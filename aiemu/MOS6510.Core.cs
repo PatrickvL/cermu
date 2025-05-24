@@ -122,16 +122,11 @@ public partial class MOS6510
     private readonly Func<bool> branchOverflowSetAction;
 
     // Pre-allocated continuation delegates for addressing modes (to eliminate lambda expressions)
-    private readonly CycleAction readZeroPageLoadAStep1;
-    private readonly CycleAction readZeroPageLoadAStep2;
-    private readonly CycleAction readZeroPageLoadXStep1;
-    private readonly CycleAction readZeroPageLoadXStep2;
-    private readonly CycleAction readZeroPageLoadYStep1;
-    private readonly CycleAction readZeroPageLoadYStep2;
-    private readonly CycleAction readZeroPageOrAccumulatorStep1;
-    private readonly CycleAction readZeroPageOrAccumulatorStep2;
-    private readonly CycleAction readZeroPageAndAccumulatorStep1;
-    private readonly CycleAction readZeroPageAndAccumulatorStep2;
+    private readonly CycleAction readZeroPageToLoadAComplete;
+    private readonly CycleAction readZeroPageToLoadXComplete;
+    private readonly CycleAction readZeroPageToLoadYComplete;
+    private readonly CycleAction readZeroPageToOrAccumulatorComplete;
+    private readonly CycleAction readZeroPageToAndAccumulatorComplete;
     
     private readonly CycleAction readImmediateLoadAComplete;
     private readonly CycleAction readImmediateLoadXComplete;
@@ -163,16 +158,11 @@ public partial class MOS6510
         fetchOpcodeCompleteAction = FetchOpcodeComplete;
         
         // Pre-allocate zero page addressing mode delegates
-        readZeroPageLoadAStep1 = ReadZeroPageLoadAStep1;
-        readZeroPageLoadAStep2 = ReadZeroPageLoadAStep2;
-        readZeroPageLoadXStep1 = ReadZeroPageLoadXStep1;
-        readZeroPageLoadXStep2 = ReadZeroPageLoadXStep2;
-        readZeroPageLoadYStep1 = ReadZeroPageLoadYStep1;
-        readZeroPageLoadYStep2 = ReadZeroPageLoadYStep2;
-        readZeroPageOrAccumulatorStep1 = ReadZeroPageOrAccumulatorStep1;
-        readZeroPageOrAccumulatorStep2 = ReadZeroPageOrAccumulatorStep2;
-        readZeroPageAndAccumulatorStep1 = ReadZeroPageAndAccumulatorStep1;
-        readZeroPageAndAccumulatorStep2 = ReadZeroPageAndAccumulatorStep2;
+        readZeroPageToLoadAComplete = ReadZeroPageToLoadAComplete;
+        readZeroPageToLoadXComplete = ReadZeroPageToLoadXComplete;
+        readZeroPageToLoadYComplete = ReadZeroPageToLoadYComplete;
+        readZeroPageToOrAccumulatorComplete = ReadZeroPageToOrAccumulatorComplete;
+        readZeroPageToAndAccumulatorComplete = ReadZeroPageToAndAccumulatorComplete;
         loadAAction = LoadA;
         loadXAction = LoadX;
         loadYAction = LoadY;
@@ -350,69 +340,39 @@ public partial class MOS6510
         return opcodeTable[opcode];
     }
 
-    // Zero page addressing mode step methods
-    private CycleAction ReadZeroPageLoadAStep1()
+    // Optimized zero page addressing mode methods - deduplicated
+    private CycleAction ReadZeroPageToLoadAComplete()
     {
         lo = BusComplete();
         BusRead(lo);
-        return readZeroPageLoadAStep2;
+        return readImmediateLoadAComplete;
     }
 
-    private CycleAction ReadZeroPageLoadAStep2()
-    {
-        val = BusComplete();
-        return LoadA();
-    }
-
-    private CycleAction ReadZeroPageLoadXStep1()
+    private CycleAction ReadZeroPageToLoadXComplete()
     {
         lo = BusComplete();
         BusRead(lo);
-        return readZeroPageLoadXStep2;
+        return readImmediateLoadXComplete;
     }
 
-    private CycleAction ReadZeroPageLoadXStep2()
-    {
-        val = BusComplete();
-        return LoadX();
-    }
-
-    private CycleAction ReadZeroPageLoadYStep1()
+    private CycleAction ReadZeroPageToLoadYComplete()
     {
         lo = BusComplete();
         BusRead(lo);
-        return readZeroPageLoadYStep2;
+        return readImmediateLoadYComplete;
     }
 
-    private CycleAction ReadZeroPageLoadYStep2()
-    {
-        val = BusComplete();
-        return LoadY();
-    }
-
-    private CycleAction ReadZeroPageOrAccumulatorStep1()
+    private CycleAction ReadZeroPageToOrAccumulatorComplete()
     {
         lo = BusComplete();
         BusRead(lo);
-        return readZeroPageOrAccumulatorStep2;
+        return readImmediateOrAccumulatorComplete;
     }
 
-    private CycleAction ReadZeroPageOrAccumulatorStep2()
-    {
-        val = BusComplete();
-        return OrAccumulator();
-    }
-
-    private CycleAction ReadZeroPageAndAccumulatorStep1()
+    private CycleAction ReadZeroPageToAndAccumulatorComplete()
     {
         lo = BusComplete();
         BusRead(lo);
-        return readZeroPageAndAccumulatorStep2;
-    }
-
-    private CycleAction ReadZeroPageAndAccumulatorStep2()
-    {
-        val = BusComplete();
-        return AndAccumulator();
+        return readImmediateAndAccumulatorComplete;
     }
 }
