@@ -33,16 +33,16 @@ public partial class MOS6510
         opcodeTable[0x01] = () => ReadZeroPageIndexedIndirect(() => orAccumulatorAction);  // ORA (zp,X) - 6502
         opcodeTable[0x02] = () => DummyRead(() => fetchOpcodeAction);                      // *JAM - 6510 (illegal)
         opcodeTable[0x03] = () => ModifyZeroPageIndexedIndirect(sLO_OperationAction);      // *SLO (zp,X) - 6510 (illegal)
-        opcodeTable[0x04] = () => ReadZeroPage(() => fetchOpcodeAction);                   // *NOP zp - 6510 (illegal)
-        opcodeTable[0x05] = () => ReadZeroPage(() => orAccumulatorAction);                 // ORA zp - 6502
+        opcodeTable[0x04] = () => ReadZeroPageNop();                                       // *NOP zp - 6510 (illegal)
+        opcodeTable[0x05] = () => ReadZeroPageOrAccumulator();                             // ORA zp - 6502
         opcodeTable[0x06] = () => ModifyZeroPage(ArithmeticShiftLeft);                     // ASL zp - 6502
         opcodeTable[0x07] = () => ModifyZeroPage(sLO_OperationAction);                     // *SLO zp - 6510 (illegal)
         opcodeTable[0x08] = () => PushStack(() => P);                                      // PHP - 6502
-        opcodeTable[0x09] = () => ReadImmediate(() => orAccumulatorAction);                // ORA # - 6502
+        opcodeTable[0x09] = () => ReadImmediateOrAccumulator();                            // ORA # - 6502
         opcodeTable[0x0A] = () => DummyRead(() => ArithmeticShiftLeftA);                   // ASL A - 6502
-        opcodeTable[0x0B] = () => ReadImmediate(() => ANC_Operation);                      // *ANC # - 6510 (illegal)
-        opcodeTable[0x0C] = () => ReadAbsolute(() => fetchOpcodeAction);                   // *NOP abs - 6510 (illegal)
-        opcodeTable[0x0D] = () => ReadAbsolute(() => orAccumulatorAction);                 // ORA abs - 6502
+        opcodeTable[0x0B] = () => ReadImmediateANC();                                      // *ANC # - 6510 (illegal)
+        opcodeTable[0x0C] = () => ReadAbsoluteNop();                                       // *NOP abs - 6510 (illegal)
+        opcodeTable[0x0D] = () => ReadAbsoluteOrAccumulator();                             // ORA abs - 6502
         opcodeTable[0x0E] = () => ModifyAbsolute(ArithmeticShiftLeft);                     // ASL abs - 6502
         opcodeTable[0x0F] = () => ModifyAbsolute(sLO_OperationAction);                     // *SLO abs - 6510 (illegal)
  
@@ -67,16 +67,16 @@ public partial class MOS6510
         opcodeTable[0x21] = () => ReadZeroPageIndexedIndirect(() => andAccumulatorAction); // AND (zp,X) - 6502
         opcodeTable[0x22] = () => DummyRead(() => fetchOpcodeAction);                      // *JAM - 6510 (illegal)
         opcodeTable[0x23] = () => ModifyZeroPageIndexedIndirect(RLA_Operation);            // *RLA (zp,X) - 6510 (illegal)
-        opcodeTable[0x24] = () => ReadZeroPage(() => BitTest);                             // BIT zp - 6502
-        opcodeTable[0x25] = () => ReadZeroPage(() => andAccumulatorAction);                // AND zp - 6502
+        opcodeTable[0x24] = () => ReadZeroPageBitTest();                                   // BIT zp - 6502
+        opcodeTable[0x25] = () => ReadZeroPageAndAccumulator();                            // AND zp - 6502
         opcodeTable[0x26] = () => ModifyZeroPage(RotateLeft);                              // ROL zp - 6502
         opcodeTable[0x27] = () => ModifyZeroPage(RLA_Operation);                           // *RLA zp - 6510 (illegal)
         opcodeTable[0x28] = () => PullStack(plpAction);                                    // PLP - 6502
-        opcodeTable[0x29] = () => ReadImmediate(() => andAccumulatorAction);               // AND # - 6502
+        opcodeTable[0x29] = () => ReadImmediateAndAccumulator();                           // AND # - 6502
         opcodeTable[0x2A] = () => DummyRead(() => RotateLeftA);                            // ROL A - 6502
-        opcodeTable[0x2B] = () => ReadImmediate(() => ANC_Operation);                      // *ANC # - 6510 (illegal)
-        opcodeTable[0x2C] = () => ReadAbsolute(() => BitTest);                             // BIT abs - 6502
-        opcodeTable[0x2D] = () => ReadAbsolute(() => andAccumulatorAction);                // AND abs - 6502
+        opcodeTable[0x2B] = () => ReadImmediateANC();                                      // *ANC # - 6510 (illegal)
+        opcodeTable[0x2C] = () => ReadAbsoluteBitTest();                                   // BIT abs - 6502
+        opcodeTable[0x2D] = () => ReadAbsoluteAndAccumulator();                            // AND abs - 6502
         opcodeTable[0x2E] = () => ModifyAbsolute(RotateLeft);                              // ROL abs - 6502
         opcodeTable[0x2F] = () => ModifyAbsolute(RLA_Operation);                           // *RLA abs - 6510 (illegal)
 
@@ -101,16 +101,16 @@ public partial class MOS6510
         opcodeTable[0x41] = () => ReadZeroPageIndexedIndirect(() => xorAccumulatorAction); // EOR (zp,X) - 6502
         opcodeTable[0x42] = () => DummyRead(() => fetchOpcodeAction);                      // *JAM - 6510 (illegal)
         opcodeTable[0x43] = () => ModifyZeroPageIndexedIndirect(SRE_Operation);            // *SRE (zp,X) - 6510 (illegal)
-        opcodeTable[0x44] = () => ReadZeroPage(() => fetchOpcodeAction);                   // *NOP zp - 6510 (illegal)
-        opcodeTable[0x45] = () => ReadZeroPage(() => xorAccumulatorAction);                // EOR zp - 6502
+        opcodeTable[0x44] = () => ReadZeroPageNop();                                       // *NOP zp - 6510 (illegal)
+        opcodeTable[0x45] = () => ReadZeroPageXorAccumulator();                            // EOR zp - 6502
         opcodeTable[0x46] = () => ModifyZeroPage(LogicalShiftRight);                       // LSR zp - 6502
         opcodeTable[0x47] = () => ModifyZeroPage(SRE_Operation);                           // *SRE zp - 6510 (illegal)
         opcodeTable[0x48] = () => PushStack(() => A);                                      // PHA - 6502
-        opcodeTable[0x49] = () => ReadImmediate(() => xorAccumulatorAction);               // EOR # - 6502
+        opcodeTable[0x49] = () => ReadImmediateXorAccumulator();                           // EOR # - 6502
         opcodeTable[0x4A] = () => DummyRead(() => LogicalShiftRightA);                     // LSR A - 6502
-        opcodeTable[0x4B] = () => ReadImmediate(() => ALR_Operation);                      // *ALR # - 6510 (illegal)
+        opcodeTable[0x4B] = () => ReadImmediateALR();                                      // *ALR # - 6510 (illegal)
         opcodeTable[0x4C] = () => JumpAbsolute;                                            // JMP abs - 6502
-        opcodeTable[0x4D] = () => ReadAbsolute(() => xorAccumulatorAction);                // EOR abs - 6502
+        opcodeTable[0x4D] = () => ReadAbsoluteXorAccumulator();                            // EOR abs - 6502
         opcodeTable[0x4E] = () => ModifyAbsolute(LogicalShiftRight);                       // LSR abs - 6502
         opcodeTable[0x4F] = () => ModifyAbsolute(SRE_Operation);                           // *SRE abs - 6510 (illegal)
       
@@ -135,16 +135,16 @@ public partial class MOS6510
         opcodeTable[0x61] = () => ReadZeroPageIndexedIndirect(() => addWithCarryAction);   // ADC (zp,X) - 6502
         opcodeTable[0x62] = () => DummyRead(() => fetchOpcodeAction);                      // *JAM - 6510 (illegal)
         opcodeTable[0x63] = () => ModifyZeroPageIndexedIndirect(RRA_Operation);            // *RRA (zp,X) - 6510 (illegal)
-        opcodeTable[0x64] = () => ReadZeroPage(() => fetchOpcodeAction);                   // *NOP zp - 6510 (illegal)
-        opcodeTable[0x65] = () => ReadZeroPage(() => addWithCarryAction);                  // ADC zp - 6502
+        opcodeTable[0x64] = () => ReadZeroPageNop();                                       // *NOP zp - 6510 (illegal)
+        opcodeTable[0x65] = () => ReadZeroPageAddWithCarry();                              // ADC zp - 6502
         opcodeTable[0x66] = () => ModifyZeroPage(RotateRight);                             // ROR zp - 6502
         opcodeTable[0x67] = () => ModifyZeroPage(RRA_Operation);                           // *RRA zp - 6510 (illegal)
         opcodeTable[0x68] = () => PullStack(plaAction);                                    // PLA - 6502
-        opcodeTable[0x69] = () => ReadImmediate(() => addWithCarryAction);                 // ADC # - 6502
+        opcodeTable[0x69] = () => ReadImmediateAddWithCarry();                             // ADC # - 6502
         opcodeTable[0x6A] = () => DummyRead(() => RotateRightA);                           // ROR A - 6502
-        opcodeTable[0x6B] = () => ReadImmediate(() => ARR_Operation);                      // *ARR # - 6510 (illegal)
+        opcodeTable[0x6B] = () => ReadImmediateARR();                                      // *ARR # - 6510 (illegal)
         opcodeTable[0x6C] = () => JumpIndirect;                                            // JMP (abs) - 6502
-        opcodeTable[0x6D] = () => ReadAbsolute(() => addWithCarryAction);                  // ADC abs - 6502
+        opcodeTable[0x6D] = () => ReadAbsoluteAddWithCarry();                              // ADC abs - 6502
         opcodeTable[0x6E] = () => ModifyAbsolute(RotateRight);                             // ROR abs - 6502
         opcodeTable[0x6F] = () => ModifyAbsolute(RRA_Operation);                           // *RRA abs - 6510 (illegal)
 
@@ -165,18 +165,18 @@ public partial class MOS6510
         opcodeTable[0x7E] = () => ModifyAbsoluteX(RotateRight);                            // ROR abs,X - 6502
         opcodeTable[0x7F] = () => ModifyAbsoluteX(RRA_Operation);                          // *RRA abs,X - 6510 (illegal)
 
-        opcodeTable[0x80] = () => ReadImmediate(() => fetchOpcodeAction);                  // *NOP # - 6510 (illegal)
+        opcodeTable[0x80] = () => ReadImmediateNop();                                      // *NOP # - 6510 (illegal)
         opcodeTable[0x81] = () => WriteZeroPageIndexedIndirect(() => A);                   // STA (zp,X) - 6502
-        opcodeTable[0x82] = () => ReadImmediate(() => fetchOpcodeAction);                  // *NOP # - 6510 (illegal)
+        opcodeTable[0x82] = () => ReadImmediateNop();                                      // *NOP # - 6510 (illegal)
         opcodeTable[0x83] = () => WriteZeroPageIndexedIndirect(() => (byte)(A & X));       // *SAX (zp,X) - 6510 (illegal)
         opcodeTable[0x84] = () => WriteZeroPage(() => Y);                                  // STY zp - 6502
         opcodeTable[0x85] = () => WriteZeroPage(() => A);                                  // STA zp - 6502
         opcodeTable[0x86] = () => WriteZeroPage(() => X);                                  // STX zp - 6502
         opcodeTable[0x87] = () => WriteZeroPage(() => (byte)(A & X));                      // *SAX zp - 6510 (illegal)
         opcodeTable[0x88] = () => DummyRead(() => DecrementY);                             // DEY - 6502
-        opcodeTable[0x89] = () => ReadImmediate(() => fetchOpcodeAction);                  // *NOP # - 6510 (illegal)
+        opcodeTable[0x89] = () => ReadImmediateNop();                                      // *NOP # - 6510 (illegal)
         opcodeTable[0x8A] = () => DummyRead(() => transferXAAction);                       // TXA - 6502
-        opcodeTable[0x8B] = () => ReadImmediate(() => XAA_Operation);                      // *XAA # - 6510 (illegal)
+        opcodeTable[0x8B] = () => ReadImmediateXAA();                                      // *XAA # - 6510 (illegal)
         opcodeTable[0x8C] = () => WriteAbsolute(() => Y);                                  // STY abs - 6502
         opcodeTable[0x8D] = () => WriteAbsolute(() => A);                                  // STA abs - 6502
         opcodeTable[0x8E] = () => WriteAbsolute(() => X);                                  // STX abs - 6502
@@ -199,22 +199,22 @@ public partial class MOS6510
         opcodeTable[0x9E] = () => WriteAbsoluteY(() => (byte)(X & (hi + 1)));              // *SHX abs,Y - 6510 (illegal, unstable)
         opcodeTable[0x9F] = () => WriteAbsoluteY(() => (byte)(A & X & (hi + 1)));          // *AHX abs,Y - 6510 (illegal, unstable)
 
-        opcodeTable[0xA0] = () => ReadImmediate(() => loadYAction);                        // LDY # - 6502
+        opcodeTable[0xA0] = () => ReadImmediateLoadY();                                    // LDY # - 6502
         opcodeTable[0xA1] = () => ReadZeroPageIndexedIndirect(() => loadAAction);          // LDA (zp,X) - 6502
-        opcodeTable[0xA2] = () => ReadImmediate(() => loadXAction);                        // LDX # - 6502
+        opcodeTable[0xA2] = () => ReadImmediateLoadX();                                    // LDX # - 6502
         opcodeTable[0xA3] = () => ReadZeroPageIndexedIndirect(() => LAX_Operation);        // *LAX (zp,X) - 6510 (illegal)
-        opcodeTable[0xA4] = () => ReadZeroPage(() => loadYAction);                         // LDY zp - 6502
-        opcodeTable[0xA5] = () => ReadZeroPage(() => loadAAction);                         // LDA zp - 6502
-        opcodeTable[0xA6] = () => ReadZeroPage(() => loadXAction);                         // LDX zp - 6502
-        opcodeTable[0xA7] = () => ReadZeroPage(() => LAX_Operation);                       // *LAX zp - 6510 (illegal)
+        opcodeTable[0xA4] = () => ReadZeroPageLoadY();                                     // LDY zp - 6502
+        opcodeTable[0xA5] = () => ReadZeroPageLoadA();                                     // LDA zp - 6502
+        opcodeTable[0xA6] = () => ReadZeroPageLoadX();                                     // LDX zp - 6502
+        opcodeTable[0xA7] = () => ReadZeroPageLAX();                                       // *LAX zp - 6510 (illegal)
         opcodeTable[0xA8] = () => DummyRead(() => transferAYAction);                       // TAY - 6502
-        opcodeTable[0xA9] = () => ReadImmediate(() => loadAAction);                        // LDA # - 6502
+        opcodeTable[0xA9] = () => ReadImmediateLoadA();                                    // LDA # - 6502
         opcodeTable[0xAA] = () => DummyRead(() => transferAXAction);                       // TAX - 6502
-        opcodeTable[0xAB] = () => ReadImmediate(() => LAX_Operation);                      // *LAX # - 6510 (illegal)
-        opcodeTable[0xAC] = () => ReadAbsolute(() => loadYAction);                         // LDY abs - 6502
-        opcodeTable[0xAD] = () => ReadAbsolute(() => loadAAction);                         // LDA abs - 6502
-        opcodeTable[0xAE] = () => ReadAbsolute(() => loadXAction);                         // LDX abs - 6502
-        opcodeTable[0xAF] = () => ReadAbsolute(() => LAX_Operation);                       // *LAX abs - 6510 (illegal)
+        opcodeTable[0xAB] = () => ReadImmediateLAX();                                      // *LAX # - 6510 (illegal)
+        opcodeTable[0xAC] = () => ReadAbsoluteLoadY();                                     // LDY abs - 6502
+        opcodeTable[0xAD] = () => ReadAbsoluteLoadA();                                     // LDA abs - 6502
+        opcodeTable[0xAE] = () => ReadAbsoluteLoadX();                                     // LDX abs - 6502
+        opcodeTable[0xAF] = () => ReadAbsoluteLAX();                                       // *LAX abs - 6510 (illegal)
 
         opcodeTable[0xB0] = () => BranchIf(() => (P & C) != 0);                            // BCS - 6502
         opcodeTable[0xB1] = () => ReadZeroPageIndirectIndexed(() => loadAAction);          // LDA (zp),Y - 6502
@@ -233,20 +233,20 @@ public partial class MOS6510
         opcodeTable[0xBE] = () => ReadAbsoluteY(() => loadXAction);                        // LDX abs,Y - 6502
         opcodeTable[0xBF] = () => ReadAbsoluteY(() => LAX_Operation);                      // *LAX abs,Y - 6510 (illegal)
 
-        opcodeTable[0xC0] = () => ReadImmediate(() => CompareY);                           // CPY # - 6502
+        opcodeTable[0xC0] = () => ReadImmediateCompareY();                                 // CPY # - 6502
         opcodeTable[0xC1] = () => ReadZeroPageIndexedIndirect(() => CompareA);             // CMP (zp,X) - 6502
-        opcodeTable[0xC2] = () => ReadImmediate(() => fetchOpcodeAction);                  // *NOP # - 6510 (illegal)
+        opcodeTable[0xC2] = () => ReadImmediateNop();                                      // *NOP # - 6510 (illegal)
         opcodeTable[0xC3] = () => ModifyZeroPageIndexedIndirect(DCP_Operation);            // *DCP (zp,X) - 6510 (illegal)
-        opcodeTable[0xC4] = () => ReadZeroPage(() => CompareY);                            // CPY zp - 6502
-        opcodeTable[0xC5] = () => ReadZeroPage(() => CompareA);                            // CMP zp - 6502
+        opcodeTable[0xC4] = () => ReadZeroPageCompareY();                                  // CPY zp - 6502
+        opcodeTable[0xC5] = () => ReadZeroPageCompareA();                                  // CMP zp - 6502
         opcodeTable[0xC6] = () => ModifyZeroPage(DecrementMemory);                         // DEC zp - 6502
         opcodeTable[0xC7] = () => ModifyZeroPage(DCP_Operation);                           // *DCP zp - 6510 (illegal)
         opcodeTable[0xC8] = () => DummyRead(() => IncrementY);                             // INY - 6502
-        opcodeTable[0xC9] = () => ReadImmediate(() => CompareA);                           // CMP # - 6502
+        opcodeTable[0xC9] = () => ReadImmediateCompareA();                                 // CMP # - 6502
         opcodeTable[0xCA] = () => DummyRead(() => DecrementX);                             // DEX - 6502
-        opcodeTable[0xCB] = () => ReadImmediate(() => AXS_Operation);                      // *AXS # - 6510 (illegal)
-        opcodeTable[0xCC] = () => ReadAbsolute(() => CompareY);                            // CPY abs - 6502
-        opcodeTable[0xCD] = () => ReadAbsolute(() => CompareA);                            // CMP abs - 6502
+        opcodeTable[0xCB] = () => ReadImmediateAXS();                                      // *AXS # - 6510 (illegal)
+        opcodeTable[0xCC] = () => ReadAbsoluteCompareY();                                  // CPY abs - 6502
+        opcodeTable[0xCD] = () => ReadAbsoluteCompareA();                                  // CMP abs - 6502
         opcodeTable[0xCE] = () => ModifyAbsolute(DecrementMemory);                         // DEC abs - 6502
         opcodeTable[0xCF] = () => ModifyAbsolute(DCP_Operation);                           // *DCP abs - 6510 (illegal)
 
@@ -267,20 +267,20 @@ public partial class MOS6510
         opcodeTable[0xDE] = () => ModifyAbsoluteX(DecrementMemory);                        // DEC abs,X - 6502
         opcodeTable[0xDF] = () => ModifyAbsoluteX(DCP_Operation);                          // *DCP abs,X - 6510 (illegal)
 
-        opcodeTable[0xE0] = () => ReadImmediate(() => CompareX);                           // CPX # - 6502
+        opcodeTable[0xE0] = () => ReadImmediateCompareX();                                 // CPX # - 6502
         opcodeTable[0xE1] = () => ReadZeroPageIndexedIndirect(() => SubtractWithCarry);    // SBC (zp,X) - 6502
-        opcodeTable[0xE2] = () => ReadImmediate(() => fetchOpcodeAction);                  // *NOP # - 6510 (illegal)
+        opcodeTable[0xE2] = () => ReadImmediateNop();                                      // *NOP # - 6510 (illegal)
         opcodeTable[0xE3] = () => ModifyZeroPageIndexedIndirect(ISC_Operation);            // *ISC (zp,X) - 6510 (illegal)
-        opcodeTable[0xE4] = () => ReadZeroPage(() => CompareX);                            // CPX zp - 6502
-        opcodeTable[0xE5] = () => ReadZeroPage(() => SubtractWithCarry);                   // SBC zp - 6502
+        opcodeTable[0xE4] = () => ReadZeroPageCompareX();                                  // CPX zp - 6502
+        opcodeTable[0xE5] = () => ReadZeroPageSubtractWithCarry();                         // SBC zp - 6502
         opcodeTable[0xE6] = () => ModifyZeroPage(IncrementMemory);                         // INC zp - 6502
         opcodeTable[0xE7] = () => ModifyZeroPage(ISC_Operation);                           // *ISC zp - 6510 (illegal)
         opcodeTable[0xE8] = () => DummyRead(() => IncrementX);                             // INX - 6502
-        opcodeTable[0xE9] = () => ReadImmediate(() => SubtractWithCarry);                  // SBC # - 6502
+        opcodeTable[0xE9] = () => ReadImmediateSubtractWithCarry();                        // SBC # - 6502
         opcodeTable[0xEA] = () => DummyRead(() => fetchOpcodeAction);                      // NOP - 6502
-        opcodeTable[0xEB] = () => ReadImmediate(() => SubtractWithCarry);                  // *SBC # - 6510 (illegal, same as official)
-        opcodeTable[0xEC] = () => ReadAbsolute(() => CompareX);                            // CPX abs - 6502
-        opcodeTable[0xED] = () => ReadAbsolute(() => SubtractWithCarry);                   // SBC abs - 6502
+        opcodeTable[0xEB] = () => ReadImmediateSubtractWithCarry();                        // *SBC # - 6510 (illegal, same as official)
+        opcodeTable[0xEC] = () => ReadAbsoluteCompareX();                                  // CPX abs - 6502
+        opcodeTable[0xED] = () => ReadAbsoluteSubtractWithCarry();                         // SBC abs - 6502
         opcodeTable[0xEE] = () => ModifyAbsolute(IncrementMemory);                         // INC abs - 6502
         opcodeTable[0xEF] = () => ModifyAbsolute(ISC_Operation);                           // *ISC abs - 6510 (illegal)
 
