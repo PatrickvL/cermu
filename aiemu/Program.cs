@@ -27,7 +27,7 @@ class Program
     static void ExampleEmu()
     {
         C64Bus bus = new();
-        MOS6502 cpu = new(bus);
+        MOS6510 cpu = new(bus);
 
         byte[] program = {
             0xA9, 0x42,       // LDA #$42

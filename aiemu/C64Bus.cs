@@ -1,10 +1,8 @@
 namespace aiemu;
 
 public class C64Bus
-
-//public class C64Bus
 {
-    private byte[] ram = new byte[0x10000];
+    private readonly byte[] ram = new byte[0x10000];
     public ushort AddressLines { get; set; }
     public byte DataLines { get; set; }
     public bool RW { get; set; } = true;
