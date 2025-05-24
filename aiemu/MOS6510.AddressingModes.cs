@@ -136,31 +136,36 @@ public partial class MOS6510
     private CycleAction ReadZeroPageLoadA()
     {
         BusRead(PC++);
-        return readZeroPageToLoadAComplete;
+        nextStepAction = readImmediateLoadAComplete;
+        return readZeroPageStep1Complete;
     }
 
     private CycleAction ReadZeroPageLoadX()
     {
         BusRead(PC++);
-        return readZeroPageToLoadXComplete;
+        nextStepAction = readImmediateLoadXComplete;
+        return readZeroPageStep1Complete;
     }
 
     private CycleAction ReadZeroPageLoadY()
     {
         BusRead(PC++);
-        return readZeroPageToLoadYComplete;
+        nextStepAction = readImmediateLoadYComplete;
+        return readZeroPageStep1Complete;
     }
 
     private CycleAction ReadZeroPageOrAccumulator()
     {
         BusRead(PC++);
-        return readZeroPageToOrAccumulatorComplete;
+        nextStepAction = readImmediateOrAccumulatorComplete;
+        return readZeroPageStep1Complete;
     }
 
     private CycleAction ReadZeroPageAndAccumulator()
     {
         BusRead(PC++);
-        return readZeroPageToAndAccumulatorComplete;
+        nextStepAction = readImmediateAndAccumulatorComplete;
+        return readZeroPageStep1Complete;
     }
 
     private CycleAction ReadZeroPageXorAccumulator()
