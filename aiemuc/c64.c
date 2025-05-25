@@ -57,13 +57,7 @@ static uint8_t kernal_rom[8192];
 static uint8_t basic_rom[8192];  
 static uint8_t char_rom[4096];
 
-// RAM write (fastest)
-static void ram_write(uint16_t addr, uint8_t value) {
-    ram[addr] = value;
-}
-
-// Ignored write (e.g., to ROM)
-//void write_ignore(uint16_t addr, uint8_t value) {    (void)addr; (void)value; }
+// RAM writes handled directly in device cycle handlers via bus_state
 
 // ============================================================================
 // VIC-II EMULATION - Video chip with cycle-accurate badline generation
@@ -90,12 +84,7 @@ static const uint8_t vic_write_masks[64] = {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF   // $38-$3F
 };
 
-// VIC write example (masked, with side effects)
-static void vic_write(uint16_t addr, uint8_t value) {
-    uint16_t reg = addr & 0x3F;
-    vic.registers[reg] = value & vic_write_masks[reg];
-    // Optional: trigger raster update, etc.
-}
+// VIC writes handled directly in vic_cycle() via chip selects
 
 static void vic_cycle(void) {
     // Always increment raster timing
@@ -127,10 +116,11 @@ static void vic_cycle(void) {
     
     // Handle CPU register access when chip selected
     if (unlikely(bus_state.chip_selects & VIC_CS)) {
+        uint8_t reg = bus_state.address & 0x3F;
         if (bus_state.control_lines & WRITE_CYCLE) {
-            vic.registers[bus_state.address & 0x3F] = bus_state.data;
+            vic.registers[reg] = bus_state.data & vic_write_masks[reg];
         } else {
-            bus_state.data = vic.registers[bus_state.address & 0x3F];
+            bus_state.data = vic.registers[reg];
         }
     }
 }
@@ -150,13 +140,7 @@ static union {
     };
 } cia1, cia2;
 
-static void cia1_write(uint16_t addr, uint8_t value) {
-    cia1.registers[addr & 0x0F] = value;
-}
-
-static void cia2_write(uint16_t addr, uint8_t value) {
-    cia2.registers[addr & 0x0F] = value;
-}
+// CIA writes handled directly in cia1_cycle() and cia2_cycle() via chip selects
 
 static void cia1_cycle(void) {
     // Timer A always decrements when enabled (hardware accurate)
@@ -226,9 +210,7 @@ static struct {
     uint8_t envelope_state[3];
 } sid;
 
-static void sid_write(uint16_t addr, uint8_t value) {
-    sid.registers[addr & 0x1F] = value;
-}
+// SID writes handled directly in sid_cycle() via chip selects
 
 static void sid_cycle(void) {
     // Envelope generators always run (hardware accurate)
@@ -281,15 +263,11 @@ static uint8_t* chip_select_map; // Current active map
 static uintptr_t mode_read_map[32][256];  // 32 configs × 256 256-byte blocks
 static uintptr_t* read_map; // points to mode_read_map[mode]
 
-typedef void (*write_handler_t)(uint16_t addr, uint8_t value);
-
-static write_handler_t mode_write_handlers[32][256];  // 32 modes × 256 256-byte blocks
-static write_handler_t* write_handlers;  // Points to mode_write_handlers[mode]
+// Write handlers removed - device cycle handlers already handle writes via chip selects
 
 void switch_cpu_mode(uint8_t mode) {
     chip_select_map = chip_select_maps[mode];
     read_map = mode_read_map[mode];
-    write_handlers = mode_write_handlers[mode];
 }
 
 // Ultra-fast address decoding - single memory access
@@ -319,7 +297,7 @@ static inline void cpu_write_cycle(uint16_t addr, uint8_t value) {
     bus_state.control_lines = WRITE_CYCLE;
     update_chip_selects(addr);
     bus_cycle();
-    write_handlers[addr >> 8](addr, value);
+    // Write is handled by device cycle handlers via chip selects
 }
 
 // Map generator
@@ -341,25 +319,20 @@ static void generate_pla_maps(void) {
 
             uint8_t* read_base;
             uint8_t read_mask = 0xFF;  // Default 256-byte mask
-            write_handler_t write_handler = ram_write;
 
             if (cs & IO_CS) {
                 if (addr < 0xD400) {
                     read_base = vic.registers;
                     read_mask = 0x3F;  // VIC: 64 registers (6 bits)
-                    write_handler = vic_write;
                 } else if (addr < 0xD800) {
                     read_base = sid.registers;
                     read_mask = 0x1F;  // SID: 32 registers (5 bits)
-                    write_handler = sid_write;
                 } else if (addr < 0xDD00) {
                     read_base = cia1.registers;
                     read_mask = 0x0F;  // CIA: 16 registers (4 bits)
-                    write_handler = cia1_write;
                 } else if (addr < 0xDE00) {
                     read_base = cia2.registers;
                     read_mask = 0x0F;  // CIA: 16 registers (4 bits)
-                    write_handler = cia2_write;
                 } else {
                     read_base = ram + addr;
                 }
@@ -376,7 +349,6 @@ static void generate_pla_maps(void) {
 
             // Store mask directly in LSB bits (256-byte aligned pointers have 8 zero LSBs)
             mode_read_map[mode][block] = (uintptr_t)read_base | read_mask;
-            mode_write_handlers[mode][block] = write_handler;
         }
     }
 }
