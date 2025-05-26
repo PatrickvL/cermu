@@ -1,4 +1,4 @@
-#include "cpu6510_core.h"
+#include "cpu6510.h"
 
 // ============================================================================
 // ADDRESSING MODES - All modes organized alphabetically

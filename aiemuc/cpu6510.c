@@ -1,47 +1,87 @@
 #include "cpu6510.h"
+#include "bus.h"
+#include "c64.h"
+#include <string.h>
 
 // ============================================================================
 // MOS 6510 CPU STATE
 // ============================================================================
 cpu6510_state_t cpu;
 
-// Direct threading instruction table
-static const void* instruction_table[256];
+// Universal instruction table using function pointers
+static instruction_func_t instruction_table[256];
 
-// ============================================================================
-// CPU INITIALIZATION
-// ============================================================================
+// Forward declarations
+void* handle_interrupt = NULL;
+void* fetch_opcode = NULL;
+
+// Initialize CPU
 void cpu6510_init(void) {
     cpu.a = 0;
     cpu.x = 0;
     cpu.y = 0;
     cpu.sp = 0xFD;
-    cpu.p = FLAG_U | FLAG_I;
+    cpu.p = FLAG_U | FLAG_I;  // Unused flag always set, interrupt disable
     cpu.pc = 0;
     
-    // 6510 I/O port initialization
-    cpu.port_ddr = 0x2F;   // Default DDR
-    cpu.port_data = 0x37;  // Default port data
+    // 6510-specific I/O port (addresses $0000/$0001) initialization
+    ram[0x0000] = 0x2F; // Default Data Direction Register (DDR at $0000)
+    ram[0x0001] = 0x37;  // Default I/O Port Data (at $0001)
+    switch_cpu_mode(0x07); // All RAM/ROM enabled
+ 
+    cpu.total_cycles = 0;
     
-    cpu.cycles = 0;
-    cpu.page_crossed = false;
+    // Setup instruction table
+    cpu6510_setup_opcode_table();
 }
 
+// Reset CPU
 void cpu6510_reset(void) {
-    // Read reset vector
+    // Read reset vector from $FFFC/$FFFD
     cpu_read_cycle(0xFFFC);
     uint8_t pcl = bus_state.data;
     cpu_read_cycle(0xFFFD);
     uint8_t pch = bus_state.data;
-    cpu.pc = (pch << 8) | pcl;
     
-    cpu.sp = 0xFD;
+    cpu.pc = (pch << 8) | pcl;
+    cpu.sp = 0xFF; // or 0FD?
     cpu.p |= FLAG_I;  // Set interrupt disable
-    cpu.cycles = 0;
+    cpu.total_cycles = 0;
+}
+
+bool cpu6510_step(void) {
+    cpu.total_cycles++;
+    bus_cycle();
+    // Return true when instruction completes (for testing)
+    return true;
+}
+
+void cpu6510_irq(void) {
+    // Push PC and status to stack, set interrupt disable, jump to IRQ vector
+    cpu_push((cpu.pc >> 8) & 0xFF);
+    cpu_push(cpu.pc & 0xFF);
+    cpu_push(cpu.p & ~FLAG_B);  // Clear B flag for IRQ
+    cpu.p |= FLAG_I;
+    cpu_read_cycle(0xFFFE);
+    cpu.pc = bus_state.data;
+    cpu_read_cycle(0xFFFF);
+    cpu.pc |= (bus_state.data << 8);
+}
+
+void cpu6510_nmi(void) {
+    // Push PC and status to stack, set interrupt disable, jump to NMI vector
+    cpu_push((cpu.pc >> 8) & 0xFF);
+    cpu_push(cpu.pc & 0xFF);
+    cpu_push(cpu.p & ~FLAG_B);  // Clear B flag for NMI
+    cpu.p |= FLAG_I;
+    cpu_read_cycle(0xFFFA);
+    cpu.pc = bus_state.data;
+    cpu_read_cycle(0xFFFB);
+    cpu.pc |= (bus_state.data << 8);
 }
 
 // ============================================================================
-// INSTRUCTION OPERATIONS
+// INSTRUCTION OPERATIONS (ALPHABETICAL ORDER)
 // ============================================================================
 
 // ADC - Add with Carry
@@ -159,150 +199,167 @@ static inline void op_sbc(uint8_t value) {
 }
 
 // ============================================================================
-// CPU EXECUTION LOOP WITH DIRECT THREADING
+// INSTRUCTION FUNCTIONS (Universal approach using function pointers)
 // ============================================================================
-void cpu6510_execute(void) {
-    // Initialize instruction table
-    for (int i = 0; i < 256; i++) {
-        instruction_table[i] = &&illegal_instruction;
-    }
-    
-    // Map key instructions (simplified set for demonstration)
-    instruction_table[0xA9] = &&lda_immediate;
-    instruction_table[0xA5] = &&lda_zero_page;
-    instruction_table[0xAD] = &&lda_absolute;
-    instruction_table[0x8D] = &&sta_absolute;
-    instruction_table[0x85] = &&sta_zero_page;
-    instruction_table[0x4C] = &&jmp_absolute;
-    instruction_table[0xEA] = &&nop_instruction;
-    instruction_table[0x00] = &&brk_instruction;
-    instruction_table[0x69] = &&adc_immediate;
-    instruction_table[0x29] = &&and_immediate;
-    instruction_table[0x0A] = &&asl_accumulator;
-    
-    // Start execution
-    NEXT_INSTRUCTION(main_fetch_wait);
 
-    // ========================================================================
-    // INSTRUCTION IMPLEMENTATIONS
-    // ========================================================================
-    
-    lda_immediate:
-        WAIT_READY_THEN_READ(cpu.pc++, lda_imm_wait);
-        op_lda(bus_state.data);
-        NEXT_INSTRUCTION(lda_imm_fetch_wait);
+// Forward declarations
+void lda_immediate_func(void);
+void lda_zero_page_func(void);
+void lda_absolute_func(void);
+void sta_absolute_func(void);
+void sta_zero_page_func(void);
+void jmp_absolute_func(void);
+void nop_instruction_func(void);
+void brk_instruction_func(void);
+void adc_immediate_func(void);
+void and_immediate_func(void);
+void asl_accumulator_func(void);
+void illegal_instruction_func(void);
+void handle_interrupt_func(void);
 
-    lda_zero_page:
-        WAIT_READY_THEN_READ(cpu.pc++, lda_zp_wait1);
-        cpu.addr_abs = bus_state.data;
-        WAIT_READY_THEN_READ(cpu.addr_abs, lda_zp_wait2);
-        op_lda(bus_state.data);
-        NEXT_INSTRUCTION(lda_zp_fetch_wait);
-
-    lda_absolute:
-        WAIT_READY_THEN_READ(cpu.pc++, lda_abs_wait1);
-        cpu.addr_abs = bus_state.data;
-        WAIT_READY_THEN_READ(cpu.pc++, lda_abs_wait2);
-        cpu.addr_abs |= (bus_state.data << 8);
-        WAIT_READY_THEN_READ(cpu.addr_abs, lda_abs_wait3);
-        op_lda(bus_state.data);
-        NEXT_INSTRUCTION(lda_abs_fetch_wait);
-
-    sta_absolute:
-        WAIT_READY_THEN_READ(cpu.pc++, sta_abs_wait1);
-        cpu.addr_abs = bus_state.data;
-        WAIT_READY_THEN_READ(cpu.pc++, sta_abs_wait2);
-        cpu.addr_abs |= (bus_state.data << 8);
-        WAIT_READY_THEN_WRITE(cpu.addr_abs, cpu.a, sta_abs_wait3);
-        NEXT_INSTRUCTION(sta_abs_fetch_wait);
-
-    sta_zero_page:
-        WAIT_READY_THEN_READ(cpu.pc++, sta_zp_wait1);
-        cpu.addr_abs = bus_state.data;
-        WAIT_READY_THEN_WRITE(cpu.addr_abs, cpu.a, sta_zp_wait2);
-        NEXT_INSTRUCTION(sta_zp_fetch_wait);
-
-    jmp_absolute:
-        WAIT_READY_THEN_READ(cpu.pc++, jmp_abs_wait1);
-        cpu.addr_abs = bus_state.data;
-        WAIT_READY_THEN_READ(cpu.pc++, jmp_abs_wait2);
-        cpu.addr_abs |= (bus_state.data << 8);
-        cpu.pc = cpu.addr_abs;
-        NEXT_INSTRUCTION(jmp_abs_fetch_wait);
-
-    adc_immediate:
-        WAIT_READY_THEN_READ(cpu.pc++, adc_imm_wait);
-        op_adc(bus_state.data);
-        NEXT_INSTRUCTION(adc_imm_fetch_wait);
-
-    and_immediate:
-        WAIT_READY_THEN_READ(cpu.pc++, and_imm_wait);
-        op_and(bus_state.data);
-        NEXT_INSTRUCTION(and_imm_fetch_wait);
-
-    asl_accumulator:
-        // ASL A is a 2-cycle instruction
-        WAIT_READY_THEN_READ(cpu.pc, asl_a_wait);  // Dummy read
-        cpu.a = op_asl(cpu.a);
-        NEXT_INSTRUCTION(asl_a_fetch_wait);
-
-    nop_instruction:
-        WAIT_READY_THEN_READ(cpu.pc, nop_wait);  // Dummy read
-        NEXT_INSTRUCTION(nop_fetch_wait);
-
-    brk_instruction:
-        cpu.pc++;  // Skip BRK signature byte
-        // Push PC high byte
-        cpu_push((cpu.pc >> 8) & 0xFF);
-        // Push PC low byte  
-        cpu_push(cpu.pc & 0xFF);
-        // Push status register with B flag set
-        cpu_push(cpu.p | FLAG_B);
-        // Set interrupt disable
-        cpu.p |= FLAG_I;
-        // Read IRQ vector
-        cpu_read_cycle(0xFFFE);
-        cpu.pc = bus_state.data;
-        cpu_read_cycle(0xFFFF);
-        cpu.pc |= (bus_state.data << 8);
-        NEXT_INSTRUCTION(brk_fetch_wait);
-
-    illegal_instruction:
-        // Handle illegal opcodes - just NOP for now
-        NEXT_INSTRUCTION(illegal_fetch_wait);
-
-    handle_interrupt:
-        // Interrupt handling logic
-        if (bus_state.control_lines & NMI_LINE) {
-            // Handle NMI - non-maskable
-            cpu6510_nmi();
-        } else if ((bus_state.control_lines & IRQ_LINE) && !cpu_get_flag(FLAG_I)) {
-            // Handle IRQ - only if interrupt disable is clear
-            cpu6510_irq();
-        }
-        NEXT_INSTRUCTION(interrupt_fetch_wait);
+// Universal instruction implementations
+void lda_immediate_func(void) {
+    WAIT_READY_THEN_READ(cpu.pc++, lda_imm_wait);
+    op_lda(bus_state.data);
+    NEXT_INSTRUCTION(lda_imm_fetch_wait);
 }
 
-void cpu6510_irq(void) {
-    // Push PC and status to stack, set interrupt disable, jump to IRQ vector
+void lda_zero_page_func(void) {
+    WAIT_READY_THEN_READ(cpu.pc++, lda_zp_wait1);
+    cpu.addr_abs = bus_state.data;
+    WAIT_READY_THEN_READ(cpu.addr_abs, lda_zp_wait2);
+    op_lda(bus_state.data);
+    NEXT_INSTRUCTION(lda_zp_fetch_wait);
+}
+
+void lda_absolute_func(void) {
+    WAIT_READY_THEN_READ(cpu.pc++, lda_abs_wait1);
+    cpu.addr_abs = bus_state.data;
+    WAIT_READY_THEN_READ(cpu.pc++, lda_abs_wait2);
+    cpu.addr_abs |= (bus_state.data << 8);
+    WAIT_READY_THEN_READ(cpu.addr_abs, lda_abs_wait3);
+    op_lda(bus_state.data);
+    NEXT_INSTRUCTION(lda_abs_fetch_wait);
+}
+
+void sta_absolute_func(void) {
+    WAIT_READY_THEN_READ(cpu.pc++, sta_abs_wait1);
+    cpu.addr_abs = bus_state.data;
+    WAIT_READY_THEN_READ(cpu.pc++, sta_abs_wait2);
+    cpu.addr_abs |= (bus_state.data << 8);
+    WAIT_READY_THEN_WRITE(cpu.addr_abs, cpu.a, sta_abs_wait3);
+    NEXT_INSTRUCTION(sta_abs_fetch_wait);
+}
+
+void sta_zero_page_func(void) {
+    WAIT_READY_THEN_READ(cpu.pc++, sta_zp_wait1);
+    cpu.addr_abs = bus_state.data;
+    WAIT_READY_THEN_WRITE(cpu.addr_abs, cpu.a, sta_zp_wait2);
+    NEXT_INSTRUCTION(sta_zp_fetch_wait);
+}
+
+void jmp_absolute_func(void) {
+    WAIT_READY_THEN_READ(cpu.pc++, jmp_abs_wait1);
+    cpu.addr_abs = bus_state.data;
+    WAIT_READY_THEN_READ(cpu.pc++, jmp_abs_wait2);
+    cpu.addr_abs |= (bus_state.data << 8);
+    cpu.pc = cpu.addr_abs;
+    NEXT_INSTRUCTION(jmp_abs_fetch_wait);
+}
+
+void adc_immediate_func(void) {
+    WAIT_READY_THEN_READ(cpu.pc++, adc_imm_wait);
+    op_adc(bus_state.data);
+    NEXT_INSTRUCTION(adc_imm_fetch_wait);
+}
+
+void and_immediate_func(void) {
+    WAIT_READY_THEN_READ(cpu.pc++, and_imm_wait);
+    op_and(bus_state.data);
+    NEXT_INSTRUCTION(and_imm_fetch_wait);
+}
+
+void asl_accumulator_func(void) {
+    // ASL A is a 2-cycle instruction
+    WAIT_READY_THEN_READ(cpu.pc, asl_a_wait);  // Dummy read
+    cpu.a = op_asl(cpu.a);
+    NEXT_INSTRUCTION(asl_a_fetch_wait);
+}
+
+void nop_instruction_func(void) {
+    WAIT_READY_THEN_READ(cpu.pc, nop_wait);  // Dummy read
+    NEXT_INSTRUCTION(nop_fetch_wait);
+}
+
+void brk_instruction_func(void) {
+    cpu.pc++;  // Skip BRK signature byte
+    // Push PC high byte
     cpu_push((cpu.pc >> 8) & 0xFF);
+    // Push PC low byte
     cpu_push(cpu.pc & 0xFF);
-    cpu_push(cpu.p & ~FLAG_B);  // Clear B flag for IRQ
+    // Push status register with B flag set
+    cpu_push(cpu.p | FLAG_B);
+    // Set interrupt disable
     cpu.p |= FLAG_I;
+    // Read IRQ vector
     cpu_read_cycle(0xFFFE);
     cpu.pc = bus_state.data;
     cpu_read_cycle(0xFFFF);
     cpu.pc |= (bus_state.data << 8);
+    NEXT_INSTRUCTION(brk_fetch_wait);
 }
 
-void cpu6510_nmi(void) {
-    // Push PC and status to stack, set interrupt disable, jump to NMI vector
-    cpu_push((cpu.pc >> 8) & 0xFF);
-    cpu_push(cpu.pc & 0xFF);
-    cpu_push(cpu.p & ~FLAG_B);  // Clear B flag for NMI
-    cpu.p |= FLAG_I;
-    cpu_read_cycle(0xFFFA);
-    cpu.pc = bus_state.data;
-    cpu_read_cycle(0xFFFB);
-    cpu.pc |= (bus_state.data << 8);
+void illegal_instruction_func(void) {
+    // Handle illegal opcodes - just NOP for now
+    NEXT_INSTRUCTION(illegal_fetch_wait);
+}
+
+void handle_interrupt_func(void) {
+    // Interrupt handling logic
+    if (bus_state.control_lines & NMI_LINE) {
+        // Handle NMI - non-maskable
+        cpu6510_nmi();
+    } else if ((bus_state.control_lines & IRQ_LINE) && !cpu_get_flag(FLAG_I)) {
+        // Handle IRQ - only if interrupt disable is clear
+        cpu6510_irq();
+    }
+    NEXT_INSTRUCTION(interrupt_fetch_wait);
+}
+
+
+// ============================================================================
+// CPU EXECUTION LOOP WITH FUNCTION POINTERS (Universal)
+// ============================================================================
+void cpu6510_execute(void) {  
+    // Start execution - fetch first instruction
+    if (unlikely(bus_state.control_lines & (IRQ_LINE | NMI_LINE))) {
+        handle_interrupt_func();
+        return;
+    }
+    WAIT_READY_THEN_READ(cpu.pc++, main_fetch_start);
+    cpu.opcode = bus_state.data;
+    instruction_table[cpu.opcode]();
+}
+
+// ============================================================================
+// INSTRUCTION TABLE SETUP
+// ============================================================================
+void cpu6510_setup_opcode_table(void) {
+    // Initialize function pointer table
+    for (int i = 0; i < 256; i++) {
+        instruction_table[i] = illegal_instruction_func;
+    }
+    
+    // Map key instructions
+    instruction_table[0xA9] = lda_immediate_func;
+    instruction_table[0xA5] = lda_zero_page_func;
+    instruction_table[0xAD] = lda_absolute_func;
+    instruction_table[0x8D] = sta_absolute_func;
+    instruction_table[0x85] = sta_zero_page_func;
+    instruction_table[0x4C] = jmp_absolute_func;
+    instruction_table[0xEA] = nop_instruction_func;
+    instruction_table[0x00] = brk_instruction_func;
+    instruction_table[0x69] = adc_immediate_func;
+    instruction_table[0x29] = and_immediate_func;
+    instruction_table[0x0A] = asl_accumulator_func;
 }
