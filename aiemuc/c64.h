@@ -16,12 +16,12 @@
 // Chip select bit definitions
 #define RAM_CS      (1 << 0)
 #define ROM_CS      (1 << 1) 
-#define VIC_CS      (1 << 2)
-#define SID_CS      (1 << 3)
-#define CIA1_CS     (1 << 4)
-#define CIA2_CS     (1 << 5)
-#define CHAR_ROM_CS (1 << 6)
-#define IO_CS       (1 << 7)
+#define CHAR_ROM_CS (1 << 2)
+#define IO_CS       (1 << 3)
+#define VIC_CS      (1 << 4)
+#define SID_CS      (1 << 5)
+#define CIA1_CS     (1 << 6)
+#define CIA2_CS     (1 << 7)
 
 // Control line definitions
 #define READ_CYCLE  (1 << 0)
