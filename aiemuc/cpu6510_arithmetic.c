@@ -691,3 +691,29 @@ void cpy_absolute_func(void) {
     op_cpy(bus_state.data);
     NEXT_INSTRUCTION(cpy_abs_fetch_wait);
 }
+
+// BIT - Bit Test (Zero Page)
+void bit_zero_page_func(void) {
+    WAIT_READY_THEN_READ(cpu.pc++, bit_zp_wait1);
+    cpu.addr_abs = bus_state.data;
+    WAIT_READY_THEN_READ(cpu.addr_abs, bit_zp_wait2);
+    uint8_t value = bus_state.data;
+    cpu_set_flag(FLAG_Z, (cpu.a & value) == 0);
+    cpu_set_flag(FLAG_N, value & 0x80);
+    cpu_set_flag(FLAG_V, value & 0x40);
+    NEXT_INSTRUCTION(bit_zp_fetch_wait);
+}
+
+// BIT - Bit Test (Absolute)
+void bit_absolute_func(void) {
+    WAIT_READY_THEN_READ(cpu.pc++, bit_abs_wait1);
+    cpu.addr_abs = bus_state.data;
+    WAIT_READY_THEN_READ(cpu.pc++, bit_abs_wait2);
+    cpu.addr_abs |= (bus_state.data << 8);
+    WAIT_READY_THEN_READ(cpu.addr_abs, bit_abs_wait3);
+    uint8_t value = bus_state.data;
+    cpu_set_flag(FLAG_Z, (cpu.a & value) == 0);
+    cpu_set_flag(FLAG_N, value & 0x80);
+    cpu_set_flag(FLAG_V, value & 0x40);
+    NEXT_INSTRUCTION(bit_abs_fetch_wait);
+}
