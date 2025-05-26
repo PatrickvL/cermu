@@ -34,13 +34,6 @@ extern uint8_t char_rom[4096];
 // PLA EMULATION - Pre-computed chip select maps for each memory mode
 // ============================================================================
 
-// 32 possible PLA modes, 256 memory blocks each (256-byte granularity for CIA compatibility)
-extern uint8_t chip_select_maps[32][256];
-extern uint8_t* chip_select_map;
-
-extern uintptr_t mode_read_map[32][256];
-extern uintptr_t* read_map;
-
 // PLA functions
 void switch_cpu_mode(uint8_t mode);
 void generate_pla_maps(void);
