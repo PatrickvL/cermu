@@ -1,6 +1,7 @@
 #ifndef BUS_H
 #define BUS_H
 
+#include <stdint.h>
 #include "c64.h"
 
 // ============================================================================
@@ -48,6 +49,7 @@ void generate_pla_maps(void);
 void cpu_read_cycle(uint16_t addr);
 void cpu_write_cycle(uint16_t addr, uint8_t value);
 
+void bus_init(void);
 // Bus cycle function
 void bus_cycle(void);
 

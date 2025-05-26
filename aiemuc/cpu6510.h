@@ -1,13 +1,16 @@
-#ifndef CPU6510_NEW_H
-#define CPU6510_NEW_H
+#ifndef CPU6510_H
+#define CPU6510_H
 
 #include "c64.h"
 #include "bus.h"
+#include <stdint.h>
+#include <stdbool.h>
 
 // ============================================================================
 // MOS 6510 CPU EMULATION - Cycle-accurate with direct threading
 // ============================================================================
 
+// CPU state structure
 typedef struct {
     // CPU Registers  
     uint16_t pc;        // Program Counter
@@ -19,24 +22,22 @@ typedef struct {
 
     // Internal CPU state for cycle-accurate emulation
     uint8_t opcode;     // Current instruction opcode
+    uint8_t lo, hi;     // Address calculation helpers
     uint16_t addr_abs;  // Absolute address for current instruction
     uint8_t fetched;    // Fetched data for current instruction
     uint8_t temp;       // Temporary storage
-    uint8_t cycles;     // Remaining cycles for current instruction
-    bool page_crossed;  // Page boundary crossed flag
+    //uint8_t cycles;     // Remaining cycles for current instruction
+    uint64_t total_cycles; // Total CPU cycles executed
+    //bool page_crossed;  // Page boundary crossed flag
     
-    // 6510-specific I/O port (addresses $0000/$0001)
-    uint8_t port_ddr;   // Data Direction Register ($0000)
-    uint8_t port_data;  // I/O Port Data ($0001)
-
     // Direct threading state
-    const void* next_cycle;  // Next cycle function pointer
-    
+    //const void* next_cycle;  // Next cycle function pointer   
 } cpu6510_state_t;
 
+// Global CPU state
 extern cpu6510_state_t cpu;
 
-// Status Register Flags
+// MOS6510 Status Register Flags
 #define FLAG_C  0x01    // Carry
 #define FLAG_Z  0x02    // Zero
 #define FLAG_I  0x04    // Interrupt Disable
@@ -46,14 +47,18 @@ extern cpu6510_state_t cpu;
 #define FLAG_V  0x40    // Overflow
 #define FLAG_N  0x80    // Negative
 
-// Direct threading macros following existing pattern
+// Universal instruction dispatch using function pointers
+// (Works well on all compilers - performance difference with computed goto is minimal)
+typedef void (*instruction_func_t)(void);
 #define NEXT_INSTRUCTION(fetch_label) do { \
     if (unlikely(bus_state.control_lines & (IRQ_LINE | NMI_LINE))) { \
-        goto handle_interrupt; \
+        handle_interrupt_func(); \
+        return; \
     } \
     WAIT_READY_THEN_READ(cpu.pc++, fetch_label); \
     cpu.opcode = bus_state.data; \
-    goto *instruction_table[cpu.opcode]; \
+    instruction_table[cpu.opcode](); \
+    return; \
 } while(0)
 
 // Flag operations (inline for performance)
@@ -83,11 +88,15 @@ static inline uint8_t cpu_pop(void) {
     return bus_state.data;
 }
 
-// Main CPU functions
+// CPU core functions
 void cpu6510_init(void);
 void cpu6510_reset(void);
+bool cpu6510_step(void);
 void cpu6510_execute(void);
 void cpu6510_irq(void);
 void cpu6510_nmi(void);
 
-#endif // CPU6510_NEW_H
+// Instruction setup
+void cpu6510_setup_opcode_table(void);
+
+#endif // CPU6510_H

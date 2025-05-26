@@ -15,8 +15,7 @@ void c64_emulate_frame(void) {
     switch_cpu_mode(0x07); // LORAM=1, HIRAM=1, CHAREN=1
     
     // Initialize bus state
-    bus_state.raw = 0;
-    bus_state.bus_control = BA_LINE | AEC_LINE | RDY_LINE;
+    bus_init();
     
     // Start execution (commented out to avoid infinite loop in testing)
     // cpu6510_execute();
@@ -37,7 +36,9 @@ void c64_init(void) {
     
     // Generate all PLA memory maps (after chip structures are initialized)
     generate_pla_maps();
-    
+
+    bus_init();
+
     // Initialize CPU state
     cpu6510_init();
     cpu6510_reset();
@@ -50,20 +51,7 @@ void c64_init(void) {
 // MAIN FUNCTION - Simple test harness
 // ============================================================================
 int main(void) {
-    // Initialize chip states FIRST
-    memset(&vic, 0, sizeof(vic));
-    memset(&cia1, 0, sizeof(cia1));
-    memset(&cia2, 0, sizeof(cia2));
-    memset(&sid, 0, sizeof(sid));
-    
-    // Initialize RAM
-    memset(ram, 0, sizeof(ram));
-    
-    // Generate all PLA memory maps (after chip structures are initialized)
-    generate_pla_maps();
-    
-    // Initialize CPU state
-    cpu6510_init();
+    c64_init();
     // Skip reset for now to avoid reading from ROM
     // cpu6510_reset();
     

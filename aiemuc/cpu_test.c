@@ -1,5 +1,8 @@
-#include "cpu6510_core.h"
+#include "cpu6510.h"
+#include "bus.h"
+#include "c64.h"
 #include <stdio.h>
+#include <string.h>
 
 // ============================================================================
 // SIMPLE CPU TEST PROGRAM - Similar to C# aiemu
@@ -34,6 +37,21 @@ void load_test_rom(void) {
     }
 }
 
+// Simple c64_init implementation for testing
+void c64_init(void) {
+    // Initialize bus and memory
+    bus_init();
+    
+    // Initialize CPU
+    cpu6510_init();
+    
+    // Clear RAM
+    memset(ram, 0, sizeof(ram));
+    
+    // Initialize chip select maps if needed
+    generate_pla_maps();
+}
+
 void print_cpu_state(void) {
     printf("CPU State:\n");
     printf("  PC: $%04X  A: $%02X  X: $%02X  Y: $%02X  SP: $%02X\n",
@@ -57,26 +75,12 @@ int main(void) {
     // Initialize emulator
     printf("Initializing C64 system...\n");
     
-    // Initialize chip states
-    memset(&vic, 0, sizeof(vic));
-    memset(&cia1, 0, sizeof(cia1));
-    memset(&cia2, 0, sizeof(cia2));
-    memset(&sid, 0, sizeof(sid));
-    memset(ram, 0, sizeof(ram));
-    
-    // Generate PLA maps
-    generate_pla_maps();
-    switch_cpu_mode(0x07); // All RAM/ROM enabled
-    
-    // Initialize bus
-    bus_state.raw = 0;
-    bus_state.bus_control = BA_LINE | AEC_LINE | RDY_LINE;
+    c64_init();
     
     // Load test program
     load_test_rom();
     
     // Initialize and reset CPU
-    cpu6510_init();
     cpu6510_reset();
     
     printf("Initial state:\n");

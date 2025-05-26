@@ -27,3 +27,4 @@ aiemuc.exe
 # Debug files
 *.pdb
 *.ilk
+*.exe
