@@ -2,6 +2,8 @@
 build/
 bin/
 obj/
+aiemu/obj/
+aiemuc/obj/
 
 # CMake files
 CMakeCache.txt
