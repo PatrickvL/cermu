@@ -99,11 +99,56 @@ static inline uint8_t cpu_pop(void) {
 
 // ADC - Add with Carry
 static inline void op_adc(uint8_t value) {
-    uint16_t temp = cpu.a + value + (cpu_get_flag(FLAG_C) ? 1 : 0);
-    cpu_set_flag(FLAG_C, temp > 255);
-    cpu_set_flag(FLAG_V, (~(cpu.a ^ value) & (cpu.a ^ temp)) & 0x80);
-    cpu.a = temp & 0xFF;
-    cpu_set_zn(cpu.a);
+    if (cpu.p & FLAG_D) {
+        // Decimal mode - BCD arithmetic
+        uint8_t carry_in = (cpu.p & FLAG_C) ? 1 : 0;
+
+        // Split into low and high nibbles for BCD
+        uint8_t a_low = cpu.a & 0x0F;
+        uint8_t a_high = (cpu.a >> 4) & 0x0F;
+        uint8_t v_low = value & 0x0F;
+        uint8_t v_high = (value >> 4) & 0x0F;
+        
+        // Add low nibbles
+        uint16_t low_sum = a_low + v_low + carry_in;
+        if (low_sum > 9) {
+            low_sum += 6;  // BCD adjustment
+        }
+        
+        // Add high nibbles with carry from low
+        uint16_t high_sum = a_high + v_high + (low_sum > 15 ? 1 : 0);
+        if (high_sum > 9) {
+            high_sum += 6;  // BCD adjustment
+        }
+        
+        // Combine result
+        uint8_t result = ((high_sum & 0x0F) << 4) | (low_sum & 0x0F);
+        
+        // Set flags
+        cpu.p &= ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C);
+
+        if (0 == (uint8_t)(cpu.a + value + carry_in)) {
+            cpu.p |= FLAG_Z;
+        } else if ((high_sum & 0x08) != 0) {
+            cpu.p |= FLAG_N;
+        }
+
+        if ((~(cpu.a ^ value) & (cpu.a ^ (high_sum << 4)) & 0x80) != 0) {
+            cpu.p |= FLAG_V;
+        }
+
+        if (high_sum > 15) {
+            cpu.p |= FLAG_C;
+        }
+        
+        cpu.a = result;
+    } else {    
+        uint16_t temp = cpu.a + value + (cpu_get_flag(FLAG_C) ? 1 : 0);
+        cpu_set_flag(FLAG_C, temp > 255);
+        cpu_set_flag(FLAG_V, (~(cpu.a ^ value) & (cpu.a ^ temp)) & 0x80);
+        cpu.a = temp & 0xFF;
+        cpu_set_zn(cpu.a);
+    }
 }
 
 // AND - Logical AND

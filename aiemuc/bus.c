@@ -112,7 +112,7 @@ void cpu_write_cycle(uint16_t addr, uint8_t value) {
             uint8_t direction = ram[0x0000]; // Data Direction Register (DDR at $0000). 1 = set, 0 = read&clear
             uint8_t io_mask = ram[0x0001]; // I/O Port Data (at $0001)
 
-            io_mask &= !direction; // clear the mask bits that will be overwritten
+            io_mask &= ~direction; // clear the mask bits that will be overwritten (FIXED: was !direction)
             io_mask |= direction & value; // set the appropriate bits from value
             switch_cpu_mode(io_mask); // Apply the new mode to the PLA
             value = io_mask; // Fall through and write the adjusted value to I/O Port Data (at $0001)
