@@ -36,7 +36,7 @@ void cpu6510_init(void) {
     cpu.a = 0;
     cpu.x = 0;
     cpu.y = 0;
-    cpu.sp = 0xFD;
+    cpu.sp = 0xFF;
     cpu.p = FLAG_U | FLAG_I;  // Unused flag always set, interrupt disable
     cpu.pc = 0;
     
