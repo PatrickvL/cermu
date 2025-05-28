@@ -54,8 +54,8 @@ extern instruction_func_t instruction_table[256];
 #define FLAG_N  0x80    // Negative
 
 // Optimized I/O port handlers (called via callback table)
-void cpu_read_handler(void);
-void cpu_write_handler(void);
+uint8_t cpu_io_port_r8(void);
+void cpu_io_port_w8(void);
 
 #define NEXT_INSTRUCTION(fetch_label) do { \
     if (unlikely(bus.control_lines & (IRQ_LINE | NMI_LINE))) { \

@@ -1,7 +1,18 @@
 #include "vic.h"
 #include "bus.h"
+#include <string.h>
 
 vic_state_t vic;
+
+// VIC initialization
+void vic_init(void) {
+    // Initialize VIC state
+    memset(&vic, 0, sizeof(vic));
+    
+    // Set up device callbacks
+    vic.device.r8 = vic_r8;
+    vic.device.w8 = vic_w8;
+}
 
 // VIC write masks for each register (defines which bits are writable)
 const uint8_t vic_write_masks[64] = {
@@ -46,12 +57,12 @@ void vic_cycle(void) {
 }
 
 // New optimized I/O handlers - called directly via callback table (no chip select checks!)
-void vic_handle_read(void) {
+uint8_t vic_r8(void) {
     uint8_t reg = bus.address & 0x3F;
-    bus.data = vic.registers[reg];
+    return vic.registers[reg];
 }
 
-void vic_handle_write(void) {
+void vic_w8(void) {
     uint8_t reg = bus.address & 0x3F;
     vic.registers[reg] = bus.data & vic_write_masks[reg];
 }

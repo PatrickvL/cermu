@@ -1,6 +1,7 @@
 #include "c64.h"
 #include "bus.h"
 #include "ram.h"
+#include "rom.h"
 #include "vic.h"
 #include "cia.h"
 #include "sid.h"
@@ -25,14 +26,13 @@ void c64_emulate_frame(void) {
 // INITIALIZATION
 // ============================================================================
 void c64_init(void) {
-    // Initialize chip states FIRST
-    memset(&vic, 0, sizeof(vic));
-    memset(&cia1, 0, sizeof(cia1));
-    memset(&cia2, 0, sizeof(cia2));
-    memset(&sid, 0, sizeof(sid));
-    
-    // Initialize RAM
-    memset(ram, 0, sizeof(ram));
+    // Initialize all devices (each device initializes its own state and callbacks)
+    ram_init();
+    rom_init();
+    vic_init();
+    cia1_init();
+    cia2_init();
+    sid_init();
     
     // Initialize bus system (generates PLA maps internally)
     bus_init();
