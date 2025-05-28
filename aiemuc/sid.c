@@ -3,6 +3,7 @@
 
 sid_state_t sid;
 
+// Optimized SID cycle function - no I/O handling, just envelope generators
 void sid_cycle(void) {
     // Envelope generators always run (hardware accurate)
     for (int voice = 0; voice < 3; voice++) {
@@ -13,14 +14,15 @@ void sid_cycle(void) {
             sid.envelope_state[voice] = (sid.envelope_state[voice] + 1) & 0xFF;
         }
     }
-    
-    // Handle CPU register access when chip selected
-    if (unlikely(bus_state.chip_selects & SID_CS)) {
-        uint8_t reg = bus_state.address & 0x1F;
-        if (bus_state.control_lines & WRITE_CYCLE) {
-            sid.registers[reg] = bus_state.data;
-        } else {
-            bus_state.data = sid.registers[reg];
-        }
-    }
+}
+
+// New optimized I/O handlers - called directly via callback table (no chip select checks!)
+void sid_handle_read(void) {
+    uint8_t reg = bus_state.address & 0x1F;
+    bus_state.data = sid.registers[reg];
+}
+
+void sid_handle_write(void) {
+    uint8_t reg = bus_state.address & 0x1F;
+    sid.registers[reg] = bus_state.data;
 }

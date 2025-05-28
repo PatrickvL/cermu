@@ -25,4 +25,10 @@ extern cia_state_t cia1, cia2;
 void cia1_cycle(void);
 void cia2_cycle(void);
 
+// Optimized I/O handlers (called via callback table)
+void cia1_handle_read(void);
+void cia1_handle_write(void);
+void cia2_handle_read(void);
+void cia2_handle_write(void);
+
 #endif // CIA_H

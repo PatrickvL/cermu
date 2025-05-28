@@ -22,4 +22,8 @@ extern const uint8_t vic_write_masks[64];
 // VIC functions
 void vic_cycle(void);
 
+// Optimized I/O handlers (called via callback table)
+void vic_handle_read(void);
+void vic_handle_write(void);
+
 #endif // VIC_H
