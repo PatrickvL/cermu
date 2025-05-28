@@ -65,13 +65,13 @@ void bus_cycle(void);
 #define CPU_READY() ((bus.control_lines & RDY_LINE) != 0)
 
 // Wait for CPU ready with automatic stall handling
-#define WAIT_READY_THEN_READ(addr, label) do { \
+#define WAIT_READY_THEN_READ(cpu_dev, addr, label) do { \
     label: \
     if (!CPU_READY()) { bus_cycle(); goto label; } \
     cpu_read_cycle(addr); \
 } while(0)
 
-#define WAIT_READY_THEN_WRITE(addr, data, label) do { \
+#define WAIT_READY_THEN_WRITE(cpu_dev, addr, data, label) do { \
     label: \
     if (!CPU_READY()) { bus_cycle(); goto label; } \
     cpu_write_cycle(addr, data); \

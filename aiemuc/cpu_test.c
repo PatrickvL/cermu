@@ -31,15 +31,15 @@ void load_test_rom(void) {
 
 void print_cpu_state(void) {
     printf("PC:$%04X A:$%02X X:$%02X Y:$%02X SP:$%02X P:$%02X $0400:$%02X Flags:%c%c%c%c%c%c%c%c Cycles:%llu\n",
-        cpu.pc, cpu.a, cpu.x, cpu.y, cpu.sp, cpu.p, ram.data[0x0400],
-        (cpu.p & FLAG_N) ? 'N' : 'n',
-        (cpu.p & FLAG_V) ? 'V' : 'v',
-        (cpu.p & FLAG_U) ? 'U' : 'u',
-        (cpu.p & FLAG_B) ? 'B' : 'b',
-        (cpu.p & FLAG_D) ? 'D' : 'd',
-        (cpu.p & FLAG_I) ? 'I' : 'i',
-        (cpu.p & FLAG_Z) ? 'Z' : 'z',
-        (cpu.p & FLAG_C) ? 'C' : 'c', bus.total_cycles);
+        cpu_dev->pc, cpu_dev->a, cpu_dev->x, cpu_dev->y, cpu_dev->sp, cpu_dev->p, ram.data[0x0400],
+        (cpu_dev->p & FLAG_N) ? 'N' : 'n',
+        (cpu_dev->p & FLAG_V) ? 'V' : 'v',
+        (cpu_dev->p & FLAG_U) ? 'U' : 'u',
+        (cpu_dev->p & FLAG_B) ? 'B' : 'b',
+        (cpu_dev->p & FLAG_D) ? 'D' : 'd',
+        (cpu_dev->p & FLAG_I) ? 'I' : 'i',
+        (cpu_dev->p & FLAG_Z) ? 'Z' : 'z',
+        (cpu_dev->p & FLAG_C) ? 'C' : 'c', bus.total_cycles);
 }
 
 // Print CPU state on every bus cycle (for debugging)
@@ -70,12 +70,12 @@ int main(void) {
     bus_cycle_callback = print_cpu_state_on_cycle;
     // Reset CPU (sets up mode and reads reset vector)
     cpu6510_reset(&cpu);
-    printf("Debug: PC after reset: $%04X\n", cpu.pc);
+    printf("Debug: PC after reset: $%04X\n", cpu_dev->pc);
     printf("Initial state:\n");
     print_cpu_state();
     printf("\nExecuting test program...\n");
     // Execute for a limited number of instructions (not just cycles)
-    for (int i = 0; i < 100 && cpu.pc != 0x020B; i++) {
+    for (int i = 0; i < 100 && cpu_dev->pc != 0x020B; i++) {
         // Execute one full instruction (which will call bus_cycle many times)
         cpu6510_execute(&cpu);
         // Print state every 10 instructions (already printed per cycle if callback is set)
@@ -94,10 +94,10 @@ int main(void) {
     } else {
         printf("\n❌ TEST FAILED: Expected $42 at $0400, got $%02X\n", ram.data[0x0400]);
     }
-    if (cpu.x == 0x00) {
+    if (cpu_dev->x == 0x00) {
         printf("✅ TEST PASSED: X register decremented to 0\n");
     } else {
-        printf("❌ TEST FAILED: Expected X=0, got X=$%02X\n", cpu.x);
+        printf("❌ TEST FAILED: Expected X=0, got X=$%02X\n", cpu_dev->x);
     }
     return 0;
 }

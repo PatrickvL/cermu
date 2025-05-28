@@ -37,10 +37,10 @@ typedef struct {
 
 // Universal instruction dispatch using function pointers
 // (Works well on all compilers - performance difference with computed goto is minimal)
-typedef void (*instruction_func_t)(void);
+typedef void (*instruction_func_t)(cpu6510_state_t* cpu_dev);
 
 // Global CPU state
-extern cpu6510_state_t cpu;
+//extern cpu6510_state_t cpu;
 
 // Global instruction table
 extern instruction_func_t instruction_table[256];
@@ -58,51 +58,39 @@ extern instruction_func_t instruction_table[256];
 // Forward declaration
 struct device_s;
 
-#define NEXT_INSTRUCTION(fetch_label) do { \
+#define NEXT_INSTRUCTION(cpu_dev, fetch_label) do { \
     if (unlikely(bus.control_lines & (IRQ_LINE | NMI_LINE))) { \
-        handle_interrupt_func(); \
+        handle_interrupt_func(cpu_dev); \
         return; \
     } \
-    WAIT_READY_THEN_READ(cpu.pc++, fetch_label); \
-    cpu.opcode = bus.data; \
-    instruction_table[cpu.opcode](); \
+    WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc++, fetch_label); \
+    cpu_dev->opcode = bus.data; \
+    instruction_table[cpu_dev->opcode](cpu_dev); \
     return; \
 } while(0)
 
 // Flag operations (inline for performance)
-static inline void cpu_set_flag(uint8_t flag, bool condition) {
-    if (condition) cpu.p |= flag;
-    else cpu.p &= ~flag;
+static inline void cpu_set_flag(cpu6510_state_t* cpu_dev, uint8_t flag, bool condition) {
+    if (condition) cpu_dev->p |= flag;
+    else cpu_dev->p &= ~flag;
 }
 
-static inline bool cpu_get_flag(uint8_t flag) {
-    return (cpu.p & flag) != 0;
+static inline bool cpu_get_flag(cpu6510_state_t* cpu_dev, uint8_t flag) {
+    return (cpu_dev->p & flag) != 0;
 }
 
-static inline void cpu_set_zn(uint8_t value) {
-    cpu_set_flag(FLAG_Z, value == 0);
-    cpu_set_flag(FLAG_N, value & 0x80);
+static inline void cpu_set_zn(cpu6510_state_t* cpu_dev, uint8_t value) {
+    cpu_set_flag(cpu_dev, FLAG_Z, value == 0);
+    cpu_set_flag(cpu_dev, FLAG_N, value & 0x80);
 }
 
 // Stack operations
-static inline void cpu_push(uint8_t data) {
-    cpu_write_cycle(0x0100 + cpu.sp, data);
-    cpu.sp--;
-}
-
-static inline uint8_t cpu_pop(void) {
-    cpu.sp++;
-    cpu_read_cycle(0x0100 + cpu.sp);
-    return bus.data;
-}
-
-// New parameterized stack operations
-static inline void cpu_push_param(cpu6510_state_t* cpu_dev, uint8_t data) {
+static inline void cpu_push(cpu6510_state_t* cpu_dev, uint8_t data) {
     cpu_write_cycle(0x0100 + cpu_dev->sp, data);
     cpu_dev->sp--;
 }
 
-static inline uint8_t cpu_pop_param(cpu6510_state_t* cpu_dev) {
+static inline uint8_t cpu_pop(cpu6510_state_t* cpu_dev) {
     cpu_dev->sp++;
     cpu_read_cycle(0x0100 + cpu_dev->sp);
     return bus.data;
@@ -113,14 +101,14 @@ static inline uint8_t cpu_pop_param(cpu6510_state_t* cpu_dev) {
 // ============================================================================
 
 // ADC - Add with Carry
-static inline void op_adc(uint8_t value) {
-    if (cpu.p & FLAG_D) {
+static inline void op_adc(cpu6510_state_t* cpu_dev, uint8_t value) {
+    if (cpu_dev->p & FLAG_D) {
         // Decimal mode - BCD arithmetic
-        uint8_t carry_in = (cpu.p & FLAG_C) ? 1 : 0;
+        uint8_t carry_in = (cpu_dev->p & FLAG_C) ? 1 : 0;
 
         // Split into low and high nibbles for BCD
-        uint8_t a_low = cpu.a & 0x0F;
-        uint8_t a_high = (cpu.a >> 4) & 0x0F;
+        uint8_t a_low = cpu_dev->a & 0x0F;
+        uint8_t a_high = (cpu_dev->a >> 4) & 0x0F;
         uint8_t v_low = value & 0x0F;
         uint8_t v_high = (value >> 4) & 0x0F;
         
@@ -140,153 +128,153 @@ static inline void op_adc(uint8_t value) {
         uint8_t result = ((high_sum & 0x0F) << 4) | (low_sum & 0x0F);
         
         // Set flags
-        cpu.p &= ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C);
+        cpu_dev->p &= ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C);
 
-        if (0 == (uint8_t)(cpu.a + value + carry_in)) {
-            cpu.p |= FLAG_Z;
+        if (0 == (uint8_t)(cpu_dev->a + value + carry_in)) {
+            cpu_dev->p |= FLAG_Z;
         } else if ((high_sum & 0x08) != 0) {
-            cpu.p |= FLAG_N;
+            cpu_dev->p |= FLAG_N;
         }
 
-        if ((~(cpu.a ^ value) & (cpu.a ^ (high_sum << 4)) & 0x80) != 0) {
-            cpu.p |= FLAG_V;
+        if ((~(cpu_dev->a ^ value) & (cpu_dev->a ^ (high_sum << 4)) & 0x80) != 0) {
+            cpu_dev->p |= FLAG_V;
         }
 
         if (high_sum > 15) {
-            cpu.p |= FLAG_C;
+            cpu_dev->p |= FLAG_C;
         }
         
-        cpu.a = result;
+        cpu_dev->a = result;
     } else {    
-        uint16_t temp = cpu.a + value + (cpu_get_flag(FLAG_C) ? 1 : 0);
-        cpu_set_flag(FLAG_C, temp > 255);
-        cpu_set_flag(FLAG_V, (~(cpu.a ^ value) & (cpu.a ^ temp)) & 0x80);
-        cpu.a = temp & 0xFF;
-        cpu_set_zn(cpu.a);
+        uint16_t temp = cpu_dev->a + value + (cpu_get_flag(cpu_dev, FLAG_C) ? 1 : 0);
+        cpu_set_flag(cpu_dev, FLAG_C, temp > 255);
+        cpu_set_flag(cpu_dev, FLAG_V, (~(cpu_dev->a ^ value) & (cpu_dev->a ^ temp)) & 0x80);
+        cpu_dev->a = temp & 0xFF;
+        cpu_set_zn(cpu_dev, cpu_dev->a);
     }
 }
 
 // AND - Logical AND
-static inline void op_and(uint8_t value) {
-    cpu.a &= value;
-    cpu_set_zn(cpu.a);
+static inline void op_and(cpu6510_state_t* cpu_dev, uint8_t value) {
+    cpu_dev->a &= value;
+    cpu_set_zn(cpu_dev, cpu_dev->a);
 }
 
 // ASL - Arithmetic Shift Left
-static inline uint8_t op_asl(uint8_t value) {
-    cpu_set_flag(FLAG_C, value & 0x80);
+static inline uint8_t op_asl(cpu6510_state_t* cpu_dev, uint8_t value) {
+    cpu_set_flag(cpu_dev, FLAG_C, value & 0x80);
     value <<= 1;
-    cpu_set_zn(value);
+    cpu_set_zn(cpu_dev, value);
     return value;
 }
 
 // BIT - Bit Test
-static inline void op_bit(uint8_t value) {
-    cpu_set_flag(FLAG_Z, (cpu.a & value) == 0);
-    cpu_set_flag(FLAG_V, value & FLAG_V);
-    cpu_set_flag(FLAG_N, value & FLAG_N);
+static inline void op_bit(cpu6510_state_t* cpu_dev, uint8_t value) {
+    cpu_set_flag(cpu_dev, FLAG_Z, (cpu_dev->a & value) == 0);
+    cpu_set_flag(cpu_dev, FLAG_V, value & FLAG_V);
+    cpu_set_flag(cpu_dev, FLAG_N, value & FLAG_N);
 }
 
 // CMP - Compare
-static inline void op_cmp(uint8_t value) {
-    uint16_t temp = cpu.a - value;
-    cpu_set_flag(FLAG_C, cpu.a >= value);
-    cpu_set_zn(temp & 0xFF);
+static inline void op_cmp(cpu6510_state_t* cpu_dev, uint8_t value) {
+    uint16_t temp = cpu_dev->a - value;
+    cpu_set_flag(cpu_dev, FLAG_C, cpu_dev->a >= value);
+    cpu_set_zn(cpu_dev, temp & 0xFF);
 }
 
 // CPX - Compare X Register
-static inline void op_cpx(uint8_t value) {
-    uint16_t temp = cpu.x - value;
-    cpu_set_flag(FLAG_C, cpu.x >= value);
-    cpu_set_zn(temp & 0xFF);
+static inline void op_cpx(cpu6510_state_t* cpu_dev, uint8_t value) {
+    uint16_t temp = cpu_dev->x - value;
+    cpu_set_flag(cpu_dev, FLAG_C, cpu_dev->x >= value);
+    cpu_set_zn(cpu_dev, temp & 0xFF);
 }
 
 // CPY - Compare Y Register
-static inline void op_cpy(uint8_t value) {
-    uint16_t temp = cpu.y - value;
-    cpu_set_flag(FLAG_C, cpu.y >= value);
-    cpu_set_zn(temp & 0xFF);
+static inline void op_cpy(cpu6510_state_t* cpu_dev, uint8_t value) {
+    uint16_t temp = cpu_dev->y - value;
+    cpu_set_flag(cpu_dev, FLAG_C, cpu_dev->y >= value);
+    cpu_set_zn(cpu_dev, temp & 0xFF);
 }
 
 // DEC - Decrement
-static inline uint8_t op_dec(uint8_t value) {
+static inline uint8_t op_dec(cpu6510_state_t* cpu_dev, uint8_t value) {
     value--;
-    cpu_set_zn(value);
+    cpu_set_zn(cpu_dev, value);
     return value;
 }
 
 // EOR - Exclusive OR
-static inline void op_eor(uint8_t value) {
-    cpu.a ^= value;
-    cpu_set_zn(cpu.a);
+static inline void op_eor(cpu6510_state_t* cpu_dev, uint8_t value) {
+    cpu_dev->a ^= value;
+    cpu_set_zn(cpu_dev, cpu_dev->a);
 }
 
 // INC - Increment
-static inline uint8_t op_inc(uint8_t value) {
+static inline uint8_t op_inc(cpu6510_state_t* cpu_dev, uint8_t value) {
     value++;
-    cpu_set_zn(value);
+    cpu_set_zn(cpu_dev, value);
     return value;
 }
 
 // LDA - Load Accumulator
-static inline void op_lda(uint8_t value) {
-    cpu.a = value;
-    cpu_set_zn(cpu.a);
+static inline void op_lda(cpu6510_state_t* cpu_dev, uint8_t value) {
+    cpu_dev->a = value;
+    cpu_set_zn(cpu_dev, cpu_dev->a);
 }
 
 // LDX - Load X Register
-static inline void op_ldx(uint8_t value) {
-    cpu.x = value;
-    cpu_set_zn(cpu.x);
+static inline void op_ldx(cpu6510_state_t* cpu_dev, uint8_t value) {
+    cpu_dev->x = value;
+    cpu_set_zn(cpu_dev, cpu_dev->x);
 }
 
 // LDY - Load Y Register
-static inline void op_ldy(uint8_t value) {
-    cpu.y = value;
-    cpu_set_zn(cpu.y);
+static inline void op_ldy(cpu6510_state_t* cpu_dev, uint8_t value) {
+    cpu_dev->y = value;
+    cpu_set_zn(cpu_dev, cpu_dev->y);
 }
 
 // LSR - Logical Shift Right
-static inline uint8_t op_lsr(uint8_t value) {
-    cpu_set_flag(FLAG_C, value & 0x01);
+static inline uint8_t op_lsr(cpu6510_state_t* cpu_dev, uint8_t value) {
+    cpu_set_flag(cpu_dev, FLAG_C, value & 0x01);
     value >>= 1;
-    cpu_set_zn(value);
+    cpu_set_zn(cpu_dev, value);
     return value;
 }
 
 // ORA - Logical Inclusive OR
-static inline void op_ora(uint8_t value) {
-    cpu.a |= value;
-    cpu_set_zn(cpu.a);
+static inline void op_ora(cpu6510_state_t* cpu_dev, uint8_t value) {
+    cpu_dev->a |= value;
+    cpu_set_zn(cpu_dev, cpu_dev->a);
 }
 
 // ROL - Rotate Left
-static inline uint8_t op_rol(uint8_t value) {
-    uint8_t temp = (value << 1) | (cpu_get_flag(FLAG_C) ? 1 : 0);
-    cpu_set_flag(FLAG_C, value & 0x80);
-    cpu_set_zn(temp);
+static inline uint8_t op_rol(cpu6510_state_t* cpu_dev, uint8_t value) {
+    uint8_t temp = (value << 1) | (cpu_get_flag(cpu_dev, FLAG_C) ? 1 : 0);
+    cpu_set_flag(cpu_dev, FLAG_C, value & 0x80);
+    cpu_set_zn(cpu_dev, temp);
     return temp;
 }
 
 // ROR - Rotate Right
-static inline uint8_t op_ror(uint8_t value) {
-    uint8_t temp = (value >> 1) | (cpu_get_flag(FLAG_C) ? 0x80 : 0);
-    cpu_set_flag(FLAG_C, value & 0x01);
-    cpu_set_zn(temp);
+static inline uint8_t op_ror(cpu6510_state_t* cpu_dev, uint8_t value) {
+    uint8_t temp = (value >> 1) | (cpu_get_flag(cpu_dev, FLAG_C) ? 0x80 : 0);
+    cpu_set_flag(cpu_dev, FLAG_C, value & 0x01);
+    cpu_set_zn(cpu_dev, temp);
     return temp;
 }
 
 // SBC - Subtract with Carry
-static inline void op_sbc(uint8_t value) {
-    uint16_t temp = cpu.a - value - (cpu_get_flag(FLAG_C) ? 0 : 1);
-    cpu_set_flag(FLAG_C, temp < 0x100);
-    cpu_set_flag(FLAG_V, ((cpu.a ^ value) & (cpu.a ^ temp)) & 0x80);
-    cpu.a = temp & 0xFF;
-    cpu_set_zn(cpu.a);
+static inline void op_sbc(cpu6510_state_t* cpu_dev, uint8_t value) {
+    uint16_t temp = cpu_dev->a - value - (cpu_get_flag(cpu_dev, FLAG_C) ? 0 : 1);
+    cpu_set_flag(cpu_dev, FLAG_C, temp < 0x100);
+    cpu_set_flag(cpu_dev, FLAG_V, ((cpu_dev->a ^ value) & (cpu_dev->a ^ temp)) & 0x80);
+    cpu_dev->a = temp & 0xFF;
+    cpu_set_zn(cpu_dev, cpu_dev->a);
 }
 
 // Forward declarations for functions defined in main file
-void handle_interrupt_func(void);
+void handle_interrupt_func(cpu6510_state_t* cpu_dev);
 
 // CPU core functions
 void cpu6510_init(cpu6510_state_t* cpu_dev);
