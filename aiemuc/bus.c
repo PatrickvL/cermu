@@ -53,9 +53,7 @@ void bus_init(void) {
     // Initialize bus state
     bus_state.address = 0;
     bus_state.data = 0;
-    bus_state.control_lines = 0;
-    bus_state.bus_control = BA_LINE | AEC_LINE | RDY_LINE;
-    bus_state.reserved = 0;
+    bus_state.control_lines = BA_LINE | AEC_LINE | RDY_LINE;
     
     // Initialize callback table with no-op handlers
     for (int i = 0; i < 256; i++) {
@@ -124,10 +122,10 @@ void bus_cycle(void) {
     sid_cycle();       // Sound generation, envelope generators
 
     // Update RDY line based on BA (hardware accurate)
-    if (bus_state.bus_control & BA_LINE) {
-        bus_state.bus_control |= RDY_LINE;
+    if (bus_state.control_lines & BA_LINE) {
+        bus_state.control_lines |= RDY_LINE;
     } else {
-        bus_state.bus_control &= ~RDY_LINE;
+        bus_state.control_lines &= ~RDY_LINE;
     }
     // Call the callback if set
     if (bus_cycle_callback) bus_cycle_callback();

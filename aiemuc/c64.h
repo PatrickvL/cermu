@@ -23,14 +23,12 @@
 #define CIA1_CS     (1 << 6)
 #define CIA2_CS     (1 << 7)
 
-// Control line definitions
+// Bus control line definitions  
 #define IRQ_LINE    (1 << 0)
 #define NMI_LINE    (1 << 1)
-
-// Bus control definitions  
-#define BA_LINE     (1 << 0)
-#define AEC_LINE    (1 << 1)
-#define RDY_LINE    (1 << 2)
+#define BA_LINE     (1 << 2)
+#define AEC_LINE    (1 << 3)
+#define RDY_LINE    (1 << 4)
 
 // Main emulator functions
 void c64_init(void);

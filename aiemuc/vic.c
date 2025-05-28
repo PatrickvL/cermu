@@ -31,18 +31,18 @@ void vic_cycle(void) {
     
     // Generate BA signal for badline
     if (vic.badline_condition && vic.raster_cycle >= 15 && vic.raster_cycle <= 54) {
-        bus_state.bus_control &= ~BA_LINE; // Pull BA low - CPU will stall
+        bus_state.control_lines &= ~BA_LINE; // Pull BA low - CPU will stall
     } else {
-        bus_state.bus_control |= BA_LINE;  // Release BA
+        bus_state.control_lines |= BA_LINE;  // Release BA
     }
     
     // AEC follows BA with one cycle delay (hardware accurate)
-    if (vic.prev_ba && !(bus_state.bus_control & BA_LINE)) {
-        bus_state.bus_control &= ~AEC_LINE;
-    } else if (!vic.prev_ba && (bus_state.bus_control & BA_LINE)) {
-        bus_state.bus_control |= AEC_LINE;
+    if (vic.prev_ba && !(bus_state.control_lines & BA_LINE)) {
+        bus_state.control_lines &= ~AEC_LINE;
+    } else if (!vic.prev_ba && (bus_state.control_lines & BA_LINE)) {
+        bus_state.control_lines |= AEC_LINE;
     }
-    vic.prev_ba = (bus_state.bus_control & BA_LINE) != 0;
+    vic.prev_ba = (bus_state.control_lines & BA_LINE) != 0;
 }
 
 // New optimized I/O handlers - called directly via callback table (no chip select checks!)
