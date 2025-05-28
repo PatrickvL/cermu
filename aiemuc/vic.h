@@ -24,8 +24,4 @@ struct device_s;
 void vic_init(vic_state_t* vic_dev);
 void vic_cycle(vic_state_t* vic_dev);
 
-// Optimized I/O handlers (called via callback table)
-uint8_t vic_r8(struct device_s* dev);
-void vic_w8(struct device_s* dev);
-
 #endif // VIC_H

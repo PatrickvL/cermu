@@ -22,8 +22,4 @@ struct device_s;
 void sid_init(sid_state_t* sid_dev);
 void sid_cycle(sid_state_t* sid_dev);
 
-// Optimized I/O handlers (called via callback table)
-uint8_t sid_r8(struct device_s* dev);
-void sid_w8(struct device_s* dev);
-
 #endif // SID_H
