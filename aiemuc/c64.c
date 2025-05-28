@@ -12,7 +12,9 @@
 // DEVICE INSTANCES - Centralized device state management
 // ============================================================================
 ram_state_t ram;
-rom_state_t rom;
+basic_rom_state_t basic_rom;
+kernal_rom_state_t kernal_rom;
+char_rom_state_t char_rom;
 vic_state_t vic;
 cia_state_t cia1, cia2;
 sid_state_t sid;
@@ -37,7 +39,9 @@ void c64_emulate_frame(void) {
 void c64_init(void) {
     // Initialize all devices (each device initializes its own state and callbacks)
     ram_init(&ram);
-    rom_init(&rom);
+    basic_rom_init(&basic_rom);
+    kernal_rom_init(&kernal_rom);
+    char_rom_init(&char_rom);
     vic_init(&vic);
     cia1_init(&cia1);
     cia2_init(&cia2);

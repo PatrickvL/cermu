@@ -92,8 +92,8 @@ static device_callbacks_t get_device_callbacks_for_address(uint16_t addr, bool l
     // $A000-$BFFF: BASIC ROM area
     else if (addr >= 0xA000 && addr < 0xC000) {
         if (loram && !game) {
-            callbacks.read = basic_r8;
-            callbacks.device = (struct device_s*)&rom;
+            callbacks.read = basic_rom_r8;
+            callbacks.device = (struct device_s*)&basic_rom;
             // BASIC ROM writes fall through to RAM
         }
         // else: stays RAM (default)
@@ -133,15 +133,15 @@ static device_callbacks_t get_device_callbacks_for_address(uint16_t addr, bool l
         } else {
             // Character ROM
             callbacks.read = char_rom_r8;
-            callbacks.device = (struct device_s*)&rom;
+            callbacks.device = (struct device_s*)&char_rom;
             // CHAR ROM writes fall through to RAM
         }
     }
     // $E000-$FFFF: KERNAL ROM area
     else if (addr >= 0xE000) {
         if (hiram && !game) {
-            callbacks.read = kernel_r8;
-            callbacks.device = (struct device_s*)&rom;
+            callbacks.read = kernal_rom_r8;
+            callbacks.device = (struct device_s*)&kernal_rom;
             // KERNEL ROM writes fall through to RAM
         }
         // else: stays RAM (default)
