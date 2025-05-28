@@ -49,16 +49,10 @@ void bus_cycle(void) {
     if (bus_cycle_callback) bus_cycle_callback();
 }
 
-// Ultra-fast address decoding returning selected callbacks
-static inline device_callbacks_t* update_chip_selects(uint16_t addr) {
-    return &chip_select_map[addr >> 8];
-}
-
 // Optimized read cycle implementation - direct callback dispatch
 void cpu_read_cycle(uint16_t addr) {
     bus.address = addr;
-    // Get callbacks and immediately invoke read handler
-    update_chip_selects(addr)->read();
+    bus.data = chip_select_map[addr >> 8].read();
     bus_cycle();
 }
 
@@ -66,17 +60,16 @@ void cpu_read_cycle(uint16_t addr) {
 void cpu_write_cycle(uint16_t addr, uint8_t value) {
     bus.address = addr;
     bus.data = value;
-    // Get callbacks and immediately invoke write handler
-    update_chip_selects(addr)->write();
+    chip_select_map[addr >> 8].write();
     bus_cycle();
 }
 
 // Default no-op handlers for unmapped areas
-static void nop_read_handler(void) {
-    bus.data = 0xFF; // Default read value for unmapped areas
+static uint8_t nop_r8(void) {
+    return 0xFF; // Default read value for unmapped areas
 }
 
-static void nop_write_handler(void) {
+static void nop_w8(void) {
     // Writes to unmapped areas are ignored
 }
 
@@ -85,19 +78,20 @@ static device_callbacks_t get_device_callbacks_for_address(uint16_t addr, bool l
     device_callbacks_t callbacks;
     
     // Start with RAM as default (most common case)
-    callbacks.read = ram_read_handler;
-    callbacks.write = ram_write_handler;
+    callbacks.read = ram_r8;
+    callbacks.write = ram_w8;
     
-    // CPU I/O port (0x0000/0x0001) - overrides RAM
+    // $0000-$0100: CPU I/O ports ($0x0002 and up forward to RAM)
     if (addr < 0x0100) {
-        callbacks.read = cpu_read_handler;
-        callbacks.write = cpu_write_handler;
+        callbacks.read = cpu_io_port_r8;
+        callbacks.write = cpu_io_port_w8;
     }
+    // $0100-$9FFF: Always RAM (already set as default)
     // $A000-$BFFF: BASIC ROM area
     else if (addr >= 0xA000 && addr < 0xC000) {
         if (loram && !game) {
-            callbacks.read = basic_read_handler;
-            // ROM writes fall through to  RAM
+            callbacks.read = basic_r8;
+            // BASIC ROM writes fall through to RAM
         }
         // else: stays RAM (default)
     }
@@ -107,42 +101,41 @@ static device_callbacks_t get_device_callbacks_for_address(uint16_t addr, bool l
             // I/O area - determine specific device by address
             if (addr < 0xD400) {
                 // $D000-$D3FF: VIC I/O
-                callbacks.read = vic_handle_read;
-                callbacks.write = vic_handle_write;
+                callbacks.read = vic_r8;
+                callbacks.write = vic_w8;
             } else if (addr < 0xD800) {
                 // $D400-$D7FF: SID I/O
-                callbacks.read = sid_handle_read;
-                callbacks.write = sid_handle_write;
+                callbacks.read = sid_r8;
+                callbacks.write = sid_w8;
             } else if (addr < 0xDC00) {
                 // $D800-$DBFF: Color RAM - stays RAM (default)
             } else if (addr < 0xDD00) {
                 // $DC00-$DCFF: CIA 1 I/O
-                callbacks.read = cia1_handle_read;
-                callbacks.write = cia1_handle_write;
+                callbacks.read = cia1_r8;
+                callbacks.write = cia1_w8;
             } else if (addr < 0xDE00) {
                 // $DD00-$DDFF: CIA 2 I/O
-                callbacks.read = cia2_handle_read;
-                callbacks.write = cia2_handle_write;
+                callbacks.read = cia2_r8;
+                callbacks.write = cia2_w8;
             } else {
                 // $DE00-$DFFF: I/O expansion - no devices implemented
-                callbacks.read = nop_read_handler;
-                callbacks.write = nop_write_handler;
+                callbacks.read = nop_r8;
+                callbacks.write = nop_w8;
             }
         } else {
             // Character ROM
-            callbacks.read = char_rom_read_handler;
-            // ROM writes fall through to  RAM
+            callbacks.read = char_rom_r8;
+            // CHAR ROM writes fall through to RAM
         }
     }
     // $E000-$FFFF: KERNAL ROM area
     else if (addr >= 0xE000) {
         if (hiram && !game) {
-            callbacks.read = kernel_read_handler;
-            // ROM writes fall through to  RAM
+            callbacks.read = kernel_r8;
+            // KERNEL ROM writes fall through to RAM
         }
         // else: stays RAM (default)
     }
-    // $0100-$9FFF: Always RAM (already set as default)
     
     return callbacks;
 }

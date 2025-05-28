@@ -42,8 +42,8 @@ void cpu6510_init(void) {
     cpu.pc = 0;
     
     // 6510-specific I/O port (addresses $0000/$0001) initialization
-    ram[0x0000] = 0x2F; // Default Data Direction Register (DDR at $0000)
-    ram[0x0001] = 0x37;  // Default I/O Port Data (at $0001)
+    ram.data[0x0000] = 0x2F; // Default Data Direction Register (DDR at $0000)
+    ram.data[0x0001] = 0x37;  // Default I/O Port Data (at $0001)
     switch_cpu_mode(0x07); // All RAM/ROM enabled
  
     // Setup instruction table
@@ -51,23 +51,23 @@ void cpu6510_init(void) {
 }
 
 // CPU I/O port handlers
-void cpu_read_handler(void) {
-    bus.data = ram[bus.address];
+uint8_t cpu_io_port_r8(void) {
+    return ram.data[bus.address];
 }
 
-void cpu_write_handler(void) {
+void cpu_io_port_w8(void) {
     // Handle the CPU port address writes
     if (bus.address == 0x001) {
-        uint8_t direction = ram[0x0000]; // Data Direction Register (DDR at $0000). 1 = set, 0 = read&clear
-        uint8_t io_mask = ram[0x0001]; // I/O Port Data (at $0001)
+        uint8_t direction = ram.data[0x0000]; // Data Direction Register (DDR at $0000). 1 = set, 0 = read&clear
+        uint8_t io_mask = ram.data[0x0001]; // I/O Port Data (at $0001)
 
         io_mask &= ~direction; // clear the mask bits that will be overwritten
         io_mask |= direction & bus.data; // set the appropriate bits from value
         switch_cpu_mode(io_mask); // Apply the new mode to the PLA
-        ram[bus.address] = io_mask; // Write the adjusted value to I/O Port Data (at $0001)
+        ram.data[bus.address] = io_mask; // Write the adjusted value to I/O Port Data (at $0001)
     } else {
         // Normal RAM writes
-        ram[bus.address] = bus.data;
+        ram.data[bus.address] = bus.data;
     }
 }
 

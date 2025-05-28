@@ -4,14 +4,16 @@
 #include <stdint.h>
 #include "c64.h"
 
-// Device callback function pointers
-typedef void (*device_read_callback_t)(void);
-typedef void (*device_write_callback_t)(void);
-
-// Device callback struct
+// Generic device structure - all devices inherit from this
 typedef struct {
-    device_read_callback_t read;
-    device_write_callback_t write;
+    uint8_t (*r8)(void);  // Read 8-bit callback - returns data
+    void (*w8)(void);     // Write 8-bit callback
+} device_t;
+
+// Device callback struct (for compatibility)
+typedef struct {
+    uint8_t (*read)(void);   // Returns data instead of setting bus.data
+    void (*write)(void);
 } device_callbacks_t;
 
 // ============================================================================

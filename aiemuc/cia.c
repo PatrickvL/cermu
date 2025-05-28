@@ -1,7 +1,28 @@
 #include "cia.h"
 #include "bus.h"
+#include <string.h>
 
 cia_state_t cia1, cia2;
+
+// CIA1 initialization
+void cia1_init(void) {
+    // Initialize CIA1 state
+    memset(&cia1, 0, sizeof(cia1));
+    
+    // Set up device callbacks
+    cia1.device.r8 = cia1_r8;
+    cia1.device.w8 = cia1_w8;
+}
+
+// CIA2 initialization
+void cia2_init(void) {
+    // Initialize CIA2 state
+    memset(&cia2, 0, sizeof(cia2));
+    
+    // Set up device callbacks
+    cia2.device.r8 = cia2_r8;
+    cia2.device.w8 = cia2_w8;
+}
 
 // Optimized CIA cycle functions - no I/O handling, just timers and logic
 void cia1_cycle(void) {
@@ -35,19 +56,19 @@ void cia2_cycle(void) {
 }
 
 // New optimized I/O handlers - called directly via callback table (no chip select checks!)
-void cia1_handle_read(void) {
+uint8_t cia1_r8(void) {
     uint8_t reg = bus.address & 0x0F;
     switch (reg) {
-        case 0x00: bus.data = cia1.port_a; break;
-        case 0x01: bus.data = cia1.port_b; break;
-        case 0x04: bus.data = cia1.timer_a & 0xFF; break;
-        case 0x05: bus.data = cia1.timer_a >> 8; break;
-        case 0x0D: bus.data = cia1.interrupt_status; cia1.interrupt_status = 0; break;
-        default: bus.data = 0xFF; break; // Unmapped registers
+        case 0x00: return cia1.port_a;
+        case 0x01: return cia1.port_b;
+        case 0x04: return cia1.timer_a & 0xFF;
+        case 0x05: return cia1.timer_a >> 8;
+        case 0x0D: { uint8_t val = cia1.interrupt_status; cia1.interrupt_status = 0; return val; }
+        default: return 0xFF; // Unmapped registers
     }
 }
 
-void cia1_handle_write(void) {
+void cia1_w8(void) {
     uint8_t reg = bus.address & 0x0F;
     switch (reg) {
         case 0x00: cia1.port_a = bus.data; break;
@@ -60,19 +81,19 @@ void cia1_handle_write(void) {
     }
 }
 
-void cia2_handle_read(void) {
+uint8_t cia2_r8(void) {
     uint8_t reg = bus.address & 0x0F;
     switch (reg) {
-        case 0x00: bus.data = cia2.port_a; break;
-        case 0x01: bus.data = cia2.port_b; break;
-        case 0x04: bus.data = cia2.timer_a & 0xFF; break;
-        case 0x05: bus.data = cia2.timer_a >> 8; break;
-        case 0x0D: bus.data = cia2.interrupt_status; cia2.interrupt_status = 0; break;
-        default: bus.data = 0xFF; break; // Unmapped registers
+        case 0x00: return cia2.port_a;
+        case 0x01: return cia2.port_b;
+        case 0x04: return cia2.timer_a & 0xFF;
+        case 0x05: return cia2.timer_a >> 8;
+        case 0x0D: { uint8_t val = cia2.interrupt_status; cia2.interrupt_status = 0; return val; }
+        default: return 0xFF; // Unmapped registers
     }
 }
 
-void cia2_handle_write(void) {
+void cia2_w8(void) {
     uint8_t reg = bus.address & 0x0F;
     switch (reg) {
         case 0x00: cia2.port_a = bus.data; break;

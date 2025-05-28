@@ -1,7 +1,18 @@
 #include "sid.h"
 #include "bus.h"
+#include <string.h>
 
 sid_state_t sid;
+
+// SID initialization
+void sid_init(void) {
+    // Initialize SID state
+    memset(&sid, 0, sizeof(sid));
+    
+    // Set up device callbacks
+    sid.device.r8 = sid_r8;
+    sid.device.w8 = sid_w8;
+}
 
 // Optimized SID cycle function - no I/O handling, just envelope generators
 void sid_cycle(void) {
@@ -17,12 +28,12 @@ void sid_cycle(void) {
 }
 
 // New optimized I/O handlers - called directly via callback table (no chip select checks!)
-void sid_handle_read(void) {
+uint8_t sid_r8(void) {
     uint8_t reg = bus.address & 0x1F;
-    bus.data = sid.registers[reg];
+    return sid.registers[reg];
 }
 
-void sid_handle_write(void) {
+void sid_w8(void) {
     uint8_t reg = bus.address & 0x1F;
     sid.registers[reg] = bus.data;
 }
