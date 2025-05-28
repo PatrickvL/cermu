@@ -20,11 +20,12 @@ typedef struct {
     void (*w8)(struct device_s* dev);     // Write 8-bit callback
 } device_t;
 
-// Device callback struct with device pointer
+// Device callback struct with separate device pointers for read and write
 typedef struct {
     uint8_t (*read)(struct device_s* dev);   // Returns data with device pointer
     void (*write)(struct device_s* dev);     // Write with device pointer
-    struct device_s* device;                 // Pointer to device instance
+    struct device_s* read_device;            // Device for read operations
+    struct device_s* write_device;           // Device for write operations (often RAM for ROM areas)
 } device_callbacks_t;
 
 // Generic device instance
