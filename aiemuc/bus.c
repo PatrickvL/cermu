@@ -34,10 +34,10 @@ void bus_cycle(void) {
     bus.total_cycles++;
     
     // All chips always run for cycle accuracy - no conditionals for performance
-    vic_cycle();       // Video timing, BA control, sprites
-    cia1_cycle();      // Timers, keyboard, joystick
-    cia2_cycle();      // Timers, serial, user port
-    sid_cycle();       // Sound generation, envelope generators
+    vic_cycle(&vic);       // Video timing, BA control, sprites
+    cia1_cycle(&cia1);     // Timers, keyboard, joystick
+    cia2_cycle(&cia2);     // Timers, serial, user port
+    sid_cycle(&sid);       // Sound generation, envelope generators
 
     // Update RDY line based on BA (hardware accurate)
     if (bus.control_lines & BA_LINE) {

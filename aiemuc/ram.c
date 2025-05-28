@@ -6,13 +6,13 @@
 ram_state_t ram;
 
 // RAM initialization
-void ram_init(void) {
+void ram_init(ram_state_t* ram_dev) {
     // Initialize RAM state
-    memset(&ram, 0, sizeof(ram));
+    memset(ram_dev, 0, sizeof(*ram_dev));
     
     // Set up device callbacks
-    ram.device.r8 = ram_r8;
-    ram.device.w8 = ram_w8;
+    ram_dev->device.r8 = ram_r8;
+    ram_dev->device.w8 = ram_w8;
 }
 
 // RAM I/O handlers - called directly via callback table (no chip select checks!)

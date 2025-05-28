@@ -5,13 +5,13 @@
 vic_state_t vic;
 
 // VIC initialization
-void vic_init(void) {
+void vic_init(vic_state_t* vic_dev) {
     // Initialize VIC state
-    memset(&vic, 0, sizeof(vic));
+    memset(vic_dev, 0, sizeof(*vic_dev));
     
     // Set up device callbacks
-    vic.device.r8 = vic_r8;
-    vic.device.w8 = vic_w8;
+    vic_dev->device.r8 = vic_r8;
+    vic_dev->device.w8 = vic_w8;
 }
 
 // VIC write masks for each register (defines which bits are writable)
@@ -27,33 +27,33 @@ const uint8_t vic_write_masks[64] = {
 };
 
 // Optimized VIC cycle function - no I/O handling, just timing and logic
-void vic_cycle(void) {
+void vic_cycle(vic_state_t* vic_dev) {
     // Always increment raster timing
-    vic.raster_cycle++;
-    if (vic.raster_cycle >= 63) {
-        vic.raster_cycle = 0;
-        vic.raster_line++;
-        if (vic.raster_line >= 312) vic.raster_line = 0;
+    vic_dev->raster_cycle++;
+    if (vic_dev->raster_cycle >= 63) {
+        vic_dev->raster_cycle = 0;
+        vic_dev->raster_line++;
+        if (vic_dev->raster_line >= 312) vic_dev->raster_line = 0;
     }
     
     // Check for badline condition (hardware accurate)
-    vic.badline_condition = (vic.raster_line >= 0x30 && vic.raster_line <= 0xF7) &&
-                           ((vic.raster_line & 7) == (vic.registers[0x11] & 7));
+    vic_dev->badline_condition = (vic_dev->raster_line >= 0x30 && vic_dev->raster_line <= 0xF7) &&
+                                ((vic_dev->raster_line & 7) == (vic_dev->registers[0x11] & 7));
     
     // Generate BA signal for badline
-    if (vic.badline_condition && vic.raster_cycle >= 15 && vic.raster_cycle <= 54) {
+    if (vic_dev->badline_condition && vic_dev->raster_cycle >= 15 && vic_dev->raster_cycle <= 54) {
         bus.control_lines &= ~BA_LINE; // Pull BA low - CPU will stall
     } else {
         bus.control_lines |= BA_LINE;  // Release BA
     }
     
     // AEC follows BA with one cycle delay (hardware accurate)
-    if (vic.prev_ba && !(bus.control_lines & BA_LINE)) {
+    if (vic_dev->prev_ba && !(bus.control_lines & BA_LINE)) {
         bus.control_lines &= ~AEC_LINE;
-    } else if (!vic.prev_ba && (bus.control_lines & BA_LINE)) {
+    } else if (!vic_dev->prev_ba && (bus.control_lines & BA_LINE)) {
         bus.control_lines |= AEC_LINE;
     }
-    vic.prev_ba = (bus.control_lines & BA_LINE) != 0;
+    vic_dev->prev_ba = (bus.control_lines & BA_LINE) != 0;
 }
 
 // New optimized I/O handlers - called directly via callback table (no chip select checks!)

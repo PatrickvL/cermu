@@ -6,13 +6,13 @@
 rom_state_t rom;
 
 // ROM initialization
-void rom_init(void) {
+void rom_init(rom_state_t* rom_dev) {
     // Initialize ROM state
-    memset(&rom, 0, sizeof(rom));
+    memset(rom_dev, 0, sizeof(*rom_dev));
     
     // Set up device callbacks
-    rom.device.r8 = basic_r8;  // Default to basic, will be overridden by address mapping
-    rom.device.w8 = NULL;      // ROM is read-only
+    rom_dev->device.r8 = basic_r8;  // Default to basic, will be overridden by address mapping
+    rom_dev->device.w8 = NULL;      // ROM is read-only
 }
 
 // ROM I/O handlers - called directly via callback table (no chip select checks!)

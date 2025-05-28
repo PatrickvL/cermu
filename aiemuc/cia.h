@@ -25,14 +25,14 @@ typedef struct {
 
 extern cia_state_t cia1, cia2;
 
-// CIA functions
-void cia1_init(void);
-void cia2_init(void);
-void cia1_cycle(void);
-void cia2_cycle(void);
-
 // Forward declaration
 struct device_s;
+
+// CIA functions
+void cia1_init(cia_state_t* cia_dev);
+void cia2_init(cia_state_t* cia_dev);
+void cia1_cycle(cia_state_t* cia_dev);
+void cia2_cycle(cia_state_t* cia_dev);
 
 // Optimized I/O handlers (called via callback table)
 uint8_t cia1_r8(struct device_s* dev);

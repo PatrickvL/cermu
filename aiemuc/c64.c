@@ -27,12 +27,12 @@ void c64_emulate_frame(void) {
 // ============================================================================
 void c64_init(void) {
     // Initialize all devices (each device initializes its own state and callbacks)
-    ram_init();
-    rom_init();
-    vic_init();
-    cia1_init();
-    cia2_init();
-    sid_init();
+    ram_init(&ram);
+    rom_init(&rom);
+    vic_init(&vic);
+    cia1_init(&cia1);
+    cia2_init(&cia2);
+    sid_init(&sid);
     
     // Initialize bus system (generates PLA maps internally)
     bus_init();

@@ -5,52 +5,52 @@
 cia_state_t cia1, cia2;
 
 // CIA1 initialization
-void cia1_init(void) {
+void cia1_init(cia_state_t* cia_dev) {
     // Initialize CIA1 state
-    memset(&cia1, 0, sizeof(cia1));
+    memset(cia_dev, 0, sizeof(*cia_dev));
     
     // Set up device callbacks
-    cia1.device.r8 = cia1_r8;
-    cia1.device.w8 = cia1_w8;
+    cia_dev->device.r8 = cia1_r8;
+    cia_dev->device.w8 = cia1_w8;
 }
 
 // CIA2 initialization
-void cia2_init(void) {
+void cia2_init(cia_state_t* cia_dev) {
     // Initialize CIA2 state
-    memset(&cia2, 0, sizeof(cia2));
+    memset(cia_dev, 0, sizeof(*cia_dev));
     
     // Set up device callbacks
-    cia2.device.r8 = cia2_r8;
-    cia2.device.w8 = cia2_w8;
+    cia_dev->device.r8 = cia2_r8;
+    cia_dev->device.w8 = cia2_w8;
 }
 
 // Optimized CIA cycle functions - no I/O handling, just timers and logic
-void cia1_cycle(void) {
+void cia1_cycle(cia_state_t* cia_dev) {
     // Timer A always decrements when enabled (hardware accurate)
-    if (cia1.control_a & 1) {
-        if (cia1.timer_a == 0) {
-            cia1.timer_a = cia1.timer_a_latch;
-            cia1.interrupt_status |= 1; // Timer A interrupt
-            if (cia1.interrupt_control & 1) {
+    if (cia_dev->control_a & 1) {
+        if (cia_dev->timer_a == 0) {
+            cia_dev->timer_a = cia_dev->timer_a_latch;
+            cia_dev->interrupt_status |= 1; // Timer A interrupt
+            if (cia_dev->interrupt_control & 1) {
                 bus.control_lines |= IRQ_LINE;
             }
         } else {
-            cia1.timer_a--;
+            cia_dev->timer_a--;
         }
     }
 }
 
-void cia2_cycle(void) {
+void cia2_cycle(cia_state_t* cia_dev) {
     // Timer A always decrements when enabled
-    if (cia2.control_a & 1) {
-        if (cia2.timer_a == 0) {
-            cia2.timer_a = cia2.timer_a_latch;
-            cia2.interrupt_status |= 1;
-            if (cia2.interrupt_control & 1) {
+    if (cia_dev->control_a & 1) {
+        if (cia_dev->timer_a == 0) {
+            cia_dev->timer_a = cia_dev->timer_a_latch;
+            cia_dev->interrupt_status |= 1;
+            if (cia_dev->interrupt_control & 1) {
                 bus.control_lines |= NMI_LINE;
             }
         } else {
-            cia2.timer_a--;
+            cia_dev->timer_a--;
         }
     }
 }
