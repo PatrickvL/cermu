@@ -20,9 +20,7 @@ typedef struct {
 typedef struct {
     uint16_t address;       // A0-A15
     uint8_t  data;          // D0-D7
-    uint8_t  control_lines; // R/W, IRQ, NMI
-    uint8_t  bus_control;   // BA, AEC, RDY
-    uint32_t reserved;      // Padding for alignment
+    uint8_t  control_lines; // R/W, IRQ, NMI, BA, AEC, RDY
 } bus_state_t;
 
 // Global bus state
@@ -49,7 +47,7 @@ void bus_cycle(void);
 extern device_callbacks_t device_callbacks[256];
 
 // CPU ready check - hardware accurate BA/RDY handling
-#define CPU_READY() ((bus_state.bus_control & RDY_LINE) != 0)
+#define CPU_READY() ((bus_state.control_lines & RDY_LINE) != 0)
 
 // Wait for CPU ready with automatic stall handling
 #define WAIT_READY_THEN_READ(addr, label) do { \
