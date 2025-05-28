@@ -7,19 +7,19 @@
 // Absolute addressing
 static inline void addr_abs_read(void) {
     WAIT_READY_THEN_READ(cpu.pc++, abs_lo_wait);
-    cpu.lo = bus_state.data;
+    cpu.lo = bus.data;
     WAIT_READY_THEN_READ(cpu.pc++, abs_hi_wait);
-    cpu.hi = bus_state.data;
+    cpu.hi = bus.data;
     cpu.addr_abs = (cpu.hi << 8) | cpu.lo;
     WAIT_READY_THEN_READ(cpu.addr_abs, abs_data_wait);
-    cpu.fetched = bus_state.data;
+    cpu.fetched = bus.data;
 }
 
 static inline void addr_abs_write(uint8_t value) {
     WAIT_READY_THEN_READ(cpu.pc++, abs_w_lo_wait);
-    cpu.lo = bus_state.data;
+    cpu.lo = bus.data;
     WAIT_READY_THEN_READ(cpu.pc++, abs_w_hi_wait);
-    cpu.hi = bus_state.data;
+    cpu.hi = bus.data;
     cpu.addr_abs = (cpu.hi << 8) | cpu.lo;
     WAIT_READY_THEN_WRITE(cpu.addr_abs, value, abs_w_data_wait);
 }
@@ -27,9 +27,9 @@ static inline void addr_abs_write(uint8_t value) {
 // Absolute,X addressing
 static inline void addr_absx_read(void) {
     WAIT_READY_THEN_READ(cpu.pc++, absx_lo_wait);
-    cpu.lo = bus_state.data;
+    cpu.lo = bus.data;
     WAIT_READY_THEN_READ(cpu.pc++, absx_hi_wait);
-    cpu.hi = bus_state.data;
+    cpu.hi = bus.data;
     uint16_t base = (cpu.hi << 8) | cpu.lo;
     cpu.addr_abs = base + cpu.x;
     
@@ -39,14 +39,14 @@ static inline void addr_absx_read(void) {
         WAIT_READY_THEN_READ(base, absx_dummy_wait);
     }
     WAIT_READY_THEN_READ(cpu.addr_abs, absx_data_wait);
-    cpu.fetched = bus_state.data;
+    cpu.fetched = bus.data;
 }
 
 static inline void addr_absx_write(uint8_t value) {
     WAIT_READY_THEN_READ(cpu.pc++, absx_w_lo_wait);
-    cpu.lo = bus_state.data;
+    cpu.lo = bus.data;
     WAIT_READY_THEN_READ(cpu.pc++, absx_w_hi_wait);
-    cpu.hi = bus_state.data;
+    cpu.hi = bus.data;
     uint16_t base = (cpu.hi << 8) | cpu.lo;
     cpu.addr_abs = base + cpu.x;
     // Always dummy read for writes
@@ -57,9 +57,9 @@ static inline void addr_absx_write(uint8_t value) {
 // Absolute,Y addressing
 static inline void addr_absy_read(void) {
     WAIT_READY_THEN_READ(cpu.pc++, absy_lo_wait);
-    cpu.lo = bus_state.data;
+    cpu.lo = bus.data;
     WAIT_READY_THEN_READ(cpu.pc++, absy_hi_wait);
-    cpu.hi = bus_state.data;
+    cpu.hi = bus.data;
     uint16_t base = (cpu.hi << 8) | cpu.lo;
     cpu.addr_abs = base + cpu.y;
     
@@ -69,14 +69,14 @@ static inline void addr_absy_read(void) {
         WAIT_READY_THEN_READ(base, absy_dummy_wait);
     }
     WAIT_READY_THEN_READ(cpu.addr_abs, absy_data_wait);
-    cpu.fetched = bus_state.data;
+    cpu.fetched = bus.data;
 }
 
 static inline void addr_absy_write(uint8_t value) {
     WAIT_READY_THEN_READ(cpu.pc++, absy_w_lo_wait);
-    cpu.lo = bus_state.data;
+    cpu.lo = bus.data;
     WAIT_READY_THEN_READ(cpu.pc++, absy_w_hi_wait);
-    cpu.hi = bus_state.data;
+    cpu.hi = bus.data;
     uint16_t base = (cpu.hi << 8) | cpu.lo;
     cpu.addr_abs = base + cpu.y;
     // Always dummy read for writes
@@ -94,7 +94,7 @@ static inline void addr_acc(void) {
 // Immediate addressing
 static inline void addr_imm(void) {
     WAIT_READY_THEN_READ(cpu.pc++, imm_wait);
-    cpu.fetched = bus_state.data;
+    cpu.fetched = bus.data;
 }
 
 // Implied addressing
@@ -106,47 +106,47 @@ static inline void addr_imp(void) {
 // Indirect addressing (JMP only)
 static inline void addr_ind(void) {
     WAIT_READY_THEN_READ(cpu.pc++, ind_lo_wait);
-    cpu.lo = bus_state.data;
+    cpu.lo = bus.data;
     WAIT_READY_THEN_READ(cpu.pc++, ind_hi_wait);
-    cpu.hi = bus_state.data;
+    cpu.hi = bus.data;
     uint16_t ptr = (cpu.hi << 8) | cpu.lo;
     
     WAIT_READY_THEN_READ(ptr, ind_ptr_lo_wait);
-    cpu.lo = bus_state.data;
+    cpu.lo = bus.data;
     // Handle page boundary bug - increment only low byte
     WAIT_READY_THEN_READ((ptr & 0xFF00) | ((ptr + 1) & 0xFF), ind_ptr_hi_wait);
-    cpu.hi = bus_state.data;
+    cpu.hi = bus.data;
     cpu.addr_abs = (cpu.hi << 8) | cpu.lo;
 }
 
 // Zero page addressing
 static inline void addr_zp(void) {
     WAIT_READY_THEN_READ(cpu.pc++, zp_addr_wait);
-    cpu.addr_abs = bus_state.data;
+    cpu.addr_abs = bus.data;
     WAIT_READY_THEN_READ(cpu.addr_abs, zp_data_wait);
-    cpu.fetched = bus_state.data;
+    cpu.fetched = bus.data;
 }
 
 static inline void addr_zp_write(uint8_t value) {
     WAIT_READY_THEN_READ(cpu.pc++, zp_w_addr_wait);
-    cpu.addr_abs = bus_state.data;
+    cpu.addr_abs = bus.data;
     WAIT_READY_THEN_WRITE(cpu.addr_abs, value, zp_w_data_wait);
 }
 
 // Zero page,X addressing
 static inline void addr_zpx(void) {
     WAIT_READY_THEN_READ(cpu.pc++, zpx_addr_wait);
-    uint8_t base = bus_state.data;
+    uint8_t base = bus.data;
     // Dummy read for extra cycle
     WAIT_READY_THEN_READ(base, zpx_dummy_wait);
     cpu.addr_abs = (base + cpu.x) & 0xFF;
     WAIT_READY_THEN_READ(cpu.addr_abs, zpx_data_wait);
-    cpu.fetched = bus_state.data;
+    cpu.fetched = bus.data;
 }
 
 static inline void addr_zpx_write(uint8_t value) {
     WAIT_READY_THEN_READ(cpu.pc++, zpx_w_addr_wait);
-    uint8_t base = bus_state.data;
+    uint8_t base = bus.data;
     // Dummy read for extra cycle
     WAIT_READY_THEN_READ(base, zpx_w_dummy_wait);
     cpu.addr_abs = (base + cpu.x) & 0xFF;
@@ -156,17 +156,17 @@ static inline void addr_zpx_write(uint8_t value) {
 // Zero page,Y addressing
 static inline void addr_zpy(void) {
     WAIT_READY_THEN_READ(cpu.pc++, zpy_addr_wait);
-    uint8_t base = bus_state.data;
+    uint8_t base = bus.data;
     // Dummy read for extra cycle
     WAIT_READY_THEN_READ(base, zpy_dummy_wait);
     cpu.addr_abs = (base + cpu.y) & 0xFF;
     WAIT_READY_THEN_READ(cpu.addr_abs, zpy_data_wait);
-    cpu.fetched = bus_state.data;
+    cpu.fetched = bus.data;
 }
 
 static inline void addr_zpy_write(uint8_t value) {
     WAIT_READY_THEN_READ(cpu.pc++, zpy_w_addr_wait);
-    uint8_t base = bus_state.data;
+    uint8_t base = bus.data;
     // Dummy read for extra cycle
     WAIT_READY_THEN_READ(base, zpy_w_dummy_wait);
     cpu.addr_abs = (base + cpu.y) & 0xFF;
@@ -176,31 +176,31 @@ static inline void addr_zpy_write(uint8_t value) {
 // (Zero page,X) - Indexed Indirect addressing
 static inline void addr_zpx_ind(void) {
     WAIT_READY_THEN_READ(cpu.pc++, zpx_ind_base_wait);
-    uint8_t base = bus_state.data;
+    uint8_t base = bus.data;
     // Dummy read for extra cycle
     WAIT_READY_THEN_READ(base, zpx_ind_dummy_wait);
     uint8_t zp_addr = (base + cpu.x) & 0xFF;
     
     WAIT_READY_THEN_READ(zp_addr, zpx_ind_lo_wait);
-    cpu.lo = bus_state.data;
+    cpu.lo = bus.data;
     WAIT_READY_THEN_READ((zp_addr + 1) & 0xFF, zpx_ind_hi_wait);
-    cpu.hi = bus_state.data;
+    cpu.hi = bus.data;
     cpu.addr_abs = (cpu.hi << 8) | cpu.lo;
     WAIT_READY_THEN_READ(cpu.addr_abs, zpx_ind_data_wait);
-    cpu.fetched = bus_state.data;
+    cpu.fetched = bus.data;
 }
 
 static inline void addr_zpx_ind_write(uint8_t value) {
     WAIT_READY_THEN_READ(cpu.pc++, zpx_ind_w_base_wait);
-    uint8_t base = bus_state.data;
+    uint8_t base = bus.data;
     // Dummy read for extra cycle
     WAIT_READY_THEN_READ(base, zpx_ind_w_dummy_wait);
     uint8_t zp_addr = (base + cpu.x) & 0xFF;
     
     WAIT_READY_THEN_READ(zp_addr, zpx_ind_w_lo_wait);
-    cpu.lo = bus_state.data;
+    cpu.lo = bus.data;
     WAIT_READY_THEN_READ((zp_addr + 1) & 0xFF, zpx_ind_w_hi_wait);
-    cpu.hi = bus_state.data;
+    cpu.hi = bus.data;
     cpu.addr_abs = (cpu.hi << 8) | cpu.lo;
     WAIT_READY_THEN_WRITE(cpu.addr_abs, value, zpx_ind_w_data_wait);
 }
@@ -208,12 +208,12 @@ static inline void addr_zpx_ind_write(uint8_t value) {
 // (Zero page),Y - Indirect Indexed addressing
 static inline void addr_zp_ind_y(void) {
     WAIT_READY_THEN_READ(cpu.pc++, zp_ind_y_base_wait);
-    uint8_t zp_addr = bus_state.data;
+    uint8_t zp_addr = bus.data;
     
     WAIT_READY_THEN_READ(zp_addr, zp_ind_y_lo_wait);
-    cpu.lo = bus_state.data;
+    cpu.lo = bus.data;
     WAIT_READY_THEN_READ((zp_addr + 1) & 0xFF, zp_ind_y_hi_wait);
-    cpu.hi = bus_state.data;
+    cpu.hi = bus.data;
     uint16_t base = (cpu.hi << 8) | cpu.lo;
     cpu.addr_abs = base + cpu.y;
     
@@ -223,17 +223,17 @@ static inline void addr_zp_ind_y(void) {
         WAIT_READY_THEN_READ(base, zp_ind_y_dummy_wait);
     }
     WAIT_READY_THEN_READ(cpu.addr_abs, zp_ind_y_data_wait);
-    cpu.fetched = bus_state.data;
+    cpu.fetched = bus.data;
 }
 
 static inline void addr_zp_ind_y_write(uint8_t value) {
     WAIT_READY_THEN_READ(cpu.pc++, zp_ind_y_w_base_wait);
-    uint8_t zp_addr = bus_state.data;
+    uint8_t zp_addr = bus.data;
     
     WAIT_READY_THEN_READ(zp_addr, zp_ind_y_w_lo_wait);
-    cpu.lo = bus_state.data;
+    cpu.lo = bus.data;
     WAIT_READY_THEN_READ((zp_addr + 1) & 0xFF, zp_ind_y_w_hi_wait);
-    cpu.hi = bus_state.data;
+    cpu.hi = bus.data;
     uint16_t base = (cpu.hi << 8) | cpu.lo;
     cpu.addr_abs = base + cpu.y;
     
@@ -249,9 +249,9 @@ static inline void addr_zp_ind_y_write(uint8_t value) {
 // RMW Zero page
 static inline void addr_rmw_zp(uint8_t (*operation)(uint8_t)) {
     WAIT_READY_THEN_READ(cpu.pc++, rmw_zp_addr_wait);
-    cpu.addr_abs = bus_state.data;
+    cpu.addr_abs = bus.data;
     WAIT_READY_THEN_READ(cpu.addr_abs, rmw_zp_read_wait);
-    cpu.fetched = bus_state.data;
+    cpu.fetched = bus.data;
     // Dummy write
     WAIT_READY_THEN_WRITE(cpu.addr_abs, cpu.fetched, rmw_zp_dummy_wait);
     cpu.fetched = operation(cpu.fetched);
@@ -261,11 +261,11 @@ static inline void addr_rmw_zp(uint8_t (*operation)(uint8_t)) {
 // RMW Zero page,X
 static inline void addr_rmw_zpx(uint8_t (*operation)(uint8_t)) {
     WAIT_READY_THEN_READ(cpu.pc++, rmw_zpx_addr_wait);
-    uint8_t base = bus_state.data;
+    uint8_t base = bus.data;
     WAIT_READY_THEN_READ(base, rmw_zpx_dummy1_wait);
     cpu.addr_abs = (base + cpu.x) & 0xFF;
     WAIT_READY_THEN_READ(cpu.addr_abs, rmw_zpx_read_wait);
-    cpu.fetched = bus_state.data;
+    cpu.fetched = bus.data;
     // Dummy write
     WAIT_READY_THEN_WRITE(cpu.addr_abs, cpu.fetched, rmw_zpx_dummy2_wait);
     cpu.fetched = operation(cpu.fetched);
@@ -275,12 +275,12 @@ static inline void addr_rmw_zpx(uint8_t (*operation)(uint8_t)) {
 // RMW Absolute
 static inline void addr_rmw_abs(uint8_t (*operation)(uint8_t)) {
     WAIT_READY_THEN_READ(cpu.pc++, rmw_abs_lo_wait);
-    cpu.lo = bus_state.data;
+    cpu.lo = bus.data;
     WAIT_READY_THEN_READ(cpu.pc++, rmw_abs_hi_wait);
-    cpu.hi = bus_state.data;
+    cpu.hi = bus.data;
     cpu.addr_abs = (cpu.hi << 8) | cpu.lo;
     WAIT_READY_THEN_READ(cpu.addr_abs, rmw_abs_read_wait);
-    cpu.fetched = bus_state.data;
+    cpu.fetched = bus.data;
     // Dummy write
     WAIT_READY_THEN_WRITE(cpu.addr_abs, cpu.fetched, rmw_abs_dummy_wait);
     cpu.fetched = operation(cpu.fetched);
@@ -290,15 +290,15 @@ static inline void addr_rmw_abs(uint8_t (*operation)(uint8_t)) {
 // RMW Absolute,X
 static inline void addr_rmw_absx(uint8_t (*operation)(uint8_t)) {
     WAIT_READY_THEN_READ(cpu.pc++, rmw_absx_lo_wait);
-    cpu.lo = bus_state.data;
+    cpu.lo = bus.data;
     WAIT_READY_THEN_READ(cpu.pc++, rmw_absx_hi_wait);
-    cpu.hi = bus_state.data;
+    cpu.hi = bus.data;
     uint16_t base = (cpu.hi << 8) | cpu.lo;
     cpu.addr_abs = base + cpu.x;
     // Always dummy read for RMW
     WAIT_READY_THEN_READ(base, rmw_absx_dummy1_wait);
     WAIT_READY_THEN_READ(cpu.addr_abs, rmw_absx_read_wait);
-    cpu.fetched = bus_state.data;
+    cpu.fetched = bus.data;
     // Dummy write
     WAIT_READY_THEN_WRITE(cpu.addr_abs, cpu.fetched, rmw_absx_dummy2_wait);
     cpu.fetched = operation(cpu.fetched);

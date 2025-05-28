@@ -17,7 +17,7 @@
 // NOTE: PLA map entries removed - now using device handlers for all access
 
 // Global bus state
-bus_state_t bus_state;
+bus_state_t bus;
 
 
 // ============================================================================
@@ -27,9 +27,6 @@ bus_state_t bus_state;
 // 32 possible PLA modes, 256 memory blocks each (256-byte granularity for CIA compatibility)
 device_callbacks_t chip_select_maps[32][256];
 device_callbacks_t* chip_select_map; // Current active map
-
-// External CPU state
-extern cpu6510_state_t cpu;
 
 // Switch CPU mode
 void switch_cpu_mode(uint8_t mode) {
@@ -42,7 +39,7 @@ device_callbacks_t device_callbacks[256];
 
 // Default no-op handlers for unmapped areas
 static void nop_read_handler(void) {
-    bus_state.data = 0xFF; // Default read value for unmapped areas
+    bus.data = 0xFF; // Default read value for unmapped areas
 }
 
 static void nop_write_handler(void) {
@@ -51,9 +48,11 @@ static void nop_write_handler(void) {
 
 void bus_init(void) {
     // Initialize bus state
-    bus_state.address = 0;
-    bus_state.data = 0;
-    bus_state.control_lines = BA_LINE | AEC_LINE | RDY_LINE;
+    bus.address = 0;
+    bus.data = 0;
+    bus.control_lines = BA_LINE | AEC_LINE | RDY_LINE;
+    bus.total_cycles = 0;
+    
     
     // Initialize callback table with no-op handlers
     for (int i = 0; i < 256; i++) {
@@ -113,7 +112,7 @@ void (*bus_cycle_callback)(void) = NULL;
 // OPTIMIZED BUS CYCLE - Direct callback dispatch, no chip select checks
 // ============================================================================
 void bus_cycle(void) {
-    cpu.total_cycles++;
+    bus.total_cycles++;
     
     // All chips always run for cycle accuracy - no conditionals for performance
     vic_cycle();       // Video timing, BA control, sprites
@@ -122,10 +121,10 @@ void bus_cycle(void) {
     sid_cycle();       // Sound generation, envelope generators
 
     // Update RDY line based on BA (hardware accurate)
-    if (bus_state.control_lines & BA_LINE) {
-        bus_state.control_lines |= RDY_LINE;
+    if (bus.control_lines & BA_LINE) {
+        bus.control_lines |= RDY_LINE;
     } else {
-        bus_state.control_lines &= ~RDY_LINE;
+        bus.control_lines &= ~RDY_LINE;
     }
     // Call the callback if set
     if (bus_cycle_callback) bus_cycle_callback();
@@ -133,7 +132,7 @@ void bus_cycle(void) {
 
 // Optimized read cycle implementation - preselected callback dispatch
 void cpu_read_cycle(uint16_t addr) {
-    bus_state.address = addr;
+    bus.address = addr;
     // Ultra-fast address decoding with direct callback selection
     chip_select_map[addr >> 8].write();
     bus_cycle();
@@ -141,8 +140,8 @@ void cpu_read_cycle(uint16_t addr) {
 
 // Optimized write cycle implementation - preselected callback dispatch
 void cpu_write_cycle(uint16_t addr, uint8_t value) {
-    bus_state.address = addr;
-    bus_state.data = value;
+    bus.address = addr;
+    bus.data = value;
     // Ultra-fast address decoding with direct callback selection
     chip_select_map[addr >> 8].write();
     bus_cycle();

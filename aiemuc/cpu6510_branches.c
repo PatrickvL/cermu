@@ -9,7 +9,7 @@
 // Branch Instructions
 void bcc_func(void) {
     WAIT_READY_THEN_READ(cpu.pc++, bcc_wait1);
-    cpu.addr_rel = bus_state.data;
+    cpu.addr_rel = bus.data;
     if (!(cpu.p & FLAG_C)) {
         // Branch taken
         WAIT_READY_THEN_READ(cpu.pc, bcc_wait2); // Dummy read
@@ -24,7 +24,7 @@ void bcc_func(void) {
 
 void bcs_func(void) {
     WAIT_READY_THEN_READ(cpu.pc++, bcs_wait1);
-    cpu.addr_rel = bus_state.data;
+    cpu.addr_rel = bus.data;
     if (cpu.p & FLAG_C) {
         // Branch taken
         WAIT_READY_THEN_READ(cpu.pc, bcs_wait2); // Dummy read
@@ -39,7 +39,7 @@ void bcs_func(void) {
 
 void beq_func(void) {
     WAIT_READY_THEN_READ(cpu.pc++, beq_wait1);
-    cpu.addr_rel = bus_state.data;
+    cpu.addr_rel = bus.data;
     if (cpu.p & FLAG_Z) {
         // Branch taken
         WAIT_READY_THEN_READ(cpu.pc, beq_wait2); // Dummy read
@@ -54,7 +54,7 @@ void beq_func(void) {
 
 void bne_func(void) {
     WAIT_READY_THEN_READ(cpu.pc++, bne_wait1);
-    cpu.addr_rel = bus_state.data;
+    cpu.addr_rel = bus.data;
     if (!(cpu.p & FLAG_Z)) {
         // Branch taken
         WAIT_READY_THEN_READ(cpu.pc, bne_wait2); // Dummy read
@@ -69,7 +69,7 @@ void bne_func(void) {
 
 void bmi_func(void) {
     WAIT_READY_THEN_READ(cpu.pc++, bmi_wait1);
-    cpu.addr_rel = bus_state.data;
+    cpu.addr_rel = bus.data;
     if (cpu.p & FLAG_N) {
         // Branch taken
         WAIT_READY_THEN_READ(cpu.pc, bmi_wait2); // Dummy read
@@ -84,7 +84,7 @@ void bmi_func(void) {
 
 void bpl_func(void) {
     WAIT_READY_THEN_READ(cpu.pc++, bpl_wait1);
-    cpu.addr_rel = bus_state.data;
+    cpu.addr_rel = bus.data;
     if (!(cpu.p & FLAG_N)) {
         // Branch taken
         WAIT_READY_THEN_READ(cpu.pc, bpl_wait2); // Dummy read
@@ -99,7 +99,7 @@ void bpl_func(void) {
 
 void bvc_func(void) {
     WAIT_READY_THEN_READ(cpu.pc++, bvc_wait1);
-    cpu.addr_rel = bus_state.data;
+    cpu.addr_rel = bus.data;
     if (!(cpu.p & FLAG_V)) {
         // Branch taken
         WAIT_READY_THEN_READ(cpu.pc, bvc_wait2); // Dummy read
@@ -114,7 +114,7 @@ void bvc_func(void) {
 
 void bvs_func(void) {
     WAIT_READY_THEN_READ(cpu.pc++, bvs_wait1);
-    cpu.addr_rel = bus_state.data;
+    cpu.addr_rel = bus.data;
     if (cpu.p & FLAG_V) {
         // Branch taken
         WAIT_READY_THEN_READ(cpu.pc, bvs_wait2); // Dummy read
@@ -130,22 +130,22 @@ void bvs_func(void) {
 // Jump Instructions
 void jmp_absolute_func(void) {
     WAIT_READY_THEN_READ(cpu.pc++, jmp_abs_wait1);
-    cpu.addr_abs = bus_state.data;
+    cpu.addr_abs = bus.data;
     WAIT_READY_THEN_READ(cpu.pc++, jmp_abs_wait2);
-    cpu.addr_abs |= (bus_state.data << 8);
+    cpu.addr_abs |= (bus.data << 8);
     cpu.pc = cpu.addr_abs;
     NEXT_INSTRUCTION(jmp_abs_fetch_wait);
 }
 
 void jmp_indirect_func(void) {
     WAIT_READY_THEN_READ(cpu.pc++, jmp_ind_wait1);
-    cpu.lo = bus_state.data;
+    cpu.lo = bus.data;
     WAIT_READY_THEN_READ(cpu.pc++, jmp_ind_wait2);
-    cpu.hi = bus_state.data;
+    cpu.hi = bus.data;
     cpu.addr_abs = (cpu.hi << 8) | cpu.lo;
     
     WAIT_READY_THEN_READ(cpu.addr_abs, jmp_ind_wait3);
-    cpu.lo = bus_state.data;
+    cpu.lo = bus.data;
     
     // 6502 bug: if low byte is $FF, high byte wraps within same page
     if ((cpu.addr_abs & 0xFF) == 0xFF) {
@@ -155,7 +155,7 @@ void jmp_indirect_func(void) {
     }
     
     WAIT_READY_THEN_READ(cpu.addr_abs, jmp_ind_wait4);
-    cpu.hi = bus_state.data;
+    cpu.hi = bus.data;
     cpu.pc = (cpu.hi << 8) | cpu.lo;
     NEXT_INSTRUCTION(jmp_ind_fetch_wait);
 }
@@ -163,12 +163,12 @@ void jmp_indirect_func(void) {
 // Subroutine Instructions
 void jsr_func(void) {
     WAIT_READY_THEN_READ(cpu.pc++, jsr_wait1);
-    cpu.lo = bus_state.data;
+    cpu.lo = bus.data;
     WAIT_READY_THEN_READ(0x0100 + cpu.sp, jsr_wait2); // Dummy read from stack
     cpu_push((cpu.pc >> 8) & 0xFF); // Push PC high byte (return address - 1)
     cpu_push(cpu.pc & 0xFF);         // Push PC low byte
     WAIT_READY_THEN_READ(cpu.pc++, jsr_wait3);
-    cpu.hi = bus_state.data;
+    cpu.hi = bus.data;
     cpu.pc = (cpu.hi << 8) | cpu.lo;
     NEXT_INSTRUCTION(jsr_fetch_wait);
 }

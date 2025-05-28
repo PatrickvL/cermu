@@ -17,7 +17,6 @@ typedef struct {
 } vic_state_t;
 
 extern vic_state_t vic;
-extern const uint8_t vic_write_masks[64];
 
 // VIC functions
 void vic_cycle(void);

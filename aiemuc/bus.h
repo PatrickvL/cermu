@@ -21,11 +21,11 @@ typedef struct {
     uint16_t address;       // A0-A15
     uint8_t  data;          // D0-D7
     uint8_t  control_lines; // R/W, IRQ, NMI, BA, AEC, RDY
+    uint64_t total_cycles;  // Total cycles executed
 } bus_state_t;
 
 // Global bus state
-extern bus_state_t bus_state;
-
+extern bus_state_t bus;
 
 // ============================================================================
 // PLA EMULATION - Pre-computed chip select maps for each memory mode
@@ -43,11 +43,8 @@ void bus_init(void);
 // Bus cycle function
 void bus_cycle(void);
 
-// Single device callback table - indexed by chip select value
-extern device_callbacks_t device_callbacks[256];
-
 // CPU ready check - hardware accurate BA/RDY handling
-#define CPU_READY() ((bus_state.control_lines & RDY_LINE) != 0)
+#define CPU_READY() ((bus.control_lines & RDY_LINE) != 0)
 
 // Wait for CPU ready with automatic stall handling
 #define WAIT_READY_THEN_READ(addr, label) do { \
