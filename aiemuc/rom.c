@@ -1,49 +1,46 @@
 #include "rom.h"
 #include "bus.h"
 #include <string.h>
+#include <stdlib.h>
 
-// Basic ROM initialization
-void basic_rom_init(basic_rom_state_t* basic_dev) {
-    // Initialize Basic ROM state
-    memset(basic_dev, 0, sizeof(*basic_dev));
+// Generic ROM initialization with configurable size and base address
+void rom_init(rom_state_t* rom_dev, uint16_t size, uint16_t base_address) {
+    // Initialize ROM state
+    memset(rom_dev, 0, sizeof(*rom_dev));
+    
+    // Allocate memory for ROM data
+    rom_dev->data = malloc(size);
+    if (rom_dev->data) {
+        memset(rom_dev->data, 0, size);
+    }
+    
+    // Set ROM parameters
+    rom_dev->size = size;
+    rom_dev->base_address = base_address;
     
     // Set up device callbacks
-    basic_dev->device.r8 = basic_rom_r8;
-    basic_dev->device.w8 = NULL;  // ROM is read-only
+    rom_dev->device.r8 = rom_r8;
+    rom_dev->device.w8 = NULL;  // ROM is read-only
 }
 
-// Kernal ROM initialization
-void kernal_rom_init(kernal_rom_state_t* kernal_dev) {
-    // Initialize Kernal ROM state
-    memset(kernal_dev, 0, sizeof(*kernal_dev));
+// Generic ROM read handler
+uint8_t rom_r8(struct device_s* dev) {
+    rom_state_t* rom_dev = (rom_state_t*)dev;
+    uint16_t offset = bus.address - rom_dev->base_address;
     
-    // Set up device callbacks
-    kernal_dev->device.r8 = kernal_rom_r8;
-    kernal_dev->device.w8 = NULL;  // ROM is read-only
-}
-
-// Character ROM initialization
-void char_rom_init(char_rom_state_t* char_dev) {
-    // Initialize Character ROM state
-    memset(char_dev, 0, sizeof(*char_dev));
+    // Bounds check
+    if (offset >= rom_dev->size) {
+        return 0xFF;  // Return default value for out-of-bounds access
+    }
     
-    // Set up device callbacks
-    char_dev->device.r8 = char_rom_r8;
-    char_dev->device.w8 = NULL;  // ROM is read-only
+    return rom_dev->data[offset];
 }
 
-// ROM I/O handlers - called directly via callback table (no chip select checks!)
-uint8_t basic_rom_r8(struct device_s* dev) {
-    basic_rom_state_t* basic_dev = (basic_rom_state_t*)dev;
-    return basic_dev->data[bus.address - 0xA000];
-}
-
-uint8_t char_rom_r8(struct device_s* dev) {
-    char_rom_state_t* char_dev = (char_rom_state_t*)dev;
-    return char_dev->data[bus.address - 0xD000];
-}
-
-uint8_t kernal_rom_r8(struct device_s* dev) {
-    kernal_rom_state_t* kernal_dev = (kernal_rom_state_t*)dev;
-    return kernal_dev->data[bus.address - 0xE000];
+// ROM cleanup - free allocated memory
+void rom_cleanup(rom_state_t* rom_dev) {
+    if (rom_dev && rom_dev->data) {
+        free(rom_dev->data);
+        rom_dev->data = NULL;
+        rom_dev->size = 0;
+    }
 }
