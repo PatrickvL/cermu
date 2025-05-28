@@ -42,9 +42,8 @@ static inline void update_chip_selects(uint16_t addr) {
     bus_state.chip_selects = chip_select_map[addr >> 8];
 }
 
-// Device callback tables - indexed by chip select value
-device_read_callback_t device_read_callbacks[256];
-device_write_callback_t device_write_callbacks[256];
+// Single device callback table - indexed by chip select value
+device_callbacks_t device_callbacks[256];
 
 // Default no-op handlers for unmapped areas
 static void nop_read_handler(void) {
@@ -60,49 +59,49 @@ void bus_init(void) {
     bus_state.raw = 0;
     bus_state.bus_control = BA_LINE | AEC_LINE | RDY_LINE;
     
-    // Initialize callback tables with no-op handlers
+    // Initialize callback table with no-op handlers
     for (int i = 0; i < 256; i++) {
-        device_read_callbacks[i] = nop_read_handler;
-        device_write_callbacks[i] = nop_write_handler;
+        device_callbacks[i].read = nop_read_handler;
+        device_callbacks[i].write = nop_write_handler;
     }
     
     // Set up device-specific handlers for each chip select combination
     // Priority order: I/O devices > ROM > RAM (highest to lowest priority)
     for (int cs = 0; cs < 256; cs++) {
         // Start with default handlers
-        device_read_callbacks[cs] = nop_read_handler;
-        device_write_callbacks[cs] = nop_write_handler;
+        device_callbacks[cs].read = nop_read_handler;
+        device_callbacks[cs].write = nop_write_handler;
         
         // Check in priority order - last match wins
         if (cs & RAM_CS) {
-            device_read_callbacks[cs] = ram_read_handler;
-            device_write_callbacks[cs] = ram_write_handler;
+            device_callbacks[cs].read = ram_read_handler;
+            device_callbacks[cs].write = ram_write_handler;
         }
         if (cs & ROM_CS) {
-            device_read_callbacks[cs] = rom_read_handler;
+            device_callbacks[cs].read = rom_read_handler;
             // ROM writes remain no-op
         }
         if (cs & CHAR_ROM_CS) {
-            device_read_callbacks[cs] = char_rom_read_handler;
+            device_callbacks[cs].read = char_rom_read_handler;
             // CHAR ROM writes remain no-op
         }
         
         // I/O devices have highest priority
         if (cs & VIC_CS) {
-            device_read_callbacks[cs] = vic_handle_read;
-            device_write_callbacks[cs] = vic_handle_write;
+            device_callbacks[cs].read = vic_handle_read;
+            device_callbacks[cs].write = vic_handle_write;
         }
         if (cs & SID_CS) {
-            device_read_callbacks[cs] = sid_handle_read;
-            device_write_callbacks[cs] = sid_handle_write;
+            device_callbacks[cs].read = sid_handle_read;
+            device_callbacks[cs].write = sid_handle_write;
         }
         if (cs & CIA1_CS) {
-            device_read_callbacks[cs] = cia1_handle_read;
-            device_write_callbacks[cs] = cia1_handle_write;
+            device_callbacks[cs].read = cia1_handle_read;
+            device_callbacks[cs].write = cia1_handle_write;
         }
         if (cs & CIA2_CS) {
-            device_read_callbacks[cs] = cia2_handle_read;
-            device_write_callbacks[cs] = cia2_handle_write;
+            device_callbacks[cs].read = cia2_handle_read;
+            device_callbacks[cs].write = cia2_handle_write;
         }
     }
 }
@@ -136,12 +135,10 @@ void bus_cycle(void) {
 // Optimized read cycle implementation - direct callback dispatch
 void cpu_read_cycle(uint16_t addr) {
     bus_state.address = addr;
-    bus_state.control_lines |= READ_CYCLE;
-    bus_state.control_lines &= ~WRITE_CYCLE;
     update_chip_selects(addr);
     
     // Direct callback dispatch - no chip select checks in handlers!
-    device_read_callbacks[bus_state.chip_selects]();
+    device_callbacks[bus_state.chip_selects].read();
     
     bus_cycle();
 }
@@ -150,12 +147,10 @@ void cpu_read_cycle(uint16_t addr) {
 void cpu_write_cycle(uint16_t addr, uint8_t value) {
     bus_state.address = addr;
     bus_state.data = value;
-    bus_state.control_lines |= WRITE_CYCLE;
-    bus_state.control_lines &= ~READ_CYCLE;
     update_chip_selects(addr);
     
     // Direct callback dispatch - no chip select checks in handlers!
-    device_write_callbacks[bus_state.chip_selects]();
+    device_callbacks[bus_state.chip_selects].write();
     
     bus_cycle();
 }

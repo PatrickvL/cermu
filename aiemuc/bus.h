@@ -7,16 +7,13 @@
 // ============================================================================
 // BUS STATE - Lives in host CPU register for maximum performance
 // ============================================================================
-typedef union {
-    uint64_t raw;
-    struct {
-        uint16_t address;       // A0-A15
-        uint8_t  data;          // D0-D7
-        uint8_t  control_lines; // R/W, IRQ, NMI
-        uint8_t  chip_selects;  // Chip select lines
-        uint8_t  bus_control;   // BA, AEC, RDY
-        uint16_t reserved;
-    };
+typedef {
+    uint16_t address;       // A0-A15
+    uint8_t  data;          // D0-D7
+    uint8_t  control_lines; // R/W, IRQ, NMI
+    uint8_t  chip_selects;  // Chip select lines
+    uint8_t  bus_control;   // BA, AEC, RDY
+    uint16_t reserved;
 } bus_state_t;
 
 // Global bus state
@@ -43,9 +40,14 @@ void bus_cycle(void);
 typedef void (*device_read_callback_t)(void);
 typedef void (*device_write_callback_t)(void);
 
-// Device callback tables - indexed by chip select value
-extern device_read_callback_t device_read_callbacks[256];
-extern device_write_callback_t device_write_callbacks[256];
+// Device callback struct
+typedef struct {
+    device_read_callback_t read;
+    device_write_callback_t write;
+} device_callbacks_t;
+
+// Single device callback table - indexed by chip select value
+extern device_callbacks_t device_callbacks[256];
 
 // CPU ready check - hardware accurate BA/RDY handling
 #define CPU_READY() ((bus_state.bus_control & RDY_LINE) != 0)
