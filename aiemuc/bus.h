@@ -4,16 +4,25 @@
 #include <stdint.h>
 #include "c64.h"
 
+// Device callback function pointers
+typedef void (*device_read_callback_t)(void);
+typedef void (*device_write_callback_t)(void);
+
+// Device callback struct
+typedef struct {
+    device_read_callback_t read;
+    device_write_callback_t write;
+} device_callbacks_t;
+
 // ============================================================================
 // BUS STATE - Lives in host CPU register for maximum performance
 // ============================================================================
-typedef {
+typedef struct {
     uint16_t address;       // A0-A15
     uint8_t  data;          // D0-D7
     uint8_t  control_lines; // R/W, IRQ, NMI
-    uint8_t  chip_selects;  // Chip select lines
     uint8_t  bus_control;   // BA, AEC, RDY
-    uint16_t reserved;
+    uint32_t reserved;      // Padding for alignment
 } bus_state_t;
 
 // Global bus state
@@ -35,16 +44,6 @@ void cpu_write_cycle(uint16_t addr, uint8_t value);
 void bus_init(void);
 // Bus cycle function
 void bus_cycle(void);
-
-// Device callback function pointers
-typedef void (*device_read_callback_t)(void);
-typedef void (*device_write_callback_t)(void);
-
-// Device callback struct
-typedef struct {
-    device_read_callback_t read;
-    device_write_callback_t write;
-} device_callbacks_t;
 
 // Single device callback table - indexed by chip select value
 extern device_callbacks_t device_callbacks[256];

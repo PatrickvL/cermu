@@ -36,9 +36,7 @@ void c64_init(void) {
     // Initialize RAM
     memset(ram, 0, sizeof(ram));
     
-    // Generate all PLA memory maps (after chip structures are initialized)
-    generate_pla_maps();
-
+    // Initialize bus system (generates PLA maps internally)
     bus_init();
 
     // Initialize CPU state

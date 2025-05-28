@@ -1,2 +1,3 @@
 # Build directories
 /aiemu/obj/
+aiemuc/c64emu
