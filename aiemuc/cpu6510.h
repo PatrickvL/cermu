@@ -96,6 +96,18 @@ static inline uint8_t cpu_pop(void) {
     return bus.data;
 }
 
+// New parameterized stack operations
+static inline void cpu_push_param(cpu6510_state_t* cpu_dev, uint8_t data) {
+    cpu_write_cycle(0x0100 + cpu_dev->sp, data);
+    cpu_dev->sp--;
+}
+
+static inline uint8_t cpu_pop_param(cpu6510_state_t* cpu_dev) {
+    cpu_dev->sp++;
+    cpu_read_cycle(0x0100 + cpu_dev->sp);
+    return bus.data;
+}
+
 // ============================================================================
 // CPU OPERATION HELPER FUNCTIONS (inline for performance)
 // ============================================================================
@@ -277,12 +289,12 @@ static inline void op_sbc(uint8_t value) {
 void handle_interrupt_func(void);
 
 // CPU core functions
-void cpu6510_init(void);
-void cpu6510_reset(void);
-bool cpu6510_step(void);
-void cpu6510_execute(void);
-void cpu6510_irq(void);
-void cpu6510_nmi(void);
+void cpu6510_init(cpu6510_state_t* cpu_dev);
+void cpu6510_reset(cpu6510_state_t* cpu_dev);
+bool cpu6510_step(cpu6510_state_t* cpu_dev);
+void cpu6510_execute(cpu6510_state_t* cpu_dev);
+void cpu6510_irq(cpu6510_state_t* cpu_dev);
+void cpu6510_nmi(cpu6510_state_t* cpu_dev);
 
 // Instruction setup
 void cpu6510_setup_opcode_table(void);

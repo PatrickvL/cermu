@@ -11,6 +11,7 @@
 // ============================================================================
 // DEVICE INSTANCES - Centralized device state management
 // ============================================================================
+cpu6510_state_t cpu;
 ram_state_t ram;
 rom_state_t basic_rom;
 rom_state_t kernal_rom;
@@ -51,8 +52,9 @@ void c64_init(void) {
     bus_init();
 
     // Initialize CPU state
-    cpu6510_init();
+    cpu6510_init(&cpu);
     
     // Load ROM images (external function)
     // load_roms(kernal_rom, basic_rom, char_rom);
 }
+

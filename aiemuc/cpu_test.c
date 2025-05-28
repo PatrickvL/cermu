@@ -69,7 +69,7 @@ int main(void) {
     // Set bus cycle callback for per-cycle state printing
     bus_cycle_callback = print_cpu_state_on_cycle;
     // Reset CPU (sets up mode and reads reset vector)
-    cpu6510_reset();
+    cpu6510_reset(&cpu);
     printf("Debug: PC after reset: $%04X\n", cpu.pc);
     printf("Initial state:\n");
     print_cpu_state();
@@ -77,7 +77,7 @@ int main(void) {
     // Execute for a limited number of instructions (not just cycles)
     for (int i = 0; i < 100 && cpu.pc != 0x020B; i++) {
         // Execute one full instruction (which will call bus_cycle many times)
-        cpu6510_execute();
+        cpu6510_execute(&cpu);
         // Print state every 10 instructions (already printed per cycle if callback is set)
         if (i % 10 == 9) {
             printf("\nAfter %d instructions:\n", i + 1);

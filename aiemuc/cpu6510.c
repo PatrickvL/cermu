@@ -17,7 +17,7 @@
 // ============================================================================
 // MOS 6510 CPU STATE
 // ============================================================================
-cpu6510_state_t cpu;
+// CPU state is now managed by the C64 system, not as a global variable
 
 // Universal instruction table using function pointers
 // Global instruction table
@@ -59,17 +59,17 @@ void cpu_io_port_w8(struct device_s* dev) {
 
 
 // Initialize CPU
-void cpu6510_init(void) {
+void cpu6510_init(cpu6510_state_t* cpu_dev) {
     // Set up device callbacks
-    cpu.device.r8 = cpu_io_port_r8;
-    cpu.device.w8 = cpu_io_port_w8;
+    cpu_dev->device.r8 = cpu_io_port_r8;
+    cpu_dev->device.w8 = cpu_io_port_w8;
     
-    cpu.a = 0;
-    cpu.x = 0;
-    cpu.y = 0;
-    cpu.sp = 0xFF;
-    cpu.p = FLAG_U | FLAG_I;  // Unused flag always set, interrupt disable
-    cpu.pc = 0;
+    cpu_dev->a = 0;
+    cpu_dev->x = 0;
+    cpu_dev->y = 0;
+    cpu_dev->sp = 0xFF;
+    cpu_dev->p = FLAG_U | FLAG_I;  // Unused flag always set, interrupt disable
+    cpu_dev->pc = 0;
     
     // 6510-specific I/O port (addresses $0000/$0001) initialization
     ram.data[0x0000] = 0x2F; // Default Data Direction Register (DDR at $0000)
@@ -81,47 +81,48 @@ void cpu6510_init(void) {
 }
 
 // Reset CPU
-void cpu6510_reset(void) {
+void cpu6510_reset(cpu6510_state_t* cpu_dev) {
     // Read reset vector from $FFFC/$FFFD
     cpu_read_cycle(0xFFFC);
     uint8_t pcl = bus.data;
     cpu_read_cycle(0xFFFD);
     uint8_t pch = bus.data;
     
-    cpu.pc = (pch << 8) | pcl;
-    cpu.sp = 0xFF; // or 0FD?
-    cpu.p |= FLAG_I;  // Set interrupt disable
+    cpu_dev->pc = (pch << 8) | pcl;
+    cpu_dev->sp = 0xFF; // or 0FD?
+    cpu_dev->p |= FLAG_I;  // Set interrupt disable
     bus.total_cycles = 0;
 }
 
-bool cpu6510_step(void) {
+bool cpu6510_step(cpu6510_state_t* cpu_dev) {
+    (void)cpu_dev; // Currently unused
     bus_cycle();
     // Return true when instruction completes (for testing)
     return true;
 }
 
-void cpu6510_irq(void) {
+void cpu6510_irq(cpu6510_state_t* cpu_dev) {
     // Push PC and status to stack, set interrupt disable, jump to IRQ vector
-    cpu_push((cpu.pc >> 8) & 0xFF);
-    cpu_push(cpu.pc & 0xFF);
-    cpu_push(cpu.p & ~FLAG_B);  // Clear B flag for IRQ
-    cpu.p |= FLAG_I;
+    cpu_push_param(cpu_dev, (cpu_dev->pc >> 8) & 0xFF);
+    cpu_push_param(cpu_dev, cpu_dev->pc & 0xFF);
+    cpu_push_param(cpu_dev, cpu_dev->p & ~FLAG_B);  // Clear B flag for IRQ
+    cpu_dev->p |= FLAG_I;
     cpu_read_cycle(0xFFFE);
-    cpu.pc = bus.data;
+    cpu_dev->pc = bus.data;
     cpu_read_cycle(0xFFFF);
-    cpu.pc |= (bus.data << 8);
+    cpu_dev->pc |= (bus.data << 8);
 }
 
-void cpu6510_nmi(void) {
+void cpu6510_nmi(cpu6510_state_t* cpu_dev) {
     // Push PC and status to stack, set interrupt disable, jump to NMI vector
-    cpu_push((cpu.pc >> 8) & 0xFF);
-    cpu_push(cpu.pc & 0xFF);
-    cpu_push(cpu.p & ~FLAG_B);  // Clear B flag for NMI
-    cpu.p |= FLAG_I;
+    cpu_push_param(cpu_dev, (cpu_dev->pc >> 8) & 0xFF);
+    cpu_push_param(cpu_dev, cpu_dev->pc & 0xFF);
+    cpu_push_param(cpu_dev, cpu_dev->p & ~FLAG_B);  // Clear B flag for NMI
+    cpu_dev->p |= FLAG_I;
     cpu_read_cycle(0xFFFA);
-    cpu.pc = bus.data;
+    cpu_dev->pc = bus.data;
     cpu_read_cycle(0xFFFB);
-    cpu.pc |= (bus.data << 8);
+    cpu_dev->pc |= (bus.data << 8);
 }
 
 // ============================================================================
@@ -156,14 +157,16 @@ void brk_instruction_func(void) {
     NEXT_INSTRUCTION(brk_fetch_wait);
 }
 
+// Note: This function needs a CPU reference - will need to be refactored
 void handle_interrupt_func(void) {
-    // Interrupt handling logic
+    // Interrupt handling logic - for now, we'll need to access global CPU
+    // This will need to be refactored to receive CPU state properly
     if (bus.control_lines & NMI_LINE) {
         // Handle NMI - non-maskable
-        cpu6510_nmi();
+        cpu6510_nmi(&cpu);
     } else if ((bus.control_lines & IRQ_LINE) && !cpu_get_flag(FLAG_I)) {
         // Handle IRQ - only if interrupt disable is clear
-        cpu6510_irq();
+        cpu6510_irq(&cpu);
     }
     NEXT_INSTRUCTION(interrupt_fetch_wait);
 }
@@ -171,15 +174,15 @@ void handle_interrupt_func(void) {
 // ============================================================================
 // CPU EXECUTION LOOP WITH FUNCTION POINTERS (Universal)
 // ============================================================================
-void cpu6510_execute(void) {  
+void cpu6510_execute(cpu6510_state_t* cpu_dev) {
     // Start execution - fetch first instruction
     if (unlikely(bus.control_lines & (IRQ_LINE | NMI_LINE))) {
         handle_interrupt_func();
         return;
     }
-    WAIT_READY_THEN_READ(cpu.pc++, main_fetch_start);
-    cpu.opcode = bus.data;
-    instruction_table[cpu.opcode]();
+    WAIT_READY_THEN_READ(cpu_dev->pc++, main_fetch_start);
+    cpu_dev->opcode = bus.data;
+    instruction_table[cpu_dev->opcode]();
 }
 
 // ============================================================================

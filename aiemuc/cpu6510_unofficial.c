@@ -12,7 +12,8 @@ void jam_func(void) {
     while (1) {
         // Wait for reset or NMI
         if (bus.control_lines & NMI_LINE) {
-            cpu6510_nmi();
+            // TODO: Fix NMI call after CPU refactoring is complete
+            // cpu6510_nmi(&cpu);
             break;
         }
     }
