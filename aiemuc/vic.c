@@ -31,27 +31,27 @@ void vic_cycle(void) {
     
     // Generate BA signal for badline
     if (vic.badline_condition && vic.raster_cycle >= 15 && vic.raster_cycle <= 54) {
-        bus_state.control_lines &= ~BA_LINE; // Pull BA low - CPU will stall
+        bus.control_lines &= ~BA_LINE; // Pull BA low - CPU will stall
     } else {
-        bus_state.control_lines |= BA_LINE;  // Release BA
+        bus.control_lines |= BA_LINE;  // Release BA
     }
     
     // AEC follows BA with one cycle delay (hardware accurate)
-    if (vic.prev_ba && !(bus_state.control_lines & BA_LINE)) {
-        bus_state.control_lines &= ~AEC_LINE;
-    } else if (!vic.prev_ba && (bus_state.control_lines & BA_LINE)) {
-        bus_state.control_lines |= AEC_LINE;
+    if (vic.prev_ba && !(bus.control_lines & BA_LINE)) {
+        bus.control_lines &= ~AEC_LINE;
+    } else if (!vic.prev_ba && (bus.control_lines & BA_LINE)) {
+        bus.control_lines |= AEC_LINE;
     }
-    vic.prev_ba = (bus_state.control_lines & BA_LINE) != 0;
+    vic.prev_ba = (bus.control_lines & BA_LINE) != 0;
 }
 
 // New optimized I/O handlers - called directly via callback table (no chip select checks!)
 void vic_handle_read(void) {
-    uint8_t reg = bus_state.address & 0x3F;
-    bus_state.data = vic.registers[reg];
+    uint8_t reg = bus.address & 0x3F;
+    bus.data = vic.registers[reg];
 }
 
 void vic_handle_write(void) {
-    uint8_t reg = bus_state.address & 0x3F;
-    vic.registers[reg] = bus_state.data & vic_write_masks[reg];
+    uint8_t reg = bus.address & 0x3F;
+    vic.registers[reg] = bus.data & vic_write_masks[reg];
 }

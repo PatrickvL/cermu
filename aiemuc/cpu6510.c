@@ -46,8 +46,6 @@ void cpu6510_init(void) {
     ram[0x0001] = 0x37;  // Default I/O Port Data (at $0001)
     switch_cpu_mode(0x07); // All RAM/ROM enabled
  
-    cpu.total_cycles = 0;
-    
     // Setup instruction table
     cpu6510_setup_opcode_table();
 }
@@ -56,18 +54,17 @@ void cpu6510_init(void) {
 void cpu6510_reset(void) {
     // Read reset vector from $FFFC/$FFFD
     cpu_read_cycle(0xFFFC);
-    uint8_t pcl = bus_state.data;
+    uint8_t pcl = bus.data;
     cpu_read_cycle(0xFFFD);
-    uint8_t pch = bus_state.data;
+    uint8_t pch = bus.data;
     
     cpu.pc = (pch << 8) | pcl;
     cpu.sp = 0xFF; // or 0FD?
     cpu.p |= FLAG_I;  // Set interrupt disable
-    cpu.total_cycles = 0;
+    bus.total_cycles = 0;
 }
 
 bool cpu6510_step(void) {
-    cpu.total_cycles++;
     bus_cycle();
     // Return true when instruction completes (for testing)
     return true;
@@ -80,9 +77,9 @@ void cpu6510_irq(void) {
     cpu_push(cpu.p & ~FLAG_B);  // Clear B flag for IRQ
     cpu.p |= FLAG_I;
     cpu_read_cycle(0xFFFE);
-    cpu.pc = bus_state.data;
+    cpu.pc = bus.data;
     cpu_read_cycle(0xFFFF);
-    cpu.pc |= (bus_state.data << 8);
+    cpu.pc |= (bus.data << 8);
 }
 
 void cpu6510_nmi(void) {
@@ -92,9 +89,9 @@ void cpu6510_nmi(void) {
     cpu_push(cpu.p & ~FLAG_B);  // Clear B flag for NMI
     cpu.p |= FLAG_I;
     cpu_read_cycle(0xFFFA);
-    cpu.pc = bus_state.data;
+    cpu.pc = bus.data;
     cpu_read_cycle(0xFFFB);
-    cpu.pc |= (bus_state.data << 8);
+    cpu.pc |= (bus.data << 8);
 }
 
 // ============================================================================
@@ -123,18 +120,18 @@ void brk_instruction_func(void) {
     cpu.p |= FLAG_I;
     // Read IRQ vector
     cpu_read_cycle(0xFFFE);
-    cpu.pc = bus_state.data;
+    cpu.pc = bus.data;
     cpu_read_cycle(0xFFFF);
-    cpu.pc |= (bus_state.data << 8);
+    cpu.pc |= (bus.data << 8);
     NEXT_INSTRUCTION(brk_fetch_wait);
 }
 
 void handle_interrupt_func(void) {
     // Interrupt handling logic
-    if (bus_state.control_lines & NMI_LINE) {
+    if (bus.control_lines & NMI_LINE) {
         // Handle NMI - non-maskable
         cpu6510_nmi();
-    } else if ((bus_state.control_lines & IRQ_LINE) && !cpu_get_flag(FLAG_I)) {
+    } else if ((bus.control_lines & IRQ_LINE) && !cpu_get_flag(FLAG_I)) {
         // Handle IRQ - only if interrupt disable is clear
         cpu6510_irq();
     }
@@ -146,12 +143,12 @@ void handle_interrupt_func(void) {
 // ============================================================================
 void cpu6510_execute(void) {  
     // Start execution - fetch first instruction
-    if (unlikely(bus_state.control_lines & (IRQ_LINE | NMI_LINE))) {
+    if (unlikely(bus.control_lines & (IRQ_LINE | NMI_LINE))) {
         handle_interrupt_func();
         return;
     }
     WAIT_READY_THEN_READ(cpu.pc++, main_fetch_start);
-    cpu.opcode = bus_state.data;
+    cpu.opcode = bus.data;
     instruction_table[cpu.opcode]();
 }
 

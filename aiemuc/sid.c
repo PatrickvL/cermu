@@ -18,11 +18,11 @@ void sid_cycle(void) {
 
 // New optimized I/O handlers - called directly via callback table (no chip select checks!)
 void sid_handle_read(void) {
-    uint8_t reg = bus_state.address & 0x1F;
-    bus_state.data = sid.registers[reg];
+    uint8_t reg = bus.address & 0x1F;
+    bus.data = sid.registers[reg];
 }
 
 void sid_handle_write(void) {
-    uint8_t reg = bus_state.address & 0x1F;
-    sid.registers[reg] = bus_state.data;
+    uint8_t reg = bus.address & 0x1F;
+    sid.registers[reg] = bus.data;
 }

@@ -56,14 +56,14 @@ void txs_func(void) {
 // NOP variations - No Operation
 void nop_zp_func(void) {
     WAIT_READY_THEN_READ(cpu.pc++, nop_zp_wait1);
-    cpu.addr_abs = bus_state.data;
+    cpu.addr_abs = bus.data;
     WAIT_READY_THEN_READ(cpu.addr_abs, nop_zp_wait2);  // Read and discard
     NEXT_INSTRUCTION(nop_zp_fetch_wait);
 }
 
 void nop_zp_x_func(void) {
     WAIT_READY_THEN_READ(cpu.pc++, nop_zp_x_wait1);
-    cpu.addr_abs = bus_state.data;
+    cpu.addr_abs = bus.data;
     WAIT_READY_THEN_READ(cpu.addr_abs, nop_zp_x_wait2); // Dummy read
     cpu.addr_abs = (cpu.addr_abs + cpu.x) & 0xFF;
     WAIT_READY_THEN_READ(cpu.addr_abs, nop_zp_x_wait3);  // Read and discard
@@ -72,18 +72,18 @@ void nop_zp_x_func(void) {
 
 void nop_abs_func(void) {
     WAIT_READY_THEN_READ(cpu.pc++, nop_abs_wait1);
-    cpu.addr_abs = bus_state.data;
+    cpu.addr_abs = bus.data;
     WAIT_READY_THEN_READ(cpu.pc++, nop_abs_wait2);
-    cpu.addr_abs |= (bus_state.data << 8);
+    cpu.addr_abs |= (bus.data << 8);
     WAIT_READY_THEN_READ(cpu.addr_abs, nop_abs_wait3);  // Read and discard
     NEXT_INSTRUCTION(nop_abs_fetch_wait);
 }
 
 void nop_abs_x_func(void) {
     WAIT_READY_THEN_READ(cpu.pc++, nop_abs_x_wait1);
-    cpu.lo = bus_state.data;
+    cpu.lo = bus.data;
     WAIT_READY_THEN_READ(cpu.pc++, nop_abs_x_wait2);
-    cpu.hi = bus_state.data;
+    cpu.hi = bus.data;
     cpu.addr_abs = (cpu.hi << 8) | cpu.lo;
 
     if ((cpu.addr_abs & 0xFF00) != ((cpu.addr_abs + cpu.x) & 0xFF00)) {

@@ -39,7 +39,7 @@ void print_cpu_state(void) {
         (cpu.p & FLAG_D) ? 'D' : 'd',
         (cpu.p & FLAG_I) ? 'I' : 'i',
         (cpu.p & FLAG_Z) ? 'Z' : 'z',
-        (cpu.p & FLAG_C) ? 'C' : 'c', cpu.total_cycles);
+        (cpu.p & FLAG_C) ? 'C' : 'c', bus.total_cycles);
 }
 
 // Print CPU state on every bus cycle (for debugging)

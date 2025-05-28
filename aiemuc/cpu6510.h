@@ -27,8 +27,6 @@ typedef struct {
     uint8_t addr_rel;   // Relative address for branch instructions
     uint8_t fetched;    // Fetched data for current instruction
     uint8_t temp;       // Temporary storage
-    //uint8_t cycles;     // Remaining cycles for current instruction
-    uint64_t total_cycles; // Total CPU cycles executed
     //bool page_crossed;  // Page boundary crossed flag
     
     // Direct threading state
@@ -56,12 +54,12 @@ extern instruction_func_t instruction_table[256];
 #define FLAG_N  0x80    // Negative
 
 #define NEXT_INSTRUCTION(fetch_label) do { \
-    if (unlikely(bus_state.control_lines & (IRQ_LINE | NMI_LINE))) { \
+    if (unlikely(bus.control_lines & (IRQ_LINE | NMI_LINE))) { \
         handle_interrupt_func(); \
         return; \
     } \
     WAIT_READY_THEN_READ(cpu.pc++, fetch_label); \
-    cpu.opcode = bus_state.data; \
+    cpu.opcode = bus.data; \
     instruction_table[cpu.opcode](); \
     return; \
 } while(0)
@@ -90,7 +88,7 @@ static inline void cpu_push(uint8_t data) {
 static inline uint8_t cpu_pop(void) {
     cpu.sp++;
     cpu_read_cycle(0x0100 + cpu.sp);
-    return bus_state.data;
+    return bus.data;
 }
 
 // ============================================================================

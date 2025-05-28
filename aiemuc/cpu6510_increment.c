@@ -41,9 +41,9 @@ void dey_func(void) {
 // INC - Increment Memory
 void inc_zero_page_func(void) {
     WAIT_READY_THEN_READ(cpu.pc++, inc_zp_wait1);
-    cpu.addr_abs = bus_state.data;
+    cpu.addr_abs = bus.data;
     WAIT_READY_THEN_READ(cpu.addr_abs, inc_zp_wait2);
-    cpu.temp = bus_state.data;
+    cpu.temp = bus.data;
     WAIT_READY_THEN_WRITE(cpu.addr_abs, cpu.temp, inc_zp_wait3); // Dummy write
     cpu.temp++;
     cpu_set_zn(cpu.temp);
@@ -53,11 +53,11 @@ void inc_zero_page_func(void) {
 
 void inc_zero_page_x_func(void) {
     WAIT_READY_THEN_READ(cpu.pc++, inc_zp_x_wait1);
-    cpu.addr_abs = bus_state.data;
+    cpu.addr_abs = bus.data;
     WAIT_READY_THEN_READ(cpu.addr_abs, inc_zp_x_wait2); // Dummy read
     cpu.addr_abs = (cpu.addr_abs + cpu.x) & 0xFF;
     WAIT_READY_THEN_READ(cpu.addr_abs, inc_zp_x_wait3);
-    cpu.temp = bus_state.data;
+    cpu.temp = bus.data;
     WAIT_READY_THEN_WRITE(cpu.addr_abs, cpu.temp, inc_zp_x_wait4); // Dummy write
     cpu.temp++;
     cpu_set_zn(cpu.temp);
@@ -67,11 +67,11 @@ void inc_zero_page_x_func(void) {
 
 void inc_absolute_func(void) {
     WAIT_READY_THEN_READ(cpu.pc++, inc_abs_wait1);
-    cpu.addr_abs = bus_state.data;
+    cpu.addr_abs = bus.data;
     WAIT_READY_THEN_READ(cpu.pc++, inc_abs_wait2);
-    cpu.addr_abs |= (bus_state.data << 8);
+    cpu.addr_abs |= (bus.data << 8);
     WAIT_READY_THEN_READ(cpu.addr_abs, inc_abs_wait3);
-    cpu.temp = bus_state.data;
+    cpu.temp = bus.data;
     WAIT_READY_THEN_WRITE(cpu.addr_abs, cpu.temp, inc_abs_wait4); // Dummy write
     cpu.temp++;
     cpu_set_zn(cpu.temp);
@@ -81,13 +81,13 @@ void inc_absolute_func(void) {
 
 void inc_absolute_x_func(void) {
     WAIT_READY_THEN_READ(cpu.pc++, inc_abs_x_wait1);
-    cpu.lo = bus_state.data;
+    cpu.lo = bus.data;
     WAIT_READY_THEN_READ(cpu.pc++, inc_abs_x_wait2);
-    cpu.hi = bus_state.data;
+    cpu.hi = bus.data;
     cpu.addr_abs = (cpu.hi << 8) | cpu.lo;
     WAIT_READY_THEN_READ(cpu.addr_abs + cpu.x, inc_abs_x_wait3); // Always extra cycle for RMW
     WAIT_READY_THEN_READ(cpu.addr_abs + cpu.x, inc_abs_x_wait4);
-    cpu.temp = bus_state.data;
+    cpu.temp = bus.data;
     WAIT_READY_THEN_WRITE(cpu.addr_abs + cpu.x, cpu.temp, inc_abs_x_wait5); // Dummy write
     cpu.temp++;
     cpu_set_zn(cpu.temp);
@@ -98,9 +98,9 @@ void inc_absolute_x_func(void) {
 // DEC - Decrement Memory
 void dec_zero_page_func(void) {
     WAIT_READY_THEN_READ(cpu.pc++, dec_zp_wait1);
-    cpu.addr_abs = bus_state.data;
+    cpu.addr_abs = bus.data;
     WAIT_READY_THEN_READ(cpu.addr_abs, dec_zp_wait2);
-    cpu.temp = bus_state.data;
+    cpu.temp = bus.data;
     WAIT_READY_THEN_WRITE(cpu.addr_abs, cpu.temp, dec_zp_wait3); // Dummy write
     cpu.temp--;
     cpu_set_zn(cpu.temp);
@@ -110,11 +110,11 @@ void dec_zero_page_func(void) {
 
 void dec_zero_page_x_func(void) {
     WAIT_READY_THEN_READ(cpu.pc++, dec_zp_x_wait1);
-    cpu.addr_abs = bus_state.data;
+    cpu.addr_abs = bus.data;
     WAIT_READY_THEN_READ(cpu.addr_abs, dec_zp_x_wait2); // Dummy read
     cpu.addr_abs = (cpu.addr_abs + cpu.x) & 0xFF;
     WAIT_READY_THEN_READ(cpu.addr_abs, dec_zp_x_wait3);
-    cpu.temp = bus_state.data;
+    cpu.temp = bus.data;
     WAIT_READY_THEN_WRITE(cpu.addr_abs, cpu.temp, dec_zp_x_wait4); // Dummy write
     cpu.temp--;
     cpu_set_zn(cpu.temp);
@@ -124,11 +124,11 @@ void dec_zero_page_x_func(void) {
 
 void dec_absolute_func(void) {
     WAIT_READY_THEN_READ(cpu.pc++, dec_abs_wait1);
-    cpu.addr_abs = bus_state.data;
+    cpu.addr_abs = bus.data;
     WAIT_READY_THEN_READ(cpu.pc++, dec_abs_wait2);
-    cpu.addr_abs |= (bus_state.data << 8);
+    cpu.addr_abs |= (bus.data << 8);
     WAIT_READY_THEN_READ(cpu.addr_abs, dec_abs_wait3);
-    cpu.temp = bus_state.data;
+    cpu.temp = bus.data;
     WAIT_READY_THEN_WRITE(cpu.addr_abs, cpu.temp, dec_abs_wait4); // Dummy write
     cpu.temp--;
     cpu_set_zn(cpu.temp);
@@ -138,13 +138,13 @@ void dec_absolute_func(void) {
 
 void dec_absolute_x_func(void) {
     WAIT_READY_THEN_READ(cpu.pc++, dec_abs_x_wait1);
-    cpu.lo = bus_state.data;
+    cpu.lo = bus.data;
     WAIT_READY_THEN_READ(cpu.pc++, dec_abs_x_wait2);
-    cpu.hi = bus_state.data;
+    cpu.hi = bus.data;
     cpu.addr_abs = (cpu.hi << 8) | cpu.lo;
     WAIT_READY_THEN_READ(cpu.addr_abs + cpu.x, dec_abs_x_wait3); // Always extra cycle for RMW
     WAIT_READY_THEN_READ(cpu.addr_abs + cpu.x, dec_abs_x_wait4);
-    cpu.temp = bus_state.data;
+    cpu.temp = bus.data;
     WAIT_READY_THEN_WRITE(cpu.addr_abs + cpu.x, cpu.temp, dec_abs_x_wait5); // Dummy write
     cpu.temp--;
     cpu_set_zn(cpu.temp);
