@@ -33,7 +33,6 @@ extern bus_state_t bus;
 
 // PLA functions
 void switch_cpu_mode(uint8_t mode);
-void generate_pla_maps(void);
 
 // Memory access functions
 void cpu_read_cycle(uint16_t addr);

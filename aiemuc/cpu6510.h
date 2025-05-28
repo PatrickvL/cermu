@@ -53,6 +53,10 @@ extern instruction_func_t instruction_table[256];
 #define FLAG_V  0x40    // Overflow
 #define FLAG_N  0x80    // Negative
 
+// Optimized I/O port handlers (called via callback table)
+void cpu_read_handler(void);
+void cpu_write_handler(void);
+
 #define NEXT_INSTRUCTION(fetch_label) do { \
     if (unlikely(bus.control_lines & (IRQ_LINE | NMI_LINE))) { \
         handle_interrupt_func(); \

@@ -13,16 +13,6 @@
 #define unlikely(x) __builtin_expect(!!(x), 0)
 #endif
 
-// Chip select bit definitions
-#define RAM_CS      (1 << 0)
-#define ROM_CS      (1 << 1) 
-#define CHAR_ROM_CS (1 << 2)
-#define IO_CS       (1 << 3)
-#define VIC_CS      (1 << 4)
-#define SID_CS      (1 << 5)
-#define CIA1_CS     (1 << 6)
-#define CIA2_CS     (1 << 7)
-
 // Bus control line definitions  
 #define IRQ_LINE    (1 << 0)
 #define NMI_LINE    (1 << 1)
