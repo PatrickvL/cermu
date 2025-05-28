@@ -24,8 +24,11 @@ extern vic_state_t vic;
 void vic_init(void);
 void vic_cycle(void);
 
+// Forward declaration
+struct device_s;
+
 // Optimized I/O handlers (called via callback table)
-uint8_t vic_r8(void);
-void vic_w8(void);
+uint8_t vic_r8(struct device_s* dev);
+void vic_w8(struct device_s* dev);
 
 #endif // VIC_H

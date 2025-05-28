@@ -22,8 +22,11 @@ extern sid_state_t sid;
 void sid_init(void);
 void sid_cycle(void);
 
+// Forward declaration
+struct device_s;
+
 // Optimized I/O handlers (called via callback table)
-uint8_t sid_r8(void);
-void sid_w8(void);
+uint8_t sid_r8(struct device_s* dev);
+void sid_w8(struct device_s* dev);
 
 #endif // SID_H

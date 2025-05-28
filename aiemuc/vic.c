@@ -57,12 +57,14 @@ void vic_cycle(void) {
 }
 
 // New optimized I/O handlers - called directly via callback table (no chip select checks!)
-uint8_t vic_r8(void) {
+uint8_t vic_r8(struct device_s* dev) {
+    vic_state_t* vic_dev = (vic_state_t*)dev;
     uint8_t reg = bus.address & 0x3F;
-    return vic.registers[reg];
+    return vic_dev->registers[reg];
 }
 
-void vic_w8(void) {
+void vic_w8(struct device_s* dev) {
+    vic_state_t* vic_dev = (vic_state_t*)dev;
     uint8_t reg = bus.address & 0x3F;
-    vic.registers[reg] = bus.data & vic_write_masks[reg];
+    vic_dev->registers[reg] = bus.data & vic_write_masks[reg];
 }

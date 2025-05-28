@@ -17,10 +17,13 @@ typedef struct {
 
 extern rom_state_t rom;
 
+// Forward declaration
+struct device_s;
+
 // Optimized I/O handlers (called via callback table)
 void rom_init(void);
-uint8_t basic_r8(void);
-uint8_t char_rom_r8(void);
-uint8_t kernel_r8(void);
+uint8_t basic_r8(struct device_s* dev);
+uint8_t char_rom_r8(struct device_s* dev);
+uint8_t kernel_r8(struct device_s* dev);
 
 #endif // ROM_H

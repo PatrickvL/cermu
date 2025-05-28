@@ -28,12 +28,14 @@ void sid_cycle(void) {
 }
 
 // New optimized I/O handlers - called directly via callback table (no chip select checks!)
-uint8_t sid_r8(void) {
+uint8_t sid_r8(struct device_s* dev) {
+    sid_state_t* sid_dev = (sid_state_t*)dev;
     uint8_t reg = bus.address & 0x1F;
-    return sid.registers[reg];
+    return sid_dev->registers[reg];
 }
 
-void sid_w8(void) {
+void sid_w8(struct device_s* dev) {
+    sid_state_t* sid_dev = (sid_state_t*)dev;
     uint8_t reg = bus.address & 0x1F;
-    sid.registers[reg] = bus.data;
+    sid_dev->registers[reg] = bus.data;
 }

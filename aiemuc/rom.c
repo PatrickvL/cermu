@@ -16,14 +16,17 @@ void rom_init(void) {
 }
 
 // ROM I/O handlers - called directly via callback table (no chip select checks!)
-uint8_t basic_r8(void) {
-    return rom.basic_data[bus.address - 0xA000];
+uint8_t basic_r8(struct device_s* dev) {
+    rom_state_t* rom_dev = (rom_state_t*)dev;
+    return rom_dev->basic_data[bus.address - 0xA000];
 }
 
-uint8_t char_rom_r8(void) {
-    return rom.char_data[bus.address - 0xD000];
+uint8_t char_rom_r8(struct device_s* dev) {
+    rom_state_t* rom_dev = (rom_state_t*)dev;
+    return rom_dev->char_data[bus.address - 0xD000];
 }
 
-uint8_t kernel_r8(void) {
-    return rom.kernal_data[bus.address - 0xE000];
+uint8_t kernel_r8(struct device_s* dev) {
+    rom_state_t* rom_dev = (rom_state_t*)dev;
+    return rom_dev->kernal_data[bus.address - 0xE000];
 }
