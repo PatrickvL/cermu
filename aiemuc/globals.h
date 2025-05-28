@@ -14,11 +14,11 @@
 // ============================================================================
 
 extern ram_state_t ram;
-extern basic_rom_state_t basic_rom;
-extern kernal_rom_state_t kernal_rom;
-extern char_rom_state_t char_rom;
+extern rom_state_t basic_rom;
+extern rom_state_t kernal_rom;
+extern rom_state_t char_rom;
 extern vic_state_t vic;
 extern cia_state_t cia1, cia2;
-extern sid_state_t  sid;
+extern sid_state_t sid;
 
 #endif // GLOBALS_H
