@@ -7,12 +7,13 @@
 #include "vic.h"
 #include "cia.h"
 #include "sid.h"
-#include "cpu6510.h"
 
 // ============================================================================
 // GLOBAL DEVICE INSTANCES - All declared in c64.c
 // This header centralizes all device extern declarations to avoid circular dependencies
 // ============================================================================
+
+#include "cpu6510.h"
 
 extern cpu6510_state_t cpu;
 extern ram_state_t ram;

@@ -84,6 +84,7 @@ static device_callbacks_t get_device_callbacks_for_address(uint16_t addr, bool l
     // $0000-$0100: CPU I/O ports ($0x0002 and up forward to RAM)
     if (addr < 0x0100) {
         // CPU port uses CPU device which forwards to RAM internally
+        // The CPU device is accessed from the C64 system, not as global
         callbacks.read_device = (struct device_s*)&cpu;
         callbacks.write_device = (struct device_s*)&cpu;
     }
