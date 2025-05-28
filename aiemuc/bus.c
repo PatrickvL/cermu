@@ -49,7 +49,7 @@ void bus_cycle(void) {
 void cpu_read_cycle(uint16_t addr) {
     bus.address = addr;
     device_callbacks_t* cb = &chip_select_map[addr >> 8];
-    bus.data = cb->read(cb->device);
+    bus.data = cb->read(cb->read_device);
     bus_cycle();
 }
 
@@ -58,7 +58,7 @@ void cpu_write_cycle(uint16_t addr, uint8_t value) {
     bus.address = addr;
     bus.data = value;
     device_callbacks_t* cb = &chip_select_map[addr >> 8];
-    cb->write(cb->device);
+    cb->write(cb->write_device);
     bus_cycle();
 }
 
@@ -80,21 +80,23 @@ static device_callbacks_t get_device_callbacks_for_address(uint16_t addr, bool l
     // Start with RAM as default (most common case)
     callbacks.read = ram_r8;
     callbacks.write = ram_w8;
-    callbacks.device = (struct device_s*)&ram;
+    callbacks.read_device = (struct device_s*)&ram;
+    callbacks.write_device = (struct device_s*)&ram;
     
     // $0000-$0100: CPU I/O ports ($0x0002 and up forward to RAM)
     if (addr < 0x0100) {
         callbacks.read = cpu_io_port_r8;
         callbacks.write = cpu_io_port_w8;
-        callbacks.device = (struct device_s*)&ram; // CPU port uses RAM device
+        callbacks.read_device = (struct device_s*)&ram; // CPU port uses RAM device
+        callbacks.write_device = (struct device_s*)&ram;
     }
     // $0100-$9FFF: Always RAM (already set as default)
     // $A000-$BFFF: BASIC ROM area
     else if (addr >= 0xA000 && addr < 0xC000) {
         if (loram && !game) {
             callbacks.read = rom_r8;
-            callbacks.device = (struct device_s*)&basic_rom;
-            // BASIC ROM writes fall through to RAM
+            callbacks.read_device = (struct device_s*)&basic_rom;
+            // BASIC ROM writes fall through to RAM (write_device stays RAM from default)
         }
         // else: stays RAM (default)
     }
@@ -106,43 +108,48 @@ static device_callbacks_t get_device_callbacks_for_address(uint16_t addr, bool l
                 // $D000-$D3FF: VIC I/O
                 callbacks.read = vic_r8;
                 callbacks.write = vic_w8;
-                callbacks.device = (struct device_s*)&vic;
+                callbacks.read_device = (struct device_s*)&vic;
+                callbacks.write_device = (struct device_s*)&vic;
             } else if (addr < 0xD800) {
                 // $D400-$D7FF: SID I/O
                 callbacks.read = sid_r8;
                 callbacks.write = sid_w8;
-                callbacks.device = (struct device_s*)&sid;
+                callbacks.read_device = (struct device_s*)&sid;
+                callbacks.write_device = (struct device_s*)&sid;
             } else if (addr < 0xDC00) {
                 // $D800-$DBFF: Color RAM - stays RAM (default)
             } else if (addr < 0xDD00) {
                 // $DC00-$DCFF: CIA 1 I/O
                 callbacks.read = cia1_r8;
                 callbacks.write = cia1_w8;
-                callbacks.device = (struct device_s*)&cia1;
+                callbacks.read_device = (struct device_s*)&cia1;
+                callbacks.write_device = (struct device_s*)&cia1;
             } else if (addr < 0xDE00) {
                 // $DD00-$DDFF: CIA 2 I/O
                 callbacks.read = cia2_r8;
                 callbacks.write = cia2_w8;
-                callbacks.device = (struct device_s*)&cia2;
+                callbacks.read_device = (struct device_s*)&cia2;
+                callbacks.write_device = (struct device_s*)&cia2;
             } else {
                 // $DE00-$DFFF: I/O expansion - no devices implemented
                 callbacks.read = nop_r8;
                 callbacks.write = nop_w8;
-                callbacks.device = NULL; // No device for unmapped areas
+                callbacks.read_device = NULL; // No device for unmapped areas
+                callbacks.write_device = NULL;
             }
         } else {
             // Character ROM
             callbacks.read = rom_r8;
-            callbacks.device = (struct device_s*)&char_rom;
-            // CHAR ROM writes fall through to RAM
+            callbacks.read_device = (struct device_s*)&char_rom;
+            // CHAR ROM writes fall through to RAM (write_device stays RAM from default)
         }
     }
     // $E000-$FFFF: KERNAL ROM area
     else if (addr >= 0xE000) {
         if (hiram && !game) {
             callbacks.read = rom_r8;
-            callbacks.device = (struct device_s*)&kernal_rom;
-            // KERNEL ROM writes fall through to RAM
+            callbacks.read_device = (struct device_s*)&kernal_rom;
+            // KERNEL ROM writes fall through to RAM (write_device stays RAM from default)
         }
         // else: stays RAM (default)
     }
