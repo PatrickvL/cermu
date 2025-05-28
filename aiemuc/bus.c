@@ -1,24 +1,14 @@
 #include "bus.h"
+#include "cpu6510.h"
 #include "ram.h"
 #include "rom.h"
 #include "vic.h"
 #include "cia.h"
 #include "sid.h"
-#include "cpu6510.h"
 #include <string.h>
-
-// NOTE: If all device base addresses (RAM, ROM, IO, etc.) are guaranteed to be 256-byte aligned,
-// the 'mask' member can be merged into the low 8 bits of the 'base' pointer, since those bits
-// will always be zero. This allows storing both the base pointer and the mask in a single uintptr_t,
-// using (base | mask). To extract them:
-//   - base = (void*)((entry & ~0xFF));   // clear low 8 bits for base
-//   - mask = (uint8_t)(entry & 0xFF);   // low 8 bits for mask
-// This optimization is only safe if all mapped regions are aligned to 256 bytes.
-// NOTE: PLA map entries removed - now using device handlers for all access
 
 // Global bus state
 bus_state_t bus;
-
 
 // ============================================================================
 // PLA EMULATION - Pre-computed callback maps for each memory mode
@@ -34,79 +24,8 @@ void switch_cpu_mode(uint8_t mode) {
     chip_select_map = chip_select_maps[mode];
 }
 
-// Single device callback table - indexed by chip select value
-device_callbacks_t device_callbacks[256];
-
-// Default no-op handlers for unmapped areas
-static void nop_read_handler(void) {
-    bus.data = 0xFF; // Default read value for unmapped areas
-}
-
-static void nop_write_handler(void) {
-    // Writes to unmapped areas are ignored
-}
-
-void bus_init(void) {
-    // Initialize bus state
-    bus.address = 0;
-    bus.data = 0;
-    bus.control_lines = BA_LINE | AEC_LINE | RDY_LINE;
-    bus.total_cycles = 0;
-    
-    
-    // Initialize callback table with no-op handlers
-    for (int i = 0; i < 256; i++) {
-        device_callbacks[i].read = nop_read_handler;
-        device_callbacks[i].write = nop_write_handler;
-    }
-    
-    // Set up device-specific handlers for each chip select combination
-    // Priority order: I/O devices > ROM > RAM (highest to lowest priority)
-    for (int cs = 0; cs < 256; cs++) {
-        // Start with default handlers
-        device_callbacks[cs].read = nop_read_handler;
-        device_callbacks[cs].write = nop_write_handler;
-        
-        // Check in priority order - last match wins
-        if (cs & RAM_CS) {
-            device_callbacks[cs].read = ram_read_handler;
-            device_callbacks[cs].write = ram_write_handler;
-        }
-        if (cs & ROM_CS) {
-            device_callbacks[cs].read = rom_read_handler;
-            // ROM writes remain no-op
-        }
-        if (cs & CHAR_ROM_CS) {
-            device_callbacks[cs].read = char_rom_read_handler;
-            // CHAR ROM writes remain no-op
-        }
-        
-        // I/O devices have highest priority
-        if (cs & VIC_CS) {
-            device_callbacks[cs].read = vic_handle_read;
-            device_callbacks[cs].write = vic_handle_write;
-        }
-        if (cs & SID_CS) {
-            device_callbacks[cs].read = sid_handle_read;
-            device_callbacks[cs].write = sid_handle_write;
-        }
-        if (cs & CIA1_CS) {
-            device_callbacks[cs].read = cia1_handle_read;
-            device_callbacks[cs].write = cia1_handle_write;
-        }
-        if (cs & CIA2_CS) {
-            device_callbacks[cs].read = cia2_handle_read;
-            device_callbacks[cs].write = cia2_handle_write;
-        }
-    }
-    
-    // Generate PLA maps after device callbacks are initialized
-    generate_pla_maps();
-}
-
 // Callback for each bus cycle (can be set by test harness)
 void (*bus_cycle_callback)(void) = NULL;
-
 
 // ============================================================================
 // OPTIMIZED BUS CYCLE - Direct callback dispatch, no chip select checks
@@ -147,6 +66,81 @@ void cpu_write_cycle(uint16_t addr, uint8_t value) {
     bus_cycle();
 }
 
+// Default no-op handlers for unmapped areas
+static void nop_read_handler(void) {
+    bus.data = 0xFF; // Default read value for unmapped areas
+}
+
+static void nop_write_handler(void) {
+    // Writes to unmapped areas are ignored
+}
+
+// Single device callback table - indexed by chip select value
+device_callbacks_t device_callbacks[1024];
+
+// Chip select bit definitions
+#define RAM_CS      (1 << 0)
+#define CPU_CS      (1 << 1) // CPU port handling (0x0000/0x0001)
+#define KERNEL_CS   (1 << 2) 
+#define BASIC_CS    (1 << 3) 
+#define CHAR_CS     (1 << 4)
+#define IO_CS       (1 << 5)
+#define VIC_CS      (1 << 6)
+#define SID_CS      (1 << 7)
+#define CIA1_CS     (1 << 8)
+#define CIA2_CS     (1 << 9)
+
+void initialize_device_callbacks()
+{
+    // Set up device-specific handlers for each chip select combination
+    // Priority order: I/O devices > ROM > RAM (highest to lowest priority)
+    for (int cs = 0; cs < 1024; cs++) {
+        // Start with default handlers
+        device_callbacks[cs].read = nop_read_handler;
+        device_callbacks[cs].write = nop_write_handler;
+        
+        // Check in priority order - last match wins
+        if (cs & RAM_CS) {
+            device_callbacks[cs].read = ram_read_handler;
+            device_callbacks[cs].write = ram_write_handler;
+        }
+        if (cs & CPU_CS) { // CPU port handling (0x0000/0x0001)
+            device_callbacks[cs].read = cpu_read_handler;
+            device_callbacks[cs].write = cpu_write_handler;
+        }
+        if (cs & BASIC_CS) {
+            device_callbacks[cs].read = basic_read_handler;
+            // ROM writes remain no-op
+        }
+        if (cs & KERNEL_CS) {
+            device_callbacks[cs].read = kernel_read_handler;
+            // ROM writes remain no-op
+        }
+        if (cs & CHAR_CS) {
+            device_callbacks[cs].read = char_rom_read_handler;
+            // CHAR ROM writes remain no-op
+        }
+        
+        // I/O devices have highest priority
+        if (cs & VIC_CS) {
+            device_callbacks[cs].read = vic_handle_read;
+            device_callbacks[cs].write = vic_handle_write;
+        }
+        if (cs & SID_CS) {
+            device_callbacks[cs].read = sid_handle_read;
+            device_callbacks[cs].write = sid_handle_write;
+        }
+        if (cs & CIA1_CS) {
+            device_callbacks[cs].read = cia1_handle_read;
+            device_callbacks[cs].write = cia1_handle_write;
+        }
+        if (cs & CIA2_CS) {
+            device_callbacks[cs].read = cia2_handle_read;
+            device_callbacks[cs].write = cia2_handle_write;
+        }
+    }
+}
+
 // Generate PLA maps with direct callback assignment
 void generate_pla_maps(void) {
     for (int mode = 0; mode < 32; ++mode) { // As written to ram[0x0001]
@@ -156,12 +150,16 @@ void generate_pla_maps(void) {
 
         for (int block = 0; block < 256; block++) {
             uint16_t addr = block << 8;  // 256-byte blocks
-            uint8_t cs = RAM_CS;
+            uint16_t cs = RAM_CS;
 
             // NOTE : CART ROM LO will start at 0x8000!
-            if (addr >= 0xA000 && addr < 0xC000) cs = (loram && !game) ? ROM_CS : RAM_CS;
-            else if (addr >= 0xD000 && addr < 0xE000) cs = charen ? IO_CS : CHAR_ROM_CS;
-            else if (addr >= 0xE000) cs = (hiram && !game) ? ROM_CS : RAM_CS;
+            if (addr >= 0xA000 && addr < 0xC000) cs = (loram && !game) ? BASIC_CS : RAM_CS;
+            else if (addr >= 0xD000 && addr < 0xE000) cs = charen ? IO_CS : CHAR_CS;
+            else if (addr >= 0xE000) cs = (hiram && !game) ? KERNEL_CS : RAM_CS;
+
+            // CPU I/O port
+            if ((cs & RAM_CS) && (addr < 0x0100))
+                cs = CPU_CS;
 
             // Handle I/O area chip selects
             if (cs & IO_CS) {
@@ -186,4 +184,16 @@ void generate_pla_maps(void) {
             chip_select_maps[mode][block] = device_callbacks[cs];
         }
     }
+}
+
+void bus_init(void) {
+    // Initialize bus state
+    bus.address = 0;
+    bus.data = 0;
+    bus.control_lines = BA_LINE | AEC_LINE | RDY_LINE;
+    bus.total_cycles = 0;
+
+    initialize_device_callbacks();
+    // Generate PLA maps after device callbacks are initialized
+    generate_pla_maps();
 }

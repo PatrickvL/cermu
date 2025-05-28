@@ -1,6 +1,5 @@
 #include "cpu6510.h"
 #include "bus.h"
-#include "c64.h"
 
 // ============================================================================
 // MOS 6510 STACK INSTRUCTIONS
