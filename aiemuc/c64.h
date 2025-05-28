@@ -13,12 +13,13 @@
 #define unlikely(x) __builtin_expect(!!(x), 0)
 #endif
 
-// Bus control line definitions  
-#define IRQ_LINE    (1 << 0)
-#define NMI_LINE    (1 << 1)
-#define BA_LINE     (1 << 2)
-#define AEC_LINE    (1 << 3)
-#define RDY_LINE    (1 << 4)
+// ============================================================================
+// GLOBAL DEVICE INSTANCES - Declared in c64.c
+// Note: Full types are defined in device headers, accessed where needed
+// ============================================================================
+
+// Global device instances - centralized in c64.c
+// Files that need access to these devices should include globals.h
 
 // Main emulator functions
 void c64_init(void);

@@ -2,8 +2,6 @@
 #include "bus.h"
 #include <string.h>
 
-vic_state_t vic;
-
 // VIC initialization
 void vic_init(vic_state_t* vic_dev) {
     // Initialize VIC state

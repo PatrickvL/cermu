@@ -1,7 +1,6 @@
 #ifndef SID_H
 #define SID_H
 
-#include "c64.h"
 #include "bus.h"
 
 // ============================================================================
@@ -15,8 +14,6 @@ typedef struct {
     uint16_t envelope_counter[3];
     uint8_t envelope_state[3];
 } sid_state_t;
-
-extern sid_state_t sid;
 
 // Forward declaration
 struct device_s;

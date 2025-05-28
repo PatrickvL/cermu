@@ -2,8 +2,6 @@
 #include "bus.h"
 #include <string.h>
 
-sid_state_t sid;
-
 // SID initialization
 void sid_init(sid_state_t* sid_dev) {
     // Initialize SID state

@@ -1,7 +1,6 @@
 #include "cpu6510.h"
 #include "bus.h"
-#include "ram.h"
-#include "c64.h"
+#include "globals.h"
 #include <string.h>
 
 // Include all instruction implementation files

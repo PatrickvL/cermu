@@ -1,7 +1,6 @@
 #ifndef CIA_H
 #define CIA_H
 
-#include "c64.h"
 #include "bus.h"
 
 // ============================================================================
@@ -22,8 +21,6 @@ typedef struct {
         };
     };
 } cia_state_t;
-
-extern cia_state_t cia1, cia2;
 
 // Forward declaration
 struct device_s;

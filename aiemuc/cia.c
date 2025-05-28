@@ -2,8 +2,6 @@
 #include "bus.h"
 #include <string.h>
 
-cia_state_t cia1, cia2;
-
 // CIA1 initialization
 void cia1_init(cia_state_t* cia_dev) {
     // Initialize CIA1 state

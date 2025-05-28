@@ -2,9 +2,6 @@
 #include "bus.h"
 #include <string.h>
 
-// ROM device instance
-rom_state_t rom;
-
 // ROM initialization
 void rom_init(rom_state_t* rom_dev) {
     // Initialize ROM state
