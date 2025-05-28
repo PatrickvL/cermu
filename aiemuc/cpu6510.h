@@ -29,18 +29,11 @@ typedef struct {
     uint8_t addr_rel;   // Relative address for branch instructions
     uint8_t fetched;    // Fetched data for current instruction
     uint8_t temp;       // Temporary storage
-    //bool page_crossed;  // Page boundary crossed flag
-    
-    // Direct threading state
-    //const void* next_cycle;  // Next cycle function pointer
 } cpu6510_state_t;
 
 // Universal instruction dispatch using function pointers
 // (Works well on all compilers - performance difference with computed goto is minimal)
 typedef void (*instruction_func_t)(cpu6510_state_t* cpu_dev);
-
-// Global CPU state
-//extern cpu6510_state_t cpu;
 
 // Global instruction table
 extern instruction_func_t instruction_table[256];
