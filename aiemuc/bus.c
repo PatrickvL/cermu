@@ -49,15 +49,15 @@ void bus_cycle(void) {
     if (bus_cycle_callback) bus_cycle_callback();
 }
 
-// Optimized read cycle implementation - preselected callback dispatch
+// Optimized read cycle implementation - direct callback dispatch
 void cpu_read_cycle(uint16_t addr) {
     bus.address = addr;
     // Ultra-fast address decoding with direct callback selection
-    chip_select_map[addr >> 8].write();
+    chip_select_map[addr >> 8].read();
     bus_cycle();
 }
 
-// Optimized write cycle implementation - preselected callback dispatch
+// Optimized write cycle implementation - direct callback dispatch
 void cpu_write_cycle(uint16_t addr, uint8_t value) {
     bus.address = addr;
     bus.data = value;
