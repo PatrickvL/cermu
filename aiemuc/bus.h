@@ -4,17 +4,26 @@
 #include <stdint.h>
 #include "c64.h"
 
+// Forward declaration
+struct device_s;
+
 // Generic device structure - all devices inherit from this
 typedef struct {
-    uint8_t (*r8)(void);  // Read 8-bit callback - returns data
-    void (*w8)(void);     // Write 8-bit callback
+    uint8_t (*r8)(struct device_s* dev);  // Read 8-bit callback - returns data
+    void (*w8)(struct device_s* dev);     // Write 8-bit callback
 } device_t;
 
-// Device callback struct (for compatibility)
+// Device callback struct with device pointer
 typedef struct {
-    uint8_t (*read)(void);   // Returns data instead of setting bus.data
-    void (*write)(void);
+    uint8_t (*read)(struct device_s* dev);   // Returns data with device pointer
+    void (*write)(struct device_s* dev);     // Write with device pointer
+    struct device_s* device;                 // Pointer to device instance
 } device_callbacks_t;
+
+// Generic device instance
+typedef struct device_s {
+    device_t callbacks;
+} device_instance_t;
 
 // ============================================================================
 // BUS STATE - Lives in host CPU register for maximum performance

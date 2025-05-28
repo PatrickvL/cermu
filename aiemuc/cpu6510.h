@@ -53,9 +53,12 @@ extern instruction_func_t instruction_table[256];
 #define FLAG_V  0x40    // Overflow
 #define FLAG_N  0x80    // Negative
 
+// Forward declaration
+struct device_s;
+
 // Optimized I/O port handlers (called via callback table)
-uint8_t cpu_io_port_r8(void);
-void cpu_io_port_w8(void);
+uint8_t cpu_io_port_r8(struct device_s* dev);
+void cpu_io_port_w8(struct device_s* dev);
 
 #define NEXT_INSTRUCTION(fetch_label) do { \
     if (unlikely(bus.control_lines & (IRQ_LINE | NMI_LINE))) { \

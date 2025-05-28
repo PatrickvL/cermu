@@ -16,10 +16,12 @@ void ram_init(void) {
 }
 
 // RAM I/O handlers - called directly via callback table (no chip select checks!)
-uint8_t ram_r8(void) {
-    return ram.data[bus.address];
+uint8_t ram_r8(struct device_s* dev) {
+    ram_state_t* ram_dev = (ram_state_t*)dev;
+    return ram_dev->data[bus.address];
 }
 
-void ram_w8(void) {
-    ram.data[bus.address] = bus.data;
+void ram_w8(struct device_s* dev) {
+    ram_state_t* ram_dev = (ram_state_t*)dev;
+    ram_dev->data[bus.address] = bus.data;
 }

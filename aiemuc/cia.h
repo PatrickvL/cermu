@@ -31,10 +31,13 @@ void cia2_init(void);
 void cia1_cycle(void);
 void cia2_cycle(void);
 
+// Forward declaration
+struct device_s;
+
 // Optimized I/O handlers (called via callback table)
-uint8_t cia1_r8(void);
-void cia1_w8(void);
-uint8_t cia2_r8(void);
-void cia2_w8(void);
+uint8_t cia1_r8(struct device_s* dev);
+void cia1_w8(struct device_s* dev);
+uint8_t cia2_r8(struct device_s* dev);
+void cia2_w8(struct device_s* dev);
 
 #endif // CIA_H
