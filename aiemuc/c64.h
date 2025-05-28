@@ -24,10 +24,8 @@
 #define CIA2_CS     (1 << 7)
 
 // Control line definitions
-#define READ_CYCLE  (1 << 0)
-#define WRITE_CYCLE (1 << 1)
-#define IRQ_LINE    (1 << 2)
-#define NMI_LINE    (1 << 3)
+#define IRQ_LINE    (1 << 0)
+#define NMI_LINE    (1 << 1)
 
 // Bus control definitions  
 #define BA_LINE     (1 << 0)

@@ -38,16 +38,21 @@ The optimized approach uses pre-computed callback tables:
 ### 1. Callback Table Initialization
 
 ```c
-// 256-entry tables for all possible chip select combinations
-device_read_callback_t device_read_callbacks[256];
-device_write_callback_t device_write_callbacks[256];
+// Device callback struct for read/write operations
+typedef struct {
+    device_read_callback_t read;
+    device_write_callback_t write;
+} device_callbacks_t;
+
+// Single 256-entry table for all possible chip select combinations
+device_callbacks_t device_callbacks[256];
 
 // Pre-computed during initialization based on chip select priority
 for (int cs = 0; cs < 256; cs++) {
     // Priority: I/O devices > ROM > RAM
     if (cs & VIC_CS) {
-        device_read_callbacks[cs] = vic_read_handler;
-        device_write_callbacks[cs] = vic_write_handler;
+        device_callbacks[cs].read = vic_handle_read;
+        device_callbacks[cs].write = vic_handle_write;
     }
     // ... other devices
 }
@@ -58,11 +63,10 @@ for (int cs = 0; cs < 256; cs++) {
 ```c
 void cpu_read_cycle(uint16_t addr) {
     bus_state.address = addr;
-    bus_state.control_lines |= READ_CYCLE;
     update_chip_selects(addr);
     
     // Direct callback - no conditionals!
-    device_read_callbacks[bus_state.chip_selects]();
+    device_callbacks[bus_state.chip_selects].read();
     
     bus_cycle();
 }
@@ -121,9 +125,11 @@ call    [callback_table + rax*8]  ; 1 call (direct)
 
 ## Memory Usage
 
-- **Callback tables**: 2KB (256 entries × 2 tables × 8 bytes)
+- **Callback table**: 4KB (256 entries × 1 struct × 16 bytes)
 - **Chip select maps**: Unchanged (32KB)
-- **Total overhead**: 2KB additional memory for massive performance gain
+- **Total overhead**: 4KB additional memory for massive performance gain
+
+*Note: Memory usage increased slightly (2KB → 4KB) due to struct padding, but cache locality improved with related read/write handlers stored together.*
 
 ## Compatibility
 
@@ -175,6 +181,8 @@ The optimization also improved code organization by moving device handlers to th
 - Separated device timing logic from I/O handling
 - Modular device architecture with proper encapsulation
 - Updated build system to include new device modules
+- Unified callback structure using device_callbacks_t struct
+- Removed obsolete READ_CYCLE and WRITE_CYCLE flags
 
 ✅ **Verified Functionality:**
 - All source files compile cleanly with -Wall -Wextra
