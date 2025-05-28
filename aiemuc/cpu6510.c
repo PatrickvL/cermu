@@ -103,9 +103,9 @@ bool cpu6510_step(cpu6510_state_t* cpu_dev) {
 
 void cpu6510_irq(cpu6510_state_t* cpu_dev) {
     // Push PC and status to stack, set interrupt disable, jump to IRQ vector
-    cpu_push_param(cpu_dev, (cpu_dev->pc >> 8) & 0xFF);
-    cpu_push_param(cpu_dev, cpu_dev->pc & 0xFF);
-    cpu_push_param(cpu_dev, cpu_dev->p & ~FLAG_B);  // Clear B flag for IRQ
+    cpu_push(cpu_dev, (cpu_dev->pc >> 8) & 0xFF);
+    cpu_push(cpu_dev, cpu_dev->pc & 0xFF);
+    cpu_push(cpu_dev, cpu_dev->p & ~FLAG_B);  // Clear B flag for IRQ
     cpu_dev->p |= FLAG_I;
     cpu_read_cycle(0xFFFE);
     cpu_dev->pc = bus.data;
@@ -115,9 +115,9 @@ void cpu6510_irq(cpu6510_state_t* cpu_dev) {
 
 void cpu6510_nmi(cpu6510_state_t* cpu_dev) {
     // Push PC and status to stack, set interrupt disable, jump to NMI vector
-    cpu_push_param(cpu_dev, (cpu_dev->pc >> 8) & 0xFF);
-    cpu_push_param(cpu_dev, cpu_dev->pc & 0xFF);
-    cpu_push_param(cpu_dev, cpu_dev->p & ~FLAG_B);  // Clear B flag for NMI
+    cpu_push(cpu_dev, (cpu_dev->pc >> 8) & 0xFF);
+    cpu_push(cpu_dev, cpu_dev->pc & 0xFF);
+    cpu_push(cpu_dev, cpu_dev->p & ~FLAG_B);  // Clear B flag for NMI
     cpu_dev->p |= FLAG_I;
     cpu_read_cycle(0xFFFA);
     cpu_dev->pc = bus.data;
@@ -134,41 +134,41 @@ void cpu6510_nmi(cpu6510_state_t* cpu_dev) {
 // ============================================================================
 
 // Basic instruction functions that are not in separate files
-void nop_instruction_func(void) {
-    WAIT_READY_THEN_READ(cpu.pc, nop_wait);  // Dummy read
-    NEXT_INSTRUCTION(nop_fetch_wait);
+void nop_instruction_func(cpu6510_state_t* cpu_dev) {
+    WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc, nop_wait);  // Dummy read
+    NEXT_INSTRUCTION(cpu_dev, nop_fetch_wait);
 }
 
-void brk_instruction_func(void) {
-    cpu.pc++;  // Skip BRK signature byte
+void brk_instruction_func(cpu6510_state_t* cpu_dev) {
+    cpu_dev->pc++;  // Skip BRK signature byte
     // Push PC high byte
-    cpu_push((cpu.pc >> 8) & 0xFF);
+    cpu_push(cpu_dev, (cpu_dev->pc >> 8) & 0xFF);
     // Push PC low byte
-    cpu_push(cpu.pc & 0xFF);
+    cpu_push(cpu_dev, cpu_dev->pc & 0xFF);
     // Push status register with B flag set
-    cpu_push(cpu.p | FLAG_B);
+    cpu_push(cpu_dev, cpu_dev->p | FLAG_B);
     // Set interrupt disable
-    cpu.p |= FLAG_I;
+    cpu_dev->p |= FLAG_I;
     // Read IRQ vector
     cpu_read_cycle(0xFFFE);
-    cpu.pc = bus.data;
+    cpu_dev->pc = bus.data;
     cpu_read_cycle(0xFFFF);
-    cpu.pc |= (bus.data << 8);
-    NEXT_INSTRUCTION(brk_fetch_wait);
+    cpu_dev->pc |= (bus.data << 8);
+    NEXT_INSTRUCTION(cpu_dev, brk_fetch_wait);
 }
 
 // Note: This function needs a CPU reference - will need to be refactored
-void handle_interrupt_func(void) {
+void handle_interrupt_func(cpu6510_state_t* cpu_dev) {
     // Interrupt handling logic - for now, we'll need to access global CPU
     // This will need to be refactored to receive CPU state properly
     if (bus.control_lines & NMI_LINE) {
         // Handle NMI - non-maskable
-        cpu6510_nmi(&cpu);
-    } else if ((bus.control_lines & IRQ_LINE) && !cpu_get_flag(FLAG_I)) {
+        cpu6510_nmi(cpu_dev);
+    } else if ((bus.control_lines & IRQ_LINE) && !cpu_get_flag(cpu_dev, FLAG_I)) {
         // Handle IRQ - only if interrupt disable is clear
-        cpu6510_irq(&cpu);
+        cpu6510_irq(cpu_dev);
     }
-    NEXT_INSTRUCTION(interrupt_fetch_wait);
+    NEXT_INSTRUCTION(cpu_dev, interrupt_fetch_wait);
 }
 
 // ============================================================================
@@ -177,12 +177,12 @@ void handle_interrupt_func(void) {
 void cpu6510_execute(cpu6510_state_t* cpu_dev) {
     // Start execution - fetch first instruction
     if (unlikely(bus.control_lines & (IRQ_LINE | NMI_LINE))) {
-        handle_interrupt_func();
+        handle_interrupt_func(cpu_dev);
         return;
     }
-    WAIT_READY_THEN_READ(cpu_dev->pc++, main_fetch_start);
+    WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc++, main_fetch_start);
     cpu_dev->opcode = bus.data;
-    instruction_table[cpu_dev->opcode]();
+    instruction_table[cpu_dev->opcode](cpu_dev);
 }
 
 // ============================================================================
