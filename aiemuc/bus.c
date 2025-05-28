@@ -83,13 +83,9 @@ static device_callbacks_t get_device_callbacks_for_address(uint16_t addr, bool l
     
     // $0000-$0100: CPU I/O ports ($0x0002 and up forward to RAM)
     if (addr < 0x0100) {
-        // CPU port has special handlers but uses RAM device
-        callbacks.read_device = (struct device_s*)&ram;
-        callbacks.write_device = (struct device_s*)&ram;
-        // Special case: CPU I/O port uses custom handlers, not device callbacks
-        callbacks.read = cpu_io_port_r8;
-        callbacks.write = cpu_io_port_w8;
-        return callbacks;
+        // CPU port uses CPU device which forwards to RAM internally
+        callbacks.read_device = (struct device_s*)&cpu;
+        callbacks.write_device = (struct device_s*)&cpu;
     }
     // $0100-$9FFF: Always RAM (already set as default)
     // $A000-$BFFF: BASIC ROM area
