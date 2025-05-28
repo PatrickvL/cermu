@@ -12,7 +12,9 @@
 
 // CPU state structure
 typedef struct {
-    // CPU Registers  
+    device_t device;    // Generic device interface (must be first)
+    
+    // CPU Registers
     uint16_t pc;        // Program Counter
     uint8_t a;          // Accumulator
     uint8_t x;          // X Index Register
@@ -30,7 +32,7 @@ typedef struct {
     //bool page_crossed;  // Page boundary crossed flag
     
     // Direct threading state
-    //const void* next_cycle;  // Next cycle function pointer   
+    //const void* next_cycle;  // Next cycle function pointer
 } cpu6510_state_t;
 
 // Universal instruction dispatch using function pointers
@@ -55,10 +57,6 @@ extern instruction_func_t instruction_table[256];
 
 // Forward declaration
 struct device_s;
-
-// Optimized I/O port handlers (called via callback table)
-uint8_t cpu_io_port_r8(struct device_s* dev);
-void cpu_io_port_w8(struct device_s* dev);
 
 #define NEXT_INSTRUCTION(fetch_label) do { \
     if (unlikely(bus.control_lines & (IRQ_LINE | NMI_LINE))) { \
