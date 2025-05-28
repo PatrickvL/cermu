@@ -28,12 +28,17 @@ void sid_w8(struct device_s* dev) {
     sid_dev->registers[reg] = bus.data;
 }
 
+// Static device descriptor for SID
+static const device_t sid_device_descriptor = {
+    .r8 = sid_r8,
+    .w8 = sid_w8
+};
+
 // SID initialization
 void sid_init(sid_state_t* sid_dev) {
     // Initialize SID state
     memset(sid_dev, 0, sizeof(*sid_dev));
     
-    // Set up device callbacks
-    sid_dev->device.r8 = sid_r8;
-    sid_dev->device.w8 = sid_w8;
+    // Set up device callbacks from descriptor pointer
+    sid_dev->device = &sid_device_descriptor;
 }

@@ -13,12 +13,17 @@ void ram_w8(struct device_s* dev) {
     ram_dev->data[bus.address] = bus.data;
 }
 
+// Static device descriptor for RAM
+static const device_t ram_device_descriptor = {
+    .r8 = ram_r8,
+    .w8 = ram_w8
+};
+
 // RAM initialization
 void ram_init(ram_state_t* ram_dev) {
     // Initialize RAM state
     memset(ram_dev, 0, sizeof(*ram_dev));
     
-    // Set up device callbacks
-    ram_dev->device.r8 = ram_r8;
-    ram_dev->device.w8 = ram_w8;
+    // Set up device callbacks from descriptor pointer
+    ram_dev->device = &ram_device_descriptor;
 }

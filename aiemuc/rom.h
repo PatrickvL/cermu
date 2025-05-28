@@ -10,7 +10,7 @@
 #define MAX_ROM_SIZE 8192  // Maximum ROM size (8K)
 
 typedef struct {
-    device_t device;         // Generic device interface (must be first)
+    const device_t* device;  // Pointer to device descriptor (must be first)
     uint8_t* data;          // Pointer to ROM data (dynamically allocated)
     uint16_t size;          // Size of ROM in bytes
     uint16_t base_address;  // Base address for address calculation

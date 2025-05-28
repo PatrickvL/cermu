@@ -88,14 +88,24 @@ void cia2_w8(struct device_s* dev) {
     }
 }
 
+// Static device descriptors for CIA1 and CIA2
+static const device_t cia1_device_descriptor = {
+    .r8 = cia1_r8,
+    .w8 = cia1_w8
+};
+
+static const device_t cia2_device_descriptor = {
+    .r8 = cia2_r8,
+    .w8 = cia2_w8
+};
+
 // CIA1 initialization
 void cia1_init(cia_state_t* cia_dev) {
     // Initialize CIA1 state
     memset(cia_dev, 0, sizeof(*cia_dev));
     
-    // Set up device callbacks
-    cia_dev->device.r8 = cia1_r8;
-    cia_dev->device.w8 = cia1_w8;
+    // Set up device callbacks from descriptor pointer
+    cia_dev->device = &cia1_device_descriptor;
 }
 
 // CIA2 initialization
@@ -103,7 +113,6 @@ void cia2_init(cia_state_t* cia_dev) {
     // Initialize CIA2 state
     memset(cia_dev, 0, sizeof(*cia_dev));
     
-    // Set up device callbacks
-    cia_dev->device.r8 = cia2_r8;
-    cia_dev->device.w8 = cia2_w8;
+    // Set up device callbacks from descriptor pointer
+    cia_dev->device = &cia2_device_descriptor;
 }
