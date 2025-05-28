@@ -49,11 +49,16 @@ void bus_cycle(void) {
     if (bus_cycle_callback) bus_cycle_callback();
 }
 
+// Ultra-fast address decoding returning selected callbacks
+static inline device_callbacks_t* update_chip_selects(uint16_t addr) {
+    return &chip_select_map[addr >> 8];
+}
+
 // Optimized read cycle implementation - direct callback dispatch
 void cpu_read_cycle(uint16_t addr) {
     bus.address = addr;
-    // Ultra-fast address decoding with direct callback selection
-    chip_select_map[addr >> 8].read();
+    // Get callbacks and immediately invoke read handler
+    update_chip_selects(addr)->read();
     bus_cycle();
 }
 
@@ -61,8 +66,8 @@ void cpu_read_cycle(uint16_t addr) {
 void cpu_write_cycle(uint16_t addr, uint8_t value) {
     bus.address = addr;
     bus.data = value;
-    // Ultra-fast address decoding with direct callback selection
-    chip_select_map[addr >> 8].write();
+    // Get callbacks and immediately invoke write handler
+    update_chip_selects(addr)->write();
     bus_cycle();
 }
 
@@ -75,73 +80,74 @@ static void nop_write_handler(void) {
     // Writes to unmapped areas are ignored
 }
 
-// Single device callback table - indexed by chip select value
-device_callbacks_t device_callbacks[1024];
-
-// Chip select bit definitions
-#define RAM_CS      (1 << 0)
-#define CPU_CS      (1 << 1) // CPU port handling (0x0000/0x0001)
-#define KERNEL_CS   (1 << 2) 
-#define BASIC_CS    (1 << 3) 
-#define CHAR_CS     (1 << 4)
-#define IO_CS       (1 << 5)
-#define VIC_CS      (1 << 6)
-#define SID_CS      (1 << 7)
-#define CIA1_CS     (1 << 8)
-#define CIA2_CS     (1 << 9)
-
-void initialize_device_callbacks()
-{
-    // Set up device-specific handlers for each chip select combination
-    // Priority order: I/O devices > ROM > RAM (highest to lowest priority)
-    for (int cs = 0; cs < 1024; cs++) {
-        // Start with default handlers
-        device_callbacks[cs].read = nop_read_handler;
-        device_callbacks[cs].write = nop_write_handler;
-        
-        // Check in priority order - last match wins
-        if (cs & RAM_CS) {
-            device_callbacks[cs].read = ram_read_handler;
-            device_callbacks[cs].write = ram_write_handler;
+// Helper function to get callbacks based on address and mode bits
+static device_callbacks_t get_device_callbacks_for_address(uint16_t addr, bool loram, bool hiram, bool charen, bool game) {
+    device_callbacks_t callbacks;
+    
+    // Start with RAM as default (most common case)
+    callbacks.read = ram_read_handler;
+    callbacks.write = ram_write_handler;
+    
+    // CPU I/O port (0x0000/0x0001) - overrides RAM
+    if (addr < 0x0100) {
+        callbacks.read = cpu_read_handler;
+        callbacks.write = cpu_write_handler;
+    }
+    // $A000-$BFFF: BASIC ROM area
+    else if (addr >= 0xA000 && addr < 0xC000) {
+        if (loram && !game) {
+            callbacks.read = basic_read_handler;
+            // ROM writes fall through to  RAM
         }
-        if (cs & CPU_CS) { // CPU port handling (0x0000/0x0001)
-            device_callbacks[cs].read = cpu_read_handler;
-            device_callbacks[cs].write = cpu_write_handler;
-        }
-        if (cs & BASIC_CS) {
-            device_callbacks[cs].read = basic_read_handler;
-            // ROM writes remain no-op
-        }
-        if (cs & KERNEL_CS) {
-            device_callbacks[cs].read = kernel_read_handler;
-            // ROM writes remain no-op
-        }
-        if (cs & CHAR_CS) {
-            device_callbacks[cs].read = char_rom_read_handler;
-            // CHAR ROM writes remain no-op
-        }
-        
-        // I/O devices have highest priority
-        if (cs & VIC_CS) {
-            device_callbacks[cs].read = vic_handle_read;
-            device_callbacks[cs].write = vic_handle_write;
-        }
-        if (cs & SID_CS) {
-            device_callbacks[cs].read = sid_handle_read;
-            device_callbacks[cs].write = sid_handle_write;
-        }
-        if (cs & CIA1_CS) {
-            device_callbacks[cs].read = cia1_handle_read;
-            device_callbacks[cs].write = cia1_handle_write;
-        }
-        if (cs & CIA2_CS) {
-            device_callbacks[cs].read = cia2_handle_read;
-            device_callbacks[cs].write = cia2_handle_write;
+        // else: stays RAM (default)
+    }
+    // $D000-$DFFF: I/O or Character ROM area
+    else if (addr >= 0xD000 && addr < 0xE000) {
+        if (charen) {
+            // I/O area - determine specific device by address
+            if (addr < 0xD400) {
+                // $D000-$D3FF: VIC I/O
+                callbacks.read = vic_handle_read;
+                callbacks.write = vic_handle_write;
+            } else if (addr < 0xD800) {
+                // $D400-$D7FF: SID I/O
+                callbacks.read = sid_handle_read;
+                callbacks.write = sid_handle_write;
+            } else if (addr < 0xDC00) {
+                // $D800-$DBFF: Color RAM - stays RAM (default)
+            } else if (addr < 0xDD00) {
+                // $DC00-$DCFF: CIA 1 I/O
+                callbacks.read = cia1_handle_read;
+                callbacks.write = cia1_handle_write;
+            } else if (addr < 0xDE00) {
+                // $DD00-$DDFF: CIA 2 I/O
+                callbacks.read = cia2_handle_read;
+                callbacks.write = cia2_handle_write;
+            } else {
+                // $DE00-$DFFF: I/O expansion - no devices implemented
+                callbacks.read = nop_read_handler;
+                callbacks.write = nop_write_handler;
+            }
+        } else {
+            // Character ROM
+            callbacks.read = char_rom_read_handler;
+            // ROM writes fall through to  RAM
         }
     }
+    // $E000-$FFFF: KERNAL ROM area
+    else if (addr >= 0xE000) {
+        if (hiram && !game) {
+            callbacks.read = kernel_read_handler;
+            // ROM writes fall through to  RAM
+        }
+        // else: stays RAM (default)
+    }
+    // $0100-$9FFF: Always RAM (already set as default)
+    
+    return callbacks;
 }
 
-// Generate PLA maps with direct callback assignment
+// Generate PLA maps with direct callback assignment based on address and mode bits
 void generate_pla_maps(void) {
     for (int mode = 0; mode < 32; ++mode) { // As written to ram[0x0001]
         bool loram = mode & 1, hiram = mode & 2, charen = mode & 4;
@@ -150,38 +156,9 @@ void generate_pla_maps(void) {
 
         for (int block = 0; block < 256; block++) {
             uint16_t addr = block << 8;  // 256-byte blocks
-            uint16_t cs = RAM_CS;
-
-            // NOTE : CART ROM LO will start at 0x8000!
-            if (addr >= 0xA000 && addr < 0xC000) cs = (loram && !game) ? BASIC_CS : RAM_CS;
-            else if (addr >= 0xD000 && addr < 0xE000) cs = charen ? IO_CS : CHAR_CS;
-            else if (addr >= 0xE000) cs = (hiram && !game) ? KERNEL_CS : RAM_CS;
-
-            // CPU I/O port
-            if ((cs & RAM_CS) && (addr < 0x0100))
-                cs = CPU_CS;
-
-            // Handle I/O area chip selects
-            if (cs & IO_CS) {
-                if (addr < 0xD400) {
-                    cs = VIC_CS;  // VIC I/O
-                } else if (addr < 0xD800) {
-                    cs = SID_CS;  // SID I/O
-                } else if (addr < 0xDC00) {
-                    // TODO : Add support for 4-bit color ram up to DBE7 (DBE8 to DBFF unused)
-                } else if (addr < 0xDD00) {
-                    cs = CIA1_CS;  // CIA 1 I/O
-                } else if (addr < 0xDE00) {
-                    cs = CIA2_CS;  // CIA 2 I/O
-                } else if (addr < 0xDF00) {
-                    // TODO : Add support for DE00 to DEFF (I/O 1)
-                } else {
-                    // TODO : Add support for DE00 to DEFF (I/O 1) and DF00 to DFFF (I/O 2)
-                }
-            }
-
-            // Directly assign callbacks based on chip select priority
-            chip_select_maps[mode][block] = device_callbacks[cs];
+            
+            // Directly assign callbacks based on address and mode bits
+            chip_select_maps[mode][block] = get_device_callbacks_for_address(addr, loram, hiram, charen, game);
         }
     }
 }
@@ -193,7 +170,6 @@ void bus_init(void) {
     bus.control_lines = BA_LINE | AEC_LINE | RDY_LINE;
     bus.total_cycles = 0;
 
-    initialize_device_callbacks();
-    // Generate PLA maps after device callbacks are initialized
+    // Generate PLA maps with integrated device callback assignment
     generate_pla_maps();
 }
