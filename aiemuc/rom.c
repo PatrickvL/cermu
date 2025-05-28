@@ -16,6 +16,12 @@ uint8_t rom_r8(struct device_s* dev) {
     return rom_dev->data[offset];
 }
 
+// Static device descriptor for ROM
+static const device_t rom_device_descriptor = {
+    .r8 = rom_r8,
+    .w8 = NULL  // ROM is read-only
+};
+
 // ROM cleanup - free allocated memory
 void rom_cleanup(rom_state_t* rom_dev) {
     if (rom_dev && rom_dev->data) {
@@ -40,7 +46,6 @@ void rom_init(rom_state_t* rom_dev, uint16_t size, uint16_t base_address) {
     rom_dev->size = size;
     rom_dev->base_address = base_address;
     
-    // Set up device callbacks
-    rom_dev->device.r8 = rom_r8;
-    rom_dev->device.w8 = NULL;  // ROM is read-only
+    // Set up device callbacks from descriptor pointer
+    rom_dev->device = &rom_device_descriptor;
 }

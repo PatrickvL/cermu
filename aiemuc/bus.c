@@ -73,6 +73,26 @@ static void nop_w8(struct device_s* dev) {
     // Writes to unmapped areas are ignored
 }
 
+// Helper function to extract read callback from pointer-based device
+static uint8_t (*get_device_read_callback(struct device_s* dev))(struct device_s*) {
+    if (!dev) return nop_r8;
+    
+    // Since our devices now use pointer-based descriptors, we need to cast appropriately
+    // All our device structures have 'const device_t* device' as the first field
+    const device_t* device_desc = *(const device_t**)dev;
+    return device_desc ? device_desc->r8 : nop_r8;
+}
+
+// Helper function to extract write callback from pointer-based device
+static void (*get_device_write_callback(struct device_s* dev))(struct device_s*) {
+    if (!dev) return nop_w8;
+    
+    // Since our devices now use pointer-based descriptors, we need to cast appropriately
+    // All our device structures have 'const device_t* device' as the first field
+    const device_t* device_desc = *(const device_t**)dev;
+    return device_desc ? device_desc->w8 : nop_w8;
+}
+
 // Helper function to get callbacks based on address and mode bits
 static device_callbacks_t get_device_callbacks_for_address(uint16_t addr, bool loram, bool hiram, bool charen, bool game) {
     device_callbacks_t callbacks;
@@ -140,8 +160,8 @@ static device_callbacks_t get_device_callbacks_for_address(uint16_t addr, bool l
     }
     
     // Extract function pointers from devices (after all device pointers are set)
-    callbacks.read = callbacks.read_device ? callbacks.read_device->callbacks.r8 : nop_r8;
-    callbacks.write = callbacks.write_device ? callbacks.write_device->callbacks.w8 : nop_w8;
+    callbacks.read = get_device_read_callback(callbacks.read_device);
+    callbacks.write = get_device_write_callback(callbacks.write_device);
     
     return callbacks;
 }

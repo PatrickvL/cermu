@@ -8,7 +8,7 @@
 // ============================================================================
 
 typedef struct {
-    device_t device;  // Generic device interface (must be first)
+    const device_t* device;  // Pointer to device descriptor (must be first)
     
     uint8_t registers[32];
     uint16_t envelope_counter[3];

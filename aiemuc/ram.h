@@ -8,7 +8,7 @@
 // ============================================================================
 
 typedef struct {
-    device_t device;  // Generic device interface (must be first)
+    const device_t* device;  // Pointer to device descriptor (must be first)
     uint8_t data[65536];  // 64K RAM
 } ram_state_t;
 

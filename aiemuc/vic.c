@@ -57,12 +57,17 @@ void vic_w8(struct device_s* dev) {
     vic_dev->registers[reg] = bus.data & vic_write_masks[reg];
 }
 
+// Static device descriptor for VIC
+static const device_t vic_device_descriptor = {
+    .r8 = vic_r8,
+    .w8 = vic_w8
+};
+
 // VIC initialization
 void vic_init(vic_state_t* vic_dev) {
     // Initialize VIC state
     memset(vic_dev, 0, sizeof(*vic_dev));
     
-    // Set up device callbacks
-    vic_dev->device.r8 = vic_r8;
-    vic_dev->device.w8 = vic_w8;
+    // Set up device callbacks from descriptor pointer
+    vic_dev->device = &vic_device_descriptor;
 }
