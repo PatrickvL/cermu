@@ -18,12 +18,12 @@ typedef struct {
 
 extern sid_state_t sid;
 
-// SID functions
-void sid_init(void);
-void sid_cycle(void);
-
 // Forward declaration
 struct device_s;
+
+// SID functions
+void sid_init(sid_state_t* sid_dev);
+void sid_cycle(sid_state_t* sid_dev);
 
 // Optimized I/O handlers (called via callback table)
 uint8_t sid_r8(struct device_s* dev);

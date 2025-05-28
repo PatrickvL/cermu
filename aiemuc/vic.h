@@ -20,12 +20,12 @@ typedef struct {
 
 extern vic_state_t vic;
 
-// VIC functions
-void vic_init(void);
-void vic_cycle(void);
-
 // Forward declaration
 struct device_s;
+
+// VIC functions
+void vic_init(vic_state_t* vic_dev);
+void vic_cycle(vic_state_t* vic_dev);
 
 // Optimized I/O handlers (called via callback table)
 uint8_t vic_r8(struct device_s* dev);

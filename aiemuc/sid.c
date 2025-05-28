@@ -5,24 +5,24 @@
 sid_state_t sid;
 
 // SID initialization
-void sid_init(void) {
+void sid_init(sid_state_t* sid_dev) {
     // Initialize SID state
-    memset(&sid, 0, sizeof(sid));
+    memset(sid_dev, 0, sizeof(*sid_dev));
     
     // Set up device callbacks
-    sid.device.r8 = sid_r8;
-    sid.device.w8 = sid_w8;
+    sid_dev->device.r8 = sid_r8;
+    sid_dev->device.w8 = sid_w8;
 }
 
 // Optimized SID cycle function - no I/O handling, just envelope generators
-void sid_cycle(void) {
+void sid_cycle(sid_state_t* sid_dev) {
     // Envelope generators always run (hardware accurate)
     for (int voice = 0; voice < 3; voice++) {
-        sid.envelope_counter[voice]++;
-        if (sid.envelope_counter[voice] >= 0x8000) {
-            sid.envelope_counter[voice] = 0;
+        sid_dev->envelope_counter[voice]++;
+        if (sid_dev->envelope_counter[voice] >= 0x8000) {
+            sid_dev->envelope_counter[voice] = 0;
             // Simplified envelope state machine
-            sid.envelope_state[voice] = (sid.envelope_state[voice] + 1) & 0xFF;
+            sid_dev->envelope_state[voice] = (sid_dev->envelope_state[voice] + 1) & 0xFF;
         }
     }
 }

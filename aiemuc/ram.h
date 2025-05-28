@@ -19,7 +19,7 @@ extern ram_state_t ram;
 struct device_s;
 
 // Optimized I/O handlers (called via callback table)
-void ram_init(void);
+void ram_init(ram_state_t* ram_dev);
 uint8_t ram_r8(struct device_s* dev);
 void ram_w8(struct device_s* dev);
 

@@ -21,7 +21,7 @@ extern rom_state_t rom;
 struct device_s;
 
 // Optimized I/O handlers (called via callback table)
-void rom_init(void);
+void rom_init(rom_state_t* rom_dev);
 uint8_t basic_r8(struct device_s* dev);
 uint8_t char_rom_r8(struct device_s* dev);
 uint8_t kernel_r8(struct device_s* dev);
