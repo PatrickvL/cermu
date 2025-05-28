@@ -21,12 +21,12 @@ bus_state_t bus_state;
 
 
 // ============================================================================
-// PLA EMULATION - Pre-computed chip select maps for each memory mode
+// PLA EMULATION - Pre-computed callback maps for each memory mode
 // ============================================================================
 
 // 32 possible PLA modes, 256 memory blocks each (256-byte granularity for CIA compatibility)
-uint8_t chip_select_maps[32][256];
-uint8_t* chip_select_map; // Current active map
+device_callbacks_t chip_select_maps[32][256];
+device_callbacks_t* chip_select_map; // Current active map
 
 // External CPU state
 extern cpu6510_state_t cpu;
@@ -35,11 +35,6 @@ extern cpu6510_state_t cpu;
 void switch_cpu_mode(uint8_t mode) {
     mode &= 0x1F; // Mask to 5 bits (0-31) // TODO : no mask needed when mode argument is guaranteed to be between 0 and 31
     chip_select_map = chip_select_maps[mode];
-}
-
-// Ultra-fast address decoding - single memory access
-static inline void update_chip_selects(uint16_t addr) {
-    bus_state.chip_selects = chip_select_map[addr >> 8];
 }
 
 // Single device callback table - indexed by chip select value
@@ -55,9 +50,12 @@ static void nop_write_handler(void) {
 }
 
 void bus_init(void) {
-    // Initialize bus
-    bus_state.raw = 0;
+    // Initialize bus state
+    bus_state.address = 0;
+    bus_state.data = 0;
+    bus_state.control_lines = 0;
     bus_state.bus_control = BA_LINE | AEC_LINE | RDY_LINE;
+    bus_state.reserved = 0;
     
     // Initialize callback table with no-op handlers
     for (int i = 0; i < 256; i++) {
@@ -104,6 +102,9 @@ void bus_init(void) {
             device_callbacks[cs].write = cia2_handle_write;
         }
     }
+    
+    // Generate PLA maps after device callbacks are initialized
+    generate_pla_maps();
 }
 
 // Callback for each bus cycle (can be set by test harness)
@@ -132,30 +133,24 @@ void bus_cycle(void) {
     if (bus_cycle_callback) bus_cycle_callback();
 }
 
-// Optimized read cycle implementation - direct callback dispatch
+// Optimized read cycle implementation - preselected callback dispatch
 void cpu_read_cycle(uint16_t addr) {
     bus_state.address = addr;
-    update_chip_selects(addr);
-    
-    // Direct callback dispatch - no chip select checks in handlers!
-    device_callbacks[bus_state.chip_selects].read();
-    
+    // Ultra-fast address decoding with direct callback selection
+    chip_select_map[addr >> 8].write();
     bus_cycle();
 }
 
-// Optimized write cycle implementation - direct callback dispatch
+// Optimized write cycle implementation - preselected callback dispatch
 void cpu_write_cycle(uint16_t addr, uint8_t value) {
     bus_state.address = addr;
     bus_state.data = value;
-    update_chip_selects(addr);
-    
-    // Direct callback dispatch - no chip select checks in handlers!
-    device_callbacks[bus_state.chip_selects].write();
-    
+    // Ultra-fast address decoding with direct callback selection
+    chip_select_map[addr >> 8].write();
     bus_cycle();
 }
 
-// Generate PLA maps
+// Generate PLA maps with direct callback assignment
 void generate_pla_maps(void) {
     for (int mode = 0; mode < 32; ++mode) { // As written to ram[0x0001]
         bool loram = mode & 1, hiram = mode & 2, charen = mode & 4;
@@ -190,7 +185,8 @@ void generate_pla_maps(void) {
                 }
             }
 
-            chip_select_maps[mode][block] = cs;
+            // Directly assign callbacks based on chip select priority
+            chip_select_maps[mode][block] = device_callbacks[cs];
         }
     }
 }

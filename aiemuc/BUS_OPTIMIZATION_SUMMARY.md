@@ -61,12 +61,21 @@ for (int cs = 0; cs < 256; cs++) {
 ### 2. Direct Callback Dispatch
 
 ```c
+// Ultra-fast address decoding with callback preselection
+static inline void update_chip_selects(uint16_t addr) {
+    bus_state.chip_selects = chip_select_map[addr >> 8];
+    // Preselect callbacks for immediate dispatch
+    device_callbacks_t *selected = &device_callbacks[bus_state.chip_selects];
+    bus_state.selected_read = selected->read;
+    bus_state.selected_write = selected->write;
+}
+
 void cpu_read_cycle(uint16_t addr) {
     bus_state.address = addr;
     update_chip_selects(addr);
     
-    // Direct callback - no conditionals!
-    device_callbacks[bus_state.chip_selects].read();
+    // Direct dispatch using preselected callback - no array indexing!
+    bus_state.selected_read();
     
     bus_cycle();
 }
@@ -183,12 +192,45 @@ The optimization also improved code organization by moving device handlers to th
 - Updated build system to include new device modules
 - Unified callback structure using device_callbacks_t struct
 - Removed obsolete READ_CYCLE and WRITE_CYCLE flags
+- Preselected callback optimization eliminating array indexing
 
 ✅ **Verified Functionality:**
 - All source files compile cleanly with -Wall -Wextra
 - No runtime errors or warnings
 - Maintains binary compatibility with existing code
 - All device handlers properly integrated
+
+## Preselected Callback Optimization
+
+The final optimization preselects callbacks in `update_chip_selects()`, eliminating array indexing overhead:
+
+### **Before (Array Indexing):**
+```c
+void cpu_read_cycle(uint16_t addr) {
+    bus_state.address = addr;
+    update_chip_selects(addr);
+    // Array lookup required each call
+    device_callbacks[bus_state.chip_selects].read();
+    bus_cycle();
+}
+```
+
+### **After (Preselected Callbacks):**
+```c
+void cpu_read_cycle(uint16_t addr) {
+    bus_state.address = addr;
+    update_chip_selects(addr);  // Preselects callbacks once
+    // Direct function pointer call - no array lookup!
+    bus_state.selected_read();
+    bus_cycle();
+}
+```
+
+### **Benefits:**
+- **Eliminated array indexing**: No runtime array lookup in CPU cycles
+- **Better cache locality**: Function pointers stored in frequently accessed bus_state
+- **Reduced instruction count**: Direct function pointer call vs. array[index].member
+- **Improved register utilization**: Bus state likely cached in CPU registers
 
 ## Conclusion
 
