@@ -2,26 +2,6 @@
 #include "bus.h"
 #include <string.h>
 
-// CIA1 initialization
-void cia1_init(cia_state_t* cia_dev) {
-    // Initialize CIA1 state
-    memset(cia_dev, 0, sizeof(*cia_dev));
-    
-    // Set up device callbacks
-    cia_dev->device.r8 = cia1_r8;
-    cia_dev->device.w8 = cia1_w8;
-}
-
-// CIA2 initialization
-void cia2_init(cia_state_t* cia_dev) {
-    // Initialize CIA2 state
-    memset(cia_dev, 0, sizeof(*cia_dev));
-    
-    // Set up device callbacks
-    cia_dev->device.r8 = cia2_r8;
-    cia_dev->device.w8 = cia2_w8;
-}
-
 // Optimized CIA cycle functions - no I/O handling, just timers and logic
 void cia1_cycle(cia_state_t* cia_dev) {
     // Timer A always decrements when enabled (hardware accurate)
@@ -106,4 +86,24 @@ void cia2_w8(struct device_s* dev) {
         case 0x0D: cia_dev->interrupt_control = bus.data; break;
         // Writes to unmapped registers are ignored
     }
+}
+
+// CIA1 initialization
+void cia1_init(cia_state_t* cia_dev) {
+    // Initialize CIA1 state
+    memset(cia_dev, 0, sizeof(*cia_dev));
+    
+    // Set up device callbacks
+    cia_dev->device.r8 = cia1_r8;
+    cia_dev->device.w8 = cia1_w8;
+}
+
+// CIA2 initialization
+void cia2_init(cia_state_t* cia_dev) {
+    // Initialize CIA2 state
+    memset(cia_dev, 0, sizeof(*cia_dev));
+    
+    // Set up device callbacks
+    cia_dev->device.r8 = cia2_r8;
+    cia_dev->device.w8 = cia2_w8;
 }

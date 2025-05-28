@@ -22,9 +22,6 @@ struct device_s;
 // ROM initialization with configurable size and base address
 void rom_init(rom_state_t* rom_dev, uint16_t size, uint16_t base_address);
 
-// Generic ROM read handler
-uint8_t rom_r8(struct device_s* dev);
-
 // ROM cleanup (free allocated memory)
 void rom_cleanup(rom_state_t* rom_dev);
 

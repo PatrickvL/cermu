@@ -2,16 +2,6 @@
 #include "bus.h"
 #include <string.h>
 
-// VIC initialization
-void vic_init(vic_state_t* vic_dev) {
-    // Initialize VIC state
-    memset(vic_dev, 0, sizeof(*vic_dev));
-    
-    // Set up device callbacks
-    vic_dev->device.r8 = vic_r8;
-    vic_dev->device.w8 = vic_w8;
-}
-
 // VIC write masks for each register (defines which bits are writable)
 const uint8_t vic_write_masks[64] = {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,  // $00-$07
@@ -65,4 +55,14 @@ void vic_w8(struct device_s* dev) {
     vic_state_t* vic_dev = (vic_state_t*)dev;
     uint8_t reg = bus.address & 0x3F;
     vic_dev->registers[reg] = bus.data & vic_write_masks[reg];
+}
+
+// VIC initialization
+void vic_init(vic_state_t* vic_dev) {
+    // Initialize VIC state
+    memset(vic_dev, 0, sizeof(*vic_dev));
+    
+    // Set up device callbacks
+    vic_dev->device.r8 = vic_r8;
+    vic_dev->device.w8 = vic_w8;
 }

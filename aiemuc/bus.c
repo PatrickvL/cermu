@@ -78,23 +78,23 @@ static device_callbacks_t get_device_callbacks_for_address(uint16_t addr, bool l
     device_callbacks_t callbacks;
     
     // Start with RAM as default (most common case)
-    callbacks.read = ram_r8;
-    callbacks.write = ram_w8;
     callbacks.read_device = (struct device_s*)&ram;
     callbacks.write_device = (struct device_s*)&ram;
     
     // $0000-$0100: CPU I/O ports ($0x0002 and up forward to RAM)
     if (addr < 0x0100) {
+        // CPU port has special handlers but uses RAM device
+        callbacks.read_device = (struct device_s*)&ram;
+        callbacks.write_device = (struct device_s*)&ram;
+        // Special case: CPU I/O port uses custom handlers, not device callbacks
         callbacks.read = cpu_io_port_r8;
         callbacks.write = cpu_io_port_w8;
-        callbacks.read_device = (struct device_s*)&ram; // CPU port uses RAM device
-        callbacks.write_device = (struct device_s*)&ram;
+        return callbacks;
     }
     // $0100-$9FFF: Always RAM (already set as default)
     // $A000-$BFFF: BASIC ROM area
     else if (addr >= 0xA000 && addr < 0xC000) {
         if (loram && !game) {
-            callbacks.read = rom_r8;
             callbacks.read_device = (struct device_s*)&basic_rom;
             // BASIC ROM writes fall through to RAM (write_device stays RAM from default)
         }
@@ -106,40 +106,29 @@ static device_callbacks_t get_device_callbacks_for_address(uint16_t addr, bool l
             // I/O area - determine specific device by address
             if (addr < 0xD400) {
                 // $D000-$D3FF: VIC I/O
-                callbacks.read = vic_r8;
-                callbacks.write = vic_w8;
                 callbacks.read_device = (struct device_s*)&vic;
                 callbacks.write_device = (struct device_s*)&vic;
             } else if (addr < 0xD800) {
                 // $D400-$D7FF: SID I/O
-                callbacks.read = sid_r8;
-                callbacks.write = sid_w8;
                 callbacks.read_device = (struct device_s*)&sid;
                 callbacks.write_device = (struct device_s*)&sid;
             } else if (addr < 0xDC00) {
                 // $D800-$DBFF: Color RAM - stays RAM (default)
             } else if (addr < 0xDD00) {
                 // $DC00-$DCFF: CIA 1 I/O
-                callbacks.read = cia1_r8;
-                callbacks.write = cia1_w8;
                 callbacks.read_device = (struct device_s*)&cia1;
                 callbacks.write_device = (struct device_s*)&cia1;
             } else if (addr < 0xDE00) {
                 // $DD00-$DDFF: CIA 2 I/O
-                callbacks.read = cia2_r8;
-                callbacks.write = cia2_w8;
                 callbacks.read_device = (struct device_s*)&cia2;
                 callbacks.write_device = (struct device_s*)&cia2;
             } else {
                 // $DE00-$DFFF: I/O expansion - no devices implemented
-                callbacks.read = nop_r8;
-                callbacks.write = nop_w8;
                 callbacks.read_device = NULL; // No device for unmapped areas
                 callbacks.write_device = NULL;
             }
         } else {
             // Character ROM
-            callbacks.read = rom_r8;
             callbacks.read_device = (struct device_s*)&char_rom;
             // CHAR ROM writes fall through to RAM (write_device stays RAM from default)
         }
@@ -147,12 +136,15 @@ static device_callbacks_t get_device_callbacks_for_address(uint16_t addr, bool l
     // $E000-$FFFF: KERNAL ROM area
     else if (addr >= 0xE000) {
         if (hiram && !game) {
-            callbacks.read = rom_r8;
             callbacks.read_device = (struct device_s*)&kernal_rom;
             // KERNEL ROM writes fall through to RAM (write_device stays RAM from default)
         }
         // else: stays RAM (default)
     }
+    
+    // Extract function pointers from devices (after all device pointers are set)
+    callbacks.read = callbacks.read_device ? callbacks.read_device->callbacks.r8 : nop_r8;
+    callbacks.write = callbacks.write_device ? callbacks.write_device->callbacks.w8 : nop_w8;
     
     return callbacks;
 }

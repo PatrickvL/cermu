@@ -31,10 +31,4 @@ void cia2_init(cia_state_t* cia_dev);
 void cia1_cycle(cia_state_t* cia_dev);
 void cia2_cycle(cia_state_t* cia_dev);
 
-// Optimized I/O handlers (called via callback table)
-uint8_t cia1_r8(struct device_s* dev);
-void cia1_w8(struct device_s* dev);
-uint8_t cia2_r8(struct device_s* dev);
-void cia2_w8(struct device_s* dev);
-
 #endif // CIA_H
