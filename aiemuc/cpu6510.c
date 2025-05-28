@@ -1,5 +1,6 @@
 #include "cpu6510.h"
 #include "bus.h"
+#include "ram.h"
 #include "c64.h"
 #include <string.h>
 

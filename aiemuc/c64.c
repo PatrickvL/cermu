@@ -1,5 +1,7 @@
 #include "c64.h"
 #include "bus.h"
+#include "ram.h"
+#include "rom.h"
 #include "vic.h"
 #include "cia.h"
 #include "sid.h"

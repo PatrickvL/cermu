@@ -19,4 +19,8 @@ extern sid_state_t sid;
 // SID functions
 void sid_cycle(void);
 
+// Optimized I/O handlers (called via callback table)
+void sid_handle_read(void);
+void sid_handle_write(void);
+
 #endif // SID_H

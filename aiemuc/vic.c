@@ -15,6 +15,7 @@ const uint8_t vic_write_masks[64] = {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF   // $38-$3F
 };
 
+// Optimized VIC cycle function - no I/O handling, just timing and logic
 void vic_cycle(void) {
     // Always increment raster timing
     vic.raster_cycle++;
@@ -42,14 +43,15 @@ void vic_cycle(void) {
         bus_state.bus_control |= AEC_LINE;
     }
     vic.prev_ba = (bus_state.bus_control & BA_LINE) != 0;
-    
-    // Handle CPU register access when chip selected
-    if (unlikely(bus_state.chip_selects & VIC_CS)) {
-        uint8_t reg = bus_state.address & 0x3F;
-        if (bus_state.control_lines & WRITE_CYCLE) {
-            vic.registers[reg] = bus_state.data & vic_write_masks[reg];
-        } else {
-            bus_state.data = vic.registers[reg];
-        }
-    }
+}
+
+// New optimized I/O handlers - called directly via callback table (no chip select checks!)
+void vic_handle_read(void) {
+    uint8_t reg = bus_state.address & 0x3F;
+    bus_state.data = vic.registers[reg];
+}
+
+void vic_handle_write(void) {
+    uint8_t reg = bus_state.address & 0x3F;
+    vic.registers[reg] = bus_state.data & vic_write_masks[reg];
 }

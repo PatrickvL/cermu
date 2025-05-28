@@ -22,13 +22,6 @@ typedef union {
 // Global bus state
 extern bus_state_t bus_state;
 
-// ============================================================================
-// MEMORY - 64K RAM + ROM images (merged from memory.h)
-// ============================================================================
-extern uint8_t ram[65536];
-extern uint8_t kernal_rom[8192];
-extern uint8_t basic_rom[8192];
-extern uint8_t char_rom[4096];
 
 // ============================================================================
 // PLA EMULATION - Pre-computed chip select maps for each memory mode
@@ -45,6 +38,14 @@ void cpu_write_cycle(uint16_t addr, uint8_t value);
 void bus_init(void);
 // Bus cycle function
 void bus_cycle(void);
+
+// Device callback function pointers
+typedef void (*device_read_callback_t)(void);
+typedef void (*device_write_callback_t)(void);
+
+// Device callback tables - indexed by chip select value
+extern device_read_callback_t device_read_callbacks[256];
+extern device_write_callback_t device_write_callbacks[256];
 
 // CPU ready check - hardware accurate BA/RDY handling
 #define CPU_READY() ((bus_state.bus_control & RDY_LINE) != 0)
