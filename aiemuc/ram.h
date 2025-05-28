@@ -1,7 +1,6 @@
 #ifndef RAM_H
 #define RAM_H
 
-#include "c64.h"
 #include "bus.h"
 
 // ============================================================================
@@ -12,8 +11,6 @@ typedef struct {
     device_t device;  // Generic device interface (must be first)
     uint8_t data[65536];  // 64K RAM
 } ram_state_t;
-
-extern ram_state_t ram;
 
 // Forward declaration
 struct device_s;

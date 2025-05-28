@@ -1,7 +1,6 @@
 #ifndef VIC_H
 #define VIC_H
 
-#include "c64.h"
 #include "bus.h"
 
 // ============================================================================
@@ -17,8 +16,6 @@ typedef struct {
     bool badline_condition;
     bool prev_ba;
 } vic_state_t;
-
-extern vic_state_t vic;
 
 // Forward declaration
 struct device_s;

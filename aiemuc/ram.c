@@ -2,9 +2,6 @@
 #include "bus.h"
 #include <string.h>
 
-// RAM device instance
-ram_state_t ram;
-
 // RAM initialization
 void ram_init(ram_state_t* ram_dev) {
     // Initialize RAM state

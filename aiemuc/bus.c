@@ -1,10 +1,6 @@
 #include "bus.h"
 #include "cpu6510.h"
-#include "ram.h"
-#include "rom.h"
-#include "vic.h"
-#include "cia.h"
-#include "sid.h"
+#include "globals.h"
 #include <string.h>
 
 // Global bus state

@@ -1,7 +1,6 @@
 #ifndef ROM_H
 #define ROM_H
 
-#include "c64.h"
 #include "bus.h"
 
 // ============================================================================
@@ -14,8 +13,6 @@ typedef struct {
     uint8_t basic_data[8192];
     uint8_t char_data[4096];
 } rom_state_t;
-
-extern rom_state_t rom;
 
 // Forward declaration
 struct device_s;

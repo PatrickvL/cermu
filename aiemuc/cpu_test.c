@@ -1,6 +1,6 @@
 #include "cpu6510.h"
 #include "bus.h"
-#include "c64.h"
+#include "globals.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -23,15 +23,15 @@ void load_test_rom(void) {
     // Copy test code to appropriate memory locations
     for (int i = 0; i < sizeof(test_code); i++) {
         // Program in RAM
-        ram[i] = test_code[i];
+        ram.data[i] = test_code[i];
     }
     // Write reset vector at $FFFC/$FFFD points to $0200
-    ram[0xFFFC] = 0x00, ram[0xFFFD] = 0x02;
+    ram.data[0xFFFC] = 0x00, ram.data[0xFFFD] = 0x02;
 }
 
 void print_cpu_state(void) {
     printf("PC:$%04X A:$%02X X:$%02X Y:$%02X SP:$%02X P:$%02X $0400:$%02X Flags:%c%c%c%c%c%c%c%c Cycles:%llu\n",
-        cpu.pc, cpu.a, cpu.x, cpu.y, cpu.sp, cpu.p, ram[0x0400],
+        cpu.pc, cpu.a, cpu.x, cpu.y, cpu.sp, cpu.p, ram.data[0x0400],
         (cpu.p & FLAG_N) ? 'N' : 'n',
         (cpu.p & FLAG_V) ? 'V' : 'v',
         (cpu.p & FLAG_U) ? 'U' : 'u',
@@ -89,10 +89,10 @@ int main(void) {
     printf("\nFinal state:\n");
     print_cpu_state();
     // Verify test results
-    if (ram[0x0400] == 0x42) {
+    if (ram.data[0x0400] == 0x42) {
         printf("\n✅ TEST PASSED: Value $42 stored at $0400\n");
     } else {
-        printf("\n❌ TEST FAILED: Expected $42 at $0400, got $%02X\n", ram[0x0400]);
+        printf("\n❌ TEST FAILED: Expected $42 at $0400, got $%02X\n", ram.data[0x0400]);
     }
     if (cpu.x == 0x00) {
         printf("✅ TEST PASSED: X register decremented to 0\n");

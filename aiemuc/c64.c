@@ -9,6 +9,15 @@
 #include <string.h>
 
 // ============================================================================
+// DEVICE INSTANCES - Centralized device state management
+// ============================================================================
+ram_state_t ram;
+rom_state_t rom;
+vic_state_t vic;
+cia_state_t cia1, cia2;
+sid_state_t sid;
+
+// ============================================================================
 // MAIN EMULATION LOOP
 // ============================================================================
 void c64_emulate_frame(void) {
