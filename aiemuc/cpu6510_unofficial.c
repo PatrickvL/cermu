@@ -955,7 +955,7 @@ void isc_zero_page_x_func(cpu6510_state_t* cpu_dev) {
 }
 
 // NOP variants
-void nop_func(cpu6510_state_t* cpu_dev) { /* true NOP, does nothing */ NEXT_INSTRUCTION(cpu_dev, nop_fetch_wait); }
+void nop_func(cpu6510_state_t* cpu_dev) { NEXT_INSTRUCTION(cpu_dev, nop_fetch_wait); }
 void nop_zero_page_func(cpu6510_state_t* cpu_dev) { NEXT_INSTRUCTION(cpu_dev, nop_fetch_wait); }
 void nop_zero_page_x_func(cpu6510_state_t* cpu_dev) { NEXT_INSTRUCTION(cpu_dev, nop_fetch_wait); }
 void nop_absolute_func(cpu6510_state_t* cpu_dev) { NEXT_INSTRUCTION(cpu_dev, nop_fetch_wait); }

@@ -6,7 +6,7 @@
 // ============================================================================
 int main(void) {
     c64_init();
-    // Skip reset for now to avoid reading from ROM
+    // Note: ROM is now properly implemented, reset can be enabled when needed
     // cpu6510_reset();
     
     printf("C64 emulator initialized successfully!\n");

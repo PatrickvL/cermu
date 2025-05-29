@@ -16,7 +16,7 @@ device_callbacks_t* chip_select_map; // Current active map
 
 // Switch CPU mode
 void switch_cpu_mode(uint8_t mode) {
-    mode &= 0x1F; // Mask to 5 bits (0-31) // TODO : no mask needed when mode argument is guaranteed to be between 0 and 31
+    mode &= 0x1F; // Mask to 5 bits (0-31) for safety
     chip_select_map = chip_select_maps[mode];
 }
 
