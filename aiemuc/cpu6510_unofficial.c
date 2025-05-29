@@ -7,9 +7,8 @@
 // JAM - Freeze the CPU (0x02, 0x12, 0x22, 0x32, 0x42, 0x52, 0x62, 0x72, 0x92, 0xB2, 0xD2, 0xF2)
 void jam_func(cpu6510_state_t* cpu_dev) {
     // CPU freezes - infinite loop until reset
-    while (1) {
-        // Wait for reset or NMI
-        if (bus->control_lines & NMI_LINE) {
+    while (1) {        // Wait for reset or NMI
+        if (cpu_dev->bus->control_lines & NMI_LINE) {
             cpu6510_nmi(cpu_dev);
             break;
         }

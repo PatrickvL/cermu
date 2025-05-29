@@ -2,6 +2,7 @@
 #define CIA_H
 
 #include "device.h"
+#include "bus.h"
 
 // ============================================================================
 // CIA EMULATION - Timer and I/O chips
@@ -20,7 +21,13 @@ typedef struct {
             uint8_t port_a, port_b;
         };
     };
+    
+    // Bus attachment
+    bus_state_t* bus;
 } cia_state_t;
+
+// Device attachment
+void cia_attach_bus(cia_state_t* cia_dev, bus_state_t* bus_state);
 
 // Note: Use device_init(), device_cycle(), device_cleanup() instead of wrapper functions
 
