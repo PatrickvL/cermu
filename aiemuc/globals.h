@@ -16,11 +16,5 @@
 #include "cpu6510.h"
 
 extern cpu6510_state_t cpu;
-extern rom_state_t basic_rom;
-extern rom_state_t kernal_rom;
-extern rom_state_t char_rom;
-extern vic_state_t vic;
-extern cia_state_t cia1, cia2;
-extern sid_state_t sid;
 
 #endif // GLOBALS_H

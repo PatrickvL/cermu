@@ -1,11 +1,20 @@
 #ifndef CPU6510_H
 #define CPU6510_H
 
-#include "c64.h"
+#include "device.h"
 #include "bus.h"
 #include "ram.h"
 #include <stdint.h>
 #include <stdbool.h>
+
+// Compiler optimization hints
+#ifdef _MSC_VER
+#define likely(x)   (x)
+#define unlikely(x) (x)
+#else
+#define likely(x)   __builtin_expect(!!(x), 1)
+#define unlikely(x) __builtin_expect(!!(x), 0)
+#endif
 
 // ============================================================================
 // MOS 6510 CPU EMULATION - Cycle-accurate with direct threading

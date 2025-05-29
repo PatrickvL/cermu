@@ -1,6 +1,7 @@
 #ifndef ROM_H
 #define ROM_H
 
+#include "device.h"
 #include "bus.h"
 
 // ============================================================================
