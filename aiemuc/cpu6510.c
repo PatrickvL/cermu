@@ -29,28 +29,27 @@ void* fetch_opcode = NULL;
 // CPU I/O port handlers
 uint8_t cpu_io_port_r8(struct device_s* dev) {
     cpu6510_state_t* cpu_dev = (cpu6510_state_t*)dev;
-    if (bus.address <= 0x001) {
-        return cpu_dev->io_port[bus.address]; // Data Direction Register (DDR at $0000). 1 = set, 0 = read&clear
+    if (cpu_dev->bus->address <= 0x001) {
+        return cpu_dev->io_port[cpu_dev->bus->address]; // Data Direction Register (DDR at $0000). 1 = set, 0 = read&clear
     }
-    return cpu_dev->ram->data[bus.address];
+    return cpu_dev->ram->data[cpu_dev->bus->address];
 }
 
 void cpu_io_port_w8(struct device_s* dev) {
     cpu6510_state_t* cpu_dev = (cpu6510_state_t*)dev;
-    (void)cpu_dev; // CPU state not needed for current implementation
     
     // Handle the CPU port address writes
-    if (bus.address <= 0x001) {
+    if (cpu_dev->bus->address <= 0x001) {
         uint8_t direction = cpu_dev->io_port[0x0000]; // Data Direction Register (DDR at $0000). 1 = set, 0 = read&clear
         uint8_t io_mask = cpu_dev->io_port[0x0001]; // I/O Port Data (at $0001)
 
         io_mask &= ~direction; // clear the mask bits that will be overwritten
-        io_mask |= direction & bus.data; // set the appropriate bits from value
+        io_mask |= direction & cpu_dev->bus->data; // set the appropriate bits from value
         switch_cpu_mode(io_mask); // Apply the new mode to the PLA
-        cpu_dev->io_port[bus.address] = io_mask; // Write the adjusted value to I/O Port Data (at $0001)
+        cpu_dev->io_port[cpu_dev->bus->address] = io_mask; // Write the adjusted value to I/O Port Data (at $0001)
     } else {
         // Normal RAM writes - forward to RAM
-        cpu_dev->ram->data[bus.address] = bus.data;
+        cpu_dev->ram->data[cpu_dev->bus->address] = cpu_dev->bus->data;
     }
 }
 
@@ -109,14 +108,14 @@ void cpu_attach_bus(cpu6510_state_t* cpu_dev, bus_state_t* bus_state) {
 void cpu6510_reset(cpu6510_state_t* cpu_dev) {
     // Read reset vector from $FFFC/$FFFD
     cpu_read_cycle(0xFFFC);
-    uint8_t pcl = bus.data;
+    uint8_t pcl = cpu_dev->bus->data;
     cpu_read_cycle(0xFFFD);
-    uint8_t pch = bus.data;
+    uint8_t pch = cpu_dev->bus->data;
     
     cpu_dev->pc = (pch << 8) | pcl;
     cpu_dev->sp = 0xFF; // or 0FD?
     cpu_dev->p |= FLAG_I;  // Set interrupt disable
-    bus.total_cycles = 0;
+    cpu_dev->bus->total_cycles = 0;
 }
 
 bool cpu6510_step(cpu6510_state_t* cpu_dev) {
@@ -133,9 +132,9 @@ void cpu6510_irq(cpu6510_state_t* cpu_dev) {
     cpu_push(cpu_dev, cpu_dev->p & ~FLAG_B);  // Clear B flag for IRQ
     cpu_dev->p |= FLAG_I;
     cpu_read_cycle(0xFFFE);
-    cpu_dev->pc = bus.data;
+    cpu_dev->pc = cpu_dev->bus->data;
     cpu_read_cycle(0xFFFF);
-    cpu_dev->pc |= (bus.data << 8);
+    cpu_dev->pc |= (cpu_dev->bus->data << 8);
 }
 
 void cpu6510_nmi(cpu6510_state_t* cpu_dev) {
@@ -145,9 +144,9 @@ void cpu6510_nmi(cpu6510_state_t* cpu_dev) {
     cpu_push(cpu_dev, cpu_dev->p & ~FLAG_B);  // Clear B flag for NMI
     cpu_dev->p |= FLAG_I;
     cpu_read_cycle(0xFFFA);
-    cpu_dev->pc = bus.data;
+    cpu_dev->pc = cpu_dev->bus->data;
     cpu_read_cycle(0xFFFB);
-    cpu_dev->pc |= (bus.data << 8);
+    cpu_dev->pc |= (cpu_dev->bus->data << 8);
 }
 
 // ============================================================================
@@ -156,7 +155,7 @@ void cpu6510_nmi(cpu6510_state_t* cpu_dev) {
 
 // Basic instruction functions that are not in separate files
 void nop_instruction_func(cpu6510_state_t* cpu_dev) {
-    WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc, nop_wait);  // Dummy read
+    CPU_WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc, nop_wait);  // Dummy read
     NEXT_INSTRUCTION(cpu_dev, nop_fetch_wait);
 }
 
@@ -172,18 +171,18 @@ void brk_instruction_func(cpu6510_state_t* cpu_dev) {
     cpu_dev->p |= FLAG_I;
     // Read IRQ vector
     cpu_read_cycle(0xFFFE);
-    cpu_dev->pc = bus.data;
+    cpu_dev->pc = cpu_dev->bus->data;
     cpu_read_cycle(0xFFFF);
-    cpu_dev->pc |= (bus.data << 8);
+    cpu_dev->pc |= (cpu_dev->bus->data << 8);
     NEXT_INSTRUCTION(cpu_dev, brk_fetch_wait);
 }
 
 // Interrupt handler - called when IRQ or NMI lines are active
 void handle_interrupt_func(cpu6510_state_t* cpu_dev) {
-    if (bus.control_lines & NMI_LINE) {
+    if (cpu_dev->bus->control_lines & NMI_LINE) {
         // Handle NMI - non-maskable
         cpu6510_nmi(cpu_dev);
-    } else if ((bus.control_lines & IRQ_LINE) && !cpu_get_flag(cpu_dev, FLAG_I)) {
+    } else if ((cpu_dev->bus->control_lines & IRQ_LINE) && !cpu_get_flag(cpu_dev, FLAG_I)) {
         // Handle IRQ - only if interrupt disable is clear
         cpu6510_irq(cpu_dev);
     }
@@ -195,12 +194,12 @@ void handle_interrupt_func(cpu6510_state_t* cpu_dev) {
 // ============================================================================
 void cpu6510_execute(cpu6510_state_t* cpu_dev) {
     // Start execution - fetch first instruction
-    if (unlikely(bus.control_lines & (IRQ_LINE | NMI_LINE))) {
+    if (unlikely(cpu_dev->bus->control_lines & (IRQ_LINE | NMI_LINE))) {
         handle_interrupt_func(cpu_dev);
         return;
     }
-    WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc++, main_fetch_start);
-    cpu_dev->opcode = bus.data;
+    CPU_WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc++, main_fetch_start);
+    cpu_dev->opcode = cpu_dev->bus->data;
     instruction_table[cpu_dev->opcode](cpu_dev);
 }
 
