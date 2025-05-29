@@ -1,6 +1,4 @@
 #include "cpu6510.h"
-#include "bus.h"
-#include "c64.h"
 
 // ============================================================================
 // MOS 6510 TRANSFER AND SYSTEM INSTRUCTIONS
@@ -56,14 +54,14 @@ void txs_func(cpu6510_state_t* cpu_dev) {
 // NOP variations - No Operation
 void nop_zp_func(cpu6510_state_t* cpu_dev) {
     WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc++, nop_zp_wait1);
-    cpu_dev->addr_abs = bus.data;
+    cpu_dev->addr_abs = cpu_dev->bus->data;
     WAIT_READY_THEN_READ(cpu_dev, cpu_dev->addr_abs, nop_zp_wait2);  // Read and discard
     NEXT_INSTRUCTION(cpu_dev, nop_zp_fetch_wait);
 }
 
 void nop_zp_x_func(cpu6510_state_t* cpu_dev) {
     WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc++, nop_zp_x_wait1);
-    cpu_dev->addr_abs = bus.data;
+    cpu_dev->addr_abs = cpu_dev->bus->data;
     WAIT_READY_THEN_READ(cpu_dev, cpu_dev->addr_abs, nop_zp_x_wait2); // Dummy read
     cpu_dev->addr_abs = (cpu_dev->addr_abs + cpu_dev->x) & 0xFF;
     WAIT_READY_THEN_READ(cpu_dev, cpu_dev->addr_abs, nop_zp_x_wait3);  // Read and discard
@@ -72,18 +70,18 @@ void nop_zp_x_func(cpu6510_state_t* cpu_dev) {
 
 void nop_abs_func(cpu6510_state_t* cpu_dev) {
     WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc++, nop_abs_wait1);
-    cpu_dev->addr_abs = bus.data;
+    cpu_dev->addr_abs = cpu_dev->bus->data;
     WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc++, nop_abs_wait2);
-    cpu_dev->addr_abs |= (bus.data << 8);
+    cpu_dev->addr_abs |= (cpu_dev->bus->data << 8);
     WAIT_READY_THEN_READ(cpu_dev, cpu_dev->addr_abs, nop_abs_wait3);  // Read and discard
     NEXT_INSTRUCTION(cpu_dev, nop_abs_fetch_wait);
 }
 
 void nop_abs_x_func(cpu6510_state_t* cpu_dev) {
     WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc++, nop_abs_x_wait1);
-    cpu_dev->lo = bus.data;
+    cpu_dev->lo = cpu_dev->bus->data;
     WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc++, nop_abs_x_wait2);
-    cpu_dev->hi = bus.data;
+    cpu_dev->hi = cpu_dev->bus->data;
     cpu_dev->addr_abs = (cpu_dev->hi << 8) | cpu_dev->lo;
 
     if ((cpu_dev->addr_abs & 0xFF00) != ((cpu_dev->addr_abs + cpu_dev->x) & 0xFF00)) {

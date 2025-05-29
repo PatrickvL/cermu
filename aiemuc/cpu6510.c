@@ -1,6 +1,4 @@
 #include "cpu6510.h"
-#include "bus.h"
-#include "globals.h"
 #include <string.h>
 
 // Include all instruction implementation files
@@ -155,7 +153,7 @@ void cpu6510_nmi(cpu6510_state_t* cpu_dev) {
 
 // Basic instruction functions that are not in separate files
 void nop_instruction_func(cpu6510_state_t* cpu_dev) {
-    CPU_WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc, nop_wait);  // Dummy read
+    WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc, nop_wait);  // Dummy read
     NEXT_INSTRUCTION(cpu_dev, nop_fetch_wait);
 }
 
@@ -198,7 +196,7 @@ void cpu6510_execute(cpu6510_state_t* cpu_dev) {
         handle_interrupt_func(cpu_dev);
         return;
     }
-    CPU_WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc++, main_fetch_start);
+    WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc++, main_fetch_start);
     cpu_dev->opcode = cpu_dev->bus->data;
     instruction_table[cpu_dev->opcode](cpu_dev);
 }

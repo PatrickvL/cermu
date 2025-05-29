@@ -52,9 +52,9 @@ void bus_cycle(void) {
 // Optimized read cycle implementation - direct callback dispatch
 void cpu_read_cycle(uint16_t addr) {
     bus.address = addr;
+    bus_cycle();
     device_callbacks_t* cb = &chip_select_map[addr >> 8];
     bus.data = cb->read(cb->read_device, addr);
-    bus_cycle();
 }
 
 // Optimized write cycle implementation - direct callback dispatch
