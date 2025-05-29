@@ -43,18 +43,18 @@ void bus_init(c64_state_t* c64);
 void bus_cycle(void);
 
 // CPU ready check - hardware accurate BA/RDY handling
-#define CPU_READY() ((bus.control_lines & RDY_LINE) != 0)
+#define CPU_READY(cpu_dev) (((cpu_dev)->bus->control_lines & RDY_LINE) != 0)
 
 // Wait for CPU ready with automatic stall handling
 #define WAIT_READY_THEN_READ(cpu_dev, addr, label) do { \
     label: \
-    if (!CPU_READY()) { bus_cycle(); goto label; } \
+    if (!CPU_READY(cpu_dev)) { bus_cycle(); goto label; } \
     cpu_read_cycle(addr); \
 } while(0)
 
 #define WAIT_READY_THEN_WRITE(cpu_dev, addr, data, label) do { \
     label: \
-    if (!CPU_READY()) { bus_cycle(); goto label; } \
+    if (!CPU_READY(cpu_dev)) { bus_cycle(); goto label; } \
     cpu_write_cycle(addr, data); \
 } while(0)
 
