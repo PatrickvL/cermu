@@ -3,9 +3,9 @@
 #include <string.h>
 
 // New optimized I/O handlers - called directly via callback table (no chip select checks!)
-uint8_t cia1_r8(struct device_s* dev) {
+uint8_t cia1_r8(struct device_s* dev, uint16_t address) {
     cia_state_t* cia_dev = (cia_state_t*)dev;
-    uint8_t reg = bus.address & 0x0F;
+    uint8_t reg = address & 0x0F;
     switch (reg) {
         case 0x00: return cia_dev->port_a;
         case 0x01: return cia_dev->port_b;
@@ -16,23 +16,23 @@ uint8_t cia1_r8(struct device_s* dev) {
     }
 }
 
-void cia1_w8(struct device_s* dev) {
+void cia1_w8(struct device_s* dev, uint16_t address, uint8_t data) {
     cia_state_t* cia_dev = (cia_state_t*)dev;
-    uint8_t reg = bus.address & 0x0F;
+    uint8_t reg = address & 0x0F;
     switch (reg) {
-        case 0x00: cia_dev->port_a = bus.data; break;
-        case 0x01: cia_dev->port_b = bus.data; break;
-        case 0x04: cia_dev->timer_a_latch = (cia_dev->timer_a_latch & 0xFF00) | bus.data; break;
-        case 0x05: cia_dev->timer_a_latch = (cia_dev->timer_a_latch & 0x00FF) | (bus.data << 8); break;
-        case 0x0E: cia_dev->control_a = bus.data; break;
-        case 0x0D: cia_dev->interrupt_control = bus.data; break;
+        case 0x00: cia_dev->port_a = data; break;
+        case 0x01: cia_dev->port_b = data; break;
+        case 0x04: cia_dev->timer_a_latch = (cia_dev->timer_a_latch & 0xFF00) | data; break;
+        case 0x05: cia_dev->timer_a_latch = (cia_dev->timer_a_latch & 0x00FF) | (data << 8); break;
+        case 0x0E: cia_dev->control_a = data; break;
+        case 0x0D: cia_dev->interrupt_control = data; break;
         // Writes to unmapped registers are ignored
     }
 }
 
-uint8_t cia2_r8(struct device_s* dev) {
+uint8_t cia2_r8(struct device_s* dev, uint16_t address) {
     cia_state_t* cia_dev = (cia_state_t*)dev;
-    uint8_t reg = bus.address & 0x0F;
+    uint8_t reg = address & 0x0F;
     switch (reg) {
         case 0x00: return cia_dev->port_a;
         case 0x01: return cia_dev->port_b;
@@ -43,16 +43,16 @@ uint8_t cia2_r8(struct device_s* dev) {
     }
 }
 
-void cia2_w8(struct device_s* dev) {
+void cia2_w8(struct device_s* dev, uint16_t address, uint8_t data) {
     cia_state_t* cia_dev = (cia_state_t*)dev;
-    uint8_t reg = bus.address & 0x0F;
+    uint8_t reg = address & 0x0F;
     switch (reg) {
-        case 0x00: cia_dev->port_a = bus.data; break;
-        case 0x01: cia_dev->port_b = bus.data; break;
-        case 0x04: cia_dev->timer_a_latch = (cia_dev->timer_a_latch & 0xFF00) | bus.data; break;
-        case 0x05: cia_dev->timer_a_latch = (cia_dev->timer_a_latch & 0x00FF) | (bus.data << 8); break;
-        case 0x0E: cia_dev->control_a = bus.data; break;
-        case 0x0D: cia_dev->interrupt_control = bus.data; break;
+        case 0x00: cia_dev->port_a = data; break;
+        case 0x01: cia_dev->port_b = data; break;
+        case 0x04: cia_dev->timer_a_latch = (cia_dev->timer_a_latch & 0xFF00) | data; break;
+        case 0x05: cia_dev->timer_a_latch = (cia_dev->timer_a_latch & 0x00FF) | (data << 8); break;
+        case 0x0E: cia_dev->control_a = data; break;
+        case 0x0D: cia_dev->interrupt_control = data; break;
         // Writes to unmapped registers are ignored
     }
 }

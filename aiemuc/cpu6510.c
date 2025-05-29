@@ -27,29 +27,29 @@ void* fetch_opcode = NULL;
 // ============================================================================
 
 // CPU I/O port handlers
-uint8_t cpu_io_port_r8(struct device_s* dev) {
+uint8_t cpu_io_port_r8(struct device_s* dev, uint16_t address) {
     cpu6510_state_t* cpu_dev = (cpu6510_state_t*)dev;
-    if (cpu_dev->bus->address <= 0x001) {
-        return cpu_dev->io_port[cpu_dev->bus->address]; // Data Direction Register (DDR at $0000). 1 = set, 0 = read&clear
+    if (address <= 0x001) {
+        return cpu_dev->io_port[address]; // Data Direction Register (DDR at $0000). 1 = set, 0 = read&clear
     }
-    return cpu_dev->ram->data[cpu_dev->bus->address];
+    return cpu_dev->ram->data[address];
 }
 
-void cpu_io_port_w8(struct device_s* dev) {
+void cpu_io_port_w8(struct device_s* dev, uint16_t address, uint8_t data) {
     cpu6510_state_t* cpu_dev = (cpu6510_state_t*)dev;
     
     // Handle the CPU port address writes
-    if (cpu_dev->bus->address <= 0x001) {
+    if (address <= 0x001) {
         uint8_t direction = cpu_dev->io_port[0x0000]; // Data Direction Register (DDR at $0000). 1 = set, 0 = read&clear
         uint8_t io_mask = cpu_dev->io_port[0x0001]; // I/O Port Data (at $0001)
 
         io_mask &= ~direction; // clear the mask bits that will be overwritten
-        io_mask |= direction & cpu_dev->bus->data; // set the appropriate bits from value
+        io_mask |= direction & data; // set the appropriate bits from value
         switch_cpu_mode(io_mask); // Apply the new mode to the PLA
-        cpu_dev->io_port[cpu_dev->bus->address] = io_mask; // Write the adjusted value to I/O Port Data (at $0001)
+        cpu_dev->io_port[address] = io_mask; // Write the adjusted value to I/O Port Data (at $0001)
     } else {
         // Normal RAM writes - forward to RAM
-        cpu_dev->ram->data[cpu_dev->bus->address] = cpu_dev->bus->data;
+        cpu_dev->ram->data[address] = data;
     }
 }
 

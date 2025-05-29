@@ -2,7 +2,6 @@
 #define ROM_H
 
 #include "device.h"
-#include "bus.h"
 
 // ============================================================================
 // ROM EMULATION - Generic ROM device with configurable size

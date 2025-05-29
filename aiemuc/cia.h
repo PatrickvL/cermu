@@ -2,7 +2,6 @@
 #define CIA_H
 
 #include "device.h"
-#include "bus.h"
 
 // ============================================================================
 // CIA EMULATION - Timer and I/O chips

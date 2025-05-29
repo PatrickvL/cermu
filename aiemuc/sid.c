@@ -1,5 +1,4 @@
 #include "sid.h"
-#include "bus.h"
 #include <string.h>
 
 // Forward declaration of device descriptor
@@ -30,16 +29,16 @@ static void sid_cycle(struct device_s* dev) {
 static void sid_cleanup(struct device_s* dev) { (void)dev; }
 
 // Optimized I/O handlers - called directly via callback table (no chip select checks!)
-uint8_t sid_r8(struct device_s* dev) {
+uint8_t sid_r8(struct device_s* dev, uint16_t address) {
     sid_state_t* sid_dev = (sid_state_t*)dev;
-    uint8_t reg = bus.address & 0x1F;
+    uint8_t reg = address & 0x1F;
     return sid_dev->registers[reg];
 }
 
-void sid_w8(struct device_s* dev) {
+void sid_w8(struct device_s* dev, uint16_t address, uint8_t data) {
     sid_state_t* sid_dev = (sid_state_t*)dev;
-    uint8_t reg = bus.address & 0x1F;
-    sid_dev->registers[reg] = bus.data;
+    uint8_t reg = address & 0x1F;
+    sid_dev->registers[reg] = data;
 }
 
 // Static device descriptor for SID

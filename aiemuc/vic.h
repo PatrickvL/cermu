@@ -2,7 +2,6 @@
 #define VIC_H
 
 #include "device.h"
-#include "bus.h"
 
 // ============================================================================
 // VIC-II EMULATION - Video chip with cycle-accurate badline generation
