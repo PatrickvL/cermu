@@ -40,7 +40,7 @@ void switch_cpu_mode(uint8_t mode);
 void cpu_read_cycle(uint16_t addr);
 void cpu_write_cycle(uint16_t addr, uint8_t value);
 
-void bus_init(c64_state_t* c64);
+void bus_init(bus_state_t* bus);
 // Bus cycle function
 void bus_cycle(void);
 
