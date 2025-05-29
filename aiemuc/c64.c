@@ -38,21 +38,24 @@ void c64_emulate_frame(void) {
 // INITIALIZATION
 // ============================================================================
 void c64_init(void) {
-    // Initialize all devices (each device initializes its own state and callbacks)
-    ram_init(&ram);
-    rom_init(&basic_rom, 8192, 0xA000);    // Basic ROM: 8K at $A000-$BFFF
-    rom_init(&kernal_rom, 8192, 0xE000);   // Kernal ROM: 8K at $E000-$FFFF
-    rom_init(&char_rom, 4096, 0xD000);     // Character ROM: 4K at $D000-$DFFF
-    vic_init(&vic);
-    cia1_init(&cia1);
-    cia2_init(&cia2);
-    sid_init(&sid);
+    // Initialize all devices using generic device function callers
+    device_init((struct device_s*)&ram);
+    device_init((struct device_s*)&vic);
+    device_init((struct device_s*)&cia1);
+    device_init((struct device_s*)&cia2);
+    device_init((struct device_s*)&sid);
+    device_init((struct device_s*)&cpu);
+    
+    // ROM devices need special setup parameters before device_init
+    rom_setup(&basic_rom, 8192, 0xA000);    // Basic ROM: 8K at $A000-$BFFF
+    device_init((struct device_s*)&basic_rom);
+    rom_setup(&kernal_rom, 8192, 0xE000);   // Kernal ROM: 8K at $E000-$FFFF
+    device_init((struct device_s*)&kernal_rom);
+    rom_setup(&char_rom, 4096, 0xD000);     // Character ROM: 4K at $D000-$DFFF
+    device_init((struct device_s*)&char_rom);
     
     // Initialize bus system (generates PLA maps internally)
     bus_init();
-
-    // Initialize CPU state
-    cpu6510_init(&cpu);
     
     // Load ROM images (external function)
     // load_roms(kernal_rom, basic_rom, char_rom);

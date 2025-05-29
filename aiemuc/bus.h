@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "device.h"
 
 // Bus control line definitions
 #define IRQ_LINE    (1 << 0)
@@ -10,28 +11,6 @@
 #define BA_LINE     (1 << 2)
 #define AEC_LINE    (1 << 3)
 #define RDY_LINE    (1 << 4)
-
-// Forward declaration
-struct device_s;
-
-// Generic device structure - all devices inherit from this
-typedef struct {
-    uint8_t (*r8)(struct device_s* dev);  // Read 8-bit callback - returns data
-    void (*w8)(struct device_s* dev);     // Write 8-bit callback
-} device_t;
-
-// Device callback struct with separate device pointers for read and write
-typedef struct {
-    uint8_t (*read)(struct device_s* dev);   // Returns data with device pointer
-    void (*write)(struct device_s* dev);     // Write with device pointer
-    struct device_s* read_device;            // Device for read operations
-    struct device_s* write_device;           // Device for write operations (often RAM for ROM areas)
-} device_callbacks_t;
-
-// Generic device instance
-typedef struct device_s {
-    device_t callbacks;
-} device_instance_t;
 
 // ============================================================================
 // BUS STATE - Lives in host CPU register for maximum performance

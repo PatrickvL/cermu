@@ -2,8 +2,20 @@
 #include "bus.h"
 #include <string.h>
 
-// Optimized SID cycle function - no I/O handling, just envelope generators
-void sid_cycle(sid_state_t* sid_dev) {
+// Forward declaration of device descriptor
+static const device_t sid_device_descriptor;
+
+// Direct implementation functions for device lifecycle
+static void sid_init(struct device_s* dev) {
+    sid_state_t* sid_dev = (sid_state_t*)dev;
+    // Initialize SID state
+    memset(sid_dev, 0, sizeof(*sid_dev));
+    // Set up device callbacks from descriptor pointer
+    sid_dev->device = &sid_device_descriptor;
+}
+
+static void sid_cycle(struct device_s* dev) {
+    sid_state_t* sid_dev = (sid_state_t*)dev;
     // Envelope generators always run (hardware accurate)
     for (int voice = 0; voice < 3; voice++) {
         sid_dev->envelope_counter[voice]++;
@@ -15,7 +27,9 @@ void sid_cycle(sid_state_t* sid_dev) {
     }
 }
 
-// New optimized I/O handlers - called directly via callback table (no chip select checks!)
+static void sid_cleanup(struct device_s* dev) { (void)dev; }
+
+// Optimized I/O handlers - called directly via callback table (no chip select checks!)
 uint8_t sid_r8(struct device_s* dev) {
     sid_state_t* sid_dev = (sid_state_t*)dev;
     uint8_t reg = bus.address & 0x1F;
@@ -31,14 +45,8 @@ void sid_w8(struct device_s* dev) {
 // Static device descriptor for SID
 static const device_t sid_device_descriptor = {
     .r8 = sid_r8,
-    .w8 = sid_w8
+    .w8 = sid_w8,
+    .init = sid_init,
+    .cycle = sid_cycle,
+    .cleanup = sid_cleanup
 };
-
-// SID initialization
-void sid_init(sid_state_t* sid_dev) {
-    // Initialize SID state
-    memset(sid_dev, 0, sizeof(*sid_dev));
-    
-    // Set up device callbacks from descriptor pointer
-    sid_dev->device = &sid_device_descriptor;
-}

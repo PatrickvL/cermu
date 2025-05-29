@@ -48,9 +48,6 @@ extern instruction_func_t instruction_table[256];
 #define FLAG_V  0x40    // Overflow
 #define FLAG_N  0x80    // Negative
 
-// Forward declaration
-struct device_s;
-
 #define NEXT_INSTRUCTION(cpu_dev, fetch_label) do { \
     if (unlikely(bus.control_lines & (IRQ_LINE | NMI_LINE))) { \
         handle_interrupt_func(cpu_dev); \

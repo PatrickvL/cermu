@@ -15,7 +15,6 @@ typedef struct {
 // Forward declaration
 struct device_s;
 
-// Optimized I/O handlers (called via callback table)
-void ram_init(ram_state_t* ram_dev);
+// Note: Use device_init(), device_cycle(), device_cleanup() instead of wrapper functions
 
 #endif // RAM_H

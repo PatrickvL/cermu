@@ -25,10 +25,6 @@ typedef struct {
 // Forward declaration
 struct device_s;
 
-// CIA functions
-void cia1_init(cia_state_t* cia_dev);
-void cia2_init(cia_state_t* cia_dev);
-void cia1_cycle(cia_state_t* cia_dev);
-void cia2_cycle(cia_state_t* cia_dev);
+// Note: Use device_init(), device_cycle(), device_cleanup() instead of wrapper functions
 
 #endif // CIA_H
