@@ -63,13 +63,28 @@ extern instruction_func_t instruction_table[256];
 #define FLAG_V  0x40    // Overflow
 #define FLAG_N  0x80    // Negative
 
+// CPU-specific bus access macros that use the CPU's bus pointer
+#define CPU_READY(cpu_dev) ((cpu_dev->bus->control_lines & RDY_LINE) != 0)
+
+#define CPU_WAIT_READY_THEN_READ(cpu_dev, addr, label) do { \
+    label: \
+    if (!CPU_READY(cpu_dev)) { bus_cycle(); goto label; } \
+    cpu_read_cycle(addr); \
+} while(0)
+
+#define CPU_WAIT_READY_THEN_WRITE(cpu_dev, addr, data, label) do { \
+    label: \
+    if (!CPU_READY(cpu_dev)) { bus_cycle(); goto label; } \
+    cpu_write_cycle(addr, data); \
+} while(0)
+
 #define NEXT_INSTRUCTION(cpu_dev, fetch_label) do { \
-    if (unlikely(bus.control_lines & (IRQ_LINE | NMI_LINE))) { \
+    if (unlikely(cpu_dev->bus->control_lines & (IRQ_LINE | NMI_LINE))) { \
         handle_interrupt_func(cpu_dev); \
         return; \
     } \
-    WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc++, fetch_label); \
-    cpu_dev->opcode = bus.data; \
+    CPU_WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc++, fetch_label); \
+    cpu_dev->opcode = cpu_dev->bus->data; \
     instruction_table[cpu_dev->opcode](cpu_dev); \
     return; \
 } while(0)
