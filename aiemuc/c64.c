@@ -46,6 +46,9 @@ void c64_init(void) {
     device_init((struct device_s*)&sid);
     device_init((struct device_s*)&cpu);
     
+    // Attach RAM to CPU so it can access it directly
+    cpu_attach_ram(&cpu, &ram);
+    
     // ROM devices need special setup parameters before device_init
     rom_setup(&basic_rom, 8192, 0xA000);    // Basic ROM: 8K at $A000-$BFFF
     device_init((struct device_s*)&basic_rom);
