@@ -30,6 +30,9 @@ void c64_init(c64_state_t* c64) {
     // Attach RAM to CPU so it can access it directly
     cpu_attach_ram(&c64->cpu, &c64->ram);
     
+    // Attach bus to CPU so it can access bus state directly
+    cpu_attach_bus(&c64->cpu, &bus);
+    
     // ROM devices need special setup parameters before device_init
     rom_setup(&(c64->basic_rom), 8192, 0xA000);    // Basic ROM: 8K at $A000-$BFFF
     device_init((struct device_s*)&(c64->basic_rom));
