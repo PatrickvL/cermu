@@ -7,13 +7,14 @@
 // Forward declaration
 struct device_s;
 
+// TODO : Convert this into a VMT-like feature
 // Generic device structure - all devices inherit from this
 typedef struct {
-    uint8_t (*r8)(struct device_s* dev);  // Read 8-bit callback - returns data
-    void (*w8)(struct device_s* dev);     // Write 8-bit callback
-    void (*init)(struct device_s* dev);   // Device initialization
-    void (*cycle)(struct device_s* dev);  // Device cycle (timers, logic)
+    void (*init)(struct device_s* dev);    // Device initialization
     void (*cleanup)(struct device_s* dev); // Device cleanup (optional)
+    uint8_t (*r8)(struct device_s* dev);   // Read 8-bit callback - returns data
+    void (*w8)(struct device_s* dev);      // Write 8-bit callback
+    void (*cycle)(struct device_s* dev);   // Device cycle (timers, logic)
 } device_t;
 
 // Device callback struct with separate device pointers for read and write
@@ -83,9 +84,5 @@ static inline void device_write(struct device_s* dev) {
 // Helper functions for extracting callbacks from devices
 uint8_t (*get_device_read_callback(struct device_s* dev))(struct device_s*);
 void (*get_device_write_callback(struct device_s* dev))(struct device_s*);
-
-// Default no-op handlers for unmapped areas
-uint8_t nop_r8(struct device_s* dev);
-void nop_w8(struct device_s* dev);
 
 #endif // DEVICE_H

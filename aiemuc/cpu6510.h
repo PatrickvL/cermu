@@ -3,6 +3,7 @@
 
 #include "c64.h"
 #include "bus.h"
+#include "ram.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -29,6 +30,10 @@ typedef struct {
     uint8_t addr_rel;   // Relative address for branch instructions
     uint8_t fetched;    // Fetched data for current instruction
     uint8_t temp;       // Temporary storage
+    uint8_t io_port[2]; // 0:DDR, 1:Port
+    
+    // RAM attachment
+    ram_state_t* ram;   // Pointer to attached RAM
 } cpu6510_state_t;
 
 // Universal instruction dispatch using function pointers
@@ -273,6 +278,9 @@ bool cpu6510_step(cpu6510_state_t* cpu_dev);
 void cpu6510_execute(cpu6510_state_t* cpu_dev);
 void cpu6510_irq(cpu6510_state_t* cpu_dev);
 void cpu6510_nmi(cpu6510_state_t* cpu_dev);
+
+// RAM attachment
+void cpu_attach_ram(cpu6510_state_t* cpu_dev, ram_state_t* ram_dev);
 
 // Instruction setup
 void cpu6510_setup_opcode_table(void);

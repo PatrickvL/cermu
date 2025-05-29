@@ -16,7 +16,6 @@
 #include "cpu6510.h"
 
 extern cpu6510_state_t cpu;
-extern ram_state_t ram;
 extern rom_state_t basic_rom;
 extern rom_state_t kernal_rom;
 extern rom_state_t char_rom;
