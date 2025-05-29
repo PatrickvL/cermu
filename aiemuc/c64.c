@@ -156,7 +156,6 @@ void c64_emulate_frame(c64_state_t* c64) {
 void c64_init(c64_state_t* c64) {
     // Set the C64 system instance for bus operations
     c64_system = c64;
-    bus = &c64_system->bus; // TODO : Remove once bus is no longer global
    
     // Initialize cycle counter
     c64->total_cycles = 0;
@@ -174,6 +173,11 @@ void c64_init(c64_state_t* c64) {
     
     // Attach bus to CPU so it can access bus state directly
     cpu_attach_bus(&c64->cpu, &c64->bus);
+    
+    // Attach bus to VIC and CIA devices so they can access control lines
+    vic_attach_bus(&c64->vic, &c64->bus);
+    cia_attach_bus(&c64->cia1, &c64->bus);
+    cia_attach_bus(&c64->cia2, &c64->bus);
     
     // ROM devices need special setup parameters before device_init
     rom_setup(&(c64->basic_rom), 8192, 0xA000);    // Basic ROM: 8K at $A000-$BFFF

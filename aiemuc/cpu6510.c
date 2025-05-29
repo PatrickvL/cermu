@@ -1,5 +1,9 @@
 #include "cpu6510.h"
+#include "c64.h"
 #include <string.h>
+
+// External reference to global C64 state
+extern c64_state_t* c64_system;
 
 // Include all instruction implementation files
 #include "cpu6510_arithmetic.c"
@@ -68,10 +72,10 @@ void cpu_read_cycle(uint16_t addr) {
     // TODO : Emulate how the 6510 CPU only sets the address lines
     // when RDY and when not accessing the I/O ports (same for writes)
     // perhaps best merge the cpu_io_r8 into here
-    bus->address = addr;
+    c64_system->bus.address = addr;
     c64_non_cpu_cycles();
     device_callbacks_t* cb = &chip_select_map[addr >> 8];
-    bus->data = cb->read(cb->read_device, addr);
+    c64_system->bus.data = cb->read(cb->read_device, addr);
 }
 
 // Optimized write cycle implementation - direct callback dispatch
@@ -80,8 +84,8 @@ void cpu_write_cycle(uint16_t addr, uint8_t value) {
     // address and data lines and the ones on the bus (which
     // can be "detached" by the RDY line / accessing I/O ports)
     // perhaps best merge the cpu_io_w8 into here
-    bus->address = addr;
-    bus->data = value;
+    c64_system->bus.address = addr;
+    c64_system->bus.data = value;
     device_callbacks_t* cb = &chip_select_map[addr >> 8];
     cb->write(cb->write_device, addr, value);
     c64_non_cpu_cycles();

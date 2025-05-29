@@ -23,9 +23,6 @@ typedef struct {
     uint8_t  control_lines; // R/W, IRQ, NMI, BA, AEC, RDY
 } bus_state_t;
 
-// Global bus state
-extern bus_state_t* bus;
-
 // ============================================================================
 // PLA EMULATION - Pre-computed chip select maps for each memory mode
 // ============================================================================
