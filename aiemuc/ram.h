@@ -2,7 +2,6 @@
 #define RAM_H
 
 #include "device.h"
-#include "bus.h"
 
 // ============================================================================
 // RAM EMULATION - 64K system RAM with CPU port handling

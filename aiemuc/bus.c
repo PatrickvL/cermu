@@ -53,7 +53,7 @@ void bus_cycle(void) {
 void cpu_read_cycle(uint16_t addr) {
     bus.address = addr;
     device_callbacks_t* cb = &chip_select_map[addr >> 8];
-    bus.data = cb->read(cb->read_device);
+    bus.data = cb->read(cb->read_device, addr);
     bus_cycle();
 }
 
@@ -62,7 +62,7 @@ void cpu_write_cycle(uint16_t addr, uint8_t value) {
     bus.address = addr;
     bus.data = value;
     device_callbacks_t* cb = &chip_select_map[addr >> 8];
-    cb->write(cb->write_device);
+    cb->write(cb->write_device, addr, value);
     bus_cycle();
 }
 

@@ -1,12 +1,11 @@
 #include "rom.h"
-#include "bus.h"
 #include <string.h>
 #include <stdlib.h>
 
 // Generic ROM read handler
-uint8_t rom_r8(struct device_s* dev) {
+uint8_t rom_r8(struct device_s* dev, uint16_t address) {
     rom_state_t* rom_dev = (rom_state_t*)dev;
-    uint16_t offset = bus.address - rom_dev->base_address;
+    uint16_t offset = address - rom_dev->base_address;
     
     // Bounds check
     if (offset >= rom_dev->size) {

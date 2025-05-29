@@ -1,19 +1,18 @@
 #include "ram.h"
-#include "bus.h"
 #include <string.h>
 
 // Forward declaration of descriptor
 static const device_t ram_device_descriptor;
 
 // RAM I/O handlers - called directly via callback table (no chip select checks!)
-uint8_t ram_r8(struct device_s* dev) {
+uint8_t ram_r8(struct device_s* dev, uint16_t address) {
     ram_state_t* ram_dev = (ram_state_t*)dev;
-    return ram_dev->data[bus.address];
+    return ram_dev->data[address];
 }
 
-void ram_w8(struct device_s* dev) {
+void ram_w8(struct device_s* dev, uint16_t address, uint8_t data) {
     ram_state_t* ram_dev = (ram_state_t*)dev;
-    ram_dev->data[bus.address] = bus.data;
+    ram_dev->data[address] = data;
 }
 
 // RAM lifecycle methods

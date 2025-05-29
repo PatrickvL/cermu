@@ -2,7 +2,6 @@
 #define SID_H
 
 #include "device.h"
-#include "bus.h"
 
 // ============================================================================
 // SID EMULATION - Sound chip with envelope generators

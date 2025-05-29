@@ -15,16 +15,16 @@ const uint8_t vic_write_masks[64] = {
 };
 
 // New optimized I/O handlers - called directly via callback table (no chip select checks!)
-uint8_t vic_r8(struct device_s* dev) {
+uint8_t vic_r8(struct device_s* dev, uint16_t address) {
     vic_state_t* vic_dev = (vic_state_t*)dev;
-    uint8_t reg = bus.address & 0x3F;
+    uint8_t reg = address & 0x3F;
     return vic_dev->registers[reg];
 }
 
-void vic_w8(struct device_s* dev) {
+void vic_w8(struct device_s* dev, uint16_t address, uint8_t data) {
     vic_state_t* vic_dev = (vic_state_t*)dev;
-    uint8_t reg = bus.address & 0x3F;
-    vic_dev->registers[reg] = bus.data & vic_write_masks[reg];
+    uint8_t reg = address & 0x3F;
+    vic_dev->registers[reg] = data & vic_write_masks[reg];
 }
 // Forward declaration of device descriptor
 static const device_t vic_device_descriptor;
