@@ -57,28 +57,8 @@ void cpu_io_port_w8(struct device_s* dev) {
 
 // CPU lifecycle wrapper functions
 static void cpu_init(struct device_s* dev) {
-    // CPU init logic is handled by cpu6510_init() which sets up the device properly
-    (void)dev;
-}
-
-static void cpu_cycle(struct device_s* dev) {
     cpu6510_state_t* cpu_dev = (cpu6510_state_t*)dev;
-    cpu6510_step(cpu_dev);
-}
-
-static void cpu_cleanup(struct device_s* dev) {
-    // CPU has no cleanup needed
-    (void)dev;
-}
-// Initialize CPU
-void cpu6510_init(cpu6510_state_t* cpu_dev) {
-    // Set up device callbacks
-    cpu_dev->device.r8 = cpu_io_port_r8;
-    cpu_dev->device.w8 = cpu_io_port_w8;
-    cpu_dev->device.init = cpu_init;
-    cpu_dev->device.cycle = cpu_cycle;
-    cpu_dev->device.cleanup = cpu_cleanup;
-    
+    // Initialize CPU registers and state
     cpu_dev->a = 0;
     cpu_dev->x = 0;
     cpu_dev->y = 0;
@@ -96,9 +76,33 @@ void cpu6510_init(cpu6510_state_t* cpu_dev) {
     cpu6510_setup_opcode_table();
 }
 
+static void cpu_cycle(struct device_s* dev) {
+    cpu6510_state_t* cpu_dev = (cpu6510_state_t*)dev;
+    cpu6510_step(cpu_dev);
+}
+
+static void cpu_cleanup(struct device_s* dev) {
+    // CPU has no cleanup needed
+    (void)dev;
+}
+
+// Forward declaration of descriptor
+static const device_t cpu_device_descriptor;
+
+// Initialize CPU
+void cpu6510_init(cpu6510_state_t* cpu_dev) {
+    // Set up device callbacks from descriptor pointer
+    cpu_dev->device = &cpu_device_descriptor;
+}
+
 // Attach RAM to CPU
 void cpu_attach_ram(cpu6510_state_t* cpu_dev, ram_state_t* ram_dev) {
     cpu_dev->ram = ram_dev;
+}
+
+// Attach bus to CPU
+void cpu_attach_bus(cpu6510_state_t* cpu_dev, bus_state_t* bus_state) {
+    cpu_dev->bus = bus_state;
 }
 
 // Reset CPU
@@ -476,3 +480,12 @@ void cpu6510_setup_opcode_table(void) {
     instruction_table[0xFE] = inc_absolute_x_func;     // INC $nnnn,X
     instruction_table[0xFF] = isc_absolute_x_func;     // ISC $nnnn,X (illegal)
 }
+
+// Static device descriptor for CPU6510
+static const device_t cpu_device_descriptor = {
+    .r8 = cpu_io_port_r8,
+    .w8 = cpu_io_port_w8,
+    .init = cpu_init,
+    .cycle = cpu_cycle,
+    .cleanup = cpu_cleanup
+};
