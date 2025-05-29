@@ -20,8 +20,6 @@ typedef struct {
 // Forward declaration
 struct device_s;
 
-// VIC functions
-void vic_init(vic_state_t* vic_dev);
-void vic_cycle(vic_state_t* vic_dev);
+// Note: Use device_init(), device_cycle(), device_cleanup() instead of wrapper functions
 
 #endif // VIC_H

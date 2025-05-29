@@ -2,37 +2,6 @@
 #include "bus.h"
 #include <string.h>
 
-// Optimized CIA cycle functions - no I/O handling, just timers and logic
-void cia1_cycle(cia_state_t* cia_dev) {
-    // Timer A always decrements when enabled (hardware accurate)
-    if (cia_dev->control_a & 1) {
-        if (cia_dev->timer_a == 0) {
-            cia_dev->timer_a = cia_dev->timer_a_latch;
-            cia_dev->interrupt_status |= 1; // Timer A interrupt
-            if (cia_dev->interrupt_control & 1) {
-                bus.control_lines |= IRQ_LINE;
-            }
-        } else {
-            cia_dev->timer_a--;
-        }
-    }
-}
-
-void cia2_cycle(cia_state_t* cia_dev) {
-    // Timer A always decrements when enabled
-    if (cia_dev->control_a & 1) {
-        if (cia_dev->timer_a == 0) {
-            cia_dev->timer_a = cia_dev->timer_a_latch;
-            cia_dev->interrupt_status |= 1;
-            if (cia_dev->interrupt_control & 1) {
-                bus.control_lines |= NMI_LINE;
-            }
-        } else {
-            cia_dev->timer_a--;
-        }
-    }
-}
-
 // New optimized I/O handlers - called directly via callback table (no chip select checks!)
 uint8_t cia1_r8(struct device_s* dev) {
     cia_state_t* cia_dev = (cia_state_t*)dev;
@@ -88,31 +57,76 @@ void cia2_w8(struct device_s* dev) {
     }
 }
 
-// Static device descriptors for CIA1 and CIA2
-static const device_t cia1_device_descriptor = {
-    .r8 = cia1_r8,
-    .w8 = cia1_w8
-};
+// Forward declarations of device descriptors
+static const device_t cia1_device_descriptor;
+static const device_t cia2_device_descriptor;
 
-static const device_t cia2_device_descriptor = {
-    .r8 = cia2_r8,
-    .w8 = cia2_w8
-};
-
-// CIA1 initialization
-void cia1_init(cia_state_t* cia_dev) {
+// Direct implementation functions for device lifecycle
+static void cia1_init(struct device_s* dev) {
+    cia_state_t* cia_dev = (cia_state_t*)dev;
     // Initialize CIA1 state
     memset(cia_dev, 0, sizeof(*cia_dev));
-    
     // Set up device callbacks from descriptor pointer
     cia_dev->device = &cia1_device_descriptor;
 }
 
-// CIA2 initialization
-void cia2_init(cia_state_t* cia_dev) {
+static void cia1_cycle(struct device_s* dev) {
+    cia_state_t* cia_dev = (cia_state_t*)dev;
+    // Timer A always decrements when enabled (hardware accurate)
+    if (cia_dev->control_a & 1) {
+        if (cia_dev->timer_a == 0) {
+            cia_dev->timer_a = cia_dev->timer_a_latch;
+            cia_dev->interrupt_status |= 1; // Timer A interrupt
+            if (cia_dev->interrupt_control & 1) {
+                bus.control_lines |= IRQ_LINE;
+            }
+        } else {
+            cia_dev->timer_a--;
+        }
+    }
+}
+
+static void cia1_cleanup(struct device_s* dev) { (void)dev; }
+
+static void cia2_init(struct device_s* dev) {
+    cia_state_t* cia_dev = (cia_state_t*)dev;
     // Initialize CIA2 state
     memset(cia_dev, 0, sizeof(*cia_dev));
-    
     // Set up device callbacks from descriptor pointer
     cia_dev->device = &cia2_device_descriptor;
 }
+
+static void cia2_cycle(struct device_s* dev) {
+    cia_state_t* cia_dev = (cia_state_t*)dev;
+    // Timer A always decrements when enabled
+    if (cia_dev->control_a & 1) {
+        if (cia_dev->timer_a == 0) {
+            cia_dev->timer_a = cia_dev->timer_a_latch;
+            cia_dev->interrupt_status |= 1;
+            if (cia_dev->interrupt_control & 1) {
+                bus.control_lines |= NMI_LINE;
+            }
+        } else {
+            cia_dev->timer_a--;
+        }
+    }
+}
+
+static void cia2_cleanup(struct device_s* dev) { (void)dev; }
+
+// Static device descriptors for CIA1 and CIA2
+static const device_t cia1_device_descriptor = {
+    .r8 = cia1_r8,
+    .w8 = cia1_w8,
+    .init = cia1_init,
+    .cycle = cia1_cycle,
+    .cleanup = cia1_cleanup
+};
+
+static const device_t cia2_device_descriptor = {
+    .r8 = cia2_r8,
+    .w8 = cia2_w8,
+    .init = cia2_init,
+    .cycle = cia2_cycle,
+    .cleanup = cia2_cleanup
+};

@@ -18,8 +18,6 @@ typedef struct {
 // Forward declaration
 struct device_s;
 
-// SID functions
-void sid_init(sid_state_t* sid_dev);
-void sid_cycle(sid_state_t* sid_dev);
+// Note: Use device_init(), device_cycle(), device_cleanup() instead of wrapper functions
 
 #endif // SID_H

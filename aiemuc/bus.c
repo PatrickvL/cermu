@@ -24,16 +24,16 @@ void switch_cpu_mode(uint8_t mode) {
 void (*bus_cycle_callback)(void) = NULL;
 
 // ============================================================================
-// OPTIMIZED BUS CYCLE - Direct callback dispatch, no chip select checks
+// OPTIMIZED BUS CYCLE - Safe device lifecycle management and callback dispatch
 // ============================================================================
 void bus_cycle(void) {
     bus.total_cycles++;
     
-    // All chips always run for cycle accuracy - no conditionals for performance
-    vic_cycle(&vic);       // Video timing, BA control, sprites
-    cia1_cycle(&cia1);     // Timers, keyboard, joystick
-    cia2_cycle(&cia2);     // Timers, serial, user port
-    sid_cycle(&sid);       // Sound generation, envelope generators
+    // All chips always run for cycle accuracy - using safe device callers
+    device_cycle((struct device_s*)&vic);
+    device_cycle((struct device_s*)&cia1);
+    device_cycle((struct device_s*)&cia2);
+    device_cycle((struct device_s*)&sid);
 
     // Update RDY line based on BA (hardware accurate)
     if (bus.control_lines & BA_LINE) {
@@ -62,36 +62,6 @@ void cpu_write_cycle(uint16_t addr, uint8_t value) {
     bus_cycle();
 }
 
-// Default no-op handlers for unmapped areas
-static uint8_t nop_r8(struct device_s* dev) {
-    (void)dev; // Unused parameter
-    return 0xFF; // Default read value for unmapped areas
-}
-
-static void nop_w8(struct device_s* dev) {
-    (void)dev; // Unused parameter
-    // Writes to unmapped areas are ignored
-}
-
-// Helper function to extract read callback from pointer-based device
-static uint8_t (*get_device_read_callback(struct device_s* dev))(struct device_s*) {
-    if (!dev) return nop_r8;
-    
-    // Since our devices now use pointer-based descriptors, we need to cast appropriately
-    // All our device structures have 'const device_t* device' as the first field
-    const device_t* device_desc = *(const device_t**)dev;
-    return device_desc ? device_desc->r8 : nop_r8;
-}
-
-// Helper function to extract write callback from pointer-based device
-static void (*get_device_write_callback(struct device_s* dev))(struct device_s*) {
-    if (!dev) return nop_w8;
-    
-    // Since our devices now use pointer-based descriptors, we need to cast appropriately
-    // All our device structures have 'const device_t* device' as the first field
-    const device_t* device_desc = *(const device_t**)dev;
-    return device_desc ? device_desc->w8 : nop_w8;
-}
 
 // Helper function to get callbacks based on address and mode bits
 static device_callbacks_t get_device_callbacks_for_address(uint16_t addr, bool loram, bool hiram, bool charen, bool game) {

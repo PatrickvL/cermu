@@ -58,11 +58,29 @@ void cpu_io_port_w8(struct device_s* dev) {
 }
 
 
+// CPU lifecycle wrapper functions
+static void cpu_init(struct device_s* dev) {
+    // CPU init logic is handled by cpu6510_init() which sets up the device properly
+    (void)dev;
+}
+
+static void cpu_cycle(struct device_s* dev) {
+    cpu6510_state_t* cpu_dev = (cpu6510_state_t*)dev;
+    cpu6510_step(cpu_dev);
+}
+
+static void cpu_cleanup(struct device_s* dev) {
+    // CPU has no cleanup needed
+    (void)dev;
+}
 // Initialize CPU
 void cpu6510_init(cpu6510_state_t* cpu_dev) {
     // Set up device callbacks
     cpu_dev->device.r8 = cpu_io_port_r8;
     cpu_dev->device.w8 = cpu_io_port_w8;
+    cpu_dev->device.init = cpu_init;
+    cpu_dev->device.cycle = cpu_cycle;
+    cpu_dev->device.cleanup = cpu_cleanup;
     
     cpu_dev->a = 0;
     cpu_dev->x = 0;

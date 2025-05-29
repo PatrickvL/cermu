@@ -19,10 +19,8 @@ typedef struct {
 // Forward declaration
 struct device_s;
 
-// ROM initialization with configurable size and base address
-void rom_init(rom_state_t* rom_dev, uint16_t size, uint16_t base_address);
-
-// ROM cleanup (free allocated memory)
-void rom_cleanup(rom_state_t* rom_dev);
+// Note: Use device_init(), device_cycle(), device_cleanup() instead of wrapper functions
+// ROM requires additional parameters, so use rom_setup() for initialization
+void rom_setup(rom_state_t* rom_dev, uint16_t size, uint16_t base_address);
 
 #endif // ROM_H

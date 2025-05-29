@@ -14,8 +14,32 @@ const uint8_t vic_write_masks[64] = {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF   // $38-$3F
 };
 
-// Optimized VIC cycle function - no I/O handling, just timing and logic
-void vic_cycle(vic_state_t* vic_dev) {
+// New optimized I/O handlers - called directly via callback table (no chip select checks!)
+uint8_t vic_r8(struct device_s* dev) {
+    vic_state_t* vic_dev = (vic_state_t*)dev;
+    uint8_t reg = bus.address & 0x3F;
+    return vic_dev->registers[reg];
+}
+
+void vic_w8(struct device_s* dev) {
+    vic_state_t* vic_dev = (vic_state_t*)dev;
+    uint8_t reg = bus.address & 0x3F;
+    vic_dev->registers[reg] = bus.data & vic_write_masks[reg];
+}
+// Forward declaration of device descriptor
+static const device_t vic_device_descriptor;
+
+// Direct implementation functions for device lifecycle
+static void vic_init(struct device_s* dev) {
+    vic_state_t* vic_dev = (vic_state_t*)dev;
+    // Initialize VIC state
+    memset(vic_dev, 0, sizeof(*vic_dev));
+    // Set up device callbacks from descriptor pointer
+    vic_dev->device = &vic_device_descriptor;
+}
+
+static void vic_cycle(struct device_s* dev) {
+    vic_state_t* vic_dev = (vic_state_t*)dev;
     // Always increment raster timing
     vic_dev->raster_cycle++;
     if (vic_dev->raster_cycle >= 63) {
@@ -44,30 +68,13 @@ void vic_cycle(vic_state_t* vic_dev) {
     vic_dev->prev_ba = (bus.control_lines & BA_LINE) != 0;
 }
 
-// New optimized I/O handlers - called directly via callback table (no chip select checks!)
-uint8_t vic_r8(struct device_s* dev) {
-    vic_state_t* vic_dev = (vic_state_t*)dev;
-    uint8_t reg = bus.address & 0x3F;
-    return vic_dev->registers[reg];
-}
-
-void vic_w8(struct device_s* dev) {
-    vic_state_t* vic_dev = (vic_state_t*)dev;
-    uint8_t reg = bus.address & 0x3F;
-    vic_dev->registers[reg] = bus.data & vic_write_masks[reg];
-}
+static void vic_cleanup(struct device_s* dev) { (void)dev; }
 
 // Static device descriptor for VIC
 static const device_t vic_device_descriptor = {
     .r8 = vic_r8,
-    .w8 = vic_w8
+    .w8 = vic_w8,
+    .init = vic_init,
+    .cycle = vic_cycle,
+    .cleanup = vic_cleanup
 };
-
-// VIC initialization
-void vic_init(vic_state_t* vic_dev) {
-    // Initialize VIC state
-    memset(vic_dev, 0, sizeof(*vic_dev));
-    
-    // Set up device callbacks from descriptor pointer
-    vic_dev->device = &vic_device_descriptor;
-}
