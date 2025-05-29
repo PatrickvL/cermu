@@ -31,6 +31,7 @@ typedef struct c64_state_s {
     vic_state_t vic;
     cia_state_t cia1, cia2;
     sid_state_t sid;
+    uint64_t total_cycles;  // Total cycles executed by the system
 } c64_state_t;
 
 // ============================================================================

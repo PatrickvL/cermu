@@ -5,6 +5,9 @@
 // Global bus state
 bus_state_t bus;
 
+// Global C64 state pointer for cycle counting
+c64_state_t* c64_system = NULL;
+
 // ============================================================================
 // PLA EMULATION - Pre-computed callback maps for each memory mode
 // ============================================================================
@@ -25,18 +28,16 @@ void (*bus_cycle_callback)(void) = NULL;
 // ============================================================================
 // OPTIMIZED BUS CYCLE - Safe device lifecycle management and callback dispatch
 // ============================================================================
-// Static pointer to current C64 instance for bus operations
-static c64_state_t* current_c64 = NULL;
 
 void bus_cycle(void) {
-    bus.total_cycles++;
-    
-    // All chips always run for cycle accuracy - using safe device callers
-    if (current_c64) {
-        device_cycle((struct device_s*)&current_c64->vic);
-        device_cycle((struct device_s*)&current_c64->cia1);
-        device_cycle((struct device_s*)&current_c64->cia2);
-        device_cycle((struct device_s*)&current_c64->sid);
+    if (c64_system) {
+        c64_system->total_cycles++;
+        
+        // All chips always run for cycle accuracy - using safe device callers
+        device_cycle((struct device_s*)&c64_system->vic);
+        device_cycle((struct device_s*)&c64_system->cia1);
+        device_cycle((struct device_s*)&c64_system->cia2);
+        device_cycle((struct device_s*)&c64_system->sid);
     }
 
     // Update RDY line based on BA (hardware accurate)
@@ -157,14 +158,16 @@ void generate_pla_maps(c64_state_t* c64) {
 }
 
 void bus_init(c64_state_t* c64) {
-    // Set the current C64 instance for bus operations
-    current_c64 = c64;
+    // Set the C64 system instance for bus operations
+    c64_system = c64;
     
     // Initialize bus state
     bus.address = 0;
     bus.data = 0;
     bus.control_lines = BA_LINE | AEC_LINE | RDY_LINE;
-    bus.total_cycles = 0;
+    
+    // Initialize total cycles in C64 state
+    c64->total_cycles = 0;
 
     // Generate PLA maps with integrated device callback assignment
     generate_pla_maps(c64);
