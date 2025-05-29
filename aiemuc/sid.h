@@ -15,9 +15,6 @@ typedef struct {
     uint8_t envelope_state[3];
 } sid_state_t;
 
-// Forward declaration
-struct device_s;
-
 // Note: Use device_init(), device_cycle(), device_cleanup() instead of wrapper functions
 
 #endif // SID_H
