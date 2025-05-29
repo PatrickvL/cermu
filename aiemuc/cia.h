@@ -22,9 +22,6 @@ typedef struct {
     };
 } cia_state_t;
 
-// Forward declaration
-struct device_s;
-
 // Note: Use device_init(), device_cycle(), device_cleanup() instead of wrapper functions
 
 #endif // CIA_H
