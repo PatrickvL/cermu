@@ -23,6 +23,7 @@
 // C64 SYSTEM STATE STRUCTURE
 // ============================================================================
 typedef struct c64_state_s {
+    bus_state_t bus;
     cpu6510_state_t cpu;
     ram_state_t ram;
     rom_state_t basic_rom;

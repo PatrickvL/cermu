@@ -9,7 +9,7 @@ void jam_func(cpu6510_state_t* cpu_dev) {
     // CPU freezes - infinite loop until reset
     while (1) {
         // Wait for reset or NMI
-        if (bus.control_lines & NMI_LINE) {
+        if (bus->control_lines & NMI_LINE) {
             cpu6510_nmi(cpu_dev);
             break;
         }

@@ -105,16 +105,46 @@ void generate_pla_maps(c64_state_t* c64) {
     }
 }
 
+// Global C64 state pointer for cycle counting
+c64_state_t* c64_system = NULL;
+
+// Callback for each bus cycle (can be set by test harness)
+void (*bus_cycle_callback)(void) = NULL;
+
+// ============================================================================
+// OPTIMIZED BUS CYCLE - Safe device lifecycle management and callback dispatch
+// ============================================================================
+
+void c64_non_cpu_cycles(void) {
+    if (c64_system) {
+        c64_system->total_cycles++;
+        
+        // All chips always run for cycle accuracy - using safe device callers
+        device_cycle((struct device_s*)&c64_system->vic);
+        device_cycle((struct device_s*)&c64_system->cia1);
+        device_cycle((struct device_s*)&c64_system->cia2);
+        device_cycle((struct device_s*)&c64_system->sid);
+    }
+
+    // Update RDY line based on BA (hardware accurate)
+    if ((&c64_system->bus)->control_lines & BA_LINE) {
+        (&c64_system->bus)->control_lines |= RDY_LINE;
+    } else {
+        (&c64_system->bus)->control_lines &= ~RDY_LINE;
+    }
+    // Call the callback if set
+    if (bus_cycle_callback) bus_cycle_callback();
+}
+
 // ============================================================================
 // MAIN EMULATION LOOP
 // ============================================================================
 void c64_emulate_frame(c64_state_t* c64) {
-    (void)c64; // Avoid unused parameter warning
     // Set initial PLA mode (all RAM/ROM enabled)
     switch_cpu_mode(0x07); // LORAM=1, HIRAM=1, CHAREN=1
 
     // Initialize bus state
-    bus_init(&bus);
+    bus_init(&c64->bus);
 
     // Start execution (commented out to avoid infinite loop in testing)
     // cpu6510_execute();
@@ -126,6 +156,7 @@ void c64_emulate_frame(c64_state_t* c64) {
 void c64_init(c64_state_t* c64) {
     // Set the C64 system instance for bus operations
     c64_system = c64;
+    bus = &c64_system->bus; // TODO : Remove once bus is no longer global
    
     // Initialize cycle counter
     c64->total_cycles = 0;
@@ -142,7 +173,7 @@ void c64_init(c64_state_t* c64) {
     cpu_attach_ram(&c64->cpu, &c64->ram);
     
     // Attach bus to CPU so it can access bus state directly
-    cpu_attach_bus(&c64->cpu, &bus);
+    cpu_attach_bus(&c64->cpu, &c64->bus);
     
     // ROM devices need special setup parameters before device_init
     rom_setup(&(c64->basic_rom), 8192, 0xA000);    // Basic ROM: 8K at $A000-$BFFF
@@ -153,7 +184,7 @@ void c64_init(c64_state_t* c64) {
     device_init((struct device_s*)&(c64->char_rom));
     
     // Initialize bus system (generates PLA maps internally)
-    bus_init(&bus);
+    bus_init(&c64->bus);
    
     // Generate PLA maps with integrated device callback assignment
     generate_pla_maps(c64);
