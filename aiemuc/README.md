@@ -13,17 +13,17 @@ The emulator is split into logical modules for maintainability while preserving 
 
 ### Bus System
 
-- **`bus.h/c`** - Unified bus state and cycle coordination
-  - 64-bit bus state union for optimal performance
+- **`bus.h/c`** - Unified bus state and cycle coordination with callback table optimization
+  - Pre-computed device callback tables for direct dispatch
   - Coordinated device cycle execution
   - Hardware-accurate BA/RDY line handling
 
 ### Memory Management
 
-- **`memory.h/c`** - PLA emulation and memory mapping
+- **`bus.c`** - PLA emulation and optimized I/O dispatch
   - 256-byte block granularity for optimal device compatibility
   - Pre-computed chip select maps (32 PLA modes × 256 blocks)
-  - Direct mask storage in pointer LSB bits
+  - Direct callback dispatch eliminating conditional overhead
   - Optimized read/write cycle functions
 
 ### Device Emulation
@@ -44,16 +44,17 @@ The emulator is split into logical modules for maintainability while preserving 
 
 ### CPU Emulation
 
-- **`cpu.h/c`** - 6502 CPU with direct threading
-  - Direct threading dispatch for maximum performance
+- **`cpu6510.h/c`** - MOS 6510 CPU with function pointer dispatch
+  - Function pointer table dispatch for optimal performance
   - Hardware-accurate BA/RDY stall handling
   - Cycle-accurate instruction execution
+  - Comprehensive illegal opcode support
 
 ## Key Optimizations
 
 1. **256-byte Memory Blocks** - Perfect granularity for CIA devices (16 registers)
-2. **Direct Mask Storage** - Read masks stored in pointer LSB bits (no shifting)
-3. **Direct Threading** - Computed goto dispatch eliminates function call overhead
+2. **Callback Table Dispatch** - Pre-computed function pointers eliminate conditional overhead
+3. **Function Pointer Dispatch** - Direct function calls eliminate branch prediction overhead
 4. **Pre-computed PLA Maps** - Instant address decoding for all 32 memory modes
 5. **Unified Bus Cycles** - All devices run every cycle for perfect timing accuracy
 
@@ -65,8 +66,8 @@ make clean && make
 
 ## Performance Features
 
-- **Zero-overhead bus state** - 64-bit union optimized for registers
-- **Eliminated write handler dispatch** - Writes handled directly in device cycles
+- **Zero-overhead I/O dispatch** - Direct callback function calls eliminate conditionals
+- **Eliminated chip select checks** - Pre-computed callback tables handle device selection
 - **Hardware-accurate timing** - BA/RDY lines control CPU stalls precisely
 - **Cache-optimized memory layout** - Aligned data structures for performance
 

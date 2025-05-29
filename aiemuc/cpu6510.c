@@ -14,11 +14,6 @@
 #include "cpu6510_system.c"
 #include "cpu6510_unofficial.c"
 
-// ============================================================================
-// MOS 6510 CPU STATE
-// ============================================================================
-// CPU state is now managed by the C64 system, not as a global variable
-
 // Universal instruction table using function pointers
 // Global instruction table
 instruction_func_t instruction_table[256];
@@ -144,10 +139,6 @@ void cpu6510_nmi(cpu6510_state_t* cpu_dev) {
 }
 
 // ============================================================================
-// INSTRUCTION OPERATIONS - Now defined as inline functions in cpu6510.h
-// ============================================================================
-
-// ============================================================================
 // INSTRUCTION FUNCTIONS (Universal approach using function pointers)
 // ============================================================================
 
@@ -175,10 +166,8 @@ void brk_instruction_func(cpu6510_state_t* cpu_dev) {
     NEXT_INSTRUCTION(cpu_dev, brk_fetch_wait);
 }
 
-// Note: This function needs a CPU reference - will need to be refactored
+// Interrupt handler - called when IRQ or NMI lines are active
 void handle_interrupt_func(cpu6510_state_t* cpu_dev) {
-    // Interrupt handling logic - for now, we'll need to access global CPU
-    // This will need to be refactored to receive CPU state properly
     if (bus.control_lines & NMI_LINE) {
         // Handle NMI - non-maskable
         cpu6510_nmi(cpu_dev);
