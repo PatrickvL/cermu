@@ -1,6 +1,7 @@
 #ifndef VIC_H
 #define VIC_H
 
+#include "device.h"
 #include "bus.h"
 
 // ============================================================================

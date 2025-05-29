@@ -3,7 +3,9 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "device.h"
+
+// Forward declaration to avoid circular dependency
+typedef struct c64_state_s c64_state_t;
 
 // Bus control line definitions
 #define IRQ_LINE    (1 << 0)
@@ -36,7 +38,7 @@ void switch_cpu_mode(uint8_t mode);
 void cpu_read_cycle(uint16_t addr);
 void cpu_write_cycle(uint16_t addr, uint8_t value);
 
-void bus_init(void);
+void bus_init(c64_state_t* c64);
 // Bus cycle function
 void bus_cycle(void);
 

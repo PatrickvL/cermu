@@ -1,6 +1,7 @@
 #ifndef SID_H
 #define SID_H
 
+#include "device.h"
 #include "bus.h"
 
 // ============================================================================

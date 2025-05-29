@@ -3,6 +3,12 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "cpu6510.h"
+#include "ram.h"
+#include "rom.h"
+#include "vic.h"
+#include "cia.h"
+#include "sid.h"
 
 // Compiler optimization hints
 #ifdef _MSC_VER
@@ -14,15 +20,23 @@
 #endif
 
 // ============================================================================
-// GLOBAL DEVICE INSTANCES - Declared in c64.c
-// Note: Full types are defined in device headers, accessed where needed
+// C64 SYSTEM STATE STRUCTURE
 // ============================================================================
+typedef struct c64_state_s {
+    cpu6510_state_t cpu;
+    ram_state_t ram;
+    rom_state_t basic_rom;
+    rom_state_t kernal_rom;
+    rom_state_t char_rom;
+    vic_state_t vic;
+    cia_state_t cia1, cia2;
+    sid_state_t sid;
+} c64_state_t;
 
-// Global device instances - centralized in c64.c
-// Files that need access to these devices should include globals.h
-
-// Main emulator functions
-void c64_init(void);
-void c64_emulate_frame(void);
+// ============================================================================
+// C64 SYSTEM FUNCTIONS
+// ============================================================================
+void c64_init(c64_state_t* c64);
+void c64_emulate_frame(c64_state_t* c64);
 
 #endif // C64_H

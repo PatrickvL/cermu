@@ -1,6 +1,7 @@
 #ifndef CIA_H
 #define CIA_H
 
+#include "device.h"
 #include "bus.h"
 
 // ============================================================================

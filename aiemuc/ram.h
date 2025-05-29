@@ -1,6 +1,7 @@
 #ifndef RAM_H
 #define RAM_H
 
+#include "device.h"
 #include "bus.h"
 
 // ============================================================================
