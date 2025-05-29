@@ -113,7 +113,6 @@ void cpu6510_reset(cpu6510_state_t* cpu_dev) {
     cpu_dev->pc = (pch << 8) | pcl;
     cpu_dev->sp = 0xFF; // or 0FD?
     cpu_dev->p |= FLAG_I;  // Set interrupt disable
-    cpu_dev->bus->total_cycles = 0;
 }
 
 bool cpu6510_step(cpu6510_state_t* cpu_dev) {

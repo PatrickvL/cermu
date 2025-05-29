@@ -21,11 +21,13 @@ typedef struct {
     uint16_t address;       // A0-A15
     uint8_t  data;          // D0-D7
     uint8_t  control_lines; // R/W, IRQ, NMI, BA, AEC, RDY
-    uint64_t total_cycles;  // Total cycles executed
 } bus_state_t;
 
 // Global bus state
 extern bus_state_t bus;
+
+// Global C64 state pointer for cycle counting
+extern c64_state_t* c64_system;
 
 // ============================================================================
 // PLA EMULATION - Pre-computed chip select maps for each memory mode

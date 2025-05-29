@@ -18,6 +18,9 @@ void c64_emulate_frame(c64_state_t* c64) {
 // INITIALIZATION
 // ============================================================================
 void c64_init(c64_state_t* c64) {
+    // Initialize cycle counter
+    c64->total_cycles = 0;
+    
     // Initialize C64 state structure devices
     device_init((struct device_s*)&(c64->ram));
     device_init((struct device_s*)&(c64->vic));
