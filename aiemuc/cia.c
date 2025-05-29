@@ -78,7 +78,7 @@ static void cia1_cycle(struct device_s* dev) {
             cia_dev->timer_a = cia_dev->timer_a_latch;
             cia_dev->interrupt_status |= 1; // Timer A interrupt
             if (cia_dev->interrupt_control & 1) {
-                bus.control_lines |= IRQ_LINE;
+                bus->control_lines |= IRQ_LINE;
             }
         } else {
             cia_dev->timer_a--;
@@ -104,7 +104,7 @@ static void cia2_cycle(struct device_s* dev) {
             cia_dev->timer_a = cia_dev->timer_a_latch;
             cia_dev->interrupt_status |= 1;
             if (cia_dev->interrupt_control & 1) {
-                bus.control_lines |= NMI_LINE;
+                bus->control_lines |= NMI_LINE;
             }
         } else {
             cia_dev->timer_a--;

@@ -54,18 +54,18 @@ static void vic_cycle(struct device_s* dev) {
     
     // Generate BA signal for badline
     if (vic_dev->badline_condition && vic_dev->raster_cycle >= 15 && vic_dev->raster_cycle <= 54) {
-        bus.control_lines &= ~BA_LINE; // Pull BA low - CPU will stall
+        bus->control_lines &= ~BA_LINE; // Pull BA low - CPU will stall
     } else {
-        bus.control_lines |= BA_LINE;  // Release BA
+        bus->control_lines |= BA_LINE;  // Release BA
     }
     
     // AEC follows BA with one cycle delay (hardware accurate)
-    if (vic_dev->prev_ba && !(bus.control_lines & BA_LINE)) {
-        bus.control_lines &= ~AEC_LINE;
-    } else if (!vic_dev->prev_ba && (bus.control_lines & BA_LINE)) {
-        bus.control_lines |= AEC_LINE;
+    if (vic_dev->prev_ba && !(bus->control_lines & BA_LINE)) {
+        bus->control_lines &= ~AEC_LINE;
+    } else if (!vic_dev->prev_ba && (bus->control_lines & BA_LINE)) {
+        bus->control_lines |= AEC_LINE;
     }
-    vic_dev->prev_ba = (bus.control_lines & BA_LINE) != 0;
+    vic_dev->prev_ba = (bus->control_lines & BA_LINE) != 0;
 }
 
 static void vic_cleanup(struct device_s* dev) { (void)dev; }

@@ -24,33 +24,68 @@ void* fetch_opcode = NULL;
 // CPU OPERATION FUNCTIONS (inline for performance)
 // ============================================================================
 
+// Compute effective port output: outputs from Data when DDR=1, else external bus data
+inline uint8_t cpu_io_mask(cpu6510_state_t* cpu_dev, uint8_t value)
+{
+    uint8_t ddr = cpu_dev->io_port[0];
+    uint8_t data = cpu_dev->io_port[1];
+    return (data & ddr) | (value & ~ddr);
+}
+
 // CPU I/O port handlers
 uint8_t cpu_io_port_r8(struct device_s* dev, uint16_t address) {
     cpu6510_state_t* cpu_dev = (cpu6510_state_t*)dev;
-    if (address <= 0x001) {
-        return cpu_dev->io_port[address]; // Data Direction Register (DDR at $0000). 1 = set, 0 = read&clear
+    switch (address) {
+        case 0: // Return Data Direction Register
+        return cpu_dev->io_port[0];
+        case 1: // Return port: outputs defined by DDR bits, inputs from bus data
+        return cpu_io_mask(cpu_dev, cpu_dev->bus->data);
+        default:
+        return cpu_dev->ram->data[address];
     }
-    return cpu_dev->ram->data[address];
 }
 
-void cpu_io_port_w8(struct device_s* dev, uint16_t address, uint8_t data) {
+void cpu_io_port_w8(struct device_s* dev, uint16_t address, uint8_t value) {
     cpu6510_state_t* cpu_dev = (cpu6510_state_t*)dev;
-    
-    // Handle the CPU port address writes
-    if (address <= 0x001) {
-        uint8_t direction = cpu_dev->io_port[0x0000]; // Data Direction Register (DDR at $0000). 1 = set, 0 = read&clear
-        uint8_t io_mask = cpu_dev->io_port[0x0001]; // I/O Port Data (at $0001)
-
-        io_mask &= ~direction; // clear the mask bits that will be overwritten
-        io_mask |= direction & data; // set the appropriate bits from value
-        switch_cpu_mode(io_mask); // Apply the new mode to the PLA
-        cpu_dev->io_port[address] = io_mask; // Write the adjusted value to I/O Port Data (at $0001)
-    } else {
-        // Normal RAM writes - forward to RAM
-        cpu_dev->ram->data[address] = data;
+    if (address > 1) {
+        // Fast-path : Normal RAM writes
+        cpu_dev->ram->data[address] = value;
+        return;
     }
+
+    // Update Data Direction / Data register
+    cpu_dev->io_port[address] = value;
+
+    uint8_t port_out = cpu_io_mask(cpu_dev, value);
+    switch_cpu_mode(port_out);
 }
 
+// Current active map, updated by switch_cpu_mode()
+device_callbacks_t* chip_select_map;
+
+// Optimized read cycle implementation - direct callback dispatch
+void cpu_read_cycle(uint16_t addr) {
+    // TODO : Emulate how the 6510 CPU only sets the address lines
+    // when RDY and when not accessing the I/O ports (same for writes)
+    // perhaps best merge the cpu_io_r8 into here
+    bus->address = addr;
+    c64_non_cpu_cycles();
+    device_callbacks_t* cb = &chip_select_map[addr >> 8];
+    bus->data = cb->read(cb->read_device, addr);
+}
+
+// Optimized write cycle implementation - direct callback dispatch
+void cpu_write_cycle(uint16_t addr, uint8_t value) {
+    // TODO : Make a distinction between the cpu's internal
+    // address and data lines and the ones on the bus (which
+    // can be "detached" by the RDY line / accessing I/O ports)
+    // perhaps best merge the cpu_io_w8 into here
+    bus->address = addr;
+    bus->data = value;
+    device_callbacks_t* cb = &chip_select_map[addr >> 8];
+    cb->write(cb->write_device, addr, value);
+    c64_non_cpu_cycles();
+}
 
 // CPU lifecycle wrapper functions
 static void cpu_init(struct device_s* dev) {
@@ -117,7 +152,7 @@ void cpu6510_reset(cpu6510_state_t* cpu_dev) {
 
 bool cpu6510_step(cpu6510_state_t* cpu_dev) {
     (void)cpu_dev; // Currently unused
-    bus_cycle();
+    c64_non_cpu_cycles();
     // Return true when instruction completes (for testing)
     return true;
 }
