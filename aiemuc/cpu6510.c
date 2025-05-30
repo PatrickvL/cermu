@@ -20,14 +20,34 @@ instruction_func_t instruction_table[256];
 // CPU OPERATION FUNCTIONS (inline for performance)
 // ============================================================================
 
+// Compute effective port output: outputs from Data when DDR=1, else external bus data
+static inline uint8_t cpu_io_mask(cpu6510_state_t* cpu_dev, uint8_t value)
+{
+    uint8_t ddr = cpu_dev->io_port[0];
+    uint8_t data = cpu_dev->io_port[1];
+    return (data & ddr) | (value & ~ddr);
+}
+
 // Current active map, updated by switch_cpu_mode()
 device_callbacks_t* chip_select_map;
 
-// Optimized read cycle implementation - direct callback dispatch
+// Optimized read cycle implementation with embedded I/O port handling
 void cpu_read_cycle(cpu6510_state_t* cpu_dev, uint16_t addr) {
-    // TODO : Emulate how the 6510 CPU only sets the address lines
-    // when RDY and when not accessing the I/O ports (same for writes)
-    // perhaps best merge the cpu_io_r8 into here
+    // Handle I/O ports directly in CPU - addresses $0000 and $0001
+    if (addr <= 1) {
+        if (addr == 0) {
+            // Return Data Direction Register
+            cpu_dev->data = cpu_dev->io_port[0];
+        } else {
+            // Return port: outputs defined by DDR bits, inputs from bus data
+            cpu_dev->data = cpu_io_mask(cpu_dev, cpu_dev->bus->data);
+        }
+        // Note : MOS6510 I/O port accesses do not update bus address and data lines!
+        c64_non_cpu_cycles();
+        return;
+    }
+    
+    // For all other addresses, use chip select map
     cpu_dev->bus->address = addr;
     c64_non_cpu_cycles();
     //cpu_dev->data = bus_read_cycle(cpu_dev->bus, addr);
@@ -37,49 +57,24 @@ void cpu_read_cycle(cpu6510_state_t* cpu_dev, uint16_t addr) {
     cpu_dev->data = data;
 }
 
-// Compute effective port output: outputs from Data when DDR=1, else external bus data
-inline uint8_t cpu_io_mask(cpu6510_state_t* cpu_dev, uint8_t value)
-{
-    uint8_t ddr = cpu_dev->io_port[0];
-    uint8_t data = cpu_dev->io_port[1];
-    return (data & ddr) | (value & ~ddr);
-}
-
-// CPU I/O port handlers
-uint8_t cpu_io_port_r8(struct device_s* dev, uint16_t address) {
-    cpu6510_state_t* cpu_dev = (cpu6510_state_t*)dev;
-    switch (address) {
-        case 0: // Return Data Direction Register
-        return cpu_dev->io_port[0];
-        case 1: // Return port: outputs defined by DDR bits, inputs from bus data
-        return cpu_io_mask(cpu_dev, cpu_dev->data);
-        default:
-        return cpu_dev->ram->data[address];
-    }
-}
-
-void cpu_io_port_w8(struct device_s* dev, uint16_t address, uint8_t value) {
-    cpu6510_state_t* cpu_dev = (cpu6510_state_t*)dev;
-    if (address > 1) {
-        // Fast-path : Normal RAM writes
-        cpu_dev->ram->data[address] = value;
+// Optimized write cycle implementation with embedded I/O port handling
+void cpu_write_cycle(cpu6510_state_t* cpu_dev, uint16_t addr, uint8_t value) {
+    // Handle I/O ports directly in CPU - addresses $0000 and $0001
+    if (addr <= 1) {
+        // Update Data Direction / Data register
+        cpu_dev->io_port[addr] = value;        
+        // If writing to port data register, update CPU mode
+        if (addr == 1) {
+            uint8_t port_out = cpu_io_mask(cpu_dev, value);
+            switch_cpu_mode(port_out);
+        }        
+        // Note : MOS6510 I/O port accesses do not update bus address and data lines!
+        c64_non_cpu_cycles();
         return;
     }
-
-    // Update Data Direction / Data register
-    cpu_dev->io_port[address] = value;
-
-    uint8_t port_out = cpu_io_mask(cpu_dev, value);
-    switch_cpu_mode(port_out);
-}
-
-// Optimized write cycle implementation - direct callback dispatch
-void cpu_write_cycle(cpu6510_state_t* cpu_dev, uint16_t addr, uint8_t value) {
-    // TODO : Make a distinction between the cpu's internal
-    // address and data lines and the ones on the bus (which
-    // can be "detached" by the RDY line / accessing I/O ports)
-    // perhaps best merge the cpu_io_w8 into here
-    //bus_write_cycle(cpu_dev->bus, addr, value);
+    
+    // For all other addresses, use chip select map
+    //bus_write_cycle(cpu_dev->bus, addr, value);    
     cpu_dev->bus->address = addr;
     cpu_dev->bus->data = value;
     device_callbacks_t* cb = &chip_select_map[addr >> 8];
@@ -99,10 +94,8 @@ static void cpu_init(struct device_s* dev) {
     cpu_dev->pc = 0;
     
     // 6510-specific I/O port (addresses $0000/$0001) initialization
-    // Note: RAM must be attached before calling cpu6510_init
     cpu_dev->io_port[0x0000] = 0x2F; // Default Data Direction Register (DDR at $0000)
     cpu_dev->io_port[0x0001] = 0x37;  // Default I/O Port Data (at $0001)
-    switch_cpu_mode(0x07); // All RAM/ROM enabled
  
     // Setup instruction table
     cpu6510_setup_opcode_table();
@@ -122,15 +115,11 @@ void cpu6510_init(cpu6510_state_t* cpu_dev) {
     cpu_dev->device = &cpu_device_descriptor;
 }
 
-// Attach RAM to CPU
-void cpu_attach_ram(cpu6510_state_t* cpu_dev, ram_state_t* ram_dev) {
-    cpu_dev->ram = ram_dev;
-}
-
 // Attach bus to CPU
 void cpu_attach_bus(cpu6510_state_t* cpu_dev, bus_state_t* bus_state) {
     cpu_dev->bus = bus_state;
 }
+
 
 // Reset CPU
 void cpu6510_reset(cpu6510_state_t* cpu_dev) {
@@ -501,8 +490,8 @@ void cpu6510_setup_opcode_table(void) {
 
 // Static device descriptor for CPU6510
 static const device_t cpu_device_descriptor = {
-    .r8 = cpu_io_port_r8,
-    .w8 = cpu_io_port_w8,
+    .r8 = NULL,  // I/O ports handled directly in cpu_read_cycle
+    .w8 = NULL,  // I/O ports handled directly in cpu_write_cycle
     .init = cpu_init,
     .cycle = cpu_cycle,
     .cleanup = NULL // CPU has no cleanup needed

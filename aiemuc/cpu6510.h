@@ -43,7 +43,6 @@ typedef struct {
     uint8_t io_port[2]; // 0:DDR, 1:Port
     
     // Device attachments
-    ram_state_t* ram;   // Pointer to attached RAM
     bus_state_t* bus;   // Pointer to attached bus
 } cpu6510_state_t;
 
@@ -65,7 +64,7 @@ extern instruction_func_t instruction_table[256];
 #define FLAG_N  0x80    // Negative
 
 // ============================================================================
-// PLA EMULATION - Pre-computed chip select maps for each memory mode
+// I/O PORT EMULATION - Direct handling in CPU read/write cycles
 // ============================================================================
 
 // PLA functions
@@ -319,7 +318,6 @@ void cpu6510_execute(cpu6510_state_t* cpu_dev);
 void cpu6510_nmi(cpu6510_state_t* cpu_dev);
 
 // Device attachments
-void cpu_attach_ram(cpu6510_state_t* cpu_dev, ram_state_t* ram_dev);
 void cpu_attach_bus(cpu6510_state_t* cpu_dev, bus_state_t* bus_state);
 
 // Instruction setup

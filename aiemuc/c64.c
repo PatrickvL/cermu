@@ -10,16 +10,10 @@ static device_callbacks_t get_device_callbacks_for_address(c64_state_t* c64, uin
     callbacks.read_device = (struct device_s*)&(c64->ram);
     callbacks.write_device = (struct device_s*)&(c64->ram);
     
-    // $0000-$0100: CPU I/O ports ($0x0002 and up forward to RAM)
-    if (addr < 0x0100) {
-        // CPU port uses CPU device which forwards to RAM internally
-        // The CPU device is accessed from the C64 system, not as global
-        callbacks.read_device = (struct device_s*)&(c64->cpu);
-        callbacks.write_device = (struct device_s*)&(c64->cpu);
-    }
+    // $0000-$0001: CPU I/O ports (handled directly in cpu_read/write_cycle, but for $0002-$00FF use RAM)
     // $0100-$9FFF: Always RAM (already set as default)
     // $A000-$BFFF: BASIC ROM area
-    else if (addr >= 0xA000 && addr < 0xC000) {
+    if (addr >= 0xA000 && addr < 0xC000) {
         if (loram && !game) {
             callbacks.read_device = (struct device_s*)&(c64->basic_rom);
             // BASIC ROM writes fall through to RAM (write_device stays RAM from default)
@@ -167,9 +161,6 @@ void c64_init(c64_state_t* c64) {
     device_init((struct device_s*)&(c64->cia2));
     device_init((struct device_s*)&(c64->sid));
     device_init((struct device_s*)&(c64->cpu));
-    
-    // Attach RAM to CPU so it can access it directly
-    cpu_attach_ram(&c64->cpu, &c64->ram);
     
     // Attach bus to CPU so it can access bus state directly
     cpu_attach_bus(&c64->cpu, &c64->bus);
