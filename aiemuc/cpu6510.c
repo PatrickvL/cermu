@@ -2,9 +2,6 @@
 #include "c64.h"
 #include <string.h>
 
-// External reference to global C64 state
-extern c64_state_t* c64_system;
-
 // Include all instruction implementation files
 #include "cpu6510_arithmetic.c"
 #include "cpu6510_branches.c"
@@ -39,7 +36,7 @@ uint8_t cpu_io_port_r8(struct device_s* dev, uint16_t address) {
         case 0: // Return Data Direction Register
         return cpu_dev->io_port[0];
         case 1: // Return port: outputs defined by DDR bits, inputs from bus data
-        return cpu_io_mask(cpu_dev, cpu_dev->bus->data);
+        return cpu_io_mask(cpu_dev, cpu_dev->data);
         default:
         return cpu_dev->ram->data[address];
     }
@@ -64,24 +61,26 @@ void cpu_io_port_w8(struct device_s* dev, uint16_t address, uint8_t value) {
 device_callbacks_t* chip_select_map;
 
 // Optimized read cycle implementation - direct callback dispatch
-void cpu_read_cycle(uint16_t addr) {
+void cpu_read_cycle(cpu6510_state_t* cpu_dev, uint16_t addr) {
     // TODO : Emulate how the 6510 CPU only sets the address lines
     // when RDY and when not accessing the I/O ports (same for writes)
     // perhaps best merge the cpu_io_r8 into here
-    c64_system->bus.address = addr;
+    cpu_dev->bus->address = addr;
     c64_non_cpu_cycles();
     device_callbacks_t* cb = &chip_select_map[addr >> 8];
-    c64_system->bus.data = cb->read(cb->read_device, addr);
+    uint8_t data = cb->read(cb->read_device, addr);
+    cpu_dev->bus->data = data;
+    cpu_dev->data = data;
 }
 
 // Optimized write cycle implementation - direct callback dispatch
-void cpu_write_cycle(uint16_t addr, uint8_t value) {
+void cpu_write_cycle(cpu6510_state_t* cpu_dev, uint16_t addr, uint8_t value) {
     // TODO : Make a distinction between the cpu's internal
     // address and data lines and the ones on the bus (which
     // can be "detached" by the RDY line / accessing I/O ports)
     // perhaps best merge the cpu_io_w8 into here
-    c64_system->bus.address = addr;
-    c64_system->bus.data = value;
+    cpu_dev->bus->address = addr;
+    cpu_dev->bus->data = value;
     device_callbacks_t* cb = &chip_select_map[addr >> 8];
     cb->write(cb->write_device, addr, value);
     c64_non_cpu_cycles();
@@ -135,10 +134,10 @@ void cpu_attach_bus(cpu6510_state_t* cpu_dev, bus_state_t* bus_state) {
 // Reset CPU
 void cpu6510_reset(cpu6510_state_t* cpu_dev) {
     // Read reset vector from $FFFC/$FFFD
-    cpu_read_cycle(0xFFFC);
-    uint8_t pcl = cpu_dev->bus->data;
-    cpu_read_cycle(0xFFFD);
-    uint8_t pch = cpu_dev->bus->data;
+    cpu_read_cycle(cpu_dev, 0xFFFC);
+    uint8_t pcl = cpu_dev->data;
+    cpu_read_cycle(cpu_dev, 0xFFFD);
+    uint8_t pch = cpu_dev->data;
     
     cpu_dev->pc = (pch << 8) | pcl;
     cpu_dev->sp = 0xFF; // or 0FD?
@@ -158,10 +157,10 @@ void cpu6510_irq(cpu6510_state_t* cpu_dev) {
     cpu_push(cpu_dev, cpu_dev->pc & 0xFF);
     cpu_push(cpu_dev, cpu_dev->p & ~FLAG_B);  // Clear B flag for IRQ
     cpu_dev->p |= FLAG_I;
-    cpu_read_cycle(0xFFFE);
-    cpu_dev->pc = cpu_dev->bus->data;
-    cpu_read_cycle(0xFFFF);
-    cpu_dev->pc |= (cpu_dev->bus->data << 8);
+    cpu_read_cycle(cpu_dev, 0xFFFE);
+    cpu_dev->pc = cpu_dev->data;
+    cpu_read_cycle(cpu_dev, 0xFFFF);
+    cpu_dev->pc |= (cpu_dev->data << 8);
 }
 
 void cpu6510_nmi(cpu6510_state_t* cpu_dev) {
@@ -170,10 +169,10 @@ void cpu6510_nmi(cpu6510_state_t* cpu_dev) {
     cpu_push(cpu_dev, cpu_dev->pc & 0xFF);
     cpu_push(cpu_dev, cpu_dev->p & ~FLAG_B);  // Clear B flag for NMI
     cpu_dev->p |= FLAG_I;
-    cpu_read_cycle(0xFFFA);
-    cpu_dev->pc = cpu_dev->bus->data;
-    cpu_read_cycle(0xFFFB);
-    cpu_dev->pc |= (cpu_dev->bus->data << 8);
+    cpu_read_cycle(cpu_dev, 0xFFFA);
+    cpu_dev->pc = cpu_dev->data;
+    cpu_read_cycle(cpu_dev, 0xFFFB);
+    cpu_dev->pc |= (cpu_dev->data << 8);
 }
 
 // ============================================================================
@@ -197,10 +196,10 @@ void brk_instruction_func(cpu6510_state_t* cpu_dev) {
     // Set interrupt disable
     cpu_dev->p |= FLAG_I;
     // Read IRQ vector
-    cpu_read_cycle(0xFFFE);
-    cpu_dev->pc = cpu_dev->bus->data;
-    cpu_read_cycle(0xFFFF);
-    cpu_dev->pc |= (cpu_dev->bus->data << 8);
+    cpu_read_cycle(cpu_dev, 0xFFFE);
+    cpu_dev->pc = cpu_dev->data;
+    cpu_read_cycle(cpu_dev, 0xFFFF);
+    cpu_dev->pc |= (cpu_dev->data << 8);
     NEXT_INSTRUCTION(cpu_dev, brk_fetch_wait);
 }
 
@@ -226,7 +225,7 @@ void cpu6510_execute(cpu6510_state_t* cpu_dev) {
         return;
     }
     WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc++, main_fetch_start);
-    instruction_table[cpu_dev->bus->data](cpu_dev);
+    instruction_table[cpu_dev->data](cpu_dev);
 }
 
 // ============================================================================

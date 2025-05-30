@@ -33,6 +33,8 @@ typedef struct {
     uint8_t p;          // Processor Status Register
 
     // Internal CPU state for cycle-accurate emulation
+    uint8_t data;       // Data register (exchanged with bus when not in tri-state))
+
     uint8_t lo, hi;     // Address calculation helpers
     uint16_t addr_abs;  // Absolute address for current instruction
     uint8_t addr_rel;   // Relative address for branch instructions
@@ -70,8 +72,8 @@ extern instruction_func_t instruction_table[256];
 void switch_cpu_mode(uint8_t mode);
 
 // Memory access functions
-void cpu_read_cycle(uint16_t addr);
-void cpu_write_cycle(uint16_t addr, uint8_t value);
+void cpu_read_cycle(cpu6510_state_t* cpu_dev, uint16_t addr);
+void cpu_write_cycle(cpu6510_state_t* cpu_dev, uint16_t addr, uint8_t value);
 
 // Bus cycle function
 void c64_non_cpu_cycles(void);
@@ -83,13 +85,13 @@ void c64_non_cpu_cycles(void);
 #define WAIT_READY_THEN_READ(cpu_dev, addr, label) do { \
     label: \
     if (!CPU_READY(cpu_dev)) { c64_non_cpu_cycles(); goto label; } \
-    cpu_read_cycle(addr); \
+    cpu_read_cycle(cpu_dev, addr); \
 } while(0)
 
 #define WAIT_READY_THEN_WRITE(cpu_dev, addr, data, label) do { \
     label: \
     if (!CPU_READY(cpu_dev)) { c64_non_cpu_cycles(); goto label; } \
-    cpu_write_cycle(addr, data); \
+    cpu_write_cycle(cpu_dev, addr, data); \
 } while(0)
 
 #define NEXT_INSTRUCTION(cpu_dev, fetch_label) do { \
@@ -98,7 +100,7 @@ void c64_non_cpu_cycles(void);
         return; \
     } \
     WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc++, fetch_label); \
-    instruction_table[cpu_dev->bus->data](cpu_dev); \
+    instruction_table[cpu_dev->data](cpu_dev); \
     return; \
 } while(0)
 
@@ -119,14 +121,14 @@ static inline void cpu_set_zn(cpu6510_state_t* cpu_dev, uint8_t value) {
 
 // Stack operations
 static inline void cpu_push(cpu6510_state_t* cpu_dev, uint8_t data) {
-    cpu_write_cycle(0x0100 + cpu_dev->sp, data);
+    cpu_write_cycle(cpu_dev, 0x0100 + cpu_dev->sp, data);
     cpu_dev->sp--;
 }
 
 static inline uint8_t cpu_pop(cpu6510_state_t* cpu_dev) {
     cpu_dev->sp++;
-    cpu_read_cycle(0x0100 + cpu_dev->sp);
-    return cpu_dev->bus->data;
+    cpu_read_cycle(cpu_dev, 0x0100 + cpu_dev->sp);
+    return cpu_dev->data;
 }
 
 // ============================================================================
