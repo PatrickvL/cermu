@@ -33,7 +33,6 @@ typedef struct {
     uint8_t p;          // Processor Status Register
 
     // Internal CPU state for cycle-accurate emulation
-    uint8_t opcode;     // Current instruction opcode
     uint8_t lo, hi;     // Address calculation helpers
     uint16_t addr_abs;  // Absolute address for current instruction
     uint8_t addr_rel;   // Relative address for branch instructions
@@ -69,8 +68,7 @@ extern instruction_func_t instruction_table[256];
         return; \
     } \
     WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc++, fetch_label); \
-    cpu_dev->opcode = cpu_dev->bus->data; \
-    instruction_table[cpu_dev->opcode](cpu_dev); \
+    instruction_table[cpu_dev->bus->data](cpu_dev); \
     return; \
 } while(0)
 
