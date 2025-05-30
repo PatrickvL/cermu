@@ -1,5 +1,4 @@
 #include "cpu6510.h"
-#include "c64.h"
 #include <string.h>
 
 // Include all instruction implementation files
