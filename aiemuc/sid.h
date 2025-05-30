@@ -15,6 +15,4 @@ typedef struct {
     uint8_t envelope_state[3];
 } sid_state_t;
 
-// Note: Use device_init(), device_cycle(), device_cleanup() instead of wrapper functions
-
 #endif // SID_H

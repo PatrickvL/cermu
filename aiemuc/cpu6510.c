@@ -20,6 +20,23 @@ instruction_func_t instruction_table[256];
 // CPU OPERATION FUNCTIONS (inline for performance)
 // ============================================================================
 
+// Current active map, updated by switch_cpu_mode()
+device_callbacks_t* chip_select_map;
+
+// Optimized read cycle implementation - direct callback dispatch
+void cpu_read_cycle(cpu6510_state_t* cpu_dev, uint16_t addr) {
+    // TODO : Emulate how the 6510 CPU only sets the address lines
+    // when RDY and when not accessing the I/O ports (same for writes)
+    // perhaps best merge the cpu_io_r8 into here
+    cpu_dev->bus->address = addr;
+    c64_non_cpu_cycles();
+    //cpu_dev->data = bus_read_cycle(cpu_dev->bus, addr);
+    device_callbacks_t* cb = &chip_select_map[addr >> 8];
+    uint8_t data = cb->read(cb->read_device, addr);
+    cpu_dev->bus->data = data;
+    cpu_dev->data = data;
+}
+
 // Compute effective port output: outputs from Data when DDR=1, else external bus data
 inline uint8_t cpu_io_mask(cpu6510_state_t* cpu_dev, uint8_t value)
 {
@@ -56,28 +73,13 @@ void cpu_io_port_w8(struct device_s* dev, uint16_t address, uint8_t value) {
     switch_cpu_mode(port_out);
 }
 
-// Current active map, updated by switch_cpu_mode()
-device_callbacks_t* chip_select_map;
-
-// Optimized read cycle implementation - direct callback dispatch
-void cpu_read_cycle(cpu6510_state_t* cpu_dev, uint16_t addr) {
-    // TODO : Emulate how the 6510 CPU only sets the address lines
-    // when RDY and when not accessing the I/O ports (same for writes)
-    // perhaps best merge the cpu_io_r8 into here
-    cpu_dev->bus->address = addr;
-    c64_non_cpu_cycles();
-    device_callbacks_t* cb = &chip_select_map[addr >> 8];
-    uint8_t data = cb->read(cb->read_device, addr);
-    cpu_dev->bus->data = data;
-    cpu_dev->data = data;
-}
-
 // Optimized write cycle implementation - direct callback dispatch
 void cpu_write_cycle(cpu6510_state_t* cpu_dev, uint16_t addr, uint8_t value) {
     // TODO : Make a distinction between the cpu's internal
     // address and data lines and the ones on the bus (which
     // can be "detached" by the RDY line / accessing I/O ports)
     // perhaps best merge the cpu_io_w8 into here
+    //bus_write_cycle(cpu_dev->bus, addr, value);
     cpu_dev->bus->address = addr;
     cpu_dev->bus->data = value;
     device_callbacks_t* cb = &chip_select_map[addr >> 8];
@@ -150,12 +152,17 @@ bool cpu6510_step(cpu6510_state_t* cpu_dev) {
     return true;
 }
 
-void cpu6510_irq(cpu6510_state_t* cpu_dev) {
+void cpu6510_irq(cpu6510_state_t* cpu_dev, uint8_t status) {
     // Push PC and status to stack, set interrupt disable, jump to IRQ vector
+    // Push PC high byte
     cpu_push(cpu_dev, (cpu_dev->pc >> 8) & 0xFF);
+    // Push PC low byte
     cpu_push(cpu_dev, cpu_dev->pc & 0xFF);
-    cpu_push(cpu_dev, cpu_dev->p & ~FLAG_B);  // Clear B flag for IRQ
+    // Push status argument byte
+    cpu_push(cpu_dev, status); 
+    // Set interrupt disable
     cpu_dev->p |= FLAG_I;
+    // Read IRQ vector
     cpu_read_cycle(cpu_dev, 0xFFFE);
     cpu_dev->pc = cpu_dev->data;
     cpu_read_cycle(cpu_dev, 0xFFFF);
@@ -186,19 +193,7 @@ void nop_instruction_func(cpu6510_state_t* cpu_dev) {
 
 void brk_instruction_func(cpu6510_state_t* cpu_dev) {
     cpu_dev->pc++;  // Skip BRK signature byte
-    // Push PC high byte
-    cpu_push(cpu_dev, (cpu_dev->pc >> 8) & 0xFF);
-    // Push PC low byte
-    cpu_push(cpu_dev, cpu_dev->pc & 0xFF);
-    // Push status register with B flag set
-    cpu_push(cpu_dev, cpu_dev->p | FLAG_B);
-    // Set interrupt disable
-    cpu_dev->p |= FLAG_I;
-    // Read IRQ vector
-    cpu_read_cycle(cpu_dev, 0xFFFE);
-    cpu_dev->pc = cpu_dev->data;
-    cpu_read_cycle(cpu_dev, 0xFFFF);
-    cpu_dev->pc |= (cpu_dev->data << 8);
+    cpu6510_irq(cpu_dev, cpu_dev->p | FLAG_B); // Call IRQ handler
     NEXT_INSTRUCTION(cpu_dev, brk_fetch_wait);
 }
 
@@ -208,8 +203,8 @@ void handle_interrupt_func(cpu6510_state_t* cpu_dev) {
         // Handle NMI - non-maskable
         cpu6510_nmi(cpu_dev);
     } else if ((cpu_dev->bus->control_lines & IRQ_LINE) && !cpu_get_flag(cpu_dev, FLAG_I)) {
-        // Handle IRQ - only if interrupt disable is clear
-        cpu6510_irq(cpu_dev);
+        // Handle IRQ when interrupt disable is clear
+        cpu6510_irq(cpu_dev, cpu_dev->p & ~FLAG_B); // Clear B flag for IRQ
     }
     NEXT_INSTRUCTION(cpu_dev, interrupt_fetch_wait);
 }
@@ -511,5 +506,4 @@ static const device_t cpu_device_descriptor = {
     .init = cpu_init,
     .cycle = cpu_cycle,
     .cleanup = NULL // CPU has no cleanup needed
-
 };

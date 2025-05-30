@@ -24,6 +24,4 @@ typedef struct {
 // Device attachment
 void vic_attach_bus(vic_state_t* vic_dev, bus_state_t* bus_state);
 
-// Note: Use device_init(), device_cycle(), device_cleanup() instead of wrapper functions
-
 #endif // VIC_H
