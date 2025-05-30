@@ -26,8 +26,6 @@ static void sid_cycle(struct device_s* dev) {
     }
 }
 
-static void sid_cleanup(struct device_s* dev) { (void)dev; }
-
 // Optimized I/O handlers - called directly via callback table (no chip select checks!)
 uint8_t sid_r8(struct device_s* dev, uint16_t address) {
     sid_state_t* sid_dev = (sid_state_t*)dev;
@@ -47,5 +45,5 @@ static const device_t sid_device_descriptor = {
     .w8 = sid_w8,
     .init = sid_init,
     .cycle = sid_cycle,
-    .cleanup = sid_cleanup
+    .cleanup = NULL
 };

@@ -68,15 +68,13 @@ static void vic_cycle(struct device_s* dev) {
     vic_dev->prev_ba = (vic_dev->bus->control_lines & BA_LINE) != 0;
 }
 
-static void vic_cleanup(struct device_s* dev) { (void)dev; }
-
 // Static device descriptor for VIC
 static const device_t vic_device_descriptor = {
     .r8 = vic_r8,
     .w8 = vic_w8,
     .init = vic_init,
     .cycle = vic_cycle,
-    .cleanup = vic_cleanup
+    .cleanup = NULL
 };
 
 // Attach bus to VIC

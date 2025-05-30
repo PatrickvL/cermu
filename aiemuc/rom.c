@@ -23,8 +23,6 @@ static void rom_init(struct device_s* dev) {
     (void)dev;
 }
 
-static void rom_cycle(struct device_s* dev) { (void)dev; } // ROM has no cycle logic
-
 static void rom_cleanup(struct device_s* dev) {
     rom_state_t* rom_dev = (rom_state_t*)dev;
     if (rom_dev && rom_dev->data) {
@@ -39,7 +37,7 @@ static const device_t rom_device_descriptor = {
     .r8 = rom_r8,
     .w8 = NULL,  // ROM is read-only
     .init = rom_init,
-    .cycle = rom_cycle,
+    .cycle = NULL,
     .cleanup = rom_cleanup
 };
 

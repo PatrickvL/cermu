@@ -113,11 +113,6 @@ static void cpu_cycle(struct device_s* dev) {
     cpu6510_step(cpu_dev);
 }
 
-static void cpu_cleanup(struct device_s* dev) {
-    // CPU has no cleanup needed
-    (void)dev;
-}
-
 // Forward declaration of descriptor
 static const device_t cpu_device_descriptor;
 
@@ -517,5 +512,6 @@ static const device_t cpu_device_descriptor = {
     .w8 = cpu_io_port_w8,
     .init = cpu_init,
     .cycle = cpu_cycle,
-    .cleanup = cpu_cleanup
+    .cleanup = NULL // CPU has no cleanup needed
+
 };

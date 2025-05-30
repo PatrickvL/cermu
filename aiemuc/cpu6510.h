@@ -62,6 +62,36 @@ extern instruction_func_t instruction_table[256];
 #define FLAG_V  0x40    // Overflow
 #define FLAG_N  0x80    // Negative
 
+// ============================================================================
+// PLA EMULATION - Pre-computed chip select maps for each memory mode
+// ============================================================================
+
+// PLA functions
+void switch_cpu_mode(uint8_t mode);
+
+// Memory access functions
+void cpu_read_cycle(uint16_t addr);
+void cpu_write_cycle(uint16_t addr, uint8_t value);
+
+// Bus cycle function
+void c64_non_cpu_cycles(void);
+
+// CPU ready check - hardware accurate BA/RDY handling
+#define CPU_READY(cpu_dev) (((cpu_dev)->bus->control_lines & RDY_LINE) != 0)
+
+// Wait for CPU ready with automatic stall handling
+#define WAIT_READY_THEN_READ(cpu_dev, addr, label) do { \
+    label: \
+    if (!CPU_READY(cpu_dev)) { c64_non_cpu_cycles(); goto label; } \
+    cpu_read_cycle(addr); \
+} while(0)
+
+#define WAIT_READY_THEN_WRITE(cpu_dev, addr, data, label) do { \
+    label: \
+    if (!CPU_READY(cpu_dev)) { c64_non_cpu_cycles(); goto label; } \
+    cpu_write_cycle(addr, data); \
+} while(0)
+
 #define NEXT_INSTRUCTION(cpu_dev, fetch_label) do { \
     if (unlikely(cpu_dev->bus->control_lines & (IRQ_LINE | NMI_LINE))) { \
         handle_interrupt_func(cpu_dev); \
