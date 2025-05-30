@@ -316,7 +316,6 @@ void cpu6510_init(cpu6510_state_t* cpu_dev);
 void cpu6510_reset(cpu6510_state_t* cpu_dev);
 bool cpu6510_step(cpu6510_state_t* cpu_dev);
 void cpu6510_execute(cpu6510_state_t* cpu_dev);
-void cpu6510_irq(cpu6510_state_t* cpu_dev);
 void cpu6510_nmi(cpu6510_state_t* cpu_dev);
 
 // Device attachments

@@ -29,6 +29,4 @@ typedef struct {
 // Device attachment
 void cia_attach_bus(cia_state_t* cia_dev, bus_state_t* bus_state);
 
-// Note: Use device_init(), device_cycle(), device_cleanup() instead of wrapper functions
-
 #endif // CIA_H

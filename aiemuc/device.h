@@ -14,11 +14,11 @@ typedef void (*device_write_func_t)(struct device_s* dev, uint16_t address, uint
 // TODO : Convert this into a VMT-like feature
 // Generic device structure - all devices inherit from this
 typedef struct {
-    void (*init)(struct device_s* dev);                        // Device initialization
-    void (*cleanup)(struct device_s* dev);                     // Device cleanup (optional)
-    device_read_func_t r8;                                     // Read 8-bit callback - returns data
-    device_write_func_t w8;                                    // Write 8-bit callback
-    void (*cycle)(struct device_s* dev);                       // Device cycle (timers, logic)
+    void (*init)(struct device_s* dev);    // Device initialization
+    void (*cleanup)(struct device_s* dev); // Device cleanup (optional)
+    device_read_func_t r8;                 // Read 8-bit callback - returns data
+    device_write_func_t w8;                // Write 8-bit callback
+    void (*cycle)(struct device_s* dev);   // Device cycle (timers, logic)
 } device_t;
 
 // Device callback struct with separate device pointers for read and write
