@@ -20,10 +20,6 @@ extern c64_state_t* c64_system;
 // Global instruction table
 instruction_func_t instruction_table[256];
 
-// Forward declarations
-void* handle_interrupt = NULL;
-void* fetch_opcode = NULL;
-
 // ============================================================================
 // CPU OPERATION FUNCTIONS (inline for performance)
 // ============================================================================
@@ -235,8 +231,7 @@ void cpu6510_execute(cpu6510_state_t* cpu_dev) {
         return;
     }
     WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc++, main_fetch_start);
-    cpu_dev->opcode = cpu_dev->bus->data;
-    instruction_table[cpu_dev->opcode](cpu_dev);
+    instruction_table[cpu_dev->bus->data](cpu_dev);
 }
 
 // ============================================================================
