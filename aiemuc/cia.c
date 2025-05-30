@@ -86,8 +86,6 @@ static void cia1_cycle(struct device_s* dev) {
     }
 }
 
-static void cia1_cleanup(struct device_s* dev) { (void)dev; }
-
 static void cia2_init(struct device_s* dev) {
     cia_state_t* cia_dev = (cia_state_t*)dev;
     // Initialize CIA2 state
@@ -112,15 +110,13 @@ static void cia2_cycle(struct device_s* dev) {
     }
 }
 
-static void cia2_cleanup(struct device_s* dev) { (void)dev; }
-
 // Static device descriptors for CIA1 and CIA2
 static const device_t cia1_device_descriptor = {
     .r8 = cia1_r8,
     .w8 = cia1_w8,
     .init = cia1_init,
     .cycle = cia1_cycle,
-    .cleanup = cia1_cleanup
+    .cleanup = NULL
 };
 
 static const device_t cia2_device_descriptor = {
@@ -128,7 +124,7 @@ static const device_t cia2_device_descriptor = {
     .w8 = cia2_w8,
     .init = cia2_init,
     .cycle = cia2_cycle,
-    .cleanup = cia2_cleanup
+    .cleanup = NULL
 };
 
 // Attach bus to CIA devices

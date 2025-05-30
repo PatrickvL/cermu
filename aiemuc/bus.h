@@ -23,35 +23,6 @@ typedef struct {
     uint8_t  control_lines; // R/W, IRQ, NMI, BA, AEC, RDY
 } bus_state_t;
 
-// ============================================================================
-// PLA EMULATION - Pre-computed chip select maps for each memory mode
-// ============================================================================
-
-// PLA functions
-void switch_cpu_mode(uint8_t mode);
-
-// Memory access functions
-void cpu_read_cycle(uint16_t addr);
-void cpu_write_cycle(uint16_t addr, uint8_t value);
-
 void bus_init(bus_state_t* bus);
-// Bus cycle function
-void c64_non_cpu_cycles(void);
-
-// CPU ready check - hardware accurate BA/RDY handling
-#define CPU_READY(cpu_dev) (((cpu_dev)->bus->control_lines & RDY_LINE) != 0)
-
-// Wait for CPU ready with automatic stall handling
-#define WAIT_READY_THEN_READ(cpu_dev, addr, label) do { \
-    label: \
-    if (!CPU_READY(cpu_dev)) { c64_non_cpu_cycles(); goto label; } \
-    cpu_read_cycle(addr); \
-} while(0)
-
-#define WAIT_READY_THEN_WRITE(cpu_dev, addr, data, label) do { \
-    label: \
-    if (!CPU_READY(cpu_dev)) { c64_non_cpu_cycles(); goto label; } \
-    cpu_write_cycle(addr, data); \
-} while(0)
 
 #endif // BUS_H
