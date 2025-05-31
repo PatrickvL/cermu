@@ -12,14 +12,30 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 # Add compiler flags for debugging and warnings
+# Always enable warning flags
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra")
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -O0 -Wall -Wextra")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -O0")
 else()
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -DNDEBUG")
 endif()
 
-# Create executable directly
-add_executable(aiemuc main.c)
+# Collect all source files
+set(SOURCES
+    c64_main.c
+    c64.c
+    bus.c
+    device.c
+    ram.c
+    rom.c
+    cia.c
+    sid.c
+    vic.c
+    cpu6510.c
+)
+
+# Create executable with all source files
+add_executable(aiemuc ${SOURCES})
 
 # Set output directory
 set_target_properties(aiemuc PROPERTIES

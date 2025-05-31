@@ -91,12 +91,6 @@ void c64_non_cpu_cycles(void);
     cpu_write_cycle(cpu_dev, addr, data); \
 } while(0)
 
-#define WAIT_READY_THEN_READ(cpu_dev, addr, var) do { \
-    UNIQUE_LABEL(wait_ready_read): \
-    if (!CPU_READY(cpu_dev)) { c64_non_cpu_cycles(); goto UNIQUE_LABEL(wait_ready_read); } \
-    var = cpu_read_cycle(cpu_dev, addr); \
-} while(0)
-
 #define NEXT_INSTRUCTION(cpu_dev) do { \
     if (unlikely(cpu_dev->bus->control_lines & (IRQ_LINE | NMI_LINE))) { \
         handle_interrupt_func(cpu_dev); \
@@ -662,7 +656,7 @@ static inline void cpu_store_a_and_x(cpu6510_state_t* cpu_dev, void (*addr_func)
 // Complex store with high byte manipulation (AHX, SHX, SHY, TAS)
 static inline void cpu_complex_store(cpu6510_state_t* cpu_dev, uint8_t (*addr_func)(cpu6510_state_t*), 
                                       uint8_t value, bool add_high_byte) {
-    uint8_t fetched = addr_func(cpu_dev);  // Sets address
+    addr_func(cpu_dev);  // Sets address
     if (add_high_byte) {
         value &= ((cpu_dev->address >> 8) + 1);
     }
@@ -747,6 +741,7 @@ void cpu6510_reset(cpu6510_state_t* cpu_dev);
 bool cpu6510_step(cpu6510_state_t* cpu_dev);
 void cpu6510_execute(cpu6510_state_t* cpu_dev);
 void cpu6510_nmi(cpu6510_state_t* cpu_dev);
+void cpu6510_irq(cpu6510_state_t* cpu_dev, uint8_t status);
 
 // Device attachments
 void cpu_attach_bus(cpu6510_state_t* cpu_dev, bus_state_t* bus_state);
