@@ -170,13 +170,7 @@ void cpu6510_nmi(cpu6510_state_t* cpu_dev) {
 // ============================================================================
 void cpu6510_execute(cpu6510_state_t* cpu_dev) {
     // Start execution - fetch first instruction
-    if (unlikely(cpu_dev->bus->control_lines & (IRQ_LINE | NMI_LINE))) {
-        handle_interrupt_func(cpu_dev);
-        return;
-    }
-    CPU_READY_OR_STALL(cpu_dev);
-    uint8_t opcode = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    instruction_table[opcode](cpu_dev);
+    NEXT_INSTRUCTION(cpu_dev);
 }
 
 // ============================================================================

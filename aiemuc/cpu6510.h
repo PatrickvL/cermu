@@ -76,6 +76,9 @@ void cpu_write_cycle(cpu6510_state_t* cpu_dev, uint16_t addr, uint8_t value);
 // Bus cycle function
 void c64_non_cpu_cycles(void);
 
+// Forward declaration for functions used in macros
+void handle_interrupt_func(cpu6510_state_t* cpu_dev);
+
 // CPU ready check - hardware accurate BA/RDY handling
 #define CPU_READY(cpu_dev) (((cpu_dev)->bus->control_lines & RDY_LINE) != 0)
 
@@ -86,8 +89,7 @@ void c64_non_cpu_cycles(void);
 } while(0)
 
 #define WAIT_READY_THEN_WRITE(cpu_dev, addr, data) do { \
-    UNIQUE_LABEL(wait_ready_write): \
-    if (!CPU_READY(cpu_dev)) { c64_non_cpu_cycles(); goto UNIQUE_LABEL(wait_ready_write); } \
+    CPU_READY_OR_STALL(cpu_dev); \
     cpu_write_cycle(cpu_dev, addr, data); \
 } while(0)
 
@@ -96,15 +98,11 @@ void c64_non_cpu_cycles(void);
         handle_interrupt_func(cpu_dev); \
         return; \
     } \
-    UNIQUE_LABEL(next_inst_wait): \
-    if (!CPU_READY(cpu_dev)) { c64_non_cpu_cycles(); goto UNIQUE_LABEL(next_inst_wait); } \
+    CPU_READY_OR_STALL(cpu_dev); \
     uint8_t opcode = cpu_read_cycle(cpu_dev, cpu_dev->pc++); \
     instruction_table[opcode](cpu_dev); \
     return; \
 } while(0)
-
-// Forward declaration for functions used in macros
-void handle_interrupt_func(cpu6510_state_t* cpu_dev);
 
 // Flag operations (inline for performance)
 static inline void cpu_set_flag(cpu6510_state_t* cpu_dev, uint8_t flag, bool condition) {
@@ -439,12 +437,12 @@ static inline uint8_t op_sbc(cpu6510_state_t* cpu_dev, uint8_t value) {
 
 // Void wrapper for SBC (for ISC illegal instruction)
 static inline void op_sbc_void(cpu6510_state_t* cpu_dev, uint8_t value) {
-    op_sbc(cpu_dev, value);
+    (void)op_sbc(cpu_dev, value);
 }
 
 // Void wrapper for ADC (for RRA illegal instruction)
 static inline void op_adc_void(cpu6510_state_t* cpu_dev, uint8_t value) {
-    op_adc(cpu_dev, value);
+    (void)op_adc(cpu_dev, value);
 }
 
 // ============================================================================
