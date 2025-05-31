@@ -149,6 +149,12 @@ void brk_func(cpu6510_state_t* cpu_dev) {
     NEXT_INSTRUCTION(cpu_dev, brk_fetch_wait);
 }
 
+void brk_instruction_func(cpu6510_state_t* cpu_dev) {
+    cpu_dev->pc++;  // Skip BRK signature byte
+    cpu6510_irq(cpu_dev, cpu_dev->p | FLAG_B); // Call IRQ handler
+    NEXT_INSTRUCTION(cpu_dev, brk_fetch_wait);
+}
+
 // Jump Instructions
 void jmp_absolute_func(cpu6510_state_t* cpu_dev) {
     CPU_READY_OR_STALL(cpu_dev, jmp_abs_wait1);
