@@ -7,51 +7,51 @@
 
 // Clear flag instructions
 void clc_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev, clc_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     (void)cpu_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
     cpu_dev->p &= ~FLAG_C;
-    NEXT_INSTRUCTION(cpu_dev, clc_fetch_wait);
+    NEXT_INSTRUCTION(cpu_dev);
 }
 
 void cld_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev, cld_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     (void)cpu_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
     cpu_dev->p &= ~FLAG_D;
-    NEXT_INSTRUCTION(cpu_dev, cld_fetch_wait);
+    NEXT_INSTRUCTION(cpu_dev);
 }
 
 void cli_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev, cli_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     (void)cpu_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
     cpu_dev->p &= ~FLAG_I;
-    NEXT_INSTRUCTION(cpu_dev, cli_fetch_wait);
+    NEXT_INSTRUCTION(cpu_dev);
 }
 
 void clv_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev, clv_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     (void)cpu_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
     cpu_dev->p &= ~FLAG_V;
-    NEXT_INSTRUCTION(cpu_dev, clv_fetch_wait);
+    NEXT_INSTRUCTION(cpu_dev);
 }
 
 // Set flag instructions
 void sec_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev, sec_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     (void)cpu_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
     cpu_dev->p |= FLAG_C;
-    NEXT_INSTRUCTION(cpu_dev, sec_fetch_wait);
+    NEXT_INSTRUCTION(cpu_dev);
 }
 
 void sed_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev, sed_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     (void)cpu_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
     cpu_dev->p |= FLAG_D;
-    NEXT_INSTRUCTION(cpu_dev, sed_fetch_wait);
+    NEXT_INSTRUCTION(cpu_dev);
 }
 
 void sei_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev, sei_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     (void)cpu_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
     cpu_dev->p |= FLAG_I;
-    NEXT_INSTRUCTION(cpu_dev, sei_fetch_wait);
+    NEXT_INSTRUCTION(cpu_dev);
 }

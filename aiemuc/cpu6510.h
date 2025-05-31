@@ -16,6 +16,11 @@
 #define unlikely(x) __builtin_expect(!!(x), 0)
 #endif
 
+// Macro utilities for generating unique labels
+#define CONCAT_IMPL(a, b) a ## b
+#define CONCAT(a, b) CONCAT_IMPL(a, b)
+#define UNIQUE_LABEL(prefix) CONCAT(prefix, __LINE__)
+
 // ============================================================================
 // MOS 6510 CPU EMULATION - Cycle-accurate with direct threading
 // ============================================================================
@@ -75,27 +80,37 @@ void c64_non_cpu_cycles(void);
 #define CPU_READY(cpu_dev) (((cpu_dev)->bus->control_lines & RDY_LINE) != 0)
 
 // Wait for CPU ready with automatic stall handling
-#define CPU_READY_OR_STALL(cpu_dev, label) do { \
-    label: \
-    if (!CPU_READY(cpu_dev)) { c64_non_cpu_cycles(); goto label; } \
+#define CPU_READY_OR_STALL(cpu_dev) do { \
+    UNIQUE_LABEL(cpu_ready_stall): \
+    if (!CPU_READY(cpu_dev)) { c64_non_cpu_cycles(); goto UNIQUE_LABEL(cpu_ready_stall); } \
 } while(0)
 
-#define WAIT_READY_THEN_WRITE(cpu_dev, addr, data, label) do { \
-    label: \
-    if (!CPU_READY(cpu_dev)) { c64_non_cpu_cycles(); goto label; } \
+#define WAIT_READY_THEN_WRITE(cpu_dev, addr, data) do { \
+    UNIQUE_LABEL(wait_ready_write): \
+    if (!CPU_READY(cpu_dev)) { c64_non_cpu_cycles(); goto UNIQUE_LABEL(wait_ready_write); } \
     cpu_write_cycle(cpu_dev, addr, data); \
 } while(0)
 
-#define NEXT_INSTRUCTION(cpu_dev, fetch_label) do { \
+#define WAIT_READY_THEN_READ(cpu_dev, addr, var) do { \
+    UNIQUE_LABEL(wait_ready_read): \
+    if (!CPU_READY(cpu_dev)) { c64_non_cpu_cycles(); goto UNIQUE_LABEL(wait_ready_read); } \
+    var = cpu_read_cycle(cpu_dev, addr); \
+} while(0)
+
+#define NEXT_INSTRUCTION(cpu_dev) do { \
     if (unlikely(cpu_dev->bus->control_lines & (IRQ_LINE | NMI_LINE))) { \
         handle_interrupt_func(cpu_dev); \
         return; \
     } \
-    CPU_READY_OR_STALL(cpu_dev, fetch_label); \
+    UNIQUE_LABEL(next_inst_wait): \
+    if (!CPU_READY(cpu_dev)) { c64_non_cpu_cycles(); goto UNIQUE_LABEL(next_inst_wait); } \
     uint8_t opcode = cpu_read_cycle(cpu_dev, cpu_dev->pc++); \
     instruction_table[opcode](cpu_dev); \
     return; \
 } while(0)
+
+// Forward declaration for functions used in macros
+void handle_interrupt_func(cpu6510_state_t* cpu_dev);
 
 // Flag operations (inline for performance)
 static inline void cpu_set_flag(cpu6510_state_t* cpu_dev, uint8_t flag, bool condition) {
@@ -129,122 +144,122 @@ static inline uint8_t cpu_pop(cpu6510_state_t* cpu_dev) {
 
 // Immediate addressing - returns the immediate value
 static inline uint8_t addr_imm(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev, imm_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     return cpu_read_cycle(cpu_dev, cpu_dev->pc++);
 }
 
 // Zero page addressing - sets address and returns fetched value
 static inline uint8_t addr_zp(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev, zp_addr_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     cpu_dev->address = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    CPU_READY_OR_STALL(cpu_dev, zp_data_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     return cpu_read_cycle(cpu_dev, cpu_dev->address);
 }
 
 // Zero page,X addressing - sets address and returns fetched value
 static inline uint8_t addr_zpx(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev, zpx_addr_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     uint8_t base = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    CPU_READY_OR_STALL(cpu_dev, zpx_dummy_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     (void)cpu_read_cycle(cpu_dev, base); // Dummy read
     cpu_dev->address = (base + cpu_dev->x) & 0xFF;
-    CPU_READY_OR_STALL(cpu_dev, zpx_data_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     return cpu_read_cycle(cpu_dev, cpu_dev->address);
 }
 
 // Zero page,Y addressing - sets address and returns fetched value
 static inline uint8_t addr_zpy(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev, zpy_addr_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     uint8_t base = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    CPU_READY_OR_STALL(cpu_dev, zpy_dummy_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     (void)cpu_read_cycle(cpu_dev, base); // Dummy read
     cpu_dev->address = (base + cpu_dev->y) & 0xFF;
-    CPU_READY_OR_STALL(cpu_dev, zpy_data_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     return cpu_read_cycle(cpu_dev, cpu_dev->address);
 }
 
 // Absolute addressing - sets address and returns fetched value
 static inline uint8_t addr_abs(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev, abs_lo_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     uint8_t addr_lo = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    CPU_READY_OR_STALL(cpu_dev, abs_hi_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     uint8_t addr_hi = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
     cpu_dev->address = (addr_hi << 8) | addr_lo;
-    CPU_READY_OR_STALL(cpu_dev, abs_data_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     return cpu_read_cycle(cpu_dev, cpu_dev->address);
 }
 
 // Absolute,X addressing - sets address and returns fetched value
 static inline uint8_t addr_absx(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev, absx_lo_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     uint8_t addr_lo = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    CPU_READY_OR_STALL(cpu_dev, absx_hi_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     uint8_t addr_hi = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
     uint16_t base = (addr_hi << 8) | addr_lo;
     cpu_dev->address = base + cpu_dev->x;
     
     // Check for page crossing
     if ((base & 0xFF00) != (cpu_dev->address & 0xFF00)) {
-        CPU_READY_OR_STALL(cpu_dev, absx_dummy_wait);
+        CPU_READY_OR_STALL(cpu_dev);
         (void)cpu_read_cycle(cpu_dev, base); // Dummy read
     }
-    CPU_READY_OR_STALL(cpu_dev, absx_data_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     return cpu_read_cycle(cpu_dev, cpu_dev->address);
 }
 
 // Absolute,Y addressing - sets address and returns fetched value
 static inline uint8_t addr_absy(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev, absy_lo_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     uint8_t addr_lo = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    CPU_READY_OR_STALL(cpu_dev, absy_hi_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     uint8_t addr_hi = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
     uint16_t base = (addr_hi << 8) | addr_lo;
     cpu_dev->address = base + cpu_dev->y;
     
     // Check for page crossing
     if ((base & 0xFF00) != (cpu_dev->address & 0xFF00)) {
-        CPU_READY_OR_STALL(cpu_dev, absy_dummy_wait);
+        CPU_READY_OR_STALL(cpu_dev);
         (void)cpu_read_cycle(cpu_dev, base); // Dummy read
     }
-    CPU_READY_OR_STALL(cpu_dev, absy_data_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     return cpu_read_cycle(cpu_dev, cpu_dev->address);
 }
 
 // (Zero page,X) - Indexed Indirect addressing
 static inline uint8_t addr_zpx_ind(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev, zpx_ind_base_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     uint8_t base = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    CPU_READY_OR_STALL(cpu_dev, zpx_ind_dummy_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     (void)cpu_read_cycle(cpu_dev, base); // Dummy read
     uint8_t zp_addr = (base + cpu_dev->x) & 0xFF;
     
-    CPU_READY_OR_STALL(cpu_dev, zpx_ind_lo_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     uint8_t addr_lo = cpu_read_cycle(cpu_dev, zp_addr);
-    CPU_READY_OR_STALL(cpu_dev, zpx_ind_hi_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     uint8_t addr_hi = cpu_read_cycle(cpu_dev, (zp_addr + 1) & 0xFF);
     cpu_dev->address = (addr_hi << 8) | addr_lo;
-    CPU_READY_OR_STALL(cpu_dev, zpx_ind_data_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     return cpu_read_cycle(cpu_dev, cpu_dev->address);
 }
 
 // (Zero page),Y - Indirect Indexed addressing
 static inline uint8_t addr_zp_ind_y(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev, zp_ind_y_base_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     uint8_t zp_addr = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
 
-    CPU_READY_OR_STALL(cpu_dev, zp_ind_y_lo_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     uint8_t addr_lo = cpu_read_cycle(cpu_dev, zp_addr);
-    CPU_READY_OR_STALL(cpu_dev, zp_ind_y_hi_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     uint8_t addr_hi = cpu_read_cycle(cpu_dev, (zp_addr + 1) & 0xFF);
     uint16_t base = (addr_hi << 8) | addr_lo;
     cpu_dev->address = base + cpu_dev->y;
     
     // Check for page crossing
     if ((base & 0xFF00) != (cpu_dev->address & 0xFF00)) {
-        CPU_READY_OR_STALL(cpu_dev, zp_ind_y_dummy_wait);
+        CPU_READY_OR_STALL(cpu_dev);
         (void)cpu_read_cycle(cpu_dev, base); // Dummy read
     }
-    CPU_READY_OR_STALL(cpu_dev, zp_ind_y_data_wait);
+    CPU_READY_OR_STALL(cpu_dev);
     return cpu_read_cycle(cpu_dev, cpu_dev->address);
 }
 
@@ -428,9 +443,303 @@ static inline uint8_t op_sbc(cpu6510_state_t* cpu_dev, uint8_t value) {
     return cpu_dev->a;
 }
 
-// Forward declarations for functions defined in main file
-void handle_interrupt_func(cpu6510_state_t* cpu_dev);
-void cpu6510_irq(cpu6510_state_t* cpu_dev, uint8_t status);
+// Void wrapper for SBC (for ISC illegal instruction)
+static inline void op_sbc_void(cpu6510_state_t* cpu_dev, uint8_t value) {
+    op_sbc(cpu_dev, value);
+}
+
+// Void wrapper for ADC (for RRA illegal instruction)
+static inline void op_adc_void(cpu6510_state_t* cpu_dev, uint8_t value) {
+    op_adc(cpu_dev, value);
+}
+
+// ============================================================================
+// CONTROL FLOW HELPER FUNCTIONS (inline for performance)
+// ============================================================================
+
+// Generic branch helper - handles all branch instruction logic
+static inline void cpu_branch_helper(cpu6510_state_t* cpu_dev, bool condition) {
+    int8_t offset = (int8_t)addr_imm(cpu_dev);
+    if (condition) {
+        uint16_t new_pc = cpu_dev->pc + offset;
+        if ((cpu_dev->pc & 0xFF00) != (new_pc & 0xFF00)) {
+            // Page boundary crossed - extra cycle
+            CPU_READY_OR_STALL(cpu_dev);
+            (void)cpu_read_cycle(cpu_dev, (cpu_dev->pc & 0xFF00) | (new_pc & 0x00FF));
+        }
+        CPU_READY_OR_STALL(cpu_dev);
+        (void)cpu_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
+        cpu_dev->pc = new_pc;
+    }
+    NEXT_INSTRUCTION(cpu_dev);
+}
+
+// Stack push with timing control
+static inline void cpu_push_with_wait(cpu6510_state_t* cpu_dev, uint8_t data) {
+    CPU_READY_OR_STALL(cpu_dev);
+    cpu_write_cycle(cpu_dev, 0x0100 + cpu_dev->sp, data);
+    cpu_dev->sp--;
+}
+
+// Stack pop with timing control  
+static inline uint8_t cpu_pop_with_wait(cpu6510_state_t* cpu_dev) {
+    CPU_READY_OR_STALL(cpu_dev);
+    cpu_dev->sp++;
+    return cpu_read_cycle(cpu_dev, 0x0100 + cpu_dev->sp);
+}
+
+// BRK/IRQ common sequence - handles the interrupt setup portion
+static inline void cpu_interrupt_sequence(cpu6510_state_t* cpu_dev, uint8_t status_flags, uint16_t vector_addr) {
+    // Push PC high byte
+    cpu_push_with_wait(cpu_dev, (cpu_dev->pc >> 8) & 0xFF);
+    // Push PC low byte  
+    cpu_push_with_wait(cpu_dev, cpu_dev->pc & 0xFF);
+    // Push status register
+    cpu_push_with_wait(cpu_dev, status_flags);
+    // Set interrupt disable
+    cpu_dev->p |= FLAG_I;
+    // Read vector low
+    CPU_READY_OR_STALL(cpu_dev);
+    uint8_t pc_lo = cpu_read_cycle(cpu_dev, vector_addr);
+    // Read vector high
+    CPU_READY_OR_STALL(cpu_dev);
+    uint8_t pc_hi = cpu_read_cycle(cpu_dev, vector_addr + 1);
+    cpu_dev->pc = (pc_hi << 8) | pc_lo;
+}
+
+// ============================================================================
+// READ-MODIFY-WRITE HELPER FUNCTIONS (inline for performance)
+// ============================================================================
+
+// Accumulator read-modify-write operations (2 cycles)
+static inline void cpu_rmw_accumulator(cpu6510_state_t* cpu_dev, uint8_t (*operation)(cpu6510_state_t*, uint8_t)) {
+    CPU_READY_OR_STALL(cpu_dev);
+    (void)cpu_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
+    cpu_dev->a = operation(cpu_dev, cpu_dev->a);
+    NEXT_INSTRUCTION(cpu_dev);
+}
+
+// Zero page read-modify-write operations
+static inline void cpu_rmw_zero_page(cpu6510_state_t* cpu_dev, uint8_t (*operation)(cpu6510_state_t*, uint8_t)) {
+    CPU_READY_OR_STALL(cpu_dev);
+    cpu_dev->address = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+    CPU_READY_OR_STALL(cpu_dev);
+    uint8_t value = cpu_read_cycle(cpu_dev, cpu_dev->address);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value); // Write original value
+    value = operation(cpu_dev, value);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value);
+    NEXT_INSTRUCTION(cpu_dev);
+}
+
+// Zero page,X read-modify-write operations
+static inline void cpu_rmw_zero_page_x(cpu6510_state_t* cpu_dev, uint8_t (*operation)(cpu6510_state_t*, uint8_t)) {
+    CPU_READY_OR_STALL(cpu_dev);
+    cpu_dev->address = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+    CPU_READY_OR_STALL(cpu_dev);
+    (void)cpu_read_cycle(cpu_dev, cpu_dev->address); // Dummy read
+    cpu_dev->address = (cpu_dev->address + cpu_dev->x) & 0xFF;
+    CPU_READY_OR_STALL(cpu_dev);
+    uint8_t value = cpu_read_cycle(cpu_dev, cpu_dev->address);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value); // Write original value
+    value = operation(cpu_dev, value);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value);
+    NEXT_INSTRUCTION(cpu_dev);
+}
+
+// Absolute read-modify-write operations
+static inline void cpu_rmw_absolute(cpu6510_state_t* cpu_dev, uint8_t (*operation)(cpu6510_state_t*, uint8_t)) {
+    CPU_READY_OR_STALL(cpu_dev);
+    uint8_t addr_lo = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+    cpu_dev->address = addr_lo;
+    CPU_READY_OR_STALL(cpu_dev);
+    uint8_t addr_hi = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+    cpu_dev->address |= (addr_hi << 8);
+    CPU_READY_OR_STALL(cpu_dev);
+    uint8_t value = cpu_read_cycle(cpu_dev, cpu_dev->address);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value); // Write original value
+    value = operation(cpu_dev, value);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value);
+    NEXT_INSTRUCTION(cpu_dev);
+}
+
+// Absolute,X read-modify-write operations
+static inline void cpu_rmw_absolute_x(cpu6510_state_t* cpu_dev, uint8_t (*operation)(cpu6510_state_t*, uint8_t)) {
+    CPU_READY_OR_STALL(cpu_dev);
+    uint8_t addr_lo = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+    CPU_READY_OR_STALL(cpu_dev);
+    uint8_t addr_hi = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+    cpu_dev->address = (addr_hi << 8) | addr_lo;
+    CPU_READY_OR_STALL(cpu_dev);
+    (void)cpu_read_cycle(cpu_dev, (cpu_dev->address & 0xFF00) | ((cpu_dev->address + cpu_dev->x) & 0xFF)); // Dummy read
+    cpu_dev->address += cpu_dev->x;
+    CPU_READY_OR_STALL(cpu_dev);
+    uint8_t value = cpu_read_cycle(cpu_dev, cpu_dev->address);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value); // Write original value
+    value = operation(cpu_dev, value);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value);
+    NEXT_INSTRUCTION(cpu_dev);
+}
+
+// ============================================================================
+// REGISTER OPERATION HELPER FUNCTIONS (inline for performance)
+// ============================================================================
+
+// Register increment/decrement with flags
+static inline void cpu_register_inc_dec(cpu6510_state_t* cpu_dev, uint8_t* reg, int delta) {
+    CPU_READY_OR_STALL(cpu_dev);
+    (void)cpu_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
+    *reg += delta;
+    cpu_set_zn(cpu_dev, *reg);
+    NEXT_INSTRUCTION(cpu_dev);
+}
+
+// Register transfer with flags (when flags should be set)
+static inline void cpu_register_transfer_with_flags(cpu6510_state_t* cpu_dev, uint8_t* dest, uint8_t src) {
+    CPU_READY_OR_STALL(cpu_dev);
+    (void)cpu_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
+    *dest = src;
+    cpu_set_zn(cpu_dev, *dest);
+    NEXT_INSTRUCTION(cpu_dev);
+}
+
+// Register transfer without flags (e.g., TXS)
+static inline void cpu_register_transfer_no_flags(cpu6510_state_t* cpu_dev, uint8_t* dest, uint8_t src) {
+    CPU_READY_OR_STALL(cpu_dev);
+    (void)cpu_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
+    *dest = src;
+    NEXT_INSTRUCTION(cpu_dev);
+}
+
+// Memory increment/decrement operations
+static inline void cpu_memory_inc_dec(cpu6510_state_t* cpu_dev, uint8_t (*addr_func)(cpu6510_state_t*), int delta) {
+    uint8_t fetched = addr_func(cpu_dev);
+    uint8_t result = fetched + delta;
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, result);
+    cpu_set_zn(cpu_dev, result);
+    NEXT_INSTRUCTION(cpu_dev);
+}
+
+// ============================================================================
+// ILLEGAL INSTRUCTION HELPER FUNCTIONS (inline for performance)
+// ============================================================================
+
+// Read-modify-write + register operation combo (SLO, RLA, RRA, SRE)
+static inline void cpu_illegal_rmw_combo(cpu6510_state_t* cpu_dev, uint8_t (*addr_func)(cpu6510_state_t*), 
+                                          uint8_t (*rmw_op)(cpu6510_state_t*, uint8_t),
+                                          void (*reg_op)(cpu6510_state_t*, uint8_t)) {
+    uint8_t value = addr_func(cpu_dev);
+    uint8_t result = rmw_op(cpu_dev, value);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, result);
+    reg_op(cpu_dev, result);
+    NEXT_INSTRUCTION(cpu_dev);
+}
+
+// INC/DEC + register operation combo (DCP, ISC)
+static inline void cpu_illegal_inc_dec_combo(cpu6510_state_t* cpu_dev, uint8_t (*addr_func)(cpu6510_state_t*), 
+                                              int delta, void (*reg_op)(cpu6510_state_t*, uint8_t)) {
+    uint8_t value = addr_func(cpu_dev);
+    value += delta;
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value);
+    reg_op(cpu_dev, value);
+    NEXT_INSTRUCTION(cpu_dev);
+}
+
+// Load both A and X (LAX variants)
+static inline void cpu_load_a_and_x(cpu6510_state_t* cpu_dev, uint8_t (*addr_func)(cpu6510_state_t*)) {
+    uint8_t value = addr_func(cpu_dev);
+    cpu_dev->a = value;
+    cpu_dev->x = value;
+    cpu_set_zn(cpu_dev, value);
+    NEXT_INSTRUCTION(cpu_dev);
+}
+
+// Store A & X (SAX variants)
+static inline void cpu_store_a_and_x(cpu6510_state_t* cpu_dev, void (*addr_func)(cpu6510_state_t*, uint8_t)) {
+    addr_func(cpu_dev, cpu_dev->a & cpu_dev->x);
+    NEXT_INSTRUCTION(cpu_dev);
+}
+
+// Complex store with high byte manipulation (AHX, SHX, SHY, TAS)
+static inline void cpu_complex_store(cpu6510_state_t* cpu_dev, uint8_t (*addr_func)(cpu6510_state_t*), 
+                                      uint8_t value, bool add_high_byte) {
+    uint8_t fetched = addr_func(cpu_dev);  // Sets address
+    if (add_high_byte) {
+        value &= ((cpu_dev->address >> 8) + 1);
+    }
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value);
+    NEXT_INSTRUCTION(cpu_dev);
+}
+
+// Immediate mode accumulator operations (ALR, ANC, ARR, AXS, XAA)
+static inline void cpu_immediate_accumulator_op(cpu6510_state_t* cpu_dev, void (*operation)(cpu6510_state_t*, uint8_t)) {
+    uint8_t value = addr_imm(cpu_dev);
+    operation(cpu_dev, value);
+    NEXT_INSTRUCTION(cpu_dev);
+}
+
+// ============================================================================
+// ILLEGAL INSTRUCTION SPECIFIC OPERATIONS (inline for performance)
+// ============================================================================
+
+// ALR operation: AND then LSR
+static inline void op_alr(cpu6510_state_t* cpu_dev, uint8_t value) {
+    cpu_dev->a &= value;
+    cpu_set_flag(cpu_dev, FLAG_C, cpu_dev->a & 0x01);
+    cpu_dev->a >>= 1;
+    cpu_set_zn(cpu_dev, cpu_dev->a);
+}
+
+// ANC operation: AND then copy N to C
+static inline void op_anc(cpu6510_state_t* cpu_dev, uint8_t value) {
+    cpu_dev->a &= value;
+    cpu_set_zn(cpu_dev, cpu_dev->a);
+    cpu_set_flag(cpu_dev, FLAG_C, cpu_dev->a & 0x80);
+}
+
+// ARR operation: AND then ROR with special V flag behavior
+static inline void op_arr(cpu6510_state_t* cpu_dev, uint8_t value) {
+    cpu_dev->a &= value;
+    uint8_t old_carry = cpu_get_flag(cpu_dev, FLAG_C) ? 1 : 0;
+    cpu_set_flag(cpu_dev, FLAG_C, cpu_dev->a & 0x01);
+    cpu_dev->a = (cpu_dev->a >> 1) | (old_carry << 7);
+    cpu_set_zn(cpu_dev, cpu_dev->a);
+    // V flag behavior is complex for ARR
+    cpu_set_flag(cpu_dev, FLAG_V, ((cpu_dev->a >> 6) ^ (cpu_dev->a >> 5)) & 1);
+}
+
+// AXS operation: (A & X) - immediate, store in X
+static inline void op_axs(cpu6510_state_t* cpu_dev, uint8_t value) {
+    uint8_t temp = cpu_dev->a & cpu_dev->x;
+    uint16_t result = temp - value;
+    cpu_set_flag(cpu_dev, FLAG_C, result < 0x100);
+    cpu_dev->x = result & 0xFF;
+    cpu_set_zn(cpu_dev, cpu_dev->x);
+}
+
+// XAA operation: Transfer X to A, then AND with immediate
+static inline void op_xaa(cpu6510_state_t* cpu_dev, uint8_t value) {
+    cpu_dev->a = cpu_dev->x;
+    cpu_dev->a &= value;
+    cpu_set_zn(cpu_dev, cpu_dev->a);
+}
+
+// SLO register operation: ORA with result
+static inline void op_slo_reg(cpu6510_state_t* cpu_dev, uint8_t value) {
+    cpu_dev->a |= value;
+    cpu_set_zn(cpu_dev, cpu_dev->a);
+}
+
+// RLA register operation: AND with result
+static inline void op_rla_reg(cpu6510_state_t* cpu_dev, uint8_t value) {
+    cpu_dev->a &= value;
+    cpu_set_zn(cpu_dev, cpu_dev->a);
+}
+
+// SRE register operation: EOR with result
+static inline void op_sre_reg(cpu6510_state_t* cpu_dev, uint8_t value) {
+    cpu_dev->a ^= value;
+    cpu_set_zn(cpu_dev, cpu_dev->a);
+}
 
 // CPU core functions
 void cpu6510_init(cpu6510_state_t* cpu_dev);

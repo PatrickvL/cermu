@@ -79,7 +79,7 @@ void handle_interrupt_func(cpu6510_state_t* cpu_dev) {
         // Handle IRQ when interrupt disable is clear
         cpu6510_irq(cpu_dev, cpu_dev->p & ~FLAG_B); // Clear B flag for IRQ
     }
-    NEXT_INSTRUCTION(cpu_dev, interrupt_fetch_wait);
+    NEXT_INSTRUCTION(cpu_dev);
 }
 
 // CPU lifecycle wrapper functions
@@ -174,7 +174,7 @@ void cpu6510_execute(cpu6510_state_t* cpu_dev) {
         handle_interrupt_func(cpu_dev);
         return;
     }
-    CPU_READY_OR_STALL(cpu_dev, main_fetch_start);
+    CPU_READY_OR_STALL(cpu_dev);
     uint8_t opcode = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
     instruction_table[opcode](cpu_dev);
 }
