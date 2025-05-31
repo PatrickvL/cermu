@@ -31,6 +31,25 @@ static inline uint8_t cpu_io_mask(cpu6510_state_t* cpu_dev, uint8_t value)
 // Current active map, updated by switch_cpu_mode()
 device_callbacks_t* chip_select_map;
 
+uint8_t bus_read_cycle(bus_state_t *bus, uint16_t addr) { // TODO : Move to bus.c/.h
+    // For all other addresses, use chip select map
+    bus->address = addr;
+    c64_non_cpu_cycles();
+    device_callbacks_t* cb = &chip_select_map[addr >> 8];
+    uint8_t data = cb->read(cb->read_device, addr);
+    bus->data = data;
+    return data;
+}
+
+void bus_write_cycle(bus_state_t* bus, uint16_t addr, uint8_t value) { // TODO : Move to bus.c/.h
+    // For all other addresses, use chip select map
+    bus->address = addr;
+    bus->data = value;
+    device_callbacks_t* cb = &chip_select_map[addr >> 8];
+    cb->write(cb->write_device, addr, value);
+    c64_non_cpu_cycles();
+}
+
 // Optimized read cycle implementation with embedded I/O port handling
 uint8_t cpu_read_cycle(cpu6510_state_t* cpu_dev, uint16_t addr) {
     // Handle I/O ports directly in CPU - addresses $0000 and $0001
@@ -48,14 +67,7 @@ uint8_t cpu_read_cycle(cpu6510_state_t* cpu_dev, uint16_t addr) {
         return value;
     }
     
-    // For all other addresses, use chip select map
-    cpu_dev->bus->address = addr;
-    c64_non_cpu_cycles();
-    //cpu_data = bus_read_cycle(cpu_dev->bus, addr);
-    device_callbacks_t* cb = &chip_select_map[addr >> 8];
-    uint8_t data = cb->read(cb->read_device, addr);
-    cpu_dev->bus->data = data;
-    return data;
+    return bus_read_cycle(cpu_dev->bus, addr);
 }
 
 // Optimized write cycle implementation with embedded I/O port handling
@@ -74,13 +86,7 @@ void cpu_write_cycle(cpu6510_state_t* cpu_dev, uint16_t addr, uint8_t value) {
         return;
     }
     
-    // For all other addresses, use chip select map
-    //bus_write_cycle(cpu_dev->bus, addr, value);    
-    cpu_dev->bus->address = addr;
-    cpu_dev->bus->data = value;
-    device_callbacks_t* cb = &chip_select_map[addr >> 8];
-    cb->write(cb->write_device, addr, value);
-    c64_non_cpu_cycles();
+    bus_write_cycle(cpu_dev->bus, addr, value);
 }
 
 // CPU lifecycle wrapper functions
