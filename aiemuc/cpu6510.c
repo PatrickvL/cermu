@@ -1,16 +1,16 @@
 #include "cpu6510.h"
 #include <string.h>
 
-// Include all instruction implementation files
-#include "cpu6510_arithmetic.c"
-#include "cpu6510_branches.c"
-#include "cpu6510_flags.c"
-#include "cpu6510_increment.c"
-#include "cpu6510_loads_stores.c"
-#include "cpu6510_shifts.c"
-#include "cpu6510_stack.c"
-#include "cpu6510_system.c"
-#include "cpu6510_unofficial.c"
+// Include all instruction implementation files in the new organization
+#include "cpu6510_memory.c"       // LDA, LDX, LDY, STA, STX, STY
+#include "cpu6510_arithmetic.c"   // ADC, SBC, AND, ORA, EOR, CMP, CPX, CPY, BIT
+#include "cpu6510_control.c"      // BRK, RTI, RTS, JSR, JMP, all branches
+#include "cpu6510_registers.c"    // TAX, TXA, TAY, TYA, TSX, TXS, INC, DEC, INX, DEX, INY, DEY
+#include "cpu6510_flags.c"        // CLC, SEC, CLI, SEI, CLD, SED, CLV
+#include "cpu6510_stack.c"        // PHA, PLA, PHP, PLP
+#include "cpu6510_shifts.c"       // ASL, LSR, ROL, ROR
+#include "cpu6510_misc.c"         // NOP variants
+#include "cpu6510_illegal.c"      // All unofficial instructions
 
 // Universal instruction table using function pointers
 // Global instruction table
@@ -89,6 +89,35 @@ void cpu_write_cycle(cpu6510_state_t* cpu_dev, uint16_t addr, uint8_t value) {
     bus_write_cycle(cpu_dev->bus, addr, value);
 }
 
+// ============================================================================
+// MISCELLANEOUS INSTRUCTIONS (included directly to avoid redefinition)
+// ============================================================================
+
+// Basic instruction functions that are not in separate files
+void nop_instruction_func(cpu6510_state_t* cpu_dev) {
+    CPU_READY_OR_STALL(cpu_dev, nop_wait);
+    (void)cpu_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
+    NEXT_INSTRUCTION(cpu_dev, nop_fetch_wait);
+}
+
+void brk_instruction_func(cpu6510_state_t* cpu_dev) {
+    cpu_dev->pc++;  // Skip BRK signature byte
+    cpu6510_irq(cpu_dev, cpu_dev->p | FLAG_B); // Call IRQ handler
+    NEXT_INSTRUCTION(cpu_dev, brk_fetch_wait);
+}
+
+// Interrupt handler - called when IRQ or NMI lines are active
+void handle_interrupt_func(cpu6510_state_t* cpu_dev) {
+    if (cpu_dev->bus->control_lines & NMI_LINE) {
+        // Handle NMI - non-maskable
+        cpu6510_nmi(cpu_dev);
+    } else if ((cpu_dev->bus->control_lines & IRQ_LINE) && !cpu_get_flag(cpu_dev, FLAG_I)) {
+        // Handle IRQ when interrupt disable is clear
+        cpu6510_irq(cpu_dev, cpu_dev->p & ~FLAG_B); // Clear B flag for IRQ
+    }
+    NEXT_INSTRUCTION(cpu_dev, interrupt_fetch_wait);
+}
+
 // CPU lifecycle wrapper functions
 static void cpu_init(struct device_s* dev) {
     cpu6510_state_t* cpu_dev = (cpu6510_state_t*)dev;
@@ -126,7 +155,6 @@ void cpu6510_init(cpu6510_state_t* cpu_dev) {
 void cpu_attach_bus(cpu6510_state_t* cpu_dev, bus_state_t* bus_state) {
     cpu_dev->bus = bus_state;
 }
-
 
 // Reset CPU
 void cpu6510_reset(cpu6510_state_t* cpu_dev) {
@@ -171,35 +199,6 @@ void cpu6510_nmi(cpu6510_state_t* cpu_dev) {
     cpu_dev->pc = cpu_read_cycle(cpu_dev, 0xFFFA);
     uint8_t cpu_data = cpu_read_cycle(cpu_dev, 0xFFFB);
     cpu_dev->pc |= (cpu_data << 8);
-}
-
-// ============================================================================
-// INSTRUCTION FUNCTIONS (Universal approach using function pointers)
-// ============================================================================
-
-// Basic instruction functions that are not in separate files
-void nop_instruction_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev, nop_wait);
-    (void)cpu_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
-    NEXT_INSTRUCTION(cpu_dev, nop_fetch_wait);
-}
-
-void brk_instruction_func(cpu6510_state_t* cpu_dev) {
-    cpu_dev->pc++;  // Skip BRK signature byte
-    cpu6510_irq(cpu_dev, cpu_dev->p | FLAG_B); // Call IRQ handler
-    NEXT_INSTRUCTION(cpu_dev, brk_fetch_wait);
-}
-
-// Interrupt handler - called when IRQ or NMI lines are active
-void handle_interrupt_func(cpu6510_state_t* cpu_dev) {
-    if (cpu_dev->bus->control_lines & NMI_LINE) {
-        // Handle NMI - non-maskable
-        cpu6510_nmi(cpu_dev);
-    } else if ((cpu_dev->bus->control_lines & IRQ_LINE) && !cpu_get_flag(cpu_dev, FLAG_I)) {
-        // Handle IRQ when interrupt disable is clear
-        cpu6510_irq(cpu_dev, cpu_dev->p & ~FLAG_B); // Clear B flag for IRQ
-    }
-    NEXT_INSTRUCTION(cpu_dev, interrupt_fetch_wait);
 }
 
 // ============================================================================

@@ -43,137 +43,121 @@ void dey_func(cpu6510_state_t* cpu_dev) {
 // INC - Increment Memory
 void inc_zero_page_func(cpu6510_state_t* cpu_dev) {
     CPU_READY_OR_STALL(cpu_dev, inc_zp_wait1);
-    uint8_t cpu_data = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    cpu_dev->addr_abs = cpu_data;
+    cpu_dev->address = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
     CPU_READY_OR_STALL(cpu_dev, inc_zp_wait2);
-    cpu_data = cpu_read_cycle(cpu_dev, cpu_dev->addr_abs);
-    cpu_dev->temp = cpu_data;
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->addr_abs, cpu_dev->temp, inc_zp_wait3); // Dummy write
-    cpu_dev->temp++;
-    cpu_set_zn(cpu_dev, cpu_dev->temp);
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->addr_abs, cpu_dev->temp, inc_zp_wait4);
+    uint8_t value = cpu_read_cycle(cpu_dev, cpu_dev->address);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value, inc_zp_wait3); // Dummy write
+    value++;
+    cpu_set_zn(cpu_dev, value);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value, inc_zp_wait4);
     NEXT_INSTRUCTION(cpu_dev, inc_zp_fetch_wait);
 }
 
 void inc_zero_page_x_func(cpu6510_state_t* cpu_dev) {
     CPU_READY_OR_STALL(cpu_dev, inc_zp_x_wait1);
-    uint8_t cpu_data = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    cpu_dev->addr_abs = cpu_data;
+    cpu_dev->address = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
     CPU_READY_OR_STALL(cpu_dev, inc_zp_x_wait2);
-    (void)cpu_read_cycle(cpu_dev, cpu_dev->addr_abs); // Dummy read
-    cpu_dev->addr_abs = (cpu_dev->addr_abs + cpu_dev->x) & 0xFF;
+    (void)cpu_read_cycle(cpu_dev, cpu_dev->address); // Dummy read
+    cpu_dev->address = (cpu_dev->address + cpu_dev->x) & 0xFF;
     CPU_READY_OR_STALL(cpu_dev, inc_zp_x_wait3);
-    cpu_data = cpu_read_cycle(cpu_dev, cpu_dev->addr_abs);
-    cpu_dev->temp = cpu_data;
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->addr_abs, cpu_dev->temp, inc_zp_x_wait4); // Dummy write
-    cpu_dev->temp++;
-    cpu_set_zn(cpu_dev, cpu_dev->temp);
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->addr_abs, cpu_dev->temp, inc_zp_x_wait5);
+    uint8_t value = cpu_read_cycle(cpu_dev, cpu_dev->address);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value, inc_zp_x_wait4); // Dummy write
+    value++;
+    cpu_set_zn(cpu_dev, value);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value, inc_zp_x_wait5);
     NEXT_INSTRUCTION(cpu_dev, inc_zp_x_fetch_wait);
 }
 
 void inc_absolute_func(cpu6510_state_t* cpu_dev) {
     CPU_READY_OR_STALL(cpu_dev, inc_abs_wait1);
-    uint8_t cpu_data = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    cpu_dev->addr_abs = cpu_data;
+    uint8_t addr_lo = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+    cpu_dev->address = addr_lo;
     CPU_READY_OR_STALL(cpu_dev, inc_abs_wait2);
-    cpu_data = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    cpu_dev->addr_abs |= (cpu_data << 8);
+    uint8_t addr_hi = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+    cpu_dev->address |= (addr_hi << 8);
     CPU_READY_OR_STALL(cpu_dev, inc_abs_wait3);
-    cpu_data = cpu_read_cycle(cpu_dev, cpu_dev->addr_abs);
-    cpu_dev->temp = cpu_data;
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->addr_abs, cpu_dev->temp, inc_abs_wait4); // Dummy write
-    cpu_dev->temp++;
-    cpu_set_zn(cpu_dev, cpu_dev->temp);
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->addr_abs, cpu_dev->temp, inc_abs_wait5);
+    uint8_t value = cpu_read_cycle(cpu_dev, cpu_dev->address);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value, inc_abs_wait4); // Dummy write
+    value++;
+    cpu_set_zn(cpu_dev, value);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value, inc_abs_wait5);
     NEXT_INSTRUCTION(cpu_dev, inc_abs_fetch_wait);
 }
 
 void inc_absolute_x_func(cpu6510_state_t* cpu_dev) {
     CPU_READY_OR_STALL(cpu_dev, inc_abs_x_wait1);
-    uint8_t cpu_data = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    cpu_dev->lo = cpu_data;
+    uint8_t addr_lo = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
     CPU_READY_OR_STALL(cpu_dev, inc_abs_x_wait2);
-    cpu_data = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    cpu_dev->hi = cpu_data;
-    cpu_dev->addr_abs = (cpu_dev->hi << 8) | cpu_dev->lo;
+    uint8_t addr_hi = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+    cpu_dev->address = (addr_hi << 8) | addr_lo;
     CPU_READY_OR_STALL(cpu_dev, inc_abs_x_wait3);
-    cpu_data = cpu_read_cycle(cpu_dev, cpu_dev->addr_abs + cpu_dev->x); // Always extra cycle for RMW
+    (void)cpu_read_cycle(cpu_dev, cpu_dev->address + cpu_dev->x); // Always extra cycle for RMW
     CPU_READY_OR_STALL(cpu_dev, inc_abs_x_wait4);
-    cpu_data = cpu_read_cycle(cpu_dev, cpu_dev->addr_abs + cpu_dev->x);
-    cpu_dev->temp = cpu_data;
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->addr_abs + cpu_dev->x, cpu_dev->temp, inc_abs_x_wait5); // Dummy write
-    cpu_dev->temp++;
-    cpu_set_zn(cpu_dev, cpu_dev->temp);
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->addr_abs + cpu_dev->x, cpu_dev->temp, inc_abs_x_wait6);
+    uint8_t value = cpu_read_cycle(cpu_dev, cpu_dev->address + cpu_dev->x);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address + cpu_dev->x, value, inc_abs_x_wait5); // Dummy write
+    value++;
+    cpu_set_zn(cpu_dev, value);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address + cpu_dev->x, value, inc_abs_x_wait6);
     NEXT_INSTRUCTION(cpu_dev, inc_abs_x_fetch_wait);
 }
 
 // DEC - Decrement Memory
 void dec_zero_page_func(cpu6510_state_t* cpu_dev) {
     CPU_READY_OR_STALL(cpu_dev, dec_zp_wait1);
-    uint8_t cpu_data = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    cpu_dev->addr_abs = cpu_data;
+    cpu_dev->address = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
     CPU_READY_OR_STALL(cpu_dev, dec_zp_wait2);
-    cpu_data = cpu_read_cycle(cpu_dev, cpu_dev->addr_abs);
-    cpu_dev->temp = cpu_data;
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->addr_abs, cpu_dev->temp, dec_zp_wait3); // Dummy write
-    cpu_dev->temp--;
-    cpu_set_zn(cpu_dev, cpu_dev->temp);
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->addr_abs, cpu_dev->temp, dec_zp_wait4);
+    uint8_t value = cpu_read_cycle(cpu_dev, cpu_dev->address);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value, dec_zp_wait3); // Dummy write
+    value--;
+    cpu_set_zn(cpu_dev, value);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value, dec_zp_wait4);
     NEXT_INSTRUCTION(cpu_dev, dec_zp_fetch_wait);
 }
 
 void dec_zero_page_x_func(cpu6510_state_t* cpu_dev) {
     CPU_READY_OR_STALL(cpu_dev, dec_zp_x_wait1);
-    uint8_t cpu_data = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    cpu_dev->addr_abs = cpu_data;
+    cpu_dev->address = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
     CPU_READY_OR_STALL(cpu_dev, dec_zp_x_wait2);
-    (void)cpu_read_cycle(cpu_dev, cpu_dev->addr_abs); // Dummy read
-    cpu_dev->addr_abs = (cpu_dev->addr_abs + cpu_dev->x) & 0xFF;
+    (void)cpu_read_cycle(cpu_dev, cpu_dev->address); // Dummy read
+    cpu_dev->address = (cpu_dev->address + cpu_dev->x) & 0xFF;
     CPU_READY_OR_STALL(cpu_dev, dec_zp_x_wait3);
-    cpu_data = cpu_read_cycle(cpu_dev, cpu_dev->addr_abs);
-    cpu_dev->temp = cpu_data;
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->addr_abs, cpu_dev->temp, dec_zp_x_wait4); // Dummy write
-    cpu_dev->temp--;
-    cpu_set_zn(cpu_dev, cpu_dev->temp);
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->addr_abs, cpu_dev->temp, dec_zp_x_wait5);
+    uint8_t value = cpu_read_cycle(cpu_dev, cpu_dev->address);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value, dec_zp_x_wait4); // Dummy write
+    value--;
+    cpu_set_zn(cpu_dev, value);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value, dec_zp_x_wait5);
     NEXT_INSTRUCTION(cpu_dev, dec_zp_x_fetch_wait);
 }
 
 void dec_absolute_func(cpu6510_state_t* cpu_dev) {
     CPU_READY_OR_STALL(cpu_dev, dec_abs_wait1);
-    uint8_t cpu_data = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    cpu_dev->addr_abs = cpu_data;
+    uint8_t addr_lo = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+    cpu_dev->address = addr_lo;
     CPU_READY_OR_STALL(cpu_dev, dec_abs_wait2);
-    cpu_data = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    cpu_dev->addr_abs |= (cpu_data << 8);
+    uint8_t addr_hi = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+    cpu_dev->address |= (addr_hi << 8);
     CPU_READY_OR_STALL(cpu_dev, dec_abs_wait3);
-    cpu_data = cpu_read_cycle(cpu_dev, cpu_dev->addr_abs);
-    cpu_dev->temp = cpu_data;
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->addr_abs, cpu_dev->temp, dec_abs_wait4); // Dummy write
-    cpu_dev->temp--;
-    cpu_set_zn(cpu_dev, cpu_dev->temp);
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->addr_abs, cpu_dev->temp, dec_abs_wait5);
+    uint8_t value = cpu_read_cycle(cpu_dev, cpu_dev->address);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value, dec_abs_wait4); // Dummy write
+    value--;
+    cpu_set_zn(cpu_dev, value);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value, dec_abs_wait5);
     NEXT_INSTRUCTION(cpu_dev, dec_abs_fetch_wait);
 }
 
 void dec_absolute_x_func(cpu6510_state_t* cpu_dev) {
     CPU_READY_OR_STALL(cpu_dev, dec_abs_x_wait1);
-    uint8_t cpu_data = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    cpu_dev->lo = cpu_data;
+    uint8_t addr_lo = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
     CPU_READY_OR_STALL(cpu_dev, dec_abs_x_wait2);
-    cpu_data = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    cpu_dev->hi = cpu_data;
-    cpu_dev->addr_abs = (cpu_dev->hi << 8) | cpu_dev->lo;
+    uint8_t addr_hi = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+    cpu_dev->address = (addr_hi << 8) | addr_lo;
     CPU_READY_OR_STALL(cpu_dev, dec_abs_x_wait3);
-    cpu_data = cpu_read_cycle(cpu_dev, cpu_dev->addr_abs + cpu_dev->x); // Always extra cycle for RMW
+    (void)cpu_read_cycle(cpu_dev, cpu_dev->address + cpu_dev->x); // Always extra cycle for RMW
     CPU_READY_OR_STALL(cpu_dev, dec_abs_x_wait4);
-    cpu_data = cpu_read_cycle(cpu_dev, cpu_dev->addr_abs + cpu_dev->x);
-    cpu_dev->temp = cpu_data;
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->addr_abs + cpu_dev->x, cpu_dev->temp, dec_abs_x_wait5); // Dummy write
-    cpu_dev->temp--;
-    cpu_set_zn(cpu_dev, cpu_dev->temp);
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->addr_abs + cpu_dev->x, cpu_dev->temp, dec_abs_x_wait6);
+    uint8_t value = cpu_read_cycle(cpu_dev, cpu_dev->address + cpu_dev->x);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address + cpu_dev->x, value, dec_abs_x_wait5); // Dummy write
+    value--;
+    cpu_set_zn(cpu_dev, value);
+    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address + cpu_dev->x, value, dec_abs_x_wait6);
     NEXT_INSTRUCTION(cpu_dev, dec_abs_x_fetch_wait);
 }

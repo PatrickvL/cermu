@@ -33,11 +33,7 @@ typedef struct {
     uint8_t p;          // Processor Status Register
 
     // Internal CPU state for cycle-accurate emulation
-    uint8_t lo, hi;     // Address calculation helpers
-    uint16_t addr_abs;  // Absolute address for current instruction
-    uint8_t addr_rel;   // Relative address for branch instructions
-    uint8_t fetched;    // Fetched data for current instruction
-    uint8_t temp;       // Temporary storage
+    uint16_t address;   // Address for current instruction (used for both absolute and relative)
     uint8_t io_port[2]; // 0:DDR, 1:Port
     
     // Device attachments
@@ -128,11 +124,136 @@ static inline uint8_t cpu_pop(cpu6510_state_t* cpu_dev) {
 }
 
 // ============================================================================
+// ADDRESSING MODE HELPER FUNCTIONS (inline for performance)
+// ============================================================================
+
+// Immediate addressing - returns the immediate value
+static inline uint8_t addr_imm(cpu6510_state_t* cpu_dev) {
+    CPU_READY_OR_STALL(cpu_dev, imm_wait);
+    return cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+}
+
+// Zero page addressing - sets address and returns fetched value
+static inline uint8_t addr_zp(cpu6510_state_t* cpu_dev) {
+    CPU_READY_OR_STALL(cpu_dev, zp_addr_wait);
+    cpu_dev->address = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+    CPU_READY_OR_STALL(cpu_dev, zp_data_wait);
+    return cpu_read_cycle(cpu_dev, cpu_dev->address);
+}
+
+// Zero page,X addressing - sets address and returns fetched value
+static inline uint8_t addr_zpx(cpu6510_state_t* cpu_dev) {
+    CPU_READY_OR_STALL(cpu_dev, zpx_addr_wait);
+    uint8_t base = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+    CPU_READY_OR_STALL(cpu_dev, zpx_dummy_wait);
+    (void)cpu_read_cycle(cpu_dev, base); // Dummy read
+    cpu_dev->address = (base + cpu_dev->x) & 0xFF;
+    CPU_READY_OR_STALL(cpu_dev, zpx_data_wait);
+    return cpu_read_cycle(cpu_dev, cpu_dev->address);
+}
+
+// Zero page,Y addressing - sets address and returns fetched value
+static inline uint8_t addr_zpy(cpu6510_state_t* cpu_dev) {
+    CPU_READY_OR_STALL(cpu_dev, zpy_addr_wait);
+    uint8_t base = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+    CPU_READY_OR_STALL(cpu_dev, zpy_dummy_wait);
+    (void)cpu_read_cycle(cpu_dev, base); // Dummy read
+    cpu_dev->address = (base + cpu_dev->y) & 0xFF;
+    CPU_READY_OR_STALL(cpu_dev, zpy_data_wait);
+    return cpu_read_cycle(cpu_dev, cpu_dev->address);
+}
+
+// Absolute addressing - sets address and returns fetched value
+static inline uint8_t addr_abs(cpu6510_state_t* cpu_dev) {
+    CPU_READY_OR_STALL(cpu_dev, abs_lo_wait);
+    uint8_t addr_lo = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+    CPU_READY_OR_STALL(cpu_dev, abs_hi_wait);
+    uint8_t addr_hi = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+    cpu_dev->address = (addr_hi << 8) | addr_lo;
+    CPU_READY_OR_STALL(cpu_dev, abs_data_wait);
+    return cpu_read_cycle(cpu_dev, cpu_dev->address);
+}
+
+// Absolute,X addressing - sets address and returns fetched value
+static inline uint8_t addr_absx(cpu6510_state_t* cpu_dev) {
+    CPU_READY_OR_STALL(cpu_dev, absx_lo_wait);
+    uint8_t addr_lo = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+    CPU_READY_OR_STALL(cpu_dev, absx_hi_wait);
+    uint8_t addr_hi = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+    uint16_t base = (addr_hi << 8) | addr_lo;
+    cpu_dev->address = base + cpu_dev->x;
+    
+    // Check for page crossing
+    if ((base & 0xFF00) != (cpu_dev->address & 0xFF00)) {
+        CPU_READY_OR_STALL(cpu_dev, absx_dummy_wait);
+        (void)cpu_read_cycle(cpu_dev, base); // Dummy read
+    }
+    CPU_READY_OR_STALL(cpu_dev, absx_data_wait);
+    return cpu_read_cycle(cpu_dev, cpu_dev->address);
+}
+
+// Absolute,Y addressing - sets address and returns fetched value
+static inline uint8_t addr_absy(cpu6510_state_t* cpu_dev) {
+    CPU_READY_OR_STALL(cpu_dev, absy_lo_wait);
+    uint8_t addr_lo = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+    CPU_READY_OR_STALL(cpu_dev, absy_hi_wait);
+    uint8_t addr_hi = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+    uint16_t base = (addr_hi << 8) | addr_lo;
+    cpu_dev->address = base + cpu_dev->y;
+    
+    // Check for page crossing
+    if ((base & 0xFF00) != (cpu_dev->address & 0xFF00)) {
+        CPU_READY_OR_STALL(cpu_dev, absy_dummy_wait);
+        (void)cpu_read_cycle(cpu_dev, base); // Dummy read
+    }
+    CPU_READY_OR_STALL(cpu_dev, absy_data_wait);
+    return cpu_read_cycle(cpu_dev, cpu_dev->address);
+}
+
+// (Zero page,X) - Indexed Indirect addressing
+static inline uint8_t addr_zpx_ind(cpu6510_state_t* cpu_dev) {
+    CPU_READY_OR_STALL(cpu_dev, zpx_ind_base_wait);
+    uint8_t base = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+    CPU_READY_OR_STALL(cpu_dev, zpx_ind_dummy_wait);
+    (void)cpu_read_cycle(cpu_dev, base); // Dummy read
+    uint8_t zp_addr = (base + cpu_dev->x) & 0xFF;
+    
+    CPU_READY_OR_STALL(cpu_dev, zpx_ind_lo_wait);
+    uint8_t addr_lo = cpu_read_cycle(cpu_dev, zp_addr);
+    CPU_READY_OR_STALL(cpu_dev, zpx_ind_hi_wait);
+    uint8_t addr_hi = cpu_read_cycle(cpu_dev, (zp_addr + 1) & 0xFF);
+    cpu_dev->address = (addr_hi << 8) | addr_lo;
+    CPU_READY_OR_STALL(cpu_dev, zpx_ind_data_wait);
+    return cpu_read_cycle(cpu_dev, cpu_dev->address);
+}
+
+// (Zero page),Y - Indirect Indexed addressing
+static inline uint8_t addr_zp_ind_y(cpu6510_state_t* cpu_dev) {
+    CPU_READY_OR_STALL(cpu_dev, zp_ind_y_base_wait);
+    uint8_t zp_addr = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+
+    CPU_READY_OR_STALL(cpu_dev, zp_ind_y_lo_wait);
+    uint8_t addr_lo = cpu_read_cycle(cpu_dev, zp_addr);
+    CPU_READY_OR_STALL(cpu_dev, zp_ind_y_hi_wait);
+    uint8_t addr_hi = cpu_read_cycle(cpu_dev, (zp_addr + 1) & 0xFF);
+    uint16_t base = (addr_hi << 8) | addr_lo;
+    cpu_dev->address = base + cpu_dev->y;
+    
+    // Check for page crossing
+    if ((base & 0xFF00) != (cpu_dev->address & 0xFF00)) {
+        CPU_READY_OR_STALL(cpu_dev, zp_ind_y_dummy_wait);
+        (void)cpu_read_cycle(cpu_dev, base); // Dummy read
+    }
+    CPU_READY_OR_STALL(cpu_dev, zp_ind_y_data_wait);
+    return cpu_read_cycle(cpu_dev, cpu_dev->address);
+}
+
+// ============================================================================
 // CPU OPERATION HELPER FUNCTIONS (inline for performance)
 // ============================================================================
 
 // ADC - Add with Carry
-static inline void op_adc(cpu6510_state_t* cpu_dev, uint8_t value) {
+static inline uint8_t op_adc(cpu6510_state_t* cpu_dev, uint8_t value) {
     if (cpu_dev->p & FLAG_D) {
         // Decimal mode - BCD arithmetic
         uint8_t carry_in = (cpu_dev->p & FLAG_C) ? 1 : 0;
@@ -176,12 +297,14 @@ static inline void op_adc(cpu6510_state_t* cpu_dev, uint8_t value) {
         }
         
         cpu_dev->a = result;
+        return result;
     } else {    
         uint16_t temp = cpu_dev->a + value + (cpu_get_flag(cpu_dev, FLAG_C) ? 1 : 0);
         cpu_set_flag(cpu_dev, FLAG_C, temp > 255);
         cpu_set_flag(cpu_dev, FLAG_V, (~(cpu_dev->a ^ value) & (cpu_dev->a ^ temp)) & 0x80);
         cpu_dev->a = temp & 0xFF;
         cpu_set_zn(cpu_dev, cpu_dev->a);
+        return cpu_dev->a;
     }
 }
 
@@ -296,16 +419,18 @@ static inline uint8_t op_ror(cpu6510_state_t* cpu_dev, uint8_t value) {
 }
 
 // SBC - Subtract with Carry
-static inline void op_sbc(cpu6510_state_t* cpu_dev, uint8_t value) {
+static inline uint8_t op_sbc(cpu6510_state_t* cpu_dev, uint8_t value) {
     uint16_t temp = cpu_dev->a - value - (cpu_get_flag(cpu_dev, FLAG_C) ? 0 : 1);
     cpu_set_flag(cpu_dev, FLAG_C, temp < 0x100);
     cpu_set_flag(cpu_dev, FLAG_V, ((cpu_dev->a ^ value) & (cpu_dev->a ^ temp)) & 0x80);
     cpu_dev->a = temp & 0xFF;
     cpu_set_zn(cpu_dev, cpu_dev->a);
+    return cpu_dev->a;
 }
 
 // Forward declarations for functions defined in main file
 void handle_interrupt_func(cpu6510_state_t* cpu_dev);
+void cpu6510_irq(cpu6510_state_t* cpu_dev, uint8_t status);
 
 // CPU core functions
 void cpu6510_init(cpu6510_state_t* cpu_dev);
