@@ -16,6 +16,9 @@
 // Global instruction table
 instruction_func_t instruction_table[256];
 
+// Current active map, updated by switch_cpu_mode()
+device_callbacks_t* chip_select_map;
+
 // ============================================================================
 // CPU OPERATION FUNCTIONS (inline for performance)
 // ============================================================================
@@ -26,28 +29,6 @@ static inline uint8_t cpu_io_mask(cpu6510_state_t* cpu_dev, uint8_t value)
     uint8_t ddr = cpu_dev->io_port[0];
     uint8_t data = cpu_dev->io_port[1];
     return (data & ddr) | (value & ~ddr);
-}
-
-// Current active map, updated by switch_cpu_mode()
-device_callbacks_t* chip_select_map;
-
-uint8_t bus_read_cycle(bus_state_t *bus, uint16_t addr) { // TODO : Move to bus.c/.h
-    // For all other addresses, use chip select map
-    bus->address = addr;
-    c64_non_cpu_cycles();
-    device_callbacks_t* cb = &chip_select_map[addr >> 8];
-    uint8_t data = cb->read(cb->read_device, addr);
-    bus->data = data;
-    return data;
-}
-
-void bus_write_cycle(bus_state_t* bus, uint16_t addr, uint8_t value) { // TODO : Move to bus.c/.h
-    // For all other addresses, use chip select map
-    bus->address = addr;
-    bus->data = value;
-    device_callbacks_t* cb = &chip_select_map[addr >> 8];
-    cb->write(cb->write_device, addr, value);
-    c64_non_cpu_cycles();
 }
 
 // Optimized read cycle implementation with embedded I/O port handling
@@ -87,23 +68,6 @@ void cpu_write_cycle(cpu6510_state_t* cpu_dev, uint16_t addr, uint8_t value) {
     }
     
     bus_write_cycle(cpu_dev->bus, addr, value);
-}
-
-// ============================================================================
-// MISCELLANEOUS INSTRUCTIONS (included directly to avoid redefinition)
-// ============================================================================
-
-// Basic instruction functions that are not in separate files
-void nop_instruction_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev, nop_wait);
-    (void)cpu_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
-    NEXT_INSTRUCTION(cpu_dev, nop_fetch_wait);
-}
-
-void brk_instruction_func(cpu6510_state_t* cpu_dev) {
-    cpu_dev->pc++;  // Skip BRK signature byte
-    cpu6510_irq(cpu_dev, cpu_dev->p | FLAG_B); // Call IRQ handler
-    NEXT_INSTRUCTION(cpu_dev, brk_fetch_wait);
 }
 
 // Interrupt handler - called when IRQ or NMI lines are active
@@ -467,7 +431,7 @@ void cpu6510_setup_opcode_table(void) {
     instruction_table[0xE7] = isc_zero_page_func;      // ISC $nn (illegal)
     instruction_table[0xE8] = inx_func;                // INX
     instruction_table[0xE9] = sbc_immediate_func;      // SBC #$nn
-    instruction_table[0xEA] = nop_instruction_func;    // NOP
+    instruction_table[0xEA] = nop_func;                // NOP
     instruction_table[0xEB] = sbc_immediate_func;      // SBC #$nn (illegal)
     instruction_table[0xEC] = cpx_absolute_func;       // CPX $nnnn
     instruction_table[0xED] = sbc_absolute_func;       // SBC $nnnn

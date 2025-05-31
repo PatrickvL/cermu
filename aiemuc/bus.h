@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "device.h"
 
 // Forward declaration to avoid circular dependency
 typedef struct c64_state_s c64_state_t;
@@ -23,6 +24,12 @@ typedef struct {
     uint8_t  control_lines; // R/W, IRQ, NMI, BA, AEC, RDY
 } bus_state_t;
 
+// Bus functions
 void bus_init(bus_state_t* bus);
+uint8_t bus_read_cycle(bus_state_t *bus, uint16_t addr);
+void bus_write_cycle(bus_state_t* bus, uint16_t addr, uint8_t value);
+
+// External functions needed by bus
+void c64_non_cpu_cycles(void);
 
 #endif // BUS_H
