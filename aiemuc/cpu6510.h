@@ -33,8 +33,6 @@ typedef struct {
     uint8_t p;          // Processor Status Register
 
     // Internal CPU state for cycle-accurate emulation
-    uint8_t data;       // Data register (exchanged with bus when not in tri-state))
-
     uint8_t lo, hi;     // Address calculation helpers
     uint16_t addr_abs;  // Absolute address for current instruction
     uint8_t addr_rel;   // Relative address for branch instructions
@@ -71,7 +69,7 @@ extern instruction_func_t instruction_table[256];
 void switch_cpu_mode(uint8_t mode);
 
 // Memory access functions
-void cpu_read_cycle(cpu6510_state_t* cpu_dev, uint16_t addr);
+uint8_t cpu_read_cycle(cpu6510_state_t* cpu_dev, uint16_t addr);
 void cpu_write_cycle(cpu6510_state_t* cpu_dev, uint16_t addr, uint8_t value);
 
 // Bus cycle function
@@ -81,10 +79,9 @@ void c64_non_cpu_cycles(void);
 #define CPU_READY(cpu_dev) (((cpu_dev)->bus->control_lines & RDY_LINE) != 0)
 
 // Wait for CPU ready with automatic stall handling
-#define WAIT_READY_THEN_READ(cpu_dev, addr, label) do { \
+#define CPU_READY_OR_STALL(cpu_dev, label) do { \
     label: \
     if (!CPU_READY(cpu_dev)) { c64_non_cpu_cycles(); goto label; } \
-    cpu_read_cycle(cpu_dev, addr); \
 } while(0)
 
 #define WAIT_READY_THEN_WRITE(cpu_dev, addr, data, label) do { \
@@ -98,8 +95,9 @@ void c64_non_cpu_cycles(void);
         handle_interrupt_func(cpu_dev); \
         return; \
     } \
-    WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc++, fetch_label); \
-    instruction_table[cpu_dev->data](cpu_dev); \
+    CPU_READY_OR_STALL(cpu_dev, fetch_label); \
+    uint8_t opcode = cpu_read_cycle(cpu_dev, cpu_dev->pc++); \
+    instruction_table[opcode](cpu_dev); \
     return; \
 } while(0)
 
@@ -126,8 +124,7 @@ static inline void cpu_push(cpu6510_state_t* cpu_dev, uint8_t data) {
 
 static inline uint8_t cpu_pop(cpu6510_state_t* cpu_dev) {
     cpu_dev->sp++;
-    cpu_read_cycle(cpu_dev, 0x0100 + cpu_dev->sp);
-    return cpu_dev->data;
+    return cpu_read_cycle(cpu_dev, 0x0100 + cpu_dev->sp);
 }
 
 // ============================================================================

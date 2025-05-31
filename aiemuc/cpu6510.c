@@ -32,29 +32,30 @@ static inline uint8_t cpu_io_mask(cpu6510_state_t* cpu_dev, uint8_t value)
 device_callbacks_t* chip_select_map;
 
 // Optimized read cycle implementation with embedded I/O port handling
-void cpu_read_cycle(cpu6510_state_t* cpu_dev, uint16_t addr) {
+uint8_t cpu_read_cycle(cpu6510_state_t* cpu_dev, uint16_t addr) {
     // Handle I/O ports directly in CPU - addresses $0000 and $0001
     if (addr <= 1) {
+        uint8_t value;
         if (addr == 0) {
             // Return Data Direction Register
-            cpu_dev->data = cpu_dev->io_port[0];
+            value = cpu_dev->io_port[0];
         } else {
             // Return port: outputs defined by DDR bits, inputs from bus data
-            cpu_dev->data = cpu_io_mask(cpu_dev, cpu_dev->bus->data);
+            value = cpu_io_mask(cpu_dev, cpu_dev->bus->data);
         }
         // Note : MOS6510 I/O port accesses do not update bus address and data lines!
         c64_non_cpu_cycles();
-        return;
+        return value;
     }
     
     // For all other addresses, use chip select map
     cpu_dev->bus->address = addr;
     c64_non_cpu_cycles();
-    //cpu_dev->data = bus_read_cycle(cpu_dev->bus, addr);
+    //cpu_data = bus_read_cycle(cpu_dev->bus, addr);
     device_callbacks_t* cb = &chip_select_map[addr >> 8];
     uint8_t data = cb->read(cb->read_device, addr);
     cpu_dev->bus->data = data;
-    cpu_dev->data = data;
+    return data;
 }
 
 // Optimized write cycle implementation with embedded I/O port handling
@@ -124,10 +125,8 @@ void cpu_attach_bus(cpu6510_state_t* cpu_dev, bus_state_t* bus_state) {
 // Reset CPU
 void cpu6510_reset(cpu6510_state_t* cpu_dev) {
     // Read reset vector from $FFFC/$FFFD
-    cpu_read_cycle(cpu_dev, 0xFFFC);
-    uint8_t pcl = cpu_dev->data;
-    cpu_read_cycle(cpu_dev, 0xFFFD);
-    uint8_t pch = cpu_dev->data;
+    uint8_t pcl = cpu_read_cycle(cpu_dev, 0xFFFC);
+    uint8_t pch = cpu_read_cycle(cpu_dev, 0xFFFD);
     
     cpu_dev->pc = (pch << 8) | pcl;
     cpu_dev->sp = 0xFF; // or 0FD?
@@ -152,10 +151,9 @@ void cpu6510_irq(cpu6510_state_t* cpu_dev, uint8_t status) {
     // Set interrupt disable
     cpu_dev->p |= FLAG_I;
     // Read IRQ vector
-    cpu_read_cycle(cpu_dev, 0xFFFE);
-    cpu_dev->pc = cpu_dev->data;
-    cpu_read_cycle(cpu_dev, 0xFFFF);
-    cpu_dev->pc |= (cpu_dev->data << 8);
+    cpu_dev->pc = cpu_read_cycle(cpu_dev, 0xFFFE);
+    uint8_t cpu_data = cpu_read_cycle(cpu_dev, 0xFFFF);
+    cpu_dev->pc |= (cpu_data << 8);
 }
 
 void cpu6510_nmi(cpu6510_state_t* cpu_dev) {
@@ -164,10 +162,9 @@ void cpu6510_nmi(cpu6510_state_t* cpu_dev) {
     cpu_push(cpu_dev, cpu_dev->pc & 0xFF);
     cpu_push(cpu_dev, cpu_dev->p & ~FLAG_B);  // Clear B flag for NMI
     cpu_dev->p |= FLAG_I;
-    cpu_read_cycle(cpu_dev, 0xFFFA);
-    cpu_dev->pc = cpu_dev->data;
-    cpu_read_cycle(cpu_dev, 0xFFFB);
-    cpu_dev->pc |= (cpu_dev->data << 8);
+    cpu_dev->pc = cpu_read_cycle(cpu_dev, 0xFFFA);
+    uint8_t cpu_data = cpu_read_cycle(cpu_dev, 0xFFFB);
+    cpu_dev->pc |= (cpu_data << 8);
 }
 
 // ============================================================================
@@ -176,7 +173,8 @@ void cpu6510_nmi(cpu6510_state_t* cpu_dev) {
 
 // Basic instruction functions that are not in separate files
 void nop_instruction_func(cpu6510_state_t* cpu_dev) {
-    WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc, nop_wait);  // Dummy read
+    CPU_READY_OR_STALL(cpu_dev, nop_wait);
+    (void)cpu_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
     NEXT_INSTRUCTION(cpu_dev, nop_fetch_wait);
 }
 
@@ -207,8 +205,9 @@ void cpu6510_execute(cpu6510_state_t* cpu_dev) {
         handle_interrupt_func(cpu_dev);
         return;
     }
-    WAIT_READY_THEN_READ(cpu_dev, cpu_dev->pc++, main_fetch_start);
-    instruction_table[cpu_dev->data](cpu_dev);
+    CPU_READY_OR_STALL(cpu_dev, main_fetch_start);
+    uint8_t opcode = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
+    instruction_table[opcode](cpu_dev);
 }
 
 // ============================================================================
