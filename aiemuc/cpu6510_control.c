@@ -40,110 +40,110 @@ void bvs_func(cpu6510_state_t* cpu_dev) {
 
 // Break
 void brk_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     (void)cpu_read_cycle(cpu_dev, cpu_dev->pc++);  // Read next byte (padding)
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     cpu_write_cycle(cpu_dev, 0x0100 + cpu_dev->sp, (cpu_dev->pc >> 8) & 0xFF);  // Push PC high
     cpu_dev->sp--;
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     cpu_write_cycle(cpu_dev, 0x0100 + cpu_dev->sp, cpu_dev->pc & 0xFF);  // Push PC low
     cpu_dev->sp--;
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     cpu_write_cycle(cpu_dev, 0x0100 + cpu_dev->sp, cpu_dev->p | FLAG_B);  // Push P with B set
     cpu_dev->sp--;
     cpu_dev->p |= FLAG_I;  // Set interrupt disable
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t pc_lo = cpu_read_cycle(cpu_dev, 0xFFFE);  // Read IRQ vector low
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t pc_hi = cpu_read_cycle(cpu_dev, 0xFFFF);  // Read IRQ vector high
     cpu_dev->pc = (pc_hi << 8) | pc_lo;
-    NEXT_INSTRUCTION(cpu_dev);
+    CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 void brk_instruction_func(cpu6510_state_t* cpu_dev) {
     cpu_dev->pc++;  // Skip BRK signature byte
     cpu6510_irq(cpu_dev, cpu_dev->p | FLAG_B); // Call IRQ handler
-    NEXT_INSTRUCTION(cpu_dev);
+    CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 // Jump Instructions
 void jmp_absolute_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t addr_lo = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t addr_hi = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
     cpu_dev->pc = (addr_hi << 8) | addr_lo;
-    NEXT_INSTRUCTION(cpu_dev);
+    CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 void jmp_indirect_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t ptr_lo = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t ptr_hi = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
     uint16_t ptr = (ptr_hi << 8) | ptr_lo;
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t addr_lo = cpu_read_cycle(cpu_dev, ptr);
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     // 6502 bug: if pointer is at page boundary, high byte wraps within page
     uint8_t addr_hi = cpu_read_cycle(cpu_dev, (ptr & 0xFF00) | ((ptr + 1) & 0x00FF));
     cpu_dev->pc = (addr_hi << 8) | addr_lo;
-    NEXT_INSTRUCTION(cpu_dev);
+    CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 // Jump to Subroutine
 void jsr_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t addr_lo = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     (void)cpu_read_cycle(cpu_dev, 0x0100 + cpu_dev->sp);  // Dummy read from stack
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     cpu_write_cycle(cpu_dev, 0x0100 + cpu_dev->sp, (cpu_dev->pc >> 8) & 0xFF);  // Push PC high
     cpu_dev->sp--;
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     cpu_write_cycle(cpu_dev, 0x0100 + cpu_dev->sp, cpu_dev->pc & 0xFF);  // Push PC low
     cpu_dev->sp--;
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t addr_hi = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
     cpu_dev->pc = (addr_hi << 8) | addr_lo;
-    NEXT_INSTRUCTION(cpu_dev);
+    CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 // Return from Interrupt
 void rti_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     (void)cpu_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     (void)cpu_read_cycle(cpu_dev, 0x0100 + cpu_dev->sp);  // Dummy read from current SP
     cpu_dev->sp++;
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     cpu_dev->p = cpu_read_cycle(cpu_dev, 0x0100 + cpu_dev->sp);
     cpu_dev->p |= FLAG_U;  // Unused flag always set
     cpu_dev->sp++;
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t pc_lo = cpu_read_cycle(cpu_dev, 0x0100 + cpu_dev->sp);
     cpu_dev->sp++;
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t pc_hi = cpu_read_cycle(cpu_dev, 0x0100 + cpu_dev->sp);
     cpu_dev->pc = (pc_hi << 8) | pc_lo;
-    NEXT_INSTRUCTION(cpu_dev);
+    CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 // Return from Subroutine
 void rts_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     (void)cpu_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     (void)cpu_read_cycle(cpu_dev, 0x0100 + cpu_dev->sp);  // Dummy read from current SP
     cpu_dev->sp++;
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t pc_lo = cpu_read_cycle(cpu_dev, 0x0100 + cpu_dev->sp);
     cpu_dev->sp++;
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t pc_hi = cpu_read_cycle(cpu_dev, 0x0100 + cpu_dev->sp);
     cpu_dev->pc = (pc_hi << 8) | pc_lo;
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     (void)cpu_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
     cpu_dev->pc++;  // RTS increments PC
-    NEXT_INSTRUCTION(cpu_dev);
+    CPU_OPCODE_FOOTER(cpu_dev);
 }

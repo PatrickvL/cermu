@@ -79,7 +79,7 @@ void handle_interrupt_func(cpu6510_state_t* cpu_dev) {
         // Handle IRQ when interrupt disable is clear
         cpu6510_irq(cpu_dev, cpu_dev->p & ~FLAG_B); // Clear B flag for IRQ
     }
-    NEXT_INSTRUCTION(cpu_dev);
+    CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 // CPU lifecycle wrapper functions
@@ -170,7 +170,7 @@ void cpu6510_nmi(cpu6510_state_t* cpu_dev) {
 // ============================================================================
 void cpu6510_execute(cpu6510_state_t* cpu_dev) {
     // Start execution - fetch first instruction
-    NEXT_INSTRUCTION(cpu_dev);
+    CPU_NEXT_INSTRUCTION(cpu_dev);
 }
 
 // ============================================================================

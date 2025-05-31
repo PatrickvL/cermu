@@ -7,27 +7,29 @@
 
 // AHX - Store A & X & high byte of address
 void ahx_indirect_y_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     cpu_dev->address = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t addr_lo = cpu_read_cycle(cpu_dev, cpu_dev->address);
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t addr_hi = cpu_read_cycle(cpu_dev, (cpu_dev->address + 1) & 0xFF);
     cpu_dev->address = ((addr_hi << 8) | addr_lo) + cpu_dev->y;
     uint8_t value = cpu_dev->a & cpu_dev->x & ((cpu_dev->address >> 8) + 1);
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value);
-    NEXT_INSTRUCTION(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
+    cpu_write_cycle(cpu_dev, cpu_dev->address, value);
+    CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 void ahx_absolute_y_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t addr_lo = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t addr_hi = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
     cpu_dev->address = ((addr_hi << 8) | addr_lo) + cpu_dev->y;
     uint8_t value = cpu_dev->a & cpu_dev->x & ((cpu_dev->address >> 8) + 1);
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value);
-    NEXT_INSTRUCTION(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
+    cpu_write_cycle(cpu_dev, cpu_dev->address, value);
+    CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 // ALR - AND then LSR (immediate mode only)
@@ -129,7 +131,7 @@ void las_absolute_y_func(cpu6510_state_t* cpu_dev) {
     cpu_dev->x = value;
     cpu_dev->sp = value;
     cpu_set_zn(cpu_dev, value);
-    NEXT_INSTRUCTION(cpu_dev);
+    CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 // LAX - Load A and X
@@ -138,7 +140,7 @@ void lax_immediate_func(cpu6510_state_t* cpu_dev) {
     cpu_dev->a = value;
     cpu_dev->x = value;
     cpu_set_zn(cpu_dev, value);
-    NEXT_INSTRUCTION(cpu_dev);
+    CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 void lax_zero_page_func(cpu6510_state_t* cpu_dev) {
@@ -225,70 +227,76 @@ void rra_indirect_y_func(cpu6510_state_t* cpu_dev) {
 
 // SAX - Store A & X
 void sax_zero_page_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     cpu_dev->address = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, cpu_dev->a & cpu_dev->x);
-    NEXT_INSTRUCTION(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
+    cpu_write_cycle(cpu_dev, cpu_dev->address, cpu_dev->a & cpu_dev->x);
+    CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 void sax_zero_page_y_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     cpu_dev->address = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     (void)cpu_read_cycle(cpu_dev, cpu_dev->address);  // Dummy read
     cpu_dev->address = (cpu_dev->address + cpu_dev->y) & 0xFF;
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, cpu_dev->a & cpu_dev->x);
-    NEXT_INSTRUCTION(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
+    cpu_write_cycle(cpu_dev, cpu_dev->address, cpu_dev->a & cpu_dev->x);
+    CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 void sax_absolute_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t addr_lo = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
     cpu_dev->address = addr_lo;
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t addr_hi = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
     cpu_dev->address |= (addr_hi << 8);
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, cpu_dev->a & cpu_dev->x);
-    NEXT_INSTRUCTION(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
+    cpu_write_cycle(cpu_dev, cpu_dev->address, cpu_dev->a & cpu_dev->x);
+    CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 void sax_indirect_x_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     cpu_dev->address = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     (void)cpu_read_cycle(cpu_dev, cpu_dev->address);  // Dummy read
     cpu_dev->address = (cpu_dev->address + cpu_dev->x) & 0xFF;
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t addr_lo = cpu_read_cycle(cpu_dev, cpu_dev->address);
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t addr_hi = cpu_read_cycle(cpu_dev, (cpu_dev->address + 1) & 0xFF);
     cpu_dev->address = (addr_hi << 8) | addr_lo;
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, cpu_dev->a & cpu_dev->x);
-    NEXT_INSTRUCTION(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
+    cpu_write_cycle(cpu_dev, cpu_dev->address, cpu_dev->a & cpu_dev->x);
+    CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 // SHX - Store X & high byte of address + 1
 void shx_absolute_y_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t addr_lo = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t addr_hi = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
     cpu_dev->address = ((addr_hi << 8) | addr_lo) + cpu_dev->y;
     uint8_t value = cpu_dev->x & ((cpu_dev->address >> 8) + 1);
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value);
-    NEXT_INSTRUCTION(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
+    cpu_write_cycle(cpu_dev, cpu_dev->address, value);
+    CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 // SHY - Store Y & high byte of address + 1
 void shy_absolute_x_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t addr_lo = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t addr_hi = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
     cpu_dev->address = ((addr_hi << 8) | addr_lo) + cpu_dev->x;
     uint8_t value = cpu_dev->y & ((cpu_dev->address >> 8) + 1);
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value);
-    NEXT_INSTRUCTION(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
+    cpu_write_cycle(cpu_dev, cpu_dev->address, value);
+    CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 // SLO - ASL then ORA
@@ -351,15 +359,16 @@ void sre_indirect_y_func(cpu6510_state_t* cpu_dev) {
 
 // TAS - Transfer A & X to S, then store A & X & high byte + 1
 void tas_absolute_y_func(cpu6510_state_t* cpu_dev) {
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t addr_lo = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
-    CPU_READY_OR_STALL(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
     uint8_t addr_hi = cpu_read_cycle(cpu_dev, cpu_dev->pc++);
     cpu_dev->address = ((addr_hi << 8) | addr_lo) + cpu_dev->y;
     cpu_dev->sp = cpu_dev->a & cpu_dev->x;
     uint8_t value = cpu_dev->sp & ((cpu_dev->address >> 8) + 1);
-    WAIT_READY_THEN_WRITE(cpu_dev, cpu_dev->address, value);
-    NEXT_INSTRUCTION(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
+    cpu_write_cycle(cpu_dev, cpu_dev->address, value);
+    CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 // XAA - Transfer X to A, then AND with immediate
