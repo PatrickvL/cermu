@@ -1,6 +1,48 @@
 #include "sid.h"
 #include <string.h>
 
+void* sid_system_create(void* bus) {
+    sid_t* sid = (sid_t*)calloc(1, sizeof(sid_t));
+    if (!sid) return NULL;
+    sid->desc = &sid_descriptor;
+    sid->bus = (bus_interface_t*)bus;
+    return sid;
+}
+
+void sid_system_destroy(void* context) {
+    free(context);
+}
+
+uint8_t sid_registers_read(void* context, uint16_t address) {
+    sid_t* sid = (sid_t*)context;
+    uint8_t reg = address & 0x1F;
+    if (reg >= 0x19 && reg <= 0x1C) {
+        switch (reg) {
+            case 0x19: return sid->pot_x;
+            case 0x1A: return sid->pot_y;
+            case 0x1B: return sid->osc3;
+            case 0x1C: return sid->env3;
+        }
+    }
+    return 0;
+}
+
+void sid_registers_write(void* context, uint16_t address, uint8_t value) {
+    sid_t* sid = (sid_t*)context;
+    uint8_t reg = address & 0x1F;
+    if (reg <= 0x18) sid->registers[reg] = value;
+}
+
+static device_descriptor_t sid_descriptor = {
+    .create = sid_system_create,
+    .destroy = sid_system_destroy,
+    .read = sid_registers_read,
+    .write = sid_registers_write,
+    .bank_change = NULL
+};
+
+// old
+
 // Forward declaration of device descriptor
 static const device_t sid_device_descriptor;
 

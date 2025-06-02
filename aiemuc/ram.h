@@ -2,6 +2,15 @@
 #define RAM_H
 
 #include "device.h"
+#include "bus.h"
+
+typedef struct {
+    device_descriptor_t* desc;
+    uint8_t memory[65536];
+    bus_interface_t* bus;
+} ram_t;
+
+// old
 
 // ============================================================================
 // RAM EMULATION - 64K system RAM with CPU port handling

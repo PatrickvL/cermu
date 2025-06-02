@@ -2,6 +2,17 @@
 #define SID_H
 
 #include "device.h"
+#include "bus.h"
+
+typedef struct {
+    device_descriptor_t* desc;
+    uint8_t registers[29];
+    uint8_t pot_x, pot_y;
+    uint8_t osc3, env3;
+    bus_interface_t* bus;
+} sid_t;
+
+// old
 
 // ============================================================================
 // SID EMULATION - Sound chip with envelope generators

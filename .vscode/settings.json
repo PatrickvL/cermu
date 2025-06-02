@@ -4,6 +4,8 @@
         "c64.h": "c",
         "cpu6510.h": "c",
         "bus.h": "c",
-        "stdbool.h": "c"
+        "stdbool.h": "c",
+        "device.h": "c",
+        "stdint.h": "c"
     }
 }

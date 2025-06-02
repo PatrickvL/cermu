@@ -1,8 +1,30 @@
 #ifndef DEVICE_H
 #define DEVICE_H
 
-#include <stdint.h>
-#include <stdbool.h>
+#include <stdint.h> // old
+#include <stdbool.h> // old
+
+typedef struct {
+    void* (*create)(void* bus);
+    void (*destroy)(void* context);
+    uint8_t (*read)(void* context, uint16_t address);
+    void (*write)(void* context, uint16_t address, uint8_t value);
+    void (*bank_change)(void* context, uint8_t bank);
+} device_descriptor_t;
+
+typedef uint8_t (*device_read_func_t)(void* context, uint16_t);
+typedef void (*device_write_func_t)(void* context, uint16_t, uint8_t);
+
+// Device registry
+typedef struct {
+    void* device;
+    device_descriptor_t* desc;
+    uint16_t base_address;
+    uint16_t size;
+} device_entry_t;
+
+
+// OLD
 
 // Forward declaration
 struct device_s;
