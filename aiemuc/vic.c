@@ -1,6 +1,60 @@
-#include "vic.h"
+#include "vic.h" // TODO : Rename to vic_ii.c or mos????.[hc]
 #include "bus.h"
 #include <string.h>
+
+void* vicii_system_create(void* bus) {
+    vic_ii_t* vic = (vic_ii_t*)calloc(1, sizeof(vic_ii_t));
+    if (!vic) return NULL;
+    vic->desc = &vic_ii_descriptor;
+    vic->bus = (bus_interface_t*)bus;
+    vic->bank_change = vicii_bank_change;
+    return vic;
+}
+
+void vicii_system_destroy(void* context) {
+    free(context);
+}
+
+uint8_t vicii_registers_read(void* context, uint16_t address) {
+    vic_ii_t* vic = (vic_ii_t*)context;
+    uint8_t reg = address & 0x3F;
+    if (reg <= 0x2E) {
+        if (reg == 0x12) return vic->raster_line;
+        if (reg == 0x1E) {
+            uint8_t val = vic->collision_sprite;
+            vic->collision_sprite = 0;
+            return val;
+        }
+        if (reg == 0x1F) {
+            uint8_t val = vic->collision_bg;
+            vic->collision_bg = 0;
+            return val;
+        }
+        return vic->registers[reg];
+    }
+    return 0;
+}
+
+void vicii_registers_write(void* context, uint16_t address, uint8_t value) {
+    vic_ii_t* vic = (vic_ii_t*)context;
+    uint8_t reg = address & 0x3F;
+    if (reg <= 0x2E) vic->registers[reg] = value;
+}
+
+void vicii_bank_change(void* context, uint8_t bank) {
+    vic_ii_t* vic = (vic_ii_t*)context;
+    vic->bank = bank;
+}
+
+static device_descriptor_t vic_ii_descriptor = {
+    .create = vicii_system_create,
+    .destroy = vicii_system_destroy,
+    .read = vicii_registers_read,
+    .write = vicii_registers_write,
+    .bank_change = vicii_bank_change
+};
+
+// old
 
 // VIC write masks for each register (defines which bits are writable)
 const uint8_t vic_write_masks[64] = {

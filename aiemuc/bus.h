@@ -1,9 +1,17 @@
 #ifndef BUS_H
 #define BUS_H
 
-#include <stdint.h>
-#include <stdbool.h>
-#include "device.h"
+#include <stdint.h> // old
+#include <stdbool.h> // old
+#include "device.h" // old
+
+// Generic types
+typedef struct {
+    uint8_t (*read)(void* bus, uint16_t address);
+    void (*write)(void* bus, uint16_t address, uint8_t value);
+} bus_interface_t;
+
+// OLD
 
 // Forward declaration to avoid circular dependency
 typedef struct c64_state_s c64_state_t;

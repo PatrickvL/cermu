@@ -1,64 +1,10 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
-
-// TODO : Move to aiemuc.h
-
-#define alignas(x) __attribute__((aligned(x)))
-
-// TODO : Move to bus.h
-
-// Generic types
-typedef struct {
-    uint8_t (*read)(void* bus, uint16_t address);
-    void (*write)(void* bus, uint16_t address, uint8_t value);
-} bus_interface_t;
-
-// TODO : Move to device.h
-
-typedef struct {
-    void (*init)(void* context, void* bus);
-    uint8_t (*read)(void* context, uint16_t address);
-    void (*write)(void* context, uint16_t address, uint8_t value);
-    void (*bank_change)(void* context, uint8_t bank);
-} device_descriptor_t;
-
-typedef uint8_t (*device_read_func_t)(void* context, uint16_t);
-typedef void (*device_write_func_t)(void* context, uint16_t, uint8_t);
-
-// Device registry
-typedef struct {
-    void* device;
-    device_descriptor_t* desc;
-    uint16_t base_address;
-    uint16_t size;
-    uint8_t device_id;
-} device_entry_t;
-
-// TODO : Move to system.h
-
-// Callback types
-typedef struct {
-    device_read_func_t func;
-    void* context;
-} read_callback_t;
-
-typedef struct {
-    device_write_func_t func;
-    void* context;
-} write_callback_t;
-
-// Generic 8-bit system
-typedef struct {
-    device_entry_t devices[16];
-    uint8_t device_count;
-    alignas(64) uint8_t system_memory[98304];
-    uint8_t* handler_table;
-    alignas(64) read_callback_t read_callbacks[16];
-    alignas(64) write_callback_t write_callbacks[16];
-    alignas(64) uint8_t chip_select_map[32][256];
-} system_8bit_t;
-
+#include "aiemuc.h"
+#include "bus.h"
+#include "device.h"
+#include "system.h"
 // TODO : Move to mos6510.h
 
 #define PFNDUOP void(*)()

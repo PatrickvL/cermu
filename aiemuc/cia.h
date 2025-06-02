@@ -4,6 +4,19 @@
 #include "device.h"
 #include "bus.h"
 
+typedef struct {
+    device_descriptor_t* desc;
+    uint8_t pra, prb, ddra, ddrb;
+    uint16_t timer_a, timer_b;
+    uint8_t tod_10ths, tod_sec, tod_min, tod_hr;
+    uint8_t sdr, icr, cra, crb;
+    bool tod_latched;
+    uint8_t tod_latch[4];
+    bus_interface_t* bus;
+} cia_t;
+
+// old
+
 // ============================================================================
 // CIA EMULATION - Timer and I/O chips
 // ============================================================================
