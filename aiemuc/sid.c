@@ -1,16 +1,15 @@
 #include "sid.h"
 #include <string.h>
 
-void* sid_system_create(void* bus) {
-    sid_t* sid = (sid_t*)calloc(1, sizeof(sid_t));
-    if (!sid) return NULL;
-    sid->desc = &sid_descriptor;
-    sid->bus = (bus_interface_t*)bus;
-    return sid;
+void sid_system_destroy(void* device) {
+    free(device);
 }
 
-void sid_system_destroy(void* context) {
-    free(context);
+void* sid_system_create(device_descriptor_t* desc) {
+    sid_t* sid = (sid_t*)calloc(1, sizeof(sid_t));
+    if (!sid) return NULL;
+    sid->desc = desc;
+    return sid;
 }
 
 uint8_t sid_registers_read(void* context, uint16_t address) {
@@ -41,51 +40,14 @@ static device_descriptor_t sid_descriptor = {
     .bank_change = NULL
 };
 
-// old
-
-// Forward declaration of device descriptor
-static const device_t sid_device_descriptor;
-
-// Direct implementation functions for device lifecycle
-static void sid_init(struct device_s* dev) {
-    sid_state_t* sid_dev = (sid_state_t*)dev;
-    // Initialize SID state
-    memset(sid_dev, 0, sizeof(*sid_dev));
-    // Set up device callbacks from descriptor pointer
-    sid_dev->device = &sid_device_descriptor;
-}
-
-static void sid_cycle(struct device_s* dev) {
-    sid_state_t* sid_dev = (sid_state_t*)dev;
+static void sid_cycle(sid_t* sid) {
     // Envelope generators always run (hardware accurate)
     for (int voice = 0; voice < 3; voice++) {
-        sid_dev->envelope_counter[voice]++;
-        if (sid_dev->envelope_counter[voice] >= 0x8000) {
-            sid_dev->envelope_counter[voice] = 0;
+        sid->envelope_counter[voice]++;
+        if (sid->envelope_counter[voice] >= 0x8000) {
+            sid->envelope_counter[voice] = 0;
             // Simplified envelope state machine
-            sid_dev->envelope_state[voice] = (sid_dev->envelope_state[voice] + 1) & 0xFF;
+            sid->envelope_state[voice] = (sid->envelope_state[voice] + 1) & 0xFF;
         }
     }
 }
-
-// Optimized I/O handlers - called directly via callback table (no chip select checks!)
-uint8_t sid_r8(struct device_s* dev, uint16_t address) {
-    sid_state_t* sid_dev = (sid_state_t*)dev;
-    uint8_t reg = address & 0x1F;
-    return sid_dev->registers[reg];
-}
-
-void sid_w8(struct device_s* dev, uint16_t address, uint8_t data) {
-    sid_state_t* sid_dev = (sid_state_t*)dev;
-    uint8_t reg = address & 0x1F;
-    sid_dev->registers[reg] = data;
-}
-
-// Static device descriptor for SID
-static const device_t sid_device_descriptor = {
-    .r8 = sid_r8,
-    .w8 = sid_w8,
-    .init = sid_init,
-    .cycle = sid_cycle,
-    .cleanup = NULL
-};

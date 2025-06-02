@@ -1,17 +1,21 @@
 #include "cia.h"
-#include "bus.h"
+#include "c64_bus.h"
 #include <string.h>
 
-void* cia_system_create(void* bus) {
+void* cia_system_create(device_descriptor_t* desc) {
     cia_t* cia = (cia_t*)calloc(1, sizeof(cia_t));
     if (!cia) return NULL;
-    cia->desc = &cia_descriptor;
-    cia->bus = (bus_interface_t*)bus;
+    cia->desc = desc;
     return cia;
 }
 
-void cia_system_destroy(void* context) {
-    free(context);
+void cia_system_destroy(void* device) {
+    free(device);
+}
+
+void cia_bus_attach(void* device, c64_bus_t* bus) {
+    cia_t* cia = (cia_t*)device;
+    cia->bus = bus;
 }
 
 uint8_t cia_registers_read(void* context, uint16_t address) {
@@ -81,139 +85,25 @@ void cia_registers_write(void* context, uint16_t address, uint8_t value) {
 static device_descriptor_t cia_descriptor = {
     .create = cia_system_create,
     .destroy = cia_system_destroy,
+    .bus_attach = cia_bus_attach,
     .read = cia_registers_read,
     .write = cia_registers_write,
     .bank_change = NULL
 };
 
-// old
-
-// New optimized I/O handlers - called directly via callback table (no chip select checks!)
-uint8_t cia1_r8(struct device_s* dev, uint16_t address) {
-    cia_state_t* cia_dev = (cia_state_t*)dev;
-    uint8_t reg = address & 0x0F;
-    switch (reg) {
-        case 0x00: return cia_dev->port_a;
-        case 0x01: return cia_dev->port_b;
-        case 0x04: return cia_dev->timer_a & 0xFF;
-        case 0x05: return cia_dev->timer_a >> 8;
-        case 0x0D: { uint8_t val = cia_dev->interrupt_status; cia_dev->interrupt_status = 0; return val; }
-        default: return 0xFF; // Unmapped registers
-    }
-}
-
-void cia1_w8(struct device_s* dev, uint16_t address, uint8_t data) {
-    cia_state_t* cia_dev = (cia_state_t*)dev;
-    uint8_t reg = address & 0x0F;
-    switch (reg) {
-        case 0x00: cia_dev->port_a = data; break;
-        case 0x01: cia_dev->port_b = data; break;
-        case 0x04: cia_dev->timer_a_latch = (cia_dev->timer_a_latch & 0xFF00) | data; break;
-        case 0x05: cia_dev->timer_a_latch = (cia_dev->timer_a_latch & 0x00FF) | (data << 8); break;
-        case 0x0E: cia_dev->control_a = data; break;
-        case 0x0D: cia_dev->interrupt_control = data; break;
-        // Writes to unmapped registers are ignored
-    }
-}
-
-uint8_t cia2_r8(struct device_s* dev, uint16_t address) {
-    cia_state_t* cia_dev = (cia_state_t*)dev;
-    uint8_t reg = address & 0x0F;
-    switch (reg) {
-        case 0x00: return cia_dev->port_a;
-        case 0x01: return cia_dev->port_b;
-        case 0x04: return cia_dev->timer_a & 0xFF;
-        case 0x05: return cia_dev->timer_a >> 8;
-        case 0x0D: { uint8_t val = cia_dev->interrupt_status; cia_dev->interrupt_status = 0; return val; }
-        default: return 0xFF; // Unmapped registers
-    }
-}
-
-void cia2_w8(struct device_s* dev, uint16_t address, uint8_t data) {
-    cia_state_t* cia_dev = (cia_state_t*)dev;
-    uint8_t reg = address & 0x0F;
-    switch (reg) {
-        case 0x00: cia_dev->port_a = data; break;
-        case 0x01: cia_dev->port_b = data; break;
-        case 0x04: cia_dev->timer_a_latch = (cia_dev->timer_a_latch & 0xFF00) | data; break;
-        case 0x05: cia_dev->timer_a_latch = (cia_dev->timer_a_latch & 0x00FF) | (data << 8); break;
-        case 0x0E: cia_dev->control_a = data; break;
-        case 0x0D: cia_dev->interrupt_control = data; break;
-        // Writes to unmapped registers are ignored
-    }
-}
-
-// Forward declarations of device descriptors
-static const device_t cia1_device_descriptor;
-static const device_t cia2_device_descriptor;
-
-// Direct implementation functions for device lifecycle
-static void cia1_init(struct device_s* dev) {
-    cia_state_t* cia_dev = (cia_state_t*)dev;
-    // Initialize CIA1 state
-    memset(cia_dev, 0, sizeof(*cia_dev));
-    // Set up device callbacks from descriptor pointer
-    cia_dev->device = &cia1_device_descriptor;
-}
-
-static void cia1_cycle(struct device_s* dev) {
-    cia_state_t* cia_dev = (cia_state_t*)dev;
+static void cia_cycle(cia_t* cia) {
     // Timer A always decrements when enabled (hardware accurate)
-    if (cia_dev->control_a & 1) {
-        if (cia_dev->timer_a == 0) {
-            cia_dev->timer_a = cia_dev->timer_a_latch;
-            cia_dev->interrupt_status |= 1; // Timer A interrupt
-            if (cia_dev->interrupt_control & 1) {
-                cia_dev->bus->control_lines |= IRQ_LINE;
+    if (cia->cra & 1) {
+        if (cia->timer_a == 0) {
+/*
+            cia->timer_a = cia->timer_a_latch;
+*/            
+            cia->icr |= 1; // Timer A interrupt
+            if (cia->sdr & 1) {
+                cia->c64_bus->control_lines |= IRQ_LINE;
             }
         } else {
-            cia_dev->timer_a--;
+            cia->timer_a--;
         }
     }
-}
-
-static void cia2_init(struct device_s* dev) {
-    cia_state_t* cia_dev = (cia_state_t*)dev;
-    // Initialize CIA2 state
-    memset(cia_dev, 0, sizeof(*cia_dev));
-    // Set up device callbacks from descriptor pointer
-    cia_dev->device = &cia2_device_descriptor;
-}
-
-static void cia2_cycle(struct device_s* dev) {
-    cia_state_t* cia_dev = (cia_state_t*)dev;
-    // Timer A always decrements when enabled
-    if (cia_dev->control_a & 1) {
-        if (cia_dev->timer_a == 0) {
-            cia_dev->timer_a = cia_dev->timer_a_latch;
-            cia_dev->interrupt_status |= 1;
-            if (cia_dev->interrupt_control & 1) {
-                cia_dev->bus->control_lines |= NMI_LINE;
-            }
-        } else {
-            cia_dev->timer_a--;
-        }
-    }
-}
-
-// Static device descriptors for CIA1 and CIA2
-static const device_t cia1_device_descriptor = {
-    .r8 = cia1_r8,
-    .w8 = cia1_w8,
-    .init = cia1_init,
-    .cycle = cia1_cycle,
-    .cleanup = NULL
-};
-
-static const device_t cia2_device_descriptor = {
-    .r8 = cia2_r8,
-    .w8 = cia2_w8,
-    .init = cia2_init,
-    .cycle = cia2_cycle,
-    .cleanup = NULL
-};
-
-// Attach bus to CIA devices
-void cia_attach_bus(cia_state_t* cia_dev, bus_state_t* bus_state) {
-    cia_dev->bus = bus_state;
 }

@@ -1,41 +1,72 @@
 #include "c64_bus.h"
 
-// Bus functions
-void* c64_bus_system_create(void* bus) {
-    c64_bus_t* c64_bus = (c64_bus_t*)calloc(1, sizeof(c64_bus_t));
-    if (!c64_bus) return NULL;
-    c64_bus->desc = &c64_bus_descriptor;
-    c64_bus->interface.read = c64_bus_memory_read;
-    c64_bus->interface.write = c64_bus_memory_write;
-    c64_bus->c64 = (c64_state_t*)bus;
-    return c64_bus;
-}
-
-void c64_bus_system_destroy(void* context) {
-    free(context);
-}
-
-uint8_t c64_bus_memory_read(void* context, uint16_t address) {
-    c64_bus_t* bus = (c64_bus_t*)context;
-    return c64_memory_read(bus->c64, address);
+uint8_t c64_bus_memory_read(void* device, uint16_t address) {
+    c64_bus_t* c64_bus = (c64_bus_t*)device;
+    uint8_t page = address >> 8;
+    uint8_t id = READ_ID(c64_bus->device_id_per_page[page]);
+    read_callback_t* cb = &c64_bus->read_callbacks[id];
+    return cb->func(cb->context, address);
 }
 
 void c64_bus_memory_write(void* context, uint16_t address, uint8_t value) {
-    c64_bus_t* bus = (c64_bus_t*)context;
-    c64_state_t* c64 = bus->c64;
+    c64_bus_t* c64_bus = (c64_bus_t*)context;
+    uint8_t page = address >> 8;
+    uint8_t id = WRITE_ID(c64_bus->device_id_per_page[page]);
+    write_callback_t* cb = &c64_bus->write_callbacks[id];
+    cb->func(cb->context, address, value);
+    // TODO : Move below signalling of VIC-II bank change to somewhere else with less impact on performance
     if (address == 0xDD00) {
+        c64_t* c64 = c64_bus->c64;
         uint8_t bank = 3 - (value & 0x3);
         if (c64->vic_ii->desc->bank_change) {
             c64->vic_ii->desc->bank_change(c64->vic_ii, bank);
         }
     }
-    c64_memory_write(c64, address, value);
+}
+
+void c64_bus_system_destroy(void* device) {
+    free(device);
+}
+
+void* c64_bus_system_create(device_descriptor_t* desc) {
+    c64_bus_t* c64_bus = (c64_bus_t*)calloc(1, sizeof(c64_bus_t));
+    if (!c64_bus) return NULL;
+    c64_bus->desc = desc;
+    // Initialize bus state
+    c64_bus->address = 0;
+    c64_bus->data = 0;
+    c64_bus->control_lines = BA_LINE | AEC_LINE | RDY_LINE;
+    return c64_bus;
+}
+
+void c64_bus_system_attach(c64_bus_t* c64_bus, c64_t* c64) {
+    c64_bus->c64 = (c64_t*)c64;
 }
 
 static device_descriptor_t c64_bus_descriptor = {
     .create = c64_bus_system_create,
     .destroy = c64_bus_system_destroy,
+    .bus_attach = c64_bus_system_attach,
     .read = c64_bus_memory_read,
     .write = c64_bus_memory_write,
     .bank_change = NULL
 };
+
+void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {
+    c64_bus->device_id_per_page = c64_bus->device_id_per_page_per_mode[mode];
+}
+
+uint8_t c64_bus_read_cycle(c64_bus_t *bus, uint16_t addr) {
+    bus->address = addr; // Perhaps this is no longer needed
+    uint8_t data = c64_bus_memory_read(bus, addr);
+    bus->data = data; // Perhaps this is no longer needed
+    c64_non_cpu_cycle(bus->c64);
+    return data;
+}    
+
+void c64_bus_write_cycle(c64_bus_t* bus, uint16_t addr, uint8_t value) {
+    bus->address = addr; // Perhaps this is no longer needed
+    bus->data = value; // Perhaps this is no longer needed
+    c64_bus_memory_write(bus, addr, value);
+    c64_non_cpu_cycle(bus->c64);
+}        
