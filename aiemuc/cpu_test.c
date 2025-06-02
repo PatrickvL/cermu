@@ -1,5 +1,5 @@
 #include "c64.h"
-#include "bus.h"
+#include "c64_bus.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -8,7 +8,7 @@
 // ============================================================================
 
 // Global C64 system state
-static c64_state_t c64;
+static c64_t c64;
 
 // Test ROM - Simple program to test CPU functionality
 static uint8_t test_code[] = {
@@ -67,7 +67,7 @@ int main(void) {
     // Set bus cycle callback for per-cycle state printing
     bus_cycle_callback = print_cpu_state_on_cycle;
     // Reset CPU (sets up mode and reads reset vector)
-    cpu6510_reset(&c64.cpu);
+    mos6510_reset(&c64.cpu);
     printf("Debug: PC after reset: $%04X\n", c64.cpu.pc);
     printf("Initial state:\n");
     print_cpu_state();
@@ -75,7 +75,7 @@ int main(void) {
     // Execute for a limited number of instructions (not just cycles)
     for (int i = 0; i < 100 && c64.cpu.pc != 0x020B; i++) {
         // Execute one full instruction (which will call bus_cycle many times)
-        cpu6510_execute(&c64.cpu);
+        mos6510_execute(&c64.cpu);
         // Print state every 10 instructions (already printed per cycle if callback is set)
         if (i % 10 == 9) {
             printf("\nAfter %d instructions:\n", i + 1);

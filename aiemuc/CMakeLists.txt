@@ -13,7 +13,11 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 
 # Add compiler flags for debugging and warnings
 # Always enable warning flags
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra")
+if(MSVC)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W4")
+else()
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra")
+endif()
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -O0")
 else()
@@ -24,14 +28,13 @@ endif()
 set(SOURCES
     c64_main.c
     c64.c
-    bus.c
-    device.c
+    c64_bus.c
     ram.c
     rom.c
     cia.c
     sid.c
     vic.c
-    cpu6510.c
+    mos6510.c
 )
 
 # Create executable with all source files

@@ -3,13 +3,18 @@
 
 // Compiler optimization hints
 #ifdef _MSC_VER
-#define likely(x)   (x)
-#define unlikely(x) (x)
-#define alignas(x) __declspec(align(x))
+#include <stdalign.h>
+//#define alignas(x) __declspec(align(x))
 #else
-#define likely(x)   __builtin_expect(!!(x), 1)
-#define unlikely(x) __builtin_expect(!!(x), 0)
 #define alignas(x) __attribute__((aligned(x)))
 #endif
 
-#endif AIEMUC_H
+#ifdef _MSC_VER
+    #define likely(x)   (x)
+    #define unlikely(x) (x)
+#else
+    #define likely(x)   __builtin_expect(!!(x), 1)
+    #define unlikely(x) __builtin_expect(!!(x), 0)
+#endif
+
+#endif // AIEMUC_H

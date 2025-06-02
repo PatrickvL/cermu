@@ -44,7 +44,7 @@ The emulator is split into logical modules for maintainability while preserving 
 
 ### CPU Emulation
 
-- **`cpu6510.h/c`** - MOS 6510 CPU with function pointer dispatch
+- **`mos6510.h/c`** - MOS 6510 CPU with function pointer dispatch
   - Function pointer table dispatch for optimal performance
   - Hardware-accurate BA/RDY stall handling
   - Cycle-accurate instruction execution
