@@ -1,4 +1,5 @@
 #include "c64_bus.h"
+#include <stdlib.h>
 
 uint8_t c64_bus_memory_read(void* device, uint16_t address) {
     c64_bus_t* c64_bus = (c64_bus_t*)device;
@@ -43,7 +44,7 @@ void c64_bus_system_attach(c64_bus_t* c64_bus, c64_t* c64) {
     c64_bus->c64 = (c64_t*)c64;
 }
 
-static device_descriptor_t c64_bus_descriptor = {
+device_descriptor_t c64_bus_descriptor = {
     .create = c64_bus_system_create,
     .destroy = c64_bus_system_destroy,
     .bus_attach = c64_bus_system_attach,
@@ -56,17 +57,17 @@ void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {
     c64_bus->device_id_per_page = c64_bus->device_id_per_page_per_mode[mode];
 }
 
-uint8_t c64_bus_read_cycle(c64_bus_t *bus, uint16_t addr) {
-    bus->address = addr; // Perhaps this is no longer needed
-    uint8_t data = c64_bus_memory_read(bus, addr);
-    bus->data = data; // Perhaps this is no longer needed
-    c64_non_cpu_cycle(bus->c64);
+uint8_t c64_bus_read_cycle(c64_bus_t *c64_bus, uint16_t addr) {
+    c64_bus->address = addr; // Perhaps this is no longer needed
+    uint8_t data = c64_bus_memory_read(c64_bus, addr);
+    c64_bus->data = data; // Perhaps this is no longer needed
+    c64_non_cpu_cycle(c64_bus->c64);
     return data;
 }    
 
-void c64_bus_write_cycle(c64_bus_t* bus, uint16_t addr, uint8_t value) {
-    bus->address = addr; // Perhaps this is no longer needed
-    bus->data = value; // Perhaps this is no longer needed
-    c64_bus_memory_write(bus, addr, value);
-    c64_non_cpu_cycle(bus->c64);
+void c64_bus_write_cycle(c64_bus_t* c64_bus, uint16_t addr, uint8_t value) {
+    c64_bus->address = addr; // Perhaps this is no longer needed
+    c64_bus->data = value; // Perhaps this is no longer needed
+    c64_bus_memory_write(c64_bus, addr, value);
+    c64_non_cpu_cycle(c64_bus->c64);
 }        

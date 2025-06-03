@@ -7,35 +7,35 @@
 
 // Branch Instructions (alphabetical order)
 void bcc_func(mos6510_t* cpu_dev) {
-    cpu_branch_helper(cpu_dev, !cpu_get_flag(cpu_dev, FLAG_C));
+    mos6510_branch_helper(cpu_dev, !cpu_get_flag(cpu_dev, FLAG_C));
 }
 
 void bcs_func(mos6510_t* cpu_dev) {
-    cpu_branch_helper(cpu_dev, cpu_get_flag(cpu_dev, FLAG_C));
+    mos6510_branch_helper(cpu_dev, cpu_get_flag(cpu_dev, FLAG_C));
 }
 
 void beq_func(mos6510_t* cpu_dev) {
-    cpu_branch_helper(cpu_dev, cpu_get_flag(cpu_dev, FLAG_Z));
+    mos6510_branch_helper(cpu_dev, cpu_get_flag(cpu_dev, FLAG_Z));
 }
 
 void bmi_func(mos6510_t* cpu_dev) {
-    cpu_branch_helper(cpu_dev, cpu_get_flag(cpu_dev, FLAG_N));
+    mos6510_branch_helper(cpu_dev, cpu_get_flag(cpu_dev, FLAG_N));
 }
 
 void bne_func(mos6510_t* cpu_dev) {
-    cpu_branch_helper(cpu_dev, !cpu_get_flag(cpu_dev, FLAG_Z));
+    mos6510_branch_helper(cpu_dev, !cpu_get_flag(cpu_dev, FLAG_Z));
 }
 
 void bpl_func(mos6510_t* cpu_dev) {
-    cpu_branch_helper(cpu_dev, !cpu_get_flag(cpu_dev, FLAG_N));
+    mos6510_branch_helper(cpu_dev, !cpu_get_flag(cpu_dev, FLAG_N));
 }
 
 void bvc_func(mos6510_t* cpu_dev) {
-    cpu_branch_helper(cpu_dev, !cpu_get_flag(cpu_dev, FLAG_V));
+    mos6510_branch_helper(cpu_dev, !cpu_get_flag(cpu_dev, FLAG_V));
 }
 
 void bvs_func(mos6510_t* cpu_dev) {
-    cpu_branch_helper(cpu_dev, cpu_get_flag(cpu_dev, FLAG_V));
+    mos6510_branch_helper(cpu_dev, cpu_get_flag(cpu_dev, FLAG_V));
 }
 
 // Break

@@ -7,6 +7,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+// Forward declaration to avoid circular dependency
+typedef struct c64_s c64_t;
+
 // Macro utilities for generating unique labels
 #define CONCAT_IMPL(a, b) a ## b
 #define CONCAT(a, b) CONCAT_IMPL(a, b)
@@ -70,7 +73,7 @@ void mos6510_write_cycle(mos6510_t* cpu_dev, uint16_t addr, uint8_t value);
 void mos6510_interrupt_handler(mos6510_t* cpu_dev);
 
 // Shield off where the cpu control lines reside (might we want to change this later)
-#define CPU_CONTROL_LINES(cpu_dev) ((cpu_dev)->bus->control_lines)
+#define CPU_CONTROL_LINES(cpu_dev) ((cpu_dev)->c64_bus->control_lines)
 
 // CPU ready check - hardware accurate BA/RDY handling
 #define CPU_READY(cpu_dev) ((CPU_CONTROL_LINES(cpu_dev) & RDY_LINE) != 0)
@@ -78,7 +81,7 @@ void mos6510_interrupt_handler(mos6510_t* cpu_dev);
 // Wait for CPU ready with automatic stall handling
 #define CPU_INTRA_CYCLE(cpu_dev) do { \
     UNIQUE_LABEL(cpu_ready_stall): \
-    if (!CPU_READY(cpu_dev)) { c64_non_cpu_cycle(cpu_dev->c64); goto UNIQUE_LABEL(cpu_ready_stall); } \
+    if (!CPU_READY(cpu_dev)) { c64_non_cpu_cycle(cpu_dev->c64_bus->c64); goto UNIQUE_LABEL(cpu_ready_stall); } \
 } while(0)
 
 #define CPU_NEXT_INSTRUCTION(cpu_dev) do { \
@@ -105,8 +108,8 @@ static inline bool cpu_get_flag(mos6510_t* cpu_dev, uint8_t flag) {
 }
 
 static inline void mos6510_set_zn(mos6510_t* cpu_dev, uint8_t value) {
-    cpu_set_flag(cpu_dev, FLAG_Z, value == 0);
-    cpu_set_flag(cpu_dev, FLAG_N, value & 0x80);
+    mos6510_set_flag(cpu_dev, FLAG_Z, value == 0);
+    mos6510_set_flag(cpu_dev, FLAG_N, value & 0x80);
 }
 
 // Stack operations
@@ -303,10 +306,10 @@ static inline uint8_t op_adc(mos6510_t* cpu_dev, uint8_t value) {
         return result;
     } else {    
         uint16_t temp = cpu_dev->a + value + (cpu_get_flag(cpu_dev, FLAG_C) ? 1 : 0);
-        cpu_set_flag(cpu_dev, FLAG_C, temp > 255);
-        cpu_set_flag(cpu_dev, FLAG_V, (~(cpu_dev->a ^ value) & (cpu_dev->a ^ temp)) & 0x80);
+        mos6510_set_flag(cpu_dev, FLAG_C, temp > 255);
+        mos6510_set_flag(cpu_dev, FLAG_V, (~(cpu_dev->a ^ value) & (cpu_dev->a ^ temp)) & 0x80);
         cpu_dev->a = temp & 0xFF;
-        cpu_set_zn(cpu_dev, cpu_dev->a);
+        mos6510_set_zn(cpu_dev, cpu_dev->a);
         return cpu_dev->a;
     }
 }
@@ -314,120 +317,120 @@ static inline uint8_t op_adc(mos6510_t* cpu_dev, uint8_t value) {
 // AND - Logical AND
 static inline void op_and(mos6510_t* cpu_dev, uint8_t value) {
     cpu_dev->a &= value;
-    cpu_set_zn(cpu_dev, cpu_dev->a);
+    mos6510_set_zn(cpu_dev, cpu_dev->a);
 }
 
 // ASL - Arithmetic Shift Left
 static inline uint8_t op_asl(mos6510_t* cpu_dev, uint8_t value) {
-    cpu_set_flag(cpu_dev, FLAG_C, value & 0x80);
+    mos6510_set_flag(cpu_dev, FLAG_C, value & 0x80);
     value <<= 1;
-    cpu_set_zn(cpu_dev, value);
+    mos6510_set_zn(cpu_dev, value);
     return value;
 }
 
 // BIT - Bit Test
 static inline void op_bit(mos6510_t* cpu_dev, uint8_t value) {
-    cpu_set_flag(cpu_dev, FLAG_Z, (cpu_dev->a & value) == 0);
-    cpu_set_flag(cpu_dev, FLAG_V, value & FLAG_V);
-    cpu_set_flag(cpu_dev, FLAG_N, value & FLAG_N);
+    mos6510_set_flag(cpu_dev, FLAG_Z, (cpu_dev->a & value) == 0);
+    mos6510_set_flag(cpu_dev, FLAG_V, value & FLAG_V);
+    mos6510_set_flag(cpu_dev, FLAG_N, value & FLAG_N);
 }
 
 // CMP - Compare
 static inline void op_cmp(mos6510_t* cpu_dev, uint8_t value) {
     uint16_t temp = cpu_dev->a - value;
-    cpu_set_flag(cpu_dev, FLAG_C, cpu_dev->a >= value);
-    cpu_set_zn(cpu_dev, temp & 0xFF);
+    mos6510_set_flag(cpu_dev, FLAG_C, cpu_dev->a >= value);
+    mos6510_set_zn(cpu_dev, temp & 0xFF);
 }
 
 // CPX - Compare X Register
 static inline void op_cpx(mos6510_t* cpu_dev, uint8_t value) {
     uint16_t temp = cpu_dev->x - value;
-    cpu_set_flag(cpu_dev, FLAG_C, cpu_dev->x >= value);
-    cpu_set_zn(cpu_dev, temp & 0xFF);
+    mos6510_set_flag(cpu_dev, FLAG_C, cpu_dev->x >= value);
+    mos6510_set_zn(cpu_dev, temp & 0xFF);
 }
 
 // CPY - Compare Y Register
 static inline void op_cpy(mos6510_t* cpu_dev, uint8_t value) {
     uint16_t temp = cpu_dev->y - value;
-    cpu_set_flag(cpu_dev, FLAG_C, cpu_dev->y >= value);
-    cpu_set_zn(cpu_dev, temp & 0xFF);
+    mos6510_set_flag(cpu_dev, FLAG_C, cpu_dev->y >= value);
+    mos6510_set_zn(cpu_dev, temp & 0xFF);
 }
 
 // DEC - Decrement
 static inline uint8_t op_dec(mos6510_t* cpu_dev, uint8_t value) {
     value--;
-    cpu_set_zn(cpu_dev, value);
+    mos6510_set_zn(cpu_dev, value);
     return value;
 }
 
 // EOR - Exclusive OR
 static inline void op_eor(mos6510_t* cpu_dev, uint8_t value) {
     cpu_dev->a ^= value;
-    cpu_set_zn(cpu_dev, cpu_dev->a);
+    mos6510_set_zn(cpu_dev, cpu_dev->a);
 }
 
 // INC - Increment
 static inline uint8_t op_inc(mos6510_t* cpu_dev, uint8_t value) {
     value++;
-    cpu_set_zn(cpu_dev, value);
+    mos6510_set_zn(cpu_dev, value);
     return value;
 }
 
 // LDA - Load Accumulator
 static inline void op_lda(mos6510_t* cpu_dev, uint8_t value) {
     cpu_dev->a = value;
-    cpu_set_zn(cpu_dev, cpu_dev->a);
+    mos6510_set_zn(cpu_dev, cpu_dev->a);
 }
 
 // LDX - Load X Register
 static inline void op_ldx(mos6510_t* cpu_dev, uint8_t value) {
     cpu_dev->x = value;
-    cpu_set_zn(cpu_dev, cpu_dev->x);
+    mos6510_set_zn(cpu_dev, cpu_dev->x);
 }
 
 // LDY - Load Y Register
 static inline void op_ldy(mos6510_t* cpu_dev, uint8_t value) {
     cpu_dev->y = value;
-    cpu_set_zn(cpu_dev, cpu_dev->y);
+    mos6510_set_zn(cpu_dev, cpu_dev->y);
 }
 
 // LSR - Logical Shift Right
 static inline uint8_t op_lsr(mos6510_t* cpu_dev, uint8_t value) {
-    cpu_set_flag(cpu_dev, FLAG_C, value & 0x01);
+    mos6510_set_flag(cpu_dev, FLAG_C, value & 0x01);
     value >>= 1;
-    cpu_set_zn(cpu_dev, value);
+    mos6510_set_zn(cpu_dev, value);
     return value;
 }
 
 // ORA - Logical Inclusive OR
 static inline void op_ora(mos6510_t* cpu_dev, uint8_t value) {
     cpu_dev->a |= value;
-    cpu_set_zn(cpu_dev, cpu_dev->a);
+    mos6510_set_zn(cpu_dev, cpu_dev->a);
 }
 
 // ROL - Rotate Left
 static inline uint8_t op_rol(mos6510_t* cpu_dev, uint8_t value) {
     uint8_t temp = (value << 1) | (cpu_get_flag(cpu_dev, FLAG_C) ? 1 : 0);
-    cpu_set_flag(cpu_dev, FLAG_C, value & 0x80);
-    cpu_set_zn(cpu_dev, temp);
+    mos6510_set_flag(cpu_dev, FLAG_C, value & 0x80);
+    mos6510_set_zn(cpu_dev, temp);
     return temp;
 }
 
 // ROR - Rotate Right
 static inline uint8_t op_ror(mos6510_t* cpu_dev, uint8_t value) {
     uint8_t temp = (value >> 1) | (cpu_get_flag(cpu_dev, FLAG_C) ? 0x80 : 0);
-    cpu_set_flag(cpu_dev, FLAG_C, value & 0x01);
-    cpu_set_zn(cpu_dev, temp);
+    mos6510_set_flag(cpu_dev, FLAG_C, value & 0x01);
+    mos6510_set_zn(cpu_dev, temp);
     return temp;
 }
 
 // SBC - Subtract with Carry
 static inline uint8_t op_sbc(mos6510_t* cpu_dev, uint8_t value) {
     uint16_t temp = cpu_dev->a - value - (cpu_get_flag(cpu_dev, FLAG_C) ? 0 : 1);
-    cpu_set_flag(cpu_dev, FLAG_C, temp < 0x100);
-    cpu_set_flag(cpu_dev, FLAG_V, ((cpu_dev->a ^ value) & (cpu_dev->a ^ temp)) & 0x80);
+    mos6510_set_flag(cpu_dev, FLAG_C, temp < 0x100);
+    mos6510_set_flag(cpu_dev, FLAG_V, ((cpu_dev->a ^ value) & (cpu_dev->a ^ temp)) & 0x80);
     cpu_dev->a = temp & 0xFF;
-    cpu_set_zn(cpu_dev, cpu_dev->a);
+    mos6510_set_zn(cpu_dev, cpu_dev->a);
     return cpu_dev->a;
 }
 
@@ -441,22 +444,135 @@ static inline void op_adc_void(mos6510_t* cpu_dev, uint8_t value) {
     (void)op_adc(cpu_dev, value);
 }
 
+// Generic arithmetic operation helper - combines addressing mode with operation
+static inline void mos6510_arithmetic_helper(mos6510_t* cpu_dev, uint8_t (*addr_func)(mos6510_t*), void (*op_func)(mos6510_t*, uint8_t)) {
+    uint8_t value = addr_func(cpu_dev);
+    op_func(cpu_dev, value);
+    CPU_OPCODE_FOOTER(cpu_dev);
+}
+
+// Generic load operation helper - combines addressing mode with load operation
+static inline void mos6510_load_helper(mos6510_t* cpu_dev, uint8_t (*addr_func)(mos6510_t*), void (*op_func)(mos6510_t*, uint8_t)) {
+    uint8_t value = addr_func(cpu_dev);
+    op_func(cpu_dev, value);
+    CPU_OPCODE_FOOTER(cpu_dev);
+}
+
+// ============================================================================
+// STORE ADDRESS HELPER FUNCTIONS (inline for performance)  
+// ============================================================================
+
+// Zero page addressing for stores - sets address only
+static inline void addr_zp_store(mos6510_t* cpu_dev) {
+    CPU_INTRA_CYCLE(cpu_dev);
+    cpu_dev->address = mos6510_read_cycle(cpu_dev, cpu_dev->pc++);
+}
+
+// Zero page,X addressing for stores - sets address only  
+static inline void addr_zpx_store(mos6510_t* cpu_dev) {
+    CPU_INTRA_CYCLE(cpu_dev);
+    uint8_t base = mos6510_read_cycle(cpu_dev, cpu_dev->pc++);
+    CPU_INTRA_CYCLE(cpu_dev);
+    (void)mos6510_read_cycle(cpu_dev, base); // Dummy read
+    cpu_dev->address = (base + cpu_dev->x) & 0xFF;
+}
+
+// Zero page,Y addressing for stores - sets address only
+static inline void addr_zpy_store(mos6510_t* cpu_dev) {
+    CPU_INTRA_CYCLE(cpu_dev);
+    uint8_t base = mos6510_read_cycle(cpu_dev, cpu_dev->pc++);
+    CPU_INTRA_CYCLE(cpu_dev);
+    (void)mos6510_read_cycle(cpu_dev, base); // Dummy read
+    cpu_dev->address = (base + cpu_dev->y) & 0xFF;
+}
+
+// Absolute addressing for stores - sets address only
+static inline void addr_abs_store(mos6510_t* cpu_dev) {
+    CPU_INTRA_CYCLE(cpu_dev);
+    uint8_t addr_lo = mos6510_read_cycle(cpu_dev, cpu_dev->pc++);
+    CPU_INTRA_CYCLE(cpu_dev);
+    uint8_t addr_hi = mos6510_read_cycle(cpu_dev, cpu_dev->pc++);
+    cpu_dev->address = (addr_hi << 8) | addr_lo;
+}
+
+// Absolute,X addressing for stores - sets address only (with dummy read)
+static inline void addr_absx_store(mos6510_t* cpu_dev) {
+    CPU_INTRA_CYCLE(cpu_dev);
+    uint8_t addr_lo = mos6510_read_cycle(cpu_dev, cpu_dev->pc++);
+    CPU_INTRA_CYCLE(cpu_dev);
+    uint8_t addr_hi = mos6510_read_cycle(cpu_dev, cpu_dev->pc++);
+    cpu_dev->address = (addr_hi << 8) | addr_lo;
+    CPU_INTRA_CYCLE(cpu_dev);
+    (void)mos6510_read_cycle(cpu_dev, cpu_dev->address + cpu_dev->x); // Dummy read
+    cpu_dev->address += cpu_dev->x;
+}
+
+// Absolute,Y addressing for stores - sets address only (with dummy read)
+static inline void addr_absy_store(mos6510_t* cpu_dev) {
+    CPU_INTRA_CYCLE(cpu_dev);
+    uint8_t addr_lo = mos6510_read_cycle(cpu_dev, cpu_dev->pc++);
+    CPU_INTRA_CYCLE(cpu_dev);
+    uint8_t addr_hi = mos6510_read_cycle(cpu_dev, cpu_dev->pc++);
+    cpu_dev->address = (addr_hi << 8) | addr_lo;
+    CPU_INTRA_CYCLE(cpu_dev);
+    (void)mos6510_read_cycle(cpu_dev, cpu_dev->address + cpu_dev->y); // Dummy read
+    cpu_dev->address += cpu_dev->y;
+}
+
+// (Zero page,X) addressing for stores - sets address only
+static inline void addr_zpx_ind_store(mos6510_t* cpu_dev) {
+    CPU_INTRA_CYCLE(cpu_dev);
+    uint8_t base = mos6510_read_cycle(cpu_dev, cpu_dev->pc++);
+    CPU_INTRA_CYCLE(cpu_dev);
+    (void)mos6510_read_cycle(cpu_dev, base); // Dummy read
+    uint8_t zp_addr = (base + cpu_dev->x) & 0xFF;
+    CPU_INTRA_CYCLE(cpu_dev);
+    uint8_t addr_lo = mos6510_read_cycle(cpu_dev, zp_addr);
+    CPU_INTRA_CYCLE(cpu_dev);
+    uint8_t addr_hi = mos6510_read_cycle(cpu_dev, (zp_addr + 1) & 0xFF);
+    cpu_dev->address = (addr_hi << 8) | addr_lo;
+}
+
+// (Zero page),Y addressing for stores - sets address only (with dummy read)
+static inline void addr_zp_ind_y_store(mos6510_t* cpu_dev) {
+    CPU_INTRA_CYCLE(cpu_dev);
+    uint8_t zp_addr = mos6510_read_cycle(cpu_dev, cpu_dev->pc++);
+    CPU_INTRA_CYCLE(cpu_dev);
+    uint8_t addr_lo = mos6510_read_cycle(cpu_dev, zp_addr);
+    CPU_INTRA_CYCLE(cpu_dev);
+    uint8_t addr_hi = mos6510_read_cycle(cpu_dev, (zp_addr + 1) & 0xFF);
+    cpu_dev->address = (addr_hi << 8) | addr_lo;
+    CPU_INTRA_CYCLE(cpu_dev);
+    (void)mos6510_read_cycle(cpu_dev, cpu_dev->address + cpu_dev->y); // Dummy read
+    cpu_dev->address += cpu_dev->y;
+}
+
+// Generic store operation helper - combines addressing mode with store value
+static inline void mos6510_store_helper(mos6510_t* cpu_dev, void (*addr_func)(mos6510_t*), uint8_t value) {
+    addr_func(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
+    mos6510_write_cycle(cpu_dev, cpu_dev->address, value);
+    CPU_OPCODE_FOOTER(cpu_dev);
+}
+
 // ============================================================================
 // CONTROL FLOW HELPER FUNCTIONS (inline for performance)
 // ============================================================================
 
 // Generic branch helper - handles all branch instruction logic
 static inline void mos6510_branch_helper(mos6510_t* cpu_dev, bool condition) {
-    int8_t offset = (int8_t)addr_imm(cpu_dev);
+    CPU_INTRA_CYCLE(cpu_dev);
+    uint8_t rel_addr = mos6510_read_cycle(cpu_dev, cpu_dev->pc++);
     if (condition) {
-        uint16_t new_pc = cpu_dev->pc + offset;
-        if ((cpu_dev->pc & 0xFF00) != (new_pc & 0xFF00)) {
-            // Page boundary crossed - extra cycle
-            CPU_INTRA_CYCLE(cpu_dev);
-            (void)mos6510_read_cycle(cpu_dev, (cpu_dev->pc & 0xFF00) | (new_pc & 0x00FF));
-        }
+        // Branch taken
         CPU_INTRA_CYCLE(cpu_dev);
-        (void)mos6510_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
+        (void)mos6510_read_cycle(cpu_dev, cpu_dev->pc); // Dummy read
+        uint16_t new_pc = cpu_dev->pc + (int8_t)rel_addr;
+        if ((cpu_dev->pc ^ new_pc) & 0xFF00) {
+            // Page crossed - extra cycle
+            CPU_INTRA_CYCLE(cpu_dev);
+            (void)mos6510_read_cycle(cpu_dev, (cpu_dev->pc & 0xFF00) | (new_pc & 0xFF));
+        }
         cpu_dev->pc = new_pc;
     }
     CPU_OPCODE_FOOTER(cpu_dev);
@@ -479,11 +595,11 @@ static inline uint8_t mos6510_pop_with_wait(mos6510_t* cpu_dev) {
 // BRK/IRQ common sequence - handles the interrupt setup portion
 static inline void mos6510_interrupt_sequence(mos6510_t* cpu_dev, uint8_t status_flags, uint16_t vector_addr) {
     // Push PC high byte
-    cpu_push_with_wait(cpu_dev, (cpu_dev->pc >> 8) & 0xFF);
+    mos6510_push_with_wait(cpu_dev, (cpu_dev->pc >> 8) & 0xFF);
     // Push PC low byte  
-    cpu_push_with_wait(cpu_dev, cpu_dev->pc & 0xFF);
+    mos6510_push_with_wait(cpu_dev, cpu_dev->pc & 0xFF);
     // Push status register
-    cpu_push_with_wait(cpu_dev, status_flags);
+    mos6510_push_with_wait(cpu_dev, status_flags);
     // Set interrupt disable
     cpu_dev->p |= FLAG_I;
     // Read vector low
@@ -585,7 +701,7 @@ static inline void mos6510_register_inc_dec(mos6510_t* cpu_dev, uint8_t* reg, in
     CPU_INTRA_CYCLE(cpu_dev);
     (void)mos6510_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
     *reg += delta;
-    cpu_set_zn(cpu_dev, *reg);
+    mos6510_set_zn(cpu_dev, *reg);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
@@ -594,7 +710,7 @@ static inline void mos6510_register_transfer_with_flags(mos6510_t* cpu_dev, uint
     CPU_INTRA_CYCLE(cpu_dev);
     (void)mos6510_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
     *dest = src;
-    cpu_set_zn(cpu_dev, *dest);
+    mos6510_set_zn(cpu_dev, *dest);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
@@ -607,12 +723,11 @@ static inline void mos6510_register_transfer_no_flags(mos6510_t* cpu_dev, uint8_
 }
 
 // Memory increment/decrement operations
-static inline void mos6510_memory_inc_dec(mos6510_t* cpu_dev, uint8_t (*addr_func)(mos6510_t*), int delta) {
-    uint8_t fetched = addr_func(cpu_dev);
+static inline void mos6510_memory_inc_dec(mos6510_t* cpu_dev, uint8_t fetched, int delta) {
     uint8_t result = fetched + delta;
     CPU_INTRA_CYCLE(cpu_dev);
     mos6510_write_cycle(cpu_dev, cpu_dev->address, result);
-    cpu_set_zn(cpu_dev, result);
+    mos6510_set_zn(cpu_dev, result);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
@@ -621,10 +736,9 @@ static inline void mos6510_memory_inc_dec(mos6510_t* cpu_dev, uint8_t (*addr_fun
 // ============================================================================
 
 // Read-modify-write + register operation combo (SLO, RLA, RRA, SRE)
-static inline void mos6510_illegal_rmw_combo(mos6510_t* cpu_dev, uint8_t (*addr_func)(mos6510_t*), 
+static inline void mos6510_illegal_rmw_combo(mos6510_t* cpu_dev, uint8_t value, 
                                           uint8_t (*rmw_op)(mos6510_t*, uint8_t),
                                           void (*reg_op)(mos6510_t*, uint8_t)) {
-    uint8_t value = addr_func(cpu_dev);
     uint8_t result = rmw_op(cpu_dev, value);
     CPU_INTRA_CYCLE(cpu_dev);
     mos6510_write_cycle(cpu_dev, cpu_dev->address, result);
@@ -633,9 +747,8 @@ static inline void mos6510_illegal_rmw_combo(mos6510_t* cpu_dev, uint8_t (*addr_
 }
 
 // INC/DEC + register operation combo (DCP, ISC)
-static inline void mos6510_illegal_inc_dec_combo(mos6510_t* cpu_dev, uint8_t (*addr_func)(mos6510_t*), 
+static inline void mos6510_illegal_inc_dec_combo(mos6510_t* cpu_dev, uint8_t value, 
                                               int delta, void (*reg_op)(mos6510_t*, uint8_t)) {
-    uint8_t value = addr_func(cpu_dev);
     value += delta;
     CPU_INTRA_CYCLE(cpu_dev);
     mos6510_write_cycle(cpu_dev, cpu_dev->address, value);
@@ -644,11 +757,10 @@ static inline void mos6510_illegal_inc_dec_combo(mos6510_t* cpu_dev, uint8_t (*a
 }
 
 // Load both A and X (LAX variants)
-static inline void mos6510_load_a_and_x(mos6510_t* cpu_dev, uint8_t (*addr_func)(mos6510_t*)) {
-    uint8_t value = addr_func(cpu_dev);
+static inline void mos6510_load_a_and_x(mos6510_t* cpu_dev, uint8_t value) {
     cpu_dev->a = value;
     cpu_dev->x = value;
-    cpu_set_zn(cpu_dev, value);
+    mos6510_set_zn(cpu_dev, value);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
@@ -659,12 +771,8 @@ static inline void mos6510_store_a_and_x(mos6510_t* cpu_dev, void (*addr_func)(m
 }
 
 // Complex store with high byte manipulation (AHX, SHX, SHY, TAS)
-static inline void mos6510_complex_store(mos6510_t* cpu_dev, uint8_t (*addr_func)(mos6510_t*), 
-                                      uint8_t value, bool add_high_byte) {
-    addr_func(cpu_dev);  // Sets address
-    if (add_high_byte) {
-        value &= ((cpu_dev->address >> 8) + 1);
-    }
+static inline void mos6510_complex_store(mos6510_t* cpu_dev, uint8_t value) {
+    value &= ((cpu_dev->address >> 8) + 1);
     CPU_INTRA_CYCLE(cpu_dev);
     mos6510_write_cycle(cpu_dev, cpu_dev->address, value);
     CPU_OPCODE_FOOTER(cpu_dev);
@@ -684,61 +792,61 @@ static inline void mos6510_immediate_accumulator_op(mos6510_t* cpu_dev, void (*o
 // ALR operation: AND then LSR
 static inline void op_alr(mos6510_t* cpu_dev, uint8_t value) {
     cpu_dev->a &= value;
-    cpu_set_flag(cpu_dev, FLAG_C, cpu_dev->a & 0x01);
+    mos6510_set_flag(cpu_dev, FLAG_C, cpu_dev->a & 0x01);
     cpu_dev->a >>= 1;
-    cpu_set_zn(cpu_dev, cpu_dev->a);
+    mos6510_set_zn(cpu_dev, cpu_dev->a);
 }
 
 // ANC operation: AND then copy N to C
 static inline void op_anc(mos6510_t* cpu_dev, uint8_t value) {
     cpu_dev->a &= value;
-    cpu_set_zn(cpu_dev, cpu_dev->a);
-    cpu_set_flag(cpu_dev, FLAG_C, cpu_dev->a & 0x80);
+    mos6510_set_zn(cpu_dev, cpu_dev->a);
+    mos6510_set_flag(cpu_dev, FLAG_C, cpu_dev->a & 0x80);
 }
 
 // ARR operation: AND then ROR with special V flag behavior
 static inline void op_arr(mos6510_t* cpu_dev, uint8_t value) {
     cpu_dev->a &= value;
     uint8_t old_carry = cpu_get_flag(cpu_dev, FLAG_C) ? 1 : 0;
-    cpu_set_flag(cpu_dev, FLAG_C, cpu_dev->a & 0x01);
+    mos6510_set_flag(cpu_dev, FLAG_C, cpu_dev->a & 0x01);
     cpu_dev->a = (cpu_dev->a >> 1) | (old_carry << 7);
-    cpu_set_zn(cpu_dev, cpu_dev->a);
+    mos6510_set_zn(cpu_dev, cpu_dev->a);
     // V flag behavior is complex for ARR
-    cpu_set_flag(cpu_dev, FLAG_V, ((cpu_dev->a >> 6) ^ (cpu_dev->a >> 5)) & 1);
+    mos6510_set_flag(cpu_dev, FLAG_V, ((cpu_dev->a >> 6) ^ (cpu_dev->a >> 5)) & 1);
 }
 
 // AXS operation: (A & X) - immediate, store in X
 static inline void op_axs(mos6510_t* cpu_dev, uint8_t value) {
     uint8_t temp = cpu_dev->a & cpu_dev->x;
     uint16_t result = temp - value;
-    cpu_set_flag(cpu_dev, FLAG_C, result < 0x100);
+    mos6510_set_flag(cpu_dev, FLAG_C, result < 0x100);
     cpu_dev->x = result & 0xFF;
-    cpu_set_zn(cpu_dev, cpu_dev->x);
+    mos6510_set_zn(cpu_dev, cpu_dev->x);
 }
 
 // XAA operation: Transfer X to A, then AND with immediate
 static inline void op_xaa(mos6510_t* cpu_dev, uint8_t value) {
     cpu_dev->a = cpu_dev->x;
     cpu_dev->a &= value;
-    cpu_set_zn(cpu_dev, cpu_dev->a);
+    mos6510_set_zn(cpu_dev, cpu_dev->a);
 }
 
 // SLO register operation: ORA with result
 static inline void op_slo_reg(mos6510_t* cpu_dev, uint8_t value) {
     cpu_dev->a |= value;
-    cpu_set_zn(cpu_dev, cpu_dev->a);
+    mos6510_set_zn(cpu_dev, cpu_dev->a);
 }
 
 // RLA register operation: AND with result
 static inline void op_rla_reg(mos6510_t* cpu_dev, uint8_t value) {
     cpu_dev->a &= value;
-    cpu_set_zn(cpu_dev, cpu_dev->a);
+    mos6510_set_zn(cpu_dev, cpu_dev->a);
 }
 
 // SRE register operation: EOR with result
 static inline void op_sre_reg(mos6510_t* cpu_dev, uint8_t value) {
     cpu_dev->a ^= value;
-    cpu_set_zn(cpu_dev, cpu_dev->a);
+    mos6510_set_zn(cpu_dev, cpu_dev->a);
 }
 
 // CPU core functions

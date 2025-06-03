@@ -8,111 +8,111 @@
 // LDA - Load Accumulator
 void lda_immediate_func(mos6510_t* cpu_dev) {
     cpu_dev->a = addr_imm(cpu_dev);
-    cpu_set_zn(cpu_dev, cpu_dev->a);
+    mos6510_set_zn(cpu_dev, cpu_dev->a);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 void lda_zero_page_func(mos6510_t* cpu_dev) {
     cpu_dev->a = addr_zp(cpu_dev);
-    cpu_set_zn(cpu_dev, cpu_dev->a);
+    mos6510_set_zn(cpu_dev, cpu_dev->a);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 void lda_zero_page_x_func(mos6510_t* cpu_dev) {
     cpu_dev->a = addr_zpx(cpu_dev);
-    cpu_set_zn(cpu_dev, cpu_dev->a);
+    mos6510_set_zn(cpu_dev, cpu_dev->a);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 void lda_absolute_func(mos6510_t* cpu_dev) {
     cpu_dev->a = addr_abs(cpu_dev);
-    cpu_set_zn(cpu_dev, cpu_dev->a);
+    mos6510_set_zn(cpu_dev, cpu_dev->a);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 void lda_absolute_x_func(mos6510_t* cpu_dev) {
     cpu_dev->a = addr_absx(cpu_dev);
-    cpu_set_zn(cpu_dev, cpu_dev->a);
+    mos6510_set_zn(cpu_dev, cpu_dev->a);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 void lda_absolute_y_func(mos6510_t* cpu_dev) {
     cpu_dev->a = addr_absy(cpu_dev);
-    cpu_set_zn(cpu_dev, cpu_dev->a);
+    mos6510_set_zn(cpu_dev, cpu_dev->a);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 void lda_indirect_x_func(mos6510_t* cpu_dev) {
     cpu_dev->a = addr_zpx_ind(cpu_dev);
-    cpu_set_zn(cpu_dev, cpu_dev->a);
+    mos6510_set_zn(cpu_dev, cpu_dev->a);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 void lda_indirect_y_func(mos6510_t* cpu_dev) {
     cpu_dev->a = addr_zp_ind_y(cpu_dev);
-    cpu_set_zn(cpu_dev, cpu_dev->a);
+    mos6510_set_zn(cpu_dev, cpu_dev->a);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 // LDX - Load X Register
 void ldx_immediate_func(mos6510_t* cpu_dev) {
     cpu_dev->x = addr_imm(cpu_dev);
-    cpu_set_zn(cpu_dev, cpu_dev->x);
+    mos6510_set_zn(cpu_dev, cpu_dev->x);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 void ldx_zero_page_func(mos6510_t* cpu_dev) {
     cpu_dev->x = addr_zp(cpu_dev);
-    cpu_set_zn(cpu_dev, cpu_dev->x);
+    mos6510_set_zn(cpu_dev, cpu_dev->x);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 void ldx_zero_page_y_func(mos6510_t* cpu_dev) {
     cpu_dev->x = addr_zpy(cpu_dev);
-    cpu_set_zn(cpu_dev, cpu_dev->x);
+    mos6510_set_zn(cpu_dev, cpu_dev->x);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 void ldx_absolute_func(mos6510_t* cpu_dev) {
     cpu_dev->x = addr_abs(cpu_dev);
-    cpu_set_zn(cpu_dev, cpu_dev->x);
+    mos6510_set_zn(cpu_dev, cpu_dev->x);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 void ldx_absolute_y_func(mos6510_t* cpu_dev) {
     cpu_dev->x = addr_absy(cpu_dev);
-    cpu_set_zn(cpu_dev, cpu_dev->x);
+    mos6510_set_zn(cpu_dev, cpu_dev->x);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 // LDY - Load Y Register
 void ldy_immediate_func(mos6510_t* cpu_dev) {
     cpu_dev->y = addr_imm(cpu_dev);
-    cpu_set_zn(cpu_dev, cpu_dev->y);
+    mos6510_set_zn(cpu_dev, cpu_dev->y);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 void ldy_zero_page_func(mos6510_t* cpu_dev) {
     cpu_dev->y = addr_zp(cpu_dev);
-    cpu_set_zn(cpu_dev, cpu_dev->y);
+    mos6510_set_zn(cpu_dev, cpu_dev->y);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 void ldy_zero_page_x_func(mos6510_t* cpu_dev) {
     cpu_dev->y = addr_zpx(cpu_dev);
-    cpu_set_zn(cpu_dev, cpu_dev->y);
+    mos6510_set_zn(cpu_dev, cpu_dev->y);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 void ldy_absolute_func(mos6510_t* cpu_dev) {
     cpu_dev->y = addr_abs(cpu_dev);
-    cpu_set_zn(cpu_dev, cpu_dev->y);
+    mos6510_set_zn(cpu_dev, cpu_dev->y);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 void ldy_absolute_x_func(mos6510_t* cpu_dev) {
     cpu_dev->y = addr_absx(cpu_dev);
-    cpu_set_zn(cpu_dev, cpu_dev->y);
+    mos6510_set_zn(cpu_dev, cpu_dev->y);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 

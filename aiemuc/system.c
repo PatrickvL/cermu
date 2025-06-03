@@ -1,12 +1,13 @@
 #include "system.h"
 //#include "device.h"
 
-uint8_t register_device(system_8bit_t* system, void* device, device_descriptor_t* desc, uint16_t base, uint16_t size) {
+uint8_t system_device_register(system_8bit_t* system, void* device, device_descriptor_t* desc, uint16_t base, uint16_t size) {
     if (system->device_count >= 16) return 0xFF;
     uint8_t id = system->device_count++;
     device_entry_t* entry = &system->devices[id];
     entry->desc = desc;
     entry->device = device;
+    entry->rwcb_context = device; // By default, rwcb_context is the device itself
     entry->base_address = base;
     entry->size = size;
     entry->device_id = id;

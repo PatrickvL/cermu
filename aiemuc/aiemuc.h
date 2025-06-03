@@ -3,8 +3,8 @@
 
 // Compiler optimization hints
 #ifdef _MSC_VER
-#include <stdalign.h>
-//#define alignas(x) __declspec(align(x))
+//#include <stdalign.h>
+#define alignas(x) __declspec(align(x))
 #else
 #define alignas(x) __attribute__((aligned(x)))
 #endif

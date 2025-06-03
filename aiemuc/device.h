@@ -4,14 +4,18 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-typedef struct device_descriptor_s {
+// Forward-declare the struct name
+typedef struct device_descriptor_s device_descriptor_t;
+
+// Now define it
+struct device_descriptor_s {
     void* (*create)(device_descriptor_t* desc);
     void (*destroy)(void* device);
     void (*bus_attach)(void* device, void* bus);
     uint8_t (*read)(void* device, uint16_t address);
     void (*write)(void* device, uint16_t address, uint8_t value);
     void (*bank_change)(void* device, uint8_t bank);
-} device_descriptor_t;
+};
 
 typedef uint8_t (*device_read_func_t)(void* context, uint16_t);
 typedef void (*device_write_func_t)(void* context, uint16_t, uint8_t);
@@ -20,7 +24,7 @@ typedef void (*device_write_func_t)(void* context, uint16_t, uint8_t);
 typedef struct {
     void* device;
     device_descriptor_t* desc;
-    void* rwcb_context; // Context for read and write callbacks. Often the deivce itself, sometimes a buffer or other structure. TODO : Populate in all device creation functions.
+    void* rwcb_context; // Context for read and write callbacks. Often the deivce itself, sometimes a buffer or other structure.
     uint16_t base_address;
     uint16_t size;
     uint8_t device_id;

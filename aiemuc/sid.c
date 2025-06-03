@@ -1,8 +1,15 @@
 #include "sid.h"
+#include "c64.h"
 #include <string.h>
+#include <stdlib.h>
 
 void sid_system_destroy(void* device) {
     free(device);
+}
+
+void sid_bus_attach(void* device, void* bus) {
+    sid_t* sid = (sid_t*)device;
+    c64_bus_t* c64_bus = (c64_bus_t*)bus;
 }
 
 void* sid_system_create(device_descriptor_t* desc) {
@@ -32,9 +39,10 @@ void sid_registers_write(void* context, uint16_t address, uint8_t value) {
     if (reg <= 0x18) sid->registers[reg] = value;
 }
 
-static device_descriptor_t sid_descriptor = {
+device_descriptor_t sid_descriptor = {
     .create = sid_system_create,
     .destroy = sid_system_destroy,
+    .bus_attach = sid_bus_attach,
     .read = sid_registers_read,
     .write = sid_registers_write,
     .bank_change = NULL

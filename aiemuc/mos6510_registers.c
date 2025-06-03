@@ -5,77 +5,81 @@
 // ============================================================================
 // Register transfers, increments, and decrements
 
-// Decrement Instructions (alphabetical order)
-void dec_zero_page_func(mos6510_t* cpu_dev) {
-    cpu_memory_inc_dec(cpu_dev, addr_zp, -1);
+// INX - Increment X Register (0xE8)
+void inx_func(mos6510_t* cpu_dev) {
+    mos6510_register_inc_dec(cpu_dev, &cpu_dev->x, 1);
 }
 
-void dec_zero_page_x_func(mos6510_t* cpu_dev) {
-    cpu_memory_inc_dec(cpu_dev, addr_zpx, -1);
+// INY - Increment Y Register (0xC8)
+void iny_func(mos6510_t* cpu_dev) {
+    mos6510_register_inc_dec(cpu_dev, &cpu_dev->y, 1);
 }
 
-void dec_absolute_func(mos6510_t* cpu_dev) {
-    cpu_memory_inc_dec(cpu_dev, addr_abs, -1);
-}
-
-void dec_absolute_x_func(mos6510_t* cpu_dev) {
-    cpu_memory_inc_dec(cpu_dev, addr_absx, -1);
-}
-
+// DEX - Decrement X Register (0xCA)
 void dex_func(mos6510_t* cpu_dev) {
-    cpu_register_inc_dec(cpu_dev, &cpu_dev->x, -1);
+    mos6510_register_inc_dec(cpu_dev, &cpu_dev->x, -1);
 }
 
+// DEY - Decrement Y Register (0x88)
 void dey_func(mos6510_t* cpu_dev) {
-    cpu_register_inc_dec(cpu_dev, &cpu_dev->y, -1);
+    mos6510_register_inc_dec(cpu_dev, &cpu_dev->y, -1);
 }
 
-// Increment Instructions
+// INC - Increment Memory
 void inc_zero_page_func(mos6510_t* cpu_dev) {
-    cpu_memory_inc_dec(cpu_dev, addr_zp, 1);
+    mos6510_rmw_zero_page(cpu_dev, op_inc);
 }
 
 void inc_zero_page_x_func(mos6510_t* cpu_dev) {
-    cpu_memory_inc_dec(cpu_dev, addr_zpx, 1);
+    mos6510_rmw_zero_page_x(cpu_dev, op_inc);
 }
 
 void inc_absolute_func(mos6510_t* cpu_dev) {
-    cpu_memory_inc_dec(cpu_dev, addr_abs, 1);
+    mos6510_rmw_absolute(cpu_dev, op_inc);
 }
 
 void inc_absolute_x_func(mos6510_t* cpu_dev) {
-    cpu_memory_inc_dec(cpu_dev, addr_absx, 1);
+    mos6510_rmw_absolute_x(cpu_dev, op_inc);
 }
 
-void inx_func(mos6510_t* cpu_dev) {
-    cpu_register_inc_dec(cpu_dev, &cpu_dev->x, 1);
+// DEC - Decrement Memory
+void dec_zero_page_func(mos6510_t* cpu_dev) {
+    mos6510_rmw_zero_page(cpu_dev, op_dec);
 }
 
-void iny_func(mos6510_t* cpu_dev) {
-    cpu_register_inc_dec(cpu_dev, &cpu_dev->y, 1);
+void dec_zero_page_x_func(mos6510_t* cpu_dev) {
+    mos6510_rmw_zero_page_x(cpu_dev, op_dec);
+}
+
+void dec_absolute_func(mos6510_t* cpu_dev) {
+    mos6510_rmw_absolute(cpu_dev, op_dec);  
+}
+
+void dec_absolute_x_func(mos6510_t* cpu_dev) {
+    mos6510_rmw_absolute_x(cpu_dev, op_dec);
 }
 
 // Transfer Instructions
 void tax_func(mos6510_t* cpu_dev) {
-    cpu_register_transfer_with_flags(cpu_dev, &cpu_dev->x, cpu_dev->a);
+    mos6510_register_transfer_with_flags(cpu_dev, &cpu_dev->x, cpu_dev->a);
 }
 
 void tay_func(mos6510_t* cpu_dev) {
-    cpu_register_transfer_with_flags(cpu_dev, &cpu_dev->y, cpu_dev->a);
+    mos6510_register_transfer_with_flags(cpu_dev, &cpu_dev->y, cpu_dev->a);
 }
 
 void tsx_func(mos6510_t* cpu_dev) {
-    cpu_register_transfer_with_flags(cpu_dev, &cpu_dev->x, cpu_dev->sp);
+    mos6510_register_transfer_with_flags(cpu_dev, &cpu_dev->x, cpu_dev->sp);
 }
 
 void txa_func(mos6510_t* cpu_dev) {
-    cpu_register_transfer_with_flags(cpu_dev, &cpu_dev->a, cpu_dev->x);
+    mos6510_register_transfer_with_flags(cpu_dev, &cpu_dev->a, cpu_dev->x);
 }
 
 void txs_func(mos6510_t* cpu_dev) {
-    cpu_register_transfer_no_flags(cpu_dev, &cpu_dev->sp, cpu_dev->x);
+    mos6510_register_transfer_no_flags(cpu_dev, &cpu_dev->sp, cpu_dev->x);
 }
 
 void tya_func(mos6510_t* cpu_dev) {
-    cpu_register_transfer_with_flags(cpu_dev, &cpu_dev->a, cpu_dev->y);
+    mos6510_register_transfer_with_flags(cpu_dev, &cpu_dev->a, cpu_dev->y);
 }
