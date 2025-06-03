@@ -31,7 +31,7 @@ set(SOURCES
     c64_bus.c
     ram.c
     rom.c
-    cia.c
+    mos6526.c
     sid.c
     vic.c
     mos6510.c

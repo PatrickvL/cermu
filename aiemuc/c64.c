@@ -8,7 +8,7 @@
 #include "system.h"
 #include "c64_bus.h"
 #include "mos6510.h"
-#include "cia.h"
+#include "mos6526.h"
 #include "vic.h"
 #include "sid.h"
 #include "ram.h"
@@ -22,7 +22,7 @@ extern device_descriptor_t ram_descriptor;
 extern device_descriptor_t rom_descriptor;
 extern device_descriptor_t vic_ii_descriptor;
 extern device_descriptor_t sid_descriptor;
-extern device_descriptor_t cia_descriptor;
+extern device_descriptor_t mos6526_descriptor;
 
 // Global variable definition
 c64_t* c64 = NULL;
@@ -100,7 +100,7 @@ static read_callback_t c64_detached_read_callback = {
     .context = NULL
 };
 
-static c64_detached_write_callback = {
+static write_callback_t c64_detached_write_callback = {
     .func = (device_write_func_t)c64_detached_write,
     .context = NULL
 };
@@ -176,8 +176,8 @@ void c64_non_cpu_cycle(c64_t* c64) {
     
     // All chips always run for cycle accuracy - using safe device callers
     vic_ii_cycle(c64->vic_ii);
-    cia_cycle(c64->cia1);
-    cia_cycle(c64->cia2);
+    mos6526_cycle(c64->cia1);
+    mos6526_cycle(c64->cia2);
     sid_cycle(c64->sid);
     
     // Update RDY line based on BA (hardware accurate)
@@ -207,8 +207,8 @@ c64_t* c64_system_create() {
         &c64_bus_descriptor,
         &mos6510_descriptor,
         &ram_descriptor,
-        &cia_descriptor,
-        &cia_descriptor,
+        &mos6526_descriptor,
+        &mos6526_descriptor,
         &vic_ii_descriptor,
         &sid_descriptor,
         &custom_descriptor,

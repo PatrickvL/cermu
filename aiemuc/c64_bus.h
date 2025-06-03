@@ -14,6 +14,11 @@
 #define AEC_LINE    (1 << 3)
 #define RDY_LINE    (1 << 4)
 
+// Macro definitions for device ID extraction
+#define ID_TUPLE(read_id, write_id) (((read_id) << 4) | (write_id))
+#define READ_ID(id) (((id) >> 4) & 0xF)
+#define WRITE_ID(id) ((id) & 0xF)
+
 typedef struct c64_s c64_t; // external, avoid circular dependency (via c64.h)
 
 typedef struct c64_bus_s {

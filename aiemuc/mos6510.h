@@ -72,7 +72,7 @@ void mos6510_write_cycle(mos6510_t* cpu_dev, uint16_t addr, uint8_t value);
 // Forward declaration for functions used in macros
 void mos6510_interrupt_handler(mos6510_t* cpu_dev);
 
-// Shield off where the cpu control lines reside (might we want to change this later)
+// Shield off where the cpu control lines remos6581e (might we want to change this later)
 #define CPU_CONTROL_LINES(cpu_dev) ((cpu_dev)->c64_bus->control_lines)
 
 // CPU ready check - hardware accurate BA/RDY handling
