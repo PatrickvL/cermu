@@ -15,6 +15,18 @@
 #include "rom.h"
 #include "c64.h"
 
+// Device descriptor declarations (defined in respective .c files)
+extern device_descriptor_t c64_bus_descriptor;
+extern device_descriptor_t mos6510_descriptor;
+extern device_descriptor_t ram_descriptor;
+extern device_descriptor_t rom_descriptor;
+extern device_descriptor_t vic_ii_descriptor;
+extern device_descriptor_t sid_descriptor;
+extern device_descriptor_t cia_descriptor;
+
+// Global variable definition
+c64_t* c64 = NULL;
+
 //typedef struct custom custom_t;
 
 // TODO : Move to c64_custom.c
@@ -29,6 +41,11 @@ void custom_system_destroy(void* device) {
     free(device);
 }
 
+void custom_bus_attach(void* device, void* bus) {
+    custom_t* custom = (custom_t*)device;
+    c64_bus_t* c64_bus = (c64_bus_t*)bus;
+}
+
 uint8_t custom_registers_read(void* context, uint16_t address) {
     custom_t* custom = (custom_t*)context;
     return custom->registers[address & 0xFF];
@@ -39,9 +56,10 @@ void custom_registers_write(void* context, uint16_t address, uint8_t value) {
     custom->registers[address & 0xFF] = value;
 }
 
-static device_descriptor_t custom_descriptor = {
+device_descriptor_t custom_descriptor = {
     .create = custom_system_create,
     .destroy = custom_system_destroy,
+    .bus_attach = custom_bus_attach,
     .read = custom_registers_read,
     .write = custom_registers_write,
     .bank_change = NULL
@@ -69,13 +87,37 @@ void c64_memory_init(system_8bit_t* system) {
     }
 }
 
+uint8_t c64_detached_read(c64_t* c64, uint16_t address) {
+    return 0xFF; // TODO : Return the current bus.data?
+}
+
+void c64_detached_write(c64_t* c64, uint16_t address, uint8_t value) {
+    // Do nothing - detached devices do not write
+}
+
+static read_callback_t c64_detached_read_callback = {
+    .func = (device_read_func_t)c64_detached_read,
+    .context = NULL
+};
+
+static c64_detached_write_callback = {
+    .func = (device_write_func_t)c64_detached_write,
+    .context = NULL
+};
+
 void c64_callbacks_init(c64_t* c64) {
     c64_bus_t* bus = c64->bus;     
     for (int i = 0; i < c64->system.device_count; i++) {
         device_entry_t* dev = &c64->system.devices[i];
         device_descriptor_t* desc = dev->desc;
-        bus->read_callbacks[i] = (read_callback_t){ desc->read, dev->rwcb_context };
-        bus->write_callbacks[i] = (write_callback_t){ desc->write, dev->rwcb_context };
+        if (desc->read)
+            bus->read_callbacks[i] = (read_callback_t){ desc->read, dev->rwcb_context };
+        else
+            bus->read_callbacks[i] = c64_detached_read_callback;
+        if (desc->write)
+            bus->write_callbacks[i] = (write_callback_t){ desc->write, dev->rwcb_context };
+        else
+            bus->write_callbacks[i] = c64_detached_write_callback;
     }
 }
 
@@ -102,7 +144,7 @@ void c64_pla_maps_generate(c64_t* c64) {
             } else if (loram && addr >= 0xA000 && addr <= 0xBFFF) {
                 id = basic_id;
             } else if (game && addr >= 0x8000 && addr <= 0xBFFF) {
-                } id = cartridge_id;
+                id = cartridge_id;
             } else if (charen && addr >= 0xD000 && addr <= 0xDFFF) {
                 for (int i = 0; i < system->device_count; i++) {
                     device_entry_t* dev = &system->devices[i];
@@ -110,6 +152,7 @@ void c64_pla_maps_generate(c64_t* c64) {
                         id = i;
                         break;
                     }
+                }
             }
             bus->device_id_per_page_per_mode[mode][page] = ID_TUPLE(id, id);
         }
@@ -150,7 +193,7 @@ void c64_non_cpu_cycle(c64_t* c64) {
 //
 
 void c64_system_destroy(c64_t* c64) {
-    if (!c64) return NULL;
+    if (!c64) return;
 
     system_devices_destroy(&c64->system);
     free(c64);
@@ -191,27 +234,32 @@ c64_t* c64_system_create() {
     uint8_t ids[11];
 
     for (int i = 0; i < 11; i++) {
-        *devices[i] = descriptors[i]->create(i == 0 ? &c64->bus : c64);
+        *devices[i] = descriptors[i]->create(descriptors[i]);
         if (!*devices[i]) {
             c64_system_destroy(c64);
             return NULL;
         }
-        ids[i] = register_device(&c64->system, *devices[i], descriptors[i], bases[i], sizes[i]);
+        ids[i] = system_device_register(&c64->system, *devices[i], descriptors[i], bases[i], sizes[i]);
         if (ids[i] == 0xFF) {
             c64_system_destroy(c64);
             return NULL;
         }
-
+        
         if (descriptors[i]->bus_attach) {
-            descriptors[i]->bus_attach(*devices[i], &c64->bus);
-        } 
+            descriptors[i]->bus_attach(*devices[i], c64->bus);
+        }
     }
 
     c64_bus_system_attach(c64->bus, c64);
 
-    c64->basic->base_address = 0xA000;
-    c64->kernal->base_address = 0xE000;
-    c64->cartridge->base_address = 0x8000;
+    // Initialize memory devices with their device_entry_t to set rwcb_context (no loops)
+    ram_memory_init(c64->ram, &c64->system.devices[ids[2]]);
+    
+    // Initialize ROM devices with their address and size information
+    // Pass device_entry_t so ROM can set its own rwcb_context
+    rom_memory_init(c64->basic, 0xA000, 8192, &c64->system.devices[ids[8]]);
+    rom_memory_init(c64->kernal, 0xE000, 8192, &c64->system.devices[ids[9]]);
+    rom_memory_init(c64->cartridge, 0x8000, 16384, &c64->system.devices[ids[10]]);
 
     c64_memory_init(&c64->system);
     c64_callbacks_init(c64);

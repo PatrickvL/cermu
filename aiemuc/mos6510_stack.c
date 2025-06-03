@@ -14,7 +14,7 @@ void pla_func(mos6510_t* cpu_dev) {
     cpu_dev->sp++;
     CPU_INTRA_CYCLE(cpu_dev);
     cpu_dev->a = mos6510_read_cycle(cpu_dev, 0x0100 + cpu_dev->sp);
-    cpu_set_zn(cpu_dev, cpu_dev->a);
+    mos6510_set_zn(cpu_dev, cpu_dev->a);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 

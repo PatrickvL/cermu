@@ -6,7 +6,7 @@
 
 typedef void (*vic_bank_change_func_t)(void* context, uint8_t bank);
 
-typedef struct {
+typedef struct vic_ii_s {
     device_descriptor_t* desc;
     uint8_t registers[47];
     uint8_t raster_line;
@@ -18,5 +18,8 @@ typedef struct {
     c64_bus_t* bus;
     vic_bank_change_func_t bank_change;
 } vic_ii_t;
+
+// Function declarations
+void vic_ii_cycle(vic_ii_t* vic);
 
 #endif // VIC_H

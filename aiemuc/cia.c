@@ -1,6 +1,7 @@
 #include "cia.h"
 #include "c64_bus.h"
 #include <string.h>
+#include <stdlib.h>
 
 void* cia_system_create(device_descriptor_t* desc) {
     cia_t* cia = (cia_t*)calloc(1, sizeof(cia_t));
@@ -82,7 +83,7 @@ void cia_registers_write(void* context, uint16_t address, uint8_t value) {
     }
 }
 
-static device_descriptor_t cia_descriptor = {
+device_descriptor_t cia_descriptor = {
     .create = cia_system_create,
     .destroy = cia_system_destroy,
     .bus_attach = cia_bus_attach,

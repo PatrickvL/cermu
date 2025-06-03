@@ -1,6 +1,8 @@
 #include "device.h"
 #include "mos6510.h"
+#include <stdlib.h>
 #include "c64_bus.h"
+#include <stdlib.h>
 
 // ============================================================================
 // CPU OPERATION FUNCTIONS (inline for performance)
@@ -28,12 +30,11 @@ static inline void mos6510_ioport_write(mos6510_t* cpu_dev, uint16_t addr, uint8
     // Mux Data Direction with Data register and the given value
     uint8_t port_out = mos6510_io_mask(cpu_dev, cpu_dev->io_port[1]);
     // Update the bus mode based on the port output
-    c64_bus_mode_switch(cpu_dev->bus, port_out);
+    c64_bus_mode_switch(cpu_dev->c64_bus, port_out);
 }
 
 // CPU lifecycle wrapper functions
-static void mos6510_init(struct device_s* dev) {
-    mos6510_t* cpu_dev = (mos6510_t*)dev;
+void mos6510_init(mos6510_t* cpu_dev) {
     // Initialize CPU registers and state
     cpu_dev->a = 0;
     cpu_dev->x = 0;
@@ -67,7 +68,7 @@ void mos6510_bus_attach(void* device, c64_bus_t* bus) {
     cpu->c64_bus = bus;
 }
 
-static device_descriptor_t mos6510_descriptor = {
+device_descriptor_t mos6510_descriptor = {
     .create = mos6510_system_create,
     .destroy = mos6510_system_destroy,
     .bus_attach = mos6510_bus_attach,
@@ -88,7 +89,7 @@ uint8_t mos6510_read_cycle(mos6510_t* cpu_dev, uint16_t addr) {
         return value;
     }
     
-    return c64_bus_read_cycle(cpu_dev->bus, addr);
+    return c64_bus_read_cycle(cpu_dev->c64_bus, addr);
 }
 
 // Optimized write cycle implementation with embedded I/O port handling
@@ -101,7 +102,7 @@ void mos6510_write_cycle(mos6510_t* cpu_dev, uint16_t addr, uint8_t value) {
         return;
     }
     
-    c64_bus_write_cycle(cpu_dev->bus, addr, value);
+    c64_bus_write_cycle(cpu_dev->c64_bus, addr, value);
 }
 
 // Interrupt handler - called when IRQ or NMI lines are active
@@ -137,11 +138,11 @@ bool mos6510_step(mos6510_t* cpu_dev) { // _dispatch
 void mos6510_irq(mos6510_t* cpu_dev, uint8_t status) {
     // Push PC and status to stack, set interrupt disable, jump to IRQ vector
     // Push PC high byte
-    cpu_push(cpu_dev, (cpu_dev->pc >> 8) & 0xFF);
+    mos6510_push(cpu_dev, (cpu_dev->pc >> 8) & 0xFF);
     // Push PC low byte
-    cpu_push(cpu_dev, cpu_dev->pc & 0xFF);
+    mos6510_push(cpu_dev, cpu_dev->pc & 0xFF);
     // Push status argument byte
-    cpu_push(cpu_dev, status); 
+    mos6510_push(cpu_dev, status); 
     // Set interrupt disable
     cpu_dev->p |= FLAG_I;
     // Read IRQ vector
@@ -152,9 +153,9 @@ void mos6510_irq(mos6510_t* cpu_dev, uint8_t status) {
 
 void mos6510_nmi(mos6510_t* cpu_dev) {
     // Push PC and status to stack, set interrupt disable, jump to NMI vector
-    cpu_push(cpu_dev, (cpu_dev->pc >> 8) & 0xFF);
-    cpu_push(cpu_dev, cpu_dev->pc & 0xFF);
-    cpu_push(cpu_dev, cpu_dev->p & ~FLAG_B);  // Clear B flag for NMI
+    mos6510_push(cpu_dev, (cpu_dev->pc >> 8) & 0xFF);
+    mos6510_push(cpu_dev, cpu_dev->pc & 0xFF);
+    mos6510_push(cpu_dev, cpu_dev->p & ~FLAG_B);  // Clear B flag for NMI
     cpu_dev->p |= FLAG_I;
     cpu_dev->pc = mos6510_read_cycle(cpu_dev, 0xFFFA);
     uint8_t cpu_data = mos6510_read_cycle(cpu_dev, 0xFFFB);

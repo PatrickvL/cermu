@@ -1,6 +1,10 @@
 #include "vic.h" // TODO : Rename to vic_ii.c or mos????.[hc]
 #include "c64_bus.h"
 #include <string.h>
+#include <stdlib.h>
+
+// Forward declarations
+void vicii_bank_change(void* context, uint8_t bank);
 
 void vicii_system_destroy(void* device) {
     free(device);
@@ -14,7 +18,7 @@ void* vicii_system_create(device_descriptor_t* desc) {
     return vic;
 }
 
-void* vicii_bus_attach(void* device, c64_bus_t* bus) {
+void vicii_bus_attach(void* device, c64_bus_t* bus) {
     vic_ii_t* vic = (vic_ii_t*)device;
     vic->bus = bus;
 }
@@ -50,7 +54,7 @@ void vicii_bank_change(void* context, uint8_t bank) {
     vic->bank = bank;
 }
 
-static device_descriptor_t vic_ii_descriptor = {
+device_descriptor_t vic_ii_descriptor = {
     .create = vicii_system_create,
     .destroy = vicii_system_destroy,
     .bus_attach = vicii_bus_attach,

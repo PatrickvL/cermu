@@ -3,16 +3,17 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "mos6510.h"
 #include "aiemuc.h"
 #include "system.h"
-#include "mos6510.h"
-#include "cia.h"
-#include "ram.h"
-#include "rom.h"
-#include "vic.h"
-#include "sid.h"
 #include "c64_bus.h"
+
+// Forward declarations to avoid circular dependencies
+typedef struct mos6510_s mos6510_t;
+typedef struct ram_s ram_t;
+typedef struct rom_s rom_t;
+typedef struct vic_ii_s vic_ii_t;
+typedef struct cia_s cia_t;
+typedef struct sid_s sid_t;
 
 // TODO : Move to custom.h or delete if not needed
 typedef struct {
@@ -41,13 +42,14 @@ typedef struct c64_s {
 #define READ_ID(id) (((id) >> 4) & 0xF)
 #define WRITE_ID(id) ((id) & 0xF)
 
-// External functions needed by bus
+// Function declarations
+c64_t* c64_system_create(void);
+void c64_system_destroy(c64_t* c64);
 void c64_non_cpu_cycle(c64_t* c64);
-
-// Global variables
-c64_t* c64 = NULL;
-
 void c64_init(c64_t* c64);
 void c64_emulate_frame(c64_t* c64);
+
+// Global variables
+extern c64_t* c64;
 
 #endif // C64_H

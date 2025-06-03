@@ -1,4 +1,5 @@
 #include "rom.h"
+#include "c64.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -6,52 +7,47 @@ void* rom_system_create(device_descriptor_t* desc) {
     rom_t* rom = (rom_t*)calloc(1, sizeof(rom_t));
     if (!rom) return NULL;
     rom->desc = desc;
-    for (int i = 0; i < c64->system.device_count; i++) {
-        if (c64->system.devices[i].device == rom) {
-            rom->size = c64->system.devices[i].size;
-            rom->base_address = c64->system.devices[i].base_address;
-            rom->memory = (uint8_t*)malloc(rom->size);
-            if (!rom->memory) {
-                free(rom);
-                return NULL;
-            }
-            break;
-        }
-    }
+    // Memory allocation and addressing will be done in rom_memory_init
+    rom->memory = NULL;
+    rom->size = 0;
+    rom->base_address = 0;
     return rom;
+}
+
+// Initialize ROM with device entry information
+void rom_memory_init(void* device, uint16_t base_address, uint16_t size, device_entry_t* device_entry) {
+    rom_t* rom = (rom_t*)device;
+    if (!rom) return;
+    
+    rom->size = size;
+    rom->base_address = base_address;
+    rom->memory = (uint8_t*)malloc(rom->size);
+    
+    // Set pre-adjusted rwcb_context so ROM can reuse RAM read code
+    if (device_entry && rom->memory) {
+        device_entry->rwcb_context = rom->memory - base_address;
+    }
+    
+    // Note: Memory content will be loaded by c64_memory_init
 }
 
 void rom_system_destroy(void* context) {
     rom_t* rom = (rom_t*)context;
+    if (!rom) return;
     free(rom->memory);
     free(rom);
 }
 
 uint8_t rom_memory_read(void* context, uint16_t address) {
     uint8_t* memory = (uint8_t*)context;
-    rom_t* rom = NULL;
-    for (int i = 0; i < c64->system.device_count; i++) {
-        if (c64->system.devices[i].desc == &rom_descriptor &&
-            address >= c64->system.devices[i].base_address &&
-            address < c64->system.devices[i].base_address + c64->system.devices[i].size) {
-            rom = (rom_t*)c64->system.devices[i].device;
-            break;
-        }
-    }
-    if (rom) {
-        return memory[address - rom->base_address];
-    }
-    return 0;
+    return memory[address];
 }
 
-void rom_memory_write(void* context, uint16_t address, uint8_t value) {
-    // ROM is read-only
-}
-
-static device_descriptor_t rom_descriptor = {
+device_descriptor_t rom_descriptor = {
     .create = rom_system_create,
     .destroy = rom_system_destroy,
-    .read = rom_memory_read,
-    .write = rom_memory_write,
+    .bus_attach = NULL,
+    .read = rom_memory_read, // ROM read receives pre-adjusted pointer vis rbcb_context
+    .write = NULL, // ROM is read-only, no write function
     .bank_change = NULL
 };
