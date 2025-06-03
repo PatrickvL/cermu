@@ -20,7 +20,7 @@ extern device_descriptor_t c64_bus_descriptor;
 extern device_descriptor_t mos6510_descriptor;
 extern device_descriptor_t ram_descriptor;
 extern device_descriptor_t rom_descriptor;
-extern device_descriptor_t vic_ii_descriptor;
+extern device_descriptor_t mos6581_descriptor;
 extern device_descriptor_t mos6581_descriptor;
 extern device_descriptor_t mos6526_descriptor;
 
@@ -175,7 +175,7 @@ void c64_non_cpu_cycle(c64_t* c64) {
     c64->total_cycles++;
     
     // All chips always run for cycle accuracy - using safe device callers
-    vic_ii_cycle(c64->vic_ii);
+    mos6581_cycle(c64->mos6581);
     mos6526_cycle(c64->cia1);
     mos6526_cycle(c64->cia2);
     mos6581_cycle(c64->mos6581);
@@ -209,7 +209,7 @@ c64_t* c64_system_create() {
         &ram_descriptor,
         &mos6526_descriptor,
         &mos6526_descriptor,
-        &vic_ii_descriptor,
+        &mos6581_descriptor,
         &mos6581_descriptor,
         &custom_descriptor,
         &rom_descriptor,
@@ -222,7 +222,7 @@ c64_t* c64_system_create() {
         (void**)&c64->ram,
         (void**)&c64->cia1,
         (void**)&c64->cia2,
-        (void**)&c64->vic_ii,
+        (void**)&c64->mos6581,
         (void**)&c64->mos6581,
         (void**)&c64->custom,
         (void**)&c64->basic,
