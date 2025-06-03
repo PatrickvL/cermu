@@ -16,7 +16,7 @@ typedef struct ram_s ram_t;
 typedef struct rom_s rom_t;
 typedef struct vic_ii_s vic_ii_t;
 typedef struct mos6526_s mos6526_t;
-typedef struct sid_s sid_t;
+typedef struct mos6581_s mos6581_t;
 
 // TODO : Move to custom.h or delete if not needed
 typedef struct {
@@ -35,7 +35,7 @@ typedef struct c64_s {
     mos6526_t* cia1;
     mos6526_t* cia2;
     custom_t* custom;
-    sid_t* sid;
+    mos6581_t* mos6581;
     rom_t* cartridge;
     rom_t* kernal;
     uint64_t total_cycles;  // Total cycles executed by the system

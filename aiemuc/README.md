@@ -38,7 +38,7 @@ The emulator is split into logical modules for maintainability while preserving 
   - Port A/B handling
   - IRQ/NMI generation
 
-- **`sid.h/c`** - SID sound chip
+- **`mos6581.h/c`** - SID sound chip
   - Envelope generator emulation
   - Register-accurate sound synthesis
 

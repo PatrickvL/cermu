@@ -1,0 +1,197 @@
+MSBuild version 17.14.8+a7a4d5af0 for .NET Framework
+
+cl : command line  warning D9002: ignoring unknown option '-O3' [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  c64_main.c
+  c64.c
+D:\Workspaces\Git\aiemu\aiemuc\c64_bus.h(28,51): warning C4324: 'c64_bus_s': structure was padded due to alignment specifier [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../c64_main.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(138,5): warning C4013: 'c64_non_cpu_cycle' undefined; assuming extern returning int [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../c64_main.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(703,13): warning C4244: '+=': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../c64_main.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(727,30): warning C4244: 'initializing': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../c64_main.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(752,14): warning C4244: '+=': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../c64_main.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\c64.h(51,6): error C2371: 'c64_non_cpu_cycle': redefinition; different basic types [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../c64_main.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\c64_main.c(9,11): warning C4459: declaration of 'c64' hides global declaration [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+      D:\Workspaces\Git\aiemu\aiemuc\c64.h(57,15):
+      see declaration of 'c64'
+  
+D:\Workspaces\Git\aiemu\aiemuc\c64_bus.h(28,51): warning C4324: 'c64_bus_s': structure was padded due to alignment specifier [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../c64.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(138,5): warning C4013: 'c64_non_cpu_cycle' undefined; assuming extern returning int [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../c64.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(703,13): warning C4244: '+=': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../c64.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(727,30): warning C4244: 'initializing': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../c64.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(752,14): warning C4244: '+=': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../c64.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\c64.h(51,6): error C2371: 'c64_non_cpu_cycle': redefinition; different basic types [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../c64.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\c64.c(90,34): warning C4459: declaration of 'c64' hides global declaration [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+      D:\Workspaces\Git\aiemu\aiemuc\c64.c(28,8):
+      see declaration of 'c64'
+  
+D:\Workspaces\Git\aiemu\aiemuc\c64.c(94,32): warning C4459: declaration of 'c64' hides global declaration [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+      D:\Workspaces\Git\aiemu\aiemuc\c64.c(28,8):
+      see declaration of 'c64'
+  
+D:\Workspaces\Git\aiemu\aiemuc\c64.c(108,32): warning C4459: declaration of 'c64' hides global declaration [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+      D:\Workspaces\Git\aiemu\aiemuc\c64.c(28,8):
+      see declaration of 'c64'
+  
+D:\Workspaces\Git\aiemu\aiemuc\c64.c(124,35): warning C4459: declaration of 'c64' hides global declaration [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+      D:\Workspaces\Git\aiemu\aiemuc\c64.c(28,8):
+      see declaration of 'c64'
+  
+D:\Workspaces\Git\aiemu\aiemuc\c64.c(130,52): warning C4244: '=': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+D:\Workspaces\Git\aiemu\aiemuc\c64.c(131,58): warning C4244: '=': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+D:\Workspaces\Git\aiemu\aiemuc\c64.c(132,59): warning C4244: '=': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+D:\Workspaces\Git\aiemu\aiemuc\c64.c(133,62): warning C4244: '=': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+D:\Workspaces\Git\aiemu\aiemuc\c64.c(152,30): warning C4244: '=': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+D:\Workspaces\Git\aiemu\aiemuc\c64.c(138,34): warning C4244: 'initializing': conversion from 'int' to 'uint16_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+D:\Workspaces\Git\aiemu\aiemuc\c64.c(139,26): warning C4244: 'initializing': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+D:\Workspaces\Git\aiemu\aiemuc\c64.c(162,30): warning C4459: declaration of 'c64' hides global declaration [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+      D:\Workspaces\Git\aiemu\aiemuc\c64.c(28,8):
+      see declaration of 'c64'
+  
+D:\Workspaces\Git\aiemu\aiemuc\c64.c(174,31): warning C4459: declaration of 'c64' hides global declaration [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+      D:\Workspaces\Git\aiemu\aiemuc\c64.c(28,8):
+      see declaration of 'c64'
+  
+D:\Workspaces\Git\aiemu\aiemuc\c64.c(195,32): warning C4459: declaration of 'c64' hides global declaration [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+      D:\Workspaces\Git\aiemu\aiemuc\c64.c(28,8):
+      see declaration of 'c64'
+  
+D:\Workspaces\Git\aiemu\aiemuc\c64.c(203,12): warning C4459: declaration of 'c64' hides global declaration [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+      D:\Workspaces\Git\aiemu\aiemuc\c64.c(28,8):
+      see declaration of 'c64'
+  
+D:\Workspaces\Git\aiemu\aiemuc\c64.c(233,31): warning C4305: 'initializing': truncation from 'int' to 'uint16_t' [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  c64_bus.c
+D:\Workspaces\Git\aiemu\aiemuc\c64_bus.h(28,51): warning C4324: 'c64_bus_s': structure was padded due to alignment specifier [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../c64_bus.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(138,5): warning C4013: 'c64_non_cpu_cycle' undefined; assuming extern returning int [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../c64_bus.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(703,13): warning C4244: '+=': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../c64_bus.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(727,30): warning C4244: 'initializing': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../c64_bus.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(752,14): warning C4244: '+=': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../c64_bus.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\c64.h(51,6): error C2371: 'c64_non_cpu_cycle': redefinition; different basic types [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../c64_bus.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\c64_bus.c(22,16): warning C4459: declaration of 'c64' hides global declaration [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+      D:\Workspaces\Git\aiemu\aiemuc\c64.h(57,15):
+      see declaration of 'c64'
+  
+D:\Workspaces\Git\aiemu\aiemuc\c64_bus.c(45,55): warning C4459: declaration of 'c64' hides global declaration [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+      D:\Workspaces\Git\aiemu\aiemuc\c64.h(57,15):
+      see declaration of 'c64'
+  
+  ram.c
+D:\Workspaces\Git\aiemu\aiemuc\c64_bus.h(28,51): warning C4324: 'c64_bus_s': structure was padded due to alignment specifier [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../ram.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(138,5): warning C4013: 'c64_non_cpu_cycle' undefined; assuming extern returning int [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../ram.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(703,13): warning C4244: '+=': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../ram.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(727,30): warning C4244: 'initializing': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../ram.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(752,14): warning C4244: '+=': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../ram.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\c64.h(51,6): error C2371: 'c64_non_cpu_cycle': redefinition; different basic types [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../ram.c')
+  
+  rom.c
+D:\Workspaces\Git\aiemu\aiemuc\c64_bus.h(28,51): warning C4324: 'c64_bus_s': structure was padded due to alignment specifier [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../rom.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(138,5): warning C4013: 'c64_non_cpu_cycle' undefined; assuming extern returning int [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../rom.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(703,13): warning C4244: '+=': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../rom.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(727,30): warning C4244: 'initializing': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../rom.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(752,14): warning C4244: '+=': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../rom.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\c64.h(51,6): error C2371: 'c64_non_cpu_cycle': redefinition; different basic types [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../rom.c')
+  
+  mos6526.c
+D:\Workspaces\Git\aiemu\aiemuc\c64_bus.h(28,51): warning C4324: 'c64_bus_s': structure was padded due to alignment specifier [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../mos6526.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6526.c(95,13): warning C4211: nonstandard extension used: redefined extern to static [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  mos6581.c
+D:\Workspaces\Git\aiemu\aiemuc\c64_bus.h(28,51): warning C4324: 'c64_bus_s': structure was padded due to alignment specifier [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../mos6581.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(138,5): warning C4013: 'c64_non_cpu_cycle' undefined; assuming extern returning int [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../mos6581.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(703,13): warning C4244: '+=': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../mos6581.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(727,30): warning C4244: 'initializing': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../mos6581.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(752,14): warning C4244: '+=': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../mos6581.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\c64.h(51,6): error C2371: 'c64_non_cpu_cycle': redefinition; different basic types [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../mos6581.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6581.c(51,13): warning C4211: nonstandard extension used: redefined extern to static [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  vic.c
+D:\Workspaces\Git\aiemu\aiemuc\c64_bus.h(28,51): warning C4324: 'c64_bus_s': structure was padded due to alignment specifier [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../vic.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\vic.c(66,13): warning C4211: nonstandard extension used: redefined extern to static [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  mos6510.c
+D:\Workspaces\Git\aiemu\aiemuc\c64_bus.h(28,51): warning C4324: 'c64_bus_s': structure was padded due to alignment specifier [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../mos6510.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(138,5): warning C4013: 'c64_non_cpu_cycle' undefined; assuming extern returning int [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../mos6510.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(703,13): warning C4244: '+=': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../mos6510.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(727,30): warning C4244: 'initializing': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../mos6510.c')
+  
+D:\Workspaces\Git\aiemu\aiemuc\mos6510.h(752,14): warning C4244: '+=': conversion from 'int' to 'uint8_t', possible loss of data [D:\Workspaces\Git\aiemu\aiemuc\build\aiemuc.vcxproj]
+  (compiling source file '../mos6510.c')
+  
+  Generating Code...

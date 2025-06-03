@@ -10,7 +10,7 @@
 #include "mos6510.h"
 #include "mos6526.h"
 #include "vic.h"
-#include "sid.h"
+#include "mos6581.h"
 #include "ram.h"
 #include "rom.h"
 #include "c64.h"
@@ -21,7 +21,7 @@ extern device_descriptor_t mos6510_descriptor;
 extern device_descriptor_t ram_descriptor;
 extern device_descriptor_t rom_descriptor;
 extern device_descriptor_t vic_ii_descriptor;
-extern device_descriptor_t sid_descriptor;
+extern device_descriptor_t mos6581_descriptor;
 extern device_descriptor_t mos6526_descriptor;
 
 // Global variable definition
@@ -178,7 +178,7 @@ void c64_non_cpu_cycle(c64_t* c64) {
     vic_ii_cycle(c64->vic_ii);
     mos6526_cycle(c64->cia1);
     mos6526_cycle(c64->cia2);
-    sid_cycle(c64->sid);
+    mos6581_cycle(c64->mos6581);
     
     // Update RDY line based on BA (hardware accurate)
     if (c64->bus->control_lines & BA_LINE) {
@@ -210,7 +210,7 @@ c64_t* c64_system_create() {
         &mos6526_descriptor,
         &mos6526_descriptor,
         &vic_ii_descriptor,
-        &sid_descriptor,
+        &mos6581_descriptor,
         &custom_descriptor,
         &rom_descriptor,
         &rom_descriptor,
@@ -223,7 +223,7 @@ c64_t* c64_system_create() {
         (void**)&c64->cia1,
         (void**)&c64->cia2,
         (void**)&c64->vic_ii,
-        (void**)&c64->sid,
+        (void**)&c64->mos6581,
         (void**)&c64->custom,
         (void**)&c64->basic,
         (void**)&c64->kernal,
