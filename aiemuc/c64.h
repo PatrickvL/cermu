@@ -14,7 +14,7 @@ typedef struct c64_bus_s c64_bus_t;
 // Note: mos6510_t is defined in mos6510.h as anonymous struct, so no forward declaration needed
 typedef struct ram_s ram_t;
 typedef struct rom_s rom_t;
-typedef struct vic_ii_s vic_ii_t;
+typedef struct mos6581_s mos6581_t;
 typedef struct mos6526_s mos6526_t;
 typedef struct mos6581_s mos6581_t;
 
@@ -31,7 +31,7 @@ typedef struct c64_s {
     mos6510_t* mos6510;
     ram_t* ram;
     rom_t* basic;
-    vic_ii_t* vic_ii;
+    mos6581_t* mos6581;
     mos6526_t* cia1;
     mos6526_t* cia2;
     custom_t* custom;

@@ -21,8 +21,8 @@ void c64_bus_memory_write(void* context, uint16_t address, uint8_t value) {
     if (address == 0xDD00) {
         c64_t* c64 = c64_bus->c64;
         uint8_t bank = 3 - (value & 0x3);
-        if (c64->vic_ii->desc->bank_change) {
-            c64->vic_ii->desc->bank_change(c64->vic_ii, bank);
+        if (c64->mos6581->desc->bank_change) {
+            c64->mos6581->desc->bank_change(c64->mos6581, bank);
         }
     }
 }

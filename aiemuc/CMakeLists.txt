@@ -33,7 +33,7 @@ set(SOURCES
     rom.c
     mos6526.c
     mos6581.c
-    vic.c
+    mos6569.c
     mos6510.c
 )
 
