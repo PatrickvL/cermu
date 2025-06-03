@@ -5,14 +5,17 @@
 #include <stdbool.h>
 #include "aiemuc.h"
 #include "system.h"
-#include "c64_bus.h"
+#include "mos6510.h"
+
+// Forward declaration to avoid circular dependency with c64_bus.h
+typedef struct c64_bus_s c64_bus_t;
 
 // Forward declarations to avoid circular dependencies
-typedef struct mos6510_s mos6510_t;
+// Note: mos6510_t is defined in mos6510.h as anonymous struct, so no forward declaration needed
 typedef struct ram_s ram_t;
 typedef struct rom_s rom_t;
 typedef struct vic_ii_s vic_ii_t;
-typedef struct cia_s cia_t;
+typedef struct mos6526_s mos6526_t;
 typedef struct sid_s sid_t;
 
 // TODO : Move to custom.h or delete if not needed
@@ -29,8 +32,8 @@ typedef struct c64_s {
     ram_t* ram;
     rom_t* basic;
     vic_ii_t* vic_ii;
-    cia_t* cia1;
-    cia_t* cia2;
+    mos6526_t* cia1;
+    mos6526_t* cia2;
     custom_t* custom;
     sid_t* sid;
     rom_t* cartridge;
@@ -46,6 +49,7 @@ typedef struct c64_s {
 c64_t* c64_system_create(void);
 void c64_system_destroy(c64_t* c64);
 void c64_non_cpu_cycle(c64_t* c64);
+void c64_system_init(void);
 void c64_init(c64_t* c64);
 void c64_emulate_frame(c64_t* c64);
 
