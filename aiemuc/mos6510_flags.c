@@ -7,51 +7,30 @@
 
 // Clear flag instructions
 void clc_func(mos6510_t* cpu_dev) {
-    CPU_INTRA_CYCLE(cpu_dev);
-    (void)mos6510_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
-    cpu_dev->p &= ~FLAG_C;
-    CPU_OPCODE_FOOTER(cpu_dev);
+    mos6510_flag_clear_helper(cpu_dev, FLAG_C);
 }
 
 void cld_func(mos6510_t* cpu_dev) {
-    CPU_INTRA_CYCLE(cpu_dev);
-    (void)mos6510_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
-    cpu_dev->p &= ~FLAG_D;
-    CPU_OPCODE_FOOTER(cpu_dev);
+    mos6510_flag_clear_helper(cpu_dev, FLAG_D);
 }
 
 void cli_func(mos6510_t* cpu_dev) {
-    CPU_INTRA_CYCLE(cpu_dev);
-    (void)mos6510_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
-    cpu_dev->p &= ~FLAG_I;
-    CPU_OPCODE_FOOTER(cpu_dev);
+    mos6510_flag_clear_helper(cpu_dev, FLAG_I);
 }
 
 void clv_func(mos6510_t* cpu_dev) {
-    CPU_INTRA_CYCLE(cpu_dev);
-    (void)mos6510_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
-    cpu_dev->p &= ~FLAG_V;
-    CPU_OPCODE_FOOTER(cpu_dev);
+    mos6510_flag_clear_helper(cpu_dev, FLAG_V);
 }
 
 // Set flag instructions
 void sec_func(mos6510_t* cpu_dev) {
-    CPU_INTRA_CYCLE(cpu_dev);
-    (void)mos6510_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
-    cpu_dev->p |= FLAG_C;
-    CPU_OPCODE_FOOTER(cpu_dev);
+    mos6510_flag_set_helper(cpu_dev, FLAG_C);
 }
 
 void sed_func(mos6510_t* cpu_dev) {
-    CPU_INTRA_CYCLE(cpu_dev);
-    (void)mos6510_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
-    cpu_dev->p |= FLAG_D;
-    CPU_OPCODE_FOOTER(cpu_dev);
+    mos6510_flag_set_helper(cpu_dev, FLAG_D);
 }
 
 void sei_func(mos6510_t* cpu_dev) {
-    CPU_INTRA_CYCLE(cpu_dev);
-    (void)mos6510_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
-    cpu_dev->p |= FLAG_I;
-    CPU_OPCODE_FOOTER(cpu_dev);
+    mos6510_flag_set_helper(cpu_dev, FLAG_I);
 }

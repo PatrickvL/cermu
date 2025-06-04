@@ -69,8 +69,9 @@ void switch_cpu_mode(uint8_t mode);
 uint8_t mos6510_read_cycle(mos6510_t* cpu_dev, uint16_t addr);
 void mos6510_write_cycle(mos6510_t* cpu_dev, uint16_t addr, uint8_t value);
 
-// Forward declaration for functions used in macros
-void mos6510_interrupt_handler(mos6510_t* cpu_dev);
+ // Forward declaration for functions used in macros
+ void mos6510_interrupt_handler(mos6510_t* cpu_dev);
+ void c64_non_cpu_cycle(c64_t* c64);
 
 // Shield off where the cpu control lines remos6581e (might we want to change this later)
 #define CPU_CONTROL_LINES(cpu_dev) ((cpu_dev)->c64_bus->control_lines)
@@ -448,6 +449,20 @@ static inline void op_adc_void(mos6510_t* cpu_dev, uint8_t value) {
 static inline void mos6510_arithmetic_helper(mos6510_t* cpu_dev, uint8_t (*addr_func)(mos6510_t*), void (*op_func)(mos6510_t*, uint8_t)) {
     uint8_t value = addr_func(cpu_dev);
     op_func(cpu_dev, value);
+    CPU_OPCODE_FOOTER(cpu_dev);
+}
+
+inline void mos6510_flag_clear_helper(mos6510_t* cpu_dev, uint8_t flag) {
+    CPU_INTRA_CYCLE(cpu_dev);
+    (void)mos6510_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
+    cpu_dev->p &= ~flag;
+    CPU_OPCODE_FOOTER(cpu_dev);
+}
+
+inline void mos6510_flag_set_helper(mos6510_t* cpu_dev, uint8_t flag) {
+    CPU_INTRA_CYCLE(cpu_dev);
+    (void)mos6510_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
+    cpu_dev->p |= flag;
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
