@@ -137,12 +137,11 @@ void c64_pla_maps_generate(c64_t* c64) {
         else if (dev->base_address == 0x8000) cartridge_id = i;
     }
     for (int mode = 0; mode < 32; mode++) {
-        bool loram = mode & 1, hiram = mode & 2, charen = !(mode & 4), game = mode & 8;
-        for (int page = 0; page < 256; page++) {
-            uint16_t addr = page * 8;
-            uint8_t id = page;
+        bool loram = mode & 1, hiram = mode & 2, charen = !(mode & 4), game = mode & 8;        for (int page = 0; page < 256; page++) {
+            uint16_t addr = page * 256;  // Fix: page * 256, not page * 8
+            uint8_t id = ram_id;  // Default to RAM instead of page
             if (page == 0) {
-                id = ram_id; // Zero page
+                id = ram_id; // Zero page is always RAM
             } else if (hiram && addr >= 0xE000) {
                 id = kernal_id;
             } else if (loram && addr >= 0xA000 && addr <= 0xBFFF) {
@@ -268,9 +267,8 @@ c64_t* c64_system_create() {
     // Now that all devices have their rwcb_context set, we can initialize the callbacks
     c64_callbacks_init(c64);
     
+    // Now attach devices to the bus
     for (int i = 0; i < 11; i++) {
-        *devices[i] = descriptors[i]->create(descriptors[i]);
-
         if (i == 0) {
             // Make sure that the c64 bus has access to the c64 instance.
             // This is necessary so the below (indirect, via bus_attach)
