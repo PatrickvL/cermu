@@ -78,8 +78,8 @@ device_descriptor_t mos6510_descriptor = {
     .create = mos6510_system_create,
     .destroy = mos6510_system_destroy,
     .bus_attach = mos6510_bus_attach,
-    .read = mos6510_ioport_read,
-    .write = mos6510_ioport_write,
+    .read = NULL,
+    .write = NULL,
     .bank_change = NULL
 };
 
