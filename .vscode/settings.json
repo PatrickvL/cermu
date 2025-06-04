@@ -6,6 +6,7 @@
         "bus.h": "c",
         "stdbool.h": "c",
         "device.h": "c",
-        "stdint.h": "c"
+        "stdint.h": "c",
+        "mos6569.h": "c"
     }
 }
