@@ -40,27 +40,6 @@ void bvs_func(mos6510_t* cpu_dev) {
 
 // Break
 void brk_func(mos6510_t* cpu_dev) {
-    CPU_INTRA_CYCLE(cpu_dev);
-    (void)mos6510_read_cycle(cpu_dev, cpu_dev->pc++);  // Read next byte (padding)
-    CPU_INTRA_CYCLE(cpu_dev);
-    mos6510_write_cycle(cpu_dev, 0x0100 + cpu_dev->sp, (cpu_dev->pc >> 8) & 0xFF);  // Push PC high
-    cpu_dev->sp--;
-    CPU_INTRA_CYCLE(cpu_dev);
-    mos6510_write_cycle(cpu_dev, 0x0100 + cpu_dev->sp, cpu_dev->pc & 0xFF);  // Push PC low
-    cpu_dev->sp--;
-    CPU_INTRA_CYCLE(cpu_dev);
-    mos6510_write_cycle(cpu_dev, 0x0100 + cpu_dev->sp, cpu_dev->p | FLAG_B);  // Push P with B set
-    cpu_dev->sp--;
-    cpu_dev->p |= FLAG_I;  // Set interrupt disable
-    CPU_INTRA_CYCLE(cpu_dev);
-    uint8_t pc_lo = mos6510_read_cycle(cpu_dev, 0xFFFE);  // Read IRQ vector low
-    CPU_INTRA_CYCLE(cpu_dev);
-    uint8_t pc_hi = mos6510_read_cycle(cpu_dev, 0xFFFF);  // Read IRQ vector high
-    cpu_dev->pc = (pc_hi << 8) | pc_lo;
-    CPU_OPCODE_FOOTER(cpu_dev);
-}
-
-void brk_instruction_func(mos6510_t* cpu_dev) {
     cpu_dev->pc++;  // Skip BRK signature byte
     mos6510_irq(cpu_dev, cpu_dev->p | FLAG_B); // Call IRQ handler
     CPU_OPCODE_FOOTER(cpu_dev);
