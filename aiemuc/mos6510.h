@@ -69,9 +69,15 @@ void switch_cpu_mode(uint8_t mode);
 uint8_t mos6510_read_cycle(mos6510_t* cpu_dev, uint16_t addr);
 void mos6510_write_cycle(mos6510_t* cpu_dev, uint16_t addr, uint8_t value);
 
- // Forward declaration for functions used in macros
- void mos6510_interrupt_handler(mos6510_t* cpu_dev);
- void c64_non_cpu_cycle(c64_t* c64);
+// Forward declaration for functions used in macros
+void mos6510_interrupt_handler(mos6510_t* cpu_dev);
+void c64_non_cpu_cycle(c64_t* c64);
+
+// CPU opcode dispatch function
+static inline void mos6510_opcode_dispatch(mos6510_t* cpu, uint8_t opcode) {
+    mos6510_opcode_handler_t handler = mos6510_opcode_handlers[opcode];
+    handler(cpu);
+}
 
 // Shield off where the cpu control lines remos6581e (might we want to change this later)
 #define CPU_CONTROL_LINES(cpu_dev) ((cpu_dev)->c64_bus->control_lines)
@@ -118,7 +124,7 @@ static inline void mos6510_set_zn(mos6510_t* cpu_dev, uint8_t value) {
 }
 
 // Stack operations
-static inline void mos6510_push(mos6510_t* cpu_dev, uint8_t data) {
+inline void mos6510_push(mos6510_t* cpu_dev, uint8_t data) {
     mos6510_write_cycle(cpu_dev, 0x0100 + cpu_dev->sp, data);
     cpu_dev->sp--;
 }
@@ -128,11 +134,21 @@ static inline uint8_t mos6510_pop(mos6510_t* cpu_dev) {
     return mos6510_read_cycle(cpu_dev, 0x0100 + cpu_dev->sp);
 }
 
-// CPU opcode dispatch function
-static inline void mos6510_opcode_dispatch(mos6510_t* cpu, uint8_t opcode) {
-    mos6510_opcode_handler_t handler = mos6510_opcode_handlers[opcode];
-    handler(cpu);
+// BRK/IRQ common sequence - handles the interrupt setup portion
+static inline void mos6510_interrupt_sequence(mos6510_t* cpu_dev, uint8_t status_flags, uint16_t vector_addr) {
+    // Push PC and status unconditionally (skip RDY checks)
+    mos6510_push(cpu_dev, (cpu_dev->pc >> 8) & 0xFF);
+    mos6510_push(cpu_dev, cpu_dev->pc & 0xFF);
+    mos6510_push(cpu_dev, status_flags);
+    // Set interrupt disable
+    cpu_dev->p |= FLAG_I;
+    // Read vector low and high without RDY checks
+    uint8_t pc_lo = mos6510_read_cycle(cpu_dev, vector_addr);
+    uint8_t pc_hi = mos6510_read_cycle(cpu_dev, vector_addr + 1);
+    cpu_dev->pc = (pc_hi << 8) | pc_lo;
+    // Note : callers will dispatch the next instruction
 }
+
 
 // ============================================================================
 // ADDRESSING MODE HELPER FUNCTIONS (inline for performance)

@@ -110,21 +110,6 @@ void mos6510_write_cycle(mos6510_t* cpu_dev, uint16_t addr, uint8_t value) {
     c64_bus_write_cycle(cpu_dev->c64_bus, addr, value);
 }
 
-// BRK/IRQ common sequence - handles the interrupt setup portion
-inline void mos6510_interrupt_sequence(mos6510_t* cpu_dev, uint8_t status_flags, uint16_t vector_addr) {
-    // Push PC and status unconditionally (skip RDY checks)
-    mos6510_push(cpu_dev, (cpu_dev->pc >> 8) & 0xFF);
-    mos6510_push(cpu_dev, cpu_dev->pc & 0xFF);
-    mos6510_push(cpu_dev, status_flags);
-    // Set interrupt disable
-    cpu_dev->p |= FLAG_I;
-    // Read vector low and high without RDY checks
-    uint8_t pc_lo = mos6510_read_cycle(cpu_dev, vector_addr);
-    uint8_t pc_hi = mos6510_read_cycle(cpu_dev, vector_addr + 1);
-    cpu_dev->pc = (pc_hi << 8) | pc_lo;
-    // Note : callers will dispatch the next instruction
-}
-
 void mos6510_nmi(mos6510_t* cpu_dev) {
     mos6510_interrupt_sequence(cpu_dev, cpu_dev->p & ~FLAG_B, 0xFFFA);
 }

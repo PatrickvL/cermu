@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#include "aiemuc.h"
 #include "device.h"
 #include "system.h"
 #include "c64.h"
