@@ -22,7 +22,7 @@ typedef struct {
 } system_8bit_t;
 
 // Function declarations
-uint8_t system_device_register(system_8bit_t* system, void* device, device_descriptor_t* desc, uint16_t base, uint16_t size);
+uint8_t system_device_register(system_8bit_t* system, void* device, device_descriptor_t* desc, uint16_t base, unsigned int size);
 void system_devices_destroy(system_8bit_t* system);
 
 #endif // SYSTEM_H
