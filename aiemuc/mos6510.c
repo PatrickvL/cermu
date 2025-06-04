@@ -2,6 +2,35 @@
 #include "mos6510.h"
 #include "c64_bus.h"
 #include <stdlib.h>
+#include <string.h>
+
+// Interception support for threaded dispatch
+static bool intercepting = false;
+static mos6510_opcode_handler_t original_handlers[256];
+
+// Stub that restores original table on first hit
+static void intercept_stub(mos6510_t* cpu) {
+    (void)cpu; // Avoid unused parameter warning
+    if (!intercepting) return;
+    memcpy(mos6510_opcode_handlers, original_handlers, sizeof(original_handlers));
+    intercepting = false;
+}
+
+// Public API to begin interception
+void mos6510_start_intercept(void) {
+    memcpy(original_handlers, mos6510_opcode_handlers, sizeof(original_handlers));
+    for (int i = 0; i < 256; ++i) {
+        mos6510_opcode_handlers[i] = intercept_stub;
+    }
+    intercepting = true;
+}
+
+// Public API to cancel interception early if needed
+void mos6510_stop_intercept(void) {
+    if (!intercepting) return;
+    memcpy(mos6510_opcode_handlers, original_handlers, sizeof(original_handlers));
+    intercepting = false;
+}
 
 // ============================================================================
 // CPU OPERATION FUNCTIONS (inline for performance)

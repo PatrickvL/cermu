@@ -48,6 +48,24 @@ typedef void (*mos6510_opcode_handler_t)(mos6510_t* cpu_dev);
 // Global instruction table
 extern mos6510_opcode_handler_t mos6510_opcode_handlers[256];
 
+
+// --- Interception support: replace handlers with stubs until next opcode ---
+/**
+ * Begin intercepting the next opcode fetch.  All 256 handlers will be
+ * replaced with an internal stub that restores the original table on its
+ * first invocation.
+ */
+void mos6510_start_intercept(void);
+
+/**
+ * Cancel interception and restore the original handler table immediately.
+ */
+void mos6510_stop_intercept(void);
+
+// Interception support: monkey-patch opcode table with stubs until next opcode
+void mos6510_start_intercept(void);
+void mos6510_stop_intercept(void);
+
 // MOS6510 Status Register Flags
 #define FLAG_C  0x01    // Carry
 #define FLAG_Z  0x02    // Zero
