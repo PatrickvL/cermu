@@ -43,13 +43,13 @@ void* c64_bus_system_create(device_descriptor_t* desc) {
 }
 
 void c64_bus_system_attach(c64_bus_t* c64_bus, c64_t* c64) {
-    c64_bus->c64 = (c64_t*)c64;
+    c64_bus->c64 = c64;
 }
 
 device_descriptor_t c64_bus_descriptor = {
     .create = c64_bus_system_create,
     .destroy = c64_bus_system_destroy,
-    .bus_attach = c64_bus_system_attach,
+    .bus_attach = NULL,
     .read = c64_bus_memory_read,
     .write = c64_bus_memory_write,
     .bank_change = NULL

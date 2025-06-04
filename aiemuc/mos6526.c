@@ -92,7 +92,7 @@ device_descriptor_t mos6526_descriptor = {
     .bank_change = NULL
 };
 
-static void mos6526_cycle(mos6526_t* cia) {
+void mos6526_cycle(mos6526_t* cia) {
     // Timer A always decrements when enabled (hardware accurate)
     if (cia->cra & 1) {
         if (cia->timer_a == 0) {

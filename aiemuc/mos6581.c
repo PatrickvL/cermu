@@ -7,11 +7,6 @@ void mos6581_system_destroy(void* device) {
     free(device);
 }
 
-void mos6581_bus_attach(void* device, void* bus) {
-    mos6581_t* sid = (mos6581_t*)device;
-    c64_bus_t* c64_bus = (c64_bus_t*)bus;
-}
-
 void* mos6581_system_create(device_descriptor_t* desc) {
     mos6581_t* sid = (mos6581_t*)calloc(1, sizeof(mos6581_t));
     if (!sid) return NULL;
@@ -42,13 +37,13 @@ void mos6581_registers_write(void* context, uint16_t address, uint8_t value) {
 device_descriptor_t mos6581_descriptor = {
     .create = mos6581_system_create,
     .destroy = mos6581_system_destroy,
-    .bus_attach = mos6581_bus_attach,
+    .bus_attach = NULL,
     .read = mos6581_registers_read,
     .write = mos6581_registers_write,
     .bank_change = NULL
 };
 
-static void mos6581_cycle(mos6581_t* sid) {
+void mos6581_cycle(mos6581_t* sid) {
     // Envelope generators always run (hardware accurate)
     for (int voice = 0; voice < 3; voice++) {
         sid->envelope_counter[voice]++;

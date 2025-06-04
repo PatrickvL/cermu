@@ -63,7 +63,7 @@ device_descriptor_t mos6569_descriptor = {
     .bank_change = mos6569_bank_change
 };
 
-static void mos6569_cycle(mos6569_t* vicii) {
+void mos6569_cycle(mos6569_t* vicii) {
     // Always increment raster timing
     vicii->raster_cycle++;
     if (vicii->raster_cycle >= 63) {

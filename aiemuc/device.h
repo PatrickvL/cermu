@@ -25,8 +25,8 @@ typedef struct {
     void* device;
     device_descriptor_t* desc;
     void* rwcb_context; // Context for read and write callbacks. Often the deivce itself, sometimes a buffer or other structure.
+    unsigned int size;
     uint16_t base_address;
-    uint16_t size;
     uint8_t device_id;
 } device_entry_t;
 

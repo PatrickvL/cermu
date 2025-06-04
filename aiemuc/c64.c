@@ -15,6 +15,11 @@
 #include "ram.h"
 #include "rom.h"
 
+static uint8_t initial_ram[65536] = {0};
+static uint8_t basic_rom[8192] = {0};
+static uint8_t kernal_rom[8192] = {0};
+static uint8_t cartridge_rom[16384] = {0};
+
 // Device descriptor declarations (defined in respective .c files)
 extern device_descriptor_t c64_bus_descriptor;
 extern device_descriptor_t mos6510_descriptor;
@@ -41,11 +46,6 @@ void custom_system_destroy(void* device) {
     free(device);
 }
 
-void custom_bus_attach(void* device, void* bus) {
-    custom_t* custom = (custom_t*)device;
-    c64_bus_t* c64_bus = (c64_bus_t*)bus;
-}
-
 uint8_t custom_registers_read(void* context, uint16_t address) {
     custom_t* custom = (custom_t*)context;
     return custom->registers[address & 0xFF];
@@ -59,7 +59,7 @@ void custom_registers_write(void* context, uint16_t address, uint8_t value) {
 device_descriptor_t custom_descriptor = {
     .create = custom_system_create,
     .destroy = custom_system_destroy,
-    .bus_attach = custom_bus_attach,
+    .bus_attach = NULL,
     .read = custom_registers_read,
     .write = custom_registers_write,
     .bank_change = NULL
@@ -88,10 +88,15 @@ void c64_memory_init(system_8bit_t* system) {
 }
 
 uint8_t c64_detached_read(c64_t* c64, uint16_t address) {
+    (void)c64;
+    (void)address;
     return 0xFF; // TODO : Return the current bus.data?
 }
 
 void c64_detached_write(c64_t* c64, uint16_t address, uint8_t value) {
+    (void)c64;
+    (void)address;
+    (void)value;
     // Do nothing - detached devices do not write
 }
 
@@ -230,7 +235,7 @@ c64_t* c64_system_create() {
         (void**)&c64->cartridge,
     };
     uint16_t bases[] = {0x0000, 0x0000, 0x0000, 0xDC00, 0xDD00, 0xD000, 0xD400, 0xD800, 0xA000, 0xE000, 0x8000};
-    uint16_t sizes[] = {0, 0, 65536, 256, 256, 1024, 1024, 1024, 8192, 8192, 16384};
+    unsigned int sizes[] = {0, 0, 65536, 256, 256, 1024, 1024, 1024, 8192, 8192, 16384};
     uint8_t ids[11];
 
     for (int i = 0; i < 11; i++) {
@@ -270,4 +275,13 @@ c64_t* c64_system_create() {
 
 void c64_system_init() {
     c64 = c64_system_create();
+}
+
+void c64_init(c64_t* c64_ptr) {
+    (void)c64_ptr;
+    c64_system_init();
+}
+
+void c64_emulate_frame(c64_t* c64) {
+    (void)c64;
 }

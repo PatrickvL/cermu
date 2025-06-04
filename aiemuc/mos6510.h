@@ -452,14 +452,14 @@ static inline void mos6510_arithmetic_helper(mos6510_t* cpu_dev, uint8_t (*addr_
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
-inline void mos6510_flag_clear_helper(mos6510_t* cpu_dev, uint8_t flag) {
+static inline void mos6510_flag_clear_helper(mos6510_t* cpu_dev, uint8_t flag) {
     CPU_INTRA_CYCLE(cpu_dev);
     (void)mos6510_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
     cpu_dev->p &= ~flag;
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
-inline void mos6510_flag_set_helper(mos6510_t* cpu_dev, uint8_t flag) {
+static inline void mos6510_flag_set_helper(mos6510_t* cpu_dev, uint8_t flag) {
     CPU_INTRA_CYCLE(cpu_dev);
     (void)mos6510_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
     cpu_dev->p |= flag;
