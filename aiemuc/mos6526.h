@@ -22,6 +22,6 @@ typedef struct mos6526_s {
 } mos6526_t;
 
 // Function declarations
-void mos6526_cycle(mos6526_t* mos6526);
+void mos6526_cycle(mos6526_t* cia);
 
 #endif // CIA_H

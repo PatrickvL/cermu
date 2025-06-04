@@ -26,6 +26,6 @@ typedef struct mos6569_s {
 } mos6569_t;
 
 // Function declarations
-void mos6581_cycle(mos6569_t* vic);
+void mos6569_cycle(mos6569_t* vicii);
 
 #endif // MOS6569_H

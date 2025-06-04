@@ -1,6 +1,6 @@
 #include "c64_bus.h"
 #include "c64.h"
-#include "vic.h"
+#include "mos6569.h" // vicii
 #include <stdlib.h>
 
 uint8_t c64_bus_memory_read(void* device, uint16_t address) {
@@ -21,8 +21,8 @@ void c64_bus_memory_write(void* context, uint16_t address, uint8_t value) {
     if (address == 0xDD00) {
         c64_t* c64 = c64_bus->c64;
         uint8_t bank = 3 - (value & 0x3);
-        if (c64->mos6581->desc->bank_change) {
-            c64->mos6581->desc->bank_change(c64->mos6581, bank);
+        if (c64->sid->desc->bank_change) {
+            c64->sid->desc->bank_change(c64->sid, bank);
         }
     }
 }

@@ -6,23 +6,23 @@
 #include "aiemuc.h"
 #include "device.h"
 #include "system.h"
+#include "c64.h"
 #include "c64_bus.h"
-#include "mos6510.h"
-#include "mos6526.h"
-#include "vic.h"
-#include "mos6581.h"
+#include "mos6510.h" // cpu
+#include "mos6526.h" // cia
+#include "mos6581.h" // sid
+#include "mos6569.h" // vicii
 #include "ram.h"
 #include "rom.h"
-#include "c64.h"
 
 // Device descriptor declarations (defined in respective .c files)
 extern device_descriptor_t c64_bus_descriptor;
 extern device_descriptor_t mos6510_descriptor;
+extern device_descriptor_t mos6526_descriptor;
+extern device_descriptor_t mos6581_descriptor;
+extern device_descriptor_t mos6569_descriptor;
 extern device_descriptor_t ram_descriptor;
 extern device_descriptor_t rom_descriptor;
-extern device_descriptor_t mos6581_descriptor;
-extern device_descriptor_t mos6581_descriptor;
-extern device_descriptor_t mos6526_descriptor;
 
 // Global variable definition
 c64_t* c64 = NULL;
@@ -175,10 +175,10 @@ void c64_non_cpu_cycle(c64_t* c64) {
     c64->total_cycles++;
     
     // All chips always run for cycle accuracy - using safe device callers
-    mos6581_cycle(c64->mos6581);
+    mos6581_cycle(c64->sid);
     mos6526_cycle(c64->cia1);
     mos6526_cycle(c64->cia2);
-    mos6581_cycle(c64->mos6581);
+    mos6569_cycle(c64->vicii);
     
     // Update RDY line based on BA (hardware accurate)
     if (c64->bus->control_lines & BA_LINE) {
@@ -210,7 +210,7 @@ c64_t* c64_system_create() {
         &mos6526_descriptor,
         &mos6526_descriptor,
         &mos6581_descriptor,
-        &mos6581_descriptor,
+        &mos6569_descriptor,
         &custom_descriptor,
         &rom_descriptor,
         &rom_descriptor,
@@ -222,8 +222,8 @@ c64_t* c64_system_create() {
         (void**)&c64->ram,
         (void**)&c64->cia1,
         (void**)&c64->cia2,
-        (void**)&c64->mos6581,
-        (void**)&c64->mos6581,
+        (void**)&c64->sid,
+        (void**)&c64->vicii,
         (void**)&c64->custom,
         (void**)&c64->basic,
         (void**)&c64->kernal,

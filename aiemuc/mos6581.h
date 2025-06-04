@@ -17,6 +17,6 @@ typedef struct mos6581_s {
 } mos6581_t;
 
 // Function declarations
-void mos6581_cycle(mos6581_t* mos6581);
+void mos6581_cycle(mos6581_t* sid);
 
 #endif // MOS6581_H
