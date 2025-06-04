@@ -1,6 +1,5 @@
 #include "c64_bus.h"
 #include "c64.h"
-#include "mos6569.h" // vicii
 #include <stdlib.h>
 
 uint8_t c64_bus_memory_read(void* device, uint16_t address) {

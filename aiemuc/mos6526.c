@@ -14,7 +14,8 @@ void mos6526_system_destroy(void* device) {
     free(device);
 }
 
-void mos6526_bus_attach(void* device, c64_bus_t* bus) {
+void mos6526_bus_attach(void* device, void* bus) {
+    c64_bus_t* c64_bus = (c64_bus_t*)bus;
     mos6526_t* cia = (mos6526_t*)device;
     cia->bus = bus;
 }

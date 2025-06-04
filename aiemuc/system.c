@@ -1,5 +1,4 @@
 #include "system.h"
-//#include "device.h"
 
 uint8_t system_device_register(system_8bit_t* system, void* device, device_descriptor_t* desc, uint16_t base, unsigned int size) {
     if (system->device_count >= 16) return 0xFF;

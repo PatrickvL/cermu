@@ -249,13 +249,10 @@ c64_t* c64_system_create() {
             c64_system_destroy(c64);
             return NULL;
         }
-        
-        if (descriptors[i]->bus_attach) {
-            descriptors[i]->bus_attach(*devices[i], c64->bus);
-        }
-    }
+    }    
 
-    c64_bus_system_attach(c64->bus, c64);
+    // Now having a registry of all devices, the PLA maps can be generated
+    c64_pla_maps_generate(c64);
 
     // Initialize memory devices with their device_entry_t to set rwcb_context (no loops)
     ram_memory_init(c64->ram, &c64->system.devices[ids[2]]);
@@ -265,10 +262,27 @@ c64_t* c64_system_create() {
     rom_memory_init(c64->basic, 0xA000, 8192, &c64->system.devices[ids[8]]);
     rom_memory_init(c64->kernal, 0xE000, 8192, &c64->system.devices[ids[9]]);
     rom_memory_init(c64->cartridge, 0x8000, 16384, &c64->system.devices[ids[10]]);
-
+    
+    // Set default memory contents TODO : Read from file?
     c64_memory_init(&c64->system);
+
+    // Now that all devices have their rwcb_context set, we can initialize the callbacks
     c64_callbacks_init(c64);
-    c64_pla_maps_generate(c64);
+    
+    for (int i = 0; i < 11; i++) {
+        *devices[i] = descriptors[i]->create(descriptors[i]);
+
+        if (i == 0) {
+            // Make sure that the c64 bus has access to the c64 instance.
+            // This is necessary so the below (indirect, via bus_attach)
+            // call to mos6510_bus_attach, which calls mos6510_ioport_write,
+            // can call c64_bus_mode_switch with the actual c64 instance.
+            c64_bus_system_attach(c64->bus, c64);
+        }
+        if (descriptors[i]->bus_attach) {
+            descriptors[i]->bus_attach(*devices[i], c64->bus);
+        }
+    }
 
     return c64;
 }
