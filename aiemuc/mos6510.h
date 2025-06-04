@@ -85,14 +85,18 @@ void mos6510_write_cycle(mos6510_t* cpu_dev, uint16_t addr, uint8_t value);
     if (!CPU_READY(cpu_dev)) { c64_non_cpu_cycle(cpu_dev->c64_bus->c64); goto UNIQUE_LABEL(cpu_ready_stall); } \
 } while(0)
 
+#define CPU_NEXT_INSTRUCTION_DISPATCH(cpu_dev); do { \
+    uint8_t opcode = mos6510_read_cycle(cpu_dev, cpu_dev->pc++); \
+    mos6510_opcode_dispatch(cpu_dev, opcode); \
+} while(0)
+
 #define CPU_NEXT_INSTRUCTION(cpu_dev) do { \
     if (unlikely(CPU_CONTROL_LINES(cpu_dev) & (IRQ_LINE | NMI_LINE))) { \
         mos6510_interrupt_handler(cpu_dev); \
         return; \
     } \
     CPU_INTRA_CYCLE(cpu_dev); \
-    uint8_t opcode = mos6510_read_cycle(cpu_dev, cpu_dev->pc++); \
-    mos6510_opcode_dispatch(cpu_dev, opcode); \
+    CPU_NEXT_INSTRUCTION_DISPATCH(cpu_dev); \
     return; \
 } while(0)
 
@@ -592,25 +596,6 @@ static inline uint8_t mos6510_pop_with_wait(mos6510_t* cpu_dev) {
     CPU_INTRA_CYCLE(cpu_dev);
     cpu_dev->sp++;
     return mos6510_read_cycle(cpu_dev, 0x0100 + cpu_dev->sp);
-}
-
-// BRK/IRQ common sequence - handles the interrupt setup portion
-static inline void mos6510_interrupt_sequence(mos6510_t* cpu_dev, uint8_t status_flags, uint16_t vector_addr) {
-    // Push PC high byte
-    mos6510_push_with_wait(cpu_dev, (cpu_dev->pc >> 8) & 0xFF);
-    // Push PC low byte  
-    mos6510_push_with_wait(cpu_dev, cpu_dev->pc & 0xFF);
-    // Push status register
-    mos6510_push_with_wait(cpu_dev, status_flags);
-    // Set interrupt disable
-    cpu_dev->p |= FLAG_I;
-    // Read vector low
-    CPU_INTRA_CYCLE(cpu_dev);
-    uint8_t pc_lo = mos6510_read_cycle(cpu_dev, vector_addr);
-    // Read vector high
-    CPU_INTRA_CYCLE(cpu_dev);
-    uint8_t pc_hi = mos6510_read_cycle(cpu_dev, vector_addr + 1);
-    cpu_dev->pc = (pc_hi << 8) | pc_lo;
 }
 
 // ============================================================================

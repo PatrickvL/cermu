@@ -1,6 +1,5 @@
 #include "device.h"
 #include "mos6510.h"
-#include <stdlib.h>
 #include "c64_bus.h"
 #include <stdlib.h>
 
@@ -111,6 +110,29 @@ void mos6510_write_cycle(mos6510_t* cpu_dev, uint16_t addr, uint8_t value) {
     c64_bus_write_cycle(cpu_dev->c64_bus, addr, value);
 }
 
+// BRK/IRQ common sequence - handles the interrupt setup portion
+inline void mos6510_interrupt_sequence(mos6510_t* cpu_dev, uint8_t status_flags, uint16_t vector_addr) {
+    // Push PC and status unconditionally (skip RDY checks)
+    mos6510_push(cpu_dev, (cpu_dev->pc >> 8) & 0xFF);
+    mos6510_push(cpu_dev, cpu_dev->pc & 0xFF);
+    mos6510_push(cpu_dev, status_flags);
+    // Set interrupt disable
+    cpu_dev->p |= FLAG_I;
+    // Read vector low and high without RDY checks
+    uint8_t pc_lo = mos6510_read_cycle(cpu_dev, vector_addr);
+    uint8_t pc_hi = mos6510_read_cycle(cpu_dev, vector_addr + 1);
+    cpu_dev->pc = (pc_hi << 8) | pc_lo;
+    // Note : callers will dispatch the next instruction
+}
+
+void mos6510_nmi(mos6510_t* cpu_dev) {
+    mos6510_interrupt_sequence(cpu_dev, cpu_dev->p & ~FLAG_B, 0xFFFA);
+}
+
+void mos6510_irq(mos6510_t* cpu_dev, uint8_t status) {
+    mos6510_interrupt_sequence(cpu_dev, status, 0xFFFE);
+}
+
 // Interrupt handler - called when IRQ or NMI lines are active
 void mos6510_interrupt_handler(mos6510_t* cpu_dev) {
     if (CPU_CONTROL_LINES(cpu_dev) & NMI_LINE) {
@@ -141,33 +163,6 @@ bool mos6510_step(mos6510_t* cpu_dev) { // _dispatch
     return true;
 }
 
-void mos6510_irq(mos6510_t* cpu_dev, uint8_t status) {
-    // Push PC and status to stack, set interrupt disable, jump to IRQ vector
-    // Push PC high byte
-    mos6510_push(cpu_dev, (cpu_dev->pc >> 8) & 0xFF);
-    // Push PC low byte
-    mos6510_push(cpu_dev, cpu_dev->pc & 0xFF);
-    // Push status argument byte
-    mos6510_push(cpu_dev, status); 
-    // Set interrupt disable
-    cpu_dev->p |= FLAG_I;
-    // Read IRQ vector
-    cpu_dev->pc = mos6510_read_cycle(cpu_dev, 0xFFFE);
-    uint8_t cpu_data = mos6510_read_cycle(cpu_dev, 0xFFFF);
-    cpu_dev->pc |= (cpu_data << 8);
-}
-
-void mos6510_nmi(mos6510_t* cpu_dev) {
-    // Push PC and status to stack, set interrupt disable, jump to NMI vector
-    mos6510_push(cpu_dev, (cpu_dev->pc >> 8) & 0xFF);
-    mos6510_push(cpu_dev, cpu_dev->pc & 0xFF);
-    mos6510_push(cpu_dev, cpu_dev->p & ~FLAG_B);  // Clear B flag for NMI
-    cpu_dev->p |= FLAG_I;
-    cpu_dev->pc = mos6510_read_cycle(cpu_dev, 0xFFFA);
-    uint8_t cpu_data = mos6510_read_cycle(cpu_dev, 0xFFFB);
-    cpu_dev->pc |= (cpu_data << 8);
-}
-
 // ============================================================================
 // CPU EXECUTION LOOP WITH FUNCTION POINTERS (Universal)
 // ============================================================================
@@ -195,7 +190,7 @@ void mos6510_execute(mos6510_t* cpu_dev) {
 
 // Global MOS6510 instruction table using function pointers
 mos6510_opcode_handler_t mos6510_opcode_handlers[256] = {
-    [0x00] = brk_instruction_func,   // BRK
+    [0x00] = brk_func,               // BRK
     [0x01] = ora_indirect_x_func,    // ORA ($nn,X)
     [0x02] = jam_func,               // JAM (illegal)
     [0x03] = slo_indirect_x_func,    // SLO ($nn,X)
