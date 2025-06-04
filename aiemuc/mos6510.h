@@ -260,7 +260,7 @@ static inline uint8_t addr_zp_ind_y(mos6510_t* cpu_dev) {
 // ============================================================================
 
 // ADC - Add with Carry
-static inline uint8_t op_adc(mos6510_t* cpu_dev, uint8_t value) {
+static inline void op_adc(mos6510_t* cpu_dev, uint8_t value) {
     if (cpu_dev->p & FLAG_D) {
         // Decimal mode - BCD arithmetic
         uint8_t carry_in = (cpu_dev->p & FLAG_C) ? 1 : 0;
@@ -304,14 +304,12 @@ static inline uint8_t op_adc(mos6510_t* cpu_dev, uint8_t value) {
         }
         
         cpu_dev->a = result;
-        return result;
     } else {    
         uint16_t temp = cpu_dev->a + value + (cpu_get_flag(cpu_dev, FLAG_C) ? 1 : 0);
         mos6510_set_flag(cpu_dev, FLAG_C, temp > 255);
         mos6510_set_flag(cpu_dev, FLAG_V, (~(cpu_dev->a ^ value) & (cpu_dev->a ^ temp)) & 0x80);
         cpu_dev->a = temp & 0xFF;
         mos6510_set_zn(cpu_dev, cpu_dev->a);
-        return cpu_dev->a;
     }
 }
 
@@ -426,29 +424,18 @@ static inline uint8_t op_ror(mos6510_t* cpu_dev, uint8_t value) {
 }
 
 // SBC - Subtract with Carry
-static inline uint8_t op_sbc(mos6510_t* cpu_dev, uint8_t value) {
+static inline void op_sbc(mos6510_t* cpu_dev, uint8_t value) {
     uint16_t temp = cpu_dev->a - value - (cpu_get_flag(cpu_dev, FLAG_C) ? 0 : 1);
     mos6510_set_flag(cpu_dev, FLAG_C, temp < 0x100);
     mos6510_set_flag(cpu_dev, FLAG_V, ((cpu_dev->a ^ value) & (cpu_dev->a ^ temp)) & 0x80);
     cpu_dev->a = temp & 0xFF;
     mos6510_set_zn(cpu_dev, cpu_dev->a);
-    return cpu_dev->a;
-}
-
-// Void wrapper for SBC (for ISC illegal instruction)
-static inline void op_sbc_void(mos6510_t* cpu_dev, uint8_t value) {
-    (void)op_sbc(cpu_dev, value);
-}
-
-// Void wrapper for ADC (for RRA illegal instruction)
-static inline void op_adc_void(mos6510_t* cpu_dev, uint8_t value) {
-    (void)op_adc(cpu_dev, value);
 }
 
 // Generic arithmetic operation helper - combines addressing mode with operation
-static inline void mos6510_arithmetic_helper(mos6510_t* cpu_dev, uint8_t (*addr_func)(mos6510_t*), uint8_t (*op_func)(mos6510_t*, uint8_t)) {
+static inline void mos6510_arithmetic_helper(mos6510_t* cpu_dev, uint8_t (*addr_func)(mos6510_t*), void (*op_func)(mos6510_t*, uint8_t)) {
     uint8_t value = addr_func(cpu_dev);
-    (void)op_func(cpu_dev, value);
+    op_func(cpu_dev, value);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 

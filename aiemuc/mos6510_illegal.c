@@ -87,37 +87,37 @@ void dcp_indirect_y_func(mos6510_t* cpu_dev) {
 // ISC - INC then SBC
 void isc_zero_page_func(mos6510_t* cpu_dev) {
     uint8_t value = addr_zp(cpu_dev);
-    mos6510_illegal_inc_dec_combo(cpu_dev, value, 1, op_sbc_void);
+    mos6510_illegal_inc_dec_combo(cpu_dev, value, 1, op_sbc);
 }
 
 void isc_zero_page_x_func(mos6510_t* cpu_dev) {
     uint8_t value = addr_zpx(cpu_dev);
-    mos6510_illegal_inc_dec_combo(cpu_dev, value, 1, op_sbc_void);
+    mos6510_illegal_inc_dec_combo(cpu_dev, value, 1, op_sbc);
 }
 
 void isc_absolute_func(mos6510_t* cpu_dev) {
     uint8_t value = addr_abs(cpu_dev);
-    mos6510_illegal_inc_dec_combo(cpu_dev, value, 1, op_sbc_void);
+    mos6510_illegal_inc_dec_combo(cpu_dev, value, 1, op_sbc);
 }
 
 void isc_absolute_x_func(mos6510_t* cpu_dev) {
     uint8_t value = addr_absx(cpu_dev);
-    mos6510_illegal_inc_dec_combo(cpu_dev, value, 1, op_sbc_void);
+    mos6510_illegal_inc_dec_combo(cpu_dev, value, 1, op_sbc);
 }
 
 void isc_absolute_y_func(mos6510_t* cpu_dev) {
     uint8_t value = addr_absy(cpu_dev);
-    mos6510_illegal_inc_dec_combo(cpu_dev, value, 1, op_sbc_void);
+    mos6510_illegal_inc_dec_combo(cpu_dev, value, 1, op_sbc);
 }
 
 void isc_indirect_x_func(mos6510_t* cpu_dev) {
     uint8_t value = addr_zpx_ind(cpu_dev);
-    mos6510_illegal_inc_dec_combo(cpu_dev, value, 1, op_sbc_void);
+    mos6510_illegal_inc_dec_combo(cpu_dev, value, 1, op_sbc);
 }
 
 void isc_indirect_y_func(mos6510_t* cpu_dev) {
     uint8_t value = addr_zp_ind_y(cpu_dev);
-    mos6510_illegal_inc_dec_combo(cpu_dev, value, 1, op_sbc_void);
+    mos6510_illegal_inc_dec_combo(cpu_dev, value, 1, op_sbc);
 }
 
 // JAM - Halt the processor (multiple opcodes)
@@ -222,37 +222,37 @@ void rla_indirect_y_func(mos6510_t* cpu_dev) {
 // RRA - ROR then ADC
 void rra_zero_page_func(mos6510_t* cpu_dev) {
     uint8_t value = addr_zp(cpu_dev);
-    mos6510_illegal_rmw_combo(cpu_dev, value, op_ror, op_adc_void);
+    mos6510_illegal_rmw_combo(cpu_dev, value, op_ror, op_adc);
 }
 
 void rra_zero_page_x_func(mos6510_t* cpu_dev) {
     uint8_t value = addr_zpx(cpu_dev);
-    mos6510_illegal_rmw_combo(cpu_dev, value, op_ror, op_adc_void);
+    mos6510_illegal_rmw_combo(cpu_dev, value, op_ror, op_adc);
 }
 
 void rra_absolute_func(mos6510_t* cpu_dev) {
     uint8_t value = addr_abs(cpu_dev);
-    mos6510_illegal_rmw_combo(cpu_dev, value, op_ror, op_adc_void);
+    mos6510_illegal_rmw_combo(cpu_dev, value, op_ror, op_adc);
 }
 
 void rra_absolute_x_func(mos6510_t* cpu_dev) {
     uint8_t value = addr_absx(cpu_dev);
-    mos6510_illegal_rmw_combo(cpu_dev, value, op_ror, op_adc_void);
+    mos6510_illegal_rmw_combo(cpu_dev, value, op_ror, op_adc);
 }
 
 void rra_absolute_y_func(mos6510_t* cpu_dev) {
     uint8_t value = addr_absy(cpu_dev);
-    mos6510_illegal_rmw_combo(cpu_dev, value, op_ror, op_adc_void);
+    mos6510_illegal_rmw_combo(cpu_dev, value, op_ror, op_adc);
 }
 
 void rra_indirect_x_func(mos6510_t* cpu_dev) {
     uint8_t value = addr_zpx_ind(cpu_dev);
-    mos6510_illegal_rmw_combo(cpu_dev, value, op_ror, op_adc_void);
+    mos6510_illegal_rmw_combo(cpu_dev, value, op_ror, op_adc);
 }
 
 void rra_indirect_y_func(mos6510_t* cpu_dev) {
     uint8_t value = addr_zp_ind_y(cpu_dev);
-    mos6510_illegal_rmw_combo(cpu_dev, value, op_ror, op_adc_void);
+    mos6510_illegal_rmw_combo(cpu_dev, value, op_ror, op_adc);
 }
 
 // SAX - Store A & X

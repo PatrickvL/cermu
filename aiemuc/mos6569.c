@@ -18,9 +18,10 @@ void* mos6569_system_create(device_descriptor_t* desc) {
     return vicii;
 }
 
-void mos6569_bus_attach(void* device, c64_bus_t* bus) {
+void mos6569_bus_attach(void* device, void* bus) {
     mos6569_t* vicii = (mos6569_t*)device;
-    vicii->bus = bus;
+    c64_bus_t* c64_bus = (c64_bus_t*)bus;
+    vicii->bus = c64_bus;
 }
 
 uint8_t mos6569_registers_read(void* device, uint16_t address) {

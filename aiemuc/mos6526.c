@@ -15,9 +15,9 @@ void mos6526_system_destroy(void* device) {
 }
 
 void mos6526_bus_attach(void* device, void* bus) {
-    c64_bus_t* c64_bus = (c64_bus_t*)bus;
     mos6526_t* cia = (mos6526_t*)device;
-    cia->bus = bus;
+    c64_bus_t* c64_bus = (c64_bus_t*)bus;
+    cia->bus = c64_bus;
 }
 
 uint8_t mos6526_registers_read(void* context, uint16_t address) {
