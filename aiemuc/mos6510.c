@@ -45,7 +45,9 @@ void mos6510_init(mos6510_t* cpu_dev) {
     
     // 6510-specific I/O port (addresses $0000/$0001) initialization
     cpu_dev->io_port[0] = 0x2F;  // Default Data Direction Register (DDR at $0000)
-    mos6510_ioport_write(cpu_dev, 1, 0x37);  // Default I/O Port Data (at $0001)
+    cpu_dev->io_port[1] = 0x37;  // Default I/O Port Data (at $0001)
+    // Note, that this value will be communicated to the rest of the system via the bus
+    // when the bus is attached to the CPU (see mos6510_bus_attach).
 }
 
 //
@@ -63,9 +65,13 @@ void* mos6510_system_create(device_descriptor_t* desc) {
 }
 
 // Attach bus to CPU
-void mos6510_bus_attach(void* device, c64_bus_t* bus) {
+void mos6510_bus_attach(void* device, void* bus) {
     mos6510_t* cpu = (mos6510_t*)device;
-    cpu->c64_bus = bus;
+    c64_bus_t* c64_bus = (c64_bus_t*)bus;
+    cpu->c64_bus = c64_bus;
+    // Publish current I/O port state to the bus
+    // This is necessary to ensure the bus has the correct initial state
+    mos6510_ioport_write(cpu, 1, cpu->io_port[1]);
 }
 
 device_descriptor_t mos6510_descriptor = {

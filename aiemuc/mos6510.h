@@ -446,9 +446,9 @@ static inline void op_adc_void(mos6510_t* cpu_dev, uint8_t value) {
 }
 
 // Generic arithmetic operation helper - combines addressing mode with operation
-static inline void mos6510_arithmetic_helper(mos6510_t* cpu_dev, uint8_t (*addr_func)(mos6510_t*), void (*op_func)(mos6510_t*, uint8_t)) {
+static inline void mos6510_arithmetic_helper(mos6510_t* cpu_dev, uint8_t (*addr_func)(mos6510_t*), uint8_t (*op_func)(mos6510_t*, uint8_t)) {
     uint8_t value = addr_func(cpu_dev);
-    op_func(cpu_dev, value);
+    (void)op_func(cpu_dev, value);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
 
