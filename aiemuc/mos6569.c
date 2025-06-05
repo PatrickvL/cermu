@@ -28,7 +28,7 @@ uint8_t mos6569_registers_read(void* device, uint16_t address) {
     mos6569_t* vicii = (mos6569_t*)device;
     uint8_t reg = address & 0x3F;
     if (reg <= 0x2E) {
-        if (reg == 0x12) return vicii->raster_line;
+        if (reg == 0x12) return (uint8_t)(vicii->raster_line & 0xFF);
         if (reg == 0x1E) {
             uint8_t val = vicii->collision_sprite;
             vicii->collision_sprite = 0;

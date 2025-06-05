@@ -28,9 +28,6 @@ extern device_descriptor_t mos6569_descriptor;
 extern device_descriptor_t ram_descriptor;
 extern device_descriptor_t rom_descriptor;
 
-// Global variable definition
-c64_t* c64 = NULL;
-
 //typedef struct custom custom_t;
 
 // TODO : Move to c64_custom.c
@@ -127,18 +124,17 @@ void c64_callbacks_init(c64_t* c64) {
 
 void c64_pla_maps_generate(c64_t* c64) {
     system_8bit_t* system = &c64->system;
-    c64_bus_t* bus = c64->bus;
-    uint8_t ram_id = 0, basic_id = 0, kernal_id = 0, cartridge_id = 0;
+    c64_bus_t* bus = c64->bus;    uint8_t ram_id = 0, basic_id = 0, kernal_id = 0, cartridge_id = 0;
     for (int i = 0; i < system->device_count; i++) {
         device_entry_t* dev = &system->devices[i];
-        if (dev->desc == &ram_descriptor) ram_id = i;
-        else if (dev->base_address == 0xA000) basic_id = i;
-        else if (dev->base_address == 0xE000) kernal_id = i;
-        else if (dev->base_address == 0x8000) cartridge_id = i;
+        if (dev->desc == &ram_descriptor) ram_id = (uint8_t)i;
+        else if (dev->base_address == 0xA000) basic_id = (uint8_t)i;
+        else if (dev->base_address == 0xE000) kernal_id = (uint8_t)i;
+        else if (dev->base_address == 0x8000) cartridge_id = (uint8_t)i;
     }
     for (int mode = 0; mode < 32; mode++) {
         bool loram = mode & 1, hiram = mode & 2, charen = !(mode & 4), game = mode & 8;        for (int page = 0; page < 256; page++) {
-            uint16_t addr = page * 256;  // Fix: page * 256, not page * 8
+            uint16_t addr = (uint16_t)(page * 256);  // Fix: page * 256, not page * 8
             uint8_t id = ram_id;  // Default to RAM instead of page
             if (page == 0) {
                 id = ram_id; // Zero page is always RAM
@@ -148,11 +144,10 @@ void c64_pla_maps_generate(c64_t* c64) {
                 id = basic_id;
             } else if (game && addr >= 0x8000 && addr <= 0xBFFF) {
                 id = cartridge_id;
-            } else if (charen && addr >= 0xD000 && addr <= 0xDFFF) {
-                for (int i = 0; i < system->device_count; i++) {
+            } else if (charen && addr >= 0xD000 && addr <= 0xDFFF) {                for (int i = 0; i < system->device_count; i++) {
                     device_entry_t* dev = &system->devices[i];
                     if (dev->size && addr >= dev->base_address && addr < dev->base_address + dev->size) {
-                        id = i;
+                        id = (uint8_t)i;
                         break;
                     }
                 }
@@ -203,8 +198,10 @@ void c64_system_destroy(c64_t* c64) {
 }
 
 c64_t* c64_system_create() {
-    c64_t* c64 = malloc(sizeof(c64_t));
-    if (!c64) return NULL;
+    c64_t* c64 = calloc(1, sizeof(c64_t));
+    if (!c64) {
+        return NULL;
+    }
 
     device_descriptor_t* descriptors[] = {
         &c64_bus_descriptor,
@@ -247,7 +244,7 @@ c64_t* c64_system_create() {
             c64_system_destroy(c64);
             return NULL;
         }
-    }    
+    }
 
     // Now having a registry of all devices, the PLA maps can be generated
     c64_pla_maps_generate(c64);
@@ -280,17 +277,7 @@ c64_t* c64_system_create() {
             descriptors[i]->bus_attach(*devices[i], c64->bus);
         }
     }
-
     return c64;
-}
-
-void c64_system_init() {
-    c64 = c64_system_create();
-}
-
-void c64_init(c64_t* c64_ptr) {
-    (void)c64_ptr;
-    c64_system_init();
 }
 
 void c64_emulate_frame(c64_t* c64) {
