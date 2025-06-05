@@ -31,11 +31,10 @@
             if (jump_target == KLAUS_SUCCESS_ADDRESS) {
                 harness->test_result = TEST_PASSED;
                 harness->execution_complete = true;
-                return;
             }
         }
     }
-    
+    else    
     // Check for stuck CPU
     if (cpu->pc == harness->last_pc) {
         harness->stuck_counter++;
@@ -53,13 +52,16 @@
     if (harness->current_cycles >= harness->max_cycles) {
         harness->test_result = TEST_TIMEOUT;
         harness->execution_complete = true;
-        return;
     }
-    
+    else
     // Progress reporting
     if (harness->current_cycles % 100000 == 0) {
         printf("Executed %llu cycles, PC=$%04X\n", 
                (unsigned long long)harness->current_cycles, cpu->pc);
+    }
+
+    if (harness->execution_complete) {
+        mos6510_start_intercept();
     }
 }
 
@@ -263,7 +265,6 @@ test_status_t test_harness_run_klaus_test(test_harness_t* harness) {
     // Use mos6510_execute() for continuous execution instead of stepping
     // The callback will control execution and set execution_complete when done
     printf("Starting CPU execution with callback-based control...\n");
-    mos6510_start_intercept();
     mos6510_execute(harness->c64->mos6510);
     
     // Execution completed, clean up callback
