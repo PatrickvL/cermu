@@ -32,6 +32,11 @@ void mos6510_stop_intercept(void) {
     intercepting = false;
 }
 
+// Check if interception is currently active
+bool mos6510_is_intercepting(void) {
+    return intercepting;
+}
+
 // ============================================================================
 // CPU OPERATION FUNCTIONS (inline for performance)
 // ============================================================================
@@ -181,7 +186,8 @@ bool mos6510_step(mos6510_t* cpu_dev) { // _dispatch
 // CPU EXECUTION LOOP WITH FUNCTION POINTERS (Universal)
 // ============================================================================
 void mos6510_execute(mos6510_t* cpu_dev) {
-    // Start execution - fetch first instruction
+    // Start execution using threaded dispatch
+    // The CPU_NEXT_INSTRUCTION macro will chain instructions until intercept is triggered
     CPU_NEXT_INSTRUCTION(cpu_dev);
 }
 

@@ -144,7 +144,8 @@ void c64_pla_maps_generate(c64_t* c64) {
                 id = basic_id;
             } else if (game && addr >= 0x8000 && addr <= 0xBFFF) {
                 id = cartridge_id;
-            } else if (charen && addr >= 0xD000 && addr <= 0xDFFF) {                for (int i = 0; i < system->device_count; i++) {
+            } else if (charen && addr >= 0xD000 && addr <= 0xDFFF) {
+                for (int i = 0; i < system->device_count; i++) {
                     device_entry_t* dev = &system->devices[i];
                     if (dev->size && addr >= dev->base_address && addr < dev->base_address + dev->size) {
                         id = (uint8_t)i;

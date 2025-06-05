@@ -43,6 +43,11 @@ typedef struct {
     test_result_t test_result;      // Current test result
     uint16_t last_pc;               // Last PC for stuck detection
     uint32_t stuck_counter;         // Counter for stuck detection
+    
+    // Opcode-aware stuck detection
+    uint8_t last_opcode;            // Last opcode seen for tracking
+    uint8_t last_expected_cycles;   // Expected cycles for last opcode
+    uint64_t pc_change_cycle;       // Cycle when PC last changed
 } test_harness_t;
 
 // Test execution status
