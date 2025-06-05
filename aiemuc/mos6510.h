@@ -721,7 +721,7 @@ static inline void mos6510_rmw_absolute_x(mos6510_t* cpu_dev, uint8_t (*operatio
 static inline void mos6510_register_inc_dec(mos6510_t* cpu_dev, uint8_t* reg, int delta) {
     CPU_INTRA_CYCLE(cpu_dev);
     (void)mos6510_read_cycle(cpu_dev, cpu_dev->pc);  // Dummy read
-    *reg += delta;
+    *reg += (uint8_t)delta;
     mos6510_set_zn(cpu_dev, *reg);
     CPU_OPCODE_FOOTER(cpu_dev);
 }
@@ -745,7 +745,7 @@ static inline void mos6510_register_transfer_no_flags(mos6510_t* cpu_dev, uint8_
 
 // Memory increment/decrement operations
 static inline void mos6510_memory_inc_dec(mos6510_t* cpu_dev, uint8_t fetched, int delta) {
-    uint8_t result = fetched + delta;
+    uint8_t result = fetched + (uint8_t)delta;
     CPU_INTRA_CYCLE(cpu_dev);
     mos6510_write_cycle(cpu_dev, cpu_dev->address, result);
     mos6510_set_zn(cpu_dev, result);
@@ -770,7 +770,7 @@ static inline void mos6510_illegal_rmw_combo(mos6510_t* cpu_dev, uint8_t value,
 // INC/DEC + register operation combo (DCP, ISC)
 static inline void mos6510_illegal_inc_dec_combo(mos6510_t* cpu_dev, uint8_t value, 
                                               int delta, void (*reg_op)(mos6510_t*, uint8_t)) {
-    value += delta;
+    value += (uint8_t)delta;
     CPU_INTRA_CYCLE(cpu_dev);
     mos6510_write_cycle(cpu_dev, cpu_dev->address, value);
     reg_op(cpu_dev, value);

@@ -3,18 +3,27 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <time.h>
 #include "mos6510.h"
 
-  // External bus cycle callback
-  extern void (*bus_cycle_callback)(void);
+// Windows compatibility for unistd.h functions
+#ifdef _WIN32
+#include <io.h>
+#include <direct.h>
+#define access _access
+#define F_OK 0
+#else
+#include <unistd.h>
+#endif
 
-  // Global test harness for bus callback access
-  static test_harness_t* g_test_harness = NULL;
+// External bus cycle callback
+extern void (*bus_cycle_callback)(void);
 
-  // Bus cycle callback for Klaus test execution control
-  void klaus_bus_cycle_callback(void) {
+// Global test harness for bus callback access
+static test_harness_t* g_test_harness = NULL;
+
+// Bus cycle callback for Klaus test execution control
+void klaus_bus_cycle_callback(void) {
     if (!g_test_harness) return;
     
     test_harness_t* harness = g_test_harness;
@@ -41,7 +50,6 @@
         if (harness->stuck_counter > 1000) {
             harness->test_result = TEST_STUCK;
             harness->execution_complete = true;
-            return;
         }
     } else {
         harness->stuck_counter = 0;
@@ -53,7 +61,7 @@
         harness->test_result = TEST_TIMEOUT;
         harness->execution_complete = true;
     }
-    else
+
     // Progress reporting
     if (harness->current_cycles % 100000 == 0) {
         printf("Executed %llu cycles, PC=$%04X\n", 
@@ -183,18 +191,12 @@ test_status_t test_harness_run_klaus_test(test_harness_t* harness) {
         return status;
     }
 
-    printf("Debug: harness->c64 = %p\n", (void*)harness->c64);
-    printf("Debug: harness->c64->mos6510 = %p\n", (void*)harness->c64->mos6510);
-    
     mos6510_t* cpu = harness->c64->mos6510;
     if (!cpu) {
         status.result = TEST_ERROR;
         strncpy(status.error_message, "CPU not initialized", sizeof(status.error_message) - 1);
         return status;
     }
-    
-    printf("Debug: CPU pointer is valid\n");
-    printf("Debug: CPU bus pointer = %p\n", (void*)cpu->c64_bus);
     
     if (!cpu->c64_bus) {
         status.result = TEST_ERROR;
@@ -203,47 +205,15 @@ test_status_t test_harness_run_klaus_test(test_harness_t* harness) {
     }
     
     // Initialize CPU with proper reset sequence first
-    printf("Debug: Calling mos6510_reset...\n");
-    printf("Debug: About to read reset vector from $FFFC\n");
-    
-    // Try a manual memory read first to test the bus
-    printf("Debug: Testing bus read at $FFFC...\n");
-    uint8_t test_byte = harness->c64->ram->memory[0xFFFC];
-    printf("Debug: Direct RAM read at $FFFC = $%02X\n", test_byte);
-    
-    // Try the CPU read cycle function
-    printf("Debug: Testing mos6510_read_cycle at $FFFC...\n");
-    uint8_t cpu_test = mos6510_read_cycle(cpu, 0xFFFC);
-    printf("Debug: CPU read cycle at $FFFC = $%02X\n", cpu_test);
-    
+    // Reset CPU and configure for Klaus test
     mos6510_reset(cpu);
-    printf("Debug: Reset complete, PC now $%04X\n", cpu->pc);
     
     // Configure CPU I/O port for Klaus test - map all memory to RAM
     // Write to I/O port $0001 to set banking mode (LORAM=0, HIRAM=0, CHAREN=1)
-    printf("Debug: Setting CPU I/O port for all-RAM mode...\n");
     mos6510_write_cycle(cpu, 0x0001, 0x04);  // LORAM=0, HIRAM=0, CHAREN=1 (mode 4)
-    printf("Debug: Set memory banking mode via I/O port write\n");
-    
-    // Test the bus read again
-    printf("Debug: Testing CPU read cycle at $FFFC after banking change...\n");
-    
-    // Debug the bus mapping first
-    c64_bus_t* bus = cpu->c64_bus;
-    uint8_t page_ff_id = READ_ID(bus->device_id_per_page[0xFF]);
-    printf("Debug: Device ID for page $FF = %d\n", page_ff_id);
-    printf("Debug: Total devices in system = %d\n", harness->c64->system.device_count);
-    
-    uint8_t new_test = mos6510_read_cycle(cpu, 0xFFFC);
-    printf("Debug: CPU read cycle at $FFFC now returns = $%02X\n", new_test);
-    
-    // Double-check what's actually in RAM
-    printf("Debug: Direct RAM read at $FFFC after banking = $%02X\n", harness->c64->ram->memory[0xFFFC]);
-    printf("Debug: Direct RAM read at $FFFD after banking = $%02X\n", harness->c64->ram->memory[0xFFFD]);
     
     // Now manually set PC for Klaus test
     cpu->pc = KLAUS_TEST_START_ADDRESS;
-    printf("Debug: Set PC to $%04X for Klaus test\n", cpu->pc);
     
     printf("Starting Klaus functional test...\n");
     printf("Initial PC: $%04X\n", cpu->pc);
@@ -319,9 +289,9 @@ void test_harness_print_status(const test_status_t* status) {
             break;
     }
     
-    printf("Cycles executed: %lu\n", status->cycles_executed);
+    printf("Cycles executed: %llu\n", (unsigned long long)status->cycles_executed);
     printf("Final PC: $%04X\n", status->final_pc);
-    printf("Duration: %ld seconds\n", status->end_time - status->start_time);
+    printf("Duration: %lld seconds\n", (long long)(status->end_time - status->start_time));
     
     if (strlen(status->error_message) > 0) {
         printf("Error: %s\n", status->error_message);

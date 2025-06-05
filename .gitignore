@@ -4,4 +4,3 @@
 # Build directories
 /aiemu/obj/
 aiemuc/c64emu
-aiemuc/cpu_test

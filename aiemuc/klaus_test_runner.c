@@ -3,7 +3,75 @@
 #include <stdlib.h>
 #include <string.h>
 #include "mos6510.h"
+
+// Windows compatibility for getopt
+#ifdef _WIN32
+#define getopt_long(argc, argv, optstring, longopts, longindex) simple_getopt(argc, argv, optstring)
+#define option simple_option
+struct simple_option {
+    const char* name;
+    int has_arg;
+    int* flag;
+    int val;
+};
+#define no_argument 0
+#define required_argument 1
+#define optional_argument 2
+
+static char* optarg = NULL;
+static int optind = 1;
+
+static int simple_getopt(int argc, char* const argv[], const char* optstring) {
+    if (optind >= argc) return -1;
+    
+    char* arg = argv[optind++];
+    if (arg[0] != '-') {
+        optind--;
+        return -1;
+    }
+    
+    if (arg[1] == '\0') return -1;
+    if (arg[1] == '-') {
+        // Long option parsing simplified
+        if (strcmp(arg, "--help") == 0) return 'h';
+        if (strncmp(arg, "--trace", 7) == 0) {
+            if (arg[7] == '=') {
+                optarg = &arg[8];
+            } else if (optind < argc) {
+                optarg = argv[optind++];
+            }
+            return 't';
+        }
+        if (strncmp(arg, "--cycles", 8) == 0) {
+            if (arg[8] == '=') {
+                optarg = &arg[9];
+            } else if (optind < argc) {
+                optarg = argv[optind++];
+            }
+            return 'c';
+        }
+        if (strcmp(arg, "--functional") == 0) return 'f';
+        if (strcmp(arg, "--decimal") == 0) return 'd';
+        if (strcmp(arg, "--interrupt") == 0) return 'i';
+        return '?';
+    }
+    
+    char opt = arg[1];
+    if (strchr(optstring, opt)) {
+        if (strchr(optstring, ':') && strchr(optstring, opt)[1] == ':') {
+            if (arg[2] != '\0') {
+                optarg = &arg[2];
+            } else if (optind < argc) {
+                optarg = argv[optind++];
+            }
+        }
+        return opt;
+    }
+    return '?';
+}
+#else
 #include <getopt.h>
+#endif
 
 // ============================================================================
 // Klaus2m5 Test Runner - Standalone Program
@@ -97,7 +165,7 @@ int main(int argc, char* argv[]) {
 
     if (verbose) {
         printf("Configuration:\n");
-        printf("  Max cycles: %lu\n", max_cycles);
+        printf("  Max cycles: %llu\n", (unsigned long long)max_cycles);
         printf("  Trace file: %s\n", trace_file ? trace_file : "disabled");
         printf("  Test mode: ");
         switch (test_mode) {
@@ -118,11 +186,13 @@ int main(int argc, char* argv[]) {
             break;
 
         case TEST_MODE_FUNCTIONAL: {
+            printf("Creating test harness...\n");
             test_harness_t* harness = test_harness_create();
             if (!harness) {
                 fprintf(stderr, "Failed to create test harness\n");
                 return 1;
             }
+            printf("Test harness created successfully\n");
 
             // Configure trace if requested
             if (trace_file) {
@@ -131,16 +201,18 @@ int main(int argc, char* argv[]) {
 
             // Load and run functional test
             char test_path[512];
-            snprintf(test_path, sizeof(test_path), 
-                     "%s/6502_65C02_functional_tests/bin_files/6502_functional_test.bin", 
-                     getenv("PWD") ?: ".");
+            snprintf(test_path, sizeof(test_path),
+                     "6502_65C02_functional_tests/bin_files/6502_functional_test.bin");
 
+            printf("Attempting to load test binary: %s\n", test_path);
             if (test_harness_load_binary(harness, test_path)) {
+                printf("Test binary loaded successfully\n");
                 harness->max_cycles = max_cycles;
                 test_status_t status = test_harness_run_klaus_test(harness);
                 test_harness_print_status(&status);
                 all_passed = (status.result == TEST_PASSED);
             } else {
+                printf("Failed to load test binary\n");
                 all_passed = false;
             }
 

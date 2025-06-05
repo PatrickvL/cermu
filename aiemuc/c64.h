@@ -52,11 +52,6 @@ typedef struct c64_s {
 c64_t* c64_system_create(void);
 void c64_system_destroy(c64_t* c64);
 void c64_non_cpu_cycle(c64_t* c64);
-void c64_system_init(void);
-void c64_init(c64_t* c64);
 void c64_emulate_frame(c64_t* c64);
-
-// Global variables
-extern c64_t* c64;
 
 #endif // C64_H
