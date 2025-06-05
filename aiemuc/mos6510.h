@@ -875,6 +875,7 @@ void mos6510_init(mos6510_t* cpu_dev);
 void mos6510_reset(mos6510_t* cpu_dev);
 bool mos6510_step(mos6510_t* cpu_dev);
 void mos6510_execute(mos6510_t* cpu_dev);
+bool mos6510_is_intercepting(void);
 void mos6510_nmi(mos6510_t* cpu_dev);
 void mos6510_irq(mos6510_t* cpu_dev, uint8_t status);
 

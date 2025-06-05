@@ -1,4 +1,5 @@
 #include "mos6510_test_harness.h"
+#include "mos6510_cycles.h"
 #include "ram.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,6 +32,14 @@ void klaus_bus_cycle_callback(void) {
     
     harness->current_cycles++;
     
+    // Debug output for the first few callbacks - removed limit to see full execution
+    if (harness->current_cycles <= 1000) {
+        if (harness->current_cycles % 50 == 0 || harness->current_cycles <= 200) {
+            printf("DEBUG: Bus callback #%llu - PC=$%04X, last_PC=$%04X\n", 
+                   (unsigned long long)harness->current_cycles, cpu->pc, harness->last_pc);
+        }
+    }
+    
     // Check for test completion at Klaus success address
     if (cpu->pc == KLAUS_SUCCESS_ADDRESS) {
         uint8_t instruction = harness->c64->ram->memory[cpu->pc];
@@ -43,17 +52,76 @@ void klaus_bus_cycle_callback(void) {
             }
         }
     }
-    else    
-    // Check for stuck CPU
+    
+    // Intelligent opcode-aware stuck detection
     if (cpu->pc == harness->last_pc) {
         harness->stuck_counter++;
-        if (harness->stuck_counter > 1000) {
+        
+        // Get current opcode and its expected cycle count
+        uint8_t opcode = harness->c64->ram->memory[cpu->pc];
+        uint8_t expected_cycles = mos6510_get_opcode_cycles(opcode);
+        
+        // Update tracking information when opcode changes
+        if (opcode != harness->last_opcode) {
+            harness->last_opcode = opcode;
+            harness->last_expected_cycles = expected_cycles;
+        }
+        
+        // Calculate dynamic threshold based on opcode
+        // Allow extra cycles for bus stealing, page crossing, and other timing variations
+        uint32_t dynamic_threshold = expected_cycles * 8; // 8x safety margin for complex cases
+        
+        // Ensure minimum threshold to handle complex addressing modes and VIA interference
+        if (dynamic_threshold < MOS6510_MAX_CYCLES_WITH_BUS_STEALING * 2) {
+            dynamic_threshold = MOS6510_MAX_CYCLES_WITH_BUS_STEALING * 2;
+        }
+        
+        // Additional safety for illegal opcodes (they might behave unexpectedly)
+        if (opcode == 0x02 || opcode == 0x12 || opcode == 0x22 || opcode == 0x32 ||
+            opcode == 0x42 || opcode == 0x52 || opcode == 0x62 || opcode == 0x72 ||
+            opcode == 0x92 || opcode == 0xB2 || opcode == 0xD2 || opcode == 0xF2) {
+            // JAM instructions - these legitimately halt the CPU
+            printf("DEBUG: Encountered JAM instruction at PC=$%04X (opcode=$%02X) - legitimate halt\n", 
+                   cpu->pc, opcode);
+            harness->test_result = TEST_STUCK;
+            harness->execution_complete = true;
+            return;
+        }
+        
+        if (harness->current_cycles <= 1000) {
+            printf("DEBUG: Stuck counter incremented to %d (PC=$%04X, opcode=$%02X, expected_cycles=%d, threshold=%d)\n", 
+                   harness->stuck_counter, cpu->pc, opcode, expected_cycles, dynamic_threshold);
+        }
+        
+        // Check if we've exceeded the dynamic threshold
+        if (harness->stuck_counter > dynamic_threshold) {
+            printf("DEBUG: CPU detected as stuck at PC=$%04X after %d cycles (opcode=$%02X, expected=%d cycles)\n", 
+                   cpu->pc, harness->stuck_counter, opcode, expected_cycles);
+            
+            // Additional analysis for debugging
+            printf("DEBUG: Memory at PC: %02X %02X %02X %02X\n",
+                   harness->c64->ram->memory[cpu->pc],
+                   harness->c64->ram->memory[cpu->pc + 1],
+                   harness->c64->ram->memory[cpu->pc + 2],
+                   harness->c64->ram->memory[cpu->pc + 3]);
+            
             harness->test_result = TEST_STUCK;
             harness->execution_complete = true;
         }
     } else {
+        // PC changed - reset stuck detection
+        if (harness->stuck_counter > 0) {
+            uint64_t cycles_at_pc = harness->current_cycles - harness->pc_change_cycle;
+            if (harness->current_cycles <= 1000) {
+                printf("DEBUG: PC changed from $%04X to $%04X after %llu cycles (stuck_counter was %d)\n", 
+                       harness->last_pc, cpu->pc, 
+                       (unsigned long long)cycles_at_pc, harness->stuck_counter);
+            }
+        }
+        
         harness->stuck_counter = 0;
         harness->last_pc = cpu->pc;
+        harness->pc_change_cycle = harness->current_cycles;
     }
     
     // Check for cycle timeout
@@ -69,6 +137,7 @@ void klaus_bus_cycle_callback(void) {
     }
 
     if (harness->execution_complete) {
+        printf("DEBUG: Execution complete, starting intercept. Result=%d\n", harness->test_result);
         mos6510_start_intercept();
     }
 }
@@ -105,6 +174,11 @@ test_harness_t* test_harness_create(void) {
     harness->test_result = TEST_NOT_SET;
     harness->last_pc = 0;
     harness->stuck_counter = 0;
+    
+    // Initialize opcode-aware tracking fields
+    harness->last_opcode = 0;
+    harness->last_expected_cycles = 0;
+    harness->pc_change_cycle = 0;
 
     return harness;
 }
@@ -236,6 +310,11 @@ test_status_t test_harness_run_klaus_test(test_harness_t* harness) {
     // The callback will control execution and set execution_complete when done
     printf("Starting CPU execution with callback-based control...\n");
     mos6510_execute(harness->c64->mos6510);
+    
+    printf("DEBUG: mos6510_execute() returned. Cycles executed: %llu, execution_complete: %s, test_result: %d\n",
+           (unsigned long long)harness->current_cycles, 
+           harness->execution_complete ? "true" : "false",
+           harness->test_result);
     
     // Execution completed, clean up callback
     bus_cycle_callback = NULL;

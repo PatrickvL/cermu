@@ -29,91 +29,119 @@ if(MSVC)
         /WX                     # Treat warnings as errors
         /wd4324                 # Disable "structure was padded" warning
         /wd4459                 # Disable declaration hiding global declaration warnings
-        /wd4244                 # Disable conversion warnings (fixed with explicit casts)
-        /D_CRT_SECURE_NO_WARNINGS  # Disable MSVC security warnings for standard C functions
+        /wd4255                 # Disable 'function' : no function prototype given
+        /analyze               # Enable static code analysis
     )
-    # Set MSVC specific definitions
-    add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 else()
-    # GCC/Clang specific settings
+    # GCC/Clang settings
     add_compile_options(
-        -Wall                   # Enable common warnings
+        -Wall                   # Enable all common warnings
         -Wextra                 # Enable extra warnings
-        -Wpedantic             # Enable pedantic warnings
-        -Wformat=2             # Enable format string warnings
-        -Wunused               # Enable unused variable/function warnings
-        -Wshadow               # Enable variable shadowing warnings
-        -Wcast-align           # Enable cast alignment warnings
-        -Wcast-qual            # Enable cast qualifier warnings
-        -Wconversion           # Enable implicit conversion warnings
-        -Wsign-conversion      # Enable sign conversion warnings
-        -Wlogical-op           # Enable logical operation warnings (GCC)
-        -Wduplicated-cond      # Enable duplicated condition warnings (GCC)
-        -Wduplicated-branches  # Enable duplicated branch warnings (GCC)
-        -Wnull-dereference     # Enable null dereference warnings (GCC)
-        -Wdouble-promotion     # Enable double promotion warnings
-        -Wformat-security      # Enable format security warnings
-        -Werror                # Treat warnings as errors
-        $<$<CONFIG:Debug>:-g3 -Og>    # Debug symbols and optimized debug
-        $<$<CONFIG:Release>:-O3 -DNDEBUG>  # Optimized release
+        -Werror                 # Treat warnings as errors
+        -pedantic               # Strict ISO C compliance
+        -Wcast-align            # Warn about cast alignment issues
+        -Wcast-qual             # Warn about cast qualifiers
+        -Wmissing-prototypes    # Warn about missing function prototypes
+        -Wstrict-prototypes     # Warn about non-prototype function declarations
+        -Wno-unused-parameter   # Allow unused parameters (common in callbacks)
     )
 endif()
 
-# Platform-specific definitions
+# Platform specific definitions
 if(WIN32)
-    add_definitions(-DWIN32_LEAN_AND_MEAN)
-    add_definitions(-D_WIN32_WINNT=0x0601)  # Windows 7 or later
+    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+    add_definitions(-D_WIN32_WINNT=0x0601)  # Target Windows 7 or later
+    add_definitions(-DNOMINMAX)             # Don't define min/max macros
 endif()
 
-# Main emulator source files (matches Makefile SOURCES)
-set(MAIN_SOURCES
-    c64_main.c
-    c64.c
-    c64_bus.c
-    ram.c
-    rom.c
-    system.c
-    mos6569.c
-    mos6526.c
-    mos6581.c
-    mos6510.c
-)
+# Debug vs Release specific settings
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_definitions(-DDEBUG)
+    if(MSVC)
+        add_compile_options(/Od /Zi)        # No optimization, generate debug info
+    else()
+        add_compile_options(-O0 -g)         # No optimization, generate debug info
+    endif()
+else()
+    add_definitions(-DNDEBUG)
+    if(MSVC)
+        add_compile_options(/O2)            # Optimize for speed
+    else()
+        add_compile_options(-O2)            # Optimize for speed
+    endif()
+endif()
 
-# Klaus test runner source files (matches Makefile KLAUS_SOURCES)
-set(KLAUS_SOURCES
-    klaus_test_runner.c
+# Source files
+set(EMULATOR_SOURCES
+    mos6510.c
     mos6510_test_harness.c
     c64.c
     c64_bus.c
+    system.c
     ram.c
     rom.c
-    system.c
-    mos6569.c
     mos6526.c
     mos6581.c
-    mos6510.c
+    mos6569.c
 )
 
-# Create main emulator executable (matches Makefile TARGET)
-add_executable(c64emu ${MAIN_SOURCES})
+set(EMULATOR_HEADERS
+    mos6510.h
+    mos6510_test_harness.h
+    mos6510_cycles.h
+    c64.h
+    c64_bus.h
+    system.h
+    device.h
+    ram.h
+    rom.h
+    mos6526.h
+    mos6581.h
+    mos6569.h
+    aiemuc.h
+)
 
-# Create Klaus test runner executable (matches Makefile KLAUS_RUNNER)
-add_executable(klaus_test_runner ${KLAUS_SOURCES})
+# Main emulator executable
+add_executable(c64emu c64_main.c ${EMULATOR_SOURCES} ${EMULATOR_HEADERS})
 
-# Platform-specific settings
-if(UNIX)
-    target_link_libraries(c64emu m) # Link math library
-    target_link_libraries(klaus_test_runner m) # Link math library
+# Test harness for Klaus 6502 functional tests
+add_executable(klaus_test_runner klaus_test_runner.c ${EMULATOR_SOURCES} ${EMULATOR_HEADERS})
+
+# Verification program for cycle calculation
+add_executable(verify_cycles verify_cycles.c)
+target_include_directories(verify_cycles PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+# Include directories
+target_include_directories(c64emu PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(klaus_test_runner PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+# Platform-specific libraries
+if(WIN32)
+    # No additional libraries needed for basic functionality
+else()
+    # Link against math library on Unix-like systems
+    target_link_libraries(c64emu m)
+    target_link_libraries(klaus_test_runner m)
 endif()
 
-# Add test target (matches Makefile test target)
-add_custom_target(test
-    DEPENDS c64emu
-    COMMAND ${CMAKE_COMMAND} -E echo "Build successful! C64 emulator with cycle-accurate MOS6510 CPU compiled cleanly."
+# Set output directories
+set_target_properties(c64emu klaus_test_runner verify_cycles
+    PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/$<CONFIG>
+    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/$<CONFIG>
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/$<CONFIG>
 )
 
-# Add klaus target (matches Makefile klaus target)
-add_custom_target(klaus
-    DEPENDS klaus_test_runner
-    COMMAND ${CMAKE_COMMAND} -E echo "Klaus test runner compiled successfully!"
+# Installation targets (optional)
+install(TARGETS c64emu klaus_test_runner verify_cycles
+    RUNTIME DESTINATION bin
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
 )
+
+# CPack configuration for packaging (optional)
+include(CPack)
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "MOS 6510 CPU Emulator")
+set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
+set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})

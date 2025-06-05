@@ -2,7 +2,7 @@
 
 // Macro to define branch instructions
 #define DEFINE_BRANCH(fn, cond) \
-    void fn##_func(mos6510_t* cpu_dev) { mos6510_branch_helper(cpu_dev, cond); }
+    void fn(mos6510_t* cpu_dev) { mos6510_branch_helper(cpu_dev, cond); }
 
 // ============================================================================
 // MOS 6510 CONTROL FLOW INSTRUCTIONS
@@ -10,14 +10,14 @@
 // Branch, Jump, Call, Return and Break instructions
 
 // Branch Instructions (alphabetical order)
-DEFINE_BRANCH(bcc, !cpu_get_flag(cpu_dev, FLAG_C)) // BCC - Branch if Carry Clear (0x90)
-DEFINE_BRANCH(bcs,  cpu_get_flag(cpu_dev, FLAG_C)) // BCS - Branch if Carry Set (0xB0)
-DEFINE_BRANCH(beq,  cpu_get_flag(cpu_dev, FLAG_Z)) // BEQ - Branch if Equal (0xF0)
-DEFINE_BRANCH(bmi,  cpu_get_flag(cpu_dev, FLAG_N)) // BMI - Branch if Minus (0x30)
-DEFINE_BRANCH(bne, !cpu_get_flag(cpu_dev, FLAG_Z)) // BNE - Branch if Not Equal (0xD0)
-DEFINE_BRANCH(bpl, !cpu_get_flag(cpu_dev, FLAG_N)) // BPL - Branch if Positive (0x10)
-DEFINE_BRANCH(bvc, !cpu_get_flag(cpu_dev, FLAG_V)) // BVC - Branch if Overflow Clear (0x50)
-DEFINE_BRANCH(bvs,  cpu_get_flag(cpu_dev, FLAG_V)) // BVS - Branch if Overflow Set (0x70)
+DEFINE_BRANCH(bcc_func, !cpu_get_flag(cpu_dev, FLAG_C)) // BCC - Branch if Carry Clear (0x90)
+DEFINE_BRANCH(bcs_func,  cpu_get_flag(cpu_dev, FLAG_C)) // BCS - Branch if Carry Set (0xB0)
+DEFINE_BRANCH(beq_func,  cpu_get_flag(cpu_dev, FLAG_Z)) // BEQ - Branch if Equal (0xF0)
+DEFINE_BRANCH(bmi_func,  cpu_get_flag(cpu_dev, FLAG_N)) // BMI - Branch if Minus (0x30)
+DEFINE_BRANCH(bne_func, !cpu_get_flag(cpu_dev, FLAG_Z)) // BNE - Branch if Not Equal (0xD0)
+DEFINE_BRANCH(bpl_func, !cpu_get_flag(cpu_dev, FLAG_N)) // BPL - Branch if Positive (0x10)
+DEFINE_BRANCH(bvc_func, !cpu_get_flag(cpu_dev, FLAG_V)) // BVC - Branch if Overflow Clear (0x50)
+DEFINE_BRANCH(bvs_func,  cpu_get_flag(cpu_dev, FLAG_V)) // BVS - Branch if Overflow Set (0x70)
 
 // Break
 void brk_func(mos6510_t* cpu_dev) {
