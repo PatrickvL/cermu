@@ -133,27 +133,59 @@ void c64_pla_maps_generate(c64_t* c64) {
         else if (dev->base_address == 0x8000) cartridge_id = (uint8_t)i;
     }
     for (int mode = 0; mode < 32; mode++) {
-        bool loram = mode & 1, hiram = mode & 2, charen = !(mode & 4), game = mode & 8;        for (int page = 0; page < 256; page++) {
-            uint16_t addr = (uint16_t)(page * 256);  // Fix: page * 256, not page * 8
-            uint8_t id = ram_id;  // Default to RAM instead of page
-            if (page == 0) {
-                id = ram_id; // Zero page is always RAM
-            } else if (hiram && addr >= 0xE000) {
-                id = kernal_id;
-            } else if (loram && addr >= 0xA000 && addr <= 0xBFFF) {
-                id = basic_id;
-            } else if (game && addr >= 0x8000 && addr <= 0xBFFF) {
-                id = cartridge_id;
-            } else if (charen && addr >= 0xD000 && addr <= 0xDFFF) {
-                for (int i = 0; i < system->device_count; i++) {
-                    device_entry_t* dev = &system->devices[i];
-                    if (dev->size && addr >= dev->base_address && addr < dev->base_address + dev->size) {
-                        id = (uint8_t)i;
-                        break;
+        bool loram = mode & 1, hiram = mode & 2, charen = !(mode & 4), game = mode & 8;
+        
+        // Initialize condensed table with 32 entries instead of 256
+        for (int index = 0; index < 32; index++) {
+            uint8_t id = ram_id;  // Default to RAM
+            
+            if (index < 16) {
+                // Banks 0-15: Use bank number directly as index
+                // Each bank represents 4KB (0x1000 bytes)
+                uint16_t bank_start = (uint16_t)(index * 0x1000);
+                
+                if (index == 0) {
+                    id = ram_id; // Zero page bank is always RAM
+                } else if (hiram && bank_start >= 0xE000) {
+                    id = kernal_id;
+                } else if (loram && bank_start >= 0xA000 && bank_start <= 0xBFFF) {
+                    id = basic_id;
+                } else if (game && bank_start >= 0x8000 && bank_start <= 0xBFFF) {
+                    id = cartridge_id;
+                } else if (charen && bank_start >= 0xD000 && bank_start <= 0xDFFF) {
+                    // For IO bank (0xD000-0xDFFF), find the appropriate device
+                    for (int i = 0; i < system->device_count; i++) {
+                        device_entry_t* dev = &system->devices[i];
+                        if (dev->size && bank_start >= dev->base_address && bank_start < dev->base_address + dev->size) {
+                            id = (uint8_t)i;
+                            break;
+                        }
                     }
                 }
+            } else {
+                // Indices 16-31: IO range (bank 13) broken down by pages
+                // index 16 = page 0 of bank 13 (0xD000-0xD0FF)
+                // index 17 = page 1 of bank 13 (0xD100-0xD1FF)
+                // ...
+                // index 31 = page 15 of bank 13 (0xDF00-0xDFFF)
+                int page_in_bank = index - 16;
+                uint16_t addr = (uint16_t)(0xD000 + (page_in_bank * 256));
+                
+                if (charen) {
+                    // Find the appropriate device for this specific page in IO range
+                    for (int i = 0; i < system->device_count; i++) {
+                        device_entry_t* dev = &system->devices[i];
+                        if (dev->size && addr >= dev->base_address && addr < dev->base_address + dev->size) {
+                            id = (uint8_t)i;
+                            break;
+                        }
+                    }
+                } else {
+                    id = ram_id; // If CHAREN is off, IO range maps to RAM
+                }
             }
-            bus->device_id_per_page_per_mode[mode][page] = DEVIDS_RW_ENCODE(id, id);
+            
+            bus->device_id_per_page_per_mode[mode][index] = DEVIDS_RW_ENCODE(id, id);
         }
     }
 }

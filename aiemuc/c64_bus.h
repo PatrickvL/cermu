@@ -27,13 +27,21 @@
 
 typedef struct c64_s c64_t; // external, avoid circular dependency (via c64.h)
 
+// Inline function to calculate condensed device index from address
+// IO range (bank 13) maps to index 16-31, other banks use bank number directly
+static inline int c64_bus_get_device_index(uint16_t address) {
+    int bank = address >> 12;
+    int page = (address >> 8) & 0x0F;
+    return bank + ((bank == 13) * (page + 3));
+}
+
 typedef struct c64_bus_s {
     device_descriptor_t* desc;
     c64_t* c64;
-    uint8_t* device_id_per_page; // Maps each page (covering 256 bytes each, 256 pages) to a device ID
+    uint8_t* device_id_per_page; // Maps each condensed index (32 entries) to a device ID
     alignas(64) read_callback_t read_callbacks[16]; // indexed by device ID
     alignas(64) write_callback_t write_callbacks[16]; // indexed by device ID
-    alignas(64) uint8_t device_id_per_page_per_mode[32][256]; 
+    alignas(64) uint8_t device_id_per_page_per_mode[32][32]; // Condensed from 256 to 32 entries per mode
 
     uint16_t address;       // A0-A15
     uint8_t  data;          // D0-D7
