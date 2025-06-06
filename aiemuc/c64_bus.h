@@ -15,9 +15,15 @@
 #define RDY_LINE    (1 << 4)
 
 // Macro definitions for device ID extraction
-#define ID_TUPLE(read_id, write_id) (((read_id) << 4) | (write_id))
-#define READ_ID(id) (((id) >> 4) & 0xF)
-#define WRITE_ID(id) ((id) & 0xF)
+
+// Encoding macros (Option 1: [7:4] write ID, [3:0] read ID)
+#define DEVIDS_RW_ENCODE(read_id, write_id) \
+    (((read_id) & 0x0F) | (((write_id) & 0x0F) << 4))
+#define DEVID_READ_DECODE(entry) ((entry) & 0x0F)
+#define DEVID_WRITE_DECODE(entry) ((entry) >> 4) // For now. Once write IDs are reduced to 2 bits use shift 6 and enable below spare bit
+//#define DECODE_SPARE(entry) (((entry) >> 4) & 0x03)
+// Encoding macros (Option 2: [7:6] write ID, [5:4] spare, [3:0] read ID)
+//    (((read_id) & 0x0F) | (((flags) & 0x03) << 4) | (((write_id) & 0x03) << 6))
 
 typedef struct c64_s c64_t; // external, avoid circular dependency (via c64.h)
 

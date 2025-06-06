@@ -43,6 +43,7 @@ typedef struct {
     test_result_t test_result;      // Current test result
     uint16_t last_pc;               // Last PC for stuck detection
     uint32_t stuck_counter;         // Counter for stuck detection
+    time_t start_time;              // Test start time for timeout calculation
     
     // Opcode-aware stuck detection
     uint8_t last_opcode;            // Last opcode seen for tracking

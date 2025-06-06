@@ -5,7 +5,7 @@
 uint8_t c64_bus_memory_read(void* device, uint16_t address) {
     c64_bus_t* c64_bus = (c64_bus_t*)device;
     uint8_t page = address >> 8;
-    uint8_t id = READ_ID(c64_bus->device_id_per_page[page]);
+    uint8_t id = DEVID_READ_DECODE(c64_bus->device_id_per_page[page]);
     read_callback_t* cb = &c64_bus->read_callbacks[id];
     return cb->func(cb->context, address);
 }
@@ -13,7 +13,7 @@ uint8_t c64_bus_memory_read(void* device, uint16_t address) {
 void c64_bus_memory_write(void* context, uint16_t address, uint8_t value) {
     c64_bus_t* c64_bus = (c64_bus_t*)context;
     uint8_t page = address >> 8;
-    uint8_t id = WRITE_ID(c64_bus->device_id_per_page[page]);
+    uint8_t id = DEVID_WRITE_DECODE(c64_bus->device_id_per_page[page]);
     write_callback_t* cb = &c64_bus->write_callbacks[id];
     cb->func(cb->context, address, value);
     // TODO : Move below signalling of VIC-II bank change to somewhere else with less impact on performance

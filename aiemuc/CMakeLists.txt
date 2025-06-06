@@ -57,18 +57,8 @@ endif()
 # Debug vs Release specific settings
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_definitions(-DDEBUG)
-    if(MSVC)
-        add_compile_options(/Od /Zi)        # No optimization, generate debug info
-    else()
-        add_compile_options(-O0 -g)         # No optimization, generate debug info
-    endif()
 else()
     add_definitions(-DNDEBUG)
-    if(MSVC)
-        add_compile_options(/O2)            # Optimize for speed
-    else()
-        add_compile_options(-O2)            # Optimize for speed
-    endif()
 endif()
 
 # Source files
@@ -107,9 +97,13 @@ add_executable(c64emu c64_main.c ${EMULATOR_SOURCES} ${EMULATOR_HEADERS})
 # Test harness for Klaus 6502 functional tests
 add_executable(klaus_test_runner klaus_test_runner.c ${EMULATOR_SOURCES} ${EMULATOR_HEADERS})
 
-# Verification program for cycle calculation
-add_executable(verify_cycles verify_cycles.c)
-target_include_directories(verify_cycles PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+# Verification program for cycle calculation (commented out - source file missing)
+# add_executable(verify_cycles verify_cycles.c)
+# target_include_directories(verify_cycles PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+# Debug test for DEX instruction (commented out - source file missing)
+# add_executable(debug_dex_test debug_dex_test.c ${EMULATOR_SOURCES} ${EMULATOR_HEADERS})
+# target_include_directories(debug_dex_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Include directories
 target_include_directories(c64emu PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -122,10 +116,11 @@ else()
     # Link against math library on Unix-like systems
     target_link_libraries(c64emu m)
     target_link_libraries(klaus_test_runner m)
+    # target_link_libraries(debug_dex_test m)  # commented out - target doesn't exist
 endif()
 
 # Set output directories
-set_target_properties(c64emu klaus_test_runner verify_cycles
+set_target_properties(c64emu klaus_test_runner
     PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/$<CONFIG>
     ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/$<CONFIG>
@@ -133,7 +128,7 @@ set_target_properties(c64emu klaus_test_runner verify_cycles
 )
 
 # Installation targets (optional)
-install(TARGETS c64emu klaus_test_runner verify_cycles
+install(TARGETS c64emu klaus_test_runner
     RUNTIME DESTINATION bin
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
