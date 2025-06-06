@@ -44,10 +44,6 @@ typedef struct c64_s {
     uint64_t total_cycles;  // Total cycles executed by the system
 } c64_t;
 
-#define ID_TUPLE(read_id, write_id) (((read_id) << 4) | (write_id))
-#define READ_ID(id) (((id) >> 4) & 0xF)
-#define WRITE_ID(id) ((id) & 0xF)
-
 // Function declarations
 c64_t* c64_system_create(void);
 void c64_system_destroy(c64_t* c64);

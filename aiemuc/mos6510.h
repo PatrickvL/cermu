@@ -109,7 +109,7 @@ static inline void mos6510_opcode_dispatch(mos6510_t* cpu, uint8_t opcode) {
     if (!CPU_READY(cpu_dev)) { c64_non_cpu_cycle(cpu_dev->c64_bus->c64); goto UNIQUE_LABEL(cpu_ready_stall); } \
 } while(0)
 
-#define CPU_NEXT_INSTRUCTION_DISPATCH(cpu_dev); do { \
+#define CPU_NEXT_INSTRUCTION_DISPATCH(cpu_dev) do { \
     uint8_t opcode = mos6510_read_cycle(cpu_dev, cpu_dev->pc++); \
     mos6510_opcode_dispatch(cpu_dev, opcode); \
 } while(0)

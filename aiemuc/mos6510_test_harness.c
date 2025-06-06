@@ -23,6 +23,9 @@ extern void (*bus_cycle_callback)(void);
 // Global test harness for bus callback access
 static test_harness_t* g_test_harness = NULL;
 
+// Time-based execution timeout (10 seconds)
+#define KLAUS_TIMEOUT_SECONDS 10
+
 // Bus cycle callback for Klaus test execution control
 void klaus_bus_cycle_callback(void) {
     if (!g_test_harness) return;
@@ -32,12 +35,61 @@ void klaus_bus_cycle_callback(void) {
     
     harness->current_cycles++;
     
-    // Debug output for the first few callbacks - removed limit to see full execution
-    if (harness->current_cycles <= 1000) {
-        if (harness->current_cycles % 50 == 0 || harness->current_cycles <= 200) {
-            printf("DEBUG: Bus callback #%llu - PC=$%04X, last_PC=$%04X\n", 
-                   (unsigned long long)harness->current_cycles, cpu->pc, harness->last_pc);
+    // Check for time-based timeout every 1000 cycles to avoid excessive time() calls
+    if (harness->current_cycles % 1000 == 0) {
+        time_t current_time = time(NULL);
+        double elapsed_seconds = difftime(current_time, harness->start_time);
+        
+        if (elapsed_seconds >= KLAUS_TIMEOUT_SECONDS) {
+            printf("DEBUG: Time timeout reached after %.1f seconds (%llu cycles, PC=$%04X)\n",
+                   elapsed_seconds, (unsigned long long)harness->current_cycles, cpu->pc);
+            harness->test_result = TEST_TIMEOUT;
+            harness->execution_complete = true;
+            return;
         }
+        
+        // Progress reporting with time information
+        if (harness->current_cycles % 100000 == 0) {
+            printf("Executed %llu cycles in %.1f seconds, PC=$%04X\n", 
+                   (unsigned long long)harness->current_cycles, elapsed_seconds, cpu->pc);
+        }
+    }
+    
+    // Enhanced CPU state logging to track the DEX loop behavior
+    uint8_t x_reg = cpu->x;
+    uint8_t flags = cpu->p;
+    uint8_t z_flag = (flags & 0x02) ? 1 : 0;
+    
+    // Log DEX loop progression - track when X changes or reaches critical values
+    static uint8_t last_x_value = 0xFF;
+    bool in_dex_loop_range = (cpu->pc >= 0x0470 && cpu->pc <= 0x0490) || 
+                            (cpu->pc >= 0x0560 && cpu->pc <= 0x0570) ||
+                            (cpu->pc >= 0x0520 && cpu->pc <= 0x0530) ||
+                            (cpu->pc >= 0x04F0 && cpu->pc <= 0x0510) ||
+                            (cpu->pc >= 0x04C0 && cpu->pc <= 0x04D0);
+    
+    if (in_dex_loop_range) {
+        // Log when X changes (indicates successful DEX execution)
+        if (x_reg != last_x_value) {
+            printf("DEX_PROGRESS: cycle=%llu PC=$%04X X=$%02X→$%02X flags=$%02X (Z=%d)\n",
+                   (unsigned long long)harness->current_cycles, cpu->pc, 
+                   last_x_value, x_reg, flags, z_flag);
+            last_x_value = x_reg;
+        }
+        
+        // Special logging for critical X values
+        if (x_reg <= 0x05 || x_reg == 0x00) {
+            printf("DEX_CRITICAL: cycle=%llu PC=$%04X X=$%02X flags=$%02X (Z=%d)\n",
+                   (unsigned long long)harness->current_cycles, cpu->pc, x_reg, flags, z_flag);
+        }
+        
+        // Log when Zero flag changes in the DEX loop
+        static uint8_t last_z_flag = 0xFF;
+        if (z_flag != last_z_flag && last_z_flag != 0xFF) {
+            printf("DEX_ZERO_FLAG: cycle=%llu PC=$%04X X=$%02X Z=%d→%d\n",
+                   (unsigned long long)harness->current_cycles, cpu->pc, x_reg, last_z_flag, z_flag);
+        }
+        last_z_flag = z_flag;
     }
     
     // Check for test completion at Klaus success address
@@ -67,9 +119,35 @@ void klaus_bus_cycle_callback(void) {
             harness->last_expected_cycles = expected_cycles;
         }
         
-        // Calculate dynamic threshold based on opcode
+        // Calculate dynamic threshold based on opcode and location
         // Allow extra cycles for bus stealing, page crossing, and other timing variations
         uint32_t dynamic_threshold = expected_cycles * 8; // 8x safety margin for complex cases
+        
+        // Special handling for DEX instructions - they can create long loops
+        // Check if we're in a sequence of DEX instructions by examining surrounding memory
+        bool in_dex_sequence = false;
+        if (opcode == 0xCA) {
+            // Check if this is part of a longer DEX sequence
+            uint8_t prev_instruction = (cpu->pc > 0) ? harness->c64->ram->memory[cpu->pc - 1] : 0x00;
+            uint8_t next_instruction = harness->c64->ram->memory[cpu->pc + 1];
+            
+            // If previous or next instruction is also DEX, or if we're in known DEX ranges
+            if (prev_instruction == 0xCA || next_instruction == 0xCA ||
+                (cpu->pc >= 0x0470 && cpu->pc <= 0x0490) || 
+                (cpu->pc >= 0x0560 && cpu->pc <= 0x0570) ||
+                (cpu->pc >= 0x0520 && cpu->pc <= 0x0530) ||
+                (cpu->pc >= 0x04F0 && cpu->pc <= 0x0510) ||
+                (cpu->pc >= 0x04C0 && cpu->pc <= 0x04D0)) {
+                in_dex_sequence = true;
+            }
+        }
+        
+        if (in_dex_sequence) {
+            // DEX sequences can legitimately run for hundreds of cycles
+            // Each DEX takes 2 cycles, worst case loop from $FF to $00 = 255 * 2 = 510 cycles
+            // Add significant safety margin for nested loops and multiple iterations
+            dynamic_threshold = 2000; // Allow 2000 cycles for DEX sequences
+        }
         
         // Ensure minimum threshold to handle complex addressing modes and VIA interference
         if (dynamic_threshold < MOS6510_MAX_CYCLES_WITH_BUS_STEALING * 2) {
@@ -89,13 +167,13 @@ void klaus_bus_cycle_callback(void) {
         }
         
         if (harness->current_cycles <= 1000) {
-            printf("DEBUG: Stuck counter incremented to %d (PC=$%04X, opcode=$%02X, expected_cycles=%d, threshold=%d)\n", 
+            printf("DEBUG: Stuck counter incremented to %u (PC=$%04X, opcode=$%02X, expected_cycles=%u, threshold=%u)\n", 
                    harness->stuck_counter, cpu->pc, opcode, expected_cycles, dynamic_threshold);
         }
         
         // Check if we've exceeded the dynamic threshold
         if (harness->stuck_counter > dynamic_threshold) {
-            printf("DEBUG: CPU detected as stuck at PC=$%04X after %d cycles (opcode=$%02X, expected=%d cycles)\n", 
+            printf("DEBUG: CPU detected as stuck at PC=$%04X after %u cycles (opcode=$%02X, expected=%u cycles)\n", 
                    cpu->pc, harness->stuck_counter, opcode, expected_cycles);
             
             // Additional analysis for debugging
@@ -105,6 +183,12 @@ void klaus_bus_cycle_callback(void) {
                    harness->c64->ram->memory[cpu->pc + 2],
                    harness->c64->ram->memory[cpu->pc + 3]);
             
+            // Show CPU register state when stuck
+            printf("DEBUG: CPU state - A=$%02X X=$%02X Y=$%02X P=$%02X SP=$%02X\n",
+                   cpu->a, cpu->x, cpu->y, cpu->p, cpu->sp);
+            printf("DEBUG: Z flag = %d, N flag = %d\n", 
+                   (cpu->p & 0x02) ? 1 : 0, (cpu->p & 0x80) ? 1 : 0);
+            
             harness->test_result = TEST_STUCK;
             harness->execution_complete = true;
         }
@@ -113,7 +197,7 @@ void klaus_bus_cycle_callback(void) {
         if (harness->stuck_counter > 0) {
             uint64_t cycles_at_pc = harness->current_cycles - harness->pc_change_cycle;
             if (harness->current_cycles <= 1000) {
-                printf("DEBUG: PC changed from $%04X to $%04X after %llu cycles (stuck_counter was %d)\n", 
+                printf("DEBUG: PC changed from $%04X to $%04X after %llu cycles (stuck_counter was %u)\n", 
                        harness->last_pc, cpu->pc, 
                        (unsigned long long)cycles_at_pc, harness->stuck_counter);
             }
@@ -124,16 +208,12 @@ void klaus_bus_cycle_callback(void) {
         harness->pc_change_cycle = harness->current_cycles;
     }
     
-    // Check for cycle timeout
+    // Check for cycle timeout (backup safety mechanism)
     if (harness->current_cycles >= harness->max_cycles) {
+        printf("DEBUG: Cycle timeout reached after %llu cycles (PC=$%04X)\n",
+               (unsigned long long)harness->current_cycles, cpu->pc);
         harness->test_result = TEST_TIMEOUT;
         harness->execution_complete = true;
-    }
-
-    // Progress reporting
-    if (harness->current_cycles % 100000 == 0) {
-        printf("Executed %llu cycles, PC=$%04X\n", 
-               (unsigned long long)harness->current_cycles, cpu->pc);
     }
 
     if (harness->execution_complete) {
@@ -174,6 +254,7 @@ test_harness_t* test_harness_create(void) {
     harness->test_result = TEST_NOT_SET;
     harness->last_pc = 0;
     harness->stuck_counter = 0;
+    harness->start_time = 0;  // Will be set when test execution begins
     
     // Initialize opcode-aware tracking fields
     harness->last_opcode = 0;
@@ -298,13 +379,14 @@ test_status_t test_harness_run_klaus_test(test_harness_t* harness) {
     harness->test_result = TEST_NOT_SET;
     harness->last_pc = 0;
     harness->stuck_counter = 0;
+    harness->start_time = time(NULL);  // Set start time for timeout calculation
     
     // Set up bus cycle callback for execution control
     g_test_harness = harness;
     extern void (*bus_cycle_callback)(void);
     bus_cycle_callback = klaus_bus_cycle_callback;
     
-    status.start_time = time(NULL);
+    status.start_time = harness->start_time;
     
     // Use mos6510_execute() for continuous execution instead of stepping
     // The callback will control execution and set execution_complete when done

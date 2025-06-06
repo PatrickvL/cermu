@@ -202,7 +202,7 @@ int main(int argc, char* argv[]) {
             // Load and run functional test
             char test_path[512];
             snprintf(test_path, sizeof(test_path),
-                     "6502_65C02_functional_tests/bin_files/6502_functional_test.bin");
+                     "aiemuc/6502_65C02_functional_tests/bin_files/6502_functional_test.bin");
 
             printf("Attempting to load test binary: %s\n", test_path);
             if (test_harness_load_binary(harness, test_path)) {
