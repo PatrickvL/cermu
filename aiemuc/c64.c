@@ -11,6 +11,7 @@
 #include "mos6526.h" // cia
 #include "mos6581.h" // sid
 #include "mos6569.h" // vicii
+#include "mos2114.h" // colorram
 #include "ram.h"
 #include "rom.h"
 
@@ -28,38 +29,6 @@ extern device_descriptor_t mos6569_descriptor;
 extern device_descriptor_t ram_descriptor;
 extern device_descriptor_t rom_descriptor;
 
-//typedef struct custom custom_t;
-
-// TODO : Move to c64_custom.c
-void* custom_system_create(device_descriptor_t* desc) {
-    custom_t* custom = (custom_t*)calloc(1, sizeof(custom_t));
-    if (!custom) return NULL;
-    custom->desc = desc;
-    return custom;
-}
-
-void custom_system_destroy(void* device) {
-    free(device);
-}
-
-uint8_t custom_registers_read(void* context, uint16_t address) {
-    custom_t* custom = (custom_t*)context;
-    return custom->registers[address & 0xFF];
-}
-
-void custom_registers_write(void* context, uint16_t address, uint8_t value) {
-    custom_t* custom = (custom_t*)context;
-    custom->registers[address & 0xFF] = value;
-}
-
-device_descriptor_t custom_descriptor = {
-    .create = custom_system_create,
-    .destroy = custom_system_destroy,
-    .bus_attach = NULL,
-    .read = custom_registers_read,
-    .write = custom_registers_write,
-    .bank_change = NULL
-};
 
 // Actual c64.c
 
@@ -244,7 +213,7 @@ c64_t* c64_system_create() {
         &mos6526_descriptor,
         &mos6581_descriptor,
         &mos6569_descriptor,
-        &custom_descriptor,
+        &mos2114_descriptor,
         &rom_descriptor,
         &rom_descriptor,
         &rom_descriptor,
@@ -257,7 +226,7 @@ c64_t* c64_system_create() {
         (void**)&c64->cia2,
         (void**)&c64->sid,
         (void**)&c64->vicii,
-        (void**)&c64->custom,
+        (void**)&c64->colorram,
         (void**)&c64->basic,
         (void**)&c64->kernal,
         (void**)&c64->cartridge,
@@ -284,6 +253,7 @@ c64_t* c64_system_create() {
 
     // Initialize memory devices with their device_entry_t to set rwcb_context (no loops)
     ram_memory_init(c64->ram, &c64->system.devices[ids[2]]);
+    mos2114_memory_init(c64->colorram, &c64->system.devices[ids[7]]);
     
     // Initialize ROM devices with their address and size information
     // Pass device_entry_t so ROM can set its own rwcb_context

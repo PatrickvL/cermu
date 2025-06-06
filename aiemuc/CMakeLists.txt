@@ -73,6 +73,7 @@ set(EMULATOR_SOURCES
     mos6526.c
     mos6581.c
     mos6569.c
+    mos2114.c
 )
 
 set(EMULATOR_HEADERS
@@ -88,6 +89,7 @@ set(EMULATOR_HEADERS
     mos6526.h
     mos6581.h
     mos6569.h
+    mos2114.h
     aiemuc.h
 )
 
@@ -96,6 +98,15 @@ add_executable(c64emu c64_main.c ${EMULATOR_SOURCES} ${EMULATOR_HEADERS})
 
 # Test harness for Klaus 6502 functional tests
 add_executable(klaus_test_runner klaus_test_runner.c ${EMULATOR_SOURCES} ${EMULATOR_HEADERS})
+
+# MOS6510 validation framework
+add_executable(mos6510_validator 
+    mos6510_validation_runner.c 
+    mos6510_validation_tests.c 
+    mos6510_specific_tests.c 
+    ${EMULATOR_SOURCES} 
+    ${EMULATOR_HEADERS}
+)
 
 # Verification program for cycle calculation (commented out - source file missing)
 # add_executable(verify_cycles verify_cycles.c)
@@ -108,6 +119,7 @@ add_executable(klaus_test_runner klaus_test_runner.c ${EMULATOR_SOURCES} ${EMULA
 # Include directories
 target_include_directories(c64emu PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(klaus_test_runner PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(mos6510_validator PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Platform-specific libraries
 if(WIN32)
@@ -116,11 +128,12 @@ else()
     # Link against math library on Unix-like systems
     target_link_libraries(c64emu m)
     target_link_libraries(klaus_test_runner m)
+    target_link_libraries(mos6510_validator m)
     # target_link_libraries(debug_dex_test m)  # commented out - target doesn't exist
 endif()
 
 # Set output directories
-set_target_properties(c64emu klaus_test_runner
+set_target_properties(c64emu klaus_test_runner mos6510_validator
     PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/$<CONFIG>
     ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/$<CONFIG>
@@ -128,7 +141,7 @@ set_target_properties(c64emu klaus_test_runner
 )
 
 # Installation targets (optional)
-install(TARGETS c64emu klaus_test_runner
+install(TARGETS c64emu klaus_test_runner mos6510_validator
     RUNTIME DESTINATION bin
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib

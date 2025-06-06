@@ -9,6 +9,7 @@
 #include "mos6526.h" // cia
 #include "mos6581.h" // sid
 #include "mos6569.h" // vicii
+#include "mos2114.h" // colorram
 
 // Forward declaration to avoid circular dependency with c64_bus.h
 typedef struct c64_bus_s c64_bus_t;
@@ -21,12 +22,6 @@ typedef struct mos6581_s mos6581_t;
 typedef struct mos6526_s mos6526_t;
 typedef struct mos6569_s mos6569_t;
 
-// TODO : Move to custom.h or delete if not needed
-typedef struct {
-    device_descriptor_t* desc;
-    uint8_t registers[256];
-    c64_bus_t* bus;
-} custom_t;
 
 typedef struct c64_s {
     system_8bit_t system;
@@ -37,7 +32,7 @@ typedef struct c64_s {
     mos6581_t* sid;
     mos6526_t* cia1;
     mos6526_t* cia2;
-    custom_t* custom;
+    mos2114_t* colorram;
     mos6569_t* vicii;
     rom_t* cartridge;
     rom_t* kernal;
