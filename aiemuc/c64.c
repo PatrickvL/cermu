@@ -199,33 +199,33 @@ c64_t* c64_system_create() {
     }
 
     device_descriptor_t* descriptors[] = {
-        &c64_bus_descriptor,
-        &mos6510_descriptor,
-        &ram_descriptor,
-        &mos6526_descriptor,
-        &mos6526_descriptor,
-        &mos6581_descriptor,
-        &mos6569_descriptor,
-        &mos2114_descriptor,
-        &rom_descriptor,
-        &rom_descriptor,
-        &rom_descriptor,
+        &c64_bus_descriptor, // 'unmapped' bus
+        &ram_descriptor, // ram
+        &mos6510_descriptor, // cpu
+        &mos6569_descriptor, // vicii
+        &mos6581_descriptor, // sid
+        &mos2114_descriptor, // colorram
+        &mos6526_descriptor, // cia(1)
+        &mos6526_descriptor, // cia(2)
+        &rom_descriptor, // cartridge
+        &rom_descriptor, // basic ROM
+        &rom_descriptor, // kernal ROM
     };
     void** devices[] = {
-        (void**)&c64->bus,
-        (void**)&c64->mos6510,
-        (void**)&c64->ram,
-        (void**)&c64->cia1,
-        (void**)&c64->cia2,
-        (void**)&c64->sid,
-        (void**)&c64->vicii,
-        (void**)&c64->colorram,
-        (void**)&c64->basic,
-        (void**)&c64->kernal,
-        (void**)&c64->cartridge,
+        (void**)&c64->bus, // DEVID_UNMAPPED
+        (void**)&c64->ram, // DEVID_RAM
+        (void**)&c64->mos6510, // DEVIC_ZEROPAGE
+        (void**)&c64->vicii, // DEVID_VICII
+        (void**)&c64->sid, // DEVID_SID
+        (void**)&c64->colorram, // DEVID_COLORRAM
+        (void**)&c64->cia1, // DEVID_CIA *same id!*
+        (void**)&c64->cia2, // DEVID_CIA *same id!*
+        (void**)&c64->cartridge, // DEVID_CARTRIDGE
+        (void**)&c64->basic, // DEVID_BASIC_ROM
+        (void**)&c64->kernal, // DEVID_KERNAL_ROM
     };
-    uint16_t bases[] = {0x0000, 0x0000, 0x0000, 0xDC00, 0xDD00, 0xD000, 0xD400, 0xD800, 0xA000, 0xE000, 0x8000};
-    unsigned int sizes[] = {0, 0, 65536, 256, 256, 1024, 1024, 1024, 8192, 8192, 16384};
+    uint16_t bases[] = {0x0000, 0x0000, 0x0000, 0xD000, 0xD400, 0xD800, 0xDC00, 0xDD00, 0x8000, 0xA000, 0xE000};
+    unsigned int sizes[] = {0, 65536, 256, 256, 1024, 1024, 1024, 8192, 8192, 16384}; // TODO
     uint8_t ids[11];
 
     for (int i = 0; i < 11; i++) {
@@ -245,13 +245,13 @@ c64_t* c64_system_create() {
     c64_pla_maps_generate(c64);
 
     // Initialize memory devices with their device_entry_t to set rwcb_context (no loops)
-    ram_memory_init(c64->ram, &c64->system.devices[ids[2]]);
-    mos2114_memory_init(c64->colorram, &c64->system.devices[ids[7]]);
+    ram_memory_init(c64->ram, &c64->system.devices[DEVID_RAM]);
+    mos2114_memory_init(c64->colorram, &c64->system.devices[DEVID_COLORRAM]);
     
     // Initialize ROM devices with their address and size information
     // Pass device_entry_t so ROM can set its own rwcb_context
-    rom_memory_init(c64->basic, 0xA000, 8192, &c64->system.devices[ids[8]]);
-    rom_memory_init(c64->kernal, 0xE000, 8192, &c64->system.devices[ids[9]]);
+    rom_memory_init(c64->basic, 0xA000, 8192, &c64->system.devices[DEVID_BASIC_ROM]);
+    rom_memory_init(c64->kernal, 0xE000, 8192, &c64->system.devices[DEVID_KERNAL_ROM]);
     rom_memory_init(c64->cartridge, 0x8000, 16384, &c64->system.devices[ids[10]]);
     
     // Set default memory contents TODO : Read from file?
