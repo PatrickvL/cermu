@@ -65,13 +65,9 @@ void c64_detached_write(c64_t* c64, uint16_t address, uint8_t value) {
     // Do nothing - detached devices do not write
 }
 
-static read_callback_t c64_detached_read_callback = {
-    .func = (device_read_func_t)c64_detached_read,
-    .context = NULL
-};
-
-static write_callback_t c64_detached_write_callback = {
-    .func = (device_write_func_t)c64_detached_write,
+static device_access_callback_t c64_detached_access_callback = {
+    .read_func = (device_read_func_t)c64_detached_read,
+    .write_func = (device_write_func_t)c64_detached_write,
     .context = NULL
 };
 
@@ -80,14 +76,11 @@ void c64_callbacks_init(c64_t* c64) {
     for (int i = 0; i < c64->system.device_count; i++) {
         device_entry_t* dev = &c64->system.devices[i];
         device_descriptor_t* desc = dev->desc;
-        if (desc->read)
-            bus->read_callbacks[i] = (read_callback_t){ desc->read, dev->rwcb_context };
-        else
-            bus->read_callbacks[i] = c64_detached_read_callback;
-        if (desc->write)
-            bus->write_callbacks[i] = (write_callback_t){ desc->write, dev->rwcb_context };
-        else
-            bus->write_callbacks[i] = c64_detached_write_callback;
+        bus->device_access_callbacks[i] = (device_access_callback_t){
+            .read_func = desc->read ? desc->read : (device_read_func_t)c64_detached_read,
+            .write_func = desc->write ? desc->write : (device_write_func_t)c64_detached_write,
+            .context = dev->rwcb_context
+        };
     }
 }
 

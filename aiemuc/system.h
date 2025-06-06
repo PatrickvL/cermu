@@ -15,6 +15,13 @@ typedef struct {
     void* context;
 } write_callback_t;
 
+// Unified device access callback - combines read/write with shared context
+typedef struct {
+    device_read_func_t read_func;
+    device_write_func_t write_func;
+    void* context;  // Shared context for both read and write operations
+} device_access_callback_t;
+
 // Generic 8-bit system
 typedef struct {
     device_entry_t devices[16];

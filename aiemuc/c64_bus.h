@@ -39,8 +39,7 @@ typedef struct c64_bus_s {
     device_descriptor_t* desc;
     c64_t* c64;
     uint8_t* device_id_per_page; // Maps each condensed index (32 entries) to a device ID
-    alignas(64) read_callback_t read_callbacks[16]; // indexed by device ID
-    alignas(64) write_callback_t write_callbacks[16]; // indexed by device ID
+    alignas(64) device_access_callback_t device_access_callbacks[16]; // indexed by device ID - unified read/write/context
     alignas(64) uint8_t device_id_per_page_per_mode[32][32]; // Condensed from 256 to 32 entries per mode
 
     uint16_t address;       // A0-A15
