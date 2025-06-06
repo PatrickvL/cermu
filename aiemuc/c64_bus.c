@@ -6,16 +6,16 @@ uint8_t c64_bus_memory_read(void* device, uint16_t address) {
     c64_bus_t* c64_bus = (c64_bus_t*)device;
     int index = c64_bus_get_device_index(address);
     uint8_t id = DEVID_READ_DECODE(c64_bus->device_id_per_page[index]);
-    read_callback_t* cb = &c64_bus->read_callbacks[id];
-    return cb->func(cb->context, address);
+    device_access_callback_t* cb = &c64_bus->device_access_callbacks[id];
+    return cb->read_func(cb->context, address);
 }
 
 void c64_bus_memory_write(void* context, uint16_t address, uint8_t value) {
     c64_bus_t* c64_bus = (c64_bus_t*)context;
     int index = c64_bus_get_device_index(address);
     uint8_t id = DEVID_WRITE_DECODE(c64_bus->device_id_per_page[index]);
-    write_callback_t* cb = &c64_bus->write_callbacks[id];
-    cb->func(cb->context, address, value);
+    device_access_callback_t* cb = &c64_bus->device_access_callbacks[id];
+    cb->write_func(cb->context, address, value);
     // TODO : Move below signalling of VIC-II bank change to somewhere else with less impact on performance
     if (address == 0xDD00) {
         c64_t* c64 = c64_bus->c64;
