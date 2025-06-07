@@ -2,5 +2,48 @@
 .vscode/settings.json
 
 # Build directories
+build/
+bin/
+obj/
 /aiemu/obj/
-aiemuc/c64emu
+/code/c/build/
+/code/c/bin/
+
+# CMake files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+
+# Visual Studio files
+*.vcxproj.user
+*.vcxproj.filters
+.vs/
+
+# Executables
+aiemuc
+aiemuc.exe
+c64emu
+c64emu.exe
+
+# Object files
+*.o
+*.obj
+
+# Debug files
+*.pdb
+*.ilk
+
+# Data files (ROMs, cartridges, disk images) - keep README files
+data/**/*.rom
+data/**/*.bin
+data/**/*.crt
+data/**/*.d64
+data/**/*.d71
+data/**/*.d81
+data/**/*.tap
+data/**/*.t64
+data/**/*.prg
+data/**/*.p00
+data/**/*.img
+data/**/*.adf
+!data/**/README.md
