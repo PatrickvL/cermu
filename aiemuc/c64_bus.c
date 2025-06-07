@@ -3,19 +3,26 @@
 #include <stdlib.h>
 #include <string.h>
 
-uint8_t c64_bus_memory_read(void* device, uint16_t address) {
-    c64_bus_t* c64_bus = (c64_bus_t*)device;
-    int index = c64_bus_get_device_index(address);
-    uint8_t id = DEVID_READ_DECODE(c64_bus->device_id_per_index[index]);
-    device_access_callback_t* cb = &c64_bus->device_access_callbacks[id];
+// Inline function to calculate condensed bank index from address.
+// Bank number is derived from the upper 4 bits of the address, whereby the lower 4 
+// IO range (bank 13), returns 16 + the page number (from the 2nd address nybble).
+static inline int c64_bus_address_to_bankidx(uint16_t address) {
+    int bank = address >> 12;
+    int page = (address >> 8) & 0x0F;
+    return bank + ((bank == 13) * (page + 3));
+}
+
+uint8_t c64_bus_memory_read(c64_bus_t* c64_bus, uint16_t address) {
+    int bankidx = c64_bus_address_to_bankidx(address);
+    uint8_t devid = DEVID_READ_DECODE(c64_bus->devid_per_bankidx[bankidx]);
+    access_callback_t* cb = &c64_bus->access_callback_per_devid[devid];
     return cb->read_func(cb->context, address);
 }
 
-void c64_bus_memory_write(void* context, uint16_t address, uint8_t value) {
-    c64_bus_t* c64_bus = (c64_bus_t*)context;
-    int index = c64_bus_get_device_index(address);
-    uint8_t id = DEVID_WRITE_DECODE(c64_bus->device_id_per_index[index]);
-    device_access_callback_t* cb = &c64_bus->device_access_callbacks[id];
+void c64_bus_memory_write(c64_bus_t* c64_bus, uint16_t address, uint8_t value) {
+    int bankidx = c64_bus_address_to_bankidx(address);
+    uint8_t devid = DEVID_WRITE_DECODE(c64_bus->devid_per_bankidx[bankidx]);
+    access_callback_t* cb = &c64_bus->access_callback_per_devid[devid];
     cb->write_func(cb->context, address, value);
     // TODO : Move below signalling of VIC-II bank change to somewhere else with less impact on performance
     if (address == 0xDD00) {
@@ -50,14 +57,14 @@ device_descriptor_t c64_bus_descriptor = {
     .create = c64_bus_system_create,
     .destroy = c64_bus_system_destroy,
     .bus_attach = NULL,
-    .read = c64_bus_memory_read,
-    .write = c64_bus_memory_write,
+    .read = NULL,
+    .write = NULL,
     .bank_change = NULL
 };
 
 void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {
     // Update the device ID mapping for the current mode
-    memcpy(c64_bus->device_id_per_index, c64_bus->device_id_per_index_per_mode[mode], sizeof(c64_bus->device_id_per_index));
+    memcpy(c64_bus->devid_per_bankidx, c64_bus->devid_per_bankidx_per_mode[mode], sizeof(c64_bus->devid_per_bankidx));
 }
 
 uint8_t c64_bus_read_cycle(c64_bus_t *c64_bus, uint16_t addr) {
