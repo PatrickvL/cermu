@@ -1,11 +1,12 @@
 #include "c64_bus.h"
 #include "c64.h"
 #include <stdlib.h>
+#include <string.h>
 
 uint8_t c64_bus_memory_read(void* device, uint16_t address) {
     c64_bus_t* c64_bus = (c64_bus_t*)device;
     int index = c64_bus_get_device_index(address);
-    uint8_t id = DEVID_READ_DECODE(c64_bus->device_id_per_page[index]);
+    uint8_t id = DEVID_READ_DECODE(c64_bus->device_id_per_index[index]);
     device_access_callback_t* cb = &c64_bus->device_access_callbacks[id];
     return cb->read_func(cb->context, address);
 }
@@ -13,7 +14,7 @@ uint8_t c64_bus_memory_read(void* device, uint16_t address) {
 void c64_bus_memory_write(void* context, uint16_t address, uint8_t value) {
     c64_bus_t* c64_bus = (c64_bus_t*)context;
     int index = c64_bus_get_device_index(address);
-    uint8_t id = DEVID_WRITE_DECODE(c64_bus->device_id_per_page[index]);
+    uint8_t id = DEVID_WRITE_DECODE(c64_bus->device_id_per_index[index]);
     device_access_callback_t* cb = &c64_bus->device_access_callbacks[id];
     cb->write_func(cb->context, address, value);
     // TODO : Move below signalling of VIC-II bank change to somewhere else with less impact on performance
@@ -55,7 +56,8 @@ device_descriptor_t c64_bus_descriptor = {
 };
 
 void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {
-    c64_bus->device_id_per_page = c64_bus->device_id_per_index_per_mode[mode];
+    // Update the device ID mapping for the current mode
+    memcpy(c64_bus->device_id_per_index, c64_bus->device_id_per_index_per_mode[mode], sizeof(c64_bus->device_id_per_index));
 }
 
 uint8_t c64_bus_read_cycle(c64_bus_t *c64_bus, uint16_t addr) {
