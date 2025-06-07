@@ -84,8 +84,9 @@ static mos6510_opcode_handler_t original_handlers[256];
 
 // Stub that restores original table on first hit
 static void intercept_stub(mos6510_t* cpu) {
-    (void)cpu; // Avoid unused parameter warning
     if (!intercepting) return;
+    // Undo the PC increment from CPU_OPCODE_FOOTER since we're not executing the next instruction
+    cpu->pc--;
     memcpy(mos6510_opcode_handlers, original_handlers, sizeof(original_handlers));
     intercepting = false;
 }
