@@ -6,6 +6,7 @@
 #include "../../core/system.h"
 #include "c64.h"
 #include "c64_bus.h"
+#include "c64_bus_adapter.h"
 #include "../../chip/cpu/mos6510/mos6510.h" // cpu
 #include "../../chip/io/mos6526.h" // cia
 #include "../../chip/sound/mos6581.h" // sid
@@ -19,9 +20,8 @@ static uint8_t basic_rom[8192] = {0};
 static uint8_t kernal_rom[8192] = {0};
 static uint8_t cartridge_rom[16384] = {0};
 
-// Device descriptor declarations (defined in respective .c files)
+// Device descriptor declarations for non-CPU devices (defined in respective .c files)
 extern device_descriptor_t c64_bus_descriptor;
-extern device_descriptor_t mos6510_descriptor;
 extern device_descriptor_t mos6526_descriptor;
 extern device_descriptor_t mos6581_descriptor;
 extern device_descriptor_t mos6569_descriptor;
@@ -230,6 +230,9 @@ c64_t* c64_system_create() {
     
     // Set default memory contents TODO : Read from file?
     c64_memory_init(&c64->system);
+
+    // Attach RAM directly to MOS6510 for zero page access to avoid circular dependency
+    mos6510_attach_ram(c64->mos6510, c64->ram, ram_memory_read, ram_memory_write);
 
     // Now that all devices have their rwcb_context set, we can initialize the callbacks
     c64_callbacks_init(c64);

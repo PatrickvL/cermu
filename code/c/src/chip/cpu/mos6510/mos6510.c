@@ -1,10 +1,82 @@
-#include "../../../core/device.h"
 #include "mos6510.h"
-// Include after mos6510.h to get full definitions without conflicts
-#include "../../../systems/c64/c64.h"  
-#include "../../memory/ram.h"
-#include <stdlib.h>
 #include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+
+// ============================================================================
+// DEVICE DESCRIPTOR FUNCTIONS
+// ============================================================================
+
+// Device functions for MOS6510
+static void* mos6510_create(device_descriptor_t* desc) {
+    mos6510_t* cpu = malloc(sizeof(mos6510_t));
+    if (cpu) {
+        cpu->desc = desc;
+        mos6510_init(cpu);
+    }
+    return cpu;
+}
+
+static void mos6510_destroy(void* device) {
+    if (device) {
+        free(device);
+    }
+}
+
+uint8_t mos6510_zeropage_read(void* device, uint16_t address) {
+    mos6510_t* cpu = (mos6510_t*)device;
+    
+    // Handle MOS6510 zero page I/O ports - addresses $0000 and $0001
+    if (address == 0) {
+        // Return Data Direction Register
+        return cpu->io_port[0];
+    } else if (address == 1) {
+        // Return port: outputs defined by DDR bits, inputs from external pins
+        uint8_t ddr = cpu->io_port[0];
+        uint8_t data = cpu->io_port[1];
+        uint8_t external = cpu->io_interface.read_external_pins(cpu->io_interface.context);
+        return (data & ddr) | (external & ~ddr);    } else {
+        // For addresses $0002-$00FF, access system RAM directly to avoid circular dependency
+        if (cpu->ram_access.read_func) {
+            return cpu->ram_access.read_func(cpu->ram_access.context, address);
+        } else {
+            // Fallback to bus interface if RAM not attached yet (during initialization)
+            return cpu->bus_interface.bus_read(cpu->bus_interface.context, address);
+        }
+    }
+}
+
+void mos6510_zeropage_write(void* device, uint16_t address, uint8_t value) {
+    mos6510_t* cpu = (mos6510_t*)device;
+    
+    // Handle MOS6510 zero page I/O ports - addresses $0000 and $0001
+    if (address <= 1) {
+        // Update Data Direction / Data register
+        cpu->io_port[address] = value;
+        
+        // Notify system of output pin changes
+        uint8_t ddr = cpu->io_port[0];
+        uint8_t port_data = cpu->io_port[1];
+        uint8_t effective_output = port_data & ddr;
+        cpu->io_interface.output_pins_changed(cpu->io_interface.context, ddr, port_data, effective_output);    } else {
+        // For addresses $0002-$00FF, write to system RAM directly to avoid circular dependency
+        if (cpu->ram_access.write_func) {
+            cpu->ram_access.write_func(cpu->ram_access.context, address, value);
+        } else {
+            // Fallback to bus interface if RAM not attached yet (during initialization)
+            cpu->bus_interface.bus_write(cpu->bus_interface.context, address, value);
+        }
+    }
+}
+
+device_descriptor_t mos6510_descriptor = {
+    .create = mos6510_create,
+    .destroy = mos6510_destroy,
+    .bus_attach = NULL,
+    .read = mos6510_zeropage_read,
+    .write = mos6510_zeropage_write,
+    .bank_change = NULL
+};
 
 // Interception support for threaded dispatch
 static bool intercepting = false;
@@ -43,59 +115,6 @@ bool mos6510_is_intercepting(void) {
 // CPU OPERATION FUNCTIONS (inline for performance)
 // ============================================================================
 
-// Compute effective port output: outputs from Data when DDR=1, else external data
-static inline uint8_t mos6510_io_mask(mos6510_t* cpu_dev, uint8_t value)
-{
-    uint8_t ddr = cpu_dev->io_port[0];
-    uint8_t data = cpu_dev->io_port[1];
-    return (data & ddr) | (value & ~ddr);
-}
-
-static inline uint8_t mos6510_ioport_read(mos6510_t* cpu_dev, uint16_t addr) {
-    uint8_t value = cpu_dev->io_port[addr];
-    if (addr == 1) {
-        // Return port: outputs defined by DDR bits, inputs from bus data
-        return mos6510_io_mask(cpu_dev, value); // TODO : Figure out if `value` is the correct argument, and if so, could we just return it directly?
-    }
-    return value;
-}
-
-static inline void mos6510_ioport_write(mos6510_t* cpu_dev, uint16_t addr, uint8_t value) {
-    cpu_dev->io_port[addr] = value; // Update Data Direction (or Data) register
-    // Mux Data Direction with Data register and the given value
-    uint8_t port_out = mos6510_io_mask(cpu_dev, cpu_dev->io_port[1]);
-    // Update the bus mode based on the port output
-    c64_bus_mode_switch(cpu_dev->c64_bus, port_out);
-}
-
-//
-
-static uint8_t mos6510_zeropage_read(void* device, uint16_t addr) {
-    mos6510_t* cpu_dev = (mos6510_t*)device;
-    // Handle I/O ports directly in CPU - addresses $0000 and $0001
-    if (addr <= 1) {
-        uint8_t value = mos6510_ioport_read(cpu_dev, addr);
-        return value;
-    }
-    
-    // For the rest of the zero page addresses, access RAM
-    c64_t *c64 = cpu_dev->c64_bus->c64;
-    return ram_memory_read(c64->ram->memory, addr);
-}    
-
-static void mos6510_zeropage_write(void* device, uint16_t addr, uint8_t value) {
-    mos6510_t* cpu_dev = (mos6510_t*)device;
-    // Handle I/O ports directly in CPU - addresses $0000 and $0001
-    if (addr <= 1) {
-        mos6510_ioport_write(cpu_dev, addr, value);
-        return;
-    }
-
-    // For the rest of the zero page addresses, access RAM
-    c64_t *c64 = cpu_dev->c64_bus->c64;
-    ram_memory_write(c64->ram->memory, addr, value);
-}
-
 // CPU lifecycle wrapper functions
 void mos6510_init(mos6510_t* cpu_dev) {
     // Initialize CPU registers and state
@@ -111,40 +130,15 @@ void mos6510_init(mos6510_t* cpu_dev) {
     cpu_dev->io_port[1] = 0x37;  // Default I/O Port Data (at $0001)
     // Note, that this value will be communicated to the rest of the system via the bus
     // when the bus is attached to the CPU (see mos6510_bus_attach).
+      // Initialize RAM accessors to NULL (will be set by mos6510_attach_ram)
+    cpu_dev->ram_access.context = NULL;
+    cpu_dev->ram_access.read_func = NULL;
+    cpu_dev->ram_access.write_func = NULL;
 }
 
 //
 
-void mos6510_system_destroy(void* device) {
-    free(device);
-}
-
-void* mos6510_system_create(device_descriptor_t* desc) {
-    mos6510_t* cpu = (mos6510_t*)calloc(1, sizeof(mos6510_t));
-    if (!cpu) return NULL;
-    cpu->desc = desc;
-    mos6510_init(cpu);
-    return cpu;
-}
-
-// Attach bus to CPU
-void mos6510_bus_attach(void* device, void* bus) {
-    mos6510_t* cpu = (mos6510_t*)device;
-    c64_bus_t* c64_bus = (c64_bus_t*)bus;
-    cpu->c64_bus = c64_bus;
-    // Publish current I/O port state to the bus
-    // This is necessary to ensure the bus has the correct initial state
-    mos6510_ioport_write(cpu, 1, cpu->io_port[1]);
-}
-
-device_descriptor_t mos6510_descriptor = {
-    .create = mos6510_system_create,
-    .destroy = mos6510_system_destroy,
-    .bus_attach = mos6510_bus_attach,
-    .read = mos6510_zeropage_read,
-    .write = mos6510_zeropage_write,
-    .bank_change = NULL
-};
+//
 
 //
 
@@ -158,10 +152,10 @@ void mos6510_irq(mos6510_t* cpu_dev, uint8_t status) {
 
 // Interrupt handler - called when IRQ or NMI lines are active
 void mos6510_interrupt_handler(mos6510_t* cpu_dev) {
-    if (CPU_CONTROL_LINES(cpu_dev) & NMI_LINE) {
+    if (CPU_TEST_NMI(cpu_dev)) {
         // Handle NMI - non-maskable
         mos6510_nmi(cpu_dev);
-    } else if ((CPU_CONTROL_LINES(cpu_dev) & IRQ_LINE) && !cpu_get_flag(cpu_dev, FLAG_I)) {
+    } else if (CPU_TEST_IRQ(cpu_dev) && !cpu_get_flag(cpu_dev, FLAG_I)) {
         // Handle IRQ when interrupt disable is clear
         mos6510_irq(cpu_dev, cpu_dev->p & ~FLAG_B); // Clear B flag for IRQ
     }
@@ -179,10 +173,25 @@ void mos6510_reset(mos6510_t* cpu_dev) {
     cpu_dev->p |= FLAG_I;  // Set interrupt disable
 }
 
-bool mos6510_step(mos6510_t* cpu_dev) { // _dispatch
+bool mos6510_step(mos6510_t* cpu_dev) {
+    // Single step implementation using interception mechanism
+    // This ensures only one instruction executes before returning control
+    
+    // Fetch the opcode and get the real handler BEFORE starting interception
     uint8_t opcode = mos6510_read_cycle(cpu_dev, cpu_dev->pc++);
-    mos6510_opcode_dispatch(cpu_dev, opcode);
-    // Return true when instruction completes (for testing)
+    mos6510_opcode_handler_t handler = mos6510_opcode_handlers[opcode];
+    
+    // Start interception to catch the next instruction after this one
+    mos6510_start_intercept();
+    
+    // Execute the actual instruction handler
+    handler(cpu_dev);
+    
+    // Stop interception to clean up the handler table
+    mos6510_stop_intercept();
+    
+    // If we reach here, the instruction completed and interception triggered
+    // The threaded dispatch was halted after one instruction
     return true;
 }
 
@@ -486,3 +495,62 @@ mos6510_opcode_handler_t mos6510_opcode_handlers[256] = {
     [0xFE] = inc_absolute_x_func,    // INC $nnnn,X
     [0xFF] = isc_absolute_x_func,    // ISC $nnnn,X (illegal)
 };
+
+// ============================================================================
+// PERFORMANCE-OPTIMIZED INTERFACE ATTACHMENT FUNCTIONS
+// ============================================================================
+
+/**
+ * Attach bus interface to CPU by copying entire interface struct by value.
+ * This provides zero-indirection access while maintaining clean organization.
+ */
+void mos6510_attach_bus_interface(mos6510_t* cpu_dev, const bus_cycle_ops_t* bus_interface) {
+    // Copy entire interface struct by value for zero-indirection access
+    cpu_dev->bus_interface = *bus_interface;
+}
+
+/**
+ * Attach control lines interface to CPU by copying entire interface struct by value.
+ * This provides zero-indirection access while maintaining clean organization.
+ */
+void mos6510_attach_control_lines_interface(mos6510_t* cpu_dev, const control_lines_interface_t* control_interface) {
+    // Copy entire interface struct by value for zero-indirection access
+    cpu_dev->control_interface = *control_interface;
+}
+
+/**
+ * Attach I/O port interface to CPU by copying entire interface struct by value.
+ * This provides zero-indirection access while maintaining clean organization.
+ */
+void mos6510_attach_io_interface(mos6510_t* cpu_dev, const mos6510_io_port_interface_t* io_interface) {
+    // Copy entire interface struct by value for zero-indirection access
+    cpu_dev->io_interface = *io_interface;
+}
+
+/**
+ * Attach system lines state to CPU.
+ * Note: This is a pointer to shared system state, not copied.
+ */
+void mos6510_attach_system_lines(mos6510_t* cpu_dev, system_lines_t* system_lines) {
+    if (!cpu_dev || !system_lines) return;
+    
+    // Store pointer to shared system state
+    cpu_dev->system_lines = system_lines;
+}
+
+/**
+ * Attach RAM directly to CPU for zero page access ($0002-$00FF).
+ * This provides direct access to RAM without going through the bus interface,
+ * which is essential to avoid circular dependencies when the CPU needs to access
+ * zero page memory during system initialization.
+ */
+void mos6510_attach_ram(mos6510_t* cpu_dev, void* ram_context, 
+                        uint8_t (*ram_read)(void*, uint16_t), 
+                        void (*ram_write)(void*, uint16_t, uint8_t)) {
+    if (!cpu_dev || !ram_context || !ram_read || !ram_write) return;
+    
+    // Store RAM access interface using consolidated structure
+    cpu_dev->ram_access.context = ram_context;
+    cpu_dev->ram_access.read_func = ram_read;
+    cpu_dev->ram_access.write_func = ram_write;
+}

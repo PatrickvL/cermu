@@ -2,9 +2,17 @@
 #define MOS6510_H
 
 #include "../../../core/device.h"
-#include "../../../systems/c64/c64_bus.h"
+#include "../../../core/bus_cycle_interface.h"
+#include "../../../core/control_lines_interface.h"
+#include "../../../core/system_lines.h"
+#include "../../../core/system.h"
+#include "mos6510_pins.h"
+#include "mos6510_io_interface.h"
 #include <stdint.h>
 #include <stdbool.h>
+
+// Forward declaration to resolve circular dependencies
+typedef struct mos6510_s mos6510_t;
 
 // Macro utilities for generating unique labels
 #define CONCAT_IMPL(a, b) a ## b
@@ -16,11 +24,25 @@
 // ============================================================================
 
 // CPU state structure
-typedef struct {
+struct mos6510_s {
     device_descriptor_t* desc; // Pointer to device descriptor (must be first)
-      // Device attachments
-    c64_bus_t* c64_bus; // Required for c64_non_cpu_cycle() TODO : Do that without referring to the c64 system
+      // === PERFORMANCE-OPTIMIZED INTERFACE STORAGE ===
+    // Store interface structs by value for zero-indirection access    // Bus interface (stored by value for optimal performance)
+    bus_cycle_ops_t bus_interface;
     
+    // Control lines interface (stored by value for optimal performance) 
+    control_lines_interface_t control_interface;
+      // I/O port interface (stored by value for optimal performance)
+    mos6510_io_port_interface_t io_interface;
+    
+    // === SHARED STATE POINTERS ===
+    // These CANNOT be copied - must remain as pointers to shared system state
+    system_lines_t* system_lines;  // Shared system-wide line state
+      // === DIRECT RAM ACCESS (for zero page $0002-$00FF) ===
+    // Direct RAM accessors to avoid circular dependency with bus interface
+    access_callback_t ram_access;  // Consolidated RAM access interface
+    
+    // === CPU INTERNAL STATE ===
     // Internal CPU state for cycle-accurate emulation
     uint16_t address;   // Address for current instruction (used for both absolute and relative)
     
@@ -34,7 +56,7 @@ typedef struct {
     uint8_t y;          // Y Index Register
     uint8_t sp;         // Stack Pointer
     uint8_t p;          // Processor Status Register
-} mos6510_t;
+};
 
 // Universal instruction dispatch using function pointers
 // (Works well on all compilers - performance difference with computed goto is minimal)
@@ -57,10 +79,6 @@ void mos6510_start_intercept(void);
  */
 void mos6510_stop_intercept(void);
 
-// Interception support: monkey-patch opcode table with stubs until next opcode
-void mos6510_start_intercept(void);
-void mos6510_stop_intercept(void);
-
 // MOS6510 Status Register Flags
 #define FLAG_C  0x01    // Carry
 #define FLAG_Z  0x02    // Zero
@@ -78,13 +96,59 @@ void mos6510_stop_intercept(void);
 // PLA functions
 void switch_cpu_mode(uint8_t mode);
 
-// Memory access functions
+// ============================================================================
+// MOS6510 ZERO PAGE I/O PORT ACCESSORS
+// ============================================================================
+
+// Compute effective port output: outputs from Data when DDR=1, else external data
+static inline uint8_t mos6510_io_mask(mos6510_t* cpu_dev, uint8_t value)
+{
+    uint8_t ddr = cpu_dev->io_port[0];
+    uint8_t data = cpu_dev->io_port[1];
+    return (data & ddr) | (value & ~ddr);
+}
+
+// MOS6510 zero page I/O port read (addresses $0000/$0001)
+static inline uint8_t mos6510_ioport_read(mos6510_t* cpu_dev, uint16_t addr) {
+    if (addr == 0) {
+        // Return Data Direction Register
+        return cpu_dev->io_port[0];
+    } else {
+        // Return port: outputs defined by DDR bits, inputs from external pins
+        uint8_t external = cpu_dev->io_interface.read_external_pins(cpu_dev->io_interface.context);
+        return mos6510_io_mask(cpu_dev, external);
+    }
+}
+
+// MOS6510 zero page I/O port write (addresses $0000/$0001)
+static inline void mos6510_ioport_write(mos6510_t* cpu_dev, uint16_t addr, uint8_t value) {
+    // Update Data Direction / Data register
+    cpu_dev->io_port[addr] = value;
+    
+    // Notify system of output pin changes
+    uint8_t ddr = cpu_dev->io_port[0];
+    uint8_t port_data = cpu_dev->io_port[1];
+    uint8_t effective_output = mos6510_io_mask(cpu_dev, port_data);
+    cpu_dev->io_interface.output_pins_changed(cpu_dev->io_interface.context, ddr, port_data, effective_output);
+}
+
+// Memory access functions using optimized direct callbacks
 static inline uint8_t mos6510_read_cycle(mos6510_t* cpu_dev, uint16_t addr) {
-    return c64_bus_read_cycle(cpu_dev->c64_bus, addr);
+    // All addresses go through bus interface - banking system routes zero page to device functions
+    uint8_t result = cpu_dev->bus_interface.bus_read(cpu_dev->bus_interface.context, addr);
+    
+    // Execute one cycle on other non-CPU chips after the bus operation
+    cpu_dev->bus_interface.cycle_tick(cpu_dev->bus_interface.context);
+    
+    return result;
 }
 
 static inline void mos6510_write_cycle(mos6510_t* cpu_dev, uint16_t addr, uint8_t value) {
-    c64_bus_write_cycle(cpu_dev->c64_bus, addr, value);
+    // All addresses go through bus interface - banking system routes zero page to device functions
+    cpu_dev->bus_interface.bus_write(cpu_dev->bus_interface.context, addr, value);
+    
+    // Execute one cycle on other non-CPU chips after the bus operation
+    cpu_dev->bus_interface.cycle_tick(cpu_dev->bus_interface.context);
 }
 
 // Forward declaration for functions used in macros
@@ -97,16 +161,16 @@ static inline void mos6510_opcode_dispatch(mos6510_t* cpu, uint8_t opcode) {
     handler(cpu);
 }
 
-// Shield off where the cpu control lines remos6581e (might we want to change this later)
-#define CPU_CONTROL_LINES(cpu_dev) ((cpu_dev)->c64_bus->control_lines)
+// CPU ready check - hardware accurate BA/RDY handling using direct callback
+#define CPU_READY(cpu_dev) CPU_TEST_RDY(cpu_dev)
 
-// CPU ready check - hardware accurate BA/RDY handling
-#define CPU_READY(cpu_dev) ((CPU_CONTROL_LINES(cpu_dev) & RDY_LINE) != 0)
-
-// Wait for CPU ready with automatic stall handling
+// Wait for CPU ready with automatic stall handling using direct callback
 #define CPU_INTRA_CYCLE(cpu_dev) do { \
     UNIQUE_LABEL(cpu_ready_stall): \
-    if (!CPU_READY(cpu_dev)) { c64_non_cpu_cycle(cpu_dev->c64_bus->c64); goto UNIQUE_LABEL(cpu_ready_stall); } \
+    if (!CPU_READY(cpu_dev)) { \
+        CPU_BUS_CYCLE(cpu_dev); \
+        goto UNIQUE_LABEL(cpu_ready_stall); \
+    } \
 } while(0)
 
 #define CPU_NEXT_INSTRUCTION_DISPATCH(cpu_dev) do { \
@@ -115,7 +179,7 @@ static inline void mos6510_opcode_dispatch(mos6510_t* cpu, uint8_t opcode) {
 } while(0)
 
 #define CPU_NEXT_INSTRUCTION(cpu_dev) do { \
-    if (unlikely(CPU_CONTROL_LINES(cpu_dev) & (IRQ_LINE | NMI_LINE))) { \
+    if (CPU_TEST_IRQ(cpu_dev) || CPU_TEST_NMI(cpu_dev)) { \
         mos6510_interrupt_handler(cpu_dev); \
         return; \
     } \
@@ -125,6 +189,30 @@ static inline void mos6510_opcode_dispatch(mos6510_t* cpu, uint8_t opcode) {
 } while(0)
 
 #define CPU_OPCODE_FOOTER(cpu_dev) CPU_NEXT_INSTRUCTION(cpu_dev)
+
+// ============================================================================
+// PERFORMANCE-OPTIMIZED MACROS FOR CODE DEDUPLICATION
+// ============================================================================
+
+// CPU_CONTROL_LINES - Get control lines with zero-indirection access
+#define CPU_CONTROL_LINES(cpu_dev) \
+    ((cpu_dev)->control_interface.get_lines((cpu_dev)->control_interface.context))
+
+// Test specific control lines using lightweight macros
+#define CPU_TEST_IRQ(cpu_dev) (CPU_CONTROL_LINES(cpu_dev) & MOS6510_MASK_IRQ)
+#define CPU_TEST_NMI(cpu_dev) (CPU_CONTROL_LINES(cpu_dev) & MOS6510_MASK_NMI)
+#define CPU_TEST_RDY(cpu_dev) (CPU_CONTROL_LINES(cpu_dev) & MOS6510_MASK_RDY)
+
+// System lines access macros for direct system state operations
+#define CPU_SYSTEM_LINES_TEST(cpu_dev, mask) SYS_LINES_TEST((cpu_dev)->system_lines, mask)
+#define CPU_SYSTEM_LINES_SET(cpu_dev, mask) SYS_LINES_SET((cpu_dev)->system_lines, mask)
+#define CPU_SYSTEM_LINES_CLEAR(cpu_dev, mask) SYS_LINES_CLEAR((cpu_dev)->system_lines, mask)
+
+// Bus cycle operations - call bus operation then cycle tick
+#define CPU_BUS_CYCLE(cpu_dev) \
+    ((cpu_dev)->bus_interface.cycle_tick((cpu_dev)->bus_interface.context))
+
+
 
 // Flag operations (inline for performance)
 static inline void mos6510_set_flag(mos6510_t* cpu_dev, uint8_t flag, bool condition) {
@@ -879,7 +967,16 @@ bool mos6510_is_intercepting(void);
 void mos6510_nmi(mos6510_t* cpu_dev);
 void mos6510_irq(mos6510_t* cpu_dev, uint8_t status);
 
-// Device attachments
-void mos6510_attach_bus(mos6510_t* cpu_dev, c64_bus_t* bus_state);
+// Device descriptor
+extern device_descriptor_t mos6510_descriptor;
+
+// Performance-optimized interface attachment functions
+void mos6510_attach_bus_interface(mos6510_t* cpu_dev, const bus_cycle_ops_t* bus_interface);
+void mos6510_attach_control_lines_interface(mos6510_t* cpu_dev, const control_lines_interface_t* control_interface);
+void mos6510_attach_io_interface(mos6510_t* cpu_dev, const mos6510_io_port_interface_t* io_interface);
+void mos6510_attach_system_lines(mos6510_t* cpu_dev, system_lines_t* system_lines);
+void mos6510_attach_ram(mos6510_t* cpu_dev, void* ram_context, 
+                        uint8_t (*ram_read)(void*, uint16_t), 
+                        void (*ram_write)(void*, uint16_t, uint8_t));
 
 #endif // MOS6510_H

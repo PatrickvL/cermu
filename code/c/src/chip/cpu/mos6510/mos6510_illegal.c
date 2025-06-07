@@ -122,15 +122,18 @@ void isc_indirect_y_func(mos6510_t* cpu_dev) {
 
 // JAM - Halt the processor (multiple opcodes)
 void jam_func(mos6510_t* cpu_dev) {
-    // JAM instruction - CPU halts until reset
-    // In a real implementation, this would halt the CPU
-    // For emulation, we can either halt or treat as NOP
-    while (1) {        // Wait for reset or NMI
-        if (CPU_CONTROL_LINES(cpu_dev) & NMI_LINE) {
+    // JAM instruction - CPU halts until reset or NMI
+    // Loop until we get an NMI or reset signal
+    while (1) {
+        // Use proper SYS_LINES_TEST macros - no runtime interface checks needed
+        if (SYS_LINES_TEST(cpu_dev->system_lines, SYS_MASK_NMI)) {
             mos6510_nmi(cpu_dev);
             break;
         }
+        // Allow non-CPU cycles during halt
+        CPU_BUS_CYCLE(cpu_dev);
     }
+    CPU_OPCODE_FOOTER(cpu_dev);
 }
 
 // LAS - Load A, X, and S from memory AND S
