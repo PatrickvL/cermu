@@ -125,8 +125,21 @@ add_executable(c64emu
 #     ${SYSTEM_SOURCES}
 # )
 
+# Basic MOS6510 functionality test
+add_executable(test_mos6510_basic
+    test_mos6510_basic.c
+    ${CORE_SOURCES}
+    ${CHIP_SOURCES}
+    ${SYSTEM_SOURCES}
+)
+
 # Set output directory
 set_target_properties(c64emu
+    PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
+
+set_target_properties(test_mos6510_basic
     PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
@@ -136,13 +149,16 @@ install(TARGETS c64emu
     RUNTIME DESTINATION bin
 )
 
-# Enable testing (tests currently disabled)
-# enable_testing()
+# Enable testing
+enable_testing()
 
 # Add tests (currently disabled due to API compatibility issues)
 # add_test(NAME minimal_test COMMAND minimal_test)
 # add_test(NAME cpu_test COMMAND cpu_test)
 # add_test(NAME klaus_test COMMAND klaus_test)
+
+# Add basic MOS6510 test
+add_test(NAME mos6510_basic_test COMMAND test_mos6510_basic)
 
 # Print configuration summary
 message(STATUS "")
