@@ -1,6 +1,8 @@
 #include "device.h"
 #include "mos6510.h"
 #include "c64_bus.h"
+#include "c64.h"
+#include "ram.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -66,6 +68,34 @@ static inline void mos6510_ioport_write(mos6510_t* cpu_dev, uint16_t addr, uint8
     c64_bus_mode_switch(cpu_dev->c64_bus, port_out);
 }
 
+//
+
+static uint8_t mos6510_zeropage_read(void* device, uint16_t addr) {
+    mos6510_t* cpu_dev = (mos6510_t*)device;
+    // Handle I/O ports directly in CPU - addresses $0000 and $0001
+    if (addr <= 1) {
+        uint8_t value = mos6510_ioport_read(cpu_dev, addr);
+        return value;
+    }
+    
+    // For the rest of the zero page addresses, access RAM
+    c64_t *c64 = cpu_dev->c64_bus->c64;
+    return ram_memory_read(c64->ram->memory, addr);
+}    
+
+static void mos6510_zeropage_write(void* device, uint16_t addr, uint8_t value) {
+    mos6510_t* cpu_dev = (mos6510_t*)device;
+    // Handle I/O ports directly in CPU - addresses $0000 and $0001
+    if (addr <= 1) {
+        mos6510_ioport_write(cpu_dev, addr, value);
+        return;
+    }
+
+    // For the rest of the zero page addresses, access RAM
+    c64_t *c64 = cpu_dev->c64_bus->c64;
+    ram_memory_write(c64->ram->memory, addr, value);
+}
+
 // CPU lifecycle wrapper functions
 void mos6510_init(mos6510_t* cpu_dev) {
     // Initialize CPU registers and state
@@ -111,100 +141,12 @@ device_descriptor_t mos6510_descriptor = {
     .create = mos6510_system_create,
     .destroy = mos6510_system_destroy,
     .bus_attach = mos6510_bus_attach,
-    .read = NULL,
-    .write = NULL,
+    .read = mos6510_zeropage_read,
+    .write = mos6510_zeropage_write,
     .bank_change = NULL
 };
 
 //
-/*
-To understand how the MOS 6510 ensures that the RAM does not respond during a read from the I/O port, we need to delve into the internal mechanisms and control signals used by the 6510. Here’s a detailed explanation:
-
-### Internal Mechanisms
-
-1. **Address Decoding**:
-   - The 6510 has internal logic to decode the address lines. When the CPU issues a read or write operation, the address lines are checked to determine if the target is the I/O port (addresses `$00` or `$01`).
-
-2. **Control Signals**:
-   - The 6510 uses several control signals to manage memory and I/O operations:
-     - **Read Enable (RE)**: Indicates a read operation.
-     - **Write Enable (WE)**: Indicates a write operation.
-     - **Chip Select (CS)**: Selects the memory or I/O device to be accessed.
-
-### Read Operation from I/O Port
-
-1. **Address Recognition**:
-   - When the CPU issues a read from address `$00` or `$01`, the 6510's internal logic recognizes this as a read from the I/O port.
-
-2. **Internal Register Access**:
-   - The 6510 reads the value from the appropriate internal register (DDR or Data Register).
-
-3. **Data Bus Control**:
-   - The value from the internal register is placed on the data bus.
-
-4. **Control Signal Management**:
-   - **Chip Select (CS) for RAM**: The 6510 ensures that the CS signal for the RAM is not asserted during the read from the I/O port. This prevents the RAM from responding to the address.
-   - **Read Enable (RE)**: The RE signal is asserted, but only the internal I/O port responds to it, not the RAM.
-
-### Detailed Steps
-
-1. **CPU Read from I/O Port**:
-   - The CPU issues a read from address `$00` or `$01`.
-   - The 6510's internal logic recognizes this as a read from the I/O port.
-   - The CS signal for the RAM is not asserted, so the RAM does not respond to the address.
-   - The RE signal is asserted, and the internal I/O port (DDR or Data Register) places the value on the data bus.
-
-2. **Bus Monitoring**:
-   - The value from the I/O port is placed on the data bus and can be observed by any device monitoring the bus.
-   - The RAM remains inactive because its CS signal is not asserted.
-
-### Example Scenario
-
-1. **CPU Read from Data Register**:
-   - The CPU issues a read from address `$01`.
-   - The 6510's internal logic recognizes this as a read from the Data Register.
-   - The CS signal for the RAM is not asserted, so the RAM does not respond.
-   - The RE signal is asserted, and the Data Register places the value (e.g., `0x55`) on the data bus.
-   - The CPU reads the value `0x55` from the data bus.
-
-2. **Bus Monitoring**:
-   - A hardware probe connected to the data bus would see the value `0x55` during this operation.
-   - The RAM at address `$01` remains unaffected and does not respond to the read operation.
-
-### Summary
-
-- **Address Recognition**: The 6510's internal logic recognizes reads to addresses `$00` and `$01` as I/O port operations.
-- **Chip Select (CS) Management**: The CS signal for the RAM is not asserted, preventing the RAM from responding to the address.
-- **Read Enable (RE)**: The RE signal is asserted, but only the internal I/O port responds to it.
-- **Data Bus Visibility**: The value from the I/O port is placed on the data bus and can be observed by any device monitoring the bus.
-
-This mechanism ensures that the I/O port read operations do not interfere with the RAM, maintaining the integrity of the memory and allowing the I/O operations to function correctly.
-*/
-// Optimized read cycle implementation with embedded I/O port handling
-uint8_t mos6510_read_cycle(mos6510_t* cpu_dev, uint16_t addr) {
-    // Handle I/O ports directly in CPU - addresses $0000 and $0001
-    if (addr <= 1) {
-        uint8_t value = mos6510_ioport_read(cpu_dev, addr);
-        // Note : MOS6510 I/O port accesses do not update bus address and data lines!
-        c64_non_cpu_cycle(cpu_dev->c64_bus->c64); // But all other devices must still run for this cycle
-        return value;
-    }
-    
-    return c64_bus_read_cycle(cpu_dev->c64_bus, addr);
-}
-
-// Optimized write cycle implementation with embedded I/O port handling
-void mos6510_write_cycle(mos6510_t* cpu_dev, uint16_t addr, uint8_t value) {
-    // Handle I/O ports directly in CPU - addresses $0000 and $0001
-    if (addr <= 1) {
-        mos6510_ioport_write(cpu_dev, addr, value);
-        // Note : MOS6510 I/O port accesses do not update bus address and data lines!
-        c64_non_cpu_cycle(cpu_dev->c64_bus->c64); // But all other devices must still run for this cycle
-        return;
-    }
-    
-    c64_bus_write_cycle(cpu_dev->c64_bus, addr, value);
-}
 
 void mos6510_nmi(mos6510_t* cpu_dev) {
     mos6510_interrupt_sequence(cpu_dev, cpu_dev->p & ~FLAG_B, 0xFFFA);

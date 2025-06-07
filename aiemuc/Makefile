@@ -1,13 +1,13 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -O3 -std=c99
 TARGET = c64emu
-SOURCES = c64_main.c c64.c c64_bus.c ram.c rom.c system.c mos6569.c mos6526.c mos6581.c mos6510.c
+SOURCES = c64_main.c c64.c c64_bus.c ram.c rom.c system.c mos6569.c mos6526.c mos6581.c mos6510.c mos2114.c
 OBJECTS = $(SOURCES:.c=.o)
 HEADERS = c64.h c64_bus.h ram.h rom.h mos6569.h mos6526.h mos6581.h mos6510.h
 
 # Klaus test harness
 KLAUS_RUNNER = klaus_test_runner
-KLAUS_SOURCES = klaus_test_runner.c mos6510_test_harness.c c64.c c64_bus.c ram.c rom.c system.c mos6569.c mos6526.c mos6581.c mos6510.c
+KLAUS_SOURCES = klaus_test_runner.c mos6510_test_harness.c c64.c c64_bus.c ram.c rom.c system.c mos6569.c mos6526.c mos6581.c mos6510.c mos2114.c
 KLAUS_OBJECTS = $(KLAUS_SOURCES:.c=.o)
 KLAUS_HEADERS = $(HEADERS) mos6510_test_harness.h
 
