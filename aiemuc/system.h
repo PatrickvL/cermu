@@ -4,28 +4,12 @@
 #include "aiemuc.h"
 #include "device.h"
 
-// Device ID definitions (unified index space, ordered by base address)
-// The first 7 IDs are for devices supporting both read and write callbacks.
-// The rest (CARTRIDGE, BASIC, KERNAL) are read-only.
-#define DEVID_UNMAPPED    0   // Unmapped (PLA hole)
-#define DEVID_RAM         1   // RAM (main memory)
-#define DEVID_ZERO_PAGE   2   // Zero page (special handling for $0000/$0001)
-#define DEVID_VIC         3   // VIC-II ($D000)
-#define DEVID_SID         4   // SID ($D400)
-#define DEVID_COLORRAM    5   // Color RAM ($D800)
-#define DEVID_CIA         6   // CIA1 ($DC00) and CIA2 ($DD00), same device type, different context
-// Devices below only support read (ROM/Cartridge)
-#define DEVID_CARTRIDGE   7   // Cartridge ROM ($8000)
-#define DEVID_BASIC_ROM   8   // BASIC ROM ($A000)
-#define DEVID_KERNAL_ROM  9   // KERNAL ROM ($E000)
-// Add more as needed, keeping IDs unique and ordered by base address
-
 // Unified device access callback - combines read/write with shared context
 typedef struct {
     device_read_func_t read_func;
     device_write_func_t write_func;
     void* context;  // Shared context for both read and write operations
-} device_access_callback_t;
+} access_callback_t;
 
 // Generic 8-bit system
 typedef struct {

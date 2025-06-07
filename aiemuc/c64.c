@@ -65,18 +65,12 @@ void c64_detached_write(c64_t* c64, uint16_t address, uint8_t value) {
     // Do nothing - detached devices do not write
 }
 
-static device_access_callback_t c64_detached_access_callback = {
-    .read_func = (device_read_func_t)c64_detached_read,
-    .write_func = (device_write_func_t)c64_detached_write,
-    .context = NULL
-};
-
 void c64_callbacks_init(c64_t* c64) {
     c64_bus_t* bus = c64->bus;     
     for (int i = 0; i < c64->system.device_count; i++) {
         device_entry_t* dev = &c64->system.devices[i];
         device_descriptor_t* desc = dev->desc;
-        bus->device_access_callbacks[i] = (device_access_callback_t){
+        bus->access_callback_per_devid[i] = (access_callback_t){
             .read_func = desc->read ? desc->read : (device_read_func_t)c64_detached_read,
             .write_func = desc->write ? desc->write : (device_write_func_t)c64_detached_write,
             .context = dev->rwcb_context
@@ -147,7 +141,7 @@ void c64_pla_maps_generate(c64_t* c64) {
                 }
             }
             
-            bus->device_id_per_index_per_mode[mode][index] = DEVIDS_RW_ENCODE(id, id);
+            bus->devid_per_bankidx_per_mode[mode][index] = DEVIDS_RW_ENCODE(id, id);
         }
     }
 }
@@ -200,8 +194,8 @@ c64_t* c64_system_create() {
 
     device_descriptor_t* descriptors[] = {
         &c64_bus_descriptor, // 'unmapped' bus
+        &mos6510_descriptor, // cpu, has 2 i/o ports in zero page
         &ram_descriptor, // ram
-        &mos6510_descriptor, // cpu
         &mos6569_descriptor, // vicii
         &mos6581_descriptor, // sid
         &mos2114_descriptor, // colorram
@@ -213,8 +207,8 @@ c64_t* c64_system_create() {
     };
     void** devices[] = {
         (void**)&c64->bus, // DEVID_UNMAPPED
-        (void**)&c64->ram, // DEVID_RAM
         (void**)&c64->mos6510, // DEVIC_ZEROPAGE
+        (void**)&c64->ram, // DEVID_RAM
         (void**)&c64->vicii, // DEVID_VICII
         (void**)&c64->sid, // DEVID_SID
         (void**)&c64->colorram, // DEVID_COLORRAM
