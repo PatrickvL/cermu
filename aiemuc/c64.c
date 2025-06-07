@@ -147,7 +147,7 @@ void c64_pla_maps_generate(c64_t* c64) {
                 }
             }
             
-            bus->device_id_per_page_per_mode[mode][index] = DEVIDS_RW_ENCODE(id, id);
+            bus->device_id_per_index_per_mode[mode][index] = DEVIDS_RW_ENCODE(id, id);
         }
     }
 }

@@ -20,17 +20,6 @@
 #define DEVID_KERNAL_ROM  9   // KERNAL ROM ($E000)
 // Add more as needed, keeping IDs unique and ordered by base address
 
-// Callback types
-typedef struct {
-    device_read_func_t func;
-    void* context;
-} read_callback_t;
-
-typedef struct {
-    device_write_func_t func;
-    void* context;
-} write_callback_t;
-
 // Unified device access callback - combines read/write with shared context
 typedef struct {
     device_read_func_t read_func;
