@@ -55,7 +55,7 @@ device_descriptor_t c64_bus_descriptor = {
 };
 
 void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {
-    c64_bus->device_id_per_page = c64_bus->device_id_per_page_per_mode[mode];
+    c64_bus->device_id_per_page = c64_bus->device_id_per_index_per_mode[mode];
 }
 
 uint8_t c64_bus_read_cycle(c64_bus_t *c64_bus, uint16_t addr) {
