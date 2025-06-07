@@ -84,8 +84,13 @@ void mos6510_stop_intercept(void);
 void switch_cpu_mode(uint8_t mode);
 
 // Memory access functions
-uint8_t mos6510_read_cycle(mos6510_t* cpu_dev, uint16_t addr);
-void mos6510_write_cycle(mos6510_t* cpu_dev, uint16_t addr, uint8_t value);
+static inline uint8_t mos6510_read_cycle(mos6510_t* cpu_dev, uint16_t addr) {
+    return c64_bus_read_cycle(cpu_dev->c64_bus, addr);
+}
+
+static inline void mos6510_write_cycle(mos6510_t* cpu_dev, uint16_t addr, uint8_t value) {
+    c64_bus_write_cycle(cpu_dev->c64_bus, addr, value);
+}
 
 // Forward declaration for functions used in macros
 void mos6510_interrupt_handler(mos6510_t* cpu_dev);
@@ -142,7 +147,7 @@ static inline void mos6510_set_zn(mos6510_t* cpu_dev, uint8_t value) {
 }
 
 // Stack operations
-inline void mos6510_push(mos6510_t* cpu_dev, uint8_t data) {
+static inline void mos6510_push(mos6510_t* cpu_dev, uint8_t data) {
     mos6510_write_cycle(cpu_dev, 0x0100 + cpu_dev->sp, data);
     cpu_dev->sp--;
 }

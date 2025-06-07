@@ -207,7 +207,7 @@ c64_t* c64_system_create() {
     };
     void** devices[] = {
         (void**)&c64->bus, // DEVID_UNMAPPED
-        (void**)&c64->mos6510, // DEVIC_ZEROPAGE
+        (void**)&c64->mos6510, // DEVID_ZEROPAGE
         (void**)&c64->ram, // DEVID_RAM
         (void**)&c64->vicii, // DEVID_VICII
         (void**)&c64->sid, // DEVID_SID

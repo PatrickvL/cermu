@@ -20,7 +20,7 @@
 // The first 7 IDs are for devices supporting both read and write callbacks.
 // The rest (CARTRIDGE, BASIC, KERNAL) are read-only.
 #define DEVID_UNMAPPED    0   // Unmapped (PLA hole)
-#define DEVID_ZERO_PAGE   1   // Zero page (special handling for $0000/$0001)
+#define DEVID_ZEROPAGE    1   // Zero page (special handling for MOS6410 CPU's I/O ports at $0000/$0001)
 #define DEVID_RAM         2   // RAM (main memory)
 #define DEVID_VIC         3   // VIC-II ($D000)
 #define DEVID_SID         4   // SID ($D400)
