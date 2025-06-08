@@ -58,9 +58,11 @@ typedef struct c64_bus_s {
     uint8_t  control_lines; // R/W, IRQ, NMI, BA, AEC, RDY
     uint8_t  data;          // D0-D7
     uint16_t address;       // A0-A15
-    
-    // System lines for control signals (includes EXROM and GAME)
+      // System lines for control signals (includes EXROM and GAME)
     uint32_t system_lines;  // System-wide control lines including cartridge signals
+    
+    // Current CPU I/O port state (for PLA mode generation)
+    uint8_t cpu_port_state;  // Current CPU port $0001 effective output
     
     // ACID allocation tracking
     uint8_t next_write_acid;    // Next available write-capable ACID (1-7)
@@ -92,6 +94,13 @@ void c64_bus_memory_write(c64_bus_t *bus, uint16_t address, uint8_t value);
 
 // System functions  
 void c64_bus_system_attach(c64_bus_t* c64_bus, void* c64);  // c64_t*
+
+// Cartridge interface functions for controlling EXROM and GAME signals
+void c64_bus_set_exrom_signal(c64_bus_t* c64_bus, bool active);
+void c64_bus_set_game_signal(c64_bus_t* c64_bus, bool active);
+void c64_bus_set_cartridge_signals(c64_bus_t* c64_bus, bool exrom_active, bool game_active);
+bool c64_bus_get_exrom_signal(c64_bus_t* c64_bus);
+bool c64_bus_get_game_signal(c64_bus_t* c64_bus);
 
 // ACID allocation and management
 uint8_t c64_bus_allocate_acid(c64_bus_t* bus, uint8_t chip_id, 
