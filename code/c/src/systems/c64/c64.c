@@ -6,7 +6,6 @@
 #include "../../core/system.h"
 #include "c64.h"
 #include "c64_bus.h"
-#include "c64_bus_adapter.h"
 #include "../../chip/cpu/mos6510/mos6510.h" // cpu
 #include "../../chip/io/mos6526.h" // cia
 #include "../../chip/sound/mos6581.h" // sid
@@ -17,9 +16,6 @@
 #include "../../chip/logic/pla.h" // PLA for memory mapping
 
 static uint8_t initial_ram[65536] = {0};
-static uint8_t basic_rom[8192] = {0};
-static uint8_t kernal_rom[8192] = {0};
-static uint8_t cartridge_rom[16384] = {0};
 
 // Device descriptor declarations for non-CPU devices (defined in respective .c files)
 extern device_descriptor_t c64_bus_descriptor;
@@ -29,28 +25,17 @@ extern device_descriptor_t mos6569_descriptor;
 extern device_descriptor_t ram_descriptor;
 extern device_descriptor_t rom_descriptor;
 
-// Global variable definition
-c64_t* c64 = NULL;
-
 // Actual c64.c
 
 void c64_memory_init(system_8bit_t* system) {
-    extern uint8_t initial_ram[65536], basic_rom[8192], kernal_rom[8192], cartridge_rom[16384];
+    extern uint8_t initial_ram[65536];
     for (int i = 0; i < system->device_count; i++) {
         device_entry_t* dev = &system->devices[i];
         if (dev->desc == &ram_descriptor) {
             ram_t* ram = (ram_t*)dev->device;
             memcpy(ram->memory, initial_ram, 65536);
-        } else if (dev->desc == &rom_descriptor) {
-            rom_t* rom = (rom_t*)dev->device;
-            if (dev->base_address == 0xA000) {
-                memcpy(rom->memory, basic_rom, dev->size);
-            } else if (dev->base_address == 0xE000) {
-                memcpy(rom->memory, kernal_rom, dev->size);
-            } else if (dev->base_address == 0x8000) {
-                memcpy(rom->memory, cartridge_rom, dev->size);
-            }
         }
+        // ROM initialization removed - ROMs should be loaded from files when needed
     }
 }
 
@@ -144,11 +129,6 @@ void c64_pla_maps_generate(c64_t* c64) {
     }
 }
 
-void c64_cpu_dispatch(c64_t* c64, uint16_t PC) {
-    uint8_t opcode = c64_bus_memory_read(c64->bus, PC);
-    mos6510_opcode_dispatch((mos6510_t*)c64->mos6510, opcode);
-}
-
 // ============================================================================
 // OPTIMIZED BUS CYCLE - Safe device lifecycle management and callback dispatch
 // ============================================================================
@@ -230,8 +210,8 @@ c64_t* c64_system_create() {
             c64_system_destroy(c64);
             return NULL;
         }
-    }    
-
+    }
+    
     // Now having a registry of all devices, the PLA maps can be generated
     c64_pla_maps_generate(c64);
 
@@ -266,19 +246,5 @@ c64_t* c64_system_create() {
             descriptors[i]->bus_attach(*devices[i], c64->bus);
         }
     }
-
     return c64;
-}
-
-void c64_system_init() {
-    c64 = c64_system_create();
-}
-
-void c64_init(c64_t* c64_ptr) {
-    (void)c64_ptr;
-    c64_system_init();
-}
-
-void c64_emulate_frame(c64_t* c64) {
-    (void)c64;
 }

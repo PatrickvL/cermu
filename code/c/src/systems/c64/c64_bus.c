@@ -48,6 +48,10 @@ void* c64_bus_system_create(device_descriptor_t* desc) {
     c64_bus->address = 0;
     c64_bus->data = 0;
     c64_bus->control_lines = BA_LINE | AEC_LINE | RDY_LINE;
+    
+    // Initialize the integrated adapter interfaces
+    c64_bus_init_adapters(c64_bus);
+    
     return c64_bus;
 }
 
@@ -75,7 +79,7 @@ uint8_t c64_bus_read_cycle(c64_bus_t *c64_bus, uint16_t addr) {
     c64_bus->data = data; // Perhaps this is no longer needed
     c64_non_cpu_cycle(c64_bus->c64);
     return data;
-}    
+}
 
 void c64_bus_write_cycle(c64_bus_t* c64_bus, uint16_t addr, uint8_t value) {
     c64_bus->address = addr; // Perhaps this is no longer needed
@@ -94,7 +98,8 @@ void c64_bus_populate_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla,
     // Clear current mapping
     for (int i = 0; i < 32; i++) {
         bus->devid_per_bankidx[i] = DEVID_UNMAPPED;
-    }      // Map memory regions based on PLA outputs
+    }
+    // Map memory regions based on PLA outputs
     for (uint32_t addr = 0; addr < 0x10000; addr += 0x100) {
         int bank_idx = c64_bus_address_to_bankidx(addr);
         uint8_t device_id = DEVID_UNMAPPED;
@@ -167,8 +172,74 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla,
         c64_bus_populate_pla_mapping(bus, pla, ram_id, basic_id, kernal_id, 
                                    charrom_id, io_id, cartridge_roml_id, 
                                    cartridge_romh_id, colorram_id);
-        
-        // Copy the mapping to the mode-specific array
+          // Copy the mapping to the mode-specific array
         memcpy(bus->devid_per_bankidx_per_mode[mode], bus->devid_per_bankidx, sizeof(bus->devid_per_bankidx));
     }
+}
+
+// ============================================================================
+// ADAPTER INTERFACES - Integrated adapter initialization
+// ============================================================================
+
+// Adapter function implementations for C64 bus
+static uint8_t c64_bus_adapter_bus_read(void* context, uint16_t address) {
+    c64_bus_t* c64_bus = (c64_bus_t*)context;
+    return c64_bus_memory_read(c64_bus, address);
+}
+
+static void c64_bus_adapter_bus_write(void* context, uint16_t address, uint8_t value) {
+    c64_bus_t* c64_bus = (c64_bus_t*)context;
+    c64_bus_memory_write(c64_bus, address, value);
+}
+
+static void c64_bus_adapter_non_cpu_cycle(void* context) {
+    c64_bus_t* c64_bus = (c64_bus_t*)context;
+    c64_non_cpu_cycle(c64_bus->c64);
+}
+
+// Control lines adapter functions
+static uint32_t c64_control_lines_get(void* context) {
+    c64_bus_t* c64_bus = (c64_bus_t*)context;
+    // Convert the C64's uint8_t control_lines to the new uint32_t format
+    // For now, just extend it to 32 bits
+    return (uint32_t)c64_bus->control_lines;
+}
+
+static void c64_control_lines_set(void* context, uint32_t lines) {
+    c64_bus_t* c64_bus = (c64_bus_t*)context;
+    // Convert back to the C64's uint8_t format
+    // For now, just truncate (assumes lower 8 bits contain the relevant data)
+    c64_bus->control_lines = (uint8_t)(lines & 0xFF);
+}
+
+// I/O port adapter functions
+static void c64_io_port_output_changed(void* context, uint8_t ddr, uint8_t port_data, uint8_t effective_output) {
+    c64_bus_t* c64_bus = (c64_bus_t*)context;
+    // Use the effective output for mode switching
+    c64_bus_mode_switch(c64_bus, effective_output);
+}
+
+static uint8_t c64_io_port_input_read(void* context) {
+    // For C64, the I/O port typically reads the current port state
+    // This can be extended to read actual external signals if needed
+    (void)context; // Unused for now
+    return 0xFF; // Default to all inputs high
+}
+
+void c64_bus_init_adapters(c64_bus_t* c64_bus) {
+    // Initialize bus cycle adapter
+    c64_bus->bus_adapter.bus_read = c64_bus_adapter_bus_read;
+    c64_bus->bus_adapter.bus_write = c64_bus_adapter_bus_write;
+    c64_bus->bus_adapter.cycle_tick = c64_bus_adapter_non_cpu_cycle;
+    c64_bus->bus_adapter.context = c64_bus;
+    
+    // Initialize control lines adapter
+    c64_bus->control_lines_adapter.get_lines = c64_control_lines_get;
+    c64_bus->control_lines_adapter.set_lines = c64_control_lines_set;
+    c64_bus->control_lines_adapter.context = c64_bus;
+    
+    // Initialize I/O port adapter
+    c64_bus->io_port_adapter.output_pins_changed = c64_io_port_output_changed;
+    c64_bus->io_port_adapter.read_external_pins = c64_io_port_input_read;
+    c64_bus->io_port_adapter.context = c64_bus;
 }
