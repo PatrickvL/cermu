@@ -2,7 +2,7 @@
 #define C64_BUS_H
 
 #include "../../core/aiemuc.h"
-#include "../../core/device.h"
+#include "../../core/chip.h"
 #include "../../core/system.h"
 #include "../../core/bus_cycle_interface.h"
 #include "../../core/control_lines_interface.h"
@@ -45,7 +45,7 @@
 #define DECODE_SPARE(entry) (((entry) >> 4) & 0x01)
 
 typedef struct c64_bus_s {
-    device_descriptor_t* desc;
+    chip_descriptor_t* desc;
     void* c64;  // c64_t* - opaque pointer to avoid circular dependency
     uint8_t  control_lines; // R/W, IRQ, NMI, BA, AEC, RDY
     uint8_t  data;          // D0-D7
@@ -88,7 +88,7 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla,
                                    uint8_t charrom_id, uint8_t io_id, uint8_t cartridge_roml_id,
                                    uint8_t cartridge_romh_id, uint8_t colorram_id);
 
-extern device_descriptor_t c64_bus_descriptor;
+extern chip_descriptor_t c64_bus_descriptor;
 
 // ============================================================================
 // ADAPTER INTERFACES - Integrated adapter access

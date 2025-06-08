@@ -230,7 +230,7 @@ test_status_t test_harness_run_klaus_test(test_harness_t* harness) {
     c64_bus_t* bus = cpu->c64_bus;
     uint8_t page_ff_id = READ_ID(bus->device_id_per_page[0xFF]);
     printf("Debug: Device ID for page $FF = %d\n", page_ff_id);
-    printf("Debug: Total devices in system = %d\n", harness->c64->system.device_count);
+    printf("Debug: Total chips in system = %d\n", harness->c64->system.chip_count);
     
     uint8_t new_test = mos6510_read_cycle(cpu, 0xFFFC);
     printf("Debug: CPU read cycle at $FFFC now returns = $%02X\n", new_test);

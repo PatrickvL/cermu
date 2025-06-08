@@ -63,7 +63,7 @@ include_directories(
 # Core library sources
 set(CORE_SOURCES
     src/core/system.c
-    src/core/device.c
+    src/core/chip.c
 )
 
 # Chip library sources

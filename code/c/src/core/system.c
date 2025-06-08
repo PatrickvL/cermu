@@ -1,23 +1,23 @@
 #include "system.h"
 
-uint8_t system_device_register(system_8bit_t* system, void* device, device_descriptor_t* desc, uint16_t base, unsigned int size) {
-    if (system->device_count >= 16) return 0xFF;
-    uint8_t id = system->device_count++;
-    device_entry_t* entry = &system->devices[id];
+uint8_t system_chip_register(system_8bit_t* system, void* chip, chip_descriptor_t* desc, uint16_t base, unsigned int size) {
+    if (system->chip_count >= 16) return 0xFF;
+    uint8_t id = system->chip_count++;
+    chip_entry_t* entry = &system->chips[id];
     entry->desc = desc;
-    entry->device = device;
-    entry->rwcb_context = device; // By default, rwcb_context is the device itself
+    entry->chip = chip;
+    entry->rwcb_context = chip; // By default, rwcb_context is the chip itself
     entry->base_address = base;
     entry->size = size;
-    entry->device_id = id;
+    entry->chip_id = id;
     return id;
 }
 
-void system_devices_destroy(system_8bit_t* system) {
-    for (int i = 0; i < system->device_count; i++) {
-        device_entry_t* entry = &system->devices[i];
+void system_chips_destroy(system_8bit_t* system) {
+    for (int i = 0; i < system->chip_count; i++) {
+        chip_entry_t* entry = &system->chips[i];
         if (entry->desc && entry->desc->destroy) {
-            entry->desc->destroy(entry->device);
+            entry->desc->destroy(entry->chip);
         }
     }
 }

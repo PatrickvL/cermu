@@ -1,7 +1,7 @@
 #ifndef MOS6569_H
 #define MOS6569_H
 
-#include "../../core/device.h"
+#include "../../core/chip.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -12,7 +12,7 @@
 typedef void (*mos6569_bank_change_func_t)(void* context, uint8_t bank);
 
 typedef struct mos6569_s {
-    device_descriptor_t* desc;
+    chip_descriptor_t* desc;
     uint8_t registers[47];
     uint8_t raster_cycle;
     uint16_t raster_line;
