@@ -25,21 +25,21 @@ int main() {
     // Mode 0: All signals high (should be mostly RAM)
     printf("Mode 0 (all signals high):\n");
     for (int i = 0; i < 8; i++) {
-        uint8_t devid = bus->devid_per_bankidx_per_mode[0][i];
-        printf("  Bank %d: devid = 0x%02X\n", i, devid);
+        uint8_t acid = bus->acid_per_bankidx_per_mode[0][i];
+        printf("  Bank %d: acid = 0x%02X\n", i, acid);
     }
     
     // Mode 31: All signals low (different configuration)
     printf("Mode 31 (all signals low):\n");
     for (int i = 0; i < 8; i++) {
-        uint8_t devid = bus->devid_per_bankidx_per_mode[31][i];
-        printf("  Bank %d: devid = 0x%02X\n", i, devid);
+        uint8_t acid = bus->acid_per_bankidx_per_mode[31][i];
+        printf("  Bank %d: acid = 0x%02X\n", i, acid);
     }
     
     // Check if modes are different (indicating PLA is actually working)
     bool modes_differ = false;
     for (int i = 0; i < 32; i++) {
-        if (bus->devid_per_bankidx_per_mode[0][i] != bus->devid_per_bankidx_per_mode[31][i]) {
+        if (bus->acid_per_bankidx_per_mode[0][i] != bus->acid_per_bankidx_per_mode[31][i]) {
             modes_differ = true;
             break;
         }

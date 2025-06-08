@@ -57,9 +57,9 @@ void c64_callbacks_init(c64_t* c64) {
     
     // Initialize all access callbacks to detached defaults
     for (int i = 0; i < 16; i++) {
-        bus->access_callback_per_devid[i].read_func = c64_detached_read;
-        bus->access_callback_per_devid[i].write_func = c64_detached_write;
-        bus->access_callback_per_devid[i].context = NULL;
+        bus->access_callback_per_acid[i].read_func = c64_detached_read;
+        bus->access_callback_per_acid[i].write_func = c64_detached_write;
+        bus->access_callback_per_acid[i].context = NULL;
     }
       // Set up device-specific callbacks based on device IDs
     for (int i = 0; i < c64->system.chip_count; i++) {
@@ -67,12 +67,12 @@ void c64_callbacks_init(c64_t* c64) {
         chip_descriptor_t* desc = dev->desc;
         if (i < 16) { // Safety check for device ID bounds
             if (desc->read) {
-                bus->access_callback_per_devid[i].read_func = desc->read;
-                bus->access_callback_per_devid[i].context = dev->rwcb_context;
+                bus->access_callback_per_acid[i].read_func = desc->read;
+                bus->access_callback_per_acid[i].context = dev->rwcb_context;
             }
             if (desc->write) {
-                bus->access_callback_per_devid[i].write_func = desc->write;
-                bus->access_callback_per_devid[i].context = dev->rwcb_context;
+                bus->access_callback_per_acid[i].write_func = desc->write;
+                bus->access_callback_per_acid[i].context = dev->rwcb_context;
             }
         }
     }
@@ -90,14 +90,13 @@ void c64_pla_maps_generate(c64_t* c64) {
         else if (dev->base_address == 0xE000) kernal_id = i;
         else if (dev->base_address == 0x8000) cartridge_id = i;
     }
-      // Create a temporary PLA instance for generating memory maps
+    // Create a temporary PLA instance for generating memory maps
     pla_906114_01_t* pla = pla_906114_01_create();
-    if (!pla) {
-        // Fallback to simple mapping if PLA creation fails
+    if (!pla) {        // Fallback to simple mapping if PLA creation fails
         for (int mode = 0; mode < 32; mode++) {
             for (int bankidx = 0; bankidx < 32; bankidx++) {
-                uint8_t devid = DEVIDS_RW_ENCODE(ram_id, ram_id);
-                bus->devid_per_bankidx_per_mode[mode][bankidx] = devid;
+                uint8_t acid = ACIDS_RW_ENCODE(ram_id, ram_id);
+                bus->acid_per_bankidx_per_mode[mode][bankidx] = acid;
             }
         }
         return;
@@ -105,11 +104,11 @@ void c64_pla_maps_generate(c64_t* c64) {
     
     // Use proper device IDs based on predefined constants
     // Some devices may not be registered yet, use predefined IDs where appropriate
-    uint8_t charrom_id = DEVID_UNMAPPED;  // Character ROM might not be a separate device
-    uint8_t io_id = DEVID_VIC;           // Default I/O to VIC for unmapped I/O space
+    uint8_t charrom_id = ACID_UNMAPPED;  // Character ROM might not be a separate device
+    uint8_t io_id = ACID_VIC;           // Default I/O to VIC for unmapped I/O space
     uint8_t cartridge_roml_id = cartridge_id; // Low cartridge ROM
     uint8_t cartridge_romh_id = cartridge_id; // High cartridge ROM  
-    uint8_t colorram_id = DEVID_COLORRAM; // Color RAM
+    uint8_t colorram_id = ACID_COLORRAM; // Color RAM
     
     // Generate all 32 memory modes using PLA
     c64_bus_generate_all_pla_modes(bus, (struct pla_906114_01_s*)pla,
@@ -119,10 +118,9 @@ void c64_pla_maps_generate(c64_t* c64) {
     
     // Clean up PLA instance
     pla_906114_01_destroy(pla);
-    
     // Set initial bank mapping to mode 0 (all signals high)
     for (int bankidx = 0; bankidx < 32; bankidx++) {
-        bus->devid_per_bankidx[bankidx] = bus->devid_per_bankidx_per_mode[0][bankidx];
+        bus->acid_per_bankidx[bankidx] = bus->acid_per_bankidx_per_mode[0][bankidx];
     }
 }
 

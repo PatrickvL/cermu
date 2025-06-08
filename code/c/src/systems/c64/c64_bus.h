@@ -19,30 +19,31 @@
 #define AEC_LINE    (1 << 3)
 #define RDY_LINE    (1 << 4)
 
-// Macro definitions for device ID extraction
+// Macro definitions for ACID (ACcessor InDex) extraction
 
-// Device ID definitions (unified index space, ordered by base address)
-// The first 7 IDs are for devices supporting both read and write callbacks.
+// ACID definitions (unified index space, ordered by base address)
+// ACIDs identify which device accessor to use for memory operations.
+// The first 7 ACIDs are for devices supporting both read and write callbacks.
 // The rest (CARTRIDGE, BASIC, KERNAL) are read-only.
-#define DEVID_UNMAPPED    0   // Unmapped (PLA hole)
-#define DEVID_ZEROPAGE    1   // Zero page (special handling for MOS6410 CPU's I/O ports at $0000/$0001)
-#define DEVID_RAM         2   // RAM (main memory)
-#define DEVID_VIC         3   // VIC-II ($D000)
-#define DEVID_SID         4   // SID ($D400)
-#define DEVID_COLORRAM    5   // Color RAM ($D800)
-#define DEVID_CIA         6   // CIA1 ($DC00) and CIA2 ($DD00), same device type, different context
+#define ACID_UNMAPPED    0   // Unmapped (PLA hole)
+#define ACID_ZEROPAGE    1   // Zero page (special handling for MOS6410 CPU's I/O ports at $0000/$0001)
+#define ACID_RAM         2   // RAM (main memory)
+#define ACID_VIC         3   // VIC-II ($D000)
+#define ACID_SID         4   // SID ($D400)
+#define ACID_COLORRAM    5   // Color RAM ($D800)
+#define ACID_CIA         6   // CIA1 ($DC00) and CIA2 ($DD00), same device type, different context
 // Devices below only support read (ROM/Cartridge)
-#define DEVID_CARTRIDGE   7   // Cartridge ROM ($8000)
-#define DEVID_BASIC_ROM   8   // BASIC ROM ($A000)
-#define DEVID_KERNAL_ROM  9   // KERNAL ROM ($E000)
-// Add more as needed, keeping IDs unique and ordered by base address
+#define ACID_CARTRIDGE   7   // Cartridge ROM ($8000)
+#define ACID_BASIC_ROM   8   // BASIC ROM ($A000)
+#define ACID_KERNAL_ROM  9   // KERNAL ROM ($E000)
+// Add more as needed, keeping ACIDs unique and ordered by base address
 
-// Encoding macros ([7:5] write ID, [4]:spare bit, [3:0] read ID)
-#define DEVIDS_RW_ENCODE(read_id, write_id) \
-    (((read_id) & 0x0F) | (((write_id) & 0x07) << 5)) // TODO : Encode spare bit once needed
-#define DEVID_READ_DECODE(entry) ((entry) & 0x0F)
-#define DEVID_WRITE_DECODE(entry) ((entry) >> 5)
-#define DECODE_SPARE(entry) (((entry) >> 4) & 0x01)
+// Encoding macros ([7:5] write ACID, [4]:spare bit, [3:0] read ACID)
+#define ACIDS_RW_ENCODE(read_acid, write_acid) \
+    (((read_acid) & 0x0F) | (((write_acid) & 0x07) << 5)) // TODO : Encode spare bit once needed
+#define ACID_READ_DECODE(entry) ((entry) & 0x0F)
+#define ACID_WRITE_DECODE(entry) ((entry) >> 5)
+#define ACID_DECODE_SPARE(entry) (((entry) >> 4) & 0x01)
 
 typedef struct c64_bus_s {
     chip_descriptor_t* desc;
@@ -50,9 +51,9 @@ typedef struct c64_bus_s {
     uint8_t  control_lines; // R/W, IRQ, NMI, BA, AEC, RDY
     uint8_t  data;          // D0-D7
     uint16_t address;       // A0-A15
-    alignas(64) access_callback_t access_callback_per_devid[16]; // indexed by device ID - unified read/write/context
-    alignas(64) uint8_t devid_per_bankidx[32]; // Maps each condensed index (32 entries) to a device ID
-    alignas(64) uint8_t devid_per_bankidx_per_mode[32][32]; // Condensed from 256 to 32 entries per mode
+    alignas(64) access_callback_t access_callback_per_acid[16]; // indexed by ACID - unified read/write/context
+    alignas(64) uint8_t acid_per_bankidx[32]; // Maps each condensed index (32 entries) to an ACID
+    alignas(64) uint8_t acid_per_bankidx_per_mode[32][32]; // Condensed from 256 to 32 entries per mode
     
     // Integrated adapter interfaces - can be passed out as pointers
     bus_cycle_ops_t bus_adapter;
