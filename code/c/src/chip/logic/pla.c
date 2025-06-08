@@ -5,11 +5,9 @@
 // Commodore PLA MOS 906114-01 implementation
 // Based on detailed analysis from C64 wiki and dissection documents
 
-void* pla_906114_01_create(chip_descriptor_t* desc) {
+pla_906114_01_t* pla_906114_01_create(void) {
     pla_906114_01_t* pla = (pla_906114_01_t*)calloc(1, sizeof(pla_906114_01_t));
     if (!pla) return NULL;
-    
-    pla->desc = desc;
     
     // Set default input states (typical C64 boot state)
     pla->inputs.n_charen = true;    // Character ROM disabled initially
@@ -32,8 +30,8 @@ void* pla_906114_01_create(chip_descriptor_t* desc) {
     return pla;
 }
 
-void pla_906114_01_destroy(void* chip) {
-    free(chip);
+void pla_906114_01_destroy(pla_906114_01_t* pla) {
+    free(pla);
 }
 
 void pla_906114_01_set_address_high(pla_906114_01_t* pla, uint8_t addr_high) {
@@ -209,12 +207,3 @@ void pla_906114_01_update_outputs(pla_906114_01_t* pla) {
     pla->outputs.n_roml = !(p19 || p20);
     pla->outputs.n_romh = !(p21 || p22 || p23);
 }
-
-chip_descriptor_t pla_906114_01_descriptor = {
-    .create = pla_906114_01_create,
-    .destroy = pla_906114_01_destroy,
-    .bus_attach = NULL,
-    .read = NULL,
-    .write = NULL,
-    .bank_change = NULL
-};
