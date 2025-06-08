@@ -101,50 +101,108 @@ void c64_bus_write_cycle(c64_bus_t* c64_bus, uint16_t addr, uint8_t value) {
 void c64_bus_populate_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla,
                                  uint8_t ram_id, uint8_t basic_id, uint8_t kernal_id, 
                                  uint8_t charrom_id, uint8_t io_id, uint8_t cartridge_roml_id, 
-                                 uint8_t cartridge_romh_id, uint8_t colorram_id) {    // Clear current mapping
+                                 uint8_t cartridge_romh_id, uint8_t colorram_id) {
+    // Clear current mapping
     for (int i = 0; i < 32; i++) {
-        bus->acid_per_bankidx[i] = ACID_UNMAPPED;
-    }
-    // Map memory regions based on PLA outputs
+        bus->acid_per_bankidx[i] = ACIDS_RW_ENCODE(ACID_UNMAPPED, ACID_UNMAPPED);
+    }    // Map memory regions based on PLA outputs
     for (uint32_t addr = 0; addr < 0x10000; addr += 0x100) {
-        int bank_idx = c64_bus_address_to_bankidx(addr);        uint8_t chip_id = ACID_UNMAPPED;
+        uint8_t read_acid = ACID_UNMAPPED;
+        uint8_t write_acid = ACID_UNMAPPED;
         
         // Set address in PLA
         pla_906114_01_set_address_high((pla_906114_01_t*)pla, (addr >> 8) & 0x0F);
-          // Determine chip based on PLA outputs
+        
+        // Get bank index for this address (same for both read and write)
+        int bank_idx = c64_bus_address_to_bankidx(addr);
+        
+        // Configure PLA for READ mode
+        ((pla_906114_01_t*)pla)->inputs.r_w = true;  // Read mode
+        pla_906114_01_update_outputs((pla_906114_01_t*)pla);
+        
+        // Determine read ACID based on PLA outputs for read mode
         if (!pla->outputs.n_casram) {
             // RAM is selected
             if (addr < 0x0002) {
-                chip_id = ACID_ZEROPAGE;  // Special handling for CPU I/O ports
+                // Special handling for CPU I/O ports (read/write)
+                read_acid = ACID_ZEROPAGE;
             } else {
-                chip_id = ram_id;
+                // Main RAM (read/write)
+                read_acid = ram_id;
             }
         } else if (!pla->outputs.n_basic) {
-            chip_id = basic_id;
+            // BASIC ROM (read-only)
+            read_acid = basic_id;
         } else if (!pla->outputs.n_kernal) {
-            chip_id = kernal_id;
+            // KERNAL ROM (read-only)
+            read_acid = kernal_id;
         } else if (!pla->outputs.n_charrom) {
-            chip_id = charrom_id;
+            // Character ROM (read-only)
+            read_acid = charrom_id;
         } else if (!pla->outputs.n_io) {
             // I/O region - determine specific chip
             if (addr >= 0xD000 && addr < 0xD400) {
-                chip_id = ACID_VIC;
+                // VIC-II (read/write)
+                read_acid = ACID_VIC;
             } else if (addr >= 0xD400 && addr < 0xD800) {
-                chip_id = ACID_SID;
+                // SID (read/write)
+                read_acid = ACID_SID;
             } else if (addr >= 0xD800 && addr < 0xDC00) {
-                chip_id = colorram_id;
+                // Color RAM (read/write)
+                read_acid = colorram_id;
             } else if (addr >= 0xDC00 && addr < 0xE000) {
-                chip_id = ACID_CIA;
+                // CIA1/CIA2 (read/write)
+                read_acid = ACID_CIA;
             } else {
-                chip_id = io_id;
+                // Other I/O (assume read/write for flexibility)
+                read_acid = io_id;
             }
         } else if (!pla->outputs.n_roml) {
-            chip_id = cartridge_roml_id;
+            // Cartridge ROM Low (read-only)
+            read_acid = cartridge_roml_id;
         } else if (!pla->outputs.n_romh) {
-            chip_id = cartridge_romh_id;
-        }
+            // Cartridge ROM High (read-only)
+            read_acid = cartridge_romh_id;
+        }        
+        // Configure PLA for WRITE mode and get write bank index
+        ((pla_906114_01_t*)pla)->inputs.r_w = false;  // Write mode
+        pla_906114_01_update_outputs((pla_906114_01_t*)pla);
         
-        bus->acid_per_bankidx[bank_idx] = chip_id;
+        // Determine write ACID based on PLA outputs for write mode
+        if (!pla->outputs.n_casram) {
+            // RAM is selected
+            if (addr < 0x0002) {
+                // Special handling for CPU I/O ports (read/write)
+                write_acid = ACID_ZEROPAGE;
+            } else {
+                // Main RAM (read/write)
+                write_acid = ram_id;
+            }
+        } else if (!pla->outputs.n_io) {
+            // I/O region - determine specific chip (only writable devices in write mode)
+            if (addr >= 0xD000 && addr < 0xD400) {
+                // VIC-II (read/write)
+                write_acid = ACID_VIC;
+            } else if (addr >= 0xD400 && addr < 0xD800) {
+                // SID (read/write)
+                write_acid = ACID_SID;
+            } else if (addr >= 0xD800 && addr < 0xDC00) {
+                // Color RAM (read/write)
+                write_acid = colorram_id;
+            } else if (addr >= 0xDC00 && addr < 0xE000) {
+                // CIA1/CIA2 (read/write)
+                write_acid = ACID_CIA;
+            } else {
+                // Other I/O (assume read/write for flexibility)
+                write_acid = io_id;
+            }
+        }
+        // Note: ROM areas (BASIC, KERNAL, Character ROM, Cartridge) are not writable, 
+        // so write_acid remains ACID_UNMAPPED for those regions
+        
+        // Use bank index for the mapping
+        // Encode both read and write ACIDs into the mapping
+        bus->acid_per_bankidx[bank_idx] = ACIDS_RW_ENCODE(read_acid, write_acid);
     }
 }
 
