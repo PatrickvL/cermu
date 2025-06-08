@@ -49,6 +49,9 @@ void* c64_bus_system_create(chip_descriptor_t* desc) {
     c64_bus->data = 0;
     c64_bus->control_lines = BA_LINE | AEC_LINE | RDY_LINE;
     
+    // Initialize ACID allocation tracking
+    c64_bus_initialize_acids(c64_bus);
+    
     // Initialize the integrated adapter interfaces
     c64_bus_init_adapters(c64_bus);
     
@@ -239,4 +242,66 @@ void c64_bus_init_adapters(c64_bus_t* c64_bus) {
     c64_bus->io_port_adapter.output_pins_changed = c64_io_port_output_changed;
     c64_bus->io_port_adapter.read_external_pins = c64_io_port_input_read;
     c64_bus->io_port_adapter.context = c64_bus;
+}
+
+// ============================================================================
+// ACID ALLOCATION AND MANAGEMENT
+// ============================================================================
+
+void c64_bus_initialize_acids(c64_bus_t* bus) {
+    // Initialize ACID allocation counters
+    bus->next_write_acid = 1;  // Start after ACID_UNMAPPED (0)
+    bus->next_read_acid = 8;   // Start at first read-only ACID
+    
+    // Initialize chip ID to ACID mapping
+    for (int i = 0; i < 16; i++) {
+        bus->chip_id_to_acid[i] = ACID_UNMAPPED;
+    }
+    
+    // Initialize all access callbacks to detached/unmapped defaults
+    for (int i = 0; i < 16; i++) {
+        bus->access_callback_per_acid[i].read_func = c64_detached_read;
+        bus->access_callback_per_acid[i].write_func = c64_detached_write;
+        bus->access_callback_per_acid[i].context = NULL;
+    }
+}
+
+uint8_t c64_bus_allocate_acid(c64_bus_t* bus, uint8_t chip_id, 
+                              chip_read_func_t read_func, chip_write_func_t write_func, 
+                              void* context) {
+    uint8_t allocated_acid = ACID_UNMAPPED;
+    
+    // Determine allocation strategy based on callback availability
+    if (write_func != NULL) {
+        // Device supports write operations - allocate from write-capable range (1-7)
+        if (bus->next_write_acid <= 7) {
+            allocated_acid = bus->next_write_acid++;
+        } else {
+            // Fall back to read-only range if write range is exhausted
+            // This shouldn't happen in normal C64 configuration
+            if (bus->next_read_acid < 16) {
+                allocated_acid = bus->next_read_acid++;
+            }
+        }
+    } else if (read_func != NULL) {
+        // Device only supports read operations - allocate from read-only range (8+)
+        if (bus->next_read_acid < 16) {
+            allocated_acid = bus->next_read_acid++;
+        }
+    }
+    
+    // If allocation succeeded, register the callbacks and context
+    if (allocated_acid != ACID_UNMAPPED && chip_id < 16) {
+        bus->chip_id_to_acid[chip_id] = allocated_acid;
+        
+        // Set up the access callbacks
+        if (read_func) {
+            bus->access_callback_per_acid[allocated_acid].read_func = read_func;
+        }
+        if (write_func) {
+            bus->access_callback_per_acid[allocated_acid].write_func = write_func;
+        }
+        bus->access_callback_per_acid[allocated_acid].context = context;
+    }
+      return allocated_acid;
 }
