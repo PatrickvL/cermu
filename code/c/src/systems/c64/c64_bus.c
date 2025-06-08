@@ -124,8 +124,8 @@ void c64_bus_populate_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla,
         if (!pla->outputs.n_casram) {
             // RAM is selected
             if (addr < 0x0002) {
-                // Special handling for CPU I/O ports (read/write)
-                read_acid = ACID_ZEROPAGE;
+                // Special handling for CPU I/O ports in zero bank (4KB bank $0000-$0FFF)
+                read_acid = ACID_ZEROBANK;
             } else {
                 // Main RAM (read/write)
                 read_acid = ram_id;
@@ -172,8 +172,8 @@ void c64_bus_populate_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla,
         if (!pla->outputs.n_casram) {
             // RAM is selected
             if (addr < 0x0002) {
-                // Special handling for CPU I/O ports (read/write)
-                write_acid = ACID_ZEROPAGE;
+                // Special handling for CPU I/O ports in zero bank (4KB bank $0000-$0FFF)
+                write_acid = ACID_ZEROBANK;
             } else {
                 // Main RAM (read/write)
                 write_acid = ram_id;

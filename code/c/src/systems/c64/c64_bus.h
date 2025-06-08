@@ -30,7 +30,7 @@
 
 // Write-capable ACIDs (1-7): These chips support write operations and get low IDs
 // to fit in the 3-bit write field of the encoding
-#define ACID_ZEROPAGE    1   // CPU I/O ports at $0000/$0001 (read/write)
+#define ACID_ZEROBANK    1   // Zero bank (4KB) including CPU I/O ports at $0000-$0001 (read/write)
 #define ACID_RAM         2   // Main RAM (read/write)
 #define ACID_VIC         3   // VIC-II $D000-$D3FF (read/write)
 #define ACID_SID         4   // SID $D400-$D7FF (read/write)
