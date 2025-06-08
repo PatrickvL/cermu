@@ -1,5 +1,4 @@
 #include "mos6581.h" // sid
-#include "c64.h"
 #include <string.h>
 #include <stdlib.h>
 
