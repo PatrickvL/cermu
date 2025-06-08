@@ -1,6 +1,6 @@
 // Test program for PLA 906114-01 integration with C64 bus (simplified)
-#include "src/chip/logic/pla.h"
-#include "src/systems/c64/c64_bus.h"
+#include "../src/chip/logic/pla.h"
+#include "../src/systems/c64/c64_bus.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,7 +24,7 @@ void test_pla_logic() {
     printf("Testing PLA 906114-01 logic...\n");
     
     // Create PLA chip
-    pla_906114_01_t* pla = (pla_906114_01_t*)pla_906114_01_create(&pla_906114_01_descriptor);
+    pla_906114_01_t* pla = pla_906114_01_create();
     if (!pla) {
         printf("Failed to create PLA chip\n");
         return;
@@ -84,7 +84,7 @@ void test_pla_logic() {
 void test_memory_modes() {
     printf("Testing C64 memory mode configurations...\n");
     
-    pla_906114_01_t* pla = (pla_906114_01_t*)pla_906114_01_create(&pla_906114_01_descriptor);
+    pla_906114_01_t* pla = pla_906114_01_create();
     if (!pla) {
         printf("Failed to create PLA chip\n");
         return;

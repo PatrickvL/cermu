@@ -90,9 +90,8 @@ void c64_pla_maps_generate(c64_t* c64) {
         else if (dev->base_address == 0xE000) kernal_id = i;
         else if (dev->base_address == 0x8000) cartridge_id = i;
     }
-    
-    // Create a temporary PLA instance for generating memory maps
-    pla_906114_01_t* pla = (pla_906114_01_t*)pla_906114_01_create(&pla_906114_01_descriptor);
+      // Create a temporary PLA instance for generating memory maps
+    pla_906114_01_t* pla = pla_906114_01_create();
     if (!pla) {
         // Fallback to simple mapping if PLA creation fails
         for (int mode = 0; mode < 32; mode++) {
