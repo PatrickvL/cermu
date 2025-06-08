@@ -36,7 +36,6 @@ typedef struct c64_s {
 c64_t* c64_system_create(void);
 void c64_system_destroy(c64_t* c64);
 void c64_non_cpu_cycle(void* c64);  // c64_t* - using void* for consistency
-void c64_emulate_frame(c64_t* c64);
 void c64_pla_maps_generate(c64_t* c64);  // PLA memory mapping generation
 
 #endif // C64_H

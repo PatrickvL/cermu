@@ -4,6 +4,9 @@
 #include "../../core/aiemuc.h"
 #include "../../core/device.h"
 #include "../../core/system.h"
+#include "../../core/bus_cycle_interface.h"
+#include "../../core/control_lines_interface.h"
+#include "../../chip/cpu/mos6510/mos6510_io_interface.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -50,6 +53,11 @@ typedef struct c64_bus_s {
     alignas(64) access_callback_t access_callback_per_devid[16]; // indexed by device ID - unified read/write/context
     alignas(64) uint8_t devid_per_bankidx[32]; // Maps each condensed index (32 entries) to a device ID
     alignas(64) uint8_t devid_per_bankidx_per_mode[32][32]; // Condensed from 256 to 32 entries per mode
+    
+    // Integrated adapter interfaces - can be passed out as pointers
+    bus_cycle_ops_t bus_adapter;
+    control_lines_interface_t control_lines_adapter;
+    mos6510_io_port_interface_t io_port_adapter;
 } c64_bus_t;
 
 void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode);
@@ -81,5 +89,51 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla,
                                    uint8_t cartridge_romh_id, uint8_t colorram_id);
 
 extern device_descriptor_t c64_bus_descriptor;
+
+// ============================================================================
+// ADAPTER INTERFACES - Integrated adapter access
+// ============================================================================
+
+/**
+ * Initialize the integrated adapter interfaces in the C64 bus.
+ * This sets up the adapter interfaces so they can be passed out as pointers.
+ * Should be called during bus initialization.
+ * 
+ * @param c64_bus Pointer to the C64 bus implementation
+ */
+void c64_bus_init_adapters(c64_bus_t* c64_bus);
+
+/**
+ * Get a pointer to the bus cycle adapter interface.
+ * This allows the C64 bus to work with the refactored MOS6510 CPU.
+ * 
+ * @param c64_bus Pointer to the existing C64 bus implementation
+ * @return Pointer to the bus interface structure configured for the C64 bus
+ */
+static inline bus_cycle_ops_t* c64_bus_get_adapter(c64_bus_t* c64_bus) {
+    return &c64_bus->bus_adapter;
+}
+
+/**
+ * Get a pointer to the control lines adapter interface.
+ * This allows any chip to access the shared control lines.
+ * 
+ * @param c64_bus Pointer to the existing C64 bus implementation
+ * @return Pointer to the control lines interface structure configured for the C64 bus
+ */
+static inline control_lines_interface_t* c64_control_lines_get_adapter(c64_bus_t* c64_bus) {
+    return &c64_bus->control_lines_adapter;
+}
+
+/**
+ * Get a pointer to the I/O port adapter interface.
+ * This handles the CPU's I/O ports at addresses $0000 and $0001.
+ * 
+ * @param c64_bus Pointer to the existing C64 bus implementation
+ * @return Pointer to the I/O port interface structure configured for the C64 system
+ */
+static inline mos6510_io_port_interface_t* c64_io_port_get_adapter(c64_bus_t* c64_bus) {
+    return &c64_bus->io_port_adapter;
+}
 
 #endif // C64_BUS_H
