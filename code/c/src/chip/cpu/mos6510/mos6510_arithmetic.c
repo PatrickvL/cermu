@@ -2,7 +2,7 @@
 
 // Macro to define arithmetic instructions
 #define DEFINE_ARITH_OP(fn, addr_func, op_func) \
-    void fn(mos6510_t* cpu_dev) { mos6510_arithmetic_helper(cpu_dev, addr_func, op_func); }
+    void fn(mos6510_t* cpu) { mos6510_arithmetic_helper(cpu, addr_func, op_func); }
 
 // ============================================================================
 // MOS 6510 ARITHMETIC AND LOGIC INSTRUCTIONS

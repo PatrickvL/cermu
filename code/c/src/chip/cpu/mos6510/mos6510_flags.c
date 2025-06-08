@@ -1,8 +1,8 @@
 #include "mos6510.h"
 
 // Macro to define flag clear/set handlers
-#define DEFINE_FLAG_CLEAR(fn, flag) void fn(mos6510_t* cpu_dev) { mos6510_flag_clear_helper(cpu_dev, flag); }
-#define DEFINE_FLAG_SET(fn, flag)   void fn(mos6510_t* cpu_dev) { mos6510_flag_set_helper(cpu_dev, flag); }
+#define DEFINE_FLAG_CLEAR(fn, flag) void fn(mos6510_t* cpu) { mos6510_flag_clear_helper(cpu, flag); }
+#define DEFINE_FLAG_SET(fn, flag)   void fn(mos6510_t* cpu) { mos6510_flag_set_helper(cpu, flag); }
 
 // ============================================================================
 // MOS 6510 FLAG INSTRUCTIONS

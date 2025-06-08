@@ -2,11 +2,11 @@
 
 // Macros for register transfer/inc/dec instructions
 #define DEFINE_REG_XFER(fn, dest, src) \
-    void fn(mos6510_t* cpu_dev) { mos6510_register_transfer_with_flags(cpu_dev, &cpu_dev->dest, cpu_dev->src); }
+    void fn(mos6510_t* cpu) { mos6510_register_transfer_with_flags(cpu, &cpu->dest, cpu->src); }
 #define DEFINE_REG_XFER_NOFLAG(fn, dest, src) \
-    void fn(mos6510_t* cpu_dev) { mos6510_register_transfer_no_flags(cpu_dev, &cpu_dev->dest, cpu_dev->src); }
+    void fn(mos6510_t* cpu) { mos6510_register_transfer_no_flags(cpu, &cpu->dest, cpu->src); }
 #define DEFINE_REG_INCDEC(fn, reg, delta) \
-    void fn(mos6510_t* cpu_dev) { mos6510_register_inc_dec(cpu_dev, &cpu_dev->reg, delta); }
+    void fn(mos6510_t* cpu) { mos6510_register_inc_dec(cpu, &cpu->reg, delta); }
 
 // ============================================================================
 // MOS 6510 REGISTER INSTRUCTIONS
@@ -19,37 +19,37 @@ DEFINE_REG_INCDEC(dex_func, x, -1) // DEX - Decrement X Register (0xCA)
 DEFINE_REG_INCDEC(dey_func, y, -1) // DEY - Decrement Y Register (0x88)
 
 // INC - Increment Memory
-void inc_zero_page_func(mos6510_t* cpu_dev) {
-    mos6510_rmw_zero_page(cpu_dev, op_inc);
+void inc_zero_page_func(mos6510_t* cpu) {
+    mos6510_rmw_zero_page(cpu, op_inc);
 }
 
-void inc_zero_page_x_func(mos6510_t* cpu_dev) {
-    mos6510_rmw_zero_page_x(cpu_dev, op_inc);
+void inc_zero_page_x_func(mos6510_t* cpu) {
+    mos6510_rmw_zero_page_x(cpu, op_inc);
 }
 
-void inc_absolute_func(mos6510_t* cpu_dev) {
-    mos6510_rmw_absolute(cpu_dev, op_inc);
+void inc_absolute_func(mos6510_t* cpu) {
+    mos6510_rmw_absolute(cpu, op_inc);
 }
 
-void inc_absolute_x_func(mos6510_t* cpu_dev) {
-    mos6510_rmw_absolute_x(cpu_dev, op_inc);
+void inc_absolute_x_func(mos6510_t* cpu) {
+    mos6510_rmw_absolute_x(cpu, op_inc);
 }
 
 // DEC - Decrement Memory
-void dec_zero_page_func(mos6510_t* cpu_dev) {
-    mos6510_rmw_zero_page(cpu_dev, op_dec);
+void dec_zero_page_func(mos6510_t* cpu) {
+    mos6510_rmw_zero_page(cpu, op_dec);
 }
 
-void dec_zero_page_x_func(mos6510_t* cpu_dev) {
-    mos6510_rmw_zero_page_x(cpu_dev, op_dec);
+void dec_zero_page_x_func(mos6510_t* cpu) {
+    mos6510_rmw_zero_page_x(cpu, op_dec);
 }
 
-void dec_absolute_func(mos6510_t* cpu_dev) {
-    mos6510_rmw_absolute(cpu_dev, op_dec);  
+void dec_absolute_func(mos6510_t* cpu) {
+    mos6510_rmw_absolute(cpu, op_dec);  
 }
 
-void dec_absolute_x_func(mos6510_t* cpu_dev) {
-    mos6510_rmw_absolute_x(cpu_dev, op_dec);
+void dec_absolute_x_func(mos6510_t* cpu) {
+    mos6510_rmw_absolute_x(cpu, op_dec);
 }
 
 // Transfer Instructions

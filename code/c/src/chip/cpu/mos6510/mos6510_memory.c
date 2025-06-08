@@ -2,9 +2,9 @@
 
 // Macro to define load/store handlers
 #define DEFINE_LOAD_OP(fn, addr_func, op_func) \
-    void fn(mos6510_t* cpu_dev) { mos6510_load_helper(cpu_dev, addr_func, op_func); }
+    void fn(mos6510_t* cpu) { mos6510_load_helper(cpu, addr_func, op_func); }
 #define DEFINE_STORE_OP(fn, addr_store_func, reg)  \
-    void fn(mos6510_t* cpu_dev) { mos6510_store_helper(cpu_dev, addr_store_func, cpu_dev->reg); }
+    void fn(mos6510_t* cpu) { mos6510_store_helper(cpu, addr_store_func, cpu->reg); }
 
 // ============================================================================
 // MOS 6510 MEMORY INSTRUCTIONS
