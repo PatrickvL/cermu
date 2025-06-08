@@ -24,11 +24,11 @@
 
 // ACID definitions (ACcessor InDex for callback dispatch)
 // ACIDs identify which accessor callbacks to use for memory operations.
-// The allocation order prioritizes write-capable devices for 3-bit encoding.
+// The allocation order prioritizes write-capable chips for 3-bit encoding.
 // ACID 0 is reserved for unmapped/detached operations.
-#define ACID_UNMAPPED    0   // Reserved: Unmapped/detached operations (no real device)
+#define ACID_UNMAPPED    0   // Reserved: Unmapped/detached operations (no real chip)
 
-// Write-capable ACIDs (1-7): These devices support write operations and get low IDs
+// Write-capable ACIDs (1-7): These chips support write operations and get low IDs
 // to fit in the 3-bit write field of the encoding
 #define ACID_ZEROPAGE    1   // CPU I/O ports at $0000/$0001 (read/write)
 #define ACID_RAM         2   // Main RAM (read/write)
@@ -36,9 +36,9 @@
 #define ACID_SID         4   // SID $D400-$D7FF (read/write)
 #define ACID_COLORRAM    5   // Color RAM $D800-$DBFF (read/write)
 #define ACID_CIA         6   // CIA1/CIA2 $DC00-$DDFF (read/write)
-// ACID 7 available for future write-capable device
+// ACID 7 available for future write-capable chip
 
-// Read-only ACIDs (8+): These devices only support read operations
+// Read-only ACIDs (8+): These chips only support read operations
 #define ACID_BASIC_ROM   8   // BASIC ROM $A000-$BFFF (read-only)
 #define ACID_KERNAL_ROM  9   // KERNAL ROM $E000-$FFFF (read-only)
 #define ACID_CARTRIDGE   10  // Cartridge ROM $8000-$9FFF (read-only)

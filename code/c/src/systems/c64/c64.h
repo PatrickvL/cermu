@@ -38,7 +38,7 @@ void c64_system_destroy(c64_t* c64);
 void c64_non_cpu_cycle(void* c64);  // c64_t* - using void* for consistency
 void c64_pla_maps_generate(c64_t* c64);  // PLA memory mapping generation
 
-// ACID detached callback functions for unmapped devices
+// ACID detached callback functions for unmapped chips
 uint8_t c64_detached_read(void* context, uint16_t address);
 void c64_detached_write(void* context, uint16_t address, uint8_t value);
 
