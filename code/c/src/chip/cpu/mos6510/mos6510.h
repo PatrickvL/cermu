@@ -93,9 +93,6 @@ void mos6510_stop_intercept(void);
 // I/O PORT EMULATION - Direct handling in CPU read/write cycles
 // ============================================================================
 
-// PLA functions
-void switch_cpu_mode(uint8_t mode);
-
 // ============================================================================
 // MOS6510 ZERO PAGE I/O PORT ACCESSORS
 // ============================================================================
