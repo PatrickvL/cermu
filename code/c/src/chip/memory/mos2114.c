@@ -26,15 +26,15 @@ void mos2114_memory_init(void* device, device_entry_t* device_entry) {
 
 uint8_t mos2114_read(void* context, uint16_t address) {
     uint8_t* memory = (uint8_t*)context;
-    // MOS2114 has 1024 addresses, mask to 10 bits
-    return memory[address & 0x3FF];
+    // Address routing handled by bus system, no mask needed
+    return memory[address];
 }
 
 void mos2114_write(void* context, uint16_t address, uint8_t value) {
     uint8_t* memory = (uint8_t*)context;
     // MOS2114 is 4-bit wide, so only store lower 4 bits
-    // Address mask to 10 bits (1024 addresses)
-    memory[address & 0x3FF] = value & 0x0F;
+    // Address routing handled by bus system, no mask needed
+    memory[address] = value & 0x0F;
 }
 
 device_descriptor_t mos2114_descriptor = {

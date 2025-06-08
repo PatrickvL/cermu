@@ -26,6 +26,7 @@ void mos6569_bus_attach(void* device, void* bus) {
 
 uint8_t mos6569_registers_read(void* device, uint16_t address) {
     mos6569_t* vicii = (mos6569_t*)device;
+    // VIC-II has 64 registers that mirror throughout its address space
     uint8_t reg = address & 0x3F;
     if (reg <= 0x2E) {
         if (reg == 0x12) return (uint8_t)(vicii->raster_line & 0xFF);
@@ -46,6 +47,7 @@ uint8_t mos6569_registers_read(void* device, uint16_t address) {
 
 void mos6569_registers_write(void* context, uint16_t address, uint8_t value) {
     mos6569_t* vicii = (mos6569_t*)context;
+    // VIC-II has 64 registers that mirror throughout its address space
     uint8_t reg = address & 0x3F;
     if (reg <= 0x2E) vicii->registers[reg] = value;
 }
