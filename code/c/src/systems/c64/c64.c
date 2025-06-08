@@ -52,28 +52,28 @@ void c64_detached_write(void* context, uint16_t address, uint8_t value) {
 }
 
 void c64_callbacks_init(c64_t* c64) {
-    // Simplified callback initialization for current API
+    // Initialize ACID allocation system
     c64_bus_t* bus = c64->bus;
+    c64_bus_initialize_acids(bus);
     
-    // Initialize all access callbacks to detached defaults
-    for (int i = 0; i < 16; i++) {
-        bus->access_callback_per_acid[i].read_func = c64_detached_read;
-        bus->access_callback_per_acid[i].write_func = c64_detached_write;
-        bus->access_callback_per_acid[i].context = NULL;
-    }
-      // Set up device-specific callbacks based on device IDs
+    // Allocate ACIDs for all registered devices based on their capabilities
+    // ACIDs 1-7: Write-capable devices (3-bit encoding)
+    // ACIDs 8+: Read-only devices (4-bit encoding) 
+    // ACID 0: Reserved for unmapped operations
+    
     for (int i = 0; i < c64->system.chip_count; i++) {
         chip_entry_t* dev = &c64->system.chips[i];
         chip_descriptor_t* desc = dev->desc;
-        if (i < 16) { // Safety check for device ID bounds
-            if (desc->read) {
-                bus->access_callback_per_acid[i].read_func = desc->read;
-                bus->access_callback_per_acid[i].context = dev->rwcb_context;
-            }
-            if (desc->write) {
-                bus->access_callback_per_acid[i].write_func = desc->write;
-                bus->access_callback_per_acid[i].context = dev->rwcb_context;
-            }
+        
+        // Allocate ACID based on device capabilities
+        uint8_t allocated_acid = c64_bus_allocate_acid(bus, i, 
+                                                       desc->read, desc->write, 
+                                                       dev->rwcb_context);
+        
+        // Store the allocated ACID in the chip_id_to_acid mapping
+        // (This is already done in c64_bus_allocate_acid, but shown for clarity)
+        if (allocated_acid != ACID_UNMAPPED) {
+            bus->chip_id_to_acid[i] = allocated_acid;
         }
     }
 }
@@ -81,40 +81,46 @@ void c64_callbacks_init(c64_t* c64) {
 void c64_pla_maps_generate(c64_t* c64) {
     system_8bit_t* system = &c64->system;
     c64_bus_t* bus = c64->bus;
-      // Find device IDs for different memory types
-    uint8_t ram_id = 0, basic_id = 0, kernal_id = 0, cartridge_id = 0;
+      // Find chip IDs for different memory types
+    uint8_t ram_chip_id = 0, basic_chip_id = 0, kernal_chip_id = 0, cartridge_chip_id = 0;
     for (int i = 0; i < system->chip_count; i++) {
         chip_entry_t* dev = &system->chips[i];
-        if (dev->desc == &ram_descriptor) ram_id = i;
-        else if (dev->base_address == 0xA000) basic_id = i;
-        else if (dev->base_address == 0xE000) kernal_id = i;
-        else if (dev->base_address == 0x8000) cartridge_id = i;
+        if (dev->desc == &ram_descriptor) ram_chip_id = i;
+        else if (dev->base_address == 0xA000) basic_chip_id = i;
+        else if (dev->base_address == 0xE000) kernal_chip_id = i;
+        else if (dev->base_address == 0x8000) cartridge_chip_id = i;
     }
+    
+    // Convert chip IDs to ACIDs using the mapping
+    uint8_t ram_acid = bus->chip_id_to_acid[ram_chip_id];
+    uint8_t basic_acid = bus->chip_id_to_acid[basic_chip_id];
+    uint8_t kernal_acid = bus->chip_id_to_acid[kernal_chip_id];
+    uint8_t cartridge_acid = bus->chip_id_to_acid[cartridge_chip_id];
+    
     // Create a temporary PLA instance for generating memory maps
     pla_906114_01_t* pla = pla_906114_01_create();
     if (!pla) {        // Fallback to simple mapping if PLA creation fails
         for (int mode = 0; mode < 32; mode++) {
             for (int bankidx = 0; bankidx < 32; bankidx++) {
-                uint8_t acid = ACIDS_RW_ENCODE(ram_id, ram_id);
+                uint8_t acid = ACIDS_RW_ENCODE(ram_acid, ram_acid);
                 bus->acid_per_bankidx_per_mode[mode][bankidx] = acid;
             }
         }
-        return;
-    }
+        return;    }
     
-    // Use proper device IDs based on predefined constants
-    // Some devices may not be registered yet, use predefined IDs where appropriate
-    uint8_t charrom_id = ACID_UNMAPPED;  // Character ROM might not be a separate device
-    uint8_t io_id = ACID_VIC;           // Default I/O to VIC for unmapped I/O space
-    uint8_t cartridge_roml_id = cartridge_id; // Low cartridge ROM
-    uint8_t cartridge_romh_id = cartridge_id; // High cartridge ROM  
-    uint8_t colorram_id = ACID_COLORRAM; // Color RAM
+    // Use proper ACIDs based on allocated values
+    // Some devices may not be registered yet, use predefined constants where appropriate
+    uint8_t charrom_acid = ACID_UNMAPPED;  // Character ROM might not be a separate device
+    uint8_t io_acid = ACID_VIC;           // Default I/O to VIC for unmapped I/O space
+    uint8_t cartridge_roml_acid = cartridge_acid; // Low cartridge ROM
+    uint8_t cartridge_romh_acid = cartridge_acid; // High cartridge ROM  
+    uint8_t colorram_acid = ACID_COLORRAM; // Color RAM
     
     // Generate all 32 memory modes using PLA
     c64_bus_generate_all_pla_modes(bus, (struct pla_906114_01_s*)pla,
-                                  ram_id, basic_id, kernal_id,
-                                  charrom_id, io_id, cartridge_roml_id,
-                                  cartridge_romh_id, colorram_id);
+                                  ram_acid, basic_acid, kernal_acid,
+                                  charrom_acid, io_acid, cartridge_roml_acid,
+                                  cartridge_romh_acid, colorram_acid);
     
     // Clean up PLA instance
     pla_906114_01_destroy(pla);

@@ -21,26 +21,32 @@
 
 // Macro definitions for ACID (ACcessor InDex) extraction
 
-// ACID definitions (unified index space, ordered by base address)
-// ACIDs identify which device accessor to use for memory operations.
-// The first 7 ACIDs are for devices supporting both read and write callbacks.
-// The rest (CARTRIDGE, BASIC, KERNAL) are read-only.
-#define ACID_UNMAPPED    0   // Unmapped (PLA hole)
-#define ACID_ZEROPAGE    1   // Zero page (special handling for MOS6410 CPU's I/O ports at $0000/$0001)
-#define ACID_RAM         2   // RAM (main memory)
-#define ACID_VIC         3   // VIC-II ($D000)
-#define ACID_SID         4   // SID ($D400)
-#define ACID_COLORRAM    5   // Color RAM ($D800)
-#define ACID_CIA         6   // CIA1 ($DC00) and CIA2 ($DD00), same device type, different context
-// Devices below only support read (ROM/Cartridge)
-#define ACID_CARTRIDGE   7   // Cartridge ROM ($8000)
-#define ACID_BASIC_ROM   8   // BASIC ROM ($A000)
-#define ACID_KERNAL_ROM  9   // KERNAL ROM ($E000)
-// Add more as needed, keeping ACIDs unique and ordered by base address
+// ACID definitions (ACcessor InDex for callback dispatch)
+// ACIDs identify which accessor callbacks to use for memory operations.
+// The allocation order prioritizes write-capable devices for 3-bit encoding.
+// ACID 0 is reserved for unmapped/detached operations.
+#define ACID_UNMAPPED    0   // Reserved: Unmapped/detached operations (no real device)
 
-// Encoding macros ([7:5] write ACID, [4]:spare bit, [3:0] read ACID)
+// Write-capable ACIDs (1-7): These devices support write operations and get low IDs
+// to fit in the 3-bit write field of the encoding
+#define ACID_ZEROPAGE    1   // CPU I/O ports at $0000/$0001 (read/write)
+#define ACID_RAM         2   // Main RAM (read/write)
+#define ACID_VIC         3   // VIC-II $D000-$D3FF (read/write)
+#define ACID_SID         4   // SID $D400-$D7FF (read/write)
+#define ACID_COLORRAM    5   // Color RAM $D800-$DBFF (read/write)
+#define ACID_CIA         6   // CIA1/CIA2 $DC00-$DDFF (read/write)
+// ACID 7 available for future write-capable device
+
+// Read-only ACIDs (8+): These devices only support read operations
+#define ACID_BASIC_ROM   8   // BASIC ROM $A000-$BFFF (read-only)
+#define ACID_KERNAL_ROM  9   // KERNAL ROM $E000-$FFFF (read-only)
+#define ACID_CARTRIDGE   10  // Cartridge ROM $8000-$9FFF (read-only)
+// Add more read-only ACIDs as needed
+
+// Encoding macros for packing read/write ACIDs into single byte
+// Format: [7:5] write ACID (3 bits), [4] spare, [3:0] read ACID (4 bits)
 #define ACIDS_RW_ENCODE(read_acid, write_acid) \
-    (((read_acid) & 0x0F) | (((write_acid) & 0x07) << 5)) // TODO : Encode spare bit once needed
+    (((read_acid) & 0x0F) | (((write_acid) & 0x07) << 5))
 #define ACID_READ_DECODE(entry) ((entry) & 0x0F)
 #define ACID_WRITE_DECODE(entry) ((entry) >> 5)
 #define ACID_DECODE_SPARE(entry) (((entry) >> 4) & 0x01)
@@ -51,6 +57,12 @@ typedef struct c64_bus_s {
     uint8_t  control_lines; // R/W, IRQ, NMI, BA, AEC, RDY
     uint8_t  data;          // D0-D7
     uint16_t address;       // A0-A15
+    
+    // ACID allocation tracking
+    uint8_t next_write_acid;    // Next available write-capable ACID (1-7)
+    uint8_t next_read_acid;     // Next available read-only ACID (8+)
+    uint8_t chip_id_to_acid[16]; // Maps chip ID to allocated ACID
+    
     alignas(64) access_callback_t access_callback_per_acid[16]; // indexed by ACID - unified read/write/context
     alignas(64) uint8_t acid_per_bankidx[32]; // Maps each condensed index (32 entries) to an ACID
     alignas(64) uint8_t acid_per_bankidx_per_mode[32][32]; // Condensed from 256 to 32 entries per mode
@@ -73,6 +85,12 @@ void c64_bus_memory_write(c64_bus_t *bus, uint16_t address, uint8_t value);
 
 // System functions  
 void c64_bus_system_attach(c64_bus_t* c64_bus, void* c64);  // c64_t*
+
+// ACID allocation and management
+uint8_t c64_bus_allocate_acid(c64_bus_t* bus, uint8_t chip_id, 
+                              chip_read_func_t read_func, chip_write_func_t write_func, 
+                              void* context);
+void c64_bus_initialize_acids(c64_bus_t* bus);
 
 // Forward declaration for PLA
 struct pla_906114_01_s;
