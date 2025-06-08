@@ -16,6 +16,8 @@
 #define SYS_LINE_BA         3   // Bus Available (bit 3)
 #define SYS_LINE_AEC        4   // Address Enable Control (bit 4)
 #define SYS_LINE_RDY        5   // Ready (bit 5)
+#define SYS_LINE_EXROM      6   // EXROM (bit 6) - C64 cartridge control signal
+#define SYS_LINE_GAME       7   // GAME (bit 7) - C64 cartridge control signal
 
 // Data bus (8 bits starting at bit 8)
 #define SYS_LINE_D0         8
@@ -39,6 +41,8 @@
 #define SYS_MASK_BA         (1U << SYS_LINE_BA)
 #define SYS_MASK_AEC        (1U << SYS_LINE_AEC)
 #define SYS_MASK_RDY        (1U << SYS_LINE_RDY)
+#define SYS_MASK_EXROM      (1U << SYS_LINE_EXROM)
+#define SYS_MASK_GAME       (1U << SYS_LINE_GAME)
 
 #define SYS_MASK_DATA_BUS   (0xFFU << SYS_LINE_D0)    // 8-bit data bus mask
 #define SYS_MASK_ADDR_BUS   (0xFFFFU << SYS_LINE_A0)  // 16-bit address bus mask

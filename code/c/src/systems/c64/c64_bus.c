@@ -43,11 +43,13 @@ void c64_bus_system_destroy(void* chip) {
 void* c64_bus_system_create(chip_descriptor_t* desc) {
     c64_bus_t* c64_bus = (c64_bus_t*)calloc(1, sizeof(c64_bus_t));
     if (!c64_bus) return NULL;
-    c64_bus->desc = desc;
-    // Initialize bus state
+    c64_bus->desc = desc;    // Initialize bus state
     c64_bus->address = 0;
     c64_bus->data = 0;
     c64_bus->control_lines = BA_LINE | AEC_LINE | RDY_LINE;
+    
+    // Initialize system lines with default cartridge signals (no cartridge)
+    c64_bus->system_lines = SYS_MASK_EXROM | SYS_MASK_GAME;  // Both high = no cartridge
     
     // Initialize ACID allocation tracking
     c64_bus_initialize_acids(c64_bus);
@@ -178,6 +180,32 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla,
 }
 
 // ============================================================================
+// PLA MODE GENERATION - Convert CPU port bits + cartridge signals to 5-bit PLA mode
+// ============================================================================
+
+uint8_t c64_bus_generate_pla_mode(c64_bus_t* c64_bus, uint8_t cpu_port_bits) {
+    // The PLA expects a 5-bit mode value with the following bit mapping:
+    // Bit 0: LORAM (from CPU port bit 0)
+    // Bit 1: HIRAM (from CPU port bit 1) 
+    // Bit 2: CHAREN (from CPU port bit 2)
+    // Bit 3: EXROM (from cartridge signal)
+    // Bit 4: GAME (from cartridge signal)
+    
+    uint8_t pla_mode = 0;
+    
+    // Extract CPU I/O port control bits (bits 0-2 of $0001)
+    pla_mode |= (cpu_port_bits & 0x01);      // LORAM (bit 0)
+    pla_mode |= (cpu_port_bits & 0x02);      // HIRAM (bit 1)
+    pla_mode |= (cpu_port_bits & 0x04);      // CHAREN (bit 2)
+    
+    // Add cartridge control signals from system lines
+    pla_mode |= ((c64_bus->system_lines & SYS_MASK_EXROM) ? 0x08 : 0); // EXROM (bit 3)
+    pla_mode |= ((c64_bus->system_lines & SYS_MASK_GAME) ? 0x10 : 0);  // GAME (bit 4)
+    
+    return pla_mode;
+}
+
+// ============================================================================
 // ADAPTER INTERFACES - Integrated adapter initialization
 // ============================================================================
 
@@ -215,8 +243,9 @@ static void c64_control_lines_set(void* context, uint32_t lines) {
 // I/O port adapter functions
 static void c64_io_port_output_changed(void* context, uint8_t ddr, uint8_t port_data, uint8_t effective_output) {
     c64_bus_t* c64_bus = (c64_bus_t*)context;
-    // Use the effective output for mode switching
-    c64_bus_mode_switch(c64_bus, effective_output);
+    // Generate proper 5-bit PLA mode from CPU port bits and cartridge signals
+    uint8_t pla_mode = c64_bus_generate_pla_mode(c64_bus, effective_output);
+    c64_bus_mode_switch(c64_bus, pla_mode);
 }
 
 static uint8_t c64_io_port_input_read(void* context) {
