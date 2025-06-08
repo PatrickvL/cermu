@@ -107,45 +107,44 @@ void c64_bus_populate_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla,
     }
     // Map memory regions based on PLA outputs
     for (uint32_t addr = 0; addr < 0x10000; addr += 0x100) {
-        int bank_idx = c64_bus_address_to_bankidx(addr);
-        uint8_t device_id = ACID_UNMAPPED;
+        int bank_idx = c64_bus_address_to_bankidx(addr);        uint8_t chip_id = ACID_UNMAPPED;
         
         // Set address in PLA
         pla_906114_01_set_address_high((pla_906114_01_t*)pla, (addr >> 8) & 0x0F);
-          // Determine device based on PLA outputs
+          // Determine chip based on PLA outputs
         if (!pla->outputs.n_casram) {
             // RAM is selected
             if (addr < 0x0002) {
-                device_id = ACID_ZEROPAGE;  // Special handling for CPU I/O ports
+                chip_id = ACID_ZEROPAGE;  // Special handling for CPU I/O ports
             } else {
-                device_id = ram_id;
+                chip_id = ram_id;
             }
         } else if (!pla->outputs.n_basic) {
-            device_id = basic_id;
+            chip_id = basic_id;
         } else if (!pla->outputs.n_kernal) {
-            device_id = kernal_id;
+            chip_id = kernal_id;
         } else if (!pla->outputs.n_charrom) {
-            device_id = charrom_id;
+            chip_id = charrom_id;
         } else if (!pla->outputs.n_io) {
-            // I/O region - determine specific device
+            // I/O region - determine specific chip
             if (addr >= 0xD000 && addr < 0xD400) {
-                device_id = ACID_VIC;
+                chip_id = ACID_VIC;
             } else if (addr >= 0xD400 && addr < 0xD800) {
-                device_id = ACID_SID;
+                chip_id = ACID_SID;
             } else if (addr >= 0xD800 && addr < 0xDC00) {
-                device_id = colorram_id;
+                chip_id = colorram_id;
             } else if (addr >= 0xDC00 && addr < 0xE000) {
-                device_id = ACID_CIA;
+                chip_id = ACID_CIA;
             } else {
-                device_id = io_id;
+                chip_id = io_id;
             }
         } else if (!pla->outputs.n_roml) {
-            device_id = cartridge_roml_id;
+            chip_id = cartridge_roml_id;
         } else if (!pla->outputs.n_romh) {
-            device_id = cartridge_romh_id;
+            chip_id = cartridge_romh_id;
         }
         
-        bus->acid_per_bankidx[bank_idx] = device_id;
+        bus->acid_per_bankidx[bank_idx] = chip_id;
     }
 }
 
@@ -303,10 +302,9 @@ uint8_t c64_bus_allocate_acid(c64_bus_t* bus, uint8_t chip_id,
                               chip_read_func_t read_func, chip_write_func_t write_func, 
                               void* context) {
     uint8_t allocated_acid = ACID_UNMAPPED;
-    
     // Determine allocation strategy based on callback availability
     if (write_func != NULL) {
-        // Device supports write operations - allocate from write-capable range (1-7)
+        // Chip supports write operations - allocate from write-capable range (1-7)
         if (bus->next_write_acid <= 7) {
             allocated_acid = bus->next_write_acid++;
         } else {
@@ -317,7 +315,7 @@ uint8_t c64_bus_allocate_acid(c64_bus_t* bus, uint8_t chip_id,
             }
         }
     } else if (read_func != NULL) {
-        // Device only supports read operations - allocate from read-only range (8+)
+        // Chip only supports read operations - allocate from read-only range (8+)
         if (bus->next_read_acid < 16) {
             allocated_acid = bus->next_read_acid++;
         }
