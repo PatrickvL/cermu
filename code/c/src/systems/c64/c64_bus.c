@@ -7,9 +7,11 @@
 // Bank number is derived from the upper 4 bits of the address, whereby the lower 4 
 // IO range (bank 13), returns 16 + the page number (from the 2nd address nybble).
 static inline int c64_bus_address_to_bankidx(uint16_t address) {
-    int bank = address >> 12;
     int page = (address >> 8) & 0x0F;
-    return bank + ((bank == 13) * (page + 3));
+    int bank = address >> 12; // bank 0 to 15 (13 is unused)
+    int bank13_delta = 3 + page; // 3 to 18, when added to 13 gives 16 to 31
+    int is_bank13_mask = - (int)(bank == 13); // 0x00000000 or 0xFFFFFFFF
+    return bank + (is_bank13_mask & bank13_delta); // 0 to 31: 0 to 15 bank numbers (13 unused), 16 and up for bank 13 pages
 }
 
 uint8_t c64_bus_memory_read(c64_bus_t* c64_bus, uint16_t address) {
