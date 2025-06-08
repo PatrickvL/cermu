@@ -3,19 +3,19 @@
 #include <string.h>
 #include <stdlib.h>
 
-void* mos6526_system_create(device_descriptor_t* desc) {
+void* mos6526_system_create(chip_descriptor_t* desc) {
     mos6526_t* cia = (mos6526_t*)calloc(1, sizeof(mos6526_t));
     if (!cia) return NULL;
     cia->desc = desc;
     return cia;
 }
 
-void mos6526_system_destroy(void* device) {
-    free(device);
+void mos6526_system_destroy(void* chip) {
+    free(chip);
 }
 
-void mos6526_bus_attach(void* device, void* bus) {
-    mos6526_t* cia = (mos6526_t*)device;
+void mos6526_bus_attach(void* chip, void* bus) {
+    mos6526_t* cia = (mos6526_t*)chip;
     c64_bus_t* c64_bus = (c64_bus_t*)bus;
     cia->bus = c64_bus;
 }
@@ -86,7 +86,7 @@ void mos6526_registers_write(void* context, uint16_t address, uint8_t value) {
     }
 }
 
-device_descriptor_t mos6526_descriptor = {
+chip_descriptor_t mos6526_descriptor = {
     .create = mos6526_system_create,
     .destroy = mos6526_system_destroy,
     .bus_attach = mos6526_bus_attach,

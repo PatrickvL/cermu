@@ -6,11 +6,11 @@
 // Forward declarations
 void mos6569_bank_change(void* context, uint8_t bank);
 
-void mos6569_system_destroy(void* device) {
-    free(device);
+void mos6569_system_destroy(void* chip) {
+    free(chip);
 }
 
-void* mos6569_system_create(device_descriptor_t* desc) {
+void* mos6569_system_create(chip_descriptor_t* desc) {
     mos6569_t* vicii = (mos6569_t*)calloc(1, sizeof(mos6569_t));
     if (!vicii) return NULL;
     vicii->desc = desc;
@@ -18,14 +18,14 @@ void* mos6569_system_create(device_descriptor_t* desc) {
     return vicii;
 }
 
-void mos6569_bus_attach(void* device, void* bus) {
-    mos6569_t* vicii = (mos6569_t*)device;
+void mos6569_bus_attach(void* chip, void* bus) {
+    mos6569_t* vicii = (mos6569_t*)chip;
     c64_bus_t* c64_bus = (c64_bus_t*)bus;
     vicii->bus = c64_bus;
 }
 
-uint8_t mos6569_registers_read(void* device, uint16_t address) {
-    mos6569_t* vicii = (mos6569_t*)device;
+uint8_t mos6569_registers_read(void* chip, uint16_t address) {
+    mos6569_t* vicii = (mos6569_t*)chip;
     // VIC-II has 64 registers that mirror throughout its address space
     uint8_t reg = address & 0x3F;
     if (reg <= 0x2E) {
@@ -57,7 +57,7 @@ void mos6569_bank_change(void* context, uint8_t bank) {
     vicii->bank = bank;
 }
 
-device_descriptor_t mos6569_descriptor = {
+chip_descriptor_t mos6569_descriptor = {
     .create = mos6569_system_create,
     .destroy = mos6569_system_destroy,
     .bus_attach = mos6569_bus_attach,

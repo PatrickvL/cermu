@@ -1,7 +1,7 @@
 #ifndef MOS6526_H
 #define MOS6526_H
 
-#include "../../core/device.h"
+#include "../../core/chip.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -10,7 +10,7 @@
 // It provides timers, I/O ports, and a real-time clock (RTC) functionality.
 
 typedef struct mos6526_s {
-    device_descriptor_t* desc;
+    chip_descriptor_t* desc;
     uint8_t pra, prb, ddra, ddrb;
     uint16_t timer_a, timer_b;
     uint8_t tod_10ths, tod_sec, tod_min, tod_hr;

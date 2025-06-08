@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-void* rom_system_create(device_descriptor_t* desc) {
+void* rom_system_create(chip_descriptor_t* desc) {
     rom_t* rom = (rom_t*)calloc(1, sizeof(rom_t));
     if (!rom) return NULL;
     rom->desc = desc;
@@ -13,9 +13,9 @@ void* rom_system_create(device_descriptor_t* desc) {
     return rom;
 }
 
-// Initialize ROM with device entry information
-void rom_memory_init(void* device, uint16_t base_address, uint16_t size, device_entry_t* device_entry) {
-    rom_t* rom = (rom_t*)device;
+// Initialize ROM with chip entry information
+void rom_memory_init(void* chip, uint16_t base_address, uint16_t size, chip_entry_t* chip_entry) {
+    rom_t* rom = (rom_t*)chip;
     if (!rom) return;
     
     rom->size = size;
@@ -23,8 +23,8 @@ void rom_memory_init(void* device, uint16_t base_address, uint16_t size, device_
     rom->memory = (uint8_t*)malloc(rom->size);
     
     // Set pre-adjusted rwcb_context so ROM can reuse RAM read code
-    if (device_entry && rom->memory) {
-        device_entry->rwcb_context = rom->memory - base_address;
+    if (chip_entry && rom->memory) {
+        chip_entry->rwcb_context = rom->memory - base_address;
     }
     
     // Note: Memory content will be loaded by c64_memory_init
@@ -42,7 +42,7 @@ uint8_t rom_memory_read(void* context, uint16_t address) {
     return memory[address];
 }
 
-device_descriptor_t rom_descriptor = {
+chip_descriptor_t rom_descriptor = {
     .create = rom_system_create,
     .destroy = rom_system_destroy,
     .bus_attach = NULL,

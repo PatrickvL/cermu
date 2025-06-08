@@ -1,7 +1,7 @@
 #ifndef PLA_H
 #define PLA_H
 
-#include "../../core/device.h"
+#include "../../core/chip.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -39,14 +39,14 @@ typedef struct {
 } pla_outputs_t;
 
 typedef struct pla_906114_01_s {
-    device_descriptor_t* desc;
+    chip_descriptor_t* desc;
     pla_inputs_t inputs;
     pla_outputs_t outputs;
 } pla_906114_01_t;
 
 // Function declarations
-void* pla_906114_01_create(device_descriptor_t* desc);
-void pla_906114_01_destroy(void* device);
+void* pla_906114_01_create(chip_descriptor_t* desc);
+void pla_906114_01_destroy(void* chip);
 
 // Main PLA logic function - updates all output lines based on input states
 void pla_906114_01_update_outputs(pla_906114_01_t* pla);
@@ -57,6 +57,6 @@ void pla_906114_01_set_address_high(pla_906114_01_t* pla, uint8_t addr_high);
 // VIC address bus input (combines VA13-VA12)
 void pla_906114_01_set_vic_address(pla_906114_01_t* pla, uint8_t va_high);
 
-extern device_descriptor_t pla_906114_01_descriptor;
+extern chip_descriptor_t pla_906114_01_descriptor;
 
 #endif // PLA_H

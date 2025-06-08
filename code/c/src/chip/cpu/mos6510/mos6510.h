@@ -1,7 +1,7 @@
 #ifndef MOS6510_H
 #define MOS6510_H
 
-#include "../../../core/device.h"
+#include "../../../core/chip.h"
 #include "../../../core/bus_cycle_interface.h"
 #include "../../../core/control_lines_interface.h"
 #include "../../../core/system_lines.h"
@@ -25,7 +25,7 @@ typedef struct mos6510_s mos6510_t;
 
 // CPU state structure
 struct mos6510_s {
-    device_descriptor_t* desc; // Pointer to device descriptor (must be first)
+    chip_descriptor_t* desc; // Pointer to chip descriptor (must be first)
       // === PERFORMANCE-OPTIMIZED INTERFACE STORAGE ===
     // Store interface structs by value for zero-indirection access    // Bus interface (stored by value for optimal performance)
     bus_cycle_ops_t bus_interface;
@@ -134,7 +134,7 @@ static inline void mos6510_ioport_write(mos6510_t* cpu, uint16_t addr, uint8_t v
 
 // Memory access functions using optimized direct callbacks
 static inline uint8_t mos6510_read_cycle(mos6510_t* cpu, uint16_t addr) {
-    // All addresses go through bus interface - banking system routes zero page to device functions
+    // All addresses go through bus interface - banking system routes zero page to chip functions
     uint8_t result = cpu->bus_interface.bus_read(cpu->bus_interface.context, addr);
     
     // Execute one cycle on other non-CPU chips after the bus operation
@@ -144,7 +144,7 @@ static inline uint8_t mos6510_read_cycle(mos6510_t* cpu, uint16_t addr) {
 }
 
 static inline void mos6510_write_cycle(mos6510_t* cpu, uint16_t addr, uint8_t value) {
-    // All addresses go through bus interface - banking system routes zero page to device functions
+    // All addresses go through bus interface - banking system routes zero page to chip functions
     cpu->bus_interface.bus_write(cpu->bus_interface.context, addr, value);
     
     // Execute one cycle on other non-CPU chips after the bus operation
@@ -967,8 +967,8 @@ bool mos6510_is_intercepting(void);
 void mos6510_nmi(mos6510_t* cpu);
 void mos6510_irq(mos6510_t* cpu, uint8_t status);
 
-// Device descriptor
-extern device_descriptor_t mos6510_descriptor;
+// Chip descriptor
+extern chip_descriptor_t mos6510_descriptor;
 
 // Performance-optimized interface attachment functions
 void mos6510_attach_bus_interface(mos6510_t* cpu, const bus_cycle_ops_t* bus_interface);

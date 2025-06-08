@@ -1,7 +1,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "../../core/device.h"
+#include "../../core/chip.h"
 #include "../../core/system.h"
 #include "c64.h"
 #include "c64_bus.h"
@@ -17,21 +17,21 @@
 static uint8_t initial_ram[65536] = {0};
 
 // Device descriptor declarations for non-CPU devices (defined in respective .c files)
-extern device_descriptor_t c64_bus_descriptor;
-extern device_descriptor_t mos6526_descriptor;
-extern device_descriptor_t mos6581_descriptor;
-extern device_descriptor_t mos6569_descriptor;
-extern device_descriptor_t ram_descriptor;
-extern device_descriptor_t rom_descriptor;
+extern chip_descriptor_t c64_bus_descriptor;
+extern chip_descriptor_t mos6526_descriptor;
+extern chip_descriptor_t mos6581_descriptor;
+extern chip_descriptor_t mos6569_descriptor;
+extern chip_descriptor_t ram_descriptor;
+extern chip_descriptor_t rom_descriptor;
 
 // Actual c64.c
 
 void c64_memory_init(system_8bit_t* system) {
     extern uint8_t initial_ram[65536];
-    for (int i = 0; i < system->device_count; i++) {
-        device_entry_t* dev = &system->devices[i];
+    for (int i = 0; i < system->chip_count; i++) {
+        chip_entry_t* dev = &system->chips[i];
         if (dev->desc == &ram_descriptor) {
-            ram_t* ram = (ram_t*)dev->device;
+            ram_t* ram = (ram_t*)dev->chip;
             memcpy(ram->memory, initial_ram, 65536);
         }
         // ROM initialization removed - ROMs should be loaded from files when needed
@@ -61,11 +61,10 @@ void c64_callbacks_init(c64_t* c64) {
         bus->access_callback_per_devid[i].write_func = c64_detached_write;
         bus->access_callback_per_devid[i].context = NULL;
     }
-    
-    // Set up device-specific callbacks based on device IDs
-    for (int i = 0; i < c64->system.device_count; i++) {
-        device_entry_t* dev = &c64->system.devices[i];
-        device_descriptor_t* desc = dev->desc;
+      // Set up device-specific callbacks based on device IDs
+    for (int i = 0; i < c64->system.chip_count; i++) {
+        chip_entry_t* dev = &c64->system.chips[i];
+        chip_descriptor_t* desc = dev->desc;
         if (i < 16) { // Safety check for device ID bounds
             if (desc->read) {
                 bus->access_callback_per_devid[i].read_func = desc->read;
@@ -73,7 +72,8 @@ void c64_callbacks_init(c64_t* c64) {
             }
             if (desc->write) {
                 bus->access_callback_per_devid[i].write_func = desc->write;
-                bus->access_callback_per_devid[i].context = dev->rwcb_context;            }
+                bus->access_callback_per_devid[i].context = dev->rwcb_context;
+            }
         }
     }
 }
@@ -81,11 +81,10 @@ void c64_callbacks_init(c64_t* c64) {
 void c64_pla_maps_generate(c64_t* c64) {
     system_8bit_t* system = &c64->system;
     c64_bus_t* bus = c64->bus;
-    
-    // Find device IDs for different memory types
+      // Find device IDs for different memory types
     uint8_t ram_id = 0, basic_id = 0, kernal_id = 0, cartridge_id = 0;
-    for (int i = 0; i < system->device_count; i++) {
-        device_entry_t* dev = &system->devices[i];
+    for (int i = 0; i < system->chip_count; i++) {
+        chip_entry_t* dev = &system->chips[i];
         if (dev->desc == &ram_descriptor) ram_id = i;
         else if (dev->base_address == 0xA000) basic_id = i;
         else if (dev->base_address == 0xE000) kernal_id = i;
@@ -163,7 +162,7 @@ void c64_non_cpu_cycle(void* c64_ptr) {
 void c64_system_destroy(c64_t* c64) {
     if (!c64) return;
 
-    system_devices_destroy(&c64->system);
+    system_chips_destroy(&c64->system);
     free(c64);
 }
 
@@ -171,7 +170,7 @@ c64_t* c64_system_create() {
     c64_t* c64 = malloc(sizeof(c64_t));
     if (!c64) return NULL;
 
-    device_descriptor_t* descriptors[] = {
+    chip_descriptor_t* descriptors[] = {
         &c64_bus_descriptor,
         &mos6510_descriptor,
         &ram_descriptor,
@@ -207,7 +206,7 @@ c64_t* c64_system_create() {
             c64_system_destroy(c64);
             return NULL;
         }
-        ids[i] = system_device_register(&c64->system, *devices[i], descriptors[i], bases[i], sizes[i]);
+        ids[i] = system_chip_register(&c64->system, *devices[i], descriptors[i], bases[i], sizes[i]);
         if (ids[i] == 0xFF) {
             c64_system_destroy(c64);
             return NULL;
@@ -215,16 +214,14 @@ c64_t* c64_system_create() {
     }
     
     // Now having a registry of all devices, the PLA maps can be generated
-    c64_pla_maps_generate(c64);
-
-    // Initialize memory devices with their device_entry_t to set rwcb_context (no loops)
-    ram_memory_init(c64->ram, &c64->system.devices[ids[2]]);
+    c64_pla_maps_generate(c64);    // Initialize memory devices with their chip_entry_t to set rwcb_context (no loops)
+    ram_memory_init(c64->ram, &c64->system.chips[ids[2]]);
     
     // Initialize ROM devices with their address and size information
-    // Pass device_entry_t so ROM can set its own rwcb_context
-    rom_memory_init(c64->basic, 0xA000, 8192, &c64->system.devices[ids[8]]);
-    rom_memory_init(c64->kernal, 0xE000, 8192, &c64->system.devices[ids[9]]);
-    rom_memory_init(c64->cartridge, 0x8000, 16384, &c64->system.devices[ids[10]]);
+    // Pass chip_entry_t so ROM can set its own rwcb_context
+    rom_memory_init(c64->basic, 0xA000, 8192, &c64->system.chips[ids[8]]);
+    rom_memory_init(c64->kernal, 0xE000, 8192, &c64->system.chips[ids[9]]);
+    rom_memory_init(c64->cartridge, 0x8000, 16384, &c64->system.chips[ids[10]]);
     
     // Set default memory contents TODO : Read from file?
     c64_memory_init(&c64->system);

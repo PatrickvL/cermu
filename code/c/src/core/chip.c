@@ -1,4 +1,4 @@
-#include "device.h"
+#include "chip.h"
 
 // ============================================================================
 // GENERIC STUB FUNCTIONS

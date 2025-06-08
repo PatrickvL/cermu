@@ -36,11 +36,11 @@ void c64_bus_memory_write(c64_bus_t* c64_bus, uint16_t address, uint8_t value) {
     }
 }
 
-void c64_bus_system_destroy(void* device) {
-    free(device);
+void c64_bus_system_destroy(void* chip) {
+    free(chip);
 }
 
-void* c64_bus_system_create(device_descriptor_t* desc) {
+void* c64_bus_system_create(chip_descriptor_t* desc) {
     c64_bus_t* c64_bus = (c64_bus_t*)calloc(1, sizeof(c64_bus_t));
     if (!c64_bus) return NULL;
     c64_bus->desc = desc;
@@ -59,7 +59,7 @@ void c64_bus_system_attach(c64_bus_t* c64_bus, void* c64) {
     c64_bus->c64 = c64;  // Store as opaque pointer
 }
 
-device_descriptor_t c64_bus_descriptor = {
+chip_descriptor_t c64_bus_descriptor = {
     .create = c64_bus_system_create,
     .destroy = c64_bus_system_destroy,
     .bus_attach = NULL,

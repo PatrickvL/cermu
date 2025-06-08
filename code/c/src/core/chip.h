@@ -1,34 +1,34 @@
-#ifndef AIEMUC_DEVICE_H
-#define AIEMUC_DEVICE_H
+#ifndef AIEMUC_CHIP_H
+#define AIEMUC_CHIP_H
 
 #include <stdint.h>
 #include <stdbool.h>
 
 // Forward-declare the struct name
-typedef struct device_descriptor_s device_descriptor_t;
+typedef struct chip_descriptor_s chip_descriptor_t;
 
 // Now define it
-struct device_descriptor_s {
-    void* (*create)(device_descriptor_t* desc);
-    void (*destroy)(void* device);
-    void (*bus_attach)(void* device, void* bus);
-    uint8_t (*read)(void* device, uint16_t address);
-    void (*write)(void* device, uint16_t address, uint8_t value);
-    void (*bank_change)(void* device, uint8_t bank);
+struct chip_descriptor_s {
+    void* (*create)(chip_descriptor_t* desc);
+    void (*destroy)(void* chip);
+    void (*bus_attach)(void* chip, void* bus);
+    uint8_t (*read)(void* chip, uint16_t address);
+    void (*write)(void* chip, uint16_t address, uint8_t value);
+    void (*bank_change)(void* chip, uint8_t bank);
 };
 
-typedef uint8_t (*device_read_func_t)(void* context, uint16_t);
-typedef void (*device_write_func_t)(void* context, uint16_t, uint8_t);
+typedef uint8_t (*chip_read_func_t)(void* context, uint16_t);
+typedef void (*chip_write_func_t)(void* context, uint16_t, uint8_t);
 
-// Device registry
+// Chip registry
 typedef struct {
-    void* device;
-    device_descriptor_t* desc;
-    void* rwcb_context; // Context for read and write callbacks. Often the deivce itself, sometimes a buffer or other structure.
+    void* chip;
+    chip_descriptor_t* desc;
+    void* rwcb_context; // Context for read and write callbacks. Often the chip itself, sometimes a buffer or other structure.
     unsigned int size;
     uint16_t base_address;
-    uint8_t device_id;
-} device_entry_t;
+    uint8_t chip_id;
+} chip_entry_t;
 
 // ============================================================================
 // GENERIC STUB FUNCTIONS
@@ -48,4 +48,4 @@ uint8_t generic_stub_read(void* context, uint16_t address);
  */
 void generic_stub_write(void* context, uint16_t address, uint8_t value);
 
-#endif // AIEMUC_DEVICE_H
+#endif // AIEMUC_CHIP_H

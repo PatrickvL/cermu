@@ -1,15 +1,15 @@
 #include "mos6510.h"
-#include "device.h"
+#include "../../../core/chip.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 
 // ============================================================================
-// DEVICE DESCRIPTOR FUNCTIONS
+// CHIP DESCRIPTOR FUNCTIONS
 // ============================================================================
 
-// Device functions for MOS6510
-static void* mos6510_create(device_descriptor_t* desc) {
+// Chip functions for MOS6510
+static void* mos6510_create(chip_descriptor_t* desc) {
     mos6510_t* cpu = malloc(sizeof(mos6510_t));
     if (cpu) {
         cpu->desc = desc;
@@ -18,14 +18,14 @@ static void* mos6510_create(device_descriptor_t* desc) {
     return cpu;
 }
 
-static void mos6510_destroy(void* device) {
-    if (device) {
-        free(device);
+static void mos6510_destroy(void* chip) {
+    if (chip) {
+        free(chip);
     }
 }
 
-uint8_t mos6510_zeropage_read(void* device, uint16_t address) {
-    mos6510_t* cpu = (mos6510_t*)device;
+uint8_t mos6510_zeropage_read(void* chip, uint16_t address) {
+    mos6510_t* cpu = (mos6510_t*)chip;
     
     // Handle MOS6510 zero page I/O ports - addresses $0000 and $0001
     if (address == 0) {
@@ -43,8 +43,8 @@ uint8_t mos6510_zeropage_read(void* device, uint16_t address) {
     }
 }
 
-void mos6510_zeropage_write(void* device, uint16_t address, uint8_t value) {
-    mos6510_t* cpu = (mos6510_t*)device;
+void mos6510_zeropage_write(void* chip, uint16_t address, uint8_t value) {
+    mos6510_t* cpu = (mos6510_t*)chip;
     
     // Handle MOS6510 zero page I/O ports - addresses $0000 and $0001
     if (address <= 1) {
@@ -66,7 +66,7 @@ void mos6510_zeropage_write(void* device, uint16_t address, uint8_t value) {
     }
 }
 
-device_descriptor_t mos6510_descriptor = {
+chip_descriptor_t mos6510_descriptor = {
     .create = mos6510_create,
     .destroy = mos6510_destroy,
     .bus_attach = NULL,

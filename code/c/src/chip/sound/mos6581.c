@@ -2,11 +2,11 @@
 #include <string.h>
 #include <stdlib.h>
 
-void mos6581_system_destroy(void* device) {
-    free(device);
+void mos6581_system_destroy(void* chip) {
+    free(chip);
 }
 
-void* mos6581_system_create(device_descriptor_t* desc) {
+void* mos6581_system_create(chip_descriptor_t* desc) {
     mos6581_t* sid = (mos6581_t*)calloc(1, sizeof(mos6581_t));
     if (!sid) return NULL;
     sid->desc = desc;
@@ -35,7 +35,7 @@ void mos6581_registers_write(void* context, uint16_t address, uint8_t value) {
     if (reg <= 0x18) sid->registers[reg] = value;
 }
 
-device_descriptor_t mos6581_descriptor = {
+chip_descriptor_t mos6581_descriptor = {
     .create = mos6581_system_create,
     .destroy = mos6581_system_destroy,
     .bus_attach = NULL,

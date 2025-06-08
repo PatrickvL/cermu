@@ -1,14 +1,14 @@
 #ifndef MOS6581_H
 #define MOS6581_H
 
-#include "../../core/device.h"
+#include "../../core/chip.h"
 
 // MOS6581, also known as SID (Sound Interface Device),
 // is a sound chip used in the Commodore 64.
 // It provides three oscillators, an envelope generator, and various filters.
 
 typedef struct mos6581_s {
-    device_descriptor_t* desc;
+    chip_descriptor_t* desc;
     uint8_t registers[29];
     uint16_t envelope_counter[3];
     uint8_t envelope_state[3];

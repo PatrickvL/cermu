@@ -2,23 +2,23 @@
 #define SYSTEM_H
 
 #include "aiemuc.h"
-#include "device.h"
+#include "chip.h"
 
-// Unified device access callback - combines read/write with shared context
+// Unified chip access callback - combines read/write with shared context
 typedef struct {
-    device_read_func_t read_func;
-    device_write_func_t write_func;
+    chip_read_func_t read_func;
+    chip_write_func_t write_func;
     void* context;  // Shared context for both read and write operations
 } access_callback_t;
 
 // Generic 8-bit system
 typedef struct {
-    device_entry_t devices[16];
-    uint8_t device_count;
+    chip_entry_t chips[16];
+    uint8_t chip_count;
 } system_8bit_t;
 
 // Function declarations
-uint8_t system_device_register(system_8bit_t* system, void* device, device_descriptor_t* desc, uint16_t base, unsigned int size);
-void system_devices_destroy(system_8bit_t* system);
+uint8_t system_chip_register(system_8bit_t* system, void* chip, chip_descriptor_t* desc, uint16_t base, unsigned int size);
+void system_chips_destroy(system_8bit_t* system);
 
 #endif // SYSTEM_H
