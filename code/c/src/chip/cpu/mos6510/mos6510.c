@@ -1,5 +1,5 @@
 #include "mos6510.h"
-#include "../../../core/device.h"
+#include "device.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
