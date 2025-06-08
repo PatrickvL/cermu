@@ -1,5 +1,4 @@
 #include "rom.h"
-#include "c64.h"
 #include <string.h>
 #include <stdlib.h>
 
