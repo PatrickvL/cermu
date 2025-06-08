@@ -16,15 +16,15 @@ static inline int c64_bus_address_to_bankidx(uint16_t address) {
 
 uint8_t c64_bus_memory_read(c64_bus_t* c64_bus, uint16_t address) {
     int bankidx = c64_bus_address_to_bankidx(address);
-    uint8_t devid = DEVID_READ_DECODE(c64_bus->devid_per_bankidx[bankidx]);
-    access_callback_t* cb = &c64_bus->access_callback_per_devid[devid];
+    uint8_t acid = ACID_READ_DECODE(c64_bus->acid_per_bankidx[bankidx]);
+    access_callback_t* cb = &c64_bus->access_callback_per_acid[acid];
     return cb->read_func(cb->context, address);
 }
 
 void c64_bus_memory_write(c64_bus_t* c64_bus, uint16_t address, uint8_t value) {
     int bankidx = c64_bus_address_to_bankidx(address);
-    uint8_t devid = DEVID_WRITE_DECODE(c64_bus->devid_per_bankidx[bankidx]);
-    access_callback_t* cb = &c64_bus->access_callback_per_devid[devid];
+    uint8_t acid = ACID_WRITE_DECODE(c64_bus->acid_per_bankidx[bankidx]);
+    access_callback_t* cb = &c64_bus->access_callback_per_acid[acid];
     cb->write_func(cb->context, address, value);
     // TODO : Move below signalling of VIC-II bank change to somewhere else with less impact on performance
     if (address == 0xDD00) {
@@ -69,8 +69,8 @@ chip_descriptor_t c64_bus_descriptor = {
 };
 
 void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {
-    // Update the device ID mapping for the current mode
-    memcpy(c64_bus->devid_per_bankidx, c64_bus->devid_per_bankidx_per_mode[mode], sizeof(c64_bus->devid_per_bankidx));
+    // Update the ACID mapping for the current mode
+    memcpy(c64_bus->acid_per_bankidx, c64_bus->acid_per_bankidx_per_mode[mode], sizeof(c64_bus->acid_per_bankidx));
 }
 
 uint8_t c64_bus_read_cycle(c64_bus_t *c64_bus, uint16_t addr) {
@@ -94,24 +94,22 @@ void c64_bus_write_cycle(c64_bus_t* c64_bus, uint16_t addr, uint8_t value) {
 void c64_bus_populate_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla,
                                  uint8_t ram_id, uint8_t basic_id, uint8_t kernal_id, 
                                  uint8_t charrom_id, uint8_t io_id, uint8_t cartridge_roml_id, 
-                                 uint8_t cartridge_romh_id, uint8_t colorram_id) {
-    // Clear current mapping
+                                 uint8_t cartridge_romh_id, uint8_t colorram_id) {    // Clear current mapping
     for (int i = 0; i < 32; i++) {
-        bus->devid_per_bankidx[i] = DEVID_UNMAPPED;
+        bus->acid_per_bankidx[i] = ACID_UNMAPPED;
     }
     // Map memory regions based on PLA outputs
     for (uint32_t addr = 0; addr < 0x10000; addr += 0x100) {
         int bank_idx = c64_bus_address_to_bankidx(addr);
-        uint8_t device_id = DEVID_UNMAPPED;
+        uint8_t device_id = ACID_UNMAPPED;
         
         // Set address in PLA
         pla_906114_01_set_address_high((pla_906114_01_t*)pla, (addr >> 8) & 0x0F);
-        
-        // Determine device based on PLA outputs
+          // Determine device based on PLA outputs
         if (!pla->outputs.n_casram) {
             // RAM is selected
             if (addr < 0x0002) {
-                device_id = DEVID_ZEROPAGE;  // Special handling for CPU I/O ports
+                device_id = ACID_ZEROPAGE;  // Special handling for CPU I/O ports
             } else {
                 device_id = ram_id;
             }
@@ -124,13 +122,13 @@ void c64_bus_populate_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla,
         } else if (!pla->outputs.n_io) {
             // I/O region - determine specific device
             if (addr >= 0xD000 && addr < 0xD400) {
-                device_id = DEVID_VIC;
+                device_id = ACID_VIC;
             } else if (addr >= 0xD400 && addr < 0xD800) {
-                device_id = DEVID_SID;
+                device_id = ACID_SID;
             } else if (addr >= 0xD800 && addr < 0xDC00) {
                 device_id = colorram_id;
             } else if (addr >= 0xDC00 && addr < 0xE000) {
-                device_id = DEVID_CIA;
+                device_id = ACID_CIA;
             } else {
                 device_id = io_id;
             }
@@ -140,7 +138,7 @@ void c64_bus_populate_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla,
             device_id = cartridge_romh_id;
         }
         
-        bus->devid_per_bankidx[bank_idx] = device_id;
+        bus->acid_per_bankidx[bank_idx] = device_id;
     }
 }
 
@@ -171,9 +169,8 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla,
           // Populate mapping for this mode
         c64_bus_populate_pla_mapping(bus, pla, ram_id, basic_id, kernal_id, 
                                    charrom_id, io_id, cartridge_roml_id, 
-                                   cartridge_romh_id, colorram_id);
-          // Copy the mapping to the mode-specific array
-        memcpy(bus->devid_per_bankidx_per_mode[mode], bus->devid_per_bankidx, sizeof(bus->devid_per_bankidx));
+                                   cartridge_romh_id, colorram_id);        // Copy the mapping to the mode-specific array
+        memcpy(bus->acid_per_bankidx_per_mode[mode], bus->acid_per_bankidx, sizeof(bus->acid_per_bankidx));
     }
 }
 
