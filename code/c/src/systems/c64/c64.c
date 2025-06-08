@@ -1,4 +1,3 @@
-#include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -134,6 +133,7 @@ void c64_pla_maps_generate(c64_t* c64) {
 // ============================================================================
 
 // Callback for each bus cycle (can be set by test harness)
+// Usually NULL during normal emulation, only set for testing/debugging
 void (*bus_cycle_callback)(void) = NULL;
 
 void c64_non_cpu_cycle(void* c64_ptr) {
@@ -152,8 +152,10 @@ void c64_non_cpu_cycle(void* c64_ptr) {
     } else {
         c64->bus->control_lines &= ~RDY_LINE;
     }
-    // Call the callback if set
-    if (bus_cycle_callback) bus_cycle_callback();
+    // Optimized null check with unlikely hint - callback rarely set during normal emulation
+    if (__builtin_expect(bus_cycle_callback != NULL, 0)) {
+        bus_cycle_callback();
+    }
 }
 
 //
