@@ -4,6 +4,7 @@
 #include "../../core/aiemuc.h"
 #include "../../core/chip.h"
 #include "../../core/system.h"
+#include "../../core/system_lines.h"
 #include "../../core/bus_cycle_interface.h"
 #include "../../core/control_lines_interface.h"
 #include "../../chip/cpu/mos6510/mos6510_io_interface.h"
@@ -58,6 +59,9 @@ typedef struct c64_bus_s {
     uint8_t  data;          // D0-D7
     uint16_t address;       // A0-A15
     
+    // System lines for control signals (includes EXROM and GAME)
+    uint32_t system_lines;  // System-wide control lines including cartridge signals
+    
     // ACID allocation tracking
     uint8_t next_write_acid;    // Next available write-capable ACID (1-7)
     uint8_t next_read_acid;     // Next available read-only ACID (8+)
@@ -74,6 +78,9 @@ typedef struct c64_bus_s {
 } c64_bus_t;
 
 void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode);
+
+// PLA mode generation function - maps CPU I/O port bits + cartridge signals to 5-bit PLA mode
+uint8_t c64_bus_generate_pla_mode(c64_bus_t* c64_bus, uint8_t cpu_port_bits);
 
 // Bus cycle functions
 uint8_t c64_bus_read_cycle(c64_bus_t *bus, uint16_t addr);
