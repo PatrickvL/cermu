@@ -47,9 +47,11 @@ void* c64_bus_system_create(chip_descriptor_t* desc) {
     c64_bus->address = 0;
     c64_bus->data = 0;
     c64_bus->control_lines = BA_LINE | AEC_LINE | RDY_LINE;
-    
-    // Initialize system lines with default cartridge signals (no cartridge)
+      // Initialize system lines with default cartridge signals (no cartridge)
     c64_bus->system_lines = SYS_MASK_EXROM | SYS_MASK_GAME;  // Both high = no cartridge
+    
+    // Initialize CPU port state to default (LORAM=1, HIRAM=1, CHAREN=1)
+    c64_bus->cpu_port_state = 0x07;  // Default CPU port state
     
     // Initialize ACID allocation tracking
     c64_bus_initialize_acids(c64_bus);
@@ -243,6 +245,8 @@ static void c64_control_lines_set(void* context, uint32_t lines) {
 // I/O port adapter functions
 static void c64_io_port_output_changed(void* context, uint8_t ddr, uint8_t port_data, uint8_t effective_output) {
     c64_bus_t* c64_bus = (c64_bus_t*)context;
+    // Store the current CPU port state for use by cartridge functions
+    c64_bus->cpu_port_state = effective_output;
     // Generate proper 5-bit PLA mode from CPU port bits and cartridge signals
     uint8_t pla_mode = c64_bus_generate_pla_mode(c64_bus, effective_output);
     c64_bus_mode_switch(c64_bus, pla_mode);
@@ -333,4 +337,105 @@ uint8_t c64_bus_allocate_acid(c64_bus_t* bus, uint8_t chip_id,
         bus->access_callback_per_acid[allocated_acid].context = context;
     }
       return allocated_acid;
+}
+
+// ============================================================================
+// CARTRIDGE INTERFACE FUNCTIONS - Control EXROM and GAME signals
+// ============================================================================
+
+/**
+ * Set the EXROM signal state for cartridge control.
+ * The EXROM signal controls cartridge ROM visibility and memory mapping.
+ * 
+ * @param c64_bus Pointer to the C64 bus
+ * @param active true = EXROM active (signal low), false = EXROM inactive (signal high)
+ */
+void c64_bus_set_exrom_signal(c64_bus_t* c64_bus, bool active) {
+    if (!c64_bus) return;
+    
+    if (active) {
+        c64_bus->system_lines &= ~SYS_MASK_EXROM;  // Clear bit (signal low)
+    } else {
+        c64_bus->system_lines |= SYS_MASK_EXROM;   // Set bit (signal high)
+    }
+    
+    // Regenerate PLA mode with updated cartridge signals
+    uint8_t pla_mode = c64_bus_generate_pla_mode(c64_bus, c64_bus->cpu_port_state);
+    c64_bus_mode_switch(c64_bus, pla_mode);
+}
+
+/**
+ * Set the GAME signal state for cartridge control.
+ * The GAME signal controls cartridge ROM banking and Ultimax mode.
+ * 
+ * @param c64_bus Pointer to the C64 bus
+ * @param active true = GAME active (signal low), false = GAME inactive (signal high)
+ */
+void c64_bus_set_game_signal(c64_bus_t* c64_bus, bool active) {
+    if (!c64_bus) return;
+    
+    if (active) {
+        c64_bus->system_lines &= ~SYS_MASK_GAME;   // Clear bit (signal low)
+    } else {
+        c64_bus->system_lines |= SYS_MASK_GAME;    // Set bit (signal high)
+    }
+    
+    // Regenerate PLA mode with updated cartridge signals
+    uint8_t pla_mode = c64_bus_generate_pla_mode(c64_bus, c64_bus->cpu_port_state);
+    c64_bus_mode_switch(c64_bus, pla_mode);
+}
+
+/**
+ * Set both EXROM and GAME signals simultaneously for cartridge control.
+ * This is more efficient than calling the individual functions separately.
+ * 
+ * @param c64_bus Pointer to the C64 bus
+ * @param exrom_active true = EXROM active (signal low), false = EXROM inactive (signal high)
+ * @param game_active true = GAME active (signal low), false = GAME inactive (signal high)
+ */
+void c64_bus_set_cartridge_signals(c64_bus_t* c64_bus, bool exrom_active, bool game_active) {
+    if (!c64_bus) return;
+    
+    // Update EXROM signal
+    if (exrom_active) {
+        c64_bus->system_lines &= ~SYS_MASK_EXROM;  // Clear bit (signal low)
+    } else {
+        c64_bus->system_lines |= SYS_MASK_EXROM;   // Set bit (signal high)
+    }
+      // Update GAME signal
+    if (game_active) {
+        c64_bus->system_lines &= ~SYS_MASK_GAME;   // Clear bit (signal low)
+    } else {
+        c64_bus->system_lines |= SYS_MASK_GAME;    // Set bit (signal high)
+    }
+    
+    // Regenerate PLA mode with updated cartridge signals (once for both signals)
+    uint8_t pla_mode = c64_bus_generate_pla_mode(c64_bus, c64_bus->cpu_port_state);
+    c64_bus_mode_switch(c64_bus, pla_mode);
+}
+
+/**
+ * Get the current EXROM signal state.
+ * 
+ * @param c64_bus Pointer to the C64 bus
+ * @return true = EXROM active (signal low), false = EXROM inactive (signal high)
+ */
+bool c64_bus_get_exrom_signal(c64_bus_t* c64_bus) {
+    if (!c64_bus) return false;
+    
+    // Return inverted state (bit set = signal high = inactive)
+    return (c64_bus->system_lines & SYS_MASK_EXROM) == 0;
+}
+
+/**
+ * Get the current GAME signal state.
+ * 
+ * @param c64_bus Pointer to the C64 bus
+ * @return true = GAME active (signal low), false = GAME inactive (signal high)
+ */
+bool c64_bus_get_game_signal(c64_bus_t* c64_bus) {
+    if (!c64_bus) return false;
+    
+    // Return inverted state (bit set = signal high = inactive)
+    return (c64_bus->system_lines & SYS_MASK_GAME) == 0;
 }
