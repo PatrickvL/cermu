@@ -1,4 +1,5 @@
 #include "mos6510.h"
+#include "../../../core/device.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -35,14 +36,10 @@ uint8_t mos6510_zeropage_read(void* device, uint16_t address) {
         uint8_t ddr = cpu->io_port[0];
         uint8_t data = cpu->io_port[1];
         uint8_t external = cpu->io_interface.read_external_pins(cpu->io_interface.context);
-        return (data & ddr) | (external & ~ddr);    } else {
+        return (data & ddr) | (external & ~ddr);
+    } else {
         // For addresses $0002-$00FF, access system RAM directly to avoid circular dependency
-        if (cpu->ram_access.read_func) {
-            return cpu->ram_access.read_func(cpu->ram_access.context, address);
-        } else {
-            // Fallback to bus interface if RAM not attached yet (during initialization)
-            return cpu->bus_interface.bus_read(cpu->bus_interface.context, address);
-        }
+        return cpu->ram_access.read_func(cpu->ram_access.context, address);
     }
 }
 
@@ -131,17 +128,11 @@ void mos6510_init(mos6510_t* cpu) {
     cpu->io_port[1] = 0x37;  // Default I/O Port Data (at $0001)
     // Note, that this value will be communicated to the rest of the system via the bus
     // when the bus is attached to the CPU (see mos6510_bus_attach).
-      // Initialize RAM accessors to NULL (will be set by mos6510_attach_ram)
+    // Initialize RAM accessors to NULL (will be set by mos6510_attach_ram)
     cpu->ram_access.context = NULL;
-    cpu->ram_access.read_func = NULL;
-    cpu->ram_access.write_func = NULL;
+    cpu->ram_access.read_func = generic_stub_read;
+    cpu->ram_access.write_func = generic_stub_write;
 }
-
-//
-
-//
-
-//
 
 void mos6510_nmi(mos6510_t* cpu) {
     mos6510_interrupt_sequence(cpu, cpu->p & ~FLAG_B, 0xFFFA);
@@ -552,6 +543,7 @@ void mos6510_attach_ram(mos6510_t* cpu, void* ram_context,
     
     // Store RAM access interface using consolidated structure
     cpu->ram_access.context = ram_context;
-    cpu->ram_access.read_func = ram_read;
-    cpu->ram_access.write_func = ram_write;
+    // Assign read/write functions, falling back to stubs if not provided
+    cpu->ram_access.read_func = ram_read ? ram_read : generic_stub_read;
+    cpu->ram_access.write_func = ram_write ? ram_write : generic_stub_write;
 }

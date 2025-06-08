@@ -30,4 +30,22 @@ typedef struct {
     uint8_t device_id;
 } device_entry_t;
 
+// ============================================================================
+// GENERIC STUB FUNCTIONS
+// ============================================================================
+
+/**
+ * Generic stub read function for unattached callbacks.
+ * Returns 0x00 for any read operation.
+ * Use this to eliminate null checks in high-frequency code paths.
+ */
+uint8_t generic_stub_read(void* context, uint16_t address);
+
+/**
+ * Generic stub write function for unattached callbacks.
+ * Does nothing for any write operation.
+ * Use this to eliminate null checks in high-frequency code paths.
+ */
+void generic_stub_write(void* context, uint16_t address, uint8_t value);
+
 #endif // AIEMUC_DEVICE_H
