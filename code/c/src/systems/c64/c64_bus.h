@@ -65,4 +65,21 @@ void c64_bus_memory_write(c64_bus_t *bus, uint16_t address, uint8_t value);
 // System functions  
 void c64_bus_system_attach(c64_bus_t* c64_bus, void* c64);  // c64_t*
 
+// Forward declaration for PLA
+struct pla_906114_01_s;
+
+// PLA-based bus mapping functions
+void c64_bus_populate_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla, 
+                                 uint8_t ram_id, uint8_t basic_id, uint8_t kernal_id, 
+                                 uint8_t charrom_id, uint8_t io_id, uint8_t cartridge_roml_id, 
+                                 uint8_t cartridge_romh_id, uint8_t colorram_id);
+
+// Generate all 32 memory modes using PLA
+void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla,
+                                   uint8_t ram_id, uint8_t basic_id, uint8_t kernal_id,
+                                   uint8_t charrom_id, uint8_t io_id, uint8_t cartridge_roml_id,
+                                   uint8_t cartridge_romh_id, uint8_t colorram_id);
+
+extern device_descriptor_t c64_bus_descriptor;
+
 #endif // C64_BUS_H

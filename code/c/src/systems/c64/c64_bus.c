@@ -82,4 +82,93 @@ void c64_bus_write_cycle(c64_bus_t* c64_bus, uint16_t addr, uint8_t value) {
     c64_bus->data = value; // Perhaps this is no longer needed
     c64_bus_memory_write(c64_bus, addr, value);
     c64_non_cpu_cycle(c64_bus->c64);
-}        
+}
+
+// PLA integration functions
+#include "../../chip/logic/pla.h"
+
+void c64_bus_populate_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla,
+                                 uint8_t ram_id, uint8_t basic_id, uint8_t kernal_id, 
+                                 uint8_t charrom_id, uint8_t io_id, uint8_t cartridge_roml_id, 
+                                 uint8_t cartridge_romh_id, uint8_t colorram_id) {
+    // Clear current mapping
+    for (int i = 0; i < 32; i++) {
+        bus->devid_per_bankidx[i] = DEVID_UNMAPPED;
+    }      // Map memory regions based on PLA outputs
+    for (uint32_t addr = 0; addr < 0x10000; addr += 0x100) {
+        int bank_idx = c64_bus_address_to_bankidx(addr);
+        uint8_t device_id = DEVID_UNMAPPED;
+        
+        // Set address in PLA
+        pla_906114_01_set_address_high((pla_906114_01_t*)pla, (addr >> 8) & 0x0F);
+        
+        // Determine device based on PLA outputs
+        if (!pla->outputs.n_casram) {
+            // RAM is selected
+            if (addr < 0x0002) {
+                device_id = DEVID_ZEROPAGE;  // Special handling for CPU I/O ports
+            } else {
+                device_id = ram_id;
+            }
+        } else if (!pla->outputs.n_basic) {
+            device_id = basic_id;
+        } else if (!pla->outputs.n_kernal) {
+            device_id = kernal_id;
+        } else if (!pla->outputs.n_charrom) {
+            device_id = charrom_id;
+        } else if (!pla->outputs.n_io) {
+            // I/O region - determine specific device
+            if (addr >= 0xD000 && addr < 0xD400) {
+                device_id = DEVID_VIC;
+            } else if (addr >= 0xD400 && addr < 0xD800) {
+                device_id = DEVID_SID;
+            } else if (addr >= 0xD800 && addr < 0xDC00) {
+                device_id = colorram_id;
+            } else if (addr >= 0xDC00 && addr < 0xE000) {
+                device_id = DEVID_CIA;
+            } else {
+                device_id = io_id;
+            }
+        } else if (!pla->outputs.n_roml) {
+            device_id = cartridge_roml_id;
+        } else if (!pla->outputs.n_romh) {
+            device_id = cartridge_romh_id;
+        }
+        
+        bus->devid_per_bankidx[bank_idx] = device_id;
+    }
+}
+
+void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla,
+                                   uint8_t ram_id, uint8_t basic_id, uint8_t kernal_id,
+                                   uint8_t charrom_id, uint8_t io_id, uint8_t cartridge_roml_id,
+                                   uint8_t cartridge_romh_id, uint8_t colorram_id) {
+    pla_906114_01_t* pla_impl = (pla_906114_01_t*)pla;
+    
+    // Generate all 32 memory modes (5-bit combinations of LORAM, HIRAM, CHAREN, EXROM, GAME)
+    for (int mode = 0; mode < 32; mode++) {
+        // Set PLA inputs based on mode
+        pla_impl->inputs.n_loram = (mode & 0x01) == 0;    // LORAM (inverted)
+        pla_impl->inputs.n_hiram = (mode & 0x02) == 0;    // HIRAM (inverted)
+        pla_impl->inputs.n_charen = (mode & 0x04) == 0;   // CHAREN (inverted)
+        pla_impl->inputs.n_exrom = (mode & 0x08) == 0;    // EXROM (inverted)
+        pla_impl->inputs.n_game = (mode & 0x10) == 0;     // GAME (inverted)
+        
+        // Set other inputs for normal CPU operation
+        pla_impl->inputs.aec = true;     // CPU has bus control
+        pla_impl->inputs.ba = true;      // Bus available
+        pla_impl->inputs.r_w = true;     // Read mode
+        pla_impl->inputs.n_cas = true;   // No CAS
+        pla_impl->inputs.n_va14 = true;  // VA14 high
+        pla_impl->inputs.va13 = false;   // VA13 low
+        pla_impl->inputs.va12 = false;   // VA12 low
+        pla_impl->inputs.n_ce = false;   // Chip enabled
+          // Populate mapping for this mode
+        c64_bus_populate_pla_mapping(bus, pla, ram_id, basic_id, kernal_id, 
+                                   charrom_id, io_id, cartridge_roml_id, 
+                                   cartridge_romh_id, colorram_id);
+        
+        // Copy the mapping to the mode-specific array
+        memcpy(bus->devid_per_bankidx_per_mode[mode], bus->devid_per_bankidx, sizeof(bus->devid_per_bankidx));
+    }
+}

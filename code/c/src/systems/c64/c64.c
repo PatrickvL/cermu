@@ -14,6 +14,7 @@
 #include "../../chip/memory/ram.h"
 #include "../../chip/memory/rom.h"
 #include "../../chip/memory/mos2114.h" // colorram
+#include "../../chip/logic/pla.h" // PLA for memory mapping
 
 static uint8_t initial_ram[65536] = {0};
 static uint8_t basic_rom[8192] = {0};
@@ -96,7 +97,8 @@ void c64_callbacks_init(c64_t* c64) {
 void c64_pla_maps_generate(c64_t* c64) {
     system_8bit_t* system = &c64->system;
     c64_bus_t* bus = c64->bus;
-      // Find device IDs for different memory types
+    
+    // Find device IDs for different memory types
     uint8_t ram_id = 0, basic_id = 0, kernal_id = 0, cartridge_id = 0;
     for (int i = 0; i < system->device_count; i++) {
         device_entry_t* dev = &system->devices[i];
@@ -106,25 +108,39 @@ void c64_pla_maps_generate(c64_t* c64) {
         else if (dev->base_address == 0x8000) cartridge_id = i;
     }
     
-    // Suppress unused variable warnings for future expansion
-    (void)basic_id;
-    (void)kernal_id;
-    (void)cartridge_id;
-    
-    // Initialize simple bank mapping - using current bus structure
-    // For now, just set up basic memory mapping using devid_per_bankidx
-    for (int mode = 0; mode < 32; mode++) {
-        for (int bankidx = 0; bankidx < 32; bankidx++) {
-            // Default to RAM device ID, encoded for both read and write
-            uint8_t devid = DEVIDS_RW_ENCODE(ram_id, ram_id);
-            bus->devid_per_bankidx_per_mode[mode][bankidx] = devid;
+    // Create a temporary PLA instance for generating memory maps
+    pla_906114_01_t* pla = (pla_906114_01_t*)pla_906114_01_create(&pla_906114_01_descriptor);
+    if (!pla) {
+        // Fallback to simple mapping if PLA creation fails
+        for (int mode = 0; mode < 32; mode++) {
+            for (int bankidx = 0; bankidx < 32; bankidx++) {
+                uint8_t devid = DEVIDS_RW_ENCODE(ram_id, ram_id);
+                bus->devid_per_bankidx_per_mode[mode][bankidx] = devid;
+            }
         }
+        return;
     }
     
-    // Set initial bank mapping
+    // Use proper device IDs based on predefined constants
+    // Some devices may not be registered yet, use predefined IDs where appropriate
+    uint8_t charrom_id = DEVID_UNMAPPED;  // Character ROM might not be a separate device
+    uint8_t io_id = DEVID_VIC;           // Default I/O to VIC for unmapped I/O space
+    uint8_t cartridge_roml_id = cartridge_id; // Low cartridge ROM
+    uint8_t cartridge_romh_id = cartridge_id; // High cartridge ROM  
+    uint8_t colorram_id = DEVID_COLORRAM; // Color RAM
+    
+    // Generate all 32 memory modes using PLA
+    c64_bus_generate_all_pla_modes(bus, (struct pla_906114_01_s*)pla,
+                                  ram_id, basic_id, kernal_id,
+                                  charrom_id, io_id, cartridge_roml_id,
+                                  cartridge_romh_id, colorram_id);
+    
+    // Clean up PLA instance
+    pla_906114_01_destroy(pla);
+    
+    // Set initial bank mapping to mode 0 (all signals high)
     for (int bankidx = 0; bankidx < 32; bankidx++) {
-        uint8_t devid = DEVIDS_RW_ENCODE(ram_id, ram_id);
-        bus->devid_per_bankidx[bankidx] = devid;
+        bus->devid_per_bankidx[bankidx] = bus->devid_per_bankidx_per_mode[0][bankidx];
     }
 }
 
