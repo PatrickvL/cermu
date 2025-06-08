@@ -15,6 +15,7 @@ void* mos6581_system_create(device_descriptor_t* desc) {
 
 uint8_t mos6581_registers_read(void* context, uint16_t address) {
     mos6581_t* sid = (mos6581_t*)context;
+    // SID has 32 registers that mirror throughout its address space
     uint8_t reg = address & 0x1F;
     if (reg >= 0x19 && reg <= 0x1C) {
         switch (reg) {
@@ -29,6 +30,7 @@ uint8_t mos6581_registers_read(void* context, uint16_t address) {
 
 void mos6581_registers_write(void* context, uint16_t address, uint8_t value) {
     mos6581_t* sid = (mos6581_t*)context;
+    // SID has 32 registers that mirror throughout its address space
     uint8_t reg = address & 0x1F;
     if (reg <= 0x18) sid->registers[reg] = value;
 }

@@ -22,6 +22,7 @@ void mos6526_bus_attach(void* device, void* bus) {
 
 uint8_t mos6526_registers_read(void* context, uint16_t address) {
     mos6526_t* cia = (mos6526_t*)context;
+    // CIA has 16 registers that mirror throughout its address space
     uint8_t reg = address & 0xF;
     switch (reg) {
         case 0x0: return cia->pra & cia->ddra;
@@ -58,6 +59,7 @@ uint8_t mos6526_registers_read(void* context, uint16_t address) {
 
 void mos6526_registers_write(void* context, uint16_t address, uint8_t value) {
     mos6526_t* cia = (mos6526_t*)context;
+    // CIA has 16 registers that mirror throughout its address space
     uint8_t reg = address & 0xF;
     switch (reg) {
         case 0x0:
