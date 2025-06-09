@@ -9,30 +9,55 @@
  * All chips map their pins to these positions.
  */
 
+/*
+ * Reordered system lines:
+ * A0-A15 first, D0-D7 next, then common control lines, then seldom lines.
+ */
+
+// Address bus (16 bits starting at bit 0)
+// A0-A15
+#define SYS_LINE_A0         0
+#define SYS_LINE_A1         1
+#define SYS_LINE_A2         2
+#define SYS_LINE_A3         3
+#define SYS_LINE_A4         4
+#define SYS_LINE_A5         5
+#define SYS_LINE_A6         6
+#define SYS_LINE_A7         7
+#define SYS_LINE_A8         8
+#define SYS_LINE_A9         9
+#define SYS_LINE_A10        10
+#define SYS_LINE_A11        11
+#define SYS_LINE_A12        12
+#define SYS_LINE_A13        13
+#define SYS_LINE_A14        14
+#define SYS_LINE_A15        15
+
+// Data bus (8 bits starting at bit 16)
+// D0-D7
+#define SYS_LINE_D0         16
+#define SYS_LINE_D1         17
+#define SYS_LINE_D2         18
+#define SYS_LINE_D3         19
+#define SYS_LINE_D4         20
+#define SYS_LINE_D5         21
+#define SYS_LINE_D6         22
+#define SYS_LINE_D7         23
+
 // Control lines (shared across most chips)
-#define SYS_LINE_IRQ        0   // IRQ line (bit 0)
-#define SYS_LINE_NMI        1   // NMI line (bit 1)
-#define SYS_LINE_RESET      2   // RESET line (bit 2)
-#define SYS_LINE_BA         3   // Bus Available (bit 3)
-#define SYS_LINE_AEC        4   // Address Enable Control (bit 4)
-#define SYS_LINE_RDY        5   // Ready (bit 5)
-#define SYS_LINE_EXROM      6   // EXROM (bit 6) - C64 cartridge control signal
-#define SYS_LINE_GAME       7   // GAME (bit 7) - C64 cartridge control signal
+// Most common lines
+#define SYS_LINE_IRQ        24   // IRQ line (bit 24)
+#define SYS_LINE_NMI        25   // NMI line (bit 25)
+#define SYS_LINE_RESET      26   // RESET line (bit 26)
+#define SYS_LINE_BA         27   // Bus Available (bit 27)
+#define SYS_LINE_AEC        28   // Address Enable Control (bit 28)
+#define SYS_LINE_RDY        29   // Ready (bit 29)
 
-// Data bus (8 bits starting at bit 8)
-#define SYS_LINE_D0         8
-#define SYS_LINE_D1         9
-#define SYS_LINE_D2         10
-#define SYS_LINE_D3         11
-#define SYS_LINE_D4         12
-#define SYS_LINE_D5         13
-#define SYS_LINE_D6         14
-#define SYS_LINE_D7         15
+// Cartridge control signals (less common)
+// Seldom lines
+#define SYS_LINE_EXROM      30   // EXROM (bit 30)
+#define SYS_LINE_GAME       31   // GAME (bit 31)
 
-// Address bus (16 bits starting at bit 16)
-#define SYS_LINE_A0         16
-#define SYS_LINE_A1         17
-// ... up to A15 at bit 31
 
 // Bit masks for easy access
 #define SYS_MASK_IRQ        (1U << SYS_LINE_IRQ)
