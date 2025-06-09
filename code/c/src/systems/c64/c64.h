@@ -12,6 +12,7 @@
 #include "../../chip/io/mos6526.h"
 #include "../../chip/video/mos6569.h"
 #include "c64_bus.h"  // Include the bus header to get c64_bus_t definition
+#include "system_config.h"
 
 // No forward declarations needed - all types are defined in included headers
 
@@ -33,7 +34,7 @@ typedef struct c64_s {
 } c64_t;
 
 // Function declarations
-c64_t* c64_system_create(void);
+c64_t* c64_system_create(const system_config_t* config);
 void c64_system_destroy(c64_t* c64);
 void c64_non_cpu_cycle(void* c64);  // c64_t* - using void* for consistency
 void c64_pla_maps_generate(c64_t* c64);  // PLA memory mapping generation
