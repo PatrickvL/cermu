@@ -7,7 +7,12 @@
  * PAL VIC-II (MOS6569) lifecycle and bus attach wrappers
  */
 void* mos6569_system_create(chip_descriptor_t* desc) {
-    return vicii_common_system_create(desc, mos6569_bank_change);
+    vicii_common_t* vicii = vicii_common_system_create(desc, mos6569_bank_change);
+    if (vicii) {
+        vicii->cycles_per_line = MOS6569_CYCLES_PER_LINE;
+        vicii->total_lines    = MOS6569_TOTAL_LINES;
+    }
+    return vicii;
 }
 
 void mos6569_system_destroy(void* chip) {
@@ -52,5 +57,5 @@ chip_descriptor_t mos6569_descriptor = {
  * PAL cycle logic: delegate to common with PAL timing constants
  */
 void mos6569_cycle(mos6569_t* vicii) {
-    vicii_common_cycle((vicii_common_t*)vicii, MOS6569_CYCLES_PER_LINE, MOS6569_TOTAL_LINES);
+    vicii_common_cycle((vicii_common_t*)vicii);
 }

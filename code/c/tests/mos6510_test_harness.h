@@ -3,6 +3,7 @@
 
 #include "mos6510.h"
 #include "c64.h"
+#include "system_config.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>

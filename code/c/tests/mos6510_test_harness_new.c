@@ -12,7 +12,10 @@ test_harness_t* test_harness_create(void) {
         return NULL;
     }
 
-    harness->c64 = c64_system_create();
+    system_config_t config = {
+        .vic_standard = VIC_PAL
+    };
+    harness->c64 = c64_system_create(&config);
     if (!harness->c64) {
         fprintf(stderr, "Failed to create C64 system\n");
         free(harness);
