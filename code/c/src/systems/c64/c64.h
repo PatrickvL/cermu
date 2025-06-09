@@ -10,6 +10,8 @@
 #include "../../chip/memory/mos2114.h"
 #include "../../chip/sound/mos6581.h"
 #include "../../chip/io/mos6526.h"
+#include "../../chip/video/vicii_common.h"
+#include "../../chip/video/mos6567.h"
 #include "../../chip/video/mos6569.h"
 #include "c64_bus.h"  // Include the bus header to get c64_bus_t definition
 #include "system_config.h"
@@ -27,7 +29,7 @@ typedef struct c64_s {
     mos6526_t* cia1;
     mos6526_t* cia2;
     mos2114_t* colorram;
-    mos6569_t* vicii;
+    vicii_common_t* vicii; // mos6567_t (NTSC) or mos6569_t (PAL)
     rom_t* cartridge;
     rom_t* kernal;
     uint64_t total_cycles;  // Total cycles executed by the system

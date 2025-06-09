@@ -9,8 +9,9 @@
 #include "../../chip/cpu/mos6510/mos6510.h" // cpu
 #include "../../chip/io/mos6526.h" // cia
 #include "../../chip/sound/mos6581.h" // sid
-#include "../../chip/video/mos6569.h" // vicii
-#include "../../chip/video/mos6597.h" // vicii NTSC stub
+#include "../../chip/video/mos6569.h" // vicii PAL
+#include "../../chip/video/mos6567.h" // vicii NTSC stub
+#include "../../chip/video/vicii_common.h"
 #include "../../chip/memory/ram.h"
 #include "../../chip/memory/rom.h"
 #include "../../chip/memory/mos2114.h" // colorram
@@ -23,7 +24,7 @@ extern chip_descriptor_t c64_bus_descriptor;
 extern chip_descriptor_t mos6526_descriptor;
 extern chip_descriptor_t mos6581_descriptor;
 extern chip_descriptor_t mos6569_descriptor;
-extern chip_descriptor_t mos6597_descriptor;
+extern chip_descriptor_t mos6567_descriptor;
 extern chip_descriptor_t ram_descriptor;
 extern chip_descriptor_t rom_descriptor;
 
@@ -147,7 +148,7 @@ void c64_non_cpu_cycle(void* c64_ptr) {
     mos6581_cycle(c64->sid);
     mos6526_cycle(c64->cia1);
     mos6526_cycle(c64->cia2);
-    mos6569_cycle(c64->vicii);
+    vicii_common_cycle(c64->vicii);
     
     // Update RDY line based on BA (hardware accurate)
     if (c64->bus->control_lines & BA_LINE) {
@@ -181,7 +182,7 @@ c64_t* c64_system_create(const system_config_t* config) {
         &mos6526_descriptor,
         &mos6526_descriptor,
         &mos6581_descriptor,
-        (config->vic_standard == VIC_PAL ? &mos6569_descriptor : &mos6597_descriptor),
+        (config->vic_standard == VIC_PAL ? &mos6569_descriptor : &mos6567_descriptor),
         &mos2114_descriptor,
         &rom_descriptor,
         &rom_descriptor,

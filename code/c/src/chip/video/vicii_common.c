@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-void* vicii_common_system_create(chip_descriptor_t* desc, void (*bank_change)(void*, uint8_t)) {
+vicii_common_t* vicii_common_system_create(chip_descriptor_t* desc, void (*bank_change)(void*, uint8_t)) {
     vicii_common_t* vicii = (vicii_common_t*)calloc(1, sizeof(vicii_common_t));
     if (!vicii) return NULL;
     vicii->desc = desc;
@@ -51,13 +51,13 @@ void vicii_common_bank_change(void* chip, uint8_t bank) {
     vicii->bank = bank;
 }
 
-void vicii_common_cycle(vicii_common_t* vicii, uint8_t cycles_per_line, uint16_t total_lines) {
+void vicii_common_cycle(vicii_common_t* vicii) {
     // Raster timing advance
     vicii->raster_cycle++;
-    if (vicii->raster_cycle >= cycles_per_line) {
+    if (vicii->raster_cycle >= vicii->cycles_per_line) {
         vicii->raster_cycle = 0;
         vicii->raster_line++;
-        if (vicii->raster_line >= total_lines) vicii->raster_line = 0;
+        if (vicii->raster_line >= vicii->total_lines) vicii->raster_line = 0;
     }
 
     // Badline detection
