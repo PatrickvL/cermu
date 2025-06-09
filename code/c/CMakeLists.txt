@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.16)
 project(aiemuc 
     VERSION 0.1.0
     DESCRIPTION "C64 Emulator - C implementation"
-    LANGUAGES C
+    LANGUAGES C CXX
 )
 
 # Set C standard
@@ -47,6 +47,24 @@ else()
     endif()
 endif()
 
+# Find required packages for GUI (optional)
+find_package(PkgConfig QUIET)
+if (PkgConfig_FOUND)
+    pkg_check_modules(SDL2 sdl2)
+    find_package(OpenGL QUIET)
+else()
+    set(SDL2_FOUND FALSE)
+    set(OpenGL_FOUND FALSE)
+endif()
+
+if(SDL2_FOUND AND OpenGL_FOUND)
+    message(STATUS "SDL2 and OpenGL found - GUI will be built")
+    set(BUILD_GUI TRUE)
+else()
+    message(STATUS "SDL2 or OpenGL not found - GUI will be skipped")
+    set(BUILD_GUI FALSE)
+endif()
+
 # Include directories
 include_directories(
     ${CMAKE_SOURCE_DIR}/src/core
@@ -58,7 +76,20 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/src/chip/video
     ${CMAKE_SOURCE_DIR}/src/systems/c64
     ${CMAKE_SOURCE_DIR}/src/main
+    ${CMAKE_SOURCE_DIR}/src/gui
+    ${CMAKE_SOURCE_DIR}/external/cimgui
+    ${CMAKE_SOURCE_DIR}/external/cimgui/imgui
+    ${CMAKE_SOURCE_DIR}/external/cimgui/imgui/backends
+    ${SDL2_INCLUDE_DIRS}
 )
+
+# Add cimgui subdirectory if building GUI
+if(BUILD_GUI)
+    # Configure cimgui to build as static library
+    set(IMGUI_STATIC "yes" CACHE STRING "Build as a static library" FORCE)
+    
+    add_subdirectory(external/cimgui)
+endif()
 
 # Core library sources
 set(CORE_SOURCES
@@ -87,6 +118,8 @@ set(CHIP_SOURCES
     
     # Video
     src/chip/video/mos6569.c
+    src/chip/video/mos6567.c
+    src/chip/video/vicii_common.c
 )
 
 # System sources
@@ -95,13 +128,60 @@ set(SYSTEM_SOURCES
     src/systems/c64/c64_bus.c
 )
 
-# Main executable
+# Main executable (console version)
 add_executable(c64emu
     src/main/c64_main.c
     ${CORE_SOURCES}
     ${CHIP_SOURCES}
     ${SYSTEM_SOURCES}
 )
+
+# Set output directory for console executable
+set_target_properties(c64emu
+    PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
+
+# GUI executable (ImGui version) - only if SDL2 and OpenGL are available
+if(BUILD_GUI)
+    # GUI sources (just our interface file - cimgui handles the rest)
+    set(GUI_SOURCES
+        src/gui/cimgui_interface.c
+        src/gui/cimgui_backends.cpp
+    )
+
+    add_executable(c64emu_gui
+        src/main/c64_main_gui.c
+        ${CORE_SOURCES}
+        ${CHIP_SOURCES}
+        ${SYSTEM_SOURCES}
+        ${GUI_SOURCES}
+    )
+
+    # Define CIMGUI_DEFINE_ENUMS_AND_STRUCTS only for our GUI code
+    target_compile_definitions(c64emu_gui PRIVATE CIMGUI_DEFINE_ENUMS_AND_STRUCTS=1)
+    
+    # Disable pedantic warnings for GUI build to work around cimgui header issues
+    target_compile_options(c64emu_gui PRIVATE -Wno-pedantic)
+
+    # Link libraries for GUI version
+    target_link_libraries(c64emu_gui 
+        ${SDL2_LIBRARIES}
+        ${OPENGL_LIBRARIES}
+        ${CMAKE_DL_LIBS}
+        cimgui
+    )
+
+    # Set output directory for GUI executable
+    set_target_properties(c64emu_gui
+        PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    )
+    
+    message(STATUS "GUI executable c64emu_gui will be built")
+else()
+    message(STATUS "GUI executable c64emu_gui will be skipped (missing SDL2 or OpenGL)")
+endif()
 
 # Test executables (currently disabled due to API compatibility issues)
 # add_executable(klaus_test
@@ -146,9 +226,15 @@ set_target_properties(test_mos6510_basic
 )
 
 # Installation
-install(TARGETS c64emu
-    RUNTIME DESTINATION bin
-)
+if(BUILD_GUI)
+    install(TARGETS c64emu c64emu_gui
+        RUNTIME DESTINATION bin
+    )
+else()
+    install(TARGETS c64emu
+        RUNTIME DESTINATION bin
+    )
+endif()
 
 # Enable testing
 enable_testing()
