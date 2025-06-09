@@ -5,10 +5,12 @@
 #include "../../core/system.h"
 #include "c64.h"
 #include "c64_bus.h"
+#include "system_config.h"
 #include "../../chip/cpu/mos6510/mos6510.h" // cpu
 #include "../../chip/io/mos6526.h" // cia
 #include "../../chip/sound/mos6581.h" // sid
 #include "../../chip/video/mos6569.h" // vicii
+#include "../../chip/video/mos6597.h" // vicii NTSC stub
 #include "../../chip/memory/ram.h"
 #include "../../chip/memory/rom.h"
 #include "../../chip/memory/mos2114.h" // colorram
@@ -21,6 +23,7 @@ extern chip_descriptor_t c64_bus_descriptor;
 extern chip_descriptor_t mos6526_descriptor;
 extern chip_descriptor_t mos6581_descriptor;
 extern chip_descriptor_t mos6569_descriptor;
+extern chip_descriptor_t mos6597_descriptor;
 extern chip_descriptor_t ram_descriptor;
 extern chip_descriptor_t rom_descriptor;
 
@@ -167,7 +170,7 @@ void c64_system_destroy(c64_t* c64) {
     free(c64);
 }
 
-c64_t* c64_system_create() {
+c64_t* c64_system_create(const system_config_t* config) {
     c64_t* c64 = malloc(sizeof(c64_t));
     if (!c64) return NULL;
 
@@ -178,7 +181,7 @@ c64_t* c64_system_create() {
         &mos6526_descriptor,
         &mos6526_descriptor,
         &mos6581_descriptor,
-        &mos6569_descriptor,
+        (config->vic_standard == VIC_PAL ? &mos6569_descriptor : &mos6597_descriptor),
         &mos2114_descriptor,
         &rom_descriptor,
         &rom_descriptor,
