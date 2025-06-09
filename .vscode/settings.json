@@ -7,6 +7,8 @@
         "stdbool.h": "c",
         "device.h": "c",
         "stdint.h": "c",
-        "mos6569.h": "c"
+        "mos6569.h": "c",
+        "vicii_common.h": "c",
+        "mos6567.h": "c"
     }
 }
