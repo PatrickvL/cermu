@@ -972,8 +972,6 @@ void mos6510_attach_bus_interface(mos6510_t* cpu, const bus_cycle_ops_t* bus_int
 void mos6510_attach_control_lines_interface(mos6510_t* cpu, const control_lines_interface_t* control_interface);
 void mos6510_attach_io_interface(mos6510_t* cpu, const mos6510_io_port_interface_t* io_interface);
 void mos6510_attach_system_lines(mos6510_t* cpu, system_lines_t* system_lines);
-void mos6510_attach_ram(mos6510_t* cpu, void* ram_context, 
-                        uint8_t (*ram_read)(void*, uint16_t), 
-                        void (*ram_write)(void*, uint16_t, uint8_t));
+void mos6510_attach_ram(mos6510_t* cpu, const access_callback_t* ram_access);
 
 #endif // MOS6510_H
