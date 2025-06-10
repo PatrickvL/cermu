@@ -73,22 +73,39 @@ void c64_callbacks_init(c64_t* c64) {
 void c64_pla_maps_generate(c64_t* c64) {
     system_8bit_t* system = &c64->system;
     c64_bus_t* bus = c64->bus;
-      // Find chip IDs for different memory types
-    uint8_t ram_chip_id = 0, basic_chip_id = 0, kernal_chip_id = 0, cartridge_chip_id = 0;
-    for (int i = 0; i < system->chip_count; i++) {
+    // Find chip IDs for different memory types
+    uint8_t ram_chip_id = 0, basic_chip_id = 0, kernal_chip_id = 0;
+    uint8_t cartridge_roml_chip_id = 0, cartridge_romh_chip_id = 0, charrom_chip_id = 0;
+      for (int i = 0; i < system->chip_count; i++) {
         chip_entry_t* dev = &system->chips[i];
-        if (dev->desc == &ram_descriptor) ram_chip_id = i;
+        if (dev->desc == &ram_descriptor) {
+            ram_chip_id = i;
+        }
         // TODO : Generalize this to allow for any chip id
-        else if (dev->base_address == 0xA000) basic_chip_id = i;
-        else if (dev->base_address == 0xE000) kernal_chip_id = i;
-        else if (dev->base_address == 0x8000) cartridge_chip_id = i;
+        else if (dev->base_address == 0xA000 && dev->size == 8192) {
+            basic_chip_id = i;  // BASIC ROM at $A000-$BFFF
+        }
+        else if (dev->base_address == 0xE000) {
+            kernal_chip_id = i;
+        }
+        else if (dev->base_address == 0x8000) {
+            cartridge_roml_chip_id = i;  // Cartridge ROM Low at $8000-$9FFF
+        } 
+        else if (dev->base_address == 0xC000) {
+            cartridge_romh_chip_id = i;  // Cartridge ROM High at $C000-$DFFF
+        }
+        else if (dev->base_address == 0xD000 && dev->size == 4096) {
+            charrom_chip_id = i;  // Character ROM at $D000-$DFFF
+        }
     }
-    
+
     // Convert chip IDs to ACIDs using the mapping
     uint8_t ram_acid = bus->chip_id_to_acid[ram_chip_id];
     uint8_t basic_acid = bus->chip_id_to_acid[basic_chip_id];
     uint8_t kernal_acid = bus->chip_id_to_acid[kernal_chip_id];
-    uint8_t cartridge_acid = bus->chip_id_to_acid[cartridge_chip_id];
+    uint8_t cartridge_roml_acid = bus->chip_id_to_acid[cartridge_roml_chip_id];
+    uint8_t cartridge_romh_acid = bus->chip_id_to_acid[cartridge_romh_chip_id];
+    uint8_t charrom_acid = bus->chip_id_to_acid[charrom_chip_id];
     
     // Create a temporary PLA instance for generating memory maps
     pla_906114_01_t* pla = pla_906114_01_create();
@@ -100,13 +117,11 @@ void c64_pla_maps_generate(c64_t* c64) {
                 bus->acid_per_bankidx_per_mode[mode][bankidx] = acid;
             }
         }
-        return;    }
-    
-    // Use proper ACIDs based on allocated values    // Some chips may not be registered yet, use predefined constants where appropriate
-    uint8_t charrom_acid = ACID_UNMAPPED;  // Character ROM might not be a separate chip
+        return;
+    }    
+    // Use proper ACIDs based on allocated values
+    // Additional I/O and memory mapping constants
     uint8_t io_acid = ACID_VIC;           // Default I/O to VIC for unmapped I/O space
-    uint8_t cartridge_roml_acid = cartridge_acid; // Low cartridge ROM
-    uint8_t cartridge_romh_acid = cartridge_acid; // High cartridge ROM  
     uint8_t colorram_acid = ACID_COLORRAM; // Color RAM
     
     // Generate all 32 memory modes using PLA
@@ -195,8 +210,10 @@ c64_t* c64_system_create(const system_config_t* config) {
     if (!(c64->bus = create_and_register_chip(c64, &c64_bus_descriptor, 0x0000, 0))) return NULL;
     if (!(c64->ram = create_and_register_chip(c64, &ram_descriptor, 0x0000, 65536))) return NULL;
     if (!(c64->mos6510 = create_and_register_chip(c64, &mos6510_descriptor, 0x0000, 4096))) return NULL;
-    if (!(c64->cartridge = create_and_register_chip(c64, &rom_descriptor, 0x8000, 16384))) return NULL;
+    if (!(c64->cartridge_roml = create_and_register_chip(c64, &rom_descriptor, 0x8000, 8192))) return NULL;
     if (!(c64->basic = create_and_register_chip(c64, &rom_descriptor, 0xA000, 8192))) return NULL;
+    if (!(c64->cartridge_romh = create_and_register_chip(c64, &rom_descriptor, 0xC000, 8192))) return NULL;
+    if (!(c64->charrom = create_and_register_chip(c64, &rom_descriptor, 0xD000, 4096))) return NULL;
     if (!(c64->vicii = create_and_register_chip(c64, vicii_descriptor, 0xD000, 1024))) return NULL;
     if (!(c64->sid = create_and_register_chip(c64, &mos6581_descriptor, 0xD400, 1024))) return NULL;
     if (!(c64->colorram = create_and_register_chip(c64, &mos2114_descriptor, 0xD800, 1024))) return NULL;

@@ -30,7 +30,9 @@ typedef struct c64_s {
     mos6526_t* cia2;
     mos2114_t* colorram;
     vicii_common_t* vicii; // mos6567_t (NTSC) or mos6569_t (PAL)
-    rom_t* cartridge;
+    rom_t* charrom;        // Character ROM $D000-$DFFF (4KB) when CHAREN=0
+    rom_t* cartridge_roml; // Cartridge ROM Low $8000-$9FFF (8KB)
+    rom_t* cartridge_romh; // Cartridge ROM High $A000-$BFFF (8KB)
     rom_t* kernal;
     uint64_t total_cycles;  // Total cycles executed by the system
 } c64_t;
