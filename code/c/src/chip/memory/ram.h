@@ -8,11 +8,10 @@ typedef struct ram_s {
     uint8_t memory[65536];
 } ram_t;
 
-// Function declarations
-void ram_memory_init(void* chip, chip_entry_t* chip_entry);
-
 // Direct RAM access functions
 uint8_t ram_memory_read(void* context, uint16_t address);
 void ram_memory_write(void* context, uint16_t address, uint8_t value);
+
+extern chip_descriptor_t ram_descriptor;
 
 #endif // RAM_H

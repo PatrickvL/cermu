@@ -15,13 +15,10 @@ void mos2114_destroy(void* chip) {
     free(chip);
 }
 
-// Initialize MOS2114 with chip entry information
-void mos2114_memory_init(void* chip, chip_entry_t* chip_entry) {
+// Callback to provide rwcb_context for system registration
+void* mos2114_get_rwcb_context(void* chip) {
     mos2114_t* mos2114 = (mos2114_t*)chip;
-    if (!mos2114 || !chip_entry) return;
-    
-    // Set rwcb_context to memory buffer for direct memory access
-    chip_entry->rwcb_context = mos2114->memory;
+    return mos2114->memory;
 }
 
 uint8_t mos2114_read(void* context, uint16_t address) {
@@ -43,5 +40,6 @@ chip_descriptor_t mos2114_descriptor = {
     .bus_attach = NULL,
     .read = mos2114_read,
     .write = mos2114_write,
-    .bank_change = NULL
+    .bank_change = NULL,
+    .get_rwcb_context = mos2114_get_rwcb_context
 };

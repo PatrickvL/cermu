@@ -19,4 +19,6 @@ typedef struct mos6581_s {
 // Function declarations
 void mos6581_cycle(mos6581_t* sid);
 
+extern chip_descriptor_t mos6581_descriptor;
+
 #endif // MOS6581_H

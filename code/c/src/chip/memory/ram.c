@@ -13,13 +13,10 @@ void ram_system_destroy(void* context) {
     free(context);
 }
 
-// Initialize RAM with chip entry information
-void ram_memory_init(void* chip, chip_entry_t* chip_entry) {
+// Callback to provide rwcb_context for system registration
+void* ram_get_rwcb_context(void* chip) {
     ram_t* ram = (ram_t*)chip;
-    if (!ram || !chip_entry) return;
-    
-    // Set rwcb_context to memory buffer for direct memory access
-    chip_entry->rwcb_context = ram->memory;
+    return ram->memory;
 }
 
 uint8_t ram_memory_read(void* context, uint16_t address) {
@@ -38,5 +35,6 @@ chip_descriptor_t ram_descriptor = {
     .bus_attach = NULL,
     .read = ram_memory_read,
     .write = ram_memory_write,
-    .bank_change = NULL
+    .bank_change = NULL,
+    .get_rwcb_context = ram_get_rwcb_context
 };

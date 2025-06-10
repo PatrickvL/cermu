@@ -20,9 +20,6 @@ extern chip_descriptor_t mos2114_descriptor;
 void* mos2114_create(chip_descriptor_t* desc);
 void mos2114_destroy(void* chip);
 
-// Bus attach function to set up rwcb_context
-void mos2114_memory_init(void* chip, chip_entry_t* chip_entry);
-
 // Read/Write functions
 uint8_t mos2114_read(void* context, uint16_t address);
 void mos2114_write(void* context, uint16_t address, uint8_t value);
