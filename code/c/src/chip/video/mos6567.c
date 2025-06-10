@@ -45,6 +45,7 @@ void mos6567_bank_change(void* chip, uint8_t bank) {
  * Descriptor for NTSC VIC-II
  */
 chip_descriptor_t mos6567_descriptor = {
+    .description = "MOS6567 VIC-II Video Interface Chip (NTSC)",
     .create     = mos6567_system_create,
     .destroy    = mos6567_system_destroy,
     .bus_attach = mos6567_bus_attach,

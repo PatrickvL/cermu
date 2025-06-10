@@ -201,7 +201,7 @@ void c64_system_destroy(c64_t* c64) {
 }
 
 c64_t* c64_system_create(const system_config_t* config) {
-    c64_t* c64 = malloc(sizeof(c64_t));
+    c64_t* c64 = calloc(1, sizeof(c64_t));
     if (!c64) return NULL;
 
     chip_descriptor_t* vicii_descriptor = (config->vic_standard == VIC_PAL ? &mos6569_descriptor : &mos6567_descriptor);

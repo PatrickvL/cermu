@@ -22,7 +22,6 @@ static bool g_should_quit = false;
 bool gui_init(const char* window_title, int width, int height) {
     // Initialize SDL
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0) {
-        printf("Error: %s\n", SDL_GetError());
         return false;
     }
 
@@ -40,13 +39,15 @@ bool gui_init(const char* window_title, int width, int height) {
     SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
     g_window = SDL_CreateWindow(window_title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, width, height, window_flags);
     if (g_window == NULL) {
-        printf("Error: SDL_CreateWindow(): %s\n", SDL_GetError());
         return false;
     }
 
     g_gl_context = SDL_GL_CreateContext(g_window);
     SDL_GL_MakeCurrent(g_window, g_gl_context);
     SDL_GL_SetSwapInterval(1); // Enable vsync
+    
+    // Show the window
+    SDL_ShowWindow(g_window);
 
     // Setup Dear ImGui context
     igCreateContext(NULL);
@@ -753,11 +754,9 @@ void gui_render_screen(c64_t* c64, gui_state_t* gui_state) {
 
 // File handling stubs - implement with platform-specific file dialogs
 void gui_load_rom_file(const char* filepath, const char* type) {
-    printf("Loading %s ROM from: %s\n", type, filepath);
     // TODO: Implement ROM loading
 }
 
 void gui_load_disk_image(const char* filepath) {
-    printf("Loading disk image from: %s\n", filepath);
     // TODO: Implement disk image loading
 }

@@ -9,6 +9,7 @@ typedef struct chip_descriptor_s chip_descriptor_t;
 
 // Now define it
 struct chip_descriptor_s {
+    const char* description;            // Human-readable description for debugging
     void* (*create)(chip_descriptor_t* desc);
     void (*destroy)(void* chip);
     void (*bus_attach)(void* chip, void* bus);

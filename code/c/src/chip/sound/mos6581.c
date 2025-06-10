@@ -36,6 +36,7 @@ void mos6581_registers_write(void* context, uint16_t address, uint8_t value) {
 }
 
 chip_descriptor_t mos6581_descriptor = {
+    .description = "MOS6581 SID Sound Interface Device",
     .create = mos6581_system_create,
     .destroy = mos6581_system_destroy,
     .bus_attach = NULL,

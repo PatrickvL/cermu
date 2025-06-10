@@ -12,9 +12,11 @@ CMakeFiles/
 cmake_install.cmake
 
 # Visual Studio files
+.vs/
+*.sln
+*.vcxproj
 *.vcxproj.user
 *.vcxproj.filters
-.vs/
 
 # Executables
 aiemuc
@@ -25,10 +27,24 @@ c64emu.exe
 # Object files
 *.o
 *.obj
+*.lib
 
 # Debug files
 *.pdb
 *.ilk
+
+*.exp
+
+# Build files
+*.recipe
+*.lastbuildstate
+*.tlog
+
+code/c/CTestTestfile.cmake
+code/c/deps/*
+code/c/c64emu.dir/*
+code/c/c64emu_gui.dir/*
+code/c/cimgui_build/*
 
 # Data files (ROMs, cartridges, disk images) - keep README files
 data/**/*.rom
@@ -53,5 +69,3 @@ code/c/test_ram_consolidation
 code/c/tests/test_pla_clean
 code/c/tests/test_pla_standalone
 code/c/test_ram_consolidation
-
-code/c/deps/*

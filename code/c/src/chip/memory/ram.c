@@ -30,6 +30,7 @@ void ram_memory_write(void* context, uint16_t address, uint8_t value) {
 }
 
 chip_descriptor_t ram_descriptor = {
+    .description = "System RAM (64KB)",
     .create = ram_system_create,
     .destroy = ram_system_destroy,
     .bus_attach = NULL,
