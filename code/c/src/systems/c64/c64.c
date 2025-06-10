@@ -1,6 +1,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "../../core/aiemuc.h"
 #include "../../core/chip.h"
 #include "../../core/system.h"
 #include "c64.h"
@@ -163,7 +164,7 @@ void c64_non_cpu_cycle(void* c64_ptr) {
         c64->bus->control_lines &= ~RDY_LINE;
     }
     // Optimized null check with unlikely hint - callback rarely set during normal emulation
-    if (__builtin_expect(bus_cycle_callback != NULL, 0)) {
+    if (unlikely(bus_cycle_callback != NULL)) {
         bus_cycle_callback();
     }
 }
