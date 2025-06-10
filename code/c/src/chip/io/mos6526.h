@@ -23,6 +23,12 @@ typedef struct mos6526_s {
 // Function declarations
 void mos6526_cycle(mos6526_t* cia);
 
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+// GUI function declarations
+void mos6526_render_debug_window(void* chip, bool* show_window);
+void mos6526_render_settings_window(void* chip, bool* show_window);
+#endif
+
 extern chip_descriptor_t mos6526_descriptor;
 
 #endif // CIA_H

@@ -93,7 +93,12 @@ chip_descriptor_t mos6526_descriptor = {
     .bus_attach = mos6526_bus_attach,
     .read = mos6526_registers_read,
     .write = mos6526_registers_write,
-    .bank_change = NULL
+    .bank_change = NULL,
+    .get_rwcb_context = NULL,
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    .render_debug_window = mos6526_render_debug_window,
+    .render_settings_window = mos6526_render_settings_window
+#endif
 };
 
 void mos6526_cycle(mos6526_t* cia) {
@@ -112,3 +117,8 @@ void mos6526_cycle(mos6526_t* cia) {
         }
     }
 }
+
+// Include GUI implementation
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#include "mos6526_gui.c"
+#endif

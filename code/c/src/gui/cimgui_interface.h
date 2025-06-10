@@ -9,11 +9,7 @@ struct c64_s;
 
 // GUI State structure
 typedef struct {
-    bool show_cpu_state;
     bool show_memory_viewer;
-    bool show_vic_registers;
-    bool show_cia_registers;
-    bool show_sid_registers;
     bool show_debugger;
     bool show_settings;
     bool show_about;
@@ -22,6 +18,10 @@ typedef struct {
     bool emulation_paused;
     int target_fps;
     float emulation_speed;
+    
+    // Chip Debug Windows (indexed by chip ID)
+    bool show_chip_debug[16];    // Debug windows for each chip (indexed by chip ID)
+    bool show_chip_settings[16]; // Settings windows for each chip (indexed by chip ID)
     
     // Memory viewer state
     uint16_t memory_address;
@@ -57,11 +57,7 @@ void gui_handle_events(void);
 
 // Window rendering functions
 void gui_render_menu_bar(struct c64_s* c64, gui_state_t* gui_state);
-void gui_render_cpu_state(struct c64_s* c64, gui_state_t* gui_state);
 void gui_render_memory_viewer(struct c64_s* c64, gui_state_t* gui_state);
-void gui_render_vic_registers(struct c64_s* c64, gui_state_t* gui_state);
-void gui_render_cia_registers(struct c64_s* c64, gui_state_t* gui_state);
-void gui_render_sid_registers(struct c64_s* c64, gui_state_t* gui_state);
 void gui_render_debugger(struct c64_s* c64, gui_state_t* gui_state);
 void gui_render_settings(struct c64_s* c64, gui_state_t* gui_state);
 void gui_render_about(gui_state_t* gui_state);

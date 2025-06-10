@@ -975,4 +975,10 @@ void mos6510_attach_io_interface(mos6510_t* cpu, const mos6510_io_port_interface
 void mos6510_attach_system_lines(mos6510_t* cpu, system_lines_t* system_lines);
 void mos6510_attach_ram(mos6510_t* cpu, const access_callback_t* ram_access);
 
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+// GUI functions
+void mos6510_render_debug_window(void* chip, bool* show_window);
+void mos6510_render_settings_window(void* chip, bool* show_window);
+#endif
+
 #endif // MOS6510_H
