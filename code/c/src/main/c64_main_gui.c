@@ -2,7 +2,7 @@
 #include "../systems/c64/system_config.h"
 #include "../gui/cimgui_interface.h"
 #include <stdio.h>
-#include <SDL2/SDL.h>
+#include <SDL.h>
 
 // ============================================================================
 // MAIN FUNCTION - ImGui-based C64 Emulator

@@ -2,12 +2,9 @@
 .vscode/settings.json
 
 # Build directories
-build/
-bin/
-obj/
-/aiemu/obj/
-/code/c/build/
-/code/c/bin/
+code/c/build/
+code/c/build_gui/
+code/c/bin/
 
 # CMake files
 CMakeCache.txt
@@ -47,6 +44,7 @@ data/**/*.p00
 data/**/*.img
 data/**/*.adf
 !data/**/README.md
+
 code/c/test_optimized_cpu
 code/c/test_pla_clean
 code/c/test_pla_mapping
@@ -55,3 +53,5 @@ code/c/test_ram_consolidation
 code/c/tests/test_pla_clean
 code/c/tests/test_pla_standalone
 code/c/test_ram_consolidation
+
+code/c/deps/*

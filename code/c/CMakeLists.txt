@@ -48,13 +48,31 @@ else()
 endif()
 
 # Find required packages for GUI (optional)
-find_package(PkgConfig QUIET)
-if (PkgConfig_FOUND)
-    pkg_check_modules(SDL2 sdl2)
-    find_package(OpenGL QUIET)
+find_package(OpenGL QUIET)
+
+# Check for local SDL2 installation
+set(SDL2_DIR "${CMAKE_SOURCE_DIR}/deps/sdl2/SDL2-2.30.10")
+if(EXISTS "${SDL2_DIR}/include/SDL.h")
+    set(SDL2_FOUND TRUE)
+    set(SDL2_INCLUDE_DIRS "${SDL2_DIR}/include")
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        # 64-bit
+        set(SDL2_LIBRARIES "${SDL2_DIR}/lib/x64/SDL2.lib" "${SDL2_DIR}/lib/x64/SDL2main.lib")
+        set(SDL2_DLLS "${SDL2_DIR}/lib/x64/SDL2.dll")
+    else()
+        # 32-bit
+        set(SDL2_LIBRARIES "${SDL2_DIR}/lib/x86/SDL2.lib" "${SDL2_DIR}/lib/x86/SDL2main.lib")
+        set(SDL2_DLLS "${SDL2_DIR}/lib/x86/SDL2.dll")
+    endif()
+    message(STATUS "Using local SDL2 from: ${SDL2_DIR}")
 else()
-    set(SDL2_FOUND FALSE)
-    set(OpenGL_FOUND FALSE)
+    # Fallback to pkg-config
+    find_package(PkgConfig QUIET)
+    if (PkgConfig_FOUND)
+        pkg_check_modules(SDL2 sdl2)
+    else()
+        set(SDL2_FOUND FALSE)
+    endif()
 endif()
 
 if(SDL2_FOUND AND OpenGL_FOUND)
@@ -77,9 +95,9 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/src/systems/c64
     ${CMAKE_SOURCE_DIR}/src/main
     ${CMAKE_SOURCE_DIR}/src/gui
-    ${CMAKE_SOURCE_DIR}/external/cimgui
-    ${CMAKE_SOURCE_DIR}/external/cimgui/imgui
-    ${CMAKE_SOURCE_DIR}/external/cimgui/imgui/backends
+    ${CMAKE_SOURCE_DIR}/../../external/cimgui
+    ${CMAKE_SOURCE_DIR}/../../external/cimgui/imgui
+    ${CMAKE_SOURCE_DIR}/../../external/cimgui/imgui/backends
     ${SDL2_INCLUDE_DIRS}
 )
 
@@ -88,7 +106,7 @@ if(BUILD_GUI)
     # Configure cimgui to build as static library
     set(IMGUI_STATIC "yes" CACHE STRING "Build as a static library" FORCE)
     
-    add_subdirectory(external/cimgui)
+    add_subdirectory(../../external/cimgui cimgui_build)
 endif()
 
 # Core library sources
@@ -161,8 +179,15 @@ if(BUILD_GUI)
     # Define CIMGUI_DEFINE_ENUMS_AND_STRUCTS only for our GUI code
     target_compile_definitions(c64emu_gui PRIVATE CIMGUI_DEFINE_ENUMS_AND_STRUCTS=1)
     
-    # Disable pedantic warnings for GUI build to work around cimgui header issues
-    target_compile_options(c64emu_gui PRIVATE -Wno-pedantic)
+    # Add SDL2 include directories to the GUI target
+    target_include_directories(c64emu_gui PRIVATE ${SDL2_INCLUDE_DIRS})
+    
+    # Disable some warnings for GUI build to work around cimgui header issues
+    if(MSVC)
+        target_compile_options(c64emu_gui PRIVATE /WX- /wd4201 /wd4996 /wd4244 /wd4189 /wd4100 /wd5287)
+    else()
+        target_compile_options(c64emu_gui PRIVATE -Wno-pedantic)
+    endif()
 
     # Link libraries for GUI version
     target_link_libraries(c64emu_gui 

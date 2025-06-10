@@ -4,8 +4,8 @@
 #include "../chip/cpu/mos6510/mos6510.h"
 #include "cimgui_backends.h"
 
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_opengl.h>
+#include <SDL.h>
+#include <SDL_opengl.h>
 #ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #endif
