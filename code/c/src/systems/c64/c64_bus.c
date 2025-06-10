@@ -109,12 +109,11 @@ void c64_bus_populate_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla,
     for (uint32_t addr = 0; addr < 0x10000; addr += 0x100) {
         uint8_t read_acid = ACID_UNMAPPED;
         uint8_t write_acid = ACID_UNMAPPED;
-        
         // Set address in PLA
-        pla_906114_01_set_address_high((pla_906114_01_t*)pla, (addr >> 8) & 0x0F);
+        pla_906114_01_set_address_high((pla_906114_01_t*)pla, (uint8_t)((addr >> 8) & 0x0F));
         
         // Get bank index for this address (same for both read and write)
-        int bank_idx = c64_bus_address_to_bankidx(addr);
+        int bank_idx = c64_bus_address_to_bankidx((uint16_t)addr);
         
         // Configure PLA for READ mode
         ((pla_906114_01_t*)pla)->inputs.r_w = true;  // Read mode
@@ -301,6 +300,8 @@ static void c64_control_lines_set(void* context, uint32_t lines) {
 
 // I/O port adapter functions
 static void c64_io_port_output_changed(void* context, uint8_t ddr, uint8_t port_data, uint8_t effective_output) {
+    (void)ddr;       // Unused parameter
+    (void)port_data; // Unused parameter
     c64_bus_t* c64_bus = (c64_bus_t*)context;
     // Store the current CPU port state for use by cartridge functions
     c64_bus->cpu_port_state = effective_output;

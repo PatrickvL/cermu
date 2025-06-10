@@ -57,9 +57,8 @@ void c64_callbacks_init(c64_t* c64) {
     for (int i = 0; i < c64->system.chip_count; i++) {
         chip_entry_t* dev = &c64->system.chips[i];
         chip_descriptor_t* desc = dev->desc;
-        
-        // Allocate ACID based on chip capabilities
-        uint8_t allocated_acid = c64_bus_allocate_acid(bus, i, 
+          // Allocate ACID based on chip capabilities
+        uint8_t allocated_acid = c64_bus_allocate_acid(bus, (uint8_t)i, 
                                                        desc->read, desc->write, 
                                                        dev->rwcb_context);
         
@@ -77,7 +76,7 @@ void c64_pla_maps_generate(c64_t* c64) {
     // Find chip IDs for different memory types
     uint8_t ram_chip_id = 0, basic_chip_id = 0, kernal_chip_id = 0;
     uint8_t cartridge_roml_chip_id = 0, cartridge_romh_chip_id = 0, charrom_chip_id = 0;
-      for (int i = 0; i < system->chip_count; i++) {
+      for (uint8_t i = 0; i < system->chip_count; i++) {        
         chip_entry_t* dev = &system->chips[i];
         if (dev->desc == &ram_descriptor) {
             ram_chip_id = i;
