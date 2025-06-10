@@ -19,6 +19,12 @@ typedef struct mos6581_s {
 // Function declarations
 void mos6581_cycle(mos6581_t* sid);
 
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+// GUI function declarations
+void mos6581_render_debug_window(void* chip, bool* show_window);
+void mos6581_render_settings_window(void* chip, bool* show_window);
+#endif
+
 extern chip_descriptor_t mos6581_descriptor;
 
 #endif // MOS6581_H

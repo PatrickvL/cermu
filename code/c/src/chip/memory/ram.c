@@ -37,5 +37,14 @@ chip_descriptor_t ram_descriptor = {
     .read = ram_memory_read,
     .write = ram_memory_write,
     .bank_change = NULL,
-    .get_rwcb_context = ram_get_rwcb_context
+    .get_rwcb_context = ram_get_rwcb_context,
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    .render_debug_window = ram_render_debug_window,
+    .render_settings_window = ram_render_settings_window
+#endif
 };
+
+// Include GUI implementation
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#include "ram_gui.c"
+#endif

@@ -29,6 +29,9 @@ if(MSVC)
         /WX                     # Treat warnings as errors
         /wd4324                 # Disable "structure was padded" warning
         /wd4459                 # Disable declaration hiding global declaration warnings
+        /wd4201                 # Disable nameless struct/union warning (ImGui compatibility)
+        /wd4100                 # Disable unreferenced parameter warning
+        /wd5287                 # Disable different enum types warning (ImGui compatibility)
     )
 else()
     # GCC/Clang specific settings
@@ -166,6 +169,7 @@ if(BUILD_GUI)
     set(GUI_SOURCES
         src/gui/cimgui_interface.c
         src/gui/cimgui_backends.cpp
+        src/chip/video/vicii_gui.c
     )
 
     add_executable(c64emu_gui

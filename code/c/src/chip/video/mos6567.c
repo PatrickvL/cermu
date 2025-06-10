@@ -51,7 +51,12 @@ chip_descriptor_t mos6567_descriptor = {
     .bus_attach = mos6567_bus_attach,
     .read       = mos6567_registers_read,
     .write      = mos6567_registers_write,
-    .bank_change= mos6567_bank_change
+    .bank_change= mos6567_bank_change,
+    .get_rwcb_context = NULL,
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    .render_debug_window = mos6567_render_debug_window,
+    .render_settings_window = mos6567_render_settings_window
+#endif
 };
 
 /*
@@ -60,3 +65,8 @@ chip_descriptor_t mos6567_descriptor = {
 void mos6567_cycle(mos6567_t* vicii) {
     vicii_common_cycle((vicii_common_t*)vicii);
 }
+
+// Include GUI implementation
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#include "mos6567_gui.c"
+#endif

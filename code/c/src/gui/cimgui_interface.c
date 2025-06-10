@@ -117,7 +117,6 @@ void gui_init_state(gui_state_t* gui_state) {
     memset(gui_state, 0, sizeof(gui_state_t));
     
     // Set default values
-    gui_state->show_cpu_state = true;
     gui_state->show_screen = true;  // Show screen by default
     gui_state->target_fps = 50;  // PAL C64 refresh rate
     gui_state->emulation_speed = 1.0f;
@@ -149,20 +148,8 @@ void gui_render_frame(c64_t* c64, gui_state_t* gui_state) {
     if (gui_state->show_screen) {
         gui_render_screen(c64, gui_state);
     }
-    if (gui_state->show_cpu_state) {
-        gui_render_cpu_state(c64, gui_state);
-    }
     if (gui_state->show_memory_viewer) {
         gui_render_memory_viewer(c64, gui_state);
-    }
-    if (gui_state->show_vic_registers) {
-        gui_render_vic_registers(c64, gui_state);
-    }
-    if (gui_state->show_cia_registers) {
-        gui_render_cia_registers(c64, gui_state);
-    }
-    if (gui_state->show_sid_registers) {
-        gui_render_sid_registers(c64, gui_state);
     }
     if (gui_state->show_debugger) {
         gui_render_debugger(c64, gui_state);
@@ -172,6 +159,23 @@ void gui_render_frame(c64_t* c64, gui_state_t* gui_state) {
     }
     if (gui_state->show_about) {
         gui_render_about(gui_state);
+    }
+
+    // Render chip debug and settings windows using chip callbacks
+    if (c64 && c64->system.chip_count > 0) {
+        for (uint8_t chip_id = 0; chip_id < c64->system.chip_count && chip_id < 16; chip_id++) {
+            chip_entry_t* entry = &c64->system.chips[chip_id];
+            
+            // Render debug window if enabled and chip has debug callback
+            if (gui_state->show_chip_debug[chip_id] && entry->desc && entry->desc->render_debug_window) {
+                entry->desc->render_debug_window(entry->chip, &gui_state->show_chip_debug[chip_id]);
+            }
+            
+            // Render settings window if enabled and chip has settings callback
+            if (gui_state->show_chip_settings[chip_id] && entry->desc && entry->desc->render_settings_window) {
+                entry->desc->render_settings_window(entry->chip, &gui_state->show_chip_settings[chip_id]);
+            }
+        }
     }
 
     // Rendering
@@ -219,12 +223,54 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state) {
         
         if (igBeginMenu("View", true)) {
             igMenuItem_BoolPtr("Screen Display", NULL, &gui_state->show_screen, true);
-            igMenuItem_BoolPtr("CPU State", NULL, &gui_state->show_cpu_state, true);
             igMenuItem_BoolPtr("Memory Viewer", NULL, &gui_state->show_memory_viewer, true);
-            igMenuItem_BoolPtr("VIC-II Registers", NULL, &gui_state->show_vic_registers, true);
-            igMenuItem_BoolPtr("CIA Registers", NULL, &gui_state->show_cia_registers, true);
-            igMenuItem_BoolPtr("SID Registers", NULL, &gui_state->show_sid_registers, true);
             igMenuItem_BoolPtr("Debugger", NULL, &gui_state->show_debugger, true);
+            
+            // Add dynamic chip debug windows
+            if (c64 && c64->system.chip_count > 0) {
+                igSeparator();
+                igText("Debug Windows:");
+                for (uint8_t chip_id = 0; chip_id < c64->system.chip_count && chip_id < 16; chip_id++) {
+                    chip_entry_t* entry = &c64->system.chips[chip_id];
+                    if (entry->desc && entry->desc->render_debug_window) {
+                        char menu_label[64];
+                        snprintf(menu_label, sizeof(menu_label), "%s", entry->desc->description);
+                        igMenuItem_BoolPtr(menu_label, NULL, &gui_state->show_chip_debug[chip_id], true);
+                    }
+                }
+            }
+            
+            igEndMenu();
+        }
+        
+        if (igBeginMenu("Chips", true)) {
+            if (c64 && c64->system.chip_count > 0) {
+                if (igBeginMenu("Debug Windows", true)) {
+                    for (uint8_t chip_id = 0; chip_id < c64->system.chip_count && chip_id < 16; chip_id++) {
+                        chip_entry_t* entry = &c64->system.chips[chip_id];
+                        if (entry->desc && entry->desc->render_debug_window) {
+                            char menu_label[64];
+                            snprintf(menu_label, sizeof(menu_label), "%s Debug", entry->desc->description);
+                            igMenuItem_BoolPtr(menu_label, NULL, &gui_state->show_chip_debug[chip_id], true);
+                        }
+                    }
+                    igEndMenu();
+                }
+                
+                if (igBeginMenu("Settings Windows", true)) {
+                    for (uint8_t chip_id = 0; chip_id < c64->system.chip_count && chip_id < 16; chip_id++) {
+                        chip_entry_t* entry = &c64->system.chips[chip_id];
+                        if (entry->desc && entry->desc->render_settings_window) {
+                            char menu_label[64];
+                            snprintf(menu_label, sizeof(menu_label), "%s Settings", entry->desc->description);
+                            igMenuItem_BoolPtr(menu_label, NULL, &gui_state->show_chip_settings[chip_id], true);
+                        }
+                    }
+                    igEndMenu();
+                }
+            } else {
+                igMenuItem_Bool("No chips available", NULL, false, false);
+            }
             igEndMenu();
         }
         
@@ -246,36 +292,6 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state) {
         
         igEndMainMenuBar();
     }
-}
-
-void gui_render_cpu_state(c64_t* c64, gui_state_t* gui_state) {
-    if (!igBegin("CPU State", &gui_state->show_cpu_state, 0)) {
-        igEnd();
-        return;
-    }
-
-    if (c64 && c64->mos6510) {
-        // TODO: Get CPU state from MOS6510
-        // For now, show placeholder values
-        igText("Program Counter: $%04X", 0x0000);
-        igText("Accumulator:     $%02X", 0x00);
-        igText("X Register:      $%02X", 0x00);
-        igText("Y Register:      $%02X", 0x00);
-        igText("Stack Pointer:   $%02X", 0xFF);
-        
-        igSeparator();
-        igText("Status Flags:");
-        igText("N V - B D I Z C");
-        igText("0 0 1 0 0 0 0 0");
-        
-        igSeparator();
-        igText("Current Instruction: NOP");
-        igText("Cycles: %llu", c64->total_cycles);
-    } else {
-        igText("C64 system not initialized");
-    }
-
-    igEnd();
 }
 
 void gui_render_memory_viewer(c64_t* c64, gui_state_t* gui_state) {
@@ -316,89 +332,6 @@ void gui_render_memory_viewer(c64_t* c64, gui_state_t* gui_state) {
         igEndChild();
     } else {
         igText("C64 system not initialized");
-    }
-
-    igEnd();
-}
-
-void gui_render_vic_registers(c64_t* c64, gui_state_t* gui_state) {
-    if (!igBegin("VIC-II Registers", &gui_state->show_vic_registers, 0)) {
-        igEnd();
-        return;
-    }
-
-    if (c64 && c64->vicii) {
-        igText("VIC-II (6569) Registers");
-        igSeparator();
-        
-        // TODO: Display actual VIC registers
-        for (int i = 0; i < 47; i++) {
-            igText("$D%03X: $%02X", 0x000 + i, 0x00);
-        }
-    } else {
-        igText("VIC-II not initialized");
-    }
-
-    igEnd();
-}
-
-void gui_render_cia_registers(c64_t* c64, gui_state_t* gui_state) {
-    if (!igBegin("CIA Registers", &gui_state->show_cia_registers, 0)) {
-        igEnd();
-        return;
-    }
-
-    if (c64 && c64->cia1 && c64->cia2) {
-        if (igBeginTabBar("CIATab", 0)) {
-            if (igBeginTabItem("CIA1", NULL, 0)) {
-                igText("CIA1 ($DC00-$DCFF)");
-                igSeparator();
-                
-                // TODO: Display actual CIA1 registers
-                for (int i = 0; i < 16; i++) {
-                    igText("$DC%02X: $%02X", i, 0x00);
-                }
-                
-                igEndTabItem();
-            }
-            
-            if (igBeginTabItem("CIA2", NULL, 0)) {
-                igText("CIA2 ($DD00-$DDFF)");
-                igSeparator();
-                
-                // TODO: Display actual CIA2 registers
-                for (int i = 0; i < 16; i++) {
-                    igText("$DD%02X: $%02X", i, 0x00);
-                }
-                
-                igEndTabItem();
-            }
-            
-            igEndTabBar();
-        }
-    } else {
-        igText("CIA chips not initialized");
-    }
-
-    igEnd();
-}
-
-void gui_render_sid_registers(c64_t* c64, gui_state_t* gui_state) {
-    if (!igBegin("SID Registers", &gui_state->show_sid_registers, 0)) {
-        igEnd();
-        return;
-    }
-
-    if (c64 && c64->sid) {
-        igText("SID (6581) Registers");
-        igSeparator();
-        
-        // TODO: Display actual SID registers
-        for (int i = 0; i < 29; i++) {
-            igText("$D4%02X: $%02X", i, 0x00);
-        }
-    } else {
-        igText("SID not initialized");
     }
 
     igEnd();

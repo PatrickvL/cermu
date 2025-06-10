@@ -73,7 +73,12 @@ chip_descriptor_t mos6510_descriptor = {
     .bus_attach = NULL,
     .read = mos6510_zeropage_read,
     .write = mos6510_zeropage_write,
-    .bank_change = NULL
+    .bank_change = NULL,
+    .get_rwcb_context = NULL,
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    .render_debug_window = mos6510_render_debug_window,
+    .render_settings_window = mos6510_render_settings_window
+#endif
 };
 
 // Interception support for threaded dispatch
@@ -210,6 +215,9 @@ void mos6510_execute(mos6510_t* cpu) {
 #include "mos6510_illegal.c"      // All unofficial instructions
 #include "mos6510_memory.c"       // LDA, LDX, LDY, STA, STX, STY
 #include "mos6510_misc.c"         // NOP variants
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#include "mos6510_gui.c"          // GUI debug and settings windows
+#endif
 #include "mos6510_registers.c"    // TAX, TXA, TAY, TYA, TSX, TXS, INC, DEC, INX, DEX, INY, DEY
 #include "mos6510_shifts.c"       // ASL, LSR, ROL, ROR
 #include "mos6510_stack.c"        // PHA, PLA, PHP, PLP

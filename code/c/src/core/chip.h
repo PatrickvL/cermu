@@ -17,6 +17,10 @@ struct chip_descriptor_s {
     void (*write)(void* chip, uint16_t address, uint8_t value);
     void (*bank_change)(void* chip, uint8_t bank);
     void* (*get_rwcb_context)(void* chip); // Optional callback to set custom rwcb_context
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    void (*render_debug_window)(void* chip, bool* show_window); // Optional GUI debug window callback
+    void (*render_settings_window)(void* chip, bool* show_window); // Optional GUI settings window callback
+#endif
 };
 
 typedef uint8_t (*chip_read_func_t)(void* context, uint16_t);

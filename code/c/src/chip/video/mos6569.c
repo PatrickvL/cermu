@@ -51,7 +51,12 @@ chip_descriptor_t mos6569_descriptor = {
     .bus_attach  = mos6569_bus_attach,
     .read        = mos6569_registers_read,
     .write       = mos6569_registers_write,
-    .bank_change = mos6569_bank_change
+    .bank_change = mos6569_bank_change,
+    .get_rwcb_context = NULL,
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    .render_debug_window = mos6569_render_debug_window,
+    .render_settings_window = mos6569_render_settings_window
+#endif
 };
 
 /**
@@ -60,3 +65,8 @@ chip_descriptor_t mos6569_descriptor = {
 void mos6569_cycle(mos6569_t* vicii) {
     vicii_common_cycle((vicii_common_t*)vicii);
 }
+
+// Include GUI implementation
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#include "mos6569_gui.c"
+#endif
