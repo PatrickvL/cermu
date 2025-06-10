@@ -223,9 +223,13 @@ c64_t* c64_system_create(const system_config_t* config) {
     
     // Now having a registry of all chips, the PLA maps can be generated
     c64_pla_maps_generate(c64);
-   
     // Attach RAM directly to MOS6510 for zero page access to avoid circular dependency
-    mos6510_attach_ram(c64->mos6510, c64->ram, ram_memory_read, ram_memory_write);
+    access_callback_t ram_access = {
+        .read_func = ram_descriptor.read,
+        .write_func = ram_descriptor.write,
+        .context = ram_descriptor.get_rwcb_context(c64->ram)
+    };
+    mos6510_attach_ram(c64->mos6510, &ram_access);
 
     // Set default memory contents TODO : Read from file?
     c64_memory_init(&c64->system);

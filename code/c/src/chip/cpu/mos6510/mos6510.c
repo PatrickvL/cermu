@@ -536,14 +536,17 @@ void mos6510_attach_system_lines(mos6510_t* cpu, system_lines_t* system_lines) {
  * which is essential to avoid circular dependencies when the CPU needs to access
  * zero page memory during system initialization.
  */
-void mos6510_attach_ram(mos6510_t* cpu, void* ram_context, 
-                        uint8_t (*ram_read)(void*, uint16_t), 
-                        void (*ram_write)(void*, uint16_t, uint8_t)) {
-    if (!cpu || !ram_context || !ram_read || !ram_write) return;
+void mos6510_attach_ram(mos6510_t* cpu, const access_callback_t* ram_access) {
+    if (!cpu || !ram_access) return;
     
-    // Store RAM access interface using consolidated structure
-    cpu->ram_access.context = ram_context;
-    // Assign read/write functions, falling back to stubs if not provided
-    cpu->ram_access.read_func = ram_read ? ram_read : generic_stub_read;
-    cpu->ram_access.write_func = ram_write ? ram_write : generic_stub_write;
+    // Copy the access callback structure
+    cpu->ram_access = *ram_access;
+    
+    // Ensure valid function pointers, falling back to stubs if not provided
+    if (!cpu->ram_access.read_func) {
+        cpu->ram_access.read_func = generic_stub_read;
+    }
+    if (!cpu->ram_access.write_func) {
+        cpu->ram_access.write_func = generic_stub_write;
+    }
 }
