@@ -6,18 +6,17 @@ uint8_t system_chip_register(system_8bit_t* system, void* chip, chip_descriptor_
     chip_entry_t* entry = &system->chips[id];
     entry->desc = desc;
     entry->chip = chip;
+    entry->chip_id = id;
     entry->base_address = base;
     entry->size = size;
-    entry->chip_id = id;
-    
+    entry->rwcb_context = chip; // Default to chip itself. Can get replaced by a callback.
     // Use chip-specific callback to set rwcb_context if available
-     entry->rwcb_context = desc->get_rwcb_context(chip);
     if (desc->get_rwcb_context) {
-        // If the callback returns a buffer, adjust it's base address
-        (char*)entry->rwcb_context -= base;
-    } else {
-        // If the callback returns NULL, use the chip itself as context
-        entry->rwcb_context = chip;
+        char* memory = desc->get_rwcb_context(chip);
+        if (memory) {
+            // If the callback returns a buffer, adjust it's base address
+            entry->rwcb_context = memory - base;
+        }
     }
     
     return id;
