@@ -35,6 +35,7 @@ void mos2114_write(void* context, uint16_t address, uint8_t value) {
 }
 
 chip_descriptor_t mos2114_descriptor = {
+    .description = "MOS2114 Color RAM (1K x 4-bit)",
     .create = mos2114_create,
     .destroy = mos2114_destroy,
     .bus_attach = NULL,

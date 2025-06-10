@@ -42,6 +42,7 @@ uint8_t rom_memory_read(void* context, uint16_t address) {
 }
 
 chip_descriptor_t rom_descriptor = {
+    .description = "ROM Chip (Read-Only Memory)",
     .create = rom_system_create,
     .destroy = rom_system_destroy,
     .bus_attach = NULL,

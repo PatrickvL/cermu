@@ -45,6 +45,7 @@ void mos6569_bank_change(void* chip, uint8_t bank) {
  * Descriptor for PAL VIC-II
  */
 chip_descriptor_t mos6569_descriptor = {
+    .description = "MOS6569 VIC-II Video Interface Chip (PAL)",
     .create      = mos6569_system_create,
     .destroy     = mos6569_system_destroy,
     .bus_attach  = mos6569_bus_attach,

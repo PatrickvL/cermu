@@ -67,6 +67,7 @@ void mos6510_zeropage_write(void* chip, uint16_t address, uint8_t value) {
 }
 
 chip_descriptor_t mos6510_descriptor = {
+    .description = "MOS6510 CPU with I/O Ports",
     .create = mos6510_create,
     .destroy = mos6510_destroy,
     .bus_attach = NULL,

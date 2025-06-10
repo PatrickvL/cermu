@@ -1,7 +1,6 @@
 #include "../systems/c64/c64.h"
 #include "../systems/c64/system_config.h"
 #include "../gui/cimgui_interface.h"
-#include <stdio.h>
 #include <SDL.h>
 
 // ============================================================================
@@ -11,11 +10,8 @@ int main(int argc, char** argv) {
     (void)argc;
     (void)argv;
     
-    printf("Starting C64 Emulator with ImGui interface...\n");
-    
     // Initialize GUI
     if (!gui_init("C64 Emulator", 1200, 800)) {
-        printf("Failed to initialize GUI!\n");
         return 1;
     }
     
@@ -25,7 +21,6 @@ int main(int argc, char** argv) {
     };
     c64_t* c64 = c64_system_create(&config);
     if (!c64) {
-        printf("Failed to initialize C64 system!\n");
         gui_cleanup();
         return 1;
     }
@@ -33,9 +28,6 @@ int main(int argc, char** argv) {
     // Initialize GUI state
     gui_state_t gui_state;
     gui_init_state(&gui_state);
-    
-    printf("C64 emulator initialized successfully!\n");
-    printf("GUI interface ready.\n");
     
     // Main loop
     while (!gui_should_quit()) {
@@ -57,7 +49,6 @@ int main(int argc, char** argv) {
     }
     
     // Cleanup
-    printf("Shutting down emulator...\n");
     gui_cleanup_state(&gui_state);
     c64_system_destroy(c64);
     gui_cleanup();

@@ -67,6 +67,7 @@ void c64_bus_system_attach(c64_bus_t* c64_bus, void* c64) {
 }
 
 chip_descriptor_t c64_bus_descriptor = {
+    .description = "C64 System Bus Controller",
     .create = c64_bus_system_create,
     .destroy = c64_bus_system_destroy,
     .bus_attach = NULL,

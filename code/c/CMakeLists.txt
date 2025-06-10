@@ -197,11 +197,22 @@ if(BUILD_GUI)
         cimgui
     )
 
-    # Set output directory for GUI executable
+    # Set output directory for GUI executable and make it a Windows app (not console)
     set_target_properties(c64emu_gui
         PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+        WIN32_EXECUTABLE TRUE
     )
+    
+    # Copy SDL2.dll to output directory on Windows
+    if(WIN32)
+        add_custom_command(TARGET c64emu_gui POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/deps/sdl2/SDL2-2.30.10/lib/x64/SDL2.dll"
+            "$<TARGET_FILE_DIR:c64emu_gui>/SDL2.dll"
+            COMMENT "Copying SDL2.dll to output directory"
+        )
+    endif()
     
     message(STATUS "GUI executable c64emu_gui will be built")
 else()

@@ -87,6 +87,7 @@ void mos6526_registers_write(void* context, uint16_t address, uint8_t value) {
 }
 
 chip_descriptor_t mos6526_descriptor = {
+    .description = "MOS6526 CIA Complex Interface Adapter",
     .create = mos6526_system_create,
     .destroy = mos6526_system_destroy,
     .bus_attach = mos6526_bus_attach,
