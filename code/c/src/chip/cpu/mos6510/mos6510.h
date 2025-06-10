@@ -1,6 +1,7 @@
 #ifndef MOS6510_H
 #define MOS6510_H
 
+#include "../../../core/aiemuc.h"
 #include "../../../core/chip.h"
 #include "../../../core/bus_cycle_interface.h"
 #include "../../../core/control_lines_interface.h"
@@ -164,7 +165,7 @@ static inline void mos6510_opcode_dispatch(mos6510_t* cpu, uint8_t opcode) {
 // Wait for CPU ready with automatic stall handling using direct callback
 #define CPU_INTRA_CYCLE(cpu) do { \
     UNIQUE_LABEL(cpu_ready_stall): \
-    if (__builtin_expect(!CPU_READY(cpu), 0)) { \
+    if (unlikely(CPU_READY(cpu))) { \
         CPU_BUS_CYCLE(cpu); \
         goto UNIQUE_LABEL(cpu_ready_stall); \
     } \
@@ -176,7 +177,7 @@ static inline void mos6510_opcode_dispatch(mos6510_t* cpu, uint8_t opcode) {
 } while(0)
 
 #define CPU_NEXT_INSTRUCTION(cpu) do { \
-    if (__builtin_expect(CPU_TEST_IRQ(cpu) || CPU_TEST_NMI(cpu), 0)) { \
+    if (unlikely(CPU_TEST_IRQ(cpu) || CPU_TEST_NMI(cpu))) { \
         mos6510_interrupt_handler(cpu); \
         return; \
     } \
