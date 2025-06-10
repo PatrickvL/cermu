@@ -1,7 +1,7 @@
 // Backend wrapper for cimgui with SDL2 and OpenGL3
 // This file compiles the necessary ImGui backend implementations for use with cimgui
 
-#include <SDL2/SDL.h>
+#include <SDL.h>
 #include "imgui.h"
 #include "backends/imgui_impl_sdl2.h"
 #include "backends/imgui_impl_opengl3.h"
