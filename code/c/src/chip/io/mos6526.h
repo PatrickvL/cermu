@@ -23,4 +23,6 @@ typedef struct mos6526_s {
 // Function declarations
 void mos6526_cycle(mos6526_t* cia);
 
+extern chip_descriptor_t mos6526_descriptor;
+
 #endif // CIA_H

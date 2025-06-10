@@ -15,6 +15,7 @@ struct chip_descriptor_s {
     uint8_t (*read)(void* chip, uint16_t address);
     void (*write)(void* chip, uint16_t address, uint8_t value);
     void (*bank_change)(void* chip, uint8_t bank);
+    void* (*get_rwcb_context)(void* chip); // Optional callback to set custom rwcb_context
 };
 
 typedef uint8_t (*chip_read_func_t)(void* context, uint16_t);

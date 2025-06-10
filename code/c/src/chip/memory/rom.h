@@ -6,11 +6,11 @@
 typedef struct rom_s {
     chip_descriptor_t* desc;
     uint8_t* memory;
-    uint16_t size;
-    uint16_t base_address;
 } rom_t;
 
-// Function declarations
-void rom_memory_init(void* chip, uint16_t base_address, uint16_t size, chip_entry_t* chip_entry);
+// Specialized ROM creation function that takes size parameter  
+void* rom_system_create_with_size(chip_descriptor_t* desc, unsigned int size);
+
+extern chip_descriptor_t rom_descriptor;
 
 #endif // ROM_H

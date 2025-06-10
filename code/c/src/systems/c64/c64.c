@@ -19,17 +19,6 @@
 
 static uint8_t initial_ram[65536] = {0};
 
-// Chip descriptor declarations for non-CPU chips (defined in respective .c files)
-extern chip_descriptor_t c64_bus_descriptor;
-extern chip_descriptor_t mos6526_descriptor;
-extern chip_descriptor_t mos6581_descriptor;
-extern chip_descriptor_t mos6569_descriptor;
-extern chip_descriptor_t mos6567_descriptor;
-extern chip_descriptor_t ram_descriptor;
-extern chip_descriptor_t rom_descriptor;
-
-// Actual c64.c
-
 void c64_memory_init(system_8bit_t* system) {
     extern uint8_t initial_ram[65536];
     for (int i = 0; i < system->chip_count; i++) {
@@ -59,7 +48,7 @@ void c64_callbacks_init(c64_t* c64) {
     // Initialize ACID allocation system
     c64_bus_t* bus = c64->bus;
     c64_bus_initialize_acids(bus);
-      // Allocate ACIDs for all registered chips based on their capabilities
+    // Allocate ACIDs for all registered chips based on their capabilities
     // ACIDs 1-7: Write-capable chips (3-bit encoding)
     // ACIDs 8+: Read-only chips (4-bit encoding)
     // ACID 0: Reserved for unmapped operations
@@ -89,6 +78,7 @@ void c64_pla_maps_generate(c64_t* c64) {
     for (int i = 0; i < system->chip_count; i++) {
         chip_entry_t* dev = &system->chips[i];
         if (dev->desc == &ram_descriptor) ram_chip_id = i;
+        // TODO : Generalize this to allow for any chip id
         else if (dev->base_address == 0xA000) basic_chip_id = i;
         else if (dev->base_address == 0xE000) kernal_chip_id = i;
         else if (dev->base_address == 0x8000) cartridge_chip_id = i;
@@ -102,7 +92,8 @@ void c64_pla_maps_generate(c64_t* c64) {
     
     // Create a temporary PLA instance for generating memory maps
     pla_906114_01_t* pla = pla_906114_01_create();
-    if (!pla) {        // Fallback to simple mapping if PLA creation fails
+    if (!pla) {
+        // Fallback to simple mapping if PLA creation fails
         for (int mode = 0; mode < 32; mode++) {
             for (int bankidx = 0; bankidx < 32; bankidx++) {
                 uint8_t acid = ACIDS_RW_ENCODE(ram_acid, ram_acid);
@@ -162,6 +153,29 @@ void c64_non_cpu_cycle(void* c64_ptr) {
     }
 }
 
+// Compact chip creation helper - creates and registers a chip (rwcb_context auto-set by system_chip_register)
+static inline void* create_and_register_chip(c64_t* c64, chip_descriptor_t* desc, uint16_t addr, unsigned int size) {
+    void* chip;
+    
+    // Special handling for ROM - allocate memory based on requested size before registration
+    if (desc == &rom_descriptor) {
+        chip = rom_system_create_with_size(desc, size);
+    } else {
+        chip = desc->create(desc);
+    }
+    
+    if (!chip) {
+        c64_system_destroy(c64);
+        return NULL;
+    }
+    uint8_t chip_id = system_chip_register(&c64->system, chip, desc, addr, size);
+    if (chip_id == 0xFF) {
+        c64_system_destroy(c64);
+        return NULL;
+    }
+    return chip;
+}
+
 //
 
 void c64_system_destroy(c64_t* c64) {
@@ -175,76 +189,40 @@ c64_t* c64_system_create(const system_config_t* config) {
     c64_t* c64 = malloc(sizeof(c64_t));
     if (!c64) return NULL;
 
-    chip_descriptor_t* descriptors[] = {
-        &c64_bus_descriptor,
-        &mos6510_descriptor,
-        &ram_descriptor,
-        &mos6526_descriptor,
-        &mos6526_descriptor,
-        &mos6581_descriptor,
-        (config->vic_standard == VIC_PAL ? &mos6569_descriptor : &mos6567_descriptor),
-        &mos2114_descriptor,
-        &rom_descriptor,
-        &rom_descriptor,
-        &rom_descriptor,
-    };
-    void** chips[] = {
-        (void**)&c64->bus,
-        (void**)&c64->mos6510,
-        (void**)&c64->ram,
-        (void**)&c64->cia1,
-        (void**)&c64->cia2,
-        (void**)&c64->sid,
-        (void**)&c64->vicii,
-        (void**)&c64->colorram,
-        (void**)&c64->basic,
-        (void**)&c64->kernal,
-        (void**)&c64->cartridge,
-    };
-    uint16_t bases[] = {0x0000, 0x0000, 0x0000, 0xDC00, 0xDD00, 0xD000, 0xD400, 0xD800, 0xA000, 0xE000, 0x8000};
-    unsigned int sizes[] = {0, 0, 65536, 256, 256, 1024, 1024, 1024, 8192, 8192, 16384};
-    uint8_t ids[11];
-    for (int i = 0; i < 11; i++) {
-        *chips[i] = descriptors[i]->create(descriptors[i]);
-        if (!*chips[i]) {
-            c64_system_destroy(c64);
-            return NULL;
-        }
-        ids[i] = system_chip_register(&c64->system, *chips[i], descriptors[i], bases[i], sizes[i]);
-        if (ids[i] == 0xFF) {
-            c64_system_destroy(c64);
-            return NULL;
-        }
-    }
+    chip_descriptor_t* vicii_descriptor = (config->vic_standard == VIC_PAL ? &mos6569_descriptor : &mos6567_descriptor);
+
+    // One line per chip - create, register, assign memory address/size, assign to C64 field, and initialize rwcb_context
+    if (!(c64->bus = create_and_register_chip(c64, &c64_bus_descriptor, 0x0000, 0))) return NULL;
+    if (!(c64->ram = create_and_register_chip(c64, &ram_descriptor, 0x0000, 65536))) return NULL;
+    if (!(c64->mos6510 = create_and_register_chip(c64, &mos6510_descriptor, 0x0000, 4096))) return NULL;
+    if (!(c64->cartridge = create_and_register_chip(c64, &rom_descriptor, 0x8000, 16384))) return NULL;
+    if (!(c64->basic = create_and_register_chip(c64, &rom_descriptor, 0xA000, 8192))) return NULL;
+    if (!(c64->vicii = create_and_register_chip(c64, vicii_descriptor, 0xD000, 1024))) return NULL;
+    if (!(c64->sid = create_and_register_chip(c64, &mos6581_descriptor, 0xD400, 1024))) return NULL;
+    if (!(c64->colorram = create_and_register_chip(c64, &mos2114_descriptor, 0xD800, 1024))) return NULL;
+    if (!(c64->cia1 = create_and_register_chip(c64, &mos6526_descriptor, 0xDC00, 256))) return NULL;
+    if (!(c64->cia2 = create_and_register_chip(c64, &mos6526_descriptor, 0xDD00, 256))) return NULL;
+    if (!(c64->kernal = create_and_register_chip(c64, &rom_descriptor, 0xE000, 8192))) return NULL;
+    
     // Now having a registry of all chips, the PLA maps can be generated
-    c64_pla_maps_generate(c64);    // Initialize memory chips with their chip_entry_t to set rwcb_context (no loops)
-    ram_memory_init(c64->ram, &c64->system.chips[ids[2]]);
-    
-    // Initialize ROM chips with their address and size information
-    // Pass chip_entry_t so ROM can set its own rwcb_context
-    rom_memory_init(c64->basic, 0xA000, 8192, &c64->system.chips[ids[8]]);
-    rom_memory_init(c64->kernal, 0xE000, 8192, &c64->system.chips[ids[9]]);
-    rom_memory_init(c64->cartridge, 0x8000, 16384, &c64->system.chips[ids[10]]);
-    
+    c64_pla_maps_generate(c64);
+   
+    // Attach RAM directly to MOS6510 for zero page access to avoid circular dependency
+    mos6510_attach_ram(c64->mos6510, c64->ram, ram_memory_read, ram_memory_write);
+
     // Set default memory contents TODO : Read from file?
     c64_memory_init(&c64->system);
 
-    // Attach RAM directly to MOS6510 for zero page access to avoid circular dependency
-    mos6510_attach_ram(c64->mos6510, c64->ram, ram_memory_read, ram_memory_write);    // Now that all chips have their rwcb_context set, we can initialize the callbacks
+    // Now that all devices have their rwcb_context set, we can initialize the callbacks
     c64_callbacks_init(c64);
     
-    // Now attach chips to the bus
-    for (int i = 0; i < 11; i++) {
-        if (i == 0) {
-            // Make sure that the c64 bus has access to the c64 instance.
-            // This is necessary so the below (indirect, via bus_attach)
-            // call to mos6510_bus_attach, which calls mos6510_ioport_write,
-            // can call c64_bus_mode_switch with the actual c64 instance.
-            c64_bus_system_attach(c64->bus, c64);
-        }
-        if (descriptors[i]->bus_attach) {
-            descriptors[i]->bus_attach(*chips[i], c64->bus);
-        }
+    // Attach bus to C64 system first, then all other chips with bus_attach callbacks
+    c64_bus_system_attach(c64->bus, c64);
+    for (int i = 0; i < c64->system.chip_count; i++) {
+        chip_entry_t* chip = &c64->system.chips[i];
+        if (chip->desc && chip->desc->bus_attach && chip->desc != &c64_bus_descriptor)
+            chip->desc->bus_attach(chip->chip, c64->bus);
     }
+    
     return c64;
 }

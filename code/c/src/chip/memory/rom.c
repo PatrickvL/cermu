@@ -6,28 +6,27 @@ void* rom_system_create(chip_descriptor_t* desc) {
     rom_t* rom = (rom_t*)calloc(1, sizeof(rom_t));
     if (!rom) return NULL;
     rom->desc = desc;
-    // Memory allocation and addressing will be done in rom_memory_init
-    rom->memory = NULL;
-    rom->size = 0;
-    rom->base_address = 0;
     return rom;
 }
 
-// Initialize ROM with chip entry information
-void rom_memory_init(void* chip, uint16_t base_address, uint16_t size, chip_entry_t* chip_entry) {
-    rom_t* rom = (rom_t*)chip;
-    if (!rom) return;
-    
-    rom->size = size;
-    rom->base_address = base_address;
-    rom->memory = (uint8_t*)malloc(rom->size);
-    
-    // Set pre-adjusted rwcb_context so ROM can reuse RAM read code
-    if (chip_entry && rom->memory) {
-        chip_entry->rwcb_context = rom->memory - base_address;
+// Specialized ROM creation function that takes size parameter
+void* rom_system_create_with_size(chip_descriptor_t* desc, unsigned int size) {
+    rom_t* rom = (rom_t*)rom_system_create(desc);
+    if (!rom) return NULL;
+    // Allocate only the required size
+    rom->memory = (uint8_t*)malloc(size);
+    if (!rom->memory) {
+        free(rom);
+        return NULL;
     }
-    
-    // Note: Memory content will be loaded by c64_memory_init
+    return rom;
+}
+
+// Callback to provide rwcb_context for system registration
+void* rom_get_rwcb_context(void* chip) {
+    rom_t* rom = (rom_t*)chip;
+    // ROM callback should return NULL if memory allocation failed during create
+    return rom->memory; // Will be NULL if malloc failed in rom_system_create
 }
 
 void rom_system_destroy(void* context) {
@@ -48,5 +47,6 @@ chip_descriptor_t rom_descriptor = {
     .bus_attach = NULL,
     .read = rom_memory_read, // ROM read receives pre-adjusted pointer vis rbcb_context
     .write = NULL, // ROM is read-only, no write function
-    .bank_change = NULL
+    .bank_change = NULL,
+    .get_rwcb_context = rom_get_rwcb_context
 };
