@@ -1,5 +1,5 @@
 #include "vicii_common.h"
-#include "../../systems/c64/c64_bus.h"
+#include "../../../systems/c64/c64_bus.h"
 #include <stdlib.h>
 #include <string.h>
 

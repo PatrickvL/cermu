@@ -138,9 +138,9 @@ set(CHIP_SOURCES
     src/chip/sound/mos6581.c
     
     # Video
-    src/chip/video/mos6569.c
-    src/chip/video/mos6567.c
-    src/chip/video/vicii_common.c
+    src/chip/video/vic_ii/mos6569.c
+    src/chip/video/vic_ii/mos6567.c
+    src/chip/video/vic_ii/vicii_common.c
 )
 
 # System sources
@@ -176,7 +176,7 @@ if(BUILD_GUI)    # GUI sources (just our interface file - cimgui handles the res
     set(GUI_SOURCES
         src/gui/cimgui_interface.c
         src/gui/cimgui_backends.cpp
-        src/chip/video/vicii_gui.c
+        src/chip/video/vic_ii/vicii_gui.c
     )
 
     add_executable(c64emu_gui
