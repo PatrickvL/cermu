@@ -20,10 +20,13 @@ static SDL_GLContext g_gl_context = NULL;
 static bool g_should_quit = false;
 
 bool gui_init(const char* window_title, int width, int height) {
-    // Initialize SDL
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0) {
+    // Initialize SDL subsystems
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS) < 0) {
+        printf("Failed to initialize SDL: %s\n", SDL_GetError());
         return false;
     }
+
+    // SDL should already be initialized by gui_init_sdl_and_window
 
     // GL 3.0 + GLSL 130
     const char* glsl_version = "#version 130";
@@ -136,13 +139,17 @@ void gui_init_state(gui_state_t* gui_state) {
 }
 
 void gui_render_frame(c64_t* c64, gui_state_t* gui_state) {
+    gui_render_frame_with_context(c64, gui_state, NULL);
+}
+
+void gui_render_frame_with_context(c64_t* c64, gui_state_t* gui_state, struct emulation_context_s* emu_context) {
     // Start the Dear ImGui frame
     ImGui_ImplOpenGL3_NewFrame_C();
     ImGui_ImplSDL2_NewFrame_C();
     igNewFrame();
 
-    // Render main menu bar
-    gui_render_menu_bar(c64, gui_state);
+    // Render main menu bar with emulation context
+    gui_render_menu_bar_with_context(c64, gui_state, emu_context);
 
     // Render windows based on gui_state
     if (gui_state->show_screen) {
@@ -189,6 +196,10 @@ void gui_render_frame(c64_t* c64, gui_state_t* gui_state) {
 }
 
 void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state) {
+    gui_render_menu_bar_with_context(c64, gui_state, NULL);
+}
+
+void gui_render_menu_bar_with_context(c64_t* c64, gui_state_t* gui_state, struct emulation_context_s* emu_context) {
     if (igBeginMainMenuBar()) {
         if (igBeginMenu("File", true)) {
             if (igMenuItem_Bool("Load ROM...", NULL, false, true)) {
@@ -208,15 +219,25 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state) {
         }
         
         if (igBeginMenu("Emulation", true)) {
-            if (igMenuItem_Bool("Reset", NULL, false, true)) {
-                // TODO: Reset C64
+            if (igMenuItem_Bool("Reset", NULL, false, emu_context != NULL)) {
+                if (emu_context) {
+                    gui_emulation_reset(emu_context);
+                }
             }
             igSeparator();
-            if (igMenuItem_Bool(gui_state->emulation_running ? "Pause" : "Run", NULL, false, true)) {
-                gui_state->emulation_running = !gui_state->emulation_running;
+            if (igMenuItem_Bool(gui_state->emulation_running ? "Pause" : "Run", NULL, false, emu_context != NULL)) {
+                if (emu_context) {
+                    if (gui_state->emulation_running) {
+                        gui_emulation_pause(emu_context);
+                    } else {
+                        gui_emulation_start(emu_context);
+                    }
+                }
             }
-            if (igMenuItem_Bool("Step", NULL, false, true)) {
-                // TODO: Single step execution
+            if (igMenuItem_Bool("Single Step", NULL, false, emu_context != NULL)) {
+                if (emu_context) {
+                    gui_emulation_step(emu_context);
+                }
             }
             igEndMenu();
         }
@@ -693,3 +714,307 @@ void gui_load_rom_file(const char* filepath, const char* type) {
 void gui_load_disk_image(const char* filepath) {
     // TODO: Implement disk image loading
 }
+
+// ============================================================================
+// EMULATION THREADING IMPLEMENTATION (SDL-based)
+// ============================================================================
+
+#include <SDL_thread.h>
+#include <SDL_mutex.h>
+#include <SDL_timer.h>
+
+// PAL C64 timing constants
+#define PAL_CYCLES_PER_SECOND   985248
+#define PAL_CYCLES_PER_FRAME    19705  // 985248 / 50 FPS
+#define PAL_TARGET_FPS          50
+
+// SDL-specific thread implementation
+typedef struct {
+    SDL_Thread* thread;
+    SDL_mutex* signal_mutex;
+    SDL_cond* signal_condition;
+} sdl_thread_impl_t;
+
+// Forward declarations
+static int gui_emulation_thread_main(void* data);
+static void gui_emulation_process_signal(emulation_context_t* context, emulation_signal_t signal);
+static void gui_emulation_run_frame(emulation_context_t* context);
+
+bool gui_emulation_thread_init(emulation_context_t* context, struct c64_s* c64) {
+    if (!context || !c64) return false;
+    
+    // Initialize context
+    context->c64 = c64;
+    context->pending_signal = EMU_SIGNAL_NONE;
+    context->current_state = EMU_STATE_STOPPED;
+    context->thread_running = false;
+    
+    // Set PAL timing by default
+    context->cycles_per_second = PAL_CYCLES_PER_SECOND;
+    context->frame_cycles = PAL_CYCLES_PER_FRAME;
+    context->target_fps = PAL_TARGET_FPS;
+    
+    // Initialize statistics
+    context->total_cycles_executed = 0;
+    context->frames_rendered = 0;
+    context->actual_fps = 0;
+    
+    // Create SDL-specific implementation
+    sdl_thread_impl_t* impl = (sdl_thread_impl_t*)calloc(1, sizeof(sdl_thread_impl_t));
+    if (!impl) return false;
+    
+    impl->signal_mutex = SDL_CreateMutex();
+    if (!impl->signal_mutex) {
+        free(impl);
+        return false;
+    }
+    
+    impl->signal_condition = SDL_CreateCond();
+    if (!impl->signal_condition) {
+        SDL_DestroyMutex(impl->signal_mutex);
+        free(impl);
+        return false;
+    }
+    
+    context->thread_impl = impl;
+    return true;
+}
+
+void gui_emulation_thread_cleanup(emulation_context_t* context) {
+    if (!context || !context->thread_impl) return;
+    
+    sdl_thread_impl_t* impl = (sdl_thread_impl_t*)context->thread_impl;
+    
+    // Stop thread if running
+    gui_emulation_thread_stop(context);
+    
+    // Cleanup SDL objects
+    if (impl->signal_condition) {
+        SDL_DestroyCond(impl->signal_condition);
+    }
+    if (impl->signal_mutex) {
+        SDL_DestroyMutex(impl->signal_mutex);
+    }
+    
+    free(impl);
+    context->thread_impl = NULL;
+}
+
+bool gui_emulation_thread_start(emulation_context_t* context) {
+    if (!context || !context->thread_impl) return false;
+    
+    sdl_thread_impl_t* impl = (sdl_thread_impl_t*)context->thread_impl;
+    if (impl->thread) return false; // Already running
+    
+    context->thread_running = true;
+    impl->thread = SDL_CreateThread(gui_emulation_thread_main, "C64Emulation", context);
+    
+    if (!impl->thread) {
+        context->thread_running = false;
+        return false;
+    }
+    
+    return true;
+}
+
+void gui_emulation_thread_stop(emulation_context_t* context) {
+    if (!context || !context->thread_impl) return;
+    
+    sdl_thread_impl_t* impl = (sdl_thread_impl_t*)context->thread_impl;
+    if (!impl->thread) return;
+    
+    // Signal thread to quit
+    gui_emulation_send_signal(context, EMU_SIGNAL_QUIT);
+    
+    // Wait for thread to finish
+    SDL_WaitThread(impl->thread, NULL);
+    impl->thread = NULL;
+}
+
+void gui_emulation_send_signal(emulation_context_t* context, emulation_signal_t signal) {
+    if (!context || !context->thread_impl) return;
+    
+    sdl_thread_impl_t* impl = (sdl_thread_impl_t*)context->thread_impl;
+    
+    SDL_LockMutex(impl->signal_mutex);
+    context->pending_signal = signal;
+    SDL_CondSignal(impl->signal_condition);
+    SDL_UnlockMutex(impl->signal_mutex);
+}
+
+emulation_state_t gui_emulation_get_state(emulation_context_t* context) {
+    if (!context) return EMU_STATE_STOPPED;
+    return context->current_state;
+}
+
+void gui_emulation_set_speed(emulation_context_t* context, float speed_multiplier) {
+    if (!context || !context->thread_impl) return;
+    
+    sdl_thread_impl_t* impl = (sdl_thread_impl_t*)context->thread_impl;
+    
+    SDL_LockMutex(impl->signal_mutex);
+    context->cycles_per_second = (uint64_t)(PAL_CYCLES_PER_SECOND * speed_multiplier);
+    context->frame_cycles = (uint64_t)(PAL_CYCLES_PER_FRAME * speed_multiplier);
+    SDL_UnlockMutex(impl->signal_mutex);
+}
+
+uint32_t gui_emulation_get_fps(emulation_context_t* context) {
+    if (!context) return 0;
+    return context->actual_fps;
+}
+
+uint64_t gui_emulation_get_total_cycles(emulation_context_t* context) {
+    if (!context) return 0;
+    return context->total_cycles_executed;
+}
+
+// Convenience wrapper functions
+void gui_emulation_start(emulation_context_t* emu_context) {
+    if (emu_context) {
+        gui_emulation_send_signal(emu_context, EMU_SIGNAL_START);
+    }
+}
+
+void gui_emulation_pause(emulation_context_t* emu_context) {
+    if (emu_context) {
+        gui_emulation_send_signal(emu_context, EMU_SIGNAL_PAUSE);
+    }
+}
+
+void gui_emulation_step(emulation_context_t* emu_context) {
+    if (emu_context) {
+        gui_emulation_send_signal(emu_context, EMU_SIGNAL_STEP);
+    }
+}
+
+void gui_emulation_reset(emulation_context_t* emu_context) {
+    if (emu_context) {
+        gui_emulation_send_signal(emu_context, EMU_SIGNAL_RESET);
+    }
+}
+
+// Main emulation thread function - focused on CPU dispatch only
+static int gui_emulation_thread_main(void* data) {
+    emulation_context_t* context = (emulation_context_t*)data;
+    if (!context) return -1;
+    
+    sdl_thread_impl_t* impl = (sdl_thread_impl_t*)context->thread_impl;
+    context->current_state = EMU_STATE_STOPPED;
+    
+    while (context->thread_running) {
+        // Wait for signal
+        SDL_LockMutex(impl->signal_mutex);
+        while (context->pending_signal == EMU_SIGNAL_NONE && context->thread_running) {
+            SDL_CondWait(impl->signal_condition, impl->signal_mutex);
+        }
+        emulation_signal_t signal = context->pending_signal;
+        context->pending_signal = EMU_SIGNAL_NONE;
+        SDL_UnlockMutex(impl->signal_mutex);
+        
+        if (!context->thread_running) break;
+        
+        // Process signal and execute CPU operation
+        switch (signal) {
+            case EMU_SIGNAL_START:
+                context->current_state = EMU_STATE_RUNNING;
+                // Start CPU threaded dispatch - this will run until intercept is triggered
+                // TODO: mos6510_execute_threaded(context->c64->mos6510);
+                // After threaded dispatch returns (due to intercept), go back to paused
+                context->current_state = EMU_STATE_PAUSED;
+                break;
+                
+            case EMU_SIGNAL_STEP:
+                context->current_state = EMU_STATE_STEPPING;
+                // Execute single CPU step
+                // TODO: mos6510_step(context->c64->mos6510);
+                context->current_state = EMU_STATE_PAUSED;
+                break;
+                
+            case EMU_SIGNAL_RESET:
+                context->current_state = EMU_STATE_RESETTING;
+                // Reset the CPU and system
+                // TODO: mos6510_reset(context->c64->mos6510);
+                context->current_state = EMU_STATE_STOPPED;
+                break;
+                
+            case EMU_SIGNAL_PAUSE:
+                // Set CPU intercept to break out of threaded dispatch
+                // TODO: mos6510_set_intercept(context->c64->mos6510, true);
+                context->current_state = EMU_STATE_PAUSED;
+                break;
+                
+            case EMU_SIGNAL_QUIT:
+                context->thread_running = false;
+                break;
+                
+            default:
+                break;
+        }
+    }
+    
+    context->thread_running = false;
+    return 0;
+}
+
+static void gui_emulation_process_signal(emulation_context_t* context, emulation_signal_t signal) {
+    switch (signal) {
+        case EMU_SIGNAL_START:
+            context->current_state = EMU_STATE_RUNNING;
+            break;
+        case EMU_SIGNAL_PAUSE:
+            context->current_state = EMU_STATE_PAUSED;
+            break;
+        case EMU_SIGNAL_STEP:
+            context->current_state = EMU_STATE_STEPPING;
+            break;
+        case EMU_SIGNAL_RESET:
+            context->current_state = EMU_STATE_RESETTING;
+            break;
+        case EMU_SIGNAL_QUIT:
+            context->thread_running = false;
+            break;
+        default:
+            break;
+    }
+}
+
+// Frame rendering and timing functions (called from main GUI thread)
+void gui_emulation_render_frame(emulation_context_t* context) {
+    if (!context) return;
+    
+    // Only render frame if emulation is running
+    if (context->current_state == EMU_STATE_RUNNING) {
+        // Update frame counter
+        context->frames_rendered++;
+        
+        // Set CPU intercept after frame period to pause threaded dispatch
+        // This allows the GUI thread to regain control periodically
+        // TODO: mos6510_set_intercept_after_cycles(context->c64->mos6510, context->frame_cycles);
+    }
+}
+
+void gui_emulation_update_fps(emulation_context_t* context) {
+    if (!context) return;
+    
+    static uint32_t last_fps_time = 0;
+    static uint32_t fps_counter = 0;
+    
+    if (last_fps_time == 0) {
+        last_fps_time = SDL_GetTicks();
+    }
+    
+    fps_counter++;
+    
+    uint32_t current_time = SDL_GetTicks();
+    if (current_time - last_fps_time >= 1000) {
+        context->actual_fps = fps_counter;
+        fps_counter = 0;
+        last_fps_time = current_time;
+    }
+}
+
+// SDL abstraction functions
+void gui_delay(uint32_t ms) {
+    SDL_Delay(ms);
+}
+

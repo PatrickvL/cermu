@@ -59,12 +59,12 @@ if(EXISTS "${SDL2_DIR}/include/SDL.h")
     set(SDL2_FOUND TRUE)
     set(SDL2_INCLUDE_DIRS "${SDL2_DIR}/include")
     if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-        # 64-bit
-        set(SDL2_LIBRARIES "${SDL2_DIR}/lib/x64/SDL2.lib" "${SDL2_DIR}/lib/x64/SDL2main.lib")
+        # 64-bit - exclude SDL2main.lib since we define our own main
+        set(SDL2_LIBRARIES "${SDL2_DIR}/lib/x64/SDL2.lib")
         set(SDL2_DLLS "${SDL2_DIR}/lib/x64/SDL2.dll")
     else()
-        # 32-bit
-        set(SDL2_LIBRARIES "${SDL2_DIR}/lib/x86/SDL2.lib" "${SDL2_DIR}/lib/x86/SDL2main.lib")
+        # 32-bit - exclude SDL2main.lib since we define our own main
+        set(SDL2_LIBRARIES "${SDL2_DIR}/lib/x86/SDL2.lib")
         set(SDL2_DLLS "${SDL2_DIR}/lib/x86/SDL2.dll")
     endif()
     message(STATUS "Using local SDL2 from: ${SDL2_DIR}")
@@ -201,11 +201,11 @@ if(BUILD_GUI)
         cimgui
     )
 
-    # Set output directory for GUI executable and make it a Windows app (not console)
+    # Set output directory for GUI executable (keep as console app for now)
     set_target_properties(c64emu_gui
         PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-        WIN32_EXECUTABLE TRUE
+        WIN32_EXECUTABLE FALSE
     )
     
     # Copy SDL2.dll to output directory on Windows
