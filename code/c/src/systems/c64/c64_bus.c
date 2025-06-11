@@ -157,8 +157,8 @@ void c64_bus_populate_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla) {
         } else if (!pla->outputs.n_romh) {
             // Cartridge ROM High (read-only)
             read_acid = ACID_ROMH;
-        }        
-
+        }
+        
         // Configure PLA for WRITE mode
         ((pla_906114_01_t*)pla)->inputs.r_w = false;  // Write mode
         pla_906114_01_update_outputs((pla_906114_01_t*)pla);

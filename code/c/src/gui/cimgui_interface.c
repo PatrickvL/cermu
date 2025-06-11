@@ -165,13 +165,21 @@ void gui_render_frame(c64_t* c64, gui_state_t* gui_state, struct emulation_conte
     ImGui_ImplSDL2_NewFrame_C();
     igNewFrame();
 
+    // Initialize screen display if needed
+    if (gui_state->screen_texture_id == 0) {
+        gui_init_screen_display(gui_state);
+    }
+    
+    // Update screen texture with current frame
+    gui_update_screen_texture(c64, gui_state);
+    
+    // Render C64 screen as background (fullscreen)
+    gui_render_screen(c64, gui_state);
+
     // Render main menu bar with emulation context
     gui_render_menu_bar(c64, gui_state, emu_context);
 
-    // Render windows based on gui_state
-    if (gui_state->show_screen) {
-        gui_render_screen(c64, gui_state);
-    }
+    // Render windows based on gui_state (but not the screen window)
     if (gui_state->show_memory_viewer) {
         gui_render_memory_viewer(c64, gui_state);
     }
@@ -297,7 +305,40 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, struct emulation_co
             
             igEndMenu();
         }
-        
+
+        if (igBeginMenu("Screen", true)) {
+            igText("Display Controls");
+            igSeparator();
+            
+            igSliderFloat("Scale", &gui_state->screen_scale, 0.5f, 4.0f, "%.1fx", ImGuiSliderFlags_None);
+            igCheckbox("Filter", &gui_state->screen_filter);
+            igCheckbox("Scanlines", &gui_state->screen_scanlines);
+            
+            // Update texture filtering based on user preference
+            if (gui_state->screen_texture_id != 0) {
+                glBindTexture(GL_TEXTURE_2D, gui_state->screen_texture_id);
+                if (gui_state->screen_filter) {
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                } else {
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                }
+            }
+            
+            igSeparator();
+            
+            // Display information - use the constants that are defined later in the file
+            igText("Resolution: 320x200");
+            igText("With border: 403x284");
+            
+            if (c64) {
+                igText("Frame: %llu", c64->total_cycles / 20000);
+            }
+            
+            igEndMenu();
+        }
+
         if (igBeginMenu("Chips", true)) {
             if (c64 && c64->system.chip_count > 0) {
                 if (igBeginMenu("Debug Windows", true)) {
@@ -718,98 +759,97 @@ void gui_update_screen_texture(c64_t* c64, gui_state_t* gui_state) {
 }
 
 void gui_render_screen(c64_t* c64, gui_state_t* gui_state) {
-    if (!igBegin("C64 Screen", &gui_state->show_screen, 0)) {
-        igEnd();
-        return;
-    }
+    // Get the main viewport to create a fullscreen background window
+    const ImGuiViewport* viewport = igGetMainViewport();
     
-    // Initialize screen display if needed
-    if (gui_state->screen_texture_id == 0) {
-        gui_init_screen_display(gui_state);
-    }
+    // Set window position and size to cover the entire viewport
+    igSetNextWindowPos(viewport->Pos, ImGuiCond_Always, (ImVec2){0, 0});
+    igSetNextWindowSize(viewport->Size, ImGuiCond_Always);
     
-    // Update screen texture with current frame
-    gui_update_screen_texture(c64, gui_state);
+    // Window flags for a fullscreen background window
+    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration | 
+                                   ImGuiWindowFlags_NoMove | 
+                                   ImGuiWindowFlags_NoResize | 
+                                   ImGuiWindowFlags_NoSavedSettings | 
+                                   ImGuiWindowFlags_NoBringToFrontOnFocus | 
+                                   ImGuiWindowFlags_NoFocusOnAppearing |
+                                   ImGuiWindowFlags_NoNav |
+                                   ImGuiWindowFlags_NoBackground;
     
-    // Calculate display size
-    float display_width = C64_TOTAL_WIDTH * gui_state->screen_scale;
-    float display_height = C64_TOTAL_HEIGHT * gui_state->screen_scale;
+    // Push window to background (behind all other windows)
+    igPushStyleVar_Float(ImGuiStyleVar_WindowRounding, 0.0f);
+    igPushStyleVar_Float(ImGuiStyleVar_WindowBorderSize, 0.0f);
     
-    // Screen controls
-    igText("Display Controls");
-    igSliderFloat("Scale", &gui_state->screen_scale, 0.5f, 4.0f, "%.1fx", ImGuiSliderFlags_None);
-    igCheckbox("Filter", &gui_state->screen_filter);
-    igSameLine(0, -1.0f);
-    igCheckbox("Scanlines", &gui_state->screen_scanlines);
-    
-    // Update texture filtering based on user preference
-    glBindTexture(GL_TEXTURE_2D, gui_state->screen_texture_id);
-    if (gui_state->screen_filter) {
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    } else {
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    }
-    
-    igSeparator();
-    
-    // Display information
-    igText("Resolution: %dx%d (with border: %dx%d)", 
-                C64_SCREEN_WIDTH, C64_SCREEN_HEIGHT,
-                C64_TOTAL_WIDTH, C64_TOTAL_HEIGHT);
-    igText("Display Size: %.0fx%.0f", display_width, display_height);
-    
-    if (c64) {
-        igText("Frame: %llu", c64->total_cycles / 20000);
-    }
-    
-    igSeparator();
-    
-    // Center the image in the available content region
-    ImVec2 content_avail;
-    igGetContentRegionAvail(&content_avail);
-    ImVec2 image_size = {display_width, display_height};
-    
-    // Calculate centering offset
-    ImVec2 cursor_pos;
-    igGetCursorPos(&cursor_pos);
-    if (content_avail.x > image_size.x) {
-        cursor_pos.x += (content_avail.x - image_size.x) * 0.5f;
-    }
-    if (content_avail.y > image_size.y) {
-        cursor_pos.y += (content_avail.y - image_size.y) * 0.5f;
-    }
-    igSetCursorPos(cursor_pos);
-    
-    // Render the screen texture
-    ImTextureID tex_id = (ImTextureID)(intptr_t)gui_state->screen_texture_id;
-    
-    if (gui_state->screen_scanlines) {
-        // TODO: Implement scanline shader effect
-        // For now, just draw the image normally
-        igImage(tex_id, image_size, (ImVec2){0, 0}, (ImVec2){1, 1});
-    } else {
-        igImage(tex_id, image_size, (ImVec2){0, 0}, (ImVec2){1, 1});
-    }
-    
-    // Handle mouse interaction with screen
-    if (igIsItemHovered(ImGuiHoveredFlags_None)) {
-        ImVec2 mouse_pos;
-        igGetMousePos(&mouse_pos);
-        ImVec2 image_min;
-        igGetItemRectMin(&image_min);
-        ImVec2 relative_pos = {(mouse_pos.x - image_min.x) / gui_state->screen_scale,
-                              (mouse_pos.y - image_min.y) / gui_state->screen_scale};
+    if (igBegin("##C64ScreenBackground", NULL, window_flags)) {
+        // Calculate aspect ratio and centered position for C64 screen
+        float screen_aspect = (float)C64_TOTAL_WIDTH / (float)C64_TOTAL_HEIGHT;
+        float viewport_aspect = viewport->Size.x / viewport->Size.y;
         
-        if (relative_pos.x >= 0 && relative_pos.x < C64_TOTAL_WIDTH &&
-            relative_pos.y >= 0 && relative_pos.y < C64_TOTAL_HEIGHT) {
-            igSetTooltip("Screen coordinates: (%d, %d)", 
-                         (int)relative_pos.x, (int)relative_pos.y);
+        float display_width, display_height;
+        
+        if (viewport_aspect > screen_aspect) {
+            // Viewport is wider than screen - fit to height
+            display_height = viewport->Size.y;
+            display_width = display_height * screen_aspect;
+        } else {
+            // Viewport is taller than screen - fit to width  
+            display_width = viewport->Size.x;
+            display_height = display_width / screen_aspect;
+        }
+        
+        // Apply user scaling
+        display_width *= gui_state->screen_scale;
+        display_height *= gui_state->screen_scale;
+        
+        // Clamp to viewport size
+        if (display_width > viewport->Size.x) {
+            float scale_factor = viewport->Size.x / display_width;
+            display_width = viewport->Size.x;
+            display_height *= scale_factor;
+        }
+        if (display_height > viewport->Size.y) {
+            float scale_factor = viewport->Size.y / display_height;
+            display_height = viewport->Size.y;
+            display_width *= scale_factor;
+        }
+        
+        // Center the screen in the viewport
+        float center_x = (viewport->Size.x - display_width) * 0.5f;
+        float center_y = (viewport->Size.y - display_height) * 0.5f;
+        
+        // Set cursor position to center the image
+        igSetCursorPos((ImVec2){center_x, center_y});
+        
+        // Render the C64 screen texture
+        ImTextureID tex_id = (ImTextureID)(intptr_t)gui_state->screen_texture_id;
+        ImVec2 image_size = {display_width, display_height};
+        
+        if (gui_state->screen_scanlines) {
+            // TODO: Implement scanline shader effect
+            // For now, just draw the image normally
+            igImage(tex_id, image_size, (ImVec2){0, 0}, (ImVec2){1, 1});
+        } else {
+            igImage(tex_id, image_size, (ImVec2){0, 0}, (ImVec2){1, 1});
+        }
+        // Handle mouse interaction with fullscreen screen
+        if (igIsItemHovered(ImGuiHoveredFlags_None)) {
+            ImVec2 mouse_pos;
+            igGetMousePos(&mouse_pos);
+            ImVec2 image_min;
+            igGetItemRectMin(&image_min);
+            ImVec2 relative_pos = {(mouse_pos.x - image_min.x) / (display_width / C64_TOTAL_WIDTH),
+                                  (mouse_pos.y - image_min.y) / (display_height / C64_TOTAL_HEIGHT)};
+            
+            if (relative_pos.x >= 0 && relative_pos.x < C64_TOTAL_WIDTH &&
+                relative_pos.y >= 0 && relative_pos.y < C64_TOTAL_HEIGHT) {
+                igSetTooltip("C64 Screen coordinates: (%d, %d)", 
+                           (int)relative_pos.x, (int)relative_pos.y);
+            }
         }
     }
-    
     igEnd();
+    
+    igPopStyleVar(2); // Pop WindowRounding and WindowBorderSize
 }
 
 // ============================================================================
