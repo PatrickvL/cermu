@@ -30,6 +30,10 @@ void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config) {
         rom_config = system_config_get_default_roms();
     }
     
+    // Discover ROM root path for C64 system
+    char rom_root_path[1024];
+    bool rom_root_found = system_config_discover_rom_root("c64", rom_root_path, sizeof(rom_root_path));
+    
     for (int i = 0; i < system->chip_count; i++) {
         chip_entry_t* dev = &system->chips[i];
         
@@ -48,30 +52,35 @@ void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config) {
             }
             
             bool rom_loaded = false;
-              // Determine ROM type based on memory address and size
-            if (dev->base_address == 0xA000 && dev->size == 8192) {
-                // BASIC ROM
-                rom_loaded = rom_loader_load_to_buffer((const char**)rom_config->basic_rom_paths, 8192, 
-                                                     rom->memory, dev->size);
-                if (!rom_loaded) {
-                    printf("Warning: Failed to load BASIC ROM\n");
+              // Only attempt to load ROMs if we found the ROM root directory
+            if (rom_root_found) {
+                // Determine ROM type based on memory address and size
+                if (dev->base_address == 0xA000 && dev->size == 8192) {
+                    // BASIC ROM
+                    rom_loaded = rom_loader_load_from_root(rom_root_path, (const char**)rom_config->basic_rom_filenames, 8192, 
+                                                         rom->memory, dev->size);
+                    if (!rom_loaded) {
+                        printf("Warning: Failed to load BASIC ROM\n");
+                    }
                 }
-            }
-            else if (dev->base_address == 0xE000 && dev->size == 8192) {
-                // KERNAL ROM  
-                rom_loaded = rom_loader_load_to_buffer((const char**)rom_config->kernal_rom_paths, 8192,
-                                                     rom->memory, dev->size);
-                if (!rom_loaded) {
-                    printf("Warning: Failed to load KERNAL ROM\n");
+                else if (dev->base_address == 0xE000 && dev->size == 8192) {
+                    // KERNAL ROM  
+                    rom_loaded = rom_loader_load_from_root(rom_root_path, (const char**)rom_config->kernal_rom_filenames, 8192,
+                                                         rom->memory, dev->size);
+                    if (!rom_loaded) {
+                        printf("Warning: Failed to load KERNAL ROM\n");
+                    }
                 }
-            }
-            else if (dev->base_address == 0xD000 && dev->size == 4096) {
-                // Character ROM
-                rom_loaded = rom_loader_load_to_buffer((const char**)rom_config->chargen_rom_paths, 4096,
-                                                     rom->memory, dev->size);
-                if (!rom_loaded) {
-                    printf("Warning: Failed to load Character ROM\n");
+                else if (dev->base_address == 0xD000 && dev->size == 4096) {
+                    // Character ROM
+                    rom_loaded = rom_loader_load_from_root(rom_root_path, (const char**)rom_config->chargen_rom_filenames, 4096,
+                                                         rom->memory, dev->size);
+                    if (!rom_loaded) {
+                        printf("Warning: Failed to load Character ROM\n");
+                    }
                 }
+            } else {
+                printf("Warning: ROM root not found, skipping ROM loading\n");
             }
             
             // If ROM loading failed, fill with default pattern (0xFF for unloaded ROM)

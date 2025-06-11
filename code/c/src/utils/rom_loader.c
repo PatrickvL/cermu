@@ -94,6 +94,43 @@ bool rom_loader_load_to_buffer(const char* file_paths[], size_t expected_size,
     return true;
 }
 
+bool rom_loader_load_from_root(const char* rom_root_path, const char* filenames[], 
+                              size_t expected_size, uint8_t* dest_buffer, size_t dest_size) {
+    if (!rom_root_path || !filenames || !dest_buffer || dest_size == 0) {
+        return false;
+    }
+    
+    // Count number of filenames to construct paths array
+    int filename_count = 0;
+    while (filenames[filename_count] != NULL && filename_count < 10) {
+        filename_count++;
+    }
+    
+    if (filename_count == 0) {
+        return false;
+    }
+    
+    // Construct full paths by combining rom_root_path with each filename
+    const char* full_paths[11];  // filename_count + 1 for NULL terminator
+    char path_buffers[10][1024];  // Static buffers for constructed paths
+    
+    for (int i = 0; i < filename_count; i++) {
+        snprintf(path_buffers[i], sizeof(path_buffers[i]), "%s%c%s", 
+                 rom_root_path, 
+#ifdef _WIN32
+                 '\\',
+#else
+                 '/',
+#endif
+                 filenames[i]);
+        full_paths[i] = path_buffers[i];
+    }
+    full_paths[filename_count] = NULL;
+    
+    // Use existing rom_loader_load_to_buffer function
+    return rom_loader_load_to_buffer(full_paths, expected_size, dest_buffer, dest_size);
+}
+
 bool rom_loader_verify_md5(const uint8_t* buffer, size_t size, const char* expected_md5) {
     // TODO: Implement MD5 verification
     // For now, just return true to allow ROM loading without verification
