@@ -92,18 +92,14 @@ void gui_cleanup_state(gui_state_t* gui_state);
 void gui_delay(uint32_t ms);
 
 // Main GUI functions
-void gui_render_frame(struct c64_s* c64, gui_state_t* gui_state);
-void gui_render_frame_with_context(struct c64_s* c64, gui_state_t* gui_state, struct emulation_context_s* emu_context);
+void gui_render_frame(struct c64_s* c64, gui_state_t* gui_state, struct emulation_context_s* emu_context);
 bool gui_should_quit(void);
-void gui_handle_events(void);
-void gui_handle_events_with_context(struct emulation_context_s* emu_context);
+void gui_handle_events(struct emulation_context_s* emu_context);
 
 // Window rendering functions
-void gui_render_menu_bar(struct c64_s* c64, gui_state_t* gui_state);
-void gui_render_menu_bar_with_context(struct c64_s* c64, gui_state_t* gui_state, struct emulation_context_s* emu_context);
+void gui_render_menu_bar(struct c64_s* c64, gui_state_t* gui_state, struct emulation_context_s* emu_context);
 void gui_render_memory_viewer(struct c64_s* c64, gui_state_t* gui_state);
-void gui_render_debugger(struct c64_s* c64, gui_state_t* gui_state);
-void gui_render_debugger_with_context(struct c64_s* c64, gui_state_t* gui_state, struct emulation_context_s* emu_context);
+void gui_render_debugger(struct c64_s* c64, gui_state_t* gui_state, struct emulation_context_s* emu_context);
 void gui_render_settings(struct c64_s* c64, gui_state_t* gui_state);
 void gui_render_about(gui_state_t* gui_state);
 void gui_render_screen(struct c64_s* c64, gui_state_t* gui_state);
@@ -115,8 +111,7 @@ void gui_update_screen_texture(struct c64_s* c64, gui_state_t* gui_state);
 
 // Utility functions
 void gui_init_state(gui_state_t* gui_state);
-void gui_load_rom_file(const char* filepath, const char* type);
-void gui_load_rom_file_with_context(const char* filepath, const char* type, gui_state_t* gui_state, emulation_context_t* emu_context);
+void gui_load_rom_file(const char* filepath, const char* type, gui_state_t* gui_state, emulation_context_t* emu_context);
 void gui_load_disk_image(const char* filepath);
 bool gui_reload_roms_from_state(struct c64_s* c64, const gui_state_t* gui_state);
 bool gui_apply_rom_changes(emulation_context_t* emu_context, gui_state_t* gui_state);

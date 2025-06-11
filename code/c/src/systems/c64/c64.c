@@ -146,7 +146,8 @@ void c64_callbacks_init(c64_t* c64) {
             else if (dev->base_address == 0xE000) {
                 acid = ACID_KERNAL;
             }
-        }        else if (desc == &mos6567_descriptor || desc == &mos6569_descriptor) {
+        }
+        else if (desc == &mos6567_descriptor || desc == &mos6569_descriptor) {
             // VIC-II (NTSC or PAL) gets I/O slots 0-3 (D000-D3FF)
             c64_bus_register_chip_callbacks(bus, ACID_VIC_D0, context, desc->read, desc->write);
             c64_bus_register_chip_callbacks(bus, ACID_VIC_D1, context, desc->read, desc->write);
