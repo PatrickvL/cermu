@@ -237,6 +237,9 @@ typedef struct {
     uint8_t bank;
     void (*bank_change)(void* context, uint8_t bank);
     
+    // VIC-II memory mapping
+    vicii_memory_map_t memory_map;
+    
     // Per-standard timing (set by wrapper create functions)
     uint8_t cycles_per_line;
     uint16_t total_lines;
@@ -275,12 +278,30 @@ void vicii_common_update_border_limits(vicii_common_t* vicii);
 void vicii_common_update_bad_line(vicii_common_t* vicii);
 void vicii_common_handle_raster_interrupt(vicii_common_t* vicii);
 
-// Memory access functions
-uint8_t vicii_common_c_access(vicii_common_t* vicii);
-uint8_t vicii_common_g_access(vicii_common_t* vicii);
+// VIC-II memory access functions
+uint8_t vicii_memory_read_cycle(vicii_common_t* vicii, uint16_t address);
+void vicii_update_bank_mapping(vicii_common_t* vicii, uint8_t bank);
+
+// Character and graphics access functions
+void vicii_common_c_access(vicii_common_t* vicii);
+void vicii_common_g_access(vicii_common_t* vicii);
 
 // Pixel emission functions
 void vicii_common_emit_border_pixels(vicii_common_t* vicii);
 void vicii_common_emit_graphics_pixels(vicii_common_t* vicii, uint8_t data);
+
+// VIC-II banking constants
+#define VICII_BANK_0_BASE    0x0000  // Bank 0: $0000-$3FFF
+#define VICII_BANK_1_BASE    0x4000  // Bank 1: $4000-$7FFF
+#define VICII_BANK_2_BASE    0x8000  // Bank 2: $8000-$BFFF
+#define VICII_BANK_3_BASE    0xC000  // Bank 3: $C000-$FFFF
+
+// VIC-II memory mapping structure
+typedef struct {
+    uint16_t bank_base;         // Base address of current 16KB VIC bank
+    uint16_t video_matrix_base; // Video matrix base within VIC bank
+    uint16_t char_base;         // Character ROM base within VIC bank
+    bool char_rom_enabled;      // Whether character ROM is accessible
+} vicii_memory_map_t;
 
 #endif // VICII_COMMON_H
