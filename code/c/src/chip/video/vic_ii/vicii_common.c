@@ -197,6 +197,10 @@ void vicii_common_registers_write(void* chip, uint16_t address, uint8_t value) {
         case VICII_C2:
             update_graphics_mode_and_dependent_colors(vicii);
             break;
+        case VICII_MP:
+            // Memory pointers changed - update memory mapping
+            vicii_update_bank_mapping(vicii, vicii->bank);
+            break;
         case VICII_EC:
             set_main_border_flip_flop(vicii,
                 vicii->border_pixel.priority > VICII_PRIORITY_BACKGROUND);
@@ -215,7 +219,7 @@ void vicii_common_registers_write(void* chip, uint16_t address, uint8_t value) {
 
 void vicii_common_bank_change(void* chip, uint8_t bank) {
     vicii_common_t* vicii = (vicii_common_t*)chip;
-    vicii->bank = bank;
+    vicii_update_bank_mapping(vicii, bank);
 }
 
 // Initialize VIC-II to default state
@@ -304,6 +308,9 @@ void vicii_common_initialize(vicii_common_t* vicii) {
     update_graphics_mode_and_dependent_colors(vicii);
     set_main_border_flip_flop(vicii, false);
     
+    // Initialize VIC-II memory mapping to default bank 0
+    vicii_update_bank_mapping(vicii, 0);
+    
     // Allocate pixel buffers
     if (vicii->visible_pixels_per_line > 0) {
         vicii->pixel_line_priority = malloc(vicii->visible_pixels_per_line * sizeof(vicii_priority_t));
@@ -311,7 +318,212 @@ void vicii_common_initialize(vicii_common_t* vicii) {
     }
 }
 
-// Main cycle function - simplified version of the complex cycle-by-cycle implementation
+// VIC-II specific memory read function with proper banking
+uint8_t vicii_memory_read_cycle(vicii_common_t* vicii, uint16_t address) {
+    if (!vicii->bus) return 0xFF;
+    
+    // VIC-II only sees 14-bit addresses (16KB banks)
+    // The top 2 bits come from CIA2 port A (inverted)
+    uint16_t vic_address = (address & 0x3FFF) | vicii->memory_map.bank_base;
+    
+    // Special handling for character ROM access
+    // Character ROM is visible in VIC bank when:
+    // 1. Address is in range $1000-$1FFF or $9000-$9FFF
+    // 2. Character ROM is enabled (determined by memory setup register)
+    if (vicii->memory_map.char_rom_enabled) {
+        uint16_t char_check = address & 0x3000;
+        if (char_check == 0x1000 || char_check == 0x9000) {
+            // Access character ROM directly (bypass banking)
+            c64_bus_t* bus = (c64_bus_t*)vicii->bus;
+            return bus->read_callbacks[ACID_CHARROM].read(
+                bus->read_callbacks[ACID_CHARROM].context,
+                (address & 0x0FFF) | 0xD000  // Map to $D000-$DFFF range
+            );
+        }
+    }
+    
+    // Use bus memory read for all other accesses
+    return c64_bus_memory_read((c64_bus_t*)vicii->bus, vic_address);
+}
+
+// Update VIC-II bank mapping when CIA2 changes the bank
+void vicii_update_bank_mapping(vicii_common_t* vicii, uint8_t bank) {
+    // VIC-II bank is inverted: 0=bank3, 1=bank2, 2=bank1, 3=bank0
+    bank = 3 - (bank & 0x03);
+    vicii->bank = bank;
+    
+    switch (bank) {
+        case 0: vicii->memory_map.bank_base = VICII_BANK_0_BASE; break;
+        case 1: vicii->memory_map.bank_base = VICII_BANK_1_BASE; break;
+        case 2: vicii->memory_map.bank_base = VICII_BANK_2_BASE; break;
+        case 3: vicii->memory_map.bank_base = VICII_BANK_3_BASE; break;
+    }
+    
+    // Update video matrix and character base addresses
+    uint8_t mp_reg = vicii->registers[VICII_MP];
+    vicii->memory_map.video_matrix_base = ((mp_reg & 0xF0) >> 4) * 0x400;
+    vicii->memory_map.char_base = ((mp_reg & 0x0E) >> 1) * 0x800;
+    
+    // Character ROM is accessible in banks 0 and 2 when char_base points to $1000/$9000
+    vicii->memory_map.char_rom_enabled = (bank == 0 || bank == 2) &&
+                                        (vicii->memory_map.char_base == 0x1000 ||
+                                         vicii->memory_map.char_base == 0x9000);
+}
+
+// Character access (c-access) - reads from video matrix
+void vicii_common_c_access(vicii_common_t* vicii) {
+    if (!vicii->video_logic_display_state) return;
+    
+    // Calculate video matrix address
+    uint16_t address = vicii->memory_map.video_matrix_base | vicii->vc;
+    
+    // Read character code from video matrix
+    vicii->video_matrix_line[vicii->vmli] = vicii_memory_read_cycle(vicii, address);
+    
+    // Read color from color RAM (always at $D800-$DBFF, independent of VIC banking)
+    if (vicii->bus) {
+        c64_bus_t* bus = (c64_bus_t*)vicii->bus;
+        vicii->video_color_line[vicii->vmli] =
+            bus->read_callbacks[ACID_COLORRAM_D8].read(
+                bus->read_callbacks[ACID_COLORRAM_D8].context,
+                0xD800 + vicii->vc
+            ) & 0x0F;  // Color RAM is only 4 bits
+    }
+}
+
+// Graphics access (g-access) - reads character/bitmap data
+void vicii_common_g_access(vicii_common_t* vicii) {
+    uint16_t address;
+    uint8_t char_code = 0;
+    vicii_color_t color_code = VICII_COLOR_BLACK;
+    
+    if (vicii->video_logic_display_state) {
+        // Get data from video matrix line (set by c-access)
+        char_code = vicii->video_matrix_line[vicii->vmli];
+        color_code = vicii->video_color_line[vicii->vmli];
+        
+        // Calculate graphics data address based on mode
+        if ((vicii->graphics_mode & VICII_BITMAP_MODE_MASK) == 0) {
+            // Text mode: address = char_base + (char_code * 8) + row
+            address = vicii->memory_map.char_base + (char_code << 3) + vicii->rc;
+        } else {
+            // Bitmap mode: address = char_base + (vc * 8) + row
+            address = vicii->memory_map.char_base + (vicii->vc << 3) + vicii->rc;
+        }
+    } else {
+        // Idle state: always access $3fff
+        address = 0x3fff;
+    }
+    
+    // Handle Extended Color Mode (ECM)
+    if (vicii->graphics_mode & VICII_EXTENDED_COLOR_MODE_MASK) {
+        // In ECM, address lines 9 and 10 are forced low
+        address &= ~0x0600;
+    }
+    
+    // Read graphics data
+    uint8_t graphics_data = vicii_memory_read_cycle(vicii, address);
+    
+    // Update colors based on graphics mode and character/color data
+    switch (vicii->graphics_mode) {
+        case VICII_GM_STANDARD_TEXT:
+            vicii->colors[4].color = color_code;
+            break;
+            
+        case VICII_GM_MULTICOLOR_TEXT: {
+            uint8_t mc_flag = (color_code >> 3) & 1;  // Bit 3 determines multicolor
+            if (mc_flag) {
+                vicii->colors[3].color = color_code & 0x07;  // Use bits 0-2
+            } else {
+                vicii->colors[4].color = color_code;
+            }
+            break;
+        }
+        
+        case VICII_GM_STANDARD_BITMAP:
+            vicii->colors[0].color = char_code & 0x0F;       // Lower nibble
+            vicii->colors[4].color = (char_code >> 4) & 0x0F; // Upper nibble
+            break;
+            
+        case VICII_GM_MULTICOLOR_BITMAP:
+            vicii->colors[1].color = (char_code >> 4) & 0x0F; // Upper nibble
+            vicii->colors[2].color = char_code & 0x0F;        // Lower nibble
+            vicii->colors[3].color = color_code;              // Color RAM
+            break;
+            
+        case VICII_GM_ECM_TEXT:
+            vicii->colors[0].color = vicii->registers[VICII_B0C + ((char_code >> 6) & 3)] & 0x0F;
+            vicii->colors[4].color = color_code;
+            break;
+    }
+    
+    // Emit pixels based on graphics data and mode
+    vicii_common_emit_graphics_pixels(vicii, graphics_data);
+    
+    // Increment video counters
+    vicii->vc = (vicii->vc + 1) & 0x3FF;  // 10-bit counter
+    vicii->vmli = (vicii->vmli + 1) & 0x3F; // 6-bit counter
+}
+
+// Emit border pixels
+void vicii_common_emit_border_pixels(vicii_common_t* vicii) {
+    // Emit 8 border pixels (one character width)
+    for (int i = 0; i < 8; i++) {
+        if (vicii->pixel_line_index < vicii->visible_pixels_per_line) {
+            vicii->pixel_line_priority[vicii->pixel_line_index] = vicii->border_pixel.priority;
+            vicii->pixel_line_color[vicii->pixel_line_index] = vicii->border_pixel.color;
+            vicii->pixel_line_index++;
+        }
+    }
+}
+
+// Emit graphics pixels based on graphics data
+void vicii_common_emit_graphics_pixels(vicii_common_t* vicii, uint8_t graphics_data) {
+    // Check if we're in multicolor mode
+    bool multicolor = false;
+    
+    switch (vicii->graphics_mode) {
+        case VICII_GM_MULTICOLOR_TEXT: {
+            uint8_t color_code = vicii->video_color_line[vicii->vmli];
+            multicolor = (color_code >> 3) & 1;
+            break;
+        }
+        case VICII_GM_MULTICOLOR_BITMAP:
+            multicolor = true;
+            break;
+    }
+    
+    if (multicolor) {
+        // Multicolor mode: 4 double-width pixels, 2 bits per pixel
+        for (int i = 0; i < 4; i++) {
+            uint8_t color_index = (graphics_data >> (6 - i * 2)) & 0x03;
+            vicii_pixel_t pixel = vicii->colors[color_index];
+            
+            // Emit double-width pixel
+            for (int j = 0; j < 2; j++) {
+                if (vicii->pixel_line_index < vicii->visible_pixels_per_line) {
+                    vicii->pixel_line_priority[vicii->pixel_line_index] = pixel.priority;
+                    vicii->pixel_line_color[vicii->pixel_line_index] = pixel.color;
+                    vicii->pixel_line_index++;
+                }
+            }
+        }
+    } else {
+        // Standard mode: 8 single-width pixels, 1 bit per pixel
+        for (int i = 0; i < 8; i++) {
+            uint8_t bit = (graphics_data >> (7 - i)) & 1;
+            vicii_pixel_t pixel = vicii->colors[bit ? 4 : 0];  // Foreground or background
+            
+            if (vicii->pixel_line_index < vicii->visible_pixels_per_line) {
+                vicii->pixel_line_priority[vicii->pixel_line_index] = pixel.priority;
+                vicii->pixel_line_color[vicii->pixel_line_index] = pixel.color;
+                vicii->pixel_line_index++;
+            }
+        }
+    }
+}
+
+// Main cycle function with character and graphics access
 void vicii_common_cycle(vicii_common_t* vicii) {
     // Count X position
     vicii->x_coordinate += 8;
@@ -321,6 +533,7 @@ void vicii_common_cycle(vicii_common_t* vicii) {
     if (vicii->x_cycle >= vicii->cycles_per_line) {
         vicii->x_cycle = 0;
         vicii->x_coordinate = 0;
+        vicii->pixel_line_index = 0;  // Reset pixel line index
         vicii->raster_counter++;
         
         // Handle vertical retrace
@@ -339,8 +552,8 @@ void vicii_common_cycle(vicii_common_t* vicii) {
     
     // Handle bad line related state
     if (vicii->bad_line) {
-        // Set BA low during bad line
-        if (vicii->bus) {
+        // Set BA low during bad line (cycles 12-54)
+        if (vicii->bus && vicii->x_cycle >= 12 && vicii->x_cycle <= 54) {
             ((c64_bus_t*)vicii->bus)->control_lines &= ~BA_LINE;
         }
         vicii->video_logic_display_state = true;
@@ -350,36 +563,57 @@ void vicii_common_cycle(vicii_common_t* vicii) {
         }
     }
     
-    // Handle display logic
-    if (vicii->x_cycle >= 14 && vicii->x_cycle <= 54) {
-        // In display window
-        if (vicii->x_cycle == 14) {
+    // Handle display logic with character and graphics access
+    switch (vicii->x_cycle) {
+        case 14:
+            // Reset video counters at start of line
             vicii->vc = vicii->vc_base;
             vicii->vmli = 0;
             if (vicii->bad_line) {
                 vicii->rc = 0;
             }
-        }
-        
-        // Character and graphics access would happen here
-        // (Simplified for now - full implementation would do c_access and g_access)
-    }
-    
-    // Handle sprite logic (simplified)
-    // Full sprite implementation would handle all 8 sprites with proper timing
-    
-    // Handle end of character row
-    if (vicii->x_cycle == 58) {
-        if (vicii->rc == 7) {
-            if (!vicii->bad_line) {
-                vicii->video_logic_display_state = false;
-                vicii->vc_base = vicii->vc;
-                vicii->rc = 0;
+            break;
+            
+        case 15:
+        case 16:
+        case 17:
+            // Character and graphics access cycles 15-54
+            if (vicii->x_cycle >= 15 && vicii->x_cycle <= 54) {
+                // Character access in display state during bad lines
+                if (vicii->video_logic_display_state && vicii->bad_line) {
+                    vicii_common_c_access(vicii);
+                }
+                // Graphics access always happens in display window
+                vicii_common_g_access(vicii);
             }
-        }
-        
-        if (vicii->video_logic_display_state) {
-            vicii->rc = (vicii->rc + 1) & 0x07;
-        }
+            break;
+            
+        case 58:
+            // Handle end of character row
+            if (vicii->rc == 7) {
+                if (!vicii->bad_line) {
+                    vicii->video_logic_display_state = false;
+                    vicii->vc_base = vicii->vc;
+                    vicii->rc = 0;
+                }
+            }
+            
+            if (vicii->video_logic_display_state) {
+                vicii->rc = (vicii->rc + 1) & 0x07;
+            }
+            break;
+            
+        default:
+            // Handle cycles 18-54 (character and graphics access)
+            if (vicii->x_cycle >= 18 && vicii->x_cycle <= 54) {
+                if (vicii->video_logic_display_state && vicii->bad_line) {
+                    vicii_common_c_access(vicii);
+                }
+                vicii_common_g_access(vicii);
+            } else if (vicii->x_cycle >= 11 && vicii->x_cycle <= 54) {
+                // Emit border pixels outside display area
+                vicii_common_emit_border_pixels(vicii);
+            }
+            break;
     }
 }
