@@ -1,3 +1,10 @@
+#include <SDL.h>
+#include <SDL_opengl.h>
+#ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#endif
+#include <cimgui.h>
+
 #include "cimgui_interface.h"
 #include "../systems/c64/c64.h"
 #include "../systems/c64/c64_bus.h"
@@ -5,13 +12,6 @@
 #include "../utils/rom_loader.h"
 #include "../chip/cpu/mos6510/mos6510.h"
 #include "cimgui_backends.h"
-
-#include <SDL.h>
-#include <SDL_opengl.h>
-#ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#endif
-#include <cimgui.h>
 
 #include <stdio.h>
 #include <string.h>

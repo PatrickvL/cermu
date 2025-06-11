@@ -12,11 +12,14 @@
 
 void mos6510_render_debug_window(void* chip, bool* show_window) {
     mos6510_t* cpu = (mos6510_t*)chip;
-    if (!cpu) return;
+    if (!cpu || !cpu->desc) return;
     
     if (!*show_window) return;
     
-    if (!igBegin("MOS6510 CPU Debug", show_window, 0)) {
+    char window_title[128];
+    snprintf(window_title, sizeof(window_title), "%s Debug", cpu->desc->description);
+    
+    if (!igBegin(window_title, show_window, 0)) {
         igEnd();
         return;
     }
@@ -124,10 +127,14 @@ void mos6510_render_debug_window(void* chip, bool* show_window) {
 
 void mos6510_render_settings_window(void* chip, bool* show_window) {
     mos6510_t* cpu = (mos6510_t*)chip;
+    if (!cpu || !cpu->desc) return;
     
     if (!*show_window) return;
     
-    if (!igBegin("MOS6510 CPU Settings", show_window, 0)) {
+    char window_title[128];
+    snprintf(window_title, sizeof(window_title), "%s Settings", cpu->desc->description);
+    
+    if (!igBegin(window_title, show_window, 0)) {
         igEnd();
         return;
     }

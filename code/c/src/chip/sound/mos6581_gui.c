@@ -9,12 +9,16 @@
 // ============================================================================
 // MOS6581 SID GUI DEBUG WINDOW
 // ============================================================================
-
 void mos6581_render_debug_window(void* chip, bool* show_window) {
-    (void)chip; // Suppress unused parameter warning
+    mos6581_t* sid = (mos6581_t*)chip;
+    if (!sid || !sid->desc) return;
+    
     if (!*show_window) return;
     
-    if (!igBegin("MOS6581 SID Debug", show_window, 0)) {
+    char window_title[128];
+    snprintf(window_title, sizeof(window_title), "%s Debug", sid->desc->description);
+    
+    if (!igBegin(window_title, show_window, 0)) {
         igEnd();
         return;
     }
@@ -61,12 +65,16 @@ void mos6581_render_debug_window(void* chip, bool* show_window) {
 // ============================================================================
 // MOS6581 SID GUI SETTINGS WINDOW
 // ============================================================================
-
 void mos6581_render_settings_window(void* chip, bool* show_window) {
-    (void)chip; // Suppress unused parameter warning
+    mos6581_t* sid = (mos6581_t*)chip;
+    if (!sid || !sid->desc) return;
+    
     if (!*show_window) return;
     
-    if (!igBegin("MOS6581 SID Settings", show_window, 0)) {
+    char window_title[128];
+    snprintf(window_title, sizeof(window_title), "%s Settings", sid->desc->description);
+    
+    if (!igBegin(window_title, show_window, 0)) {
         igEnd();
         return;
     }
