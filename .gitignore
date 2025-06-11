@@ -40,8 +40,20 @@ c64emu.exe
 *.lastbuildstate
 *.tlog
 
-code/c/CTestTestfile.cmake
+external/*
 code/c/deps/*
+
+code/c/test_optimized_cpu
+code/c/test_pla_clean
+code/c/test_pla_mapping
+code/c/test_pla_standalone
+code/c/test_ram_consolidation
+code/c/tests/test_pla_clean
+code/c/tests/test_pla_standalone
+code/c/test_ram_consolidation
+code/c/imgui.ini
+
+code/c/CTestTestfile.cmake
 code/c/c64emu.dir/*
 code/c/c64emu_gui.dir/*
 code/c/cimgui_build/*
@@ -60,13 +72,3 @@ data/**/*.p00
 data/**/*.img
 data/**/*.adf
 !data/**/README.md
-
-code/c/test_optimized_cpu
-code/c/test_pla_clean
-code/c/test_pla_mapping
-code/c/test_pla_standalone
-code/c/test_ram_consolidation
-code/c/tests/test_pla_clean
-code/c/tests/test_pla_standalone
-code/c/test_ram_consolidation
-code/c/imgui.ini
