@@ -43,3 +43,7 @@ You can verify your ROM files using these MD5 checksums:
 ## Legal Notice
 
 These ROM files are copyrighted by Commodore and must be obtained legally.
+
+## Test ROMs
+
+https://www.zimmers.net/anonftp/pub/cbm/firmware/computers/c64/
