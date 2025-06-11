@@ -96,6 +96,7 @@ void gui_render_frame(struct c64_s* c64, gui_state_t* gui_state);
 void gui_render_frame_with_context(struct c64_s* c64, gui_state_t* gui_state, struct emulation_context_s* emu_context);
 bool gui_should_quit(void);
 void gui_handle_events(void);
+void gui_handle_events_with_context(struct emulation_context_s* emu_context);
 
 // Window rendering functions
 void gui_render_menu_bar(struct c64_s* c64, gui_state_t* gui_state);
