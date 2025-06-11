@@ -11,9 +11,15 @@
 // ============================================================================
 
 void pla_render_debug_window(void* chip, bool* show_window) {
+    // Note: PLA doesn't have a descriptor structure, so we'll use a generic approach
+    if (!chip) return;
+    
     if (!*show_window) return;
     
-    if (!igBegin("PLA Debug", show_window, 0)) {
+    char window_title[128];
+    snprintf(window_title, sizeof(window_title), "PLA Debug");
+    
+    if (!igBegin(window_title, show_window, 0)) {
         igEnd();
         return;
     }
@@ -41,9 +47,14 @@ void pla_render_debug_window(void* chip, bool* show_window) {
 }
 
 void pla_render_settings_window(void* chip, bool* show_window) {
+    if (!chip) return;
+    
     if (!*show_window) return;
     
-    if (!igBegin("PLA Settings", show_window, 0)) {
+    char window_title[128];
+    snprintf(window_title, sizeof(window_title), "PLA Settings");
+    
+    if (!igBegin(window_title, show_window, 0)) {
         igEnd();
         return;
     }

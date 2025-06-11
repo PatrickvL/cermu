@@ -9,12 +9,16 @@
 // ============================================================================
 // RAM GUI DEBUG WINDOW
 // ============================================================================
-
 void ram_render_debug_window(void* chip, bool* show_window) {
-    (void)chip; // Suppress unused parameter warning
+    ram_t* ram = (ram_t*)chip;
+    if (!ram || !ram->desc) return;
+    
     if (!*show_window) return;
     
-    if (!igBegin("RAM Debug", show_window, 0)) {
+    char window_title[128];
+    snprintf(window_title, sizeof(window_title), "%s Debug", ram->desc->description);
+    
+    if (!igBegin(window_title, show_window, 0)) {
         igEnd();
         return;
     }
@@ -40,12 +44,16 @@ void ram_render_debug_window(void* chip, bool* show_window) {
 
     igEnd();
 }
-
 void ram_render_settings_window(void* chip, bool* show_window) {
-    (void)chip; // Suppress unused parameter warning
+    ram_t* ram = (ram_t*)chip;
+    if (!ram || !ram->desc) return;
+    
     if (!*show_window) return;
     
-    if (!igBegin("RAM Settings", show_window, 0)) {
+    char window_title[128];
+    snprintf(window_title, sizeof(window_title), "%s Settings", ram->desc->description);
+    
+    if (!igBegin(window_title, show_window, 0)) {
         igEnd();
         return;
     }

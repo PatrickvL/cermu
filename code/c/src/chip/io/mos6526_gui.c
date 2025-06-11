@@ -12,10 +12,14 @@
 
 void mos6526_render_debug_window(void* chip, bool* show_window) {
     mos6526_t* cia = (mos6526_t*)chip;
+    if (!cia || !cia->desc) return;
     
     if (!*show_window) return;
     
-    if (!igBegin("MOS6526 CIA Debug", show_window, 0)) {
+    char window_title[128];
+    snprintf(window_title, sizeof(window_title), "%s Debug", cia->desc->description);
+    
+    if (!igBegin(window_title, show_window, 0)) {
         igEnd();
         return;
     }
@@ -80,10 +84,14 @@ void mos6526_render_debug_window(void* chip, bool* show_window) {
 
 void mos6526_render_settings_window(void* chip, bool* show_window) {
     mos6526_t* cia = (mos6526_t*)chip;
+    if (!cia || !cia->desc) return;
     
     if (!*show_window) return;
     
-    if (!igBegin("MOS6526 CIA Settings", show_window, 0)) {
+    char window_title[128];
+    snprintf(window_title, sizeof(window_title), "%s Settings", cia->desc->description);
+    
+    if (!igBegin(window_title, show_window, 0)) {
         igEnd();
         return;
     }
