@@ -1,10 +1,10 @@
 #include "../systems/c64/c64.h"
 #include "../systems/c64/system_config.h"
 #include "../gui/cimgui_interface.h"
-#include <SDL.h>
+#include <stdio.h>
 
 // ============================================================================
-// MAIN FUNCTION - ImGui-based C64 Emulator
+// MAIN FUNCTION - Threaded C64 Emulator with GUI
 // ============================================================================
 int main(int argc, char** argv) {
     (void)argc;
@@ -29,24 +29,86 @@ int main(int argc, char** argv) {
     gui_state_t gui_state;
     gui_init_state(&gui_state);
     
-    // Main loop
+    // Initialize emulation thread through GUI
+    emulation_context_t emu_context;
+    if (!gui_emulation_thread_init(&emu_context, c64)) {
+        printf("Failed to initialize emulation thread\n");
+        c64_system_destroy(c64);
+        gui_cleanup();
+        return 1;
+    }
+    
+    // Start emulation thread
+    if (!gui_emulation_thread_start(&emu_context)) {
+        printf("Failed to start emulation thread\n");
+        gui_emulation_thread_cleanup(&emu_context);
+        c64_system_destroy(c64);
+        gui_cleanup();
+        return 1;
+    }
+    
+    printf("C64 Emulator started with threaded execution\n");
+    
+    // Track previous GUI state for signal generation
+    bool prev_emulation_running = false;
+    bool prev_emulation_paused = true;
+    emulation_state_t prev_emu_state = EMU_STATE_STOPPED;
+    
+    // Main GUI loop (runs at ~60 FPS)
     while (!gui_should_quit()) {
-        // Handle SDL events and ImGui input
+        // Handle events and input
         gui_handle_events();
         
-        // Run emulation if enabled
-        if (gui_state.emulation_running && !gui_state.emulation_paused) {
-            // TODO: Run C64 emulation step
-            // For now, just increment cycle counter for demo
-            c64->total_cycles++;
+        // Update GUI state with current emulation status
+        emulation_state_t emu_state = gui_emulation_get_state(&emu_context);
+        gui_state.emulation_running = (emu_state == EMU_STATE_RUNNING);
+        gui_state.emulation_paused = (emu_state == EMU_STATE_PAUSED || emu_state == EMU_STATE_STOPPED);
+        
+        // Check for GUI state changes and send appropriate signals
+        if (gui_state.emulation_running != prev_emulation_running) {
+            if (gui_state.emulation_running) {
+                printf("GUI: Starting emulation\n");
+                gui_emulation_send_signal(&emu_context, EMU_SIGNAL_START);
+            } else {
+                printf("GUI: Stopping emulation\n");
+                gui_emulation_send_signal(&emu_context, EMU_SIGNAL_PAUSE);
+            }
+            prev_emulation_running = gui_state.emulation_running;
         }
         
-        // Render GUI frame
-        gui_render_frame(c64, &gui_state);
+        if (gui_state.emulation_paused != prev_emulation_paused) {
+            if (gui_state.emulation_paused && prev_emu_state == EMU_STATE_RUNNING) {
+                printf("GUI: Pausing emulation\n");
+                gui_emulation_send_signal(&emu_context, EMU_SIGNAL_PAUSE);
+            } else if (!gui_state.emulation_paused && prev_emu_state == EMU_STATE_PAUSED) {
+                printf("GUI: Resuming emulation\n");
+                gui_emulation_send_signal(&emu_context, EMU_SIGNAL_START);
+            }
+            prev_emulation_paused = gui_state.emulation_paused;
+        }
         
-        // Simple frame rate limiting
-        SDL_Delay(16); // ~60 FPS
+        prev_emu_state = emu_state;
+        
+        // Handle frame rendering if emulation is running
+        if (emu_state == EMU_STATE_RUNNING) {
+            gui_emulation_render_frame(&emu_context);
+        }
+        
+        // Update FPS counter
+        gui_emulation_update_fps(&emu_context);
+        
+        // Render GUI frame with emulation context for control buttons
+        gui_render_frame_with_context(c64, &gui_state, &emu_context);
+        
+        // GUI frame rate limiting (60 FPS)
+        gui_delay(16);
     }
+    
+    printf("Shutting down C64 emulator\n");
+    
+    // Cleanup emulation thread
+    gui_emulation_thread_stop(&emu_context);
+    gui_emulation_thread_cleanup(&emu_context);
     
     // Cleanup
     gui_cleanup_state(&gui_state);
