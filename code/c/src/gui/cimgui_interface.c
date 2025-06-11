@@ -886,23 +886,54 @@ bool gui_reload_roms_from_state(c64_t* c64, const gui_state_t* gui_state) {
         return false;
     }
     
+    // For now, we'll extract just the filename from the full path stored in GUI state
+    // and create a custom ROM configuration
+    char basic_filename[256] = {0};
+    char kernal_filename[256] = {0};
+    char chargen_filename[256] = {0};
+    
+    // Extract filename from full path (find last path separator)
+    const char* basic_name = strrchr(gui_state->rom_path_basic, '/');
+    if (!basic_name) basic_name = strrchr(gui_state->rom_path_basic, '\\');
+    if (basic_name) {
+        strncpy(basic_filename, basic_name + 1, sizeof(basic_filename) - 1);
+    } else {
+        strncpy(basic_filename, gui_state->rom_path_basic, sizeof(basic_filename) - 1);
+    }
+    
+    const char* kernal_name = strrchr(gui_state->rom_path_kernal, '/');
+    if (!kernal_name) kernal_name = strrchr(gui_state->rom_path_kernal, '\\');
+    if (kernal_name) {
+        strncpy(kernal_filename, kernal_name + 1, sizeof(kernal_filename) - 1);
+    } else {
+        strncpy(kernal_filename, gui_state->rom_path_kernal, sizeof(kernal_filename) - 1);
+    }
+    
+    const char* chargen_name = strrchr(gui_state->rom_path_chargen, '/');
+    if (!chargen_name) chargen_name = strrchr(gui_state->rom_path_chargen, '\\');
+    if (chargen_name) {
+        strncpy(chargen_filename, chargen_name + 1, sizeof(chargen_filename) - 1);
+    } else {
+        strncpy(chargen_filename, gui_state->rom_path_chargen, sizeof(chargen_filename) - 1);
+    }
+    
     // Create a custom ROM configuration from GUI state
     rom_config_t custom_rom_config = {
-        .basic_rom_paths = {
-            gui_state->rom_path_basic,
-            NULL, NULL, NULL
+        .basic_rom_filenames = {
+            basic_filename,
+            NULL, NULL, NULL, NULL
         },
-        .kernal_rom_paths = {
-            gui_state->rom_path_kernal,
-            NULL, NULL, NULL
+        .kernal_rom_filenames = {
+            kernal_filename,
+            NULL, NULL, NULL, NULL
         },
-        .chargen_rom_paths = {
-            gui_state->rom_path_chargen,
-            NULL, NULL, NULL
+        .chargen_rom_filenames = {
+            chargen_filename,
+            NULL, NULL, NULL, NULL, NULL
         }
     };
     
-    // Reload ROMs using the new paths
+    // Reload ROMs using the new configuration
     return c64_reload_roms(c64, &custom_rom_config);
 }
 
