@@ -1184,8 +1184,7 @@ static int gui_emulation_thread_main(void* data) {
                 
                 uint16_t reset_vector = (reset_high << 8) | reset_low;
                 printf("Emulation thread: Reset vector = $%04X\n", reset_vector);
-                
-                if (reset_vector == 0x0000) {
+                  if (reset_vector == 0x0000) {
                     printf("Emulation thread: WARNING - No ROM loaded, reset vector is $0000\n");
                     printf("Emulation thread: Using simulation mode instead of real CPU execution\n");
                     
@@ -1193,6 +1192,8 @@ static int gui_emulation_thread_main(void* data) {
                     printf("Emulation thread: Starting simulation mode\n");
                     uint64_t sim_cycles = 0;
                     const uint64_t MAX_SIM_CYCLES = 100000;
+                    uint32_t last_sim_log_time = SDL_GetTicks();
+                    const uint32_t sim_log_interval_ms = 10000; // Log every 10 seconds for simulation
                     
                     while (context->current_state == EMU_STATE_RUNNING && sim_cycles < MAX_SIM_CYCLES) {
                         // Simulate CPU step - this executes one instruction safely
@@ -1212,25 +1213,40 @@ static int gui_emulation_thread_main(void* data) {
                             }
                             // Small delay to prevent busy loop and allow GUI responsiveness
                             SDL_Delay(1);
+                            
+                            // Time-based logging for simulation mode
+                            uint32_t current_sim_time = SDL_GetTicks();
+                            if (current_sim_time - last_sim_log_time >= sim_log_interval_ms) {
+                                printf("Emulation thread: Simulation executed %llu cycles (total: %llu)\n", 
+                                       (unsigned long long)sim_cycles,
+                                       (unsigned long long)context->total_cycles_executed);
+                                last_sim_log_time = current_sim_time;
+                            }
                         }
                     }
                       if (sim_cycles >= MAX_SIM_CYCLES) {
                         printf("Emulation thread: Simulation reached cycle limit (%llu cycles)\n", (unsigned long long)sim_cycles);
-                    }
-                } else {
+                    }                } else {
                     // Real execution mode with proper ROM
                     printf("Emulation thread: Starting real CPU execution with intercept control\n");
-                      // Set up controlled execution with intercept mechanism
+                    
+                    // Set up controlled execution with intercept mechanism
                     // This will allow the PAUSE signal to stop execution
                     const uint32_t batch_size = 10000; // Execute in batches
+                    uint32_t last_log_time = SDL_GetTicks();
+                    const uint32_t log_interval_ms = 5000; // Log every 5 seconds
+                    uint64_t cycles_since_last_log = 0;
                     
                     while (context->current_state == EMU_STATE_RUNNING) {
                         // Execute a batch of instructions using controlled threaded dispatch
-                        printf("Emulation thread: Executing batch of %d instructions\n", batch_size);
-                          // Use intercept to limit execution to a batch
+                        uint32_t batch_cycles = 0;
+                        
+                        // Use intercept to limit execution to a batch
                         for (int i = 0; i < (int)batch_size && context->current_state == EMU_STATE_RUNNING; i++) {
                             if (mos6510_step(context->c64->mos6510)) {
                                 context->total_cycles_executed++;
+                                batch_cycles++;
+                                cycles_since_last_log++;
                             } else {
                                 printf("Emulation thread: CPU execution failed\n");
                                 context->current_state = EMU_STATE_STOPPED;
@@ -1239,10 +1255,19 @@ static int gui_emulation_thread_main(void* data) {
                             
                             // Check for pause every 100 instructions
                             if ((i % 100) == 0 && mos6510_is_intercepting()) {
-                                printf("Emulation thread: Intercept detected, pausing execution\n");
                                 context->current_state = EMU_STATE_PAUSED;
                                 break;
                             }
+                        }
+                        
+                        // Time-based logging instead of per-batch logging
+                        uint32_t current_time = SDL_GetTicks();
+                        if (current_time - last_log_time >= log_interval_ms) {
+                            printf("Emulation thread: Executed %llu cycles (total: %llu)\n", 
+                                   (unsigned long long)cycles_since_last_log,
+                                   (unsigned long long)context->total_cycles_executed);
+                            last_log_time = current_time;
+                            cycles_since_last_log = 0;
                         }
                         
                         // Small delay between batches to allow GUI responsiveness
