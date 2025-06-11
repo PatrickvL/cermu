@@ -67,13 +67,13 @@ void vicii_render_common_debug_window(void* chip, bool* show_window, const char*
     
     // Raster information
     if (igCollapsingHeader_TreeNodeFlags("Raster Information", ImGuiTreeNodeFlags_DefaultOpen)) {
-        igText("Raster Line: %d", vicii->raster_line);
-        igText("Raster Cycle: %d", vicii->raster_cycle);
-        igText("Badline Condition: %s", vicii->badline_condition ? "YES" : "NO");
-        igText("Previous BA: %s", vicii->prev_ba ? "LOW" : "HIGH");
+        igText("Raster Line: %d", vicii->raster_counter);
+        igText("Raster Cycle: %d", vicii->x_cycle);
+        igText("Badline Condition: %s", vicii->bad_line ? "YES" : "NO");
+        igText("X Coordinate: %d", vicii->x_coordinate);
         
         // Progress bar for raster position
-        float raster_progress = (float)vicii->raster_line / (float)vicii->total_lines;
+        float raster_progress = (float)vicii->raster_counter / (float)vicii->total_lines;
         igProgressBar(raster_progress, (ImVec2){-1, 0}, NULL);
         igText("Raster Progress: %.1f%%", raster_progress * 100.0f);
     }
@@ -172,13 +172,13 @@ void vicii_render_common_debug_window(void* chip, bool* show_window, const char*
     
     // Collision detection
     if (igCollapsingHeader_TreeNodeFlags("Collision Detection", ImGuiTreeNodeFlags_None)) {
-        igText("Sprite-Sprite Collision: $%02X", vicii->collision_sprite);
-        igText("Sprite-Background Collision: $%02X", vicii->collision_bg);
+        igText("Sprite-Sprite Collision: $%02X", vicii->registers[VICII_REGS_SIZE]);
+        igText("Sprite-Background Collision: $%02X", vicii->registers[VICII_REGS_SIZE + 1]);
         
         if (igButton("Clear Collisions", (ImVec2){0, 0})) {
             // Clear collision registers (would need to implement this properly)
-            vicii->collision_sprite = 0;
-            vicii->collision_bg = 0;
+            vicii->registers[VICII_REGS_SIZE] = 0;
+            vicii->registers[VICII_REGS_SIZE + 1] = 0;
         }
     }
     
