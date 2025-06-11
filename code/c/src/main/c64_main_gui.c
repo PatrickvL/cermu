@@ -53,11 +53,10 @@ int main(int argc, char** argv) {
     bool prev_emulation_running = false;
     bool prev_emulation_paused = true;
     emulation_state_t prev_emu_state = EMU_STATE_STOPPED;
-    
-    // Main GUI loop (runs at ~60 FPS)
+      // Main GUI loop (runs at ~60 FPS)
     while (!gui_should_quit()) {
-        // Handle events and input
-        gui_handle_events();
+        // Handle events and input (with emulation context for proper shutdown)
+        gui_handle_events_with_context(&emu_context);
         
         // Update GUI state with current emulation status
         emulation_state_t emu_state = gui_emulation_get_state(&emu_context);

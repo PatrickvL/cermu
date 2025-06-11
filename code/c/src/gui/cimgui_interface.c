@@ -106,14 +106,39 @@ bool gui_should_quit(void) {
 }
 
 void gui_handle_events(void) {
+    gui_handle_events_with_context(NULL);
+}
+
+void gui_handle_events_with_context(emulation_context_t* emu_context) {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
-        ImGui_ImplSDL2_ProcessEvent_C(&event);
-        if (event.type == SDL_QUIT) {
+        ImGui_ImplSDL2_ProcessEvent_C(&event);        if (event.type == SDL_QUIT) {
             g_should_quit = true;
+            // Stop emulation when window is closed
+            if (emu_context) {
+                printf("GUI: Window closed, stopping emulation\n");
+                // Force thread to stop immediately
+                emu_context->thread_running = false;
+                emu_context->current_state = EMU_STATE_STOPPED;
+                // Use intercept to stop CPU execution immediately
+                mos6510_start_intercept();
+                // Send quit signal to emulation thread
+                gui_emulation_send_signal(emu_context, EMU_SIGNAL_QUIT);
+            }
         }
         if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == SDL_GetWindowID(g_window)) {
             g_should_quit = true;
+            // Stop emulation when window is closed
+            if (emu_context) {
+                printf("GUI: Window close event, stopping emulation\n");
+                // Force thread to stop immediately
+                emu_context->thread_running = false;
+                emu_context->current_state = EMU_STATE_STOPPED;
+                // Use intercept to stop CPU execution immediately
+                mos6510_start_intercept();
+                // Send quit signal to emulation thread
+                gui_emulation_send_signal(emu_context, EMU_SIGNAL_QUIT);
+            }
         }
     }
 }
@@ -1194,8 +1219,7 @@ static int gui_emulation_thread_main(void* data) {
                     const uint64_t MAX_SIM_CYCLES = 100000;
                     uint32_t last_sim_log_time = SDL_GetTicks();
                     const uint32_t sim_log_interval_ms = 10000; // Log every 10 seconds for simulation
-                    
-                    while (context->current_state == EMU_STATE_RUNNING && sim_cycles < MAX_SIM_CYCLES) {
+                      while (context->current_state == EMU_STATE_RUNNING && context->thread_running && sim_cycles < MAX_SIM_CYCLES) {
                         // Simulate CPU step - this executes one instruction safely
                         if (mos6510_step(context->c64->mos6510)) {
                             context->total_cycles_executed++;
@@ -1207,8 +1231,8 @@ static int gui_emulation_thread_main(void* data) {
                         
                         // Check for intercept every 1000 cycles to allow pause/stop
                         if ((sim_cycles % 1000) == 0) {
-                            if (mos6510_is_intercepting()) {
-                                printf("Emulation thread: Intercept detected during simulation\n");
+                            if (mos6510_is_intercepting() || !context->thread_running) {
+                                printf("Emulation thread: Intercept or quit detected during simulation\n");
                                 break;
                             }
                             // Small delay to prevent busy loop and allow GUI responsiveness
@@ -1236,13 +1260,12 @@ static int gui_emulation_thread_main(void* data) {
                     uint32_t last_log_time = SDL_GetTicks();
                     const uint32_t log_interval_ms = 5000; // Log every 5 seconds
                     uint64_t cycles_since_last_log = 0;
-                    
-                    while (context->current_state == EMU_STATE_RUNNING) {
+                      while (context->current_state == EMU_STATE_RUNNING && context->thread_running) {
                         // Execute a batch of instructions using controlled threaded dispatch
                         uint32_t batch_cycles = 0;
                         
                         // Use intercept to limit execution to a batch
-                        for (int i = 0; i < (int)batch_size && context->current_state == EMU_STATE_RUNNING; i++) {
+                        for (int i = 0; i < (int)batch_size && context->current_state == EMU_STATE_RUNNING && context->thread_running; i++) {
                             if (mos6510_step(context->c64->mos6510)) {
                                 context->total_cycles_executed++;
                                 batch_cycles++;
@@ -1254,12 +1277,11 @@ static int gui_emulation_thread_main(void* data) {
                             }
                             
                             // Check for pause every 100 instructions
-                            if ((i % 100) == 0 && mos6510_is_intercepting()) {
+                            if ((i % 100) == 0 && (mos6510_is_intercepting() || !context->thread_running)) {
                                 context->current_state = EMU_STATE_PAUSED;
                                 break;
                             }
-                        }
-                        
+                        }                        
                         // Time-based logging instead of per-batch logging
                         uint32_t current_time = SDL_GetTicks();
                         if (current_time - last_log_time >= log_interval_ms) {
@@ -1271,7 +1293,7 @@ static int gui_emulation_thread_main(void* data) {
                         }
                         
                         // Small delay between batches to allow GUI responsiveness
-                        if (context->current_state == EMU_STATE_RUNNING) {
+                        if (context->current_state == EMU_STATE_RUNNING && context->thread_running) {
                             SDL_Delay(10);
                         }
                     }
