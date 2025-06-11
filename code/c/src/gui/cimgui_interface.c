@@ -374,9 +374,8 @@ void gui_render_memory_viewer(c64_t* c64, gui_state_t* gui_state) {
             for (int col = 0; col < gui_state->memory_columns; col++) {
                 uint16_t byte_addr = addr + col;
                 if (col >= gui_state->memory_columns || addr + col > 0xFFFF) break;
-                
-                // TODO: Read memory from C64 bus
-                uint8_t byte_value = 0x00; // c64_bus_memory_read(c64->bus, byte_addr);
+                // Read memory through proper C64 bus mapping
+                uint8_t byte_value = c64->bus ? c64_bus_memory_read(c64->bus, byte_addr) : 0x00;
                 
                 igSameLine(0, -1.0f);
                 igText("%02X", byte_value);
@@ -416,11 +415,11 @@ void gui_render_debugger_with_context(c64_t* c64, gui_state_t* gui_state, emulat
             igText("CPU: %s", c64->mos6510 ? "Initialized" : "NOT INITIALIZED");
             igText("Bus: %s", c64->bus ? "Attached" : "NOT ATTACHED");
             igText("RAM: %s", c64->ram ? "Available" : "NOT AVAILABLE");
-            
-            // Check reset vector
-            if (c64->ram && c64->ram->memory) {
-                uint8_t reset_low = c64->ram->memory[0xFFFC];
-                uint8_t reset_high = c64->ram->memory[0xFFFD];
+              // Check reset vector
+            if (c64 && c64->bus) {
+                // Read reset vector through proper memory mapping (ROM or RAM depending on banking)
+                uint8_t reset_low = c64_bus_memory_read(c64->bus, 0xFFFC);
+                uint8_t reset_high = c64_bus_memory_read(c64->bus, 0xFFFD);
                 uint16_t reset_vector = (reset_high << 8) | reset_low;
                 igText("Reset Vector: $%04X %s", reset_vector, 
                        reset_vector == 0x0000 ? "(NO ROM)" : "(ROM LOADED)");
@@ -1176,13 +1175,11 @@ static int gui_emulation_thread_main(void* data) {
                 // Check if system has ROM loaded by examining reset vector
                 uint8_t reset_low = 0;
                 uint8_t reset_high = 0;
-                
-                // Try to read reset vector through the bus system
-                if (context->c64->bus && context->c64->ram) {
-                    // For now, read directly from RAM since ROMs aren't loaded
-                    // In a real system, this would read through the memory mapping
-                    reset_low = context->c64->ram->memory[0xFFFC];
-                    reset_high = context->c64->ram->memory[0xFFFD];
+                  // Try to read reset vector through the bus system
+                if (context->c64->bus) {
+                    // Read reset vector through proper memory mapping (ROM or RAM depending on banking)
+                    reset_low = c64_bus_memory_read(context->c64->bus, 0xFFFC);
+                    reset_high = c64_bus_memory_read(context->c64->bus, 0xFFFD);
                 }
                 
                 uint16_t reset_vector = (reset_high << 8) | reset_low;
