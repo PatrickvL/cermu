@@ -42,6 +42,8 @@ c64_t* c64_system_create(const system_config_t* config);
 void c64_system_destroy(c64_t* c64);
 void c64_non_cpu_cycle(void* c64);  // c64_t* - using void* for consistency
 bool c64_pla_maps_generate(c64_t* c64);  // PLA memory mapping generation
+void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config);
+bool c64_reload_roms(c64_t* c64, const rom_config_t* rom_config);
 
 // ACID detached callback functions for unmapped chips
 uint8_t c64_detached_read(void* context, uint16_t address);

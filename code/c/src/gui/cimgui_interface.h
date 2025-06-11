@@ -115,7 +115,10 @@ void gui_update_screen_texture(struct c64_s* c64, gui_state_t* gui_state);
 // Utility functions
 void gui_init_state(gui_state_t* gui_state);
 void gui_load_rom_file(const char* filepath, const char* type);
+void gui_load_rom_file_with_context(const char* filepath, const char* type, gui_state_t* gui_state, emulation_context_t* emu_context);
 void gui_load_disk_image(const char* filepath);
+bool gui_reload_roms_from_state(struct c64_s* c64, const gui_state_t* gui_state);
+bool gui_apply_rom_changes(emulation_context_t* emu_context, gui_state_t* gui_state);
 
 // Emulation thread functions (SDL-based implementation)
 bool gui_emulation_thread_init(emulation_context_t* context, struct c64_s* c64);

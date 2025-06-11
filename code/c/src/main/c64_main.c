@@ -8,7 +8,8 @@
 int main(void) {
     // Create system configuration (PAL by default)
     system_config_t config = {
-        .vic_standard = VIC_PAL
+        .vic_standard = VIC_PAL,
+        .rom_config = NULL  // Use default ROM paths
     };
     
     // Initialize the C64 system and get the instance
@@ -18,10 +19,8 @@ int main(void) {
         return 1;
     }
     
-    // Note: ROM is now properly implemented, reset can be enabled when needed
-    // mos6510_reset();
-    
-    printf("C64 emulator initialized successfully!\n");
+    // Note: ROM files are now loaded automatically from data/c64/roms/
+    printf("C64 emulator initialized successfully with ROM loading!\n");
     
     // Clean up
     c64_system_destroy(c64);
