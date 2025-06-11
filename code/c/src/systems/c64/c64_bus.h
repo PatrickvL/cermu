@@ -112,9 +112,8 @@ bool c64_bus_get_exrom_signal(c64_bus_t* c64_bus);
 bool c64_bus_get_game_signal(c64_bus_t* c64_bus);
 
 // Optimized callback management
-void c64_bus_register_chip_callbacks(c64_bus_t* bus, uint8_t chip_id,
-                                    chip_read_func_t read_func, chip_write_func_t write_func,
-                                    void* context);
+void c64_bus_register_chip_callbacks(c64_bus_t* bus, uint8_t acid, void* context,
+                                    chip_read_func_t read_func, chip_write_func_t write_func);
 
 // Forward declaration for PLA
 struct pla_906114_01_s;

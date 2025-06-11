@@ -312,20 +312,19 @@ void c64_bus_init_adapters(c64_bus_t* c64_bus) {
 // ============================================================================
 
 // Register a chip's callbacks in the optimized arrays
-void c64_bus_register_chip_callbacks(c64_bus_t* bus, uint8_t chip_id,
-                                    chip_read_func_t read_func, chip_write_func_t write_func,
-                                    void* context) {
-    if (chip_id >= 24) return;  // Invalid chip ID
+void c64_bus_register_chip_callbacks(c64_bus_t* bus, uint8_t acid, void* context,
+                                    chip_read_func_t read_func, chip_write_func_t write_func) {
+    if (acid >= 24) return;  // Invalid chip ID
     
     // Register read callback
     if (read_func) {
-        bus->read_callbacks[chip_id].read = read_func;
-        bus->read_callbacks[chip_id].context = context;
+        bus->read_callbacks[acid].read = read_func;
+        bus->read_callbacks[acid].context = context;
     }
     
     // Register write callback
     if (write_func) {
-        bus->write_funcs[chip_id] = write_func;
+        bus->write_funcs[acid] = write_func;
     }
 }
 
