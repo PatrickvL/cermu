@@ -55,7 +55,8 @@ void mos6510_zeropage_write(void* chip, uint16_t address, uint8_t value) {
         uint8_t ddr = cpu->io_port[0];
         uint8_t port_data = cpu->io_port[1];
         uint8_t effective_output = port_data & ddr;
-        cpu->io_interface.output_pins_changed(cpu->io_interface.context, ddr, port_data, effective_output);    } else {
+        cpu->io_interface.output_pins_changed(cpu->io_interface.context, ddr, port_data, effective_output);
+    } else {
         // For addresses $0002-$00FF, write to system RAM directly to avoid circular dependency
         if (cpu->ram_access.write_func) {
             cpu->ram_access.write_func(cpu->ram_access.context, address, value);
