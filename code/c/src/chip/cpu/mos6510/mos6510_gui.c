@@ -77,12 +77,17 @@ void mos6510_render_debug_window(void* chip, bool* show_window) {
     // Control Lines Section
     igText("Control Lines");
     igSeparator();
-#if 0 // TODO : fix this part crashing    
-    uint32_t control_lines = CPU_CONTROL_LINES(cpu);
-    igText("IRQ: %s", (control_lines & MOS6510_MASK_IRQ) ? "ACTIVE" : "inactive");
-    igText("NMI: %s", (control_lines & MOS6510_MASK_NMI) ? "ACTIVE" : "inactive");
-    igText("RDY: %s", (control_lines & MOS6510_MASK_RDY) ? "STALLED" : "ready");
-#endif
+    // Check if control interface is properly initialized
+    if (cpu->control_interface.get_lines && cpu->control_interface.context) {
+        uint32_t control_lines = CPU_CONTROL_LINES(cpu);
+        igText("IRQ: %s", (control_lines & MOS6510_MASK_IRQ) ? "ACTIVE" : "inactive");
+        igText("NMI: %s", (control_lines & MOS6510_MASK_NMI) ? "ACTIVE" : "inactive");
+        igText("RDY: %s", (control_lines & MOS6510_MASK_RDY) ? "STALLED" : "ready");
+    } else {
+        igText("IRQ: Not connected");
+        igText("NMI: Not connected");
+        igText("RDY: Not connected");
+    }
     igSeparator();
 
     // Execution Control Section
@@ -90,15 +95,22 @@ void mos6510_render_debug_window(void* chip, bool* show_window) {
     igSeparator();
     
     if (igButton("Step One Instruction", (ImVec2){0, 0})) {
-#if 1 // TODO : fix this part crashing    
-        mos6510_step(cpu);
-#endif
+        // Check if CPU has proper interface setup before stepping
+        if (cpu->bus_interface.bus_read && cpu->bus_interface.context) {
+            mos6510_step(cpu);
+        }
     }
     igSameLine(0, -1.0f);
     if (igButton("Reset CPU", (ImVec2){0, 0})) {
-#if 1 // TODO : fix this part crashing    
-        mos6510_reset(cpu);
-#endif
+        // Reset only the CPU state, not the entire system
+        cpu->pc = 0;
+        cpu->a = 0;
+        cpu->x = 0;
+        cpu->y = 0;
+        cpu->sp = 0xFF;
+        cpu->p = FLAG_U | FLAG_I; // Set unused flag and interrupt disable
+        cpu->io_port[0] = 0x2F;   // Default DDR
+        cpu->io_port[1] = 0x37;   // Default Port
     }
     
     igText("Interception: %s", mos6510_is_intercepting() ? "ACTIVE" : "inactive");

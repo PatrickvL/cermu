@@ -245,5 +245,12 @@ c64_t* c64_system_create(const system_config_t* config) {
             chip->desc->bus_attach(chip->chip, c64->bus);
     }
     
+    // Attach CPU interfaces to the MOS6510
+    mos6510_attach_bus_interface(c64->mos6510, c64_bus_get_adapter(c64->bus));
+    mos6510_attach_control_lines_interface(c64->mos6510, c64_control_lines_get_adapter(c64->bus));
+    mos6510_attach_io_interface(c64->mos6510, c64_io_port_get_adapter(c64->bus));
+    // Note: system_lines attachment would need proper system_lines_t structure
+    // For now, this will be handled through the control_lines_interface
+    
     return c64;
 }
