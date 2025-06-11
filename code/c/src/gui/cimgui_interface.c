@@ -154,6 +154,15 @@ void gui_init_state(gui_state_t* gui_state) {
     gui_state->screen_scale = 2.0f;
     gui_state->screen_filter = false;
     gui_state->screen_scanlines = false;
+    
+    // Aspect ratio configuration defaults
+    gui_state->aspect_ratio_mode = ASPECT_RATIO_ORIGINAL;
+    gui_state->scaling_mode = SCALING_MODE_FIT;
+    gui_state->custom_aspect_ratio = 4.0f / 3.0f;  // 4:3 default
+    gui_state->maintain_pixel_aspect = true;
+    gui_state->show_overscan = true;
+    gui_state->center_display = true;
+    gui_state->host_dpi_scale = 1.0f;  // Will be detected at runtime
       // Default ROM paths (can be modified by user)    strcpy(gui_state->rom_path_basic, "data/c64/roms/basic.901226-01.bin");
     strcpy(gui_state->rom_path_kernal, "data/c64/roms/kernal.901227-03.bin");
     strcpy(gui_state->rom_path_chargen, "data/c64/roms/characters.901225-01.bin");
@@ -325,6 +334,41 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, struct emulation_co
                     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
                 }
             }
+            
+            igSeparator();
+            igText("Aspect Ratio & Scaling");
+            
+            // Aspect ratio mode selection
+            const char* aspect_ratio_items[] = {
+                "Original", "4:3", "16:10", "16:9", "Custom", "Pixel Perfect"
+            };
+            int current_aspect = (int)gui_state->aspect_ratio_mode;
+            if (igCombo_Str_arr("Aspect Ratio", &current_aspect, aspect_ratio_items, ASPECT_RATIO_COUNT, -1)) {
+                gui_state->aspect_ratio_mode = (aspect_ratio_mode_t)current_aspect;
+            }
+            
+            // Custom aspect ratio input (only shown when Custom is selected)
+            if (gui_state->aspect_ratio_mode == ASPECT_RATIO_CUSTOM) {
+                igSliderFloat("Custom Ratio", &gui_state->custom_aspect_ratio, 0.5f, 3.0f, "%.2f", ImGuiSliderFlags_None);
+            }
+            
+            // Scaling mode selection
+            const char* scaling_mode_items[] = {
+                "Fit (Black Bars)", "Fill (Crop)", "Stretch", "Integer Scale"
+            };
+            int current_scaling = (int)gui_state->scaling_mode;
+            if (igCombo_Str_arr("Scaling Mode", &current_scaling, scaling_mode_items, SCALING_MODE_COUNT, -1)) {
+                gui_state->scaling_mode = (scaling_mode_t)current_scaling;
+            }
+            
+            // Additional options
+            igCheckbox("Maintain Pixel Aspect", &gui_state->maintain_pixel_aspect);
+            igCheckbox("Show Overscan/Border", &gui_state->show_overscan);
+            igCheckbox("Center Display", &gui_state->center_display);
+            
+            // Host DPI information
+            igSeparator();
+            igText("Host DPI Scale: %.2f", gui_state->host_dpi_scale);
             
             igSeparator();
             
@@ -762,16 +806,22 @@ void gui_render_screen(c64_t* c64, gui_state_t* gui_state) {
     // Get the main viewport to create a fullscreen background window
     const ImGuiViewport* viewport = igGetMainViewport();
     
+    // Detect and update host DPI scale if needed
+    ImGuiIO* io = igGetIO_Nil();
+    if (gui_state->host_dpi_scale <= 0.0f) {
+        gui_state->host_dpi_scale = io->DisplayFramebufferScale.x > 0.0f ? io->DisplayFramebufferScale.x : 1.0f;
+    }
+    
     // Set window position and size to cover the entire viewport
     igSetNextWindowPos(viewport->Pos, ImGuiCond_Always, (ImVec2){0, 0});
     igSetNextWindowSize(viewport->Size, ImGuiCond_Always);
     
     // Window flags for a fullscreen background window
-    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration | 
-                                   ImGuiWindowFlags_NoMove | 
-                                   ImGuiWindowFlags_NoResize | 
-                                   ImGuiWindowFlags_NoSavedSettings | 
-                                   ImGuiWindowFlags_NoBringToFrontOnFocus | 
+    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration |
+                                   ImGuiWindowFlags_NoMove |
+                                   ImGuiWindowFlags_NoResize |
+                                   ImGuiWindowFlags_NoSavedSettings |
+                                   ImGuiWindowFlags_NoBringToFrontOnFocus |
                                    ImGuiWindowFlags_NoFocusOnAppearing |
                                    ImGuiWindowFlags_NoNav |
                                    ImGuiWindowFlags_NoBackground;
@@ -781,44 +831,34 @@ void gui_render_screen(c64_t* c64, gui_state_t* gui_state) {
     igPushStyleVar_Float(ImGuiStyleVar_WindowBorderSize, 0.0f);
     
     if (igBegin("##C64ScreenBackground", NULL, window_flags)) {
-        // Calculate aspect ratio and centered position for C64 screen
-        float screen_aspect = (float)C64_TOTAL_WIDTH / (float)C64_TOTAL_HEIGHT;
-        float viewport_aspect = viewport->Size.x / viewport->Size.y;
-        
-        float display_width, display_height;
-        
-        if (viewport_aspect > screen_aspect) {
-            // Viewport is wider than screen - fit to height
-            display_height = viewport->Size.y;
-            display_width = display_height * screen_aspect;
-        } else {
-            // Viewport is taller than screen - fit to width  
-            display_width = viewport->Size.x;
-            display_height = display_width / screen_aspect;
+        // Determine if this is PAL or NTSC (check if c64 system is available)
+        bool is_pal = true;  // Default to PAL
+        if (c64 && c64->system.chip_count > 0) {
+            // Try to detect VIC-II type from chip system
+            for (uint8_t i = 0; i < c64->system.chip_count; i++) {
+                chip_entry_t* entry = &c64->system.chips[i];
+                if (entry->desc && strstr(entry->desc->description, "6567")) {
+                    is_pal = false;  // NTSC
+                    break;
+                } else if (entry->desc && strstr(entry->desc->description, "6569")) {
+                    is_pal = true;   // PAL
+                    break;
+                }
+            }
         }
         
-        // Apply user scaling
-        display_width *= gui_state->screen_scale;
-        display_height *= gui_state->screen_scale;
+        // Get guest display dimensions
+        float guest_width, guest_height;
+        gui_get_guest_dimensions(gui_state, is_pal, &guest_width, &guest_height);
         
-        // Clamp to viewport size
-        if (display_width > viewport->Size.x) {
-            float scale_factor = viewport->Size.x / display_width;
-            display_width = viewport->Size.x;
-            display_height *= scale_factor;
-        }
-        if (display_height > viewport->Size.y) {
-            float scale_factor = viewport->Size.y / display_height;
-            display_height = viewport->Size.y;
-            display_width *= scale_factor;
-        }
+        // Calculate display dimensions and position using new aspect ratio system
+        float display_width, display_height, pos_x, pos_y;
+        gui_calculate_display_dimensions(gui_state, viewport->Size.x, viewport->Size.y,
+                                       guest_width, guest_height, is_pal,
+                                       &display_width, &display_height, &pos_x, &pos_y);
         
-        // Center the screen in the viewport
-        float center_x = (viewport->Size.x - display_width) * 0.5f;
-        float center_y = (viewport->Size.y - display_height) * 0.5f;
-        
-        // Set cursor position to center the image
-        igSetCursorPos((ImVec2){center_x, center_y});
+        // Set cursor position
+        igSetCursorPos((ImVec2){pos_x, pos_y});
         
         // Render the C64 screen texture
         ImTextureID tex_id = (ImTextureID)(intptr_t)gui_state->screen_texture_id;
@@ -837,19 +877,174 @@ void gui_render_screen(c64_t* c64, gui_state_t* gui_state) {
             igGetMousePos(&mouse_pos);
             ImVec2 image_min;
             igGetItemRectMin(&image_min);
-            ImVec2 relative_pos = {(mouse_pos.x - image_min.x) / (display_width / C64_TOTAL_WIDTH),
-                                  (mouse_pos.y - image_min.y) / (display_height / C64_TOTAL_HEIGHT)};
             
-            if (relative_pos.x >= 0 && relative_pos.x < C64_TOTAL_WIDTH &&
-                relative_pos.y >= 0 && relative_pos.y < C64_TOTAL_HEIGHT) {
-                igSetTooltip("C64 Screen coordinates: (%d, %d)", 
-                           (int)relative_pos.x, (int)relative_pos.y);
+            // Calculate relative position within the displayed image
+            float rel_x = (mouse_pos.x - image_min.x) / display_width;
+            float rel_y = (mouse_pos.y - image_min.y) / display_height;
+            
+            // Convert to guest screen coordinates
+            int guest_x = (int)(rel_x * guest_width);
+            int guest_y = (int)(rel_y * guest_height);
+            
+            if (rel_x >= 0.0f && rel_x <= 1.0f && rel_y >= 0.0f && rel_y <= 1.0f &&
+                guest_x >= 0 && guest_x < (int)guest_width &&
+                guest_y >= 0 && guest_y < (int)guest_height) {
+                
+                if (gui_state->show_overscan) {
+                    igSetTooltip("C64 Screen coordinates: (%d, %d)", guest_x, guest_y);
+                } else {
+                    igSetTooltip("C64 Active area: (%d, %d)", guest_x, guest_y);
+                }
             }
         }
     }
     igEnd();
     
     igPopStyleVar(2); // Pop WindowRounding and WindowBorderSize
+}
+
+// ============================================================================
+// ASPECT RATIO CALCULATION IMPLEMENTATION
+// ============================================================================
+
+// Get guest display dimensions based on current settings
+void gui_get_guest_dimensions(gui_state_t* gui_state, bool is_pal,
+                             float* out_width, float* out_height) {
+    if (gui_state->show_overscan) {
+        // Include border/overscan area
+        *out_width = (float)C64_TOTAL_WIDTH;
+        *out_height = (float)C64_TOTAL_HEIGHT;
+    } else {
+        // Active display area only
+        *out_width = (float)C64_SCREEN_WIDTH;
+        *out_height = (float)C64_SCREEN_HEIGHT;
+    }
+}
+
+// Get target aspect ratio based on configuration
+float gui_get_target_aspect_ratio(gui_state_t* gui_state, bool is_pal) {
+    switch (gui_state->aspect_ratio_mode) {
+        case ASPECT_RATIO_4_3:
+            return 4.0f / 3.0f;
+            
+        case ASPECT_RATIO_16_10:
+            return 16.0f / 10.0f;
+            
+        case ASPECT_RATIO_16_9:
+            return 16.0f / 9.0f;
+            
+        case ASPECT_RATIO_CUSTOM:
+            return gui_state->custom_aspect_ratio;
+            
+        case ASPECT_RATIO_PIXEL_PERFECT:
+            return 1.0f;  // Square pixels
+            
+        case ASPECT_RATIO_ORIGINAL:
+        default: {
+            // Calculate original C64 aspect ratio
+            float guest_width, guest_height;
+            gui_get_guest_dimensions(gui_state, is_pal, &guest_width, &guest_height);
+            
+            // C64 pixels are not square - they have different aspect ratios for PAL vs NTSC
+            float pixel_aspect = is_pal ? (312.0f / 50.0f) / (263.0f / 60.0f) : 1.0f;
+            
+            if (gui_state->maintain_pixel_aspect) {
+                return (guest_width / guest_height) * pixel_aspect;
+            } else {
+                return guest_width / guest_height;
+            }
+        }
+    }
+}
+
+// Calculate display dimensions and position with aspect ratio and scaling
+void gui_calculate_display_dimensions(gui_state_t* gui_state, float viewport_width, float viewport_height,
+                                     float guest_width, float guest_height, bool is_pal,
+                                     float* out_display_width, float* out_display_height,
+                                     float* out_pos_x, float* out_pos_y) {
+    
+    // Apply host DPI scaling
+    float effective_viewport_width = viewport_width / gui_state->host_dpi_scale;
+    float effective_viewport_height = viewport_height / gui_state->host_dpi_scale;
+    
+    // Get target aspect ratio
+    float target_aspect = gui_get_target_aspect_ratio(gui_state, is_pal);
+    float viewport_aspect = effective_viewport_width / effective_viewport_height;
+    
+    float display_width, display_height;
+    
+    switch (gui_state->scaling_mode) {
+        case SCALING_MODE_FILL:
+            // Fill entire viewport (may crop guest content)
+            display_width = effective_viewport_width;
+            display_height = effective_viewport_height;
+            break;
+            
+        case SCALING_MODE_STRETCH:
+            // Stretch to fill viewport (may distort aspect ratio)
+            display_width = effective_viewport_width;
+            display_height = effective_viewport_height;
+            break;
+            
+        case SCALING_MODE_INTEGER: {
+            // Use integer scaling only
+            float max_scale_x = effective_viewport_width / guest_width;
+            float max_scale_y = effective_viewport_height / guest_height;
+            float integer_scale = floorf(fminf(max_scale_x, max_scale_y));
+            
+            if (integer_scale < 1.0f) integer_scale = 1.0f;
+            
+            display_width = guest_width * integer_scale;
+            display_height = guest_height * integer_scale;
+            break;
+        }
+        
+        case SCALING_MODE_FIT:
+        default: {
+            // Fit within viewport maintaining aspect ratio (may add black bars)
+            if (viewport_aspect > target_aspect) {
+                // Viewport is wider - fit to height, add side bars
+                display_height = effective_viewport_height;
+                display_width = display_height * target_aspect;
+            } else {
+                // Viewport is taller - fit to width, add top/bottom bars
+                display_width = effective_viewport_width;
+                display_height = display_width / target_aspect;
+            }
+            break;
+        }
+    }
+    
+    // Apply user scaling
+    display_width *= gui_state->screen_scale;
+    display_height *= gui_state->screen_scale;
+    
+    // Clamp to viewport size if needed
+    if (display_width > effective_viewport_width) {
+        float scale_factor = effective_viewport_width / display_width;
+        display_width = effective_viewport_width;
+        display_height *= scale_factor;
+    }
+    if (display_height > effective_viewport_height) {
+        float scale_factor = effective_viewport_height / display_height;
+        display_height = effective_viewport_height;
+        display_width *= scale_factor;
+    }
+    
+    // Calculate position (center by default)
+    float pos_x = 0.0f;
+    float pos_y = 0.0f;
+    
+    if (gui_state->center_display) {
+        pos_x = (effective_viewport_width - display_width) * 0.5f;
+        pos_y = (effective_viewport_height - display_height) * 0.5f;
+    }
+    
+    // Apply DPI scaling back to final values
+    *out_display_width = display_width * gui_state->host_dpi_scale;
+    *out_display_height = display_height * gui_state->host_dpi_scale;
+    *out_pos_x = pos_x * gui_state->host_dpi_scale;
+    *out_pos_y = pos_y * gui_state->host_dpi_scale;
 }
 
 // ============================================================================
