@@ -47,11 +47,9 @@ void c64_detached_write(void* context, uint16_t address, uint8_t value) {
 
 void c64_callbacks_init(c64_t* c64) {
     // Initialize optimized callback system
-    c64_bus_t* bus = c64->bus;
-
-    // Initialize all callbacks to stub functions first
+    c64_bus_t* bus = c64->bus;    // Initialize all callbacks to stub functions first
     for (int i = 0; i < 24; i++) {
-        c64_bus_register_chip_callbacks(bus, i, NULL,
+        c64_bus_register_chip_callbacks(bus, (uint8_t)i, NULL,
             c64_detached_read, c64_detached_write);
     }
     
@@ -86,29 +84,28 @@ void c64_callbacks_init(c64_t* c64) {
             else if (dev->base_address == 0xE000) {
                 acid = ACID_KERNAL;
             }
-        }
-        else if (desc == &mos6567_descriptor || desc == &mos6569_descriptor) {
+        }        else if (desc == &mos6567_descriptor || desc == &mos6569_descriptor) {
             // VIC-II (NTSC or PAL) gets I/O slots 0-3 (D000-D3FF)
-            c64_bus_register_chip_callbacks(bus, context, ACID_VIC_D0, desc->read, desc->write);
-            c64_bus_register_chip_callbacks(bus, context, ACID_VIC_D1, desc->read, desc->write);
-            c64_bus_register_chip_callbacks(bus, context, ACID_VIC_D2, desc->read, desc->write);
-            c64_bus_register_chip_callbacks(bus, context, ACID_VIC_D3, desc->read, desc->write);
+            c64_bus_register_chip_callbacks(bus, ACID_VIC_D0, context, desc->read, desc->write);
+            c64_bus_register_chip_callbacks(bus, ACID_VIC_D1, context, desc->read, desc->write);
+            c64_bus_register_chip_callbacks(bus, ACID_VIC_D2, context, desc->read, desc->write);
+            c64_bus_register_chip_callbacks(bus, ACID_VIC_D3, context, desc->read, desc->write);
             continue;
         }
         else if (desc == &mos6581_descriptor) {
             // SID gets I/O slots 4-7 (D400-D7FF)
-            c64_bus_register_chip_callbacks(bus, context, ACID_SID_D4, desc->read, desc->write);
-            c64_bus_register_chip_callbacks(bus, context, ACID_SID_D5, desc->read, desc->write);
-            c64_bus_register_chip_callbacks(bus, context, ACID_SID_D6, desc->read, desc->write);
-            c64_bus_register_chip_callbacks(bus, context, ACID_SID_D7, desc->read, desc->write);
+            c64_bus_register_chip_callbacks(bus, ACID_SID_D4, context, desc->read, desc->write);
+            c64_bus_register_chip_callbacks(bus, ACID_SID_D5, context, desc->read, desc->write);
+            c64_bus_register_chip_callbacks(bus, ACID_SID_D6, context, desc->read, desc->write);
+            c64_bus_register_chip_callbacks(bus, ACID_SID_D7, context, desc->read, desc->write);
             continue;
         }
         else if (desc == &mos2114_descriptor) {
             // Color RAM gets I/O slots 8-11 (D800-DBFF)
-            c64_bus_register_chip_callbacks(bus, context, ACID_COLORRAM_D8, desc->read, desc->write);
-            c64_bus_register_chip_callbacks(bus, context, ACID_COLORRAM_D9, desc->read, desc->write);
-            c64_bus_register_chip_callbacks(bus, context, ACID_COLORRAM_DA, desc->read, desc->write);
-            c64_bus_register_chip_callbacks(bus, context, ACID_COLORRAM_DB, desc->read, desc->write);
+            c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_D8, context, desc->read, desc->write);
+            c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_D9, context, desc->read, desc->write);
+            c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_DA, context, desc->read, desc->write);
+            c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_DB, context, desc->read, desc->write);
             continue;
         }
         else if (desc == &mos6526_descriptor) {
@@ -123,7 +120,7 @@ void c64_callbacks_init(c64_t* c64) {
         }
         
         // Register the chip callback
-        c64_bus_register_chip_callbacks(bus, context, acid, desc->read, desc->write);
+        c64_bus_register_chip_callbacks(bus, acid, context, desc->read, desc->write);
     }
 }
 

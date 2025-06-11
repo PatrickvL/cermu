@@ -29,7 +29,7 @@ static inline int c64_bus_get_bank(uint16_t address) {
 
 /* Memory read - 2 ops, 2.5-3.5 cycles (optimized cache usage) */
 uint8_t c64_bus_memory_read(c64_bus_t *bus, uint16_t address) {
-    uint8_t bank = c64_bus_get_bank(address);  // Extract 4KB bank (0-15)
+    uint8_t bank = (uint8_t)c64_bus_get_bank(address);  // Extract 4KB bank (0-15)
     uint8_t encoded = bus->encoded_rwid_per_bank[bank];  // Get banking info for this bank
     uint8_t is_io = -(encoded == 0);  // Branchless I/O detection
     uint8_t acid = (((encoded & 0xF) + ACID_IO2_DF) & ~is_io) | (((address >> 8) & 0xF) & is_io);
@@ -38,7 +38,7 @@ uint8_t c64_bus_memory_read(c64_bus_t *bus, uint16_t address) {
 
 /* Memory write - 2 ops, 3-4 cycles */
 void c64_bus_memory_write(c64_bus_t *bus, uint16_t address, uint8_t value) {
-    uint8_t bank = c64_bus_get_bank(address);  // Extract 4KB bank (0-15)
+    uint8_t bank = (uint8_t)c64_bus_get_bank(address);  // Extract 4KB bank (0-15)
     uint8_t encoded = bus->encoded_rwid_per_bank[bank];  // Get banking info for this bank
     uint8_t is_io = -(encoded == 0);  // Branchless I/O detection
     uint8_t acid = (((encoded >> 4) + ACID_IO2_DF) & ~is_io) | (((address >> 8) & 0xF) & is_io);
