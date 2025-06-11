@@ -159,7 +159,7 @@ void gui_render_frame_with_context(c64_t* c64, gui_state_t* gui_state, struct em
         gui_render_memory_viewer(c64, gui_state);
     }
     if (gui_state->show_debugger) {
-        gui_render_debugger(c64, gui_state);
+        gui_render_debugger_with_context(c64, gui_state, emu_context);
     }
     if (gui_state->show_settings) {
         gui_render_settings(c64, gui_state);
@@ -222,23 +222,43 @@ void gui_render_menu_bar_with_context(c64_t* c64, gui_state_t* gui_state, struct
             if (igMenuItem_Bool("Reset", NULL, false, emu_context != NULL)) {
                 if (emu_context) {
                     gui_emulation_reset(emu_context);
+                    printf("GUI: Reset signal sent\n");
                 }
             }
             igSeparator();
-            if (igMenuItem_Bool(gui_state->emulation_running ? "Pause" : "Run", NULL, false, emu_context != NULL)) {
+            
+            // Start/Pause button
+            const char* run_pause_text = gui_state->emulation_running ? "Pause" : "Start";
+            if (igMenuItem_Bool(run_pause_text, NULL, false, emu_context != NULL)) {
                 if (emu_context) {
                     if (gui_state->emulation_running) {
                         gui_emulation_pause(emu_context);
+                        printf("GUI: Pause signal sent\n");
                     } else {
                         gui_emulation_start(emu_context);
+                        printf("GUI: Start signal sent\n");
                     }
                 }
             }
-            if (igMenuItem_Bool("Single Step", NULL, false, emu_context != NULL)) {
+            
+            // Single step button
+            if (igMenuItem_Bool("Single Step", NULL, false, emu_context != NULL && !gui_state->emulation_running)) {
                 if (emu_context) {
                     gui_emulation_step(emu_context);
+                    printf("GUI: Step signal sent\n");
                 }
             }
+            
+            igSeparator();
+            
+            // Speed control
+            if (emu_context) {
+                static float speed_multiplier = 1.0f;
+                if (igSliderFloat("Speed", &speed_multiplier, 0.1f, 5.0f, "%.1fx", ImGuiSliderFlags_None)) {
+                    gui_emulation_set_speed(emu_context, speed_multiplier);
+                }
+            }
+            
             igEndMenu();
         }
         
@@ -359,11 +379,61 @@ void gui_render_memory_viewer(c64_t* c64, gui_state_t* gui_state) {
 }
 
 void gui_render_debugger(c64_t* c64, gui_state_t* gui_state) {
+    gui_render_debugger_with_context(c64, gui_state, NULL);
+}
+
+void gui_render_debugger_with_context(c64_t* c64, gui_state_t* gui_state, emulation_context_t* emu_context) {
     if (!igBegin("Debugger", &gui_state->show_debugger, 0)) {
         igEnd();
         return;
     }
 
+    // Emulation state display
+    if (emu_context) {
+        igText("Emulation State: %s",
+               emu_context->current_state == EMU_STATE_RUNNING ? "Running" :
+               emu_context->current_state == EMU_STATE_PAUSED ? "Paused" :
+               emu_context->current_state == EMU_STATE_STEPPING ? "Stepping" :
+               emu_context->current_state == EMU_STATE_STOPPED ? "Stopped" : "Unknown");
+        igText("FPS: %u", emu_context->actual_fps);
+        igText("Total Cycles: %llu", emu_context->total_cycles_executed);
+        igSeparator();
+    }
+
+    // Execution controls
+    igText("Execution Control");
+    
+    if (emu_context) {
+        // Start/Pause button
+        bool is_running = (emu_context->current_state == EMU_STATE_RUNNING);
+        const char* run_pause_text = is_running ? "Pause" : "Run";
+        if (igButton(run_pause_text, (ImVec2){60, 0})) {
+            if (is_running) {
+                gui_emulation_pause(emu_context);
+                printf("Debugger: Pause signal sent\n");
+            } else {
+                gui_emulation_start(emu_context);
+                printf("Debugger: Start signal sent\n");
+            }
+        }
+        
+        igSameLine(0, -1.0f);
+        if (igButton("Step", (ImVec2){60, 0})) {
+            gui_emulation_step(emu_context);
+            printf("Debugger: Step signal sent\n");
+        }
+        
+        igSameLine(0, -1.0f);
+        if (igButton("Reset", (ImVec2){60, 0})) {
+            gui_emulation_reset(emu_context);
+            printf("Debugger: Reset signal sent\n");
+        }
+    } else {
+        igText("Emulation context not available");
+    }
+    
+    igSeparator();
+    
     // Breakpoint controls
     igText("Breakpoints");
     igInputInt("Address", (int*)&gui_state->breakpoint_address, 1, 16, ImGuiInputTextFlags_CharsHexadecimal);
@@ -373,28 +443,14 @@ void gui_render_debugger(c64_t* c64, gui_state_t* gui_state) {
     if (igButton("Add", (ImVec2){0, 0})) {
         gui_state->breakpoint_enabled = true;
         // TODO: Set breakpoint in emulator
+        printf("Breakpoint set at $%04X\n", gui_state->breakpoint_address);
     }
     
     igSameLine(0, -1.0f);
     if (igButton("Clear All", (ImVec2){0, 0})) {
         gui_state->breakpoint_enabled = false;
         // TODO: Clear all breakpoints
-    }
-    
-    igSeparator();
-    
-    // Execution controls
-    igText("Execution Control");
-    if (igButton("Step Into", (ImVec2){0, 0})) {
-        // TODO: Single step execution
-    }
-    igSameLine(0, -1.0f);
-    if (igButton("Step Over", (ImVec2){0, 0})) {
-        // TODO: Step over subroutines
-    }
-    igSameLine(0, -1.0f);
-    if (igButton("Step Out", (ImVec2){0, 0})) {
-        // TODO: Step out of current subroutine
+        printf("All breakpoints cleared\n");
     }
     
     igSeparator();
@@ -876,7 +932,10 @@ void gui_emulation_start(emulation_context_t* emu_context) {
 }
 
 void gui_emulation_pause(emulation_context_t* emu_context) {
-    if (emu_context) {
+    if (emu_context && emu_context->c64) {
+        // First trigger the intercept to stop CPU execution
+        mos6510_start_intercept();
+        // Then send the pause signal to update thread state
         gui_emulation_send_signal(emu_context, EMU_SIGNAL_PAUSE);
     }
 }
@@ -888,8 +947,22 @@ void gui_emulation_step(emulation_context_t* emu_context) {
 }
 
 void gui_emulation_reset(emulation_context_t* emu_context) {
-    if (emu_context) {
-        gui_emulation_send_signal(emu_context, EMU_SIGNAL_RESET);
+    if (emu_context && emu_context->c64) {
+        // Reset should happen from GUI thread for immediate response
+        printf("GUI: Performing system reset\n");
+        
+        // First stop any running CPU execution
+        mos6510_start_intercept();
+        
+        // Perform CPU reset (could be extended to full system reset)
+        mos6510_reset(emu_context->c64->mos6510);
+        
+        // Update thread state
+        emu_context->current_state = EMU_STATE_STOPPED;
+        emu_context->total_cycles_executed = 0;
+        emu_context->frames_rendered = 0;
+        
+        printf("GUI: System reset completed\n");
     }
 }
 
@@ -917,29 +990,31 @@ static int gui_emulation_thread_main(void* data) {
         switch (signal) {
             case EMU_SIGNAL_START:
                 context->current_state = EMU_STATE_RUNNING;
-                // Start CPU threaded dispatch - this will run until intercept is triggered
-                // TODO: mos6510_execute_threaded(context->c64->mos6510);
-                // After threaded dispatch returns (due to intercept), go back to paused
+                printf("Emulation thread: Starting CPU execution\n");
+                // Start CPU execution - this will block until intercept is triggered
+                mos6510_execute(context->c64->mos6510);
+                printf("Emulation thread: CPU execution stopped (intercept triggered)\n");
+                // After execution returns (due to intercept), go back to paused
                 context->current_state = EMU_STATE_PAUSED;
                 break;
                 
             case EMU_SIGNAL_STEP:
                 context->current_state = EMU_STATE_STEPPING;
-                // Execute single CPU step
-                // TODO: mos6510_step(context->c64->mos6510);
+                printf("Emulation thread: Single step execution\n");
+                // Execute single CPU instruction
+                mos6510_step(context->c64->mos6510);
                 context->current_state = EMU_STATE_PAUSED;
                 break;
                 
             case EMU_SIGNAL_RESET:
-                context->current_state = EMU_STATE_RESETTING;
-                // Reset the CPU and system
-                // TODO: mos6510_reset(context->c64->mos6510);
+                // Reset is now handled by GUI thread, just acknowledge signal
+                printf("Emulation thread: Reset signal received (handled by GUI thread)\n");
                 context->current_state = EMU_STATE_STOPPED;
                 break;
                 
             case EMU_SIGNAL_PAUSE:
-                // Set CPU intercept to break out of threaded dispatch
-                // TODO: mos6510_set_intercept(context->c64->mos6510, true);
+                // This signal should trigger intercept from GUI thread, not here
+                printf("Emulation thread: Pause signal received\n");
                 context->current_state = EMU_STATE_PAUSED;
                 break;
                 
@@ -987,9 +1062,15 @@ void gui_emulation_render_frame(emulation_context_t* context) {
         // Update frame counter
         context->frames_rendered++;
         
-        // Set CPU intercept after frame period to pause threaded dispatch
-        // This allows the GUI thread to regain control periodically
-        // TODO: mos6510_set_intercept_after_cycles(context->c64->mos6510, context->frame_cycles);
+        // Trigger periodic intercept to allow GUI thread to regain control
+        // This prevents the emulation thread from running indefinitely
+        static uint32_t frame_count = 0;
+        frame_count++;
+        
+        // Trigger intercept every few frames to maintain GUI responsiveness
+        if ((frame_count % 3) == 0) {
+            mos6510_start_intercept();
+        }
     }
 }
 
@@ -1017,4 +1098,3 @@ void gui_emulation_update_fps(emulation_context_t* context) {
 void gui_delay(uint32_t ms) {
     SDL_Delay(ms);
 }
-
