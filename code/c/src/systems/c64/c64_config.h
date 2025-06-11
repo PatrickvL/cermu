@@ -1,9 +1,10 @@
-#ifndef SYSTEM_CONFIG_H
-#define SYSTEM_CONFIG_H
+#ifndef C64_CONFIG_H
+#define C64_CONFIG_H
 
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include "../../core/config/path_discovery.h"
 
 typedef enum {
     VIC_PAL,   // PAL timing standard
@@ -35,15 +36,4 @@ typedef struct {
  */
 const rom_config_t* system_config_get_default_roms(void);
 
-/**
- * Discover the ROM root folder by searching upwards from executable location.
- * Searches for 'data' folder containing the system ROM files.
- * 
- * @param system_name System folder name (e.g., "c64", "vic20")
- * @param out_path Buffer to store the discovered ROM root path
- * @param path_size Size of the output buffer
- * @return true if ROM root folder was found, false otherwise
- */
-bool system_config_discover_rom_root(const char* system_name, char* out_path, size_t path_size);
-
-#endif // SYSTEM_CONFIG_H
+#endif // C64_CONFIG_H

@@ -1,5 +1,5 @@
 #include "../systems/c64/c64.h"
-#include "../systems/c64/system_config.h"
+#include "../systems/c64/c64_config.h"
 #include <stdio.h>
 
 // ============================================================================

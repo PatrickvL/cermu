@@ -1,7 +1,7 @@
 #include "cimgui_interface.h"
 #include "../systems/c64/c64.h"
 #include "../systems/c64/c64_bus.h"
-#include "../systems/c64/system_config.h"
+#include "../systems/c64/c64_config.h"
 #include "../utils/rom_loader.h"
 #include "../chip/cpu/mos6510/mos6510.h"
 #include "cimgui_backends.h"
