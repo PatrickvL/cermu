@@ -24,33 +24,36 @@
 
 // ACID definitions (ACcessor InDex for callback dispatch)
 // ACIDs identify which accessor callbacks to use for memory operations.
-// The allocation order prioritizes write-capable chips for 3-bit encoding.
-// ACID 0 is reserved for unmapped/detached operations.
-#define ACID_UNMAPPED    0   // Reserved: Unmapped/detached operations (no real chip)
-
-// Write-capable ACIDs (1-7): These chips support write operations and get low IDs
-// to fit in the 3-bit write field of the encoding
-#define ACID_ZEROBANK    1   // Zero bank (4KB) including CPU I/O ports at $0000-$0001 (read/write)
-#define ACID_RAM         2   // Main RAM (read/write)
-#define ACID_VIC         3   // VIC-II $D000-$D3FF (read/write)
-#define ACID_SID         4   // SID $D400-$D7FF (read/write)
-#define ACID_COLORRAM    5   // Color RAM $D800-$DBFF (read/write)
-#define ACID_CIA         6   // CIA1/CIA2 $DC00-$DDFF (read/write)
-// ACID 7 available for future write-capable chip
-
-// Read-only ACIDs (8+): These chips only support read operations
-#define ACID_BASIC_ROM   8   // BASIC ROM $A000-$BFFF (read-only)
-#define ACID_KERNAL_ROM  9   // KERNAL ROM $E000-$FFFF (read-only)
-#define ACID_CARTRIDGE   10  // Cartridge ROM $8000-$9FFF (read-only)
-// Add more read-only ACIDs as needed
-
-// Encoding macros for packing read/write ACIDs into single byte
-// Format: [7:5] write ACID (3 bits), [4] spare, [3:0] read ACID (4 bits)
-#define ACIDS_RW_ENCODE(read_acid, write_acid) \
-    (((read_acid) & 0x0F) | (((write_acid) & 0x07) << 5))
-#define ACID_READ_DECODE(entry) ((entry) & 0x0F)
-#define ACID_WRITE_DECODE(entry) ((entry) >> 5)
-#define ACID_DECODE_SPARE(entry) (((entry) >> 4) & 0x01)
+// Accessor Callback IDs for optimized callback system
+enum {
+    /* I/O pages 0-15 (direct page mapping for $D000-$DFFF, read/write) */
+    ACID_VIC_D0 = 0,      /* $D000-$D0FF */
+    ACID_VIC_D1 = 1,      /* $D100-$D1FF */
+    ACID_VIC_D2 = 2,      /* $D200-$D2FF */
+    ACID_VIC_D3 = 3,      /* $D300-$D3FF */
+    ACID_SID_D4 = 4,      /* $D400-$D4FF */
+    ACID_SID_D5 = 5,      /* $D500-$D5FF */
+    ACID_SID_D6 = 6,      /* $D600-$D6FF */
+    ACID_SID_D7 = 7,      /* $D700-$D7FF */
+    ACID_COLORRAM_D8 = 8, /* $D800-$D8FF */
+    ACID_COLORRAM_D9 = 9, /* $D900-$D9FF */
+    ACID_COLORRAM_DA = 10,/* $DA00-$DAFF */
+    ACID_COLORRAM_DB = 11,/* $DB00-$DBFF */
+    ACID_CIA1_DC = 12,    /* $DC00-$DCFF */
+    ACID_CIA2_DD = 13,    /* $DD00-$DDFF */
+    ACID_IO1_DE = 14,     /* $DE00-$DEFF */
+    ACID_IO2_DF = 15,     /* $DF00-$DFFF */
+    /* Non-I/O chips 16-23 */
+    ACID_RAM = 16,        // Main RAM (64KB)
+    ACID_ZEROBANK = 17,   // Zero bank (4KB) overlaps RAM, required for CPU I/O ports at $0000-$0001
+    // Read-only ACIDs (8+): These chips only support read operations
+    ACID_BASIC = 18,      // BASIC ROM $A000-$BFFF (read-only)
+    ACID_KERNAL = 19,     // KERNAL ROM $E000-$FFFF (read-only)
+    ACID_CHARROM = 20,
+    ACID_ROML = 21,       // Cartridge ROM $8000-$9FFF (read-only)
+    ACID_ROMH = 22,
+    ACID_UNMAPPED = 23,   // Unmapped/detached operations (no real chip)
+};
 
 typedef struct c64_bus_s {
     chip_descriptor_t* desc;
@@ -61,17 +64,23 @@ typedef struct c64_bus_s {
       // System lines for control signals (includes EXROM and GAME)
     uint32_t system_lines;  // System-wide control lines including cartridge signals
     
-    // Current CPU I/O port state (for PLA mode generation)
-    uint8_t cpu_port_state;  // Current CPU port $0001 effective output
+    // Current PLA banking mode (0-31) derived from CPU port + cartridge signals
+    uint8_t pla_banking_mode;  // Current banking mode for fast switching
     
-    // ACID allocation tracking
-    uint8_t next_write_acid;    // Next available write-capable ACID (1-7)
-    uint8_t next_read_acid;     // Next available read-only ACID (8+)
-    uint8_t chip_id_to_acid[16]; // Maps chip ID to allocated ACID
+    // OPTIMIZED MEMORY BANKING - Cache-friendly layout
+    // 16 bytes: encoded_rwid_per_bank mapping (4KB banks 0-15) - fits in single cache line
+    alignas(16) uint8_t encoded_rwid_per_bank[16];
     
-    alignas(64) access_callback_t access_callback_per_acid[16]; // indexed by ACID - unified read/write/context
-    alignas(64) uint8_t acid_per_bankidx[32]; // Maps each condensed index (32 entries) to an ACID
-    alignas(64) uint8_t acid_per_bankidx_per_mode[32][32]; // Condensed from 256 to 32 entries per mode
+    // Split read/write for better cache usage (reads are 3-4x more frequent)
+    alignas(64) struct {
+        void *context;
+        chip_read_func_t read;
+    } read_callbacks[24];        // 384 bytes - hot cache for reads
+    
+    alignas(64) chip_write_func_t write_funcs[24]; // 192 bytes - separate cache line for writes
+    
+    // Banking configurations per mode (32 modes x 16 banks = 512 bytes)
+    alignas(64) uint8_t encoded_rwid_per_bank_per_mode[32][16]; // Banking configurations per mode
     
     // Integrated adapter interfaces - can be passed out as pointers
     bus_cycle_ops_t bus_adapter;
@@ -102,26 +111,19 @@ void c64_bus_set_cartridge_signals(c64_bus_t* c64_bus, bool exrom_active, bool g
 bool c64_bus_get_exrom_signal(c64_bus_t* c64_bus);
 bool c64_bus_get_game_signal(c64_bus_t* c64_bus);
 
-// ACID allocation and management
-uint8_t c64_bus_allocate_acid(c64_bus_t* bus, uint8_t chip_id, 
-                              chip_read_func_t read_func, chip_write_func_t write_func, 
-                              void* context);
-void c64_bus_initialize_acids(c64_bus_t* bus);
+// Optimized callback management
+void c64_bus_register_chip_callbacks(c64_bus_t* bus, uint8_t chip_id,
+                                    chip_read_func_t read_func, chip_write_func_t write_func,
+                                    void* context);
 
 // Forward declaration for PLA
 struct pla_906114_01_s;
 
 // PLA-based bus mapping functions
-void c64_bus_populate_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla, 
-                                 uint8_t ram_id, uint8_t basic_id, uint8_t kernal_id, 
-                                 uint8_t charrom_id, uint8_t io_id, uint8_t cartridge_roml_id, 
-                                 uint8_t cartridge_romh_id, uint8_t colorram_id);
+void c64_bus_populate_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla);
 
 // Generate all 32 memory modes using PLA
-void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla,
-                                   uint8_t ram_id, uint8_t basic_id, uint8_t kernal_id,
-                                   uint8_t charrom_id, uint8_t io_id, uint8_t cartridge_roml_id,
-                                   uint8_t cartridge_romh_id, uint8_t colorram_id);
+void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla);
 
 extern chip_descriptor_t c64_bus_descriptor;
 
