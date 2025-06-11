@@ -1,6 +1,8 @@
 #include "cimgui_interface.h"
 #include "../systems/c64/c64.h"
 #include "../systems/c64/c64_bus.h"
+#include "../systems/c64/system_config.h"
+#include "../utils/rom_loader.h"
 #include "../chip/cpu/mos6510/mos6510.h"
 #include "cimgui_backends.h"
 
@@ -131,11 +133,10 @@ void gui_init_state(gui_state_t* gui_state) {
     gui_state->screen_scale = 2.0f;
     gui_state->screen_filter = false;
     gui_state->screen_scanlines = false;
-    
-    // Default ROM paths (can be modified by user)
-    strcpy(gui_state->rom_path_basic, "data/c64/roms/basic.rom");
-    strcpy(gui_state->rom_path_kernal, "data/c64/roms/kernal.rom");
-    strcpy(gui_state->rom_path_chargen, "data/c64/roms/chargen.rom");
+      // Default ROM paths (can be modified by user)
+    strcpy(gui_state->rom_path_basic, "data/c64/roms/basic.901226-01.bin");
+    strcpy(gui_state->rom_path_kernal, "data/c64/roms/kernal.901227-03.bin");
+    strcpy(gui_state->rom_path_chargen, "data/c64/roms/characters.901225-01.bin");
 }
 
 void gui_render_frame(c64_t* c64, gui_state_t* gui_state) {
@@ -538,11 +539,22 @@ void gui_render_settings(c64_t* c64, gui_state_t* gui_state) {
     if (igButton("Browse##chargen", (ImVec2){0, 0})) {
         // TODO: File dialog
     }
+      igSeparator();
     
-    igSeparator();
-    
+    if (igButton("Reload ROMs", (ImVec2){0, 0})) {
+        if (c64) {
+            if (gui_reload_roms_from_state(c64, gui_state)) {
+                printf("ROMs reloaded successfully from GUI settings\n");
+            } else {
+                printf("Failed to reload ROMs from GUI settings\n");
+            }
+        } else {
+            printf("Cannot reload ROMs: C64 system not initialized\n");
+        }
+    }
+    igSameLine(0, -1.0f);
     if (igButton("Apply Settings", (ImVec2){0, 0})) {
-        // TODO: Apply settings to emulator
+        // TODO: Apply other settings to emulator
     }
     igSameLine(0, -1.0f);
     if (igButton("Reset to Defaults", (ImVec2){0, 0})) {
@@ -793,13 +805,105 @@ void gui_render_screen(c64_t* c64, gui_state_t* gui_state) {
     igEnd();
 }
 
-// File handling stubs - implement with platform-specific file dialogs
+// ============================================================================
+// ROM LOADING IMPLEMENTATION
+// ============================================================================
+
 void gui_load_rom_file(const char* filepath, const char* type) {
-    // TODO: Implement ROM loading
+    if (!filepath || !type) {
+        printf("Invalid ROM loading parameters\n");
+        return;
+    }
+    
+    printf("ROM loading requested: %s (%s)\n", filepath, type);
+    
+    // Store the ROM path in the global GUI state
+    // Note: This assumes gui_state is accessible globally or through a context
+    // For now, just print a message that implementation is needed
+    printf("Warning: ROM loading needs to be connected to GUI state and emulation context\n");
+    printf("TODO: Update GUI state ROM paths and trigger reload in emulation context\n");
+}
+
+// Helper function to reload ROMs when new paths are provided
+bool gui_apply_rom_changes(emulation_context_t* emu_context, gui_state_t* gui_state) {
+    if (!emu_context || !emu_context->c64 || !gui_state) {
+        return false;
+    }
+    
+    // Check if any ROM paths have changed (simplified - just reload unconditionally for now)
+    return gui_reload_roms_from_state(emu_context->c64, gui_state);
+}
+
+// Updated ROM loading function that updates GUI state
+void gui_load_rom_file_with_context(const char* filepath, const char* type, gui_state_t* gui_state, emulation_context_t* emu_context) {
+    if (!filepath || !type || !gui_state) {
+        printf("Invalid ROM loading parameters\n");
+        return;
+    }
+    
+    printf("ROM loading requested: %s (%s)\n", filepath, type);
+    
+    // Update the appropriate ROM path in GUI state
+    if (strcmp(type, "basic") == 0) {
+        strncpy(gui_state->rom_path_basic, filepath, sizeof(gui_state->rom_path_basic) - 1);
+        gui_state->rom_path_basic[sizeof(gui_state->rom_path_basic) - 1] = '\0';
+    } else if (strcmp(type, "kernal") == 0) {
+        strncpy(gui_state->rom_path_kernal, filepath, sizeof(gui_state->rom_path_kernal) - 1);
+        gui_state->rom_path_kernal[sizeof(gui_state->rom_path_kernal) - 1] = '\0';
+    } else if (strcmp(type, "chargen") == 0) {
+        strncpy(gui_state->rom_path_chargen, filepath, sizeof(gui_state->rom_path_chargen) - 1);
+        gui_state->rom_path_chargen[sizeof(gui_state->rom_path_chargen) - 1] = '\0';
+    } else {
+        printf("Unknown ROM type: %s\n", type);
+        return;
+    }
+    
+    // If emulation context is available, reload ROMs immediately
+    if (emu_context) {
+        if (gui_apply_rom_changes(emu_context, gui_state)) {
+            printf("ROM reloaded successfully: %s\n", filepath);
+        } else {
+            printf("Failed to reload ROM: %s\n", filepath);
+        }
+    } else {
+        printf("ROM path updated, will be loaded when emulation starts\n");
+    }
 }
 
 void gui_load_disk_image(const char* filepath) {
+    if (!filepath) {
+        printf("Invalid disk image path\n");
+        return;
+    }
+    
+    printf("Disk image loading requested: %s\n", filepath);
     // TODO: Implement disk image loading
+}
+
+// Helper function to reload ROMs from GUI state
+bool gui_reload_roms_from_state(c64_t* c64, const gui_state_t* gui_state) {
+    if (!c64 || !gui_state) {
+        return false;
+    }
+    
+    // Create a custom ROM configuration from GUI state
+    rom_config_t custom_rom_config = {
+        .basic_rom_paths = {
+            gui_state->rom_path_basic,
+            NULL, NULL, NULL
+        },
+        .kernal_rom_paths = {
+            gui_state->rom_path_kernal,
+            NULL, NULL, NULL
+        },
+        .chargen_rom_paths = {
+            gui_state->rom_path_chargen,
+            NULL, NULL, NULL
+        }
+    };
+    
+    // Reload ROMs using the new paths
+    return c64_reload_roms(c64, &custom_rom_config);
 }
 
 // ============================================================================

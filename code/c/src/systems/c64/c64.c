@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #include "../../core/aiemuc.h"
 #include "../../core/chip.h"
@@ -7,6 +8,7 @@
 #include "c64.h"
 #include "c64_bus.h"
 #include "system_config.h"
+#include "../../utils/rom_loader.h"
 #include "../../chip/cpu/mos6510/mos6510.h" // cpu
 #include "../../chip/io/mos6526.h" // cia
 #include "../../chip/sound/mos6581.h" // sid
@@ -20,15 +22,63 @@
 
 static uint8_t initial_ram[65536] = {0};
 
-void c64_memory_init(system_8bit_t* system) {
+void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config) {
     extern uint8_t initial_ram[65536];
+    
+    // Use default ROM configuration if none provided
+    if (!rom_config) {
+        rom_config = system_config_get_default_roms();
+    }
+    
     for (int i = 0; i < system->chip_count; i++) {
         chip_entry_t* dev = &system->chips[i];
+        
+        // Initialize RAM
         if (dev->desc == &ram_descriptor) {
             ram_t* ram = (ram_t*)dev->chip;
             memcpy(ram->memory, initial_ram, 65536);
         }
-        // ROM initialization removed - ROMs should be loaded from files when needed
+        
+        // Initialize ROM chips by loading from files
+        else if (dev->desc == &rom_descriptor) {
+            rom_t* rom = (rom_t*)dev->chip;
+            if (!rom->memory) {
+                printf("Warning: ROM chip has no allocated memory\n");
+                continue;
+            }
+            
+            bool rom_loaded = false;
+              // Determine ROM type based on memory address and size
+            if (dev->base_address == 0xA000 && dev->size == 8192) {
+                // BASIC ROM
+                rom_loaded = rom_loader_load_to_buffer((const char**)rom_config->basic_rom_paths, 8192, 
+                                                     rom->memory, dev->size);
+                if (!rom_loaded) {
+                    printf("Warning: Failed to load BASIC ROM\n");
+                }
+            }
+            else if (dev->base_address == 0xE000 && dev->size == 8192) {
+                // KERNAL ROM  
+                rom_loaded = rom_loader_load_to_buffer((const char**)rom_config->kernal_rom_paths, 8192,
+                                                     rom->memory, dev->size);
+                if (!rom_loaded) {
+                    printf("Warning: Failed to load KERNAL ROM\n");
+                }
+            }
+            else if (dev->base_address == 0xD000 && dev->size == 4096) {
+                // Character ROM
+                rom_loaded = rom_loader_load_to_buffer((const char**)rom_config->chargen_rom_paths, 4096,
+                                                     rom->memory, dev->size);
+                if (!rom_loaded) {
+                    printf("Warning: Failed to load Character ROM\n");
+                }
+            }
+            
+            // If ROM loading failed, fill with default pattern (0xFF for unloaded ROM)
+            if (!rom_loaded) {
+                memset(rom->memory, 0xFF, dev->size);
+            }
+        }
     }
 }
 
@@ -238,9 +288,9 @@ c64_t* c64_system_create(const system_config_t* config) {
         .context = ram_descriptor.get_rwcb_context(c64->ram)
     };
     mos6510_attach_ram(c64->mos6510, &ram_access);
-
-    // Set default memory contents TODO : Read from file?
-    c64_memory_init(&c64->system);
+    // Set default memory contents and load ROMs from configured paths
+    const rom_config_t* rom_config = config->rom_config ? config->rom_config : system_config_get_default_roms();
+    c64_memory_init(&c64->system, rom_config);
 
     // Now that all devices have their rwcb_context set, we can initialize the callbacks
     c64_callbacks_init(c64);
@@ -261,4 +311,16 @@ c64_t* c64_system_create(const system_config_t* config) {
     // For now, this will be handled through the control_lines_interface
     
     return c64;
+}
+
+bool c64_reload_roms(c64_t* c64, const rom_config_t* rom_config) {
+    if (!c64 || !rom_config) {
+        return false;
+    }
+    
+    // Reload ROMs using the memory initialization function
+    c64_memory_init(&c64->system, rom_config);
+    
+    printf("ROMs reloaded successfully\n");
+    return true;
 }

@@ -147,6 +147,12 @@ set(CHIP_SOURCES
 set(SYSTEM_SOURCES
     src/systems/c64/c64.c
     src/systems/c64/c64_bus.c
+    src/systems/c64/system_config.c
+)
+
+# Utility sources
+set(UTIL_SOURCES
+    src/utils/rom_loader.c
 )
 
 # Main executable (console version)
@@ -155,6 +161,7 @@ add_executable(c64emu
     ${CORE_SOURCES}
     ${CHIP_SOURCES}
     ${SYSTEM_SOURCES}
+    ${UTIL_SOURCES}
 )
 
 # Set output directory for console executable
@@ -164,8 +171,7 @@ set_target_properties(c64emu
 )
 
 # GUI executable (ImGui version) - only if SDL2 and OpenGL are available
-if(BUILD_GUI)
-    # GUI sources (just our interface file - cimgui handles the rest)
+if(BUILD_GUI)    # GUI sources (just our interface file - cimgui handles the rest)
     set(GUI_SOURCES
         src/gui/cimgui_interface.c
         src/gui/cimgui_backends.cpp
@@ -177,6 +183,7 @@ if(BUILD_GUI)
         ${CORE_SOURCES}
         ${CHIP_SOURCES}
         ${SYSTEM_SOURCES}
+        ${UTIL_SOURCES}
         ${GUI_SOURCES}
     )
 
@@ -252,6 +259,7 @@ add_executable(test_mos6510_basic
     ${CORE_SOURCES}
     ${CHIP_SOURCES}
     ${SYSTEM_SOURCES}
+    ${UTIL_SOURCES}
 )
 
 # Set output directory

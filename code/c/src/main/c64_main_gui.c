@@ -14,10 +14,10 @@ int main(int argc, char** argv) {
     if (!gui_init("C64 Emulator", 1200, 800)) {
         return 1;
     }
-    
-    // Initialize the C64 system
+      // Initialize the C64 system
     system_config_t config = {
-        .vic_standard = VIC_PAL
+        .vic_standard = VIC_PAL,
+        .rom_config = NULL  // Use default ROM paths, can be overridden by GUI later
     };
     c64_t* c64 = c64_system_create(&config);
     if (!c64) {
