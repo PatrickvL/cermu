@@ -54,9 +54,8 @@ int main(int argc, char** argv) {
     bool prev_emulation_paused = true;
     emulation_state_t prev_emu_state = EMU_STATE_STOPPED;
       // Main GUI loop (runs at ~60 FPS)
-    while (!gui_should_quit()) {
-        // Handle events and input (with emulation context for proper shutdown)
-        gui_handle_events_with_context(&emu_context);
+    while (!gui_should_quit()) {        // Handle events and input (with emulation context for proper shutdown)
+        gui_handle_events(&emu_context);
         
         // Update GUI state with current emulation status
         emulation_state_t emu_state = gui_emulation_get_state(&emu_context);
@@ -95,9 +94,8 @@ int main(int argc, char** argv) {
         
         // Update FPS counter
         gui_emulation_update_fps(&emu_context);
-        
-        // Render GUI frame with emulation context for control buttons
-        gui_render_frame_with_context(c64, &gui_state, &emu_context);
+          // Render GUI frame with emulation context for control buttons
+        gui_render_frame(c64, &gui_state, &emu_context);
         
         // GUI frame rate limiting (60 FPS)
         gui_delay(16);

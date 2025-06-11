@@ -105,11 +105,7 @@ bool gui_should_quit(void) {
     return g_should_quit;
 }
 
-void gui_handle_events(void) {
-    gui_handle_events_with_context(NULL);
-}
-
-void gui_handle_events_with_context(emulation_context_t* emu_context) {
+void gui_handle_events(emulation_context_t* emu_context) {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         ImGui_ImplSDL2_ProcessEvent_C(&event);        if (event.type == SDL_QUIT) {
@@ -158,24 +154,19 @@ void gui_init_state(gui_state_t* gui_state) {
     gui_state->screen_scale = 2.0f;
     gui_state->screen_filter = false;
     gui_state->screen_scanlines = false;
-      // Default ROM paths (can be modified by user)
-    strcpy(gui_state->rom_path_basic, "data/c64/roms/basic.901226-01.bin");
+      // Default ROM paths (can be modified by user)    strcpy(gui_state->rom_path_basic, "data/c64/roms/basic.901226-01.bin");
     strcpy(gui_state->rom_path_kernal, "data/c64/roms/kernal.901227-03.bin");
     strcpy(gui_state->rom_path_chargen, "data/c64/roms/characters.901225-01.bin");
 }
 
-void gui_render_frame(c64_t* c64, gui_state_t* gui_state) {
-    gui_render_frame_with_context(c64, gui_state, NULL);
-}
-
-void gui_render_frame_with_context(c64_t* c64, gui_state_t* gui_state, struct emulation_context_s* emu_context) {
+void gui_render_frame(c64_t* c64, gui_state_t* gui_state, struct emulation_context_s* emu_context) {
     // Start the Dear ImGui frame
     ImGui_ImplOpenGL3_NewFrame_C();
     ImGui_ImplSDL2_NewFrame_C();
     igNewFrame();
 
     // Render main menu bar with emulation context
-    gui_render_menu_bar_with_context(c64, gui_state, emu_context);
+    gui_render_menu_bar(c64, gui_state, emu_context);
 
     // Render windows based on gui_state
     if (gui_state->show_screen) {
@@ -185,7 +176,7 @@ void gui_render_frame_with_context(c64_t* c64, gui_state_t* gui_state, struct em
         gui_render_memory_viewer(c64, gui_state);
     }
     if (gui_state->show_debugger) {
-        gui_render_debugger_with_context(c64, gui_state, emu_context);
+        gui_render_debugger(c64, gui_state, emu_context);
     }
     if (gui_state->show_settings) {
         gui_render_settings(c64, gui_state);
@@ -217,15 +208,10 @@ void gui_render_frame_with_context(c64_t* c64, gui_state_t* gui_state, struct em
     glViewport(0, 0, (int)io->DisplaySize.x, (int)io->DisplaySize.y);
     glClearColor(0.0f, 0.0f, 0.2f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-    ImGui_ImplOpenGL3_RenderDrawData_C(igGetDrawData());
-    SDL_GL_SwapWindow(g_window);
+    ImGui_ImplOpenGL3_RenderDrawData_C(igGetDrawData());    SDL_GL_SwapWindow(g_window);
 }
 
-void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state) {
-    gui_render_menu_bar_with_context(c64, gui_state, NULL);
-}
-
-void gui_render_menu_bar_with_context(c64_t* c64, gui_state_t* gui_state, struct emulation_context_s* emu_context) {
+void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, struct emulation_context_s* emu_context) {
     if (igBeginMainMenuBar()) {
         if (igBeginMenu("File", true)) {
             if (igMenuItem_Bool("Load ROM...", NULL, false, true)) {
@@ -415,15 +401,12 @@ void gui_render_memory_viewer(c64_t* c64, gui_state_t* gui_state) {
     igEnd();
 }
 
-void gui_render_debugger(c64_t* c64, gui_state_t* gui_state) {
-    gui_render_debugger_with_context(c64, gui_state, NULL);
-}
-
-void gui_render_debugger_with_context(c64_t* c64, gui_state_t* gui_state, emulation_context_t* emu_context) {
+void gui_render_debugger(c64_t* c64, gui_state_t* gui_state, emulation_context_t* emu_context) {
     if (!igBegin("Debugger", &gui_state->show_debugger, 0)) {
         igEnd();
         return;
-    }    // Emulation state display
+    }
+    // Emulation state display
     if (emu_context) {
         igText("Emulation State: %s",
                emu_context->current_state == EMU_STATE_RUNNING ? "Running" :
@@ -833,21 +816,6 @@ void gui_render_screen(c64_t* c64, gui_state_t* gui_state) {
 // ROM LOADING IMPLEMENTATION
 // ============================================================================
 
-void gui_load_rom_file(const char* filepath, const char* type) {
-    if (!filepath || !type) {
-        printf("Invalid ROM loading parameters\n");
-        return;
-    }
-    
-    printf("ROM loading requested: %s (%s)\n", filepath, type);
-    
-    // Store the ROM path in the global GUI state
-    // Note: This assumes gui_state is accessible globally or through a context
-    // For now, just print a message that implementation is needed
-    printf("Warning: ROM loading needs to be connected to GUI state and emulation context\n");
-    printf("TODO: Update GUI state ROM paths and trigger reload in emulation context\n");
-}
-
 // Helper function to reload ROMs when new paths are provided
 bool gui_apply_rom_changes(emulation_context_t* emu_context, gui_state_t* gui_state) {
     if (!emu_context || !emu_context->c64 || !gui_state) {
@@ -859,7 +827,7 @@ bool gui_apply_rom_changes(emulation_context_t* emu_context, gui_state_t* gui_st
 }
 
 // Updated ROM loading function that updates GUI state
-void gui_load_rom_file_with_context(const char* filepath, const char* type, gui_state_t* gui_state, emulation_context_t* emu_context) {
+void gui_load_rom_file(const char* filepath, const char* type, gui_state_t* gui_state, emulation_context_t* emu_context) {
     if (!filepath || !type || !gui_state) {
         printf("Invalid ROM loading parameters\n");
         return;
@@ -1250,7 +1218,8 @@ static int gui_emulation_thread_main(void* data) {
                     }
                       if (sim_cycles >= MAX_SIM_CYCLES) {
                         printf("Emulation thread: Simulation reached cycle limit (%llu cycles)\n", (unsigned long long)sim_cycles);
-                    }                } else {
+                    }
+                } else {
                     // Real execution mode with proper ROM
                     printf("Emulation thread: Starting real CPU execution with intercept control\n");
                     
@@ -1281,7 +1250,7 @@ static int gui_emulation_thread_main(void* data) {
                                 context->current_state = EMU_STATE_PAUSED;
                                 break;
                             }
-                        }                        
+                        }
                         // Time-based logging instead of per-batch logging
                         uint32_t current_time = SDL_GetTicks();
                         if (current_time - last_log_time >= log_interval_ms) {
