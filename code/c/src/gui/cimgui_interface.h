@@ -102,6 +102,7 @@ void gui_render_menu_bar(struct c64_s* c64, gui_state_t* gui_state);
 void gui_render_menu_bar_with_context(struct c64_s* c64, gui_state_t* gui_state, struct emulation_context_s* emu_context);
 void gui_render_memory_viewer(struct c64_s* c64, gui_state_t* gui_state);
 void gui_render_debugger(struct c64_s* c64, gui_state_t* gui_state);
+void gui_render_debugger_with_context(struct c64_s* c64, gui_state_t* gui_state, struct emulation_context_s* emu_context);
 void gui_render_settings(struct c64_s* c64, gui_state_t* gui_state);
 void gui_render_about(gui_state_t* gui_state);
 void gui_render_screen(struct c64_s* c64, gui_state_t* gui_state);
