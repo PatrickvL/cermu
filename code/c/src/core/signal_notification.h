@@ -32,7 +32,7 @@ typedef void (*signal_change_callback_t)(signal_watcher_t* watcher,
 struct signal_watcher_s {
     uint32_t watch_mask;                    // Which signals to watch for changes
     uint32_t last_state;                    // Last known state of watched signals
-    signal_change_callback_t callback;     // Function to call on changes
+    signal_change_callback_t callback;      // Function to call on changes
     void* context;                          // User context for callback
     signal_watcher_t* next;                 // Linked list for system
 };
