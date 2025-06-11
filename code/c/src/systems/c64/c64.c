@@ -13,9 +13,9 @@
 #include "../../chip/cpu/mos6510/mos6510.h" // cpu
 #include "../../chip/io/mos6526.h" // cia
 #include "../../chip/sound/mos6581.h" // sid
-#include "../../chip/video/mos6569.h" // vicii PAL
-#include "../../chip/video/mos6567.h" // vicii NTSC stub
-#include "../../chip/video/vicii_common.h"
+#include "../../chip/video/vic_ii/mos6569.h" // vicii PAL
+#include "../../chip/video/vic_ii/mos6567.h" // vicii NTSC stub
+#include "../../chip/video/vic_ii/vicii_common.h"
 #include "../../chip/memory/ram.h"
 #include "../../chip/memory/rom.h"
 #include "../../chip/memory/mos2114.h" // colorram

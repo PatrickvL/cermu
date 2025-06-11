@@ -10,9 +10,9 @@
 #include "../../chip/memory/mos2114.h"
 #include "../../chip/sound/mos6581.h"
 #include "../../chip/io/mos6526.h"
-#include "../../chip/video/vicii_common.h"
-#include "../../chip/video/mos6567.h"
-#include "../../chip/video/mos6569.h"
+#include "../../chip/video/vic_ii/vicii_common.h"
+#include "../../chip/video/vic_ii/mos6567.h"
+#include "../../chip/video/vic_ii/mos6569.h"
 #include "c64_bus.h"  // Include the bus header to get c64_bus_t definition
 #include "c64_config.h"
 
