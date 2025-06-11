@@ -132,7 +132,8 @@ void vicii_render_common_debug_window(void* chip, bool* show_window, const char*
         for (int i = 0; i < 8; i++) {
             bool enabled = (sprite_enable >> i) & 1;
             uint16_t x = vicii->registers[i * 2] | (((sprite_x_msb >> i) & 1) << 8);
-            uint8_t y = vicii->registers[i * 2 + 1];            bool multicolor = (sprite_multicolor >> i) & 1;
+            uint8_t y = vicii->registers[i * 2 + 1];
+            bool multicolor = (sprite_multicolor >> i) & 1;
             bool priority = (sprite_priority >> i) & 1;
             bool expand_x = (sprite_expand_x >> i) & 1;
             bool expand_y = (sprite_expand_y >> i) & 1;

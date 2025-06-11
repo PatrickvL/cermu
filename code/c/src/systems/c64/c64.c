@@ -47,7 +47,9 @@ void c64_detached_write(void* context, uint16_t address, uint8_t value) {
 
 void c64_callbacks_init(c64_t* c64) {
     // Initialize optimized callback system
-    c64_bus_t* bus = c64->bus;    // Initialize all callbacks to stub functions first
+    c64_bus_t* bus = c64->bus;
+
+    // Initialize all callbacks to stub functions first
     for (int i = 0; i < 24; i++) {
         c64_bus_register_chip_callbacks(bus, (uint8_t)i, NULL,
             c64_detached_read, c64_detached_write);

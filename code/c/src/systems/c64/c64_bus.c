@@ -60,7 +60,8 @@ void c64_bus_system_destroy(void* chip) {
 void* c64_bus_system_create(chip_descriptor_t* desc) {
     c64_bus_t* c64_bus = (c64_bus_t*)calloc(1, sizeof(c64_bus_t));
     if (!c64_bus) return NULL;
-    c64_bus->desc = desc;    // Initialize bus state
+    c64_bus->desc = desc;
+    // Initialize bus state
     c64_bus->address = 0;
     c64_bus->data = 0;
     c64_bus->control_lines = BA_LINE | AEC_LINE | RDY_LINE;
@@ -205,8 +206,9 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
         pla_impl->inputs.va13 = false;   // VA13 low
         pla_impl->inputs.va12 = false;   // VA12 low
         pla_impl->inputs.n_ce = false;   // Chip enabled
-          // Populate mapping for this mode
-        c64_bus_populate_pla_mapping(bus, pla);        // Copy the mapping to the mode-specific array
+        // Populate mapping for this mode
+        c64_bus_populate_pla_mapping(bus, pla);
+        // Copy the mapping to the mode-specific array
         memcpy(bus->encoded_rwid_per_bank_per_mode[mode], bus->encoded_rwid_per_bank, 16);
     }
 }
