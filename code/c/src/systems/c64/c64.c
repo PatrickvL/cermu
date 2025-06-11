@@ -7,8 +7,9 @@
 #include "../../core/system.h"
 #include "c64.h"
 #include "c64_bus.h"
-#include "system_config.h"
-#include "../../utils/rom_loader.h"
+#include "c64_config.h"
+#include "../../core/storage/rom_loader.h"
+#include "../../core/config/path_discovery.h"
 #include "../../chip/cpu/mos6510/mos6510.h" // cpu
 #include "../../chip/io/mos6526.h" // cia
 #include "../../chip/sound/mos6581.h" // sid

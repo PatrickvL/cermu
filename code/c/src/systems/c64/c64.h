@@ -14,7 +14,7 @@
 #include "../../chip/video/mos6567.h"
 #include "../../chip/video/mos6569.h"
 #include "c64_bus.h"  // Include the bus header to get c64_bus_t definition
-#include "system_config.h"
+#include "c64_config.h"
 
 // No forward declarations needed - all types are defined in included headers
 
