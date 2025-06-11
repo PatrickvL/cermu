@@ -51,80 +51,79 @@ void c64_callbacks_init(c64_t* c64) {
 
     // Initialize all callbacks to stub functions first
     for (int i = 0; i < 24; i++) {
-        bus->read_callbacks[i].read = c64_detached_read;
-        bus->read_callbacks[i].context = NULL;
-        bus->write_funcs[i] = c64_detached_write;
+        c64_bus_register_chip_callbacks(bus, i, NULL,
+            c64_detached_read, c64_detached_write);
     }
     
     // Register chip callbacks in optimized arrays based on chip types
     for (int i = 0; i < c64->system.chip_count; i++) {
         chip_entry_t* dev = &c64->system.chips[i];
         chip_descriptor_t* desc = dev->desc;
-        void* context = desc->get_rwcb_context ? desc->get_rwcb_context(dev->chip) : dev->chip;
-        
+        void* context = dev->rwcb_context; // Set by system_chip_register
+
         // Map chips to optimized callback slots based on their type and address
-        uint8_t chip_id = ACID_UNMAPPED; // Default to unmapped access 
+        uint8_t acid = ACID_UNMAPPED; // Default to unmapped access 
         
-        if (desc == &ram_descriptor) {
-            chip_id = ACID_RAM;
+        if (desc == &mos6510_descriptor) {
+            acid = ACID_ZEROBANK; // CPU handles zero bank
+        }
+        else if (desc == &ram_descriptor) {
+            acid = ACID_RAM;
         }
         else if (desc == &rom_descriptor) {
-            if (dev->base_address == 0xA000) {
-                chip_id = ACID_BASIC;
+            if (dev->base_address == 0x8000) {
+                acid = ACID_ROML;
             }
-            else if (dev->base_address == 0xE000) {
-                chip_id = ACID_KERNAL;
-            }
-            else if (dev->base_address == 0xD000) {
-                chip_id = ACID_CHARROM;
-            }
-            else if (dev->base_address == 0x8000) {
-                chip_id = ACID_ROML;
+            else if (dev->base_address == 0xA000) {
+                acid = ACID_BASIC;
             }
             else if (dev->base_address == 0xC000) {
-                chip_id = ACID_ROMH;
+                acid = ACID_ROMH;
+            }
+            else if (dev->base_address == 0xD000) {
+                acid = ACID_CHARROM;
+            }
+            else if (dev->base_address == 0xE000) {
+                acid = ACID_KERNAL;
             }
         }
-        else if (desc == &mos6510_descriptor) {
-            chip_id = ACID_ZEROBANK; // CPU handles zero bank
-        }
-        else if (desc == &mos6569_descriptor || desc == &mos6567_descriptor) {
-            // VIC-II gets I/O slots 0-3 (D000-D3FF)
-            c64_bus_register_chip_callbacks(bus, ACID_VIC_D0, desc->read, desc->write, context);
-            c64_bus_register_chip_callbacks(bus, ACID_VIC_D1, desc->read, desc->write, context);
-            c64_bus_register_chip_callbacks(bus, ACID_VIC_D2, desc->read, desc->write, context);
-            c64_bus_register_chip_callbacks(bus, ACID_VIC_D3, desc->read, desc->write, context);
+        else if (desc == &mos6567_descriptor || desc == &mos6569_descriptor) {
+            // VIC-II (NTSC or PAL) gets I/O slots 0-3 (D000-D3FF)
+            c64_bus_register_chip_callbacks(bus, context, ACID_VIC_D0, desc->read, desc->write);
+            c64_bus_register_chip_callbacks(bus, context, ACID_VIC_D1, desc->read, desc->write);
+            c64_bus_register_chip_callbacks(bus, context, ACID_VIC_D2, desc->read, desc->write);
+            c64_bus_register_chip_callbacks(bus, context, ACID_VIC_D3, desc->read, desc->write);
             continue;
         }
         else if (desc == &mos6581_descriptor) {
             // SID gets I/O slots 4-7 (D400-D7FF)
-            c64_bus_register_chip_callbacks(bus, ACID_SID_D4, desc->read, desc->write, context);
-            c64_bus_register_chip_callbacks(bus, ACID_SID_D5, desc->read, desc->write, context);
-            c64_bus_register_chip_callbacks(bus, ACID_SID_D6, desc->read, desc->write, context);
-            c64_bus_register_chip_callbacks(bus, ACID_SID_D7, desc->read, desc->write, context);
+            c64_bus_register_chip_callbacks(bus, context, ACID_SID_D4, desc->read, desc->write);
+            c64_bus_register_chip_callbacks(bus, context, ACID_SID_D5, desc->read, desc->write);
+            c64_bus_register_chip_callbacks(bus, context, ACID_SID_D6, desc->read, desc->write);
+            c64_bus_register_chip_callbacks(bus, context, ACID_SID_D7, desc->read, desc->write);
             continue;
         }
         else if (desc == &mos2114_descriptor) {
             // Color RAM gets I/O slots 8-11 (D800-DBFF)
-            c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_D8, desc->read, desc->write, context);
-            c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_D9, desc->read, desc->write, context);
-            c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_DA, desc->read, desc->write, context);
-            c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_DB, desc->read, desc->write, context);
+            c64_bus_register_chip_callbacks(bus, context, ACID_COLORRAM_D8, desc->read, desc->write);
+            c64_bus_register_chip_callbacks(bus, context, ACID_COLORRAM_D9, desc->read, desc->write);
+            c64_bus_register_chip_callbacks(bus, context, ACID_COLORRAM_DA, desc->read, desc->write);
+            c64_bus_register_chip_callbacks(bus, context, ACID_COLORRAM_DB, desc->read, desc->write);
             continue;
         }
         else if (desc == &mos6526_descriptor) {
             // CIA chips get slots 12-13 (DC00-DDFF)
             if (dev->base_address == 0xDC00) {
-                chip_id = ACID_CIA1_DC; // 12
+                acid = ACID_CIA1_DC; // 12
             }
             else if (dev->base_address == 0xDD00) {
-                chip_id = ACID_CIA2_DD; // 13
+                acid = ACID_CIA2_DD; // 13
             }
             // Note : ACID_IO1_DE and ACID_IO2_DF are not yet supported, but reserved for future expansion
         }
         
         // Register the chip callback
-        c64_bus_register_chip_callbacks(bus, chip_id, desc->read, desc->write, context);
+        c64_bus_register_chip_callbacks(bus, context, acid, desc->read, desc->write);
     }
 }
 
@@ -232,6 +231,7 @@ c64_t* c64_system_create(const system_config_t* config) {
     
     // Now having a registry of all chips, the PLA maps can be generated
     if (!c64_pla_maps_generate(c64)) return NULL;
+
     // Attach RAM directly to MOS6510 for zero page access to avoid circular dependency
     access_callback_t ram_access = {
         .read_func = ram_descriptor.read,
