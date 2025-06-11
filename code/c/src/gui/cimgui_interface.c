@@ -226,17 +226,19 @@ void gui_render_menu_bar_with_context(c64_t* c64, gui_state_t* gui_state, struct
                 }
             }
             igSeparator();
-            
-            // Start/Pause button
-            const char* run_pause_text = gui_state->emulation_running ? "Pause" : "Start";
+              // Start/Pause button
+            bool is_running = emu_context ? (emu_context->current_state == EMU_STATE_RUNNING) : gui_state->emulation_running;
+            const char* run_pause_text = is_running ? "Pause" : "Start";
             if (igMenuItem_Bool(run_pause_text, NULL, false, emu_context != NULL)) {
                 if (emu_context) {
-                    if (gui_state->emulation_running) {
+                    if (is_running) {
                         gui_emulation_pause(emu_context);
                         printf("GUI: Pause signal sent\n");
+                        gui_state->emulation_running = false;
                     } else {
                         gui_emulation_start(emu_context);
                         printf("GUI: Start signal sent\n");
+                        gui_state->emulation_running = true;
                     }
                 }
             }
@@ -324,12 +326,22 @@ void gui_render_menu_bar_with_context(c64_t* c64, gui_state_t* gui_state, struct
             igMenuItem_BoolPtr("About", NULL, &gui_state->show_about, true);
             igEndMenu();
         }
-        
-        // Status bar on the right
+          // Status bar on the right
         igSameLine(igGetWindowWidth() - 300, -1.0f);
         igText("Cycles: %llu", c64 ? c64->total_cycles : 0);
         igSameLine(0, -1.0f);
-        igText(gui_state->emulation_running ? "Running" : "Paused");
+        
+        // Show actual emulation state from context if available
+        if (emu_context) {
+            const char* state_text = 
+                emu_context->current_state == EMU_STATE_RUNNING ? "Running" :
+                emu_context->current_state == EMU_STATE_PAUSED ? "Paused" :
+                emu_context->current_state == EMU_STATE_STEPPING ? "Stepping" :
+                emu_context->current_state == EMU_STATE_STOPPED ? "Stopped" : "Unknown";
+            igText("%s", state_text);
+        } else {
+            igText("%s", gui_state->emulation_running ? "Running" : "Paused");
+        }
         
         igEndMainMenuBar();
     }
@@ -386,9 +398,7 @@ void gui_render_debugger_with_context(c64_t* c64, gui_state_t* gui_state, emulat
     if (!igBegin("Debugger", &gui_state->show_debugger, 0)) {
         igEnd();
         return;
-    }
-
-    // Emulation state display
+    }    // Emulation state display
     if (emu_context) {
         igText("Emulation State: %s",
                emu_context->current_state == EMU_STATE_RUNNING ? "Running" :
@@ -398,12 +408,33 @@ void gui_render_debugger_with_context(c64_t* c64, gui_state_t* gui_state, emulat
         igText("FPS: %u", emu_context->actual_fps);
         igText("Total Cycles: %llu", emu_context->total_cycles_executed);
         igSeparator();
+        
+        // System initialization status
+        igText("System Status:");
+        if (c64) {
+            igText("CPU: %s", c64->mos6510 ? "Initialized" : "NOT INITIALIZED");
+            igText("Bus: %s", c64->bus ? "Attached" : "NOT ATTACHED");
+            igText("RAM: %s", c64->ram ? "Available" : "NOT AVAILABLE");
+            
+            // Check reset vector
+            if (c64->ram && c64->ram->memory) {
+                uint8_t reset_low = c64->ram->memory[0xFFFC];
+                uint8_t reset_high = c64->ram->memory[0xFFFD];
+                uint16_t reset_vector = (reset_high << 8) | reset_low;
+                igText("Reset Vector: $%04X %s", reset_vector, 
+                       reset_vector == 0x0000 ? "(NO ROM)" : "(ROM LOADED)");
+            } else {
+                igText("Reset Vector: N/A");
+            }
+        } else {
+            igText("C64 System: NOT INITIALIZED");
+        }
+        igSeparator();
     }
 
     // Execution controls
     igText("Execution Control");
-    
-    if (emu_context) {
+      if (emu_context) {
         // Start/Pause button
         bool is_running = (emu_context->current_state == EMU_STATE_RUNNING);
         const char* run_pause_text = is_running ? "Pause" : "Run";
@@ -987,14 +1018,110 @@ static int gui_emulation_thread_main(void* data) {
         if (!context->thread_running) break;
         
         // Process signal and execute CPU operation
-        switch (signal) {
-            case EMU_SIGNAL_START:
+        switch (signal) {            case EMU_SIGNAL_START:
                 context->current_state = EMU_STATE_RUNNING;
                 printf("Emulation thread: Starting CPU execution\n");
-                // Start CPU execution - this will block until intercept is triggered
-                mos6510_execute(context->c64->mos6510);
-                printf("Emulation thread: CPU execution stopped (intercept triggered)\n");
-                // After execution returns (due to intercept), go back to paused
+                
+                // Ensure CPU is properly initialized before execution
+                if (!context->c64->mos6510) {
+                    printf("Emulation thread: ERROR - CPU not initialized\n");
+                    context->current_state = EMU_STATE_STOPPED;
+                    break;
+                }
+                
+                // Check if CPU has proper interfaces attached
+                if (!context->c64->bus) {
+                    printf("Emulation thread: ERROR - Bus not attached to C64\n");
+                    context->current_state = EMU_STATE_STOPPED;
+                    break;
+                }
+                
+                printf("Emulation thread: Checking system initialization...\n");
+                
+                // Check if system has ROM loaded by examining reset vector
+                uint8_t reset_low = 0;
+                uint8_t reset_high = 0;
+                
+                // Try to read reset vector through the bus system
+                if (context->c64->bus && context->c64->ram) {
+                    // For now, read directly from RAM since ROMs aren't loaded
+                    // In a real system, this would read through the memory mapping
+                    reset_low = context->c64->ram->memory[0xFFFC];
+                    reset_high = context->c64->ram->memory[0xFFFD];
+                }
+                
+                uint16_t reset_vector = (reset_high << 8) | reset_low;
+                printf("Emulation thread: Reset vector = $%04X\n", reset_vector);
+                
+                if (reset_vector == 0x0000) {
+                    printf("Emulation thread: WARNING - No ROM loaded, reset vector is $0000\n");
+                    printf("Emulation thread: Using simulation mode instead of real CPU execution\n");
+                    
+                    // Simulation mode - execute instructions in a controlled manner
+                    printf("Emulation thread: Starting simulation mode\n");
+                    uint64_t sim_cycles = 0;
+                    const uint64_t MAX_SIM_CYCLES = 100000;
+                    
+                    while (context->current_state == EMU_STATE_RUNNING && sim_cycles < MAX_SIM_CYCLES) {
+                        // Simulate CPU step - this executes one instruction safely
+                        if (mos6510_step(context->c64->mos6510)) {
+                            context->total_cycles_executed++;
+                            sim_cycles++;
+                        } else {
+                            printf("Emulation thread: CPU step failed, stopping simulation\n");
+                            break;
+                        }
+                        
+                        // Check for intercept every 1000 cycles to allow pause/stop
+                        if ((sim_cycles % 1000) == 0) {
+                            if (mos6510_is_intercepting()) {
+                                printf("Emulation thread: Intercept detected during simulation\n");
+                                break;
+                            }
+                            // Small delay to prevent busy loop and allow GUI responsiveness
+                            SDL_Delay(1);
+                        }
+                    }
+                      if (sim_cycles >= MAX_SIM_CYCLES) {
+                        printf("Emulation thread: Simulation reached cycle limit (%llu cycles)\n", (unsigned long long)sim_cycles);
+                    }
+                } else {
+                    // Real execution mode with proper ROM
+                    printf("Emulation thread: Starting real CPU execution with intercept control\n");
+                      // Set up controlled execution with intercept mechanism
+                    // This will allow the PAUSE signal to stop execution
+                    const uint32_t batch_size = 10000; // Execute in batches
+                    
+                    while (context->current_state == EMU_STATE_RUNNING) {
+                        // Execute a batch of instructions using controlled threaded dispatch
+                        printf("Emulation thread: Executing batch of %d instructions\n", batch_size);
+                          // Use intercept to limit execution to a batch
+                        for (int i = 0; i < (int)batch_size && context->current_state == EMU_STATE_RUNNING; i++) {
+                            if (mos6510_step(context->c64->mos6510)) {
+                                context->total_cycles_executed++;
+                            } else {
+                                printf("Emulation thread: CPU execution failed\n");
+                                context->current_state = EMU_STATE_STOPPED;
+                                break;
+                            }
+                            
+                            // Check for pause every 100 instructions
+                            if ((i % 100) == 0 && mos6510_is_intercepting()) {
+                                printf("Emulation thread: Intercept detected, pausing execution\n");
+                                context->current_state = EMU_STATE_PAUSED;
+                                break;
+                            }
+                        }
+                        
+                        // Small delay between batches to allow GUI responsiveness
+                        if (context->current_state == EMU_STATE_RUNNING) {
+                            SDL_Delay(10);
+                        }
+                    }
+                }
+                
+                printf("Emulation thread: CPU execution stopped\n");
+                // After execution returns, go back to paused
                 context->current_state = EMU_STATE_PAUSED;
                 break;
                 
