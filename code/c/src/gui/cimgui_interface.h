@@ -7,6 +7,25 @@
 // Forward declarations
 struct c64_s;
 
+// Aspect ratio configuration enums
+typedef enum {
+    ASPECT_RATIO_ORIGINAL = 0,    // Use original guest aspect ratio
+    ASPECT_RATIO_4_3,             // Force 4:3 aspect ratio
+    ASPECT_RATIO_16_10,           // Force 16:10 aspect ratio
+    ASPECT_RATIO_16_9,            // Force 16:9 aspect ratio
+    ASPECT_RATIO_CUSTOM,          // Use custom aspect ratio
+    ASPECT_RATIO_PIXEL_PERFECT,   // 1:1 pixel aspect ratio
+    ASPECT_RATIO_COUNT
+} aspect_ratio_mode_t;
+
+typedef enum {
+    SCALING_MODE_FIT = 0,         // Fit display within window (may add black bars)
+    SCALING_MODE_FILL,            // Fill entire window (may crop)
+    SCALING_MODE_STRETCH,         // Stretch to fill window (may distort)
+    SCALING_MODE_INTEGER,         // Use integer scaling only
+    SCALING_MODE_COUNT
+} scaling_mode_t;
+
 // GUI State structure
 typedef struct {
     bool show_memory_viewer;
@@ -36,6 +55,15 @@ typedef struct {
     float screen_scale;
     bool screen_filter;
     bool screen_scanlines;
+    
+    // Aspect ratio configuration
+    aspect_ratio_mode_t aspect_ratio_mode;
+    scaling_mode_t scaling_mode;
+    float custom_aspect_ratio;        // For ASPECT_RATIO_CUSTOM mode
+    bool maintain_pixel_aspect;       // Maintain square pixels
+    bool show_overscan;               // Include overscan/border area
+    bool center_display;              // Center display in available space
+    float host_dpi_scale;             // Host DPI scaling factor
     
     // File paths
     char rom_path_basic[512];
@@ -108,6 +136,15 @@ void gui_render_screen(struct c64_s* c64, gui_state_t* gui_state);
 bool gui_init_screen_display(gui_state_t* gui_state);
 void gui_cleanup_screen_display(gui_state_t* gui_state);
 void gui_update_screen_texture(struct c64_s* c64, gui_state_t* gui_state);
+
+// Aspect ratio calculation functions
+void gui_calculate_display_dimensions(gui_state_t* gui_state, float viewport_width, float viewport_height,
+                                     float guest_width, float guest_height, bool is_pal,
+                                     float* out_display_width, float* out_display_height,
+                                     float* out_pos_x, float* out_pos_y);
+float gui_get_target_aspect_ratio(gui_state_t* gui_state, bool is_pal);
+void gui_get_guest_dimensions(gui_state_t* gui_state, bool is_pal,
+                             float* out_width, float* out_height);
 
 // Utility functions
 void gui_init_state(gui_state_t* gui_state);
