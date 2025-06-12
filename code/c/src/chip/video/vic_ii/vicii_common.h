@@ -174,6 +174,14 @@ struct vicii_pixel_s {
 // Number of sprites
 #define VICII_NUM_SPRITES 8
 
+// VIC-II memory mapping structure
+typedef struct {
+    uint16_t bank_base;         // Base address of current 16KB VIC bank
+    uint16_t video_matrix_base; // Video matrix base within VIC bank
+    uint16_t char_base;         // Character ROM base within VIC bank
+    bool char_rom_enabled;      // Whether character ROM is accessible
+} vicii_memory_map_t;
+
 // VIC-II Sprite structure
 typedef struct {
     uint8_t x_pos;
@@ -252,6 +260,11 @@ typedef struct {
     vicii_priority_t* pixel_line_priority;
     uint32_t* pixel_line_color;
     uint16_t pixel_line_index;
+    
+    // Frame buffer output
+    uint32_t* framebuffer;
+    int framebuffer_width;
+    int framebuffer_height;
 } vicii_common_t;
 
 // Factory and lifecycle
@@ -290,18 +303,15 @@ void vicii_common_g_access(vicii_common_t* vicii);
 void vicii_common_emit_border_pixels(vicii_common_t* vicii);
 void vicii_common_emit_graphics_pixels(vicii_common_t* vicii, uint8_t data);
 
+// Frame buffer output functions
+void vicii_common_flush_pixel_line_to_output(vicii_common_t* vicii, uint32_t* palette, int y);
+uint32_t* vicii_common_get_default_palette(void);
+void vicii_common_set_framebuffer(vicii_common_t* vicii, uint32_t* framebuffer, int width, int height);
+
 // VIC-II banking constants
 #define VICII_BANK_0_BASE    0x0000  // Bank 0: $0000-$3FFF
 #define VICII_BANK_1_BASE    0x4000  // Bank 1: $4000-$7FFF
 #define VICII_BANK_2_BASE    0x8000  // Bank 2: $8000-$BFFF
 #define VICII_BANK_3_BASE    0xC000  // Bank 3: $C000-$FFFF
-
-// VIC-II memory mapping structure
-typedef struct {
-    uint16_t bank_base;         // Base address of current 16KB VIC bank
-    uint16_t video_matrix_base; // Video matrix base within VIC bank
-    uint16_t char_base;         // Character ROM base within VIC bank
-    bool char_rom_enabled;      // Whether character ROM is accessible
-} vicii_memory_map_t;
 
 #endif // VICII_COMMON_H

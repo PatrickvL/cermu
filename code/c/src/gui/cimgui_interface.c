@@ -11,10 +11,14 @@
 #include "../systems/c64/c64_config.h"
 #include "../utils/rom_loader.h"
 #include "../chip/cpu/mos6510/mos6510.h"
+#include "../chip/video/vic_ii/vicii_common.h"
 #include "cimgui_backends.h"
 
 #include <stdio.h>
 #include <string.h>
+
+// Macro to create RGBA color values for OpenGL GL_RGBA format
+#define RGBA_COLOR(r, g, b, a) (((uint32_t)(a) << 24) | ((uint32_t)(b) << 16) | ((uint32_t)(g) << 8) | (uint32_t)(r))
 
 // Global SDL and OpenGL state
 static SDL_Window* g_window = NULL;
@@ -163,6 +167,7 @@ void gui_init_state(gui_state_t* gui_state) {
     gui_state->show_overscan = true;
     gui_state->center_display = true;
     gui_state->host_dpi_scale = 1.0f;  // Will be detected at runtime
+    gui_state->show_invisible_area = false;  // Hide invisible area by default
       // Default ROM paths (can be modified by user)    strcpy(gui_state->rom_path_basic, "data/c64/roms/basic.901226-01.bin");
     strcpy(gui_state->rom_path_kernal, "data/c64/roms/kernal.901227-03.bin");
     strcpy(gui_state->rom_path_chargen, "data/c64/roms/characters.901225-01.bin");
@@ -365,6 +370,33 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, struct emulation_co
             igCheckbox("Maintain Pixel Aspect", &gui_state->maintain_pixel_aspect);
             igCheckbox("Show Overscan/Border", &gui_state->show_overscan);
             igCheckbox("Center Display", &gui_state->center_display);
+            igCheckbox("Show Invisible Area", &gui_state->show_invisible_area);
+            
+            // Debug: VIC-II color cycling
+            igSeparator();
+            igText("Debug Features:");
+            static bool color_cycle_enabled = false;
+            igCheckbox("Cycle Background Color", &color_cycle_enabled);
+            
+            // Implement background color cycling
+            if (color_cycle_enabled && c64 && c64->vicii) {
+                static uint32_t last_cycle_time = 0;
+                static uint8_t current_bg_color = 0;
+                uint32_t current_time = SDL_GetTicks();
+                
+                if (current_time - last_cycle_time > 2000) { // Change every 2 seconds
+                    // Write to VIC-II background color register 0 (B0C = register 33) - this affects the center area
+                    vicii_common_registers_write(c64->vicii, 33, current_bg_color);  // VICII_B0C = 33
+                    // Also cycle border color to be more visible
+                    vicii_common_registers_write(c64->vicii, 32, (current_bg_color + 8) % 16);  // VICII_EC = 32
+                    printf("DEBUG: Set VIC-II background color 0 (center) to %d, border to %d\n",
+                           current_bg_color, (current_bg_color + 8) % 16);
+                    
+                    current_bg_color = (current_bg_color + 1) % 16;
+                    last_cycle_time = current_time;
+                }
+                igText("Current BG Color: %d", (current_bg_color + 15) % 16); // Show the current one
+            }
             
             // Host DPI information
             igSeparator();
@@ -694,8 +726,14 @@ void gui_render_about(gui_state_t* gui_state) {
 // C64 display constants
 #define C64_SCREEN_WIDTH  320
 #define C64_SCREEN_HEIGHT 200
-#define C64_TOTAL_WIDTH   403  // Including borders
-#define C64_TOTAL_HEIGHT  284  // Including borders
+#define C64_VISIBLE_WIDTH   403  // VIC-II visible area (including borders)
+#define C64_VISIBLE_HEIGHT  284  // VIC-II visible area (including borders)
+#define C64_TOTAL_WIDTH   512   // Full framebuffer width (centered VIC-II area)
+#define C64_TOTAL_HEIGHT  384   // Full framebuffer height (centered VIC-II area)
+
+// VIC-II area positioning within the larger framebuffer
+#define VIC_OFFSET_X  ((C64_TOTAL_WIDTH - C64_VISIBLE_WIDTH) / 2)   // Center horizontally
+#define VIC_OFFSET_Y  ((C64_TOTAL_HEIGHT - C64_VISIBLE_HEIGHT) / 2) // Center vertically
 
 // Simple C64 color palette (16 colors)
 static const uint32_t c64_palette[16] = {
@@ -717,8 +755,9 @@ static const uint32_t c64_palette[16] = {
     0xFFBBBBBB   // 15: Light Grey
 };
 
-// Static framebuffer for C64 screen
+// Static framebuffer for C64 screen (double buffering handled at VIC-II level)
 static uint32_t screen_buffer[C64_TOTAL_WIDTH * C64_TOTAL_HEIGHT];
+// Remove vic_buffer - VIC-II will render directly to centered area of screen_buffer
 
 bool gui_init_screen_display(gui_state_t* gui_state) {
     // Generate OpenGL texture
@@ -731,30 +770,11 @@ bool gui_init_screen_display(gui_state_t* gui_state) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     
-    // Initialize with placeholder content
+    // Initialize with completely black screen (no test patterns)
     memset(screen_buffer, 0, sizeof(screen_buffer));
     
-    // Create a simple test pattern (blue border, light blue center)
-    for (int y = 0; y < C64_TOTAL_HEIGHT; y++) {
-        for (int x = 0; x < C64_TOTAL_WIDTH; x++) {
-            uint32_t color = c64_palette[6]; // Blue border
-            
-            // Inner screen area 
-            if (x >= 40 && x < 360 && y >= 40 && y < 240) {
-                color = c64_palette[14]; // Light blue screen
-                
-                // Add some test text pattern
-                if (((x / 8) + (y / 8)) % 2) {
-                    color = c64_palette[1]; // White
-                }
-            }
-            
-            screen_buffer[y * C64_TOTAL_WIDTH + x] = color;
-        }
-    }
-    
-    // Upload initial data to texture
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, C64_TOTAL_WIDTH, C64_TOTAL_HEIGHT, 
+    // Upload initial black data to texture
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, C64_TOTAL_WIDTH, C64_TOTAL_HEIGHT,
                  0, GL_RGBA, GL_UNSIGNED_BYTE, screen_buffer);
     
     // Initialize screen display state
@@ -772,31 +792,54 @@ void gui_cleanup_screen_display(gui_state_t* gui_state) {
     }
 }
 
+// Re-add vic_buffer but as a temporary solution until VIC-II can handle stride
+static uint32_t vic_buffer[C64_VISIBLE_WIDTH * C64_VISIBLE_HEIGHT];
+
 void gui_update_screen_texture(c64_t* c64, gui_state_t* gui_state) {
-    // TODO: Get actual pixel data from VIC-II
-    // For now, update with dummy pattern that changes based on emulation state
+    static void* connected_vic_chip = NULL;  // Keep track of connected VIC chip
     
-    if (c64 && gui_state->emulation_running) {
-        // Simple animation based on cycle count
-        uint64_t frame = (c64->total_cycles / 20000) % 60;
+    // Initialize screen buffer with appropriate background color
+    // When showing invisible area, use brownish color (VIC-II generates color 9 = brown in invisible area)
+    uint32_t background_fill = 0x00000000; // Default black
+    if (gui_state->show_invisible_area) {
+        // Use color 9 (brown) from VIC-II palette for invisible area
+        // This is what real VIC-II hardware shows in the invisible area
+        background_fill = RGBA_COLOR(0x43, 0x39, 0x00, 0xFF); // Brown color
+    }
+    
+    // Fill entire buffer with appropriate background
+    for (int i = 0; i < C64_TOTAL_WIDTH * C64_TOTAL_HEIGHT; i++) {
+        screen_buffer[i] = background_fill;
+    }
+    
+    if (c64 && c64->vicii) {
+        // Set up framebuffer connection if not already done or chip changed
+        if (connected_vic_chip != c64->vicii) {
+            // Connect VIC-II to the VIC-II sized buffer (403x284)
+            vicii_common_set_framebuffer((vicii_common_t*)c64->vicii,
+                                        vic_buffer, C64_VISIBLE_WIDTH, C64_VISIBLE_HEIGHT);
+            connected_vic_chip = c64->vicii;
+            printf("GUI: Connected VIC-II to buffer (%dx%d)\n", C64_VISIBLE_WIDTH, C64_VISIBLE_HEIGHT);
+        }
         
-        for (int y = 0; y < C64_TOTAL_HEIGHT; y++) {
-            for (int x = 0; x < C64_TOTAL_WIDTH; x++) {
-                uint32_t color = c64_palette[6]; // Blue border
+        // Copy VIC-II content to properly centered position in full framebuffer
+        for (int y = 0; y < C64_VISIBLE_HEIGHT; y++) {
+            for (int x = 0; x < C64_VISIBLE_WIDTH; x++) {
+                int vic_idx = y * C64_VISIBLE_WIDTH + x;
+                int screen_x = VIC_OFFSET_X + x;
+                int screen_y = VIC_OFFSET_Y + y;
+                int screen_idx = screen_y * C64_TOTAL_WIDTH + screen_x;
                 
-                // Inner screen area
-                if (x >= 40 && x < 360 && y >= 40 && y < 240) {
-                    // Create animated pattern
-                    int pattern = ((x / 8) + (y / 8) + frame) % 16;
-                    color = c64_palette[pattern];
+                if (screen_x < C64_TOTAL_WIDTH && screen_y < C64_TOTAL_HEIGHT &&
+                    screen_idx < C64_TOTAL_WIDTH * C64_TOTAL_HEIGHT &&
+                    vic_idx < C64_VISIBLE_WIDTH * C64_VISIBLE_HEIGHT) {
+                    screen_buffer[screen_idx] = vic_buffer[vic_idx];
                 }
-                
-                screen_buffer[y * C64_TOTAL_WIDTH + x] = color;
             }
         }
     }
     
-    // Update OpenGL texture
+    // Always upload the full screen buffer to OpenGL texture
     glBindTexture(GL_TEXTURE_2D, gui_state->screen_texture_id);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, C64_TOTAL_WIDTH, C64_TOTAL_HEIGHT,
                     GL_RGBA, GL_UNSIGNED_BYTE, screen_buffer);
@@ -864,12 +907,30 @@ void gui_render_screen(c64_t* c64, gui_state_t* gui_state) {
         ImTextureID tex_id = (ImTextureID)(intptr_t)gui_state->screen_texture_id;
         ImVec2 image_size = {display_width, display_height};
         
+        // Calculate UV coordinates based on display settings
+        ImVec2 uv_min = {0, 0};
+        ImVec2 uv_max = {1, 1};
+        
+        if (!gui_state->show_invisible_area) {
+            // Default: Show only VIC-II visible area (crop the invisible area)
+            float u_offset = (float)VIC_OFFSET_X / (float)C64_TOTAL_WIDTH;
+            float v_offset = (float)VIC_OFFSET_Y / (float)C64_TOTAL_HEIGHT;
+            float u_scale = (float)C64_VISIBLE_WIDTH / (float)C64_TOTAL_WIDTH;
+            float v_scale = (float)C64_VISIBLE_HEIGHT / (float)C64_TOTAL_HEIGHT;
+            
+            uv_min.x = u_offset;
+            uv_min.y = v_offset;
+            uv_max.x = u_offset + u_scale;
+            uv_max.y = v_offset + v_scale;
+        }
+        // When show_invisible_area is true, use full texture (uv_min/max = 0,0 to 1,1)
+        
         if (gui_state->screen_scanlines) {
             // TODO: Implement scanline shader effect
             // For now, just draw the image normally
-            igImage(tex_id, image_size, (ImVec2){0, 0}, (ImVec2){1, 1});
+            igImage(tex_id, image_size, uv_min, uv_max);
         } else {
-            igImage(tex_id, image_size, (ImVec2){0, 0}, (ImVec2){1, 1});
+            igImage(tex_id, image_size, uv_min, uv_max);
         }
         // Handle mouse interaction with fullscreen screen
         if (igIsItemHovered(ImGuiHoveredFlags_None)) {
@@ -910,14 +971,14 @@ void gui_render_screen(c64_t* c64, gui_state_t* gui_state) {
 // Get guest display dimensions based on current settings
 void gui_get_guest_dimensions(gui_state_t* gui_state, bool is_pal,
                              float* out_width, float* out_height) {
-    if (gui_state->show_overscan) {
-        // Include border/overscan area
+    if (gui_state->show_invisible_area) {
+        // Show full framebuffer including invisible area
         *out_width = (float)C64_TOTAL_WIDTH;
         *out_height = (float)C64_TOTAL_HEIGHT;
     } else {
-        // Active display area only
-        *out_width = (float)C64_SCREEN_WIDTH;
-        *out_height = (float)C64_SCREEN_HEIGHT;
+        // Default: Show only VIC-II visible area
+        *out_width = (float)C64_VISIBLE_WIDTH;
+        *out_height = (float)C64_VISIBLE_HEIGHT;
     }
 }
 
