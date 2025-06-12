@@ -58,6 +58,10 @@
 #define VICII_M6C     45  // $d02d Color sprite 6
 #define VICII_M7C     46  // $d02e Color sprite 7
 
+// MxM and MxD storage is moved outside the 0..63 range
+#define VICII_MXM_2   64  // Shadow register for MxM $d01e Sprite-sprite collision x
+#define VICII_MXD_2   65  // Shadow register for MxD $d01f Sprite-data collision x
+
 // Control register 1 ($d011) bit masks
 #define VICII_C1_YSCROLL  0x07  // Smooth Scroll to Y Pos
 #define VICII_C1_RSEL     0x08  // Select 24/25 Row Text Display
@@ -200,6 +204,14 @@ typedef struct {
 // Main VIC-II state structure
 typedef struct {
     chip_descriptor_t* desc;
+    // Storage for all VIC-II registers.
+    // Note : Writes to unconnected bits ARE stored here, but are OR'ed to 1
+    // by MaskBusRead(), which has to handle some registers separately anyway.
+    // Only writes on 4-bit color registers ARE masked, to avoid having to do
+    // that in (often repeated) reads.
+    // This makes BusWrite small & fast (even though that's not very important).
+    // Note : MxM and MxD are read from 2 additional indices (they already have to
+    // do clear-on-read anyway, and this way writes are ignored without a check.)
     uint8_t registers[VICII_REGS_SIZE + 2];  // +2 for shadow collision registers
     
     // Timing state
@@ -288,7 +300,6 @@ void vicii_common_cycle(vicii_common_t* vicii);
 void vicii_common_initialize(vicii_common_t* vicii);
 void vicii_common_update_graphics_mode(vicii_common_t* vicii);
 void vicii_common_update_border_limits(vicii_common_t* vicii);
-void vicii_common_update_bad_line(vicii_common_t* vicii);
 void vicii_common_handle_raster_interrupt(vicii_common_t* vicii);
 
 // VIC-II memory access functions
