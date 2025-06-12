@@ -46,12 +46,12 @@ void mos6567_bank_change(void* chip, uint8_t bank) {
  */
 chip_descriptor_t mos6567_descriptor = {
     .description = "MOS6567 VIC-II Video Interface Chip (NTSC)",
-    .create     = mos6567_system_create,
-    .destroy    = mos6567_system_destroy,
-    .bus_attach = mos6567_bus_attach,
-    .read       = mos6567_registers_read,
-    .write      = mos6567_registers_write,
-    .bank_change= mos6567_bank_change,
+    .create      = mos6567_system_create,
+    .destroy     = mos6567_system_destroy,
+    .bus_attach  = mos6567_bus_attach,
+    .read        = vicii_common_registers_read, // Not mos6567_registers_read as that's just a forward
+    .write       = vicii_common_registers_write, // Note mos6567_registers_write as that's just a forward
+    .bank_change = mos6567_bank_change,
     .get_rwcb_context = NULL,
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
     .render_debug_window = mos6567_render_debug_window,
