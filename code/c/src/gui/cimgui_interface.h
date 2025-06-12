@@ -63,6 +63,7 @@ typedef struct {
     bool maintain_pixel_aspect;       // Maintain square pixels
     bool show_overscan;               // Include overscan/border area
     bool center_display;              // Center display in available space
+    bool show_invisible_area;         // Show non-visible area around VIC-II output
     float host_dpi_scale;             // Host DPI scaling factor
     
     // File paths

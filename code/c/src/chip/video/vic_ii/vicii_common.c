@@ -2,6 +2,7 @@
 #include "../../../systems/c64/c64_bus.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 // Helper function to read clear (collision registers)
 static uint8_t read_clear(vicii_common_t* vicii, uint8_t reg) {
@@ -12,12 +13,18 @@ static uint8_t read_clear(vicii_common_t* vicii, uint8_t reg) {
 
 // Helper function to set main border flip flop
 static void set_main_border_flip_flop(vicii_common_t* vicii, bool main_border_flip_flop) {
-    if (main_border_flip_flop) {
-        vicii->border_pixel.priority = VICII_PRIORITY_BORDER;
-        vicii->border_pixel.color = vicii->registers[VICII_EC] & 0x0F;
-    } else {
-        vicii->border_pixel.priority = VICII_PRIORITY_BACKGROUND;
-        vicii->border_pixel.color = vicii->registers[VICII_B0C] & 0x0F;
+    // Always set border pixel state to use border color regardless of flip-flop state
+    // The actual border rendering will be handled by the cycle function
+    vicii->border_pixel.priority = VICII_PRIORITY_BORDER;
+    vicii->border_pixel.color = vicii->registers[VICII_EC] & 0x0F;
+    
+    // Update pixel line buffers if they exist
+    if (vicii->pixel_line_color && vicii->visible_pixels_per_line > 0) {
+        uint8_t border_color = vicii->registers[VICII_EC] & 0x0F;
+        for (int i = 0; i < vicii->visible_pixels_per_line; i++) {
+            vicii->pixel_line_priority[i] = VICII_PRIORITY_BORDER;
+            vicii->pixel_line_color[i] = border_color;
+        }
     }
 }
 
@@ -306,15 +313,32 @@ void vicii_common_initialize(vicii_common_t* vicii) {
     vicii->colors[4].priority = VICII_PRIORITY_FOREGROUND;
     
     update_graphics_mode_and_dependent_colors(vicii);
-    set_main_border_flip_flop(vicii, false);
+    
+    // Initialize border generation properly
+    set_main_border_flip_flop(vicii, true);  // Start generating border pixels
     
     // Initialize VIC-II memory mapping to default bank 0
     vicii_update_bank_mapping(vicii, 0);
+    
+    // Initialize video logic display state to start generating pixels
+    vicii->video_logic_display_state = false;  // Will be enabled during bad lines
+    
+    // Set visible pixels per line based on timing
+    if (vicii->visible_pixels_per_line == 0) {
+        // Default to PAL size if not set - this should be set by wrapper create functions
+        vicii->visible_pixels_per_line = VICII_PAL_VISIBLE_PIXELS;
+    }
     
     // Allocate pixel buffers
     if (vicii->visible_pixels_per_line > 0) {
         vicii->pixel_line_priority = malloc(vicii->visible_pixels_per_line * sizeof(vicii_priority_t));
         vicii->pixel_line_color = malloc(vicii->visible_pixels_per_line * sizeof(uint32_t));
+        
+        // Initialize pixel buffers with default values (light blue border)
+        for (int i = 0; i < vicii->visible_pixels_per_line; i++) {
+            vicii->pixel_line_priority[i] = VICII_PRIORITY_BORDER;
+            vicii->pixel_line_color[i] = VICII_COLOR_LIGHT_BLUE;  // Default VIC-II border color
+        }
     }
 }
 
@@ -531,19 +555,33 @@ void vicii_common_cycle(vicii_common_t* vicii) {
     
     // Handle horizontal retrace
     if (vicii->x_cycle >= vicii->cycles_per_line) {
+        // Flush current pixel line to framebuffer before advancing to next line
+        // Always flush if we have a framebuffer, even for raster lines beyond VIC-II's normal range
+        if (vicii->framebuffer && vicii->raster_counter < vicii->framebuffer_height) {
+            vicii_common_flush_pixel_line_to_output(vicii,
+                vicii_common_get_default_palette(), vicii->raster_counter);
+        }
+        
         vicii->x_cycle = 0;
         vicii->x_coordinate = 0;
         vicii->pixel_line_index = 0;  // Reset pixel line index
         vicii->raster_counter++;
         
-        // Handle vertical retrace
+        // Handle vertical retrace - but continue generating lines until framebuffer is full
         if (vicii->raster_counter >= vicii->total_lines) {
-            vicii->raster_counter = 0;
-            vicii->frame_count++;
-            vicii->was_den_set_during_raster_30 = false;
-            vicii->bad_line = false;
-            vicii->vc_base = 0;
-            vicii->lp_edge_detected = false;
+            // If we haven't filled the entire framebuffer height, continue generating border lines
+            if (vicii->framebuffer && vicii->raster_counter < vicii->framebuffer_height) {
+                // Continue with border-only lines until framebuffer is complete
+                // Don't reset VIC-II state, just keep generating border pixels
+            } else {
+                // Normal VIC-II vertical retrace
+                vicii->raster_counter = 0;
+                vicii->frame_count++;
+                vicii->was_den_set_during_raster_30 = false;
+                vicii->bad_line = false;
+                vicii->vc_base = 0;
+                vicii->lp_edge_detected = false;
+            }
         } else {
             update_bad_line(vicii);
             handle_raster_interrupt(vicii);
@@ -563,57 +601,148 @@ void vicii_common_cycle(vicii_common_t* vicii) {
         }
     }
     
-    // Handle display logic with character and graphics access
-    switch (vicii->x_cycle) {
-        case 14:
-            // Reset video counters at start of line
-            vicii->vc = vicii->vc_base;
-            vicii->vmli = 0;
-            if (vicii->bad_line) {
-                vicii->rc = 0;
-            }
-            break;
+    // VIC-II pixel generation - emit pixels for all framebuffer lines
+    // Generate pixels to properly fill the framebuffer with correct centering
+    if (vicii->framebuffer && vicii->raster_counter < vicii->framebuffer_height) {
+        // Calculate how many cycles we need to fill the framebuffer width
+        int cycles_needed = (vicii->framebuffer_width + 7) / 8;  // Round up to cover full width
+        
+        // Generate pixels for the full width, starting from cycle 0 to ensure proper centering
+        if (vicii->x_cycle < cycles_needed) {
+            bool in_normal_vic_range = vicii->raster_counter < vicii->total_lines;
+            bool in_display_area = in_normal_vic_range &&
+                                  (vicii->x_cycle >= 15 && vicii->x_cycle <= 54) &&
+                                  (vicii->raster_counter >= vicii->border_top &&
+                                   vicii->raster_counter <= vicii->border_bottom);
             
-        case 15:
-        case 16:
-        case 17:
-            // Character and graphics access cycles 15-54
-            if (vicii->x_cycle >= 15 && vicii->x_cycle <= 54) {
-                // Character access in display state during bad lines
-                if (vicii->video_logic_display_state && vicii->bad_line) {
-                    vicii_common_c_access(vicii);
-                }
-                // Graphics access always happens in display window
+            if (in_display_area) {
+                // In display area - emit graphics/text pixels (even in idle state for background color)
                 vicii_common_g_access(vicii);
-            }
-            break;
-            
-        case 58:
-            // Handle end of character row
-            if (vicii->rc == 7) {
-                if (!vicii->bad_line) {
-                    vicii->video_logic_display_state = false;
-                    vicii->vc_base = vicii->vc;
-                    vicii->rc = 0;
-                }
-            }
-            
-            if (vicii->video_logic_display_state) {
-                vicii->rc = (vicii->rc + 1) & 0x07;
-            }
-            break;
-            
-        default:
-            // Handle cycles 18-54 (character and graphics access)
-            if (vicii->x_cycle >= 18 && vicii->x_cycle <= 54) {
-                if (vicii->video_logic_display_state && vicii->bad_line) {
-                    vicii_common_c_access(vicii);
-                }
-                vicii_common_g_access(vicii);
-            } else if (vicii->x_cycle >= 11 && vicii->x_cycle <= 54) {
-                // Emit border pixels outside display area
+            } else {
+                // Outside display area, display disabled, or beyond normal VIC range - emit border pixels
                 vicii_common_emit_border_pixels(vicii);
             }
-            break;
+        }
     }
+    
+    // Handle display logic control (separate from pixel generation)
+    if (vicii->x_cycle == 14) {
+        // Reset video counters at start of display window
+        vicii->vc = vicii->vc_base;
+        vicii->vmli = 0;
+        if (vicii->bad_line) {
+            vicii->rc = 0;
+        }
+    }
+    
+    // Character access during bad lines (cycles 15-54)
+    if (vicii->x_cycle >= 15 && vicii->x_cycle <= 54) {
+        if (vicii->video_logic_display_state && vicii->bad_line) {
+            vicii_common_c_access(vicii);
+        }
+    }
+    
+    // Handle end of character row
+    if (vicii->x_cycle == 58) {
+        if (vicii->rc == 7) {
+            if (!vicii->bad_line) {
+                vicii->video_logic_display_state = false;
+                vicii->vc_base = vicii->vc;
+                vicii->rc = 0;
+            }
+        }
+        
+        if (vicii->video_logic_display_state) {
+            vicii->rc = (vicii->rc + 1) & 0x07;
+        }
+    }
+}
+
+// Macro to create RGBA color values for OpenGL GL_RGBA format
+#define RGBA_COLOR(r, g, b, a) (((uint32_t)(a) << 24) | ((uint32_t)(b) << 16) | ((uint32_t)(g) << 8) | (uint32_t)(r))
+
+// C64 color palette (16 colors) in RGBA format for OpenGL
+static const uint32_t c64_palette[16] = {
+    RGBA_COLOR(0x00, 0x00, 0x00, 0xFF),  // 0: Black
+    RGBA_COLOR(0xFF, 0xFF, 0xFF, 0xFF),  // 1: White
+    RGBA_COLOR(0x68, 0x37, 0x2B, 0xFF),  // 2: Red
+    RGBA_COLOR(0x70, 0xA4, 0xB2, 0xFF),  // 3: Cyan
+    RGBA_COLOR(0x6F, 0x3D, 0x86, 0xFF),  // 4: Purple/Violet
+    RGBA_COLOR(0x58, 0x8D, 0x43, 0xFF),  // 5: Green
+    RGBA_COLOR(0x35, 0x28, 0x79, 0xFF),  // 6: Blue
+    RGBA_COLOR(0xB8, 0xC7, 0x6F, 0xFF),  // 7: Yellow
+    RGBA_COLOR(0x6F, 0x4F, 0x25, 0xFF),  // 8: Orange
+    RGBA_COLOR(0x43, 0x39, 0x00, 0xFF),  // 9: Brown
+    RGBA_COLOR(0x9A, 0x67, 0x59, 0xFF),  // 10: Light Red
+    RGBA_COLOR(0x44, 0x44, 0x44, 0xFF),  // 11: Dark Grey
+    RGBA_COLOR(0x6C, 0x6C, 0x6C, 0xFF),  // 12: Grey
+    RGBA_COLOR(0x9A, 0xD2, 0x84, 0xFF),  // 13: Light Green
+    RGBA_COLOR(0x6C, 0x5E, 0xB5, 0xFF),  // 14: Light Blue
+    RGBA_COLOR(0x95, 0x95, 0x95, 0xFF)   // 15: Light Grey
+};
+
+// Get default C64 color palette
+uint32_t* vicii_common_get_default_palette(void) {
+    return (uint32_t*)c64_palette;
+}
+
+// Set framebuffer for VIC-II output
+void vicii_common_set_framebuffer(vicii_common_t* vicii, uint32_t* framebuffer, int width, int height) {
+    vicii->framebuffer = framebuffer;
+    vicii->framebuffer_width = width;
+    vicii->framebuffer_height = height;
+    
+    printf("VIC-II: Connected to framebuffer (%dx%d)\n", width, height);
+    
+    // Initialize VIC-II state to generate proper colors, but don't pre-fill framebuffer
+    // Let the VIC-II cycle function generate the actual content
+    vicii->border_pixel.priority = VICII_PRIORITY_BORDER;
+    vicii->border_pixel.color = VICII_COLOR_LIGHT_BLUE;
+    
+    // Initialize pixel line buffers with proper border colors
+    if (vicii->pixel_line_color && vicii->visible_pixels_per_line > 0) {
+        for (int i = 0; i < vicii->visible_pixels_per_line; i++) {
+            vicii->pixel_line_priority[i] = VICII_PRIORITY_BORDER;
+            vicii->pixel_line_color[i] = VICII_COLOR_LIGHT_BLUE;
+        }
+    }
+}
+
+// Flush pixel line to framebuffer (equivalent to C# FlushPixelLineToOutput)
+void vicii_common_flush_pixel_line_to_output(vicii_common_t* vicii, uint32_t* palette, int y) {
+    if (!vicii->framebuffer || !palette || y >= vicii->framebuffer_height) {
+        return;
+    }
+    
+    // Calculate row address in framebuffer
+    int row_address = y * vicii->framebuffer_width;
+    
+    // Always use current border color from register (this ensures proper color updates)
+    uint8_t border_color_index = vicii->registers[VICII_EC] & 0x0F;
+    uint32_t border_color = palette[border_color_index];
+    
+    // First, fill the entire line with border color
+    for (int x = 0; x < vicii->framebuffer_width; x++) {
+        vicii->framebuffer[row_address + x] = border_color;
+    }
+    
+    // Then, overwrite with VIC-II generated pixels if any, centered in the framebuffer
+    int pixels_to_copy = (vicii->pixel_line_index < vicii->visible_pixels_per_line) ?
+                        vicii->pixel_line_index : vicii->visible_pixels_per_line;
+    
+    if (vicii->pixel_line_color && pixels_to_copy > 0) {
+        // Center VIC-II visible area within the framebuffer
+        int offset_x = (vicii->framebuffer_width - vicii->visible_pixels_per_line) / 2;
+        
+        for (int x = 0; x < pixels_to_copy; x++) {
+            int fb_x = offset_x + x;
+            if (fb_x >= 0 && fb_x < vicii->framebuffer_width) {
+                uint8_t color_index = vicii->pixel_line_color[x] & 0x0F;  // Ensure 4-bit color
+                vicii->framebuffer[row_address + fb_x] = palette[color_index];
+            }
+        }
+    }
+    
+    // Reset pixel line index for next line
+    vicii->pixel_line_index = 0;
 }
