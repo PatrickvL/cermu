@@ -660,15 +660,17 @@ void vicii_common_c_access(vicii_common_t* vicii) {
 
 // Graphics access (g-access) - reads character/bitmap data
 void vicii_common_g_access(vicii_common_t* vicii) {
-    uint16_t address;
+    // [In idle-state,] the sequencer uses "0" bits for the video matrix data
     uint8_t char_code = 0;
-    vicii_color_t color_code = VICII_COLOR_BLACK;
-    
+    vicii_color_t color_code = VICII_COLOR_BLACK; // = 0
+    uint16_t address;
     if (vicii->video_logic_display_state) {
+        // ...data is internally read from the position specified by VMLI
+        // ...on each g-access in display state.
         // Get data from video matrix line (set by c-access)
         char_code = vicii->video_matrix_line[vicii->vmli];
         color_code = vicii->video_color_line[vicii->vmli];
-        
+        // In display state, [..] the addresses [..] depend on the selected display mode
         // Calculate graphics data address based on mode
         if ((vicii->graphics_mode & VICII_BITMAP_MODE_MASK) == 0) {
             // Text mode: address = char_base + (char_code * 8) + row
@@ -678,59 +680,100 @@ void vicii_common_g_access(vicii_common_t* vicii) {
             address = vicii->memory_map.char_base + (vicii->vc << 3) + vicii->rc;
         }
     } else {
-        // Idle state: always access $3fff
+        // In idle state, [..] access is always to address
+        // $3fff ($39ff when the ECM bit in register $d016 is set). The graphics
+        // are displayed by the sequencer exactly as in display state, but with
+        // the video matrix data treated as "0" bits.
         address = 0x3fff;
     }
     
     // Handle Extended Color Mode (ECM)
+    // If the ECM bit is set
     if (vicii->graphics_mode & VICII_EXTENDED_COLOR_MODE_MASK) {
-        // In ECM, address lines 9 and 10 are forced low
+        // the address generator always holds the address lines 9 and 10 low
         address &= ~0x0600;
     }
     
     // Read graphics data
+    // Read g-access Data bits and decode into pixels
     uint8_t graphics_data = vicii_memory_read_cycle(vicii, address);
+// This proves pixels ARE drawn:    graphics_data = (uint8_t)(vicii->x_cycle ^ vicii->frame_count); // For testing, replace with actual read
     
+    // For MulticolorTextMode (ECM/BMM/MCM=0/0/1) and InvalidTextMode (ECM/BMM/MCM=1/0/1)
+    uint8_t mc_flag = ((vicii->graphics_mode & 3) == 1)
+        // Bit D11 indicates multi-color pixels
+        ? (uint8_t)color_code >> 3
+        // Otherwise, multi-color pixels depend on the MCM bit
+        : vicii->graphics_mode & VICII_MULTICOLOR_MODE_MASK;
+    // MC flag 0: 8 pixels with 1 bit color; 1: 4 double-width pixels with 2 bits color
+
     // Update colors based on graphics mode and character/color data
+    // Decode c-access Data bits into colors not already set in UpdateColorsBasedOnGraphicsModeAndBackground012()
     switch (vicii->graphics_mode) {
-        case VICII_GM_STANDARD_TEXT:
-            vicii->colors[4].color = color_code;
-            break;
-            
-        case VICII_GM_MULTICOLOR_TEXT: {
-            uint8_t mc_flag = (color_code >> 3) & 1;  // Bit 3 determines multicolor
+        case VICII_GM_STANDARD_TEXT: // ECM/BMM/MCM=0/0/0
+            // Already set: Colors[0].Color = Reg_BackgroundColor(0); // Reg[B0C]; // $d021
+            vicii->colors[4].color = color_code; // Color from bits 8-11 of c-data
+            break;            
+        case VICII_GM_MULTICOLOR_TEXT: { // ECM/BMM/MCM=0/0/1
+            // Already set : Colors[0].Color = Reg_BackgroundColor(0); // Reg[B0C]; // $d021
             if (mc_flag) {
-                vicii->colors[3].color = color_code & 0x07;  // Use bits 0-2
+                // Already set : Colors[0b01].Color = Reg_BackgroundColor(1); // Reg[B1C]; // $d022
+                // Already set : Colors[0b10].Color = Reg_BackgroundColor(2); // Reg[B2C]; // $d023
+                vicii->colors[3].color = color_code & 0x07; // Color from bits 8-10 of c-data
             } else {
-                vicii->colors[4].color = color_code;
+                vicii->colors[4].color = color_code; // Color from bits 8-10 of c-data (11th is 0 here, so no masking needed)
             }
             break;
         }
-        
-        case VICII_GM_STANDARD_BITMAP:
-            vicii->colors[0].color = char_code & 0x0F;       // Lower nibble
-            vicii->colors[4].color = (char_code >> 4) & 0x0F; // Upper nibble
+        case VICII_GM_STANDARD_BITMAP: // ECM/BMM/MCM=0/1/0
+            vicii->colors[0].color = char_code & 0x0F; // Color from bits 0-3 of c-data
+            vicii->colors[4].color = char_code >> 4; // Color from bits 4-7 of c-data
+            break;            
+        case VICII_GM_MULTICOLOR_BITMAP: // ECM/BMM/MCM=0/1/1
+            // Already set : Colors[0b00].Color = Reg_BackgroundColor(0); // Reg[B0C]; // $d021
+            vicii->colors[1].color = char_code >> 4; // Color from bits 4-7 of c-data
+            vicii->colors[2].color = char_code & 0x0F; // Color from bits 0-3 of c-data
+            vicii->colors[3].color = color_code; // Color from bits 8-11 of c-data
             break;
-            
-        case VICII_GM_MULTICOLOR_BITMAP:
-            vicii->colors[1].color = (char_code >> 4) & 0x0F; // Upper nibble
-            vicii->colors[2].color = char_code & 0x0F;        // Lower nibble
-            vicii->colors[3].color = color_code;              // Color RAM
-            break;
-            
-        case VICII_GM_ECM_TEXT:
+        case VICII_GM_ECM_TEXT: // ECM/BMM/MCM=1/0/0
             // Select either VICII_B0C, VICII_B1C, VICII_B2C or VICII_B3C based on char_code bits
-            vicii->colors[0].color = vicii->registers[VICII_B0C + ((char_code >> 6) & 3)] & 0x0F;
-            vicii->colors[4].color = color_code;
+            vicii->colors[0].color = Reg_BackgroundColor(vicii, char_code >> 6); // B0C/B1C/B2C/B3C, depending bits 6&7 of c-data
+            vicii->colors[4].color = color_code; // Color from bits 8-11 of c-data
             break;
+        // case GM.InvalidTextMode: // unused // ECM/BMM/MCM=1/0/1 (optional MC mode via MC_flag)
+        // case GM.InvalidBitmapMode1: // unused // ECM/BMM/MCM=1/1/0
+        // case GM.InvalidBitmapMode2: // unused // ECM/BMM/MCM=1/1/1
+        // Note : Colors for invalid modes are all set to Color.Black
+        // in UpdateColorsBasedOnGraphicsModeAndBackground012()
     }
     
     // Emit pixels based on graphics data and mode
     vicii_common_emit_graphics_pixels(vicii, graphics_data);
+/* TODO : Instead, translate :
+    if (mc_flag > 0)
+    {
+        // Note : Assume that multicolor pixels are double-width
+        EmitMC1Pixel((u2)(g_Data >> 6));
+        EmitMC1Pixel((u2)((g_Data >> 4) & 3));
+        EmitMC1Pixel((u2)((g_Data >> 2) & 3));
+        EmitMC1Pixel((u2)(g_Data & 3));
+    }
+    else
+    {
+        EmitMC0Pixel((u1)(g_Data >> 7));
+        EmitMC0Pixel((u1)((g_Data >> 6) & 1));
+        EmitMC0Pixel((u1)((g_Data >> 5) & 1));
+        EmitMC0Pixel((u1)((g_Data >> 4) & 1));
+        EmitMC0Pixel((u1)((g_Data >> 3) & 1));
+        EmitMC0Pixel((u1)((g_Data >> 2) & 1));
+        EmitMC0Pixel((u1)((g_Data >> 1) & 1));
+        EmitMC0Pixel((u1)(g_Data & 1));
+    }
+*/
     
-    // Increment video counters
-    vicii->vc = (vicii->vc + 1) & 0x3FF;  // 10-bit counter
-    vicii->vmli = (vicii->vmli + 1) & 0x3F; // 6-bit counter
+    // 4. VC and VMLI are incremented after each g-access
+    vicii->vc = (vicii->vc + 1) & 0x3FF; // TODO : implement wrapping in u10
+    vicii->vmli = (vicii->vmli + 1) & 0x3F; // TODO : implement wrapping in u6
 }
 
 // Emit border pixels
