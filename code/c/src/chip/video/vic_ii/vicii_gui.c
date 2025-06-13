@@ -69,7 +69,7 @@ void vicii_render_common_debug_window(void* chip, bool* show_window, const char*
     if (igCollapsingHeader_TreeNodeFlags("Raster Information", ImGuiTreeNodeFlags_DefaultOpen)) {
         igText("Raster Line: %d", vicii->raster_counter);
         igText("Raster Cycle: %d", vicii->x_cycle);
-        igText("Badline Condition: %s", vicii->bad_line ? "YES" : "NO");
+        igText("Badline Condition: %s", vicii->is_bad_line ? "YES" : "NO");
         igText("X Coordinate: %d", vicii->x_coordinate);
         
         // Progress bar for raster position
