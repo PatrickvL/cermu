@@ -1,0 +1,4 @@
+[submodule "processor_tests"]
+	path = processor_tests
+	url = https://github.com/TomHarte/ProcessorTests.git
+	branch = main
