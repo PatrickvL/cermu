@@ -40,7 +40,7 @@ int main(int argc, char* argv[]) {
     bool verbose = false;
 
     // Parse command line arguments
-    static struct option long_options[] = {
+    static const struct option long_options[] = {
         {"help",       no_argument,       0, 'h'},
         {"trace",      required_argument, 0, 't'},
         {"cycles",     required_argument, 0, 'c'},

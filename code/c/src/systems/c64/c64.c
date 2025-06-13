@@ -21,11 +21,7 @@
 #include "../../chip/memory/mos2114.h" // colorram
 #include "../../chip/logic/pla.h" // PLA for memory mapping
 
-static uint8_t initial_ram[65536] = {0};
-
 void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config) {
-    extern uint8_t initial_ram[65536];
-    
     // Use default ROM configuration if none provided
     if (!rom_config) {
         rom_config = system_config_get_default_roms();
@@ -41,7 +37,8 @@ void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config) {
         // Initialize RAM
         if (dev->desc == &ram_descriptor) {
             ram_t* ram = (ram_t*)dev->chip;
-            memcpy(ram->memory, initial_ram, 65536);
+            // Initialize RAM to zero - no need for separate initial_ram array
+            memset(ram->memory, 0, 65536);
         }
         
         // Initialize ROM chips by loading from files

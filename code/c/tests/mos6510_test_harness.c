@@ -263,7 +263,7 @@ test_status_t test_harness_run_klaus_test(test_harness_t* harness) {
     // Use mos6510_execute() for continuous execution instead of stepping
     // The callback will control execution and set execution_complete when done
     printf("Starting CPU execution with callback-based control...\n");
-    mos6510_start_intercept();
+    mos6510_start_intercept(harness->c64->mos6510);
     mos6510_execute(harness->c64->mos6510);
     
     // Execution completed, clean up callback

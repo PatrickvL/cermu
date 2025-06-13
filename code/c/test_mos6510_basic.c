@@ -46,7 +46,7 @@ static void dummy_set_control_lines(void *context, uint32_t lines) {
     (void)lines;    // Unused - dummy implementation does nothing
 }
 
-static control_lines_interface_t control_interface = {
+static const control_lines_interface_t control_interface = {
     .get_lines = dummy_get_control_lines,
     .set_lines = dummy_set_control_lines,
     .context = NULL

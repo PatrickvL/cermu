@@ -116,7 +116,7 @@ void mos6510_render_debug_window(void* chip, bool* show_window) {
         cpu->io_port[1] = 0x37;   // Default Port
     }
     
-    igText("Interception: %s", mos6510_is_intercepting() ? "ACTIVE" : "inactive");
+    igText("Interception: %s", mos6510_is_intercepting(cpu) ? "ACTIVE" : "inactive");
 
     igEnd();
 }
