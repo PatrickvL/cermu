@@ -66,7 +66,23 @@ endforeach()
 add_library(mos6510_lib STATIC ${CPU_SOURCES} ${CORE_SOURCES})
 target_include_directories(mos6510_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../)
 
-# Test executables
+# JSON Parser library for ProcessorTests
+add_library(json_parser STATIC json_parser.c)
+target_include_directories(json_parser PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+# ProcessorTests Runner - Ground Truth Validation
+add_executable(processor_tests_runner
+    processor_tests_runner.c
+)
+target_link_libraries(processor_tests_runner mos6510_lib json_parser)
+
+# Comprehensive Test Suite (fallback/custom tests)
+add_executable(test_mos6510_comprehensive
+    test_mos6510_comprehensive.c
+)
+target_link_libraries(test_mos6510_comprehensive mos6510_lib)
+
+# Basic test (if exists)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../test_mos6510_basic.c)
     add_executable(test_mos6510_basic
         ${CMAKE_CURRENT_SOURCE_DIR}/../test_mos6510_basic.c
@@ -74,15 +90,28 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../test_mos6510_basic.c)
     target_link_libraries(test_mos6510_basic mos6510_lib)
 endif()
 
-add_executable(test_mos6510_comprehensive
-    test_mos6510_comprehensive.c
-)
-target_link_libraries(test_mos6510_comprehensive mos6510_lib)
-
 # Enable testing
 enable_testing()
 
-# Add tests
+# ProcessorTests - Primary validation (if ProcessorTests directory exists)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/processor_tests)
+    add_test(NAME processor_tests 
+             COMMAND processor_tests_runner processor_tests/6502/v1/
+             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    set_tests_properties(processor_tests PROPERTIES
+        TIMEOUT 300
+        PASS_REGULAR_EXPRESSION "ALL TESTS PASSED"
+    )
+endif()
+
+# Comprehensive test - Secondary validation
+add_test(NAME comprehensive_test COMMAND test_mos6510_comprehensive)
+set_tests_properties(comprehensive_test PROPERTIES
+    TIMEOUT 60
+    PASS_REGULAR_EXPRESSION "ALL TESTS PASSED"
+)
+
+# Basic test (if available)
 if(TARGET test_mos6510_basic)
     add_test(NAME basic_test COMMAND test_mos6510_basic)
     set_tests_properties(basic_test PROPERTIES
@@ -91,13 +120,19 @@ if(TARGET test_mos6510_basic)
     )
 endif()
 
-add_test(NAME comprehensive_test COMMAND test_mos6510_comprehensive)
-set_tests_properties(comprehensive_test PROPERTIES
-    TIMEOUT 60
-    PASS_REGULAR_EXPRESSION "ALL TESTS PASSED"
+# Custom targets for convenience
+add_custom_target(run_processor_tests
+    COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -R processor_tests --verbose
+    DEPENDS processor_tests_runner
+    COMMENT "Running ProcessorTests ground truth validation"
 )
 
-# Custom targets for convenience
+add_custom_target(run_comprehensive_test
+    COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -R comprehensive_test --verbose
+    DEPENDS test_mos6510_comprehensive
+    COMMENT "Running comprehensive MOS6510 tests"
+)
+
 if(TARGET test_mos6510_basic)
     add_custom_target(run_basic_test
         COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -R basic_test --verbose
@@ -106,20 +141,14 @@ if(TARGET test_mos6510_basic)
     )
 endif()
 
-add_custom_target(run_comprehensive_test
-    COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -R comprehensive_test --verbose
-    DEPENDS test_mos6510_comprehensive
-    COMMENT "Running comprehensive MOS6510 tests"
-)
-
 add_custom_target(run_all_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} --verbose
-    DEPENDS test_mos6510_comprehensive
+    DEPENDS processor_tests_runner test_mos6510_comprehensive
     COMMENT "Running all MOS6510 tests"
 )
 
 # Install targets (optional)
-install(TARGETS test_mos6510_comprehensive
+install(TARGETS processor_tests_runner test_mos6510_comprehensive
     RUNTIME DESTINATION bin
 )
 
@@ -136,3 +165,4 @@ message(STATUS "  Build Type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "  Compiler: ${CMAKE_C_COMPILER_ID}")
 message(STATUS "  CPU Sources Found: ${CPU_SOURCES}")
 message(STATUS "  Core Sources Found: ${CORE_SOURCES}")
+message(STATUS "  ProcessorTests Available: ${EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/processor_tests}")
