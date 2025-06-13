@@ -168,7 +168,8 @@ void gui_init_state(gui_state_t* gui_state) {
     gui_state->center_display = true;
     gui_state->host_dpi_scale = 1.0f;  // Will be detected at runtime
     gui_state->show_invisible_area = false;  // Hide invisible area by default
-      // Default ROM paths (can be modified by user)    strcpy(gui_state->rom_path_basic, "data/c64/roms/basic.901226-01.bin");
+    // Default ROM paths (can be modified by user)    
+    strcpy(gui_state->rom_path_basic, "data/c64/roms/basic.901226-01.bin");
     strcpy(gui_state->rom_path_kernal, "data/c64/roms/kernal.901227-03.bin");
     strcpy(gui_state->rom_path_chargen, "data/c64/roms/characters.901225-01.bin");
 }
