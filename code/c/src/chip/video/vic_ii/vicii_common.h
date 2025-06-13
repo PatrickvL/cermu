@@ -221,7 +221,7 @@ typedef struct {
     
     // Video logic state
     bool video_logic_display_state;
-    bool bad_line;
+    bool is_bad_line;
     bool was_den_set_during_raster_30;
     bool vertical_border_flip_flop;
     
@@ -240,6 +240,40 @@ typedef struct {
     vicii_pixel_t colors[5];
     vicii_pixel_t border_pixel;
     
+    // SCREEN POSITION DECODES 6567 NTSC
+    // NTSC: https://gist.githubusercontent.com/SaxxonPike/50aca1d91234ca4980d84b795a31c6e4/raw/8eb80835e27a5f759b1c423cad58967ada0862fd/6567-datasheet-timing.txt
+    // PAL : https://www.lemon64.com/forum/viewtopic.php?t=70525
+    // HORIZONTAL DECODES
+    //         NTSC  NTSC  PAL   PAL
+    // NAME    SET  CLEAR  SET  CLEAR             FUNCTION
+    // -----   ---   ---   ---   ---   ---------------------------------
+    // SPBA    336   376   ???   ???   Buss avail for sprite #0 fetch
+    // EOL     340   346   ???   ???   End   line (internal clock)
+    // HBLANK  396   496   ???   ???   Blanks video during horiz retrace
+    // VINC    404   412   394?  404?  Increment vertical counter
+    // HSYNC   416   452   408   444   Horizontal sync pulse
+    // HEQ2    434   452   426   444   Horizontal equalization pulse 2
+    // BURST   456   492   448?  ???   Gates reference color burst
+    // REFW    484    12   ???   ???   Enable dynamic ram refresh
+    // VMBA    496   332   ???   ???   Buss avail for character fetch
+    // BOL     508     4   ???   ???   Begin line (internal clock)
+    // CW       12   332   ???   ???   Enable character fetch
+    // BKDE40   28   348   ???   ???   Enables 40 column background
+    // BKDE38   35   339   ???   ???   Enables 38 column background
+    // HEQ1    178   196   174   192   Horizontal equalization pulse 1
+    //
+    //     VERTICAL DECODES
+    //                NTSC  NTSC  PAL   PAL
+    //     NAME       SET  CLEAR  SET  CLEAR             FUNCTION
+    //     -----      ---   ---   ---   ---   ---------------------------------
+    //bool VBLANK; //  13    24   300   311   Blanks video during vert retrace
+    //bool VEQ; //     14    23   301   310   Enables vertical equalization
+    //bool VSYNC; //   17    20   304   307   Enables vertical sync
+    bool EEVMF; //     48   248    48   248   Enables character fetch [Enable ?E? Video Matrix Fetch]
+    //bool VSW25; //   51   251    51   251   Enables 25 row screen window
+    //bool VSW24; //   55   247    55   247   Enables 24 row screen window
+    bool VRESET; //   261   n/a   312?  n/a   Resets vertical count to zero [See NrOfLines]
+
     // Border limits (updated based on RSEL/CSEL)
     uint16_t border_top;
     uint16_t border_bottom;
