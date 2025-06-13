@@ -5,6 +5,7 @@
 code/c/build/
 code/c/build_gui/
 code/c/bin/
+code/c/tests/build/
 
 # CMake files
 CMakeCache.txt
