@@ -32,10 +32,10 @@ void mos6526_render_debug_window(void* chip, bool* show_window) {
     igText("Data Ports");
     igSeparator();
     
-    igText("Port A Data (PRA): $%02X", cia->pra);
-    igText("Port A DDR (DDRA): $%02X", cia->ddra);
-    igText("Port B Data (PRB): $%02X", cia->prb);
-    igText("Port B DDR (DDRB): $%02X", cia->ddrb);
+    igText("Port A Data (PRA): $%02X", cia->reg[PRA]);
+    igText("Port A DDR (DDRA): $%02X", cia->reg[DDRA]);
+    igText("Port B Data (PRB): $%02X", cia->reg[PRB]);
+    igText("Port B DDR (DDRB): $%02X", cia->reg[DDRB]);
     
     igSeparator();
     
@@ -43,13 +43,15 @@ void mos6526_render_debug_window(void* chip, bool* show_window) {
     igText("Timers");
     igSeparator();
     
-    igText("Timer A: %04X", cia->timer_a);
-    igText("Timer A Control: $%02X", cia->cra);
-    igText("Timer A Running: %s", (cia->cra & 0x01) ? "YES" : "NO");
+    uint16_t timer_a = (cia->reg[TA_HI] << 8) | cia->reg[TA_LO];
+    igText("Timer A: %04X", timer_a);
+    igText("Timer A Control: $%02X", cia->reg[CRA]);
+    igText("Timer A Running: %s", (cia->reg[CRA] & 0x01) ? "YES" : "NO");
     
-    igText("Timer B: %04X", cia->timer_b);
-    igText("Timer B Control: $%02X", cia->crb);
-    igText("Timer B Running: %s", (cia->crb & 0x01) ? "YES" : "NO");
+    uint16_t timer_b = (cia->reg[TB_HI] << 8) | cia->reg[TB_LO];
+    igText("Timer B: %04X", timer_b);
+    igText("Timer B Control: $%02X", cia->reg[CRB]);
+    igText("Timer B Running: %s", (cia->reg[CRB] & 0x01) ? "YES" : "NO");
     
     igSeparator();
     
@@ -57,23 +59,23 @@ void mos6526_render_debug_window(void* chip, bool* show_window) {
     igText("Time of Day Clock");
     igSeparator();
     
-    igText("TOD 10ths: $%02X", cia->tod_10ths);
-    igText("TOD Seconds: $%02X", cia->tod_sec);
-    igText("TOD Minutes: $%02X", cia->tod_min);
-    igText("TOD Hours: $%02X", cia->tod_hr);
+    igText("TOD 10ths: $%02X", cia->reg[TOD_10THS]);
+    igText("TOD Seconds: $%02X", cia->reg[TOD_SEC]);
+    igText("TOD Minutes: $%02X", cia->reg[TOD_MIN]);
+    igText("TOD Hours: $%02X", cia->reg[TOD_HR]);
     
     igSeparator();
     
     // Interrupts
     igText("Interrupt Control");
     igSeparator();
-      igText("ICR: $%02X", cia->icr);
-    igText("IRQ Active: %s", (cia->icr & 0x80) ? "YES" : "NO");
+    igText("ICR: $%02X", cia->reg[ICR]);
+    igText("IRQ Active: %s", (cia->reg[ICR] & 0x80) ? "YES" : "NO");
     
     igSeparator();
     
     // Serial Data Register
-    igText("Serial Data Register: $%02X", cia->sdr);
+    igText("Serial Data Register: $%02X", cia->reg[SDR]);
 
     igEnd();
 }
@@ -98,63 +100,97 @@ void mos6526_render_settings_window(void* chip, bool* show_window) {
 
     igText("CIA Configuration");
     igSeparator();
-      igText("Chip Type: MOS6526 CIA");
+    igText("Chip Type: MOS6526 CIA");
+
+    // CIA State Section
+    igText("Extended CIA Debug Information");
+    igSeparator();
+    
+    // Port A and B with detailed information
+    igText("Data Ports (Detailed)");
+    igSeparator();
+    
+    igText("Port A Data (PRA): $%02X", cia->reg[PRA]);
+    igText("Port A DDR (DDRA): $%02X", cia->reg[DDRA]);
+    igText("Port A Value: $%02X", cia->port_a_value);
+    igSeparator();
+    
+    igText("Port B Data (PRB): $%02X", cia->reg[PRB]);
+    igText("Port B DDR (DDRB): $%02X", cia->reg[DDRB]);
+    igText("Port B Internal DDR: $%02X", cia->reg[IDDRB_OFFSET]);
+    igText("Port B Value: $%02X", cia->port_b_value);
     
     igSeparator();
     
-    // Timer Settings
-    igText("Timer Configuration");
+    // Timers with latches
+    igText("Timers (with Latches)");
     igSeparator();
     
-    static bool timer_a_enabled = true;
-    static bool timer_b_enabled = true;
+    uint16_t timer_a = (cia->reg[TA_HI] << 8) | cia->reg[TA_LO];
+    uint16_t timer_a_latch = (cia->reg[TIMER_OFFSET + TA_HI] << 8) | cia->reg[TIMER_OFFSET + TA_LO];
+    igText("Timer A: $%04X", timer_a);
+    igText("Timer A Latch: $%04X", timer_a_latch);
+    igText("Timer A Control: $%02X", cia->reg[CRA]);
+    igText("Timer A Running: %s", (cia->reg[CRA] & CRA_START) ? "YES" : "NO");
     
-    igCheckbox("Timer A Enabled", &timer_a_enabled);
-    igCheckbox("Timer B Enabled", &timer_b_enabled);
-    
-    igSeparator();
-    
-    // Port Configuration
-    igText("Port Configuration");
-    igSeparator();
-    
-    static int port_a_direction = 0x00;
-    static int port_b_direction = 0x00;
-    
-    igSliderInt("Port A Direction", &port_a_direction, 0, 255, "$%02X", 0);
-    igSliderInt("Port B Direction", &port_b_direction, 0, 255, "$%02X", 0);
-    
-    if (igButton("Apply Port Settings", (ImVec2){0, 0})) {
-        cia->ddra = (uint8_t)port_a_direction;
-        cia->ddrb = (uint8_t)port_b_direction;
-    }
+    uint16_t timer_b = (cia->reg[TB_HI] << 8) | cia->reg[TB_LO];
+    uint16_t timer_b_latch = (cia->reg[TIMER_OFFSET + TB_HI] << 8) | cia->reg[TIMER_OFFSET + TB_LO];
+    igText("Timer B: $%04X", timer_b);
+    igText("Timer B Latch: $%04X", timer_b_latch);
+    igText("Timer B Control: $%02X", cia->reg[CRB]);
+    igText("Timer B Running: %s", (cia->reg[CRB] & CRB_START) ? "YES" : "NO");
     
     igSeparator();
     
-    // Interrupt Settings
-    igText("Interrupt Configuration");
+    // Time of Day Clock with detailed information
+    igText("Time of Day Clock (Detailed)");
     igSeparator();
     
-    static bool irq_enabled = true;
-    igCheckbox("IRQ Enabled", &irq_enabled);
-      if (igButton("Reset CIA", (ImVec2){0, 0})) {
-        // Reset CIA state
-        cia->pra = 0x00;
-        cia->prb = 0x00;
-        cia->ddra = 0x00;
-        cia->ddrb = 0x00;
-        cia->timer_a = 0xFFFF;
-        cia->timer_b = 0xFFFF;
-        cia->cra = 0x00;
-        cia->crb = 0x00;
-        cia->icr = 0x00;
-        cia->sdr = 0x00;
-        cia->tod_10ths = 0x00;
-        cia->tod_sec = 0x00;
-        cia->tod_min = 0x00;
-        cia->tod_hr = 0x00;
-        cia->tod_latched = false;
-    }
+    igText("TOD 10ths: $%02X", cia->reg[TOD_10THS]);
+    igText("TOD Seconds: $%02X", cia->reg[TOD_SEC]);
+    igText("TOD Minutes: $%02X", cia->reg[TOD_MIN]);
+    igText("TOD Hours: $%02X", cia->reg[TOD_HR]);
+    igText("TOD Running: %s", cia->is_running_tod ? "YES" : "NO");
+    igText("TOD Cycles: %d", cia->tod_cycles);
+    igText("TOD Read Delta: %u", cia->read_tod_delta);
+    igText("TOD Write Delta: %u", cia->write_tod_delta);
+    
+    igSeparator();
+    
+    // Alarm registers
+    igText("Alarm Registers");
+    igSeparator();
+    
+    igText("Alarm 10ths: $%02X", cia->reg[ALARM_OFFSET + TOD_10THS]);
+    igText("Alarm Seconds: $%02X", cia->reg[ALARM_OFFSET + TOD_SEC]);
+    igText("Alarm Minutes: $%02X", cia->reg[ALARM_OFFSET + TOD_MIN]);
+    igText("Alarm Hours: $%02X", cia->reg[ALARM_OFFSET + TOD_HR]);
+    
+    igSeparator();
+    
+    // Interrupts with detailed information
+    igText("Interrupt Control (Detailed)");
+    igSeparator();
+    
+    igText("ICR: $%02X", cia->reg[ICR]);
+    igText("Interrupt Mask: $%02X", cia->interrupt_mask);
+    igText("Delayed IRQ: %s", cia->delayed_irq ? "YES" : "NO");
+    igText("IRQ Active: %s", (cia->reg[ICR] & ICR_IRQ) ? "YES" : "NO");
+    igText("Timer A IRQ: %s", (cia->reg[ICR] & ICR_TA) ? "YES" : "NO");
+    igText("Timer B IRQ: %s", (cia->reg[ICR] & ICR_TB) ? "YES" : "NO");
+    igText("Alarm IRQ: %s", (cia->reg[ICR] & ICR_ALRM) ? "YES" : "NO");
+    igText("Serial IRQ: %s", (cia->reg[ICR] & ICR_SP) ? "YES" : "NO");
+    igText("Flag IRQ: %s", (cia->reg[ICR] & ICR_FLG) ? "YES" : "NO");
+    
+    igSeparator();
+    
+    // Serial Data Register with detailed information
+    igText("Serial Data (Detailed)");
+    igSeparator();
+    
+    igText("SDR: $%02X", cia->reg[SDR]);
+    igText("Shift Register: $%02X", cia->reg[SHIFT_OFFSET]);
+    igText("Serial Shift: %d", cia->serial_shift);
 
     igEnd();
 }
