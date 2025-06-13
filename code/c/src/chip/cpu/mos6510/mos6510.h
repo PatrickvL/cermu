@@ -15,6 +15,10 @@
 // Forward declaration to resolve circular dependencies
 typedef struct mos6510_s mos6510_t;
 
+// Universal instruction dispatch using function pointers
+// (Works well on all compilers - performance difference with computed goto is minimal)
+typedef void (*mos6510_opcode_handler_t)(mos6510_t* cpu);
+
 // Macro utilities for generating unique labels
 #define CONCAT_IMPL(a, b) a ## b
 #define CONCAT(a, b) CONCAT_IMPL(a, b)
@@ -46,6 +50,9 @@ struct mos6510_s {
     // === CPU INTERNAL STATE ===
     // Internal CPU state for cycle-accurate emulation
     uint16_t address;   // Address for current instruction (used for both absolute and relative)
+      // Interception support state
+    bool intercepting;                           // True if interception is active
+    mos6510_opcode_handler_t opcode_handlers[256]; // Per-CPU handler table (copy of global when not intercepting)
     
     // I/O Ports
     uint8_t io_port[2]; // 0:DDR, 1:Port
@@ -59,26 +66,27 @@ struct mos6510_s {
     uint8_t p;          // Processor Status Register
 };
 
-// Universal instruction dispatch using function pointers
-// (Works well on all compilers - performance difference with computed goto is minimal)
-typedef void (*mos6510_opcode_handler_t)(mos6510_t* cpu);
-
 // Global instruction table
 extern mos6510_opcode_handler_t mos6510_opcode_handlers[256];
 
 
 // --- Interception support: replace handlers with stubs until next opcode ---
 /**
- * Begin intercepting the next opcode fetch.  All 256 handlers will be
+ * Begin intercepting the next opcode fetch for the specified CPU.  All 256 handlers will be
  * replaced with an internal stub that restores the original table on its
  * first invocation.
  */
-void mos6510_start_intercept(void);
+void mos6510_start_intercept(mos6510_t* cpu);
 
 /**
- * Cancel interception and restore the original handler table immediately.
+ * Cancel interception and restore the original handler table immediately for the specified CPU.
  */
-void mos6510_stop_intercept(void);
+void mos6510_stop_intercept(mos6510_t* cpu);
+
+/**
+ * Check if interception is currently active for the specified CPU.
+ */
+bool mos6510_is_intercepting(mos6510_t* cpu);
 
 // MOS6510 Status Register Flags
 #define FLAG_C  0x01    // Carry
@@ -155,7 +163,7 @@ void c64_non_cpu_cycle(void* c64);  // c64_t* - forward declaration with opaque 
 
 // CPU opcode dispatch function
 static inline void mos6510_opcode_dispatch(mos6510_t* cpu, uint8_t opcode) {
-    mos6510_opcode_handler_t handler = mos6510_opcode_handlers[opcode];
+    mos6510_opcode_handler_t handler = cpu->opcode_handlers[opcode];
     handler(cpu);
 }
 
@@ -961,7 +969,7 @@ void mos6510_init(mos6510_t* cpu);
 void mos6510_reset(mos6510_t* cpu);
 bool mos6510_step(mos6510_t* cpu);
 void mos6510_execute(mos6510_t* cpu);
-bool mos6510_is_intercepting(void);
+bool mos6510_is_intercepting(mos6510_t* cpu);
 void mos6510_nmi(mos6510_t* cpu);
 void mos6510_irq(mos6510_t* cpu, uint8_t status);
 

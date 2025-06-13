@@ -82,42 +82,42 @@ chip_descriptor_t mos6510_descriptor = {
 #endif
 };
 
-// Interception support for threaded dispatch
-static bool intercepting = false;
-static mos6510_opcode_handler_t original_handlers[256];
+// ============================================================================
+// CPU OPERATION FUNCTIONS (inline for performance)
+// ============================================================================
 
 // Stub that restores original table on first hit
 static void intercept_stub(mos6510_t* cpu) {
-    if (!intercepting) return;
+    if (!cpu->intercepting) return;
     // Undo the PC increment from CPU_OPCODE_FOOTER since we're not executing the next instruction
     cpu->pc--;
-    memcpy(mos6510_opcode_handlers, original_handlers, sizeof(original_handlers));
-    intercepting = false;
+    // Restore original handlers from global table
+    memcpy(cpu->opcode_handlers, mos6510_opcode_handlers, sizeof(cpu->opcode_handlers));
+    cpu->intercepting = false;
 }
 
 // Public API to begin interception
-void mos6510_start_intercept(void) {
-    memcpy(original_handlers, mos6510_opcode_handlers, sizeof(original_handlers));
+void mos6510_start_intercept(mos6510_t* cpu) {
+    if (!cpu) return;
+    // Set all handlers to the intercept stub
     for (int i = 0; i < 256; ++i) {
-        mos6510_opcode_handlers[i] = intercept_stub;
+        cpu->opcode_handlers[i] = intercept_stub;
     }
-    intercepting = true;
+    cpu->intercepting = true;
 }
 
 // Public API to cancel interception early if needed
-void mos6510_stop_intercept(void) {
-    if (!intercepting) return;
-    memcpy(mos6510_opcode_handlers, original_handlers, sizeof(original_handlers));
-    intercepting = false;
+void mos6510_stop_intercept(mos6510_t* cpu) {
+    if (!cpu || !cpu->intercepting) return;
+    // Restore original handlers from global table
+    memcpy(cpu->opcode_handlers, mos6510_opcode_handlers, sizeof(cpu->opcode_handlers));
+    cpu->intercepting = false;
 }
 
 // Check if interception is currently active
-bool mos6510_is_intercepting(void) {
-    return intercepting;
+bool mos6510_is_intercepting(mos6510_t* cpu) {
+    return cpu ? cpu->intercepting : false;
 }
-
-// ============================================================================
-// CPU OPERATION FUNCTIONS (inline for performance)
 // ============================================================================
 
 // CPU lifecycle wrapper functions
@@ -129,6 +129,10 @@ void mos6510_init(mos6510_t* cpu) {
     cpu->sp = 0xFF;
     cpu->p = FLAG_U | FLAG_I;  // Unused flag always set, interrupt disable
     cpu->pc = 0;
+    
+    // Initialize interception state and copy global handler table
+    cpu->intercepting = false;
+    memcpy(cpu->opcode_handlers, mos6510_opcode_handlers, sizeof(cpu->opcode_handlers));
     
     // 6510-specific I/O port (addresses $0000/$0001) initialization
     cpu->io_port[0] = 0x2F;  // Default Data Direction Register (DDR at $0000)
@@ -175,19 +179,18 @@ void mos6510_reset(mos6510_t* cpu) {
 bool mos6510_step(mos6510_t* cpu) {
     // Single step implementation using interception mechanism
     // This ensures only one instruction executes before returning control
-    
+
     // Fetch the opcode and get the real handler BEFORE starting interception
     uint8_t opcode = mos6510_read_cycle(cpu, cpu->pc++);
-    mos6510_opcode_handler_t handler = mos6510_opcode_handlers[opcode];
-    
-    // Start interception to catch the next instruction after this one
-    mos6510_start_intercept();
+    mos6510_opcode_handler_t handler = cpu->opcode_handlers[opcode];
+      // Start interception to catch the next instruction after this one
+    mos6510_start_intercept(cpu);
     
     // Execute the actual instruction handler
     handler(cpu);
     
     // Stop interception to clean up the handler table
-    mos6510_stop_intercept();
+    mos6510_stop_intercept(cpu);
     
     // If we reach here, the instruction completed and interception triggered
     // The threaded dispatch was halted after one instruction

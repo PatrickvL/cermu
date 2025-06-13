@@ -121,7 +121,7 @@ void gui_handle_events(emulation_context_t* emu_context) {
                 emu_context->thread_running = false;
                 emu_context->current_state = EMU_STATE_STOPPED;
                 // Use intercept to stop CPU execution immediately
-                mos6510_start_intercept();
+                mos6510_start_intercept(emu_context->c64->mos6510);
                 // Send quit signal to emulation thread
                 gui_emulation_send_signal(emu_context, EMU_SIGNAL_QUIT);
             }
@@ -135,7 +135,7 @@ void gui_handle_events(emulation_context_t* emu_context) {
                 emu_context->thread_running = false;
                 emu_context->current_state = EMU_STATE_STOPPED;
                 // Use intercept to stop CPU execution immediately
-                mos6510_start_intercept();
+                mos6510_start_intercept(emu_context->c64->mos6510);
                 // Send quit signal to emulation thread
                 gui_emulation_send_signal(emu_context, EMU_SIGNAL_QUIT);
             }
@@ -1394,7 +1394,7 @@ void gui_emulation_start(emulation_context_t* emu_context) {
 void gui_emulation_pause(emulation_context_t* emu_context) {
     if (emu_context && emu_context->c64) {
         // First trigger the intercept to stop CPU execution
-        mos6510_start_intercept();
+        mos6510_start_intercept(emu_context->c64->mos6510);
         // Then send the pause signal to update thread state
         gui_emulation_send_signal(emu_context, EMU_SIGNAL_PAUSE);
     }
@@ -1412,7 +1412,7 @@ void gui_emulation_reset(emulation_context_t* emu_context) {
         printf("GUI: Performing system reset\n");
         
         // First stop any running CPU execution
-        mos6510_start_intercept();
+        mos6510_start_intercept(emu_context->c64->mos6510);
         
         // Perform CPU reset (could be extended to full system reset)
         mos6510_reset(emu_context->c64->mos6510);
@@ -1501,7 +1501,7 @@ static int gui_emulation_thread_main(void* data) {
                         
                         // Check for intercept every 1000 cycles to allow pause/stop
                         if ((sim_cycles % 1000) == 0) {
-                            if (mos6510_is_intercepting() || !context->thread_running) {
+                            if (mos6510_is_intercepting(context->c64->mos6510) || !context->thread_running) {
                                 printf("Emulation thread: Intercept or quit detected during simulation\n");
                                 break;
                             }
@@ -1548,7 +1548,7 @@ static int gui_emulation_thread_main(void* data) {
                             }
                             
                             // Check for pause every 100 instructions
-                            if ((i % 100) == 0 && (mos6510_is_intercepting() || !context->thread_running)) {
+                            if ((i % 100) == 0 && (mos6510_is_intercepting(context->c64->mos6510) || !context->thread_running)) {
                                 context->current_state = EMU_STATE_PAUSED;
                                 break;
                             }
@@ -1646,7 +1646,7 @@ void gui_emulation_render_frame(emulation_context_t* context) {
         
         // Trigger intercept every few frames to maintain GUI responsiveness
         if ((frame_count % 3) == 0) {
-            mos6510_start_intercept();
+            mos6510_start_intercept(context->c64->mos6510);
         }
     }
 }

@@ -155,7 +155,7 @@ int main() {
     cpu.a = 0x00;
     
     // Enable interception - this will cause threaded dispatch to stop after hitting any opcode
-    mos6510_start_intercept();
+    mos6510_start_intercept(&cpu);
     printf("✓ Interception enabled - threaded dispatch will break on first opcode\n");
     
     // Now execute with threaded dispatch - it will run one instruction then stop due to interception
@@ -170,7 +170,7 @@ int main() {
     printf("Final state: A=0x%02X, PC=0x%04X\n", cpu.a, cpu.pc);
     
     // Check interception status
-    if (!mos6510_is_intercepting()) {
+    if (!mos6510_is_intercepting(&cpu)) {
         printf("✓ Interception automatically disabled after first instruction\n");
     }
 
