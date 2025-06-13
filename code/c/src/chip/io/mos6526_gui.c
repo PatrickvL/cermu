@@ -1,10 +1,15 @@
 #include "mos6526.h"
 #include "../../gui/cimgui_interface.h"
+#include "../../systems/c64/c64.h"  // Need this to access C64 structure
 #ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #endif
 #include <cimgui.h>
 #include <stdio.h>
+#include <stddef.h>  // For offsetof
+
+// Forward declaration
+static const char* mos6526_get_cia_name(mos6526_t* cia);
 
 // ============================================================================
 // MOS6526 CIA GUI DEBUG WINDOW
@@ -15,14 +20,21 @@ void mos6526_render_debug_window(void* chip, bool* show_window) {
     if (!cia || !cia->desc) return;
     
     if (!*show_window) return;
-    
-    char window_title[128];
-    snprintf(window_title, sizeof(window_title), "%s Debug", cia->desc->description);
+      // Push unique ID to prevent conflicts between CIA1 and CIA2
+    igPushID_Int((int)(uintptr_t)cia);
+      char window_title[128];
+    const char* cia_name = mos6526_get_cia_name(cia);
+    snprintf(window_title, sizeof(window_title), "%s Debug", cia_name);
     
     if (!igBegin(window_title, show_window, 0)) {
         igEnd();
+        igPopID();
         return;
     }
+
+    // Show which CIA this is
+    igText("Complex Interface Adapter - %s", cia_name);
+    igSeparator();
 
     // CIA State Section
     igText("CIA State");
@@ -78,6 +90,7 @@ void mos6526_render_debug_window(void* chip, bool* show_window) {
     igText("Serial Data Register: $%02X", cia->reg[SDR]);
 
     igEnd();
+    igPopID();
 }
 
 // ============================================================================
@@ -90,15 +103,21 @@ void mos6526_render_settings_window(void* chip, bool* show_window) {
     
     if (!*show_window) return;
     
+    // Push unique ID to prevent conflicts between CIA1 and CIA2
+    igPushID_Int((int)(uintptr_t)cia);
+    
     char window_title[128];
-    snprintf(window_title, sizeof(window_title), "%s Settings", cia->desc->description);
+    const char* cia_name = mos6526_get_cia_name(cia);
+    snprintf(window_title, sizeof(window_title), "%s Settings", cia_name);
     
     if (!igBegin(window_title, show_window, 0)) {
         igEnd();
+        igPopID();
         return;
     }
 
-    igText("CIA Configuration");
+    // Show which CIA this is
+    igText("Complex Interface Adapter - %s Configuration", cia_name);
     igSeparator();
     igText("Chip Type: MOS6526 CIA");
 
@@ -191,6 +210,29 @@ void mos6526_render_settings_window(void* chip, bool* show_window) {
     igText("SDR: $%02X", cia->reg[SDR]);
     igText("Shift Register: $%02X", cia->reg[SHIFT_OFFSET]);
     igText("Serial Shift: %d", cia->serial_shift);
-
+    
     igEnd();
+    igPopID();
+}
+
+// Helper function to determine CIA type based on system context
+static const char* mos6526_get_cia_name(mos6526_t* cia) {
+    if (!cia->bus) return "CIA"; // Generic CIA if no bus context
+    
+    // For C64 system: CIA1 is at 0xDC00, CIA2 is at 0xDD00
+    // Access the C64 structure through the bus to determine which CIA this is
+    c64_bus_t* bus = (c64_bus_t*)cia->bus;
+    
+    // The C64 bus should have a reference back to the C64 system
+    c64_t* c64 = (c64_t*)bus->c64;
+    if (!c64) return "CIA"; // Generic CIA if no c64 context
+    
+    // Now we can directly compare pointers to determine which CIA this is
+    if (cia == c64->cia1) {
+        return "CIA1 ($DC00)";
+    } else if (cia == c64->cia2) {
+        return "CIA2 ($DD00)";
+    } else {
+        return "CIA"; // Generic fallback for other systems
+    }
 }

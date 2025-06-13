@@ -310,9 +310,11 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, struct emulation_co
                 for (uint8_t chip_id = 0; chip_id < c64->system.chip_count && chip_id < 16; chip_id++) {
                     chip_entry_t* entry = &c64->system.chips[chip_id];
                     if (entry->desc && entry->desc->render_debug_window) {
+                        igPushID_Int(chip_id); // Push unique ID for each chip
                         char menu_label[64];
                         snprintf(menu_label, sizeof(menu_label), "%s", entry->desc->description);
                         igMenuItem_BoolPtr(menu_label, NULL, &gui_state->show_chip_debug[chip_id], true);
+                        igPopID(); // Pop chip ID
                     }
                 }
             }
@@ -421,9 +423,11 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, struct emulation_co
                     for (uint8_t chip_id = 0; chip_id < c64->system.chip_count && chip_id < 16; chip_id++) {
                         chip_entry_t* entry = &c64->system.chips[chip_id];
                         if (entry->desc && entry->desc->render_debug_window) {
+                            igPushID_Int(chip_id); // Push unique ID for each chip
                             char menu_label[64];
                             snprintf(menu_label, sizeof(menu_label), "%s Debug", entry->desc->description);
                             igMenuItem_BoolPtr(menu_label, NULL, &gui_state->show_chip_debug[chip_id], true);
+                            igPopID(); // Pop chip ID
                         }
                     }
                     igEndMenu();
@@ -433,9 +437,11 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, struct emulation_co
                     for (uint8_t chip_id = 0; chip_id < c64->system.chip_count && chip_id < 16; chip_id++) {
                         chip_entry_t* entry = &c64->system.chips[chip_id];
                         if (entry->desc && entry->desc->render_settings_window) {
+                            igPushID_Int(chip_id); // Push unique ID for each chip
                             char menu_label[64];
                             snprintf(menu_label, sizeof(menu_label), "%s Settings", entry->desc->description);
                             igMenuItem_BoolPtr(menu_label, NULL, &gui_state->show_chip_settings[chip_id], true);
+                            igPopID(); // Pop chip ID
                         }
                     }
                     igEndMenu();

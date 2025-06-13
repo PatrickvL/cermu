@@ -130,6 +130,9 @@ void vicii_render_common_debug_window(void* chip, bool* show_window, const char*
         uint8_t sprite_expand_y = vicii->registers[0x17];
         
         for (int i = 0; i < 8; i++) {
+            // Push unique ID for each sprite to prevent conflicts
+            igPushID_Int(i);
+            
             bool enabled = (sprite_enable >> i) & 1;
             uint16_t x = vicii->registers[i * 2] | (((sprite_x_msb >> i) & 1) << 8);
             uint8_t y = vicii->registers[i * 2 + 1];
@@ -141,7 +144,8 @@ void vicii_render_common_debug_window(void* chip, bool* show_window, const char*
             char sprite_label[64];
             snprintf(sprite_label, sizeof(sprite_label), enabled ? "Sprite %d (ENABLED)" : "Sprite %d (disabled)", i);
             
-            if (igTreeNode_Str(sprite_label)) {
+            // Use collapsing header instead of tree node for consistency
+            if (igCollapsingHeader_BoolPtr(sprite_label, NULL, ImGuiTreeNodeFlags_None)) {
                 igText("Position: X=%d, Y=%d", x, y);
                 igText("Color: $%02X", vicii->registers[0x27 + i]);
                 igText("Multicolor: %s", multicolor ? "YES" : "NO");
@@ -149,11 +153,12 @@ void vicii_render_common_debug_window(void* chip, bool* show_window, const char*
                 igText("Expand X: %s", expand_x ? "2x" : "1x");
                 igText("Expand Y: %s", expand_y ? "2x" : "1x");
                 igText("Data Pointer: $%02X", vicii->registers[0x3F8 + i]);
-                igTreePop();
             } else {
                 igSameLine(0, -1.0f);
                 igText("X=%d Y=%d Color=$%02X", x, y, vicii->registers[0x27 + i]);
             }
+            
+            igPopID(); // Pop sprite ID
         }
         
         igSeparator();
