@@ -86,12 +86,12 @@ mos6510_t* setup_cpu_from_state(const cpu_state_t* initial_state) {
     mos6510_attach_control_lines_interface(cpu, &control_interface);
     
     // Set initial CPU state
-    cpu->pc = initial_state->pc;
-    cpu->sp = initial_state->s;
-    cpu->a = initial_state->a;
-    cpu->x = initial_state->x;
-    cpu->y = initial_state->y;
-    cpu->p = initial_state->p;
+    cpu->base.pc = initial_state->pc;
+    cpu->base.sp = initial_state->s;
+    cpu->base.a = initial_state->a;
+    cpu->base.x = initial_state->x;
+    cpu->base.y = initial_state->y;
+    cpu->base.p = initial_state->p;
     
     cycle_count = 0;
     return cpu;
@@ -118,28 +118,28 @@ bool compare_cpu_state(const mos6510_t* cpu, const cpu_state_t* expected, const 
     // Adjust cycle count for intercept mechanism overhead
     uint32_t adjusted_cycles = (cycle_count > 0) ? cycle_count - 1 : 0;
     
-    if (cpu->pc != expected->pc) {
-        printf("FAIL %s: PC - expected 0x%04X, got 0x%04X\n", test_name, expected->pc, cpu->pc);
+    if (cpu->base.pc != expected->pc) {
+        printf("FAIL %s: PC - expected 0x%04X, got 0x%04X\n", test_name, expected->pc, cpu->base.pc);
         passed = false;
     }
-    if (cpu->sp != expected->s) {
-        printf("FAIL %s: SP - expected 0x%02X, got 0x%02X\n", test_name, expected->s, cpu->sp);
+    if (cpu->base.sp != expected->s) {
+        printf("FAIL %s: SP - expected 0x%02X, got 0x%02X\n", test_name, expected->s, cpu->base.sp);
         passed = false;
     }
-    if (cpu->a != expected->a) {
-        printf("FAIL %s: A - expected 0x%02X, got 0x%02X\n", test_name, expected->a, cpu->a);
+    if (cpu->base.a != expected->a) {
+        printf("FAIL %s: A - expected 0x%02X, got 0x%02X\n", test_name, expected->a, cpu->base.a);
         passed = false;
     }
-    if (cpu->x != expected->x) {
-        printf("FAIL %s: X - expected 0x%02X, got 0x%02X\n", test_name, expected->x, cpu->x);
+    if (cpu->base.x != expected->x) {
+        printf("FAIL %s: X - expected 0x%02X, got 0x%02X\n", test_name, expected->x, cpu->base.x);
         passed = false;
     }
-    if (cpu->y != expected->y) {
-        printf("FAIL %s: Y - expected 0x%02X, got 0x%02X\n", test_name, expected->y, cpu->y);
+    if (cpu->base.y != expected->y) {
+        printf("FAIL %s: Y - expected 0x%02X, got 0x%02X\n", test_name, expected->y, cpu->base.y);
         passed = false;
     }
-    if (cpu->p != expected->p) {
-        printf("FAIL %s: P - expected 0x%02X, got 0x%02X\n", test_name, expected->p, cpu->p);
+    if (cpu->base.p != expected->p) {
+        printf("FAIL %s: P - expected 0x%02X, got 0x%02X\n", test_name, expected->p, cpu->base.p);
         passed = false;
     }
     if (expected->has_cycles && adjusted_cycles != expected->cycles) {

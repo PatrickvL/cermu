@@ -100,7 +100,7 @@ int main() {
     // Test basic CPU reset
     mos6510_reset(cpu);
     printf("PASS: CPU reset completed\n");
-    printf("DEBUG: PC after reset = 0x%04X\n", cpu->pc);
+    printf("DEBUG: PC after reset = 0x%04X\n", cpu->base.pc);
     
     // Test a simple program: NOP instruction at address 0x1000
     test_memory[0x1000] = 0xEA;  // NOP opcode
@@ -117,19 +117,19 @@ int main() {
     printf("PASS: NOP instruction executed successfully\n");
     
     // Verify PC advanced
-    if (cpu->pc != 0x1001) {
-        printf("FAIL: PC did not advance correctly. Expected 0x1001, got 0x%04X\n", cpu->pc);
+    if (cpu->base.pc != 0x1001) {
+        printf("FAIL: PC did not advance correctly. Expected 0x1001, got 0x%04X\n", cpu->base.pc);
         mos6510_descriptor.destroy(cpu);
         return 1;
     }
-    printf("PASS: PC advanced correctly to 0x%04X\n", cpu->pc);
+    printf("PASS: PC advanced correctly to 0x%04X\n", cpu->base.pc);
     
     // Test zero page read/write (this will exercise our modified functions)
     test_memory[0x00] = 0x42;  // Set zero page value
     test_memory[0x1001] = 0xA5;  // LDA $00 (zero page)
     test_memory[0x1002] = 0x00;
     
-    cpu->pc = 0x1001;
+    cpu->base.pc = 0x1001;
     step_result = mos6510_step(cpu);
     if (!step_result) {
         printf("FAIL: LDA zero page instruction failed\n");
@@ -139,18 +139,18 @@ int main() {
     printf("PASS: LDA zero page executed\n");
     
     // Check if accumulator was loaded correctly
-    if (cpu->a != 0x42) {
-        printf("FAIL: LDA zero page did not load correct value. Expected 0x42, got 0x%02X\n", cpu->a);
+    if (cpu->base.a != 0x42) {
+        printf("FAIL: LDA zero page did not load correct value. Expected 0x42, got 0x%02X\n", cpu->base.a);
         mos6510_descriptor.destroy(cpu);
         return 1;
     }
-    printf("PASS: LDA zero page loaded correct value (0x%02X)\n", cpu->a);
+    printf("PASS: LDA zero page loaded correct value (0x%02X)\n", cpu->base.a);
     
     // Test zero page write
     test_memory[0x1003] = 0x85;  // STA $01 (zero page)
     test_memory[0x1004] = 0x01;
     
-    cpu->pc = 0x1003;
+    cpu->base.pc = 0x1003;
     step_result = mos6510_step(cpu);
     if (!step_result) {
         printf("FAIL: STA zero page instruction failed\n");
