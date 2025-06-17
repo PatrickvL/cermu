@@ -116,7 +116,7 @@ bool json_parse_string(const char* json, const char* key, char* output, size_t m
     return *value == '"';
 }
 
-// Parse RAM array: [[address, [bytes...]], ...]
+// Parse RAM array: [[address, value], ...] - ProcessorTests format
 bool json_parse_ram_array(const char* json, cpu_state_t* state) {
     const char* ram_start = json_find_key(json, "ram");
     if (!ram_start || *ram_start != '[') return true; // RAM is optional
@@ -128,7 +128,7 @@ bool json_parse_ram_array(const char* json, cpu_state_t* state) {
         pos = json_skip_whitespace(pos);
         if (*pos == ']') break;
         
-        // Expect [address, [bytes...]]
+        // Expect [address, value] pair
         if (*pos != '[') break;
         pos++;
         
@@ -141,31 +141,18 @@ bool json_parse_ram_array(const char* json, cpu_state_t* state) {
         if (*pos != ',') break;
         pos++;
         
-        // Parse bytes array
+        // Parse single value (ProcessorTests format is [addr, value] not [addr, [values...]])
         pos = json_skip_whitespace(pos);
-        if (*pos != '[') break;
-        pos++;
+        state->ram[state->ram_count].bytes[0] = (uint8_t)strtol(pos, (char**)&pos, 10);
+        state->ram[state->ram_count].byte_count = 1;
         
-        state->ram[state->ram_count].byte_count = 0;
-        while (*pos && *pos != ']' && state->ram[state->ram_count].byte_count < MAX_RAM_BYTES) {
-            pos = json_skip_whitespace(pos);
-            if (*pos == ']') break;
-            
-            state->ram[state->ram_count].bytes[state->ram[state->ram_count].byte_count] = 
-                (uint8_t)strtol(pos, (char**)&pos, 10);
-            state->ram[state->ram_count].byte_count++;
-            
-            pos = json_skip_whitespace(pos);
-            if (*pos == ',') pos++;
-        }
-        
-        // Skip closing brackets
-        if (*pos == ']') pos++;
+        // Skip closing bracket for this pair
         pos = json_skip_whitespace(pos);
         if (*pos == ']') pos++;
         
         state->ram_count++;
         
+        // Skip comma between entries
         pos = json_skip_whitespace(pos);
         if (*pos == ',') pos++;
     }
