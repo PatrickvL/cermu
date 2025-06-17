@@ -1,565 +1,508 @@
-#include "mos6510.h"
+#ifndef MOS6510_H
+#define MOS6510_H
+
+#include "../../../core/aiemuc.h"
 #include "../../../core/chip.h"
-#include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
+#include "../../../core/bus_cycle_interface.h"
+#include "../../../core/control_lines_interface.h"
+#include "../../../core/system_lines.h"
+#include "../../../core/system.h"
+#include "../mos6502_family/mos6502_family_core.h"
+#include <stdint.h>
+#include <stdbool.h>
+
+// MOS6510 I/O port interface
+typedef struct {
+    void* context;
+    uint8_t (*read_external_pins)(void* context, uint8_t port_value, uint8_t ddr);
+    void (*output_pins_changed)(void* context, uint8_t port_value, uint8_t ddr);
+} mos6510_io_port_interface_t;
+
+// MOS6510 specific constants
+#define MOS6510_MASK_IRQ    SYS_MASK_IRQ
+#define MOS6510_MASK_NMI    SYS_MASK_NMI
+#define MOS6510_MASK_RDY    SYS_MASK_RDY
+
+// Forward declaration to resolve circular dependencies
+typedef struct mos6510_s mos6510_t;
+
+// MOS6510 opcode handler type (compatible with family handlers)
+typedef void (*mos6510_opcode_handler_t)(mos6510_t* cpu);
 
 // ============================================================================
-// CHIP DESCRIPTOR FUNCTIONS
+// MOS 6510 CPU EMULATION - Extends 6502 family with I/O ports
 // ============================================================================
 
-// Chip functions for MOS6510
-static void* mos6510_create(chip_descriptor_t* desc) {
-    mos6510_t* cpu = malloc(sizeof(mos6510_t));
-    if (cpu) {
-        cpu->desc = desc;
-        mos6510_init(cpu);
-    }
-    return cpu;
-}
-
-static void mos6510_destroy(void* chip) {
-    if (chip) {
-        free(chip);
-    }
-}
-
-uint8_t mos6510_zeropage_read(void* chip, uint16_t address) {
-    mos6510_t* cpu = (mos6510_t*)chip;
+// MOS6510 CPU state structure - extends the family structure
+struct mos6510_s {
+    // === BASE 6502 FAMILY STRUCTURE (MUST BE FIRST) ===
+    // This allows safe casting between mos6510_t* and mos6502_family_t*
+    mos6502_family_t base;
     
-    // Handle MOS6510 zero page I/O ports - addresses $0000 and $0001
-    if (address == 0) {
+    // === MOS6510-SPECIFIC EXTENSIONS ===
+    // I/O port interface (stored by value for optimal performance)
+    mos6510_io_port_interface_t io_interface;
+      // Direct RAM access (for zero bank $0002-$0FFF to avoid circular dependency)
+    access_callback_t ram_access;  // Consolidated RAM access interface
+    
+    // I/O Ports (MOS6510-specific)
+    uint8_t io_port[2]; // 0:DDR, 1:Port
+};
+
+// Global instruction table
+extern mos6510_opcode_handler_t mos6510_opcode_handlers[256];
+
+
+// --- Interception support: replace handlers with stubs until next opcode ---
+/**
+ * Begin intercepting the next opcode fetch for the specified CPU.  All 256 handlers will be
+ * replaced with an internal stub that restores the original table on its
+ * first invocation.
+ */
+void mos6510_start_intercept(mos6510_t* cpu);
+
+/**
+ * Cancel interception and restore the original handler table immediately for the specified CPU.
+ */
+void mos6510_stop_intercept(mos6510_t* cpu);
+
+/**
+ * Check if interception is currently active for the specified CPU.
+ */
+bool mos6510_is_intercepting(mos6510_t* cpu);
+
+// MOS6510 Status Register Flags
+#define FLAG_C  0x01    // Carry
+#define FLAG_Z  0x02    // Zero
+#define FLAG_I  0x04    // Interrupt Disable
+#define FLAG_D  0x08    // Decimal Mode
+#define FLAG_B  0x10    // Break Command
+#define FLAG_U  0x20    // Unused (always 1)
+#define FLAG_V  0x40    // Overflow
+#define FLAG_N  0x80    // Negative
+
+// MOS6510 Control Line Masks (mapped to system line positions)
+#define MOS6510_MASK_IRQ    SYS_MASK_IRQ    // IRQ line mask
+#define MOS6510_MASK_NMI    SYS_MASK_NMI    // NMI line mask  
+#define MOS6510_MASK_RDY    SYS_MASK_RDY    // RDY line mask
+
+// ============================================================================
+// I/O PORT EMULATION - Direct handling in CPU read/write cycles
+// ============================================================================
+
+// ============================================================================
+// MOS6510 ZERO BANK I/O PORT ACCESSORS
+// ============================================================================
+
+// Compute effective port output: outputs from Data when DDR=1, else external data
+static inline uint8_t mos6510_io_mask(mos6510_t* cpu, uint8_t value)
+{
+    uint8_t ddr = cpu->io_port[0];
+    uint8_t data = cpu->io_port[1];
+    return (data & ddr) | (value & ~ddr);
+}
+
+// MOS6510 zero bank I/O port read (addresses $0000/$0001)
+static inline uint8_t mos6510_ioport_read(mos6510_t* cpu, uint16_t addr) {
+    if (addr == 0) {
         // Return Data Direction Register
         return cpu->io_port[0];
-    } else if (address == 1) {
-        // Return port: outputs defined by DDR bits, inputs from external pins
-        uint8_t ddr = cpu->io_port[0];
-        uint8_t data = cpu->io_port[1];
-        uint8_t external = cpu->io_interface.read_external_pins(cpu->io_interface.context);
-        return (data & ddr) | (external & ~ddr);
-    } else {
-        // For addresses $0002-$00FF, access system RAM directly to avoid circular dependency
-        return cpu->ram_access.read_func(cpu->ram_access.context, address);
+    } else {        // Return port: outputs defined by DDR bits, inputs from external pins
+        uint8_t external = cpu->io_interface.read_external_pins(cpu->io_interface.context, cpu->io_port[1], cpu->io_port[0]);
+        return mos6510_io_mask(cpu, external);
     }
 }
 
-void mos6510_zeropage_write(void* chip, uint16_t address, uint8_t value) {
-    mos6510_t* cpu = (mos6510_t*)chip;
+// MOS6510 zero bank I/O port write (addresses $0000/$0001)
+static inline void mos6510_ioport_write(mos6510_t* cpu, uint16_t addr, uint8_t value) {
+    // Update Data Direction / Data register
+    cpu->io_port[addr] = value;    // Notify system of output pin changes
+    uint8_t ddr = cpu->io_port[0];
+    uint8_t port_data = cpu->io_port[1];
+    cpu->io_interface.output_pins_changed(cpu->io_interface.context, port_data, ddr);
+}
+
+// Memory access functions using optimized direct callbacks
+static inline uint8_t mos6510_read_cycle(mos6510_t* cpu, uint16_t addr) {
+    // All addresses go through bus interface - banking system routes zero bank to chip functions
+    uint8_t result = cpu->base.bus_interface.bus_read(cpu->base.bus_interface.context, addr);
     
-    // Handle MOS6510 zero page I/O ports - addresses $0000 and $0001
-    if (address <= 1) {
-        // Update Data Direction / Data register
-        cpu->io_port[address] = value;
-        
-        // Notify system of output pin changes
-        uint8_t ddr = cpu->io_port[0];
-        uint8_t port_data = cpu->io_port[1];
-        uint8_t effective_output = port_data & ddr;
-        cpu->io_interface.output_pins_changed(cpu->io_interface.context, ddr, port_data, effective_output);
-    } else {
-        // For addresses $0002-$00FF, write to system RAM directly to avoid circular dependency
-        if (cpu->ram_access.write_func) {
-            cpu->ram_access.write_func(cpu->ram_access.context, address, value);
-        } else {
-            // Fallback to bus interface if RAM not attached yet (during initialization)
-            cpu->bus_interface.bus_write(cpu->bus_interface.context, address, value);
-        }
-    }
-}
-
-chip_descriptor_t mos6510_descriptor = {
-    .description = "MOS6510 CPU with I/O Ports",
-    .create = mos6510_create,
-    .destroy = mos6510_destroy,
-    .bus_attach = NULL,
-    .read = mos6510_zeropage_read,
-    .write = mos6510_zeropage_write,
-    .bank_change = NULL,
-    .get_rwcb_context = NULL,
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-    .render_debug_window = mos6510_render_debug_window,
-    .render_settings_window = mos6510_render_settings_window
-#endif
-};
-
-// ============================================================================
-// CPU OPERATION FUNCTIONS (inline for performance)
-// ============================================================================
-
-// Stub that restores original table on first hit
-static void intercept_stub(mos6510_t* cpu) {
-    if (!cpu->intercepting) return;
-    // Undo the PC increment from CPU_OPCODE_FOOTER since we're not executing the next instruction
-    cpu->pc--;
-    // Restore original handlers from global table
-    memcpy(cpu->opcode_handlers, mos6510_opcode_handlers, sizeof(cpu->opcode_handlers));
-    cpu->intercepting = false;
-}
-
-// Public API to begin interception
-void mos6510_start_intercept(mos6510_t* cpu) {
-    if (!cpu) return;
-    // Set all handlers to the intercept stub
-    for (int i = 0; i < 256; ++i) {
-        cpu->opcode_handlers[i] = intercept_stub;
-    }
-    cpu->intercepting = true;
-}
-
-// Public API to cancel interception early if needed
-void mos6510_stop_intercept(mos6510_t* cpu) {
-    if (!cpu || !cpu->intercepting) return;
-    // Restore original handlers from global table
-    memcpy(cpu->opcode_handlers, mos6510_opcode_handlers, sizeof(cpu->opcode_handlers));
-    cpu->intercepting = false;
-}
-
-// Check if interception is currently active
-bool mos6510_is_intercepting(mos6510_t* cpu) {
-    return cpu ? cpu->intercepting : false;
-}
-// ============================================================================
-
-// CPU lifecycle wrapper functions
-void mos6510_init(mos6510_t* cpu) {
-    // Initialize CPU registers and state
-    cpu->a = 0;
-    cpu->x = 0;
-    cpu->y = 0;
-    cpu->sp = 0xFF;
-    cpu->p = FLAG_U | FLAG_I;  // Unused flag always set, interrupt disable
-    cpu->pc = 0;
+    // Execute one cycle on other non-CPU chips after the bus operation
+    cpu->base.bus_interface.cycle_tick(cpu->base.bus_interface.context);
     
-    // Initialize interception state and copy global handler table
-    cpu->intercepting = false;
-    memcpy(cpu->opcode_handlers, mos6510_opcode_handlers, sizeof(cpu->opcode_handlers));
+    return result;
+}
+
+static inline void mos6510_write_cycle(mos6510_t* cpu, uint16_t addr, uint8_t value) {
+    // All addresses go through bus interface - banking system routes zero bank to chip functions
+    cpu->base.bus_interface.bus_write(cpu->base.bus_interface.context, addr, value);
     
-    // 6510-specific I/O port (addresses $0000/$0001) initialization
-    cpu->io_port[0] = 0x2F;  // Default Data Direction Register (DDR at $0000)
-    cpu->io_port[1] = 0x37;  // Default I/O Port Data (at $0001)
-    // Note, that this value will be communicated to the rest of the system via the bus
-    // when the bus is attached to the CPU (see mos6510_bus_attach).
-    // Initialize RAM accessors to NULL (will be set by mos6510_attach_ram)
-    cpu->ram_access.context = NULL;
-    cpu->ram_access.read_func = generic_stub_read;
-    cpu->ram_access.write_func = generic_stub_write;
+    // Execute one cycle on other non-CPU chips after the bus operation
+    cpu->base.bus_interface.cycle_tick(cpu->base.bus_interface.context);
 }
 
-void mos6510_nmi(mos6510_t* cpu) {
-    mos6510_interrupt_sequence(cpu, cpu->p & ~FLAG_B, 0xFFFA);
-}
+// Forward declaration for functions used in macros
+void mos6510_interrupt_handler(mos6510_t* cpu);
+void c64_non_cpu_cycle(void* c64);  // c64_t* - forward declaration with opaque pointer
 
-void mos6510_irq(mos6510_t* cpu, uint8_t status) {
-    mos6510_interrupt_sequence(cpu, status, 0xFFFE);
-}
-
-// Interrupt handler - called when IRQ or NMI lines are active
-void mos6510_interrupt_handler(mos6510_t* cpu) {
-    if (CPU_TEST_NMI(cpu)) {
-        // Handle NMI - non-maskable
-        mos6510_nmi(cpu);
-    } else if (CPU_TEST_IRQ(cpu) && !cpu_get_flag(cpu, FLAG_I)) {
-        // Handle IRQ when interrupt disable is clear
-        mos6510_irq(cpu, cpu->p & ~FLAG_B); // Clear B flag for IRQ
-    }
-    CPU_OPCODE_FOOTER(cpu);
-}
-
-// Reset CPU
-void mos6510_reset(mos6510_t* cpu) {
-    // Read reset vector from $FFFC/$FFFD
-    uint8_t pcl = mos6510_read_cycle(cpu, 0xFFFC);
-    uint8_t pch = mos6510_read_cycle(cpu, 0xFFFD);
-    
-    cpu->pc = (pch << 8) | pcl;
-    cpu->sp = 0xFF; // or 0FD?
-    cpu->p |= FLAG_I;  // Set interrupt disable
-}
-
-bool mos6510_step(mos6510_t* cpu) {
-    // Single step implementation using interception mechanism
-    // This ensures only one instruction executes before returning control
-
-    // Fetch the opcode and get the real handler BEFORE starting interception
-    uint8_t opcode = mos6510_read_cycle(cpu, cpu->pc++);
-    mos6510_opcode_handler_t handler = cpu->opcode_handlers[opcode];
-      // Start interception to catch the next instruction after this one
-    mos6510_start_intercept(cpu);
-    
-    // Execute the actual instruction handler
+// CPU opcode dispatch function
+static inline void mos6510_opcode_dispatch(mos6510_t* cpu, uint8_t opcode) {
+    mos6510_opcode_handler_t handler = (mos6510_opcode_handler_t)cpu->base.opcode_handlers[opcode];
     handler(cpu);
-    
-    // Stop interception to clean up the handler table
-    mos6510_stop_intercept(cpu);
-    
-    // If we reach here, the instruction completed and interception triggered
-    // The threaded dispatch was halted after one instruction
-    return true;
+}
+
+// MOS6510-specific versions of shared macros
+#define MOS6510_OPCODE_FOOTER(cpu) \
+    M6502_NEXT_INSTRUCTION(&((cpu)->base), mos6510_interrupt_handler, mos6510_read_cycle, mos6510_opcode_dispatch)
+
+// ============================================================================
+// PERFORMANCE-OPTIMIZED MACROS FOR CODE DEDUPLICATION
+// ============================================================================
+
+// Cycle timing macro for intra-instruction cycles
+#define MOS6510_INTRA_CYCLE(cpu) do { \
+    (cpu)->base.bus_interface.cycle_tick((cpu)->base.bus_interface.context); \
+} while(0)
+
+// MOS6510_CONTROL_LINES - Get control lines with zero-indirection access
+#define MOS6510_CONTROL_LINES(cpu) \
+    ((cpu)->control_interface.get_lines((cpu)->control_interface.context))
+
+// Test specific control lines using lightweight macros
+#define MOS6510_TEST_IRQ(cpu) (MOS6510_CONTROL_LINES(cpu) & MOS6510_MASK_IRQ)
+#define MOS6510_TEST_NMI(cpu) (MOS6510_CONTROL_LINES(cpu) & MOS6510_MASK_NMI)
+#define MOS6510_TEST_RDY(cpu) (MOS6510_CONTROL_LINES(cpu) & MOS6510_MASK_RDY)
+
+// System lines access macros for direct system state operations
+#define MOS6510_SYSTEM_LINES_TEST(cpu, mask) SYS_LINES_TEST((cpu)->system_lines, mask)
+#define MOS6510_SYSTEM_LINES_SET(cpu, mask) SYS_LINES_SET((cpu)->system_lines, mask)
+#define MOS6510_SYSTEM_LINES_CLEAR(cpu, mask) SYS_LINES_CLEAR((cpu)->system_lines, mask)
+
+// Bus cycle operations - call bus operation then cycle tick
+#define MOS6510_BUS_CYCLE(cpu) \
+    ((cpu)->bus_interface.cycle_tick((cpu)->bus_interface.context))
+
+
+
+// Flag operations (using family functions)
+static inline void mos6510_set_flag(mos6510_t* cpu, uint8_t flag, bool condition) {
+    mos6502_family_set_flag(&cpu->base, flag, condition);
+}
+
+static inline bool mos6510_get_flag(mos6510_t* cpu, uint8_t flag) {
+    return mos6502_family_get_flag(&cpu->base, flag);
+}
+
+static inline void mos6510_set_nz_flags(mos6510_t* cpu, uint8_t value) {
+    mos6502_family_set_nz_flags(&cpu->base, value);
+}
+
+// Stack operations (using family functions)
+static inline void mos6510_push(mos6510_t* cpu, uint8_t data) {
+    mos6502_family_push(&cpu->base, data);
+}
+
+static inline uint8_t mos6510_pop(mos6510_t* cpu) {
+    return mos6502_family_pull(&cpu->base);
+}
+
+// BRK/IRQ common sequence - handles the interrupt setup portion
+static inline void mos6510_interrupt_sequence(mos6510_t* cpu, uint8_t status_flags, uint16_t vector_addr) {
+    // Push PC and status unconditionally (skip RDY checks)
+    mos6502_family_push(&cpu->base, (cpu->base.pc >> 8) & 0xFF);
+    mos6502_family_push(&cpu->base, cpu->base.pc & 0xFF);
+    mos6502_family_push(&cpu->base, status_flags);
+    // Set interrupt disable
+    cpu->base.p |= FLAG_I;
+    // Read vector low and high without RDY checks
+    uint8_t pc_lo = mos6510_read_cycle(cpu, vector_addr);
+    uint8_t pc_hi = mos6510_read_cycle(cpu, vector_addr + 1);
+    cpu->base.pc = (pc_hi << 8) | pc_lo;
+    // Note : callers will dispatch the next instruction
+}
+
+
+// ============================================================================
+// ADDRESSING MODE HELPER FUNCTIONS (delegating to family functions)
+// ============================================================================
+
+// ============================================================================
+// MOS6510 ADDRESSING MODE FUNCTIONS
+// ============================================================================
+// Note: Use mos6502_family_addr_* functions directly instead of wrappers
+// for better performance. Examples:
+//   mos6502_family_addr_imm(&cpu->base)  // Immediate addressing
+//   mos6502_family_addr_zp(&cpu->base)   // Zero page addressing
+//   mos6502_family_addr_abs(&cpu->base)  // Absolute addressing
+// etc.
+
+// ============================================================================
+// MOS6510 ADVANCED ADDRESSING MODE FUNCTIONS  
+// ============================================================================
+// Note: These use family functions directly for optimal performance
+
+// (Zero page,X) - Indexed Indirect addressing
+static inline uint8_t mos6510_addr_zpx_ind(mos6510_t* cpu) {
+    return mos6502_family_addr_indx(&cpu->base);
+}
+
+// (Zero page),Y - Indirect Indexed addressing
+static inline uint8_t mos6510_addr_zp_ind_y(mos6510_t* cpu) {
+    return mos6502_family_addr_indy(&cpu->base);
 }
 
 // ============================================================================
-// CPU EXECUTION LOOP WITH FUNCTION POINTERS (Universal)
+// STORE ADDRESS HELPER FUNCTIONS (inline for performance)  
 // ============================================================================
-void mos6510_execute(mos6510_t* cpu) {
-    // Start execution using threaded dispatch
-    // The CPU_NEXT_INSTRUCTION macro will chain instructions until intercept is triggered
-    CPU_NEXT_INSTRUCTION(cpu);
+
+// Zero page addressing for stores - sets address only
+static inline void addr_zp_store(mos6510_t* cpu) {
+    MOS6510_INTRA_CYCLE(cpu);
+    cpu->base.address = mos6510_read_cycle(cpu, cpu->base.pc++);
+}
+
+// Zero page,X addressing for stores - sets address only  
+static inline void addr_zpx_store(mos6510_t* cpu) {
+    MOS6510_INTRA_CYCLE(cpu);
+    uint8_t base = mos6510_read_cycle(cpu, cpu->base.pc++);
+    MOS6510_INTRA_CYCLE(cpu);
+    (void)mos6510_read_cycle(cpu, base); // Dummy read
+    cpu->base.address = (base + cpu->base.x) & 0xFF;
+}
+
+// Zero page,Y addressing for stores - sets address only
+static inline void addr_zpy_store(mos6510_t* cpu) {
+    MOS6510_INTRA_CYCLE(cpu);
+    uint8_t base = mos6510_read_cycle(cpu, cpu->base.pc++);
+    MOS6510_INTRA_CYCLE(cpu);
+    (void)mos6510_read_cycle(cpu, base); // Dummy read
+    cpu->base.address = (base + cpu->base.y) & 0xFF;
+}
+
+// Absolute addressing for stores - sets address only
+static inline void addr_abs_store(mos6510_t* cpu) {
+    MOS6510_INTRA_CYCLE(cpu);
+    uint8_t addr_lo = mos6510_read_cycle(cpu, cpu->base.pc++);
+    MOS6510_INTRA_CYCLE(cpu);
+    uint8_t addr_hi = mos6510_read_cycle(cpu, cpu->base.pc++);
+    cpu->base.address = (addr_hi << 8) | addr_lo;
+}
+
+// Absolute,X addressing for stores - sets address only (with dummy read)
+static inline void addr_absx_store(mos6510_t* cpu) {
+    MOS6510_INTRA_CYCLE(cpu);
+    uint8_t addr_lo = mos6510_read_cycle(cpu, cpu->base.pc++);
+    MOS6510_INTRA_CYCLE(cpu);
+    uint8_t addr_hi = mos6510_read_cycle(cpu, cpu->base.pc++);
+    cpu->base.address = (addr_hi << 8) | addr_lo;
+    MOS6510_INTRA_CYCLE(cpu);
+    (void)mos6510_read_cycle(cpu, cpu->base.address + cpu->base.x); // Dummy read
+    cpu->base.address += cpu->base.x;
+}
+
+// Absolute,Y addressing for stores - sets address only (with dummy read)
+static inline void addr_absy_store(mos6510_t* cpu) {
+    MOS6510_INTRA_CYCLE(cpu);
+    uint8_t addr_lo = mos6510_read_cycle(cpu, cpu->base.pc++);
+    MOS6510_INTRA_CYCLE(cpu);
+    uint8_t addr_hi = mos6510_read_cycle(cpu, cpu->base.pc++);
+    cpu->base.address = (addr_hi << 8) | addr_lo;
+    MOS6510_INTRA_CYCLE(cpu);
+    (void)mos6510_read_cycle(cpu, cpu->base.address + cpu->base.y); // Dummy read
+    cpu->base.address += cpu->base.y;
+}
+
+// (Zero page,X) addressing for stores - sets address only
+static inline void addr_zpx_ind_store(mos6510_t* cpu) {
+    MOS6510_INTRA_CYCLE(cpu);
+    uint8_t base = mos6510_read_cycle(cpu, cpu->base.pc++);
+    MOS6510_INTRA_CYCLE(cpu);
+    (void)mos6510_read_cycle(cpu, base); // Dummy read
+    uint8_t zp_addr = (base + cpu->base.x) & 0xFF;
+    MOS6510_INTRA_CYCLE(cpu);
+    uint8_t addr_lo = mos6510_read_cycle(cpu, zp_addr);
+    MOS6510_INTRA_CYCLE(cpu);
+    uint8_t addr_hi = mos6510_read_cycle(cpu, (zp_addr + 1) & 0xFF);
+    cpu->base.address = (addr_hi << 8) | addr_lo;
+}
+
+// (Zero page),Y addressing for stores - sets address only (with dummy read)
+static inline void addr_zp_ind_y_store(mos6510_t* cpu) {
+    MOS6510_INTRA_CYCLE(cpu);
+    uint8_t zp_addr = mos6510_read_cycle(cpu, cpu->base.pc++);
+    MOS6510_INTRA_CYCLE(cpu);
+    uint8_t addr_lo = mos6510_read_cycle(cpu, zp_addr);
+    MOS6510_INTRA_CYCLE(cpu);
+    uint8_t addr_hi = mos6510_read_cycle(cpu, (zp_addr + 1) & 0xFF);
+    cpu->base.address = (addr_hi << 8) | addr_lo;
+    MOS6510_INTRA_CYCLE(cpu);
+    (void)mos6510_read_cycle(cpu, cpu->base.address + cpu->base.y); // Dummy read
+    cpu->base.address += cpu->base.y;
+}
+
+// Stack push with timing control
+static inline void mos6510_push_with_wait(mos6510_t* cpu, uint8_t data) {
+    MOS6510_INTRA_CYCLE(cpu);
+    mos6510_write_cycle(cpu, 0x0100 + cpu->base.sp, data);
+    cpu->base.sp--;
+}
+
+// Stack pop with timing control  
+static inline uint8_t mos6510_pop_with_wait(mos6510_t* cpu) {
+    MOS6510_INTRA_CYCLE(cpu);
+    cpu->base.sp++;
+    return mos6510_read_cycle(cpu, 0x0100 + cpu->base.sp);
 }
 
 // ============================================================================
-// INSTRUCTION TABLE SETUP
+// MOS6510 OPCODE IMPLEMENTATIONS
 // ============================================================================
 
-// TODO : I want the function signature of all 256 opcode handlers to be declared using a macro.
+// ============================================================================
+// OPCODE FUNCTION DECLARATIONS
+// ============================================================================
 
-// Include all instruction implementation files in the new organization
-#include "mos6510_arithmetic.c"   // ADC, SBC, AND, ORA, EOR, CMP, CPX, CPY, BIT
-#include "mos6510_control.c"      // BRK, RTI, RTS, JSR, JMP, all branches
-#include "mos6510_flags.c"        // CLC, SEC, CLI, SEI, CLD, SED, CLV
-#include "mos6510_illegal.c"      // All unofficial instructions
-#include "mos6510_memory.c"       // LDA, LDX, LDY, STA, STX, STY
-#include "mos6510_misc.c"         // NOP variants
+// ============================================================================
+// ILLEGAL INSTRUCTION HELPER FUNCTIONS (inline for performance)
+// ============================================================================
+
+// Read-modify-write + register operation combo (SLO, RLA, RRA, SRE)
+static inline void mos6510_illegal_rmw_combo(mos6510_t* cpu, uint8_t value, 
+                                          uint8_t (*rmw_op)(mos6510_t*, uint8_t),
+                                          void (*reg_op)(mos6510_t*, uint8_t)) {
+    uint8_t result = rmw_op(cpu, value);
+    MOS6510_INTRA_CYCLE(cpu);
+    mos6510_write_cycle(cpu, cpu->base.address, result);
+    reg_op(cpu, result);
+    MOS6510_OPCODE_FOOTER(cpu);
+}
+
+// INC/DEC + register operation combo (DCP, ISC)
+static inline void mos6510_illegal_inc_dec_combo(mos6510_t* cpu, uint8_t value, 
+                                              int delta, void (*reg_op)(mos6510_t*, uint8_t)) {
+    value += (uint8_t)delta;
+    MOS6510_INTRA_CYCLE(cpu);
+    mos6510_write_cycle(cpu, cpu->base.address, value);
+    reg_op(cpu, value);
+    MOS6510_OPCODE_FOOTER(cpu);
+}
+
+// Load both A and X (LAX variants)
+static inline void mos6510_load_a_and_x(mos6510_t* cpu, uint8_t value) {
+    cpu->base.a = value;
+    cpu->base.x = value;
+    mos6502_family_set_nz_flags(&cpu->base, value);
+    MOS6510_OPCODE_FOOTER(cpu);
+}
+
+// Store A & X (SAX variants)
+static inline void mos6510_store_a_and_x(mos6510_t* cpu, void (*addr_func)(mos6510_t*, uint8_t)) {
+    addr_func(cpu, cpu->base.a & cpu->base.x);
+    MOS6510_OPCODE_FOOTER(cpu);
+}
+
+// Complex store with high byte manipulation (AHX, SHX, SHY, TAS)
+static inline void mos6510_complex_store(mos6510_t* cpu, uint8_t value) {
+    value &= ((cpu->base.address >> 8) + 1);
+    MOS6510_INTRA_CYCLE(cpu);
+    mos6510_write_cycle(cpu, cpu->base.address, value);
+    MOS6510_OPCODE_FOOTER(cpu);
+}
+
+// Immediate mode accumulator operations (ALR, ANC, ARR, AXS, XAA)
+static inline void mos6510_immediate_accumulator_op(mos6510_t* cpu, void (*operation)(mos6510_t*, uint8_t)) {
+    uint8_t value = mos6502_family_addr_imm(&cpu->base);
+    operation(cpu, value);
+    MOS6510_OPCODE_FOOTER(cpu);
+}
+
+// ============================================================================
+// ILLEGAL INSTRUCTION SPECIFIC OPERATIONS (inline for performance)
+// ============================================================================
+
+// ALR operation: AND then LSR
+static inline void mos6502_family_op_alr(mos6510_t* cpu, uint8_t value) {
+    cpu->base.a &= value;
+    mos6510_set_flag(cpu, FLAG_C, cpu->base.a & 0x01);
+    cpu->base.a >>= 1;
+    mos6502_family_set_nz_flags(&cpu->base, cpu->base.a);
+}
+
+// ANC operation: AND then copy N to C
+static inline void mos6502_family_op_anc(mos6510_t* cpu, uint8_t value) {
+    cpu->base.a &= value;
+    mos6502_family_set_nz_flags(&cpu->base, cpu->base.a);
+    mos6510_set_flag(cpu, FLAG_C, cpu->base.a & 0x80);
+}
+
+// ARR operation: AND then ROR with special V flag behavior
+static inline void mos6502_family_op_arr(mos6510_t* cpu, uint8_t value) {
+    cpu->base.a &= value;
+    uint8_t old_carry = mos6502_family_get_flag(&cpu->base, FLAG_C) ? 1 : 0;
+    mos6510_set_flag(cpu, FLAG_C, cpu->base.a & 0x01);
+    cpu->base.a = (cpu->base.a >> 1) | (old_carry << 7);
+    mos6502_family_set_nz_flags(&cpu->base, cpu->base.a);
+    // V flag behavior is complex for ARR
+    mos6510_set_flag(cpu, FLAG_V, ((cpu->base.a >> 6) ^ (cpu->base.a >> 5)) & 1);
+}
+
+// AXS operation: (A & X) - immediate, store in X
+static inline void mos6502_family_op_axs(mos6510_t* cpu, uint8_t value) {
+    uint8_t temp = cpu->base.a & cpu->base.x;
+    uint16_t result = temp - value;
+    mos6510_set_flag(cpu, FLAG_C, result < 0x100);
+    cpu->base.x = result & 0xFF;
+    mos6502_family_set_nz_flags(&cpu->base, cpu->base.x);
+}
+
+// XAA operation: Transfer X to A, then AND with immediate
+static inline void mos6502_family_op_xaa(mos6510_t* cpu, uint8_t value) {
+    cpu->base.a = cpu->base.x;
+    cpu->base.a &= value;
+    mos6502_family_set_nz_flags(&cpu->base, cpu->base.a);
+}
+
+// SLO register operation: ORA with result
+static inline void mos6502_family_op_slo_reg(mos6510_t* cpu, uint8_t value) {
+    cpu->base.a |= value;
+    mos6502_family_set_nz_flags(&cpu->base, cpu->base.a);
+}
+
+// RLA register operation: AND with result
+static inline void mos6502_family_op_rla_reg(mos6510_t* cpu, uint8_t value) {
+    cpu->base.a &= value;
+    mos6502_family_set_nz_flags(&cpu->base, cpu->base.a);
+}
+
+// SRE register operation: EOR with result
+static inline void mos6502_family_op_sre_reg(mos6510_t* cpu, uint8_t value) {
+    cpu->base.a ^= value;
+    mos6502_family_set_nz_flags(&cpu->base, cpu->base.a);
+}
+
+// CPU core functions
+void mos6510_init(mos6510_t* cpu);
+void mos6510_reset(mos6510_t* cpu);
+bool mos6510_step(mos6510_t* cpu);
+void mos6510_execute(mos6510_t* cpu);
+bool mos6510_is_intercepting(mos6510_t* cpu);
+void mos6510_nmi(mos6510_t* cpu);
+void mos6510_irq(mos6510_t* cpu, uint8_t status);
+
+// Chip descriptor
+extern chip_descriptor_t mos6510_descriptor;
+
+// Performance-optimized interface attachment functions
+void mos6510_attach_bus_interface(mos6510_t* cpu, const bus_cycle_ops_t* bus_interface);
+void mos6510_attach_control_lines_interface(mos6510_t* cpu, const control_lines_interface_t* control_interface);
+void mos6510_attach_io_interface(mos6510_t* cpu, const mos6510_io_port_interface_t* io_interface);
+void mos6510_attach_system_lines(mos6510_t* cpu, system_lines_t* system_lines);
+void mos6510_attach_ram(mos6510_t* cpu, const access_callback_t* ram_access);
+
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#include "mos6510_gui.c"          // GUI debug and settings windows
+// GUI functions
+void mos6510_render_debug_window(void* chip, bool* show_window);
+void mos6510_render_settings_window(void* chip, bool* show_window);
 #endif
-#include "mos6510_registers.c"    // TAX, TXA, TAY, TYA, TSX, TXS, INC, DEC, INX, DEX, INY, DEY
-#include "mos6510_shifts.c"       // ASL, LSR, ROL, ROR
-#include "mos6510_stack.c"        // PHA, PLA, PHP, PLP
 
-// Global MOS6510 instruction table using function pointers
-mos6510_opcode_handler_t mos6510_opcode_handlers[256] = {
-    [0x00] = brk_func,               // BRK
-    [0x01] = ora_indirect_x_func,    // ORA ($nn,X)
-    [0x02] = jam_func,               // JAM (illegal)
-    [0x03] = slo_indirect_x_func,    // SLO ($nn,X)
-    [0x04] = nop_zero_page_func,     // NOP $nn (illegal)
-    [0x05] = ora_zero_page_func,     // ORA $nn
-    [0x06] = asl_zero_page_func,     // ASL $nn
-    [0x07] = slo_zero_page_func,     // SLO $nn (illegal)
-    [0x08] = php_func,               // PHP
-    [0x09] = ora_immediate_func,     // ORA #$nn
-    [0x0A] = asl_accumulator_func,   // ASL A
-    [0x0B] = anc_immediate_func,     // ANC #$nn (illegal)
-    [0x0C] = nop_absolute_func,      // NOP $nnnn (illegal)
-    [0x0D] = ora_absolute_func,      // ORA $nnnn
-    [0x0E] = asl_absolute_func,      // ASL $nnnn
-    [0x0F] = slo_absolute_func,      // SLO $nnnn (illegal)
-
-    [0x10] = bpl_func,               // BPL rel
-    [0x11] = ora_indirect_y_func,    // ORA ($nn),Y
-    [0x12] = jam_func,               // JAM (illegal)
-    [0x13] = slo_indirect_y_func,    // SLO ($nn),Y (illegal)
-    [0x14] = nop_zero_page_x_func,   // NOP $nn,X (illegal)
-    [0x15] = ora_zero_page_x_func,   // ORA $nn,X
-    [0x16] = asl_zero_page_x_func,   // ASL $nn,X
-    [0x17] = slo_zero_page_x_func,   // SLO $nn,X (illegal)
-    [0x18] = clc_func,               // CLC
-    [0x19] = ora_absolute_y_func,    // ORA $nnnn,Y
-    [0x1A] = nop_func,               // NOP (illegal)
-    [0x1B] = slo_absolute_y_func,    // SLO $nnnn,Y (illegal)
-    [0x1C] = nop_absolute_x_func,    // NOP $nnnn,X (illegal)
-    [0x1D] = ora_absolute_x_func,    // ORA $nnnn,X
-    [0x1E] = asl_absolute_x_func,    // ASL $nnnn,X
-    [0x1F] = slo_absolute_x_func,    // SLO $nnnn,X (illegal)
-
-    [0x20] = jsr_func,               // JSR $nnnn
-    [0x21] = and_indirect_x_func,    // AND ($nn,X)
-    [0x22] = jam_func,               // JAM (illegal)
-    [0x23] = rla_indirect_x_func,    // RLA ($nn,X) (illegal)
-    [0x24] = bit_zero_page_func,     // BIT $nn
-    [0x25] = and_zero_page_func,     // AND $nn
-    [0x26] = rol_zero_page_func,     // ROL $nn
-    [0x27] = rla_zero_page_func,     // RLA $nn (illegal)
-    [0x28] = plp_func,               // PLP
-    [0x29] = and_immediate_func,     // AND #$nn
-    [0x2A] = rol_accumulator_func,   // ROL A
-    [0x2B] = anc_immediate_func,     // ANC #$nn (illegal)
-    [0x2C] = bit_absolute_func,      // BIT $nnnn
-    [0x2D] = and_absolute_func,      // AND $nnnn
-    [0x2E] = rol_absolute_func,      // ROL $nnnn
-    [0x2F] = rla_absolute_func,      // RLA $nnnn (illegal)
-
-    [0x30] = bmi_func,               // BMI rel
-    [0x31] = and_indirect_y_func,    // AND ($nn),Y
-    [0x32] = jam_func,               // JAM (illegal)
-    [0x33] = rla_indirect_y_func,    // RLA ($nn),Y (illegal)
-    [0x34] = nop_zero_page_x_func,   // NOP $nn,X (illegal)
-    [0x35] = and_zero_page_x_func,   // AND $nn,X
-    [0x36] = rol_zero_page_x_func,   // ROL $nn,X
-    [0x37] = rla_zero_page_x_func,   // RLA $nn,X (illegal)
-    [0x38] = sec_func,               // SEC
-    [0x39] = and_absolute_y_func,    // AND $nnnn,Y
-    [0x3A] = nop_func,               // NOP (illegal)
-    [0x3B] = rla_absolute_y_func,    // RLA $nnnn,Y (illegal)
-    [0x3C] = nop_absolute_x_func,    // NOP $nnnn,X (illegal)
-    [0x3D] = and_absolute_x_func,    // AND $nnnn,X
-    [0x3E] = rol_absolute_x_func,    // ROL $nnnn,X
-    [0x3F] = rla_absolute_x_func,    // RLA $nnnn,X (illegal)
-
-    [0x40] = rti_func,               // RTI
-    [0x41] = eor_indirect_x_func,    // EOR ($nn,X)
-    [0x42] = jam_func,               // JAM (illegal)
-    [0x43] = sre_indirect_x_func,    // SRE ($nn,X) (illegal)
-    [0x44] = nop_zero_page_func,     // NOP $nn (illegal)
-    [0x45] = eor_zero_page_func,     // EOR $nn
-    [0x46] = lsr_zero_page_func,     // LSR $nn
-    [0x47] = sre_zero_page_func,     // SRE $nn (illegal)
-    [0x48] = pha_func,               // PHA
-    [0x49] = eor_immediate_func,     // EOR #$nn
-    [0x4A] = lsr_accumulator_func,   // LSR A
-    [0x4B] = alr_immediate_func,     // ALR #$nn (illegal)
-    [0x4C] = jmp_absolute_func,      // JMP $nnnn
-    [0x4D] = eor_absolute_func,      // EOR $nnnn
-    [0x4E] = lsr_absolute_func,      // LSR $nnnn
-    [0x4F] = sre_absolute_func,      // SRE $nnnn (illegal)
-
-    [0x50] = bvc_func,               // BVC rel
-    [0x51] = eor_indirect_y_func,    // EOR ($nn),Y
-    [0x52] = jam_func,               // JAM (illegal)
-    [0x53] = sre_indirect_y_func,    // SRE ($nn),Y (illegal)
-    [0x54] = nop_zero_page_x_func,   // NOP $nn,X (illegal)
-    [0x55] = eor_zero_page_x_func,   // EOR $nn,X
-    [0x56] = lsr_zero_page_x_func,   // LSR $nn,X
-    [0x57] = sre_zero_page_x_func,   // SRE $nn,X (illegal)
-    [0x58] = cli_func,               // CLI
-    [0x59] = eor_absolute_y_func,    // EOR $nnnn,Y
-    [0x5A] = nop_func,               // NOP (illegal)
-    [0x5B] = sre_absolute_y_func,    // SRE $nnnn,Y (illegal)
-    [0x5C] = nop_absolute_x_func,    // NOP $nnnn,X (illegal)
-    [0x5D] = eor_absolute_x_func,    // EOR $nnnn,X
-    [0x5E] = lsr_absolute_x_func,    // LSR $nnnn,X
-    [0x5F] = sre_absolute_x_func,    // SRE $nnnn,X (illegal)
-
-    [0x60] = rts_func,               // RTS
-    [0x61] = adc_indirect_x_func,    // ADC ($nn,X)
-    [0x62] = jam_func,               // JAM (illegal)
-    [0x63] = rra_indirect_x_func,    // RRA ($nn,X) (illegal)
-    [0x64] = nop_zero_page_func,     // NOP $nn (illegal)
-    [0x65] = adc_zero_page_func,     // ADC $nn
-    [0x66] = ror_zero_page_func,     // ROR $nn
-    [0x67] = rra_zero_page_func,     // RRA $nn (illegal)
-    [0x68] = pla_func,               // PLA
-    [0x69] = adc_immediate_func,     // ADC #$nn
-    [0x6A] = ror_accumulator_func,   // ROR A
-    [0x6B] = arr_immediate_func,     // ARR #$nn (illegal)
-    [0x6C] = jmp_indirect_func,      // JMP ($nnnn)
-    [0x6D] = adc_absolute_func,      // ADC $nnnn
-    [0x6E] = ror_absolute_func,      // ROR $nnnn
-    [0x6F] = rra_absolute_func,      // RRA $nnnn (illegal)
-
-    [0x70] = bvs_func,               // BVS rel
-    [0x71] = adc_indirect_y_func,    // ADC ($nn),Y
-    [0x72] = jam_func,               // JAM (illegal)
-    [0x73] = rra_indirect_y_func,    // RRA ($nn),Y (illegal)
-    [0x74] = nop_zero_page_x_func,   // NOP $nn,X (illegal)
-    [0x75] = adc_zero_page_x_func,   // ADC $nn,X
-    [0x76] = ror_zero_page_x_func,   // ROR $nn,X
-    [0x77] = rra_zero_page_x_func,   // RRA $nn,X (illegal)
-    [0x78] = sei_func,               // SEI
-    [0x79] = adc_absolute_y_func,    // ADC $nnnn,Y
-    [0x7A] = nop_func,               // NOP (illegal)
-    [0x7B] = rra_absolute_y_func,    // RRA $nnnn,Y (illegal)
-    [0x7C] = nop_absolute_x_func,    // NOP $nnnn,X (illegal)
-    [0x7D] = adc_absolute_x_func,    // ADC $nnnn,X
-    [0x7E] = ror_absolute_x_func,    // ROR $nnnn,X
-    [0x7F] = rra_absolute_x_func,    // RRA $nnnn,X (illegal)
-
-    [0x80] = nop_immediate_func,     // NOP #$nn (illegal)
-    [0x81] = sta_indirect_x_func,    // STA ($nn,X)
-    [0x82] = nop_immediate_func,     // NOP #$nn (illegal)
-    [0x83] = sax_indirect_x_func,    // SAX ($nn,X) (illegal)
-    [0x84] = sty_zero_page_func,     // STY $nn
-    [0x85] = sta_zero_page_func,     // STA $nn
-    [0x86] = stx_zero_page_func,     // STX $nn
-    [0x87] = sax_zero_page_func,     // SAX $nn (illegal)
-    [0x88] = dey_func,               // DEY
-    [0x89] = nop_immediate_func,     // NOP #$nn (illegal)
-    [0x8A] = txa_func,               // TXA
-    [0x8B] = xaa_immediate_func,     // XAA #$nn (illegal)
-    [0x8C] = sty_absolute_func,      // STY $nnnn
-    [0x8D] = sta_absolute_func,      // STA $nnnn
-    [0x8E] = stx_absolute_func,      // STX $nnnn
-    [0x8F] = sax_absolute_func,      // SAX $nnnn (illegal)
-
-    [0x90] = bcc_func,               // BCC rel
-    [0x91] = sta_indirect_y_func,    // STA ($nn),Y
-    [0x92] = jam_func,               // JAM (illegal)
-    [0x93] = ahx_indirect_y_func,    // AHX ($nn),Y (illegal)
-    [0x94] = sty_zero_page_x_func,   // STY $nn,X
-    [0x95] = sta_zero_page_x_func,   // STA $nn,X
-    [0x96] = stx_zero_page_y_func,   // STX $nn,Y
-    [0x97] = sax_zero_page_y_func,   // SAX $nn,Y (illegal)
-    [0x98] = tya_func,               // TYA
-    [0x99] = sta_absolute_y_func,    // STA $nnnn,Y
-    [0x9A] = txs_func,               // TXS
-    [0x9B] = tas_absolute_y_func,    // TAS $nnnn,Y (illegal)
-    [0x9C] = shy_absolute_x_func,    // SHY $nnnn,X (illegal)
-    [0x9D] = sta_absolute_x_func,    // STA $nnnn,X
-    [0x9E] = shx_absolute_y_func,    // SHX $nnnn,Y (illegal)
-    [0x9F] = ahx_absolute_y_func,    // AHX $nnnn,Y (illegal)
-
-    [0xA0] = ldy_immediate_func,     // LDY #$nn
-    [0xA1] = lda_indirect_x_func,    // LDA ($nn,X)
-    [0xA2] = ldx_immediate_func,     // LDX #$nn
-    [0xA3] = lax_indirect_x_func,    // LAX ($nn,X) (illegal)
-    [0xA4] = ldy_zero_page_func,     // LDY $nn
-    [0xA5] = lda_zero_page_func,     // LDA $nn
-    [0xA6] = ldx_zero_page_func,     // LDX $nn
-    [0xA7] = lax_zero_page_func,     // LAX $nn (illegal)
-    [0xA8] = tay_func,               // TAY
-    [0xA9] = lda_immediate_func,     // LDA #$nn
-    [0xAA] = tax_func,               // TAX
-    [0xAB] = lax_immediate_func,     // LAX #$nn (illegal)
-    [0xAC] = ldy_absolute_func,      // LDY $nnnn
-    [0xAD] = lda_absolute_func,      // LDA $nnnn
-    [0xAE] = ldx_absolute_func,      // LDX $nnnn
-    [0xAF] = lax_absolute_func,      // LAX $nnnn (illegal)
-
-    [0xB0] = bcs_func,               // BCS rel
-    [0xB1] = lda_indirect_y_func,    // LDA ($nn),Y
-    [0xB2] = jam_func,               // JAM (illegal)
-    [0xB3] = lax_indirect_y_func,    // LAX ($nn),Y (illegal)
-    [0xB4] = ldy_zero_page_x_func,   // LDY $nn,X
-    [0xB5] = lda_zero_page_x_func,   // LDA $nn,X
-    [0xB6] = ldx_zero_page_y_func,   // LDX $nn,Y
-    [0xB7] = lax_zero_page_y_func,   // LAX $nn,Y (illegal)
-    [0xB8] = clv_func,               // CLV
-    [0xB9] = lda_absolute_y_func,    // LDA $nnnn,Y
-    [0xBA] = tsx_func,               // TSX
-    [0xBB] = las_absolute_y_func,    // LAS $nnnn,Y (illegal)
-    [0xBC] = ldy_absolute_x_func,    // LDY $nnnn,X
-    [0xBD] = lda_absolute_x_func,    // LDA $nnnn,X
-    [0xBE] = ldx_absolute_y_func,    // LDX $nnnn,Y
-    [0xBF] = lax_absolute_y_func,    // LAX $nnnn,Y (illegal)
-
-    [0xC0] = cpy_immediate_func,     // CPY #$nn
-    [0xC1] = cmp_indirect_x_func,    // CMP ($nn,X)
-    [0xC2] = nop_immediate_func,     // NOP #$nn (illegal)
-    [0xC3] = dcp_indirect_x_func,    // DCP ($nn,X) (illegal)
-    [0xC4] = cpy_zero_page_func,     // CPY $nn
-    [0xC5] = cmp_zero_page_func,     // CMP $nn
-    [0xC6] = dec_zero_page_func,     // DEC $nn
-    [0xC7] = dcp_zero_page_func,     // DCP $nn (illegal)
-    [0xC8] = iny_func,               // INY
-    [0xC9] = cmp_immediate_func,     // CMP #$nn
-    [0xCA] = dex_func,               // DEX
-    [0xCB] = axs_immediate_func,     // AXS #$nn (illegal)
-    [0xCC] = cpy_absolute_func,      // CPY $nnnn
-    [0xCD] = cmp_absolute_func,      // CMP $nnnn
-    [0xCE] = dec_absolute_func,      // DEC $nnnn
-    [0xCF] = dcp_absolute_func,      // DCP $nnnn (illegal)
-
-    [0xD0] = bne_func,               // BNE rel
-    [0xD1] = cmp_indirect_y_func,    // CMP ($nn),Y
-    [0xD2] = jam_func,               // JAM (illegal)
-    [0xD3] = dcp_indirect_y_func,    // DCP ($nn),Y (illegal)
-    [0xD4] = nop_zero_page_x_func,   // NOP $nn,X (illegal)
-    [0xD5] = cmp_zero_page_x_func,   // CMP $nn,X
-    [0xD6] = dec_zero_page_x_func,   // DEC $nn,X
-    [0xD7] = dcp_zero_page_x_func,   // DCP $nn,X (illegal)
-    [0xD8] = cld_func,               // CLD
-    [0xD9] = cmp_absolute_y_func,    // CMP $nnnn,Y
-    [0xDA] = nop_func,               // NOP (illegal)
-    [0xDB] = dcp_absolute_y_func,    // DCP $nnnn,Y (illegal)
-    [0xDC] = nop_absolute_x_func,    // NOP $nnnn,X (illegal)
-    [0xDD] = cmp_absolute_x_func,    // CMP $nnnn,X
-    [0xDE] = dec_absolute_x_func,    // DEC $nnnn,X
-    [0xDF] = dcp_absolute_x_func,    // DCP $nnnn,X (illegal)
-
-    [0xE0] = cpx_immediate_func,     // CPX #$nn
-    [0xE1] = sbc_indirect_x_func,    // SBC ($nn,X)
-    [0xE2] = nop_immediate_func,     // NOP #$nn (illegal)
-    [0xE3] = isc_indirect_x_func,    // ISC ($nn,X) (illegal)
-    [0xE4] = cpx_zero_page_func,     // CPX $nn
-    [0xE5] = sbc_zero_page_func,     // SBC $nn
-    [0xE6] = inc_zero_page_func,     // INC $nn
-    [0xE7] = isc_zero_page_func,     // ISC $nn (illegal)
-    [0xE8] = inx_func,               // INX
-    [0xE9] = sbc_immediate_func,     // SBC #$nn
-    [0xEA] = nop_func,               // NOP
-    [0xEB] = sbc_immediate_func,     // SBC #$nn (illegal)
-    [0xEC] = cpx_absolute_func,      // CPX $nnnn
-    [0xED] = sbc_absolute_func,      // SBC $nnnn
-    [0xEE] = inc_absolute_func,      // INC $nnnn
-    [0xEF] = isc_absolute_func,      // ISC $nnnn (illegal)
-
-    [0xF0] = beq_func,               // BEQ rel
-    [0xF1] = sbc_indirect_y_func,    // SBC ($nn),Y
-    [0xF2] = jam_func,               // JAM (illegal)
-    [0xF3] = isc_indirect_y_func,    // ISC ($nn),Y (illegal)
-    [0xF4] = nop_zero_page_x_func,   // NOP $nn,X (illegal)
-    [0xF5] = sbc_zero_page_x_func,   // SBC $nn,X
-    [0xF6] = inc_zero_page_x_func,   // INC $nn,X
-    [0xF7] = isc_zero_page_x_func,   // ISC $nn,X (illegal)
-    [0xF8] = sed_func,               // SED
-    [0xF9] = sbc_absolute_y_func,    // SBC $nnnn,Y
-    [0xFA] = nop_func,               // NOP (illegal)
-    [0xFB] = isc_absolute_y_func,    // ISC $nnnn,Y (illegal)
-    [0xFC] = nop_absolute_x_func,    // NOP $nnnn,X (illegal)
-    [0xFD] = sbc_absolute_x_func,    // SBC $nnnn,X
-    [0xFE] = inc_absolute_x_func,    // INC $nnnn,X
-    [0xFF] = isc_absolute_x_func,    // ISC $nnnn,X (illegal)
-};
-
-// ============================================================================
-// PERFORMANCE-OPTIMIZED INTERFACE ATTACHMENT FUNCTIONS
-// ============================================================================
-
-/**
- * Attach bus interface to CPU by copying entire interface struct by value.
- * This provides zero-indirection access while maintaining clean organization.
- */
-void mos6510_attach_bus_interface(mos6510_t* cpu, const bus_cycle_ops_t* bus_interface) {
-    // Copy entire interface struct by value for zero-indirection access
-    cpu->bus_interface = *bus_interface;
-}
-
-/**
- * Attach control lines interface to CPU by copying entire interface struct by value.
- * This provides zero-indirection access while maintaining clean organization.
- */
-void mos6510_attach_control_lines_interface(mos6510_t* cpu, const control_lines_interface_t* control_interface) {
-    // Copy entire interface struct by value for zero-indirection access
-    cpu->control_interface = *control_interface;
-}
-
-/**
- * Attach I/O port interface to CPU by copying entire interface struct by value.
- * This provides zero-indirection access while maintaining clean organization.
- */
-void mos6510_attach_io_interface(mos6510_t* cpu, const mos6510_io_port_interface_t* io_interface) {
-    // Copy entire interface struct by value for zero-indirection access
-    cpu->io_interface = *io_interface;
-}
-
-/**
- * Attach system lines state to CPU.
- * Note: This is a pointer to shared system state, not copied.
- */
-void mos6510_attach_system_lines(mos6510_t* cpu, system_lines_t* system_lines) {
-    if (!cpu || !system_lines) return;
-    
-    // Store pointer to shared system state
-    cpu->system_lines = system_lines;
-}
-
-/**
- * Attach RAM directly to CPU for zero page access ($0002-$00FF).
- * This provides direct access to RAM without going through the bus interface,
- * which is essential to avoid circular dependencies when the CPU needs to access
- * zero page memory during system initialization.
- */
-void mos6510_attach_ram(mos6510_t* cpu, const access_callback_t* ram_access) {
-    if (!cpu || !ram_access) return;
-    
-    // Copy the access callback structure
-    cpu->ram_access = *ram_access;
-    
-    // Ensure valid function pointers, falling back to stubs if not provided
-    if (!cpu->ram_access.read_func) {
-        cpu->ram_access.read_func = generic_stub_read;
-    }
-    if (!cpu->ram_access.write_func) {
-        cpu->ram_access.write_func = generic_stub_write;
-    }
-}
+#endif // MOS6510_H

@@ -106,12 +106,12 @@ mos6510_t* setup_cpu(cpu_state_t* state) {
     mos6510_attach_control_lines_interface(cpu, &control_interface);
     
     // Set initial state
-    cpu->a = state->a;
-    cpu->x = state->x;
-    cpu->y = state->y;
-    cpu->sp = state->sp;
-    cpu->p = state->p;
-    cpu->pc = state->pc;
+    cpu->base.a = state->a;
+    cpu->base.x = state->x;
+    cpu->base.y = state->y;
+    cpu->base.sp = state->sp;
+    cpu->base.p = state->p;
+    cpu->base.pc = state->pc;
     
     cycle_count = 0;
     return cpu;
@@ -119,12 +119,12 @@ mos6510_t* setup_cpu(cpu_state_t* state) {
 
 // Save CPU state
 void save_cpu_state(mos6510_t* cpu, cpu_state_t* state) {
-    state->a = cpu->a;
-    state->x = cpu->x;
-    state->y = cpu->y;
-    state->sp = cpu->sp;
-    state->p = cpu->p;
-    state->pc = cpu->pc;
+    state->a = cpu->base.a;
+    state->x = cpu->base.x;
+    state->y = cpu->base.y;
+    state->sp = cpu->base.sp;
+    state->p = cpu->base.p;
+    state->pc = cpu->base.pc;
     // Adjust for intercept mechanism overhead - subtract 1 cycle
     state->cycles = (cycle_count > 0) ? cycle_count - 1 : 0;
 }

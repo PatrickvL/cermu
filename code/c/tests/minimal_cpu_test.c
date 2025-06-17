@@ -15,7 +15,7 @@ int main() {
     // Initialize CPU
     mos6510_init(cpu);
     printf("CPU initialized: PC=$%04X, A=$%02X, X=$%02X, Y=$%02X, SP=$%02X, P=$%02X\n",
-           cpu->pc, cpu->a, cpu->x, cpu->y, cpu->sp, cpu->p);
+           cpu->base.pc, cpu->base.a, cpu->base.x, cpu->base.y, cpu->base.sp, cpu->base.p);
     
     // Try to step without memory access (this should fail gracefully)
     printf("Attempting to step CPU (should fail without memory)...\n");

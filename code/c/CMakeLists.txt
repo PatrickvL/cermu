@@ -165,6 +165,9 @@ add_executable(c64emu
     ${CORE_UTIL_SOURCES}
 )
 
+# Link required libraries including the CPU family
+target_link_libraries(c64emu mos6502_family mos6510)
+
 # Set output directory for console executable
 set_target_properties(c64emu
     PROPERTIES
@@ -207,6 +210,8 @@ if(BUILD_GUI)    # GUI sources (just our interface file - cimgui handles the res
         ${OPENGL_LIBRARIES}
         ${CMAKE_DL_LIBS}
         cimgui
+        mos6502_family
+        mos6510
     )
 
     # Set output directory for GUI executable (keep as console app for now)

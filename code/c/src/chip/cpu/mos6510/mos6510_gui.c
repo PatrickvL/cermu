@@ -1,4 +1,6 @@
 #include "mos6510.h"
+#include "../mos6502_family/mos6502_family_gui.h"
+#include "../mos6502_family/mos6502_family_constants.h"
 #include "../../../gui/cimgui_interface.h"
 #ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
@@ -24,101 +26,16 @@ void mos6510_render_debug_window(void* chip, bool* show_window) {
         return;
     }
 
-    // CPU State Section
-    igText("CPU State");
-    igSeparator();
+    // Create GUI configuration for MOS6510    mos6502_family_gui_config_t config = {
+        .cpu_type_name = "MOS 6510 (C64)",
+        .has_decimal_mode = false,  // MOS6510 does not support decimal mode
+        .has_io_ports = true,       // MOS6510 has I/O ports
+        .has_extended_opcodes = false,
+        .render_cpu_specific = mos6510_render_cpu_specific
+    };
     
-    igText("PC: $%04X", cpu->pc);
-    igText("A:  $%02X (%d)", cpu->a, cpu->a);
-    igText("X:  $%02X (%d)", cpu->x, cpu->x);
-    igText("Y:  $%02X (%d)", cpu->y, cpu->y);
-    igText("SP: $%02X", cpu->sp);
-    
-    igSeparator();
-    
-    // Status Register with individual flags
-    igText("Status Register: $%02X", cpu->p);
-    igText("Flags: N V - B D I Z C");
-    
-    // Create a formatted string for flag display
-    char flag_str[32];
-    snprintf(flag_str, sizeof(flag_str), "       %c %c 1 %c %c %c %c %c",
-        (cpu->p & FLAG_N) ? '1' : '0',
-        (cpu->p & FLAG_V) ? '1' : '0',
-        (cpu->p & FLAG_B) ? '1' : '0',
-        (cpu->p & FLAG_D) ? '1' : '0',
-        (cpu->p & FLAG_I) ? '1' : '0',
-        (cpu->p & FLAG_Z) ? '1' : '0',
-        (cpu->p & FLAG_C) ? '1' : '0');
-    igText("%s", flag_str);
-
-    igSeparator();
-
-    // I/O Ports Section
-    igText("I/O Ports ($0000-$0001)");
-    igSeparator();
-    
-    igText("DDR ($0000): $%02X", cpu->io_port[0]);
-    igText("Port ($0001): $%02X", cpu->io_port[1]);
-    
-    // Show individual port bits
-    igText("Port Bits: 7 6 5 4 3 2 1 0");
-    char port_bits[32];
-    snprintf(port_bits, sizeof(port_bits), "           %c %c %c %c %c %c %c %c",
-        (cpu->io_port[1] & 0x80) ? '1' : '0',
-        (cpu->io_port[1] & 0x40) ? '1' : '0',
-        (cpu->io_port[1] & 0x20) ? '1' : '0',
-        (cpu->io_port[1] & 0x10) ? '1' : '0',
-        (cpu->io_port[1] & 0x08) ? '1' : '0',
-        (cpu->io_port[1] & 0x04) ? '1' : '0',
-        (cpu->io_port[1] & 0x02) ? '1' : '0',
-        (cpu->io_port[1] & 0x01) ? '1' : '0');
-    igText("%s", port_bits);
-
-    igSeparator();
-    
-    // Control Lines Section
-    igText("Control Lines");
-    igSeparator();
-    // Check if control interface is properly initialized
-    if (cpu->control_interface.get_lines && cpu->control_interface.context) {
-        uint32_t control_lines = CPU_CONTROL_LINES(cpu);
-        igText("IRQ: %s", (control_lines & MOS6510_MASK_IRQ) ? "ACTIVE" : "inactive");
-        igText("NMI: %s", (control_lines & MOS6510_MASK_NMI) ? "ACTIVE" : "inactive");
-        igText("RDY: %s", (control_lines & MOS6510_MASK_RDY) ? "STALLED" : "ready");
-    } else {
-        igText("IRQ: Not connected");
-        igText("NMI: Not connected");
-        igText("RDY: Not connected");
-    }
-    igSeparator();
-
-    // Execution Control Section
-    igText("Execution Control");
-    igSeparator();
-    
-    if (igButton("Step One Instruction", (ImVec2){0, 0})) {
-        // Check if CPU has proper interface setup before stepping
-        if (cpu->bus_interface.bus_read && cpu->bus_interface.context) {
-            mos6510_step(cpu);
-        }
-    }
-    igSameLine(0, -1.0f);
-    if (igButton("Reset CPU", (ImVec2){0, 0})) {
-        // Reset only the CPU state, not the entire system
-        cpu->pc = 0;
-        cpu->a = 0;
-        cpu->x = 0;
-        cpu->y = 0;
-        cpu->sp = 0xFF;
-        cpu->p = FLAG_U | FLAG_I; // Set unused flag and interrupt disable
-        cpu->io_port[0] = 0x2F;   // Default DDR
-        cpu->io_port[1] = 0x37;   // Default Port
-    }
-    
-    igText("Interception: %s", mos6510_is_intercepting(cpu) ? "ACTIVE" : "inactive");
-
-    igEnd();
+    // Use the shared family debug window renderer
+    mos6502_family_render_debug_window(chip, show_window, &config);
 }
 
 // ============================================================================
@@ -191,4 +108,52 @@ void mos6510_render_settings_window(void* chip, bool* show_window) {
     }
 
     igEnd();
+}
+
+// ============================================================================
+// MOS6510-SPECIFIC GUI FUNCTIONS
+// ============================================================================
+
+static void mos6510_render_io_ports(mos6510_t* cpu) {
+    if (!cpu) return;
+    
+    igText("I/O Ports ($0000-$0001)");
+    igSeparator();
+    
+    igText("DDR ($0000): $%02X", cpu->io_port[0]);
+    igText("Port ($0001): $%02X", cpu->io_port[1]);
+    
+    // Show individual port bits using shared helper function
+    mos6502_family_render_port_bits(cpu->io_port[1], "Port Bits");
+    
+    // Show DDR bits as well
+    mos6502_family_render_port_bits(cpu->io_port[0], "DDR Bits ");
+    
+    igSeparator();
+}
+
+static const char* mos6510_get_cpu_name(void* cpu_instance) {
+    (void)cpu_instance; // Suppress unused parameter warning
+    return "MOS 6510";
+}
+
+// CPU-specific rendering for MOS6510 (I/O ports)
+void mos6510_render_cpu_specific(void* chip) {
+    mos6510_t* cpu = (mos6510_t*)chip;
+    
+    igSeparator();
+    igText("I/O Ports:");
+    
+    // Show the I/O ports with their current values
+    igText("Port 0 (DDR): $%02X", cpu->io_port[0]);
+    igText("Port 1 (Data): $%02X", cpu->io_port[1]);
+    
+    // Show interpretation of the port values
+    igText("Port Control:");
+    igText("  Bit 0 (LORAM): %s", (cpu->io_port[1] & 0x01) ? "1" : "0");
+    igText("  Bit 1 (HIRAM): %s", (cpu->io_port[1] & 0x02) ? "1" : "0");  
+    igText("  Bit 2 (CHAREN): %s", (cpu->io_port[1] & 0x04) ? "1" : "0");
+    igText("  Bit 3 (Cassette Write): %s", (cpu->io_port[1] & 0x08) ? "1" : "0");
+    igText("  Bit 4 (Cassette Switch): %s", (cpu->io_port[1] & 0x10) ? "1" : "0");
+    igText("  Bit 5 (Cassette Motor): %s", (cpu->io_port[1] & 0x20) ? "1" : "0");
 }
