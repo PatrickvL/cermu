@@ -8,14 +8,15 @@ int main() {
     printf("Testing PLA-based memory mapping generation...\n");
     
     // Create a minimal C64 system for testing
-    c64_t* c64 = c64_system_create();
+    system_config_t config = {0}; // Default config
+    c64_t* c64 = c64_system_create(&config);
     if (!c64) {
         printf("Failed to create C64 system\n");
         return 1;
     }
     
     // Generate PLA memory maps
-    if(!c64_pla_maps_generate(c64))
+    if(!c64_pla_maps_generate(c64)) {
         printf("Failed to create PLA maps\n");
         return 1;
     }
