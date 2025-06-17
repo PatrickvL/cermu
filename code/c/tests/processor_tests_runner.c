@@ -81,8 +81,7 @@ mos6510_t* setup_cpu_from_state(const cpu_state_t* initial_state) {
         .read_external_pins = test_io_read,
         .output_pins_changed = test_io_write
     };
-    
-    mos6510_attach_bus_interface(cpu, &bus_ops);
+      mos6510_attach_bus_interface(cpu, &bus_ops);
     mos6510_attach_io_interface(cpu, &io_interface);
     mos6510_attach_control_lines_interface(cpu, &control_interface);
     
@@ -190,8 +189,7 @@ bool run_processor_test(const processor_test_t* test) {
         printf("FAIL %s: Could not create CPU\n", test->name);
         return false;
     }
-    
-    // Execute one instruction
+      // Execute one instruction
     bool step_result = mos6510_step(cpu);
     if (!step_result) {
         printf("FAIL %s: Instruction execution failed\n", test->name);

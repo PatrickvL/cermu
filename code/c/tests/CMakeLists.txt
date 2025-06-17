@@ -82,12 +82,12 @@ add_executable(test_mos6510_comprehensive
 )
 target_link_libraries(test_mos6510_comprehensive mos6510_lib)
 
-# Basic test (if exists)
+# Basic test (if exists) - renamed to avoid conflict with main project
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../test_mos6510_basic.c)
-    add_executable(test_mos6510_basic
+    add_executable(test_mos6510_basic_tests
         ${CMAKE_CURRENT_SOURCE_DIR}/../test_mos6510_basic.c
     )
-    target_link_libraries(test_mos6510_basic mos6510_lib)
+    target_link_libraries(test_mos6510_basic_tests mos6510_lib)
 endif()
 
 # Enable testing
@@ -112,8 +112,8 @@ set_tests_properties(comprehensive_test PROPERTIES
 )
 
 # Basic test (if available)
-if(TARGET test_mos6510_basic)
-    add_test(NAME basic_test COMMAND test_mos6510_basic)
+if(TARGET test_mos6510_basic_tests)
+    add_test(NAME basic_test COMMAND test_mos6510_basic_tests)
     set_tests_properties(basic_test PROPERTIES
         TIMEOUT 30
         PASS_REGULAR_EXPRESSION "ALL TESTS PASSED"
@@ -133,10 +133,10 @@ add_custom_target(run_comprehensive_test
     COMMENT "Running comprehensive MOS6510 tests"
 )
 
-if(TARGET test_mos6510_basic)
+if(TARGET test_mos6510_basic_tests)
     add_custom_target(run_basic_test
         COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -R basic_test --verbose
-        DEPENDS test_mos6510_basic
+        DEPENDS test_mos6510_basic_tests
         COMMENT "Running basic MOS6510 tests"
     )
 endif()
@@ -152,8 +152,8 @@ install(TARGETS processor_tests_runner test_mos6510_comprehensive
     RUNTIME DESTINATION bin
 )
 
-if(TARGET test_mos6510_basic)
-    install(TARGETS test_mos6510_basic
+if(TARGET test_mos6510_basic_tests)
+    install(TARGETS test_mos6510_basic_tests
         RUNTIME DESTINATION bin
     )
 endif()
@@ -165,4 +165,8 @@ message(STATUS "  Build Type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "  Compiler: ${CMAKE_C_COMPILER_ID}")
 message(STATUS "  CPU Sources Found: ${CPU_SOURCES}")
 message(STATUS "  Core Sources Found: ${CORE_SOURCES}")
-message(STATUS "  ProcessorTests Available: ${EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/processor_tests}")
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/processor_tests)
+    message(STATUS "  ProcessorTests Available: Yes")
+else()
+    message(STATUS "  ProcessorTests Available: No")
+endif()

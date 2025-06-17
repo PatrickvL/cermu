@@ -288,6 +288,9 @@ endif()
 # Enable testing
 enable_testing()
 
+# Add tests subdirectory for comprehensive MOS6510 testing
+add_subdirectory(tests)
+
 # Add tests (currently disabled due to API compatibility issues)
 # add_test(NAME minimal_test COMMAND minimal_test)
 # add_test(NAME cpu_test COMMAND cpu_test)
