@@ -13,12 +13,14 @@
 // Encoding macros for packing read/write ACIDs into single byte by packing
 // the IO pages into one (ACID_VIC_D0, which will be restored to the full
 // range by c64_bus_memory_read/write) and decreasing higher ACID by 15,
-// (turning 23 into 9) which results in a range of 0-9 which fits in 4 bits.
-// Outuput byte format: [7:4] write code (4 bits), [3:0] read code (4 bits)
+// Order: I/O pages (0-15), then writable chips (16-19), then read-only (20-24)
+// Non-I/O ACIDs 16-24 become 1-9 in encoded form, which fits in 4 bits.
+// Writable ACIDs 16-19 become 1-4 in encoded form, which fits in 3 bits.
+// Output byte format: [7:5] write code (3 bits), [4] unused (1 bit), [3:0] read code (4 bits)
 inline static uint8_t encode_acid_rw(uint8_t read_acid, uint8_t write_acid) {
     read_acid = (read_acid <= ACID_IO2_DF) ? ACID_VIC_D0 : read_acid - ACID_IO2_DF;
     write_acid = (write_acid <= ACID_IO2_DF) ? ACID_VIC_D0 : write_acid - ACID_IO2_DF;
-    uint8_t encoded = read_acid | (write_acid  << 4);
+    uint8_t encoded = read_acid | (write_acid << 5);
     return encoded;
 }
 
@@ -41,7 +43,8 @@ void c64_bus_memory_write(c64_bus_t *bus, uint16_t address, uint8_t value) {
     uint8_t bank = (uint8_t)c64_bus_get_bank(address);  // Extract 4KB bank (0-15)
     uint8_t encoded = bus->encoded_rwid_per_bank[bank];  // Get banking info for this bank
     uint8_t is_io = -(encoded == 0);  // Branchless I/O detection
-    uint8_t acid = (((encoded >> 4) + ACID_IO2_DF) & ~is_io) | (((address >> 8) & 0xF) & is_io);
+    uint8_t acid = (((encoded >> 5) + ACID_IO2_DF) & ~is_io) | (((address >> 8) & 0xF) & is_io);
+    // Note : Write acid will be within writable range (0-19)
     bus->write_funcs[acid](bus->read_callbacks[acid].context, address, value);
     // TODO : Move below signalling of VIC-II bank change to somewhere else with less impact on performance
     if (address == 0xDD00) {
@@ -316,7 +319,7 @@ void c64_bus_init_adapters(c64_bus_t* c64_bus) {
 // Register a chip's callbacks in the optimized arrays
 void c64_bus_register_chip_callbacks(c64_bus_t* bus, uint8_t acid, void* context,
                                     chip_read_func_t read_func, chip_write_func_t write_func) {
-    if (acid >= 24) return;  // Invalid chip ID
+    if (acid >= 24) return;  // Invalid chip ID for reads
     
     // Register read callback
     if (read_func) {
@@ -324,8 +327,8 @@ void c64_bus_register_chip_callbacks(c64_bus_t* bus, uint8_t acid, void* context
         bus->read_callbacks[acid].context = context;
     }
     
-    // Register write callback
-    if (write_func) {
+    // Register write callback (only for writable chips 0-19)
+    if (write_func && acid < 20) {
         bus->write_funcs[acid] = write_func;
     }
 }

@@ -26,33 +26,35 @@
 // ACIDs identify which accessor callbacks to use for memory operations.
 // Accessor Callback IDs for optimized callback system
 enum {
-    /* I/O pages 0-15 (direct page mapping for $D000-$DFFF, read/write) */
-    ACID_VIC_D0 = 0,      /* $D000-$D0FF */
+    /* I/O pages: 0-15 ($D000-$DFFF) - Read/Write capable, page-addressed */
+    ACID_VIC_D0 = 0,      /* $D000-$D0FF - Video Interface Controller */
     ACID_VIC_D1 = 1,      /* $D100-$D1FF */
     ACID_VIC_D2 = 2,      /* $D200-$D2FF */
     ACID_VIC_D3 = 3,      /* $D300-$D3FF */
-    ACID_SID_D4 = 4,      /* $D400-$D4FF */
+    ACID_SID_D4 = 4,      /* $D400-$D4FF - Sound Interface Device */
     ACID_SID_D5 = 5,      /* $D500-$D5FF */
     ACID_SID_D6 = 6,      /* $D600-$D6FF */
     ACID_SID_D7 = 7,      /* $D700-$D7FF */
-    ACID_COLORRAM_D8 = 8, /* $D800-$D8FF */
+    ACID_COLORRAM_D8 = 8, /* $D800-$D8FF - Color RAM (4-bit) */
     ACID_COLORRAM_D9 = 9, /* $D900-$D9FF */
     ACID_COLORRAM_DA = 10,/* $DA00-$DAFF */
     ACID_COLORRAM_DB = 11,/* $DB00-$DBFF */
-    ACID_CIA1_DC = 12,    /* $DC00-$DCFF */
+    ACID_CIA1_DC = 12,    /* $DC00-$DCFF - Complex Interface Adapter */
     ACID_CIA2_DD = 13,    /* $DD00-$DDFF */
-    ACID_IO1_DE = 14,     /* $DE00-$DEFF */
+    ACID_IO1_DE = 14,     /* $DE00-$DEFF - Expansion I/O */
     ACID_IO2_DF = 15,     /* $DF00-$DFFF */
-    /* Non-I/O chips 16-23 */
-    ACID_RAM = 16,        // Main RAM (64KB)
-    ACID_ZEROBANK = 17,   // Zero bank (4KB) overlaps RAM, required for CPU I/O ports at $0000-$0001
-    // Read-only ACIDs (8+): These chips only support read operations
-    ACID_BASIC = 18,      // BASIC ROM $A000-$BFFF (read-only)
-    ACID_KERNAL = 19,     // KERNAL ROM $E000-$FFFF (read-only)
-    ACID_CHARROM = 20,
-    ACID_ROML = 21,       // Cartridge ROM $8000-$9FFF (read-only)
-    ACID_ROMH = 22,
-    ACID_UNMAPPED = 23,   // Unmapped/detached operations (no real chip)
+
+    /* Writable Non-I/O Chips: 16-19 - Read/Write, optimized for 3-bit write addressing */
+    ACID_ZEROBANK = 16,   /* $0000-$03FF - Zero bank (CPU I/O port address 0 and 1 and RAM fallback above) */
+    ACID_RAM = 17,        /* $0000-$FFFF - System RAM */
+    ACID_ROML = 18,       /* $8000-$9FFF - Cartridge ROM Low (writable via banking) */
+    ACID_ROMH = 19,       /* $A000-$BFFF/$E000-$FFFF - Cartridge ROM High */
+
+    /* Read-Only Non-I/O Chips: 20-23 - Read-only, writes typically go to underlying RAM */
+    ACID_UNMAPPED = 20,   /* Unmapped/open address space (returns $FF, no chip) */
+    ACID_BASIC = 21,      /* $A000-$BFFF - BASIC ROM */
+    ACID_CHARROM = 22,    /* $D000-$DFFF - Character ROM */
+    ACID_KERNAL = 23,     /* $E000-$FFFF - KERNAL ROM */
 };
 
 typedef struct c64_bus_s {
@@ -77,7 +79,7 @@ typedef struct c64_bus_s {
         chip_read_func_t read;
     } read_callbacks[24];        // 384 bytes - hot cache for reads
     
-    alignas(64) chip_write_func_t write_funcs[24]; // 192 bytes - separate cache line for writes
+    alignas(64) chip_write_func_t write_funcs[20]; // 160 bytes - separate cache line for writes (only writable chips 0-19)
     
     // Banking configurations per mode (32 modes x 16 banks = 512 bytes)
     alignas(64) uint8_t encoded_rwid_per_bank_per_mode[32][16]; // Banking configurations per mode
