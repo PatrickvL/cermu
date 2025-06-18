@@ -62,32 +62,50 @@ This document tracks the comprehensive refactoring of the MOS6510 CPU implementa
 
 ## Current Build Status
 
-### Last Build Results
+### Last Build Results (June 18, 2025 1:54 PM)
 - **Status**: Build errors present
 - **CMake Generation**: ✅ Successful
-- **Compilation**: ❌ Errors in multiple files
+- **Compilation**: ❌ Major errors blocking build
 
-### Known Issues Remaining
+### Critical Issues Identified
 
-#### 1. Type Incompatibility Issues
+#### 1. ✅ FIXED: Missing Include File
+- **Issue**: `mos6510_io_interface.h` not found in `c64_bus.h:10`
+- **Solution**: Updated to include `mos6510.h` directly
+- **Status**: RESOLVED
+
+#### 2. ❌ URGENT: Type Incompatibility Warnings (Treated as Errors)
 ```c
-// In mos6510_illegal.c - callback signature mismatches
-void mos6510_sax_illegal(mos6502_family_t* cpu, uint16_t addr, uint8_t value) {
-    // Error: Expected callback signature doesn't match
-}
+// Error lines in mos6510.h: 379, 389, 397, 403, 411, 418
+// Problem: inline functions calling family functions with wrong types
+MOS6510_OPCODE_FOOTER(cpu);  // cpu is mos6510_t*, but macro expects access to base
+```
+- **Root Cause**: Inline functions in `mos6510.h` need proper casting to `&cpu->base`
+- **Files Affected**: All compilation units including `mos6510.h`
+- **Priority**: BLOCKING - Warnings treated as errors
+
+#### 3. ❌ HIGH: Duplicate Function Definitions
+```c
+// Functions defined in BOTH places:
+// - mos6502_family_core.h (as inline)
+// - mos6510_illegal.c (as separate implementations)
+mos6502_family_op_asl, mos6502_family_op_dec, mos6502_family_op_inc,
+mos6502_family_op_lda, mos6502_family_op_ldx, mos6502_family_op_ldy,
+mos6502_family_op_lsr, mos6502_family_op_rol, mos6502_family_op_ror
+```
+- **Priority**: HIGH - Causing link errors
+
+#### 4. ❌ MEDIUM: I/O Interface Signature Mismatch
+```c
+// Function signature inconsistencies:
+read_external_pins: Expected (void*, uint8_t, uint8_t) vs Found (void*)
+output_pins_changed: Expected (void*, uint8_t, uint8_t) vs Found (void*, uint8_t, uint8_t, uint8_t)
 ```
 
-#### 2. Duplicate Function Definitions
-- Some operation helpers still duplicated between family and MOS6510
-- Need systematic identification and removal
-
-#### 3. Missing Generic Stub Functions
-- Need `ram_access` stub functions to eliminate null pointer checks
-- Should provide no-op implementations for CPUs without RAM access
-
-#### 4. Callback-based Illegal Instruction Helpers
-- Some illegal instruction helpers still use callback patterns
-- Should be converted to direct inline implementations
+#### 5. ✅ PARTIAL: mos6510.c File Corruption
+- **Issue**: File contained header content instead of implementation
+- **Solution**: Restored basic implementation structure with stubs
+- **Status**: Basic structure restored, needs opcode table completion
 
 ## Files Modified
 
@@ -113,17 +131,23 @@ void mos6510_sax_illegal(mos6502_family_t* cpu, uint16_t addr, uint8_t value) {
 ## Next Steps (Priority Order)
 
 ### Immediate (Critical for Build)
-1. **Fix Type Incompatibility Issues**
-   - Resolve callback signature mismatches in illegal opcode helpers
-   - Ensure all function pointers match expected signatures
+1. **URGENT: Fix Type Incompatibility in mos6510.h**
+   - Fix inline functions that call family functions with wrong parameter types
+   - Add proper casting from `mos6510_t*` to `mos6502_family_t*` via `&cpu->base`
+   - Lines affected: 379, 389, 397, 403, 411, 418
 
-2. **Remove Remaining Duplicate Functions**
-   - Use grep to identify: `grep -r "^[a-zA-Z_][a-zA-Z0-9_]*.*{" src/chip/cpu/mos6510/ | grep -v "mos6502_family_"`
-   - Systematically remove duplicates that exist in family
+2. **HIGH: Remove Duplicate Function Definitions**
+   - Delete duplicate implementations from `mos6510_illegal.c` that conflict with inline family functions
+   - Functions to remove: `mos6502_family_op_asl`, `mos6502_family_op_dec`, `mos6502_family_op_inc`, etc.
+   - Keep only family inline implementations
 
-3. **Implement Generic RAM Access Stubs**
-   - Create no-op `ram_access` functions for base family
-   - Eliminate null pointer checks throughout codebase
+3. **MEDIUM: Fix I/O Interface Signatures**
+   - Align `read_external_pins` and `output_pins_changed` function signatures
+   - Update interface definition in `mos6510.h` or calling code in `mos6510.c` and test files
+
+4. **LOW: Complete Opcode Table Implementation**
+   - Current table has only 3 stub functions
+   - Need to populate all 256 entries or integrate with existing opcode modules
 
 ### Short Term (Architecture Cleanup)
 4. **Replace Callback-based Illegal Helpers**
@@ -221,7 +245,7 @@ grep -r "ram_access" src/chip/cpu/
 
 ---
 
-**Last Updated**: June 17, 2025  
-**Status**: In Progress - Build Issues Remain  
-**Next Action**: Fix type incompatibility issues in illegal opcode handlers  
-**Estimated Completion**: 2-3 more sessions with focused debugging
+**Last Updated**: June 18, 2025 1:55 PM
+**Status**: In Progress - Critical Build Issues Identified and Partially Resolved
+**Next Action**: Fix type casting in mos6510.h inline functions (lines 379, 389, 397, 403, 411, 418)
+**Estimated Completion**: 1-2 more sessions focused on type compatibility and duplicate removal
