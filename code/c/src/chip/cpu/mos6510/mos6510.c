@@ -89,13 +89,13 @@ chip_descriptor_t mos6510_descriptor = {
 // Public API to begin interception
 void mos6510_start_intercept(mos6510_t* cpu) {
     if (!cpu) return;
-    mos6502_family_start_intercepting(&cpu->base);
+    mos6502_family_start_intercept(&cpu->base);
 }
 
 // Public API to cancel interception early if needed
 void mos6510_stop_intercept(mos6510_t* cpu) {
     if (!cpu) return;
-    mos6502_family_stop_intercepting(&cpu->base);
+    mos6502_family_stop_intercept(&cpu->base);
 }
 
 // Check if interception is currently active

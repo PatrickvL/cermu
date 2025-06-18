@@ -75,10 +75,11 @@ nes6502/     - NES variant with specific quirks
    - Unified memory layout across all family CPUs
    - Shared flag management and opcode dispatch system
 
-### 🔄 Current Tasks (In Progress) 
+### 🔄 Current Tasks (In Progress)
 1. **ProcessorTests Build Fixes**: Fix missing descriptor declarations and undefined getter/setter functions
 2. **Direct Struct Access Migration**: Replace CPU-specific getter calls with direct mos6502_family_t member access
 3. **Decimal Mode Validation**: Execute ProcessorTests on MOS6502 vs MOS6510/NES6502 to demonstrate differences
+4. **Family Level Interception Integration**: ✅ All CPUs now use family level interception mechanism
 
 ### ⏳ Pending Tasks
 1. **Complete ProcessorTests Integration**: Fix build issues and run validation tests
@@ -292,14 +293,27 @@ processor_tests/
   - Need to validate decimal mode differences between MOS6502 vs NES6502 with actual test execution
 - **Next Session**: Fix ProcessorTests build issues and run decimal mode validation tests
 
+### Session 2025-06-19 (Family Level Interception Integration)
+- **Completed**: Fixed MOS6510 interception function calls to use proper family level API
+- **Major Fix**:
+  - ✅ **MOS6510 Interception Fix**: Updated [`mos6510_start_intercept`](aiemu/code/c/src/chip/cpu/mos6510/mos6510.c:92) and [`mos6510_stop_intercept`](aiemu/code/c/src/chip/cpu/mos6510/mos6510.c:98) to call correct family functions
+  - Changed from `mos6502_family_start_intercepting` → [`mos6502_family_start_intercept`](aiemu/code/c/src/chip/cpu/mos6502_family/mos6502_family_core.h:186)
+  - Changed from `mos6502_family_stop_intercepting` → [`mos6502_family_stop_intercept`](aiemu/code/c/src/chip/cpu/mos6502_family/mos6502_family_core.h:187)
+- **Status Verification**:
+  - ✅ **MOS6502**: Already using correct family level interception calls (lines 227-239 in [`mos6502.c`](aiemu/code/c/src/chip/cpu/mos6502/mos6502.c:227))
+  - ✅ **NES6502**: Already using correct family level interception calls (lines 161-171 in [`nes6502.c`](aiemu/code/c/src/chip/cpu/nes6502/nes6502.c:161))
+  - ✅ **MOS6510**: Now fixed to use correct family level interception calls
+- **Result**: All CPU family members now consistently use the shared family level interception mechanism
+- **Next Session**: Continue with ProcessorTests build fixes and decimal mode validation
+
 ### Session 2025-06-18 (Initial Architecture)
-- **Started**: Architecture design and family structure analysis  
+- **Started**: Architecture design and family structure analysis
 - **Progress**: Created basic MOS6502 structure, identified architecture needs
 - **Issues**: Incomplete opcode tables, missing threaded dispatch
 - **Completed**: Moved to full implementation phase
 
 ---
 
-*Last Updated: 2025-06-18*  
-*Status: Core implementation complete - ProcessorTests integration and validation in progress*  
+*Last Updated: 2025-06-19*
+*Status: Core implementation complete - All CPUs now use family level interception - ProcessorTests integration and validation in progress*
 *Next Session: Fix test runner build issues and demonstrate decimal mode differences*
