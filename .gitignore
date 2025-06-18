@@ -21,9 +21,8 @@ cmake_install.cmake
 
 # Executables
 aiemuc
-aiemuc.exe
 c64emu
-c64emu.exe
+*.exe
 
 # Object files
 *.o
