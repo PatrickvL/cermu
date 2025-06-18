@@ -62,12 +62,12 @@ struct mos6502_family_s {
     // === DIRECT RAM ACCESS (for zero page optimization) ===
     // Direct RAM accessors to avoid circular dependency with bus interface
     access_callback_t ram_access;  // Consolidated RAM access interface
-    
-    // === CPU INTERNAL STATE (shared by all 6502 family) ===
+      // === CPU INTERNAL STATE (shared by all 6502 family) ===
     uint16_t address;   // Address for current instruction
     
-    // Interception support state
-    bool intercepting;                           // True if interception is active
+    // Intercept mechanism for single-step execution
+    bool intercepting;                           // True if intercept mode is active
+    mos6502_family_opcode_handler_t saved_opcode_handlers[256]; // Saved handlers during intercept
     mos6502_family_opcode_handler_t opcode_handlers[256]; // Per-CPU handler table
     
     // CPU Registers (standard 6502 family)

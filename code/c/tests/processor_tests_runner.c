@@ -73,7 +73,7 @@ void test_cycle_tick(void* context) {
 
 static uint32_t dummy_get_control_lines(void *context) {
     (void)context;
-    return (1U << 5);  // RDY active, no IRQ/NMI
+    return (1U << 29);  // RDY active (bit 29), no IRQ/NMI
 }
 
 static void dummy_set_control_lines(void *context, uint32_t lines) {

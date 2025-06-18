@@ -1,5 +1,6 @@
 #include "mos6502_family_core.h"
 #include "../../../core/system.h"
+#include <string.h>  // For memcpy
 
 // ============================================================================
 // SHARED MOS 6502 FAMILY CORE IMPLEMENTATION
@@ -70,38 +71,57 @@ void mos6502_family_interrupt_handler(mos6502_family_t* cpu) {
     MOS6502_FAMILY_OPCODE_FOOTER(cpu);
 }
 
-// Interception support (shared)
+// Interception support (shared) - proper handler replacement mechanism
+void mos6502_family_intercept_stub(mos6502_family_t* cpu) {
+    // Decrement PC since it was incremented during opcode fetch
+    cpu->pc--;
+    
+    // Use the common stop_intercept function to restore handlers
+    mos6502_family_stop_intercept(cpu);
+}
+
 void mos6502_family_start_intercept(mos6502_family_t* cpu) {
+    if (!cpu) return;
+    
+    // Save current handlers and replace all with intercept stubs
+    memcpy(cpu->saved_opcode_handlers, cpu->opcode_handlers, sizeof(cpu->opcode_handlers));
+    for (int i = 0; i < 256; i++) {
+        cpu->opcode_handlers[i] = mos6502_family_intercept_stub;
+    }
+    
     cpu->intercepting = true;
 }
 
 void mos6502_family_stop_intercept(mos6502_family_t* cpu) {
+    if (!cpu) return;
+    
+    // Restore original handlers from saved copy
+    memcpy(cpu->opcode_handlers, cpu->saved_opcode_handlers, sizeof(cpu->opcode_handlers));
+    
+    // Clear intercept flag
     cpu->intercepting = false;
 }
 
 bool mos6502_family_is_intercepting(mos6502_family_t* cpu) {
-    return cpu->intercepting;
+    return cpu ? cpu->intercepting : false;
 }
 
-// Single step execution (shared)
+// Single step execution (shared) - uses intercept mechanism for performance
 bool mos6502_family_step(mos6502_family_t* cpu) {
     if (!cpu) return false;
     
-    // Check if ready line is asserted (for RDY support)
-    if (!M6502_TEST_RDY(cpu)) {
-        return false; // CPU is halted
-    }
-    
-    // Handle interrupts first
-    if (M6502_TEST_IRQ(cpu) || M6502_TEST_NMI(cpu)) {
-        mos6502_family_interrupt_handler(cpu);
-        return true;
-    }
-    
-    // Fetch and execute next instruction
-    MOS6502_FAMILY_INTRA_CYCLE(cpu);
+    // Single step implementation using interception mechanism
+    // This ensures only one instruction executes before returning control
+    // Fetch the opcode and get the real handler BEFORE starting interception
     uint8_t opcode = mos6502_family_read_cycle(cpu, cpu->pc++);
-    mos6502_family_opcode_dispatch(cpu, opcode);
+    mos6502_family_opcode_handler_t handler = cpu->opcode_handlers[opcode];
     
+    // Start interception to catch the next instruction after this one
+    mos6502_family_start_intercept(cpu);
+    
+    // Execute the actual instruction handler
+    handler(cpu);
+    
+    // The threaded dispatch will hit the intercept stub which calls stop_intercept
     return true;
 }
