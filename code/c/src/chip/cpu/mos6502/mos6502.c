@@ -7,9 +7,6 @@
 // MOS 6502 IMPLEMENTATION
 // ============================================================================
 
-// Forward declarations for opcode handlers
-static void mos6502_init_opcode_table(mos6502_t* cpu);
-
 // Chip interface implementation
 bool mos6502_create(chip_descriptor_t* desc, mos6502_t* cpu) {
     if (!desc || !cpu) {
@@ -33,8 +30,11 @@ bool mos6502_create(chip_descriptor_t* desc, mos6502_t* cpu) {
     // No CPU-specific data for standard MOS 6502
     cpu->base.cpu_specific_data = NULL;
     
-    // Initialize opcode handler table
-    mos6502_init_opcode_table(cpu);
+    // Initialize with complete family opcode table
+    mos6502_family_init_opcode_table(&cpu->base);
+    
+    // Standard MOS6502 supports all opcodes including decimal mode
+    // No overrides needed - uses full family table as-is
     
     return true;
 }
@@ -173,54 +173,6 @@ void mos6502_sbc(mos6502_t* cpu, uint8_t operand) {
     
     // Perform ADC with inverted operand
     mos6502_adc(cpu, ~operand);
-}
-
-// ============================================================================
-// OPCODE HANDLER STUBS (Would be filled out with complete instruction set)
-// ============================================================================
-
-// Basic instruction handlers (examples)
-static void mos6502_brk(mos6502_t* cpu) {
-    mos6502_family_t* base = &cpu->base;
-    
-    // BRK instruction: push PC+2, push status with B flag set, jump to IRQ vector
-    base->pc++; // Skip the signature byte
-    
-    // Push return address (PC+1)
-    mos6502_push(base, (base->pc >> 8) & 0xFF);
-    mos6502_push(base, base->pc & 0xFF);
-    
-    // Push status register with B flag set
-    mos6502_push(base, base->p | MOS6502_FLAG_B);
-    
-    // Set interrupt disable flag
-    mos6502_set_flag(base, MOS6502_FLAG_I, true);
-    
-    // Jump to IRQ vector
-    uint8_t addr_lo = mos6502_read_cycle(base, 0xFFFE);
-    uint8_t addr_hi = mos6502_read_cycle(base, 0xFFFF);
-    base->pc = (addr_hi << 8) | addr_lo;
-}
-
-static void mos6502_nop(mos6502_t* cpu) {
-    // No operation - just continue to next instruction
-    (void)cpu; // Suppress unused parameter warning
-}
-
-// Initialize the opcode handler table
-static void mos6502_init_opcode_table(mos6502_t* cpu) {
-    if (!cpu) return;
-    
-    // Initialize all opcodes to NULL (will be handled as NOPs)
-    for (int i = 0; i < 256; i++) {
-        cpu->base.opcode_handlers[i] = NULL;
-    }
-      // Set up basic opcodes (more would be added for complete implementation)
-    cpu->base.opcode_handlers[0x00] = (mos6502_opcode_handler_t)mos6502_brk;
-    cpu->base.opcode_handlers[0xEA] = (mos6502_opcode_handler_t)mos6502_nop;
-    
-    // TODO: Add complete opcode table for all 256 instructions
-    // This would include all arithmetic, logical, memory, and control instructions
 }
 
 // ============================================================================
