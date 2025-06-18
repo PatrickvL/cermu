@@ -8,6 +8,9 @@
 // MOS 6502 CPU (Standard 6502 with Decimal Mode Support)
 // ============================================================================
 
+// External descriptor for chip management
+extern chip_descriptor_t mos6502_descriptor;
+
 // MOS 6502 specific configuration
 #define MOS6502_HAS_DECIMAL_MODE 1
 #define MOS6502_HAS_IO_PORTS 0

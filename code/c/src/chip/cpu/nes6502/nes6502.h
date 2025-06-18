@@ -9,6 +9,9 @@
 // Key difference: Decimal mode is disabled (D flag exists but does nothing)
 // ============================================================================
 
+// External descriptor for chip management
+extern chip_descriptor_t nes6502_descriptor;
+
 // NES 6502 doesn't have additional hardware beyond the standard 6502 family
 typedef struct {
     mos6502_family_t base; // Must be first member for casting
