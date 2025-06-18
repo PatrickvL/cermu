@@ -96,9 +96,9 @@ void mos6502_family_render_memory_view(mos6502_family_t* cpu, uint16_t start_add
         char ascii_part[20] = "";
         
         snprintf(line, sizeof(line), "%04X: ", (unsigned int)(start_addr + i));
-        
-        for (int j = 0; j < 16 && (i + j) < length; j++) {
-            uint8_t value = cpu->bus_interface.bus_read(cpu->bus_interface.context, start_addr + i + j);
+          for (int j = 0; j < 16 && (i + j) < length; j++) {
+            uint16_t addr = (uint16_t)(start_addr + i + j);
+            uint8_t value = cpu->bus_interface.bus_read(cpu->bus_interface.context, addr);
             char hex_byte[8];
             snprintf(hex_byte, sizeof(hex_byte), "%02X ", value);
             strncat(hex_part, hex_byte, sizeof(hex_part) - strlen(hex_part) - 1);
