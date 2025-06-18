@@ -13,8 +13,28 @@
 #endif
 
 #include "json_parser.h"
+#include "../src/chip/cpu/mos6502/mos6502.h"
 #include "../src/chip/cpu/mos6510/mos6510.h"
+#include "../src/chip/cpu/nes6502/nes6502.h"
 #include "../src/core/control_lines_interface.h"
+
+// ============================================================================
+// CPU TYPE DETECTION AND MANAGEMENT
+// ============================================================================
+
+typedef enum {
+    CPU_TYPE_UNKNOWN = 0,
+    CPU_TYPE_MOS6502,
+    CPU_TYPE_MOS6510, 
+    CPU_TYPE_NES6502
+} cpu_type_t;
+
+typedef struct {
+    cpu_type_t type;
+    void* cpu;
+    chip_descriptor_t* descriptor;
+    const char* name;
+} cpu_instance_t;
 
 // Test infrastructure
 static uint8_t test_memory[65536];
@@ -23,7 +43,10 @@ static uint32_t total_tests = 0;
 static uint32_t passed_tests = 0;
 static bool verbose_output = false;
 
-// Memory interface for CPU
+// ============================================================================
+// MEMORY AND CONTROL INTERFACES (SHARED)
+// ============================================================================
+
 uint8_t test_read(void* context, uint16_t address) {
     (void)context;
     return test_memory[address];
@@ -35,16 +58,12 @@ void test_write(void* context, uint16_t address, uint8_t value) {
 }
 
 uint8_t test_io_read(void* context, uint8_t port_value, uint8_t ddr) {
-    (void)context;
-    (void)port_value;
-    (void)ddr;
+    (void)context; (void)port_value; (void)ddr;
     return 0xFF;
 }
 
 void test_io_write(void* context, uint8_t port_value, uint8_t ddr) {
-    (void)context;
-    (void)port_value;
-    (void)ddr;
+    (void)context; (void)port_value; (void)ddr;
 }
 
 void test_cycle_tick(void* context) {
@@ -67,40 +86,199 @@ static const control_lines_interface_t control_interface = {
     .context = NULL
 };
 
-// Setup CPU with initial state
-mos6510_t* setup_cpu_from_state(const cpu_state_t* initial_state) {
-    mos6510_t* cpu = (mos6510_t*)mos6510_descriptor.create(&mos6510_descriptor);
-    if (!cpu) return NULL;
+// ============================================================================
+// CPU TYPE DETECTION
+// ============================================================================
+
+cpu_type_t detect_cpu_type(const char* test_path) {
+    // Detect CPU type from test path
+    if (strstr(test_path, "6502") && !strstr(test_path, "nes6502")) {
+        return CPU_TYPE_MOS6502;  // Standard 6502 with decimal mode
+    } else if (strstr(test_path, "nes6502")) {
+        return CPU_TYPE_NES6502;  // NES 6502 without decimal mode
+    } else if (strstr(test_path, "6510")) {
+        return CPU_TYPE_MOS6510;  // C64 6510 without decimal mode
+    }
     
-    bus_cycle_ops_t bus_ops = {
-        .context = NULL,
-        .bus_read = test_read,
-        .bus_write = test_write,
-        .cycle_tick = test_cycle_tick
-    };
-    
-    mos6510_io_port_interface_t io_interface = {
-        .context = NULL,
-        .read_external_pins = test_io_read,
-        .output_pins_changed = test_io_write
-    };
-      mos6510_attach_bus_interface(cpu, &bus_ops);
-    mos6510_attach_io_interface(cpu, &io_interface);
-    mos6510_attach_control_lines_interface(cpu, &control_interface);
-    
-    // Set initial CPU state
-    cpu->base.pc = initial_state->pc;
-    cpu->base.sp = initial_state->s;
-    cpu->base.a = initial_state->a;
-    cpu->base.x = initial_state->x;
-    cpu->base.y = initial_state->y;
-    cpu->base.p = initial_state->p;
-    
-    cycle_count = 0;
-    return cpu;
+    // Default fallback based on folder structure analysis
+    printf("WARNING: Could not detect CPU type from path '%s', using MOS6502\n", test_path);
+    return CPU_TYPE_MOS6502;
 }
 
-// Setup memory from RAM array
+// ============================================================================
+// CPU INSTANCE MANAGEMENT
+// ============================================================================
+
+bool create_cpu_instance(cpu_instance_t* instance, cpu_type_t type) {
+    instance->type = type;
+    
+    switch (type) {
+        case CPU_TYPE_MOS6502:
+            instance->cpu = mos6502_descriptor.create(&mos6502_descriptor);
+            instance->descriptor = &mos6502_descriptor;
+            instance->name = "MOS6502";
+            
+            if (instance->cpu) {
+                bus_cycle_ops_t bus_ops = {
+                    .context = NULL,
+                    .bus_read = test_read,
+                    .bus_write = test_write,
+                    .cycle_tick = test_cycle_tick
+                };
+                mos6502_attach_bus((mos6502_t*)instance->cpu, &bus_ops);
+                mos6502_attach_control_lines((mos6502_t*)instance->cpu, &control_interface);
+            }
+            break;
+            
+        case CPU_TYPE_MOS6510:
+            instance->cpu = mos6510_descriptor.create(&mos6510_descriptor);
+            instance->descriptor = &mos6510_descriptor;
+            instance->name = "MOS6510";
+            
+            if (instance->cpu) {
+                bus_cycle_ops_t bus_ops = {
+                    .context = NULL,
+                    .bus_read = test_read,
+                    .bus_write = test_write,
+                    .cycle_tick = test_cycle_tick
+                };
+                mos6510_io_port_interface_t io_interface = {
+                    .context = NULL,
+                    .read_external_pins = test_io_read,
+                    .output_pins_changed = test_io_write
+                };
+                mos6510_attach_bus_interface((mos6510_t*)instance->cpu, &bus_ops);
+                mos6510_attach_io_interface((mos6510_t*)instance->cpu, &io_interface);
+                mos6510_attach_control_lines_interface((mos6510_t*)instance->cpu, &control_interface);
+            }
+            break;
+            
+        case CPU_TYPE_NES6502:
+            instance->cpu = nes6502_descriptor.create(&nes6502_descriptor);
+            instance->descriptor = &nes6502_descriptor;
+            instance->name = "NES6502";
+            
+            if (instance->cpu) {
+                bus_cycle_ops_t bus_ops = {
+                    .context = NULL,
+                    .bus_read = test_read,
+                    .bus_write = test_write,
+                    .cycle_tick = test_cycle_tick
+                };
+                nes6502_attach_bus((nes6502_t*)instance->cpu, &bus_ops);
+                nes6502_attach_control_lines((nes6502_t*)instance->cpu, &control_interface);
+            }
+            break;
+            
+        default:
+            return false;
+    }
+    
+    return instance->cpu != NULL;
+}
+
+void destroy_cpu_instance(cpu_instance_t* instance) {
+    if (instance->cpu && instance->descriptor) {
+        instance->descriptor->destroy(instance->cpu);
+        instance->cpu = NULL;
+    }
+}
+
+// ============================================================================
+// CPU STATE MANAGEMENT (POLYMORPHIC)
+// ============================================================================
+
+void set_cpu_state(cpu_instance_t* instance, const cpu_state_t* state) {
+    switch (instance->type) {
+        case CPU_TYPE_MOS6502: {
+            mos6502_t* cpu = (mos6502_t*)instance->cpu;
+            mos6502_set_pc(cpu, state->pc);
+            mos6502_set_a(cpu, state->a);
+            mos6502_set_x(cpu, state->x);
+            mos6502_set_y(cpu, state->y);
+            mos6502_set_sp(cpu, state->s);
+            mos6502_set_p(cpu, state->p);
+            break;
+        }
+        case CPU_TYPE_MOS6510: {
+            mos6510_t* cpu = (mos6510_t*)instance->cpu;
+            mos6510_set_pc(cpu, state->pc);
+            mos6510_set_a(cpu, state->a);
+            mos6510_set_x(cpu, state->x);
+            mos6510_set_y(cpu, state->y);
+            mos6510_set_sp(cpu, state->s);
+            mos6510_set_p(cpu, state->p);
+            break;
+        }
+        case CPU_TYPE_NES6502: {
+            nes6502_t* cpu = (nes6502_t*)instance->cpu;
+            nes6502_set_pc(cpu, state->pc);
+            nes6502_set_a(cpu, state->a);
+            nes6502_set_x(cpu, state->x);
+            nes6502_set_y(cpu, state->y);
+            nes6502_set_sp(cpu, state->s);
+            nes6502_set_p(cpu, state->p);
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+void get_cpu_state(cpu_instance_t* instance, cpu_state_t* state) {
+    switch (instance->type) {
+        case CPU_TYPE_MOS6502: {
+            mos6502_t* cpu = (mos6502_t*)instance->cpu;
+            state->pc = mos6502_get_pc(cpu);
+            state->a = mos6502_get_a(cpu);
+            state->x = mos6502_get_x(cpu);
+            state->y = mos6502_get_y(cpu);
+            state->s = mos6502_get_sp(cpu);
+            state->p = mos6502_get_p(cpu);
+            break;
+        }
+        case CPU_TYPE_MOS6510: {
+            mos6510_t* cpu = (mos6510_t*)instance->cpu;
+            state->pc = mos6510_get_pc(cpu);
+            state->a = mos6510_get_a(cpu);
+            state->x = mos6510_get_x(cpu);
+            state->y = mos6510_get_y(cpu);
+            state->s = mos6510_get_sp(cpu);
+            state->p = mos6510_get_p(cpu);
+            break;
+        }
+        case CPU_TYPE_NES6502: {
+            nes6502_t* cpu = (nes6502_t*)instance->cpu;
+            state->pc = nes6502_get_pc(cpu);
+            state->a = nes6502_get_a(cpu);
+            state->x = nes6502_get_x(cpu);
+            state->y = nes6502_get_y(cpu);
+            state->s = nes6502_get_sp(cpu);
+            state->p = nes6502_get_p(cpu);
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+bool step_cpu(cpu_instance_t* instance) {
+    switch (instance->type) {
+        case CPU_TYPE_MOS6502:
+            return mos6502_step((mos6502_t*)instance->cpu);
+        case CPU_TYPE_MOS6510:
+            return mos6510_step((mos6510_t*)instance->cpu);
+        case CPU_TYPE_NES6502:
+            return nes6502_step((nes6502_t*)instance->cpu);
+        default:
+            return false;
+    }
+}
+
+// ============================================================================
+// TEST EXECUTION
+// ============================================================================
+
 void setup_memory_from_state(const cpu_state_t* state) {
     // Clear memory
     memset(test_memory, 0, sizeof(test_memory));
@@ -114,35 +292,36 @@ void setup_memory_from_state(const cpu_state_t* state) {
     }
 }
 
-// Compare CPU state with expected final state
-bool compare_cpu_state(const mos6510_t* cpu, const cpu_state_t* expected, const char* test_name) {
+bool compare_cpu_state(cpu_instance_t* instance, const cpu_state_t* expected, const char* test_name) {
     bool passed = true;
+    cpu_state_t actual;
+    get_cpu_state(instance, &actual);
     
     // Adjust cycle count for intercept mechanism overhead
     uint32_t adjusted_cycles = (cycle_count > 0) ? cycle_count - 1 : 0;
     
-    if (cpu->base.pc != expected->pc) {
-        printf("FAIL %s: PC - expected 0x%04X, got 0x%04X\n", test_name, expected->pc, cpu->base.pc);
+    if (actual.pc != expected->pc) {
+        printf("FAIL %s: PC - expected 0x%04X, got 0x%04X\n", test_name, expected->pc, actual.pc);
         passed = false;
     }
-    if (cpu->base.sp != expected->s) {
-        printf("FAIL %s: SP - expected 0x%02X, got 0x%02X\n", test_name, expected->s, cpu->base.sp);
+    if (actual.s != expected->s) {
+        printf("FAIL %s: SP - expected 0x%02X, got 0x%02X\n", test_name, expected->s, actual.s);
         passed = false;
     }
-    if (cpu->base.a != expected->a) {
-        printf("FAIL %s: A - expected 0x%02X, got 0x%02X\n", test_name, expected->a, cpu->base.a);
+    if (actual.a != expected->a) {
+        printf("FAIL %s: A - expected 0x%02X, got 0x%02X\n", test_name, expected->a, actual.a);
         passed = false;
     }
-    if (cpu->base.x != expected->x) {
-        printf("FAIL %s: X - expected 0x%02X, got 0x%02X\n", test_name, expected->x, cpu->base.x);
+    if (actual.x != expected->x) {
+        printf("FAIL %s: X - expected 0x%02X, got 0x%02X\n", test_name, expected->x, actual.x);
         passed = false;
     }
-    if (cpu->base.y != expected->y) {
-        printf("FAIL %s: Y - expected 0x%02X, got 0x%02X\n", test_name, expected->y, cpu->base.y);
+    if (actual.y != expected->y) {
+        printf("FAIL %s: Y - expected 0x%02X, got 0x%02X\n", test_name, expected->y, actual.y);
         passed = false;
     }
-    if (cpu->base.p != expected->p) {
-        printf("FAIL %s: P - expected 0x%02X, got 0x%02X\n", test_name, expected->p, cpu->base.p);
+    if (actual.p != expected->p) {
+        printf("FAIL %s: P - expected 0x%02X, got 0x%02X\n", test_name, expected->p, actual.p);
         passed = false;
     }
     if (expected->has_cycles && adjusted_cycles != expected->cycles) {
@@ -154,7 +333,6 @@ bool compare_cpu_state(const mos6510_t* cpu, const cpu_state_t* expected, const 
     return passed;
 }
 
-// Compare memory state with expected final RAM
 bool compare_memory_state(const cpu_state_t* expected, const char* test_name) {
     bool passed = true;
     
@@ -175,33 +353,29 @@ bool compare_memory_state(const cpu_state_t* expected, const char* test_name) {
     return passed;
 }
 
-// Run a single processor test
-bool run_processor_test(const processor_test_t* test) {
+bool run_processor_test(cpu_instance_t* instance, const processor_test_t* test) {
     total_tests++;
     
     if (verbose_output) {
-        printf("Running test: %s\n", test->name);
+        printf("Running test: %s on %s\n", test->name, instance->name);
     }
     
     // Setup memory from initial state
     setup_memory_from_state(&test->initial);
     
     // Setup CPU with initial state
-    mos6510_t* cpu = setup_cpu_from_state(&test->initial);
-    if (!cpu) {
-        printf("FAIL %s: Could not create CPU\n", test->name);
-        return false;
-    }
-      // Execute one instruction
-    bool step_result = mos6510_step(cpu);
+    set_cpu_state(instance, &test->initial);
+    cycle_count = 0;
+    
+    // Execute one instruction
+    bool step_result = step_cpu(instance);
     if (!step_result) {
-        printf("FAIL %s: Instruction execution failed\n", test->name);
-        mos6510_descriptor.destroy(cpu);
+        printf("FAIL %s: Instruction execution failed on %s\n", test->name, instance->name);
         return false;
     }
     
     // Compare CPU state
-    bool cpu_state_ok = compare_cpu_state(cpu, &test->final, test->name);
+    bool cpu_state_ok = compare_cpu_state(instance, &test->final, test->name);
     
     // Compare memory state
     bool memory_state_ok = compare_memory_state(&test->final, test->name);
@@ -211,16 +385,18 @@ bool run_processor_test(const processor_test_t* test) {
     if (passed) {
         passed_tests++;
         if (verbose_output) {
-            printf("PASS %s\n", test->name);
+            printf("PASS %s on %s\n", test->name, instance->name);
         }
     }
     
-    mos6510_descriptor.destroy(cpu);
     return passed;
 }
 
-// Load and run tests from a JSON file
-bool run_tests_from_file(const char* filepath) {
+// ============================================================================
+// FILE PROCESSING (REUSED FROM ORIGINAL)
+// ============================================================================
+
+bool run_tests_from_file(cpu_instance_t* instance, const char* filepath) {
     FILE* file = fopen(filepath, "r");
     if (!file) {
         printf("ERROR: Could not open file: %s\n", filepath);
@@ -271,7 +447,7 @@ bool run_tests_from_file(const char* filepath) {
                     // Parse and run the test
                     processor_test_t test;
                     if (json_parse_processor_test(test_json, &test)) {
-                        run_processor_test(&test);
+                        run_processor_test(instance, &test);
                     } else {
                         printf("ERROR: Failed to parse test in file: %s\n", filepath);
                     }
@@ -292,7 +468,7 @@ bool run_tests_from_file(const char* filepath) {
         // Single test
         processor_test_t test;
         if (json_parse_processor_test(json_content, &test)) {
-            run_processor_test(&test);
+            run_processor_test(instance, &test);
         } else {
             printf("ERROR: Failed to parse test in file: %s\n", filepath);
         }
@@ -303,8 +479,7 @@ bool run_tests_from_file(const char* filepath) {
 }
 
 #ifdef _WIN32
-// Windows directory traversal
-void run_tests_from_directory(const char* dirpath) {
+void run_tests_from_directory(cpu_instance_t* instance, const char* dirpath) {
     char search_path[1024];
     snprintf(search_path, sizeof(search_path), "%s\\*", dirpath);
     
@@ -324,13 +499,13 @@ void run_tests_from_directory(const char* dirpath) {
         
         if (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
             // Recursively process subdirectory
-            run_tests_from_directory(filepath);
+            run_tests_from_directory(instance, filepath);
         } else {
             // Check if it's a JSON file
             size_t len = strlen(find_data.cFileName);
             if (len > 5 && strcmp(find_data.cFileName + len - 5, ".json") == 0) {
                 printf("Processing file: %s\n", filepath);
-                run_tests_from_file(filepath);
+                run_tests_from_file(instance, filepath);
             }
         }
     } while (FindNextFileA(hFind, &find_data));
@@ -338,8 +513,7 @@ void run_tests_from_directory(const char* dirpath) {
     FindClose(hFind);
 }
 #else
-// Unix/Linux directory traversal
-void run_tests_from_directory(const char* dirpath) {
+void run_tests_from_directory(cpu_instance_t* instance, const char* dirpath) {
     DIR* dir = opendir(dirpath);
     if (!dir) {
         printf("ERROR: Could not open directory: %s\n", dirpath);
@@ -357,13 +531,13 @@ void run_tests_from_directory(const char* dirpath) {
         if (stat(filepath, &statbuf) == 0) {
             if (S_ISDIR(statbuf.st_mode)) {
                 // Recursively process subdirectory
-                run_tests_from_directory(filepath);
+                run_tests_from_directory(instance, filepath);
             } else if (S_ISREG(statbuf.st_mode)) {
                 // Check if it's a JSON file
                 size_t len = strlen(entry->d_name);
                 if (len > 5 && strcmp(entry->d_name + len - 5, ".json") == 0) {
                     printf("Processing file: %s\n", filepath);
-                    run_tests_from_file(filepath);
+                    run_tests_from_file(instance, filepath);
                 }
             }
         }
@@ -373,16 +547,27 @@ void run_tests_from_directory(const char* dirpath) {
 }
 #endif
 
+// ============================================================================
+// MAIN PROGRAM
+// ============================================================================
+
 void print_usage(const char* program_name) {
-    printf("ProcessorTests Runner for MOS6510 CPU\n");
+    printf("Unified ProcessorTests Runner for MOS6502 Family CPUs\n");
     printf("Usage: %s [options] <test_file_or_directory>\n", program_name);
     printf("Options:\n");
     printf("  -v, --verbose    Enable verbose output\n");
     printf("  -h, --help       Show this help message\n");
+    printf("  --cpu <type>     Force CPU type (mos6502, mos6510, nes6502)\n");
+    printf("\n");
+    printf("Supported CPU Types:\n");
+    printf("  MOS6502   - Standard 6502 with decimal mode\n");
+    printf("  MOS6510   - C64 6510 without decimal mode\n");
+    printf("  NES6502   - NES 6502 without decimal mode\n");
     printf("\n");
     printf("Examples:\n");
     printf("  %s processor_tests/6502/v1/\n", program_name);
-    printf("  %s -v processor_tests/6502/v1/00.json\n", program_name);
+    printf("  %s --cpu nes6502 processor_tests/nes6502/v1/69.json\n", program_name);
+    printf("  %s -v processor_tests/6502/v1/69.json\n", program_name);
 }
 
 int main(int argc, char* argv[]) {
@@ -392,6 +577,7 @@ int main(int argc, char* argv[]) {
     }
     
     const char* test_path = NULL;
+    cpu_type_t forced_cpu_type = CPU_TYPE_UNKNOWN;
     
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
@@ -400,6 +586,18 @@ int main(int argc, char* argv[]) {
         } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
             print_usage(argv[0]);
             return 0;
+        } else if (strcmp(argv[i], "--cpu") == 0 && i + 1 < argc) {
+            i++;
+            if (strcmp(argv[i], "mos6502") == 0) {
+                forced_cpu_type = CPU_TYPE_MOS6502;
+            } else if (strcmp(argv[i], "mos6510") == 0) {
+                forced_cpu_type = CPU_TYPE_MOS6510;
+            } else if (strcmp(argv[i], "nes6502") == 0) {
+                forced_cpu_type = CPU_TYPE_NES6502;
+            } else {
+                printf("ERROR: Unknown CPU type: %s\n", argv[i]);
+                return 1;
+            }
         } else {
             test_path = argv[i];
         }
@@ -411,8 +609,19 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    printf("=== ProcessorTests Runner for MOS6510 CPU ===\n");
-    printf("Using ground truth data from TomHarte/ProcessorTests\n");
+    // Detect CPU type
+    cpu_type_t cpu_type = (forced_cpu_type != CPU_TYPE_UNKNOWN) ? 
+                          forced_cpu_type : detect_cpu_type(test_path);
+    
+    // Create CPU instance
+    cpu_instance_t cpu_instance;
+    if (!create_cpu_instance(&cpu_instance, cpu_type)) {
+        printf("ERROR: Could not create CPU instance for type %d\n", cpu_type);
+        return 1;
+    }
+    
+    printf("=== Unified ProcessorTests Runner for MOS6502 Family ===\n");
+    printf("CPU Type: %s\n", cpu_instance.name);
     printf("Test path: %s\n", test_path);
     printf("Verbose: %s\n", verbose_output ? "enabled" : "disabled");
     printf("\n");
@@ -421,6 +630,7 @@ int main(int argc, char* argv[]) {
     struct stat statbuf;
     if (stat(test_path, &statbuf) != 0) {
         printf("ERROR: Could not access path: %s\n", test_path);
+        destroy_cpu_instance(&cpu_instance);
         return 1;
     }
     
@@ -429,31 +639,34 @@ int main(int argc, char* argv[]) {
 #else
     if (S_ISDIR(statbuf.st_mode)) {
 #endif
-        run_tests_from_directory(test_path);
+        run_tests_from_directory(&cpu_instance, test_path);
 #ifdef _WIN32
     } else if (statbuf.st_mode & _S_IFREG) {
 #else
     } else if (S_ISREG(statbuf.st_mode)) {
 #endif
-        run_tests_from_file(test_path);
+        run_tests_from_file(&cpu_instance, test_path);
     } else {
         printf("ERROR: Invalid path type: %s\n", test_path);
+        destroy_cpu_instance(&cpu_instance);
         return 1;
     }
     
-    printf("\n=== TEST SUMMARY ===\n");
+    printf("\n=== TEST SUMMARY for %s ===\n", cpu_instance.name);
     printf("Total tests run: %u\n", total_tests);
     printf("Tests passed: %u\n", passed_tests);
     printf("Tests failed: %u\n", total_tests - passed_tests);
+    
+    destroy_cpu_instance(&cpu_instance);
     
     if (total_tests == 0) {
         printf("\nNo tests found in specified path!\n");
         return 1;
     } else if (passed_tests == total_tests) {
-        printf("\nALL TESTS PASSED - MOS6510 CPU matches ProcessorTests ground truth!\n");
+        printf("\nALL TESTS PASSED - %s matches ProcessorTests ground truth!\n", cpu_instance.name);
         return 0;
     } else {
-        printf("\nSOME TESTS FAILED - CPU implementation differs from ground truth\n");
+        printf("\nSOME TESTS FAILED - %s implementation differs from ground truth\n", cpu_instance.name);
         return 1;
     }
 }
