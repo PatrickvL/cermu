@@ -14,7 +14,6 @@
 
 #include "json_parser.h"
 #include "../src/chip/cpu/mos6510/mos6510.h"
-#include "../src/chip/cpu/mos6510/mos6510_cycles.h"
 #include "../src/core/control_lines_interface.h"
 
 // Test infrastructure
@@ -35,13 +34,17 @@ void test_write(void* context, uint16_t address, uint8_t value) {
     test_memory[address] = value;
 }
 
-uint8_t test_io_read(void* context) {
+uint8_t test_io_read(void* context, uint8_t port_value, uint8_t ddr) {
     (void)context;
+    (void)port_value;
+    (void)ddr;
     return 0xFF;
 }
 
-void test_io_write(void* context, uint8_t ddr, uint8_t port_data, uint8_t effective_output) {
-    (void)context; (void)ddr; (void)port_data; (void)effective_output;
+void test_io_write(void* context, uint8_t port_value, uint8_t ddr) {
+    (void)context;
+    (void)port_value;
+    (void)ddr;
 }
 
 void test_cycle_tick(void* context) {

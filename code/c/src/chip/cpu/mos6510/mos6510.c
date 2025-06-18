@@ -207,7 +207,7 @@ bool mos6510_step(mos6510_t* cpu) {
 void mos6510_execute(mos6510_t* cpu) {
     // Start execution using threaded dispatch
     // The MOS6510_OPCODE_FOOTER macro will chain instructions until intercept is triggered
-    M6502_NEXT_INSTRUCTION(&cpu->base, mos6510_interrupt_handler, mos6510_read_cycle, mos6510_opcode_dispatch);
+    M6502_NEXT_INSTRUCTION(&cpu->base, mos6510_interrupt_handler_wrapper, mos6510_read_cycle_wrapper, mos6510_opcode_dispatch_wrapper);
 }
 
 // ============================================================================

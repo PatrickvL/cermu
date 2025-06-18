@@ -17,16 +17,17 @@ void test_write(void* context, uint16_t address, uint8_t value) {
     test_memory[address] = value;
 }
 
-uint8_t test_io_read(void* context) {
-    (void)context;  // Unused
+uint8_t test_io_read(void* context, uint8_t port_value, uint8_t ddr) {
+    (void)context;    // Unused
+    (void)port_value; // Unused
+    (void)ddr;        // Unused
     return 0xFF;  // Return default value for external pins
 }
 
-void test_io_write(void* context, uint8_t ddr, uint8_t port_data, uint8_t effective_output) {
-    (void)context;  // Unused
-    (void)ddr;      // Unused
-    (void)port_data; // Unused
-    (void)effective_output; // Unused
+void test_io_write(void* context, uint8_t port_value, uint8_t ddr) {
+    (void)context;    // Unused
+    (void)port_value; // Unused
+    (void)ddr;        // Unused
     // Do nothing for this test
 }
 

@@ -120,6 +120,16 @@ set(CORE_SOURCES
 
 # Chip library sources
 set(CHIP_SOURCES
+    # CPU family core functions (shared by all family members)
+    src/chip/cpu/mos6502_family/mos6502_family_core.c
+    src/chip/cpu/mos6502_family/mos6502_family_arithmetic.c
+    src/chip/cpu/mos6502_family/mos6502_family_control.c
+    src/chip/cpu/mos6502_family/mos6502_family_memory.c
+    src/chip/cpu/mos6502_family/mos6502_family_registers.c
+    src/chip/cpu/mos6502_family/mos6502_family_shifts.c
+    src/chip/cpu/mos6502_family/mos6502_family_misc.c
+    src/chip/cpu/mos6502_family/mos6502_family_opcodes.c
+    
     # CPU (operation files are included in mos6510.c)
     src/chip/cpu/mos6510/mos6510.c
     
@@ -165,8 +175,9 @@ add_executable(c64emu
     ${CORE_UTIL_SOURCES}
 )
 
-# Link required libraries including the CPU family
-target_link_libraries(c64emu mos6502_family mos6510)
+# Link required libraries
+# Note: mos6502_family functions are inline in headers, no separate library needed
+target_link_libraries(c64emu)
 
 # Set output directory for console executable
 set_target_properties(c64emu
@@ -205,13 +216,11 @@ if(BUILD_GUI)    # GUI sources (just our interface file - cimgui handles the res
     endif()
 
     # Link libraries for GUI version
-    target_link_libraries(c64emu_gui 
+    target_link_libraries(c64emu_gui
         ${SDL2_LIBRARIES}
         ${OPENGL_LIBRARIES}
         ${CMAKE_DL_LIBS}
         cimgui
-        mos6502_family
-        mos6510
     )
 
     # Set output directory for GUI executable (keep as console app for now)

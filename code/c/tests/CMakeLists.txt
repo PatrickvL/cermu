@@ -57,7 +57,7 @@ endforeach()
 # Create a library for the MOS6510 CPU
 add_library(mos6510_lib STATIC ${CPU_SOURCES} ${CORE_SOURCES})
 target_include_directories(mos6510_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../)
-target_link_libraries(mos6510_lib mos6502_family)
+# Note: mos6502_family functions are inline in headers, no separate library needed
 
 # JSON Parser library for ProcessorTests
 add_library(json_parser STATIC json_parser.c)
@@ -67,20 +67,20 @@ target_include_directories(json_parser PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(processor_tests_runner
     processor_tests_runner.c
 )
-target_link_libraries(processor_tests_runner mos6510_lib json_parser mos6502_family)
+target_link_libraries(processor_tests_runner mos6510_lib json_parser)
 
 # Comprehensive Test Suite (fallback/custom tests)
 add_executable(test_mos6510_comprehensive
     test_mos6510_comprehensive.c
 )
-target_link_libraries(test_mos6510_comprehensive mos6510_lib mos6502_family)
+target_link_libraries(test_mos6510_comprehensive mos6510_lib)
 
 # Basic test (if exists) - renamed to avoid conflict with main project
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../test_mos6510_basic.c)
     add_executable(test_mos6510_basic_tests
         ${CMAKE_CURRENT_SOURCE_DIR}/../test_mos6510_basic.c
     )
-    target_link_libraries(test_mos6510_basic_tests mos6510_lib mos6502_family)
+    target_link_libraries(test_mos6510_basic_tests mos6510_lib)
 endif()
 
 # Enable testing
