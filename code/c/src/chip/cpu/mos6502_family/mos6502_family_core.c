@@ -55,13 +55,13 @@ void mos6502_family_interrupt_sequence(mos6502_family_t* cpu, uint8_t status_fla
 
 void mos6502_family_interrupt_handler(mos6502_family_t* cpu) {
     // Check for NMI first (higher priority)
-    if (MOS6502_FAMILY_TEST_NMI(cpu)) {
+    if (M6502_TEST_NMI(cpu)) {
         mos6502_family_interrupt_sequence(cpu, cpu->p, 0xFFFA); // NMI vector
         return;
     }
     
     // Check for IRQ (if not masked)
-    if (MOS6502_FAMILY_TEST_IRQ(cpu) && !mos6502_family_get_flag(cpu, FLAG_I)) {
+    if (M6502_TEST_IRQ(cpu) && !mos6502_family_get_flag(cpu, FLAG_I)) {
         mos6502_family_interrupt_sequence(cpu, cpu->p, 0xFFFE); // IRQ vector
         return;
     }
@@ -88,12 +88,12 @@ bool mos6502_family_step(mos6502_family_t* cpu) {
     if (!cpu) return false;
     
     // Check if ready line is asserted (for RDY support)
-    if (!MOS6502_FAMILY_TEST_RDY(cpu)) {
+    if (!M6502_TEST_RDY(cpu)) {
         return false; // CPU is halted
     }
     
     // Handle interrupts first
-    if (MOS6502_FAMILY_TEST_IRQ(cpu) || MOS6502_FAMILY_TEST_NMI(cpu)) {
+    if (M6502_TEST_IRQ(cpu) || M6502_TEST_NMI(cpu)) {
         mos6502_family_interrupt_handler(cpu);
         return true;
     }

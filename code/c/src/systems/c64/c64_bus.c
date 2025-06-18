@@ -278,19 +278,19 @@ static void c64_control_lines_set(void* context, uint32_t lines) {
 }
 
 // I/O port adapter functions
-static void c64_io_port_output_changed(void* context, uint8_t ddr, uint8_t port_data, uint8_t effective_output) {
-    (void)ddr;       // Unused parameter
-    (void)port_data; // Unused parameter
+static void c64_io_port_output_changed(void* context, uint8_t port_value, uint8_t ddr) {
     c64_bus_t* c64_bus = (c64_bus_t*)context;
     // Generate proper 5-bit PLA mode from CPU port bits and cartridge signals
-    uint8_t pla_mode = c64_bus_generate_pla_mode(c64_bus, effective_output);
+    uint8_t pla_mode = c64_bus_generate_pla_mode(c64_bus, port_value);
     c64_bus_mode_switch(c64_bus, pla_mode);
 }
 
-static uint8_t c64_io_port_input_read(void* context) {
+static uint8_t c64_io_port_input_read(void* context, uint8_t port_value, uint8_t ddr) {
     // For C64, the I/O port typically reads the current port state
     // This can be extended to read actual external signals if needed
-    (void)context; // Unused for now
+    (void)context;    // Unused for now
+    (void)port_value; // Unused for now
+    (void)ddr;        // Unused for now
     return 0xFF; // Default to all inputs high
 }
 
