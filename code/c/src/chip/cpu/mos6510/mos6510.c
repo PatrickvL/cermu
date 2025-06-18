@@ -86,37 +86,21 @@ chip_descriptor_t mos6510_descriptor = {
 // CPU OPERATION FUNCTIONS (inline for performance)
 // ============================================================================
 
-// Stub that restores original table on first hit
-static void intercept_stub(mos6510_t* cpu) {
-    if (!cpu->base.intercepting) return;
-    // Undo the PC increment from MOS6510_OPCODE_FOOTER since we're not executing the next instruction
-    cpu->base.pc--;
-    // Restore original handlers from global table
-    memcpy(cpu->base.opcode_handlers, mos6510_opcode_handlers, sizeof(cpu->base.opcode_handlers));
-    cpu->base.intercepting = false;
-}
-
 // Public API to begin interception
 void mos6510_start_intercept(mos6510_t* cpu) {
     if (!cpu) return;
-    // Set all handlers to the intercept stub
-    for (int i = 0; i < 256; ++i) {
-        cpu->base.opcode_handlers[i] = (mos6502_family_opcode_handler_t)intercept_stub;
-    }
-    cpu->base.intercepting = true;
+    mos6502_family_start_intercepting(&cpu->base);
 }
 
 // Public API to cancel interception early if needed
 void mos6510_stop_intercept(mos6510_t* cpu) {
-    if (!cpu || !cpu->base.intercepting) return;
-    // Restore original handlers from global table
-    memcpy(cpu->base.opcode_handlers, mos6510_opcode_handlers, sizeof(cpu->base.opcode_handlers));
-    cpu->base.intercepting = false;
+    if (!cpu) return;
+    mos6502_family_stop_intercepting(&cpu->base);
 }
 
 // Check if interception is currently active
 bool mos6510_is_intercepting(mos6510_t* cpu) {
-    return cpu ? cpu->base.intercepting : false;
+    return cpu ? mos6502_family_is_intercepting(&cpu->base) : false;
 }
 
 // ============================================================================
@@ -133,7 +117,6 @@ void mos6510_init(mos6510_t* cpu) {
     cpu->base.p = FLAG_U | FLAG_I;  // Unused flag always set, interrupt disable
     cpu->base.pc = 0;
     cpu->base.address = 0;
-    cpu->base.intercepting = false;
 
     // Copy MOS6510 opcode handlers to instance table
     memcpy(cpu->base.opcode_handlers, mos6510_opcode_handlers, sizeof(cpu->base.opcode_handlers));

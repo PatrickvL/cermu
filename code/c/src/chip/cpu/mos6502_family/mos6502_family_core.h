@@ -48,6 +48,17 @@ typedef void (*mos6502_family_opcode_handler_t)(mos6502_family_t* cpu);
 struct mos6502_family_s {
     chip_descriptor_t* desc; // Pointer to chip descriptor (must be first)
     
+    // CPU Registers (standard 6502 family)
+    uint16_t pc;        // Program Counter
+    uint8_t a;          // Accumulator
+    uint8_t x;          // X Index Register
+    uint8_t y;          // Y Index Register
+    uint8_t sp;         // Stack Pointer
+    uint8_t p;          // Processor Status Register
+    
+    // === CPU INTERNAL STATE (shared by all 6502 family) ===
+    uint16_t address;   // Address for current instruction
+
     // === PERFORMANCE-OPTIMIZED INTERFACE STORAGE ===
     // Bus interface (stored by value for optimal performance)
     bus_cycle_ops_t bus_interface;
@@ -59,29 +70,15 @@ struct mos6502_family_s {
     // These CANNOT be copied - must remain as pointers to shared system state
     system_lines_t* system_lines;  // Shared system-wide line state
     
+    mos6502_family_opcode_handler_t opcode_handlers[256]; // Per-CPU handler table
+
+    // Intercept mechanism for single-step execution
+    mos6502_family_opcode_handler_t saved_opcode_handlers[256]; // Saved handlers during intercept
+    
     // === DIRECT RAM ACCESS (for zero page optimization) ===
     // Direct RAM accessors to avoid circular dependency with bus interface
+    // TODO : Move to mos6510 (the sole user for now)
     access_callback_t ram_access;  // Consolidated RAM access interface
-      // === CPU INTERNAL STATE (shared by all 6502 family) ===
-    uint16_t address;   // Address for current instruction
-    
-    // Intercept mechanism for single-step execution
-    bool intercepting;                           // True if intercept mode is active
-    mos6502_family_opcode_handler_t saved_opcode_handlers[256]; // Saved handlers during intercept
-    mos6502_family_opcode_handler_t opcode_handlers[256]; // Per-CPU handler table
-    
-    // CPU Registers (standard 6502 family)
-    uint16_t pc;        // Program Counter
-    uint8_t a;          // Accumulator
-    uint8_t x;          // X Index Register
-    uint8_t y;          // Y Index Register
-    uint8_t sp;         // Stack Pointer
-    uint8_t p;          // Processor Status Register
-    
-    // === CPU-SPECIFIC EXTENSIONS ===
-    // Different family members can add their own fields here
-    // For example, 6510 will add I/O ports, 65C02 might add new registers
-    void* cpu_specific_data;  // Pointer to CPU-specific extensions
 };
 
 // ============================================================================

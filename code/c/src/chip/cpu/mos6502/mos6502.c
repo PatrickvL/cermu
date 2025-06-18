@@ -15,7 +15,6 @@ bool mos6502_create(chip_descriptor_t* desc, mos6502_t* cpu) {
     
     // Initialize base MOS 6502 family structure
     cpu->base.desc = desc;
-    cpu->base.intercepting = false;
     cpu->base.system_lines = NULL;
     
     // Initialize CPU state
@@ -26,9 +25,6 @@ bool mos6502_create(chip_descriptor_t* desc, mos6502_t* cpu) {
     cpu->base.sp = 0xFF;
     cpu->base.p = FLAG_U | FLAG_I; // Start with unused=1, interrupt disable=1
     cpu->base.address = 0x0000;
-    
-    // No CPU-specific data for standard MOS 6502
-    cpu->base.cpu_specific_data = NULL;
     
     // Initialize with complete family opcode table
     mos6502_family_init_opcode_table(&cpu->base);
@@ -61,8 +57,6 @@ void mos6502_reset(mos6502_t* cpu) {
     uint8_t addr_lo = mos6502_family_read_cycle(&cpu->base, 0xFFFC);
     uint8_t addr_hi = mos6502_family_read_cycle(&cpu->base, 0xFFFD);
     cpu->base.pc = (addr_hi << 8) | addr_lo;
-    
-    cpu->base.intercepting = false;
 }
 
 bool mos6502_step(mos6502_t* cpu) {
@@ -232,14 +226,14 @@ void mos6502_write_memory(mos6502_t* cpu, uint16_t address, uint8_t value) {
 
 void mos6502_start_intercept(mos6502_t* cpu) {
     if (!cpu) return;
-    cpu->base.intercepting = true;
+    mos6502_family_start_intercept(&cpu->base);
 }
 
 void mos6502_stop_intercept(mos6502_t* cpu) {
     if (!cpu) return;
-    cpu->base.intercepting = false;
+    mos6502_family_stop_intercept(&cpu->base);
 }
 
 bool mos6502_is_intercepting(mos6502_t* cpu) {
-    return cpu ? cpu->base.intercepting : false;
+    return cpu ? mos6502_family_is_intercepting(&cpu->base) : false;
 }
