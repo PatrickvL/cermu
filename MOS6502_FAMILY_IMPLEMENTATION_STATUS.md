@@ -58,21 +58,20 @@ nes6502/     - NES variant with specific quirks
 3. **MOS6510 Refactoring**: Successfully separated from family core
 4. **ProcessorTests Repository**: Cloned TomHarte/ProcessorTests with all test data
 5. **Basic MOS6502 Structure**: Created initial MOS6502 implementation
+6. **Complete Family Opcode Table**: All 256 opcodes in shared family table ✅
+7. **MOS6502 Integration**: Uses family table with full decimal mode support ✅
+8. **NES6502 Implementation**: Complete with decimal mode overrides ✅
 
 ### 🔄 Current Tasks (In Progress)
-1. **MOS6502 Integration**: Connected to family opcode table and functions ✅
-2. **NES6502 Implementation**: Create NES6502 with CPU-specific overrides
-3. **ProcessorTests Integration**: Connect test runners to CPU implementations
-4. **Decimal Mode Validation**: Demonstrate MOS6502 vs MOS6510 differences
+1. **ProcessorTests Integration**: Connect test runners to CPU implementations
+2. **Decimal Mode Testing**: Create test runners for MOS6502 vs NES6502/MOS6510
+3. **Validation Testing**: Run ProcessorTests on all CPU variants
 
 ### ⏳ Pending Tasks
-1. **Complete MOS6502 Implementation**: Full 256 opcode table
-2. **Complete NES6502 Implementation**: NES-specific opcode behaviors
-3. **Illegal Opcode Implementation**: Shared illegal opcode handlers
-4. **ProcessorTests Integration**: Test runners for each CPU variant
-5. **Decimal Mode Validation**: Demonstrate MOS6502 vs MOS6510 differences
-6. **Performance Testing**: Benchmark threaded dispatch performance
-7. **Documentation**: Complete API docs and usage examples
+1. **ProcessorTests Test Runners**: Create specific test runners for each CPU type
+2. **Decimal Mode Validation**: Demonstrate MOS6502 vs MOS6510 differences
+3. **Performance Testing**: Benchmark threaded dispatch performance
+4. **Documentation**: Complete API docs and usage examples
 
 ## Build Instructions
 
@@ -180,15 +179,15 @@ Each JSON file contains:
 ## Success Criteria
 
 ### Phase 1: Architecture Complete
-- [ ] Complete 256-entry opcode table in family core
-- [ ] Threaded dispatch system implemented
-- [ ] Interception system moved to family level
-- [ ] All CPUs compile and run basic operations
+- [x] Complete 256-entry opcode table in family core
+- [x] Threaded dispatch system implemented
+- [x] Interception system moved to family level
+- [x] All CPUs compile and run basic operations
 
 ### Phase 2: Full Implementation
-- [ ] MOS6502: All opcodes implemented with decimal mode support
-- [ ] MOS6510: All opcodes implemented without decimal mode
-- [ ] NES6502: All opcodes implemented with NES-specific behaviors
+- [x] MOS6502: All opcodes implemented with decimal mode support
+- [x] MOS6510: All opcodes implemented without decimal mode
+- [x] NES6502: All opcodes implemented with NES-specific behaviors
 - [ ] Illegal opcodes: Shared implementations with CPU overrides
 
 ### Phase 3: Validation Complete
