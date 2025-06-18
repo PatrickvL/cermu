@@ -60,10 +60,10 @@ nes6502/     - NES variant with specific quirks
 5. **Basic MOS6502 Structure**: Created initial MOS6502 implementation
 
 ### 🔄 Current Tasks (In Progress)
-1. **Family Opcode Table Design**: Creating complete 256-entry opcode system
-2. **Threaded Dispatch Implementation**: Bus cycle management between opcodes
-3. **Illegal Opcode Research**: Analyzing shared vs CPU-specific illegal behaviors
-4. **Interception System Migration**: Moving from MOS6510 to family level
+1. **MOS6502 Integration**: Connected to family opcode table and functions ✅
+2. **NES6502 Implementation**: Create NES6502 with CPU-specific overrides
+3. **ProcessorTests Integration**: Connect test runners to CPU implementations
+4. **Decimal Mode Validation**: Demonstrate MOS6502 vs MOS6510 differences
 
 ### ⏳ Pending Tasks
 1. **Complete MOS6502 Implementation**: Full 256 opcode table
