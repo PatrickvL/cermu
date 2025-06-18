@@ -1,6 +1,7 @@
 #include "nes6502.h"
 #include "../mos6502_family/mos6502_family_core.h"
 #include "../../../core/system.h"
+#include <stdlib.h>
 #include <string.h>
 
 // ============================================================================
@@ -9,6 +10,26 @@
 
 // Forward declarations for opcode handlers
 static void nes6502_init_opcode_table(nes6502_t* cpu);
+static void nes6502_adc_impl(nes6502_t* cpu, uint8_t operand);
+static void nes6502_sbc_impl(nes6502_t* cpu, uint8_t operand);
+
+// Forward declarations for addressing mode handlers
+static void nes6502_adc_immediate(mos6502_family_t* cpu);
+static void nes6502_adc_zero_page(mos6502_family_t* cpu);
+static void nes6502_adc_zero_page_x(mos6502_family_t* cpu);
+static void nes6502_adc_absolute(mos6502_family_t* cpu);
+static void nes6502_adc_absolute_x(mos6502_family_t* cpu);
+static void nes6502_adc_absolute_y(mos6502_family_t* cpu);
+static void nes6502_adc_indirect_x(mos6502_family_t* cpu);
+static void nes6502_adc_indirect_y(mos6502_family_t* cpu);
+static void nes6502_sbc_immediate(mos6502_family_t* cpu);
+static void nes6502_sbc_zero_page(mos6502_family_t* cpu);
+static void nes6502_sbc_zero_page_x(mos6502_family_t* cpu);
+static void nes6502_sbc_absolute(mos6502_family_t* cpu);
+static void nes6502_sbc_absolute_x(mos6502_family_t* cpu);
+static void nes6502_sbc_absolute_y(mos6502_family_t* cpu);
+static void nes6502_sbc_indirect_x(mos6502_family_t* cpu);
+static void nes6502_sbc_indirect_y(mos6502_family_t* cpu);
 
 // Chip interface implementation
 bool nes6502_create(chip_descriptor_t* desc, nes6502_t* cpu) {
@@ -32,10 +53,31 @@ bool nes6502_create(chip_descriptor_t* desc, nes6502_t* cpu) {
     
     // No CPU-specific data for NES 6502
     cpu->base.cpu_specific_data = NULL;
+      // Initialize with complete family opcode table
+    mos6502_family_init_opcode_table(&cpu->base);
     
-    // Initialize opcode handler table
-    nes6502_init_opcode_table(cpu);
+    // NES 6502 specific overrides: Disable decimal mode behavior
+    // Override all ADC opcodes to use binary-only arithmetic
+    mos6502_family_override_opcode(&cpu->base, 0x69, (mos6502_family_opcode_handler_t)nes6502_adc_immediate);  // ADC #nn
+    mos6502_family_override_opcode(&cpu->base, 0x65, (mos6502_family_opcode_handler_t)nes6502_adc_zero_page);   // ADC $nn
+    mos6502_family_override_opcode(&cpu->base, 0x75, (mos6502_family_opcode_handler_t)nes6502_adc_zero_page_x); // ADC $nn,X
+    mos6502_family_override_opcode(&cpu->base, 0x6D, (mos6502_family_opcode_handler_t)nes6502_adc_absolute);    // ADC $nnnn
+    mos6502_family_override_opcode(&cpu->base, 0x7D, (mos6502_family_opcode_handler_t)nes6502_adc_absolute_x);  // ADC $nnnn,X
+    mos6502_family_override_opcode(&cpu->base, 0x79, (mos6502_family_opcode_handler_t)nes6502_adc_absolute_y);  // ADC $nnnn,Y
+    mos6502_family_override_opcode(&cpu->base, 0x61, (mos6502_family_opcode_handler_t)nes6502_adc_indirect_x);  // ADC ($nn,X)
+    mos6502_family_override_opcode(&cpu->base, 0x71, (mos6502_family_opcode_handler_t)nes6502_adc_indirect_y);  // ADC ($nn),Y
     
+    // Override all SBC opcodes to use binary-only arithmetic
+    mos6502_family_override_opcode(&cpu->base, 0xE9, (mos6502_family_opcode_handler_t)nes6502_sbc_immediate);  // SBC #nn
+    mos6502_family_override_opcode(&cpu->base, 0xE5, (mos6502_family_opcode_handler_t)nes6502_sbc_zero_page);   // SBC $nn
+    mos6502_family_override_opcode(&cpu->base, 0xF5, (mos6502_family_opcode_handler_t)nes6502_sbc_zero_page_x); // SBC $nn,X
+    mos6502_family_override_opcode(&cpu->base, 0xED, (mos6502_family_opcode_handler_t)nes6502_sbc_absolute);    // SBC $nnnn
+    mos6502_family_override_opcode(&cpu->base, 0xFD, (mos6502_family_opcode_handler_t)nes6502_sbc_absolute_x);  // SBC $nnnn,X
+    mos6502_family_override_opcode(&cpu->base, 0xF9, (mos6502_family_opcode_handler_t)nes6502_sbc_absolute_y);  // SBC $nnnn,Y
+    mos6502_family_override_opcode(&cpu->base, 0xE1, (mos6502_family_opcode_handler_t)nes6502_sbc_indirect_x);  // SBC ($nn,X)
+    mos6502_family_override_opcode(&cpu->base, 0xF1, (mos6502_family_opcode_handler_t)nes6502_sbc_indirect_y);  // SBC ($nn),Y
+    mos6502_family_override_opcode(&cpu->base, 0xEB, (mos6502_family_opcode_handler_t)nes6502_sbc_immediate);  // SBC #nn (illegal)
+  
     return true;
 }
 
@@ -132,8 +174,8 @@ bool nes6502_is_intercepting(nes6502_t* cpu) {
 // NES 6502 OPCODE HANDLERS (No Decimal Mode)
 // ============================================================================
 
-// ADC without decimal mode support (NES characteristic)
-static void nes6502_adc(nes6502_t* cpu, uint8_t operand) {
+// Binary-only ADC implementation (NES characteristic)
+static void nes6502_adc_impl(nes6502_t* cpu, uint8_t operand) {
     if (!cpu) return;
     
     mos6502_family_t* base = &cpu->base;
@@ -153,62 +195,261 @@ static void nes6502_adc(nes6502_t* cpu, uint8_t operand) {
     base->a = result & 0xFF;
 }
 
-// SBC without decimal mode support (NES characteristic)
-static void nes6502_sbc(nes6502_t* cpu, uint8_t operand) {
+// Binary-only SBC implementation (NES characteristic)
+static void nes6502_sbc_impl(nes6502_t* cpu, uint8_t operand) {
     if (!cpu) return;
     
-    // SBC is just ADC with the operand inverted and carry inverted
+    // SBC = ADC with inverted operand and inverted carry
     mos6502_family_t* base = &cpu->base;
     bool carry_in = mos6502_family_get_flag(base, FLAG_C);
     
-    // Flip carry for subtraction
+    // Flip carry for subtraction (borrow = !carry)
     mos6502_family_set_flag(base, FLAG_C, !carry_in);
     
     // Perform ADC with inverted operand (binary mode only)
-    nes6502_adc(cpu, ~operand);
+    nes6502_adc_impl(cpu, ~operand);
 }
 
-// Basic instruction handlers (examples)
-static void nes6502_brk(nes6502_t* cpu) {
-    mos6502_family_t* base = &cpu->base;
+// ADC addressing mode handlers
+static void nes6502_adc_immediate(mos6502_family_t* cpu) {
+    uint8_t operand = mos6502_family_read_cycle(cpu, cpu->pc);
+    cpu->pc++;
+    nes6502_adc_impl((nes6502_t*)cpu, operand);
+    MOS6502_FAMILY_OPCODE_FOOTER(cpu);
     
-    // BRK instruction: push PC+2, push status with B flag set, jump to IRQ vector
-    base->pc++; // Skip the signature byte
-    
-    // Push return address (PC+1)
-    mos6502_family_push(base, (base->pc >> 8) & 0xFF);
-    mos6502_family_push(base, base->pc & 0xFF);
-    
-    // Push status register with B flag set
-    mos6502_family_push(base, base->p | FLAG_B);
-    
-    // Set interrupt disable flag
-    mos6502_family_set_flag(base, FLAG_I, true);
-    
-    // Jump to IRQ vector
-    uint8_t addr_lo = mos6502_family_read_cycle(base, 0xFFFE);
-    uint8_t addr_hi = mos6502_family_read_cycle(base, 0xFFFF);
-    base->pc = (addr_hi << 8) | addr_lo;
 }
 
-static void nes6502_nop(nes6502_t* cpu) {
-    // No operation - just continue to next instruction
-    (void)cpu; // Suppress unused parameter warning
+static void nes6502_adc_zero_page(mos6502_family_t* cpu) {
+    uint8_t addr = mos6502_family_read_cycle(cpu, cpu->pc);
+    cpu->pc++;
+    uint8_t operand = mos6502_family_read_cycle(cpu, addr);
+    nes6502_adc_impl((nes6502_t*)cpu, operand);
+    MOS6502_FAMILY_OPCODE_FOOTER(cpu);
+    
 }
 
-// Initialize the opcode handler table
-static void nes6502_init_opcode_table(nes6502_t* cpu) {
-    if (!cpu) return;
+static void nes6502_adc_zero_page_x(mos6502_family_t* cpu) {
+    uint8_t addr = mos6502_family_read_cycle(cpu, cpu->pc);
+    cpu->pc++;
+    mos6502_family_read_cycle(cpu, addr); // Dummy read
+    addr = (addr + cpu->x) & 0xFF;
+    uint8_t operand = mos6502_family_read_cycle(cpu, addr);
+    nes6502_adc_impl((nes6502_t*)cpu, operand);
+    MOS6502_FAMILY_OPCODE_FOOTER(cpu);
     
-    // Initialize all opcodes to NULL (will be handled as NOPs)
-    for (int i = 0; i < 256; i++) {
-        cpu->base.opcode_handlers[i] = NULL;
+}
+
+static void nes6502_adc_absolute(mos6502_family_t* cpu) {
+    uint8_t addr_lo = mos6502_family_read_cycle(cpu, cpu->pc);
+    cpu->pc++;
+    uint8_t addr_hi = mos6502_family_read_cycle(cpu, cpu->pc);
+    cpu->pc++;
+    uint16_t addr = (addr_hi << 8) | addr_lo;
+    uint8_t operand = mos6502_family_read_cycle(cpu, addr);
+    nes6502_adc_impl((nes6502_t*)cpu, operand);
+    MOS6502_FAMILY_OPCODE_FOOTER(cpu);
+    
+}
+
+static void nes6502_adc_absolute_x(mos6502_family_t* cpu) {
+    uint8_t addr_lo = mos6502_family_read_cycle(cpu, cpu->pc);
+    cpu->pc++;
+    uint8_t addr_hi = mos6502_family_read_cycle(cpu, cpu->pc);
+    cpu->pc++;
+    uint16_t addr = (addr_hi << 8) | addr_lo;
+    uint16_t final_addr = addr + cpu->x;
+    if ((addr & 0xFF00) != (final_addr & 0xFF00)) {
+        mos6502_family_read_cycle(cpu, (addr & 0xFF00) | (final_addr & 0xFF)); // Dummy read on page cross
     }
+    uint8_t operand = mos6502_family_read_cycle(cpu, final_addr);
+    nes6502_adc_impl((nes6502_t*)cpu, operand);
+    MOS6502_FAMILY_OPCODE_FOOTER(cpu);
     
-    // Set up basic opcodes (more would be added for complete implementation)
-    cpu->base.opcode_handlers[0x00] = (mos6502_family_opcode_handler_t)nes6502_brk;
-    cpu->base.opcode_handlers[0xEA] = (mos6502_family_opcode_handler_t)nes6502_nop;
-    
-    // TODO: Add complete opcode table for all 256 instructions
-    // Key difference from standard 6502: ADC/SBC always work in binary mode
 }
+
+static void nes6502_adc_absolute_y(mos6502_family_t* cpu) {
+    uint8_t addr_lo = mos6502_family_read_cycle(cpu, cpu->pc);
+    cpu->pc++;
+    uint8_t addr_hi = mos6502_family_read_cycle(cpu, cpu->pc);
+    cpu->pc++;
+    uint16_t addr = (addr_hi << 8) | addr_lo;
+    uint16_t final_addr = addr + cpu->y;
+    if ((addr & 0xFF00) != (final_addr & 0xFF00)) {
+        mos6502_family_read_cycle(cpu, (addr & 0xFF00) | (final_addr & 0xFF)); // Dummy read on page cross
+    }
+    uint8_t operand = mos6502_family_read_cycle(cpu, final_addr);
+    nes6502_adc_impl((nes6502_t*)cpu, operand);
+    MOS6502_FAMILY_OPCODE_FOOTER(cpu);
+    
+}
+
+static void nes6502_adc_indirect_x(mos6502_family_t* cpu) {
+    uint8_t zp_addr = mos6502_family_read_cycle(cpu, cpu->pc);
+    cpu->pc++;
+    mos6502_family_read_cycle(cpu, zp_addr); // Dummy read
+    zp_addr = (zp_addr + cpu->x) & 0xFF;
+    uint8_t addr_lo = mos6502_family_read_cycle(cpu, zp_addr);
+    uint8_t addr_hi = mos6502_family_read_cycle(cpu, (zp_addr + 1) & 0xFF);
+    uint16_t addr = (addr_hi << 8) | addr_lo;
+    uint8_t operand = mos6502_family_read_cycle(cpu, addr);
+    nes6502_adc_impl((nes6502_t*)cpu, operand);
+    MOS6502_FAMILY_OPCODE_FOOTER(cpu);
+    
+}
+
+static void nes6502_adc_indirect_y(mos6502_family_t* cpu) {
+    uint8_t zp_addr = mos6502_family_read_cycle(cpu, cpu->pc);
+    cpu->pc++;
+    uint8_t addr_lo = mos6502_family_read_cycle(cpu, zp_addr);
+    uint8_t addr_hi = mos6502_family_read_cycle(cpu, (zp_addr + 1) & 0xFF);
+    uint16_t addr = (addr_hi << 8) | addr_lo;
+    uint16_t final_addr = addr + cpu->y;
+    if ((addr & 0xFF00) != (final_addr & 0xFF00)) {
+        mos6502_family_read_cycle(cpu, (addr & 0xFF00) | (final_addr & 0xFF)); // Dummy read on page cross
+    }
+    uint8_t operand = mos6502_family_read_cycle(cpu, final_addr);
+    nes6502_adc_impl((nes6502_t*)cpu, operand);
+    MOS6502_FAMILY_OPCODE_FOOTER(cpu);
+    
+}
+
+// SBC addressing mode handlers
+static void nes6502_sbc_immediate(mos6502_family_t* cpu) {
+    uint8_t operand = mos6502_family_read_cycle(cpu, cpu->pc);
+    cpu->pc++;
+    nes6502_sbc_impl((nes6502_t*)cpu, operand);
+    MOS6502_FAMILY_OPCODE_FOOTER(cpu);
+    
+}
+
+static void nes6502_sbc_zero_page(mos6502_family_t* cpu) {
+    uint8_t addr = mos6502_family_read_cycle(cpu, cpu->pc);
+    cpu->pc++;
+    uint8_t operand = mos6502_family_read_cycle(cpu, addr);
+    nes6502_sbc_impl((nes6502_t*)cpu, operand);
+    MOS6502_FAMILY_OPCODE_FOOTER(cpu);
+    
+}
+
+static void nes6502_sbc_zero_page_x(mos6502_family_t* cpu) {
+    uint8_t addr = mos6502_family_read_cycle(cpu, cpu->pc);
+    cpu->pc++;
+    mos6502_family_read_cycle(cpu, addr); // Dummy read
+    addr = (addr + cpu->x) & 0xFF;
+    uint8_t operand = mos6502_family_read_cycle(cpu, addr);
+    nes6502_sbc_impl((nes6502_t*)cpu, operand);
+    MOS6502_FAMILY_OPCODE_FOOTER(cpu);
+    
+}
+
+static void nes6502_sbc_absolute(mos6502_family_t* cpu) {
+    uint8_t addr_lo = mos6502_family_read_cycle(cpu, cpu->pc);
+    cpu->pc++;
+    uint8_t addr_hi = mos6502_family_read_cycle(cpu, cpu->pc);
+    cpu->pc++;
+    uint16_t addr = (addr_hi << 8) | addr_lo;
+    uint8_t operand = mos6502_family_read_cycle(cpu, addr);
+    nes6502_sbc_impl((nes6502_t*)cpu, operand);
+    MOS6502_FAMILY_OPCODE_FOOTER(cpu);
+    
+}
+
+static void nes6502_sbc_absolute_x(mos6502_family_t* cpu) {
+    uint8_t addr_lo = mos6502_family_read_cycle(cpu, cpu->pc);
+    cpu->pc++;
+    uint8_t addr_hi = mos6502_family_read_cycle(cpu, cpu->pc);
+    cpu->pc++;
+    uint16_t addr = (addr_hi << 8) | addr_lo;
+    uint16_t final_addr = addr + cpu->x;
+    if ((addr & 0xFF00) != (final_addr & 0xFF00)) {
+        mos6502_family_read_cycle(cpu, (addr & 0xFF00) | (final_addr & 0xFF)); // Dummy read on page cross
+    }
+    uint8_t operand = mos6502_family_read_cycle(cpu, final_addr);
+    nes6502_sbc_impl((nes6502_t*)cpu, operand);
+    MOS6502_FAMILY_OPCODE_FOOTER(cpu);
+    
+}
+
+static void nes6502_sbc_absolute_y(mos6502_family_t* cpu) {
+    uint8_t addr_lo = mos6502_family_read_cycle(cpu, cpu->pc);
+    cpu->pc++;
+    uint8_t addr_hi = mos6502_family_read_cycle(cpu, cpu->pc);
+    cpu->pc++;
+    uint16_t addr = (addr_hi << 8) | addr_lo;
+    uint16_t final_addr = addr + cpu->y;
+    if ((addr & 0xFF00) != (final_addr & 0xFF00)) {
+        mos6502_family_read_cycle(cpu, (addr & 0xFF00) | (final_addr & 0xFF)); // Dummy read on page cross
+    }
+    uint8_t operand = mos6502_family_read_cycle(cpu, final_addr);
+    nes6502_sbc_impl((nes6502_t*)cpu, operand);
+    MOS6502_FAMILY_OPCODE_FOOTER(cpu);
+    
+}
+
+static void nes6502_sbc_indirect_x(mos6502_family_t* cpu) {
+    uint8_t zp_addr = mos6502_family_read_cycle(cpu, cpu->pc);
+    cpu->pc++;
+    mos6502_family_read_cycle(cpu, zp_addr); // Dummy read
+    zp_addr = (zp_addr + cpu->x) & 0xFF;
+    uint8_t addr_lo = mos6502_family_read_cycle(cpu, zp_addr);
+    uint8_t addr_hi = mos6502_family_read_cycle(cpu, (zp_addr + 1) & 0xFF);
+    uint16_t addr = (addr_hi << 8) | addr_lo;
+    uint8_t operand = mos6502_family_read_cycle(cpu, addr);
+    nes6502_sbc_impl((nes6502_t*)cpu, operand);
+    MOS6502_FAMILY_OPCODE_FOOTER(cpu);
+    
+}
+
+static void nes6502_sbc_indirect_y(mos6502_family_t* cpu) {
+    uint8_t zp_addr = mos6502_family_read_cycle(cpu, cpu->pc);
+    cpu->pc++;
+    uint8_t addr_lo = mos6502_family_read_cycle(cpu, zp_addr);
+    uint8_t addr_hi = mos6502_family_read_cycle(cpu, (zp_addr + 1) & 0xFF);
+    uint16_t addr = (addr_hi << 8) | addr_lo;
+    uint16_t final_addr = addr + cpu->y;
+    if ((addr & 0xFF00) != (final_addr & 0xFF00)) {
+        mos6502_family_read_cycle(cpu, (addr & 0xFF00) | (final_addr & 0xFF)); // Dummy read on page cross
+    }
+    uint8_t operand = mos6502_family_read_cycle(cpu, final_addr);
+    nes6502_sbc_impl((nes6502_t*)cpu, operand);
+    MOS6502_FAMILY_OPCODE_FOOTER(cpu);
+    
+}
+
+// ============================================================================
+// CHIP DESCRIPTOR
+// ============================================================================
+
+// Wrapper functions for chip descriptor interface
+static void* nes6502_create_wrapper(chip_descriptor_t* desc) {
+    nes6502_t* cpu = malloc(sizeof(nes6502_t));
+    if (!cpu) return NULL;
+    
+    if (!nes6502_create(desc, cpu)) {
+        free(cpu);
+        return NULL;
+    }
+    return cpu;
+}
+
+static void nes6502_destroy_wrapper(void* chip) {
+    if (chip) {
+        nes6502_destroy((nes6502_t*)chip);
+        free(chip);
+    }
+}
+
+chip_descriptor_t nes6502_descriptor = {
+    .description = "NES 6502 CPU (No Decimal Mode)",
+    .create = nes6502_create_wrapper,
+    .destroy = nes6502_destroy_wrapper,
+    .bus_attach = NULL,
+    .read = NULL,  // NES 6502 doesn't have special read behavior
+    .write = NULL, // NES 6502 doesn't have special write behavior
+    .bank_change = NULL,
+    .get_rwcb_context = NULL,
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    .render_debug_window = nes6502_render_debug_window,
+    .render_settings_window = NULL
+#endif
+};
