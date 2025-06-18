@@ -39,7 +39,6 @@ bool nes6502_create(chip_descriptor_t* desc, nes6502_t* cpu) {
     
     // Initialize base 6502 family structure
     cpu->base.desc = desc;
-    cpu->base.intercepting = false;
     cpu->base.system_lines = NULL;
     
     // Initialize CPU state
@@ -50,9 +49,6 @@ bool nes6502_create(chip_descriptor_t* desc, nes6502_t* cpu) {
     cpu->base.sp = 0xFF;
     cpu->base.p = FLAG_U | FLAG_I; // Start with unused=1, interrupt disable=1
     cpu->base.address = 0x0000;
-    
-    // No CPU-specific data for NES 6502
-    cpu->base.cpu_specific_data = NULL;
       // Initialize with complete family opcode table
     mos6502_family_init_opcode_table(&cpu->base);
     
@@ -103,8 +99,6 @@ void nes6502_reset(nes6502_t* cpu) {
     uint8_t addr_lo = mos6502_family_read_cycle(&cpu->base, 0xFFFC);
     uint8_t addr_hi = mos6502_family_read_cycle(&cpu->base, 0xFFFD);
     cpu->base.pc = (addr_hi << 8) | addr_lo;
-    
-    cpu->base.intercepting = false;
 }
 
 bool nes6502_step(nes6502_t* cpu) {

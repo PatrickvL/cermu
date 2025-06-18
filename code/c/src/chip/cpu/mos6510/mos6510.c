@@ -118,8 +118,11 @@ void mos6510_init(mos6510_t* cpu) {
     cpu->base.pc = 0;
     cpu->base.address = 0;
 
-    // Copy MOS6510 opcode handlers to instance table
-    memcpy(cpu->base.opcode_handlers, mos6510_opcode_handlers, sizeof(cpu->base.opcode_handlers));
+    // Initialize with complete family opcode table (like MOS6502 and NES6502)
+    mos6502_family_init_opcode_table(&cpu->base);
+    
+    // MOS6510 specific: no decimal mode behavior (similar to NES6502)
+    // The family table already implements binary-only ADC/SBC, so no overrides needed
 
     // 6510-specific I/O port (addresses $0000/$0001) initialization
     cpu->io_port[0] = 0x2F;  // Default Data Direction Register (DDR at $0000)
@@ -194,43 +197,12 @@ void mos6510_execute(mos6510_t* cpu) {
 }
 
 // ============================================================================
-// TEMPORARY STUB IMPLEMENTATIONS
+// MOS6510 NOW USES FAMILY OPCODE TABLE
 // ============================================================================
 
-// Temporary stub implementations - these should be replaced with actual implementations
-// from the illegal instruction files and other opcode modules
-
-void brk_func(mos6510_t* cpu) {
-    // TODO: Implement BRK instruction
-    MOS6510_OPCODE_FOOTER(cpu);
-}
-
-void ora_indirect_x_func(mos6510_t* cpu) {
-    // TODO: Implement ORA (zp,X) instruction
-    MOS6510_OPCODE_FOOTER(cpu);
-}
-
-void jam_func(mos6510_t* cpu) {
-    // JAM instruction - halt CPU (illegal instruction)
-    // In a real implementation, this would halt the CPU
-    MOS6510_OPCODE_FOOTER(cpu);
-}
-
-// ============================================================================
-// GLOBAL INSTRUCTION TABLE PLACEHOLDER
-// ============================================================================
-
-// Global MOS6510 instruction table using function pointers
-mos6510_opcode_handler_t mos6510_opcode_handlers[256] = {
-    [0x00] = brk_func,                           // BRK
-    [0x01] = ora_indirect_x_func,               // ORA ($nn,X)
-    [0x02] = jam_func,                          // JAM (illegal)
-    // ... (complete opcode table would be populated here)
-    // For now, initialize remaining entries to jam_func to prevent crashes
-};
-
-// Note: Complete opcode table initialization should be done during CPU creation
-// This is a minimal table - a complete implementation would populate all 256 entries
+// Note: MOS6510 now uses the shared family opcode table through mos6502_family_init_opcode_table()
+// All 256 opcodes are implemented in the family core with proper implementations
+// No MOS6510-specific overrides are needed since the family table already provides binary-only arithmetic
 
 // ============================================================================
 // PERFORMANCE-OPTIMIZED INTERFACE ATTACHMENT FUNCTIONS
