@@ -1,5 +1,7 @@
 #include "mos6502.h"
 #include "../../../core/system.h"
+#include <stdlib.h>
+#include <string.h>
 
 // ============================================================================
 // MOS 6502 IMPLEMENTATION
@@ -13,7 +15,8 @@ bool mos6502_create(chip_descriptor_t* desc, mos6502_t* cpu) {
     if (!desc || !cpu) {
         return false;
     }
-      // Initialize base MOS 6502 family structure
+    
+    // Initialize base MOS 6502 family structure
     cpu->base.desc = desc;
     cpu->base.intercepting = false;
     cpu->base.system_lines = NULL;
@@ -24,7 +27,7 @@ bool mos6502_create(chip_descriptor_t* desc, mos6502_t* cpu) {
     cpu->base.x = 0x00;
     cpu->base.y = 0x00;
     cpu->base.sp = 0xFF;
-    cpu->base.p = MOS6502_FLAG_U | MOS6502_FLAG_I; // Start with unused=1, interrupt disable=1
+    cpu->base.p = FLAG_U | FLAG_I; // Start with unused=1, interrupt disable=1
     cpu->base.address = 0x0000;
     
     // No CPU-specific data for standard MOS 6502
@@ -100,34 +103,7 @@ void mos6502_set_y(mos6502_t* cpu, uint8_t value) { if (cpu) cpu->base.y = value
 void mos6502_set_sp(mos6502_t* cpu, uint8_t value) { if (cpu) cpu->base.sp = value; }
 void mos6502_set_p(mos6502_t* cpu, uint8_t value) { if (cpu) cpu->base.p = value; }
 
-// Memory access functions
-uint8_t mos6502_read_memory(mos6502_t* cpu, uint16_t address) {
-    return cpu ? mos6502_read_cycle(&cpu->base, address) : 0;
-}
-
-void mos6502_write_memory(mos6502_t* cpu, uint16_t address, uint8_t value) {
-    if (cpu) {
-        mos6502_write_cycle(&cpu->base, address, value);
-    }
-}
-
-// Test and debug support
-void mos6502_start_intercept(mos6502_t* cpu) {
-    if (cpu) mos6502_start_intercept(&cpu->base);
-}
-
-void mos6502_stop_intercept(mos6502_t* cpu) {
-    if (cpu) mos6502_stop_intercept(&cpu->base);
-}
-
-bool mos6502_is_intercepting(mos6502_t* cpu) {
-    return cpu ? mos6502_is_intercepting(&cpu->base) : false;
-}
-
-// ============================================================================
 // DECIMAL MODE ARITHMETIC (Full 6502 Support)
-// ============================================================================
-
 void mos6502_adc(mos6502_t* cpu, uint8_t operand) {
     if (!cpu) return;
     
@@ -245,4 +221,74 @@ static void mos6502_init_opcode_table(mos6502_t* cpu) {
     
     // TODO: Add complete opcode table for all 256 instructions
     // This would include all arithmetic, logical, memory, and control instructions
+}
+
+// ============================================================================
+// CHIP DESCRIPTOR
+// ============================================================================
+
+// Wrapper functions for chip descriptor interface
+static void* mos6502_create_wrapper(chip_descriptor_t* desc) {
+    mos6502_t* cpu = malloc(sizeof(mos6502_t));
+    if (!cpu) return NULL;
+    
+    if (!mos6502_create(desc, cpu)) {
+        free(cpu);
+        return NULL;
+    }
+    return cpu;
+}
+
+static void mos6502_destroy_wrapper(void* chip) {
+    if (chip) {
+        mos6502_destroy((mos6502_t*)chip);
+        free(chip);
+    }
+}
+
+chip_descriptor_t mos6502_descriptor = {
+    .description = "MOS6502 CPU with Decimal Mode",
+    .create = mos6502_create_wrapper,
+    .destroy = mos6502_destroy_wrapper,
+    .bus_attach = NULL,
+    .read = NULL,  // Standard 6502 doesn't have special read behavior
+    .write = NULL, // Standard 6502 doesn't have special write behavior
+    .bank_change = NULL,
+    .get_rwcb_context = NULL,
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    .render_debug_window = mos6502_render_debug_window,
+    .render_settings_window = NULL
+#endif
+};
+
+// ============================================================================
+// MEMORY ACCESS FUNCTIONS
+// ============================================================================
+
+uint8_t mos6502_read_memory(mos6502_t* cpu, uint16_t address) {
+    if (!cpu) return 0xFF;
+    return mos6502_read_cycle(&cpu->base, address);
+}
+
+void mos6502_write_memory(mos6502_t* cpu, uint16_t address, uint8_t value) {
+    if (!cpu) return;
+    mos6502_write_cycle(&cpu->base, address, value);
+}
+
+// ============================================================================
+// INTERCEPT FUNCTIONS
+// ============================================================================
+
+void mos6502_start_intercept(mos6502_t* cpu) {
+    if (!cpu) return;
+    cpu->base.intercepting = true;
+}
+
+void mos6502_stop_intercept(mos6502_t* cpu) {
+    if (!cpu) return;
+    cpu->base.intercepting = false;
+}
+
+bool mos6502_is_intercepting(mos6502_t* cpu) {
+    return cpu ? cpu->base.intercepting : false;
 }
