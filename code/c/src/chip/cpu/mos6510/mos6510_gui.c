@@ -8,31 +8,32 @@
 #include <cimgui.h>
 #include <stdio.h>
 
+// Forward declarations
+static void mos6510_render_cpu_specific(void* chip);
+
 // ============================================================================
 // MOS6510 CPU GUI DEBUG WINDOW
 // ============================================================================
 
 void mos6510_render_debug_window(void* chip, bool* show_window) {
     mos6510_t* cpu = (mos6510_t*)chip;
-    if (!cpu || !cpu->desc) return;
+    if (!cpu || !cpu->base.desc) return;
     
     if (!*show_window) return;
     
     char window_title[128];
-    snprintf(window_title, sizeof(window_title), "%s Debug", cpu->desc->description);
+    snprintf(window_title, sizeof(window_title), "%s Debug", cpu->base.desc->description);
     
     if (!igBegin(window_title, show_window, 0)) {
         igEnd();
         return;
-    }
-
-    // Create GUI configuration for MOS6510    mos6502_family_gui_config_t config = {
-        .cpu_type_name = "MOS 6510 (C64)",
-        .has_decimal_mode = false,  // MOS6510 does not support decimal mode
-        .has_io_ports = true,       // MOS6510 has I/O ports
-        .has_extended_opcodes = false,
-        .render_cpu_specific = mos6510_render_cpu_specific
-    };
+    }    // Create GUI configuration for MOS6510
+    mos6502_family_gui_config_t config;
+    config.cpu_type_name = "MOS 6510 (C64)";
+    config.has_decimal_mode = false;  // MOS6510 does not support decimal mode
+    config.has_io_ports = true;       // MOS6510 has I/O ports
+    config.has_extended_opcodes = false;
+    config.render_cpu_specific = mos6510_render_cpu_specific;
     
     // Use the shared family debug window renderer
     mos6502_family_render_debug_window(chip, show_window, &config);
@@ -44,12 +45,12 @@ void mos6510_render_debug_window(void* chip, bool* show_window) {
 
 void mos6510_render_settings_window(void* chip, bool* show_window) {
     mos6510_t* cpu = (mos6510_t*)chip;
-    if (!cpu || !cpu->desc) return;
+    if (!cpu || !cpu->base.desc) return;
     
     if (!*show_window) return;
     
     char window_title[128];
-    snprintf(window_title, sizeof(window_title), "%s Settings", cpu->desc->description);
+    snprintf(window_title, sizeof(window_title), "%s Settings", cpu->base.desc->description);
     
     if (!igBegin(window_title, show_window, 0)) {
         igEnd();
