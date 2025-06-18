@@ -71,7 +71,8 @@ target_include_directories(json_parser PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(processor_tests_runner
     processor_tests_runner.c
 )
-target_link_libraries(processor_tests_runner mos6510_lib json_parser)
+target_link_libraries(processor_tests_runner mos6502 nes6502 mos6510 json_parser)
+target_sources(processor_tests_runner PRIVATE ${CORE_SOURCES})
 
 # Comprehensive Test Suite (fallback/custom tests)
 add_executable(test_mos6510_comprehensive
