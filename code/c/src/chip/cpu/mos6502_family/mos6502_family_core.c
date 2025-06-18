@@ -73,11 +73,14 @@ void mos6502_family_interrupt_handler(mos6502_family_t* cpu) {
 
 // Interception support (shared) - proper handler replacement mechanism
 void mos6502_family_intercept_stub(mos6502_family_t* cpu) {
-    // Decrement PC since it was incremented during opcode fetch
+    // This stub is hit when threaded dispatch tries to execute the next instruction
+    // Restore the original handlers and stop interception
+    if (mos6502_family_is_intercepting(cpu)) {
+        mos6502_family_stop_intercept(cpu);
+    }
+    // Decrement PC since it was incremented during opcode fetch for the next instruction
     cpu->pc--;
-    // When intercepting this stub is called at the end of an opcode,
-    // and because no next instruction is executed, the threaded dispatch
-    // ends here.
+    // Threaded dispatch ends here - this completes the single step
 }
 
 bool mos6502_family_is_intercepting(mos6502_family_t* cpu) {
@@ -113,6 +116,7 @@ bool mos6502_family_step(mos6502_family_t* cpu) {
     
     // Single step implementation using interception mechanism
     // This ensures only one instruction executes before returning control
+    
     // Fetch the opcode and get the real handler BEFORE starting interception
     uint8_t opcode = mos6502_family_read_cycle(cpu, cpu->pc++);
     mos6502_family_opcode_handler_t handler = cpu->opcode_handlers[opcode];
@@ -121,10 +125,11 @@ bool mos6502_family_step(mos6502_family_t* cpu) {
     mos6502_family_start_intercept(cpu);
     
     // Execute the actual instruction handler
+    // The handler will call the footer macro which does threaded dispatch to the next instruction
+    // Since interception is active, the next instruction will be the intercept stub
+    // The intercept stub will automatically restore handlers and stop interception
     handler(cpu);
-
-    // Use the common stop_intercept function to restore handlers
-    mos6502_family_stop_intercept(cpu);
-   
+    
+    // The intercept stub has already restored handlers, so we're done
     return true;
 }
