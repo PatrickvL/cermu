@@ -100,7 +100,7 @@ void mos6502_family_stop_intercept(mos6502_family_t* cpu) {
     if (!cpu) return;
     
     if (!mos6502_family_is_intercepting(cpu)) return;
-    
+
     // Restore original handlers from saved copy
     memcpy(cpu->opcode_handlers, cpu->saved_opcode_handlers, sizeof(cpu->opcode_handlers));
 }
@@ -108,6 +108,8 @@ void mos6502_family_stop_intercept(mos6502_family_t* cpu) {
 // Single step execution (shared) - uses intercept mechanism for performance
 bool mos6502_family_step(mos6502_family_t* cpu) {
     if (!cpu) return false;
+    
+    if (mos6502_family_is_intercepting(cpu)) return false; // Cannot step while intercepting
     
     // Single step implementation using interception mechanism
     // This ensures only one instruction executes before returning control
@@ -124,6 +126,5 @@ bool mos6502_family_step(mos6502_family_t* cpu) {
     // Use the common stop_intercept function to restore handlers
     mos6502_family_stop_intercept(cpu);
    
-    // The threaded dispatch will hit the intercept stub which calls stop_intercept
     return true;
 }
