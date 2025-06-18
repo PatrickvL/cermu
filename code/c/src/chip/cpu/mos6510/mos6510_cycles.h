@@ -63,7 +63,7 @@ static inline uint8_t mos6510_get_opcode_cycles(uint8_t opcode) {
 
 // Check if a cycle count is reasonable for any 6510 instruction 
 static inline bool mos6510_is_reasonable_cycle_count(uint32_t cycles) {
-    return cycles <= MOS6510_MAX_CYCLES_WITH_BUS_STEALING;       
+    return cycles <= MOS6510_MAX_CYCLES_WITH_BUS_STEALING;
 }
 
 #endif // MOS6510_CYCLES_H

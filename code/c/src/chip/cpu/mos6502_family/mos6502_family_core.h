@@ -538,7 +538,8 @@ static inline uint8_t mos6502_family_addr_indy(mos6502_family_t* cpu) {
     uint8_t addr_lo = mos6502_family_read_cycle(cpu, zp_addr);
     MOS6502_FAMILY_INTRA_CYCLE(cpu);
     uint8_t addr_hi = mos6502_family_read_cycle(cpu, (zp_addr + 1) & 0xFF);
-    uint16_t base_addr = (addr_hi << 8) | addr_lo;    cpu->address = base_addr + cpu->y;
+    uint16_t base_addr = (addr_hi << 8) | addr_lo;
+    cpu->address = base_addr + cpu->y;
     
     // Check for page boundary crossing
     if ((base_addr & 0xFF00) != (cpu->address & 0xFF00)) {

@@ -38,7 +38,7 @@ uint8_t mos6502_family_pull(mos6502_family_t* cpu) {
 void mos6502_family_interrupt_sequence(mos6502_family_t* cpu, uint8_t status_flags, uint16_t vector_addr) {
     // Push program counter (high byte first)
     mos6502_family_push(cpu, (cpu->pc >> 8) & 0xFF);
-    mos6502_family_push(cpu, cpu->pc & 0xFF);    
+    mos6502_family_push(cpu, cpu->pc & 0xFF);
     // Push status register with specified flags
     mos6502_family_push(cpu, status_flags | FLAG_U); // Always set unused flag
       // Set interrupt disable flag

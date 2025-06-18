@@ -54,11 +54,12 @@ void mos6502_reset(mos6502_t* cpu) {
     cpu->base.a = 0x00;
     cpu->base.x = 0x00;
     cpu->base.y = 0x00;
-    cpu->base.sp = 0xFF;    cpu->base.p = MOS6502_FLAG_U | MOS6502_FLAG_I; // Start with unused=1, interrupt disable=1
+    cpu->base.sp = 0xFF;
+    cpu->base.p = FLAG_U | FLAG_I; // Start with unused=1, interrupt disable=1
     
     // Load reset vector
-    uint8_t addr_lo = mos6502_read_cycle(&cpu->base, 0xFFFC);
-    uint8_t addr_hi = mos6502_read_cycle(&cpu->base, 0xFFFD);
+    uint8_t addr_lo = mos6502_family_read_cycle(&cpu->base, 0xFFFC);
+    uint8_t addr_hi = mos6502_family_read_cycle(&cpu->base, 0xFFFD);
     cpu->base.pc = (addr_hi << 8) | addr_lo;
     
     cpu->base.intercepting = false;
@@ -66,7 +67,7 @@ void mos6502_reset(mos6502_t* cpu) {
 
 bool mos6502_step(mos6502_t* cpu) {
     if (!cpu) return false;
-    return mos6502_step(&cpu->base);
+    return mos6502_family_step(&cpu->base);
 }
 
 // Configuration and setup functions
@@ -106,10 +107,9 @@ void mos6502_set_p(mos6502_t* cpu, uint8_t value) { if (cpu) cpu->base.p = value
 // DECIMAL MODE ARITHMETIC (Full 6502 Support)
 void mos6502_adc(mos6502_t* cpu, uint8_t operand) {
     if (!cpu) return;
-    
-    mos6502_family_t* base = &cpu->base;
-    bool carry_in = mos6502_get_flag(base, MOS6502_FLAG_C);
-    bool decimal_mode = mos6502_get_flag(base, MOS6502_FLAG_D);
+      mos6502_family_t* base = &cpu->base;
+    bool carry_in = mos6502_family_get_flag(base, FLAG_C);
+    bool decimal_mode = mos6502_family_get_flag(base, FLAG_D);
     
     if (decimal_mode) {
         // Decimal mode ADC - convert to BCD
@@ -134,28 +134,27 @@ void mos6502_adc(mos6502_t* cpu, uint8_t operand) {
             carry_out = true;
         }
         
-        uint8_t result = (result_hi << 4) | result_lo;
-          // Set flags (N and Z are set based on binary result, not BCD)
+        uint8_t result = (result_hi << 4) | result_lo;        // Set flags (N and Z are set based on binary result, not BCD)
         uint16_t binary_result = base->a + operand + (carry_in ? 1 : 0);
-        mos6502_set_flag(base, MOS6502_FLAG_C, carry_out);
-        mos6502_set_flag(base, MOS6502_FLAG_Z, (binary_result & 0xFF) == 0);
-        mos6502_set_flag(base, MOS6502_FLAG_N, (binary_result & 0x80) != 0);
+        mos6502_family_set_flag(base, FLAG_C, carry_out);
+        mos6502_family_set_flag(base, FLAG_Z, (binary_result & 0xFF) == 0);
+        mos6502_family_set_flag(base, FLAG_N, (binary_result & 0x80) != 0);
         
         // V flag: set if sign changed unexpectedly in binary arithmetic
         bool overflow = ((base->a ^ result) & (operand ^ result) & 0x80) != 0;
-        mos6502_set_flag(base, MOS6502_FLAG_V, overflow);
+        mos6502_family_set_flag(base, FLAG_V, overflow);
         
         base->a = result;
     } else {        // Binary mode ADC
         uint16_t result = base->a + operand + (carry_in ? 1 : 0);
         
-        mos6502_set_flag(base, MOS6502_FLAG_C, result > 0xFF);
-        mos6502_set_flag(base, MOS6502_FLAG_Z, (result & 0xFF) == 0);
-        mos6502_set_flag(base, MOS6502_FLAG_N, (result & 0x80) != 0);
+        mos6502_family_set_flag(base, FLAG_C, result > 0xFF);
+        mos6502_family_set_flag(base, FLAG_Z, (result & 0xFF) == 0);
+        mos6502_family_set_flag(base, FLAG_N, (result & 0x80) != 0);
         
         // V flag: overflow if both inputs have same sign, but result has different sign
         bool overflow = ((base->a ^ (result & 0xFF)) & (operand ^ (result & 0xFF)) & 0x80) != 0;
-        mos6502_set_flag(base, MOS6502_FLAG_V, overflow);
+        mos6502_family_set_flag(base, FLAG_V, overflow);
         
         base->a = result & 0xFF;
     }
@@ -166,10 +165,10 @@ void mos6502_sbc(mos6502_t* cpu, uint8_t operand) {
     
     // SBC is just ADC with the operand inverted and carry inverted
     mos6502_family_t* base = &cpu->base;
-    bool carry_in = mos6502_get_flag(base, MOS6502_FLAG_C);
+    bool carry_in = mos6502_family_get_flag(base, FLAG_C);
     
     // Flip carry for subtraction
-    mos6502_set_flag(base, MOS6502_FLAG_C, !carry_in);
+    mos6502_family_set_flag(base, FLAG_C, !carry_in);
     
     // Perform ADC with inverted operand
     mos6502_adc(cpu, ~operand);
@@ -219,12 +218,12 @@ chip_descriptor_t mos6502_descriptor = {
 
 uint8_t mos6502_read_memory(mos6502_t* cpu, uint16_t address) {
     if (!cpu) return 0xFF;
-    return mos6502_read_cycle(&cpu->base, address);
+    return mos6502_family_read_cycle(&cpu->base, address);
 }
 
 void mos6502_write_memory(mos6502_t* cpu, uint16_t address, uint8_t value) {
     if (!cpu) return;
-    mos6502_write_cycle(&cpu->base, address, value);
+    mos6502_family_write_cycle(&cpu->base, address, value);
 }
 
 // ============================================================================
