@@ -23,6 +23,9 @@ endif()
 # Include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../)
 
+# Add the CPU subdirectory to make mos6502_family library available
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu cpu_build)
+
 # Source directories
 set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 set(CPU_DIR ${SRC_DIR}/chip/cpu/mos6510)
@@ -57,7 +60,8 @@ endforeach()
 # Create a library for the MOS6510 CPU
 add_library(mos6510_lib STATIC ${CPU_SOURCES} ${CORE_SOURCES})
 target_include_directories(mos6510_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../)
-# Note: mos6502_family functions are inline in headers, no separate library needed
+# Link against the mos6502_family library which contains shared functions like mos6502_family_push
+target_link_libraries(mos6510_lib mos6502_family)
 
 # JSON Parser library for ProcessorTests
 add_library(json_parser STATIC json_parser.c)

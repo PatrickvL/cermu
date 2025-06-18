@@ -5,6 +5,7 @@
 #endif
 #include <cimgui.h>
 #include <stdio.h>
+#include <string.h>  // For strncat
 
 // ============================================================================
 // SHARED MOS 6502 FAMILY GUI IMPLEMENTATION
@@ -94,16 +95,16 @@ void mos6502_family_render_memory_view(mos6502_family_t* cpu, uint16_t start_add
         char hex_part[64] = "";
         char ascii_part[20] = "";
         
-        snprintf(line, sizeof(line), "%04X: ", start_addr + i);
+        snprintf(line, sizeof(line), "%04X: ", (unsigned int)(start_addr + i));
         
         for (int j = 0; j < 16 && (i + j) < length; j++) {
             uint8_t value = cpu->bus_interface.bus_read(cpu->bus_interface.context, start_addr + i + j);
             char hex_byte[8];
             snprintf(hex_byte, sizeof(hex_byte), "%02X ", value);
             strncat(hex_part, hex_byte, sizeof(hex_part) - strlen(hex_part) - 1);
-            
-            char ascii_char = (value >= 32 && value <= 126) ? value : '.';
-            strncat(ascii_part, &ascii_char, 1);
+              char ascii_char = (value >= 32 && value <= 126) ? (char)value : '.';
+            char ascii_str[2] = {ascii_char, '\0'};
+            strncat(ascii_part, ascii_str, sizeof(ascii_part) - strlen(ascii_part) - 1);
         }
         
         igText("%s%-48s %s", line, hex_part, ascii_part);
@@ -119,9 +120,8 @@ void mos6502_family_render_stack_view(mos6502_family_t* cpu) {
     // Show stack around current SP
     uint16_t stack_base = 0x0100;
     uint16_t current_sp = stack_base | cpu->sp;
-    
-    for (int i = -4; i <= 4; i++) {
-        uint16_t addr = current_sp + i;
+      for (int i = -4; i <= 4; i++) {
+        uint16_t addr = (uint16_t)(current_sp + i);
         if ((addr & 0xFF00) == 0x0100) { // Stay in stack page
             uint8_t value = cpu->bus_interface.bus_read(cpu->bus_interface.context, addr);
             const char* marker = (i == 0) ? " <- SP" : "";
@@ -230,7 +230,7 @@ void mos6502_family_render_settings_window(void* chip, bool* show_window, const 
 
 void mos6502_family_render_flag_bits(uint8_t flags, const char* flag_names) {
     char bits[32];
-    int bit_count = strlen(flag_names);
+    int bit_count = (int)strlen(flag_names);
     
     for (int i = 0; i < bit_count; i++) {
         bits[i*2] = (flags & (0x80 >> i)) ? '1' : '0';

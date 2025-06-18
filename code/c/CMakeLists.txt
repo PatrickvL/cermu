@@ -119,8 +119,7 @@ set(CORE_SOURCES
 )
 
 # Chip library sources
-set(CHIP_SOURCES
-    # CPU family core functions (shared by all family members)
+set(CHIP_SOURCES    # CPU family core functions (shared by all family members)
     src/chip/cpu/mos6502_family/mos6502_family_core.c
     src/chip/cpu/mos6502_family/mos6502_family_arithmetic.c
     src/chip/cpu/mos6502_family/mos6502_family_control.c
@@ -129,8 +128,7 @@ set(CHIP_SOURCES
     src/chip/cpu/mos6502_family/mos6502_family_shifts.c
     src/chip/cpu/mos6502_family/mos6502_family_misc.c
     src/chip/cpu/mos6502_family/mos6502_family_opcodes.c
-    
-    # CPU (operation files are included in mos6510.c)
+      # CPU (operation files are included in mos6510.c)
     src/chip/cpu/mos6510/mos6510.c
     
     # I/O
@@ -186,11 +184,14 @@ set_target_properties(c64emu
 )
 
 # GUI executable (ImGui version) - only if SDL2 and OpenGL are available
-if(BUILD_GUI)    # GUI sources (just our interface file - cimgui handles the rest)
+if(BUILD_GUI)
+    # GUI sources (just our interface file - cimgui handles the rest)
     set(GUI_SOURCES
         src/gui/cimgui_interface.c
         src/gui/cimgui_backends.cpp
         src/chip/video/vic_ii/vicii_gui.c
+        src/chip/cpu/mos6502_family/mos6502_family_gui.c
+        src/chip/cpu/mos6510/mos6510_gui.c
     )
 
     add_executable(c64emu_gui
