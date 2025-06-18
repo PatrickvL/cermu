@@ -189,76 +189,71 @@ void destroy_cpu_instance(cpu_instance_t* instance) {
 // ============================================================================
 
 void set_cpu_state(cpu_instance_t* instance, const cpu_state_t* state) {
+    // All CPUs use the same mos6502_family_t base structure - access directly
+    mos6502_family_t* cpu_base = NULL;
+    
     switch (instance->type) {
         case CPU_TYPE_MOS6502: {
             mos6502_t* cpu = (mos6502_t*)instance->cpu;
-            mos6502_set_pc(cpu, state->pc);
-            mos6502_set_a(cpu, state->a);
-            mos6502_set_x(cpu, state->x);
-            mos6502_set_y(cpu, state->y);
-            mos6502_set_sp(cpu, state->s);
-            mos6502_set_p(cpu, state->p);
+            cpu_base = &cpu->base;
             break;
         }
         case CPU_TYPE_MOS6510: {
             mos6510_t* cpu = (mos6510_t*)instance->cpu;
-            mos6510_set_pc(cpu, state->pc);
-            mos6510_set_a(cpu, state->a);
-            mos6510_set_x(cpu, state->x);
-            mos6510_set_y(cpu, state->y);
-            mos6510_set_sp(cpu, state->s);
-            mos6510_set_p(cpu, state->p);
+            cpu_base = &cpu->base;
             break;
-        }
-        case CPU_TYPE_NES6502: {
+        }        case CPU_TYPE_NES6502: {
             nes6502_t* cpu = (nes6502_t*)instance->cpu;
-            nes6502_set_pc(cpu, state->pc);
-            nes6502_set_a(cpu, state->a);
-            nes6502_set_x(cpu, state->x);
-            nes6502_set_y(cpu, state->y);
-            nes6502_set_sp(cpu, state->s);
-            nes6502_set_p(cpu, state->p);
+            cpu_base = &cpu->base;
             break;
         }
         default:
             break;
     }
+    
+    // Direct struct member access - all CPUs share the same base layout
+    if (cpu_base) {
+        cpu_base->pc = state->pc;
+        cpu_base->a = state->a;
+        cpu_base->x = state->x;
+        cpu_base->y = state->y;
+        cpu_base->sp = state->s;
+        cpu_base->p = state->p;
+    }
 }
 
 void get_cpu_state(cpu_instance_t* instance, cpu_state_t* state) {
+    // All CPUs use the same mos6502_family_t base structure - access directly
+    mos6502_family_t* cpu_base = NULL;
+    
     switch (instance->type) {
         case CPU_TYPE_MOS6502: {
             mos6502_t* cpu = (mos6502_t*)instance->cpu;
-            state->pc = mos6502_get_pc(cpu);
-            state->a = mos6502_get_a(cpu);
-            state->x = mos6502_get_x(cpu);
-            state->y = mos6502_get_y(cpu);
-            state->s = mos6502_get_sp(cpu);
-            state->p = mos6502_get_p(cpu);
+            cpu_base = &cpu->base;
             break;
         }
         case CPU_TYPE_MOS6510: {
             mos6510_t* cpu = (mos6510_t*)instance->cpu;
-            state->pc = mos6510_get_pc(cpu);
-            state->a = mos6510_get_a(cpu);
-            state->x = mos6510_get_x(cpu);
-            state->y = mos6510_get_y(cpu);
-            state->s = mos6510_get_sp(cpu);
-            state->p = mos6510_get_p(cpu);
+            cpu_base = &cpu->base;
             break;
         }
         case CPU_TYPE_NES6502: {
             nes6502_t* cpu = (nes6502_t*)instance->cpu;
-            state->pc = nes6502_get_pc(cpu);
-            state->a = nes6502_get_a(cpu);
-            state->x = nes6502_get_x(cpu);
-            state->y = nes6502_get_y(cpu);
-            state->s = nes6502_get_sp(cpu);
-            state->p = nes6502_get_p(cpu);
+            cpu_base = &cpu->base;
             break;
         }
         default:
             break;
+    }
+    
+    // Direct struct member access - all CPUs share the same base layout
+    if (cpu_base) {
+        state->pc = cpu_base->pc;
+        state->a = cpu_base->a;
+        state->x = cpu_base->x;
+        state->y = cpu_base->y;
+        state->s = cpu_base->sp;
+        state->p = cpu_base->p;
     }
 }
 
