@@ -75,35 +75,34 @@ void mos6502_family_interrupt_handler(mos6502_family_t* cpu) {
 void mos6502_family_intercept_stub(mos6502_family_t* cpu) {
     // Decrement PC since it was incremented during opcode fetch
     cpu->pc--;
-    
-    // Use the common stop_intercept function to restore handlers
-    mos6502_family_stop_intercept(cpu);
+    // When intercepting this stub is called at the end of an opcode,
+    // and because no next instruction is executed, the threaded dispatch
+    // ends here.
+}
+
+bool mos6502_family_is_intercepting(mos6502_family_t* cpu) {
+    return cpu ? cpu->opcode_handlers[0] == mos6502_family_intercept_stub : false;
 }
 
 void mos6502_family_start_intercept(mos6502_family_t* cpu) {
     if (!cpu) return;
     
+    if (mos6502_family_is_intercepting(cpu)) return;
+
     // Save current handlers and replace all with intercept stubs
     memcpy(cpu->saved_opcode_handlers, cpu->opcode_handlers, sizeof(cpu->opcode_handlers));
     for (int i = 0; i < 256; i++) {
         cpu->opcode_handlers[i] = mos6502_family_intercept_stub;
     }
-    
-    cpu->intercepting = true;
 }
 
 void mos6502_family_stop_intercept(mos6502_family_t* cpu) {
     if (!cpu) return;
     
+    if (!mos6502_family_is_intercepting(cpu)) return;
+    
     // Restore original handlers from saved copy
     memcpy(cpu->opcode_handlers, cpu->saved_opcode_handlers, sizeof(cpu->opcode_handlers));
-    
-    // Clear intercept flag
-    cpu->intercepting = false;
-}
-
-bool mos6502_family_is_intercepting(mos6502_family_t* cpu) {
-    return cpu ? cpu->intercepting : false;
 }
 
 // Single step execution (shared) - uses intercept mechanism for performance
@@ -121,7 +120,10 @@ bool mos6502_family_step(mos6502_family_t* cpu) {
     
     // Execute the actual instruction handler
     handler(cpu);
-    
+
+    // Use the common stop_intercept function to restore handlers
+    mos6502_family_stop_intercept(cpu);
+   
     // The threaded dispatch will hit the intercept stub which calls stop_intercept
     return true;
 }
