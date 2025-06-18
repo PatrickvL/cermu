@@ -166,25 +166,11 @@ void mos6510_reset(mos6510_t* cpu) {
 }
 
 bool mos6510_step(mos6510_t* cpu) {
-    // Single step implementation using interception mechanism
-    // This ensures only one instruction executes before returning control
-
-    // Fetch the opcode and get the real handler BEFORE starting interception
-    uint8_t opcode = mos6510_read_cycle(cpu, cpu->base.pc++);
-    mos6510_opcode_handler_t handler = (mos6510_opcode_handler_t)cpu->base.opcode_handlers[opcode];
+    if (!cpu) return false;
     
-    // Start interception to catch the next instruction after this one
-    mos6510_start_intercept(cpu);
-
-    // Execute the actual instruction handler
-    handler(cpu);
-
-    // Stop interception to clean up the handler table
-    mos6510_stop_intercept(cpu);
-
-    // If we reach here, the instruction completed and interception triggered
-    // The threaded dispatch was halted after one instruction
-    return true;
+    // Use the shared family step implementation
+    // This ensures consistent single-step behavior across all family members
+    return mos6502_family_step(&cpu->base);
 }
 
 // ============================================================================
