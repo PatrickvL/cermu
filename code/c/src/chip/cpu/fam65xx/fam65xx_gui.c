@@ -1,5 +1,5 @@
-#include "mos6502_family_gui.h"
-#include "mos6502_family_constants.h"
+#include "fam65xx_gui.h"
+#include "fam65xx_constants.h"
 #ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #endif
@@ -11,7 +11,7 @@
 // SHARED MOS 6502 FAMILY GUI IMPLEMENTATION
 // ============================================================================
 
-void mos6502_family_render_cpu_registers(mos6502_family_t* cpu) {
+void fam65xx_render_cpu_registers(fam65xx_t* cpu) {
     if (!cpu) return;
     
     igText("CPU Registers");
@@ -24,7 +24,7 @@ void mos6502_family_render_cpu_registers(mos6502_family_t* cpu) {
     igText("SP: $%02X", cpu->sp);
 }
 
-void mos6502_family_render_status_flags(mos6502_family_t* cpu) {
+void fam65xx_render_status_flags(fam65xx_t* cpu) {
     if (!cpu) return;
     
     igText("Status Register: $%02X", cpu->p);
@@ -43,7 +43,7 @@ void mos6502_family_render_status_flags(mos6502_family_t* cpu) {
     igText("%s", flag_str);
 }
 
-void mos6502_family_render_control_lines(mos6502_family_t* cpu) {
+void fam65xx_render_control_lines(fam65xx_t* cpu) {
     if (!cpu) return;
     
     igText("Control Lines");
@@ -62,7 +62,7 @@ void mos6502_family_render_control_lines(mos6502_family_t* cpu) {
     }
 }
 
-void mos6502_family_render_execution_controls(mos6502_family_t* cpu, bool (*step_func)(void*), void (*reset_func)(void*)) {
+void fam65xx_render_execution_controls(fam65xx_t* cpu, bool (*step_func)(void*), void (*reset_func)(void*)) {
     if (!cpu) return;
     
     igText("Execution Control");
@@ -81,10 +81,10 @@ void mos6502_family_render_execution_controls(mos6502_family_t* cpu, bool (*step
         }
     }
     
-    igText("Interception: %s", mos6502_family_is_intercepting(cpu) ? "ACTIVE" : "inactive");
+    igText("Interception: %s", fam65xx_is_intercepting(cpu) ? "ACTIVE" : "inactive");
 }
 
-void mos6502_family_render_memory_view(mos6502_family_t* cpu, uint16_t start_addr, uint16_t length) {
+void fam65xx_render_memory_view(fam65xx_t* cpu, uint16_t start_addr, uint16_t length) {
     if (!cpu || !cpu->bus_interface.bus_read) return;
     
     igText("Memory View ($%04X - $%04X)", start_addr, start_addr + length - 1);
@@ -111,7 +111,7 @@ void mos6502_family_render_memory_view(mos6502_family_t* cpu, uint16_t start_add
     }
 }
 
-void mos6502_family_render_stack_view(mos6502_family_t* cpu) {
+void fam65xx_render_stack_view(fam65xx_t* cpu) {
     if (!cpu) return;
     
     igText("Stack View (Page $01)");
@@ -130,7 +130,7 @@ void mos6502_family_render_stack_view(mos6502_family_t* cpu) {
     }
 }
 
-void mos6502_family_render_disassembly(mos6502_family_t* cpu, int num_instructions) {
+void fam65xx_render_disassembly(fam65xx_t* cpu, int num_instructions) {
     if (!cpu) return;
     
     igText("Disassembly (PC = $%04X)", cpu->pc);
@@ -149,10 +149,10 @@ void mos6502_family_render_disassembly(mos6502_family_t* cpu, int num_instructio
     }
 }
 
-void mos6502_family_render_debug_window(void* chip, bool* show_window, const mos6502_family_gui_config_t* config) {
+void fam65xx_render_debug_window(void* chip, bool* show_window, const fam65xx_gui_config_t* config) {
     if (!chip || !show_window || !config) return;
     
-    mos6502_family_t* cpu = (mos6502_family_t*)chip;
+    fam65xx_t* cpu = (fam65xx_t*)chip;
     if (!cpu->desc) return;
     
     if (!*show_window) return;
@@ -166,9 +166,9 @@ void mos6502_family_render_debug_window(void* chip, bool* show_window, const mos
     }
 
     // Common CPU state
-    mos6502_family_render_cpu_registers(cpu);
+    fam65xx_render_cpu_registers(cpu);
     igSeparator();
-    mos6502_family_render_status_flags(cpu);
+    fam65xx_render_status_flags(cpu);
     igSeparator();
     
     // CPU-specific sections
@@ -178,19 +178,19 @@ void mos6502_family_render_debug_window(void* chip, bool* show_window, const mos
     }
     
     // Control lines
-    mos6502_family_render_control_lines(cpu);
+    fam65xx_render_control_lines(cpu);
     igSeparator();
     
     // Execution controls (would need to be passed proper function pointers)
-    mos6502_family_render_execution_controls(cpu, NULL, NULL);
+    fam65xx_render_execution_controls(cpu, NULL, NULL);
 
     igEnd();
 }
 
-void mos6502_family_render_settings_window(void* chip, bool* show_window, const mos6502_family_gui_config_t* config) {
+void fam65xx_render_settings_window(void* chip, bool* show_window, const fam65xx_gui_config_t* config) {
     if (!chip || !show_window || !config) return;
     
-    mos6502_family_t* cpu = (mos6502_family_t*)chip;
+    fam65xx_t* cpu = (fam65xx_t*)chip;
     if (!cpu->desc) return;
     
     if (!*show_window) return;
@@ -228,7 +228,7 @@ void mos6502_family_render_settings_window(void* chip, bool* show_window, const 
     igEnd();
 }
 
-void mos6502_family_render_flag_bits(uint8_t flags, const char* flag_names) {
+void fam65xx_render_flag_bits(uint8_t flags, const char* flag_names) {
     char bits[32];
     int bit_count = (int)strlen(flag_names);
     
@@ -242,7 +242,7 @@ void mos6502_family_render_flag_bits(uint8_t flags, const char* flag_names) {
     igText("%s", bits);
 }
 
-void mos6502_family_render_port_bits(uint8_t port_value, const char* label) {
+void fam65xx_render_port_bits(uint8_t port_value, const char* label) {
     igText("%s: $%02X", label, port_value);
     igText("Bits: 7 6 5 4 3 2 1 0");
     

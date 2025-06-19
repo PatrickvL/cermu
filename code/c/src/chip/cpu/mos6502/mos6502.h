@@ -1,8 +1,8 @@
 #ifndef MOS6502_H
 #define MOS6502_H
 
-#include "../mos6502_family/mos6502_family_core.h"
-#include "../mos6502_family/mos6502_family_constants.h"
+#include "../fam65xx/fam65xx_core.h"
+#include "../fam65xx/fam65xx_constants.h"
 
 // ============================================================================
 // MOS 6502 CPU (Standard 6502 with Decimal Mode Support)
@@ -11,14 +11,9 @@
 // External descriptor for chip management
 extern chip_descriptor_t mos6502_descriptor;
 
-// MOS 6502 specific configuration
-#define MOS6502_HAS_DECIMAL_MODE 1
-#define MOS6502_HAS_IO_PORTS 0
-#define MOS6502_HAS_ILLEGAL_OPCODES 1
-
 // MOS 6502 doesn't have additional hardware beyond the standard MOS 6502 family
 typedef struct {
-    mos6502_family_t base; // Must be first member for casting
+    fam65xx_t base; // Must be first member for casting
     // No additional hardware for standard MOS 6502
 } mos6502_t;
 

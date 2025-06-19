@@ -1,5 +1,5 @@
 #include "mos6510.h"
-#include "../mos6502_family/mos6502_family_core.h"
+#include "../fam65xx/fam65xx_core.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -17,23 +17,23 @@
 // ============================================================================
 // MOS6510-SPECIFIC ILLEGAL INSTRUCTION HELPER OPERATIONS
 // ============================================================================
-// Note: All mos6502_family_* functions should be implemented in the family folder.
+// Note: All fam65xx_* functions should be implemented in the family folder.
 // These are MOS6510-specific wrappers and helpers only.
 
 // MOS6510-specific illegal operation helpers that use family functions
 static inline void mos6510_op_slo_reg(mos6510_t* cpu, uint8_t value) {
     cpu->base.a |= value;
-    mos6502_family_set_nz_flags(&cpu->base, cpu->base.a);
+    fam65xx_set_nz_flags(&cpu->base, cpu->base.a);
 }
 
 static inline void mos6510_op_rla_reg(mos6510_t* cpu, uint8_t value) {
     cpu->base.a &= value;
-    mos6502_family_set_nz_flags(&cpu->base, cpu->base.a);
+    fam65xx_set_nz_flags(&cpu->base, cpu->base.a);
 }
 
 static inline void mos6510_op_sre_reg(mos6510_t* cpu, uint8_t value) {
     cpu->base.a ^= value;
-    mos6502_family_set_nz_flags(&cpu->base, cpu->base.a);
+    fam65xx_set_nz_flags(&cpu->base, cpu->base.a);
 }
 
 // ============================================================================
@@ -45,8 +45,8 @@ static inline void mos6510_op_sre_reg(mos6510_t* cpu, uint8_t value) {
 
 // SLO (Shift Left then OR) - example implementation
 void mos6510_slo_zp(mos6510_t* cpu) {
-    uint8_t value = mos6502_family_addr_zp(&cpu->base);
-    uint8_t result = mos6502_family_op_asl(&cpu->base, value);
+    uint8_t value = fam65xx_addr_zp(&cpu->base);
+    uint8_t result = fam65xx_op_asl(&cpu->base, value);
     MOS6510_INTRA_CYCLE(cpu);
     mos6510_write_cycle(cpu, cpu->base.address, result);
     mos6510_op_slo_reg(cpu, result);
@@ -55,7 +55,7 @@ void mos6510_slo_zp(mos6510_t* cpu) {
 
 // LAX (Load A and X) - example implementation  
 void mos6510_lax_zp(mos6510_t* cpu) {
-    uint8_t value = mos6502_family_addr_zp(&cpu->base);
+    uint8_t value = fam65xx_addr_zp(&cpu->base);
     mos6510_load_a_and_x(cpu, value);
 }
 

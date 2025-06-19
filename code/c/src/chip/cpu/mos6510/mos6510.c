@@ -1,6 +1,6 @@
 #include "mos6510.h"
 #include "../../../core/chip.h"
-#include "../mos6502_family/mos6502_family_core.h"
+#include "../fam65xx/fam65xx_core.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -89,18 +89,18 @@ chip_descriptor_t mos6510_descriptor = {
 // Public API to begin interception
 void mos6510_start_intercept(mos6510_t* cpu) {
     if (!cpu) return;
-    mos6502_family_start_intercept(&cpu->base);
+    fam65xx_start_intercept(&cpu->base);
 }
 
 // Public API to cancel interception early if needed
 void mos6510_stop_intercept(mos6510_t* cpu) {
     if (!cpu) return;
-    mos6502_family_stop_intercept(&cpu->base);
+    fam65xx_stop_intercept(&cpu->base);
 }
 
 // Check if interception is currently active
 bool mos6510_is_intercepting(mos6510_t* cpu) {
-    return cpu ? mos6502_family_is_intercepting(&cpu->base) : false;
+    return cpu ? fam65xx_is_intercepting(&cpu->base) : false;
 }
 
 // ============================================================================
@@ -118,11 +118,11 @@ void mos6510_init(mos6510_t* cpu) {
     cpu->base.pc = 0;
     cpu->base.address = 0;
 
-    // Initialize with complete family opcode table (like MOS6502 and NES6502)
-    mos6502_family_init_opcode_table(&cpu->base);
+    // Initialize opcode table with MOS6510 features (no decimal mode, has illegal opcodes)
+    uint32_t features = FAM65XX_FEATURE_ILLEGAL_OPCODES;
+    fam65xx_init_opcode_table(&cpu->base, features);
     
-    // MOS6510 specific: no decimal mode behavior (similar to NES6502)
-    // The family table already implements binary-only ADC/SBC, so no overrides needed
+    // MOS6510 specific: decimal mode disabled automatically by feature flags
 
     // 6510-specific I/O port (addresses $0000/$0001) initialization
     cpu->io_port[0] = 0x2F;  // Default Data Direction Register (DDR at $0000)
@@ -144,10 +144,10 @@ void mos6510_irq(mos6510_t* cpu, uint8_t status) {
 
 // Interrupt handler - called when IRQ or NMI lines are active
 void mos6510_interrupt_handler(mos6510_t* cpu) {
-    if (M6502_TEST_NMI(&cpu->base)) {
+    if (FAM65XX_TEST_NMI(&cpu->base)) {
         // Handle NMI - non-maskable
         mos6510_nmi(cpu);
-    } else if (M6502_TEST_IRQ(&cpu->base) && !mos6502_family_get_flag(&cpu->base, FLAG_I)) {
+    } else if (FAM65XX_TEST_IRQ(&cpu->base) && !fam65xx_get_flag(&cpu->base, FLAG_I)) {
         // Handle IRQ when interrupt disable is clear
         mos6510_irq(cpu, cpu->base.p & ~FLAG_B); // Clear B flag for IRQ
     }
@@ -170,7 +170,7 @@ bool mos6510_step(mos6510_t* cpu) {
     
     // Use the shared family step implementation
     // This ensures consistent single-step behavior across all family members
-    return mos6502_family_step(&cpu->base);
+    return fam65xx_step(&cpu->base);
 }
 
 // ============================================================================
@@ -179,14 +179,14 @@ bool mos6510_step(mos6510_t* cpu) {
 void mos6510_execute(mos6510_t* cpu) {
     // Start execution using threaded dispatch
     // The MOS6510_OPCODE_FOOTER macro will chain instructions until intercept is triggered
-    M6502_NEXT_INSTRUCTION(&cpu->base, mos6510_interrupt_handler_wrapper, mos6510_read_cycle_wrapper);
+    FAM65XX_NEXT_INSTRUCTION(&cpu->base, mos6510_interrupt_handler_wrapper, mos6510_read_cycle_wrapper);
 }
 
 // ============================================================================
 // MOS6510 NOW USES FAMILY OPCODE TABLE
 // ============================================================================
 
-// Note: MOS6510 now uses the shared family opcode table through mos6502_family_init_opcode_table()
+// Note: MOS6510 now uses the shared family opcode table through fam65xx_init_opcode_table()
 // All 256 opcodes are implemented in the family core with proper implementations
 // No MOS6510-specific overrides are needed since the family table already provides binary-only arithmetic
 

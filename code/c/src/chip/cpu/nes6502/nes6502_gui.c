@@ -1,6 +1,6 @@
 #include "nes6502.h"
-#include "../mos6502_family/mos6502_family_gui.h"
-#include "../mos6502_family/mos6502_family_constants.h"
+#include "../fam65xx/fam65xx_gui.h"
+#include "../fam65xx/fam65xx_constants.h"
 #include "../../../gui/cimgui_interface.h"
 #ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
@@ -45,7 +45,7 @@ void nes6502_render_debug_window(void* chip, bool* show_window) {
     }
 
     // Create GUI configuration for NES6502
-    mos6502_family_gui_config_t config = {
+    fam65xx_gui_config_t config = {
         .cpu_type_name = "NES 6502 (Nintendo)",
         .has_decimal_mode = false,  // NES6502 does NOT support decimal mode
         .has_io_ports = false,      // No I/O ports
@@ -54,7 +54,7 @@ void nes6502_render_debug_window(void* chip, bool* show_window) {
     };
     
     // Use the shared family debug window renderer
-    mos6502_family_render_debug_window(chip, show_window, &config);
+    fam65xx_render_debug_window(chip, show_window, &config);
     
     igEnd();
 }

@@ -1,0 +1,580 @@
+#ifndef FAM65XX_CORE_H
+#define FAM65XX_CORE_H
+
+#include "../../../core/aiemuc.h"
+#include "../../../core/chip.h"
+#include "../../../core/bus_cycle_interface.h"
+#include "../../../core/control_lines_interface.h"
+#include "../../../core/system_lines.h"
+#include "../../../core/system.h"
+#include <stdint.h>
+#include <stdbool.h>
+
+// ============================================================================
+// MOS 6502 FAMILY CORE DEFINITIONS
+// ============================================================================
+
+// 6502 Status Register Flags (shared by all family members)
+#define FLAG_C  0x01    // Carry
+#define FLAG_Z  0x02    // Zero
+#define FLAG_I  0x04    // Interrupt Disable
+#define FLAG_D  0x08    // Decimal Mode
+#define FLAG_B  0x10    // Break Command
+#define FLAG_U  0x20    // Unused (always 1)
+#define FLAG_V  0x40    // Overflow
+#define FLAG_N  0x80    // Negative
+
+// Universal instruction dispatch using function pointers
+typedef struct fam65xx_s fam65xx_t;
+typedef void (*fam65xx_opcode_handler_t)(fam65xx_t* cpu);
+
+// ============================================================================
+// SHARED MOS 6502 FAMILY CPU STATE STRUCTURE
+// ============================================================================
+
+struct fam65xx_s {
+    chip_descriptor_t* desc; // Pointer to chip descriptor (must be first)
+    
+    // CPU Registers (standard 6502 family)
+    uint16_t pc;        // Program Counter
+    uint8_t a;          // Accumulator
+    uint8_t x;          // X Index Register
+    uint8_t y;          // Y Index Register
+    uint8_t sp;         // Stack Pointer
+    uint8_t p;          // Processor Status Register
+    
+    // === CPU INTERNAL STATE (shared by all 6502 family) ===
+    uint16_t address;   // Address for current instruction
+
+    // === PERFORMANCE-OPTIMIZED INTERFACE STORAGE ===
+    // Bus interface (stored by value for optimal performance)
+    bus_cycle_ops_t bus_interface;
+    
+    // Control lines interface (stored by value for optimal performance) 
+    control_lines_interface_t control_interface;
+    
+    // === SHARED STATE POINTERS ===
+    // These CANNOT be copied - must remain as pointers to shared system state
+    system_lines_t* system_lines;  // Shared system-wide line state
+    
+    fam65xx_opcode_handler_t opcode_handlers[256]; // Per-CPU handler table
+
+    // Intercept mechanism for single-step execution
+    fam65xx_opcode_handler_t saved_opcode_handlers[256]; // Saved handlers during intercept
+      // === DIRECT RAM ACCESS (for zero page optimization) ===
+    // Direct RAM accessors to avoid circular dependency with bus interface
+    // TODO : Move to mos6510 (the sole user for now)
+    access_callback_t ram_access;  // Consolidated RAM access interface
+};
+
+// Include arithmetic function declarations after struct definition
+#include "fam65xx_arithmetic.h"
+
+// ============================================================================
+// SHARED MACROS FOR PERFORMANCE-CRITICAL CODE
+// ============================================================================
+
+// ============================================================================
+// SHARED MOS 6502 FAMILY MACROS (used by all family members)
+// ============================================================================
+
+// Macro utilities for generating unique labels
+#define FAM65XX_CONCAT_IMPL(a, b) a ## b
+#define FAM65XX_CONCAT(a, b) FAM65XX_CONCAT_IMPL(a, b)
+#define FAM65XX_UNIQUE_LABEL(prefix) FAM65XX_CONCAT(prefix, __LINE__)
+
+// Cycle timing macros (shared by all family members)
+#define FAM65XX_INTRA_CYCLE(cpu) do { \
+    (cpu)->bus_interface.cycle_tick((cpu)->bus_interface.context); \
+} while(0)
+
+// Ready check and wait with automatic stall handling
+#define FAM65XX_READY(cpu) FAM65XX_TEST_RDY(cpu)
+#define FAM65XX_WAIT_READY(cpu) do { \
+    FAM65XX_UNIQUE_LABEL(cpu_ready_stall): \
+    if (unlikely(!FAM65XX_READY(cpu))) { \
+        FAM65XX_INTRA_CYCLE(cpu); \
+        goto FAM65XX_UNIQUE_LABEL(cpu_ready_stall); \
+    } \
+} while(0)
+
+// Control line access and testing (shared)
+#define FAM65XX_CONTROL_LINES(cpu) \
+    ((cpu)->control_interface.get_lines((cpu)->control_interface.context))
+
+#define FAM65XX_TEST_IRQ(cpu) (FAM65XX_CONTROL_LINES(cpu) & SYS_MASK_IRQ)
+#define FAM65XX_TEST_NMI(cpu) (FAM65XX_CONTROL_LINES(cpu) & SYS_MASK_NMI)
+#define FAM65XX_TEST_RDY(cpu) (FAM65XX_CONTROL_LINES(cpu) & SYS_MASK_RDY)
+
+// System lines access macros for direct system state operations
+#define FAM65XX_SYSTEM_LINES_TEST(cpu, mask) SYS_LINES_TEST((cpu)->system_lines, mask)
+#define FAM65XX_SYSTEM_LINES_SET(cpu, mask) SYS_LINES_SET((cpu)->system_lines, mask)
+#define FAM65XX_SYSTEM_LINES_CLEAR(cpu, mask) SYS_LINES_CLEAR((cpu)->system_lines, mask)
+
+// Instruction dispatch macros (shared - but implementation-specific functions)
+#define FAM65XX_NEXT_INSTRUCTION_DISPATCH(cpu, read_func) do { \
+    uint8_t opcode = read_func(cpu, (cpu)->pc++); \
+    (cpu)->opcode_handlers[opcode](cpu); \
+} while(0)
+
+#define FAM65XX_NEXT_INSTRUCTION(cpu, interrupt_func, read_func) do { \
+    if (unlikely(FAM65XX_TEST_IRQ(cpu) || FAM65XX_TEST_NMI(cpu))) { \
+        interrupt_func(cpu); \
+    } else { \
+        FAM65XX_WAIT_READY(cpu); \
+        FAM65XX_NEXT_INSTRUCTION_DISPATCH(cpu, read_func); \
+    } \
+} while(0)
+
+// Universal instruction dispatch using function pointers
+// ============================================================================
+// SHARED FUNCTION DECLARATIONS
+// ============================================================================
+
+// Core memory and cycle functions (shared by all family members)
+uint8_t fam65xx_read_cycle(fam65xx_t* cpu, uint16_t address);
+void fam65xx_write_cycle(fam65xx_t* cpu, uint16_t address, uint8_t value);
+
+// Family-specific versions of shared macros
+#define FAM65XX_OPCODE_FOOTER(cpu) \
+    FAM65XX_NEXT_INSTRUCTION(cpu, fam65xx_interrupt_handler, fam65xx_read_cycle)
+
+// Stack operations (shared)
+void fam65xx_push(fam65xx_t* cpu, uint8_t value);
+uint8_t fam65xx_pull(fam65xx_t* cpu);
+
+// Flag operations (shared)
+static inline bool fam65xx_get_flag(fam65xx_t* cpu, uint8_t flag) {
+    return (cpu->p & flag) != 0;
+}
+
+static inline void fam65xx_set_flag(fam65xx_t* cpu, uint8_t flag, bool value) {
+    if (value) {
+        cpu->p |= flag;
+    } else {
+        cpu->p &= ~flag;
+    }
+}
+
+static inline void fam65xx_set_nz_flags(fam65xx_t* cpu, uint8_t value) {
+    fam65xx_set_flag(cpu, FLAG_Z, value == 0);
+    fam65xx_set_flag(cpu, FLAG_N, (value & 0x80) != 0);
+}
+
+// Interrupt handling (shared)
+void fam65xx_interrupt_sequence(fam65xx_t* cpu, uint8_t status_flags, uint16_t vector_addr);
+void fam65xx_interrupt_handler(fam65xx_t* cpu);
+
+// Interception support (shared)
+void fam65xx_start_intercept(fam65xx_t* cpu);
+void fam65xx_stop_intercept(fam65xx_t* cpu);
+bool fam65xx_is_intercepting(fam65xx_t* cpu);
+
+// Single step execution (shared)
+bool fam65xx_step(fam65xx_t* cpu);
+
+// ============================================================================
+// SHARED OPCODE HANDLER TABLE INITIALIZATION
+// ============================================================================
+
+// Initialize opcode handler table with CPU-specific features (shared by all family members)
+void fam65xx_init_opcode_table(fam65xx_t* cpu, uint32_t cpu_features);
+
+// Override specific opcodes for CPU variants (manual override if needed)
+void fam65xx_override_opcode(fam65xx_t* cpu, uint8_t opcode, fam65xx_opcode_handler_t handler);
+
+// CPU feature flags for automatic opcode table configuration
+#define FAM65XX_FEATURE_DECIMAL_MODE    (1U << 0)   // CPU supports decimal mode ADC/SBC
+#define FAM65XX_FEATURE_ILLEGAL_OPCODES (1U << 1)   // CPU supports illegal opcodes
+#define FAM65XX_FEATURE_BCD_FLAG        (1U << 2)   // CPU sets BCD flag even without decimal mode
+#define FAM65XX_FEATURE_ROR_BUG         (1U << 3)   // CPU has ROR absolute,X page boundary bug
+
+// Default opcode handler table (shared base)
+extern fam65xx_opcode_handler_t fam65xx_default_handlers[256];
+
+// ============================================================================
+// SHARED OPCODE OPERATION IMPLEMENTATIONS  
+// ============================================================================
+// ============================================================================
+// ADDRESSING MODE HELPER FUNCTIONS (inline for performance)
+// ============================================================================
+
+// Immediate addressing - returns the immediate value
+static inline uint8_t fam65xx_addr_imm(fam65xx_t* cpu) {
+    FAM65XX_INTRA_CYCLE(cpu);
+    return fam65xx_read_cycle(cpu, cpu->pc++);
+}
+
+// Zero page addressing - sets address and returns fetched value
+static inline uint8_t fam65xx_addr_zp(fam65xx_t* cpu) {
+    FAM65XX_INTRA_CYCLE(cpu);
+    cpu->address = fam65xx_read_cycle(cpu, cpu->pc++);
+    FAM65XX_INTRA_CYCLE(cpu);
+    return fam65xx_read_cycle(cpu, cpu->address);
+}
+
+// Zero page,X addressing - sets address and returns fetched value
+static inline uint8_t fam65xx_addr_zpx(fam65xx_t* cpu) {
+    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t base = fam65xx_read_cycle(cpu, cpu->pc++);
+    FAM65XX_INTRA_CYCLE(cpu);
+    (void)fam65xx_read_cycle(cpu, base); // Dummy read
+    cpu->address = (base + cpu->x) & 0xFF;
+    FAM65XX_INTRA_CYCLE(cpu);
+    return fam65xx_read_cycle(cpu, cpu->address);
+}
+
+// Zero page,Y addressing - sets address and returns fetched value
+static inline uint8_t fam65xx_addr_zpy(fam65xx_t* cpu) {
+    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t base = fam65xx_read_cycle(cpu, cpu->pc++);
+    FAM65XX_INTRA_CYCLE(cpu);
+    (void)fam65xx_read_cycle(cpu, base); // Dummy read
+    cpu->address = (base + cpu->y) & 0xFF;
+    FAM65XX_INTRA_CYCLE(cpu);
+    return fam65xx_read_cycle(cpu, cpu->address);
+}
+
+// Absolute addressing - sets address and returns fetched value
+static inline uint8_t fam65xx_addr_abs(fam65xx_t* cpu) {
+    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);
+    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);
+    cpu->address = (addr_hi << 8) | addr_lo;
+    FAM65XX_INTRA_CYCLE(cpu);
+    return fam65xx_read_cycle(cpu, cpu->address);
+}
+
+// Absolute,X addressing - sets address and returns fetched value
+static inline uint8_t fam65xx_addr_absx(fam65xx_t* cpu) {
+    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);
+    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);
+    uint16_t base_addr = (addr_hi << 8) | addr_lo;
+    cpu->address = base_addr + cpu->x;
+    
+    // Check for page boundary crossing
+    if ((base_addr & 0xFF00) != (cpu->address & 0xFF00)) {
+        FAM65XX_INTRA_CYCLE(cpu);
+        (void)fam65xx_read_cycle(cpu, (addr_hi << 8) | ((addr_lo + cpu->x) & 0xFF)); // Dummy read
+    }
+    FAM65XX_INTRA_CYCLE(cpu);
+    return fam65xx_read_cycle(cpu, cpu->address);
+}
+
+// Absolute,Y addressing - sets address and returns fetched value
+static inline uint8_t fam65xx_addr_absy(fam65xx_t* cpu) {
+    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);
+    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);
+    uint16_t base_addr = (addr_hi << 8) | addr_lo;
+    cpu->address = base_addr + cpu->y;
+    
+    // Check for page boundary crossing
+    if ((base_addr & 0xFF00) != (cpu->address & 0xFF00)) {
+        FAM65XX_INTRA_CYCLE(cpu);
+        (void)fam65xx_read_cycle(cpu, (addr_hi << 8) | ((addr_lo + cpu->y) & 0xFF)); // Dummy read
+    }
+    FAM65XX_INTRA_CYCLE(cpu);
+    return fam65xx_read_cycle(cpu, cpu->address);
+}
+
+// Indexed indirect (zp,X) addressing
+static inline uint8_t fam65xx_addr_indx(fam65xx_t* cpu) {
+    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t zp_addr = fam65xx_read_cycle(cpu, cpu->pc++);
+    FAM65XX_INTRA_CYCLE(cpu);
+    (void)fam65xx_read_cycle(cpu, zp_addr); // Dummy read
+    uint8_t effective_addr = (zp_addr + cpu->x) & 0xFF;
+    
+    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t addr_lo = fam65xx_read_cycle(cpu, effective_addr);
+    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t addr_hi = fam65xx_read_cycle(cpu, (effective_addr + 1) & 0xFF);
+    cpu->address = (addr_hi << 8) | addr_lo;
+    
+    FAM65XX_INTRA_CYCLE(cpu);
+    return fam65xx_read_cycle(cpu, cpu->address);
+}
+
+// Indirect indexed (zp),Y addressing
+static inline uint8_t fam65xx_addr_indy(fam65xx_t* cpu) {
+    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t zp_addr = fam65xx_read_cycle(cpu, cpu->pc++);
+    
+    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t addr_lo = fam65xx_read_cycle(cpu, zp_addr);
+    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t addr_hi = fam65xx_read_cycle(cpu, (zp_addr + 1) & 0xFF);
+    uint16_t base_addr = (addr_hi << 8) | addr_lo;
+    cpu->address = base_addr + cpu->y;
+    
+    // Check for page boundary crossing
+    if ((base_addr & 0xFF00) != (cpu->address & 0xFF00)) {
+        FAM65XX_INTRA_CYCLE(cpu);
+        (void)fam65xx_read_cycle(cpu, (addr_hi << 8) | ((addr_lo + cpu->y) & 0xFF)); // Dummy read
+    }
+    FAM65XX_INTRA_CYCLE(cpu);
+    return fam65xx_read_cycle(cpu, cpu->address);
+}
+
+// ============================================================================
+// PERFORMANCE-CRITICAL INLINE HELPER FUNCTIONS
+// ============================================================================
+
+// Inline simple arithmetic operations for maximum performance
+static inline void fam65xx_op_and_inline(fam65xx_t* cpu, uint8_t value) {
+    cpu->a &= value;
+    fam65xx_set_nz_flags(cpu, cpu->a);
+}
+
+static inline void fam65xx_op_ora_inline(fam65xx_t* cpu, uint8_t value) {
+    cpu->a |= value;
+    fam65xx_set_nz_flags(cpu, cpu->a);
+}
+
+static inline void fam65xx_op_eor_inline(fam65xx_t* cpu, uint8_t value) {
+    cpu->a ^= value;
+    fam65xx_set_nz_flags(cpu, cpu->a);
+}
+
+// Inline load helper (replaces DEFINE_LOAD_OP macro)
+static inline void fam65xx_load_helper(fam65xx_t* cpu, 
+    uint8_t (*addr_func)(fam65xx_t*), 
+    void (*op_func)(fam65xx_t*, uint8_t)) {
+    uint8_t value = addr_func(cpu);
+    op_func(cpu, value);
+    FAM65XX_OPCODE_FOOTER(cpu);
+}
+
+// Inline store helper (replaces DEFINE_STORE_OP macro)
+static inline void fam65xx_store_helper(fam65xx_t* cpu, 
+    void (*addr_store_func)(fam65xx_t*, uint8_t), 
+    uint8_t reg_value) {
+    addr_store_func(cpu, reg_value);
+    FAM65XX_OPCODE_FOOTER(cpu);
+}
+
+// Inline register transfer with flags (replaces DEFINE_REG_XFER macro)
+static inline void fam65xx_register_transfer_with_flags(fam65xx_t* cpu, 
+    uint8_t* dest, uint8_t src_value) {
+    FAM65XX_INTRA_CYCLE(cpu);
+    (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
+    *dest = src_value;
+    fam65xx_set_nz_flags(cpu, *dest);
+    FAM65XX_OPCODE_FOOTER(cpu);
+}
+
+// Inline register transfer without flags (replaces DEFINE_REG_XFER_NOFLAG macro)
+static inline void fam65xx_register_transfer_no_flags(fam65xx_t* cpu, 
+    uint8_t* dest, uint8_t src_value) {
+    FAM65XX_INTRA_CYCLE(cpu);
+    (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
+    *dest = src_value;
+    FAM65XX_OPCODE_FOOTER(cpu);
+}
+
+// Inline register increment/decrement (replaces DEFINE_REG_INCDEC macro)
+static inline void fam65xx_register_inc_dec(fam65xx_t* cpu, 
+    uint8_t* reg, int8_t delta) {
+    FAM65XX_INTRA_CYCLE(cpu);
+    (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
+    *reg += delta;
+    fam65xx_set_nz_flags(cpu, *reg);
+    FAM65XX_OPCODE_FOOTER(cpu);
+}
+
+// Inline flag operations (replaces DEFINE_FLAG_CLEAR/SET macros)
+static inline void fam65xx_flag_clear_helper(fam65xx_t* cpu, uint8_t flag) {
+    FAM65XX_INTRA_CYCLE(cpu);
+    (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
+    fam65xx_set_flag(cpu, flag, false);
+    FAM65XX_OPCODE_FOOTER(cpu);
+}
+
+static inline void fam65xx_flag_set_helper(fam65xx_t* cpu, uint8_t flag) {
+    FAM65XX_INTRA_CYCLE(cpu);
+    (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
+    fam65xx_set_flag(cpu, flag, true);
+    FAM65XX_OPCODE_FOOTER(cpu);
+}
+
+// ============================================================================
+// READ-MODIFY-WRITE INLINE HELPERS (for shifts, INC/DEC operations)
+// ============================================================================
+
+// Accumulator read-modify-write operations (2 cycles)
+static inline void fam65xx_rmw_accumulator(fam65xx_t* cpu, 
+    uint8_t (*operation)(fam65xx_t*, uint8_t)) {
+    FAM65XX_INTRA_CYCLE(cpu);
+    (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
+    cpu->a = operation(cpu, cpu->a);
+    FAM65XX_OPCODE_FOOTER(cpu);
+}
+
+// Zero page read-modify-write operations
+static inline void fam65xx_rmw_zero_page(fam65xx_t* cpu, 
+    uint8_t (*operation)(fam65xx_t*, uint8_t)) {
+    FAM65XX_INTRA_CYCLE(cpu);
+    cpu->address = fam65xx_read_cycle(cpu, cpu->pc++);
+    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t value = fam65xx_read_cycle(cpu, cpu->address);
+    FAM65XX_INTRA_CYCLE(cpu);
+    fam65xx_write_cycle(cpu, cpu->address, value); // Write original value
+    value = operation(cpu, value);
+    FAM65XX_INTRA_CYCLE(cpu);
+    fam65xx_write_cycle(cpu, cpu->address, value);
+    FAM65XX_OPCODE_FOOTER(cpu);
+}
+
+// Zero page,X read-modify-write operations
+static inline void fam65xx_rmw_zero_page_x(fam65xx_t* cpu, 
+    uint8_t (*operation)(fam65xx_t*, uint8_t)) {
+    FAM65XX_INTRA_CYCLE(cpu);
+    cpu->address = fam65xx_read_cycle(cpu, cpu->pc++);
+    FAM65XX_INTRA_CYCLE(cpu);
+    (void)fam65xx_read_cycle(cpu, cpu->address); // Dummy read
+    cpu->address = (cpu->address + cpu->x) & 0xFF;
+    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t value = fam65xx_read_cycle(cpu, cpu->address);
+    FAM65XX_INTRA_CYCLE(cpu);
+    fam65xx_write_cycle(cpu, cpu->address, value); // Write original value
+    value = operation(cpu, value);
+    FAM65XX_INTRA_CYCLE(cpu);
+    fam65xx_write_cycle(cpu, cpu->address, value);
+    FAM65XX_OPCODE_FOOTER(cpu);
+}
+
+// Absolute read-modify-write operations
+static inline void fam65xx_rmw_absolute(fam65xx_t* cpu, 
+    uint8_t (*operation)(fam65xx_t*, uint8_t)) {
+    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);
+    cpu->address = addr_lo;
+    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);
+    cpu->address |= (addr_hi << 8);
+    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t value = fam65xx_read_cycle(cpu, cpu->address);
+    FAM65XX_INTRA_CYCLE(cpu);
+    fam65xx_write_cycle(cpu, cpu->address, value); // Write original value
+    value = operation(cpu, value);
+    FAM65XX_INTRA_CYCLE(cpu);
+    fam65xx_write_cycle(cpu, cpu->address, value);
+    FAM65XX_OPCODE_FOOTER(cpu);
+}
+
+// Absolute,X read-modify-write operations
+static inline void fam65xx_rmw_absolute_x(fam65xx_t* cpu, 
+    uint8_t (*operation)(fam65xx_t*, uint8_t)) {
+    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);
+    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);
+    uint16_t base_addr = (addr_hi << 8) | addr_lo;
+    cpu->address = base_addr + cpu->x;
+    FAM65XX_INTRA_CYCLE(cpu);
+    (void)fam65xx_read_cycle(cpu, (addr_hi << 8) | ((addr_lo + cpu->x) & 0xFF)); // Dummy read
+    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t value = fam65xx_read_cycle(cpu, cpu->address);
+    FAM65XX_INTRA_CYCLE(cpu);
+    fam65xx_write_cycle(cpu, cpu->address, value); // Write original value
+    value = operation(cpu, value);
+    FAM65XX_INTRA_CYCLE(cpu);
+    fam65xx_write_cycle(cpu, cpu->address, value);
+    FAM65XX_OPCODE_FOOTER(cpu);
+}
+
+// Specialized inline arithmetic helpers for common simple operations
+#define FAM65XX_AND_HELPER(cpu, addr_func) do { \
+    uint8_t value = addr_func(cpu); \
+    fam65xx_op_and_inline(cpu, value); \
+    FAM65XX_OPCODE_FOOTER(cpu); \
+} while(0)
+
+#define FAM65XX_ORA_HELPER(cpu, addr_func) do { \
+    uint8_t value = addr_func(cpu); \
+    fam65xx_op_ora_inline(cpu, value); \
+    FAM65XX_OPCODE_FOOTER(cpu); \
+} while(0)
+
+#define FAM65XX_EOR_HELPER(cpu, addr_func) do { \
+    uint8_t value = addr_func(cpu); \
+    fam65xx_op_eor_inline(cpu, value); \
+    FAM65XX_OPCODE_FOOTER(cpu); \
+} while(0)
+
+// ============================================================================
+// INLINE OPERATION FUNCTIONS (for RMW and load/store operations)
+// ============================================================================
+
+// Shift and rotate operations (inline for maximum performance)
+static inline uint8_t fam65xx_op_asl(fam65xx_t* cpu, uint8_t value) {
+    fam65xx_set_flag(cpu, FLAG_C, value & 0x80);
+    value <<= 1;
+    fam65xx_set_nz_flags(cpu, value);
+    return value;
+}
+
+static inline uint8_t fam65xx_op_lsr(fam65xx_t* cpu, uint8_t value) {
+    fam65xx_set_flag(cpu, FLAG_C, value & 0x01);
+    value >>= 1;
+    fam65xx_set_nz_flags(cpu, value);
+    return value;
+}
+
+static inline uint8_t fam65xx_op_rol(fam65xx_t* cpu, uint8_t value) {
+    bool old_carry = fam65xx_get_flag(cpu, FLAG_C);
+    fam65xx_set_flag(cpu, FLAG_C, value & 0x80);
+    value = (value << 1) | (old_carry ? 1 : 0);
+    fam65xx_set_nz_flags(cpu, value);
+    return value;
+}
+
+static inline uint8_t fam65xx_op_ror(fam65xx_t* cpu, uint8_t value) {
+    bool old_carry = fam65xx_get_flag(cpu, FLAG_C);
+    fam65xx_set_flag(cpu, FLAG_C, value & 0x01);
+    value = (value >> 1) | (old_carry ? 0x80 : 0);
+    fam65xx_set_nz_flags(cpu, value);
+    return value;
+}
+
+// Increment/decrement operations (inline for maximum performance)
+static inline uint8_t fam65xx_op_inc(fam65xx_t* cpu, uint8_t value) {
+    value++;
+    fam65xx_set_nz_flags(cpu, value);
+    return value;
+}
+
+static inline uint8_t fam65xx_op_dec(fam65xx_t* cpu, uint8_t value) {
+    value--;
+    fam65xx_set_nz_flags(cpu, value);
+    return value;
+}
+
+// Load operations (inline for maximum performance)
+static inline void fam65xx_op_lda(fam65xx_t* cpu, uint8_t value) {
+    cpu->a = value;
+    fam65xx_set_nz_flags(cpu, cpu->a);
+}
+
+static inline void fam65xx_op_ldx(fam65xx_t* cpu, uint8_t value) {
+    cpu->x = value;
+    fam65xx_set_nz_flags(cpu, cpu->x);
+}
+
+static inline void fam65xx_op_ldy(fam65xx_t* cpu, uint8_t value) {
+    cpu->y = value;
+    fam65xx_set_nz_flags(cpu, cpu->y);
+}
+
+// Feature-based opcode handlers
+bool fam65xx_is_illegal_opcode(uint8_t opcode);
+void fam65xx_sed_with_flag(fam65xx_t* cpu);
+void fam65xx_cld_with_flag(fam65xx_t* cpu);
+void fam65xx_ror_absolute_x_buggy(fam65xx_t* cpu);
+
+#endif // FAM65XX_CORE_H

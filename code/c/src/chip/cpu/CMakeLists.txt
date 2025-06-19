@@ -2,18 +2,18 @@
 
 # Shared MOS 6502 Family Core
 add_library(mos6502_family STATIC
-    mos6502_family/mos6502_family_core.c
-    mos6502_family/mos6502_family_gui.c
-    mos6502_family/mos6502_family_arithmetic.c
-    mos6502_family/mos6502_family_control.c
-    mos6502_family/mos6502_family_memory.c
-    mos6502_family/mos6502_family_registers.c
-    mos6502_family/mos6502_family_shifts.c
-    mos6502_family/mos6502_family_misc.c
-    mos6502_family/mos6502_family_opcodes.c
+    fam65xx/fam65xx_core.c
+    fam65xx/fam65xx_gui.c
+    fam65xx/fam65xx_arithmetic.c
+    fam65xx/fam65xx_control.c
+    fam65xx/fam65xx_memory.c
+    fam65xx/fam65xx_registers.c
+    fam65xx/fam65xx_shifts.c
+    fam65xx/fam65xx_misc.c
+    fam65xx/fam65xx_opcodes.c
 )
 target_include_directories(mos6502_family PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/mos6502_family
+    ${CMAKE_CURRENT_SOURCE_DIR}/fam65xx
     ${CMAKE_CURRENT_SOURCE_DIR}/../../..
 )
 

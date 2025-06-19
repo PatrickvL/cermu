@@ -1,6 +1,6 @@
 #include "mos6502.h"
-#include "../mos6502_family/mos6502_family_gui.h"
-#include "../mos6502_family/mos6502_family_constants.h"
+#include "../fam65xx/fam65xx_gui.h"
+#include "../fam65xx/fam65xx_constants.h"
 #include "../../../gui/cimgui_interface.h"
 #ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
@@ -46,7 +46,7 @@ void mos6502_render_debug_window(void* chip, bool* show_window) {
     }
 
     // Create GUI configuration for MOS6502
-    mos6502_family_gui_config_t config = {
+    fam65xx_gui_config_t config = {
         .cpu_type_name = "MOS 6502 (Standard)",
         .has_decimal_mode = true,   // MOS6502 supports full decimal mode
         .has_io_ports = false,      // No I/O ports
@@ -55,7 +55,7 @@ void mos6502_render_debug_window(void* chip, bool* show_window) {
     };
     
     // Use the shared family debug window renderer
-    mos6502_family_render_debug_window(chip, show_window, &config);
+    fam65xx_render_debug_window(chip, show_window, &config);
     
     igEnd();
 }

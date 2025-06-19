@@ -7,7 +7,7 @@
 #include "../../../core/control_lines_interface.h"
 #include "../../../core/system_lines.h"
 #include "../../../core/system.h"
-#include "../mos6502_family/mos6502_family_core.h"
+#include "../fam65xx/fam65xx_core.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -37,8 +37,8 @@ typedef void (*mos6510_opcode_handler_t)(mos6510_t* cpu);
 // MOS6510 CPU state structure - extends the family structure
 struct mos6510_s {
     // === BASE 6502 FAMILY STRUCTURE (MUST BE FIRST) ===
-    // This allows safe casting between mos6510_t* and mos6502_family_t*
-    mos6502_family_t base;
+    // This allows safe casting between mos6510_t* and fam65xx_t*
+    fam65xx_t base;
     
     // === MOS6510-SPECIFIC EXTENSIONS ===
     // I/O port interface (stored by value for optimal performance)
@@ -156,18 +156,18 @@ static inline void mos6510_opcode_dispatch(mos6510_t* cpu, uint8_t opcode) {
 
 // MOS6510-specific versions of shared macros - using wrapper functions to handle type conversion
 // Since base is the first member of mos6510_t, we can safely cast directly
-static inline void mos6510_interrupt_handler_wrapper(mos6502_family_t* base_cpu) {
+static inline void mos6510_interrupt_handler_wrapper(fam65xx_t* base_cpu) {
     mos6510_t* cpu = (mos6510_t*)base_cpu;
     mos6510_interrupt_handler(cpu);
 }
 
-static inline uint8_t mos6510_read_cycle_wrapper(mos6502_family_t* base_cpu, uint16_t addr) {
+static inline uint8_t mos6510_read_cycle_wrapper(fam65xx_t* base_cpu, uint16_t addr) {
     mos6510_t* cpu = (mos6510_t*)base_cpu;
     return mos6510_read_cycle(cpu, addr);
 }
 
 #define MOS6510_OPCODE_FOOTER(cpu) \
-    M6502_NEXT_INSTRUCTION(&((cpu)->base), mos6510_interrupt_handler_wrapper, mos6510_read_cycle_wrapper)
+    FAM65XX_NEXT_INSTRUCTION(&((cpu)->base), mos6510_interrupt_handler_wrapper, mos6510_read_cycle_wrapper)
 
 // ============================================================================
 // PERFORMANCE-OPTIMIZED MACROS FOR CODE DEDUPLICATION
@@ -200,32 +200,32 @@ static inline uint8_t mos6510_read_cycle_wrapper(mos6502_family_t* base_cpu, uin
 
 // Flag operations (using family functions)
 static inline void mos6510_set_flag(mos6510_t* cpu, uint8_t flag, bool condition) {
-    mos6502_family_set_flag(&cpu->base, flag, condition);
+    fam65xx_set_flag(&cpu->base, flag, condition);
 }
 
 static inline bool mos6510_get_flag(mos6510_t* cpu, uint8_t flag) {
-    return mos6502_family_get_flag(&cpu->base, flag);
+    return fam65xx_get_flag(&cpu->base, flag);
 }
 
 static inline void mos6510_set_nz_flags(mos6510_t* cpu, uint8_t value) {
-    mos6502_family_set_nz_flags(&cpu->base, value);
+    fam65xx_set_nz_flags(&cpu->base, value);
 }
 
 // Stack operations (using family functions)
 static inline void mos6510_push(mos6510_t* cpu, uint8_t data) {
-    mos6502_family_push(&cpu->base, data);
+    fam65xx_push(&cpu->base, data);
 }
 
 static inline uint8_t mos6510_pop(mos6510_t* cpu) {
-    return mos6502_family_pull(&cpu->base);
+    return fam65xx_pull(&cpu->base);
 }
 
 // BRK/IRQ common sequence - handles the interrupt setup portion
 static inline void mos6510_interrupt_sequence(mos6510_t* cpu, uint8_t status_flags, uint16_t vector_addr) {
     // Push PC and status unconditionally (skip RDY checks)
-    mos6502_family_push(&cpu->base, (cpu->base.pc >> 8) & 0xFF);
-    mos6502_family_push(&cpu->base, cpu->base.pc & 0xFF);
-    mos6502_family_push(&cpu->base, status_flags);
+    fam65xx_push(&cpu->base, (cpu->base.pc >> 8) & 0xFF);
+    fam65xx_push(&cpu->base, cpu->base.pc & 0xFF);
+    fam65xx_push(&cpu->base, status_flags);
     // Set interrupt disable
     cpu->base.p |= FLAG_I;
     // Read vector low and high without RDY checks
@@ -243,11 +243,11 @@ static inline void mos6510_interrupt_sequence(mos6510_t* cpu, uint8_t status_fla
 // ============================================================================
 // MOS6510 ADDRESSING MODE FUNCTIONS
 // ============================================================================
-// Note: Use mos6502_family_addr_* functions directly instead of wrappers
+// Note: Use fam65xx_addr_* functions directly instead of wrappers
 // for better performance. Examples:
-//   mos6502_family_addr_imm(&cpu->base)  // Immediate addressing
-//   mos6502_family_addr_zp(&cpu->base)   // Zero page addressing
-//   mos6502_family_addr_abs(&cpu->base)  // Absolute addressing
+//   fam65xx_addr_imm(&cpu->base)  // Immediate addressing
+//   fam65xx_addr_zp(&cpu->base)   // Zero page addressing
+//   fam65xx_addr_abs(&cpu->base)  // Absolute addressing
 // etc.
 
 // ============================================================================
@@ -257,12 +257,12 @@ static inline void mos6510_interrupt_sequence(mos6510_t* cpu, uint8_t status_fla
 
 // (Zero page,X) - Indexed Indirect addressing
 static inline uint8_t mos6510_addr_zpx_ind(mos6510_t* cpu) {
-    return mos6502_family_addr_indx(&cpu->base);
+    return fam65xx_addr_indx(&cpu->base);
 }
 
 // (Zero page),Y - Indirect Indexed addressing
 static inline uint8_t mos6510_addr_zp_ind_y(mos6510_t* cpu) {
-    return mos6502_family_addr_indy(&cpu->base);
+    return fam65xx_addr_indy(&cpu->base);
 }
 
 // ============================================================================
@@ -405,7 +405,7 @@ static inline void mos6510_illegal_inc_dec_combo(mos6510_t* cpu, uint8_t value,
 static inline void mos6510_load_a_and_x(mos6510_t* cpu, uint8_t value) {
     cpu->base.a = value;
     cpu->base.x = value;
-    mos6502_family_set_nz_flags(&cpu->base, value);
+    fam65xx_set_nz_flags(&cpu->base, value);
     MOS6510_OPCODE_FOOTER(cpu);
 }
 
@@ -425,7 +425,7 @@ static inline void mos6510_complex_store(mos6510_t* cpu, uint8_t value) {
 
 // Immediate mode accumulator operations (ALR, ANC, ARR, AXS, XAA)
 static inline void mos6510_immediate_accumulator_op(mos6510_t* cpu, void (*operation)(mos6510_t*, uint8_t)) {
-    uint8_t value = mos6502_family_addr_imm(&cpu->base);
+    uint8_t value = fam65xx_addr_imm(&cpu->base);
     operation(cpu, value);
     MOS6510_OPCODE_FOOTER(cpu);
 }
@@ -435,63 +435,63 @@ static inline void mos6510_immediate_accumulator_op(mos6510_t* cpu, void (*opera
 // ============================================================================
 
 // ALR operation: AND then LSR
-static inline void mos6502_family_op_alr(mos6510_t* cpu, uint8_t value) {
+static inline void fam65xx_op_alr(mos6510_t* cpu, uint8_t value) {
     cpu->base.a &= value;
     mos6510_set_flag(cpu, FLAG_C, cpu->base.a & 0x01);
     cpu->base.a >>= 1;
-    mos6502_family_set_nz_flags(&cpu->base, cpu->base.a);
+    fam65xx_set_nz_flags(&cpu->base, cpu->base.a);
 }
 
 // ANC operation: AND then copy N to C
-static inline void mos6502_family_op_anc(mos6510_t* cpu, uint8_t value) {
+static inline void fam65xx_op_anc(mos6510_t* cpu, uint8_t value) {
     cpu->base.a &= value;
-    mos6502_family_set_nz_flags(&cpu->base, cpu->base.a);
+    fam65xx_set_nz_flags(&cpu->base, cpu->base.a);
     mos6510_set_flag(cpu, FLAG_C, cpu->base.a & 0x80);
 }
 
 // ARR operation: AND then ROR with special V flag behavior
-static inline void mos6502_family_op_arr(mos6510_t* cpu, uint8_t value) {
+static inline void fam65xx_op_arr(mos6510_t* cpu, uint8_t value) {
     cpu->base.a &= value;
-    uint8_t old_carry = mos6502_family_get_flag(&cpu->base, FLAG_C) ? 1 : 0;
+    uint8_t old_carry = fam65xx_get_flag(&cpu->base, FLAG_C) ? 1 : 0;
     mos6510_set_flag(cpu, FLAG_C, cpu->base.a & 0x01);
     cpu->base.a = (cpu->base.a >> 1) | (old_carry << 7);
-    mos6502_family_set_nz_flags(&cpu->base, cpu->base.a);
+    fam65xx_set_nz_flags(&cpu->base, cpu->base.a);
     // V flag behavior is complex for ARR
     mos6510_set_flag(cpu, FLAG_V, ((cpu->base.a >> 6) ^ (cpu->base.a >> 5)) & 1);
 }
 
 // AXS operation: (A & X) - immediate, store in X
-static inline void mos6502_family_op_axs(mos6510_t* cpu, uint8_t value) {
+static inline void fam65xx_op_axs(mos6510_t* cpu, uint8_t value) {
     uint8_t temp = cpu->base.a & cpu->base.x;
     uint16_t result = temp - value;
     mos6510_set_flag(cpu, FLAG_C, result < 0x100);
     cpu->base.x = result & 0xFF;
-    mos6502_family_set_nz_flags(&cpu->base, cpu->base.x);
+    fam65xx_set_nz_flags(&cpu->base, cpu->base.x);
 }
 
 // XAA operation: Transfer X to A, then AND with immediate
-static inline void mos6502_family_op_xaa(mos6510_t* cpu, uint8_t value) {
+static inline void fam65xx_op_xaa(mos6510_t* cpu, uint8_t value) {
     cpu->base.a = cpu->base.x;
     cpu->base.a &= value;
-    mos6502_family_set_nz_flags(&cpu->base, cpu->base.a);
+    fam65xx_set_nz_flags(&cpu->base, cpu->base.a);
 }
 
 // SLO register operation: ORA with result
-static inline void mos6502_family_op_slo_reg(mos6510_t* cpu, uint8_t value) {
+static inline void fam65xx_op_slo_reg(mos6510_t* cpu, uint8_t value) {
     cpu->base.a |= value;
-    mos6502_family_set_nz_flags(&cpu->base, cpu->base.a);
+    fam65xx_set_nz_flags(&cpu->base, cpu->base.a);
 }
 
 // RLA register operation: AND with result
-static inline void mos6502_family_op_rla_reg(mos6510_t* cpu, uint8_t value) {
+static inline void fam65xx_op_rla_reg(mos6510_t* cpu, uint8_t value) {
     cpu->base.a &= value;
-    mos6502_family_set_nz_flags(&cpu->base, cpu->base.a);
+    fam65xx_set_nz_flags(&cpu->base, cpu->base.a);
 }
 
 // SRE register operation: EOR with result
-static inline void mos6502_family_op_sre_reg(mos6510_t* cpu, uint8_t value) {
+static inline void fam65xx_op_sre_reg(mos6510_t* cpu, uint8_t value) {
     cpu->base.a ^= value;
-    mos6502_family_set_nz_flags(&cpu->base, cpu->base.a);
+    fam65xx_set_nz_flags(&cpu->base, cpu->base.a);
 }
 
 // CPU core functions

@@ -1,6 +1,6 @@
 #include "mos6510.h"
-#include "../mos6502_family/mos6502_family_gui.h"
-#include "../mos6502_family/mos6502_family_constants.h"
+#include "../fam65xx/fam65xx_gui.h"
+#include "../fam65xx/fam65xx_constants.h"
 #include "../../../gui/cimgui_interface.h"
 #ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
@@ -28,7 +28,7 @@ void mos6510_render_debug_window(void* chip, bool* show_window) {
         igEnd();
         return;
     }    // Create GUI configuration for MOS6510
-    mos6502_family_gui_config_t config;
+    fam65xx_gui_config_t config;
     config.cpu_type_name = "MOS 6510 (C64)";
     config.has_decimal_mode = false;  // MOS6510 does not support decimal mode
     config.has_io_ports = true;       // MOS6510 has I/O ports
@@ -36,7 +36,7 @@ void mos6510_render_debug_window(void* chip, bool* show_window) {
     config.render_cpu_specific = mos6510_render_cpu_specific;
     
     // Use the shared family debug window renderer
-    mos6502_family_render_debug_window(chip, show_window, &config);
+    fam65xx_render_debug_window(chip, show_window, &config);
 }
 
 // ============================================================================
@@ -125,10 +125,10 @@ static void mos6510_render_io_ports(mos6510_t* cpu) {
     igText("Port ($0001): $%02X", cpu->io_port[1]);
     
     // Show individual port bits using shared helper function
-    mos6502_family_render_port_bits(cpu->io_port[1], "Port Bits");
+    fam65xx_render_port_bits(cpu->io_port[1], "Port Bits");
     
     // Show DDR bits as well
-    mos6502_family_render_port_bits(cpu->io_port[0], "DDR Bits ");
+    fam65xx_render_port_bits(cpu->io_port[0], "DDR Bits ");
     
     igSeparator();
 }
