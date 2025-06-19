@@ -189,8 +189,8 @@ void destroy_cpu_instance(cpu_instance_t* instance) {
 // ============================================================================
 
 void set_cpu_state(cpu_instance_t* instance, const cpu_state_t* state) {
-    // All CPUs use the same mos6502_family_t base structure - access directly
-    mos6502_family_t* cpu_base = NULL;
+    // All CPUs use the same fam65xx_t base structure - access directly
+    fam65xx_t* cpu_base = NULL;
     
     switch (instance->type) {
         case CPU_TYPE_MOS6502: {
@@ -223,8 +223,8 @@ void set_cpu_state(cpu_instance_t* instance, const cpu_state_t* state) {
 }
 
 void get_cpu_state(cpu_instance_t* instance, cpu_state_t* state) {
-    // All CPUs use the same mos6502_family_t base structure - access directly
-    mos6502_family_t* cpu_base = NULL;
+    // All CPUs use the same fam65xx_t base structure - access directly
+    fam65xx_t* cpu_base = NULL;
     
     switch (instance->type) {
         case CPU_TYPE_MOS6502: {

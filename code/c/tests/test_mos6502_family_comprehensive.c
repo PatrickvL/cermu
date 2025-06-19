@@ -1,7 +1,7 @@
 #include "../src/chip/cpu/mos6502/mos6502.h"
 #include "../src/chip/cpu/mos6510/mos6510.h"
 #include "../src/chip/cpu/nes6502/nes6502.h"
-#include "../src/chip/cpu/mos6502_family/mos6502_family_constants.h"
+#include "../src/chip/cpu/fam65xx/fam65xx_constants.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>

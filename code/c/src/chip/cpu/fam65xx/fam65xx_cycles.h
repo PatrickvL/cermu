@@ -1,5 +1,5 @@
-#ifndef MOS6502_FAMILY_CYCLES_H
-#define MOS6502_FAMILY_CYCLES_H
+#ifndef FAM65XX_CYCLES_H
+#define FAM65XX_CYCLES_H
 
 #include <stdint.h>
 
@@ -11,7 +11,7 @@
 // Cycle counts reflect the minimum cycles for each instruction
 // Some instructions may take additional cycles due to page crossing or other factors
 
-static const uint8_t mos6502_family_cycle_table[256] = {
+static const uint8_t fam65xx_cycle_table[256] = {
     // 0x00-0x0F
     7, 6, 2, 8, 3, 3, 5, 5, 3, 2, 2, 2, 4, 4, 6, 6,
     // 0x10-0x1F  
@@ -47,14 +47,14 @@ static const uint8_t mos6502_family_cycle_table[256] = {
 };
 
 // Maximum reasonable cycle count for any single instruction
-#define MOS6502_MAX_CYCLES_PER_INSTRUCTION 8
+#define FAM65XX_MAX_CYCLES_PER_INSTRUCTION 8
 
 // Cycle count lookup macro
-#define MOS6502_GET_CYCLES(opcode) mos6502_family_cycle_table[(opcode)]
+#define FAM65XX_GET_CYCLES(opcode) fam65xx_cycle_table[(opcode)]
 
 // Helper macros for cycle timing calculations
-#define MOS6502_PAGE_CROSSED(addr1, addr2) (((addr1) & 0xFF00) != ((addr2) & 0xFF00))
-#define MOS6502_BRANCH_TAKEN_CYCLES 1
-#define MOS6502_PAGE_CROSS_CYCLES 1
+#define FAM65XX_PAGE_CROSSED(addr1, addr2) (((addr1) & 0xFF00) != ((addr2) & 0xFF00))
+#define FAM65XX_BRANCH_TAKEN_CYCLES 1
+#define FAM65XX_PAGE_CROSS_CYCLES 1
 
-#endif // MOS6502_FAMILY_CYCLES_H
+#endif // FAM65XX_CYCLES_H

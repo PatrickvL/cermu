@@ -1,8 +1,8 @@
 #ifndef NES6502_H
 #define NES6502_H
 
-#include "../mos6502_family/mos6502_family_core.h"
-#include "../mos6502_family/mos6502_family_constants.h"
+#include "../fam65xx/fam65xx_core.h"
+#include "../fam65xx/fam65xx_constants.h"
 
 // ============================================================================
 // NES 6502 CPU (6502 variant used in Nintendo Entertainment System)
@@ -14,7 +14,7 @@ extern chip_descriptor_t nes6502_descriptor;
 
 // NES 6502 doesn't have additional hardware beyond the standard 6502 family
 typedef struct {
-    mos6502_family_t base; // Must be first member for casting
+    fam65xx_t base; // Must be first member for casting
     // No additional hardware for NES 6502
 } nes6502_t;
 

@@ -1,5 +1,5 @@
-#ifndef MOS6502_FAMILY_CONSTANTS_H
-#define MOS6502_FAMILY_CONSTANTS_H
+#ifndef FAM65XX_CONSTANTS_H
+#define FAM65XX_CONSTANTS_H
 
 #include <stdint.h>
 
@@ -40,30 +40,24 @@
 #define RESET_X         0x00
 #define RESET_Y         0x00
 
-// CPU capabilities flags (for family differentiation)
-#define MOS6502_CAP_DECIMAL_MODE      0x01
-#define MOS6502_CAP_IO_PORTS          0x02
-#define MOS6502_CAP_ILLEGAL_OPCODES   0x04
-#define MOS6502_CAP_EXTRA_OPCODES     0x08  // For 65C02, etc.
-
 // Pin mappings (shared by family - individual CPUs can override)
 #include "../../../core/system_lines.h"
 
-#define MOS6502_PIN_IRQ         SYS_LINE_IRQ
-#define MOS6502_PIN_NMI         SYS_LINE_NMI  
-#define MOS6502_PIN_RDY         SYS_LINE_RDY
-#define MOS6502_PIN_AEC         SYS_LINE_AEC    // Address Enable Control
-#define MOS6502_PIN_BA          SYS_LINE_BA     // Bus Available
+#define FAM65XX_PIN_IRQ         SYS_LINE_IRQ
+#define FAM65XX_PIN_NMI         SYS_LINE_NMI  
+#define FAM65XX_PIN_RDY         SYS_LINE_RDY
+#define FAM65XX_PIN_AEC         SYS_LINE_AEC    // Address Enable Control
+#define FAM65XX_PIN_BA          SYS_LINE_BA     // Bus Available
 
 // Pin masks for efficient operations
-#define MOS6502_MASK_IRQ        SYS_MASK_IRQ
-#define MOS6502_MASK_NMI        SYS_MASK_NMI
-#define MOS6502_MASK_RDY        SYS_MASK_RDY
-#define MOS6502_MASK_AEC        SYS_MASK_AEC
-#define MOS6502_MASK_BA         SYS_MASK_BA
+#define FAM65XX_MASK_IRQ        SYS_MASK_IRQ
+#define FAM65XX_MASK_NMI        SYS_MASK_NMI
+#define FAM65XX_MASK_RDY        SYS_MASK_RDY
+#define FAM65XX_MASK_AEC        SYS_MASK_AEC
+#define FAM65XX_MASK_BA         SYS_MASK_BA
 
 // Combined masks for efficiency
-#define MOS6502_MASK_INPUTS     (MOS6502_MASK_IRQ | MOS6502_MASK_NMI | MOS6502_MASK_RDY)
-#define MOS6502_MASK_OUTPUTS    (MOS6502_MASK_AEC | MOS6502_MASK_BA)
+#define FAM65XX_MASK_INPUTS     (FAM65XX_MASK_IRQ | FAM65XX_MASK_NMI | FAM65XX_MASK_RDY)
+#define FAM65XX_MASK_OUTPUTS    (FAM65XX_MASK_AEC | FAM65XX_MASK_BA)
 
-#endif // MOS6502_FAMILY_CONSTANTS_H
+#endif // FAM65XX_CONSTANTS_H
