@@ -8,16 +8,13 @@
 
 // Core memory and cycle functions (shared by all family members)
 uint8_t mos6502_family_read_cycle(mos6502_family_t* cpu, uint16_t address) {
+    cpu->bus_interface.cycle_tick(cpu->bus_interface.context);
     return cpu->bus_interface.bus_read(cpu->bus_interface.context, address);
 }
 
 void mos6502_family_write_cycle(mos6502_family_t* cpu, uint16_t address, uint8_t value) {
+    cpu->bus_interface.cycle_tick(cpu->bus_interface.context);
     cpu->bus_interface.bus_write(cpu->bus_interface.context, address, value);
-}
-
-void mos6502_family_opcode_dispatch(mos6502_family_t* cpu, uint8_t opcode) {
-    // All opcodes have handlers - no NULL check needed for performance
-    cpu->opcode_handlers[opcode](cpu);
 }
 
 // Stack operations (shared)
@@ -108,7 +105,7 @@ void mos6502_family_stop_intercept(mos6502_family_t* cpu) {
     memcpy(cpu->opcode_handlers, cpu->saved_opcode_handlers, sizeof(cpu->opcode_handlers));
 }
 
-// Single step execution (shared) - uses intercept mechanism for performance
+// Single step execution (shared) - bypasses threaded dispatch for single instructions
 bool mos6502_family_step(mos6502_family_t* cpu) {
     if (!cpu) return false;
     

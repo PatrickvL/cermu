@@ -2,7 +2,7 @@
 
 **Project**: Complete MOS6502 Family CPU Implementation with Shared Architecture  
 **Date Started**: 2025-06-18  
-**Current Status**: Core Implementation Complete - Testing and Validation Phase
+**Current Status**: ProcessorTests Integration - Debugging First Opcode Step Hang
 
 ## Overview
 
@@ -43,6 +43,7 @@ mos6510/     - C64 CPU without decimal mode, with I/O port
 nes6502/     - NES variant with specific quirks
 ```
 
+
 ### Key Features
 - **Shared Opcode Base**: Default 256-entry opcode table in family core
 - **CPU-Specific Overrides**: Each CPU can override specific opcodes
@@ -74,18 +75,21 @@ nes6502/     - NES variant with specific quirks
    - Direct member access instead of inefficient getter/setter functions
    - Unified memory layout across all family CPUs
    - Shared flag management and opcode dispatch system
+10. **Family Level Interception Integration**: ✅ All CPUs now use family level interception mechanism
 
 ### 🔄 Current Tasks (In Progress)
-1. **ProcessorTests Build Fixes**: Fix missing descriptor declarations and undefined getter/setter functions
-2. **Direct Struct Access Migration**: Replace CPU-specific getter calls with direct mos6502_family_t member access
-3. **Decimal Mode Validation**: Execute ProcessorTests on MOS6502 vs MOS6510/NES6502 to demonstrate differences
-4. **Family Level Interception Integration**: ✅ All CPUs now use family level interception mechanism
+1. **ProcessorTests Hang Debug**: Added debug output to trace execution flow in `mos6502_family_step` and intercept stub
+2. **Root Cause Analysis**: Focus on identifying actual hang location rather than modifying threaded dispatch architecture
+3. **Bus Interface Verification**: Ensure memory and bus interfaces are properly initialized in test runner
+4. **M6502_NEXT_INSTRUCTION Arguments Research**: Investigate if `interrupt_func`, `read_func`, `dispatch_func` parameters are needed at all (all family CPUs might use same calls anyway)
+5. **Interrupt Dispatch Investigation**: Check if interrupt handlers need to dispatch to next instruction after completion
 
 ### ⏳ Pending Tasks
 1. **Complete ProcessorTests Integration**: Fix build issues and run validation tests
-2. **Performance Testing**: Benchmark threaded dispatch performance vs previous implementation
-3. **Documentation**: Complete API documentation and usage examples
-4. **Code Cleanup**: Remove legacy getter/setter functions and optimize direct struct access
+2. **Decimal Mode Validation**: Execute ProcessorTests on MOS6502 vs MOS6510/NES6502 to demonstrate differences
+3. **Performance Testing**: Benchmark threaded dispatch performance vs previous implementation
+4. **Documentation**: Complete API documentation and usage examples
+5. **Code Cleanup**: Remove legacy getter/setter functions and optimize direct struct access
 
 ## Build Instructions
 
@@ -170,15 +174,16 @@ Each JSON file contains:
 - **MOS6510**: Existing implementation maintains compatibility with family architecture
 - **NES6502**: Complete with all ADC/SBC opcodes overridden for binary-only arithmetic
 
-### Testing Infrastructure ✅ MOSTLY COMPLETE
+### Testing Infrastructure ✅ HANG ISSUE
 - **ProcessorTests Repository**: All 256-opcode test data available for multiple CPU variants
 - **Unified Test Runner**: Single runner auto-detects CPU type from test data folder
 - **Build System**: All targets compile successfully
+- **CRITICAL ISSUE**: Test runner hangs on first CPU opcode step execution
 
-### Known Issues ⚠️ NEEDS ATTENTION
-1. **Missing Descriptor Declarations**: Test runner has undefined mos6502_descriptor, nes6502_descriptor
-2. **Getter/Setter Functions**: Legacy functions should be replaced with direct struct member access
-3. **Test Runner Build**: Some undefined functions prevent successful ProcessorTests execution
+###Known Issues ⚠️ NEEDS IMMEDIATE ATTENTION
+- **ProcessorTests Hang**: Runner hangs on first opcode step - likely infinite loop or missing cycle completion
+- **Missing Descriptor Declarations**: Test runner has undefined mos6502_descriptor, nes6502_descriptor
+- **Getter/Setter Functions**: Legacy functions should be replaced with direct struct member access
 
 ## Next Steps
 
@@ -211,7 +216,8 @@ Each JSON file contains:
 - [x] NES6502: All opcodes implemented with decimal mode overrides
 - [x] CPU overrides: Demonstrated with NES6502 ADC/SBC binary-only arithmetic
 
-### Phase 3: Validation In Progress 🔄
+### Phase 3: Validation In Progress 🚨 HANG ISSUE
+- [ ] 🚨 **BLOCKER**: Fix ProcessorTests runner hang on first opcode step
 - [ ] MOS6502: Passes all applicable ProcessorTests (build issues to fix)
 - [ ] MOS6510: Passes all applicable ProcessorTests (binary mode only)
 - [ ] NES6502: Passes all applicable ProcessorTests (build issues to fix)
@@ -253,7 +259,7 @@ processor_tests/
 - `c:\Workspaces\Mine\aiemu\code\c\src\chip\cpu\mos6502\mos6502.h` - Header definitions for MOS6502 ✅
 - `c:\Workspaces\Mine\aiemu\code\c\src\chip\cpu\nes6502\nes6502.c` - Complete NES6502 with decimal mode overrides ✅  
 - `c:\Workspaces\Mine\aiemu\code\c\src\chip\cpu\nes6502\nes6502.h` - NES6502 header definitions ✅
-- `c:\Workspaces\Mine\aiemu\code\c\tests\processor_tests_runner.c` - Unified test runner for all CPU types ✅
+- `c:\Workspaces\Mine\aiemu\code\c\tests\processor_tests_runner.c` - Unified test runner for all CPU types ⚠️ HANG ISSUE
 - `c:\Workspaces\Mine\aiemu\code\c\CMakeLists.txt` - GUI source reorganization and build fixes ✅
 
 ### Architecture Files (Existing)
@@ -270,6 +276,24 @@ processor_tests/
 ## Session Notes
 
 *Update this section each session with progress made and issues encountered.*
+
+### Session 2025-06-19 (🚨 ProcessorTests Hang Debug)
+- **Current Issue**: ProcessorTests runner hangs on first CPU opcode step execution
+- **Status**: CRITICAL BLOCKER - All ProcessorTests validation blocked until resolved
+- **Key Architecture Understanding**:
+  - **Threaded Dispatch Performance**: The threaded dispatch mechanism is deliberately chosen for runtime performance benefits and must be preserved
+  - **Single-Step vs Continuous Execution**: Single-stepping is only used for testing/debugging, while continuous execution uses threaded dispatch for performance
+  - **Interception Mechanism Necessity**: The interception mechanism is required to break the threaded dispatch chain for single-step debugging
+- **Investigation Progress**:
+  - ✅ **Return Statement Analysis**: Confirmed that `return` statements in `M6502_NEXT_INSTRUCTION` macro are NOT the issue since the macro is always the last thing in opcode handlers
+  - ✅ **Threaded Dispatch Understanding**: Each opcode handler calls the next instruction directly through function calls, creating a chain that never returns to original caller in continuous mode
+  - ✅ **Interception Mechanism**: Properly designed to replace all handlers with intercept stubs that break the chain and return control for single-stepping
+  - 🔄 **Debug Approach**: Added debug output to `mos6502_family_step` and `mos6502_family_intercept_stub` to trace execution flow
+- **Critical Design Principles**:
+  - Do NOT modify or replace the threaded dispatch mechanism - it's performance-critical
+  - Do NOT remove the interception mechanism - it's the correct approach for single-stepping
+  - Focus on debugging the actual hang location rather than architectural changes
+- **Next Action**: Build and run with debug output to identify exact hang location
 
 ### Session 2025-06-18 (Complete Core Implementation)
 - **Completed**: Full MOS6502 family architecture implementation
@@ -314,6 +338,89 @@ processor_tests/
 
 ---
 
-*Last Updated: 2025-06-19*
-*Status: Core implementation complete - All CPUs now use family level interception - ProcessorTests integration and validation in progress*
-*Next Session: Fix test runner build issues and demonstrate decimal mode differences*
+## Architectural Insights & Debugging Principles
+
+### Threaded Dispatch System Understanding
+The MOS6502 family uses a threaded dispatch system for performance optimization:
+
+**How Threaded Dispatch Works:**
+- Each opcode handler calls the next instruction directly through `MOS6502_FAMILY_OPCODE_FOOTER(cpu)`
+- This creates a chain of function calls that never returns to the original caller
+- Designed for continuous execution where performance is critical
+- Each handler ends with `M6502_NEXT_INSTRUCTION` macro that dispatches to the next opcode
+
+**Why Threaded Dispatch is Important:**
+- Eliminates the overhead of returning to a central dispatch loop
+- Provides significant runtime performance benefits for emulation
+- Critical for accurate timing in CPU emulation
+- Must be preserved - do NOT modify this system
+
+### Interception Mechanism for Single-Stepping
+For debugging and testing, single-step execution is needed:
+
+**How Interception Works:**
+- `mos6502_family_start_intercept()` replaces ALL opcode handlers with `mos6502_family_intercept_stub`
+- Original handlers are saved in `saved_opcode_handlers[]`
+- When the current instruction completes and tries to dispatch to the next one, it hits the intercept stub
+- The intercept stub calls `mos6502_family_stop_intercept()` to restore original handlers
+- The intercept stub returns without calling another handler, breaking the threaded dispatch chain
+
+**Why Interception is Necessary:**
+- Single-stepping requires breaking the threaded dispatch chain after exactly one instruction
+- The interception mechanism is the correct architectural approach
+- Alternative approaches (like disabling threaded dispatch) would harm performance and complicate the codebase
+
+### Common Debugging Mistakes to Avoid
+
+**❌ DO NOT:**
+- Replace or modify the threaded dispatch mechanism
+- Remove the interception system
+- Assume the `return` statement in `M6502_NEXT_INSTRUCTION` macro is the problem (it's always the last thing in handlers)
+- Create alternative step functions that bypass the existing architecture
+
+**✅ DO:**
+- Use debug output to trace execution flow and identify actual hang location
+- Verify bus interface initialization and memory setup
+- Check that intercept stub is being called correctly
+- Ensure CPU state is properly initialized before stepping
+- Trace opcode execution to find where the infinite loop occurs
+
+### Debugging Process for Hang Issues
+1. Add debug output to `mos6502_family_step()` to confirm it's being called
+2. Add debug output to `mos6502_family_intercept_stub()` to confirm interception works
+3. Verify memory and bus interface setup in test runner
+4. Check CPU state initialization
+5. Trace opcode execution to find where the infinite loop occurs
+
+### Critical Investigation Areas
+
+**M6502_NEXT_INSTRUCTION Macro Arguments:**
+- **Issue**: Before the MOS6510 refactoring, the arguments passed to `M6502_NEXT_INSTRUCTION` were not used
+- **Current Arguments**: `interrupt_func`, `read_func`, `dispatch_func`
+- **Investigation Needed**:
+  - Determine if these need to be arguments at all - all family CPUs might end up making the same calls anyway
+  - Could potentially simplify to direct calls in the macro instead of parameterized functions
+  - Check if `mos6502_family_interrupt_handler`, `mos6502_family_read_cycle`, `mos6502_family_opcode_dispatch` are used by all family members
+  - Consider removing parameters and using direct function calls for simplification
+
+**Interrupt Handling and Dispatch:**
+- **Potential Issue**: After calling `interrupt_func`, the system might need to dispatch to the next instruction
+- **Investigation Needed**:
+  - Check if interrupt handlers properly return control or if they need to dispatch next instruction
+  - Verify that interrupt sequences complete correctly and don't hang
+  - Ensure interrupt handling works correctly with the interception mechanism for single-stepping
+  - Test both IRQ and NMI interrupt scenarios
+
+**CRITICAL FINDING - M6502_NEXT_INSTRUCTION Macro Issue:**
+- **Problem Identified**: In `M6502_NEXT_INSTRUCTION` macro, when interrupt occurs:
+  - Macro calls `interrupt_func(cpu)` 
+  - Macro ends without calling `M6502_NEXT_INSTRUCTION_DISPATCH`
+  - This means no dispatch to next instruction after interrupt handling
+- **Current Interrupt Handler Behavior**: 
+  - If interrupt occurs: calls `mos6502_family_interrupt_sequence` and returns (NO DISPATCH)
+  - If no interrupt: calls `MOS6502_FAMILY_OPCODE_FOOTER` (DOES DISPATCH)
+- **Inconsistency**: The macro expects interrupt handler to handle its own dispatch, but interrupt sequence doesn't dispatch
+- **Potential Fix**: Either:
+  1. Modify macro to dispatch after interrupt handling, OR
+  2. Modify interrupt sequence to handle dispatch internally
+
