@@ -106,7 +106,7 @@ struct mos6502_family_s {
 #define M6502_READY(cpu) M6502_TEST_RDY(cpu)
 #define M6502_WAIT_READY(cpu) do { \
     M6502_UNIQUE_LABEL(cpu_ready_stall): \
-    if (unlikely(M6502_READY(cpu))) { \
+    if (unlikely(!M6502_READY(cpu))) { \
         M6502_INTRA_CYCLE(cpu); \
         goto M6502_UNIQUE_LABEL(cpu_ready_stall); \
     } \
@@ -126,19 +126,18 @@ struct mos6502_family_s {
 #define M6502_SYSTEM_LINES_CLEAR(cpu, mask) SYS_LINES_CLEAR((cpu)->system_lines, mask)
 
 // Instruction dispatch macros (shared - but implementation-specific functions)
-#define M6502_NEXT_INSTRUCTION_DISPATCH(cpu, read_func, dispatch_func) do { \
+#define M6502_NEXT_INSTRUCTION_DISPATCH(cpu, read_func) do { \
     uint8_t opcode = read_func(cpu, (cpu)->pc++); \
-    dispatch_func(cpu, opcode); \
+    (cpu)->opcode_handlers[opcode](cpu); \
 } while(0)
 
-#define M6502_NEXT_INSTRUCTION(cpu, interrupt_func, read_func, dispatch_func) do { \
+#define M6502_NEXT_INSTRUCTION(cpu, interrupt_func, read_func) do { \
     if (unlikely(M6502_TEST_IRQ(cpu) || M6502_TEST_NMI(cpu))) { \
         interrupt_func(cpu); \
-        return; \
+    } else { \
+        M6502_WAIT_READY(cpu); \
+        M6502_NEXT_INSTRUCTION_DISPATCH(cpu, read_func); \
     } \
-    M6502_WAIT_READY(cpu); \
-    M6502_NEXT_INSTRUCTION_DISPATCH(cpu, read_func, dispatch_func); \
-    return; \
 } while(0)
 
 // Universal instruction dispatch using function pointers
@@ -149,12 +148,11 @@ struct mos6502_family_s {
 // Core memory and cycle functions (shared by all family members)
 uint8_t mos6502_family_read_cycle(mos6502_family_t* cpu, uint16_t address);
 void mos6502_family_write_cycle(mos6502_family_t* cpu, uint16_t address, uint8_t value);
-void mos6502_family_opcode_dispatch(mos6502_family_t* cpu, uint8_t opcode);
 void mos6502_family_interrupt_handler(mos6502_family_t* cpu);
 
 // Family-specific versions of shared macros
 #define MOS6502_FAMILY_OPCODE_FOOTER(cpu) \
-    M6502_NEXT_INSTRUCTION(cpu, mos6502_family_interrupt_handler, mos6502_family_read_cycle, mos6502_family_opcode_dispatch)
+    M6502_NEXT_INSTRUCTION(cpu, mos6502_family_interrupt_handler, mos6502_family_read_cycle)
 
 // Stack operations (shared)
 void mos6502_family_push(mos6502_family_t* cpu, uint8_t value);

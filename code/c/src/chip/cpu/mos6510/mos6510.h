@@ -166,13 +166,8 @@ static inline uint8_t mos6510_read_cycle_wrapper(mos6502_family_t* base_cpu, uin
     return mos6510_read_cycle(cpu, addr);
 }
 
-static inline void mos6510_opcode_dispatch_wrapper(mos6502_family_t* base_cpu, uint8_t opcode) {
-    mos6510_t* cpu = (mos6510_t*)base_cpu;
-    mos6510_opcode_dispatch(cpu, opcode);
-}
-
 #define MOS6510_OPCODE_FOOTER(cpu) \
-    M6502_NEXT_INSTRUCTION(&((cpu)->base), mos6510_interrupt_handler_wrapper, mos6510_read_cycle_wrapper, mos6510_opcode_dispatch_wrapper)
+    M6502_NEXT_INSTRUCTION(&((cpu)->base), mos6510_interrupt_handler_wrapper, mos6510_read_cycle_wrapper)
 
 // ============================================================================
 // PERFORMANCE-OPTIMIZED MACROS FOR CODE DEDUPLICATION
