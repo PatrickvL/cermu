@@ -591,12 +591,11 @@ void fam65xx_init_opcode_table(fam65xx_t* cpu, uint32_t cpu_features) {
     
     // Apply illegal opcodes behavior
     if (!(cpu_features & FAM65XX_FEATURE_ILLEGAL_OPCODES)) {
-        // Replace all illegal opcodes with JAM instructions for CPUs that don't support them
-        // This ensures that illegal opcodes crash the CPU instead of doing unpredictable things
+        // Replace all illegal opcodes with JAM instructions for CPUs that don't support them        // This ensures that illegal opcodes crash the CPU instead of doing unpredictable things
         for (int i = 0; i < 256; i++) {
             // Check if this is an illegal opcode by comparing to known legal opcodes
-            if (fam65xx_is_illegal_opcode(i)) {
-                fam65xx_override_opcode(cpu, i, fam65xx_jam);
+            if (fam65xx_is_illegal_opcode((uint8_t)i)) {
+                fam65xx_override_opcode(cpu, (uint8_t)i, fam65xx_jam);
             }
         }
     }      // TODO: Apply other feature flags (BCD_FLAG, ROR_BUG, etc.) as needed

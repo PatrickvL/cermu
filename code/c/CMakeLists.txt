@@ -190,7 +190,7 @@ if(BUILD_GUI)
         src/gui/cimgui_interface.c
         src/gui/cimgui_backends.cpp
         src/chip/video/vic_ii/vicii_gui.c
-        src/chip/cpu/mos6502_family/mos6502_family_gui.c
+        src/chip/cpu/fam65xx/fam65xx_gui.c
         src/chip/cpu/mos6510/mos6510_gui.c
     )
 
