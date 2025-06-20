@@ -52,7 +52,7 @@ bool nes6502_create(chip_descriptor_t* desc, nes6502_t* cpu) {
     
     // Initialize opcode table with NES6502 features (no decimal mode)
     uint32_t features = FAM65XX_FEATURE_ILLEGAL_OPCODES;  // No decimal mode, no I/O ports
-    fam65xx_init_with_features(&cpu->base, features);
+    fam65xx_init_opcode_table(&cpu->base, features);
     // NES 6502 specific: decimal mode disabled automatically by feature flags
   
     return true;

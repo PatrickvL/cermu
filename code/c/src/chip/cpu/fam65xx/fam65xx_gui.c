@@ -48,13 +48,12 @@ void fam65xx_render_control_lines(fam65xx_t* cpu) {
     
     igText("Control Lines");
     igSeparator();
-    
-    // Check if control interface is properly initialized
+      // Check if control interface is properly initialized
     if (cpu->control_interface.get_lines && cpu->control_interface.context) {
         uint32_t control_lines = cpu->control_interface.get_lines(cpu->control_interface.context);
-        igText("IRQ: %s", (control_lines & (1U << 0)) ? "ACTIVE" : "inactive");
-        igText("NMI: %s", (control_lines & (1U << 1)) ? "ACTIVE" : "inactive");
-        igText("RDY: %s", (control_lines & (1U << 5)) ? "STALLED" : "ready");
+        igText("IRQ: %s", (control_lines & FAM65XX_MASK_IRQ) ? "ACTIVE" : "inactive");
+        igText("NMI: %s", (control_lines & FAM65XX_MASK_NMI) ? "ACTIVE" : "inactive");
+        igText("RDY: %s", (control_lines & FAM65XX_MASK_RDY) ? "ready" : "STALLED");
     } else {
         igText("IRQ: Not connected");
         igText("NMI: Not connected");
