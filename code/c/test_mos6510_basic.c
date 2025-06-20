@@ -38,8 +38,8 @@ void test_cycle_tick(void* context) {
 // Dummy control lines interface - returns no active interrupts
 static uint32_t dummy_get_control_lines(void *context) {
     (void)context;  // Unused
-    // Return RDY active (bit 5) to allow CPU to proceed, no IRQ/NMI active
-    return (1U << 5);  // SYS_MASK_RDY = (1U << SYS_LINE_RDY) = (1U << 5)
+    // Return RDY active (bit 29) to allow CPU to proceed, no IRQ/NMI active
+    return (1U << 29);  // SYS_MASK_RDY = (1U << SYS_LINE_RDY) = (1U << 29)
 }
 
 static void dummy_set_control_lines(void *context, uint32_t lines) {
