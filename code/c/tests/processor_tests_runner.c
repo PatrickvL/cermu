@@ -606,7 +606,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    const char* test_path = NULL;
+    const char* test_paths[256];  // Support up to 256 test paths
+    int test_path_count = 0;
     cpu_type_t forced_cpu_type = CPU_TYPE_UNKNOWN;
     
     // Parse command line arguments
@@ -629,19 +630,23 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
         } else {
-            test_path = argv[i];
+            if (test_path_count < 256) {
+                test_paths[test_path_count++] = argv[i];
+            } else {
+                printf("ERROR: Too many test paths (max 256)\n");
+                return 1;
+            }
         }
     }
     
-    if (!test_path) {
+    if (test_path_count == 0) {
         printf("ERROR: No test file or directory specified\n");
         print_usage(argv[0]);
         return 1;
-    }
-    
-    // Detect CPU type
+    }    
+    // Detect CPU type from first test path
     cpu_type_t cpu_type = (forced_cpu_type != CPU_TYPE_UNKNOWN) ? 
-                          forced_cpu_type : detect_cpu_type(test_path);
+                          forced_cpu_type : detect_cpu_type(test_paths[0]);
     
     // Create CPU instance
     cpu_instance_t cpu_instance;
@@ -652,34 +657,37 @@ int main(int argc, char* argv[]) {
     
     printf("=== Unified ProcessorTests Runner for MOS6502 Family ===\n");
     printf("CPU Type: %s\n", cpu_instance.name);
-    printf("Test path: %s\n", test_path);
+    printf("Test paths: %d specified\n", test_path_count);
     printf("Verbose: %s\n", verbose_output ? "enabled" : "disabled");
     printf("\n");
     
-    // Check if path is file or directory
-    struct stat statbuf;
-    if (stat(test_path, &statbuf) != 0) {
-        printf("ERROR: Could not access path: %s\n", test_path);
-        destroy_cpu_instance(&cpu_instance);
-        return 1;
-    }
-    
+    // Process all test paths
+    for (int path_idx = 0; path_idx < test_path_count; path_idx++) {
+        const char* test_path = test_paths[path_idx];
+        printf("Processing test path: %s\n", test_path);
+        
+        // Check if path is file or directory
+        struct stat statbuf;
+        if (stat(test_path, &statbuf) != 0) {
+            printf("ERROR: Could not access path: %s\n", test_path);
+            continue;  // Continue with next path instead of exiting
+        }
+        
 #ifdef _WIN32
-    if (statbuf.st_mode & _S_IFDIR) {
+        if (statbuf.st_mode & _S_IFDIR) {
 #else
-    if (S_ISDIR(statbuf.st_mode)) {
+        if (S_ISDIR(statbuf.st_mode)) {
 #endif
-        run_tests_from_directory(&cpu_instance, test_path);
+            run_tests_from_directory(&cpu_instance, test_path);
 #ifdef _WIN32
-    } else if (statbuf.st_mode & _S_IFREG) {
+        } else if (statbuf.st_mode & _S_IFREG) {
 #else
-    } else if (S_ISREG(statbuf.st_mode)) {
+        } else if (S_ISREG(statbuf.st_mode)) {
 #endif
-        run_tests_from_file(&cpu_instance, test_path);
-    } else {
-        printf("ERROR: Invalid path type: %s\n", test_path);
-        destroy_cpu_instance(&cpu_instance);
-        return 1;
+            run_tests_from_file(&cpu_instance, test_path);
+        } else {
+            printf("ERROR: Invalid path type: %s\n", test_path);
+        }
     }
       printf("\n=== TEST SUMMARY for %s ===\n", cpu_instance.name);
     printf("Total tests run: %u\n", total_tests);
