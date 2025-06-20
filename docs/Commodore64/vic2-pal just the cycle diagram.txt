@@ -1,0 +1,60 @@
+Legend: [ left edge of the overscan screen (sprite co-ordinate $1E0 at
+                                            the beginning of this cycle)
+        { left edge of the text screen (at the beginning of this cycle)
+        } right edge of the text screen (at the end of this cycle)
+        ] right edge of the overscan screen (a bit after the end of this cycle)
+
+        - idle bus cycle (reads from the last byte of the video bank,
+          e.g. (video bank base address) + $3FFF)
+        + idle bus cycle (just like '-', but reads from
+          (video bank base address) + $39FF if ECM ($D011 bit 6) is selected)
+        . do nothing in phi2
+        0 pointer fetch for sprite 0
+        1 pointer fetch for sprite 1
+        2 pointer fetch for sprite 2
+        3 pointer fetch for sprite 3
+        4 pointer fetch for sprite 4
+        5 pointer fetch for sprite 5
+        6 pointer fetch for sprite 6
+        7 pointer fetch for sprite 7
+        r memory refresh cycle
+        g graphics fetch
+        c character pointer and/or color data fetch
+        s Reading the sprite data (s-access)
+
+3-4-5-6-7-rrrrrgggggggggggggggggggggggggggggggggggggggg--0-1-2- Normal scan line, no sprites
+3-4-5-6-7-rrrrrgggggggggggggggggggggggggggggggggggggggg--0-1s2s Normal scan line, no sprites on the current scan line but at least the sprites 1 and 2 active on the following scan line
+3s4s5s6s7srrrrrgggggggggggggggggggggggggggggggggggggggg--0s1s2s Bad scan line, at least the sprites 3--7 active on the current scan line and the sprites 0--2 on the following scan line
+3-4-5-6-7-rrrrrgggggggggggggggggggggggggggggggggggggggg--0-1-2- Bad scan line, no sprites
+3-4-5-6-7-rrrrr++++++++++++++++++++++++++++++++++++++++--0-1-2- Overscan raster line (vertical border) or blanked screen, no sprites
+3s4-5-6-7srrrrr++++++++++++++++++++++++++++++++++++++++--0-1-2- Two successive overscan raster lines (vertical border),
+3-4-5-6-7-rrrrr++++++++++++++++++++++++++++++++++++++++--0-1s2- sprites 1, 3 and 7 active on the latter
+         [      {                                      }   ]    ^ Phi-1 6569R3
+123456789012345678901234567890123456789012345678901234567890123 X-Cycle
+         1         2         3         4         5         6    v Phi-2 6569R3
+............................................................... Normal scan line, no sprites
+...........................................................ssss Normal scan line, no sprites on the current scan line but at least the sprites 1 and 2 active on the following scan line
+ssssssssss....cccccccccccccccccccccccccccccccccccccccc...ssssss Bad scan line, at least the sprites 3--7 active on the current scan line and the sprites 0--2 on the following scan line
+..............cccccccccccccccccccccccccccccccccccccccc......... Bad scan line, no sprites
+............................................................... Overscan raster line (vertical border) or blanked screen, no sprites
+...........................................................ss.. Two successive overscan raster lines (vertical border),
+ss......ss..................................................... sprites 1, 3 and 7 active on the latter
+                                                                v Phi-2 6510
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx Normal scan line, no sprites
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxXXX==== Normal scan line, no sprites on the current scan line but at least the sprites 1 and 2 active on the following scan line
+==========xXXX========================================***====== Bad scan line, at least the sprites 3--7 active on the current scan line and the sprites 0--2 on the following scan line
+xxxxxxxxxxxXXX========================================xxxxxxxxx Bad scan line, no sprites
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx Overscan raster line (vertical border) or blanked screen, no sprites
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxXXX==** Two successive overscan raster lines (vertical border),
+==xxxXXX==xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx sprites 1, 3 and 7 active on the latter
+
+Legend: x processor executes instructions (BA high, AEC high)
+        X bus request pending, bus still available (BA low, AEC high);
+          processor may execute write cycles, stops on the next read cycle.
+        * bus request pending, bus still available (BA low, AEC high);
+          processor is blocked because it would like to read something.
+        = bus unavailable (BA low, AEC low);
+          processor is blocked because it would like to read something.
+
+Note:   The left edge of the diagrams is the start of the raster line,
+        as indicated by the Raster Counter register ($D012/$D011).
