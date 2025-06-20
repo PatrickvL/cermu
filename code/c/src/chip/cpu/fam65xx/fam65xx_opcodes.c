@@ -537,22 +537,20 @@ void fam65xx_cld_with_flag(fam65xx_t* cpu) {
 void fam65xx_ror_absolute_x_buggy(fam65xx_t* cpu) {
     // Buggy ROR absolute,X that doesn't handle page crossing correctly
     // This is a simplified implementation - the real bug is more complex
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint16_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);
-    uint16_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);
+    uint16_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
+    uint16_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
     uint16_t addr = (addr_hi << 8) | addr_lo;
     uint16_t effective_addr = addr + cpu->x;
     
     // Bug: doesn't add extra cycle for page crossing like other absolute,X instructions
-    uint8_t value = fam65xx_read_cycle(cpu, effective_addr);
-    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t value = fam65xx_read_cycle(cpu, effective_addr);  // Bus read cycle
     
     bool old_carry = fam65xx_get_flag(cpu, FLAG_C);
     fam65xx_set_flag(cpu, FLAG_C, value & 0x01);
     value = (value >> 1) | (old_carry ? 0x80 : 0x00);
     fam65xx_set_nz_flags(cpu, value);
     
-    fam65xx_write_cycle(cpu, effective_addr, value);
+    fam65xx_write_cycle(cpu, effective_addr, value);  // Bus write cycle
     FAM65XX_OPCODE_FOOTER(cpu);
 }
 

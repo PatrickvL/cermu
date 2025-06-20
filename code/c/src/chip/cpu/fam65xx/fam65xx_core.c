@@ -8,28 +8,26 @@
 
 // Core memory and cycle functions (shared by all family members)
 uint8_t fam65xx_read_cycle(fam65xx_t* cpu, uint16_t address) {
-    cpu->bus_interface.cycle_tick(cpu->bus_interface.context);
+    cpu->bus_interface.cycle_tick(cpu->bus_interface.context);  // Bus cycle
     return cpu->bus_interface.bus_read(cpu->bus_interface.context, address);
 }
 
 void fam65xx_write_cycle(fam65xx_t* cpu, uint16_t address, uint8_t value) {
-    cpu->bus_interface.cycle_tick(cpu->bus_interface.context);
+    cpu->bus_interface.cycle_tick(cpu->bus_interface.context);  // Bus cycle
     cpu->bus_interface.bus_write(cpu->bus_interface.context, address, value);
 }
 
 // Stack operations (shared)
 void fam65xx_push(fam65xx_t* cpu, uint8_t value) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    fam65xx_write_cycle(cpu, 0x0100 | cpu->sp, value);
+
+    fam65xx_write_cycle(cpu, 0x0100 | cpu->sp, value);  // Bus write cycle
     cpu->sp--;
 }
 
 uint8_t fam65xx_pull(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    (void)fam65xx_read_cycle(cpu, 0x0100 | cpu->sp); // Dummy read
+    (void)fam65xx_read_cycle(cpu, 0x0100 | cpu->sp);  // T1: Dummy read
     cpu->sp++;
-    FAM65XX_INTRA_CYCLE(cpu);
-    return fam65xx_read_cycle(cpu, 0x0100 | cpu->sp);
+    return fam65xx_read_cycle(cpu, 0x0100 | cpu->sp);  // T2: Stack read
 }
 
 // Interrupt handling (shared)
@@ -43,10 +41,10 @@ void fam65xx_interrupt_sequence(fam65xx_t* cpu, uint8_t status_flags, uint16_t v
     fam65xx_set_flag(cpu, FLAG_I, true);
     
     // Load interrupt vector
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_lo = fam65xx_read_cycle(cpu, vector_addr);
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_hi = fam65xx_read_cycle(cpu, vector_addr + 1);
+
+    uint8_t addr_lo = fam65xx_read_cycle(cpu, vector_addr);  // Bus read cycle
+
+    uint8_t addr_hi = fam65xx_read_cycle(cpu, vector_addr + 1);  // Bus read cycle
     
     cpu->pc = (addr_hi << 8) | addr_lo;
 }

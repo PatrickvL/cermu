@@ -84,68 +84,54 @@ void fam65xx_bit_absolute(fam65xx_t* cpu) {
 // NOP OPERATIONS (including illegal NOP variants)
 // ============================================================================
 
-// NOP - No Operation
+// NOP - No Operation  
 void fam65xx_nop(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
+    (void)fam65xx_read_cycle(cpu, cpu->pc);      // T1: Dummy read
     FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // NOP - No Operation (Immediate) - illegal opcode
 void fam65xx_nop_immediate(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
     (void)fam65xx_read_cycle(cpu, cpu->pc++); // Read and discard immediate value
     FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // NOP - No Operation (Zero Page) - illegal opcode
 void fam65xx_nop_zero_page(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr = fam65xx_read_cycle(cpu, cpu->pc++);
-    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t addr = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
     (void)fam65xx_read_cycle(cpu, addr); // Dummy read
     FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // NOP - No Operation (Zero Page,X) - illegal opcode
 void fam65xx_nop_zero_page_x(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t base = fam65xx_read_cycle(cpu, cpu->pc++);
-    FAM65XX_INTRA_CYCLE(cpu);
+    uint8_t base = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
     (void)fam65xx_read_cycle(cpu, base); // Dummy read
     uint8_t addr = (base + cpu->x) & 0xFF;
-    FAM65XX_INTRA_CYCLE(cpu);
     (void)fam65xx_read_cycle(cpu, addr); // Dummy read
     FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // NOP - No Operation (Absolute) - illegal opcode
 void fam65xx_nop_absolute(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);
+    uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
+    uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
     uint16_t addr = (addr_hi << 8) | addr_lo;
-    FAM65XX_INTRA_CYCLE(cpu);
     (void)fam65xx_read_cycle(cpu, addr); // Dummy read
     FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // NOP - No Operation (Absolute,X) - illegal opcode
 void fam65xx_nop_absolute_x(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);
+    uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
+    uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
     uint16_t base_addr = (addr_hi << 8) | addr_lo;
     uint16_t addr = base_addr + cpu->x;
     
     // Check for page boundary crossing
     if ((base_addr & 0xFF00) != (addr & 0xFF00)) {
-        FAM65XX_INTRA_CYCLE(cpu);
         (void)fam65xx_read_cycle(cpu, (addr_hi << 8) | ((addr_lo + cpu->x) & 0xFF)); // Dummy read
     }
-    FAM65XX_INTRA_CYCLE(cpu);
     (void)fam65xx_read_cycle(cpu, addr); // Dummy read
     FAM65XX_OPCODE_FOOTER(cpu);
 }
@@ -159,7 +145,6 @@ void fam65xx_jam(fam65xx_t* cpu) {
     // JAM instruction halts the CPU by entering an infinite loop
     // The program counter is not incremented
     // This effectively freezes the CPU until reset
-    FAM65XX_INTRA_CYCLE(cpu);
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Read current PC
     
     // Decrement PC to stay on the same instruction
