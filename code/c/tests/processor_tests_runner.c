@@ -43,6 +43,10 @@ static uint32_t total_tests = 0;
 static uint32_t passed_tests = 0;
 static bool verbose_output = false;
 
+// Failure tracking by opcode
+static uint32_t opcode_failures[256] = {0};
+static uint32_t opcode_totals[256] = {0};
+
 // ============================================================================
 // MEMORY AND CONTROL INTERFACES (SHARED)
 // ============================================================================
@@ -296,32 +300,46 @@ bool compare_cpu_state(cpu_instance_t* instance, const cpu_state_t* expected, co
     uint32_t adjusted_cycles = (cycle_count > 0) ? cycle_count - 1 : 0;
     
     if (actual.pc != expected->pc) {
-        printf("FAIL %s: PC - expected 0x%04X, got 0x%04X\n", test_name, expected->pc, actual.pc);
+        if (verbose_output) {
+            printf("FAIL %s: PC - expected 0x%04X, got 0x%04X\n", test_name, expected->pc, actual.pc);
+        }
         passed = false;
     }
     if (actual.s != expected->s) {
-        printf("FAIL %s: SP - expected 0x%02X, got 0x%02X\n", test_name, expected->s, actual.s);
+        if (verbose_output) {
+            printf("FAIL %s: SP - expected 0x%02X, got 0x%02X\n", test_name, expected->s, actual.s);
+        }
         passed = false;
     }
     if (actual.a != expected->a) {
-        printf("FAIL %s: A - expected 0x%02X, got 0x%02X\n", test_name, expected->a, actual.a);
+        if (verbose_output) {
+            printf("FAIL %s: A - expected 0x%02X, got 0x%02X\n", test_name, expected->a, actual.a);
+        }
         passed = false;
     }
     if (actual.x != expected->x) {
-        printf("FAIL %s: X - expected 0x%02X, got 0x%02X\n", test_name, expected->x, actual.x);
+        if (verbose_output) {
+            printf("FAIL %s: X - expected 0x%02X, got 0x%02X\n", test_name, expected->x, actual.x);
+        }
         passed = false;
     }
     if (actual.y != expected->y) {
-        printf("FAIL %s: Y - expected 0x%02X, got 0x%02X\n", test_name, expected->y, actual.y);
+        if (verbose_output) {
+            printf("FAIL %s: Y - expected 0x%02X, got 0x%02X\n", test_name, expected->y, actual.y);
+        }
         passed = false;
     }
     if (actual.p != expected->p) {
-        printf("FAIL %s: P - expected 0x%02X, got 0x%02X\n", test_name, expected->p, actual.p);
+        if (verbose_output) {
+            printf("FAIL %s: P - expected 0x%02X, got 0x%02X\n", test_name, expected->p, actual.p);
+        }
         passed = false;
     }
     if (expected->has_cycles && adjusted_cycles != expected->cycles) {
-        printf("FAIL %s: Cycles - expected %u, got %u (raw: %u)\n", 
-               test_name, expected->cycles, adjusted_cycles, cycle_count);
+        if (verbose_output) {
+            printf("FAIL %s: Cycles - expected %u, got %u (raw: %u)\n", 
+                   test_name, expected->cycles, adjusted_cycles, cycle_count);
+        }
         passed = false;
     }
     
@@ -338,8 +356,10 @@ bool compare_memory_state(const cpu_state_t* expected, const char* test_name) {
             uint8_t actual_value = test_memory[addr + j];
             
             if (actual_value != expected_value) {
-                printf("FAIL %s: Memory[0x%04X] - expected 0x%02X, got 0x%02X\n", 
-                       test_name, addr + j, expected_value, actual_value);
+                if (verbose_output) {
+                    printf("FAIL %s: Memory[0x%04X] - expected 0x%02X, got 0x%02X\n", 
+                           test_name, addr + j, expected_value, actual_value);
+                }
                 passed = false;
             }
         }
@@ -357,15 +377,24 @@ bool run_processor_test(cpu_instance_t* instance, const processor_test_t* test) 
     
     // Setup memory from initial state
     setup_memory_from_state(&test->initial);
-    
-    // Setup CPU with initial state
+      // Setup CPU with initial state
     set_cpu_state(instance, &test->initial);
     cycle_count = 0;
     
-    // Execute one instruction
+    // Read the actual opcode from memory at the current PC using bus_read
+    uint8_t opcode = test_read(NULL, test->initial.pc);
+    opcode_totals[opcode]++;
+    
+    if (verbose_output) {
+        printf("  Opcode at PC 0x%04X: 0x%02X\n", test->initial.pc, opcode);
+    }      // Execute one instruction
     bool step_result = step_cpu(instance);
     if (!step_result) {
-        printf("FAIL %s: Instruction execution failed on %s\n", test->name, instance->name);
+        if (verbose_output) {
+            printf("FAIL %s: Instruction execution failed on %s (opcode 0x%02X)\n", 
+                   test->name, instance->name, opcode);
+        }
+        opcode_failures[opcode]++;
         return false;
     }
     
@@ -380,7 +409,13 @@ bool run_processor_test(cpu_instance_t* instance, const processor_test_t* test) 
     if (passed) {
         passed_tests++;
         if (verbose_output) {
-            printf("PASS %s on %s\n", test->name, instance->name);
+            printf("PASS %s on %s (opcode 0x%02X)\n", test->name, instance->name, opcode);
+        }
+    } else {
+        opcode_failures[opcode]++;
+        if (verbose_output) {
+            printf("FAIL %s: State mismatch on %s (opcode 0x%02X)\n", 
+                   test->name, instance->name, opcode);
         }
     }
     
@@ -646,11 +681,189 @@ int main(int argc, char* argv[]) {
         destroy_cpu_instance(&cpu_instance);
         return 1;
     }
-    
-    printf("\n=== TEST SUMMARY for %s ===\n", cpu_instance.name);
+      printf("\n=== TEST SUMMARY for %s ===\n", cpu_instance.name);
     printf("Total tests run: %u\n", total_tests);
     printf("Tests passed: %u\n", passed_tests);
     printf("Tests failed: %u\n", total_tests - passed_tests);
+    
+    // Print opcode failure summary
+    if (total_tests - passed_tests > 0) {
+        printf("\n=== FAILURE BREAKDOWN BY OPCODE ===\n");
+        uint32_t failing_opcodes = 0;
+        for (int i = 0; i < 256; i++) {
+            if (opcode_failures[i] > 0) {
+                printf("0x%02X: %u/%u failed", i, opcode_failures[i], opcode_totals[i]);
+                
+                // Add common instruction name if known
+                const char* inst_name = "";
+                switch (i) {
+                    case 0x00: inst_name = " (BRK)"; break;
+                    case 0x01: inst_name = " (ORA zpg,X)"; break;
+                    case 0x05: inst_name = " (ORA zpg)"; break;
+                    case 0x06: inst_name = " (ASL zpg)"; break;
+                    case 0x08: inst_name = " (PHP)"; break;
+                    case 0x09: inst_name = " (ORA #)"; break;
+                    case 0x0A: inst_name = " (ASL A)"; break;
+                    case 0x0D: inst_name = " (ORA abs)"; break;
+                    case 0x0E: inst_name = " (ASL abs)"; break;
+                    case 0x10: inst_name = " (BPL)"; break;
+                    case 0x11: inst_name = " (ORA zpg,Y)"; break;
+                    case 0x15: inst_name = " (ORA zpg,X)"; break;
+                    case 0x16: inst_name = " (ASL zpg,X)"; break;
+                    case 0x18: inst_name = " (CLC)"; break;
+                    case 0x19: inst_name = " (ORA abs,Y)"; break;
+                    case 0x1D: inst_name = " (ORA abs,X)"; break;
+                    case 0x1E: inst_name = " (ASL abs,X)"; break;
+                    case 0x20: inst_name = " (JSR)"; break;
+                    case 0x21: inst_name = " (AND zpg,X)"; break;
+                    case 0x24: inst_name = " (BIT zpg)"; break;
+                    case 0x25: inst_name = " (AND zpg)"; break;
+                    case 0x26: inst_name = " (ROL zpg)"; break;
+                    case 0x28: inst_name = " (PLP)"; break;
+                    case 0x29: inst_name = " (AND #)"; break;
+                    case 0x2A: inst_name = " (ROL A)"; break;
+                    case 0x2C: inst_name = " (BIT abs)"; break;
+                    case 0x2D: inst_name = " (AND abs)"; break;
+                    case 0x2E: inst_name = " (ROL abs)"; break;
+                    case 0x30: inst_name = " (BMI)"; break;
+                    case 0x31: inst_name = " (AND zpg,Y)"; break;
+                    case 0x35: inst_name = " (AND zpg,X)"; break;
+                    case 0x36: inst_name = " (ROL zpg,X)"; break;
+                    case 0x38: inst_name = " (SEC)"; break;
+                    case 0x39: inst_name = " (AND abs,Y)"; break;
+                    case 0x3D: inst_name = " (AND abs,X)"; break;
+                    case 0x3E: inst_name = " (ROL abs,X)"; break;
+                    case 0x40: inst_name = " (RTI)"; break;
+                    case 0x41: inst_name = " (EOR zpg,X)"; break;
+                    case 0x45: inst_name = " (EOR zpg)"; break;
+                    case 0x46: inst_name = " (LSR zpg)"; break;
+                    case 0x48: inst_name = " (PHA)"; break;
+                    case 0x49: inst_name = " (EOR #)"; break;
+                    case 0x4A: inst_name = " (LSR A)"; break;
+                    case 0x4C: inst_name = " (JMP abs)"; break;
+                    case 0x4D: inst_name = " (EOR abs)"; break;
+                    case 0x4E: inst_name = " (LSR abs)"; break;
+                    case 0x50: inst_name = " (BVC)"; break;
+                    case 0x51: inst_name = " (EOR zpg,Y)"; break;
+                    case 0x55: inst_name = " (EOR zpg,X)"; break;
+                    case 0x56: inst_name = " (LSR zpg,X)"; break;
+                    case 0x58: inst_name = " (CLI)"; break;
+                    case 0x59: inst_name = " (EOR abs,Y)"; break;
+                    case 0x5D: inst_name = " (EOR abs,X)"; break;
+                    case 0x5E: inst_name = " (LSR abs,X)"; break;
+                    case 0x60: inst_name = " (RTS)"; break;
+                    case 0x61: inst_name = " (ADC zpg,X)"; break;
+                    case 0x65: inst_name = " (ADC zpg)"; break;
+                    case 0x66: inst_name = " (ROR zpg)"; break;
+                    case 0x68: inst_name = " (PLA)"; break;
+                    case 0x69: inst_name = " (ADC #)"; break;
+                    case 0x6A: inst_name = " (ROR A)"; break;
+                    case 0x6C: inst_name = " (JMP ind)"; break;
+                    case 0x6D: inst_name = " (ADC abs)"; break;
+                    case 0x6E: inst_name = " (ROR abs)"; break;
+                    case 0x70: inst_name = " (BVS)"; break;
+                    case 0x71: inst_name = " (ADC zpg,Y)"; break;
+                    case 0x75: inst_name = " (ADC zpg,X)"; break;
+                    case 0x76: inst_name = " (ROR zpg,X)"; break;
+                    case 0x78: inst_name = " (SEI)"; break;
+                    case 0x79: inst_name = " (ADC abs,Y)"; break;
+                    case 0x7D: inst_name = " (ADC abs,X)"; break;
+                    case 0x7E: inst_name = " (ROR abs,X)"; break;
+                    case 0x81: inst_name = " (STA zpg,X)"; break;
+                    case 0x84: inst_name = " (STY zpg)"; break;
+                    case 0x85: inst_name = " (STA zpg)"; break;
+                    case 0x86: inst_name = " (STX zpg)"; break;
+                    case 0x88: inst_name = " (DEY)"; break;
+                    case 0x8A: inst_name = " (TXA)"; break;
+                    case 0x8C: inst_name = " (STY abs)"; break;
+                    case 0x8D: inst_name = " (STA abs)"; break;
+                    case 0x8E: inst_name = " (STX abs)"; break;
+                    case 0x90: inst_name = " (BCC)"; break;
+                    case 0x91: inst_name = " (STA zpg,Y)"; break;
+                    case 0x94: inst_name = " (STY zpg,X)"; break;
+                    case 0x95: inst_name = " (STA zpg,X)"; break;
+                    case 0x96: inst_name = " (STX zpg,Y)"; break;
+                    case 0x98: inst_name = " (TYA)"; break;
+                    case 0x99: inst_name = " (STA abs,Y)"; break;
+                    case 0x9A: inst_name = " (TXS)"; break;
+                    case 0x9D: inst_name = " (STA abs,X)"; break;
+                    case 0xA0: inst_name = " (LDY #)"; break;
+                    case 0xA1: inst_name = " (LDA zpg,X)"; break;
+                    case 0xA2: inst_name = " (LDX #)"; break;
+                    case 0xA4: inst_name = " (LDY zpg)"; break;
+                    case 0xA5: inst_name = " (LDA zpg)"; break;
+                    case 0xA6: inst_name = " (LDX zpg)"; break;
+                    case 0xA8: inst_name = " (TAY)"; break;
+                    case 0xA9: inst_name = " (LDA #)"; break;
+                    case 0xAA: inst_name = " (TAX)"; break;
+                    case 0xAC: inst_name = " (LDY abs)"; break;
+                    case 0xAD: inst_name = " (LDA abs)"; break;
+                    case 0xAE: inst_name = " (LDX abs)"; break;
+                    case 0xB0: inst_name = " (BCS)"; break;
+                    case 0xB1: inst_name = " (LDA zpg,Y)"; break;
+                    case 0xB4: inst_name = " (LDY zpg,X)"; break;
+                    case 0xB5: inst_name = " (LDA zpg,X)"; break;
+                    case 0xB6: inst_name = " (LDX zpg,Y)"; break;
+                    case 0xB8: inst_name = " (CLV)"; break;
+                    case 0xB9: inst_name = " (LDA abs,Y)"; break;
+                    case 0xBA: inst_name = " (TSX)"; break;
+                    case 0xBC: inst_name = " (LDY abs,X)"; break;
+                    case 0xBD: inst_name = " (LDA abs,X)"; break;
+                    case 0xBE: inst_name = " (LDX abs,Y)"; break;
+                    case 0xC0: inst_name = " (CPY #)"; break;
+                    case 0xC1: inst_name = " (CMP zpg,X)"; break;
+                    case 0xC4: inst_name = " (CPY zpg)"; break;
+                    case 0xC5: inst_name = " (CMP zpg)"; break;
+                    case 0xC6: inst_name = " (DEC zpg)"; break;
+                    case 0xC8: inst_name = " (INY)"; break;
+                    case 0xC9: inst_name = " (CMP #)"; break;
+                    case 0xCA: inst_name = " (DEX)"; break;
+                    case 0xCC: inst_name = " (CPY abs)"; break;
+                    case 0xCD: inst_name = " (CMP abs)"; break;
+                    case 0xCE: inst_name = " (DEC abs)"; break;
+                    case 0xD0: inst_name = " (BNE)"; break;
+                    case 0xD1: inst_name = " (CMP zpg,Y)"; break;
+                    case 0xD5: inst_name = " (CMP zpg,X)"; break;
+                    case 0xD6: inst_name = " (DEC zpg,X)"; break;
+                    case 0xD8: inst_name = " (CLD)"; break;
+                    case 0xD9: inst_name = " (CMP abs,Y)"; break;
+                    case 0xDD: inst_name = " (CMP abs,X)"; break;
+                    case 0xDE: inst_name = " (DEC abs,X)"; break;
+                    case 0xE0: inst_name = " (CPX #)"; break;
+                    case 0xE1: inst_name = " (SBC zpg,X)"; break;
+                    case 0xE4: inst_name = " (CPX zpg)"; break;
+                    case 0xE5: inst_name = " (SBC zpg)"; break;
+                    case 0xE6: inst_name = " (INC zpg)"; break;
+                    case 0xE8: inst_name = " (INX)"; break;
+                    case 0xE9: inst_name = " (SBC #)"; break;
+                    case 0xEA: inst_name = " (NOP)"; break;
+                    case 0xEC: inst_name = " (CPX abs)"; break;
+                    case 0xED: inst_name = " (SBC abs)"; break;
+                    case 0xEE: inst_name = " (INC abs)"; break;
+                    case 0xF0: inst_name = " (BEQ)"; break;
+                    case 0xF1: inst_name = " (SBC zpg,Y)"; break;
+                    case 0xF5: inst_name = " (SBC zpg,X)"; break;
+                    case 0xF6: inst_name = " (INC zpg,X)"; break;
+                    case 0xF8: inst_name = " (SED)"; break;
+                    case 0xF9: inst_name = " (SBC abs,Y)"; break;
+                    case 0xFD: inst_name = " (SBC abs,X)"; break;
+                    case 0xFE: inst_name = " (INC abs,X)"; break;
+                    // Illegal opcodes
+                    case 0x87: inst_name = " (SAX zpg) *ILLEGAL*"; break;
+                    case 0xA7: inst_name = " (LAX zpg) *ILLEGAL*"; break;
+                    case 0xC7: inst_name = " (DCP zpg) *ILLEGAL*"; break;
+                    case 0xE7: inst_name = " (ISC zpg) *ILLEGAL*"; break;
+                    default: 
+                        if (opcode_totals[i] > 0) inst_name = " *ILLEGAL*"; 
+                        break;
+                }
+                
+                printf("%s\n", inst_name);
+                failing_opcodes++;
+            }
+        }
+        printf("Total failing opcodes: %u\n", failing_opcodes);
+    }
     
     destroy_cpu_instance(&cpu_instance);
     
