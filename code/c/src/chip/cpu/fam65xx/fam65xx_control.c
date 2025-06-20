@@ -23,7 +23,7 @@ static inline void fam65xx_branch_helper(fam65xx_t* cpu, bool condition) {
             (void)fam65xx_read_cycle(cpu, (old_pc & 0xFF00) | (cpu->pc & 0xFF)); // Dummy read
         }
     }
-    fam65xx_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // BPL - Branch if Positive

@@ -135,9 +135,19 @@ struct fam65xx_s {
 uint8_t fam65xx_read_cycle(fam65xx_t* cpu, uint16_t address);
 void fam65xx_write_cycle(fam65xx_t* cpu, uint16_t address, uint8_t value);
 
+// Forward declaration for macros
+void fam65xx_interrupt_handler(fam65xx_t* cpu);
+
 // Family-specific versions of shared macros
 #define FAM65XX_OPCODE_FOOTER(cpu) \
     FAM65XX_NEXT_INSTRUCTION(cpu, fam65xx_interrupt_handler, fam65xx_read_cycle)
+
+// Arithmetic helper function implementation (static inline for performance)
+static inline void fam65xx_arithmetic_helper(fam65xx_t* cpu, fam65xx_addr_func_t addr_func, fam65xx_op_func_t op_func) {
+    uint8_t value = addr_func(cpu);
+    op_func(cpu, value);
+    FAM65XX_OPCODE_FOOTER(cpu);
+}
 
 // Stack operations (shared)
 void fam65xx_push(fam65xx_t* cpu, uint8_t value);
@@ -163,7 +173,6 @@ static inline void fam65xx_set_nz_flags(fam65xx_t* cpu, uint8_t value) {
 
 // Interrupt handling (shared)
 void fam65xx_interrupt_sequence(fam65xx_t* cpu, uint8_t status_flags, uint16_t vector_addr);
-void fam65xx_interrupt_handler(fam65xx_t* cpu);
 
 // Interception support (shared)
 void fam65xx_start_intercept(fam65xx_t* cpu);
@@ -341,6 +350,25 @@ static inline void fam65xx_op_eor_inline(fam65xx_t* cpu, uint8_t value) {
     fam65xx_set_nz_flags(cpu, cpu->a);
 }
 
+// Arithmetic helper functions (replacing macros for better type safety and debugging)
+static inline void fam65xx_and_helper(fam65xx_t* cpu, uint8_t (*addr_func)(fam65xx_t*)) {
+    uint8_t value = addr_func(cpu);
+    fam65xx_op_and_inline(cpu, value);
+    FAM65XX_OPCODE_FOOTER(cpu);
+}
+
+static inline void fam65xx_ora_helper(fam65xx_t* cpu, uint8_t (*addr_func)(fam65xx_t*)) {
+    uint8_t value = addr_func(cpu);
+    fam65xx_op_ora_inline(cpu, value);
+    FAM65XX_OPCODE_FOOTER(cpu);
+}
+
+static inline void fam65xx_eor_helper(fam65xx_t* cpu, uint8_t (*addr_func)(fam65xx_t*)) {
+    uint8_t value = addr_func(cpu);
+    fam65xx_op_eor_inline(cpu, value);
+    FAM65XX_OPCODE_FOOTER(cpu);
+}
+
 // Inline load helper (replaces DEFINE_LOAD_OP macro)
 static inline void fam65xx_load_helper(fam65xx_t* cpu, 
     uint8_t (*addr_func)(fam65xx_t*), 
@@ -487,25 +515,6 @@ static inline void fam65xx_rmw_absolute_x(fam65xx_t* cpu,
     fam65xx_write_cycle(cpu, cpu->address, value);
     FAM65XX_OPCODE_FOOTER(cpu);
 }
-
-// Specialized inline arithmetic helpers for common simple operations
-#define FAM65XX_AND_HELPER(cpu, addr_func) do { \
-    uint8_t value = addr_func(cpu); \
-    fam65xx_op_and_inline(cpu, value); \
-    FAM65XX_OPCODE_FOOTER(cpu); \
-} while(0)
-
-#define FAM65XX_ORA_HELPER(cpu, addr_func) do { \
-    uint8_t value = addr_func(cpu); \
-    fam65xx_op_ora_inline(cpu, value); \
-    FAM65XX_OPCODE_FOOTER(cpu); \
-} while(0)
-
-#define FAM65XX_EOR_HELPER(cpu, addr_func) do { \
-    uint8_t value = addr_func(cpu); \
-    fam65xx_op_eor_inline(cpu, value); \
-    FAM65XX_OPCODE_FOOTER(cpu); \
-} while(0)
 
 // ============================================================================
 // INLINE OPERATION FUNCTIONS (for RMW and load/store operations)

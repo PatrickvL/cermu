@@ -81,13 +81,6 @@ void fam65xx_op_bit(fam65xx_t* cpu, uint8_t value) {
 // SHARED OPCODE IMPLEMENTATIONS - ADC
 // ============================================================================
 
-// Arithmetic helper function implementation
-static inline void fam65xx_arithmetic_helper(fam65xx_t* cpu, fam65xx_addr_func_t addr_func, fam65xx_op_func_t op_func) {
-    uint8_t value = addr_func(cpu);
-    op_func(cpu, value);
-    fam65xx_OPCODE_FOOTER(cpu);
-}
-
 void fam65xx_adc_immediate(fam65xx_t* cpu) {
     fam65xx_arithmetic_helper(cpu, fam65xx_addr_imm, fam65xx_op_adc);
 }
@@ -161,35 +154,35 @@ void fam65xx_sbc_indirect_y(fam65xx_t* cpu) {
 // ============================================================================
 
 void fam65xx_and_immediate(fam65xx_t* cpu) {
-    FAM65XX_AND_HELPER(cpu, fam65xx_addr_imm);
+    fam65xx_and_helper(cpu, fam65xx_addr_imm);
 }
 
 void fam65xx_and_zero_page(fam65xx_t* cpu) {
-    FAM65XX_AND_HELPER(cpu, fam65xx_addr_zp);
+    fam65xx_and_helper(cpu, fam65xx_addr_zp);
 }
 
 void fam65xx_and_zero_page_x(fam65xx_t* cpu) {
-    FAM65XX_AND_HELPER(cpu, fam65xx_addr_zpx);
+    fam65xx_and_helper(cpu, fam65xx_addr_zpx);
 }
 
 void fam65xx_and_absolute(fam65xx_t* cpu) {
-    FAM65XX_AND_HELPER(cpu, fam65xx_addr_abs);
+    fam65xx_and_helper(cpu, fam65xx_addr_abs);
 }
 
 void fam65xx_and_absolute_x(fam65xx_t* cpu) {
-    FAM65XX_AND_HELPER(cpu, fam65xx_addr_absx);
+    fam65xx_and_helper(cpu, fam65xx_addr_absx);
 }
 
 void fam65xx_and_absolute_y(fam65xx_t* cpu) {
-    FAM65XX_AND_HELPER(cpu, fam65xx_addr_absy);
+    fam65xx_and_helper(cpu, fam65xx_addr_absy);
 }
 
 void fam65xx_and_indirect_x(fam65xx_t* cpu) {
-    FAM65XX_AND_HELPER(cpu, fam65xx_addr_indx);
+    fam65xx_and_helper(cpu, fam65xx_addr_indx);
 }
 
 void fam65xx_and_indirect_y(fam65xx_t* cpu) {
-    FAM65XX_AND_HELPER(cpu, fam65xx_addr_indy);
+    fam65xx_and_helper(cpu, fam65xx_addr_indy);
 }
 
 // ============================================================================
@@ -197,35 +190,35 @@ void fam65xx_and_indirect_y(fam65xx_t* cpu) {
 // ============================================================================
 
 void fam65xx_ora_immediate(fam65xx_t* cpu) {
-    FAM65XX_ORA_HELPER(cpu, fam65xx_addr_imm);
+    fam65xx_ora_helper(cpu, fam65xx_addr_imm);
 }
 
 void fam65xx_ora_zero_page(fam65xx_t* cpu) {
-    FAM65XX_ORA_HELPER(cpu, fam65xx_addr_zp);
+    fam65xx_ora_helper(cpu, fam65xx_addr_zp);
 }
 
 void fam65xx_ora_zero_page_x(fam65xx_t* cpu) {
-    FAM65XX_ORA_HELPER(cpu, fam65xx_addr_zpx);
+    fam65xx_ora_helper(cpu, fam65xx_addr_zpx);
 }
 
 void fam65xx_ora_absolute(fam65xx_t* cpu) {
-    FAM65XX_ORA_HELPER(cpu, fam65xx_addr_abs);
+    fam65xx_ora_helper(cpu, fam65xx_addr_abs);
 }
 
 void fam65xx_ora_absolute_x(fam65xx_t* cpu) {
-    FAM65XX_ORA_HELPER(cpu, fam65xx_addr_absx);
+    fam65xx_ora_helper(cpu, fam65xx_addr_absx);
 }
 
 void fam65xx_ora_absolute_y(fam65xx_t* cpu) {
-    FAM65XX_ORA_HELPER(cpu, fam65xx_addr_absy);
+    fam65xx_ora_helper(cpu, fam65xx_addr_absy);
 }
 
 void fam65xx_ora_indirect_x(fam65xx_t* cpu) {
-    FAM65XX_ORA_HELPER(cpu, fam65xx_addr_indx);
+    fam65xx_ora_helper(cpu, fam65xx_addr_indx);
 }
 
 void fam65xx_ora_indirect_y(fam65xx_t* cpu) {
-    FAM65XX_ORA_HELPER(cpu, fam65xx_addr_indy);
+    fam65xx_ora_helper(cpu, fam65xx_addr_indy);
 }
 
 // ============================================================================
@@ -233,35 +226,35 @@ void fam65xx_ora_indirect_y(fam65xx_t* cpu) {
 // ============================================================================
 
 void fam65xx_eor_immediate(fam65xx_t* cpu) {
-    FAM65XX_EOR_HELPER(cpu, fam65xx_addr_imm);
+    fam65xx_eor_helper(cpu, fam65xx_addr_imm);
 }
 
 void fam65xx_eor_zero_page(fam65xx_t* cpu) {
-    FAM65XX_EOR_HELPER(cpu, fam65xx_addr_zp);
+    fam65xx_eor_helper(cpu, fam65xx_addr_zp);
 }
 
 void fam65xx_eor_zero_page_x(fam65xx_t* cpu) {
-    FAM65XX_EOR_HELPER(cpu, fam65xx_addr_zpx);
+    fam65xx_eor_helper(cpu, fam65xx_addr_zpx);
 }
 
 void fam65xx_eor_absolute(fam65xx_t* cpu) {
-    FAM65XX_EOR_HELPER(cpu, fam65xx_addr_abs);
+    fam65xx_eor_helper(cpu, fam65xx_addr_abs);
 }
 
 void fam65xx_eor_absolute_x(fam65xx_t* cpu) {
-    FAM65XX_EOR_HELPER(cpu, fam65xx_addr_absx);
+    fam65xx_eor_helper(cpu, fam65xx_addr_absx);
 }
 
 void fam65xx_eor_absolute_y(fam65xx_t* cpu) {
-    FAM65XX_EOR_HELPER(cpu, fam65xx_addr_absy);
+    fam65xx_eor_helper(cpu, fam65xx_addr_absy);
 }
 
 void fam65xx_eor_indirect_x(fam65xx_t* cpu) {
-    FAM65XX_EOR_HELPER(cpu, fam65xx_addr_indx);
+    fam65xx_eor_helper(cpu, fam65xx_addr_indx);
 }
 
 void fam65xx_eor_indirect_y(fam65xx_t* cpu) {
-    FAM65XX_EOR_HELPER(cpu, fam65xx_addr_indy);
+    fam65xx_eor_helper(cpu, fam65xx_addr_indy);
 }
 
 // Decimal mode ADC operation (for MOS6502 with functional decimal mode)
