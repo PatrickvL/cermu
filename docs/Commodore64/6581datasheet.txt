@@ -1,0 +1,681 @@
+﻿
+                                                  c o m m o d o r e 
+
+                                                    mos technology
+
+                                                        N M O S 
+
+                950 Rittenhouse Rd, Norristown. PA 19403 * Tel.: 215/666-7950 * TWX: 510/660-4168 
+
+
+                                           6581 SOUND INTERFACE DEVICE (SID)
+
+
+
+
+CONCEPT
+The 6581 Sound Interface Device (SID) is a single- chip, 3-voice electronic music synthesizer/sound effects
+generator compatible with the 65XX and similar microprocessor families. SID provides wide-range, high-
+resolution control of pitch (frequency) tone color (harmonic content) and dynamics (volume). Specialized
+control circuitry minimizes software overhead facilitating use in arcade/home video games and low-cost
+musical instruments. 
+
+
+
+    FEATURES                                                        6581 PIN CONFIGURATION
+
+    * 3 Tone Oscillators 
+      Range: 0-4 kHz 
+    * 4 Waveforms per Oscillator 
+      Triangle, Sawtooth,                                               +------------+
+      Variable Pulse, Noise                                             |            |
+    * 3 Amplitude Modulators                                      CAP1A | 1        28| Vdd
+      Range: 48 dB                                                CAP1B | 2        27| AUDIO OUT
+    * 3 Envelope Generators                                       CAP2A | 3        26| IN EXT
+      Exponential response,                                       CAP2B | 4        25| Vcc
+      Attack Rate: 2mS-8S                                          _RES | 5        24| POT X
+      Decay Rate: 6mS-24S                                     [phi2] ø2 | 6  6581  23| POT Y
+      Sustain Level: 0-peak volume                                  R_W | 7   SID  22| D7
+      Release Rate: 6mS-24S                                         _CS | 8        21| D6
+    * Oscillator Synchronization                                     A0 | 9        20| D5
+    * Ring Modulation                                                A1 |10        19| D4
+    * Programmable Filter                                            A2 |11        18| D3
+      Cutoff range: 30 Hz-12 kHz                                     A3 |12        17| D2
+      12 dB/octave Rolloff                                           A4 |13        16| D1
+      Low pass, Band pass,                                          GND |14        15| D0
+      High pass, Notch outputs                                          |            |
+      Variable Resonance                                                +------------+
+    * Master Volume Control 
+    * 2 A/D POT Interfaces 
+    * Random Number/Modulation Generator 
+    * External Audio Input 
+
+ MOS Technology, Inc.                          c om m o d o r e       Optoelectronics, Inc.
+950 Rittenhouse Rd, Norristown. PA 19403     semiconductor group     4350 Bellwood Parkway South, Dallas, TX 75234
+Tel.: 215/666-7950   TWX: 510/660-4168                               Tel.: 214/387-0006  TLX 730969
+                                                                      Commodore Electronics Ltd.
+ Frontier Manufacturing, Inc.                                        Shing Dao Industrial Building
+2955 N. Airway Ave. Costa Mesa, CA 92626     A COMMODORE COMPANY     232 Aberdeen Main Rd., Hong Kong
+Tel.: 714/979-6300, TLX: 685649                                      Tel.: 5/540241, TLX: 78065366
+
+----------------------------------------------------------1-----------------------------------------------------------
+
+DESCRIPTION
+The 6581 consists Of three synthesizer "voices"            the three voices, a programmable Filter is provided
+which can be used independently or in conjunction          for generating complex, dynamic tone colors via
+with each other (or external audio sources) to create      subtractive synthesis.
+complex sounds. Each voice consists of a Tone              SID allows the microprocessor to read the
+Oscillator/Waveform Generator, an Envelope                 changing output of the third Oscillator and third
+Generator and an Amplitude Modulator. The Tone             Envelope Generator. These outputs can be used as
+Oscillator controls the pitch of the voice over a wide     a source of modulation information for creating
+range. The Oscillator produces four waveforms at           vibrato, frequency/filter sweeps and similar effects.
+the selected frequency, with the unique harmonic           The third oscillator can also act as a random
+content of each waveform providing simple control          number generator for games. Two A/D converters
+of tone color. The volume dynamics of the oscillator       are provided for interfacing SID with
+are controlled by the Amplitude Modulator under            potentiometers. These can be used for "paddles" in
+the direction of the Envelope Generator. When              a game environment or as front panel controls in a
+triggered, the Envelope Generator creates an               music synthesizer. SID can process external audio
+amplitude envelope with programmable rates of              signals, allowing multiple SID chips to be daisy-
+increasing and decreasing volume. In addition to           chained or mixed in complex polyphonic systems.
+
+
+
+                                                       TODO
+
+
+                                              6581 SID BLOCK DIAGRAM
+
+----------------------------------------------------------2-----------------------------------------------------------
+
+SID CONTROL REGISTERS
+
+There are 29 eight-bit registers in SID which control the generation of sound. These registers are either WRlTE-only
+or READ-only and are listed below in Table 1.
+
+
+       Address    Reg #                               Data
+   A4 A3 A2 Al A0 (Hex)    D7      D6      D5      D4      D3      D2      Dl      D0   Reg Name         Reg Type
+                       +-------+-------+-------+-------+-------+-------+-------+-------+ VOICE 1
+ 0  0  0  0  0  0  00  |   F7  |   F6  |   F5  |   F4  |   F3  |   F2  |   F1  |   F0  |Freq Lo          Write-only
+ 1  0  0  0  0  1  01  |  F15  |  F14  |  F13  |  F12  |  F11  |  F10  |   F9  |   F8  |Freq Hi          Write-only
+ 2  0  0  0  1  0  02  |  PW7  |  PW6  |  PW5  |  PW4  |  PW3  |  PW2  |  PW1  |  PW0  |PW LO            Write-only
+ 3  0  0  0  1  1  03  |  ---  |  ---  |  ---  |  ---  |  PW11 |  PW10 |  PW9  |  PW8  |PW HI            Write-only
+ 4  0  0  1  0  0  04  | NOISE |  Π_Π_ |  /|/| |  /\/\ |  TEST |RINGMOD|  SYNC |  GATE |Control Reg      Write-only
+ 5  0  0  1  0  1  05  |  ATK3 |  ATK2 |  ATK1 |  ATK0 |  DCY3 |  DCY2 |  DCY1 |  DCY0 |Attack/Decay     Write-only
+ 6  0  0  1  1  0  06  |  STN3 |  STN2 |  STN1 |  STN0 |  RlS3 |  RlS2 |  RlS1 |  RlS0 |Sustain/Release  Write-only
+                       +-------+-------+-------+-------+-------+-------+-------+-------+
+                       +-------+-------+-------+-------+-------+-------+-------+-------+ VOICE 2
+ 7  0  0  1  1  1  07  |   F7  |   F6  |   F5  |   F4  |   F3  |   F2  |   F1  |   F0  |Freq Lo          Write-only
+ 8  0  1  0  0  0  08  |  F15  |  F14  |  F13  |  F12  |  F11  |  F10  |   F9  |   F8  |Freq Hi          Write-only
+ 9  0  1  0  0  1  09  |  PW7  |  PW6  |  PW5  |  PW4  |  PW3  |  PW2  |  PW1  |  PW0  |PW LO            Write-only
+10  0  1  0  1  0  0A  |  ---  |  ---  |  ---  |  ---  |  PW11 |  PW10 |  PW9  |  PW8  |PW HI            Write-only
+11  0  1  0  1  1  0B  | NOISE |  Π_Π_ |  /|/| |  /\/\ |  TEST |RINGMOD|  SYNC |  GATE |Control Reg      Write-only
+12  0  1  1  0  0  0C  |  ATK3 |  ATK2 |  ATK1 |  ATK0 |  DCY3 |  DCY2 |  DCY1 |  DCY0 |Attack/Decay     Write-only
+13  0  1  1  0  1  0D  |  STN3 |  STN2 |  STN1 |  STN0 |  RlS3 |  RlS2 |  RlS1 |  RlS0 |Sustain/Release  Write-only
+                       +-------+-------+-------+-------+-------+-------+-------+-------+
+                       +-------+-------+-------+-------+-------+-------+-------+-------+ VOICE 3
+14  0  1  1  1  0  0E  |   F7  |   F6  |   F5  |   F4  |   F3  |   F2  |   F1  |   F0  |Freq Lo          Write-only
+15  0  1  1  1  1  0F  |  F15  |  F14  |  F13  |  F12  |  F11  |  F10  |   F9  |   F8  |Freq Hi          Write-only
+16  1  0  0  0  0  10  |  PW7  |  PW6  |  PW5  |  PW4  |  PW3  |  PW2  |  PW1  |  PW0  |PW LO            Write-only
+17  1  0  0  0  1  11  |  ---  |  ---  |  ---  |  ---  |  PW11 |  PW10 |  PW9  |  PW8  |PW HI            Write-only
+18  1  0  0  1  0  12  | NOISE |  Π_Π_ |  /|/| |  /\/\ |  TEST |RINGMOD|  SYNC |  GATE |Control Reg      Write-only
+19  1  0  0  1  1  13  |  ATK3 |  ATK2 |  ATK1 |  ATK0 |  DCY3 |  DCY2 |  DCY1 |  DCY0 |Attack/Decay     Write-only
+20  1  0  1  0  0  14  |  STN3 |  STN2 |  STN1 |  STN0 |  RlS3 |  RlS2 |  RlS1 |  RlS0 |Sustain/Release  Write-only
+                       +-------+-------+-------+-------+-------+-------+-------+-------+
+                       +-------+-------+-------+-------+-------+-------+-------+-------+ Filter
+21  1  0  1  0  1  15  |  ---  |  ---  |  ---  |   --- |  ---  |  FC2  |  FC1  |  FC0  |FC LO            Write-only
+22  1  0  1  1  0  16  |  FC10 |  FC9  |   FC8 |   FC7 |  FC6  |  FC5  |  FC4  |  FC3  |FC HI            Write-only
+23  1  0  1  1  1  17  |  RES3 |  RES2 |  RES1 |  RES0 |Filt EX| Filt 3| Filt 2| Filt 1|RES/Filt         Write-only
+24  1  1  0  0  0  18  | 3 OFF |   HP  |   BP  |   LP  |  VOL3 |  VOL2 |  VOL1 |  VOL0 |Mode/Vol         Write-only
+                       +-------+-------+-------+-------+-------+-------+-------+-------+
+                       +-------+-------+-------+-------+-------+-------+-------+-------+ Misc
+25  1  1  0  0  1  19  |  PX7  |  PX6  |  PX5  |  PX4  |  PX3  |  PX2  |  PX1  |  PX0  |POTX             Read-only
+26  1  1  0  1  0  1A  |  PY7  |  PY6  |  PY5  |  PY4  |  PY3  |  PY2  |  PY1  |  PY0  |POTY             Read-only
+27  1  1  0  1  1  1B  |   O7  |   O6  |   O5  |   O4  |   O3  |   O2  |   O1  |   O0  |OSC3/Random      Read-only
+28  1  1  1  0  0  1C  |   E7  |   E6  |   E5  |   E4  |   E3  |   E2  |   E1  |   E0  |ENV3             Read-only
+                       +-------+-------+-------+-------+-------+-------+-------+-------+
+
+                                          TABLE 1 - SID REGISTER MAP
+
+----------------------------------------------------------3-----------------------------------------------------------
+
+SID REGISTER DESCRIPTION                                   Oscillator 3. In order for sync to occur. Oscillator 3 must
+                                                           be set to some frequency other than zero but
+VOICE 1                                                    preferably lower than the frequency of Oscillator 1. No
+                                                           other parameters of Voice 3 have any effect on sync.
+ Freq Lo/Freq Hi (Registers 00,01)
+Together these registers form a 16-bit number which         Ring Mod (Bit 2)
+linearly controls the Frequency of Oscillator 1. The       The RING MOD bit, when set to a one, replaces the
+frequency is determined by the following equation:         Triangle waveform output of Oscillator 1 with a "Ring
+  Fout = (Fn * Fclk/16777216) Hz                           Modulated" combination of Oscillators 1 and 3. Varying
+                                                           the frequency of Oscillator 1 with respect to Oscillator 3
+Where Fn is the 16-bit number in the Frequency registers   produces a wide range of non-harmonic overtone
+and Fclk is the system clock applied to the ø2 input (pin  structures for creating bell or gong sounds and for special
+6). For a standard 1.0 Mhz clock, the frequency is given   effects. In order for ring modulation to be audible,
+by:                                                        the Triangle waveform of Oscillator 1 must be selected
+  Fout = (Fn * 0.0596) Hz                                  and Oscillator 3 must be set to some frequency other
+                                                           than zero. No other parameters of Voice 3 have any effect
+A complete table of values for generating 8 octaves of     on ring modulation.
+the equally-tempered musical scale with concert A (440
+Hz) tuning is provided in appendix A. It should be noted    Test (Bit 3)
+that the frequency resolution of SID is sufficient for     The TEST bit, when set to a one, resets and locks
+any tuning scale and allows sweeping from note to note     Oscillator 1 at zero until the TEST bit is cleared. The
+(portamento) with no discernable frequency steps.          Noise waveform output of Oscillator 1 is also reset and
+                                                           the Pulse waveform output is held at a DC level. Normally
+PW Lo/PW Hi (Registers 02,03)                              this bit is used for testing purposes, however, it can be
+Together these registers form a 12-bit number (bits 4-7    used to synchronize Oscillator 1 to external events,
+of PW HI are not used) which linearly controls the Pulse   allowing the generation of highly complex waveforms
+Width (duty cycle) of the Pulse waveform on Oscillator 1.  under real-time software control.
+
+The pulse width is determined by the following equation:   /\/\ (Bit 4)
+  PWout = (PWn/40.95) %                                    When set to a one, the Triangle waveform output of
+                                                           Oscillator 1 is selected. The Triangle waveform is low in
+Where PWn is the 12-bit number in the Pulse Width          harmonics and has a mellow, flute-like quality.
+registers.
+                                                           /|/| (Bit 5)
+The pulse width resolution allows the width to be          When set to a one, the Sawtooth waveform of Oscillator 1
+smoothly swept with no discernable steppeng. Note that     is selected. The Sawtooth waveform is rich in even and
+the Pulse waveform on Oscillator 1 must be selected in     odd harmonics and has a bright, brassy quality.
+order for the Pulse Width registers to have any audible    
+effect. A value of 0 or 4095 ($FFF) in the Pulse Width     Π_Π_ (Bit 6)
+registers will produce a constant DC output, while a       When set to a one, the Pulse waveform output of
+value of 2048 ($800) will produce a square wave.           Oscillator 1 is selected. The harmonic content of this
+                                                           waveform can be adjusted by the Pulse Width registers,
+ CONTROL REGISTER (Register 04)                            producing tone qualities ranging from a bright, hollow
+This register contains eight control bits which select     square wave to a nasal, reedy pulse. Sweeping the pulse
+various options on Oscillator 1.                           width in real-time produces a dynamic "phasing" effect
+                                                           which adds a sense of motion to the sound. Rapidly
+ Gate (Bit 0)                                              jumping between different pulse widths can produce
+The GATE bit controls the Envelope Generator for Voice     interesting harmonic sequences.
+1. When this bit is set to a one, the Envelope Generator
+is Gated (triggered) and the ATTACK/DECAY/SUSTA1N           Noise (Bit 7)
+cycle is initiated. When the bit is reset to a zero, the   When set to a one, the Noise output waveform of
+RELEASE cycle begins. The Envelope Generator controls      Oscillator 1 is selected. This output is a random signal
+the amplitude of Oscillator 1 appearing at the audio       which changes at the frequency of Oscillator 1. The
+output, therefore, the GATE bit must be set (along with    sound quality can be varied from a low rumbling to
+suitable envelope parameters) for the selected output of   hissing white noise via the Oscillator 1 Frequency
+Oscillator 1 to be audible. A detailed discussion of the   registers. Noise is useful in creating explosions,
+Envelope Generator can be found in Appendix B.             gunshots, jet engines, wind, surf and other unpitched
+                                                           sounds, as well as snare drums and cymbals. Sweeping
+ Sync (Bit 1)                                              the Oscillator frequency with Noise selected produces a
+The SYNC bit, when set to a one, Synchronizes the          dramatic rushing effect.
+fundamental frequency of Oscillator 1 with the
+fundamental frequency of Oscillator 3, producing "Hard     One of the output waveforms must be selected for
+Sync" effects. Varying the frequency of Oscillator 1 with  Oscillator 1 to be audible, however, it is NOT necessary
+respect to Oscillator 3 produces a wide range of complex   to deselect waveforms to silence the output of Voice 1.
+harmonic structures from Voice 1 at the frequency of       The amplitude of Voice 1 at the final output is a function
+                                                           of the Envelope Generator only.
+
+----------------------------------------------------------4-----------------------------------------------------------
+
+NOTE: The oscillator output waveforms are NOT additive.    A SUSTAIN value of 8 would cause Voice 1 to SUSTAIN
+If more than one output waveform is selected               at an amplitude one-half the peak amplitude reached by
+simultaneously, the result will be a logical AN Ding of    the ATTACK cycle.
+the waveforms. Although this technique can be used to       Bits 0-3 (RLS0-RLS3) select 1 of 16 RELEASE rates for
+generate additional waveforms beyond the four listed       the Envelope Generator. The RELEASE cycle follows the
+above, it must be used with care. If any other waveform    SUSTAIN cycle when the Gate bit is reset to zero. At this
+is selected while Noise is on, the Noise output can "lock  time, the output of Voice 1 will fall from the SUSTAIN
+up". If this occurs, the Noise output will remain silent   amplitude to zero amplitude at the selected RELEASE
+until reset by the TEST bit or by bringing _RES (pin 5)    rate. The 16 RELEASE rates are identical to the DECAY
+low.                                                       rates.
+ Attack/Decay (Register 05)                                
+ Bits 4-7 of this register (ATK0-ATK3) select 1 of 16      NOTE: The cycling of the Envelope Generator can be
+ATTACK rates for the Voice 1 Envelope Generator. The       altered at any point via the Gate bit. The Envelope
+ATTACK rate determines how rapidly the output of Voice     Generator can be Gated and Released without restriction.
+1 rises from zero to peak amplitude when the Envelope      For example, if the Gate bit is reset before the envelope
+Generator is Gated. The 16 ATTACK rates are listed         has finished the ATTACK cycle, the RELEASE cycle will
+below in Table 2.                                          immediately begin, starting from whatever amplitude had
+                                                           been reached. If the envelope is then Gated again
+ Bits 0-3 (DCY0-DCY3) select 1 of 16 DECAY rates for the   (before the RELEASE cycle has reached zero amplitude),
+Envelope Generator. The DECAY cycle follows the            another ATTACK cycle will begin, starting from whatever
+ATTACK cycle and the DECAY rate determines how             amplitude had been reached. This technique can be
+repeadly the output falls from the peak amplitude to the   used to generate complex amplitude envelopes via real-
+selected SUSTAIN level. The 16 DECAY rates are listed      time software control.
+in Table 2.
+                                                            Voice 2
+ TABLE 2 - ENVELOPE RATES                                  Registers 07-$0D control Voice 2 and are functionally
+   VALUE     ATTACK RATE   DECAY/RELEASE RATE              identical to registers 00-06 with these exceptions:
+ DEC  (HEX)  (Time/Cycle)     (Time/Cycle)
+  0    (0)       2 mS             6 mS                     When selected, SYNC synchronizes Oscillator 2 with
+  1    (1)       8 mS            24 mS                     Oscillator 1.
+  2    (2)      16 mS            48 mS                     When selected, RING MOD replaces the Triangle output
+  3    (3)      24 mS            72 mS                     of Oscillator 2 with the ring modulated combination of
+  4    (4)      38 mS           114 mS                     Oscillators 2 and 1.
+  5    (5)      56 mS           168 mS                     
+  6    (6)      68 mS           204 mS                      Voice 3
+  7    (7)      80 mS           240 mS                     Registers $0E-$14 control Voice 3 and are functionally
+  8    (8)     100 mS           300 mS                     identical to registers 00-06 with these exceptions:
+  9    (9)     250 mS           750 mS                     
+ 10    (A)     500 mS           1.5 S                      When selected, SYNC synchronizes Oscillator 3 with
+ 11    (B)     800 mS           2.4 5                      Oscillator 2.
+ 12    (C)       1 S              3 5                      When selected, RING MOD replaces the Triangle output
+ 13    (D)       3 S              9 S                      of Oscillator 3 with the ring modulated combination of
+ 14    (E)       5 5             15 5                      Oscillators 3 and 2.
+ 15    (F)       8 5             24 5
+                                                           Typical operation of a voice consists of selecting the
+                                                           desired parameters: frequency, waveform effects (SYNC,
+NOTE: Envelope rates are based on a 1.0 Mhz ø2 clock.      RING MOD) and envelope rates, then gating the voice
+For other ø2 frequencies, multiply the given rate by 1     whenever the sound is desired. The sound can be
+Mhz/ø2. The rates refer to the amount of time per cycle.   sustained for any length of time and terminated by
+For example, given an ATTACK value of 2, the ATTACK        clearing the Gate bit. Each voice can be used separately,
+cycle would take 16 mS to rise from zero to peak           with independent parameters and gating, or in unison to
+amplitude. The DECAY/RELEASE rates refer to the            create a single, powerful voice. When used in unison, a
+amount of time these cycles would take to fall from peak   slight detuning of each oscillator or tuning to musical
+amplitude to zero.                                         intervals creates a rich, animated sound.
+
+ Sustain/Release (Register 06)                             FILTER
+ Bits 4-7 of this register (STNO-STN3) select 1 of 16
+SUSTAIN levels for the Envelope Generator. The              FC Lo/FC Hi (Registers $15, $16)
+SUSTAIN cycle follows the DECAY cycle and the output       Together these registers form an 11-bit number (bits 3-7
+of Voice 1 will remain at the selected SUSTAIN amplitude   of FC LO are not used) which linearly controls the Cutoff
+as long as the Gate bit remains set. The SUSTAIN levels    (or Center) Frequency of the programmable Filter. The
+range from zero to peak amplitude in 16 linear steps,      approximate Cutoff Frequency ranges between 30Hz and
+with a SUSTAIN value of 0 selecting zero amplitude and a   10KHz with the recommended capacitor values of
+SUSTAIN value of 15 ($F) selecting the peak amplitude.     2200pF for CAP1 and CAP2.
+
+----------------------------------------------------------5-----------------------------------------------------------
+
+The frequency range of the Filter can be altered to suit   For example, both LP and HP modes can be selected to
+specific applications. Refer to the Pin Description        produce a Notch (or Band Reject) Filter response. In
+section for more information.                              order for the Filter to have any audible effect, at least
+                                                           one Filter output must be selected and at least one Voice
+ RES/Filt (Register $17)                                    must be routed through the Filter. The Filter is, perhaps,
+ Bits 4-7 of this register (RES0-RES3) control the         the most important element in SID as it allows the
+Resonance of the Filter, resonance of a peaking effect     generation of complex tone colors via subtractive
+which emphasizes frequency components at the Cutoff        synthesis. The Filter is used to eliminate specific
+Frequency of the Filter, causing a sharper sound. There    frequency components from a harmonically-rich input
+are 16 Resonance settings ranging linearly from no         signal). The best results are achieved by varying the
+resonance (0) to maximum resonance (15 or $F).             Cutoff Frequency in real-time.
+
+ Bits 0-3 determine which signals will be routed through    Bits 0-3 (VOL0-VOL3) select 1 of 16 overall Volume levels
+the Filter:                                                for the final composite audio output. The output volume
+ Filt 1 (Bit 0)                                            levels range from no output (0) to maximum volume (15 or
+When set to a zero, Voice 1 appears directly at the audio  $F) in 16 linear steps. This control can be used as a
+output and the Filter has no effect on it. When set to a   static volume control for balancing levels in multi-chip
+one, Voice 1 will be processed through the Filter and the  systems or for creating dynamic volume effects, such as
+harmonic content of Voice 1 will be altered according to   Tremolo. Some Volume level other than zero must be
+the selected Filter parameters.                            selected in order for SID to produce any sound.
+
+ Filt 2 (Bit 1)                                            MISC
+Same as bit 0 for Voice 2.                                 
+ Filt 3 (Bit 2)                                             POTX (Register $19)
+Same as bit 0 for voice 3.                                 This register allows the microprocessor to read the
+ Filtex (Bit 3)                                            position of the potentiometer tied to POTX (pin 24), with
+Same as bit 0 for External audio input (pin 26).           values ranging from 0 at minimum resistance, to 255
+                                                           ($FF) at maximum resistance. The value is always valid
+ Mode/Vol (Register $18)                                   and is updated every 512 ø2 clock cycles. See the Pin
+ Bits 4-7 of this register select various Filter mode and  Description section for information on post and capacitor
+output options:                                            values.
+ LP (Bit 4)                                                 POTY (Register $1A)
+When set to a one, the Low Pass output of the Filter is    Same as POTX for the pot tied to POTY (pin 23).
+selected and sent to the audio output. For a given Filter   OSC 3/RANDOM (Register $1B)
+input signal, all frequency components below the Filter    This register allows the microprocessor to read the upper
+Cutoff Frequency are passed unaltered, while all           8 output bits of Oscillator 3. The character of the
+frequency components above the Cutoff are attenuated at    numbers generated is directly related to the waveform
+a rate of 12 dB/Octave. The Low Pass mode produces         selected. If the Sawtooth waveform of Oscillator 3 is
+full-bodied sounds.                                        selected, this register will present a series of numbers
+ BP (Bit 5)                                                incrementing from 0 to 255 ($FF) at a rate determined by
+Same as bit 4 for the Band Pass output. All frequency      the frequency of Oscillator 3. If the Triangle waveform is
+components above and below the Cutoff are attenuated       selected, the output will increment from 0 up to 255, then
+at a rate of 6 dB/Octave. The Band Pass mode produces      decrement down to 0. If the Pulse waveform is selected,
+thin, open sounds.                                         the output will jump between 0 and 255. Selecting the
+                                                           Noise waveform will produce a series of random
+ HP (Bit 6)                                                numbers, therefore, this register can be used as a
+Same as bit 4 for the High Pass output. All frequency      random number generator for games. There are
+Components above the Cutoff are passed unaltered, while    numerous timing and sequencing applications for the
+all frequency components below the Cutoff are              OSC 3 register, however, the chief function is probably
+attenuated at a rate of 12 dB/Octave. The High Pass        that of a modulation generator. The numbers generated
+mode produces tinny, buzzy sounds.                         by this register can be added, via software, to the
+ 3 off (Bit 7)                                             Oscillator or Filter Frequency registers or the Pulse Width
+When set to a one, the output of Voice 3 is disconnected   registers in real-time. Many dynamic effects can be
+from the direct audio path. Setting Voice 3 to bypass the  generated in this manner. Siren-like sounds can be
+Filter (FILT 3 = 0) and setting 3 OFF to a one prevents    created by adding the OSC 3 Sawtooth output to the
+Voice 3 from reaching the audio output. This allows Voice  frequency control of another oscillator. Synthesizer
+3 to be used for modulation purposes without any           "Sample and Hold" effects can be produced by adding
+undesirable output.                                        the OSC 3 Noise output to the Filter Frequency control
+                                                           registers. Vibrato can be produced by setting Oscillator 3
+NOTE: The Filter output modes ARE additive and             to a frequency around 7 Hz and adding the OSC 3 Triangle
+multiple Filter rhodes may be selected simultaneously.     output (with proper scaling) to the Frequency control
+                                                           of another oscillator. An unlimited range of effects
+
+----------------------------------------------------------6-----------------------------------------------------------
+
+are available by altering the frequency of Oscillator 3    selected SID register and a low allows the
+and scaling the OSC 3 output. Normally, when Oscillator    microprocessor to Write data into the selected SID
+3 is used for modulation, the audio output of Voice 3      register. This pin is normally connected to the system
+should be eliminated (3 OFF = 1).                          Read/Write line.
+
+ ENV 3 (Register $1C)                                       _CS (Pin 8) - This TIL-level input is a low active chip
+Same as OSC 3, but this register allows the                select which controls data transfers between SID and the
+microprocessor to read the output of the Voice 3 Envelope  microprocessor. CS must be low for any transfer. A Read
+Generator. This output can be added to the Filter          from the selected SID register can only occur if CS is low,
+Frequency to produce harmonic envelopes, WAH WAH,          ø2 is high and R/W is high. A Write to the selected SID
+and similar effects. "Phaser" sounds can be created by     register can only occur if CS is low, ø2 is high and R/W
+adding this output to the frequency control registers      is low. This pin is normally connected to address
+of an oscillator. The Voice 3 Envelope Generator           decoding circuitry, allowing SID to reside in the memory
+must be gated in order to produce any output from this     map of a system.
+register. The OSC 3 register, however, always reflects      A0-A4 (Pins 9-13) - These TM-level inputs are used to
+the changing output of the oscillator and is not affected  select one of the 29 SID registers. Although enough
+in any way by the Envelope Generator.                      addresses are provided to select 1 of 32 registers, the
+                                                           remaining three register locations are not used. A Write to
+SID PIN DESCRIPTION                                        any of these three locations is ignored and a Read
+                                                           returns invalid data. These pins are normally connected
+ CAP1A, CAP1B (Pins 1,2) /                                 to the corresponding address lines of the microprocessor
+ CAP2A, CAP2B (Pins 3,4)                                   so that SID may be addressed in the same manner as
+These pins are used to connect the two integrating         memory.
+capacitors required by the programmable Filter. Cl
+connects between pins 1 and 2, C2 between pins 3 and        GND (Pin 14) - For best results, the ground line
+4. Both capacitors should be the same value. Normal        between SID and the power supply should be separate
+operation of the Filter over the audio range               from ground lines to other digital circuitry. This will
+(approximately-30 Hz-12 KHz) is accomplished with a        minimize digital noise at the audio output.
+value of 2200 pF for Cl and C2. Polystyrene capacitors      DO-D7 (Pins 15-22) - These bidirectional lines are used
+are preferred. In complex polyphonic systems, where        to transfer data between SID and the microprocessor.
+many SID chips must track each other, matched              They are TTL compatible in the output mode and capable
+capacitors are recommended. The frequency range of the     of driving 2 TTL loads in the output mode. The data
+Filter can be tailored to specific applications by the     buffers are usually in the high-impedance off state.
+choice of capacitor values. For example, a low-cost game   During a Write operation, the data buffers remain in the
+may not require full high-frequency response. In this      off (input) state and the microprocessor supplies data to
+case, larger values for Cl and ø2 could be chosen to       SID over these lines. During a Read operation, the data
+provide more control over the bass frequencies of the      buffers turn on and SID supplies data to the
+Filter. The approximate maximum Cutoff Frequency of the    microprocessor over these lines. The pins are normally
+Filter is given by:                                        connected to the corresponding data lines of the
+  FCmax = 2.6E-5/C                                         microprocessor.
+
+Where C is the capacitor value. The range of the Filter     POTX, POTY (Pins 24,23) - These pins are inputs to
+extends approximately 9 octaves below the maximum          the AID converters used to digitize the position of
+Cutoff Frequency.                                          potentiometers. The conversion process is based on the
+                                                           time constant of a capacitor tied from the POT pin to
+ _RES (Pin 5) - This TTL-level input is the reset control  ground, charged by a potentiometer tied from the POT
+for SID. When brought low for at least ten ø2 cycles, all  pin to +5 volts. The component values are determined
+internal registers are reset to zero and the audio output  by:
+is silenced. This pin is normally connected to the reset     RC = 4.7E-4
+line of the microprocessor or a power-on-clear circuit.
+ ø2 (Pin 6) - This TTL-level input is the master clock     Where R is the maximum resistance of the pot and C is
+for SID. All oscillator frequencies and envelope rates     the capacitor.
+are referenced to this clock. ø2 also controls data        The larger the capacitor, the smaller the POT value jitter.
+transfers between SID and the microprocessors Data can     The recommended values for R and C are 470 KOhms
+only be transferred when ø2 is high. Essentially, ø2 acts  and 1000 pF.
+as a high-active chip select as far as data transfers are  Note that a separate pot and cap are required for each
+concerned. This pin is normally connected to the system    POT pin.
+clock, with a nominal operating frequency of 1.0 MHz.       Vcc (Pin 25) - As with the GND line, a separate +5
+ R/W (Pin 7)- This TTL-level input controls the direction  VDC line should be run between SID Vcc and the power
+of data transfers betveen SID and the microprocessor. if   supply in order to minimize noise. A bypass capacitor
+the chip select conditions have been met, a high on this   should be located close to the pin.
+line allows the microprocessor to Read data from the
+
+----------------------------------------------------------7-----------------------------------------------------------
+
+ Ext In (Pin 26) - This analog input allows external        Audio Out (Pin 27) - This open-source buffer is the
+audio signals to be mixed with the audio output of SID or  final audio output of SID, comprised of the three SID
+processed through the Filter. Typical sources include      voices, the Filter and any external input. The output level
+voice, guitar and organ. The input impedence of this pin   is set by the output Volume control and reaches a
+is in the order of 100 KOhms. Any signal applied directly  maximum of approximately 3 volts p-p at a 6 volt DC
+to the pin should ride at DC level of 6 volts and should   level. A source resistor from AUDIO OUT to ground is
+not exceed 3 volts p-p. In order to prevent any            required for proper operation. The recommended
+interference caused by DC level differences, external      resistance is 1 KOhm for a standard output impedance.
+signals should be AC-coupled to EXT IN by an electrolytic  As the output of SID rides at a 6 volt DC level, it should
+capacitor in the 1-10 pF range. As the direct              be AC-coupled to any audio amplifier with an electrolytic
+audio path (FILTEX = 0) has unity gain, EXT IN can be      capacitor in the 1-10 pF range.
+used to mix outputs of many SID chips by daisy-chaining.
+The number of chips that can be chained in this manner      Vdd (Pin 28) - As with Vcc, a separate +12 VDC line
+is determined by the amount of noise and distortion        should be run to SID Vdd and a bypass capacitor should
+allowable at the final output. Note that the output        be used.
+Volume control will affect not only the three SID voices,
+but also any external inputs.                              See appendix C for typical SID application.
+
+
+6581 SID CHARACTERISTICS
+
+ABSOLUTE MAXIMUM RATINGS                                   COMMENT
+Supply Voltage, Vdd               0.3 VDC to+17 VDC        Stresses above those listed under "Absolute Maximum
+Supply Voltage, Vcc               0.3 VDC to +7 VDC        Ratings" may cause permanent damage to the device.
+Input Voltage (analog), Vina      0.3 VDC to+17 VDC        These are stress ratings only. Functional operation of this
+Input Voltage (digital), Vind     0.3 VDC to +7 VDC        device at these or any other conditions above those
+Operating Temperature, Ta             0°C to +70° C        indicated in the operational sections of this specification
+Storage Temperature, Tstg           -55°C to+150° C        is not implied and exposure to absolute maximum rating
+All inputs contain protection circuitry to prevent damage  conditions for extended periods may affect device
+due to high static discharges. Care should be exercised    reliability.
+to prevent unnecessary application of voltages in excess
+of the allowable limits.
+
+     ELECTRICAL CHARACTERISTICS (Vdd=12±5% VDC I Vcc 5±5% VDC. Ta               0 to 70°C)
+     Characteristic                                                           Typ         Max          Units
+     Input High Voltage                                                                                VDC
+     Input Low Voltage                                                                                 VDC
+     Input Leakage Current
+     Output High Voltage
+     Output Low Voltage
+     Output High Current
+     Output Low Current      (DO-D7; Sinking,
+                             Vol-=r0.4 VDC)
+     Input Capacitance       ORES, ø2, RAN, CS,
+                             AO-A4, DO-D7)
+     Pot Trigger Voltage     (POTX, POTT)
+     Pot Sink Current        (POTX, POTY)                                                               NA
+     Input Impedance                                                                                  KOhms
+     Audio input Voltage                                                                               VDC
+                                                                                                       VAC
+     Audio Output Voltage                                          6.5         8.0
+                                                                   5.0         6.5         8.0         VDC
+                                                                   .25         .8          1.2        vACp-p
+                                                                   475         3           A          vACp-p
+     Power Supply Current    (Vdd)                                                                      mA
+     Power Supply Current    (Vcc)                                                         100          mA
+     Power Dissipation       (Total)                                                      1000
+
+ Subject to change without notice.
+
+----------------------------------------------------------8-----------------------------------------------------------
+
+                                                   6581 (SID) TIMING
+
+READ CYCLE
+T  A  Tcyc---- .-----mealL....i  , Tc --------gi  - TF
+ø2
+RAT/  *TACC Is
+TAH  MEASURED
+AO-A4  ,LATESTFROM THE
+OCCURRING OF
+CS  ø2, CS, AO-A4
+00 -07
+Symbol  Name  Min  Typ  Max  I  Units 
+TCYC  Clock Cycle Time  -I  20  nS
+TC  Clock High Pulse Width  450  500  10,000  S
+TRH TF  Clock Rise/Fall Time  25  n5
+TRS  Read Set-up Time  0  11=111.1■=m•  ■1=111•1■••  nS
+TRH  Read Hold Time  0  M.■••■17.  nS
+TACC  Access Time  350  nS
+TAH  Address Hold Time  10  ■Imloblill  nS
+TCH  Chip Select Hold Time  0  .■•••IPIM.  nS
+TDH  Data Hold Time  20  nS
+WRITE CYCLE
+fe2
+*TW IS
+MEASURED-FROM THE
+RAN  LATEST
+OCCURRING OF
+hi CS} RAN
+AO-A4
+CS
+DO D7
+Symbol  Name  Min  Typ  Max  Units
+TW  Write Pulse Width  350  n5
+TWH  Write Hold Time  0  WI•17...  nS
+TAWS  Address Set-up Time  0  •PPII  nS
+TAH  Address Hold Time  10  nS
+ICH  Chip Select Hold Time  0  1101■YNIM  nS
+TVD  Valid Data  80  nS
+I  .  TDH  Data Hold Time  10  S
+
+Subject to change without notice.
+
+----------------------------------------------------------9-----------------------------------------------------------
+
+ APPENDIX A EQUAL-TEMPERED MUSICAL SCALE VALUES
+The following table lists the numerical values which must be stored in the SID Oscillator frequency control registers
+to produce the notes of the equal-tempered musical scale. The equal-tempered scale consists of an octave containing 12
+semitones (notes): C,D,E,F,G,A,B and C#,D#,F#,G#,A#. The frequency of each semitone is exactly the 12th root of 2
+times the frequency of the previous semitone. The table is based on a ø2 = clock of 1.0 Mhz. Refer to the equation
+given in the Register Description for use of other master clock frequencies. The scale selected is concert pitch, in
+which A4=440 Hz. Transpositions of this scale and scales other than the equal-tempered scale are also possible.
+
+      Musical        Freq        Osc Fn        Osc Fn   |   Musical        Freq        Osc Fn        Osc Fn
+        Note         (Hz)       (Decimal)       (Hex)   |    Note          (Hz)       (Decimal)       (Hex)
+        0 C0         16.35          274         0112    |   48 C4         261.63        4389          1125
+        1 C0$        17.32          291         0123    |   49 C4$        277.18        4650          122A
+        2 D0         18.35          308         0134    |   50 D4         293.66        4927          133F
+        3 D0$        19.44          326         0146    |   51 D4$        311.13        5220          1464
+        4 E0         20.60          346         015A    |   52 E4         329.63        5530          159A
+        5 F0         21.83          366         016E    |   53 F4         349.23        5859          16E3
+        6 F0$        23.12          388         0184    |   54 F4$        370.00        6207          183F
+        7 G0         24.50          411         018B    |   55 G4         392.00        6577          1981
+        8 G0$        25.96          435         01B3    |   56 G4$        415.30        6968          1B38
+        9 A0         27.50          461         01CD    |   57 A4         440.00        7382          1CD6
+       10 A0$        29.14          489         01E9    |   58 A4$        466.16        7821          1E80
+       11 B0         30.87          518         0206    |   59 B4         493.88        8286          205E
+       12 Cl         32.70          549         0225    |   60 C5         523.25        8779          224B
+       13 C1$        34.65          581         0245    |   61 C5$        554.37        9301          2455
+       14 Dl         36.71          616         0268    |   62 D5         587.33        9854          267E
+       15 D1$        38.89          652         028C    |   63 D5$        622.25       10440          28C8
+       16 El         41.20          691         02B3    |   64 E5         659.25       11060          2B34
+       17 Fl         43.65          732         02DC    |   65 F5         698.46       11718          2DC6
+       18 F1$        46.25          776         0308    |   66 F5$        740.00       12415          307F
+       19 G1         49.00          822         0336    |   67 G5         783.99       13153          3361
+       20 G1$        51.91          871         0367    |   68 G5$        830.61       13935          366F
+       21 Al         55.00          923         039B    |   69 A5         880.00       14764          39AC
+       22 A1$        58.27          978         03D2    |   70 A5$        932.33       15642          3D1A
+       23 B1         61.74         1036         040C    |   71 B5         987.77       16572          40BC
+       24 C2         65.41         1097         0449    |   72 C6        1046.50       17557          4495
+       25 C2$        69.30         1163         048B    |   73 C6$       1108.73       18601          48A9
+       26 D2         73.42         1232         04D0    |   74 D6        1174.66       19709          4CFC
+       27 D2$        77.78         1305         0519    |   75 D6$       1244.51       20897          518F
+       28 E2         82.41         1383         0567    |   76 E6        1318.51       22121          5669
+       29 F2         87.31         1465         05B9    |   77 F6        1396.91       23436          5B8C
+       30 F2$        92.50         1552         0610    |   78 F6$       1479.28       24830          60FE
+       31 G2         98.00         1644         066C    |   79 G6        1567.98       26306          6602
+       32 G2$       103.83         1742         06CE    |   80 G6$       1661.22       27871          6CDF
+       33 A2        110.00         1845         0735    |   81 A6        1760.00       29528          7358
+       34 A2$       116.54         1955         07A3    |   82 A6$       1864.65       31234          7A34
+       35 B2        123.47         2071         0817    |   83 B6        1975.53       33144          8178
+       36 C3        130.81         2195         0893    |   84 C7        2093.00       35115          892B
+       37 C3$       138.59         2325         0915    |   85 C7$       2217.46       37203          9153
+       38 D3        146.83         2463         099F    |   86 D7        2349.32       39415          99F7
+       39 D3$       155.56         2610         0A32    |   87 D7$       2489.01       41759          A31F
+       40 E3        164.81         2765         0ACD    |   88 E7        2637.02       44242          ACD2
+       41 F3        174.61         2930         0B72    |   89 F7        2793.83       46873          B719
+       42 F3$       185.00         3104         0C20    |   90 F7$       2959.95       49660          ClFC
+       43 G3        196.00         3288         0C08    |   91 G7        3135.96       52613          C085
+       44 G3$       207.65         3484         0D9C    |   92 G7$       3322.44       55741          D980
+       45 A3        220.00         3691         0E6B    |   93 A7        3520.00       59056          E6B0
+       46 A3$       233.08         3910         0F46    |   94 A7$       3729.31       62567          F467
+       47 B3        246.94         4143         102F    |   95 B7        3951.06      *66288        *1F2F0
+
+
+Although the table above provides a simple and quick       the 16-bit values for the eighth octave (C7 through B7),
+method for generating the equal-tempered scale, its very   then notes in lower octaves can be derived by choosing
+memory inefficient as it requires 192 bytes for the table  the appropriate note in the eighth octave and dividing the
+alone. Memory efficiency can be improved by determining    16-bit value by two for each octave of difference. As
+the note value algorithmically. Using the fact that each   division by two is nothing more than a right-shift of the
+note in an octave is exactly half the frequency of that    value, the calculation can easily be accomplished by a
+note in the net octave, the note look-up table can be      simple software routine. Although note B7 is beyond the
+reduced from 96 entries to 12 entries, as there are 12     range of the Oscillators, this value should still be
+notes per octave. If the 12 entries (24 bytes) consist of  included in the table for calculation purposes (the MSB
+
+---------------------------------------------------------10-----------------------------------------------------------
+
+of B7 would require a special software case, such as       typical cymbal envelope is shown below:
+generating this bit in the CARRY before shifting). Each    
+note must be specified in a form which indicates which     ATTACK:   0        2 mS       |\   D
+of the 12 semitones is desired, and which of the eight     DECAY:    9      750 mS   __A_| `'--____ 
+octaves the semitone is in. Since four bits are necessary  SUSTAIN:  0                    _________ _ _ _
+to select 1 of 12 semitones and three bits are necessary   RELEASE:  9      750 mS  GATE_|
+to select 1 of 8 octaves, the information can fit in one   
+byte, with the lower nybble selecting the semitone (by
+addressing the look-up table) and the upper nybble         Note that the tone immediately begins to decay to zero
+being used by the division routine to determine how        amplitude after the peak is reached, regardless of when
+many times the table value must be right-shifted.          GATE is cleared. The amplitude envelope of pianos and
+                                                           harpsichords is somewhat more complicated, but can be
+APPENDIX B - SID ENVELOPE GENERATORS                       generated quite easily with the ADSR. These instruments
+                                                           reach full volume when a key is first struck. The
+The four-part ADSR (ATTACK, DECAY, SUSTAIN,                amplitude immediately begins to die away slowly as long
+RELEASE) envelope generator has been proven in             as the key remains depressed. If the key is released
+electronic music to provide the optimum trade-off          before the sound has fully died away, the amplitude will
+between flexibility and ease of amplitude control.         immediately drop to zero. This envelope is shown below:
+Appropriate selection of envelope parameters allows the
+simulation of a wide range of percussion and sustained     ATTACK:   0        2 mS       |`-_D 
+instruments. The violin is a good example of a sustained   DECAY:    9      750 mS   __A_|   |__R__
+instrument. The violinist controls the volume by bowing    SUSTAIN:  0                    ___
+the instrument. Typically, the volume builds slowly,       RELEASE:  0        6 mS  GATE_|   |_____
+reaches a peak, then drops to an intermediate level. The
+violinist can maintain this level for as long as desired,
+then the volume is allowed to slowly die away. A           Note that the tone decays slowly until GATE is cleared, at
+"snapshot" of this envelope is shown below:                which point the amplitude drops rapidly to zero.
+
+                                                           The most simple envelope is that of the organ. When a key
+              |<-A->|D |<-- Sustain -->|<- R ->|           is pressed, the tone immediately reaches full volume and
+   Peak   ____|_____|  |     Period    |       |           remains there. When the key is released, the tone drop
+Amplitude     |    / \ |               |       |           immediately to zero volume. This envelope is shown below:
+              |   /   \L_______________|       |
+              |  /        Intermediate  \      |           ATTACK: 0 0        2 mS        ___s___ 
+   Zero       | /             Level      '-_   |           DECAY:    0        6 mS    _A_|       |_R__
+Amplitude ____L/                            `--_           SUSTAIN: 15 ($F)               _______
+                                                           RELEASE:  0        6 mS    ___|       |____
+
+This volume envelope can be easily reproduced by the
+ADSR as shown below, with typical envelope rates:          The real power of SID lies in the ability to create original
+                                                           sounds rather than simulations of acoustic instruments.
+ATTACK:  10 ($A) 500 mS         /\D__s__                   The ADSR is capable of creating envelopes which do not
+DECAY:    8      300 mS       A/        `'-,_R_            correspond to any "real" instruments. A good example
+SUSTAIN: 10 ($A)                ________                   would be the "backwards" envelope. This envelope is
+RELEASE:  9      750 mS  _GATE_|        |_____             characterized by a slow attack and rapid decay which
+                                                           sounds very much like an instrument that has been
+                                                           recorded on tape then played backwards. This envelope
+Note that the tone can be held at the intermediate         is shown below:
+SUSTAIN level for as long as desired. The tone will not                                    __s___
+begin to die away until GATE is cleared. With minor        ATTACK:  10 ($A) 500 mS       A/      |
+alterations, this basic envelope can be used for brass     DECAY:    0        6 mS    ___/       \__R__
+and woodwinds as well as strings.                          SUSTAIN: 15 ($F)               _______
+                                                           RELEASE:  3       72 mS  GATE_|       |____
+An entirely different form of envelope is produced by      
+percussion instruments such as drums, cymbals and
+gongs, as well as certain keyboards such as pianos and     Many unique sounds can be created by applying the
+harpsichords. The percussion envelope is characterized     amplitude envelope of one instrument to the harmonic
+by a nearly instantaneous attack, immediately followed     structure of another. This produces sounds similar to
+by a decay to zero volume. Percussion instruments cannot   familiar acoustic instruments, yet notably different. In
+be sustained at a constant amplitude. For example, the     general, sound is quite subjective and experimentation
+instant a drum is struck, the sound reaches full volume    with various envelope rates and harmonic contents will
+and decays rapidly regardless of how it was struck. A      be necessary in order to achieve the desired sound.
+
+---------------------------------------------------------11-----------------------------------------------------------
+
+                                                               LC)
+                                               LO
+                                               +
+                                                                                                 .;
+                                                    a               a
+                                                   ic)              lo
+                                                   c                c)
+                      Y                            c)               c)
+                         1
+                                                             .        in           'cl'` 07 C\I 1-- CD     P---- CO LO ‘tm CY) C\I .1-- C)
+                                         1g3 DE----i        <         4,,          < < < < <               ❑ 0 C2i CI C2i 0 0 0
+                                         Cr 0 CC
+                                              C\J
+                                             ria
+                                                                            m
+   N                                                                        a.
+  I                                     z 
+                                        0                                   >4
+  q                                    itsL                                 0
+  T-                                                                        Lc)
+                                        0                                   co
+                                        0
+                             L-0 0040■•>
+                                                                                II
+
+COMMODORE SEMICONDUCTOR GROUP reserves the right to make changes to any products herein to
+improve reliability, function or design. COMMODORE SEMICONDUCTOR GROUP does not assume any
+liability arising out of the application or use of any product or circuit described herein; neither does it convey
+any license under its patent rights nor the rights of others.
+
+---------------------------------------------------------12-----------------------------------------------------------

@@ -1,0 +1,457 @@
+﻿COMMODORE SEMICONDUCTOR GROUP
+6526 CIA SHEET 1 / 8
+950 Rittenhouse Rd., Norristown, PA 19403 · Tel.: 215/666-7950 · TWX: 510/660-4168 
+
+DESCRIPTION
+ The 6526 Complex Interface Adapter (CIA) is a 65xx bus compatible
+peripheral interface device with extremely flexible timing and I/O capabilities.
+
+FEATURES
+· 16 Individually programmable I/O lines
+· 8 or 16-Bit handshaking on read or write
+· 2 independent, linkable 16-bit interval timers
+· 24-hour (AM/PM) time of day clock with programmable alarm
+· 8-Bit shift register for serial I/O
+· 2TTL Load capability
+· CMOS compatible I/O lines
+· 1 or 2 MHz operation available
+
+MAXIMUM RATINGS
+Supply Voltage, Vcc         -0.3V to +7.0V
+Input/Output Voltage, Vin   -0.3V to +7.0v
+Operating Temperature, Top     0˚C to 70˚C
+Storage Temperature, Tstg   -55˚C to 150˚C
+
+All inputs contain protection circuitry to prevent
+damage due to high static discharge. Care
+should be exercised to prevent unnecessary
+application of voltages in excess of the allowable
+limits.
+
+COMMENT
+Stresses above those listed under "Absolute
+Maximum Ratings" may cause permanent
+damage to the device. These are stress ratings
+only. Functional operation of this device at these
+or any other conditions above those indicated in
+the operational sections of this specification is not
+implied and exposure to absolute maximum
+rating conditions for extended periods may affect
+device reliability.
+
+6526 INTERFACE SIGNALS
+
+phi2 - Clock Input
+ The phi2 clock is a TTL compatible input used for
+internal device operation and as a timing reference
+for communicating with the system bus.
+
+/CS - Chip Select Input
+ The /CS input controls the activity of the 6526. A
+low level on /CS while phi2 is high causes the
+device to respond to signals on the R/W and
+address (RSx) lines. A high on /CS prevents these
+lines from controlling the 6526. The /CS line is
+normally activated (low) at phi2 by the appropriate A
+address combination.
+
+R/W - Read/Write Input
+ The R/W signal is normally supplied by the
+microprocessor and controls the direction of data
+transfers of the 6526. A high on R/W indicates a
+read (data transfer out of the 6526), while a low
+indicates a write (data transfer into the 6526).
+
+RS0-3 - Address Inputs
+ The address inputs select the internal register as
+described by the Register Map. 
+
+DB0-7 - Data Bus Inputs/Outputs
+ The eight data bus pins transfer information
+between the 6526 and the system data bus. These
+pins are high impedance inputs unless /CS is low
+and R/W and phi2 are high, to read the device.
+During this read, the data bus output buffers are
+enabled, driving the data from the selected register
+onto the system data bus.
+
+/IRQ - Interrupt request Output
+ /IRQ is an open drain output normally connected
+to the processor interrupt input. An external pullup
+resistor holds the signal high, allowing multiple /IRQ
+outputs to be connected together. The /IRQ output
+is normally off (high impedance) and is activated
+low as indicated in the functional description.
+
+/RES - Reset Input
+ A low on the /RES pin resets all internal registers.
+The port pins are set as inputs and port registers to
+zero (although a read of the ports will return all high
+because of passive pullups). The timer control
+registers are set to zero and the timer latches to all
+ones. All other registers are reset to zero.
+
+        6526 FUNCTIONAL DESCRIPTION
+
+              REGISTER MAP
+RS3   RS2   RS1   RS0 |  REG
+----------------------+---- +----------+
+ 0     0     0     0  |  0  | PRA      | PERIPHERAL DATA REG A
+ 0     0     0     1  |  1  | PRB      | PERIPHERAL DATA REG B
+ 0     0     1     0  |  2  | DDRA     | DATA DIRECTION REG A
+ 0     0     1     1  |  3  | DDRB     | DATA DIRECTION REG B
+ 0     1     0     0  |  4  | TA LO    | TIMER A LOW REGISTER
+ 0     1     0     1  |  5  | TA HI    | TIMER A HIGH REGISTER
+ 0     1     1     0  |  6  | TB LO    | TIMER B LOW REGISTER
+ 0     1     1     1  |  7  | TB HI    | TIMER B HIGH REGISTER
+ 1     0     0     0  |  8  | TOD 10TH | 10THS OF SECONDS REGISTER
+ 1     0     0     1  |  9  | TOD SEC  | SECONDS REGISTER
+ 1     0     1     0  |  A  | TOD MIN  | MINUTES REGISTER
+ 1     0     1     1  |  B  | TOD HR   | HOURS - AM/PM REGISTER
+ 1     1     0     0  |  C  | SDR      | SERIAL DATA REGISTER
+ 1     1     0     1  |  D  | ICR      | INTERRUPT CONTROL REGISTER
+ 1     1     1     0  |  E  | CRA      | CONTROL REG A
+ 1     1     1     1  |  F  | CRB      | CONTROL REG B
+                      |     +----------+
+
+I/O Ports (PRA, PRB, DDRA, DDRB)
+
+ Ports A and B each consists of an 8-bit Peripheral
+Data Register (PR) and and 8-bit Data Direction
+Register (DDR). If a bit in the DDR is set to the
+ONE, corresponding bit in the PR is an output, if a
+DDR bit is set to ZERO, the corresponding PR bit is
+defined as input. On a READ, the PR reflects the 
+information present on the actual port
+pins (PA0-7, PB0-7) for both input and output bits.
+Port A and B have passive pull-up devices as well
+as active pull-ups, providing both CMOS and TTL
+compatibility. Both ports have two TTL load drive
+capability. In addition to normal I/O operation, PB6
+and PB7 also provide timer output functions.
+
+Handshaking
+
+ Handshaking on data transfer can be
+accomplished using the /PC output pin and the
+/FLAG input pin. /PC will go low for one cycle
+following a read or write of PORT B. This signal can
+be used to indicate "data ready" at PORT B or "data
+accepted" from PORT B. Handshaking on 16-bit
+data transfers (using both PORT A and PORT B) is
+possible but always reading or writing PORT A first.
+/FLAG is negative edge sensitive input which can
+be used for receiving the /PC output from another
+6526, or as a general purpose interrupt input. Any
+negative transition on /FLAG will set the /FLAG
+interrupt bit.
+
+REG  NAME
+----------+------+------+------+------+------+------+------+------+
+ 0    PRA |  PA7 |  PA6 |  PA5 |  PA4 |  PA3 |  PA2 |  PA1 |  PA0 |
+ 1    PRB |  PB7 |  PB6 |  PB5 |  PB4 |  PB3 |  PB2 |  PB1 |  PB0 |
+ 2   DDRA | DPA7 | DPA6 | DPA5 | DPA4 | DPA3 | DPA2 | DPA1 | DPA0 |
+ 3   DDRB | DPB7 | DPB6 | DPB5 | DPB4 | DPB3 | DPB2 | DPB1 | DPB0 |
+          +------+------+------+------+------+------+------+------+
+
+Interval Timers (Timer A, Timer B)
+
+ Each interval timer consists of a 16-bit read-only
+Timer Counter and a 16-bit write-only Timer Latch.
+Data writtet to the timer are latched in the Timer
+Latch, while data read from the timer are present
+contents of the Timer Counter. The timers can be
+used independently or linked for extended
+operations. The various timer modes allow
+generation of long time delays, variable width
+pulses, pulse trains and variable frequency
+waveforms. Utilizing the CNT input, the timers can
+count external pulses or measure frequency, pulse
+width and delay times or external signals. Each
+timer has an associated control register, providing
+independent control of the following functions:
+
+PB On/Off
+ A control bit allows the timer output to appear on
+a PORT B output line (PB6 for TIMER A and PB7
+for TIMER B). This function overrides the DDRB
+control bit and forces the appropriate PB line to an
+output.
+
+Toggle/Pulse
+ A control bit selects the output applied to PORT
+B. On every timer underflow the output can either
+toggle or generate a single positive pulse of one
+cycle duration. The Toggle output is set high
+whenever the timer is started and is set low by
+/RES.
+
+One-Shot/Continuous
+ A control bit selects either timer mode. In
+one-shot mode, the timer will count down from
+latched value to zero, generate the interrupt, reload
+the latched value, then stop. In continuous mode,
+the timer will count from latched value to zero,
+generate interrupt, reload the latched value and
+repeat the procedure continuously.
+
+Force Load
+ A strobe bit allows the timer latch to be loaded
+into the timer counter at any time, whether the timer
+is running or not.
+
+Input Mode:
+ Control bits allow selection of the clock used to
+decrement the timer. TIMER A can count phi2 clock
+pulses or external pulses applied to the CNT pin.
+TIMER B can count phi2 pulses, external CNT
+pulses, TIMER A underflow pulses or TIMER A
+underflow pulses while the CNT pin is held high.
+ The timer latch is loaded into the timer on any
+timer underflow, on a force load or following a write
+to the high byte of the prescaler while the timer is
+stopped. If the timer is running, a write to the high
+byte will load the timer latch, but not reload the
+counter.
+
+READ (TIMER)
+REG  NAME
+----------+------+------+------+------+------+------+------+------+
+ 4   TALO | TAL7 | TAL6 | TAL5 | TAL4 | TAL3 | TAL2 | TAL1 | TAL0 |
+ 5   TAHI | TAH7 | TAH6 | TAH5 | TAH4 | TAH3 | TAH2 | TAH1 | TAH0 |
+ 6   TBLO | TBL7 | TBL6 | TBL5 | TBL4 | TBL3 | TBL2 | TBL1 | TBL0 |
+ 7   TBHI | TBH7 | TBH6 | TBH5 | TBH4 | TBH3 | TBH2 | TBH1 | TBH0 |
+          +------+------+------+------+------+------+------+------+
+
+
+WRITE (PRESCALER)
+REG  NAME
+----------+------+------+------+------+------+------+------+------+
+ 4   PALO | PAL7 | PAL6 | PAL5 | PAL4 | PAL3 | PAL2 | PAL1 | PAL0 |
+ 5   PAHO | PAH7 | PAH6 | PAH5 | PAH4 | PAH3 | PAH2 | PAH1 | PAH0 |
+ 6   PBLO | PBL7 | PBL6 | PBL5 | PBL4 | PBL3 | PBL2 | PBL1 | PBL0 |
+ 7   PBHI | PBH7 | PBH6 | PBH5 | PBH4 | PBH3 | PBH2 | PBH1 | PBH0 |
+          +------+------+------+------+------+------+------+------+
+
+Time of Day Clock (TOD)
+
+ The TOD clock is a special purpose timer for
+real-time applications. TOD consists of a 24-hour
+(AM/PM) clock with 1/10th second resolution. It is
+organized into 4 registers: 10ths of seconds,
+Seconds, Minutes and Hours. The AM/PM flag is in
+the MSB of the Hours register for easy bit testing.
+Each register reads out in BCD format to simplify
+conversion for driving displays, etc. The clock
+requires an external 60Hz or 50Hz (programmable)
+TTL level input on the TOD pin for accurate
+time-keeping. In addition to time-keeping, a
+programmable ALARM is provided for generating
+an interrupt at a desired time. The ALARM registers
+are located at the same addresses as the
+corresponding TOD registers. Access to the
+ALARM is governed by a Control Register bit. The
+ALARM is write-only; any read of a TOD address
+will read time regardless of the state of the ALARM
+access bit.
+
+ A specific sequence of events must be followed
+for proper setting and reading of TOD. TOD is
+automatically stopped whenever a write to the
+Hours register occurs. The clock will not start again
+until after a write to the 10ths of seconds register.
+This assures TOD will always start at the desired
+time. Since a carry from one stage to the next
+can occur at any time with respect to read
+operation, a latching function is included to keep all
+Time Of Day information constant during a read
+sequence. All four TOD registers latch on a read of
+Hours and remain latched until after a read of 10ths
+of seconds. The TOD clock continues to count
+when the output registers are latched. If only one
+register is to be read, there is no carry problem and
+the register can be read "on the fly", provided that
+any read of Hours is followed by a read of 10ths of
+seconds to disable the latching.
+
+  READ
+REG  NAME
+----------+-----+-----+-----+-----+-----+-----+-----+-----+
+ 8  10THS |  0  |  0  |  0  |  0  |  T8 |  T4 |  T2 |  T1 |
+ 9   SEC  |  0  | SH4 | SH2 | SH1 | SL8 | SL4 | SL2 | SL1 |
+ A   MIN  |  0  | MH4 | MH2 | MH1 | ML8 | ML4 | ML2 | ML1 |
+ B   HR   | PM  |  0  |  0  | HH  | HL8 | HL4 | HL2 | HL1 |
+          +-----+-----+-----+-----+-----+-----+-----+-----+
+
+  WRITE
+CRB7 = 0 TOD
+CRB7 = 1 ALARM
+(SAME FORMAT AS READ)
+
+
+Serial Port (SDR)
+
+ The serial port is a buffered, 8-bit synchronous
+shift register system. A control bit selects input or
+output mode. In input mode, data on the SP pin is
+shifted into the shift register on the rising edge of
+the signal applied to the CNT pin. After 8 CNT
+pulses, the data in the shift register is dumped into
+the Serial Data Register and an interrupt is
+generated. In the output mode, TIMER A is used for
+the baud rate generator. Data is shifted out on the
+SP pin at 1/2 the underflow rate of TIMER A. The
+maximum baud rate possible is phi2 divided by 4,
+but the maximum useable baud rate will be
+determined by line loading and the speed at which
+the receiver responds to input data. Transmission
+will start following a write to the Serial Data
+Register (provided TIMER A is running and in
+continuous mode). The clock signal derived from
+TIMER A appears as an output on the CNT pin.
+The data in the Serial Data Register will be loaded
+into the shift register, then shift out to the SP pin
+when a CNT pulse occurs. Data shifted out
+becomes valid on the falling edge on CNT and
+remains valid until the next falling edge. After 8
+CNT pulses, an interrupt is generated to indicate
+more data can be sent. If the Serial Data Register
+was loaded with new information prior to this
+interrupt, the new data will automatically be loaded
+into the shift register and transmission will continue.
+If the microprosessor stays one byte ahead of the
+shift register, transmission will be continuous. If no
+further data is to be transmitted, after the 8th CNT
+pulse, CNT will return high and SP will remain at
+the level of the last data bit transmitted. SDR data
+is shifted out MSB first and serial input data should
+also appear in this format. 
+
+ The bidirectional capability of the Serial Port and
+CNT clock allows many 6526 devices to be
+connected to a common serial communication bus
+on which one 6526 acts as a master, sourcing data
+and shift clock, while all other 6526 chips act as
+slaves. Both CNT and SP outputs are open drain to
+allow such a common bus. Protocol for master/slave
+selection can be transmitted over the serial bus, or
+via dedicated handshaking lines.
+
+REG  NAME
+----------+----+----+----+----+----+----+----+----+
+ C   SDR  | S7 | S6 | S5 | S4 | S3 | S2 | S1 | S0 |
+          +----+----+----+----+----+----+----+----+
+
+Interrupt Control (ICR)
+
+ There are five sources of interrupts on the 6526:
+underflow from TIMER A, underflow from TIMER B,
+TOD ALARM, Serial Port full/empty and /FLAG. A
+single register provides masking and interrupt
+information. The Interrupt Control Register consists
+of a write-only MASK register and a read-only
+DATA register. Any interrupt will set the
+corresponding bit in the DATA register. Any
+interrupt which is enabled by the MASK register will
+set the IR bit (MSB) of the DATA register and bring
+the /IRQ pin low. In a multi-chip system, the IR bit
+can be polled to detect which chip has generated
+an interrupt request. The interrupt DATA register is
+cleared and the /IRQ line returns high following a
+read of the DATA register. Since each interrupt sets
+an interrupt bit regardless of the MASK, and each
+interrupt bit can be selectively masked to prevent
+the generation of a processor interrupt, it is possible
+to intermix polled interrupts with true interrupts.
+However, polling the IR bit will cause the DATA
+register to clear, therefore, it is up to the user to
+preserve the information contained in the DATA
+register if any polled interrupts were present.
+
+ The MASK register provides convenient control of
+individual mask bits. When writing to the MASK
+register, if bit 7 (SET/CLEAR) of data written is a
+ZERO, any mask bit written with a one will be
+cleared, while those mask bits written with a zero
+will be unaffected. If bit 7 of the data written is a
+ONE, any mask bit written with a one will be set,
+while those mask bits written with a zero will be
+unaffected. In order for an interrupt flag to set IR
+and generate an Interrupt Request, the
+corresponding MASK bit must be set.
+
+READ (INT DATA)
+REG  NAME
+----------+----+----+----+----+----+----+----+----+
+ D   ICR  | IR |  0 |  0 | FLG| SP |ALRM| TB | TA |
+          +----+----+----+----+----+----+----+----+
+
+WRITE (INT MASK)
+REG  NAME
+----------+----+----+----+----+----+----+----+----+
+ D   ICR  | S/C|  X |  X | FLG| SP |ALRM| TB | TA |
+          +----+----+----+----+----+----+----+----+
+
+CONTROL REGISTERS
+
+ There are two control registers in the 6526, CRA and CRB. CRA is associated with TIMER A and CRB
+is associated with TIMER B. The register format is as follows:
+
+CRA:
+ Bit   Name   Function
+  0   START   1 = START TIMER A
+              0 = STOP TIMER A
+              (This bit is automatically reset when underflow occurs during one-shot mode).
+  1    PBON   1 = TIMER A output appears on PB6.
+              0 = PB6 normal operation.
+  2  OUTMODE  1 = TOGGLE
+              0 = PULSE
+  3  RUNMODE  1 = ONE-SHOT
+              0 = CONTINUOUS
+  4    LOAD   1 = FORCE LOAD (this is a STROBE input, there is no data storage, bit 4 will
+                  always read back a zero and writing a zero has no effect).
+  5   INMODE  1 = TIMER A counts positive CNT transitions.
+              0 = TIMER A counts phi2 pulses.
+  6   SPMODE  1 = SERIAL PORT output (CNT sources shift clock).
+              0 = SERIAL PORT input (external shift clock required).
+  7   TODIN   1 = 50Hz clock required on TOD pin for accurate time.
+              0 = 60Hz clock required on TOD pin for accurate time
+
+CRB:
+ Bit   Name   Function
+              (Bits CRB0-4 are identical to CRA0-4 for TIMER B with the exception that bit 1
+              controls the ouput of TIMER B on PB7)
+  5,6 INMODE  Bits CRB5 and CRB6 select one of four input modes for TIMER B as:
+              CRB6 CRB5
+                0    0    TIMER B counts phi2 pulses
+                0    1    TIMER B counts positive CNT transitions.
+                1    0    TIMER B counts TIMER A underflow pulses.
+                1    1    TIMER B counts TIMER A underflow pulses while CNT is high.
+  7   TODIN   1 = writing to TOD registers sets ALARM.
+              0 = writing to TOD registers sets TOD clock.
+
+            TODIN    SPMODE   INMODE    LOAD   RUNMODE  OUTMODE   PB ON    START
+          +--------+--------+--------+--------+--------+--------+--------+--------+
+REG  NAME |0=60Hz  |0=INPUT |0=phi2  |1=FORCE |0=CONT. |0=PULSE |0=PB6OFF|0=STOP  |
+--------- |        |        |        |LOAD    |        |        |        |        |
+ E   CRA  |1=50Hz  |1=OUTPUT|1=CNT   |(STROBE)|1=O.S.  |1=TOGGLE|1=PB6ON |1=START |
+          +--------+--------+--------+--------+--------+--------+--------+--------+
+                            |<------------------------TA------------------------->|
+
+            ALARM        INMODE         LOAD   RUNMODE  OUTMODE   PB ON    START
+          +--------+------+----------+--------+--------+--------+--------+--------+
+REG  NAME |0=TOD   |   0  | 0=phi2   |1=FORCE |0=CONT. |0=PULSE |0=PB7OFF|0=STOP  |
+--------- |        |   0  | 1=CNT    |LOAD    |        |        |        |        |
+ F   CRB  |1=ALARM |   1  | 0=TA     |(STROBE)|1=O.S.  |1=TOGGLE|1=PB7ON |1=START |
+          |        |   1  | 1=CNT*TA |        |        |        |        |        |
+          +--------+------+----------+--------+--------+--------+--------+--------+
+                   |<-----------------------------TB----------------------------->|
+
+    All unused register bits are unaffected by a write and forced to zero on a read.
+
+
+
+COMMODORE SEMICONDUCTOR GROUP reserves the rights to make changes to any products herein to
+improve reliability, function or design. COMMODORE SEMICONDUCTOR GROUP does not assume any
+liability arising out of the application or use of any product or circuit described herein;
+neither does it convey any license under its patent rights nor rights of others.
