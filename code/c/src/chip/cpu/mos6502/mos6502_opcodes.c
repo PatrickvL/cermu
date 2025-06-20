@@ -325,9 +325,7 @@ void mos6502_op_brk(mos6502_t* cpu) {
     fam65xx_set_flag(base, FLAG_I, true);
     
     // Jump to IRQ vector
-    FAM65XX_INTRA_CYCLE(base);
     uint8_t addr_lo = fam65xx_read_cycle(base, 0xFFFE);
-    FAM65XX_INTRA_CYCLE(base);
     uint8_t addr_hi = fam65xx_read_cycle(base, 0xFFFF);
     
     base->pc = (addr_hi << 8) | addr_lo;

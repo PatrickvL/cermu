@@ -129,8 +129,8 @@ void save_cpu_state(mos6510_t* cpu, cpu_state_t* state) {
     state->sp = cpu->base.sp;
     state->p = cpu->base.p;
     state->pc = cpu->base.pc;
-    // Adjust for intercept mechanism overhead - subtract 1 cycle
-    state->cycles = (cycle_count > 0) ? cycle_count - 1 : 0;
+    // No cycle adjustment needed with current step implementation
+    state->cycles = cycle_count;
 }
 
 // Compare CPU states

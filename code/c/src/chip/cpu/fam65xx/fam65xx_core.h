@@ -78,26 +78,6 @@ struct fam65xx_s {
 // SHARED MOS 6502 FAMILY MACROS (used by all family members)
 // ============================================================================
 
-// Macro utilities for generating unique labels
-#define FAM65XX_CONCAT_IMPL(a, b) a ## b
-#define FAM65XX_CONCAT(a, b) FAM65XX_CONCAT_IMPL(a, b)
-#define FAM65XX_UNIQUE_LABEL(prefix) FAM65XX_CONCAT(prefix, __LINE__)
-
-// Cycle timing macros (shared by all family members)
-#define FAM65XX_INTRA_CYCLE(cpu) do { \
-    (cpu)->bus_interface.cycle_tick((cpu)->bus_interface.context); \
-} while(0)
-
-// Ready check and wait with automatic stall handling
-#define FAM65XX_READY(cpu) FAM65XX_TEST_RDY(cpu)
-#define FAM65XX_WAIT_READY(cpu) do { \
-    FAM65XX_UNIQUE_LABEL(cpu_ready_stall): \
-    if (unlikely(!FAM65XX_READY(cpu))) { \
-        FAM65XX_INTRA_CYCLE(cpu); \
-        goto FAM65XX_UNIQUE_LABEL(cpu_ready_stall); \
-    } \
-} while(0)
-
 // Control line access and testing (shared)
 #define FAM65XX_CONTROL_LINES(cpu) \
     ((cpu)->control_interface.get_lines((cpu)->control_interface.context))
@@ -111,6 +91,25 @@ struct fam65xx_s {
 #define FAM65XX_SYSTEM_LINES_SET(cpu, mask) SYS_LINES_SET((cpu)->system_lines, mask)
 #define FAM65XX_SYSTEM_LINES_CLEAR(cpu, mask) SYS_LINES_CLEAR((cpu)->system_lines, mask)
 
+// Macro utilities for generating unique labels
+#define FAM65XX_CONCAT_IMPL(a, b) a ## b
+#define FAM65XX_CONCAT(a, b) FAM65XX_CONCAT_IMPL(a, b)
+#define FAM65XX_UNIQUE_LABEL(prefix) FAM65XX_CONCAT(prefix, __LINE__)
+
+// Cycle timing macros (shared by all family members)
+#define FAM65XX_INTRA_CYCLE(cpu) do { \
+    (cpu)->bus_interface.cycle_tick((cpu)->bus_interface.context); \
+} while(0)
+
+// Ready check and wait with automatic stall handling
+#define FAM65XX_WAIT_READY(cpu) do { \
+    FAM65XX_UNIQUE_LABEL(cpu_ready_stall): \
+    if (unlikely(!FAM65XX_TEST_RDY(cpu))) { \
+        FAM65XX_INTRA_CYCLE(cpu); \
+        goto FAM65XX_UNIQUE_LABEL(cpu_ready_stall); \
+    } \
+} while(0)
+
 // Instruction dispatch macros (shared - but implementation-specific functions)
 #define FAM65XX_NEXT_INSTRUCTION_DISPATCH(cpu, read_func) do { \
     uint8_t opcode = read_func(cpu, (cpu)->pc++); \
@@ -122,8 +121,8 @@ struct fam65xx_s {
         interrupt_func(cpu); \
     } else { \
         FAM65XX_WAIT_READY(cpu); \
-        FAM65XX_NEXT_INSTRUCTION_DISPATCH(cpu, read_func); \
     } \
+    FAM65XX_NEXT_INSTRUCTION_DISPATCH(cpu, read_func); \
 } while(0)
 
 // Universal instruction dispatch using function pointers
@@ -132,8 +131,8 @@ struct fam65xx_s {
 // ============================================================================
 
 // Core memory and cycle functions (shared by all family members)
-uint8_t fam65xx_read_cycle(fam65xx_t* cpu, uint16_t address);
-void fam65xx_write_cycle(fam65xx_t* cpu, uint16_t address, uint8_t value);
+uint8_t fam65xx_read_cycle(fam65xx_t* cpu, uint16_t address);  // Bus read cycle
+void fam65xx_write_cycle(fam65xx_t* cpu, uint16_t address, uint8_t value);  // Bus write cycle
 
 // Forward declaration for macros
 void fam65xx_interrupt_handler(fam65xx_t* cpu);
@@ -210,124 +209,93 @@ extern fam65xx_opcode_handler_t fam65xx_default_handlers[256];
 
 // Immediate addressing - returns the immediate value
 static inline uint8_t fam65xx_addr_imm(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    return fam65xx_read_cycle(cpu, cpu->pc++);
+    return fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Immediate value fetch
 }
 
 // Zero page addressing - sets address and returns fetched value
 static inline uint8_t fam65xx_addr_zp(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    cpu->address = fam65xx_read_cycle(cpu, cpu->pc++);
-    FAM65XX_INTRA_CYCLE(cpu);
-    return fam65xx_read_cycle(cpu, cpu->address);
+    cpu->address = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Address fetch
+    return fam65xx_read_cycle(cpu, cpu->address);       // T2: Data fetch
 }
 
 // Zero page,X addressing - sets address and returns fetched value
 static inline uint8_t fam65xx_addr_zpx(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t base = fam65xx_read_cycle(cpu, cpu->pc++);
-    FAM65XX_INTRA_CYCLE(cpu);
-    (void)fam65xx_read_cycle(cpu, base); // Dummy read
+    uint8_t base = fam65xx_read_cycle(cpu, cpu->pc++);        // T1: Address fetch
+    (void)fam65xx_read_cycle(cpu, base);                      // T2: Dummy read of base address
     cpu->address = (base + cpu->x) & 0xFF;
-    FAM65XX_INTRA_CYCLE(cpu);
-    return fam65xx_read_cycle(cpu, cpu->address);
+    return fam65xx_read_cycle(cpu, cpu->address);             // T3: Data fetch
 }
 
 // Zero page,Y addressing - sets address and returns fetched value
 static inline uint8_t fam65xx_addr_zpy(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t base = fam65xx_read_cycle(cpu, cpu->pc++);
-    FAM65XX_INTRA_CYCLE(cpu);
-    (void)fam65xx_read_cycle(cpu, base); // Dummy read
+    uint8_t base = fam65xx_read_cycle(cpu, cpu->pc++);        // T1: Address fetch
+    (void)fam65xx_read_cycle(cpu, base);                      // T2: Dummy read of base address
     cpu->address = (base + cpu->y) & 0xFF;
-    FAM65XX_INTRA_CYCLE(cpu);
-    return fam65xx_read_cycle(cpu, cpu->address);
+    return fam65xx_read_cycle(cpu, cpu->address);             // T3: Data fetch
 }
 
 // Absolute addressing - sets address and returns fetched value
 static inline uint8_t fam65xx_addr_abs(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);
+    uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);     // T1: Low byte fetch
+    uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);     // T2: High byte fetch
     cpu->address = (addr_hi << 8) | addr_lo;
-    FAM65XX_INTRA_CYCLE(cpu);
-    return fam65xx_read_cycle(cpu, cpu->address);
+    return fam65xx_read_cycle(cpu, cpu->address);             // T3: Data fetch
 }
 
 // Absolute,X addressing - sets address and returns fetched value
 static inline uint8_t fam65xx_addr_absx(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);
+    uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);     // T1: Low byte fetch
+    uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);     // T2: High byte fetch
     uint16_t base_addr = (addr_hi << 8) | addr_lo;
     cpu->address = base_addr + cpu->x;
     
     // Check for page boundary crossing
     if ((base_addr & 0xFF00) != (cpu->address & 0xFF00)) {
-        FAM65XX_INTRA_CYCLE(cpu);
-        (void)fam65xx_read_cycle(cpu, (addr_hi << 8) | ((addr_lo + cpu->x) & 0xFF)); // Dummy read
+        (void)fam65xx_read_cycle(cpu, (addr_hi << 8) | ((addr_lo + cpu->x) & 0xFF)); // T3: Dummy read (page cross)
     }
-    FAM65XX_INTRA_CYCLE(cpu);
-    return fam65xx_read_cycle(cpu, cpu->address);
+    return fam65xx_read_cycle(cpu, cpu->address);             // T3/T4: Data fetch
 }
 
 // Absolute,Y addressing - sets address and returns fetched value
 static inline uint8_t fam65xx_addr_absy(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);
+    uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);     // T1: Low byte fetch
+    uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);     // T2: High byte fetch
     uint16_t base_addr = (addr_hi << 8) | addr_lo;
-    cpu->address = base_addr + cpu->y;
-    
+    cpu->address = base_addr + cpu->y;    
     // Check for page boundary crossing
     if ((base_addr & 0xFF00) != (cpu->address & 0xFF00)) {
-        FAM65XX_INTRA_CYCLE(cpu);
-        (void)fam65xx_read_cycle(cpu, (addr_hi << 8) | ((addr_lo + cpu->y) & 0xFF)); // Dummy read
+        (void)fam65xx_read_cycle(cpu, (addr_hi << 8) | ((addr_lo + cpu->y) & 0xFF)); // T3: Dummy read (page cross)
     }
-    FAM65XX_INTRA_CYCLE(cpu);
-    return fam65xx_read_cycle(cpu, cpu->address);
+    return fam65xx_read_cycle(cpu, cpu->address);             // T3/T4: Data fetch
 }
 
 // Indexed indirect (zp,X) addressing
 static inline uint8_t fam65xx_addr_indx(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t zp_addr = fam65xx_read_cycle(cpu, cpu->pc++);
-    FAM65XX_INTRA_CYCLE(cpu);
-    (void)fam65xx_read_cycle(cpu, zp_addr); // Dummy read
+    uint8_t zp_addr = fam65xx_read_cycle(cpu, cpu->pc++);     // T1: ZP base address fetch
+    (void)fam65xx_read_cycle(cpu, zp_addr);                   // T2: Dummy read of ZP base
     uint8_t effective_addr = (zp_addr + cpu->x) & 0xFF;
     
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_lo = fam65xx_read_cycle(cpu, effective_addr);
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_hi = fam65xx_read_cycle(cpu, (effective_addr + 1) & 0xFF);
+    uint8_t addr_lo = fam65xx_read_cycle(cpu, effective_addr);         // T3: Low byte of target
+    uint8_t addr_hi = fam65xx_read_cycle(cpu, (effective_addr + 1) & 0xFF); // T4: High byte of target
     cpu->address = (addr_hi << 8) | addr_lo;
     
-    FAM65XX_INTRA_CYCLE(cpu);
-    return fam65xx_read_cycle(cpu, cpu->address);
+    return fam65xx_read_cycle(cpu, cpu->address);             // T5: Data fetch
 }
 
 // Indirect indexed (zp),Y addressing
 static inline uint8_t fam65xx_addr_indy(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t zp_addr = fam65xx_read_cycle(cpu, cpu->pc++);
+    uint8_t zp_addr = fam65xx_read_cycle(cpu, cpu->pc++);     // T1: ZP address fetch
     
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_lo = fam65xx_read_cycle(cpu, zp_addr);
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_hi = fam65xx_read_cycle(cpu, (zp_addr + 1) & 0xFF);
+    uint8_t addr_lo = fam65xx_read_cycle(cpu, zp_addr);       // T2: Low byte of base address
+    uint8_t addr_hi = fam65xx_read_cycle(cpu, (zp_addr + 1) & 0xFF); // T3: High byte of base address
     uint16_t base_addr = (addr_hi << 8) | addr_lo;
     cpu->address = base_addr + cpu->y;
     
     // Check for page boundary crossing
     if ((base_addr & 0xFF00) != (cpu->address & 0xFF00)) {
-        FAM65XX_INTRA_CYCLE(cpu);
-        (void)fam65xx_read_cycle(cpu, (addr_hi << 8) | ((addr_lo + cpu->y) & 0xFF)); // Dummy read
+        (void)fam65xx_read_cycle(cpu, (addr_hi << 8) | ((addr_lo + cpu->y) & 0xFF)); // T4: Dummy read (page cross)
     }
-    FAM65XX_INTRA_CYCLE(cpu);
-    return fam65xx_read_cycle(cpu, cpu->address);
+    return fam65xx_read_cycle(cpu, cpu->address);             // T4/T5: Data fetch
 }
 
 // ============================================================================
@@ -389,8 +357,7 @@ static inline void fam65xx_store_helper(fam65xx_t* cpu,
 // Inline register transfer with flags (replaces DEFINE_REG_XFER macro)
 static inline void fam65xx_register_transfer_with_flags(fam65xx_t* cpu, 
     uint8_t* dest, uint8_t src_value) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
+    (void)fam65xx_read_cycle(cpu, cpu->pc);                   // T1: Dummy read
     *dest = src_value;
     fam65xx_set_nz_flags(cpu, *dest);
     FAM65XX_OPCODE_FOOTER(cpu);
@@ -399,8 +366,7 @@ static inline void fam65xx_register_transfer_with_flags(fam65xx_t* cpu,
 // Inline register transfer without flags (replaces DEFINE_REG_XFER_NOFLAG macro)
 static inline void fam65xx_register_transfer_no_flags(fam65xx_t* cpu, 
     uint8_t* dest, uint8_t src_value) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
+    (void)fam65xx_read_cycle(cpu, cpu->pc);                   // T1: Dummy read
     *dest = src_value;
     FAM65XX_OPCODE_FOOTER(cpu);
 }
@@ -408,8 +374,7 @@ static inline void fam65xx_register_transfer_no_flags(fam65xx_t* cpu,
 // Inline register increment/decrement (replaces DEFINE_REG_INCDEC macro)
 static inline void fam65xx_register_inc_dec(fam65xx_t* cpu, 
     uint8_t* reg, int8_t delta) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
+    (void)fam65xx_read_cycle(cpu, cpu->pc);                   // T1: Dummy read
     *reg += delta;
     fam65xx_set_nz_flags(cpu, *reg);
     FAM65XX_OPCODE_FOOTER(cpu);
@@ -417,15 +382,13 @@ static inline void fam65xx_register_inc_dec(fam65xx_t* cpu,
 
 // Inline flag operations (replaces DEFINE_FLAG_CLEAR/SET macros)
 static inline void fam65xx_flag_clear_helper(fam65xx_t* cpu, uint8_t flag) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
+    (void)fam65xx_read_cycle(cpu, cpu->pc);                   // T1: Dummy read
     fam65xx_set_flag(cpu, flag, false);
     FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 static inline void fam65xx_flag_set_helper(fam65xx_t* cpu, uint8_t flag) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
+    (void)fam65xx_read_cycle(cpu, cpu->pc);                   // T1: Dummy read
     fam65xx_set_flag(cpu, flag, true);
     FAM65XX_OPCODE_FOOTER(cpu);
 }
@@ -447,14 +410,14 @@ static inline void fam65xx_rmw_accumulator(fam65xx_t* cpu,
 static inline void fam65xx_rmw_zero_page(fam65xx_t* cpu, 
     uint8_t (*operation)(fam65xx_t*, uint8_t)) {
     FAM65XX_INTRA_CYCLE(cpu);
-    cpu->address = fam65xx_read_cycle(cpu, cpu->pc++);
+    cpu->address = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
     FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t value = fam65xx_read_cycle(cpu, cpu->address);
+    uint8_t value = fam65xx_read_cycle(cpu, cpu->address);  // T2: Data fetch
     FAM65XX_INTRA_CYCLE(cpu);
     fam65xx_write_cycle(cpu, cpu->address, value); // Write original value
     value = operation(cpu, value);
     FAM65XX_INTRA_CYCLE(cpu);
-    fam65xx_write_cycle(cpu, cpu->address, value);
+    fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     FAM65XX_OPCODE_FOOTER(cpu);
 }
 
@@ -462,17 +425,17 @@ static inline void fam65xx_rmw_zero_page(fam65xx_t* cpu,
 static inline void fam65xx_rmw_zero_page_x(fam65xx_t* cpu, 
     uint8_t (*operation)(fam65xx_t*, uint8_t)) {
     FAM65XX_INTRA_CYCLE(cpu);
-    cpu->address = fam65xx_read_cycle(cpu, cpu->pc++);
+    cpu->address = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
     FAM65XX_INTRA_CYCLE(cpu);
     (void)fam65xx_read_cycle(cpu, cpu->address); // Dummy read
     cpu->address = (cpu->address + cpu->x) & 0xFF;
     FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t value = fam65xx_read_cycle(cpu, cpu->address);
+    uint8_t value = fam65xx_read_cycle(cpu, cpu->address);  // T2: Data fetch
     FAM65XX_INTRA_CYCLE(cpu);
     fam65xx_write_cycle(cpu, cpu->address, value); // Write original value
     value = operation(cpu, value);
     FAM65XX_INTRA_CYCLE(cpu);
-    fam65xx_write_cycle(cpu, cpu->address, value);
+    fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     FAM65XX_OPCODE_FOOTER(cpu);
 }
 
@@ -480,18 +443,18 @@ static inline void fam65xx_rmw_zero_page_x(fam65xx_t* cpu,
 static inline void fam65xx_rmw_absolute(fam65xx_t* cpu, 
     uint8_t (*operation)(fam65xx_t*, uint8_t)) {
     FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);
+    uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
     cpu->address = addr_lo;
     FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);
+    uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
     cpu->address |= (addr_hi << 8);
     FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t value = fam65xx_read_cycle(cpu, cpu->address);
+    uint8_t value = fam65xx_read_cycle(cpu, cpu->address);  // T2: Data fetch
     FAM65XX_INTRA_CYCLE(cpu);
     fam65xx_write_cycle(cpu, cpu->address, value); // Write original value
     value = operation(cpu, value);
     FAM65XX_INTRA_CYCLE(cpu);
-    fam65xx_write_cycle(cpu, cpu->address, value);
+    fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     FAM65XX_OPCODE_FOOTER(cpu);
 }
 
@@ -499,20 +462,20 @@ static inline void fam65xx_rmw_absolute(fam65xx_t* cpu,
 static inline void fam65xx_rmw_absolute_x(fam65xx_t* cpu, 
     uint8_t (*operation)(fam65xx_t*, uint8_t)) {
     FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);
+    uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
     FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);
+    uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
     uint16_t base_addr = (addr_hi << 8) | addr_lo;
     cpu->address = base_addr + cpu->x;
     FAM65XX_INTRA_CYCLE(cpu);
     (void)fam65xx_read_cycle(cpu, (addr_hi << 8) | ((addr_lo + cpu->x) & 0xFF)); // Dummy read
     FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t value = fam65xx_read_cycle(cpu, cpu->address);
+    uint8_t value = fam65xx_read_cycle(cpu, cpu->address);  // T2: Data fetch
     FAM65XX_INTRA_CYCLE(cpu);
     fam65xx_write_cycle(cpu, cpu->address, value); // Write original value
     value = operation(cpu, value);
     FAM65XX_INTRA_CYCLE(cpu);
-    fam65xx_write_cycle(cpu, cpu->address, value);
+    fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     FAM65XX_OPCODE_FOOTER(cpu);
 }
 

@@ -6,20 +6,20 @@
 
 // Branch helper function implementation
 static inline void fam65xx_branch_helper(fam65xx_t* cpu, bool condition) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    int8_t offset = (int8_t)fam65xx_read_cycle(cpu, cpu->pc++);
+
+    int8_t offset = (int8_t)fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
     
     if (condition) {
         uint16_t old_pc = cpu->pc;
         cpu->pc += offset;
         
         // Extra cycle for taking the branch
-        FAM65XX_INTRA_CYCLE(cpu);
+    
         (void)fam65xx_read_cycle(cpu, old_pc); // Dummy read
         
         // Extra cycle if page boundary crossed
         if ((old_pc & 0xFF00) != (cpu->pc & 0xFF00)) {
-            FAM65XX_INTRA_CYCLE(cpu);
+        
             (void)fam65xx_read_cycle(cpu, (old_pc & 0xFF00) | (cpu->pc & 0xFF)); // Dummy read
         }
     }
@@ -72,10 +72,10 @@ void fam65xx_beq(fam65xx_t* cpu) {
 
 // JMP - Jump Absolute
 void fam65xx_jmp_absolute(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);
+
+    uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
+
+    uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
     cpu->pc = (addr_hi << 8) | addr_lo;
     
     FAM65XX_OPCODE_FOOTER(cpu);
@@ -83,15 +83,15 @@ void fam65xx_jmp_absolute(fam65xx_t* cpu) {
 
 // JMP - Jump Indirect
 void fam65xx_jmp_indirect(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t ptr_lo = fam65xx_read_cycle(cpu, cpu->pc++);
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t ptr_hi = fam65xx_read_cycle(cpu, cpu->pc++);
+
+    uint8_t ptr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
+
+    uint8_t ptr_hi = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
     uint16_t ptr = (ptr_hi << 8) | ptr_lo;
     
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_lo = fam65xx_read_cycle(cpu, ptr);
-    FAM65XX_INTRA_CYCLE(cpu);
+
+    uint8_t addr_lo = fam65xx_read_cycle(cpu, ptr);  // Bus read cycle
+
     // Bug in 6502: if ptr is $xxFF, high byte comes from $xx00 instead of $xx00+1
     uint8_t addr_hi = fam65xx_read_cycle(cpu, (ptr & 0xFF00) | ((ptr + 1) & 0xFF));
     cpu->pc = (addr_hi << 8) | addr_lo;
@@ -101,10 +101,10 @@ void fam65xx_jmp_indirect(fam65xx_t* cpu) {
 
 // JSR - Jump to Subroutine
 void fam65xx_jsr(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);
+
+    uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
     
-    FAM65XX_INTRA_CYCLE(cpu);
+
     (void)fam65xx_read_cycle(cpu, 0x0100 | cpu->sp); // Dummy read
     
     // Push return address - 1 (JSR pushes PC-1)
@@ -112,8 +112,8 @@ void fam65xx_jsr(fam65xx_t* cpu) {
     fam65xx_push(cpu, (return_addr >> 8) & 0xFF);
     fam65xx_push(cpu, return_addr & 0xFF);
     
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc);
+
+    uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc);  // T1: Dummy read
     cpu->pc = (addr_hi << 8) | addr_lo;
     
     FAM65XX_OPCODE_FOOTER(cpu);
@@ -121,7 +121,7 @@ void fam65xx_jsr(fam65xx_t* cpu) {
 
 // RTS - Return from Subroutine
 void fam65xx_rts(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
+
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     
     // Pull return address
@@ -129,7 +129,7 @@ void fam65xx_rts(fam65xx_t* cpu) {
     uint8_t addr_hi = fam65xx_pull(cpu);
     cpu->pc = ((addr_hi << 8) | addr_lo) + 1; // RTS increments PC
     
-    FAM65XX_INTRA_CYCLE(cpu);
+
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     
     FAM65XX_OPCODE_FOOTER(cpu);
@@ -141,7 +141,7 @@ void fam65xx_rts(fam65xx_t* cpu) {
 
 // BRK - Break
 void fam65xx_brk(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
+
     (void)fam65xx_read_cycle(cpu, cpu->pc++); // Read and discard next byte
     
     // Push PC+1 (BRK increments PC before pushing)
@@ -155,10 +155,10 @@ void fam65xx_brk(fam65xx_t* cpu) {
     fam65xx_set_flag(cpu, FLAG_I, true);
     
     // Load IRQ vector
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_lo = fam65xx_read_cycle(cpu, 0xFFFE);
-    FAM65XX_INTRA_CYCLE(cpu);
-    uint8_t addr_hi = fam65xx_read_cycle(cpu, 0xFFFF);
+
+    uint8_t addr_lo = fam65xx_read_cycle(cpu, 0xFFFE);  // Bus read cycle
+
+    uint8_t addr_hi = fam65xx_read_cycle(cpu, 0xFFFF);  // Bus read cycle
     cpu->pc = (addr_hi << 8) | addr_lo;
     
     FAM65XX_OPCODE_FOOTER(cpu);
@@ -166,7 +166,7 @@ void fam65xx_brk(fam65xx_t* cpu) {
 
 // RTI - Return from Interrupt
 void fam65xx_rti(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
+
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     
     // Pull status register
@@ -187,7 +187,7 @@ void fam65xx_rti(fam65xx_t* cpu) {
 
 // CLC - Clear Carry Flag
 void fam65xx_clc(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
+
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_set_flag(cpu, FLAG_C, false);
     FAM65XX_OPCODE_FOOTER(cpu);
@@ -195,7 +195,7 @@ void fam65xx_clc(fam65xx_t* cpu) {
 
 // SEC - Set Carry Flag
 void fam65xx_sec(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
+
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_set_flag(cpu, FLAG_C, true);
     FAM65XX_OPCODE_FOOTER(cpu);
@@ -203,7 +203,7 @@ void fam65xx_sec(fam65xx_t* cpu) {
 
 // CLI - Clear Interrupt Disable Flag
 void fam65xx_cli(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
+
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_set_flag(cpu, FLAG_I, false);
     FAM65XX_OPCODE_FOOTER(cpu);
@@ -211,7 +211,7 @@ void fam65xx_cli(fam65xx_t* cpu) {
 
 // SEI - Set Interrupt Disable Flag
 void fam65xx_sei(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
+
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_set_flag(cpu, FLAG_I, true);
     FAM65XX_OPCODE_FOOTER(cpu);
@@ -219,7 +219,7 @@ void fam65xx_sei(fam65xx_t* cpu) {
 
 // CLV - Clear Overflow Flag
 void fam65xx_clv(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
+
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_set_flag(cpu, FLAG_V, false);
     FAM65XX_OPCODE_FOOTER(cpu);
@@ -227,7 +227,7 @@ void fam65xx_clv(fam65xx_t* cpu) {
 
 // CLD - Clear Decimal Flag
 void fam65xx_cld(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
+
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_set_flag(cpu, FLAG_D, false);
     FAM65XX_OPCODE_FOOTER(cpu);
@@ -235,7 +235,7 @@ void fam65xx_cld(fam65xx_t* cpu) {
 
 // SED - Set Decimal Flag
 void fam65xx_sed(fam65xx_t* cpu) {
-    FAM65XX_INTRA_CYCLE(cpu);
+
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_set_flag(cpu, FLAG_D, true);
     FAM65XX_OPCODE_FOOTER(cpu);
