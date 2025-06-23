@@ -1,81 +1,8 @@
-#include "fam65xx_core.h"
+#include "fam65xx_arithmetic.h"
 
 // ============================================================================
 // SHARED MOS 6502 FAMILY OPCODE OPERATIONS
 // ============================================================================
-
-// Shared arithmetic operations (used by all family members)
-void fam65xx_op_adc(fam65xx_t* cpu, uint8_t value) {
-    uint16_t result = cpu->a + value + (fam65xx_get_flag(cpu, FLAG_C) ? 1 : 0);
-    
-    // Set overflow flag (signed overflow)
-    bool overflow = ((cpu->a ^ result) & (value ^ result) & 0x80) != 0;
-    fam65xx_set_flag(cpu, FLAG_V, overflow);
-    
-    // Set carry flag
-    fam65xx_set_flag(cpu, FLAG_C, result > 0xFF);
-    
-    // Update accumulator and set N/Z flags
-    cpu->a = result & 0xFF;
-    fam65xx_set_nz_flags(cpu, cpu->a);
-}
-
-void fam65xx_op_sbc(fam65xx_t* cpu, uint8_t value) {
-    // SBC is equivalent to ADC with inverted value
-    uint8_t inverted_value = ~value;
-    uint16_t result = cpu->a + inverted_value + (fam65xx_get_flag(cpu, FLAG_C) ? 1 : 0);
-    
-    // Set overflow flag (signed overflow)
-    bool overflow = ((cpu->a ^ result) & (inverted_value ^ result) & 0x80) != 0;
-    fam65xx_set_flag(cpu, FLAG_V, overflow);
-    
-    // Set carry flag (inverted for subtraction)
-    fam65xx_set_flag(cpu, FLAG_C, result > 0xFF);
-    
-    // Update accumulator and set N/Z flags
-    cpu->a = result & 0xFF;
-    fam65xx_set_nz_flags(cpu, cpu->a);
-}
-
-void fam65xx_op_and(fam65xx_t* cpu, uint8_t value) {
-    cpu->a &= value;
-    fam65xx_set_nz_flags(cpu, cpu->a);
-}
-
-void fam65xx_op_ora(fam65xx_t* cpu, uint8_t value) {
-    cpu->a |= value;
-    fam65xx_set_nz_flags(cpu, cpu->a);
-}
-
-void fam65xx_op_eor(fam65xx_t* cpu, uint8_t value) {
-    cpu->a ^= value;
-    fam65xx_set_nz_flags(cpu, cpu->a);
-}
-
-void fam65xx_op_cmp(fam65xx_t* cpu, uint8_t value) {
-    uint16_t result = cpu->a - value;
-    fam65xx_set_flag(cpu, FLAG_C, cpu->a >= value);
-    fam65xx_set_nz_flags(cpu, result & 0xFF);
-}
-
-void fam65xx_op_cpx(fam65xx_t* cpu, uint8_t value) {
-    uint16_t result = cpu->x - value;
-    fam65xx_set_flag(cpu, FLAG_C, cpu->x >= value);
-    fam65xx_set_nz_flags(cpu, result & 0xFF);
-}
-
-void fam65xx_op_cpy(fam65xx_t* cpu, uint8_t value) {
-    uint16_t result = cpu->y - value;
-    fam65xx_set_flag(cpu, FLAG_C, cpu->y >= value);
-    fam65xx_set_nz_flags(cpu, result & 0xFF);
-}
-
-void fam65xx_op_bit(fam65xx_t* cpu, uint8_t value) {
-    uint8_t result = cpu->a & value;
-    fam65xx_set_flag(cpu, FLAG_Z, result == 0);
-    fam65xx_set_flag(cpu, FLAG_N, (value & 0x80) != 0);
-    fam65xx_set_flag(cpu, FLAG_V, (value & 0x40) != 0);
-}
 
 // ============================================================================
 // SHARED OPCODE IMPLEMENTATIONS - ADC
@@ -258,7 +185,7 @@ void fam65xx_eor_indirect_y(fam65xx_t* cpu) {
 }
 
 // Decimal mode ADC operation (for MOS6502 with functional decimal mode)
-void mos6502_op_adc_decimal(fam65xx_t* cpu, uint8_t value) {
+static inline void mos6502_op_adc_decimal(fam65xx_t* cpu, uint8_t value) {
     if (fam65xx_get_flag(cpu, FLAG_D)) {
         // Decimal (BCD) mode arithmetic
         uint8_t carry_in = fam65xx_get_flag(cpu, FLAG_C) ? 1 : 0;
@@ -299,7 +226,7 @@ void mos6502_op_adc_decimal(fam65xx_t* cpu, uint8_t value) {
 }
 
 // Decimal mode SBC operation (for MOS6502 with functional decimal mode)
-void mos6502_op_sbc_decimal(fam65xx_t* cpu, uint8_t value) {
+static inline void mos6502_op_sbc_decimal(fam65xx_t* cpu, uint8_t value) {
     if (fam65xx_get_flag(cpu, FLAG_D)) {
         // Decimal (BCD) mode arithmetic
         uint8_t carry_in = fam65xx_get_flag(cpu, FLAG_C) ? 0 : 1; // Inverted for SBC

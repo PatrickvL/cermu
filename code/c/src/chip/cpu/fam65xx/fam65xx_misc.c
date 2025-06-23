@@ -1,8 +1,34 @@
 #include "fam65xx_core.h"
+#include "fam65xx_arithmetic.h"
 
 // ============================================================================
 // SHARED MOS 6502 FAMILY MISCELLANEOUS OPERATIONS
 // ============================================================================
+
+static inline void fam65xx_op_cmp(fam65xx_t* cpu, uint8_t value) {
+    uint16_t result = cpu->a - value;
+    fam65xx_set_flag(cpu, FLAG_C, cpu->a >= value);
+    fam65xx_set_nz_flags(cpu, result & 0xFF);
+}
+
+static inline void fam65xx_op_cpx(fam65xx_t* cpu, uint8_t value) {
+    uint16_t result = cpu->x - value;
+    fam65xx_set_flag(cpu, FLAG_C, cpu->x >= value);
+    fam65xx_set_nz_flags(cpu, result & 0xFF);
+}
+
+static inline void fam65xx_op_cpy(fam65xx_t* cpu, uint8_t value) {
+    uint16_t result = cpu->y - value;
+    fam65xx_set_flag(cpu, FLAG_C, cpu->y >= value);
+    fam65xx_set_nz_flags(cpu, result & 0xFF);
+}
+
+static inline void fam65xx_op_bit(fam65xx_t* cpu, uint8_t value) {
+    uint8_t result = cpu->a & value;
+    fam65xx_set_flag(cpu, FLAG_Z, result == 0);
+    fam65xx_set_flag(cpu, FLAG_N, (value & 0x80) != 0);
+    fam65xx_set_flag(cpu, FLAG_V, (value & 0x40) != 0);
+}
 
 // ============================================================================
 // COMPARE OPERATIONS

@@ -1,4 +1,5 @@
 #include "fam65xx_core.h"
+#include "fam65xx_arithmetic.h"
 #include <string.h>
 
 // ============================================================================
@@ -209,7 +210,7 @@ extern void fam65xx_nop_absolute_x(fam65xx_t* cpu);
 
 extern void fam65xx_jam(fam65xx_t* cpu);
 
-// Default opcode handler table - all 256 opcodes
+        // Default opcode handler table - all 256 opcodes
 // This provides a complete baseline that all family members can use
 fam65xx_opcode_handler_t fam65xx_default_handlers[256] = {
     [0x00] = fam65xx_brk,                // BRK

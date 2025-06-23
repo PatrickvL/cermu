@@ -1,31 +1,50 @@
 #ifndef FAM65XX_ARITHMETIC_H
 #define FAM65XX_ARITHMETIC_H
 
-#include <stdint.h>
-
-// Forward declaration to avoid circular dependency
-typedef struct fam65xx_s fam65xx_t;
+#include "fam65xx_core.h"
 
 // ============================================================================
-// ARITHMETIC OPERATION FUNCTION DECLARATIONS
+// ARITHMETIC OPERATION DECLARATIONS
 // ============================================================================
 
-// Generic family arithmetic operations (used by all family members)
-void fam65xx_op_adc(fam65xx_t* cpu, uint8_t value);
-void fam65xx_op_sbc(fam65xx_t* cpu, uint8_t value);
-void fam65xx_op_and(fam65xx_t* cpu, uint8_t value);
-void fam65xx_op_ora(fam65xx_t* cpu, uint8_t value);
-void fam65xx_op_eor(fam65xx_t* cpu, uint8_t value);
-void fam65xx_op_cmp(fam65xx_t* cpu, uint8_t value);
-void fam65xx_op_cpx(fam65xx_t* cpu, uint8_t value);
-void fam65xx_op_cpy(fam65xx_t* cpu, uint8_t value);
-void fam65xx_op_bit(fam65xx_t* cpu, uint8_t value);
+// Binary mode arithmetic operations - inline for zero call overhead
+static inline void fam65xx_op_adc(fam65xx_t* cpu, uint8_t value) {
+    uint16_t result = cpu->a + value + (fam65xx_get_flag(cpu, FLAG_C) ? 1 : 0);
+    
+    // Set overflow flag (signed overflow)
+    bool overflow = ((cpu->a ^ result) & (value ^ result) & 0x80) != 0;
+    fam65xx_set_flag(cpu, FLAG_V, overflow);
+    
+    // Set carry flag
+    fam65xx_set_flag(cpu, FLAG_C, result > 0xFF);
+    
+    // Update accumulator and set N/Z flags
+    cpu->a = result & 0xFF;
+    fam65xx_set_nz_flags(cpu, cpu->a);
+}
 
-// MOS6502-specific decimal mode operation functions
-void mos6502_op_adc_decimal(fam65xx_t* cpu, uint8_t value);
-void mos6502_op_sbc_decimal(fam65xx_t* cpu, uint8_t value);
+static inline void fam65xx_op_sbc(fam65xx_t* cpu, uint8_t value) {
+    // SBC is equivalent to ADC with inverted value
+    uint8_t inverted_value = ~value;
+    uint16_t result = cpu->a + inverted_value + (fam65xx_get_flag(cpu, FLAG_C) ? 1 : 0);
+    
+    // Set overflow flag (signed overflow) 
+    bool overflow = ((cpu->a ^ result) & (inverted_value ^ result) & 0x80) != 0;
+    fam65xx_set_flag(cpu, FLAG_V, overflow);
+    
+    // Set carry flag (inverted for subtraction)
+    fam65xx_set_flag(cpu, FLAG_C, result > 0xFF);
+    
+    // Update accumulator and set N/Z flags
+    cpu->a = result & 0xFF;
+    fam65xx_set_nz_flags(cpu, cpu->a);
+}
 
-// MOS6502-specific decimal-aware opcode handlers
+// ============================================================================
+// DECIMAL MODE OPCODE HANDLERS
+// ============================================================================
+
+// MOS6502 specific ADC decimal mode opcode handlers
 void mos6502_adc_immediate_decimal(fam65xx_t* cpu);
 void mos6502_adc_zero_page_decimal(fam65xx_t* cpu);
 void mos6502_adc_zero_page_x_decimal(fam65xx_t* cpu);
@@ -35,6 +54,7 @@ void mos6502_adc_absolute_y_decimal(fam65xx_t* cpu);
 void mos6502_adc_indirect_x_decimal(fam65xx_t* cpu);
 void mos6502_adc_indirect_y_decimal(fam65xx_t* cpu);
 
+// MOS6502 specific SBC decimal mode opcode handlers
 void mos6502_sbc_immediate_decimal(fam65xx_t* cpu);
 void mos6502_sbc_zero_page_decimal(fam65xx_t* cpu);
 void mos6502_sbc_zero_page_x_decimal(fam65xx_t* cpu);
@@ -44,8 +64,5 @@ void mos6502_sbc_absolute_y_decimal(fam65xx_t* cpu);
 void mos6502_sbc_indirect_x_decimal(fam65xx_t* cpu);
 void mos6502_sbc_indirect_y_decimal(fam65xx_t* cpu);
 
-// Arithmetic helper function types
-typedef uint8_t (*fam65xx_addr_func_t)(fam65xx_t* cpu);
-typedef void (*fam65xx_op_func_t)(fam65xx_t* cpu, uint8_t value);
 
 #endif // FAM65XX_ARITHMETIC_H

@@ -61,14 +61,11 @@ struct fam65xx_s {
 
     // Intercept mechanism for single-step execution
     fam65xx_opcode_handler_t saved_opcode_handlers[256]; // Saved handlers during intercept
-      // === DIRECT RAM ACCESS (for zero page optimization) ===
+    // === DIRECT RAM ACCESS (for zero page optimization) ===
     // Direct RAM accessors to avoid circular dependency with bus interface
     // TODO : Move to mos6510 (the sole user for now)
     access_callback_t ram_access;  // Consolidated RAM access interface
 };
-
-// Include arithmetic function declarations after struct definition
-#include "fam65xx_arithmetic.h"
 
 // ============================================================================
 // SHARED MACROS FOR PERFORMANCE-CRITICAL CODE
@@ -140,6 +137,10 @@ void fam65xx_interrupt_handler(fam65xx_t* cpu);
 // Family-specific versions of shared macros
 #define FAM65XX_OPCODE_FOOTER(cpu) \
     FAM65XX_NEXT_INSTRUCTION(cpu, fam65xx_interrupt_handler, fam65xx_read_cycle)
+
+// Arithmetic helper function types
+typedef uint8_t (*fam65xx_addr_func_t)(fam65xx_t* cpu);
+typedef void (*fam65xx_op_func_t)(fam65xx_t* cpu, uint8_t value);
 
 // Arithmetic helper function implementation (static inline for performance)
 static inline void fam65xx_arithmetic_helper(fam65xx_t* cpu, fam65xx_addr_func_t addr_func, fam65xx_op_func_t op_func) {
@@ -303,17 +304,17 @@ static inline uint8_t fam65xx_addr_indy(fam65xx_t* cpu) {
 // ============================================================================
 
 // Inline simple arithmetic operations for maximum performance
-static inline void fam65xx_op_and_inline(fam65xx_t* cpu, uint8_t value) {
+static inline void fam65xx_op_and(fam65xx_t* cpu, uint8_t value) {
     cpu->a &= value;
     fam65xx_set_nz_flags(cpu, cpu->a);
 }
 
-static inline void fam65xx_op_ora_inline(fam65xx_t* cpu, uint8_t value) {
+static inline void fam65xx_op_ora(fam65xx_t* cpu, uint8_t value) {
     cpu->a |= value;
     fam65xx_set_nz_flags(cpu, cpu->a);
 }
 
-static inline void fam65xx_op_eor_inline(fam65xx_t* cpu, uint8_t value) {
+static inline void fam65xx_op_eor(fam65xx_t* cpu, uint8_t value) {
     cpu->a ^= value;
     fam65xx_set_nz_flags(cpu, cpu->a);
 }
@@ -321,19 +322,19 @@ static inline void fam65xx_op_eor_inline(fam65xx_t* cpu, uint8_t value) {
 // Arithmetic helper functions (replacing macros for better type safety and debugging)
 static inline void fam65xx_and_helper(fam65xx_t* cpu, uint8_t (*addr_func)(fam65xx_t*)) {
     uint8_t value = addr_func(cpu);
-    fam65xx_op_and_inline(cpu, value);
+    fam65xx_op_and(cpu, value);
     FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 static inline void fam65xx_ora_helper(fam65xx_t* cpu, uint8_t (*addr_func)(fam65xx_t*)) {
     uint8_t value = addr_func(cpu);
-    fam65xx_op_ora_inline(cpu, value);
+    fam65xx_op_ora(cpu, value);
     FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 static inline void fam65xx_eor_helper(fam65xx_t* cpu, uint8_t (*addr_func)(fam65xx_t*)) {
     uint8_t value = addr_func(cpu);
-    fam65xx_op_eor_inline(cpu, value);
+    fam65xx_op_eor(cpu, value);
     FAM65XX_OPCODE_FOOTER(cpu);
 }
 
