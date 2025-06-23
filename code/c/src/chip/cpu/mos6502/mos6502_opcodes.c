@@ -1,4 +1,5 @@
 #include "mos6502_opcodes.h"
+#include "../fam65xx/fam65xx_arithmetic.h"
 #include <stdio.h>
 
 // ============================================================================
@@ -8,59 +9,44 @@
 void mos6502_op_adc(fam65xx_t* cpu, uint8_t operand) {
     if (!cpu) return;
     
-    bool carry_in = fam65xx_get_flag(cpu, FLAG_C);
-    
     if (fam65xx_get_flag(cpu, FLAG_D)) {
-        // Decimal mode ADC
+        // Decimal (BCD) mode arithmetic - MOS6502 specific implementation
+        uint8_t carry_in = fam65xx_get_flag(cpu, FLAG_C) ? 1 : 0;
         uint8_t A = cpu->a;
         uint8_t s = operand;
-        uint8_t C = carry_in ? 1 : 0;
-          // Lower nibble calculation
-        uint8_t al = (A & 0x0f) + (s & 0x0f) + C;
         
-        // Upper nibble calculation with carry from lower nibble
+        // Convert to BCD
+        uint8_t al = (A & 0x0F) + (s & 0x0F) + carry_in;
         uint8_t ah = (A >> 4) + (s >> 4);
-        if (al > 0x09) {  // BCD carry at > 9, not > 15
-            ah += 1;  // Carry from lower nibble
+        
+        // Handle low nibble carry
+        if (al > 9) {
+            al = (al + 6) & 0x0F;
+            ah++;
         }
         
-        // BCD adjustments
-        if (al > 0x09) {
-            al += 0x06;
-        }
-        if (ah > 0x09) {
-            ah += 0x06;
-        }
+        // Set N and Z flags based on binary result (6502 quirk)
+        uint16_t binary_result = A + s + carry_in;
+        fam65xx_set_flag(cpu, FLAG_N, (binary_result & 0x80) != 0);
+        fam65xx_set_flag(cpu, FLAG_Z, (binary_result & 0xFF) == 0);
         
-        // Calculate binary result for flag setting
-        uint16_t binary_sum = A + s + C;
-        
-        // Set flags
-        fam65xx_set_flag(cpu, FLAG_C, ah > 0x0f);
-        fam65xx_set_flag(cpu, FLAG_Z, (binary_sum & 0xFF) == 0);
-        fam65xx_set_flag(cpu, FLAG_N, (binary_sum & 0x80) != 0);
-        
-        // V flag: overflow if both inputs have same sign, but result has different sign
-        uint8_t binary_result = binary_sum & 0xFF;
+        // Set overflow flag based on binary result
         bool overflow = ((A ^ binary_result) & (s ^ binary_result) & 0x80) != 0;
         fam65xx_set_flag(cpu, FLAG_V, overflow);
         
+        // Handle high nibble carry
+        if (ah > 9) {
+            ah = (ah + 6) & 0x0F;
+            fam65xx_set_flag(cpu, FLAG_C, true);
+        } else {
+            fam65xx_set_flag(cpu, FLAG_C, false);
+        }
+        
         // Update accumulator with BCD result
-        cpu->a = ((ah & 0x0f) << 4) | (al & 0x0f);
+        cpu->a = (ah << 4) | al;
     } else {
-        // Binary mode ADC
-        uint16_t result = cpu->a + operand + (carry_in ? 1 : 0);
-        uint8_t result_8 = result & 0xFF;
-        
-        fam65xx_set_flag(cpu, FLAG_C, result > 0xFF);
-        fam65xx_set_flag(cpu, FLAG_Z, result_8 == 0);
-        fam65xx_set_flag(cpu, FLAG_N, (result_8 & 0x80) != 0);
-        
-        // V flag: overflow if both inputs have same sign, but result has different sign
-        bool overflow = ((cpu->a ^ result_8) & (operand ^ result_8) & 0x80) != 0;
-        fam65xx_set_flag(cpu, FLAG_V, overflow);
-        
-        cpu->a = result_8;
+        // Binary mode ADC - use inlined base family implementation
+        fam65xx_op_adc(cpu, operand);
     }
 }
 
@@ -68,52 +54,43 @@ void mos6502_op_sbc(fam65xx_t* cpu, uint8_t operand) {
     if (!cpu) return;
     
     if (fam65xx_get_flag(cpu, FLAG_D)) {
-        // Decimal mode SBC
+        // Decimal (BCD) mode arithmetic - MOS6502 specific implementation
+        uint8_t carry_in = fam65xx_get_flag(cpu, FLAG_C) ? 0 : 1; // Inverted for SBC
         uint8_t A = cpu->a;
         uint8_t s = operand;
-        bool carry_flag = fam65xx_get_flag(cpu, FLAG_C);
-        uint8_t borrow = carry_flag ? 0 : 1;  // Carry clear = borrow needed
         
-        // Calculate the lower nibble
-        uint8_t AL = (A & 15) - (s & 15) - borrow;
+        // Convert to BCD for subtraction
+        int8_t al = (A & 0x0F) - (s & 0x0F) - carry_in;
+        int8_t ah = (A >> 4) - (s >> 4);
         
-        // BCD fixup for lower nibble
-        if (AL & 16) AL -= 6;
+        // Handle low nibble borrow
+        if (al < 0) {
+            al = (al - 6) & 0x0F;
+            ah--;
+        }
         
-        // Calculate the upper nibble
-        uint8_t AH = (A >> 4) - (s >> 4) - (AL & 16 ? 1 : 0);
+        // Set N and Z flags based on binary result (6502 quirk)
+        uint16_t binary_result = A - s - carry_in;
+        fam65xx_set_flag(cpu, FLAG_N, (binary_result & 0x80) != 0);
+        fam65xx_set_flag(cpu, FLAG_Z, (binary_result & 0xFF) == 0);
         
-        // BCD fixup for upper nibble
-        if (AH & 16) AH -= 6;
-        
-        // The flags are set just like in Binary mode (NOT affected by decimal mode)
-        uint16_t binary_result = A - s - borrow;
-        fam65xx_set_flag(cpu, FLAG_C, (binary_result & 256) == 0);
-        fam65xx_set_flag(cpu, FLAG_Z, (binary_result & 255) == 0);
-        fam65xx_set_flag(cpu, FLAG_N, (binary_result & 128) != 0);
-        
-        // V flag
-        bool overflow = ((binary_result ^ s) & 128) && ((A ^ s) & 128);
+        // Set overflow flag based on binary result
+        bool overflow = ((A ^ binary_result) & ((~s) ^ binary_result) & 0x80) != 0;
         fam65xx_set_flag(cpu, FLAG_V, overflow);
         
-        // Update accumulator
-        cpu->a = ((AH << 4) | (AL & 15)) & 255;
+        // Handle high nibble borrow
+        if (ah < 0) {
+            ah = (ah - 6) & 0x0F;
+            fam65xx_set_flag(cpu, FLAG_C, false);
+        } else {
+            fam65xx_set_flag(cpu, FLAG_C, true);
+        }
+        
+        // Update accumulator with BCD result
+        cpu->a = (ah << 4) | al;
     } else {
-        // Binary mode SBC
-        bool borrow = !fam65xx_get_flag(cpu, FLAG_C);
-        
-        uint16_t result = cpu->a - operand - (borrow ? 1 : 0);
-        uint8_t result_8 = result & 0xFF;
-        
-        fam65xx_set_flag(cpu, FLAG_C, (result & 0x8000) == 0); // No borrow
-        fam65xx_set_flag(cpu, FLAG_Z, result_8 == 0);
-        fam65xx_set_flag(cpu, FLAG_N, (result_8 & 0x80) != 0);
-        
-        // V flag: overflow in subtraction
-        bool overflow = ((cpu->a ^ result_8) & ((~operand) ^ result_8) & 0x80) != 0;
-        fam65xx_set_flag(cpu, FLAG_V, overflow);
-        
-        cpu->a = result_8;
+        // Binary mode SBC - use base family implementation
+        fam65xx_op_sbc(cpu, operand);
     }
 }
 

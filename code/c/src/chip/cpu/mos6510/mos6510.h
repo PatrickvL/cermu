@@ -203,23 +203,6 @@ static inline void mos6510_set_flag(mos6510_t* cpu, uint8_t flag, bool condition
     fam65xx_set_flag(&cpu->base, flag, condition);
 }
 
-static inline bool mos6510_get_flag(mos6510_t* cpu, uint8_t flag) {
-    return fam65xx_get_flag(&cpu->base, flag);
-}
-
-static inline void mos6510_set_nz_flags(mos6510_t* cpu, uint8_t value) {
-    fam65xx_set_nz_flags(&cpu->base, value);
-}
-
-// Stack operations (using family functions)
-static inline void mos6510_push(mos6510_t* cpu, uint8_t data) {
-    fam65xx_push(&cpu->base, data);
-}
-
-static inline uint8_t mos6510_pop(mos6510_t* cpu) {
-    return fam65xx_pull(&cpu->base);
-}
-
 // BRK/IRQ common sequence - handles the interrupt setup portion
 static inline void mos6510_interrupt_sequence(mos6510_t* cpu, uint8_t status_flags, uint16_t vector_addr) {
     // Push PC and status unconditionally (skip RDY checks)
@@ -353,28 +336,6 @@ static inline void addr_zp_ind_y_store(mos6510_t* cpu) {
     (void)mos6510_read_cycle(cpu, cpu->base.address + cpu->base.y); // Dummy read
     cpu->base.address += cpu->base.y;
 }
-
-// Stack push with timing control
-static inline void mos6510_push_with_wait(mos6510_t* cpu, uint8_t data) {
-    MOS6510_INTRA_CYCLE(cpu);
-    mos6510_write_cycle(cpu, 0x0100 + cpu->base.sp, data);
-    cpu->base.sp--;
-}
-
-// Stack pop with timing control  
-static inline uint8_t mos6510_pop_with_wait(mos6510_t* cpu) {
-    MOS6510_INTRA_CYCLE(cpu);
-    cpu->base.sp++;
-    return mos6510_read_cycle(cpu, 0x0100 + cpu->base.sp);
-}
-
-// ============================================================================
-// MOS6510 OPCODE IMPLEMENTATIONS
-// ============================================================================
-
-// ============================================================================
-// OPCODE FUNCTION DECLARATIONS
-// ============================================================================
 
 // ============================================================================
 // ILLEGAL INSTRUCTION HELPER FUNCTIONS (inline for performance)
