@@ -33,10 +33,6 @@ void mos6502_op_sbc_absy(mos6502_t* cpu);   // $F9
 void mos6502_op_sbc_indx(mos6502_t* cpu);   // $E1
 void mos6502_op_sbc_indy(mos6502_t* cpu);   // $F1
 
-// Other key opcodes
-void mos6502_op_brk(mos6502_t* cpu);        // $00
-void mos6502_op_nop(mos6502_t* cpu);        // $EA
-
 // Opcode table initialization
 void mos6502_init_opcode_table(mos6502_t* cpu);
 
