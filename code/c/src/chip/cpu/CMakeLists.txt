@@ -21,6 +21,7 @@ target_include_directories(mos6502_family PUBLIC
 add_library(mos6502 STATIC
     mos6502/mos6502.c
     mos6502/mos6502_gui.c
+    mos6502/mos6502_opcodes.c
 )
 target_link_libraries(mos6502 PUBLIC mos6502_family)
 target_include_directories(mos6502 PUBLIC
