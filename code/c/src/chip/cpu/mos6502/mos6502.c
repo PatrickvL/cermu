@@ -1,4 +1,6 @@
 #include "mos6502.h"
+#include "mos6502_opcodes.h"
+#include "../fam65xx/fam65xx_core.h"
 #include "../../../core/system.h"
 #include <stdlib.h>
 #include <string.h>
@@ -26,9 +28,8 @@ bool mos6502_create(chip_descriptor_t* desc, mos6502_t* cpu) {
     cpu->base.p = FLAG_U | FLAG_I; // Start with unused=1, interrupt disable=1
     cpu->base.address = 0x0000;
     
-    // Initialize opcode table with MOS6502 features (decimal mode enabled)
-    uint32_t features = FAM65XX_FEATURE_DECIMAL_MODE | FAM65XX_FEATURE_ILLEGAL_OPCODES;
-    fam65xx_init_opcode_table(&cpu->base, features);
+    // Initialize opcode table with MOS6502-specific handlers
+    mos6502_init_opcode_table(cpu);
     
     return true;
 }
