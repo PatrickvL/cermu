@@ -1,5 +1,6 @@
 #include "fam65xx_core.h"
 #include "fam65xx_arithmetic.h"
+#include "fam65xx_illegal.h"
 #include <string.h>
 
 // ============================================================================
@@ -598,4 +599,103 @@ void fam65xx_init_opcode_table(fam65xx_t* cpu, uint32_t cpu_features) {
             }
         }
     }      // TODO: Apply other feature flags (BCD_FLAG, ROR_BUG, etc.) as needed
+
+    // Register all illegal opcodes with their correct handlers
+    // LAX
+    fam65xx_override_opcode(cpu, 0xA3, fam65xx_lax_indirect_x); // LAX ($nn,X)
+    fam65xx_override_opcode(cpu, 0xA7, fam65xx_lax_zero_page);   // LAX $nn
+    fam65xx_override_opcode(cpu, 0xAF, fam65xx_lax_absolute);    // LAX $nnnn
+    fam65xx_override_opcode(cpu, 0xB3, fam65xx_lax_indirect_y); // LAX ($nn),Y
+    fam65xx_override_opcode(cpu, 0xB7, fam65xx_lax_zero_page_y); // LAX $nn,Y
+    fam65xx_override_opcode(cpu, 0xBF, fam65xx_lax_absolute_y);  // LAX $nnnn,Y
+    fam65xx_override_opcode(cpu, 0xAB, fam65xx_lax_immediate);   // LAX #$nn
+
+    // SAX
+    fam65xx_override_opcode(cpu, 0x83, fam65xx_sax_indirect_x); // SAX ($nn,X)
+    fam65xx_override_opcode(cpu, 0x87, fam65xx_sax_zero_page);   // SAX $nn
+    fam65xx_override_opcode(cpu, 0x8F, fam65xx_sax_absolute);    // SAX $nnnn
+    fam65xx_override_opcode(cpu, 0x97, fam65xx_sax_zero_page_y); // SAX $nn,Y
+
+    // DCP
+    fam65xx_override_opcode(cpu, 0xC3, fam65xx_dcp_indirect_x); // DCP ($nn,X)
+    fam65xx_override_opcode(cpu, 0xC7, fam65xx_dcp_zero_page);   // DCP $nn
+    fam65xx_override_opcode(cpu, 0xCF, fam65xx_dcp_absolute);    // DCP $nnnn
+    fam65xx_override_opcode(cpu, 0xD3, fam65xx_dcp_indirect_y); // DCP ($nn),Y
+    fam65xx_override_opcode(cpu, 0xD7, fam65xx_dcp_zero_page_x); // DCP $nn,X
+    fam65xx_override_opcode(cpu, 0xDB, fam65xx_dcp_absolute_y);  // DCP $nnnn,Y
+    fam65xx_override_opcode(cpu, 0xDF, fam65xx_dcp_absolute_x);  // DCP $nnnn,X
+
+    // ISC (a.k.a. ISB)
+    fam65xx_override_opcode(cpu, 0xE3, fam65xx_isc_indirect_x); // ISC ($nn,X)
+    fam65xx_override_opcode(cpu, 0xE7, fam65xx_isc_zero_page);   // ISC $nn
+    fam65xx_override_opcode(cpu, 0xEF, fam65xx_isc_absolute);    // ISC $nnnn
+    fam65xx_override_opcode(cpu, 0xF3, fam65xx_isc_indirect_y); // ISC ($nn),Y
+    fam65xx_override_opcode(cpu, 0xF7, fam65xx_isc_zero_page_x); // ISC $nn,X
+    fam65xx_override_opcode(cpu, 0xFB, fam65xx_isc_absolute_y);  // ISC $nnnn,Y
+    fam65xx_override_opcode(cpu, 0xFF, fam65xx_isc_absolute_x);  // ISC $nnnn,X
+
+    // SLO
+    fam65xx_override_opcode(cpu, 0x03, fam65xx_slo_indirect_x); // SLO ($nn,X)
+    fam65xx_override_opcode(cpu, 0x07, fam65xx_slo_zero_page);   // SLO $nn
+    fam65xx_override_opcode(cpu, 0x0F, fam65xx_slo_absolute);    // SLO $nnnn
+    fam65xx_override_opcode(cpu, 0x13, fam65xx_slo_indirect_y); // SLO ($nn),Y
+    fam65xx_override_opcode(cpu, 0x17, fam65xx_slo_zero_page_x); // SLO $nn,X
+    fam65xx_override_opcode(cpu, 0x1B, fam65xx_slo_absolute_y);  // SLO $nnnn,Y
+    fam65xx_override_opcode(cpu, 0x1F, fam65xx_slo_absolute_x);  // SLO $nnnn,X
+
+    // RLA
+    fam65xx_override_opcode(cpu, 0x23, fam65xx_rla_indirect_x); // RLA ($nn,X)
+    fam65xx_override_opcode(cpu, 0x27, fam65xx_rla_zero_page);   // RLA $nn
+    fam65xx_override_opcode(cpu, 0x2F, fam65xx_rla_absolute);    // RLA $nnnn
+    fam65xx_override_opcode(cpu, 0x33, fam65xx_rla_indirect_y); // RLA ($nn),Y
+    fam65xx_override_opcode(cpu, 0x37, fam65xx_rla_zero_page_x); // RLA $nn,X
+    fam65xx_override_opcode(cpu, 0x3B, fam65xx_rla_absolute_y);  // RLA $nnnn,Y
+    fam65xx_override_opcode(cpu, 0x3F, fam65xx_rla_absolute_x);  // RLA $nnnn,X
+
+    // SRE
+    fam65xx_override_opcode(cpu, 0x43, fam65xx_sre_indirect_x); // SRE ($nn,X)
+    fam65xx_override_opcode(cpu, 0x47, fam65xx_sre_zero_page);   // SRE $nn
+    fam65xx_override_opcode(cpu, 0x4F, fam65xx_sre_absolute);    // SRE $nnnn
+    fam65xx_override_opcode(cpu, 0x53, fam65xx_sre_indirect_y); // SRE ($nn),Y
+    fam65xx_override_opcode(cpu, 0x57, fam65xx_sre_zero_page_x); // SRE $nn,X
+    fam65xx_override_opcode(cpu, 0x5B, fam65xx_sre_absolute_y);  // SRE $nnnn,Y
+    fam65xx_override_opcode(cpu, 0x5F, fam65xx_sre_absolute_x);  // SRE $nnnn,X
+
+    // RRA
+    fam65xx_override_opcode(cpu, 0x63, fam65xx_rra_indirect_x); // RRA ($nn,X)
+    fam65xx_override_opcode(cpu, 0x67, fam65xx_rra_zero_page);   // RRA $nn
+    fam65xx_override_opcode(cpu, 0x6F, fam65xx_rra_absolute);    // RRA $nnnn
+    fam65xx_override_opcode(cpu, 0x73, fam65xx_rra_indirect_y); // RRA ($nn),Y
+    fam65xx_override_opcode(cpu, 0x77, fam65xx_rra_zero_page_x); // RRA $nn,X
+    fam65xx_override_opcode(cpu, 0x7B, fam65xx_rra_absolute_y);  // RRA $nnnn,Y
+    fam65xx_override_opcode(cpu, 0x7F, fam65xx_rra_absolute_x);  // RRA $nnnn,X
+
+    // NOPs (illegal variants)
+    fam65xx_override_opcode(cpu, 0x1A, fam65xx_nop); // NOP
+    fam65xx_override_opcode(cpu, 0x3A, fam65xx_nop); // NOP
+    fam65xx_override_opcode(cpu, 0x5A, fam65xx_nop); // NOP
+    fam65xx_override_opcode(cpu, 0x7A, fam65xx_nop); // NOP
+    fam65xx_override_opcode(cpu, 0xDA, fam65xx_nop); // NOP
+    fam65xx_override_opcode(cpu, 0xFA, fam65xx_nop); // NOP
+    fam65xx_override_opcode(cpu, 0x04, fam65xx_nop_zp); // NOP $nn
+    fam65xx_override_opcode(cpu, 0x44, fam65xx_nop_zp); // NOP $nn
+    fam65xx_override_opcode(cpu, 0x64, fam65xx_nop_zp); // NOP $nn
+    fam65xx_override_opcode(cpu, 0x14, fam65xx_nop_zpx); // NOP $nn,X
+    fam65xx_override_opcode(cpu, 0x34, fam65xx_nop_zpx); // NOP $nn,X
+    fam65xx_override_opcode(cpu, 0x54, fam65xx_nop_zpx); // NOP $nn,X
+    fam65xx_override_opcode(cpu, 0x74, fam65xx_nop_zpx); // NOP $nn,X
+    fam65xx_override_opcode(cpu, 0xD4, fam65xx_nop_zpx); // NOP $nn,X
+    fam65xx_override_opcode(cpu, 0xF4, fam65xx_nop_zpx); // NOP $nn,X
+    fam65xx_override_opcode(cpu, 0x0C, fam65xx_nop_abs); // NOP $nnnn
+    fam65xx_override_opcode(cpu, 0x1C, fam65xx_nop_absx); // NOP $nnnn,X
+    fam65xx_override_opcode(cpu, 0x3C, fam65xx_nop_absx); // NOP $nnnn,X
+    fam65xx_override_opcode(cpu, 0x5C, fam65xx_nop_absx); // NOP $nnnn,X
+    fam65xx_override_opcode(cpu, 0x7C, fam65xx_nop_absx); // NOP $nnnn,X
+    fam65xx_override_opcode(cpu, 0xDC, fam65xx_nop_absx); // NOP $nnnn,X
+    fam65xx_override_opcode(cpu, 0xFC, fam65xx_nop_absx); // NOP $nnnn,X
+    fam65xx_override_opcode(cpu, 0x80, fam65xx_nop_imm); // NOP #$nn
+    fam65xx_override_opcode(cpu, 0x82, fam65xx_nop_imm); // NOP #$nn
+    fam65xx_override_opcode(cpu, 0x89, fam65xx_nop_imm_special); // NOP #$nn (special)
+    fam65xx_override_opcode(cpu, 0xC2, fam65xx_nop_imm); // NOP #$nn
+    fam65xx_override_opcode(cpu, 0xE2, fam65xx_nop_imm); // NOP #$nn
 }
