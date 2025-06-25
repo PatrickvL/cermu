@@ -31,34 +31,30 @@ uint8_t fam65xx_pull(fam65xx_t* cpu) {
 }
 
 // Interrupt handling (shared)
+// For IRQ and NMI, the B flag is cleared in the pushed status. For BRK, it is set.
 void fam65xx_interrupt_sequence(fam65xx_t* cpu, uint8_t status_flags, uint16_t vector_addr) {
     // Push program counter (high byte first)
     fam65xx_push(cpu, (cpu->pc >> 8) & 0xFF);
     fam65xx_push(cpu, cpu->pc & 0xFF);
-    // Push status register with specified flags
-    fam65xx_push(cpu, status_flags | FLAG_U); // Always set unused flag
-      // Set interrupt disable flag
+    // Push status register with specified flags (caller must set/clear B flag as appropriate)
+    fam65xx_push(cpu, (status_flags & ~FLAG_B) | FLAG_U); // B flag should be set only for BRK
     fam65xx_set_flag(cpu, FLAG_I, true);
-    
     // Load interrupt vector
-
     uint8_t addr_lo = fam65xx_read_cycle(cpu, vector_addr);  // Bus read cycle
-
     uint8_t addr_hi = fam65xx_read_cycle(cpu, vector_addr + 1);  // Bus read cycle
-    
     cpu->pc = (addr_hi << 8) | addr_lo;
 }
 
+// Interrupt handler - called when IRQ or NMI lines are active
 void fam65xx_interrupt_handler(fam65xx_t* cpu) {
     // Check for NMI first (higher priority)
     if (FAM65XX_TEST_NMI(cpu)) {
-        fam65xx_interrupt_sequence(cpu, cpu->p, 0xFFFA); // NMI vector
+        fam65xx_interrupt_sequence(cpu, cpu->p & ~FLAG_B, 0xFFFA); // NMI vector, B flag cleared
         return;
     }
-    
     // Check for IRQ (if not masked)
     if (FAM65XX_TEST_IRQ(cpu) && !fam65xx_get_flag(cpu, FLAG_I)) {
-        fam65xx_interrupt_sequence(cpu, cpu->p, 0xFFFE); // IRQ vector
+        fam65xx_interrupt_sequence(cpu, cpu->p & ~FLAG_B, 0xFFFE); // IRQ vector, B flag cleared
         return;
     }
 }

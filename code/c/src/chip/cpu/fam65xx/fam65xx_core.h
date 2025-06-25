@@ -108,23 +108,23 @@ struct fam65xx_s {
 } while(0)
 
 // Instruction dispatch macros (shared - but implementation-specific functions)
-#define FAM65XX_NEXT_INSTRUCTION_DISPATCH(cpu, read_func) do { \
-    uint8_t opcode = read_func(cpu, (cpu)->pc++); \
+#define FAM65XX_NEXT_INSTRUCTION_DISPATCH(cpu) do { \
+    uint8_t opcode = fam65xx_read_cycle(cpu, (cpu)->pc++); \
     (cpu)->opcode_handlers[opcode](cpu); \
 } while(0)
 
-#define FAM65XX_NEXT_INSTRUCTION(cpu, interrupt_func, read_func) do { \
+#define FAM65XX_NEXT_INSTRUCTION(cpu) do { \
     if (unlikely(FAM65XX_TEST_IRQ(cpu) || FAM65XX_TEST_NMI(cpu))) { \
-        interrupt_func(cpu); \
+        fam65xx_interrupt_handler(cpu); \
     } else { \
         FAM65XX_WAIT_READY(cpu); \
     } \
-    FAM65XX_NEXT_INSTRUCTION_DISPATCH(cpu, read_func); \
+    FAM65XX_NEXT_INSTRUCTION_DISPATCH(cpu); \
 } while(0)
 
 // Family-specific versions of shared macros
 #define FAM65XX_OPCODE_FOOTER(cpu) \
-    FAM65XX_NEXT_INSTRUCTION(cpu, fam65xx_interrupt_handler, fam65xx_read_cycle)
+    FAM65XX_NEXT_INSTRUCTION(cpu)
 
 // Universal instruction dispatch using function pointers
 // ============================================================================
@@ -173,7 +173,9 @@ static inline void fam65xx_set_nz_flags(fam65xx_t* cpu, uint8_t value) {
 }
 
 // Interrupt handling (shared)
+// For IRQ and NMI, the B flag is cleared in the pushed status. For BRK, it is set.
 void fam65xx_interrupt_sequence(fam65xx_t* cpu, uint8_t status_flags, uint16_t vector_addr);
+void fam65xx_interrupt_handler(fam65xx_t* cpu);
 
 // Interception support (shared)
 void fam65xx_start_intercept(fam65xx_t* cpu);

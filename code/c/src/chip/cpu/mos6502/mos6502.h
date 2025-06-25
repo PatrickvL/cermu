@@ -47,10 +47,6 @@ void mos6502_set_y(mos6502_t* cpu, uint8_t value);
 void mos6502_set_sp(mos6502_t* cpu, uint8_t value);
 void mos6502_set_p(mos6502_t* cpu, uint8_t value);
 
-// Memory access functions
-uint8_t mos6502_read_memory(mos6502_t* cpu, uint16_t address);
-void mos6502_write_memory(mos6502_t* cpu, uint16_t address, uint8_t value);
-
 // Test and debug support
 void mos6502_start_intercept(mos6502_t* cpu);
 void mos6502_stop_intercept(mos6502_t* cpu);

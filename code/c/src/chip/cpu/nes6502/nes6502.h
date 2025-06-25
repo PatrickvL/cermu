@@ -49,10 +49,6 @@ void nes6502_set_y(nes6502_t* cpu, uint8_t value);
 void nes6502_set_sp(nes6502_t* cpu, uint8_t value);
 void nes6502_set_p(nes6502_t* cpu, uint8_t value);
 
-// Memory access functions
-uint8_t nes6502_read_memory(nes6502_t* cpu, uint16_t address);
-void nes6502_write_memory(nes6502_t* cpu, uint16_t address, uint8_t value);
-
 // Test and debug support
 void nes6502_start_intercept(nes6502_t* cpu);
 void nes6502_stop_intercept(nes6502_t* cpu);
