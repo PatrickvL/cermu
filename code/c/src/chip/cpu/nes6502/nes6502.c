@@ -100,17 +100,6 @@ void nes6502_set_y(nes6502_t* cpu, uint8_t value) { if (cpu) cpu->base.y = value
 void nes6502_set_sp(nes6502_t* cpu, uint8_t value) { if (cpu) cpu->base.sp = value; }
 void nes6502_set_p(nes6502_t* cpu, uint8_t value) { if (cpu) cpu->base.p = value; }
 
-// Memory access functions
-uint8_t nes6502_read_memory(nes6502_t* cpu, uint16_t address) {
-    return cpu ? fam65xx_read_cycle(&cpu->base, address) : 0;
-}
-
-void nes6502_write_memory(nes6502_t* cpu, uint16_t address, uint8_t value) {
-    if (cpu) {
-        fam65xx_write_cycle(&cpu->base, address, value);
-    }
-}
-
 // Test and debug support
 void nes6502_start_intercept(nes6502_t* cpu) {
     if (cpu) fam65xx_start_intercept(&cpu->base);

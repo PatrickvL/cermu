@@ -134,26 +134,6 @@ void mos6510_init(mos6510_t* cpu) {
     cpu->ram_access.write_func = NULL;
 }
 
-void mos6510_nmi(mos6510_t* cpu) {
-    mos6510_interrupt_sequence(cpu, cpu->base.p & ~FLAG_B, 0xFFFA);
-}
-
-void mos6510_irq(mos6510_t* cpu, uint8_t status) {
-    mos6510_interrupt_sequence(cpu, status, 0xFFFE);
-}
-
-// Interrupt handler - called when IRQ or NMI lines are active
-void mos6510_interrupt_handler(mos6510_t* cpu) {
-    if (FAM65XX_TEST_NMI(&cpu->base)) {
-        // Handle NMI - non-maskable
-        mos6510_nmi(cpu);
-    } else if (FAM65XX_TEST_IRQ(&cpu->base) && !fam65xx_get_flag(&cpu->base, FLAG_I)) {
-        // Handle IRQ when interrupt disable is clear
-        mos6510_irq(cpu, cpu->base.p & ~FLAG_B); // Clear B flag for IRQ
-    }
-    MOS6510_OPCODE_FOOTER(cpu);
-}
-
 // Reset CPU
 void mos6510_reset(mos6510_t* cpu) {
     // Read reset vector from $FFFC/$FFFD
@@ -179,7 +159,7 @@ bool mos6510_step(mos6510_t* cpu) {
 void mos6510_execute(mos6510_t* cpu) {
     // Start execution using threaded dispatch
     // The MOS6510_OPCODE_FOOTER macro will chain instructions until intercept is triggered
-    FAM65XX_NEXT_INSTRUCTION(&cpu->base, mos6510_interrupt_handler_wrapper, mos6510_read_cycle_wrapper);
+    FAM65XX_NEXT_INSTRUCTION(&cpu->base);
 }
 
 // ============================================================================

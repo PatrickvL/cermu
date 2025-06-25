@@ -50,10 +50,6 @@ struct mos6510_s {
     uint8_t io_port[2]; // 0:DDR, 1:Port
 };
 
-// Global instruction table
-extern mos6510_opcode_handler_t mos6510_opcode_handlers[256];
-
-
 // --- Interception support: replace handlers with stubs until next opcode ---
 /**
  * Begin intercepting the next opcode fetch for the specified CPU.  All 256 handlers will be
@@ -127,56 +123,19 @@ static inline void mos6510_ioport_write(mos6510_t* cpu, uint16_t addr, uint8_t v
 
 // Memory access functions using optimized direct callbacks
 static inline uint8_t mos6510_read_cycle(mos6510_t* cpu, uint16_t addr) {
-    // All addresses go through bus interface - banking system routes zero bank to chip functions
-    uint8_t result = cpu->base.bus_interface.bus_read(cpu->base.bus_interface.context, addr);
-    
-    // Execute one cycle on other non-CPU chips after the bus operation
-    cpu->base.bus_interface.cycle_tick(cpu->base.bus_interface.context);
-    
-    return result;
+    // Forward to family implementation (identical logic)
+    return fam65xx_read_cycle(&cpu->base, addr);
 }
 
 static inline void mos6510_write_cycle(mos6510_t* cpu, uint16_t addr, uint8_t value) {
-    // All addresses go through bus interface - banking system routes zero bank to chip functions
-    cpu->base.bus_interface.bus_write(cpu->base.bus_interface.context, addr, value);
-    
-    // Execute one cycle on other non-CPU chips after the bus operation
-    cpu->base.bus_interface.cycle_tick(cpu->base.bus_interface.context);
+    fam65xx_write_cycle(&cpu->base, addr, value);
 }
-
-// Forward declaration for functions used in macros
-void mos6510_interrupt_handler(mos6510_t* cpu);
-void c64_non_cpu_cycle(void* c64);  // c64_t* - forward declaration with opaque pointer
-
-// CPU opcode dispatch function
-static inline void mos6510_opcode_dispatch(mos6510_t* cpu, uint8_t opcode) {
-    mos6510_opcode_handler_t handler = (mos6510_opcode_handler_t)cpu->base.opcode_handlers[opcode];
-    handler(cpu);
-}
-
-// MOS6510-specific versions of shared macros - using wrapper functions to handle type conversion
-// Since base is the first member of mos6510_t, we can safely cast directly
-static inline void mos6510_interrupt_handler_wrapper(fam65xx_t* base_cpu) {
-    mos6510_t* cpu = (mos6510_t*)base_cpu;
-    mos6510_interrupt_handler(cpu);
-}
-
-static inline uint8_t mos6510_read_cycle_wrapper(fam65xx_t* base_cpu, uint16_t addr) {
-    mos6510_t* cpu = (mos6510_t*)base_cpu;
-    return mos6510_read_cycle(cpu, addr);
-}
-
-#define MOS6510_OPCODE_FOOTER(cpu) \
-    FAM65XX_NEXT_INSTRUCTION(&((cpu)->base), mos6510_interrupt_handler_wrapper, mos6510_read_cycle_wrapper)
 
 // ============================================================================
 // PERFORMANCE-OPTIMIZED MACROS FOR CODE DEDUPLICATION
 // ============================================================================
 
-// Cycle timing macro for intra-instruction cycles
-#define MOS6510_INTRA_CYCLE(cpu) do { \
-    (cpu)->base.bus_interface.cycle_tick((cpu)->base.bus_interface.context); \
-} while(0)
+// MOS6510-specific versions of shared macros
 
 // MOS6510_CONTROL_LINES - Get control lines with zero-indirection access
 #define MOS6510_CONTROL_LINES(cpu) \
@@ -192,11 +151,13 @@ static inline uint8_t mos6510_read_cycle_wrapper(fam65xx_t* base_cpu, uint16_t a
 #define MOS6510_SYSTEM_LINES_SET(cpu, mask) SYS_LINES_SET((cpu)->system_lines, mask)
 #define MOS6510_SYSTEM_LINES_CLEAR(cpu, mask) SYS_LINES_CLEAR((cpu)->system_lines, mask)
 
-// Bus cycle operations - call bus operation then cycle tick
-#define MOS6510_BUS_CYCLE(cpu) \
-    ((cpu)->bus_interface.cycle_tick((cpu)->bus_interface.context))
+// Bus cycle timing macro for intra-instruction cycles
+#define MOS6510_INTRA_CYCLE(cpu) do { \
+    (cpu)->base.bus_interface.cycle_tick((cpu)->base.bus_interface.context); \
+} while(0)
 
-
+#define MOS6510_OPCODE_FOOTER(cpu) \
+    FAM65XX_OPCODE_FOOTER(&(cpu)->base)
 
 // Flag operations (using family functions)
 static inline void mos6510_set_flag(mos6510_t* cpu, uint8_t flag, bool condition) {

@@ -206,20 +206,6 @@ chip_descriptor_t mos6502_descriptor = {
 };
 
 // ============================================================================
-// MEMORY ACCESS FUNCTIONS
-// ============================================================================
-
-uint8_t mos6502_read_memory(mos6502_t* cpu, uint16_t address) {
-    if (!cpu) return 0xFF;
-    return fam65xx_read_cycle(&cpu->base, address);
-}
-
-void mos6502_write_memory(mos6502_t* cpu, uint16_t address, uint8_t value) {
-    if (!cpu) return;
-    fam65xx_write_cycle(&cpu->base, address, value);
-}
-
-// ============================================================================
 // INTERCEPT FUNCTIONS
 // ============================================================================
 
