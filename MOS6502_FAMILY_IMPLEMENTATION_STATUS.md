@@ -210,8 +210,8 @@ Each JSON file contains:
 - **CRITICAL ISSUE**: Test runner hangs on first CPU opcode step execution
 
 ###Known Issues ⚠️ NEEDS IMMEDIATE ATTENTION
-- **ProcessorTests Hang**: Runner hangs on first opcode step - likely infinite loop or missing cycle completion
-- **Missing Descriptor Declarations**: Test runner has undefined mos6502_descriptor, nes6502_descriptor
+- ✅ **FIXED: ProcessorTests Hang**: **CRITICAL INTERRUPT DISPATCH BUG RESOLVED** - Fixed [`fam65xx_interrupt_handler`](aiemu/code/c/src/chip/cpu/fam65xx/fam65xx_core.c:54) to properly dispatch to next instruction after interrupt processing
+- ✅ **FIXED: Missing Descriptor Declarations**: Both [`mos6502_descriptor`](aiemu/code/c/src/chip/cpu/mos6502/mos6502.c:192) and [`nes6502_descriptor`](aiemu/code/c/src/chip/cpu/nes6502/nes6502.c:417) are properly defined
 - **Getter/Setter Functions**: Legacy functions should be replaced with direct struct member access
 
 ## Next Steps

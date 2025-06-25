@@ -61,9 +61,6 @@ void fam65xx_interrupt_handler(fam65xx_t* cpu) {
         fam65xx_interrupt_sequence(cpu, cpu->p, 0xFFFE); // IRQ vector
         return;
     }
-    
-    // No interrupt - continue with next instruction
-    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // Interception support (shared) - proper handler replacement mechanism

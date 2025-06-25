@@ -122,6 +122,10 @@ struct fam65xx_s {
     FAM65XX_NEXT_INSTRUCTION_DISPATCH(cpu, read_func); \
 } while(0)
 
+// Family-specific versions of shared macros
+#define FAM65XX_OPCODE_FOOTER(cpu) \
+    FAM65XX_NEXT_INSTRUCTION(cpu, fam65xx_interrupt_handler, fam65xx_read_cycle)
+
 // Universal instruction dispatch using function pointers
 // ============================================================================
 // SHARED FUNCTION DECLARATIONS
@@ -134,9 +138,6 @@ void fam65xx_write_cycle(fam65xx_t* cpu, uint16_t address, uint8_t value);  // B
 // Forward declaration for macros
 void fam65xx_interrupt_handler(fam65xx_t* cpu);
 
-// Family-specific versions of shared macros
-#define FAM65XX_OPCODE_FOOTER(cpu) \
-    FAM65XX_NEXT_INSTRUCTION(cpu, fam65xx_interrupt_handler, fam65xx_read_cycle)
 
 // Arithmetic helper function types
 typedef uint8_t (*fam65xx_addr_func_t)(fam65xx_t* cpu);
