@@ -556,37 +556,90 @@ void fam65xx_ror_absolute_x_buggy(fam65xx_t* cpu) {
     FAM65XX_OPCODE_FOOTER(cpu);
 }
 
+// NMOS 6502 decimal mode core logic (shared for all MOS6502 decimal-aware handlers)
+void mos6502_op_adc(fam65xx_t* cpu, uint8_t operand) {
+    if (!cpu) return;
+    if (fam65xx_get_flag(cpu, FLAG_D)) {
+        // Decimal (BCD) mode arithmetic - NMOS 6502 implementation
+        // The NMOS 6502 has specific behavior: N,V,Z flags based on binary result,
+        // but the accumulator and C flag are based on BCD arithmetic
+        uint8_t carry_in = fam65xx_get_flag(cpu, FLAG_C) ? 1 : 0;
+        uint8_t A = cpu->a;
+        uint8_t operand_val = operand;
+        uint16_t binary_result = A + operand_val + carry_in;
+        fam65xx_set_flag(cpu, FLAG_N, (binary_result & 0x80) != 0);
+        fam65xx_set_flag(cpu, FLAG_Z, (binary_result & 0xFF) == 0);
+        fam65xx_set_flag(cpu, FLAG_V, ((A ^ binary_result) & (operand_val ^ binary_result) & 0x80) != 0);
+        uint16_t al = (A & 0x0F) + (operand_val & 0x0F) + carry_in;
+        if (al >= 0x0A) {
+            al = ((al + 0x06) & 0x0F) + 0x10;
+        }
+        uint16_t result = (A & 0xF0) + (operand_val & 0xF0) + al;
+        if (result >= 0xA0) {
+            result += 0x60;
+        }
+        fam65xx_set_flag(cpu, FLAG_C, result >= 0x100);
+        cpu->a = result & 0xFF;
+    } else {
+        fam65xx_op_adc(cpu, operand);
+    }
+}
+
+void mos6502_op_sbc(fam65xx_t* cpu, uint8_t operand) {
+    if (!cpu) return;
+    if (fam65xx_get_flag(cpu, FLAG_D)) {
+        uint8_t carry_in = fam65xx_get_flag(cpu, FLAG_C) ? 0 : 1; // Inverted for SBC
+        uint8_t A = cpu->a;
+        uint8_t operand_val = operand;
+        uint16_t binary_result = A - operand_val - carry_in;
+        fam65xx_set_flag(cpu, FLAG_N, (binary_result & 0x80) != 0);
+        fam65xx_set_flag(cpu, FLAG_Z, (binary_result & 0xFF) == 0);
+        fam65xx_set_flag(cpu, FLAG_V, ((A ^ binary_result) & ((~operand_val) ^ binary_result) & 0x80) != 0);
+        int16_t al = (A & 0x0F) - (operand_val & 0x0F) - carry_in;
+        int16_t ah = (A >> 4) - (operand_val >> 4);
+        if (al < 0) {
+            al = (al - 6) & 0x0F;
+            ah--;
+        }
+        if (ah < 0) {
+            ah = (ah - 6) & 0x0F;
+            fam65xx_set_flag(cpu, FLAG_C, false);
+        } else {
+            fam65xx_set_flag(cpu, FLAG_C, true);
+        }
+        cpu->a = ((ah << 4) & 0xF0) | (al & 0x0F);
+    } else {
+        fam65xx_op_sbc(cpu, operand);
+    }
+}
+
 /**
- * Initialize CPU with default opcode handler table.
- * This copies the complete base table to the CPU's handler array.
- */
-/**
- * Initialize opcode table with CPU-specific features.
- * This processes CPU feature flags and automatically overrides opcodes as needed.
+ * Initialize CPU with default opcode handler table with CPU-specific features.
+ * This copies the complete base table to the CPU's handler array
+ * and processes CPU feature flags and automatically overrides opcodes as needed.
  */
 void fam65xx_init_opcode_table(fam65xx_t* cpu, uint32_t cpu_features) {
     // Start with the default opcode table (binary-only arithmetic, like MOS6510)
     memcpy(cpu->opcode_handlers, fam65xx_default_handlers, sizeof(cpu->opcode_handlers));    // Apply decimal mode overrides if supported
     if (cpu_features & FAM65XX_FEATURE_DECIMAL_MODE) {
-        // Override ADC opcodes with decimal-aware versions
-        fam65xx_override_opcode(cpu, 0x69, mos6502_adc_immediate_decimal);  // ADC #$nn
-        fam65xx_override_opcode(cpu, 0x65, mos6502_adc_zero_page_decimal);  // ADC $nn
-        fam65xx_override_opcode(cpu, 0x75, mos6502_adc_zero_page_x_decimal); // ADC $nn,X
-        fam65xx_override_opcode(cpu, 0x6D, mos6502_adc_absolute_decimal);   // ADC $nnnn
-        fam65xx_override_opcode(cpu, 0x7D, mos6502_adc_absolute_x_decimal); // ADC $nnnn,X
-        fam65xx_override_opcode(cpu, 0x79, mos6502_adc_absolute_y_decimal); // ADC $nnnn,Y
-        fam65xx_override_opcode(cpu, 0x61, mos6502_adc_indirect_x_decimal); // ADC ($nn,X)
-        fam65xx_override_opcode(cpu, 0x71, mos6502_adc_indirect_y_decimal); // ADC ($nn),Y
-        
-        // Override SBC opcodes with decimal-aware versions
-        fam65xx_override_opcode(cpu, 0xE9, mos6502_sbc_immediate_decimal);  // SBC #$nn
-        fam65xx_override_opcode(cpu, 0xE5, mos6502_sbc_zero_page_decimal);  // SBC $nn
-        fam65xx_override_opcode(cpu, 0xF5, mos6502_sbc_zero_page_x_decimal); // SBC $nn,X
-        fam65xx_override_opcode(cpu, 0xED, mos6502_sbc_absolute_decimal);   // SBC $nnnn
-        fam65xx_override_opcode(cpu, 0xFD, mos6502_sbc_absolute_x_decimal); // SBC $nnnn,X
-        fam65xx_override_opcode(cpu, 0xF9, mos6502_sbc_absolute_y_decimal); // SBC $nnnn,Y
-        fam65xx_override_opcode(cpu, 0xE1, mos6502_sbc_indirect_x_decimal); // SBC ($nn,X)
-        fam65xx_override_opcode(cpu, 0xF1, mos6502_sbc_indirect_y_decimal); // SBC ($nn),Y
+        // Use MOS6502-specific decimal-aware handlers for ADC/SBC
+        fam65xx_override_opcode(cpu, 0x69, mos6502_op_adc_imm);  // ADC #$nn
+        fam65xx_override_opcode(cpu, 0x65, mos6502_op_adc_zp);   // ADC $nn
+        fam65xx_override_opcode(cpu, 0x75, mos6502_op_adc_zpx);  // ADC $nn,X
+        fam65xx_override_opcode(cpu, 0x6D, mos6502_op_adc_abs);  // ADC $nnnn
+        fam65xx_override_opcode(cpu, 0x7D, mos6502_op_adc_absx); // ADC $nnnn,X
+        fam65xx_override_opcode(cpu, 0x79, mos6502_op_adc_absy); // ADC $nnnn,Y
+        fam65xx_override_opcode(cpu, 0x61, mos6502_op_adc_indx); // ADC ($nn,X)
+        fam65xx_override_opcode(cpu, 0x71, mos6502_op_adc_indy); // ADC ($nn),Y
+
+        fam65xx_override_opcode(cpu, 0xE9, mos6502_op_sbc_imm);  // SBC #$nn
+        fam65xx_override_opcode(cpu, 0xE5, mos6502_op_sbc_zp);   // SBC $nn
+        fam65xx_override_opcode(cpu, 0xF5, mos6502_op_sbc_zpx);  // SBC $nn,X
+        fam65xx_override_opcode(cpu, 0xED, mos6502_op_sbc_abs);  // SBC $nnnn
+        fam65xx_override_opcode(cpu, 0xFD, mos6502_op_sbc_absx); // SBC $nnnn,X
+        fam65xx_override_opcode(cpu, 0xF9, mos6502_op_sbc_absy); // SBC $nnnn,Y
+        fam65xx_override_opcode(cpu, 0xE1, mos6502_op_sbc_indx); // SBC ($nn,X)
+        fam65xx_override_opcode(cpu, 0xF1, mos6502_op_sbc_indy); // SBC ($nn),Y
     }
     
     // Apply illegal opcodes behavior

@@ -10,40 +10,38 @@ void mos6502_op_adc(fam65xx_t* cpu, uint8_t operand) {
     if (!cpu) return;
     
     if (fam65xx_get_flag(cpu, FLAG_D)) {
-        // Decimal (BCD) mode arithmetic - MOS6502 specific implementation
+        // Decimal (BCD) mode arithmetic - NMOS 6502 implementation
+        // The NMOS 6502 has specific behavior: N,V,Z flags based on binary result,
+        // but the accumulator and C flag are based on BCD arithmetic
+        
         uint8_t carry_in = fam65xx_get_flag(cpu, FLAG_C) ? 1 : 0;
         uint8_t A = cpu->a;
-        uint8_t s = operand;
+        uint8_t operand_val = operand;
         
-        // Convert to BCD
-        uint8_t al = (A & 0x0F) + (s & 0x0F) + carry_in;
-        uint8_t ah = (A >> 4) + (s >> 4);
+        // First, do binary addition for N, V, Z flags
+        uint16_t binary_result = A + operand_val + carry_in;
         
-        // Handle low nibble carry
-        if (al > 9) {
-            al = (al + 6) & 0x0F;
-            ah++;
-        }
-        
-        // Set N and Z flags based on binary result (6502 quirk)
-        uint16_t binary_result = A + s + carry_in;
+        // Set N, V, Z flags based on binary result (NMOS 6502 behavior)
         fam65xx_set_flag(cpu, FLAG_N, (binary_result & 0x80) != 0);
         fam65xx_set_flag(cpu, FLAG_Z, (binary_result & 0xFF) == 0);
+        fam65xx_set_flag(cpu, FLAG_V, ((A ^ binary_result) & (operand_val ^ binary_result) & 0x80) != 0);
         
-        // Set overflow flag based on binary result
-        bool overflow = ((A ^ binary_result) & (s ^ binary_result) & 0x80) != 0;
-        fam65xx_set_flag(cpu, FLAG_V, overflow);
-        
-        // Handle high nibble carry
-        if (ah > 9) {
-            ah = (ah + 6) & 0x0F;
-            fam65xx_set_flag(cpu, FLAG_C, true);
-        } else {
-            fam65xx_set_flag(cpu, FLAG_C, false);
+        // Now do BCD arithmetic for the accumulator and carry flag
+        uint16_t al = (A & 0x0F) + (operand_val & 0x0F) + carry_in;
+        if (al >= 0x0A) {
+            al = ((al + 0x06) & 0x0F) + 0x10;
         }
         
+        uint16_t result = (A & 0xF0) + (operand_val & 0xF0) + al;
+        if (result >= 0xA0) {
+            result += 0x60;
+        }
+        
+        // Set carry flag based on BCD result
+        fam65xx_set_flag(cpu, FLAG_C, result >= 0x100);
+        
         // Update accumulator with BCD result
-        cpu->a = (ah << 4) | al;
+        cpu->a = result & 0xFF;
     } else {
         // Binary mode ADC - use inlined base family implementation
         fam65xx_op_adc(cpu, operand);
@@ -54,29 +52,31 @@ void mos6502_op_sbc(fam65xx_t* cpu, uint8_t operand) {
     if (!cpu) return;
     
     if (fam65xx_get_flag(cpu, FLAG_D)) {
-        // Decimal (BCD) mode arithmetic - MOS6502 specific implementation
+        // Decimal (BCD) mode arithmetic - NMOS 6502 implementation
+        // The NMOS 6502 has specific behavior: N,V,Z flags based on binary result,
+        // but the accumulator and C flag are based on BCD arithmetic
+        
         uint8_t carry_in = fam65xx_get_flag(cpu, FLAG_C) ? 0 : 1; // Inverted for SBC
         uint8_t A = cpu->a;
-        uint8_t s = operand;
+        uint8_t operand_val = operand;
         
-        // Convert to BCD for subtraction
-        int8_t al = (A & 0x0F) - (s & 0x0F) - carry_in;
-        int8_t ah = (A >> 4) - (s >> 4);
+        // First, do binary subtraction for N, V, Z flags
+        uint16_t binary_result = A - operand_val - carry_in;
+        
+        // Set N, V, Z flags based on binary result (NMOS 6502 behavior)
+        fam65xx_set_flag(cpu, FLAG_N, (binary_result & 0x80) != 0);
+        fam65xx_set_flag(cpu, FLAG_Z, (binary_result & 0xFF) == 0);
+        fam65xx_set_flag(cpu, FLAG_V, ((A ^ binary_result) & ((~operand_val) ^ binary_result) & 0x80) != 0);
+        
+        // Now do BCD arithmetic for the accumulator and carry flag
+        int16_t al = (A & 0x0F) - (operand_val & 0x0F) - carry_in;
+        int16_t ah = (A >> 4) - (operand_val >> 4);
         
         // Handle low nibble borrow
         if (al < 0) {
             al = (al - 6) & 0x0F;
             ah--;
         }
-        
-        // Set N and Z flags based on binary result (6502 quirk)
-        uint16_t binary_result = A - s - carry_in;
-        fam65xx_set_flag(cpu, FLAG_N, (binary_result & 0x80) != 0);
-        fam65xx_set_flag(cpu, FLAG_Z, (binary_result & 0xFF) == 0);
-        
-        // Set overflow flag based on binary result
-        bool overflow = ((A ^ binary_result) & ((~s) ^ binary_result) & 0x80) != 0;
-        fam65xx_set_flag(cpu, FLAG_V, overflow);
         
         // Handle high nibble borrow
         if (ah < 0) {
@@ -87,7 +87,7 @@ void mos6502_op_sbc(fam65xx_t* cpu, uint8_t operand) {
         }
         
         // Update accumulator with BCD result
-        cpu->a = (ah << 4) | al;
+        cpu->a = ((ah << 4) & 0xF0) | (al & 0x0F);
     } else {
         // Binary mode SBC - use base family implementation
         fam65xx_op_sbc(cpu, operand);
@@ -170,28 +170,8 @@ void mos6502_op_sbc_indy(mos6502_t* cpu) {
 
 void mos6502_init_opcode_table(mos6502_t* cpu) {
     if (!cpu) return;
-    
-    // Initialize with base family opcodes and decimal mode support
+    // Only set up the base table with decimal mode and illegal opcode support.
+    // Do NOT override ADC/SBC handlers here; let fam65xx_init_opcode_table handle it based on the feature flag.
     uint32_t features = FAM65XX_FEATURE_DECIMAL_MODE | FAM65XX_FEATURE_ILLEGAL_OPCODES;
     fam65xx_init_opcode_table(&cpu->base, features);
-    
-    // Override ADC opcodes with MOS6502-specific decimal implementations
-    fam65xx_override_opcode(&cpu->base, 0x69, (fam65xx_opcode_handler_t)mos6502_op_adc_imm);   // ADC #$nn
-    fam65xx_override_opcode(&cpu->base, 0x65, (fam65xx_opcode_handler_t)mos6502_op_adc_zp);    // ADC $nn
-    fam65xx_override_opcode(&cpu->base, 0x75, (fam65xx_opcode_handler_t)mos6502_op_adc_zpx);   // ADC $nn,X
-    fam65xx_override_opcode(&cpu->base, 0x6D, (fam65xx_opcode_handler_t)mos6502_op_adc_abs);   // ADC $nnnn
-    fam65xx_override_opcode(&cpu->base, 0x7D, (fam65xx_opcode_handler_t)mos6502_op_adc_absx);  // ADC $nnnn,X
-    fam65xx_override_opcode(&cpu->base, 0x79, (fam65xx_opcode_handler_t)mos6502_op_adc_absy);  // ADC $nnnn,Y
-    fam65xx_override_opcode(&cpu->base, 0x61, (fam65xx_opcode_handler_t)mos6502_op_adc_indx);  // ADC ($nn,X)
-    fam65xx_override_opcode(&cpu->base, 0x71, (fam65xx_opcode_handler_t)mos6502_op_adc_indy);  // ADC ($nn),Y
-    
-    // Override SBC opcodes with MOS6502-specific decimal implementations
-    fam65xx_override_opcode(&cpu->base, 0xE9, (fam65xx_opcode_handler_t)mos6502_op_sbc_imm);   // SBC #$nn
-    fam65xx_override_opcode(&cpu->base, 0xE5, (fam65xx_opcode_handler_t)mos6502_op_sbc_zp);    // SBC $nn
-    fam65xx_override_opcode(&cpu->base, 0xF5, (fam65xx_opcode_handler_t)mos6502_op_sbc_zpx);   // SBC $nn,X
-    fam65xx_override_opcode(&cpu->base, 0xED, (fam65xx_opcode_handler_t)mos6502_op_sbc_abs);   // SBC $nnnn
-    fam65xx_override_opcode(&cpu->base, 0xFD, (fam65xx_opcode_handler_t)mos6502_op_sbc_absx);  // SBC $nnnn,X
-    fam65xx_override_opcode(&cpu->base, 0xF9, (fam65xx_opcode_handler_t)mos6502_op_sbc_absy);  // SBC $nnnn,Y
-    fam65xx_override_opcode(&cpu->base, 0xE1, (fam65xx_opcode_handler_t)mos6502_op_sbc_indx);  // SBC ($nn,X)
-    fam65xx_override_opcode(&cpu->base, 0xF1, (fam65xx_opcode_handler_t)mos6502_op_sbc_indy);  // SBC ($nn),Y
 }

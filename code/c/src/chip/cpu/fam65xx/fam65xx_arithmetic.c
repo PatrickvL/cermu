@@ -187,38 +187,33 @@ void fam65xx_eor_indirect_y(fam65xx_t* cpu) {
 // Decimal mode ADC operation (for MOS6502 with functional decimal mode)
 static inline void mos6502_op_adc_decimal(fam65xx_t* cpu, uint8_t value) {
     if (fam65xx_get_flag(cpu, FLAG_D)) {
-        // Decimal (BCD) mode arithmetic
+        // NMOS 6502 decimal mode - flags set from binary, result is BCD
         uint8_t carry_in = fam65xx_get_flag(cpu, FLAG_C) ? 1 : 0;
+        uint8_t original_a = cpu->a;
         
-        // Convert to BCD
-        uint8_t al = (cpu->a & 0x0F) + (value & 0x0F) + carry_in;
-        uint8_t ah = (cpu->a >> 4) + (value >> 4);
+        // First do binary addition for flag calculation
+        uint16_t binary_sum = original_a + value + carry_in;
         
-        // Handle low nibble carry
-        if (al > 9) {
-            al = (al + 6) & 0x0F;
-            ah++;
+        // Set N and V flags based on binary result (NMOS 6502 behavior)
+        fam65xx_set_flag(cpu, FLAG_N, (binary_sum & 0x80) != 0);
+        fam65xx_set_flag(cpu, FLAG_Z, (binary_sum & 0xFF) == 0);
+        bool v_flag = ((original_a ^ binary_sum) & (value ^ binary_sum) & 0x80) != 0;
+        fam65xx_set_flag(cpu, FLAG_V, v_flag);
+        
+        // Now do actual BCD arithmetic for the result
+        uint16_t al = (original_a & 0x0F) + (value & 0x0F) + carry_in;
+        if (al >= 0x0A) {
+            al = ((al + 0x06) & 0x0F) + 0x10;
         }
         
-        // Set N and Z flags based on binary result (6502 quirk)
-        uint16_t binary_result = cpu->a + value + carry_in;
-        fam65xx_set_flag(cpu, FLAG_N, (binary_result & 0x80) != 0);
-        fam65xx_set_flag(cpu, FLAG_Z, (binary_result & 0xFF) == 0);
-        
-        // Set overflow flag based on binary result
-        bool overflow = ((cpu->a ^ binary_result) & (value ^ binary_result) & 0x80) != 0;
-        fam65xx_set_flag(cpu, FLAG_V, overflow);
-        
-        // Handle high nibble carry
-        if (ah > 9) {
-            ah = (ah + 6) & 0x0F;
-            fam65xx_set_flag(cpu, FLAG_C, true);
-        } else {
-            fam65xx_set_flag(cpu, FLAG_C, false);
+        uint16_t bcd_result = (original_a & 0xF0) + (value & 0xF0) + al;
+        if (bcd_result >= 0xA0) {
+            bcd_result += 0x60;
         }
         
-        // Update accumulator with BCD result
-        cpu->a = (ah << 4) | al;
+        // Set C flag and update accumulator based on BCD result
+        fam65xx_set_flag(cpu, FLAG_C, bcd_result >= 0x100);
+        cpu->a = bcd_result & 0xFF;
     } else {
         // Binary mode - use standard implementation
         fam65xx_op_adc(cpu, value);
