@@ -1,7 +1,14 @@
 #include "fam65xx_core.h"
-#include "fam65xx_arithmetic.h"
-#include "fam65xx_illegal.h"
 #include <string.h>
+
+// Opcode implementations are now included directly
+#include "fam65xx_arithmetic.inc"
+#include "fam65xx_control.inc"
+#include "fam65xx_illegal.inc"
+#include "fam65xx_memory.inc"
+#include "fam65xx_misc.inc"
+#include "fam65xx_registers.inc"
+#include "fam65xx_shifts.inc"
 
 // ============================================================================
 // SHARED MOS 6502 FAMILY DEFAULT OPCODE HANDLER TABLE
@@ -14,204 +21,7 @@
 // - MOS6502 enables all operations including decimal mode
 // - MOS6510 adds I/O port handling and illegal opcodes
 
-// External declarations for the opcode implementations
-// These are declared in the various fam65xx_*.c files
-
-// Arithmetic operations
-extern void fam65xx_op_adc_immediate(fam65xx_t* cpu);
-extern void fam65xx_op_adc_zero_page(fam65xx_t* cpu);
-extern void fam65xx_op_adc_zero_page_x(fam65xx_t* cpu);
-extern void fam65xx_op_adc_absolute(fam65xx_t* cpu);
-extern void fam65xx_op_adc_absolute_x(fam65xx_t* cpu);
-extern void fam65xx_op_adc_absolute_y(fam65xx_t* cpu);
-extern void fam65xx_op_adc_indirect_x(fam65xx_t* cpu);
-extern void fam65xx_op_adc_indirect_y(fam65xx_t* cpu);
-
-extern void fam65xx_op_sbc_immediate(fam65xx_t* cpu);
-extern void fam65xx_op_sbc_zero_page(fam65xx_t* cpu);
-extern void fam65xx_op_sbc_zero_page_x(fam65xx_t* cpu);
-extern void fam65xx_op_sbc_absolute(fam65xx_t* cpu);
-extern void fam65xx_op_sbc_absolute_x(fam65xx_t* cpu);
-extern void fam65xx_op_sbc_absolute_y(fam65xx_t* cpu);
-extern void fam65xx_op_sbc_indirect_x(fam65xx_t* cpu);
-extern void fam65xx_op_sbc_indirect_y(fam65xx_t* cpu);
-
-extern void fam65xx_op_and_immediate(fam65xx_t* cpu);
-extern void fam65xx_op_and_zero_page(fam65xx_t* cpu);
-extern void fam65xx_op_and_zero_page_x(fam65xx_t* cpu);
-extern void fam65xx_op_and_absolute(fam65xx_t* cpu);
-extern void fam65xx_op_and_absolute_x(fam65xx_t* cpu);
-extern void fam65xx_op_and_absolute_y(fam65xx_t* cpu);
-extern void fam65xx_op_and_indirect_x(fam65xx_t* cpu);
-extern void fam65xx_op_and_indirect_y(fam65xx_t* cpu);
-
-extern void fam65xx_op_ora_immediate(fam65xx_t* cpu);
-extern void fam65xx_op_ora_zero_page(fam65xx_t* cpu);
-extern void fam65xx_op_ora_zero_page_x(fam65xx_t* cpu);
-extern void fam65xx_op_ora_absolute(fam65xx_t* cpu);
-extern void fam65xx_op_ora_absolute_x(fam65xx_t* cpu);
-extern void fam65xx_op_ora_absolute_y(fam65xx_t* cpu);
-extern void fam65xx_op_ora_indirect_x(fam65xx_t* cpu);
-extern void fam65xx_op_ora_indirect_y(fam65xx_t* cpu);
-
-extern void fam65xx_op_eor_immediate(fam65xx_t* cpu);
-extern void fam65xx_op_eor_zero_page(fam65xx_t* cpu);
-extern void fam65xx_op_eor_zero_page_x(fam65xx_t* cpu);
-extern void fam65xx_op_eor_absolute(fam65xx_t* cpu);
-extern void fam65xx_op_eor_absolute_x(fam65xx_t* cpu);
-extern void fam65xx_op_eor_absolute_y(fam65xx_t* cpu);
-extern void fam65xx_op_eor_indirect_x(fam65xx_t* cpu);
-extern void fam65xx_op_eor_indirect_y(fam65xx_t* cpu);
-
-// Memory operations
-extern void fam65xx_op_lda_immediate(fam65xx_t* cpu);
-extern void fam65xx_op_lda_zero_page(fam65xx_t* cpu);
-extern void fam65xx_op_lda_zero_page_x(fam65xx_t* cpu);
-extern void fam65xx_op_lda_absolute(fam65xx_t* cpu);
-extern void fam65xx_op_lda_absolute_x(fam65xx_t* cpu);
-extern void fam65xx_op_lda_absolute_y(fam65xx_t* cpu);
-extern void fam65xx_op_lda_indirect_x(fam65xx_t* cpu);
-extern void fam65xx_op_lda_indirect_y(fam65xx_t* cpu);
-
-extern void fam65xx_op_ldx_immediate(fam65xx_t* cpu);
-extern void fam65xx_op_ldx_zero_page(fam65xx_t* cpu);
-extern void fam65xx_op_ldx_zero_page_y(fam65xx_t* cpu);
-extern void fam65xx_op_ldx_absolute(fam65xx_t* cpu);
-extern void fam65xx_op_ldx_absolute_y(fam65xx_t* cpu);
-
-extern void fam65xx_op_ldy_immediate(fam65xx_t* cpu);
-extern void fam65xx_op_ldy_zero_page(fam65xx_t* cpu);
-extern void fam65xx_op_ldy_zero_page_x(fam65xx_t* cpu);
-extern void fam65xx_op_ldy_absolute(fam65xx_t* cpu);
-extern void fam65xx_op_ldy_absolute_x(fam65xx_t* cpu);
-
-extern void fam65xx_op_sta_zero_page(fam65xx_t* cpu);
-extern void fam65xx_op_sta_zero_page_x(fam65xx_t* cpu);
-extern void fam65xx_op_sta_absolute(fam65xx_t* cpu);
-extern void fam65xx_op_sta_absolute_x(fam65xx_t* cpu);
-extern void fam65xx_op_sta_absolute_y(fam65xx_t* cpu);
-extern void fam65xx_op_sta_indirect_x(fam65xx_t* cpu);
-extern void fam65xx_op_sta_indirect_y(fam65xx_t* cpu);
-
-extern void fam65xx_op_stx_zero_page(fam65xx_t* cpu);
-extern void fam65xx_op_stx_zero_page_y(fam65xx_t* cpu);
-extern void fam65xx_op_stx_absolute(fam65xx_t* cpu);
-
-extern void fam65xx_op_sty_zero_page(fam65xx_t* cpu);
-extern void fam65xx_op_sty_zero_page_x(fam65xx_t* cpu);
-extern void fam65xx_op_sty_absolute(fam65xx_t* cpu);
-
-// Control flow
-extern void fam65xx_op_bpl(fam65xx_t* cpu);
-extern void fam65xx_op_bmi(fam65xx_t* cpu);
-extern void fam65xx_op_bvc(fam65xx_t* cpu);
-extern void fam65xx_op_bvs(fam65xx_t* cpu);
-extern void fam65xx_op_bcc(fam65xx_t* cpu);
-extern void fam65xx_op_bcs(fam65xx_t* cpu);
-extern void fam65xx_op_bne(fam65xx_t* cpu);
-extern void fam65xx_op_beq(fam65xx_t* cpu);
-
-extern void fam65xx_op_jmp_absolute(fam65xx_t* cpu);
-extern void fam65xx_op_jmp_indirect(fam65xx_t* cpu);
-extern void fam65xx_op_jsr(fam65xx_t* cpu);
-extern void fam65xx_op_rts(fam65xx_t* cpu);
-
-extern void fam65xx_op_brk(fam65xx_t* cpu);
-extern void fam65xx_op_rti(fam65xx_t* cpu);
-
-// Flag operations
-extern void fam65xx_op_clc(fam65xx_t* cpu);
-extern void fam65xx_op_sec(fam65xx_t* cpu);
-extern void fam65xx_op_cli(fam65xx_t* cpu);
-extern void fam65xx_op_sei(fam65xx_t* cpu);
-extern void fam65xx_op_clv(fam65xx_t* cpu);
-extern void fam65xx_op_cld(fam65xx_t* cpu);
-extern void fam65xx_op_sed(fam65xx_t* cpu);
-
-// Register operations
-extern void fam65xx_op_tax(fam65xx_t* cpu);
-extern void fam65xx_op_tay(fam65xx_t* cpu);
-extern void fam65xx_op_txa(fam65xx_t* cpu);
-extern void fam65xx_op_tya(fam65xx_t* cpu);
-extern void fam65xx_op_tsx(fam65xx_t* cpu);
-extern void fam65xx_op_txs(fam65xx_t* cpu);
-
-extern void fam65xx_op_pha(fam65xx_t* cpu);
-extern void fam65xx_op_pla(fam65xx_t* cpu);
-extern void fam65xx_op_php(fam65xx_t* cpu);
-extern void fam65xx_op_plp(fam65xx_t* cpu);
-
-extern void fam65xx_op_inx(fam65xx_t* cpu);
-extern void fam65xx_op_iny(fam65xx_t* cpu);
-extern void fam65xx_op_dex(fam65xx_t* cpu);
-extern void fam65xx_op_dey(fam65xx_t* cpu);
-
-extern void fam65xx_op_inc_zero_page(fam65xx_t* cpu);
-extern void fam65xx_op_inc_zero_page_x(fam65xx_t* cpu);
-extern void fam65xx_op_inc_absolute(fam65xx_t* cpu);
-extern void fam65xx_op_inc_absolute_x(fam65xx_t* cpu);
-
-extern void fam65xx_op_dec_zero_page(fam65xx_t* cpu);
-extern void fam65xx_op_dec_zero_page_x(fam65xx_t* cpu);
-extern void fam65xx_op_dec_absolute(fam65xx_t* cpu);
-extern void fam65xx_op_dec_absolute_x(fam65xx_t* cpu);
-
-// Shift operations
-extern void fam65xx_op_asl_accumulator(fam65xx_t* cpu);
-extern void fam65xx_op_asl_zero_page(fam65xx_t* cpu);
-extern void fam65xx_op_asl_zero_page_x(fam65xx_t* cpu);
-extern void fam65xx_op_asl_absolute(fam65xx_t* cpu);
-extern void fam65xx_op_asl_absolute_x(fam65xx_t* cpu);
-
-extern void fam65xx_op_lsr_accumulator(fam65xx_t* cpu);
-extern void fam65xx_op_lsr_zero_page(fam65xx_t* cpu);
-extern void fam65xx_op_lsr_zero_page_x(fam65xx_t* cpu);
-extern void fam65xx_op_lsr_absolute(fam65xx_t* cpu);
-extern void fam65xx_op_lsr_absolute_x(fam65xx_t* cpu);
-
-extern void fam65xx_op_rol_accumulator(fam65xx_t* cpu);
-extern void fam65xx_op_rol_zero_page(fam65xx_t* cpu);
-extern void fam65xx_op_rol_zero_page_x(fam65xx_t* cpu);
-extern void fam65xx_op_rol_absolute(fam65xx_t* cpu);
-extern void fam65xx_op_rol_absolute_x(fam65xx_t* cpu);
-
-extern void fam65xx_op_ror_accumulator(fam65xx_t* cpu);
-extern void fam65xx_op_ror_zero_page(fam65xx_t* cpu);
-extern void fam65xx_op_ror_zero_page_x(fam65xx_t* cpu);
-extern void fam65xx_op_ror_absolute(fam65xx_t* cpu);
-extern void fam65xx_op_ror_absolute_x(fam65xx_t* cpu);
-
-// Miscellaneous operations
-extern void fam65xx_op_cmp_immediate(fam65xx_t* cpu);
-extern void fam65xx_op_cmp_zero_page(fam65xx_t* cpu);
-extern void fam65xx_op_cmp_zero_page_x(fam65xx_t* cpu);
-extern void fam65xx_op_cmp_absolute(fam65xx_t* cpu);
-extern void fam65xx_op_cmp_absolute_x(fam65xx_t* cpu);
-extern void fam65xx_op_cmp_absolute_y(fam65xx_t* cpu);
-extern void fam65xx_op_cmp_indirect_x(fam65xx_t* cpu);
-extern void fam65xx_op_cmp_indirect_y(fam65xx_t* cpu);
-
-extern void fam65xx_op_cpx_immediate(fam65xx_t* cpu);
-extern void fam65xx_op_cpx_zero_page(fam65xx_t* cpu);
-extern void fam65xx_op_cpx_absolute(fam65xx_t* cpu);
-
-extern void fam65xx_op_cpy_immediate(fam65xx_t* cpu);
-extern void fam65xx_op_cpy_zero_page(fam65xx_t* cpu);
-extern void fam65xx_op_cpy_absolute(fam65xx_t* cpu);
-
-extern void fam65xx_op_bit_zero_page(fam65xx_t* cpu);
-extern void fam65xx_op_bit_absolute(fam65xx_t* cpu);
-
-extern void fam65xx_op_nop(fam65xx_t* cpu);
-extern void fam65xx_op_nop_immediate(fam65xx_t* cpu);
-extern void fam65xx_op_nop_zero_page(fam65xx_t* cpu);
-extern void fam65xx_op_nop_zero_page_x(fam65xx_t* cpu);
-extern void fam65xx_op_nop_absolute(fam65xx_t* cpu);
-extern void fam65xx_op_nop_absolute_x(fam65xx_t* cpu);
-
-extern void fam65xx_op_jam(fam65xx_t* cpu);
-
-        // Default opcode handler table - all 256 opcodes
+// Default opcode handler table - all 256 opcodes
 // This provides a complete baseline that all family members can use
 fam65xx_opcode_handler_t fam65xx_op_default_handlers[256] = {
     [0x00] = fam65xx_op_brk,                // BRK

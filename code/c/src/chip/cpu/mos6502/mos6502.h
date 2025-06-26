@@ -21,6 +21,9 @@ typedef struct {
 // MOS 6502 SPECIFIC FUNCTIONS
 // ============================================================================
 
+// Opcode table initialization
+void mos6502_init_opcode_table(mos6502_t* cpu);
+
 // Chip interface functions
 bool mos6502_create(chip_descriptor_t* desc, mos6502_t* cpu);
 void mos6502_destroy(mos6502_t* cpu);

@@ -144,6 +144,12 @@ void fam65xx_op_dey(fam65xx_t* cpu) {
 // MEMORY INCREMENT/DECREMENT OPERATIONS
 // ============================================================================
 
+static inline uint8_t fam65xx_op_inc(fam65xx_t* cpu, uint8_t value) {
+    value++;
+    fam65xx_set_nz_flags(cpu, value);
+    return value;
+}
+
 // INC - Increment Memory
 void fam65xx_op_inc_zero_page(fam65xx_t* cpu) {
 
@@ -214,6 +220,13 @@ void fam65xx_op_inc_absolute_x(fam65xx_t* cpu) {
 }
 
 // DEC - Decrement Memory
+
+static inline uint8_t fam65xx_op_dec(fam65xx_t* cpu, uint8_t value) {
+    value--;
+    fam65xx_set_nz_flags(cpu, value);
+    return value;
+}
+
 void fam65xx_op_dec_zero_page(fam65xx_t* cpu) {
 
     cpu->address = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch

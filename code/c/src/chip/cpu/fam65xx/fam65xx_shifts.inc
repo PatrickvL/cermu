@@ -8,6 +8,36 @@
 // ACCUMULATOR SHIFTS AND ROTATES
 // ============================================================================
 
+static inline uint8_t fam65xx_op_asl(fam65xx_t* cpu, uint8_t value) {
+    fam65xx_set_flag(cpu, FLAG_C, value & 0x80);
+    value <<= 1;
+    fam65xx_set_nz_flags(cpu, value);
+    return value;
+}
+
+static inline uint8_t fam65xx_op_lsr(fam65xx_t* cpu, uint8_t value) {
+    fam65xx_set_flag(cpu, FLAG_C, value & 0x01);
+    value >>= 1;
+    fam65xx_set_nz_flags(cpu, value);
+    return value;
+}
+
+static inline uint8_t fam65xx_op_rol(fam65xx_t* cpu, uint8_t value) {
+    bool old_carry = fam65xx_get_flag(cpu, FLAG_C);
+    fam65xx_set_flag(cpu, FLAG_C, value & 0x80);
+    value = (value << 1) | (old_carry ? 1 : 0);
+    fam65xx_set_nz_flags(cpu, value);
+    return value;
+}
+
+static inline uint8_t fam65xx_op_ror(fam65xx_t* cpu, uint8_t value) {
+    bool old_carry = fam65xx_get_flag(cpu, FLAG_C);
+    fam65xx_set_flag(cpu, FLAG_C, value & 0x01);
+    value = (value >> 1) | (old_carry ? 0x80 : 0);
+    fam65xx_set_nz_flags(cpu, value);
+    return value;
+}
+
 // ASL A - Arithmetic Shift Left (Accumulator)
 void fam65xx_op_asl_accumulator(fam65xx_t* cpu) {
     fam65xx_op_rmw_accumulator_helper(cpu, fam65xx_op_asl);

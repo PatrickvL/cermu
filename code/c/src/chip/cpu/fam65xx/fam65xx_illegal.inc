@@ -1,7 +1,6 @@
-// fam65xx_illegal.c - Refactored MOS6510 illegal opcodes for all 65xx family CPUs
+// fam65xx_illegal.inc - Refactored MOS6510 illegal opcodes for all 65xx family CPUs
 
 #include "fam65xx_core.h"
-#include "fam65xx_constants.h"
 
 // ============================================================================
 // ILLEGAL INSTRUCTION SPECIFIC OPERATIONS (inline for performance)
@@ -289,6 +288,12 @@ void fam65xx_op_nop_absy(fam65xx_t* cpu) {
 
 // 2-byte NOPs (immediate, but some are "read and ignore" like $89)
 void fam65xx_op_nop_imm_special(fam65xx_t* cpu) {
+    (void)fam65xx_addr_imm(cpu);
+    FAM65XX_OPCODE_FOOTER(cpu);
+}
+
+// This is a special NOP that reads an immediate value but does nothing with it.
+void fam65xx_op_nop_immediate_special(fam65xx_t* cpu) {
     (void)fam65xx_addr_imm(cpu);
     FAM65XX_OPCODE_FOOTER(cpu);
 }

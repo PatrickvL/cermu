@@ -1,5 +1,4 @@
 #include "fam65xx_core.h"
-#include "fam65xx_arithmetic.h"
 
 // ============================================================================
 // SHARED MOS 6502 FAMILY MISCELLANEOUS OPERATIONS
