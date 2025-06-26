@@ -97,43 +97,18 @@ void fam65xx_op_ahx_absolute_y(fam65xx_t* cpu) {
     FAM65XX_OPCODE_FOOTER(cpu);
 }
 
-// --- ALR/ANC/ARR/AXS (immediate) ---
+// --- ALR/ANC/ARR/AXS (immediate) unified with addr_op_helper ---
 void fam65xx_op_alr_immediate(fam65xx_t* cpu) {
-    uint8_t value = fam65xx_addr_imm(cpu);
-    cpu->a &= value;
-    fam65xx_set_flag(cpu, FLAG_C, cpu->a & 0x01);
-    cpu->a >>= 1;
-    fam65xx_set_nz_flags(cpu, cpu->a);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_alr);
 }
-
 void fam65xx_op_anc_immediate(fam65xx_t* cpu) {
-    uint8_t value = fam65xx_addr_imm(cpu);
-    cpu->a &= value;
-    fam65xx_set_nz_flags(cpu, cpu->a);
-    fam65xx_set_flag(cpu, FLAG_C, cpu->a & 0x80);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_anc);
 }
-
 void fam65xx_op_arr_immediate(fam65xx_t* cpu) {
-    uint8_t value = fam65xx_addr_imm(cpu);
-    cpu->a &= value;
-    uint8_t old_carry = fam65xx_get_flag(cpu, FLAG_C) ? 1 : 0;
-    fam65xx_set_flag(cpu, FLAG_C, cpu->a & 0x01);
-    cpu->a = (cpu->a >> 1) | (old_carry << 7);
-    fam65xx_set_nz_flags(cpu, cpu->a);
-    fam65xx_set_flag(cpu, FLAG_V, ((cpu->a >> 6) ^ (cpu->a >> 5)) & 1);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_arr);
 }
-
 void fam65xx_op_axs_immediate(fam65xx_t* cpu) {
-    uint8_t value = fam65xx_addr_imm(cpu);
-    uint8_t temp = cpu->a & cpu->x;
-    uint16_t result = temp - value;
-    fam65xx_set_flag(cpu, FLAG_C, result < 0x100);
-    cpu->x = result & 0xFF;
-    fam65xx_set_nz_flags(cpu, cpu->x);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_axs);
 }
 
 // --- DCP ---
@@ -240,60 +215,32 @@ void fam65xx_op_las_absolute_y(fam65xx_t* cpu) {
 }
 
 // --- LAX ---
+static inline void fam65xx_op_lax(fam65xx_t* cpu, uint8_t value) {
+    cpu->a = value;
+    cpu->x = value;
+    fam65xx_set_nz_flags(cpu, value);
+}
+
 void fam65xx_op_lax_immediate(fam65xx_t* cpu) {
-    uint8_t value = fam65xx_addr_imm(cpu);
-    cpu->a = value;
-    cpu->x = value;
-    fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_lax);
 }
-
 void fam65xx_op_lax_zero_page(fam65xx_t* cpu) {
-    uint8_t value = fam65xx_addr_zp(cpu);
-    cpu->a = value;
-    cpu->x = value;
-    fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_lax);
 }
-
 void fam65xx_op_lax_zero_page_y(fam65xx_t* cpu) {
-    uint8_t value = fam65xx_addr_zpy(cpu);
-    cpu->a = value;
-    cpu->x = value;
-    fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_zpy, fam65xx_op_lax);
 }
-
 void fam65xx_op_lax_absolute(fam65xx_t* cpu) {
-    uint8_t value = fam65xx_addr_abs(cpu);
-    cpu->a = value;
-    cpu->x = value;
-    fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_lax);
 }
-
 void fam65xx_op_lax_absolute_y(fam65xx_t* cpu) {
-    uint8_t value = fam65xx_addr_absy(cpu);
-    cpu->a = value;
-    cpu->x = value;
-    fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_lax);
 }
-
 void fam65xx_op_lax_indirect_x(fam65xx_t* cpu) {
-    uint8_t value = fam65xx_addr_zpx_ind(cpu);
-    cpu->a = value;
-    cpu->x = value;
-    fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_lax);
 }
-
 void fam65xx_op_lax_indirect_y(fam65xx_t* cpu) {
-    uint8_t value = fam65xx_addr_zp_ind_y(cpu);
-    cpu->a = value;
-    cpu->x = value;
-    fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_lax);
 }
 
 // --- ILLEGAL NOPs (undocumented NOPs with various addressing modes) ---
@@ -344,4 +291,78 @@ void fam65xx_op_nop_absy(fam65xx_t* cpu) {
 void fam65xx_op_nop_imm_special(fam65xx_t* cpu) {
     (void)fam65xx_addr_imm(cpu);
     FAM65XX_OPCODE_FOOTER(cpu);
+}
+
+// --- XAA (immediate) ---
+void fam65xx_op_xaa_immediate(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_xaa);
+}
+
+// --- SLO (all memory addressing modes) ---
+void fam65xx_op_slo_zero_page(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_slo_reg);
+}
+void fam65xx_op_slo_zero_page_x(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_slo_reg);
+}
+void fam65xx_op_slo_absolute(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_slo_reg);
+}
+void fam65xx_op_slo_absolute_x(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_slo_reg);
+}
+void fam65xx_op_slo_absolute_y(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_slo_reg);
+}
+void fam65xx_op_slo_indirect_x(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_slo_reg);
+}
+void fam65xx_op_slo_indirect_y(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_slo_reg);
+}
+
+// --- RLA (all memory addressing modes) ---
+void fam65xx_op_rla_zero_page(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_rla_reg);
+}
+void fam65xx_op_rla_zero_page_x(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_rla_reg);
+}
+void fam65xx_op_rla_absolute(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_rla_reg);
+}
+void fam65xx_op_rla_absolute_x(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_rla_reg);
+}
+void fam65xx_op_rla_absolute_y(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_rla_reg);
+}
+void fam65xx_op_rla_indirect_x(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_rla_reg);
+}
+void fam65xx_op_rla_indirect_y(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_rla_reg);
+}
+
+// --- SRE (all memory addressing modes) ---
+void fam65xx_op_sre_zero_page(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_sre_reg);
+}
+void fam65xx_op_sre_zero_page_x(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_sre_reg);
+}
+void fam65xx_op_sre_absolute(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_sre_reg);
+}
+void fam65xx_op_sre_absolute_x(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_sre_reg);
+}
+void fam65xx_op_sre_absolute_y(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_sre_reg);
+}
+void fam65xx_op_sre_indirect_x(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_sre_reg);
+}
+void fam65xx_op_sre_indirect_y(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_sre_reg);
 }

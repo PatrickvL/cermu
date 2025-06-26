@@ -302,56 +302,6 @@ static inline void addr_zp_ind_y_store(mos6510_t* cpu) {
 // ILLEGAL INSTRUCTION HELPER FUNCTIONS (inline for performance)
 // ============================================================================
 
-// Read-modify-write + register operation combo (SLO, RLA, RRA, SRE)
-static inline void mos6510_illegal_rmw_combo(mos6510_t* cpu, uint8_t value, 
-                                          uint8_t (*rmw_op)(mos6510_t*, uint8_t),
-                                          void (*reg_op)(mos6510_t*, uint8_t)) {
-    uint8_t result = rmw_op(cpu, value);
-    MOS6510_INTRA_CYCLE(cpu);
-    mos6510_write_cycle(cpu, cpu->base.address, result);
-    reg_op(cpu, result);
-    MOS6510_OPCODE_FOOTER(cpu);
-}
-
-// INC/DEC + register operation combo (DCP, ISC)
-static inline void mos6510_illegal_inc_dec_combo(mos6510_t* cpu, uint8_t value, 
-                                              int delta, void (*reg_op)(mos6510_t*, uint8_t)) {
-    value += (uint8_t)delta;
-    MOS6510_INTRA_CYCLE(cpu);
-    mos6510_write_cycle(cpu, cpu->base.address, value);
-    reg_op(cpu, value);
-    MOS6510_OPCODE_FOOTER(cpu);
-}
-
-// Load both A and X (LAX variants)
-static inline void mos6510_load_a_and_x(mos6510_t* cpu, uint8_t value) {
-    cpu->base.a = value;
-    cpu->base.x = value;
-    fam65xx_set_nz_flags(&cpu->base, value);
-    MOS6510_OPCODE_FOOTER(cpu);
-}
-
-// Store A & X (SAX variants)
-static inline void mos6510_store_a_and_x(mos6510_t* cpu, void (*addr_func)(mos6510_t*, uint8_t)) {
-    addr_func(cpu, cpu->base.a & cpu->base.x);
-    MOS6510_OPCODE_FOOTER(cpu);
-}
-
-// Complex store with high byte manipulation (AHX, SHX, SHY, TAS)
-static inline void mos6510_complex_store(mos6510_t* cpu, uint8_t value) {
-    value &= ((cpu->base.address >> 8) + 1);
-    MOS6510_INTRA_CYCLE(cpu);
-    mos6510_write_cycle(cpu, cpu->base.address, value);
-    MOS6510_OPCODE_FOOTER(cpu);
-}
-
-// Immediate mode accumulator operations (ALR, ANC, ARR, AXS, XAA)
-static inline void mos6510_immediate_accumulator_op(mos6510_t* cpu, void (*operation)(mos6510_t*, uint8_t)) {
-    uint8_t value = fam65xx_addr_imm(&cpu->base);
-    operation(cpu, value);
-    MOS6510_OPCODE_FOOTER(cpu);
-}
-
 // CPU core functions
 void mos6510_init(mos6510_t* cpu);
 void mos6510_reset(mos6510_t* cpu);
