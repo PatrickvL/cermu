@@ -1,67 +1,83 @@
 # MOS 6502 Family CPU Architecture
 
 ## Overview
-This modular architecture supports the MOS 6502 family of processors with maximum code sharing while allowing for CPU-specific features and optimizations. The `mos` prefix clearly identifies this as MOS Technology's processor family, making room for other manufacturers (Motorola 68xx, Zilog Z80, etc.).
+This modular architecture supports the MOS 6502 family of processors with maximum code sharing while allowing for CPU-specific features and optimizations. The `fam65xx` prefix clearly identifies this as MOS Technology's processor family, making room for other manufacturers (Motorola 68xx, Zilog Z80, etc.).
+
+## Handler Registration Architecture (2025 Update)
+
+**Unified Static Opcode Handler Table**
+- All opcode handler registration (including legal and illegal opcodes) is now performed statically in a single table: `fam65xx_op_default_handlers`.
+- There is no dynamic handler override logic or runtime patching; all handlers are assigned at compile time.
+- All handler helpers (for both legal and illegal opcodes) are deduplicated and use a unified approach (e.g., `fam65xx_addr_op_helper`).
+- Feature flags for illegal opcodes and dynamic override functions (such as `fam65xx_override_opcode`) have been removed.
+- All legal and illegal opcode handlers are always included for all family CPUs; there is no conditional compilation for opcode support.
+- This approach ensures maximum maintainability, clarity, and performance.
 
 ## Folder Structure
 
 ```
 src/chip/cpu/
-├── mos6502_family/           # Shared MOS 6502 family code
-│   ├── mos6502_family_core.h # Common CPU state, macros, and interfaces
-│   └── mos6502_family_core.c # Shared implementation (memory, interrupts, etc.)
+├── fam65xx/                    # Shared 6502-family code and all opcode/handler logic
+│   ├── fam65xx_core.h          # Common CPU state, macros, and interfaces
+│   ├── fam65xx_opcodes.c       # Static opcode handler table and registration
+│   ├── fam65xx_illegal.c       # Illegal opcode helpers and implementations
+│   ├── fam65xx_arithmetic.c    # Arithmetic and logic helpers
+│   ├── fam65xx_shifts.inc      # Shift/rotate helpers
+│   └── ... (other shared helpers)
 │
-├── mos6502/                  # Standard MOS 6502 (with decimal mode)
-│   ├── mos6502.h             # MOS 6502 specific interface
-│   └── mos6502.c             # MOS 6502 implementation with decimal mode
+├── mos6502/                    # Standard MOS 6502 (with decimal mode)
+│   ├── mos6502.h               # MOS 6502 specific interface
+│   └── mos6502.c               # MOS 6502 implementation with decimal mode
 │
-├── mos6510/                  # MOS 6510 (C64 CPU, no decimal mode)
-│   ├── mos6510.h             # MOS 6510 specific interface (existing)
-│   ├── mos6510.c             # MOS 6510 main implementation (existing)
-│   ├── mos6510_arithmetic.c  # Arithmetic operations (existing)
-│   ├── mos6510_control.c     # Control flow instructions (existing)
-│   └── ... (other existing files)
+├── mos6510/                    # MOS 6510 (C64 CPU, no decimal mode)
+│   ├── mos6510.h               # MOS 6510 specific interface
+│   └── mos6510.c               # MOS 6510 implementation
 │
-└── nes6502/                  # NES 6502 (Nintendo Entertainment System)
-    ├── nes6502.h             # NES 6502 specific interface
-    └── nes6502.c             # NES 6502 implementation
+├── nes6502/                    # NES 6502 (Nintendo Entertainment System)
+│   ├── nes6502.h               # NES 6502 specific interface
+│   └── nes6502.c               # NES 6502 implementation
+└── ... (other family members)
 ```
 
 ## Architecture Design
 
-### mos6502_family (Shared Core)
+### fam65xx (Shared Core)
 - **Purpose**: Contains all code shared by MOS 6502 family processors
 - **Key Features**:
-  - Common CPU state structure (`mos6502_family_t`)
+  - Common CPU state structure (`fam65xx_cpu_t`)
   - Shared addressing modes
   - Shared memory access functions  
   - Shared interrupt handling
   - Shared stack operations
   - Performance macros for cycle timing
+  - **Unified static opcode handler table for all opcodes**
 
-### mos6502 (Standard MOS 6502)
-- **Purpose**: Standard MOS 6502 with full decimal mode support
-- **Key Features**:
-  - Full BCD arithmetic for ADC/SBC instructions
-  - All standard MOS 6502 opcodes including illegal opcodes
-  - Compatible with MOS 6502 test suites
-  - Used for systems like Apple II, VIC-20, etc.
+### Static Opcode Handler Architecture (2025+)
+- **Static Table:** All opcode handlers are assigned in the static `fam65xx_op_default_handlers[256]` array at compile time.
+- **No Dynamic Overrides:** There is no runtime handler override or feature flag logic. The static table is the only source of truth.
+- **Unified Helpers:** All opcode handler helpers (including decimal mode ADC/SBC and illegal opcodes) are deduplicated and shared across the family where possible.
+- **Handler Registration:** To change or extend opcode behavior, update the static table and provide the handler implementation.
+- **No Feature Flags:** The `FAM65XX_FEATURE_ILLEGAL_OPCODES` flag and related code have been removed. All opcodes (legal and illegal) are always handled.
 
-### mos6510 (C64 CPU)
-- **Purpose**: MOS 6510 as used in Commodore 64
-- **Key Features**:
-  - No decimal mode support (ADC/SBC work in binary only)
-  - Built-in I/O ports ($00 and $01)
-  - C64-specific memory banking control
-  - Optimized for C64 emulation
+#### Example: Static Handler Table (C Pseudocode)
+```c
+// fam65xx_op_default_handlers[opcode] = handler_function;
+fam65xx_op_default_handlers[0x69] = fam65xx_adc_handler; // ADC (with decimal mode if enabled)
+fam65xx_op_default_handlers[0x6B] = fam65xx_arr_handler; // Illegal opcode ARR
+// ... all 256 opcodes assigned ...
+```
 
-### nes6502 (Nintendo NES CPU)
-- **Purpose**: NES 6502 variant with decimal mode disabled
-- **Key Features**:
-  - Decimal mode flag exists but is ignored (no BCD arithmetic)
-  - All standard opcodes work in binary mode only
-  - Compatible with NES test suites
-  - Used specifically in Nintendo Entertainment System
+#### Adding or Modifying an Opcode Handler
+1. Implement or update the handler function (e.g., `fam65xx_new_handler`).
+2. Assign it to the correct opcode index in `fam65xx_op_default_handlers`.
+3. Ensure the function is declared as `extern` if used across files.
+4. Rebuild and test.
+
+#### Removing Obsolete Code
+- All dynamic override functions (e.g., `fam65xx_override_opcode`) and feature flags are now removed.
+- All handler helpers are deduplicated; only one implementation per unique operation remains.
+
+---
 
 ## CPU Feature Differentiation
 
@@ -71,88 +87,76 @@ src/chip/cpu/
 | I/O Ports ($00/$01)    | ✗        | ✓        | ✗        |
 | Illegal Opcodes        | ✓        | ✓        | ✓        |
 | Memory Banking         | ✗        | ✓        | ✗        |
+| **Static Handler Table** | ✓      | ✓        | ✓        |
+| **Dynamic Override**     | ✗      | ✗        | ✗        |
 
 ## Usage Examples
 
 ### Creating a 6502 CPU (for test suites)
 ```c
 #include "chip/cpu/mos6502/mos6502.h"
+#include "chip/cpu/fam65xx/fam65xx_core.h"
 
 mos6502_t cpu;
 chip_descriptor_t desc;
 mos6502_create(&desc, &cpu);
-
-// This CPU will pass 6502 test suites including decimal mode tests
+// All opcode handlers are statically assigned via fam65xx_op_default_handlers
 ```
 
 ### Creating a 6510 CPU (for C64)
 ```c
 #include "chip/cpu/mos6510/mos6510.h"
+#include "chip/cpu/fam65xx/fam65xx_core.h"
 
 mos6510_t cpu;
 chip_descriptor_t desc;  
 mos6510_create(&desc, &cpu);
-
-// This CPU is optimized for C64 and will not pass decimal mode tests
+// All opcode handlers are statically assigned via fam65xx_op_default_handlers
 ```
 
 ### Creating a NES 6502 CPU (for NES)
 ```c
 #include "chip/cpu/nes6502/nes6502.h"
+#include "chip/cpu/fam65xx/fam65xx_core.h"
 
 nes6502_t cpu;
 chip_descriptor_t desc;
 nes6502_create(&desc, &cpu);
-
-// This CPU is optimized for NES and works in binary mode only
+// All opcode handlers are statically assigned via fam65xx_op_default_handlers
 ```
 
 ## Extension Points
 
 ### Adding New MOS 6502 Family Members
 1. Create new directory under `cpu/` (e.g., `mos65c02/`)
-2. Include `mos6502_family/mos6502_family_core.h`
-3. Create CPU-specific structure extending `mos6502_family_t`
-4. Implement CPU-specific opcode handlers
-5. Configure feature macros as needed
+2. Include `fam65xx/fam65xx_core.h`
+3. Create CPU-specific structure extending `fam65xx_cpu_t`
+4. Implement CPU-specific opcode handlers as needed
+5. Register all opcode handlers statically in the unified handler table (`fam65xx_op_default_handlers`)
+6. **No dynamic override or feature flag logic is required.**
 
 ### Example: Adding MOS 65C02
 ```c
 // In mos65c02/mos65c02.h
-#include "../mos6502_family/mos6502_family_core.h"
+#include "../fam65xx/fam65xx_core.h"
 
 typedef struct {
-    mos6502_family_t base;  // Must be first
+    fam65xx_cpu_t base;  // Must be first
     // MOS 65C02-specific extensions (new registers, etc.)
 } mos65c02_t;
 ```
 
-## GUI Architecture
+## Documentation Notes
 
-The GUI system is modularized to maximize code sharing while allowing CPU-specific extensions:
-
-### Shared GUI Framework (`mos6502_family_gui`)
-- **Common Components**: Register display, status flags, control lines, execution controls
-- **Configurable**: Each CPU can specify capabilities (decimal mode, I/O ports, etc.)
-- **Extensible**: CPU-specific sections can be added via hooks
-
-### CPU-Specific GUI Extensions
-- **MOS 6502**: Shows decimal mode support status
-- **NES 6502**: Shows decimal mode disabled status  
-- **MOS 6510**: Shows I/O port status and bit breakdown
-
-### GUI Configuration Example
-```c
-mos6502_family_gui_config_t config = {
-    .cpu_type_name = "MOS 6502 (Standard)",
-    .has_decimal_mode = true,
-    .has_io_ports = false,
-    .has_extended_opcodes = false,
-    .render_cpu_specific = mos6502_render_cpu_specific
-};
-```
+- The static handler table approach replaces all previous dynamic handler override logic and feature flags for opcode support.
+- All handler helpers are deduplicated and used consistently across the codebase.
+- See `fam65xx_op_default_handlers` in the source for the complete opcode-to-handler mapping.
+- For more details, refer to the comments in `fam65xx_opcodes.c` and related implementation files.
 
 ## Testing Strategy
+
+- **All opcode handlers are now statically assigned and tested via the canonical table.**
+- **Test suites should cover all legal and illegal opcodes as appropriate for each CPU variant.**
 
 ### Test Suite Compatibility
 1. **MOS 6502**: Run ALL 6502 test suites (including decimal mode tests)
@@ -178,19 +182,10 @@ mos6502_family_gui_config_t config = {
 
 ## Performance Considerations
 
-1. **Zero-Indirection Access**: All interfaces stored by value in CPU structures
-2. **Shared Constants**: Common flags, vectors, and cycles defined once
-3. **Modular Compilation**: Each CPU type compiles independently
-4. **Cycle Accuracy**: Shared cycle timing ensures consistent behavior
-5. **GUI Efficiency**: Shared rendering code reduces binary size
+- **Opcode dispatch is now a single static lookup, with no runtime indirection.**
+- **All handler helpers are deduplicated for maximum code sharing and efficiency.**
 
 ## Future Extensions
 
-This architecture easily supports:
-- **VIC-20**: Use MOS 6502 (has decimal mode)
-- **C128**: Use MOS 8502 (extend MOS 6510 with additional features)  
-- **Apple II**: Use MOS 6502
-- **Other MOS 6502 variants**: MOS 65C02, MOS 65816, etc.
-- **Other CPU families**: Motorola 68xx, Zilog Z80, Intel 8080, etc.
-
-Each new CPU type gets its own directory and extends the appropriate family code as needed.
+- **To support new CPU variants or opcode extensions, follow the static handler registration pattern.**
+- **No dynamic handler override logic is needed.**
