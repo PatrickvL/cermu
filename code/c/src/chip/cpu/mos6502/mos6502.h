@@ -2,7 +2,6 @@
 #define MOS6502_H
 
 #include "../fam65xx/fam65xx_core.h"
-#include "../fam65xx/fam65xx_constants.h"
 
 // ============================================================================
 // MOS 6502 CPU (Standard 6502 with Decimal Mode Support)

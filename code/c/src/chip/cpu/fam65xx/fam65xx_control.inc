@@ -27,44 +27,28 @@ static inline void fam65xx_op_branch_helper(fam65xx_t* cpu, bool condition) {
 }
 
 // BPL - Branch if Positive
-void fam65xx_op_bpl(fam65xx_t* cpu) {
-    fam65xx_op_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_N));
-}
+void fam65xx_op_bpl(fam65xx_t* cpu) { fam65xx_op_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_N)); }
 
 // BMI - Branch if Minus
-void fam65xx_op_bmi(fam65xx_t* cpu) {
-    fam65xx_op_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_N));
-}
+void fam65xx_op_bmi(fam65xx_t* cpu) { fam65xx_op_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_N)); }
 
 // BVC - Branch if Overflow Clear
-void fam65xx_op_bvc(fam65xx_t* cpu) {
-    fam65xx_op_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_V));
-}
+void fam65xx_op_bvc(fam65xx_t* cpu) { fam65xx_op_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_V)); }
 
 // BVS - Branch if Overflow Set
-void fam65xx_op_bvs(fam65xx_t* cpu) {
-    fam65xx_op_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_V));
-}
+void fam65xx_op_bvs(fam65xx_t* cpu) { fam65xx_op_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_V)); }
 
 // BCC - Branch if Carry Clear
-void fam65xx_op_bcc(fam65xx_t* cpu) {
-    fam65xx_op_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_C));
-}
+void fam65xx_op_bcc(fam65xx_t* cpu) { fam65xx_op_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_C)); }
 
 // BCS - Branch if Carry Set
-void fam65xx_op_bcs(fam65xx_t* cpu) {
-    fam65xx_op_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_C));
-}
+void fam65xx_op_bcs(fam65xx_t* cpu) { fam65xx_op_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_C)); }
 
 // BNE - Branch if Not Equal
-void fam65xx_op_bne(fam65xx_t* cpu) {
-    fam65xx_op_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_Z));
-}
+void fam65xx_op_bne(fam65xx_t* cpu) { fam65xx_op_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_Z)); }
 
 // BEQ - Branch if Equal
-void fam65xx_op_beq(fam65xx_t* cpu) {
-    fam65xx_op_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_Z));
-}
+void fam65xx_op_beq(fam65xx_t* cpu) { fam65xx_op_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_Z)); }
 
 // ============================================================================
 // JUMP AND SUBROUTINE OPERATIONS

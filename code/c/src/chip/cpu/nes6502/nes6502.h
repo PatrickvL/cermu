@@ -2,7 +2,6 @@
 #define NES6502_H
 
 #include "../fam65xx/fam65xx_core.h"
-#include "../fam65xx/fam65xx_constants.h"
 
 // ============================================================================
 // NES 6502 CPU (6502 variant used in Nintendo Entertainment System)

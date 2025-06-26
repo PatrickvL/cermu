@@ -501,70 +501,24 @@ void mos6502_op_sbc(fam65xx_t* cpu, uint8_t operand) {
 // ============================================================================
 
 // ADC - Add with Carry (supports both binary and decimal modes)
-void mos6502_op_adc_imm(fam65xx_t* cpu) {
-    fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, mos6502_op_adc);
-}
-
-void mos6502_op_adc_zp(fam65xx_t* cpu) {
-    fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, mos6502_op_adc);
-}
-
-void mos6502_op_adc_zpx(fam65xx_t* cpu) {
-    fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, mos6502_op_adc);
-}
-
-void mos6502_op_adc_abs(fam65xx_t* cpu) {
-    fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, mos6502_op_adc);
-}
-
-void mos6502_op_adc_absx(fam65xx_t* cpu) {
-    fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, mos6502_op_adc);
-}
-
-void mos6502_op_adc_absy(fam65xx_t* cpu) {
-    fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, mos6502_op_adc);
-}
-
-void mos6502_op_adc_indx(fam65xx_t* cpu) {
-    fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, mos6502_op_adc);
-}
-
-void mos6502_op_adc_indy(fam65xx_t* cpu) {
-    fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, mos6502_op_adc);
-}
+void mos6502_op_adc_imm(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, mos6502_op_adc); }
+void mos6502_op_adc_zp(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, mos6502_op_adc); }
+void mos6502_op_adc_zpx(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, mos6502_op_adc); }
+void mos6502_op_adc_abs(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, mos6502_op_adc); }
+void mos6502_op_adc_absx(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, mos6502_op_adc); }
+void mos6502_op_adc_absy(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, mos6502_op_adc); }
+void mos6502_op_adc_indx(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, mos6502_op_adc); }
+void mos6502_op_adc_indy(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, mos6502_op_adc); }
 
 // SBC - Subtract with Carry (supports both binary and decimal modes)
-void mos6502_op_sbc_imm(fam65xx_t* cpu) {
-    fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, mos6502_op_sbc);
-}
-
-void mos6502_op_sbc_zp(fam65xx_t* cpu) {
-    fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, mos6502_op_sbc);
-}
-
-void mos6502_op_sbc_zpx(fam65xx_t* cpu) {
-    fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, mos6502_op_sbc);
-}
-
-void mos6502_op_sbc_abs(fam65xx_t* cpu) {
-    fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, mos6502_op_sbc);
-}
-
-void mos6502_op_sbc_absx(fam65xx_t* cpu) {
-    fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, mos6502_op_sbc);
-}
-
-void mos6502_op_sbc_absy(fam65xx_t* cpu) {
-    fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, mos6502_op_sbc);
-}
-
-void mos6502_op_sbc_indx(fam65xx_t* cpu) {
-    fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, mos6502_op_sbc);
-}
-
-void mos6502_op_sbc_indy(fam65xx_t* cpu) {
-    fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, mos6502_op_sbc);
-}
+void mos6502_op_sbc_imm(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, mos6502_op_sbc); }
+void mos6502_op_sbc_zp(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, mos6502_op_sbc); }
+void mos6502_op_sbc_zpx(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, mos6502_op_sbc); }
+void mos6502_op_sbc_abs(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, mos6502_op_sbc); }
+void mos6502_op_sbc_absx(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, mos6502_op_sbc); }
+void mos6502_op_sbc_absy(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, mos6502_op_sbc); }
+void mos6502_op_sbc_indx(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, mos6502_op_sbc); }
+void mos6502_op_sbc_indy(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, mos6502_op_sbc); }
 
 /**
  * Initialize CPU with default opcode handler table with CPU-specific features.
