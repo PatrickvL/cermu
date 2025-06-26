@@ -8,6 +8,11 @@
 // LOAD OPERATIONS - LDA
 // ============================================================================
 
+static inline void fam65xx_op_lda(fam65xx_t* cpu, uint8_t value) {
+    cpu->a = value;
+    fam65xx_set_nz_flags(cpu, cpu->a);
+}
+
 void fam65xx_op_lda_immediate(fam65xx_t* cpu) {
     cpu->a = fam65xx_addr_imm(cpu);             // T1: Immediate value fetch
     fam65xx_set_nz_flags(cpu, cpu->a);
@@ -60,6 +65,11 @@ void fam65xx_op_lda_indirect_y(fam65xx_t* cpu) {
 // LOAD OPERATIONS - LDX
 // ============================================================================
 
+static inline void fam65xx_op_ldx(fam65xx_t* cpu, uint8_t value) {
+    cpu->x = value;
+    fam65xx_set_nz_flags(cpu, cpu->x);
+}
+
 void fam65xx_op_ldx_immediate(fam65xx_t* cpu) {
     cpu->x = fam65xx_addr_imm(cpu);
     fam65xx_set_nz_flags(cpu, cpu->x);
@@ -93,6 +103,11 @@ void fam65xx_op_ldx_absolute_y(fam65xx_t* cpu) {
 // ============================================================================
 // LOAD OPERATIONS - LDY
 // ============================================================================
+
+static inline void fam65xx_op_ldy(fam65xx_t* cpu, uint8_t value) {
+    cpu->y = value;
+    fam65xx_set_nz_flags(cpu, cpu->y);
+}
 
 void fam65xx_op_ldy_immediate(fam65xx_t* cpu) {
     cpu->y = fam65xx_addr_imm(cpu);

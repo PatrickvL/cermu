@@ -1,12 +1,32 @@
-#include "fam65xx_arithmetic.h"
+#include "fam65xx_core.h"
 
 // ============================================================================
 // SHARED MOS 6502 FAMILY OPCODE OPERATIONS
 // ============================================================================
 
 // ============================================================================
+// ARITHMETIC OPERATION DECLARATIONS
+// ============================================================================
+
+// ============================================================================
 // SHARED OPCODE IMPLEMENTATIONS - ADC
 // ============================================================================
+
+// Binary mode arithmetic operations - inline for zero call overhead
+static inline void fam65xx_op_adc(fam65xx_t* cpu, uint8_t value) {
+    uint16_t result = cpu->a + value + (fam65xx_get_flag(cpu, FLAG_C) ? 1 : 0);
+    
+    // Set overflow flag (signed overflow)
+    bool overflow = ((cpu->a ^ result) & (value ^ result) & 0x80) != 0;
+    fam65xx_set_flag(cpu, FLAG_V, overflow);
+    
+    // Set carry flag
+    fam65xx_set_flag(cpu, FLAG_C, result > 0xFF);
+    
+    // Update accumulator and set N/Z flags
+    cpu->a = result & 0xFF;
+    fam65xx_set_nz_flags(cpu, cpu->a);
+}
 
 void fam65xx_op_adc_immediate(fam65xx_t* cpu) {
     fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_adc);
@@ -44,6 +64,23 @@ void fam65xx_op_adc_indirect_y(fam65xx_t* cpu) {
 // SHARED OPCODE IMPLEMENTATIONS - SBC
 // ============================================================================
 
+static inline void fam65xx_op_sbc(fam65xx_t* cpu, uint8_t value) {
+    // SBC is equivalent to ADC with inverted value
+    uint8_t inverted_value = ~value;
+    uint16_t result = cpu->a + inverted_value + (fam65xx_get_flag(cpu, FLAG_C) ? 1 : 0);
+    
+    // Set overflow flag (signed overflow) 
+    bool overflow = ((cpu->a ^ result) & (inverted_value ^ result) & 0x80) != 0;
+    fam65xx_set_flag(cpu, FLAG_V, overflow);
+    
+    // Set carry flag (inverted for subtraction)
+    fam65xx_set_flag(cpu, FLAG_C, result > 0xFF);
+    
+    // Update accumulator and set N/Z flags
+    cpu->a = result & 0xFF;
+    fam65xx_set_nz_flags(cpu, cpu->a);
+}
+
 void fam65xx_op_sbc_immediate(fam65xx_t* cpu) {
     fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_sbc);
 }
@@ -79,6 +116,11 @@ void fam65xx_op_sbc_indirect_y(fam65xx_t* cpu) {
 // ============================================================================
 // SHARED OPCODE IMPLEMENTATIONS - AND (using unified helper)
 // ============================================================================
+
+static inline void fam65xx_op_and(fam65xx_t* cpu, uint8_t value) {
+    cpu->a &= value;
+    fam65xx_set_nz_flags(cpu, cpu->a);
+}
 
 void fam65xx_op_and_immediate(fam65xx_t* cpu) {
     fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_and);
@@ -116,6 +158,11 @@ void fam65xx_op_and_indirect_y(fam65xx_t* cpu) {
 // SHARED OPCODE IMPLEMENTATIONS - ORA (using unified helper)
 // ============================================================================
 
+static inline void fam65xx_op_ora(fam65xx_t* cpu, uint8_t value) {
+    cpu->a |= value;
+    fam65xx_set_nz_flags(cpu, cpu->a);
+}
+
 void fam65xx_op_ora_immediate(fam65xx_t* cpu) {
     fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_ora);
 }
@@ -151,6 +198,11 @@ void fam65xx_op_ora_indirect_y(fam65xx_t* cpu) {
 // ============================================================================
 // SHARED OPCODE IMPLEMENTATIONS - EOR (using unified helper)
 // ============================================================================
+
+static inline void fam65xx_op_eor(fam65xx_t* cpu, uint8_t value) {
+    cpu->a ^= value;
+    fam65xx_set_nz_flags(cpu, cpu->a);
+}
 
 void fam65xx_op_eor_immediate(fam65xx_t* cpu) {
     fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_eor);

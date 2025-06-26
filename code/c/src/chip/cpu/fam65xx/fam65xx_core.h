@@ -307,22 +307,6 @@ static inline uint8_t fam65xx_addr_indy(fam65xx_t* cpu) {
 // PERFORMANCE-CRITICAL INLINE HELPER FUNCTIONS
 // ============================================================================
 
-// Inline simple arithmetic operations for maximum performance
-static inline void fam65xx_op_and(fam65xx_t* cpu, uint8_t value) {
-    cpu->a &= value;
-    fam65xx_set_nz_flags(cpu, cpu->a);
-}
-
-static inline void fam65xx_op_ora(fam65xx_t* cpu, uint8_t value) {
-    cpu->a |= value;
-    fam65xx_set_nz_flags(cpu, cpu->a);
-}
-
-static inline void fam65xx_op_eor(fam65xx_t* cpu, uint8_t value) {
-    cpu->a ^= value;
-    fam65xx_set_nz_flags(cpu, cpu->a);
-}
-
 // Inline load helper (replaces DEFINE_LOAD_OP macro)
 static inline void fam65xx_op_register_transfer_with_flags_helper(fam65xx_t* cpu, 
     uint8_t* dest, uint8_t src_value) {
@@ -447,75 +431,5 @@ static inline void fam65xx_op_rmw_absolute_x_helper(fam65xx_t* cpu,
     fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     FAM65XX_OPCODE_FOOTER(cpu);
 }
-
-// ============================================================================
-// INLINE OPERATION FUNCTIONS (for RMW and load/store operations)
-// ============================================================================
-
-// Shift and rotate operations (inline for maximum performance)
-static inline uint8_t fam65xx_op_asl(fam65xx_t* cpu, uint8_t value) {
-    fam65xx_set_flag(cpu, FLAG_C, value & 0x80);
-    value <<= 1;
-    fam65xx_set_nz_flags(cpu, value);
-    return value;
-}
-
-static inline uint8_t fam65xx_op_lsr(fam65xx_t* cpu, uint8_t value) {
-    fam65xx_set_flag(cpu, FLAG_C, value & 0x01);
-    value >>= 1;
-    fam65xx_set_nz_flags(cpu, value);
-    return value;
-}
-
-static inline uint8_t fam65xx_op_rol(fam65xx_t* cpu, uint8_t value) {
-    bool old_carry = fam65xx_get_flag(cpu, FLAG_C);
-    fam65xx_set_flag(cpu, FLAG_C, value & 0x80);
-    value = (value << 1) | (old_carry ? 1 : 0);
-    fam65xx_set_nz_flags(cpu, value);
-    return value;
-}
-
-static inline uint8_t fam65xx_op_ror(fam65xx_t* cpu, uint8_t value) {
-    bool old_carry = fam65xx_get_flag(cpu, FLAG_C);
-    fam65xx_set_flag(cpu, FLAG_C, value & 0x01);
-    value = (value >> 1) | (old_carry ? 0x80 : 0);
-    fam65xx_set_nz_flags(cpu, value);
-    return value;
-}
-
-// Increment/decrement operations (inline for maximum performance)
-static inline uint8_t fam65xx_op_inc(fam65xx_t* cpu, uint8_t value) {
-    value++;
-    fam65xx_set_nz_flags(cpu, value);
-    return value;
-}
-
-static inline uint8_t fam65xx_op_dec(fam65xx_t* cpu, uint8_t value) {
-    value--;
-    fam65xx_set_nz_flags(cpu, value);
-    return value;
-}
-
-// Load operations (inline for maximum performance)
-static inline void fam65xx_op_lda(fam65xx_t* cpu, uint8_t value) {
-    cpu->a = value;
-    fam65xx_set_nz_flags(cpu, cpu->a);
-}
-
-static inline void fam65xx_op_ldx(fam65xx_t* cpu, uint8_t value) {
-    cpu->x = value;
-    fam65xx_set_nz_flags(cpu, cpu->x);
-}
-
-static inline void fam65xx_op_ldy(fam65xx_t* cpu, uint8_t value) {
-    cpu->y = value;
-    fam65xx_set_nz_flags(cpu, cpu->y);
-}
-
-// Feature-based opcode handlers
-bool fam65xx_is_illegal_opcode(uint8_t opcode);
-void fam65xx_op_sed_with_flag(fam65xx_t* cpu);
-void fam65xx_op_cld_with_flag(fam65xx_t* cpu);
-void fam65xx_op_ror_absolute_x_buggy(fam65xx_t* cpu);
 
 #endif // FAM65XX_CORE_H
