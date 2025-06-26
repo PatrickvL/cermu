@@ -1,6 +1,6 @@
 #include "mos6502.h"
 #include "../fam65xx/fam65xx_gui.h"
-#include "../fam65xx/fam65xx_constants.h"
+#include "../fam65xx/fam65xx_core.h"
 #include "../../../gui/cimgui_interface.h"
 #ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS

@@ -1,5 +1,5 @@
 #include "fam65xx_gui.h"
-#include "fam65xx_constants.h"
+#include "fam65xx_core.h"
 #ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #endif
