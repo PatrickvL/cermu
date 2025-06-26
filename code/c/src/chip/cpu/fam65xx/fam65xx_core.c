@@ -60,7 +60,7 @@ void fam65xx_interrupt_handler(fam65xx_t* cpu) {
 }
 
 // Interception support (shared) - proper handler replacement mechanism
-void fam65xx_intercept_stub(fam65xx_t* cpu) {
+void fam65xx_op_intercept_stub(fam65xx_t* cpu) {
     // This stub is hit when threaded dispatch tries to execute the next instruction
     // Restore the original handlers and stop interception
     if (fam65xx_is_intercepting(cpu)) {
@@ -72,7 +72,7 @@ void fam65xx_intercept_stub(fam65xx_t* cpu) {
 }
 
 bool fam65xx_is_intercepting(fam65xx_t* cpu) {
-    return cpu ? cpu->opcode_handlers[0] == fam65xx_intercept_stub : false;
+    return cpu ? cpu->opcode_handlers[0] == fam65xx_op_intercept_stub : false;
 }
 
 void fam65xx_start_intercept(fam65xx_t* cpu) {
@@ -83,7 +83,7 @@ void fam65xx_start_intercept(fam65xx_t* cpu) {
     // Save current handlers and replace all with intercept stubs
     memcpy(cpu->saved_opcode_handlers, cpu->opcode_handlers, sizeof(cpu->opcode_handlers));
     for (int i = 0; i < 256; i++) {
-        cpu->opcode_handlers[i] = fam65xx_intercept_stub;
+        cpu->opcode_handlers[i] = fam65xx_op_intercept_stub;
     }
 }
 

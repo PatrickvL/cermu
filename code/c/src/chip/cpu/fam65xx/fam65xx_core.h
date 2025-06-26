@@ -144,15 +144,11 @@ typedef uint8_t (*fam65xx_addr_func_t)(fam65xx_t* cpu);
 typedef void (*fam65xx_op_func_t)(fam65xx_t* cpu, uint8_t value);
 
 // Arithmetic helper function implementation (static inline for performance)
-static inline void fam65xx_arithmetic_helper(fam65xx_t* cpu, fam65xx_addr_func_t addr_func, fam65xx_op_func_t op_func) {
+static inline void fam65xx_addr_op_helper(fam65xx_t* cpu, fam65xx_addr_func_t addr_func, fam65xx_op_func_t op_func) {
     uint8_t value = addr_func(cpu);
     op_func(cpu, value);
     FAM65XX_OPCODE_FOOTER(cpu);
 }
-
-// Stack operations (shared)
-void fam65xx_push(fam65xx_t* cpu, uint8_t value);
-uint8_t fam65xx_pull(fam65xx_t* cpu);
 
 // Flag operations (shared)
 static inline bool fam65xx_get_flag(fam65xx_t* cpu, uint8_t flag) {
@@ -185,6 +181,11 @@ bool fam65xx_is_intercepting(fam65xx_t* cpu);
 // Single step execution (shared)
 bool fam65xx_step(fam65xx_t* cpu);
 
+// Stack operations (shared)
+void fam65xx_push(fam65xx_t* cpu, uint8_t value);
+uint8_t fam65xx_pull(fam65xx_t* cpu);
+
+
 // ============================================================================
 // SHARED OPCODE HANDLER TABLE INITIALIZATION
 // ============================================================================
@@ -202,7 +203,7 @@ void fam65xx_override_opcode(fam65xx_t* cpu, uint8_t opcode, fam65xx_opcode_hand
 #define FAM65XX_FEATURE_ROR_BUG         (1U << 3)   // CPU has ROR absolute,X page boundary bug
 
 // Default opcode handler table (shared base)
-extern fam65xx_opcode_handler_t fam65xx_default_handlers[256];
+extern fam65xx_opcode_handler_t fam65xx_op_default_handlers[256];
 
 // ============================================================================
 // SHARED OPCODE OPERATION IMPLEMENTATIONS  
@@ -323,26 +324,26 @@ static inline void fam65xx_op_eor(fam65xx_t* cpu, uint8_t value) {
 }
 
 // Arithmetic helper functions (replacing macros for better type safety and debugging)
-static inline void fam65xx_and_helper(fam65xx_t* cpu, uint8_t (*addr_func)(fam65xx_t*)) {
+static inline void fam65xx_op_and_helper(fam65xx_t* cpu, uint8_t (*addr_func)(fam65xx_t*)) {
     uint8_t value = addr_func(cpu);
     fam65xx_op_and(cpu, value);
     FAM65XX_OPCODE_FOOTER(cpu);
 }
 
-static inline void fam65xx_ora_helper(fam65xx_t* cpu, uint8_t (*addr_func)(fam65xx_t*)) {
+static inline void fam65xx_op_ora_helper(fam65xx_t* cpu, uint8_t (*addr_func)(fam65xx_t*)) {
     uint8_t value = addr_func(cpu);
     fam65xx_op_ora(cpu, value);
     FAM65XX_OPCODE_FOOTER(cpu);
 }
 
-static inline void fam65xx_eor_helper(fam65xx_t* cpu, uint8_t (*addr_func)(fam65xx_t*)) {
+static inline void fam65xx_op_eor_helper(fam65xx_t* cpu, uint8_t (*addr_func)(fam65xx_t*)) {
     uint8_t value = addr_func(cpu);
     fam65xx_op_eor(cpu, value);
     FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // Inline load helper (replaces DEFINE_LOAD_OP macro)
-static inline void fam65xx_load_helper(fam65xx_t* cpu, 
+static inline void fam65xx_op_load_helper(fam65xx_t* cpu, 
     uint8_t (*addr_func)(fam65xx_t*), 
     void (*op_func)(fam65xx_t*, uint8_t)) {
     uint8_t value = addr_func(cpu);
@@ -351,7 +352,7 @@ static inline void fam65xx_load_helper(fam65xx_t* cpu,
 }
 
 // Inline store helper (replaces DEFINE_STORE_OP macro)
-static inline void fam65xx_store_helper(fam65xx_t* cpu, 
+static inline void fam65xx_op_store_helper(fam65xx_t* cpu, 
     void (*addr_store_func)(fam65xx_t*, uint8_t), 
     uint8_t reg_value) {
     addr_store_func(cpu, reg_value);
@@ -359,7 +360,7 @@ static inline void fam65xx_store_helper(fam65xx_t* cpu,
 }
 
 // Inline register transfer with flags (replaces DEFINE_REG_XFER macro)
-static inline void fam65xx_register_transfer_with_flags(fam65xx_t* cpu, 
+static inline void fam65xx_op_register_transfer_with_flags(fam65xx_t* cpu, 
     uint8_t* dest, uint8_t src_value) {
     (void)fam65xx_read_cycle(cpu, cpu->pc);                   // T1: Dummy read
     *dest = src_value;
@@ -368,7 +369,7 @@ static inline void fam65xx_register_transfer_with_flags(fam65xx_t* cpu,
 }
 
 // Inline register transfer without flags (replaces DEFINE_REG_XFER_NOFLAG macro)
-static inline void fam65xx_register_transfer_no_flags(fam65xx_t* cpu, 
+static inline void fam65xx_op_register_transfer_no_flags(fam65xx_t* cpu, 
     uint8_t* dest, uint8_t src_value) {
     (void)fam65xx_read_cycle(cpu, cpu->pc);                   // T1: Dummy read
     *dest = src_value;
@@ -376,7 +377,7 @@ static inline void fam65xx_register_transfer_no_flags(fam65xx_t* cpu,
 }
 
 // Inline register increment/decrement (replaces DEFINE_REG_INCDEC macro)
-static inline void fam65xx_register_inc_dec(fam65xx_t* cpu, 
+static inline void fam65xx_op_register_inc_dec(fam65xx_t* cpu, 
     uint8_t* reg, int8_t delta) {
     (void)fam65xx_read_cycle(cpu, cpu->pc);                   // T1: Dummy read
     *reg += delta;
@@ -385,13 +386,13 @@ static inline void fam65xx_register_inc_dec(fam65xx_t* cpu,
 }
 
 // Inline flag operations (replaces DEFINE_FLAG_CLEAR/SET macros)
-static inline void fam65xx_flag_clear_helper(fam65xx_t* cpu, uint8_t flag) {
+static inline void fam65xx_op_flag_clear_helper(fam65xx_t* cpu, uint8_t flag) {
     (void)fam65xx_read_cycle(cpu, cpu->pc);                   // T1: Dummy read
     fam65xx_set_flag(cpu, flag, false);
     FAM65XX_OPCODE_FOOTER(cpu);
 }
 
-static inline void fam65xx_flag_set_helper(fam65xx_t* cpu, uint8_t flag) {
+static inline void fam65xx_op_flag_set_helper(fam65xx_t* cpu, uint8_t flag) {
     (void)fam65xx_read_cycle(cpu, cpu->pc);                   // T1: Dummy read
     fam65xx_set_flag(cpu, flag, true);
     FAM65XX_OPCODE_FOOTER(cpu);
@@ -402,7 +403,7 @@ static inline void fam65xx_flag_set_helper(fam65xx_t* cpu, uint8_t flag) {
 // ============================================================================
 
 // Accumulator read-modify-write operations (2 cycles)
-static inline void fam65xx_rmw_accumulator(fam65xx_t* cpu, 
+static inline void fam65xx_op_rmw_accumulator(fam65xx_t* cpu, 
     uint8_t (*operation)(fam65xx_t*, uint8_t)) {
     FAM65XX_INTRA_CYCLE(cpu);
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
@@ -411,7 +412,7 @@ static inline void fam65xx_rmw_accumulator(fam65xx_t* cpu,
 }
 
 // Zero page read-modify-write operations
-static inline void fam65xx_rmw_zero_page(fam65xx_t* cpu, 
+static inline void fam65xx_op_rmw_zero_page(fam65xx_t* cpu, 
     uint8_t (*operation)(fam65xx_t*, uint8_t)) {
     FAM65XX_INTRA_CYCLE(cpu);
     cpu->address = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
@@ -426,7 +427,7 @@ static inline void fam65xx_rmw_zero_page(fam65xx_t* cpu,
 }
 
 // Zero page,X read-modify-write operations
-static inline void fam65xx_rmw_zero_page_x(fam65xx_t* cpu, 
+static inline void fam65xx_op_rmw_zero_page_x(fam65xx_t* cpu, 
     uint8_t (*operation)(fam65xx_t*, uint8_t)) {
     FAM65XX_INTRA_CYCLE(cpu);
     cpu->address = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
@@ -444,7 +445,7 @@ static inline void fam65xx_rmw_zero_page_x(fam65xx_t* cpu,
 }
 
 // Absolute read-modify-write operations
-static inline void fam65xx_rmw_absolute(fam65xx_t* cpu, 
+static inline void fam65xx_op_rmw_absolute(fam65xx_t* cpu, 
     uint8_t (*operation)(fam65xx_t*, uint8_t)) {
     FAM65XX_INTRA_CYCLE(cpu);
     uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
@@ -463,7 +464,7 @@ static inline void fam65xx_rmw_absolute(fam65xx_t* cpu,
 }
 
 // Absolute,X read-modify-write operations
-static inline void fam65xx_rmw_absolute_x(fam65xx_t* cpu, 
+static inline void fam65xx_op_rmw_absolute_x(fam65xx_t* cpu, 
     uint8_t (*operation)(fam65xx_t*, uint8_t)) {
     FAM65XX_INTRA_CYCLE(cpu);
     uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
@@ -549,8 +550,8 @@ static inline void fam65xx_op_ldy(fam65xx_t* cpu, uint8_t value) {
 
 // Feature-based opcode handlers
 bool fam65xx_is_illegal_opcode(uint8_t opcode);
-void fam65xx_sed_with_flag(fam65xx_t* cpu);
-void fam65xx_cld_with_flag(fam65xx_t* cpu);
-void fam65xx_ror_absolute_x_buggy(fam65xx_t* cpu);
+void fam65xx_op_sed_with_flag(fam65xx_t* cpu);
+void fam65xx_op_cld_with_flag(fam65xx_t* cpu);
+void fam65xx_op_ror_absolute_x_buggy(fam65xx_t* cpu);
 
 #endif // FAM65XX_CORE_H

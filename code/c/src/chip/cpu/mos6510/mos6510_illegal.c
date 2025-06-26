@@ -17,7 +17,7 @@
 // ============================================================================
 // MOS6510-SPECIFIC ILLEGAL INSTRUCTION HELPER OPERATIONS
 // ============================================================================
-// Note: All fam65xx_* functions should be implemented in the family folder.
+// Note: All fam65xx_op_* functions should be implemented in the family folder.
 // These are MOS6510-specific wrappers and helpers only.
 
 // MOS6510-specific illegal operation helpers that use family functions
