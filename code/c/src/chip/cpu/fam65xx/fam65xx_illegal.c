@@ -137,47 +137,71 @@ void fam65xx_op_axs_immediate(fam65xx_t* cpu) {
 }
 
 // --- DCP ---
-#define FAM65XX_DCP_HANDLER(NAME, ADDR_MODE) \
-void fam65xx_op_dcp_##NAME(fam65xx_t* cpu) { \
-    uint8_t value = fam65xx_addr_##ADDR_MODE(cpu); \
-    value--; \
-    FAM65XX_INTRA_CYCLE(cpu); \
-    fam65xx_write_cycle(cpu, cpu->address, value); \
-    fam65xx_set_flag(cpu, FLAG_C, cpu->a >= value); \
-    fam65xx_set_nz_flags(cpu, (uint8_t)(cpu->a - value)); \
-    FAM65XX_OPCODE_FOOTER(cpu); \
+// DCP: DEC memory, then CMP with A (illegal opcode)
+static inline void fam65xx_op_dcp(fam65xx_t* cpu, uint8_t value) {
+    value--;
+    FAM65XX_INTRA_CYCLE(cpu);
+    fam65xx_write_cycle(cpu, cpu->address, value);
+    fam65xx_set_flag(cpu, FLAG_C, cpu->a >= value);
+    fam65xx_set_nz_flags(cpu, (uint8_t)(cpu->a - value));
 }
 
-FAM65XX_DCP_HANDLER(zero_page, zp)
-FAM65XX_DCP_HANDLER(zero_page_x, zpx)
-FAM65XX_DCP_HANDLER(absolute, abs)
-FAM65XX_DCP_HANDLER(absolute_x, absx)
-FAM65XX_DCP_HANDLER(absolute_y, absy)
-FAM65XX_DCP_HANDLER(indirect_x, zpx_ind)
-FAM65XX_DCP_HANDLER(indirect_y, zp_ind_y)
+void fam65xx_op_dcp_zero_page(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_dcp);
+}
+void fam65xx_op_dcp_zero_page_x(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_dcp);
+}
+void fam65xx_op_dcp_absolute(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_dcp);
+}
+void fam65xx_op_dcp_absolute_x(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_dcp);
+}
+void fam65xx_op_dcp_absolute_y(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_dcp);
+}
+void fam65xx_op_dcp_indirect_x(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_dcp);
+}
+void fam65xx_op_dcp_indirect_y(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_dcp);
+}
 
 // --- ISC ---
-#define FAM65XX_ISC_HANDLER(NAME, ADDR_MODE) \
-    void fam65xx_op_isc_##NAME(fam65xx_t* cpu) { \
-    uint8_t value = fam65xx_addr_##ADDR_MODE(cpu); \
-    value++; \
-    FAM65XX_INTRA_CYCLE(cpu); \
-    fam65xx_write_cycle(cpu, cpu->address, value); \
-    uint16_t temp = cpu->a - value - (fam65xx_get_flag(cpu, FLAG_C) ? 0 : 1); \
-    fam65xx_set_flag(cpu, FLAG_C, temp < 0x100); \
-    fam65xx_set_flag(cpu, FLAG_V, ((cpu->a ^ value) & (cpu->a ^ temp)) & 0x80); \
-    cpu->a = temp & 0xFF; \
-    fam65xx_set_nz_flags(cpu, cpu->a); \
-    FAM65XX_OPCODE_FOOTER(cpu); \
+// ISC: INC memory, then SBC with A (illegal opcode)
+static inline void fam65xx_op_isc(fam65xx_t* cpu, uint8_t value) {
+    value++;
+    FAM65XX_INTRA_CYCLE(cpu);
+    fam65xx_write_cycle(cpu, cpu->address, value);
+    uint16_t temp = cpu->a - value - (fam65xx_get_flag(cpu, FLAG_C) ? 0 : 1);
+    fam65xx_set_flag(cpu, FLAG_C, temp < 0x100);
+    fam65xx_set_flag(cpu, FLAG_V, ((cpu->a ^ value) & (cpu->a ^ temp)) & 0x80);
+    cpu->a = temp & 0xFF;
+    fam65xx_set_nz_flags(cpu, cpu->a);
 }
 
-FAM65XX_ISC_HANDLER(zero_page, zp)
-FAM65XX_ISC_HANDLER(zero_page_x, zpx)
-FAM65XX_ISC_HANDLER(absolute, abs)
-FAM65XX_ISC_HANDLER(absolute_x, absx)
-FAM65XX_ISC_HANDLER(absolute_y, absy)
-FAM65XX_ISC_HANDLER(indirect_x, zpx_ind)
-FAM65XX_ISC_HANDLER(indirect_y, zp_ind_y)
+void fam65xx_op_isc_zero_page(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_isc);
+}
+void fam65xx_op_isc_zero_page_x(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_isc);
+}
+void fam65xx_op_isc_absolute(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_isc);
+}
+void fam65xx_op_isc_absolute_x(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_isc);
+}
+void fam65xx_op_isc_absolute_y(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_isc);
+}
+void fam65xx_op_isc_indirect_x(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_isc);
+}
+void fam65xx_op_isc_indirect_y(fam65xx_t* cpu) {
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_isc);
+}
 
 // --- JAM ---
 // ============================================================================
