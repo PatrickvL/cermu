@@ -11,7 +11,7 @@
 // Cycle counts reflect the minimum cycles for each instruction
 // Some instructions may take additional cycles due to page crossing or other factors
 
-static const uint8_t fam65xx_cycle_table[256] = {
+static const uint8_t fam65xx_op_cycle_table[256] = {
     // 0x00-0x0F
     7, 6, 2, 8, 3, 3, 5, 5, 3, 2, 2, 2, 4, 4, 6, 6,
     // 0x10-0x1F  
@@ -50,7 +50,7 @@ static const uint8_t fam65xx_cycle_table[256] = {
 #define FAM65XX_MAX_CYCLES_PER_INSTRUCTION 8
 
 // Cycle count lookup macro
-#define FAM65XX_GET_CYCLES(opcode) fam65xx_cycle_table[(opcode)]
+#define FAM65XX_GET_CYCLES(opcode) fam65xx_op_cycle_table[(opcode)]
 
 // Helper macros for cycle timing calculations
 #define FAM65XX_PAGE_CROSSED(addr1, addr2) (((addr1) & 0xFF00) != ((addr2) & 0xFF00))

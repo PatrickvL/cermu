@@ -27,42 +27,42 @@ static inline void fam65xx_branch_helper(fam65xx_t* cpu, bool condition) {
 }
 
 // BPL - Branch if Positive
-void fam65xx_bpl(fam65xx_t* cpu) {
+void fam65xx_op_bpl(fam65xx_t* cpu) {
     fam65xx_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_N));
 }
 
 // BMI - Branch if Minus
-void fam65xx_bmi(fam65xx_t* cpu) {
+void fam65xx_op_bmi(fam65xx_t* cpu) {
     fam65xx_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_N));
 }
 
 // BVC - Branch if Overflow Clear
-void fam65xx_bvc(fam65xx_t* cpu) {
+void fam65xx_op_bvc(fam65xx_t* cpu) {
     fam65xx_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_V));
 }
 
 // BVS - Branch if Overflow Set
-void fam65xx_bvs(fam65xx_t* cpu) {
+void fam65xx_op_bvs(fam65xx_t* cpu) {
     fam65xx_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_V));
 }
 
 // BCC - Branch if Carry Clear
-void fam65xx_bcc(fam65xx_t* cpu) {
+void fam65xx_op_bcc(fam65xx_t* cpu) {
     fam65xx_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_C));
 }
 
 // BCS - Branch if Carry Set
-void fam65xx_bcs(fam65xx_t* cpu) {
+void fam65xx_op_bcs(fam65xx_t* cpu) {
     fam65xx_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_C));
 }
 
 // BNE - Branch if Not Equal
-void fam65xx_bne(fam65xx_t* cpu) {
+void fam65xx_op_bne(fam65xx_t* cpu) {
     fam65xx_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_Z));
 }
 
 // BEQ - Branch if Equal
-void fam65xx_beq(fam65xx_t* cpu) {
+void fam65xx_op_beq(fam65xx_t* cpu) {
     fam65xx_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_Z));
 }
 
@@ -71,7 +71,7 @@ void fam65xx_beq(fam65xx_t* cpu) {
 // ============================================================================
 
 // JMP - Jump Absolute
-void fam65xx_jmp_absolute(fam65xx_t* cpu) {
+void fam65xx_op_jmp_absolute(fam65xx_t* cpu) {
 
     uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
@@ -82,7 +82,7 @@ void fam65xx_jmp_absolute(fam65xx_t* cpu) {
 }
 
 // JMP - Jump Indirect
-void fam65xx_jmp_indirect(fam65xx_t* cpu) {
+void fam65xx_op_jmp_indirect(fam65xx_t* cpu) {
 
     uint8_t ptr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
@@ -100,7 +100,7 @@ void fam65xx_jmp_indirect(fam65xx_t* cpu) {
 }
 
 // JSR - Jump to Subroutine
-void fam65xx_jsr(fam65xx_t* cpu) {
+void fam65xx_op_jsr(fam65xx_t* cpu) {
 
     uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
     
@@ -120,7 +120,7 @@ void fam65xx_jsr(fam65xx_t* cpu) {
 }
 
 // RTS - Return from Subroutine
-void fam65xx_rts(fam65xx_t* cpu) {
+void fam65xx_op_rts(fam65xx_t* cpu) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     
@@ -140,7 +140,7 @@ void fam65xx_rts(fam65xx_t* cpu) {
 // ============================================================================
 
 // BRK - Break
-void fam65xx_brk(fam65xx_t* cpu) {
+void fam65xx_op_brk(fam65xx_t* cpu) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc++); // Read and discard next byte
     
@@ -165,7 +165,7 @@ void fam65xx_brk(fam65xx_t* cpu) {
 }
 
 // RTI - Return from Interrupt
-void fam65xx_rti(fam65xx_t* cpu) {
+void fam65xx_op_rti(fam65xx_t* cpu) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     
@@ -186,7 +186,7 @@ void fam65xx_rti(fam65xx_t* cpu) {
 // ============================================================================
 
 // CLC - Clear Carry Flag
-void fam65xx_clc(fam65xx_t* cpu) {
+void fam65xx_op_clc(fam65xx_t* cpu) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_set_flag(cpu, FLAG_C, false);
@@ -194,7 +194,7 @@ void fam65xx_clc(fam65xx_t* cpu) {
 }
 
 // SEC - Set Carry Flag
-void fam65xx_sec(fam65xx_t* cpu) {
+void fam65xx_op_sec(fam65xx_t* cpu) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_set_flag(cpu, FLAG_C, true);
@@ -202,7 +202,7 @@ void fam65xx_sec(fam65xx_t* cpu) {
 }
 
 // CLI - Clear Interrupt Disable Flag
-void fam65xx_cli(fam65xx_t* cpu) {
+void fam65xx_op_cli(fam65xx_t* cpu) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_set_flag(cpu, FLAG_I, false);
@@ -210,7 +210,7 @@ void fam65xx_cli(fam65xx_t* cpu) {
 }
 
 // SEI - Set Interrupt Disable Flag
-void fam65xx_sei(fam65xx_t* cpu) {
+void fam65xx_op_sei(fam65xx_t* cpu) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_set_flag(cpu, FLAG_I, true);
@@ -218,7 +218,7 @@ void fam65xx_sei(fam65xx_t* cpu) {
 }
 
 // CLV - Clear Overflow Flag
-void fam65xx_clv(fam65xx_t* cpu) {
+void fam65xx_op_clv(fam65xx_t* cpu) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_set_flag(cpu, FLAG_V, false);
@@ -226,7 +226,7 @@ void fam65xx_clv(fam65xx_t* cpu) {
 }
 
 // CLD - Clear Decimal Flag
-void fam65xx_cld(fam65xx_t* cpu) {
+void fam65xx_op_cld(fam65xx_t* cpu) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_set_flag(cpu, FLAG_D, false);
@@ -234,7 +234,7 @@ void fam65xx_cld(fam65xx_t* cpu) {
 }
 
 // SED - Set Decimal Flag
-void fam65xx_sed(fam65xx_t* cpu) {
+void fam65xx_op_sed(fam65xx_t* cpu) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_set_flag(cpu, FLAG_D, true);
