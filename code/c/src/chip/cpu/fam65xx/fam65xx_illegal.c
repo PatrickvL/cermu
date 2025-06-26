@@ -180,7 +180,20 @@ FAM65XX_ISC_HANDLER(indirect_x, zpx_ind)
 FAM65XX_ISC_HANDLER(indirect_y, zp_ind_y)
 
 // --- JAM ---
+// ============================================================================
+// JAM OPERATION (illegal)
+// ============================================================================
+
+// JAM - Halt and Catch Fire (illegal opcode)
 void fam65xx_op_jam(fam65xx_t* cpu) {
+    // TODO : Verify if this is the correct behavior for JAM
+    (void)fam65xx_read_cycle(cpu, cpu->pc); // Read current PC
+    // Decrement PC to stay on the same instruction
+    cpu->pc--;
+    
+    // JAM instruction halts the CPU by entering an infinite loop
+    // The program counter is not incremented
+    // This effectively freezes the CPU until reset
     while (1) {
         if (fam65xx_system_lines_test(cpu, FAM65XX_MASK_NMI)) {
             fam65xx_op_nmi(cpu);

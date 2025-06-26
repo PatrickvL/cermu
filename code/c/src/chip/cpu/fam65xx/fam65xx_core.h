@@ -323,44 +323,8 @@ static inline void fam65xx_op_eor(fam65xx_t* cpu, uint8_t value) {
     fam65xx_set_nz_flags(cpu, cpu->a);
 }
 
-// Arithmetic helper functions (replacing macros for better type safety and debugging)
-static inline void fam65xx_op_and_helper(fam65xx_t* cpu, uint8_t (*addr_func)(fam65xx_t*)) {
-    uint8_t value = addr_func(cpu);
-    fam65xx_op_and(cpu, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
-}
-
-static inline void fam65xx_op_ora_helper(fam65xx_t* cpu, uint8_t (*addr_func)(fam65xx_t*)) {
-    uint8_t value = addr_func(cpu);
-    fam65xx_op_ora(cpu, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
-}
-
-static inline void fam65xx_op_eor_helper(fam65xx_t* cpu, uint8_t (*addr_func)(fam65xx_t*)) {
-    uint8_t value = addr_func(cpu);
-    fam65xx_op_eor(cpu, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
-}
-
 // Inline load helper (replaces DEFINE_LOAD_OP macro)
-static inline void fam65xx_op_load_helper(fam65xx_t* cpu, 
-    uint8_t (*addr_func)(fam65xx_t*), 
-    void (*op_func)(fam65xx_t*, uint8_t)) {
-    uint8_t value = addr_func(cpu);
-    op_func(cpu, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
-}
-
-// Inline store helper (replaces DEFINE_STORE_OP macro)
-static inline void fam65xx_op_store_helper(fam65xx_t* cpu, 
-    void (*addr_store_func)(fam65xx_t*, uint8_t), 
-    uint8_t reg_value) {
-    addr_store_func(cpu, reg_value);
-    FAM65XX_OPCODE_FOOTER(cpu);
-}
-
-// Inline register transfer with flags (replaces DEFINE_REG_XFER macro)
-static inline void fam65xx_op_register_transfer_with_flags(fam65xx_t* cpu, 
+static inline void fam65xx_op_register_transfer_with_flags_helper(fam65xx_t* cpu, 
     uint8_t* dest, uint8_t src_value) {
     (void)fam65xx_read_cycle(cpu, cpu->pc);                   // T1: Dummy read
     *dest = src_value;
@@ -369,7 +333,7 @@ static inline void fam65xx_op_register_transfer_with_flags(fam65xx_t* cpu,
 }
 
 // Inline register transfer without flags (replaces DEFINE_REG_XFER_NOFLAG macro)
-static inline void fam65xx_op_register_transfer_no_flags(fam65xx_t* cpu, 
+static inline void fam65xx_op_register_transfer_no_flags_helper(fam65xx_t* cpu, 
     uint8_t* dest, uint8_t src_value) {
     (void)fam65xx_read_cycle(cpu, cpu->pc);                   // T1: Dummy read
     *dest = src_value;
@@ -377,7 +341,7 @@ static inline void fam65xx_op_register_transfer_no_flags(fam65xx_t* cpu,
 }
 
 // Inline register increment/decrement (replaces DEFINE_REG_INCDEC macro)
-static inline void fam65xx_op_register_inc_dec(fam65xx_t* cpu, 
+static inline void fam65xx_op_register_inc_dec_helper(fam65xx_t* cpu, 
     uint8_t* reg, int8_t delta) {
     (void)fam65xx_read_cycle(cpu, cpu->pc);                   // T1: Dummy read
     *reg += delta;
@@ -403,7 +367,7 @@ static inline void fam65xx_op_flag_set_helper(fam65xx_t* cpu, uint8_t flag) {
 // ============================================================================
 
 // Accumulator read-modify-write operations (2 cycles)
-static inline void fam65xx_op_rmw_accumulator(fam65xx_t* cpu, 
+static inline void fam65xx_op_rmw_accumulator_helper(fam65xx_t* cpu, 
     uint8_t (*operation)(fam65xx_t*, uint8_t)) {
     FAM65XX_INTRA_CYCLE(cpu);
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
@@ -412,7 +376,7 @@ static inline void fam65xx_op_rmw_accumulator(fam65xx_t* cpu,
 }
 
 // Zero page read-modify-write operations
-static inline void fam65xx_op_rmw_zero_page(fam65xx_t* cpu, 
+static inline void fam65xx_op_rmw_zero_page_helper(fam65xx_t* cpu, 
     uint8_t (*operation)(fam65xx_t*, uint8_t)) {
     FAM65XX_INTRA_CYCLE(cpu);
     cpu->address = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
@@ -427,7 +391,7 @@ static inline void fam65xx_op_rmw_zero_page(fam65xx_t* cpu,
 }
 
 // Zero page,X read-modify-write operations
-static inline void fam65xx_op_rmw_zero_page_x(fam65xx_t* cpu, 
+static inline void fam65xx_op_rmw_zero_page_x_helper(fam65xx_t* cpu, 
     uint8_t (*operation)(fam65xx_t*, uint8_t)) {
     FAM65XX_INTRA_CYCLE(cpu);
     cpu->address = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
@@ -445,7 +409,7 @@ static inline void fam65xx_op_rmw_zero_page_x(fam65xx_t* cpu,
 }
 
 // Absolute read-modify-write operations
-static inline void fam65xx_op_rmw_absolute(fam65xx_t* cpu, 
+static inline void fam65xx_op_rmw_absolute_helper(fam65xx_t* cpu, 
     uint8_t (*operation)(fam65xx_t*, uint8_t)) {
     FAM65XX_INTRA_CYCLE(cpu);
     uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
@@ -464,7 +428,7 @@ static inline void fam65xx_op_rmw_absolute(fam65xx_t* cpu,
 }
 
 // Absolute,X read-modify-write operations
-static inline void fam65xx_op_rmw_absolute_x(fam65xx_t* cpu, 
+static inline void fam65xx_op_rmw_absolute_x_helper(fam65xx_t* cpu, 
     uint8_t (*operation)(fam65xx_t*, uint8_t)) {
     FAM65XX_INTRA_CYCLE(cpu);
     uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch

@@ -161,21 +161,3 @@ void fam65xx_op_nop_absolute_x(fam65xx_t* cpu) {
     (void)fam65xx_read_cycle(cpu, addr); // Dummy read
     FAM65XX_OPCODE_FOOTER(cpu);
 }
-
-// ============================================================================
-// JAM OPERATION (illegal)
-// ============================================================================
-
-// JAM - Halt and Catch Fire (illegal opcode)
-void fam65xx_op_jam(fam65xx_t* cpu) {
-    // JAM instruction halts the CPU by entering an infinite loop
-    // The program counter is not incremented
-    // This effectively freezes the CPU until reset
-    (void)fam65xx_read_cycle(cpu, cpu->pc); // Read current PC
-    
-    // Decrement PC to stay on the same instruction
-    cpu->pc--;
-    
-    // Do not call FAM65XX_OPCODE_FOOTER - this breaks the normal flow
-    // The CPU will keep executing this instruction indefinitely
-}

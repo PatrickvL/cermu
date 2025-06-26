@@ -77,111 +77,111 @@ void fam65xx_op_sbc_indirect_y(fam65xx_t* cpu) {
 }
 
 // ============================================================================
-// SHARED OPCODE IMPLEMENTATIONS - AND (using inline helpers for performance)
+// SHARED OPCODE IMPLEMENTATIONS - AND (using unified helper)
 // ============================================================================
 
 void fam65xx_op_and_immediate(fam65xx_t* cpu) {
-    fam65xx_op_and_helper(cpu, fam65xx_addr_imm);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_and);
 }
 
 void fam65xx_op_and_zero_page(fam65xx_t* cpu) {
-    fam65xx_op_and_helper(cpu, fam65xx_addr_zp);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_and);
 }
 
 void fam65xx_op_and_zero_page_x(fam65xx_t* cpu) {
-    fam65xx_op_and_helper(cpu, fam65xx_addr_zpx);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_and);
 }
 
 void fam65xx_op_and_absolute(fam65xx_t* cpu) {
-    fam65xx_op_and_helper(cpu, fam65xx_addr_abs);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_and);
 }
 
 void fam65xx_op_and_absolute_x(fam65xx_t* cpu) {
-    fam65xx_op_and_helper(cpu, fam65xx_addr_absx);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_and);
 }
 
 void fam65xx_op_and_absolute_y(fam65xx_t* cpu) {
-    fam65xx_op_and_helper(cpu, fam65xx_addr_absy);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_and);
 }
 
 void fam65xx_op_and_indirect_x(fam65xx_t* cpu) {
-    fam65xx_op_and_helper(cpu, fam65xx_addr_indx);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_and);
 }
 
 void fam65xx_op_and_indirect_y(fam65xx_t* cpu) {
-    fam65xx_op_and_helper(cpu, fam65xx_addr_indy);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_and);
 }
 
 // ============================================================================
-// SHARED OPCODE IMPLEMENTATIONS - ORA (using inline helpers for performance)
+// SHARED OPCODE IMPLEMENTATIONS - ORA (using unified helper)
 // ============================================================================
 
 void fam65xx_op_ora_immediate(fam65xx_t* cpu) {
-    fam65xx_op_ora_helper(cpu, fam65xx_addr_imm);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_ora);
 }
 
 void fam65xx_op_ora_zero_page(fam65xx_t* cpu) {
-    fam65xx_op_ora_helper(cpu, fam65xx_addr_zp);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_ora);
 }
 
 void fam65xx_op_ora_zero_page_x(fam65xx_t* cpu) {
-    fam65xx_op_ora_helper(cpu, fam65xx_addr_zpx);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_ora);
 }
 
 void fam65xx_op_ora_absolute(fam65xx_t* cpu) {
-    fam65xx_op_ora_helper(cpu, fam65xx_addr_abs);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_ora);
 }
 
 void fam65xx_op_ora_absolute_x(fam65xx_t* cpu) {
-    fam65xx_op_ora_helper(cpu, fam65xx_addr_absx);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_ora);
 }
 
 void fam65xx_op_ora_absolute_y(fam65xx_t* cpu) {
-    fam65xx_op_ora_helper(cpu, fam65xx_addr_absy);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_ora);
 }
 
 void fam65xx_op_ora_indirect_x(fam65xx_t* cpu) {
-    fam65xx_op_ora_helper(cpu, fam65xx_addr_indx);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_ora);
 }
 
 void fam65xx_op_ora_indirect_y(fam65xx_t* cpu) {
-    fam65xx_op_ora_helper(cpu, fam65xx_addr_indy);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_ora);
 }
 
 // ============================================================================
-// SHARED OPCODE IMPLEMENTATIONS - EOR (using inline helpers for performance)
+// SHARED OPCODE IMPLEMENTATIONS - EOR (using unified helper)
 // ============================================================================
 
 void fam65xx_op_eor_immediate(fam65xx_t* cpu) {
-    fam65xx_op_eor_helper(cpu, fam65xx_addr_imm);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_eor);
 }
 
 void fam65xx_op_eor_zero_page(fam65xx_t* cpu) {
-    fam65xx_op_eor_helper(cpu, fam65xx_addr_zp);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_eor);
 }
 
 void fam65xx_op_eor_zero_page_x(fam65xx_t* cpu) {
-    fam65xx_op_eor_helper(cpu, fam65xx_addr_zpx);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_eor);
 }
 
 void fam65xx_op_eor_absolute(fam65xx_t* cpu) {
-    fam65xx_op_eor_helper(cpu, fam65xx_addr_abs);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_eor);
 }
 
 void fam65xx_op_eor_absolute_x(fam65xx_t* cpu) {
-    fam65xx_op_eor_helper(cpu, fam65xx_addr_absx);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_eor);
 }
 
 void fam65xx_op_eor_absolute_y(fam65xx_t* cpu) {
-    fam65xx_op_eor_helper(cpu, fam65xx_addr_absy);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_eor);
 }
 
 void fam65xx_op_eor_indirect_x(fam65xx_t* cpu) {
-    fam65xx_op_eor_helper(cpu, fam65xx_addr_indx);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_eor);
 }
 
 void fam65xx_op_eor_indirect_y(fam65xx_t* cpu) {
-    fam65xx_op_eor_helper(cpu, fam65xx_addr_indy);
+    fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_eor);
 }
 
 // Decimal mode ADC operation (for MOS6502 with functional decimal mode)
