@@ -84,3 +84,20 @@ void fam65xx_op_nop_zero_page(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam6
 void fam65xx_op_nop_zero_page_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_nop_op); }
 void fam65xx_op_nop_absolute(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_nop_op); }
 void fam65xx_op_nop_absolute_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_nop_op); }
+
+/*
+ * Opcode 0x89: NOP #imm ("special NOP", unofficial)
+ * --------------------------------------------------
+ * Hardware-accurate implementation:
+ * - Reads the immediate operand.
+ * - Performs a logical AND between A and the immediate operand, but does NOT store the result.
+ * - Sets N and Z flags as if AND A,#imm was executed.
+ * - Does NOT modify A or memory.
+ * - This matches the behavior of real NMOS 6502-family CPUs.
+ */
+void fam65xx_op_nop_immediate_special(fam65xx_t* cpu) {
+    uint8_t operand = fam65xx_read_cycle(cpu, cpu->pc++); // Fetch immediate operand
+    uint8_t result = cpu->a & operand;
+    fam65xx_set_nz_flags(cpu, result);
+    FAM65XX_OPCODE_FOOTER(cpu);
+}

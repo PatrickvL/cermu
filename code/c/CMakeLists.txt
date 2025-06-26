@@ -121,14 +121,7 @@ set(CORE_SOURCES
 # Chip library sources
 set(CHIP_SOURCES    # CPU family core functions (shared by all family members)
     src/chip/cpu/fam65xx/fam65xx_core.c
-    src/chip/cpu/fam65xx/fam65xx_arithmetic.c
-    src/chip/cpu/fam65xx/fam65xx_control.c
-    src/chip/cpu/fam65xx/fam65xx_memory.c
-    src/chip/cpu/fam65xx/fam65xx_registers.c
-    src/chip/cpu/fam65xx/fam65xx_shifts.c
-    src/chip/cpu/fam65xx/fam65xx_misc.c
     src/chip/cpu/fam65xx/fam65xx_opcodes.c
-      # CPU (operation files are included in mos6510.c)
     src/chip/cpu/mos6510/mos6510.c
     
     # I/O
