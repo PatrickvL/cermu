@@ -1,5 +1,4 @@
 #include "mos6502.h"
-#include "mos6502_opcodes.h"
 #include "../fam65xx/fam65xx_core.h"
 #include "../../../core/system.h"
 #include <stdlib.h>

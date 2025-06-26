@@ -75,13 +75,20 @@ struct fam65xx_s {
 // SHARED MOS 6502 FAMILY MACROS (used by all family members)
 // ============================================================================
 
+#define FAM65XX_MASK_IRQ  SYS_MASK_IRQ
+#define FAM65XX_MASK_NMI  SYS_MASK_NMI
+#define FAM65XX_MASK_RDY  SYS_MASK_RDY
+
 // Control line access and testing (shared)
 #define FAM65XX_CONTROL_LINES(cpu) \
     ((cpu)->control_interface.get_lines((cpu)->control_interface.context))
 
-#define FAM65XX_TEST_IRQ(cpu) (FAM65XX_CONTROL_LINES(cpu) & SYS_MASK_IRQ)
-#define FAM65XX_TEST_NMI(cpu) (FAM65XX_CONTROL_LINES(cpu) & SYS_MASK_NMI)
-#define FAM65XX_TEST_RDY(cpu) (FAM65XX_CONTROL_LINES(cpu) & SYS_MASK_RDY)
+// Provide a stub for fam65xx_op_nmi (does nothing for now)
+static inline void fam65xx_op_nmi(fam65xx_t* cpu) { /* TODO: implement if needed */ }
+
+#define FAM65XX_TEST_IRQ(cpu) (FAM65XX_CONTROL_LINES(cpu) & FAM65XX_MASK_IRQ)
+#define FAM65XX_TEST_NMI(cpu) (FAM65XX_CONTROL_LINES(cpu) & FAM65XX_MASK_NMI)
+#define FAM65XX_TEST_RDY(cpu) (FAM65XX_CONTROL_LINES(cpu) & FAM65XX_MASK_RDY)
 
 // System lines access macros for direct system state operations
 #define FAM65XX_SYSTEM_LINES_TEST(cpu, mask) SYS_LINES_TEST((cpu)->system_lines, mask)
