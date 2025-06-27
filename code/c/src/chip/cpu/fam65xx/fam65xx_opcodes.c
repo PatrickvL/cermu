@@ -298,18 +298,6 @@ fam65xx_opcode_handler_t fam65xx_op_default_handlers[256] = {
 };
 
 // ============================================================================
-// OPCODE TABLE INITIALIZATION AND MANAGEMENT
-// ============================================================================
-
-/**
- * Override a specific opcode handler for CPU-specific behavior.
- * Use this to customize behavior per CPU type (e.g., disable decimal mode).
- */
-void fam65xx_override_opcode(fam65xx_t* cpu, uint8_t opcode, fam65xx_opcode_handler_t handler) {
-    cpu->opcode_handlers[opcode] = handler;
-}
-
-// ============================================================================
 // FEATURE-BASED OPCODE HANDLERS
 // ============================================================================
 
@@ -519,6 +507,18 @@ void mos6502_op_sbc_absx(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_a
 void mos6502_op_sbc_absy(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, mos6502_op_sbc); }
 void mos6502_op_sbc_indx(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, mos6502_op_sbc); }
 void mos6502_op_sbc_indy(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, mos6502_op_sbc); }
+
+// ============================================================================
+// OPCODE TABLE INITIALIZATION AND MANAGEMENT
+// ============================================================================
+
+/**
+ * Override a specific opcode handler for CPU-specific behavior.
+ * Use this to customize behavior per CPU type (e.g., disable decimal mode).
+ */
+void fam65xx_override_opcode(fam65xx_t* cpu, uint8_t opcode, fam65xx_opcode_handler_t handler) {
+    cpu->opcode_handlers[opcode] = handler;
+}
 
 /**
  * Initialize CPU with default opcode handler table with CPU-specific features.
