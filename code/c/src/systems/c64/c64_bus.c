@@ -104,14 +104,14 @@ void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {
 uint8_t c64_bus_read_cycle(c64_bus_t *c64_bus, uint16_t addr) {
     c64_bus->address = addr; // Perhaps this is no longer needed
     uint8_t data = c64_bus_memory_read(c64_bus, addr);
-    c64_bus->data = data; // Perhaps this is no longer needed
+    c64_bus->data = data; // Used for "floating" bus state
     c64_non_cpu_cycle(c64_bus->c64);
     return data;
 }
 
 void c64_bus_write_cycle(c64_bus_t* c64_bus, uint16_t addr, uint8_t value) {
     c64_bus->address = addr; // Perhaps this is no longer needed
-    c64_bus->data = value; // Perhaps this is no longer needed
+    c64_bus->data = value; // Used for "floating" bus state for subsequent unattached reads
     c64_bus_memory_write(c64_bus, addr, value);
     c64_non_cpu_cycle(c64_bus->c64);
 }
@@ -296,10 +296,11 @@ static uint8_t c64_io_port_input_read(void* context, uint8_t port_value, uint8_t
 
 void c64_bus_init_adapters(c64_bus_t* c64_bus) {
     // Initialize bus cycle adapter
+    c64_bus->bus_adapter.context = c64_bus;
     c64_bus->bus_adapter.bus_read = c64_bus_adapter_bus_read;
     c64_bus->bus_adapter.bus_write = c64_bus_adapter_bus_write;
     c64_bus->bus_adapter.cycle_tick = c64_bus_adapter_non_cpu_cycle;
-    c64_bus->bus_adapter.context = c64_bus;
+    c64_bus->bus_adapter.detached_read = c64_bus_adapter_detached_read;
     
     // Initialize control lines adapter
     c64_bus->control_lines_adapter.get_lines = c64_control_lines_get;

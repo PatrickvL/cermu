@@ -68,32 +68,23 @@ void mos6581_reset(mos6581_t* sid) {
 uint8_t mos6581_registers_read(void* context, uint16_t address) {
     mos6581_t* sid = (mos6581_t*)context;
     uint32_t r = address & SID_REGS_MASK; // The SID registers are repeated each 32 bytes in the area $d400-$d7ff
-    uint8_t v;
     
     switch (r) {
         case 25: // $D419:POTX Read Game Paddle 1 (or 3) Position
-            v = 0; // TODO
-            break;
+            return 0; // TODO
         case 26: // $D41A:POTY Read Game Paddle 2 (or 4) Position
-            v = 0; // TODO
-            break;
+            return 0; // TODO
         case 27: // $D41B:OSC3 Read Oscillator 3/Random Number Generator
             // "always reflects the changing output of the oscillator and is not affected in any way by the Envelope Generator. "
-            v = (uint8_t)(sid->voice3.oscillator_waveform >> 4); // "read the upper 8 output bits of Oscillator 3"
-            break;
+            return  (uint8_t)(sid->voice3.oscillator_waveform >> 4); // "read the upper 8 output bits of Oscillator 3"
         case 28: // $D41C:ENV3 Envelope Generator 3 Output
             // "The Voice 3 Envelope Generator must be gated in order to produce any output from this register."
-            v = (uint8_t)(sid->voice3.gated ? sid->voice3.envelope_amplitude >> 8 : 0); // Assume upper 8 output bits
-            break;
+            return  (uint8_t)(sid->voice3.gated ? sid->voice3.envelope_amplitude >> 8 : 0); // Assume upper 8 output bits
         default: // All other registers are either write-only or (the final 3) unmapped.
             // Return previous bus value when reading write-only registers.
             // This is what makes SID/busvalue/busvalue.prg test succeed.
-            return sid->bus_value;
+            return  sid->bus_interface.detached_read(sid->bus_interface.context);
     }
-
-    // Store bus value on valid register read for later retrieval when reading write-only registers
-    sid->bus_value = v;
-    return v;
 }
 
 void mos6581_registers_write(void* context, uint16_t address, uint8_t value) {
@@ -167,9 +158,6 @@ void mos6581_registers_write(void* context, uint16_t address, uint8_t value) {
             case 31: value = 0xFF; break; // $D41F
         }
     }
-
-    // Store bus value on valid register write for later retrieval when reading write-only registers
-    sid->bus_value = value;
 }
 
 void mos6581_write_resonance_control_register_value(mos6581_t* sid, uint8_t v) {
@@ -255,11 +243,17 @@ void mos6581_cycle(mos6581_t* sid) {
     }
 }
 
+void mos6581_bus_attach(void* chip, bus_cycle_ops_t* bus_interface) {
+    mos6581_t* sid = (mos6581_t*)chip;
+    sid->bus_interface = *bus_interface;
+}
+
+
 chip_descriptor_t mos6581_descriptor = {
     .description = "MOS6581 SID Sound Interface Device",
     .create = mos6581_system_create,
     .destroy = mos6581_system_destroy,
-    .bus_attach = NULL,
+    .bus_attach = mos6581_bus_attach,
     .read = mos6581_registers_read,
     .write = mos6581_registers_write,
     .bank_change = NULL,

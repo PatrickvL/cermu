@@ -2,6 +2,7 @@
 #define MOS6526_H
 
 #include "../../core/chip.h"
+#include "../../core/bus_cycle_interface.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -64,7 +65,7 @@ typedef struct mos6526_s {
     int serial_shift;
     uint8_t interrupt_mask;
     
-    void* bus;  // c64_bus_t* - opaque pointer to avoid circular dependency
+    bus_cycle_ops_t bus_interface;
 } mos6526_t;
 
 // Technical register indices (in decimal) and masks (in hexadecimal)

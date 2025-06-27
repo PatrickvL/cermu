@@ -1,5 +1,4 @@
 #include "mos6526.h" // cia
-#include "../../systems/c64/c64_bus.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -22,10 +21,9 @@ void mos6526_system_destroy(void* chip) {
     free(chip);
 }
 
-void mos6526_bus_attach(void* chip, void* bus) {
+void mos6526_bus_attach(void* chip, bus_cycle_ops_t* bus_interface) {
     mos6526_t* cia = (mos6526_t*)chip;
-    c64_bus_t* c64_bus = (c64_bus_t*)bus;
-    cia->bus = c64_bus;
+    cia->bus_interface = *bus_interface;
 }
 
 void mos6526_reset(mos6526_t* cia) {
@@ -108,7 +106,8 @@ uint8_t mos6526_registers_read(void* context, uint16_t address) {
         case CRB: 
             return cia->reg[CRB];
         default:
-            return 0;
+            // Unused registers return the last value on the bus
+            return cia->bus_interface.detached_read(cia->bus_interface.context);
     }
 }
 

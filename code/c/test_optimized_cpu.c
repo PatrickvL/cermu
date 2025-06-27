@@ -9,17 +9,17 @@ static uint8_t test_memory[65536];
 
 // Test bus interface implementation
 static uint8_t test_bus_read(void* context, uint16_t address) {
-    (void)context; // Unused
+    (void)context;
     return test_memory[address];
 }
 
 static void test_bus_write(void* context, uint16_t address, uint8_t value) {
-    (void)context; // Unused
+    (void)context;
     test_memory[address] = value;
 }
 
 static void test_non_cpu_cycle(void* context) {
-    (void)context; // Unused for basic test
+    (void)context; for basic test
     // NOTE: In advanced usage, this callback could be used for:
     // - Execution tracing by counting cycles
     // - Breakpoint detection by checking PC values  
@@ -28,25 +28,30 @@ static void test_non_cpu_cycle(void* context) {
     // This is the key mechanism for controlling threaded dispatch execution
 }
 
+static uint8_t test_detached_read(void* context) {
+    (void)context;
+    return 0xFF;
+}
+
 // Test control lines interface implementation
 static uint32_t test_get_control_lines(void* context) {
-    (void)context; // Unused
+    (void)context;
     return 0; // No interrupts for basic test
 }
 
 static void test_set_control_lines(void* context, uint32_t lines) {
-    (void)context; // Unused
+    (void)context;
     (void)lines; // Unused
 }
 
 // Test I/O interface implementation
 static uint8_t test_read_external_pins(void* context) {
-    (void)context; // Unused
+    (void)context;
     return 0xFF; // All pins high for test
 }
 
 static void test_output_pins_changed(void* context, uint8_t ddr, uint8_t port_data, uint8_t effective_output) {
-    (void)context; // Unused
+    (void)context;
     printf("I/O Port changed: DDR=0x%02X, Data=0x%02X, Output=0x%02X\n", ddr, port_data, effective_output);
 }
 
@@ -79,10 +84,11 @@ int main() {
 
     // Create interface structures
     bus_cycle_ops_t bus_interface = {
+        .context = NULL,
         .bus_read = test_bus_read,
         .bus_write = test_bus_write,
         .cycle_tick = test_non_cpu_cycle,
-        .context = NULL
+        .detached_read = test_detached_read
     };
 
     control_lines_interface_t control_interface = {

@@ -134,7 +134,6 @@ void mos6581_render_debug_window(void* chip, bool* show_window) {
         igText("Filter Voice Count: %d", sid->filter_voice_count);
         igText("Sample Index: %d", sid->sample_index);
         igText("Sample Buffer Size: %d", SAMPLE_BUFFER_SIZE);
-        igText("Bus Value: $%02X", sid->bus_value);
         
         igUnindent(16.0f);
     }

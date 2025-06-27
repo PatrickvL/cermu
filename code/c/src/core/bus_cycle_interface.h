@@ -12,6 +12,12 @@
  */
 typedef struct {
     /**
+     * User-provided context pointer passed to all callback functions.
+     * Can point to the bus implementation, system state, or any other data.
+     */
+    void* context;
+
+    /**
      * Callback to perform a bus read operation.
      * Should only handle memory access, not advance system components.
      * 
@@ -40,11 +46,7 @@ typedef struct {
      */
     void (*cycle_tick)(void* context);
 
-    /**
-     * User-provided context pointer passed to all callback functions.
-     * Can point to the bus implementation, system state, or any other data.
-     */
-    void* context;
+    uint8_t (*detached_read)(void* context);
 } bus_cycle_ops_t;
 
 #endif // BUS_CYCLE_OPS_H

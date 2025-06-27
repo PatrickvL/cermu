@@ -1,7 +1,7 @@
 #include "../src/chip/cpu/mos6502/mos6502.h"
 #include "../src/chip/cpu/mos6510/mos6510.h"
 #include "../src/chip/cpu/nes6502/nes6502.h"
-#include "../src/chip/cpu/fam65xx/fam65xx_constants.h"
+#include "../src/chip/cpu/fam65xx/fam65xx_core.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -22,6 +22,11 @@ static void mock_write(void* context, uint16_t address, uint8_t value) {
 static void mock_cycle_tick(void* context) {
     (void)context;
     // No-op for this test
+}
+
+static uint8_t mock_detached_read(void* context) {
+    (void)context;
+    return 0xFF;
 }
 
 static uint32_t mock_get_lines(void* context) {
@@ -69,10 +74,10 @@ static void setup_mock_interfaces(
     control_lines_interface_t* control_interface,
     access_callback_t* ram_access
 ) {
-    bus_interface->bus_read = mock_read;
+    bus_interface->context = NULL;
     bus_interface->bus_write = mock_write;
     bus_interface->cycle_tick = mock_cycle_tick;
-    bus_interface->context = NULL;
+    bus_interface->detached_read = mock_detached_read;
     
     control_interface->get_lines = mock_get_lines;
     control_interface->set_lines = mock_set_lines;

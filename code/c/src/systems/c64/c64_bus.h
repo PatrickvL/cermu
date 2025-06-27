@@ -152,6 +152,12 @@ static inline bus_cycle_ops_t* c64_bus_get_adapter(c64_bus_t* c64_bus) {
     return &c64_bus->bus_adapter;
 }
 
+static inline uint8_t c64_bus_adapter_detached_read(void* context) {
+    c64_bus_t* bus = (c64_bus_t*)context;
+    return bus->data; // Return "floating" bus data for detached reads
+    // TODO : These should also decay and float to 0xFF after a while
+}
+
 /**
  * Get a pointer to the control lines adapter interface.
  * This allows any chip to access the shared control lines.

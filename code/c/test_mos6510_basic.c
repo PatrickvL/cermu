@@ -35,6 +35,11 @@ void test_cycle_tick(void* context) {
     (void)context;  // Unused - just a dummy implementation
 }
 
+static uint8_t test_detached_read(void* context) {
+    (void)context;
+    return 0xFF;
+}
+
 // Dummy control lines interface - returns no active interrupts
 static uint32_t dummy_get_control_lines(void *context) {
     (void)context;  // Unused
@@ -72,7 +77,8 @@ int main() {
         .context = NULL,
         .bus_read = test_read,
         .bus_write = test_write,
-        .cycle_tick = test_cycle_tick
+        .cycle_tick = test_cycle_tick,
+        .detached_read = test_detached_read
     };
     
     // Attach bus interface

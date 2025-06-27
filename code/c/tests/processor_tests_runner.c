@@ -61,6 +61,11 @@ void test_write(void* context, uint16_t address, uint8_t value) {
     test_memory[address] = value;
 }
 
+uint8_t test_detached_read(void* context) {
+    (void)context;
+    return 0xFF;
+}
+
 uint8_t test_io_read(void* context, uint8_t port_value, uint8_t ddr) {
     (void)context; (void)port_value; (void)ddr;
     return 0xFF;
@@ -127,7 +132,8 @@ bool create_cpu_instance(cpu_instance_t* instance, cpu_type_t type) {
                     .context = NULL,
                     .bus_read = test_read,
                     .bus_write = test_write,
-                    .cycle_tick = test_cycle_tick
+                    .cycle_tick = test_cycle_tick,
+                    .detached_read = test_detached_read
                 };
                 mos6502_attach_bus((mos6502_t*)instance->cpu, &bus_ops);
                 mos6502_attach_control_lines((mos6502_t*)instance->cpu, &control_interface);
@@ -144,7 +150,8 @@ bool create_cpu_instance(cpu_instance_t* instance, cpu_type_t type) {
                     .context = NULL,
                     .bus_read = test_read,
                     .bus_write = test_write,
-                    .cycle_tick = test_cycle_tick
+                    .cycle_tick = test_cycle_tick,
+                    .detached_read = test_detached_read
                 };
                 mos6510_io_port_interface_t io_interface = {
                     .context = NULL,
@@ -167,7 +174,8 @@ bool create_cpu_instance(cpu_instance_t* instance, cpu_type_t type) {
                     .context = NULL,
                     .bus_read = test_read,
                     .bus_write = test_write,
-                    .cycle_tick = test_cycle_tick
+                    .cycle_tick = test_cycle_tick,
+                    .detached_read = test_detached_read
                 };
                 nes6502_attach_bus((nes6502_t*)instance->cpu, &bus_ops);
                 nes6502_attach_control_lines((nes6502_t*)instance->cpu, &control_interface);
