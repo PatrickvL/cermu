@@ -111,6 +111,17 @@ struct fam65xx_s {
     } \
 } while(0)
 
+// Core memory and cycle functions (shared)
+static inline uint8_t fam65xx_read_cycle(fam65xx_t* cpu, uint16_t address) {
+    cpu->bus_interface.cycle_tick(cpu->bus_interface.context);  // Bus cycle
+    return cpu->bus_interface.bus_read(cpu->bus_interface.context, address);
+}
+
+static inline void fam65xx_write_cycle(fam65xx_t* cpu, uint16_t address, uint8_t value) {
+    cpu->bus_interface.cycle_tick(cpu->bus_interface.context);  // Bus cycle
+    cpu->bus_interface.bus_write(cpu->bus_interface.context, address, value);
+}
+
 // Instruction dispatch macros (shared - but implementation-specific functions)
 #define FAM65XX_NEXT_INSTRUCTION_DISPATCH(cpu) do { \
     uint8_t opcode = fam65xx_read_cycle(cpu, (cpu)->pc++); \
@@ -138,18 +149,7 @@ void fam65xx_interrupt_handler(fam65xx_t* cpu);
 // SHARED FUNCTION DECLARATIONS
 // ============================================================================
 
-// Core memory and cycle functions (shared by all family members)
-static inline uint8_t fam65xx_read_cycle(fam65xx_t* cpu, uint16_t address) {
-    cpu->bus_interface.cycle_tick(cpu->bus_interface.context);  // Bus cycle
-    return cpu->bus_interface.bus_read(cpu->bus_interface.context, address);
-}
-
-static inline void fam65xx_write_cycle(fam65xx_t* cpu, uint16_t address, uint8_t value) {
-    cpu->bus_interface.cycle_tick(cpu->bus_interface.context);  // Bus cycle
-    cpu->bus_interface.bus_write(cpu->bus_interface.context, address, value);
-}
-
-// Arithmetic helper function types
+// Arithmetic helper function types (shared by all family members)
 typedef uint8_t (*fam65xx_addr_func_t)(fam65xx_t* cpu);
 typedef void (*fam65xx_op_func_t)(fam65xx_t* cpu, uint8_t value);
 
@@ -178,6 +178,17 @@ static inline void fam65xx_set_nz_flags(fam65xx_t* cpu, uint8_t value) {
     fam65xx_set_flag(cpu, FLAG_N, (value & 0x80) != 0);
 }
 
+// Stack operations (shared)
+static inline void fam65xx_push(fam65xx_t* cpu, uint8_t value) {
+    fam65xx_write_cycle(cpu, 0x0100 | cpu->sp, value);  // Bus write cycle
+    cpu->sp--;
+}
+static inline uint8_t fam65xx_pull(fam65xx_t* cpu) {
+    (void)fam65xx_read_cycle(cpu, 0x0100 | cpu->sp);  // T1: Dummy read
+    cpu->sp++;
+    return fam65xx_read_cycle(cpu, 0x0100 | cpu->sp);  // T2: Stack read
+}
+
 // Interrupt handling (shared)
 // For IRQ and NMI, the B flag is cleared in the pushed status. For BRK, it is set.
 static void fam65xx_interrupt_sequence(fam65xx_t* cpu, uint8_t status_flags, uint16_t vector_addr) {
@@ -199,17 +210,6 @@ static void fam65xx_nmi(fam65xx_t* cpu) {
 
 static void fam65xx_irq(fam65xx_t* cpu) {
     fam65xx_interrupt_sequence(cpu, cpu->p & ~FLAG_B, 0xFFFE); // IRQ vector, B flag cleared
-}
-
-// Stack operations (shared)
-static inline void fam65xx_push(fam65xx_t* cpu, uint8_t value) {
-    fam65xx_write_cycle(cpu, 0x0100 | cpu->sp, value);  // Bus write cycle
-    cpu->sp--;
-}
-static inline uint8_t fam65xx_pull(fam65xx_t* cpu) {
-    (void)fam65xx_read_cycle(cpu, 0x0100 | cpu->sp);  // T1: Dummy read
-    cpu->sp++;
-    return fam65xx_read_cycle(cpu, 0x0100 | cpu->sp);  // T2: Stack read
 }
 
 // Interception support (shared)
