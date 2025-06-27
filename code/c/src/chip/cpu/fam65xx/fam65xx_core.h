@@ -83,9 +83,6 @@ struct fam65xx_s {
 #define FAM65XX_CONTROL_LINES(cpu) \
     ((cpu)->control_interface.get_lines((cpu)->control_interface.context))
 
-// Provide a stub for fam65xx_op_nmi (does nothing for now)
-static inline void fam65xx_op_nmi(fam65xx_t* cpu) { /* TODO: implement if needed */ }
-
 #define FAM65XX_TEST_IRQ(cpu) (FAM65XX_CONTROL_LINES(cpu) & FAM65XX_MASK_IRQ)
 #define FAM65XX_TEST_NMI(cpu) (FAM65XX_CONTROL_LINES(cpu) & FAM65XX_MASK_NMI)
 #define FAM65XX_TEST_RDY(cpu) (FAM65XX_CONTROL_LINES(cpu) & FAM65XX_MASK_RDY)
@@ -120,6 +117,9 @@ static inline void fam65xx_op_nmi(fam65xx_t* cpu) { /* TODO: implement if needed
     (cpu)->opcode_handlers[opcode](cpu); \
 } while(0)
 
+// Forward declaration for macros
+void fam65xx_interrupt_handler(fam65xx_t* cpu);
+
 #define FAM65XX_NEXT_INSTRUCTION(cpu) do { \
     if (unlikely(FAM65XX_TEST_IRQ(cpu) || FAM65XX_TEST_NMI(cpu))) { \
         fam65xx_interrupt_handler(cpu); \
@@ -141,10 +141,6 @@ static inline void fam65xx_op_nmi(fam65xx_t* cpu) { /* TODO: implement if needed
 // Core memory and cycle functions (shared by all family members)
 uint8_t fam65xx_read_cycle(fam65xx_t* cpu, uint16_t address);  // Bus read cycle
 void fam65xx_write_cycle(fam65xx_t* cpu, uint16_t address, uint8_t value);  // Bus write cycle
-
-// Forward declaration for macros
-void fam65xx_interrupt_handler(fam65xx_t* cpu);
-
 
 // Arithmetic helper function types
 typedef uint8_t (*fam65xx_addr_func_t)(fam65xx_t* cpu);
@@ -177,8 +173,26 @@ static inline void fam65xx_set_nz_flags(fam65xx_t* cpu, uint8_t value) {
 
 // Interrupt handling (shared)
 // For IRQ and NMI, the B flag is cleared in the pushed status. For BRK, it is set.
-void fam65xx_interrupt_sequence(fam65xx_t* cpu, uint8_t status_flags, uint16_t vector_addr);
-void fam65xx_interrupt_handler(fam65xx_t* cpu);
+static void fam65xx_interrupt_sequence(fam65xx_t* cpu, uint8_t status_flags, uint16_t vector_addr) {
+    // Push program counter (high byte first)
+    fam65xx_push(cpu, (cpu->pc >> 8) & 0xFF);
+    fam65xx_push(cpu, cpu->pc & 0xFF);
+    // Push status register with specified flags (caller must set/clear B flag as appropriate)
+    fam65xx_push(cpu, status_flags | FLAG_U); // B flag set for BRK, clear for IRQ/NMI
+    fam65xx_set_flag(cpu, FLAG_I, true);
+    // Load interrupt vector
+    uint8_t addr_lo = fam65xx_read_cycle(cpu, vector_addr);  // Bus read cycle
+    uint8_t addr_hi = fam65xx_read_cycle(cpu, vector_addr + 1);  // Bus read cycle
+    cpu->pc = (addr_hi << 8) | addr_lo;
+}
+
+static void fam65xx_nmi(fam65xx_t* cpu) {
+    fam65xx_interrupt_sequence(cpu, cpu->p & ~FLAG_B, 0xFFFA); // NMI vector, B flag cleared
+}
+
+static void fam65xx_irq(fam65xx_t* cpu) {
+    fam65xx_interrupt_sequence(cpu, cpu->p & ~FLAG_B, 0xFFFE); // IRQ vector, B flag cleared
+}
 
 // Interception support (shared)
 void fam65xx_start_intercept(fam65xx_t* cpu);
@@ -191,7 +205,6 @@ bool fam65xx_step(fam65xx_t* cpu);
 // Stack operations (shared)
 void fam65xx_push(fam65xx_t* cpu, uint8_t value);
 uint8_t fam65xx_pull(fam65xx_t* cpu);
-
 
 // ============================================================================
 // SHARED OPCODE HANDLER TABLE INITIALIZATION

@@ -377,7 +377,7 @@ bool run_processor_test(cpu_instance_t* instance, const processor_test_t* test) 
     
     // Setup memory from initial state
     setup_memory_from_state(&test->initial);
-      // Setup CPU with initial state
+    // Setup CPU with initial state
     set_cpu_state(instance, &test->initial);
     cycle_count = 0;
     
@@ -387,7 +387,9 @@ bool run_processor_test(cpu_instance_t* instance, const processor_test_t* test) 
     
     if (verbose_output) {
         printf("  Opcode at PC 0x%04X: 0x%02X\n", test->initial.pc, opcode);
-    }      // Execute one instruction
+    }
+    
+    // Execute one instruction
     bool step_result = step_cpu(instance);
     if (!step_result) {
         if (verbose_output) {
