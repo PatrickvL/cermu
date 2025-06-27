@@ -2,6 +2,7 @@
 #define MOS6581_H
 
 #include "../../core/chip.h"
+#include "../../core/bus_cycle_interface.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -101,6 +102,9 @@ typedef struct mos6581_s {
     // Chip descriptor must be first
     chip_descriptor_t* desc;
 
+    // Bus interface
+    bus_cycle_ops_t bus_interface;
+
     // SID register array
     uint8_t regs[SID_REGS_SIZE];
 
@@ -132,7 +136,6 @@ typedef struct mos6581_s {
     uint32_t filter_voice_count;      // Number of voices being filtered
     uint32_t sample_index;            // Current sample buffer index
     uint8_t sample_buffer[SAMPLE_BUFFER_SIZE]; // Sample buffer
-    uint8_t bus_value;                // Last bus value for read-only register reads
 } mos6581_t;
 
 // Function declarations

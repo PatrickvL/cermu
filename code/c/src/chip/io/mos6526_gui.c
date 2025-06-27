@@ -217,11 +217,11 @@ void mos6526_render_settings_window(void* chip, bool* show_window) {
 
 // Helper function to determine CIA type based on system context
 static const char* mos6526_get_cia_name(mos6526_t* cia) {
-    if (!cia->bus) return "CIA"; // Generic CIA if no bus context
+    if (!cia->bus_interface.context) return "CIA"; // Generic CIA if no bus context
     
     // For C64 system: CIA1 is at 0xDC00, CIA2 is at 0xDD00
     // Access the C64 structure through the bus to determine which CIA this is
-    c64_bus_t* bus = (c64_bus_t*)cia->bus;
+    c64_bus_t* bus = (c64_bus_t*)cia->bus_interface.context;
     
     // The C64 bus should have a reference back to the C64 system
     c64_t* c64 = (c64_t*)bus->c64;

@@ -90,9 +90,8 @@ void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config) {
 }
 
 uint8_t c64_detached_read(void* context, uint16_t address) {
-    (void)context;
     (void)address;
-    return 0xFF; // Return default value for detached reads
+    return c64_bus_adapter_detached_read(context);
 }
 
 void c64_detached_write(void* context, uint16_t address, uint8_t value) {
@@ -108,7 +107,7 @@ void c64_callbacks_init(c64_t* c64) {
 
     // Initialize all callbacks to stub functions first
     for (int i = 0; i < 24; i++) {
-        c64_bus_register_chip_callbacks(bus, (uint8_t)i, NULL,
+        c64_bus_register_chip_callbacks(bus, (uint8_t)i, bus,
             c64_detached_read, c64_detached_write);
     }
     
