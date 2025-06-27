@@ -139,8 +139,15 @@ void fam65xx_interrupt_handler(fam65xx_t* cpu);
 // ============================================================================
 
 // Core memory and cycle functions (shared by all family members)
-uint8_t fam65xx_read_cycle(fam65xx_t* cpu, uint16_t address);  // Bus read cycle
-void fam65xx_write_cycle(fam65xx_t* cpu, uint16_t address, uint8_t value);  // Bus write cycle
+static inline uint8_t fam65xx_read_cycle(fam65xx_t* cpu, uint16_t address) {
+    cpu->bus_interface.cycle_tick(cpu->bus_interface.context);  // Bus cycle
+    return cpu->bus_interface.bus_read(cpu->bus_interface.context, address);
+}
+
+static inline void fam65xx_write_cycle(fam65xx_t* cpu, uint16_t address, uint8_t value) {
+    cpu->bus_interface.cycle_tick(cpu->bus_interface.context);  // Bus cycle
+    cpu->bus_interface.bus_write(cpu->bus_interface.context, address, value);
+}
 
 // Arithmetic helper function types
 typedef uint8_t (*fam65xx_addr_func_t)(fam65xx_t* cpu);
@@ -194,6 +201,17 @@ static void fam65xx_irq(fam65xx_t* cpu) {
     fam65xx_interrupt_sequence(cpu, cpu->p & ~FLAG_B, 0xFFFE); // IRQ vector, B flag cleared
 }
 
+// Stack operations (shared)
+static inline void fam65xx_push(fam65xx_t* cpu, uint8_t value) {
+    fam65xx_write_cycle(cpu, 0x0100 | cpu->sp, value);  // Bus write cycle
+    cpu->sp--;
+}
+static inline uint8_t fam65xx_pull(fam65xx_t* cpu) {
+    (void)fam65xx_read_cycle(cpu, 0x0100 | cpu->sp);  // T1: Dummy read
+    cpu->sp++;
+    return fam65xx_read_cycle(cpu, 0x0100 | cpu->sp);  // T2: Stack read
+}
+
 // Interception support (shared)
 void fam65xx_start_intercept(fam65xx_t* cpu);
 void fam65xx_stop_intercept(fam65xx_t* cpu);
@@ -201,10 +219,6 @@ bool fam65xx_is_intercepting(fam65xx_t* cpu);
 
 // Single step execution (shared)
 bool fam65xx_step(fam65xx_t* cpu);
-
-// Stack operations (shared)
-void fam65xx_push(fam65xx_t* cpu, uint8_t value);
-uint8_t fam65xx_pull(fam65xx_t* cpu);
 
 // ============================================================================
 // SHARED OPCODE HANDLER TABLE INITIALIZATION
