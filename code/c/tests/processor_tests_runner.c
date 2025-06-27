@@ -392,7 +392,23 @@ bool run_processor_test(cpu_instance_t* instance, const processor_test_t* test) 
     // Read the actual opcode from memory at the current PC using bus_read
     uint8_t opcode = test_read(NULL, test->initial.pc);
     opcode_totals[opcode]++;
-    
+
+    // If this is a JAM (KIL) opcode, assert NMI so the handler can break out for the test
+    switch (opcode) {
+        case 0x02: case 0x12: case 0x22: case 0x32:
+        case 0x42: case 0x52: case 0x62: case 0x72:
+        case 0x92: case 0xB2: case 0xD2: case 0xF2:
+            // Set NMI line using the control interface
+            if (instance->type == CPU_TYPE_MOS6502 || instance->type == CPU_TYPE_MOS6510 || instance->type == CPU_TYPE_NES6502) {
+                if (instance->cpu) {
+                    // The control interface is attached to the CPU instance
+                    fam65xx_t* famcpu = (fam65xx_t*)instance->cpu;
+                    famcpu->control_interface.set_lines(famcpu->control_interface.context, SYS_MASK_NMI);
+                }
+            }
+            break;
+    }
+
     if (verbose_output) {
         printf("  Opcode at PC 0x%04X: 0x%02X\n", test->initial.pc, opcode);
     }
