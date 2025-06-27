@@ -47,10 +47,7 @@ static bool verbose_output = false;
 static uint32_t opcode_failures[256] = {0};
 static uint32_t opcode_totals[256] = {0};
 
-// ============================================================================
 // MEMORY AND CONTROL INTERFACES (SHARED)
-// ============================================================================
-
 uint8_t test_read(void* context, uint16_t address) {
     (void)context;
     return test_memory[address];
@@ -80,18 +77,22 @@ void test_cycle_tick(void* context) {
     cycle_count++;
 }
 
-static uint32_t dummy_get_control_lines(void *context) {
+// --- Control lines state for test harness ---
+static uint32_t test_control_lines = (1U << 29); // RDY active by default
+
+static uint32_t test_get_control_lines(void *context) {
     (void)context;
-    return (1U << 29);  // RDY active (bit 29), no IRQ/NMI
+    return test_control_lines;
 }
 
-static void dummy_set_control_lines(void *context, uint32_t lines) {
-    (void)context; (void)lines;
+static void test_set_control_lines(void *context, uint32_t lines) {
+    (void)context;
+    test_control_lines = lines;
 }
 
 static const control_lines_interface_t control_interface = {
-    .get_lines = dummy_get_control_lines,
-    .set_lines = dummy_set_control_lines,
+    .get_lines = test_get_control_lines,
+    .set_lines = test_set_control_lines,
     .context = NULL
 };
 
