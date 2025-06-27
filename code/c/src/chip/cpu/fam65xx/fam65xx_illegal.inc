@@ -108,8 +108,8 @@ void fam65xx_op_jam(fam65xx_t* cpu) {
     (void)fam65xx_read_cycle(cpu, cpu->pc);
     cpu->pc--; // JAM instruction halts the CPU by looping on itself
     while (1) {
-        if (FAM65XX_SYSTEM_LINES_TEST(cpu, FAM65XX_MASK_NMI)) {
-            fam65xx_op_nmi(cpu);
+        if (unlikely(FAM65XX_TEST_NMI(cpu))) {
+            fam65xx_nmi(cpu);
             break;
         }
         FAM65XX_INTRA_CYCLE(cpu);

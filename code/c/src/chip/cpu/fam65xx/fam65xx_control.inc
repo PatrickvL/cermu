@@ -125,26 +125,8 @@ void fam65xx_op_rts(fam65xx_t* cpu) {
 
 // BRK - Break
 void fam65xx_op_brk(fam65xx_t* cpu) {
-
     (void)fam65xx_read_cycle(cpu, cpu->pc++); // Read and discard next byte
-    
-    // Push PC+1 (BRK increments PC before pushing)
-    fam65xx_push(cpu, (cpu->pc >> 8) & 0xFF);
-    fam65xx_push(cpu, cpu->pc & 0xFF);
-    
-    // Push status with B flag set
-    fam65xx_push(cpu, cpu->p | FLAG_B | FLAG_U);
-    
-    // Set interrupt disable flag
-    fam65xx_set_flag(cpu, FLAG_I, true);
-    
-    // Load IRQ vector
-
-    uint8_t addr_lo = fam65xx_read_cycle(cpu, 0xFFFE);  // Bus read cycle
-
-    uint8_t addr_hi = fam65xx_read_cycle(cpu, 0xFFFF);  // Bus read cycle
-    cpu->pc = (addr_hi << 8) | addr_lo;
-    
+    fam65xx_interrupt_sequence(cpu, cpu->p | FLAG_B, 0xFFFE);
     FAM65XX_OPCODE_FOOTER(cpu);
 }
 
