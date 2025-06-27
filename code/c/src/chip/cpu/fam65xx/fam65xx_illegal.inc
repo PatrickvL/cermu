@@ -103,13 +103,13 @@ void fam65xx_op_isc_absolute_y(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam
 void fam65xx_op_isc_indirect_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_isc); }
 void fam65xx_op_isc_indirect_y(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_isc); }
 
-// --- JAM ---
+// --- JAM (KIL) ---
 void fam65xx_op_jam(fam65xx_t* cpu) {
     (void)fam65xx_read_cycle(cpu, cpu->pc);
-        cpu->pc--; // JAM instruction halts the CPU by looping on itself
-        while (1) {
-            if (FAM65XX_SYSTEM_LINES_TEST(cpu, FAM65XX_MASK_NMI)) {
-                fam65xx_op_nmi(cpu);
+    cpu->pc--; // JAM instruction halts the CPU by looping on itself
+    while (1) {
+        if (FAM65XX_SYSTEM_LINES_TEST(cpu, FAM65XX_MASK_NMI)) {
+            fam65xx_op_nmi(cpu);
             break;
         }
         FAM65XX_INTRA_CYCLE(cpu);
@@ -142,6 +142,20 @@ void fam65xx_op_lax_absolute(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65
 void fam65xx_op_lax_absolute_y(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_lax); }
 void fam65xx_op_lax_indirect_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_lax); }
 void fam65xx_op_lax_indirect_y(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_lax); }
+
+// --- NOP (illegal variants) ---
+
+// Illegal NOP operation: Fetches a value but does nothing with it
+static inline void fam65xx_op_nop_illegal(fam65xx_t* cpu, uint8_t value) {
+    (void)cpu;    // Unused
+    (void)value;  // Unused
+}
+
+void fam65xx_op_nop_immediate(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_nop_illegal); }
+void fam65xx_op_nop_zero_page(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_nop_illegal); }
+void fam65xx_op_nop_zero_page_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_nop_illegal); }
+void fam65xx_op_nop_absolute(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_nop_illegal); }
+void fam65xx_op_nop_absolute_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_nop_illegal); }
 
 // --- RLA ---
 // RLA operation: ROL memory, then AND with A
