@@ -6,30 +6,6 @@
 // SHARED MOS 6502 FAMILY CORE IMPLEMENTATION
 // ============================================================================
 
-// Core memory and cycle functions (shared by all family members)
-uint8_t fam65xx_read_cycle(fam65xx_t* cpu, uint16_t address) {
-    cpu->bus_interface.cycle_tick(cpu->bus_interface.context);  // Bus cycle
-    return cpu->bus_interface.bus_read(cpu->bus_interface.context, address);
-}
-
-void fam65xx_write_cycle(fam65xx_t* cpu, uint16_t address, uint8_t value) {
-    cpu->bus_interface.cycle_tick(cpu->bus_interface.context);  // Bus cycle
-    cpu->bus_interface.bus_write(cpu->bus_interface.context, address, value);
-}
-
-// Stack operations (shared)
-void fam65xx_push(fam65xx_t* cpu, uint8_t value) {
-
-    fam65xx_write_cycle(cpu, 0x0100 | cpu->sp, value);  // Bus write cycle
-    cpu->sp--;
-}
-
-uint8_t fam65xx_pull(fam65xx_t* cpu) {
-    (void)fam65xx_read_cycle(cpu, 0x0100 | cpu->sp);  // T1: Dummy read
-    cpu->sp++;
-    return fam65xx_read_cycle(cpu, 0x0100 | cpu->sp);  // T2: Stack read
-}
-
 // Interrupt handler - called when IRQ or NMI lines are active
 void fam65xx_interrupt_handler(fam65xx_t* cpu) {
     // Check for NMI first (higher priority)
