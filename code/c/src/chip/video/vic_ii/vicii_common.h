@@ -156,11 +156,13 @@ struct vicii_pixel_s {
 
 // VIC-II timing constants
 #define VICII_PAL_CYCLES_PER_LINE    63
-#define VICII_PAL_TOTAL_LINES        312
+#define VICII_PAL_TOTAL_LINES        312 // VIC_LINES_PER_FRAME 
 #define VICII_PAL_VISIBLE_PIXELS     403
 #define VICII_NTSC_CYCLES_PER_LINE   65
 #define VICII_NTSC_TOTAL_LINES       262
 #define VICII_NTSC_VISIBLE_PIXELS    411
+
+// #define VIC_CYCLES_PER_FRAME (VIC_CYCLES_PER_LINE * VIC_LINES_PER_FRAME)
 
 // Border limits
 #define VICII_BORDER_TOP_RSEL1       51
@@ -171,6 +173,25 @@ struct vicii_pixel_s {
 #define VICII_BORDER_LEFT_CSEL0      32
 #define VICII_BORDER_RIGHT_CSEL0     336
 #define VICII_BORDER_RIGHT_CSEL1     344
+
+// VIC-II access types
+#define VIC_ACCESS_IDLE         0
+#define VIC_ACCESS_REFRESH      1
+#define VIC_ACCESS_SPRITE_PTR   2
+#define VIC_ACCESS_SPRITE_DATA  3
+#define VIC_ACCESS_CHAR_DATA    4
+#define VIC_ACCESS_COLOR_DATA   5
+
+typedef enum {
+    CYCLE_GROUP_LINE_START,          // Cycle 0
+    CYCLE_GROUP_SPRITES,             // Cycles 1-8
+    CYCLE_GROUP_REFRESH,             // Cycle 9
+    CYCLE_GROUP_NORMAL,              // Cycles 10-11
+    CYCLE_GROUP_BADLINE_WARNING,     // Cycle 12
+    CYCLE_GROUP_BADLINE_CONTINUE,    // Cycles 13-14
+    CYCLE_GROUP_CHAR_COLOR,          // Cycles 15-54
+    CYCLE_GROUP_LINE_END             // Cycles 55-62
+} vic_cycle_group_t;
 
 // Interrupt mask
 #define VICII_INTERRUPTS_MASK (VICII_IR_ILP | VICII_IR_IMMC | VICII_IR_IMBC | VICII_IR_IRST)
@@ -215,13 +236,16 @@ typedef struct {
     uint8_t registers[VICII_REGS_SIZE + 2];  // +2 for shadow collision registers
     
     // Timing state
-    uint8_t x_cycle;
+    uint8_t x_cycle; // aka line_cycle;
     uint16_t x_coordinate;
-    uint16_t raster_counter;
+    vic_cycle_group_t cycle_group;  // Current cycle group (updated when line_cycle changes)    
+    uint16_t raster_counter; // aka raster_line;
+    uint32_t frame_count;
     
     // Video logic state
     bool video_logic_display_state;
-    bool is_bad_line;
+    bool is_bad_line; // aka badline;
+    bool badline_starting; // NEW
     bool was_den_set_during_raster_30;
     bool vertical_border_flip_flop;
     
