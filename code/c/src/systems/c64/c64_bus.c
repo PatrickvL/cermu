@@ -102,18 +102,36 @@ void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {
 }
 
 uint8_t c64_bus_read_cycle(c64_bus_t *c64_bus, uint16_t addr) {
+    c64_t* c64 = c64_bus->c64;
+
+    // READ CYCLES CAN BE HALTED: Wait for both BA and AEC
+    while (!(c64_bus->control_lines & BA_LINE) || !(c64_bus->control_lines & AEC_LINE)) {
+        c64_non_cpu_cycle(c64, true, false);
+    }
+
     c64_bus->address = addr; // Perhaps this is no longer needed
     uint8_t data = c64_bus_memory_read(c64_bus, addr);
     c64_bus->data = data; // Used for "floating" bus state
-    c64_non_cpu_cycle(c64_bus->c64);
+
+    // Tick system through complete cycle
+    c64_non_cpu_cycle(c64, true, false);    
     return data;
 }
 
 void c64_bus_write_cycle(c64_bus_t* c64_bus, uint16_t addr, uint8_t value) {
+    c64_t* c64 = c64_bus->c64;
+
+    // WRITE CYCLES CANNOT BE INTERRUPTED by BA, but need AEC
+    while (!(c64_bus->control_lines & AEC_LINE)) {
+        c64_non_cpu_cycle(c64, true, false);
+    }    
+
     c64_bus->address = addr; // Perhaps this is no longer needed
     c64_bus->data = value; // Used for "floating" bus state for subsequent unattached reads
     c64_bus_memory_write(c64_bus, addr, value);
-    c64_non_cpu_cycle(c64_bus->c64);
+
+    // Advance system
+    c64_non_cpu_cycle(c64, true, false);
 }
 
 // PLA integration functions
