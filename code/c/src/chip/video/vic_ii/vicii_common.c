@@ -5,12 +5,18 @@
 #include <stdio.h>
 
 // forwards
-static uint8_t read_clear(vicii_common_t* vicii, uint8_t reg);
 static void update_border_color_and_priority(vicii_common_t* vicii);
 static void update_colors_based_on_graphics_mode_and_background_012(vicii_common_t* vicii);
 static void update_graphics_mode_and_dependent_colors(vicii_common_t* vicii);
 static void update_is_bad_line(vicii_common_t* vicii);
 void set_main_border_flip_flop(vicii_common_t* vicii, bool main_border_flip_flop);
+
+// Helper function to read clear (collision registers)
+static uint8_t read_clear(vicii_common_t* vicii, uint8_t reg) {
+    uint8_t val = vicii->registers[reg];
+    vicii->registers[reg] = 0;
+    return val;
+}
 
 // Register read with proper masking
 uint8_t vicii_common_registers_read(void* chip, uint16_t address) {
@@ -43,13 +49,6 @@ uint8_t vicii_common_registers_read(void* chip, uint16_t address) {
                 return vicii->registers[reg] | 0xF0;       // 32-46 $d020-$d02e use bits 0..3 (bits 4..7 are not connected)
             }
     }
-}
-
-// Helper function to read clear (collision registers)
-static uint8_t read_clear(vicii_common_t* vicii, uint8_t reg) {
-    uint8_t val = vicii->registers[reg];
-    vicii->registers[reg] = 0;
-    return val;
 }
 
 // Register write with proper handling
@@ -168,81 +167,34 @@ void vicii_common_registers_write(void* chip, uint16_t address, uint8_t value) {
 // Initialize VIC-II to default state
 void vicii_common_initialize(vicii_common_t* vicii) {
     // TODO : Set VIC-II default bank to 0 (lowest 16 Kb)
-
+    
     // Set all registers to their default value :
-    for (int r = 0; r < VICII_REGS_SIZE; r++) {
-        switch (r) {
-            case VICII_C1:
-                vicii->registers[r] = VICII_C1_RST8 | VICII_C1_DEN | VICII_C1_RSEL |
-                                     (VICII_C1_YSCROLL & 3); // 155:Display ENable,25-row  
-                break;
-            case VICII_MXE:
-                vicii->registers[r] = 0;  // All sprites disabled
-                break;
-            case VICII_C2:
-                vicii->registers[r] = VICII_C2_CSEL; // 8: XSCROLL:0, no MultiColorMode, 40-column display, no RESET
-                break;
-            case VICII_IR:
-                vicii->registers[r] = VICII_IR_UNUSED; // See BusWrite; Always set the unused bits high
-                break;
-            case VICII_MP:
-                vicii->registers[r] = VICII_MP_CB12 | VICII_MP_VM10; // 0x14: "address of Character Dot-Data area to 4096 ($1000)"
-                break;
-            case VICII_EC:
-                vicii->registers[r] = VICII_COLOR_LIGHT_BLUE; // 14: Border Color
-                break;
-            case VICII_B0C:
-                vicii->registers[r] = VICII_COLOR_BLUE; // 6: Background Color 0
-                break;
-            case VICII_B1C:
-                vicii->registers[r] = VICII_COLOR_WHITE; // 1: Background Color 1
-                break;
-            case VICII_B2C:
-                vicii->registers[r] = VICII_COLOR_RED; // 2: Background Color 2
-                break;
-            case VICII_B3C:
-                vicii->registers[r] = VICII_COLOR_CYAN; // 3: Background Color 3
-                break;
-            case VICII_MM0:
-                vicii->registers[r] = VICII_COLOR_PURPLE; // 4: Sprite Multicolor 0
-                break;
-            case VICII_MM1:
-                vicii->registers[r] = VICII_COLOR_BLACK; // 0: Sprite Multicolor 1
-                break;
-            case VICII_M0C:
-                vicii->registers[r] = VICII_COLOR_WHITE; // 1: Sprite Color 0
-                break;
-            case VICII_M1C:
-                vicii->registers[r] = VICII_COLOR_RED; // 2: Sprite Color 1
-                break;
-            case VICII_M2C:
-                vicii->registers[r] = VICII_COLOR_CYAN; // 3: Sprite Color 2
-                break;
-            case VICII_M3C:
-                vicii->registers[r] = VICII_COLOR_PURPLE; // 4: Sprite Color 3
-                break;
-            case VICII_M4C:
-                vicii->registers[r] = VICII_COLOR_GREEN; // 5: Sprite Color 4
-                break;
-            case VICII_M5C:
-                vicii->registers[r] = VICII_COLOR_BLUE; // 6: Sprite Color 5
-                break;
-            case VICII_M6C:
-                vicii->registers[r] = VICII_COLOR_YELLOW; // 7: Sprite Color 6
-                break;
-            case VICII_M7C:
-                vicii->registers[r] = VICII_COLOR_MEDIUM_GREY; // 12: Sprite Color 7
-                break;
-            default:
-                // Set registers 47-63 $d02f-$d03f unused addresses to 0xFF (which we never overwrite)
-                // so that reading them needs no separate case in default MaskBusRead() return value.
-                if (r >= 47) {
-                    vicii->registers[r] = 0xFF;  // Unused addresses
-                } else {
-                    vicii->registers[r] = 0; // SPxX,SPxY,MSIGX,etc
-                }
-                break;
-        }
+    memset(vicii->registers, 0, sizeof(vicii->registers)); // SPxX,SPxY,MSIGX,etc
+    vicii->registers[VICII_C1] = VICII_C1_RST8 | VICII_C1_DEN | VICII_C1_RSEL |
+                            (VICII_C1_YSCROLL & 3); // 155:Display ENable,25-row  
+    vicii->registers[VICII_MXE] = 0;  // All sprites disabled
+    vicii->registers[VICII_C2] = VICII_C2_CSEL; // 8: XSCROLL:0, no MultiColorMode, 40-column display, no RESET
+    vicii->registers[VICII_MP] = VICII_MP_CB12 | VICII_MP_VM10; // 0x14: "address of Character Dot-Data area to 4096 ($1000)"
+    vicii->registers[VICII_IR] = VICII_IR_UNUSED; // See BusWrite; Always set the unused bits high
+    vicii->registers[VICII_EC] = VICII_COLOR_LIGHT_BLUE; // 14: Border Color
+    vicii->registers[VICII_B0C] = VICII_COLOR_BLUE; // 6: Background Color 0
+    vicii->registers[VICII_B1C] = VICII_COLOR_WHITE; // 1: Background Color 1
+    vicii->registers[VICII_B2C] = VICII_COLOR_RED; // 2: Background Color 2
+    vicii->registers[VICII_B3C] = VICII_COLOR_CYAN; // 3: Background Color 3
+    vicii->registers[VICII_MM0] = VICII_COLOR_PURPLE; // 4: Sprite Multicolor 0
+    vicii->registers[VICII_MM1] = VICII_COLOR_BLACK; // 0: Sprite Multicolor 1
+    vicii->registers[VICII_M0C] = VICII_COLOR_WHITE; // 1: Sprite Color 0
+    vicii->registers[VICII_M1C] = VICII_COLOR_RED; // 2: Sprite Color 1
+    vicii->registers[VICII_M2C] = VICII_COLOR_CYAN; // 3: Sprite Color 2
+    vicii->registers[VICII_M3C] = VICII_COLOR_PURPLE; // 4: Sprite Color 3
+    vicii->registers[VICII_M4C] = VICII_COLOR_GREEN; // 5: Sprite Color 4
+    vicii->registers[VICII_M5C] = VICII_COLOR_BLUE; // 6: Sprite Color 5
+    vicii->registers[VICII_M6C] = VICII_COLOR_YELLOW; // 7: Sprite Color 6
+    vicii->registers[VICII_M7C] = VICII_COLOR_MEDIUM_GREY; // 12: Sprite Color 7
+    // Set registers 47-63 $d02f-$d03f unused addresses to 0xFF (which we never overwrite)
+    // so that reading them needs no separate case in default MaskBusRead() return value.
+    for (int r = 47; r < VICII_REGS_SIZE; r++) {
+        vicii->registers[r] = 0xFF;  // Unused addresses
     }
     
     update_graphics_mode_and_dependent_colors(vicii);
@@ -299,14 +251,14 @@ static inline uint8_t Reg_BackgroundColor(vicii_common_t* vicii, int i) { return
 static void update_is_bad_line(vicii_common_t* vicii) {
     bool eevmf = (vicii->raster_counter >= 48) && (vicii->raster_counter < 248);
     
-    // A Bad Line Condition is given at any arbitrary clock cycle, if at the
+    // "A Bad Line Condition is given at any arbitrary clock cycle, if at the
     // negative edge of ø0 at the beginning of the cycle RASTER >= $30 and RASTER
     // <= $f7 and the lower three bits of RASTER are equal to YSCROLL and if the
-    // DEN bit was set during an arbitrary cycle of raster line $30.
+    // DEN bit was set during an arbitrary cycle of raster line $30."
     if (eevmf) {
-        // A Bad Line Condition can only occur if the DEN bit has been
-        // set for at least one cycle somewhere in raster line $30.
-        if (vicii->raster_counter == 0x30) {
+        // "A Bad Line Condition can only occur if the DEN bit has been
+        // set for at least one cycle somewhere in raster line $30."
+        if (vicii->raster_counter == 0x30) { // 48
             // Check if DEN was set during raster line $30
             if (!vicii->was_den_set_during_raster_30) {
                 vicii->was_den_set_during_raster_30 = Reg_DisplayEnable(vicii);
@@ -444,6 +396,8 @@ void vicii_common_cycle(vicii_common_t* vicii) {
                 vicii->is_bad_line = false;
                 vicii->vc_base = 0;
                 vicii->lp_edge_detected = false;
+                // Handle frame completion directly
+                //c64_handle_frame_complete(c64);
             }
         } else {
             update_is_bad_line(vicii);
