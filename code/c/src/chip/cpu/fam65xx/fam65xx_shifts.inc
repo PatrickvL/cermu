@@ -41,7 +41,6 @@ static inline uint8_t fam65xx_op_ror(fam65xx_t* cpu, uint8_t value) {
 // Accumulator read-modify-write operations (2 cycles)
 static inline void fam65xx_op_rmw_accumulator_helper(fam65xx_t* cpu, 
     uint8_t (*operation)(fam65xx_t*, uint8_t)) {
-    FAM65XX_INTRA_CYCLE(cpu);
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->a = operation(cpu, cpu->a);
     FAM65XX_OPCODE_FOOTER(cpu);
@@ -67,14 +66,10 @@ void fam65xx_op_ror_accumulator(fam65xx_t* cpu) { fam65xx_op_rmw_accumulator_hel
 // Zero page read-modify-write operations
 static inline void fam65xx_op_rmw_zero_page_helper(fam65xx_t* cpu, 
     uint8_t (*operation)(fam65xx_t*, uint8_t)) {
-    FAM65XX_INTRA_CYCLE(cpu);
     cpu->address = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
-    FAM65XX_INTRA_CYCLE(cpu);
     uint8_t value = fam65xx_read_cycle(cpu, cpu->address);  // T2: Data fetch
-    FAM65XX_INTRA_CYCLE(cpu);
     fam65xx_write_cycle(cpu, cpu->address, value); // Write original value
     value = operation(cpu, value);
-    FAM65XX_INTRA_CYCLE(cpu);
     fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     FAM65XX_OPCODE_FOOTER(cpu);
 }
@@ -98,17 +93,12 @@ void fam65xx_op_ror_zero_page(fam65xx_t* cpu) { fam65xx_op_rmw_zero_page_helper(
 // Zero page,X read-modify-write operations
 static inline void fam65xx_op_rmw_zero_page_x_helper(fam65xx_t* cpu, 
     uint8_t (*operation)(fam65xx_t*, uint8_t)) {
-    FAM65XX_INTRA_CYCLE(cpu);
     cpu->address = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
-    FAM65XX_INTRA_CYCLE(cpu);
     (void)fam65xx_read_cycle(cpu, cpu->address); // Dummy read
     cpu->address = (cpu->address + cpu->x) & 0xFF;
-    FAM65XX_INTRA_CYCLE(cpu);
     uint8_t value = fam65xx_read_cycle(cpu, cpu->address);  // T2: Data fetch
-    FAM65XX_INTRA_CYCLE(cpu);
     fam65xx_write_cycle(cpu, cpu->address, value); // Write original value
     value = operation(cpu, value);
-    FAM65XX_INTRA_CYCLE(cpu);
     fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     FAM65XX_OPCODE_FOOTER(cpu);
 }
@@ -132,18 +122,13 @@ void fam65xx_op_ror_zero_page_x(fam65xx_t* cpu) { fam65xx_op_rmw_zero_page_x_hel
 // Absolute read-modify-write operations
 static inline void fam65xx_op_rmw_absolute_helper(fam65xx_t* cpu, 
     uint8_t (*operation)(fam65xx_t*, uint8_t)) {
-    FAM65XX_INTRA_CYCLE(cpu);
     uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
     cpu->address = addr_lo;
-    FAM65XX_INTRA_CYCLE(cpu);
     uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
     cpu->address |= (addr_hi << 8);
-    FAM65XX_INTRA_CYCLE(cpu);
     uint8_t value = fam65xx_read_cycle(cpu, cpu->address);  // T2: Data fetch
-    FAM65XX_INTRA_CYCLE(cpu);
     fam65xx_write_cycle(cpu, cpu->address, value); // Write original value
     value = operation(cpu, value);
-    FAM65XX_INTRA_CYCLE(cpu);
     fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     FAM65XX_OPCODE_FOOTER(cpu);
 }
@@ -167,20 +152,14 @@ void fam65xx_op_ror_absolute(fam65xx_t* cpu) { fam65xx_op_rmw_absolute_helper(cp
 // Absolute,X read-modify-write operations
 static inline void fam65xx_op_rmw_absolute_x_helper(fam65xx_t* cpu, 
     uint8_t (*operation)(fam65xx_t*, uint8_t)) {
-    FAM65XX_INTRA_CYCLE(cpu);
     uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
-    FAM65XX_INTRA_CYCLE(cpu);
     uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
     uint16_t base_addr = (addr_hi << 8) | addr_lo;
     cpu->address = base_addr + cpu->x;
-    FAM65XX_INTRA_CYCLE(cpu);
     (void)fam65xx_read_cycle(cpu, (addr_hi << 8) | ((addr_lo + cpu->x) & 0xFF)); // Dummy read
-    FAM65XX_INTRA_CYCLE(cpu);
     uint8_t value = fam65xx_read_cycle(cpu, cpu->address);  // T2: Data fetch
-    FAM65XX_INTRA_CYCLE(cpu);
     fam65xx_write_cycle(cpu, cpu->address, value); // Write original value
     value = operation(cpu, value);
-    FAM65XX_INTRA_CYCLE(cpu);
     fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     FAM65XX_OPCODE_FOOTER(cpu);
 }

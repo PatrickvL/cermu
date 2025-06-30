@@ -8,18 +8,18 @@
 static uint8_t test_memory[65536];
 
 // Test bus interface implementation
-static uint8_t test_bus_read(void* context, uint16_t address) {
+static uint8_t test_bus_read_cycle(void* context, uint16_t address) {
     (void)context;
     return test_memory[address];
 }
 
-static void test_bus_write(void* context, uint16_t address, uint8_t value) {
+static void test_bus_write_cycle(void* context, uint16_t address, uint8_t value) {
     (void)context;
     test_memory[address] = value;
 }
 
 static void test_non_cpu_cycle(void* context) {
-    (void)context; for basic test
+    (void)context;
     // NOTE: In advanced usage, this callback could be used for:
     // - Execution tracing by counting cycles
     // - Breakpoint detection by checking PC values  
@@ -85,8 +85,8 @@ int main() {
     // Create interface structures
     bus_cycle_ops_t bus_interface = {
         .context = NULL,
-        .bus_read = test_bus_read,
-        .bus_write = test_bus_write,
+        .bus_read_cycle = test_bus_read_cycle,
+        .bus_write_cycle = test_bus_write_cycle,
         .cycle_tick = test_non_cpu_cycle,
         .detached_read = test_detached_read
     };
@@ -119,12 +119,12 @@ int main() {
 
     // Verify direct callback optimization is working
     printf("\nTesting Direct Callback Optimization:\n");
-    printf("- Bus read callback:  %p\n", (void*)cpu.bus_interface.bus_read);
-    printf("- Bus write callback: %p\n", (void*)cpu.bus_interface.bus_write);
+    printf("- Bus read callback:  %p\n", (void*)cpu.bus_interface.bus_read_cycle);
+    printf("- Bus write callback: %p\n", (void*)cpu.bus_interface.bus_write_cycle);
     printf("- Control lines callback: %p\n", (void*)cpu.control_interface.get_lines);
     printf("- I/O pins callback: %p\n", (void*)cpu.io_interface.output_pins_changed);
     
-    if (cpu.bus_interface.bus_read && cpu.bus_interface.bus_write && cpu.control_interface.get_lines) {
+    if (cpu.bus_interface.bus_read_cycle && cpu.bus_interface.bus_write_cycle && cpu.control_interface.get_lines) {
         printf("✓ Direct callback pointers successfully copied into CPU structure\n");
         printf("✓ No interface indirection overhead - maximum performance achieved!\n");
     } else {

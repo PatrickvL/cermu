@@ -48,13 +48,15 @@ static uint32_t opcode_failures[256] = {0};
 static uint32_t opcode_totals[256] = {0};
 
 // MEMORY AND CONTROL INTERFACES (SHARED)
-uint8_t test_read(void* context, uint16_t address) {
+uint8_t test_read_cycle(void* context, uint16_t address) {
     (void)context;
+    cycle_count++;
     return test_memory[address];
 }
 
-void test_write(void* context, uint16_t address, uint8_t value) {
+void test_write_cycle(void* context, uint16_t address, uint8_t value) {
     (void)context;
+    cycle_count++;
     test_memory[address] = value;
 }
 
@@ -74,7 +76,6 @@ void test_io_write(void* context, uint8_t port_value, uint8_t ddr) {
 
 void test_cycle_tick(void* context) {
     (void)context;
-    cycle_count++;
 }
 
 // --- Control lines state for test harness ---
@@ -131,8 +132,8 @@ bool create_cpu_instance(cpu_instance_t* instance, cpu_type_t type) {
             if (instance->cpu) {
                 bus_cycle_ops_t bus_ops = {
                     .context = NULL,
-                    .bus_read = test_read,
-                    .bus_write = test_write,
+                    .bus_read_cycle = test_read_cycle,
+                    .bus_write_cycle = test_write_cycle,
                     .cycle_tick = test_cycle_tick,
                     .detached_read = test_detached_read
                 };
@@ -149,8 +150,8 @@ bool create_cpu_instance(cpu_instance_t* instance, cpu_type_t type) {
             if (instance->cpu) {
                 bus_cycle_ops_t bus_ops = {
                     .context = NULL,
-                    .bus_read = test_read,
-                    .bus_write = test_write,
+                    .bus_read_cycle = test_read_cycle,
+                    .bus_write_cycle = test_write_cycle,
                     .cycle_tick = test_cycle_tick,
                     .detached_read = test_detached_read
                 };
@@ -173,8 +174,8 @@ bool create_cpu_instance(cpu_instance_t* instance, cpu_type_t type) {
             if (instance->cpu) {
                 bus_cycle_ops_t bus_ops = {
                     .context = NULL,
-                    .bus_read = test_read,
-                    .bus_write = test_write,
+                    .bus_read_cycle = test_read_cycle,
+                    .bus_write_cycle = test_write_cycle,
                     .cycle_tick = test_cycle_tick,
                     .detached_read = test_detached_read
                 };
@@ -390,8 +391,8 @@ bool run_processor_test(cpu_instance_t* instance, const processor_test_t* test) 
     set_cpu_state(instance, &test->initial);
     cycle_count = 0;
     
-    // Read the actual opcode from memory at the current PC using bus_read
-    uint8_t opcode = test_read(NULL, test->initial.pc);
+    // Read the actual opcode from memory at the current PC using bus_read_cycle
+    uint8_t opcode = test_read_cycle(NULL, test->initial.pc);
     opcode_totals[opcode]++;
 
     // If this is a JAM (KIL) opcode, assert NMI so the handler can break out for the test

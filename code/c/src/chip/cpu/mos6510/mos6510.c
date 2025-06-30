@@ -62,7 +62,7 @@ void mos6510_zeropage_write(void* chip, uint16_t address, uint8_t value) {
             cpu->ram_access.write_func(cpu->ram_access.context, address, value);
         } else {
             // Fallback to bus interface if RAM not attached yet (during initialization)
-            cpu->base.bus_interface.bus_write(cpu->base.bus_interface.context, address, value);
+            cpu->base.bus_interface.bus_write_cycle(cpu->base.bus_interface.context, address, value);
         }
     }
 }

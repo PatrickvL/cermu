@@ -113,13 +113,11 @@ struct fam65xx_s {
 
 // Core memory and cycle functions (shared)
 static inline uint8_t fam65xx_read_cycle(fam65xx_t* cpu, uint16_t address) {
-    cpu->bus_interface.cycle_tick(cpu->bus_interface.context);  // Bus cycle
-    return cpu->bus_interface.bus_read(cpu->bus_interface.context, address);
+    return cpu->bus_interface.bus_read_cycle(cpu->bus_interface.context, address);
 }
 
 static inline void fam65xx_write_cycle(fam65xx_t* cpu, uint16_t address, uint8_t value) {
-    cpu->bus_interface.cycle_tick(cpu->bus_interface.context);  // Bus cycle
-    cpu->bus_interface.bus_write(cpu->bus_interface.context, address, value);
+    cpu->bus_interface.bus_write_cycle(cpu->bus_interface.context, address, value);
 }
 
 // Instruction dispatch macros (shared - but implementation-specific functions)

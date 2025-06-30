@@ -44,13 +44,15 @@ typedef struct {
 } test_case_t;
 
 // Memory interface with cycle counting
-uint8_t test_read(void* context, uint16_t address) {
+uint8_t test_read_cycle(void* context, uint16_t address) {
     (void)context;
+    cycle_count++;
     return test_memory[address];
 }
 
-void test_write(void* context, uint16_t address, uint8_t value) {
+void test_write_cycle(void* context, uint16_t address, uint8_t value) {
     (void)context;
+    cycle_count++;
     test_memory[address] = value;
 }
 
@@ -74,7 +76,6 @@ void test_io_write(void* context, uint8_t port_value, uint8_t ddr) {
 
 void test_cycle_tick(void* context) {
     (void)context;
-    cycle_count++;
 }
 
 static uint32_t dummy_get_control_lines(void *context) {
@@ -99,8 +100,8 @@ mos6510_t* setup_cpu(cpu_state_t* state) {
     
     bus_cycle_ops_t bus_ops = {
         .context = NULL,
-        .bus_read = test_read,
-        .bus_write = test_write,
+        .bus_read_cycle = test_read_cycle,
+        .bus_write_cycle = test_write_cycle,
         .cycle_tick = test_cycle_tick,
         .detached_read = test_detached_read
     };

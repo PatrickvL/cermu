@@ -70,7 +70,7 @@ bool fam65xx_step(fam65xx_t* cpu) {
     // Do the opcode fetch without performing an extra bus cycle_tick as would
     // be done by fam65xx_read_cycle, because during stepping the preceding opcode
     // fetch (as done by FAM65XX_OPCODE_FOOTER) already performed the cycle_tick.
-    uint8_t opcode = cpu->bus_interface.bus_read(cpu->bus_interface.context, cpu->pc++);
+    uint8_t opcode = cpu->bus_interface.bus_read_cycle(cpu->bus_interface.context, cpu->pc++);
     fam65xx_opcode_handler_t handler = cpu->opcode_handlers[opcode];
     
     // Start interception to catch the next instruction after this one

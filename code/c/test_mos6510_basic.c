@@ -7,12 +7,12 @@
 // Simple memory interface for testing
 static uint8_t test_memory[65536];
 
-uint8_t test_read(void* context, uint16_t address) {
+uint8_t test_read_cycle(void* context, uint16_t address) {
     (void)context;  // Unused
     return test_memory[address];
 }
 
-void test_write(void* context, uint16_t address, uint8_t value) {
+void test_write_cycle(void* context, uint16_t address, uint8_t value) {
     (void)context;  // Unused
     test_memory[address] = value;
 }
@@ -75,8 +75,8 @@ int main() {
     // Create bus cycle operations
     bus_cycle_ops_t bus_ops = {
         .context = NULL,
-        .bus_read = test_read,
-        .bus_write = test_write,
+        .bus_read_cycle = test_read_cycle,
+        .bus_write_cycle = test_write_cycle,
         .cycle_tick = test_cycle_tick,
         .detached_read = test_detached_read
     };
