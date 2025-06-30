@@ -68,7 +68,7 @@ void fam65xx_render_execution_controls(fam65xx_t* cpu, bool (*step_func)(void*),
     igSeparator();
     
     if (igButton("Step One Instruction", (ImVec2){0, 0})) {
-        if (step_func && cpu->bus_interface.bus_read && cpu->bus_interface.context) {
+        if (step_func && cpu->bus_interface.bus_read_cycle && cpu->bus_interface.context) {
             step_func(cpu);
         }
     }
@@ -84,7 +84,7 @@ void fam65xx_render_execution_controls(fam65xx_t* cpu, bool (*step_func)(void*),
 }
 
 void fam65xx_render_memory_view(fam65xx_t* cpu, uint16_t start_addr, uint16_t length) {
-    if (!cpu || !cpu->bus_interface.bus_read) return;
+    if (!cpu || !cpu->bus_interface.bus_read_cycle) return;
     
     igText("Memory View ($%04X - $%04X)", start_addr, start_addr + length - 1);
     igSeparator();
@@ -97,7 +97,7 @@ void fam65xx_render_memory_view(fam65xx_t* cpu, uint16_t start_addr, uint16_t le
         snprintf(line, sizeof(line), "%04X: ", (unsigned int)(start_addr + i));
           for (int j = 0; j < 16 && (i + j) < length; j++) {
             uint16_t addr = (uint16_t)(start_addr + i + j);
-            uint8_t value = cpu->bus_interface.bus_read(cpu->bus_interface.context, addr);
+            uint8_t value = cpu->bus_interface.bus_read_cycle(cpu->bus_interface.context, addr);
             char hex_byte[8];
             snprintf(hex_byte, sizeof(hex_byte), "%02X ", value);
             strncat(hex_part, hex_byte, sizeof(hex_part) - strlen(hex_part) - 1);
@@ -122,7 +122,7 @@ void fam65xx_render_stack_view(fam65xx_t* cpu) {
       for (int i = -4; i <= 4; i++) {
         uint16_t addr = (uint16_t)(current_sp + i);
         if ((addr & 0xFF00) == 0x0100) { // Stay in stack page
-            uint8_t value = cpu->bus_interface.bus_read(cpu->bus_interface.context, addr);
+            uint8_t value = cpu->bus_interface.bus_read_cycle(cpu->bus_interface.context, addr);
             const char* marker = (i == 0) ? " <- SP" : "";
             igText("$%04X: $%02X%s", addr, value, marker);
         }
@@ -140,9 +140,9 @@ void fam65xx_render_disassembly(fam65xx_t* cpu, int num_instructions) {
     uint16_t addr = cpu->pc;
     for (int i = 0; i < num_instructions; i++) {
         if (addr == cpu->pc) {
-            igText("-> $%04X: $%02X", addr, cpu->bus_interface.bus_read(cpu->bus_interface.context, addr));
+            igText("-> $%04X: $%02X", addr, cpu->bus_interface.bus_read_cycle(cpu->bus_interface.context, addr));
         } else {
-            igText("   $%04X: $%02X", addr, cpu->bus_interface.bus_read(cpu->bus_interface.context, addr));
+            igText("   $%04X: $%02X", addr, cpu->bus_interface.bus_read_cycle(cpu->bus_interface.context, addr));
         }
         addr++; // Simplified - real implementation would decode instruction length
     }

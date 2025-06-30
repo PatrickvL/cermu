@@ -19,23 +19,23 @@ typedef struct {
 
     /**
      * Callback to perform a bus read operation.
-     * Should only handle memory access, not advance system components.
+     * Should advance other system components (VIC, CIA, SID, etc.) by one cycle.
      * 
      * @param context User-provided context pointer
      * @param address 16-bit address to read from
      * @return Data read from the specified address
      */
-    uint8_t (*bus_read)(void* context, uint16_t address);
+    uint8_t (*bus_read_cycle)(void* context, uint16_t address);
 
     /**
      * Callback to perform a bus write operation.
-     * Should only handle memory access, not advance system components.
+     * Should advance other system components (VIC, CIA, SID, etc.) by one cycle.
      * 
      * @param context User-provided context pointer
      * @param address 16-bit address to write to
      * @param value 8-bit value to write
      */
-    void (*bus_write)(void* context, uint16_t address, uint8_t value);
+    void (*bus_write_cycle)(void* context, uint16_t address, uint8_t value);
 
     /**
      * Callback to execute one non-CPU cycle tick.

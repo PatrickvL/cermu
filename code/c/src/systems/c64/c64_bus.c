@@ -265,14 +265,14 @@ uint8_t c64_bus_generate_pla_mode(c64_bus_t* c64_bus, uint8_t cpu_port_bits) {
 // ============================================================================
 
 // Adapter function implementations for C64 bus
-static uint8_t c64_bus_adapter_bus_read(void* context, uint16_t address) {
+static uint8_t c64_bus_adapter_bus_read_cycle(void* context, uint16_t address) {
     c64_bus_t* c64_bus = (c64_bus_t*)context;
-    return c64_bus_memory_read(c64_bus, address);
+    return c64_bus_read_cycle(c64_bus, address);
 }
 
-static void c64_bus_adapter_bus_write(void* context, uint16_t address, uint8_t value) {
+static void c64_bus_adapter_bus_write_cycle(void* context, uint16_t address, uint8_t value) {
     c64_bus_t* c64_bus = (c64_bus_t*)context;
-    c64_bus_memory_write(c64_bus, address, value);
+    c64_bus_write_cycle(c64_bus, address, value);
 }
 
 static void c64_bus_adapter_non_cpu_cycle(void* context) {
@@ -315,8 +315,8 @@ static uint8_t c64_io_port_input_read(void* context, uint8_t port_value, uint8_t
 void c64_bus_init_adapters(c64_bus_t* c64_bus) {
     // Initialize bus cycle adapter
     c64_bus->bus_adapter.context = c64_bus;
-    c64_bus->bus_adapter.bus_read = c64_bus_adapter_bus_read;
-    c64_bus->bus_adapter.bus_write = c64_bus_adapter_bus_write;
+    c64_bus->bus_adapter.bus_read_cycle = c64_bus_adapter_bus_read_cycle;
+    c64_bus->bus_adapter.bus_write_cycle = c64_bus_adapter_bus_write_cycle;
     c64_bus->bus_adapter.cycle_tick = c64_bus_adapter_non_cpu_cycle;
     c64_bus->bus_adapter.detached_read = c64_bus_adapter_detached_read;
     

@@ -75,7 +75,7 @@ static void setup_mock_interfaces(
     access_callback_t* ram_access
 ) {
     bus_interface->context = NULL;
-    bus_interface->bus_write = mock_write;
+    bus_interface->bus_write_cycle = mock_write;
     bus_interface->cycle_tick = mock_cycle_tick;
     bus_interface->detached_read = mock_detached_read;
     
