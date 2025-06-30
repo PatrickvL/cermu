@@ -59,13 +59,6 @@ chip_descriptor_t mos6567_descriptor = {
 #endif
 };
 
-/*
- * NTSC cycle logic: delegate to common with NTSC timing
- */
-void mos6567_cycle(mos6567_t* vicii) {
-    vicii_common_cycle((vicii_common_t*)vicii);
-}
-
 // Include GUI implementation
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #include "mos6567_gui.c"

@@ -29,11 +29,4 @@ void mos6569_render_debug_window(void* chip, bool* show_window);
 void mos6569_render_settings_window(void* chip, bool* show_window);
 #endif
 
-// Timing constants for PAL VIC-II
-#define MOS6569_CYCLES_PER_LINE 63
-#define MOS6569_TOTAL_LINES    312
-
-// Main cycle function
-void mos6569_cycle(mos6569_t* vicii);
-
 #endif // MOS6569_H

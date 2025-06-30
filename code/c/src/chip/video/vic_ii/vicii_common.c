@@ -362,13 +362,17 @@ void set_main_border_flip_flop(vicii_common_t* vicii, bool main_border_flip_flop
     }
 }
 
-// Main cycle function with character and graphics access
-void vicii_common_cycle(vicii_common_t* vicii) {
+/*
+ * VIC-II TIMING ADVANCEMENT - VIC-II owns the master clock
+ * Updates cycle_group only when transitioning to different groups
+ */
+void vic_ii_advance_timing(vicii_common_t* vicii) {
     // Count X position
     vicii->x_coordinate += 8;
     vicii->x_cycle++;
     
     // Handle horizontal retrace
+    // Check for end of raster line or update cycle group
     if (vicii->x_cycle >= vicii->cycles_per_line) {
         // Flush current pixel line to framebuffer before advancing to next line
         // Always flush if we have a framebuffer, even for raster lines beyond VIC-II's normal range
@@ -376,10 +380,11 @@ void vicii_common_cycle(vicii_common_t* vicii) {
             vicii_common_flush_pixel_line_to_output(vicii,
                 vicii_common_get_default_palette(), vicii->raster_counter);
         }
-        
-        vicii->x_cycle = 0;
-        vicii->x_coordinate = 0;
+    
         vicii->pixel_line_index = 0;  // Reset pixel line index
+        vicii->x_coordinate = 0;
+        vicii->x_cycle = 0;
+        vicii->cycle_group = CYCLE_GROUP_LINE_START;  // Reset to line start
         vicii->raster_counter++;
         
         // Handle vertical retrace - but continue generating lines until framebuffer is full
@@ -405,19 +410,37 @@ void vicii_common_cycle(vicii_common_t* vicii) {
         }
     }
     
-    // Handle bad line related state
-    if (vicii->is_bad_line) {
-        // Set BA low during bad line (cycles 12-54)
-        if (vicii->bus && vicii->x_cycle >= 12 && vicii->x_cycle <= 54) {
-            ((c64_bus_t*)vicii->bus)->control_lines &= ~BA_LINE;
-        }
-        vicii->video_logic_display_state = true;
-    } else {
-        if (vicii->bus) {
-            ((c64_bus_t*)vicii->bus)->control_lines |= BA_LINE;
-        }
+    switch (vicii->x_cycle) {
+        case 1:
+            vicii->cycle_group = CYCLE_GROUP_SPRITES;
+            break;
+        case 9:
+            vicii->cycle_group = CYCLE_GROUP_REFRESH;
+            break;
+        case 10:
+            vicii->cycle_group = CYCLE_GROUP_NORMAL;
+            break;
+        case 12:
+            vicii->cycle_group = CYCLE_GROUP_BADLINE_WARNING;
+            break;
+        case 15:
+            vicii->cycle_group = CYCLE_GROUP_CHAR_AND_COLOR;
+            // Handle display logic control (separate from pixel generation)
+            // Reset video counters at start of display window
+            vicii->vc = vicii->vc_base;
+            vicii->vmli = 0;
+            if (vicii->is_bad_line) {
+                vicii->rc = 0;
+            }
+            break;
+        case 55:
+            vicii->cycle_group = CYCLE_GROUP_LINE_END;
+            break;
+        // No other cases - cycle_group stays the same for intermediate values
     }
-    
+}
+
+void vic_ii_process_display_data(vicii_common_t* vicii, c64_bus_t* bus) {
     // VIC-II pixel generation - emit pixels for all framebuffer lines
     // Generate pixels to properly fill the framebuffer with correct centering
     if (vicii->framebuffer && vicii->raster_counter < vicii->framebuffer_height) {
@@ -442,23 +465,6 @@ void vicii_common_cycle(vicii_common_t* vicii) {
         }
     }
     
-    // Handle display logic control (separate from pixel generation)
-    if (vicii->x_cycle == 14) {
-        // Reset video counters at start of display window
-        vicii->vc = vicii->vc_base;
-        vicii->vmli = 0;
-        if (vicii->is_bad_line) {
-            vicii->rc = 0;
-        }
-    }
-    
-    // Character access during bad lines (cycles 15-54)
-    if (vicii->x_cycle >= 15 && vicii->x_cycle <= 54) {
-        if (vicii->video_logic_display_state && vicii->is_bad_line) {
-            vicii_common_c_access(vicii);
-        }
-    }
-    
     // Handle end of character row
     if (vicii->x_cycle == 58) {
         if (vicii->rc == 7) {
@@ -473,6 +479,196 @@ void vicii_common_cycle(vicii_common_t* vicii) {
             vicii->rc = (vicii->rc + 1) & 0x07;
         }
     }
+}
+
+/*
+ * VIC-II BUS ACCESS: Consolidated bus access logic
+ * This implements the character and color data fetching described in the documentation
+ */
+void vic_ii_bus_access(vicii_common_t* vicii, c64_bus_t* bus, 
+                       uint8_t access_type, uint8_t access_param) {
+    uint16_t address;
+    uint8_t data;
+    
+    switch (access_type) {
+        case VIC_ACCESS_SPRITE_PTR:
+            // Fetch sprite pointer (p-access from documentation)
+            address = vicii->memory_map.video_matrix_base + 0x3F8 + vicii->vc;
+            // TODO : What about  = vicii->screen_base + 0x3F8 + access_param;
+            data = vicii_memory_read(vicii, address);
+            vicii->sprites[access_param].data_pointer = data;
+            break;
+            
+        case VIC_ACCESS_SPRITE_DATA:
+            // Fetch sprite data byte (s-access from documentation)
+            if (vicii->sprites[access_param].dma_counter < 3) {
+                address = vicii->sprites[access_param].data_pointer * 64 + 
+                         vicii->sprites[access_param].dma_counter;
+                data = vicii_memory_read(vicii, address);
+                // TODO : Actually store : 
+                // vicii->sprite_buffers[access_param][vicii->sprites[access_param].dma_counter] = data;
+                vicii->sprites[access_param].dma_counter++;
+            }
+            break;
+            
+        case VIC_ACCESS_CHAR_DATA:
+            // if (!vicii->video_logic_display_state) return;
+
+            // Handle simultaneous color access during bad line
+            // Read color from color RAM (always at $D800-$DBFF, independent of VIC banking)
+            address = 0xD800 + vicii->vc;
+            // TODO : What about = 0xD800 + (vicii->video_counter & 0x3FF) + access_param;
+            // Color RAM uses same addressing as character data (lower 10 bits)
+            data = bus->read_callbacks[ACID_COLORRAM_D8].read(
+                bus->read_callbacks[ACID_COLORRAM_D8].context, address);
+            vicii->video_color_line[vicii->vmli] = data & 0x0F; // Color RAM returns only 4 bits (on pins D)
+
+            // Character access (c-access) - reads from video matrix
+            // Fetch character code (c-access from documentation)
+            // This reads from video matrix using VC (Video Counter)
+            // Calculate video matrix address
+            address = vicii->memory_map.video_matrix_base | vicii->vc;
+            // TODO : What about = vicii->screen_base + vicii->video_counter + access_param; ?
+            // Read character code from video matrix
+            data = vicii_memory_read(vicii, address);
+            vicii->video_matrix_line[vicii->vmli] = data;
+            break;
+            
+        case VIC_ACCESS_REFRESH:
+            // DRAM refresh (r-access from documentation)
+            address = vicii->memory_map.video_matrix_base | 0x3F00 | (0xFF & (-1 - 5 * vicii->raster_counter));
+            // TODO : What about = vicii->video_bank_base | 0x3F00 | (0xFF & (-1 - 5 * vicii->raster_counter));
+            data = vicii_memory_read(vicii, address);
+            break;
+            
+        default:
+            // Idle access (i-access from documentation)
+            data = vicii_memory_read(vicii, 0x3FFF);
+            break;
+    }
+    
+    bus->data = data;
+}
+
+/*
+ * HANDLE SPRITE BUS REQUIREMENTS FOR CURRENT CYCLE
+ * Returns access type only - bus control can be derived from return value
+ */
+uint8_t vic_ii_handle_sprite_requirements(vicii_common_t* vicii, uint8_t sprite_num, uint16_t target_line) {
+    // Inlined sprite enabled check
+    if ((vicii->sprites[sprite_num].enabled) &&
+        (target_line >= vicii->sprites[sprite_num].y_pos) &&
+        (target_line <= vicii->sprites[sprite_num].y_pos + 
+         (vicii->sprites[sprite_num].y_expand ? 42 : 21))) {
+        
+        if (vicii->x_cycle & 1) {
+            // Odd cycles: sprite pointer fetches
+            return VIC_ACCESS_SPRITE_PTR;
+        } else {
+            // Even cycles: sprite data fetches (if DMA active)
+            if (vicii->sprites[sprite_num].dma_counter < 3) {
+                return VIC_ACCESS_SPRITE_DATA;
+            }
+        }
+    }
+    return VIC_ACCESS_IDLE;
+}
+
+// Main cycle function with character and graphics access
+void vicii_common_cycle(vicii_common_t* vicii) {
+    // Direct bus control variables
+    uint8_t access_type = VIC_ACCESS_IDLE;
+    uint8_t access_param = 0;
+    bool ba_low = false;
+    
+    switch (vicii->cycle_group) {
+        case CYCLE_GROUP_SPRITES: // Cycles 1-8
+        case CYCLE_GROUP_LINE_END: // Cycles 55-62 (for PAL, 55-64 for NTSC)
+            // Handle both sprite cases together
+            {
+                uint8_t sprite_num;
+                
+                if (vicii->cycle_group == CYCLE_GROUP_SPRITES) {
+                    // Cycles 1-8: sprites 3-7 (current line)
+                    sprite_num = ((vicii->x_cycle - 1) / 2) + 3;
+                    access_type = vic_ii_handle_sprite_requirements(vicii, sprite_num, vicii->raster_counter);
+                } else {
+                    if (vicii->x_cycle >= 61) break;  // Only cycles 55-60 used
+                    int next_line = (vicii->raster_counter + 1) % vicii->total_lines;
+                    // Cycles 55-60: sprites 0-2 (next line)
+                    sprite_num = (vicii->x_cycle - 55) / 2;  // 0, 1, 2
+                    access_type = vic_ii_handle_sprite_requirements(vicii, sprite_num, next_line);
+                }
+                
+                // Get sprite access requirements
+                if (access_type != VIC_ACCESS_IDLE) {
+                    ba_low = true;
+                    access_param = sprite_num;  // access_param is always sprite_num
+                }
+            }
+            break;
+            
+        case CYCLE_GROUP_REFRESH:
+            // Cycle 9: Refresh doesn't require BA/AEC control
+            access_type = VIC_ACCESS_REFRESH;
+            break;
+            
+        case CYCLE_GROUP_BADLINE_WARNING:
+            // Cycles 12-14: BA warning but VIC doesn't have full control yet
+            if (vicii->is_bad_line) {
+                ba_low = true;
+            }
+            break;
+            
+        case CYCLE_GROUP_CHAR_AND_COLOR:
+            // Cycles 15-54: Bad line character/color fetches
+            if (vicii->video_logic_display_state && vicii->is_bad_line) {
+                ba_low = true;
+                access_type = VIC_ACCESS_CHAR_DATA;
+                access_param = vicii->x_cycle - 15;
+            }
+            break;
+            
+        default:
+            break;
+    }
+
+    c64_bus_t* bus = vicii->bus;
+    
+    // Handle bad line related state
+    // Set BA line directly
+    if (ba_low) {
+        // Set BA low during bad line (cycles 12-54)
+        // Set BA low if VIC has bus control or is in bad line state
+        bus->control_lines &= ~BA_LINE;
+        vicii->video_logic_display_state = true;
+    } else {
+        // Set BA high if VIC doesn't have bus control
+        bus->control_lines |= BA_LINE;
+    }
+
+    // === PHI1 PHASE ===
+    // Perform VIC bus access if it has control and wants to access
+    // Derive vic_has_bus_control from access_type
+    if (access_type > VIC_ACCESS_REFRESH) {
+        // Set AEC low (VIC has full control)
+        bus->control_lines &= ~AEC_LINE;
+        vic_ii_bus_access(vicii, bus, access_type, access_param);
+        // AEC stays low for phi2 when VIC has control (no change needed)
+    } else {
+        // === PHI2 PHASE (when VIC doesn't access) ===
+        // Set AEC high (CPU can access) since VIC doesn't have control
+        bus->control_lines |= AEC_LINE;
+    }
+    
+    // Process display data and check interrupts
+    vic_ii_process_display_data(vicii, bus);
+
+    if (vic_ii_raster_irq_triggered(vicii, bus)) {
+        vicii->registers[VICII_IR] |= VICII_IR_IRQ;
+    }
+        
+    vic_ii_advance_timing(vicii);
 }
 
 /* TODO : Translate :
@@ -537,27 +733,6 @@ void vicii_common_handle_left_border_flipflop()
 }
 */
 
-// Character access (c-access) - reads from video matrix
-void vicii_common_c_access(vicii_common_t* vicii) {
-    if (!vicii->video_logic_display_state) return;
-    
-    // Calculate video matrix address
-    uint16_t address = vicii->memory_map.video_matrix_base | vicii->vc;
-    
-    // Read character code from video matrix
-    vicii->video_matrix_line[vicii->vmli] = vicii_memory_read_cycle(vicii, address);
-    
-    // Read color from color RAM (always at $D800-$DBFF, independent of VIC banking)
-    if (vicii->bus) {
-        c64_bus_t* bus = (c64_bus_t*)vicii->bus;
-        vicii->video_color_line[vicii->vmli] =
-            bus->read_callbacks[ACID_COLORRAM_D8].read(
-                bus->read_callbacks[ACID_COLORRAM_D8].context,
-                0xD800 + vicii->vc
-            ) & 0x0F;  // Color RAM is only 4 bits
-    }
-}
-
 // Graphics access (g-access) - reads character/bitmap data
 void vicii_common_g_access(vicii_common_t* vicii) {
     // [In idle-state,] the sequencer uses "0" bits for the video matrix data
@@ -612,7 +787,7 @@ void vicii_common_g_access(vicii_common_t* vicii) {
     
     // Read graphics data
     // Read g-access Data bits and decode into pixels
-    uint8_t graphics_data = vicii_memory_read_cycle(vicii, address);
+    uint8_t graphics_data = vicii_memory_read(vicii, address);
 // This proves pixels ARE drawn:    graphics_data = (uint8_t)(vicii->x_cycle ^ vicii->frame_count); // For testing, replace with actual read
     
     // For MulticolorTextMode (ECM/BMM/MCM=0/0/1) and InvalidTextMode (ECM/BMM/MCM=1/0/1)
@@ -942,9 +1117,14 @@ void vicii_common_bank_change(void* chip, uint8_t bank) {
 }
 
 // VIC-II specific memory read function with proper banking
-uint8_t vicii_memory_read_cycle(vicii_common_t* vicii, uint16_t address) {
+uint8_t vicii_memory_read(vicii_common_t* vicii, uint16_t address) {
     if (!vicii->bus) return 0xFF;
     
+    c64_bus_t* bus = (c64_bus_t*)vicii->bus;
+
+    // TODO : Replace below with proper vic_read_callbacks, initialized
+    // similarly to c64_bus_generate_all_pla_modes()
+
     // VIC-II only sees 14-bit addresses (16KB banks)
     // The top 2 bits come from CIA2 port A (inverted)
     uint16_t vic_address = (address & 0x3FFF) | vicii->memory_map.bank_base;
@@ -954,10 +1134,9 @@ uint8_t vicii_memory_read_cycle(vicii_common_t* vicii, uint16_t address) {
     // 1. Address is in range $1000-$1FFF or $9000-$9FFF
     // 2. Character ROM is enabled (determined by memory setup register)
     if (vicii->memory_map.char_rom_enabled) {
-        uint16_t char_check = address & 0x3000;
+        uint16_t char_check = address & 0xF000;
         if (char_check == 0x1000 || char_check == 0x9000) {
             // Access character ROM directly (bypass banking)
-            c64_bus_t* bus = (c64_bus_t*)vicii->bus;
             return bus->read_callbacks[ACID_CHARROM].read(
                 bus->read_callbacks[ACID_CHARROM].context,
                 (address & 0x0FFF) | 0xD000  // Map to $D000-$DFFF range
@@ -966,7 +1145,7 @@ uint8_t vicii_memory_read_cycle(vicii_common_t* vicii, uint16_t address) {
     }
     
     // Use bus memory read for all other accesses
-    return c64_bus_memory_read((c64_bus_t*)vicii->bus, vic_address);
+    return c64_bus_memory_read(bus, vic_address);
 }
 
 // Update VIC-II bank mapping when CIA2 changes the bank

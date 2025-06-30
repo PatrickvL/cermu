@@ -154,12 +154,14 @@ struct vicii_pixel_s {
     vicii_color_t color;
 };
 
-// VIC-II timing constants
-#define VICII_PAL_CYCLES_PER_LINE    63
-#define VICII_PAL_TOTAL_LINES        312 // VIC_LINES_PER_FRAME 
+// MOS6569 PAL VIC-II timing constants 
+#define VICII_PAL_CYCLES_PER_LINE    63 // aka MOS6569_CYCLES_PER_LINE
+#define VICII_PAL_TOTAL_LINES        312 // aka MOS6569_TOTAL_LINES / VIC_LINES_PER_FRAME 
 #define VICII_PAL_VISIBLE_PIXELS     403
-#define VICII_NTSC_CYCLES_PER_LINE   65
-#define VICII_NTSC_TOTAL_LINES       262
+
+// MOS6567 NTSC VIC-II timing constants 
+#define VICII_NTSC_CYCLES_PER_LINE   65 // aka MOS6567_CYCLES_PER_LINE
+#define VICII_NTSC_TOTAL_LINES       262 // aka MOS6567_TOTAL_LINES
 #define VICII_NTSC_VISIBLE_PIXELS    411
 
 // #define VIC_CYCLES_PER_FRAME (VIC_CYCLES_PER_LINE * VIC_LINES_PER_FRAME)
@@ -180,17 +182,15 @@ struct vicii_pixel_s {
 #define VIC_ACCESS_SPRITE_PTR   2
 #define VIC_ACCESS_SPRITE_DATA  3
 #define VIC_ACCESS_CHAR_DATA    4
-#define VIC_ACCESS_COLOR_DATA   5
 
 typedef enum {
     CYCLE_GROUP_LINE_START,          // Cycle 0
     CYCLE_GROUP_SPRITES,             // Cycles 1-8
     CYCLE_GROUP_REFRESH,             // Cycle 9
     CYCLE_GROUP_NORMAL,              // Cycles 10-11
-    CYCLE_GROUP_BADLINE_WARNING,     // Cycle 12
-    CYCLE_GROUP_BADLINE_CONTINUE,    // Cycles 13-14
-    CYCLE_GROUP_CHAR_COLOR,          // Cycles 15-54
-    CYCLE_GROUP_LINE_END             // Cycles 55-62
+    CYCLE_GROUP_BADLINE_WARNING,     // Cycle 12-14
+    CYCLE_GROUP_CHAR_AND_COLOR,      // Cycles 15-54
+    CYCLE_GROUP_LINE_END             // Cycles 55-62 (for PAL, 55-64 for NTSC)
 } vic_cycle_group_t;
 
 // Interrupt mask
@@ -220,6 +220,7 @@ typedef struct {
     uint8_t data_pointer;
     uint8_t mcbase;  // multicolor base
     uint8_t mc;      // multicolor counter
+    uint8_t dma_counter; // TODO : Set and update
 } vicii_sprite_t;
 
 // Main VIC-II state structure
@@ -361,11 +362,10 @@ void vicii_common_update_border_limits(vicii_common_t* vicii);
 void vicii_common_handle_raster_interrupt(vicii_common_t* vicii);
 
 // VIC-II memory access functions
-uint8_t vicii_memory_read_cycle(vicii_common_t* vicii, uint16_t address);
+uint8_t vicii_memory_read(vicii_common_t* vicii, uint16_t address);
 void vicii_update_bank_mapping(vicii_common_t* vicii, uint8_t bank);
 
 // Character and graphics access functions
-void vicii_common_c_access(vicii_common_t* vicii);
 void vicii_common_g_access(vicii_common_t* vicii);
 
 // Pixel emission functions
