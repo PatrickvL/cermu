@@ -151,11 +151,6 @@ static inline void mos6510_write_cycle(mos6510_t* cpu, uint16_t addr, uint8_t va
 #define MOS6510_SYSTEM_LINES_SET(cpu, mask) SYS_LINES_SET((cpu)->system_lines, mask)
 #define MOS6510_SYSTEM_LINES_CLEAR(cpu, mask) SYS_LINES_CLEAR((cpu)->system_lines, mask)
 
-// Bus cycle timing macro for intra-instruction cycles
-#define MOS6510_INTRA_CYCLE(cpu) do { \
-    (cpu)->base.bus_interface.cycle_tick((cpu)->base.bus_interface.context); \
-} while(0)
-
 #define MOS6510_OPCODE_FOOTER(cpu) \
     FAM65XX_OPCODE_FOOTER(&(cpu)->base)
 
@@ -215,85 +210,64 @@ static inline uint8_t mos6510_addr_zp_ind_y(mos6510_t* cpu) {
 
 // Zero page addressing for stores - sets address only
 static inline void addr_zp_store(mos6510_t* cpu) {
-    MOS6510_INTRA_CYCLE(cpu);
     cpu->base.address = mos6510_read_cycle(cpu, cpu->base.pc++);
 }
 
 // Zero page,X addressing for stores - sets address only  
 static inline void addr_zpx_store(mos6510_t* cpu) {
-    MOS6510_INTRA_CYCLE(cpu);
     uint8_t base = mos6510_read_cycle(cpu, cpu->base.pc++);
-    MOS6510_INTRA_CYCLE(cpu);
     (void)mos6510_read_cycle(cpu, base); // Dummy read
     cpu->base.address = (base + cpu->base.x) & 0xFF;
 }
 
 // Zero page,Y addressing for stores - sets address only
 static inline void addr_zpy_store(mos6510_t* cpu) {
-    MOS6510_INTRA_CYCLE(cpu);
     uint8_t base = mos6510_read_cycle(cpu, cpu->base.pc++);
-    MOS6510_INTRA_CYCLE(cpu);
     (void)mos6510_read_cycle(cpu, base); // Dummy read
     cpu->base.address = (base + cpu->base.y) & 0xFF;
 }
 
 // Absolute addressing for stores - sets address only
 static inline void addr_abs_store(mos6510_t* cpu) {
-    MOS6510_INTRA_CYCLE(cpu);
     uint8_t addr_lo = mos6510_read_cycle(cpu, cpu->base.pc++);
-    MOS6510_INTRA_CYCLE(cpu);
     uint8_t addr_hi = mos6510_read_cycle(cpu, cpu->base.pc++);
     cpu->base.address = (addr_hi << 8) | addr_lo;
 }
 
 // Absolute,X addressing for stores - sets address only (with dummy read)
 static inline void addr_absx_store(mos6510_t* cpu) {
-    MOS6510_INTRA_CYCLE(cpu);
     uint8_t addr_lo = mos6510_read_cycle(cpu, cpu->base.pc++);
-    MOS6510_INTRA_CYCLE(cpu);
     uint8_t addr_hi = mos6510_read_cycle(cpu, cpu->base.pc++);
     cpu->base.address = (addr_hi << 8) | addr_lo;
-    MOS6510_INTRA_CYCLE(cpu);
     (void)mos6510_read_cycle(cpu, cpu->base.address + cpu->base.x); // Dummy read
     cpu->base.address += cpu->base.x;
 }
 
 // Absolute,Y addressing for stores - sets address only (with dummy read)
 static inline void addr_absy_store(mos6510_t* cpu) {
-    MOS6510_INTRA_CYCLE(cpu);
     uint8_t addr_lo = mos6510_read_cycle(cpu, cpu->base.pc++);
-    MOS6510_INTRA_CYCLE(cpu);
     uint8_t addr_hi = mos6510_read_cycle(cpu, cpu->base.pc++);
     cpu->base.address = (addr_hi << 8) | addr_lo;
-    MOS6510_INTRA_CYCLE(cpu);
     (void)mos6510_read_cycle(cpu, cpu->base.address + cpu->base.y); // Dummy read
     cpu->base.address += cpu->base.y;
 }
 
 // (Zero page,X) addressing for stores - sets address only
 static inline void addr_zpx_ind_store(mos6510_t* cpu) {
-    MOS6510_INTRA_CYCLE(cpu);
     uint8_t base = mos6510_read_cycle(cpu, cpu->base.pc++);
-    MOS6510_INTRA_CYCLE(cpu);
     (void)mos6510_read_cycle(cpu, base); // Dummy read
     uint8_t zp_addr = (base + cpu->base.x) & 0xFF;
-    MOS6510_INTRA_CYCLE(cpu);
     uint8_t addr_lo = mos6510_read_cycle(cpu, zp_addr);
-    MOS6510_INTRA_CYCLE(cpu);
     uint8_t addr_hi = mos6510_read_cycle(cpu, (zp_addr + 1) & 0xFF);
     cpu->base.address = (addr_hi << 8) | addr_lo;
 }
 
 // (Zero page),Y addressing for stores - sets address only (with dummy read)
 static inline void addr_zp_ind_y_store(mos6510_t* cpu) {
-    MOS6510_INTRA_CYCLE(cpu);
     uint8_t zp_addr = mos6510_read_cycle(cpu, cpu->base.pc++);
-    MOS6510_INTRA_CYCLE(cpu);
     uint8_t addr_lo = mos6510_read_cycle(cpu, zp_addr);
-    MOS6510_INTRA_CYCLE(cpu);
     uint8_t addr_hi = mos6510_read_cycle(cpu, (zp_addr + 1) & 0xFF);
     cpu->base.address = (addr_hi << 8) | addr_lo;
-    MOS6510_INTRA_CYCLE(cpu);
     (void)mos6510_read_cycle(cpu, cpu->base.address + cpu->base.y); // Dummy read
     cpu->base.address += cpu->base.y;
 }
