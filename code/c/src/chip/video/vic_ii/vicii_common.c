@@ -24,29 +24,33 @@ uint8_t vicii_common_registers_read(void* chip, uint16_t address) {
     // The VIC registers are repeated each 64 bytes in the area $d000-$d3ff
     uint8_t reg = address & VICII_REGS_MASK;
     
+    uint8_t data = ((c64_bus_t*)vicii->bus)->data; // Used for "floating" bus state for subsequent unattached reads
+
     switch (reg) {
         case VICII_C1:
-            return (vicii->registers[VICII_C1] & 0x7F) |   //    17 $d011 Control register 1
-                   ((vicii->raster_counter >> 1) & VICII_C1_RST8); // bit 7 (RST8) reflects raster_counter bit 8 
+            return (vicii->registers[VICII_C1] & 0x7F) |       //    17 $d011 Control register 1
+                   ((vicii->raster_counter >> 1) & VICII_C1_RST8); //         bit 7 (RST8) reflects raster_counter bit 8 
         case VICII_RASTER:
-            return vicii->raster_counter & 0xFF;           //    18 $d012 Reflects raster_counter bits 0..7 (masked to u8 by caller, BusRead)
+            return vicii->raster_counter & 0xFF;               //    18 $d012 Reflects raster_counter bits 0..7
         case VICII_C2:
-            return vicii->registers[VICII_C2] | 0xC0;      //    22 $d016 |  - |  - | RES| MCM|CSEL|    XSCROLL   | Control register 2
+            return vicii->registers[VICII_C2] | (data & 0xC0); //    22 $d016 |  - |  - | RES| MCM|CSEL|    XSCROLL   | Control register 2
         case VICII_MP:
-            return vicii->registers[VICII_MP] | 0x01;      //    24 $d018 |VM13|VM12|VM11|VM10|CB13|CB12|CB11|  - | Memory pointers
-        // IR                                                    25 $d019 Note : Default read, since BusWrite(), Initialize() already set the unconnected IR_UNUSED bits
+            return vicii->registers[VICII_MP] | (data & 0x01); //    24 $d018 |VM13|VM12|VM11|VM10|CB13|CB12|CB11|  - | Memory pointers
+        case VICII_IR:
+            return vicii->registers[VICII_IR] | (data & 0x70); //    25 $d019 | IRQ|  - |  - |  - | ILP|IMMC|IMBC|IRST| Interrupt register
         case VICII_IE:
-            return vicii->registers[VICII_IE] | 0xF0;      //    26 $d01a |  - |  - |  - |  - | ELP|EMMC|EMBC|ERST| Interrupt Enabled
+            return vicii->registers[VICII_IE] | (data & 0xF0); //    26 $d01a |  - |  - |  - |  - | ELP|EMMC|EMBC|ERST| Interrupt Enabled
         case VICII_MXM:
-            return read_clear(vicii, VICII_MXM_2);         //    30 $d01e Sprite-sprite collision is cleared on read
+            return read_clear(vicii, VICII_MXM_2);             //    30 $d01e Sprite-sprite collision is cleared on read
         case VICII_MXD:
-            return read_clear(vicii, VICII_MXD_2);         //    31 $d01f Sprite-data collision is cleared on read
+            return read_clear(vicii, VICII_MXD_2);             //    31 $d01f Sprite-data collision is cleared on read
         default:
             if (reg <= 29) {
-                return vicii->registers[reg];              //  0-29 $d000-$d01f (except 22,24,25,26) use all 8 bits
+                return vicii->registers[reg];                  //  0-29 $d000-$d01f (except 22,24,25,26) use all 8 bits
+            } else if (reg <= 46) {
+                return vicii->registers[reg] | (data & 0xF0);  // 32-46 $d020-$d02e use bits 0..3 (bits 4..7 are not connected)
             } else {
-                // Note : 'Or' doesn't change                 47-63 $d02f-$d03f unused addresses give $ff on reading, as set in Initialize()
-                return vicii->registers[reg] | 0xF0;       // 32-46 $d020-$d02e use bits 0..3 (bits 4..7 are not connected)
+                return data;                                   // 47-63 $d02f-$d03f unattached registers (many docs say: give $ff on reading)
             }
     }
 }
@@ -73,7 +77,7 @@ void vicii_common_registers_write(void* chip, uint16_t address, uint8_t value) {
         // Clear all '1' bits in the Interrupt Register
         ir &= ~value;
         // Always set the not-connected bits high
-        ir |= VICII_IR_UNUSED;
+        ir |= VICII_IR_UNUSED; // TODO : Remove this now that reads use floating bus data?
         // Store the resulting bits
         vicii->registers[VICII_IR] = ir;
         // Note/TODO : Here, it's assumed that when all interrupt bits are cleared, the
@@ -494,7 +498,7 @@ void vic_ii_bus_access(vicii_common_t* vicii, c64_bus_t* bus,
         case VIC_ACCESS_SPRITE_PTR:
             // Fetch sprite pointer (p-access from documentation)
             address = vicii->memory_map.video_matrix_base + 0x3F8 + vicii->vc;
-            // TODO : What about  = vicii->screen_base + 0x3F8 + access_param;
+            // TODO : What about = vicii->screen_base + 0x3F8 + access_param;
             data = vicii_memory_read(vicii, address);
             vicii->sprites[access_param].data_pointer = data;
             break;
@@ -521,7 +525,7 @@ void vic_ii_bus_access(vicii_common_t* vicii, c64_bus_t* bus,
             // Color RAM uses same addressing as character data (lower 10 bits)
             data = bus->read_callbacks[ACID_COLORRAM_D8].read(
                 bus->read_callbacks[ACID_COLORRAM_D8].context, address);
-            vicii->video_color_line[vicii->vmli] = data & 0x0F; // Color RAM returns only 4 bits (on pins D)
+            vicii->video_color_line[vicii->vmli] = data & 0x0F; // Color RAM returns only 4 bits (on pins D8-D11)
 
             // Character access (c-access) - reads from video matrix
             // Fetch character code (c-access from documentation)
@@ -554,8 +558,7 @@ void vic_ii_bus_access(vicii_common_t* vicii, c64_bus_t* bus,
  * HANDLE SPRITE BUS REQUIREMENTS FOR CURRENT CYCLE
  * Returns access type only - bus control can be derived from return value
  */
-uint8_t vic_ii_handle_sprite_requirements(vicii_common_t* vicii, uint8_t sprite_num, uint16_t target_line) {
-    // Inlined sprite enabled check
+inline uint8_t vic_ii_handle_sprite_requirements(vicii_common_t* vicii, uint8_t sprite_num, uint16_t target_line) {
     if ((vicii->sprites[sprite_num].enabled) &&
         (target_line >= vicii->sprites[sprite_num].y_pos) &&
         (target_line <= vicii->sprites[sprite_num].y_pos + 
@@ -587,20 +590,20 @@ void vicii_common_cycle(vicii_common_t* vicii) {
             // Handle both sprite cases together
             {
                 uint8_t sprite_num;
-                
+                uint8_t sprite_line;
                 if (vicii->cycle_group == CYCLE_GROUP_SPRITES) {
                     // Cycles 1-8: sprites 3-7 (current line)
                     sprite_num = ((vicii->x_cycle - 1) / 2) + 3;
-                    access_type = vic_ii_handle_sprite_requirements(vicii, sprite_num, vicii->raster_counter);
+                    sprite_line = vicii->raster_counter;
                 } else {
                     if (vicii->x_cycle >= 61) break;  // Only cycles 55-60 used
-                    int next_line = (vicii->raster_counter + 1) % vicii->total_lines;
                     // Cycles 55-60: sprites 0-2 (next line)
                     sprite_num = (vicii->x_cycle - 55) / 2;  // 0, 1, 2
-                    access_type = vic_ii_handle_sprite_requirements(vicii, sprite_num, next_line);
+                    sprite_line = (vicii->raster_counter + 1) % vicii->total_lines;
                 }
                 
                 // Get sprite access requirements
+                access_type = vic_ii_handle_sprite_requirements(vicii, sprite_num, sprite_line);
                 if (access_type != VIC_ACCESS_IDLE) {
                     ba_low = true;
                     access_param = sprite_num;  // access_param is always sprite_num
@@ -641,6 +644,8 @@ void vicii_common_cycle(vicii_common_t* vicii) {
         // Set BA low during bad line (cycles 12-54)
         // Set BA low if VIC has bus control or is in bad line state
         bus->control_lines &= ~BA_LINE;
+        // The transition from idle to display state occurs
+        // as soon as there is a Bad Line Condition
         vicii->video_logic_display_state = true;
     } else {
         // Set BA high if VIC doesn't have bus control
