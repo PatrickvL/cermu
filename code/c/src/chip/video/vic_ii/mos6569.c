@@ -59,13 +59,6 @@ chip_descriptor_t mos6569_descriptor = {
 #endif
 };
 
-/**
- * PAL cycle logic: delegate to common with PAL timing constants
- */
-void mos6569_cycle(mos6569_t* vicii) {
-    vicii_common_cycle((vicii_common_t*)vicii);
-}
-
 // Include GUI implementation
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #include "mos6569_gui.c"

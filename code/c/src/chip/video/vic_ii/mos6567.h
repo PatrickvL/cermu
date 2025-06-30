@@ -26,13 +26,4 @@ void mos6567_render_debug_window(void* chip, bool* show_window);
 void mos6567_render_settings_window(void* chip, bool* show_window);
 #endif
 
-// Timing constants (NTSC stub)
-#define MOS6567_CYCLES_PER_LINE 65
-#define MOS6567_TOTAL_LINES    262
-
-/**
- * NTSC cycle logic: delegate to common with NTSC timing
- */
-void mos6567_cycle(mos6567_t* vicii);
-
 #endif // MOS6567_H
