@@ -210,25 +210,63 @@ bool c64_pla_maps_generate(c64_t* c64) {
 // Usually NULL during normal emulation, only set for testing/debugging
 void (*bus_cycle_callback)(void) = NULL;
 
-void c64_non_cpu_cycle(void* c64_ptr) {
-    c64_t* c64 = (c64_t*)c64_ptr;  // Cast from opaque pointer
+/*
+ * SIMPLIFIED MAIN SYSTEM TICK
+ * VIC handles both phases internally, other chips tick once per cycle
+ */
+void c64_non_cpu_cycle(void* c64_ptr, bool do_at_least_one_tick, bool do_wait) {
+    // Optimized null check with unlikely hint - callback rarely set during normal emulation
+    if (unlikely(bus_cycle_callback != NULL)) {
+        bus_cycle_callback();
+    }
+    
+    c64_t* c64 = (c64_t*)c64_ptr;  // Cast from opaque pointer    
+    c64_bus_t* bus = c64->bus;
+
     c64->total_cycles++;
+        
+    for (;;) {
+        // Check exit conditions - CPU can proceed when both BA and AEC are high
+        if (!do_at_least_one_tick && (!do_wait || ((bus->control_lines & BA_LINE) && (bus->control_lines & AEC_LINE)))) {
+            return;
+        }
+
+        // Mark the first tick as done (before actually doing it to keep code neater)
+        do_at_least_one_tick = false;
+        
+        // VIC tick handles both phi1 and phi2 phases internally
+        vicii_common_cycle(c64->vicii);
+        
+        // Other chips tick once per complete cycle
+        mos6526_cycle(c64->cia1);
+        mos6526_cycle(c64->cia2); 
+        mos6581_cycle(c64->sid);
+//        c64_update_interrupt_lines(c64, bus);
+//void c64_update_interrupt_lines(c64_t* c64, c64_bus_t* bus) {
+/*
+    bus->irq_line = false;
+    bus->nmi_line = false;
     
-    // All chips always run for cycle accuracy - using safe chip callers
-    mos6581_cycle(c64->sid);
-    mos6526_cycle(c64->cia1);
-    mos6526_cycle(c64->cia2);
-    vicii_common_cycle(c64->vicii);
+    // VIC-II IRQ
+    if (c64->vic.irq_status & c64->vic.irq_mask) {
+        bus->irq_line = true;
+    }
     
+    // CIA interrupts
+    if (c64->cia1.interrupt_control & c64->cia1.interrupt_mask) {
+        bus->irq_line = true;
+    }
+    if (c64->cia2.interrupt_control & c64->cia2.interrupt_mask) {
+        bus->nmi_line = true;
+    }
+*/
     // Update RDY line based on BA (hardware accurate)
     if (c64->bus->control_lines & BA_LINE) {
         c64->bus->control_lines |= RDY_LINE;
     } else {
         c64->bus->control_lines &= ~RDY_LINE;
     }
-    // Optimized null check with unlikely hint - callback rarely set during normal emulation
-    if (unlikely(bus_cycle_callback != NULL)) {
-        bus_cycle_callback();
+//}
     }
 }
 
