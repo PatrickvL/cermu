@@ -665,20 +665,16 @@ inline uint8_t vic_ii_handle_sprite_requirements(vicii_common_t* vicii, uint8_t 
 // Emit sprite pixels for the current cycle
 // "Sprite pixels are emitted according to the sprite sequencer and priority logic."
 static void vicii_common_emit_sprite_pixels(vicii_common_t* vicii) {
-    // For each sprite, check if it is in display state and should emit pixels at this x position
     for (int i = 0; i < VICII_NUM_SPRITES; ++i) {
         vicii_sprite_t* spr = &vicii->sprites[i];
         if (!spr->display_state)
             continue;
-        // TODO: Implement sprite shift register logic and pixel emission per vic-ii.txt
-        // "The sprite shift register is loaded at the start of the display state and shifted each cycle."
-        // For now, emit a placeholder pixel for each active sprite (for review and incremental build)
-        // This should be replaced with actual shift register and priority/collision logic
-        if (vicii->pixel_line_index < vicii->visible_pixels_per_line) {
-            // Use sprite color and priority (placeholder: always foreground)
-            vicii->pixel_line_priority[vicii->pixel_line_index] = VICII_PRIORITY_FOREGROUND;
+        // Emit a pixel if the MSB of the shift register is set
+        uint8_t sprite_pixel = (spr->shift_reg & 0x800000) ? 1 : 0; // 24-bit shift reg, MSB first
+        if (sprite_pixel && vicii->pixel_line_index < vicii->visible_pixels_per_line) {
+            // TODO: Integrate with priority/collision logic
+            vicii->pixel_line_priority[vicii->pixel_line_index] = VICII_PRIORITY_SPRITE_IN_FRONT;
             vicii->pixel_line_color[vicii->pixel_line_index] = spr->color;
-            // TODO: Integrate with priority/collision logic and only overwrite if sprite has priority
         }
     }
 }
