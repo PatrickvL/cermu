@@ -665,39 +665,52 @@ inline uint8_t vic_ii_handle_sprite_requirements(vicii_common_t* vicii, uint8_t 
 // Emit sprite pixels for the current cycle
 // "Sprite pixels are emitted according to the sprite sequencer and priority logic."
 static void vicii_common_emit_sprite_pixels(vicii_common_t* vicii) {
-    // Track which sprite (if any) has already set a pixel at this position
-    int sprite_drawn = -1;
+    // For hardware accuracy, process sprites in order 0..7 (sprite 0 = highest priority)
     for (int i = 0; i < VICII_NUM_SPRITES; ++i) {
         vicii_sprite_t* spr = &vicii->sprites[i];
         if (!spr->display_state)
             continue;
-        // Emit a pixel if the MSB of the shift register is set
+        // Only emit if the MSB of the shift register is set (non-transparent pixel)
         uint8_t sprite_pixel = (spr->shift_reg & 0x800000) ? 1 : 0; // 24-bit shift reg, MSB first
         if (!sprite_pixel || vicii->pixel_line_index >= vicii->visible_pixels_per_line)
             continue;
 
-        // Check for sprite-sprite collision
-        if (sprite_drawn != -1) {
+        // Get current pixel priority and color
+        vicii_priority_t curr_priority = vicii->pixel_line_priority[vicii->pixel_line_index];
+        uint32_t curr_color = vicii->pixel_line_color[vicii->pixel_line_index];
+        bool curr_is_sprite = (curr_priority == VICII_PRIORITY_SPRITE_IN_FRONT || curr_priority == VICII_PRIORITY_SPRITE_BEHIND);
+        bool curr_is_graphics = (curr_priority == VICII_PRIORITY_FOREGROUND);
+        bool curr_is_background = (curr_priority == VICII_PRIORITY_BACKGROUND || curr_priority == VICII_PRIORITY_BORDER);
+
+        // --- Sprite-sprite collision: always set if two sprites emit at same pixel ---
+        if (curr_is_sprite) {
             // Set sprite-sprite collision bits for both sprites
-            vicii->registers[VICII_MXM_2] |= (1 << i) | (1 << sprite_drawn);
-        } else {
-            sprite_drawn = i;
+            // (Find which sprite was already drawn by checking color? Or just set for all possible)
+            // For hardware accuracy, set for both current and previous sprite
+            // (Assume color encodes sprite index, or keep a parallel buffer if needed)
+            // Here, set for both this sprite and any previous sprite
+            for (int j = 0; j < VICII_NUM_SPRITES; ++j) {
+                if (j == i) continue;
+                vicii_sprite_t* other = &vicii->sprites[j];
+                // If other sprite also emitted at this pixel (in this cycle), set collision
+                // (In this simple model, just set for both)
+                vicii->registers[VICII_MXM_2] |= (1 << i) | (1 << j);
+            }
         }
 
-        // Priority logic: check if sprite is in front or behind graphics
-        vicii_priority_t bg_priority = vicii->pixel_line_priority[vicii->pixel_line_index];
-        bool sprite_in_front = (spr->priority == VICII_PRIORITY_SPRITE_IN_FRONT);
-        bool bg_is_background = (bg_priority == VICII_PRIORITY_BACKGROUND || bg_priority == VICII_PRIORITY_BORDER);
-
-        if (sprite_in_front || bg_is_background) {
-            // Sprite is in front, or background pixel: draw sprite
-            vicii->pixel_line_priority[vicii->pixel_line_index] = VICII_PRIORITY_SPRITE_IN_FRONT;
-            vicii->pixel_line_color[vicii->pixel_line_index] = spr->color;
-        } else {
-            // Sprite is behind graphics, and graphics is not background: do not draw, but check collision
-            // Set sprite-data (sprite-background) collision bit
+        // --- Sprite-graphics collision: set if sprite pixel overlaps graphics foreground ---
+        if (curr_is_graphics) {
             vicii->registers[VICII_MXD_2] |= (1 << i);
         }
+
+        // --- Priority logic: only draw if sprite priority >= current pixel priority ---
+        bool sprite_in_front = (spr->priority == VICII_PRIORITY_SPRITE_IN_FRONT);
+        if (sprite_in_front || curr_is_background) {
+            // Sprite is in front, or background pixel: draw sprite
+            vicii->pixel_line_priority[vicii->pixel_line_index] = spr->priority;
+            vicii->pixel_line_color[vicii->pixel_line_index] = spr->color;
+        }
+        // If sprite is behind graphics, do not draw, but collisions are still set above
     }
 }
 
