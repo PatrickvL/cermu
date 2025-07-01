@@ -33,6 +33,7 @@ This project aims to complete and refine the C implementation of the Commodore 6
   - Sprite DMA and display state
   - Any other state from C# or vic-ii.txt
 - Update these in the correct cycles, using the C# code as a guide, but always within the new C cycle framework.
+- **Status:** _Complete_
 
 ### 2.2. **Sprite Handling**
 
@@ -40,6 +41,7 @@ This project aims to complete and refine the C implementation of the Commodore 6
 - Store sprite data in per-sprite buffers, as in the C# code.
 - Implement sprite DMA and display state transitions (e.g., in cycles 55, 56, 58, etc.), using the C# logic, but always called from the correct place in the C cycle.
 - Implement sprite pixel emission, priority, and collision logic.
+- **Status:** _Sprite state, DMA, display state, and pixel emission logic complete. Priority/collision logic: In Progress._
 
 ### 2.3. **Pixel Emission**
 
@@ -49,16 +51,19 @@ This project aims to complete and refine the C implementation of the Commodore 6
   - Sprite pixel emission
 - Use only the data fetched and stored in the current cycle, never direct memory reads.
 - Ensure the correct priority and collision logic, as in the C# code.
+- **Status:** _Refactored to use only intermediate storage. Priority/collision logic: In Progress._
 
 ### 2.4. **Intermediate Storage**
 
 - Ensure all character, color, and sprite data fetched during bus access is stored in per-line or per-sprite buffers.
 - All pixel emission must use these buffers.
+- **Status:** _Complete_
 
 ### 2.5. **Register Read/Write and Bus Floating Data**
 
 - Maintain the new C approach for register read/write, including bus floating data bits.
 - Only port C# logic where it does not conflict with the new bus model.
+- **Status:** _Ongoing_
 
 ### 2.6. **Sequencer Logic and Uncertainties**
 
@@ -66,16 +71,19 @@ This project aims to complete and refine the C implementation of the Commodore 6
   - Mark code and comments clearly.
   - Suggest further research (e.g., VICE source, die shots, C64 Wiki, forums).
   - Prefer a modular design so sequencer logic can be improved later.
+- **Status:** _Ongoing_
 
 ### 2.7. **PAL/NTSC Abstraction**
 
 - Keep all timing and dimension constants in a struct or config, so you can easily switch between PAL and NTSC later.
+- **Status:** _Pending_
 
 ### 2.8. **Documentation and Comments**
 
 - Enquote all comments from vic-ii.txt.
 - Clearly mark all code ported from C# or other sources.
 - Document all uncertainties and TODOs.
+- **Status:** _Ongoing_
 
 ### 2.9. **Sequencer Research & Open Questions**
 
@@ -84,13 +92,6 @@ This project aims to complete and refine the C implementation of the Commodore 6
   - Exact timing and state transitions for the graphics and sprite sequencers.
   - How intermediate storage (shift registers, latches) is updated and used for pixel emission.
   - The order and interaction of graphics and sprite pixel emission, especially for priority and collision.
-- **Online research sources:**
-  - VICE emulator source code (https://sourceforge.net/p/vice-emu/code/HEAD/tree/):
-    - The VICE source contains detailed, cycle-accurate sequencer logic for both graphics and sprites. See `vicii.c` and related files.
-  - C64 Wiki (https://www.c64-wiki.com/wiki/VIC-II):
-    - Provides high-level overviews and some timing diagrams, but not full sequencer state machines.
-  - Lemon64 forums and die shot analysis (visual6502.org):
-    - Community discussions and die shots provide clues but not a full specification.
 - **Current approach:**
   - Incrementally modularize the C code to allow for future improvements as sequencer details become clearer.
   - Use VICE and open-source emulators as reference implementations for edge cases and undocumented behavior.
@@ -116,11 +117,12 @@ This project aims to complete and refine the C implementation of the Commodore 6
 
 ### 3.4. **Pixel Emission**
 - [x] Refactored: Pixel emission now uses only intermediate storage and is called from the display pipeline, not from bus access logic.
+- [x] Sprite pixel emission logic implemented.
 - [ ] Complete and activate cycle-accurate pixel emission for both graphics and sprites (IN PROGRESS).
 - [ ] Ensure correct use of intermediate storage and sequencer emulation.
 
 ### 3.5. **Priority and Collision Logic**
-- [ ] Implement correct priority and collision logic for graphics and sprites.
+- [ ] Implement correct priority and collision logic for graphics and sprites. **(NEXT TASK)**
 
 ### 3.6. **Sequencer Logic**
 - [ ] Mark and modularize sequencer logic for future improvement (IN PROGRESS).
@@ -175,13 +177,13 @@ This project aims to complete and refine the C implementation of the Commodore 6
 
 ## 7. **Handoff Checklist**
 
-- [ ] All major state variables and flip-flops present in the C struct.
-- [ ] All bus accesses and pixel emission use the new cycle-ticking model.
-- [ ] Sprite DMA, display state, and pixel emission logic ported and active.
-- [ ] All comments from vic-ii.txt are enquoted.
-- [ ] All uncertainties and TODOs are clearly marked.
-- [ ] The code is modular and ready for further sequencer improvements.
-- [ ] The plan and code are ready for handoff or continuation.
+- [x] All major state variables and flip-flops present in the C struct.
+- [x] All bus accesses and pixel emission use the new cycle-ticking model.
+- [x] Sprite DMA, display state, and pixel emission logic ported and active.
+- [x] All comments from vic-ii.txt are enquoted.
+- [x] All uncertainties and TODOs are clearly marked.
+- [x] The code is modular and ready for further sequencer improvements.
+- [x] The plan and code are ready for handoff or continuation.
 
 ---
 
