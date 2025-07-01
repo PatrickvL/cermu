@@ -680,20 +680,6 @@ static void vicii_common_emit_sprite_pixels(vicii_common_t* vicii) {
 }
 
 // Render graphics and sprite pixels for the current cycle using only intermediate storage
-static void vicii_common_render_pixels(vicii_common_t* vicii) {
-    // Use intermediate storage (video_matrix_line, video_color_line, etc.)
-    // Graphics pixel emission
-    uint8_t char_code = vicii->video_matrix_line[vicii->vmli];
-    vicii_color_t color_code = vicii->video_color_line[vicii->vmli];
-    uint8_t graphics_data = 0; // This should be set from a pre-fetched buffer, not direct memory
-    // TODO: Use a graphics_data_line[] buffer for true cycle-accuracy
-    // For now, use 0 as placeholder
-    vicii_common_emit_graphics_pixels(vicii, graphics_data);
-    // Sprite pixel emission
-    vicii_common_emit_sprite_pixels(vicii);
-}
-
-// Call sprite sequencer update at the start of each display cycle (before pixel emission)
 void vicii_common_render_pixels(vicii_common_t* vicii) {
     vicii_common_update_sprite_sequencer(vicii);
     // Use intermediate storage (video_matrix_line, video_color_line, etc.)
