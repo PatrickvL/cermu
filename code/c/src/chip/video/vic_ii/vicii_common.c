@@ -471,9 +471,9 @@ static void vicii_common_update_sprite_sequencer(vicii_common_t* vicii) {
         if (spr->display_state) {
             // On the first cycle of display state, load the shift register from sprite data buffer
             if (spr->sequencer_reload) {
-                // TODO: Use actual sprite data buffer (DMA-fetched)
-                // For now, just zero the shift register as placeholder
-                spr->shift_reg = 0; // Replace with: spr->shift_reg = spr->data_buffer[0];
+                // Load the shift register from the DMA-fetched sprite data buffer
+                // Each sprite is 24 bits (3 bytes), loaded MSB first
+                spr->shift_reg = (spr->data_buffer[0] << 16) | (spr->data_buffer[1] << 8) | spr->data_buffer[2];
                 spr->sequencer_reload = false;
             } else {
                 // Shift the register left (MSB first)
