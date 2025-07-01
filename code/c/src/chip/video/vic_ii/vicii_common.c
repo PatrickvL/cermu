@@ -665,16 +665,38 @@ inline uint8_t vic_ii_handle_sprite_requirements(vicii_common_t* vicii, uint8_t 
 // Emit sprite pixels for the current cycle
 // "Sprite pixels are emitted according to the sprite sequencer and priority logic."
 static void vicii_common_emit_sprite_pixels(vicii_common_t* vicii) {
+    // Track which sprite (if any) has already set a pixel at this position
+    int sprite_drawn = -1;
     for (int i = 0; i < VICII_NUM_SPRITES; ++i) {
         vicii_sprite_t* spr = &vicii->sprites[i];
         if (!spr->display_state)
             continue;
         // Emit a pixel if the MSB of the shift register is set
         uint8_t sprite_pixel = (spr->shift_reg & 0x800000) ? 1 : 0; // 24-bit shift reg, MSB first
-        if (sprite_pixel && vicii->pixel_line_index < vicii->visible_pixels_per_line) {
-            // TODO: Integrate with priority/collision logic
+        if (!sprite_pixel || vicii->pixel_line_index >= vicii->visible_pixels_per_line)
+            continue;
+
+        // Check for sprite-sprite collision
+        if (sprite_drawn != -1) {
+            // Set sprite-sprite collision bits for both sprites
+            vicii->registers[VICII_MXM_2] |= (1 << i) | (1 << sprite_drawn);
+        } else {
+            sprite_drawn = i;
+        }
+
+        // Priority logic: check if sprite is in front or behind graphics
+        vicii_priority_t bg_priority = vicii->pixel_line_priority[vicii->pixel_line_index];
+        bool sprite_in_front = (spr->priority == VICII_PRIORITY_SPRITE_IN_FRONT);
+        bool bg_is_background = (bg_priority == VICII_PRIORITY_BACKGROUND || bg_priority == VICII_PRIORITY_BORDER);
+
+        if (sprite_in_front || bg_is_background) {
+            // Sprite is in front, or background pixel: draw sprite
             vicii->pixel_line_priority[vicii->pixel_line_index] = VICII_PRIORITY_SPRITE_IN_FRONT;
             vicii->pixel_line_color[vicii->pixel_line_index] = spr->color;
+        } else {
+            // Sprite is behind graphics, and graphics is not background: do not draw, but check collision
+            // Set sprite-data (sprite-background) collision bit
+            vicii->registers[VICII_MXD_2] |= (1 << i);
         }
     }
 }
