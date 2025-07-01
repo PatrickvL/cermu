@@ -483,6 +483,92 @@ static void vicii_common_update_sprite_sequencer(vicii_common_t* vicii) {
     }
 }
 
+// Cycle-accurate, hardware-accurate graphics pixel emission
+// "The heart of the sequencer is an 8 bit shift register that is shifted by 1 bit every pixel and reloaded with new graphics data after every g-access."
+void vicii_common_emit_graphics_pixels(vicii_common_t* vicii, uint8_t data) {
+    // Only emit if within visible area
+    if (vicii->pixel_line_index >= vicii->visible_pixels_per_line)
+        return;
+
+    // Static sequencer state for the current line (could be moved to struct for multi-line support)
+    static uint8_t graphics_shift_reg = 0;
+    static uint8_t graphics_reload_pending = 0;
+    static uint8_t xscroll_counter = 0;
+    static uint8_t last_graphics_mode = 0xFF;
+
+    // On mode change or new line, reset sequencer
+    if (vicii->graphics_mode != last_graphics_mode || vicii->pixel_line_index == 0) {
+        graphics_shift_reg = 0;
+        graphics_reload_pending = 1;
+        xscroll_counter = vicii->registers[VICII_C2] & VICII_C2_XSCROLL;
+        last_graphics_mode = vicii->graphics_mode;
+    }
+
+    // XSCROLL: delay reload by 0-7 pixels
+    if (xscroll_counter > 0) {
+        xscroll_counter--;
+        // Shift out previous data (should be 0 in new line)
+        graphics_shift_reg <<= 1;
+    } else if (graphics_reload_pending) {
+        graphics_shift_reg = data;
+        graphics_reload_pending = 0;
+    } else {
+        graphics_shift_reg <<= 1;
+    }
+
+    // Determine pixel color based on graphics mode
+    uint8_t pixel = 0;
+    uint8_t color_index = 0;
+    switch (vicii->graphics_mode) {
+        case VICII_GM_STANDARD_TEXT:
+            // "In standard text mode, every bit in the character generator directly corresponds to one pixel on the screen."
+            pixel = (graphics_shift_reg & 0x80) ? 1 : 0;
+            color_index = pixel ? 4 : 0;
+            break;
+        case VICII_GM_MULTICOLOR_TEXT: {
+            // "If bit 11 of the c-data is zero, the character is displayed as in standard text mode... If bit 11 is set, each two adjacent bits of the dot matrix form one pixel."
+            uint8_t mc_flag = (vicii->video_color_line[vicii->vmli] >> 3) & 1;
+            if (mc_flag) {
+                // Multicolor: 4 double-width pixels, 2 bits per pixel
+                uint8_t mc_bits = (graphics_shift_reg & 0xC0) >> 6;
+                color_index = mc_bits;
+                graphics_shift_reg <<= 2;
+            } else {
+                pixel = (graphics_shift_reg & 0x80) ? 1 : 0;
+                color_index = pixel ? 4 : 0;
+                graphics_shift_reg <<= 1;
+            }
+            break;
+        }
+        case VICII_GM_STANDARD_BITMAP:
+            // "Each bit in the bitmap data corresponds to one pixel."
+            pixel = (graphics_shift_reg & 0x80) ? 1 : 0;
+            color_index = pixel ? 4 : 0;
+            break;
+        case VICII_GM_MULTICOLOR_BITMAP: {
+            // "Each two adjacent bits form one pixel."
+            uint8_t mc_bits = (graphics_shift_reg & 0xC0) >> 6;
+            color_index = mc_bits;
+            graphics_shift_reg <<= 2;
+            break;
+        }
+        case VICII_GM_ECM_TEXT:
+            // "Select either B0C, B1C, B2C or B3C based on char_code bits."
+            pixel = (graphics_shift_reg & 0x80) ? 1 : 0;
+            color_index = pixel ? 4 : 0;
+            break;
+        default:
+            // Invalid/idle: always background
+            color_index = 0;
+            break;
+    }
+
+    // Write to intermediate storage
+    vicii->pixel_line_priority[vicii->pixel_line_index] = vicii->colors[color_index].priority;
+    vicii->pixel_line_color[vicii->pixel_line_index] = vicii->colors[color_index].color;
+    vicii->pixel_line_index++;
+}
+
 /*
  * VIC-II TIMING ADVANCEMENT - VIC-II owns the master clock
  * Updates cycle_group only when transitioning to different groups
