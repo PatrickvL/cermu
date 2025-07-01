@@ -221,6 +221,20 @@ typedef struct {
     uint8_t mcbase;  // multicolor base
     uint8_t mc;      // multicolor counter
     uint8_t dma_counter; // TODO : Set and update
+    // --- Added for hardware-accurate emulation (see C# and vic-ii.txt) ---
+    bool expansion_flip_flop; // "The expansion flip flop is set as long as the bit in MxYE in register $d017 corresponding to the sprite is cleared."
+    bool display_state;       // "DisplayState: Sprite is currently being displayed."
+    // Sprite sequencer reload flag for display state
+    bool sequencer_reload;
+    // Shift register for sprite pixel emission (8 bits for each sprite, not 3-byte buffer)
+    uint8_t shift_reg;
+    // Shift registers for sprite pixel data (3 bytes per sprite)
+    uint8_t shift_register[3];
+    // Sprite MCBASE and MC (data counter base and counter)
+    // Already present as mcbase and mc
+    // TODO: Add any additional per-sprite state as needed from C#
+    // Sprite DMA-fetched data buffer (3 bytes per sprite, as per VIC-II hardware)
+    uint8_t data_buffer[3];
 } vicii_sprite_t;
 
 // Main VIC-II state structure

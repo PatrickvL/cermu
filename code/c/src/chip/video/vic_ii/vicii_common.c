@@ -107,14 +107,12 @@ void vicii_common_registers_write(void* chip, uint16_t address, uint8_t value) {
             update_graphics_mode_and_dependent_colors(vicii);
             break;
         case VICII_MXYE: // $d017 Sprite Y expansion x
-            // TODO : 
-            //for (int i = 0; i < NrSprites; i++)
-            //    Sprites[i].WrittenToRegMxYE();
+            for (int i = 0; i < VICII_NUM_SPRITES; i++)
+                vicii_sprite_written_to_reg_mxye(vicii, i);
             break;
         case VICII_MXDP: // $d01b Sprite data priority
-            // TODO : 
-            //for (int i = 0; i < NrSprites; i++)
-            //    Sprites[i].WrittenToRegMxDP();
+            for (int i = 0; i < VICII_NUM_SPRITES; i++)
+                vicii_sprite_written_to_reg_mxdp(vicii, i);
             break;            
         case VICII_MP: // AI $d018 Memory pointers
             // Memory pointers changed - update memory mapping
@@ -132,40 +130,48 @@ void vicii_common_registers_write(void* chip, uint16_t address, uint8_t value) {
             update_colors_based_on_graphics_mode_and_background_012(vicii);
             break;
         case VICII_MM0: // $d025 (4 bits) Sprite multicolor 0
-            // TODO : 
-            //for (int i = 0; i < NrSprites; i++)
-            //    Sprites[i].WrittenToRegMM0();
+            for (int i = 0; i < VICII_NUM_SPRITES; i++)
+                vicii_sprite_written_to_reg_mm0(vicii, i);
             break;
         case VICII_MM1: // $d026 (4 bits) Sprite multicolor 1
-            // TODO :
-            //for (int i = 0; i < NrSprites; i++)
-            //    Sprites[i].WrittenToRegMM1();
+            for (int i = 0; i < VICII_NUM_SPRITES; i++)
+                vicii_sprite_written_to_reg_mm1(vicii, i);
             break;
         case VICII_M0C: // $d027 (4 bits) Color sprite 0
-            // TODO : Sprites[0].WrittenToRegMxC();
-            break;
         case VICII_M1C: // $d028 (4 bits) Color sprite 1
-            // TODO : Sprites[1].WrittenToRegMxC();
-            break;
         case VICII_M2C: // $d029 (4 bits) Color sprite 2
-            // TODO : Sprites[2].WrittenToRegMxC();
-            break;
         case VICII_M3C: // $d02a (4 bits) Color sprite 3
-            // TODO : Sprites[3].WrittenToRegMxC();
-            break;
         case VICII_M4C: // $d02b (4 bits) Color sprite 4
-            // TODO : Sprites[4].WrittenToRegMxC();
-            break;
         case VICII_M5C: // $d02c (4 bits) Color sprite 5
-            // TODO : Sprites[5].WrittenToRegMxC();
-            break;
         case VICII_M6C: // $d02d (4 bits) Color sprite 6
-            // TODO : Sprites[6].WrittenToRegMxC();
-            break;
         case VICII_M7C: // $d02e (4 bits) Color sprite 7
-            // TODO : Sprites[7].WrittenToRegMxC();
+            vicii_sprite_written_to_reg_mxc(vicii, reg - VICII_M0C);
             break;
     }
+}
+
+// --- Sprite register write handlers ---
+// "The expansion flip flop is set as long as the bit in MxYE in register $d017 corresponding to the sprite is cleared."
+static void vicii_sprite_written_to_reg_mxye(vicii_common_t* vicii, int i) {
+    if (!(vicii->registers[VICII_MXYE] & (1 << i)))
+        vicii->sprites[i].expansion_flip_flop = true;
+}
+// "With the MxDP bits from register $d01b, you can separately specify for each sprite if it should be displayed in front of or behind the foreground pixels."
+static void vicii_sprite_written_to_reg_mxdp(vicii_common_t* vicii, int i) {
+    // Priority: 0 = in front, 1 = behind
+    vicii->sprites[i].priority = (vicii->registers[VICII_MXDP] & (1 << i)) ? VICII_PRIORITY_SPRITE_BEHIND : VICII_PRIORITY_SPRITE_IN_FRONT;
+}
+// "MM0: Sprite multicolor 0"
+static void vicii_sprite_written_to_reg_mm0(vicii_common_t* vicii, int i) {
+    vicii->sprites[i].color = vicii->registers[VICII_MM0] & 0x0F;
+}
+// "MM1: Sprite multicolor 1"
+static void vicii_sprite_written_to_reg_mm1(vicii_common_t* vicii, int i) {
+    vicii->sprites[i].color = vicii->registers[VICII_MM1] & 0x0F;
+}
+// "MxC: Sprite color register"
+static void vicii_sprite_written_to_reg_mxc(vicii_common_t* vicii, int i) {
+    vicii->sprites[i].color = vicii->registers[VICII_M0C + i] & 0x0F;
 }
 
 // Initialize VIC-II to default state
@@ -241,6 +247,45 @@ void vicii_common_initialize(vicii_common_t* vicii) {
             vicii->pixel_line_priority[i] = VICII_PRIORITY_BORDER;
             vicii->pixel_line_color[i] = VICII_COLOR_LIGHT_BLUE;  // Default VIC-II border color
         }
+    }
+}
+
+// Reactivated and adapted for new C design
+// "If there is a Bad Line Condition, the BA line is set low and the transition from idle to display state occurs as soon as there is a Bad Line Condition."
+void vicii_common_handle_bad_line_related_state(vicii_common_t* vicii)
+{
+    if (vicii->is_bad_line)
+    {
+        // BA.SetLow() is handled in the main cycle logic
+        vicii->video_logic_display_state = true;
+    }
+}
+
+// "1. If the X coordinate reaches the right comparison value, the main border flip flop is set."
+void vicii_common_handle_right_border_flipflop(vicii_common_t* vicii)
+{
+    // BorderRightCSEL0 = 336 (should be 335) / BorderRightCSEL1 = 344
+    // TODO: Make right border pixel-exact based on non-4-multiple BorderRightCSEL0 limit
+    if (vicii->x_coordinate == vicii->border_right)
+    {
+        set_main_border_flip_flop(vicii, true);
+    }
+}
+
+// "If the X coordinate reaches the left comparison value ..."
+void vicii_common_handle_left_border_flipflop(vicii_common_t* vicii)
+{
+    if (vicii->x_coordinate == vicii->border_left)
+    {
+        // "4. If the X coordinate reaches the left comparison value and the Y coordinate reaches the bottom one, the vertical border flip flop is set."
+        if (vicii->raster_counter == vicii->border_bottom)
+            vicii->vertical_border_flip_flop = true;
+        // "5. If the X coordinate reaches the left comparison value and the Y coordinate reaches the top one and the DEN bit in register $d011 is set, the vertical border flip flop is reset."
+        if (vicii->raster_counter == vicii->border_top && Reg_DisplayEnable(vicii))
+            vicii->vertical_border_flip_flop = false;
+        // "6. If the X coordinate reaches the left comparison value and the vertical border flip flop is not set, the main flip flop is reset."
+        if (!vicii->vertical_border_flip_flop)
+            set_main_border_flip_flop(vicii, false);
     }
 }
 
@@ -366,6 +411,78 @@ void set_main_border_flip_flop(vicii_common_t* vicii, bool main_border_flip_flop
     }
 }
 
+// Handles sprite DMA state transitions at specific cycles
+// At cycle 55, check for DMA start
+static void vicii_common_handle_cycle_55_sprite_dma(vicii_common_t* vicii) {
+    for (int i = 0; i < VICII_NUM_SPRITES; ++i) {
+        vicii_sprite_t* spr = &vicii->sprites[i];
+        if (spr->enabled && spr->y_pos == (uint8_t)(vicii->raster_counter - 1)) {
+            spr->dma_counter = 0;
+            spr->mcbase = 0;
+            if (spr->y_expand)
+                spr->expansion_flip_flop = !spr->expansion_flip_flop;
+            else
+                spr->expansion_flip_flop = true;
+        }
+    }
+}
+// Handles sprite DMA state transitions at specific cycles
+// At cycle 55, check for DMA start
+// At cycle 56, handle expansion flip-flop (if needed)
+static void vicii_common_handle_cycle_56_sprite_dma(vicii_common_t* vicii) {
+    for (int i = 0; i < VICII_NUM_SPRITES; ++i) {
+        vicii_sprite_t* spr = &vicii->sprites[i];
+        if (spr->y_expand) {
+            spr->expansion_flip_flop = !spr->expansion_flip_flop;
+        }
+    }
+}
+
+// At cycle 58, set display state and MC
+static void vicii_common_handle_cycle_58(vicii_common_t* vicii) {
+    // Handle end of character row
+    if (vicii->rc == 7) {
+        if (!vicii->is_bad_line) {
+            vicii->video_logic_display_state = false;
+            vicii->vc_base = vicii->vc;
+            vicii->rc = 0;
+        }
+    }
+    
+    if (vicii->video_logic_display_state) {
+        vicii->rc = (vicii->rc + 1) & 0x07;
+    }
+    
+    // Handles sprite display state transitions at cycle 58
+    for (int i = 0; i < VICII_NUM_SPRITES; ++i) {
+        vicii_sprite_t* spr = &vicii->sprites[i];
+        if (spr->enabled && spr->y_pos == (uint8_t)(vicii->raster_counter - 1)) {
+            spr->display_state = true;
+            spr->mc = spr->mcbase;
+        }
+    }
+}
+
+// Sprite sequencer and shift register update for pixel emission
+// "The sprite shift register is loaded at the start of the display state and shifted each cycle."
+static void vicii_common_update_sprite_sequencer(vicii_common_t* vicii) {
+    for (int i = 0; i < VICII_NUM_SPRITES; ++i) {
+        vicii_sprite_t* spr = &vicii->sprites[i];
+        if (spr->display_state) {
+            // On the first cycle of display state, load the shift register from sprite data buffer
+            if (spr->sequencer_reload) {
+                // TODO: Use actual sprite data buffer (DMA-fetched)
+                // For now, just zero the shift register as placeholder
+                spr->shift_reg = 0; // Replace with: spr->shift_reg = spr->data_buffer[0];
+                spr->sequencer_reload = false;
+            } else {
+                // Shift the register left (MSB first)
+                spr->shift_reg <<= 1;
+            }
+        }
+    }
+}
+
 /*
  * VIC-II TIMING ADVANCEMENT - VIC-II owns the master clock
  * Updates cycle_group only when transitioning to different groups
@@ -437,51 +554,19 @@ void vic_ii_advance_timing(vicii_common_t* vicii) {
                 vicii->rc = 0;
             }
             break;
+
         case 55:
             vicii->cycle_group = CYCLE_GROUP_LINE_END;
+            // Call sprite DMA/display state handler at the appropriate cycle
+            vicii_common_handle_cycle_55_sprite_dma(vicii);
+            break;
+        case 56:
+            vicii_common_handle_cycle_56_sprite_dma(vicii);
+            break;
+        case 58:
+            vicii_common_handle_cycle_58(vicii);
             break;
         // No other cases - cycle_group stays the same for intermediate values
-    }
-}
-
-void vic_ii_process_display_data(vicii_common_t* vicii, c64_bus_t* bus) {
-    // VIC-II pixel generation - emit pixels for all framebuffer lines
-    // Generate pixels to properly fill the framebuffer with correct centering
-    if (vicii->framebuffer && vicii->raster_counter < vicii->framebuffer_height) {
-        // Calculate how many cycles we need to fill the framebuffer width
-        int cycles_needed = (vicii->framebuffer_width + 7) / 8;  // Round up to cover full width
-        
-        // Generate pixels for the full width, starting from cycle 0 to ensure proper centering
-        if (vicii->x_cycle < cycles_needed) {
-            bool in_normal_vic_range = vicii->raster_counter < vicii->total_lines;
-            bool in_display_area = in_normal_vic_range &&
-                                  (vicii->x_cycle >= 15 && vicii->x_cycle <= 54) &&
-                                  (vicii->raster_counter >= vicii->border_top &&
-                                   vicii->raster_counter <= vicii->border_bottom);
-            
-            if (in_display_area) {
-                // In display area - emit graphics/text pixels (even in idle state for background color)
-                vicii_common_g_access(vicii);
-            } else {
-                // Outside display area, display disabled, or beyond normal VIC range - emit border pixels
-                vicii_common_emit_border_pixels(vicii);
-            }
-        }
-    }
-    
-    // Handle end of character row
-    if (vicii->x_cycle == 58) {
-        if (vicii->rc == 7) {
-            if (!vicii->is_bad_line) {
-                vicii->video_logic_display_state = false;
-                vicii->vc_base = vicii->vc;
-                vicii->rc = 0;
-            }
-        }
-        
-        if (vicii->video_logic_display_state) {
-            vicii->rc = (vicii->rc + 1) & 0x07;
-        }
     }
 }
 
@@ -509,8 +594,8 @@ void vic_ii_bus_access(vicii_common_t* vicii, c64_bus_t* bus,
                 address = vicii->sprites[access_param].data_pointer * 64 + 
                          vicii->sprites[access_param].dma_counter;
                 data = vicii_memory_read(vicii, address);
-                // TODO : Actually store : 
-                // vicii->sprite_buffers[access_param][vicii->sprites[access_param].dma_counter] = data;
+                // Store DMA-fetched sprite data in per-sprite buffer
+                vicii->sprites[access_param].data_buffer[vicii->sprites[access_param].dma_counter] = data;
                 vicii->sprites[access_param].dma_counter++;
             }
             break;
@@ -558,7 +643,7 @@ void vic_ii_bus_access(vicii_common_t* vicii, c64_bus_t* bus,
  * HANDLE SPRITE BUS REQUIREMENTS FOR CURRENT CYCLE
  * Returns access type only - bus control can be derived from return value
  */
-inline uint8_t vic_ii_handle_sprite_requirements(vicii_common_t* vicii, uint8_t sprite_num, uint16_t target_line) {
+inline uint8_t vic_ii_handle_sprite_requirements(vicii_common_t* vicii, uint8_t sprite_num, uint8_t target_line) {
     if ((vicii->sprites[sprite_num].enabled) &&
         (target_line >= vicii->sprites[sprite_num].y_pos) &&
         (target_line <= vicii->sprites[sprite_num].y_pos + 
@@ -575,6 +660,79 @@ inline uint8_t vic_ii_handle_sprite_requirements(vicii_common_t* vicii, uint8_t 
         }
     }
     return VIC_ACCESS_IDLE;
+}
+
+// Emit sprite pixels for the current cycle
+// "Sprite pixels are emitted according to the sprite sequencer and priority logic."
+static void vicii_common_emit_sprite_pixels(vicii_common_t* vicii) {
+    // For each sprite, check if it is in display state and should emit pixels at this x position
+    for (int i = 0; i < VICII_NUM_SPRITES; ++i) {
+        vicii_sprite_t* spr = &vicii->sprites[i];
+        if (!spr->display_state)
+            continue;
+        // TODO: Implement sprite shift register logic and pixel emission per vic-ii.txt
+        // "The sprite shift register is loaded at the start of the display state and shifted each cycle."
+        // For now, emit a placeholder pixel for each active sprite (for review and incremental build)
+        // This should be replaced with actual shift register and priority/collision logic
+        if (vicii->pixel_line_index < vicii->visible_pixels_per_line) {
+            // Use sprite color and priority (placeholder: always foreground)
+            vicii->pixel_line_priority[vicii->pixel_line_index] = VICII_PRIORITY_FOREGROUND;
+            vicii->pixel_line_color[vicii->pixel_line_index] = spr->color;
+            // TODO: Integrate with priority/collision logic and only overwrite if sprite has priority
+        }
+    }
+}
+
+// Render graphics and sprite pixels for the current cycle using only intermediate storage
+static void vicii_common_render_pixels(vicii_common_t* vicii) {
+    // Use intermediate storage (video_matrix_line, video_color_line, etc.)
+    // Graphics pixel emission
+    uint8_t char_code = vicii->video_matrix_line[vicii->vmli];
+    vicii_color_t color_code = vicii->video_color_line[vicii->vmli];
+    uint8_t graphics_data = 0; // This should be set from a pre-fetched buffer, not direct memory
+    // TODO: Use a graphics_data_line[] buffer for true cycle-accuracy
+    // For now, use 0 as placeholder
+    vicii_common_emit_graphics_pixels(vicii, graphics_data);
+    // Sprite pixel emission
+    vicii_common_emit_sprite_pixels(vicii);
+}
+
+// Call sprite sequencer update at the start of each display cycle (before pixel emission)
+void vicii_common_render_pixels(vicii_common_t* vicii) {
+    vicii_common_update_sprite_sequencer(vicii);
+    // Use intermediate storage (video_matrix_line, video_color_line, etc.)
+    // Graphics pixel emission
+    uint8_t char_code = vicii->video_matrix_line[vicii->vmli];
+    vicii_color_t color_code = vicii->video_color_line[vicii->vmli];
+    uint8_t graphics_data = 0; // Should be set from a pre-fetched buffer
+    vicii_common_emit_graphics_pixels(vicii, graphics_data);
+    vicii_common_emit_sprite_pixels(vicii);
+}
+
+void vic_ii_process_display_data(vicii_common_t* vicii, c64_bus_t* bus) {
+    // VIC-II pixel generation - emit pixels for all framebuffer lines
+    // Generate pixels to properly fill the framebuffer with correct centering
+    if (vicii->framebuffer && vicii->raster_counter < vicii->framebuffer_height) {
+        // Calculate how many cycles we need to fill the framebuffer width
+        int cycles_needed = (vicii->framebuffer_width + 7) / 8;  // Round up to cover full width
+        
+        // Generate pixels for the full width, starting from cycle 0 to ensure proper centering
+        if (vicii->x_cycle < cycles_needed) {
+            bool in_normal_vic_range = vicii->raster_counter < vicii->total_lines;
+            bool in_display_area = in_normal_vic_range &&
+                                  (vicii->x_cycle >= 15 && vicii->x_cycle <= 54) &&
+                                  (vicii->raster_counter >= vicii->border_top &&
+                                   vicii->raster_counter <= vicii->border_bottom);
+            
+            if (in_display_area) {
+                // In display area - emit graphics/text pixels (even in idle state for background color)
+                vicii_common_render_pixels(vicii);
+            } else {
+                // Outside display area, display disabled, or beyond normal VIC range - emit border pixels
+                vicii_common_emit_border_pixels(vicii);
+            }
+        }
+    }
 }
 
 // Main cycle function with character and graphics access
@@ -676,69 +834,9 @@ void vicii_common_cycle(vicii_common_t* vicii) {
     vic_ii_advance_timing(vicii);
 }
 
-/* TODO : Translate :
-void vicii_common_handle_bad_line_related_state()
-{
-    if (is_bad_line)
-    {
-        BA.SetLow();
-        // The transition from idle to display state occurs
-        // as soon as there is a Bad Line Condition
-        video_logic_display_state = true;
-    }
-}
-
-void vicii_common_handle_right_border_flipflop()
-{
-    // "1. If the X coordinate reaches the right comparison value,
-    // the main border flip flop is set."
-    // BorderRightCSEL0 = 336 (should be 335) / BorderRightCSEL1 = 344
-    // TODO : Make right border pixel-exact based on non-4-multiple BorderRightCSEL0 limit
-    if (XCoordinate == BorderRight)
-    {
-#if VIC_TRACING
-        if (DebugShowRightBorderRed)
-            if (PixelLineIndex > 2)
-                PixelLineColor[PixelLineIndex - 1] = (int)Color.Red;
-#endif
-        vicii_common_set_main_border_flipflop(true);
-    }
-}
-
-void vicii_common_handle_left_border_flipflop()
-{
-    // BorderLeftCSEL1 = 24 / BorderLeftCSEL0 = 32 (should be 31)
-    // TODO : Make left border pixel-exact based on non-4-multiple BorderLeftCSEL0 limit
-    if (XCoordinate == BorderLeft)
-    {
-#if VIC_TRACING
-        if (DebugShowLeftBorderRed)
-            if (PixelLineIndex > 2)
-                PixelLineColor[PixelLineIndex - 1] = (int)Color.Red;
-#endif
-        // "4. If the X coordinate reaches the left comparison value
-        // and the Y coordinate reaches the bottom one,
-        // the vertical border flip flop is set."
-        if (raster_counter == BorderBottom)
-            VerticalBorderFlipFlop = true;
-
-        // "5. If the X coordinate reaches the left comparison value
-        // and the Y coordinate reaches the top one
-        // and the DEN bit in register $d011 is set,
-        // the vertical border flip flop is reset."
-        if (raster_counter == BorderTop && Reg_DisplayEnable())
-            VerticalBorderFlipFlop = false;
-
-        // "6. If the X coordinate reaches the left comparison value
-        // and the vertical border flip flop is not set,
-        // the main flip flop is reset."
-        if (!VerticalBorderFlipFlop)
-            vicii_common_set_main_border_flipflop(false);
-    }
-}
-*/
-
-// Graphics access (g-access) - reads character/bitmap data
+/*
+ * VIC-II Graphics access (g-access) - reads character/bitmap data
+ */
 void vicii_common_g_access(vicii_common_t* vicii) {
     // [In idle-state,] the sequencer uses "0" bits for the video matrix data
     uint8_t char_code = 0;
@@ -848,244 +946,12 @@ void vicii_common_g_access(vicii_common_t* vicii) {
     
     // Emit pixels based on graphics data and mode
     vicii_common_emit_graphics_pixels(vicii, graphics_data);
-/* TODO : Instead, translate :
-    if (mc_flag > 0)
-    {
-        // Note : Assume that multicolor pixels are double-width
-        EmitMC1Pixel((u2)(g_Data >> 6));
-        EmitMC1Pixel((u2)((g_Data >> 4) & 3));
-        EmitMC1Pixel((u2)((g_Data >> 2) & 3));
-        EmitMC1Pixel((u2)(g_Data & 3));
-    }
-    else
-    {
-        EmitMC0Pixel((u1)(g_Data >> 7));
-        EmitMC0Pixel((u1)((g_Data >> 6) & 1));
-        EmitMC0Pixel((u1)((g_Data >> 5) & 1));
-        EmitMC0Pixel((u1)((g_Data >> 4) & 1));
-        EmitMC0Pixel((u1)((g_Data >> 3) & 1));
-        EmitMC0Pixel((u1)((g_Data >> 2) & 1));
-        EmitMC0Pixel((u1)((g_Data >> 1) & 1));
-        EmitMC0Pixel((u1)(g_Data & 1));
-    }
-*/
+    // Emit sprite pixels (after graphics, so sprite priority/collision can be handled)
+    vicii_common_emit_sprite_pixels(vicii);
     
     // 4. VC and VMLI are incremented after each g-access
     vicii->vc = (vicii->vc + 1) & 0x3FF; // TODO : implement wrapping in u10
     vicii->vmli = (vicii->vmli + 1) & 0x3F; // TODO : implement wrapping in u6
-}
-
-/* TODO : Translate :
-void HorizontalRetrace()
-{
-    // Flush before increasing the raster_counter
-    FlushPixelLineToOutput(Palettes.GetPalette(PaletteNr), raster_counter);
-    raster_counter++;
-    // Raster transitions / Vertical decodes :
-    //VBLANK = (raster_counter >= 300) && (raster_counter < 311);
-    //VEQ = (raster_counter >= 301) && (raster_counter < 310);
-    //VSYNC = (raster_counter >= 304) && (raster_counter < 307);
-    EEVMF = (raster_counter >= 48) && (raster_counter < 248);
-    //VSW25 = (raster_counter >= 51) && (raster_counter < 251);
-    //VSW24 = (raster_counter >= 55) && (raster_counter < 247);
-    VRESET = (raster_counter >= 312);
-    // Check for end of frame
-    if (VRESET) // raster_counter >= NrOfLines
-    {
-        // "Raster line 0 is an exception: In this line, IRQ and incrementing
-        // (resp. resetting) of RASTER are performed one cycle later
-        // than in the other lines."
-        // ^ Above implies vicii_common_handle_raster_interrupt() should not be called here,
-        // but for XCyle 2 when raster_counter is 0, as done in ClockPulse().
-        // TODO : The RASTER part needs more investigation
-        VerticalRetrace();
-    }
-    else
-    {
-        update_is_bad_line();
-        vicii_common_handle_raster_interrupt();
-    }
-}
-*/
-
-// Handle raster interrupt
-void vicii_common_handle_raster_interrupt(vicii_common_t* vicii) {
-    // Raster interrupt line reached?
-    uint16_t raster_compare = ((vicii->registers[VICII_C1] & VICII_C1_RST8) << 1) |
-                              vicii->registers[VICII_RASTER]; // C1_RST8: 17.7, RASTER: 18
-    
-    if (vicii->raster_counter == raster_compare) {
-        // "The line number of the current screen line being scanned by the
-        // raster is the same as the line number value written to the Raster
-        // Register (53266, $D012)."
-        vicii->registers[VICII_IR] |= VICII_IR_IRST; // Signal a RaSTer interrupt occurred
-    }
-    
-    // Interrupt handling
-    // "The negative edge of IRQ on a raster interrupt has been used to define the
-    // beginning of a line (this is also the moment in which the RASTER register
-    // is incremented)."
-
-    // "When one of these conditions is met, the corresponding bit in this
-    // status register is set to 1 and latched.  That means that as long as
-    // the corresponding enable bit in the VIC IRQ Mask register is set to 1,
-    // and IRQ requested will be generated, and any subsequent fulfillment of
-    // the same condition will be ignored until the latch is cleared."
-
-    // Was any interrupt signalled? (IR_IRST/IR_IMBC/IR_IMMC/IR_ILP)
-    // and was any of them enabled? (IE_ERST/IE_EMBC/IE_EMMC/IE_ELP)    // Check if any interrupt is both signaled and enabled
-    uint8_t interrupt_status = vicii->registers[VICII_IR] & vicii->registers[VICII_IE];
-    if ((interrupt_status & VICII_INTERRUPTS_MASK) > 0) {
-        // "Anytime that any of the other bits in the status register
-        // is set to 1, Bit 7 will also be set."
-        // Set the global "interrupt was trigerred" flag
-        vicii->registers[VICII_IR] |= VICII_IR_IRQ;
-        // TODO: Signal IRQ to CPU via bus
-/* TODO : Translate :
-            // Set IRQ flag, on Any Enabled VIC IRQ Condition
-            _IRQ.SetLow();
-*/
-    } else {
-        // No active interrupts; Was the global IR_IRQ flag set?
-        if ((vicii->registers[VICII_IR] & VICII_IR_IRQ) > 0) {
-            // Clear interrupt trigerred flag.
-            // TODO : Is this indeed the correct moment to clear the IR_IRQ flag?
-            // TODO : Or should it be cleared as soon as BusWrite(IR) clears all interrupt bits?
-            vicii->registers[VICII_IR] &= ~VICII_IR_IRQ;
-            // In any case, DO NOT call _IRQ.SetHigh() here! That can deactivate
-            // other sources of interrupts (the CIA's, SID?) which resulted in a
-            // kernal boot hang (not showing the READY prompt).
-            // Instead, it appears the IRQ pin must be reset by the CPU when
-            // receiving and handling an interrupt - see MOS6510.RaiseInterrupt().
-        }
-    }
-}
-
-/* TODO : Translate :
-private void VerticalRetrace()
-{
-    // Reset is_bad_line and its inputs (except Reg[C1], obviously)
-    WasDENSetDuringRasterLinex30 = false;
-    is_bad_line = false;
-    raster_counter = 0;
-    // 1. Once somewhere outside of the range of raster lines $30-$f7
-    // (i.e. outside of the Bad Line range), VCBASE is reset to zero.
-    // This is presumably done in raster line 0, the exact moment
-    // cannot be determined and is irrelevant.
-    VCBASE = 0;
-    // Reset the LightPen edge-detection
-    LPEdgeDetected = false;
-    // New frame
-    NrFrames++;
-#if VIC_TRACING
-    if (DebugSwapPaletteEach200Frames)
-        PaletteNr = (NrFrames / 200) % Palettes.NrPalettes;
-#endif
-    // "An 8 bit refresh counter (REF) is used to generate 256 DRAM
-    // row addresses. The counter is reset to $ff in raster line 0"
-    REF = 0xFF; 
-}
-*/
-
-// Emit border pixels
-void vicii_common_emit_border_pixels(vicii_common_t* vicii) {
-    // Emit 8 border pixels (one character width)
-    for (int i = 0; i < 8; i++) {
-        if (vicii->pixel_line_index < vicii->visible_pixels_per_line) {
-            vicii->pixel_line_priority[vicii->pixel_line_index] = vicii->border_pixel.priority;
-            vicii->pixel_line_color[vicii->pixel_line_index] = vicii->border_pixel.color;
-            vicii->pixel_line_index++;
-        }
-    }
-}
-
-/* TODO : Instead, translate :
-
-    // Drawing
-
-    private void EmitBorderPixels()
-    {
-        // Border : Either Priority.Background (0) or Priority.Border (4)
-        int count = 8;
-        while (count-- > 0)
-            EmitPixel(BorderPixel);
-    }
-
-    private void EmitMC0Pixel(u1 colorIndex)
-    {
-        // "in standard mode (MCM = 0), cleared pixels belong to the background
-        // and set pixels to the foreground. It should be noted that this is also
-        // valid for the graphics generated in idle state."
-
-        // Use Colors[4] in non-MultiColor modes for drawing the foreground color
-        // (because for MC mode, Colors[1].Priority is set to Priority.Background!)
-        // Graphics : Either Priority.Background (0) or Priority.Foreground (2)
-        EmitPixel(Colors[colorIndex * 4]);
-    }
-
-    private void EmitMC1Pixel(u2 colorIndex)
-    {
-        // "In multicolor mode (MCM=1), the bit combinations "00" and "01" belong to
-        // the background and "10" and "11" to the foreground"
-
-        // Graphics : Either Priority.Background (0) or Priority.Foreground (2)
-        Pixel color = Colors[colorIndex];
-        EmitPixel(color);
-        EmitPixel(color);
-    }
-
-    private void EmitPixel(Pixel pixel)
-    {
-        PixelLinePriority[PixelLineIndex] = pixel.Priority;
-        EmitColor((int)pixel.Color);
-    }
-*/
-
-// Emit graphics pixels based on graphics data
-void vicii_common_emit_graphics_pixels(vicii_common_t* vicii, uint8_t graphics_data) {
-    // Check if we're in multicolor mode
-    bool multicolor = false;
-    
-    // Note : Because of below differences, we cannot check for VICII_MULTICOLOR_MODE_MASK alone
-    switch (vicii->graphics_mode) {
-        case VICII_GM_MULTICOLOR_TEXT: {
-            uint8_t color_code = vicii->video_color_line[vicii->vmli];
-            multicolor = (color_code >> 3) & 1;
-            break;
-        }
-        case VICII_GM_MULTICOLOR_BITMAP:
-            multicolor = true;
-            break;
-    }
-    
-    if (multicolor) {
-        // Multicolor mode: 4 double-width pixels, 2 bits per pixel
-        for (int i = 0; i < 4; i++) {
-            uint8_t color_index = (graphics_data >> (6 - i * 2)) & 0x03;
-            vicii_pixel_t pixel = vicii->colors[color_index];
-            
-            // Emit double-width pixel
-            for (int j = 0; j < 2; j++) {
-                if (vicii->pixel_line_index < vicii->visible_pixels_per_line) {
-                    vicii->pixel_line_priority[vicii->pixel_line_index] = pixel.priority;
-                    vicii->pixel_line_color[vicii->pixel_line_index] = pixel.color;
-                    vicii->pixel_line_index++;
-                }
-            }
-        }
-    } else {
-        // Standard mode: 8 single-width pixels, 1 bit per pixel
-        for (int i = 0; i < 8; i++) {
-            uint8_t bit = (graphics_data >> (7 - i)) & 1;
-            vicii_pixel_t pixel = vicii->colors[bit ? 4 : 0];  // Foreground or background
-            
-            if (vicii->pixel_line_index < vicii->visible_pixels_per_line) {
-                vicii->pixel_line_priority[vicii->pixel_line_index] = pixel.priority;
-                vicii->pixel_line_color[vicii->pixel_line_index] = pixel.color;
-                vicii->pixel_line_index++;
-            }
-        }
-    }
 }
 
 // VIC-II system creation
