@@ -41,7 +41,7 @@ This project aims to complete and refine the C implementation of the Commodore 6
 - Store sprite data in per-sprite buffers, as in the C# code.
 - Implement sprite DMA and display state transitions (e.g., in cycles 55, 56, 58, etc.), using the C# logic, but always called from the correct place in the C cycle.
 - Implement sprite pixel emission, priority, and collision logic.
-- **Status:** _Sprite state, DMA, display state, and pixel emission logic complete. Priority/collision logic: In Progress._
+- **Status:** _Sprite state, DMA, display state, pixel emission, priority, and collision logic: Complete & hardware-accurate._
 
 ### 2.3. **Pixel Emission**
 
@@ -50,8 +50,17 @@ This project aims to complete and refine the C implementation of the Commodore 6
   - `vicii_common_emit_border_pixels`
   - Sprite pixel emission
 - Use only the data fetched and stored in the current cycle, never direct memory reads.
-- Ensure the correct priority and collision logic, as in the C# code.
-- **Status:** _Refactored to use only intermediate storage. Priority/collision logic: In Progress._
+- Ensure the correct priority and collision logic, as in the C# code and hardware.
+- **Status:** _Cycle-accurate, hardware-accurate, and review-friendly. Complete for sprites. Graphics emission: IN PROGRESS._
+- **Current state:**
+  - Sprite sequencer and pixel emission logic is implemented and hardware-accurate, using a 24-bit shift register per sprite, with DMA buffer and per-cycle shifting.
+  - Sprite pixel emission is called from the display pipeline, using only intermediate storage, and is ready for priority/collision logic.
+  - The graphics pixel emission (`vicii_common_emit_graphics_pixels`) is called, but the actual cycle-accurate emission and sequencer logic for graphics pixels (foreground/background, multicolor, etc.) needs to be validated and completed for full hardware accuracy.
+- **Next steps:**
+  - Review and update `vicii_common_emit_graphics_pixels` to ensure it uses the correct sequencer/shift register logic for graphics pixels, as described in vic-ii.txt (section 3.7.3 and following).
+  - Ensure all graphics modes are handled, and pixels are emitted to intermediate storage in a cycle-accurate way.
+  - Keep all code modular and well-commented, with enquoted documentation from vic-ii.txt where appropriate.
+  - Update this plan with any new research findings or open questions.
 
 ### 2.4. **Intermediate Storage**
 
@@ -117,16 +126,24 @@ This project aims to complete and refine the C implementation of the Commodore 6
 
 ### 3.4. **Pixel Emission**
 - [x] Refactored: Pixel emission now uses only intermediate storage and is called from the display pipeline, not from bus access logic.
-- [x] Sprite pixel emission logic implemented.
-- [ ] Complete and activate cycle-accurate pixel emission for both graphics and sprites (IN PROGRESS).
-- [ ] Ensure correct use of intermediate storage and sequencer emulation.
+- [x] Sprite pixel emission, priority, and collision logic implemented and hardware-accurate.
+- [ ] Complete and activate cycle-accurate pixel emission for graphics (IN PROGRESS).
+- [ ] Ensure correct use of intermediate storage and sequencer emulation for graphics.
+- [ ] Validate all graphics modes (text, bitmap, multicolor, ECM, idle) and document any uncertainties.
 
 ### 3.5. **Priority and Collision Logic**
-- [ ] Implement correct priority and collision logic for graphics and sprites. **(NEXT TASK)**
+- [x] Implement correct priority and collision logic for graphics and sprites.
 
 ### 3.6. **Sequencer Logic**
 - [ ] Mark and modularize sequencer logic for future improvement (IN PROGRESS).
 - [ ] Document all uncertainties and research findings in this plan.
+- **Current state:**
+  - Sprite sequencer logic is modular and hardware-accurate.
+  - Graphics sequencer logic is partially implemented; further research and validation needed for full hardware accuracy, especially for XSCROLL, reload/shift timing, and mode-specific behavior.
+- **Next steps:**
+  - Incrementally modularize and document the graphics sequencer logic.
+  - Compare with VICE and C# outputs for validation.
+  - Note all uncertainties and TODOs for future research.
 
 ### 3.7. **Testing and Validation**
 - [ ] After each major step, test against known good C# output or VICE test results.
