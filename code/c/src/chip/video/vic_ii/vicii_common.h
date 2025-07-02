@@ -381,42 +381,6 @@ typedef struct {
 
 // Only externally-visible (non-static/non-inline) functions need declarations
 
-// Register unit functions
-uint8_t vic_registers_read(vic_registers_unit_t* regs, vic_timing_unit_t* timing, 
-                          vic_bus_unit_t* bus, uint16_t address);
-void vic_registers_write(vic_registers_unit_t* regs, vic_sequencer_unit_t* sequencer,
-                        vic_border_unit_t* border, vic_memory_unit_t* memory,
-                        vic_sprites_unit_t* sprites, uint16_t address, uint8_t value);
-
-// Timing unit functions
-void vic_timing_advance(vic_timing_unit_t* timing, vic_video_logic_unit_t* video_logic,
-                       vic_pixel_unit_t* pixel);
-
-// Video logic unit functions (Documentation section 3.5)
-void vic_update_badline_condition(vic_video_logic_unit_t* video_logic, 
-                                  vic_registers_unit_t* regs, vic_timing_unit_t* timing);
-
-// Sequencer unit functions (Documentation section 3.7.3)
-void vic_graphics_sequencer(vic_sequencer_unit_t* sequencer, vic_video_data_unit_t* video_data,
-                            vic_pixel_unit_t* pixel, uint8_t graphics_data);
-
-// Memory unit functions
-uint8_t vic_memory_read(vic_memory_unit_t* memory, vic_bus_unit_t* bus, uint16_t address);
-
-// Sprites system functions (Documentation section 3.8)
-void vic_sprites_update_from_register(vic_sprites_unit_t* sprites, uint8_t reg, uint8_t value);
-void vic_sprite_sequencer(vic_sprites_unit_t* sprites, vic_pixel_unit_t* pixel, 
-                         vic_registers_unit_t* regs);
-
-// Pixel unit functions
-void vic_pixel_flush_line(vic_pixel_unit_t* pixel, vic_registers_unit_t* regs, 
-                         uint32_t* palette, int y);
-
-// Bus unit functions (Documentation section 3.6.2)
-void vic_memory_access(vic_bus_unit_t* bus, vic_memory_unit_t* memory,
-                      vic_video_data_unit_t* video_data, vic_sprites_unit_t* sprites,
-                      uint8_t access_type, uint8_t access_param);
-
 // Main cycle function
 void vicii_common_cycle(vicii_common_t* vicii);
 

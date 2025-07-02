@@ -6,6 +6,10 @@
 /**
  * PAL VIC-II (MOS6569) wrapper type.
  */
+// MOS6569 PAL timing constants (aliases for consistency)
+#define MOS6569_CYCLES_PER_LINE  VICII_PAL_CYCLES_PER_LINE
+#define MOS6569_TOTAL_LINES      VICII_PAL_TOTAL_LINES
+
 typedef vicii_common_t mos6569_t;
 
 // Lifecycle and bus attachment
