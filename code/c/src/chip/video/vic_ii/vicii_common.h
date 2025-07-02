@@ -176,20 +176,22 @@ struct vicii_pixel_s {
 #define VICII_BORDER_RIGHT_CSEL0     336
 #define VICII_BORDER_RIGHT_CSEL1     344
 
-// VIC-II access types
-#define VIC_ACCESS_IDLE         0
-#define VIC_ACCESS_REFRESH      1
-#define VIC_ACCESS_SPRITE_PTR   2
-#define VIC_ACCESS_SPRITE_DATA  3
-#define VIC_ACCESS_CHAR_DATA    4
+// VIC-II access types (Documentation section 3.6.2)
+#define VIC_ACCESS_IDLE         0  // i-access - idle access to $3fff
+#define VIC_ACCESS_REFRESH      1  // r-access - DRAM refresh
+#define VIC_ACCESS_P            2  // p-access - sprite data pointers
+#define VIC_ACCESS_S            3  // s-access - sprite data
+#define VIC_ACCESS_C            4  // c-access - video matrix and Color RAM
+#define VIC_ACCESS_G            5  // g-access - character generator or bitmap
 
+// Cycle groups (Documentation section 3.6.3)
 typedef enum {
     CYCLE_GROUP_LINE_START,          // Cycle 0
-    CYCLE_GROUP_SPRITES,             // Cycles 1-8
-    CYCLE_GROUP_REFRESH,             // Cycle 9
-    CYCLE_GROUP_NORMAL,              // Cycles 10-11
-    CYCLE_GROUP_BADLINE_WARNING,     // Cycle 12-14
-    CYCLE_GROUP_CHAR_AND_COLOR,      // Cycles 15-54
+    CYCLE_GROUP_SPRITE_PS_ACCESS,    // Cycles 1-8 (p and s accesses)
+    CYCLE_GROUP_REFRESH_ACCESS,      // Cycle 9 (r-access)
+    CYCLE_GROUP_IDLE,                // Cycles 10-11 (idle cycles)
+    CYCLE_GROUP_BADLINE_SETUP,       // Cycles 12-14 (BA warning)
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,   // Cycles 15-54 (c and g accesses)
     CYCLE_GROUP_LINE_END             // Cycles 55-62 (for PAL, 55-64 for NTSC)
 } vic_cycle_group_t;
 
@@ -199,84 +201,62 @@ typedef enum {
 // Number of sprites
 #define VICII_NUM_SPRITES 8
 
-// VIC-II memory mapping structure
-typedef struct {
-    uint16_t bank_base;         // Base address of current 16KB VIC bank
-    uint16_t video_matrix_base; // Video matrix base within VIC bank
-    uint16_t char_base;         // Character ROM base within VIC bank
-    bool char_rom_enabled;      // Whether character ROM is accessible
-} vicii_memory_map_t;
+// VIC-II banking constants
+#define VICII_BANK_0_BASE    0x0000
+#define VICII_BANK_1_BASE    0x4000
+#define VICII_BANK_2_BASE    0x8000
+#define VICII_BANK_3_BASE    0xC000
 
-// VIC-II Sprite structure
-typedef struct {
-    uint8_t x_pos;
-    uint8_t y_pos;
-    bool enabled;
-    bool multicolor;
-    bool x_expand;
-    bool y_expand;
-    bool priority;
-    vicii_color_t color;
-    uint8_t data_pointer;
-    uint8_t mcbase;  // multicolor base
-    uint8_t mc;      // multicolor counter
-    uint8_t dma_counter; // TODO : Set and update
-    // --- Added for hardware-accurate emulation (see C# and vic-ii.txt) ---
-    bool expansion_flip_flop; // "The expansion flip flop is set as long as the bit in MxYE in register $d017 corresponding to the sprite is cleared."
-    bool display_state;       // "DisplayState: Sprite is currently being displayed."
-    // Sprite sequencer reload flag for display state
-    bool sequencer_reload;
-    // Shift register for sprite pixel emission (8 bits for each sprite, not 3-byte buffer)
-    uint8_t shift_reg;
-    // Shift registers for sprite pixel data (3 bytes per sprite)
-    uint8_t shift_register[3];
-    // Sprite MCBASE and MC (data counter base and counter)
-    // Already present as mcbase and mc
-    // TODO: Add any additional per-sprite state as needed from C#
-    // Sprite DMA-fetched data buffer (3 bytes per sprite, as per VIC-II hardware)
-    uint8_t data_buffer[3];
-} vicii_sprite_t;
+// ========================================================================================
+// TOPIC-SPECIFIC UNIT STRUCTURES
+// ========================================================================================
 
-// Main VIC-II state structure
+// Register Unit - All VIC-II register state
 typedef struct {
-    chip_descriptor_t* desc;
-    // Storage for all VIC-II registers.
-    // Note : Writes to unconnected bits ARE stored here, but are OR'ed to 1
-    // by MaskBusRead(), which has to handle some registers separately anyway.
-    // Only writes on 4-bit color registers ARE masked, to avoid having to do
-    // that in (often repeated) reads.
-    // This makes BusWrite small & fast (even though that's not very important).
-    // Note : MxM and MxD are read from 2 additional indices (they already have to
-    // do clear-on-read anyway, and this way writes are ignored without a check.)
-    uint8_t registers[VICII_REGS_SIZE + 2];  // +2 for shadow collision registers
-    
-    // Timing state
-    uint8_t x_cycle; // aka line_cycle;
+    uint8_t data[VICII_REGS_SIZE + 2];  // +2 for shadow collision registers
+} vic_registers_unit_t;
+
+// Timing Unit - All timing-related state
+typedef struct {
+    uint8_t x_cycle;
     uint16_t x_coordinate;
-    vic_cycle_group_t cycle_group;  // Current cycle group (updated when line_cycle changes)    
-    uint16_t raster_counter; // aka raster_line;
+    vic_cycle_group_t cycle_group;
+    uint16_t raster_counter;
     uint32_t frame_count;
-    
-    // Video logic state
-    bool video_logic_display_state;
-    bool is_bad_line; // aka badline;
-    bool badline_starting; // NEW
+    uint8_t cycles_per_line;
+    uint16_t total_lines;
+} vic_timing_unit_t;
+
+// Video Logic Unit - Display state and bad line logic (Documentation section 3.7)
+typedef struct {
+    bool display_state;
+    bool is_bad_line;
     bool was_den_set_during_raster_30;
     bool vertical_border_flip_flop;
-    
-    // Video counters
-    uint16_t vc_base;     // Video Counter Base (10 bits)
-    uint16_t vc;          // Video Counter (10 bits)
-    uint8_t rc;           // Row Counter (3 bits)
-    uint8_t vmli;         // Video Matrix Line Index (6 bits)
-    
-    // Video data buffers
+    uint16_t vcbase;     // VCBASE - Video Counter Base (10 bits) (Documentation section 3.7.2)
+    uint16_t vc;         // VC - Video Counter (10 bits) (Documentation section 3.7.2)
+    uint8_t rc;          // RC - Row Counter (3 bits) (Documentation section 3.7.2)
+    uint8_t vmli;        // VMLI - Video Matrix Line Index (6 bits) (Documentation section 3.7.2)
+    uint8_t refresh_counter; // REF - 8 bit refresh counter (Documentation section 3.13)
+} vic_video_logic_unit_t;
+
+// Video Data Unit - Character and color line buffers
+typedef struct {
     uint8_t video_matrix_line[40];
     vicii_color_t video_color_line[40];
-    
-    // Graphics mode and colors
-    uint8_t graphics_mode;
-    vicii_pixel_t colors[5];
+} vic_video_data_unit_t;
+
+// Graphics Sequencer Unit - Graphics pixel generation state
+typedef struct {
+    uint8_t shift_reg;        // Graphics shift register
+    uint8_t xscroll_counter;  // XSCROLL delay counter
+    uint8_t last_mode;        // Last graphics mode for change detection
+    uint8_t graphics_mode;    // Current graphics mode
+    vicii_pixel_t colors[5];  // Color palette for current mode
+} vic_sequencer_unit_t;
+
+// Border Unit - Border generation and limits (Documentation section 3.9)
+typedef struct {
     vicii_pixel_t border_pixel;
     
     // SCREEN POSITION DECODES 6567 NTSC
@@ -308,49 +288,141 @@ typedef struct {
     //bool VBLANK; //  13    24   300   311   Blanks video during vert retrace
     //bool VEQ; //     14    23   301   310   Enables vertical equalization
     //bool VSYNC; //   17    20   304   307   Enables vertical sync
-    bool EEVMF; //     48   248    48   248   Enables character fetch [Enable ?E? Video Matrix Fetch]
+    //bool EEVMF; //     48   248    48   248   Enables character fetch [Enable ?E? Video Matrix Fetch]
     //bool VSW25; //   51   251    51   251   Enables 25 row screen window
     //bool VSW24; //   55   247    55   247   Enables 24 row screen window
-    bool VRESET; //   261   n/a   312?  n/a   Resets vertical count to zero [See NrOfLines]
+    //bool VRESET; //   261   n/a   312?  n/a   Resets vertical count to zero [See NrOfLines]
 
     // Border limits (updated based on RSEL/CSEL)
     uint16_t border_top;
     uint16_t border_bottom;
     uint16_t border_left;
     uint16_t border_right;
-    
-    // Sprites
-    vicii_sprite_t sprites[VICII_NUM_SPRITES];
-    
-    // Light pen state
-    bool lp_edge_detected;
-    
-    // Bus and memory access
-    void* bus;
-    uint8_t bank;
-    void (*bank_change)(void* context, uint8_t bank);
-    
-    // VIC-II memory mapping
-    vicii_memory_map_t memory_map;
-    
-    // Per-standard timing (set by wrapper create functions)
-    uint8_t cycles_per_line;
-    uint16_t total_lines;
-    uint16_t visible_pixels_per_line;
-    
-    // Frame statistics
-    uint32_t frame_count;
-    
-    // Display output (for pixel rendering)
+    bool main_border_flip_flop;      // Main border flip flop (Documentation section 3.9)
+    bool vertical_border_flip_flop;  // Vertical border flip flop (Documentation section 3.9)
+} vic_border_unit_t;
+
+// Memory Mapping Unit - VIC-II memory access configuration (Documentation section 2.4.2)
+typedef struct {
+    uint16_t bank_base;         // Base address of current 16KB VIC bank
+    uint16_t vm_base;           // VM10-VM13 bits - Video Matrix base within VIC bank
+    uint16_t cb_base;           // CB11-CB13 bits - Character Base within VIC bank
+    bool char_rom_enabled;      // Whether character ROM is accessible
+    uint8_t bank;              // Current bank (0-3)
+} vic_memory_unit_t;
+
+// Sprite Unit - Single sprite state (Documentation section 3.8)
+typedef struct {
+    uint8_t x_pos;
+    uint8_t y_pos;
+    bool enabled;
+    bool multicolor;
+    bool x_expand;
+    bool y_expand;
+    vicii_priority_t priority;
+    uint8_t data_pointer;
+    uint8_t mcbase;               // MCBASE - MOB Data Counter Base (Documentation section 3.8.1)
+    uint8_t mc;                   // MC - MOB Data Counter (Documentation section 3.8.1)
+    uint8_t mc_counter;           // More descriptive than dma_counter
+    bool expansion_flip_flop;
+    bool display_state;
+    bool sequencer_reload;
+    uint32_t shift_reg;          // 24-bit shift register
+    uint8_t shift_register[3];
+    uint8_t data_buffer[3];
+} vic_sprite_unit_t;
+
+// Sprites System Unit - All sprite management
+typedef struct {
+    vic_sprite_unit_t sprites[VICII_NUM_SPRITES];
+} vic_sprites_unit_t;
+
+// Pixel Output Unit - Pixel line generation and framebuffer
+typedef struct {
     vicii_priority_t* pixel_line_priority;
     uint32_t* pixel_line_color;
     uint16_t pixel_line_index;
-    
-    // Frame buffer output
+    uint16_t visible_pixels_per_line;
     uint32_t* framebuffer;
     int framebuffer_width;
     int framebuffer_height;
+} vic_pixel_unit_t;
+
+// Bus Interface Unit - External bus communication
+typedef struct {
+    void* bus;
+    void (*bank_change)(void* context, uint8_t bank);
+    bool lp_edge_detected;
+} vic_bus_unit_t;
+
+// Main VIC-II structure composed of units
+typedef struct {
+    chip_descriptor_t* desc;
+    
+    // Feature toggles
+    bool enable_hardware_accurate_reads;  // Enable VIC idle/refresh memory reads for $DE00 data bus tricks and cycle accuracy (default: false for performance)
+    
+    // Topic-specific units
+    vic_registers_unit_t registers;
+    vic_timing_unit_t timing;
+    vic_video_logic_unit_t video_logic;
+    vic_video_data_unit_t video_data;
+    vic_sequencer_unit_t sequencer;
+    vic_border_unit_t border;
+    vic_memory_unit_t memory;
+    vic_sprites_unit_t sprites;
+    vic_pixel_unit_t pixel;
+    vic_bus_unit_t bus;
 } vicii_common_t;
+
+// ========================================================================================
+// PUBLIC API FUNCTION PROTOTYPES
+// ========================================================================================
+
+// Only externally-visible (non-static/non-inline) functions need declarations
+
+// Register unit functions
+uint8_t vic_registers_read(vic_registers_unit_t* regs, vic_timing_unit_t* timing, 
+                          vic_bus_unit_t* bus, uint16_t address);
+void vic_registers_write(vic_registers_unit_t* regs, vic_sequencer_unit_t* sequencer,
+                        vic_border_unit_t* border, vic_memory_unit_t* memory,
+                        vic_sprites_unit_t* sprites, uint16_t address, uint8_t value);
+
+// Timing unit functions
+void vic_timing_advance(vic_timing_unit_t* timing, vic_video_logic_unit_t* video_logic,
+                       vic_pixel_unit_t* pixel);
+
+// Video logic unit functions (Documentation section 3.5)
+void vic_update_badline_condition(vic_video_logic_unit_t* video_logic, 
+                                  vic_registers_unit_t* regs, vic_timing_unit_t* timing);
+
+// Sequencer unit functions (Documentation section 3.7.3)
+void vic_graphics_sequencer(vic_sequencer_unit_t* sequencer, vic_video_data_unit_t* video_data,
+                            vic_pixel_unit_t* pixel, uint8_t graphics_data);
+
+// Memory unit functions
+uint8_t vic_memory_read(vic_memory_unit_t* memory, vic_bus_unit_t* bus, uint16_t address);
+
+// Sprites system functions (Documentation section 3.8)
+void vic_sprites_update_from_register(vic_sprites_unit_t* sprites, uint8_t reg, uint8_t value);
+void vic_sprite_sequencer(vic_sprites_unit_t* sprites, vic_pixel_unit_t* pixel, 
+                         vic_registers_unit_t* regs);
+
+// Pixel unit functions
+void vic_pixel_flush_line(vic_pixel_unit_t* pixel, vic_registers_unit_t* regs, 
+                         uint32_t* palette, int y);
+
+// Bus unit functions (Documentation section 3.6.2)
+void vic_memory_access(vic_bus_unit_t* bus, vic_memory_unit_t* memory,
+                      vic_video_data_unit_t* video_data, vic_sprites_unit_t* sprites,
+                      uint8_t access_type, uint8_t access_param);
+
+// Main cycle function
+void vicii_common_cycle(vicii_common_t* vicii);
+
+// ========================================================================================
+// HIGH-LEVEL API (LEGACY COMPATIBILITY)
+// ========================================================================================
 
 // Factory and lifecycle
 vicii_common_t* vicii_common_system_create(chip_descriptor_t* desc, void (*bank_change)(void*, uint8_t));
@@ -359,42 +431,15 @@ void vicii_common_system_destroy(void* chip);
 // Bus attachment
 void vicii_common_bus_attach(void* chip, void* bus);
 
-// Register I/O
+// Register I/O (legacy wrappers)
 uint8_t vicii_common_registers_read(void* chip, uint16_t address);
 void vicii_common_registers_write(void* chip, uint16_t address, uint8_t value);
 
 // Bank change callback
 void vicii_common_bank_change(void* chip, uint8_t bank);
 
-// Cycle logic, parameterized by cycles_per_line and total_lines
-void vicii_common_cycle(vicii_common_t* vicii);
-
-// Internal helper functions
-void vicii_common_initialize(vicii_common_t* vicii);
-void vicii_common_update_graphics_mode(vicii_common_t* vicii);
-void vicii_common_update_border_limits(vicii_common_t* vicii);
-void vicii_common_handle_raster_interrupt(vicii_common_t* vicii);
-
-// VIC-II memory access functions
-uint8_t vicii_memory_read(vicii_common_t* vicii, uint16_t address);
-void vicii_update_bank_mapping(vicii_common_t* vicii, uint8_t bank);
-
-// Character and graphics access functions
-void vicii_common_g_access(vicii_common_t* vicii);
-
-// Pixel emission functions
-void vicii_common_emit_border_pixels(vicii_common_t* vicii);
-void vicii_common_emit_graphics_pixels(vicii_common_t* vicii, uint8_t data);
-
-// Frame buffer output functions
-void vicii_common_flush_pixel_line_to_output(vicii_common_t* vicii, uint32_t* palette, int y);
+// Utility functions
 uint32_t* vicii_common_get_default_palette(void);
 void vicii_common_set_framebuffer(vicii_common_t* vicii, uint32_t* framebuffer, int width, int height);
-
-// VIC-II banking constants
-#define VICII_BANK_0_BASE    0x0000  // Bank 0: $0000-$3FFF
-#define VICII_BANK_1_BASE    0x4000  // Bank 1: $4000-$7FFF
-#define VICII_BANK_2_BASE    0x8000  // Bank 2: $8000-$BFFF
-#define VICII_BANK_3_BASE    0xC000  // Bank 3: $C000-$FFFF
 
 #endif // VICII_COMMON_H

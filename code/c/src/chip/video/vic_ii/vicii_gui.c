@@ -19,9 +19,9 @@ static const char* get_vic_type_name(vicii_common_t* vicii) {
 }
 
 static const char* get_video_standard(vicii_common_t* vicii) {
-    if (vicii->cycles_per_line == 65 && vicii->total_lines == 262) {
+    if (vicii->timing.cycles_per_line == 65 && vicii->timing.total_lines == 262) {
         return "NTSC 60Hz";
-    } else if (vicii->cycles_per_line == 63 && vicii->total_lines == 312) {
+    } else if (vicii->timing.cycles_per_line == 63 && vicii->timing.total_lines == 312) {
         return "PAL 50Hz";
     }
     return "Unknown";
@@ -60,29 +60,29 @@ void vicii_render_common_debug_window(void* chip, bool* show_window, const char*
     // Basic chip information
     if (igCollapsingHeader_TreeNodeFlags("Chip Information", ImGuiTreeNodeFlags_DefaultOpen)) {
         igText("Video Standard: %s", get_video_standard(vicii));
-        igText("Cycles per Line: %d", vicii->cycles_per_line);
-        igText("Total Lines: %d", vicii->total_lines);
-        igText("Current Bank: %d", vicii->bank);
+        igText("Cycles per Line: %d", vicii->timing.cycles_per_line);
+        igText("Total Lines: %d", vicii->timing.total_lines);
+        igText("Current Bank: %d", vicii->memory.bank);
     }
     
     // Raster information
     if (igCollapsingHeader_TreeNodeFlags("Raster Information", ImGuiTreeNodeFlags_DefaultOpen)) {
-        igText("Raster Line: %d", vicii->raster_counter);
-        igText("Raster Cycle: %d", vicii->x_cycle);
-        igText("Badline Condition: %s", vicii->is_bad_line ? "YES" : "NO");
-        igText("X Coordinate: %d", vicii->x_coordinate);
+        igText("Raster Line: %d", vicii->timing.raster_counter);
+        igText("Raster Cycle: %d", vicii->timing.x_cycle);
+        igText("Badline Condition: %s", vicii->video_logic.is_bad_line ? "YES" : "NO");
+        igText("X Coordinate: %d", vicii->timing.x_coordinate);
         
         // Progress bar for raster position
-        float raster_progress = (float)vicii->raster_counter / (float)vicii->total_lines;
+        float raster_progress = (float)vicii->timing.raster_counter / (float)vicii->timing.total_lines;
         igProgressBar(raster_progress, (ImVec2){-1, 0}, NULL);
         igText("Raster Progress: %.1f%%", raster_progress * 100.0f);
     }
     
     // Control registers
     if (igCollapsingHeader_TreeNodeFlags("Control Registers", ImGuiTreeNodeFlags_DefaultOpen)) {
-        uint8_t cr1 = vicii->registers[0x11];
-        uint8_t cr2 = vicii->registers[0x16];
-        uint8_t memory_setup = vicii->registers[0x18];
+        uint8_t cr1 = vicii->registers.data[0x11];
+        uint8_t cr2 = vicii->registers.data[0x16];
+        uint8_t memory_setup = vicii->registers.data[0x18];
         
         igText("Control Register 1 ($D011): $%02X", cr1);
         igIndent(20.0f);
@@ -110,8 +110,8 @@ void vicii_render_common_debug_window(void* chip, bool* show_window, const char*
     
     // Display position and scrolling
     if (igCollapsingHeader_TreeNodeFlags("Display Position", ImGuiTreeNodeFlags_DefaultOpen)) {
-        uint8_t cr1 = vicii->registers[0x11];
-        uint8_t cr2 = vicii->registers[0x16];
+        uint8_t cr1 = vicii->registers.data[0x11];
+        uint8_t cr2 = vicii->registers.data[0x16];
         
         igText("Horizontal Scroll: %d", cr2 & 0x07);
         igText("Vertical Scroll: %d", cr1 & 0x07);
@@ -122,20 +122,20 @@ void vicii_render_common_debug_window(void* chip, bool* show_window, const char*
     
     // Sprites
     if (igCollapsingHeader_TreeNodeFlags("Sprites", ImGuiTreeNodeFlags_None)) {
-        uint8_t sprite_enable = vicii->registers[0x15];
-        uint8_t sprite_x_msb = vicii->registers[0x10];
-        uint8_t sprite_multicolor = vicii->registers[0x1C];
-        uint8_t sprite_priority = vicii->registers[0x1B];
-        uint8_t sprite_expand_x = vicii->registers[0x1D];
-        uint8_t sprite_expand_y = vicii->registers[0x17];
+        uint8_t sprite_enable = vicii->registers.data[0x15];
+        uint8_t sprite_x_msb = vicii->registers.data[0x10];
+        uint8_t sprite_multicolor = vicii->registers.data[0x1C];
+        uint8_t sprite_priority = vicii->registers.data[0x1B];
+        uint8_t sprite_expand_x = vicii->registers.data[0x1D];
+        uint8_t sprite_expand_y = vicii->registers.data[0x17];
         
-        for (int i = 0; i < 8; i++) {
+        for (int i = 0; i < VICII_NUM_SPRITES; i++) {
             // Push unique ID for each sprite to prevent conflicts
             igPushID_Int(i);
             
             bool enabled = (sprite_enable >> i) & 1;
-            uint16_t x = vicii->registers[i * 2] | (((sprite_x_msb >> i) & 1) << 8);
-            uint8_t y = vicii->registers[i * 2 + 1];
+            uint16_t x = vicii->registers.data[i * 2] | (((sprite_x_msb >> i) & 1) << 8);
+            uint8_t y = vicii->registers.data[i * 2 + 1];
             bool multicolor = (sprite_multicolor >> i) & 1;
             bool priority = (sprite_priority >> i) & 1;
             bool expand_x = (sprite_expand_x >> i) & 1;
@@ -147,50 +147,50 @@ void vicii_render_common_debug_window(void* chip, bool* show_window, const char*
             // Use collapsing header instead of tree node for consistency
             if (igCollapsingHeader_BoolPtr(sprite_label, NULL, ImGuiTreeNodeFlags_None)) {
                 igText("Position: X=%d, Y=%d", x, y);
-                igText("Color: $%02X", vicii->registers[0x27 + i]);
+                igText("Color: $%02X", vicii->registers.data[0x27 + i]);
                 igText("Multicolor: %s", multicolor ? "YES" : "NO");
                 igText("Priority: %s", priority ? "Behind BG" : "In front of BG");
                 igText("Expand X: %s", expand_x ? "2x" : "1x");
                 igText("Expand Y: %s", expand_y ? "2x" : "1x");
-                igText("Data Pointer: $%02X", vicii->registers[0x3F8 + i]);
+                igText("Data Pointer: $%02X", vicii->registers.data[0x3F8 + i]);
             } else {
                 igSameLine(0, -1.0f);
-                igText("X=%d Y=%d Color=$%02X", x, y, vicii->registers[0x27 + i]);
+                igText("X=%d Y=%d Color=$%02X", x, y, vicii->registers.data[0x27 + i]);
             }
             
             igPopID(); // Pop sprite ID
         }
         
         igSeparator();
-        igText("Sprite Multicolor 0: $%02X", vicii->registers[0x25]);
-        igText("Sprite Multicolor 1: $%02X", vicii->registers[0x26]);
+        igText("Sprite Multicolor 0: $%02X", vicii->registers.data[0x25]);
+        igText("Sprite Multicolor 1: $%02X", vicii->registers.data[0x26]);
     }
     
     // Colors
     if (igCollapsingHeader_TreeNodeFlags("Colors", ImGuiTreeNodeFlags_None)) {
-        igText("Border Color: $%02X", vicii->registers[0x20]);
-        igText("Background Color 0: $%02X", vicii->registers[0x21]);
-        igText("Background Color 1: $%02X", vicii->registers[0x22]);
-        igText("Background Color 2: $%02X", vicii->registers[0x23]);
-        igText("Background Color 3: $%02X", vicii->registers[0x24]);
+        igText("Border Color: $%02X", vicii->registers.data[0x20]);
+        igText("Background Color 0: $%02X", vicii->registers.data[0x21]);
+        igText("Background Color 1: $%02X", vicii->registers.data[0x22]);
+        igText("Background Color 2: $%02X", vicii->registers.data[0x23]);
+        igText("Background Color 3: $%02X", vicii->registers.data[0x24]);
     }
     
     // Collision detection
     if (igCollapsingHeader_TreeNodeFlags("Collision Detection", ImGuiTreeNodeFlags_None)) {
-        igText("Sprite-Sprite Collision: $%02X", vicii->registers[VICII_REGS_SIZE]);
-        igText("Sprite-Background Collision: $%02X", vicii->registers[VICII_REGS_SIZE + 1]);
+        igText("Sprite-Sprite Collision: $%02X", vicii->registers.data[VICII_REGS_SIZE]);
+        igText("Sprite-Background Collision: $%02X", vicii->registers.data[VICII_REGS_SIZE + 1]);
         
         if (igButton("Clear Collisions", (ImVec2){0, 0})) {
             // Clear collision registers (would need to implement this properly)
-            vicii->registers[VICII_REGS_SIZE] = 0;
-            vicii->registers[VICII_REGS_SIZE + 1] = 0;
+            vicii->registers.data[VICII_REGS_SIZE] = 0;
+            vicii->registers.data[VICII_REGS_SIZE + 1] = 0;
         }
     }
     
     // Interrupt status
     if (igCollapsingHeader_TreeNodeFlags("Interrupts", ImGuiTreeNodeFlags_None)) {
-        uint8_t irq_status = vicii->registers[0x19];
-        uint8_t irq_enable = vicii->registers[0x1A];
+        uint8_t irq_status = vicii->registers.data[0x19];
+        uint8_t irq_enable = vicii->registers.data[0x1A];
         
         igText("IRQ Status ($D019): $%02X", irq_status);
         igIndent(20.0f);
@@ -209,7 +209,7 @@ void vicii_render_common_debug_window(void* chip, bool* show_window, const char*
         igText("Light Pen IRQ: %s", (irq_enable & 0x08) ? "ENABLED" : "disabled");
         igUnindent(20.0f);
         
-        uint16_t raster_irq = vicii->registers[0x12] | ((vicii->registers[0x11] & 0x80) << 1);
+        uint16_t raster_irq = vicii->registers.data[0x12] | ((vicii->registers.data[0x11] & 0x80) << 1);
         igText("Raster IRQ Line: %d", raster_irq);
     }
     
@@ -221,7 +221,7 @@ void vicii_render_common_debug_window(void* chip, bool* show_window, const char*
             pos += snprintf(line + pos, sizeof(line) - pos, "$D%03X: ", 0x000 + i);
             
             for (int j = 0; j < 8 && (i + j) < 47; j++) {
-                pos += snprintf(line + pos, sizeof(line) - pos, "%02X ", vicii->registers[i + j]);
+                pos += snprintf(line + pos, sizeof(line) - pos, "%02X ", vicii->registers.data[i + j]);
             }
             
             igText("%s", line);
@@ -250,7 +250,7 @@ void vicii_render_common_settings_window(void* chip, bool* show_window, const ch
     
     igText("Chip Type: %s", get_vic_type_name(vicii));
     igText("Video Standard: %s", get_video_standard(vicii));
-    igText("Timing: %d cycles/line, %d lines/frame", vicii->cycles_per_line, vicii->total_lines);
+    igText("Timing: %d cycles/line, %d lines/frame", vicii->timing.cycles_per_line, vicii->timing.total_lines);
     
     igSeparator();
     
