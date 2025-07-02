@@ -329,7 +329,7 @@ void vic_registers_write(vicii_common_t* vicii, uint16_t address, uint8_t value)
         case VICII_MM1: // $d026 (4 bits) Sprite multicolor 1
             // Global sprite multicolor registers - update all sprites with pre-masked value
             for (int i = 0; i < VICII_NUM_SPRITES; i++) {
-                vicii->sprites.sprites[i].color = value; // value already masked to 0x0F above
+                // MM0/MM1 are global multicolor registers, not per-sprite
             }
             break;
         default:
@@ -643,7 +643,7 @@ void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, uint8_t acces
     if (!vicii->bus.bus) return;
     
     uint16_t address;
-    uint8_t data;
+    uint8_t data = 0;
     
     switch (access_type) {
         case VIC_ACCESS_P:
@@ -1024,7 +1024,7 @@ void vicii_common_system_destroy(void* chip) {
     }
 }
 
-static inline void vicii_common_bus_attach(void* chip, void* bus) {
+void vicii_common_bus_attach(void* chip, void* bus) {
     ((vicii_common_t*)chip)->bus.bus = bus;
 }
 

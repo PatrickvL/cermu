@@ -277,7 +277,7 @@ static void c64_bus_adapter_bus_write_cycle(void* context, uint16_t address, uin
 
 static void c64_bus_adapter_non_cpu_cycle(void* context) {
     c64_bus_t* c64_bus = (c64_bus_t*)context;
-    c64_non_cpu_cycle(c64_bus->c64);
+    c64_non_cpu_cycle(c64_bus->c64, true, false);
 }
 
 // Control lines adapter functions
