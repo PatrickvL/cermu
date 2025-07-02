@@ -9,8 +9,8 @@
 void* mos6569_system_create(chip_descriptor_t* desc) {
     vicii_common_t* vicii = vicii_common_system_create(desc, mos6569_bank_change);
     if (vicii) {
-        vicii->cycles_per_line = MOS6569_CYCLES_PER_LINE;
-        vicii->total_lines    = MOS6569_TOTAL_LINES;
+        vicii->timing.cycles_per_line = MOS6569_CYCLES_PER_LINE;
+        vicii->timing.total_lines    = MOS6569_TOTAL_LINES;
     }
     return vicii;
 }

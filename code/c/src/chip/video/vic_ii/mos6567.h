@@ -3,6 +3,10 @@
 
 #include "vicii_common.h"
 
+// MOS6567 NTSC timing constants (aliases for consistency)
+#define MOS6567_CYCLES_PER_LINE  VICII_NTSC_CYCLES_PER_LINE
+#define MOS6567_TOTAL_LINES      VICII_NTSC_TOTAL_LINES
+
 typedef vicii_common_t mos6567_t;
 
 // Lifecycle and bus attach

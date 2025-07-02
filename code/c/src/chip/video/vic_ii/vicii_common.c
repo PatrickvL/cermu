@@ -106,7 +106,7 @@ static inline void vic_memory_update_mapping(vic_memory_unit_t* memory, uint8_t 
                                (memory->cb_base == 0x9000));
 }
 
-uint8_t vic_memory_read(vicii_common_t* vicii, uint16_t address) {
+uint8_t vic_memory_read(vicii_common_t* vicii, int16_t address) {
     if (!vicii->bus.bus) return 0xFF;
     
     c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
@@ -124,6 +124,33 @@ uint8_t vic_memory_read(vicii_common_t* vicii, uint16_t address) {
     }
     
     return c64_bus_memory_read(c64_bus, vic_address);
+}
+
+// ========================================================================================
+// VIDEO LOGIC UNIT FUNCTIONS
+// ========================================================================================
+
+// Update bad line condition (Documentation section 3.5)
+void vic_update_badline_condition(vicii_common_t* vicii) {
+    uint16_t raster = vicii->timing.raster_counter;
+    
+    // ""A Bad Line Condition is given at any arbitrary clock cycle, if at the
+    // negative edge of ø0 at the beginning of the cycle RASTER >= $30 and RASTER
+    // <= $f7 and the lower three bits of RASTER are equal to YSCROLL and if the
+    // DEN bit was set during an arbitrary cycle of raster line $30.""
+    // Single range check instead of two comparisons
+    if ((raster - 48) < 200) {  // Equivalent to raster >= 48 && raster < 248
+        if (raster == 0x30) {
+            if (!vicii->video_logic.was_den_set_during_raster_30) {
+                vicii->video_logic.was_den_set_during_raster_30 = 
+                    (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;  // Avoid > 0 comparison
+            }
+        }
+        vicii->video_logic.is_bad_line = vicii->video_logic.was_den_set_during_raster_30 &&
+                                 ((raster & 0x07) == (vicii->registers.data[VICII_C1] & VICII_C1_YSCROLL));
+    } else {
+        vicii->video_logic.is_bad_line = false;
+    }
 }
 
 // ========================================================================================
@@ -351,33 +378,6 @@ uint8_t vic_registers_read(vicii_common_t* vicii, uint16_t address) {
 		    } else {
 		        return data;                                        // 47-63 $d02f-$d03f unattached registers (many docs say: give $ff on reading)
 		    }
-    }
-}
-
-// ========================================================================================
-// VIDEO LOGIC UNIT FUNCTIONS
-// ========================================================================================
-
-// Update bad line condition (Documentation section 3.5)
-void vic_update_badline_condition(vicii_common_t* vicii) {
-    uint16_t raster = vicii->timing.raster_counter;
-    
-    // ""A Bad Line Condition is given at any arbitrary clock cycle, if at the
-    // negative edge of ø0 at the beginning of the cycle RASTER >= $30 and RASTER
-    // <= $f7 and the lower three bits of RASTER are equal to YSCROLL and if the
-    // DEN bit was set during an arbitrary cycle of raster line $30.""
-    // Single range check instead of two comparisons
-    if ((raster - 48) < 200) {  // Equivalent to raster >= 48 && raster < 248
-        if (raster == 0x30) {
-            if (!vicii->video_logic.was_den_set_during_raster_30) {
-                vicii->video_logic.was_den_set_during_raster_30 = 
-                    (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;  // Avoid > 0 comparison
-            }
-        }
-        vicii->video_logic.is_bad_line = vicii->video_logic.was_den_set_during_raster_30 &&
-                                 ((raster & 0x07) == (vicii->registers.data[VICII_C1] & VICII_C1_YSCROLL));
-    } else {
-        vicii->video_logic.is_bad_line = false;
     }
 }
 
