@@ -2,6 +2,7 @@
 #include "c64.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>  // For printf (debug)
 
 /*
  * OPTIMIZED MEMORY ACCESS - Based on fast banking system
@@ -35,6 +36,7 @@ uint8_t c64_bus_memory_read(c64_bus_t *bus, uint16_t address) {
     uint8_t encoded = bus->encoded_rwid_per_bank[bank];  // Get banking info for this bank
     uint8_t is_io = -(encoded == 0);  // Branchless I/O detection
     uint8_t acid = (((encoded & 0xF) + ACID_IO2_DF) & ~is_io) | (((address >> 8) & 0xF) & is_io);
+    
     return bus->read_callbacks[acid].read(bus->read_callbacks[acid].context, address);
 }
 
@@ -98,6 +100,7 @@ chip_descriptor_t c64_bus_descriptor = {
 void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {
     // Update the optimized banking for the current mode
     c64_bus->pla_banking_mode = mode & 0x1F;
+    
     memcpy(c64_bus->encoded_rwid_per_bank, c64_bus->encoded_rwid_per_bank_per_mode[mode], 16);
 }
 
@@ -218,17 +221,22 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
         pla_impl->inputs.n_exrom = (mode & 0x08) == 0;    // EXROM (inverted)
         pla_impl->inputs.n_game = (mode & 0x10) == 0;     // GAME (inverted)
         
-        // Set other inputs for normal CPU operation
-        pla_impl->inputs.aec = true;     // CPU has bus control
-        pla_impl->inputs.ba = true;      // Bus available
-        pla_impl->inputs.r_w = true;     // Read mode
-        pla_impl->inputs.n_cas = true;   // No CAS
-        pla_impl->inputs.n_va14 = true;  // VA14 high
-        pla_impl->inputs.va13 = false;   // VA13 low
-        pla_impl->inputs.va12 = false;   // VA12 low
-        pla_impl->inputs.n_ce = false;   // Chip enabled
+        // Set other inputs for normal CPU operation (not VIC-II access)
+        pla_impl->inputs.aec = true;      // CPU has bus control (AEC high = CPU access)
+        pla_impl->inputs.ba = true;       // Bus available (BA high = no DMA)
+        pla_impl->inputs.r_w = true;      // Read mode (will be toggled for write mode)
+        pla_impl->inputs.n_cas = true;    // No CAS (CAS inactive for CPU access)
+        pla_impl->inputs.n_ce = false;    // Chip enabled (CE active)
+        
+        // VIC-II address bits - not relevant for CPU mapping, set to safe defaults
+        pla_impl->inputs.n_va14 = true;   // VA14 inactive
+        pla_impl->inputs.va13 = false;    // VA13 low
+        pla_impl->inputs.va12 = false;    // VA12 low
+        
+        // CPU address bits will be set during populate_pla_mapping for each bank
         // Populate mapping for this mode
         c64_bus_populate_pla_mapping(bus, pla);
+        
         // Copy the mapping to the mode-specific array
         memcpy(bus->encoded_rwid_per_bank_per_mode[mode], bus->encoded_rwid_per_bank, 16);
     }

@@ -197,8 +197,8 @@ bool c64_pla_maps_generate(c64_t* c64) {
     // Clean up PLA instance
     pla_906114_01_destroy(pla);
     
-    // Set initial bank mapping to mode 31 (all signals high) using proper mode switch
-    c64_bus_mode_switch(bus, 0x1F);
+    // Set initial bank mapping to mode 1 (known to enable Kernal ROM) using proper mode switch
+    c64_bus_mode_switch(bus, 0x01);
     return true;
 }
 
