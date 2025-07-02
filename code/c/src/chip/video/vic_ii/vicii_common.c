@@ -106,7 +106,7 @@ static inline void vic_memory_update_mapping(vic_memory_unit_t* memory, uint8_t 
                                (memory->cb_base == 0x9000));
 }
 
-uint8_t vic_memory_read(vicii_common_t* vicii, int16_t address) {
+uint8_t vic_memory_read(vicii_common_t* vicii, uint16_t address) {
     if (!vicii->bus.bus) return 0xFF;
     
     c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
