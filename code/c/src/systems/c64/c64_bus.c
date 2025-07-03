@@ -140,67 +140,63 @@ void c64_bus_write_cycle(c64_bus_t* c64_bus, uint16_t addr, uint8_t value) {
 // PLA integration functions
 #include "../../chip/logic/pla.h"
 
-void c64_bus_populate_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla) {
+uint8_t pla_906114_01_outputs_to_acid(pla_906114_01_t* pla) {
+    if (!pla->outputs.n_casram) {
+        // Main RAM (read/write)
+        return ACID_RAM;
+    } else if (!pla->outputs.n_basic) {
+        // BASIC ROM (read-only)
+        return ACID_BASIC;
+    } else if (!pla->outputs.n_kernal) {
+        // KERNAL ROM (read-only)
+        return ACID_KERNAL;
+    } else if (!pla->outputs.n_charrom) {
+        // Character ROM (read-only)
+        return ACID_CHARROM;
+    } else if (!pla->outputs.gr_w) {
+        // Color RAM (write-only)
+        return ACID_COLORRAM_D8;
+    } else if (!pla->outputs.n_io) {
+        // I/O region - I/O bank (read-write)
+        return ACID_VIC_D0; // c64_bus_memory_read will handle mapping to full 16 I/O pages
+    } else if (!pla->outputs.n_roml) {
+        // Cartridge ROM Low (read-only)
+        return ACID_ROML;
+    } else if (!pla->outputs.n_romh) {
+        // Cartridge ROM High (read-only)
+        return ACID_ROMH;
+    }
+
+    return ACID_UNMAPPED;
+}
+
+void c64_bus_populate_cpu_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla) {
+    // Set other inputs for normal CPU operation (not VIC-II access)
+    pla->inputs.n_aec = false;   // CPU has bus control (AEC high (#EAC low) = CPU access)
+    pla->inputs.ba = true;       // Bus available (BA high = no DMA)
+    pla->inputs.n_cas = true;    // No CAS (CAS inactive for CPU access)
     // Map memory regions based on PLA outputs
     for (uint32_t bank = 0; bank < 16; bank++) {
-        // Initialize read/write ACIDs
-        uint8_t read_acid = ACID_UNMAPPED;
-        uint8_t write_acid = ACID_UNMAPPED;
-        // Set address in PLA
-        pla_906114_01_set_address_high((pla_906114_01_t*)pla, (uint8_t)bank);
-        
         // Configure PLA for READ mode
-        ((pla_906114_01_t*)pla)->inputs.r_w = true;  // Read mode
-        pla_906114_01_update_outputs((pla_906114_01_t*)pla);
-        
+        pla->inputs.r_w = true;  // Read mode
+        // Set address in PLA (will call pla_906114_01_update_outputs)
+        pla_906114_01_set_cpu_address_bank((pla_906114_01_t*)pla, (uint8_t)bank);
         // Determine read ACID based on PLA outputs for read mode
-        if (!pla->outputs.n_casram) {
-            // RAM is selected
-            if (bank == 0) {
-                // Special handling for CPU I/O ports in zero bank (4KB bank $0000-$0FFF)
-                read_acid = ACID_ZEROBANK;
-            } else {
-                // Main RAM (read/write)
-                read_acid = ACID_RAM;
-            }
-        } else if (!pla->outputs.n_basic) {
-            // BASIC ROM (read-only)
-            read_acid = ACID_BASIC;
-        } else if (!pla->outputs.n_kernal) {
-            // KERNAL ROM (read-only)
-            read_acid = ACID_KERNAL;
-        } else if (!pla->outputs.n_charrom) {
-            // Character ROM (read-only)
-            read_acid = ACID_CHARROM;
-        } else if (!pla->outputs.n_io) {
-            // I/O region - I/O bank (read-write)
-            read_acid = ACID_VIC_D0; // c64_bus_memory_read will handle mapping to full 16 I/O pages
-        } else if (!pla->outputs.n_roml) {
-            // Cartridge ROM Low (read-only)
-            read_acid = ACID_ROML;
-        } else if (!pla->outputs.n_romh) {
-            // Cartridge ROM High (read-only)
-            read_acid = ACID_ROMH;
+        uint8_t read_acid = pla_906114_01_outputs_to_acid((pla_906114_01_t*)pla);
+        // Special handling for CPU I/O ports in zero bank (4KB bank $0000-$0FFF)
+        if (bank == 0 && read_acid == ACID_RAM) {
+            read_acid = ACID_ZEROBANK;
         }
-        
+
         // Configure PLA for WRITE mode
-        ((pla_906114_01_t*)pla)->inputs.r_w = false;  // Write mode
+        pla->inputs.r_w = false;  // Write mode
         pla_906114_01_update_outputs((pla_906114_01_t*)pla);
-        
-        // Determine write ACID based on PLA outputs for write mode
-        if (!pla->outputs.n_casram) {
-            // RAM is selected
-            if (bank == 0) {
-                // Special handling for CPU I/O ports in zero bank (4KB bank $0000-$0FFF)
-                write_acid = ACID_ZEROBANK;
-            } else {
-                // Main RAM (read/write)
-                write_acid = ACID_RAM;
-            }
-        } else if (!pla->outputs.n_io) {
-            // I/O region - I/O bank (read-write)
-            write_acid = ACID_VIC_D0; // c64_bus_memory_write will handle mapping to full 16 I/O pages
+        uint8_t write_acid = pla_906114_01_outputs_to_acid((pla_906114_01_t*)pla);
+        // Special handling for CPU I/O ports in zero bank (4KB bank $0000-$0FFF)
+        if (bank == 0 && write_acid == ACID_RAM) {
+            write_acid = ACID_ZEROBANK;
         }
+        
         // Note: ROM areas (BASIC, KERNAL, Character ROM, Cartridge) are not writable, 
         // so write_acid remains ACID_UNMAPPED for those regions
         
@@ -209,36 +205,48 @@ void c64_bus_populate_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla) {
     }
 }
 
+void c64_bus_populate_vicii_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla) {
+    // Set other inputs for VIC-II access (not normal CPU operation)
+    pla->inputs.n_aec = true;   // VIC-II has bus control (AEC low (#EAC high) = VIC-II access)
+    pla->inputs.ba = false;     // Bus available (BA low = DMA)
+    pla->inputs.n_cas = true;   // No CAS (CAS inactive for CPU access)
+    // Configure PLA for READ mode
+    pla->inputs.r_w = true;      // Read mode
+
+    // Map memory regions based on PLA outputs
+    for (uint32_t bank = 0; bank < 16; bank++) {
+        // Set address in PLA (will call pla_906114_01_update_outputs)
+        pla_906114_01_set_vicii_address_bank((pla_906114_01_t*)pla, (uint8_t)bank);
+        // Determine read ACID based on PLA outputs for read mode
+        uint8_t read_acid = pla_906114_01_outputs_to_acid((pla_906114_01_t*)pla, bank);
+
+        const uint8_t write_acid = ACID_UNMAPPED;
+        
+        // Encode both read and write ACIDs into the mapping
+        bus->encoded_rwid_per_bank[bank] = encode_acid_rw(read_acid, write_acid);
+    }
+}
+
 void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla) {
-    pla_906114_01_t* pla_impl = (pla_906114_01_t*)pla;
-    
     // Generate all 32 memory modes (5-bit combinations of LORAM, HIRAM, CHAREN, EXROM, GAME)
+    // below code will 
     for (int mode = 0; mode < 32; mode++) {
         // Set PLA inputs based on mode
-        pla_impl->inputs.n_loram = (mode & 0x01) == 0;    // LORAM (inverted)
-        pla_impl->inputs.n_hiram = (mode & 0x02) == 0;    // HIRAM (inverted)
-        pla_impl->inputs.n_charen = (mode & 0x04) == 0;   // CHAREN (inverted)
-        pla_impl->inputs.n_exrom = (mode & 0x08) == 0;    // EXROM (inverted)
-        pla_impl->inputs.n_game = (mode & 0x10) == 0;     // GAME (inverted)
-        
-        // Set other inputs for normal CPU operation (not VIC-II access)
-        pla_impl->inputs.aec = true;      // CPU has bus control (AEC high = CPU access)
-        pla_impl->inputs.ba = true;       // Bus available (BA high = no DMA)
-        pla_impl->inputs.r_w = true;      // Read mode (will be toggled for write mode)
-        pla_impl->inputs.n_cas = true;    // No CAS (CAS inactive for CPU access)
-        pla_impl->inputs.n_ce = false;    // Chip enabled (CE active)
-        
-        // VIC-II address bits - not relevant for CPU mapping, set to safe defaults
-        pla_impl->inputs.n_va14 = true;   // VA14 inactive
-        pla_impl->inputs.va13 = false;    // VA13 low
-        pla_impl->inputs.va12 = false;    // VA12 low
-        
+        pla->inputs.n_loram = (mode & 0x01) == 0;    // LORAM (inverted)
+        pla->inputs.n_hiram = (mode & 0x02) == 0;    // HIRAM (inverted)
+        pla->inputs.n_charen = (mode & 0x04) == 0;   // CHAREN (inverted)
+        pla->inputs.n_exrom = (mode & 0x08) == 0;    // EXROM (inverted)
+        pla->inputs.n_game = (mode & 0x10) == 0;     // GAME (inverted)
         // CPU address bits will be set during populate_pla_mapping for each bank
         // Populate mapping for this mode
-        c64_bus_populate_pla_mapping(bus, pla);
-        
+        c64_bus_populate_cpu_pla_mapping(bus, pla);
         // Copy the mapping to the mode-specific array
         memcpy(bus->encoded_rwid_per_bank_per_mode[mode], bus->encoded_rwid_per_bank, 16);
+/*
+        c64_bus_populate_vicii_pla_mapping(bus, pla);        
+        // Copy the mapping to the mode-specific array
+        memcpy(bus->vic_encoded_rwid_per_bank_per_mode[mode], bus->encoded_rwid_per_bank, 16);
+*/
     }
 }
 
@@ -254,12 +262,8 @@ uint8_t c64_bus_generate_pla_mode(c64_bus_t* c64_bus, uint8_t cpu_port_bits) {
     // Bit 3: EXROM (from cartridge signal)
     // Bit 4: GAME (from cartridge signal)
     
-    uint8_t pla_mode = 0;
-    
     // Extract CPU I/O port control bits (bits 0-2 of $0001)
-    pla_mode |= (cpu_port_bits & 0x01);      // LORAM (bit 0)
-    pla_mode |= (cpu_port_bits & 0x02);      // HIRAM (bit 1)
-    pla_mode |= (cpu_port_bits & 0x04);      // CHAREN (bit 2)
+    uint8_t pla_mode = cpu_port_bits & 0x07; // LORAM (bit 0) | HIRAM (bit 1) | CHAREN (bit 2)
     
     // Add cartridge control signals from system lines
     pla_mode |= ((c64_bus->system_lines & SYS_MASK_EXROM) ? 0x08 : 0); // EXROM (bit 3)
