@@ -121,7 +121,7 @@ void c64_bus_register_chip_callbacks(c64_bus_t* bus, uint8_t acid, void* context
 struct pla_906114_01_s;
 
 // PLA-based bus mapping functions
-void c64_bus_populate_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla);
+void c64_bus_populate_cpu_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla);
 
 // Generate all 32 memory modes using PLA
 void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla);

@@ -15,14 +15,13 @@ pla_906114_01_t* pla_906114_01_create(void) {
     pla->inputs.n_loram = true;     // Low RAM enabled
     pla->inputs.n_cas = true;       // No CAS initially
     pla->inputs.n_va14 = true;      // VA14 high
-    pla->inputs.aec = true;         // CPU has bus control
+    pla->inputs.n_aec = false;      // CPU has bus control
     pla->inputs.ba = true;          // Bus available
     pla->inputs.r_w = true;         // Read mode
     pla->inputs.n_exrom = true;     // No external ROM
     pla->inputs.n_game = true;      // No game cartridge
     pla->inputs.va13 = false;       // VA13 low
     pla->inputs.va12 = false;       // VA12 low
-    pla->inputs.n_ce = false;       // Chip enabled
     
     // Update outputs based on initial inputs
     pla_906114_01_update_outputs(pla);
@@ -34,20 +33,59 @@ void pla_906114_01_destroy(pla_906114_01_t* pla) {
     free(pla);
 }
 
-void pla_906114_01_set_address_high(pla_906114_01_t* pla, uint8_t addr_high) {
-    pla->inputs.a12 = (addr_high & 0x01) != 0;
-    pla->inputs.a13 = (addr_high & 0x02) != 0;
-    pla->inputs.a14 = (addr_high & 0x04) != 0;
-    pla->inputs.a15 = (addr_high & 0x08) != 0;
-    
-    pla_906114_01_update_outputs(pla);
+// Check for Ultimax mode (#GAME = 0, #EXROM = 1)
+bool pla_906114_01_is_ultimax_mode(pla_906114_01_t* pla) {
+    return pla->inputs.n_exrom && !pla->inputs.n_game;
 }
 
-void pla_906114_01_set_vic_address(pla_906114_01_t* pla, uint8_t va_high) {
-    pla->inputs.va12 = (va_high & 0x01) != 0;
-    pla->inputs.va13 = (va_high & 0x02) != 0;
+void pla_906114_01_set_cpu_address_bank(pla_906114_01_t* pla, uint8_t high_nybble) {
+    if (pla_906114_01_is_ultimax_mode(pla)) {
+        // "The address bus lines A15 to A12 (I5 to I8) are connected to the global address bus.
+        // They are driven by the CPU when AEC from the VIC-II and #DMA from the Expansion
+        // Port are both high. During VIC-II cycles, when AEC is low, they are pulled up by RP4.
+        // When they are pulled up by this resistor array only, it is possible to change them from  the Expansion Port.
+        // These address lines are used by the PLA to control the memory
+        // mapping when AEC is high, i.e. during CPU cycles. However,
+        // they are also evaluated in the PLA in Ultimax mode when AEC is low"
+        // (which means when the VIC-II has bus control).
+        if (pla->inputs.n_aec) {
+            // "The address lines A12 to A15 of the C64 address
+            // bus are pulled up by RP4 whenever the VIC-II has
+            // the bus, so they are %1111 usually"
+            uint8_t rp4 = 0x0F; // RP4 pulls A12-A15 high in Ultimax mode TODO : Let cardridge / exrom set this
+
+            high_nybble = rp4;
+        }
+    }
+
+    pla->inputs.a12 = (high_nybble & 0x01) != 0;
+    pla->inputs.a13 = (high_nybble & 0x02) != 0;
+    pla->inputs.a14 = (high_nybble & 0x04) != 0;
+    pla->inputs.a15 = (high_nybble & 0x08) != 0;
     
     pla_906114_01_update_outputs(pla);
+}    
+
+void pla_906114_01_set_vicii_address_bank(pla_906114_01_t* pla, uint8_t high_nybble) {
+    pla->inputs.va12 = (high_nybble & 0x01) != 0;
+    pla->inputs.va13 = (high_nybble & 0x02) != 0;
+    pla->inputs.n_va14 = (high_nybble & 0x04) == 0; // VA14 is inverted in the PLA
+    // Note that the VIC-II itself only has 14 address lines,
+    // which can only address 16KB of memory. However, VIC-II
+    // memory accesses use the upper 2 bits (VA14, VA15) from CIA2,
+    // as set via vicii_common_bank_change().
+    // Here, we don't care since we're only initializing the
+    // VIC-II bank mapping using the PLA logic.   
+
+    // Also apply the same bank bits to the a12-a15 :
+    pla_906114_01_set_cpu_address_bank(pla, high_nybble);
+}
+
+void pla_906114_01_set_cardrigde_mode(pla_906114_01_t* pla, uint8_t high_nybble) {
+    // "#EXROM, #GAME (I12, I13)
+    // The two lines #EXROM and #GAME can be pulled down by cartridges to change the
+    // memory map of the C64, e.g., to map external ROM into the address space. When they
+    // are not pulled down from the cartridge port, resistors in RP4 pull them up."
 }
 
 void pla_906114_01_update_outputs(pla_906114_01_t* pla) {
@@ -58,9 +96,8 @@ void pla_906114_01_update_outputs(pla_906114_01_t* pla) {
     bool a15 = pla->inputs.a15;
     bool va12 = pla->inputs.va12;
     bool va13 = pla->inputs.va13;
-    bool n_va14 = !pla->inputs.n_va14;  // Note: inverted in hardware
-    bool aec = pla->inputs.aec;
-    bool n_aec = !aec;
+    bool n_va14 = pla->inputs.n_va14;
+    bool n_aec = pla->inputs.n_aec;
     bool n_cas = pla->inputs.n_cas;
     bool n_charen = pla->inputs.n_charen;
     bool n_exrom = pla->inputs.n_exrom;

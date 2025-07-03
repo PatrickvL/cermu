@@ -19,7 +19,7 @@ void test_pla_logic() {
     pla->inputs.n_loram = false;  // LORAM=1 (signal inverted, so false = enabled)
     pla->inputs.n_hiram = false;  // HIRAM=1 (signal inverted, so false = enabled) 
     pla->inputs.n_charen = false; // CHAREN=1 (signal inverted, so false = I/O enabled)
-    pla->inputs.aec = true;       // CPU has bus control
+    pla->inputs.n_aec = false;    // CPU has bus control
     pla->inputs.r_w = true;       // Read mode
     pla->inputs.n_game = true;    // No game cartridge (signal inverted, so true = no cart)
     pla->inputs.n_exrom = true;   // No external ROM (signal inverted, so true = no ROM)
@@ -36,13 +36,13 @@ void test_pla_logic() {
     
     // Test BASIC ROM access ($A000-$BFFF) - should be enabled
     printf("\nTesting BASIC ROM access ($A000) with LORAM=1, HIRAM=1:\n");
-    pla_906114_01_set_address_high(pla, 0x0A);  // $A000
+    pla_906114_01_set_cpu_address_bank(pla, 0x0A);  // $A000
     printf("  BASIC: %s\n", pla->outputs.n_basic ? "disabled" : "enabled");
     printf("  CASRAM: %s\n", pla->outputs.n_casram ? "disabled" : "enabled");
     
     // Test I/O access ($D000-$DFFF) - should be enabled with CHAREN=1
     printf("\nTesting I/O access ($D000) with CHAREN=1:\n");
-    pla_906114_01_set_address_high(pla, 0x0D);  // $D000
+    pla_906114_01_set_cpu_address_bank(pla, 0x0D);  // $D000
     printf("  I/O: %s\n", pla->outputs.n_io ? "disabled" : "enabled");
     printf("  CHARROM: %s\n", pla->outputs.n_charrom ? "disabled" : "enabled");
     
@@ -55,7 +55,7 @@ void test_pla_logic() {
     
     // Test KERNAL ROM access ($E000-$FFFF) - should be enabled
     printf("\nTesting KERNAL ROM access ($E000) with HIRAM=1:\n");
-    pla_906114_01_set_address_high(pla, 0x0E);  // $E000
+    pla_906114_01_set_cpu_address_bank(pla, 0x0E);  // $E000
     printf("  KERNAL: %s\n", pla->outputs.n_kernal ? "disabled" : "enabled");
     printf("  CASRAM: %s\n", pla->outputs.n_casram ? "disabled" : "enabled");
     
@@ -80,7 +80,7 @@ void test_memory_modes() {
     pla->inputs.n_charen = true;  // Don't care
     pla->inputs.n_game = true;    // No game cartridge
     pla->inputs.n_exrom = true;   // No external ROM
-    pla->inputs.aec = true;       // CPU has bus control
+    pla->inputs.n_aec = false;    // CPU has bus control
     pla->inputs.r_w = true;       // Read mode
     
     // Test various addresses
@@ -88,7 +88,7 @@ void test_memory_modes() {
     const char* test_names[] = {"BASIC area", "I/O/CHAR area", "KERNAL area"};
     
     for (int i = 0; i < 3; i++) {
-        pla_906114_01_set_address_high(pla, test_addresses[i] >> 8);
+        pla_906114_01_set_cpu_address_bank(pla, test_addresses[i] >> 8);
         printf("  %s ($%04X): CASRAM=%s\n", 
                test_names[i], test_addresses[i],
                pla->outputs.n_casram ? "disabled" : "enabled");
@@ -101,7 +101,7 @@ void test_memory_modes() {
     pla->inputs.n_charen = true;  // I/O mode
     
     for (int i = 0; i < 3; i++) {
-        pla_906114_01_set_address_high(pla, test_addresses[i] >> 8);
+        pla_906114_01_set_cpu_address_bank(pla, test_addresses[i] >> 8);
         const char* expected = (i == 0) ? "RAM" : 
                               (i == 1) ? "I/O" : "KERNAL";
         printf("  %s ($%04X): Expected=%s, CASRAM=%s, I/O=%s, KERNAL=%s\n", 
