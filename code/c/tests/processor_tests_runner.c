@@ -74,10 +74,6 @@ void test_io_write(void* context, uint8_t port_value, uint8_t ddr) {
     (void)context; (void)port_value; (void)ddr;
 }
 
-void test_cycle_tick(void* context) {
-    (void)context;
-}
-
 // --- Control lines state for test harness ---
 static uint32_t test_control_lines = (1U << 29); // RDY active by default
 
@@ -134,7 +130,6 @@ bool create_cpu_instance(cpu_instance_t* instance, cpu_type_t type) {
                     .context = NULL,
                     .bus_read_cycle = test_read_cycle,
                     .bus_write_cycle = test_write_cycle,
-                    .cycle_tick = test_cycle_tick,
                     .detached_read = test_detached_read
                 };
                 mos6502_attach_bus((mos6502_t*)instance->cpu, &bus_ops);
@@ -152,7 +147,6 @@ bool create_cpu_instance(cpu_instance_t* instance, cpu_type_t type) {
                     .context = NULL,
                     .bus_read_cycle = test_read_cycle,
                     .bus_write_cycle = test_write_cycle,
-                    .cycle_tick = test_cycle_tick,
                     .detached_read = test_detached_read
                 };
                 mos6510_io_port_interface_t io_interface = {
@@ -176,7 +170,6 @@ bool create_cpu_instance(cpu_instance_t* instance, cpu_type_t type) {
                     .context = NULL,
                     .bus_read_cycle = test_read_cycle,
                     .bus_write_cycle = test_write_cycle,
-                    .cycle_tick = test_cycle_tick,
                     .detached_read = test_detached_read
                 };
                 nes6502_attach_bus((nes6502_t*)instance->cpu, &bus_ops);

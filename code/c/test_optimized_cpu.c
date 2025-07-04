@@ -18,16 +18,6 @@ static void test_bus_write_cycle(void* context, uint16_t address, uint8_t value)
     test_memory[address] = value;
 }
 
-static void test_non_cpu_cycle(void* context) {
-    (void)context;
-    // NOTE: In advanced usage, this callback could be used for:
-    // - Execution tracing by counting cycles
-    // - Breakpoint detection by checking PC values  
-    // - Triggering interception to stop threaded dispatch
-    // - Performance profiling and timing analysis
-    // This is the key mechanism for controlling threaded dispatch execution
-}
-
 static uint8_t test_detached_read(void* context) {
     (void)context;
     return 0xFF;
@@ -87,7 +77,6 @@ int main() {
         .context = NULL,
         .bus_read_cycle = test_bus_read_cycle,
         .bus_write_cycle = test_bus_write_cycle,
-        .cycle_tick = test_non_cpu_cycle,
         .detached_read = test_detached_read
     };
 

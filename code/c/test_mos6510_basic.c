@@ -31,10 +31,6 @@ void test_io_write(void* context, uint8_t port_value, uint8_t ddr) {
     // Do nothing for this test
 }
 
-void test_cycle_tick(void* context) {
-    (void)context;  // Unused - just a dummy implementation
-}
-
 static uint8_t test_detached_read(void* context) {
     (void)context;
     return 0xFF;
@@ -77,7 +73,6 @@ int main() {
         .context = NULL,
         .bus_read_cycle = test_read_cycle,
         .bus_write_cycle = test_write_cycle,
-        .cycle_tick = test_cycle_tick,
         .detached_read = test_detached_read
     };
     

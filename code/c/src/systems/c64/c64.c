@@ -210,38 +210,22 @@ bool c64_pla_maps_generate(c64_t* c64) {
 // Usually NULL during normal emulation, only set for testing/debugging
 void (*bus_cycle_callback)(void) = NULL;
 
-/*
- * SIMPLIFIED MAIN SYSTEM TICK
- * VIC handles both phases internally, other chips tick once per cycle
- */
-void c64_non_cpu_cycle(void* c64_ptr, bool do_at_least_one_tick, bool do_wait) {
+// Ticks all non-CPU chips once to complete a cycle.
+inline void c64_non_cpu_cycle(void* c64_ptr) {
     // Optimized null check with unlikely hint - callback rarely set during normal emulation
     if (unlikely(bus_cycle_callback != NULL)) {
         bus_cycle_callback();
     }
-    
-    c64_t* c64 = (c64_t*)c64_ptr;  // Cast from opaque pointer    
-    c64_bus_t* bus = c64->bus;
+
+    c64_t* c64 = (c64_t*)c64_ptr;  // Cast from opaque pointer
 
     c64->total_cycles++;
-        
-    for (;;) {
-        // Mark the first tick as done (before actually doing it to keep code neater)
-        if (do_at_least_one_tick) {
-            do_at_least_one_tick = false;
-        } else {
-            // The loop can exit if we are not waiting, or if the CPU has control of the bus.
-            if (!do_wait) return;
-            if ((bus->control_lines & BA_LINE) && (bus->control_lines & AEC_LINE)) return;
-        }
-
-        // VIC tick handles both phi1 and phi2 phases internally
-        vicii_common_cycle(c64->vicii);
-        
-        // Other chips tick once per complete cycle
-        mos6526_cycle(c64->cia1);
-        mos6526_cycle(c64->cia2); 
-        mos6581_cycle(c64->sid);
+    // VIC tick handles both phi1 and phi2 phases internally
+    vicii_common_cycle(c64->vicii);
+    // Other chips tick once per complete cycle
+    mos6526_cycle(c64->cia1);
+    mos6526_cycle(c64->cia2);
+    mos6581_cycle(c64->sid);
 //        c64_update_interrupt_lines(c64, bus);
 //void c64_update_interrupt_lines(c64_t* c64, c64_bus_t* bus) {
 /*
@@ -268,7 +252,6 @@ void c64_non_cpu_cycle(void* c64_ptr, bool do_at_least_one_tick, bool do_wait) {
         c64->bus->control_lines &= ~RDY_LINE;
     }
 //}
-    }
 }
 
 // Compact chip creation helper - creates and registers a chip (rwcb_context auto-set by system_chip_register)

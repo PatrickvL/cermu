@@ -19,11 +19,6 @@ static void mock_write(void* context, uint16_t address, uint8_t value) {
     test_memory[address] = value;
 }
 
-static void mock_cycle_tick(void* context) {
-    (void)context;
-    // No-op for this test
-}
-
 static uint8_t mock_detached_read(void* context) {
     (void)context;
     return 0xFF;
@@ -76,7 +71,6 @@ static void setup_mock_interfaces(
 ) {
     bus_interface->context = NULL;
     bus_interface->bus_write_cycle = mock_write;
-    bus_interface->cycle_tick = mock_cycle_tick;
     bus_interface->detached_read = mock_detached_read;
     
     control_interface->get_lines = mock_get_lines;

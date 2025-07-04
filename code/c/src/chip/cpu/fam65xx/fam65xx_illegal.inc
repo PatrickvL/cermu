@@ -112,7 +112,13 @@ void fam65xx_op_jam(fam65xx_t* cpu) {
             fam65xx_nmi(cpu);
             break;
         }
-        FAM65XX_INTRA_CYCLE(cpu);
+        // For now, perform a dummy read cycle to simulate the JAM behavior
+        // This is a no-op in terms of CPU state, but allows the CPU to remain
+        // in a valid state without crashing.
+        // In a real implementation, this would halt the CPU until an interrupt occurs.
+        // This is a placeholder to simulate the JAM behavior without crashing.
+        // In a real CPU, this would halt execution until an interrupt occurs.
+        (void)fam65xx_read_cycle(cpu, cpu->pc);
     }
     FAM65XX_OPCODE_FOOTER(cpu);
 }
