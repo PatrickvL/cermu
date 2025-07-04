@@ -571,7 +571,7 @@ static const char* c64_bus_get_chip_name_from_acid(c64_bus_t* bus, uint8_t acid,
 static void decode_acid_rw_for_debug(uint8_t encoded, uint16_t bank_address, 
                                      uint8_t* read_acid, uint8_t* write_acid) {
     if (encoded == 0) {
-        // I/O region - determine specific ACID from bank address
+        // I/O region - determine specific ACID from bank address  
         uint8_t io_page = (bank_address >> 8) & 0x0F;
         *read_acid = io_page;
         *write_acid = io_page;
