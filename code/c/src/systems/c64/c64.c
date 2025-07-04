@@ -229,9 +229,10 @@ void c64_non_cpu_cycle(void* c64_ptr, bool do_at_least_one_tick, bool do_wait) {
         // Mark the first tick as done (before actually doing it to keep code neater)
         if (do_at_least_one_tick) {
             do_at_least_one_tick = false;
-        // Check exit conditions - CPU can proceed when both BA and AEC are high
-        } else if (!do_wait || ((bus->control_lines & BA_LINE) && (bus->control_lines & AEC_LINE))) {
-            return;
+        } else {
+            // The loop can exit if we are not waiting, or if the CPU has control of the bus.
+            if (!do_wait) return;
+            if ((bus->control_lines & BA_LINE) && (bus->control_lines & AEC_LINE)) return;
         }
 
         // VIC tick handles both phi1 and phi2 phases internally
