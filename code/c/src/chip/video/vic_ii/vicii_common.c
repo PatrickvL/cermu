@@ -132,30 +132,25 @@ uint8_t vic_memory_read(vicii_common_t* vicii, uint16_t address) {
     
     c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
     
-    // Use PLA-based VIC-II banking instead of hardcoded logic
-    // Map VIC-II 14-bit address to 4KB bank (0-3 for VIC-II's 16KB space)
-    uint8_t vic_bank = (address >> 12) & 0x0F;  // Extract 4KB bank from VIC-II address
+    // OPTIMIZED VIC-II MEMORY READ - More optimal than CPU version
+    // VIC-II can only read, never write, and can't access I/O regions
+    // Uses only 4 banks (0-3) and 4 modes instead of CPU's 16 banks and 32 modes
     
-    // Get current PLA mode from bus
-    uint8_t pla_mode = c64_bus->pla_banking_mode;
+    // Extract 4KB bank from VIC-II 14-bit address (0-3 for VIC-II's 16KB space)
+    uint8_t vic_bank = (address >> 12) & 0x03;  // Only 4 banks, so mask with 0x03
     
-    // Get encoded read/write info for this bank in current PLA mode
-    uint8_t encoded = c64_bus->vic_encoded_rwid_per_bank_per_mode[pla_mode][vic_bank];
+    // Get encoded read acid for this bank in current PLA mode
+    // VIC-II banking uses same mode as CPU but only needs 4 configurations
+    uint8_t encoded = c64_bus->vic_encoded_rwid_per_bank_per_mode[c64_bus->pla_banking_mode][vic_bank];
     
-    // Decode the read ACID
-    uint8_t read_acid, write_acid;
-    decode_acid_rw(encoded, &read_acid, &write_acid);
-    
-    // Handle I/O region mapping if needed
-    if (read_acid == ACID_VIC_D0) {
-        // For I/O regions, determine the specific I/O page
-        read_acid = (address >> 8) & 0x0F;
-    }
+    // Direct ACID extraction - no I/O detection needed (VIC-II can't access I/O)
+    // VIC-II encoded values never use I/O regions (encoded == 0), so no special handling needed
+    uint8_t read_acid = (encoded & 0x0F) + ACID_IO2_DF;
     
     // Calculate final address including VIC-II bank offset from CIA2
     uint16_t final_address = (address & 0x3FFF) | vicii->memory.bank_base;
     
-    // Use the callback for the determined chip
+    // Direct callback - single operation, no branch
     return c64_bus->read_callbacks[read_acid].read(
         c64_bus->read_callbacks[read_acid].context, 
         final_address
