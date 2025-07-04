@@ -282,11 +282,11 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
         c64_bus_populate_cpu_pla_mapping(bus, pla);
         // Copy the mapping to the mode-specific array
         memcpy(bus->encoded_rwid_per_bank_per_mode[mode], bus->encoded_rwid_per_bank, 16);
-/*
+        
+        // Populate VIC-II mapping for this mode
         c64_bus_populate_vicii_pla_mapping(bus, pla);        
         // Copy the mapping to the mode-specific array
         memcpy(bus->vic_encoded_rwid_per_bank_per_mode[mode], bus->encoded_rwid_per_bank, 16);
-*/
     }
 }
 
@@ -640,6 +640,7 @@ static uint16_t c64_bus_get_chip_base_from_acid(c64_bus_t* bus, uint8_t acid) {
  * - read ACID
  * - write ACID
  * - bank start offset within the chip
+ * Additionally, for I/O regions ($D000-$DFFF), shows individual I/O pages
  * 
  * @param c64 Pointer to the C64 system
  */
@@ -651,7 +652,7 @@ void c64_bus_debug_dump_bank_layout(c64_t* c64) {
     
     c64_bus_t* bus = c64->bus;
     
-    printf("=== C64 Bus Bank Layout Debug Dump ===\n");
+    printf("=== C64 Bus Bank Layout Debug Dump (CPU Memory View) ===\n");
     printf("Bank Layout for all PLA modes (0-31)\n");
     printf("Each bank covers 4KB (0x1000 bytes) of address space\n\n");
     
@@ -720,10 +721,101 @@ void c64_bus_debug_dump_bank_layout(c64_t* c64) {
                    write_acid, 
                    read_offset_str,
                    write_offset_str);
+                   
+            // For I/O bank (bank 13, $D000-$DFFF), show individual I/O pages
+            if (bank == 13 && (read_acid == ACID_VIC_D0 || write_acid == ACID_VIC_D0)) {
+                printf("       | I/O Pages within Bank 13 ($D000-$DFFF):\n");
+                for (int page = 0; page < 16; page++) {
+                    uint8_t io_acid = page;
+                    uint16_t page_addr = 0xD000 + (page * 0x100);
+                    const char* io_read_chip = c64_bus_get_chip_name_from_acid(bus, io_acid, page_addr);
+                    const char* io_write_chip = c64_bus_get_chip_name_from_acid(bus, io_acid, page_addr);
+                    
+                    printf("       |   Page %2d ($%04X) | %-14s | %-14s | %6d | %6d |\n", 
+                           page, (unsigned int)page_addr, 
+                           io_read_chip, io_write_chip, 
+                           io_acid, io_acid);
+                }
+            }
         }
         
         printf("\n");
     }
     
-    printf("=== End Bank Layout Debug Dump ===\n");
+    printf("=== End CPU Bank Layout Debug Dump ===\n");
+}
+
+/**
+ * Debug function to dump VIC-II bank layout for all PLA modes.
+ * For each PLA mode (0-31), prints a table with one row per bank (0-15) showing:
+ * - bank number
+ * - read chip name (VIC-II perspective)
+ * - read ACID
+ * - bank start offset within the chip
+ * 
+ * @param c64 Pointer to the C64 system
+ */
+void c64_bus_debug_dump_vicii_bank_layout(c64_t* c64) {
+    if (!c64 || !c64->bus) {
+        printf("Error: Invalid C64 or bus pointer\n");
+        return;
+    }
+    
+    c64_bus_t* bus = c64->bus;
+    
+    printf("=== C64 Bus VIC-II Bank Layout Debug Dump ===\n");
+    printf("VIC-II Bank Layout for all PLA modes (0-31)\n");
+    printf("Each bank covers 4KB (0x1000 bytes) of address space\n");
+    printf("VIC-II can only address 16KB total (14-bit address bus)\n");
+    printf("Full 64KB access via CIA2 bank selection (bits 0-1 of port A)\n\n");
+    
+    for (int mode = 0; mode < 32; mode++) {
+        printf("PLA Mode %d (0x%02X) - VIC-II Memory View:\n", mode, mode);
+        printf("  Bank | Read Chip      | R-ACID | VIC-II Offset\n");
+        printf("  -----|----------------|--------|----------------\n");
+        
+        for (int bank = 0; bank < 16; bank++) {
+            uint8_t encoded = bus->vic_encoded_rwid_per_bank_per_mode[mode][bank];
+            uint8_t read_acid, write_acid;
+            uint16_t bank_address = bank * 0x1000;
+            
+            // Decode the ACIDs with enhanced I/O handling
+            decode_acid_rw_for_debug(encoded, bank_address, &read_acid, &write_acid);
+            
+            // Get chip names
+            const char* read_chip = c64_bus_get_chip_name_from_acid(bus, read_acid, bank_address);
+            
+            // Calculate offsets
+            uint16_t read_base = c64_bus_get_chip_base_from_acid(bus, read_acid);
+            
+            char read_offset_str[16];
+            
+            if (read_acid == ACID_UNMAPPED) {
+                strcpy(read_offset_str, "-");
+            } else if (read_acid == ACID_VIC_D0) {
+                // For I/O regions, show the actual I/O page that would be accessed
+                snprintf(read_offset_str, sizeof(read_offset_str), "I/O($%04X)", 
+                         (unsigned int)bank_address);
+            } else {
+                int32_t offset = (int32_t)bank_address - (int32_t)read_base;
+                if (offset < 0) {
+                    snprintf(read_offset_str, sizeof(read_offset_str), "-$%04X", 
+                             (unsigned int)(-offset));
+                } else {
+                    snprintf(read_offset_str, sizeof(read_offset_str), "$%04X", 
+                             (unsigned int)offset);
+                }
+            }
+            
+            printf("  %2d   | %-14s | %6d | %s\n", 
+                   bank, 
+                   read_chip, 
+                   read_acid, 
+                   read_offset_str);
+        }
+        
+        printf("\n");
+    }
+    
+    printf("=== End VIC-II Bank Layout Debug Dump ===\n");
 }
