@@ -211,7 +211,7 @@ bool c64_pla_maps_generate(c64_t* c64) {
 void (*bus_cycle_callback)(void) = NULL;
 
 // Ticks all non-CPU chips once to complete a cycle.
-inline void c64_non_cpu_cycle(void* c64_ptr) {
+void c64_non_cpu_cycle(void* c64_ptr) {
     // Optimized null check with unlikely hint - callback rarely set during normal emulation
     if (unlikely(bus_cycle_callback != NULL)) {
         bus_cycle_callback();

@@ -4,6 +4,10 @@
 #include <string.h>
 #include <stdio.h>  // For printf (debug)
 
+// Include descriptors for chip identification
+#include "../../chip/memory/ram.h"
+#include "../../chip/memory/rom.h"
+
 /*
  * OPTIMIZED MEMORY ACCESS - Based on fast banking system
  * - 2 ops, 2.5-3.5 cycles for reads (0.5-1 cycle faster)
@@ -23,6 +27,26 @@ inline static uint8_t encode_acid_rw(uint8_t read_acid, uint8_t write_acid) {
     write_acid = (write_acid <= ACID_IO2_DF) ? ACID_VIC_D0 : write_acid - ACID_IO2_DF;
     uint8_t encoded = read_acid | (write_acid << 5);
     return encoded;
+}
+
+// Decode read/write ACIDs from encoded byte - reverse of encode_acid_rw
+inline static void decode_acid_rw(uint8_t encoded, uint8_t* read_acid, uint8_t* write_acid) {
+    uint8_t read_code = encoded & 0x0F;  // Extract bits [3:0]
+    uint8_t write_code = (encoded >> 5) & 0x07;  // Extract bits [7:5]
+    
+    // Reverse the encoding logic
+    // Special case: encoded 0 means I/O region, which will be resolved by memory access
+    if (read_code == ACID_VIC_D0) {
+        *read_acid = ACID_VIC_D0;  // I/O region - actual page will be determined by address bits
+    } else {
+        *read_acid = read_code + ACID_IO2_DF;
+    }
+    
+    if (write_code == ACID_VIC_D0) {
+        *write_acid = ACID_VIC_D0;  // I/O region - actual page will be determined by address bits  
+    } else {
+        *write_acid = write_code + ACID_IO2_DF;
+    }
 }
 
 // Simple 4KB bank calculation for optimized system (0-15)
@@ -234,7 +258,7 @@ void c64_bus_populate_vicii_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* 
         // Set address in PLA (will call pla_906114_01_update_outputs)
         pla_906114_01_set_vicii_address_bank((pla_906114_01_t*)pla, (uint8_t)bank);
         // Determine read ACID based on PLA outputs for read mode
-        uint8_t read_acid = pla_906114_01_outputs_to_acid((pla_906114_01_t*)pla, bank);
+        uint8_t read_acid = pla_906114_01_outputs_to_acid((pla_906114_01_t*)pla);
 
         const uint8_t write_acid = ACID_UNMAPPED;
         
@@ -476,4 +500,230 @@ bool c64_bus_get_game_signal(c64_bus_t* c64_bus) {
     
     // Return inverted state (bit set = signal high = inactive)
     return (c64_bus->system_lines & SYS_MASK_GAME) == 0;
+}
+
+// ============================================================================
+// DEBUG FUNCTIONS - Bank layout analysis
+// ============================================================================
+
+// Helper function to get chip descriptor name from ACID, with enhanced I/O region handling
+static const char* c64_bus_get_chip_name_from_acid(c64_bus_t* bus, uint8_t acid, uint16_t bank_address) {
+    if (acid >= 24) return "INVALID";
+    
+    void* context = bus->read_callbacks[acid].context;
+    if (!context) return "UNMAPPED";
+    
+    // For I/O ACIDs (0-15), we need to map them to descriptive names
+    if (acid <= ACID_IO2_DF) {
+        switch (acid) {
+            case ACID_VIC_D0:
+            case ACID_VIC_D1:
+            case ACID_VIC_D2:
+            case ACID_VIC_D3:
+                return "VIC-II";
+            case ACID_SID_D4:
+            case ACID_SID_D5:
+            case ACID_SID_D6:
+            case ACID_SID_D7:
+                return "SID";
+            case ACID_COLORRAM_D8:
+            case ACID_COLORRAM_D9:
+            case ACID_COLORRAM_DA:
+            case ACID_COLORRAM_DB:
+                return "Color-RAM";
+            case ACID_CIA1_DC:
+                return "CIA1";
+            case ACID_CIA2_DD:
+                return "CIA2";
+            case ACID_IO1_DE:
+                return "IO1";
+            case ACID_IO2_DF:
+                return "IO2";
+            default:
+                return "I/O";
+        }
+    }
+    
+    // For non-I/O ACIDs, map to standard names
+    switch (acid) {
+        case ACID_ZEROBANK:
+            return "CPU-ZeroBank";
+        case ACID_RAM:
+            return "RAM";
+        case ACID_ROML:
+            return "Cart-ROML";
+        case ACID_ROMH:
+            return "Cart-ROMH";
+        case ACID_UNMAPPED:
+            return "UNMAPPED";
+        case ACID_BASIC:
+            return "BASIC-ROM";
+        case ACID_CHARROM:
+            return "CHAR-ROM";
+        case ACID_KERNAL:
+            return "KERNAL-ROM";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+// Enhanced decode function that handles I/O regions properly for debug output
+static void decode_acid_rw_for_debug(uint8_t encoded, uint16_t bank_address, 
+                                     uint8_t* read_acid, uint8_t* write_acid) {
+    if (encoded == 0) {
+        // I/O region - determine specific ACID from bank address
+        uint8_t io_page = (bank_address >> 8) & 0x0F;
+        *read_acid = io_page;
+        *write_acid = io_page;
+    } else {
+        // Non-I/O region - decode normally
+        decode_acid_rw(encoded, read_acid, write_acid);
+    }
+}
+
+// Helper function to get chip base address from ACID by searching the system
+static uint16_t c64_bus_get_chip_base_from_acid(c64_bus_t* bus, uint8_t acid) {
+    if (!bus->c64) return 0x0000;
+    
+    c64_t* c64 = (c64_t*)bus->c64;
+    system_8bit_t* system = &c64->system;
+    
+    // For I/O ACIDs, return the I/O page base address
+    if (acid <= ACID_IO2_DF) {
+        return 0xD000 + (acid * 0x100);
+    }
+    
+    // For non-I/O ACIDs, search through registered chips
+    for (int i = 0; i < system->chip_count; i++) {
+        chip_entry_t* entry = &system->chips[i];
+        
+        // Match chip descriptor to ACID
+        if (entry->desc == &ram_descriptor && acid == ACID_RAM) {
+            return entry->base_address;
+        }
+        else if (entry->desc == &rom_descriptor) {
+            if (entry->base_address == 0xA000 && acid == ACID_BASIC) {
+                return entry->base_address;
+            }
+            else if (entry->base_address == 0xD000 && acid == ACID_CHARROM) {
+                return entry->base_address;
+            }
+            else if (entry->base_address == 0xE000 && acid == ACID_KERNAL) {
+                return entry->base_address;
+            }
+            else if (entry->base_address == 0x8000 && acid == ACID_ROML) {
+                return entry->base_address;
+            }
+            else if ((entry->base_address == 0xA000 || entry->base_address == 0xE000) && acid == ACID_ROMH) {
+                return entry->base_address;
+            }
+        }
+    }
+    
+    // Default mappings for special cases
+    switch (acid) {
+        case ACID_ZEROBANK:
+            return 0x0000;
+        case ACID_UNMAPPED:
+            return 0x0000;
+        default:
+            return 0x0000;
+    }
+}
+
+/**
+ * Debug function to dump bank layout for all PLA modes.
+ * For each PLA mode (0-31), prints a table with one row per bank (0-15) showing:
+ * - bank number
+ * - read chip name
+ * - write chip name  
+ * - read ACID
+ * - write ACID
+ * - bank start offset within the chip
+ * 
+ * @param c64 Pointer to the C64 system
+ */
+void c64_bus_debug_dump_bank_layout(c64_t* c64) {
+    if (!c64 || !c64->bus) {
+        printf("Error: Invalid C64 or bus pointer\n");
+        return;
+    }
+    
+    c64_bus_t* bus = c64->bus;
+    
+    printf("=== C64 Bus Bank Layout Debug Dump ===\n");
+    printf("Bank Layout for all PLA modes (0-31)\n");
+    printf("Each bank covers 4KB (0x1000 bytes) of address space\n\n");
+    
+    for (int mode = 0; mode < 32; mode++) {
+        printf("PLA Mode %d (0x%02X):\n", mode, mode);
+        printf("  Bank | Read Chip      | Write Chip     | R-ACID | W-ACID | Read/Write Offset\n");
+        printf("  -----|----------------|----------------|--------|--------|------------------\n");
+        
+        for (int bank = 0; bank < 16; bank++) {
+            uint8_t encoded = bus->encoded_rwid_per_bank_per_mode[mode][bank];
+            uint8_t read_acid, write_acid;
+            uint16_t bank_address = bank * 0x1000;
+            
+            // Decode the ACIDs with enhanced I/O handling
+            decode_acid_rw_for_debug(encoded, bank_address, &read_acid, &write_acid);
+            
+            // Get chip names
+            const char* read_chip = c64_bus_get_chip_name_from_acid(bus, read_acid, bank_address);
+            const char* write_chip = c64_bus_get_chip_name_from_acid(bus, write_acid, bank_address);
+            
+            // Calculate offsets
+            uint16_t read_base = c64_bus_get_chip_base_from_acid(bus, read_acid);
+            uint16_t write_base = c64_bus_get_chip_base_from_acid(bus, write_acid);
+            
+            char read_offset_str[16], write_offset_str[16];
+            
+            if (read_acid == ACID_UNMAPPED) {
+                strcpy(read_offset_str, "-");
+            } else if (read_acid == ACID_VIC_D0) {
+                // For I/O regions, show the actual I/O page that would be accessed
+                snprintf(read_offset_str, sizeof(read_offset_str), "I/O($%04X)", 
+                         (unsigned int)bank_address);
+            } else {
+                int32_t offset = (int32_t)bank_address - (int32_t)read_base;
+                if (offset < 0) {
+                    snprintf(read_offset_str, sizeof(read_offset_str), "-$%04X", 
+                             (unsigned int)(-offset));
+                } else {
+                    snprintf(read_offset_str, sizeof(read_offset_str), "$%04X", 
+                             (unsigned int)offset);
+                }
+            }
+            
+            if (write_acid == ACID_UNMAPPED) {
+                strcpy(write_offset_str, "-");
+            } else if (write_acid == ACID_VIC_D0) {
+                // For I/O regions, show the actual I/O page that would be accessed
+                snprintf(write_offset_str, sizeof(write_offset_str), "I/O($%04X)", 
+                         (unsigned int)bank_address);
+            } else {
+                int32_t offset = (int32_t)bank_address - (int32_t)write_base;
+                if (offset < 0) {
+                    snprintf(write_offset_str, sizeof(write_offset_str), "-$%04X", 
+                             (unsigned int)(-offset));
+                } else {
+                    snprintf(write_offset_str, sizeof(write_offset_str), "$%04X", 
+                             (unsigned int)offset);
+                }
+            }
+            
+            printf("  %2d   | %-14s | %-14s | %6d | %6d | %s/%s\n", 
+                   bank, 
+                   read_chip, 
+                   write_chip, 
+                   read_acid, 
+                   write_acid, 
+                   read_offset_str,
+                   write_offset_str);
+        }
+        
+        printf("\n");
+    }
+    
+    printf("=== End Bank Layout Debug Dump ===\n");
 }

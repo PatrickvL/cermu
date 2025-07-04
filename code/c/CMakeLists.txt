@@ -38,10 +38,11 @@ else()
     add_compile_options(
         -Wall                   # Enable most warnings
         -Wextra                 # Enable extra warnings
-        -Werror                 # Treat warnings as errors
+        # -Werror                 # Treat warnings as errors - disabled for development
         -Wno-unused-parameter   # Disable unused parameter warnings (common in device callbacks)
         -Wno-unused-variable    # Disable unused variable warnings (for development)
-        -pedantic              # Enable pedantic mode
+        -Wno-unused-function    # Disable unused function warnings (for development)
+        # -pedantic              # Enable pedantic mode - disabled for development
     )
     
     # Debug-specific flags

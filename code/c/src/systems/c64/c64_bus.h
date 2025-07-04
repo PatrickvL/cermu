@@ -120,11 +120,18 @@ void c64_bus_register_chip_callbacks(c64_bus_t* bus, uint8_t acid, void* context
 // Forward declaration for PLA
 struct pla_906114_01_s;
 
+// Forward declaration for C64 system
+struct c64_s;
+typedef struct c64_s c64_t;
+
 // PLA-based bus mapping functions
 void c64_bus_populate_cpu_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla);
 
 // Generate all 32 memory modes using PLA
 void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla);
+
+// Debug function to dump bank layout for all PLA modes
+void c64_bus_debug_dump_bank_layout(c64_t* c64);
 
 extern chip_descriptor_t c64_bus_descriptor;
 
