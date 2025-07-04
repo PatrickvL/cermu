@@ -4,6 +4,27 @@
 #include <string.h>
 #include <stdio.h>
 
+// Forward declaration for decode function from bus
+// Decode read/write ACIDs from encoded byte - reverse of encode_acid_rw
+static inline void decode_acid_rw(uint8_t encoded, uint8_t* read_acid, uint8_t* write_acid) {
+    uint8_t read_code = encoded & 0x0F;  // Extract bits [3:0]
+    uint8_t write_code = (encoded >> 5) & 0x07;  // Extract bits [7:5]
+    
+    // Reverse the encoding logic
+    // Special case: encoded 0 means I/O region, which will be resolved by memory access
+    if (read_code == 0) {  // ACID_VIC_D0
+        *read_acid = 0;  // I/O region - actual page will be determined by address bits
+    } else {
+        *read_acid = read_code + 15;  // ACID_IO2_DF
+    }
+    
+    if (write_code == 0) {  // ACID_VIC_D0
+        *write_acid = 0;  // I/O region - actual page will be determined by address bits  
+    } else {
+        *write_acid = write_code + 15;  // ACID_IO2_DF
+    }
+}
+
 // ========================================================================================
 // UTILITY FUNCTIONS AND CONSTANTS
 // ========================================================================================
@@ -110,20 +131,35 @@ uint8_t vic_memory_read(vicii_common_t* vicii, uint16_t address) {
     if (!vicii->bus.bus) return 0xFF;
     
     c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
-    uint16_t vic_address = (address & 0x3FFF) | vicii->memory.bank_base;
     
-    // Character ROM check (only when enabled)
-    if (vicii->memory.char_rom_enabled) {
-        uint16_t char_check = address & 0xF000;
-        if (char_check == 0x1000 || char_check == 0x9000) {
-            return c64_bus->read_callbacks[ACID_CHARROM].read(
-                c64_bus->read_callbacks[ACID_CHARROM].context,
-                (address & 0x0FFF) | 0xD000
-            );
-        }
+    // Use PLA-based VIC-II banking instead of hardcoded logic
+    // Map VIC-II 14-bit address to 4KB bank (0-3 for VIC-II's 16KB space)
+    uint8_t vic_bank = (address >> 12) & 0x0F;  // Extract 4KB bank from VIC-II address
+    
+    // Get current PLA mode from bus
+    uint8_t pla_mode = c64_bus->pla_banking_mode;
+    
+    // Get encoded read/write info for this bank in current PLA mode
+    uint8_t encoded = c64_bus->vic_encoded_rwid_per_bank_per_mode[pla_mode][vic_bank];
+    
+    // Decode the read ACID
+    uint8_t read_acid, write_acid;
+    decode_acid_rw(encoded, &read_acid, &write_acid);
+    
+    // Handle I/O region mapping if needed
+    if (read_acid == ACID_VIC_D0) {
+        // For I/O regions, determine the specific I/O page
+        read_acid = (address >> 8) & 0x0F;
     }
     
-    return c64_bus_memory_read(c64_bus, vic_address);
+    // Calculate final address including VIC-II bank offset from CIA2
+    uint16_t final_address = (address & 0x3FFF) | vicii->memory.bank_base;
+    
+    // Use the callback for the determined chip
+    return c64_bus->read_callbacks[read_acid].read(
+        c64_bus->read_callbacks[read_acid].context, 
+        final_address
+    );
 }
 
 // ========================================================================================
