@@ -74,10 +74,6 @@ void test_io_write(void* context, uint8_t port_value, uint8_t ddr) {
     (void)ddr;
 }
 
-void test_cycle_tick(void* context) {
-    (void)context;
-}
-
 static uint32_t dummy_get_control_lines(void *context) {
     (void)context;
     return (1U << 29);  // RDY active (bit 29), no IRQ/NMI
@@ -102,7 +98,6 @@ mos6510_t* setup_cpu(cpu_state_t* state) {
         .context = NULL,
         .bus_read_cycle = test_read_cycle,
         .bus_write_cycle = test_write_cycle,
-        .cycle_tick = test_cycle_tick,
         .detached_read = test_detached_read
     };
     

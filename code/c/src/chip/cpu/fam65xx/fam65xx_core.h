@@ -92,25 +92,6 @@ struct fam65xx_s {
 #define FAM65XX_SYSTEM_LINES_SET(cpu, mask) SYS_LINES_SET((cpu)->system_lines, mask)
 #define FAM65XX_SYSTEM_LINES_CLEAR(cpu, mask) SYS_LINES_CLEAR((cpu)->system_lines, mask)
 
-// Macro utilities for generating unique labels
-#define FAM65XX_CONCAT_IMPL(a, b) a ## b
-#define FAM65XX_CONCAT(a, b) FAM65XX_CONCAT_IMPL(a, b)
-#define FAM65XX_UNIQUE_LABEL(prefix) FAM65XX_CONCAT(prefix, __LINE__)
-
-// Cycle timing macros (shared by all family members)
-#define FAM65XX_INTRA_CYCLE(cpu) do { \
-    (cpu)->bus_interface.cycle_tick((cpu)->bus_interface.context); \
-} while(0)
-
-// Ready check and wait with automatic stall handling
-#define FAM65XX_WAIT_READY(cpu) do { \
-    FAM65XX_UNIQUE_LABEL(cpu_ready_stall): \
-    if (unlikely(!FAM65XX_TEST_RDY(cpu))) { \
-        FAM65XX_INTRA_CYCLE(cpu); \
-        goto FAM65XX_UNIQUE_LABEL(cpu_ready_stall); \
-    } \
-} while(0)
-
 // Core memory and cycle functions (shared)
 static inline uint8_t fam65xx_read_cycle(fam65xx_t* cpu, uint16_t address) {
     return cpu->bus_interface.bus_read_cycle(cpu->bus_interface.context, address);
@@ -132,8 +113,6 @@ void fam65xx_interrupt_handler(fam65xx_t* cpu);
 #define FAM65XX_NEXT_INSTRUCTION(cpu) do { \
     if (unlikely(FAM65XX_TEST_IRQ(cpu) || FAM65XX_TEST_NMI(cpu))) { \
         fam65xx_interrupt_handler(cpu); \
-    } else { \
-        FAM65XX_WAIT_READY(cpu); \
     } \
     FAM65XX_NEXT_INSTRUCTION_DISPATCH(cpu); \
 } while(0)

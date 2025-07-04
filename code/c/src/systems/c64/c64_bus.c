@@ -104,37 +104,53 @@ void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {
     memcpy(c64_bus->encoded_rwid_per_bank, c64_bus->encoded_rwid_per_bank_per_mode[mode], 16);
 }
 
-uint8_t c64_bus_read_cycle(c64_bus_t *c64_bus, uint16_t addr) {
+// Waits for the bus to be ready, ticking non-CPU chips.
+static inline void c64_wait_for_bus_ready(c64_bus_t *c64_bus, bool is_read_cycle) {
     c64_t* c64 = c64_bus->c64;
 
-    // READ CYCLES CAN BE HALTED: Wait for both BA and AEC
-    while (!(c64_bus->control_lines & BA_LINE) || !(c64_bus->control_lines & AEC_LINE)) {
-        c64_non_cpu_cycle(c64, true, false);
+    if (is_read_cycle) {
+        // A CPU read must wait for VIC to release the bus (AEC high) AND
+        // for the BA/RDY line to be high.
+        while (!(c64_bus->control_lines & AEC_LINE) || !(c64_bus->control_lines & BA_LINE)) {
+            c64_non_cpu_cycle(c64);
+        }
+    } else {
+        // A CPU write only needs to wait for VIC to release the address bus.
+        // It is NOT affected by the BA/RDY line.
+        while (!(c64_bus->control_lines & AEC_LINE)) {
+            c64_non_cpu_cycle(c64);
+        }
     }
+}
 
+uint8_t c64_bus_read_cycle(c64_bus_t *c64_bus, uint16_t addr) {
+    // The core cycle function handles all bus contention (waiting) and performs
+    // the final tick for all non-CPU chips. This happens concurrently with the
+    // CPU's memory access.
+    c64_wait_for_bus_ready(c64_bus, true);
+
+    // The bus is now guaranteed to be ready for the CPU.
     c64_bus->address = addr; // Perhaps this is no longer needed
     uint8_t data = c64_bus_memory_read(c64_bus, addr);
-    c64_bus->data = data; // Used for "floating" bus state
+    c64_bus->data = data; // Used for "floating" bus state for subsequent unattached reads
 
     // Tick system through complete cycle
-    c64_non_cpu_cycle(c64, true, false);    
+    c64_non_cpu_cycle(c64_bus->c64);
     return data;
 }
 
 void c64_bus_write_cycle(c64_bus_t* c64_bus, uint16_t addr, uint8_t value) {
-    c64_t* c64 = c64_bus->c64;
+    // The core cycle function handles all bus contention (waiting) and performs
+    // the final tick for all non-CPU chips.
+    c64_wait_for_bus_ready(c64_bus, false);
 
-    // WRITE CYCLES CANNOT BE INTERRUPTED by BA, but need AEC
-    while (!(c64_bus->control_lines & AEC_LINE)) {
-        c64_non_cpu_cycle(c64, true, false);
-    }    
-
+    // The bus is now guaranteed to be ready for the CPU.
     c64_bus->address = addr; // Perhaps this is no longer needed
     c64_bus->data = value; // Used for "floating" bus state for subsequent unattached reads
     c64_bus_memory_write(c64_bus, addr, value);
 
     // Advance system
-    c64_non_cpu_cycle(c64, true, false);
+    c64_non_cpu_cycle(c64_bus->c64);
 }
 
 // PLA integration functions
@@ -287,11 +303,6 @@ static void c64_bus_adapter_bus_write_cycle(void* context, uint16_t address, uin
     c64_bus_write_cycle(c64_bus, address, value);
 }
 
-static void c64_bus_adapter_non_cpu_cycle(void* context) {
-    c64_bus_t* c64_bus = (c64_bus_t*)context;
-    c64_non_cpu_cycle(c64_bus->c64, true, false);
-}
-
 // Control lines adapter functions
 static uint32_t c64_control_lines_get(void* context) {
     c64_bus_t* c64_bus = (c64_bus_t*)context;
@@ -329,7 +340,6 @@ void c64_bus_init_adapters(c64_bus_t* c64_bus) {
     c64_bus->bus_adapter.context = c64_bus;
     c64_bus->bus_adapter.bus_read_cycle = c64_bus_adapter_bus_read_cycle;
     c64_bus->bus_adapter.bus_write_cycle = c64_bus_adapter_bus_write_cycle;
-    c64_bus->bus_adapter.cycle_tick = c64_bus_adapter_non_cpu_cycle;
     c64_bus->bus_adapter.detached_read = c64_bus_adapter_detached_read;
     
     // Initialize control lines adapter

@@ -59,29 +59,48 @@ void fam65xx_stop_intercept(fam65xx_t* cpu) {
 
 // Single step execution (shared) - bypasses threaded dispatch for single instructions
 bool fam65xx_step(fam65xx_t* cpu) {
-    if (!cpu) return false;
-    
-    if (fam65xx_is_intercepting(cpu)) return false; // Cannot step while intercepting
-    
-    // Single step implementation using interception mechanism
-    // This ensures only one instruction executes before returning control
+    if (!cpu || fam65xx_is_intercepting(cpu)) {
+        return false; // Cannot step if no CPU or already intercepting
+    }
 
-    // Fetch the opcode and get the real handler BEFORE starting interception
-    // Do the opcode fetch without performing an extra bus cycle_tick as would
-    // be done by fam65xx_read_cycle, because during stepping the preceding opcode
-    // fetch (as done by FAM65XX_OPCODE_FOOTER) already performed the cycle_tick.
-    uint8_t opcode = cpu->bus_interface.bus_read_cycle(cpu->bus_interface.context, cpu->pc++);
+    // To perform a single step, we use the interception mechanism. This ensures
+    // that all bus interactions, including CPU stalls, are handled correctly
+    // by the underlying bus implementation, as if in free-running execution.
+
+    // --- How CPU Stalling (Cycle Stretching) Works ---
+    // In a C64, the VIC-II chip can halt the CPU to take over the bus for
+    // graphics rendering. It does this using two main signals:
+    // 1. AEC (Address Enable Control): When VIC pulls AEC low, the CPU is
+    //    disconnected from the address bus.
+    // 2. BA (Bus Available, connected to the CPU's RDY pin): When VIC pulls
+    //    BA low, it signals the CPU to halt on its next READ cycle.
+    //
+    // The `c64_bus_read_cycle` function in `c64_bus.c` calls into the main
+    // system cycle handler (`c64_non_cpu_cycle`). This handler centralizes
+    // all bus contention logic. It will loop, ticking the VIC, CIAs, etc.,
+    // until the VIC releases the bus (AEC and/or BA/RDY lines go high),
+    // accurately simulating the CPU being "frozen" while the rest of the
+    // system runs. Write cycles are correctly handled by only waiting for AEC,
+    // not the RDY line, as per 6502/6510 hardware behavior.
+
+    // --- Stepping Logic ---
+    // 1. We fetch the opcode for the instruction at the current PC. This read
+    //    operation will correctly stall if the VIC has control of the bus.
+    uint8_t opcode = cpu->bus_interface.bus_read_cycle(cpu->bus_interface.context, cpu->pc);
     fam65xx_opcode_handler_t handler = cpu->opcode_handlers[opcode];
-    
-    // Start interception to catch the next instruction after this one
+
+    // 2. We start interception. This replaces all 256 opcode handlers with a
+    //    stub that will halt execution and restore the original handlers.
     fam65xx_start_intercept(cpu);
-    
-    // Execute the actual instruction handler
-    // The handler will call the footer macro which does threaded dispatch to the next instruction
-    // Since interception is active, the next instruction will be the intercept stub
-    // The intercept stub will automatically restore handlers and stop interception
+
+    // 3. We execute the real handler for the fetched opcode. All memory
+    //    accesses within this handler will correctly stall if/when required.
+    //    The handler finishes with a macro that tries to dispatch the *next*
+    //    instruction.
     handler(cpu);
-    
-    // The intercept stub has already restored handlers, so we're done
+
+    // 4. The dispatch to the next instruction is caught by our intercept stub.
+    //    The stub calls `fam65xx_stop_intercept`, restoring the real handlers
+    //    and completing the single step.
     return true;
 }

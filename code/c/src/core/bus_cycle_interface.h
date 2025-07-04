@@ -38,14 +38,12 @@ typedef struct {
     void (*bus_write_cycle)(void* context, uint16_t address, uint8_t value);
 
     /**
-     * Callback to execute one non-CPU cycle tick.
-     * Called separately after bus operations and during RDY stall handling.
-     * Should advance other system components (VIC, CIA, SID, etc.) by one cycle.
-     * 
+     * Callback for reading from the bus when no specific device is addressed.
+     * This typically returns the last value on the data bus ("floating bus").
+     *
      * @param context User-provided context pointer
+     * @return Last value on the data bus
      */
-    void (*cycle_tick)(void* context);
-
     uint8_t (*detached_read)(void* context);
 } bus_cycle_ops_t;
 

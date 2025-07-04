@@ -18,7 +18,6 @@
 
 // No forward declarations needed - all types are defined in included headers
 
-
 typedef struct c64_s {
     system_8bit_t system;
     c64_bus_t* bus;
@@ -40,7 +39,9 @@ typedef struct c64_s {
 // Function declarations
 c64_t* c64_system_create(const system_config_t* config);
 void c64_system_destroy(c64_t* c64);
-void c64_non_cpu_cycle(void* c64_ptr, bool do_at_least_one_tick, bool do_wait);  // c64_t* - using void* for test_pla_standalone linker stub
+
+// Ticks all non-CPU chips once to complete a cycle.
+inline void c64_non_cpu_cycle(void* c64_ptr);
 bool c64_pla_maps_generate(c64_t* c64);  // PLA memory mapping generation
 void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config);
 bool c64_reload_roms(c64_t* c64, const rom_config_t* rom_config);
