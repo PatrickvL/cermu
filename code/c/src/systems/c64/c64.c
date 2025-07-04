@@ -226,14 +226,14 @@ void c64_non_cpu_cycle(void* c64_ptr, bool do_at_least_one_tick, bool do_wait) {
     c64->total_cycles++;
         
     for (;;) {
+        // Mark the first tick as done (before actually doing it to keep code neater)
+        if (do_at_least_one_tick) {
+            do_at_least_one_tick = false;
         // Check exit conditions - CPU can proceed when both BA and AEC are high
-        if (!do_at_least_one_tick && (!do_wait || ((bus->control_lines & BA_LINE) && (bus->control_lines & AEC_LINE)))) {
+        } else if (!do_wait || ((bus->control_lines & BA_LINE) && (bus->control_lines & AEC_LINE))) {
             return;
         }
 
-        // Mark the first tick as done (before actually doing it to keep code neater)
-        do_at_least_one_tick = false;
-        
         // VIC tick handles both phi1 and phi2 phases internally
         vicii_common_cycle(c64->vicii);
         
