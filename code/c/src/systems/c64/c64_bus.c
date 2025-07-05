@@ -253,28 +253,21 @@ void c64_bus_populate_vicii_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* 
     // Configure PLA for READ mode (VIC-II can only read, never write)
     pla->inputs.r_w = true;      // Read mode
 
-    // VIC-II only shows first 4 banks (16KB address space with 14-bit addressing)
-    // Map memory regions based on PLA outputs
-    for (uint32_t bank = 0; bank < 4; bank++) {
+    // VIC-II can access all 16 banks (full 16-bit address space)
+    // VA14 and VA15 are driven by CIA, so VIC-II can reach all 16 banks
+    for (uint32_t bank = 0; bank < 16; bank++) {
         // Handle VA14 line for different configurations
-        // For banks 0-1: VA14 = 0
-        // For banks 2-3: VA14 = 1
-        pla->inputs.n_va14 = (bank < 2) ? true : false;  // VA14 inverted
+        // For banks 0-3: VA14 = 0, For banks 4-7: VA14 = 0
+        // For banks 8-11: VA14 = 1, For banks 12-15: VA14 = 1
+        pla->inputs.n_va14 = (bank < 8) ? true : false;  // VA14 inverted
         
         // Set address in PLA (will call pla_906114_01_update_outputs)
         pla_906114_01_set_vicii_address_bank((pla_906114_01_t*)pla, (uint8_t)bank);
         // Determine read ACID based on PLA outputs for read mode
         uint8_t read_acid = pla_906114_01_outputs_to_acid((pla_906114_01_t*)pla);
 
-        const uint8_t write_acid = ACID_UNMAPPED;  // VIC-II never writes
-        
-        // Encode both read and write ACIDs into the mapping
-        bus->encoded_rwid_per_bank[bank] = encode_acid_rw(read_acid, write_acid);
-    }
-    
-    // Fill remaining banks (4-15) with unmapped for consistency
-    for (uint32_t bank = 4; bank < 16; bank++) {
-        bus->encoded_rwid_per_bank[bank] = encode_acid_rw(ACID_UNMAPPED, ACID_UNMAPPED);
+        // Store raw ACID directly (no encoding needed for VIC-II)
+        bus->encoded_rwid_per_bank[bank] = read_acid;
     }
 }
 
@@ -295,8 +288,9 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
     }
     
     // Generate VIC-II memory modes (different steering parameters)
-    // VIC-II uses: #GAME, #EXROM, #VA14 = 3 bits = 8 modes
-    // But we need to map these to our 32-mode array structure
+    // VIC-II uses: #GAME, #EXROM, #VA14 = 3 bits, but #VA14 is handled per-bank
+    // So we have 4 unique configs based on #GAME and #EXROM
+    // We'll repeat these 4 configs across all 32 modes for easy indexing
     for (int cpu_mode = 0; cpu_mode < 32; cpu_mode++) {
         // Extract relevant bits for VIC-II: #GAME, #EXROM from CPU mode
         bool n_game = (cpu_mode & 0x10) == 0;     // GAME (inverted)
@@ -309,8 +303,8 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
         
         // Populate VIC-II mapping for this mode
         c64_bus_populate_vicii_pla_mapping(bus, pla);        
-        // Copy the mapping to the mode-specific array
-        memcpy(bus->vic_encoded_rwid_per_bank_per_mode[cpu_mode], bus->encoded_rwid_per_bank, 16);
+        // Copy the raw ACIDs to the mode-specific array
+        memcpy(bus->vic_rwid_per_bank_per_mode[cpu_mode], bus->encoded_rwid_per_bank, 16);
     }
 }
 
@@ -801,8 +795,8 @@ void c64_bus_debug_dump_vicii_bank_layout(c64_t* c64) {
     printf("VIC-II Bank Layout for relevant PLA modes\n");
     printf("VIC-II uses #GAME, #EXROM, #VA14 steering lines\n");
     printf("Each bank covers 4KB (0x1000 bytes) of address space\n");
-    printf("VIC-II can only address 16KB total (14-bit address bus)\n");
-    printf("Only first 4 banks shown (VIC-II's 16KB space)\n\n");
+    printf("VIC-II can access full 16-bit address space (VA14/VA15 driven by CIA)\n");
+    printf("All 16 banks shown (VIC-II's full 64KB addressable space)\n\n");
     
     // Show unique VIC-II configurations based on #GAME and #EXROM
     // Create a set of unique configurations to avoid duplicates
@@ -842,17 +836,13 @@ void c64_bus_debug_dump_vicii_bank_layout(c64_t* c64) {
         
         printf("VIC-II Configuration: #GAME=%d, #EXROM=%d (from PLA Mode %d):\n", 
                n_game ? 0 : 1, n_exrom ? 0 : 1, mode);
-        printf("  Bank | Read Chip      | R-ACID | VIC-II Offset | VA14\n");
-        printf("  -----|----------------|--------|---------------|-----\n");
+        printf("  Bank | Read Chip      | R-ACID | VIC-II Offset | VA14/VA15\n");
+        printf("  -----|----------------|--------|---------------|----------\n");
         
-        // Only show first 4 banks (VIC-II's 16KB address space)
-        for (int bank = 0; bank < 4; bank++) {
-            uint8_t encoded = bus->vic_encoded_rwid_per_bank_per_mode[mode][bank];
-            uint8_t read_acid, write_acid;
+        // Show all 16 banks (VIC-II's full 64KB address space)
+        for (int bank = 0; bank < 16; bank++) {
+            uint8_t read_acid = bus->vic_rwid_per_bank_per_mode[mode][bank]; // Raw ACID, no decoding needed
             uint16_t bank_address = bank * 0x1000;
-            
-            // Decode the ACIDs with enhanced I/O handling
-            decode_acid_rw_for_debug(encoded, bank_address, &read_acid, &write_acid);
             
             // Get chip names
             const char* read_chip = c64_bus_get_chip_name_from_acid(bus, read_acid, bank_address);
@@ -879,15 +869,16 @@ void c64_bus_debug_dump_vicii_bank_layout(c64_t* c64) {
                 }
             }
             
-            // VA14 line value for this bank
-            int va14_value = (bank < 2) ? 0 : 1;
+            // VA14/VA15 line values for this bank
+            int va14_value = (bank < 8) ? 0 : 1;
+            int va15_value = (bank < 4 || (bank >= 8 && bank < 12)) ? 0 : 1;
             
-            printf("  %2d   | %-14s | %6d | %-13s | %d\n", 
+            printf("  %2d   | %-14s | %6d | %-13s | %d/%d\n", 
                    bank, 
                    read_chip, 
                    read_acid, 
                    read_offset_str,
-                   va14_value);
+                   va14_value, va15_value);
         }
         
         printf("\n");

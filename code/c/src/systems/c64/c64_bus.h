@@ -83,7 +83,7 @@ typedef struct c64_bus_s {
     
     // Banking configurations per mode (32 modes x 16 banks = 512 bytes)
     alignas(64) uint8_t encoded_rwid_per_bank_per_mode[32][16]; // CPU Banking configurations per mode
-    alignas(64) uint8_t vic_encoded_rwid_per_bank_per_mode[32][16]; // VIC-II Banking configurations per mode
+    alignas(64) uint8_t vic_rwid_per_bank_per_mode[32][16]; // VIC-II Banking configurations per mode (raw ACIDs, no encoding)
     
     // Integrated adapter interfaces - can be passed out as pointers
     bus_cycle_ops_t bus_adapter;
