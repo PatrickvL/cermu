@@ -23,8 +23,10 @@ void* mos2114_get_rwcb_context(void* chip) {
 
 uint8_t mos2114_read(void* context, uint16_t address) {
     uint8_t* memory = (uint8_t*)context;
-    // Address routing handled by bus system, no mask needed
-    return memory[address];
+    // Color RAM is mapped at $D800-$DBFF (1024 bytes)
+    // Mask to 10 bits for 1K addressing
+    uint16_t offset = address & 0x3FF;  // 0x3FF = 1023, ensures we stay within bounds
+    return memory[offset];
 }
 
 void mos2114_write(void* context, uint16_t address, uint8_t value) {

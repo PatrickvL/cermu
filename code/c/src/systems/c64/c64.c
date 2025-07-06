@@ -18,7 +18,6 @@
 #include "../../chip/video/vic_ii/vicii_common.h"
 #include "../../chip/memory/ram.h"
 #include "../../chip/memory/rom.h"
-#include "../../chip/memory/mos2114.h" // colorram
 #include "../../chip/logic/pla.h" // PLA for memory mapping
 
 void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config) {
@@ -219,13 +218,38 @@ void c64_non_cpu_cycle(void* c64_ptr) {
 
     c64_t* c64 = (c64_t*)c64_ptr;  // Cast from opaque pointer
 
+    // Safety check
+    if (!c64) {
+        printf("ERROR: c64_non_cpu_cycle called with NULL c64_ptr\n");
+        fflush(stdout);
+        return;
+    }
+
     c64->total_cycles++;
+    // Debug output every 1000 cycles to track progress
+    if (c64->total_cycles % 1000 == 0) {
+        printf("c64_non_cpu_cycle: cycle #%llu\n", (unsigned long long)c64->total_cycles);
+        fflush(stdout);
+    }
+        
     // VIC tick handles both phi1 and phi2 phases internally
-    vicii_common_cycle(c64->vicii);
+    if (c64->vicii) {
+        vicii_common_cycle(c64->vicii);
+    } else {
+        printf("ERROR: c64->vicii is NULL at cycle %llu\n", (unsigned long long)c64->total_cycles);
+        fflush(stdout);
+    }
+    
     // Other chips tick once per complete cycle
-    mos6526_cycle(c64->cia1);
-    mos6526_cycle(c64->cia2);
-    mos6581_cycle(c64->sid);
+    if (c64->cia1) {
+        mos6526_cycle(c64->cia1);
+    }
+    if (c64->cia2) {
+        mos6526_cycle(c64->cia2);
+    }
+    if (c64->sid) {
+        mos6581_cycle(c64->sid);
+    }
 //        c64_update_interrupt_lines(c64, bus);
 //void c64_update_interrupt_lines(c64_t* c64, c64_bus_t* bus) {
 /*
@@ -306,6 +330,10 @@ c64_t* c64_system_create(const system_config_t* config) {
     if (!(c64->cia1 = create_and_register_chip(c64, &mos6526_descriptor, 0xDC00, 256))) return NULL;
     if (!(c64->cia2 = create_and_register_chip(c64, &mos6526_descriptor, 0xDD00, 256))) return NULL;
     if (!(c64->kernal = create_and_register_chip(c64, &rom_descriptor, 0xE000, 8192))) return NULL;
+    
+    // Register PLA for GUI debugging (special case - chip is the C64 system itself)
+    uint8_t pla_chip_id = system_chip_register(&c64->system, c64, &pla_descriptor, 0x0000, 0);
+    if (pla_chip_id == 0xFF) return NULL;
     
     // Now having a registry of all chips, the PLA maps can be generated
     if (!c64_pla_maps_generate(c64)) return NULL;

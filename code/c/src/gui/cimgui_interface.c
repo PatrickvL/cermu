@@ -168,6 +168,9 @@ void gui_init_state(gui_state_t* gui_state) {
     gui_state->center_display = true;
     gui_state->host_dpi_scale = 1.0f;  // Will be detected at runtime
     gui_state->show_invisible_area = false;  // Hide invisible area by default
+    
+    // PLA Debug window - now handled via chip debug system
+    
     // Default ROM paths (can be modified by user)    
     strcpy(gui_state->rom_path_basic, "data/c64/roms/basic.901226-01.bin");
     strcpy(gui_state->rom_path_kernal, "data/c64/roms/kernal.901227-03.bin");
@@ -207,7 +210,8 @@ void gui_render_frame(c64_t* c64, gui_state_t* gui_state, struct emulation_conte
     if (gui_state->show_about) {
         gui_render_about(gui_state);
     }
-
+    // PLA debug is now handled through the chip system
+    
     // Render chip debug and settings windows using chip callbacks
     if (c64 && c64->system.chip_count > 0) {
         for (uint8_t chip_id = 0; chip_id < c64->system.chip_count && chip_id < 16; chip_id++) {
@@ -304,19 +308,63 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, struct emulation_co
             igMenuItem_BoolPtr("Memory Viewer", NULL, &gui_state->show_memory_viewer, true);
             igMenuItem_BoolPtr("Debugger", NULL, &gui_state->show_debugger, true);
             
-            // Add dynamic chip debug windows
+            igEndMenu();
+        }
+
+        if (igBeginMenu("Chips", true)) {
+            // Special handling for PLA debug since it's registered as a chip now
             if (c64 && c64->system.chip_count > 0) {
-                igSeparator();
-                igText("Debug Windows:");
+                // Find the PLA chip in the system
                 for (uint8_t chip_id = 0; chip_id < c64->system.chip_count && chip_id < 16; chip_id++) {
                     chip_entry_t* entry = &c64->system.chips[chip_id];
-                    if (entry->desc && entry->desc->render_debug_window) {
-                        igPushID_Int(chip_id); // Push unique ID for each chip
-                        char menu_label[64];
-                        snprintf(menu_label, sizeof(menu_label), "%s", entry->desc->description);
-                        igMenuItem_BoolPtr(menu_label, NULL, &gui_state->show_chip_debug[chip_id], true);
-                        igPopID(); // Pop chip ID
+                    if (entry->desc && strcmp(entry->desc->description, "PLA (Programmable Logic Array)") == 0) {
+                        igMenuItem_BoolPtr("PLA Debug", NULL, &gui_state->show_chip_debug[chip_id], true);
+                        break;
                     }
+                }
+            }
+            
+            // Add chip debug windows organized by categories
+            if (c64 && c64->system.chip_count > 0) {
+                igSeparator();
+                
+                // Memory & Logic category
+                if (igBeginMenu("Memory & Logic", true)) {
+                    for (uint8_t chip_id = 0; chip_id < c64->system.chip_count && chip_id < 16; chip_id++) {
+                        chip_entry_t* entry = &c64->system.chips[chip_id];
+                        if (entry->desc && entry->desc->render_debug_window) {
+                            // Check if this is a memory/logic chip (RAM, ROM, PLA)
+                            const char* desc = entry->desc->description;
+                            if (strstr(desc, "RAM") || strstr(desc, "ROM") || strstr(desc, "PLA") || strstr(desc, "Memory")) {
+                                igPushID_Int(chip_id);
+                                char menu_label[64];
+                                snprintf(menu_label, sizeof(menu_label), "%s", desc);
+                                igMenuItem_BoolPtr(menu_label, NULL, &gui_state->show_chip_debug[chip_id], true);
+                                igPopID();
+                            }
+                        }
+                    }
+                    igEndMenu();
+                }
+                
+                // I/O & Peripherals category
+                if (igBeginMenu("I/O & Peripherals", true)) {
+                    for (uint8_t chip_id = 0; chip_id < c64->system.chip_count && chip_id < 16; chip_id++) {
+                        chip_entry_t* entry = &c64->system.chips[chip_id];
+                        if (entry->desc && entry->desc->render_debug_window) {
+                            // Check if this is an I/O or peripheral chip (VIC-II, SID, CIA)
+                            const char* desc = entry->desc->description;
+                            if (strstr(desc, "VIC") || strstr(desc, "SID") || strstr(desc, "CIA") || 
+                                strstr(desc, "I/O") || strstr(desc, "Video") || strstr(desc, "Audio")) {
+                                igPushID_Int(chip_id);
+                                char menu_label[64];
+                                snprintf(menu_label, sizeof(menu_label), "%s", desc);
+                                igMenuItem_BoolPtr(menu_label, NULL, &gui_state->show_chip_debug[chip_id], true);
+                                igPopID();
+                            }
+                        }
+                    }
+                    igEndMenu();
                 }
             }
             
@@ -1492,9 +1540,11 @@ static int gui_emulation_thread_main(void* data) {
                     const uint32_t sim_log_interval_ms = 10000; // Log every 10 seconds for simulation
                       while (context->current_state == EMU_STATE_RUNNING && context->thread_running && sim_cycles < MAX_SIM_CYCLES) {
                         // Simulate CPU step - this executes one instruction safely
+                        printf("Emulation thread: About to call mos6510_step, cycle %llu\n", (unsigned long long)sim_cycles);
                         if (mos6510_step(context->c64->mos6510)) {
                             context->total_cycles_executed++;
                             sim_cycles++;
+                            printf("Emulation thread: mos6510_step succeeded, cycle %llu\n", (unsigned long long)sim_cycles);
                         } else {
                             printf("Emulation thread: CPU step failed, stopping simulation\n");
                             break;
@@ -1524,50 +1574,74 @@ static int gui_emulation_thread_main(void* data) {
                     }
                 } else {
                     // Real execution mode with proper ROM
-                    printf("Emulation thread: Starting real CPU execution with intercept control\n");
+                    printf("Emulation thread: Starting real CPU execution with continuous execution\n");
                     
-                    // Set up controlled execution with intercept mechanism
-                    // This will allow the PAUSE signal to stop execution
-                    const uint32_t batch_size = 10000; // Execute in batches
+                    // Reset CPU to proper initial state and load reset vector into PC
+                    mos6510_reset(context->c64->mos6510);
+                    printf("Emulation thread: CPU reset completed, PC set to reset vector\n");
+                    
+                    // Use continuous execution with mos6510_execute()
+                    // This will run until intercept is triggered (for pause/stop)
                     uint32_t last_log_time = SDL_GetTicks();
                     const uint32_t log_interval_ms = 5000; // Log every 5 seconds
-                    uint64_t cycles_since_last_log = 0;
-                      while (context->current_state == EMU_STATE_RUNNING && context->thread_running) {
-                        // Execute a batch of instructions using controlled threaded dispatch
-                        uint32_t batch_cycles = 0;
+                    uint64_t last_total_cycles = context->total_cycles_executed;
+                    
+                    while (context->current_state == EMU_STATE_RUNNING && context->thread_running) {
+                        // Start continuous execution - this will run until intercept
+                        printf("Emulation thread: Starting continuous CPU execution\n");
+                        fflush(stdout); // Force output before potential crash
                         
-                        // Use intercept to limit execution to a batch
-                        for (int i = 0; i < (int)batch_size && context->current_state == EMU_STATE_RUNNING && context->thread_running; i++) {
-                            if (mos6510_step(context->c64->mos6510)) {
-                                context->total_cycles_executed++;
-                                batch_cycles++;
-                                cycles_since_last_log++;
-                            } else {
-                                printf("Emulation thread: CPU execution failed\n");
-                                context->current_state = EMU_STATE_STOPPED;
-                                break;
-                            }
+                        // Check CPU state before execution
+                        mos6510_t* cpu = (mos6510_t*)context->c64->mos6510;
+                        printf("Emulation thread: CPU PC=$%04X before execution\n", cpu->base.pc);
+                        fflush(stdout);
+                        
+                        // Record start time to detect crashes
+                        uint32_t start_time = SDL_GetTicks();
+                        
+                        mos6510_execute(context->c64->mos6510);
+                        
+                        uint32_t end_time = SDL_GetTicks();
+                        uint32_t execution_time = end_time - start_time;
+                        
+                        printf("Emulation thread: CPU execution returned after %u ms (intercept hit)\n", execution_time);
+                        fflush(stdout);
+                        
+                        // If execution returned very quickly, it might be a crash or error
+                        if (execution_time < 100) {
+                            printf("Emulation thread: WARNING - Execution returned very quickly (%u ms)\n", execution_time);
+                            printf("Emulation thread: CPU PC=$%04X after quick return\n", cpu->base.pc);
+                            fflush(stdout);
+                        }
+                        
+                        // Update cycle count (approximate - continuous execution doesn't track individual cycles)
+                        context->total_cycles_executed += 1000; // Rough estimate
+                        
+                        // Check why execution stopped
+                        if (mos6510_is_intercepting(context->c64->mos6510)) {
+                            printf("Emulation thread: Intercept detected, clearing intercept\n");
+                            mos6510_stop_intercept(context->c64->mos6510);
                             
-                            // Check for pause every 100 instructions
-                            if ((i % 100) == 0 && (mos6510_is_intercepting(context->c64->mos6510) || !context->thread_running)) {
-                                context->current_state = EMU_STATE_PAUSED;
+                            // Check if we should pause or continue
+                            if (context->current_state != EMU_STATE_RUNNING || !context->thread_running) {
+                                printf("Emulation thread: Pause/stop requested\n");
                                 break;
                             }
                         }
-                        // Time-based logging instead of per-batch logging
+                        
+                        // Time-based logging
                         uint32_t current_time = SDL_GetTicks();
                         if (current_time - last_log_time >= log_interval_ms) {
-                            printf("Emulation thread: Executed %llu cycles (total: %llu)\n", 
-                                   (unsigned long long)cycles_since_last_log,
+                            uint64_t cycles_executed = context->total_cycles_executed - last_total_cycles;
+                            printf("Emulation thread: Executed ~%llu cycles (total: %llu)\n", 
+                                   (unsigned long long)cycles_executed,
                                    (unsigned long long)context->total_cycles_executed);
                             last_log_time = current_time;
-                            cycles_since_last_log = 0;
+                            last_total_cycles = context->total_cycles_executed;
                         }
                         
-                        // Small delay between batches to allow GUI responsiveness
-                        if (context->current_state == EMU_STATE_RUNNING && context->thread_running) {
-                            SDL_Delay(10);
-                        }
+                        // Small delay to allow GUI responsiveness
+                        SDL_Delay(10);
                     }
                 }
                 
@@ -1676,3 +1750,6 @@ void gui_emulation_update_fps(emulation_context_t* context) {
 void gui_delay(uint32_t ms) {
     SDL_Delay(ms);
 }
+
+// PLA debug function moved to pla_gui.c
+// PLA is now handled through the chip system

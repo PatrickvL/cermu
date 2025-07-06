@@ -1,4 +1,48 @@
 #include "pla.h"
+#include "../../core/chip.h"
+#include "../../systems/c64/c64_bus.h"
+#include <stdio.h>
+
+//#define DEBUG_PLA_BANKING
+
+// ============================================================================
+// PLA CHIP DESCRIPTOR FOR GUI INTEGRATION
+// ============================================================================
+
+// PLA create function - returns NULL since PLA is part of the C64 bus system
+static void* pla_create(chip_descriptor_t* desc) {
+    // PLA is not a standalone chip - it's part of the C64 bus system
+    return NULL;
+}
+
+// PLA destroy function - no-op since PLA is part of the bus
+static void pla_destroy(void* chip) {
+    // PLA is part of the C64 system, not destroyed separately
+}
+
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+// Forward declaration for GUI function
+void pla_render_debug_window(void* chip, bool* show_window);
+#endif
+
+// PLA chip descriptor
+chip_descriptor_t pla_descriptor = {
+    .description = "PLA (Programmable Logic Array)",
+    .create = pla_create,
+    .destroy = pla_destroy,
+    .read = NULL,  // PLA doesn't have direct read/write interface
+    .write = NULL,
+    .get_rwcb_context = NULL,
+    .bus_attach = NULL,
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    .render_debug_window = pla_render_debug_window,
+    .render_settings_window = NULL
+#endif
+};
+
+// ============================================================================
+// PLA LOGIC IMPLEMENTATION
+// ============================================================================
 #include <stdlib.h>
 #include <string.h>
 
@@ -89,6 +133,14 @@ void pla_906114_01_set_cardrigde_mode(pla_906114_01_t* pla, uint8_t high_nybble)
 }
 
 void pla_906114_01_update_outputs(pla_906114_01_t* pla) {
+    #ifdef DEBUG_PLA_BANKING
+    static int debug_call_count = 0;
+    debug_call_count++;
+    if (debug_call_count <= 5) {
+        printf("PLA update_outputs called %d times\n", debug_call_count);
+    }
+    #endif
+    
     // Input state (using same variable names as C# code for clarity)
     bool a12 = pla->inputs.a12;
     bool a13 = pla->inputs.a13;
@@ -243,4 +295,22 @@ void pla_906114_01_update_outputs(pla_906114_01_t* pla) {
                   p15 || p16 || p17 || p18);
     pla->outputs.n_roml = !(p19 || p20);
     pla->outputs.n_romh = !(p21 || p22 || p23);
+    
+    // Unconditional debug output for banking issue
+    if (a15 == 0 && a14 == 0 && a13 == 0 && a12 == 0) { // Bank 0
+        printf("PLA Bank 0: n_casram=%d n_basic=%d n_kernal=%d n_charrom=%d n_io=%d n_roml=%d n_romh=%d\n",
+               pla->outputs.n_casram, pla->outputs.n_basic, pla->outputs.n_kernal, 
+               pla->outputs.n_charrom, pla->outputs.n_io, pla->outputs.n_roml, pla->outputs.n_romh);
+        printf("PLA Inputs: n_loram=%d n_hiram=%d n_charen=%d n_exrom=%d n_game=%d n_aec=%d r_w=%d n_cas=%d\n",
+               pla->inputs.n_loram, pla->inputs.n_hiram, pla->inputs.n_charen,
+               pla->inputs.n_exrom, pla->inputs.n_game, pla->inputs.n_aec, pla->inputs.r_w, pla->inputs.n_cas);
+        
+        // Check which product terms are active for n_casram
+        bool casram_terms[] = {p0, p1, p2, p3, p4, p5, p6, p7, false, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22, p23, p24, p25, p26, p27, p28, false, false, false};
+        printf("Active CASRAM terms: ");
+        for (int i = 0; i < 32; i++) {
+            if (casram_terms[i]) printf("p%d ", i);
+        }
+        printf("\n");
+    }
 }

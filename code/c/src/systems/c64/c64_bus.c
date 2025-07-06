@@ -2,7 +2,6 @@
 #include "c64.h"
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>  // For printf (debug)
 
 /*
  * OPTIMIZED MEMORY ACCESS - Based on fast banking system
@@ -183,6 +182,8 @@ uint8_t pla_906114_01_outputs_to_acid(pla_906114_01_t* pla) {
         return ACID_ROMH;
     }
 
+    // Default to unmapped when no chip is selected
+    // This happens when all PLA outputs are inactive (high)
     return ACID_UNMAPPED;
 }
 
@@ -190,7 +191,7 @@ void c64_bus_populate_cpu_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pl
     // Set other inputs for normal CPU operation (not VIC-II access)
     pla->inputs.n_aec = false;   // CPU has bus control (AEC high (#EAC low) = CPU access)
     pla->inputs.ba = true;       // Bus available (BA high = no DMA)
-    pla->inputs.n_cas = true;    // No CAS (CAS inactive for CPU access)
+    pla->inputs.n_cas = false;   // CAS active (CAS low = enable RAM access for CPU)
     // Map memory regions based on PLA outputs
     for (uint32_t bank = 0; bank < 16; bank++) {
         // Configure PLA for READ mode

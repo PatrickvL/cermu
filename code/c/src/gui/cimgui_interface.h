@@ -42,6 +42,8 @@ typedef struct {
     bool show_chip_debug[16];    // Debug windows for each chip (indexed by chip ID)
     bool show_chip_settings[16]; // Settings windows for each chip (indexed by chip ID)
     
+    // PLA Debug Window - now handled via chip debug system
+    
     // Memory viewer state
     uint16_t memory_address;
     int memory_columns;
@@ -132,6 +134,7 @@ void gui_render_debugger(struct c64_s* c64, gui_state_t* gui_state, struct emula
 void gui_render_settings(struct c64_s* c64, gui_state_t* gui_state);
 void gui_render_about(gui_state_t* gui_state);
 void gui_render_screen(struct c64_s* c64, gui_state_t* gui_state);
+// PLA debug is now handled through the chip system via pla_render_debug_window
 
 // Screen display functions
 bool gui_init_screen_display(gui_state_t* gui_state);

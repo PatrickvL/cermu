@@ -4,6 +4,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "../../core/chip.h"
+
+// PLA chip descriptor for GUI integration
+extern chip_descriptor_t pla_descriptor;
+
 // Commodore PLA MOS 906114-01 REV3 8411
 // https://www.c64-wiki.com/wiki/PLA_(C64_chip)
 // http://skoe.de/docs/c64-dissected/pla/c64_pla_dissected_a4ss.pdf
@@ -71,5 +76,11 @@ void pla_906114_01_set_cpu_address_bank(pla_906114_01_t* pla, uint8_t addr_high)
 
 // VIC address bus input (combines VA13-VA12)
 void pla_906114_01_set_vicii_address_bank(pla_906114_01_t* pla, uint8_t va_high);
+
+// Convert PLA output signals to ACID (Accessor ID) values
+uint8_t pla_906114_01_outputs_to_acid(pla_906114_01_t* pla);
+
+// GUI debug window
+void pla_render_debug_window(void* chip, bool* show_window);
 
 #endif // PLA_H
