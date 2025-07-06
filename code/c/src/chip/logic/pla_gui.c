@@ -339,13 +339,12 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                 igText("VIC-II Memory Detail (Active Bank %d):", current_vic_bank);
                 
                 // Detailed VIC-II memory map for active bank
-                if (igBeginTable("VICIIDetail", 7, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit, (ImVec2){0, 0}, 0)) {
+                if (igBeginTable("VICIIDetail", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit, (ImVec2){0, 0}, 0)) {
                     igTableSetupColumn("VIC Address", ImGuiTableColumnFlags_None, 0.0f, 0);
                     igTableSetupColumn("Physical Address", ImGuiTableColumnFlags_None, 0.0f, 0);
-                    igTableSetupColumn("Encoded", ImGuiTableColumnFlags_None, 0.0f, 0);
+                    igTableSetupColumn("ACID", ImGuiTableColumnFlags_None, 0.0f, 0);
                     igTableSetupColumn("Chip", ImGuiTableColumnFlags_None, 0.0f, 0);
                     igTableSetupColumn("Read Offset", ImGuiTableColumnFlags_None, 0.0f, 0);
-                    igTableSetupColumn("Write Offset", ImGuiTableColumnFlags_None, 0.0f, 0);
                     igTableSetupColumn("Usage", ImGuiTableColumnFlags_None, 0.0f, 0);
                     igTableHeadersRow();
                     
@@ -363,21 +362,18 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                         igTableSetColumnIndex(1);
                         igText("$%04X-$%04X", phys_start, phys_end);
                         
-                        // Determine what chip this maps to based on PLA mode
+                        // Determine what chip this maps to based on VIC-II PLA mode
                         uint8_t phys_bank = phys_start / 0x1000;
-                        uint8_t encoded = 0;
+                        uint8_t read_acid = ACID_RAM; // Default to RAM
                         if (has_bus && pla_debug_selected_mode < 32) {
-                            encoded = c64->bus->encoded_rwid_per_bank_per_mode[pla_debug_selected_mode][phys_bank];
+                            read_acid = c64->bus->vicii_acid_per_bank_per_mode[pla_debug_selected_mode][phys_bank];
                         }
-                        uint8_t read_acid = decode_read_acid(encoded);
-                        uint8_t write_acid = decode_write_acid(encoded);
                         
                         igTableSetColumnIndex(2);
-                        igText("%02X", encoded);
+                        igText("%02X", read_acid); // Show direct ACID, not encoded value
                         
-                        // Calculate separate read and write in-chip offsets
+                        // Calculate read offset (VIC-II only reads)
                         uint16_t read_offset = 0;
-                        uint16_t write_offset = 0;
                         
                         // Calculate read offset
                         if (read_acid == ACID_RAM) {
@@ -392,21 +388,6 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                             read_offset = phys_start - 0xD000; // I/O chips - offset within I/O space
                         } else {
                             read_offset = phys_start; // Other chips - use physical address as offset
-                        }
-                        
-                        // Calculate write offset
-                        if (write_acid == ACID_RAM) {
-                            write_offset = phys_start; // RAM is linear
-                        } else if (write_acid == ACID_CHARROM) {
-                            write_offset = phys_start - 0xD000; // Character ROM offset within 4KB ROM
-                        } else if (write_acid == ACID_BASIC) {
-                            write_offset = phys_start - 0xA000; // BASIC ROM offset within 8KB ROM  
-                        } else if (write_acid == ACID_KERNAL) {
-                            write_offset = phys_start - 0xE000; // KERNAL ROM offset within 8KB ROM
-                        } else if (write_acid >= ACID_VIC_D0 && write_acid <= ACID_IO2_DF) {
-                            write_offset = phys_start - 0xD000; // I/O chips - offset within I/O space
-                        } else {
-                            write_offset = phys_start; // Other chips - use physical address as offset
                         }
                         
                         igTableSetColumnIndex(3);
@@ -428,9 +409,6 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                         igText("$%04X", read_offset);
                         
                         igTableSetColumnIndex(5);
-                        igText("$%04X", write_offset);
-                        
-                        igTableSetColumnIndex(6);
                         // Common VIC-II memory usage
                         if (region == 0) {
                             igText("Sprite data / Screen");
@@ -553,11 +531,13 @@ static const char* get_acid_name(uint8_t acid) {
 
 // Helper function to decode ACID from encoded value
 static uint8_t decode_read_acid(uint8_t encoded) {
-    if (encoded == 0) return ACID_VIC_D0; // I/O pages - will be further resolved by address
-    return (encoded & 0xF) + ACID_IO2_DF; // Decode: add offset to get actual ACID
+    uint8_t read_code = encoded & 0xF; // Extract lower 4 bits
+    if (read_code == 0) return ACID_VIC_D0; // I/O pages - will be further resolved by address
+    return read_code + ACID_IO2_DF; // Decode: add offset to get actual ACID (16-24 become 1-9)
 }
 
 static uint8_t decode_write_acid(uint8_t encoded) {
-    if (encoded == 0) return ACID_VIC_D0; // I/O pages - will be further resolved by address
-    return (encoded >> 5) + ACID_IO2_DF; // Decode: extract upper 3 bits and add offset
+    uint8_t write_code = (encoded >> 5) & 0x7; // Extract upper 3 bits
+    if (write_code == 0) return ACID_VIC_D0; // I/O pages - will be further resolved by address
+    return write_code + ACID_IO2_DF; // Decode: extract upper 3 bits and add offset
 }

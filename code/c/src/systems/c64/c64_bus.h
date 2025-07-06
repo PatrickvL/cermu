@@ -82,7 +82,11 @@ typedef struct c64_bus_s {
     alignas(64) chip_write_func_t write_funcs[20]; // 160 bytes - separate cache line for writes (only writable chips 0-19)
     
     // Banking configurations per mode (32 modes x 16 banks = 512 bytes)
-    alignas(64) uint8_t encoded_rwid_per_bank_per_mode[32][16]; // Banking configurations per mode
+    alignas(64) uint8_t encoded_rwid_per_bank_per_mode[32][16]; // CPU banking configurations per mode
+    
+    // VIC-II banking configurations per mode (32 modes x 16 banks = 512 bytes)
+    // VIC-II uses direct ACID values, not encoded, since it only does read accesses
+    alignas(64) uint8_t vicii_acid_per_bank_per_mode[32][16]; // VIC-II direct ACID per mode
     
     // Integrated adapter interfaces - can be passed out as pointers
     bus_cycle_ops_t bus_adapter;
@@ -122,6 +126,7 @@ struct pla_906114_01_s;
 
 // PLA-based bus mapping functions
 void c64_bus_populate_cpu_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla);
+void c64_bus_populate_vicii_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla, uint8_t mode);
 
 // Generate all 32 memory modes using PLA
 void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla);

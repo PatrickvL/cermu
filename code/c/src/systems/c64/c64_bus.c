@@ -222,13 +222,13 @@ void c64_bus_populate_cpu_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pl
     }
 }
 
-void c64_bus_populate_vicii_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla) {
+void c64_bus_populate_vicii_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla, uint8_t mode) {
     // Set other inputs for VIC-II access (not normal CPU operation)
     pla->inputs.n_aec = true;   // VIC-II has bus control (AEC low (#EAC high) = VIC-II access)
     pla->inputs.ba = false;     // Bus available (BA low = DMA)
-    pla->inputs.n_cas = true;   // No CAS (CAS inactive for CPU access)
-    // Configure PLA for READ mode
-    pla->inputs.r_w = true;      // Read mode
+    pla->inputs.n_cas = true;   // CAS inactive for VIC-II regular memory access (not refresh)
+    // Configure PLA for READ mode (VIC-II only reads)
+    pla->inputs.r_w = true;     // Read mode
 
     // Map memory regions based on PLA outputs
     for (uint32_t bank = 0; bank < 16; bank++) {
@@ -237,10 +237,8 @@ void c64_bus_populate_vicii_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* 
         // Determine read ACID based on PLA outputs for read mode
         uint8_t read_acid = pla_906114_01_outputs_to_acid((pla_906114_01_t*)pla);
 
-        const uint8_t write_acid = ACID_UNMAPPED;
-        
-        // Encode both read and write ACIDs into the mapping
-        bus->encoded_rwid_per_bank[bank] = encode_acid_rw(read_acid, write_acid);
+        // VIC-II banking stores direct ACID values, no encoding needed
+        bus->vicii_acid_per_bank_per_mode[mode][bank] = read_acid;
     }
 }
 
@@ -257,13 +255,11 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
         // CPU address bits will be set during populate_pla_mapping for each bank
         // Populate mapping for this mode
         c64_bus_populate_cpu_pla_mapping(bus, pla);
-        // Copy the mapping to the mode-specific array
+        // Copy the CPU mapping to the mode-specific array
         memcpy(bus->encoded_rwid_per_bank_per_mode[mode], bus->encoded_rwid_per_bank, 16);
-/*
-        c64_bus_populate_vicii_pla_mapping(bus, pla);        
-        // Copy the mapping to the mode-specific array
-        memcpy(bus->vic_encoded_rwid_per_bank_per_mode[mode], bus->encoded_rwid_per_bank, 16);
-*/
+
+        // Populate VIC-II mapping for this mode (stores direct ACIDs)
+        c64_bus_populate_vicii_pla_mapping(bus, pla, (uint8_t)mode);
     }
 }
 
