@@ -115,18 +115,21 @@ uint8_t vic_memory_read(vicii_common_t* vicii, uint16_t address) {
     
     // ULTRA-OPTIMIZED VIC-II MEMORY READ - Better performance than CPU version
     // VIC-II uses pre-selected active array (raw ACIDs), can only read, never write
-    // Uses direct addressing without bank_base offset (already incorporated)
+    // Bank base offset applied here to keep operations in most appropriate place
+    
+    // Apply bank base offset to address
+    uint16_t final_address = address + vicii->memory.bank_base;
     
     // Extract 4KB bank from address (0-15 for VIC-II's 64KB addressable space)
-    uint8_t vic_bank = (address >> 12) & 0x0F;
+    uint8_t vic_bank = (final_address >> 12) & 0x0F;
     
     // Get raw ACID directly from pre-selected active array (no mode indexing)
     uint8_t read_acid = c64_bus->vic_rwid_per_bank[vic_bank];
     
-    // Direct callback with address as-is (bank_base already incorporated)
+    // Direct callback with final address including bank offset
     return c64_bus->read_callbacks[read_acid].read(
         c64_bus->read_callbacks[read_acid].context, 
-        address
+        final_address
     );
 }
 
@@ -654,7 +657,7 @@ void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, uint8_t acces
             // p-access: ""To the sprite data pointers; 8 bytes after the end of the video matrix,
             // that select one out of 256 blocks of 64 bytes within the VIC address
             // space for each sprite.""
-            address = vicii->memory.bank_base + vicii->memory.vm_base + 0x3F8 + access_param;
+            address = vicii->memory.vm_base + 0x3F8 + access_param;
             data = vic_memory_read(vicii, address);
             vicii->sprites.sprites[access_param].data_pointer = data;
             break;
@@ -663,7 +666,7 @@ void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, uint8_t acces
             // sprites which can be moved in steps of 64 bytes with the sprite data
             // pointers independently for each sprite.""
             if (vicii->sprites.sprites[access_param].mc_counter < 3) {
-                address = vicii->memory.bank_base + vicii->sprites.sprites[access_param].data_pointer * 64 + 
+                address = vicii->sprites.sprites[access_param].data_pointer * 64 + 
                          vicii->sprites.sprites[access_param].mc_counter;
                 data = vic_memory_read(vicii, address);
                 vicii->sprites.sprites[access_param].data_buffer[vicii->sprites.sprites[access_param].mc_counter] = data;
@@ -693,7 +696,7 @@ void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, uint8_t acces
                 
                 // SAME φ PHASE: Video matrix access (lower 8 bits of 12-bit matrix)
                 // ""The VIC accesses in the first phase (φ2 low), the processor in the second phase (φ2 high)""
-                address = vicii->memory.bank_base + vicii->memory.vm_base;
+                address = vicii->memory.vm_base;
                 data = vic_memory_read(vicii, address);
                 bus->data = data; // Set bus data for next access
                 vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = data; // Lower 8 bits of 12-bit matrix
@@ -709,18 +712,18 @@ void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, uint8_t acces
                     // Display state: g-access address calculation (Documentation section 3.7.3.1)
                     if (vicii->registers.data[VICII_C1] & VICII_C1_BMM) {
                         // Bitmap mode: ""CB13| VC9| VC8| VC7| VC6| VC5| VC4| VC3| VC2| VC1| VC0| RC2| RC1| RC0|""
-                        address = (vicii->memory.bank_base + vicii->memory.cb_base) | 
+                        address = vicii->memory.cb_base | 
                                    ((vicii->video_logic.vc & 0x3FF) << 3) | 
                                    (vicii->video_logic.rc & 0x07);
                     } else {
                         // Text mode: ""CB13|CB12|CB11| D7 | D6 | D5 | D4 | D3 | D2 | D1 | D0 | RC2| RC1| RC0|""
-                        address = (vicii->memory.bank_base + vicii->memory.cb_base) | 
+                        address = vicii->memory.cb_base | 
                                    (char_code << 3) | 
                                    (vicii->video_logic.rc & 0x07);
                     }
                 } else {
                     // Idle state: ""The access is always to address $3fff ($39ff when the ECM bit in register $d016 is set)""
-                    address = vicii->memory.bank_base + ((vicii->registers.data[VICII_C1] & VICII_C1_ECM) ? 0x39ff : 0x3fff);
+                    address = (vicii->registers.data[VICII_C1] & VICII_C1_ECM) ? 0x39ff : 0x3fff;
                 }
                 
                 // NEXT φ PHASE or SAME CYCLE: g-access reads character/bitmap data or idle data
@@ -742,7 +745,7 @@ void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, uint8_t acces
             // row addresses. The counter is reset to $ff in raster line 0 and decremented
             // by 1 after each refresh access.""
             if (vicii->enable_hardware_accurate_reads) {
-                address = (vicii->memory.bank_base + vicii->memory.vm_base) | 0x3F00 | vicii->video_logic.refresh_counter;
+                address = (vicii->memory.vm_base) | 0x3F00 | vicii->video_logic.refresh_counter;
                 data = vic_memory_read(vicii, address);
             } else {
                 // Skip read for performance - refresh counter still maintained for timing accuracy
@@ -757,7 +760,7 @@ void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, uint8_t acces
             // access to video address $3fff (i.e. to $3fff, $7fff, $bfff or $ffff
             // depending on the VIC bank) of which the result is discarded.""
             if (vicii->enable_hardware_accurate_reads) {
-                data = vic_memory_read(vicii, vicii->memory.bank_base + 0x3FFF);
+                data = vic_memory_read(vicii, 0x3FFF);
             } else {
                 // Skip read for performance - result discarded anyway per documentation
                 data = 0xFF; // Typical floating bus value
