@@ -6,7 +6,7 @@
 #include <string.h>
 
 // Simple stub for c64_non_cpu_cycle to avoid linking errors
-void c64_non_cpu_cycle(void* c64, bool do_at_least_one_tick, bool do_wait) {
+void c64_non_cpu_cycle(void* c64) {
     // Stub - not needed for this test
 }
 

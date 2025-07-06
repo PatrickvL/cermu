@@ -41,7 +41,7 @@ c64_t* c64_system_create(const system_config_t* config);
 void c64_system_destroy(c64_t* c64);
 
 // Ticks all non-CPU chips once to complete a cycle.
-inline void c64_non_cpu_cycle(void* c64_ptr);
+void c64_non_cpu_cycle(void* c64_ptr);
 bool c64_pla_maps_generate(c64_t* c64);  // PLA memory mapping generation
 void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config);
 bool c64_reload_roms(c64_t* c64, const rom_config_t* rom_config);
