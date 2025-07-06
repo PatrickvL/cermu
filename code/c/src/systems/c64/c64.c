@@ -194,6 +194,12 @@ bool c64_pla_maps_generate(c64_t* c64) {
     // Generate all 32 memory modes using PLA
     c64_bus_generate_all_pla_modes(bus, (struct pla_906114_01_s*)pla);
     
+    // In debug builds, dump the generated bank layouts for diagnosis
+#ifdef DEBUG
+    c64_bus_debug_dump_bank_layout(c64);
+    c64_bus_debug_dump_vicii_bank_layout(c64);
+#endif
+    
     // Clean up PLA instance
     pla_906114_01_destroy(pla);
     
