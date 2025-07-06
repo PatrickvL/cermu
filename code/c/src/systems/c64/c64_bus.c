@@ -234,7 +234,7 @@ void c64_bus_populate_vicii_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* 
         // Set address in PLA (will call pla_906114_01_update_outputs)
         pla_906114_01_set_vicii_address_bank((pla_906114_01_t*)pla, (uint8_t)bank);
         // Determine read ACID based on PLA outputs for read mode
-        uint8_t read_acid = pla_906114_01_outputs_to_acid((pla_906114_01_t*)pla, bank);
+        uint8_t read_acid = pla_906114_01_outputs_to_acid((pla_906114_01_t*)pla);
 
         const uint8_t write_acid = ACID_UNMAPPED;
         
