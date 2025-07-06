@@ -59,8 +59,8 @@ typedef enum {
 #define ENVELOPE_RATE_TABLE_SIZE 16
 
 // Forward declarations
-typedef struct voice_s voice_t;
-typedef struct mos6581_s mos6581_t;
+struct voice_s;
+struct mos6581_s;
 
 // Voice structure - matches C# Voice class
 typedef struct voice_s {
@@ -94,7 +94,7 @@ typedef struct voice_s {
     uint16_t envelope_next_level;     // Next level for envelope calculations
 
     // Reference to chip
-    mos6581_t* sid;
+    struct mos6581_s* sid;
 } voice_t;
 
 // MOS6581 SID structure - matches C# MOS6581 class

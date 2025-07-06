@@ -243,9 +243,9 @@ void mos6581_cycle(mos6581_t* sid) {
     }
 }
 
-void mos6581_bus_attach(void* chip, bus_cycle_ops_t* bus_interface) {
+void mos6581_bus_attach(void* chip, void* bus) {
     mos6581_t* sid = (mos6581_t*)chip;
-    sid->bus_interface = *bus_interface;
+    sid->bus_interface = *(bus_cycle_ops_t*)bus;
 }
 
 

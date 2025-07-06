@@ -289,7 +289,7 @@ void vic_registers_write(vicii_common_t* vicii, uint16_t address, uint8_t value)
         case VICII_C1: // $d011 Control register 1
             // Update bad line condition when C1 changes (YSCROLL or DEN bit changes)
             vic_update_badline_condition(vicii);
-            // Fall through to C2 case
+            /* fall through */
         case VICII_C2: // $d016 Control register 2
             vic_sequencer_update_mode(&vicii->sequencer, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
             vic_border_update_limits(&vicii->border, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
@@ -325,7 +325,7 @@ void vic_registers_write(vicii_common_t* vicii, uint16_t address, uint8_t value)
             break;
         case VICII_EC: // $d020 (4 bits) Exterior color (Border)
             vicii->border.border_pixel.color = value; // value already masked to 0x0F above
-            // Fall through to B0C-B2C case
+            /* fall through */
         case VICII_B0C: // $d021 (4 bits) Background color 0
         case VICII_B1C: // $d022 (4 bits) Background color 1
         case VICII_B2C: // $d023 (4 bits) Background color 2
@@ -701,7 +701,7 @@ void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, uint8_t acces
                 bus->data = data; // Set bus data for next access
                 vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = data; // Lower 8 bits of 12-bit matrix
             }
-            // Fall through to g-access case
+            /* fall through */
         case VIC_ACCESS_G:
             // g-access follows: ""In idle state, only g-accesses occur. The access is always to address $3fff""
             // ""In display state, c- and g-accesses take place, the addresses and interpretation of the data depend on the selected display mode""

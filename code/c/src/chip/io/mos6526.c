@@ -21,9 +21,9 @@ void mos6526_system_destroy(void* chip) {
     free(chip);
 }
 
-void mos6526_bus_attach(void* chip, bus_cycle_ops_t* bus_interface) {
+void mos6526_bus_attach(void* chip, void* bus) {
     mos6526_t* cia = (mos6526_t*)chip;
-    cia->bus_interface = *bus_interface;
+    cia->bus_interface = *(bus_cycle_ops_t*)bus;
 }
 
 void mos6526_reset(mos6526_t* cia) {
@@ -309,16 +309,16 @@ void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edg
     switch (in_mode) {
         // 0 = TIMER A counts phi2 pulses
         // 0 0 TIMER B counts phi2 pulses
-        case (0b00 << 5):
+        case (0x00 << 5):
             count_timer = true;
             break;
         // 1 = TIMER A counts positive CNT transitions.
         // 0 1 TIMER B counts positive CNT transitions.
-        case (0b01 << 5):
+        case (0x01 << 5):
             count_timer = cnt_is_positive_edge; // TODO: Verify
             break;
         // 1 0 TIMER B counts TIMER A underflow pulses.
-        case (0b10 << 5):
+        case (0x02 << 5):
             count_timer = (cia->reg[ICR] & ICR_TA) > 0;
             break;
         // 1 1 TIMER B counts TIMER A underflow pulses while CNT is high."

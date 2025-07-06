@@ -115,8 +115,6 @@
 #define VICII_EXTENDED_COLOR_MODE_MASK 4  // ECM=1
 
 // Forward declarations for types
-typedef enum vicii_color_e vicii_color_t;
-typedef enum vicii_priority_e vicii_priority_t;
 typedef struct vicii_pixel_s vicii_pixel_t;
 
 // VIC-II Colors
@@ -138,6 +136,7 @@ enum vicii_color_e {
     VICII_COLOR_LIGHT_BLUE = 14,
     VICII_COLOR_LIGHT_GREY = 15
 };
+typedef enum vicii_color_e vicii_color_t;
 
 // Priority levels for sprite/background collision
 enum vicii_priority_e {
@@ -147,6 +146,7 @@ enum vicii_priority_e {
     VICII_PRIORITY_SPRITE_IN_FRONT = 3,
     VICII_PRIORITY_BORDER = 4
 };
+typedef enum vicii_priority_e vicii_priority_t;
 
 // Pixel structure
 struct vicii_pixel_s {
