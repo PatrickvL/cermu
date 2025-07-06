@@ -4,26 +4,7 @@
 #include <string.h>
 #include <stdio.h>
 
-// Forward declaration for decode function from bus
-// Decode read/write ACIDs from encoded byte - reverse of encode_acid_rw
-static inline void decode_acid_rw(uint8_t encoded, uint8_t* read_acid, uint8_t* write_acid) {
-    uint8_t read_code = encoded & 0x0F;  // Extract bits [3:0]
-    uint8_t write_code = (encoded >> 5) & 0x07;  // Extract bits [7:5]
-    
-    // Reverse the encoding logic
-    // Special case: encoded 0 means I/O region, which will be resolved by memory access
-    if (read_code == 0) {  // ACID_VIC_D0
-        *read_acid = 0;  // I/O region - actual page will be determined by address bits
-    } else {
-        *read_acid = read_code + 15;  // ACID_IO2_DF
-    }
-    
-    if (write_code == 0) {  // ACID_VIC_D0
-        *write_acid = 0;  // I/O region - actual page will be determined by address bits  
-    } else {
-        *write_acid = write_code + 15;  // ACID_IO2_DF
-    }
-}
+
 
 // ========================================================================================
 // UTILITY FUNCTIONS AND CONSTANTS
@@ -673,7 +654,7 @@ void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, uint8_t acces
             // p-access: ""To the sprite data pointers; 8 bytes after the end of the video matrix,
             // that select one out of 256 blocks of 64 bytes within the VIC address
             // space for each sprite.""
-            address = vicii->memory.vm_base + 0x3F8 + access_param;
+            address = vicii->memory.bank_base + vicii->memory.vm_base + 0x3F8 + access_param;
             data = vic_memory_read(vicii, address);
             vicii->sprites.sprites[access_param].data_pointer = data;
             break;
@@ -682,7 +663,7 @@ void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, uint8_t acces
             // sprites which can be moved in steps of 64 bytes with the sprite data
             // pointers independently for each sprite.""
             if (vicii->sprites.sprites[access_param].mc_counter < 3) {
-                address = vicii->sprites.sprites[access_param].data_pointer * 64 + 
+                address = vicii->memory.bank_base + vicii->sprites.sprites[access_param].data_pointer * 64 + 
                          vicii->sprites.sprites[access_param].mc_counter;
                 data = vic_memory_read(vicii, address);
                 vicii->sprites.sprites[access_param].data_buffer[vicii->sprites.sprites[access_param].mc_counter] = data;
@@ -712,7 +693,7 @@ void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, uint8_t acces
                 
                 // SAME φ PHASE: Video matrix access (lower 8 bits of 12-bit matrix)
                 // ""The VIC accesses in the first phase (φ2 low), the processor in the second phase (φ2 high)""
-                address = vicii->memory.vm_base;
+                address = vicii->memory.bank_base + vicii->memory.vm_base;
                 data = vic_memory_read(vicii, address);
                 bus->data = data; // Set bus data for next access
                 vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = data; // Lower 8 bits of 12-bit matrix
@@ -728,18 +709,18 @@ void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, uint8_t acces
                     // Display state: g-access address calculation (Documentation section 3.7.3.1)
                     if (vicii->registers.data[VICII_C1] & VICII_C1_BMM) {
                         // Bitmap mode: ""CB13| VC9| VC8| VC7| VC6| VC5| VC4| VC3| VC2| VC1| VC0| RC2| RC1| RC0|""
-                        address = vicii->memory.cb_base | 
+                        address = (vicii->memory.bank_base + vicii->memory.cb_base) | 
                                    ((vicii->video_logic.vc & 0x3FF) << 3) | 
                                    (vicii->video_logic.rc & 0x07);
                     } else {
                         // Text mode: ""CB13|CB12|CB11| D7 | D6 | D5 | D4 | D3 | D2 | D1 | D0 | RC2| RC1| RC0|""
-                        address = vicii->memory.cb_base | 
+                        address = (vicii->memory.bank_base + vicii->memory.cb_base) | 
                                    (char_code << 3) | 
                                    (vicii->video_logic.rc & 0x07);
                     }
                 } else {
                     // Idle state: ""The access is always to address $3fff ($39ff when the ECM bit in register $d016 is set)""
-                    address = (vicii->registers.data[VICII_C1] & VICII_C1_ECM) ? 0x39ff : 0x3fff;
+                    address = vicii->memory.bank_base + ((vicii->registers.data[VICII_C1] & VICII_C1_ECM) ? 0x39ff : 0x3fff);
                 }
                 
                 // NEXT φ PHASE or SAME CYCLE: g-access reads character/bitmap data or idle data
@@ -761,7 +742,7 @@ void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, uint8_t acces
             // row addresses. The counter is reset to $ff in raster line 0 and decremented
             // by 1 after each refresh access.""
             if (vicii->enable_hardware_accurate_reads) {
-                address = vicii->memory.vm_base | 0x3F00 | vicii->video_logic.refresh_counter;
+                address = (vicii->memory.bank_base + vicii->memory.vm_base) | 0x3F00 | vicii->video_logic.refresh_counter;
                 data = vic_memory_read(vicii, address);
             } else {
                 // Skip read for performance - refresh counter still maintained for timing accuracy
@@ -776,7 +757,7 @@ void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, uint8_t acces
             // access to video address $3fff (i.e. to $3fff, $7fff, $bfff or $ffff
             // depending on the VIC bank) of which the result is discarded.""
             if (vicii->enable_hardware_accurate_reads) {
-                data = vic_memory_read(vicii, 0x3FFF);
+                data = vic_memory_read(vicii, vicii->memory.bank_base + 0x3FFF);
             } else {
                 // Skip read for performance - result discarded anyway per documentation
                 data = 0xFF; // Typical floating bus value
