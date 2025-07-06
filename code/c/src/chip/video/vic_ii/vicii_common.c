@@ -132,23 +132,20 @@ uint8_t vic_memory_read(vicii_common_t* vicii, uint16_t address) {
     
     c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
     
-    // FULLY OPTIMIZED VIC-II MEMORY READ - More optimal than CPU version
-    // VIC-II uses raw ACIDs (no encoding/decoding), can only read, never write
-    // Uses all 16 banks with direct ACID access
+    // ULTRA-OPTIMIZED VIC-II MEMORY READ - Better performance than CPU version
+    // VIC-II uses pre-selected active array (raw ACIDs), can only read, never write
+    // Uses direct addressing without bank_base offset (already incorporated)
     
-    // Extract 4KB bank from full 16-bit address (0-15 for VIC-II's 64KB addressable space)
-    uint8_t vic_bank = (address >> 12) & 0x0F;  // All 16 banks
+    // Extract 4KB bank from address (0-15 for VIC-II's 64KB addressable space)
+    uint8_t vic_bank = (address >> 12) & 0x0F;
     
-    // Get raw ACID directly for this bank in current PLA mode (no decoding needed)
-    uint8_t read_acid = c64_bus->vic_rwid_per_bank_per_mode[c64_bus->pla_banking_mode][vic_bank];
+    // Get raw ACID directly from pre-selected active array (no mode indexing)
+    uint8_t read_acid = c64_bus->vic_rwid_per_bank[vic_bank];
     
-    // Calculate final address including VIC-II bank offset from CIA2
-    uint16_t final_address = (address & 0x3FFF) | vicii->memory.bank_base;
-    
-    // Direct callback - single operation, no decode, no branches
+    // Direct callback with address as-is (bank_base already incorporated)
     return c64_bus->read_callbacks[read_acid].read(
         c64_bus->read_callbacks[read_acid].context, 
-        final_address
+        address
     );
 }
 

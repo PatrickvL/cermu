@@ -72,6 +72,8 @@ typedef struct c64_bus_s {
     // OPTIMIZED MEMORY BANKING - Cache-friendly layout
     // 16 bytes: encoded_rwid_per_bank mapping (4KB banks 0-15) - fits in single cache line
     alignas(16) uint8_t encoded_rwid_per_bank[16];
+    // VIC-II active array for optimized access (raw ACIDs, no encoding)  
+    alignas(16) uint8_t vic_rwid_per_bank[16];
     
     // Split read/write for better cache usage (reads are 3-4x more frequent)
     alignas(64) struct {

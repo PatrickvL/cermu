@@ -126,6 +126,8 @@ void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {
     c64_bus->pla_banking_mode = mode & 0x1F;
     
     memcpy(c64_bus->encoded_rwid_per_bank, c64_bus->encoded_rwid_per_bank_per_mode[mode], 16);
+    // Also copy VIC-II active array for optimal performance
+    memcpy(c64_bus->vic_rwid_per_bank, c64_bus->vic_rwid_per_bank_per_mode[mode], 16);
 }
 
 // Waits for the bus to be ready, ticking non-CPU chips.
