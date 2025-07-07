@@ -105,6 +105,12 @@ void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {
     memcpy(c64_bus->vic_ii_acid_per_bank, c64_bus->vic_ii_acid_per_bank_per_mode[mode], 16);
 }
 
+static void c64_bus_update_pla_mode(c64_bus_t* c64_bus) {
+    uint8_t cpu_port_bits = c64_bus->pla_banking_mode & 0x07;
+    uint8_t pla_mode = c64_bus_generate_pla_mode(c64_bus, cpu_port_bits);
+    c64_bus_mode_switch(c64_bus, pla_mode);
+}
+
 // Waits for the bus to be ready, ticking non-CPU chips.
 static inline void c64_wait_for_bus_ready(c64_bus_t *c64_bus, bool is_read_cycle) {
     c64_t* c64 = c64_bus->c64;
@@ -409,11 +415,8 @@ void c64_bus_set_exrom_signal(c64_bus_t* c64_bus, bool active) {
     } else {
         c64_bus->system_lines |= SYS_MASK_EXROM;   // Set bit (signal high)
     }
-    
-    // Regenerate PLA mode with updated cartridge signals
-    uint8_t cpu_port_bits = c64_bus->pla_banking_mode & 0x07;  // Extract CPU port bits
-    uint8_t pla_mode = c64_bus_generate_pla_mode(c64_bus, cpu_port_bits);
-    c64_bus_mode_switch(c64_bus, pla_mode);
+
+    c64_bus_update_pla_mode(c64_bus);
 }
 
 /**
@@ -432,10 +435,7 @@ void c64_bus_set_game_signal(c64_bus_t* c64_bus, bool active) {
         c64_bus->system_lines |= SYS_MASK_GAME;    // Set bit (signal high)
     }
     
-    // Regenerate PLA mode with updated cartridge signals
-    uint8_t cpu_port_bits = c64_bus->pla_banking_mode & 0x07;  // Extract CPU port bits
-    uint8_t pla_mode = c64_bus_generate_pla_mode(c64_bus, cpu_port_bits);
-    c64_bus_mode_switch(c64_bus, pla_mode);
+    c64_bus_update_pla_mode(c64_bus);
 }
 
 /**
@@ -462,10 +462,7 @@ void c64_bus_set_cartridge_signals(c64_bus_t* c64_bus, bool exrom_active, bool g
         c64_bus->system_lines |= SYS_MASK_GAME;    // Set bit (signal high)
     }
     
-    // Regenerate PLA mode with updated cartridge signals (once for both signals)
-    uint8_t cpu_port_bits = c64_bus->pla_banking_mode & 0x07;  // Extract CPU port bits
-    uint8_t pla_mode = c64_bus_generate_pla_mode(c64_bus, cpu_port_bits);
-    c64_bus_mode_switch(c64_bus, pla_mode);
+    c64_bus_update_pla_mode(c64_bus);
 }
 
 /**
