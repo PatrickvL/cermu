@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 // Maximum array sizes for processor tests
 #define MAX_RAM_ENTRIES 16

@@ -72,7 +72,9 @@ typedef struct c64_bus_s {
     // OPTIMIZED MEMORY BANKING - Cache-friendly layout
     // 16 bytes: encoded_rwid_per_bank mapping (4KB banks 0-15) - fits in single cache line
     alignas(16) uint8_t encoded_rwid_per_bank[16];
-    
+    // VIC-II active array for optimized access (raw ACIDs, no encoding)  
+    alignas(16) uint8_t vic_ii_acid_per_bank[16];
+
     // Split read/write for better cache usage (reads are 3-4x more frequent)
     alignas(64) struct {
         void *context;
@@ -86,7 +88,7 @@ typedef struct c64_bus_s {
     
     // VIC-II banking configurations per mode (32 modes x 16 banks = 512 bytes)
     // VIC-II uses direct ACID values, not encoded, since it only does read accesses
-    alignas(64) uint8_t vicii_acid_per_bank_per_mode[32][16]; // VIC-II direct ACID per mode
+    alignas(64) uint8_t vic_ii_acid_per_bank_per_mode[32][16]; // VIC-II direct ACID per mode
     
     // Integrated adapter interfaces - can be passed out as pointers
     bus_cycle_ops_t bus_adapter;

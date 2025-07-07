@@ -13,12 +13,166 @@
 #include <stdio.h>
 #include <string.h>
 
-// Forward declarations
-static const char* get_pla_mode_description(uint8_t mode);
-static const char* get_chip_detail(uint8_t acid);
-static const char* get_acid_name(uint8_t acid);
-static uint8_t decode_read_acid(uint8_t encoded);
-static uint8_t decode_write_acid(uint8_t encoded);
+// Helper function to decode ACID from encoded value - TODO : Move to c64_bus.h
+// Decode read/write ACIDs from encoded byte - reverse of encode_acid_rw
+static uint8_t decode_read_acid(uint8_t encoded) {
+    uint8_t read_code = encoded & 0xF; // Extract lower 4 bits
+    if (read_code == 0) return ACID_VIC_D0; // I/O pages - will be further resolved by address
+    return read_code + ACID_IO2_DF; // Decode: add offset to get actual ACID (16-24 become 1-9)
+}
+
+static uint8_t decode_write_acid(uint8_t encoded) {
+    uint8_t write_code = (encoded >> 5) & 0x7; // Extract upper 3 bits
+    if (write_code == 0) return ACID_VIC_D0; // I/O pages - will be further resolved by address
+    return write_code + ACID_IO2_DF; // Decode: extract upper 3 bits and add offset
+}
+
+// Helper function to get PLA mode description
+static const char* get_pla_mode_description(uint8_t mode) {
+    static char mode_desc[256];
+    
+    uint8_t loram = mode & 0x01;
+    uint8_t hiram = (mode >> 1) & 0x01;
+    uint8_t charen = (mode >> 2) & 0x01;
+    uint8_t exrom = (mode >> 3) & 0x01;
+    uint8_t game = (mode >> 4) & 0x01;
+    
+    snprintf(mode_desc, sizeof(mode_desc), 
+             "LORAM:%d HIRAM:%d CHAREN:%d EXROM:%d GAME:%d",
+             loram, hiram, charen, exrom, game);
+    
+    return mode_desc;
+}
+
+// Helper function to get detailed chip information
+static const char* get_chip_detail(uint8_t acid) {
+    switch (acid) {
+        case ACID_VIC_D0: return "VIC-II Video Interface Controller ($D000-$D0FF)";
+        case ACID_VIC_D1: return "VIC-II Extended Registers ($D100-$D1FF)";
+        case ACID_VIC_D2: return "VIC-II Mirror ($D200-$D2FF)";
+        case ACID_VIC_D3: return "VIC-II Mirror ($D300-$D3FF)";
+        case ACID_SID_D4: return "SID Sound Interface Device ($D400-$D4FF)";
+        case ACID_SID_D5: return "SID Mirror ($D500-$D5FF)";
+        case ACID_SID_D6: return "SID Mirror ($D600-$D6FF)";
+        case ACID_SID_D7: return "SID Mirror ($D700-$D7FF)";
+        case ACID_COLORRAM_D8: return "Color RAM ($D800-$DBFF, 1KB 4-bit)";
+        case ACID_COLORRAM_D9: return "Color RAM ($D800-$DBFF, 1KB 4-bit)";
+        case ACID_COLORRAM_DA: return "Color RAM ($D800-$DBFF, 1KB 4-bit)";
+        case ACID_COLORRAM_DB: return "Color RAM ($D800-$DBFF, 1KB 4-bit)";
+        case ACID_CIA1_DC: return "CIA1 Complex Interface Adapter ($DC00-$DCFF)";
+        case ACID_CIA2_DD: return "CIA2 Complex Interface Adapter ($DD00-$DDFF)";
+        case ACID_IO1_DE: return "I/O Expansion Area 1 ($DE00-$DEFF)";
+        case ACID_IO2_DF: return "I/O Expansion Area 2 ($DF00-$DFFF)";
+        case ACID_ZEROBANK: return "Zero Page RAM ($0000-$00FF)";
+        case ACID_RAM: return "Main RAM (64KB total)";
+        case ACID_ROML: return "Cartridge ROM Low ($8000-$9FFF)";
+        case ACID_ROMH: return "Cartridge ROM High ($A000-$BFFF)";
+        case ACID_UNMAPPED: return "Detached/Unmapped";
+        case ACID_BASIC: return "BASIC ROM ($A000-$BFFF, 8KB)";
+        case ACID_CHARROM: return "Character ROM ($D000-$DFFF, 4KB)";
+        case ACID_KERNAL: return "KERNAL ROM ($E000-$FFFF, 8KB)";
+        default: return "Unknown ACID";
+    }
+}
+
+// Helper function to get ACID name (without addresses)
+static const char* get_acid_name(uint8_t acid) {
+    switch (acid) {
+        // For I/O ACIDs (0-15), we need to map them to descriptive names
+        case ACID_VIC_D0:
+        case ACID_VIC_D1:
+        case ACID_VIC_D2:
+        case ACID_VIC_D3:
+            return "VIC-II";
+        case ACID_SID_D4:
+        case ACID_SID_D5:
+        case ACID_SID_D6:
+        case ACID_SID_D7:
+            return "SID";
+        case ACID_COLORRAM_D8:
+        case ACID_COLORRAM_D9:
+        case ACID_COLORRAM_DA:
+        case ACID_COLORRAM_DB:
+            return "Color RAM";
+        case ACID_CIA1_DC:
+            return "CIA1";
+        case ACID_CIA2_DD:
+            return "CIA2";
+        case ACID_IO1_DE:
+            return "IO1";
+        case ACID_IO2_DF:
+            return "IO2";
+        // For non-I/O ACIDs, map to standard names
+        case ACID_ZEROBANK:
+            return "CPU-Zero Bank";
+        case ACID_RAM:
+            return "RAM";
+        case ACID_ROML:
+            return "Cart ROM Low";
+        case ACID_ROMH:
+            return "Cart ROM High";
+        case ACID_UNMAPPED:
+            return "-";
+        case ACID_BASIC:
+            return "BASIC ROM";
+        case ACID_CHARROM:
+            return "Character ROM";
+        case ACID_KERNAL:
+            return "KERNAL ROM";
+        default:
+            return "INVALID";
+    }    
+}
+
+// Helper function to get chip base address from ACID by searching the system
+static uint16_t c64_bus_get_chip_base_from_acid(c64_bus_t* bus, uint8_t acid) {
+    if (!bus->c64) return 0x0000;
+    
+    c64_t* c64 = (c64_t*)bus->c64;
+    system_8bit_t* system = &c64->system;
+    
+    // For I/O ACIDs, return the I/O page base address
+    if (acid <= ACID_IO2_DF) {
+        return 0xD000 + (acid * 0x100);
+    }
+    
+    // For non-I/O ACIDs, search through registered chips
+    for (int i = 0; i < system->chip_count; i++) {
+        chip_entry_t* entry = &system->chips[i];
+        
+        // Match chip descriptor to ACID
+        if (entry->desc == &ram_descriptor && acid == ACID_RAM) {
+            return entry->base_address;
+        }
+        else if (entry->desc == &rom_descriptor) {
+            if (entry->base_address == 0xA000 && acid == ACID_BASIC) {
+                return entry->base_address;
+            }
+            else if (entry->base_address == 0xD000 && acid == ACID_CHARROM) {
+                return entry->base_address;
+            }
+            else if (entry->base_address == 0xE000 && acid == ACID_KERNAL) {
+                return entry->base_address;
+            }
+            else if (entry->base_address == 0x8000 && acid == ACID_ROML) {
+                return entry->base_address;
+            }
+            else if ((entry->base_address == 0xA000 || entry->base_address == 0xE000) && acid == ACID_ROMH) {
+                return entry->base_address;
+            }
+        }
+    }
+    
+    // Default mappings for special cases
+    switch (acid) {
+        case ACID_ZEROBANK:
+            return 0x0000;
+        case ACID_UNMAPPED:
+            return 0x0000;
+        default:
+            return 0x0000;
+    }
+}
 
 // ============================================================================
 // PLA GUI DEBUG WINDOW
@@ -110,14 +264,15 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                     uint8_t read_acid = decode_read_acid(encoded);
                     uint8_t write_acid = decode_write_acid(encoded);
                     
-                    // Special handling for I/O pages (bank 0xD when encoded == 0)
-                    if (encoded == 0 && bank == 0xD) {
+                    // Special handling for I/O pages
+                    if (read_acid == ACID_VIC_D0 || write_acid == ACID_VIC_D0) {
                         // Show I/O pages as individual rows
                         for (int page = 0; page < 16; page++) {
                             if (page > 0) {
                                 igTableNextRow(ImGuiTableRowFlags_None, 0.0f);
                             }
-                            
+                            uint8_t page_read_acid = (read_acid == ACID_VIC_D0) ? page : read_acid;
+                            uint8_t page_write_acid = (write_acid == ACID_VIC_D0) ? page : write_acid;
                             uint16_t page_start = 0xD000 + (page * 0x100);
                             uint16_t page_end = page_start + 0xFF;
                             
@@ -132,15 +287,15 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                             igTableSetColumnIndex(2);
                             igText("00");
                             igTableSetColumnIndex(3);
-                            igText("%s", get_acid_name(page)); // page corresponds to ACID_VIC_D0 through ACID_IO2_DF
+                            igText("%s", get_acid_name(page_read_acid)); // page corresponds to ACID_VIC_D0 through ACID_IO2_DF
                             igTableSetColumnIndex(4);
-                            igText("%s", get_acid_name(page)); // Same for write
+                            igText("%s", get_acid_name(page_write_acid)); // Same for write
                             igTableSetColumnIndex(5);
                             igText("$%04X", page * 0x100);  // Read offset within I/O space
                             igTableSetColumnIndex(6);
                             igText("$%04X", page * 0x100);  // Write offset within I/O space
                             igTableSetColumnIndex(7);
-                            if (page == 0) {
+                            if (read_acid == 0) {
                                 igText("I/O Area");
                             } else {
                                 const char* chip_detail = get_chip_detail(page);
@@ -223,9 +378,9 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                         igTableSetColumnIndex(7);
                         // Add usage notes
                         if (bank == 0) {
-                            igText("Zero page");
+                            igText("Zero page, stack,  RAM");
                         } else if (bank == 1) {
-                            igText("Stack");
+                            igText("Basic ML program start");
                         } else if (bank >= 2 && bank <= 7) {
                             igText("User programs/data");
                         } else if (bank == 8 || bank == 9) {
@@ -366,7 +521,7 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                         uint8_t phys_bank = phys_start / 0x1000;
                         uint8_t read_acid = ACID_RAM; // Default to RAM
                         if (has_bus && pla_debug_selected_mode < 32) {
-                            read_acid = c64->bus->vicii_acid_per_bank_per_mode[pla_debug_selected_mode][phys_bank];
+                            read_acid = c64->bus->vic_ii_acid_per_bank_per_mode[pla_debug_selected_mode][phys_bank];
                         }
                         
                         igTableSetColumnIndex(2);
@@ -444,100 +599,4 @@ void pla_render_debug_window(void* chip, bool* show_window) {
     }
     
     igEnd();
-}
-
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-// Helper function to get PLA mode description
-static const char* get_pla_mode_description(uint8_t mode) {
-    static char mode_desc[256];
-    
-    uint8_t loram = mode & 0x01;
-    uint8_t hiram = (mode >> 1) & 0x01;
-    uint8_t charen = (mode >> 2) & 0x01;
-    uint8_t exrom = (mode >> 3) & 0x01;
-    uint8_t game = (mode >> 4) & 0x01;
-    
-    snprintf(mode_desc, sizeof(mode_desc), 
-             "LORAM:%d HIRAM:%d CHAREN:%d EXROM:%d GAME:%d",
-             loram, hiram, charen, exrom, game);
-    
-    return mode_desc;
-}
-
-// Helper function to get detailed chip information
-static const char* get_chip_detail(uint8_t acid) {
-    switch (acid) {
-        case ACID_VIC_D0: return "VIC-II Video Interface Controller ($D000-$D0FF)";
-        case ACID_VIC_D1: return "VIC-II Extended Registers ($D100-$D1FF)";
-        case ACID_VIC_D2: return "VIC-II Mirror ($D200-$D2FF)";
-        case ACID_VIC_D3: return "VIC-II Mirror ($D300-$D3FF)";
-        case ACID_SID_D4: return "SID Sound Interface Device ($D400-$D4FF)";
-        case ACID_SID_D5: return "SID Mirror ($D500-$D5FF)";
-        case ACID_SID_D6: return "SID Mirror ($D600-$D6FF)";
-        case ACID_SID_D7: return "SID Mirror ($D700-$D7FF)";
-        case ACID_COLORRAM_D8: return "Color RAM ($D800-$DBFF, 1KB 4-bit)";
-        case ACID_COLORRAM_D9: return "Color RAM ($D800-$DBFF, 1KB 4-bit)";
-        case ACID_COLORRAM_DA: return "Color RAM ($D800-$DBFF, 1KB 4-bit)";
-        case ACID_COLORRAM_DB: return "Color RAM ($D800-$DBFF, 1KB 4-bit)";
-        case ACID_CIA1_DC: return "CIA1 Complex Interface Adapter ($DC00-$DCFF)";
-        case ACID_CIA2_DD: return "CIA2 Complex Interface Adapter ($DD00-$DDFF)";
-        case ACID_IO1_DE: return "I/O Expansion Area 1 ($DE00-$DEFF)";
-        case ACID_IO2_DF: return "I/O Expansion Area 2 ($DF00-$DFFF)";
-        case ACID_ZEROBANK: return "Zero Page RAM ($0000-$00FF)";
-        case ACID_RAM: return "Main RAM (64KB total)";
-        case ACID_ROML: return "Cartridge ROM Low ($8000-$9FFF)";
-        case ACID_ROMH: return "Cartridge ROM High ($A000-$BFFF)";
-        case ACID_UNMAPPED: return "Detached/Unmapped";
-        case ACID_BASIC: return "BASIC ROM ($A000-$BFFF, 8KB)";
-        case ACID_CHARROM: return "Character ROM ($D000-$DFFF, 4KB)";
-        case ACID_KERNAL: return "KERNAL ROM ($E000-$FFFF, 8KB)";
-        default: return "Unknown ACID";
-    }
-}
-
-// Helper function to get ACID name (without addresses)
-static const char* get_acid_name(uint8_t acid) {
-    switch (acid) {
-        case ACID_VIC_D0: return "VIC-II";
-        case ACID_VIC_D1: return "VIC-II";
-        case ACID_VIC_D2: return "VIC-II";
-        case ACID_VIC_D3: return "VIC-II";
-        case ACID_SID_D4: return "SID";
-        case ACID_SID_D5: return "SID";
-        case ACID_SID_D6: return "SID";
-        case ACID_SID_D7: return "SID";
-        case ACID_COLORRAM_D8: return "Color RAM";
-        case ACID_COLORRAM_D9: return "Color RAM";
-        case ACID_COLORRAM_DA: return "Color RAM";
-        case ACID_COLORRAM_DB: return "Color RAM";
-        case ACID_CIA1_DC: return "CIA1";
-        case ACID_CIA2_DD: return "CIA2";
-        case ACID_IO1_DE: return "I/O1";
-        case ACID_IO2_DF: return "I/O2";
-        case ACID_ZEROBANK: return "Zero Bank";
-        case ACID_RAM: return "RAM";
-        case ACID_ROML: return "Cart ROM Low";
-        case ACID_ROMH: return "Cart ROM High";
-        case ACID_UNMAPPED: return "Detached";
-        case ACID_BASIC: return "BASIC ROM";
-        case ACID_CHARROM: return "Character ROM";
-        case ACID_KERNAL: return "KERNAL ROM";
-        default: return "Unknown";
-    }
-}
-
-// Helper function to decode ACID from encoded value
-static uint8_t decode_read_acid(uint8_t encoded) {
-    uint8_t read_code = encoded & 0xF; // Extract lower 4 bits
-    if (read_code == 0) return ACID_VIC_D0; // I/O pages - will be further resolved by address
-    return read_code + ACID_IO2_DF; // Decode: add offset to get actual ACID (16-24 become 1-9)
-}
-
-static uint8_t decode_write_acid(uint8_t encoded) {
-    uint8_t write_code = (encoded >> 5) & 0x7; // Extract upper 3 bits
-    if (write_code == 0) return ACID_VIC_D0; // I/O pages - will be further resolved by address
-    return write_code + ACID_IO2_DF; // Decode: extract upper 3 bits and add offset
 }

@@ -1,9 +1,11 @@
+//#define DEBUG_PLA_BANKING
+
 #include "pla.h"
 #include "../../core/chip.h"
 #include "../../systems/c64/c64_bus.h"
+#ifdef DEBUG_PLA_BANKING
 #include <stdio.h>
-
-//#define DEBUG_PLA_BANKING
+#endif
 
 // ============================================================================
 // PLA CHIP DESCRIPTOR FOR GUI INTEGRATION
@@ -113,6 +115,9 @@ void pla_906114_01_set_cpu_address_bank(pla_906114_01_t* pla, uint8_t high_nybbl
 void pla_906114_01_set_vicii_address_bank(pla_906114_01_t* pla, uint8_t high_nybble) {
     pla->inputs.va12 = (high_nybble & 0x01) != 0;
     pla->inputs.va13 = (high_nybble & 0x02) != 0;
+    // Handle VA14 line for different configurations
+    // For banks 0-3: VA14 = 0, For banks 4-7: VA14 = 0
+    // For banks 8-11: VA14 = 1, For banks 12-15: VA14 = 1
     pla->inputs.n_va14 = (high_nybble & 0x04) == 0; // VA14 is inverted in the PLA
     // Note that the VIC-II itself only has 14 address lines,
     // which can only address 16KB of memory. However, VIC-II
@@ -295,8 +300,8 @@ void pla_906114_01_update_outputs(pla_906114_01_t* pla) {
                   p15 || p16 || p17 || p18);
     pla->outputs.n_roml = !(p19 || p20);
     pla->outputs.n_romh = !(p21 || p22 || p23);
-    
-    // Unconditional debug output for banking issue
+#ifdef DEBUG_PLA_BANKING
+    // Debug output for banking issue
     if (a15 == 0 && a14 == 0 && a13 == 0 && a12 == 0) { // Bank 0
         printf("PLA Bank 0: n_casram=%d n_basic=%d n_kernal=%d n_charrom=%d n_io=%d n_roml=%d n_romh=%d\n",
                pla->outputs.n_casram, pla->outputs.n_basic, pla->outputs.n_kernal, 
@@ -313,4 +318,5 @@ void pla_906114_01_update_outputs(pla_906114_01_t* pla) {
         }
         printf("\n");
     }
+#endif
 }

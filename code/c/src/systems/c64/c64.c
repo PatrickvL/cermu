@@ -100,6 +100,30 @@ void c64_detached_write(void* context, uint16_t address, uint8_t value) {
     // Do nothing - detached chips do not write
 }
 
+uint8_t c64_dev_descriptor_to_acid(chip_entry_t* dev) {
+    chip_descriptor_t* desc = dev->desc;
+    
+    if (desc == &mos2114_descriptor) return ACID_COLORRAM_D8; // Color RAM
+    if (desc == &mos6510_descriptor) return ACID_ZEROBANK; // CPU handles zero bank
+    if (desc == &mos6526_descriptor) { // CIA chips get slots 12-13 (DC00-DDFF)
+        if (dev->base_address == 0xDC00) return ACID_CIA1_DC; // 12
+        if (dev->base_address == 0xDD00) return ACID_CIA2_DD; // 13
+    }
+    if (desc == &mos6567_descriptor || desc == &mos6569_descriptor) return ACID_VIC_D0; // VIC-II
+    if (desc == &mos6581_descriptor) return ACID_SID_D4; // SID
+    if (desc == &ram_descriptor) return ACID_RAM; // RAM
+    if (desc == &rom_descriptor) { // ROMs are handled by base address
+        if (dev->base_address == 0x8000) return ACID_ROML;
+        if (dev->base_address == 0xA000) return ACID_BASIC;
+        if (dev->base_address == 0xC000) return ACID_ROMH;
+        if (dev->base_address == 0xD000) return ACID_CHARROM;
+        if (dev->base_address == 0xE000) return ACID_KERNAL;
+    }
+    // Note : ACID_IO1_DE and ACID_IO2_DF are not yet supported, but reserved for future expansion
+
+    return ACID_UNMAPPED; // Default unmapped access
+}
+
 void c64_callbacks_init(c64_t* c64) {
     // Initialize optimized callback system
     c64_bus_t* bus = c64->bus;
@@ -117,68 +141,35 @@ void c64_callbacks_init(c64_t* c64) {
         void* context = dev->rwcb_context; // Set by system_chip_register
 
         // Map chips to optimized callback slots based on their type and address
-        uint8_t acid = ACID_UNMAPPED; // Default to unmapped access 
-        
-        if (desc == &mos6510_descriptor) {
-            acid = ACID_ZEROBANK; // CPU handles zero bank
-        }
-        else if (desc == &ram_descriptor) {
-            acid = ACID_RAM;
-        }
-        else if (desc == &rom_descriptor) {
-            if (dev->base_address == 0x8000) {
-                acid = ACID_ROML;
-            }
-            else if (dev->base_address == 0xA000) {
-                acid = ACID_BASIC;
-            }
-            else if (dev->base_address == 0xC000) {
-                acid = ACID_ROMH;
-            }
-            else if (dev->base_address == 0xD000) {
-                acid = ACID_CHARROM;
-            }
-            else if (dev->base_address == 0xE000) {
-                acid = ACID_KERNAL;
-            }
-        }
-        else if (desc == &mos6567_descriptor || desc == &mos6569_descriptor) {
-            // VIC-II (NTSC or PAL) gets I/O slots 0-3 (D000-D3FF)
-            c64_bus_register_chip_callbacks(bus, ACID_VIC_D0, context, desc->read, desc->write);
-            c64_bus_register_chip_callbacks(bus, ACID_VIC_D1, context, desc->read, desc->write);
-            c64_bus_register_chip_callbacks(bus, ACID_VIC_D2, context, desc->read, desc->write);
-            c64_bus_register_chip_callbacks(bus, ACID_VIC_D3, context, desc->read, desc->write);
-            continue;
-        }
-        else if (desc == &mos6581_descriptor) {
-            // SID gets I/O slots 4-7 (D400-D7FF)
-            c64_bus_register_chip_callbacks(bus, ACID_SID_D4, context, desc->read, desc->write);
-            c64_bus_register_chip_callbacks(bus, ACID_SID_D5, context, desc->read, desc->write);
-            c64_bus_register_chip_callbacks(bus, ACID_SID_D6, context, desc->read, desc->write);
-            c64_bus_register_chip_callbacks(bus, ACID_SID_D7, context, desc->read, desc->write);
-            continue;
-        }
-        else if (desc == &mos2114_descriptor) {
-            // Color RAM gets I/O slots 8-11 (D800-DBFF)
-            c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_D8, context, desc->read, desc->write);
-            c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_D9, context, desc->read, desc->write);
-            c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_DA, context, desc->read, desc->write);
-            c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_DB, context, desc->read, desc->write);
-            continue;
-        }
-        else if (desc == &mos6526_descriptor) {
-            // CIA chips get slots 12-13 (DC00-DDFF)
-            if (dev->base_address == 0xDC00) {
-                acid = ACID_CIA1_DC; // 12
-            }
-            else if (dev->base_address == 0xDD00) {
-                acid = ACID_CIA2_DD; // 13
-            }
-            // Note : ACID_IO1_DE and ACID_IO2_DF are not yet supported, but reserved for future expansion
-        }
-        
-        // Register the chip callback
-        c64_bus_register_chip_callbacks(bus, acid, context, desc->read, desc->write);
+        uint8_t acid = c64_dev_descriptor_to_acid(dev);
+
+        switch (acid) {
+            case ACID_VIC_D0:
+                // VIC-II (NTSC or PAL) gets I/O slots 0-3 (D000-D3FF)
+                c64_bus_register_chip_callbacks(bus, ACID_VIC_D0, context, desc->read, desc->write);
+                c64_bus_register_chip_callbacks(bus, ACID_VIC_D1, context, desc->read, desc->write);
+                c64_bus_register_chip_callbacks(bus, ACID_VIC_D2, context, desc->read, desc->write);
+                c64_bus_register_chip_callbacks(bus, ACID_VIC_D3, context, desc->read, desc->write);
+                break;
+            case ACID_SID_D4:
+                // SID gets I/O slots 4-7 (D400-D7FF)
+                c64_bus_register_chip_callbacks(bus, ACID_SID_D4, context, desc->read, desc->write);
+                c64_bus_register_chip_callbacks(bus, ACID_SID_D5, context, desc->read, desc->write);
+                c64_bus_register_chip_callbacks(bus, ACID_SID_D6, context, desc->read, desc->write);
+                c64_bus_register_chip_callbacks(bus, ACID_SID_D7, context, desc->read, desc->write);
+                break;
+            case ACID_COLORRAM_D8:
+                // Color RAM gets I/O slots 8-11 (D800-DBFF)
+                c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_D8, context, desc->read, desc->write);
+                c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_D9, context, desc->read, desc->write);
+                c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_DA, context, desc->read, desc->write);
+                c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_DB, context, desc->read, desc->write);
+                break;
+            default:
+                // Register the chip callback
+                c64_bus_register_chip_callbacks(bus, acid, context, desc->read, desc->write);
+                break;
+        }       
     }
 }
 
@@ -211,45 +202,57 @@ void (*bus_cycle_callback)(void) = NULL;
 
 // Ticks all non-CPU chips once to complete a cycle.
 void c64_non_cpu_cycle(void* c64_ptr) {
+    c64_t* c64 = (c64_t*)c64_ptr;  // Cast from opaque pointer
+
     // Optimized null check with unlikely hint - callback rarely set during normal emulation
     if (unlikely(bus_cycle_callback != NULL)) {
         bus_cycle_callback();
-    }
+    }    
 
-    c64_t* c64 = (c64_t*)c64_ptr;  // Cast from opaque pointer
-
-    // Safety check
-    if (!c64) {
+    // Safety checks
+    if (unlikely(!c64)) {
         printf("ERROR: c64_non_cpu_cycle called with NULL c64_ptr\n");
         fflush(stdout);
         return;
     }
+    if (unlikely(!c64->vicii)) {
+        printf("ERROR: c64->vicii is NULL at cycle %llu\n", (unsigned long long)c64->total_cycles);
+        fflush(stdout);
+        return;
+    }
 
-    c64->total_cycles++;
+    if (unlikely(!c64->cia1)) {
+        printf("ERROR: c64->cia1 is NULL at cycle %llu\n", (unsigned long long)c64->total_cycles);
+        fflush(stdout);
+        return;
+    }
+    
+    if (unlikely(!c64->cia2)) {
+        printf("ERROR: c64->cia2 is NULL at cycle %llu\n", (unsigned long long)c64->total_cycles);
+        fflush(stdout);
+        return;
+    }
+    
+    if (unlikely(!c64->sid)) {
+        printf("ERROR: c64->sid is NULL at cycle %llu\n", (unsigned long long)c64->total_cycles);
+        fflush(stdout);
+        return;
+    }
+    
     // Debug output every 1000 cycles to track progress
     if (c64->total_cycles % 1000 == 0) {
         printf("c64_non_cpu_cycle: cycle #%llu\n", (unsigned long long)c64->total_cycles);
         fflush(stdout);
     }
-        
-    // VIC tick handles both phi1 and phi2 phases internally
-    if (c64->vicii) {
-        vicii_common_cycle(c64->vicii);
-    } else {
-        printf("ERROR: c64->vicii is NULL at cycle %llu\n", (unsigned long long)c64->total_cycles);
-        fflush(stdout);
-    }
     
+    c64->total_cycles++;
+    
+    // VIC tick handles both phi1 and phi2 phases internally
+    vicii_common_cycle(c64->vicii);
     // Other chips tick once per complete cycle
-    if (c64->cia1) {
-        mos6526_cycle(c64->cia1);
-    }
-    if (c64->cia2) {
-        mos6526_cycle(c64->cia2);
-    }
-    if (c64->sid) {
-        mos6581_cycle(c64->sid);
-    }
+    mos6526_cycle(c64->cia1);
+    mos6526_cycle(c64->cia2);
+    mos6581_cycle(c64->sid);
 //        c64_update_interrupt_lines(c64, bus);
 //void c64_update_interrupt_lines(c64_t* c64, c64_bus_t* bus) {
 /*

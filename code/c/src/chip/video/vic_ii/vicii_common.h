@@ -114,11 +114,6 @@
 #define VICII_BITMAP_MODE_MASK        2  // BMM=1
 #define VICII_EXTENDED_COLOR_MODE_MASK 4  // ECM=1
 
-// Forward declarations for types
-typedef enum vicii_color_e vicii_color_t;
-typedef enum vicii_priority_e vicii_priority_t;
-typedef struct vicii_pixel_s vicii_pixel_t;
-
 // VIC-II Colors
 enum vicii_color_e {
     VICII_COLOR_BLACK = 0,
@@ -138,6 +133,7 @@ enum vicii_color_e {
     VICII_COLOR_LIGHT_BLUE = 14,
     VICII_COLOR_LIGHT_GREY = 15
 };
+typedef enum vicii_color_e vicii_color_t;
 
 // Priority levels for sprite/background collision
 enum vicii_priority_e {
@@ -147,12 +143,14 @@ enum vicii_priority_e {
     VICII_PRIORITY_SPRITE_IN_FRONT = 3,
     VICII_PRIORITY_BORDER = 4
 };
+typedef enum vicii_priority_e vicii_priority_t;
 
 // Pixel structure
 struct vicii_pixel_s {
     vicii_priority_t priority;
     vicii_color_t color;
 };
+typedef struct vicii_pixel_s vicii_pixel_t;
 
 // MOS6569 PAL VIC-II timing constants 
 #define VICII_PAL_CYCLES_PER_LINE    63 // aka MOS6569_CYCLES_PER_LINE

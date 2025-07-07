@@ -101,6 +101,8 @@ void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {
     c64_bus->pla_banking_mode = mode & 0x1F;
     
     memcpy(c64_bus->encoded_rwid_per_bank, c64_bus->encoded_rwid_per_bank_per_mode[mode], 16);
+    // Also copy VIC-II active array for optimal performance
+    memcpy(c64_bus->vic_ii_acid_per_bank, c64_bus->vic_ii_acid_per_bank_per_mode[mode], 16);
 }
 
 // Waits for the bus to be ready, ticking non-CPU chips.
@@ -222,15 +224,16 @@ void c64_bus_populate_cpu_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pl
     }
 }
 
-void c64_bus_populate_vicii_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla, uint8_t mode) {
+void c64_bus_populate_vicii_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla) {
     // Set other inputs for VIC-II access (not normal CPU operation)
     pla->inputs.n_aec = true;   // VIC-II has bus control (AEC low (#EAC high) = VIC-II access)
     pla->inputs.ba = false;     // Bus available (BA low = DMA)
     pla->inputs.n_cas = true;   // CAS inactive for VIC-II regular memory access (not refresh)
-    // Configure PLA for READ mode (VIC-II only reads)
+    // Configure PLA for READ mode (VIC-II can only read, never write)
     pla->inputs.r_w = true;     // Read mode
 
-    // Map memory regions based on PLA outputs
+    // VIC-II can access all 16 banks (full 16-bit address space)
+    // VA14 and VA15 are driven by CIA, so VIC-II can reach all 16 banks
     for (uint32_t bank = 0; bank < 16; bank++) {
         // Set address in PLA (will call pla_906114_01_update_outputs)
         pla_906114_01_set_vicii_address_bank((pla_906114_01_t*)pla, (uint8_t)bank);
@@ -238,13 +241,12 @@ void c64_bus_populate_vicii_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* 
         uint8_t read_acid = pla_906114_01_outputs_to_acid((pla_906114_01_t*)pla);
 
         // VIC-II banking stores direct ACID values, no encoding needed
-        bus->vicii_acid_per_bank_per_mode[mode][bank] = read_acid;
+        bus->vic_ii_acid_per_bank[bank] = read_acid;        
     }
 }
 
 void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla) {
-    // Generate all 32 memory modes (5-bit combinations of LORAM, HIRAM, CHAREN, EXROM, GAME)
-    // below code will 
+    // Generate all 32 CPU memory modes (5-bit combinations of LORAM, HIRAM, CHAREN, EXROM, GAME)
     for (int mode = 0; mode < 32; mode++) {
         // Set PLA inputs based on mode
         pla->inputs.n_loram = (mode & 0x01) == 0;    // LORAM (inverted)
@@ -257,9 +259,26 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
         c64_bus_populate_cpu_pla_mapping(bus, pla);
         // Copy the CPU mapping to the mode-specific array
         memcpy(bus->encoded_rwid_per_bank_per_mode[mode], bus->encoded_rwid_per_bank, 16);
-
+    }
+    
+    // Generate VIC-II memory modes (different steering parameters)
+    // VIC-II uses: #GAME, #EXROM, #VA14 = 3 bits, but #VA14 is handled per-bank
+    // So we have 4 unique configs based on #GAME and #EXROM
+    // We'll repeat these 4 configs across all 32 modes for easy indexing
+    for (int cpu_mode = 0; cpu_mode < 32; cpu_mode++) {
+        // Extract relevant bits for VIC-II: #GAME, #EXROM from CPU mode
+        bool n_game = (cpu_mode & 0x10) == 0;     // GAME (inverted)
+        bool n_exrom = (cpu_mode & 0x08) == 0;    // EXROM (inverted)
+        
+        // Set PLA inputs for VIC-II (only the relevant ones)
+        pla->inputs.n_game = n_game;
+        pla->inputs.n_exrom = n_exrom;
+        // Note: #VA14 will be set during populate_vicii_pla_mapping for each bank
+        
         // Populate VIC-II mapping for this mode (stores direct ACIDs)
-        c64_bus_populate_vicii_pla_mapping(bus, pla, (uint8_t)mode);
+        c64_bus_populate_vicii_pla_mapping(bus, pla);
+        // Copy the VIC-II raw ACIDs to the mode-specific array
+        memcpy(bus->vic_ii_acid_per_bank_per_mode[cpu_mode], bus->vic_ii_acid_per_bank, 16);
     }
 }
 
