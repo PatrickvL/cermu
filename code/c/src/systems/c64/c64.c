@@ -337,10 +337,10 @@ c64_t* c64_system_create(const system_config_t* config) {
     
     // Register PLA for GUI debugging (special case - chip is the C64 system itself)
     uint8_t pla_chip_id = system_chip_register(&c64->system, c64, &pla_descriptor, 0x0000, 0);
-    if (pla_chip_id == 0xFF) return NULL;
+    if (pla_chip_id == 0xFF) { c64_system_destroy(c64); return NULL; }
     
     // Now having a registry of all chips, the PLA maps can be generated
-    if (!c64_pla_maps_generate(c64)) return NULL;
+    if (!c64_pla_maps_generate(c64)) { c64_system_destroy(c64); return NULL; }
 
     // Attach RAM directly to MOS6510 for zero page access to avoid circular dependency
     access_callback_t ram_access = {

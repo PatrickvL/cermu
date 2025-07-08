@@ -202,8 +202,8 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                 for (int bank = 0; bank < 16; bank++) {
                     igTableNextRow(ImGuiTableRowFlags_None, 0.0f);
                     
-                    uint16_t start_addr = bank * 0x1000;
-                    uint16_t end_addr = start_addr + 0x0FFF;
+                    uint16_t bank_start = bank * 0x1000;
+                    uint16_t bank_end = bank_start + 0x0FFF;
                     
                     // Get encoded value for this bank and mode
                     uint8_t encoded = 0;
@@ -222,29 +222,36 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                             if (page > 0) {
                                 igTableNextRow(ImGuiTableRowFlags_None, 0.0f);
                             }
+                            uint16_t page_start = bank_start + (page * 0x100);
+                            uint16_t page_end = page_start + 0xFF;
+
                             uint8_t page_read_acid = (read_acid == ACID_VIC_D0) ? page : read_acid;
                             uint8_t page_write_acid = (write_acid == ACID_VIC_D0) ? page : write_acid;
-                            uint16_t page_start = 0xD000 + (page * 0x100);
-                            uint16_t page_end = page_start + 0xFF;
-                            
+                            acid_descriptor_t read_desc = {0};
+                            acid_descriptor_t write_desc = {0};
+                            c64_bus_get_acid_descriptor(has_bus ? c64->bus : NULL, page_read_acid, &read_desc);
+                            c64_bus_get_acid_descriptor(has_bus ? c64->bus : NULL, page_write_acid, &write_desc);
+                            uint16_t read_offset = (read_desc.base <= page_start) ? (page_start - read_desc.base) : 0;
+                            uint16_t write_offset = (write_desc.base <= page_start) ? (page_start - write_desc.base) : 0;
+
                             igTableSetColumnIndex(0);
                             if (page == 0) {
-                                igText("%02X", bank);
+                                igText("$%X", bank);
                             } else {
-                                igText("  .%X", page); // Sub-page indicator
+                                igText("$%2X", (bank < 4) | page); // Sub-page indicator
                             }
                             igTableSetColumnIndex(1);
                             igText("$%04X-$%04X", page_start, page_end);
                             igTableSetColumnIndex(2);
                             igText("00");
                             igTableSetColumnIndex(3);
-                            igText("%s", c64_bus_acid_to_title(page_read_acid)); // page corresponds to ACID_VIC_D0 through ACID_IO2_DF
+                            igText("%s", c64_bus_acid_to_title(page_read_acid));
                             igTableSetColumnIndex(4);
-                            igText("%s", c64_bus_acid_to_title(page_write_acid)); // Same for write
+                            igText("%s", c64_bus_acid_to_title(page_write_acid));
                             igTableSetColumnIndex(5);
-                            igText("$%04X", page * 0x100);  // Read offset within I/O space
+                            igText("$%04X", read_offset);  // Read offset within I/O space
                             igTableSetColumnIndex(6);
-                            igText("$%04X", page * 0x100);  // Write offset within I/O space
+                            igText("$%04X", write_offset);  // Write offset within I/O space
                             igTableSetColumnIndex(7);
                             if (read_acid == 0) {
                                 igText("I/O Area");
@@ -271,51 +278,17 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                     } else {
                         // Regular bank (non-I/O or I/O mapped to other chips)
                         // Calculate separate read and write in-chip offsets
-                        uint16_t read_offset = 0;
-                        uint16_t write_offset = 0;
-                        
-                        // Calculate read offset
-                        if (read_acid == ACID_RAM) {
-                            read_offset = start_addr; // RAM is linear
-                        } else if (read_acid == ACID_BASIC) {
-                            read_offset = start_addr >= 0xA000 ? start_addr - 0xA000 : 0;
-                        } else if (read_acid == ACID_KERNAL) {
-                            read_offset = start_addr >= 0xE000 ? start_addr - 0xE000 : 0;
-                        } else if (read_acid == ACID_CHARROM) {
-                            read_offset = start_addr >= 0xD000 ? start_addr - 0xD000 : 0;
-                        } else if (read_acid == ACID_ROML) {
-                            read_offset = start_addr >= 0x8000 ? start_addr - 0x8000 : 0;
-                        } else if (read_acid == ACID_ROMH) {
-                            read_offset = start_addr >= 0xA000 ? start_addr - 0xA000 : 0;
-                        } else if (read_acid >= ACID_VIC_D0 && read_acid <= ACID_IO2_DF) {
-                            read_offset = start_addr - 0xD000;
-                        } else {
-                            read_offset = start_addr;
-                        }
-                        
-                        // Calculate write offset
-                        if (write_acid == ACID_RAM) {
-                            write_offset = start_addr; // RAM is linear
-                        } else if (write_acid == ACID_BASIC) {
-                            write_offset = start_addr >= 0xA000 ? start_addr - 0xA000 : 0;
-                        } else if (write_acid == ACID_KERNAL) {
-                            write_offset = start_addr >= 0xE000 ? start_addr - 0xE000 : 0;
-                        } else if (write_acid == ACID_CHARROM) {
-                            write_offset = start_addr >= 0xD000 ? start_addr - 0xD000 : 0;
-                        } else if (write_acid == ACID_ROML) {
-                            write_offset = start_addr >= 0x8000 ? start_addr - 0x8000 : 0;
-                        } else if (write_acid == ACID_ROMH) {
-                            write_offset = start_addr >= 0xA000 ? start_addr - 0xA000 : 0;
-                        } else if (write_acid >= ACID_VIC_D0 && write_acid <= ACID_IO2_DF) {
-                            write_offset = start_addr - 0xD000;
-                        } else {
-                            write_offset = start_addr;
-                        }
-                        
+                        acid_descriptor_t read_desc = {0};
+                        acid_descriptor_t write_desc = {0};
+                        c64_bus_get_acid_descriptor(has_bus ? c64->bus : NULL, read_acid, &read_desc);
+                        c64_bus_get_acid_descriptor(has_bus ? c64->bus : NULL, write_acid, &write_desc);
+                        uint16_t read_offset = (read_desc.base <= bank_start) ? (bank_start - read_desc.base) : 0;
+                        uint16_t write_offset = (write_desc.base <= bank_start) ? (bank_start - write_desc.base) : 0;
+
                         igTableSetColumnIndex(0);
-                        igText("%02X", bank);
+                        igText("$%X", bank);
                         igTableSetColumnIndex(1);
-                        igText("$%04X-$%04X", start_addr, end_addr);
+                        igText("$%04X-$%04X", bank_start, bank_end);
                         igTableSetColumnIndex(2);
                         igText("%02X", encoded);
                         igTableSetColumnIndex(3);
@@ -549,24 +522,25 @@ void pla_render_debug_window(void* chip, bool* show_window) {
         igTableSetupColumn("Title", ImGuiTableColumnFlags_None, 0.0f, 0);
         igTableHeadersRow();
         acid_descriptor_t desc;
-        for (int acid = 0; acid < 24; acid++) {
+        for (int acid = 0; acid < ACID_MAX; acid++) {
             igTableNextRow(ImGuiTableRowFlags_None, 0.0f);
             igTableSetColumnIndex(0);
             igText("%02d", acid);
             igTableSetColumnIndex(1);
-            if (c64_bus_get_acid_descriptor(has_bus ? c64->bus : NULL, acid, &desc)) {
-                igText("$%04X-$%04X", desc.base, desc.base + (uint16_t)desc.size - 1);
+            bool has_desc = c64_bus_get_acid_descriptor(has_bus ? c64->bus : NULL, acid, &desc);
+            if (has_desc && desc.size > 0) {
+                igText("$%04X-$%04X", desc.base, (uint16_t)(desc.base + desc.size - 1));
             } else {
                 igText("-");
             }
             igTableSetColumnIndex(2);
-            if (desc.size > 0) {
-                igText("%s", c64_bus_size_to_str(desc.size));
-            } else {
-                igText("?");
-            }
+            igText("%s", c64_bus_size_to_str(desc.size));
             igTableSetColumnIndex(3);
-            igText("%s", c64_bus_acid_to_title(acid));
+            if (has_desc) {
+                igText("%s", desc.label);
+            } else {
+                igText("%s", c64_bus_acid_to_title(acid));
+            }
         }
         igEndTable();
     }

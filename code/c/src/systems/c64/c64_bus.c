@@ -516,18 +516,19 @@ bool c64_bus_get_acid_descriptor(const c64_bus_t* bus, uint8_t acid, acid_descri
         case ACID_ZEROBANK:
             out->base = 0x0000;
             out->size = 0x400;
-            out->label = "Zero Page RAM";
+            out->label = "Zero Bank RAM";
             return true;
         case ACID_UNMAPPED:
             out->base = 0;
             out->size = 0;
-            out->label = "-";
+            out->label = "Unmapped";
             return true;
         default:
             break;
     }
 
-    out->base = 0; out->size = 0;
+    out->base = 0;
+    out->size = 0;
     out->label = "?";
     return false;
 }
@@ -567,7 +568,7 @@ const char* c64_bus_acid_to_title(uint8_t acid) {
         case ACID_ROMH:
             return "Cartridge ROM High";
         case ACID_UNMAPPED:
-            return "-";
+            return "Unmapped";
         case ACID_BASIC:
             return "BASIC ROM";
         case ACID_CHARROM:
