@@ -312,18 +312,7 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, struct emulation_co
         }
 
         if (igBeginMenu("Chips", true)) {
-            // Special handling for PLA debug since it's registered as a chip now
-            if (c64 && c64->system.chip_count > 0) {
-                // Find the PLA chip in the system
-                for (uint8_t chip_id = 0; chip_id < c64->system.chip_count && chip_id < 16; chip_id++) {
-                    chip_entry_t* entry = &c64->system.chips[chip_id];
-                    if (entry->desc && strcmp(entry->desc->description, "PLA (Programmable Logic Array)") == 0) {
-                        igMenuItem_BoolPtr("PLA Debug", NULL, &gui_state->show_chip_debug[chip_id], true);
-                        break;
-                    }
-                }
-            }
-            
+            // Remove special handling for PLA debug since it's now handled by the chip system
             // Add chip debug windows organized by categories
             if (c64 && c64->system.chip_count > 0) {
                 igSeparator();
