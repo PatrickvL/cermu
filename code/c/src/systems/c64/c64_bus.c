@@ -2,6 +2,7 @@
 #include "c64.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 /*
  * OPTIMIZED MEMORY ACCESS - Based on fast banking system
@@ -379,21 +380,27 @@ void c64_bus_init_adapters(c64_bus_t* c64_bus) {
 // OPTIMIZED CALLBACK MANAGEMENT
 // ============================================================================
 
-// Register a chip's callbacks in the optimized arrays
-void c64_bus_register_chip_callbacks(c64_bus_t* bus, uint8_t acid, void* context,
-                                    chip_read_func_t read_func, chip_write_func_t write_func) {
-    if (acid >= 24) return;  // Invalid chip ID for reads
-    
+// Central ACID-to-chip_entry_t* mapping for fast lookup (populated at system init)
+static chip_entry_t* c64_bus_acid_to_entry[ACID_MAX] = {0};
+
+// Register a chip's callbacks in the optimized arrays and update ACID-to-entry mapping
+void c64_bus_register_chip_callbacks(c64_bus_t* bus, uint8_t acid, chip_entry_t* entry) {
+    if (acid >= ACID_MAX) return;  // Invalid chip ID for reads
+    if (!entry || !entry->desc) return;
+    chip_descriptor_t* desc = entry->desc;
+    void* context = entry->rwcb_context;
     // Register read callback
-    if (read_func) {
-        bus->read_callbacks[acid].read = read_func;
+    if (desc->read) {
+        bus->read_callbacks[acid].read = desc->read;
         bus->read_callbacks[acid].context = context;
     }
-    
     // Register write callback (only for writable chips 0-19)
-    if (write_func && acid < 20) {
-        bus->write_funcs[acid] = write_func;
+    if (desc->write && acid < 20) {
+        bus->write_funcs[acid] = desc->write;
     }
+
+    // Always set the ACID-to-entry mapping
+    c64_bus_acid_to_entry[acid] = entry;
 }
 
 // ============================================================================
@@ -489,4 +496,98 @@ bool c64_bus_get_game_signal(c64_bus_t* c64_bus) {
     
     // Return inverted state (bit set = signal high = inactive)
     return (c64_bus->system_lines & SYS_MASK_GAME) == 0;
+}
+
+// Update c64_bus_get_acid_descriptor to use the new mapping for all ACIDs
+bool c64_bus_get_acid_descriptor(const c64_bus_t* bus, uint8_t acid, acid_descriptor_t* out) {
+    if (!bus || !out || acid >= ACID_MAX) return false;
+
+    memset(out, 0, sizeof(*out));
+    chip_entry_t* entry = c64_bus_acid_to_entry[acid];
+    if (entry) {
+        out->base = entry->base_address;
+        out->size = entry->size;
+        out->label = entry->desc && entry->desc->description ? entry->desc->description : "?";
+        return true;
+    }
+
+    // Special cases
+    switch (acid) {
+        case ACID_ZEROBANK:
+            out->base = 0x0000;
+            out->size = 0x400;
+            out->label = "Zero Page RAM";
+            return true;
+        case ACID_UNMAPPED:
+            out->base = 0;
+            out->size = 0;
+            out->label = "-";
+            return true;
+        default:
+            break;
+    }
+
+    out->base = 0; out->size = 0;
+    out->label = "?";
+    return false;
+}
+
+// Return a concise title string for each ACID (for legend/tooling/GUI)
+const char* c64_bus_acid_to_title(uint8_t acid) {
+    switch (acid) {
+        case ACID_VIC_D0:
+        case ACID_VIC_D1:
+        case ACID_VIC_D2:
+        case ACID_VIC_D3:
+            return "VIC-II";
+        case ACID_SID_D4:
+        case ACID_SID_D5:
+        case ACID_SID_D6:
+        case ACID_SID_D7:
+            return "SID";
+        case ACID_COLORRAM_D8:
+        case ACID_COLORRAM_D9:
+        case ACID_COLORRAM_DA:
+        case ACID_COLORRAM_DB:
+            return "Color RAM";
+        case ACID_CIA1_DC:
+            return "CIA1";
+        case ACID_CIA2_DD:
+            return "CIA2";
+        case ACID_IO1_DE:
+            return "IO1";
+        case ACID_IO2_DF:
+            return "IO2";
+        case ACID_ZEROBANK:
+            return "Zero Bank RAM";
+        case ACID_RAM:
+            return "RAM";
+        case ACID_ROML:
+            return "Cartridge ROM Low";
+        case ACID_ROMH:
+            return "Cartridge ROM High";
+        case ACID_UNMAPPED:
+            return "-";
+        case ACID_BASIC:
+            return "BASIC ROM";
+        case ACID_CHARROM:
+            return "Character ROM";
+        case ACID_KERNAL:
+            return "KERNAL ROM";
+        default:
+            return "?";
+    }
+}
+
+// Utility: Convert a size in bytes to a human-readable string ("256B", "4KB", etc.)
+const char* c64_bus_size_to_str(size_t size) {
+    static char buf[16];
+    if (size >= (1 << 20) && (size % (1 << 20)) == 0) {
+        snprintf(buf, sizeof(buf), "%zuMB", size / (1 << 20));
+    } else if (size >= 1024 && (size % 1024) == 0) {
+        snprintf(buf, sizeof(buf), "%zuKB", size / 1024);
+    } else {
+        snprintf(buf, sizeof(buf), "%zuB", size);
+    }
+    return buf;
 }

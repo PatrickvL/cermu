@@ -55,6 +55,8 @@ enum {
     ACID_BASIC = 21,      /* $A000-$BFFF - BASIC ROM */
     ACID_CHARROM = 22,    /* $D000-$DFFF - Character ROM */
     ACID_KERNAL = 23,     /* $E000-$FFFF - KERNAL ROM */
+
+    ACID_MAX = 24 // Total number of ACIDs (0-23 for I/O, 16-19 for writable chips, 20-23 for read-only)
 };
 
 typedef struct c64_bus_s {
@@ -96,6 +98,28 @@ typedef struct c64_bus_s {
     mos6510_io_port_interface_t io_port_adapter;
 } c64_bus_t;
 
+// ACID descriptor struct for tooling
+typedef struct {
+    uint16_t base;
+    size_t size;
+//    uint16_t end;
+//    const char* size_str;
+    const char* label; // always from chip descriptor if available
+//    const char* title;
+} acid_descriptor_t;
+
+/**
+ * Fetch descriptor for a given ACID from registered chips or synthesize for I/O/special
+ * Returns true if found, false if not (out is only valid if true)
+ */
+bool c64_bus_get_acid_descriptor(const c64_bus_t* bus, uint8_t acid, acid_descriptor_t* out);
+
+// Tooling: Map ACID to a concise type/title string (not address/size)
+const char* c64_bus_acid_to_title(uint8_t acid);
+
+// Utility: Convert a size in bytes to a human-readable string ("256B", "4KB", etc.)
+const char* c64_bus_size_to_str(size_t size);
+
 void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode);
 
 // PLA mode generation function - maps CPU I/O port bits + cartridge signals to 5-bit PLA mode
@@ -120,8 +144,7 @@ bool c64_bus_get_exrom_signal(c64_bus_t* c64_bus);
 bool c64_bus_get_game_signal(c64_bus_t* c64_bus);
 
 // Optimized callback management
-void c64_bus_register_chip_callbacks(c64_bus_t* bus, uint8_t acid, void* context,
-                                    chip_read_func_t read_func, chip_write_func_t write_func);
+void c64_bus_register_chip_callbacks(c64_bus_t* bus, uint8_t acid, chip_entry_t* entry);
 
 // Forward declaration for PLA
 struct pla_906114_01_s;

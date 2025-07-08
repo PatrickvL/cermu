@@ -75,55 +75,6 @@ static const char* get_chip_detail(uint8_t acid) {
     }
 }
 
-// Helper function to get ACID name (without addresses)
-static const char* get_acid_name(uint8_t acid) {
-    switch (acid) {
-        // For I/O ACIDs (0-15), we need to map them to descriptive names
-        case ACID_VIC_D0:
-        case ACID_VIC_D1:
-        case ACID_VIC_D2:
-        case ACID_VIC_D3:
-            return "VIC-II";
-        case ACID_SID_D4:
-        case ACID_SID_D5:
-        case ACID_SID_D6:
-        case ACID_SID_D7:
-            return "SID";
-        case ACID_COLORRAM_D8:
-        case ACID_COLORRAM_D9:
-        case ACID_COLORRAM_DA:
-        case ACID_COLORRAM_DB:
-            return "Color RAM";
-        case ACID_CIA1_DC:
-            return "CIA1";
-        case ACID_CIA2_DD:
-            return "CIA2";
-        case ACID_IO1_DE:
-            return "IO1";
-        case ACID_IO2_DF:
-            return "IO2";
-        // For non-I/O ACIDs, map to standard names
-        case ACID_ZEROBANK:
-            return "CPU-Zero Bank";
-        case ACID_RAM:
-            return "RAM";
-        case ACID_ROML:
-            return "Cart ROM Low";
-        case ACID_ROMH:
-            return "Cart ROM High";
-        case ACID_UNMAPPED:
-            return "-";
-        case ACID_BASIC:
-            return "BASIC ROM";
-        case ACID_CHARROM:
-            return "Character ROM";
-        case ACID_KERNAL:
-            return "KERNAL ROM";
-        default:
-            return "INVALID";
-    }    
-}
-
 // Helper function to get chip base address from ACID by searching the system
 static uint16_t c64_bus_get_chip_base_from_acid(c64_bus_t* bus, uint8_t acid) {
     if (!bus->c64) return 0x0000;
@@ -287,9 +238,9 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                             igTableSetColumnIndex(2);
                             igText("00");
                             igTableSetColumnIndex(3);
-                            igText("%s", get_acid_name(page_read_acid)); // page corresponds to ACID_VIC_D0 through ACID_IO2_DF
+                            igText("%s", c64_bus_acid_to_title(page_read_acid)); // page corresponds to ACID_VIC_D0 through ACID_IO2_DF
                             igTableSetColumnIndex(4);
-                            igText("%s", get_acid_name(page_write_acid)); // Same for write
+                            igText("%s", c64_bus_acid_to_title(page_write_acid)); // Same for write
                             igTableSetColumnIndex(5);
                             igText("$%04X", page * 0x100);  // Read offset within I/O space
                             igTableSetColumnIndex(6);
@@ -368,9 +319,9 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                         igTableSetColumnIndex(2);
                         igText("%02X", encoded);
                         igTableSetColumnIndex(3);
-                        igText("%s", get_acid_name(read_acid));
+                        igText("%s", c64_bus_acid_to_title(read_acid));
                         igTableSetColumnIndex(4);
-                        igText("%s", get_acid_name(write_acid));
+                        igText("%s", c64_bus_acid_to_title(write_acid));
                         igTableSetColumnIndex(5);
                         igText("$%04X", read_offset);
                         igTableSetColumnIndex(6);
@@ -554,10 +505,10 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                             if (charen_bit == 0) {
                                 igText("Character ROM");
                             } else {
-                                igText("%s", get_acid_name(read_acid));
+                                igText("%s", c64_bus_acid_to_title(read_acid));
                             }
                         } else {
-                            igText("%s", get_acid_name(read_acid));
+                            igText("%s", c64_bus_acid_to_title(read_acid));
                         }
                         
                         igTableSetColumnIndex(4);
@@ -591,11 +542,33 @@ void pla_render_debug_window(void* chip, bool* show_window) {
     // Chip Information Legend (moved to bottom for better space utilization)
     igSeparator();
     igText("ACID Legend:");
-    if (igBeginChild_Str("ChipInfo", (ImVec2){0, 150}, true, 0)) {
+    if (igBeginTable("ACIDLegend", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit, (ImVec2){0, 150}, 0)) {
+        igTableSetupColumn("ACID id", ImGuiTableColumnFlags_None, 0.0f, 0);
+        igTableSetupColumn("Memory Range", ImGuiTableColumnFlags_None, 0.0f, 0);
+        igTableSetupColumn("Size", ImGuiTableColumnFlags_None, 0.0f, 0);
+        igTableSetupColumn("Title", ImGuiTableColumnFlags_None, 0.0f, 0);
+        igTableHeadersRow();
+        acid_descriptor_t desc;
         for (int acid = 0; acid < 24; acid++) {
-            igText("ACID %02d: %s", acid, get_chip_detail(acid));
+            igTableNextRow(ImGuiTableRowFlags_None, 0.0f);
+            igTableSetColumnIndex(0);
+            igText("%02d", acid);
+            igTableSetColumnIndex(1);
+            if (c64_bus_get_acid_descriptor(has_bus ? c64->bus : NULL, acid, &desc)) {
+                igText("$%04X-$%04X", desc.base, desc.base + (uint16_t)desc.size - 1);
+            } else {
+                igText("-");
+            }
+            igTableSetColumnIndex(2);
+            if (desc.size > 0) {
+                igText("%s", c64_bus_size_to_str(desc.size));
+            } else {
+                igText("?");
+            }
+            igTableSetColumnIndex(3);
+            igText("%s", c64_bus_acid_to_title(acid));
         }
-        igEndChild();
+        igEndTable();
     }
     
     igEnd();

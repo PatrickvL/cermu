@@ -129,45 +129,46 @@ void c64_callbacks_init(c64_t* c64) {
     c64_bus_t* bus = c64->bus;
 
     // Initialize all callbacks to stub functions first
-    for (int i = 0; i < 24; i++) {
-        c64_bus_register_chip_callbacks(bus, (uint8_t)i, bus,
-            c64_detached_read, c64_detached_write);
+    for (int acid = 0;  acid < ACID_MAX; acid++) {
+        // Register read callback
+        bus->read_callbacks[acid].read = c64_detached_read;
+        bus->read_callbacks[acid].context = bus;
+        // Register write callback (only for writable chips 0-19)
+        if (acid < 20)
+            bus->write_funcs[acid] = c64_detached_write;
     }
     
     // Register chip callbacks in optimized arrays based on chip types
     for (int i = 0; i < c64->system.chip_count; i++) {
         chip_entry_t* dev = &c64->system.chips[i];
-        chip_descriptor_t* desc = dev->desc;
-        void* context = dev->rwcb_context; // Set by system_chip_register
-
         // Map chips to optimized callback slots based on their type and address
         uint8_t acid = c64_dev_descriptor_to_acid(dev);
 
         switch (acid) {
             case ACID_VIC_D0:
                 // VIC-II (NTSC or PAL) gets I/O slots 0-3 (D000-D3FF)
-                c64_bus_register_chip_callbacks(bus, ACID_VIC_D0, context, desc->read, desc->write);
-                c64_bus_register_chip_callbacks(bus, ACID_VIC_D1, context, desc->read, desc->write);
-                c64_bus_register_chip_callbacks(bus, ACID_VIC_D2, context, desc->read, desc->write);
-                c64_bus_register_chip_callbacks(bus, ACID_VIC_D3, context, desc->read, desc->write);
+                c64_bus_register_chip_callbacks(bus, ACID_VIC_D0, dev);
+                c64_bus_register_chip_callbacks(bus, ACID_VIC_D1, dev);
+                c64_bus_register_chip_callbacks(bus, ACID_VIC_D2, dev);
+                c64_bus_register_chip_callbacks(bus, ACID_VIC_D3, dev);
                 break;
             case ACID_SID_D4:
                 // SID gets I/O slots 4-7 (D400-D7FF)
-                c64_bus_register_chip_callbacks(bus, ACID_SID_D4, context, desc->read, desc->write);
-                c64_bus_register_chip_callbacks(bus, ACID_SID_D5, context, desc->read, desc->write);
-                c64_bus_register_chip_callbacks(bus, ACID_SID_D6, context, desc->read, desc->write);
-                c64_bus_register_chip_callbacks(bus, ACID_SID_D7, context, desc->read, desc->write);
+                c64_bus_register_chip_callbacks(bus, ACID_SID_D4, dev);
+                c64_bus_register_chip_callbacks(bus, ACID_SID_D5, dev);
+                c64_bus_register_chip_callbacks(bus, ACID_SID_D6, dev);
+                c64_bus_register_chip_callbacks(bus, ACID_SID_D7, dev);
                 break;
             case ACID_COLORRAM_D8:
                 // Color RAM gets I/O slots 8-11 (D800-DBFF)
-                c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_D8, context, desc->read, desc->write);
-                c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_D9, context, desc->read, desc->write);
-                c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_DA, context, desc->read, desc->write);
-                c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_DB, context, desc->read, desc->write);
+                c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_D8, dev);
+                c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_D9, dev);
+                c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_DA, dev);
+                c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_DB, dev);
                 break;
             default:
                 // Register the chip callback
-                c64_bus_register_chip_callbacks(bus, acid, context, desc->read, desc->write);
+                c64_bus_register_chip_callbacks(bus, acid, dev);
                 break;
         }       
     }
