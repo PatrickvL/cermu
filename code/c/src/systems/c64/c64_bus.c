@@ -221,7 +221,7 @@ void c64_bus_populate_vicii_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* 
     // Set other inputs for VIC-II access (not normal CPU operation)
     pla->inputs.n_aec = true;   // VIC-II has bus control (AEC low (#EAC high) = VIC-II access)
     pla->inputs.ba = false;     // Bus available (BA low = DMA)
-    pla->inputs.n_cas = true;   // CAS inactive for VIC-II regular memory access (not refresh)
+    pla->inputs.n_cas = false;  // CAS active for VIC-II regular memory access (not refresh)
     // Configure PLA for READ mode (VIC-II can only read, never write)
     pla->inputs.r_w = true;     // Read mode
 
