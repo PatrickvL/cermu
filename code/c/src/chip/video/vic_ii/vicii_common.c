@@ -95,9 +95,9 @@ uint32_t* vicii_common_get_default_palette(void) {
 // Update memory mapping (Documentation section 2.4.2)
 static inline void vic_memory_update_mapping(vic_memory_unit_t* memory, uint8_t mp_reg) {
     // Update addresses with bit operations
-    // ""VM10-VM13 (register $d018) that specify one of four 1KB blocks within the 16KB address space""
+    // "VM10-VM13 (register $d018) that specify one of four 1KB blocks within the 16KB address space"
     memory->vm_base = ((uint16_t)mp_reg & 0xF0) << 6;  // VM10-VM13 bits * 0x400 -> << 6
-    // ""CB11-CB13 (register $d018) that specify one of eight 2KB blocks within the 16KB address space""
+    // "CB11-CB13 (register $d018) that specify one of eight 2KB blocks within the 16KB address space"
     memory->cb_base = ((uint16_t)mp_reg & 0x0E) << 10; // CB11-CB13 bits * 0x800 -> << 10
 }
 
@@ -134,10 +134,10 @@ uint8_t vic_memory_read(vicii_common_t* vicii, uint16_t address) {
 void vic_update_badline_condition(vicii_common_t* vicii) {
     uint16_t raster = vicii->timing.raster_counter;
     
-    // ""A Bad Line Condition is given at any arbitrary clock cycle, if at the
+    // "A Bad Line Condition is given at any arbitrary clock cycle, if at the
     // negative edge of ø0 at the beginning of the cycle RASTER >= $30 and RASTER
     // <= $f7 and the lower three bits of RASTER are equal to YSCROLL and if the
-    // DEN bit was set during an arbitrary cycle of raster line $30.""
+    // DEN bit was set during an arbitrary cycle of raster line $30."
     // Single range check instead of two comparisons
     if ((raster - 48) < 200) {  // Equivalent to raster >= 48 && raster < 248
         if (raster == 0x30) {
@@ -209,29 +209,29 @@ static inline void vic_border_update_flip_flops_x(vic_border_unit_t* border, vic
     uint16_t x_coord = timing->x_coordinate;
     bool den_set = (c1_reg & VICII_C1_DEN) != 0;
     
-    // ""The flip flops are switched according to the following rules:""
+    // "The flip flops are switched according to the following rules:"
     
-    // Rule 1: ""If the X coordinate reaches the right comparison value, the main border flip flop is set.""
+    // Rule 1: "If the X coordinate reaches the right comparison value, the main border flip flop is set."
     if (x_coord == border->border_right) {
         border->main_border_flip_flop = true;
     }
     
     // Rules 4, 5, 6: Handle left coordinate checks only
     else if (x_coord == border->border_left) {
-        // Rule 4: ""If the X coordinate reaches the left comparison value and the Y
-        // coordinate reaches the bottom one, the vertical border flip flop is set.""
+        // Rule 4: "If the X coordinate reaches the left comparison value and the Y
+        // coordinate reaches the bottom one, the vertical border flip flop is set."
         if (raster == border->border_bottom) {
             border->vertical_border_flip_flop = true;
         }
-        // Rule 5: ""If the X coordinate reaches the left comparison value and the Y
+        // Rule 5: "If the X coordinate reaches the left comparison value and the Y
         // coordinate reaches the top one and the DEN bit in register $d011 is set,
-        // the vertical border flip flop is reset.""
+        // the vertical border flip flop is reset."
         else if (raster == border->border_top && den_set) {
             border->vertical_border_flip_flop = false;
         }
         
-        // Rule 6: ""If the X coordinate reaches the left comparison value and the vertical
-        // border flip flop is not set, the main flip flop is reset.""
+        // Rule 6: "If the X coordinate reaches the left comparison value and the vertical
+        // border flip flop is not set, the main flip flop is reset."
         if (!border->vertical_border_flip_flop) {
             border->main_border_flip_flop = false;
         }
@@ -269,6 +269,11 @@ void vic_registers_write(vicii_common_t* vicii, uint16_t address, uint8_t value)
     // * Unused register indices 47..63 are written anyway here
     //   because avoiding those would only be slower, for no benefit
 
+    if (reg == VICII_IR) { // $d019 Interrupt Register
+        // Treat the latching Interrupt Register differently from the other registers
+        vic_registers_write_interrupt(&vicii->registers, value);
+        return;
+    }
     
     // Mask color registers to 4 bits
     if (reg >= VICII_EC) { // $d020 (4 bits) Exterior color (Border)
@@ -294,7 +299,7 @@ void vic_registers_write(vicii_common_t* vicii, uint16_t address, uint8_t value)
             }
             break;
         case VICII_MXYE: // $d017 Sprite Y expansion x
-            // ""Complex expansion flip flop logic per VIC-II documentation""
+            // "Complex expansion flip flop logic per VIC-II documentation"
             // Optimized: set flip-flop state directly based on bit value
             for (int i = 0; i < VICII_NUM_SPRITES; i++) {
                 // Writing 0 sets flip-flop, writing 1 clears it (immediate effect)
@@ -305,10 +310,6 @@ void vic_registers_write(vicii_common_t* vicii, uint16_t address, uint8_t value)
         case VICII_MP: // AI $d018 Memory pointers
             vic_memory_update_mapping(&vicii->memory, value);
             break;
-        case VICII_IR: // $d019 Interrupt Register
-		    // Treat the latching Interrupt Register differently from the other registers
-            vic_registers_write_interrupt(&vicii->registers, value);
-            return;
         case VICII_MXDP: // $d01b Sprite data priority
             // Batch update sprite priorities
             for (int i = 0; i < VICII_NUM_SPRITES; i++) {
@@ -402,16 +403,16 @@ void vic_timing_advance(vicii_common_t* vicii) {
         }
         
         // VC/RC Rule 1: Reset VCBASE outside display range (Documentation section 3.7.2)
-        // ""Once somewhere outside of the range of raster lines $30-$f7 (i.e.
+        // "Once somewhere outside of the range of raster lines $30-$f7 (i.e.
         // outside of the Bad Line range), VCBASE is reset to zero. This is
         // presumably done in raster line 0, the exact moment cannot be determined
-        // and is irrelevant.""
+        // and is irrelevant."
         if (vicii->timing.raster_counter < 0x30 || vicii->timing.raster_counter > 0xf7) {
             vicii->video_logic.vcbase = 0;
         }
         
         // Reset refresh counter in raster line 0 (Documentation section 3.13)
-        // ""The counter is reset to $ff in raster line 0""
+        // "The counter is reset to $ff in raster line 0"
         if (vicii->timing.raster_counter == 0) {
             vicii->video_logic.refresh_counter = 0xFF;
         }
@@ -427,9 +428,9 @@ void vic_timing_advance(vicii_common_t* vicii) {
     switch (vicii->timing.x_cycle) {
         case 14:
             // VC/RC Rule 2: Handle cycle 14 updates (Documentation section 3.7.2)
-            // ""In the first phase of cycle 14 of each line, VC is loaded from VCBASE
+            // "In the first phase of cycle 14 of each line, VC is loaded from VCBASE
             // (VCBASE->VC) and VMLI is cleared. If there is a Bad Line Condition in
-            // this phase, RC is also reset to zero.""
+            // this phase, RC is also reset to zero."
             vicii->video_logic.vc = vicii->video_logic.vcbase;
             vicii->video_logic.vmli = 0;
             if (vicii->video_logic.is_bad_line) {
