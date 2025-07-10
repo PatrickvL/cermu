@@ -38,8 +38,8 @@ static const char* get_pla_mode_description(uint8_t mode) {
     uint8_t game = (mode >> 4) & 0x01;
     
     snprintf(mode_desc, sizeof(mode_desc), 
-             "LORAM:%d HIRAM:%d CHAREN:%d EXROM:%d GAME:%d",
-             loram, hiram, charen, exrom, game);
+             "#LORAM:%d #HIRAM:%d #CHAREN:%d #EXROM:%d #GAME:%d",
+             1 - loram, 1 - hiram, 1 - charen, 1 - exrom, 1 - game);
     
     return mode_desc;
 }
@@ -162,11 +162,37 @@ void pla_render_debug_window(void* chip, bool* show_window) {
     igSameLine(0, -1.0f);
     igText("Current Mode: %d", current_mode);
     
-    // Manual mode selector
+    // Manual mode selector as active-low toggles in requested order: #LORAM, #HIRAM, #GAME, #EXROM, #CHAREN
+    static bool loram_n = false, hiram_n = false, game_n = false, exrom_n = false, charen_n = false;
+    // Extract bits from current mode (active-low)
+    loram_n = ((pla_debug_selected_mode & 0x01) == 0);
+    hiram_n = ((pla_debug_selected_mode & 0x02) == 0);
+    game_n  = ((pla_debug_selected_mode & 0x10) == 0);
+    exrom_n = ((pla_debug_selected_mode & 0x08) == 0);
+    charen_n = ((pla_debug_selected_mode & 0x04) == 0);
+
+    bool changed = false;
     igText("Viewing Mode:");
     igSameLine(0, -1.0f);
-    if (igSliderInt("##mode", &pla_debug_selected_mode, 0, 31, "Mode %d", ImGuiSliderFlags_None)) {
-        auto_track_mode = false; // Disable auto-tracking when manually changing
+    changed |= igCheckbox("#LORAM", &loram_n);
+    igSameLine(0, -1.0f);
+    changed |= igCheckbox("#HIRAM", &hiram_n);
+    igSameLine(0, -1.0f);
+    changed |= igCheckbox("#GAME", &game_n);
+    igSameLine(0, -1.0f);
+    changed |= igCheckbox("#EXROM", &exrom_n);
+    igSameLine(0, -1.0f);
+    changed |= igCheckbox("#CHAREN", &charen_n);
+
+    if (changed) {
+        // Reconstruct mode from toggles (active-low: 0 = checked)
+        pla_debug_selected_mode = 0;
+        if (!loram_n)  pla_debug_selected_mode |= 0x01;
+        if (!hiram_n)  pla_debug_selected_mode |= 0x02;
+        if (!charen_n) pla_debug_selected_mode |= 0x04;
+        if (!exrom_n)  pla_debug_selected_mode |= 0x08;
+        if (!game_n)   pla_debug_selected_mode |= 0x10;
+        auto_track_mode = false;
     }
     
     igSeparator();
