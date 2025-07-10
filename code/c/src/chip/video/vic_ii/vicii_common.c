@@ -79,8 +79,8 @@ static const vic_cycle_group_t cycle_group_table_pal[64] = {
     CYCLE_GROUP_LINE_END,           // 58
     CYCLE_GROUP_LINE_END,           // 59
     CYCLE_GROUP_LINE_END,           // 60
-    CYCLE_GROUP_LINE_END,           // 61
-    CYCLE_GROUP_LINE_END,           // 62
+    CYCLE_GROUP_IDLE,               // 61
+    CYCLE_GROUP_IDLE,               // 62
     CYCLE_GROUP_LINE_START          // 63 (wrap-around safety)
 };
 
@@ -390,7 +390,6 @@ void vic_timing_advance(vicii_common_t* vicii) {
         // Reset line state - combine operations
         vicii->pixel.pixel_line_index = 0;
         vicii->timing.x_cycle = 0;
-        vicii->timing.cycle_group = CYCLE_GROUP_LINE_START;
         
         if (++vicii->timing.raster_counter >= vicii->timing.total_lines) {
             if (!vicii->pixel.framebuffer || vicii->timing.raster_counter >= vicii->pixel.framebuffer_height) {
@@ -439,10 +438,10 @@ void vic_timing_advance(vicii_common_t* vicii) {
             break;
         case 58:
             // VC/RC Rule 5: Handle cycle 58 updates (Documentation section 3.7.2)
-            // ""In the first phase of cycle 58, the VIC checks if RC=7. If so, the video
+            // "In the first phase of cycle 58, the VIC checks if RC=7. If so, the video
             // logic goes to idle state and VCBASE is loaded from VC (VC->VCBASE). If
             // the video logic is in display state afterwards (this is always the case
-            // if there is a Bad Line Condition), RC is incremented.""
+            // if there is a Bad Line Condition), RC is incremented."
             if (vicii->video_logic.rc == 7) {
                 vicii->video_logic.display_state = false;  // Go to idle state
                 vicii->video_logic.vcbase = vicii->video_logic.vc;  // VC->VCBASE
@@ -459,13 +458,13 @@ void vic_timing_advance(vicii_common_t* vicii) {
                 uint16_t raster = vicii->timing.raster_counter;
                 bool den_set = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
                 
-                // Rule 2: ""If the Y coordinate reaches the bottom comparison value in cycle 63, the
-                // vertical border flip flop is set.""
+                // Rule 2: "If the Y coordinate reaches the bottom comparison value in cycle 63, the
+                // vertical border flip flop is set."
                 if (raster == vicii->border.border_bottom) {
                     vicii->border.vertical_border_flip_flop = true;
                 }
-                // Rule 3: ""If the Y coordinate reaches the top comparison value in cycle 63 and the
-                // DEN bit in register $d011 is set, the vertical border flip flop is reset.""
+                // Rule 3: "If the Y coordinate reaches the top comparison value in cycle 63 and the
+                // DEN bit in register $d011 is set, the vertical border flip flop is reset."
                 else if (raster == vicii->border.border_top && den_set) {
                     vicii->border.vertical_border_flip_flop = false;
                 }
@@ -592,24 +591,24 @@ static inline void vic_sprite_emit_pixels(vicii_common_t* vicii, int sprite_inde
     vicii_priority_t curr_priority = vicii->pixel.pixel_line_priority[pixel_idx];
     
     // Sprite-sprite collision detection
-    // ""A collision of sprites among themselves is detected as soon as two or more
-    // sprite data sequencers output a non-transparent pixel""
+    // "A collision of sprites among themselves is detected as soon as two or more
+    // sprite data sequencers output a non-transparent pixel"
     if (curr_priority == VICII_PRIORITY_SPRITE_IN_FRONT || 
         curr_priority == VICII_PRIORITY_SPRITE_BEHIND) {
         vicii->registers.data[VICII_MXM_2] |= (1 << sprite_index);
     }
     
     // Sprite-graphics collision detection  
-    // ""A collision of sprites and other graphics data is detected as soon as one
+    // "A collision of sprites and other graphics data is detected as soon as one
     // or more sprite data sequencers output a non-transparent pixel and the
-    // graphics data sequencer outputs a foreground pixel""
+    // graphics data sequencer outputs a foreground pixel"
     if (curr_priority == VICII_PRIORITY_FOREGROUND) {
         vicii->registers.data[VICII_MXD_2] |= (1 << sprite_index);
     }
     
     // Priority check and pixel overwrite
-    // ""The sprites have a rigid hierarchy among themselves: Sprite 0 has the
-    // highest and sprite 7 the lowest priority""
+    // "The sprites have a rigid hierarchy among themselves: Sprite 0 has the
+    // highest and sprite 7 the lowest priority"
     bool sprite_wins = false;
     if (sprite->priority == VICII_PRIORITY_SPRITE_IN_FRONT) {
         // Sprite in front of graphics
@@ -647,17 +646,17 @@ void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, uint8_t acces
     
     switch (access_type) {
         case VIC_ACCESS_P:
-            // p-access: ""To the sprite data pointers; 8 bytes after the end of the video matrix,
+            // p-access: "To the sprite data pointers; 8 bytes after the end of the video matrix,
             // that select one out of 256 blocks of 64 bytes within the VIC address
-            // space for each sprite.""
+            // space for each sprite."
             address = vicii->memory.vm_base + 0x3F8 + access_param;
             data = vic_memory_read(vicii, address);
             vicii->sprites.sprites[access_param].data_pointer = data;
             break;
         case VIC_ACCESS_S:
-            // s-access: ""To the sprite data; an area of 63 bytes containing the pixel data of the
+            // s-access: "To the sprite data; an area of 63 bytes containing the pixel data of the
             // sprites which can be moved in steps of 64 bytes with the sprite data
-            // pointers independently for each sprite.""
+            // pointers independently for each sprite."
             if (vicii->sprites.sprites[access_param].mc_counter < 3) {
                 address = vicii->sprites.sprites[access_param].data_pointer * 64 + 
                          vicii->sprites.sprites[access_param].mc_counter;
@@ -667,19 +666,19 @@ void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, uint8_t acces
             }
             break;
         case VIC_ACCESS_C:
-            // c-access: ""To the video matrix; an area of 1000 video addresses (40×25, 12 bits each)
+            // c-access: "To the video matrix; an area of 1000 video addresses (40×25, 12 bits each)
             // that can be moved in 1KB steps within the 16KB address space of the VIC
             // with the bits VM10-VM13 of register $d018. It stores the character codes
             // and their color for the text modes and some of the color information of
             // 8×8 pixel blocks for the bitmap modes. The Color RAM is part of the
-            // video matrix, it delivers the upper 4 bits of the 12 bit matrix.""
+            // video matrix, it delivers the upper 4 bits of the 12 bit matrix."
             {
                 c64_bus_t* bus = (c64_bus_t*)vicii->bus.bus;
                 // FIRST φ PHASE (φ2 low): VIC accesses Color RAM simultaneously with video matrix
-                // ""The VIC has a 12 bit wide data bus over which the VIC accesses the memory. The
+                // "The VIC has a 12 bit wide data bus over which the VIC accesses the memory. The
                 // lower 8 bits are connected to the main memory and the processor data bus, the upper 4 bits are
                 // connected to a special 4 bit wide static memory (1024 addresses, A0-A9) used for storing color
-                // information, the Color RAM.""
+                // information, the Color RAM."
                 address = 0xD800 + vicii->video_logic.vc;
                 // TODO : What about = 0xD800 + (vicii->video_counter & 0x3FF) + access_param;
                 // Color RAM uses same addressing as character data (lower 10 bits)
@@ -688,7 +687,7 @@ void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, uint8_t acces
                 vicii->video_data.video_color_line[vicii->video_logic.vmli] = data & 0x0F; // Upper 4 bits of 12-bit matrix
                 
                 // SAME φ PHASE: Video matrix access (lower 8 bits of 12-bit matrix)
-                // ""The VIC accesses in the first phase (φ2 low), the processor in the second phase (φ2 high)""
+                // "The VIC accesses in the first phase (φ2 low), the processor in the second phase (φ2 high)"
                 address = vicii->memory.vm_base;
                 data = vic_memory_read(vicii, address);
                 bus->data = data; // Set bus data for next access
@@ -696,33 +695,33 @@ void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, uint8_t acces
             }
             // Fall through to g-access case
         case VIC_ACCESS_G:
-            // g-access follows: ""In idle state, only g-accesses occur. The access is always to address $3fff""
-            // ""In display state, c- and g-accesses take place, the addresses and interpretation of the data depend on the selected display mode""
+            // g-access follows: "In idle state, only g-accesses occur. The access is always to address $3fff"
+            // "In display state, c- and g-accesses take place, the addresses and interpretation of the data depend on the selected display mode"
             {
                 uint8_t char_code = data; // Character code from c-access
                 
                 if (vicii->video_logic.display_state) {
                     // Display state: g-access address calculation (Documentation section 3.7.3.1)
                     if (vicii->registers.data[VICII_C1] & VICII_C1_BMM) {
-                        // Bitmap mode: ""CB13| VC9| VC8| VC7| VC6| VC5| VC4| VC3| VC2| VC1| VC0| RC2| RC1| RC0|""
+                        // Bitmap mode: "CB13| VC9| VC8| VC7| VC6| VC5| VC4| VC3| VC2| VC1| VC0| RC2| RC1| RC0|"
                         address = vicii->memory.cb_base | 
                                    ((vicii->video_logic.vc & 0x3FF) << 3) | 
                                    (vicii->video_logic.rc & 0x07);
                     } else {
-                        // Text mode: ""CB13|CB12|CB11| D7 | D6 | D5 | D4 | D3 | D2 | D1 | D0 | RC2| RC1| RC0|""
+                        // Text mode: "CB13|CB12|CB11| D7 | D6 | D5 | D4 | D3 | D2 | D1 | D0 | RC2| RC1| RC0|"
                         address = vicii->memory.cb_base | 
                                    (char_code << 3) | 
                                    (vicii->video_logic.rc & 0x07);
                     }
                 } else {
-                    // Idle state: ""The access is always to address $3fff ($39ff when the ECM bit in register $d016 is set)""
+                    // Idle state: "The access is always to address $3fff ($39ff when the ECM bit in register $d016 is set)"
                     address = (vicii->registers.data[VICII_C1] & VICII_C1_ECM) ? 0x39ff : 0x3fff;
                 }
                 
                 // NEXT φ PHASE or SAME CYCLE: g-access reads character/bitmap data or idle data
-                // ""Bad Line Condition... the VIC also needs the bus sometimes during the second phase.
+                // "Bad Line Condition... the VIC also needs the bus sometimes during the second phase.
                 // In this case, BA goes low three cycles before the VIC access. After that,
-                // AEC remains low during the second phase and the VIC performs the accesses.""
+                // AEC remains low during the second phase and the VIC performs the accesses."
                 uint8_t graphics_data = vic_memory_read(vicii, address);
                 
                 // Process graphics data for sequencer
@@ -732,11 +731,11 @@ void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, uint8_t acces
             }
             break;
         case VIC_ACCESS_REFRESH:
-            // r-access: ""Accesses for refreshing the dynamic RAM, 5 read accesses per raster
+            // r-access: "Accesses for refreshing the dynamic RAM, 5 read accesses per raster
             // line. The VIC does five read accesses in every raster line for the refresh of the
             // dynamic RAM. An 8 bit refresh counter (REF) is used to generate 256 DRAM
             // row addresses. The counter is reset to $ff in raster line 0 and decremented
-            // by 1 after each refresh access.""
+            // by 1 after each refresh access."
             if (vicii->enable_hardware_accurate_reads) {
                 address = vicii->memory.vm_base | 0x3F00 | vicii->video_logic.refresh_counter;
                 data = vic_memory_read(vicii, address);
@@ -747,11 +746,11 @@ void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, uint8_t acces
             vicii->video_logic.refresh_counter--;  // Always decrement counter
             break;
         default:
-            // i-access: ""Idle accesses. As described, the VIC accesses in every first clock phase
+            // i-access: "Idle accesses. As described, the VIC accesses in every first clock phase
             // although there are some cycles in which no other of the above mentioned
             // accesses is pending. In this case, the VIC does an idle access; a read
             // access to video address $3fff (i.e. to $3fff, $7fff, $bfff or $ffff
-            // depending on the VIC bank) of which the result is discarded.""
+            // depending on the VIC bank) of which the result is discarded."
             if (vicii->enable_hardware_accurate_reads) {
                 data = vic_memory_read(vicii, 0x3FFF);
             } else {
@@ -806,18 +805,16 @@ void vicii_common_cycle(vicii_common_t* vicii) {
             
         case CYCLE_GROUP_LINE_END:
             // Handle late sprite access cycles (cycles 55-60)
-            if (cycle >= 55 && cycle <= 60) {
-                access_param = (cycle - 55) >> 1;
-                if (vicii->sprites.sprites[access_param].enabled) {  // Direct access
-                    access_type = (cycle & 1) ? VIC_ACCESS_P : VIC_ACCESS_S;
-                    ba_low = true;
-                }
+            access_param = (cycle - 55) >> 1;
+            if (vicii->sprites.sprites[access_param].enabled) {  // Direct access
+                access_type = (cycle & 1) ? VIC_ACCESS_P : VIC_ACCESS_S;
+                ba_low = true;
             }
             
             // Cycle 55: Handle sprite Y expansion flip flop inversion (Documentation section 3.8.1)
-            // ""If the MxYE bit is set in the first phase of cycle 55, the expansion
-            // flip flop is inverted.""
-            if (cycle == 55) {
+            // "If the MxYE bit is set in the first phase of cycle 55, the expansion
+            // flip flop is inverted."
+            if (cycle == 55) { // TODO : Separate into a cycle group entry and fall through to above
                 uint8_t mxye_reg = vicii->registers.data[VICII_MXYE];  // Direct access - single use
                 for (int i = 0; i < VICII_NUM_SPRITES; i++) {
                     if (mxye_reg & (1 << i)) {
@@ -838,37 +835,37 @@ void vicii_common_cycle(vicii_common_t* vicii) {
     // Bus control - combine operations
     c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;  // Used multiple times - KEEP
     if (ba_low) {
-        // ""BA will then go low 3 cycles before the VIC takes over the bus completely
+        // "BA will then go low 3 cycles before the VIC takes over the bus completely
         // (3 cycles is the maximum number of successive write accesses of the 6510).
-        // After 3 cycles, AEC stays low during the second clock phase so that the VIC can output its addresses.""
+        // After 3 cycles, AEC stays low during the second clock phase so that the VIC can output its addresses."
         c64_bus->control_lines &= ~BA_LINE;
         // Inlined vic_video_logic_handle_bad_line
         if (vicii->video_logic.is_bad_line) {  // Direct access
             vicii->video_logic.display_state = true;  // Direct access
         }
     } else {
-        // ""The VIC accesses in the first phase (φ2 low), the processor in the second phase (φ2 high)""
+        // "The VIC accesses in the first phase (φ2 low), the processor in the second phase (φ2 high)"
         c64_bus->control_lines |= BA_LINE;
     }
     
     // Perform bus access
     if (access_type > VIC_ACCESS_REFRESH) {
-        // ""AEC stays low during the second clock phase so that the VIC can output its addresses""
+        // "AEC stays low during the second clock phase so that the VIC can output its addresses"
         // This blocks the CPU by tri-stating its address lines
         c64_bus->control_lines &= ~AEC_LINE;
         vic_memory_access(vicii, access_type, access_param);
         
         // VC/RC Rule 4: Increment VC and VMLI after g-access in display state (Documentation section 3.7.2)
         if (access_type == VIC_ACCESS_C) {
-            // ""VC and VMLI are incremented after each g-access in display state.""
+            // "VC and VMLI are incremented after each g-access in display state."
             if (vicii->video_logic.display_state) {
                 vicii->video_logic.vc++;
                 vicii->video_logic.vmli++;
             }
         }
     } else {
-        // ""AEC is normally low during the first clock phase (φ2 low) and high during the
-        // second phase so that the VIC can access the bus during the first phase and the 6510 during the second phase""
+        // "AEC is normally low during the first clock phase (φ2 low) and high during the
+        // second phase so that the VIC can access the bus during the first phase and the 6510 during the second phase"
         c64_bus->control_lines |= AEC_LINE;
     }
     
@@ -888,7 +885,7 @@ void vicii_common_cycle(vicii_common_t* vicii) {
                 vic_sprite_sequencer(vicii);
             } else {
                 // Border display logic (Documentation section 3.9)
-                // ""If it is set, the VIC displays the color stored in register $d020""
+                // "If it is set, the VIC displays the color stored in register $d020"
                 if (vicii->border.main_border_flip_flop) {
                     vic_border_emit_pixels(vicii);
                 } else {
@@ -1042,7 +1039,7 @@ void vicii_common_bank_change(void* chip, uint8_t bank) {
     vicii_common_t* vicii = (vicii_common_t*)chip;
     bank = 3 - (bank & 0x03);  // Invert bank
     vicii->memory.bank = bank;
-    vicii->memory.bank_base = bank * 0x4000;;
+    vicii->memory.bank_base = bank * 0x4000;
 }
 
 void vicii_common_set_framebuffer(vicii_common_t* vicii, uint32_t* framebuffer, int width, int height) {
