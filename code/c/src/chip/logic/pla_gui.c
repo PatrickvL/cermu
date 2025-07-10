@@ -206,7 +206,7 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                     // Decode ACIDs
                     uint8_t read_acid = decode_read_acid(encoded);
                     uint8_t write_acid = decode_write_acid(encoded);
-                    
+
                     // Special handling for I/O pages
                     if (read_acid == ACID_VIC_D0 || write_acid == ACID_VIC_D0) {
                         // Show I/O pages as individual rows

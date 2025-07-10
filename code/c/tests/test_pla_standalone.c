@@ -49,7 +49,7 @@ void test_pla_logic() {
     printf("  CASRAM: %s\n", pla->outputs.n_casram ? "disabled" : "enabled");
     printf("  ROML: %s\n", pla->outputs.n_roml ? "disabled" : "enabled");
     printf("  ROMH: %s\n", pla->outputs.n_romh ? "disabled" : "enabled");
-    printf("  GRW: %s\n", pla->outputs.gr_w ? "enabled" : "disabled");
+    printf("  GRW: %s\n", pla->outputs.n_grw ? "disabled" : "enabled");
     
     // Test BASIC ROM access ($A000-$BFFF) - should be enabled
     printf("\nTesting BASIC ROM access ($A000) with LORAM=1, HIRAM=1:\n");

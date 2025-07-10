@@ -295,7 +295,7 @@ void pla_906114_01_update_outputs(pla_906114_01_t* pla) {
     pla->outputs.n_basic = !p0;
     pla->outputs.n_kernal = !(p1 || p2);
     pla->outputs.n_charrom = !(p3 || p4 || p5 || p6 || p7);
-    pla->outputs.gr_w = p31;
+    pla->outputs.n_grw = !p31;
     pla->outputs.n_io = !(p9 || p10 || p11 || p12 || p13 || p14 ||
                   p15 || p16 || p17 || p18);
     pla->outputs.n_roml = !(p19 || p20);

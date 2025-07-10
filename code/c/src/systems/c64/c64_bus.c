@@ -177,7 +177,7 @@ uint8_t pla_906114_01_outputs_to_acid(pla_906114_01_t* pla) {
     } else if (!pla->outputs.n_charrom) {
         // Character ROM (read-only)
         return ACID_CHARROM;
-    } else if (!pla->outputs.gr_w) {
+    } else if (!pla->outputs.n_grw) {
         // Color RAM (write-only)
         return ACID_COLORRAM_D8;
     } else if (!pla->outputs.n_io) {
@@ -535,6 +535,7 @@ bool c64_bus_get_acid_descriptor(const c64_bus_t* bus, uint8_t acid, acid_descri
 
 // Return a concise title string for each ACID (for legend/tooling/GUI)
 const char* c64_bus_acid_to_title(uint8_t acid) {
+    // See get_chip_detail
     switch (acid) {
         case ACID_VIC_D0:
         case ACID_VIC_D1:

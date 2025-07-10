@@ -49,7 +49,7 @@ typedef struct {
     bool n_romh;     // pin 10/F7 : #ROMH - ROM High select
     bool n_roml;     // pin 11/F6 : #ROML - ROM Low select  
     bool n_io;       // pin 12/F5 : #I/O - I/O select
-    bool gr_w;       // pin 13/F4 : GR/#W - Color RAM write enable (Connected to #WE on the color RAM)
+    bool n_grw;      // pin 13/F4 : GR/#W - Color RAM write enable (Connected to #WE on the color RAM)
     // Not needed:      pin 14/VSS : GND - Ground
 
     // Right hand side, bottom>up pins:
