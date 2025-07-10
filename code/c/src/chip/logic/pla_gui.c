@@ -91,56 +91,6 @@ static const char* get_chip_detail(uint8_t acid) {
     }
 }
 
-// Helper function to get chip base address from ACID by searching the system
-static uint16_t c64_bus_get_chip_base_from_acid(c64_bus_t* bus, uint8_t acid) {
-    if (!bus->c64) return 0x0000;
-    
-    c64_t* c64 = (c64_t*)bus->c64;
-    system_8bit_t* system = &c64->system;
-    
-    // For I/O ACIDs, return the I/O page base address
-    if (acid <= ACID_IO2_DF) {
-        return 0xD000 + (acid * 0x100);
-    }
-    
-    // For non-I/O ACIDs, search through registered chips
-    for (int i = 0; i < system->chip_count; i++) {
-        chip_entry_t* entry = &system->chips[i];
-        
-        // Match chip descriptor to ACID
-        if (entry->desc == &ram_descriptor && acid == ACID_RAM) {
-            return entry->base_address;
-        }
-        else if (entry->desc == &rom_descriptor) {
-            if (entry->base_address == 0xA000 && acid == ACID_BASIC) {
-                return entry->base_address;
-            }
-            else if (entry->base_address == 0xD000 && acid == ACID_CHARROM) {
-                return entry->base_address;
-            }
-            else if (entry->base_address == 0xE000 && acid == ACID_KERNAL) {
-                return entry->base_address;
-            }
-            else if (entry->base_address == 0x8000 && acid == ACID_ROML) {
-                return entry->base_address;
-            }
-            else if ((entry->base_address == 0xA000 || entry->base_address == 0xE000) && acid == ACID_ROMH) {
-                return entry->base_address;
-            }
-        }
-    }
-    
-    // Default mappings for special cases
-    switch (acid) {
-        case ACID_ZEROBANK:
-            return 0x0000;
-        case ACID_UNMAPPED:
-            return 0x0000;
-        default:
-            return 0x0000;
-    }
-}
-
 // ============================================================================
 // PLA GUI DEBUG WINDOW
 // ============================================================================
