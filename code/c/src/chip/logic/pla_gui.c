@@ -28,18 +28,34 @@ static uint8_t decode_write_acid(uint8_t encoded) {
 }
 
 // Helper function to get PLA mode description
-static const char* get_pla_mode_description(uint8_t mode) {
+static const char* get_pla_mode_cpu_description(uint8_t mode) {
     static char mode_desc[256];
     
     uint8_t loram = mode & 0x01;
     uint8_t hiram = (mode >> 1) & 0x01;
-    uint8_t charen = (mode >> 2) & 0x01;
-    uint8_t exrom = (mode >> 3) & 0x01;
     uint8_t game = (mode >> 4) & 0x01;
+    uint8_t exrom = (mode >> 3) & 0x01;
+    uint8_t charen = (mode >> 2) & 0x01;
     
     snprintf(mode_desc, sizeof(mode_desc), 
-             "#LORAM:%d #HIRAM:%d #CHAREN:%d #EXROM:%d #GAME:%d",
+             "#LORAM:%d #HIRAM:%d #EXROM:%d #GAME:%d #CHAREN:%d",
              1 - loram, 1 - hiram, 1 - charen, 1 - exrom, 1 - game);
+    
+    return mode_desc;
+}
+
+
+// Helper function to get PLA mode description
+static const char* get_pla_mode_vic_ii_description(uint8_t mode, uint16_t bank) {
+    static char mode_desc[256];
+    
+    uint8_t game = (mode >> 4) & 0x01;
+    uint8_t exrom = (mode >> 3) & 0x01;
+    uint8_t va14 = (bank >> 14) & 0x01;
+    
+    snprintf(mode_desc, sizeof(mode_desc), 
+             "#GAME:%d #EXROM:%d #VA14:%d",
+             1 - game, 1 - exrom, 1 - va14);
     
     return mode_desc;
 }
@@ -208,7 +224,7 @@ void pla_render_debug_window(void* chip, bool* show_window) {
             igText("CPU Memory Banking (16 x 4KB banks):");
             igText("Mode %d - %s", pla_debug_selected_mode,
                    (pla_debug_selected_mode == current_mode) ? "(ACTIVE)" : "(Preview)");
-            igText("Configuration: %s", get_pla_mode_description(pla_debug_selected_mode));
+            igText("Configuration: %s", get_pla_mode_cpu_description(pla_debug_selected_mode));
             
             igSeparator();
             
@@ -362,16 +378,10 @@ void pla_render_debug_window(void* chip, bool* show_window) {
             igText("VIC-II Memory Banking");
             igText("Mode %d - %s", pla_debug_selected_mode,
                    (pla_debug_selected_mode == current_mode) ? "(ACTIVE)" : "(Preview)");
-            
-            // VIC-II specific information
+                   
+                   // VIC-II specific information
             if (has_bus && c64->vicii) {
                 vicii_common_t* vicii = (vicii_common_t*)c64->vicii;
-                
-                igSeparator();
-                igText("VIC-II State:");
-                igText("Raster Line: %d", vicii->timing.raster_counter);
-                igText("X Cycle: %d", vicii->timing.x_cycle);
-                igText("Frame Count: %d", vicii->timing.frame_count);
                 
                 // Get current VIC-II bank from CIA2 Port A bits 0-1
                 uint8_t current_vic_bank = 0;
@@ -379,6 +389,8 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                     uint8_t cia2_port_a = c64->cia2->reg[0]; // PRA register
                     current_vic_bank = 3 - (cia2_port_a & 0x03); // Inverted bits 0-1
                 }
+                uint16_t current_vic_bank_address = current_vic_bank * 0x4000;
+                igText("Configuration: %s", get_pla_mode_vic_ii_description(pla_debug_selected_mode, current_vic_bank_address));
                 
                 igSeparator();
                 igText("VIC-II Bank Control:");
