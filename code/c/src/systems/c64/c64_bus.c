@@ -551,7 +551,7 @@ const char* c64_bus_acid_to_title(uint8_t acid) {
         case ACID_COLORRAM_D9:
         case ACID_COLORRAM_DA:
         case ACID_COLORRAM_DB:
-            return "Color RAM";
+            return "COLORRAM";
         case ACID_CIA1_DC:
             return "CIA1";
         case ACID_CIA2_DD:
@@ -561,21 +561,21 @@ const char* c64_bus_acid_to_title(uint8_t acid) {
         case ACID_IO2_DF:
             return "IO2";
         case ACID_ZEROBANK:
-            return "Zero Bank RAM";
+            return "RAM"; // Ignore the zero bank aspect, it's mostly just RAM
         case ACID_RAM:
             return "RAM";
         case ACID_ROML:
-            return "Cartridge ROM Low";
+            return "ROML";
         case ACID_ROMH:
-            return "Cartridge ROM High";
+            return "ROMH";
         case ACID_UNMAPPED:
-            return "Unmapped";
+            return "-";
         case ACID_BASIC:
-            return "BASIC ROM";
+            return "BASIC";
         case ACID_CHARROM:
-            return "Character ROM";
+            return "CHARROM";
         case ACID_KERNAL:
-            return "KERNAL ROM";
+            return "KERNAL";
         default:
             return "?";
     }

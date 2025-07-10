@@ -178,7 +178,7 @@ void pla_render_debug_window(void* chip, bool* show_window) {
             
             igSeparator();
             
-            if (igBeginTable("CPUBanking", 8, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit, (ImVec2){0, 0}, 0)) {
+            if (igBeginTable("CPUBanking", 7, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit, (ImVec2){0, 0}, 0)) {
                 // Table headers
                 igTableSetupColumn("Bank", ImGuiTableColumnFlags_None, 0.0f, 0);
                 igTableSetupColumn("Address", ImGuiTableColumnFlags_None, 0.0f, 0);
@@ -187,7 +187,6 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                 igTableSetupColumn("Write Chip", ImGuiTableColumnFlags_None, 0.0f, 0);
                 igTableSetupColumn("Read Offset", ImGuiTableColumnFlags_None, 0.0f, 0);
                 igTableSetupColumn("Write Offset", ImGuiTableColumnFlags_None, 0.0f, 0);
-                igTableSetupColumn("Notes", ImGuiTableColumnFlags_None, 0.0f, 0);
                 igTableHeadersRow();
                 
                 // Table rows
@@ -244,28 +243,6 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                             igText("$%04X", read_offset);  // Read offset within I/O space
                             igTableSetColumnIndex(6);
                             igText("$%04X", write_offset);  // Write offset within I/O space
-                            igTableSetColumnIndex(7);
-                            if (read_acid == 0) {
-                                igText("I/O Area");
-                            } else {
-                                const char* chip_detail = get_chip_detail(page);
-                                // Extract just the chip name from the detail
-                                if (strstr(chip_detail, "VIC-II")) {
-                                    igText("VIC-II registers");
-                                } else if (strstr(chip_detail, "SID")) {
-                                    igText("SID registers");
-                                } else if (strstr(chip_detail, "Color RAM")) {
-                                    igText("Color RAM");
-                                } else if (strstr(chip_detail, "CIA1")) {
-                                    igText("CIA1 registers");
-                                } else if (strstr(chip_detail, "CIA2")) {
-                                    igText("CIA2 registers");
-                                } else if (strstr(chip_detail, "I/O Expansion")) {
-                                    igText("Expansion I/O");
-                                } else {
-                                    igText("I/O page");
-                                }
-                            }
                         }
                     } else {
                         // Regular bank (non-I/O or I/O mapped to other chips)
@@ -291,27 +268,6 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                         igText("$%04X", read_offset);
                         igTableSetColumnIndex(6);
                         igText("$%04X", write_offset);
-                        igTableSetColumnIndex(7);
-                        // Add usage notes
-                        if (bank == 0) {
-                            igText("Zero page, stack,  RAM");
-                        } else if (bank == 1) {
-                            igText("Basic ML program start");
-                        } else if (bank >= 2 && bank <= 7) {
-                            igText("User programs/data");
-                        } else if (bank == 8 || bank == 9) {
-                            igText("Cartridge ROM Low");
-                        } else if (bank == 0xA || bank == 0xB) {
-                            igText("BASIC ROM / RAM");
-                        } else if (bank == 0xC) {
-                            igText("Upper RAM");
-                        } else if (bank == 0xD) {
-                            igText("I/O / Character ROM");
-                        } else if (bank == 0xE || bank == 0xF) {
-                            igText("KERNAL ROM / RAM");
-                        } else {
-                            igText("");
-                        }
                     }
                 }
                 
