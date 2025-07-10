@@ -96,14 +96,9 @@ uint32_t* vicii_common_get_default_palette(void) {
 static inline void vic_memory_update_mapping(vic_memory_unit_t* memory, uint8_t mp_reg) {
     // Update addresses with bit operations
     // ""VM10-VM13 (register $d018) that specify one of four 1KB blocks within the 16KB address space""
-    memory->vm_base = (mp_reg & 0xF0) << 6;  // VM10-VM13 bits * 0x400 -> << 6
+    memory->vm_base = ((uint16_t)mp_reg & 0xF0) << 6;  // VM10-VM13 bits * 0x400 -> << 6
     // ""CB11-CB13 (register $d018) that specify one of eight 2KB blocks within the 16KB address space""
-    memory->cb_base = (mp_reg & 0x0E) << 10; // CB11-CB13 bits * 0x800 -> << 10
-    
-    // Character ROM accessibility check
-    memory->char_rom_enabled = ((memory->bank & 0x01) == 0) &&  // bank 0 or 2
-                              ((memory->cb_base == 0x1000) ||
-                               (memory->cb_base == 0x9000));
+    memory->cb_base = ((uint16_t)mp_reg & 0x0E) << 10; // CB11-CB13 bits * 0x800 -> << 10
 }
 
 uint8_t vic_memory_read(vicii_common_t* vicii, uint16_t address) {
@@ -116,10 +111,10 @@ uint8_t vic_memory_read(vicii_common_t* vicii, uint16_t address) {
     // Bank base offset applied here to keep operations in most appropriate place
     
     // Apply bank base offset to address
-    uint16_t final_address = address + vicii->memory.bank_base;
+    uint16_t final_address = vicii->memory.bank_base | address;
     
     // Extract 4KB bank from address (0-15 for VIC-II's 64KB addressable space)
-    uint8_t vic_bank = (final_address >> 12) & 0x0F;
+    uint8_t vic_bank = final_address >> 12;
     
     // Get raw ACID directly from pre-selected active array (no mode indexing)
     uint8_t read_acid = c64_bus->vic_ii_acid_per_bank[vic_bank];
@@ -1047,13 +1042,7 @@ void vicii_common_bank_change(void* chip, uint8_t bank) {
     vicii_common_t* vicii = (vicii_common_t*)chip;
     bank = 3 - (bank & 0x03);  // Invert bank
     vicii->memory.bank = bank;
-    
-    const uint16_t bank_bases[] = {
-        VICII_BANK_0_BASE, VICII_BANK_1_BASE,
-        VICII_BANK_2_BASE, VICII_BANK_3_BASE
-    };
-    vicii->memory.bank_base = bank_bases[bank];
-    vic_memory_update_mapping(&vicii->memory, vicii->registers.data[VICII_MP]);
+    vicii->memory.bank_base = bank * 0x4000;;
 }
 
 void vicii_common_set_framebuffer(vicii_common_t* vicii, uint32_t* framebuffer, int width, int height) {

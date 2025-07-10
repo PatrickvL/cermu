@@ -199,12 +199,6 @@ typedef enum {
 // Number of sprites
 #define VICII_NUM_SPRITES 8
 
-// VIC-II banking constants
-#define VICII_BANK_0_BASE    0x0000
-#define VICII_BANK_1_BASE    0x4000
-#define VICII_BANK_2_BASE    0x8000
-#define VICII_BANK_3_BASE    0xC000
-
 // ========================================================================================
 // TOPIC-SPECIFIC UNIT STRUCTURES
 // ========================================================================================
@@ -305,7 +299,6 @@ typedef struct {
     uint16_t bank_base;         // Base address of current 16KB VIC bank
     uint16_t vm_base;           // VM10-VM13 bits - Video Matrix base within VIC bank
     uint16_t cb_base;           // CB11-CB13 bits - Character Base within VIC bank
-    bool char_rom_enabled;      // Whether character ROM is accessible
     uint8_t bank;              // Current bank (0-3)
 } vic_memory_unit_t;
 
