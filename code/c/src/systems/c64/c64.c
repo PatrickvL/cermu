@@ -166,6 +166,8 @@ void c64_callbacks_init(c64_t* c64) {
                 c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_DA, dev);
                 c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_DB, dev);
                 break;
+            case ACID_UNMAPPED:
+                break; // Unmapped chips do not register callbacks
             default:
                 // Register the chip callback
                 c64_bus_register_chip_callbacks(bus, acid, dev);

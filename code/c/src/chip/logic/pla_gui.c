@@ -116,7 +116,6 @@ void pla_render_debug_window(void* chip, bool* show_window) {
     // Static state for PLA debug window
     static bool auto_track_mode = true;
     static int pla_debug_selected_mode = 0;
-    static int pla_debug_tab = 0;
     
     // Auto-track mode checkbox
     igCheckbox("Auto-track active mode", &auto_track_mode);
@@ -168,8 +167,6 @@ void pla_render_debug_window(void* chip, bool* show_window) {
         
         // CPU Memory View Tab
         if (igBeginTabItem("CPU Memory View", NULL, ImGuiTabItemFlags_None)) {
-            pla_debug_tab = 0;
-            
             // CPU Memory Banking Table
             igText("CPU Memory Banking (16 x 4KB banks):");
             igText("Mode %d - %s", pla_debug_selected_mode,
@@ -178,95 +175,92 @@ void pla_render_debug_window(void* chip, bool* show_window) {
             
             igSeparator();
             
-            if (igBeginTable("CPUBanking", 7, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit, (ImVec2){0, 0}, 0)) {
+            if (igBeginTable("CPUBanking", 9, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit, (ImVec2){0, 0}, 0)) {
                 // Table headers
                 igTableSetupColumn("Bank", ImGuiTableColumnFlags_None, 0.0f, 0);
-                igTableSetupColumn("Address", ImGuiTableColumnFlags_None, 0.0f, 0);
+                igTableSetupColumn("Address Range", ImGuiTableColumnFlags_None, 0.0f, 0);
                 igTableSetupColumn("Encoded", ImGuiTableColumnFlags_None, 0.0f, 0);
+                igTableSetupColumn("Read ACID", ImGuiTableColumnFlags_None, 0.0f, 0);
                 igTableSetupColumn("Read Chip", ImGuiTableColumnFlags_None, 0.0f, 0);
-                igTableSetupColumn("Write Chip", ImGuiTableColumnFlags_None, 0.0f, 0);
                 igTableSetupColumn("Read Offset", ImGuiTableColumnFlags_None, 0.0f, 0);
+                igTableSetupColumn("Write ACID", ImGuiTableColumnFlags_None, 0.0f, 0);
+                igTableSetupColumn("Write Chip", ImGuiTableColumnFlags_None, 0.0f, 0);
                 igTableSetupColumn("Write Offset", ImGuiTableColumnFlags_None, 0.0f, 0);
                 igTableHeadersRow();
                 
+                acid_descriptor_t read_desc = {0};
+                acid_descriptor_t write_desc = {0};
                 // Table rows
                 for (int bank = 0; bank < 16; bank++) {
                     igTableNextRow(ImGuiTableRowFlags_None, 0.0f);
-                    
+                    igTableSetColumnIndex(0);
+                    igText("$%X", bank);
+                    igTableSetColumnIndex(1);
+
                     uint16_t bank_start = bank * 0x1000;
-                    uint16_t bank_end = bank_start + 0x0FFF;
-                    
+
+                    igText("$%04X-$%04X", bank_start, bank_start + 0x0FFF);
+                    igTableSetColumnIndex(2);
+
                     // Get encoded value for this bank and mode
-                    uint8_t encoded = 0;
+                    uint8_t encoded = encode_acid_rw(ACID_UNMAPPED, ACID_UNMAPPED);
                     if (has_bus && pla_debug_selected_mode < 32) {
                         encoded = c64->bus->encoded_rwid_per_bank_per_mode[pla_debug_selected_mode][bank];
                     }
                     
+                    igText("$%02X", encoded);
+                    igTableSetColumnIndex(3);
+                    
                     // Decode ACIDs
                     uint8_t read_acid = decode_read_acid(encoded);
-                    uint8_t write_acid = decode_write_acid(encoded);
 
-                    // Special handling for I/O pages
-                    if (read_acid == ACID_VIC_D0 || write_acid == ACID_VIC_D0) {
-                        // Show I/O pages as individual rows
-                        for (int page = 0; page < 16; page++) {
-                            if (page > 0) {
-                                igTableNextRow(ImGuiTableRowFlags_None, 0.0f);
-                            }
-                            uint16_t page_start = bank_start + (page * 0x100);
-                            uint16_t page_end = page_start + 0xFF;
-
-                            uint8_t page_read_acid = (read_acid == ACID_VIC_D0) ? page : read_acid;
-                            uint8_t page_write_acid = (write_acid == ACID_VIC_D0) ? page : write_acid;
-                            acid_descriptor_t read_desc = {0};
-                            acid_descriptor_t write_desc = {0};
-                            c64_bus_get_acid_descriptor(has_bus ? c64->bus : NULL, page_read_acid, &read_desc);
-                            c64_bus_get_acid_descriptor(has_bus ? c64->bus : NULL, page_write_acid, &write_desc);
-                            uint16_t read_offset = (read_desc.base <= page_start) ? (page_start - read_desc.base) : 0;
-                            uint16_t write_offset = (write_desc.base <= page_start) ? (page_start - write_desc.base) : 0;
-
-                            igTableSetColumnIndex(0);
-                            if (page == 0) {
-                                igText("$%X", bank);
-                            } else {
-                                igText("$%2X", (bank < 4) | page); // Sub-page indicator
-                            }
-                            igTableSetColumnIndex(1);
-                            igText("$%04X-$%04X", page_start, page_end);
-                            igTableSetColumnIndex(2);
-                            igText("00");
-                            igTableSetColumnIndex(3);
-                            igText("%s", c64_bus_acid_to_title(page_read_acid));
-                            igTableSetColumnIndex(4);
-                            igText("%s", c64_bus_acid_to_title(page_write_acid));
-                            igTableSetColumnIndex(5);
-                            igText("$%04X", read_offset);  // Read offset within I/O space
-                            igTableSetColumnIndex(6);
-                            igText("$%04X", write_offset);  // Write offset within I/O space
-                        }
+                    igText("%02d", read_acid);
+                    igTableSetColumnIndex(4);
+                    if (read_acid == ACID_UNMAPPED) {
+                        igText("Unmapped");
+                        igTableSetColumnIndex(5);
+                        igText("-");
                     } else {
-                        // Regular bank (non-I/O or I/O mapped to other chips)
                         // Calculate separate read and write in-chip offsets
-                        acid_descriptor_t read_desc = {0};
-                        acid_descriptor_t write_desc = {0};
                         c64_bus_get_acid_descriptor(has_bus ? c64->bus : NULL, read_acid, &read_desc);
-                        c64_bus_get_acid_descriptor(has_bus ? c64->bus : NULL, write_acid, &write_desc);
-                        uint16_t read_offset = (read_desc.base <= bank_start) ? (bank_start - read_desc.base) : 0;
-                        uint16_t write_offset = (write_desc.base <= bank_start) ? (bank_start - write_desc.base) : 0;
 
-                        igTableSetColumnIndex(0);
-                        igText("$%X", bank);
-                        igTableSetColumnIndex(1);
-                        igText("$%04X-$%04X", bank_start, bank_end);
-                        igTableSetColumnIndex(2);
-                        igText("%02X", encoded);
-                        igTableSetColumnIndex(3);
-                        igText("%s", c64_bus_acid_to_title(read_acid));
-                        igTableSetColumnIndex(4);
-                        igText("%s", c64_bus_acid_to_title(write_acid));
+                        // Compute effective base address for offset calculation (for ROMH remap, etc)
+                        uint16_t read_effective_base = read_desc.base;
+                        if (read_acid == ACID_ROMH && (bank_start >= 0xE000)) { // TODO : Is there a better way to check this?
+                            // ROMH remapped to $E000/$F000: treat as if base is $E000
+                            read_effective_base = 0xE000;
+                        }
+                        
+                        // WAS uint16_t read_offset = (read_effective_base <= bank_start) ? (bank_start - read_effective_base) : 0;
+                        uint16_t read_offset = bank_start - read_effective_base;
+                        
+                        igText("%s", (read_acid == ACID_VIC_D0) ? "I/O" : c64_bus_acid_to_title(read_acid));
                         igTableSetColumnIndex(5);
                         igText("$%04X", read_offset);
-                        igTableSetColumnIndex(6);
+                    }
+                    
+                    uint8_t write_acid = decode_write_acid(encoded);
+                    
+                    igTableSetColumnIndex(6);
+                    igText("%02d", write_acid);
+                    igTableSetColumnIndex(7);
+                    if (write_acid == ACID_UNMAPPED) {
+                        igText("Unmapped");
+                        igTableSetColumnIndex(8);
+                        igText("-");
+                    } else {
+                        c64_bus_get_acid_descriptor(has_bus ? c64->bus : NULL, write_acid, &write_desc);
+
+                        uint16_t write_effective_base = write_desc.base;
+                        if (write_acid == ACID_ROMH && (bank_start >= 0xE000)) { // NOTE : although ROMH is not writable, PLA modes 16-23 (LHGX xx01) still map it
+                            // ROMH remapped to $E000/$F000: treat as if base is $E000
+                            write_effective_base = 0xE000;
+                        }
+                        
+                        uint16_t write_offset = bank_start - write_effective_base;
+
+                        igText("%s", (write_acid == ACID_VIC_D0) ? "I/O" : c64_bus_acid_to_title(write_acid));
+                        igTableSetColumnIndex(8);
                         igText("$%04X", write_offset);
                     }
                 }
@@ -279,16 +273,12 @@ void pla_render_debug_window(void* chip, bool* show_window) {
         
         // VIC-II Memory View Tab
         if (igBeginTabItem("VIC-II Memory View", NULL, ImGuiTabItemFlags_None)) {
-            pla_debug_tab = 1;
-            
             igText("VIC-II Memory Banking (16 x 4KB banks):");
             igText("Mode %d - %s", pla_debug_selected_mode,
                    (pla_debug_selected_mode == current_mode) ? "(ACTIVE)" : "(Preview)");
                    
-                   // VIC-II specific information
-            if (has_bus && c64->vicii) {
-                vicii_common_t* vicii = (vicii_common_t*)c64->vicii;
-                
+            // VIC-II specific information
+            if (has_bus) {                
                 // Get current VIC-II bank from CIA2 Port A bits 0-1
                 uint8_t current_vic_bank = 0;
                 if (c64->cia2) {
@@ -306,47 +296,48 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                 
                 // VIC-II memory banking table (now 16 x 4KB banks, DRY with CPU table)
                 if (igBeginTable("VICIIBanking", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit, (ImVec2){0, 0}, 0)) {
-                    igTableSetupColumn("4KB Bank", ImGuiTableColumnFlags_None, 0.0f, 0);
+                    igTableSetupColumn("Bank", ImGuiTableColumnFlags_None, 0.0f, 0);
                     igTableSetupColumn("Address Range", ImGuiTableColumnFlags_None, 0.0f, 0);
                     igTableSetupColumn("ACID", ImGuiTableColumnFlags_None, 0.0f, 0);
                     igTableSetupColumn("Chip", ImGuiTableColumnFlags_None, 0.0f, 0);
-                    igTableSetupColumn("Read Offset", ImGuiTableColumnFlags_None, 0.0f, 0);
+                    igTableSetupColumn("Offset", ImGuiTableColumnFlags_None, 0.0f, 0);
                     igTableSetupColumn("Status", ImGuiTableColumnFlags_None, 0.0f, 0);
                     igTableHeadersRow();
+                    acid_descriptor_t read_desc = {0};
                     for (int bank = 0; bank < 16; bank++) {
                         igTableNextRow(ImGuiTableRowFlags_None, 0.0f);
-                        uint16_t bank_start = bank * 0x1000;
-                        uint16_t bank_end = bank_start + 0x0FFF;
-                        // Get ACID for this VIC-II bank and mode
-                        uint8_t read_acid = ACID_RAM;
-                        if (has_bus && pla_debug_selected_mode < 32) {
-                            read_acid = c64->bus->vic_ii_acid_per_bank_per_mode[pla_debug_selected_mode][bank];
-                        }
-                        acid_descriptor_t read_desc = {0};
-                        c64_bus_get_acid_descriptor(has_bus ? c64->bus : NULL, read_acid, &read_desc);
-                        uint16_t read_offset = (read_desc.base <= bank_start) ? (bank_start - read_desc.base) : 0;
                         igTableSetColumnIndex(0);
                         igText("%d", bank);
                         igTableSetColumnIndex(1);
-                        igText("$%04X-$%04X", bank_start, bank_end);
+
+                        uint16_t bank_start = bank * 0x1000;
+
+                        igText("$%04X-$%04X", bank_start, bank_start + 0x0FFF);
                         igTableSetColumnIndex(2);
-                        igText("%02X", read_acid);
+
+                        // Get ACID for this VIC-II bank and mode
+                        uint8_t read_acid = ACID_UNMAPPED;
+                        if (has_bus && pla_debug_selected_mode < 32) {
+                            read_acid = c64->bus->vic_ii_acid_per_bank_per_mode[pla_debug_selected_mode][bank];
+                        }
+
+                        igText("%02d", read_acid);
                         igTableSetColumnIndex(3);
                         igText("%s", c64_bus_acid_to_title(read_acid));
                         igTableSetColumnIndex(4);
+
+                        c64_bus_get_acid_descriptor(has_bus ? c64->bus : NULL, read_acid, &read_desc);
+                        uint16_t read_offset = (read_desc.base <= bank_start) ? (bank_start - read_desc.base) : 0;
+
                         igText("$%04X", read_offset);
                         igTableSetColumnIndex(5);
                         // Status: highlight if this 4KB bank is in the active VIC-II 16KB bank
-                        if ((bank_start / 0x4000) == current_vic_bank) {
-                            igText("ACTIVE");
-                        } else {
-                            igText("Inactive");
-                        }
+                        igText(((bank_start / 0x4000) == current_vic_bank) ? "ACTIVE" : "Inactive");
                     }
                     igEndTable();
                 }
             } else {
-                igText("VIC-II not available or bus not initialized");
+                igText("Bus not initialized");
             }
             
             igEndTabItem();
@@ -358,10 +349,11 @@ void pla_render_debug_window(void* chip, bool* show_window) {
     // Chip Information Legend (moved to bottom for better space utilization)
     igSeparator();
     igText("ACID Legend:");
-    if (igBeginTable("ACIDLegend", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit, (ImVec2){0, 150}, 0)) {
+    if (igBeginTable("ACIDLegend", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit, (ImVec2){0, 150}, 0)) {
         igTableSetupColumn("ACID id", ImGuiTableColumnFlags_None, 0.0f, 0);
         igTableSetupColumn("Memory Range", ImGuiTableColumnFlags_None, 0.0f, 0);
         igTableSetupColumn("Size", ImGuiTableColumnFlags_None, 0.0f, 0);
+        igTableSetupColumn("Chip", ImGuiTableColumnFlags_None, 0.0f, 0);
         igTableSetupColumn("Title", ImGuiTableColumnFlags_None, 0.0f, 0);
         igTableHeadersRow();
         acid_descriptor_t desc;
@@ -370,6 +362,7 @@ void pla_render_debug_window(void* chip, bool* show_window) {
             igTableSetColumnIndex(0);
             igText("%02d", acid);
             igTableSetColumnIndex(1);
+
             bool has_desc = c64_bus_get_acid_descriptor(has_bus ? c64->bus : NULL, acid, &desc);
             if (has_desc && desc.size > 0) {
                 igText("$%04X-$%04X", desc.base, (uint16_t)(desc.base + desc.size - 1));
@@ -379,6 +372,8 @@ void pla_render_debug_window(void* chip, bool* show_window) {
             igTableSetColumnIndex(2);
             igText("%s", c64_bus_size_to_str(desc.size));
             igTableSetColumnIndex(3);
+            igText("%s", (acid == ACID_UNMAPPED) ? "Unmapped" : c64_bus_acid_to_title(acid));
+            igTableSetColumnIndex(4);
             if (has_desc) {
                 igText("%s", desc.label);
             } else {

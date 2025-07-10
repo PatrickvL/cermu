@@ -210,4 +210,18 @@ static inline mos6510_io_port_interface_t* c64_io_port_get_adapter(c64_bus_t* c6
     return &c64_bus->io_port_adapter;
 }
 
+// Encoding macros for packing read/write ACIDs into single byte by packing
+// the IO pages into one (ACID_VIC_D0, which will be restored to the full
+// range by c64_bus_memory_read/write) and decreasing higher ACID by 15,
+// Order: I/O pages (0-15), then writable chips (16-19), then read-only (20-24)
+// Non-I/O ACIDs 16-24 become 1-9 in encoded form, which fits in 4 bits.
+// Writable ACIDs 16-19 become 1-4 in encoded form, which fits in 3 bits.
+// Output byte format: [7:5] write code (3 bits), [4] unused (1 bit), [3:0] read code (4 bits)
+static inline uint8_t encode_acid_rw(uint8_t read_acid, uint8_t write_acid) {
+    read_acid = (read_acid <= ACID_IO2_DF) ? ACID_VIC_D0 : read_acid - ACID_IO2_DF;
+    write_acid = (write_acid <= ACID_IO2_DF) ? ACID_VIC_D0 : write_acid - ACID_IO2_DF;
+    uint8_t encoded = read_acid | (write_acid << 5);
+    return encoded;
+}
+
 #endif // C64_BUS_H
