@@ -375,7 +375,7 @@ void pla_render_debug_window(void* chip, bool* show_window) {
         if (igBeginTabItem("VIC-II Memory View", NULL, ImGuiTabItemFlags_None)) {
             pla_debug_tab = 1;
             
-            igText("VIC-II Memory Banking");
+            igText("VIC-II Memory Banking (16 x 4KB banks):");
             igText("Mode %d - %s", pla_debug_selected_mode,
                    (pla_debug_selected_mode == current_mode) ? "(ACTIVE)" : "(Preview)");
                    
@@ -397,147 +397,46 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                 igText("CIA2 Port A bits 0-1: %d (Bank %d active)", c64->cia2 ? (c64->cia2->reg[0] & 0x03) : 0, current_vic_bank);
                 
                 igSeparator();
-                igText("VIC-II Memory Map (64KB address space):");
                 
-                // VIC-II memory banking table
-                if (igBeginTable("VICIIBanking", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit, (ImVec2){0, 0}, 0)) {
-                    igTableSetupColumn("VIC Bank", ImGuiTableColumnFlags_None, 0.0f, 0);
+                // VIC-II memory banking table (now 16 x 4KB banks, DRY with CPU table)
+                if (igBeginTable("VICIIBanking", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit, (ImVec2){0, 0}, 0)) {
+                    igTableSetupColumn("4KB Bank", ImGuiTableColumnFlags_None, 0.0f, 0);
                     igTableSetupColumn("Address Range", ImGuiTableColumnFlags_None, 0.0f, 0);
-                    igTableSetupColumn("Physical Memory", ImGuiTableColumnFlags_None, 0.0f, 0);
-                    igTableSetupColumn("Char ROM", ImGuiTableColumnFlags_None, 0.0f, 0);
+                    igTableSetupColumn("ACID", ImGuiTableColumnFlags_None, 0.0f, 0);
+                    igTableSetupColumn("Chip", ImGuiTableColumnFlags_None, 0.0f, 0);
+                    igTableSetupColumn("Read Offset", ImGuiTableColumnFlags_None, 0.0f, 0);
                     igTableSetupColumn("Status", ImGuiTableColumnFlags_None, 0.0f, 0);
                     igTableHeadersRow();
-                    
-                    for (int vic_bank = 0; vic_bank < 4; vic_bank++) {
+                    for (int bank = 0; bank < 16; bank++) {
                         igTableNextRow(ImGuiTableRowFlags_None, 0.0f);
-                        
-                        uint16_t bank_start = vic_bank * 0x4000;
-                        uint16_t bank_end = bank_start + 0x3FFF;
-                        
+                        uint16_t bank_start = bank * 0x1000;
+                        uint16_t bank_end = bank_start + 0x0FFF;
+                        // Get ACID for this VIC-II bank and mode
+                        uint8_t read_acid = ACID_RAM;
+                        if (has_bus && pla_debug_selected_mode < 32) {
+                            read_acid = c64->bus->vic_ii_acid_per_bank_per_mode[pla_debug_selected_mode][bank];
+                        }
+                        acid_descriptor_t read_desc = {0};
+                        c64_bus_get_acid_descriptor(has_bus ? c64->bus : NULL, read_acid, &read_desc);
+                        uint16_t read_offset = (read_desc.base <= bank_start) ? (bank_start - read_desc.base) : 0;
                         igTableSetColumnIndex(0);
-                        igText("%d", vic_bank);
+                        igText("%d", bank);
                         igTableSetColumnIndex(1);
                         igText("$%04X-$%04X", bank_start, bank_end);
                         igTableSetColumnIndex(2);
-                        
-                        // Determine what physical memory this VIC bank maps to
-                        if (vic_bank == 0) {
-                            igText("RAM $0000-$3FFF");
-                        } else if (vic_bank == 1) {
-                            igText("RAM $4000-$7FFF");
-                        } else if (vic_bank == 2) {
-                            igText("RAM $8000-$BFFF");
-                        } else {
-                            igText("RAM $C000-$FFFF");
-                        }
-                        
+                        igText("%02X", read_acid);
                         igTableSetColumnIndex(3);
-                        // Character ROM visibility for VIC-II
-                        if (vic_bank == 0) {
-                            igText("$1000-$1FFF (depends on mode)");
-                        } else if (vic_bank == 2) {
-                            igText("$9000-$9FFF (depends on mode)");
-                        } else {
-                            igText("Not visible");
-                        }
-                        
+                        igText("%s", c64_bus_acid_to_title(read_acid));
                         igTableSetColumnIndex(4);
-                        if (vic_bank == current_vic_bank) {
+                        igText("$%04X", read_offset);
+                        igTableSetColumnIndex(5);
+                        // Status: highlight if this 4KB bank is in the active VIC-II 16KB bank
+                        if ((bank_start / 0x4000) == current_vic_bank) {
                             igText("ACTIVE");
                         } else {
                             igText("Inactive");
                         }
                     }
-                    
-                    igEndTable();
-                }
-                
-                igSeparator();
-                igText("VIC-II Memory Detail (Active Bank %d):", current_vic_bank);
-                
-                // Detailed VIC-II memory map for active bank
-                if (igBeginTable("VICIIDetail", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit, (ImVec2){0, 0}, 0)) {
-                    igTableSetupColumn("VIC Address", ImGuiTableColumnFlags_None, 0.0f, 0);
-                    igTableSetupColumn("Physical Address", ImGuiTableColumnFlags_None, 0.0f, 0);
-                    igTableSetupColumn("ACID", ImGuiTableColumnFlags_None, 0.0f, 0);
-                    igTableSetupColumn("Chip", ImGuiTableColumnFlags_None, 0.0f, 0);
-                    igTableSetupColumn("Read Offset", ImGuiTableColumnFlags_None, 0.0f, 0);
-                    igTableSetupColumn("Usage", ImGuiTableColumnFlags_None, 0.0f, 0);
-                    igTableHeadersRow();
-                    
-                    // Show memory regions within the active VIC bank
-                    for (int region = 0; region < 16; region++) {
-                        igTableNextRow(ImGuiTableRowFlags_None, 0.0f);
-                        
-                        uint16_t vic_start = region * 0x400;
-                        uint16_t vic_end = vic_start + 0x3FF;
-                        uint16_t phys_start = (current_vic_bank * 0x4000) + vic_start;
-                        uint16_t phys_end = phys_start + 0x3FF;
-                        
-                        igTableSetColumnIndex(0);
-                        igText("$%04X-$%04X", vic_start, vic_end);
-                        igTableSetColumnIndex(1);
-                        igText("$%04X-$%04X", phys_start, phys_end);
-                        
-                        // Determine what chip this maps to based on VIC-II PLA mode
-                        uint8_t phys_bank = phys_start / 0x1000;
-                        uint8_t read_acid = ACID_RAM; // Default to RAM
-                        if (has_bus && pla_debug_selected_mode < 32) {
-                            read_acid = c64->bus->vic_ii_acid_per_bank_per_mode[pla_debug_selected_mode][phys_bank];
-                        }
-                        
-                        igTableSetColumnIndex(2);
-                        igText("%02X", read_acid); // Show direct ACID, not encoded value
-                        
-                        // Calculate read offset (VIC-II only reads)
-                        uint16_t read_offset = 0;
-                        
-                        // Calculate read offset
-                        if (read_acid == ACID_RAM) {
-                            read_offset = phys_start; // RAM is linear
-                        } else if (read_acid == ACID_CHARROM) {
-                            read_offset = phys_start - 0xD000; // Character ROM offset within 4KB ROM
-                        } else if (read_acid == ACID_BASIC) {
-                            read_offset = phys_start - 0xA000; // BASIC ROM offset within 8KB ROM  
-                        } else if (read_acid == ACID_KERNAL) {
-                            read_offset = phys_start - 0xE000; // KERNAL ROM offset within 8KB ROM
-                        } else if (read_acid >= ACID_VIC_D0 && read_acid <= ACID_IO2_DF) {
-                            read_offset = phys_start - 0xD000; // I/O chips - offset within I/O space
-                        } else {
-                            read_offset = phys_start; // Other chips - use physical address as offset
-                        }
-                        
-                        igTableSetColumnIndex(3);
-                        // Special handling for Character ROM in VIC-II banks
-                        if ((current_vic_bank == 0 && phys_start >= 0x1000 && phys_start < 0x2000) ||
-                            (current_vic_bank == 2 && phys_start >= 0x9000 && phys_start < 0xA000)) {
-                            // Character ROM might be visible depending on CHAREN
-                            uint8_t charen_bit = (pla_debug_selected_mode >> 2) & 1;
-                            if (charen_bit == 0) {
-                                igText("Character ROM");
-                            } else {
-                                igText("%s", c64_bus_acid_to_title(read_acid));
-                            }
-                        } else {
-                            igText("%s", c64_bus_acid_to_title(read_acid));
-                        }
-                        
-                        igTableSetColumnIndex(4);
-                        igText("$%04X", read_offset);
-                        
-                        igTableSetColumnIndex(5);
-                        // Common VIC-II memory usage
-                        if (region == 0) {
-                            igText("Sprite data / Screen");
-                        } else if (region == 1) {
-                            igText("Sprite data / Charset");
-                        } else if (region < 8) {
-                            igText("Sprite data");
-                        } else {
-                            igText("Screen / Charset");
-                        }
-                    }
-                    
                     igEndTable();
                 }
             } else {
