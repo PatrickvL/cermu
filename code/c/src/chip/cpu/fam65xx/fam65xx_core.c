@@ -1,6 +1,7 @@
 #include "fam65xx_core.h"
 #include "../../../core/system.h"
 #include <string.h>  // For memcpy
+#include <stdio.h>   // For printf (debug)
 
 // ============================================================================
 // SHARED MOS 6502 FAMILY CORE IMPLEMENTATION
@@ -22,14 +23,18 @@ void fam65xx_interrupt_handler(fam65xx_t* cpu) {
 
 // Interception support (shared) - proper handler replacement mechanism
 void fam65xx_op_intercept_stub(fam65xx_t* cpu) {
+    printf("fam65xx_op_intercept_stub: INTERCEPT HIT!\n");
     // This stub is hit when threaded dispatch tries to execute the next instruction
     // Restore the original handlers and stop interception
     if (fam65xx_is_intercepting(cpu)) {
+        printf("fam65xx_op_intercept_stub: Stopping interception\n");
         fam65xx_stop_intercept(cpu);
     }
     // Decrement PC since it was incremented during opcode fetch for the next instruction
+    printf("fam65xx_op_intercept_stub: Decrementing PC from $%04X to $%04X\n", cpu->pc, cpu->pc - 1);
     cpu->pc--;
     // Threaded dispatch ends here - this completes the single step
+    printf("fam65xx_op_intercept_stub: Single step completed\n");
 }
 
 bool fam65xx_is_intercepting(fam65xx_t* cpu) {
@@ -59,10 +64,14 @@ void fam65xx_stop_intercept(fam65xx_t* cpu) {
 
 // Single step execution (shared) - bypasses threaded dispatch for single instructions
 bool fam65xx_step(fam65xx_t* cpu) {
-    if (!cpu || fam65xx_is_intercepting(cpu)) {
-        return false; // Cannot step if no CPU or already intercepting
+    if (!cpu) {
+        return false;
     }
-
+    
+    if (fam65xx_is_intercepting(cpu)) {
+        return false; // Cannot step while intercepting
+    }
+    
     // To perform a single step, we use the interception mechanism. This ensures
     // that all bus interactions, including CPU stalls, are handled correctly
     // by the underlying bus implementation, as if in free-running execution.
@@ -87,7 +96,11 @@ bool fam65xx_step(fam65xx_t* cpu) {
     // 1. We fetch the opcode for the instruction at the current PC. This read
     //    operation will correctly stall if the VIC has control of the bus.
     uint8_t opcode = cpu->bus_interface.bus_read_cycle(cpu->bus_interface.context, cpu->pc);
+    
     fam65xx_opcode_handler_t handler = cpu->opcode_handlers[opcode];
+    if (!handler) {
+        return false;
+    }
 
     // 2. We start interception. This replaces all 256 opcode handlers with a
     //    stub that will halt execution and restore the original handlers.

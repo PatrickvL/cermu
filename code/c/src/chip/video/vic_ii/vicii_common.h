@@ -184,13 +184,14 @@ typedef struct vicii_pixel_s vicii_pixel_t;
 
 // Cycle groups (Documentation section 3.6.3)
 typedef enum {
-    CYCLE_GROUP_LINE_START,          // Cycle 0
-    CYCLE_GROUP_SPRITE_PS_ACCESS,    // Cycles 1-8 (p and s accesses)
-    CYCLE_GROUP_REFRESH_ACCESS,      // Cycle 9 (r-access)
-    CYCLE_GROUP_IDLE,                // Cycles 10-11 (idle cycles)
-    CYCLE_GROUP_BADLINE_SETUP,       // Cycles 12-14 (BA warning)
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,   // Cycles 15-54 (c and g accesses)
-    CYCLE_GROUP_LINE_END             // Cycles 55-62 (for PAL, 55-64 for NTSC)
+    CYCLE_GROUP_LINE_START,           // Cycle 0
+    CYCLE_GROUP_SPRITE_3_7_PS_ACCESS, // Cycles 1-8 (p and s accesses)
+    CYCLE_GROUP_REFRESH_ACCESS,       // Cycle 9 (r-access)
+    CYCLE_GROUP_IDLE,                 // Cycles 10-11 (idle cycles)
+    CYCLE_GROUP_BADLINE_SETUP,        // Cycles 12-14 (BA warning)
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // Cycles 15-54 (c and g accesses)
+    CYCLE_GROUP_SPRITE_0_PS_ACCESS,   // Cycle 55 (p-access for sprite 0)
+    CYCLE_GROUP_SPRITE_0_2_PS_ACCESS  // Cycles 55-62 (for PAL, 55-64 for NTSC)
 } vic_cycle_group_t;
 
 // Interrupt mask

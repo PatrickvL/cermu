@@ -18,70 +18,70 @@ static const uint32_t c64_palette[16] = {
 
 // Cycle group lookup table - PAL timing (63 cycles per line) (Documentation section 3.6.3)
 static const vic_cycle_group_t cycle_group_table_pal[64] = {
-    CYCLE_GROUP_LINE_START,         // 0
-    CYCLE_GROUP_SPRITE_PS_ACCESS,   // 1
-    CYCLE_GROUP_SPRITE_PS_ACCESS,   // 2
-    CYCLE_GROUP_SPRITE_PS_ACCESS,   // 3
-    CYCLE_GROUP_SPRITE_PS_ACCESS,   // 4
-    CYCLE_GROUP_SPRITE_PS_ACCESS,   // 5
-    CYCLE_GROUP_SPRITE_PS_ACCESS,   // 6
-    CYCLE_GROUP_SPRITE_PS_ACCESS,   // 7
-    CYCLE_GROUP_SPRITE_PS_ACCESS,   // 8
-    CYCLE_GROUP_REFRESH_ACCESS,     // 9
-    CYCLE_GROUP_IDLE,               // 10
-    CYCLE_GROUP_IDLE,               // 11
-    CYCLE_GROUP_BADLINE_SETUP,      // 12
-    CYCLE_GROUP_BADLINE_SETUP,      // 13
-    CYCLE_GROUP_BADLINE_SETUP,      // 14
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 15
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 16
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 17
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 18
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 19
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 20
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 21
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 22
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 23
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 24
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 25
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 26
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 27
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 28
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 29
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 30
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 31
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 32
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 33
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 34
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 35
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 36
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 37
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 38
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 39
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 40
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 41
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 42
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 43
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 44
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 45
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 46
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 47
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 48
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 49
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 50
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 51
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 52
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 53
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,  // 54
-    CYCLE_GROUP_LINE_END,           // 55
-    CYCLE_GROUP_LINE_END,           // 56
-    CYCLE_GROUP_LINE_END,           // 57
-    CYCLE_GROUP_LINE_END,           // 58
-    CYCLE_GROUP_LINE_END,           // 59
-    CYCLE_GROUP_LINE_END,           // 60
-    CYCLE_GROUP_IDLE,               // 61
-    CYCLE_GROUP_IDLE,               // 62
-    CYCLE_GROUP_LINE_START          // 63 (wrap-around safety)
+    CYCLE_GROUP_LINE_START,           // 0
+    CYCLE_GROUP_SPRITE_3_7_PS_ACCESS, // 1
+    CYCLE_GROUP_SPRITE_3_7_PS_ACCESS, // 2
+    CYCLE_GROUP_SPRITE_3_7_PS_ACCESS, // 3
+    CYCLE_GROUP_SPRITE_3_7_PS_ACCESS, // 4
+    CYCLE_GROUP_SPRITE_3_7_PS_ACCESS, // 5
+    CYCLE_GROUP_SPRITE_3_7_PS_ACCESS, // 6
+    CYCLE_GROUP_SPRITE_3_7_PS_ACCESS, // 7
+    CYCLE_GROUP_SPRITE_3_7_PS_ACCESS, // 8
+    CYCLE_GROUP_REFRESH_ACCESS,       // 9
+    CYCLE_GROUP_IDLE,                 // 10
+    CYCLE_GROUP_IDLE,                 // 11
+    CYCLE_GROUP_BADLINE_SETUP,        // 12
+    CYCLE_GROUP_BADLINE_SETUP,        // 13
+    CYCLE_GROUP_BADLINE_SETUP,        // 14
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 15
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 16
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 17
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 18
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 19
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 20
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 21
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 22
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 23
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 24
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 25
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 26
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 27
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 28
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 29
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 30
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 31
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 32
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 33
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 34
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 35
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 36
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 37
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 38
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 39
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 40
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 41
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 42
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 43
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 44
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 45
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 46
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 47
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 48
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 49
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 50
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 51
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 52
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 53
+    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // 54
+    CYCLE_GROUP_SPRITE_0_PS_ACCESS, // 55
+    CYCLE_GROUP_SPRITE_0_2_PS_ACCESS, // 56
+    CYCLE_GROUP_SPRITE_0_2_PS_ACCESS, // 57
+    CYCLE_GROUP_SPRITE_0_2_PS_ACCESS, // 58
+    CYCLE_GROUP_SPRITE_0_2_PS_ACCESS, // 59
+    CYCLE_GROUP_SPRITE_0_2_PS_ACCESS, // 60
+    CYCLE_GROUP_IDLE,                 // 61
+    CYCLE_GROUP_IDLE,                 // 62
+    CYCLE_GROUP_LINE_START            // 63 (wrap-around safety)
 };
 
 uint32_t* vicii_common_get_default_palette(void) {
@@ -777,9 +777,8 @@ void vicii_common_cycle(vicii_common_t* vicii) {
     
     // Determine bus access requirements based on cycle group
     switch (cycle_group) {
-        case CYCLE_GROUP_SPRITE_PS_ACCESS:
-            // Handle sprite access cycles (cycles 1-8)
-            access_param = ((cycle - 1) >> 1) + 3;
+        case CYCLE_GROUP_SPRITE_3_7_PS_ACCESS: // cycles 1 to 8
+            access_param = ((cycle - 1) >> 1) + 3; // Sprite 3 to 7
             if (vicii->sprites.sprites[access_param].enabled) {  // Direct access
                 access_type = (cycle & 1) ? VIC_ACCESS_P : VIC_ACCESS_S;
                 ba_low = true;
@@ -804,26 +803,26 @@ void vicii_common_cycle(vicii_common_t* vicii) {
             }
             break;
             
-        case CYCLE_GROUP_LINE_END:
-            // Handle late sprite access cycles (cycles 55-60)
+        case CYCLE_GROUP_SPRITE_0_PS_ACCESS: { // cycle 55
+            // Cycle 55: Handle sprite Y expansion flip flop inversion (Documentation section 3.8.1)
+            // "If the MxYE bit is set in the first phase of cycle 55, the expansion
+            // flip flop is inverted."
+            uint8_t mxye_reg = vicii->registers.data[VICII_MXYE];  // Direct access - single use
+            for (int i = 0; i < VICII_NUM_SPRITES; i++) {
+                if (mxye_reg & (1 << i)) {
+                    // If MxYE bit is set in cycle 55, invert the expansion flip flop
+                    vicii->sprites.sprites[i].expansion_flip_flop = !vicii->sprites.sprites[i].expansion_flip_flop;  // Direct access
+                }
+            }
+        }
+        // fall through to sprite access case
+        case CYCLE_GROUP_SPRITE_0_2_PS_ACCESS: // cycles 55-60
             access_param = (cycle - 55) >> 1;
             if (vicii->sprites.sprites[access_param].enabled) {  // Direct access
                 access_type = (cycle & 1) ? VIC_ACCESS_P : VIC_ACCESS_S;
                 ba_low = true;
             }
             
-            // Cycle 55: Handle sprite Y expansion flip flop inversion (Documentation section 3.8.1)
-            // "If the MxYE bit is set in the first phase of cycle 55, the expansion
-            // flip flop is inverted."
-            if (cycle == 55) { // TODO : Separate into a cycle group entry and fall through to above
-                uint8_t mxye_reg = vicii->registers.data[VICII_MXYE];  // Direct access - single use
-                for (int i = 0; i < VICII_NUM_SPRITES; i++) {
-                    if (mxye_reg & (1 << i)) {
-                        // If MxYE bit is set in cycle 55, invert the expansion flip flop
-                        vicii->sprites.sprites[i].expansion_flip_flop = !vicii->sprites.sprites[i].expansion_flip_flop;  // Direct access
-                    }
-                }
-            }
             break;
             
         case CYCLE_GROUP_IDLE:
