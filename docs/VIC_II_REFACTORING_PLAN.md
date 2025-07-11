@@ -51,14 +51,14 @@ This project aims to complete and refine the C implementation of the Commodore 6
   - Sprite pixel emission
 - Use only the data fetched and stored in the current cycle, never direct memory reads.
 - Ensure the correct priority and collision logic, as in the C# code and hardware.
-- **Status:** _Cycle-accurate, hardware-accurate, and review-friendly. Complete for sprites. Graphics emission: IN PROGRESS._
+- **Status:** _Sprite pixel emission: hardware-accurate and complete. Graphics pixel emission: PARTIALLY COMPLETE—cycle-accuracy and full mode validation IN PROGRESS._
 - **Current state:**
   - Sprite sequencer and pixel emission logic is implemented and hardware-accurate, using a 24-bit shift register per sprite, with DMA buffer and per-cycle shifting.
   - Sprite pixel emission is called from the display pipeline, using only intermediate storage, and is ready for priority/collision logic.
-  - The graphics pixel emission (`vicii_common_emit_graphics_pixels`) is called, but the actual cycle-accurate emission and sequencer logic for graphics pixels (foreground/background, multicolor, etc.) needs to be validated and completed for full hardware accuracy.
+  - The graphics pixel emission (`vicii_common_emit_graphics_pixels` / `vic_graphics_sequencer`) is present and called, but the actual cycle-accurate emission and sequencer logic for graphics pixels (foreground/background, multicolor, etc.) needs further validation and completion for full hardware accuracy. Not all graphics modes are fully validated.
 - **Next steps:**
-  - Review and update `vicii_common_emit_graphics_pixels` to ensure it uses the correct sequencer/shift register logic for graphics pixels, as described in vic-ii.txt (section 3.7.3 and following).
-  - Ensure all graphics modes are handled, and pixels are emitted to intermediate storage in a cycle-accurate way.
+  - Review and update `vicii_common_emit_graphics_pixels` and `vic_graphics_sequencer` to ensure cycle-accurate sequencer/shift register logic for graphics pixels, as described in vic-ii.txt (section 3.7.3 and following).
+  - Validate all graphics modes (text, bitmap, multicolor, ECM, idle) and document any uncertainties.
   - Keep all code modular and well-commented, with enquoted documentation from vic-ii.txt where appropriate.
   - Update this plan with any new research findings or open questions.
 
@@ -80,7 +80,7 @@ This project aims to complete and refine the C implementation of the Commodore 6
   - Mark code and comments clearly.
   - Suggest further research (e.g., VICE source, die shots, C64 Wiki, forums).
   - Prefer a modular design so sequencer logic can be improved later.
-- **Status:** _Ongoing_
+- **Status:** _Ongoing. Graphics sequencer logic is modular but incomplete for full hardware accuracy—cycle-accuracy and mode-specific behavior need further research and validation. Expand TODOs and uncertainties in code and plan._
 
 ### 2.7. **PAL/NTSC Abstraction**
 
@@ -91,7 +91,7 @@ This project aims to complete and refine the C implementation of the Commodore 6
 
 - Enquote all comments from vic-ii.txt.
 - Clearly mark all code ported from C# or other sources.
-- Document all uncertainties and TODOs.
+- Document all uncertainties and TODOs, especially in sequencer logic and graphics emission.
 - **Status:** _Ongoing_
 
 ### 2.9. **Sequencer Research & Open Questions**
@@ -127,7 +127,7 @@ This project aims to complete and refine the C implementation of the Commodore 6
 ### 3.4. **Pixel Emission**
 - [x] Refactored: Pixel emission now uses only intermediate storage and is called from the display pipeline, not from bus access logic.
 - [x] Sprite pixel emission, priority, and collision logic implemented and hardware-accurate.
-- [ ] Complete and activate cycle-accurate pixel emission for graphics (IN PROGRESS).
+- [ ] Graphics pixel emission: PARTIALLY COMPLETE—cycle-accuracy and mode validation IN PROGRESS.
 - [ ] Ensure correct use of intermediate storage and sequencer emulation for graphics.
 - [ ] Validate all graphics modes (text, bitmap, multicolor, ECM, idle) and document any uncertainties.
 
@@ -135,11 +135,11 @@ This project aims to complete and refine the C implementation of the Commodore 6
 - [x] Implement correct priority and collision logic for graphics and sprites.
 
 ### 3.6. **Sequencer Logic**
-- [ ] Mark and modularize sequencer logic for future improvement (IN PROGRESS).
-- [ ] Document all uncertainties and research findings in this plan.
+- [ ] Graphics sequencer logic is modular but incomplete for full hardware accuracy—cycle-accuracy and mode-specific behavior need further research and validation.
+- [ ] Document all uncertainties and research findings in this plan and code.
 - **Current state:**
   - Sprite sequencer logic is modular and hardware-accurate.
-  - Graphics sequencer logic is partially implemented; further research and validation needed for full hardware accuracy, especially for XSCROLL, reload/shift timing, and mode-specific behavior.
+  - Graphics sequencer logic is present but needs further validation for XSCROLL, reload/shift timing, and mode-specific behavior.
 - **Next steps:**
   - Incrementally modularize and document the graphics sequencer logic.
   - Compare with VICE and C# outputs for validation.
@@ -148,6 +148,7 @@ This project aims to complete and refine the C implementation of the Commodore 6
 ### 3.7. **Testing and Validation**
 - [ ] After each major step, test against known good C# output or VICE test results.
 - [ ] Start with border and background, then text/bitmap graphics, then sprites.
+- [ ] Add explicit TODOs for test/validation hooks in code.
 
 ---
 
