@@ -182,18 +182,6 @@ typedef struct vicii_pixel_s vicii_pixel_t;
 #define VIC_ACCESS_C            4  // c-access - video matrix and Color RAM
 #define VIC_ACCESS_G            5  // g-access - character generator or bitmap
 
-// Cycle groups (Documentation section 3.6.3)
-typedef enum {
-    CYCLE_GROUP_LINE_START,           // Cycle 0
-    CYCLE_GROUP_SPRITE_3_7_PS_ACCESS, // Cycles 1-8 (p and s accesses)
-    CYCLE_GROUP_REFRESH_ACCESS,       // Cycle 9 (r-access)
-    CYCLE_GROUP_IDLE,                 // Cycles 10-11 (idle cycles)
-    CYCLE_GROUP_BADLINE_SETUP,        // Cycles 12-14 (BA warning)
-    CYCLE_GROUP_CHAR_COLOR_ACCESS,    // Cycles 15-54 (c and g accesses)
-    CYCLE_GROUP_SPRITE_0_PS_ACCESS,   // Cycle 55 (p-access for sprite 0)
-    CYCLE_GROUP_SPRITE_0_2_PS_ACCESS  // Cycles 55-62 (for PAL, 55-64 for NTSC)
-} vic_cycle_group_t;
-
 // Interrupt mask
 #define VICII_INTERRUPTS_MASK (VICII_IR_ILP | VICII_IR_IMMC | VICII_IR_IMBC | VICII_IR_IRST)
 
@@ -211,13 +199,21 @@ typedef struct {
 
 // Timing Unit - All timing-related state
 typedef struct {
-    uint8_t x_cycle;
-    uint16_t x_coordinate;
-    vic_cycle_group_t cycle_group;
-    uint16_t raster_counter;
-    uint32_t frame_count;
-    uint8_t cycles_per_line;
-    uint16_t total_lines;
+    // Primary counter is x_coordinate (pixel-level precision)
+    uint16_t x_coordinate;               // Primary counter: 0-511 (9-bit, wraps)
+    uint16_t display_x_coordinate;       // Display coordinate with 12-pixel pipeline delay
+    
+    // Derived counters
+    uint8_t x_cycle;                     // Derived from x_coordinate (x_coordinate / 8)
+    uint16_t raster_counter;             // Current raster line (0-total_lines)
+    uint32_t frame_count;                // Frame counter
+    
+    // Precalculated timing parameters
+    const vic_cycle_entry_t* cycle_table; // Precalculated cycle table pointer
+    uint16_t base_offset;                // Precalculated x_coordinate base offset
+    uint16_t pixels_per_line;            // Total pixels per line (504 PAL, 520 NTSC)
+    uint8_t cycles_per_line;             // Cycles per line (63 PAL, 65 NTSC)
+    uint16_t total_lines;                // Total lines per frame
 } vic_timing_unit_t;
 
 // Video Logic Unit - Display state and bad line logic (Documentation section 3.7)
@@ -225,7 +221,6 @@ typedef struct {
     bool display_state;
     bool is_bad_line;
     bool was_den_set_during_raster_30;
-    bool vertical_border_flip_flop;
     uint16_t vcbase;     // VCBASE - Video Counter Base (10 bits) (Documentation section 3.7.2)
     uint16_t vc;         // VC - Video Counter (10 bits) (Documentation section 3.7.2)
     uint8_t rc;          // RC - Row Counter (3 bits) (Documentation section 3.7.2)
@@ -241,10 +236,12 @@ typedef struct {
 
 // Graphics Sequencer Unit - Graphics pixel generation state
 typedef struct {
+    uint8_t graphics_mode;    // Current graphics mode
+    uint8_t last_mode;        // Last graphics mode for change detection
     uint8_t shift_reg;        // Graphics shift register
     uint8_t xscroll_counter;  // XSCROLL delay counter
-    uint8_t last_mode;        // Last graphics mode for change detection
-    uint8_t graphics_mode;    // Current graphics mode
+    uint8_t char_index;       // Current character index (0-39)
+    uint8_t pixel_in_char;    // Current pixel within character (0-7)
     vicii_pixel_t colors[5];  // Color palette for current mode
 } vic_sequencer_unit_t;
 
@@ -303,7 +300,7 @@ typedef struct {
     uint8_t bank;              // Current bank (0-3)
 } vic_memory_unit_t;
 
-// Sprite Unit - Single sprite state (Documentation section 3.8)
+// Sprite Unit - Single sprite state (Documentation section 3.8 + VIC-Addendum)
 typedef struct {
     uint8_t x_pos;
     uint8_t y_pos;
@@ -313,8 +310,12 @@ typedef struct {
     bool y_expand;
     vicii_priority_t priority;
     uint8_t data_pointer;
+    
+    // VIC-Addendum sprite crunch support
     uint8_t mcbase;               // MCBASE - MOB Data Counter Base (Documentation section 3.8.1)
     uint8_t mc;                   // MC - MOB Data Counter (Documentation section 3.8.1)
+    bool dma_enabled;             // Sprite DMA state (disabled when MCBASE == 63)
+    
     uint8_t mc_counter;           // More descriptive than dma_counter
     bool expansion_flip_flop;
     bool display_state;
@@ -335,6 +336,13 @@ typedef struct {
     uint32_t* pixel_line_color;
     uint16_t pixel_line_index;
     uint16_t visible_pixels_per_line;
+    
+    // X-coordinate driven rendering support
+    uint16_t display_start_x;            // Start of display area
+    uint16_t display_end_x;              // End of display area
+    uint16_t framebuffer_start_x;        // Start of framebuffer area  
+    uint16_t framebuffer_end_x;          // End of framebuffer area
+    
     uint32_t* framebuffer;
     int framebuffer_width;
     int framebuffer_height;
@@ -376,10 +384,6 @@ typedef struct {
 // Main cycle function
 void vicii_common_cycle(vicii_common_t* vicii);
 
-// ========================================================================================
-// HIGH-LEVEL API (LEGACY COMPATIBILITY)
-// ========================================================================================
-
 // Factory and lifecycle
 vicii_common_t* vicii_common_system_create(chip_descriptor_t* desc, void (*bank_change)(void*, uint8_t));
 void vicii_common_system_destroy(void* chip);
@@ -395,7 +399,6 @@ void vicii_common_registers_write(void* chip, uint16_t address, uint8_t value);
 void vicii_common_bank_change(void* chip, uint8_t bank);
 
 // Utility functions
-uint32_t* vicii_common_get_default_palette(void);
 void vicii_common_set_framebuffer(vicii_common_t* vicii, uint32_t* framebuffer, int width, int height);
 
 #endif // VICII_COMMON_H
