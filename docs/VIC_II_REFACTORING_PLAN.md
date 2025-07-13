@@ -34,6 +34,7 @@ This project aims to complete and refine the C implementation of the Commodore 6
 
 - Sprite pointer/data fetches, DMA, display state transitions, pixel emission, priority, and collision logic are implemented and hardware-accurate.
 - **Status:** _Complete_
+- **TODO:** Finalize full sprite crunch logic per VIC-Addendum rule 7/8 (bitwise MCBASE update).
 
 ### 2.3. **Pixel Emission**
 
@@ -43,10 +44,6 @@ This project aims to complete and refine the C implementation of the Commodore 6
 - All pixel emission uses only intermediate storage buffers.
 - Priority and collision logic are correct.
 - **Status:** _Complete and hardware-accurate for all modes._
-- **Current state:**
-  - Graphics sequencer logic is modular, cycle-accurate, and validates all VIC-II modes.
-  - Sprite sequencer and pixel emission logic are hardware-accurate.
-  - Border logic is cycle-accurate.
 - **Next steps:**
   - Finalize and document any remaining edge cases.
   - Proceed to comprehensive testing and validation.
@@ -69,6 +66,7 @@ This project aims to complete and refine the C implementation of the Commodore 6
 - All graphics modes (text, bitmap, multicolor, ECM, idle) are handled.
 - Uncertainties and TODOs are documented in code and plan.
 - **Status:** _Complete. Further research and validation for edge cases may be needed._
+- **TODO:** Review sequencer edge cases for effects: FLD, FLI, DMA delay, linecrunch, sprite stretching.
 
 ### 2.7. **PAL/NTSC Abstraction**
 
@@ -109,6 +107,7 @@ This project aims to complete and refine the C implementation of the Commodore 6
 ### 3.3. **Sprite DMA and Display State**
 - [x] Implement sprite DMA and display state transitions in the correct cycles.
 - [x] Store sprite data in per-sprite buffers.
+- [ ] Finalize full sprite crunch logic per VIC-Addendum rule 7/8.
 
 ### 3.4. **Pixel Emission**
 - [x] Pixel emission now uses only intermediate storage and is called from the display pipeline, not from bus access logic.
@@ -129,11 +128,13 @@ This project aims to complete and refine the C implementation of the Commodore 6
 - **Next steps:**
   - Finalize documentation and edge case handling.
   - Proceed to comprehensive testing and validation.
+- [ ] Review and implement edge-case effects: FLD, FLI, DMA delay, linecrunch, sprite stretching.
 
 ### 3.7. **Testing and Validation**
 - [ ] After each major step, test against known good C# output or VICE test results.
 - [ ] Start with border and background, then text/bitmap graphics, then sprites.
 - [ ] Add explicit TODOs for test/validation hooks in code.
+- [ ] Validate edge-case behaviors: lightpen retrigger, raster IRQ edge-trigger, fetch glitches, C64C bank switching, grey dot effect.
 
 ---
 

@@ -867,8 +867,10 @@ static void vic_cycle_sprite_p_expansion_check(vicii_common_t* vicii, int sprite
                 // Check if CPU cleared Y expansion bit in previous cycle (sprite crunch)
                 // This is a simplified implementation - full crunch detection would require
                 // tracking register writes within specific cycle phases
-                sprite->mcbase = sprite->mc;
-                
+                // VIC-II Addendum sprite crunch logic:
+                // MCBASE = (0xAA & (MCBASE & MC)) | (0x55 & (MCBASE | MC))
+                uint8_t old_mcbase = sprite->mcbase;
+                sprite->mcbase = (0xAA & (old_mcbase & sprite->mc)) | (0x55 & (old_mcbase | sprite->mc));
                 // "After the MCBASE update, the VIC checks if MCBASE is equal to 63 and turns
                 // off the DMA of the sprite if it is."
                 if (sprite->mcbase == 63) {
