@@ -189,6 +189,17 @@ typedef struct vicii_pixel_s vicii_pixel_t;
 #define VICII_NUM_SPRITES 8
 
 // ========================================================================================
+// CYCLE TABLE ENTRY TYPE (needed for timing unit)
+// ========================================================================================
+typedef struct vicii_common_s vicii_common_t;
+typedef void (*vic_cycle_func_t)(vicii_common_t*, int);
+
+typedef struct vic_cycle_entry_t {
+    vic_cycle_func_t func;
+    int param;
+} vic_cycle_entry_t;
+
+// ========================================================================================
 // TOPIC-SPECIFIC UNIT STRUCTURES
 // ========================================================================================
 
@@ -202,12 +213,12 @@ typedef struct {
     // Primary counter is x_coordinate (pixel-level precision)
     uint16_t x_coordinate;               // Primary counter: 0-511 (9-bit, wraps)
     uint16_t display_x_coordinate;       // Display coordinate with 12-pixel pipeline delay
-    
+
     // Derived counters
     uint8_t x_cycle;                     // Derived from x_coordinate (x_coordinate / 8)
     uint16_t raster_counter;             // Current raster line (0-total_lines)
     uint32_t frame_count;                // Frame counter
-    
+
     // Precalculated timing parameters
     const vic_cycle_entry_t* cycle_table; // Precalculated cycle table pointer
     uint16_t base_offset;                // Precalculated x_coordinate base offset
@@ -356,12 +367,12 @@ typedef struct {
 } vic_bus_unit_t;
 
 // Main VIC-II structure composed of units
-typedef struct {
+struct vicii_common_s {
     chip_descriptor_t* desc;
-    
+
     // Feature toggles
     bool enable_hardware_accurate_reads;  // Enable VIC idle/refresh memory reads for $DE00 data bus tricks and cycle accuracy (default: false for performance)
-    
+
     // Topic-specific units
     vic_registers_unit_t registers;
     vic_timing_unit_t timing;
@@ -373,7 +384,7 @@ typedef struct {
     vic_sprites_unit_t sprites;
     vic_pixel_unit_t pixel;
     vic_bus_unit_t bus;
-} vicii_common_t;
+};
 
 // ========================================================================================
 // PUBLIC API FUNCTION PROTOTYPES

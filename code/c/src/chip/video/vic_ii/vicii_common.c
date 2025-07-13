@@ -120,7 +120,7 @@ void vic_graphics_sequencer(vicii_common_t* vicii, uint8_t graphics_data) {
     // Load new graphics data every 8 pixels (one character width)
     if (seq->pixel_in_char == 0) {
         seq->shift_reg = graphics_data;
-        seq->char_index = display_pixel_x >> 3; // Character position
+        seq->char_index = (uint8_t)(display_pixel_x >> 3); // Character position
     }
     
     // Extract pixel data based on mode
@@ -356,7 +356,7 @@ static inline void vic_sprite_emit_pixels(vicii_common_t* vicii, int sprite_inde
     
     if (current_x < sprite_x || current_x >= (sprite_x + 24)) return;
     
-    uint8_t sprite_pixel_x = current_x - sprite_x;
+    uint8_t sprite_pixel_x = (uint8_t)(current_x - sprite_x);
     
     if (vicii->registers.data[VICII_MXXE] & (1 << sprite_index)) {
         sprite_pixel_x >>= 1;
@@ -390,6 +390,7 @@ static inline void vic_sprite_emit_pixels(vicii_common_t* vicii, int sprite_inde
     if (is_multicolor) {
         uint8_t bit_pair = (sprite->shift_reg >> (22 - sprite_pixel_x)) & 3;
         switch (bit_pair) {
+            default: //  avoids a compiler warning
             case 0: return;
             case 1: sprite_color = vicii->registers.data[VICII_MM0]; break;
             case 2: sprite_color = vicii->registers.data[VICII_M0C + sprite_index]; break;
@@ -916,13 +917,6 @@ static void vic_cycle_border_check(vicii_common_t* vicii, int param) {
 // CYCLE TABLES
 // ========================================================================================
 
-typedef void (*vic_cycle_func_t)(vicii_common_t*, int);
-
-typedef struct {
-    vic_cycle_func_t func;
-    int param;
-} vic_cycle_entry_t;
-
 // Cycle callback table - PAL timing (63 cycles per line) (Documentation section 3.6.3)
 static const vic_cycle_entry_t vic_cycle_table_pal[64] = {
     {vic_cycle_idle, 0},                              // 0
@@ -1117,8 +1111,6 @@ void vicii_common_cycle(vicii_common_t* vicii) {
     // Flush pixel line if end of line
     if (vicii->timing.x_coordinate == 0 && vicii->pixel.framebuffer) {
         vic_pixel_flush_line(vicii, vicii_common_get_default_palette(),
-                             vicii->pixel.pixel_line_priority, 
-                             vicii->pixel.pixel_line_color);
                            (vicii->timing.raster_counter - 1) % vicii->timing.total_lines);
     }
 }
@@ -1225,7 +1217,6 @@ static inline void vicii_common_initialize_timing(vicii_common_t* vicii, bool is
     
     vicii->timing.x_cycle = 0;
     vicii->timing.raster_counter = 0;
-    vic_update_x_coordinate(vicii);
 }
 
 // ========================================================================================
