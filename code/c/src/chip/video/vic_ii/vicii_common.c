@@ -772,7 +772,7 @@ static void vic_cycle_sprite_p_access(vicii_common_t* vicii, int sprite_num) {
     if (sprite->enabled) {
         vic_bus_control_ba_low(vicii);
         vic_bus_control_aec_low(vicii);
-        vic_memory_access(vicii, VIC_ACCESS_P, sprite_num);
+        vic_memory_access(vicii, VIC_ACCESS_P, (uint8_t)sprite_num);
     } else {
         vic_bus_control_ba_high(vicii);
         vic_bus_control_aec_high(vicii);
@@ -785,7 +785,7 @@ static void vic_cycle_sprite_s_access(vicii_common_t* vicii, int sprite_num) {
     if (sprite->enabled) {
         vic_bus_control_ba_low(vicii);
         vic_bus_control_aec_low(vicii);
-        vic_memory_access(vicii, VIC_ACCESS_S, sprite_num);
+        vic_memory_access(vicii, VIC_ACCESS_S, (uint8_t)sprite_num);
     } else {
         vic_bus_control_ba_high(vicii);
         vic_bus_control_aec_high(vicii);
@@ -828,7 +828,7 @@ static void vic_cycle_char_color_access(vicii_common_t* vicii, int char_index) {
     if (vicii->video_logic.is_bad_line) {
         vic_bus_control_ba_low(vicii);
         vic_bus_control_aec_low(vicii);
-        vic_memory_access(vicii, VIC_ACCESS_C, char_index);
+        vic_memory_access(vicii, VIC_ACCESS_C, (uint8_t)char_index);
         
         if (vicii->pixel.framebuffer && 
             vicii->timing.raster_counter < vicii->pixel.framebuffer_height &&
@@ -839,7 +839,7 @@ static void vic_cycle_char_color_access(vicii_common_t* vicii, int char_index) {
     } else {
         vic_bus_control_ba_high(vicii);
         vic_bus_control_aec_high(vicii);
-        vic_memory_access(vicii, VIC_ACCESS_G, char_index);
+        vic_memory_access(vicii, VIC_ACCESS_G, (uint8_t)char_index);
         
         if (vicii->pixel.framebuffer && 
             vicii->timing.raster_counter < vicii->pixel.framebuffer_height) {
