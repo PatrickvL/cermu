@@ -723,7 +723,7 @@ uint8_t vic_registers_read(vicii_common_t* vicii, uint16_t address) {
 static inline void vic_update_timing_from_x_coordinate(vicii_common_t* vicii) {
     // Calculate cycle from x_coordinate (reverse of previous calculation)
     uint16_t adjusted_x = (vicii->timing.x_coordinate - vicii->timing.base_offset) & 0x1FF;
-    vicii->timing.x_cycle = adjusted_x >> 3; // Divide by 8 pixels per cycle
+    vicii->timing.x_cycle = (uint8_t)(adjusted_x >> 3); // Divide by 8 pixels per cycle
     
     // Display coordinate with 12-pixel pipeline delay
     vicii->timing.display_x_coordinate = (vicii->timing.x_coordinate - 12) & 0x1FF;
@@ -895,24 +895,26 @@ static void vic_cycle_sprite_s_rc_check(vicii_common_t* vicii, int sprite_num) {
     vic_cycle_sprite_s_access(vicii, sprite_num);
 }
 
-// Border Rules 2 & 3: Y coordinate checks in cycle 63 (Documentation section 3.9)
-static void vic_cycle_border_check(vicii_common_t* vicii, int param) {
+// Border Rules 2 & 3: Y coordinate checks in cycle 63 (1-based numbering)
+// Combined with sprite S access for cycle efficiency
+static void vic_cycle_sprite_s_border_check(vicii_common_t* vicii, int param) {
     uint16_t raster = vicii->timing.raster_counter;
     bool den_set = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
                 
-    // Rule 2: "If the Y coordinate reaches the bottom comparison value in cycle 63, the
-    // vertical border flip flop is set."
+    // Rule 2: "If the Y coordinate reaches the bottom comparison value in cycle 63,
+    // the vertical border flip flop is set."
     if (raster == vicii->border.border_bottom) {
         vicii->border.vertical_border_flip_flop = true;
     }
 
-    // Rule 3: "If the Y coordinate reaches the top comparison value in cycle 63 and the
-    // DEN bit in register $d011 is set, the vertical border flip flop is reset."
+    // Rule 3: "If the Y coordinate reaches the top comparison value in cycle 63 and
+    // the DEN bit in register $d011 is set, the vertical border flip flop is reset."
     else if (raster == vicii->border.border_top && den_set) {
         vicii->border.vertical_border_flip_flop = false;
     }
     
-    vic_cycle_idle(vicii, param);
+    // Perform the sprite S access for this cycle
+    vic_cycle_sprite_s_access(vicii, param);
 }
 
 // ========================================================================================
@@ -920,141 +922,139 @@ static void vic_cycle_border_check(vicii_common_t* vicii, int param) {
 // ========================================================================================
 
 // Cycle callback table - PAL timing (63 cycles per line) (Documentation section 3.6.3)
-static const vic_cycle_entry_t vic_cycle_table_pal[64] = {
-    {vic_cycle_idle, 0},                              // 0
-    {vic_cycle_sprite_p_access, 0},                   // 1
-    {vic_cycle_sprite_s_access, 0},                   // 2
-    {vic_cycle_sprite_p_access, 1},                   // 3
-    {vic_cycle_sprite_s_access, 1},                   // 4
-    {vic_cycle_sprite_p_access, 2},                   // 5
-    {vic_cycle_sprite_s_access, 2},                   // 6
-    {vic_cycle_sprite_p_access, 3},                   // 7
-    {vic_cycle_sprite_s_access, 3},                   // 8
-    {vic_cycle_refresh, 0},                           // 9
-    {vic_cycle_idle, 0},                              // 10
+static const vic_cycle_entry_t vic_cycle_table_pal[63] = {
+    {vic_cycle_idle, 0},                              // 1
+    {vic_cycle_sprite_p_access, 0},                   // 2
+    {vic_cycle_sprite_s_access, 0},                   // 3
+    {vic_cycle_sprite_p_access, 1},                   // 4
+    {vic_cycle_sprite_s_access, 1},                   // 5
+    {vic_cycle_sprite_p_access, 2},                   // 6
+    {vic_cycle_sprite_s_access, 2},                   // 7
+    {vic_cycle_sprite_p_access, 3},                   // 8
+    {vic_cycle_sprite_s_access, 3},                   // 9
+    {vic_cycle_refresh, 0},                           // 10
     {vic_cycle_idle, 0},                              // 11
-    {vic_cycle_badline_setup, 0},                     // 12
+    {vic_cycle_idle, 0},                              // 12
     {vic_cycle_badline_setup, 0},                     // 13
-    {vic_cycle_vc_load, 0},                           // 14
-    {vic_cycle_char_color_access, 0},                 // 15
-    {vic_cycle_char_color_access, 1},                 // 16
-    {vic_cycle_char_color_access, 2},                 // 17
-    {vic_cycle_char_color_access, 3},                 // 18
-    {vic_cycle_char_color_access, 4},                 // 19
-    {vic_cycle_char_color_access, 5},                 // 20
-    {vic_cycle_char_color_access, 6},                 // 21
-    {vic_cycle_char_color_access, 7},                 // 22
-    {vic_cycle_char_color_access, 8},                 // 23
-    {vic_cycle_char_color_access, 9},                 // 24
-    {vic_cycle_char_color_access, 10},                // 25
-    {vic_cycle_char_color_access, 11},                // 26
-    {vic_cycle_char_color_access, 12},                // 27
-    {vic_cycle_char_color_access, 13},                // 28
-    {vic_cycle_char_color_access, 14},                // 29
-    {vic_cycle_char_color_access, 15},                // 30
-    {vic_cycle_char_color_access, 16},                // 31
-    {vic_cycle_char_color_access, 17},                // 32
-    {vic_cycle_char_color_access, 18},                // 33
-    {vic_cycle_char_color_access, 19},                // 34
-    {vic_cycle_char_color_access, 20},                // 35
-    {vic_cycle_char_color_access, 21},                // 36
-    {vic_cycle_char_color_access, 22},                // 37
-    {vic_cycle_char_color_access, 23},                // 38
-    {vic_cycle_char_color_access, 24},                // 39
-    {vic_cycle_char_color_access, 25},                // 40
-    {vic_cycle_char_color_access, 26},                // 41
-    {vic_cycle_char_color_access, 27},                // 42
-    {vic_cycle_char_color_access, 28},                // 43
-    {vic_cycle_char_color_access, 29},                // 44
-    {vic_cycle_char_color_access, 30},                // 45
-    {vic_cycle_char_color_access, 31},                // 46
-    {vic_cycle_char_color_access, 32},                // 47
-    {vic_cycle_char_color_access, 33},                // 48
-    {vic_cycle_char_color_access, 34},                // 49
-    {vic_cycle_char_color_access, 35},                // 50
-    {vic_cycle_char_color_access, 36},                // 51
-    {vic_cycle_char_color_access, 37},                // 52
-    {vic_cycle_char_color_access, 38},                // 53
-    {vic_cycle_char_color_access, 39},                // 54
-    {vic_cycle_sprite_p_expansion_check, 4},          // 55
-    {vic_cycle_sprite_s_access, 4},                   // 56
-    {vic_cycle_sprite_p_access, 5},                   // 57
-    {vic_cycle_sprite_s_rc_check, 5},                 // 58
-    {vic_cycle_sprite_p_access, 6},                   // 59
-    {vic_cycle_sprite_s_access, 6},                   // 60
-    {vic_cycle_sprite_p_access, 7},                   // 61
-    {vic_cycle_sprite_s_access, 7},                   // 62
-    {vic_cycle_border_check, 0}                       // 63
+    {vic_cycle_badline_setup, 0},                     // 14
+    {vic_cycle_vc_load, 0},                           // 15
+    {vic_cycle_char_color_access, 0},                 // 16
+    {vic_cycle_char_color_access, 1},                 // 17
+    {vic_cycle_char_color_access, 2},                 // 18
+    {vic_cycle_char_color_access, 3},                 // 19
+    {vic_cycle_char_color_access, 4},                 // 20
+    {vic_cycle_char_color_access, 5},                 // 21
+    {vic_cycle_char_color_access, 6},                 // 22
+    {vic_cycle_char_color_access, 7},                 // 23
+    {vic_cycle_char_color_access, 8},                 // 24
+    {vic_cycle_char_color_access, 9},                 // 25
+    {vic_cycle_char_color_access, 10},                // 26
+    {vic_cycle_char_color_access, 11},                // 27
+    {vic_cycle_char_color_access, 12},                // 28
+    {vic_cycle_char_color_access, 13},                // 29
+    {vic_cycle_char_color_access, 14},                // 30
+    {vic_cycle_char_color_access, 15},                // 31
+    {vic_cycle_char_color_access, 16},                // 32
+    {vic_cycle_char_color_access, 17},                // 33
+    {vic_cycle_char_color_access, 18},                // 34
+    {vic_cycle_char_color_access, 19},                // 35
+    {vic_cycle_char_color_access, 20},                // 36
+    {vic_cycle_char_color_access, 21},                // 37
+    {vic_cycle_char_color_access, 22},                // 38
+    {vic_cycle_char_color_access, 23},                // 39
+    {vic_cycle_char_color_access, 24},                // 40
+    {vic_cycle_char_color_access, 25},                // 41
+    {vic_cycle_char_color_access, 26},                // 42
+    {vic_cycle_char_color_access, 27},                // 43
+    {vic_cycle_char_color_access, 28},                // 44
+    {vic_cycle_char_color_access, 29},                // 45
+    {vic_cycle_char_color_access, 30},                // 46
+    {vic_cycle_char_color_access, 31},                // 47
+    {vic_cycle_char_color_access, 32},                // 48
+    {vic_cycle_char_color_access, 33},                // 49
+    {vic_cycle_char_color_access, 34},                // 50
+    {vic_cycle_char_color_access, 35},                // 51
+    {vic_cycle_char_color_access, 36},                // 52
+    {vic_cycle_char_color_access, 37},                // 53
+    {vic_cycle_char_color_access, 38},                // 54
+    {vic_cycle_char_color_access, 39},                // 55
+    {vic_cycle_sprite_p_expansion_check, 4},          // 56
+    {vic_cycle_sprite_s_access, 4},                   // 57
+    {vic_cycle_sprite_p_access, 5},                   // 58
+    {vic_cycle_sprite_s_rc_check, 5},                 // 59
+    {vic_cycle_sprite_p_access, 6},                   // 60
+    {vic_cycle_sprite_s_access, 6},                   // 61
+    {vic_cycle_sprite_p_access, 7},                   // 62
+    {vic_cycle_sprite_s_border_check, 7}              // 63
 };
 
-// Cycle callback table - NTSC timing
-static const vic_cycle_entry_t vic_cycle_table_ntsc[66] = {
-    {vic_cycle_idle, 0},                              // 0
-    {vic_cycle_sprite_p_access, 0},                   // 1
-    {vic_cycle_sprite_s_access, 0},                   // 2
-    {vic_cycle_sprite_p_access, 1},                   // 3
-    {vic_cycle_sprite_s_access, 1},                   // 4
-    {vic_cycle_sprite_p_access, 2},                   // 5
-    {vic_cycle_sprite_s_access, 2},                   // 6
-    {vic_cycle_sprite_p_access, 3},                   // 7
-    {vic_cycle_sprite_s_access, 3},                   // 8
-    {vic_cycle_refresh, 0},                           // 9
-    {vic_cycle_idle, 0},                              // 10
+// Cycle callback table - NTSC timing (65 cycles per line)
+static const vic_cycle_entry_t vic_cycle_table_ntsc[65] = {
+    {vic_cycle_idle, 0},                              // 1
+    {vic_cycle_sprite_p_access, 0},                   // 2
+    {vic_cycle_sprite_s_access, 0},                   // 3
+    {vic_cycle_sprite_p_access, 1},                   // 4
+    {vic_cycle_sprite_s_access, 1},                   // 5
+    {vic_cycle_sprite_p_access, 2},                   // 6
+    {vic_cycle_sprite_s_access, 2},                   // 7
+    {vic_cycle_sprite_p_access, 3},                   // 8
+    {vic_cycle_sprite_s_access, 3},                   // 9
+    {vic_cycle_refresh, 0},                           // 10
     {vic_cycle_idle, 0},                              // 11
-    {vic_cycle_badline_setup, 0},                     // 12
+    {vic_cycle_idle, 0},                              // 12
     {vic_cycle_badline_setup, 0},                     // 13
-    {vic_cycle_vc_load, 0},                           // 14
-    {vic_cycle_char_color_access, 0},                 // 15
-    {vic_cycle_char_color_access, 1},                 // 16
-    {vic_cycle_char_color_access, 2},                 // 17
-    {vic_cycle_char_color_access, 3},                 // 18
-    {vic_cycle_char_color_access, 4},                 // 19
-    {vic_cycle_char_color_access, 5},                 // 20
-    {vic_cycle_char_color_access, 6},                 // 21
-    {vic_cycle_char_color_access, 7},                 // 22
-    {vic_cycle_char_color_access, 8},                 // 23
-    {vic_cycle_char_color_access, 9},                 // 24
-    {vic_cycle_char_color_access, 10},                // 25
-    {vic_cycle_char_color_access, 11},                // 26
-    {vic_cycle_char_color_access, 12},                // 27
-    {vic_cycle_char_color_access, 13},                // 28
-    {vic_cycle_char_color_access, 14},                // 29
-    {vic_cycle_char_color_access, 15},                // 30
-    {vic_cycle_char_color_access, 16},                // 31
-    {vic_cycle_char_color_access, 17},                // 32
-    {vic_cycle_char_color_access, 18},                // 33
-    {vic_cycle_char_color_access, 19},                // 34
-    {vic_cycle_char_color_access, 20},                // 35
-    {vic_cycle_char_color_access, 21},                // 36
-    {vic_cycle_char_color_access, 22},                // 37
-    {vic_cycle_char_color_access, 23},                // 38
-    {vic_cycle_char_color_access, 24},                // 39
-    {vic_cycle_char_color_access, 25},                // 40
-    {vic_cycle_char_color_access, 26},                // 41
-    {vic_cycle_char_color_access, 27},                // 42
-    {vic_cycle_char_color_access, 28},                // 43
-    {vic_cycle_char_color_access, 29},                // 44
-    {vic_cycle_char_color_access, 30},                // 45
-    {vic_cycle_char_color_access, 31},                // 46
-    {vic_cycle_char_color_access, 32},                // 47
-    {vic_cycle_char_color_access, 33},                // 48
-    {vic_cycle_char_color_access, 34},                // 49
-    {vic_cycle_char_color_access, 35},                // 50
-    {vic_cycle_char_color_access, 36},                // 51
-    {vic_cycle_char_color_access, 37},                // 52
-    {vic_cycle_char_color_access, 38},                // 53
-    {vic_cycle_char_color_access, 39},                // 54
-    {vic_cycle_sprite_p_expansion_check, 4},          // 55
-    {vic_cycle_sprite_s_access, 4},                   // 56
-    {vic_cycle_sprite_p_access, 5},                   // 57
-    {vic_cycle_sprite_s_rc_check, 5},                 // 58
-    {vic_cycle_sprite_p_access, 6},                   // 59
-    {vic_cycle_sprite_s_access, 6},                   // 60
-    {vic_cycle_sprite_p_access, 7},                   // 61
-    {vic_cycle_sprite_s_access, 7},                   // 62
-    {vic_cycle_idle, 0},                              // 63
+    {vic_cycle_badline_setup, 0},                     // 14
+    {vic_cycle_vc_load, 0},                           // 15
+    {vic_cycle_char_color_access, 0},                 // 16
+    {vic_cycle_char_color_access, 1},                 // 17
+    {vic_cycle_char_color_access, 2},                 // 18
+    {vic_cycle_char_color_access, 3},                 // 19
+    {vic_cycle_char_color_access, 4},                 // 20
+    {vic_cycle_char_color_access, 5},                 // 21
+    {vic_cycle_char_color_access, 6},                 // 22
+    {vic_cycle_char_color_access, 7},                 // 23
+    {vic_cycle_char_color_access, 8},                 // 24
+    {vic_cycle_char_color_access, 9},                 // 25
+    {vic_cycle_char_color_access, 10},                // 26
+    {vic_cycle_char_color_access, 11},                // 27
+    {vic_cycle_char_color_access, 12},                // 28
+    {vic_cycle_char_color_access, 13},                // 29
+    {vic_cycle_char_color_access, 14},                // 30
+    {vic_cycle_char_color_access, 15},                // 31
+    {vic_cycle_char_color_access, 16},                // 32
+    {vic_cycle_char_color_access, 17},                // 33
+    {vic_cycle_char_color_access, 18},                // 34
+    {vic_cycle_char_color_access, 19},                // 35
+    {vic_cycle_char_color_access, 20},                // 36
+    {vic_cycle_char_color_access, 21},                // 37
+    {vic_cycle_char_color_access, 22},                // 38
+    {vic_cycle_char_color_access, 23},                // 39
+    {vic_cycle_char_color_access, 24},                // 40
+    {vic_cycle_char_color_access, 25},                // 41
+    {vic_cycle_char_color_access, 26},                // 42
+    {vic_cycle_char_color_access, 27},                // 43
+    {vic_cycle_char_color_access, 28},                // 44
+    {vic_cycle_char_color_access, 29},                // 45
+    {vic_cycle_char_color_access, 30},                // 46
+    {vic_cycle_char_color_access, 31},                // 47
+    {vic_cycle_char_color_access, 32},                // 48
+    {vic_cycle_char_color_access, 33},                // 49
+    {vic_cycle_char_color_access, 34},                // 50
+    {vic_cycle_char_color_access, 35},                // 51
+    {vic_cycle_char_color_access, 36},                // 52
+    {vic_cycle_char_color_access, 37},                // 53
+    {vic_cycle_char_color_access, 38},                // 54
+    {vic_cycle_char_color_access, 39},                // 55
+    {vic_cycle_sprite_p_expansion_check, 4},          // 56
+    {vic_cycle_sprite_s_access, 4},                   // 57
+    {vic_cycle_sprite_p_access, 5},                   // 58
+    {vic_cycle_sprite_s_rc_check, 5},                 // 59
+    {vic_cycle_sprite_p_access, 6},                   // 60
+    {vic_cycle_sprite_s_access, 6},                   // 61
+    {vic_cycle_sprite_p_access, 7},                   // 62
+    {vic_cycle_sprite_s_border_check, 7},             // 63
     {vic_cycle_idle, 0},                              // 64
-    {vic_cycle_border_check, 0}                       // 65
+    {vic_cycle_idle, 0}                               // 65
 };
 
 // ========================================================================================
@@ -1208,12 +1208,14 @@ static inline void vicii_common_initialize_timing(vicii_common_t* vicii, bool is
         vicii->timing.total_lines = VICII_PAL_TOTAL_LINES;
         vicii->timing.cycle_table = vic_cycle_table_pal;
         vicii->timing.base_offset = 404;
+        vicii->timing.pixels_per_line = 504; // 63 cycles * 8 pixels per cycle
         vicii->pixel.visible_pixels_per_line = VICII_PAL_VISIBLE_PIXELS;
     } else {
         vicii->timing.cycles_per_line = VICII_NTSC_CYCLES_PER_LINE;
         vicii->timing.total_lines = VICII_NTSC_TOTAL_LINES;
         vicii->timing.cycle_table = vic_cycle_table_ntsc;
         vicii->timing.base_offset = 412;
+        vicii->timing.pixels_per_line = 520; // 65 cycles * 8 pixels per cycle
         vicii->pixel.visible_pixels_per_line = VICII_NTSC_VISIBLE_PIXELS;
     }
     
