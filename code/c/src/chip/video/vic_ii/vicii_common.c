@@ -355,12 +355,9 @@ static void vic_unified_pixel_sequencer(vicii_common_t* vicii) {
     if (x_coord < vicii->pixel.display_start_x || x_coord >= vicii->pixel.display_end_x) return;
     
     // Determine if we're in border or display area
-    bool in_vertical_display = (vicii->timing.raster_counter >= vicii->border.border_top &&
-                               vicii->timing.raster_counter <= vicii->border.border_bottom);
-    bool in_horizontal_display = (x_coord >= vicii->border.border_left &&
-                                 x_coord <= vicii->border.border_right);
-    bool in_main_display = in_vertical_display && in_horizontal_display && 
-                          !vicii->border.main_border_flip_flop && 
+    // VIC-II border flip-flop logic: graphics are displayed when main_border_flip_flop is FALSE
+    // Border is displayed when main_border_flip_flop is TRUE
+    bool in_main_display = !vicii->border.main_border_flip_flop && 
                           !vicii->border.vertical_border_flip_flop;
     
     if (in_main_display && vicii->video_logic.display_state) {
@@ -505,24 +502,20 @@ static void vic_unified_pixel_sequencer(vicii_common_t* vicii) {
 void vic_pixel_flush_line(vicii_common_t* vicii, uint32_t* palette, int y) {
     if (!vicii->pixel.framebuffer || !palette || y >= vicii->pixel.framebuffer_height) return;
     
-    vic_pixel_unit_t* pixel = &vicii->pixel;  // Used multiple times - KEEP
-
+    vic_pixel_unit_t* pixel = &vicii->pixel;
     uint32_t* row_ptr = &pixel->framebuffer[y * pixel->framebuffer_width];
-    uint32_t border_color = palette[vicii->registers.data[VICII_EC]]; // Direct access - single use
+    uint32_t border_color = palette[vicii->registers.data[VICII_EC]];
     
-    // Fill entire line with border color
+    // Fill entire line with border color first
     for (int x = 0; x < pixel->framebuffer_width; x++) {
         row_ptr[x] = border_color;
     }
     
-    // Copy VIC-II pixels
-    int pixels_to_copy = (pixel->pixel_line_index < pixel->visible_pixels_per_line) ?
-                        pixel->pixel_line_index : pixel->visible_pixels_per_line;
-    
-    if (pixel->pixel_line_color && pixels_to_copy > 0) {
+    // Copy the entire VIC-II line buffer (pixel_line_color contains the full line)
+    if (pixel->pixel_line_color) {
         int offset_x = (pixel->framebuffer_width - pixel->visible_pixels_per_line) >> 1;
         
-        for (int x = 0; x < pixels_to_copy; x++) {
+        for (int x = 0; x < pixel->visible_pixels_per_line; x++) {
             int fb_x = offset_x + x;
             if (fb_x >= 0 && fb_x < pixel->framebuffer_width) {
                 uint8_t color_index = pixel->pixel_line_color[x] & 0x0F;
@@ -530,8 +523,6 @@ void vic_pixel_flush_line(vicii_common_t* vicii, uint32_t* palette, int y) {
             }
         }
     }
-    
-    pixel->pixel_line_index = 0;
 }
 
 static inline void vic_pixel_set_framebuffer(vic_pixel_unit_t* pixel, uint32_t* framebuffer, 
@@ -1174,17 +1165,15 @@ static const vicii_chip_config_t vicii_config_ntsc = {
 static inline void vic_border_update_flip_flops_x(vic_border_unit_t* border, vic_timing_unit_t* timing, 
                                                   uint8_t c1_reg) {
     uint16_t raster = timing->raster_counter;
-    uint16_t x_coord = timing->display_x_coordinate;  // Use display coordinate for synchronization
+    uint16_t x_coord = timing->x_coordinate;  // Use actual hardware X coordinate (not delayed display coordinate)
     bool den_set = (c1_reg & VICII_C1_DEN) != 0;
     
     // Check each pixel in this cycle (8 pixels) against border boundaries
     for (int pixel = 0; pixel < 8; pixel++) {
-        uint16_t pixel_x = x_coord + (uint16_t)pixel;
+        uint16_t pixel_x = (x_coord + (uint16_t)pixel) % timing->pixels_per_line;
         
         // Rule 1: "If the X coordinate reaches the right comparison value, the main border flip flop is set."
         if (pixel_x == border->border_right) {
-            printf("DEBUG: Border Rule 1 triggered - pixel_x=%d right=%d - setting main_ff to 1\n", 
-                   pixel_x, border->border_right);
             border->main_border_flip_flop = true;
         }
         
@@ -1205,8 +1194,6 @@ static inline void vic_border_update_flip_flops_x(vic_border_unit_t* border, vic
             // Rule 6: "If the X coordinate reaches the left comparison value and the vertical
             // border flip flop is not set, the main flip flop is reset."
             if (!border->vertical_border_flip_flop) {
-                printf("DEBUG: Border Rule 6 triggered - pixel_x=%d left=%d vertical_ff=%d - setting main_ff to 0\n", 
-                       pixel_x, border->border_left, border->vertical_border_flip_flop);
                 border->main_border_flip_flop = false;
             }
         }
@@ -1223,9 +1210,13 @@ void vicii_common_cycle(vicii_common_t* vicii) {
     // Perform unified memory access
     vic_memory_access(vicii, access_type, entry->param);
     
+    // Update border flip-flops FIRST to establish display window state
+    vic_border_update_flip_flops_x(&vicii->border, &vicii->timing, 
+                                  vicii->registers.data[VICII_C1]);
+    
     // Perform unified pixel sequencing (8 pixels per cycle)
     // This handles both graphics and border pixels, plus sprite overlay
-    // IMPORTANT: This must run BEFORE border flip-flops are updated for the current pixel!
+    // IMPORTANT: This must run AFTER border flip-flops are updated for the current pixel!
     if (vicii->pixel.framebuffer && 
         vicii->timing.raster_counter < vicii->pixel.framebuffer_height) {
         vic_unified_pixel_sequencer(vicii);

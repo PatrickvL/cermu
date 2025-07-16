@@ -170,8 +170,8 @@ typedef struct vicii_pixel_s vicii_pixel_t;
 #define VICII_BORDER_BOTTOM_RSEL0    247
 #define VICII_BORDER_BOTTOM_RSEL1    251
 #define VICII_BORDER_LEFT_CSEL1      24
-#define VICII_BORDER_LEFT_CSEL0      32
-#define VICII_BORDER_RIGHT_CSEL0     336
+#define VICII_BORDER_LEFT_CSEL0      31
+#define VICII_BORDER_RIGHT_CSEL0     335
 #define VICII_BORDER_RIGHT_CSEL1     344
 
 // VIC-II access types (Documentation section 3.6.2)
