@@ -101,13 +101,17 @@ void vic_graphics_sequencer(vicii_common_t* vicii, uint8_t graphics_data) {
     // Calculate pixel position within display
     uint16_t display_pixel_x = x_coord - vicii->pixel.display_start_x;
     
-    // Initialize sequencer on mode change or line start
-    if (seq->graphics_mode != seq->last_mode || display_pixel_x == 0) {
-        seq->last_mode = seq->graphics_mode;
-        seq->shift_reg = 0;
+    // Initialize sequencer on line start only
+    if (display_pixel_x == 0) {
         seq->xscroll_counter = vicii->registers.data[VICII_C2] & VICII_C2_XSCROLL;
         seq->char_index = 0;
         seq->pixel_in_char = 0;
+    }
+
+    // Reset shift register on mode change (but not x-scroll)
+    if (seq->graphics_mode != seq->last_mode) {
+        seq->last_mode = seq->graphics_mode;
+        seq->shift_reg = 0;
     }
     
     // XSCROLL handling - delay pixel output by XSCROLL pixels
@@ -268,7 +272,12 @@ void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, uint8_t acces
             break;
             
         case VIC_ACCESS_C:
-            // Color RAM access
+            // Color RAM access (pins D8-D11)
+            // Note, that mos2114_read masks the address to 0x03FF
+            // so for that there's no need to use base 0xD800, but
+            // since the same adress is used for both C and G accesses,
+            // we still calculate the absolute address
+            // TODO : Should this incorporate vic_bank_base too? 
             address = 0xD800 + vicii->video_logic.vc;
             data = bus->read_callbacks[ACID_COLORRAM_D8].read(
                 bus->read_callbacks[ACID_COLORRAM_D8].context, address);
