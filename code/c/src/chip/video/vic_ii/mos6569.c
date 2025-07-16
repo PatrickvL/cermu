@@ -7,11 +7,8 @@
  * PAL VIC-II (MOS6569) lifecycle and bus attach wrappers
  */
 void* mos6569_system_create(chip_descriptor_t* desc) {
-    vicii_common_t* vicii = vicii_common_system_create(desc, mos6569_bank_change);
-    if (vicii) {
-        vicii->timing.cycles_per_line = MOS6569_CYCLES_PER_LINE;
-        vicii->timing.total_lines    = MOS6569_TOTAL_LINES;
-    }
+    const vicii_chip_config_t* config = vicii_common_get_default_config(true); // PAL = true
+    vicii_common_t* vicii = vicii_common_system_create(desc, config, mos6569_bank_change);
     return vicii;
 }
 

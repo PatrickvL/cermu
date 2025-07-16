@@ -46,6 +46,9 @@ bool c64_pla_maps_generate(c64_t* c64);  // PLA memory mapping generation
 void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config);
 bool c64_reload_roms(c64_t* c64, const rom_config_t* rom_config);
 
+// Set the framebuffer for VIC-II pixel output
+void c64_set_framebuffer(c64_t* c64, uint32_t* framebuffer, int width, int height);
+
 // ACID detached callback functions for unmapped chips
 uint8_t c64_detached_read(void* context, uint16_t address);
 void c64_detached_write(void* context, uint16_t address, uint8_t value);

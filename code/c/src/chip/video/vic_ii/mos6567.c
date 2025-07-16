@@ -7,11 +7,8 @@
  * NTSC VIC-II (MOS6567) lifecycle and bus attach wrappers
  */
 void* mos6567_system_create(chip_descriptor_t* desc) {
-    vicii_common_t* vicii = vicii_common_system_create(desc, mos6567_bank_change);
-    if (vicii) {
-        vicii->timing.cycles_per_line = MOS6567_CYCLES_PER_LINE;
-        vicii->timing.total_lines    = MOS6567_TOTAL_LINES;
-    }
+    const vicii_chip_config_t* config = vicii_common_get_default_config(false); // PAL = false (NTSC)
+    vicii_common_t* vicii = vicii_common_system_create(desc, config, mos6567_bank_change);
     return vicii;
 }
 

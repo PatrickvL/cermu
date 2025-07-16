@@ -66,15 +66,15 @@ static inline void vic_border_pixel_sequencer(vicii_common_t* vicii) {
     }
 }
 
-static inline void vic_border_update_limits(vic_border_unit_t* border, uint8_t c1_reg, uint8_t c2_reg) {
+static inline void vic_border_update_limits(vic_border_unit_t* border, const vicii_chip_config_t* config, uint8_t c1_reg, uint8_t c2_reg) {
     border->border_top = (c1_reg & VICII_C1_RSEL) ? 
-        VICII_BORDER_TOP_RSEL1 : VICII_BORDER_TOP_RSEL0;
+        config->border_top_rsel1 : config->border_top_rsel0;
     border->border_bottom = (c1_reg & VICII_C1_RSEL) ? 
-        VICII_BORDER_BOTTOM_RSEL1 : VICII_BORDER_BOTTOM_RSEL0;
+        config->border_bottom_rsel1 : config->border_bottom_rsel0;
     border->border_left = (c2_reg & VICII_C2_CSEL) ? 
-        VICII_BORDER_LEFT_CSEL1 : VICII_BORDER_LEFT_CSEL0;
+        config->border_left_csel1 : config->border_left_csel0;
     border->border_right = (c2_reg & VICII_C2_CSEL) ? 
-        VICII_BORDER_RIGHT_CSEL1 : VICII_BORDER_RIGHT_CSEL0;
+        config->border_right_csel1 : config->border_right_csel0;
 }
 
 // ========================================================================================
@@ -683,7 +683,7 @@ void vic_registers_write(vicii_common_t* vicii, uint16_t address, uint8_t value)
             // Fall through to C2 case
         case VICII_C2: // $d016 Control register 2
             vic_sequencer_update_mode(&vicii->sequencer, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
-            vic_border_update_limits(&vicii->border, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
+            vic_border_update_limits(&vicii->border, vicii->config, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
             break;
         case VICII_MXE: // $d015 Sprite enabled x
             // Update sprite enabled state
@@ -786,7 +786,11 @@ uint8_t vic_registers_read(vicii_common_t* vicii, uint16_t address) {
 static inline void vic_update_timing_from_x_coordinate(vicii_common_t* vicii) {
     // Calculate cycle from x_coordinate (reverse of previous calculation)
     uint16_t adjusted_x = (vicii->timing.x_coordinate - vicii->timing.base_offset) & 0x1FF;
-    vicii->timing.x_cycle = (uint8_t)(adjusted_x >> 3); // Divide by 8 pixels per cycle
+    uint8_t calculated_cycle = (uint8_t)(adjusted_x >> 3); // Divide by 8 pixels per cycle
+    
+    // Ensure x_cycle stays within valid range (0 to cycles_per_line - 1)
+    vicii->timing.x_cycle = (calculated_cycle < vicii->timing.cycles_per_line) ? 
+                           calculated_cycle : (vicii->timing.cycles_per_line - 1);
     
     // Display coordinate with 12-pixel pipeline delay
     vicii->timing.display_x_coordinate = (vicii->timing.x_coordinate - 12) & 0x1FF;
@@ -801,12 +805,10 @@ void vic_timing_advance(vicii_common_t* vicii) {
         vicii->timing.x_coordinate = 0;
         
         if (++vicii->timing.raster_counter >= vicii->timing.total_lines) {
-            if (!vicii->pixel.framebuffer || vicii->timing.raster_counter >= vicii->pixel.framebuffer_height) {
-                vicii->timing.raster_counter = 0;
-                vicii->video_logic.was_den_set_during_raster_30 = false;
-                vicii->video_logic.is_bad_line = false;
-                vicii->video_logic.vcbase = 0;
-            }
+            vicii->timing.raster_counter = 0;
+            vicii->video_logic.was_den_set_during_raster_30 = false;
+            vicii->video_logic.is_bad_line = false;
+            vicii->video_logic.vcbase = 0;
         }
         
         if (vicii->timing.raster_counter < 0x30 || vicii->timing.raster_counter > 0xf7) {
@@ -1111,6 +1113,60 @@ static const vic_cycle_entry_t vic_cycle_table_ntsc[65] = {
 };
 
 // ========================================================================================
+// CHIP CONFIGURATION DEFINITIONS
+// ========================================================================================
+
+// MOS6569 PAL VIC-II Configuration
+static const vicii_chip_config_t vicii_config_pal = {
+    .cycles_per_line = VICII_PAL_CYCLES_PER_LINE,
+    .total_lines = VICII_PAL_TOTAL_LINES,
+    .pixels_per_line = 504, // 63 cycles * 8 pixels per cycle
+    .visible_pixels_per_line = VICII_PAL_VISIBLE_PIXELS,
+    .base_offset = 404,
+    
+    .border_top_rsel0 = VICII_BORDER_TOP_RSEL0,
+    .border_bottom_rsel0 = VICII_BORDER_BOTTOM_RSEL0,
+    .border_top_rsel1 = VICII_BORDER_TOP_RSEL1,
+    .border_bottom_rsel1 = VICII_BORDER_BOTTOM_RSEL1,
+    .border_left_csel0 = VICII_BORDER_LEFT_CSEL0,
+    .border_right_csel0 = VICII_BORDER_RIGHT_CSEL0,
+    .border_left_csel1 = VICII_BORDER_LEFT_CSEL1,
+    .border_right_csel1 = VICII_BORDER_RIGHT_CSEL1,
+    
+    .display_start_x = 24,
+    .display_end_x = 344,
+    .framebuffer_start_x = 0,
+    .framebuffer_end_x = 403,
+    
+    .chip_name = "MOS6569 PAL"
+};
+
+// MOS6567 NTSC VIC-II Configuration
+static const vicii_chip_config_t vicii_config_ntsc = {
+    .cycles_per_line = VICII_NTSC_CYCLES_PER_LINE,
+    .total_lines = VICII_NTSC_TOTAL_LINES,
+    .pixels_per_line = 520, // 65 cycles * 8 pixels per cycle
+    .visible_pixels_per_line = VICII_NTSC_VISIBLE_PIXELS,
+    .base_offset = 412,
+    
+    .border_top_rsel0 = VICII_BORDER_TOP_RSEL0,
+    .border_bottom_rsel0 = VICII_BORDER_BOTTOM_RSEL0,
+    .border_top_rsel1 = VICII_BORDER_TOP_RSEL1,
+    .border_bottom_rsel1 = VICII_BORDER_BOTTOM_RSEL1,
+    .border_left_csel0 = VICII_BORDER_LEFT_CSEL0,
+    .border_right_csel0 = VICII_BORDER_RIGHT_CSEL0,
+    .border_left_csel1 = VICII_BORDER_LEFT_CSEL1,
+    .border_right_csel1 = VICII_BORDER_RIGHT_CSEL1,
+    
+    .display_start_x = 24,
+    .display_end_x = 344,
+    .framebuffer_start_x = 0,
+    .framebuffer_end_x = 411,
+    
+    .chip_name = "MOS6567 NTSC"
+};
+
+// ========================================================================================
 // MAIN CYCLE FUNCTION
 // ========================================================================================
 
@@ -1118,34 +1174,41 @@ static const vic_cycle_entry_t vic_cycle_table_ntsc[65] = {
 static inline void vic_border_update_flip_flops_x(vic_border_unit_t* border, vic_timing_unit_t* timing, 
                                                   uint8_t c1_reg) {
     uint16_t raster = timing->raster_counter;
-    uint16_t x_coord = timing->display_x_coordinate;
+    uint16_t x_coord = timing->display_x_coordinate;  // Use display coordinate for synchronization
     bool den_set = (c1_reg & VICII_C1_DEN) != 0;
     
-    // "The flip flops are switched according to the following rules:"
-    
-    // Rule 1: "If the X coordinate reaches the right comparison value, the main border flip flop is set."
-    if (x_coord == border->border_right) {
-        border->main_border_flip_flop = true;
-    }
-    
-    // Rules 4, 5, 6: Handle left coordinate checks only
-    else if (x_coord == border->border_left) {
-        // Rule 4: "If the X coordinate reaches the left comparison value and the Y
-        // coordinate reaches the bottom one, the vertical border flip flop is set."
-        if (raster == border->border_bottom) {
-            border->vertical_border_flip_flop = true;
-        }
-        // Rule 5: "If the X coordinate reaches the left comparison value and the Y
-        // coordinate reaches the top one and the DEN bit in register $d011 is set,
-        // the vertical border flip flop is reset."
-        else if (raster == border->border_top && den_set) {
-            border->vertical_border_flip_flop = false;
+    // Check each pixel in this cycle (8 pixels) against border boundaries
+    for (int pixel = 0; pixel < 8; pixel++) {
+        uint16_t pixel_x = x_coord + (uint16_t)pixel;
+        
+        // Rule 1: "If the X coordinate reaches the right comparison value, the main border flip flop is set."
+        if (pixel_x == border->border_right) {
+            printf("DEBUG: Border Rule 1 triggered - pixel_x=%d right=%d - setting main_ff to 1\n", 
+                   pixel_x, border->border_right);
+            border->main_border_flip_flop = true;
         }
         
-        // Rule 6: "If the X coordinate reaches the left comparison value and the vertical
-        // border flip flop is not set, the main flip flop is reset."
-        if (!border->vertical_border_flip_flop) {
-            border->main_border_flip_flop = false;
+        // Rules 4, 5, 6: Handle left coordinate checks only  
+        if (pixel_x == border->border_left) {
+            // Rule 4: "If the X coordinate reaches the left comparison value and the Y
+            // coordinate reaches the bottom one, the vertical border flip flop is set."
+            if (raster == border->border_bottom) {
+                border->vertical_border_flip_flop = true;
+            }
+            // Rule 5: "If the X coordinate reaches the left comparison value and the Y
+            // coordinate reaches the top one and the DEN bit in register $d011 is set,
+            // the vertical border flip flop is reset."
+            else if (raster == border->border_top && den_set) {
+                border->vertical_border_flip_flop = false;
+            }
+            
+            // Rule 6: "If the X coordinate reaches the left comparison value and the vertical
+            // border flip flop is not set, the main flip flop is reset."
+            if (!border->vertical_border_flip_flop) {
+                printf("DEBUG: Border Rule 6 triggered - pixel_x=%d left=%d vertical_ff=%d - setting main_ff to 0\n", 
+                       pixel_x, border->border_left, border->vertical_border_flip_flop);
+                border->main_border_flip_flop = false;
+            }
         }
     }
 }
@@ -1162,6 +1225,7 @@ void vicii_common_cycle(vicii_common_t* vicii) {
     
     // Perform unified pixel sequencing (8 pixels per cycle)
     // This handles both graphics and border pixels, plus sprite overlay
+    // IMPORTANT: This must run BEFORE border flip-flops are updated for the current pixel!
     if (vicii->pixel.framebuffer && 
         vicii->timing.raster_counter < vicii->pixel.framebuffer_height) {
         vic_unified_pixel_sequencer(vicii);
@@ -1177,8 +1241,10 @@ void vicii_common_cycle(vicii_common_t* vicii) {
     
     // Flush pixel line if end of line
     if (vicii->timing.x_coordinate == 0 && vicii->pixel.framebuffer) {
-        vic_pixel_flush_line(vicii, vicii_common_get_default_palette(),
-                           (vicii->timing.raster_counter - 1) % vicii->timing.total_lines);
+        uint16_t flush_line = (vicii->timing.raster_counter == 0) ? 
+                             (vicii->timing.total_lines - 1) : 
+                             (vicii->timing.raster_counter - 1);
+        vic_pixel_flush_line(vicii, vicii_common_get_default_palette(), flush_line);
     }
 }
 
@@ -1238,7 +1304,8 @@ static inline void vicii_common_initialize(vicii_common_t* vicii) {
     
     // Update units based on register values
     vic_sequencer_update_mode(&vicii->sequencer, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
-    vic_border_update_limits(&vicii->border, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
+    vic_border_update_limits(&vicii->border, vicii->config, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
+    
     // Initialize border priority once (color will be updated by register writes)
     vicii->border.border_pixel.priority = VICII_PRIORITY_BORDER;
     vicii->border.border_pixel.color = vicii->registers.data[VICII_EC];
@@ -1250,13 +1317,49 @@ static inline void vicii_common_initialize(vicii_common_t* vicii) {
     // Initialize refresh counter (Documentation section 3.13)
     vicii->video_logic.refresh_counter = 0xFF;
     
-    // Set timing defaults (should be set by wrapper create functions)
-    vicii->timing.cycles_per_line = VICII_PAL_CYCLES_PER_LINE;
-    vicii->timing.total_lines = VICII_PAL_TOTAL_LINES;
-    vicii->pixel.visible_pixels_per_line = VICII_PAL_VISIBLE_PIXELS;
+    // Initialize bad line detection - since DEN is set during initialization,
+    // we need to set this flag to true so bad lines can be detected immediately
+    vicii->video_logic.was_den_set_during_raster_30 = true;
     
-    // Allocate pixel buffers
+    // Allocate pixel buffers - size will be set by timing initialization
+    // This is just a placeholder allocation
+    vicii->pixel.visible_pixels_per_line = VICII_PAL_VISIBLE_PIXELS; // Default, will be overridden
+}
+
+static inline void vicii_common_initialize_timing(vicii_common_t* vicii, const vicii_chip_config_t* config) {
+    printf("DEBUG: vicii_common_initialize_timing chip=%s\n", config->chip_name);
+    
+    // Copy timing parameters from config
+    vicii->timing.cycles_per_line = config->cycles_per_line;
+    vicii->timing.total_lines = config->total_lines;
+    vicii->timing.base_offset = config->base_offset;
+    vicii->timing.pixels_per_line = config->pixels_per_line;
+    vicii->pixel.visible_pixels_per_line = config->visible_pixels_per_line;
+    
+    // Copy display area bounds from config
+    vicii->pixel.display_start_x = config->display_start_x;
+    vicii->pixel.display_end_x = config->display_end_x;
+    vicii->pixel.framebuffer_start_x = config->framebuffer_start_x;
+    vicii->pixel.framebuffer_end_x = config->framebuffer_end_x;
+    
+    // Select cycle table based on timing characteristics
+    if (config->cycles_per_line == VICII_PAL_CYCLES_PER_LINE) {
+        vicii->timing.cycle_table = vic_cycle_table_pal;
+    } else if (config->cycles_per_line == VICII_NTSC_CYCLES_PER_LINE) {
+        vicii->timing.cycle_table = vic_cycle_table_ntsc;
+    } else {
+        // Default to PAL if unknown
+        vicii->timing.cycle_table = vic_cycle_table_pal;
+        printf("WARNING: Unknown cycles_per_line %d, defaulting to PAL\n", config->cycles_per_line);
+    }
+    
+    // Allocate pixel buffers based on config
     if (vicii->pixel.visible_pixels_per_line > 0) {
+        // Free any existing buffers
+        free(vicii->pixel.pixel_line_priority);
+        free(vicii->pixel.pixel_line_color);
+        
+        // Allocate new buffers with correct size
         vicii->pixel.pixel_line_priority = malloc(vicii->pixel.visible_pixels_per_line * sizeof(vicii_priority_t));
         vicii->pixel.pixel_line_color = malloc(vicii->pixel.visible_pixels_per_line * sizeof(uint32_t));
         
@@ -1265,41 +1368,31 @@ static inline void vicii_common_initialize(vicii_common_t* vicii) {
             vicii->pixel.pixel_line_color[i] = VICII_COLOR_LIGHT_BLUE;
         }
     }
-}
-
-static inline void vicii_common_initialize_timing(vicii_common_t* vicii, bool is_pal) {
-    if (is_pal) {
-        vicii->timing.cycles_per_line = VICII_PAL_CYCLES_PER_LINE;
-        vicii->timing.total_lines = VICII_PAL_TOTAL_LINES;
-        vicii->timing.cycle_table = vic_cycle_table_pal;
-        vicii->timing.base_offset = 404;
-        vicii->timing.pixels_per_line = 504; // 63 cycles * 8 pixels per cycle
-        vicii->pixel.visible_pixels_per_line = VICII_PAL_VISIBLE_PIXELS;
-    } else {
-        vicii->timing.cycles_per_line = VICII_NTSC_CYCLES_PER_LINE;
-        vicii->timing.total_lines = VICII_NTSC_TOTAL_LINES;
-        vicii->timing.cycle_table = vic_cycle_table_ntsc;
-        vicii->timing.base_offset = 412;
-        vicii->timing.pixels_per_line = 520; // 65 cycles * 8 pixels per cycle
-        vicii->pixel.visible_pixels_per_line = VICII_NTSC_VISIBLE_PIXELS;
-    }
+    
+    printf("DEBUG: timing initialized: cycles_per_line=%d pixels_per_line=%d\n", 
+           vicii->timing.cycles_per_line, vicii->timing.pixels_per_line);
     
     vicii->timing.x_cycle = 0;
     vicii->timing.raster_counter = 0;
+    
+    // Initialize border flip-flops to show border initially
+    vicii->border.main_border_flip_flop = true;
+    vicii->border.vertical_border_flip_flop = true;
 }
 
 // ========================================================================================
 // PUBLIC API FUNCTIONS
 // ========================================================================================
 
-vicii_common_t* vicii_common_system_create(chip_descriptor_t* desc, void (*bank_change)(void*, uint8_t)) {
+vicii_common_t* vicii_common_system_create(chip_descriptor_t* desc, const vicii_chip_config_t* config, void (*bank_change)(void*, uint8_t)) {
     vicii_common_t* vicii = (vicii_common_t*)calloc(1, sizeof(vicii_common_t));
     if (!vicii) return NULL;
     
     vicii->desc = desc;
+    vicii->config = config;
     vicii->bus.bank_change = bank_change;
     vicii_common_initialize(vicii);
-    vicii_common_initialize_timing(vicii, true); // Default to PAL
+    vicii_common_initialize_timing(vicii, config);
     
     return vicii;
 }
@@ -1315,6 +1408,11 @@ void vicii_common_system_destroy(void* chip) {
 
 void vicii_common_bus_attach(void* chip, void* bus) {
     ((vicii_common_t*)chip)->bus.bus = bus;
+}
+
+// Configuration helper function
+const vicii_chip_config_t* vicii_common_get_default_config(bool is_pal) {
+    return is_pal ? &vicii_config_pal : &vicii_config_ntsc;
 }
 
 uint8_t vicii_common_registers_read(void* chip, uint16_t address) {

@@ -189,6 +189,45 @@ typedef struct vicii_pixel_s vicii_pixel_t;
 #define VICII_NUM_SPRITES 8
 
 // ========================================================================================
+// CHIP CONFIGURATION STRUCTURE
+// ========================================================================================
+
+// Configuration struct for different MOS 656x chip variants
+typedef struct {
+    // Timing parameters
+    uint8_t cycles_per_line;
+    uint16_t total_lines;
+    uint16_t pixels_per_line;
+    uint16_t visible_pixels_per_line;
+    uint16_t base_offset;
+    
+    // Border coordinates for RSEL=0 (24-row mode)
+    uint16_t border_top_rsel0;
+    uint16_t border_bottom_rsel0;
+    
+    // Border coordinates for RSEL=1 (25-row mode)
+    uint16_t border_top_rsel1;
+    uint16_t border_bottom_rsel1;
+    
+    // Border coordinates for CSEL=0 (38-column mode)
+    uint16_t border_left_csel0;
+    uint16_t border_right_csel0;
+    
+    // Border coordinates for CSEL=1 (40-column mode)
+    uint16_t border_left_csel1;
+    uint16_t border_right_csel1;
+    
+    // Display area bounds
+    uint16_t display_start_x;
+    uint16_t display_end_x;
+    uint16_t framebuffer_start_x;
+    uint16_t framebuffer_end_x;
+    
+    // Chip name for debugging
+    const char* chip_name;
+} vicii_chip_config_t;
+
+// ========================================================================================
 // CYCLE TABLE ENTRY TYPE (needed for timing unit)
 // ========================================================================================
 typedef struct vicii_common_s vicii_common_t;
@@ -373,6 +412,9 @@ struct vicii_common_s {
     // Feature toggles
     bool enable_hardware_accurate_reads;  // Enable VIC idle/refresh memory reads for $DE00 data bus tricks and cycle accuracy (default: false for performance)
 
+    // Chip configuration (set at initialization)
+    const vicii_chip_config_t* config;
+
     // Topic-specific units
     vic_registers_unit_t registers;
     vic_timing_unit_t timing;
@@ -396,8 +438,11 @@ struct vicii_common_s {
 void vicii_common_cycle(vicii_common_t* vicii);
 
 // Factory and lifecycle
-vicii_common_t* vicii_common_system_create(chip_descriptor_t* desc, void (*bank_change)(void*, uint8_t));
+vicii_common_t* vicii_common_system_create(chip_descriptor_t* desc, const vicii_chip_config_t* config, void (*bank_change)(void*, uint8_t));
 void vicii_common_system_destroy(void* chip);
+
+// Configuration helpers
+const vicii_chip_config_t* vicii_common_get_default_config(bool is_pal);
 
 // Bus attachment
 void vicii_common_bus_attach(void* chip, void* bus);

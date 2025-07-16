@@ -25,6 +25,12 @@ int main(int argc, char** argv) {
         return 1;
     }
     
+    // Set up framebuffer for VIC-II
+    uint32_t* screen_buffer = gui_get_screen_buffer();
+    int width, height;
+    gui_get_screen_dimensions(&width, &height);
+    c64_set_framebuffer(c64, screen_buffer, width, height);
+    
     // Initialize GUI state
     gui_state_t gui_state;
     gui_init_state(&gui_state);

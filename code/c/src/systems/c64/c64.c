@@ -242,8 +242,8 @@ void c64_non_cpu_cycle(void* c64_ptr) {
         return;
     }
     
-    // Debug output every 1000 cycles to track progress
-    if (c64->total_cycles % 1000 == 0) {
+    // Debug output every 2000000 cycles to track progress
+    if (c64->total_cycles % 2000000 == 0) {
         printf("c64_non_cpu_cycle: cycle #%llu\n", (unsigned long long)c64->total_cycles);
         fflush(stdout);
     }
@@ -374,6 +374,16 @@ c64_t* c64_system_create(const system_config_t* config) {
     // For now, this will be handled through the control_lines_interface
     
     return c64;
+}
+
+// Set the framebuffer for VIC-II pixel output
+void c64_set_framebuffer(c64_t* c64, uint32_t* framebuffer, int width, int height) {
+    if (!c64 || !c64->vicii || !framebuffer) return;
+    
+    // Set the framebuffer on the VIC-II chip
+    vicii_common_set_framebuffer(c64->vicii, framebuffer, width, height);
+    
+    printf("DEBUG: Framebuffer set for VIC-II: %dx%d\n", width, height);
 }
 
 bool c64_reload_roms(c64_t* c64, const rom_config_t* rom_config) {

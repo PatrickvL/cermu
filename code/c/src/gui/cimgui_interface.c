@@ -803,6 +803,17 @@ static const uint32_t c64_palette[16] = {
 static uint32_t screen_buffer[C64_TOTAL_WIDTH * C64_TOTAL_HEIGHT];
 // Remove vic_buffer - VIC-II will render directly to centered area of screen_buffer
 
+// Get access to the screen buffer for VIC-II framebuffer setup
+uint32_t* gui_get_screen_buffer(void) {
+    return screen_buffer;
+}
+
+// Get screen buffer dimensions
+void gui_get_screen_dimensions(int* width, int* height) {
+    if (width) *width = C64_TOTAL_WIDTH;
+    if (height) *height = C64_TOTAL_HEIGHT;
+}
+
 bool gui_init_screen_display(gui_state_t* gui_state) {
     // Generate OpenGL texture
     glGenTextures(1, &gui_state->screen_texture_id);

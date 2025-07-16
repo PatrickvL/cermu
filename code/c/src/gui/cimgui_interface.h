@@ -141,6 +141,10 @@ bool gui_init_screen_display(gui_state_t* gui_state);
 void gui_cleanup_screen_display(gui_state_t* gui_state);
 void gui_update_screen_texture(struct c64_s* c64, gui_state_t* gui_state);
 
+// Framebuffer access functions
+uint32_t* gui_get_screen_buffer(void);
+void gui_get_screen_dimensions(int* width, int* height);
+
 // Aspect ratio calculation functions
 void gui_calculate_display_dimensions(gui_state_t* gui_state, float viewport_width, float viewport_height,
                                      float guest_width, float guest_height, bool is_pal,
