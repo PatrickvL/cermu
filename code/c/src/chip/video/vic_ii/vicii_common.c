@@ -59,6 +59,13 @@ static inline void vic_border_emit_pixels(vicii_common_t* vicii) {
     vic_pixel_emit_single(&vicii->pixel, &vicii->border.border_pixel);
 }
 
+static inline void vic_border_pixel_sequencer(vicii_common_t* vicii) {
+    // Sequence 8 border pixels per cycle
+    for (int i = 0; i < 8; i++) {
+        vic_border_emit_pixels(vicii);
+    }
+}
+
 static inline void vic_border_update_limits(vic_border_unit_t* border, uint8_t c1_reg, uint8_t c2_reg) {
     border->border_top = (c1_reg & VICII_C1_RSEL) ? 
         VICII_BORDER_TOP_RSEL1 : VICII_BORDER_TOP_RSEL0;
@@ -237,7 +244,7 @@ uint8_t vic_memory_read(vicii_common_t* vicii, uint16_t address) {
         c64_bus->read_callbacks[read_acid].context, final_address);
 }
 
-void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, uint8_t access_param) {
+void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, int access_param) {
     if (!vicii->bus.bus) return;
     
     uint16_t address;
@@ -246,7 +253,7 @@ void vic_memory_access(vicii_common_t* vicii, uint8_t access_type, uint8_t acces
     
     switch (access_type) {
         case VIC_ACCESS_P:
-            address = vicii->memory.vm_base + 0x3F8 + access_param;
+            address = vicii->memory.vm_base + 0x3F8 + (uint16_t)access_param;
             data = vic_memory_read(vicii, address);
             {
                 vic_sprite_unit_t* sprite = &vicii->sprites.sprites[access_param];
@@ -430,22 +437,83 @@ void vic_sprite_sequencer(vicii_common_t* vicii) {
     }
 }
 
-static void vic_pixel_sequencer(vicii_common_t* vicii) {
+// Unified pixel sequencer - sequences 8 pixels per cycle
+// Called once per cycle in vicii_common_cycle
+static void vic_unified_pixel_sequencer(vicii_common_t* vicii) {
     uint16_t x_coord = vicii->timing.display_x_coordinate;
     
-    // Check border flip-flops to determine display vs border
-    bool in_display_window = !vicii->border.main_border_flip_flop && 
-                            !vicii->border.vertical_border_flip_flop &&
-                            x_coord >= vicii->border.border_left &&
-                            x_coord <= vicii->border.border_right;
+    // Check if we're in the visible display area
+    if (x_coord < vicii->pixel.display_start_x || x_coord >= vicii->pixel.display_end_x) return;
     
-    if (in_display_window && vicii->video_logic.display_state) {
-        // Graphics handled by c-access/g-access - sprites processed here
-        vic_sprite_sequencer(vicii);
+    // Determine if we're in border or display area
+    bool in_vertical_display = (vicii->timing.raster_counter >= vicii->border.border_top &&
+                               vicii->timing.raster_counter <= vicii->border.border_bottom);
+    bool in_horizontal_display = (x_coord >= vicii->border.border_left &&
+                                 x_coord <= vicii->border.border_right);
+    bool in_main_display = in_vertical_display && in_horizontal_display && 
+                          !vicii->border.main_border_flip_flop && 
+                          !vicii->border.vertical_border_flip_flop;
+    
+    if (in_main_display && vicii->video_logic.display_state) {
+        // We're in display area - sequence 8 pixels from graphics data
+        // Graphics data should already be in the sequencer from G-access
+        vic_sequencer_unit_t* seq = &vicii->sequencer;
+        
+        // Initialize sequencer on line start only
+        uint16_t display_pixel_x = x_coord - vicii->pixel.display_start_x;
+        if (display_pixel_x == 0) {
+            seq->xscroll_counter = vicii->registers.data[VICII_C2] & VICII_C2_XSCROLL;
+            seq->char_index = 0;
+            seq->pixel_in_char = 0;
+        }
+
+        // Reset shift register on mode change (but not x-scroll)
+        if (seq->graphics_mode != seq->last_mode) {
+            seq->last_mode = seq->graphics_mode;
+            seq->shift_reg = 0;
+        }
+        
+        // Sequence 8 pixels from graphics data
+        for (int pixel = 0; pixel < 8; pixel++) {
+            uint16_t pixel_x = x_coord + (uint16_t)pixel;
+            
+            // XSCROLL handling - delay pixel output by XSCROLL pixels
+            if (seq->xscroll_counter > 0) {
+                seq->xscroll_counter--;
+                vic_pixel_emit_at_x(vicii, &seq->colors[0], pixel_x);
+                continue;
+            }
+            
+            // Extract pixel from shift register
+            uint8_t bit_index = 7 - (seq->pixel_in_char % 8);
+            bool pixel_bit = (seq->shift_reg >> bit_index) & 1;
+            
+            vicii_pixel_t pixel_data;
+            if (pixel_bit) {
+                pixel_data = seq->colors[1]; // Foreground
+            } else {
+                pixel_data = seq->colors[0]; // Background
+            }
+            
+            vic_pixel_emit_at_x(vicii, &pixel_data, pixel_x);
+            
+            seq->pixel_in_char++;
+            if (seq->pixel_in_char >= 8) {
+                seq->pixel_in_char = 0;
+                seq->char_index++;
+            }
+        }
     } else {
-        // Border area - emit border pixels at current x coordinate
-        vic_pixel_emit_at_x(vicii, &vicii->border.border_pixel, x_coord);
+        // We're in border area - sequence 8 border pixels
+        for (int pixel = 0; pixel < 8; pixel++) {
+            uint16_t pixel_x = x_coord + (uint16_t)pixel;
+            vic_pixel_emit_at_x(vicii, &vicii->border.border_pixel, pixel_x);
+        }
     }
+    
+    // Sprites are processed every cycle and can overlay any area
+    // They have priority over both graphics and border pixels
+    vic_sprite_sequencer(vicii);
 }
 
 void vic_pixel_flush_line(vicii_common_t* vicii, uint32_t* palette, int y) {
@@ -770,45 +838,45 @@ void vic_timing_advance(vicii_common_t* vicii) {
 // CYCLE FUNCTIONS
 // ========================================================================================
 
-static void vic_cycle_idle(vicii_common_t* vicii, int param) {
+static uint8_t vic_cycle_idle(vicii_common_t* vicii, int param) {
     vic_bus_control_ba_high(vicii);
     vic_bus_control_aec_high(vicii);
-    vic_memory_access(vicii, VIC_ACCESS_IDLE, 0);
+    return VIC_ACCESS_IDLE;
 }
 
-static void vic_cycle_sprite_p_access(vicii_common_t* vicii, int sprite_num) {
+static uint8_t vic_cycle_sprite_p_access(vicii_common_t* vicii, int sprite_num) {
     vic_sprite_unit_t* sprite = &vicii->sprites.sprites[sprite_num];
     if (sprite->enabled) {
         vic_bus_control_ba_low(vicii);
         vic_bus_control_aec_low(vicii);
-        vic_memory_access(vicii, VIC_ACCESS_P, (uint8_t)sprite_num);
+        return VIC_ACCESS_P;
     } else {
         vic_bus_control_ba_high(vicii);
         vic_bus_control_aec_high(vicii);
-        vic_memory_access(vicii, VIC_ACCESS_IDLE, 0);
+        return VIC_ACCESS_IDLE;
     }
 }
 
-static void vic_cycle_sprite_s_access(vicii_common_t* vicii, int sprite_num) {
+static uint8_t vic_cycle_sprite_s_access(vicii_common_t* vicii, int sprite_num) {
     vic_sprite_unit_t* sprite = &vicii->sprites.sprites[sprite_num];
     if (sprite->enabled) {
         vic_bus_control_ba_low(vicii);
         vic_bus_control_aec_low(vicii);
-        vic_memory_access(vicii, VIC_ACCESS_S, (uint8_t)sprite_num);
+        return VIC_ACCESS_S;
     } else {
         vic_bus_control_ba_high(vicii);
         vic_bus_control_aec_high(vicii);
-        vic_memory_access(vicii, VIC_ACCESS_IDLE, 0);
+        return VIC_ACCESS_IDLE;
     }
 }
 
-static void vic_cycle_refresh(vicii_common_t* vicii, int param) {
+static uint8_t vic_cycle_refresh(vicii_common_t* vicii, int param) {
     vic_bus_control_ba_high(vicii);
     vic_bus_control_aec_high(vicii);
-    vic_memory_access(vicii, VIC_ACCESS_REFRESH, 0);
+    return VIC_ACCESS_REFRESH;
 }
 
-static void vic_cycle_badline_setup(vicii_common_t* vicii, int param) {
+static uint8_t vic_cycle_badline_setup(vicii_common_t* vicii, int param) {
     if (vicii->video_logic.is_bad_line) {
         vic_bus_control_ba_low(vicii);
         vicii->video_logic.display_state = true;
@@ -816,10 +884,10 @@ static void vic_cycle_badline_setup(vicii_common_t* vicii, int param) {
         vic_bus_control_ba_high(vicii);
     }
     vic_bus_control_aec_high(vicii);
-    vic_memory_access(vicii, VIC_ACCESS_IDLE, 0);
+    return VIC_ACCESS_IDLE;
 }
 
-static void vic_cycle_vc_load(vicii_common_t* vicii, int param) {
+static uint8_t vic_cycle_vc_load(vicii_common_t* vicii, int param) {
     vicii->video_logic.vc = vicii->video_logic.vcbase;
     vicii->video_logic.vmli = 0;
     if (vicii->video_logic.is_bad_line) {
@@ -830,34 +898,22 @@ static void vic_cycle_vc_load(vicii_common_t* vicii, int param) {
         vic_bus_control_ba_high(vicii);
     }
     vic_bus_control_aec_high(vicii);
-    vic_memory_access(vicii, VIC_ACCESS_IDLE, 0);
+    return VIC_ACCESS_IDLE;
 }
 
-static void vic_cycle_char_color_access(vicii_common_t* vicii, int char_index) {
+static uint8_t vic_cycle_char_color_access(vicii_common_t* vicii, int char_index) {
     if (vicii->video_logic.is_bad_line) {
         vic_bus_control_ba_low(vicii);
         vic_bus_control_aec_low(vicii);
-        vic_memory_access(vicii, VIC_ACCESS_C, (uint8_t)char_index);
-        
-        if (vicii->pixel.framebuffer && 
-            vicii->timing.raster_counter < vicii->pixel.framebuffer_height &&
-            vicii->timing.raster_counter >= vicii->border.border_top &&
-            vicii->timing.raster_counter <= vicii->border.border_bottom) {
-            vic_pixel_sequencer(vicii);
-        }
+        return VIC_ACCESS_C;
     } else {
         vic_bus_control_ba_high(vicii);
         vic_bus_control_aec_high(vicii);
-        vic_memory_access(vicii, VIC_ACCESS_G, (uint8_t)char_index);
-        
-        if (vicii->pixel.framebuffer && 
-            vicii->timing.raster_counter < vicii->pixel.framebuffer_height) {
-            vic_pixel_sequencer(vicii);
-        }
+        return VIC_ACCESS_G;
     }
 }
 
-static void vic_cycle_sprite_p_expansion_check(vicii_common_t* vicii, int sprite_num) {
+static uint8_t vic_cycle_sprite_p_expansion_check(vicii_common_t* vicii, int sprite_num) {
     // "7. In the first phase of cycle 16, it is checked if the expansion flip flop
     // is set. If so, MCBASE load from MC (MC->MCBASE), unless the CPU cleared
     // the Y expansion bit in $d017 in the second phase of cycle 15, in which case
@@ -888,10 +944,10 @@ static void vic_cycle_sprite_p_expansion_check(vicii_common_t* vicii, int sprite
             }
         }
     }
-    vic_cycle_sprite_p_access(vicii, sprite_num);
+    return vic_cycle_sprite_p_access(vicii, sprite_num);
 }
 
-static void vic_cycle_sprite_s_rc_check(vicii_common_t* vicii, int sprite_num) {
+static uint8_t vic_cycle_sprite_s_rc_check(vicii_common_t* vicii, int sprite_num) {
     if (vicii->video_logic.rc == 7) {
         vicii->video_logic.display_state = false;
         vicii->video_logic.vcbase = vicii->video_logic.vc;
@@ -901,12 +957,12 @@ static void vic_cycle_sprite_s_rc_check(vicii_common_t* vicii, int sprite_num) {
         vicii->video_logic.rc++;
     }
     
-    vic_cycle_sprite_s_access(vicii, sprite_num);
+    return vic_cycle_sprite_s_access(vicii, sprite_num);
 }
 
 // Border Rules 2 & 3: Y coordinate checks in cycle 63 (1-based numbering)
 // Combined with sprite S access for cycle efficiency
-static void vic_cycle_sprite_s_border_check(vicii_common_t* vicii, int param) {
+static uint8_t vic_cycle_sprite_s_border_check(vicii_common_t* vicii, int param) {
     uint16_t raster = vicii->timing.raster_counter;
     bool den_set = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
                 
@@ -923,7 +979,7 @@ static void vic_cycle_sprite_s_border_check(vicii_common_t* vicii, int param) {
     }
     
     // Perform the sprite S access for this cycle
-    vic_cycle_sprite_s_access(vicii, param);
+    return vic_cycle_sprite_s_access(vicii, param);
 }
 
 // ========================================================================================
@@ -1109,7 +1165,19 @@ static inline void vic_border_update_flip_flops_x(vic_border_unit_t* border, vic
 void vicii_common_cycle(vicii_common_t* vicii) {
     // Get current cycle entry (derived from x_coordinate)
     const vic_cycle_entry_t* entry = &vicii->timing.cycle_table[vicii->timing.x_cycle];
-    entry->func(vicii, entry->param);
+    
+    // Call cycle function to get access type
+    uint8_t access_type = entry->func(vicii, entry->param);
+    
+    // Perform unified memory access
+    vic_memory_access(vicii, access_type, entry->param);
+    
+    // Perform unified pixel sequencing (8 pixels per cycle)
+    // This handles both graphics and border pixels, plus sprite overlay
+    if (vicii->pixel.framebuffer && 
+        vicii->timing.raster_counter < vicii->pixel.framebuffer_height) {
+        vic_unified_pixel_sequencer(vicii);
+    }
     
     // Update border flip-flops AFTER pixel generation using hardware-accurate coordinates
     vic_border_update_flip_flops_x(&vicii->border, &vicii->timing, 

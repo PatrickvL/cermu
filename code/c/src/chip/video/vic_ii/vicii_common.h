@@ -192,7 +192,7 @@ typedef struct vicii_pixel_s vicii_pixel_t;
 // CYCLE TABLE ENTRY TYPE (needed for timing unit)
 // ========================================================================================
 typedef struct vicii_common_s vicii_common_t;
-typedef void (*vic_cycle_func_t)(vicii_common_t*, int);
+typedef uint8_t (*vic_cycle_func_t)(vicii_common_t*, int);
 
 typedef struct vic_cycle_entry_t {
     vic_cycle_func_t func;
