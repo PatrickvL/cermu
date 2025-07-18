@@ -251,17 +251,64 @@ static void fam65xx_disasm_full(fam65xx_t* cpu, uint8_t opcode) {
     );
 }
 
-// Instruction dispatch macros (shared - but implementation-specific functions)
+// Instruction dispatch (shared - but implementation-specific functions)
 static inline void fam65xx_next_instruction_dispatch(fam65xx_t* cpu) {
     uint8_t opcode = fam65xx_read_cycle(cpu, cpu->pc++);
-
-    // ROM disassembly reference : https://www.pagetable.com/c64ref/c64disasm/#FCE2
     static int dump_counter = 50;
     if (dump_counter > 0) {
         dump_counter--;
         fam65xx_disasm_full(cpu, opcode);
     }
-    cpu->opcode_handlers[opcode](cpu);
+
+    #ifdef _MSC_VER
+#pragma message("Compiling with MSVC")
+#endif
+#ifdef _M_X64
+#pragma message("Targeting x64")
+#endif
+#ifdef _M_IX86
+#pragma message("Targeting x86")
+#endif
+#ifdef __GNUC__
+#pragma message("Compiling with GCC")
+#endif
+#ifdef __clang__
+#pragma message("Compiling with Clang")
+#endif
+#ifdef __x86_64__
+#pragma message("Detected x86_64")
+#endif
+#ifdef __i386__
+#pragma message("Detected i386")
+#endif
+
+    void (*next_handler)(fam65xx_t*) = cpu->opcode_handlers[opcode];
+#if defined(_MSC_VER) && defined(_M_IX86)
+    // MSVC x86 inline assembly
+    __asm {
+        mov eax, next_handler
+        mov ecx, cpu
+        jmp eax
+    }
+#elif defined(_MSC_VER) && defined(_M_X64)
+    // MSVC x64 inline assembly
+    __asm {
+        mov rdi, cpu
+        jmp next_handler
+    }
+#elif defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
+    // GCC/Clang x86/x64 inline assembly
+    asm volatile (
+        "mov %[cpu], %%rdi\n\t"   // Pass cpu in first argument register (x86_64 System V ABI)
+        "jmp *%[handler]\n\t"
+        :
+        : [handler] "r" (next_handler), [cpu] "r" (cpu)
+        : "rdi"
+    );
+#else
+    // Fallback: normal call (will grow stack)
+    next_handler(cpu);
+#endif
 }
 
 // Forward declaration for macros
