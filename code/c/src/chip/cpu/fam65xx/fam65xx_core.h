@@ -138,23 +138,7 @@ static const char* fam65xx_opcode_mnemonics[256] = {
 #endif
 
 // Core disassembler function - code[0] is the opcode at current PC
-static int disasm(unsigned char *code, char *output, size_t output_size) {
-    unsigned char op = code[0];
-
-#if 0
-    // Packed addressing mode data: 4 bits per mode, 64 modes in 32 bytes
-    static const unsigned char modes[] = {
-        0x00,0x11,0x20,0x11,0x33,0x33,0x33,0x33,0x00,0x22,0x44,0x22,0x66,0x66,0x66,0x66,
-        0xCC,0xBB,0x20,0xBB,0x33,0x55,0x55,0x33,0x00,0x88,0x20,0x88,0x66,0x77,0x77,0x66,
-        0x66,0xAA,0x20,0xAA,0x33,0x33,0x33,0x33,0x00,0x22,0x44,0x22,0x66,0x66,0x66,0x66,
-        0xCC,0xBB,0x20,0xBB,0x33,0x55,0x55,0x33,0x00,0x88,0x20,0x88,0x99,0x77,0x77,0x66
-    };
-    
-    int m = (modes[op >> 1] >> ((op & 1) << 2)) & 15;
-    int bytes = "\0\0\1\1\1\1\2\2\2\2\1\1\1"[m];
-#else
-    // Corrected addressing mode table for all 256 MOS 6510 opcodes
-    // Mode values: 0=imp, 1=acc, 2=imm, 3=zpg, 4=zpx, 5=zpy, 6=abs, 7=abx, 8=aby, 9=ind, 10=izx, 11=izy, 12=rel
+static int fam65xx_disasm(uint16_t pc, unsigned char *code, char *output, size_t output_size) {
     static const unsigned char modes[256] = {
         // 0x00-0x0F
         0, 10, 0, 10, 3, 3, 3, 3, 0, 2, 1, 2, 6, 6, 6, 6,
@@ -189,15 +173,15 @@ static int disasm(unsigned char *code, char *output, size_t output_size) {
         // 0xF0-0xFF
         12, 11, 0, 11, 4, 4, 4, 4, 0, 8, 0, 8, 7, 7, 7, 7
     };
-    
+
+    unsigned char op = code[0];
     int m = modes[op];
     int bytes = "\0\0\1\1\1\1\2\2\2\2\1\1\1"[m];
-#endif
+
     // If output is NULL, just return byte count
     if (!output) return bytes;
-    
+
     int len = SPRINTF_SAFE(output, output_size, "%s ", fam65xx_opcode_mnemonics[op]);
-    
     switch(m) {
         case 1: return len + SPRINTF_SAFE(output + len, output_size - len, "A");
         case 2: return len + SPRINTF_SAFE(output + len, output_size - len, "#$%02X", code[1]);
@@ -210,14 +194,61 @@ static int disasm(unsigned char *code, char *output, size_t output_size) {
         case 9: return len + SPRINTF_SAFE(output + len, output_size - len, "($%04X)", code[1] | (code[2] << 8));
         case 10: return len + SPRINTF_SAFE(output + len, output_size - len, "($%02X,X)", code[1]);
         case 11: return len + SPRINTF_SAFE(output + len, output_size - len, "($%02X),Y", code[1]);
-        case 12: return len + SPRINTF_SAFE(output + len, output_size - len, "$%04X", (unsigned short)(2 + (signed char)code[1]));
+        case 12: {
+            // Relative branch: target = pc + 2 + (signed char)code[1]
+            uint16_t target = (uint16_t)(pc + 2 + (int8_t)code[1]);
+            return len + SPRINTF_SAFE(output + len, output_size - len, "$%04X", target);
+        }
     }
     return len;
 }
 
 // Wrapper function to get instruction byte count only
 static int fam65xx_opcode_extra_byte_count(uint8_t opcode) {
-    return disasm(&opcode, NULL, 0);
+    return fam65xx_disasm(0, &opcode, NULL, 0);
+}
+
+static void fam65xx_disasm_full(fam65xx_t* cpu, uint8_t opcode) {
+    uint16_t pc = cpu->pc - 1;
+    // Prefetch instruction bytes efficiently
+    uint8_t inst_bytes[3] = {opcode, 0, 0};
+    int byte_count = fam65xx_opcode_extra_byte_count(opcode);  // Get count from opcode alone
+
+    // Only read the bytes we actually need
+    for (int i = 1; i <= byte_count; ++i) {
+        inst_bytes[i] = fam65xx_read_cycle(cpu, (uint16_t)(pc + i));
+    }
+
+    // Generate full disassembly
+    char disasm_buffer[16];
+
+    fam65xx_disasm(pc, inst_bytes, disasm_buffer, sizeof(disasm_buffer));
+
+    uint8_t p = cpu->p;
+    
+    // Print instruction bytes (only the ones we fetched)
+    printf(".,%04X", pc);
+    for (int i = 0; i < 3; ++i) {
+        if (i <= byte_count) {
+            printf(" %02X", inst_bytes[i]);
+        } else {
+            printf("   ");  // Pad with spaces for unused bytes
+        }
+    }
+
+    // Print disassembly and registers
+    printf(" %-12s  A:%02X X:%02X Y:%02X P:%c%c%c%c%c%c%c%c\n",
+        disasm_buffer,
+        cpu->a, cpu->x, cpu->y,
+        (p & 0x80) ? 'N' : '-', // Negative
+        (p & 0x40) ? 'V' : '-', // Overflow
+        (p & 0x20) ? 'U' : '-', // Unused
+        (p & 0x10) ? 'B' : '-', // Break
+        (p & 0x08) ? 'D' : '-', // Decimal
+        (p & 0x04) ? 'I' : '-', // Interrupt Disable
+        (p & 0x02) ? 'Z' : '-', // Zero
+        (p & 0x01) ? 'C' : '-'  // Carry
+    );
 }
 
 // Instruction dispatch macros (shared - but implementation-specific functions)
@@ -228,45 +259,7 @@ static inline void fam65xx_next_instruction_dispatch(fam65xx_t* cpu) {
     static int dump_counter = 50;
     if (dump_counter > 0) {
         dump_counter--;
-
-        int byte_count = fam65xx_opcode_extra_byte_count(opcode);  // Get count from opcode alone
-        // Prefetch instruction bytes efficiently
-        uint8_t inst_bytes[3] = {opcode, 0, 0};
-
-        // Only read the bytes we actually need
-        for (int i = 0; i < byte_count; ++i) {
-            inst_bytes[i + 1] = fam65xx_read_cycle(cpu, (uint16_t)(cpu->pc + i));
-        }
-
-        // Generate full disassembly
-        char disasm_buffer[16];
-        disasm(inst_bytes, disasm_buffer, sizeof(disasm_buffer));
-
-        uint8_t p = cpu->p;
-        
-        // Print instruction bytes (only the ones we fetched)
-        printf(".,%04X", cpu->pc - 1);
-        for (int i = 0; i < 3; ++i) {
-            if (i <= byte_count) {
-                printf(" %02X", inst_bytes[i]);
-            } else {
-                printf("   ");  // Pad with spaces for unused bytes
-            }
-        }
-
-        // Print disassembly and registers
-        printf(" %-12s  A:%02X X:%02X Y:%02X P:%c%c%c%c%c%c%c%c\n",
-            disasm_buffer,
-            cpu->a, cpu->x, cpu->y,
-            (p & 0x80) ? 'N' : '-', // Negative
-            (p & 0x40) ? 'V' : '-', // Overflow
-            (p & 0x20) ? 'U' : '-', // Unused
-            (p & 0x10) ? 'B' : '-', // Break
-            (p & 0x08) ? 'D' : '-', // Decimal
-            (p & 0x04) ? 'I' : '-', // Interrupt Disable
-            (p & 0x02) ? 'Z' : '-', // Zero
-            (p & 0x01) ? 'C' : '-'  // Carry
-        );
+        fam65xx_disasm_full(cpu, opcode);
     }
     cpu->opcode_handlers[opcode](cpu);
 }

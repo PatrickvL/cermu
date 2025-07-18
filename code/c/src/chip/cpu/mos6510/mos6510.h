@@ -115,11 +115,12 @@ static inline void mos6510_ioport_write(mos6510_t* cpu, uint16_t addr, uint8_t v
     printf("mos6510_ioport_write: addr=%04X value=%02X\n", addr, value);
     // Update Data Direction / Data register
     cpu->io_port[addr] = value;
-
-    // Notify system of output pin changes
-    uint8_t ddr = cpu->io_port[0];
-    uint8_t port_data = cpu->io_port[1];
-    cpu->io_interface.output_pins_changed(cpu->io_interface.context, port_data, ddr);
+    if (addr == 1) {
+        // Notify system of output pin changes
+        uint8_t ddr = cpu->io_port[0];
+        uint8_t port_data = cpu->io_port[1];
+        cpu->io_interface.output_pins_changed(cpu->io_interface.context, port_data, ddr);
+    }
 }
 
 // Memory access functions using optimized direct callbacks

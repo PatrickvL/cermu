@@ -285,18 +285,18 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
 uint8_t c64_bus_generate_pla_mode(c64_bus_t* c64_bus, uint8_t cpu_port_bits) {
     printf("c64_bus_generate_pla_mode.cpu_port_bits: %02X\n", cpu_port_bits);
     // The PLA expects a 5-bit mode value with the following bit mapping:
-    // Bit 0: LORAM (from CPU port bit 0)
-    // Bit 1: HIRAM (from CPU port bit 1) 
-    // Bit 2: CHAREN (from CPU port bit 2)
-    // Bit 3: EXROM (from cartridge signal)
-    // Bit 4: GAME (from cartridge signal)
+    // Bit 0: !LORAM (from CPU port bit 0)
+    // Bit 1: !HIRAM (from CPU port bit 1) 
+    // Bit 2: !CHAREN (from CPU port bit 2)
+    // Bit 3: !EXROM (from cartridge signal)
+    // Bit 4: !GAME (from cartridge signal)
     
     // Extract CPU I/O port control bits (bits 0-2 of $0001)
-    uint8_t pla_mode = cpu_port_bits & 0x07; // LORAM (bit 0) | HIRAM (bit 1) | CHAREN (bit 2)
+    uint8_t pla_mode = (~cpu_port_bits) & 0x07; // LORAM (bit 0) | HIRAM (bit 1) | CHAREN (bit 2)
     
     // Add cartridge control signals from system lines
-    pla_mode |= ((c64_bus->system_lines & SYS_MASK_EXROM) ? 0x08 : 0); // EXROM (bit 3)
-    pla_mode |= ((c64_bus->system_lines & SYS_MASK_GAME) ? 0x10 : 0);  // GAME (bit 4)
+    pla_mode |= ((c64_bus->system_lines & SYS_MASK_EXROM) ? 0 : 0x08); // EXROM (bit 3)
+    pla_mode |= ((c64_bus->system_lines & SYS_MASK_GAME) ? 0 : 0x10);  // GAME (bit 4)
     printf("c64_bus_generate_pla_mode.pla_mode: %02X\n", pla_mode);
 
     return pla_mode;
