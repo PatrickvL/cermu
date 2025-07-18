@@ -28,13 +28,14 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu cpu_build)
 
 # Source directories
 set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../src)
-set(CPU_DIR ${SRC_DIR}/chip/cpu/mos6510)
+set(CPU_DIR ${SRC_DIR}/chip/cpu)
 set(CORE_DIR ${SRC_DIR}/core)
 
 # Collect CPU source files
 set(CPU_SOURCES
-    ${CPU_DIR}/mos6510.c
-    ${CPU_DIR}/mos6510_illegal.c
+    ${CPU_DIR}/mos6510/mos6510.c
+    ${CPU_DIR}/fam65xx/fam65xx_core.c
+    ${CPU_DIR}/fam65xx/fam65xx_opcodes.c
 )
 
 # Collect core source files
