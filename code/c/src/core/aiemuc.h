@@ -17,4 +17,17 @@
     #define unlikely(x) __builtin_expect(!!(x), 0)
 #endif
 
+#if defined(__GNUC__) || defined(__clang__)
+    #define aiemuc_popcount(x) __builtin_popcount(x)
+#else
+    static inline int aiemuc_popcount(unsigned int x) {
+        int count = 0;
+        while (x) {
+            count += x & 1;
+            x >>= 1;
+        }
+        return count;
+    }
+#endif
+
 #endif // AIEMUC_H

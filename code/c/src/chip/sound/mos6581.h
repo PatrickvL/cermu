@@ -5,6 +5,7 @@
 #include "../../core/bus_cycle_interface.h"
 #include <stdint.h>
 #include <stdbool.h>
+#include <math.h>
 
 // SID MOS 6581 DIP has 28 pins; Pinout:
 typedef enum {
@@ -29,6 +30,18 @@ typedef enum {
 #define SID_REGS_SIZE (1 << SID_REGS_BITS) // 32
 #define SID_REGS_MASK (SID_REGS_SIZE - 1) // 31
 
+// SID chip revisions
+typedef enum {
+    SID_REVISION_6581_R1,
+    SID_REVISION_6581_R2,
+    SID_REVISION_6581_R3,
+    SID_REVISION_6581_R4,
+    SID_REVISION_6581_R4AR,
+    SID_REVISION_8580_R5,
+    SID_REVISION_CSG_6581,
+    SID_REVISION_CSG_8580
+} sid_revision_t;
+
 // Voice envelope cycle states
 typedef enum {
     CYCLE_OFF = 0,     // Off cycle (0)
@@ -47,57 +60,121 @@ typedef enum {
     WAVEFORM_NOISE = 0x8     // Noise waveform
 } waveform_bits_t;
 
-// Constants from C# code
-#define WAVEFORM_ACCUMULATOR_MSB 0x8000000       // Bit 23 (24th counting from 0)
-#define WAVEFORM_ACCUMULATOR_MAX 0xFFFFFFF       // The highest 24 bit (12.12 fixed-point) number
-#define OSCILLATOR_MAX 0xFFF                     // The highest 12 bit (8.4 fixed-point) number
-#define AMPLITUDE_PEAK 0xFFFF                    // The highest 16 bit (8.8 fixed-point) number
-#define DECAY_RELEASE_DIVIDER (-3)               // Decay and Release are decreases, and take 3 times longer than RatesinMS[Attack]
-#define SAMPLE_BUFFER_SIZE (128 * 1024)          // Sample buffer size from C# code
+// SID constants
+#define WAVEFORM_ACCUMULATOR_MAX 0xFFFFFF       // 24-bit accumulator
+#define WAVEFORM_ACCUMULATOR_MSB 0x800000       // Bit 23 (MSB)
+#define OSCILLATOR_MAX 0xFFF                    // 12-bit oscillator output
+#define ENVELOPE_MAX 0xFFFF                     // 16-bit envelope output
+#define PULSE_WIDTH_MAX 0xFFF                   // 12-bit pulse width
+#define NOISE_LFSR_MASK 0x7FFFFF               // 23-bit LFSR mask
+#define SAMPLE_BUFFER_SIZE (8192)              // Reduced buffer size
 
 // Envelope rate table size (16 entries, 0-15)
 #define ENVELOPE_RATE_TABLE_SIZE 16
 
+// Filter constants
+#define FILTER_CUTOFF_MAX 2048.0f
+#define FILTER_RESONANCE_MAX 15.0f
+
+// Combined waveform lookup table size
+#define COMBINED_WAVEFORM_TABLE_SIZE 4096
+
 // Forward declarations
 typedef struct voice_s voice_t;
 typedef struct mos6581_s mos6581_t;
+typedef struct filter_state_s filter_state_t;
+typedef struct ring_buffer_s ring_buffer_t;
 
-// Voice structure - matches C# Voice class
+// Ring buffer for sample output
+typedef struct ring_buffer_s {
+    float* buffer;
+    uint32_t size;
+    uint32_t write_pos;
+    uint32_t read_pos;
+    uint32_t mask;
+} ring_buffer_t;
+
+// Filter state structure
+typedef struct filter_state_s {
+    // Two-integrator-loop biquad filter state
+    float cutoff_frequency;
+    float resonance;
+    float low_pass_output;
+    float band_pass_output;
+    float high_pass_output;
+    float previous_input;
+    float previous_low_pass;
+    float previous_band_pass;
+    
+    // Filter coefficients
+    float w0;           // Cutoff frequency coefficient
+    float q;            // Resonance coefficient
+    float integrator1;  // First integrator state
+    float integrator2;  // Second integrator state
+    
+    // Nonlinear distortion state (6581 specific)
+    float distortion_level;
+    bool enable_distortion;
+} filter_state_t;
+
+// Voice structure - Enhanced with all SID features
 typedef struct voice_s {
-    // Write-only voice register values :
-    uint16_t frequency;               // Voice frequency control (FRELO/FREHI) - frequency of oscillator
-    uint16_t pulse_waveform_width;    // Pulse waveform width (PWLO/PWHI) - pulse waveform duty cycle
-    waveform_bits_t waveform;         // Waveform control register (VCREG) - voice waveform select
-    bool gated;                       // Gate bit: 1=start attack/decay/sustain cycle, 0=start release cycle
-    bool synchronize;                 // Oscillator sync: synchronize this oscillator with oscillator of the previous voice
-    bool ring_modulation;             // Ring modulation: replace triangle waveform with ring modulation output
-    bool test;                        // Test bit: 1=disable oscillator, reset noise generator
-    uint8_t attack_rate;              // Attack rate (ATDCY): envelope attack rate control
-    uint8_t decay_rate;               // Decay rate (ATDCY): envelope decay rate control
-    uint16_t sustain_level;           // Sustain level (SUREL): envelope sustain level control (16-bit)
-    uint8_t release_rate;             // Release rate (SUREL): envelope release rate control
+    // Write-only voice register values
+    uint16_t frequency;               // Voice frequency control (FRELO/FREHI)
+    uint16_t pulse_waveform_width;    // Pulse waveform width (PWLO/PWHI)
+    waveform_bits_t waveform;         // Waveform control register (VCREG)
+    bool gated;                       // Gate bit
+    bool synchronize;                 // Oscillator sync
+    bool ring_modulation;             // Ring modulation
+    bool test;                        // Test bit
+    uint8_t attack_rate;              // Attack rate (ATDCY)
+    uint8_t decay_rate;               // Decay rate (ATDCY)
+    uint16_t sustain_level;           // Sustain level (SUREL)
+    uint8_t release_rate;             // Release rate (SUREL)
 
-    // Read-only voice register values :
-    uint8_t oscillator_output;        // Oscillator output (OSC3): provides real-time oscillator output for voice 3
-    uint8_t envelope_output;          // Envelope output (ENV3): provides real-time envelope output for voice 3    // Internal state from C# Voice class :
-    uint32_t waveform_accumulator;    // Accumulator used to track the current position in the waveform generation cycle
-    uint32_t envelope_accumulator;    // Accumulator used to track the current position in the envelope generation cycle
-    envelope_cycle_t envelope_cycle;  // Current envelope generation cycle state: Attack, Decay, Sustain, or Release
-    bool envelope_hold_zero;          // When true, holds the envelope output at zero during the attack phase
-    uint8_t noise_output;             // Current output from the noise generator
-    uint32_t noise_seed;              // Current state of the noise generator's linear feedback shift register
-    uint16_t envelope_amplitude;      // Current envelope amplitude (16-bit 8.8 fixed-point)
-    uint32_t oscillator_waveform;     // Current oscillator waveform output
-    int envelope_deltas[ENVELOPE_RATE_TABLE_SIZE]; // Envelope rate deltas
+    // Read-only voice register values
+    uint8_t oscillator_output;        // Oscillator output (OSC3)
+    uint8_t envelope_output;          // Envelope output (ENV3)
+
+    // Internal state - Enhanced
+    uint32_t waveform_accumulator;    // 24-bit phase accumulator
+    uint32_t envelope_accumulator;    // Envelope timing accumulator
+    envelope_cycle_t envelope_cycle;  // Current envelope state
+    uint16_t envelope_amplitude;      // Current envelope amplitude
+    uint32_t oscillator_waveform;     // Current oscillator output
+    
+    // Envelope generation state
+    uint32_t envelope_rate_counter;   // Rate counter for envelope timing
+    uint32_t envelope_rate_period;    // Rate period for current cycle
+    bool envelope_hold_zero;          // Hold envelope at zero during attack
+    uint16_t envelope_next_level;     // Next level for envelope transitions
+    
+    // Noise generation state
+    uint32_t noise_lfsr;              // 23-bit LFSR state
+    uint32_t noise_output;            // Current noise output
+    bool noise_clock_enable;          // Noise clock enable from accumulator
+    
+    // Waveform generation state
+    uint32_t triangle_output;         // Triangle waveform output
+    uint32_t sawtooth_output;         // Sawtooth waveform output
+    uint32_t pulse_output;            // Pulse waveform output
+    uint32_t combined_output;         // Combined waveform output
+    
+    // Sync and ring modulation state
+    uint32_t prev_accumulator;        // Previous accumulator for sync detection
+    bool sync_trigger;                // Sync trigger flag
+    bool ring_msb;                    // Ring modulation MSB state
+    
+    // Voice result and timing
+    uint32_t result;                  // Final voice output
     float cpu_clock;                  // CPU clock frequency
-    uint32_t result;                  // Result field for voice calculations
-    uint16_t envelope_next_level;     // Next level for envelope calculations
-
-    // Reference to chip
+    uint32_t voice_index;             // Voice index (0, 1, 2)
+    
+    // Reference to parent chip
     mos6581_t* sid;
 } voice_t;
 
-// MOS6581 SID structure - matches C# MOS6581 class
+// Main SID chip structure - Enhanced
 typedef struct mos6581_s {
     // Chip descriptor must be first
     chip_descriptor_t* desc;
@@ -107,61 +184,86 @@ typedef struct mos6581_s {
 
     // SID register array
     uint8_t regs[SID_REGS_SIZE];
+    uint8_t bus_value;                // Last bus value for read-only registers
 
-    // Three voices
+    // Three voices with cross-references
     voice_t voice1;
     voice_t voice2;
     voice_t voice3;
+    voice_t* voices[3];               // Array for easy iteration
 
-    // Frequency cutoff
-    uint16_t filter_cutoff_frequency; // Filter cutoff frequency (CUTLO/CUTHI) - frequency where filter starts to have effect
+    // Filter state
+    filter_state_t filter_state;
+    uint16_t filter_cutoff_frequency; // Filter cutoff frequency (CUTLO/CUTHI)
+    uint8_t filter_resonance;         // Filter resonance control
+    bool filter_voice1;               // Voice 1 filtered
+    bool filter_voice2;               // Voice 2 filtered  
+    bool filter_voice3;               // Voice 3 filtered
+    bool filter_voice4;               // External input filtered
 
-    // Filter control
-    uint8_t filter_resonance;         // Filter resonance control, also controls external filter input
-    bool filter_voice1;               // Voice 1 filtered, 1=voice 1 filtered
-    bool filter_voice2;               // Voice 2 filtered, 1=voice 2 filtered  
-    bool filter_voice3;               // Voice 3 filtered, 1=voice 3 filtered
-    bool filter_voice4;               // Filter external input signal, 1=external input filtered
+    // Volume and filter control
+    uint8_t volume;                   // Master volume control
+    bool low_pass_enabled;            // Low-pass filter enabled
+    bool band_pass_enabled;           // Band-pass filter enabled
+    bool high_pass_enabled;           // High-pass filter enabled
+    bool voice3_disabled;             // Voice 3 output disabled
 
-    // Volume control  
-    uint8_t volume;                   // Master volume control, also controls external filter input
-
-    // Filter switches
-    bool low_pass_enabled;            // Select low-pass filter, 1=low-pass on
-    bool band_pass_enabled;           // Select band-pass filter, 1=band-pass on
-    bool high_pass_enabled;           // Select high-pass filter, 1=high-pass on
-    bool voice3_disabled;             // Disconnect output of voice 3, 1=voice 3 off
-
-    // Internal state from C# MOS6581 class
-    uint32_t filter_voice_count;      // Number of voices being filtered
-    uint32_t sample_index;            // Current sample buffer index
-    uint8_t sample_buffer[SAMPLE_BUFFER_SIZE]; // Sample buffer
+    // Timing and sample generation
+    uint32_t cycle_count;             // Cycle counter
+    uint32_t subcycle_count;          // Sub-cycle counter
+    bool pal_timing;                  // PAL (true) vs NTSC (false) timing
+    float sample_rate;                // Output sample rate
+    float sid_rate;                   // Internal SID update rate
+    
+    // Sample output
+    ring_buffer_t sample_buffer;      // Ring buffer for samples
+    float* temp_buffer;               // Temporary buffer for processing
+    uint32_t temp_buffer_size;        // Size of temporary buffer
+    
+    // Chip revision and features
+    sid_revision_t revision;          // SID chip revision
+    bool enable_filter;               // Filter enable flag
+    bool enable_distortion;           // Distortion enable (6581 specific)
+    bool enable_digiboost;            // Digital boost for 4-bit samples
+    
+    // Volume bug state (6581 specific)
+    bool volume_change_click;         // Volume change click flag
+    float volume_click_amplitude;     // Click amplitude
+    uint32_t volume_click_counter;    // Click duration counter
+    
+    // External input
+    float external_input;             // External audio input level
+    
+    // POT interface
+    uint8_t pot_x_value;              // POT X value
+    uint8_t pot_y_value;              // POT Y value
+    
+    // Combined waveform lookup tables
+    uint8_t* combined_waveform_table; // Combined waveform lookup table
+    bool combined_waveform_enabled;   // Combined waveform enable
+    
+    // Statistics and debugging
+    uint32_t total_cycles;            // Total cycles processed
+    uint32_t samples_generated;       // Total samples generated
+    
 } mos6581_t;
 
 // Function declarations
-void* mos6581_system_create(chip_descriptor_t* desc);
-void mos6581_system_destroy(void* chip);
+
+// System functions
 void mos6581_reset(mos6581_t* sid);
-uint8_t mos6581_registers_read(void* context, uint16_t address);
-void mos6581_registers_write(void* context, uint16_t address, uint8_t value);
+
+// Main cycle function
 void mos6581_cycle(mos6581_t* sid);
 
-// Voice functions
-void voice_write_pulse_waveform_width(voice_t* voice, uint16_t value);
-void voice_write_voice_control_register_value(voice_t* voice, uint8_t value);
-void voice_write_attack_decay_register_value(voice_t* voice, uint8_t value);
-void voice_write_sustain_release_register_value(voice_t* voice, uint8_t value);
-int voice_rate_to_delta(voice_t* voice, int rate);
-void voice_clock_cycle(voice_t* voice);
-void voice_reset(voice_t* voice);
-int voice_cycles_per_millisecond(voice_t* voice);
+// Voice output
+void mos6581_generate_samples(mos6581_t* sid, float* output, uint32_t sample_count);
 
-// Filter functions
-void mos6581_write_resonance_control_register_value(mos6581_t* sid, uint8_t value);
-void mos6581_write_volume_and_filter_select_register_value(mos6581_t* sid, uint8_t value);
-
-// Pin check function
-bool mos6581_pin_read(mos6581_t* sid, mos6581_pin_t pin);
+// Utility functions
+void mos6581_set_revision(mos6581_t* sid, sid_revision_t revision);
+void mos6581_set_timing(mos6581_t* sid, bool pal_timing);
+void mos6581_set_sample_rate(mos6581_t* sid, float sample_rate);
+float mos6581_interpolate_sample(mos6581_t* sid, float position);
 
 // Chip descriptor
 extern chip_descriptor_t mos6581_descriptor;

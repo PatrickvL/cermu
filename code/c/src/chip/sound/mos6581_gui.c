@@ -63,16 +63,6 @@ static void render_voice_debug(voice_t* voice, int voice_num) {
         igText("Envelope Next Level: %d", voice->envelope_next_level);
         igText("Sustain Level: %d", voice->sustain_level);
         
-        // Envelope Deltas lookup table
-        igText("Envelope Deltas:");
-        igIndent(16.0f);
-        igText("  Attack: %d", voice->envelope_deltas[CYCLE_ATTACK]);
-        igText("  Decay: %d", voice->envelope_deltas[CYCLE_DECAY]);
-        igText("  Sustain: %d", voice->envelope_deltas[CYCLE_SUSTAIN]);
-        igText("  Release: %d", voice->envelope_deltas[CYCLE_RELEASE]);
-        igText("  Off: %d", voice->envelope_deltas[CYCLE_OFF]);
-        igUnindent(16.0f);
-        
         igText("CPU Clock: %.0f Hz", voice->cpu_clock);
 
         igUnindent(16.0f);
@@ -131,8 +121,6 @@ void mos6581_render_debug_window(void* chip, bool* show_window) {
         igSeparator();
         
         // Internal state
-        igText("Filter Voice Count: %d", sid->filter_voice_count);
-        igText("Sample Index: %d", sid->sample_index);
         igText("Sample Buffer Size: %d", SAMPLE_BUFFER_SIZE);
         
         igUnindent(16.0f);
