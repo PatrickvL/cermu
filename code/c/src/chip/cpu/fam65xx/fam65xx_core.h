@@ -10,6 +10,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include <stdio.h> // TMP for printf
+
 // ============================================================================
 // MOS 6502 FAMILY CORE DEFINITIONS
 // ============================================================================
@@ -94,18 +96,180 @@ struct fam65xx_s {
 
 // Core memory and cycle functions (shared)
 static inline uint8_t fam65xx_read_cycle(fam65xx_t* cpu, uint16_t address) {
-    return cpu->bus_interface.bus_read_cycle(cpu->bus_interface.context, address);
+    uint8_t value = cpu->bus_interface.bus_read_cycle(cpu->bus_interface.context, address);
+    if (address >= 0xFFFC && address <= 0xFFFF) {
+        static int counter = 0;
+        if (counter < 12) {
+            counter++;
+            printf("vector read at %04X: %02X\n", address, value);
+        }
+    }
+    return value;
+//    return cpu->bus_interface.bus_read_cycle(cpu->bus_interface.context, address);
 }
 
 static inline void fam65xx_write_cycle(fam65xx_t* cpu, uint16_t address, uint8_t value) {
     cpu->bus_interface.bus_write_cycle(cpu->bus_interface.context, address, value);
 }
 
+static const char* fam65xx_opcode_mnemonics[256] = {
+    "BRK","ORA","JAM","SLO","NOP","ORA","ASL","SLO","PHP","ORA","ASL","JAM","NOP","ORA","ASL","SLO",
+    "BPL","ORA","JAM","SLO","NOP","ORA","ASL","SLO","CLC","ORA","NOP","SLO","NOP","ORA","ASL","SLO",
+    "JSR","AND","JAM","RLA","BIT","AND","ROL","RLA","PLP","AND","ROL","JAM","BIT","AND","ROL","RLA",
+    "BMI","AND","JAM","RLA","NOP","AND","ROL","RLA","SEC","AND","NOP","RLA","NOP","AND","ROL","RLA",
+    "RTI","EOR","JAM","SRE","NOP","EOR","LSR","SRE","PHA","EOR","LSR","JAM","JMP","EOR","LSR","SRE",
+    "BVC","EOR","JAM","SRE","NOP","EOR","LSR","SRE","CLI","EOR","NOP","SRE","NOP","EOR","LSR","SRE",
+    "RTS","ADC","JAM","RRA","NOP","ADC","ROR","RRA","PLA","ADC","ROR","JAM","JMP","ADC","ROR","RRA",
+    "BVS","ADC","JAM","RRA","NOP","ADC","ROR","RRA","SEI","ADC","NOP","RRA","NOP","ADC","ROR","RRA",
+    "NOP","STA","NOP","SAX","STY","STA","STX","SAX","DEY","NOP","TXA","XAA","STY","STA","STX","SAX",
+    "BCC","STA","JAM","AHX","STY","STA","STX","SAX","TYA","STA","TXS","TAS","SHY","STA","SHX","AHX",
+    "LDY","LDA","LDX","LAX","LDY","LDA","LDX","LAX","TAY","LDA","TAX","LAX","LDY","LDA","LDX","LAX",
+    "BCS","LDA","JAM","LAX","LDY","LDA","LDX","LAX","CLV","LDA","TSX","LAS","LDY","LDA","LDX","LAX",
+    "CPY","CMP","JAM","DCP","CPY","CMP","DEC","DCP","INY","CMP","DEX","AXS","CPY","CMP","DEC","DCP",
+    "BNE","CMP","JAM","DCP","NOP","CMP","DEC","DCP","CLD","CMP","NOP","DCP","NOP","CMP","DEC","DCP",
+    "CPX","SBC","JAM","ISC","CPX","SBC","INC","ISC","INX","SBC","NOP","SBC","CPX","SBC","INC","ISC",
+    "BEQ","SBC","JAM","ISC","NOP","SBC","INC","ISC","SED","SBC","NOP","ISC","NOP","SBC","INC","ISC"
+};
+
+#ifdef _MSC_VER
+#define SPRINTF_SAFE(buf, size, fmt, ...) sprintf_s(buf, size, fmt, __VA_ARGS__)
+#else
+#define SPRINTF_SAFE(buf, size, fmt, ...) sprintf(buf, fmt, __VA_ARGS__)
+#endif
+
+// Core disassembler function - code[0] is the opcode at current PC
+static int disasm(unsigned char *code, char *output, size_t output_size) {
+    unsigned char op = code[0];
+
+#if 0
+    // Packed addressing mode data: 4 bits per mode, 64 modes in 32 bytes
+    static const unsigned char modes[] = {
+        0x00,0x11,0x20,0x11,0x33,0x33,0x33,0x33,0x00,0x22,0x44,0x22,0x66,0x66,0x66,0x66,
+        0xCC,0xBB,0x20,0xBB,0x33,0x55,0x55,0x33,0x00,0x88,0x20,0x88,0x66,0x77,0x77,0x66,
+        0x66,0xAA,0x20,0xAA,0x33,0x33,0x33,0x33,0x00,0x22,0x44,0x22,0x66,0x66,0x66,0x66,
+        0xCC,0xBB,0x20,0xBB,0x33,0x55,0x55,0x33,0x00,0x88,0x20,0x88,0x99,0x77,0x77,0x66
+    };
+    
+    int m = (modes[op >> 1] >> ((op & 1) << 2)) & 15;
+    int bytes = "\0\0\1\1\1\1\2\2\2\2\1\1\1"[m];
+#else
+    // Corrected addressing mode table for all 256 MOS 6510 opcodes
+    // Mode values: 0=imp, 1=acc, 2=imm, 3=zpg, 4=zpx, 5=zpy, 6=abs, 7=abx, 8=aby, 9=ind, 10=izx, 11=izy, 12=rel
+    static const unsigned char modes[256] = {
+        // 0x00-0x0F
+        0, 10, 0, 10, 3, 3, 3, 3, 0, 2, 1, 2, 6, 6, 6, 6,
+        // 0x10-0x1F  
+        12, 11, 0, 11, 4, 4, 4, 4, 0, 8, 0, 8, 7, 7, 7, 7,
+        // 0x20-0x2F
+        6, 10, 0, 10, 3, 3, 3, 3, 0, 2, 1, 2, 6, 6, 6, 6,
+        // 0x30-0x3F
+        12, 11, 0, 11, 4, 4, 4, 4, 0, 8, 0, 8, 7, 7, 7, 7,
+        // 0x40-0x4F
+        0, 10, 0, 10, 3, 3, 3, 3, 0, 2, 1, 2, 6, 6, 6, 6,
+        // 0x50-0x5F
+        12, 11, 0, 11, 4, 4, 4, 4, 0, 8, 0, 8, 7, 7, 7, 7,
+        // 0x60-0x6F
+        0, 10, 0, 10, 3, 3, 3, 3, 0, 2, 1, 2, 9, 6, 6, 6,
+        // 0x70-0x7F
+        12, 11, 0, 11, 4, 4, 4, 4, 0, 8, 0, 8, 7, 7, 7, 7,
+        // 0x80-0x8F: Fixed STX opcodes
+        2, 10, 2, 10, 3, 3, 5, 3, 0, 2, 0, 2, 6, 6, 6, 6,
+        // 0x90-0x9F: Fixed STA/STX opcodes  
+        12, 11, 0, 11, 4, 4, 5, 4, 0, 8, 0, 8, 7, 7, 8, 7,
+        // 0xA0-0xAF
+        2, 10, 2, 10, 3, 3, 3, 3, 0, 2, 0, 2, 6, 6, 6, 6,
+        // 0xB0-0xBF: Fixed LDX/LDA opcodes
+        12, 11, 0, 11, 4, 4, 5, 4, 0, 8, 0, 8, 7, 7, 8, 7,
+        // 0xC0-0xCF
+        2, 10, 2, 10, 3, 3, 3, 3, 0, 2, 0, 2, 6, 6, 6, 6,
+        // 0xD0-0xDF
+        12, 11, 0, 11, 4, 4, 4, 4, 0, 8, 0, 8, 7, 7, 7, 7,
+        // 0xE0-0xEF
+        2, 10, 2, 10, 3, 3, 3, 3, 0, 2, 0, 2, 6, 6, 6, 6,
+        // 0xF0-0xFF
+        12, 11, 0, 11, 4, 4, 4, 4, 0, 8, 0, 8, 7, 7, 7, 7
+    };
+    
+    int m = modes[op];
+    int bytes = "\0\0\1\1\1\1\2\2\2\2\1\1\1"[m];
+#endif
+    // If output is NULL, just return byte count
+    if (!output) return bytes;
+    
+    int len = SPRINTF_SAFE(output, output_size, "%s ", fam65xx_opcode_mnemonics[op]);
+    
+    switch(m) {
+        case 1: return len + SPRINTF_SAFE(output + len, output_size - len, "A");
+        case 2: return len + SPRINTF_SAFE(output + len, output_size - len, "#$%02X", code[1]);
+        case 3: return len + SPRINTF_SAFE(output + len, output_size - len, "$%02X", code[1]);
+        case 4: return len + SPRINTF_SAFE(output + len, output_size - len, "$%02X,X", code[1]);
+        case 5: return len + SPRINTF_SAFE(output + len, output_size - len, "$%02X,Y", code[1]);
+        case 6: return len + SPRINTF_SAFE(output + len, output_size - len, "$%04X", code[1] | (code[2] << 8));
+        case 7: return len + SPRINTF_SAFE(output + len, output_size - len, "$%04X,X", code[1] | (code[2] << 8));
+        case 8: return len + SPRINTF_SAFE(output + len, output_size - len, "$%04X,Y", code[1] | (code[2] << 8));
+        case 9: return len + SPRINTF_SAFE(output + len, output_size - len, "($%04X)", code[1] | (code[2] << 8));
+        case 10: return len + SPRINTF_SAFE(output + len, output_size - len, "($%02X,X)", code[1]);
+        case 11: return len + SPRINTF_SAFE(output + len, output_size - len, "($%02X),Y", code[1]);
+        case 12: return len + SPRINTF_SAFE(output + len, output_size - len, "$%04X", (unsigned short)(2 + (signed char)code[1]));
+    }
+    return len;
+}
+
+// Wrapper function to get instruction byte count only
+static int fam65xx_opcode_extra_byte_count(uint8_t opcode) {
+    return disasm(&opcode, NULL, 0);
+}
+
 // Instruction dispatch macros (shared - but implementation-specific functions)
-#define FAM65XX_NEXT_INSTRUCTION_DISPATCH(cpu) do { \
-    uint8_t opcode = fam65xx_read_cycle(cpu, (cpu)->pc++); \
-    (cpu)->opcode_handlers[opcode](cpu); \
-} while(0)
+static inline void fam65xx_next_instruction_dispatch(fam65xx_t* cpu) {
+    uint8_t opcode = fam65xx_read_cycle(cpu, cpu->pc++);
+
+    // ROM disassembly reference : https://www.pagetable.com/c64ref/c64disasm/#FCE2
+    static int dump_counter = 50;
+    if (dump_counter > 0) {
+        dump_counter--;
+
+        int byte_count = fam65xx_opcode_extra_byte_count(opcode);  // Get count from opcode alone
+        // Prefetch instruction bytes efficiently
+        uint8_t inst_bytes[3] = {opcode, 0, 0};
+
+        // Only read the bytes we actually need
+        for (int i = 0; i < byte_count; ++i) {
+            inst_bytes[i + 1] = fam65xx_read_cycle(cpu, (uint16_t)(cpu->pc + i));
+        }
+
+        // Generate full disassembly
+        char disasm_buffer[16];
+        disasm(inst_bytes, disasm_buffer, sizeof(disasm_buffer));
+
+        uint8_t p = cpu->p;
+        
+        // Print instruction bytes (only the ones we fetched)
+        printf(".,%04X", cpu->pc - 1);
+        for (int i = 0; i < 3; ++i) {
+            if (i <= byte_count) {
+                printf(" %02X", inst_bytes[i]);
+            } else {
+                printf("   ");  // Pad with spaces for unused bytes
+            }
+        }
+
+        // Print disassembly and registers
+        printf(" %-12s  A:%02X X:%02X Y:%02X P:%c%c%c%c%c%c%c%c\n",
+            disasm_buffer,
+            cpu->a, cpu->x, cpu->y,
+            (p & 0x80) ? 'N' : '-', // Negative
+            (p & 0x40) ? 'V' : '-', // Overflow
+            (p & 0x20) ? 'U' : '-', // Unused
+            (p & 0x10) ? 'B' : '-', // Break
+            (p & 0x08) ? 'D' : '-', // Decimal
+            (p & 0x04) ? 'I' : '-', // Interrupt Disable
+            (p & 0x02) ? 'Z' : '-', // Zero
+            (p & 0x01) ? 'C' : '-'  // Carry
+        );
+    }
+    cpu->opcode_handlers[opcode](cpu);
+}
 
 // Forward declaration for macros
 void fam65xx_interrupt_handler(fam65xx_t* cpu);
@@ -114,7 +278,7 @@ void fam65xx_interrupt_handler(fam65xx_t* cpu);
     if (unlikely(FAM65XX_TEST_IRQ(cpu) || FAM65XX_TEST_NMI(cpu))) { \
         fam65xx_interrupt_handler(cpu); \
     } \
-    FAM65XX_NEXT_INSTRUCTION_DISPATCH(cpu); \
+    fam65xx_next_instruction_dispatch(cpu); \
 } while(0)
 
 // Family-specific versions of shared macros

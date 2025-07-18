@@ -49,13 +49,9 @@ void mos6510_zeropage_write(void* chip, uint16_t address, uint8_t value) {
 
     // Handle MOS6510 zero page I/O ports - addresses $0000 and $0001
     if (address <= 1) {
-        // Update Data Direction / Data register
-        cpu->io_port[address] = value;
+        printf("mos6510_zeropage_write: addr=%04X value=%02X\n", address, value);
 
-        // Notify system of output pin changes
-        uint8_t ddr = cpu->io_port[0];
-        uint8_t port_data = cpu->io_port[1];
-        cpu->io_interface.output_pins_changed(cpu->io_interface.context, port_data, ddr);
+        mos6510_ioport_write(cpu, address, value);
     } else {
         // For addresses $0002-$00FF, write to system RAM directly to avoid circular dependency
         if (cpu->ram_access.write_func) {

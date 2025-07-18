@@ -84,6 +84,7 @@ chip_descriptor_t c64_bus_descriptor = {
 };
 
 void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {
+    printf("c64_bus_mode_switch: %02X\n", mode);
     // Update the optimized banking for the current mode
     c64_bus->pla_banking_mode = mode & 0x1F;
     
@@ -93,7 +94,9 @@ void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {
 }
 
 static void c64_bus_update_pla_mode(c64_bus_t* c64_bus) {
+
     uint8_t cpu_port_bits = c64_bus->pla_banking_mode & 0x07;
+    printf("c64_bus_update_pla_mode.cpu_port_bits: %02X\n", cpu_port_bits);
     uint8_t pla_mode = c64_bus_generate_pla_mode(c64_bus, cpu_port_bits);
     c64_bus_mode_switch(c64_bus, pla_mode);
 }
@@ -280,6 +283,7 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
 // ============================================================================
 
 uint8_t c64_bus_generate_pla_mode(c64_bus_t* c64_bus, uint8_t cpu_port_bits) {
+    printf("c64_bus_generate_pla_mode.cpu_port_bits: %02X\n", cpu_port_bits);
     // The PLA expects a 5-bit mode value with the following bit mapping:
     // Bit 0: LORAM (from CPU port bit 0)
     // Bit 1: HIRAM (from CPU port bit 1) 
@@ -293,7 +297,8 @@ uint8_t c64_bus_generate_pla_mode(c64_bus_t* c64_bus, uint8_t cpu_port_bits) {
     // Add cartridge control signals from system lines
     pla_mode |= ((c64_bus->system_lines & SYS_MASK_EXROM) ? 0x08 : 0); // EXROM (bit 3)
     pla_mode |= ((c64_bus->system_lines & SYS_MASK_GAME) ? 0x10 : 0);  // GAME (bit 4)
-    
+    printf("c64_bus_generate_pla_mode.pla_mode: %02X\n", pla_mode);
+
     return pla_mode;
 }
 
@@ -329,9 +334,12 @@ static void c64_control_lines_set(void* context, uint32_t lines) {
 
 // I/O port adapter functions
 static void c64_io_port_output_changed(void* context, uint8_t port_value, uint8_t ddr) {
+    printf("c64_io_port_output_changed port_value: %02X ddr: %02X\n", port_value, ddr);
     c64_bus_t* c64_bus = (c64_bus_t*)context;
+    // Mask port_value with DDR: only output bits matter for PLA
+    uint8_t masked_port = port_value & ddr;
     // Generate proper 5-bit PLA mode from CPU port bits and cartridge signals
-    uint8_t pla_mode = c64_bus_generate_pla_mode(c64_bus, port_value);
+    uint8_t pla_mode = c64_bus_generate_pla_mode(c64_bus, masked_port);
     c64_bus_mode_switch(c64_bus, pla_mode);
 }
 
