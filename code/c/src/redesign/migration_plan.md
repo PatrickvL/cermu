@@ -8,45 +8,47 @@ Highly optimized bus and chip selection logic
 Register-based calling conventions for performance
 Threaded, stackless CPU dispatch (Nostradamus Distributor pattern)
 Unified bus state threading for cycle-accurate emulation
+
 This migration plan outlines steps to transition from the legacy codebase to the new architecture, minimizing disruption and maximizing maintainability and performance.
 
-Step 1: Analysis & Mapping
-Redesign Highlights
-Bus Layer: c64_bus_implementation.c and c64_bus_optimized_header.h provide a fast, branchless bus with chip-select arrays and PLA mode management.
-Chip Layer: c64_chip_implementation_stubs.c shows how chips (VIC, SID, CIA) interact with the bus using unified bus state.
-CPU Layer: c64_cpu_integration_example.c demonstrates stackless opcode dispatch and integration with the bus.
-Legacy Code Comparison
-Bus: Legacy code uses more conditional logic and less precomputed chip selection.
-Chip: Legacy chips may use separate cycle functions and lack unified bus state threading.
-CPU: Legacy CPU dispatch may use recursive or stack-growing calls, not the threaded pattern.
-Step 2: Migration Steps
-A. Bus Layer Migration
-Replace legacy bus structures with c64_bus_t and related types from c64_bus_optimized_header.h.
-Integrate chip select arrays and PLA mode logic:
-Migrate PLA logic to use chip_select_per_bank_per_mode and encode_chip_select.
-Update all bus access points to use the new chip selection and system tick functions.
-Update memory access functions:
-Replace legacy read/write cycles with c64_bus_read_cycle and c64_bus_write_cycle.
-Ensure all chips use the unified bus state.
-B. Chip Layer Migration
-Refactor chip implementations (VIC, SID, CIA) to use the new bus state threading.
-Update chip cycle and I/O functions to match the prototypes and calling conventions in the redesign.
-Integrate chip advance cycle functions for proper timing and interrupt handling.
-C. CPU Layer Migration
-Adopt the Nostradamus Distributor pattern:
-Refactor opcode handlers to return the next handler instead of calling it.
-Use a shared bus state pointer for all handlers.
-Update handler tables and dispatch logic:
-Replace legacy dispatch with the handler table and loop from c64_cpu_integration_example.c.
-Ensure interrupt and flow control logic matches the new pattern.
-Migrate register calling conventions:
-Use REGISTER_CALL for all performance-critical functions.
-Update function pointer types and handler signatures.
-D. System Integration
-Update system initialization and cleanup to use new bus and chip structures.
-Migrate cartridge and PLA integration to use new signal and mode management.
-Refactor any legacy code that interacts with the bus, chips, or CPU to use the new interfaces.
-Step 3: Testing & Validation
+Step 1: CPU Layer Migration
+Begin migration with the CPU layer to establish the new stackless, threaded opcode dispatch model:
+
+- Refactor opcode handlers to return the next handler instead of calling it (Nostradamus Distributor pattern).
+- Use a shared bus state pointer for all handlers.
+- Update handler tables and dispatch logic to use a centralized handler table and loop.
+- Ensure interrupt and flow control logic matches the new pattern.
+- Migrate register calling conventions for performance-critical functions.
+- Update function pointer types and handler signatures.
+
+**Macro Recommendation:**
+Implement a macro for declaring opcode handler signatures, e.g.:
+    #define OPCODE_HANDLER_PROTO(name) REGISTER_CALL void* name(cpu_state_t* cpu, aiemu_bus_state_t* bus_state)
+Use this macro for all handler declarations and definitions. Future changes to the handler signature require only macro modification, not updates to all 256 handlers.
+
+**FOOTER Macro Repurposing:**
+Repurpose the existing FOOTER macro to support the new stackless dispatch pattern, e.g.:
+    #define OPCODE_FOOTER(cpu, bus) return get_next_handler(cpu, bus)
+Use this macro at the end of each handler for consistency and future-proofing.
+
+Step 2: Bus Layer Migration
+Replace legacy bus structures with c64_bus_t and related types. Integrate chip select arrays and PLA mode logic:
+- Migrate PLA logic to use chip_select_per_bank_per_mode and encode_chip_select.
+- Update all bus access points to use the new chip selection and system tick functions.
+- Replace legacy read/write cycles with c64_bus_read_cycle and c64_bus_write_cycle.
+- Ensure all chips use the unified bus state.
+
+Step 3: Chip Layer Migration
+Refactor chip implementations (VIC, SID, CIA) to use the new bus state threading:
+- Update chip cycle and I/O functions to match the prototypes and calling conventions in the redesign.
+- Integrate chip advance cycle functions for proper timing and interrupt handling.
+
+Step 4: System Integration
+Update system initialization and cleanup to use new bus and chip structures:
+- Migrate cartridge and PLA integration to use new signal and mode management.
+- Refactor any legacy code that interacts with the bus, chips, or CPU to use the new interfaces.
+
+Step 5: Testing & Validation
 Unit Test Each Layer:
 
 Bus: Validate chip selection, PLA mode switching, and memory access.

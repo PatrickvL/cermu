@@ -59,6 +59,79 @@ enum {
     ACID_MAX = 24 // Total number of ACIDs (0-23 for I/O, 16-19 for writable chips, 20-23 for read-only)
 };
 
+
+
+
+// =============================
+// Redesign Bus Types & Macros
+// =============================
+
+// Forward declarations for system and chips
+typedef struct c64_s c64_t;
+typedef struct vic_state_s vic_state_t;
+typedef struct sid_state_s sid_state_t;
+typedef struct cia_state_s cia_state_t;
+
+
+// Chip IDs (must match ACID enum order and values)
+typedef enum {
+    CHIP_VIC_D0 = 0,      /* $D000-$D0FF - Video Interface Controller */
+    CHIP_VIC_D1 = 1,      /* $D100-$D1FF */
+    CHIP_VIC_D2 = 2,      /* $D200-$D2FF */
+    CHIP_VIC_D3 = 3,      /* $D300-$D3FF */
+    CHIP_SID_D4 = 4,      /* $D400-$D4FF - Sound Interface Device */
+    CHIP_SID_D5 = 5,      /* $D500-$D5FF */
+    CHIP_SID_D6 = 6,      /* $D600-$D6FF */
+    CHIP_SID_D7 = 7,      /* $D700-$D7FF */
+    CHIP_COLORRAM_D8 = 8, /* $D800-$D8FF - Color RAM (4-bit) */
+    CHIP_COLORRAM_D9 = 9, /* $D900-$D9FF */
+    CHIP_COLORRAM_DA = 10,/* $DA00-$DAFF */
+    CHIP_COLORRAM_DB = 11,/* $DB00-$DBFF */
+    CHIP_CIA1_DC = 12,    /* $DC00-$DCFF - Complex Interface Adapter */
+    CHIP_CIA2_DD = 13,    /* $DD00-$DDFF */
+    CHIP_IO1_DE = 14,     /* $DE00-$DEFF - Expansion I/O */
+    CHIP_IO2_DF = 15,     /* $DF00-$DFFF */
+
+    CHIP_ZEROBANK = 16,   /* $0000-$03FF - Zero bank (CPU I/O port address 0 and 1 and RAM fallback above) */
+    CHIP_RAM = 17,        /* $0000-$FFFF - System RAM */
+    CHIP_ROML = 18,       /* $8000-$9FFF - Cartridge ROM Low (writable via banking) */
+    CHIP_ROMH = 19,       /* $A000-$BFFF/$E000-$FFFF - Cartridge ROM High */
+
+    CHIP_UNMAPPED = 20,   /* Unmapped/open address space (returns $FF, no chip) */
+    CHIP_BASIC = 21,      /* $A000-$BFFF - BASIC ROM */
+    CHIP_CHARROM = 22,    /* $D000-$DFFF - Character ROM */
+    CHIP_KERNAL = 23,     /* $E000-$FFFF - KERNAL ROM */
+
+    CHIP_MAX = 24 // Total number of CHIP IDs (0-23)
+} chip_id_t;
+
+// Control line masks
+#define LINE_MASK_RW   4   // Bit 2 = R/W line (1=read, 0=write)
+#define BA_LINE        1   // Bus Available
+#define AEC_LINE       2   // Address Enable Control
+#define RDY_LINE       4   // Ready
+
+// System line masks for cartridge signals
+#define SYS_MASK_EXROM 8   // EXROM signal
+#define SYS_MASK_GAME  16  // GAME signal
+
+// Chip select encoding structure
+typedef struct {
+    uint8_t read_chip  : 4;  // 4 bits = 16 possible read chips (0-15)
+    uint8_t write_chip : 4;  // 4 bits = 16 possible write chips (0-15)
+} aiemu_chip_select_t;
+
+// 32/64-bit bus state register (future-proofed for extension)
+typedef union {
+    uint64_t raw;           // 64-bit register value for future expansion
+    struct {
+        uint16_t addr;      // Bits 0-15: Address bus
+        uint8_t data;       // Bits 16-23: Data bus
+        uint8_t lines;      // Bits 24-31: Control lines including R/W
+        uint32_t reserved;  // Bits 32-63: Reserved for future use
+    };
+} aiemu_bus_state_t;
+
 typedef struct c64_bus_s {
     chip_descriptor_t* desc;
     void* c64;  // c64_t* - opaque pointer to avoid circular dependency
