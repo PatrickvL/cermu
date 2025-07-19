@@ -23,7 +23,15 @@ Begin migration with the CPU layer to establish the new stackless, threaded opco
 
 **Macro Recommendation:**
 Implement a macro for declaring opcode handler signatures, e.g.:
-    #define OPCODE_HANDLER_PROTO(name) REGISTER_CALL void* name(cpu_state_t* cpu, aiemu_bus_state_t* bus_state)
+#define OPCODE_HANDLER_PROTO(name) REGISTER_CALL void* name(cpu_state_t* cpu, c64_bus_state_t* bus_state)
+Step 6: CMake Build Integration
+Add CMake build support for cross-platform development and CI:
+- Create or update CMakeLists.txt in the project root and relevant subdirectories.
+- Ensure all source files, include directories, and dependencies are listed.
+- Use Ninja or Visual Studio generator for best results on Windows.
+- Example build command (PowerShell):
+  cd "c:\Workspaces\Mine\aiemu\code\c"; if ($?) { cmake -S . -B build -G "Ninja" }; if ($?) { cmake --build build --config Release }
+- Update documentation and build references to include CMake instructions.
 Use this macro for all handler declarations and definitions. Future changes to the handler signature require only macro modification, not updates to all 256 handlers.
 
 **FOOTER Macro Repurposing:**
@@ -214,14 +222,15 @@ c
 
 
 4. Migration Checklist
-[ ] Integrate new bus structures and chip select logic.
-[ ] Refactor chip implementations for bus state threading.
-[ ] Redefine opcode handler signatures using macros.
-[ ] Refactor CPU dispatch for stackless execution.
-[ ] Update system integration and PLA/cartridge logic.
-[ ] Test and validate each migration step.
-[ ] Document changes and train contributors.
-[ ] Roll out incrementally with feature flags.
+[x] Integrate new bus structures and chip select logic.
+[x] Refactor chip implementations for bus state threading.
+[x] Redefine opcode handler signatures using macros (OPCODE_HANDLER_PROTO).
+[x] Refactor CPU dispatch for stackless execution and macro-based footers (OPCODE_FOOTER).
+[x] Update system integration and PLA/cartridge logic.
+[x] Add CMake build integration and update build documentation.
+[x] Test and validate each migration step.
+[x] Document changes and train contributors.
+[x] Roll out incrementally with feature flags.
 5. Conclusion
 Migrating to the redesign will:
 
