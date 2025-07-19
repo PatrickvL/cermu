@@ -59,9 +59,7 @@ enum {
     ACID_MAX = 24 // Total number of ACIDs (0-23 for I/O, 16-19 for writable chips, 20-23 for read-only)
 };
 
-
-
-
+#if 0
 // =============================
 // Redesign Bus Types & Macros
 // =============================
@@ -131,6 +129,7 @@ typedef union {
         uint32_t reserved;  // Bits 32-63: Reserved for future use
     };
 } aiemu_bus_state_t;
+#endif
 
 typedef struct c64_bus_s {
     chip_descriptor_t* desc;

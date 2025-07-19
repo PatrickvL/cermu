@@ -290,12 +290,6 @@ static inline void fam65xx_next_instruction_dispatch(fam65xx_t* cpu) {
         mov ecx, cpu
         jmp eax
     }
-#elif defined(_MSC_VER) && defined(_M_X64)
-    // MSVC x64 inline assembly
-    __asm {
-        mov rdi, cpu
-        jmp next_handler
-    }
 #elif defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
     // GCC/Clang x86/x64 inline assembly
     asm volatile (
@@ -311,6 +305,24 @@ static inline void fam65xx_next_instruction_dispatch(fam65xx_t* cpu) {
 #endif
 }
 
+// Cross-platform calling convention for register arguments/returns
+#ifdef _MSC_VER
+    #define REGISTER_CALL __vectorcall  // Ensures register passing on MSVC
+#elif defined(__GNUC__) || defined(__clang__)
+    #define REGISTER_CALL __attribute__((regparm(3)))  // Register calling on GCC/Clang
+#else
+    #define REGISTER_CALL
+#endif
+
+// Cross-platform force inline macro
+#ifdef _MSC_VER
+    #define FORCE_INLINE __forceinline
+#elif defined(__GNUC__) || defined(__clang__)
+    #define FORCE_INLINE __attribute__((always_inline)) inline
+#else
+    #define FORCE_INLINE inline
+#endif
+
 // Forward declaration for macros
 void fam65xx_interrupt_handler(fam65xx_t* cpu);
 
@@ -322,7 +334,13 @@ void fam65xx_interrupt_handler(fam65xx_t* cpu);
 } while(0)
 
 // Family-specific versions of shared macros
-#define FAM65XX_OPCODE_FOOTER(cpu) \
+#define FAM65XX_OPCODE_PROTO(name) \
+    void name(fam65xx_t* cpu)
+//    REGISTER_CALL void* name(fam65xx_t* cpu, aiemu_bus_state_t* bus_state)
+#define PROTO_RETURN
+//   return
+
+#define FAM65XX_OPCODE_FOOTER() \
     FAM65XX_NEXT_INSTRUCTION(cpu)
 
 // Universal instruction dispatch using function pointers
@@ -335,10 +353,10 @@ typedef uint8_t (*fam65xx_addr_func_t)(fam65xx_t* cpu);
 typedef void (*fam65xx_op_func_t)(fam65xx_t* cpu, uint8_t value);
 
 // Arithmetic helper function implementation (static inline for performance)
-static inline void fam65xx_addr_op_helper(fam65xx_t* cpu, fam65xx_addr_func_t addr_func, fam65xx_op_func_t op_func) {
+static FORCE_INLINE void fam65xx_addr_op_helper(fam65xx_t* cpu, fam65xx_addr_func_t addr_func, fam65xx_op_func_t op_func) {
     uint8_t value = addr_func(cpu);
     op_func(cpu, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // Flag operations (shared)

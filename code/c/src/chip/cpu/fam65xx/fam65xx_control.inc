@@ -23,50 +23,50 @@ static inline void fam65xx_op_branch_helper(fam65xx_t* cpu, bool condition) {
             (void)fam65xx_read_cycle(cpu, (old_pc & 0xFF00) | (cpu->pc & 0xFF)); // Dummy read
         }
     }
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // BPL - Branch if Positive
-void fam65xx_op_bpl(fam65xx_t* cpu) { fam65xx_op_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_N)); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_bpl) { PROTO_RETURN fam65xx_op_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_N)); }
 
 // BMI - Branch if Minus
-void fam65xx_op_bmi(fam65xx_t* cpu) { fam65xx_op_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_N)); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_bmi) { PROTO_RETURN fam65xx_op_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_N)); }
 
 // BVC - Branch if Overflow Clear
-void fam65xx_op_bvc(fam65xx_t* cpu) { fam65xx_op_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_V)); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_bvc) { PROTO_RETURN fam65xx_op_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_V)); }
 
 // BVS - Branch if Overflow Set
-void fam65xx_op_bvs(fam65xx_t* cpu) { fam65xx_op_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_V)); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_bvs) { PROTO_RETURN fam65xx_op_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_V)); }
 
 // BCC - Branch if Carry Clear
-void fam65xx_op_bcc(fam65xx_t* cpu) { fam65xx_op_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_C)); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_bcc) { PROTO_RETURN fam65xx_op_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_C)); }
 
 // BCS - Branch if Carry Set
-void fam65xx_op_bcs(fam65xx_t* cpu) { fam65xx_op_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_C)); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_bcs) { PROTO_RETURN fam65xx_op_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_C)); }
 
 // BNE - Branch if Not Equal
-void fam65xx_op_bne(fam65xx_t* cpu) { fam65xx_op_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_Z)); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_bne) { PROTO_RETURN fam65xx_op_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_Z)); }
 
 // BEQ - Branch if Equal
-void fam65xx_op_beq(fam65xx_t* cpu) { fam65xx_op_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_Z)); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_beq) { PROTO_RETURN fam65xx_op_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_Z)); }
 
 // ============================================================================
 // JUMP AND SUBROUTINE OPERATIONS
 // ============================================================================
 
 // JMP - Jump Absolute
-void fam65xx_op_jmp_absolute(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_jmp_absolute) {
 
     uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
     uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
     cpu->pc = (addr_hi << 8) | addr_lo;
     
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // JMP - Jump Indirect
-void fam65xx_op_jmp_indirect(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_jmp_indirect) {
 
     uint8_t ptr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
@@ -80,11 +80,11 @@ void fam65xx_op_jmp_indirect(fam65xx_t* cpu) {
     uint8_t addr_hi = fam65xx_read_cycle(cpu, (ptr & 0xFF00) | ((ptr + 1) & 0xFF));
     cpu->pc = (addr_hi << 8) | addr_lo;
     
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // JSR - Jump to Subroutine
-void fam65xx_op_jsr(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_jsr) {
 
     uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
     
@@ -100,11 +100,11 @@ void fam65xx_op_jsr(fam65xx_t* cpu) {
     uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc);  // T1: Dummy read
     cpu->pc = (addr_hi << 8) | addr_lo;
     
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // RTS - Return from Subroutine
-void fam65xx_op_rts(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_rts) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     
@@ -116,7 +116,7 @@ void fam65xx_op_rts(fam65xx_t* cpu) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // ============================================================================
@@ -124,11 +124,11 @@ void fam65xx_op_rts(fam65xx_t* cpu) {
 // ============================================================================
 
 // BRK - Break
-void fam65xx_op_brk(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_brk) {
 #if 0
     (void)fam65xx_read_cycle(cpu, cpu->pc++); // Read and discard next byte
     fam65xx_interrupt_sequence(cpu, cpu->p | FLAG_B, 0xFFFE);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 else // As long as the IRQ vector ends up at BRK, we replace threaded dispatch with a loop
     do {
         (void)fam65xx_read_cycle(cpu, cpu->pc++);
@@ -145,7 +145,7 @@ else // As long as the IRQ vector ends up at BRK, we replace threaded dispatch w
 }
 
 // RTI - Return from Interrupt
-void fam65xx_op_rti(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_rti) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     
@@ -158,7 +158,7 @@ void fam65xx_op_rti(fam65xx_t* cpu) {
     uint8_t addr_hi = fam65xx_pull(cpu);
     cpu->pc = (addr_hi << 8) | addr_lo;
     
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // ============================================================================
@@ -166,57 +166,57 @@ void fam65xx_op_rti(fam65xx_t* cpu) {
 // ============================================================================
 
 // CLC - Clear Carry Flag
-void fam65xx_op_clc(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_clc) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_set_flag(cpu, FLAG_C, false);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // SEC - Set Carry Flag
-void fam65xx_op_sec(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_sec) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_set_flag(cpu, FLAG_C, true);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // CLI - Clear Interrupt Disable Flag
-void fam65xx_op_cli(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_cli) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_set_flag(cpu, FLAG_I, false);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // SEI - Set Interrupt Disable Flag
-void fam65xx_op_sei(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_sei) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_set_flag(cpu, FLAG_I, true);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // CLV - Clear Overflow Flag
-void fam65xx_op_clv(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_clv) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_set_flag(cpu, FLAG_V, false);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // CLD - Clear Decimal Flag
-void fam65xx_op_cld(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_cld) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_set_flag(cpu, FLAG_D, false);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // SED - Set Decimal Flag
-void fam65xx_op_sed(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_sed) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_set_flag(cpu, FLAG_D, true);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }

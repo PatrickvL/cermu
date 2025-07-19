@@ -13,52 +13,52 @@ static inline void fam65xx_op_lda(fam65xx_t* cpu, uint8_t value) {
     fam65xx_set_nz_flags(cpu, cpu->a);
 }
 
-void fam65xx_op_lda_immediate(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_lda_immediate) {
     cpu->a = fam65xx_addr_imm(cpu);             // T1: Immediate value fetch
     fam65xx_set_nz_flags(cpu, cpu->a);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_lda_zero_page(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_lda_zero_page) {
     cpu->a = fam65xx_addr_zp(cpu);
     fam65xx_set_nz_flags(cpu, cpu->a);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_lda_zero_page_x(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_lda_zero_page_x) {
     cpu->a = fam65xx_addr_zpx(cpu);
     fam65xx_set_nz_flags(cpu, cpu->a);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_lda_absolute(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_lda_absolute) {
     cpu->a = fam65xx_addr_abs(cpu);
     fam65xx_set_nz_flags(cpu, cpu->a);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_lda_absolute_x(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_lda_absolute_x) {
     cpu->a = fam65xx_addr_absx(cpu);
     fam65xx_set_nz_flags(cpu, cpu->a);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_lda_absolute_y(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_lda_absolute_y) {
     cpu->a = fam65xx_addr_absy(cpu);
     fam65xx_set_nz_flags(cpu, cpu->a);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_lda_indirect_x(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_lda_indirect_x) {
     cpu->a = fam65xx_addr_indx(cpu);
     fam65xx_set_nz_flags(cpu, cpu->a);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_lda_indirect_y(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_lda_indirect_y) {
     cpu->a = fam65xx_addr_indy(cpu);
     fam65xx_set_nz_flags(cpu, cpu->a);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // ============================================================================
@@ -70,34 +70,34 @@ static inline void fam65xx_op_ldx(fam65xx_t* cpu, uint8_t value) {
     fam65xx_set_nz_flags(cpu, cpu->x);
 }
 
-void fam65xx_op_ldx_immediate(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_ldx_immediate) {
     cpu->x = fam65xx_addr_imm(cpu);
     fam65xx_set_nz_flags(cpu, cpu->x);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_ldx_zero_page(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_ldx_zero_page) {
     cpu->x = fam65xx_addr_zp(cpu);
     fam65xx_set_nz_flags(cpu, cpu->x);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_ldx_zero_page_y(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_ldx_zero_page_y) {
     cpu->x = fam65xx_addr_zpy(cpu);
     fam65xx_set_nz_flags(cpu, cpu->x);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_ldx_absolute(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_ldx_absolute) {
     cpu->x = fam65xx_addr_abs(cpu);
     fam65xx_set_nz_flags(cpu, cpu->x);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_ldx_absolute_y(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_ldx_absolute_y) {
     cpu->x = fam65xx_addr_absy(cpu);
     fam65xx_set_nz_flags(cpu, cpu->x);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // ============================================================================
@@ -109,49 +109,49 @@ static inline void fam65xx_op_ldy(fam65xx_t* cpu, uint8_t value) {
     fam65xx_set_nz_flags(cpu, cpu->y);
 }
 
-void fam65xx_op_ldy_immediate(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_ldy_immediate) {
     cpu->y = fam65xx_addr_imm(cpu);
     fam65xx_set_nz_flags(cpu, cpu->y);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_ldy_zero_page(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_ldy_zero_page) {
     cpu->y = fam65xx_addr_zp(cpu);
     fam65xx_set_nz_flags(cpu, cpu->y);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_ldy_zero_page_x(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_ldy_zero_page_x) {
     cpu->y = fam65xx_addr_zpx(cpu);
     fam65xx_set_nz_flags(cpu, cpu->y);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_ldy_absolute(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_ldy_absolute) {
     cpu->y = fam65xx_addr_abs(cpu);
     fam65xx_set_nz_flags(cpu, cpu->y);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_ldy_absolute_x(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_ldy_absolute_x) {
     cpu->y = fam65xx_addr_absx(cpu);
     fam65xx_set_nz_flags(cpu, cpu->y);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // ============================================================================
 // STORE OPERATIONS - STA
 // ============================================================================
 
-void fam65xx_op_sta_zero_page(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_sta_zero_page) {
 
     cpu->address = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
     fam65xx_write_cycle(cpu, cpu->address, cpu->a);  // T2: Data store
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_sta_zero_page_x(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_sta_zero_page_x) {
 
     uint8_t base = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
@@ -159,10 +159,10 @@ void fam65xx_op_sta_zero_page_x(fam65xx_t* cpu) {
     cpu->address = (base + cpu->x) & 0xFF;
 
     fam65xx_write_cycle(cpu, cpu->address, cpu->a);  // T2: Data store
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_sta_absolute(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_sta_absolute) {
 
     uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
@@ -170,10 +170,10 @@ void fam65xx_op_sta_absolute(fam65xx_t* cpu) {
     cpu->address = (addr_hi << 8) | addr_lo;
 
     fam65xx_write_cycle(cpu, cpu->address, cpu->a);  // T2: Data store
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_sta_absolute_x(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_sta_absolute_x) {
 
     uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
@@ -185,10 +185,10 @@ void fam65xx_op_sta_absolute_x(fam65xx_t* cpu) {
     (void)fam65xx_read_cycle(cpu, (addr_hi << 8) | ((addr_lo + cpu->x) & 0xFF)); // Dummy read
 
     fam65xx_write_cycle(cpu, cpu->address, cpu->a);  // T2: Data store
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_sta_absolute_y(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_sta_absolute_y) {
 
     uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
@@ -200,10 +200,10 @@ void fam65xx_op_sta_absolute_y(fam65xx_t* cpu) {
     (void)fam65xx_read_cycle(cpu, (addr_hi << 8) | ((addr_lo + cpu->y) & 0xFF)); // Dummy read
 
     fam65xx_write_cycle(cpu, cpu->address, cpu->a);  // T2: Data store
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_sta_indirect_x(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_sta_indirect_x) {
 
     uint8_t zp_addr = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
@@ -218,10 +218,10 @@ void fam65xx_op_sta_indirect_x(fam65xx_t* cpu) {
     
 
     fam65xx_write_cycle(cpu, cpu->address, cpu->a);  // T2: Data store
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_sta_indirect_y(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_sta_indirect_y) {
 
     uint8_t zp_addr = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
     
@@ -236,22 +236,22 @@ void fam65xx_op_sta_indirect_y(fam65xx_t* cpu) {
     (void)fam65xx_read_cycle(cpu, (addr_hi << 8) | ((addr_lo + cpu->y) & 0xFF)); // Dummy read
 
     fam65xx_write_cycle(cpu, cpu->address, cpu->a);  // T2: Data store
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // ============================================================================
 // STORE OPERATIONS - STX
 // ============================================================================
 
-void fam65xx_op_stx_zero_page(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_stx_zero_page) {
 
     cpu->address = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
     fam65xx_write_cycle(cpu, cpu->address, cpu->x);  // T2: Data store
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_stx_zero_page_y(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_stx_zero_page_y) {
 
     uint8_t base = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
@@ -259,10 +259,10 @@ void fam65xx_op_stx_zero_page_y(fam65xx_t* cpu) {
     cpu->address = (base + cpu->y) & 0xFF;
 
     fam65xx_write_cycle(cpu, cpu->address, cpu->x);  // T2: Data store
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_stx_absolute(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_stx_absolute) {
 
     uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
@@ -270,22 +270,22 @@ void fam65xx_op_stx_absolute(fam65xx_t* cpu) {
     cpu->address = (addr_hi << 8) | addr_lo;
 
     fam65xx_write_cycle(cpu, cpu->address, cpu->x);  // T2: Data store
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // ============================================================================
 // STORE OPERATIONS - STY
 // ============================================================================
 
-void fam65xx_op_sty_zero_page(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_sty_zero_page) {
 
     cpu->address = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
     fam65xx_write_cycle(cpu, cpu->address, cpu->y);  // T2: Data store
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_sty_zero_page_x(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_sty_zero_page_x) {
 
     uint8_t base = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
@@ -293,10 +293,10 @@ void fam65xx_op_sty_zero_page_x(fam65xx_t* cpu) {
     cpu->address = (base + cpu->x) & 0xFF;
 
     fam65xx_write_cycle(cpu, cpu->address, cpu->y);  // T2: Data store
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_sty_absolute(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_sty_absolute) {
 
     uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
@@ -304,5 +304,5 @@ void fam65xx_op_sty_absolute(fam65xx_t* cpu) {
     cpu->address = (addr_hi << 8) | addr_lo;
 
     fam65xx_write_cycle(cpu, cpu->address, cpu->y);  // T2: Data store
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }

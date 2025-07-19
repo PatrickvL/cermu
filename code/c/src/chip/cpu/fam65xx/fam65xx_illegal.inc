@@ -11,23 +11,23 @@
 // ============================================================================
 
 // --- AHX ---
-void fam65xx_op_ahx_indirect_y(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_ahx_indirect_y) {
     uint16_t addr_ptr = fam65xx_read_cycle(cpu, cpu->pc++);
     uint8_t addr_lo = fam65xx_read_cycle(cpu, addr_ptr);
     uint8_t addr_hi = fam65xx_read_cycle(cpu, (addr_ptr + 1) & 0xFF);
     uint16_t addr = ((addr_hi << 8) | addr_lo) + cpu->y;
     uint8_t value = cpu->a & cpu->x & ((addr >> 8) + 1);
     fam65xx_write_cycle(cpu, addr, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_ahx_absolute_y(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_ahx_absolute_y) {
     uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);
     uint8_t addr_hi = fam65xx_read_cycle(cpu, cpu->pc++);
     uint16_t addr = ((addr_hi << 8) | addr_lo) + cpu->y;
     uint8_t value = cpu->a & cpu->x & ((addr >> 8) + 1);
     fam65xx_write_cycle(cpu, addr, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // --- ALR/ANC/ARR/AXS (immediate) ---
@@ -64,10 +64,10 @@ static inline void fam65xx_op_axs(fam65xx_t* cpu, uint8_t value) {
     fam65xx_set_nz_flags(cpu, cpu->x);
 }
 
-void fam65xx_op_alr_immediate(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_alr); }
-void fam65xx_op_anc_immediate(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_anc); }
-void fam65xx_op_arr_immediate(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_arr); }
-void fam65xx_op_axs_immediate(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_axs); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_alr_immediate) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_alr); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_anc_immediate) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_anc); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_arr_immediate) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_arr); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_axs_immediate) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_axs); }
 
 // --- DCP ---
 // DCP: DEC memory, then CMP with A (illegal opcode)
@@ -78,13 +78,13 @@ static inline void fam65xx_op_dcp(fam65xx_t* cpu, uint8_t value) {
     fam65xx_set_nz_flags(cpu, (uint8_t)(cpu->a - value));
 }
 
-void fam65xx_op_dcp_zero_page(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_dcp); }
-void fam65xx_op_dcp_zero_page_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_dcp); }
-void fam65xx_op_dcp_absolute(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_dcp); }
-void fam65xx_op_dcp_absolute_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_dcp); }
-void fam65xx_op_dcp_absolute_y(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_dcp); }
-void fam65xx_op_dcp_indirect_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_dcp); }
-void fam65xx_op_dcp_indirect_y(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_dcp); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_dcp_zero_page) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_dcp); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_dcp_zero_page_x) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_dcp); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_dcp_absolute) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_dcp); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_dcp_absolute_x) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_dcp); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_dcp_absolute_y) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_dcp); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_dcp_indirect_x) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_dcp); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_dcp_indirect_y) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_dcp); }
 
 // --- ISC ---
 // ISC: INC memory, then SBC with A (illegal opcode)
@@ -95,16 +95,16 @@ static inline void fam65xx_op_isc(fam65xx_t* cpu, uint8_t value) {
     fam65xx_op_sbc(cpu, value);
 }
 
-void fam65xx_op_isc_zero_page(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_isc); }
-void fam65xx_op_isc_zero_page_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_isc); }
-void fam65xx_op_isc_absolute(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_isc); }
-void fam65xx_op_isc_absolute_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_isc); }
-void fam65xx_op_isc_absolute_y(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_isc); }
-void fam65xx_op_isc_indirect_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_isc); }
-void fam65xx_op_isc_indirect_y(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_isc); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_isc_zero_page) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_isc); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_isc_zero_page_x) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_isc); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_isc_absolute) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_isc); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_isc_absolute_x) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_isc); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_isc_absolute_y) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_isc); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_isc_indirect_x) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_isc); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_isc_indirect_y) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_isc); }
 
 // --- JAM (KIL) ---
-void fam65xx_op_jam(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_jam) {
     (void)fam65xx_read_cycle(cpu, cpu->pc);
     cpu->pc--; // JAM instruction halts the CPU by looping on itself
     while (1) {
@@ -120,18 +120,18 @@ void fam65xx_op_jam(fam65xx_t* cpu) {
         // In a real CPU, this would halt execution until an interrupt occurs.
         (void)fam65xx_read_cycle(cpu, cpu->pc);
     }
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // --- LAS ---
-void fam65xx_op_las_absolute_y(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_las_absolute_y) {
     uint8_t value = fam65xx_addr_absy(cpu);
     value &= cpu->sp;
     cpu->a = value;
     cpu->x = value;
     cpu->sp = value;
     fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // --- LAX ---
@@ -141,13 +141,13 @@ static inline void fam65xx_op_lax(fam65xx_t* cpu, uint8_t value) {
     fam65xx_set_nz_flags(cpu, value);
 }
 
-void fam65xx_op_lax_immediate(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_lax); }
-void fam65xx_op_lax_zero_page(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_lax); }
-void fam65xx_op_lax_zero_page_y(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zpy, fam65xx_op_lax); }
-void fam65xx_op_lax_absolute(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_lax); }
-void fam65xx_op_lax_absolute_y(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_lax); }
-void fam65xx_op_lax_indirect_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_lax); }
-void fam65xx_op_lax_indirect_y(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_lax); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_lax_immediate) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_lax); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_lax_zero_page) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_lax); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_lax_zero_page_y) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_zpy, fam65xx_op_lax); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_lax_absolute) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_lax); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_lax_absolute_y) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_lax); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_lax_indirect_x) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_lax); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_lax_indirect_y) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_lax); }
 
 // --- NOP (illegal variants) ---
 
@@ -157,11 +157,11 @@ static inline void fam65xx_op_nop_illegal(fam65xx_t* cpu, uint8_t value) {
     (void)value;  // Unused
 }
 
-void fam65xx_op_nop_immediate(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_nop_illegal); }
-void fam65xx_op_nop_zero_page(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_nop_illegal); }
-void fam65xx_op_nop_zero_page_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_nop_illegal); }
-void fam65xx_op_nop_absolute(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_nop_illegal); }
-void fam65xx_op_nop_absolute_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_nop_illegal); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_nop_immediate) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_nop_illegal); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_nop_zero_page) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_nop_illegal); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_nop_zero_page_x) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_nop_illegal); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_nop_absolute) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_nop_illegal); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_nop_absolute_x) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_nop_illegal); }
 
 // --- RLA ---
 // RLA operation: ROL memory, then AND with A
@@ -174,13 +174,13 @@ static inline void fam65xx_op_rla(fam65xx_t* cpu, uint8_t value) {
     fam65xx_set_nz_flags(cpu, cpu->a);
 }
 
-void fam65xx_op_rla_zero_page(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_rla); }
-void fam65xx_op_rla_zero_page_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_rla); }
-void fam65xx_op_rla_absolute(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_rla); }
-void fam65xx_op_rla_absolute_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_rla); }
-void fam65xx_op_rla_absolute_y(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_rla); }
-void fam65xx_op_rla_indirect_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_rla); }
-void fam65xx_op_rla_indirect_y(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_rla); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_rla_zero_page) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_rla); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_rla_zero_page_x) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_rla); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_rla_absolute) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_rla); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_rla_absolute_x) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_rla); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_rla_absolute_y) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_rla); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_rla_indirect_x) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_rla); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_rla_indirect_y) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_rla); }
 
 // --- RRA ---
 // RRA operation: ROR memory, then ADC with A
@@ -192,13 +192,13 @@ static inline void fam65xx_op_rra(fam65xx_t* cpu, uint8_t value) {
     fam65xx_op_adc(cpu, value);
 }
 
-void fam65xx_op_rra_zero_page(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_rra); }
-void fam65xx_op_rra_zero_page_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_rra); }
-void fam65xx_op_rra_absolute(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_rra); }
-void fam65xx_op_rra_absolute_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_rra); }
-void fam65xx_op_rra_absolute_y(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_rra); }
-void fam65xx_op_rra_indirect_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_rra); }
-void fam65xx_op_rra_indirect_y(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_rra); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_rra_zero_page) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_rra); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_rra_zero_page_x) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_rra); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_rra_absolute) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_rra); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_rra_absolute_x) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_rra); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_rra_absolute_y) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_rra); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_rra_indirect_x) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_rra); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_rra_indirect_y) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_rra); }
 
 // --- SAX ---
 // SAX operation: Store A & X
@@ -207,10 +207,10 @@ static inline void fam65xx_op_sax(fam65xx_t* cpu, uint8_t value) {
     fam65xx_write_cycle(cpu, cpu->address, cpu->a & cpu->x);
 }
 
-void fam65xx_op_sax_zero_page(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_sax); }
-void fam65xx_op_sax_zero_page_y(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zpy, fam65xx_op_sax); }
-void fam65xx_op_sax_absolute(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_sax); }
-void fam65xx_op_sax_indirect_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_sax); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_sax_zero_page) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_sax); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_sax_zero_page_y) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_zpy, fam65xx_op_sax); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_sax_absolute) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_sax); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_sax_indirect_x) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_sax); }
 
 // --- SLO ---
 // SLO operation: ASL memory, then ORA with A
@@ -222,13 +222,13 @@ static inline void fam65xx_op_slo(fam65xx_t* cpu, uint8_t value) {
     fam65xx_set_nz_flags(cpu, cpu->a);
 }
 
-void fam65xx_op_slo_zero_page(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_slo); }
-void fam65xx_op_slo_zero_page_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_slo); }
-void fam65xx_op_slo_absolute(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_slo); }
-void fam65xx_op_slo_absolute_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_slo); }
-void fam65xx_op_slo_absolute_y(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_slo); }
-void fam65xx_op_slo_indirect_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_slo); }
-void fam65xx_op_slo_indirect_y(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_slo); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_slo_zero_page) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_slo); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_slo_zero_page_x) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_slo); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_slo_absolute) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_slo); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_slo_absolute_x) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_slo); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_slo_absolute_y) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_slo); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_slo_indirect_x) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_slo); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_slo_indirect_y) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_slo); }
 
 // --- SRE ---
 // SRE operation: LSR memory, then EOR with A
@@ -240,13 +240,13 @@ static inline void fam65xx_op_sre(fam65xx_t* cpu, uint8_t value) {
     fam65xx_set_nz_flags(cpu, cpu->a);
 }
 
-void fam65xx_op_sre_zero_page(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_sre); }
-void fam65xx_op_sre_zero_page_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_sre); }
-void fam65xx_op_sre_absolute(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_sre); }
-void fam65xx_op_sre_absolute_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_sre); }
-void fam65xx_op_sre_absolute_y(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_sre); }
-void fam65xx_op_sre_indirect_x(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_sre); }
-void fam65xx_op_sre_indirect_y(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_sre); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_sre_zero_page) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, fam65xx_op_sre); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_sre_zero_page_x) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, fam65xx_op_sre); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_sre_absolute) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, fam65xx_op_sre); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_sre_absolute_x) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, fam65xx_op_sre); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_sre_absolute_y) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, fam65xx_op_sre); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_sre_indirect_x) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, fam65xx_op_sre); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_sre_indirect_y) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, fam65xx_op_sre); }
 
 // --- XAA (immediate) ---
 // XAA operation: Transfer X to A, then AND with immediate
@@ -256,4 +256,4 @@ static inline void fam65xx_op_xaa(fam65xx_t* cpu, uint8_t value) {
     fam65xx_set_nz_flags(cpu, cpu->a);
 }
 
-void fam65xx_op_xaa_immediate(fam65xx_t* cpu) { fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_xaa); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_xaa_immediate) { PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, fam65xx_op_xaa); }

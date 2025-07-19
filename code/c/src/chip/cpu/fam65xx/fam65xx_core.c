@@ -22,7 +22,7 @@ void fam65xx_interrupt_handler(fam65xx_t* cpu) {
 }
 
 // Interception support (shared) - proper handler replacement mechanism
-void fam65xx_op_intercept_stub(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_intercept_stub) {
     printf("fam65xx_op_intercept_stub: INTERCEPT HIT!\n");
     // This stub is hit when threaded dispatch tries to execute the next instruction
     // Restore the original handlers and stop interception

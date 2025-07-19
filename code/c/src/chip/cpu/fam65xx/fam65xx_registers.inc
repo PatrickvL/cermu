@@ -9,57 +9,57 @@
 // ============================================================================
 
 // TAX - Transfer A to X
-void fam65xx_op_tax(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_tax) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->x = cpu->a;
     fam65xx_set_nz_flags(cpu, cpu->x);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // TAY - Transfer A to Y
-void fam65xx_op_tay(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_tay) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->y = cpu->a;
     fam65xx_set_nz_flags(cpu, cpu->y);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // TXA - Transfer X to A
-void fam65xx_op_txa(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_txa) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->a = cpu->x;
     fam65xx_set_nz_flags(cpu, cpu->a);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // TYA - Transfer Y to A
-void fam65xx_op_tya(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_tya) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->a = cpu->y;
     fam65xx_set_nz_flags(cpu, cpu->a);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // TSX - Transfer Stack Pointer to X
-void fam65xx_op_tsx(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_tsx) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->x = cpu->sp;
     fam65xx_set_nz_flags(cpu, cpu->x);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // TXS - Transfer X to Stack Pointer
-void fam65xx_op_txs(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_txs) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->sp = cpu->x;
     // TXS does not affect any flags
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // ============================================================================
@@ -67,37 +67,37 @@ void fam65xx_op_txs(fam65xx_t* cpu) {
 // ============================================================================
 
 // PHA - Push Accumulator
-void fam65xx_op_pha(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_pha) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_push(cpu, cpu->a);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // PLA - Pull Accumulator
-void fam65xx_op_pla(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_pla) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->a = fam65xx_pull(cpu);
     fam65xx_set_nz_flags(cpu, cpu->a);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // PHP - Push Processor Status
-void fam65xx_op_php(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_php) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_push(cpu, cpu->p | FLAG_B | FLAG_U); // B flag set when pushed by PHP
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // PLP - Pull Processor Status
-void fam65xx_op_plp(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_plp) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->p = fam65xx_pull(cpu);
     cpu->p |= FLAG_U; // Unused flag always set
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // ============================================================================
@@ -105,39 +105,39 @@ void fam65xx_op_plp(fam65xx_t* cpu) {
 // ============================================================================
 
 // INX - Increment X Register
-void fam65xx_op_inx(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_inx) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->x++;
     fam65xx_set_nz_flags(cpu, cpu->x);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // INY - Increment Y Register
-void fam65xx_op_iny(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_iny) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->y++;
     fam65xx_set_nz_flags(cpu, cpu->y);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // DEX - Decrement X Register
-void fam65xx_op_dex(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_dex) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->x--;
     fam65xx_set_nz_flags(cpu, cpu->x);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // DEY - Decrement Y Register
-void fam65xx_op_dey(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_dey) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->y--;
     fam65xx_set_nz_flags(cpu, cpu->y);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // ============================================================================
@@ -151,7 +151,7 @@ static inline uint8_t fam65xx_op_inc(fam65xx_t* cpu, uint8_t value) {
 }
 
 // INC - Increment Memory
-void fam65xx_op_inc_zero_page(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_inc_zero_page) {
 
     cpu->address = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
@@ -162,10 +162,10 @@ void fam65xx_op_inc_zero_page(fam65xx_t* cpu) {
 
     fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_inc_zero_page_x(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_inc_zero_page_x) {
 
     uint8_t base = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
@@ -179,10 +179,10 @@ void fam65xx_op_inc_zero_page_x(fam65xx_t* cpu) {
 
     fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_inc_absolute(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_inc_absolute) {
 
     uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
@@ -196,10 +196,10 @@ void fam65xx_op_inc_absolute(fam65xx_t* cpu) {
 
     fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_inc_absolute_x(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_inc_absolute_x) {
 
     uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
@@ -216,7 +216,7 @@ void fam65xx_op_inc_absolute_x(fam65xx_t* cpu) {
 
     fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
 // DEC - Decrement Memory
@@ -227,7 +227,7 @@ static inline uint8_t fam65xx_op_dec(fam65xx_t* cpu, uint8_t value) {
     return value;
 }
 
-void fam65xx_op_dec_zero_page(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_dec_zero_page) {
 
     cpu->address = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
@@ -238,10 +238,10 @@ void fam65xx_op_dec_zero_page(fam65xx_t* cpu) {
 
     fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_dec_zero_page_x(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_dec_zero_page_x) {
 
     uint8_t base = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
@@ -255,10 +255,10 @@ void fam65xx_op_dec_zero_page_x(fam65xx_t* cpu) {
 
     fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_dec_absolute(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_dec_absolute) {
 
     uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
@@ -272,10 +272,10 @@ void fam65xx_op_dec_absolute(fam65xx_t* cpu) {
 
     fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
 
-void fam65xx_op_dec_absolute_x(fam65xx_t* cpu) {
+FAM65XX_OPCODE_PROTO(fam65xx_op_dec_absolute_x) {
 
     uint8_t addr_lo = fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
 
@@ -292,5 +292,5 @@ void fam65xx_op_dec_absolute_x(fam65xx_t* cpu) {
 
     fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_OPCODE_FOOTER();
 }
