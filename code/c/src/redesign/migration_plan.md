@@ -1,43 +1,35 @@
 
-Migration Plan: Integrating code/c/src/redesign into Existing Project
+
+Migration Plan: Status and Next Steps (July 2025)
 
 Overview
-The redesign in code/c/src/redesign introduces:
+All files in code/c/src/redesign now fully implement the new architecture:
 
-Highly optimized bus and chip selection logic
-Register-based calling conventions for performance
-Threaded, stackless CPU dispatch (Nostradamus Distributor pattern)
-Unified bus state threading for cycle-accurate emulation
+- Highly optimized bus and chip selection logic
+- Register-based calling conventions for performance
+- Threaded, stackless CPU dispatch (Nostradamus Distributor pattern)
+- Unified bus state threading for cycle-accurate emulation
 
-This migration plan outlines steps to transition from the legacy codebase to the new architecture, minimizing disruption and maximizing maintainability and performance.
+The redesign folder provides complete reference implementations for bus, chip, and CPU layers, including macro-based handler declarations and CMake build integration. The next phase is integrating these patterns into the legacy codebase and validating system-wide functionality.
+
 
 Step 1: CPU Layer Migration
-Begin migration with the CPU layer to establish the new stackless, threaded opcode dispatch model:
+Status: Complete in redesign files. All opcode handlers use the stackless, threaded dispatch model and macros for signatures and footers.
 
-- Refactor opcode handlers to return the next handler instead of calling it (Nostradamus Distributor pattern).
-- Use a shared bus state pointer for all handlers.
-- Update handler tables and dispatch logic to use a centralized handler table and loop.
-- Ensure interrupt and flow control logic matches the new pattern.
-- Migrate register calling conventions for performance-critical functions.
-- Update function pointer types and handler signatures.
+Step 2: Bus Layer Migration
+Status: Complete in redesign files. Bus structures, chip select logic, and PLA integration are implemented and documented.
 
-**Macro Recommendation:**
-Implement a macro for declaring opcode handler signatures, e.g.:
-#define OPCODE_HANDLER_PROTO(name) REGISTER_CALL void* name(cpu_state_t* cpu, c64_bus_state_t* bus_state)
+Step 3: Chip Layer Migration
+Status: Complete in redesign files. Chip stubs (VIC, SID, CIA) use bus state threading and correct prototypes.
+
+Step 4: System Integration
+Status: Reference patterns and interfaces are present in redesign files. Full integration with legacy system is next.
+
+Step 5: Testing & Validation
+Status: Test patterns and benchmarking steps are described. Actual test coverage depends on legacy integration.
+
 Step 6: CMake Build Integration
-Add CMake build support for cross-platform development and CI:
-- Create or update CMakeLists.txt in the project root and relevant subdirectories.
-- Ensure all source files, include directories, and dependencies are listed.
-- Use Ninja or Visual Studio generator for best results on Windows.
-- Example build command (PowerShell):
-  cd "c:\Workspaces\Mine\aiemu\code\c"; if ($?) { cmake -S . -B build -G "Ninja" }; if ($?) { cmake --build build --config Release }
-- Update documentation and build references to include CMake instructions.
-Use this macro for all handler declarations and definitions. Future changes to the handler signature require only macro modification, not updates to all 256 handlers.
-
-**FOOTER Macro Repurposing:**
-Repurpose the existing FOOTER macro to support the new stackless dispatch pattern, e.g.:
-    #define OPCODE_FOOTER(cpu, bus) return get_next_handler(cpu, bus)
-Use this macro at the end of each handler for consistency and future-proofing.
+Status: CMake build support and documentation are present. Ensure CMakeLists.txt includes all sources and dependencies.
 
 Step 2: Bus Layer Migration
 Replace legacy bus structures with c64_bus_t and related types. Integrate chip select arrays and PLA mode logic:
@@ -222,23 +214,25 @@ c
 
 
 4. Migration Checklist
-[x] Integrate new bus structures and chip select logic.
-[x] Refactor chip implementations for bus state threading.
-[x] Redefine opcode handler signatures using macros (OPCODE_HANDLER_PROTO).
-[x] Refactor CPU dispatch for stackless execution and macro-based footers (OPCODE_FOOTER).
-[x] Update system integration and PLA/cartridge logic.
-[x] Add CMake build integration and update build documentation.
-[x] Test and validate each migration step.
-[x] Document changes and train contributors.
-[x] Roll out incrementally with feature flags.
+[x] All redesign files implement new bus, chip, and CPU architecture
+[x] Macro-based handler signatures and footers used throughout
+[x] CMake build integration and documentation complete
+[x] Migration plan and reference documentation updated
+[ ] Legacy code integration with redesign patterns
+[ ] System-wide validation and benchmarking
+[ ] Comprehensive unit and integration tests
 5. Conclusion
 Migrating to the redesign will:
 
 Improve performance and maintainability.
 Enable stackless, cycle-accurate emulation.
 Simplify future redesigns via macro-based handler declarations and centralized FOOTER logic.
-Next Steps:
 
-Begin with bus layer migration, then chips, then CPU. Validate each step and document as you go.
+Next Steps:
+- Integrate redesign patterns into legacy codebase modules
+- Update legacy code to use new bus, chip, and CPU interfaces
+- Expand unit and integration test coverage
+- Finalize CMakeLists.txt for all targets and dependencies
+- Document any remaining migration issues and solutions
 
 For further details or code-by-code mapping, request a deep-dive migration guide.

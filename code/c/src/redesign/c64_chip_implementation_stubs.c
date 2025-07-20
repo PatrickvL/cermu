@@ -21,7 +21,7 @@ typedef struct vic_state_s {
     // ... other VIC-II state
 } vic_state_t;
 
-FORCE_INLINE REGISTER_CALL c64_bus_state_t vic_advance_cycle(vic_state_t* vic, c64_bus_state_t bus) {
+FORCE_INLINE REGISTER_CALL generic_bus_state_t vic_advance_cycle(vic_state_t* vic, generic_bus_state_t bus) {
     if (!vic) return bus;
     
     // Advance VIC-II timing
@@ -43,6 +43,8 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t vic_advance_cycle(vic_state_t* vic, c
     if (vic->raster_line == raster_compare) {
         vic->registers[0x19] |= 0x01;  // Set raster interrupt flag
         vic->irq_pending = true;
+        // Set generic IRQ line
+        bus.lines |= GENERIC_IRQ_LINE;
     }
     
     // Check for badline condition (DMA cycles)
@@ -52,14 +54,14 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t vic_advance_cycle(vic_state_t* vic, c
     if (badline_condition && vic->cycle >= 15 && vic->cycle <= 54) {
         vic->badline_active = true;
         // Assert BA line (Bus Available = 0) for DMA
-        bus.lines &= ~BA_LINE;
+        bus.lines &= ~GENERIC_BA_LINE;
         // Keep AEC high so VIC can read from bus
-        bus.lines |= AEC_LINE;
+        bus.lines |= GENERIC_AEC_LINE;
     } else {
         vic->badline_active = false;
         // Release BA line
-        bus.lines |= BA_LINE;
-        bus.lines |= AEC_LINE;
+        bus.lines |= GENERIC_BA_LINE;
+        bus.lines |= GENERIC_AEC_LINE;
     }
     
     // Generate video output, handle sprites, etc.
@@ -68,7 +70,7 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t vic_advance_cycle(vic_state_t* vic, c
     return bus;
 }
 
-FORCE_INLINE REGISTER_CALL c64_bus_state_t vic_read(vic_state_t* vic, c64_bus_state_t bus) {
+FORCE_INLINE REGISTER_CALL generic_bus_state_t vic_read(vic_state_t* vic, generic_bus_state_t bus) {
     if (!vic) return bus;
     
     // Handle VIC-II register read
@@ -96,7 +98,7 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t vic_read(vic_state_t* vic, c64_bus_st
     return bus;
 }
 
-FORCE_INLINE REGISTER_CALL c64_bus_state_t vic_write(vic_state_t* vic, c64_bus_state_t bus) {
+FORCE_INLINE REGISTER_CALL generic_bus_state_t vic_write(vic_state_t* vic, generic_bus_state_t bus) {
     if (!vic) return bus;
     
     // Handle VIC-II register write
@@ -115,6 +117,7 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t vic_write(vic_state_t* vic, c64_bus_s
             // Clear IRQ if no more interrupt sources active
             if (!(vic->registers[0x19] & vic->registers[0x1A] & 0x0F)) {
                 vic->irq_pending = false;
+                bus.lines &= ~GENERIC_IRQ_LINE;  // Clear generic IRQ line
             }
             break;
         case 0x1A:  // Interrupt Mask Register
@@ -141,7 +144,7 @@ typedef struct sid_state_s {
     // ... other SID state
 } sid_state_t;
 
-FORCE_INLINE REGISTER_CALL c64_bus_state_t sid_advance_cycle(sid_state_t* sid, c64_bus_state_t bus_state) {
+FORCE_INLINE REGISTER_CALL generic_bus_state_t sid_advance_cycle(sid_state_t* sid, generic_bus_state_t bus_state) {
     if (!sid) return bus_state;
     
     // Advance SID oscillators (simplified)
@@ -165,7 +168,7 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t sid_advance_cycle(sid_state_t* sid, c
     return bus_state;  // Bus state unchanged by SID
 }
 
-FORCE_INLINE REGISTER_CALL c64_bus_state_t sid_read(sid_state_t* sid, c64_bus_state_t bus) {
+FORCE_INLINE REGISTER_CALL generic_bus_state_t sid_read(sid_state_t* sid, generic_bus_state_t bus) {
     if (!sid) return bus;
     
     // Handle SID register read
@@ -191,7 +194,7 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t sid_read(sid_state_t* sid, c64_bus_st
     return bus;
 }
 
-FORCE_INLINE REGISTER_CALL c64_bus_state_t sid_write(sid_state_t* sid, c64_bus_state_t bus) {
+FORCE_INLINE REGISTER_CALL generic_bus_state_t sid_write(sid_state_t* sid, generic_bus_state_t bus) {
     if (!sid) return bus;
     
     // Handle SID register write
@@ -228,7 +231,7 @@ typedef struct cia_state_s {
     // ... other CIA state
 } cia_state_t;
 
-FORCE_INLINE REGISTER_CALL c64_bus_state_t cia_advance_cycle(cia_state_t* cia, c64_bus_state_t bus) {
+FORCE_INLINE REGISTER_CALL generic_bus_state_t cia_advance_cycle(cia_state_t* cia, generic_bus_state_t bus) {
     if (!cia) return bus;
     
     // Handle Timer A
@@ -246,7 +249,7 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t cia_advance_cycle(cia_state_t* cia, c
                         // Set IRQ line (CIA1) or NMI line (CIA2) in bus state
                         // This would be handled differently for CIA1 vs CIA2
                         // For now, just set a general interrupt flag
-                        bus.lines |= 0x80;  // Generic interrupt signal
+                        bus.lines |= GENERIC_IRQ_LINE;
                     }
                 }
                 
@@ -278,7 +281,7 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t cia_advance_cycle(cia_state_t* cia, c
                 if (cia->registers[0x0D] & 0x80) {  // Master interrupt enable
                     if (cia->registers[0x0D] & 0x02) {  // Timer B interrupt enabled
                         cia->irq_pending = true;
-                        bus.lines |= 0x80;  // Generic interrupt signal
+                        bus.lines |= GENERIC_IRQ_LINE;
                     }
                 }
                 
@@ -297,7 +300,7 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t cia_advance_cycle(cia_state_t* cia, c
     return bus;
 }
 
-FORCE_INLINE REGISTER_CALL c64_bus_state_t cia_read(cia_state_t* cia, c64_bus_state_t bus) {
+FORCE_INLINE REGISTER_CALL generic_bus_state_t cia_read(cia_state_t* cia, generic_bus_state_t bus) {
     if (!cia) return bus;
     
     // Handle CIA register read
@@ -326,6 +329,7 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t cia_read(cia_state_t* cia, c64_bus_st
             bus.data = cia->registers[0x0D];
             cia->registers[0x0D] = 0;  // Reading ICR clears it
             cia->irq_pending = false;  // Clear pending interrupt
+            bus.lines &= ~GENERIC_IRQ_LINE;  // Clear generic IRQ line
             break;
         default:
             bus.data = cia->registers[bus.addr & 0x0F];
@@ -335,7 +339,7 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t cia_read(cia_state_t* cia, c64_bus_st
     return bus;
 }
 
-FORCE_INLINE REGISTER_CALL c64_bus_state_t cia_write(cia_state_t* cia, c64_bus_state_t bus) {
+FORCE_INLINE REGISTER_CALL generic_bus_state_t cia_write(cia_state_t* cia, generic_bus_state_t bus) {
     if (!cia) return bus;
     
     // Handle CIA register write

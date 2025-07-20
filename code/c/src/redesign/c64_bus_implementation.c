@@ -1,4 +1,4 @@
-    #include "c64_bus_optimized.h"
+#include "c64_bus_optimized.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -7,66 +7,81 @@
 // OPTIMIZED SYSTEM TICK FUNCTIONS
 // ============================================================================
 
-FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_read(c64_t* c64, c64_bus_state_t bus) {
+FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_read(c64_t* c64, c64_bus_state_t bus_state) {
     // Ultra-fast chip selection with branchless I/O detection
-    uint8_t bank = bus.addr >> 12;  // 4KB bank (0-15)
+    uint8_t bank = bus_state.bus.addr >> 12;  // 4KB bank (0-15)
     uint8_t encoded = c64->bus->chip_select_per_bank[bank];
     uint8_t base_chip = (encoded >> 4) & 0x0F;  // Extract read chip (upper 4 bits)
     
-    // Branchless I/O sub-page detection
-    uint8_t is_io = -(base_chip == CHIP_IO_REGION);
-    uint8_t selected_chip = ((base_chip + CHIP_VIC) & ~is_io) | (((bus.addr >> 10) & 0x3) & is_io);
+    // Branchless I/O sub-page detection (16 pages of $100 bytes each)
+    uint8_t is_io = -(base_chip == CHIP_VIC);
+    uint8_t selected_chip = ((base_chip) & ~is_io) | ((CHIP_VIC + ((bus_state.bus.addr >> 8) & 0xF)) & is_io);
     
     // Initialize floating bus data
-    bus.data = c64->bus->data;  // Retain last bus value
+    bus_state.bus.data = c64->bus->data;  // Retain last bus value
     
     // All chips advance their internal timing WITH bus state for interrupt handling
-    bus = vic_advance_cycle(c64->vic, bus);
-    bus = sid_advance_cycle(c64->sid, bus);
-    bus = cia_advance_cycle(c64->cia1, bus);
-    bus = cia_advance_cycle(c64->cia2, bus);
+    bus_state.bus = vic_advance_cycle(c64->vic, bus_state.bus);
+    bus_state.bus = sid_advance_cycle(c64->sid, bus_state.bus);
+    bus_state.bus = cia_advance_cycle(c64->cia1, bus_state.bus);
+    bus_state.bus = cia_advance_cycle(c64->cia2, bus_state.bus);
     
     // Switch dispatch for selected chip - compiler generates jump table
     switch (selected_chip) {
-        case CHIP_VIC:
-            bus = vic_read(c64->vic, bus);
-            break;
-        case CHIP_SID:
-            bus = sid_read(c64->sid, bus);
-            break;
-        case CHIP_CIA1:
-            bus = cia_read(c64->cia1, bus);
-            break;
-        case CHIP_CIA2:
-            bus = cia_read(c64->cia2, bus);
-            break;
         case CHIP_RAM:
-            bus.data = c64->ram.memory[bus.addr];
-            break;
-        case CHIP_COLORRAM:
-            bus.data = c64->colorram.memory[bus.addr & 0x3FF] | 0xF0; // High nibble always set
+            bus_state.bus.data = c64->ram.memory[bus_state.bus.addr];
             break;
         case CHIP_BASIC:
-            bus.data = c64->basic_rom[bus.addr & 0x1FFF];
+            bus_state.bus.data = c64->basic_rom[bus_state.bus.addr & 0x1FFF];
             break;
         case CHIP_KERNAL:
-            bus.data = c64->kernal_rom[bus.addr & 0x1FFF];
-            break;
-        case CHIP_CHARROM:
-            bus.data = c64->char_rom[bus.addr & 0x0FFF];
+            bus_state.bus.data = c64->kernal_rom[bus_state.bus.addr & 0x1FFF];
             break;
         case CHIP_ROML:
-            bus.data = c64->cartridge.roml[bus.addr & 0x1FFF];
+            bus_state.bus.data = c64->cartridge.roml[bus_state.bus.addr & 0x1FFF];
             break;
         case CHIP_ROMH:
-            bus.data = c64->cartridge.romh[bus.addr & 0x1FFF];
+            bus_state.bus.data = c64->cartridge.romh[bus_state.bus.addr & 0x1FFF];
+            break;
+        case CHIP_CHARROM:
+            bus_state.bus.data = c64->char_rom[bus_state.bus.addr & 0x0FFF];
+            break;
+        case CHIP_COLORRAM:
+            bus_state.bus.data = c64->colorram.memory[bus_state.bus.addr & 0x3FF] | 0xF0; // High nibble always set
+            break;
+        case CHIP_VIC_0:
+        case CHIP_VIC_1:
+        case CHIP_VIC_2:
+        case CHIP_VIC_3:
+            // All VIC pages map to the same VIC chip
+            bus_state.bus = vic_read(c64->vic, bus_state.bus);
+            break;
+        case CHIP_SID_0:
+        case CHIP_SID_1:
+        case CHIP_SID_2:
+        case CHIP_SID_3:
+            // All SID pages map to the same SID chip
+            bus_state.bus = sid_read(c64->sid, bus_state.bus);
+            break;
+        case CHIP_COLORRAM_PAGE:
+            // Color RAM accessed via I/O area ($D800-$D8FF) - handled by VIC
+            bus_state.bus.data = c64->colorram.memory[bus_state.bus.addr & 0x3FF] | 0xF0;
+            break;
+        case CHIP_CIA1:
+            bus_state.bus = cia_read(c64->cia1, bus_state.bus);
+            break;
+        case CHIP_CIA2:
+            bus_state.bus = cia_read(c64->cia2, bus_state.bus);
             break;
         case CHIP_IO1:
-            bus = c64->cartridge.io1_read(c64->cartridge.context, bus);
+            bus_state.bus = c64->cartridge.io1_read(c64->cartridge.context, bus_state.bus);
             break;
         case CHIP_IO2:
-            bus = c64->cartridge.io2_read(c64->cartridge.context, bus);
+            bus_state.bus = c64->cartridge.io2_read(c64->cartridge.context, bus_state.bus);
             break;
+        case CHIP_IO_UNMAPPED_9:
+        case CHIP_IO_UNMAPPED_A:
+        case CHIP_IO_UNMAPPED_B:
         case CHIP_UNMAPPED:
         default:
             // bus.data retains floating bus value (no change)
@@ -74,8 +89,8 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_read(c64_t* c64, c64_
     }
     
     // Update system bus state and return final bus state
-    c64->bus->data = bus.data;
-    return bus;
+    c64->bus->data = bus_state.bus.data;
+    return bus_state;
 }
 
 FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_write(c64_t* c64, c64_bus_state_t bus) {
@@ -96,35 +111,50 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_write(c64_t* c64, c64
     
     // Switch dispatch optimized for writes - dead code elimination removes read-only cases
     switch (selected_chip) {
-        case CHIP_VIC:
-            bus = vic_write(c64->vic, bus);
-            break;
-        case CHIP_SID:
-            bus = sid_write(c64->sid, bus);
-            break;
-        case CHIP_CIA1:
-            bus = cia_write(c64->cia1, bus);
-            break;
-        case CHIP_CIA2:
-            bus = cia_write(c64->cia2, bus);
-            break;
         case CHIP_RAM:
-            c64->ram.memory[bus.addr] = bus.data;
+            c64->ram.memory[bus_state.bus.addr] = bus_state.bus.data;
             break;
         case CHIP_COLORRAM:
-            c64->colorram.memory[bus.addr & 0x3FF] = bus.data & 0x0F; // Only low nibble stored
+            c64->colorram.memory[bus_state.bus.addr & 0x3FF] = bus_state.bus.data & 0x0F; // Only low nibble stored
+            break;
+        case CHIP_VIC_0:
+        case CHIP_VIC_1:
+        case CHIP_VIC_2:
+        case CHIP_VIC_3:
+            // All VIC pages map to the same VIC chip
+            bus_state.bus = vic_write(c64->vic, bus_state.bus);
+            break;
+        case CHIP_SID_0:
+        case CHIP_SID_1:
+        case CHIP_SID_2:
+        case CHIP_SID_3:
+            // All SID pages map to the same SID chip
+            bus_state.bus = sid_write(c64->sid, bus_state.bus);
+            break;
+        case CHIP_COLORRAM_PAGE:
+            // Color RAM accessed via I/O area ($D800-$D8FF)
+            c64->colorram.memory[bus_state.bus.addr & 0x3FF] = bus_state.bus.data & 0x0F;
+            break;
+        case CHIP_CIA1:
+            bus_state.bus = cia_write(c64->cia1, bus_state.bus);
+            break;
+        case CHIP_CIA2:
+            bus_state.bus = cia_write(c64->cia2, bus_state.bus);
             break;
         case CHIP_IO1:
-            bus = c64->cartridge.io1_write(c64->cartridge.context, bus);
+            bus_state.bus = c64->cartridge.io1_write(c64->cartridge.context, bus_state.bus);
             break;
         case CHIP_IO2:
-            bus = c64->cartridge.io2_write(c64->cartridge.context, bus);
+            bus_state.bus = c64->cartridge.io2_write(c64->cartridge.context, bus_state.bus);
             break;
         case CHIP_BASIC:
         case CHIP_KERNAL:
         case CHIP_CHARROM:
         case CHIP_ROML:
         case CHIP_ROMH:
+        case CHIP_IO_UNMAPPED_9:
+        case CHIP_IO_UNMAPPED_A:
+        case CHIP_IO_UNMAPPED_B:
         case CHIP_UNMAPPED:
         default:
             // Read-only or unmapped - ignore writes
@@ -132,8 +162,8 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_write(c64_t* c64, c64
     }
     
     // Update system bus state and return final bus state
-    c64->bus->data = bus.data;
-    return bus;
+    c64->bus->data = bus_state.bus.data;
+    return bus_state;
 }
 
 // ============================================================================
@@ -147,7 +177,7 @@ c64_bus_t* c64_bus_create(void) {
     // Initialize bus state
     bus->address = 0;
     bus->data = 0;
-    bus->control_lines = BA_LINE | AEC_LINE | RDY_LINE;
+    bus->control_lines = GENERIC_BA_LINE | GENERIC_AEC_LINE | GENERIC_RDY_LINE;
     
     // Initialize system lines with default cartridge signals (no cartridge)
     bus->system_lines = SYS_MASK_EXROM | SYS_MASK_GAME;  // Both high = no cartridge
@@ -178,18 +208,18 @@ static REGISTER_CALL c64_bus_state_t c64_wait_for_bus_ready(c64_bus_t* bus, c64_
     if (is_read_cycle) {
         // CPU read must wait for VIC to release the bus (AEC high) AND
         // for the BA/RDY line to be high
-        while (!(bus->control_lines & AEC_LINE) || !(bus->control_lines & BA_LINE)) {
+        while (!(bus->control_lines & GENERIC_AEC_LINE) || !(bus->control_lines & GENERIC_BA_LINE)) {
             bus_state = c64_non_cpu_cycle(c64, bus_state);
             // Update control lines from returned bus state
-            bus->control_lines = bus_state.lines;
+            bus->control_lines = bus_state.bus.lines;
         }
     } else {
         // CPU write only needs to wait for VIC to release the address bus
         // It is NOT affected by the BA/RDY line
-        while (!(bus->control_lines & AEC_LINE)) {
+        while (!(bus->control_lines & GENERIC_AEC_LINE)) {
             bus_state = c64_non_cpu_cycle(c64, bus_state);
             // Update control lines from returned bus state
-            bus->control_lines = bus_state.lines;
+            bus->control_lines = bus_state.bus.lines;
         }
     }
     
@@ -201,11 +231,11 @@ REGISTER_CALL c64_bus_state_t c64_bus_read_cycle(c64_bus_t* bus, c64_bus_state_t
     bus_state = c64_wait_for_bus_ready(bus, bus_state, true);
 
     // The bus is now guaranteed to be ready for the CPU
-    bus->address = bus_state.addr;
+    bus->address = bus_state.bus.addr;
 
     // Optimized system tick with compile-time read optimization
     // Set R/W line high for reads
-    bus_state.lines |= LINE_MASK_RW;
+    bus_state.bus.lines |= GENERIC_RW_LINE;
     
     return c64_system_tick_read(bus->c64, bus_state);
 }
@@ -215,12 +245,12 @@ REGISTER_CALL c64_bus_state_t c64_bus_write_cycle(c64_bus_t* bus, c64_bus_state_
     bus_state = c64_wait_for_bus_ready(bus, bus_state, false);
 
     // The bus is now guaranteed to be ready for the CPU
-    bus->address = bus_state.addr;
-    bus->data = bus_state.data;  // CPU puts data on bus for chips to read
+    bus->address = bus_state.bus.addr;
+    bus->data = bus_state.bus.data;  // CPU puts data on bus for chips to read
 
     // Optimized system tick with compile-time write optimization  
     // Ensure R/W line is clear for writes
-    bus_state.lines &= ~LINE_MASK_RW;
+    bus_state.bus.lines &= ~GENERIC_RW_LINE;
     
     return c64_system_tick_write(bus->c64, bus_state);
 }
@@ -302,10 +332,10 @@ REGISTER_CALL c64_bus_state_t c64_non_cpu_cycle(c64_t* c64, c64_bus_state_t bus_
     // Tick all non-CPU chips during bus wait states
     // This maintains proper timing during DMA and bus contention
     // Each chip can modify the bus state (e.g., set interrupt flags)
-    bus_state = vic_advance_cycle(c64->vic, bus_state);
-    bus_state = sid_advance_cycle(c64->sid, bus_state);
-    bus_state = cia_advance_cycle(c64->cia1, bus_state);
-    bus_state = cia_advance_cycle(c64->cia2, bus_state);
+    bus_state.bus = vic_advance_cycle(c64->vic, bus_state.bus);
+    bus_state.bus = sid_advance_cycle(c64->sid, bus_state.bus);
+    bus_state.bus = cia_advance_cycle(c64->cia1, bus_state.bus);
+    bus_state.bus = cia_advance_cycle(c64->cia2, bus_state.bus);
     
     return bus_state;
 }
@@ -335,8 +365,8 @@ void c64_bus_populate_chip_select_from_pla(c64_bus_t* bus) {
             // - Read/Write mode
             
             if (bank == 13) {  // $D000-$DFFF I/O area example
-                read_chip = CHIP_IO_REGION;   // Gets refined to specific I/O chip
-                write_chip = CHIP_IO_REGION;  // Gets refined to specific I/O chip
+                read_chip = CHIP_VIC;   // I/O region - gets refined to specific I/O chip
+                write_chip = CHIP_VIC;  // I/O region - gets refined to specific I/O chip
             }
             
             // Encode both read and write chips
