@@ -89,14 +89,10 @@ struct fam65xx_s {
 #define FAM65XX_TEST_NMI(cpu) (FAM65XX_CONTROL_LINES(cpu) & FAM65XX_MASK_NMI)
 #define FAM65XX_TEST_RDY(cpu) (FAM65XX_CONTROL_LINES(cpu) & FAM65XX_MASK_RDY)
 
-// System lines access macros for direct system state operations
-#define FAM65XX_SYSTEM_LINES_TEST(cpu, mask) SYS_LINES_TEST((cpu)->system_lines, mask)
-#define FAM65XX_SYSTEM_LINES_SET(cpu, mask) SYS_LINES_SET((cpu)->system_lines, mask)
-#define FAM65XX_SYSTEM_LINES_CLEAR(cpu, mask) SYS_LINES_CLEAR((cpu)->system_lines, mask)
-
 // Core memory and cycle functions (shared)
 static inline uint8_t fam65xx_read_cycle(fam65xx_t* cpu, uint16_t address) {
     uint8_t value = cpu->bus_interface.bus_read_cycle(cpu->bus_interface.context, address);
+#if DEBUG
     if (address >= 0xFFFC && address <= 0xFFFF) {
         static int counter = 0;
         if (counter < 12) {
@@ -104,8 +100,9 @@ static inline uint8_t fam65xx_read_cycle(fam65xx_t* cpu, uint16_t address) {
             printf("vector read at %04X: %02X\n", address, value);
         }
     }
+#endif
+
     return value;
-//    return cpu->bus_interface.bus_read_cycle(cpu->bus_interface.context, address);
 }
 
 static inline void fam65xx_write_cycle(fam65xx_t* cpu, uint16_t address, uint8_t value) {

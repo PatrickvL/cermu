@@ -7,7 +7,7 @@ void* mos6526_system_create(chip_descriptor_t* desc) {
     mos6526_t* cia = (mos6526_t*)calloc(1, sizeof(mos6526_t));
     if (!cia) return NULL;
     cia->desc = desc;
-    
+    cia->interrupt_line = BUS_LINE_IRQ; // Default to IRQ; caller must set to NMI for CIA2
     // Constructor equivalent - set up cycles for TOD
     // Used when CRA_TODIN = 0 (60 Hz TOD pin input pulses)
     cia->cycles_tod[0] = 1000000 / 60; // Assuming 1MHz CPU clock
@@ -366,9 +366,7 @@ bus_state_t mos6526_advance_cycle(mos6526_t* cia, bus_state_t bus_state) {
     
     // "The CIA6526 will raise an interrupt with a delay of one ø2 clock"
     if (cia->delayed_irq) {
-        // Set IRQ line 
-        bus_state.lines |= BUS_LINE_IRQ;
-        // For now we'll just clear the delayed flag
+        bus_state.lines |= cia->interrupt_line;
         cia->delayed_irq = false;
     }
 

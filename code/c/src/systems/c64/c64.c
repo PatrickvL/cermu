@@ -337,7 +337,9 @@ c64_t* c64_system_create(const system_config_t* config) {
     if (!(c64->sid = create_and_register_chip(c64, &mos6581_descriptor, 0xD400, 1024))) return NULL;
     if (!(c64->colorram = create_and_register_chip(c64, &mos2114_descriptor, 0xD800, 1024))) return NULL;
     if (!(c64->cia1 = create_and_register_chip(c64, &mos6526_descriptor, 0xDC00, 256))) return NULL;
+    ((mos6526_t*)c64->cia1)->interrupt_line = BUS_LINE_IRQ;
     if (!(c64->cia2 = create_and_register_chip(c64, &mos6526_descriptor, 0xDD00, 256))) return NULL;
+    ((mos6526_t*)c64->cia2)->interrupt_line = BUS_LINE_NMI;
     if (!(c64->kernal = create_and_register_chip(c64, &rom_descriptor, 0xE000, 8192))) return NULL;
     
     // Register PLA for GUI debugging (special case - chip is the C64 system itself)
