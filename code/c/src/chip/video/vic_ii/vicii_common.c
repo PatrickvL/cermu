@@ -634,7 +634,7 @@ static inline void vicii_registers_write_interrupt(vicii_registers_unit_t* regs,
 }
 
 // Register write function (uses all the above handlers)
-void vicii_registers_write(vicii_t* vicii, uint16_t address, uint8_t value) {
+static inline void vicii_registers_write_internal(vicii_t* vicii, uint16_t address, uint8_t value) {
     uint8_t reg = address & VICII_REGS_MASK; // The VIC registers are repeated each 64 bytes in the area $d000-$d3ff
     // Notes:
     // * Some not-connected bits (marked with '-') are written anyway here,
@@ -734,9 +734,9 @@ static inline uint8_t vicii_read_clear(vicii_registers_unit_t* regs, uint8_t reg
 }
 
 // Register read function (uses the above helper)
-uint8_t vicii_registers_read(vicii_t* vicii, uint16_t address) {
+static inline uint8_t vicii_registers_read_internal(vicii_t* vicii, uint16_t address) {
     uint8_t reg = address & VICII_REGS_MASK;
-	// Used for "floating" bus state for subsequent unattached reads
+    // Used for "floating" bus state for subsequent unattached reads
     uint8_t data = ((c64_bus_t*)vicii->bus.bus)->data;
     
     // Fast path for most common registers
@@ -759,13 +759,13 @@ uint8_t vicii_registers_read(vicii_t* vicii, uint16_t address) {
         case VICII_MXD:
             return vicii_read_clear(&vicii->registers, VICII_MXD_2);  //    31 $d01f Sprite-data collision is cleared on read
         default:
-		    if (reg <= 29) {
+            if (reg <= 29) {
                 return vicii->registers.data[reg];                  //  0-29 $d000-$d01f (except 22,24,25,26) use all 8 bits
- 		   } else if (reg <= 46) {
-        		return vicii->registers.data[reg] | (data & 0xF0);  // 32-46 $d020-$d02e use bits 0..3 (bits 4..7 are not connected)
-		    } else {
-		        return data;                                        // 47-63 $d02f-$d03f unattached registers (many docs say: give $ff on reading)
-		    }
+           } else if (reg <= 46) {
+                return vicii->registers.data[reg] | (data & 0xF0);  // 32-46 $d020-$d02e use bits 0..3 (bits 4..7 are not connected)
+            } else {
+                return data;                                        // 47-63 $d02f-$d03f unattached registers (many docs say: give $ff on reading)
+            }
     }
 }
 
@@ -1200,43 +1200,34 @@ static inline void vicii_border_update_flip_flops_x(vicii_border_unit_t* border,
     }
 }
 
-void vicii_cycle(vicii_t* vicii) {
+bus_cycle_t vicii_advance_cycle(vicii_t* vicii, bus_cycle_t bus_state) {
+    // Update bus pointer from bus_state
+    vicii->bus.bus = bus_state.bus;
     // Get current cycle entry (derived from x_coordinate)
     const vicii_cycle_entry_t* entry = &vicii->timing.cycle_table[vicii->timing.x_cycle];
-    
     // Call cycle function to get access type
     uint8_t access_type = entry->func(vicii, entry->param);
-    
     // Perform unified memory access
     vicii_memory_access(vicii, access_type, entry->param);
-    
     // Update border flip-flops FIRST to establish display window state
-    vicii_border_update_flip_flops_x(&vicii->border, &vicii->timing, 
-                                  vicii->registers.data[VICII_C1]);
-    
+    vicii_border_update_flip_flops_x(&vicii->border, &vicii->timing, vicii->registers.data[VICII_C1]);
     // Perform unified pixel sequencing (8 pixels per cycle)
-    // This handles both graphics and border pixels, plus sprite overlay
-    // IMPORTANT: This must run AFTER border flip-flops are updated for the current pixel!
-    if (vicii->pixel.framebuffer && 
-        vicii->timing.raster_counter < vicii->pixel.framebuffer_height) {
+    if (vicii->pixel.framebuffer && vicii->timing.raster_counter < vicii->pixel.framebuffer_height) {
         vicii_unified_pixel_sequencer(vicii);
     }
-    
     // Update border flip-flops AFTER pixel generation using hardware-accurate coordinates
-    vicii_border_update_flip_flops_x(&vicii->border, &vicii->timing, 
-                                  vicii->registers.data[VICII_C1]);
-    
+    vicii_border_update_flip_flops_x(&vicii->border, &vicii->timing, vicii->registers.data[VICII_C1]);
     // Advance x_coordinate (primary counter) and update derived values
     vicii_timing_advance(vicii);
     vicii_update_badline_condition(vicii);
-    
     // Flush pixel line if end of line
     if (vicii->timing.x_coordinate == 0 && vicii->pixel.framebuffer) {
-        uint16_t flush_line = (vicii->timing.raster_counter == 0) ? 
-                             (vicii->timing.total_lines - 1) : 
-                             (vicii->timing.raster_counter - 1);
+        uint16_t flush_line = (vicii->timing.raster_counter == 0) ? (vicii->timing.total_lines - 1) : (vicii->timing.raster_counter - 1);
         vicii_pixel_flush_line(vicii, vicii_get_default_palette(), flush_line);
     }
+    // Return the (possibly updated) bus state for threaded cycle chaining
+    bus_state.bus = vicii->bus.bus;
+    return bus_state;
 }
 
 // ========================================================================================
@@ -1407,11 +1398,11 @@ const vicii_chip_config_t* vicii_get_default_config(bool is_pal) {
 }
 
 uint8_t vicii_registers_read(void* chip, uint16_t address) {
-    return vicii_registers_read((vicii_t*)chip, address);
+    return vicii_registers_read_internal((vicii_t*)chip, address);
 }
 
 void vicii_registers_write(void* chip, uint16_t address, uint8_t value) {
-    vicii_registers_write((vicii_t*)chip, address, value);
+    vicii_registers_write_internal((vicii_t*)chip, address, value);
 }
 
 void vicii_bank_change(void* chip, uint8_t bank) {

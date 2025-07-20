@@ -825,30 +825,34 @@ void voice_clock_cycle(voice_t* voice) {
 // MAIN CYCLE FUNCTION
 // =============================================================================
 
-void mos6581_cycle(mos6581_t* sid) {
-    if (!sid) return;
-    
+// Unified bus state threading main cycle function
+bus_cycle_t mos6581_advance_cycle(mos6581_t* sid, bus_cycle_t bus_state) {
+    if (!sid) return bus_state;
+
     // Update at SID frequency (PAL: every 18 cycles, NTSC: every 17 cycles)
     uint32_t divisor = sid->pal_timing ? 18 : 17;
-    
+
     if (sid->cycle_count % divisor == 0) {
         // Update all voices
         for (int i = 0; i < 3; i++) {
             voice_clock_cycle(sid->voices[i]);
         }
-        
+
         // Mix voices and generate output
         uint32_t mixed_sample = mos6581_mix_voices(sid);
-        
+
         // Convert to float and store in ring buffer
         float sample = ((float)mixed_sample - 32768.0f) / 32767.0f;
         ring_buffer_write(&sid->sample_buffer, sample);
-        
+
         sid->samples_generated++;
     }
-    
+
     sid->cycle_count++;
     sid->total_cycles++;
+
+    // Return possibly updated bus state (for future expansion)
+    return bus_state;
 }
 
 // =============================================================================

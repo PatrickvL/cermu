@@ -255,7 +255,9 @@ void c64_non_cpu_cycle(void* c64_ptr) {
     // Other chips tick once per complete cycle
     mos6526_cycle(c64->cia1);
     mos6526_cycle(c64->cia2);
-    mos6581_cycle(c64->sid);
+    if (c64->bus) {
+        c64->bus_state = mos6581_advance_cycle(c64->sid, c64->bus_state);
+    }
 //        c64_update_interrupt_lines(c64, bus);
 //void c64_update_interrupt_lines(c64_t* c64, c64_bus_t* bus) {
 /*
