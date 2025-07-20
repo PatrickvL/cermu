@@ -2,34 +2,36 @@
 
 Migration Plan: Status and Next Steps (July 2025)
 
+
 Overview
-All files in code/c/src/redesign now fully implement the new architecture:
+The files in code/c/src/redesign are reference implementations only. They are not to be updated directly, but serve as inspiration for ideas, techniques, and architecture to be applied to the main project files.
 
 - Highly optimized bus and chip selection logic
 - Register-based calling conventions for performance
 - Threaded, stackless CPU dispatch (Nostradamus Distributor pattern)
 - Unified bus state threading for cycle-accurate emulation
 
-The redesign folder provides complete reference implementations for bus, chip, and CPU layers, including macro-based handler declarations and CMake build integration. The next phase is integrating these patterns into the legacy codebase and validating system-wide functionality.
+The migration goal is to adapt and integrate these redesign patterns into the main project codebase, modernizing bus, chip, and CPU layers, and updating build and testing infrastructure accordingly.
+
 
 
 Step 1: CPU Layer Migration
-Status: Complete in redesign files. All opcode handlers use the stackless, threaded dispatch model and macros for signatures and footers.
+Goal: Refactor main project opcode handlers to use stackless, threaded dispatch and macro-based signatures, inspired by redesign reference.
 
 Step 2: Bus Layer Migration
-Status: Complete in redesign files. Bus structures, chip select logic, and PLA integration are implemented and documented.
+Goal: Update main project bus structures, chip select logic, and PLA integration using redesign techniques.
 
 Step 3: Chip Layer Migration
-Status: Complete in redesign files. Chip stubs (VIC, SID, CIA) use bus state threading and correct prototypes.
+Goal: Refactor main project chip implementations (VIC, SID, CIA) to use bus state threading and modern prototypes.
 
 Step 4: System Integration
-Status: Reference patterns and interfaces are present in redesign files. Full integration with legacy system is next.
+Goal: Integrate new bus and chip patterns into main project system initialization, cartridge, and PLA logic.
 
 Step 5: Testing & Validation
-Status: Test patterns and benchmarking steps are described. Actual test coverage depends on legacy integration.
+Goal: Expand and modernize main project test coverage and benchmarking, following redesign reference patterns.
 
 Step 6: CMake Build Integration
-Status: CMake build support and documentation are present. Ensure CMakeLists.txt includes all sources and dependencies.
+Goal: Ensure main project CMakeLists.txt and build documentation reflect redesign best practices.
 
 Step 2: Bus Layer Migration
 Replace legacy bus structures with c64_bus_t and related types. Integrate chip select arrays and PLA mode logic:
@@ -214,13 +216,12 @@ c
 
 
 4. Migration Checklist
-[x] All redesign files implement new bus, chip, and CPU architecture
-[x] Macro-based handler signatures and footers used throughout
-[x] CMake build integration and documentation complete
-[x] Migration plan and reference documentation updated
-[ ] Legacy code integration with redesign patterns
-[ ] System-wide validation and benchmarking
-[ ] Comprehensive unit and integration tests
+[x] Redesign files provide reference architecture and techniques
+[ ] Main project bus, chip, and CPU layers refactored using redesign ideas
+[ ] Macro-based handler signatures and footers applied to main project
+[ ] Main project CMake build and documentation updated
+[ ] System-wide validation and benchmarking in main project
+[ ] Comprehensive unit and integration tests in main project
 5. Conclusion
 Migrating to the redesign will:
 
@@ -229,10 +230,10 @@ Enable stackless, cycle-accurate emulation.
 Simplify future redesigns via macro-based handler declarations and centralized FOOTER logic.
 
 Next Steps:
-- Integrate redesign patterns into legacy codebase modules
-- Update legacy code to use new bus, chip, and CPU interfaces
-- Expand unit and integration test coverage
-- Finalize CMakeLists.txt for all targets and dependencies
-- Document any remaining migration issues and solutions
+- Use redesign files as reference only; do not update them directly
+- Apply redesign ideas and techniques to main project files
+- Refactor main project bus, chip, and CPU layers for maintainability and performance
+- Update build and test infrastructure in main project
+- Document migration progress and any issues
 
 For further details or code-by-code mapping, request a deep-dive migration guide.
