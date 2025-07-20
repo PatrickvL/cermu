@@ -15,7 +15,7 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_read(c64_t* c64, c64_
     
     // Branchless I/O sub-page detection (16 pages of $100 bytes each)
     uint8_t is_io = -(base_chip == CHIP_VIC);
-    uint8_t selected_chip = ((base_chip) & ~is_io) | ((CHIP_VIC + ((bus_state.bus.addr >> 8) & 0xF)) & is_io);
+    uint8_t selected_chip += is_io & ((bus_state.bus.addr >> 8) & 0xF);
     
     // Initialize floating bus data
     bus_state.bus.data = c64->bus->data;  // Retain last bus value
@@ -99,9 +99,9 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_write(c64_t* c64, c64
     uint8_t encoded = c64->bus->chip_select_per_bank[bank];
     uint8_t base_chip = encoded & 0x0F;  // Extract write chip (lower 4 bits)
     
-    // Branchless I/O sub-page detection
-    uint8_t is_io = -(base_chip == CHIP_IO_REGION);
-    uint8_t selected_chip = ((base_chip + CHIP_VIC) & ~is_io) | (((bus.addr >> 10) & 0x3) & is_io);
+    // Branchless I/O sub-page detection (16 pages of $100 bytes each)
+    uint8_t is_io = -(base_chip == CHIP_VIC);
+    uint8_t selected_chip += is_io & ((bus_state.bus.addr >> 8) & 0xF);
     
     // All chips advance their internal timing WITH bus state for interrupt handling
     bus = vic_advance_cycle(c64->vic, bus);

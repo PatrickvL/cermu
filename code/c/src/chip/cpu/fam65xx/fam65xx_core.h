@@ -260,7 +260,7 @@ static inline void fam65xx_next_instruction_dispatch(fam65xx_t* cpu) {
         fam65xx_disasm_full(cpu, opcode);
     }
 
-void (*next_handler)(fam65xx_t*) = cpu->opcode_handlers[opcode];
+    void (*next_handler)(fam65xx_t*) = cpu->opcode_handlers[opcode];
 #if defined(_MSC_VER) && defined(_M_IX86)
     // MSVC x86 inline assembly
     __asm {
@@ -286,19 +286,36 @@ void (*next_handler)(fam65xx_t*) = cpu->opcode_handlers[opcode];
 // Forward declaration for macros
 void fam65xx_interrupt_handler(fam65xx_t* cpu);
 
-#define FAM65XX_NEXT_INSTRUCTION(cpu) do { \
-    if (unlikely(FAM65XX_TEST_IRQ(cpu) || FAM65XX_TEST_NMI(cpu))) { \
-        fam65xx_interrupt_handler(cpu); \
-    } \
-    fam65xx_next_instruction_dispatch(cpu); \
-} while(0)
+#ifdef REDESIGN
+    #define FAM65XX_NEXT_INSTRUCTION(cpu) do { \
+        if (unlikely(FAM65XX_TEST_IRQ(cpu) || FAM65XX_TEST_NMI(cpu))) { \
+            fam65xx_interrupt_handler(cpu); \
+        } \
+        fam65xx_next_instruction_dispatch(cpu); \
+    } while(0)
+#else
+    #define FAM65XX_NEXT_INSTRUCTION(cpu) do { \
+        if (unlikely(FAM65XX_TEST_IRQ(cpu) || FAM65XX_TEST_NMI(cpu))) { \
+            fam65xx_interrupt_handler(cpu); \
+        } \
+        fam65xx_next_instruction_dispatch(cpu); \
+    } while(0)
+#endif
 
 // Family-specific versions of shared macros
-#define FAM65XX_OPCODE_PROTO(name) \
-    void name(fam65xx_t* cpu)
-//    REGISTER_CALL void* name(fam65xx_t* cpu, aiemu_bus_state_t* bus_state)
-#define PROTO_RETURN
-//   return
+#ifdef REDESIGN
+    #define FAM65XX_OPCODE_PROTO(name) \
+        REGISTER_CALL void* name(fam65xx_t* cpu, generic_bus_state_t* bus_state)
+#else
+    #define FAM65XX_OPCODE_PROTO(name) \
+        void name(fam65xx_t* cpu)
+#endif
+
+#ifdef REDESIGN
+    #define PROTO_RETURN  return
+#else
+    #define PROTO_RETURN
+#endif
 
 #define FAM65XX_OPCODE_FOOTER() \
     FAM65XX_NEXT_INSTRUCTION(cpu)

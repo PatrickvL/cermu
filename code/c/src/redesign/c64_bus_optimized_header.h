@@ -21,27 +21,29 @@ typedef struct cia_state_s cia_state_t;
 #define CHIP_COLORRAM  6   // 1KB Color RAM (smallest memory)
 #define CHIP_UNMAPPED  7   // Unmapped regions
 // I/O pages in $D000-$DFFF range (16 pages of $100 bytes each)
-#define CHIP_VIC_0     8   // $D000-$D0FF (I/O page 0) - VIC-II registers
-#define CHIP_VIC_1     9   // $D100-$D1FF (I/O page 1) - VIC-II mirrors
-#define CHIP_VIC_2    10   // $D200-$D2FF (I/O page 2) - VIC-II mirrors  
-#define CHIP_VIC_3    11   // $D300-$D3FF (I/O page 3) - VIC-II mirrors
-#define CHIP_SID_0    12   // $D400-$D4FF (I/O page 4) - SID registers
-#define CHIP_SID_1    13   // $D500-$D5FF (I/O page 5) - SID mirrors
-#define CHIP_SID_2    14   // $D600-$D6FF (I/O page 6) - SID mirrors
-#define CHIP_SID_3    15   // $D700-$D7FF (I/O page 7) - SID mirrors
-#define CHIP_COLORRAM_PAGE 16 // $D800-$D8FF (I/O page 8) - Color RAM via VIC
-#define CHIP_IO_UNMAPPED_9 17 // $D900-$D9FF (I/O page 9) - Unmapped
-#define CHIP_IO_UNMAPPED_A 18 // $DA00-$DAFF (I/O page 10) - Unmapped
-#define CHIP_IO_UNMAPPED_B 19 // $DB00-$DBFF (I/O page 11) - Unmapped  
-#define CHIP_CIA1     20   // $DC00-$DCFF (I/O page 12) - CIA1
-#define CHIP_CIA2     21   // $DD00-$DDFF (I/O page 13) - CIA2
-#define CHIP_IO1      22   // $DE00-$DEFF (I/O page 14) - Cartridge I/O 1
-#define CHIP_IO2      23   // $DF00-$DFFF (I/O page 15) - Cartridge I/O 2
-#define CHIP_MAX      24
+#define CHIP_D0_VIC       8   // $D000-$D0FF (I/O page 0) - VIC-II registers
+#define CHIP_D1_VIC       9   // $D100-$D1FF (I/O page 1) - VIC-II mirrors
+#define CHIP_D2_VIC      10   // $D200-$D2FF (I/O page 2) - VIC-II mirrors  
+#define CHIP_D3_VIC      11   // $D300-$D3FF (I/O page 3) - VIC-II mirrors
+#define CHIP_D4_SID      12   // $D400-$D4FF (I/O page 4) - SID registers
+#define CHIP_D5_SID      13   // $D500-$D5FF (I/O page 5) - SID mirrors
+#define CHIP_D6_SID      14   // $D600-$D6FF (I/O page 6) - SID mirrors
+#define CHIP_D7_SID      15   // $D700-$D7FF (I/O page 7) - SID mirrors
+#define CHIP_D8_COLORRAM 16   // $D800-$D8FF (I/O page 8) - Color RAM via VIC
+#define CHIP_D9_UNMAPPED 17   // $D900-$D9FF (I/O page 9) - Unmapped
+#define CHIP_DA_UNMAPPED 18   // $DA00-$DAFF (I/O page 10) - Unmapped
+#define CHIP_DB_UNMAPPED 19   // $DB00-$DBFF (I/O page 11) - Unmapped  
+#define CHIP_DC_CIA1     20   // $DC00-$DCFF (I/O page 12) - CIA1
+#define CHIP_DD_CIA2     21   // $DD00-$DDFF (I/O page 13) - CIA2
+#define CHIP_DE_IO1      22   // $DE00-$DEFF (I/O page 14) - Cartridge I/O 1
+#define CHIP_DF_IO2      23   // $DF00-$DFFF (I/O page 15) - Cartridge I/O 2
+#define CHIP_MAX         24
 
 // Convenience aliases for the primary I/O chips
-#define CHIP_VIC      CHIP_VIC_0    // Primary VIC-II chip (first I/O chip)
-#define CHIP_SID      CHIP_SID_0    // Primary SID chip
+#define CHIP_VIC      CHIP_D0_VIC    // Primary VIC-II chip (first I/O chip)
+#define CHIP_SID      CHIP_D4_SID    // Primary SID chip
+#define CHIP_CIA1     CHIP_DC_CIA1
+#define CHIP_CIA2     CHIP_DD_CIA2
 
 // System line masks for cartridge signals (moved out of control lines to separate field)
 #define SYS_MASK_EXROM 8   // EXROM signal
@@ -128,24 +130,6 @@ typedef struct c64_s {
     uint8_t kernal_rom[8192]; 
     uint8_t char_rom[4096];
 } c64_t;
-
-// Cross-platform calling convention for register arguments/returns
-#ifdef _MSC_VER
-    #define REGISTER_CALL __vectorcall  // Ensures register passing on MSVC
-#elif defined(__GNUC__) || defined(__clang__)
-    #define REGISTER_CALL __attribute__((regparm(3)))  // Register calling on GCC/Clang
-#else
-    #define REGISTER_CALL
-#endif
-
-// Cross-platform force inline macro
-#ifdef _MSC_VER
-    #define FORCE_INLINE __forceinline
-#elif defined(__GNUC__) || defined(__clang__)
-    #define FORCE_INLINE __attribute__((always_inline)) inline
-#else
-    #define FORCE_INLINE inline
-#endif
 
 // Simple ROM read macro for code deduplication
 #define SIMPLE_ROM_READ(buffer, mask) \

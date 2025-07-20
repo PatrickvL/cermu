@@ -19,21 +19,50 @@ static inline int c64_bus_get_bank(uint16_t address) {
 /* Memory read - 2 ops, 2.5-3.5 cycles (optimized cache usage) */
 uint8_t c64_bus_memory_read(c64_bus_t *bus, uint16_t address) {
     uint8_t bank = (uint8_t)c64_bus_get_bank(address);  // Extract 4KB bank (0-15)
+#ifdef REDESIGN
+    // Use new encoded chip select logic
+    uint8_t chip = (bus->chip_select_per_bank[bank] >> 4) & 0x0F; // upper 4 bits: read chip
+
+    // Branchless I/O sub-page detection (16 pages of $100 bytes each)
+    uint8_t is_io = -(chip == CHIP_VIC);
+    chip += is_io & ((bus_state.bus.addr >> 8) & 0xF);
+
+    // Directly dispatch to chip read function (replace with actual chip table as needed)
+    // Example: chip_read_funcs[read_chip](...)
+    // For now, fallback to legacy callback for compatibility
+    return bus->read_callbacks[chip].read(bus->read_callbacks[chip].context, address);
+#else
     uint8_t encoded = bus->encoded_rwid_per_bank[bank];  // Get banking info for this bank
     uint8_t is_io = -(encoded == 0);  // Branchless I/O detection
     uint8_t acid = (((encoded & 0xF) + ACID_IO2_DF) & ~is_io) | (((address >> 8) & 0xF) & is_io);
     
     return bus->read_callbacks[acid].read(bus->read_callbacks[acid].context, address);
+#endif
 }
 
 /* Memory write - 2 ops, 3-4 cycles */
 void c64_bus_memory_write(c64_bus_t *bus, uint16_t address, uint8_t value) {
     uint8_t bank = (uint8_t)c64_bus_get_bank(address);  // Extract 4KB bank (0-15)
+#ifdef REDESIGN
+    // Use new encoded chip select logic
+    uint8_t chip = bus->chip_select_per_bank[bank] & 0x0F;  // Extract write chip (lower 4 bits)
+    
+    // Branchless I/O sub-page detection (16 pages of $100 bytes each)
+    uint8_t is_io = -(chip == CHIP_VIC);
+    chip += is_io & ((bus_state.bus.addr >> 8) & 0xF);
+
+    // Directly dispatch to chip write function (replace with actual chip table as needed)
+    // Example: chip_write_funcs[write_chip](...)
+    // For now, fallback to legacy callback for compatibility
+    // Note : selected_chip will be within writable range (0-19)
+    bus->write_funcs[chip](bus->read_callbacks[chip].context, address, value);
+#else
     uint8_t encoded = bus->encoded_rwid_per_bank[bank];  // Get banking info for this bank
     uint8_t is_io = -(encoded == 0);  // Branchless I/O detection
     uint8_t acid = (((encoded >> 5) + ACID_IO2_DF) & ~is_io) | (((address >> 8) & 0xF) & is_io);
     // Note : Write acid will be within writable range (0-19)
     bus->write_funcs[acid](bus->read_callbacks[acid].context, address, value);
+#endif
     // TODO : Move below signalling of VIC-II bank change to somewhere else with less impact on performance
     if (address == 0xDD00) {
         c64_t* c64 = bus->c64;
@@ -88,7 +117,11 @@ void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {
     // Update the optimized banking for the current mode
     c64_bus->pla_banking_mode = mode & 0x1F;
     
+#ifdef REDESIGN
+    memcpy(c64_bus->chip_select_per_bank, c64_bus->chip_select_per_bank_per_mode[mode], 16);
+#else
     memcpy(c64_bus->encoded_rwid_per_bank, c64_bus->encoded_rwid_per_bank_per_mode[mode], 16);
+#endif
     // Also copy VIC-II active array for optimal performance
     memcpy(c64_bus->vic_ii_acid_per_bank, c64_bus->vic_ii_acid_per_bank_per_mode[mode], 16);
 }
@@ -255,6 +288,15 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
         c64_bus_populate_cpu_pla_mapping(bus, pla);
         // Copy the CPU mapping to the mode-specific array
         memcpy(bus->encoded_rwid_per_bank_per_mode[mode], bus->encoded_rwid_per_bank, 16);
+        #ifdef REDESIGN
+        for (int bank = 0; bank < 16; bank++) {
+            // Encode branchless chip select: upper 4 bits = read chip, lower 4 bits = write chip
+            uint8_t read_acid = bus->encoded_rwid_per_bank[bank] >> 4;
+            uint8_t write_acid = bus->encoded_rwid_per_bank[bank] & 0x0F;
+            uint8_t encoded_chip_select = ((read_acid & 0x0F) << 4) | (write_acid & 0x0F);
+            bus->chip_select_per_bank_per_mode[mode][bank] = encoded_chip_select;
+        }
+        #endif
     }
     
     // Generate VIC-II memory modes (different steering parameters)
