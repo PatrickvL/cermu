@@ -49,39 +49,39 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_read(c64_t* c64, c64_
         case CHIP_COLORRAM:
             bus_state.bus.data = c64->colorram.memory[bus_state.bus.addr & 0x3FF] | 0xF0; // High nibble always set
             break;
-        case CHIP_VIC_0:
-        case CHIP_VIC_1:
-        case CHIP_VIC_2:
-        case CHIP_VIC_3:
+        case CHIP_D0_VIC:
+        case CHIP_D1_VIC:
+        case CHIP_D2_VIC:
+        case CHIP_D3_VIC:
             // All VIC pages map to the same VIC chip
             bus_state.bus = vic_read(c64->vic, bus_state.bus);
             break;
-        case CHIP_SID_0:
-        case CHIP_SID_1:
-        case CHIP_SID_2:
-        case CHIP_SID_3:
+        case CHIP_D4_SID:
+        case CHIP_D5_SID:
+        case CHIP_D6_SID:
+        case CHIP_D7_SID:
             // All SID pages map to the same SID chip
             bus_state.bus = sid_read(c64->sid, bus_state.bus);
             break;
-        case CHIP_COLORRAM_PAGE:
+        case CHIP_D8_COLORRAM:
             // Color RAM accessed via I/O area ($D800-$D8FF) - handled by VIC
             bus_state.bus.data = c64->colorram.memory[bus_state.bus.addr & 0x3FF] | 0xF0;
             break;
-        case CHIP_CIA1:
+        case CHIP_DC_CIA1:
             bus_state.bus = cia_read(c64->cia1, bus_state.bus);
             break;
-        case CHIP_CIA2:
+        case CHIP_DD_CIA2:
             bus_state.bus = cia_read(c64->cia2, bus_state.bus);
             break;
-        case CHIP_IO1:
+        case CHIP_DE_IO1:
             bus_state.bus = c64->cartridge.io1_read(c64->cartridge.context, bus_state.bus);
             break;
-        case CHIP_IO2:
+        case CHIP_DF_IO2:
             bus_state.bus = c64->cartridge.io2_read(c64->cartridge.context, bus_state.bus);
             break;
-        case CHIP_IO_UNMAPPED_9:
-        case CHIP_IO_UNMAPPED_A:
-        case CHIP_IO_UNMAPPED_B:
+        case CHIP_D9_UNMAPPED:
+        case CHIP_DA_UNMAPPED:
+        case CHIP_DB_UNMAPPED:
         case CHIP_UNMAPPED:
         default:
             // bus.data retains floating bus value (no change)
@@ -117,47 +117,47 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_write(c64_t* c64, c64
         case CHIP_COLORRAM:
             c64->colorram.memory[bus_state.bus.addr & 0x3FF] = bus_state.bus.data & 0x0F; // Only low nibble stored
             break;
-        case CHIP_VIC_0:
-        case CHIP_VIC_1:
-        case CHIP_VIC_2:
-        case CHIP_VIC_3:
-            // All VIC pages map to the same VIC chip
-            bus_state.bus = vic_write(c64->vic, bus_state.bus);
-            break;
-        case CHIP_SID_0:
-        case CHIP_SID_1:
-        case CHIP_SID_2:
-        case CHIP_SID_3:
-            // All SID pages map to the same SID chip
-            bus_state.bus = sid_write(c64->sid, bus_state.bus);
-            break;
-        case CHIP_COLORRAM_PAGE:
-            // Color RAM accessed via I/O area ($D800-$D8FF)
-            c64->colorram.memory[bus_state.bus.addr & 0x3FF] = bus_state.bus.data & 0x0F;
-            break;
-        case CHIP_CIA1:
-            bus_state.bus = cia_write(c64->cia1, bus_state.bus);
-            break;
-        case CHIP_CIA2:
-            bus_state.bus = cia_write(c64->cia2, bus_state.bus);
-            break;
-        case CHIP_IO1:
-            bus_state.bus = c64->cartridge.io1_write(c64->cartridge.context, bus_state.bus);
-            break;
-        case CHIP_IO2:
-            bus_state.bus = c64->cartridge.io2_write(c64->cartridge.context, bus_state.bus);
-            break;
         case CHIP_BASIC:
         case CHIP_KERNAL:
         case CHIP_CHARROM:
         case CHIP_ROML:
         case CHIP_ROMH:
-        case CHIP_IO_UNMAPPED_9:
-        case CHIP_IO_UNMAPPED_A:
-        case CHIP_IO_UNMAPPED_B:
         case CHIP_UNMAPPED:
+        case CHIP_D9_UNMAPPED:
+        case CHIP_DA_UNMAPPED:
+        case CHIP_DB_UNMAPPED:
         default:
             // Read-only or unmapped - ignore writes
+            break;
+        case CHIP_D0_VIC:
+        case CHIP_D1_VIC:
+        case CHIP_D2_VIC:
+        case CHIP_D3_VIC:
+            // All VIC pages map to the same VIC chip
+            bus_state.bus = vic_write(c64->vic, bus_state.bus);
+            break;
+        case CHIP_D4_SID:
+        case CHIP_D5_SID:
+        case CHIP_D6_SID:
+        case CHIP_D7_SID:
+            // All SID pages map to the same SID chip
+            bus_state.bus = sid_write(c64->sid, bus_state.bus);
+            break;
+        case CHIP_D8_COLORRAM:
+            // Color RAM accessed via I/O area ($D800-$D8FF)
+            c64->colorram.memory[bus_state.bus.addr & 0x3FF] = bus_state.bus.data & 0x0F;
+            break;
+        case CHIP_DC_CIA1:
+            bus_state.bus = cia_write(c64->cia1, bus_state.bus);
+            break;
+        case CHIP_DD_CIA2:
+            bus_state.bus = cia_write(c64->cia2, bus_state.bus);
+            break;
+        case CHIP_DE_IO1:
+            bus_state.bus = c64->cartridge.io1_write(c64->cartridge.context, bus_state.bus);
+            break;
+        case CHIP_DF_IO2:
+            bus_state.bus = c64->cartridge.io2_write(c64->cartridge.context, bus_state.bus);
             break;
     }
     
