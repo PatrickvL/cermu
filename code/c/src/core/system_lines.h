@@ -3,13 +3,10 @@
 #include <stdint.h>
 
 // Generic bus state for 16-bit systems (32-bit register value)
-typedef union {
-    uint32_t raw;           // 32-bit register value
-    struct {
-        uint16_t addr;      // Bits 0-15: Address bus
-        uint8_t data;       // Bits 16-23: Data bus
-        uint8_t lines;      // Bits 24-31: Bus control lines
-    };
+typedef struct {
+    uint16_t addr;      // Bits 0-15: Address bus
+    uint8_t data;       // Bits 16-23: Data bus
+    uint8_t lines;      // Bits 24-31: Bus control lines
 } bus_state_t;
 
 // Bus control line definitions (shared across most chips)

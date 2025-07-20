@@ -293,7 +293,6 @@ extern chip_descriptor_t mos6510_descriptor;
 void mos6510_attach_bus_interface(mos6510_t* cpu, const bus_cycle_ops_t* bus_interface);
 void mos6510_attach_control_lines_interface(mos6510_t* cpu, const control_lines_interface_t* control_interface);
 void mos6510_attach_io_interface(mos6510_t* cpu, const mos6510_io_port_interface_t* io_interface);
-void mos6510_attach_system_lines(mos6510_t* cpu, system_lines_t* system_lines);
 void mos6510_attach_ram(mos6510_t* cpu, const access_callback_t* ram_access);
 
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS

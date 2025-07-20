@@ -498,7 +498,7 @@ void c64_bus_set_cartridge_signals(c64_bus_t* c64_bus, bool exrom_active, bool g
     } else {
         c64_bus->system_lines |= SYS_MASK_EXROM;   // Set bit (signal high)
     }
-      // Update GAME signal
+    // Update GAME signal
     if (game_active) {
         c64_bus->system_lines &= ~SYS_MASK_GAME;   // Clear bit (signal low)
     } else {

@@ -77,9 +77,9 @@ struct fam65xx_s {
 // SHARED MOS 6502 FAMILY MACROS (used by all family members)
 // ============================================================================
 
-#define FAM65XX_MASK_IRQ  SYS_MASK_IRQ
-#define FAM65XX_MASK_NMI  SYS_MASK_NMI
-#define FAM65XX_MASK_RDY  SYS_MASK_RDY
+#define FAM65XX_MASK_IRQ  BUS_MASK_IRQ
+#define FAM65XX_MASK_NMI  BUS_MASK_NMI
+#define FAM65XX_MASK_RDY  BUS_MASK_RDY
 
 // Control line access and testing (shared)
 #define FAM65XX_CONTROL_LINES(cpu) \
@@ -192,12 +192,11 @@ static int fam65xx_disasm(uint16_t pc, unsigned char *code, char *output, size_t
         case 10: return len + SPRINTF_SAFE(output + len, output_size - len, "($%02X,X)", code[1]);
         case 11: return len + SPRINTF_SAFE(output + len, output_size - len, "($%02X),Y", code[1]);
         case 12: {
-            // Relative branch: target = pc + 2 + (signed char)code[1]
             uint16_t target = (uint16_t)(pc + 2 + (int8_t)code[1]);
             return len + SPRINTF_SAFE(output + len, output_size - len, "$%04X", target);
         }
+        default: return len;
     }
-    return len;
 }
 
 // Wrapper function to get instruction byte count only

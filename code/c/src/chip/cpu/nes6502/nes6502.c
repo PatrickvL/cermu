@@ -18,7 +18,6 @@ bool nes6502_create(chip_descriptor_t* desc, nes6502_t* cpu) {
     
     // Initialize base 6502 family structure
     cpu->base.desc = desc;
-    cpu->base.system_lines = NULL;
     
     // Initialize CPU state
     cpu->base.pc = 0x0000;

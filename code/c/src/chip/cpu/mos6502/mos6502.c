@@ -29,7 +29,6 @@ bool mos6502_create(chip_descriptor_t* desc, mos6502_t* cpu) {
     
     // Initialize base MOS 6502 family structure
     cpu->base.desc = desc;
-    cpu->base.system_lines = NULL;
     
     // Initialize CPU state
     cpu->base.pc = 0x0000;
@@ -85,12 +84,6 @@ void mos6502_attach_bus(mos6502_t* cpu, const bus_cycle_ops_t* bus_interface) {
 void mos6502_attach_control_lines(mos6502_t* cpu, const control_lines_interface_t* control_interface) {
     if (cpu && control_interface) {
         cpu->base.control_interface = *control_interface;
-    }
-}
-
-void mos6502_attach_system_lines(mos6502_t* cpu, system_lines_t* system_lines) {
-    if (cpu) {
-        cpu->base.system_lines = system_lines;
     }
 }
 

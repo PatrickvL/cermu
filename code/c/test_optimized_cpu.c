@@ -92,14 +92,10 @@ int main() {
         .context = NULL
     };
 
-    system_lines_t system_lines;
-    system_lines_init(&system_lines);
-
     // Attach interfaces using performance-optimized functions
     mos6510_attach_bus_interface(&cpu, &bus_interface);
     mos6510_attach_control_lines_interface(&cpu, &control_interface);
     mos6510_attach_io_interface(&cpu, &io_interface);
-    mos6510_attach_system_lines(&cpu, &system_lines);
     printf("✓ All interfaces attached with direct callback optimization\n");
 
     // Reset CPU to start execution

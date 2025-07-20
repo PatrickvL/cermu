@@ -11,16 +11,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// Forward declaration will be replaced by proper include when needed
-
-// Bus control line definitions
-#define BUS_LINE_IRQ    (1 << 0) // Interrupt request line
-#define BUS_LINE_NMI    (1 << 1) // Non-maskable interrupt line
-#define BUS_LINE_BA     (1 << 2) // Bus available line
-#define BUS_LINE_AEC    (1 << 3) // Address enable control line
-#define BUS_LINE_RDY    (1 << 4) // Ready line
-#define BUS_LINE_RW     (1 << 5) // Read/Write line (1=read, 0=write)
-
 // Macro definitions for ACID (ACcessor InDex) extraction
 
 // ACID definitions (ACcessor InDex for callback dispatch)
@@ -102,13 +92,17 @@ typedef enum {
 #define CHIP_CIA1     CHIP_DC_CIA1
 #define CHIP_CIA2     CHIP_DD_CIA2
 
+// System line masks for cartridge signals (moved out of control lines to separate field)
+#define SYS_MASK_EXROM 0   // EXROM signal
+#define SYS_MASK_GAME  1  // GAME signal
+
 // C64 bus controller structure
 typedef struct c64_bus_s {
     chip_descriptor_t* desc;
     void* c64;  // c64_t* - opaque pointer to avoid circular dependency
     bus_state_t state; // Unified bus state (data, address, control lines)
     // System lines for control signals (includes EXROM and GAME)
-    uint32_t system_lines;  // System-wide control lines including cartridge signals
+    uint8_t system_lines;  // System-wide control lines including cartridge signals
     
     // Current PLA banking mode (0-31) derived from CPU port + cartridge signals
     uint8_t pla_banking_mode;  // Current banking mode for fast switching

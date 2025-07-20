@@ -32,7 +32,6 @@ bool mos6502_step(mos6502_t* cpu);
 // Configuration and setup
 void mos6502_attach_bus(mos6502_t* cpu, const bus_cycle_ops_t* bus_interface);
 void mos6502_attach_control_lines(mos6502_t* cpu, const control_lines_interface_t* control_interface);
-void mos6502_attach_system_lines(mos6502_t* cpu, system_lines_t* system_lines);
 
 // State access (for debugger, test harness, etc.)
 uint16_t mos6502_get_pc(mos6502_t* cpu);

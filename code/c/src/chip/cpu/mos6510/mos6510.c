@@ -198,16 +198,6 @@ void mos6510_attach_io_interface(mos6510_t* cpu, const mos6510_io_port_interface
 }
 
 /**
- * Attach system lines state to CPU.
- * Note: This is a pointer to shared system state, not copied.
- */
-void mos6510_attach_system_lines(mos6510_t* cpu, system_lines_t* system_lines) {
-    if (!cpu || !system_lines) return;
-    
-    // Store pointer to shared system state
-    cpu->base.system_lines = system_lines;
-}
-/**
  * Attach bus state to CPU.
  * Note: This is a pointer to shared bus state, not copied.
  */
