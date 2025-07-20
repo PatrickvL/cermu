@@ -426,9 +426,9 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, struct emulation_co
                 
                 if (current_time - last_cycle_time > 2000) { // Change every 2 seconds
                     // Write to VIC-II background color register - this affects the center area
-                    vicii_common_registers_write(c64->vicii, VICII_B0C, current_bg_color);
+                    vicii_registers_write(c64->vicii, VICII_B0C, current_bg_color);
                     // Also cycle border (exterior) color to be more visible
-                    vicii_common_registers_write(c64->vicii, VICII_EC, (current_bg_color + 8) % 16);
+                    vicii_registers_write(c64->vicii, VICII_EC, (current_bg_color + 8) % 16);
                     printf("DEBUG: Set VIC-II background color 0 (center) to %d, border to %d\n",
                            current_bg_color, (current_bg_color + 8) % 16);
                     
@@ -801,7 +801,7 @@ static const uint32_t c64_palette[16] = {
 
 // Static framebuffer for C64 screen (double buffering handled at VIC-II level)
 static uint32_t screen_buffer[C64_TOTAL_WIDTH * C64_TOTAL_HEIGHT];
-// Remove vic_buffer - VIC-II will render directly to centered area of screen_buffer
+// Remove vicii_buffer - VIC-II will render directly to centered area of screen_buffer
 
 // Get access to the screen buffer for VIC-II framebuffer setup
 uint32_t* gui_get_screen_buffer(void) {
@@ -847,11 +847,11 @@ void gui_cleanup_screen_display(gui_state_t* gui_state) {
     }
 }
 
-// Re-add vic_buffer but as a temporary solution until VIC-II can handle stride
-static uint32_t vic_buffer[C64_VISIBLE_WIDTH * C64_VISIBLE_HEIGHT];
+// Re-add vicii_buffer but as a temporary solution until VIC-II can handle stride
+static uint32_t vicii_buffer[C64_VISIBLE_WIDTH * C64_VISIBLE_HEIGHT];
 
 void gui_update_screen_texture(c64_t* c64, gui_state_t* gui_state) {
-    static void* connected_vic_chip = NULL;  // Keep track of connected VIC chip
+    static void* connected_vicii_chip = NULL;  // Keep track of connected VIC chip
     
     // Initialize screen buffer with appropriate background color
     // When showing invisible area, use brownish color (VIC-II generates color 9 = brown in invisible area)
@@ -869,26 +869,26 @@ void gui_update_screen_texture(c64_t* c64, gui_state_t* gui_state) {
     
     if (c64 && c64->vicii) {
         // Set up framebuffer connection if not already done or chip changed
-        if (connected_vic_chip != c64->vicii) {
+        if (connected_vicii_chip != c64->vicii) {
             // Connect VIC-II to the VIC-II sized buffer (403x284)
-            vicii_common_set_framebuffer((vicii_common_t*)c64->vicii,
-                                        vic_buffer, C64_VISIBLE_WIDTH, C64_VISIBLE_HEIGHT);
-            connected_vic_chip = c64->vicii;
+            vicii_set_framebuffer((vicii_t*)c64->vicii,
+                                        vicii_buffer, C64_VISIBLE_WIDTH, C64_VISIBLE_HEIGHT);
+            connected_vicii_chip = c64->vicii;
             printf("GUI: Connected VIC-II to buffer (%dx%d)\n", C64_VISIBLE_WIDTH, C64_VISIBLE_HEIGHT);
         }
         
         // Copy VIC-II content to properly centered position in full framebuffer
         for (int y = 0; y < C64_VISIBLE_HEIGHT; y++) {
             for (int x = 0; x < C64_VISIBLE_WIDTH; x++) {
-                int vic_idx = y * C64_VISIBLE_WIDTH + x;
+                int vicii_idx = y * C64_VISIBLE_WIDTH + x;
                 int screen_x = VIC_OFFSET_X + x;
                 int screen_y = VIC_OFFSET_Y + y;
                 int screen_idx = screen_y * C64_TOTAL_WIDTH + screen_x;
                 
                 if (screen_x < C64_TOTAL_WIDTH && screen_y < C64_TOTAL_HEIGHT &&
                     screen_idx < C64_TOTAL_WIDTH * C64_TOTAL_HEIGHT &&
-                    vic_idx < C64_VISIBLE_WIDTH * C64_VISIBLE_HEIGHT) {
-                    screen_buffer[screen_idx] = vic_buffer[vic_idx];
+                    vicii_idx < C64_VISIBLE_WIDTH * C64_VISIBLE_HEIGHT) {
+                    screen_buffer[screen_idx] = vicii_buffer[vicii_idx];
                 }
             }
         }

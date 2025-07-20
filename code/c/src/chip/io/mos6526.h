@@ -115,8 +115,14 @@ typedef struct mos6526_s {
 #define CRB_START 0x01    // $dc0f Control Register B : Timer B Bit 0: 0 = Stop timer; 1 = Start timer
 
 // Function declarations
-void mos6526_cycle(mos6526_t* cia);
 void mos6526_reset(mos6526_t* cia);
+
+// Main cycle function with unified bus state threading
+bus_cycle_t mos6526_advance_cycle(mos6526_t* cia, bus_cycle_t bus_state);
+
+// Unified register I/O
+bus_cycle_t mos6526_read(mos6526_t* cia, bus_cycle_t bus_state);
+bus_cycle_t mos6526_write(mos6526_t* cia, bus_cycle_t bus_state);
 
 // PORT/PERIPHERAL DATA / DATA DIRECTION handling
 void mos6526_write_data_direction_port(mos6526_t* cia, uint32_t p, uint8_t v);

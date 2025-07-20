@@ -7,7 +7,7 @@
 #define MOS6567_CYCLES_PER_LINE  VICII_NTSC_CYCLES_PER_LINE
 #define MOS6567_TOTAL_LINES      VICII_NTSC_TOTAL_LINES
 
-typedef vicii_common_t mos6567_t;
+typedef vicii_t mos6567_t;
 
 // Lifecycle and bus attach
 void* mos6567_system_create(chip_descriptor_t* desc);

@@ -10,7 +10,7 @@
 #define MOS6569_CYCLES_PER_LINE  VICII_PAL_CYCLES_PER_LINE
 #define MOS6569_TOTAL_LINES      VICII_PAL_TOTAL_LINES
 
-typedef vicii_common_t mos6569_t;
+typedef vicii_t mos6569_t;
 
 // Lifecycle and bus attachment
 void* mos6569_system_create(chip_descriptor_t* desc);

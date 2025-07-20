@@ -11,14 +11,14 @@
 // COMMON VIC-II GUI RENDERING FUNCTIONS
 // ============================================================================
 
-static const char* get_vic_type_name(vicii_common_t* vicii) {
+static const char* get_vicii_type_name(vicii_t* vicii) {
     if (vicii && vicii->desc && vicii->desc->description) {
         return vicii->desc->description;
     }
     return "Unknown VIC-II";
 }
 
-static const char* get_video_standard(vicii_common_t* vicii) {
+static const char* get_video_standard(vicii_t* vicii) {
     if (vicii->timing.cycles_per_line == 65 && vicii->timing.total_lines == 262) {
         return "NTSC 60Hz";
     } else if (vicii->timing.cycles_per_line == 63 && vicii->timing.total_lines == 312) {
@@ -40,10 +40,10 @@ static const char* get_screen_mode(uint8_t cr1, uint8_t cr2) {
     return "Invalid Mode";
 }
 
-void vicii_render_common_debug_window(void* chip, bool* show_window, const char* window_title) {
+void vicii_render_debug_window(void* chip, bool* show_window, const char* window_title) {
     if (!*show_window) return;
     
-    vicii_common_t* vicii = (vicii_common_t*)chip;
+    vicii_t* vicii = (vicii_t*)chip;
     if (!vicii) {
         *show_window = false;
         return;
@@ -54,7 +54,7 @@ void vicii_render_common_debug_window(void* chip, bool* show_window, const char*
         return;
     }
 
-    igText("%s", get_vic_type_name(vicii));
+    igText("%s", get_vicii_type_name(vicii));
     igSeparator();
     
     // Basic chip information
@@ -231,10 +231,10 @@ void vicii_render_common_debug_window(void* chip, bool* show_window, const char*
     igEnd();
 }
 
-void vicii_render_common_settings_window(void* chip, bool* show_window, const char* window_title) {
+void vicii_render_settings_window(void* chip, bool* show_window, const char* window_title) {
     if (!*show_window) return;
     
-    vicii_common_t* vicii = (vicii_common_t*)chip;
+    vicii_t* vicii = (vicii_t*)chip;
     if (!vicii) {
         *show_window = false;
         return;
@@ -248,7 +248,7 @@ void vicii_render_common_settings_window(void* chip, bool* show_window, const ch
     igText("VIC-II Configuration");
     igSeparator();
     
-    igText("Chip Type: %s", get_vic_type_name(vicii));
+    igText("Chip Type: %s", get_vicii_type_name(vicii));
     igText("Video Standard: %s", get_video_standard(vicii));
     igText("Timing: %d cycles/line, %d lines/frame", vicii->timing.cycles_per_line, vicii->timing.total_lines);
     

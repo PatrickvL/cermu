@@ -1,9 +1,13 @@
 
 
+
+**IMPORTANT NOTE:**
+Redesign files in `code/c/src/redesign` are **reference only** and must **not** be used directly for code, includes, or implementation. All migration and refactoring must be applied to the main project files. Use redesign files solely for inspiration and architectural guidance.
+
 Migration Plan: Integrating Redesign Concepts into the Main C64 Emulator Project (July 2025)
 
 ## Overview
-This document provides a clear migration strategy for modernizing the main C64 emulator project by selectively adopting ideas and techniques from the reference implementations in `code/c/src/redesign`. The redesign files are **not** to be updated directly; they serve as inspiration only. The goal is to refactor and incrementally improve the main project, not to rewrite or replace large portions of code except where necessary (notably, chip select logic).
+This document provides a clear migration strategy for modernizing the main C64 emulator project by selectively adopting ideas and techniques inspired by the reference implementations in `code/c/src/redesign`. The redesign files are **not** to be updated directly, nor used for code, includes, or implementation; they serve as architectural inspiration only. The goal is to refactor and incrementally improve the main project files, not to rewrite or replace large portions of code except where necessary (notably, chip select logic).
 
 ---
 
@@ -61,40 +65,40 @@ This document provides a clear migration strategy for modernizing the main C64 e
 ### Migration Steps
 
 #### Step 1: Preparation
-- Map current bus, chip, and CPU layers to redesign equivalents.
-- Document existing implementations and identify areas for refactoring.
+- Map current bus, chip, and CPU layers to the architectural patterns found in the redesign reference (do not use redesign code directly).
+- Document existing implementations and identify areas for refactoring in the main project files.
 - Set up feature flags for toggling new/legacy code.
 
 #### Step 2: Bus Layer Refactoring
-- Refactor ACID-based chip select logic to use encoded, branchless chip select arrays as in the redesign.
-- Integrate PLA logic with new chip select arrays and mode switching.
-- Update bus access points to use unified system tick and cycle functions.
+- Refactor ACID-based chip select logic to use encoded, branchless chip select arrays inspired by the redesign.
+- Integrate PLA logic with new chip select arrays and mode switching in the main project files.
+- Update bus access points to use unified system tick and cycle functions in the main project files.
 
 #### Step 3: Chip Layer Refactoring
-- Ensure all chip cycle and I/O functions use unified bus state threading and match redesign prototypes.
-- Integrate chip advance cycle functions for proper timing and interrupt handling.
+- Ensure all chip cycle and I/O functions use unified bus state threading and match the architectural patterns of the redesign reference (do not use redesign code directly).
+- Integrate chip advance cycle functions for proper timing and interrupt handling in the main project files.
 
 #### Step 4: CPU Layer Refactoring
-- Ensure all opcode handlers use macro-based signatures and centralized FOOTER macros.
+- Ensure all opcode handlers use macro-based signatures and centralized FOOTER macros in the main project files.
 - Confirm stackless dispatch and shared bus state usage.
-- Update handler table and dispatch logic for consistency with redesign.
+- Update handler table and dispatch logic for consistency with the redesign architectural patterns (do not use redesign code directly).
 
 #### Step 5: System Integration
-- Update system initialization and cleanup to use new bus and chip structures.
-- Migrate cartridge and PLA integration to use new signal and mode management.
-- Refactor any legacy code that interacts with bus, chips, or CPU to use new interfaces.
+- Update system initialization and cleanup to use new bus and chip structures in the main project files.
+- Migrate cartridge and PLA integration to use new signal and mode management in the main project files.
+- Refactor any legacy code that interacts with bus, chips, or CPU to use new interfaces in the main project files.
 
 #### Step 6: Testing & Validation
-- Expand and modernize unit and integration tests for bus, chip, and CPU layers.
+- Expand and modernize unit and integration tests for bus, chip, and CPU layers in the main project files.
 - Validate chip selection, PLA mode switching, memory access, and cycle timing.
 - Benchmark performance before and after migration.
 
 #### Step 7: Documentation & Training
-- Update code comments, README, and developer docs to reflect new architecture.
+- Update code comments, README, and developer docs in the main project to reflect new architecture.
 - Provide migration guides and best practices for contributors.
 
 #### Step 8: Incremental Rollout
-- Migrate in stages: bus layer, then chips, then CPU.
+- Migrate in stages: bus layer, then chips, then CPU, in the main project files.
 - Maintain legacy compatibility during transition.
 - Flag new code for easy toggling with macros and feature flags.
 - Gradually phase out legacy code as new modules are validated.
@@ -120,7 +124,7 @@ Migrating to the redesign concepts will:
 - Simplify future redesigns via macro-based handler declarations and centralized logic
 
 **Next Steps:**
-- Use redesign files as reference only; do not update them directly
+- Use redesign files as reference/inspiration only; do not update or use them directly for code, includes, or implementation
 - Apply redesign ideas and techniques to main project files via refactoring
 - Begin with bus layer migration (chip select logic), then chips, then CPU
 - Validate each step with tests and benchmarks

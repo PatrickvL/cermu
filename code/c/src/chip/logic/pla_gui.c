@@ -46,7 +46,7 @@ static const char* get_pla_mode_cpu_description(uint8_t mode) {
 
 
 // Helper function to get PLA mode description
-static const char* get_pla_mode_vic_ii_description(uint8_t mode, uint16_t bank) {
+static const char* get_pla_mode_vicii_description(uint8_t mode, uint16_t bank) {
     static char mode_desc[256];
     
     uint8_t game = (mode >> 4) & 0x01;
@@ -280,17 +280,17 @@ void pla_render_debug_window(void* chip, bool* show_window) {
             // VIC-II specific information
             if (has_bus) {                
                 // Get current VIC-II bank from CIA2 Port A bits 0-1
-                uint8_t current_vic_bank = 0;
+                uint8_t current_vicii_bank = 0;
                 if (c64->cia2) {
                     uint8_t cia2_port_a = c64->cia2->reg[0]; // PRA register
-                    current_vic_bank = 3 - (cia2_port_a & 0x03); // Inverted bits 0-1
+                    current_vicii_bank = 3 - (cia2_port_a & 0x03); // Inverted bits 0-1
                 }
-                uint16_t current_vic_bank_address = current_vic_bank * 0x4000;
-                igText("Configuration: %s", get_pla_mode_vic_ii_description(pla_debug_selected_mode, current_vic_bank_address));
+                uint16_t current_vicii_bank_address = current_vicii_bank * 0x4000;
+                igText("Configuration: %s", get_pla_mode_vicii_description(pla_debug_selected_mode, current_vicii_bank_address));
                 
                 igSeparator();
                 igText("VIC-II Bank Control:");
-                igText("CIA2 Port A bits 0-1: %d (Bank %d active)", c64->cia2 ? (c64->cia2->reg[0] & 0x03) : 0, current_vic_bank);
+                igText("CIA2 Port A bits 0-1: %d (Bank %d active)", c64->cia2 ? (c64->cia2->reg[0] & 0x03) : 0, current_vicii_bank);
                 
                 igSeparator();
                 
@@ -318,7 +318,7 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                         // Get ACID for this VIC-II bank and mode
                         uint8_t read_acid = ACID_UNMAPPED;
                         if (has_bus && pla_debug_selected_mode < 32) {
-                            read_acid = c64->bus->vic_ii_acid_per_bank_per_mode[pla_debug_selected_mode][bank];
+                            read_acid = c64->bus->vicii_acid_per_bank_per_mode[pla_debug_selected_mode][bank];
                         }
 
                         igText("%02d", read_acid);
@@ -332,7 +332,7 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                         igText("$%04X", read_offset);
                         igTableSetColumnIndex(5);
                         // Status: highlight if this 4KB bank is in the active VIC-II 16KB bank
-                        igText(((bank_start / 0x4000) == current_vic_bank) ? "ACTIVE" : "Inactive");
+                        igText(((bank_start / 0x4000) == current_vicii_bank) ? "ACTIVE" : "Inactive");
                     }
                     igEndTable();
                 }

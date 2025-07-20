@@ -10,7 +10,7 @@
 // VIC-II CHIP IMPLEMENTATION STUB
 // ============================================================================
 
-typedef struct vic_state_s {
+typedef struct vicii_state_s {
     uint8_t registers[64];      // VIC-II registers
     uint16_t raster_line;       // Current raster line
     uint16_t cycle;             // Current cycle within raster line
@@ -19,46 +19,46 @@ typedef struct vic_state_s {
     bool badline_active;        // True when VIC is stealing cycles
     bool irq_pending;           // IRQ flag state
     // ... other VIC-II state
-} vic_state_t;
+} vicii_state_t;
 
-FORCE_INLINE REGISTER_CALL generic_bus_state_t vic_advance_cycle(vic_state_t* vic, generic_bus_state_t bus) {
-    if (!vic) return bus;
+FORCE_INLINE REGISTER_CALL generic_bus_state_t vicii_advance_cycle(vicii_state_t* vicii, generic_bus_state_t bus) {
+    if (!vicii) return bus;
     
     // Advance VIC-II timing
-    vic->cycle++;
-    if (vic->cycle >= 63) {  // PAL: 63 cycles per line
-        vic->cycle = 0;
-        vic->raster_line++;
-        if (vic->raster_line >= 312) {  // PAL: 312 lines per frame
-            vic->raster_line = 0;
+    vicii->cycle++;
+    if (vicii->cycle >= 63) {  // PAL: 63 cycles per line
+        vicii->cycle = 0;
+        vicii->raster_line++;
+        if (vicii->raster_line >= 312) {  // PAL: 312 lines per frame
+            vicii->raster_line = 0;
         }
     }
     
     // Update raster line register
-    vic->registers[0x11] = (vic->registers[0x11] & 0x7F) | ((vic->raster_line & 0x100) >> 1);
-    vic->registers[0x12] = vic->raster_line & 0xFF;
+    vicii->registers[0x11] = (vicii->registers[0x11] & 0x7F) | ((vicii->raster_line & 0x100) >> 1);
+    vicii->registers[0x12] = vicii->raster_line & 0xFF;
     
     // Check for raster interrupt
-    uint16_t raster_compare = ((vic->registers[0x11] & 0x80) << 1) | vic->registers[0x12];
-    if (vic->raster_line == raster_compare) {
-        vic->registers[0x19] |= 0x01;  // Set raster interrupt flag
-        vic->irq_pending = true;
+    uint16_t raster_compare = ((vicii->registers[0x11] & 0x80) << 1) | vicii->registers[0x12];
+    if (vicii->raster_line == raster_compare) {
+        vicii->registers[0x19] |= 0x01;  // Set raster interrupt flag
+        vicii->irq_pending = true;
         // Set generic IRQ line
         bus.lines |= GENERIC_IRQ_LINE;
     }
     
     // Check for badline condition (DMA cycles)
-    bool badline_condition = (vic->raster_line >= 0x30) && (vic->raster_line <= 0xF7) && 
-                            ((vic->raster_line & 0x07) == (vic->registers[0x11] & 0x07));
+    bool badline_condition = (vicii->raster_line >= 0x30) && (vicii->raster_line <= 0xF7) && 
+                            ((vicii->raster_line & 0x07) == (vicii->registers[0x11] & 0x07));
     
-    if (badline_condition && vic->cycle >= 15 && vic->cycle <= 54) {
-        vic->badline_active = true;
+    if (badline_condition && vicii->cycle >= 15 && vicii->cycle <= 54) {
+        vicii->badline_active = true;
         // Assert BA line (Bus Available = 0) for DMA
         bus.lines &= ~GENERIC_BA_LINE;
         // Keep AEC high so VIC can read from bus
         bus.lines |= GENERIC_AEC_LINE;
     } else {
-        vic->badline_active = false;
+        vicii->badline_active = false;
         // Release BA line
         bus.lines |= GENERIC_BA_LINE;
         bus.lines |= GENERIC_AEC_LINE;
@@ -70,61 +70,61 @@ FORCE_INLINE REGISTER_CALL generic_bus_state_t vic_advance_cycle(vic_state_t* vi
     return bus;
 }
 
-FORCE_INLINE REGISTER_CALL generic_bus_state_t vic_read(vic_state_t* vic, generic_bus_state_t bus) {
-    if (!vic) return bus;
+FORCE_INLINE REGISTER_CALL generic_bus_state_t vicii_read(vicii_state_t* vicii, generic_bus_state_t bus) {
+    if (!vicii) return bus;
     
     // Handle VIC-II register read
     switch (bus.addr & 0x3F) {
         case 0x11:  // Control Register 1
-            bus.data = vic->registers[0x11];
+            bus.data = vicii->registers[0x11];
             break;
         case 0x12:  // Raster Line
-            bus.data = vic->registers[0x12];
+            bus.data = vicii->registers[0x12];
             break;
         case 0x16:  // Control Register 2
-            bus.data = vic->registers[0x16];
+            bus.data = vicii->registers[0x16];
             break;
         case 0x19:  // Interrupt Request Register
-            bus.data = vic->registers[0x19];
+            bus.data = vicii->registers[0x19];
             break;
         case 0x1A:  // Interrupt Mask Register
-            bus.data = vic->registers[0x1A];
+            bus.data = vicii->registers[0x1A];
             break;
         default:
-            bus.data = vic->registers[bus.addr & 0x3F];
+            bus.data = vicii->registers[bus.addr & 0x3F];
             break;
     }
     
     return bus;
 }
 
-FORCE_INLINE REGISTER_CALL generic_bus_state_t vic_write(vic_state_t* vic, generic_bus_state_t bus) {
-    if (!vic) return bus;
+FORCE_INLINE REGISTER_CALL generic_bus_state_t vicii_write(vicii_state_t* vicii, generic_bus_state_t bus) {
+    if (!vicii) return bus;
     
     // Handle VIC-II register write
     switch (bus.addr & 0x3F) {
         case 0x11:  // Control Register 1
-            vic->registers[0x11] = (vic->registers[0x11] & 0x80) | (bus.data & 0x7F);
+            vicii->registers[0x11] = (vicii->registers[0x11] & 0x80) | (bus.data & 0x7F);
             break;
         case 0x12:  // Raster Line Compare
-            vic->registers[0x12] = bus.data;
+            vicii->registers[0x12] = bus.data;
             break;
         case 0x16:  // Control Register 2
-            vic->registers[0x16] = bus.data;
+            vicii->registers[0x16] = bus.data;
             break;
         case 0x19:  // Interrupt Request Register (write clears)
-            vic->registers[0x19] &= ~bus.data;
+            vicii->registers[0x19] &= ~bus.data;
             // Clear IRQ if no more interrupt sources active
-            if (!(vic->registers[0x19] & vic->registers[0x1A] & 0x0F)) {
-                vic->irq_pending = false;
+            if (!(vicii->registers[0x19] & vicii->registers[0x1A] & 0x0F)) {
+                vicii->irq_pending = false;
                 bus.lines &= ~GENERIC_IRQ_LINE;  // Clear generic IRQ line
             }
             break;
         case 0x1A:  // Interrupt Mask Register
-            vic->registers[0x1A] = bus.data & 0x0F;
+            vicii->registers[0x1A] = bus.data & 0x0F;
             break;
         default:
-            vic->registers[bus.addr & 0x3F] = bus.data;
+            vicii->registers[bus.addr & 0x3F] = bus.data;
             break;
     }
     

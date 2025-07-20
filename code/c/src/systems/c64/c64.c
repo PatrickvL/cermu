@@ -251,7 +251,7 @@ void c64_non_cpu_cycle(void* c64_ptr) {
     c64->total_cycles++;
     
     // VIC tick handles both phi1 and phi2 phases internally
-    vicii_common_cycle(c64->vicii);
+    vicii_cycle(c64->vicii);
     // Other chips tick once per complete cycle
     mos6526_cycle(c64->cia1);
     mos6526_cycle(c64->cia2);
@@ -263,7 +263,7 @@ void c64_non_cpu_cycle(void* c64_ptr) {
     bus->nmi_line = false;
     
     // VIC-II IRQ
-    if (c64->vic.irq_status & c64->vic.irq_mask) {
+    if (c64->vicii.irq_status & c64->vicii.irq_mask) {
         bus->irq_line = true;
     }
     
@@ -320,7 +320,7 @@ c64_t* c64_system_create(const system_config_t* config) {
     c64_t* c64 = calloc(1, sizeof(c64_t));
     if (!c64) return NULL;
 
-    chip_descriptor_t* vicii_descriptor = (config->vic_standard == VIC_PAL ? &mos6569_descriptor : &mos6567_descriptor);
+    chip_descriptor_t* vicii_descriptor = (config->vicii_standard == VIC_PAL ? &mos6569_descriptor : &mos6567_descriptor);
 
     // One line per chip - create, register, assign memory address/size, assign to C64 field, and initialize rwcb_context
     if (!(c64->bus = create_and_register_chip(c64, &c64_bus_descriptor, 0x0000, 0))) return NULL;
@@ -381,7 +381,7 @@ void c64_set_framebuffer(c64_t* c64, uint32_t* framebuffer, int width, int heigh
     if (!c64 || !c64->vicii || !framebuffer) return;
     
     // Set the framebuffer on the VIC-II chip
-    vicii_common_set_framebuffer(c64->vicii, framebuffer, width, height);
+    vicii_set_framebuffer(c64->vicii, framebuffer, width, height);
     
     printf("DEBUG: Framebuffer set for VIC-II: %dx%d\n", width, height);
 }

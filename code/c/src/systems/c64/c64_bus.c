@@ -123,7 +123,7 @@ void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {
     memcpy(c64_bus->encoded_rwid_per_bank, c64_bus->encoded_rwid_per_bank_per_mode[mode], 16);
 #endif
     // Also copy VIC-II active array for optimal performance
-    memcpy(c64_bus->vic_ii_acid_per_bank, c64_bus->vic_ii_acid_per_bank_per_mode[mode], 16);
+    memcpy(c64_bus->vicii_acid_per_bank, c64_bus->vicii_acid_per_bank_per_mode[mode], 16);
 }
 
 static void c64_bus_update_pla_mode(c64_bus_t* c64_bus) {
@@ -270,7 +270,7 @@ void c64_bus_populate_vicii_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* 
         uint8_t read_acid = pla_906114_01_outputs_to_acid((pla_906114_01_t*)pla);
 
         // VIC-II banking stores direct ACID values, no encoding needed
-        bus->vic_ii_acid_per_bank[bank] = read_acid;        
+        bus->vicii_acid_per_bank[bank] = read_acid;        
     }
 }
 
@@ -316,7 +316,7 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
         // Populate VIC-II mapping for this mode (stores direct ACIDs)
         c64_bus_populate_vicii_pla_mapping(bus, pla);
         // Copy the VIC-II raw ACIDs to the mode-specific array
-        memcpy(bus->vic_ii_acid_per_bank_per_mode[cpu_mode], bus->vic_ii_acid_per_bank, 16);
+        memcpy(bus->vicii_acid_per_bank_per_mode[cpu_mode], bus->vicii_acid_per_bank, 16);
     }
 }
 

@@ -21,7 +21,7 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_read(c64_t* c64, c64_
     bus_state.bus.data = c64->bus->data;  // Retain last bus value
     
     // All chips advance their internal timing WITH bus state for interrupt handling
-    bus_state.bus = vic_advance_cycle(c64->vic, bus_state.bus);
+    bus_state.bus = vicii_advance_cycle(c64->vicii, bus_state.bus);
     bus_state.bus = sid_advance_cycle(c64->sid, bus_state.bus);
     bus_state.bus = cia_advance_cycle(c64->cia1, bus_state.bus);
     bus_state.bus = cia_advance_cycle(c64->cia2, bus_state.bus);
@@ -54,7 +54,7 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_read(c64_t* c64, c64_
         case CHIP_D2_VIC:
         case CHIP_D3_VIC:
             // All VIC pages map to the same VIC chip
-            bus_state.bus = vic_read(c64->vic, bus_state.bus);
+            bus_state.bus = vicii_read(c64->vicii, bus_state.bus);
             break;
         case CHIP_D4_SID:
         case CHIP_D5_SID:
@@ -104,7 +104,7 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_write(c64_t* c64, c64
     uint8_t selected_chip += is_io & ((bus_state.bus.addr >> 8) & 0xF);
     
     // All chips advance their internal timing WITH bus state for interrupt handling
-    bus = vic_advance_cycle(c64->vic, bus);
+    bus = vicii_advance_cycle(c64->vicii, bus);
     bus = sid_advance_cycle(c64->sid, bus);
     bus = cia_advance_cycle(c64->cia1, bus);
     bus = cia_advance_cycle(c64->cia2, bus);
@@ -134,7 +134,7 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_write(c64_t* c64, c64
         case CHIP_D2_VIC:
         case CHIP_D3_VIC:
             // All VIC pages map to the same VIC chip
-            bus_state.bus = vic_write(c64->vic, bus_state.bus);
+            bus_state.bus = vicii_write(c64->vicii, bus_state.bus);
             break;
         case CHIP_D4_SID:
         case CHIP_D5_SID:
@@ -332,7 +332,7 @@ REGISTER_CALL c64_bus_state_t c64_non_cpu_cycle(c64_t* c64, c64_bus_state_t bus_
     // Tick all non-CPU chips during bus wait states
     // This maintains proper timing during DMA and bus contention
     // Each chip can modify the bus state (e.g., set interrupt flags)
-    bus_state.bus = vic_advance_cycle(c64->vic, bus_state.bus);
+    bus_state.bus = vicii_advance_cycle(c64->vicii, bus_state.bus);
     bus_state.bus = sid_advance_cycle(c64->sid, bus_state.bus);
     bus_state.bus = cia_advance_cycle(c64->cia1, bus_state.bus);
     bus_state.bus = cia_advance_cycle(c64->cia2, bus_state.bus);

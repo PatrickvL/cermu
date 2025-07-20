@@ -4,6 +4,16 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+// Central bus state type for all chips (main project only)
+typedef struct {
+    uint32_t raw;
+    struct {
+        uint16_t addr;
+        uint8_t data;
+        uint8_t lines;
+    };
+} bus_cycle_t;
+
 // Forward-declare the struct name
 typedef struct chip_descriptor_s chip_descriptor_t;
 

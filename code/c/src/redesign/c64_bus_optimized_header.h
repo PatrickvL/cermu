@@ -6,7 +6,7 @@
 
 // Forward declarations
 typedef struct c64_s c64_t;
-typedef struct vic_state_s vic_state_t;
+typedef struct vicii_state_s vicii_state_t;
 typedef struct sid_state_s sid_state_t;
 typedef struct cia_state_s cia_state_t;
 
@@ -117,7 +117,7 @@ typedef struct {
 // Main C64 system structure
 typedef struct c64_s {
     c64_bus_t* bus;
-    vic_state_t* vic;
+    vicii_state_t* vicii;
     sid_state_t* sid;
     cia_state_t* cia1;
     cia_state_t* cia2;
@@ -156,13 +156,13 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_read(c64_t* c64, c64_
 FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_write(c64_t* c64, c64_bus_state_t bus_state_in);
 
 // Chip advance cycle functions - WITH GENERIC BUS STATE for system independence
-FORCE_INLINE REGISTER_CALL generic_bus_state_t vic_advance_cycle(vic_state_t* vic, generic_bus_state_t bus_state);
+FORCE_INLINE REGISTER_CALL generic_bus_state_t vicii_advance_cycle(vicii_state_t* vicii, generic_bus_state_t bus_state);
 FORCE_INLINE REGISTER_CALL generic_bus_state_t sid_advance_cycle(sid_state_t* sid, generic_bus_state_t bus_state);
 FORCE_INLINE REGISTER_CALL generic_bus_state_t cia_advance_cycle(cia_state_t* cia, generic_bus_state_t bus_state);
 
 // Chip I/O functions with generic bus state (called only when chip is selected)
-FORCE_INLINE REGISTER_CALL generic_bus_state_t vic_read(vic_state_t* vic, generic_bus_state_t bus_state);
-FORCE_INLINE REGISTER_CALL generic_bus_state_t vic_write(vic_state_t* vic, generic_bus_state_t bus_state);
+FORCE_INLINE REGISTER_CALL generic_bus_state_t vicii_read(vicii_state_t* vicii, generic_bus_state_t bus_state);
+FORCE_INLINE REGISTER_CALL generic_bus_state_t vicii_write(vicii_state_t* vicii, generic_bus_state_t bus_state);
 FORCE_INLINE REGISTER_CALL generic_bus_state_t sid_read(sid_state_t* sid, generic_bus_state_t bus_state);
 FORCE_INLINE REGISTER_CALL generic_bus_state_t sid_write(sid_state_t* sid, generic_bus_state_t bus_state);
 FORCE_INLINE REGISTER_CALL generic_bus_state_t cia_read(cia_state_t* cia, generic_bus_state_t bus_state);

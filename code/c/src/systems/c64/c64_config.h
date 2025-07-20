@@ -9,7 +9,7 @@
 typedef enum {
     VIC_PAL,   // PAL timing standard
     VIC_NTSC   // NTSC timing standard
-} vic_standard_t;
+} vicii_standard_t;
 
 /**
  * ROM file configuration structure.
@@ -26,7 +26,7 @@ typedef struct {
  * Pass this to c64_system_create() to configure the C64 system.
  */
 typedef struct {
-    vic_standard_t vic_standard;
+    vicii_standard_t vicii_standard;
     rom_config_t* rom_config;  // Optional ROM configuration (NULL = use defaults)
 } system_config_t;
 

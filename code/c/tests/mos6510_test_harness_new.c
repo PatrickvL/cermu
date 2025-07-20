@@ -13,7 +13,7 @@ test_harness_t* test_harness_create(void) {
     }
 
     system_config_t config = {
-        .vic_standard = VIC_PAL
+        .vicii_standard = VIC_PAL
     };
     harness->c64 = c64_system_create(&config);
     if (!harness->c64) {

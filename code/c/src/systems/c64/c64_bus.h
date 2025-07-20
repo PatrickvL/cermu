@@ -66,7 +66,7 @@ enum {
 
 // Forward declarations
 typedef struct c64_s c64_t;
-typedef struct vic_state_s vic_state_t;
+typedef struct vicii_state_s vicii_state_t;
 typedef struct sid_state_s sid_state_t;
 typedef struct cia_state_s cia_state_t;
 
@@ -171,11 +171,11 @@ typedef struct c64_bus_s {
     alignas(64) uint8_t encoded_rwid_per_bank_per_mode[32][16]; // CPU banking configurations per mode    
 #endif
     // VIC-II active array for optimized access (raw ACIDs, no encoding)  
-    alignas(16) uint8_t vic_ii_acid_per_bank[16];
+    alignas(16) uint8_t vicii_acid_per_bank[16];
     
     // VIC-II banking configurations per mode (32 modes x 16 banks = 512 bytes)
     // VIC-II uses direct ACID values, not encoded, since it only does read accesses
-    alignas(64) uint8_t vic_ii_acid_per_bank_per_mode[32][16]; // VIC-II direct ACID per mode
+    alignas(64) uint8_t vicii_acid_per_bank_per_mode[32][16]; // VIC-II direct ACID per mode
     
     // Split read/write for better cache usage (reads are 3-4x more frequent)
     alignas(64) struct {

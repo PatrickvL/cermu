@@ -316,7 +316,7 @@ void example_c64_execution() {
     c64_bus_attach_c64(c64->bus, c64);
     
     // Initialize VIC, SID, CIA chips (stub allocation)
-    c64->vic = calloc(1, sizeof(vic_state_t));
+    c64->vicii = calloc(1, sizeof(vicii_state_t));
     c64->sid = calloc(1, sizeof(sid_state_t));
     c64->cia1 = calloc(1, sizeof(cia_state_t));
     c64->cia2 = calloc(1, sizeof(cia_state_t));
@@ -344,7 +344,7 @@ void example_c64_execution() {
     cpu_execute_nostradamus(&cpu, 1000);  // Execute up to 1000 instructions
     
     // Cleanup
-    free(c64->vic);
+    free(c64->vicii);
     free(c64->sid);
     free(c64->cia1);
     free(c64->cia2);

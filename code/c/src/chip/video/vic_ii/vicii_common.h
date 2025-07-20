@@ -230,13 +230,13 @@ typedef struct {
 // ========================================================================================
 // CYCLE TABLE ENTRY TYPE (needed for timing unit)
 // ========================================================================================
-typedef struct vicii_common_s vicii_common_t;
-typedef uint8_t (*vic_cycle_func_t)(vicii_common_t*, int);
+typedef struct vicii_s vicii_t;
+typedef uint8_t (*vicii_cycle_func_t)(vicii_t*, int);
 
-typedef struct vic_cycle_entry_t {
-    vic_cycle_func_t func;
+typedef struct vicii_cycle_entry_t {
+    vicii_cycle_func_t func;
     int param;
-} vic_cycle_entry_t;
+} vicii_cycle_entry_t;
 
 // ========================================================================================
 // TOPIC-SPECIFIC UNIT STRUCTURES
@@ -245,7 +245,7 @@ typedef struct vic_cycle_entry_t {
 // Register Unit - All VIC-II register state
 typedef struct {
     uint8_t data[VICII_REGS_SIZE + 2];  // +2 for shadow collision registers
-} vic_registers_unit_t;
+} vicii_registers_unit_t;
 
 // Timing Unit - All timing-related state
 typedef struct {
@@ -259,12 +259,12 @@ typedef struct {
     uint32_t frame_count;                // Frame counter
 
     // Precalculated timing parameters
-    const vic_cycle_entry_t* cycle_table; // Precalculated cycle table pointer
+    const vicii_cycle_entry_t* cycle_table; // Precalculated cycle table pointer
     uint16_t base_offset;                // Precalculated x_coordinate base offset
     uint16_t pixels_per_line;            // Total pixels per line (504 PAL, 520 NTSC)
     uint8_t cycles_per_line;             // Cycles per line (63 PAL, 65 NTSC)
     uint16_t total_lines;                // Total lines per frame
-} vic_timing_unit_t;
+} vicii_timing_unit_t;
 
 // Video Logic Unit - Display state and bad line logic (Documentation section 3.7)
 typedef struct {
@@ -276,13 +276,13 @@ typedef struct {
     uint8_t rc;          // RC - Row Counter (3 bits) (Documentation section 3.7.2)
     uint8_t vmli;        // VMLI - Video Matrix Line Index (6 bits) (Documentation section 3.7.2)
     uint8_t refresh_counter; // REF - 8 bit refresh counter (Documentation section 3.13)
-} vic_video_logic_unit_t;
+} vicii_video_logic_unit_t;
 
 // Video Data Unit - Character and color line buffers
 typedef struct {
     uint8_t video_matrix_line[40];
     vicii_color_t video_color_line[40];
-} vic_video_data_unit_t;
+} vicii_video_data_unit_t;
 
 // Graphics Sequencer Unit - Graphics pixel generation state
 typedef struct {
@@ -293,7 +293,7 @@ typedef struct {
     uint8_t char_index;       // Current character index (0-39)
     uint8_t pixel_in_char;    // Current pixel within character (0-7)
     vicii_pixel_t colors[5];  // Color palette for current mode
-} vic_sequencer_unit_t;
+} vicii_sequencer_unit_t;
 
 // Border Unit - Border generation and limits (Documentation section 3.9)
 typedef struct {
@@ -340,7 +340,7 @@ typedef struct {
     uint16_t border_right;
     bool main_border_flip_flop;      // Main border flip flop (Documentation section 3.9)
     bool vertical_border_flip_flop;  // Vertical border flip flop (Documentation section 3.9)
-} vic_border_unit_t;
+} vicii_border_unit_t;
 
 // Memory Mapping Unit - VIC-II memory access configuration (Documentation section 2.4.2)
 typedef struct {
@@ -348,7 +348,7 @@ typedef struct {
     uint16_t vm_base;           // VM10-VM13 bits - Video Matrix base within VIC bank
     uint16_t cb_base;           // CB11-CB13 bits - Character Base within VIC bank
     uint8_t bank;              // Current bank (0-3)
-} vic_memory_unit_t;
+} vicii_memory_unit_t;
 
 // Sprite Unit - Single sprite state (Documentation section 3.8 + VIC-Addendum)
 typedef struct {
@@ -373,12 +373,12 @@ typedef struct {
     uint32_t shift_reg;          // 24-bit shift register
     uint8_t shift_register[3];
     uint8_t data_buffer[3];
-} vic_sprite_unit_t;
+} vicii_sprite_unit_t;
 
 // Sprites System Unit - All sprite management
 typedef struct {
-    vic_sprite_unit_t sprites[VICII_NUM_SPRITES];
-} vic_sprites_unit_t;
+    vicii_sprite_unit_t sprites[VICII_NUM_SPRITES];
+} vicii_sprites_unit_t;
 
 // Pixel Output Unit - Pixel line generation and framebuffer
 typedef struct {
@@ -396,17 +396,17 @@ typedef struct {
     uint32_t* framebuffer;
     int framebuffer_width;
     int framebuffer_height;
-} vic_pixel_unit_t;
+} vicii_pixel_unit_t;
 
 // Bus Interface Unit - External bus communication
 typedef struct {
     void* bus;
     void (*bank_change)(void* context, uint8_t bank);
     bool lp_edge_detected;
-} vic_bus_unit_t;
+} vicii_bus_unit_t;
 
 // Main VIC-II structure composed of units
-struct vicii_common_s {
+struct vicii_s {
     chip_descriptor_t* desc;
 
     // Feature toggles
@@ -416,16 +416,16 @@ struct vicii_common_s {
     const vicii_chip_config_t* config;
 
     // Topic-specific units
-    vic_registers_unit_t registers;
-    vic_timing_unit_t timing;
-    vic_video_logic_unit_t video_logic;
-    vic_video_data_unit_t video_data;
-    vic_sequencer_unit_t sequencer;
-    vic_border_unit_t border;
-    vic_memory_unit_t memory;
-    vic_sprites_unit_t sprites;
-    vic_pixel_unit_t pixel;
-    vic_bus_unit_t bus;
+    vicii_registers_unit_t registers;
+    vicii_timing_unit_t timing;
+    vicii_video_logic_unit_t video_logic;
+    vicii_video_data_unit_t video_data;
+    vicii_sequencer_unit_t sequencer;
+    vicii_border_unit_t border;
+    vicii_memory_unit_t memory;
+    vicii_sprites_unit_t sprites;
+    vicii_pixel_unit_t pixel;
+    vicii_bus_unit_t bus;
 };
 
 // ========================================================================================
@@ -434,27 +434,31 @@ struct vicii_common_s {
 
 // Only externally-visible (non-static/non-inline) functions need declarations
 
-// Main cycle function
-void vicii_common_cycle(vicii_common_t* vicii);
+// Main cycle function with unified bus state threading
+bus_cycle_t vicii_advance_cycle(vicii_t* vicii, bus_cycle_t bus_state);
+
+// Unified register I/O
+bus_cycle_t vicii_read(vicii_t* vicii, bus_cycle_t bus_state);
+bus_cycle_t vicii_write(vicii_t* vicii, bus_cycle_t bus_state);
 
 // Factory and lifecycle
-vicii_common_t* vicii_common_system_create(chip_descriptor_t* desc, const vicii_chip_config_t* config, void (*bank_change)(void*, uint8_t));
-void vicii_common_system_destroy(void* chip);
+vicii_t* vicii_system_create(chip_descriptor_t* desc, const vicii_chip_config_t* config, void (*bank_change)(void*, uint8_t));
+void vicii_system_destroy(void* chip);
 
 // Configuration helpers
-const vicii_chip_config_t* vicii_common_get_default_config(bool is_pal);
+const vicii_chip_config_t* vicii_get_default_config(bool is_pal);
 
 // Bus attachment
-void vicii_common_bus_attach(void* chip, void* bus);
+void vicii_bus_attach(void* chip, void* bus);
 
 // Register I/O (legacy wrappers)
-uint8_t vicii_common_registers_read(void* chip, uint16_t address);
-void vicii_common_registers_write(void* chip, uint16_t address, uint8_t value);
+uint8_t vicii_registers_read(void* chip, uint16_t address);
+void vicii_registers_write(void* chip, uint16_t address, uint8_t value);
 
 // Bank change callback
-void vicii_common_bank_change(void* chip, uint8_t bank);
+void vicii_bank_change(void* chip, uint8_t bank);
 
 // Utility functions
-void vicii_common_set_framebuffer(vicii_common_t* vicii, uint32_t* framebuffer, int width, int height);
+void vicii_set_framebuffer(vicii_t* vicii, uint32_t* framebuffer, int width, int height);
 
 #endif // VICII_COMMON_H

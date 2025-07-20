@@ -8,7 +8,7 @@
 int main(void) {
     // Create system configuration (PAL by default)
     system_config_t config = {
-        .vic_standard = VIC_PAL,
+        .vicii_standard = VIC_PAL,
         .rom_config = NULL  // Use default ROM paths
     };
     
