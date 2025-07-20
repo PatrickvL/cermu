@@ -1,5 +1,27 @@
 #include "system.h"
 
+#ifdef _MSC_VER
+#pragma message("Compiling with MSVC")
+#endif
+#ifdef _M_X64
+#pragma message("Targeting x64")
+#endif
+#ifdef _M_IX86
+#pragma message("Targeting x86")
+#endif
+#ifdef __GNUC__
+#pragma message("Compiling with GCC")
+#endif
+#ifdef __clang__
+#pragma message("Compiling with Clang")
+#endif
+#ifdef __x86_64__
+#pragma message("Detected x86_64")
+#endif
+#ifdef __i386__
+#pragma message("Detected i386")
+#endif
+
 uint8_t system_chip_register(system_8bit_t* system, void* chip, chip_descriptor_t* desc, uint16_t base, unsigned int size) {
     if (system->chip_count >= 16) return 0xFF;
     uint8_t id = system->chip_count++;

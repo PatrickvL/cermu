@@ -1,28 +1,6 @@
 #ifndef AIEMUC_H
 #define AIEMUC_H
 
-#ifdef _MSC_VER
-#pragma message("Compiling with MSVC")
-#endif
-#ifdef _M_X64
-#pragma message("Targeting x64")
-#endif
-#ifdef _M_IX86
-#pragma message("Targeting x86")
-#endif
-#ifdef __GNUC__
-#pragma message("Compiling with GCC")
-#endif
-#ifdef __clang__
-#pragma message("Compiling with Clang")
-#endif
-#ifdef __x86_64__
-#pragma message("Detected x86_64")
-#endif
-#ifdef __i386__
-#pragma message("Detected i386")
-#endif
-
 // Compiler optimization hints
 #ifdef _MSC_VER
 //#include <stdalign.h>

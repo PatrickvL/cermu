@@ -60,16 +60,9 @@ enum {
     ACID_MAX = 24 // Total number of ACIDs (0-23 for I/O, 16-19 for writable chips, 20-23 for read-only)
 };
 
-#if REDESIGN
 // =============================
 // Redesign Bus Types & Macros
 // =============================
-
-// Forward declarations
-typedef struct c64_s c64_t;
-typedef struct vicii_state_s vicii_state_t;
-typedef struct sid_state_s sid_state_t;
-typedef struct cia_state_s cia_state_t;
 
 // Chip IDs ordered by memory size (largest first), then I/O by page number
 typedef enum {
@@ -108,18 +101,6 @@ typedef enum {
 #define CHIP_SID      CHIP_D4_SID    // Primary SID chip
 #define CHIP_CIA1     CHIP_DC_CIA1
 #define CHIP_CIA2     CHIP_DD_CIA2
-
-// System line masks for cartridge signals (moved out of control lines to separate field)
-#define SYS_MASK_EXROM 8   // EXROM signal
-#define SYS_MASK_GAME  16  // GAME signal
-
-// Chip select encoding structure
-typedef struct {
-    uint8_t read_chip  : 4;  // 4 bits = 16 possible read chips (0-15)
-    uint8_t write_chip : 4;  // 4 bits = 16 possible write chips (0-15)
-} chip_select_t;
-
-#endif
 
 // C64 bus controller structure
 typedef struct c64_bus_s {
