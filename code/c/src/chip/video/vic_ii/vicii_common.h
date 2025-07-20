@@ -3,6 +3,7 @@
 
 #include "../../core/chip.h"
 #include <stdint.h>
+#include "../../../core/system_lines.h" // For bus_state_t
 #include <stdbool.h>
 
 // VIC-II Register Constants

@@ -4,6 +4,9 @@
 #include "../../core/chip.h"
 #include "../../core/bus_cycle_interface.h"
 #include <stdint.h>
+#include "../../../core/system_lines.h" // For bus_state_t
+#include <stdint.h>
+#include <stdbool.h>
 #include <stdbool.h>
 
 // CIA MOS 6526 DIP has 40 pins; Pinout :

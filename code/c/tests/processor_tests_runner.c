@@ -398,7 +398,7 @@ bool run_processor_test(cpu_instance_t* instance, const processor_test_t* test) 
                 if (instance->cpu) {
                     // The control interface is attached to the CPU instance
                     fam65xx_t* famcpu = (fam65xx_t*)instance->cpu;
-                    famcpu->control_interface.set_lines(famcpu->control_interface.context, SYS_MASK_NMI);
+                    famcpu->control_interface.set_lines(famcpu->control_interface.context, BUS_MASK_NMI);
                 }
             }
             break;
