@@ -40,7 +40,7 @@ REGISTER_CALL void* cpu_fire_escape(cpu_state_t* cpu, bus_state_t* bus_state) {
 REGISTER_CALL void* cpu_lda_abs(cpu_state_t* cpu, bus_state_t* bus) {
     // Fetch low byte of address (triggers system tick)
     bus->addr = cpu->PC++;
-    bus->lines |= BUS_LINE_RW;  // Read operation
+    bus->lines |= BUS_MASK_RW;  // Read operation
     *bus = cpu->bus->read_cycle(cpu->bus->context, *bus);
     uint8_t addr_lo = bus->data;
     
@@ -68,7 +68,7 @@ REGISTER_CALL void* cpu_lda_abs(cpu_state_t* cpu, bus_state_t* bus) {
 REGISTER_CALL void* cpu_sta_abs(cpu_state_t* cpu, bus_state_t* bus) {
     // Fetch address (2 system ticks)
     bus->addr = cpu->PC++;
-    bus->lines |= BUS_LINE_RW;  // Read operation for address fetch
+    bus->lines |= BUS_MASK_RW;  // Read operation for address fetch
     *bus = cpu->bus->read_cycle(cpu->bus->context, *bus);
     uint8_t addr_lo = bus->data;
     
@@ -81,7 +81,7 @@ REGISTER_CALL void* cpu_sta_abs(cpu_state_t* cpu, bus_state_t* bus) {
     // Write A register to address (1 system tick)
     bus->addr = addr;
     bus->data = cpu->A;
-    bus->lines &= ~BUS_LINE_RW;  // Write operation (R/W = 0)
+    bus->lines &= ~BUS_MASK_RW;  // Write operation (R/W = 0)
     *bus = cpu->bus->write_cycle(cpu->bus->context, *bus);
     
     return get_next_handler(cpu, bus);
@@ -118,7 +118,7 @@ REGISTER_CALL void* cpu_brk(cpu_state_t* cpu, bus_state_t* bus) {
     // Push PC+2 to stack (high byte first)
     bus->addr = 0x0100 + cpu->SP--;
     bus->data = (cpu->PC + 1) >> 8;
-    bus->lines &= ~BUS_LINE_RW;  // Write operation (R/W = 0)
+    bus->lines &= ~BUS_MASK_RW;  // Write operation (R/W = 0)
     *bus = cpu->bus->write_cycle(cpu->bus->context, *bus);
     
     bus->addr = 0x0100 + cpu->SP--;
@@ -135,7 +135,7 @@ REGISTER_CALL void* cpu_brk(cpu_state_t* cpu, bus_state_t* bus) {
     
     // Load interrupt vector from $FFFE/$FFFF
     bus->addr = 0xFFFE;
-    bus->lines |= BUS_LINE_RW;  // Read operation
+    bus->lines |= BUS_MASK_RW;  // Read operation
     *bus = cpu->bus->read_cycle(cpu->bus->context, *bus);
     uint8_t vec_lo = bus->data;
     
@@ -161,7 +161,7 @@ REGISTER_CALL void* cpu_handle_irq(cpu_state_t* cpu, bus_state_t* bus) {
     // Push PC to stack (high byte first)
     bus->addr = 0x0100 + cpu->SP--;
     bus->data = cpu->PC >> 8;
-    bus->lines &= ~BUS_LINE_RW;  // Write operation (R/W = 0)
+    bus->lines &= ~BUS_MASK_RW;  // Write operation (R/W = 0)
     *bus = cpu->bus->write_cycle(cpu->bus->context, *bus);
     
     bus->addr = 0x0100 + cpu->SP--;
@@ -178,7 +178,7 @@ REGISTER_CALL void* cpu_handle_irq(cpu_state_t* cpu, bus_state_t* bus) {
     
     // Load IRQ vector from $FFFE/$FFFF
     bus->addr = 0xFFFE;
-    bus->lines |= BUS_LINE_RW;  // Read operation
+    bus->lines |= BUS_MASK_RW;  // Read operation
     *bus = cpu->bus->read_cycle(cpu->bus->context, *bus);
     uint8_t vec_lo = bus->data;
     
@@ -234,9 +234,9 @@ static PFNDUOP handler_table[256] = {
 // Get next handler based on current PC and interrupt state
 REGISTER_CALL void* get_next_handler(cpu_state_t* cpu, bus_state_t* bus_state) {
     // Fast combined interrupt check - most cycles have no interrupts
-    if (bus_state->lines & (BUS_LINE_NMI | BUS_LINE_IRQ)) {
+    if (bus_state->lines & (BUS_MASK_NMI | BUS_MASK_IRQ)) {
         // Only differentiate when interrupts are actually pending
-        if (bus_state->lines & BUS_LINE_NMI) {
+        if (bus_state->lines & BUS_MASK_NMI) {
             // NMI has highest priority and cannot be masked
             return cpu_handle_nmi;
         } else if (!(cpu->P & 0x04)) {
@@ -247,7 +247,7 @@ REGISTER_CALL void* get_next_handler(cpu_state_t* cpu, bus_state_t* bus_state) {
     
     // Fetch next opcode
     bus_state->addr = cpu->PC++;
-    bus_state->lines |= BUS_LINE_RW;  // Read operation
+    bus_state->lines |= BUS_MASK_RW;  // Read operation
     *bus_state = cpu->bus->read_cycle(cpu->bus->context, *bus_state);
     uint8_t opcode = bus_state->data;
     
@@ -261,7 +261,7 @@ REGISTER_CALL void* get_next_handler(cpu_state_t* cpu, bus_state_t* bus_state) {
 void cpu_execute_nostradamus(cpu_state_t* cpu, int max_instructions) {
     // Initialize bus state - allocated on stack for all handlers to share
     c64_bus_state_t shared_bus = {0};
-    shared_bus.bus.lines = BUS_LINE_BA | BUS_LINE_AEC | BUS_LINE_RDY;  // Default line states
+    shared_bus.bus.lines = BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY;  // Default line states
     
     PFNDUOP current = get_next_handler(cpu, &shared_bus.bus);  // Pass generic bus pointer
     

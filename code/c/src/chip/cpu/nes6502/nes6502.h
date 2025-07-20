@@ -30,7 +30,7 @@ bool nes6502_step(nes6502_t* cpu);
 // Configuration and setup
 void nes6502_attach_bus(nes6502_t* cpu, const bus_cycle_ops_t* bus_interface);
 void nes6502_attach_control_lines(nes6502_t* cpu, const control_lines_interface_t* control_interface);
-void nes6502_attach_system_lines(nes6502_t* cpu, system_lines_t* system_lines);
+void nes6502_attach_bus_state(nes6502_t* cpu, bus_state_t* bus_state);
 void nes6502_attach_ram(nes6502_t* cpu, const access_callback_t* ram_access);
 
 // State access (for debugger, test harness, etc.)

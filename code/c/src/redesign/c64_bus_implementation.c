@@ -177,7 +177,7 @@ c64_bus_t* c64_bus_create(void) {
     // Initialize bus state
     bus->address = 0;
     bus->data = 0;
-    bus->control_lines = BUS_LINE_BA | BUS_LINE_AEC | BUS_LINE_RDY;
+    bus->control_lines = BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY;
     
     // Initialize system lines with default cartridge signals (no cartridge)
     bus->system_lines = SYS_MASK_EXROM | SYS_MASK_GAME;  // Both high = no cartridge
@@ -208,7 +208,7 @@ static REGISTER_CALL c64_bus_state_t c64_wait_for_bus_ready(c64_bus_t* bus, c64_
     if (is_read_cycle) {
         // CPU read must wait for VIC to release the bus (AEC high) AND
         // for the BA/RDY line to be high
-        while (!(bus->control_lines & BUS_LINE_AEC) || !(bus->control_lines & BUS_LINE_BA)) {
+        while (!(bus->control_lines & BUS_MASK_AEC) || !(bus->control_lines & BUS_MASK_BA)) {
             bus_state = c64_non_cpu_cycle(c64, bus_state);
             // Update control lines from returned bus state
             bus->control_lines = bus_state.bus.lines;
@@ -216,7 +216,7 @@ static REGISTER_CALL c64_bus_state_t c64_wait_for_bus_ready(c64_bus_t* bus, c64_
     } else {
         // CPU write only needs to wait for VIC to release the address bus
         // It is NOT affected by the BA/RDY line
-        while (!(bus->control_lines & BUS_LINE_AEC)) {
+        while (!(bus->control_lines & BUS_MASK_AEC)) {
             bus_state = c64_non_cpu_cycle(c64, bus_state);
             // Update control lines from returned bus state
             bus->control_lines = bus_state.bus.lines;
@@ -235,7 +235,7 @@ REGISTER_CALL c64_bus_state_t c64_bus_read_cycle(c64_bus_t* bus, c64_bus_state_t
 
     // Optimized system tick with compile-time read optimization
     // Set R/W line high for reads
-    bus_state.bus.lines |= BUS_LINE_RW;
+    bus_state.bus.lines |= BUS_MASK_RW;
     
     return c64_system_tick_read(bus->c64, bus_state);
 }
@@ -250,7 +250,7 @@ REGISTER_CALL c64_bus_state_t c64_bus_write_cycle(c64_bus_t* bus, c64_bus_state_
 
     // Optimized system tick with compile-time write optimization  
     // Ensure R/W line is clear for writes
-    bus_state.bus.lines &= ~BUS_LINE_RW;
+    bus_state.bus.lines &= ~BUS_MASK_RW;
     
     return c64_system_tick_write(bus->c64, bus_state);
 }

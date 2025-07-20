@@ -70,12 +70,12 @@ typedef union {
 } bus_state_t;
 
 // Generic control line masks (system-independent)
-#define BUS_LINE_RW    0x01  // Read/Write line (1=read, 0=write)
-#define BUS_LINE_IRQ   0x02  // Interrupt request line
-#define BUS_LINE_NMI   0x04  // Non-maskable interrupt line
-#define BUS_LINE_RDY   0x08  // Ready line
-#define BUS_LINE_BA    0x10  // Bus available line
-#define BUS_LINE_AEC   0x20  // Address enable control line
+#define BUS_MASK_RW    0x01  // Read/Write line (1=read, 0=write)
+#define BUS_MASK_IRQ   0x02  // Interrupt request line
+#define BUS_MASK_NMI   0x04  // Non-maskable interrupt line
+#define BUS_MASK_RDY   0x08  // Ready line
+#define BUS_MASK_BA    0x10  // Bus available line
+#define BUS_MASK_AEC   0x20  // Address enable control line
 
 // C64-specific bus state (extends generic bus state)
 typedef bus_state_t c64_bus_state_t;

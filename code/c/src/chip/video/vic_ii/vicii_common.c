@@ -26,19 +26,19 @@ uint32_t* vicii_get_default_palette(void) {
 
 // Bus control helpers
 static inline void vicii_bus_control_aec_high(vicii_t* vicii) {
-    ((c64_bus_t*)vicii->bus.bus)->state.lines |= BUS_LINE_AEC;
+    ((c64_bus_t*)vicii->bus.bus)->state.lines |= BUS_MASK_AEC;
 }
 
 static inline void vicii_bus_control_aec_low(vicii_t* vicii) {
-    ((c64_bus_t*)vicii->bus.bus)->state.lines &= ~BUS_LINE_AEC;
+    ((c64_bus_t*)vicii->bus.bus)->state.lines &= ~BUS_MASK_AEC;
 }
 
 static inline void vicii_bus_control_ba_high(vicii_t* vicii) {
-    ((c64_bus_t*)vicii->bus.bus)->state.lines |= BUS_LINE_BA;
+    ((c64_bus_t*)vicii->bus.bus)->state.lines |= BUS_MASK_BA;
 }
 
 static inline void vicii_bus_control_ba_low(vicii_t* vicii) {
-    ((c64_bus_t*)vicii->bus.bus)->state.lines &= ~BUS_LINE_BA;
+    ((c64_bus_t*)vicii->bus.bus)->state.lines &= ~BUS_MASK_BA;
 }
 
 // ========================================================================================

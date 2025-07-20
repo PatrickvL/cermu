@@ -84,7 +84,7 @@ void* c64_bus_system_create(chip_descriptor_t* desc) {
     // Initialize bus state
     c64_bus->state.addr = 0;
     c64_bus->state.data = 0;
-    c64_bus->state.lines = BUS_LINE_BA | BUS_LINE_AEC | BUS_LINE_RDY;
+    c64_bus->state.lines = BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY;
       // Initialize system lines with default cartridge signals (no cartridge)
     c64_bus->system_lines = SYS_MASK_EXROM | SYS_MASK_GAME;  // Both high = no cartridge
     
@@ -141,13 +141,13 @@ static inline void c64_wait_for_bus_ready(c64_bus_t *c64_bus, bool is_read_cycle
     if (is_read_cycle) {
         // A CPU read must wait for VIC to release the bus (AEC high) AND
         // for the BA/RDY line to be high.
-        while (!(c64_bus->state.lines & BUS_LINE_AEC) || !(c64_bus->state.lines & BUS_LINE_BA)) {
+        while (!(c64_bus->state.lines & BUS_MASK_AEC) || !(c64_bus->state.lines & BUS_MASK_BA)) {
             c64_non_cpu_cycle(c64);
         }
     } else {
         // A CPU write only needs to wait for VIC to release the address bus.
         // It is NOT affected by the BA/RDY line.
-        while (!(c64_bus->state.lines & BUS_LINE_AEC)) {
+        while (!(c64_bus->state.lines & BUS_MASK_AEC)) {
             c64_non_cpu_cycle(c64);
         }
     }

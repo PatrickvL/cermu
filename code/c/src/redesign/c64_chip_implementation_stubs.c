@@ -44,7 +44,7 @@ FORCE_INLINE REGISTER_CALL bus_state_t vicii_advance_cycle(vicii_state_t* vicii,
         vicii->registers[0x19] |= 0x01;  // Set raster interrupt flag
         vicii->irq_pending = true;
         // Set generic IRQ line
-        bus.lines |= BUS_LINE_IRQ;
+        bus.lines |= BUS_MASK_IRQ;
     }
     
     // Check for badline condition (DMA cycles)
@@ -54,14 +54,14 @@ FORCE_INLINE REGISTER_CALL bus_state_t vicii_advance_cycle(vicii_state_t* vicii,
     if (badline_condition && vicii->cycle >= 15 && vicii->cycle <= 54) {
         vicii->badline_active = true;
         // Assert BA line (Bus Available = 0) for DMA
-        bus.lines &= ~BUS_LINE_BA;
+        bus.lines &= ~BUS_MASK_BA;
         // Keep AEC high so VIC can read from bus
-        bus.lines |= BUS_LINE_AEC;
+        bus.lines |= BUS_MASK_AEC;
     } else {
         vicii->badline_active = false;
         // Release BA line
-        bus.lines |= BUS_LINE_BA;
-        bus.lines |= BUS_LINE_AEC;
+        bus.lines |= BUS_MASK_BA;
+        bus.lines |= BUS_MASK_AEC;
     }
     
     // Generate video output, handle sprites, etc.
@@ -117,7 +117,7 @@ FORCE_INLINE REGISTER_CALL bus_state_t vicii_write(vicii_state_t* vicii, bus_sta
             // Clear IRQ if no more interrupt sources active
             if (!(vicii->registers[0x19] & vicii->registers[0x1A] & 0x0F)) {
                 vicii->irq_pending = false;
-                bus.lines &= ~BUS_LINE_IRQ;  // Clear generic IRQ line
+                bus.lines &= ~BUS_MASK_IRQ;  // Clear generic IRQ line
             }
             break;
         case 0x1A:  // Interrupt Mask Register
@@ -249,7 +249,7 @@ FORCE_INLINE REGISTER_CALL bus_state_t cia_advance_cycle(cia_state_t* cia, bus_s
                         // Set IRQ line (CIA1) or NMI line (CIA2) in bus state
                         // This would be handled differently for CIA1 vs CIA2
                         // For now, just set a general interrupt flag
-                        bus.lines |= BUS_LINE_IRQ;
+                        bus.lines |= BUS_MASK_IRQ;
                     }
                 }
                 
@@ -281,7 +281,7 @@ FORCE_INLINE REGISTER_CALL bus_state_t cia_advance_cycle(cia_state_t* cia, bus_s
                 if (cia->registers[0x0D] & 0x80) {  // Master interrupt enable
                     if (cia->registers[0x0D] & 0x02) {  // Timer B interrupt enabled
                         cia->irq_pending = true;
-                        bus.lines |= BUS_LINE_IRQ;
+                        bus.lines |= BUS_MASK_IRQ;
                     }
                 }
                 
@@ -329,7 +329,7 @@ FORCE_INLINE REGISTER_CALL bus_state_t cia_read(cia_state_t* cia, bus_state_t bu
             bus.data = cia->registers[0x0D];
             cia->registers[0x0D] = 0;  // Reading ICR clears it
             cia->irq_pending = false;  // Clear pending interrupt
-            bus.lines &= ~BUS_LINE_IRQ;  // Clear generic IRQ line
+            bus.lines &= ~BUS_MASK_IRQ;  // Clear generic IRQ line
             break;
         default:
             bus.data = cia->registers[bus.addr & 0x0F];

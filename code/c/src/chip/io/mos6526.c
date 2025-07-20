@@ -1,5 +1,5 @@
 #include "mos6526.h" // cia
-#include "../../systems/c64/c64_bus.h" // for BUS_LINE_IRQ
+#include "../../systems/c64/c64_bus.h" // for BUS_MASK_IRQ
 #include <string.h>
 #include <stdlib.h>
 
@@ -7,7 +7,7 @@ void* mos6526_system_create(chip_descriptor_t* desc) {
     mos6526_t* cia = (mos6526_t*)calloc(1, sizeof(mos6526_t));
     if (!cia) return NULL;
     cia->desc = desc;
-    cia->interrupt_line = BUS_LINE_IRQ; // Default to IRQ; caller must set to NMI for CIA2
+    cia->interrupt_line = BUS_MASK_IRQ; // Default to IRQ; caller must set to NMI for CIA2
     // Constructor equivalent - set up cycles for TOD
     // Used when CRA_TODIN = 0 (60 Hz TOD pin input pulses)
     cia->cycles_tod[0] = 1000000 / 60; // Assuming 1MHz CPU clock

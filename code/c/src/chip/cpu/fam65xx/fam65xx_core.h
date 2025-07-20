@@ -57,7 +57,7 @@ struct fam65xx_s {
     
     // === SHARED STATE POINTERS ===
     // These CANNOT be copied - must remain as pointers to shared system state
-    system_lines_t* system_lines;  // Shared system-wide line state
+    bus_state_t* bus_state;  // Shared bus state
     
     fam65xx_opcode_handler_t opcode_handlers[256]; // Per-CPU handler table
 

@@ -207,6 +207,16 @@ void mos6510_attach_system_lines(mos6510_t* cpu, system_lines_t* system_lines) {
     // Store pointer to shared system state
     cpu->base.system_lines = system_lines;
 }
+/**
+ * Attach bus state to CPU.
+ * Note: This is a pointer to shared bus state, not copied.
+ */
+void mos6510_attach_bus_state(mos6510_t* cpu, bus_state_t* bus_state) {
+    if (!cpu || !bus_state) return;
+    
+    // Store pointer to shared bus state
+    cpu->base.bus_state = bus_state;
+}
 
 /**
  * Attach RAM directly to CPU for zero page access ($0002-$00FF).

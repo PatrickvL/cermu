@@ -149,9 +149,8 @@ static inline void mos6510_write_cycle(mos6510_t* cpu, uint16_t addr, uint8_t va
 #define MOS6510_TEST_RDY(cpu) (MOS6510_CONTROL_LINES(cpu) & MOS6510_MASK_RDY)
 
 // System lines access macros for direct system state operations
-#define MOS6510_SYSTEM_LINES_TEST(cpu, mask) SYS_LINES_TEST((cpu)->system_lines, mask)
-#define MOS6510_SYSTEM_LINES_SET(cpu, mask) SYS_LINES_SET((cpu)->system_lines, mask)
-#define MOS6510_SYSTEM_LINES_CLEAR(cpu, mask) SYS_LINES_CLEAR((cpu)->system_lines, mask)
+// Replace with direct bus_state_t access or equivalent logic
+// Example: ((cpu)->bus_state->lines & mask)
 
 #define MOS6510_OPCODE_FOOTER(cpu) \
     FAM65XX_OPCODE_FOOTER(&(cpu)->base)

@@ -79,9 +79,9 @@ void nes6502_attach_control_lines(nes6502_t* cpu, const control_lines_interface_
     }
 }
 
-void nes6502_attach_system_lines(nes6502_t* cpu, system_lines_t* system_lines) {
+void nes6502_attach_bus_state(nes6502_t* cpu, bus_state_t* bus_state) {
     if (cpu) {
-        cpu->base.system_lines = system_lines;
+        cpu->base.bus_state = bus_state;
     }
 }
 

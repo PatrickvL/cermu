@@ -4,20 +4,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// ============================================================================
-// GENERIC 16-BIT SYSTEM BUS STATE (REUSABLE ACROSS SYSTEMS)
-// ============================================================================
-
-// Generic bus state for 16-bit systems (32-bit register value)
-typedef union {
-    uint32_t raw;           // 32-bit register value
-    struct {
-        uint16_t addr;      // Bits 0-15: Address bus
-        uint8_t data;       // Bits 16-23: Data bus
-        uint8_t lines;      // Bits 24-31: Control lines including R/W
-    };
-} bus_state_t;
-
 
 // Forward-declare the struct name
 typedef struct chip_descriptor_s chip_descriptor_t;
