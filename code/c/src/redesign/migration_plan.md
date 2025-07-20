@@ -1,6 +1,3 @@
-
-
-
 **IMPORTANT NOTE:**
 Redesign files in `code/c/src/redesign` are **reference only** and must **not** be used directly for code, includes, or implementation. All migration and refactoring must be applied to the main project files. Use redesign files solely for inspiration and architectural guidance.
 
@@ -348,3 +345,20 @@ Next Steps:
 - Document migration progress and any issues
 
 For further details or code-by-code mapping, request a deep-dive migration guide.
+
+System-wide validation
+
+**Status:**
+Most redesign concepts are now present in the main project, but some parts are not yet fully applied:
+- [ ] Full stackless threaded CPU dispatch (Nostradamus pattern) for all opcode handlers
+- [ ] Complete macro-based handler signatures and centralized FOOTER macros for all CPU handlers
+- [ ] Comprehensive unit/integration tests for bus, chip, and CPU layers
+- [ ] Full migration of PLA logic to encoded chip select arrays in all bus access points
+- [ ] Documentation and code comments updated to reflect redesign architecture
+- [ ] Performance benchmarking and validation against reference test suites
+
+**Next actions:**
+- Continue refactoring opcode handlers and dispatch logic for stackless execution
+- Expand and modernize test coverage
+- Finalize documentation and migration guides
+- Validate cycle accuracy, interrupt handling, and cartridge/PLA integration

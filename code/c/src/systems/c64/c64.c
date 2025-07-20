@@ -250,12 +250,14 @@ void c64_non_cpu_cycle(void* c64_ptr) {
     
     c64->total_cycles++;
     
+    c64_bus_t* bus = c64->bus;  // Access bus state
+
     // VIC tick handles both phi1 and phi2 phases internally
-    c64->bus->state = vicii_advance_cycle(c64->vicii, c64->bus->state);
+    bus->state = vicii_advance_cycle(c64->vicii, bus->state);
     // Other chips tick once per complete cycle
-    c64->bus->state = mos6526_advance_cycle(c64->cia1, c64->bus->state);
-    c64->bus->state = mos6526_advance_cycle(c64->cia2, c64->bus->state);
-    c64->bus->state = mos6581_advance_cycle(c64->sid, c64->bus->state); // update as needed
+    bus->state = mos6526_advance_cycle(c64->cia1, bus->state);
+    bus->state = mos6526_advance_cycle(c64->cia2, bus->state);
+    bus->state = mos6581_advance_cycle(c64->sid, bus->state); // update as needed
 
     //        c64_update_interrupt_lines(c64, bus);
 //void c64_update_interrupt_lines(c64_t* c64, c64_bus_t* bus) {
