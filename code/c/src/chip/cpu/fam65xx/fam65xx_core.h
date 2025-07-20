@@ -260,29 +260,7 @@ static inline void fam65xx_next_instruction_dispatch(fam65xx_t* cpu) {
         fam65xx_disasm_full(cpu, opcode);
     }
 
-    #ifdef _MSC_VER
-#pragma message("Compiling with MSVC")
-#endif
-#ifdef _M_X64
-#pragma message("Targeting x64")
-#endif
-#ifdef _M_IX86
-#pragma message("Targeting x86")
-#endif
-#ifdef __GNUC__
-#pragma message("Compiling with GCC")
-#endif
-#ifdef __clang__
-#pragma message("Compiling with Clang")
-#endif
-#ifdef __x86_64__
-#pragma message("Detected x86_64")
-#endif
-#ifdef __i386__
-#pragma message("Detected i386")
-#endif
-
-    void (*next_handler)(fam65xx_t*) = cpu->opcode_handlers[opcode];
+void (*next_handler)(fam65xx_t*) = cpu->opcode_handlers[opcode];
 #if defined(_MSC_VER) && defined(_M_IX86)
     // MSVC x86 inline assembly
     __asm {
@@ -304,24 +282,6 @@ static inline void fam65xx_next_instruction_dispatch(fam65xx_t* cpu) {
     next_handler(cpu);
 #endif
 }
-
-// Cross-platform calling convention for register arguments/returns
-#ifdef _MSC_VER
-    #define REGISTER_CALL __vectorcall  // Ensures register passing on MSVC
-#elif defined(__GNUC__) || defined(__clang__)
-    #define REGISTER_CALL __attribute__((regparm(3)))  // Register calling on GCC/Clang
-#else
-    #define REGISTER_CALL
-#endif
-
-// Cross-platform force inline macro
-#ifdef _MSC_VER
-    #define FORCE_INLINE __forceinline
-#elif defined(__GNUC__) || defined(__clang__)
-    #define FORCE_INLINE __attribute__((always_inline)) inline
-#else
-    #define FORCE_INLINE inline
-#endif
 
 // Forward declaration for macros
 void fam65xx_interrupt_handler(fam65xx_t* cpu);
