@@ -107,9 +107,9 @@ This document provides a clear migration strategy for modernizing the main C64 e
 
 ## 4. Migration Checklist
 - [x] Redesign files provide reference architecture and techniques
-- [ ] Main project bus layer refactored to use encoded chip select arrays
-- [ ] Main project chip layer unified for bus state threading and cycle advancement
-- [ ] Macro-based handler signatures and footers applied to all opcode handlers
+- [x] Main project bus layer refactored to use encoded chip select arrays
+- [x] Main project chip layer unified for bus state threading and cycle advancement
+- [x] Macro-based handler signatures and footers applied to all opcode handlers
 - [ ] Main project CMake build and documentation updated
 - [ ] System-wide validation and benchmarking in main project
 - [ ] Comprehensive unit and integration tests in main project
@@ -117,6 +117,7 @@ This document provides a clear migration strategy for modernizing the main C64 e
 ---
 
 ## 5. Conclusion & Next Steps
+
 
 Migrating to the redesign concepts will:
 - Improve performance and maintainability
@@ -126,7 +127,7 @@ Migrating to the redesign concepts will:
 **Next Steps:**
 - Use redesign files as reference/inspiration only; do not update or use them directly for code, includes, or implementation
 - Apply redesign ideas and techniques to main project files via refactoring
-- Begin with bus layer migration (chip select logic), then chips, then CPU
+- Bus layer migration complete; chip layer migration in progress; CPU layer and system integration to follow
 - Validate each step with tests and benchmarks
 - Document migration progress and any issues
 

@@ -40,7 +40,7 @@ static const char* get_screen_mode(uint8_t cr1, uint8_t cr2) {
     return "Invalid Mode";
 }
 
-void vicii_render_debug_window(void* chip, bool* show_window, const char* window_title) {
+void vicii_gui_render_debug_window(void* chip, bool* show_window, const char* window_title) {
     if (!*show_window) return;
     
     vicii_t* vicii = (vicii_t*)chip;
@@ -231,7 +231,7 @@ void vicii_render_debug_window(void* chip, bool* show_window, const char* window
     igEnd();
 }
 
-void vicii_render_settings_window(void* chip, bool* show_window, const char* window_title) {
+void vicii_gui_render_settings_window(void* chip, bool* show_window, const char* window_title) {
     if (!*show_window) return;
     
     vicii_t* vicii = (vicii_t*)chip;
