@@ -826,7 +826,7 @@ void voice_clock_cycle(voice_t* voice) {
 // =============================================================================
 
 // Unified bus state threading main cycle function
-bus_cycle_t mos6581_advance_cycle(mos6581_t* sid, bus_cycle_t bus_state) {
+bus_state_t mos6581_advance_cycle(mos6581_t* sid, bus_state_t bus_state) {
     if (!sid) return bus_state;
 
     // Update at SID frequency (PAL: every 18 cycles, NTSC: every 17 cycles)

@@ -11,9 +11,9 @@
 // Generic bus controller interface that any system can implement
 typedef struct {
     // Generic bus cycle functions that any system must provide
-    REGISTER_CALL generic_bus_state_t (*read_cycle)(void* context, generic_bus_state_t bus_state);
-    REGISTER_CALL generic_bus_state_t (*write_cycle)(void* context, generic_bus_state_t bus_state);
-    REGISTER_CALL generic_bus_state_t (*non_cpu_cycle)(void* context, generic_bus_state_t bus_state);
+    REGISTER_CALL bus_state_t (*read_cycle)(void* context, bus_state_t bus_state);
+    REGISTER_CALL bus_state_t (*write_cycle)(void* context, bus_state_t bus_state);
+    REGISTER_CALL bus_state_t (*non_cpu_cycle)(void* context, bus_state_t bus_state);
     void* context;  // System-specific context (c64_t*, c128_t*, etc.)
 } generic_bus_controller_t;
 
@@ -25,10 +25,10 @@ typedef struct {
 } cpu_state_t;
 
 // Handler function pointer type with register calling convention
-typedef REGISTER_CALL void* (*PFNDUOP)(cpu_state_t* cpu, generic_bus_state_t* bus_state);
+typedef REGISTER_CALL void* (*PFNDUOP)(cpu_state_t* cpu, bus_state_t* bus_state);
 
 // Special handler for flow control/exit
-REGISTER_CALL void* cpu_fire_escape(cpu_state_t* cpu, generic_bus_state_t* bus_state) {
+REGISTER_CALL void* cpu_fire_escape(cpu_state_t* cpu, bus_state_t* bus_state) {
     return cpu_fire_escape;  // Return itself to maintain handler invariant
 }
 
@@ -37,10 +37,10 @@ REGISTER_CALL void* cpu_fire_escape(cpu_state_t* cpu, generic_bus_state_t* bus_s
 // ============================================================================
 
 // LDA Absolute - $AD
-REGISTER_CALL void* cpu_lda_abs(cpu_state_t* cpu, generic_bus_state_t* bus) {
+REGISTER_CALL void* cpu_lda_abs(cpu_state_t* cpu, bus_state_t* bus) {
     // Fetch low byte of address (triggers system tick)
     bus->addr = cpu->PC++;
-    bus->lines |= GENERIC_RW_LINE;  // Read operation
+    bus->lines |= BUS_LINE_RW;  // Read operation
     *bus = cpu->bus->read_cycle(cpu->bus->context, *bus);
     uint8_t addr_lo = bus->data;
     
@@ -65,10 +65,10 @@ REGISTER_CALL void* cpu_lda_abs(cpu_state_t* cpu, generic_bus_state_t* bus) {
 }
 
 // STA Absolute - $8D  
-REGISTER_CALL void* cpu_sta_abs(cpu_state_t* cpu, generic_bus_state_t* bus) {
+REGISTER_CALL void* cpu_sta_abs(cpu_state_t* cpu, bus_state_t* bus) {
     // Fetch address (2 system ticks)
     bus->addr = cpu->PC++;
-    bus->lines |= GENERIC_RW_LINE;  // Read operation for address fetch
+    bus->lines |= BUS_LINE_RW;  // Read operation for address fetch
     *bus = cpu->bus->read_cycle(cpu->bus->context, *bus);
     uint8_t addr_lo = bus->data;
     
@@ -81,14 +81,14 @@ REGISTER_CALL void* cpu_sta_abs(cpu_state_t* cpu, generic_bus_state_t* bus) {
     // Write A register to address (1 system tick)
     bus->addr = addr;
     bus->data = cpu->A;
-    bus->lines &= ~GENERIC_RW_LINE;  // Write operation (R/W = 0)
+    bus->lines &= ~BUS_LINE_RW;  // Write operation (R/W = 0)
     *bus = cpu->bus->write_cycle(cpu->bus->context, *bus);
     
     return get_next_handler(cpu, bus);
 }
 
 // INX - $E8
-REGISTER_CALL void* cpu_inx(cpu_state_t* cpu, generic_bus_state_t* bus) {
+REGISTER_CALL void* cpu_inx(cpu_state_t* cpu, bus_state_t* bus) {
     // Internal operation - still need to advance system one cycle
     // Internal cycle - CPU doesn't use bus but chips still advance
     *bus = cpu->bus->non_cpu_cycle(cpu->bus->context, *bus);
@@ -102,7 +102,7 @@ REGISTER_CALL void* cpu_inx(cpu_state_t* cpu, generic_bus_state_t* bus) {
 }
 
 // NOP - $EA
-REGISTER_CALL void* cpu_nop(cpu_state_t* cpu, generic_bus_state_t* bus) {
+REGISTER_CALL void* cpu_nop(cpu_state_t* cpu, bus_state_t* bus) {
     // Internal operation - advance system one cycle
     // Internal cycle - CPU doesn't use bus but chips still advance
     *bus = cpu->bus->non_cpu_cycle(cpu->bus->context, *bus);
@@ -111,14 +111,14 @@ REGISTER_CALL void* cpu_nop(cpu_state_t* cpu, generic_bus_state_t* bus) {
 }
 
 // BRK - $00 (example of flow control)
-REGISTER_CALL void* cpu_brk(cpu_state_t* cpu, generic_bus_state_t* bus) {
+REGISTER_CALL void* cpu_brk(cpu_state_t* cpu, bus_state_t* bus) {
     // Internal cycle for BRK instruction decode
     *bus = cpu->bus->non_cpu_cycle(cpu->bus->context, *bus);
     
     // Push PC+2 to stack (high byte first)
     bus->addr = 0x0100 + cpu->SP--;
     bus->data = (cpu->PC + 1) >> 8;
-    bus->lines &= ~GENERIC_RW_LINE;  // Write operation (R/W = 0)
+    bus->lines &= ~BUS_LINE_RW;  // Write operation (R/W = 0)
     *bus = cpu->bus->write_cycle(cpu->bus->context, *bus);
     
     bus->addr = 0x0100 + cpu->SP--;
@@ -135,7 +135,7 @@ REGISTER_CALL void* cpu_brk(cpu_state_t* cpu, generic_bus_state_t* bus) {
     
     // Load interrupt vector from $FFFE/$FFFF
     bus->addr = 0xFFFE;
-    bus->lines |= GENERIC_RW_LINE;  // Read operation
+    bus->lines |= BUS_LINE_RW;  // Read operation
     *bus = cpu->bus->read_cycle(cpu->bus->context, *bus);
     uint8_t vec_lo = bus->data;
     
@@ -149,7 +149,7 @@ REGISTER_CALL void* cpu_brk(cpu_state_t* cpu, generic_bus_state_t* bus) {
 }
 
 // IRQ Handler
-REGISTER_CALL void* cpu_handle_irq(cpu_state_t* cpu, generic_bus_state_t* bus) {
+REGISTER_CALL void* cpu_handle_irq(cpu_state_t* cpu, bus_state_t* bus) {
     // IRQ is only serviced if I flag is clear
     if (cpu->P & 0x04) {
         return get_next_handler(cpu, bus);  // IRQ disabled, continue normal execution
@@ -161,7 +161,7 @@ REGISTER_CALL void* cpu_handle_irq(cpu_state_t* cpu, generic_bus_state_t* bus) {
     // Push PC to stack (high byte first)
     bus->addr = 0x0100 + cpu->SP--;
     bus->data = cpu->PC >> 8;
-    bus->lines &= ~GENERIC_RW_LINE;  // Write operation (R/W = 0)
+    bus->lines &= ~BUS_LINE_RW;  // Write operation (R/W = 0)
     *bus = cpu->bus->write_cycle(cpu->bus->context, *bus);
     
     bus->addr = 0x0100 + cpu->SP--;
@@ -178,7 +178,7 @@ REGISTER_CALL void* cpu_handle_irq(cpu_state_t* cpu, generic_bus_state_t* bus) {
     
     // Load IRQ vector from $FFFE/$FFFF
     bus->addr = 0xFFFE;
-    bus->lines |= GENERIC_RW_LINE;  // Read operation
+    bus->lines |= BUS_LINE_RW;  // Read operation
     *bus = cpu->bus->read_cycle(cpu->bus->context, *bus);
     uint8_t vec_lo = bus->data;
     
@@ -196,21 +196,21 @@ REGISTER_CALL void* cpu_handle_irq(cpu_state_t* cpu, generic_bus_state_t* bus) {
 // ============================================================================
 
 // Wrapper functions that adapt C64 bus functions to generic interface
-static REGISTER_CALL generic_bus_state_t c64_generic_read_cycle(void* context, generic_bus_state_t bus_state) {
+static REGISTER_CALL bus_state_t c64_generic_read_cycle(void* context, bus_state_t bus_state) {
     c64_t* c64 = (c64_t*)context;
     c64_bus_state_t c64_bus_state = { .bus = bus_state };
     c64_bus_state = c64_bus_read_cycle(c64->bus, c64_bus_state);
     return c64_bus_state.bus;
 }
 
-static REGISTER_CALL generic_bus_state_t c64_generic_write_cycle(void* context, generic_bus_state_t bus_state) {
+static REGISTER_CALL bus_state_t c64_generic_write_cycle(void* context, bus_state_t bus_state) {
     c64_t* c64 = (c64_t*)context;
     c64_bus_state_t c64_bus_state = { .bus = bus_state };
     c64_bus_state = c64_bus_write_cycle(c64->bus, c64_bus_state);
     return c64_bus_state.bus;
 }
 
-static REGISTER_CALL generic_bus_state_t c64_generic_non_cpu_cycle(void* context, generic_bus_state_t bus_state) {
+static REGISTER_CALL bus_state_t c64_generic_non_cpu_cycle(void* context, bus_state_t bus_state) {
     c64_t* c64 = (c64_t*)context;
     c64_bus_state_t c64_bus_state = { .bus = bus_state };
     c64_bus_state = c64_non_cpu_cycle(c64, c64_bus_state);
@@ -232,11 +232,11 @@ static PFNDUOP handler_table[256] = {
 };
 
 // Get next handler based on current PC and interrupt state
-REGISTER_CALL void* get_next_handler(cpu_state_t* cpu, generic_bus_state_t* bus_state) {
+REGISTER_CALL void* get_next_handler(cpu_state_t* cpu, bus_state_t* bus_state) {
     // Fast combined interrupt check - most cycles have no interrupts
-    if (bus_state->lines & (GENERIC_NMI_LINE | GENERIC_IRQ_LINE)) {
+    if (bus_state->lines & (BUS_LINE_NMI | BUS_LINE_IRQ)) {
         // Only differentiate when interrupts are actually pending
-        if (bus_state->lines & GENERIC_NMI_LINE) {
+        if (bus_state->lines & BUS_LINE_NMI) {
             // NMI has highest priority and cannot be masked
             return cpu_handle_nmi;
         } else if (!(cpu->P & 0x04)) {
@@ -247,7 +247,7 @@ REGISTER_CALL void* get_next_handler(cpu_state_t* cpu, generic_bus_state_t* bus_
     
     // Fetch next opcode
     bus_state->addr = cpu->PC++;
-    bus_state->lines |= GENERIC_RW_LINE;  // Read operation
+    bus_state->lines |= BUS_LINE_RW;  // Read operation
     *bus_state = cpu->bus->read_cycle(cpu->bus->context, *bus_state);
     uint8_t opcode = bus_state->data;
     
@@ -261,7 +261,7 @@ REGISTER_CALL void* get_next_handler(cpu_state_t* cpu, generic_bus_state_t* bus_
 void cpu_execute_nostradamus(cpu_state_t* cpu, int max_instructions) {
     // Initialize bus state - allocated on stack for all handlers to share
     c64_bus_state_t shared_bus = {0};
-    shared_bus.bus.lines = GENERIC_BA_LINE | GENERIC_AEC_LINE | GENERIC_RDY_LINE;  // Default line states
+    shared_bus.bus.lines = BUS_LINE_BA | BUS_LINE_AEC | BUS_LINE_RDY;  // Default line states
     
     PFNDUOP current = get_next_handler(cpu, &shared_bus.bus);  // Pass generic bus pointer
     

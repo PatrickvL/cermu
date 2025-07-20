@@ -26,19 +26,19 @@ uint32_t* vicii_get_default_palette(void) {
 
 // Bus control helpers
 static inline void vicii_bus_control_aec_high(vicii_t* vicii) {
-    ((c64_bus_t*)vicii->bus.bus)->control_lines |= AEC_LINE;
+    ((c64_bus_t*)vicii->bus.bus)->state.lines |= BUS_LINE_AEC;
 }
 
 static inline void vicii_bus_control_aec_low(vicii_t* vicii) {
-    ((c64_bus_t*)vicii->bus.bus)->control_lines &= ~AEC_LINE;
+    ((c64_bus_t*)vicii->bus.bus)->state.lines &= ~BUS_LINE_AEC;
 }
 
 static inline void vicii_bus_control_ba_high(vicii_t* vicii) {
-    ((c64_bus_t*)vicii->bus.bus)->control_lines |= BA_LINE;
+    ((c64_bus_t*)vicii->bus.bus)->state.lines |= BUS_LINE_BA;
 }
 
 static inline void vicii_bus_control_ba_low(vicii_t* vicii) {
-    ((c64_bus_t*)vicii->bus.bus)->control_lines &= ~BA_LINE;
+    ((c64_bus_t*)vicii->bus.bus)->state.lines &= ~BUS_LINE_BA;
 }
 
 // ========================================================================================
@@ -182,7 +182,7 @@ void vicii_memory_access(vicii_t* vicii, uint8_t access_type, int access_param) 
                     // "Whatever appears on the VIC-II internal bus during the fetch cycles
                     // is displayed. That is both loads and stores to the VIC-II, or $ff if
                     // no access occurs."
-                    data = bus->data; // Use whatever is on the bus (sprite idle fetch)
+                data = bus->state.data; // Use whatever is on the bus (sprite idle fetch)
                 }
             }
             break;
@@ -203,7 +203,7 @@ void vicii_memory_access(vicii_t* vicii, uint8_t access_type, int access_param) 
             address = vicii->memory.vm_base + vicii->video_logic.vc;
             data = vicii_memory_read(vicii, address);
             vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = data;
-            bus->data = data; // Set bus data for next access
+            bus->state.data = data; // Set bus data for next access
             
             // Increment VC and VMLI after c-access in display state
             if (vicii->video_logic.display_state) {
@@ -248,7 +248,7 @@ void vicii_memory_access(vicii_t* vicii, uint8_t access_type, int access_param) 
                 address = vicii->memory.vm_base | 0x3F00 | vicii->video_logic.refresh_counter;
                 data = vicii_memory_read(vicii, address);
             } else {
-                data = bus->data; // Use floating bus data
+                data = bus->state.data; // Use floating bus data
             }
             vicii->video_logic.refresh_counter--;
             break;
@@ -257,12 +257,12 @@ void vicii_memory_access(vicii_t* vicii, uint8_t access_type, int access_param) 
             if (vicii->enable_hardware_accurate_reads) {
                 data = vicii_memory_read(vicii, 0x3FFF);
             } else {
-                data = bus->data; // Use floating bus data
+                data = bus->state.data; // Use floating bus data
             }
             break;
     }
     
-    bus->data = data;
+    bus->state.data = data;
 }
 
 // ========================================================================================
@@ -737,7 +737,7 @@ static inline uint8_t vicii_read_clear(vicii_registers_unit_t* regs, uint8_t reg
 static inline uint8_t vicii_registers_read_internal(vicii_t* vicii, uint16_t address) {
     uint8_t reg = address & VICII_REGS_MASK;
     // Used for "floating" bus state for subsequent unattached reads
-    uint8_t data = ((c64_bus_t*)vicii->bus.bus)->data;
+    uint8_t data = ((c64_bus_t*)vicii->bus.bus)->state.data;
     
     // Fast path for most common registers
     switch (reg) {
@@ -1200,9 +1200,8 @@ static inline void vicii_border_update_flip_flops_x(vicii_border_unit_t* border,
     }
 }
 
-bus_cycle_t vicii_advance_cycle(vicii_t* vicii, bus_cycle_t bus_state) {
-    // Update bus pointer from bus_state
-    vicii->bus.bus = bus_state.bus;
+bus_state_t vicii_advance_cycle(vicii_t* vicii, bus_state_t bus_state) {
+    // Bus pointer is managed externally; do not update from bus_state
     // Get current cycle entry (derived from x_coordinate)
     const vicii_cycle_entry_t* entry = &vicii->timing.cycle_table[vicii->timing.x_cycle];
     // Call cycle function to get access type
@@ -1225,8 +1224,7 @@ bus_cycle_t vicii_advance_cycle(vicii_t* vicii, bus_cycle_t bus_state) {
         uint16_t flush_line = (vicii->timing.raster_counter == 0) ? (vicii->timing.total_lines - 1) : (vicii->timing.raster_counter - 1);
         vicii_pixel_flush_line(vicii, vicii_get_default_palette(), flush_line);
     }
-    // Return the (possibly updated) bus state for threaded cycle chaining
-    bus_state.bus = vicii->bus.bus;
+    // Return the bus state for threaded cycle chaining
     return bus_state;
 }
 

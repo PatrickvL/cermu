@@ -67,18 +67,18 @@ typedef union {
         uint8_t data;       // Bits 16-23: Data bus
         uint8_t lines;      // Bits 24-31: Control lines including R/W
     };
-} generic_bus_state_t;
+} bus_state_t;
 
 // Generic control line masks (system-independent)
-#define GENERIC_RW_LINE    0x01  // Read/Write line (1=read, 0=write)
-#define GENERIC_IRQ_LINE   0x02  // Interrupt request line
-#define GENERIC_NMI_LINE   0x04  // Non-maskable interrupt line
-#define GENERIC_RDY_LINE   0x08  // Ready line
-#define GENERIC_BA_LINE    0x10  // Bus available line
-#define GENERIC_AEC_LINE   0x20  // Address enable control line
+#define BUS_LINE_RW    0x01  // Read/Write line (1=read, 0=write)
+#define BUS_LINE_IRQ   0x02  // Interrupt request line
+#define BUS_LINE_NMI   0x04  // Non-maskable interrupt line
+#define BUS_LINE_RDY   0x08  // Ready line
+#define BUS_LINE_BA    0x10  // Bus available line
+#define BUS_LINE_AEC   0x20  // Address enable control line
 
 // C64-specific bus state (extends generic bus state)
-typedef generic_bus_state_t c64_bus_state_t;
+typedef bus_state_t c64_bus_state_t;
 
 // C64 bus controller structure
 typedef struct c64_bus_s {
@@ -108,10 +108,10 @@ typedef struct {
     uint8_t* roml;         // 8KB ROM Low
     uint8_t* romh;         // 8KB ROM High
     void* context;
-    REGISTER_CALL c64_bus_state_t (*io1_read)(void* context, generic_bus_state_t bus_state);
-    REGISTER_CALL c64_bus_state_t (*io1_write)(void* context, generic_bus_state_t bus_state);
-    REGISTER_CALL c64_bus_state_t (*io2_read)(void* context, generic_bus_state_t bus_state);
-    REGISTER_CALL c64_bus_state_t (*io2_write)(void* context, generic_bus_state_t bus_state);
+    REGISTER_CALL c64_bus_state_t (*io1_read)(void* context, bus_state_t bus_state);
+    REGISTER_CALL c64_bus_state_t (*io1_write)(void* context, bus_state_t bus_state);
+    REGISTER_CALL c64_bus_state_t (*io2_read)(void* context, bus_state_t bus_state);
+    REGISTER_CALL c64_bus_state_t (*io2_write)(void* context, bus_state_t bus_state);
 } cartridge_state_t;
 
 // Main C64 system structure
@@ -156,17 +156,17 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_read(c64_t* c64, c64_
 FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_write(c64_t* c64, c64_bus_state_t bus_state_in);
 
 // Chip advance cycle functions - WITH GENERIC BUS STATE for system independence
-FORCE_INLINE REGISTER_CALL generic_bus_state_t vicii_advance_cycle(vicii_state_t* vicii, generic_bus_state_t bus_state);
-FORCE_INLINE REGISTER_CALL generic_bus_state_t sid_advance_cycle(sid_state_t* sid, generic_bus_state_t bus_state);
-FORCE_INLINE REGISTER_CALL generic_bus_state_t cia_advance_cycle(cia_state_t* cia, generic_bus_state_t bus_state);
+FORCE_INLINE REGISTER_CALL bus_state_t vicii_advance_cycle(vicii_state_t* vicii, bus_state_t bus_state);
+FORCE_INLINE REGISTER_CALL bus_state_t sid_advance_cycle(sid_state_t* sid, bus_state_t bus_state);
+FORCE_INLINE REGISTER_CALL bus_state_t cia_advance_cycle(cia_state_t* cia, bus_state_t bus_state);
 
 // Chip I/O functions with generic bus state (called only when chip is selected)
-FORCE_INLINE REGISTER_CALL generic_bus_state_t vicii_read(vicii_state_t* vicii, generic_bus_state_t bus_state);
-FORCE_INLINE REGISTER_CALL generic_bus_state_t vicii_write(vicii_state_t* vicii, generic_bus_state_t bus_state);
-FORCE_INLINE REGISTER_CALL generic_bus_state_t sid_read(sid_state_t* sid, generic_bus_state_t bus_state);
-FORCE_INLINE REGISTER_CALL generic_bus_state_t sid_write(sid_state_t* sid, generic_bus_state_t bus_state);
-FORCE_INLINE REGISTER_CALL generic_bus_state_t cia_read(cia_state_t* cia, generic_bus_state_t bus_state);
-FORCE_INLINE REGISTER_CALL generic_bus_state_t cia_write(cia_state_t* cia, generic_bus_state_t bus_state);
+FORCE_INLINE REGISTER_CALL bus_state_t vicii_read(vicii_state_t* vicii, bus_state_t bus_state);
+FORCE_INLINE REGISTER_CALL bus_state_t vicii_write(vicii_state_t* vicii, bus_state_t bus_state);
+FORCE_INLINE REGISTER_CALL bus_state_t sid_read(sid_state_t* sid, bus_state_t bus_state);
+FORCE_INLINE REGISTER_CALL bus_state_t sid_write(sid_state_t* sid, bus_state_t bus_state);
+FORCE_INLINE REGISTER_CALL bus_state_t cia_read(cia_state_t* cia, bus_state_t bus_state);
+FORCE_INLINE REGISTER_CALL bus_state_t cia_write(cia_state_t* cia, bus_state_t bus_state);
 
 // Non-CPU cycle function (ticks all chips except CPU)
 REGISTER_CALL c64_bus_state_t c64_non_cpu_cycle(c64_t* c64, c64_bus_state_t bus_state);

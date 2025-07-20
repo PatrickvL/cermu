@@ -435,11 +435,11 @@ struct vicii_s {
 // Only externally-visible (non-static/non-inline) functions need declarations
 
 // Main cycle function with unified bus state threading
-bus_cycle_t vicii_advance_cycle(vicii_t* vicii, bus_cycle_t bus_state);
+bus_state_t vicii_advance_cycle(vicii_t* vicii, bus_state_t bus_state);
 
 // Unified register I/O
-bus_cycle_t vicii_read(vicii_t* vicii, bus_cycle_t bus_state);
-bus_cycle_t vicii_write(vicii_t* vicii, bus_cycle_t bus_state);
+bus_state_t vicii_read(vicii_t* vicii, bus_state_t bus_state);
+bus_state_t vicii_write(vicii_t* vicii, bus_state_t bus_state);
 
 // Factory and lifecycle
 vicii_t* vicii_system_create(chip_descriptor_t* desc, const vicii_chip_config_t* config, void (*bank_change)(void*, uint8_t));

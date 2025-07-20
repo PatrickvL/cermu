@@ -251,14 +251,13 @@ void c64_non_cpu_cycle(void* c64_ptr) {
     c64->total_cycles++;
     
     // VIC tick handles both phi1 and phi2 phases internally
-    vicii_cycle(c64->vicii);
+    c64->bus->state = vicii_advance_cycle(c64->vicii, c64->bus->state);
     // Other chips tick once per complete cycle
     mos6526_cycle(c64->cia1);
     mos6526_cycle(c64->cia2);
-    if (c64->bus) {
-        c64->bus_state = mos6581_advance_cycle(c64->sid, c64->bus_state);
-    }
-//        c64_update_interrupt_lines(c64, bus);
+    c64->bus->state = mos6581_advance_cycle(c64->sid, c64->bus->state); // update as needed
+
+    //        c64_update_interrupt_lines(c64, bus);
 //void c64_update_interrupt_lines(c64_t* c64, c64_bus_t* bus) {
 /*
     bus->irq_line = false;
@@ -278,10 +277,10 @@ void c64_non_cpu_cycle(void* c64_ptr) {
     }
 */
     // Update RDY line based on BA (hardware accurate)
-    if (c64->bus->control_lines & BA_LINE) {
-        c64->bus->control_lines |= RDY_LINE;
+    if (c64->bus->state.lines & BUS_LINE_BA) {
+        c64->bus->state.lines |= BUS_LINE_RDY;
     } else {
-        c64->bus->control_lines &= ~RDY_LINE;
+        c64->bus->state.lines &= ~BUS_LINE_RDY;
     }
 //}
 }

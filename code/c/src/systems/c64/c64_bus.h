@@ -14,11 +14,12 @@
 // Forward declaration will be replaced by proper include when needed
 
 // Bus control line definitions
-#define IRQ_LINE    (1 << 0)
-#define NMI_LINE    (1 << 1)
-#define BA_LINE     (1 << 2)
-#define AEC_LINE    (1 << 3)
-#define RDY_LINE    (1 << 4)
+#define BUS_LINE_IRQ    (1 << 0) // Interrupt request line
+#define BUS_LINE_NMI    (1 << 1) // Non-maskable interrupt line
+#define BUS_LINE_BA     (1 << 2) // Bus available line
+#define BUS_LINE_AEC    (1 << 3) // Address enable control line
+#define BUS_LINE_RDY    (1 << 4) // Ready line
+#define BUS_LINE_RW     (1 << 5) // Read/Write line (1=read, 0=write)
 
 // Macro definitions for ACID (ACcessor InDex) extraction
 
@@ -118,41 +119,14 @@ typedef struct {
     uint8_t write_chip : 4;  // 4 bits = 16 possible write chips (0-15)
 } chip_select_t;
 
-// ============================================================================
-// GENERIC 16-BIT SYSTEM BUS STATE (REUSABLE ACROSS SYSTEMS)
-// ============================================================================
-
-// Generic bus state for 16-bit systems (32-bit register value)
-typedef union {
-    uint32_t raw;           // 32-bit register value
-    struct {
-        uint16_t addr;      // Bits 0-15: Address bus
-        uint8_t data;       // Bits 16-23: Data bus
-        uint8_t lines;      // Bits 24-31: Control lines including R/W
-    };
-} generic_bus_state_t;
-
-// Generic control line masks (system-independent)
-#define GENERIC_RW_LINE    0x01  // Read/Write line (1=read, 0=write)
-#define GENERIC_IRQ_LINE   0x02  // Interrupt request line
-#define GENERIC_NMI_LINE   0x04  // Non-maskable interrupt line
-#define GENERIC_RDY_LINE   0x08  // Ready line
-#define GENERIC_BA_LINE    0x10  // Bus available line
-#define GENERIC_AEC_LINE   0x20  // Address enable control line
-
-// C64-specific bus state (extends generic bus state)
-typedef generic_bus_state_t c64_bus_state_t;
-
 #endif
 
 // C64 bus controller structure
 typedef struct c64_bus_s {
     chip_descriptor_t* desc;
     void* c64;  // c64_t* - opaque pointer to avoid circular dependency
-    uint8_t  control_lines; // R/W, IRQ, NMI, BA, AEC, RDY
-    uint8_t  data;          // D0-D7
-    uint16_t address;       // A0-A15
-      // System lines for control signals (includes EXROM and GAME)
+    bus_state_t state; // Unified bus state (data, address, control lines)
+    // System lines for control signals (includes EXROM and GAME)
     uint32_t system_lines;  // System-wide control lines including cartridge signals
     
     // Current PLA banking mode (0-31) derived from CPU port + cartridge signals
@@ -277,7 +251,7 @@ static inline bus_cycle_ops_t* c64_bus_get_adapter(c64_bus_t* c64_bus) {
 
 static inline uint8_t c64_bus_adapter_detached_read(void* context) {
     c64_bus_t* bus = (c64_bus_t*)context;
-    return bus->data; // Return "floating" bus data for detached reads
+    return bus->state.data; // Return "floating" bus data for detached reads
     // TODO : These should also decay and float to 0xFF after a while
 }
 

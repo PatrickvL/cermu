@@ -305,7 +305,7 @@ void fam65xx_interrupt_handler(fam65xx_t* cpu);
 // Family-specific versions of shared macros
 #ifdef REDESIGN
     #define FAM65XX_OPCODE_PROTO(name) \
-        REGISTER_CALL void* name(fam65xx_t* cpu, generic_bus_state_t* bus_state)
+        REGISTER_CALL void* name(fam65xx_t* cpu, bus_state_t* bus_state)
 #else
     #define FAM65XX_OPCODE_PROTO(name) \
         void name(fam65xx_t* cpu)

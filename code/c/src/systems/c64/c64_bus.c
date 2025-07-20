@@ -25,7 +25,7 @@ uint8_t c64_bus_memory_read(c64_bus_t *bus, uint16_t address) {
 
     // Branchless I/O sub-page detection (16 pages of $100 bytes each)
     uint8_t is_io = -(chip == CHIP_VIC);
-    chip += is_io & ((bus_state.bus.addr >> 8) & 0xF);
+    chip += is_io & (bus.addr >> 8) & 0x0F;
 
     // Directly dispatch to chip read function (replace with actual chip table as needed)
     // Example: chip_read_funcs[read_chip](...)
@@ -49,7 +49,7 @@ void c64_bus_memory_write(c64_bus_t *bus, uint16_t address, uint8_t value) {
     
     // Branchless I/O sub-page detection (16 pages of $100 bytes each)
     uint8_t is_io = -(chip == CHIP_VIC);
-    chip += is_io & ((bus_state.bus.addr >> 8) & 0xF);
+    chip += is_io & (bus.addr >> 8) & 0x0F;
 
     // Directly dispatch to chip write function (replace with actual chip table as needed)
     // Example: chip_write_funcs[write_chip](...)
@@ -82,9 +82,9 @@ void* c64_bus_system_create(chip_descriptor_t* desc) {
     if (!c64_bus) return NULL;
     c64_bus->desc = desc;
     // Initialize bus state
-    c64_bus->address = 0;
-    c64_bus->data = 0;
-    c64_bus->control_lines = BA_LINE | AEC_LINE | RDY_LINE;
+    c64_bus->state.addr = 0;
+    c64_bus->state.data = 0;
+    c64_bus->state.lines = BUS_LINE_BA | BUS_LINE_AEC | BUS_LINE_RDY;
       // Initialize system lines with default cartridge signals (no cartridge)
     c64_bus->system_lines = SYS_MASK_EXROM | SYS_MASK_GAME;  // Both high = no cartridge
     
@@ -141,13 +141,13 @@ static inline void c64_wait_for_bus_ready(c64_bus_t *c64_bus, bool is_read_cycle
     if (is_read_cycle) {
         // A CPU read must wait for VIC to release the bus (AEC high) AND
         // for the BA/RDY line to be high.
-        while (!(c64_bus->control_lines & AEC_LINE) || !(c64_bus->control_lines & BA_LINE)) {
+        while (!(c64_bus->state.lines & BUS_LINE_AEC) || !(c64_bus->state.lines & BUS_LINE_BA)) {
             c64_non_cpu_cycle(c64);
         }
     } else {
         // A CPU write only needs to wait for VIC to release the address bus.
         // It is NOT affected by the BA/RDY line.
-        while (!(c64_bus->control_lines & AEC_LINE)) {
+        while (!(c64_bus->state.lines & BUS_LINE_AEC)) {
             c64_non_cpu_cycle(c64);
         }
     }
@@ -160,9 +160,9 @@ uint8_t c64_bus_read_cycle(c64_bus_t *c64_bus, uint16_t addr) {
     c64_wait_for_bus_ready(c64_bus, true);
 
     // The bus is now guaranteed to be ready for the CPU.
-    c64_bus->address = addr; // Perhaps this is no longer needed
+    c64_bus->state.addr = addr; // Perhaps this is no longer needed
     uint8_t data = c64_bus_memory_read(c64_bus, addr);
-    c64_bus->data = data; // Used for "floating" bus state for subsequent unattached reads
+    c64_bus->state.data = data; // Used for "floating" bus state for subsequent unattached reads
 
     // Tick system through complete cycle
     c64_non_cpu_cycle(c64_bus->c64);
@@ -175,8 +175,8 @@ void c64_bus_write_cycle(c64_bus_t* c64_bus, uint16_t addr, uint8_t value) {
     c64_wait_for_bus_ready(c64_bus, false);
 
     // The bus is now guaranteed to be ready for the CPU.
-    c64_bus->address = addr; // Perhaps this is no longer needed
-    c64_bus->data = value; // Used for "floating" bus state for subsequent unattached reads
+    c64_bus->state.addr = addr; // Perhaps this is no longer needed
+    c64_bus->state.data = value; // Used for "floating" bus state for subsequent unattached reads
     c64_bus_memory_write(c64_bus, addr, value);
 
     // Advance system
@@ -364,14 +364,14 @@ static uint32_t c64_control_lines_get(void* context) {
     c64_bus_t* c64_bus = (c64_bus_t*)context;
     // Convert the C64's uint8_t control_lines to the new uint32_t format
     // For now, just extend it to 32 bits
-    return (uint32_t)c64_bus->control_lines;
+    return (uint32_t)c64_bus->state.lines;
 }
 
 static void c64_control_lines_set(void* context, uint32_t lines) {
     c64_bus_t* c64_bus = (c64_bus_t*)context;
     // Convert back to the C64's uint8_t format
     // For now, just truncate (assumes lower 8 bits contain the relevant data)
-    c64_bus->control_lines = (uint8_t)(lines & 0xFF);
+    c64_bus->state.lines = (uint8_t)(lines & 0xFF);
 }
 
 // I/O port adapter functions
