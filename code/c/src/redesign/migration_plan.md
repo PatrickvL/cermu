@@ -106,13 +106,17 @@ This document provides a clear migration strategy for modernizing the main C64 e
 ---
 
 ## 4. Migration Checklist
-- [x] Redesign files provide reference architecture and techniques
-- [x] Main project bus layer refactored to use encoded chip select arrays
-- [x] Main project chip layer unified for bus state threading and cycle advancement
-- [x] Macro-based handler signatures and footers applied to all opcode handlers
-- [ ] Main project CMake build and documentation updated
-- [ ] System-wide validation and benchmarking in main project
-- [ ] Comprehensive unit and integration tests in main project
+ [x] Redesign files provide reference architecture and techniques
+ [x] Main project bus layer refactored to use encoded chip select arrays and unified bus state threading
+ [x] Main project chip layer unified for bus state threading and cycle advancement (VIC-II, SID, CIA)
+ [x] Macro-based handler signatures and centralized FOOTER macros applied to all opcode handlers
+ [x] Global replacement of bus_cycle_t with bus_state_t completed
+ [x] c64_bus_s struct refactored to use bus_state_t state field
+ [x] All code updated to use new bus state threading; no lingering references to legacy fields
+ [x] Project builds fully after migration and refactoring
+ [ ] Main project CMake build and documentation updated to reflect redesign best practices
+ [ ] System-wide validation and benchmarking in main project
+ [ ] Comprehensive unit and integration tests in main project
 
 ---
 
@@ -120,16 +124,8 @@ This document provides a clear migration strategy for modernizing the main C64 e
 
 
 Migrating to the redesign concepts will:
-- Improve performance and maintainability
-- Enable stackless, cycle-accurate emulation
-- Simplify future redesigns via macro-based handler declarations and centralized logic
 
 **Next Steps:**
-- Use redesign files as reference/inspiration only; do not update or use them directly for code, includes, or implementation
-- Apply redesign ideas and techniques to main project files via refactoring
-- Bus layer migration complete; chip layer migration in progress; CPU layer and system integration to follow
-- Validate each step with tests and benchmarks
-- Document migration progress and any issues
 
 For further details or code-by-code mapping, request a deep-dive migration guide.
 

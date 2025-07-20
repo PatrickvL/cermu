@@ -1,4 +1,5 @@
 #include "mos6526.h" // cia
+#include "../../systems/c64/c64_bus.h" // for BUS_LINE_IRQ
 #include <string.h>
 #include <stdlib.h>
 
@@ -356,7 +357,7 @@ void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edg
 
 // Clock pulse handling
 
-void mos6526_cycle(mos6526_t* cia) {
+bus_state_t mos6526_advance_cycle(mos6526_t* cia, bus_state_t bus_state) {
     // Note: In the C# version, this checks if _CS.IsHigh, but we'll assume the chip is always selected
     // if this function is called
     
@@ -365,7 +366,8 @@ void mos6526_cycle(mos6526_t* cia) {
     
     // "The CIA6526 will raise an interrupt with a delay of one ø2 clock"
     if (cia->delayed_irq) {
-        // Set IRQ line low - in a real implementation this would affect the bus
+        // Set IRQ line 
+        bus_state.lines |= BUS_LINE_IRQ;
         // For now we'll just clear the delayed flag
         cia->delayed_irq = false;
     }
@@ -424,6 +426,7 @@ void mos6526_cycle(mos6526_t* cia) {
     }
 
     mos6526_check_interrupt_mask(cia);
+    return bus_state;
 }
 
 // TIME OF DAY (TOD) handling
