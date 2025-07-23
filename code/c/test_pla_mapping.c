@@ -30,21 +30,21 @@ int main() {
     // Mode 0: All signals high (should be mostly RAM)
     printf("Mode 0 (all signals high):\n");
     for (int i = 0; i < 8; i++) {
-        uint8_t chip = bus->cpu_chip_per_bank_per_mode[0][i];
+        uint8_t chip = bus->cpu_encoded_chip_per_bank_per_mode[0][i];
         printf("  Bank %d: chip = 0x%02X\n", i, chip);
     }
     
     // Mode 31: All signals low (different configuration)
     printf("Mode 31 (all signals low):\n");
     for (int i = 0; i < 8; i++) {
-        uint8_t chip = bus->cpu_chip_per_bank_per_mode[31][i];
+        uint8_t chip = bus->cpu_encoded_chip_per_bank_per_mode[31][i];
         printf("  Bank %d: chip = 0x%02X\n", i, chip);
     }
     
     // Check if modes are different (indicating PLA is actually working)
     bool modes_differ = false;
     for (int i = 0; i < 32; i++) {
-        if (bus->cpu_chip_per_bank_per_mode[0][i] != bus->cpu_chip_per_bank_per_mode[31][i]) {
+        if (bus->cpu_encoded_chip_per_bank_per_mode[0][i] != bus->cpu_encoded_chip_per_bank_per_mode[31][i]) {
             modes_differ = true;
             break;
         }

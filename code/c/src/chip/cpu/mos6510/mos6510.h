@@ -43,8 +43,6 @@ struct mos6510_s {
     // === MOS6510-SPECIFIC EXTENSIONS ===
     // I/O port interface (stored by value for optimal performance)
     mos6510_io_port_interface_t io_interface;
-      // Direct RAM access (for zero bank $0002-$0FFF to avoid circular dependency)
-    access_callback_t ram_access;  // Consolidated RAM access interface
     
     // I/O Ports (MOS6510-specific)
     uint8_t io_port[2]; // 0:DDR, 1:Port
@@ -104,9 +102,16 @@ static inline uint8_t mos6510_ioport_read(mos6510_t* cpu, uint16_t addr) {
     if (addr == 0) {
         // Return Data Direction Register
         return cpu->io_port[0];
-    } else {        // Return port: outputs defined by DDR bits, inputs from external pins
+    } else { // Return port: outputs defined by DDR bits, inputs from external pins
         uint8_t external = cpu->io_interface.read_external_pins(cpu->io_interface.context, cpu->io_port[1], cpu->io_port[0]);
         return mos6510_io_mask(cpu, external);
+/*
+        // Return port: outputs defined by DDR bits, inputs from external pins
+        uint8_t ddr = cpu->io_port[0];
+        uint8_t data = cpu->io_port[1];
+        uint8_t external = cpu->io_interface.read_external_pins(cpu->io_interface.context, data, ddr);
+        return (data & ddr) | (external & ~ddr);
+*/
     }
 }
 
@@ -293,7 +298,6 @@ extern chip_descriptor_t mos6510_descriptor;
 void mos6510_attach_bus_interface(mos6510_t* cpu, const bus_cycle_ops_t* bus_interface);
 void mos6510_attach_control_lines_interface(mos6510_t* cpu, const control_lines_interface_t* control_interface);
 void mos6510_attach_io_interface(mos6510_t* cpu, const mos6510_io_port_interface_t* io_interface);
-void mos6510_attach_ram(mos6510_t* cpu, const access_callback_t* ram_access);
 
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 // GUI functions

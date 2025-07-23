@@ -63,10 +63,6 @@ struct fam65xx_s {
 
     // Intercept mechanism for single-step execution
     fam65xx_opcode_handler_t saved_opcode_handlers[256]; // Saved handlers during intercept
-    // === DIRECT RAM ACCESS (for zero page optimization) ===
-    // Direct RAM accessors to avoid circular dependency with bus interface
-    // TODO : Move to mos6510 (the sole user for now)
-    access_callback_t ram_access;  // Consolidated RAM access interface
 };
 
 // ============================================================================

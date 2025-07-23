@@ -11,47 +11,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// Macro definitions for ACID (ACcessor InDex) extraction
-
-// ACID definitions (ACcessor InDex for callback dispatch)
-// ACIDs identify which accessor callbacks to use for memory operations.
-// Accessor Callback IDs for optimized callback system
-enum {
-    /* I/O pages: 0-15 ($D000-$DFFF) - Read/Write capable, page-addressed */
-    ACID_VIC_D0 = 0,      /* $D000-$D0FF - Video Interface Controller */
-    ACID_VIC_D1 = 1,      /* $D100-$D1FF */
-    ACID_VIC_D2 = 2,      /* $D200-$D2FF */
-    ACID_VIC_D3 = 3,      /* $D300-$D3FF */
-    ACID_SID_D4 = 4,      /* $D400-$D4FF - Sound Interface Device */
-    ACID_SID_D5 = 5,      /* $D500-$D5FF */
-    ACID_SID_D6 = 6,      /* $D600-$D6FF */
-    ACID_SID_D7 = 7,      /* $D700-$D7FF */
-    ACID_COLORRAM_D8 = 8, /* $D800-$D8FF - Color RAM (4-bit) */
-    ACID_COLORRAM_D9 = 9, /* $D900-$D9FF */
-    ACID_COLORRAM_DA = 10,/* $DA00-$DAFF */
-    ACID_COLORRAM_DB = 11,/* $DB00-$DBFF */
-    ACID_CIA1_DC = 12,    /* $DC00-$DCFF - Complex Interface Adapter */
-    ACID_CIA2_DD = 13,    /* $DD00-$DDFF */
-    ACID_IO1_DE = 14,     /* $DE00-$DEFF - Expansion I/O */
-    ACID_IO2_DF = 15,     /* $DF00-$DFFF */
-
-    /* Writable Non-I/O Chips: 16-19 - Read/Write, optimized for 3-bit write addressing */
-    ACID_ZEROBANK = 16,   /* $0000-$03FF - Zero bank (CPU I/O port address 0 and 1 and RAM fallback above) */
-    ACID_RAM = 17,        /* $0000-$FFFF - System RAM */
-    ACID_ROML = 18,       /* $8000-$9FFF - Cartridge ROM Low (writable via banking) */
-    ACID_ROMH = 19,       /* $A000-$BFFF/$E000-$FFFF - Cartridge ROM High */
-
-    /* Read-Only Non-I/O Chips: 20-23 - Read-only, writes typically go to underlying RAM */
-    ACID_UNMAPPED = 20,   /* Unmapped/open address space (returns $FF, no chip) */
-    ACID_BASIC = 21,      /* $A000-$BFFF - BASIC ROM */
-    ACID_CHARROM = 22,    /* $D000-$DFFF - Character ROM */
-    ACID_KERNAL = 23,     /* $E000-$FFFF - KERNAL ROM */
-
-    ACID_MAX = 24 // Total number of ACIDs (0-23 for I/O, 16-19 for writable chips, 20-23 for read-only)
-};
-
 // =============================
-// Redesign Bus Types & Macros
+// Bus Types & Macros
 // =============================
 
 // Chip IDs ordered by memory size (largest first), then I/O by page number
@@ -66,8 +27,9 @@ typedef enum {
     CHIP_CHARROM      = 6,   // 4KB Character ROM
     CHIP_COLORRAM     = 7,   // 1KB Color RAM (smallest memory)
     CHIP_UNMAPPED     = 8,   // Unmapped regions
+    CHIP_IO           = 9,   // I/O bank
     // I/O pages in $D000-$DFFF range (16 pages of $100 bytes each)
-    CHIP_D0_VIC       = 9,   // $D000-$D0FF (I/O page 0) - VIC-II registers
+    CHIP_D0_VIC = CHIP_IO,   // $D000-$D0FF (I/O page 0) - VIC-II registers
     CHIP_D1_VIC       =10,   // $D100-$D1FF (I/O page 1) - VIC-II mirrors
     CHIP_D2_VIC      = 11,   // $D200-$D2FF (I/O page 2) - VIC-II mirrors
     CHIP_D3_VIC      = 12,   // $D300-$D3FF (I/O page 3) - VIC-II mirrors
@@ -87,12 +49,6 @@ typedef enum {
     CHIP_MAX = 25 // Total number of CHIP IDs (0-24)
 } chip_id_t;
 
-// Convenience aliases for the primary I/O chips
-#define CHIP_VIC      CHIP_D0_VIC    // Primary VIC-II chip (first I/O chip)
-#define CHIP_SID      CHIP_D4_SID    // Primary SID chip
-#define CHIP_CIA1     CHIP_DC_CIA1
-#define CHIP_CIA2     CHIP_DD_CIA2
-
 // System line masks for cartridge signals (moved out of control lines to separate field)
 #define SYS_MASK_EXROM 0   // EXROM signal
 #define SYS_MASK_GAME  1  // GAME signal
@@ -110,16 +66,16 @@ typedef struct c64_bus_s {
     
     // OPTIMIZED MEMORY BANKING - Cache-friendly layout
     // Banking configurations per mode (32 modes x 16 banks = 512 bytes)
-    alignas(64) uint8_t cpu_chip_per_bank_per_mode[32][16]; // Encoded chip select for all PLA modes
-    // 16 bytes: cpu_chip_per_bank mapping (4KB banks 0-15) - fits in single cache line
-    alignas(16) uint8_t cpu_chip_per_bank[16]; // CPU banking configurations per mode
+    alignas(64) uint8_t cpu_encoded_chip_per_bank_per_mode[32][16]; // Encoded chip select for all PLA modes
+    // 16 bytes: cpu_encoded_chip_per_bank mapping (4KB banks 0-15) - fits in single cache line
+    alignas(16) uint8_t cpu_encoded_chip_per_bank[16]; // CPU banking configurations per mode
 
     // VIC-II active array for optimized access (raw CHIPs, no encoding)  
     alignas(16) uint8_t vicii_chip_per_bank[16];
     
     // VIC-II banking configurations per mode (32 modes x 16 banks = 512 bytes)
-    // VIC-II uses direct ACID values, not encoded, since it only does read accesses
-    alignas(64) uint8_t vicii_chip_per_bank_per_mode[32][16]; // VIC-II direct ACID per mode
+    // VIC-II uses direct CHIP values, not encoded, since it only does read accesses
+    alignas(64) uint8_t vicii_chip_per_bank_per_mode[32][16]; // VIC-II direct CHIP per mode
     
     // Integrated adapter interfaces - can be passed out as pointers
     bus_cycle_ops_t bus_adapter;
@@ -127,7 +83,7 @@ typedef struct c64_bus_s {
     mos6510_io_port_interface_t io_port_adapter;
 } c64_bus_t;
 
-// ACID descriptor struct for tooling
+// CHIP descriptor struct for tooling
 typedef struct {
     uint16_t base;
     size_t size;
@@ -135,16 +91,16 @@ typedef struct {
 //    const char* size_str;
     const char* label; // always from chip descriptor if available
 //    const char* title;
-} acid_descriptor_t;
+} chip_description_t;
 
 /**
- * Fetch descriptor for a given ACID from registered chips or synthesize for I/O/special
+ * Fetch descriptor for a given CHIP from registered chips or synthesize for I/O/special
  * Returns true if found, false if not (out is only valid if true)
  */
-bool c64_bus_get_acid_descriptor(const c64_bus_t* bus, uint8_t acid, acid_descriptor_t* out);
+bool c64_bus_get_chip_description(const c64_bus_t* bus, uint8_t chip, chip_description_t* out);
 
-// Tooling: Map ACID to a concise type/title string (not address/size)
-const char* c64_bus_acid_to_title(uint8_t acid);
+// Tooling: Map CHIP to a concise type/title string (not address/size)
+const char* c64_bus_chip_to_title(uint8_t chip);
 
 // Utility: Convert a size in bytes to a human-readable string ("256B", "4KB", etc.)
 const char* c64_bus_size_to_str(size_t size);
@@ -172,9 +128,6 @@ void c64_bus_set_game_signal(c64_bus_t* c64_bus, bool active);
 void c64_bus_set_cartridge_signals(c64_bus_t* c64_bus, bool exrom_active, bool game_active);
 bool c64_bus_get_exrom_signal(c64_bus_t* c64_bus);
 bool c64_bus_get_game_signal(c64_bus_t* c64_bus);
-
-// Optimized callback management
-void c64_bus_register_chip_callbacks(c64_bus_t* bus, uint8_t acid, chip_entry_t* entry);
 
 // Forward declaration for PLA
 struct pla_906114_01_s;
@@ -240,18 +193,26 @@ static inline mos6510_io_port_interface_t* c64_io_port_get_adapter(c64_bus_t* c6
     return &c64_bus->io_port_adapter;
 }
 
-// Encoding macros for packing read/write ACIDs into single byte by packing
-// the IO pages into one (ACID_VIC_D0, which will be restored to the full
-// range by c64_bus_cpu_read/write) and decreasing higher ACID by 15,
+// Encoding macros for packing read/write CHIPs into single byte by packing
+// the IO pages into one (CHIP_VIC_D0, which will be restored to the full
+// range by c64_bus_cpu_read/write) and decreasing higher CHIP by 15,
 // Order: I/O pages (0-15), then writable chips (16-19), then read-only (20-24)
-// Non-I/O ACIDs 16-24 become 1-9 in encoded form, which fits in 4 bits.
-// Writable ACIDs 16-19 become 1-4 in encoded form, which fits in 3 bits.
+// Non-I/O CHIPs 16-24 become 1-9 in encoded form, which fits in 4 bits.
+// Writable CHIPs 16-19 become 1-4 in encoded form, which fits in 3 bits.
 // Output byte format: [7:5] write code (3 bits), [4] unused (1 bit), [3:0] read code (4 bits)
-static inline uint8_t encode_acid_rw(uint8_t read_acid, uint8_t write_acid) {
-    read_acid = (read_acid <= ACID_IO2_DF) ? ACID_VIC_D0 : read_acid - ACID_IO2_DF;
-    write_acid = (write_acid <= ACID_IO2_DF) ? ACID_VIC_D0 : write_acid - ACID_IO2_DF;
-    uint8_t encoded = read_acid | (write_acid << 5);
+static inline uint8_t encode_chip_rw(uint8_t read_chip, uint8_t write_chip) {
+    read_chip = (read_chip > CHIP_IO) ? CHIP_IO : read_chip;
+    write_chip = (write_chip > CHIP_IO) ? CHIP_IO : write_chip;
+    uint8_t encoded = read_chip | (write_chip << 4);
     return encoded;
+}
+
+static inline uint8_t decode_read_chip(uint8_t encoded) {
+    return encoded & 0x0F; // Lower 4 bits are the read chip
+}
+    
+static inline uint8_t decode_write_chip(uint8_t encoded) {
+    return (encoded >> 4) & 0x0F; // Upper 4 bits are the write chip
 }
 
 #endif // C64_BUS_H

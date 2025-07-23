@@ -39,15 +39,15 @@ void c64_bus_vic_read(c64_bus_t* c64_bus, uint16_t address) {
 void c64_bus_cpu_read(c64_bus_t *bus, uint16_t address) {
     bus->state.addr = address; // Perhaps this is no longer needed
     uint8_t bank = (uint8_t)c64_bus_get_bank(address);  // Extract 4KB bank (0-15)
-    uint8_t chip = (bus->cpu_chip_per_bank[bank] >> 4) & 0x0F; // upper 4 bits: read chip
+    uint8_t chip = decode_read_chip(bus->cpu_encoded_chip_per_bank[bank]);
     // Branchless I/O sub-page detection (16 pages of $100 bytes each)
-    uint8_t is_io = -(chip == CHIP_VIC);
+    uint8_t is_io = -(chip == CHIP_IO);
     chip += is_io & (address >> 8) & 0x0F;
     // Direct switch-based chip dispatch
     switch (chip) {
         case CHIP_ZEROBANK:
             if (address <= 1) {
-                bus->state.data = mos6510_ioport_read(bus->c64->color_ram, address); break;
+                bus->state.data = mos6510_ioport_read(bus->c64->mos6510, address); break;
             }
             // fall-through
         case CHIP_RAM:
@@ -70,9 +70,9 @@ void c64_bus_cpu_read(c64_bus_t *bus, uint16_t address) {
         case CHIP_D6_SID:
         case CHIP_D7_SID:
             bus->state.data = sid_read(bus->c64->sid, address); break;
-        case CHIP_CIA1:
+        case CHIP_DC_CIA1:
             bus->state.data = mos6526_registers_read(bus->c64->cia1, bus->state); break;
-        case CHIP_CIA2:
+        case CHIP_DD_CIA2:
             bus->state.data = mos6526_registers_read(bus->c64->cia2, bus->state); break;
         case CHIP_DE_IO1:
             bus->state.data = io1_read(bus->c64->io1, address); break;
@@ -94,16 +94,16 @@ void c64_bus_cpu_write(c64_bus_t *bus, uint16_t address, uint8_t value) {
     bus->state.data = value; // Used for "floating" bus state for subsequent unattached reads
 
     uint8_t bank = (uint8_t)c64_bus_get_bank(address);  // Extract 4KB bank (0-15)
-    uint8_t chip = bus->cpu_chip_per_bank[bank] & 0x0F;  // Extract write chip (lower 4 bits)
+    uint8_t chip = decode_write_chip(bus->cpu_encoded_chip_per_bank[bank]);
     // Branchless I/O sub-page detection (16 pages of $100 bytes each)
-    uint8_t is_io = -(chip == CHIP_VIC);
+    uint8_t is_io = -(chip == CHIP_IO);
     chip += is_io & (address >> 8) & 0x0F;
     
     // Direct switch-based chip dispatch
     switch (chip) {
         case CHIP_ZEROBANK:
             if (address <= 1) {
-                mos6510_ioport_write(bus->c64->color_ram, address, value);
+                mos6510_ioport_write(bus->c64->mos6510, address, value);
                 break;
             }
             // fall-through
@@ -123,9 +123,9 @@ void c64_bus_cpu_write(c64_bus_t *bus, uint16_t address, uint8_t value) {
         case CHIP_D6_SID:
         case CHIP_D7_SID:
             sid_write(bus->c64->sid, address, value); break;
-        case CHIP_CIA1:
+        case CHIP_DC_CIA1:
             mos6526_registers_write(bus->c64->cia1, bus->state); break;
-        case CHIP_CIA2:
+        case CHIP_DD_CIA2:
             mos6526_registers_write(bus->c64->cia2, bus->state); break;
         case CHIP_DE_IO1:
             io1_write(bus->c64->io1, address, value); break;
@@ -192,7 +192,7 @@ void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {
     // Update the optimized banking for the current mode
     c64_bus->pla_banking_mode = mode & 0x1F;
     
-    memcpy(c64_bus->cpu_chip_per_bank, c64_bus->cpu_chip_per_bank_per_mode[mode], 16);
+    memcpy(c64_bus->cpu_encoded_chip_per_bank, c64_bus->cpu_encoded_chip_per_bank_per_mode[mode], 16);
     // Also copy VIC-II active array for optimal performance
     memcpy(c64_bus->vicii_chip_per_bank, c64_bus->vicii_chip_per_bank_per_mode[mode], 16);
 }
@@ -267,7 +267,7 @@ uint8_t pla_906114_01_outputs_to_chip(pla_906114_01_t* pla) {
         return CHIP_COLORRAM;
     } else if (!pla->outputs.n_io) {
         // I/O region - I/O bank (read-write)
-        return CHIP_D0_VIC; // c64_bus_cpu_read will handle mapping to full 16 I/O pages
+        return CHIP_IO; // c64_bus_cpu_read will handle mapping to full 16 I/O pages
     } else if (!pla->outputs.n_roml) {
         // Cartridge ROM Low (read-only)
         return CHIP_ROML;
@@ -309,10 +309,10 @@ void c64_bus_populate_cpu_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pl
         }
 
         // Note: ROM areas (BASIC, KERNAL, Character ROM, Cartridge) are not writable, 
-        // so write_acid remains ACID_UNMAPPED for those regions
-        
+        // so write_chip remains CHIP_UNMAPPED for those regions
+
         // Encode both read and write CHIPs into the mapping
-        bus->cpu_chip_per_bank[bank] = encode_acid_rw(read_chip, write_chip);
+        bus->cpu_encoded_chip_per_bank[bank] = encode_chip_rw(read_chip, write_chip);
     }
 }
 
@@ -331,7 +331,7 @@ void c64_bus_populate_vicii_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* 
         pla_906114_01_set_vicii_address_bank((pla_906114_01_t*)pla, (uint8_t)bank);
         // Determine read CHIP based on PLA outputs for read mode
         uint8_t read_chip = pla_906114_01_outputs_to_chip((pla_906114_01_t*)pla);
-        // VIC-II banking stores direct ACID values, no encoding needed
+        // VIC-II banking stores direct CHIP values, no encoding needed
         bus->vicii_chip_per_bank[bank] = read_chip;        
     }
 }
@@ -349,7 +349,7 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
         // Populate mapping for this mode
         c64_bus_populate_cpu_pla_mapping(bus, pla);
         // Copy the CPU mapping to the mode-specific array
-        memcpy(bus->cpu_chip_per_bank_per_mode[mode], bus->cpu_chip_per_bank, 16);
+        memcpy(bus->cpu_encoded_chip_per_bank_per_mode[mode], bus->cpu_encoded_chip_per_bank, 16);
     }
     
     // Generate VIC-II memory modes (different steering parameters)
@@ -366,9 +366,9 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
         pla->inputs.n_exrom = n_exrom;
         // Note: #VA14 will be set during populate_vicii_pla_mapping for each bank
         
-        // Populate VIC-II mapping for this mode (stores direct ACIDs)
+        // Populate VIC-II mapping for this mode (stores direct CHIPs)
         c64_bus_populate_vicii_pla_mapping(bus, pla);
-        // Copy the VIC-II raw ACIDs to the mode-specific array
+        // Copy the VIC-II raw CHIPs to the mode-specific array
         memcpy(bus->vicii_chip_per_bank_per_mode[cpu_mode], bus->vicii_chip_per_bank, 16);
     }
 }
@@ -466,33 +466,6 @@ void c64_bus_init_adapters(c64_bus_t* c64_bus) {
 }
 
 // ============================================================================
-// OPTIMIZED CALLBACK MANAGEMENT
-// ============================================================================
-
-// Central ACID-to-chip_entry_t* mapping for fast lookup (populated at system init)
-static chip_entry_t* c64_bus_acid_to_entry[ACID_MAX] = {0};
-
-// Register a chip's callbacks in the optimized arrays and update ACID-to-entry mapping
-void c64_bus_register_chip_callbacks(c64_bus_t* bus, uint8_t acid, chip_entry_t* entry) {
-    if (acid >= ACID_MAX) return;  // Invalid chip ID for reads
-    if (!entry || !entry->desc) return;
-    chip_descriptor_t* desc = entry->desc;
-    void* context = entry->rwcb_context;
-    // Register read callback
-    if (desc->read) {
-        bus->read_callbacks[acid].read = desc->read;
-        bus->read_callbacks[acid].context = context;
-    }
-    // Register write callback (only for writable chips 0-19)
-    if (desc->write && acid < 20) {
-        bus->write_funcs[acid] = desc->write;
-    }
-
-    // Always set the ACID-to-entry mapping
-    c64_bus_acid_to_entry[acid] = entry;
-}
-
-// ============================================================================
 // CARTRIDGE INTERFACE FUNCTIONS - Control EXROM and GAME signals
 // ============================================================================
 
@@ -587,12 +560,12 @@ bool c64_bus_get_game_signal(c64_bus_t* c64_bus) {
     return (c64_bus->system_lines & SYS_MASK_GAME) == 0;
 }
 
-// Update c64_bus_get_acid_descriptor to use the new mapping for all ACIDs
-bool c64_bus_get_acid_descriptor(const c64_bus_t* bus, uint8_t acid, acid_descriptor_t* out) {
-    if (!bus || !out || acid >= ACID_MAX) return false;
+// Update c64_bus_get_chip_description to use the new mapping for all CHIPs
+bool c64_bus_get_chip_description(const c64_bus_t* bus, uint8_t chip, chip_description_t* out) {
+    if (!bus || !out || chip >= CHIP_MAX) return false;
 
     memset(out, 0, sizeof(*out));
-    chip_entry_t* entry = c64_bus_acid_to_entry[acid];
+    chip_entry_t* entry = c64_bus_chip_to_entry[chip];
     if (entry) {
         out->base = entry->base_address;
         out->size = entry->size;
@@ -601,13 +574,13 @@ bool c64_bus_get_acid_descriptor(const c64_bus_t* bus, uint8_t acid, acid_descri
     }    
 
     // Special cases
-    switch (acid) {
-        case ACID_ZEROBANK:
+    switch (chip) {
+        case CHIP_ZEROBANK:
             out->base = 0x0000;
             out->size = 0x400;
             out->label = "Zero Bank RAM";
             return true;
-        case ACID_UNMAPPED:
+        case CHIP_UNMAPPED:
             out->base = 0;
             out->size = 0;
             out->label = "Unmapped";
@@ -622,49 +595,50 @@ bool c64_bus_get_acid_descriptor(const c64_bus_t* bus, uint8_t acid, acid_descri
     return false;
 }
 
-// Return a concise title string for each ACID (for legend/tooling/GUI)
-const char* c64_bus_acid_to_title(uint8_t acid) {
-    // See get_chip_detail
-    switch (acid) {
-        case ACID_VIC_D0:
-        case ACID_VIC_D1:
-        case ACID_VIC_D2:
-        case ACID_VIC_D3:
-            return "VIC-II";
-        case ACID_SID_D4:
-        case ACID_SID_D5:
-        case ACID_SID_D6:
-        case ACID_SID_D7:
-            return "SID";
-        case ACID_COLORRAM_D8:
-        case ACID_COLORRAM_D9:
-        case ACID_COLORRAM_DA:
-        case ACID_COLORRAM_DB:
-            return "COLORRAM";
-        case ACID_CIA1_DC:
-            return "CIA1";
-        case ACID_CIA2_DD:
-            return "CIA2";
-        case ACID_IO1_DE:
-            return "IO1";
-        case ACID_IO2_DF:
-            return "IO2";
-        case ACID_ZEROBANK:
+// Return a concise title string for each CHIP (for legend/tooling/GUI)
+const char* c64_bus_chip_to_title(uint8_t chip) {
+    switch (chip) {
+        case CHIP_ZEROBANK:
             return "RAM"; // Ignore the zero bank aspect, it's mostly just RAM
-        case ACID_RAM:
+        case CHIP_RAM:
             return "RAM";
-        case ACID_ROML:
-            return "ROML";
-        case ACID_ROMH:
-            return "ROMH";
-        case ACID_UNMAPPED:
-            return "-";
-        case ACID_BASIC:
+        case CHIP_BASIC:
             return "BASIC";
-        case ACID_CHARROM:
-            return "CHARROM";
-        case ACID_KERNAL:
+        case CHIP_KERNAL:
             return "KERNAL";
+        case CHIP_ROML:
+            return "ROML";
+        case CHIP_ROMH:
+            return "ROMH";
+        case CHIP_CHARROM:
+            return "CHARROM";
+        case CHIP_COLORRAM:
+            return "COLORRAM";
+        case CHIP_UNMAPPED:
+            return "-";
+        case CHIP_D0_VIC:
+        case CHIP_D1_VIC:
+        case CHIP_D2_VIC:
+        case CHIP_D3_VIC:
+            return "VIC-II";
+        case CHIP_D4_SID:
+        case CHIP_D5_SID:
+        case CHIP_D6_SID:
+        case CHIP_D7_SID:
+            return "SID";
+        case CHIP_D8_COLORRAM:
+        case CHIP_D9_UNMAPPED:
+        case CHIP_DA_UNMAPPED:
+        case CHIP_DB_UNMAPPED:
+            return "COLORRAM";
+        case CHIP_DC_CIA1:
+            return "CIA1";
+        case CHIP_DD_CIA2:
+            return "CIA2";
+        case CHIP_DE_IO1:
+            return "IO1";
+        case CHIP_DF_IO2:
+            return "IO2";
         default:
             return "?";
     }

@@ -6,17 +6,10 @@
 #include <string.h>
 #include <stdlib.h>
 
-// Mock interfaces for testing
-static uint8_t test_memory[65536];
-
-static uint8_t mock_read(void* context, uint16_t address) {
-    (void)context;
-    return test_memory[address];
-}
-
 static void mock_write(void* context, uint16_t address, uint8_t value) {
     (void)context;
-    test_memory[address] = value;
+    (void)address;
+    (void)value;
 }
 
 static uint8_t mock_detached_read(void* context) {
@@ -66,8 +59,7 @@ static const cpu_test_config_t cpu_configs[] = {
 
 static void setup_mock_interfaces(
     bus_cycle_ops_t* bus_interface,
-    control_lines_interface_t* control_interface,
-    access_callback_t* ram_access
+    control_lines_interface_t* control_interface
 ) {
     bus_interface->context = NULL;
     bus_interface->bus_write_cycle = mock_write;
@@ -76,10 +68,6 @@ static void setup_mock_interfaces(
     control_interface->get_lines = mock_get_lines;
     control_interface->set_lines = mock_set_lines;
     control_interface->context = NULL;
-    
-    ram_access->read_func = mock_read;
-    ram_access->write_func = mock_write;
-    ram_access->context = NULL;
 }
 
 static void test_decimal_mode_arithmetic(void) {
@@ -87,11 +75,7 @@ static void test_decimal_mode_arithmetic(void) {
     
     bus_cycle_ops_t bus_interface;
     control_lines_interface_t control_interface;  
-    access_callback_t ram_access;
-    setup_mock_interfaces(&bus_interface, &control_interface, &ram_access);
-    
-    // Clear test memory
-    memset(test_memory, 0, sizeof(test_memory));
+    setup_mock_interfaces(&bus_interface, &control_interface);
     
     printf("Testing decimal mode capabilities:\n\n");
     
@@ -102,7 +86,6 @@ static void test_decimal_mode_arithmetic(void) {
     if (mos6502_create(&desc6502, &cpu6502)) {
         mos6502_attach_bus(&cpu6502, &bus_interface);
         mos6502_attach_control_lines(&cpu6502, &control_interface);
-        mos6502_attach_ram(&cpu6502, &ram_access);
         
         // Test decimal addition: 09 + 01 = 10 in BCD
         mos6502_set_a(&cpu6502, 0x09);
@@ -127,7 +110,6 @@ static void test_decimal_mode_arithmetic(void) {
     if (nes6502_create(&descnes, &cpunes)) {
         nes6502_attach_bus(&cpunes, &bus_interface);
         nes6502_attach_control_lines(&cpunes, &control_interface);
-        nes6502_attach_ram(&cpunes, &ram_access);
         
         nes6502_set_a(&cpunes, 0x09);
         nes6502_set_p(&cpunes, nes6502_get_p(&cpunes) | FLAG_D); // Set decimal mode
@@ -149,7 +131,6 @@ static void test_decimal_mode_arithmetic(void) {
     if (mos6510_create(&desc6510, &cpu6510)) {
         mos6510_attach_bus(&cpu6510, &bus_interface);
         mos6510_attach_control_lines(&cpu6510, &control_interface);
-        mos6510_attach_ram(&cpu6510, &ram_access);
         
         mos6510_set_a(&cpu6510, 0x09);
         mos6510_set_p(&cpu6510, mos6510_get_p(&cpu6510) | FLAG_D); // Set decimal mode

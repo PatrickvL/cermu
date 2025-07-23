@@ -25,51 +25,13 @@ static void mos6510_destroy(void* chip) {
     }
 }
 
-uint8_t mos6510_zeropage_read(void* chip, uint16_t address) {
-    mos6510_t* cpu = (mos6510_t*)chip;
-
-    // Handle MOS6510 zero page I/O ports - addresses $0000 and $0001
-    if (address == 0) {
-        // Return Data Direction Register
-        return cpu->io_port[0];
-    } else if (address == 1) {
-        // Return port: outputs defined by DDR bits, inputs from external pins
-        uint8_t ddr = cpu->io_port[0];
-        uint8_t data = cpu->io_port[1];
-        uint8_t external = cpu->io_interface.read_external_pins(cpu->io_interface.context, data, ddr);
-        return (data & ddr) | (external & ~ddr);
-    } else {
-        // For addresses $0002-$00FF, access system RAM directly to avoid circular dependency
-        return cpu->ram_access.read_func(cpu->ram_access.context, address);
-    }
-}
-
-void mos6510_zeropage_write(void* chip, uint16_t address, uint8_t value) {
-    mos6510_t* cpu = (mos6510_t*)chip;
-
-    // Handle MOS6510 zero page I/O ports - addresses $0000 and $0001
-    if (address <= 1) {
-        printf("mos6510_zeropage_write: addr=%04X value=%02X\n", address, value);
-
-        mos6510_ioport_write(cpu, address, value);
-    } else {
-        // For addresses $0002-$00FF, write to system RAM directly to avoid circular dependency
-        if (cpu->ram_access.write_func) {
-            cpu->ram_access.write_func(cpu->ram_access.context, address, value);
-        } else {
-            // Fallback to bus interface if RAM not attached yet (during initialization)
-            cpu->base.bus_interface.bus_write_cycle(cpu->base.bus_interface.context, address, value);
-        }
-    }
-}
-
 chip_descriptor_t mos6510_descriptor = {
     .description = "MOS6510 CPU with I/O Ports",
     .create = mos6510_create,
     .destroy = mos6510_destroy,
     .bus_attach = NULL,
-    .read = mos6510_zeropage_read,
-    .write = mos6510_zeropage_write,
+    .read = mos6510_ioport_read,
+    .write = mos6510_ioport_write,
     .bank_change = NULL,
     .get_rwcb_context = NULL,
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
@@ -123,11 +85,6 @@ void mos6510_init(mos6510_t* cpu) {
     // 6510-specific I/O port (addresses $0000/$0001) initialization
     cpu->io_port[0] = 0x2F;  // Default Data Direction Register (DDR at $0000)
     cpu->io_port[1] = 0x37;  // Default I/O Port Data (at $0001)
-    
-    // Initialize RAM accessors to NULL (will be set by mos6510_attach_ram)
-    cpu->ram_access.context = NULL;
-    cpu->ram_access.read_func = NULL;
-    cpu->ram_access.write_func = NULL;
 }
 
 // Reset CPU
@@ -206,25 +163,4 @@ void mos6510_attach_bus_state(mos6510_t* cpu, bus_state_t* bus_state) {
     
     // Store pointer to shared bus state
     cpu->base.bus_state = bus_state;
-}
-
-/**
- * Attach RAM directly to CPU for zero page access ($0002-$00FF).
- * This provides direct access to RAM without going through the bus interface,
- * which is essential to avoid circular dependencies when the CPU needs to access
- * zero page memory during system initialization.
- */
-void mos6510_attach_ram(mos6510_t* cpu, const access_callback_t* ram_access) {
-    if (!cpu || !ram_access) return;
-    
-    // Copy the access callback structure
-    cpu->ram_access = *ram_access;
-    
-    // Ensure valid function pointers, falling back to generic stubs if not provided
-    if (!cpu->ram_access.read_func) {
-        cpu->ram_access.read_func = generic_stub_read;
-    }
-    if (!cpu->ram_access.write_func) {
-        cpu->ram_access.write_func = generic_stub_write;
-    }
 }

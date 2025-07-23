@@ -100,72 +100,6 @@ void c64_detached_write(void* context, uint16_t address, uint8_t value) {
     // Do nothing - detached chips do not write
 }
 
-uint8_t c64_dev_descriptor_to_acid(chip_entry_t* dev) {
-    chip_descriptor_t* desc = dev->desc;
-    
-    if (desc == &mos2114_descriptor) return ACID_COLORRAM_D8; // Color RAM
-    if (desc == &mos6510_descriptor) return ACID_ZEROBANK; // CPU handles zero bank
-    if (desc == &mos6526_descriptor) { // CIA chips get slots 12-13 (DC00-DDFF)
-        if (dev->base_address == 0xDC00) return ACID_CIA1_DC; // 12
-        if (dev->base_address == 0xDD00) return ACID_CIA2_DD; // 13
-    }
-    if (desc == &mos6567_descriptor || desc == &mos6569_descriptor) return ACID_VIC_D0; // VIC-II
-    if (desc == &mos6581_descriptor) return ACID_SID_D4; // SID
-    if (desc == &ram_descriptor) return ACID_RAM; // RAM
-    if (desc == &rom_descriptor) { // ROMs are handled by base address
-        if (dev->base_address == 0x8000) return ACID_ROML;
-        if (dev->base_address == 0xA000) return ACID_BASIC;
-        if (dev->base_address == 0xC000) return ACID_ROMH;
-        if (dev->base_address == 0xD000) return ACID_CHARROM;
-        if (dev->base_address == 0xE000) return ACID_KERNAL;
-    }
-    // Note : ACID_IO1_DE and ACID_IO2_DF are not yet supported, but reserved for future expansion
-
-    return ACID_UNMAPPED; // Default unmapped access
-}
-
-void c64_callbacks_init(c64_t* c64) {
-    // Initialize optimized callback system
-    c64_bus_t* bus = c64->bus;
-    
-    // Register chip callbacks in optimized arrays based on chip types
-    for (int i = 0; i < c64->system.chip_count; i++) {
-        chip_entry_t* dev = &c64->system.chips[i];
-        // Map chips to optimized callback slots based on their type and address
-        uint8_t acid = c64_dev_descriptor_to_acid(dev);
-
-        switch (acid) {
-            case ACID_VIC_D0:
-                // VIC-II (NTSC or PAL) gets I/O slots 0-3 (D000-D3FF)
-                c64_bus_register_chip_callbacks(bus, ACID_VIC_D0, dev);
-                c64_bus_register_chip_callbacks(bus, ACID_VIC_D1, dev);
-                c64_bus_register_chip_callbacks(bus, ACID_VIC_D2, dev);
-                c64_bus_register_chip_callbacks(bus, ACID_VIC_D3, dev);
-                break;
-            case ACID_SID_D4:
-                // SID gets I/O slots 4-7 (D400-D7FF)
-                c64_bus_register_chip_callbacks(bus, ACID_SID_D4, dev);
-                c64_bus_register_chip_callbacks(bus, ACID_SID_D5, dev);
-                c64_bus_register_chip_callbacks(bus, ACID_SID_D6, dev);
-                c64_bus_register_chip_callbacks(bus, ACID_SID_D7, dev);
-                break;
-            case ACID_COLORRAM_D8:
-                // Color RAM gets I/O slots 8-11 (D800-DBFF)
-                c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_D8, dev);
-                c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_D9, dev);
-                c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_DA, dev);
-                c64_bus_register_chip_callbacks(bus, ACID_COLORRAM_DB, dev);
-                break;
-            case ACID_UNMAPPED:
-                break; // Unmapped chips do not register callbacks
-            default:
-                // Register the chip callback
-                c64_bus_register_chip_callbacks(bus, acid, dev);
-                break;
-        }       
-    }
-}
-
 bool c64_pla_maps_generate(c64_t* c64) {
     c64_bus_t* bus = c64->bus;
     
@@ -337,20 +271,10 @@ c64_t* c64_system_create(const system_config_t* config) {
     // Now having a registry of all chips, the PLA maps can be generated
     if (!c64_pla_maps_generate(c64)) { c64_system_destroy(c64); return NULL; }
 
-    // Attach RAM directly to MOS6510 for zero page access to avoid circular dependency
-    access_callback_t ram_access = {
-        .read_func = ram_descriptor.read,
-        .write_func = ram_descriptor.write,
-        .context = ram_descriptor.get_rwcb_context(c64->ram)
-    };
-    mos6510_attach_ram(c64->mos6510, &ram_access);
     // Set default memory contents and load ROMs from configured paths
     const rom_config_t* rom_config = config->rom_config ? config->rom_config : system_config_get_default_roms();
     c64_memory_init(&c64->system, rom_config);
 
-    // Now that all devices have their rwcb_context set, we can initialize the callbacks
-    c64_callbacks_init(c64);
-    
     // Attach bus to C64 system first, then all other chips with bus_attach callbacks
     c64_bus_system_attach(c64->bus, c64);
     for (int i = 0; i < c64->system.chip_count; i++) {

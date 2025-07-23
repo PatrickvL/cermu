@@ -10,11 +10,11 @@
 FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_read(c64_t* c64, c64_bus_state_t bus_state) {
     // Ultra-fast chip selection with branchless I/O detection
     uint8_t bank = bus_state.bus.addr >> 12;  // 4KB bank (0-15)
-    uint8_t encoded = c64->bus->cpu_chip_per_bank[bank];
+    uint8_t encoded = c64->bus->cpu_encoded_chip_per_bank[bank];
     uint8_t chip = (encoded >> 4) & 0x0F;  // Extract read chip (upper 4 bits)
     
     // Branchless I/O sub-page detection (16 pages of $100 bytes each)
-    uint8_t is_io = -(base_chip == CHIP_VIC);
+    uint8_t is_io = -(base_chip == CHIP_IO);
     chip += is_io & ((bus_state.bus.addr >> 8) & 0xF);
     
     // Initialize floating bus data
@@ -96,11 +96,11 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_read(c64_t* c64, c64_
 FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_write(c64_t* c64, c64_bus_state_t bus) {
     // Ultra-fast chip selection with branchless I/O detection
     uint8_t bank = bus.addr >> 12;
-    uint8_t encoded = c64->bus->cpu_chip_per_bank[bank];
+    uint8_t encoded = c64->bus->cpu_encoded_chip_per_bank[bank];
     uint8_t chip = encoded & 0x0F;  // Extract write chip (lower 4 bits)
     
     // Branchless I/O sub-page detection (16 pages of $100 bytes each)
-    uint8_t is_io = -(base_chip == CHIP_VIC);
+    uint8_t is_io = -(base_chip == CHIP_IO);
     chip += is_io & ((bus.addr >> 8) & 0xF);
     
     // All chips advance their internal timing WITH bus state for interrupt handling
@@ -270,8 +270,8 @@ void c64_bus_mode_switch(c64_bus_t* bus, uint8_t mode) {
     bus->pla_banking_mode = mode & 0x1F;
     
     // Copy precalculated chip select data for the new mode
-    memcpy(bus->cpu_chip_per_bank, 
-           bus->cpu_chip_per_bank_per_mode[mode], 
+    memcpy(bus->cpu_encoded_chip_per_bank, 
+           bus->cpu_encoded_chip_per_bank_per_mode[mode], 
            16);
 }
 
@@ -365,12 +365,12 @@ void c64_bus_populate_chip_select_from_pla(c64_bus_t* bus) {
             // - Read/Write mode
             
             if (bank == 13) {  // $D000-$DFFF I/O area example
-                read_chip = CHIP_VIC;   // I/O region - gets refined to specific I/O chip
-                write_chip = CHIP_VIC;  // I/O region - gets refined to specific I/O chip
+                read_chip = CHIP_IO;   // I/O region - gets refined to specific I/O chip
+                write_chip = CHIP_IO;  // I/O region - gets refined to specific I/O chip
             }
             
             // Encode both read and write chips
-            bus->cpu_chip_per_bank_per_mode[mode][bank] = encode_chip_select(read_chip, write_chip);
+            bus->cpu_encoded_chip_per_bank_per_mode[mode][bank] = encode_chip_select(read_chip, write_chip);
         }
     }
     

@@ -20,8 +20,10 @@ typedef struct cia_state_s cia_state_t;
 #define CHIP_CHARROM   5   // 4KB Character ROM
 #define CHIP_COLORRAM  6   // 1KB Color RAM (smallest memory)
 #define CHIP_UNMAPPED  7   // Unmapped regions
+#define CHIP_IO        8   // I/O bank
+
 // I/O pages in $D000-$DFFF range (16 pages of $100 bytes each)
-#define CHIP_D0_VIC       8   // $D000-$D0FF (I/O page 0) - VIC-II registers
+#define CHIP_D0_VIC CHIP_IO   // $D000-$D0FF (I/O page 0) - VIC-II registers
 #define CHIP_D1_VIC       9   // $D100-$D1FF (I/O page 1) - VIC-II mirrors
 #define CHIP_D2_VIC      10   // $D200-$D2FF (I/O page 2) - VIC-II mirrors  
 #define CHIP_D3_VIC      11   // $D300-$D3FF (I/O page 3) - VIC-II mirrors
@@ -38,12 +40,6 @@ typedef struct cia_state_s cia_state_t;
 #define CHIP_DE_IO1      22   // $DE00-$DEFF (I/O page 14) - Cartridge I/O 1
 #define CHIP_DF_IO2      23   // $DF00-$DFFF (I/O page 15) - Cartridge I/O 2
 #define CHIP_MAX         24
-
-// Convenience aliases for the primary I/O chips
-#define CHIP_VIC      CHIP_D0_VIC    // Primary VIC-II chip (first I/O chip)
-#define CHIP_SID      CHIP_D4_SID    // Primary SID chip
-#define CHIP_CIA1     CHIP_DC_CIA1
-#define CHIP_CIA2     CHIP_DD_CIA2
 
 // System line masks for cartridge signals (moved out of control lines to separate field)
 #define SYS_MASK_EXROM 8   // EXROM signal
@@ -90,8 +86,8 @@ typedef struct c64_bus_s {
     uint8_t system_lines;                 // EXROM, GAME signals
     
     // Optimized chip selection arrays (precalculated from PLA)
-    uint8_t cpu_chip_per_bank[16];     // Current banking mode
-    uint8_t cpu_chip_per_bank_per_mode[32][16]; // All PLA modes
+    uint8_t cpu_encoded_chip_per_bank[16];     // Current banking mode
+    uint8_t cpu_encoded_chip_per_bank_per_mode[32][16]; // All PLA modes
     uint8_t pla_banking_mode;             // Current 5-bit PLA mode
 } c64_bus_t;
 
