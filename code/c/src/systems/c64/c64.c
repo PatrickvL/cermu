@@ -127,16 +127,6 @@ uint8_t c64_dev_descriptor_to_acid(chip_entry_t* dev) {
 void c64_callbacks_init(c64_t* c64) {
     // Initialize optimized callback system
     c64_bus_t* bus = c64->bus;
-
-    // Initialize all callbacks to stub functions first
-    for (int acid = 0;  acid < ACID_MAX; acid++) {
-        // Register read callback
-        bus->read_callbacks[acid].read = c64_detached_read;
-        bus->read_callbacks[acid].context = bus;
-        // Register write callback (only for writable chips 0-19)
-        if (acid < 20)
-            bus->write_funcs[acid] = c64_detached_write;
-    }
     
     // Register chip callbacks in optimized arrays based on chip types
     for (int i = 0; i < c64->system.chip_count; i++) {

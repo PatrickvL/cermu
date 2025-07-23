@@ -10,7 +10,7 @@
 FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_read(c64_t* c64, c64_bus_state_t bus_state) {
     // Ultra-fast chip selection with branchless I/O detection
     uint8_t bank = bus_state.bus.addr >> 12;  // 4KB bank (0-15)
-    uint8_t encoded = c64->bus->chip_select_per_bank[bank];
+    uint8_t encoded = c64->bus->cpu_chip_per_bank[bank];
     uint8_t chip = (encoded >> 4) & 0x0F;  // Extract read chip (upper 4 bits)
     
     // Branchless I/O sub-page detection (16 pages of $100 bytes each)
@@ -96,7 +96,7 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_read(c64_t* c64, c64_
 FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_write(c64_t* c64, c64_bus_state_t bus) {
     // Ultra-fast chip selection with branchless I/O detection
     uint8_t bank = bus.addr >> 12;
-    uint8_t encoded = c64->bus->chip_select_per_bank[bank];
+    uint8_t encoded = c64->bus->cpu_chip_per_bank[bank];
     uint8_t chip = encoded & 0x0F;  // Extract write chip (lower 4 bits)
     
     // Branchless I/O sub-page detection (16 pages of $100 bytes each)
@@ -270,8 +270,8 @@ void c64_bus_mode_switch(c64_bus_t* bus, uint8_t mode) {
     bus->pla_banking_mode = mode & 0x1F;
     
     // Copy precalculated chip select data for the new mode
-    memcpy(bus->chip_select_per_bank, 
-           bus->chip_select_per_bank_per_mode[mode], 
+    memcpy(bus->cpu_chip_per_bank, 
+           bus->cpu_chip_per_bank_per_mode[mode], 
            16);
 }
 
@@ -370,7 +370,7 @@ void c64_bus_populate_chip_select_from_pla(c64_bus_t* bus) {
             }
             
             // Encode both read and write chips
-            bus->chip_select_per_bank_per_mode[mode][bank] = encode_chip_select(read_chip, write_chip);
+            bus->cpu_chip_per_bank_per_mode[mode][bank] = encode_chip_select(read_chip, write_chip);
         }
     }
     

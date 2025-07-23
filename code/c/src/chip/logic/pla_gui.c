@@ -203,20 +203,20 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                     igTableSetColumnIndex(2);
 
                     // Get encoded value for this bank and mode
-                    uint8_t encoded = encode_acid_rw(ACID_UNMAPPED, ACID_UNMAPPED);
+                    uint8_t encoded = encode_acid_rw(CHIP_UNMAPPED, CHIP_UNMAPPED);
                     if (has_bus && pla_debug_selected_mode < 32) {
-                        encoded = c64->bus->encoded_rwid_per_bank_per_mode[pla_debug_selected_mode][bank];
+                        encoded = c64->bus->cpu_chip_per_bank_per_mode[pla_debug_selected_mode][bank];
                     }
                     
                     igText("$%02X", encoded);
                     igTableSetColumnIndex(3);
-                    
-                    // Decode ACIDs
-                    uint8_t read_acid = decode_read_acid(encoded);
 
-                    igText("%02d", read_acid);
+                    // Decode CHIPs
+                    uint8_t read_chip = decode_read_chip(encoded);
+
+                    igText("%02d", read_chip);
                     igTableSetColumnIndex(4);
-                    if (read_acid == ACID_UNMAPPED) {
+                    if (read_chip == CHIP_UNMAPPED) {
                         igText("Unmapped");
                         igTableSetColumnIndex(5);
                         igText("-");
@@ -233,33 +233,33 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                         
                         // WAS uint16_t read_offset = (read_effective_base <= bank_start) ? (bank_start - read_effective_base) : 0;
                         uint16_t read_offset = bank_start - read_effective_base;
-                        
-                        igText("%s", (read_acid == ACID_VIC_D0) ? "I/O" : c64_bus_acid_to_title(read_acid));
+
+                        igText("%s", (read_chip == CHIP_D0_VIC) ? "I/O" : c64_bus_chip_to_title(read_chip));
                         igTableSetColumnIndex(5);
                         igText("$%04X", read_offset);
                     }
-                    
-                    uint8_t write_acid = decode_write_acid(encoded);
+
+                    uint8_t write_chip = decode_write_chip(encoded);
                     
                     igTableSetColumnIndex(6);
-                    igText("%02d", write_acid);
+                    igText("%02d", write_chip);
                     igTableSetColumnIndex(7);
-                    if (write_acid == ACID_UNMAPPED) {
+                    if (write_chip == CHIP_UNMAPPED) {
                         igText("Unmapped");
                         igTableSetColumnIndex(8);
                         igText("-");
                     } else {
-                        c64_bus_get_acid_descriptor(has_bus ? c64->bus : NULL, write_acid, &write_desc);
+                        c64_bus_get_acid_descriptor(has_bus ? c64->bus : NULL, write_chip, &write_desc);
 
                         uint16_t write_effective_base = write_desc.base;
-                        if (write_acid == ACID_ROMH && (bank_start >= 0xE000)) { // NOTE : although ROMH is not writable, PLA modes 16-23 (LHGX xx01) still map it
+                        if (write_chip == CHIP_ROMH && (bank_start >= 0xE000)) { // NOTE : although ROMH is not writable, PLA modes 16-23 (LHGX xx01) still map it
                             // ROMH remapped to $E000/$F000: treat as if base is $E000
                             write_effective_base = 0xE000;
                         }
                         
                         uint16_t write_offset = bank_start - write_effective_base;
 
-                        igText("%s", (write_acid == ACID_VIC_D0) ? "I/O" : c64_bus_acid_to_title(write_acid));
+                        igText("%s", (write_chip == CHIP_D0_VIC) ? "I/O" : c64_bus_chip_to_title(write_chip));
                         igTableSetColumnIndex(8);
                         igText("$%04X", write_offset);
                     }
@@ -315,15 +315,15 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                         igText("$%04X-$%04X", bank_start, bank_start + 0x0FFF);
                         igTableSetColumnIndex(2);
 
-                        // Get ACID for this VIC-II bank and mode
-                        uint8_t read_acid = ACID_UNMAPPED;
+                        // Get CHIP for this VIC-II bank and mode
+                        uint8_t read_chip = CHIP_UNMAPPED;
                         if (has_bus && pla_debug_selected_mode < 32) {
-                            read_acid = c64->bus->vicii_acid_per_bank_per_mode[pla_debug_selected_mode][bank];
+                            read_chip = c64->bus->vicii_chip_per_bank_per_mode[pla_debug_selected_mode][bank];
                         }
 
-                        igText("%02d", read_acid);
+                        igText("%02d", read_chip);
                         igTableSetColumnIndex(3);
-                        igText("%s", c64_bus_acid_to_title(read_acid));
+                        igText("%s", c64_bus_acid_to_title(read_chip));
                         igTableSetColumnIndex(4);
 
                         c64_bus_get_acid_descriptor(has_bus ? c64->bus : NULL, read_acid, &read_desc);

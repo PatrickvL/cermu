@@ -130,59 +130,38 @@ static inline void vicii_memory_update_mapping(vicii_memory_unit_t* memory, uint
     memory->cb_base = ((uint16_t)mp_reg & 0x0E) << 10; // CB11-CB13 bits * 0x800 -> << 10
 }
 
-uint8_t vicii_memory_read(vicii_t* vicii, uint16_t address) {
-    if (!vicii->bus.bus) return 0xFF;
-    
-    // ULTRA-OPTIMIZED VIC-II MEMORY READ - Better performance than CPU version
-    // VIC-II uses pre-selected active array (raw ACIDs), can only read, never write
-    // Bank base offset applied here to keep operations in most appropriate place
-    
+static inline void vicii_memory_read(vicii_t* vicii, uint16_t address) {
     c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
-
-    // Apply bank base offset to address
+    // Bank base offset applied here to keep operations in most appropriate place
     uint16_t final_address = vicii->memory.bank_base | address;
     
-    // Extract 4KB bank from address (0-15 for VIC-II's 64KB addressable space)
-    uint8_t vicii_bank = final_address >> 12;
-    
-    // Get raw ACID directly from pre-selected active array (no mode indexing)
-    uint8_t read_acid = c64_bus->vicii_acid_per_bank[vicii_bank];
-    
-    // Direct callback with final address including bank offset
-    return c64_bus->read_callbacks[read_acid].read(
-        c64_bus->read_callbacks[read_acid].context, final_address);
+    c64_bus_vic_read(c64_bus, final_address);
 }
 
 void vicii_memory_access(vicii_t* vicii, uint8_t access_type, int access_param) {
     if (!vicii->bus.bus) return;
     
     uint16_t address;
-    uint8_t data = 0;
     c64_bus_t* bus = (c64_bus_t*)vicii->bus.bus;
     
     switch (access_type) {
         case VIC_ACCESS_P:
             address = vicii->memory.vm_base + 0x3F8 + (uint16_t)access_param;
-            data = vicii_memory_read(vicii, address);
-            {
-                vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[access_param];
-                sprite->data_pointer = data;
-            }
-            break;
-            
+            vicii_memory_read(vicii, address);
+            vicii->sprites.sprites[access_param].data_pointer = bus->state.data;
+            break;            
         case VIC_ACCESS_S:
             {
                 vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[access_param];
                 if (sprite->mc_counter < 3) {
                     address = sprite->data_pointer * 64 + sprite->mc_counter;
-                    data = vicii_memory_read(vicii, address);
-                    sprite->data_buffer[sprite->mc_counter] = data;
+                    vicii_memory_read(vicii, address);
+                    sprite->data_buffer[sprite->mc_counter] = bus->state.data;
                     sprite->mc_counter++;
                 } else {
                     // "Whatever appears on the VIC-II internal bus during the fetch cycles
                     // is displayed. That is both loads and stores to the VIC-II, or $ff if
                     // no access occurs."
-                data = bus->state.data; // Use whatever is on the bus (sprite idle fetch)
                 }
             }
             break;
@@ -195,15 +174,13 @@ void vicii_memory_access(vicii_t* vicii, uint8_t access_type, int access_param) 
             // we still calculate the absolute address
             // TODO : Should this incorporate vicii_bank_base too? 
             address = 0xD800 + vicii->video_logic.vc;
-            data = bus->read_callbacks[ACID_COLORRAM_D8].read(
-                bus->read_callbacks[ACID_COLORRAM_D8].context, address);
-            vicii->video_data.video_color_line[vicii->video_logic.vmli] = data & 0x0F;
+            uint8_t color_data = mos2114_read(bus->c64->color_ram, address);
+            vicii->video_data.video_color_line[vicii->video_logic.vmli] = color_data & 0x0F;
             
             // Video matrix access  
             address = vicii->memory.vm_base + vicii->video_logic.vc;
-            data = vicii_memory_read(vicii, address);
-            vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = data;
-            bus->state.data = data; // Set bus data for next access
+            vicii_memory_read(vicii, address);
+            vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = bus->state.data;
             
             // Increment VC and VMLI after c-access in display state
             if (vicii->video_logic.display_state) {
@@ -237,32 +214,25 @@ void vicii_memory_access(vicii_t* vicii, uint8_t access_type, int access_param) 
                     address = (vicii->registers.data[VICII_C1] & VICII_C1_ECM) ? 0x39ff : 0x3fff;
                 }
                 
-                uint8_t graphics_data = vicii_memory_read(vicii, address);
-                vicii_graphics_sequencer(vicii, graphics_data);
-                data = graphics_data;
+                vicii_memory_read(vicii, address);
+                vicii_graphics_sequencer(vicii, bus->state.data);
             }
             break;
             
         case VIC_ACCESS_REFRESH:
             if (vicii->enable_hardware_accurate_reads) {
                 address = vicii->memory.vm_base | 0x3F00 | vicii->video_logic.refresh_counter;
-                data = vicii_memory_read(vicii, address);
-            } else {
-                data = bus->state.data; // Use floating bus data
+                vicii_memory_read(vicii, address);
             }
             vicii->video_logic.refresh_counter--;
             break;
             
         default: // VIC_ACCESS_IDLE
             if (vicii->enable_hardware_accurate_reads) {
-                data = vicii_memory_read(vicii, 0x3FFF);
-            } else {
-                data = bus->state.data; // Use floating bus data
+                vicii_memory_read(vicii, 0x3FFF);
             }
             break;
     }
-    
-    bus->state.data = data;
 }
 
 // ========================================================================================

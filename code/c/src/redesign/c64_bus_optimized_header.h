@@ -90,8 +90,8 @@ typedef struct c64_bus_s {
     uint8_t system_lines;                 // EXROM, GAME signals
     
     // Optimized chip selection arrays (precalculated from PLA)
-    uint8_t chip_select_per_bank[16];     // Current banking mode
-    uint8_t chip_select_per_bank_per_mode[32][16]; // All PLA modes
+    uint8_t cpu_chip_per_bank[16];     // Current banking mode
+    uint8_t cpu_chip_per_bank_per_mode[32][16]; // All PLA modes
     uint8_t pla_banking_mode;             // Current 5-bit PLA mode
 } c64_bus_t;
 

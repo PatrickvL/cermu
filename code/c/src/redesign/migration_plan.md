@@ -92,7 +92,13 @@ OPCODE_HANDLER_PROTO(cpu_lda_abs) {
 ```
 
 ## 5. Migration Checklist
+## 4a. Architectural Difference to Address
 
+**Current State:** The main project uses a callback array for chip access in the bus layer.
+
+**Redesign Reference:** Uses a direct switch statement for branchless chip-select dispatch after cycle-ticking all chips.
+
+**Action Required:** Refactor the bus layer to use a switch-based approach for chip access, replacing the callback array. This is necessary for full redesign compliance and optimal performance.
 - [x] Redesign files provide reference architecture and techniques
 - [x] Main project bus layer refactored to use encoded chip select arrays and unified bus state threading
 - [x] Main project chip layer unified for bus state threading and cycle advancement (VIC-II, SID, CIA)

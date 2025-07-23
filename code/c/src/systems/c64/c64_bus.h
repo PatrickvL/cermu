@@ -57,33 +57,34 @@ enum {
 // Chip IDs ordered by memory size (largest first), then I/O by page number
 typedef enum {
     // Must be consecutive for optimal jump table
-    CHIP_RAM          = 0,   // 64KB RAM (largest)
-    CHIP_BASIC        = 1,   // 8KB BASIC ROM
-    CHIP_KERNAL       = 2,   // 8KB KERNAL ROM
-    CHIP_ROML         = 3,   // 8KB ROM Low (cartridge)
-    CHIP_ROMH         = 4,   // 8KB ROM High (cartridge)
-    CHIP_CHARROM      = 5,   // 4KB Character ROM
-    CHIP_COLORRAM     = 6,   // 1KB Color RAM (smallest memory)
-    CHIP_UNMAPPED     = 7,   // Unmapped regions
+    CHIP_ZEROBANK     = 0,   // Pseudo chip for CPU I/O ports (4KB bank $0000-$0FFF)
+    CHIP_RAM          = 1,   // 64KB RAM (largest)
+    CHIP_BASIC        = 2,   // 8KB BASIC ROM
+    CHIP_KERNAL       = 3,   // 8KB KERNAL ROM
+    CHIP_ROML         = 4,   // 8KB ROM Low (cartridge)
+    CHIP_ROMH         = 5,   // 8KB ROM High (cartridge)
+    CHIP_CHARROM      = 6,   // 4KB Character ROM
+    CHIP_COLORRAM     = 7,   // 1KB Color RAM (smallest memory)
+    CHIP_UNMAPPED     = 8,   // Unmapped regions
     // I/O pages in $D000-$DFFF range (16 pages of $100 bytes each)
-    CHIP_D0_VIC       = 8,   // $D000-$D0FF (I/O page 0) - VIC-II registers
-    CHIP_D1_VIC       = 9,   // $D100-$D1FF (I/O page 1) - VIC-II mirrors
-    CHIP_D2_VIC      = 10,   // $D200-$D2FF (I/O page 2) - VIC-II mirrors
-    CHIP_D3_VIC      = 11,   // $D300-$D3FF (I/O page 3) - VIC-II mirrors
-    CHIP_D4_SID      = 12,   // $D400-$D4FF (I/O page 4) - SID registers
-    CHIP_D5_SID      = 13,   // $D500-$D5FF (I/O page 5) - SID mirrors
-    CHIP_D6_SID      = 14,   // $D600-$D6FF (I/O page 6) - SID mirrors
-    CHIP_D7_SID      = 15,   // $D700-$D7FF (I/O page 7) - SID mirrors
-    CHIP_D8_COLORRAM = 16,   // $D800-$D8FF (I/O page 8) - Color RAM via VIC
-    CHIP_D9_UNMAPPED = 17,   // $D900-$D9FF (I/O page 9) - Unmapped
-    CHIP_DA_UNMAPPED = 18,   // $DA00-$DAFF (I/O page 10) - Unmapped
-    CHIP_DB_UNMAPPED = 19,   // $DB00-$DBFF (I/O page 11) - Unmapped
-    CHIP_DC_CIA1     = 20,   // $DC00-$DCFF (I/O page 12) - CIA1
-    CHIP_DD_CIA2     = 21,   // $DD00-$DDFF (I/O page 13) - CIA2
-    CHIP_DE_IO1      = 22,   // $DE00-$DEFF (I/O page 14) - Cartridge I/O 1
-    CHIP_DF_IO2      = 23,   // $DF00-$DFFF (I/O page 15) - Cartridge I/O 2
+    CHIP_D0_VIC       = 9,   // $D000-$D0FF (I/O page 0) - VIC-II registers
+    CHIP_D1_VIC       =10,   // $D100-$D1FF (I/O page 1) - VIC-II mirrors
+    CHIP_D2_VIC      = 11,   // $D200-$D2FF (I/O page 2) - VIC-II mirrors
+    CHIP_D3_VIC      = 12,   // $D300-$D3FF (I/O page 3) - VIC-II mirrors
+    CHIP_D4_SID      = 13,   // $D400-$D4FF (I/O page 4) - SID registers
+    CHIP_D5_SID      = 14,   // $D500-$D5FF (I/O page 5) - SID mirrors
+    CHIP_D6_SID      = 15,   // $D600-$D6FF (I/O page 6) - SID mirrors
+    CHIP_D7_SID      = 16,   // $D700-$D7FF (I/O page 7) - SID mirrors
+    CHIP_D8_COLORRAM = 17,   // $D800-$D8FF (I/O page 8) - Color RAM via VIC
+    CHIP_D9_UNMAPPED = 18,   // $D900-$D9FF (I/O page 9) - Unmapped
+    CHIP_DA_UNMAPPED = 19,   // $DA00-$DAFF (I/O page 10) - Unmapped
+    CHIP_DB_UNMAPPED = 20,   // $DB00-$DBFF (I/O page 11) - Unmapped
+    CHIP_DC_CIA1     = 21,   // $DC00-$DCFF (I/O page 12) - CIA1
+    CHIP_DD_CIA2     = 22,   // $DD00-$DDFF (I/O page 13) - CIA2
+    CHIP_DE_IO1      = 23,   // $DE00-$DEFF (I/O page 14) - Cartridge I/O 1
+    CHIP_DF_IO2      = 24,   // $DF00-$DFFF (I/O page 15) - Cartridge I/O 2
 
-    CHIP_MAX = 24 // Total number of CHIP IDs (0-23)
+    CHIP_MAX = 25 // Total number of CHIP IDs (0-24)
 } chip_id_t;
 
 // Convenience aliases for the primary I/O chips
@@ -108,31 +109,17 @@ typedef struct c64_bus_s {
     uint8_t pla_banking_mode;  // Current banking mode for fast switching
     
     // OPTIMIZED MEMORY BANKING - Cache-friendly layout
-#ifdef REDESIGN
-    // New branchless chip select arrays for migration (32 modes x 16 banks)
-    alignas(64) uint8_t chip_select_per_bank_per_mode[32][16]; // Encoded chip select for all PLA modes
-    alignas(16) uint8_t chip_select_per_bank[16];
-#else
-    // 16 bytes: encoded_rwid_per_bank mapping (4KB banks 0-15) - fits in single cache line
-    alignas(16) uint8_t encoded_rwid_per_bank[16];
-
     // Banking configurations per mode (32 modes x 16 banks = 512 bytes)
-    alignas(64) uint8_t encoded_rwid_per_bank_per_mode[32][16]; // CPU banking configurations per mode    
-#endif
-    // VIC-II active array for optimized access (raw ACIDs, no encoding)  
-    alignas(16) uint8_t vicii_acid_per_bank[16];
+    alignas(64) uint8_t cpu_chip_per_bank_per_mode[32][16]; // Encoded chip select for all PLA modes
+    // 16 bytes: cpu_chip_per_bank mapping (4KB banks 0-15) - fits in single cache line
+    alignas(16) uint8_t cpu_chip_per_bank[16]; // CPU banking configurations per mode
+
+    // VIC-II active array for optimized access (raw CHIPs, no encoding)  
+    alignas(16) uint8_t vicii_chip_per_bank[16];
     
     // VIC-II banking configurations per mode (32 modes x 16 banks = 512 bytes)
     // VIC-II uses direct ACID values, not encoded, since it only does read accesses
-    alignas(64) uint8_t vicii_acid_per_bank_per_mode[32][16]; // VIC-II direct ACID per mode
-    
-    // Split read/write for better cache usage (reads are 3-4x more frequent)
-    alignas(64) struct {
-        void *context;
-        chip_read_func_t read;
-    } read_callbacks[24];        // 384 bytes - hot cache for reads
-    
-    alignas(64) chip_write_func_t write_funcs[20]; // 160 bytes - separate cache line for writes (only writable chips 0-19)
+    alignas(64) uint8_t vicii_chip_per_bank_per_mode[32][16]; // VIC-II direct ACID per mode
     
     // Integrated adapter interfaces - can be passed out as pointers
     bus_cycle_ops_t bus_adapter;
@@ -167,13 +154,14 @@ void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode);
 // PLA mode generation function - maps CPU I/O port bits + cartridge signals to 5-bit PLA mode
 uint8_t c64_bus_generate_pla_mode(c64_bus_t* c64_bus, uint8_t cpu_port_bits);
 
+// Memory functions
+void c64_bus_vic_read(c64_bus_t* c64_bus, uint16_t address);
+uint8_t c64_bus_cpu_read(c64_bus_t *bus, uint16_t address);
+void c64_bus_cpu_write(c64_bus_t *bus, uint16_t address, uint8_t value);
+
 // Bus cycle functions
 uint8_t c64_bus_read_cycle(c64_bus_t *bus, uint16_t addr);
 void c64_bus_write_cycle(c64_bus_t* bus, uint16_t addr, uint8_t value);
-
-// Memory functions
-uint8_t c64_bus_memory_read(c64_bus_t *bus, uint16_t address);
-void c64_bus_memory_write(c64_bus_t *bus, uint16_t address, uint8_t value);
 
 // System functions  
 void c64_bus_system_attach(c64_bus_t* c64_bus, void* c64);  // c64_t*
@@ -254,7 +242,7 @@ static inline mos6510_io_port_interface_t* c64_io_port_get_adapter(c64_bus_t* c6
 
 // Encoding macros for packing read/write ACIDs into single byte by packing
 // the IO pages into one (ACID_VIC_D0, which will be restored to the full
-// range by c64_bus_memory_read/write) and decreasing higher ACID by 15,
+// range by c64_bus_cpu_read/write) and decreasing higher ACID by 15,
 // Order: I/O pages (0-15), then writable chips (16-19), then read-only (20-24)
 // Non-I/O ACIDs 16-24 become 1-9 in encoded form, which fits in 4 bits.
 // Writable ACIDs 16-19 become 1-4 in encoded form, which fits in 3 bits.
