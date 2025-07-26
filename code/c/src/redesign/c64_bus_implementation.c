@@ -10,7 +10,7 @@
 FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_read(c64_t* c64, c64_bus_state_t bus_state) {
     // Ultra-fast chip selection with branchless I/O detection
     uint8_t bank = bus_state.bus.addr >> 12;  // 4KB bank (0-15)
-    uint8_t encoded = c64->bus->cpu_encoded_chip_per_bank[bank];
+    uint8_t encoded = c64->bus.cpu_encoded_chip_per_bank[bank];
     uint8_t chip = (encoded >> 4) & 0x0F;  // Extract read chip (upper 4 bits)
     
     // Branchless I/O sub-page detection (16 pages of $100 bytes each)
@@ -18,7 +18,7 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_read(c64_t* c64, c64_
     chip += is_io & ((bus_state.bus.addr >> 8) & 0xF);
     
     // Initialize floating bus data
-    bus_state.bus.data = c64->bus->data;  // Retain last bus value
+    bus_state.bus.data = c64->bus.data;  // Retain last bus value
     
     // All chips advance their internal timing WITH bus state for interrupt handling
     bus_state.bus = vicii_advance_cycle(c64->vicii, bus_state.bus);
@@ -38,10 +38,10 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_read(c64_t* c64, c64_
             bus_state.bus.data = c64->kernal_rom[bus_state.bus.addr & 0x1FFF];
             break;
         case CHIP_ROML:
-            bus_state.bus.data = c64->cartridge.roml[bus_state.bus.addr & 0x1FFF];
+            bus_state.bus.data = c64->cartridge_roml[bus_state.bus.addr & 0x1FFF];
             break;
         case CHIP_ROMH:
-            bus_state.bus.data = c64->cartridge.romh[bus_state.bus.addr & 0x1FFF];
+            bus_state.bus.data = c64->cartridge_romh[bus_state.bus.addr & 0x1FFF];
             break;
         case CHIP_CHARROM:
             bus_state.bus.data = c64->char_rom[bus_state.bus.addr & 0x0FFF];
@@ -89,14 +89,14 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_read(c64_t* c64, c64_
     }
     
     // Update system bus state and return final bus state
-    c64->bus->data = bus_state.bus.data;
+    c64->bus.data = bus_state.bus.data;
     return bus_state;
 }
 
 FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_write(c64_t* c64, c64_bus_state_t bus) {
     // Ultra-fast chip selection with branchless I/O detection
     uint8_t bank = bus.addr >> 12;
-    uint8_t encoded = c64->bus->cpu_encoded_chip_per_bank[bank];
+    uint8_t encoded = c64->bus.cpu_encoded_chip_per_bank[bank];
     uint8_t chip = encoded & 0x0F;  // Extract write chip (lower 4 bits)
     
     // Branchless I/O sub-page detection (16 pages of $100 bytes each)
@@ -162,7 +162,7 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_write(c64_t* c64, c64
     }
     
     // Update system bus state and return final bus state
-    c64->bus->data = bus_state.bus.data;
+    c64->bus.data = bus_state.bus.data;
     return bus_state;
 }
 

@@ -112,7 +112,7 @@ typedef struct {
 
 // Main C64 system structure
 typedef struct c64_s {
-    c64_bus_t* bus;
+    c64_bus_t* bus;  // Embedded bus (value, not pointer!)
     vicii_state_t* vicii;
     sid_state_t* sid;
     cia_state_t* cia1;

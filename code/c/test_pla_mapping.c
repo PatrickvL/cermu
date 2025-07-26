@@ -23,7 +23,7 @@ int main() {
     
     
     // Test a few memory modes to see if they have different mappings
-    c64_bus_t* bus = c64->bus;
+    c64_bus_t* bus = &(c64->bus);
     
     printf("Testing different memory modes:\n");
     

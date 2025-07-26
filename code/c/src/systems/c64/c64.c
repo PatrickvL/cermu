@@ -101,7 +101,7 @@ void c64_detached_write(void* context, uint16_t address, uint8_t value) {
 }
 
 bool c64_pla_maps_generate(c64_t* c64) {
-    c64_bus_t* bus = c64->bus;
+    c64_bus_t* bus = &(c64->bus);
     
     // Create a temporary PLA instance for generating memory maps
     pla_906114_01_t* pla = pla_906114_01_create();
@@ -174,7 +174,7 @@ void c64_non_cpu_cycle(void* c64_ptr) {
     
     c64->total_cycles++;
     
-    c64_bus_t* bus = c64->bus;  // Access bus state
+    c64_bus_t* bus = &(c64->bus);  // Access bus state
 
     // VIC tick handles both phi1 and phi2 phases internally
     bus->state = vicii_advance_cycle(c64->vicii, bus->state);
@@ -203,10 +203,10 @@ void c64_non_cpu_cycle(void* c64_ptr) {
     }
 */
     // Update RDY line based on BA (hardware accurate)
-    if (c64->bus->state.lines & BUS_MASK_BA) {
-        c64->bus->state.lines |= BUS_MASK_RDY;
+    if (c64->bus.state.lines & BUS_MASK_BA) {
+        c64->bus.state.lines |= BUS_MASK_RDY;
     } else {
-        c64->bus->state.lines &= ~BUS_MASK_RDY;
+        c64->bus.state.lines &= ~BUS_MASK_RDY;
     }
 //}
 }
@@ -250,7 +250,17 @@ c64_t* c64_system_create(const system_config_t* config) {
     chip_descriptor_t* vicii_descriptor = (config->vicii_standard == VIC_PAL ? &mos6569_descriptor : &mos6567_descriptor);
 
     // One line per chip - create, register, assign memory address/size, assign to C64 field, and initialize rwcb_context
-    if (!(c64->bus = create_and_register_chip(c64, &c64_bus_descriptor, 0x0000, 0))) return NULL;
+    // Initialize bus as embedded struct - no need to create separately
+    c64->bus.desc = &c64_bus_descriptor;
+    c64->bus.c64 = c64;
+    // Initialize bus state
+    c64->bus.state.addr = 0;
+    c64->bus.state.data = 0;
+    c64->bus.state.lines = BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY;
+    // Initialize system lines with default cartridge signals (no cartridge)
+    c64->bus.system_lines = SYS_MASK_EXROM | SYS_MASK_GAME;
+    // Initialize the integrated adapter interfaces
+    c64_bus_init_adapters(&c64->bus);
     if (!(c64->ram = create_and_register_chip(c64, &ram_descriptor, 0x0000, 65536))) return NULL;
     if (!(c64->mos6510 = create_and_register_chip(c64, &mos6510_descriptor, 0x0000, 4096))) return NULL;
     if (!(c64->cartridge_roml = create_and_register_chip(c64, &rom_descriptor, 0x8000, 8192))) return NULL;
@@ -260,9 +270,14 @@ c64_t* c64_system_create(const system_config_t* config) {
     if (!(c64->vicii = create_and_register_chip(c64, vicii_descriptor, 0xD000, 1024))) return NULL;
     if (!(c64->sid = create_and_register_chip(c64, &mos6581_descriptor, 0xD400, 1024))) return NULL;
     if (!(c64->colorram = create_and_register_chip(c64, &mos2114_descriptor, 0xD800, 1024))) return NULL;
+    c64->vicii->colorram = c64->colorram; // Also assign to VIC-II for compatibility
     if (!(c64->cia1 = create_and_register_chip(c64, &mos6526_descriptor, 0xDC00, 256))) return NULL;
     if (!(c64->cia2 = create_and_register_chip(c64, &mos6526_descriptor, 0xDD00, 256))) return NULL;
     if (!(c64->kernal = create_and_register_chip(c64, &rom_descriptor, 0xE000, 8192))) return NULL;
+    
+    // Initialize placeholders for missing components
+    c64->io1 = NULL; // No cartridge I/O by default
+    c64->io2 = NULL; // No cartridge I/O by default
     
     // Register PLA for GUI debugging (special case - chip is the C64 system itself)
     uint8_t pla_chip_id = system_chip_register(&c64->system, c64, &pla_descriptor, 0x0000, 0);
@@ -276,17 +291,17 @@ c64_t* c64_system_create(const system_config_t* config) {
     c64_memory_init(&c64->system, rom_config);
 
     // Attach bus to C64 system first, then all other chips with bus_attach callbacks
-    c64_bus_system_attach(c64->bus, c64);
+    c64_bus_system_attach(&(c64->bus), c64);
     for (int i = 0; i < c64->system.chip_count; i++) {
         chip_entry_t* chip = &c64->system.chips[i];
         if (chip->desc && chip->desc->bus_attach && chip->desc != &c64_bus_descriptor)
-            chip->desc->bus_attach(chip->chip, c64->bus);
+            chip->desc->bus_attach(chip->chip, &(c64->bus));
     }
     
     // Attach CPU interfaces to the MOS6510
-    mos6510_attach_bus_interface(c64->mos6510, c64_bus_get_adapter(c64->bus));
-    mos6510_attach_control_lines_interface(c64->mos6510, c64_control_lines_get_adapter(c64->bus));
-    mos6510_attach_io_interface(c64->mos6510, c64_io_port_get_adapter(c64->bus));
+    mos6510_attach_bus_interface(c64->mos6510, c64_bus_get_adapter(&(c64->bus)));
+    mos6510_attach_control_lines_interface(c64->mos6510, c64_control_lines_get_adapter(&c64->bus));
+    mos6510_attach_io_interface(c64->mos6510, c64_io_port_get_adapter(&(c64->bus)));
     // For now, this will be handled through the control_lines_interface
     
     return c64;

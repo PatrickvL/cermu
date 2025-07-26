@@ -4,6 +4,7 @@
 #include "../../core/chip.h"
 #include <stdint.h>
 #include "../../../core/system_lines.h" // For bus_state_t
+#include "../../chip/memory/mos2114.h"  // For mos2114_t
 #include <stdbool.h>
 
 // VIC-II Register Constants
@@ -409,6 +410,7 @@ typedef struct {
 // Main VIC-II structure composed of units
 struct vicii_s {
     chip_descriptor_t* desc;
+    mos2114_t* colorram;
 
     // Feature toggles
     bool enable_hardware_accurate_reads;  // Enable VIC idle/refresh memory reads for $DE00 data bus tricks and cycle accuracy (default: false for performance)

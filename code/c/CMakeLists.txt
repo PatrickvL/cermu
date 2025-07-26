@@ -170,7 +170,7 @@ add_executable(c64emu
 
 # Link required libraries
 # Note: mos6502_family functions are inline in headers, no separate library needed
-target_link_libraries(c64emu)
+target_link_libraries(c64emu m)  # Add math library for tanhf
 
 # Set output directory for console executable
 set_target_properties(c64emu
@@ -218,6 +218,7 @@ if(BUILD_GUI)
         ${OPENGL_LIBRARIES}
         ${CMAKE_DL_LIBS}
         cimgui
+        m  # Add math library for tanhf
     )
 
     # Set output directory for GUI executable (keep as console app for now)
@@ -273,6 +274,9 @@ add_executable(test_mos6510_basic
     ${SYSTEM_SOURCES}
     ${CORE_UTIL_SOURCES}
 )
+
+# Link math library for test executable too
+target_link_libraries(test_mos6510_basic m)
 
 # Set output directory
 set_target_properties(c64emu

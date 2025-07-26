@@ -199,14 +199,14 @@ REGISTER_CALL void* cpu_handle_irq(cpu_state_t* cpu, bus_state_t* bus) {
 static REGISTER_CALL bus_state_t c64_generic_read_cycle(void* context, bus_state_t bus_state) {
     c64_t* c64 = (c64_t*)context;
     c64_bus_state_t c64_bus_state = { .bus = bus_state };
-    c64_bus_state = c64_bus_read_cycle(c64->bus, c64_bus_state);
+    c64_bus_state = c64_bus_read_cycle(&(c64->bus), c64_bus_state);
     return c64_bus_state.bus;
 }
 
 static REGISTER_CALL bus_state_t c64_generic_write_cycle(void* context, bus_state_t bus_state) {
     c64_t* c64 = (c64_t*)context;
     c64_bus_state_t c64_bus_state = { .bus = bus_state };
-    c64_bus_state = c64_bus_write_cycle(c64->bus, c64_bus_state);
+    c64_bus_state = c64_bus_write_cycle(&(c64->bus), c64_bus_state);
     return c64_bus_state.bus;
 }
 
@@ -313,7 +313,7 @@ void example_c64_execution() {
     // Create and initialize C64 system
     c64_t* c64 = calloc(1, sizeof(c64_t));
     c64->bus = c64_bus_create();
-    c64_bus_attach_c64(c64->bus, c64);
+    c64_bus_attach_c64(&(c64->bus), c64);
     
     // Initialize VIC, SID, CIA chips (stub allocation)
     c64->vicii = calloc(1, sizeof(vicii_state_t));

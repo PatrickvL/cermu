@@ -790,6 +790,9 @@ void voice_clock_cycle(voice_t* voice) {
     } else if (waveform_count == 1) {
         // Single waveform
         switch (voice->waveform) {
+            case WAVEFORM_NONE:
+                voice->oscillator_waveform = 0;
+                break;
             case WAVEFORM_TRIANGLE:
                 waveform_output = voice->triangle_output;
                 break;
@@ -1378,6 +1381,27 @@ void* mos6581_system_create(chip_descriptor_t* desc) {
 #endif
 
 // =============================================================================
+// BUS STATE INTERFACE FUNCTIONS
+// =============================================================================
+
+// Implement the missing bus_state_t functions that c64_bus.c expects
+bus_state_t mos6581_read(mos6581_t* sid, bus_state_t bus_state) {
+    if (!sid) return bus_state;
+    
+    // Read from SID register using address from bus state
+    bus_state.data = mos6581_registers_read(sid, bus_state.addr);
+    return bus_state;
+}
+
+bus_state_t mos6581_write(mos6581_t* sid, bus_state_t bus_state) {
+    if (!sid) return bus_state;
+    
+    // Write to SID register using address and data from bus state
+    mos6581_registers_write(sid, bus_state.addr, bus_state.data);
+    return bus_state;
+}
+
+// =============================================================================
 // CHIP DESCRIPTOR
 // =============================================================================
 
@@ -1385,7 +1409,7 @@ chip_descriptor_t mos6581_descriptor = {
     .description = "MOS6581 SID Sound Interface Device",
     .create = mos6581_system_create,
     .destroy = mos6581_system_destroy,
-    .bus_attach = mos6581_bus_attach,
+    .bus_attach = (void (*)(void *, void *))mos6581_bus_attach,
     .read = mos6581_registers_read,
     .write = mos6581_registers_write,
     .bank_change = NULL,

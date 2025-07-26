@@ -1,4 +1,5 @@
 #include "vicii_common.h"
+#include "../memory/mos2114.h"
 #include "../../../systems/c64/c64_bus.h"
 #include <stdlib.h>
 #include <string.h>
@@ -174,7 +175,7 @@ void vicii_memory_access(vicii_t* vicii, uint8_t access_type, int access_param) 
             // we still calculate the absolute address
             // TODO : Should this incorporate vicii_bank_base too? 
             address = 0xD800 + vicii->video_logic.vc;
-            uint8_t color_data = mos2114_read(bus->c64->color_ram, address);
+            uint8_t color_data = mos2114_read(vicii->colorram, address);
             vicii->video_data.video_color_line[vicii->video_logic.vmli] = color_data & 0x0F;
             
             // Video matrix access  
@@ -1392,4 +1393,20 @@ void vicii_set_framebuffer(vicii_t* vicii, uint32_t* framebuffer, int width, int
             vicii->pixel.pixel_line_color[i] = VICII_COLOR_LIGHT_BLUE;
         }
     }
+}
+
+// ========================================================================================
+// BUS STATE FUNCTIONS - Required by c64_bus.c
+// ========================================================================================
+
+bus_state_t vicii_read(vicii_t* vicii, bus_state_t bus_state) {
+    // Extract data from register read
+    bus_state.data = vicii_registers_read_internal(vicii, bus_state.addr);
+    return bus_state;
+}
+
+bus_state_t vicii_write(vicii_t* vicii, bus_state_t bus_state) {
+    // Write to register using address and data from bus state
+    vicii_registers_write_internal(vicii, bus_state.addr, bus_state.data);
+    return bus_state;
 }

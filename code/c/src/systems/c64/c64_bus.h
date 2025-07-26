@@ -1,6 +1,9 @@
 #ifndef C64_BUS_H
 #define C64_BUS_H
 
+#include <stddef.h>
+#include <stdint.h>
+#include <stdbool.h>
 #include "../../core/aiemuc.h"
 #include "../../core/chip.h"
 #include "../../core/system.h"
@@ -8,8 +11,6 @@
 #include "../../core/bus_cycle_interface.h"
 #include "../../core/control_lines_interface.h"
 #include "../../chip/cpu/mos6510/mos6510.h"
-#include <stdint.h>
-#include <stdbool.h>
 
 // =============================
 // Bus Types & Macros
@@ -112,7 +113,7 @@ uint8_t c64_bus_generate_pla_mode(c64_bus_t* c64_bus, uint8_t cpu_port_bits);
 
 // Memory functions
 void c64_bus_vic_read(c64_bus_t* c64_bus, uint16_t address);
-uint8_t c64_bus_cpu_read(c64_bus_t *bus, uint16_t address);
+void c64_bus_cpu_read(c64_bus_t *bus, uint16_t address);
 void c64_bus_cpu_write(c64_bus_t *bus, uint16_t address, uint8_t value);
 
 // Bus cycle functions

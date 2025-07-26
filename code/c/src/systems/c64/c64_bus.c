@@ -4,12 +4,46 @@
 #include <string.h>
 #include <stdio.h>
 
-/*
- * OPTIMIZED MEMORY ACCESS - Based on fast banking system
- * - 2 ops, 2.5-3.5 cycles for reads (0.5-1 cycle faster)
- * - Split read/write structures for better cache locality
- * - Branchless I/O detection using bit manipulation
- */
+// Temporary stub functions for missing implementations
+static uint8_t mos6526_registers_read(void* cia, bus_state_t bus_state) {
+    (void)cia; (void)bus_state;
+    return 0xFF; // Return default value
+}
+
+static void mos6526_registers_write(void* cia, bus_state_t bus_state) {
+    (void)cia; (void)bus_state;
+    // No-op for now
+}
+
+static uint8_t io1_read(void* io1, uint16_t address) {
+    (void)io1; (void)address;
+    return 0xFF; // Return default value
+}
+
+static void io1_write(void* io1, uint16_t address, uint8_t value) {
+    (void)io1; (void)address; (void)value;
+    // No-op for now
+}
+
+static uint8_t io2_read(void* io2, uint16_t address) {
+    (void)io2; (void)address;
+    return 0xFF; // Return default value
+}
+
+static void io2_write(void* io2, uint16_t address, uint8_t value) {
+    (void)io2; (void)address; (void)value;
+    // No-op for now
+}
+
+static uint8_t roml_read(void* roml, uint16_t address) {
+    (void)roml; (void)address;
+    return 0xFF; // Return default value
+}
+
+static uint8_t romh_read(void* romh, uint16_t address) {
+    (void)romh; (void)address;
+    return 0xFF; // Return default value
+}
 
 // Simple 4KB bank calculation for optimized system (0-15)
 static inline int c64_bus_get_bank(uint16_t address) {
@@ -27,14 +61,20 @@ void c64_bus_vic_read(c64_bus_t* c64_bus, uint16_t address) {
     // Direct switch-based chip dispatch (merely for VIC-II accessible chips)
     switch (chip) {
         case CHIP_RAM:
-            c64_bus->state.data = ram_read(c64_bus->c64->ram, address); break;
+            c64_bus->state.data = ram_memory_read(BUS_TO_C64(c64_bus)->ram, address); break;
         case CHIP_CHARROM:
-            c64_bus->state.data = rom_memory_read(c64_bus->c64->charrom, address); break;
+            c64_bus->state.data = rom_memory_read(BUS_TO_C64(c64_bus)->charrom, address); break;
         default: // CHIP_UNMAPPED and other chips not readable by VIC-II
             break; // Use whatever is on the bus
     }
 }
 
+/*
+ * OPTIMIZED MEMORY ACCESS - Based on fast banking system
+ * - 2 ops, 2.5-3.5 cycles for reads (0.5-1 cycle faster)
+ * - Split read/write structures for better cache locality
+ * - Branchless I/O detection using bit manipulation
+ */
 /* Memory read - 2 ops, 2.5-3.5 cycles (optimized cache usage) */
 void c64_bus_cpu_read(c64_bus_t *bus, uint16_t address) {
     bus->state.addr = address; // Perhaps this is no longer needed
@@ -47,41 +87,41 @@ void c64_bus_cpu_read(c64_bus_t *bus, uint16_t address) {
     switch (chip) {
         case CHIP_ZEROBANK:
             if (address <= 1) {
-                bus->state.data = mos6510_ioport_read(bus->c64->mos6510, address); break;
+                bus->state.data = mos6510_ioport_read(BUS_TO_C64(bus)->mos6510, address); break;
             }
             // fall-through
         case CHIP_RAM:
-            bus->state.data = ram_read(bus->c64->ram, address); break;
+            bus->state.data = ram_memory_read(BUS_TO_C64(bus)->ram, address); break;
         case CHIP_BASIC:
-            bus->state.data = rom_memory_read(bus->c64->basic, address); break;
+            bus->state.data = rom_memory_read(BUS_TO_C64(bus)->basic, address); break;
         case CHIP_KERNAL:
-            bus->state.data = rom_memory_read(bus->c64->kernal, address); break;
+            bus->state.data = rom_memory_read(BUS_TO_C64(bus)->kernal, address); break;
         case CHIP_CHARROM:
-            bus->state.data = rom_memory_read(bus->c64->charrom, address); break;
+            bus->state.data = rom_memory_read(BUS_TO_C64(bus)->charrom, address); break;
         case CHIP_COLORRAM:
-            bus->state.data = mos2114_read(bus->c64->color_ram, address); break;
+            bus->state.data = mos2114_read(BUS_TO_C64(bus)->vicii->colorram, address); break;
         case CHIP_D0_VIC:
         case CHIP_D1_VIC:
         case CHIP_D2_VIC:
         case CHIP_D3_VIC:
-            bus->state.data = vicii_read(bus->c64->vicii, address); break;
+            bus->state = vicii_read(BUS_TO_C64(bus)->vicii, bus->state); break;
         case CHIP_D4_SID:
         case CHIP_D5_SID:
         case CHIP_D6_SID:
         case CHIP_D7_SID:
-            bus->state.data = sid_read(bus->c64->sid, address); break;
+            bus->state = mos6581_read(BUS_TO_C64(bus)->sid, bus->state); break;
         case CHIP_DC_CIA1:
-            bus->state.data = mos6526_registers_read(bus->c64->cia1, bus->state); break;
+            bus->state.data = mos6526_registers_read(BUS_TO_C64(bus)->cia1, bus->state); break;
         case CHIP_DD_CIA2:
-            bus->state.data = mos6526_registers_read(bus->c64->cia2, bus->state); break;
+            bus->state.data = mos6526_registers_read(BUS_TO_C64(bus)->cia2, bus->state); break;
         case CHIP_DE_IO1:
-            bus->state.data = io1_read(bus->c64->io1, address); break;
+            bus->state.data = io1_read(BUS_TO_C64(bus)->io1, address); break;
         case CHIP_DF_IO2:
-            bus->state.data = io2_read(bus->c64->io2, address); break;
+            bus->state.data = io2_read(BUS_TO_C64(bus)->io2, address); break;
         case CHIP_ROML:
-            bus->state.data = roml_read(bus->c64->roml, address); break;
+            bus->state.data = roml_read(BUS_TO_C64(bus)->cartridge_roml, address); break;
         case CHIP_ROMH:
-            bus->state.data = romh_read(bus->c64->romh, address); break;
+            bus->state.data = romh_read(BUS_TO_C64(bus)->cartridge_romh, address); break;
         default: // CHIP_UNMAPPED
             // Used for "floating" bus state for subsequent unattached reads
             break; // Use whatever is on the bus
@@ -103,34 +143,34 @@ void c64_bus_cpu_write(c64_bus_t *bus, uint16_t address, uint8_t value) {
     switch (chip) {
         case CHIP_ZEROBANK:
             if (address <= 1) {
-                mos6510_ioport_write(bus->c64->mos6510, address, value);
+                mos6510_ioport_write(BUS_TO_C64(bus)->mos6510, address, value);
                 break;
             }
             // fall-through
         case CHIP_RAM:
-            ram_write(bus->c64->ram, address, value); break;
+            ram_memory_write(BUS_TO_C64(bus)->ram, address, value); break;
         case CHIP_CHARROM:
-            mos2114_write(bus->c64->charrom, address, value); break;
+            mos2114_write(BUS_TO_C64(bus)->charrom, address, value); break;
         case CHIP_COLORRAM:
-            color_ram_write(bus->c64->color_ram, address, value); break;
+            mos2114_write(BUS_TO_C64(bus)->colorram, address, value); break;
         case CHIP_D0_VIC:
         case CHIP_D1_VIC:
         case CHIP_D2_VIC:
         case CHIP_D3_VIC:
-            vicii_write(bus->c64->vicii, address, value); break;
+            bus->state = vicii_write(BUS_TO_C64(bus)->vicii, bus->state); break;
         case CHIP_D4_SID:
         case CHIP_D5_SID:
         case CHIP_D6_SID:
         case CHIP_D7_SID:
-            sid_write(bus->c64->sid, address, value); break;
+            bus->state = mos6581_write(BUS_TO_C64(bus)->sid, bus->state); break;
         case CHIP_DC_CIA1:
-            mos6526_registers_write(bus->c64->cia1, bus->state); break;
+            mos6526_registers_write(BUS_TO_C64(bus)->cia1, bus->state); break;
         case CHIP_DD_CIA2:
-            mos6526_registers_write(bus->c64->cia2, bus->state); break;
+            mos6526_registers_write(BUS_TO_C64(bus)->cia2, bus->state); break;
         case CHIP_DE_IO1:
-            io1_write(bus->c64->io1, address, value); break;
+            io1_write(BUS_TO_C64(bus)->io1, address, value); break;
         case CHIP_DF_IO2:
-            io2_write(bus->c64->io2, address, value); break;
+            io2_write(BUS_TO_C64(bus)->io2, address, value); break;
         case CHIP_BASIC:
         case CHIP_KERNAL:
         case CHIP_ROML:
@@ -565,7 +605,8 @@ bool c64_bus_get_chip_description(const c64_bus_t* bus, uint8_t chip, chip_descr
     if (!bus || !out || chip >= CHIP_MAX) return false;
 
     memset(out, 0, sizeof(*out));
-    chip_entry_t* entry = c64_bus_chip_to_entry[chip];
+    // For now, return false for chip lookup until proper registry is implemented
+    chip_entry_t* entry = NULL; // c64_bus_chip_to_entry[chip];
     if (entry) {
         out->base = entry->base_address;
         out->size = entry->size;
@@ -646,7 +687,7 @@ const char* c64_bus_chip_to_title(uint8_t chip) {
 
 // Utility: Convert a size in bytes to a human-readable string ("256B", "4KB", etc.)
 const char* c64_bus_size_to_str(size_t size) {
-    static char buf[16];
+    static char buf[32];  // Increased buffer size to prevent truncation
     if (size >= (1 << 20) && (size % (1 << 20)) == 0) {
         snprintf(buf, sizeof(buf), "%zuMB", size / (1 << 20));
     } else if (size >= 1024 && (size % 1024) == 0) {

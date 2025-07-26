@@ -64,8 +64,8 @@ void pla_render_debug_window(void* chip, bool* show_window) {
     }
     
     // Mode tracking and control
-    bool has_bus = (c64 && c64->bus);
-    uint8_t current_mode = has_bus ? c64->bus->pla_banking_mode : 0;
+    bool has_c64 = c64;
+    uint8_t current_mode = has_c64 ? c64->bus.pla_banking_mode : 0;
     
     // Static state for PLA debug window
     static bool auto_track_mode = true;
@@ -74,7 +74,7 @@ void pla_render_debug_window(void* chip, bool* show_window) {
     // Auto-track mode checkbox
     igCheckbox("Auto-track active mode", &auto_track_mode);
     
-    if (auto_track_mode && has_bus) {
+    if (auto_track_mode && has_c64) {
         pla_debug_selected_mode = current_mode;
     }
     
@@ -158,8 +158,8 @@ void pla_render_debug_window(void* chip, bool* show_window) {
 
                     // Get encoded value for this bank and mode
                     uint8_t encoded = encode_chip_rw(CHIP_UNMAPPED, CHIP_UNMAPPED);
-                    if (has_bus && pla_debug_selected_mode < 32) {
-                        encoded = c64->bus->cpu_encoded_chip_per_bank_per_mode[pla_debug_selected_mode][bank];
+                    if (has_c64 && pla_debug_selected_mode < 32) {
+                        encoded = c64->bus.cpu_encoded_chip_per_bank_per_mode[pla_debug_selected_mode][bank];
                     }
                     
                     igText("$%02X", encoded);
@@ -176,7 +176,7 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                         igText("-");
                     } else {
                         // Calculate separate read and write in-chip offsets
-                        c64_bus_get_chip_description(has_bus ? c64->bus : NULL, read_chip, &read_desc);
+                        c64_bus_get_chip_description(has_c64 ? &c64->bus : NULL, read_chip, &read_desc);
 
                         // Compute effective base address for offset calculation (for ROMH remap, etc)
                         uint16_t read_effective_base = read_desc.base;
@@ -203,7 +203,7 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                         igTableSetColumnIndex(8);
                         igText("-");
                     } else {
-                        c64_bus_get_chip_description(has_bus ? c64->bus : NULL, write_chip, &write_desc);
+                        c64_bus_get_chip_description(has_c64 ? &c64->bus : NULL, write_chip, &write_desc);
 
                         uint16_t write_effective_base = write_desc.base;
                         if (write_chip == CHIP_ROMH && (bank_start >= 0xE000)) { // NOTE : although ROMH is not writable, PLA modes 16-23 (LHGX xx01) still map it
@@ -232,7 +232,7 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                    (pla_debug_selected_mode == current_mode) ? "(ACTIVE)" : "(Preview)");
                    
             // VIC-II specific information
-            if (has_bus) {                
+            if (has_c64) {                
                 // Get current VIC-II bank from CIA2 Port A bits 0-1
                 uint8_t current_vicii_bank = 0;
                 if (c64->cia2) {
@@ -271,8 +271,8 @@ void pla_render_debug_window(void* chip, bool* show_window) {
 
                         // Get CHIP for this VIC-II bank and mode
                         uint8_t read_chip = CHIP_UNMAPPED;
-                        if (has_bus && pla_debug_selected_mode < 32) {
-                            read_chip = c64->bus->vicii_chip_per_bank_per_mode[pla_debug_selected_mode][bank];
+                        if (has_c64 && pla_debug_selected_mode < 32) {
+                            read_chip = c64->bus.vicii_chip_per_bank_per_mode[pla_debug_selected_mode][bank];
                         }
 
                         igText("%02d", read_chip);
@@ -280,7 +280,7 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                         igText("%s", c64_bus_chip_to_title(read_chip));
                         igTableSetColumnIndex(4);
 
-                        c64_bus_get_chip_description(has_bus ? c64->bus : NULL, read_chip, &read_desc);
+                        c64_bus_get_chip_description(has_c64 ? &c64->bus : NULL, read_chip, &read_desc);
                         uint16_t read_offset = (read_desc.base <= bank_start) ? (bank_start - read_desc.base) : 0;
 
                         igText("$%04X", read_offset);
@@ -317,7 +317,7 @@ void pla_render_debug_window(void* chip, bool* show_window) {
             igText("%02d", chip);
             igTableSetColumnIndex(1);
 
-            bool has_desc = c64_bus_get_chip_description(has_bus ? c64->bus : NULL, chip, &desc);
+            bool has_desc = c64_bus_get_chip_description(has_c64 ? &c64->bus : NULL, chip, &desc);
             if (has_desc && desc.size > 0) {
                 igText("$%04X-$%04X", desc.base, (uint16_t)(desc.base + desc.size - 1));
             } else {
