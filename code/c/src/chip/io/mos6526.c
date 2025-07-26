@@ -310,16 +310,16 @@ void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edg
     switch (in_mode) {
         // 0 = TIMER A counts phi2 pulses
         // 0 0 TIMER B counts phi2 pulses
-        case (0b00 << 5):
+        case (0x00 << 5):  // 0b00 = 0x00
             count_timer = true;
             break;
         // 1 = TIMER A counts positive CNT transitions.
         // 0 1 TIMER B counts positive CNT transitions.
-        case (0b01 << 5):
+        case (0x01 << 5):  // 0b01 = 0x01
             count_timer = cnt_is_positive_edge; // TODO: Verify
             break;
         // 1 0 TIMER B counts TIMER A underflow pulses.
-        case (0b10 << 5):
+        case (0x02 << 5):  // 0b10 = 0x02
             count_timer = (cia->reg[ICR] & ICR_TA) > 0;
             break;
         // 1 1 TIMER B counts TIMER A underflow pulses while CNT is high."

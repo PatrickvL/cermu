@@ -36,6 +36,7 @@ c64emu
 *.exp
 
 # Build files
+*.a
 *.recipe
 *.lastbuildstate
 *.tlog

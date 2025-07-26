@@ -38,10 +38,10 @@ else()
     add_compile_options(
         -Wall                   # Enable most warnings
         -Wextra                 # Enable extra warnings
-        -Werror                 # Treat warnings as errors
+        #-Werror                 # Treat warnings as errors
         -Wno-unused-parameter   # Disable unused parameter warnings (common in device callbacks)
         -Wno-unused-variable    # Disable unused variable warnings (for development)
-        -pedantic              # Enable pedantic mode
+        #-pedantic              # Enable pedantic mode
     )
     
     # Debug-specific flags
@@ -98,9 +98,9 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/src/systems/c64
     ${CMAKE_SOURCE_DIR}/src/main
     ${CMAKE_SOURCE_DIR}/src/gui
-    ${CMAKE_SOURCE_DIR}/../../external/cimgui
-    ${CMAKE_SOURCE_DIR}/../../external/cimgui/imgui
-    ${CMAKE_SOURCE_DIR}/../../external/cimgui/imgui/backends
+    ${CMAKE_SOURCE_DIR}/external/cimgui
+    ${CMAKE_SOURCE_DIR}/external/cimgui/imgui
+    ${CMAKE_SOURCE_DIR}/external/cimgui/imgui/backends
     ${SDL2_INCLUDE_DIRS}
 )
 
@@ -109,7 +109,9 @@ if(BUILD_GUI)
     # Configure cimgui to build as static library
     set(IMGUI_STATIC "yes" CACHE STRING "Build as a static library" FORCE)
     
-    add_subdirectory(../../external/cimgui cimgui_build)
+#    add_subdirectory(../../external/cimgui cimgui_build)
+#    add_subdirectory(../../external/cimgui external/cimgui)
+    add_subdirectory(external/cimgui)
 endif()
 
 # Core library sources

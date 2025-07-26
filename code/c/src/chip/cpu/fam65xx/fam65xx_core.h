@@ -12,6 +12,10 @@
 
 #include <stdio.h> // TMP for printf
 
+#ifndef __GNUC__
+#define asm __asm__
+#endif
+
 // ============================================================================
 // MOS 6502 FAMILY CORE DEFINITIONS
 // ============================================================================
@@ -127,7 +131,7 @@ static const char* fam65xx_opcode_mnemonics[256] = {
 #ifdef _MSC_VER
 #define SPRINTF_SAFE(buf, size, fmt, ...) sprintf_s(buf, size, fmt, __VA_ARGS__)
 #else
-#define SPRINTF_SAFE(buf, size, fmt, ...) sprintf(buf, fmt, __VA_ARGS__)
+#define SPRINTF_SAFE(buf, size, fmt, ...) sprintf(buf, fmt, ##__VA_ARGS__)
 #endif
 
 // Core disassembler function - code[0] is the opcode at current PC
@@ -260,15 +264,17 @@ static inline void fam65xx_next_instruction_dispatch(fam65xx_t* cpu) {
         mov ecx, cpu
         jmp eax
     }
+/*
 #elif defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
     // GCC/Clang x86/x64 inline assembly
-    asm volatile (
+    volatile asm (
         "mov %[cpu], %%rdi\n\t"   // Pass cpu in first argument register (x86_64 System V ABI)
         "jmp *%[handler]\n\t"
         :
         : [handler] "r" (next_handler), [cpu] "r" (cpu)
         : "rdi"
     );
+*/
 #else
     // Fallback: normal call (will grow stack)
     next_handler(cpu);

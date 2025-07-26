@@ -83,7 +83,7 @@ typedef enum {
 #define COMBINED_WAVEFORM_TABLE_SIZE 4096
 
 // Forward declarations
-typedef struct voice_s voice_t;
+//typedef struct voice_s voice_t;
 typedef struct mos6581_s mos6581_t;
 typedef struct filter_state_s filter_state_t;
 typedef struct ring_buffer_s ring_buffer_t;
