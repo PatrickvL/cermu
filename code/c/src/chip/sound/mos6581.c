@@ -2,7 +2,7 @@
 #include "aiemuc.h"
 #include <string.h>
 #include <stdlib.h>
-#include <math.h>
+#include <math.h> // for tanhf
 #include <stdio.h>  // For snprintf
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
