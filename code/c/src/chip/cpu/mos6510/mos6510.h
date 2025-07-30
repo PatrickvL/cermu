@@ -144,15 +144,6 @@ static inline void mos6510_write_cycle(mos6510_t* cpu, uint16_t addr, uint8_t va
 
 // MOS6510-specific versions of shared macros
 
-// MOS6510_CONTROL_LINES - Get control lines with zero-indirection access
-#define MOS6510_CONTROL_LINES(cpu) \
-    ((cpu)->control_interface.get_lines((cpu)->control_interface.context))
-
-// Test specific control lines using lightweight macros
-#define MOS6510_TEST_IRQ(cpu) (MOS6510_CONTROL_LINES(cpu) & MOS6510_MASK_IRQ)
-#define MOS6510_TEST_NMI(cpu) (MOS6510_CONTROL_LINES(cpu) & MOS6510_MASK_NMI)
-#define MOS6510_TEST_RDY(cpu) (MOS6510_CONTROL_LINES(cpu) & MOS6510_MASK_RDY)
-
 // System lines access macros for direct system state operations
 // Replace with direct bus_state_t access or equivalent logic
 // Example: ((cpu)->bus_state->lines & mask)

@@ -20,6 +20,13 @@
 // MOS 6502 FAMILY CORE DEFINITIONS
 // ============================================================================
 
+// The Nostradamus Distributor pattern for stackless CPU emulation was originally
+// described by Darek Mihocka at: http://www.emulators.com/docs/nx25_nostradamus.htm
+// This technique eliminates stack growth during CPU instruction dispatch by using
+// return values to chain handler functions, achieving significant performance gains.
+
+// ============================================================================
+
 // 6502 Status Register Flags (shared by all family members)
 #define FLAG_C  0x01    // Carry
 #define FLAG_Z  0x02    // Zero
@@ -32,7 +39,15 @@
 
 // Universal instruction dispatch using function pointers
 typedef struct fam65xx_s fam65xx_t;
+
+#ifdef REDESIGN
+// Nostradamus Distributor function pointer type - returns next handler for stackless execution
+typedef REGISTER_CALL void* (*fam65xx_opcode_handler_t)(fam65xx_t* cpu, bus_state_t* bus_state);
+// Legacy function pointer type for PFNDUOP compatibility
+typedef fam65xx_opcode_handler_t PFNDUOP;
+#else
 typedef void (*fam65xx_opcode_handler_t)(fam65xx_t* cpu);
+#endif
 
 // ============================================================================
 // SHARED MOS 6502 FAMILY CPU STATE STRUCTURE
@@ -63,7 +78,7 @@ struct fam65xx_s {
     // These CANNOT be copied - must remain as pointers to shared system state
     bus_state_t* bus_state;  // Shared bus state
     
-    fam65xx_opcode_handler_t opcode_handlers[256]; // Per-CPU handler table
+  fam65xx_opcode_handler_t opcode_handlers[256]; // Per-CPU handler table
 
     // Intercept mechanism for single-step execution
     fam65xx_opcode_handler_t saved_opcode_handlers[256]; // Saved handlers during intercept
@@ -82,11 +97,17 @@ struct fam65xx_s {
 #define FAM65XX_MASK_RDY  BUS_MASK_RDY
 
 // Control line access and testing (shared)
-#define FAM65XX_CONTROL_LINES(cpu) \
-    ((cpu)->control_interface.get_lines((cpu)->control_interface.context))
+#ifdef REDESIGN
+    #define FAM65XX_CONTROL_LINES(cpu) \
+        (bus_state->lines)
+#else
+    #define FAM65XX_CONTROL_LINES(cpu) \
+        ((cpu)->control_interface.get_lines((cpu)->control_interface.context))
+#endif
 
 #define FAM65XX_TEST_IRQ(cpu) (FAM65XX_CONTROL_LINES(cpu) & FAM65XX_MASK_IRQ)
 #define FAM65XX_TEST_NMI(cpu) (FAM65XX_CONTROL_LINES(cpu) & FAM65XX_MASK_NMI)
+#define FAM65XX_TEST_IRQ_OR_NMI(cpu) (FAM65XX_CONTROL_LINES(cpu) & (FAM65XX_MASK_IRQ | FAM65XX_MASK_NMI))
 #define FAM65XX_TEST_RDY(cpu) (FAM65XX_CONTROL_LINES(cpu) & FAM65XX_MASK_RDY)
 
 // Core memory and cycle functions (shared)
@@ -282,41 +303,102 @@ static inline void fam65xx_next_instruction_dispatch(fam65xx_t* cpu) {
 }
 
 // Forward declaration for macros
-void fam65xx_interrupt_handler(fam65xx_t* cpu);
-
 #ifdef REDESIGN
-    #define FAM65XX_NEXT_INSTRUCTION(cpu) do { \
-        if (unlikely(FAM65XX_TEST_IRQ(cpu) || FAM65XX_TEST_NMI(cpu))) { \
-            fam65xx_interrupt_handler(cpu); \
-        } \
-        fam65xx_next_instruction_dispatch(cpu); \
-    } while(0)
+void fam65xx_interrupt_handler(fam65xx_t* cpu, bus_state_t* bus_state);
 #else
-    #define FAM65XX_NEXT_INSTRUCTION(cpu) do { \
-        if (unlikely(FAM65XX_TEST_IRQ(cpu) || FAM65XX_TEST_NMI(cpu))) { \
-            fam65xx_interrupt_handler(cpu); \
-        } \
-        fam65xx_next_instruction_dispatch(cpu); \
-    } while(0)
+void fam65xx_interrupt_handler(fam65xx_t* cpu);
 #endif
 
 // Family-specific versions of shared macros
 #ifdef REDESIGN
+    // Forward declarations for Nostradamus Distributor handlers
+    REGISTER_CALL void* fam65xx_nmi_handler(fam65xx_t* cpu, bus_state_t* bus_state);
+    REGISTER_CALL void* fam65xx_irq_handler(fam65xx_t* cpu, bus_state_t* bus_state);
+    REGISTER_CALL void* fam65xx_fire_escape(fam65xx_t* cpu, bus_state_t* bus_state);
+    // Nostradamus Distributor - get next handler based on current PC and interrupt state
+    static inline REGISTER_CALL void* fam65xx_get_next_handler(fam65xx_t* cpu, bus_state_t* bus_state) {
+        // Fast combined interrupt check - most cycles have no interrupts
+        if (unlikely(FAM65XX_TEST_IRQ_OR_NMI(cpu))) {
+            // Only differentiate when interrupts are actually pending
+            if (FAM65XX_TEST_NMI(cpu)) {
+                // NMI has highest priority and cannot be masked
+                return fam65xx_nmi_handler;
+            } else if (!(cpu->p & FLAG_I)) {
+                // IRQ only if not masked by I flag
+                return fam65xx_irq_handler;
+            }
+        }
+        
+        // Fetch next opcode
+        bus_state->addr = cpu->pc++;
+        bus_state->lines |= BUS_MASK_RW;  // Read operation
+        *bus_state = cpu->bus_interface.bus_read_cycle(cpu->bus_interface.context, *bus_state);
+        uint8_t opcode = bus_state->data;
+        
+        return cpu->opcode_handlers[opcode];
+    }
+
+    // Nostradamus Distributor execution engine for stackless CPU emulation
+    static inline void fam65xx_execute_nostradamus(fam65xx_t* cpu, int max_instructions) {
+        // Initialize bus state - allocated on stack for all handlers to share
+        bus_state_t shared_bus = {0};
+        shared_bus.lines = FAM65XX_MASK_BA | FAM65XX_MASK_AEC | FAM65XX_MASK_RDY;  // Default line states
+        
+        PFNDUOP current = fam65xx_get_next_handler(cpu, &shared_bus);
+        
+        // Nostradamus Distributor pattern with proper nesting depth
+        // All handlers operate on the same shared bus state via pointer
+        for (int count = 0; count < max_instructions && current != fam65xx_fire_escape; count++) {
+            current = (PFNDUOP)current(cpu, &shared_bus);
+            if (current != fam65xx_fire_escape) {
+                current = (PFNDUOP)current(cpu, &shared_bus);
+                if (current != fam65xx_fire_escape) {
+                    current = (PFNDUOP)current(cpu, &shared_bus);
+                    if (current != fam65xx_fire_escape) {
+                        current = (PFNDUOP)current(cpu, &shared_bus);
+                        if (current != fam65xx_fire_escape) {
+                            current = (PFNDUOP)current(cpu, &shared_bus);
+                            if (current != fam65xx_fire_escape) {
+                                current = (PFNDUOP)current(cpu, &shared_bus);
+                                if (current != fam65xx_fire_escape) {
+                                    current = (PFNDUOP)current(cpu, &shared_bus);
+                                    if (current != fam65xx_fire_escape) {
+                                        current = (PFNDUOP)current(cpu, &shared_bus);
+                                        // Can continue nesting as needed for longer traces
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     #define FAM65XX_OPCODE_PROTO(name) \
-        REGISTER_CALL void* name(fam65xx_t* cpu, bus_state_t* bus_state)
+        REGISTER_CALL fam65xx_opcode_handler_t name(fam65xx_t* cpu, bus_state_t* bus_state)
+    #define FAM65XX_PROTO_RETURN  return
+    #define FAM65XX_NEXT_INSTRUCTION(cpu) do { \
+        if (unlikely(FAM65XX_TEST_IRQ_OR_NMI(cpu))) { \
+            fam65xx_interrupt_handler(cpu, bus_state); \
+        } \
+        fam65xx_next_instruction_dispatch(cpu); \
+    } while(0)
+    #define FAM65XX_OPCODE_FOOTER(cpu) \
+        return fam65xx_get_next_handler(cpu, bus_state)
 #else
     #define FAM65XX_OPCODE_PROTO(name) \
         void name(fam65xx_t* cpu)
+    #define FAM65XX_PROTO_RETURN /*no return*/
+    #define FAM65XX_NEXT_INSTRUCTION(cpu) do { \
+        if (unlikely(FAM65XX_TEST_IRQ_OR_NMI(cpu))) { \
+            fam65xx_interrupt_handler(cpu); \
+        } \
+        fam65xx_next_instruction_dispatch(cpu); \
+    } while(0)
+    #define FAM65XX_OPCODE_FOOTER(cpu) \
+        FAM65XX_NEXT_INSTRUCTION(cpu)
 #endif
-
-#ifdef REDESIGN
-    #define PROTO_RETURN  return
-#else
-    #define PROTO_RETURN
-#endif
-
-#define FAM65XX_OPCODE_FOOTER() \
-    FAM65XX_NEXT_INSTRUCTION(cpu)
 
 // Universal instruction dispatch using function pointers
 // ============================================================================
@@ -331,7 +413,7 @@ typedef void (*fam65xx_op_func_t)(fam65xx_t* cpu, uint8_t value);
 static FORCE_INLINE void fam65xx_addr_op_helper(fam65xx_t* cpu, fam65xx_addr_func_t addr_func, fam65xx_op_func_t op_func) {
     uint8_t value = addr_func(cpu);
     op_func(cpu, value);
-    FAM65XX_OPCODE_FOOTER();
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // Flag operations (shared)
@@ -378,11 +460,11 @@ static void fam65xx_interrupt_sequence(fam65xx_t* cpu, uint8_t status_flags, uin
     cpu->pc = (addr_hi << 8) | addr_lo;
 }
 
-static void fam65xx_nmi(fam65xx_t* cpu) {
+static REGISTER_CALL void fam65xx_nmi_handler(fam65xx_t* cpu) {
     fam65xx_interrupt_sequence(cpu, cpu->p & ~FLAG_B, 0xFFFA); // NMI vector, B flag cleared
 }
 
-static void fam65xx_irq(fam65xx_t* cpu) {
+static REGISTER_CALL void fam65xx_irq_handler(fam65xx_t* cpu) {
     fam65xx_interrupt_sequence(cpu, cpu->p & ~FLAG_B, 0xFFFE); // IRQ vector, B flag cleared
 }
 
@@ -504,6 +586,8 @@ static inline uint8_t fam65xx_addr_indy(fam65xx_t* cpu) {
     uint16_t base_addr = (addr_hi << 8) | addr_lo;
     cpu->address = base_addr + cpu->y;
     
+
+        
     // Check for page boundary crossing
     if ((base_addr & 0xFF00) != (cpu->address & 0xFF00)) {
         (void)fam65xx_read_cycle(cpu, (addr_hi << 8) | ((addr_lo + cpu->y) & 0xFF)); // T4: Dummy read (page cross)

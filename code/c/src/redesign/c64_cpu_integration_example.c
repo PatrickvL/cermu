@@ -351,3 +351,132 @@ void example_c64_execution() {
     c64_bus_destroy(c64->bus);
     free(c64);
 }
+
+// ============================================================================
+// ENHANCED NOSTRADAMUS DISTRIBUTOR INTEGRATION EXAMPLE
+// ============================================================================
+
+#ifdef REDESIGN
+#include "../chip/cpu/fam65xx/fam65xx_core.h"
+
+// Example DUOP table initialization for FAM65XX
+// This demonstrates how to create the enhanced DUOP structure with all fields
+static void initialize_fam65xx_duop_table(PFNDUOP duop_table[256]) {
+    // Example for LDA immediate ($A9)
+    duop_table[0xA9] = (DUOP){
+        .pfn = (void* REGISTER_CALL (*)(fam65xx_t*, void*))fam65xx_lda_imm_handler,
+        .uop = 0xA9,           // Opcode
+        .iduop = 0x01,         // Immediate addressing mode
+        .delta_pc = 2,         // LDA immediate advances PC by 2
+        .optional = 0x0000,    // No special flags
+        .ops = 0x00000001      // Single operand (immediate value)
+    };
+    
+    // Example for STA absolute ($8D)
+    duop_table[0x8D] = (DUOP){
+        .pfn = (void* REGISTER_CALL (*)(fam65xx_t*, void*))fam65xx_sta_abs_handler,
+        .uop = 0x8D,
+        .iduop = 0x03,         // Absolute addressing mode
+        .delta_pc = 3,         // STA absolute advances PC by 3
+        .optional = 0x0000,
+        .ops = 0x00000002      // Two operands (low/high address bytes)
+    };
+    
+    // Example for BNE relative ($D0)
+    duop_table[0xD0] = (DUOP){
+        .pfn = (void* REGISTER_CALL (*)(fam65xx_t*, void*))fam65xx_bne_rel_handler,
+        .uop = 0xD0,
+        .iduop = 0x0C,         // Relative addressing mode
+        .delta_pc = 0,         // PC adjustment handled by branch logic
+        .optional = 0x0001,    // Flag indicating conditional branch
+        .ops = 0x00000001      // Single operand (relative offset)
+    };
+    
+    // Fire escape handler for all unused opcodes
+    for (int i = 0; i < 256; i++) {
+        if (duop_table[i].pfn == NULL) {
+            duop_table[i] = (DUOP){
+                .pfn = (void* REGISTER_CALL (*)(fam65xx_t*, void*))fam65xx_fire_escape_impl,
+                .uop = i,
+                .iduop = 0xFF,     // Invalid instruction marker
+                .delta_pc = 0,
+                .optional = 0xFFFF, // Error flag
+                .ops = 0xFFFFFFFF   // Error marker
+            };
+        }
+    }
+}
+
+// Enhanced execution example with full Nostradamus features
+static void enhanced_nostradamus_example(void) {
+    // Initialize FAM65XX CPU
+    fam65xx_t cpu;
+    memset(&cpu, 0, sizeof(cpu));
+    cpu.pc = 0x1000;  // Start at $1000
+    cpu.sp = 0xFF;    // Stack pointer at top of stack
+    
+    // Allocate and initialize DUOP table
+    static DUOP duop_table[256];
+    initialize_fam65xx_duop_table((PFNDUOP*)duop_table);
+    
+    // Enable Nostradamus mode via environment variable
+    // export FAM65XX_NOSTRADAMUS=1
+    setenv("FAM65XX_NOSTRADAMUS", "1", 1);
+    
+    printf("=== Enhanced Nostradamus Distributor Example ===\n");
+    printf("CPU started at PC=$%04X, SP=$%02X\n", cpu.pc, cpu.sp);
+    
+    // Execute using enhanced Nostradamus pattern
+    int instructions_executed = fam65xx_execute_nostradamus(&cpu, (PFNDUOP*)duop_table, 5000);
+    
+    printf("Executed %d instructions using Nostradamus Distributor\n", instructions_executed);
+    printf("Final CPU state: PC=$%04X, A=$%02X, X=$%02X, Y=$%02X, SP=$%02X, P=$%02X\n",
+           cpu.pc, cpu.a, cpu.x, cpu.y, cpu.sp, cpu.p);
+    
+    // Demonstrate single-step debugging
+    printf("\n=== Single-Step Debugging Example ===\n");
+    for (int i = 0; i < 5; i++) {
+        int result = fam65xx_step_nostradamus(&cpu, (PFNDUOP*)duop_table);
+        if (result) {
+            printf("Step %d: PC=$%04X executed successfully\n", i + 1, cpu.pc);
+        } else {
+            printf("Step %d: Fire escape or error occurred at PC=$%04X\n", i + 1, cpu.pc);
+            break;
+        }
+    }
+    
+    printf("\n=== Performance Statistics ===\n");
+    printf("Check console output for performance metrics logged every 10000 instructions\n");
+}
+
+// Integration test function
+static void test_nostradamus_integration(void) {
+    printf("=== Nostradamus Integration Test ===\n");
+    
+    // Test basic functions
+    printf("Nostradamus enabled: %s\n", fam65xx_nostradamus_enabled() ? "YES" : "NO");
+    
+    // Test DUOP structure size (should be 16 bytes for optimal performance)
+    printf("DUOP structure size: %zu bytes\n", sizeof(DUOP));
+    if (sizeof(DUOP) == 16) {
+        printf("✓ DUOP structure is optimally sized for 16-byte alignment\n");
+    } else {
+        printf("⚠ DUOP structure is %zu bytes (not 16-byte aligned)\n", sizeof(DUOP));
+    }
+    
+    // Test fire escape function
+    fam65xx_t test_cpu;
+    memset(&test_cpu, 0, sizeof(test_cpu));
+    void* result = fam65xx_fire_escape_impl(&test_cpu, &test_cpu);
+    printf("Fire escape test: %s\n", (result == NULL) ? "PASS" : "FAIL");
+    
+    printf("Integration test complete.\n\n");
+}
+
+// Main demonstration function
+void demonstrate_enhanced_nostradamus(void) {
+    test_nostradamus_integration();
+    enhanced_nostradamus_example();
+}
+
+#endif // REDESIGN

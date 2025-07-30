@@ -25,7 +25,7 @@
 **Partially completed:**
 - 🔶 **CPU opcode handlers**: Standard function call dispatch implemented in [`fam65xx_next_instruction_dispatch()`](../../chip/cpu/fam65xx/fam65xx_core.h:251), but missing stackless threaded execution
 - 🔶 **Macro-based signatures**: [`FAM65XX_OPCODE_PROTO()`](../../chip/cpu/fam65xx/fam65xx_core.h:305) macro exists but only configured for legacy mode (not redesign mode)
-- 🔶 **FOOTER macros**: [`FAM65XX_OPCODE_FOOTER()`](../../chip/cpu/fam65xx/fam65xx_core.h:318) implemented but not using return-based dispatch
+- 🔶 **FOOTER macros**: [`FAM65XX_OPCODE_FOOTER(cpu)`](../../chip/cpu/fam65xx/fam65xx_core.h:318) implemented but not using return-based dispatch
 
 **Not yet implemented:**
 - ❌ **Stackless threaded CPU dispatch**: Current implementation uses traditional function calls rather than Nostradamus pattern
@@ -347,7 +347,7 @@ ACTION: Integrate unified interrupt line management in bus state
 2. **Update CPU handler macros**
    - Modify `FAM65XX_OPCODE_PROTO()` to return `void*` with `bus_state_t*` parameter
    - Implement `get_next_handler()` function for fetching next opcode handler
-   - Update `FAM65XX_OPCODE_FOOTER()` to return next handler pointer
+   - Update `FAM65XX_OPCODE_FOOTER(cpu)` to return next handler pointer
 
 3. **Convert core opcode handlers**
    - Start with arithmetic operations in `fam65xx_arithmetic.inc`

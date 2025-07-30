@@ -8,16 +8,18 @@
 // ============================================================================
 
 // Interrupt handler - called when IRQ or NMI lines are active
-void fam65xx_interrupt_handler(fam65xx_t* cpu) {
+#ifdef REDESIGN
+void fam65xx_interrupt_handler(fam65xx_t* cpu, bus_state_t* bus_state)
+#else
+void fam65xx_interrupt_handler(fam65xx_t* cpu)
+#endif
+{
     // Check for NMI first (higher priority)
     if (FAM65XX_TEST_NMI(cpu)) {
-        fam65xx_nmi(cpu); // NMI handler
-        return;
-    }
-    // Check for IRQ (if not masked)
-    if (FAM65XX_TEST_IRQ(cpu) && !fam65xx_get_flag(cpu, FLAG_I)) {
-        fam65xx_irq(cpu); // IRQ handler
-        return;
+        fam65xx_nmi_handler(cpu);
+    // If not NMI then IRQ - check IRQ is not masked
+    } else if (!fam65xx_get_flag(cpu, FLAG_I)) {
+        fam65xx_irq_handler(cpu);
     }
 }
 

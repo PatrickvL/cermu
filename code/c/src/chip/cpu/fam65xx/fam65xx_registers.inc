@@ -14,7 +14,7 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_tax) {
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->x = cpu->a;
     fam65xx_set_nz_flags(cpu, cpu->x);
-    FAM65XX_OPCODE_FOOTER();
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // TAY - Transfer A to Y
@@ -23,7 +23,7 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_tay) {
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->y = cpu->a;
     fam65xx_set_nz_flags(cpu, cpu->y);
-    FAM65XX_OPCODE_FOOTER();
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // TXA - Transfer X to A
@@ -32,7 +32,7 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_txa) {
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->a = cpu->x;
     fam65xx_set_nz_flags(cpu, cpu->a);
-    FAM65XX_OPCODE_FOOTER();
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // TYA - Transfer Y to A
@@ -41,7 +41,7 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_tya) {
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->a = cpu->y;
     fam65xx_set_nz_flags(cpu, cpu->a);
-    FAM65XX_OPCODE_FOOTER();
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // TSX - Transfer Stack Pointer to X
@@ -50,7 +50,7 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_tsx) {
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->x = cpu->sp;
     fam65xx_set_nz_flags(cpu, cpu->x);
-    FAM65XX_OPCODE_FOOTER();
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // TXS - Transfer X to Stack Pointer
@@ -59,7 +59,7 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_txs) {
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->sp = cpu->x;
     // TXS does not affect any flags
-    FAM65XX_OPCODE_FOOTER();
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // ============================================================================
@@ -71,7 +71,7 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_pha) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_push(cpu, cpu->a);
-    FAM65XX_OPCODE_FOOTER();
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // PLA - Pull Accumulator
@@ -80,7 +80,7 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_pla) {
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->a = fam65xx_pull(cpu);
     fam65xx_set_nz_flags(cpu, cpu->a);
-    FAM65XX_OPCODE_FOOTER();
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // PHP - Push Processor Status
@@ -88,7 +88,7 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_php) {
 
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     fam65xx_push(cpu, cpu->p | FLAG_B | FLAG_U); // B flag set when pushed by PHP
-    FAM65XX_OPCODE_FOOTER();
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // PLP - Pull Processor Status
@@ -97,7 +97,7 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_plp) {
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->p = fam65xx_pull(cpu);
     cpu->p |= FLAG_U; // Unused flag always set
-    FAM65XX_OPCODE_FOOTER();
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // ============================================================================
@@ -110,7 +110,7 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_inx) {
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->x++;
     fam65xx_set_nz_flags(cpu, cpu->x);
-    FAM65XX_OPCODE_FOOTER();
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // INY - Increment Y Register
@@ -119,7 +119,7 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_iny) {
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->y++;
     fam65xx_set_nz_flags(cpu, cpu->y);
-    FAM65XX_OPCODE_FOOTER();
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // DEX - Decrement X Register
@@ -128,7 +128,7 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_dex) {
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->x--;
     fam65xx_set_nz_flags(cpu, cpu->x);
-    FAM65XX_OPCODE_FOOTER();
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // DEY - Decrement Y Register
@@ -137,7 +137,7 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_dey) {
     (void)fam65xx_read_cycle(cpu, cpu->pc); // Dummy read
     cpu->y--;
     fam65xx_set_nz_flags(cpu, cpu->y);
-    FAM65XX_OPCODE_FOOTER();
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // ============================================================================
@@ -162,7 +162,7 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_inc_zero_page) {
 
     fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER();
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 FAM65XX_OPCODE_PROTO(fam65xx_op_inc_zero_page_x) {
@@ -179,7 +179,7 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_inc_zero_page_x) {
 
     fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER();
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 FAM65XX_OPCODE_PROTO(fam65xx_op_inc_absolute) {
@@ -196,7 +196,7 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_inc_absolute) {
 
     fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER();
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 FAM65XX_OPCODE_PROTO(fam65xx_op_inc_absolute_x) {
@@ -216,7 +216,7 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_inc_absolute_x) {
 
     fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER();
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 // DEC - Decrement Memory
@@ -238,7 +238,7 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_dec_zero_page) {
 
     fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER();
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 FAM65XX_OPCODE_PROTO(fam65xx_op_dec_zero_page_x) {
@@ -255,7 +255,7 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_dec_zero_page_x) {
 
     fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER();
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 FAM65XX_OPCODE_PROTO(fam65xx_op_dec_absolute) {
@@ -272,7 +272,7 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_dec_absolute) {
 
     fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER();
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
 
 FAM65XX_OPCODE_PROTO(fam65xx_op_dec_absolute_x) {
@@ -292,5 +292,5 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_dec_absolute_x) {
 
     fam65xx_write_cycle(cpu, cpu->address, value);  // T2: Data store
     fam65xx_set_nz_flags(cpu, value);
-    FAM65XX_OPCODE_FOOTER();
+    FAM65XX_OPCODE_FOOTER(cpu);
 }
