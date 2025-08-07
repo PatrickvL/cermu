@@ -6,6 +6,8 @@ void* ram_system_create(chip_descriptor_t* desc) {
     ram_t* ram = (ram_t*)calloc(1, sizeof(ram_t));
     if (!ram) return NULL;
     ram->desc = desc;
+    // Note: memory pointer will be set later to point into unified buffer
+    ram->memory = NULL;
     return ram;
 }
 
@@ -13,20 +15,14 @@ void ram_system_destroy(void* context) {
     free(context);
 }
 
-// Callback to provide rwcb_context for system registration
-void* ram_get_rwcb_context(void* chip) {
+uint8_t ram_memory_read(void* chip, uint16_t address) {
     ram_t* ram = (ram_t*)chip;
-    return ram->memory;
+    return ram->memory[address];
 }
 
-uint8_t ram_memory_read(void* context, uint16_t address) {
-    uint8_t* memory = (uint8_t*)context;
-    return memory[address];
-}
-
-void ram_memory_write(void* context, uint16_t address, uint8_t value) {
-    uint8_t* memory = (uint8_t*)context;
-    memory[address] = value;
+void ram_memory_write(void* chip, uint16_t address, uint8_t value) {
+    ram_t* ram = (ram_t*)chip;
+    ram->memory[address] = value;
 }
 
 chip_descriptor_t ram_descriptor = {
@@ -37,7 +33,6 @@ chip_descriptor_t ram_descriptor = {
     .read = ram_memory_read,
     .write = ram_memory_write,
     .bank_change = NULL,
-    .get_rwcb_context = ram_get_rwcb_context,
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
     .render_debug_window = ram_render_debug_window,
     .render_settings_window = ram_render_settings_window

@@ -211,7 +211,7 @@ void c64_non_cpu_cycle(void* c64_ptr) {
 //}
 }
 
-// Compact chip creation helper - creates and registers a chip (rwcb_context auto-set by system_chip_register)
+// Compact chip creation helper - creates and registers a chip
 static inline void* create_and_register_chip(c64_t* c64, chip_descriptor_t* desc, uint16_t addr, unsigned int size) {
     void* chip;
     
@@ -249,7 +249,7 @@ c64_t* c64_system_create(const system_config_t* config) {
 
     chip_descriptor_t* vicii_descriptor = (config->vicii_standard == VIC_PAL ? &mos6569_descriptor : &mos6567_descriptor);
 
-    // One line per chip - create, register, assign memory address/size, assign to C64 field, and initialize rwcb_context
+    // One line per chip - create, register, assign memory address/size, and assign to C64 field
     // Initialize bus as embedded struct - no need to create separately
     c64->bus.desc = &c64_bus_descriptor;
     c64->bus.c64 = c64;

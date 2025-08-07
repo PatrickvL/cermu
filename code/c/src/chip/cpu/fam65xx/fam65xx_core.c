@@ -40,7 +40,7 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_intercept_stub) {
 }
 
 bool fam65xx_is_intercepting(fam65xx_t* cpu) {
-    return cpu ? cpu->opcode_handlers[0] == fam65xx_op_intercept_stub : false;
+    return cpu ? cpu->opcode_handlers[4] == fam65xx_op_intercept_stub : false; // Check first opcode slot
 }
 
 void fam65xx_start_intercept(fam65xx_t* cpu) {
@@ -48,10 +48,10 @@ void fam65xx_start_intercept(fam65xx_t* cpu) {
     
     if (fam65xx_is_intercepting(cpu)) return;
 
-    // Save current handlers and replace all with intercept stubs
+    // Save current handlers and replace opcodes (indices 4-259) with intercept stubs
     memcpy(cpu->saved_opcode_handlers, cpu->opcode_handlers, sizeof(cpu->opcode_handlers));
     for (int i = 0; i < 256; i++) {
-        cpu->opcode_handlers[i] = fam65xx_op_intercept_stub;
+        cpu->opcode_handlers[4 + i] = fam65xx_op_intercept_stub; // Only intercept opcodes, not interrupts
     }
 }
 
@@ -99,7 +99,7 @@ bool fam65xx_step(fam65xx_t* cpu) {
     //    operation will correctly stall if the VIC has control of the bus.
     uint8_t opcode = cpu->bus_interface.bus_read_cycle(cpu->bus_interface.context, cpu->pc);
     
-    fam65xx_opcode_handler_t handler = cpu->opcode_handlers[opcode];
+    fam65xx_opcode_handler_t handler = cpu->opcode_handlers[4 + opcode]; // Opcodes start at index 4
     if (!handler) {
         return false;
     }

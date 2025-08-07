@@ -203,7 +203,6 @@ chip_descriptor_t mos6502_descriptor = {
     .read = NULL,  // Standard 6502 doesn't have special read behavior
     .write = NULL, // Standard 6502 doesn't have special write behavior
     .bank_change = NULL,
-    .get_rwcb_context = NULL,
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
     .render_debug_window = mos6502_render_debug_window,
     .render_settings_window = NULL

@@ -63,7 +63,7 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_read(c64_t* c64, c64_
             // All SID pages map to the same SID chip
             bus_state.bus = sid_read(c64->sid, bus_state.bus);
             break;
-        case CHIP_D8_COLORRAM:
+        case CHIP_D8_UNMAPPED:
             // Color RAM accessed via I/O area ($D800-$D8FF) - handled by VIC
             bus_state.bus.data = c64->colorram.memory[bus_state.bus.addr & 0x3FF] | 0xF0;
             break;
@@ -143,7 +143,7 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_write(c64_t* c64, c64
             // All SID pages map to the same SID chip
             bus_state.bus = sid_write(c64->sid, bus_state.bus);
             break;
-        case CHIP_D8_COLORRAM:
+        case CHIP_D8_UNMAPPED:
             // Color RAM accessed via I/O area ($D800-$D8FF)
             c64->colorram.memory[bus_state.bus.addr & 0x3FF] = bus_state.bus.data & 0x0F;
             break;

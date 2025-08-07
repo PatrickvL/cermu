@@ -33,7 +33,6 @@ chip_descriptor_t mos6510_descriptor = {
     .read = mos6510_ioport_read,
     .write = mos6510_ioport_write,
     .bank_change = NULL,
-    .get_rwcb_context = NULL,
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
     .render_debug_window = mos6510_render_debug_window,
     .render_settings_window = mos6510_render_settings_window

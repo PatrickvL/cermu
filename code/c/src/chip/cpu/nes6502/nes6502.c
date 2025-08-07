@@ -146,7 +146,6 @@ chip_descriptor_t nes6502_descriptor = {
     .read = NULL,  // NES 6502 doesn't have special read behavior
     .write = NULL, // NES 6502 doesn't have special write behavior
     .bank_change = NULL,
-    .get_rwcb_context = NULL,
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
     .render_debug_window = nes6502_render_debug_window,
     .render_settings_window = NULL

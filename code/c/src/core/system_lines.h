@@ -10,17 +10,17 @@ typedef struct {
 } bus_state_t;
 
 // Bus control line definitions (shared across most chips)
-#define BUS_LINE_RW     0 // Read/Write line (1=read, 0=write)
-#define BUS_LINE_IRQ    1 // Interrupt request line
-#define BUS_LINE_NMI    2 // Non-maskable interrupt line
+#define BUS_LINE_IRQ    0 // Interrupt request line (moved to bit 0 for optimization)
+#define BUS_LINE_NMI    1 // Non-maskable interrupt line (moved to bit 1 for optimization)
+#define BUS_LINE_RW     2 // Read/Write line (1=read, 0=write)
 #define BUS_LINE_BA     3 // Bus available line
 #define BUS_LINE_AEC    4 // Address enable control line
 #define BUS_LINE_RDY    5 // Ready line
 
 // Bit masks for easy access
-#define BUS_MASK_RW         (1 << BUS_LINE_RW)
 #define BUS_MASK_IRQ        (1 << BUS_LINE_IRQ)
 #define BUS_MASK_NMI        (1 << BUS_LINE_NMI)
+#define BUS_MASK_RW         (1 << BUS_LINE_RW)
 #define BUS_MASK_BA         (1 << BUS_LINE_BA)
 #define BUS_MASK_AEC        (1 << BUS_LINE_AEC)
 #define BUS_MASK_RDY        (1 << BUS_LINE_RDY)

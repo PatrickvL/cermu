@@ -1413,7 +1413,6 @@ chip_descriptor_t mos6581_descriptor = {
     .read = mos6581_registers_read,
     .write = mos6581_registers_write,
     .bank_change = NULL,
-    .get_rwcb_context = NULL,
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
     .render_debug_window = mos6581_render_debug_window,
     .render_settings_window = mos6581_render_settings_window

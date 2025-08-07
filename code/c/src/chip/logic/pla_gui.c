@@ -311,13 +311,13 @@ void pla_render_debug_window(void* chip, bool* show_window) {
         igTableSetupColumn("Title", ImGuiTableColumnFlags_None, 0.0f, 0);
         igTableHeadersRow();
         chip_description_t desc;
-        for (int chip = 0; chip < CHIP_MAX; chip++) {
+        for (int chip_id = 0; chip_id < CHIP_MAX; chip_id++) {
             igTableNextRow(ImGuiTableRowFlags_None, 0.0f);
             igTableSetColumnIndex(0);
-            igText("%02d", chip);
+            igText("%02d", chip_id);
             igTableSetColumnIndex(1);
 
-            bool has_desc = c64_bus_get_chip_description(has_c64 ? &c64->bus : NULL, chip, &desc);
+            bool has_desc = c64_bus_get_chip_description(has_c64 ? &c64->bus : NULL, chip_id, &desc);
             if (has_desc && desc.size > 0) {
                 igText("$%04X-$%04X", desc.base, (uint16_t)(desc.base + desc.size - 1));
             } else {
@@ -326,12 +326,12 @@ void pla_render_debug_window(void* chip, bool* show_window) {
             igTableSetColumnIndex(2);
             igText("%s", c64_bus_size_to_str(desc.size));
             igTableSetColumnIndex(3);
-            igText("%s", (chip == CHIP_UNMAPPED) ? "Unmapped" : c64_bus_chip_to_title(chip));
+            igText("%s", (chip_id == CHIP_UNMAPPED) ? "Unmapped" : c64_bus_chip_to_title(chip_id));
             igTableSetColumnIndex(4);
             if (has_desc) {
                 igText("%s", desc.label);
             } else {
-                igText("%s", c64_bus_chip_to_title(chip));
+                igText("%s", c64_bus_chip_to_title(chip_id));
             }
         }
         igEndTable();

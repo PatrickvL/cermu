@@ -190,7 +190,6 @@ chip_descriptor_t mos6526_descriptor = {
     .read = mos6526_registers_read,
     .write = mos6526_registers_write,
     .bank_change = NULL,
-    .get_rwcb_context = NULL,
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
     .render_debug_window = mos6526_render_debug_window,
     .render_settings_window = mos6526_render_settings_window

@@ -517,7 +517,7 @@ FAM65XX_OPCODE_PROTO(mos6502_op_sbc_indy) { FAM65XX_PROTO_RETURN fam65xx_addr_op
  * Use this to customize behavior per CPU type (e.g., disable decimal mode).
  */
 void fam65xx_override_opcode(fam65xx_t* cpu, uint8_t opcode, fam65xx_opcode_handler_t handler) {
-    cpu->opcode_handlers[opcode] = handler;
+    cpu->opcode_handlers[4 + opcode] = handler; // Opcodes start at index 4
 }
 
 /**
@@ -526,8 +526,18 @@ void fam65xx_override_opcode(fam65xx_t* cpu, uint8_t opcode, fam65xx_opcode_hand
  * and processes CPU feature flags and automatically overrides opcodes as needed.
  */
 void fam65xx_init_opcode_table(fam65xx_t* cpu, uint32_t cpu_features) {
-    // Start with the default opcode table (binary-only arithmetic, like MOS6510)
-    memcpy(cpu->opcode_handlers, fam65xx_op_default_handlers, sizeof(cpu->opcode_handlers));    // Apply decimal mode overrides if supported
+    // Assign interrupt handler slots (indices 0-3)
+    cpu->opcode_handlers[0] = NULL; // Reserved
+    cpu->opcode_handlers[1] = (fam65xx_opcode_handler_t)fam65xx_irq_handler; // IRQ handler slot
+    cpu->opcode_handlers[2] = (fam65xx_opcode_handler_t)fam65xx_nmi_handler; // NMI handler slot
+    cpu->opcode_handlers[3] = (fam65xx_opcode_handler_t)fam65xx_nmi_handler; // NMI handler slot (do NMI even when IRQ is set as well)
+    
+    // Copy opcodes from global table to indices 4-259 (offset by 4)
+    for (int i = 0; i < 256; i++) {
+        cpu->opcode_handlers[4 + i] = fam65xx_op_default_handlers[i];
+    }
+    
+    // Apply decimal mode overrides if supported
     if (cpu_features & FAM65XX_FEATURE_DECIMAL_MODE) {
         // Use MOS6502-specific decimal-aware handlers for ADC/SBC
         fam65xx_override_opcode(cpu, 0x69, mos6502_op_adc_imm);  // ADC #$nn (decimal-aware)

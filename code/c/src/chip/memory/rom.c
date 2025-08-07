@@ -13,32 +13,22 @@ void* rom_system_create(chip_descriptor_t* desc) {
 void* rom_system_create_with_size(chip_descriptor_t* desc, unsigned int size) {
     rom_t* rom = (rom_t*)rom_system_create(desc);
     if (!rom) return NULL;
-    // Allocate only the required size
-    rom->memory = (uint8_t*)malloc(size);
-    if (!rom->memory) {
-        free(rom);
-        return NULL;
-    }
+    // Note: memory pointer will be set later to point into unified buffer
+    // No allocation needed here anymore
+    rom->memory = NULL;
     return rom;
-}
-
-// Callback to provide rwcb_context for system registration
-void* rom_get_rwcb_context(void* chip) {
-    rom_t* rom = (rom_t*)chip;
-    // ROM callback should return NULL if memory allocation failed during create
-    return rom->memory; // Will be NULL if malloc failed in rom_system_create
 }
 
 void rom_system_destroy(void* context) {
     rom_t* rom = (rom_t*)context;
     if (!rom) return;
-    free(rom->memory);
+    // Don't free memory pointer since it points into unified buffer
     free(rom);
 }
 
-uint8_t rom_memory_read(void* context, uint16_t address) {
-    uint8_t* memory = (uint8_t*)context;
-    return memory[address];
+uint8_t rom_memory_read(void* chip, uint16_t address) {
+    rom_t* rom = (rom_t*)chip;
+    return rom->memory[address];
 }
 
 chip_descriptor_t rom_descriptor = {
@@ -46,8 +36,7 @@ chip_descriptor_t rom_descriptor = {
     .create = rom_system_create,
     .destroy = rom_system_destroy,
     .bus_attach = NULL,
-    .read = rom_memory_read, // ROM read receives pre-adjusted pointer via rwcb_context
+    .read = rom_memory_read, // ROM read receives chip pointer directly
     .write = NULL, // ROM is read-only, no write function
-    .bank_change = NULL,
-    .get_rwcb_context = rom_get_rwcb_context
+    .bank_change = NULL
 };

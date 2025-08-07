@@ -5,7 +5,7 @@
 
 typedef struct ram_s {
     chip_descriptor_t* desc;
-    uint8_t memory[65536];
+    uint8_t* memory;  // Pointer to memory (will point into unified buffer)
 } ram_t;
 
 // Direct RAM access functions

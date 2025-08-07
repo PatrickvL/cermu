@@ -16,19 +16,22 @@
 // Bus Types & Macros
 // =============================
 
-// Chip IDs ordered by memory size (largest first), then I/O by page number
+// Chip IDs optimized for unified memory buffer layout
 typedef enum {
-    // Must be consecutive for optimal jump table
-    CHIP_ZEROBANK     = 0,   // Pseudo chip for CPU I/O ports (4KB bank $0000-$0FFF)
-    CHIP_RAM          = 1,   // 64KB RAM (largest)
-    CHIP_BASIC        = 2,   // 8KB BASIC ROM
-    CHIP_KERNAL       = 3,   // 8KB KERNAL ROM
-    CHIP_ROML         = 4,   // 8KB ROM Low (cartridge)
-    CHIP_ROMH         = 5,   // 8KB ROM High (cartridge)
-    CHIP_CHARROM      = 6,   // 4KB Character ROM
-    CHIP_COLORRAM     = 7,   // 1KB Color RAM (smallest memory)
+    // Memory chips (no side effects) - consecutive for unified buffer
+    CHIP_BASIC        = 0,   // 8KB BASIC ROM - maps to unified offset 0x0000
+    CHIP_KERNAL       = 1,   // 8KB KERNAL ROM - maps to unified offset 0x2000
+    CHIP_ROML         = 2,   // 8KB ROM Low (cartridge) - maps to unified offset 0x4000
+    CHIP_ROMH         = 3,   // 8KB ROM High (cartridge) - maps to unified offset 0x6000
+    CHIP_CHARROM      = 4,   // 4KB Character ROM (+ 4KB padding) - maps to unified offset 0x8000
+    CHIP_COLORRAM     = 5,   // 1KB Color RAM (+ 7KB padding) - maps to unified offset 0xA000
+    CHIP_RAM          = 6,   // 64KB - maps to offset 0xC000 in unified buffer
+    // End of unified memory buffer chips - all below ones require callbacks :
+    CHIP_ZEROBANK     = 7,   // Pseudo chip for CPU I/O ports (4KB bank $0000-$0FFF)
     CHIP_UNMAPPED     = 8,   // Unmapped regions
-    CHIP_IO           = 9,   // I/O bank
+    
+    // I/O chips start here (all encoded as CHIP_IO = 9 in bank array)
+    CHIP_IO           = 9,   // Base I/O (gets expanded)
     // I/O pages in $D000-$DFFF range (16 pages of $100 bytes each)
     CHIP_D0_VIC = CHIP_IO,   // $D000-$D0FF (I/O page 0) - VIC-II registers
     CHIP_D1_VIC       =10,   // $D100-$D1FF (I/O page 1) - VIC-II mirrors
@@ -38,7 +41,7 @@ typedef enum {
     CHIP_D5_SID      = 14,   // $D500-$D5FF (I/O page 5) - SID mirrors
     CHIP_D6_SID      = 15,   // $D600-$D6FF (I/O page 6) - SID mirrors
     CHIP_D7_SID      = 16,   // $D700-$D7FF (I/O page 7) - SID mirrors
-    CHIP_D8_COLORRAM = 17,   // $D800-$D8FF (I/O page 8) - Color RAM via VIC
+    CHIP_D8_UNMAPPED = 17,   // $D800-$D8FF (I/O page 8) - Unmapped
     CHIP_D9_UNMAPPED = 18,   // $D900-$D9FF (I/O page 9) - Unmapped
     CHIP_DA_UNMAPPED = 19,   // $DA00-$DAFF (I/O page 10) - Unmapped
     CHIP_DB_UNMAPPED = 20,   // $DB00-$DBFF (I/O page 11) - Unmapped
@@ -65,6 +68,11 @@ typedef struct c64_bus_s {
     // Current PLA banking mode (0-31) derived from CPU port + cartridge signals
     uint8_t pla_banking_mode;  // Current banking mode for fast switching
     
+    // UNIFIED MEMORY BUFFER FOR OPTIMIZED OPCODE FETCH
+    // Layout: BASIC(8KB) + KERNAL(8KB) + ROML(8KB) + ROMH(8KB) + CHARROM(4KB+4KB pad) + COLORRAM(1KB+7KB pad) + RAM(64KB)
+    // Total: 112KB unified buffer for branchless memory access
+    alignas(64) uint8_t unified_memory_buffer[112 * 1024];  // 112KB total
+    
     // OPTIMIZED MEMORY BANKING - Cache-friendly layout
     // Banking configurations per mode (32 modes x 16 banks = 512 bytes)
     alignas(64) uint8_t cpu_encoded_chip_per_bank_per_mode[32][16]; // Encoded chip select for all PLA modes
@@ -78,11 +86,19 @@ typedef struct c64_bus_s {
     // VIC-II uses direct CHIP values, not encoded, since it only does read accesses
     alignas(64) uint8_t vicii_chip_per_bank_per_mode[32][16]; // VIC-II direct CHIP per mode
     
+    // CHIP CALLBACK ARRAYS - Function pointers for chip-specific operations
+    alignas(64) void* chip_read_callbacks[CHIP_MAX];   // chip_read_callback_t array
+    alignas(64) void* chip_write_callbacks[CHIP_MAX]; // chip_write_callback_t array
+    
     // Integrated adapter interfaces - can be passed out as pointers
     bus_cycle_ops_t bus_adapter;
     control_lines_interface_t control_lines_adapter;
     mos6510_io_port_interface_t io_port_adapter;
 } c64_bus_t;
+
+// Callback function types for chip-specific operations  TODO : Update all signatures to receive and return a bus_state_t
+typedef uint8_t (*chip_read_callback_t)(c64_bus_t* bus, uint16_t address);
+typedef void (*chip_write_callback_t)(c64_bus_t* bus, uint16_t address, uint8_t value);
 
 // CHIP descriptor struct for tooling
 typedef struct {
@@ -93,6 +109,14 @@ typedef struct {
     const char* label; // always from chip descriptor if available
 //    const char* title;
 } chip_description_t;
+
+/**
+ * Initialize chip callback arrays for optimized memory access.
+ * Should be called during bus initialization after system is attached.
+ * 
+ * @param c64_bus Pointer to the C64 bus controller
+ */
+void c64_bus_init_chip_callbacks(c64_bus_t* c64_bus);
 
 /**
  * Fetch descriptor for a given CHIP from registered chips or synthesize for I/O/special
@@ -115,6 +139,16 @@ uint8_t c64_bus_generate_pla_mode(c64_bus_t* c64_bus, uint8_t cpu_port_bits);
 void c64_bus_vic_read(c64_bus_t* c64_bus, uint16_t address);
 void c64_bus_cpu_read(c64_bus_t *bus, uint16_t address);
 void c64_bus_cpu_write(c64_bus_t *bus, uint16_t address, uint8_t value);
+
+/**
+ * Initialize RAM/ROM pointers to point into the unified memory buffer.
+ * This eliminates separate memory allocations and ensures consistency.
+ * Should be called after unified buffer is initialized.
+ * 
+ * @param c64_bus Pointer to the C64 bus controller
+ * @param c64 Pointer to the C64 system (for pointer updates)
+ */
+void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64);
 
 // Bus cycle functions
 uint8_t c64_bus_read_cycle(c64_bus_t *bus, uint16_t addr);

@@ -98,9 +98,9 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/src/systems/c64
     ${CMAKE_SOURCE_DIR}/src/main
     ${CMAKE_SOURCE_DIR}/src/gui
-    ${CMAKE_SOURCE_DIR}/external/cimgui
-    ${CMAKE_SOURCE_DIR}/external/cimgui/imgui
-    ${CMAKE_SOURCE_DIR}/external/cimgui/imgui/backends
+    ${CMAKE_SOURCE_DIR}/../../external/cimgui
+    ${CMAKE_SOURCE_DIR}/../../external/cimgui/imgui
+    ${CMAKE_SOURCE_DIR}/../../external/cimgui/imgui/backends
     ${SDL2_INCLUDE_DIRS}
 )
 
@@ -109,9 +109,8 @@ if(BUILD_GUI)
     # Configure cimgui to build as static library
     set(IMGUI_STATIC "yes" CACHE STRING "Build as a static library" FORCE)
     
-#    add_subdirectory(../../external/cimgui cimgui_build)
-#    add_subdirectory(../../external/cimgui external/cimgui)
-    add_subdirectory(external/cimgui)
+    # Add cimgui from the external directory
+    add_subdirectory(${CMAKE_SOURCE_DIR}/../../external/cimgui ${CMAKE_BINARY_DIR}/external/cimgui)
 endif()
 
 # Core library sources
@@ -170,7 +169,9 @@ add_executable(c64emu
 
 # Link required libraries
 # Note: mos6502_family functions are inline in headers, no separate library needed
-target_link_libraries(c64emu m)  # Add math library for tanhf
+if(NOT WIN32 AND NOT MSVC)
+    target_link_libraries(c64emu m)  # Add math library for tanhf (Unix only)
+endif()
 
 # Set output directory for console executable
 set_target_properties(c64emu
@@ -214,12 +215,21 @@ if(BUILD_GUI)
 
     # Link libraries for GUI version
     target_link_libraries(c64emu_gui
+        cimgui  # Properly linked cimgui static library
         ${SDL2_LIBRARIES}
         ${OPENGL_LIBRARIES}
         ${CMAKE_DL_LIBS}
-        cimgui
-        m  # Add math library for tanhf
     )
+    
+    # Add platform-specific libraries for GUI
+    if(WIN32)
+        target_link_libraries(c64emu_gui imm32)  # Required for ImGui on Windows
+    endif()
+    
+    # Add math library for GUI version too (Unix only)
+    if(NOT WIN32 AND NOT MSVC)
+        target_link_libraries(c64emu_gui m)  # Add math library for tanhf (Unix only)
+    endif()
 
     # Set output directory for GUI executable (keep as console app for now)
     set_target_properties(c64emu_gui
@@ -276,7 +286,9 @@ add_executable(test_mos6510_basic
 )
 
 # Link math library for test executable too
-target_link_libraries(test_mos6510_basic m)
+if(NOT WIN32 AND NOT MSVC)
+    target_link_libraries(test_mos6510_basic m)
+endif()
 
 # Set output directory
 set_target_properties(c64emu

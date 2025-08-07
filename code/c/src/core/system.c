@@ -31,15 +31,6 @@ uint8_t system_chip_register(system_8bit_t* system, void* chip, chip_descriptor_
     entry->chip_id = id;
     entry->base_address = base;
     entry->size = size;
-    entry->rwcb_context = chip; // Default to chip itself. Can get replaced by a callback.  
-    // Use chip-specific callback to set rwcb_context if available
-    if (desc->get_rwcb_context) {
-        void* memory = desc->get_rwcb_context(chip);
-        if (memory) {
-            // Store callback context (adjusted for base address)
-            entry->rwcb_context = (uint8_t*)memory - base;
-        }
-    }
     
     return id;
 }
