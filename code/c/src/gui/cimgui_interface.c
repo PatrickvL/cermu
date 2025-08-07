@@ -426,9 +426,11 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, struct emulation_co
                 
                 if (current_time - last_cycle_time > 2000) { // Change every 2 seconds
                     // Write to VIC-II background color register - this affects the center area
-                    vicii_registers_write(c64->vicii, VICII_B0C, current_bg_color);
+                    bus_state_t bg_bus_state = { .addr = VICII_B0C, .data = current_bg_color };
+                    vicii_registers_write(c64->vicii, bg_bus_state);
                     // Also cycle border (exterior) color to be more visible
-                    vicii_registers_write(c64->vicii, VICII_EC, (current_bg_color + 8) % 16);
+                    bus_state_t border_bus_state = { .addr = VICII_EC, .data = (current_bg_color + 8) % 16 };
+                    vicii_registers_write(c64->vicii, border_bus_state);
                     printf("DEBUG: Set VIC-II background color 0 (center) to %d, border to %d\n",
                            current_bg_color, (current_bg_color + 8) % 16);
                     
@@ -986,9 +988,9 @@ void gui_render_screen(c64_t* c64, gui_state_t* gui_state) {
         if (gui_state->screen_scanlines) {
             // TODO: Implement scanline shader effect
             // For now, just draw the image normally
-            igImage((ImTextureRef){(void*)(intptr_t)tex_id}, image_size, uv_min, uv_max);
+            igImage((ImTextureRef){._TexData = NULL, ._TexID = (ImTextureID)(intptr_t)tex_id}, image_size, uv_min, uv_max);
         } else {
-            igImage((ImTextureRef){(void*)(intptr_t)tex_id}, image_size, uv_min, uv_max);
+            igImage((ImTextureRef){._TexData = NULL, ._TexID = (ImTextureID)(intptr_t)tex_id}, image_size, uv_min, uv_max);
         }
         // Handle mouse interaction with fullscreen screen
         if (igIsItemHovered(ImGuiHoveredFlags_None)) {
@@ -1305,8 +1307,6 @@ typedef struct {
 
 // Forward declarations
 static int gui_emulation_thread_main(void* data);
-static void gui_emulation_process_signal(emulation_context_t* context, emulation_signal_t signal);
-static void gui_emulation_run_frame(emulation_context_t* context);
 
 bool gui_emulation_thread_init(emulation_context_t* context, struct c64_s* c64) {
     if (!context || !c64) return false;
@@ -1690,27 +1690,6 @@ static int gui_emulation_thread_main(void* data) {
     return 0;
 }
 
-static void gui_emulation_process_signal(emulation_context_t* context, emulation_signal_t signal) {
-    switch (signal) {
-        case EMU_SIGNAL_START:
-            context->current_state = EMU_STATE_RUNNING;
-            break;
-        case EMU_SIGNAL_PAUSE:
-            context->current_state = EMU_STATE_PAUSED;
-            break;
-        case EMU_SIGNAL_STEP:
-            context->current_state = EMU_STATE_STEPPING;
-            break;
-        case EMU_SIGNAL_RESET:
-            context->current_state = EMU_STATE_RESETTING;
-            break;
-        case EMU_SIGNAL_QUIT:
-            context->thread_running = false;
-            break;
-        default:
-            break;
-    }
-}
 
 // Frame rendering and timing functions (called from main GUI thread)
 void gui_emulation_render_frame(emulation_context_t* context) {

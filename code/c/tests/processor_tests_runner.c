@@ -60,11 +60,6 @@ void test_write_cycle(void* context, uint16_t address, uint8_t value) {
     test_memory[address] = value;
 }
 
-uint8_t test_detached_read(void* context) {
-    (void)context;
-    return 0xFF;
-}
-
 uint8_t test_io_read(void* context, uint8_t port_value, uint8_t ddr) {
     (void)context; (void)port_value; (void)ddr;
     return 0xFF;
@@ -129,8 +124,7 @@ bool create_cpu_instance(cpu_instance_t* instance, cpu_type_t type) {
                 bus_cycle_ops_t bus_ops = {
                     .context = NULL,
                     .bus_read_cycle = test_read_cycle,
-                    .bus_write_cycle = test_write_cycle,
-                    .detached_read = test_detached_read
+                    .bus_write_cycle = test_write_cycle
                 };
                 mos6502_attach_bus((mos6502_t*)instance->cpu, &bus_ops);
                 mos6502_attach_control_lines((mos6502_t*)instance->cpu, &control_interface);
@@ -146,8 +140,7 @@ bool create_cpu_instance(cpu_instance_t* instance, cpu_type_t type) {
                 bus_cycle_ops_t bus_ops = {
                     .context = NULL,
                     .bus_read_cycle = test_read_cycle,
-                    .bus_write_cycle = test_write_cycle,
-                    .detached_read = test_detached_read
+                    .bus_write_cycle = test_write_cycle
                 };
                 mos6510_io_port_interface_t io_interface = {
                     .context = NULL,
@@ -169,8 +162,7 @@ bool create_cpu_instance(cpu_instance_t* instance, cpu_type_t type) {
                 bus_cycle_ops_t bus_ops = {
                     .context = NULL,
                     .bus_read_cycle = test_read_cycle,
-                    .bus_write_cycle = test_write_cycle,
-                    .detached_read = test_detached_read
+                    .bus_write_cycle = test_write_cycle
                 };
                 nes6502_attach_bus((nes6502_t*)instance->cpu, &bus_ops);
                 nes6502_attach_control_lines((nes6502_t*)instance->cpu, &control_interface);

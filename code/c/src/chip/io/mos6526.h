@@ -4,7 +4,7 @@
 #include "../../core/chip.h"
 #include "../../core/bus_cycle_interface.h"
 #include <stdint.h>
-#include "../../../core/system_lines.h" // For bus_state_t
+#include "../../core/system_lines.h" // For bus_state_t
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdbool.h>
@@ -123,9 +123,9 @@ void mos6526_reset(mos6526_t* cia);
 // Main cycle function with unified bus state threading
 bus_state_t mos6526_advance_cycle(mos6526_t* cia, bus_state_t bus_state);
 
-// Unified register I/O
-bus_state_t mos6526_read(mos6526_t* cia, bus_state_t bus_state);
-bus_state_t mos6526_write(mos6526_t* cia, bus_state_t bus_state);
+// Register I/O functions (used directly in chip descriptor)
+bus_state_t mos6526_registers_read(void* context, bus_state_t bus_state);
+bus_state_t mos6526_registers_write(void* context, bus_state_t bus_state);
 
 // PORT/PERIPHERAL DATA / DATA DIRECTION handling
 void mos6526_write_data_direction_port(mos6526_t* cia, uint32_t p, uint8_t v);

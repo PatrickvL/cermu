@@ -97,26 +97,26 @@ static inline uint8_t mos6510_io_mask(mos6510_t* cpu, uint8_t value)
     return (data & ddr) | (value & ~ddr);
 }
 
-// MOS6510 zero bank I/O port read (addresses $0000/$0001)
-static inline uint8_t mos6510_ioport_read(mos6510_t* cpu, uint16_t addr) {
-    if (addr == 0) {
+// MOS6510 zero bank I/O port read (addresses $0000/$0001) - bus state interface
+static inline bus_state_t mos6510_ioport_read(void* context, bus_state_t bus_state) {
+    mos6510_t* cpu = (mos6510_t*)context;
+    if ((bus_state.addr & 0xFFFF) == 0) {
         // Return Data Direction Register
-        return cpu->io_port[0];
-    } else { // Return port: outputs defined by DDR bits, inputs from external pins
-        uint8_t external = cpu->io_interface.read_external_pins(cpu->io_interface.context, cpu->io_port[1], cpu->io_port[0]);
-        return mos6510_io_mask(cpu, external);
-/*
+        bus_state.data = cpu->io_port[0];
+    } else {
         // Return port: outputs defined by DDR bits, inputs from external pins
-        uint8_t ddr = cpu->io_port[0];
-        uint8_t data = cpu->io_port[1];
-        uint8_t external = cpu->io_interface.read_external_pins(cpu->io_interface.context, data, ddr);
-        return (data & ddr) | (external & ~ddr);
-*/
+        uint8_t external = cpu->io_interface.read_external_pins(cpu->io_interface.context, cpu->io_port[1], cpu->io_port[0]);
+        bus_state.data = mos6510_io_mask(cpu, external);
     }
+    return bus_state;
 }
 
-// MOS6510 zero bank I/O port write (addresses $0000/$0001)
-static inline void mos6510_ioport_write(mos6510_t* cpu, uint16_t addr, uint8_t value) {
+// MOS6510 zero bank I/O port write (addresses $0000/$0001) - bus state interface
+static inline bus_state_t mos6510_ioport_write(void* context, bus_state_t bus_state) {
+    mos6510_t* cpu = (mos6510_t*)context;
+    uint16_t addr = bus_state.addr & 0xFFFF;
+    uint8_t value = bus_state.data;
+    
     printf("mos6510_ioport_write: addr=%04X value=%02X\n", addr, value);
     // Update Data Direction / Data register
     cpu->io_port[addr] = value;
@@ -126,6 +126,7 @@ static inline void mos6510_ioport_write(mos6510_t* cpu, uint16_t addr, uint8_t v
         uint8_t port_data = cpu->io_port[1];
         cpu->io_interface.output_pins_changed(cpu->io_interface.context, port_data, ddr);
     }
+    return bus_state;
 }
 
 // Memory access functions using optimized direct callbacks

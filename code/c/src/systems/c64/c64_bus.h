@@ -87,8 +87,8 @@ typedef struct c64_bus_s {
     alignas(64) uint8_t vicii_chip_per_bank_per_mode[32][16]; // VIC-II direct CHIP per mode
     
     // CHIP CALLBACK ARRAYS - Function pointers for chip-specific operations
-    alignas(64) void* chip_read_callbacks[CHIP_MAX];   // chip_read_callback_t array
-    alignas(64) void* chip_write_callbacks[CHIP_MAX]; // chip_write_callback_t array
+    alignas(64) chip_callback_t chip_read_callbacks[CHIP_MAX];   // Unified chip_callback_t array
+    alignas(64) chip_callback_t chip_write_callbacks[CHIP_MAX]; // Unified chip_callback_t array
     
     // Integrated adapter interfaces - can be passed out as pointers
     bus_cycle_ops_t bus_adapter;
@@ -96,9 +96,6 @@ typedef struct c64_bus_s {
     mos6510_io_port_interface_t io_port_adapter;
 } c64_bus_t;
 
-// Callback function types for chip-specific operations  TODO : Update all signatures to receive and return a bus_state_t
-typedef uint8_t (*chip_read_callback_t)(c64_bus_t* bus, uint16_t address);
-typedef void (*chip_write_callback_t)(c64_bus_t* bus, uint16_t address, uint8_t value);
 
 // CHIP descriptor struct for tooling
 typedef struct {
@@ -198,12 +195,6 @@ void c64_bus_init_adapters(c64_bus_t* c64_bus);
  */
 static inline bus_cycle_ops_t* c64_bus_get_adapter(c64_bus_t* c64_bus) {
     return &c64_bus->bus_adapter;
-}
-
-static inline uint8_t c64_bus_adapter_detached_read(void* context) {
-    c64_bus_t* bus = (c64_bus_t*)context;
-    return bus->state.data; // Return "floating" bus data for detached reads
-    // TODO : These should also decay and float to 0xFF after a while
 }
 
 /**

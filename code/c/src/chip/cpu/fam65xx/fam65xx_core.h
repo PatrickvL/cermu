@@ -114,7 +114,7 @@ struct fam65xx_s {
 static inline uint8_t fam65xx_read_cycle(fam65xx_t* cpu, uint16_t address) {
     uint8_t value = cpu->bus_interface.bus_read_cycle(cpu->bus_interface.context, address);
 #if DEBUG
-    if (address >= 0xFFFC && address <= 0xFFFF) {
+    if (address >= 0xFFFC) {
         static int counter = 0;
         if (counter < 12) {
             counter++;

@@ -1,52 +1,15 @@
 #include "c64_bus.h"
 #include "c64.h"
+#include "../../chip/io/mos6526.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 
-// Chip accessor functions - these use the chip descriptor's read/write callbacks
+// Chip accessor functions - these use the chip descriptor's read/write callbacks using bus_state_t pattern
 
-static uint8_t io1_read(void* io1, uint16_t address) {
-    if (!io1) return 0xFF;
-    // For IO1, check if it has a descriptor with read function
-    // This would typically be a cartridge device
-    chip_descriptor_t* desc = *((chip_descriptor_t**)io1); // Assume first field is descriptor
-    if (desc && desc->read) {
-        return desc->read(io1, address);
-    }
-    return 0xFF; // Default for unmapped IO1
-}
-
-static void io1_write(void* io1, uint16_t address, uint8_t value) {
-    if (!io1) return;
-    // For IO1, check if it has a descriptor with write function
-    // This would typically be a cartridge device
-    chip_descriptor_t* desc = *((chip_descriptor_t**)io1); // Assume first field is descriptor
-    if (desc && desc->write) {
-        desc->write(io1, address, value);
-    }
-}
-
-static uint8_t io2_read(void* io2, uint16_t address) {
-    if (!io2) return 0xFF;
-    // For IO2, check if it has a descriptor with read function
-    // This would typically be a cartridge device
-    chip_descriptor_t* desc = *((chip_descriptor_t**)io2); // Assume first field is descriptor
-    if (desc && desc->read) {
-        return desc->read(io2, address);
-    }
-    return 0xFF; // Default for unmapped IO2
-}
-
-static void io2_write(void* io2, uint16_t address, uint8_t value) {
-    if (!io2) return;
-    // For IO2, check if it has a descriptor with write function
-    // This would typically be a cartridge device
-    chip_descriptor_t* desc = *((chip_descriptor_t**)io2); // Assume first field is descriptor
-    if (desc && desc->write) {
-        desc->write(io2, address, value);
-    }
-}
+// Cartridge expansion port IO functions removed (io1_read, io1_write, io2_read, io2_write)
+// These were unused and producing compiler warnings
+// TODO: Re-implement when cartridge support is added
 
 // Simple 4KB bank calculation for optimized system (0-15)
 static inline int8_t c64_bus_get_bank(uint16_t address) {
@@ -134,8 +97,11 @@ void c64_bus_cpu_read(c64_bus_t *c64_bus, uint16_t address) {
         chip += is_io & (preadjusted_io_addr >> 8);  // Direct 0-15 range, no mask needed
         
         // Use chip-indexed callback for optimized dispatch
-        chip_read_callback_t callback = (chip_read_callback_t)c64_bus->chip_read_callbacks[chip];
-        unified_data = callback ? callback(c64_bus, address) : c64_bus->state.data; // TODO : Use a read stub to avoid callback assigned check
+        chip_callback_t callback = c64_bus->chip_read_callbacks[chip];
+        if (callback) {
+            c64_bus->state = callback(c64_bus, c64_bus->state);
+            unified_data = c64_bus->state.data;
+        }
     }
 
     c64_bus->state.data = unified_data;
@@ -170,9 +136,9 @@ void c64_bus_cpu_write(c64_bus_t *c64_bus, uint16_t address, uint8_t value) {
     uint8_t is_io = -(chip == CHIP_IO);
     chip += is_io & (preadjusted_io_addr >> 8);  // Direct 0-15 range, no mask needed
     // Use chip-indexed callback for optimized dispatch
-    chip_write_callback_t callback = (chip_write_callback_t)c64_bus->chip_write_callbacks[chip];
+    chip_callback_t callback = c64_bus->chip_write_callbacks[chip];
     if (callback) { // TODO : Use a no-op write stub to avoid callback assigned check
-        callback(c64_bus, address, value);
+        c64_bus->state = callback(c64_bus, c64_bus->state);
     }
 }
 
@@ -491,7 +457,6 @@ void c64_bus_init_adapters(c64_bus_t* c64_bus) {
     c64_bus->bus_adapter.context = c64_bus;
     c64_bus->bus_adapter.bus_read_cycle = c64_bus_adapter_bus_read_cycle;
     c64_bus->bus_adapter.bus_write_cycle = c64_bus_adapter_bus_write_cycle;
-    c64_bus->bus_adapter.detached_read = c64_bus_adapter_detached_read;
     
     // Initialize control lines adapter
     c64_bus->control_lines_adapter.get_lines = c64_control_lines_get;
@@ -701,99 +666,51 @@ const char* c64_bus_size_to_str(size_t size) {
 // CHIP CALLBACK FUNCTIONS - Optimized chip-specific operations
 // ============================================================================
 
-// Chip read callback implementations
-static uint8_t c64_bus_chip_read_zerobank(c64_bus_t* bus, uint16_t address) {
-    if (address <= 1) {
-        return mos6510_ioport_read(BUS_TO_C64(bus)->mos6510, address);
+// Chip read callback implementations using bus_state_t pattern
+static bus_state_t c64_bus_chip_read_zerobank(void* chip, bus_state_t bus_state) {
+    c64_bus_t* bus = (c64_bus_t*)chip;
+    if (bus_state.addr <= 1) {
+        bus_state = mos6510_ioport_read(BUS_TO_C64(bus)->mos6510, bus_state);
+    } else {
+        // Fall through to RAM for addresses > 1
+        bus_state = ram_memory_read(BUS_TO_C64(bus)->ram, bus_state);
     }
-    // Fall through to RAM for addresses > 1
-    return ram_memory_read(BUS_TO_C64(bus)->ram, address);
+    return bus_state;
 }
 
-static uint8_t c64_bus_chip_read_vic(c64_bus_t* bus, uint16_t address) {
-    bus->state = vicii_read(BUS_TO_C64(bus)->vicii, bus->state);
-    return bus->state.data;
-}
-
-static uint8_t c64_bus_chip_read_sid(c64_bus_t* bus, uint16_t address) {
-    bus->state = mos6581_read(BUS_TO_C64(bus)->sid, bus->state);
-    return bus->state.data;
-}
-
-static uint8_t c64_bus_chip_read_cia1(c64_bus_t* bus, uint16_t address) {
-    bus->state = mos6526_read(BUS_TO_C64(bus)->cia1, bus->state);
-    return bus->state.data;
-}
-
-static uint8_t c64_bus_chip_read_cia2(c64_bus_t* bus, uint16_t address) {
-    bus->state = mos6526_read(BUS_TO_C64(bus)->cia2, bus->state);
-    return bus->state.data;
-}
-
-static uint8_t c64_bus_chip_read_io1(c64_bus_t* bus, uint16_t address) {
-    return io1_read(BUS_TO_C64(bus)->io1, address);
-}
-
-static uint8_t c64_bus_chip_read_io2(c64_bus_t* bus, uint16_t address) {
-    return io2_read(BUS_TO_C64(bus)->io2, address);
-}
-
-// Chip write callback implementations
-static void c64_bus_chip_write_zerobank(c64_bus_t* bus, uint16_t address, uint8_t value) {
-    if (address <= 1) {
-        mos6510_ioport_write(BUS_TO_C64(bus)->mos6510, address, value);
-        return;
+// Chip write callback implementations using bus_state_t pattern
+static bus_state_t c64_bus_chip_write_zerobank(void* chip, bus_state_t bus_state) {
+    c64_bus_t* bus = (c64_bus_t*)chip;
+    if (bus_state.addr <= 1) {
+        bus_state = mos6510_ioport_write(BUS_TO_C64(bus)->mos6510, bus_state);
+    } else {
+        // Fall through to RAM for addresses > 1
+        bus_state = ram_memory_write(BUS_TO_C64(bus)->ram, bus_state);
     }
-    // Fall through to RAM for addresses > 1
-    ram_memory_write(BUS_TO_C64(bus)->ram, address, value);
-}
-
-static void c64_bus_chip_write_ram(c64_bus_t* bus, uint16_t address, uint8_t value) {
-    ram_memory_write(BUS_TO_C64(bus)->ram, address, value);
-}
-
-static void c64_bus_chip_write_colorram(c64_bus_t* bus, uint16_t address, uint8_t value) {
-    mos2114_write(BUS_TO_C64(bus)->vicii->colorram, address, value);
-}
-
-static void c64_bus_chip_write_vic(c64_bus_t* bus, uint16_t address, uint8_t value) {
-    bus->state = vicii_write(BUS_TO_C64(bus)->vicii, bus->state);
-}
-
-static void c64_bus_chip_write_sid(c64_bus_t* bus, uint16_t address, uint8_t value) {
-    bus->state = mos6581_write(BUS_TO_C64(bus)->sid, bus->state);
-}
-
-static void c64_bus_chip_write_cia1(c64_bus_t* bus, uint16_t address, uint8_t value) {
-    bus->state = mos6526_write(BUS_TO_C64(bus)->cia1, bus->state);
+    return bus_state;
 }
 
 // CIA2-specific wrapper around mos6526_write with special handling for VIC-II bank changes
-static void c64_bus_cia2_write_with_vic_bank_handling(c64_bus_t* bus, uint16_t address, uint8_t value) {
+static bus_state_t c64_bus_cia2_write_with_vic_bank_handling(void* chip, bus_state_t bus_state) {
+    c64_bus_t* bus = (c64_bus_t*)chip;
     // First, perform the normal CIA2 write operation
-    bus->state = mos6526_write(BUS_TO_C64(bus)->cia2, bus->state);
+    bus_state = mos6526_registers_write(BUS_TO_C64(bus)->cia2, bus_state);
     
     // Special handling for CIA2 writes to trigger VIC-II bank changes
-    if (address == 0xDD00) {
+    if (bus_state.addr == 0xDD00) {
         c64_t* c64 = bus->c64;
-        uint8_t vic_bank = 3 - (value & 0x3);
+        uint8_t vic_bank = 3 - (bus_state.data & 0x3);
         if (c64->sid->desc->bank_change) {
             c64->sid->desc->bank_change(c64->sid, vic_bank);
         }
     }
+    return bus_state;
 }
 
-static void c64_bus_chip_write_cia2(c64_bus_t* bus, uint16_t address, uint8_t value) {
-    c64_bus_cia2_write_with_vic_bank_handling(bus, address, value);
+static bus_state_t c64_bus_chip_write_cia2(void* chip, bus_state_t bus_state) {
+    return c64_bus_cia2_write_with_vic_bank_handling(chip, bus_state);
 }
 
-static void c64_bus_chip_write_io1(c64_bus_t* bus, uint16_t address, uint8_t value) {
-    io1_write(BUS_TO_C64(bus)->io1, address, value);
-}
-
-static void c64_bus_chip_write_io2(c64_bus_t* bus, uint16_t address, uint8_t value) {
-    io2_write(BUS_TO_C64(bus)->io2, address, value);
-}
 
 /**
  * Initialize chip callback arrays for optimized memory access.
@@ -810,20 +727,24 @@ void c64_bus_init_chip_callbacks(c64_bus_t* c64_bus) {
     c64_bus->chip_read_callbacks[CHIP_CHARROM] = NULL; // c64_bus_cpu_read reads from unified_memory_buffer - no read callback
     c64_bus->chip_read_callbacks[CHIP_COLORRAM] = NULL; // c64_bus_cpu_read reads from unified_memory_buffer - no read callback
     c64_bus->chip_read_callbacks[CHIP_RAM] = NULL; // c64_bus_cpu_read reads from unified_memory_buffer - no read callback
-    c64_bus->chip_read_callbacks[CHIP_ZEROBANK] = (void*)c64_bus_chip_read_zerobank;
+    c64_bus->chip_read_callbacks[CHIP_ZEROBANK] = c64_bus_chip_read_zerobank;
     c64_bus->chip_read_callbacks[CHIP_UNMAPPED] = NULL; // UNMAPPED - no read callback
     
-    // VIC-II pages (D0-D3) - use wrapper functions for consistent signature
-    c64_bus->chip_read_callbacks[CHIP_D0_VIC] = (void*)c64_bus_chip_read_vic;
-    c64_bus->chip_read_callbacks[CHIP_D1_VIC] = (void*)c64_bus_chip_read_vic;
-    c64_bus->chip_read_callbacks[CHIP_D2_VIC] = (void*)c64_bus_chip_read_vic;
-    c64_bus->chip_read_callbacks[CHIP_D3_VIC] = (void*)c64_bus_chip_read_vic;
+    // VIC-II pages (D0-D3) - assign direct chip descriptor callback or NULL
+    chip_callback_t vicii_read_callback = (c64->vicii && c64->vicii->desc) ?
+        c64->vicii->desc->read : NULL;
+    c64_bus->chip_read_callbacks[CHIP_D0_VIC] = vicii_read_callback;
+    c64_bus->chip_read_callbacks[CHIP_D1_VIC] = vicii_read_callback;
+    c64_bus->chip_read_callbacks[CHIP_D2_VIC] = vicii_read_callback;
+    c64_bus->chip_read_callbacks[CHIP_D3_VIC] = vicii_read_callback;
     
-    // SID pages (D4-D7) - use wrapper functions for consistent signature
-    c64_bus->chip_read_callbacks[CHIP_D4_SID] = (void*)c64_bus_chip_read_sid;
-    c64_bus->chip_read_callbacks[CHIP_D5_SID] = (void*)c64_bus_chip_read_sid;
-    c64_bus->chip_read_callbacks[CHIP_D6_SID] = (void*)c64_bus_chip_read_sid;
-    c64_bus->chip_read_callbacks[CHIP_D7_SID] = (void*)c64_bus_chip_read_sid;
+    // SID pages (D4-D7) - assign direct chip descriptor callback or NULL
+    chip_callback_t sid_read_callback = (c64->sid && c64->sid->desc) ?
+        c64->sid->desc->read : NULL;
+    c64_bus->chip_read_callbacks[CHIP_D4_SID] = sid_read_callback;
+    c64_bus->chip_read_callbacks[CHIP_D5_SID] = sid_read_callback;
+    c64_bus->chip_read_callbacks[CHIP_D6_SID] = sid_read_callback;
+    c64_bus->chip_read_callbacks[CHIP_D7_SID] = sid_read_callback;
     
     // Unmapped I/O pages (D8-DB)
     c64_bus->chip_read_callbacks[CHIP_D8_UNMAPPED] = NULL; // UNMAPPED - no read callback
@@ -831,13 +752,16 @@ void c64_bus_init_chip_callbacks(c64_bus_t* c64_bus) {
     c64_bus->chip_read_callbacks[CHIP_DA_UNMAPPED] = NULL; // UNMAPPED - no read callback
     c64_bus->chip_read_callbacks[CHIP_DB_UNMAPPED] = NULL; // UNMAPPED - no read callback
     
-    // CIA pages (DC-DD) - use wrapper functions for consistent signature
-    c64_bus->chip_read_callbacks[CHIP_DC_CIA1] = (void*)c64_bus_chip_read_cia1;
-    c64_bus->chip_read_callbacks[CHIP_DD_CIA2] = (void*)c64_bus_chip_read_cia2;
+    // CIA pages (DC-DD) - assign direct chip descriptor callback or NULL
+    c64_bus->chip_read_callbacks[CHIP_DC_CIA1] = (c64->cia1 && c64->cia1->desc) ?
+        c64->cia1->desc->read : NULL;
     
-    // Cartridge I/O pages (DE-DF) - assign descriptor callbacks if available
-    c64_bus->chip_read_callbacks[CHIP_DE_IO1] = (void*)c64_bus_chip_read_io1;
-    c64_bus->chip_read_callbacks[CHIP_DF_IO2] = (void*)c64_bus_chip_read_io2;
+    c64_bus->chip_read_callbacks[CHIP_DD_CIA2] = (c64->cia2 && c64->cia2->desc) ?
+        c64->cia2->desc->read : NULL;
+    
+    // Cartridge I/O pages (DE-DF) - set to NULL (will be handled by chip descriptors when available)
+    c64_bus->chip_read_callbacks[CHIP_DE_IO1] = NULL; // IO1 cartridge devices use chip descriptors
+    c64_bus->chip_read_callbacks[CHIP_DF_IO2] = NULL; // IO2 cartridge devices use chip descriptors
     
     // Initialize write callbacks
     c64_bus->chip_write_callbacks[CHIP_BASIC] = NULL; // ROM - no write callback
@@ -847,20 +771,24 @@ void c64_bus_init_chip_callbacks(c64_bus_t* c64_bus) {
     c64_bus->chip_write_callbacks[CHIP_CHARROM] = NULL; // ROM - no write callback
     c64_bus->chip_write_callbacks[CHIP_COLORRAM] = NULL; // c64_bus_cpu_write writes to unified_memory_buffer - no write callback
     c64_bus->chip_write_callbacks[CHIP_RAM] = NULL; // c64_bus_cpu_write writes to unified_memory_buffer - no write callback
-    c64_bus->chip_write_callbacks[CHIP_ZEROBANK] = (void*)c64_bus_chip_write_zerobank;
+    c64_bus->chip_write_callbacks[CHIP_ZEROBANK] = c64_bus_chip_write_zerobank;
     c64_bus->chip_write_callbacks[CHIP_UNMAPPED] = NULL; // UNMAPPED - no write callback
     
-    // VIC-II pages (D0-D3) - use wrapper functions for consistent signature
-    c64_bus->chip_write_callbacks[CHIP_D0_VIC] = (void*)c64_bus_chip_write_vic;
-    c64_bus->chip_write_callbacks[CHIP_D1_VIC] = (void*)c64_bus_chip_write_vic;
-    c64_bus->chip_write_callbacks[CHIP_D2_VIC] = (void*)c64_bus_chip_write_vic;
-    c64_bus->chip_write_callbacks[CHIP_D3_VIC] = (void*)c64_bus_chip_write_vic;
+    // VIC-II pages (D0-D3) - assign direct chip descriptor callback or NULL
+    chip_callback_t vicii_write_callback = (c64->vicii && c64->vicii->desc) ?
+        c64->vicii->desc->write : NULL;
+    c64_bus->chip_write_callbacks[CHIP_D0_VIC] = vicii_write_callback;
+    c64_bus->chip_write_callbacks[CHIP_D1_VIC] = vicii_write_callback;
+    c64_bus->chip_write_callbacks[CHIP_D2_VIC] = vicii_write_callback;
+    c64_bus->chip_write_callbacks[CHIP_D3_VIC] = vicii_write_callback;
     
-    // SID pages (D4-D7) - use wrapper functions for consistent signature
-    c64_bus->chip_write_callbacks[CHIP_D4_SID] = (void*)c64_bus_chip_write_sid;
-    c64_bus->chip_write_callbacks[CHIP_D5_SID] = (void*)c64_bus_chip_write_sid;
-    c64_bus->chip_write_callbacks[CHIP_D6_SID] = (void*)c64_bus_chip_write_sid;
-    c64_bus->chip_write_callbacks[CHIP_D7_SID] = (void*)c64_bus_chip_write_sid;
+    // SID pages (D4-D7) - assign direct chip descriptor callback or NULL
+    chip_callback_t sid_write_callback = (c64->sid && c64->sid->desc) ?
+        c64->sid->desc->write : NULL;
+    c64_bus->chip_write_callbacks[CHIP_D4_SID] = sid_write_callback;
+    c64_bus->chip_write_callbacks[CHIP_D5_SID] = sid_write_callback;
+    c64_bus->chip_write_callbacks[CHIP_D6_SID] = sid_write_callback;
+    c64_bus->chip_write_callbacks[CHIP_D7_SID] = sid_write_callback;
     
     // Unmapped I/O pages (D8-DB)
     c64_bus->chip_write_callbacks[CHIP_D8_UNMAPPED] = NULL; // UNMAPPED - no write
@@ -868,15 +796,16 @@ void c64_bus_init_chip_callbacks(c64_bus_t* c64_bus) {
     c64_bus->chip_write_callbacks[CHIP_DA_UNMAPPED] = NULL; // UNMAPPED - no write
     c64_bus->chip_write_callbacks[CHIP_DB_UNMAPPED] = NULL; // UNMAPPED - no write
     
-    // CIA pages (DC-DD) - use wrapper functions for consistent signature
-    c64_bus->chip_write_callbacks[CHIP_DC_CIA1] = (void*)c64_bus_chip_write_cia1;
+    // CIA pages (DC-DD) - assign direct chip descriptor callback or NULL
+    c64_bus->chip_write_callbacks[CHIP_DC_CIA1] = (c64->cia1 && c64->cia1->desc) ?
+        c64->cia1->desc->write : NULL;
     
     // CIA2 still needs the special wrapper for VIC-II bank handling
-    c64_bus->chip_write_callbacks[CHIP_DD_CIA2] = (void*)c64_bus_chip_write_cia2;
+    c64_bus->chip_write_callbacks[CHIP_DD_CIA2] = c64_bus_chip_write_cia2;
     
-    // Cartridge I/O pages (DE-DF) - assign descriptor callbacks if available
-    c64_bus->chip_write_callbacks[CHIP_DE_IO1] = (void*)c64_bus_chip_write_io1;
-    c64_bus->chip_write_callbacks[CHIP_DF_IO2] = (void*)c64_bus_chip_write_io2;
+    // Cartridge I/O pages (DE-DF) - set to NULL (will be handled by chip descriptors when available)
+    c64_bus->chip_write_callbacks[CHIP_DE_IO1] = NULL; // IO1 cartridge devices use chip descriptors
+    c64_bus->chip_write_callbacks[CHIP_DF_IO2] = NULL; // IO2 cartridge devices use chip descriptors
 }
 
 /**

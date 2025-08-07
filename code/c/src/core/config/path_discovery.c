@@ -49,12 +49,17 @@ bool system_config_discover_data_root(const char* system_name, char* out_path, s
     
     for (int depth = 0; depth < 10; depth++) {  // Limit search depth
         // Construct test path: search_path/data/system_name
-        size_t needed_len = strlen(search_path) + strlen(system_name) + 8; // +8 for separators and "data"
+        size_t search_len = strlen(search_path);
+        size_t system_len = strlen(system_name);
+        size_t needed_len = search_len + system_len + 8; // +8 for separators and "data"
         if (needed_len >= sizeof(test_path)) {
             continue; // Skip if path would be too long
         }
-        snprintf(test_path, sizeof(test_path), "%s%cdata%c%s", 
-                 search_path, PATH_SEPARATOR, PATH_SEPARATOR, system_name);
+        int result = snprintf(test_path, sizeof(test_path), "%s%cdata%c%s",
+                             search_path, PATH_SEPARATOR, PATH_SEPARATOR, system_name);
+        if (result < 0 || (size_t)result >= sizeof(test_path)) {
+            continue; // Path was truncated, skip
+        }
         
         // Check if directory exists
 #ifdef _WIN32
@@ -115,12 +120,17 @@ bool system_config_discover_rom_root(const char* system_name, char* out_path, si
     
     for (int depth = 0; depth < 10; depth++) {  // Limit search depth
         // Construct test path: search_path/data/system_name/roms
-        size_t needed_len = strlen(search_path) + strlen(system_name) + 12; // +12 for separators, "data", and "roms"
+        size_t search_len = strlen(search_path);
+        size_t system_len = strlen(system_name);
+        size_t needed_len = search_len + system_len + 12; // +12 for separators, "data", and "roms"
         if (needed_len >= sizeof(test_path)) {
             continue; // Skip if path would be too long
         }
-        snprintf(test_path, sizeof(test_path), "%s%cdata%c%s%croms", 
-                 search_path, PATH_SEPARATOR, PATH_SEPARATOR, system_name, PATH_SEPARATOR);
+        int result = snprintf(test_path, sizeof(test_path), "%s%cdata%c%s%croms",
+                             search_path, PATH_SEPARATOR, PATH_SEPARATOR, system_name, PATH_SEPARATOR);
+        if (result < 0 || (size_t)result >= sizeof(test_path)) {
+            continue; // Path was truncated, skip
+        }
         
         // Check if directory exists
 #ifdef _WIN32

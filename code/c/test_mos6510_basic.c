@@ -31,11 +31,6 @@ void test_io_write(void* context, uint8_t port_value, uint8_t ddr) {
     // Do nothing for this test
 }
 
-static uint8_t test_detached_read(void* context) {
-    (void)context;
-    return 0xFF;
-}
-
 // Dummy control lines interface - returns no active interrupts
 static uint32_t dummy_get_control_lines(void *context) {
     (void)context;  // Unused
@@ -72,8 +67,7 @@ int main() {
     bus_cycle_ops_t bus_ops = {
         .context = NULL,
         .bus_read_cycle = test_read_cycle,
-        .bus_write_cycle = test_write_cycle,
-        .detached_read = test_detached_read
+        .bus_write_cycle = test_write_cycle
     };
     
     // Attach bus interface

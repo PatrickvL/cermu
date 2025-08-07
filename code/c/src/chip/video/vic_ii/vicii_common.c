@@ -1,5 +1,5 @@
 #include "vicii_common.h"
-#include "../memory/mos2114.h"
+#include "../../memory/mos2114.h"
 #include "../../../systems/c64/c64_bus.h"
 #include <stdlib.h>
 #include <string.h>
@@ -175,7 +175,9 @@ void vicii_memory_access(vicii_t* vicii, uint8_t access_type, int access_param) 
             // we still calculate the absolute address
             // TODO : Should this incorporate vicii_bank_base too? 
             address = 0xD800 + vicii->video_logic.vc;
-            uint8_t color_data = mos2114_read(vicii->colorram, address);
+            bus_state_t color_bus_state = { .addr = address, .data = 0 };
+            color_bus_state = mos2114_read(vicii->colorram, color_bus_state);
+            uint8_t color_data = color_bus_state.data;
             vicii->video_data.video_color_line[vicii->video_logic.vmli] = color_data & 0x0F;
             
             // Video matrix access  
@@ -188,7 +190,7 @@ void vicii_memory_access(vicii_t* vicii, uint8_t access_type, int access_param) 
                 vicii->video_logic.vc++;
                 vicii->video_logic.vmli++;
             }
-            // Fall through to g-access
+            __attribute__((fallthrough)); // to g-acess
             
         case VIC_ACCESS_G:
             {
@@ -605,8 +607,10 @@ static inline void vicii_registers_write_interrupt(vicii_registers_unit_t* regs,
 }
 
 // Register write function (uses all the above handlers)
-static inline void vicii_registers_write_internal(vicii_t* vicii, uint16_t address, uint8_t value) {
-    uint8_t reg = address & VICII_REGS_MASK; // The VIC registers are repeated each 64 bytes in the area $d000-$d3ff
+bus_state_t vicii_registers_write(void* context, bus_state_t bus_state) {
+    vicii_t* vicii = (vicii_t*)context;
+    uint8_t value = bus_state.data;
+    uint8_t reg = bus_state.addr & VICII_REGS_MASK; // The VIC registers are repeated each 64 bytes in the area $d000-$d3ff
     // Notes:
     // * Some not-connected bits (marked with '-') are written anyway here,
     //   because determing the mask for those would only be slower, for no benefit
@@ -619,7 +623,7 @@ static inline void vicii_registers_write_internal(vicii_t* vicii, uint16_t addre
     if (reg == VICII_IR) { // $d019 Interrupt Register
         // Treat the latching Interrupt Register differently from the other registers
         vicii_registers_write_interrupt(&vicii->registers, value);
-        return;
+        return bus_state; // No further processing needed for IR
     }
     
     // Mask color registers to 4 bits
@@ -642,7 +646,7 @@ static inline void vicii_registers_write_internal(vicii_t* vicii, uint16_t addre
         case VICII_C1: // $d011 Control register 1
             // Update bad line condition when C1 changes (YSCROLL or DEN bit changes)
             vicii_update_badline_condition(vicii);
-            // Fall through to C2 case
+            __attribute__((fallthrough)); // to C2 case
         case VICII_C2: // $d016 Control register 2
             vicii_sequencer_update_mode(&vicii->sequencer, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
             vicii_border_update_limits(&vicii->border, vicii->config, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
@@ -677,7 +681,7 @@ static inline void vicii_registers_write_internal(vicii_t* vicii, uint16_t addre
             break;
         case VICII_EC: // $d020 (4 bits) Exterior color (Border)
             vicii->border.border_pixel.color = value; // value already masked to 0x0F above
-            // Fall through to B0C-B2C case
+            __attribute__((fallthrough)); // to B0C-B2C case
         case VICII_B0C: // $d021 (4 bits) Background color 0
         case VICII_B1C: // $d022 (4 bits) Background color 1
         case VICII_B2C: // $d023 (4 bits) Background color 2
@@ -695,6 +699,7 @@ static inline void vicii_registers_write_internal(vicii_t* vicii, uint16_t addre
             // No special handling needed for other registers
             break;
     }
+    return bus_state;
 }
 
 // Register read helper (used by register read)
@@ -705,39 +710,53 @@ static inline uint8_t vicii_read_clear(vicii_registers_unit_t* regs, uint8_t reg
 }
 
 // Register read function (uses the above helper)
-static inline uint8_t vicii_registers_read_internal(vicii_t* vicii, uint16_t address) {
+bus_state_t vicii_registers_read(void* context, bus_state_t bus_state) {
+    vicii_t* vicii = (vicii_t*)context;
+    uint16_t address = bus_state.addr;
     uint8_t reg = address & VICII_REGS_MASK;
     // Used for "floating" bus state for subsequent unattached reads
-    uint8_t data = ((c64_bus_t*)vicii->bus.bus)->state.data;
+    uint8_t data = bus_state.data;
     
     // Fast path for most common registers
     switch (reg) {
         case VICII_C1:
-            return (vicii->registers.data[VICII_C1] & 0x7F) |       //    17 $d011 Control register 1 
+            data = (vicii->registers.data[VICII_C1] & 0x7F) |       //    17 $d011 Control register 1 
                    ((vicii->timing.raster_counter >> 1) & VICII_C1_RST8); //         bit 7 (RST8) reflects raster_counter bit 8 
+            break;
         case VICII_RASTER:
-            return vicii->timing.raster_counter & 0xFF;               //    18 $d012 Reflects raster_counter bits 0..7
+            data = vicii->timing.raster_counter & 0xFF;               //    18 $d012 Reflects raster_counter bits 0..7
+            break;
         case VICII_C2:
-            return vicii->registers.data[VICII_C2] | (data & 0xC0); //    22 $d016 |  - |  - | RES| MCM|CSEL|    XSCROLL   | Control register 2
+            data = vicii->registers.data[VICII_C2] | (data & 0xC0); //    22 $d016 |  - |  - | RES| MCM|CSEL|    XSCROLL   | Control register 2
+            break;
         case VICII_MP:
-            return vicii->registers.data[VICII_MP] | (data & 0x01); //    24 $d018 |VM13|VM12|VM11|VM10|CB13|CB12|CB11|  - | Memory pointers
+            data = vicii->registers.data[VICII_MP] | (data & 0x01); //    24 $d018 |VM13|VM12|VM11|VM10|CB13|CB12|CB11|  - | Memory pointers
+            break;
         case VICII_IR:
-            return vicii->registers.data[VICII_IR] | (data & 0x70); //    25 $d019 | IRQ|  - |  - |  - | ILP|IMMC|IMBC|IRST| Interrupt register
+            data = vicii->registers.data[VICII_IR] | (data & 0x70); //    25 $d019 | IRQ|  - |  - |  - | ILP|IMMC|IMBC|IRST| Interrupt register
+            break;
         case VICII_IE:
-            return vicii->registers.data[VICII_IE] | (data & 0xF0); //    26 $d01a |  - |  - |  - |  - | ELP|EMMC|EMBC|ERST| Interrupt Enabled
+            data = vicii->registers.data[VICII_IE] | (data & 0xF0); //    26 $d01a |  - |  - |  - |  - | ELP|EMMC|EMBC|ERST| Interrupt Enabled
+            break;
         case VICII_MXM:
-            return vicii_read_clear(&vicii->registers, VICII_MXM_2);  //    30 $d01e Sprite-sprite collision is cleared on read
+            data = vicii_read_clear(&vicii->registers, VICII_MXM_2);  //    30 $d01e Sprite-sprite collision is cleared on read
+            break;
         case VICII_MXD:
-            return vicii_read_clear(&vicii->registers, VICII_MXD_2);  //    31 $d01f Sprite-data collision is cleared on read
+            data = vicii_read_clear(&vicii->registers, VICII_MXD_2);  //    31 $d01f Sprite-data collision is cleared on read
+            break;
         default:
             if (reg <= 29) {
-                return vicii->registers.data[reg];                  //  0-29 $d000-$d01f (except 22,24,25,26) use all 8 bits
-           } else if (reg <= 46) {
-                return vicii->registers.data[reg] | (data & 0xF0);  // 32-46 $d020-$d02e use bits 0..3 (bits 4..7 are not connected)
+                data = vicii->registers.data[reg];                  //  0-29 $d000-$d01f (except 22,24,25,26) use all 8 bits
+            } else if (reg <= 46) {
+                data = vicii->registers.data[reg] | (data & 0xF0);  // 32-46 $d020-$d02e use bits 0..3 (bits 4..7 are not connected)
             } else {
-                return data;                                        // 47-63 $d02f-$d03f unattached registers (many docs say: give $ff on reading)
+                data = data;                                        // 47-63 $d02f-$d03f unattached registers (many docs say: give $ff on reading)
             }
+            break;
     }
+
+    bus_state.data = data;
+    return bus_state;
 }
 
 // ========================================================================================
@@ -1366,14 +1385,6 @@ const vicii_chip_config_t* vicii_get_default_config(bool is_pal) {
     return is_pal ? &vicii_config_pal : &vicii_config_ntsc;
 }
 
-uint8_t vicii_registers_read(void* chip, uint16_t address) {
-    return vicii_registers_read_internal((vicii_t*)chip, address);
-}
-
-void vicii_registers_write(void* chip, uint16_t address, uint8_t value) {
-    vicii_registers_write_internal((vicii_t*)chip, address, value);
-}
-
 void vicii_bank_change(void* chip, uint8_t bank) {
     vicii_t* vicii = (vicii_t*)chip;
     bank = 3 - (bank & 0x03);  // Invert bank
@@ -1399,14 +1410,5 @@ void vicii_set_framebuffer(vicii_t* vicii, uint32_t* framebuffer, int width, int
 // BUS STATE FUNCTIONS - Required by c64_bus.c
 // ========================================================================================
 
-bus_state_t vicii_read(vicii_t* vicii, bus_state_t bus_state) {
-    // Extract data from register read
-    bus_state.data = vicii_registers_read_internal(vicii, bus_state.addr);
-    return bus_state;
-}
-
-bus_state_t vicii_write(vicii_t* vicii, bus_state_t bus_state) {
-    // Write to register using address and data from bus state
-    vicii_registers_write_internal(vicii, bus_state.addr, bus_state.data);
-    return bus_state;
-}
+// Removed duplicate vicii_read/vicii_write functions
+// Functionality consolidated into vicii_registers_read/vicii_registers_write

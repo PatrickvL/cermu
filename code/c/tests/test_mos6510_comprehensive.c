@@ -56,11 +56,6 @@ void test_write_cycle(void* context, uint16_t address, uint8_t value) {
     test_memory[address] = value;
 }
 
-uint8_t test_detached_read(void* context) {
-    (void)context;
-    return 0xFF;
-}
-
 uint8_t test_io_read(void* context, uint8_t port_value, uint8_t ddr) {
     (void)context;
     (void)port_value;
@@ -97,8 +92,7 @@ mos6510_t* setup_cpu(cpu_state_t* state) {
     bus_cycle_ops_t bus_ops = {
         .context = NULL,
         .bus_read_cycle = test_read_cycle,
-        .bus_write_cycle = test_write_cycle,
-        .detached_read = test_detached_read
+        .bus_write_cycle = test_write_cycle
     };
     
     mos6510_io_port_interface_t io_interface = {

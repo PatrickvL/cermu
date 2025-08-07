@@ -15,19 +15,23 @@ void mos2114_destroy(void* chip) {
     free(chip);
 }
 
-uint8_t mos2114_read(void* chip, uint16_t address) {
-    mos2114_t* mos2114 = (mos2114_t*)chip;
+// MOS2114 read function - bus state interface
+bus_state_t mos2114_read(void* context, bus_state_t bus_state) {
+    mos2114_t* mos2114 = (mos2114_t*)context;
     // Color RAM is mapped at $D800-$DBFF (1024 bytes)
     // Mask to 10 bits for 1K addressing
-    uint16_t offset = address & 0x3FF;  // 0x3FF = 1023, ensures we stay within bounds
-    return mos2114->memory[offset];
+    uint16_t offset = bus_state.addr & 0x3FF;  // 0x3FF = 1023, ensures we stay within bounds
+    bus_state.data = mos2114->memory[offset];
+    return bus_state;
 }
 
-void mos2114_write(void* chip, uint16_t address, uint8_t value) {
-    mos2114_t* mos2114 = (mos2114_t*)chip;
+// MOS2114 write function - bus state interface
+bus_state_t mos2114_write(void* context, bus_state_t bus_state) {
+    mos2114_t* mos2114 = (mos2114_t*)context;
     // MOS2114 is 4-bit wide, so only store lower 4 bits
-    uint16_t offset = address & 0x3FF;  // Mask to 1K boundary
-    mos2114->memory[offset] = value & 0x0F;
+    uint16_t offset = bus_state.addr & 0x3FF;  // Mask to 1K boundary
+    mos2114->memory[offset] = bus_state.data & 0x0F;
+    return bus_state;
 }
 
 chip_descriptor_t mos2114_descriptor = {

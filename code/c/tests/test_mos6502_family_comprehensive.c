@@ -12,11 +12,6 @@ static void mock_write(void* context, uint16_t address, uint8_t value) {
     (void)value;
 }
 
-static uint8_t mock_detached_read(void* context) {
-    (void)context;
-    return 0xFF;
-}
-
 static uint32_t mock_get_lines(void* context) {
     (void)context;
     return 0; // No interrupts or special conditions
@@ -63,7 +58,6 @@ static void setup_mock_interfaces(
 ) {
     bus_interface->context = NULL;
     bus_interface->bus_write_cycle = mock_write;
-    bus_interface->detached_read = mock_detached_read;
     
     control_interface->get_lines = mock_get_lines;
     control_interface->set_lines = mock_set_lines;

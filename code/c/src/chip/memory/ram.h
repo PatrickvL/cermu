@@ -8,9 +8,9 @@ typedef struct ram_s {
     uint8_t* memory;  // Pointer to memory (will point into unified buffer)
 } ram_t;
 
-// Direct RAM access functions
-uint8_t ram_memory_read(void* context, uint16_t address);
-void ram_memory_write(void* context, uint16_t address, uint8_t value);
+// RAM access functions - bus state interface
+bus_state_t ram_memory_read(void* context, bus_state_t bus_state);
+bus_state_t ram_memory_write(void* context, bus_state_t bus_state);
 
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 // GUI function declarations

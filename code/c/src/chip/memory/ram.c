@@ -15,14 +15,18 @@ void ram_system_destroy(void* context) {
     free(context);
 }
 
-uint8_t ram_memory_read(void* chip, uint16_t address) {
-    ram_t* ram = (ram_t*)chip;
-    return ram->memory[address];
+// RAM memory read function - bus state interface
+bus_state_t ram_memory_read(void* context, bus_state_t bus_state) {
+    ram_t* ram = (ram_t*)context;
+    bus_state.data = ram->memory[bus_state.addr & 0xFFFF];
+    return bus_state;
 }
 
-void ram_memory_write(void* chip, uint16_t address, uint8_t value) {
-    ram_t* ram = (ram_t*)chip;
-    ram->memory[address] = value;
+// RAM memory write function - bus state interface
+bus_state_t ram_memory_write(void* context, bus_state_t bus_state) {
+    ram_t* ram = (ram_t*)context;
+    ram->memory[bus_state.addr & 0xFFFF] = bus_state.data;
+    return bus_state;
 }
 
 chip_descriptor_t ram_descriptor = {

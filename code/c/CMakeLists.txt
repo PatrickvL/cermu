@@ -98,19 +98,31 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/src/systems/c64
     ${CMAKE_SOURCE_DIR}/src/main
     ${CMAKE_SOURCE_DIR}/src/gui
-    ${CMAKE_SOURCE_DIR}/../../external/cimgui
-    ${CMAKE_SOURCE_DIR}/../../external/cimgui/imgui
-    ${CMAKE_SOURCE_DIR}/../../external/cimgui/imgui/backends
-    ${SDL2_INCLUDE_DIRS}
 )
+
+# Add GUI-specific includes only if building GUI
+if(BUILD_GUI)
+    include_directories(
+        ${CMAKE_SOURCE_DIR}/external/cimgui
+        ${CMAKE_SOURCE_DIR}/external/cimgui/imgui
+        ${CMAKE_SOURCE_DIR}/external/cimgui/imgui/backends
+        ${SDL2_INCLUDE_DIRS}
+    )
+endif()
 
 # Add cimgui subdirectory if building GUI
 if(BUILD_GUI)
-    # Configure cimgui to build as static library
-    set(IMGUI_STATIC "yes" CACHE STRING "Build as a static library" FORCE)
-    
-    # Add cimgui from the external directory
-    add_subdirectory(${CMAKE_SOURCE_DIR}/../../external/cimgui ${CMAKE_BINARY_DIR}/external/cimgui)
+    # Check if cimgui directory exists
+    if(EXISTS "${CMAKE_SOURCE_DIR}/external/cimgui/CMakeLists.txt")
+        # Configure cimgui to build as static library
+        set(IMGUI_STATIC "yes" CACHE STRING "Build as a static library" FORCE)
+        
+        # Add cimgui from the external directory
+        add_subdirectory(${CMAKE_SOURCE_DIR}/external/cimgui ${CMAKE_BINARY_DIR}/external/cimgui)
+    else()
+        message(WARNING "cimgui not found at ${CMAKE_SOURCE_DIR}/external/cimgui - disabling GUI build")
+        set(BUILD_GUI FALSE)
+    endif()
 endif()
 
 # Core library sources

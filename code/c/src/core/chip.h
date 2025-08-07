@@ -3,10 +3,13 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-
+#include "system_lines.h"
 
 // Forward-declare the struct name
 typedef struct chip_descriptor_s chip_descriptor_t;
+
+// Unified callback type for both read and write operations using bus_state_t pattern
+typedef bus_state_t (*chip_callback_t)(void* chip, bus_state_t bus_state);
 
 // Now define it
 struct chip_descriptor_s {
@@ -14,8 +17,8 @@ struct chip_descriptor_s {
     void* (*create)(chip_descriptor_t* desc);
     void (*destroy)(void* chip);
     void (*bus_attach)(void* chip, void* bus);
-    uint8_t (*read)(void* chip, uint16_t address);
-    void (*write)(void* chip, uint16_t address, uint8_t value);
+    bus_state_t (*read)(void* chip, bus_state_t bus_state);
+    bus_state_t (*write)(void* chip, bus_state_t bus_state);
     void (*bank_change)(void* chip, uint8_t bank);
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
     void (*render_debug_window)(void* chip, bool* show_window); // Optional GUI debug window callback
@@ -23,8 +26,6 @@ struct chip_descriptor_s {
 #endif
 };
 
-typedef uint8_t (*chip_read_func_t)(void* context, uint16_t);
-typedef void (*chip_write_func_t)(void* context, uint16_t, uint8_t);
 
 // Chip registry
 typedef struct {
@@ -40,17 +41,14 @@ typedef struct {
 // ============================================================================
 
 /**
- * Generic stub read function for unattached callbacks.
- * Returns 0x00 for any read operation.
+ * Generic stub callback function for unattached chip callbacks.
+ * Returns bus_state with data=0x00 for read operations, passes through unchanged for writes.
  * Use this to eliminate null checks in high-frequency code paths.
  */
-uint8_t generic_stub_read(void* context, uint16_t address);
+bus_state_t generic_stub_callback(void* context, bus_state_t bus_state);
 
-/**
- * Generic stub write function for unattached callbacks.
- * Does nothing for any write operation.
- * Use this to eliminate null checks in high-frequency code paths.
- */
+// Legacy stub functions for backward compatibility (deprecated)
+uint8_t generic_stub_read(void* context, uint16_t address);
 void generic_stub_write(void* context, uint16_t address, uint8_t value);
 
 #endif // AIEMUC_CHIP_H

@@ -6,8 +6,8 @@
 
 // Unified chip access callback - combines read/write with shared context
 typedef struct {
-    chip_read_func_t read_func;
-    chip_write_func_t write_func;
+    chip_callback_t read_func;
+    chip_callback_t write_func;
     void* context;  // Shared context for both read and write operations
 } access_callback_t;
 

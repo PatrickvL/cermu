@@ -1,36 +1,31 @@
 #include "chip.h"
 
-// ============================================================================
-// GENERIC STUB FUNCTIONS
-// ============================================================================
-
 /**
- * Generic stub read function for unattached callbacks.
- * Returns 0xFF for any read operation to provide consistent behavior.
+ * Generic stub callback function for unattached chip callbacks.
+ * Returns bus_state with data=0x00 for read operations, passes through unchanged for writes.
  * Use this to eliminate null checks in high-frequency code paths.
- * 
- * @param context Unused context pointer (can be NULL)
- * @param address Unused address parameter
- * @return Always returns 0xF
  */
-uint8_t generic_stub_read(void* context, uint16_t address) {
-    (void)context;
-    (void)address;
-    return 0xFF; // Return consistent value for unattached reads
+bus_state_t generic_stub_callback(void* context, bus_state_t bus_state) {
+    (void)context; // Unused parameter
+    // For read operations (indicated by R/W line being high), return 0x00
+    // For write operations, just pass through unchanged
+    if (bus_state.lines & BUS_MASK_RW) {
+        bus_state.data = 0x00; // Read operation - return 0x00
+    }
+    // Write operations pass through unchanged
+    return bus_state;
 }
 
-/**
- * Generic stub write function for unattached callbacks.
- * Does nothing for any write operation.
- * Use this to eliminate null checks in high-frequency code paths.
- * 
- * @param context Unused context pointer (can be NULL)
- * @param address Unused address parameter
- * @param value Unused value parameter
- */
+// Legacy stub functions for backward compatibility (deprecated)
+uint8_t generic_stub_read(void* context, uint16_t address) {
+    (void)context; // Unused parameter
+    (void)address; // Unused parameter
+    return 0x00;
+}
+
 void generic_stub_write(void* context, uint16_t address, uint8_t value) {
-    (void)context;
-    (void)address;
-    (void)value;
-    // Do nothing - stub for unattached writes
+    (void)context; // Unused parameter
+    (void)address; // Unused parameter
+    (void)value;   // Unused parameter
+    // Do nothing for write operations
 }

@@ -8,8 +8,8 @@ typedef struct rom_s {
     uint8_t* memory;
 } rom_t;
 
-// Direct ROM access functions
-uint8_t rom_memory_read(void* context, uint16_t address);
+// ROM access functions - bus state interface
+bus_state_t rom_memory_read(void* context, bus_state_t bus_state);
 
 // Specialized ROM creation function that takes size parameter
 void* rom_system_create_with_size(chip_descriptor_t* desc, unsigned int size);

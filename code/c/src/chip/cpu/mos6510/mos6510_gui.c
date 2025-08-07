@@ -115,28 +115,9 @@ void mos6510_render_settings_window(void* chip, bool* show_window) {
 // MOS6510-SPECIFIC GUI FUNCTIONS
 // ============================================================================
 
-static void mos6510_render_io_ports(mos6510_t* cpu) {
-    if (!cpu) return;
-    
-    igText("I/O Ports ($0000-$0001)");
-    igSeparator();
-    
-    igText("DDR ($0000): $%02X", cpu->io_port[0]);
-    igText("Port ($0001): $%02X", cpu->io_port[1]);
-    
-    // Show individual port bits using shared helper function
-    fam65xx_render_port_bits(cpu->io_port[1], "Port Bits");
-    
-    // Show DDR bits as well
-    fam65xx_render_port_bits(cpu->io_port[0], "DDR Bits ");
-    
-    igSeparator();
-}
-
-static const char* mos6510_get_cpu_name(void* cpu_instance) {
-    (void)cpu_instance; // Suppress unused parameter warning
-    return "MOS 6510";
-}
+// Removed unused static functions:
+// - mos6510_render_io_ports (unused)
+// - mos6510_get_cpu_name (unused)
 
 // CPU-specific rendering for MOS6510 (I/O ports)
 void mos6510_render_cpu_specific(void* chip) {

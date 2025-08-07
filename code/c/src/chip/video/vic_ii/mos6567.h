@@ -15,8 +15,8 @@ void mos6567_system_destroy(void* chip);
 void mos6567_bus_attach(void* chip, void* bus);
 
 // Register I/O
-uint8_t mos6567_registers_read(void* chip, uint16_t address);
-void mos6567_registers_write(void* chip, uint16_t address, uint8_t value);
+bus_state_t mos6567_registers_read(void* chip, bus_state_t bus_state);
+bus_state_t mos6567_registers_write(void* chip, bus_state_t bus_state);
 
 // Bank change callback
 void mos6567_bank_change(void* chip, uint8_t bank);

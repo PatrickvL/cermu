@@ -20,8 +20,8 @@ extern chip_descriptor_t mos2114_descriptor;
 void* mos2114_create(chip_descriptor_t* desc);
 void mos2114_destroy(void* chip);
 
-// Read/Write functions
-uint8_t mos2114_read(void* context, uint16_t address);
-void mos2114_write(void* context, uint16_t address, uint8_t value);
+// Read/Write functions - bus state interface
+bus_state_t mos2114_read(void* context, bus_state_t bus_state);
+bus_state_t mos2114_write(void* context, bus_state_t bus_state);
 
 #endif // MOS2114_H

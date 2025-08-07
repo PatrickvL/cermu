@@ -88,18 +88,6 @@ void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config) {
     }
 }
 
-uint8_t c64_detached_read(void* context, uint16_t address) {
-    (void)address;
-    return c64_bus_adapter_detached_read(context);
-}
-
-void c64_detached_write(void* context, uint16_t address, uint8_t value) {
-    (void)context;
-    (void)address;
-    (void)value;
-    // Do nothing - detached chips do not write
-}
-
 bool c64_pla_maps_generate(c64_t* c64) {
     c64_bus_t* bus = &(c64->bus);
     

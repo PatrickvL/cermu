@@ -64,122 +64,142 @@ void mos6526_reset(mos6526_t* cia) {
 
 // The CIA 1 registers are repeated each 16 bytes in the area $dc00-$dcff
 // The CIA 2 registers are repeated each 16 bytes in the area $dd00-$ddff
-uint8_t mos6526_registers_read(void* context, uint16_t address) {
+bus_state_t mos6526_registers_read(void* context, bus_state_t bus_state) {
     mos6526_t* cia = (mos6526_t*)context;
-    uint8_t reg = address & REGS_MASK;
+    uint8_t reg = bus_state.addr & REGS_MASK;
     
     switch (reg) {
         // Read ports
-        case PRA: 
-            return mos6526_read_port_data(cia, A);
-        case PRB: 
-            return mos6526_read_port_data(cia, B);
-        case DDRA: 
-            return cia->reg[DDRA];
-        case DDRB: 
+        case PRA:
+            bus_state.data = mos6526_read_port_data(cia, A);
+            break;
+        case PRB:
+            bus_state.data = mos6526_read_port_data(cia, B);
+            break;
+        case DDRA:
+            bus_state.data = cia->reg[DDRA];
+            break;
+        case DDRB:
             // Note : Assume this always excludes the optional PBON output mask? (If not, use IDDRB!)
-            return cia->reg[DDRB];
+            bus_state.data = cia->reg[DDRB];
+            break;
         // Read timers
-        case TA_LO: 
-            return cia->reg[TA_LO];
-        case TA_HI: 
-            return cia->reg[TA_HI];
-        case TB_LO: 
-            return cia->reg[TB_LO];
-        case TB_HI: 
-            return cia->reg[TB_HI];
+        case TA_LO:
+            bus_state.data = cia->reg[TA_LO];
+            break;
+        case TA_HI:
+            bus_state.data = cia->reg[TA_HI];
+            break;
+        case TB_LO:
+            bus_state.data = cia->reg[TB_LO];
+            break;
+        case TB_HI:
+            bus_state.data = cia->reg[TB_HI];
+            break;
         // Read TOD registers
-        case TOD_10THS: 
-            return cia->read_tod_delta > 0 ? mos6526_unlatch_read_tod_10ths(cia) : cia->reg[TOD_10THS];
-        case TOD_SEC: 
-            return cia->reg[cia->read_tod_delta + TOD_SEC];
-        case TOD_MIN: 
-            return cia->reg[cia->read_tod_delta + TOD_MIN];
-        case TOD_HR: 
-            return cia->read_tod_delta > 0 ? cia->reg[CLOCK_OFFSET + TOD_HR] : mos6526_latch_read_tod_hr(cia);
+        case TOD_10THS:
+            bus_state.data = cia->read_tod_delta > 0 ? mos6526_unlatch_read_tod_10ths(cia) : cia->reg[TOD_10THS];
+            break;
+        case TOD_SEC:
+            bus_state.data = cia->reg[cia->read_tod_delta + TOD_SEC];
+            break;
+        case TOD_MIN:
+            bus_state.data = cia->reg[cia->read_tod_delta + TOD_MIN];
+            break;
+        case TOD_HR:
+            bus_state.data = cia->read_tod_delta > 0 ? cia->reg[CLOCK_OFFSET + TOD_HR] : mos6526_latch_read_tod_hr(cia);
+            break;
         // Read control registers
-        case SDR: 
-            return cia->reg[SDR];
-        case ICR: 
-            return mos6526_read_and_clear_interrupt_control_register(cia);
-        case CRA: 
-            return cia->reg[CRA];
-        case CRB: 
-            return cia->reg[CRB];
+        case SDR:
+            bus_state.data = cia->reg[SDR];
+            break;
+        case ICR:
+            bus_state.data = mos6526_read_and_clear_interrupt_control_register(cia);
+            break;
+        case CRA:
+            bus_state.data = cia->reg[CRA];
+            break;
+        case CRB:
+            bus_state.data = cia->reg[CRB];
+            break;
         default:
-            // Unused registers return the last value on the bus
-            return cia->bus_interface.detached_read(cia->bus_interface.context);
+            // Unused registers return the last value on the bus (already in bus_state.data)
+            // No action needed - bus_state.data already contains what was on the bus
+            break;
     }
+    return bus_state;
 }
 
-void mos6526_registers_write(void* context, uint16_t address, uint8_t value) {
+bus_state_t mos6526_registers_write(void* context, bus_state_t bus_state) {
     mos6526_t* cia = (mos6526_t*)context;
-    uint8_t reg = address & REGS_MASK;
+    uint8_t reg = bus_state.addr & REGS_MASK;
+    uint8_t value = bus_state.data;
     
     switch (reg) {
         // Write ports
-        case PRA: 
-            cia->reg[PRA] = value; 
-            mos6526_update_output_port(cia, A, value); 
+        case PRA:
+            cia->reg[PRA] = value;
+            mos6526_update_output_port(cia, A, value);
             break;
-        case PRB: 
-            cia->reg[PRB] = value; 
-            mos6526_update_output_port_b(cia, value); 
+        case PRB:
+            cia->reg[PRB] = value;
+            mos6526_update_output_port_b(cia, value);
             break;
-        case DDRA: 
-            mos6526_write_data_direction_port(cia, A, value); 
-            mos6526_update_output_port(cia, A, cia->reg[PRA]); 
+        case DDRA:
+            mos6526_write_data_direction_port(cia, A, value);
+            mos6526_update_output_port(cia, A, cia->reg[PRA]);
             break;
-        case DDRB: 
-            mos6526_write_data_direction_port(cia, B, value); 
-            mos6526_update_internal_data_direction_port_b(cia, value); 
-            mos6526_update_output_port_b(cia, cia->reg[PRB]); 
+        case DDRB:
+            mos6526_write_data_direction_port(cia, B, value);
+            mos6526_update_internal_data_direction_port_b(cia, value);
+            mos6526_update_output_port_b(cia, cia->reg[PRB]);
             break;
         // Write timer latches
-        case TA_LO: 
-            cia->reg[TIMER_OFFSET + TA_LO] = value; 
+        case TA_LO:
+            cia->reg[TIMER_OFFSET + TA_LO] = value;
             break;
-        case TA_HI: 
-            cia->reg[TIMER_OFFSET + TA_HI] = value; 
-            mos6526_check_reload_timer(cia, A); 
+        case TA_HI:
+            cia->reg[TIMER_OFFSET + TA_HI] = value;
+            mos6526_check_reload_timer(cia, A);
             break;
-        case TB_LO: 
-            cia->reg[TIMER_OFFSET + TB_LO] = value; 
+        case TB_LO:
+            cia->reg[TIMER_OFFSET + TB_LO] = value;
             break;
-        case TB_HI: 
-            cia->reg[TIMER_OFFSET + TB_HI] = value; 
-            mos6526_check_reload_timer(cia, B); 
+        case TB_HI:
+            cia->reg[TIMER_OFFSET + TB_HI] = value;
+            mos6526_check_reload_timer(cia, B);
             break;
         // Write TOD registers / ALARM latches
-        case TOD_10THS: 
-            cia->reg[cia->write_tod_delta + TOD_10THS] = value; 
-            mos6526_check_alarm_interrupt(cia); 
-            cia->is_running_tod = true; 
+        case TOD_10THS:
+            cia->reg[cia->write_tod_delta + TOD_10THS] = value;
+            mos6526_check_alarm_interrupt(cia);
+            cia->is_running_tod = true;
             break;
-        case TOD_SEC: 
-            cia->reg[cia->write_tod_delta + TOD_SEC] = value; 
+        case TOD_SEC:
+            cia->reg[cia->write_tod_delta + TOD_SEC] = value;
             break;
-        case TOD_MIN: 
-            cia->reg[cia->write_tod_delta + TOD_MIN] = value; 
+        case TOD_MIN:
+            cia->reg[cia->write_tod_delta + TOD_MIN] = value;
             break;
-        case TOD_HR: 
-            cia->reg[cia->write_tod_delta + TOD_HR] = mos6526_write_tod_hr(cia, value); 
-            cia->is_running_tod = false; 
+        case TOD_HR:
+            cia->reg[cia->write_tod_delta + TOD_HR] = mos6526_write_tod_hr(cia, value);
+            cia->is_running_tod = false;
             break;
         // Write control registers
-        case SDR: 
-            mos6526_write_serial_data_register(cia, value); 
+        case SDR:
+            mos6526_write_serial_data_register(cia, value);
             break;
-        case ICR: 
-            mos6526_write_interrupt_control_register(cia, value); 
+        case ICR:
+            mos6526_write_interrupt_control_register(cia, value);
             break;
-        case CRA: 
-            mos6526_write_control_register(cia, A, value); 
+        case CRA:
+            mos6526_write_control_register(cia, A, value);
             break;
-        case CRB: 
-            mos6526_write_control_register(cia, B, value); 
+        case CRB:
+            mos6526_write_control_register(cia, B, value);
             break;
     }
+    return bus_state;
 }
 
 chip_descriptor_t mos6526_descriptor = {

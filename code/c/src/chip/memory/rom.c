@@ -26,9 +26,11 @@ void rom_system_destroy(void* context) {
     free(rom);
 }
 
-uint8_t rom_memory_read(void* chip, uint16_t address) {
-    rom_t* rom = (rom_t*)chip;
-    return rom->memory[address];
+// ROM memory read function - bus state interface
+bus_state_t rom_memory_read(void* context, bus_state_t bus_state) {
+    rom_t* rom = (rom_t*)context;
+    bus_state.data = rom->memory[bus_state.addr & 0xFFFF];
+    return bus_state;
 }
 
 chip_descriptor_t rom_descriptor = {

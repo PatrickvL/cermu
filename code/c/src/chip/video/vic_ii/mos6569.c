@@ -23,13 +23,8 @@ void mos6569_bus_attach(void* chip, void* bus) {
 /**
  * Register I/O wrappers
  */
-uint8_t mos6569_registers_read(void* chip, uint16_t address) {
-    return vicii_registers_read(chip, address);
-}
-
-void mos6569_registers_write(void* chip, uint16_t address, uint8_t value) {
-    vicii_registers_write(chip, address, value);
-}
+// Removed unused mos6569_registers_read/write wrapper functions
+// These were just forwarding to vicii_registers_read/write which are used directly in descriptors
 
 /**
  * Bank change callback wrapper

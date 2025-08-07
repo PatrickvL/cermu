@@ -1033,7 +1033,8 @@ void mos6581_load_preset(mos6581_t* sid, const mos6581_preset_t* preset) {
     // Load all registers
     for (uint32_t i = 0; i < SID_REGS_SIZE; i++) {
         if (i < 0x19 || i > 0x1C) { // Skip read-only registers
-            mos6581_registers_write(sid, 0xD400 + i, preset->registers[i]);
+            bus_state_t preset_bus_state = { .addr = 0xD400 + i, .data = preset->registers[i] };
+            mos6581_registers_write(sid, preset_bus_state);
         }
     }
 }
@@ -1146,11 +1147,12 @@ void voice_write_sustain_release_register_value(voice_t* voice, uint8_t value) {
 // REGISTER ACCESS
 // =============================================================================
 
-void mos6581_registers_write(void* context, uint16_t address, uint8_t value) {
+bus_state_t mos6581_registers_write(void* context, bus_state_t bus_state) {
     mos6581_t* sid = (mos6581_t*)context;
-    if (!sid) return;
+    if (!sid) return bus_state;
     
-    uint32_t r = address & SID_REGS_MASK;
+    uint32_t r = bus_state.addr & SID_REGS_MASK;
+    uint8_t value = bus_state.data;
     sid->bus_value = value; // Store for potential bus reads
     
     if (r < 21) { // Voice registers (0x00-0x14)
@@ -1229,38 +1231,46 @@ void mos6581_registers_write(void* context, uint16_t address, uint8_t value) {
     if (r < SID_REGS_SIZE) {
         sid->regs[r] = value;
     }
+    
+    return bus_state;
 }
 
-uint8_t mos6581_registers_read(void* context, uint16_t address) {
+bus_state_t mos6581_registers_read(void* context, bus_state_t bus_state) {
     mos6581_t* sid = (mos6581_t*)context;
-    if (!sid) return 0;
+    if (!sid) return bus_state;
     
-    uint32_t r = address & SID_REGS_MASK;
+    uint32_t r = bus_state.addr & SID_REGS_MASK;
     
     switch (r) {
         case 0x19: // POTX - Game paddle 1 position
-            return sid->pot_x_value;
+            bus_state.data = sid->pot_x_value;
+            break;
             
         case 0x1A: // POTY - Game paddle 2 position
-            return sid->pot_y_value;
+            bus_state.data = sid->pot_y_value;
+            break;
             
         case 0x1B: // OSC3 - Oscillator 3 / Random number generator
-            return (uint8_t)(sid->voice3.oscillator_waveform >> 4);
+            bus_state.data = (uint8_t)(sid->voice3.oscillator_waveform >> 4);
+            break;
             
         case 0x1C: // ENV3 - Envelope generator 3 output
-            return (uint8_t)(sid->voice3.gated ? (sid->voice3.envelope_amplitude >> 8) : 0);
+            bus_state.data = (uint8_t)(sid->voice3.gated ? (sid->voice3.envelope_amplitude >> 8) : 0);
+            break;
             
         case 0x1D: // Unused register
         case 0x1E: // Unused register
         case 0x1F: // Unused register
-            return 0xFF;
+            bus_state.data = 0xFF;
+            break;
             
         default:
-            // Return bus value for write-only registers
-            return sid->bus_interface.detached_read ? 
-                   sid->bus_interface.detached_read(sid->bus_interface.context) : 
-                   sid->bus_value;
+            // Return bus value for write-only registers (already in bus_state.data)
+            // No action needed - bus_state.data already contains what was on the bus
+            break;
     }
+    
+    return bus_state;
 }
 
 // =============================================================================
@@ -1389,16 +1399,14 @@ bus_state_t mos6581_read(mos6581_t* sid, bus_state_t bus_state) {
     if (!sid) return bus_state;
     
     // Read from SID register using address from bus state
-    bus_state.data = mos6581_registers_read(sid, bus_state.addr);
-    return bus_state;
+    return mos6581_registers_read(sid, bus_state);
 }
 
 bus_state_t mos6581_write(mos6581_t* sid, bus_state_t bus_state) {
     if (!sid) return bus_state;
     
     // Write to SID register using address and data from bus state
-    mos6581_registers_write(sid, bus_state.addr, bus_state.data);
-    return bus_state;
+    return mos6581_registers_write(sid, bus_state);
 }
 
 // =============================================================================

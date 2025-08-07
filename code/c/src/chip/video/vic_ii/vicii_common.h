@@ -1,10 +1,10 @@
 #ifndef VICII_COMMON_H
 #define VICII_COMMON_H
 
-#include "../../core/chip.h"
+#include "../../../core/chip.h"
 #include <stdint.h>
 #include "../../../core/system_lines.h" // For bus_state_t
-#include "../../chip/memory/mos2114.h"  // For mos2114_t
+#include "../../../chip/memory/mos2114.h"  // For mos2114_t
 #include <stdbool.h>
 
 // VIC-II Register Constants
@@ -440,9 +440,7 @@ struct vicii_s {
 // Main cycle function with unified bus state threading
 bus_state_t vicii_advance_cycle(vicii_t* vicii, bus_state_t bus_state);
 
-// Unified register I/O
-bus_state_t vicii_read(vicii_t* vicii, bus_state_t bus_state);
-bus_state_t vicii_write(vicii_t* vicii, bus_state_t bus_state);
+// Removed duplicate vicii_read/vicii_write functions - use vicii_registers_read/write instead
 
 // Factory and lifecycle
 vicii_t* vicii_system_create(chip_descriptor_t* desc, const vicii_chip_config_t* config, void (*bank_change)(void*, uint8_t));
@@ -454,9 +452,9 @@ const vicii_chip_config_t* vicii_get_default_config(bool is_pal);
 // Bus attachment
 void vicii_bus_attach(void* chip, void* bus);
 
-// Register I/O (legacy wrappers)
-uint8_t vicii_registers_read(void* chip, uint16_t address);
-void vicii_registers_write(void* chip, uint16_t address, uint8_t value);
+// Register I/O with bus_state_t
+bus_state_t vicii_registers_read(void* context, bus_state_t bus_state);
+bus_state_t vicii_registers_write(void* context, bus_state_t bus_state);
 
 // Bank change callback
 void vicii_bank_change(void* chip, uint8_t bank);
