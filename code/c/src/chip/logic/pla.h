@@ -50,6 +50,11 @@ typedef struct {
     bool n_roml;     // pin 11/F6 : #ROML - ROM Low select  
     bool n_io;       // pin 12/F5 : #I/O - I/O select
     bool n_grw;      // pin 13/F4 : GR/#W - Graphics Read/Write aka Color RAM write enable (Connected to #WE on the color RAM)
+                     // DETAILED _GRW SIGNAL BEHAVIOR:
+                     // - Active (low) when ALL conditions met: I/O enabled + Color RAM address range + CPU write + proper config
+                     // - When inactive (high): Hardware blocks Color RAM writes at chip level
+                     // - Prevents Color RAM corruption when Character ROM is mapped instead of I/O region
+                     // - Critical for proper C64 memory banking and Color RAM protection
     // Not needed:      pin 14/VSS : GND - Ground
 
     // Right hand side, bottom>up pins:

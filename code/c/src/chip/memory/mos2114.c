@@ -47,6 +47,31 @@ bus_state_t mos2114_read(void* context, bus_state_t bus_state) {
 // MOS2114 write function - bus state interface
 bus_state_t mos2114_write(void* context, bus_state_t bus_state) {
     mos2114_t* mos2114 = (mos2114_t*)context;
+    
+    // HARDWARE REFERENCE: PLA _GRW Signal for Color RAM Write Control
+    // ================================================================
+    // In real C64 hardware, Color RAM writes are gated by the PLA's _GRW signal.
+    // The PLA MOS 906114-01 generates _GRW (Gated R/W) specifically for Color RAM.
+    //
+    // _GRW Signal Conditions (active low):
+    // - I/O region must be enabled (!n_io = low)
+    // - Address must be in Color RAM range ($D800-$DBFF)
+    // - CPU must be writing (!r_w = low)
+    // - Memory configuration must allow I/O access (CHAREN bit)
+    //
+    // When _GRW is inactive (high), hardware blocks Color RAM writes:
+    // - Character ROM is visible instead of I/O region
+    // - CPU is reading, not writing
+    // - Address is outside Color RAM range ($D800-$DBFF)
+    // - Other PLA conditions prevent I/O access
+    //
+    // CURRENT IMPLEMENTATION:
+    // Our bus system routes I/O region access through CHIP_IO callbacks,
+    // which means this write function is only called when the PLA has
+    // already determined that I/O region access is allowed. This provides
+    // equivalent behavior to the _GRW signal gating without explicit
+    // PLA signal checking in the Color RAM chip itself.
+    
     // MOS2114 is 4-bit wide, so only store lower 4 bits
     uint16_t offset = bus_state.addr & 0x3FF;  // Mask to 1K boundary
     mos2114->memory[offset] = bus_state.data & 0x0F;
