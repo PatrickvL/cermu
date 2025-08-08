@@ -190,9 +190,9 @@ void vicii_memory_access(vicii_t* vicii, uint8_t access_type, int access_param) 
                 vicii->video_logic.vc++;
                 vicii->video_logic.vmli++;
             }
-            __attribute__((fallthrough)); // to g-acess
-            
-        case VIC_ACCESS_G:
+            FALLTHROUGH; // to g-acess            
+
+            case VIC_ACCESS_G:
             {
                 // Get character code from the video matrix line (real chip behavior)
                 uint8_t char_code = vicii->video_data.video_matrix_line[vicii->video_logic.vmli];
@@ -646,7 +646,7 @@ bus_state_t vicii_registers_write(void* context, bus_state_t bus_state) {
         case VICII_C1: // $d011 Control register 1
             // Update bad line condition when C1 changes (YSCROLL or DEN bit changes)
             vicii_update_badline_condition(vicii);
-            __attribute__((fallthrough)); // to C2 case
+            FALLTHROUGH; // to C2 case
         case VICII_C2: // $d016 Control register 2
             vicii_sequencer_update_mode(&vicii->sequencer, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
             vicii_border_update_limits(&vicii->border, vicii->config, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
@@ -681,7 +681,7 @@ bus_state_t vicii_registers_write(void* context, bus_state_t bus_state) {
             break;
         case VICII_EC: // $d020 (4 bits) Exterior color (Border)
             vicii->border.border_pixel.color = value; // value already masked to 0x0F above
-            __attribute__((fallthrough)); // to B0C-B2C case
+            FALLTHROUGH; // to B0C-B2C case
         case VICII_B0C: // $d021 (4 bits) Background color 0
         case VICII_B1C: // $d022 (4 bits) Background color 1
         case VICII_B2C: // $d023 (4 bits) Background color 2

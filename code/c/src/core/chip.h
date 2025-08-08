@@ -1,6 +1,7 @@
 #ifndef AIEMUC_CHIP_H
 #define AIEMUC_CHIP_H
 
+#include "aiemuc.h"  // Compiler compatibility macros
 #include <stdint.h>
 #include <stdbool.h>
 #include "system_lines.h"

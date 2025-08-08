@@ -55,9 +55,9 @@ bool system_config_discover_data_root(const char* system_name, char* out_path, s
         if (needed_len >= sizeof(test_path)) {
             continue; // Skip if path would be too long
         }
-        int result = snprintf(test_path, sizeof(test_path), "%s%cdata%c%s",
+        int len = snprintf(test_path, sizeof(test_path), "%s%cdata%c%s",
                              search_path, PATH_SEPARATOR, PATH_SEPARATOR, system_name);
-        if (result < 0 || (size_t)result >= sizeof(test_path)) {
+        if (len < 0 || (size_t)len >= sizeof(test_path)) {
             continue; // Path was truncated, skip
         }
         
@@ -126,9 +126,9 @@ bool system_config_discover_rom_root(const char* system_name, char* out_path, si
         if (needed_len >= sizeof(test_path)) {
             continue; // Skip if path would be too long
         }
-        int result = snprintf(test_path, sizeof(test_path), "%s%cdata%c%s%croms",
+        int len = snprintf(test_path, sizeof(test_path), "%s%cdata%c%s%croms",
                              search_path, PATH_SEPARATOR, PATH_SEPARATOR, system_name, PATH_SEPARATOR);
-        if (result < 0 || (size_t)result >= sizeof(test_path)) {
+        if (len < 0 || (size_t)len >= sizeof(test_path)) {
             continue; // Path was truncated, skip
         }
         
