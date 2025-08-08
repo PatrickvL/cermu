@@ -5,6 +5,36 @@
 #endif
 #include <cimgui.h>
 
+// ============================================================================
+// CIMGUI VERSION COMPATIBILITY LAYER
+// ============================================================================
+// This handles API differences between different versions of cimgui/ImGui
+// The original code worked on Linux with an older cimgui version that used
+// ImTextureRef struct, while newer versions use ImTextureID directly.
+
+#ifdef IMGUI_VERSION_NUM
+    // Modern ImGui/cimgui with version information available
+    #if IMGUI_VERSION_NUM >= 19000  // ImGui 1.90+ uses direct ImTextureID
+        #define CIMGUI_IMAGE_CALL(tex_id, size, uv0, uv1) \
+            igImage((ImTextureID)(intptr_t)(tex_id), size, uv0, uv1)
+    #else
+        // Older versions with version info - also use direct ImTextureID
+        #define CIMGUI_IMAGE_CALL(tex_id, size, uv0, uv1) \
+            igImage((ImTextureID)(intptr_t)(tex_id), size, uv0, uv1)
+    #endif
+#else
+    // Legacy cimgui without IMGUI_VERSION_NUM defined
+    // Default to modern API, but allow compile-time override for old systems
+    #ifndef CIMGUI_USE_LEGACY_TEXTURE_API
+        #define CIMGUI_IMAGE_CALL(tex_id, size, uv0, uv1) \
+            igImage((ImTextureID)(intptr_t)(tex_id), size, uv0, uv1)
+    #else
+        // Legacy API for very old cimgui versions that used ImTextureRef
+        #define CIMGUI_IMAGE_CALL(tex_id, size, uv0, uv1) \
+            igImage((ImTextureRef){._TexData = NULL, ._TexID = (ImTextureID)(intptr_t)(tex_id)}, size, uv0, uv1)
+    #endif
+#endif
+
 #include "cimgui_interface.h"
 #include "../systems/c64/c64.h"
 #include "../systems/c64/c64_bus.h"
@@ -988,9 +1018,9 @@ void gui_render_screen(c64_t* c64, gui_state_t* gui_state) {
         if (gui_state->screen_scanlines) {
             // TODO: Implement scanline shader effect
             // For now, just draw the image normally
-            igImage((ImTextureRef){._TexData = NULL, ._TexID = (ImTextureID)(intptr_t)tex_id}, image_size, uv_min, uv_max);
+            CIMGUI_IMAGE_CALL(tex_id, image_size, uv_min, uv_max);
         } else {
-            igImage((ImTextureRef){._TexData = NULL, ._TexID = (ImTextureID)(intptr_t)tex_id}, image_size, uv_min, uv_max);
+            CIMGUI_IMAGE_CALL(tex_id, image_size, uv_min, uv_max);
         }
         // Handle mouse interaction with fullscreen screen
         if (igIsItemHovered(ImGuiHoveredFlags_None)) {
