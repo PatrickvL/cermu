@@ -117,7 +117,6 @@ static inline bus_state_t mos6510_ioport_write(void* context, bus_state_t bus_st
     uint16_t addr = bus_state.addr & 0xFFFF;
     uint8_t value = bus_state.data;
     
-    printf("mos6510_ioport_write: addr=%04X value=%02X\n", addr, value);
     // Update Data Direction / Data register
     cpu->io_port[addr] = value;
     if (addr == 1) {

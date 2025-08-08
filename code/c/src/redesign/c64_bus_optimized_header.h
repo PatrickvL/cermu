@@ -31,10 +31,10 @@ typedef struct cia_state_s cia_state_t;
 #define CHIP_D5_SID      13   // $D500-$D5FF (I/O page 5) - SID mirrors
 #define CHIP_D6_SID      14   // $D600-$D6FF (I/O page 6) - SID mirrors
 #define CHIP_D7_SID      15   // $D700-$D7FF (I/O page 7) - SID mirrors
-#define CHIP_D8_UNMAPPED 16   // $D800-$D8FF (I/O page 8) - Unmapped
-#define CHIP_D9_UNMAPPED 17   // $D900-$D9FF (I/O page 9) - Unmapped
-#define CHIP_DA_UNMAPPED 18   // $DA00-$DAFF (I/O page 10) - Unmapped
-#define CHIP_DB_UNMAPPED 19   // $DB00-$DBFF (I/O page 11) - Unmapped  
+#define CHIP_D8_COLORRAM 16   // $D800-$D8FF (I/O page 8) - Unmapped
+#define CHIP_D9_COLORRAM 17   // $D900-$D9FF (I/O page 9) - Unmapped
+#define CHIP_DA_COLORRAM 18   // $DA00-$DAFF (I/O page 10) - Unmapped
+#define CHIP_DB_COLORRAM 19   // $DB00-$DBFF (I/O page 11) - Unmapped  
 #define CHIP_DC_CIA1     20   // $DC00-$DCFF (I/O page 12) - CIA1
 #define CHIP_DD_CIA2     21   // $DD00-$DDFF (I/O page 13) - CIA2
 #define CHIP_DE_IO1      22   // $DE00-$DEFF (I/O page 14) - Cartridge I/O 1

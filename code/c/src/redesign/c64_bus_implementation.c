@@ -63,7 +63,10 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_read(c64_t* c64, c64_
             // All SID pages map to the same SID chip
             bus_state.bus = sid_read(c64->sid, bus_state.bus);
             break;
-        case CHIP_D8_UNMAPPED:
+        case CHIP_D8_COLORRAM:
+        case CHIP_D9_COLORRAM:
+        case CHIP_DA_COLORRAM:
+        case CHIP_DB_COLORRAM:
             // Color RAM accessed via I/O area ($D800-$D8FF) - handled by VIC
             bus_state.bus.data = c64->colorram.memory[bus_state.bus.addr & 0x3FF] | 0xF0;
             break;
@@ -79,9 +82,6 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_read(c64_t* c64, c64_
         case CHIP_DF_IO2:
             bus_state.bus = c64->cartridge.io2_read(c64->cartridge.context, bus_state.bus);
             break;
-        case CHIP_D9_UNMAPPED:
-        case CHIP_DA_UNMAPPED:
-        case CHIP_DB_UNMAPPED:
         case CHIP_UNMAPPED:
         default:
             // bus.data retains floating bus value (no change)
@@ -115,6 +115,9 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_write(c64_t* c64, c64
             c64->ram.memory[bus_state.bus.addr] = bus_state.bus.data;
             break;
         case CHIP_COLORRAM:
+        case CHIP_D9_COLORRAM:
+        case CHIP_DA_COLORRAM:
+        case CHIP_DB_COLORRAM:
             c64->colorram.memory[bus_state.bus.addr & 0x3FF] = bus_state.bus.data & 0x0F; // Only low nibble stored
             break;
         case CHIP_BASIC:
@@ -123,9 +126,6 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_write(c64_t* c64, c64
         case CHIP_ROML:
         case CHIP_ROMH:
         case CHIP_UNMAPPED:
-        case CHIP_D9_UNMAPPED:
-        case CHIP_DA_UNMAPPED:
-        case CHIP_DB_UNMAPPED:
         default:
             // Read-only or unmapped - ignore writes
             break;
@@ -143,7 +143,7 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_write(c64_t* c64, c64
             // All SID pages map to the same SID chip
             bus_state.bus = sid_write(c64->sid, bus_state.bus);
             break;
-        case CHIP_D8_UNMAPPED:
+        case CHIP_D8_COLORRAM:
             // Color RAM accessed via I/O area ($D800-$D8FF)
             c64->colorram.memory[bus_state.bus.addr & 0x3FF] = bus_state.bus.data & 0x0F;
             break;

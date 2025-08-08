@@ -62,8 +62,8 @@ void c64_bus_vic_read(c64_bus_t* c64_bus, uint16_t address) {
     }
     
     // BRANCHLESS unified address calculation using shared macro
-    // Chip mapping: 0=BASIC, 1=KERNAL, 2=ROML, 3=ROMH, 4=CHARROM, 5=COLORRAM, 6=RAM
-    // Unified offsets: 0x0000=BASIC, 0x2000=KERNAL, 0x4000=ROML, 0x6000=ROMH, 0x8000=CHARROM, 0xA000=COLORRAM, 0xC000=RAM
+    // Chip mapping: 0=BASIC, 1=KERNAL, 2=ROML, 3=ROMH, 4=CHARROM, 5=RAM
+    // Unified offsets: 0x0000=BASIC, 0x2000=KERNAL, 0x4000=ROML, 0x6000=ROMH, 0x8000=CHARROM, 0xA000=RAM
     uint32_t unified_addr;
     C64_BUS_UNIFIED_ADDRESS_CALC(chip, address);
     c64_bus->state.data = c64_bus->unified_memory_buffer[unified_addr];
@@ -126,8 +126,8 @@ void c64_bus_cpu_write(c64_bus_t *c64_bus, uint16_t address, uint8_t value) {
     // FAST PATH: Direct unified buffer write for CHIP_RAM (most common case)
     if (chip == CHIP_RAM) {
         // Direct unified buffer write - no need for ram_memory_write call
-        // Unified RAM offset: 0xC000 + address (CHIP_RAM = 6, 6 << 13 = 0xC000)
-        c64_bus->unified_memory_buffer[0xC000 + address] = value;
+        // Unified RAM offset: 0xA000 + address (CHIP_RAM = 5, 5 << 13 = 0xA000)
+        c64_bus->unified_memory_buffer[0xA000 + address] = value;
         return; // Fast path complete
     }
 
@@ -173,8 +173,8 @@ void c64_bus_system_attach(c64_bus_t* c64_bus, void* c64) {
     // Initialize chip callback arrays for optimized memory access
     c64_bus_init_chip_callbacks(c64_bus);
     
-    // Initialize unified memory buffer (112KB) to zero
-    memset(c64_bus->unified_memory_buffer, 0, 112 * 1024);
+    // Initialize unified memory buffer (104KB) to zero - Color RAM handled via I/O callbacks
+    memset(c64_bus->unified_memory_buffer, 0, 104 * 1024);
     
     // Initialize ROM/RAM pointers to use unified buffer
     c64_bus_init_unified_pointers(c64_bus, c64);
@@ -267,11 +267,8 @@ uint8_t pla_906114_01_outputs_to_chip(pla_906114_01_t* pla) {
     } else if (!pla->outputs.n_charrom) {
         // Character ROM (read-only)
         return CHIP_CHARROM;
-    } else if (!pla->outputs.n_grw) {
-        // Color RAM (write-only)
-        return CHIP_COLORRAM;
     } else if (!pla->outputs.n_io) {
-        // I/O region - I/O bank (read-write)
+        // I/O region - includes Color RAM, VIC-II, SID, CIA, etc. (read-write)
         return CHIP_IO; // c64_bus_cpu_read will handle mapping to full 16 I/O pages
     } else if (!pla->outputs.n_roml) {
         // Cartridge ROM Low (read-only)
@@ -617,8 +614,6 @@ const char* c64_bus_chip_to_title(uint8_t chip) {
             return "ROMH";
         case CHIP_CHARROM:
             return "CHARROM";
-        case CHIP_COLORRAM:
-            return "COLORRAM";
         case CHIP_UNMAPPED:
             return "-";
         case CHIP_D0_VIC:
@@ -631,10 +626,10 @@ const char* c64_bus_chip_to_title(uint8_t chip) {
         case CHIP_D6_SID:
         case CHIP_D7_SID:
             return "SID";
-        case CHIP_D8_UNMAPPED:
-        case CHIP_D9_UNMAPPED:
-        case CHIP_DA_UNMAPPED:
-        case CHIP_DB_UNMAPPED:
+        case CHIP_D8_COLORRAM:
+        case CHIP_D9_COLORRAM:
+        case CHIP_DA_COLORRAM:
+        case CHIP_DB_COLORRAM:
             return "COLORRAM";
         case CHIP_DC_CIA1:
             return "CIA1";
@@ -725,7 +720,6 @@ void c64_bus_init_chip_callbacks(c64_bus_t* c64_bus) {
     c64_bus->chip_read_callbacks[CHIP_ROML] = NULL; // c64_bus_cpu_read reads from unified_memory_buffer - no read callback
     c64_bus->chip_read_callbacks[CHIP_ROMH] = NULL; // c64_bus_cpu_read reads from unified_memory_buffer - no read callback
     c64_bus->chip_read_callbacks[CHIP_CHARROM] = NULL; // c64_bus_cpu_read reads from unified_memory_buffer - no read callback
-    c64_bus->chip_read_callbacks[CHIP_COLORRAM] = NULL; // c64_bus_cpu_read reads from unified_memory_buffer - no read callback
     c64_bus->chip_read_callbacks[CHIP_RAM] = NULL; // c64_bus_cpu_read reads from unified_memory_buffer - no read callback
     c64_bus->chip_read_callbacks[CHIP_ZEROBANK] = c64_bus_chip_read_zerobank;
     c64_bus->chip_read_callbacks[CHIP_UNMAPPED] = NULL; // UNMAPPED - no read callback
@@ -746,11 +740,13 @@ void c64_bus_init_chip_callbacks(c64_bus_t* c64_bus) {
     c64_bus->chip_read_callbacks[CHIP_D6_SID] = sid_read_callback;
     c64_bus->chip_read_callbacks[CHIP_D7_SID] = sid_read_callback;
     
-    // Unmapped I/O pages (D8-DB)
-    c64_bus->chip_read_callbacks[CHIP_D8_UNMAPPED] = NULL; // UNMAPPED - no read callback
-    c64_bus->chip_read_callbacks[CHIP_D9_UNMAPPED] = NULL; // UNMAPPED - no read callback
-    c64_bus->chip_read_callbacks[CHIP_DA_UNMAPPED] = NULL; // UNMAPPED - no read callback
-    c64_bus->chip_read_callbacks[CHIP_DB_UNMAPPED] = NULL; // UNMAPPED - no read callback
+    // Color RAM mirror pages (D8-DB) - these mirror Color RAM at $D800-$DBFF
+    chip_callback_t colorram_read_callback = (c64->colorram && c64->colorram->desc) ?
+        c64->colorram->desc->read : NULL;
+    c64_bus->chip_read_callbacks[CHIP_D8_COLORRAM] = colorram_read_callback; // Color RAM mirror
+    c64_bus->chip_read_callbacks[CHIP_D9_COLORRAM] = colorram_read_callback; // Color RAM mirror
+    c64_bus->chip_read_callbacks[CHIP_DA_COLORRAM] = colorram_read_callback; // Color RAM mirror
+    c64_bus->chip_read_callbacks[CHIP_DB_COLORRAM] = colorram_read_callback; // Color RAM mirror
     
     // CIA pages (DC-DD) - assign direct chip descriptor callback or NULL
     c64_bus->chip_read_callbacks[CHIP_DC_CIA1] = (c64->cia1 && c64->cia1->desc) ?
@@ -769,7 +765,6 @@ void c64_bus_init_chip_callbacks(c64_bus_t* c64_bus) {
     c64_bus->chip_write_callbacks[CHIP_ROML] = NULL; // ROM - no write callback
     c64_bus->chip_write_callbacks[CHIP_ROMH] = NULL; // ROM - no write callback
     c64_bus->chip_write_callbacks[CHIP_CHARROM] = NULL; // ROM - no write callback
-    c64_bus->chip_write_callbacks[CHIP_COLORRAM] = NULL; // c64_bus_cpu_write writes to unified_memory_buffer - no write callback
     c64_bus->chip_write_callbacks[CHIP_RAM] = NULL; // c64_bus_cpu_write writes to unified_memory_buffer - no write callback
     c64_bus->chip_write_callbacks[CHIP_ZEROBANK] = c64_bus_chip_write_zerobank;
     c64_bus->chip_write_callbacks[CHIP_UNMAPPED] = NULL; // UNMAPPED - no write callback
@@ -790,11 +785,13 @@ void c64_bus_init_chip_callbacks(c64_bus_t* c64_bus) {
     c64_bus->chip_write_callbacks[CHIP_D6_SID] = sid_write_callback;
     c64_bus->chip_write_callbacks[CHIP_D7_SID] = sid_write_callback;
     
-    // Unmapped I/O pages (D8-DB)
-    c64_bus->chip_write_callbacks[CHIP_D8_UNMAPPED] = NULL; // UNMAPPED - no write
-    c64_bus->chip_write_callbacks[CHIP_D9_UNMAPPED] = NULL; // UNMAPPED - no write
-    c64_bus->chip_write_callbacks[CHIP_DA_UNMAPPED] = NULL; // UNMAPPED - no write
-    c64_bus->chip_write_callbacks[CHIP_DB_UNMAPPED] = NULL; // UNMAPPED - no write
+    // Color RAM mirror pages (D8-DB) - these mirror Color RAM at $D800-$DBFF
+    chip_callback_t colorram_write_callback = (c64->colorram && c64->colorram->desc) ?
+        c64->colorram->desc->write : NULL;
+    c64_bus->chip_write_callbacks[CHIP_D8_COLORRAM] = colorram_write_callback; // Color RAM mirror
+    c64_bus->chip_write_callbacks[CHIP_D9_COLORRAM] = colorram_write_callback; // Color RAM mirror
+    c64_bus->chip_write_callbacks[CHIP_DA_COLORRAM] = colorram_write_callback; // Color RAM mirror
+    c64_bus->chip_write_callbacks[CHIP_DB_COLORRAM] = colorram_write_callback; // Color RAM mirror
     
     // CIA pages (DC-DD) - assign direct chip descriptor callback or NULL
     c64_bus->chip_write_callbacks[CHIP_DC_CIA1] = (c64->cia1 && c64->cia1->desc) ?
@@ -828,14 +825,12 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system) {
         c64_device->memory = buffer + offset; \
     }
 
-    // Point the following devides to their respective unified buffer offset
+    // Point the following devices to their respective unified buffer offset
     DO(c64->basic, 0x0000);
     DO(c64->kernal, 0x2000);
     DO(c64->cartridge_roml, 0x4000);
     DO(c64->cartridge_romh, 0x6000);
     DO(c64->charrom, 0x8000);
-    if (c64->vicii)
-        DO(c64->vicii->colorram, 0xA000);
-    DO(c64->ram, 0xC000);
+    DO(c64->ram, 0xA000);
 #undef DO    
 }

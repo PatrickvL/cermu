@@ -10,7 +10,7 @@
 // https://www.amiga-stuff.com/hardware/1kx4-sram.html
 typedef struct mos2114_s {
     chip_descriptor_t* desc;
-    uint8_t* memory;  // Pointer to memory (will point into unified buffer)
+    uint8_t* memory;  // Pointer to allocated 1KB Color RAM memory
 } mos2114_t;
 
 // Chip descriptor

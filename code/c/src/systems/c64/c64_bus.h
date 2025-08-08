@@ -24,33 +24,32 @@ typedef enum {
     CHIP_ROML         = 2,   // 8KB ROM Low (cartridge) - maps to unified offset 0x4000
     CHIP_ROMH         = 3,   // 8KB ROM High (cartridge) - maps to unified offset 0x6000
     CHIP_CHARROM      = 4,   // 4KB Character ROM (+ 4KB padding) - maps to unified offset 0x8000
-    CHIP_COLORRAM     = 5,   // 1KB Color RAM (+ 7KB padding) - maps to unified offset 0xA000
-    CHIP_RAM          = 6,   // 64KB - maps to offset 0xC000 in unified buffer
+    CHIP_RAM          = 5,   // 64KB - maps to offset 0xC000 in unified buffer
     // End of unified memory buffer chips - all below ones require callbacks :
-    CHIP_ZEROBANK     = 7,   // Pseudo chip for CPU I/O ports (4KB bank $0000-$0FFF)
-    CHIP_UNMAPPED     = 8,   // Unmapped regions
+    CHIP_ZEROBANK     = 6,   // Pseudo chip for CPU I/O ports (4KB bank $0000-$0FFF)
+    CHIP_UNMAPPED     = 7,   // Unmapped regions
     
-    // I/O chips start here (all encoded as CHIP_IO = 9 in bank array)
-    CHIP_IO           = 9,   // Base I/O (gets expanded)
+    // I/O chips start here (all encoded as CHIP_IO = 8 in bank array)
+    CHIP_IO           = 8,   // Base I/O (gets expanded)
     // I/O pages in $D000-$DFFF range (16 pages of $100 bytes each)
     CHIP_D0_VIC = CHIP_IO,   // $D000-$D0FF (I/O page 0) - VIC-II registers
-    CHIP_D1_VIC       =10,   // $D100-$D1FF (I/O page 1) - VIC-II mirrors
-    CHIP_D2_VIC      = 11,   // $D200-$D2FF (I/O page 2) - VIC-II mirrors
-    CHIP_D3_VIC      = 12,   // $D300-$D3FF (I/O page 3) - VIC-II mirrors
-    CHIP_D4_SID      = 13,   // $D400-$D4FF (I/O page 4) - SID registers
-    CHIP_D5_SID      = 14,   // $D500-$D5FF (I/O page 5) - SID mirrors
-    CHIP_D6_SID      = 15,   // $D600-$D6FF (I/O page 6) - SID mirrors
-    CHIP_D7_SID      = 16,   // $D700-$D7FF (I/O page 7) - SID mirrors
-    CHIP_D8_UNMAPPED = 17,   // $D800-$D8FF (I/O page 8) - Unmapped
-    CHIP_D9_UNMAPPED = 18,   // $D900-$D9FF (I/O page 9) - Unmapped
-    CHIP_DA_UNMAPPED = 19,   // $DA00-$DAFF (I/O page 10) - Unmapped
-    CHIP_DB_UNMAPPED = 20,   // $DB00-$DBFF (I/O page 11) - Unmapped
-    CHIP_DC_CIA1     = 21,   // $DC00-$DCFF (I/O page 12) - CIA1
-    CHIP_DD_CIA2     = 22,   // $DD00-$DDFF (I/O page 13) - CIA2
-    CHIP_DE_IO1      = 23,   // $DE00-$DEFF (I/O page 14) - Cartridge I/O 1
-    CHIP_DF_IO2      = 24,   // $DF00-$DFFF (I/O page 15) - Cartridge I/O 2
+    CHIP_D1_VIC      = 9,    // $D100-$D1FF (I/O page 1) - VIC-II mirrors
+    CHIP_D2_VIC      = 10,   // $D200-$D2FF (I/O page 2) - VIC-II mirrors
+    CHIP_D3_VIC      = 11,   // $D300-$D3FF (I/O page 3) - VIC-II mirrors
+    CHIP_D4_SID      = 12,   // $D400-$D4FF (I/O page 4) - SID registers
+    CHIP_D5_SID      = 13,   // $D500-$D5FF (I/O page 5) - SID mirrors
+    CHIP_D6_SID      = 14,   // $D600-$D6FF (I/O page 6) - SID mirrors
+    CHIP_D7_SID      = 15,   // $D700-$D7FF (I/O page 7) - SID mirrors
+    CHIP_D8_COLORRAM = 16,   // $D800-$D8FF (I/O page 8) - Color RAM
+    CHIP_D9_COLORRAM = 17,   // $D900-$D9FF (I/O page 9) - Color RAM mirror
+    CHIP_DA_COLORRAM = 18,   // $DA00-$DAFF (I/O page 10) - Color RAM mirror
+    CHIP_DB_COLORRAM = 19,   // $DB00-$DBFF (I/O page 11) - Color RAM mirror
+    CHIP_DC_CIA1     = 20,   // $DC00-$DCFF (I/O page 12) - CIA1
+    CHIP_DD_CIA2     = 21,   // $DD00-$DDFF (I/O page 13) - CIA2
+    CHIP_DE_IO1      = 22,   // $DE00-$DEFF (I/O page 14) - Cartridge I/O 1
+    CHIP_DF_IO2      = 23,   // $DF00-$DFFF (I/O page 15) - Cartridge I/O 2
 
-    CHIP_MAX = 25 // Total number of CHIP IDs (0-24)
+    CHIP_MAX = 24 // Total number of CHIP IDs (0-23)
 } chip_id_t;
 
 // System line masks for cartridge signals (moved out of control lines to separate field)
@@ -69,9 +68,9 @@ typedef struct c64_bus_s {
     uint8_t pla_banking_mode;  // Current banking mode for fast switching
     
     // UNIFIED MEMORY BUFFER FOR OPTIMIZED OPCODE FETCH
-    // Layout: BASIC(8KB) + KERNAL(8KB) + ROML(8KB) + ROMH(8KB) + CHARROM(4KB+4KB pad) + COLORRAM(1KB+7KB pad) + RAM(64KB)
-    // Total: 112KB unified buffer for branchless memory access
-    alignas(64) uint8_t unified_memory_buffer[112 * 1024];  // 112KB total
+    // Layout: BASIC(8KB) + KERNAL(8KB) + ROML(8KB) + ROMH(8KB) + CHARROM(4KB+4KB pad) + RAM(64KB)
+    // Total: 104KB unified buffer for branchless memory access (Color RAM handled via I/O callbacks)
+    alignas(64) uint8_t unified_memory_buffer[104 * 1024];  // 104KB total
     
     // OPTIMIZED MEMORY BANKING - Cache-friendly layout
     // Banking configurations per mode (32 modes x 16 banks = 512 bytes)
