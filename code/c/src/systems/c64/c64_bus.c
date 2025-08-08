@@ -39,7 +39,7 @@ static inline int8_t c64_bus_get_bank(uint16_t address) {
 #define C64_BUS_UNIFIED_ADDRESS_CALC(chip, addr) \
     do { \
         uint32_t is_ram = (-(chip == CHIP_RAM)); \
-        uint32_t offset_mask = is_ram | 0x0FFF; \
+        uint32_t offset_mask = is_ram | 0x1FFF; \
         uint32_t chip_offset = (addr) & offset_mask; \
         uint32_t base_offset = chip << 13; \
         uint32_t ram_adjustment = is_ram & 0xC000; \
