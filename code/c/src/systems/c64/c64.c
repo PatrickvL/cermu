@@ -18,6 +18,7 @@
 #include "../../chip/video/vic_ii/vicii_common.h"
 #include "../../chip/memory/ram.h"
 #include "../../chip/memory/rom.h"
+#include "../../chip/memory/mos2114.h" // Color RAM
 #include "../../chip/logic/pla.h" // PLA for memory mapping
 
 void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config) {
@@ -211,11 +212,16 @@ static inline void* create_and_register_chip(c64_t* c64, chip_descriptor_t* desc
     }
     
     if (!chip) {
+        printf("ERROR: Failed to create chip: %s\n", desc->description);
+        fflush(stdout);
         c64_system_destroy(c64);
         return NULL;
     }
+    
     uint8_t chip_id = system_chip_register(&c64->system, chip, desc, addr, size);
     if (chip_id == 0xFF) {
+        printf("ERROR: Failed to register chip: %s\n", desc->description);
+        fflush(stdout);
         c64_system_destroy(c64);
         return NULL;
     }
@@ -233,7 +239,10 @@ void c64_system_destroy(c64_t* c64) {
 
 c64_t* c64_system_create(const system_config_t* config) {
     c64_t* c64 = calloc(1, sizeof(c64_t));
-    if (!c64) return NULL;
+    if (!c64) {
+        printf("ERROR: Failed to allocate C64 system\n");
+        return NULL;
+    }
 
     chip_descriptor_t* vicii_descriptor = (config->vicii_standard == VIC_PAL ? &mos6569_descriptor : &mos6567_descriptor);
 
@@ -274,16 +283,19 @@ c64_t* c64_system_create(const system_config_t* config) {
     // Now having a registry of all chips, the PLA maps can be generated
     if (!c64_pla_maps_generate(c64)) { c64_system_destroy(c64); return NULL; }
 
+    // Attach bus to C64 system first to initialize unified memory pointers
+    c64_bus_system_attach(&(c64->bus), c64);
+    
     // Set default memory contents and load ROMs from configured paths
     const rom_config_t* rom_config = config->rom_config ? config->rom_config : system_config_get_default_roms();
     c64_memory_init(&c64->system, rom_config);
 
-    // Attach bus to C64 system first, then all other chips with bus_attach callbacks
-    c64_bus_system_attach(&(c64->bus), c64);
+    // Attach all other chips with bus_attach callbacks
     for (int i = 0; i < c64->system.chip_count; i++) {
         chip_entry_t* chip = &c64->system.chips[i];
-        if (chip->desc && chip->desc->bus_attach && chip->desc != &c64_bus_descriptor)
+        if (chip->desc && chip->desc->bus_attach && chip->desc != &c64_bus_descriptor) {
             chip->desc->bus_attach(chip->chip, &(c64->bus));
+        }
     }
     
     // Attach CPU interfaces to the MOS6510
@@ -302,7 +314,6 @@ void c64_set_framebuffer(c64_t* c64, uint32_t* framebuffer, int width, int heigh
     // Set the framebuffer on the VIC-II chip
     vicii_set_framebuffer(c64->vicii, framebuffer, width, height);
     
-    printf("DEBUG: Framebuffer set for VIC-II: %dx%d\n", width, height);
 }
 
 bool c64_reload_roms(c64_t* c64, const rom_config_t* rom_config) {
