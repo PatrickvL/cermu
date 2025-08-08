@@ -178,6 +178,9 @@ add_executable(c64emu
     ${SYSTEM_SOURCES}
     ${CORE_UTIL_SOURCES}
 )
+# Enable REDESIGN CPU dispatch mechanism with Nostradamus Distributor
+target_compile_definitions(c64emu PRIVATE REDESIGN=1)
+
 
 # Link required libraries
 # Note: mos6502_family functions are inline in headers, no separate library needed
@@ -214,6 +217,9 @@ if(BUILD_GUI)
 
     # Define CIMGUI_DEFINE_ENUMS_AND_STRUCTS only for our GUI code
     target_compile_definitions(c64emu_gui PRIVATE CIMGUI_DEFINE_ENUMS_AND_STRUCTS=1)
+    # Enable REDESIGN CPU dispatch mechanism with Nostradamus Distributor
+    target_compile_definitions(c64emu_gui PRIVATE REDESIGN=1)
+
     
     # Add SDL2 include directories to the GUI target
     target_include_directories(c64emu_gui PRIVATE ${SDL2_INCLUDE_DIRS})

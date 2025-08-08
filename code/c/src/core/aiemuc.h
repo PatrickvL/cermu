@@ -75,6 +75,23 @@
 #endif
 
 /* ========================================================================== */
+/* REGISTER CALLING CONVENTIONS */
+/* ========================================================================== */
+
+/* Optimize function calls by using register calling convention where supported */
+#if defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
+    #define REGISTER_CALL __fastcall
+#elif defined(__GNUC__) || defined(__clang__)
+    #if defined(__i386__) || defined(__x86_64__)
+        #define REGISTER_CALL __attribute__((regparm(3)))
+    #else
+        #define REGISTER_CALL
+    #endif
+#else
+    #define REGISTER_CALL
+#endif
+
+/* ========================================================================== */
 /* BIT MANIPULATION FUNCTIONS */
 /* ========================================================================== */
 

@@ -5,7 +5,7 @@
 // ============================================================================
 
 // Branch helper function implementation
-static inline void fam65xx_op_branch_helper(fam65xx_t* cpu, bool condition) {
+FAM65XX_HELPER_PROTO(fam65xx_op_branch_helper), bool condition) {
 
     int8_t offset = (int8_t)fam65xx_read_cycle(cpu, cpu->pc++);  // T1: Operand fetch
     
@@ -23,32 +23,32 @@ static inline void fam65xx_op_branch_helper(fam65xx_t* cpu, bool condition) {
             (void)fam65xx_read_cycle(cpu, (old_pc & 0xFF00) | (cpu->pc & 0xFF)); // Dummy read
         }
     }
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_HELPER_FOOTER(cpu);
 }
 
 // BPL - Branch if Positive
-FAM65XX_OPCODE_PROTO(fam65xx_op_bpl) { FAM65XX_PROTO_RETURN fam65xx_op_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_N)); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_bpl) { FAM65XX_PROTO_RETURN FAM65XX_BRANCH_HELPER(cpu, !fam65xx_get_flag(cpu, FLAG_N)); }
 
 // BMI - Branch if Minus
-FAM65XX_OPCODE_PROTO(fam65xx_op_bmi) { FAM65XX_PROTO_RETURN fam65xx_op_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_N)); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_bmi) { FAM65XX_PROTO_RETURN FAM65XX_BRANCH_HELPER(cpu, fam65xx_get_flag(cpu, FLAG_N)); }
 
 // BVC - Branch if Overflow Clear
-FAM65XX_OPCODE_PROTO(fam65xx_op_bvc) { FAM65XX_PROTO_RETURN fam65xx_op_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_V)); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_bvc) { FAM65XX_PROTO_RETURN FAM65XX_BRANCH_HELPER(cpu, !fam65xx_get_flag(cpu, FLAG_V)); }
 
 // BVS - Branch if Overflow Set
-FAM65XX_OPCODE_PROTO(fam65xx_op_bvs) { FAM65XX_PROTO_RETURN fam65xx_op_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_V)); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_bvs) { FAM65XX_PROTO_RETURN FAM65XX_BRANCH_HELPER(cpu, fam65xx_get_flag(cpu, FLAG_V)); }
 
 // BCC - Branch if Carry Clear
-FAM65XX_OPCODE_PROTO(fam65xx_op_bcc) { FAM65XX_PROTO_RETURN fam65xx_op_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_C)); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_bcc) { FAM65XX_PROTO_RETURN FAM65XX_BRANCH_HELPER(cpu, !fam65xx_get_flag(cpu, FLAG_C)); }
 
 // BCS - Branch if Carry Set
-FAM65XX_OPCODE_PROTO(fam65xx_op_bcs) { FAM65XX_PROTO_RETURN fam65xx_op_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_C)); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_bcs) { FAM65XX_PROTO_RETURN FAM65XX_BRANCH_HELPER(cpu, fam65xx_get_flag(cpu, FLAG_C)); }
 
 // BNE - Branch if Not Equal
-FAM65XX_OPCODE_PROTO(fam65xx_op_bne) { FAM65XX_PROTO_RETURN fam65xx_op_branch_helper(cpu, !fam65xx_get_flag(cpu, FLAG_Z)); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_bne) { FAM65XX_PROTO_RETURN FAM65XX_BRANCH_HELPER(cpu, !fam65xx_get_flag(cpu, FLAG_Z)); }
 
 // BEQ - Branch if Equal
-FAM65XX_OPCODE_PROTO(fam65xx_op_beq) { FAM65XX_PROTO_RETURN fam65xx_op_branch_helper(cpu, fam65xx_get_flag(cpu, FLAG_Z)); }
+FAM65XX_OPCODE_PROTO(fam65xx_op_beq) { FAM65XX_PROTO_RETURN FAM65XX_BRANCH_HELPER(cpu, fam65xx_get_flag(cpu, FLAG_Z)); }
 
 // ============================================================================
 // JUMP AND SUBROUTINE OPERATIONS

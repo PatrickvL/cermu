@@ -16,10 +16,18 @@ void fam65xx_interrupt_handler(fam65xx_t* cpu)
 {
     // Check for NMI first (higher priority)
     if (FAM65XX_TEST_NMI(cpu)) {
+#ifdef REDESIGN
+        fam65xx_nmi_handler(cpu, bus_state);
+#else
         fam65xx_nmi_handler(cpu);
+#endif
     // If not NMI then IRQ - check IRQ is not masked
     } else if (!fam65xx_get_flag(cpu, FLAG_I)) {
+#ifdef REDESIGN
+        fam65xx_irq_handler(cpu, bus_state);
+#else
         fam65xx_irq_handler(cpu);
+#endif
     }
 }
 
@@ -37,6 +45,10 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_intercept_stub) {
     cpu->pc--;
     // Threaded dispatch ends here - this completes the single step
     printf("fam65xx_op_intercept_stub: Single step completed\n");
+#ifdef REDESIGN
+    // In REDESIGN mode, return NULL to end the stackless dispatch
+    FAM65XX_PROTO_RETURN NULL;
+#endif
 }
 
 bool fam65xx_is_intercepting(fam65xx_t* cpu) {
@@ -112,7 +124,14 @@ bool fam65xx_step(fam65xx_t* cpu) {
     //    accesses within this handler will correctly stall if/when required.
     //    The handler finishes with a macro that tries to dispatch the *next*
     //    instruction.
+#ifdef REDESIGN
+    // In REDESIGN mode, we need to pass bus_state to the handler
+    // TODO : Arrange that a global bus state is used for single step too
+    bus_state_t bus_state = {0}; // Initialize bus state for single step
+    handler(cpu, &bus_state);
+#else
     handler(cpu);
+#endif
 
     // 4. The dispatch to the next instruction is caught by our intercept stub.
     //    The stub calls `fam65xx_stop_intercept`, restoring the real handlers

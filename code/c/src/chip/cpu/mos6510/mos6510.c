@@ -109,9 +109,18 @@ bool mos6510_step(mos6510_t* cpu) {
 // CPU EXECUTION LOOP WITH FUNCTION POINTERS (Universal)
 // ============================================================================
 void mos6510_execute(mos6510_t* cpu) {
-    // Start execution using threaded dispatch
-    // The MOS6510_OPCODE_FOOTER macro will chain instructions until intercept is triggered
-    FAM65XX_NEXT_INSTRUCTION(&cpu->base);
+#ifdef REDESIGN
+    // Use the proper Nostradamus Distributor execution engine
+    // This will execute 500+ instructions continuously with proper instruction traces
+    fam65xx_execute_nostradamus(&cpu->base, 500);
+#else
+    // Execute multiple instructions in a loop to show more trace output
+    // Since fam65xx_next_instruction_dispatch now executes only one instruction per call,
+    // we need to call it multiple times to get continuous execution
+    for (int i = 0; i < 100; i++) {  // Execute 100 instructions per call
+        FAM65XX_NEXT_INSTRUCTION(&cpu->base);
+    }
+#endif
 }
 
 // ============================================================================

@@ -37,6 +37,11 @@ void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config) {
         // Initialize RAM
         if (dev->desc == &ram_descriptor) {
             ram_t* ram = (ram_t*)dev->chip;
+            // Safety check: ensure RAM memory pointer is valid
+            if (!ram->memory) {
+                printf("ERROR: RAM memory pointer is NULL! Skipping RAM initialization.\n");
+                continue;
+            }
             // Initialize RAM to zero - no need for separate initial_ram array
             memset(ram->memory, 0, 65536);
         }

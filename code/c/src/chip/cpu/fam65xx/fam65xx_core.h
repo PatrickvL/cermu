@@ -95,6 +95,8 @@ struct fam65xx_s {
 #define FAM65XX_MASK_IRQ  BUS_MASK_IRQ
 #define FAM65XX_MASK_NMI  BUS_MASK_NMI
 #define FAM65XX_MASK_RDY  BUS_MASK_RDY
+#define FAM65XX_MASK_BA   BUS_MASK_BA
+#define FAM65XX_MASK_AEC  BUS_MASK_AEC
 
 // Control line access and testing (shared)
 #ifdef REDESIGN
@@ -269,38 +271,38 @@ static void fam65xx_disasm_full(fam65xx_t* cpu, uint8_t opcode) {
 }
 
 // Instruction dispatch (shared - but implementation-specific functions)
-static inline void fam65xx_next_instruction_dispatch(fam65xx_t* cpu) {
+#ifdef REDESIGN
+// In REDESIGN mode, we use the Nostradamus Distributor dispatch mechanism
+static inline void fam65xx_next_instruction_dispatch(fam65xx_t* cpu, bus_state_t* bus_state) {
+    static int dump_counter = 500;
+    
     uint8_t opcode = fam65xx_read_cycle(cpu, cpu->pc++);
-    static int dump_counter = 50;
+    
     if (dump_counter > 0) {
         dump_counter--;
         fam65xx_disasm_full(cpu, opcode);
     }
 
-    void (*next_handler)(fam65xx_t*) = cpu->opcode_handlers[opcode];
-#if defined(_MSC_VER) && defined(_M_IX86)
-    // MSVC x86 inline assembly
-    __asm {
-        mov eax, next_handler
-        mov ecx, cpu
-        jmp eax
-    }
-/*
-#elif defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
-    // GCC/Clang x86/x64 inline assembly
-    volatile asm (
-        "mov %[cpu], %%rdi\n\t"   // Pass cpu in first argument register (x86_64 System V ABI)
-        "jmp *%[handler]\n\t"
-        :
-        : [handler] "r" (next_handler), [cpu] "r" (cpu)
-        : "rdi"
-    );
-*/
-#else
-    // Fallback: normal call (will grow stack)
-    next_handler(cpu);
-#endif
+    // In REDESIGN mode, handlers return the next handler pointer for stackless execution
+    fam65xx_opcode_handler_t next_handler = cpu->opcode_handlers[4 + opcode];  // Opcodes start at index 4
+    next_handler(cpu, bus_state);
 }
+#else
+// Legacy dispatch mode (simple single instruction)
+static inline void fam65xx_next_instruction_dispatch(fam65xx_t* cpu) {
+    static int dump_counter = 500;
+    
+    uint8_t opcode = fam65xx_read_cycle(cpu, cpu->pc++);
+    
+    if (dump_counter > 0) {
+        dump_counter--;
+        fam65xx_disasm_full(cpu, opcode);
+    }
+
+    void (*next_handler)(fam65xx_t*) = cpu->opcode_handlers[4 + opcode];  // Opcodes start at index 4
+    next_handler(cpu);
+}
+#endif
 
 // Forward declaration for macros
 #ifdef REDESIGN
@@ -316,8 +318,10 @@ void fam65xx_stop_intercept(fam65xx_t* cpu);
 bool fam65xx_is_intercepting(fam65xx_t* cpu);
 bool fam65xx_step(fam65xx_t* cpu);
 
+#ifdef REDESIGN
 /**
- * Ultra-optimized CPU dispatch using interrupt mask as direct handler index.
+ * Ultra-optimized CPU dispatch using interrupt mask as direct handler index (REDESIGN mode).
+ * Uses stackless execution with bus_state parameter.
  * Interrupt handlers occupy indices 0-3, opcodes start at index 4.
  * 
  * Handler index mapping:
@@ -330,10 +334,26 @@ bool fam65xx_step(fam65xx_t* cpu);
  * @param cpu Pointer to the MOS6510 CPU
  * @param c64_bus Pointer to the C64 bus controller
  */
+static inline REGISTER_CALL void* fam65xx_optimized_dispatch(fam65xx_t* cpu, bus_state_t* bus_state) {
+    // Get interrupt mask directly as handler index (0-3)
+    uint16_t handler_index = FAM65XX_TEST_IRQ_OR_NMI(cpu);
+    
+    if (handler_index == 0) {
+        // Fast path: no interrupts, fetch opcode and offset by 4 for dispatch table
+        uint8_t opcode = fam65xx_read_cycle(cpu, cpu->pc++);
+        handler_index = opcode + 4;  // Opcode handlers start at index 4
+    }
+    
+    // Return next handler for stackless execution
+    return cpu->opcode_handlers[handler_index];
+}
+#else
+/**
+ * Ultra-optimized CPU dispatch using interrupt mask as direct handler index (Legacy mode).
+ * Uses traditional function calls.
+ */
 static inline void fam65xx_optimized_dispatch(fam65xx_t* cpu, void* c64_bus_ptr) {
     // Get interrupt mask directly as handler index (0-3)
-    // interrupt_mask: 0=none, 1=IRQ, 2=NMI, 3=both
-    // This maps directly to handler indices thanks to reordered BUS_MASK bits
     uint16_t handler_index = FAM65XX_TEST_IRQ_OR_NMI(cpu);
     
     if (handler_index == 0) {
@@ -350,12 +370,14 @@ static inline void fam65xx_optimized_dispatch(fam65xx_t* cpu, void* c64_bus_ptr)
     // Index 4-259: Opcode handlers (256 opcodes: indices 4-259)
     cpu->opcode_handlers[handler_index](cpu);
 }
+#endif
 
 // Family-specific versions of shared macros
 #ifdef REDESIGN
-    // Forward declarations for Nostradamus Distributor handlers
-    REGISTER_CALL void* fam65xx_nmi_handler(fam65xx_t* cpu, bus_state_t* bus_state);
-    REGISTER_CALL void* fam65xx_irq_handler(fam65xx_t* cpu, bus_state_t* bus_state); /// TODO : In fam65xx_irq_handler, when !(cpu->p & FLAG_I) then still fetch and call opcode!
+    // Forward declarations for Nostradamus Distributor handlers - defined as static inline below
+    
+    // Forward declaration for get_next_handler helper
+    static inline REGISTER_CALL void* fam65xx_get_next_handler(fam65xx_t* cpu, bus_state_t* bus_state);
 
     /**
      * Ultra-fast execution with optimized opcode fetch and unrolled dispatch.
@@ -364,30 +386,33 @@ static inline void fam65xx_optimized_dispatch(fam65xx_t* cpu, void* c64_bus_ptr)
      */
     static inline void fam65xx_execute_nostradamus(fam65xx_t* cpu, int max_instructions) {
         // Initialize bus state - allocated on stack for all handlers to share
+    // TODO : Arrange that a global bus state is used for execution
         bus_state_t shared_bus = {0};
         shared_bus.lines = FAM65XX_MASK_BA | FAM65XX_MASK_AEC | FAM65XX_MASK_RDY;  // Default line states
         
-        // Nostradamus Distributor pattern with proper nesting depth
-        // All handlers operate on the same shared bus state via pointer
+        // Nostradamus Distributor pattern - use stackless execution
+        fam65xx_opcode_handler_t current_handler = fam65xx_optimized_dispatch(cpu, &shared_bus);
+        
         for (int count = 0; count < max_instructions; count += 16) {
             // Unrolled execution loop with optimal 16-21 byte spacing for branch prediction
-            // Each iteration is spaced to work optimally with modern CPU branch predictors
-            fam65xx_optimized_dispatch(cpu, &shared_bus);
-            fam65xx_optimized_dispatch(cpu, &shared_bus);
-            fam65xx_optimized_dispatch(cpu, &shared_bus);
-            fam65xx_optimized_dispatch(cpu, &shared_bus);
-            fam65xx_optimized_dispatch(cpu, &shared_bus);
-            fam65xx_optimized_dispatch(cpu, &shared_bus);
-            fam65xx_optimized_dispatch(cpu, &shared_bus);
-            fam65xx_optimized_dispatch(cpu, &shared_bus);
-            fam65xx_optimized_dispatch(cpu, &shared_bus);
-            fam65xx_optimized_dispatch(cpu, &shared_bus);
-            fam65xx_optimized_dispatch(cpu, &shared_bus);
-            fam65xx_optimized_dispatch(cpu, &shared_bus);
-            fam65xx_optimized_dispatch(cpu, &shared_bus);
-            fam65xx_optimized_dispatch(cpu, &shared_bus);
-            fam65xx_optimized_dispatch(cpu, &shared_bus);
-            fam65xx_optimized_dispatch(cpu, &shared_bus);
+             // Execute current handler and get next handler (stackless execution)
+            current_handler = (fam65xx_opcode_handler_t)current_handler(cpu, &shared_bus);
+            current_handler = (fam65xx_opcode_handler_t)current_handler(cpu, &shared_bus);
+            current_handler = (fam65xx_opcode_handler_t)current_handler(cpu, &shared_bus);
+            current_handler = (fam65xx_opcode_handler_t)current_handler(cpu, &shared_bus);
+            current_handler = (fam65xx_opcode_handler_t)current_handler(cpu, &shared_bus);
+            current_handler = (fam65xx_opcode_handler_t)current_handler(cpu, &shared_bus);
+            current_handler = (fam65xx_opcode_handler_t)current_handler(cpu, &shared_bus);
+            current_handler = (fam65xx_opcode_handler_t)current_handler(cpu, &shared_bus);
+            current_handler = (fam65xx_opcode_handler_t)current_handler(cpu, &shared_bus);
+            current_handler = (fam65xx_opcode_handler_t)current_handler(cpu, &shared_bus);
+            current_handler = (fam65xx_opcode_handler_t)current_handler(cpu, &shared_bus);
+            current_handler = (fam65xx_opcode_handler_t)current_handler(cpu, &shared_bus);
+            current_handler = (fam65xx_opcode_handler_t)current_handler(cpu, &shared_bus);
+            current_handler = (fam65xx_opcode_handler_t)current_handler(cpu, &shared_bus);
+            current_handler = (fam65xx_opcode_handler_t)current_handler(cpu, &shared_bus);
+            current_handler = (fam65xx_opcode_handler_t)current_handler(cpu, &shared_bus);
+            
             /* TODO : Restore Check for intercept after each instruction (for single-step debugging)
             if (mos6510_is_intercepting(cpu)) {
                 break;
@@ -396,7 +421,9 @@ static inline void fam65xx_optimized_dispatch(fam65xx_t* cpu, void* c64_bus_ptr)
     }
 
     #define FAM65XX_OPCODE_PROTO(name) \
-        REGISTER_CALL fam65xx_opcode_handler_t name(fam65xx_t* cpu, bus_state_t* bus_state)
+        REGISTER_CALL void* name(fam65xx_t* cpu, bus_state_t* bus_state)
+    #define FAM65XX_HELPER_PROTO(name) \
+        static inline REGISTER_CALL void* name(fam65xx_t* cpu, bus_state_t* bus_state
     #define FAM65XX_PROTO_RETURN  return
     #define FAM65XX_NEXT_INSTRUCTION(cpu) do { \
         if (unlikely(FAM65XX_TEST_IRQ_OR_NMI(cpu))) { \
@@ -406,9 +433,28 @@ static inline void fam65xx_optimized_dispatch(fam65xx_t* cpu, void* c64_bus_ptr)
     } while(0)
     #define FAM65XX_OPCODE_FOOTER(cpu) \
         return fam65xx_get_next_handler(cpu, bus_state)
+    // Helper macros for function calls in REDESIGN mode
+    #define FAM65XX_ADDR_OP_HELPER(cpu, addr_func, op_func) \
+        fam65xx_addr_op_helper(cpu, bus_state, addr_func, op_func)
+    #define FAM65XX_BRANCH_HELPER(cpu, condition) \
+        fam65xx_op_branch_helper(cpu, bus_state, condition)
+    #define FAM65XX_RMW_ACC_HELPER(cpu, operation) \
+        fam65xx_op_rmw_accumulator_helper(cpu, bus_state, operation)
+    #define FAM65XX_RMW_ZP_HELPER(cpu, operation) \
+        fam65xx_op_rmw_zero_page_helper(cpu, bus_state, operation)
+    #define FAM65XX_RMW_ZPX_HELPER(cpu, operation) \
+        fam65xx_op_rmw_zero_page_x_helper(cpu, bus_state, operation)
+    #define FAM65XX_RMW_ABS_HELPER(cpu, operation) \
+        fam65xx_op_rmw_absolute_helper(cpu, bus_state, operation)
+    #define FAM65XX_RMW_ABSX_HELPER(cpu, operation) \
+        fam65xx_op_rmw_absolute_x_helper(cpu, bus_state, operation)
+    #define FAM65XX_HELPER_FOOTER(cpu) \
+        return fam65xx_get_next_handler(cpu, bus_state)
 #else
     #define FAM65XX_OPCODE_PROTO(name) \
         void name(fam65xx_t* cpu)
+    #define FAM65XX_HELPER_PROTO(name) \
+        static inline void name(fam65xx_t* cpu
     #define FAM65XX_PROTO_RETURN /*no return*/
     #define FAM65XX_NEXT_INSTRUCTION(cpu) do { \
         if (unlikely(FAM65XX_TEST_IRQ_OR_NMI(cpu))) { \
@@ -417,7 +463,24 @@ static inline void fam65xx_optimized_dispatch(fam65xx_t* cpu, void* c64_bus_ptr)
         fam65xx_next_instruction_dispatch(cpu); \
     } while(0)
     #define FAM65XX_OPCODE_FOOTER(cpu) \
-        FAM65XX_NEXT_INSTRUCTION(cpu)
+        do { /* Instruction complete - dispatch loop handles next instruction */ } while(0)
+    // Helper macros for function calls in legacy mode
+    #define FAM65XX_ADDR_OP_HELPER(cpu, addr_func, op_func) \
+        fam65xx_addr_op_helper(cpu, addr_func, op_func)
+    #define FAM65XX_BRANCH_HELPER(cpu, condition) \
+        fam65xx_op_branch_helper(cpu, condition)
+    #define FAM65XX_RMW_ACC_HELPER(cpu, operation) \
+        fam65xx_op_rmw_accumulator_helper(cpu, operation)
+    #define FAM65XX_RMW_ZP_HELPER(cpu, operation) \
+        fam65xx_op_rmw_zero_page_helper(cpu, operation)
+    #define FAM65XX_RMW_ZPX_HELPER(cpu, operation) \
+        fam65xx_op_rmw_zero_page_x_helper(cpu, operation)
+    #define FAM65XX_RMW_ABS_HELPER(cpu, operation) \
+        fam65xx_op_rmw_absolute_helper(cpu, operation)
+    #define FAM65XX_RMW_ABSX_HELPER(cpu, operation) \
+        fam65xx_op_rmw_absolute_x_helper(cpu, operation)
+    #define FAM65XX_HELPER_FOOTER(cpu) \
+        do { /* No return needed in legacy mode */ } while(0)
 #endif
 
 // Universal instruction dispatch using function pointers
@@ -430,10 +493,10 @@ typedef uint8_t (*fam65xx_addr_func_t)(fam65xx_t* cpu);
 typedef void (*fam65xx_op_func_t)(fam65xx_t* cpu, uint8_t value);
 
 // Arithmetic helper function implementation (static inline for performance)
-static FORCE_INLINE void fam65xx_addr_op_helper(fam65xx_t* cpu, fam65xx_addr_func_t addr_func, fam65xx_op_func_t op_func) {
+FAM65XX_HELPER_PROTO(fam65xx_addr_op_helper), fam65xx_addr_func_t addr_func, fam65xx_op_func_t op_func) {
     uint8_t value = addr_func(cpu);
     op_func(cpu, value);
-    FAM65XX_OPCODE_FOOTER(cpu);
+    FAM65XX_HELPER_FOOTER(cpu);
 }
 
 // Flag operations (shared)
@@ -480,6 +543,8 @@ static void fam65xx_interrupt_sequence(fam65xx_t* cpu, uint8_t status_flags, uin
     cpu->pc = (addr_hi << 8) | addr_lo;
 }
 
+// Legacy mode interrupt handlers
+#ifndef REDESIGN
 static inline void fam65xx_nmi_handler(fam65xx_t* cpu) {
     fam65xx_interrupt_sequence(cpu, cpu->p & ~FLAG_B, 0xFFFA); // NMI vector, B flag cleared
 }
@@ -487,6 +552,35 @@ static inline void fam65xx_nmi_handler(fam65xx_t* cpu) {
 static inline void fam65xx_irq_handler(fam65xx_t* cpu) {
     fam65xx_interrupt_sequence(cpu, cpu->p & ~FLAG_B, 0xFFFE); // IRQ vector, B flag cleared
 }
+#else
+// REDESIGN mode helper function to get next handler
+static inline REGISTER_CALL void* fam65xx_get_next_handler(fam65xx_t* cpu, bus_state_t* bus_state) {
+    // Check for interrupts first
+    if (unlikely(FAM65XX_TEST_IRQ_OR_NMI(cpu))) {
+        uint16_t handler_index = FAM65XX_TEST_IRQ_OR_NMI(cpu);
+        return cpu->opcode_handlers[handler_index];
+    }
+    
+    // Fetch next opcode and dispatch
+    uint8_t opcode = fam65xx_read_cycle(cpu, cpu->pc++);
+    return cpu->opcode_handlers[4 + opcode];  // Opcodes start at index 4
+}
+
+// REDESIGN mode interrupt handlers (stackless execution)
+static inline REGISTER_CALL void* fam65xx_nmi_handler(fam65xx_t* cpu, bus_state_t* bus_state) {
+    fam65xx_interrupt_sequence(cpu, cpu->p & ~FLAG_B, 0xFFFA); // NMI vector, B flag cleared
+    return fam65xx_get_next_handler(cpu, bus_state);
+}
+
+static inline REGISTER_CALL void* fam65xx_irq_handler(fam65xx_t* cpu, bus_state_t* bus_state) {
+    if (cpu->p & FLAG_I) {
+        // IRQ is masked, fetch and execute next instruction instead
+        return fam65xx_get_next_handler(cpu, bus_state);
+    }
+    fam65xx_interrupt_sequence(cpu, cpu->p & ~FLAG_B, 0xFFFE); // IRQ vector, B flag cleared
+    return fam65xx_get_next_handler(cpu, bus_state);
+}
+#endif
 
 // Interception support (shared)
 void fam65xx_start_intercept(fam65xx_t* cpu);

@@ -489,24 +489,24 @@ void mos6502_op_sbc(fam65xx_t* cpu, uint8_t operand) {
 // ============================================================================
 
 // ADC - Add with Carry (supports both binary and decimal modes)
-FAM65XX_OPCODE_PROTO(mos6502_op_adc_imm) { FAM65XX_PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, mos6502_op_adc); }
-FAM65XX_OPCODE_PROTO(mos6502_op_adc_zp) { FAM65XX_PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, mos6502_op_adc); }
-FAM65XX_OPCODE_PROTO(mos6502_op_adc_zpx) { FAM65XX_PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, mos6502_op_adc); }
-FAM65XX_OPCODE_PROTO(mos6502_op_adc_abs) { FAM65XX_PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, mos6502_op_adc); }
-FAM65XX_OPCODE_PROTO(mos6502_op_adc_absx) { FAM65XX_PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, mos6502_op_adc); }
-FAM65XX_OPCODE_PROTO(mos6502_op_adc_absy) { FAM65XX_PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, mos6502_op_adc); }
-FAM65XX_OPCODE_PROTO(mos6502_op_adc_indx) { FAM65XX_PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, mos6502_op_adc); }
-FAM65XX_OPCODE_PROTO(mos6502_op_adc_indy) { FAM65XX_PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, mos6502_op_adc); }
+FAM65XX_OPCODE_PROTO(mos6502_op_adc_imm) { FAM65XX_PROTO_RETURN FAM65XX_ADDR_OP_HELPER(cpu, fam65xx_addr_imm, mos6502_op_adc); }
+FAM65XX_OPCODE_PROTO(mos6502_op_adc_zp) { FAM65XX_PROTO_RETURN FAM65XX_ADDR_OP_HELPER(cpu, fam65xx_addr_zp, mos6502_op_adc); }
+FAM65XX_OPCODE_PROTO(mos6502_op_adc_zpx) { FAM65XX_PROTO_RETURN FAM65XX_ADDR_OP_HELPER(cpu, fam65xx_addr_zpx, mos6502_op_adc); }
+FAM65XX_OPCODE_PROTO(mos6502_op_adc_abs) { FAM65XX_PROTO_RETURN FAM65XX_ADDR_OP_HELPER(cpu, fam65xx_addr_abs, mos6502_op_adc); }
+FAM65XX_OPCODE_PROTO(mos6502_op_adc_absx) { FAM65XX_PROTO_RETURN FAM65XX_ADDR_OP_HELPER(cpu, fam65xx_addr_absx, mos6502_op_adc); }
+FAM65XX_OPCODE_PROTO(mos6502_op_adc_absy) { FAM65XX_PROTO_RETURN FAM65XX_ADDR_OP_HELPER(cpu, fam65xx_addr_absy, mos6502_op_adc); }
+FAM65XX_OPCODE_PROTO(mos6502_op_adc_indx) { FAM65XX_PROTO_RETURN FAM65XX_ADDR_OP_HELPER(cpu, fam65xx_addr_indx, mos6502_op_adc); }
+FAM65XX_OPCODE_PROTO(mos6502_op_adc_indy) { FAM65XX_PROTO_RETURN FAM65XX_ADDR_OP_HELPER(cpu, fam65xx_addr_indy, mos6502_op_adc); }
 
 // SBC - Subtract with Carry (supports both binary and decimal modes)
-FAM65XX_OPCODE_PROTO(mos6502_op_sbc_imm) { FAM65XX_PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_imm, mos6502_op_sbc); }
-FAM65XX_OPCODE_PROTO(mos6502_op_sbc_zp) { FAM65XX_PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_zp, mos6502_op_sbc); }
-FAM65XX_OPCODE_PROTO(mos6502_op_sbc_zpx) { FAM65XX_PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_zpx, mos6502_op_sbc); }
-FAM65XX_OPCODE_PROTO(mos6502_op_sbc_abs) { FAM65XX_PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_abs, mos6502_op_sbc); }
-FAM65XX_OPCODE_PROTO(mos6502_op_sbc_absx) { FAM65XX_PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_absx, mos6502_op_sbc); }
-FAM65XX_OPCODE_PROTO(mos6502_op_sbc_absy) { FAM65XX_PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_absy, mos6502_op_sbc); }
-FAM65XX_OPCODE_PROTO(mos6502_op_sbc_indx) { FAM65XX_PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_indx, mos6502_op_sbc); }
-FAM65XX_OPCODE_PROTO(mos6502_op_sbc_indy) { FAM65XX_PROTO_RETURN fam65xx_addr_op_helper(cpu, fam65xx_addr_indy, mos6502_op_sbc); }
+FAM65XX_OPCODE_PROTO(mos6502_op_sbc_imm) { FAM65XX_PROTO_RETURN FAM65XX_ADDR_OP_HELPER(cpu, fam65xx_addr_imm, mos6502_op_sbc); }
+FAM65XX_OPCODE_PROTO(mos6502_op_sbc_zp) { FAM65XX_PROTO_RETURN FAM65XX_ADDR_OP_HELPER(cpu, fam65xx_addr_zp, mos6502_op_sbc); }
+FAM65XX_OPCODE_PROTO(mos6502_op_sbc_zpx) { FAM65XX_PROTO_RETURN FAM65XX_ADDR_OP_HELPER(cpu, fam65xx_addr_zpx, mos6502_op_sbc); }
+FAM65XX_OPCODE_PROTO(mos6502_op_sbc_abs) { FAM65XX_PROTO_RETURN FAM65XX_ADDR_OP_HELPER(cpu, fam65xx_addr_abs, mos6502_op_sbc); }
+FAM65XX_OPCODE_PROTO(mos6502_op_sbc_absx) { FAM65XX_PROTO_RETURN FAM65XX_ADDR_OP_HELPER(cpu, fam65xx_addr_absx, mos6502_op_sbc); }
+FAM65XX_OPCODE_PROTO(mos6502_op_sbc_absy) { FAM65XX_PROTO_RETURN FAM65XX_ADDR_OP_HELPER(cpu, fam65xx_addr_absy, mos6502_op_sbc); }
+FAM65XX_OPCODE_PROTO(mos6502_op_sbc_indx) { FAM65XX_PROTO_RETURN FAM65XX_ADDR_OP_HELPER(cpu, fam65xx_addr_indx, mos6502_op_sbc); }
+FAM65XX_OPCODE_PROTO(mos6502_op_sbc_indy) { FAM65XX_PROTO_RETURN FAM65XX_ADDR_OP_HELPER(cpu, fam65xx_addr_indy, mos6502_op_sbc); }
 
 // ============================================================================
 // OPCODE TABLE INITIALIZATION AND MANAGEMENT
