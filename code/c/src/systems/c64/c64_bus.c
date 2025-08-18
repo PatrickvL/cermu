@@ -113,6 +113,11 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
             // Optimized I/O sub-page detection using pre-calculated preadjusted_io_addr
             chip += is_io & (preadjusted_io_addr >> 8);  // Direct 0-15 range, no mask needed
             
+            // Set I/O bus flag when I/O region access is detected
+            if (is_io) {
+                bus_set_io_pending(&bus_state);
+            }
+            
             // Use chip-indexed callback for optimized dispatch
             chip_callback_t callback = c64_bus->chip_read_callbacks[chip];
             if (likely(callback)) {
@@ -120,8 +125,10 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
                 unified_data = bus_state.data;
             }
         }
-    } else {
+        
+        // Set final data value
         bus_state.data = unified_data;
+    } else {
         // === WRITE OPERATION ===
         uint8_t chip = decode_write_chip(c64_bus->cpu_encoded_chip_per_bank[cpu_bank]);
         
@@ -137,6 +144,12 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
         // Optimized I/O sub-page detection using pre-calculated preadjusted_io_addr
         uint8_t is_io = -(chip == CHIP_IO);
         chip += is_io & (preadjusted_io_addr >> 8);  // Direct 0-15 range, no mask needed
+        
+        // Set I/O bus flag when I/O region access is detected
+        if (is_io) {
+            bus_set_io_pending(&bus_state);
+        }
+        
         // Use chip-indexed callback for optimized dispatch
         chip_callback_t callback = c64_bus->chip_write_callbacks[chip];
         if (likely(callback)) {

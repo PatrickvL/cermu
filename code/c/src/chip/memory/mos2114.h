@@ -39,4 +39,7 @@ void mos2114_destroy(void* chip);
 bus_state_t mos2114_read(void* context, bus_state_t bus_state);
 bus_state_t mos2114_write(void* context, bus_state_t bus_state);
 
+// Consolidated tick function with I/O coordination
+bus_state_t REGISTER_CALL mos2114_tick(void* context, bus_state_t bus_state);
+
 #endif // MOS2114_H

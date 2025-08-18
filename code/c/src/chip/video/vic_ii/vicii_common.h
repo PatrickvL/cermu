@@ -440,6 +440,9 @@ struct vicii_s {
 // Main cycle function with unified bus state threading
 bus_state_t vicii_advance_cycle(vicii_t* vicii, bus_state_t bus_state);
 
+// Consolidated VIC-II tick function - main entry point for cycle processing
+bus_state_t vicii_tick(void* chip, bus_state_t bus_state);
+
 // Removed duplicate vicii_read/vicii_write functions - use vicii_registers_read/write instead
 
 // Factory and lifecycle

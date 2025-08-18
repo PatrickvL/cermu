@@ -170,12 +170,14 @@ void c64_non_cpu_cycle(void* c64_ptr) {
     
     c64_bus_t* bus = &(c64->bus);  // Access bus state
 
-    // VIC tick handles both phi1 and phi2 phases internally
-    bus->state = vicii_advance_cycle(c64->vicii, bus->state);
-    // Other chips tick once per complete cycle
-    bus->state = mos6526_advance_cycle(c64->cia1, bus->state);
-    bus->state = mos6526_advance_cycle(c64->cia2, bus->state);
-    bus->state = mos6581_advance_cycle(c64->sid, bus->state); // update as needed
+    // VIC-II tick handles both phi1 and phi2 phases internally with I/O coordination
+    bus->state = vicii_tick(c64->vicii, bus->state);
+    // Other chips tick once per complete cycle with I/O coordination
+    bus->state = mos6581_tick(c64->sid, bus->state);
+    // Color RAM tick for I/O coordination (no complex emulation needed)
+    bus->state = mos2114_tick(c64->colorram, bus->state);
+    bus->state = mos6526_tick(c64->cia1, bus->state);
+    bus->state = mos6526_tick(c64->cia2, bus->state);
 
     //        c64_update_interrupt_lines(c64, bus);
 //void c64_update_interrupt_lines(c64_t* c64, c64_bus_t* bus) {
@@ -275,6 +277,9 @@ c64_t* c64_system_create(const c64_config_t* config) {
     c64->vicii->colorram = c64->colorram; // Also assign to VIC-II for compatibility
     if (!(c64->cia1 = create_and_register_chip(c64, &mos6526_descriptor, 0xDC00, 256))) return NULL;
     if (!(c64->cia2 = create_and_register_chip(c64, &mos6526_descriptor, 0xDD00, 256))) return NULL;
+    
+    // Set CIA2 interrupt line to NMI (CIA1 defaults to IRQ in constructor)
+    ((mos6526_t*)c64->cia2)->interrupt_line = BUS_MASK_NMI;
     if (!(c64->kernal = create_and_register_chip(c64, &rom_descriptor, 0xE000, 8192))) return NULL;
     
     // Initialize placeholders for missing components

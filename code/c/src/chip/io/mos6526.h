@@ -123,6 +123,9 @@ void mos6526_reset(mos6526_t* cia);
 // Main cycle function with unified bus state threading
 bus_state_t mos6526_advance_cycle(mos6526_t* cia, bus_state_t bus_state);
 
+// Consolidated CIA tick function - main entry point for cycle processing
+bus_state_t mos6526_tick(void* chip, bus_state_t bus_state);
+
 // Register I/O functions (used directly in chip descriptor)
 bus_state_t mos6526_registers_read(void* context, bus_state_t bus_state);
 bus_state_t mos6526_registers_write(void* context, bus_state_t bus_state);

@@ -858,6 +858,31 @@ bus_state_t mos6581_advance_cycle(mos6581_t* sid, bus_state_t bus_state) {
     return bus_state;
 }
 
+/**
+ * Consolidated SID tick function - main entry point for SID cycle processing.
+ * Combines advance cycle functionality with I/O bus coordination.
+ * This replaces direct calls to mos6581_advance_cycle() in the new architecture.
+ *
+ * @param chip Pointer to SID chip instance
+ * @param bus_state Current bus state
+ * @return Updated bus state
+ */
+bus_state_t mos6581_tick(void* chip, bus_state_t bus_state) {
+    // Check for I/O bus flag - SID handles I/O register access
+    if (bus_is_io_pending(&bus_state)) {
+        // Check if address is within SID range ($D400-$D7FF)
+        if ((bus_state.addr & 0x0C00) == 0x0400) {
+            // SID I/O register access detected - this will be handled by register read/write functions
+            // during the normal cycle processing, so we clear the flag to acknowledge
+            bus_clear_io_pending(&bus_state);
+        }
+    }
+
+    // Delegate to the existing advance cycle function
+    // In the future, this can be expanded to include additional tick-specific logic
+    return mos6581_advance_cycle((mos6581_t*)chip, bus_state);
+}
+
 // =============================================================================
 // SAMPLE GENERATION
 // =============================================================================

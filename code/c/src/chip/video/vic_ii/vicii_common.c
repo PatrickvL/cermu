@@ -1,6 +1,7 @@
 #include "vicii_common.h"
 #include "../../memory/mos2114.h"
 #include "../../../systems/c64/c64_bus.h"
+#include "../../../core/system_lines.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -1216,6 +1217,31 @@ bus_state_t vicii_advance_cycle(vicii_t* vicii, bus_state_t bus_state) {
     }
     // Return the bus state for threaded cycle chaining
     return bus_state;
+}
+
+/**
+ * Consolidated VIC-II tick function - main entry point for VIC-II cycle processing.
+ * Combines advance cycle functionality with I/O bus coordination.
+ * This replaces direct calls to vicii_advance_cycle() in the new architecture.
+ *
+ * @param chip Pointer to VIC-II chip instance
+ * @param bus_state Current bus state
+ * @return Updated bus state
+ */
+bus_state_t vicii_tick(void* chip, bus_state_t bus_state) {
+    // Check for I/O bus flag - VIC-II handles I/O register access during normal cycles
+    if (bus_is_io_pending(&bus_state)) {
+        // Check if address is within VIC-II range ($D000-$D3FF)
+        if (bus_state.addr <= 0xD3FF) {
+            // VIC-II I/O register access detected - this will be handled by register read/write functions
+            // during the normal cycle processing, so we clear the flag to acknowledge
+            bus_clear_io_pending(&bus_state);
+        }
+    }
+    
+    // Delegate to the existing advance cycle function
+    // In the future, this can be expanded to include additional tick-specific logic
+    return vicii_advance_cycle((vicii_t*)chip, bus_state);
 }
 
 // ========================================================================================

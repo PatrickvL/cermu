@@ -1,5 +1,6 @@
 #include "mos6526.h" // cia
 #include "../../systems/c64/c64_bus.h" // for BUS_MASK_IRQ
+#include "../../core/system_lines.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -444,6 +445,44 @@ bus_state_t mos6526_advance_cycle(mos6526_t* cia, bus_state_t bus_state) {
 
     mos6526_check_interrupt_mask(cia);
     return bus_state;
+}
+
+/**
+ * Consolidated CIA tick function - main entry point for CIA cycle processing.
+ * Combines advance cycle functionality with I/O bus coordination.
+ * This replaces direct calls to mos6526_advance_cycle() in the new architecture.
+ *
+ * @param chip Pointer to CIA chip instance
+ * @param bus_state Current bus state
+ * @return Updated bus state
+ */
+/**
+ * Consolidated CIA tick function - main entry point for CIA cycle processing.
+ * Combines advance cycle functionality with I/O bus coordination.
+ * This replaces direct calls to mos6526_advance_cycle() in the new architecture.
+ *
+ * @param chip Pointer to CIA chip instance
+ * @param bus_state Current bus state
+ * @return Updated bus state
+ */
+bus_state_t mos6526_tick(void* chip, bus_state_t bus_state) {
+    mos6526_t* cia = (mos6526_t*)chip;
+    
+    // Handle I/O memory access if pending
+    if (unlikely(bus_is_io_pending(&bus_state))) {
+        // Use interrupt line to determine CIA address range:
+        // CIA1 (IRQ=0x01): $DC00-$DCFF, CIA2 (NMI=0x02): $DD00-$DDFF
+        // Optimal bit-hack: Check if address matches this CIA's page
+        uint16_t addr_page = bus_state.addr & 0xFF00;
+        uint16_t expected_page = 0xDC00 + ((cia->interrupt_line & BUS_MASK_NMI) << 7);
+        
+        if (addr_page == expected_page) {
+            bus_clear_io_pending(&bus_state);
+        }
+    }
+
+    // Delegate to the existing advance cycle function
+    return mos6526_advance_cycle(cia, bus_state);
 }
 
 // TIME OF DAY (TOD) handling
