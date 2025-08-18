@@ -1,6 +1,7 @@
 #include "c64_bus.h"
 #include "c64.h"
 #include "../../chip/io/mos6526.h"
+#include "../../core/aiemuc.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -144,6 +145,10 @@ void c64_bus_cpu_write(c64_bus_t *c64_bus, uint16_t address, uint8_t value) {
 }
 
 void c64_bus_system_destroy(void* chip) {
+    c64_bus_t* c64_bus = (c64_bus_t*)chip;
+    if (c64_bus && c64_bus->allocated_buffer) {
+        aiemuc_aligned_free(c64_bus->allocated_buffer);
+    }
     free(chip);
 }
 
@@ -174,8 +179,10 @@ void c64_bus_system_attach(c64_bus_t* c64_bus, void* c64) {
     // Initialize chip callback arrays for optimized memory access
     c64_bus_init_chip_callbacks(c64_bus);
     
-    // Initialize ROM/RAM pointers to use unified buffer
-    c64_bus_init_unified_pointers(c64_bus, c64);
+    // Initialize ROM/RAM pointers and allocate unified buffer with default configuration
+    c64_config_t default_config;
+    c64_config_init_defaults(&default_config);
+    c64_bus_init_unified_pointers(c64_bus, c64, &default_config);
 }
 
 chip_descriptor_t c64_bus_descriptor = {
@@ -806,32 +813,93 @@ void c64_bus_init_chip_callbacks(c64_bus_t* c64_bus) {
 /**
  * Initialize RAM/ROM pointers to point into the unified memory buffer.
  * This eliminates separate memory allocations and ensures consistency.
- * After this call, all RAM/ROM access will use the unified buffer.
+ * Uses configuration structure to determine cartridge ROM presence.
+ *
+ * @param c64_bus Pointer to the C64 bus controller
+ * @param c64_system Pointer to the C64 system (for pointer updates)
+ * @param config Pointer to the C64 system configuration structure
  */
-void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system) {
-    if (!c64_bus || !c64_system) return;
+void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c64_config_t* config) {
+    if (!c64_bus || !c64_system || !config) return;
+    
+    // Store cartridge ROM presence flags from configuration
+    c64_bus->roml_present = config->roml_present;
+    c64_bus->romh_present = config->romh_present;
+    
+    // Clean up any existing allocation
+    if (c64_bus->allocated_buffer) {
+        aiemuc_aligned_free(c64_bus->allocated_buffer);
+        c64_bus->allocated_buffer = NULL;
+    }
+    
+    // Calculate required memory size and offset
+    // Full layout: ROML(8KB) + ROMH(8KB) + KERNAL(8KB) + BASIC(8KB) + CHARROM(4KB) + RAM(64KB) = 100KB
+    size_t required_size = 100 * 1024; // Start with full size
+    size_t offset = 0;                  // Offset to subtract from allocated buffer
+    
+    if (!config->roml_present && !config->romh_present) {
+        // Save 16KB by not allocating space for both cartridge ROMs
+        required_size = 84 * 1024;  // KERNAL(8KB) + BASIC(8KB) + CHARROM(4KB) + RAM(64KB)
+        offset = 16 * 1024;         // Offset so KERNAL (offset 0x4000) becomes start of buffer
+    } else if (!config->roml_present) {
+        // Save 8KB by not allocating ROML
+        required_size = 92 * 1024;  // ROMH(8KB) + KERNAL(8KB) + BASIC(8KB) + CHARROM(4KB) + RAM(64KB)
+        offset = 8 * 1024;          // Offset so ROMH (offset 0x2000) becomes start of buffer
+    } else if (!config->romh_present) {
+        // Save 8KB by not allocating ROMH (more complex layout)
+        // For now, keep simple and allocate full space
+        // TODO: Implement optimized layout for ROML-only cartridges
+        required_size = 100 * 1024;
+        offset = 0;
+    }
+    
+    // Allocate aligned memory for optimal cache performance
+    c64_bus->allocated_buffer = (uint8_t*)aiemuc_aligned_alloc(64, required_size);
+    
+    if (!c64_bus->allocated_buffer) {
+        printf("c64_bus: ERROR - Failed to allocate unified memory buffer (%zu KB)\n", required_size / 1024);
+        return;
+    }
+    
+    c64_bus->allocated_size = required_size;
+    
+    // Apply pointer arithmetic trick - subtract offset so unused ROM regions point before allocated memory
+    c64_bus->unified_memory_buffer = c64_bus->allocated_buffer - offset;
+    
+    // Initialize allocated memory to zero
+    memset(c64_bus->allocated_buffer, 0, required_size);
     
     c64_t* c64 = (c64_t*)c64_system;
-    // Initialize unified memory buffer (100 KB) to zero - Color RAM handled via I/O callbacks
-    memset(c64_bus->unified_memory_buffer, 0, 100 * 1024);
-    
     uint8_t* buffer = c64_bus->unified_memory_buffer;
     
-#define DO(c64_device, offset) \
-    if (c64_device) { \
+#define DO(c64_device, offset, present_flag) \
+    if (c64_device && present_flag) { \
         /* Free existing memory if it was dynamically allocated */ \
         if (c64_device->memory && c64_device->memory != buffer + offset) { \
             free(c64_device->memory); \
         } \
         c64_device->memory = buffer + offset; \
+    } else if (c64_device) { \
+        /* ROM not present - set to NULL and free existing if needed */ \
+        if (c64_device->memory) { \
+            free(c64_device->memory); \
+            c64_device->memory = NULL; \
+        } \
     }
 
     // Point the following devices to their respective unified buffer offset
-    DO(c64->cartridge_roml, 0x0000); // CHIP_ROML
-    DO(c64->cartridge_romh, 0x2000); // CHIP_ROMH
-    DO(c64->kernal, 0x4000); // CHIP_KERNAL
-    DO(c64->basic, 0x6000); // CHIP_BASIC
-    DO(c64->charrom, 0x8000); // CHIP_CHARROM
-    DO(c64->ram, 0x9000); // CHIP_RAM
+    // Note: offsets work due to pointer arithmetic trick with offset subtraction
+    DO(c64->cartridge_roml, 0x0000, c64_bus->roml_present); // CHIP_ROML
+    DO(c64->cartridge_romh, 0x2000, c64_bus->romh_present); // CHIP_ROMH
+    DO(c64->kernal, 0x4000, true); // CHIP_KERNAL - always present
+    DO(c64->basic, 0x6000, true);  // CHIP_BASIC - always present
+    DO(c64->charrom, 0x8000, true); // CHIP_CHARROM - always present
+    DO(c64->ram, 0x9000, true);     // CHIP_RAM - always present
 #undef DO    
+    
+    printf("c64_bus: Allocated %zu KB unified buffer (saved %zu KB), ROML:%s ROMH:%s\n",
+           required_size / 1024,
+           (100 * 1024 - required_size) / 1024,
+           config->roml_present ? "yes" : "no",
+           config->romh_present ? "yes" : "no");
 }

@@ -15,7 +15,7 @@ int main(int argc, char** argv) {
         return 1;
     }
       // Initialize the C64 system
-    system_config_t config = {
+    c64_config_t config = {
         .vicii_standard = VIC_PAL,
         .rom_config = NULL  // Use default ROM paths, can be overridden by GUI later
     };

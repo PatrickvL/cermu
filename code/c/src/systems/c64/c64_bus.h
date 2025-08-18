@@ -11,6 +11,7 @@
 #include "../../core/bus_cycle_interface.h"
 #include "../../core/control_lines_interface.h"
 #include "../../chip/cpu/mos6510/mos6510.h"
+#include "c64_config.h"
 
 // =============================
 // Bus Types & Macros
@@ -69,8 +70,13 @@ typedef struct c64_bus_s {
     
     // UNIFIED MEMORY BUFFER FOR OPTIMIZED OPCODE FETCH
     // Layout: ROML(8KB) + ROMH(8KB) + KERNAL(8KB) + BASIC(8KB) + CHARROM(4KB) + RAM(64KB)
-    // Total: 100KB unified buffer for branchless memory access (Color RAM handled via I/O callbacks)
-    alignas(64) uint8_t unified_memory_buffer[100 * 1024];  // 100KB total
+    // Total: Up to 100KB unified buffer for branchless memory access (Color RAM handled via I/O callbacks)
+    // Dynamic allocation with pointer arithmetic for unused cartridge ROMs
+    uint8_t* unified_memory_buffer;   // Points to usable memory (may be offset from allocated memory)
+    uint8_t* allocated_buffer;        // Points to actual allocated memory
+    size_t allocated_size;            // Actual allocated size
+    bool roml_present;                // Whether ROML cartridge ROM is attached
+    bool romh_present;                // Whether ROMH cartridge ROM is attached
     
     // OPTIMIZED MEMORY BANKING - Cache-friendly layout
     // Banking configurations per mode (32 modes x 16 banks = 512 bytes)
@@ -139,12 +145,15 @@ void c64_bus_cpu_write(c64_bus_t *bus, uint16_t address, uint8_t value);
 /**
  * Initialize RAM/ROM pointers to point into the unified memory buffer.
  * This eliminates separate memory allocations and ensures consistency.
- * Should be called after unified buffer is initialized.
+ * Now includes dynamic allocation with cartridge ROM detection.
+ * Should be called after system is attached.
  * 
  * @param c64_bus Pointer to the C64 bus controller
  * @param c64 Pointer to the C64 system (for pointer updates)
+ * @param roml_present Whether ROML cartridge ROM is attached (optional optimization)
+ * @param romh_present Whether ROMH cartridge ROM is attached (optional optimization)
  */
-void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64);
+void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64, bool roml_present, bool romh_present);
 
 // Bus cycle functions
 uint8_t c64_bus_read_cycle(c64_bus_t *bus, uint16_t addr);

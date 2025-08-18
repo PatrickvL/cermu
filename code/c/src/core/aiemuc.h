@@ -92,6 +92,34 @@
 #endif
 
 /* ========================================================================== */
+/* ALIGNED MEMORY ALLOCATION */
+/* ========================================================================== */
+
+/* Cross-platform aligned memory allocation and deallocation */
+#include <stdlib.h>
+
+#if defined(_WIN32)
+    #include <malloc.h>
+    #define aiemuc_aligned_alloc(alignment, size) _aligned_malloc((size), (alignment))
+    #define aiemuc_aligned_free(ptr) _aligned_free(ptr)
+#elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+    /* C11 aligned_alloc */
+    #define aiemuc_aligned_alloc(alignment, size) aligned_alloc((alignment), (size))
+    #define aiemuc_aligned_free(ptr) free(ptr)
+#elif defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L
+    /* POSIX posix_memalign */
+    static inline void* aiemuc_aligned_alloc(size_t alignment, size_t size) {
+        void* ptr = NULL;
+        return (posix_memalign(&ptr, alignment, size) == 0) ? ptr : NULL;
+    }
+    #define aiemuc_aligned_free(ptr) free(ptr)
+#else
+    /* Fallback to regular malloc - alignment not guaranteed */
+    #define aiemuc_aligned_alloc(alignment, size) malloc(size)
+    #define aiemuc_aligned_free(ptr) free(ptr)
+#endif
+
+/* ========================================================================== */
 /* BIT MANIPULATION FUNCTIONS */
 /* ========================================================================== */
 

@@ -7,7 +7,7 @@
 // ============================================================================
 int main(void) {
     // Create system configuration (PAL by default)
-    system_config_t config = {
+    c64_config_t config = {
         .vicii_standard = VIC_PAL,
         .rom_config = NULL  // Use default ROM paths
     };

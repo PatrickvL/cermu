@@ -242,7 +242,7 @@ void c64_system_destroy(c64_t* c64) {
     free(c64);
 }
 
-c64_t* c64_system_create(const system_config_t* config) {
+c64_t* c64_system_create(const c64_config_t* config) {
     c64_t* c64 = calloc(1, sizeof(c64_t));
     if (!c64) {
         printf("ERROR: Failed to allocate C64 system\n");

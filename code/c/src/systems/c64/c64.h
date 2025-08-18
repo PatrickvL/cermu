@@ -48,7 +48,7 @@ typedef struct c64_s {
 #define BUS_TO_C64(bus_ptr) container_of(bus_ptr, c64_t, bus)
 
 // Function declarations
-c64_t* c64_system_create(const system_config_t* config);
+c64_t* c64_system_create(const c64_config_t* config);
 void c64_system_destroy(c64_t* c64);
 
 // Ticks all non-CPU chips once to complete a cycle.

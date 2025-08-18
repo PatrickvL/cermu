@@ -1531,7 +1531,8 @@ static int gui_emulation_thread_main(void* data) {
         if (!context->thread_running) break;
         
         // Process signal and execute CPU operation
-        switch (signal) {            case EMU_SIGNAL_START:
+        switch (signal) {
+            case EMU_SIGNAL_START:
                 context->current_state = EMU_STATE_RUNNING;
                 printf("Emulation thread: Starting CPU execution\n");
                 
