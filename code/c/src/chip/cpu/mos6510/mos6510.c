@@ -172,3 +172,38 @@ void mos6510_attach_bus_state(mos6510_t* cpu, bus_state_t* bus_state) {
     // Store pointer to shared bus state
     cpu->base.bus_state = bus_state;
 }
+
+// ============================================================================
+// I/O PORT HANDLING FUNCTIONS FOR REFACTORING PLAN
+// ============================================================================
+
+/**
+ * Handle I/O port read operations for MOS6510 (addresses 0-1).
+ * This is part of the refactoring plan to move I/O port handling into the CPU.
+ * Initially calls existing ZEROBANK callbacks but will be optimized later.
+ */
+bus_state_t mos6510_handle_io_read(mos6510_t* cpu, bus_state_t bus_state) {
+    if (!cpu) return bus_state;
+    
+    // For now, delegate to the existing I/O port read function
+    // This maintains compatibility with the current ZEROBANK system
+    // In future phases, this will be optimized to handle banking changes directly
+    return mos6510_ioport_read(cpu, bus_state);
+}
+
+/**
+ * Handle I/O port write operations for MOS6510 (addresses 0-1).
+ * This is part of the refactoring plan to move I/O port handling into the CPU.
+ * Initially calls existing ZEROBANK callbacks but will be optimized later.
+ */
+bus_state_t mos6510_handle_io_write(mos6510_t* cpu, bus_state_t bus_state) {
+    if (!cpu) return bus_state;
+    
+    // For now, delegate to the existing I/O port write function
+    // This maintains compatibility with the current ZEROBANK system
+    // In future phases, this will:
+    // 1. Handle memory banking change notifications (LORAM, HIRAM, CHAREN bits)
+    // 2. Update memory_tick() to call MOS6510 I/O functions for addresses 0-1
+    // 3. Remove dependency on CHIP_ZEROBANK infrastructure
+    return mos6510_ioport_write(cpu, bus_state);
+}

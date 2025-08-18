@@ -16,6 +16,7 @@ typedef struct {
 #define BUS_LINE_BA     3 // Bus available line
 #define BUS_LINE_AEC    4 // Address enable control line
 #define BUS_LINE_RDY    5 // Ready line
+#define BUS_LINE_IO_MEM_ACCESS_PENDING 6 // I/O memory access pending line for chip coordination
 
 // Bit masks for easy access
 #define BUS_MASK_IRQ        (1 << BUS_LINE_IRQ)
@@ -24,5 +25,19 @@ typedef struct {
 #define BUS_MASK_BA         (1 << BUS_LINE_BA)
 #define BUS_MASK_AEC        (1 << BUS_LINE_AEC)
 #define BUS_MASK_RDY        (1 << BUS_LINE_RDY)
+#define BUS_MASK_IO_MEM_ACCESS_PENDING (1 << BUS_LINE_IO_MEM_ACCESS_PENDING)
+
+// Helper functions for I/O access coordination
+static inline void bus_set_io_pending(bus_state_t* state) {
+    state->lines |= BUS_MASK_IO_MEM_ACCESS_PENDING;
+}
+
+static inline void bus_clear_io_pending(bus_state_t* state) {
+    state->lines &= ~BUS_MASK_IO_MEM_ACCESS_PENDING;
+}
+
+static inline bool bus_is_io_pending(const bus_state_t* state) {
+    return (state->lines & BUS_MASK_IO_MEM_ACCESS_PENDING) != 0;
+}
 
 #endif // SYSTEM_LINES_H

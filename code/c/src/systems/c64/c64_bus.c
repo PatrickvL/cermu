@@ -903,3 +903,36 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c
            config->roml_present ? "yes" : "no",
            config->romh_present ? "yes" : "no");
 }
+
+/**
+ * New cycle-accurate memory tick function for the refactored architecture.
+ * This function will be used by the new MOS6510 implementation to handle
+ * memory access in a cycle-accurate manner.
+ *
+ * Initially, this is a bridge to the existing memory functions but will be
+ * optimized for fast-path access and I/O coordination in later phases.
+ *
+ * @param c64_bus Pointer to the C64 bus controller
+ */
+void c64_memory_tick(c64_bus_t* c64_bus) {
+    if (!c64_bus) return;
+    
+    // Determine if this is a read or write operation
+    bool is_write = !(c64_bus->state.lines & BUS_MASK_RW);
+    uint16_t address = c64_bus->state.addr;
+    
+    if (is_write) {
+        // Write operation - call existing write function
+        c64_bus_cpu_write(c64_bus, address, c64_bus->state.data);
+    } else {
+        // Read operation - call existing read function
+        c64_bus_cpu_read(c64_bus, address);
+        // Result is now available in c64_bus->state.data
+    }
+    
+    // Future optimization notes:
+    // - Handle I/O port addresses (0-1) in MOS6510 first
+    // - Add fast path for RAM/ROM access using unified buffer
+    // - Set IO_MEM_ACCESS_PENDING flag for I/O region access
+    // - Let individual chips handle I/O in their tick functions
+}

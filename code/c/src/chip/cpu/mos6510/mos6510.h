@@ -85,6 +85,28 @@ bool mos6510_is_intercepting(mos6510_t* cpu);
 // I/O PORT EMULATION - Direct handling in CPU read/write cycles
 // ============================================================================
 
+/**
+ * Handle I/O port read operations for MOS6510 (addresses 0-1).
+ * This is part of the refactoring plan to move I/O port handling into the CPU.
+ * Initially calls existing ZEROBANK callbacks but will be optimized later.
+ *
+ * @param cpu Pointer to the MOS6510 CPU structure
+ * @param bus_state Current bus state with address and data
+ * @return Updated bus state with read data
+ */
+bus_state_t mos6510_handle_io_read(mos6510_t* cpu, bus_state_t bus_state);
+
+/**
+ * Handle I/O port write operations for MOS6510 (addresses 0-1).
+ * This is part of the refactoring plan to move I/O port handling into the CPU.
+ * Initially calls existing ZEROBANK callbacks but will be optimized later.
+ *
+ * @param cpu Pointer to the MOS6510 CPU structure
+ * @param bus_state Current bus state with address and data
+ * @return Updated bus state
+ */
+bus_state_t mos6510_handle_io_write(mos6510_t* cpu, bus_state_t bus_state);
+
 // ============================================================================
 // MOS6510 ZERO BANK I/O PORT ACCESSORS
 // ============================================================================

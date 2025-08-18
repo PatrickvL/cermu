@@ -143,6 +143,16 @@ void c64_bus_cpu_read(c64_bus_t *bus, uint16_t address);
 void c64_bus_cpu_write(c64_bus_t *bus, uint16_t address, uint8_t value);
 
 /**
+ * New cycle-accurate memory tick function for the refactored architecture.
+ * This function will be used by the new MOS6510 implementation to handle
+ * memory access in a cycle-accurate manner. Initially calls existing functions
+ * but will be optimized for fast-path access in later phases.
+ *
+ * @param c64_bus Pointer to the C64 bus controller
+ */
+void c64_memory_tick(c64_bus_t* c64_bus);
+
+/**
  * Initialize RAM/ROM pointers to point into the unified memory buffer.
  * This eliminates separate memory allocations and ensures consistency.
  * Now includes dynamic allocation with cartridge ROM detection.
