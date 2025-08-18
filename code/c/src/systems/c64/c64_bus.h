@@ -19,12 +19,12 @@
 // Chip IDs optimized for unified memory buffer layout
 typedef enum {
     // Memory chips (no side effects) - consecutive for unified buffer
-    CHIP_BASIC        = 0,   // 8KB BASIC ROM - maps to unified offset 0x0000
-    CHIP_KERNAL       = 1,   // 8KB KERNAL ROM - maps to unified offset 0x2000
-    CHIP_ROML         = 2,   // 8KB ROM Low (cartridge) - maps to unified offset 0x4000
-    CHIP_ROMH         = 3,   // 8KB ROM High (cartridge) - maps to unified offset 0x6000
+    CHIP_ROML         = 0,   // 8KB ROM Low (cartridge) - maps to unified offset 0x0000
+    CHIP_ROMH         = 1,   // 8KB ROM High (cartridge) - maps to unified offset 0x2000
+    CHIP_KERNAL       = 2,   // 8KB KERNAL ROM - maps to unified offset 0x4000
+    CHIP_BASIC        = 3,   // 8KB BASIC ROM - maps to unified offset 0x6000
     CHIP_CHARROM      = 4,   // 4KB Character ROM (+ 4KB padding) - maps to unified offset 0x8000
-    CHIP_RAM          = 5,   // 64KB - maps to offset 0xC000 in unified buffer
+    CHIP_RAM          = 5,   // 64KB - maps to offset 0x9000 in unified buffer
     // End of unified memory buffer chips - all below ones require callbacks :
     CHIP_ZEROBANK     = 6,   // Pseudo chip for CPU I/O ports (4KB bank $0000-$0FFF)
     CHIP_UNMAPPED     = 7,   // Unmapped regions
@@ -68,9 +68,9 @@ typedef struct c64_bus_s {
     uint8_t pla_banking_mode;  // Current banking mode for fast switching
     
     // UNIFIED MEMORY BUFFER FOR OPTIMIZED OPCODE FETCH
-    // Layout: BASIC(8KB) + KERNAL(8KB) + ROML(8KB) + ROMH(8KB) + CHARROM(4KB+4KB pad) + RAM(64KB)
-    // Total: 104KB unified buffer for branchless memory access (Color RAM handled via I/O callbacks)
-    alignas(64) uint8_t unified_memory_buffer[104 * 1024];  // 104KB total
+    // Layout: ROML(8KB) + ROMH(8KB) + KERNAL(8KB) + BASIC(8KB) + CHARROM(4KB) + RAM(64KB)
+    // Total: 100KB unified buffer for branchless memory access (Color RAM handled via I/O callbacks)
+    alignas(64) uint8_t unified_memory_buffer[100 * 1024];  // 100KB total
     
     // OPTIMIZED MEMORY BANKING - Cache-friendly layout
     // Banking configurations per mode (32 modes x 16 banks = 512 bytes)

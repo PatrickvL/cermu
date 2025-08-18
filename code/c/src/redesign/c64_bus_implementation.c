@@ -28,23 +28,23 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_read(c64_t* c64, c64_
     
     // Switch dispatch for selected chip - compiler generates jump table
     switch (selected_chip) {
-        case CHIP_RAM:
-            bus_state.bus.data = c64->ram.memory[bus_state.bus.addr];
-            break;
-        case CHIP_BASIC:
-            bus_state.bus.data = c64->basic_rom[bus_state.bus.addr & 0x1FFF];
-            break;
-        case CHIP_KERNAL:
-            bus_state.bus.data = c64->kernal_rom[bus_state.bus.addr & 0x1FFF];
-            break;
         case CHIP_ROML:
             bus_state.bus.data = c64->cartridge_roml[bus_state.bus.addr & 0x1FFF];
             break;
         case CHIP_ROMH:
             bus_state.bus.data = c64->cartridge_romh[bus_state.bus.addr & 0x1FFF];
             break;
+        case CHIP_KERNAL:
+            bus_state.bus.data = c64->kernal_rom[bus_state.bus.addr & 0x1FFF];
+            break;
+        case CHIP_BASIC:
+            bus_state.bus.data = c64->basic_rom[bus_state.bus.addr & 0x1FFF];
+            break;
         case CHIP_CHARROM:
             bus_state.bus.data = c64->char_rom[bus_state.bus.addr & 0x0FFF];
+            break;
+        case CHIP_RAM:
+            bus_state.bus.data = c64->ram.memory[bus_state.bus.addr];
             break;
         case CHIP_COLORRAM:
             bus_state.bus.data = c64->colorram.memory[bus_state.bus.addr & 0x3FF] | 0xF0; // High nibble always set
@@ -111,6 +111,15 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_write(c64_t* c64, c64
     
     // Switch dispatch optimized for writes - dead code elimination removes read-only cases
     switch (chip) {
+        case CHIP_ROML:
+        case CHIP_ROMH:
+        case CHIP_KERNAL:
+        case CHIP_BASIC:
+        case CHIP_CHARROM:
+        case CHIP_UNMAPPED:
+        default:
+            // Read-only or unmapped - ignore writes
+            break;
         case CHIP_RAM:
             c64->ram.memory[bus_state.bus.addr] = bus_state.bus.data;
             break;
@@ -119,15 +128,6 @@ FORCE_INLINE REGISTER_CALL c64_bus_state_t c64_system_tick_write(c64_t* c64, c64
         case CHIP_DA_COLORRAM:
         case CHIP_DB_COLORRAM:
             c64->colorram.memory[bus_state.bus.addr & 0x3FF] = bus_state.bus.data & 0x0F; // Only low nibble stored
-            break;
-        case CHIP_BASIC:
-        case CHIP_KERNAL:
-        case CHIP_CHARROM:
-        case CHIP_ROML:
-        case CHIP_ROMH:
-        case CHIP_UNMAPPED:
-        default:
-            // Read-only or unmapped - ignore writes
             break;
         case CHIP_D0_VIC:
         case CHIP_D1_VIC:

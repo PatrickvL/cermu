@@ -42,8 +42,8 @@ static inline int8_t c64_bus_get_bank(uint16_t address) {
         uint32_t offset_mask = is_ram | 0x1FFF; \
         uint32_t chip_offset = (addr) & offset_mask; \
         uint32_t base_offset = chip << 13; \
-        uint32_t ram_adjustment = is_ram & 0xC000; \
-        unified_addr = base_offset + ram_adjustment + chip_offset; \
+        uint32_t ram_adjustment = is_ram & 0x1000; \
+        unified_addr = base_offset - ram_adjustment + chip_offset; \
     } while(0)
 
 // ULTRA-OPTIMIZED VIC-II MEMORY READ - Better performance than CPU version
@@ -62,8 +62,8 @@ void c64_bus_vic_read(c64_bus_t* c64_bus, uint16_t address) {
     }
     
     // BRANCHLESS unified address calculation using shared macro
-    // Chip mapping: 0=BASIC, 1=KERNAL, 2=ROML, 3=ROMH, 4=CHARROM, 5=RAM
-    // Unified offsets: 0x0000=BASIC, 0x2000=KERNAL, 0x4000=ROML, 0x6000=ROMH, 0x8000=CHARROM, 0xA000=RAM
+    // Chip mapping: 0=ROML, 1=ROMH, 2=KERNAL, 3=BASIC, 4=CHARROM, 5=RAM
+    // Unified offsets: 0x0000=ROML, 0x2000=ROMH, 0x4000=KERNAL, 0x6000=BASIC, 0x8000=CHARROM, 0x9000=RAM
     uint32_t unified_addr;
     C64_BUS_UNIFIED_ADDRESS_CALC(chip, address);
     c64_bus->state.data = c64_bus->unified_memory_buffer[unified_addr];
@@ -124,10 +124,11 @@ void c64_bus_cpu_write(c64_bus_t *c64_bus, uint16_t address, uint8_t value) {
     uint8_t cpu_bank = c64_bus_get_bank(address);     // Extract 4KB bank (0-15)
     uint8_t chip = decode_write_chip(c64_bus->cpu_encoded_chip_per_bank[cpu_bank]);
     // FAST PATH: Direct unified buffer write for CHIP_RAM (most common case)
-    if (chip == CHIP_RAM) {
+    if (chip <= CHIP_RAM) {
+        // TODO: Assert that only CHIP_RAM enters here (no ROM chips in write part of cpu_encoded_chip_per_bank)
         // Direct unified buffer write - no need for ram_memory_write call
-        // Unified RAM offset: 0xA000 + address (CHIP_RAM = 5, 5 << 13 = 0xA000)
-        c64_bus->unified_memory_buffer[0xA000 + address] = value;
+        // Unified RAM offset: 0x9000 + address (CHIP_RAM = 5, 5 << 13 = 0xA000, minus 0x1000 for RAM)
+        c64_bus->unified_memory_buffer[0x9000 + address] = value;
         return; // Fast path complete
     }
 
@@ -172,9 +173,6 @@ void c64_bus_system_attach(c64_bus_t* c64_bus, void* c64) {
     
     // Initialize chip callback arrays for optimized memory access
     c64_bus_init_chip_callbacks(c64_bus);
-    
-    // Initialize unified memory buffer (104KB) to zero - Color RAM handled via I/O callbacks
-    memset(c64_bus->unified_memory_buffer, 0, 104 * 1024);
     
     // Initialize ROM/RAM pointers to use unified buffer
     c64_bus_init_unified_pointers(c64_bus, c64);
@@ -600,20 +598,20 @@ bool c64_bus_get_chip_description(const c64_bus_t* bus, uint8_t chip, chip_descr
 // Return a concise title string for each CHIP (for legend/tooling/GUI)
 const char* c64_bus_chip_to_title(uint8_t chip) {
     switch (chip) {
-        case CHIP_ZEROBANK:
-            return "RAM"; // Ignore the zero bank aspect, it's mostly just RAM
-        case CHIP_RAM:
-            return "RAM";
-        case CHIP_BASIC:
-            return "BASIC";
-        case CHIP_KERNAL:
-            return "KERNAL";
         case CHIP_ROML:
             return "ROML";
         case CHIP_ROMH:
             return "ROMH";
+        case CHIP_KERNAL:
+            return "KERNAL";
+        case CHIP_BASIC:
+            return "BASIC";
         case CHIP_CHARROM:
             return "CHARROM";
+        case CHIP_RAM:
+            return "RAM";
+        case CHIP_ZEROBANK:
+            return "RAM"; // Ignore the zero bank aspect, it's mostly just RAM
         case CHIP_UNMAPPED:
             return "-";
         case CHIP_D0_VIC:
@@ -715,10 +713,10 @@ void c64_bus_init_chip_callbacks(c64_bus_t* c64_bus) {
     c64_t* c64 = BUS_TO_C64(c64_bus);
     
     // Initialize read callbacks
-    c64_bus->chip_read_callbacks[CHIP_BASIC] = NULL; // c64_bus_cpu_read reads from unified_memory_buffer - no read callback
-    c64_bus->chip_read_callbacks[CHIP_KERNAL] = NULL; // c64_bus_cpu_read reads from unified_memory_buffer - no read callback
     c64_bus->chip_read_callbacks[CHIP_ROML] = NULL; // c64_bus_cpu_read reads from unified_memory_buffer - no read callback
     c64_bus->chip_read_callbacks[CHIP_ROMH] = NULL; // c64_bus_cpu_read reads from unified_memory_buffer - no read callback
+    c64_bus->chip_read_callbacks[CHIP_KERNAL] = NULL; // c64_bus_cpu_read reads from unified_memory_buffer - no read callback
+    c64_bus->chip_read_callbacks[CHIP_BASIC] = NULL; // c64_bus_cpu_read reads from unified_memory_buffer - no read callback
     c64_bus->chip_read_callbacks[CHIP_CHARROM] = NULL; // c64_bus_cpu_read reads from unified_memory_buffer - no read callback
     c64_bus->chip_read_callbacks[CHIP_RAM] = NULL; // c64_bus_cpu_read reads from unified_memory_buffer - no read callback
     c64_bus->chip_read_callbacks[CHIP_ZEROBANK] = c64_bus_chip_read_zerobank;
@@ -760,10 +758,10 @@ void c64_bus_init_chip_callbacks(c64_bus_t* c64_bus) {
     c64_bus->chip_read_callbacks[CHIP_DF_IO2] = NULL; // IO2 cartridge devices use chip descriptors
     
     // Initialize write callbacks
-    c64_bus->chip_write_callbacks[CHIP_BASIC] = NULL; // ROM - no write callback
-    c64_bus->chip_write_callbacks[CHIP_KERNAL] = NULL; // ROM - no write callback
     c64_bus->chip_write_callbacks[CHIP_ROML] = NULL; // ROM - no write callback
     c64_bus->chip_write_callbacks[CHIP_ROMH] = NULL; // ROM - no write callback
+    c64_bus->chip_write_callbacks[CHIP_KERNAL] = NULL; // ROM - no write callback
+    c64_bus->chip_write_callbacks[CHIP_BASIC] = NULL; // ROM - no write callback
     c64_bus->chip_write_callbacks[CHIP_CHARROM] = NULL; // ROM - no write callback
     c64_bus->chip_write_callbacks[CHIP_RAM] = NULL; // c64_bus_cpu_write writes to unified_memory_buffer - no write callback
     c64_bus->chip_write_callbacks[CHIP_ZEROBANK] = c64_bus_chip_write_zerobank;
@@ -814,6 +812,9 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system) {
     if (!c64_bus || !c64_system) return;
     
     c64_t* c64 = (c64_t*)c64_system;
+    // Initialize unified memory buffer (100 KB) to zero - Color RAM handled via I/O callbacks
+    memset(c64_bus->unified_memory_buffer, 0, 100 * 1024);
+    
     uint8_t* buffer = c64_bus->unified_memory_buffer;
     
 #define DO(c64_device, offset) \
@@ -826,11 +827,11 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system) {
     }
 
     // Point the following devices to their respective unified buffer offset
-    DO(c64->basic, 0x0000);
-    DO(c64->kernal, 0x2000);
-    DO(c64->cartridge_roml, 0x4000);
-    DO(c64->cartridge_romh, 0x6000);
-    DO(c64->charrom, 0x8000);
-    DO(c64->ram, 0xA000);
+    DO(c64->cartridge_roml, 0x0000); // CHIP_ROML
+    DO(c64->cartridge_romh, 0x2000); // CHIP_ROMH
+    DO(c64->kernal, 0x4000); // CHIP_KERNAL
+    DO(c64->basic, 0x6000); // CHIP_BASIC
+    DO(c64->charrom, 0x8000); // CHIP_CHARROM
+    DO(c64->ram, 0x9000); // CHIP_RAM
 #undef DO    
 }
