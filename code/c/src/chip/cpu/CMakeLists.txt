@@ -9,6 +9,8 @@ target_include_directories(mos6502_family PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/fam65xx
     ${CMAKE_CURRENT_SOURCE_DIR}/../../..
 )
+# Enable REDESIGN CPU dispatch mechanism for family core
+target_compile_definitions(mos6502_family PRIVATE REDESIGN=1)
 
 # Standard MOS 6502 (with decimal mode)
 add_library(mos6502 STATIC
@@ -19,6 +21,8 @@ target_include_directories(mos6502 PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/mos6502
     ${CMAKE_CURRENT_SOURCE_DIR}/../../..
 )
+# Enable REDESIGN CPU dispatch mechanism for MOS 6502
+target_compile_definitions(mos6502 PRIVATE REDESIGN=1)
 
 # MOS 6510 (C64 CPU, now using shared family code with MOS6510-specific illegal opcodes)
 add_library(mos6510 STATIC
@@ -31,6 +35,8 @@ target_include_directories(mos6510 PUBLIC
 
 # MOS6510 now uses shared family code for all legal operations
 target_link_libraries(mos6510 PUBLIC mos6502_family)
+# Enable REDESIGN CPU dispatch mechanism for MOS 6510
+target_compile_definitions(mos6510 PRIVATE REDESIGN=1)
 
 # Create an interface library that provides access to all CPU types
 add_library(mos6502_cpus INTERFACE)
@@ -45,3 +51,5 @@ target_include_directories(nes6502 PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/nes6502
     ${CMAKE_CURRENT_SOURCE_DIR}/../../..
 )
+# Enable REDESIGN CPU dispatch mechanism for NES 6502
+target_compile_definitions(nes6502 PRIVATE REDESIGN=1)

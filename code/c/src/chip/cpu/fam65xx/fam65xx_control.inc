@@ -125,7 +125,7 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_rts) {
 
 // BRK - Break
 FAM65XX_OPCODE_PROTO(fam65xx_op_brk) {
-#if 0
+#if 1
     (void)fam65xx_read_cycle(cpu, cpu->pc++); // Read and discard next byte
     fam65xx_interrupt_sequence(cpu, cpu->p | FLAG_B, 0xFFFE);
     FAM65XX_OPCODE_FOOTER(cpu);

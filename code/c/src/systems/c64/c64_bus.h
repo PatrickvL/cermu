@@ -157,15 +157,14 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
 /**
  * Initialize RAM/ROM pointers to point into the unified memory buffer.
  * This eliminates separate memory allocations and ensures consistency.
- * Now includes dynamic allocation with cartridge ROM detection.
+ * Uses configuration structure to determine cartridge ROM presence.
  * Should be called after system is attached.
- * 
+ *
  * @param c64_bus Pointer to the C64 bus controller
- * @param c64 Pointer to the C64 system (for pointer updates)
- * @param roml_present Whether ROML cartridge ROM is attached (optional optimization)
- * @param romh_present Whether ROMH cartridge ROM is attached (optional optimization)
+ * @param c64_system Pointer to the C64 system (for pointer updates)
+ * @param config Pointer to the C64 system configuration structure
  */
-void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64, bool roml_present, bool romh_present);
+void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c64_config_t* config);
 
 // Bus cycle functions
 uint8_t c64_bus_read_cycle(c64_bus_t *bus, uint16_t addr);

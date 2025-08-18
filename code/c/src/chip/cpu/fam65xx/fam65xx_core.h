@@ -16,6 +16,13 @@
 #define asm __asm__
 #endif
 
+// Suppress MSVC warnings for function pointer operations (C4152)
+// These are legitimate uses in the Nostradamus Distributor pattern
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4152) // nonstandard extension, function/data pointer conversion in expression
+#endif
+
 // ============================================================================
 // MOS 6502 FAMILY CORE DEFINITIONS
 // ============================================================================
@@ -41,8 +48,10 @@
 typedef struct fam65xx_s fam65xx_t;
 
 #ifdef REDESIGN
+// Forward declare the struct to avoid circular dependency
+struct fam65xx_s;
 // Nostradamus Distributor function pointer type - returns next handler for stackless execution
-typedef REGISTER_CALL void* (*fam65xx_opcode_handler_t)(fam65xx_t* cpu, bus_state_t* bus_state);
+typedef void* (REGISTER_CALL *fam65xx_opcode_handler_t)(struct fam65xx_s* cpu, bus_state_t* bus_state);
 // Legacy function pointer type for PFNDUOP compatibility
 typedef fam65xx_opcode_handler_t PFNDUOP;
 #else
@@ -323,18 +332,18 @@ bool fam65xx_step(fam65xx_t* cpu);
  * Ultra-optimized CPU dispatch using interrupt mask as direct handler index (REDESIGN mode).
  * Uses stackless execution with bus_state parameter.
  * Interrupt handlers occupy indices 0-3, opcodes start at index 4.
- * 
+ *
  * Handler index mapping:
  * 0: No interrupt
- * 1: IRQ handler 
+ * 1: IRQ handler
  * 2: NMI handler
  * 3: Both IRQ and NMI (NMI takes priority)
  * 4-259: Opcode handlers (256 opcodes shifted up by 4)
- * 
+ *
  * @param cpu Pointer to the MOS6510 CPU
  * @param c64_bus Pointer to the C64 bus controller
  */
-static inline REGISTER_CALL void* fam65xx_optimized_dispatch(fam65xx_t* cpu, bus_state_t* bus_state) {
+static inline void* REGISTER_CALL fam65xx_optimized_dispatch(fam65xx_t* cpu, bus_state_t* bus_state) {
     // Get interrupt mask directly as handler index (0-3)
     uint16_t handler_index = FAM65XX_TEST_IRQ_OR_NMI(cpu);
     
@@ -377,7 +386,7 @@ static inline void fam65xx_optimized_dispatch(fam65xx_t* cpu, void* c64_bus_ptr)
     // Forward declarations for Nostradamus Distributor handlers - defined as static inline below
     
     // Forward declaration for get_next_handler helper
-    static inline REGISTER_CALL void* fam65xx_get_next_handler(fam65xx_t* cpu, bus_state_t* bus_state);
+    static inline void* REGISTER_CALL fam65xx_get_next_handler(fam65xx_t* cpu, bus_state_t* bus_state);
 
     /**
      * Ultra-fast execution with optimized opcode fetch and unrolled dispatch.
@@ -391,7 +400,7 @@ static inline void fam65xx_optimized_dispatch(fam65xx_t* cpu, void* c64_bus_ptr)
         shared_bus.lines = FAM65XX_MASK_BA | FAM65XX_MASK_AEC | FAM65XX_MASK_RDY;  // Default line states
         
         // Nostradamus Distributor pattern - use stackless execution
-        fam65xx_opcode_handler_t current_handler = fam65xx_optimized_dispatch(cpu, &shared_bus);
+        fam65xx_opcode_handler_t current_handler = (fam65xx_opcode_handler_t)fam65xx_optimized_dispatch(cpu, &shared_bus);
         
         for (int count = 0; count < max_instructions; count += 16) {
             // Unrolled execution loop with optimal 16-21 byte spacing for branch prediction
@@ -421,9 +430,9 @@ static inline void fam65xx_optimized_dispatch(fam65xx_t* cpu, void* c64_bus_ptr)
     }
 
     #define FAM65XX_OPCODE_PROTO(name) \
-        REGISTER_CALL void* name(fam65xx_t* cpu, bus_state_t* bus_state)
+        void* REGISTER_CALL name(fam65xx_t* cpu, bus_state_t* bus_state)
     #define FAM65XX_HELPER_PROTO(name) \
-        static inline REGISTER_CALL void* name(fam65xx_t* cpu, bus_state_t* bus_state
+        static inline void* REGISTER_CALL name(fam65xx_t* cpu, bus_state_t* bus_state
     #define FAM65XX_PROTO_RETURN  return
     #define FAM65XX_NEXT_INSTRUCTION(cpu) do { \
         if (unlikely(FAM65XX_TEST_IRQ_OR_NMI(cpu))) { \
@@ -554,7 +563,7 @@ static inline void fam65xx_irq_handler(fam65xx_t* cpu) {
 }
 #else
 // REDESIGN mode helper function to get next handler
-static inline REGISTER_CALL void* fam65xx_get_next_handler(fam65xx_t* cpu, bus_state_t* bus_state) {
+static inline void* REGISTER_CALL fam65xx_get_next_handler(fam65xx_t* cpu, bus_state_t* bus_state) {
     // Check for interrupts first
     if (unlikely(FAM65XX_TEST_IRQ_OR_NMI(cpu))) {
         uint16_t handler_index = FAM65XX_TEST_IRQ_OR_NMI(cpu);
@@ -567,12 +576,12 @@ static inline REGISTER_CALL void* fam65xx_get_next_handler(fam65xx_t* cpu, bus_s
 }
 
 // REDESIGN mode interrupt handlers (stackless execution)
-static inline REGISTER_CALL void* fam65xx_nmi_handler(fam65xx_t* cpu, bus_state_t* bus_state) {
+static inline void* REGISTER_CALL fam65xx_nmi_handler(fam65xx_t* cpu, bus_state_t* bus_state) {
     fam65xx_interrupt_sequence(cpu, cpu->p & ~FLAG_B, 0xFFFA); // NMI vector, B flag cleared
     return fam65xx_get_next_handler(cpu, bus_state);
 }
 
-static inline REGISTER_CALL void* fam65xx_irq_handler(fam65xx_t* cpu, bus_state_t* bus_state) {
+static inline void* REGISTER_CALL fam65xx_irq_handler(fam65xx_t* cpu, bus_state_t* bus_state) {
     if (cpu->p & FLAG_I) {
         // IRQ is masked, fetch and execute next instruction instead
         return fam65xx_get_next_handler(cpu, bus_state);
@@ -708,5 +717,9 @@ static inline uint8_t fam65xx_addr_indy(fam65xx_t* cpu) {
     }
     return fam65xx_read_cycle(cpu, cpu->address);             // T4/T5: Data fetch
 }
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 #endif // FAM65XX_CORE_H

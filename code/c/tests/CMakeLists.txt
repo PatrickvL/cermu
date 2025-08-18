@@ -61,6 +61,8 @@ endforeach()
 # Create a library for the MOS6510 CPU
 add_library(mos6510_lib STATIC ${CPU_SOURCES} ${CORE_SOURCES})
 target_include_directories(mos6510_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../)
+# Enable REDESIGN CPU dispatch mechanism for MOS6510 library
+target_compile_definitions(mos6510_lib PRIVATE REDESIGN=1)
 # Link against the mos6502_family library which contains shared fam65xx functions
 target_link_libraries(mos6510_lib mos6502_family)
 
@@ -74,12 +76,16 @@ add_executable(processor_tests_runner
 )
 target_link_libraries(processor_tests_runner mos6502 nes6502 mos6510 json_parser)
 target_sources(processor_tests_runner PRIVATE ${CORE_SOURCES})
+# Enable REDESIGN CPU dispatch mechanism for processor tests
+target_compile_definitions(processor_tests_runner PRIVATE REDESIGN=1)
 
 # Comprehensive Test Suite (fallback/custom tests)
 add_executable(test_mos6510_comprehensive
     test_mos6510_comprehensive.c
 )
 target_link_libraries(test_mos6510_comprehensive mos6510_lib)
+# Enable REDESIGN CPU dispatch mechanism for comprehensive tests
+target_compile_definitions(test_mos6510_comprehensive PRIVATE REDESIGN=1)
 
 # Basic test (if exists) - renamed to avoid conflict with main project
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../test_mos6510_basic.c)
@@ -87,6 +93,8 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../test_mos6510_basic.c)
         ${CMAKE_CURRENT_SOURCE_DIR}/../test_mos6510_basic.c
     )
     target_link_libraries(test_mos6510_basic_tests mos6510_lib)
+    # Enable REDESIGN CPU dispatch mechanism for basic tests
+    target_compile_definitions(test_mos6510_basic_tests PRIVATE REDESIGN=1)
 endif()
 
 # Enable testing

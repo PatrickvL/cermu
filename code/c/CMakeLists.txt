@@ -303,6 +303,9 @@ add_executable(test_mos6510_basic
     ${CORE_UTIL_SOURCES}
 )
 
+# Enable REDESIGN CPU dispatch mechanism for test executable
+target_compile_definitions(test_mos6510_basic PRIVATE REDESIGN=1)
+
 # Link math library for test executable too
 if(NOT WIN32 AND NOT MSVC)
     target_link_libraries(test_mos6510_basic m)
