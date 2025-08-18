@@ -41,8 +41,8 @@ c64emu
 *.lastbuildstate
 *.tlog
 
-external/*
 code/c/deps/*
+code/c/external/cimgui/
 
 code/c/test_optimized_cpu
 code/c/test_pla_clean
