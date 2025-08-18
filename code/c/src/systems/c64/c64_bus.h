@@ -139,18 +139,20 @@ uint8_t c64_bus_generate_pla_mode(c64_bus_t* c64_bus, uint8_t cpu_port_bits);
 
 // Memory functions
 void c64_bus_vic_read(c64_bus_t* c64_bus, uint16_t address);
-void c64_bus_cpu_read(c64_bus_t *bus, uint16_t address);
-void c64_bus_cpu_write(c64_bus_t *bus, uint16_t address, uint8_t value);
 
 /**
  * New cycle-accurate memory tick function for the refactored architecture.
  * This function will be used by the new MOS6510 implementation to handle
- * memory access in a cycle-accurate manner. Initially calls existing functions
- * but will be optimized for fast-path access in later phases.
+ * memory access in a cycle-accurate manner.
+ *
+ * Optimized for register-based calling convention to avoid host stack accesses.
+ * Takes bus state by value and returns updated bus state for efficient register usage.
  *
  * @param c64_bus Pointer to the C64 bus controller
+ * @param bus_state Current bus state (passed by value for register optimization)
+ * @return Updated bus state (for register-to-register operation)
  */
-void c64_memory_tick(c64_bus_t* c64_bus);
+bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_state);
 
 /**
  * Initialize RAM/ROM pointers to point into the unified memory buffer.
@@ -239,7 +241,7 @@ static inline mos6510_io_port_interface_t* c64_io_port_get_adapter(c64_bus_t* c6
 
 // Encoding macros for packing read/write CHIPs into single byte by packing
 // the IO pages into one (CHIP_VIC_D0, which will be restored to the full
-// range by c64_bus_cpu_read/write) and decreasing higher CHIP by 15,
+// range by c64_memory_tick) and decreasing higher CHIP by 15,
 // Order: I/O pages (0-15), then writable chips (16-19), then read-only (20-24)
 // Non-I/O CHIPs 16-24 become 1-9 in encoded form, which fits in 4 bits.
 // Writable CHIPs 16-19 become 1-4 in encoded form, which fits in 3 bits.

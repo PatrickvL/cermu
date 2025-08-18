@@ -581,9 +581,7 @@ void gui_render_memory_viewer(c64_t* c64, gui_state_t* gui_state) {
                 uint16_t byte_addr = addr + col;
                 if (col >= gui_state->memory_columns || addr + col > 0xFFFF) break;
                 // Read memory through proper C64 bus mapping
-                uint8_t byte_value = 0x00;
-                c64_bus_cpu_read(&(c64->bus), byte_addr);
-                byte_value = c64->bus.state.data;
+                uint8_t byte_value = c64_bus_read_cycle(&(c64->bus), byte_addr);
                 igSameLine(0, -1.0f);
                 igText("%02X", byte_value);
             }
@@ -622,10 +620,8 @@ void gui_render_debugger(c64_t* c64, gui_state_t* gui_state, emulation_context_t
               // Check reset vector
             if (c64) {
                 // Read reset vector through proper memory mapping (ROM or RAM depending on banking)
-                c64_bus_cpu_read(&(c64->bus), 0xFFFC);
-                uint8_t reset_low = c64->bus.state.data;
-                c64_bus_cpu_read(&(c64->bus), 0xFFFD);
-                uint8_t reset_high = c64->bus.state.data;
+                uint8_t reset_low = c64_bus_read_cycle(&(c64->bus), 0xFFFC);
+                uint8_t reset_high = c64_bus_read_cycle(&(c64->bus), 0xFFFD);
                 uint16_t reset_vector = (reset_high << 8) | reset_low;
                 igText("Reset Vector: $%04X %s", reset_vector, 
                        reset_vector == 0x0000 ? "(NO ROM)" : "(ROM LOADED)");
@@ -1560,10 +1556,8 @@ static int gui_emulation_thread_main(void* data) {
                 // Bus is embedded, always available
                 if (true) {
                     // Read reset vector through proper memory mapping (ROM or RAM depending on banking)
-                    c64_bus_cpu_read(&(context->c64->bus), 0xFFFC);
-                    reset_low = context->c64->bus.state.data;
-                    c64_bus_cpu_read(&(context->c64->bus), 0xFFFD);
-                    reset_high = context->c64->bus.state.data;
+                    reset_low = c64_bus_read_cycle(&(context->c64->bus), 0xFFFC);
+                    reset_high = c64_bus_read_cycle(&(context->c64->bus), 0xFFFD);
                 }
                 
                 uint16_t reset_vector = (reset_high << 8) | reset_low;

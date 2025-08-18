@@ -71,77 +71,86 @@ void c64_bus_vic_read(c64_bus_t* c64_bus, uint16_t address) {
 }
 
 /**
- * Ultra-fast memory read with unified memory buffer for ROM access.
- * Inlines memory read logic to eliminate function call overhead.
- * Anticipates host bus contention and maintains guest cycle accuracy.
- * 
+ * New cycle-accurate memory tick function for the refactored architecture.
+ * This function will be used by the new MOS6510 implementation to handle
+ * memory access in a cycle-accurate manner.
+ *
+ * Optimized for register-based calling convention to avoid host stack accesses.
+ * Takes bus state by value and returns updated bus state for efficient register usage.
+ *
  * @param c64_bus Pointer to the C64 bus controller
- * @param address Memory address to read from
+ * @param bus_state Current bus state (passed by value for register optimization)
+ * @return Updated bus state (for register-to-register operation)
  */
-void c64_bus_cpu_read(c64_bus_t *c64_bus, uint16_t address) {
-    c64_bus->state.addr = address; // Perhaps this is no longer needed    
+bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_state) {
+    if (unlikely(!c64_bus)) return bus_state;
+    
+    // Determine if this is a read or write operation
+    bool is_read = bus_state.lines & BUS_MASK_RW;
+    uint16_t address = bus_state.addr;
+    
     // Pre-calculate address adjustments for better compiler optimization
     uint16_t preadjusted_io_addr = address - 0xD000;  // For I/O page calculation
     uint8_t cpu_bank = c64_bus_get_bank(address);     // Extract 4KB bank (0-15)
-    uint8_t chip = decode_read_chip(c64_bus->cpu_encoded_chip_per_bank[cpu_bank]);
-    // Unified address calculation using shared macro
-    uint32_t unified_addr;
-    C64_BUS_UNIFIED_ADDRESS_CALC(chip, address);
-    // Prepare masks for potential operations (parallel execution)
-    uint8_t is_io = -(chip == CHIP_IO);
-    uint8_t needs_callback = chip >= CHIP_ZEROBANK;  // 0 for fast path, 1 for slow path
-    // Always calculate unified buffer access (speculative, ignored if needs_callback)
-    uint8_t unified_data = c64_bus->unified_memory_buffer[unified_addr];
-    // Callback path: use chip-indexed callback for chips with side effects
-    if (needs_callback) {
-        // Optimized I/O sub-page detection using pre-calculated preadjusted_io_addr
-        chip += is_io & (preadjusted_io_addr >> 8);  // Direct 0-15 range, no mask needed
+    
+    if (is_read) {
+        // === READ OPERATION ===
+        uint8_t chip = decode_read_chip(c64_bus->cpu_encoded_chip_per_bank[cpu_bank]);
         
+        // Unified address calculation using shared macro
+        uint32_t unified_addr;
+        C64_BUS_UNIFIED_ADDRESS_CALC(chip, address);
+        
+        // Prepare masks for potential operations (parallel execution)
+        uint8_t is_io = -(chip == CHIP_IO);
+        uint8_t needs_callback = chip >= CHIP_ZEROBANK;  // 0 for fast path, 1 for slow path
+        
+        // Always calculate unified buffer access (speculative, ignored if needs_callback)
+        uint8_t unified_data = c64_bus->unified_memory_buffer[unified_addr];
+        
+        // Callback path: use chip-indexed callback for chips with side effects
+        if (unlikely(needs_callback)) {
+            // Optimized I/O sub-page detection using pre-calculated preadjusted_io_addr
+            chip += is_io & (preadjusted_io_addr >> 8);  // Direct 0-15 range, no mask needed
+            
+            // Use chip-indexed callback for optimized dispatch
+            chip_callback_t callback = c64_bus->chip_read_callbacks[chip];
+            if (likely(callback)) {
+                bus_state = callback(c64_bus, bus_state);
+                unified_data = bus_state.data;
+            }
+        }
+    } else {
+        bus_state.data = unified_data;
+        // === WRITE OPERATION ===
+        uint8_t chip = decode_write_chip(c64_bus->cpu_encoded_chip_per_bank[cpu_bank]);
+        
+        // FAST PATH: Direct unified buffer write for CHIP_RAM (most common case)
+        if (likely(chip <= CHIP_RAM)) {
+            // Direct unified buffer write - no need for ram_memory_write call
+            // Unified RAM offset: 0x9000 + address (CHIP_RAM = 5, 5 << 13 = 0xA000, minus 0x1000 for RAM)
+            c64_bus->unified_memory_buffer[0x9000 + address] = bus_state.data;
+            return bus_state; // Fast path complete
+        }
+        
+        // FALLBACK PATH: Use chip-indexed callback array for I/O and chips with side effects
+        // Optimized I/O sub-page detection using pre-calculated preadjusted_io_addr
+        uint8_t is_io = -(chip == CHIP_IO);
+        chip += is_io & (preadjusted_io_addr >> 8);  // Direct 0-15 range, no mask needed
         // Use chip-indexed callback for optimized dispatch
-        chip_callback_t callback = c64_bus->chip_read_callbacks[chip];
-        if (callback) {
-            c64_bus->state = callback(c64_bus, c64_bus->state);
-            unified_data = c64_bus->state.data;
+        chip_callback_t callback = c64_bus->chip_write_callbacks[chip];
+        if (likely(callback)) {
+            bus_state = callback(c64_bus, bus_state);
         }
     }
-
-    c64_bus->state.data = unified_data;
-}
-
-/**
- * Optimized memory write with unified buffer for fast path.
- * Inlines memory write logic to eliminate function call overhead.
- * Handles bus contention and maintains cycle accuracy.
- * 
- * @param c64_bus Pointer to the C64 bus controller
- * @param address Memory address to write to
- * @param value Value to write
- */
-void c64_bus_cpu_write(c64_bus_t *c64_bus, uint16_t address, uint8_t value) {
-    c64_bus->state.addr = address; // Perhaps this is no longer needed
-    c64_bus->state.data = value;   // Used for "floating" bus state for subsequent unattached reads
-    // Pre-calculate address adjustments for better compiler optimization
-    uint16_t preadjusted_io_addr = address - 0xD000;  // For I/O page calculation
-    uint8_t cpu_bank = c64_bus_get_bank(address);     // Extract 4KB bank (0-15)
-    uint8_t chip = decode_write_chip(c64_bus->cpu_encoded_chip_per_bank[cpu_bank]);
-    // FAST PATH: Direct unified buffer write for CHIP_RAM (most common case)
-    if (chip <= CHIP_RAM) {
-        // TODO: Assert that only CHIP_RAM enters here (no ROM chips in write part of cpu_encoded_chip_per_bank)
-        // Direct unified buffer write - no need for ram_memory_write call
-        // Unified RAM offset: 0x9000 + address (CHIP_RAM = 5, 5 << 13 = 0xA000, minus 0x1000 for RAM)
-        c64_bus->unified_memory_buffer[0x9000 + address] = value;
-        return; // Fast path complete
-    }
-
-    // FALLBACK PATH: Use chip-indexed callback array for I/O and chips with side effects
-    // Optimized I/O sub-page detection using pre-calculated preadjusted_io_addr
-    uint8_t is_io = -(chip == CHIP_IO);
-    chip += is_io & (preadjusted_io_addr >> 8);  // Direct 0-15 range, no mask needed
-    // Use chip-indexed callback for optimized dispatch
-    chip_callback_t callback = c64_bus->chip_write_callbacks[chip];
-    if (callback) { // TODO : Use a no-op write stub to avoid callback assigned check
-        c64_bus->state = callback(c64_bus, c64_bus->state);
-    }
+    
+    return bus_state;
+    
+    // Future optimization notes:
+    // - Handle I/O port addresses (0-1) in MOS6510 first
+    // - Add fast path for RAM/ROM access using unified buffer
+    // - Set IO_MEM_ACCESS_PENDING flag for I/O region access
+    // - Let individual chips handle I/O in their tick functions
 }
 
 void c64_bus_system_destroy(void* chip) {
@@ -238,7 +247,10 @@ uint8_t c64_bus_read_cycle(c64_bus_t *c64_bus, uint16_t addr) {
     // CPU's memory access.
     c64_wait_for_bus_ready(c64_bus, true);
     // The bus is now guaranteed to be ready for the CPU.
-    c64_bus_cpu_read(c64_bus, addr);
+    bus_state_t bus_state = c64_bus->state;
+    bus_state.addr = addr;
+    bus_state.lines |= BUS_MASK_RW; // Set read mode
+    c64_bus->state = c64_memory_tick(c64_bus, bus_state);
     // Tick system through complete cycle
     c64_non_cpu_cycle(c64_bus->c64);
     return c64_bus->state.data;
@@ -249,7 +261,11 @@ void c64_bus_write_cycle(c64_bus_t* c64_bus, uint16_t addr, uint8_t value) {
     // the final tick for all non-CPU chips.
     c64_wait_for_bus_ready(c64_bus, false);
     // The bus is now guaranteed to be ready for the CPU.
-    c64_bus_cpu_write(c64_bus, addr, value);
+    bus_state_t bus_state = c64_bus->state;
+    bus_state.addr = addr;
+    bus_state.data = value;
+    bus_state.lines &= ~BUS_MASK_RW; // Clear read/write bit for write mode
+    c64_bus->state = c64_memory_tick(c64_bus, bus_state);
     // Advance system
     c64_non_cpu_cycle(c64_bus->c64);
 }
@@ -274,7 +290,7 @@ uint8_t pla_906114_01_outputs_to_chip(pla_906114_01_t* pla) {
         return CHIP_CHARROM;
     } else if (!pla->outputs.n_io) {
         // I/O region - includes Color RAM, VIC-II, SID, CIA, etc. (read-write)
-        return CHIP_IO; // c64_bus_cpu_read will handle mapping to full 16 I/O pages
+        return CHIP_IO; // c64_memory_tick will handle mapping to full 16 I/O pages
     } else if (!pla->outputs.n_roml) {
         // Cartridge ROM Low (read-only)
         return CHIP_ROML;
@@ -720,12 +736,12 @@ void c64_bus_init_chip_callbacks(c64_bus_t* c64_bus) {
     c64_t* c64 = BUS_TO_C64(c64_bus);
     
     // Initialize read callbacks
-    c64_bus->chip_read_callbacks[CHIP_ROML] = NULL; // c64_bus_cpu_read reads from unified_memory_buffer - no read callback
-    c64_bus->chip_read_callbacks[CHIP_ROMH] = NULL; // c64_bus_cpu_read reads from unified_memory_buffer - no read callback
-    c64_bus->chip_read_callbacks[CHIP_KERNAL] = NULL; // c64_bus_cpu_read reads from unified_memory_buffer - no read callback
-    c64_bus->chip_read_callbacks[CHIP_BASIC] = NULL; // c64_bus_cpu_read reads from unified_memory_buffer - no read callback
-    c64_bus->chip_read_callbacks[CHIP_CHARROM] = NULL; // c64_bus_cpu_read reads from unified_memory_buffer - no read callback
-    c64_bus->chip_read_callbacks[CHIP_RAM] = NULL; // c64_bus_cpu_read reads from unified_memory_buffer - no read callback
+    c64_bus->chip_read_callbacks[CHIP_ROML] = NULL; // c64_memory_tick reads from unified_memory_buffer - no read callback
+    c64_bus->chip_read_callbacks[CHIP_ROMH] = NULL; // c64_memory_tick reads from unified_memory_buffer - no read callback
+    c64_bus->chip_read_callbacks[CHIP_KERNAL] = NULL; // c64_memory_tick reads from unified_memory_buffer - no read callback
+    c64_bus->chip_read_callbacks[CHIP_BASIC] = NULL; // c64_memory_tick reads from unified_memory_buffer - no read callback
+    c64_bus->chip_read_callbacks[CHIP_CHARROM] = NULL; // c64_memory_tick reads from unified_memory_buffer - no read callback
+    c64_bus->chip_read_callbacks[CHIP_RAM] = NULL; // c64_memory_tick reads from unified_memory_buffer - no read callback
     c64_bus->chip_read_callbacks[CHIP_ZEROBANK] = c64_bus_chip_read_zerobank;
     c64_bus->chip_read_callbacks[CHIP_UNMAPPED] = NULL; // UNMAPPED - no read callback
     
@@ -770,7 +786,7 @@ void c64_bus_init_chip_callbacks(c64_bus_t* c64_bus) {
     c64_bus->chip_write_callbacks[CHIP_KERNAL] = NULL; // ROM - no write callback
     c64_bus->chip_write_callbacks[CHIP_BASIC] = NULL; // ROM - no write callback
     c64_bus->chip_write_callbacks[CHIP_CHARROM] = NULL; // ROM - no write callback
-    c64_bus->chip_write_callbacks[CHIP_RAM] = NULL; // c64_bus_cpu_write writes to unified_memory_buffer - no write callback
+    c64_bus->chip_write_callbacks[CHIP_RAM] = NULL; // c64_memory_tick writes to unified_memory_buffer - no write callback
     c64_bus->chip_write_callbacks[CHIP_ZEROBANK] = c64_bus_chip_write_zerobank;
     c64_bus->chip_write_callbacks[CHIP_UNMAPPED] = NULL; // UNMAPPED - no write callback
     
@@ -902,37 +918,4 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c
            (100 * 1024 - required_size) / 1024,
            config->roml_present ? "yes" : "no",
            config->romh_present ? "yes" : "no");
-}
-
-/**
- * New cycle-accurate memory tick function for the refactored architecture.
- * This function will be used by the new MOS6510 implementation to handle
- * memory access in a cycle-accurate manner.
- *
- * Initially, this is a bridge to the existing memory functions but will be
- * optimized for fast-path access and I/O coordination in later phases.
- *
- * @param c64_bus Pointer to the C64 bus controller
- */
-void c64_memory_tick(c64_bus_t* c64_bus) {
-    if (!c64_bus) return;
-    
-    // Determine if this is a read or write operation
-    bool is_write = !(c64_bus->state.lines & BUS_MASK_RW);
-    uint16_t address = c64_bus->state.addr;
-    
-    if (is_write) {
-        // Write operation - call existing write function
-        c64_bus_cpu_write(c64_bus, address, c64_bus->state.data);
-    } else {
-        // Read operation - call existing read function
-        c64_bus_cpu_read(c64_bus, address);
-        // Result is now available in c64_bus->state.data
-    }
-    
-    // Future optimization notes:
-    // - Handle I/O port addresses (0-1) in MOS6510 first
-    // - Add fast path for RAM/ROM access using unified buffer
-    // - Set IO_MEM_ACCESS_PENDING flag for I/O region access
-    // - Let individual chips handle I/O in their tick functions
 }
