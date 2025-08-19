@@ -277,9 +277,6 @@ c64_t* c64_system_create(const c64_config_t* config) {
     c64->vicii->colorram = c64->colorram; // Also assign to VIC-II for compatibility
     if (!(c64->cia1 = create_and_register_chip(c64, &mos6526_descriptor, 0xDC00, 256))) return NULL;
     if (!(c64->cia2 = create_and_register_chip(c64, &mos6526_descriptor, 0xDD00, 256))) return NULL;
-    
-    // Set CIA2 interrupt line to NMI (CIA1 defaults to IRQ in constructor)
-    ((mos6526_t*)c64->cia2)->interrupt_line = BUS_MASK_NMI;
     if (!(c64->kernal = create_and_register_chip(c64, &rom_descriptor, 0xE000, 8192))) return NULL;
     
     // Initialize placeholders for missing components
@@ -292,7 +289,7 @@ c64_t* c64_system_create(const c64_config_t* config) {
     
     // Now having a registry of all chips, the PLA maps can be generated
     if (!c64_pla_maps_generate(c64)) { c64_system_destroy(c64); return NULL; }
-
+    
     // Attach bus to C64 system first to initialize unified memory pointers
     c64_bus_system_attach(&(c64->bus), c64);
     
@@ -314,6 +311,13 @@ c64_t* c64_system_create(const c64_config_t* config) {
     
     // Register banking change callback to update PLA mapping when I/O port changes banking bits
     mos6510_set_banking_callback(c64->mos6510, &(c64->bus), c64_bus_on_banking_change);
+    
+    // Hardware: CIA2 Data Port A bits 0-1 control VIC-II memory bank selection
+    // Note: VIC-II will monitor CIA2 writes at $DD00 directly in its tick function
+    // This eliminates the need for callbacks and global state
+    
+    // Set CIA2 interrupt line to NMI (CIA1 defaults to IRQ in constructor)
+    ((mos6526_t*)c64->cia2)->interrupt_line = BUS_MASK_NMI;
     
     return c64;
 }

@@ -12,7 +12,7 @@ void* mos6526_system_create(chip_descriptor_t* desc) {
     // Constructor equivalent - set up cycles for TOD
     // Used when CRA_TODIN = 0 (60 Hz TOD pin input pulses)
     cia->cycles_tod[0] = 1000000 / 60; // Assuming 1MHz CPU clock
-    // Used when CRA_TODIN = 1 (50 Hz TOD pin input pulses)  
+    // Used when CRA_TODIN = 1 (50 Hz TOD pin input pulses)
     cia->cycles_tod[1] = 1000000 / 50;
     
     mos6526_reset(cia);
@@ -141,6 +141,9 @@ bus_state_t mos6526_registers_write(void* context, bus_state_t bus_state) {
         case PRA:
             cia->reg[PRA] = value;
             mos6526_update_output_port(cia, A, value);
+            // Hardware: CIA2 Data Port A bits 0-1 control VIC-II memory bank selection
+            // Note: VIC-II will monitor CIA2 writes at $DD00 directly in its tick function
+            // This eliminates the need for callbacks and global state
             break;
         case PRB:
             cia->reg[PRB] = value;

@@ -1246,6 +1246,15 @@ bus_state_t vicii_tick(void* chip, bus_state_t bus_state) {
         }
     }
     
+    // Monitor CIA2 writes to $DD00 for VIC-II bank changes
+    // VIC-II watches CIA2 writes directly without callbacks or io_pending flags
+    if (bus_state.addr == 0xDD00 && !(bus_state.lines & BUS_MASK_RW)) {
+        // CIA2 Data Port A write detected - extract VIC-II bank bits (0-1)
+        // Hardware mapping: 00→Bank 3, 01→Bank 2, 10→Bank 1, 11→Bank 0
+        uint8_t vic_bank = 3 - (bus_state.data & 0x03);
+        vicii_bank_change(vicii, vic_bank);
+    }
+    
     // Delegate to the existing advance cycle function
     // In the future, this can be expanded to include additional tick-specific logic
     return vicii_advance_cycle(vicii, bus_state);
