@@ -133,7 +133,7 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
         
         // Prepare masks for potential operations (parallel execution)
         uint8_t is_io = -(chip == CHIP_IO);
-        uint8_t needs_callback = chip >= CHIP_ZEROBANK;  // 0 for fast path, 1 for slow path
+        uint8_t needs_callback = chip > CHIP_UNMAPPED;  // 0 for fast path, 1 for slow path (CHIP_IO and above)
         
         // Always calculate unified buffer access (speculative, ignored if needs_callback)
         uint8_t unified_data = c64_bus->unified_memory_buffer[unified_addr];
@@ -354,19 +354,13 @@ void c64_bus_populate_cpu_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pl
         pla_906114_01_set_cpu_address_bank((pla_906114_01_t*)pla, (uint8_t)bank);
         // Determine read CHIP based on PLA outputs for read mode
         uint8_t read_chip = pla_906114_01_outputs_to_chip((pla_906114_01_t*)pla);
-        // Special handling for CPU I/O ports in zero bank (4KB bank $0000-$0FFF)
-        if (bank == 0 && read_chip == CHIP_RAM) {
-            read_chip = CHIP_ZEROBANK;
-        }
+        // I/O port handling now done by MOS6510 bus interface callbacks - use regular RAM
 
         // Configure PLA for WRITE mode
         pla->inputs.r_w = false;  // Write mode
         pla_906114_01_update_outputs((pla_906114_01_t*)pla);
         uint8_t write_chip = pla_906114_01_outputs_to_chip((pla_906114_01_t*)pla);
-        // Special handling for CPU I/O ports in zero bank (4KB bank $0000-$0FFF)
-        if (bank == 0 && write_chip == CHIP_RAM) {
-            write_chip = CHIP_ZEROBANK;
-        }
+        // I/O port handling now done by MOS6510 bus interface callbacks - use regular RAM
 
         // Note: ROM areas (BASIC, KERNAL, Character ROM, Cartridge) are not writable, 
         // so write_chip remains CHIP_UNMAPPED for those regions
@@ -610,11 +604,6 @@ bool c64_bus_get_chip_description(const c64_bus_t* bus, uint8_t chip, chip_descr
 
     // Special cases
     switch (chip) {
-        case CHIP_ZEROBANK:
-            out->base = 0x0000;
-            out->size = 0x400;
-            out->label = "Zero Bank RAM";
-            return true;
         case CHIP_UNMAPPED:
             out->base = 0;
             out->size = 0;
@@ -645,8 +634,6 @@ const char* c64_bus_chip_to_title(uint8_t chip) {
             return "CHARROM";
         case CHIP_RAM:
             return "RAM";
-        case CHIP_ZEROBANK:
-            return "RAM"; // Ignore the zero bank aspect, it's mostly just RAM
         case CHIP_UNMAPPED:
             return "-";
         case CHIP_D0_VIC:
@@ -694,46 +681,6 @@ const char* c64_bus_size_to_str(size_t size) {
 // CHIP CALLBACK FUNCTIONS - Optimized chip-specific operations
 // ============================================================================
 
-// Chip read callback implementations using bus_state_t pattern
-static bus_state_t c64_bus_chip_read_zerobank(void* chip, bus_state_t bus_state) {
-    c64_bus_t* bus = (c64_bus_t*)chip;
-    
-    // NOTE: I/O port addresses (0-1) are now handled directly by mos6510_tick()
-    // early in the CPU tick, so they should never reach this callback.
-    // This callback only handles RAM access for addresses 2-4095 in the zero bank.
-    
-    if (unlikely(bus_state.addr <= 1)) {
-        // This should not happen with the new architecture - I/O ports are handled early
-        printf("WARNING: I/O port address %04X reached ZEROBANK callback - architecture error\n", bus_state.addr);
-        // Return current data without modification to avoid corruption
-        return bus_state;
-    }
-    
-    // Handle RAM access for addresses > 1 in the zero bank
-    bus_state = ram_memory_read(BUS_TO_C64(bus)->ram, bus_state);
-    return bus_state;
-}
-
-// Chip write callback implementations using bus_state_t pattern
-static bus_state_t c64_bus_chip_write_zerobank(void* chip, bus_state_t bus_state) {
-    c64_bus_t* bus = (c64_bus_t*)chip;
-    
-    // NOTE: I/O port addresses (0-1) are now handled directly by mos6510_tick()
-    // early in the CPU tick, so they should never reach this callback.
-    // This callback only handles RAM access for addresses 2-4095 in the zero bank.
-    
-    if (unlikely(bus_state.addr <= 1)) {
-        // This should not happen with the new architecture - I/O ports are handled early
-        printf("WARNING: I/O port address %04X reached ZEROBANK callback - architecture error\n", bus_state.addr);
-        // Return without performing write to avoid corruption
-        return bus_state;
-    }
-    
-    // Handle RAM access for addresses > 1 in the zero bank
-    bus_state = ram_memory_write(BUS_TO_C64(bus)->ram, bus_state);
-    return bus_state;
-}
-
 // CIA2-specific wrapper around mos6526_write with special handling for VIC-II bank changes
 static bus_state_t c64_bus_cia2_write_with_vic_bank_handling(void* chip, bus_state_t bus_state) {
     c64_bus_t* bus = (c64_bus_t*)chip;
@@ -770,7 +717,7 @@ void c64_bus_init_chip_callbacks(c64_bus_t* c64_bus) {
     c64_bus->chip_read_callbacks[CHIP_BASIC] = NULL; // c64_memory_tick reads from unified_memory_buffer - no read callback
     c64_bus->chip_read_callbacks[CHIP_CHARROM] = NULL; // c64_memory_tick reads from unified_memory_buffer - no read callback
     c64_bus->chip_read_callbacks[CHIP_RAM] = NULL; // c64_memory_tick reads from unified_memory_buffer - no read callback
-    c64_bus->chip_read_callbacks[CHIP_ZEROBANK] = c64_bus_chip_read_zerobank;
+    c64_bus->chip_read_callbacks[CHIP_ZEROBANK] = NULL; // DEPRECATED - I/O port handling now done by MOS6510 bus interface callbacks
     c64_bus->chip_read_callbacks[CHIP_UNMAPPED] = NULL; // UNMAPPED - no read callback
     
     // VIC-II pages (D0-D3) - assign direct chip descriptor callback or NULL
@@ -815,7 +762,7 @@ void c64_bus_init_chip_callbacks(c64_bus_t* c64_bus) {
     c64_bus->chip_write_callbacks[CHIP_BASIC] = NULL; // ROM - no write callback
     c64_bus->chip_write_callbacks[CHIP_CHARROM] = NULL; // ROM - no write callback
     c64_bus->chip_write_callbacks[CHIP_RAM] = NULL; // c64_memory_tick writes to unified_memory_buffer - no write callback
-    c64_bus->chip_write_callbacks[CHIP_ZEROBANK] = c64_bus_chip_write_zerobank;
+    c64_bus->chip_write_callbacks[CHIP_ZEROBANK] = NULL; // DEPRECATED - I/O port handling now done by MOS6510 bus interface callbacks
     c64_bus->chip_write_callbacks[CHIP_UNMAPPED] = NULL; // UNMAPPED - no write callback
     
     // VIC-II pages (D0-D3) - assign direct chip descriptor callback or NULL
