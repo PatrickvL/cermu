@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include "mos6510_registers.h"
 #include "cpu_config.h"
+#include "internal_bus.h"
 
 // Forward declarations
 typedef struct mos6510_state_s mos6510_state_t;
@@ -41,8 +42,7 @@ typedef struct mos6510_state_s {
     uint8_t rdy_halt_cycles;        // RDY line halt cycle counter
     
     // Internal bus state (visual6502 bus system)
-    uint8_t internal_bus_state;     // Internal bus routing state
-    uint8_t bus_precharge_state;    // φ2 bus precharge state
+    internal_bus_state_t internal_bus;  // Complete internal bus system state
     
     // Debug and inspection state
     uint64_t total_cycles;          // Total executed cycles counter
