@@ -5,10 +5,22 @@ param(
     [string]$Configuration = "Release"
 )
 
-# Build environment paths
+# Build environment paths - detect automatically
 $MSBuildPath = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe"
-$ProjectPath = "c:\Workspaces\Mine\aiemu\code\c"
+$ProjectPath = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ProjectPath = Join-Path $ProjectPath "code\c"
 $SolutionFile = "aiemuc.sln"
+
+# Alternative MSBuild locations to try
+$MSBuildPaths = @(
+    "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe",
+    "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe",
+    "C:\Program Files\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\MSBuild.exe",
+    "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
+)
+
+# Find first available MSBuild
+$MSBuildPath = $MSBuildPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
 
 Write-Host "Building C64 Emulator ($Configuration)..." -ForegroundColor Green
 
@@ -17,9 +29,20 @@ Push-Location $ProjectPath
 
 try {
     # Check if MSBuild exists
-    if (-not (Test-Path $MSBuildPath)) {
-        Write-Error "MSBuild not found at: $MSBuildPath"
-        Write-Host "Please install Visual Studio Build Tools 2022" -ForegroundColor Yellow
+    if (-not $MSBuildPath -or -not (Test-Path $MSBuildPath)) {
+        Write-Error "MSBuild not found. Tried:"
+        $MSBuildPaths | ForEach-Object { Write-Host "  - $_" -ForegroundColor Yellow }
+        Write-Host ""
+        Write-Host "Please install one of:" -ForegroundColor Yellow
+        Write-Host "  - Visual Studio Build Tools 2022" -ForegroundColor White
+        Write-Host "  - Visual Studio 2022 (any edition)" -ForegroundColor White
+        exit 1
+    }
+    
+    # Check if project directory exists
+    if (-not (Test-Path $ProjectPath)) {
+        Write-Error "Project directory not found: $ProjectPath"
+        Write-Host "Please run this script from the project root directory" -ForegroundColor Yellow
         exit 1
     }
 

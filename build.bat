@@ -5,16 +5,46 @@ REM Usage: build.bat [Release|Debug]
 set "CONFIGURATION=%1"
 if "%CONFIGURATION%"=="" set "CONFIGURATION=Release"
 
-set "MSBUILD_PATH=C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe"
-set "PROJECT_PATH=c:\Workspaces\Mine\aiemu\code\c"
+REM Detect project path relative to script location
+set "SCRIPT_DIR=%~dp0"
+set "PROJECT_PATH=%SCRIPT_DIR%code\c"
 set "SOLUTION_FILE=aiemuc.sln"
+
+REM Try multiple MSBuild locations
+set "MSBUILD_PATH="
+for %%P in (
+    "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe"
+    "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe"
+    "C:\Program Files\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\MSBuild.exe"
+    "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
+) do (
+    if exist "%%~P" (
+        set "MSBUILD_PATH=%%~P"
+        goto :found_msbuild
+    )
+)
+:found_msbuild
 
 echo Building C64 Emulator (%CONFIGURATION%)...
 
 REM Check if MSBuild exists
-if not exist "%MSBUILD_PATH%" (
-    echo ERROR: MSBuild not found at: %MSBUILD_PATH%
-    echo Please install Visual Studio Build Tools 2022
+if "%MSBUILD_PATH%"=="" (
+    echo ERROR: MSBuild not found. Tried:
+    echo   - "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe"
+    echo   - "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe"
+    echo   - "C:\Program Files\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\MSBuild.exe"
+    echo   - "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
+    echo.
+    echo Please install one of:
+    echo   - Visual Studio Build Tools 2022
+    echo   - Visual Studio 2022 (any edition)
+    exit /b 1
+)
+
+REM Check if project directory exists
+if not exist "%PROJECT_PATH%" (
+    echo ERROR: Project directory not found: %PROJECT_PATH%
+    echo Please run this script from the project root directory
     exit /b 1
 )
 
