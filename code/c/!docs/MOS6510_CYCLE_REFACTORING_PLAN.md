@@ -163,28 +163,45 @@ src/chip/cpu/
 #### Step 5.3: Design CPU Register Architecture with Configuration
 
 **Implementation Requirements**:
-- Define register array/structure with indexes for A, X, Y, SP, PCL, PCH, status
-- Use `cpu_family_config_t` to determine register behavior variants
-- **Research decision**: 8-bit vs 16-bit register storage approach
-  - **8-bit**: Hardware accurate, natural page-cross detection
-  - **16-bit**: Host CPU optimized, simpler PC operations
-- Design address setup and data operation function signatures
-- Create PLA control signal bit patterns with configuration-driven behavior
+- **Register array design**: Define `uint8_t registers[8]` with strategic indexing:
+  - Use bit patterns from opcodes to directly map to register indexes
+  - Enable index-based register selection for shared operation code
+  - Support both 8-bit registers and 16-bit PC through array access patterns
+- **Index mapping strategy**: Map hardware register encodings to array positions:
+  - Common opcode bit patterns (e.g., bits 2-0) directly index into register array
+  - Special handling for PC as 16-bit value using adjacent array slots
+  - Configuration-driven register behavior variants through indexed access
+- **Shared operation code**: Design operations that work with register indexes rather than fixed register names
+- **PLA control signal integration**: Create bit patterns that map directly to register array indexes
 
 **Benefits**:
-- Fundamental architecture must be solid before implementation begins
-- Configuration approach eliminates need for variant-specific code
+- **Code deduplication**: Operations that differ only in target register can share implementation
+- **Hardware accuracy**: Index mapping matches real CPU instruction encoding patterns
+- **Performance optimization**: Direct bit-pattern to index mapping eliminates decode overhead
+- **Maintainability**: Single operation implementation handles multiple register variants
+
+**Architecture Example**:
+```c
+typedef struct {
+    uint8_t registers[8];  // [A, X, Y, SP, PCL, PCH, Status, Temp]
+    // Opcode bits 2-0 can directly index into registers 0-7
+    // Operations work with register_index parameter instead of hardcoded registers
+} mos6510_cycle_registers_t;
+
+// Shared operation: void alu_operation(cpu, uint8_t reg_index, operation_type)
+// Instead of separate: alu_operation_a(), alu_operation_x(), alu_operation_y()
+```
 
 **Research Areas**:
-- Performance profiling of 8-bit vs 16-bit register approaches
-- Cache behavior analysis with different struct layouts
-- Host CPU architecture optimization (x86-64, ARM)
+- Optimal register array layout for cache performance
+- Bit pattern analysis of 6502 instruction encoding for optimal index mapping
+- Performance comparison of array indexing vs. direct register access
 
 **Files to Create**:
-- `code/c/src/chip/cpu/mos6510_cycle/mos6510_cycle_registers.h` - Register architecture
-- `code/c/src/chip/cpu/mos6510_cycle/mos6510_cycle_pla.h` - PLA definitions
+- `code/c/src/chip/cpu/mos6510_cycle/mos6510_cycle_registers.h` - Register array architecture
+- `code/c/src/chip/cpu/mos6510_cycle/mos6510_cycle_pla.h` - PLA definitions with index mapping
 
-**Risk**: Low - design phase, no code changes yet
+**Risk**: Low - design phase, but requires careful bit pattern analysis for optimal mapping
 
 #### Step 5.4: Create Parallel CPU Cycle Infrastructure with Configuration
 
