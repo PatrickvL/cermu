@@ -66,8 +66,8 @@ bool mos6510_init(mos6510_state_t *cpu, const cpu_config_t *config) {
     cpu->rdy_halt_cycles = 0;           // No RDY halt
     
     // Initialize internal bus state
-    cpu->internal_bus_state = 0;        // No bus routing
-    cpu->bus_precharge_state = 0;       // No precharge
+    // Initialize internal bus system
+    internal_bus_init(&cpu->internal_bus);
     
     // Initialize debug state
     cpu->total_cycles = 0;              // Zero cycle count
