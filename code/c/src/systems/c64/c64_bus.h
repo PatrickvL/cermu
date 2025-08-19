@@ -17,41 +17,29 @@
 // Bus Types & Macros
 // =============================
 
-// Chip IDs optimized for unified memory buffer layout
+// Chip IDs strategically numbered for branchless unified memory buffer address calculation
 typedef enum {
-    // Memory chips (no side effects) - consecutive for unified buffer
-    CHIP_ROML         = 0,   // 8KB ROM Low (cartridge) - maps to unified offset 0x0000
-    CHIP_ROMH         = 1,   // 8KB ROM High (cartridge) - maps to unified offset 0x2000
-    CHIP_KERNAL       = 2,   // 8KB KERNAL ROM - maps to unified offset 0x4000
-    CHIP_BASIC        = 3,   // 8KB BASIC ROM - maps to unified offset 0x6000
-    CHIP_CHARROM      = 4,   // 4KB Character ROM - maps to unified offset 0x8000
-    CHIP_RAM          = 5,   // 64KB RAM - maps to unified offset (0xA000 - 0x1000 =) 0x9000
-    // End of unified memory buffer chips - all below ones require callbacks :
-    CHIP_ZEROBANK     = 6,   // DEPRECATED - kept for chip numbering compatibility
-    CHIP_UNMAPPED     = 7,   // Unmapped regions
+    // Strategic numbering with 4KB step size: offset = chip << 12 (chip * 4096)
+    // 8KB regions take 2 steps each: ROML(0), ROMH(2), KERNAL(4), BASIC(6), CHARROM(8), RAM(9)
+    // Buffer: ROML(0x0000) + ROMH(0x2000) + KERNAL(0x4000) + BASIC(0x6000) + CHARROM(0x8000) + RAM(0x9000)
+    CHIP_ROML         = 0,   // 8KB ROM Low (cartridge) - maps to offset 0x0000 (0 << 12 = 0x0000)
+    CHIP_ROMH         = 2,   // 8KB ROM High (cartridge) - maps to offset 0x2000 (2 << 12 = 0x2000)
+    CHIP_KERNAL       = 4,   // 8KB KERNAL ROM - maps to offset 0x4000 (4 << 12 = 0x4000)
+    CHIP_BASIC        = 6,   // 8KB BASIC ROM - maps to offset 0x6000 (6 << 12 = 0x6000)
+    CHIP_CHARROM      = 8,   // 4KB Character ROM - maps to offset 0x8000 (8 << 12 = 0x8000)
+    CHIP_RAM          = 9,   // 64KB RAM - maps to offset 0x9000 (9 << 12 = 0x9000)
     
-    // I/O chips start here (all encoded as CHIP_IO = 8 in bank array)
-    CHIP_IO           = 8,   // Base I/O (gets expanded)
-    // I/O pages in $D000-$DFFF range (16 pages of $100 bytes each)
-    CHIP_D0_VIC = CHIP_IO,   // $D000-$D0FF (I/O page 0) - VIC-II registers
-    CHIP_D1_VIC      = 9,    // $D100-$D1FF (I/O page 1) - VIC-II mirrors
-    CHIP_D2_VIC      = 10,   // $D200-$D2FF (I/O page 2) - VIC-II mirrors
-    CHIP_D3_VIC      = 11,   // $D300-$D3FF (I/O page 3) - VIC-II mirrors
-    CHIP_D4_SID      = 12,   // $D400-$D4FF (I/O page 4) - SID registers
-    CHIP_D5_SID      = 13,   // $D500-$D5FF (I/O page 5) - SID mirrors
-    CHIP_D6_SID      = 14,   // $D600-$D6FF (I/O page 6) - SID mirrors
-    CHIP_D7_SID      = 15,   // $D700-$D7FF (I/O page 7) - SID mirrors
-    CHIP_D8_COLORRAM = 16,   // $D800-$D8FF (I/O page 8) - Color RAM
-    CHIP_D9_COLORRAM = 17,   // $D900-$D9FF (I/O page 9) - Color RAM mirror
-    CHIP_DA_COLORRAM = 18,   // $DA00-$DAFF (I/O page 10) - Color RAM mirror
-    CHIP_DB_COLORRAM = 19,   // $DB00-$DBFF (I/O page 11) - Color RAM mirror
-    CHIP_DC_CIA1     = 20,   // $DC00-$DCFF (I/O page 12) - CIA1
-    CHIP_DD_CIA2     = 21,   // $DD00-$DDFF (I/O page 13) - CIA2
-    CHIP_DE_IO1      = 22,   // $DE00-$DEFF (I/O page 14) - Cartridge I/O 1
-    CHIP_DF_IO2      = 23,   // $DF00-$DFFF (I/O page 15) - Cartridge I/O 2
-
-    CHIP_MAX = 24 // Total number of CHIP IDs (0-23)
+    // Non-offset values (not used in address calculation)
+    CHIP_UNMAPPED     = 10,  // Unmapped regions (not in unified buffer)
+    CHIP_IO           = 11,  // I/O region ($D000-$DFFF) - special case, not in unified buffer
 } chip_id_t;
+
+// Array of valid CHIP IDs for iteration (due to irregular numbering)
+static const uint8_t VALID_CHIP_IDS[] = {
+    CHIP_ROML, CHIP_ROMH, CHIP_KERNAL, CHIP_BASIC,
+    CHIP_CHARROM, CHIP_RAM, CHIP_UNMAPPED, CHIP_IO
+};
+static const size_t VALID_CHIP_COUNT = sizeof(VALID_CHIP_IDS) / sizeof(VALID_CHIP_IDS[0]);
 
 // System line masks for cartridge signals (moved out of control lines to separate field)
 #define SYS_MASK_EXROM 0   // EXROM signal
@@ -68,10 +56,12 @@ typedef struct c64_bus_s {
     // Current PLA banking mode (0-31) derived from CPU port + cartridge signals
     uint8_t pla_banking_mode;  // Current banking mode for fast switching
     
-    // UNIFIED MEMORY BUFFER FOR OPTIMIZED OPCODE FETCH
-    // Layout: ROML(8KB) + ROMH(8KB) + KERNAL(8KB) + BASIC(8KB) + CHARROM(4KB) + RAM(64KB)
-    // Total: Up to 100KB unified buffer for branchless memory access (Color RAM handled via I/O callbacks)
-    // Dynamic allocation with pointer arithmetic for unused cartridge ROMs
+    // UNIFIED MEMORY BUFFER FOR OPTIMIZED OPCODE FETCH - STRATEGIC LAYOUT
+    // Layout optimized for branchless calculation: ROML + ROMH + KERNAL + BASIC + CHARROM + RAM
+    // Offsets: ROML=0x0000, ROMH=0x2000, KERNAL=0x4000, BASIC=0x6000, CHARROM=0x8000, RAM=0x9000
+    // Total: Up to 100KB unified buffer (36KB ROM space + 64KB RAM) for branchless memory access
+    // Strategic CHIP numbering enables pure arithmetic: offset = chip << 12 (chip * 4096)
+    // Dynamic allocation skips unused cartridge ROMs at buffer start to save memory
     uint8_t* unified_memory_buffer;   // Points to usable memory (may be offset from allocated memory)
     uint8_t* allocated_buffer;        // Points to actual allocated memory
     size_t allocated_size;            // Actual allocated size
@@ -227,8 +217,6 @@ static inline control_lines_interface_t* c64_control_lines_get_adapter(c64_bus_t
 // Writable CHIPs 16-19 become 1-4 in encoded form, which fits in 3 bits.
 // Output byte format: [7:5] write code (3 bits), [4] unused (1 bit), [3:0] read code (4 bits)
 static inline uint8_t encode_chip_rw(uint8_t read_chip, uint8_t write_chip) {
-    read_chip = (read_chip > CHIP_IO) ? CHIP_IO : read_chip;
-    write_chip = (write_chip > CHIP_IO) ? CHIP_IO : write_chip;
     uint8_t encoded = read_chip | (write_chip << 4);
     return encoded;
 }

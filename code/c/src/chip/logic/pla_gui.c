@@ -188,7 +188,7 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                         // WAS uint16_t read_offset = (read_effective_base <= bank_start) ? (bank_start - read_effective_base) : 0;
                         uint16_t read_offset = bank_start - read_effective_base;
 
-                        igText("%s", (read_chip == CHIP_IO) ? "I/O" : c64_bus_chip_to_title(read_chip));
+                        igText(c64_bus_chip_to_title(read_chip));
                         igTableSetColumnIndex(5);
                         igText("$%04X", read_offset);
                     }
@@ -213,7 +213,7 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                         
                         uint16_t write_offset = bank_start - write_effective_base;
 
-                        igText("%s", (write_chip == CHIP_IO) ? "I/O" : c64_bus_chip_to_title(write_chip));
+                        igText(c64_bus_chip_to_title(write_chip));
                         igTableSetColumnIndex(8);
                         igText("$%04X", write_offset);
                     }
@@ -311,7 +311,9 @@ void pla_render_debug_window(void* chip, bool* show_window) {
         igTableSetupColumn("Title", ImGuiTableColumnFlags_None, 0.0f, 0);
         igTableHeadersRow();
         chip_description_t desc;
-        for (int chip_id = 0; chip_id < CHIP_MAX; chip_id++) {
+        // Iterate through valid CHIP IDs only (handles irregular numbering)
+        for (size_t i = 0; i < VALID_CHIP_COUNT; i++) {
+            uint8_t chip_id = VALID_CHIP_IDS[i];
             igTableNextRow(ImGuiTableRowFlags_None, 0.0f);
             igTableSetColumnIndex(0);
             igText("%02d", chip_id);

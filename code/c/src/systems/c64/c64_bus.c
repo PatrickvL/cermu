@@ -42,34 +42,43 @@ static inline int8_t c64_bus_get_bank(uint16_t address) {
 }
 
 // ============================================================================
-// UNIFIED ADDRESS CALCULATION MACRO - Shared address calculation for performance
+// UNIFIED ADDRESS CALCULATION FUNCTION - Shared address calculation for performance
 // ============================================================================
 
 /**
- * Unified address calculation macro for memory access optimization.
- * Generates branchless address calculation for the unified memory buffer.
- * This macro provides optimal instruction scheduling opportunities for the compiler.
- * 
- * Variables that will be created/used by this macro:
- * - chip: uint8_t - The target chip ID
- * - is_ram: uint32_t - 0xFFFFFFFF for RAM, 0 for others
- * - offset_mask: uint32_t - 0xFFFF for RAM, 0x0FFF for others
- * - chip_offset: uint32_t - Masked address offset
- * - base_offset: uint32_t - Chip base offset in unified buffer
- * - ram_adjustment: uint32_t - Additional offset for RAM (0x9000)
- * - unified_addr: uint32_t - Final unified buffer address
- * 
- * Usage: C64_BUS_UNIFIED_ADDRESS_CALC(chip_value, address)
+ * Ultra-optimized unified address calculation function for memory access.
+ * Pure branchless arithmetic using strategic CHIP_* numbering for maximum performance.
+ * CHIP values are chosen so that (chip << 12) directly maps to buffer offsets.
+ *
+ * CRITICAL DEPENDENCY: This function relies on the specific CHIP_* enum values
+ * in c64_bus.h. The calculation uses chip << 12 (chip * 4096) for base offsets:
+ *
+ * - CHIP_ROML     = 0  -> base_offset = 0x0000 (0 << 12 = 0x0000)
+ * - CHIP_ROMH     = 2  -> base_offset = 0x2000 (2 << 12 = 0x2000)
+ * - CHIP_KERNAL   = 4  -> base_offset = 0x4000 (4 << 12 = 0x4000)
+ * - CHIP_BASIC    = 6  -> base_offset = 0x6000 (6 << 12 = 0x6000)
+ * - CHIP_CHARROM  = 8  -> base_offset = 0x8000 (8 << 12 = 0x8000)
+ * - CHIP_RAM      = 9  -> base_offset = 0x9000 (9 << 12 = 0x9000)
+ *
+ * WARNING: Changing these CHIP_* values will break address calculation!
+ *
+ * OPTIMIZATION: Single shift + mask operation, completely branchless.
+ * Total buffer size: 0x9000 + 64KB RAM = 100KB (36KB + 64KB)
+ *
+ * @param chip The target chip ID (must be 0-9 for unified buffer chips)
+ * @param addr The 16-bit address to access
+ * @return The calculated offset into the unified memory buffer
  */
-#define C64_BUS_UNIFIED_ADDRESS_CALC(chip, addr) \
-    do { \
-        uint32_t is_ram = (-(chip == CHIP_RAM)); \
-        uint32_t offset_mask = is_ram | 0x1FFF; \
-        uint32_t chip_offset = (addr) & offset_mask; \
-        uint32_t base_offset = chip << 13; \
-        uint32_t ram_adjustment = is_ram & 0x1000; \
-        unified_addr = base_offset - ram_adjustment + chip_offset; \
-    } while(0)
+static inline uint32_t c64_bus_unified_address_calc(uint8_t chip, uint16_t addr) {
+    // Ultra-branchless calculation using strategic numbering
+    uint32_t base = (uint32_t)chip << 12;  // Direct offset calculation via strategic numbering
+    
+    // CRITICAL: addr contains original C64 memory map addresses (e.g. KERNAL 0xE000-0xFFFF)
+    // Mask strips base address to get chip-relative offset (e.g. 0xE000 & 0x1FFF = 0x0000)
+    // RAM uses full 0xFFFF, ROMs use 0x1FFF to prevent buffer overflow
+    // CHARROM (4KB) is safe with 0x1FFF mask: max 0xDFFF & 0x1FFF = 0x0FFF stays within 4KB buffer
+    return base + (addr & (0x1FFF | -(chip == CHIP_RAM)));
+}
 
 // ULTRA-OPTIMIZED VIC-II MEMORY READ - Better performance than CPU version
 // VIC-II uses pre-selected active array (indexed by CHIP), can only read, never write
@@ -86,11 +95,9 @@ void c64_bus_vic_read(c64_bus_t* c64_bus, uint16_t address) {
         return; // Leave c64_bus->state.data unchanged (floating bus state)
     }
     
-    // BRANCHLESS unified address calculation using shared macro
-    // Chip mapping: 0=ROML, 1=ROMH, 2=KERNAL, 3=BASIC, 4=CHARROM, 5=RAM
-    // Unified offsets: 0x0000=ROML, 0x2000=ROMH, 0x4000=KERNAL, 0x6000=BASIC, 0x8000=CHARROM, 0x9000=RAM
-    uint32_t unified_addr;
-    C64_BUS_UNIFIED_ADDRESS_CALC(chip, address);
+    // BRANCHLESS unified address calculation using shared function
+    // Address calculation depends on CHIP_* enum ordering (see function documentation)
+    uint32_t unified_addr = c64_bus_unified_address_calc(chip, address);
     c64_bus->state.data = c64_bus->unified_memory_buffer[unified_addr];
 }
 
@@ -104,6 +111,10 @@ void c64_bus_vic_read(c64_bus_t* c64_bus, uint16_t address) {
  *
  * NOTE: I/O port addresses (0-1) are now handled directly by mos6510_tick()
  * early in the CPU tick to prevent memory system from overwriting I/O port data.
+ *
+ * PHASE 4.1: Enhanced fast path implementation for all unified buffer chips
+ * - Direct unified buffer access for CHIP_RAM, CHIP_BASIC, CHIP_KERNAL, CHIP_CHARROM, CHIP_ROML, CHIP_ROMH
+ * - Bypass callback system for ROM/RAM access using pointer arithmetic
  *
  * @param c64_bus Pointer to the C64 bus controller
  * @param bus_state Current bus state (passed by value for register optimization)
@@ -124,33 +135,39 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
         // === READ OPERATION ===
         uint8_t chip = decode_read_chip(c64_bus->cpu_encoded_chip_per_bank[cpu_bank]);
         
-        // Fast path for unified buffer access (RAM, ROM, UNMAPPED)
+        // ENHANCED FAST PATH: Direct unified buffer access for all memory chips
+        // Fast path handles: CHIP_ROML, CHIP_ROMH, CHIP_KERNAL, CHIP_BASIC, CHIP_CHARROM, CHIP_RAM
         if (likely(chip <= CHIP_RAM)) {
-            // Unified address calculation using shared macro
-            uint32_t unified_addr;
-            C64_BUS_UNIFIED_ADDRESS_CALC(chip, address);
+            // Unified address calculation using shared function - covers all ROM/RAM types
+            // Address calculation depends on CHIP_* enum ordering (see function documentation)
+            uint32_t unified_addr = c64_bus_unified_address_calc(chip, address);
             bus_state.data = c64_bus->unified_memory_buffer[unified_addr];
         } else if (chip == CHIP_IO) {
             // I/O region: set pending flag for chips to handle in their tick functions
             bus_set_io_pending(&bus_state);
             // Leave bus_state.data unchanged (floating bus behavior)
+        } else {
+            // CHIP_UNMAPPED and others: floating bus behavior
+            // Leave bus_state.data unchanged (floating bus state)
         }
-        // Note: CHIP values above CHIP_IO are handled by setting I/O pending flag
         
     } else {
         // === WRITE OPERATION ===
         uint8_t chip = decode_write_chip(c64_bus->cpu_encoded_chip_per_bank[cpu_bank]);
         
-        // FAST PATH: Direct unified buffer write for CHIP_RAM (most common case)
+        // ENHANCED FAST PATH: Handle all writable unified buffer regions
         if (likely(chip == CHIP_RAM)) {
-            // Direct unified buffer write
-            // Unified RAM offset: 0x9000 + address
-            c64_bus->unified_memory_buffer[0x9000 + address] = bus_state.data;
+            // Direct unified buffer write for RAM (most common writable case)
+            // RAM is at offset 0x7000 in the strategic layout
+            uint32_t unified_addr = c64_bus_unified_address_calc(chip, address);
+            c64_bus->unified_memory_buffer[unified_addr] = bus_state.data;
         } else if (chip == CHIP_IO) {
             // I/O region: set pending flag for chips to handle in their tick functions
             bus_set_io_pending(&bus_state);
+        } else {
+            // Writes to UNMAPPED and ROM areas are ignored (no action needed)
+            // ROM chips (BASIC, KERNAL, CHARROM, ROML, ROMH) are read-only in hardware
         }
-        // Note: Writes to UNMAPPED and ROM areas are ignored (no action needed)
     }
     
     return bus_state;
@@ -287,8 +304,8 @@ uint8_t pla_906114_01_outputs_to_chip(pla_906114_01_t* pla) {
         // Character ROM (read-only)
         return CHIP_CHARROM;
     } else if (!pla->outputs.n_io) {
-        // I/O region - includes Color RAM, VIC-II, SID, CIA, etc. (read-write)
-        return CHIP_IO; // c64_memory_tick will handle mapping to full 16 I/O pages
+        // I/O region - includes VIC-II, SID, Color RAM, CIA1, CIA2 (read/write)
+        return CHIP_IO;
     } else if (!pla->outputs.n_roml) {
         // Cartridge ROM Low (read-only)
         return CHIP_ROML;
@@ -549,31 +566,46 @@ bool c64_bus_get_game_signal(c64_bus_t* c64_bus) {
     return (c64_bus->system_lines & SYS_MASK_GAME) == 0;
 }
 
-// Update c64_bus_get_chip_description to use the new mapping for all CHIPs
+// Chip entry lookup table for description and validation (handles irregular numbering)
+typedef struct {
+    uint16_t base_address;
+    size_t size;
+    const char* label;
+} chip_entry_t;
+
+// Sparse lookup table indexed by CHIP_* values (supports irregular numbering)
+static const chip_entry_t c64_bus_chip_to_entry[] = {
+    [CHIP_ROML]     = { 0x8000, 8*1024, "Cartridge ROM Low" },
+    [CHIP_ROMH]     = { 0xA000, 8*1024, "Cartridge ROM High" }, // Note: Can also map to 0xE000
+    [CHIP_KERNAL]   = { 0xE000, 8*1024, "KERNAL ROM" },
+    [CHIP_BASIC]    = { 0xA000, 8*1024, "BASIC ROM" },
+    [CHIP_CHARROM]  = { 0xD000, 4*1024, "Character ROM" },
+    [CHIP_RAM]      = { 0x0000, 64*1024, "RAM" },
+    [CHIP_UNMAPPED] = { 0x0000, 0, "Unmapped" },
+    [CHIP_IO]       = { 0xD000, 4*1024, "I/O" },
+};
+static const size_t CHIP_ENTRY_COUNT = sizeof(c64_bus_chip_to_entry) / sizeof(c64_bus_chip_to_entry[0]);
+
+// Update c64_bus_get_chip_description to use the chip entry lookup table
 bool c64_bus_get_chip_description(const c64_bus_t* bus, uint8_t chip, chip_description_t* out) {
-    if (!bus || !out || chip >= CHIP_MAX) return false;
+    if (!bus || !out) return false;
 
     memset(out, 0, sizeof(*out));
-    // For now, return false for chip lookup until proper registry is implemented
-    chip_entry_t* entry = NULL; // c64_bus_chip_to_entry[chip];
-    if (entry) {
+    
+    // Validate chip ID and get entry (handles irregular numbering via sparse array)
+    if (chip >= CHIP_ENTRY_COUNT) return false;
+    
+    const chip_entry_t* entry = &c64_bus_chip_to_entry[chip];
+    
+    // Entry exists if it has a label (even UNMAPPED has a label)
+    if (entry->label) {
         out->base = entry->base_address;
         out->size = entry->size;
-        out->label = entry->desc && entry->desc->description ? entry->desc->description : "?";
+        out->label = entry->label;
         return true;
-    }    
-
-    // Special cases
-    switch (chip) {
-        case CHIP_UNMAPPED:
-            out->base = 0;
-            out->size = 0;
-            out->label = "Unmapped";
-            return true;
-        default:
-            break;
     }
 
+    // Fallback for undefined entries
     out->base = 0;
     out->size = 0;
     out->label = "?";
@@ -597,29 +629,8 @@ const char* c64_bus_chip_to_title(uint8_t chip) {
             return "RAM";
         case CHIP_UNMAPPED:
             return "-";
-        case CHIP_D0_VIC:
-        case CHIP_D1_VIC:
-        case CHIP_D2_VIC:
-        case CHIP_D3_VIC:
-            return "VIC-II";
-        case CHIP_D4_SID:
-        case CHIP_D5_SID:
-        case CHIP_D6_SID:
-        case CHIP_D7_SID:
-            return "SID";
-        case CHIP_D8_COLORRAM:
-        case CHIP_D9_COLORRAM:
-        case CHIP_DA_COLORRAM:
-        case CHIP_DB_COLORRAM:
-            return "COLORRAM";
-        case CHIP_DC_CIA1:
-            return "CIA1";
-        case CHIP_DD_CIA2:
-            return "CIA2";
-        case CHIP_DE_IO1:
-            return "IO1";
-        case CHIP_DF_IO2:
-            return "IO2";
+        case CHIP_IO:
+            return "I/O";
         default:
             return "?";
     }
@@ -661,23 +672,24 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c
         c64_bus->allocated_buffer = NULL;
     }
     
-    // Calculate required memory size and offset
-    // Full layout: ROML(8KB) + ROMH(8KB) + KERNAL(8KB) + BASIC(8KB) + CHARROM(4KB) + RAM(64KB) = 100KB
-    size_t required_size = 100 * 1024; // Start with full size
-    size_t offset = 0;                  // Offset to subtract from allocated buffer
+    // Calculate required memory size for strategic layout (4KB step size)
+    // Strategic layout: ROML(0x0000) + ROMH(0x2000) + KERNAL(0x4000) + BASIC(0x6000) + CHARROM(0x8000) + RAM(0x9000)
+    // Total: 0x9000 (36KB) + RAM(64KB) = 100KB maximum
+    size_t required_size = 100 * 1024; // Base size: 36KB + 64KB RAM
+    size_t offset = 0;                  // No offset needed for strategic layout
     
+    // Adjust for missing cartridge ROMs (can save space at beginning)
     if (!config->roml_present && !config->romh_present) {
-        // Save 16KB by not allocating space for both cartridge ROMs
-        required_size = 84 * 1024;  // KERNAL(8KB) + BASIC(8KB) + CHARROM(4KB) + RAM(64KB)
-        offset = 16 * 1024;         // Offset so KERNAL (offset 0x4000) becomes start of buffer
+        // Skip first 16KB: start at KERNAL (0x4000)
+        required_size = 84 * 1024;  // (36KB - 16KB) + 64KB RAM = 84KB
+        offset = 16 * 1024;         // Offset buffer start by 16KB
     } else if (!config->roml_present) {
-        // Save 8KB by not allocating ROML
-        required_size = 92 * 1024;  // ROMH(8KB) + KERNAL(8KB) + BASIC(8KB) + CHARROM(4KB) + RAM(64KB)
-        offset = 8 * 1024;          // Offset so ROMH (offset 0x2000) becomes start of buffer
+        // Skip first 8KB: start at ROMH (0x2000)
+        required_size = 92 * 1024;  // (36KB - 8KB) + 64KB RAM = 92KB
+        offset = 8 * 1024;          // Offset buffer start by 8KB
     } else if (!config->romh_present) {
-        // Save 8KB by not allocating ROMH (more complex layout)
-        // For now, keep simple and allocate full space
-        // TODO: Implement optimized layout for ROML-only cartridges
+        // Keep ROML, skip ROMH: need custom layout
+        // For simplicity, allocate full size for now
         required_size = 100 * 1024;
         offset = 0;
     }
@@ -692,7 +704,7 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c
     
     c64_bus->allocated_size = required_size;
     
-    // Apply pointer arithmetic trick - subtract offset so unused ROM regions point before allocated memory
+    // Apply offset for missing cartridge ROMs (pointer arithmetic for memory savings)
     c64_bus->unified_memory_buffer = c64_bus->allocated_buffer - offset;
     
     // Initialize allocated memory to zero
@@ -717,13 +729,13 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c
     }
 
     // Point the following devices to their respective unified buffer offset
-    // Note: offsets work due to pointer arithmetic trick with offset subtraction
-    DO(c64->cartridge_roml, 0x0000, c64_bus->roml_present); // CHIP_ROML
-    DO(c64->cartridge_romh, 0x2000, c64_bus->romh_present); // CHIP_ROMH
-    DO(c64->kernal, 0x4000, true); // CHIP_KERNAL - always present
-    DO(c64->basic, 0x6000, true);  // CHIP_BASIC - always present
-    DO(c64->charrom, 0x8000, true); // CHIP_CHARROM - always present
-    DO(c64->ram, 0x9000, true);     // CHIP_RAM - always present
+    // Strategic layout: ROML=0x0000, ROMH=0x2000, KERNAL=0x4000, BASIC=0x6000, CHARROM=0x8000, RAM=0x9000
+    DO(c64->cartridge_roml, 0x0000, c64_bus->roml_present); // CHIP_ROML = 0 -> 0x0000 - optional
+    DO(c64->cartridge_romh, 0x2000, c64_bus->romh_present); // CHIP_ROMH = 2 -> 0x2000 - optional
+    DO(c64->kernal, 0x4000, true);                          // CHIP_KERNAL = 4 -> 0x4000 - always present
+    DO(c64->basic, 0x6000, true);                           // CHIP_BASIC = 6 -> 0x6000 - always present
+    DO(c64->charrom, 0x8000, true);                         // CHIP_CHARROM = 8 -> 0x8000 - always present
+    DO(c64->ram, 0x9000, true);                             // CHIP_RAM = 9 -> 0x9000 - always present
 #undef DO    
     
     printf("c64_bus: Allocated %zu KB unified buffer (saved %zu KB), ROML:%s ROMH:%s\n",

@@ -67,7 +67,8 @@ bus_state_t mos2114_write(void* context, bus_state_t bus_state) {
     // - Other PLA conditions prevent I/O access
     //
     // CURRENT IMPLEMENTATION:
-    // Our bus system routes I/O region access through CHIP_IO callbacks,
+    // Our bus system routes I/O region access through chip ticks,
+    // attended to this via BUS_MASK_IO_MEM_ACCESS_PENDING,
     // which means this write function is only called when the PLA has
     // already determined that I/O region access is allowed. This provides
     // equivalent behavior to the _GRW signal gating without explicit
