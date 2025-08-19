@@ -24,7 +24,7 @@ typedef enum {
     CHIP_ROMH         = 1,   // 8KB ROM High (cartridge) - maps to unified offset 0x2000
     CHIP_KERNAL       = 2,   // 8KB KERNAL ROM - maps to unified offset 0x4000
     CHIP_BASIC        = 3,   // 8KB BASIC ROM - maps to unified offset 0x6000
-    CHIP_CHARROM      = 4,   // 4KB Character ROM (+ 4KB padding) - maps to unified offset 0x8000
+    CHIP_CHARROM      = 4,   // 4KB Character ROM - maps to unified offset 0x8000
     CHIP_RAM          = 5,   // 64KB - maps to offset 0x9000 in unified buffer
     // End of unified memory buffer chips - all below ones require callbacks :
     CHIP_ZEROBANK     = 6,   // Pseudo chip for CPU I/O ports (4KB bank $0000-$0FFF)

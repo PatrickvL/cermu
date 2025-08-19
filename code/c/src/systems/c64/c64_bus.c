@@ -32,7 +32,7 @@ static inline int8_t c64_bus_get_bank(uint16_t address) {
  * - offset_mask: uint32_t - 0xFFFF for RAM, 0x0FFF for others
  * - chip_offset: uint32_t - Masked address offset
  * - base_offset: uint32_t - Chip base offset in unified buffer
- * - ram_adjustment: uint32_t - Additional offset for RAM (0xC000)
+ * - ram_adjustment: uint32_t - Additional offset for RAM (0x9000)
  * - unified_addr: uint32_t - Final unified buffer address
  * 
  * Usage: C64_BUS_UNIFIED_ADDRESS_CALC(chip_value, address)

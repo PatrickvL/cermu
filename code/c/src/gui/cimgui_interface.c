@@ -14,26 +14,20 @@
 
 #ifdef IMGUI_VERSION_NUM
     // Modern ImGui/cimgui with version information available
-    #if IMGUI_VERSION_NUM >= 19000  // ImGui 1.90+ uses direct ImTextureID
-        #define CIMGUI_IMAGE_CALL(tex_id, size, uv0, uv1) \
-            igImage((ImTextureID)(intptr_t)(tex_id), size, uv0, uv1)
-    #else
-        // Older versions with version info - also use direct ImTextureID
-        #define CIMGUI_IMAGE_CALL(tex_id, size, uv0, uv1) \
-            igImage((ImTextureID)(intptr_t)(tex_id), size, uv0, uv1)
-    #endif
+    #define CIMGUI_IMAGE_CALL(tex_id, size, uv0, uv1) \
+        igImage((ImTextureID)(intptr_t)(tex_id), size, uv0, uv1)
 #else
     // Legacy cimgui without IMGUI_VERSION_NUM defined
-    // Default to modern API, but allow compile-time override for old systems
-    #ifndef CIMGUI_USE_LEGACY_TEXTURE_API
-        // Modern cimgui uses ImTextureRef structure
-        // Used on Linux
+    // Try to detect if ImTextureRef is available at compile time
+    #ifdef CIMGUI_USE_LEGACY_TEXTURE_REF
+        // Only use ImTextureRef if explicitly requested (for very old cimgui)
+        // Note : Linux build has #ifndef CIMGUI_USE_LEGACY_TEXTURE_API here?
         #define CIMGUI_IMAGE_CALL(tex_id, size, uv0, uv1) \
             igImage((ImTextureRef){._TexData = NULL, ._TexID = (ImTextureID)(intptr_t)(tex_id)}, size, uv0, uv1)
     #else
-        // Legacy API for very old cimgui versions that used ImTextureRef
+        // Default to modern direct ImTextureID approach
         #define CIMGUI_IMAGE_CALL(tex_id, size, uv0, uv1) \
-            igImage((ImTextureRef){._TexData = NULL, ._TexID = (ImTextureID)(intptr_t)(tex_id)}, size, uv0, uv1)
+            igImage((ImTextureID)(intptr_t)(tex_id), size, uv0, uv1)
     #endif
 #endif
 

@@ -129,14 +129,14 @@ FAM65XX_OPCODE_PROTO(fam65xx_op_brk) {
     (void)fam65xx_read_cycle(cpu, cpu->pc++); // Read and discard next byte
     fam65xx_interrupt_sequence(cpu, cpu->p | FLAG_B, 0xFFFE);
     FAM65XX_OPCODE_FOOTER(cpu);
-else // As long as the IRQ vector ends up at BRK, we replace threaded dispatch with a loop
+#else // As long as the IRQ vector ends up at BRK, we replace threaded dispatch with a loop
     do {
         (void)fam65xx_read_cycle(cpu, cpu->pc++);
         fam65xx_interrupt_sequence(cpu, cpu->p | FLAG_B, 0xFFFE);
         // Fetch next opcode
         uint8_t opcode = fam65xx_read_cycle(cpu, cpu->pc);
         if (opcode != 0x00) { // 0x00 is BRK
-            (cpu)->opcode_handlers[opcode](cpu);
+            cpu->opcode_handlers[opcode](cpu);
             return;
         }
         // If next opcode is BRK, repeat loop
