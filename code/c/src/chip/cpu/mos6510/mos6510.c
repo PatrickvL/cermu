@@ -31,8 +31,6 @@ chip_descriptor_t mos6510_descriptor = {
     .create = mos6510_create,
     .destroy = mos6510_destroy,
     .bus_attach = NULL,
-    .read = NULL,  // I/O port access handled directly by mos6510_handle_io_read/write
-    .write = NULL, // I/O port access handled directly by mos6510_handle_io_read/write
     .bank_change = NULL,
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
     .render_debug_window = mos6510_render_debug_window,

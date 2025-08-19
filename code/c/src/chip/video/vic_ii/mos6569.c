@@ -41,8 +41,6 @@ chip_descriptor_t mos6569_descriptor = {
     .create      = mos6569_system_create,
     .destroy     = mos6569_system_destroy,
     .bus_attach  = mos6569_bus_attach,
-    .read        = vicii_registers_read, // Not mos6569_registers_read as that's just a forward
-    .write       = vicii_registers_write, // Note mos6569_registers_write as that's just a forward
     .bank_change = mos6569_bank_change,
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
     .render_debug_window = mos6569_render_debug_window,

@@ -208,8 +208,6 @@ chip_descriptor_t mos6526_descriptor = {
     .create = mos6526_system_create,
     .destroy = mos6526_system_destroy,
     .bus_attach = (void (*)(void *, void *))mos6526_bus_attach,
-    .read = mos6526_registers_read,
-    .write = mos6526_registers_write,
     .bank_change = NULL,
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
     .render_debug_window = mos6526_render_debug_window,
@@ -478,6 +476,14 @@ bus_state_t mos6526_tick(void* chip, bus_state_t bus_state) {
         
         if (addr_page == expected_page) {
             bus_clear_io_pending(&bus_state);
+            
+            // Handle register access directly in the tick function
+            bool is_read = bus_state.lines & BUS_MASK_RW;
+            if (is_read) {
+                bus_state = mos6526_registers_read(cia, bus_state);
+            } else {
+                bus_state = mos6526_registers_write(cia, bus_state);
+            }
         }
     }
 

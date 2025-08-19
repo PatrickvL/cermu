@@ -18,8 +18,6 @@ struct chip_descriptor_s {
     void* (*create)(chip_descriptor_t* desc);
     void (*destroy)(void* chip);
     void (*bus_attach)(void* chip, void* bus);
-    bus_state_t (*read)(void* chip, bus_state_t bus_state);
-    bus_state_t (*write)(void* chip, bus_state_t bus_state);
     void (*bank_change)(void* chip, uint8_t bank);
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
     void (*render_debug_window)(void* chip, bool* show_window); // Optional GUI debug window callback

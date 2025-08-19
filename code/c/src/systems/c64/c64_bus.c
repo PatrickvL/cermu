@@ -115,76 +115,42 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
     // Determine if this is a read or write operation
     bool is_read = bus_state.lines & BUS_MASK_RW;
     uint16_t address = bus_state.addr;
+    uint8_t cpu_bank = c64_bus_get_bank(address);     // Extract 4KB bank (0-15)
     
     // NOTE: I/O port addresses (0-1) are now handled by mos6510_tick() early in the CPU tick
     // This prevents the memory system from overwriting I/O port read data with RAM data
-    
-    // Pre-calculate address adjustments for better compiler optimization
-    uint16_t preadjusted_io_addr = address - 0xD000;  // For I/O page calculation
-    uint8_t cpu_bank = c64_bus_get_bank(address);     // Extract 4KB bank (0-15)
     
     if (is_read) {
         // === READ OPERATION ===
         uint8_t chip = decode_read_chip(c64_bus->cpu_encoded_chip_per_bank[cpu_bank]);
         
-        // Unified address calculation using shared macro
-        uint32_t unified_addr;
-        C64_BUS_UNIFIED_ADDRESS_CALC(chip, address);
-        
-        // Prepare masks for potential operations (parallel execution)
-        uint8_t is_io = -(chip == CHIP_IO);
-        uint8_t needs_callback = chip > CHIP_UNMAPPED;  // 0 for fast path, 1 for slow path (CHIP_IO and above)
-        
-        // Always calculate unified buffer access (speculative, ignored if needs_callback)
-        uint8_t unified_data = c64_bus->unified_memory_buffer[unified_addr];
-        
-        // Callback path: use chip-indexed callback for chips with side effects
-        if (unlikely(needs_callback)) {
-            // Optimized I/O sub-page detection using pre-calculated preadjusted_io_addr
-            chip += is_io & (preadjusted_io_addr >> 8);  // Direct 0-15 range, no mask needed
-            
-            // Set I/O bus flag when I/O region access is detected
-            if (is_io) {
-                bus_set_io_pending(&bus_state);
-            }
-            
-            // Use chip-indexed callback for optimized dispatch
-            chip_callback_t callback = c64_bus->chip_read_callbacks[chip];
-            if (likely(callback)) {
-                bus_state = callback(c64_bus, bus_state);
-                unified_data = bus_state.data;
-            }
+        // Fast path for unified buffer access (RAM, ROM, UNMAPPED)
+        if (likely(chip <= CHIP_RAM)) {
+            // Unified address calculation using shared macro
+            uint32_t unified_addr;
+            C64_BUS_UNIFIED_ADDRESS_CALC(chip, address);
+            bus_state.data = c64_bus->unified_memory_buffer[unified_addr];
+        } else if (chip == CHIP_IO) {
+            // I/O region: set pending flag for chips to handle in their tick functions
+            bus_set_io_pending(&bus_state);
+            // Leave bus_state.data unchanged (floating bus behavior)
         }
+        // Note: CHIP values above CHIP_IO are handled by setting I/O pending flag
         
-        // Set final data value
-        bus_state.data = unified_data;
     } else {
         // === WRITE OPERATION ===
         uint8_t chip = decode_write_chip(c64_bus->cpu_encoded_chip_per_bank[cpu_bank]);
         
         // FAST PATH: Direct unified buffer write for CHIP_RAM (most common case)
-        if (likely(chip <= CHIP_RAM)) {
-            // Direct unified buffer write - no need for ram_memory_write call
-            // Unified RAM offset: 0x9000 + address (CHIP_RAM = 5, 5 << 13 = 0xA000, minus 0x1000 for RAM)
+        if (likely(chip == CHIP_RAM)) {
+            // Direct unified buffer write
+            // Unified RAM offset: 0x9000 + address
             c64_bus->unified_memory_buffer[0x9000 + address] = bus_state.data;
-            return bus_state; // Fast path complete
-        }
-        
-        // FALLBACK PATH: Use chip-indexed callback array for I/O and chips with side effects
-        // Optimized I/O sub-page detection using pre-calculated preadjusted_io_addr
-        uint8_t is_io = -(chip == CHIP_IO);
-        chip += is_io & (preadjusted_io_addr >> 8);  // Direct 0-15 range, no mask needed
-        
-        // Set I/O bus flag when I/O region access is detected
-        if (is_io) {
+        } else if (chip == CHIP_IO) {
+            // I/O region: set pending flag for chips to handle in their tick functions
             bus_set_io_pending(&bus_state);
         }
-        
-        // Use chip-indexed callback for optimized dispatch
-        chip_callback_t callback = c64_bus->chip_write_callbacks[chip];
-        if (likely(callback)) {
-            bus_state = callback(c64_bus, bus_state);
-        }
+        // Note: Writes to UNMAPPED and ROM areas are ignored (no action needed)
     }
     
     return bus_state;
@@ -222,9 +188,6 @@ void* c64_bus_system_create(chip_descriptor_t* desc) {
 void c64_bus_system_attach(c64_bus_t* c64_bus, void* c64) {
     c64_bus->c64 = c64;  // Store as opaque pointer
     
-    // Initialize chip callback arrays for optimized memory access
-    c64_bus_init_chip_callbacks(c64_bus);
-    
     // Initialize ROM/RAM pointers and allocate unified buffer with default configuration
     c64_config_t default_config;
     c64_config_init_defaults(&default_config);
@@ -236,8 +199,6 @@ chip_descriptor_t c64_bus_descriptor = {
     .create = c64_bus_system_create,
     .destroy = c64_bus_system_destroy,
     .bus_attach = NULL,
-    .read = NULL,
-    .write = NULL,
     .bank_change = NULL
 };
 
@@ -677,129 +638,6 @@ const char* c64_bus_size_to_str(size_t size) {
     return buf;
 }
 
-// ============================================================================
-// CHIP CALLBACK FUNCTIONS - Optimized chip-specific operations
-// ============================================================================
-
-// CIA2-specific wrapper around mos6526_write with special handling for VIC-II bank changes
-static bus_state_t c64_bus_cia2_write_with_vic_bank_handling(void* chip, bus_state_t bus_state) {
-    c64_bus_t* bus = (c64_bus_t*)chip;
-    // First, perform the normal CIA2 write operation
-    bus_state = mos6526_registers_write(BUS_TO_C64(bus)->cia2, bus_state);
-    
-    // Special handling for CIA2 writes to trigger VIC-II bank changes
-    if (bus_state.addr == 0xDD00) {
-        c64_t* c64 = bus->c64;
-        uint8_t vic_bank = 3 - (bus_state.data & 0x3);
-        if (c64->sid->desc->bank_change) {
-            c64->sid->desc->bank_change(c64->sid, vic_bank);
-        }
-    }
-    return bus_state;
-}
-
-static bus_state_t c64_bus_chip_write_cia2(void* chip, bus_state_t bus_state) {
-    return c64_bus_cia2_write_with_vic_bank_handling(chip, bus_state);
-}
-
-
-/**
- * Initialize chip callback arrays for optimized memory access.
- * This replaces switch statements with function pointer arrays for better performance.
- */
-void c64_bus_init_chip_callbacks(c64_bus_t* c64_bus) {
-    c64_t* c64 = BUS_TO_C64(c64_bus);
-    
-    // Initialize read callbacks
-    c64_bus->chip_read_callbacks[CHIP_ROML] = NULL; // c64_memory_tick reads from unified_memory_buffer - no read callback
-    c64_bus->chip_read_callbacks[CHIP_ROMH] = NULL; // c64_memory_tick reads from unified_memory_buffer - no read callback
-    c64_bus->chip_read_callbacks[CHIP_KERNAL] = NULL; // c64_memory_tick reads from unified_memory_buffer - no read callback
-    c64_bus->chip_read_callbacks[CHIP_BASIC] = NULL; // c64_memory_tick reads from unified_memory_buffer - no read callback
-    c64_bus->chip_read_callbacks[CHIP_CHARROM] = NULL; // c64_memory_tick reads from unified_memory_buffer - no read callback
-    c64_bus->chip_read_callbacks[CHIP_RAM] = NULL; // c64_memory_tick reads from unified_memory_buffer - no read callback
-    c64_bus->chip_read_callbacks[CHIP_ZEROBANK] = NULL; // DEPRECATED - I/O port handling now done by MOS6510 bus interface callbacks
-    c64_bus->chip_read_callbacks[CHIP_UNMAPPED] = NULL; // UNMAPPED - no read callback
-    
-    // VIC-II pages (D0-D3) - assign direct chip descriptor callback or NULL
-    chip_callback_t vicii_read_callback = (c64->vicii && c64->vicii->desc) ?
-        c64->vicii->desc->read : NULL;
-    c64_bus->chip_read_callbacks[CHIP_D0_VIC] = vicii_read_callback;
-    c64_bus->chip_read_callbacks[CHIP_D1_VIC] = vicii_read_callback;
-    c64_bus->chip_read_callbacks[CHIP_D2_VIC] = vicii_read_callback;
-    c64_bus->chip_read_callbacks[CHIP_D3_VIC] = vicii_read_callback;
-    
-    // SID pages (D4-D7) - assign direct chip descriptor callback or NULL
-    chip_callback_t sid_read_callback = (c64->sid && c64->sid->desc) ?
-        c64->sid->desc->read : NULL;
-    c64_bus->chip_read_callbacks[CHIP_D4_SID] = sid_read_callback;
-    c64_bus->chip_read_callbacks[CHIP_D5_SID] = sid_read_callback;
-    c64_bus->chip_read_callbacks[CHIP_D6_SID] = sid_read_callback;
-    c64_bus->chip_read_callbacks[CHIP_D7_SID] = sid_read_callback;
-    
-    // Color RAM mirror pages (D8-DB) - these mirror Color RAM at $D800-$DBFF
-    chip_callback_t colorram_read_callback = (c64->colorram && c64->colorram->desc) ?
-        c64->colorram->desc->read : NULL;
-    c64_bus->chip_read_callbacks[CHIP_D8_COLORRAM] = colorram_read_callback; // Color RAM mirror
-    c64_bus->chip_read_callbacks[CHIP_D9_COLORRAM] = colorram_read_callback; // Color RAM mirror
-    c64_bus->chip_read_callbacks[CHIP_DA_COLORRAM] = colorram_read_callback; // Color RAM mirror
-    c64_bus->chip_read_callbacks[CHIP_DB_COLORRAM] = colorram_read_callback; // Color RAM mirror
-    
-    // CIA pages (DC-DD) - assign direct chip descriptor callback or NULL
-    c64_bus->chip_read_callbacks[CHIP_DC_CIA1] = (c64->cia1 && c64->cia1->desc) ?
-        c64->cia1->desc->read : NULL;
-    
-    c64_bus->chip_read_callbacks[CHIP_DD_CIA2] = (c64->cia2 && c64->cia2->desc) ?
-        c64->cia2->desc->read : NULL;
-    
-    // Cartridge I/O pages (DE-DF) - set to NULL (will be handled by chip descriptors when available)
-    c64_bus->chip_read_callbacks[CHIP_DE_IO1] = NULL; // IO1 cartridge devices use chip descriptors
-    c64_bus->chip_read_callbacks[CHIP_DF_IO2] = NULL; // IO2 cartridge devices use chip descriptors
-    
-    // Initialize write callbacks
-    c64_bus->chip_write_callbacks[CHIP_ROML] = NULL; // ROM - no write callback
-    c64_bus->chip_write_callbacks[CHIP_ROMH] = NULL; // ROM - no write callback
-    c64_bus->chip_write_callbacks[CHIP_KERNAL] = NULL; // ROM - no write callback
-    c64_bus->chip_write_callbacks[CHIP_BASIC] = NULL; // ROM - no write callback
-    c64_bus->chip_write_callbacks[CHIP_CHARROM] = NULL; // ROM - no write callback
-    c64_bus->chip_write_callbacks[CHIP_RAM] = NULL; // c64_memory_tick writes to unified_memory_buffer - no write callback
-    c64_bus->chip_write_callbacks[CHIP_ZEROBANK] = NULL; // DEPRECATED - I/O port handling now done by MOS6510 bus interface callbacks
-    c64_bus->chip_write_callbacks[CHIP_UNMAPPED] = NULL; // UNMAPPED - no write callback
-    
-    // VIC-II pages (D0-D3) - assign direct chip descriptor callback or NULL
-    chip_callback_t vicii_write_callback = (c64->vicii && c64->vicii->desc) ?
-        c64->vicii->desc->write : NULL;
-    c64_bus->chip_write_callbacks[CHIP_D0_VIC] = vicii_write_callback;
-    c64_bus->chip_write_callbacks[CHIP_D1_VIC] = vicii_write_callback;
-    c64_bus->chip_write_callbacks[CHIP_D2_VIC] = vicii_write_callback;
-    c64_bus->chip_write_callbacks[CHIP_D3_VIC] = vicii_write_callback;
-    
-    // SID pages (D4-D7) - assign direct chip descriptor callback or NULL
-    chip_callback_t sid_write_callback = (c64->sid && c64->sid->desc) ?
-        c64->sid->desc->write : NULL;
-    c64_bus->chip_write_callbacks[CHIP_D4_SID] = sid_write_callback;
-    c64_bus->chip_write_callbacks[CHIP_D5_SID] = sid_write_callback;
-    c64_bus->chip_write_callbacks[CHIP_D6_SID] = sid_write_callback;
-    c64_bus->chip_write_callbacks[CHIP_D7_SID] = sid_write_callback;
-    
-    // Color RAM mirror pages (D8-DB) - these mirror Color RAM at $D800-$DBFF
-    chip_callback_t colorram_write_callback = (c64->colorram && c64->colorram->desc) ?
-        c64->colorram->desc->write : NULL;
-    c64_bus->chip_write_callbacks[CHIP_D8_COLORRAM] = colorram_write_callback; // Color RAM mirror
-    c64_bus->chip_write_callbacks[CHIP_D9_COLORRAM] = colorram_write_callback; // Color RAM mirror
-    c64_bus->chip_write_callbacks[CHIP_DA_COLORRAM] = colorram_write_callback; // Color RAM mirror
-    c64_bus->chip_write_callbacks[CHIP_DB_COLORRAM] = colorram_write_callback; // Color RAM mirror
-    
-    // CIA pages (DC-DD) - assign direct chip descriptor callback or NULL
-    c64_bus->chip_write_callbacks[CHIP_DC_CIA1] = (c64->cia1 && c64->cia1->desc) ?
-        c64->cia1->desc->write : NULL;
-    
-    // CIA2 still needs the special wrapper for VIC-II bank handling
-    c64_bus->chip_write_callbacks[CHIP_DD_CIA2] = c64_bus_chip_write_cia2;
-    
-    // Cartridge I/O pages (DE-DF) - set to NULL (will be handled by chip descriptors when available)
-    c64_bus->chip_write_callbacks[CHIP_DE_IO1] = NULL; // IO1 cartridge devices use chip descriptors
-    c64_bus->chip_write_callbacks[CHIP_DF_IO2] = NULL; // IO2 cartridge devices use chip descriptors
-}
 
 /**
  * Initialize RAM/ROM pointers to point into the unified memory buffer.

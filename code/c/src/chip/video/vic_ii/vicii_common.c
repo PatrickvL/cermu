@@ -1229,19 +1229,26 @@ bus_state_t vicii_advance_cycle(vicii_t* vicii, bus_state_t bus_state) {
  * @return Updated bus state
  */
 bus_state_t vicii_tick(void* chip, bus_state_t bus_state) {
-    // Check for I/O bus flag - VIC-II handles I/O register access during normal cycles
-    if (bus_is_io_pending(&bus_state)) {
+    vicii_t* vicii = (vicii_t*)chip;
+
+    // Check for I/O register access when I/O pending
+    if (unlikely(bus_is_io_pending(&bus_state))) {
         // Check if address is within VIC-II range ($D000-$D3FF)
         if (bus_state.addr <= 0xD3FF) {
-            // VIC-II I/O register access detected - this will be handled by register read/write functions
-            // during the normal cycle processing, so we clear the flag to acknowledge
             bus_clear_io_pending(&bus_state);
+            // Handle register access directly
+            bool is_read = bus_state.lines & BUS_MASK_RW;
+            if (is_read) {
+                bus_state = vicii_registers_read(vicii, bus_state);
+            } else {
+                bus_state = vicii_registers_write(vicii, bus_state);
+            }
         }
     }
     
     // Delegate to the existing advance cycle function
     // In the future, this can be expanded to include additional tick-specific logic
-    return vicii_advance_cycle((vicii_t*)chip, bus_state);
+    return vicii_advance_cycle(vicii, bus_state);
 }
 
 // ========================================================================================

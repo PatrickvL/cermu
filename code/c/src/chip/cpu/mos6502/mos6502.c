@@ -200,8 +200,6 @@ chip_descriptor_t mos6502_descriptor = {
     .create = mos6502_create_wrapper,
     .destroy = mos6502_destroy_wrapper,
     .bus_attach = NULL,
-    .read = NULL,  // Standard 6502 doesn't have special read behavior
-    .write = NULL, // Standard 6502 doesn't have special write behavior
     .bank_change = NULL,
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
     .render_debug_window = mos6502_render_debug_window,

@@ -91,10 +91,6 @@ typedef struct c64_bus_s {
     // VIC-II uses direct CHIP values, not encoded, since it only does read accesses
     alignas(64) uint8_t vicii_chip_per_bank_per_mode[32][16]; // VIC-II direct CHIP per mode
     
-    // CHIP CALLBACK ARRAYS - Function pointers for chip-specific operations
-    alignas(64) chip_callback_t chip_read_callbacks[CHIP_MAX];   // Unified chip_callback_t array
-    alignas(64) chip_callback_t chip_write_callbacks[CHIP_MAX]; // Unified chip_callback_t array
-    
     // Integrated adapter interfaces - can be passed out as pointers
     bus_cycle_ops_t bus_adapter;
     control_lines_interface_t control_lines_adapter;
@@ -111,13 +107,6 @@ typedef struct {
 //    const char* title;
 } chip_description_t;
 
-/**
- * Initialize chip callback arrays for optimized memory access.
- * Should be called during bus initialization after system is attached.
- * 
- * @param c64_bus Pointer to the C64 bus controller
- */
-void c64_bus_init_chip_callbacks(c64_bus_t* c64_bus);
 
 /**
  * Fetch descriptor for a given CHIP from registered chips or synthesize for I/O/special

@@ -32,8 +32,6 @@ chip_descriptor_t pla_descriptor = {
     .description = "PLA (Programmable Logic Array)",
     .create = pla_create,
     .destroy = pla_destroy,
-    .read = NULL,  // PLA doesn't have direct read/write interface
-    .write = NULL,
     .bus_attach = NULL,
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
     .render_debug_window = pla_render_debug_window,

@@ -126,7 +126,5 @@ chip_descriptor_t mos2114_descriptor = {
     .create = mos2114_create,
     .destroy = mos2114_destroy,
     .bus_attach = NULL,
-    .read = mos2114_read,
-    .write = mos2114_write,
     .bank_change = NULL
 };
