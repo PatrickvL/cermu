@@ -33,12 +33,13 @@
 - ✅ **System integration**: Updated main cycle function to use new consolidated tick functions
 - ✅ **Performance optimization**: Maintained register-based calling convention throughout I/O system
 
-### 🚧 Current Step
-- **Phase 3**: Zero Bank Elimination (IN PROGRESS)
-- **Step 3.1**: Implement I/O Port Handling in MOS6510 (READY TO IMPLEMENT)
+### ✅ Recently Completed
+- **Phase 3**: Zero Bank Elimination (COMPLETED ✅)
+- **Step 3.1**: Implement I/O Port Handling in MOS6510 (COMPLETED ✅)
+- **Step 3.2**: Remove CHIP_ZEROBANK Infrastructure (COMPLETED ✅)
+- **Additional**: Simplified VIC-II Bank Change Implementation (COMPLETED ✅)
 
 ### 📋 Next Steps
-- Step 3.2: Remove CHIP_ZEROBANK Infrastructure
 - Phase 4: Fast Path Implementation
 - Phase 5: CPU Architecture Preparation
 
@@ -209,125 +210,79 @@ Updated the main system cycle function to use the new consolidated tick function
 
 ### Phase 3: Zero Bank Elimination (Medium Risk)
 
-**Status**: 🚧 IN PROGRESS
+**Status**: ✅ COMPLETED
 
 **Goal**: Move I/O port handling entirely into MOS6510, eliminate CHIP_ZEROBANK.
 
 #### Step 3.1: Implement I/O Port Handling in MOS6510
 
-**Status**: 🚧 READY TO IMPLEMENT
+**Status**: ✅ COMPLETED
 
-The MOS6510 CPU includes two I/O ports at addresses $00 and $01 that control memory banking and provide general-purpose I/O functionality. These ports are currently handled by the CHIP_ZEROBANK infrastructure, but hardware-accurately belong within the CPU itself.
+Successfully implemented generic I/O port device architecture and moved I/O port handling into MOS6510 CPU tick function, achieving hardware-accurate separation of concerns.
 
-**Implementation Requirements**:
+**Key Achievements**:
+- **Generic I/O Port System**: Created [`io_port_t`](code/c/src/core/io_port.h:1) device with floating bus support for unused pins
+- **Hardware-Accurate CPU Integration**: Moved I/O port handling to [`mos6510_tick()`](code/c/src/chip/cpu/mos6510/mos6510.c:1) where it belongs architecturally
+- **Optimized Implementation**: Support for 1-32 bit I/O ports with performance optimization for common 8-bit case
+- **Floating Bus Support**: Proper handling of unused pins reflecting last data bus state
 
-**3.1.1: Add I/O Port State to MOS6510 Structure**
-- Add port data direction registers for addresses $00 and $01
-- Add banking state tracking (LORAM, HIRAM, CHAREN bits)
-- Add cassette interface controls and tape motor
-- Add banking change callback system for PLA recalculation
+**Files Modified**:
+- `code/c/src/core/io_port.h` - Generic I/O port device structure and functions
+- `code/c/src/core/io_port.c` - I/O port implementation with floating bus support
+- `code/c/src/chip/cpu/mos6510/mos6510.h` - Updated MOS6510 structure with single io_port
+- `code/c/src/chip/cpu/mos6510/mos6510.c` - I/O port handling in mos6510_tick function
+- `code/c/src/systems/c64/c64.c` - Removed I/O port handling from c64_memory_tick
 
-**3.1.2: Implement I/O Port Access Functions**
-- `mos6510_handle_io_read()` - Handle reads from addresses $00-$01
-- `mos6510_handle_io_write()` - Handle writes with banking change detection
-- `mos6510_set_banking_callback()` - Register system callback for banking changes
-
-**Hardware-Accurate Port Behavior**:
-- **Port $00**: Data Direction Register controlling port $01 pin directions
-- **Port $01**: Combined data/control port with banking bits:
-  - **Bit 0 (LORAM)**: BASIC ROM vs RAM at $A000-$BFFF
-  - **Bit 1 (HIRAM)**: KERNAL ROM vs RAM at $E000-$FFFF
-  - **Bit 2 (CHAREN)**: Character ROM vs I/O at $D000-$DFFF
-  - **Bits 3,5**: Cassette write/motor control
-  - **Bit 4**: Cassette sense (read-only, hardware-driven)
-
-**3.1.3: Update memory_tick() for I/O Port Integration**
-- Modify `c64_memory_tick()` to route addresses $00-$01 to MOS6510
-- Check `address <= 1` before PLA lookup
-- Call appropriate CPU I/O functions for reads/writes
-
-**3.1.4: Implement Banking Change Notifications**
-- Detect changes to banking bits (0-2) in port $01 writes
-- Trigger callback to system for PLA mapping recalculation
-- Update internal banking state structure
-
-**3.1.5: System Integration with Banking Notifications**
-- Register banking callback during C64 system initialization
-- Set initial banking state ($37 default - all outputs, ROMs enabled)
-- Implement `c64_handle_banking_change()` to update PLA mapping
-
-**Files to Modify**:
-- `code/c/src/chip/cpu/mos6510/mos6510.h` - Add I/O port state and function declarations
-- `code/c/src/chip/cpu/mos6510/mos6510.c` - Implement I/O port handling functions
-- `code/c/src/systems/c64/c64_bus.c` - Update `c64_memory_tick()` to route addresses 0-1 to CPU
-- `code/c/src/systems/c64/c64.c` - Add banking callback registration and handling
-
-**Hardware Compatibility Notes**:
-- Port reads reflect actual pin states, not just written values
-- Cassette sense bit is read-only and driven by hardware
-- Banking changes take effect immediately (no delay)
-- Initial banking state should be $37 (all outputs, ROM enabled)
-
-**Testing Strategy**:
-- Verify banking state changes affect memory mapping correctly
-- Test I/O port read/write behavior matches real hardware
-- Validate cassette sense bit remains read-only
-- Confirm initial banking state enables proper boot sequence
-
-**Risk**: Medium - banking changes affect entire memory map, but implementation is hardware-accurate
+**Hardware Compatibility Validated**:
+- Port reads reflect actual pin states with floating bus behavior
+- MOS6510 6-bit port configuration (bits 0-5 are I/O, bits 6-7 float)
+- I/O port access integrated early in CPU tick before other processing
 
 #### Step 3.2: Remove CHIP_ZEROBANK Infrastructure
-**Status**: 🕒 PENDING (after Step 3.1)
 
-Once I/O port handling is moved to MOS6510, the CHIP_ZEROBANK infrastructure becomes redundant and can be eliminated.
+**Status**: ✅ COMPLETED
 
-**Implementation Requirements**:
+Successfully eliminated all CHIP_ZEROBANK infrastructure and moved to bus flag-based I/O coordination.
 
-**3.2.1: Update PLA Mapping Tables**
-- Change all CHIP_ZEROBANK entries in PLA tables to CHIP_RAM
-- Address range $0000-$00FF will be handled as regular RAM
-- Addresses $0000-$0001 will be intercepted by `memory_tick()` before PLA lookup
+**Key Achievements**:
+- **PLA Mapping Update**: Replaced all CHIP_ZEROBANK entries with CHIP_RAM in mapping tables
+- **Enum Cleanup**: Removed CHIP_ZEROBANK from chip enumeration without breaking subsequent values
+- **Callback Elimination**: Removed zerobank callback functions and references
+- **Complete Infrastructure Removal**: All CHIP_ZEROBANK references eliminated from codebase
 
-**3.2.2: Remove CHIP_ZEROBANK from Enumerations**
-```c
-// Before (in bus definitions):
-typedef enum {
-    CHIP_RAM = 0,
-    CHIP_ZEROBANK,    // <- REMOVE THIS
-    CHIP_BASIC,
-    CHIP_KERNAL,
-    // ... other chips
-} chip_type_t;
+**Files Modified**:
+- `code/c/src/systems/c64/c64_bus.h` - Removed CHIP_ZEROBANK from enum, eliminated callback arrays
+- `code/c/src/systems/c64/c64_bus.c` - Updated PLA mapping, removed callback functions, optimized c64_memory_tick
+- `code/c/src/chip/*/chip_descriptor.c` - Cleaned up all chip descriptors removing dead read/write assignments
 
-// After:
-typedef enum {
-    CHIP_RAM = 0,     // Zero page becomes regular RAM
-    CHIP_BASIC,
-    CHIP_KERNAL,
-    // ... other chips
-} chip_type_t;
-```
+**Architecture Improvements**:
+- **Bus Flag Coordination**: Moved to `bus_is_io_pending()` flag system for I/O coordination
+- **Direct Chip Access**: All I/O register access moved to individual chip tick functions
+- **Performance Optimization**: Eliminated callback dispatch overhead in memory access path
 
-**3.2.3: Remove ZEROBANK Callback Functions**
-- Remove `c64_bus_chip_read_zerobank()` and `c64_bus_chip_write_zerobank()` functions
-- Remove from callback array initialization
-- Update any references to use CHIP_RAM instead
+#### Additional Achievement: Simplified VIC-II Bank Change Implementation
 
-**3.2.4: Clean Up ZEROBANK References**
-- Search codebase for all CHIP_ZEROBANK references
-- Replace with CHIP_RAM or remove as appropriate
-- Update comments and documentation
+**Status**: ✅ COMPLETED
 
-**Files to Modify**:
-- `code/c/src/systems/c64/c64_bus.h` - Remove CHIP_ZEROBANK from enum
-- `code/c/src/systems/c64/c64_bus.c` - Remove zerobank callback functions and references
-- Any PLA mapping files that reference CHIP_ZEROBANK
+Implemented elegant solution for VIC-II bank change functionality using direct bus monitoring approach suggested by user.
 
-**Hardware Rationale**: In real C64 hardware, addresses $0000-$0001 are handled by CPU internal I/O ports, while $0002-$00FF are regular RAM. No separate "zero bank" chip exists.
+**Problem Solved**: VIC-II bank change functionality was lost during callback elimination refactoring.
 
-**Risk**: Medium - memory mapping change affects fundamental system addressing
+**User's Insight**: "have the vic tick function watch out for writes to 0xDD00 as well, and capture the bank-selection that way"
 
-**Validation**: Memory banking works correctly, I/O ports function properly, CHIP_ZEROBANK infrastructure completely removed
+**Solution Implemented**:
+- **Direct Bus Monitoring**: VIC-II [`vicii_tick()`](code/c/src/chip/video/vic_ii/vicii_common.c:1247) now monitors CIA2 writes at $DD00
+- **Hardware-Accurate Mapping**: Uses correct C64 hardware encoding: `vic_bank = 3 - (data & 0x03)`
+- **Clean Architecture**: No global state, callbacks, or dependency on io_pending flags
+- **Tick Order Independence**: Works regardless of CIA2/VIC-II tick execution order
+
+**Benefits Over Previous Complex Solution**:
+- Eliminated global forwarder functions and state
+- Removed hard coupling between CIA and VIC-II chips
+- Simplified system initialization
+- More maintainable and easier to understand
+
+**Validation**: ✅ VIC-II bank changes work correctly, no architectural coupling, maintains full hardware accuracy
 
 ### Phase 4: Fast Path Implementation (Medium Risk)
 
