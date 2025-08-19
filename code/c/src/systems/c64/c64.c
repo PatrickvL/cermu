@@ -308,11 +308,12 @@ c64_t* c64_system_create(const c64_config_t* config) {
         }
     }
     
-    // Attach CPU interfaces to the MOS6510
-    mos6510_attach_bus_interface(c64->mos6510, c64_bus_get_adapter(&(c64->bus)));
-    mos6510_attach_control_lines_interface(c64->mos6510, c64_control_lines_get_adapter(&c64->bus));
-    mos6510_attach_io_interface(c64->mos6510, c64_io_port_get_adapter(&(c64->bus)));
-    // For now, this will be handled through the control_lines_interface
+    // Attach CPU interfaces to the MOS6510 using the new direct adapter access
+    mos6510_attach_bus_interface(c64->mos6510, &(c64->bus.bus_adapter));
+    mos6510_attach_control_lines_interface(c64->mos6510, &(c64->bus.control_lines_adapter));
+    
+    // Register banking change callback to update PLA mapping when I/O port changes banking bits
+    mos6510_set_banking_callback(c64->mos6510, &(c64->bus), c64_bus_on_banking_change);
     
     return c64;
 }

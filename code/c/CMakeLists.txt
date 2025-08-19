@@ -129,6 +129,7 @@ endif()
 set(CORE_SOURCES
     src/core/system.c
     src/core/chip.c
+    src/core/ioport.c
 )
 
 # Chip library sources

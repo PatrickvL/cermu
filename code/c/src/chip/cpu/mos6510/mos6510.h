@@ -8,16 +8,24 @@
 #include "../../../core/system_lines.h"
 #include "../../../core/system.h"
 #include "../fam65xx/fam65xx_core.h"
+#include "../../../core/ioport.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
 
-// MOS6510 I/O port interface
+// Forward declaration for banking change callback
+typedef void (*mos6510_banking_change_callback_t)(void* context, uint8_t banking_bits);
+
+
+// MOS6510 Banking State Structure
 typedef struct {
-    void* context;
-    uint8_t (*read_external_pins)(void* context, uint8_t port_value, uint8_t ddr);
-    void (*output_pins_changed)(void* context, uint8_t port_value, uint8_t ddr);
-} mos6510_io_port_interface_t;
+    bool loram;          // Bit 0: BASIC ROM control (0=ROM visible, 1=RAM visible)
+    bool hiram;          // Bit 1: KERNAL ROM control (0=ROM visible, 1=RAM visible)
+    bool charen;         // Bit 2: Character ROM control (0=CHARROM visible, 1=I/O visible)
+    bool cassette_write; // Bit 3: Cassette write line
+    bool cassette_sense; // Bit 4: Cassette sense (read-only, hardware-driven)
+    bool tape_motor;     // Bit 5: Tape motor control
+} mos6510_banking_state_t;
 
 // MOS6510 specific constants
 #define MOS6510_MASK_IRQ    SYS_MASK_IRQ
@@ -41,11 +49,19 @@ struct mos6510_s {
     fam65xx_t base;
     
     // === MOS6510-SPECIFIC EXTENSIONS ===
-    // I/O port interface (stored by value for optimal performance)
-    mos6510_io_port_interface_t io_interface;
+    // NEW: Single I/O port using the new architecture
+    // The ioport_t handles both DDR (address 0) and Data (address 1) internally
+    ioport_t io_port;  // 6-bit MOS6510 I/O port (bits 6-7 floating)
     
-    // I/O Ports (MOS6510-specific)
-    uint8_t io_port[2]; // 0:DDR, 1:Port
+    // Banking state derived from port 1
+    mos6510_banking_state_t banking_state;
+    
+    // Banking change notification system
+    void* banking_context;                          // Context for banking callback
+    mos6510_banking_change_callback_t banking_callback; // Callback for banking changes
+    
+    // Original bus interface preservation for I/O port integration
+    bus_cycle_ops_t original_bus_interface;         // Original bus interface before MOS6510 wrapping
 };
 
 // --- Interception support: replace handlers with stubs until next opcode ---
@@ -88,77 +104,59 @@ bool mos6510_is_intercepting(mos6510_t* cpu);
 /**
  * Handle I/O port read operations for MOS6510 (addresses 0-1).
  * This is part of the refactoring plan to move I/O port handling into the CPU.
- * Initially calls existing ZEROBANK callbacks but will be optimized later.
+ * Now uses the new generic I/O port architecture with banking change detection.
+ * Uses actual bus data for proper floating bus behavior.
  *
  * @param cpu Pointer to the MOS6510 CPU structure
  * @param bus_state Current bus state with address and data
- * @return Updated bus state with read data
+ * @return Updated bus state with I/O port data
  */
 bus_state_t mos6510_handle_io_read(mos6510_t* cpu, bus_state_t bus_state);
 
 /**
  * Handle I/O port write operations for MOS6510 (addresses 0-1).
  * This is part of the refactoring plan to move I/O port handling into the CPU.
- * Initially calls existing ZEROBANK callbacks but will be optimized later.
+ * Now uses the new generic I/O port architecture with banking change detection.
+ * Uses actual bus data for proper floating bus behavior.
  *
  * @param cpu Pointer to the MOS6510 CPU structure
- * @param bus_state Current bus state with address and data
- * @return Updated bus state
+ * @param bus_state Current bus state with address and data to write
+ * @return Updated bus state after I/O port write
  */
 bus_state_t mos6510_handle_io_write(mos6510_t* cpu, bus_state_t bus_state);
 
+/**
+ * Set the banking change callback for memory map updates.
+ * This callback is called when the banking bits (LORAM, HIRAM, CHAREN) change.
+ *
+ * @param cpu Pointer to the MOS6510 CPU structure
+ * @param context Context pointer for the callback
+ * @param callback Callback function to call on banking changes
+ */
+void mos6510_set_banking_callback(mos6510_t* cpu, void* context,
+                                 mos6510_banking_change_callback_t callback);
+
+/**
+ * Get the current banking state from the MOS6510 I/O port.
+ *
+ * @param cpu Pointer to the MOS6510 CPU structure
+ * @return Current banking state structure
+ */
+mos6510_banking_state_t mos6510_get_banking_state(const mos6510_t* cpu);
+
 // ============================================================================
-// MOS6510 ZERO BANK I/O PORT ACCESSORS
+// MOS6510 ZERO BANK I/O PORT ACCESSORS - New Generic I/O Port Architecture
 // ============================================================================
 
-// Compute effective port output: outputs from Data when DDR=1, else external data
-static inline uint8_t mos6510_io_mask(mos6510_t* cpu, uint8_t value)
-{
-    uint8_t ddr = cpu->io_port[0];
-    uint8_t data = cpu->io_port[1];
-    return (data & ddr) | (value & ~ddr);
-}
+// Note: mos6510_handle_io_read and mos6510_handle_io_write serve as both
+// the internal implementation and the bus state interface callbacks.
+// They can be used directly as callback functions since they have the
+// correct signature: bus_state_t func(void* context, bus_state_t bus_state)
+// when the first parameter is treated as void* context.
 
-// MOS6510 zero bank I/O port read (addresses $0000/$0001) - bus state interface
-static inline bus_state_t mos6510_ioport_read(void* context, bus_state_t bus_state) {
-    mos6510_t* cpu = (mos6510_t*)context;
-    if ((bus_state.addr & 0xFFFF) == 0) {
-        // Return Data Direction Register
-        bus_state.data = cpu->io_port[0];
-    } else {
-        // Return port: outputs defined by DDR bits, inputs from external pins
-        uint8_t external = cpu->io_interface.read_external_pins(cpu->io_interface.context, cpu->io_port[1], cpu->io_port[0]);
-        bus_state.data = mos6510_io_mask(cpu, external);
-    }
-    return bus_state;
-}
-
-// MOS6510 zero bank I/O port write (addresses $0000/$0001) - bus state interface
-static inline bus_state_t mos6510_ioport_write(void* context, bus_state_t bus_state) {
-    mos6510_t* cpu = (mos6510_t*)context;
-    uint16_t addr = bus_state.addr & 0xFFFF;
-    uint8_t value = bus_state.data;
-    
-    // Update Data Direction / Data register
-    cpu->io_port[addr] = value;
-    if (addr == 1) {
-        // Notify system of output pin changes
-        uint8_t ddr = cpu->io_port[0];
-        uint8_t port_data = cpu->io_port[1];
-        cpu->io_interface.output_pins_changed(cpu->io_interface.context, port_data, ddr);
-    }
-    return bus_state;
-}
-
-// Memory access functions using optimized direct callbacks
-static inline uint8_t mos6510_read_cycle(mos6510_t* cpu, uint16_t addr) {
-    // Forward to family implementation (identical logic)
-    return fam65xx_read_cycle(&cpu->base, addr);
-}
-
-static inline void mos6510_write_cycle(mos6510_t* cpu, uint16_t addr, uint8_t value) {
-    fam65xx_write_cycle(&cpu->base, addr, value);
-}
+// Memory access functions with integrated I/O port tick handling
+uint8_t mos6510_read_cycle(mos6510_t* cpu, uint16_t addr);
+void mos6510_write_cycle(mos6510_t* cpu, uint16_t addr, uint8_t value);
 
 // ============================================================================
 // PERFORMANCE-OPTIMIZED MACROS FOR CODE DEDUPLICATION
@@ -304,13 +302,15 @@ bool mos6510_is_intercepting(mos6510_t* cpu);
 void mos6510_nmi(mos6510_t* cpu);
 void mos6510_irq(mos6510_t* cpu, uint8_t status);
 
+// MOS6510 tick function for cycle-accurate emulation
+void mos6510_tick(mos6510_t* cpu, bus_state_t* bus_state);
+
 // Chip descriptor
 extern chip_descriptor_t mos6510_descriptor;
 
 // Performance-optimized interface attachment functions
 void mos6510_attach_bus_interface(mos6510_t* cpu, const bus_cycle_ops_t* bus_interface);
 void mos6510_attach_control_lines_interface(mos6510_t* cpu, const control_lines_interface_t* control_interface);
-void mos6510_attach_io_interface(mos6510_t* cpu, const mos6510_io_port_interface_t* io_interface);
 
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 // GUI functions

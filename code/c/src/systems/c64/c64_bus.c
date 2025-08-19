@@ -1,10 +1,34 @@
 #include "c64_bus.h"
 #include "c64.h"
 #include "../../chip/io/mos6526.h"
+#include "../../chip/cpu/mos6510/mos6510.h"
 #include "../../core/aiemuc.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+// ============================================================================
+// BANKING CHANGE CALLBACK
+// ============================================================================
+
+void c64_bus_on_banking_change(void* bus_ptr, uint8_t banking_state) {
+    c64_bus_t* bus = (c64_bus_t*)bus_ptr;
+    if (!bus || !bus->c64) return;
+    
+    // Convert MOS6510 banking state to C64 bus mode
+    // banking_state contains LORAM (bit 0), HIRAM (bit 1), CHAREN (bit 2)
+    // Need to add EXROM and GAME bits from system lines
+    uint8_t exrom = (bus->system_lines & SYS_MASK_EXROM) ? 1 : 0;
+    uint8_t game = (bus->system_lines & SYS_MASK_GAME) ? 1 : 0;
+    
+    // Construct full PLA mode: GAME | EXROM | CHAREN | HIRAM | LORAM
+    uint8_t pla_mode = (game << 4) | (exrom << 3) | (banking_state & 0x07);
+    
+    // Switch to new memory mapping mode
+    c64_bus_mode_switch(bus, pla_mode);
+    
+    printf("Banking change: MOS6510 state=0x%02X, PLA mode=0x%02X\n", 
+           banking_state, pla_mode);
+}
 
 // Chip accessor functions - these use the chip descriptor's read/write callbacks using bus_state_t pattern
 
@@ -78,6 +102,9 @@ void c64_bus_vic_read(c64_bus_t* c64_bus, uint16_t address) {
  * Optimized for register-based calling convention to avoid host stack accesses.
  * Takes bus state by value and returns updated bus state for efficient register usage.
  *
+ * NOTE: I/O port addresses (0-1) are now handled directly by mos6510_tick()
+ * early in the CPU tick to prevent memory system from overwriting I/O port data.
+ *
  * @param c64_bus Pointer to the C64 bus controller
  * @param bus_state Current bus state (passed by value for register optimization)
  * @return Updated bus state (for register-to-register operation)
@@ -88,6 +115,9 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
     // Determine if this is a read or write operation
     bool is_read = bus_state.lines & BUS_MASK_RW;
     uint16_t address = bus_state.addr;
+    
+    // NOTE: I/O port addresses (0-1) are now handled by mos6510_tick() early in the CPU tick
+    // This prevents the memory system from overwriting I/O port read data with RAM data
     
     // Pre-calculate address adjustments for better compiler optimization
     uint16_t preadjusted_io_addr = address - 0xD000;  // For I/O page calculation
@@ -158,12 +188,6 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
     }
     
     return bus_state;
-    
-    // Future optimization notes:
-    // - Handle I/O port addresses (0-1) in MOS6510 first
-    // - Add fast path for RAM/ROM access using unified buffer
-    // - Set IO_MEM_ACCESS_PENDING flag for I/O region access
-    // - Let individual chips handle I/O in their tick functions
 }
 
 void c64_bus_system_destroy(void* chip) {
@@ -463,26 +487,6 @@ static void c64_control_lines_set(void* context, uint32_t lines) {
     c64_bus->state.lines = (uint8_t)(lines & 0xFF);
 }
 
-// I/O port adapter functions
-static void c64_io_port_output_changed(void* context, uint8_t port_value, uint8_t ddr) {
-    printf("c64_io_port_output_changed port_value: %02X ddr: %02X\n", port_value, ddr);
-    c64_bus_t* c64_bus = (c64_bus_t*)context;
-    // Mask port_value with DDR: only output bits matter for PLA
-    uint8_t masked_port = port_value & ddr;
-    // Generate proper 5-bit PLA mode from CPU port bits and cartridge signals
-    uint8_t pla_mode = c64_bus_generate_pla_mode(c64_bus, masked_port);
-    c64_bus_mode_switch(c64_bus, pla_mode);
-}
-
-static uint8_t c64_io_port_input_read(void* context, uint8_t port_value, uint8_t ddr) {
-    // For C64, the I/O port typically reads the current port state
-    // This can be extended to read actual external signals if needed
-    (void)context;    // Unused for now
-    (void)port_value; // Unused for now
-    (void)ddr;        // Unused for now
-    return 0xFF; // Default to all inputs high
-}
-
 void c64_bus_init_adapters(c64_bus_t* c64_bus) {
     // Initialize bus cycle adapter
     c64_bus->bus_adapter.context = c64_bus;
@@ -493,11 +497,6 @@ void c64_bus_init_adapters(c64_bus_t* c64_bus) {
     c64_bus->control_lines_adapter.get_lines = c64_control_lines_get;
     c64_bus->control_lines_adapter.set_lines = c64_control_lines_set;
     c64_bus->control_lines_adapter.context = c64_bus;
-    
-    // Initialize I/O port adapter
-    c64_bus->io_port_adapter.output_pins_changed = c64_io_port_output_changed;
-    c64_bus->io_port_adapter.read_external_pins = c64_io_port_input_read;
-    c64_bus->io_port_adapter.context = c64_bus;
 }
 
 // ============================================================================
@@ -698,24 +697,40 @@ const char* c64_bus_size_to_str(size_t size) {
 // Chip read callback implementations using bus_state_t pattern
 static bus_state_t c64_bus_chip_read_zerobank(void* chip, bus_state_t bus_state) {
     c64_bus_t* bus = (c64_bus_t*)chip;
-    if (bus_state.addr <= 1) {
-        bus_state = mos6510_ioport_read(BUS_TO_C64(bus)->mos6510, bus_state);
-    } else {
-        // Fall through to RAM for addresses > 1
-        bus_state = ram_memory_read(BUS_TO_C64(bus)->ram, bus_state);
+    
+    // NOTE: I/O port addresses (0-1) are now handled directly by mos6510_tick()
+    // early in the CPU tick, so they should never reach this callback.
+    // This callback only handles RAM access for addresses 2-4095 in the zero bank.
+    
+    if (unlikely(bus_state.addr <= 1)) {
+        // This should not happen with the new architecture - I/O ports are handled early
+        printf("WARNING: I/O port address %04X reached ZEROBANK callback - architecture error\n", bus_state.addr);
+        // Return current data without modification to avoid corruption
+        return bus_state;
     }
+    
+    // Handle RAM access for addresses > 1 in the zero bank
+    bus_state = ram_memory_read(BUS_TO_C64(bus)->ram, bus_state);
     return bus_state;
 }
 
 // Chip write callback implementations using bus_state_t pattern
 static bus_state_t c64_bus_chip_write_zerobank(void* chip, bus_state_t bus_state) {
     c64_bus_t* bus = (c64_bus_t*)chip;
-    if (bus_state.addr <= 1) {
-        bus_state = mos6510_ioport_write(BUS_TO_C64(bus)->mos6510, bus_state);
-    } else {
-        // Fall through to RAM for addresses > 1
-        bus_state = ram_memory_write(BUS_TO_C64(bus)->ram, bus_state);
+    
+    // NOTE: I/O port addresses (0-1) are now handled directly by mos6510_tick()
+    // early in the CPU tick, so they should never reach this callback.
+    // This callback only handles RAM access for addresses 2-4095 in the zero bank.
+    
+    if (unlikely(bus_state.addr <= 1)) {
+        // This should not happen with the new architecture - I/O ports are handled early
+        printf("WARNING: I/O port address %04X reached ZEROBANK callback - architecture error\n", bus_state.addr);
+        // Return without performing write to avoid corruption
+        return bus_state;
     }
+    
+    // Handle RAM access for addresses > 1 in the zero bank
+    bus_state = ram_memory_write(BUS_TO_C64(bus)->ram, bus_state);
     return bus_state;
 }
 

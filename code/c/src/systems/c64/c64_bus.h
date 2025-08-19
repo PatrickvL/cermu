@@ -98,7 +98,6 @@ typedef struct c64_bus_s {
     // Integrated adapter interfaces - can be passed out as pointers
     bus_cycle_ops_t bus_adapter;
     control_lines_interface_t control_lines_adapter;
-    mos6510_io_port_interface_t io_port_adapter;
 } c64_bus_t;
 
 
@@ -180,6 +179,9 @@ void c64_bus_set_cartridge_signals(c64_bus_t* c64_bus, bool exrom_active, bool g
 bool c64_bus_get_exrom_signal(c64_bus_t* c64_bus);
 bool c64_bus_get_game_signal(c64_bus_t* c64_bus);
 
+// Banking change callback function for MOS6510
+void c64_bus_on_banking_change(void* bus_ptr, uint8_t banking_state);
+
 // Forward declaration for PLA
 struct pla_906114_01_s;
 
@@ -227,16 +229,6 @@ static inline control_lines_interface_t* c64_control_lines_get_adapter(c64_bus_t
     return &c64_bus->control_lines_adapter;
 }
 
-/**
- * Get a pointer to the I/O port adapter interface.
- * This handles the CPU's I/O ports at addresses $0000 and $0001.
- * 
- * @param c64_bus Pointer to the existing C64 bus implementation
- * @return Pointer to the I/O port interface structure configured for the C64 system
- */
-static inline mos6510_io_port_interface_t* c64_io_port_get_adapter(c64_bus_t* c64_bus) {
-    return &c64_bus->io_port_adapter;
-}
 
 // Encoding macros for packing read/write CHIPs into single byte by packing
 // the IO pages into one (CHIP_VIC_D0, which will be restored to the full

@@ -87,8 +87,10 @@ void mos6510_render_settings_window(void* chip, bool* show_window) {
     igSliderInt("Port Default", &port_value, 0, 255, "$%02X", 0);
     
     if (igButton("Apply Defaults", (ImVec2){0, 0})) {
-        cpu->io_port[0] = (uint8_t)ddr_value;
-        cpu->io_port[1] = (uint8_t)port_value;
+        bus_state_t bus_state_ddr = { .addr = 0, .data = (uint8_t)ddr_value, .lines = 0 };
+        bus_state_t bus_state_port = { .addr = 1, .data = (uint8_t)port_value, .lines = 0 };
+        mos6510_handle_io_write(cpu, bus_state_ddr);
+        mos6510_handle_io_write(cpu, bus_state_port);
     }
 
     igSeparator();
@@ -127,15 +129,22 @@ void mos6510_render_cpu_specific(void* chip) {
     igText("I/O Ports:");
     
     // Show the I/O ports with their current values
-    igText("Port 0 (DDR): $%02X", cpu->io_port[0]);
-    igText("Port 1 (Data): $%02X", cpu->io_port[1]);
+    bus_state_t bus_state_ddr = { .addr = 0, .data = 0xFF, .lines = BUS_MASK_RW };
+    bus_state_t bus_state_port = { .addr = 1, .data = 0xFF, .lines = BUS_MASK_RW };
+    bus_state_ddr = mos6510_handle_io_read(cpu, bus_state_ddr);
+    bus_state_port = mos6510_handle_io_read(cpu, bus_state_port);
+    uint8_t ddr_val = bus_state_ddr.data;
+    uint8_t port_val = bus_state_port.data;
+    
+    igText("Port 0 (DDR): $%02X", ddr_val);
+    igText("Port 1 (Data): $%02X", port_val);
     
     // Show interpretation of the port values
     igText("Port Control:");
-    igText("  Bit 0 (LORAM): %s", (cpu->io_port[1] & 0x01) ? "1" : "0");
-    igText("  Bit 1 (HIRAM): %s", (cpu->io_port[1] & 0x02) ? "1" : "0");  
-    igText("  Bit 2 (CHAREN): %s", (cpu->io_port[1] & 0x04) ? "1" : "0");
-    igText("  Bit 3 (Cassette Write): %s", (cpu->io_port[1] & 0x08) ? "1" : "0");
-    igText("  Bit 4 (Cassette Switch): %s", (cpu->io_port[1] & 0x10) ? "1" : "0");
-    igText("  Bit 5 (Cassette Motor): %s", (cpu->io_port[1] & 0x20) ? "1" : "0");
+    igText("  Bit 0 (LORAM): %s", (port_val & 0x01) ? "1" : "0");
+    igText("  Bit 1 (HIRAM): %s", (port_val & 0x02) ? "1" : "0");
+    igText("  Bit 2 (CHAREN): %s", (port_val & 0x04) ? "1" : "0");
+    igText("  Bit 3 (Cassette Write): %s", (port_val & 0x08) ? "1" : "0");
+    igText("  Bit 4 (Cassette Switch): %s", (port_val & 0x10) ? "1" : "0");
+    igText("  Bit 5 (Cassette Motor): %s", (port_val & 0x20) ? "1" : "0");
 }

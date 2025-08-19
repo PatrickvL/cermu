@@ -27,7 +27,6 @@ struct chip_descriptor_s {
 #endif
 };
 
-
 // Chip registry
 typedef struct {
     void* chip;
@@ -36,20 +35,5 @@ typedef struct {
     uint16_t base_address;
     uint8_t chip_id;
 } chip_entry_t;
-
-// ============================================================================
-// GENERIC STUB FUNCTIONS
-// ============================================================================
-
-/**
- * Generic stub callback function for unattached chip callbacks.
- * Returns bus_state with data=0x00 for read operations, passes through unchanged for writes.
- * Use this to eliminate null checks in high-frequency code paths.
- */
-bus_state_t generic_stub_callback(void* context, bus_state_t bus_state);
-
-// Legacy stub functions for backward compatibility (deprecated)
-uint8_t generic_stub_read(void* context, uint16_t address);
-void generic_stub_write(void* context, uint16_t address, uint8_t value);
 
 #endif // AIEMUC_CHIP_H

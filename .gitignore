@@ -41,6 +41,10 @@ c64emu
 *.lastbuildstate
 *.tlog
 
+code/c/**/*_build/*
+code/c/**/*.dir/*
+code/c/x64/Debug/*
+
 code/c/deps/*
 code/c/external/cimgui/
 
@@ -55,9 +59,6 @@ code/c/test_ram_consolidation
 code/c/imgui.ini
 
 code/c/CTestTestfile.cmake
-code/c/c64emu.dir/*
-code/c/c64emu_gui.dir/*
-code/c/cimgui_build/*
 
 # Data files (ROMs, cartridges, disk images) - keep README files
 data/**/*.rom

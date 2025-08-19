@@ -74,16 +74,9 @@ int main() {
     mos6510_attach_bus_interface(cpu, &bus_ops);
     printf("PASS: Bus interface attached successfully\n");
     
-    // Create I/O interface  
-    mos6510_io_port_interface_t io_interface = {
-        .context = NULL,
-        .read_external_pins = test_io_read,
-        .output_pins_changed = test_io_write
-    };
-    
-    // Attach I/O interface
-    mos6510_attach_io_interface(cpu, &io_interface);
-    printf("PASS: I/O interface attached successfully\n");
+    // Set up banking change callback (not needed for basic tests, can be NULL)
+    mos6510_set_banking_callback(cpu, NULL, NULL);
+    printf("PASS: Banking callback configured\n");
     
     // Attach control lines interface
     mos6510_attach_control_lines_interface(cpu, &control_interface);
@@ -126,9 +119,15 @@ int main() {
     test_memory[0x1002] = 0x00;
     
     cpu->base.pc = 0x1001;
+    printf("DEBUG: About to execute LDA $00 instruction\n");
+    printf("DEBUG: Expected to read value 0x42 from address 0x00\n");
+    printf("DEBUG: test_memory[0x00] = 0x%02X\n", test_memory[0x00]);
     step_result = mos6510_step(cpu);
     if (!step_result) {
         printf("FAIL: LDA zero page instruction failed\n");
+        printf("DEBUG: CPU state after failed instruction:\n");
+        printf("DEBUG: PC = 0x%04X, A = 0x%02X, X = 0x%02X, Y = 0x%02X\n",
+               cpu->base.pc, cpu->base.a, cpu->base.x, cpu->base.y);
         mos6510_descriptor.destroy(cpu);
         return 1;
     }

@@ -142,13 +142,10 @@ bool create_cpu_instance(cpu_instance_t* instance, cpu_type_t type) {
                     .bus_read_cycle = test_read_cycle,
                     .bus_write_cycle = test_write_cycle
                 };
-                mos6510_io_port_interface_t io_interface = {
-                    .context = NULL,
-                    .read_external_pins = test_io_read,
-                    .output_pins_changed = test_io_write
-                };
+                // Set up banking change callback (not needed for basic tests, can be NULL)
+                mos6510_set_banking_callback((mos6510_t*)instance->cpu, NULL, NULL);
+                
                 mos6510_attach_bus_interface((mos6510_t*)instance->cpu, &bus_ops);
-                mos6510_attach_io_interface((mos6510_t*)instance->cpu, &io_interface);
                 mos6510_attach_control_lines_interface((mos6510_t*)instance->cpu, &control_interface);
             }
             break;

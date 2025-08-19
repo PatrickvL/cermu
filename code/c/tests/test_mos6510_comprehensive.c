@@ -95,14 +95,10 @@ mos6510_t* setup_cpu(cpu_state_t* state) {
         .bus_write_cycle = test_write_cycle
     };
     
-    mos6510_io_port_interface_t io_interface = {
-        .context = NULL,
-        .read_external_pins = test_io_read,
-        .output_pins_changed = test_io_write
-    };
+    // Set up banking change callback (not needed for basic tests, can be NULL)
+    mos6510_set_banking_callback(cpu, NULL, NULL);
     
     mos6510_attach_bus_interface(cpu, &bus_ops);
-    mos6510_attach_io_interface(cpu, &io_interface);
     mos6510_attach_control_lines_interface(cpu, &control_interface);
     
     // Set initial state

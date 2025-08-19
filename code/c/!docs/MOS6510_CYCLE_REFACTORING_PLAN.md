@@ -34,8 +34,8 @@
 - ✅ **Performance optimization**: Maintained register-based calling convention throughout I/O system
 
 ### 🚧 Current Step
-- **Phase 3**: Zero Bank Elimination (Ready to Start)
-- **Step 3.1**: Implement I/O Port Handling in MOS6510 (Next)
+- **Phase 3**: Zero Bank Elimination (IN PROGRESS)
+- **Step 3.1**: Implement I/O Port Handling in MOS6510 (READY TO IMPLEMENT)
 
 ### 📋 Next Steps
 - Step 3.2: Remove CHIP_ZEROBANK Infrastructure
@@ -209,21 +209,470 @@ Updated the main system cycle function to use the new consolidated tick function
 
 ### Phase 3: Zero Bank Elimination (Medium Risk)
 
+**Status**: 🚧 IN PROGRESS
+
 **Goal**: Move I/O port handling entirely into MOS6510, eliminate CHIP_ZEROBANK.
 
 #### Step 3.1: Implement I/O Port Handling in MOS6510
-- Complete `mos6510_handle_io_read/write()` to handle addresses 0-1 directly
-- Add memory banking change notifications (LORAM, HIRAM, CHAREN bits)
-- Update `memory_tick()` to call MOS6510 I/O functions for addresses 0-1
-- **Risk**: Medium - banking changes affect entire memory map
+
+**Status**: 🚧 READY TO IMPLEMENT
+
+The MOS6510 CPU includes two I/O ports at addresses $00 and $01 that control memory banking and provide general-purpose I/O functionality. These ports are currently handled by the CHIP_ZEROBANK infrastructure, but hardware-accurately belong within the CPU itself.
+
+**Implementation Requirements**:
+
+**3.1.1: Add I/O Port State to MOS6510 Structure**
+- Add port data direction registers for addresses $00 and $01
+- Add banking state tracking (LORAM, HIRAM, CHAREN bits)
+- Add cassette interface controls and tape motor
+- Add banking change callback system for PLA recalculation
+
+**3.1.2: Implement I/O Port Access Functions**
+- `mos6510_handle_io_read()` - Handle reads from addresses $00-$01
+- `mos6510_handle_io_write()` - Handle writes with banking change detection
+- `mos6510_set_banking_callback()` - Register system callback for banking changes
+
+**Hardware-Accurate Port Behavior**:
+- **Port $00**: Data Direction Register controlling port $01 pin directions
+- **Port $01**: Combined data/control port with banking bits:
+  - **Bit 0 (LORAM)**: BASIC ROM vs RAM at $A000-$BFFF
+  - **Bit 1 (HIRAM)**: KERNAL ROM vs RAM at $E000-$FFFF
+  - **Bit 2 (CHAREN)**: Character ROM vs I/O at $D000-$DFFF
+  - **Bits 3,5**: Cassette write/motor control
+  - **Bit 4**: Cassette sense (read-only, hardware-driven)
+
+**3.1.3: Update memory_tick() for I/O Port Integration**
+- Modify `c64_memory_tick()` to route addresses $00-$01 to MOS6510
+- Check `address <= 1` before PLA lookup
+- Call appropriate CPU I/O functions for reads/writes
+
+**3.1.4: Implement Banking Change Notifications**
+- Detect changes to banking bits (0-2) in port $01 writes
+- Trigger callback to system for PLA mapping recalculation
+- Update internal banking state structure
+
+**3.1.5: System Integration with Banking Notifications**
+- Register banking callback during C64 system initialization
+- Set initial banking state ($37 default - all outputs, ROMs enabled)
+- Implement `c64_handle_banking_change()` to update PLA mapping
+
+**Files to Modify**:
+- `code/c/src/chip/cpu/mos6510/mos6510.h` - Add I/O port state and function declarations
+- `code/c/src/chip/cpu/mos6510/mos6510.c` - Implement I/O port handling functions
+- `code/c/src/systems/c64/c64_bus.c` - Update `c64_memory_tick()` to route addresses 0-1 to CPU
+- `code/c/src/systems/c64/c64.c` - Add banking callback registration and handling
+
+**Hardware Compatibility Notes**:
+- Port reads reflect actual pin states, not just written values
+- Cassette sense bit is read-only and driven by hardware
+- Banking changes take effect immediately (no delay)
+- Initial banking state should be $37 (all outputs, ROM enabled)
+
+**Testing Strategy**:
+- Verify banking state changes affect memory mapping correctly
+- Test I/O port read/write behavior matches real hardware
+- Validate cassette sense bit remains read-only
+- Confirm initial banking state enables proper boot sequence
+
+**Risk**: Medium - banking changes affect entire memory map, but implementation is hardware-accurate
 
 #### Step 3.2: Remove CHIP_ZEROBANK Infrastructure
-- Update PLA mapping to use CHIP_RAM for bank 0 instead of CHIP_ZEROBANK
-- Remove `c64_bus_chip_read/write_zerobank()` functions
-- Remove CHIP_ZEROBANK from all enums and arrays
-- **Risk**: Medium - memory mapping change
+**Status**: 🕒 PENDING (after Step 3.1)
 
-**Validation**: Memory banking works correctly, I/O ports function properly
+Once I/O port handling is moved to MOS6510, the CHIP_ZEROBANK infrastructure becomes redundant and can be eliminated.
+
+**Implementation Requirements**:
+
+**3.2.1: Update PLA Mapping Tables**
+- Change all CHIP_ZEROBANK entries in PLA tables to CHIP_RAM
+- Address range $0000-$00FF will be handled as regular RAM
+- Addresses $0000-$0001 will be intercepted by `memory_tick()` before PLA lookup
+
+**3.2.2: Remove CHIP_ZEROBANK from Enumerations**
+```c
+// Before (in bus definitions):
+typedef enum {
+    CHIP_RAM = 0,
+    CHIP_ZEROBANK,    // <- REMOVE THIS
+    CHIP_BASIC,
+    CHIP_KERNAL,
+    // ... other chips
+} chip_type_t;
+
+// After:
+typedef enum {
+    CHIP_RAM = 0,     // Zero page becomes regular RAM
+    CHIP_BASIC,
+    CHIP_KERNAL,
+    // ... other chips
+} chip_type_t;
+```
+
+**3.2.3: Remove ZEROBANK Callback Functions**
+- Remove `c64_bus_chip_read_zerobank()` and `c64_bus_chip_write_zerobank()` functions
+- Remove from callback array initialization
+- Update any references to use CHIP_RAM instead
+
+**3.2.4: Clean Up ZEROBANK References**
+- Search codebase for all CHIP_ZEROBANK references
+- Replace with CHIP_RAM or remove as appropriate
+- Update comments and documentation
+
+**Files to Modify**:
+- `code/c/src/systems/c64/c64_bus.h` - Remove CHIP_ZEROBANK from enum
+- `code/c/src/systems/c64/c64_bus.c` - Remove zerobank callback functions and references
+- Any PLA mapping files that reference CHIP_ZEROBANK
+
+**Hardware Rationale**: In real C64 hardware, addresses $0000-$0001 are handled by CPU internal I/O ports, while $0002-$00FF are regular RAM. No separate "zero bank" chip exists.
+
+**Risk**: Medium - memory mapping change affects fundamental system addressing
+
+**Validation**: Memory banking works correctly, I/O ports function properly, CHIP_ZEROBANK infrastructure completely removed
+
+### Phase 4: Fast Path Implementation (Medium Risk)
+
+**Status**: 🕒 PENDING (after Phase 3)
+
+**Goal**: Optimize RAM/ROM access to bypass callback system for improved performance.
+
+#### Step 4.1: Implement Fast Path in memory_tick()
+
+**Implementation Requirements**:
+- Add direct unified buffer access for `CHIP_RAM`, `CHIP_BASIC`, `CHIP_KERNAL`, `CHIP_CHARROM`, `CHIP_ROML`, `CHIP_ROMH`
+- Bypass callback system for ROM/RAM access using pointer arithmetic
+- Keep slow path initially for debugging/validation
+- Add performance measurement and validation code
+
+**Key Benefits**:
+- Most memory accesses are to RAM/ROM, eliminating callbacks improves performance
+- Direct buffer access is closer to real hardware behavior (no indirection)
+- Reduces function call overhead on critical path
+
+**Fast Path Logic**:
+```c
+// Example fast path check in memory_tick()
+if (chip <= CHIP_ROMH && chip != CHIP_IO) {
+    // Direct unified buffer access - no callbacks
+    c64_memory_fast_path(bus, address, chip, is_write);
+    return;
+}
+```
+
+**Files to Modify**:
+- `code/c/src/systems/c64/c64_bus.c` - Add fast path logic to `c64_memory_tick()`
+
+**Risk**: Medium - performance optimization, behavior should remain identical
+
+#### Step 4.2: Simplify Chip Enumeration
+
+**⚠️ CRITICAL DEPENDENCY WARNING**: `chip_type_t` values are used as indexes and in calculations (e.g., unified memory buffer offsets). Any changes to enum values require careful analysis of all dependent code.
+
+**Implementation Requirements**:
+- **Phase A**: Audit all uses of `chip_type_t` values as indexes/calculations
+  - Search for array indexing using chip types: `buffer[chip_type]`, `table[chip]`
+  - Identify memory offset calculations using chip values
+  - Document all dependencies before making changes
+- **Phase B**: Plan enum value preservation or systematic replacement
+  - Option 1: Keep existing values, only remove unused entries at end
+  - Option 2: Create mapping layer to preserve index calculations
+  - Option 3: Update all dependent calculations systematically
+- **Phase C**: Remove individual I/O page CHIPs with careful validation
+  - Remove: `CHIP_D0_VIC`, `CHIP_D4_SID`, `CHIP_DC_CIA1`, `CHIP_DD_CIA2`, `CHIP_D8_COLORRAM`
+  - Keep: `CHIP_RAM`, `CHIP_BASIC`, `CHIP_KERNAL`, `CHIP_CHARROM`, `CHIP_ROML`, `CHIP_ROMH`, `CHIP_IO`, `CHIP_UNMAPPED`
+  - Update PLA mapping tables to use `CHIP_IO` for entire I/O range
+  - Verify all array bounds and offset calculations remain valid
+
+**Critical Files to Analyze**:
+- Unified memory buffer allocation and offset calculations
+- PLA mapping tables and decode functions
+- Any arrays dimensioned by chip count or using chip values as indexes
+
+**Benefits**:
+- Individual I/O page enums are unnecessary with bus flag approach
+- Reduces complexity and memory usage of lookup tables
+- Simplifies PLA mapping logic
+
+**Files to Modify** (after dependency analysis):
+- `code/c/src/systems/c64/c64_bus.h` - Simplify chip enumeration
+- `code/c/src/systems/c64/c64_bus.c` - Update PLA mapping tables and calculations
+- Any files referencing old I/O chip enums or using chip values in calculations
+
+**Risk**: HIGH - enum changes can break index-based calculations and memory layouts
+
+#### Step 4.3: Remove Chip Callback Arrays
+
+**Implementation Requirements**:
+- Remove `chip_read_callbacks` and `chip_write_callbacks` arrays from `c64_bus_t` structure
+- Remove `c64_bus_init_chip_callbacks()` function and all callback initialization
+- Update memory access to use either fast path or chip tick functions exclusively
+- Clean up all callback-related infrastructure
+
+**Benefits**:
+- Callbacks no longer needed with consolidated tick functions and fast path
+- Reduces memory usage and eliminates function pointer overhead
+- Simplifies bus structure and initialization
+
+**Files to Modify**:
+- `code/c/src/systems/c64/c64_bus.h` - Remove callback arrays from structure
+- `code/c/src/systems/c64/c64_bus.c` - Remove callback functions and initialization
+- `code/c/src/systems/c64/c64.c` - Update system initialization
+
+**Risk**: Medium - eliminates callback infrastructure completely
+
+**Validation**: Performance improves, memory access remains accurate, no callback dependencies remain
+
+### Phase 5: CPU Architecture Preparation (High Risk)
+
+**Status**: 🕒 PENDING (after Phase 4)
+
+**Goal**: Prepare for cycle-accurate CPU implementation without changing timing yet.
+
+#### Step 5.1: Create CPU Family Configuration System
+
+**Implementation Requirements**:
+- Design `cpu_family_config_t` structure for CPU variant configuration
+- Add CPU type enumeration: `CPU_TYPE_6502`, `CPU_TYPE_6510`, `CPU_TYPE_NES6502`
+- Include settings for decimal mode behavior differences between variants
+- Add illegal instruction handling configuration
+- Support cycle timing variations between CPU types
+
+**Benefits**:
+- Single codebase handles multiple 65xx family variants through configuration
+- Eliminates need for separate CPU implementations for minor behavioral differences
+- Makes adding new CPU variants easier (65C02, 65816, etc.)
+
+**Key Configuration Areas**:
+- Decimal mode: 6502 (full), 6510 (ADC/SBC only), NES6502 (disabled)
+- Illegal instruction behavior variations
+- Cycle timing differences
+- Register behavior variants
+
+**Files to Create/Modify**:
+- `code/c/src/chip/cpu/cpu_family_config.h` - New configuration system
+- `code/c/src/chip/cpu/cpu_family_config.c` - Configuration implementation
+
+**Risk**: Low - configuration structure design, no behavioral changes yet
+
+#### Step 5.2: Create New MOS6510 Implementation with Configuration Support
+
+**Implementation Requirements**:
+- Create new parallel folder structure: `mos6510_cycle/` alongside existing `mos6510/`
+- Integrate `cpu_family_config_t` from the start
+- Keep existing implementation intact for comparison and fallback
+- Design clean separation between old and new implementations
+
+**Benefits**:
+- Allows side-by-side comparison and easy rollback if issues arise
+- Preserves working reference implementation during development
+- Enables A/B testing between implementations
+
+**Directory Structure**:
+```
+src/chip/cpu/
+├── mos6510/           # Existing instruction-based implementation
+└── mos6510_cycle/     # New cycle-accurate implementation
+```
+
+**Files to Create**:
+- `code/c/src/chip/cpu/mos6510_cycle/` - New implementation directory
+- Core files: `mos6510_cycle.h`, `mos6510_cycle.c`, cycle tables, etc.
+
+**Risk**: Low - parallel implementation, no changes to existing code
+
+#### Step 5.3: Design CPU Register Architecture with Configuration
+
+**Implementation Requirements**:
+- Define register array/structure with indexes for A, X, Y, SP, PCL, PCH, status
+- Use `cpu_family_config_t` to determine register behavior variants
+- **Research decision**: 8-bit vs 16-bit register storage approach
+  - **8-bit**: Hardware accurate, natural page-cross detection
+  - **16-bit**: Host CPU optimized, simpler PC operations
+- Design address setup and data operation function signatures
+- Create PLA control signal bit patterns with configuration-driven behavior
+
+**Benefits**:
+- Fundamental architecture must be solid before implementation begins
+- Configuration approach eliminates need for variant-specific code
+
+**Research Areas**:
+- Performance profiling of 8-bit vs 16-bit register approaches
+- Cache behavior analysis with different struct layouts
+- Host CPU architecture optimization (x86-64, ARM)
+
+**Files to Create**:
+- `code/c/src/chip/cpu/mos6510_cycle/mos6510_cycle_registers.h` - Register architecture
+- `code/c/src/chip/cpu/mos6510_cycle/mos6510_cycle_pla.h` - PLA definitions
+
+**Risk**: Low - design phase, no code changes yet
+
+#### Step 5.4: Create Parallel CPU Cycle Infrastructure with Configuration
+
+**Implementation Requirements**:
+- Add CPU state variables for cycle counting, PLA state in new implementation
+- Create `mos6510_cycle_address_setup()` and `mos6510_cycle_data_operation()` functions
+- Use `cpu_family_config_t` to determine behavior variants
+- Initially bridge to existing instruction execution for gradual transition
+- Add cycle state tracking and debugging infrastructure
+
+**Benefits**:
+- Gradual transition allows testing new architecture with known-good execution
+- Provides foundation for full cycle-accurate implementation
+
+**Files to Create**:
+- `code/c/src/chip/cpu/mos6510_cycle/mos6510_cycle_infrastructure.c` - Cycle infrastructure
+- Bridge functions to existing execution system
+
+**Risk**: Medium - parallel implementation with system integration
+
+#### Step 5.5: Build Configuration-Driven Opcode Cycle Tables
+
+**Implementation Requirements**:
+- Create tables mapping opcodes to cycle sequences with CPU variant support
+- Include branch prediction, page crossing logic
+- Add cycle skipping logic for different conditions based on CPU configuration
+- Handle NMI masking during branch operations (hardware-accurate timing)
+- Support different decimal mode behaviors per CPU type
+
+**Benefits**:
+- Data-driven approach more maintainable than hardcoded switch statements
+- Tables allow easy validation against hardware reference manuals
+- Configuration approach eliminates need for separate CPU implementations
+
+**Files to Create**:
+- `code/c/src/chip/cpu/mos6510_cycle/mos6510_cycle_tables.h` - Cycle tables
+- `code/c/src/chip/cpu/mos6510_cycle/mos6510_cycle_tables.c` - Table data
+
+**Risk**: Low - data structure creation
+
+**Validation**: New CPU implementation can be instantiated alongside old one
+
+### Phase 6: CPU Cycle Implementation (High Risk)
+
+**Status**: 🕒 PENDING (after Phase 5)
+
+**Goal**: Replace instruction-based CPU with cycle-accurate implementation.
+
+#### Step 6.1: Implement Address Setup Operations
+
+**Implementation Requirements**:
+- Create switch-based address setup handler in new MOS6510 implementation
+- Handle immediate, zero page, absolute, indexed addressing modes
+- Update bus address at end of CPU tick (matches real hardware timing)
+- Add proper cycle counting and state management
+
+**Benefits**:
+- Switch statements more efficient than function pointer tables
+- Address setup at end of tick matches real hardware timing
+
+**Files to Modify**:
+- `code/c/src/chip/cpu/mos6510_cycle/mos6510_cycle.c` - Address setup implementation
+
+**Risk**: High - fundamental CPU behavior change
+
+#### Step 6.2: Implement Data Operations
+
+**Implementation Requirements**:
+- Create switch-based data operation handler in new MOS6510 implementation
+- Handle read, write, read-modify-write operations
+- Call `c64_memory_tick()` for actual memory access
+- Implement proper pipeline behavior matching real 6502
+
+**Benefits**:
+- Delayed data operations match real 6502 pipeline behavior
+- Centralizes all memory access through memory_tick()
+
+**Files to Modify**:
+- `code/c/src/chip/cpu/mos6510_cycle/mos6510_cycle.c` - Data operation implementation
+
+**Risk**: High - affects all CPU operations
+
+#### Step 6.3: Replace Main CPU Loop
+
+**Implementation Requirements**:
+- Switch system to use new MOS6510 implementation instead of existing fam65xx
+- Handle cycle skipping, interrupt timing in new implementation
+- Keep old implementation available for comparison/fallback
+- Add comprehensive testing and validation
+
+**Benefits**:
+- Allows A/B testing between old and new CPU implementations
+- Provides safety net if issues are discovered
+
+**Files to Modify**:
+- `code/c/src/systems/c64/c64.c` - Switch to new CPU implementation
+- Build system updates for new vs old CPU selection
+
+**Risk**: Very High - complete CPU replacement
+
+**Validation**: Extensive testing with CPU test suites, real software
+
+### Phase 7: Bus Line Management (Medium Risk)
+
+**Status**: 🕒 PENDING (after Phase 6)
+
+**Goal**: Implement proper bus line handling (RW, BA, AEC, SYNC, RDY).
+
+#### Step 7.1: Add Bus Line State Management
+
+**Implementation Requirements**:
+- Track RW flag state throughout execution
+- Handle write mode entry/exit properly
+- Manage UNMAPPED access edge cases
+- Add proper bus timing for VIC-II coordination
+
+**Files to Modify**:
+- `code/c/src/chip/cpu/mos6510_cycle/mos6510_cycle.c` - Bus line management
+
+**Risk**: Medium - bus timing critical for some software
+
+#### Step 7.2: Implement Interrupt Timing
+
+**Implementation Requirements**:
+- Add proper NMI/IRQ cycle handling with accurate timing
+- Handle interrupt masking during branch operations
+- Implement RESET timing if needed
+- Add interrupt priority and timing validation
+
+**Files to Modify**:
+- `code/c/src/chip/cpu/mos6510_cycle/mos6510_cycle_interrupts.c` - New interrupt system
+
+**Risk**: High - interrupt timing is complex and critical
+
+**Validation**: Interrupt-dependent software works correctly
+
+### Phase 8: Memory Optimization and Cleanup (Low Risk)
+
+**Status**: 🕒 PENDING (after Phase 7)
+
+**Goal**: Clean up temporary code and finalize optimizations.
+
+#### Step 8.1: Remove Deprecated Infrastructure
+
+**Implementation Requirements**:
+- Remove old callback arrays and functions
+- Clean up temporary debug code and parallel implementation paths
+- Remove unused CHIP enums and related code
+- Remove old fam65xx CPU implementation if no longer needed
+
+**Benefits**:
+- Cleanup reduces maintenance burden and code complexity
+
+**Risk**: Low - cleanup only
+
+#### Step 8.2: Performance Optimization
+
+**Implementation Requirements**:
+- Profile and optimize hot paths in new implementation
+- Consider compiler optimization hints for critical sections
+- Validate performance improvements and document gains
+- Measure memory savings from optimizations
+
+**Benefits**:
+- Quantify the benefits achieved by the refactoring
+
+**Risk**: Low - optimization of working code
+
+**Validation**: Memory usage reduced, performance maintained or improved
 
 ### Phase 4: Fast Path Implementation (Medium Risk)
 
