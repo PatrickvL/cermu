@@ -571,10 +571,10 @@ typedef struct {
     uint16_t base_address;
     size_t size;
     const char* label;
-} chip_entry_t;
+} c64_chip_entry_t;
 
 // Sparse lookup table indexed by CHIP_* values (supports irregular numbering)
-static const chip_entry_t c64_bus_chip_to_entry[] = {
+static const c64_chip_entry_t c64_bus_chip_to_entry[] = {
     [CHIP_ROML]     = { 0x8000, 8*1024, "Cartridge ROM Low" },
     [CHIP_ROMH]     = { 0xA000, 8*1024, "Cartridge ROM High" }, // Note: Can also map to 0xE000
     [CHIP_KERNAL]   = { 0xE000, 8*1024, "KERNAL ROM" },
@@ -595,7 +595,7 @@ bool c64_bus_get_chip_description(const c64_bus_t* bus, uint8_t chip, chip_descr
     // Validate chip ID and get entry (handles irregular numbering via sparse array)
     if (chip >= CHIP_ENTRY_COUNT) return false;
     
-    const chip_entry_t* entry = &c64_bus_chip_to_entry[chip];
+    const c64_chip_entry_t* entry = &c64_bus_chip_to_entry[chip];
     
     // Entry exists if it has a label (even UNMAPPED has a label)
     if (entry->label) {
