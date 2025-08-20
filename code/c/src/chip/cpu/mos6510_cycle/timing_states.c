@@ -182,11 +182,14 @@ void instruction_definition_dump(const instruction_definition_t *instr,
     char cycle_buf[256];
     int pos = 0;
     
-    pos += snprintf(buffer + pos, buffer_size - pos,
-        "Instruction: %d cycles, props=0x%X\n",
-        instr->cycle_count, instr->special_props);
+    // Use the new macro to get cycle count from flags
+    uint8_t cycle_count = INSTR_GET_CYCLE_COUNT(instr);
     
-    for (int i = 0; i < instr->cycle_count && i < 8; i++) {
+    pos += snprintf(buffer + pos, buffer_size - pos,
+        "Instruction: %d cycles, flags=0x%08X\n",
+        cycle_count, instr->flags);
+    
+    for (int i = 0; i < cycle_count && i < 8; i++) {
         cycle_definition_dump(&instr->cycles[i], cycle_buf, sizeof(cycle_buf));
         pos += snprintf(buffer + pos, buffer_size - pos,
             "  Cycle %d: %s\n", i + 1, cycle_buf);
@@ -254,7 +257,8 @@ addressing_mode_t infer_detailed_addressing_mode(uint8_t opcode) {
             break;
             
         case 0x00: // Control instructions
-            if (infer_is_branch(opcode)) {
+            // Branch instructions: opcode & 0x1F gives branch pattern
+            if ((opcode & 0x1F) == 0x10) {  // Branch pattern: xxx1 0000
                 return ADDR_RELATIVE;
             }
             return ADDR_IMPLIED;
@@ -269,7 +273,7 @@ addressing_mode_t infer_detailed_addressing_mode(uint8_t opcode) {
 bool infer_affects_flags(uint8_t opcode) {
     // Most ALU operations affect flags, stores don't
     if (infer_is_store(opcode)) return false;
-    if (infer_is_branch(opcode)) return false;
+    if ((opcode & 0x1F) == 0x10) return false; // Branch instructions
     
     // Stack operations, transfers, most others affect flags
     return true;
@@ -279,7 +283,7 @@ bool infer_affects_flags(uint8_t opcode) {
  * Get cycle count estimate from opcode (for validation)
  */
 uint8_t infer_base_cycle_count(uint8_t opcode) {
-    if (infer_is_branch(opcode)) return 2; // +1 if taken, +1 if page cross
+    if ((opcode & 0x1F) == 0x10) return 2; // Branch instructions: +1 if taken, +1 if page cross
     
     addressing_mode_t mode = infer_detailed_addressing_mode(opcode);
     switch (mode) {

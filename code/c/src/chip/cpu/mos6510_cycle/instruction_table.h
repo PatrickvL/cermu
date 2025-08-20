@@ -39,7 +39,7 @@ static inline const instruction_definition_t* pla_lookup(uint8_t opcode) {
 static inline const cycle_definition_ultra_t* get_current_cycle_definition(
     const instruction_definition_t* instr, uint8_t cycle_position) {
     
-    if (cycle_position >= instr->cycle_count || cycle_position >= 8) {
+    if (cycle_position >= INSTR_GET_CYCLE_COUNT(instr) || cycle_position >= 8) {
         return NULL; // Invalid cycle position
     }
     
@@ -126,7 +126,7 @@ bool infer_uses_y_indexing(uint8_t opcode, addressing_mode_t base_mode);
  */
 static inline uint8_t get_base_cycle_count(uint8_t opcode) {
     const instruction_definition_t* instr = pla_lookup(opcode);
-    return instr->cycle_count;
+    return INSTR_GET_CYCLE_COUNT(instr);
 }
 
 /**
@@ -134,7 +134,8 @@ static inline uint8_t get_base_cycle_count(uint8_t opcode) {
  */
 static inline bool has_variable_timing(uint8_t opcode) {
     const instruction_definition_t* instr = pla_lookup(opcode);
-    return (instr->special_props & INSTR_PROP_VARIABLE_CYCLE) != 0;
+    // Variable timing determined from precomputed flags
+    return INSTR_GET_IS_BRANCH(instr) || INSTR_GET_USES_X_INDEX(instr) || INSTR_GET_USES_Y_INDEX(instr);
 }
 
 /**
@@ -190,9 +191,9 @@ static inline bool affects_y_register(uint8_t opcode) {
 // ===== FLAG EFFECTS INFERENCE =====
 
 /**
- * Determine which flags are affected by instruction
+ * Determine which flags are affected by instruction (legacy opcode-based)
  */
-uint8_t infer_flag_effects(uint8_t opcode);
+uint8_t infer_flag_effects_from_opcode(uint8_t opcode);
 
 /**
  * Check if instruction affects N and Z flags
