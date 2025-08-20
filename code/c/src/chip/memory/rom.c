@@ -38,7 +38,5 @@ chip_descriptor_t rom_descriptor = {
     .create = rom_system_create,
     .destroy = rom_system_destroy,
     .bus_attach = NULL,
-    .read = rom_memory_read, // ROM read receives chip pointer directly
-    .write = NULL, // ROM is read-only, no write function
     .bank_change = NULL
 };

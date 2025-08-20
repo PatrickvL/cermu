@@ -257,14 +257,8 @@ typedef struct mos6581_s {
 void mos6581_reset(mos6581_t* sid);
 
 // Main cycle function with unified bus state threading
-bus_state_t mos6581_advance_cycle(mos6581_t* sid, bus_state_t bus_state);
-
 // Consolidated SID tick function - main entry point for cycle processing
 bus_state_t mos6581_tick(void* chip, bus_state_t bus_state);
-
-// Unified register I/O
-bus_state_t mos6581_read(mos6581_t* sid, bus_state_t bus_state);
-bus_state_t mos6581_write(mos6581_t* sid, bus_state_t bus_state);
 
 // Voice output
 void mos6581_generate_samples(mos6581_t* sid, float* output, uint32_t sample_count);

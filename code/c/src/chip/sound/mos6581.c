@@ -1,5 +1,5 @@
 #include "mos6581.h"
-#include "aiemuc.h"
+#include "../../core/aiemuc.h"
 #include <string.h>
 #include <stdlib.h>
 #include <math.h> // for tanhf
@@ -858,38 +858,6 @@ bus_state_t mos6581_advance_cycle(mos6581_t* sid, bus_state_t bus_state) {
     return bus_state;
 }
 
-/**
- * Consolidated SID tick function - main entry point for SID cycle processing.
- * Combines advance cycle functionality with I/O bus coordination.
- * This replaces direct calls to mos6581_advance_cycle() in the new architecture.
- *
- * @param chip Pointer to SID chip instance
- * @param bus_state Current bus state
- * @return Updated bus state
- */
-bus_state_t mos6581_tick(void* chip, bus_state_t bus_state) {
-    mos6581_t* sid = (mos6581_t*)chip;
-    
-    // Check for I/O register access when I/O pending
-    if (unlikely(bus_is_io_pending(&bus_state))) {
-        // Check if address is within SID range ($D400-$D7FF)
-        if ((bus_state.addr & 0x0C00) == 0x0400) {
-            bus_clear_io_pending(&bus_state);
-            // Handle register access directly
-            bool is_read = bus_state.lines & BUS_MASK_RW;
-            if (is_read) {
-                bus_state = mos6581_registers_read(sid, bus_state);
-            } else {
-                bus_state = mos6581_registers_write(sid, bus_state);
-            }
-        }
-    }
-    
-    // Delegate to the existing advance cycle function
-    // In the future, this can be expanded to include additional tick-specific logic
-    return mos6581_advance_cycle(sid, bus_state);
-}
-
 // =============================================================================
 // SAMPLE GENERATION
 // =============================================================================
@@ -961,146 +929,6 @@ uint32_t mos6581_calculate_envelope_time_ms(voice_t* voice, envelope_cycle_t cyc
             return 0;
     }
 }
-
-#if 0
-// =============================================================================
-// WAVEFORM CAPTURE AND ANALYSIS
-// =============================================================================
-
-void mos6581_capture_waveform(voice_t* voice, uint16_t* buffer, uint32_t buffer_size) {
-    if (!voice || !buffer) return;
-    
-    uint32_t original_accumulator = voice->waveform_accumulator;
-    uint32_t original_frequency = voice->frequency;
-    
-    // Set up for waveform capture
-    voice->frequency = 65535; // Maximum frequency for fast capture
-    voice->waveform_accumulator = 0;
-    
-    for (uint32_t i = 0; i < buffer_size; i++) {
-        voice_clock_cycle(voice);
-        buffer[i] = (uint16_t)voice->oscillator_waveform;
-    }
-    
-    // Restore original state
-    voice->waveform_accumulator = original_accumulator;
-    voice->frequency = original_frequency;
-}
-
-void mos6581_capture_envelope(voice_t* voice, uint16_t* buffer, uint32_t buffer_size) {
-    if (!voice || !buffer) return;
-    
-    envelope_cycle_t original_cycle = voice->envelope_cycle;
-    uint16_t original_amplitude = voice->envelope_amplitude;
-    
-    // Start envelope from beginning
-    voice->envelope_cycle = CYCLE_ATTACK;
-    voice->envelope_amplitude = 0;
-    voice->envelope_rate_counter = 0;
-    
-    for (uint32_t i = 0; i < buffer_size; i++) {
-        voice_update_envelope(voice);
-        buffer[i] = voice->envelope_amplitude;
-    }
-    
-    // Restore original state
-    voice->envelope_cycle = original_cycle;
-    voice->envelope_amplitude = original_amplitude;
-}
-
-// =============================================================================
-// PERFORMANCE MONITORING
-// =============================================================================
-
-typedef struct {
-    uint32_t voice_updates;
-    uint32_t filter_updates;
-    uint32_t envelope_updates;
-    uint32_t waveform_generations;
-    uint32_t buffer_overruns;
-    uint32_t buffer_underruns;
-} mos6581_performance_stats_t;
-
-static mos6581_performance_stats_t perf_stats = {0};
-
-void mos6581_get_performance_stats(mos6581_performance_stats_t* stats) {
-    if (stats) {
-        *stats = perf_stats;
-    }
-}
-
-void mos6581_reset_performance_stats(void) {
-    memset(&perf_stats, 0, sizeof(perf_stats));
-}
-
-// =============================================================================
-// PRESET MANAGEMENT
-// =============================================================================
-
-typedef struct {
-    char name[64];
-    uint8_t registers[SID_REGS_SIZE];
-    sid_revision_t revision;
-    bool pal_timing;
-} mos6581_preset_t;
-
-void mos6581_save_preset(mos6581_t* sid, mos6581_preset_t* preset, const char* name) {
-    if (!sid || !preset || !name) return;
-    
-    strncpy(preset->name, name, sizeof(preset->name) - 1);
-    preset->name[sizeof(preset->name) - 1] = '\0';
-    
-    memcpy(preset->registers, sid->regs, SID_REGS_SIZE);
-    preset->revision = sid->revision;
-    preset->pal_timing = sid->pal_timing;
-}
-
-void mos6581_load_preset(mos6581_t* sid, const mos6581_preset_t* preset) {
-    if (!sid || !preset) return;
-    
-    // Set revision and timing first
-    mos6581_set_revision(sid, preset->revision);
-    mos6581_set_timing(sid, preset->pal_timing);
-    
-    // Load all registers
-    for (uint32_t i = 0; i < SID_REGS_SIZE; i++) {
-        if (i < 0x19 || i > 0x1C) { // Skip read-only registers
-            bus_state_t preset_bus_state = { .addr = 0xD400 + i, .data = preset->registers[i] };
-            mos6581_registers_write(sid, preset_bus_state);
-        }
-    }
-}
-
-// =============================================================================
-// MEMORY MANAGEMENT HELPERS
-// =============================================================================
-
-size_t mos6581_get_memory_usage(mos6581_t* sid) {
-    if (!sid) return 0;
-    
-    size_t total = sizeof(mos6581_t);
-    total += sid->sample_buffer.size * sizeof(float);
-    total += sid->temp_buffer_size * sizeof(float);
-    total += COMBINED_WAVEFORM_TABLE_SIZE;
-    
-    return total;
-}
-
-void mos6581_optimize_memory(mos6581_t* sid) {
-    if (!sid) return;
-    
-    // Optimize ring buffer size based on usage
-    uint32_t max_usage = ring_buffer_available(&sid->sample_buffer);
-    if (max_usage < sid->sample_buffer.size / 4) {
-        // Shrink buffer if underutilized
-        uint32_t new_size = max_usage * 2;
-        if (new_size < 1024) new_size = 1024;
-        
-        ring_buffer_destroy(&sid->sample_buffer);
-        ring_buffer_init(&sid->sample_buffer, new_size);
-    }
-}
-#endif
 
 // =============================================================================
 // VOICE REGISTER WRITERS
@@ -1422,24 +1250,177 @@ void* mos6581_system_create(chip_descriptor_t* desc) {
 #include "mos6581_gui.c"
 #endif
 
-// =============================================================================
-// BUS STATE INTERFACE FUNCTIONS
-// =============================================================================
-
-// Implement the missing bus_state_t functions that c64_bus.c expects
-bus_state_t mos6581_read(mos6581_t* sid, bus_state_t bus_state) {
-    if (!sid) return bus_state;
+/**
+ * Consolidated SID tick function - main entry point for SID cycle processing.
+ * Combines advance cycle functionality with I/O bus coordination.
+ * This replaces direct calls to mos6581_advance_cycle() in the new architecture.
+ *
+ * @param chip Pointer to SID chip instance
+ * @param bus_state Current bus state
+ * @return Updated bus state
+ */
+bus_state_t mos6581_tick(void* chip, bus_state_t bus_state) {
+    mos6581_t* sid = (mos6581_t*)chip;
     
-    // Read from SID register using address from bus state
-    return mos6581_registers_read(sid, bus_state);
+    // Check for I/O register access when I/O pending
+    if (unlikely(bus_is_io_pending(&bus_state))) {
+        // Check if address is within SID range ($D400-$D7FF)
+        if ((bus_state.addr & 0x0C00) == 0x0400) {
+            bus_clear_io_pending(&bus_state);
+            // Handle register access directly
+            bool is_read = bus_state.lines & BUS_MASK_RW;
+            if (is_read) {
+                bus_state = mos6581_registers_read(sid, bus_state);
+            } else {
+                bus_state = mos6581_registers_write(sid, bus_state);
+            }
+        }
+    }
+    
+    // Delegate to the existing advance cycle function
+    // In the future, this can be expanded to include additional tick-specific logic
+    return mos6581_advance_cycle(sid, bus_state);
 }
 
-bus_state_t mos6581_write(mos6581_t* sid, bus_state_t bus_state) {
-    if (!sid) return bus_state;
+#if 0
+// =============================================================================
+// WAVEFORM CAPTURE AND ANALYSIS
+// =============================================================================
+
+void mos6581_capture_waveform(voice_t* voice, uint16_t* buffer, uint32_t buffer_size) {
+    if (!voice || !buffer) return;
     
-    // Write to SID register using address and data from bus state
-    return mos6581_registers_write(sid, bus_state);
+    uint32_t original_accumulator = voice->waveform_accumulator;
+    uint32_t original_frequency = voice->frequency;
+    
+    // Set up for waveform capture
+    voice->frequency = 65535; // Maximum frequency for fast capture
+    voice->waveform_accumulator = 0;
+    
+    for (uint32_t i = 0; i < buffer_size; i++) {
+        voice_clock_cycle(voice);
+        buffer[i] = (uint16_t)voice->oscillator_waveform;
+    }
+    
+    // Restore original state
+    voice->waveform_accumulator = original_accumulator;
+    voice->frequency = original_frequency;
 }
+
+void mos6581_capture_envelope(voice_t* voice, uint16_t* buffer, uint32_t buffer_size) {
+    if (!voice || !buffer) return;
+    
+    envelope_cycle_t original_cycle = voice->envelope_cycle;
+    uint16_t original_amplitude = voice->envelope_amplitude;
+    
+    // Start envelope from beginning
+    voice->envelope_cycle = CYCLE_ATTACK;
+    voice->envelope_amplitude = 0;
+    voice->envelope_rate_counter = 0;
+    
+    for (uint32_t i = 0; i < buffer_size; i++) {
+        voice_update_envelope(voice);
+        buffer[i] = voice->envelope_amplitude;
+    }
+    
+    // Restore original state
+    voice->envelope_cycle = original_cycle;
+    voice->envelope_amplitude = original_amplitude;
+}
+
+// =============================================================================
+// PERFORMANCE MONITORING
+// =============================================================================
+
+typedef struct {
+    uint32_t voice_updates;
+    uint32_t filter_updates;
+    uint32_t envelope_updates;
+    uint32_t waveform_generations;
+    uint32_t buffer_overruns;
+    uint32_t buffer_underruns;
+} mos6581_performance_stats_t;
+
+static mos6581_performance_stats_t perf_stats = {0};
+
+void mos6581_get_performance_stats(mos6581_performance_stats_t* stats) {
+    if (stats) {
+        *stats = perf_stats;
+    }
+}
+
+void mos6581_reset_performance_stats(void) {
+    memset(&perf_stats, 0, sizeof(perf_stats));
+}
+
+// =============================================================================
+// PRESET MANAGEMENT
+// =============================================================================
+
+typedef struct {
+    char name[64];
+    uint8_t registers[SID_REGS_SIZE];
+    sid_revision_t revision;
+    bool pal_timing;
+} mos6581_preset_t;
+
+void mos6581_save_preset(mos6581_t* sid, mos6581_preset_t* preset, const char* name) {
+    if (!sid || !preset || !name) return;
+    
+    strncpy(preset->name, name, sizeof(preset->name) - 1);
+    preset->name[sizeof(preset->name) - 1] = '\0';
+    
+    memcpy(preset->registers, sid->regs, SID_REGS_SIZE);
+    preset->revision = sid->revision;
+    preset->pal_timing = sid->pal_timing;
+}
+
+void mos6581_load_preset(mos6581_t* sid, const mos6581_preset_t* preset) {
+    if (!sid || !preset) return;
+    
+    // Set revision and timing first
+    mos6581_set_revision(sid, preset->revision);
+    mos6581_set_timing(sid, preset->pal_timing);
+    
+    // Load all registers
+    for (uint32_t i = 0; i < SID_REGS_SIZE; i++) {
+        if (i < 0x19 || i > 0x1C) { // Skip read-only registers
+            bus_state_t preset_bus_state = { .addr = 0xD400 + i, .data = preset->registers[i] };
+            mos6581_registers_write(sid, preset_bus_state);
+        }
+    }
+}
+
+// =============================================================================
+// MEMORY MANAGEMENT HELPERS
+// =============================================================================
+
+size_t mos6581_get_memory_usage(mos6581_t* sid) {
+    if (!sid) return 0;
+    
+    size_t total = sizeof(mos6581_t);
+    total += sid->sample_buffer.size * sizeof(float);
+    total += sid->temp_buffer_size * sizeof(float);
+    total += COMBINED_WAVEFORM_TABLE_SIZE;
+    
+    return total;
+}
+
+void mos6581_optimize_memory(mos6581_t* sid) {
+    if (!sid) return;
+    
+    // Optimize ring buffer size based on usage
+    uint32_t max_usage = ring_buffer_available(&sid->sample_buffer);
+    if (max_usage < sid->sample_buffer.size / 4) {
+        // Shrink buffer if underutilized
+        uint32_t new_size = max_usage * 2;
+        if (new_size < 1024) new_size = 1024;
+        
+        ring_buffer_destroy(&sid->sample_buffer);
+        ring_buffer_init(&sid->sample_buffer, new_size);
+    }
+}
+#endif
 
 // =============================================================================
 // CHIP DESCRIPTOR

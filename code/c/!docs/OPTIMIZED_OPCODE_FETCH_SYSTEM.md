@@ -77,7 +77,6 @@ void c64_bus_system_attach(c64_bus_t* c64_bus, void* c64) {
 
 // Maintain coherency on RAM writes
 case CHIP_RAM:
-    ram_memory_write(BUS_TO_C64(bus)->ram, address, value);
     bus->unified_memory_buffer[0xC000 + address] = value;
     break;
 ```
