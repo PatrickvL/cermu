@@ -132,7 +132,7 @@ static inline const instruction_definition_t* pipeline_get_decoded_instruction(
  * Lagged datapath: Register operations happen 1-2 cycles after decode
  */
 void pipeline_lag_datapath(pipeline_overlap_manager_t *pom, 
-                          const cycle_definition_ultra_t *cycle_def);
+                          const cycle_definition_t *cycle_def);
 
 /**
  * Check if datapath operation is ready
@@ -257,7 +257,7 @@ typedef enum {
  */
 void pipeline_execute_complex_transition(pipeline_overlap_manager_t *pom,
                                         complex_state_transition_t transition,
-                                        const cycle_definition_ultra_t *current_cycle);
+                                        const cycle_definition_t *current_cycle);
 
 /**
  * Check if simultaneous timing states are active

@@ -219,19 +219,19 @@ typedef struct {
     data_flow_t data_dst       : 2;  // Data destination
     uint8_t bus_routing        : 8;  // Bus transfer mask
     uint8_t cycle_flags        : 6;  // Control flags
-} cycle_definition_ultra_t; // Exactly 32 bits
+} cycle_definition_t; // Exactly 32 bits
 ```
 
 #### Complete Instruction Definition
 
-**Ultra-Compact Optimization Applied**: The original design used separate `instruction_definition_ultra_t` and `instruction_definition_optimized_t` types, but these have been consolidated into a single unified type with further optimization.
+**Ultra-Compact Optimization Applied**: The original design used separate `instruction_definition_t` and `instruction_definition_optimized_t` types, but these have been consolidated into a single unified type with further optimization.
 
 ```c
 typedef struct {
     // OPTIMIZATION: Removed redundant opcode field - opcode inferred from array index
     uint8_t cycle_count     : 4;      // Number of cycles (4 bits)
     uint8_t special_props   : 4;      // Special properties (4 bits)
-    cycle_definition_ultra_t cycles[8]; // Up to 8 cycles (32 bytes)
+    cycle_definition_t cycles[8]; // Up to 8 cycles (32 bytes)
 } instruction_definition_t; // ~33 bytes total (256 bytes saved vs original)
 ```
 
@@ -378,7 +378,7 @@ bus_state_t mos6510_tick(mos6510_state_t *cpu, bus_state_t input_bus) {
     advance_timing_state(cpu);
     
     // PLA decode for current state
-    const cycle_definition_ultra_t* cycle = get_current_cycle(cpu);
+    const cycle_definition_t* cycle = get_current_cycle(cpu);
     
     // Setup deferred operations for next tick
     cpu->deferred_data_operation = cycle->alu;

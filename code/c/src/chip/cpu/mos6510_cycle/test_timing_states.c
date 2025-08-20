@@ -30,8 +30,8 @@ static int tests_passed = 0;
 
 bool test_cycle_definition_size() {
     // Verify the ultra-compact structure is exactly 32 bits
-    size_t size = sizeof(cycle_definition_ultra_t);
-    printf("  cycle_definition_ultra_t size: %zu bytes\n", size);
+    size_t size = sizeof(cycle_definition_t);
+    printf("  cycle_definition_t size: %zu bytes\n", size);
     
     if (size != 4) {
         printf("  ERROR: Expected 4 bytes, got %zu bytes\n", size);
@@ -57,7 +57,7 @@ bool test_instruction_definition_size() {
 // ===== BIT FIELD PACKING TESTS =====
 
 bool test_bit_field_packing() {
-    cycle_definition_ultra_t cycle = {0};
+    cycle_definition_t cycle = {0};
     
     // Test all bit fields can hold their maximum values
     cycle.timing = 7;        // 3 bits max = 7
@@ -116,7 +116,7 @@ bool test_timing_state_transitions() {
     timing_state_init(&tsm);
     
     // Create a simple 2-cycle instruction (like LDA #$nn)
-    cycle_definition_ultra_t cycle1 = {
+    cycle_definition_t cycle1 = {
         .timing = TIMING_T1F,
         .address = ADDR_IMMEDIATE,
         .condition = COND_ALWAYS,
@@ -124,7 +124,7 @@ bool test_timing_state_transitions() {
         .cycle_flags = CYCLE_FLAG_SYNC
     };
     
-    cycle_definition_ultra_t cycle2 = {
+    cycle_definition_t cycle2 = {
         .timing = TIMING_T0,
         .address = ADDR_IMMEDIATE,
         .condition = COND_ALWAYS,
@@ -256,7 +256,7 @@ bool test_debug_strings() {
 }
 
 bool test_cycle_definition_dump() {
-    cycle_definition_ultra_t cycle = {
+    cycle_definition_t cycle = {
         .timing = TIMING_T2,
         .address = ADDR_ABSOLUTE,
         .condition = COND_ALWAYS,
@@ -287,7 +287,7 @@ bool test_cycle_definition_dump() {
 
 bool test_storage_optimization() {
     // Calculate theoretical storage reduction
-    size_t compact_cycle = sizeof(cycle_definition_ultra_t);
+    size_t compact_cycle = sizeof(cycle_definition_t);
     size_t compact_instruction = sizeof(instruction_definition_t);
     
     // Original unoptimized estimate: ~150 bytes per instruction

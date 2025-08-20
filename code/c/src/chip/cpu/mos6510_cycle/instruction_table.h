@@ -36,7 +36,7 @@ static inline const instruction_definition_t* pla_lookup(uint8_t opcode) {
 /**
  * Get current cycle definition for a CPU state
  */
-static inline const cycle_definition_ultra_t* get_current_cycle_definition(
+static inline const cycle_definition_t* get_current_cycle_definition(
     const instruction_definition_t* instr, uint8_t cycle_position) {
     
     if (cycle_position >= INSTR_GET_CYCLE_COUNT(instr) || cycle_position >= 8) {

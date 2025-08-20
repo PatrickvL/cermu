@@ -135,7 +135,7 @@ static void pipeline_complete_delayed_decode(pipeline_overlap_manager_t *pom) {
  * Models the "datapath behind" behavior
  */
 void pipeline_lag_datapath(pipeline_overlap_manager_t *pom,
-                          const cycle_definition_ultra_t *cycle_def) {
+                          const cycle_definition_t *cycle_def) {
     // Set up datapath lag (1-2 cycles typical)
     pom->datapath_lag_cycles = 1; // Most operations have 1 cycle lag
     
@@ -329,7 +329,7 @@ void pipeline_stall(pipeline_overlap_manager_t *pom, uint8_t stall_cycles) {
  */
 void pipeline_execute_complex_transition(pipeline_overlap_manager_t *pom,
                                         complex_state_transition_t transition,
-                                        const cycle_definition_ultra_t *current_cycle) {
+                                        const cycle_definition_t *current_cycle) {
     switch (transition) {
         case STATE_TRANS_T01_T0:
             // T01,T0 → T0 (instruction completion)
