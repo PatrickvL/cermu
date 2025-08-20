@@ -160,7 +160,8 @@ endif
 
 # Core source files
 CORE_SOURCES := $(CORE_DIR)/system.c \
-               $(CORE_DIR)/chip.c
+               $(CORE_DIR)/chip.c \
+               $(CORE_DIR)/ioport.c
 
 # Chip source files
 CHIP_SOURCES := $(CHIP_DIR)/cpu/fam65xx/fam65xx_core.c \
