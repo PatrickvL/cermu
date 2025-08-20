@@ -177,14 +177,14 @@ void cycle_definition_dump(const cycle_definition_ultra_t *cycle,
 /**
  * Dump instruction definition for debugging
  */
-void instruction_definition_dump(const instruction_definition_ultra_t *instr,
+void instruction_definition_dump(const instruction_definition_t *instr,
                                char *buffer, size_t buffer_size) {
     char cycle_buf[256];
     int pos = 0;
     
     pos += snprintf(buffer + pos, buffer_size - pos,
-        "Instruction 0x%02X: %d cycles, props=0x%X\n",
-        instr->opcode, instr->cycle_count, instr->special_props);
+        "Instruction: %d cycles, props=0x%X\n",
+        instr->cycle_count, instr->special_props);
     
     for (int i = 0; i < instr->cycle_count && i < 8; i++) {
         cycle_definition_dump(&instr->cycles[i], cycle_buf, sizeof(cycle_buf));

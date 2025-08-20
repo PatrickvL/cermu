@@ -66,30 +66,39 @@ typedef struct {
     bool is_unstable;           // Whether behavior is unstable
 } illegal_opcode_pattern_t;
 
+// ===== UNIFIED INSTRUCTION DEFINITION =====
+// Uses the optimized instruction_definition_t from timing_states.h
+// (opcode inferred from array index for maximum efficiency)
+
 // ===== DIRECT O(1) PLA LOOKUP =====
 
 /**
  * Ultra-fast direct PLA lookup with illegal opcode support
  * This is the core lookup function - exactly O(1) with no branching
  */
-static inline const instruction_definition_ultra_t* pla_lookup_advanced(uint8_t opcode) {
-    extern const instruction_definition_ultra_t instruction_table_complete[256];
-    return &instruction_table_complete[opcode];
+static inline const instruction_definition_t* pla_lookup_advanced(uint8_t opcode) {
+    extern instruction_definition_t pla_instruction_table[256];
+    return &pla_instruction_table[opcode];
 }
 
 /**
  * Check if opcode is a legal instruction
  */
 static inline bool pla_is_legal_opcode(uint8_t opcode) {
-    const instruction_definition_ultra_t* instr = pla_lookup_advanced(opcode);
-    return instr->special_props <= INSTR_PROP_RMW;
+    const instruction_definition_t* instr = pla_lookup_advanced(opcode);
+    // Legal opcodes have special_props 0 (normal), BRANCH (2), RMW (4), or VARIABLE_CYCLE (8)
+    // Illegal opcodes have JAM_OPCODE, USEFUL_ILLEGAL, etc.
+    return (instr->special_props == 0) ||
+           (instr->special_props == INSTR_PROP_BRANCH) ||
+           (instr->special_props == INSTR_PROP_RMW) ||
+           (instr->special_props == INSTR_PROP_VARIABLE_CYCLE);
 }
 
 /**
  * Check if illegal opcode is "useful" (has predictable behavior)
  */
 static inline bool pla_is_useful_illegal(uint8_t opcode) {
-    const instruction_definition_ultra_t* instr = pla_lookup_advanced(opcode);
+    const instruction_definition_t* instr = pla_lookup_advanced(opcode);
     return instr->special_props == INSTR_PROP_USEFUL_ILLEGAL ||
            instr->special_props == INSTR_PROP_ALU_ILLEGAL ||
            instr->special_props == INSTR_PROP_RMW_ILLEGAL ||
@@ -103,7 +112,7 @@ static inline bool pla_is_useful_illegal(uint8_t opcode) {
  * Check if opcode is a JAM/KIL instruction (halts CPU)
  */
 static inline bool pla_is_jam_opcode(uint8_t opcode) {
-    const instruction_definition_ultra_t* instr = pla_lookup_advanced(opcode);
+    const instruction_definition_t* instr = pla_lookup_advanced(opcode);
     return instr->special_props == INSTR_PROP_JAM_OPCODE;
 }
 
@@ -198,9 +207,10 @@ static inline bool pla_uses_x_indexing(uint8_t opcode) {
     const uint8_t aaa = pla_get_aaa_bits(opcode);
     
     // Pattern: X,ind and abs,X and zp,X
-    if (cc == 0x01 && bbb == 0x00) return true;  // (zp,X)
-    if (cc == 0x01 && bbb == 0x07) return true;  // abs,X (Group 01)
-    if (cc == 0x02 && bbb == 0x05) return true;  // zp,X (Group 10)
+    if (cc == 0x01 && bbb == 0x00) return true;  // (zp,X) - Group 01
+    if (cc == 0x01 && bbb == 0x07) return true;  // abs,X - Group 01
+    if (cc == 0x01 && bbb == 0x05) return true;  // zp,X - Group 01
+    if (cc == 0x02 && bbb == 0x05) return true;  // zp,X - Group 10
     if (cc == 0x02 && bbb == 0x07) {
         // abs,X but not LDX abs,Y (special case)
         return !(aaa == 0x05); // LDX uses Y indexing in abs,Y mode
@@ -361,12 +371,17 @@ bool pla_validate_completeness(void);
  */
 uint64_t pla_benchmark_lookup_speed(uint32_t iterations);
 
-// ===== EXTERNAL COMPLETE INSTRUCTION TABLE =====
+// ===== EXTERNAL INSTRUCTION TABLE =====
 
 /**
  * The complete 256-entry instruction table including all illegal opcodes
- * This extends the basic table from instruction_table.c
+ * Uses optimized structure without redundant opcode field
  */
-extern const instruction_definition_ultra_t instruction_table_complete[256];
+extern instruction_definition_t pla_instruction_table[256];
+
+/**
+ * Complete the instruction table with pattern-based initialization
+ */
+void pla_complete_instruction_table(void);
 
 #endif // MOS6510_CYCLE_PLA_LOOKUP_H

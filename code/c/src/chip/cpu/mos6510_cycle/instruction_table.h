@@ -28,8 +28,8 @@
  * Direct O(1) PLA lookup function
  * This is the core of the ultra-compact system - no searching needed
  */
-static inline const instruction_definition_ultra_t* pla_lookup(uint8_t opcode) {
-    extern const instruction_definition_ultra_t instruction_table[256];
+static inline const instruction_definition_t* pla_lookup(uint8_t opcode) {
+    extern const instruction_definition_t instruction_table[256];
     return &instruction_table[opcode];
 }
 
@@ -37,7 +37,7 @@ static inline const instruction_definition_ultra_t* pla_lookup(uint8_t opcode) {
  * Get current cycle definition for a CPU state
  */
 static inline const cycle_definition_ultra_t* get_current_cycle_definition(
-    const instruction_definition_ultra_t* instr, uint8_t cycle_position) {
+    const instruction_definition_t* instr, uint8_t cycle_position) {
     
     if (cycle_position >= instr->cycle_count || cycle_position >= 8) {
         return NULL; // Invalid cycle position
@@ -125,7 +125,7 @@ bool infer_uses_y_indexing(uint8_t opcode, addressing_mode_t base_mode);
  * Get base cycle count (before conditional adjustments)
  */
 static inline uint8_t get_base_cycle_count(uint8_t opcode) {
-    const instruction_definition_ultra_t* instr = pla_lookup(opcode);
+    const instruction_definition_t* instr = pla_lookup(opcode);
     return instr->cycle_count;
 }
 
@@ -133,7 +133,7 @@ static inline uint8_t get_base_cycle_count(uint8_t opcode) {
  * Check if instruction has variable cycle timing
  */
 static inline bool has_variable_timing(uint8_t opcode) {
-    const instruction_definition_ultra_t* instr = pla_lookup(opcode);
+    const instruction_definition_t* instr = pla_lookup(opcode);
     return (instr->special_props & INSTR_PROP_VARIABLE_CYCLE) != 0;
 }
 
@@ -272,6 +272,6 @@ instruction_table_stats_t get_instruction_table_stats(void);
  * The complete 256-entry instruction table
  * This is the core data structure - ultra-compact and complete
  */
-extern const instruction_definition_ultra_t instruction_table[256];
+extern const instruction_definition_t instruction_table[256];
 
 #endif // MOS6510_CYCLE_INSTRUCTION_TABLE_H
