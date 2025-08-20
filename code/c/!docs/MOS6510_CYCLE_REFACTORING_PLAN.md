@@ -231,16 +231,36 @@ typedef struct {
 - Handle NMI masking during branch operations (hardware-accurate timing)
 - Support different decimal mode behaviors per CPU type
 
+**Ultra-Compact Implementation Achieved**: The cycle tables have been implemented using the unified `instruction_definition_t` type with aggressive storage optimization:
+
+```c
+// Ultra-compact unified instruction definition (replaces previous duplicate types)
+typedef struct {
+    uint8_t cycle_count     : 4;            // Number of cycles (4 bits)
+    uint8_t special_props   : 4;            // Special properties (4 bits)
+    cycle_definition_ultra_t cycles[8];     // Up to 8 cycles (32 bytes)
+} instruction_definition_t;                 // Total: ~33 bytes (256 bytes saved vs original)
+
+// Direct O(1) lookup with opcode inferred from array index
+const instruction_definition_t instruction_table[256];
+```
+
+**Storage Optimization**: Eliminated redundant opcode field and consolidated multiple instruction definition types into single unified type, achieving 256+ bytes storage reduction.
+
 **Benefits**:
 - Data-driven approach more maintainable than hardcoded switch statements
 - Tables allow easy validation against hardware reference manuals
 - Configuration approach eliminates need for separate CPU implementations
+- **Type consolidation complete**: No duplicate instruction definition types remain
 
-**Files to Create**:
-- `code/c/src/chip/cpu/mos6510_cycle/mos6510_cycle_tables.h` - Cycle tables
-- `code/c/src/chip/cpu/mos6510_cycle/mos6510_cycle_tables.c` - Table data
+**Files Created**:
+- `code/c/src/chip/cpu/mos6510_cycle/instruction_table.h` - Unified instruction definitions
+- `code/c/src/chip/cpu/mos6510_cycle/instruction_table.c` - Ultra-compact table data
+- `code/c/src/chip/cpu/mos6510_cycle/timing_states.h` - Consolidated type definitions
 
 **Risk**: Low - data structure creation
+
+**Status**: ✅ **COMPLETED** - Ultra-compact instruction table implemented with type deduplication
 
 **Validation**: New CPU implementation can be instantiated alongside old one
 
