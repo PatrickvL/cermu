@@ -2,386 +2,229 @@
 #define MOS6510_CYCLE_PLA_LOOKUP_H
 
 #include "instruction_table.h"
-#include "timing_states.h"
 #include <stdint.h>
 #include <stdbool.h>
 
 /**
- * MOS6510 Advanced PLA Lookup and Optimization
- * 
- * This implements the complete PLA (Programmable Logic Array) lookup system
- * with direct O(1) access, all 105 illegal opcodes, and pattern-based
- * instruction classification as specified in the emulator spec.
+ * MOS6510 PLA Lookup System
+ * Direct O(1) array access implementation
+ * Based on visual6502.org 130×21 PLA logic analysis
+ *
+ * All 256 opcodes (legal + illegal) are handled through the instruction table
  */
 
-// ===== ADVANCED PLA LOOKUP SYSTEM =====
+// ===== CORE PLA LOOKUP FUNCTIONS =====
 
 /**
- * Extended instruction properties for illegal opcodes
+ * Primary PLA decode function - O(1) direct array access
+ * This replaces the complex PLA logic with a pre-computed lookup table
  */
-// Special instruction properties (4-bit field: 0x0 to 0xF)
-#define INSTR_PROP_NORMAL         0x0     // Normal legal instruction
-// Note: INSTR_PROP_BRANCH and INSTR_PROP_RMW are defined in instruction_table.h
-// We reuse those values to avoid conflicts:
-// #define INSTR_PROP_BRANCH      0x02    // From instruction_table.h
-// #define INSTR_PROP_RMW         0x04    // From instruction_table.h
-#define INSTR_PROP_PAGE_CROSS     0x2     // Page crossing affects cycle count
-#define INSTR_PROP_JAM_OPCODE     0x4     // JAM/KIL opcode (halts CPU)
-#define INSTR_PROP_USEFUL_ILLEGAL 0x5     // Useful illegal opcode
-#define INSTR_PROP_UNSTABLE       0x6     // Unstable illegal opcode
-#define INSTR_PROP_HIGHLY_ILLEGAL 0x7     // Highly illegal (crashes CPU)
-#define INSTR_PROP_NOP_VARIANT    0x8     // NOP variant with different timing
-#define INSTR_PROP_ALU_ILLEGAL    0x9     // ALU-based illegal opcode
-#define INSTR_PROP_RMW_ILLEGAL    0xA     // RMW-based illegal opcode
-#define INSTR_PROP_LOAD_ILLEGAL   0xB     // Load-combo illegal opcode
-#define INSTR_PROP_STORE_ILLEGAL  0xC     // Store-combo illegal opcode
-#define INSTR_PROP_SHIFT_ILLEGAL  0xD     // Shift-combo illegal opcode
-#define INSTR_PROP_SPECIAL_COMBO  0xE     // Special combination illegal
-#define INSTR_PROP_RESERVED       0xF     // Reserved for future use
+static inline const instruction_definition_t* pla_decode(uint8_t opcode) {
+    return pla_lookup(opcode);
+}
 
 /**
- * Illegal opcode categories for pattern-based implementation
+ * Fast opcode validation - check if opcode is implemented
+ */
+static inline bool pla_is_valid_opcode(uint8_t opcode) {
+    const instruction_definition_t* instr = pla_lookup(opcode);
+    return INSTR_GET_CYCLE_COUNT(instr) > 0;
+}
+
+/**
+ * Get instruction type classification from PLA decode
  */
 typedef enum {
-    ILLEGAL_CATEGORY_NONE = 0,      // Legal opcode
-    ILLEGAL_CATEGORY_ALU_IMM,       // ALU + immediate (ANC, ASR, etc.)
-    ILLEGAL_CATEGORY_RMW_ABS,       // RMW + absolute (SLO, RLA, etc.)
-    ILLEGAL_CATEGORY_RMW_ZP,        // RMW + zero page
-    ILLEGAL_CATEGORY_LOAD_COMBO,    // Combined load (LAX, SAX, etc.)
-    ILLEGAL_CATEGORY_DCP_ISC,       // DCP/ISC variants
-    ILLEGAL_CATEGORY_SHX_SHY,       // SHX/SHY (unstable)
-    ILLEGAL_CATEGORY_JAM,           // JAM/KIL opcodes
-    ILLEGAL_CATEGORY_NOP_VARIANTS   // NOP variants with different timings
-} illegal_opcode_category_t;
+    PLA_TYPE_LEGAL = 0,
+    PLA_TYPE_ILLEGAL = 1,
+    PLA_TYPE_INVALID = 2
+} pla_instruction_type_t;
 
 /**
- * Illegal opcode behavior pattern structure
+ * Classify instruction based on PLA decode result
  */
-typedef struct {
-    illegal_opcode_category_t category;
-    uint8_t base_operation;      // Base legal operation (if any)
-    uint8_t modifier_operation;  // Secondary operation
-    uint8_t affected_registers;  // Which registers are affected
-    bool has_side_effects;       // Whether opcode has side effects
-    bool is_unstable;           // Whether behavior is unstable
-} illegal_opcode_pattern_t;
-
-// ===== UNIFIED INSTRUCTION DEFINITION =====
-// Uses the optimized instruction_definition_t from timing_states.h
-// (opcode inferred from array index for maximum efficiency)
-
-// ===== DIRECT O(1) PLA LOOKUP =====
-
-/**
- * Ultra-fast direct PLA lookup with illegal opcode support
- * This is the core lookup function - exactly O(1) with no branching
- */
-static inline const instruction_definition_t* pla_lookup_advanced(uint8_t opcode) {
-    extern instruction_definition_t pla_instruction_table[256];
-    return &pla_instruction_table[opcode];
-}
-
-/**
- * Check if opcode is a legal instruction
- */
-static inline bool pla_is_legal_opcode(uint8_t opcode) {
-    const instruction_definition_t* instr = pla_lookup_advanced(opcode);
-    // Legal opcodes have special_props 0 (normal), BRANCH (2), RMW (4), or VARIABLE_CYCLE (8)
-    // Illegal opcodes have JAM_OPCODE, USEFUL_ILLEGAL, etc.
-    return (instr->special_props == 0) ||
-           (instr->special_props == INSTR_PROP_BRANCH) ||
-           (instr->special_props == INSTR_PROP_RMW) ||
-           (instr->special_props == INSTR_PROP_VARIABLE_CYCLE);
-}
-
-/**
- * Check if illegal opcode is "useful" (has predictable behavior)
- */
-static inline bool pla_is_useful_illegal(uint8_t opcode) {
-    const instruction_definition_t* instr = pla_lookup_advanced(opcode);
-    return instr->special_props == INSTR_PROP_USEFUL_ILLEGAL ||
-           instr->special_props == INSTR_PROP_ALU_ILLEGAL ||
-           instr->special_props == INSTR_PROP_RMW_ILLEGAL ||
-           instr->special_props == INSTR_PROP_LOAD_ILLEGAL ||
-           instr->special_props == INSTR_PROP_STORE_ILLEGAL ||
-           instr->special_props == INSTR_PROP_SHIFT_ILLEGAL ||
-           instr->special_props == INSTR_PROP_SPECIAL_COMBO;
-}
-
-/**
- * Check if opcode is a JAM/KIL instruction (halts CPU)
- */
-static inline bool pla_is_jam_opcode(uint8_t opcode) {
-    const instruction_definition_t* instr = pla_lookup_advanced(opcode);
-    return instr->special_props == INSTR_PROP_JAM_OPCODE;
-}
+pla_instruction_type_t pla_classify_instruction(uint8_t opcode);
 
 // ===== BRANCHLESS INSTRUCTION CLASSIFICATION =====
 
 /**
- * Ultra-fast branchless instruction classification functions
- * These compile to 1-5 CPU instructions each
+ * Ultra-fast branchless classification using bit manipulation
+ * All functions compile to 1-5 CPU instructions
  */
 
 /**
- * Get instruction group from opcode (AAA-BBB-CC pattern)
+ * Check if opcode uses absolute addressing mode
  */
-static inline uint8_t pla_get_instruction_group(uint8_t opcode) {
-    return opcode & 0x03; // CC bits determine main group
+static inline bool pla_is_absolute_mode(uint8_t opcode) {
+    const uint8_t bbb = get_bbb_bits(opcode);
+    return (bbb == 3) || (bbb == 7); // 011 or 111
 }
 
 /**
- * Get AAA bits (operation type)
+ * Check if opcode uses zero-page addressing
  */
-static inline uint8_t pla_get_aaa_bits(uint8_t opcode) {
-    return (opcode >> 5) & 0x07;
+static inline bool pla_is_zero_page_mode(uint8_t opcode) {
+    const uint8_t bbb = get_bbb_bits(opcode);
+    return (bbb == 1) || (bbb == 5); // 001 or 101
 }
 
 /**
- * Get BBB bits (addressing mode)
+ * Check if opcode uses immediate addressing
  */
-static inline uint8_t pla_get_bbb_bits(uint8_t opcode) {
-    return (opcode >> 2) & 0x07;
+static inline bool pla_is_immediate_mode(uint8_t opcode) {
+    const uint8_t bbb = get_bbb_bits(opcode);
+    return (bbb == 2) && is_group1_instruction(opcode);
 }
 
 /**
- * Check if instruction is Group 01 (main ALU operations)
+ * Check if opcode uses indexed addressing (X or Y)
  */
-static inline bool pla_is_group_01(uint8_t opcode) {
-    return (opcode & 0x03) == 0x01;
+static inline bool pla_uses_indexing(uint8_t opcode) {
+    const uint8_t bbb = get_bbb_bits(opcode);
+    return (bbb == 5) || (bbb == 7) || (bbb == 4) || (bbb == 6);
 }
 
 /**
- * Check if instruction is Group 10 (RMW, load/store)
+ * Check if instruction modifies memory (RMW or Store)
  */
-static inline bool pla_is_group_10(uint8_t opcode) {
-    return (opcode & 0x03) == 0x02;
+static inline bool pla_modifies_memory(uint8_t opcode) {
+    const instruction_definition_t* instr = pla_lookup(opcode);
+    return INSTR_GET_IS_RMW(instr); // Store operations are inferred from ALU operation
 }
 
 /**
- * Check if instruction is Group 00 (control, branches, interrupts)
+ * Check if instruction is a branch
  */
-static inline bool pla_is_group_00(uint8_t opcode) {
-    return (opcode & 0x03) == 0x00;
+static inline bool pla_is_branch(uint8_t opcode) {
+    return (opcode & 0x1F) == 0x10; // All branches follow xx010000 pattern
 }
 
 /**
- * Check if instruction is Group 11 (mostly illegal opcodes)
+ * Check if instruction affects processor status flags
  */
-static inline bool pla_is_group_11(uint8_t opcode) {
-    return (opcode & 0x03) == 0x03;
+static inline bool pla_affects_flags(uint8_t opcode) {
+    const instruction_definition_t* instr = pla_lookup(opcode);
+    return INSTR_GET_AFFECTS_FLAGS(instr) != 0;
 }
 
-// ===== PATTERN-BASED ILLEGAL OPCODE CLASSIFICATION =====
+// ===== ADVANCED PLA DECODE FUNCTIONS =====
 
 /**
- * Get illegal opcode category using pattern recognition
+ * Get effective addressing mode after PLA decode
  */
-illegal_opcode_category_t pla_get_illegal_category(uint8_t opcode);
+addressing_mode_t pla_get_effective_addressing_mode(uint8_t opcode);
 
 /**
- * Get illegal opcode behavior pattern
+ * Get ALU operation from PLA decode
  */
-illegal_opcode_pattern_t pla_get_illegal_pattern(uint8_t opcode);
+alu_operation_t pla_get_alu_operation(uint8_t opcode);
 
 /**
- * Execute illegal opcode operation (pattern-based)
- */
-bool pla_execute_illegal_opcode(uint8_t opcode, void* cpu_state, 
-                                void (*register_callback)(uint8_t reg, uint8_t val),
-                                void (*flag_callback)(uint8_t flags));
-
-// ===== ADDRESSING MODE INFERENCE =====
-
-/**
- * Infer addressing mode from opcode bit patterns
- */
-addressing_mode_t pla_infer_addressing_mode(uint8_t opcode);
-
-/**
- * Check if addressing mode uses X indexing
- */
-static inline bool pla_uses_x_indexing(uint8_t opcode) {
-    const uint8_t bbb = pla_get_bbb_bits(opcode);
-    const uint8_t cc = pla_get_instruction_group(opcode);
-    const uint8_t aaa = pla_get_aaa_bits(opcode);
-    
-    // Pattern: X,ind and abs,X and zp,X
-    if (cc == 0x01 && bbb == 0x00) return true;  // (zp,X) - Group 01
-    if (cc == 0x01 && bbb == 0x07) return true;  // abs,X - Group 01
-    if (cc == 0x01 && bbb == 0x05) return true;  // zp,X - Group 01
-    if (cc == 0x02 && bbb == 0x05) return true;  // zp,X - Group 10
-    if (cc == 0x02 && bbb == 0x07) {
-        // abs,X but not LDX abs,Y (special case)
-        return !(aaa == 0x05); // LDX uses Y indexing in abs,Y mode
-    }
-    
-    return false;
-}
-
-/**
- * Check if addressing mode uses Y indexing
- */
-static inline bool pla_uses_y_indexing(uint8_t opcode) {
-    const uint8_t bbb = pla_get_bbb_bits(opcode);
-    const uint8_t cc = pla_get_instruction_group(opcode);
-    const uint8_t aaa = pla_get_aaa_bits(opcode);
-    
-    // Pattern: ind,Y and abs,Y and special cases
-    if (cc == 0x01 && bbb == 0x04) return true;  // (zp),Y
-    if (cc == 0x01 && bbb == 0x06) return true;  // abs,Y
-    if (cc == 0x02 && aaa == 0x05 && bbb == 0x05) return true; // LDX zp,Y
-    if (cc == 0x02 && aaa == 0x05 && bbb == 0x07) return true; // LDX abs,Y
-    
-    return false;
-}
-
-// ===== ALU OPERATION INFERENCE =====
-
-/**
- * Infer ALU operation from opcode AAA bits
- */
-static inline alu_operation_t pla_infer_alu_operation(uint8_t opcode) {
-    const uint8_t aaa = pla_get_aaa_bits(opcode);
-    const uint8_t cc = pla_get_instruction_group(opcode);
-    
-    if (cc == 0x01) {
-        // Group 01: Main ALU operations
-        switch (aaa) {
-            case 0x00: return ALU_LOGIC;      // ORA
-            case 0x01: return ALU_LOGIC;      // AND  
-            case 0x02: return ALU_LOGIC;      // EOR
-            case 0x03: return ALU_ARITHMETIC; // ADC
-            case 0x04: return ALU_TRANSFER;   // STA
-            case 0x05: return ALU_TRANSFER;   // LDA
-            case 0x06: return ALU_ARITHMETIC; // CMP
-            case 0x07: return ALU_ARITHMETIC; // SBC
-        }
-    } else if (cc == 0x02) {
-        // Group 10: RMW and Load/Store
-        switch (aaa) {
-            case 0x00: return ALU_SHIFT;      // ASL
-            case 0x01: return ALU_SHIFT;      // ROL
-            case 0x02: return ALU_SHIFT;      // LSR
-            case 0x03: return ALU_SHIFT;      // ROR
-            case 0x04: return ALU_TRANSFER;   // STX
-            case 0x05: return ALU_TRANSFER;   // LDX
-            case 0x06: return ALU_INCREMENT;  // DEC
-            case 0x07: return ALU_INCREMENT;  // INC
-        }
-    }
-    
-    return ALU_NOP;
-}
-
-// ===== REGISTER TARGET INFERENCE =====
-
-/**
- * Infer target register from opcode patterns
- */
-static inline uint8_t pla_infer_target_register(uint8_t opcode) {
-    const uint8_t aaa = pla_get_aaa_bits(opcode);
-    const uint8_t cc = pla_get_instruction_group(opcode);
-    
-    // Handle specific patterns
-    if (opcode == 0xA9 || opcode == 0xA5 || opcode == 0xAD) return 0; // LDA -> A
-    if (opcode == 0xA2 || opcode == 0xA6 || opcode == 0xAE) return 1; // LDX -> X  
-    if (opcode == 0xA0 || opcode == 0xA4 || opcode == 0xAC) return 2; // LDY -> Y
-    
-    // Use pattern recognition for other cases
-    if (cc == 0x01) {
-        return 0; // Most Group 01 instructions affect accumulator
-    } else if (cc == 0x02 && aaa == 0x05) {
-        // LDX variants
-        return 1;
-    } else if (cc == 0x00 && (opcode & 0x0F) == 0x00 && aaa == 5) {
-        // LDY variants  
-        return 2;
-    }
-    
-    return 0; // Default to accumulator
-}
-
-// ===== FLAG EFFECTS INFERENCE =====
-
-/**
- * Determine which status flags are affected by instruction
- */
-static inline uint8_t pla_infer_flag_effects(uint8_t opcode) {
-    const uint8_t cc = pla_get_instruction_group(opcode);
-    const uint8_t aaa = pla_get_aaa_bits(opcode);
-    
-    uint8_t flags = 0;
-    
-    if (cc == 0x01) {
-        // Most Group 01 operations affect N,Z
-        flags |= 0x82; // N and Z flags
-        
-        // ADC and SBC affect all arithmetic flags
-        if (aaa == 0x03 || aaa == 0x07) {
-            flags |= 0x41; // C and V flags
-        }
-    } else if (cc == 0x02) {
-        // RMW operations affect N,Z
-        if (aaa <= 0x03 || aaa >= 0x06) {
-            flags |= 0x82; // N and Z flags
-        }
-        
-        // Shifts affect carry
-        if (aaa <= 0x03) {
-            flags |= 0x01; // C flag
-        }
-    }
-    
-    // Special cases
-    if (opcode == 0x18 || opcode == 0x38) flags = 0x01; // CLC/SEC (C only)
-    if (opcode == 0x58 || opcode == 0x78) flags = 0x04; // CLI/SEI (I only)
-    if (opcode == 0xB8 || opcode == 0xF8) flags = 0x40; // CLV/SED (V/D only)
-    
-    return flags;
-}
-
-// ===== PLA STATISTICS AND VALIDATION =====
-
-/**
- * PLA lookup statistics for optimization validation
+ * Get data flow specification from PLA decode
  */
 typedef struct {
-    uint16_t legal_opcodes;
-    uint16_t illegal_opcodes;
-    uint16_t useful_illegal_opcodes;
-    uint16_t jam_opcodes;
-    uint16_t unstable_opcodes;
-    uint32_t total_lookup_table_size;
-    float compression_ratio;
-} pla_lookup_stats_t;
+    uint8_t source_register;      // Source register index
+    uint8_t destination_register; // Destination register index
+    bool uses_memory;            // Operation involves memory
+    bool affects_accumulator;    // Operation affects A register
+} pla_data_flow_t;
 
 /**
- * Get PLA lookup system statistics
+ * Determine data flow from PLA decode
  */
-pla_lookup_stats_t pla_get_lookup_stats(void);
+pla_data_flow_t pla_get_data_flow(uint8_t opcode);
 
 /**
- * Validate PLA lookup completeness (all 256 opcodes handled)
+ * Get cycle count including conditional cycles
  */
-bool pla_validate_completeness(void);
+uint8_t pla_get_total_cycle_count(uint8_t opcode, bool page_crossed, bool branch_taken);
+
+// ===== PLA TIMING ANALYSIS =====
 
 /**
- * Test PLA lookup performance (for benchmarking)
+ * Check if instruction has conditional timing
  */
-uint64_t pla_benchmark_lookup_speed(uint32_t iterations);
-
-// ===== EXTERNAL INSTRUCTION TABLE =====
-
-/**
- * The complete 256-entry instruction table including all illegal opcodes
- * Uses optimized structure without redundant opcode field
- */
-extern instruction_definition_t pla_instruction_table[256];
+static inline bool pla_has_conditional_timing(uint8_t opcode) {
+    return has_variable_timing(opcode);
+}
 
 /**
- * Complete the instruction table with pattern-based initialization
+ * Get base timing without conditional adjustments
  */
-void pla_complete_instruction_table(void);
+static inline uint8_t pla_get_base_timing(uint8_t opcode) {
+    return get_base_cycle_count(opcode);
+}
+
+/**
+ * Calculate conditional timing adjustment
+ */
+typedef struct {
+    uint8_t page_cross_penalty;   // Additional cycles if page crossed
+    uint8_t branch_taken_penalty; // Additional cycles if branch taken
+    uint8_t total_adjustment;     // Total additional cycles
+} pla_timing_adjustment_t;
+
+/**
+ * Calculate all timing adjustments for an instruction
+ */
+pla_timing_adjustment_t pla_calculate_timing_adjustment(
+    uint8_t opcode, uint16_t base_addr, uint16_t target_addr, bool branch_condition);
+
+// ===== PLA VALIDATION AND DEBUGGING =====
+
+/**
+ * Validate PLA lookup table consistency
+ */
+bool pla_validate_lookup_table(void);
+
+/**
+ * Get PLA decode statistics
+ */
+typedef struct {
+    uint32_t total_opcodes;
+    uint32_t legal_opcodes;
+    uint32_t illegal_opcodes;
+    uint32_t invalid_opcodes;
+} pla_decode_stats_t;
+
+/**
+ * Get instruction table coverage information
+ */
+typedef struct {
+    uint32_t total_opcodes;
+    uint32_t implemented_opcodes;
+    uint32_t legal_opcodes;
+    uint32_t illegal_opcodes;
+    float coverage_percentage;
+} pla_coverage_stats_t;
+
+/**
+ * Analyze PLA decode table coverage
+ */
+pla_decode_stats_t pla_get_decode_statistics(void);
+
+/**
+ * Analyze instruction table coverage
+ */
+pla_coverage_stats_t pla_get_coverage_statistics(void);
+
+/**
+ * Debug function: print opcode decode information
+ */
+void pla_debug_print_opcode(uint8_t opcode);
+
+/**
+ * Performance test: measure PLA lookup speed
+ */
+typedef struct {
+    uint64_t total_lookups;
+    uint64_t total_cycles;
+    double average_cycles_per_lookup;
+} pla_performance_stats_t;
+
+/**
+ * Run PLA lookup performance benchmark
+ */
+pla_performance_stats_t pla_benchmark_lookup_performance(uint32_t iterations);
 
 #endif // MOS6510_CYCLE_PLA_LOOKUP_H
