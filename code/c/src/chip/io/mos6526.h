@@ -46,9 +46,9 @@ typedef enum {
 #define MASK5 0x1F
 
 // Additional Reg offsets above the 0..15 register range:
-#define TIMER_OFFSET 16 // Delta on TA_LO to TB_HI so Timer write latch resides at 16..19
-#define CLOCK_OFFSET 20 // Delta on TOD_10THS to TOD_HR so TOD read latch resides at 20..23
-#define ALARM_OFFSET 24 // Delta on TOD_10THS to TOD_HR so Alarm write latch resides at 24..27
+#define TIMER_OFFSET (16 - TA_LO) // Delta on TA_LO to TB_HI so Timer write latch resides at 16..19
+#define CLOCK_OFFSET (20 - TOD_10THS) // Delta on TOD_10THS to TOD_HR so TOD read latch resides at 20..23
+#define ALARM_OFFSET (24 - TOD_10THS) // Delta on TOD_10THS to TOD_HR so Alarm write latch resides at 24..27
 #define SHIFT_OFFSET 28 // Delta on SDR so Serial Data Shift register resides at 28
 #define IDDRB_OFFSET 29 // Internal Data Direction of Port B (a version of DDRB which includes the PBON mask)
 
