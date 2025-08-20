@@ -224,14 +224,18 @@ typedef struct {
 
 #### Complete Instruction Definition
 
+**Ultra-Compact Optimization Applied**: The original design used separate `instruction_definition_ultra_t` and `instruction_definition_optimized_t` types, but these have been consolidated into a single unified type with further optimization.
+
 ```c
 typedef struct {
-    uint8_t opcode;                    // The opcode (8 bits)
+    // OPTIMIZATION: Removed redundant opcode field - opcode inferred from array index
     uint8_t cycle_count     : 4;      // Number of cycles (4 bits)
     uint8_t special_props   : 4;      // Special properties (4 bits)
-    cycle_definition_ultra_t cycles[8]; // Up to 8 cycles
-} instruction_definition_ultra_t; // ~40 bytes total
+    cycle_definition_ultra_t cycles[8]; // Up to 8 cycles (32 bytes)
+} instruction_definition_t; // ~33 bytes total (256 bytes saved vs original)
 ```
+
+**Storage Optimization**: Removing the redundant `opcode` field saves 256 bytes across the entire instruction table since the opcode can be inferred from the array index.
 
 ### Instruction Groups (From CC Bits)
 
@@ -244,7 +248,7 @@ typedef struct {
 ### PLA Lookup Function
 
 ```c
-static inline const instruction_definition_ultra_t* pla_lookup(uint8_t opcode) {
+static inline const instruction_definition_t* pla_lookup(uint8_t opcode) {
     return &instruction_table[opcode]; // Direct O(1) array access
 }
 ```
