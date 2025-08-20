@@ -133,13 +133,13 @@ typedef char cycle_definition_size_check[
 
 /**
  * Complete instruction definition with up to 8 cycles
+ * Optimized version without redundant opcode field (opcode = array index)
  */
 typedef struct {
-    uint8_t opcode;                          // The opcode (8 bits)
     uint8_t cycle_count     : 4;            // Number of cycles (4 bits)
     uint8_t special_props   : 4;            // Special properties (4 bits)
     cycle_definition_ultra_t cycles[8];     // Up to 8 cycles (32 bytes)
-} instruction_definition_ultra_t;           // Total: ~40 bytes
+} instruction_definition_t;                 // Total: ~33 bytes (optimized)
 
 // ===== TIMING STATE MACHINE =====
 
@@ -284,7 +284,7 @@ void cycle_definition_dump(const cycle_definition_ultra_t *cycle,
 /**
  * Dump instruction definition for debugging
  */
-void instruction_definition_dump(const instruction_definition_ultra_t *instr,
+void instruction_definition_dump(const instruction_definition_t *instr,
                                char *buffer, size_t buffer_size);
 
 #endif // MOS6510_CYCLE_TIMING_STATES_H

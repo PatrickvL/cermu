@@ -30,18 +30,17 @@ static int tests_passed = 0;
 
 bool test_basic_pla_lookup() {
     // Test direct O(1) lookup for legal opcodes
-    const instruction_definition_ultra_t* instr = pla_lookup_advanced(0xA9); // LDA #$nn
+    const instruction_definition_t* instr = pla_lookup_advanced(0xA9); // LDA #$nn
     
     bool lookup_ok = (instr != NULL) &&
-                     (instr->opcode == 0xA9) &&
                      (instr->cycle_count == 2) &&
                      (instr->special_props == 0);
     
     if (!lookup_ok) {
         printf("  ERROR: Basic PLA lookup failed for LDA #$nn\n");
-        printf("    Expected: opcode=0xA9, cycles=2, props=0\n");
-        printf("    Got: opcode=0x%02X, cycles=%d, props=0x%02X\n",
-               instr->opcode, instr->cycle_count, instr->special_props);
+        printf("    Expected: cycles=2, props=0 (opcode=0xA9 inferred from array index)\n");
+        printf("    Got: cycles=%d, props=0x%02X\n",
+               instr->cycle_count, instr->special_props);
     }
     
     return lookup_ok;
@@ -372,6 +371,11 @@ bool test_pla_performance() {
 int main() {
     printf("MOS6510 Advanced PLA Lookup Test Suite\n");
     printf("=======================================\n\n");
+    
+    // Initialize the PLA instruction table first
+    printf("Initializing PLA instruction table...\n");
+    pla_complete_instruction_table();
+    printf("PLA table initialized.\n\n");
     
     // Basic PLA lookup tests
     TEST(test_basic_pla_lookup);
