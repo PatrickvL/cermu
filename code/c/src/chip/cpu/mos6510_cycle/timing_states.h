@@ -133,13 +133,75 @@ typedef char cycle_definition_size_check[
 
 /**
  * Complete instruction definition with up to 8 cycles
- * Optimized version without redundant opcode field (opcode = array index)
+ * Ultra-optimized with precomputed flags using bit masks instead of bitfields
+ * This allows compact macro-based initialization of instruction tables
  */
 typedef struct {
-    uint8_t cycle_count     : 4;            // Number of cycles (4 bits)
-    uint8_t special_props   : 4;            // Special properties (4 bits)
+    uint32_t flags;                         // Packed instruction properties
     cycle_definition_ultra_t cycles[8];     // Up to 8 cycles (32 bytes)
-} instruction_definition_t;                 // Total: ~33 bytes (optimized)
+} instruction_definition_t;                 // Total: 36 bytes (4 + 32), 32-bit aligned
+
+// ===== INSTRUCTION FLAG BIT MASKS =====
+
+// Bit masks for instruction flags (32-bit packed)
+#define INSTR_CYCLE_COUNT_MASK    0x0000000F  // Bits 0-3: Number of cycles (0-15)
+#define INSTR_IS_BRANCH_MASK      0x00000010  // Bit 4: Branch instruction
+#define INSTR_IS_RMW_MASK         0x00000020  // Bit 5: Read-Modify-Write
+#define INSTR_USES_X_INDEX_MASK   0x00000040  // Bit 6: Uses X indexing
+#define INSTR_USES_Y_INDEX_MASK   0x00000080  // Bit 7: Uses Y indexing
+#define INSTR_TARGET_REG_MASK     0x00000700  // Bits 8-10: Target register (0-7)
+#define INSTR_IS_ILLEGAL_MASK     0x00000800  // Bit 11: Illegal opcode
+#define INSTR_AFFECTS_FLAGS_MASK  0x0000F000  // Bits 12-15: Flag effects (NZVC)
+#define INSTR_ALU_OPERATION_MASK  0x000F0000  // Bits 16-19: ALU operation
+#define INSTR_ADDR_MODE_VAR_MASK  0x00300000  // Bits 20-21: Addressing mode variant
+#define INSTR_RESERVED_MASK       0xFFC00000  // Bits 22-31: Reserved
+
+// Bit shift positions
+#define INSTR_CYCLE_COUNT_SHIFT    0
+#define INSTR_IS_BRANCH_SHIFT      4
+#define INSTR_IS_RMW_SHIFT         5
+#define INSTR_USES_X_INDEX_SHIFT   6
+#define INSTR_USES_Y_INDEX_SHIFT   7
+#define INSTR_TARGET_REG_SHIFT     8
+#define INSTR_IS_ILLEGAL_SHIFT     11
+#define INSTR_AFFECTS_FLAGS_SHIFT  12
+#define INSTR_ALU_OPERATION_SHIFT  16
+#define INSTR_ADDR_MODE_VAR_SHIFT  20
+
+// ===== COMPACT FLAG CONSTRUCTION MACROS =====
+
+/**
+ * Compact macro for creating instruction flags
+ * Usage: INSTR_FLAGS(cycles, branch, rmw, x_idx, y_idx, target, illegal, flags, alu, addr_var)
+ */
+#define INSTR_FLAGS(cycles, branch, rmw, x_idx, y_idx, target, illegal, flags, alu, addr_var) \
+    (((cycles) << INSTR_CYCLE_COUNT_SHIFT) | \
+     ((branch) << INSTR_IS_BRANCH_SHIFT) | \
+     ((rmw) << INSTR_IS_RMW_SHIFT) | \
+     ((x_idx) << INSTR_USES_X_INDEX_SHIFT) | \
+     ((y_idx) << INSTR_USES_Y_INDEX_SHIFT) | \
+     ((target) << INSTR_TARGET_REG_SHIFT) | \
+     ((illegal) << INSTR_IS_ILLEGAL_SHIFT) | \
+     ((flags) << INSTR_AFFECTS_FLAGS_SHIFT) | \
+     ((alu) << INSTR_ALU_OPERATION_SHIFT) | \
+     ((addr_var) << INSTR_ADDR_MODE_VAR_SHIFT))
+
+// ===== ZERO-COST ACCESSOR MACROS =====
+
+/**
+ * Zero-cost accessor macros for precomputed instruction properties
+ * These replace expensive runtime opcode bit pattern calculations
+ */
+#define INSTR_GET_CYCLE_COUNT(instr)     (((instr)->flags & INSTR_CYCLE_COUNT_MASK) >> INSTR_CYCLE_COUNT_SHIFT)
+#define INSTR_GET_IS_BRANCH(instr)       (((instr)->flags & INSTR_IS_BRANCH_MASK) >> INSTR_IS_BRANCH_SHIFT)
+#define INSTR_GET_IS_RMW(instr)          (((instr)->flags & INSTR_IS_RMW_MASK) >> INSTR_IS_RMW_SHIFT)
+#define INSTR_GET_USES_X_INDEX(instr)    (((instr)->flags & INSTR_USES_X_INDEX_MASK) >> INSTR_USES_X_INDEX_SHIFT)
+#define INSTR_GET_USES_Y_INDEX(instr)    (((instr)->flags & INSTR_USES_Y_INDEX_MASK) >> INSTR_USES_Y_INDEX_SHIFT)
+#define INSTR_GET_TARGET_REG(instr)      (((instr)->flags & INSTR_TARGET_REG_MASK) >> INSTR_TARGET_REG_SHIFT)
+#define INSTR_GET_IS_ILLEGAL(instr)      (((instr)->flags & INSTR_IS_ILLEGAL_MASK) >> INSTR_IS_ILLEGAL_SHIFT)
+#define INSTR_GET_AFFECTS_FLAGS(instr)   (((instr)->flags & INSTR_AFFECTS_FLAGS_MASK) >> INSTR_AFFECTS_FLAGS_SHIFT)
+#define INSTR_GET_ALU_OPERATION(instr)   (((instr)->flags & INSTR_ALU_OPERATION_MASK) >> INSTR_ALU_OPERATION_SHIFT)
+#define INSTR_GET_ADDR_MODE_VAR(instr)   (((instr)->flags & INSTR_ADDR_MODE_VAR_MASK) >> INSTR_ADDR_MODE_VAR_SHIFT)
 
 // ===== TIMING STATE MACHINE =====
 
@@ -153,83 +215,6 @@ typedef struct {
     bool sync_output;                       // SYNC pin state
 } timing_state_machine_t;
 
-// ===== INFERENCE FUNCTIONS =====
-
-/**
- * Branchless inference functions - compile to 1-5 CPU instructions
- * These functions recover detailed behavior from compact representations
- */
-
-// Instruction classification (branchless bit pattern matching)
-static inline bool infer_is_branch(uint8_t opcode) {
-    return (opcode & 0x1F) == 0x10;
-}
-
-static inline bool infer_is_rmw(uint8_t opcode) {
-    return (opcode & 0x1F) == 0x06 || (opcode & 0x1F) == 0x0E;
-}
-
-static inline bool infer_uses_x_index(uint8_t opcode) {
-    return (opcode & 0x1C) == 0x14 || (opcode & 0x1C) == 0x1C;
-}
-
-static inline bool infer_uses_y_index(uint8_t opcode) {
-    return (opcode & 0x1C) == 0x18;
-}
-
-// Register selection from opcode bit patterns
-static inline uint8_t infer_target_register_index(uint8_t opcode) {
-    // Handle specific load immediate instructions
-    if (opcode == 0xA9) return 0; // LDA #$nn -> A register
-    if (opcode == 0xA2) return 1; // LDX #$nn -> X register
-    if (opcode == 0xA0) return 2; // LDY #$nn -> Y register
-    
-    // Use bit pattern analysis for other instructions
-    const uint8_t cc = opcode & 0x03;
-    const uint8_t aaa = (opcode >> 5) & 0x07;
-    
-    if (cc == 0x02) {
-        // Group 2 instructions - check AAA bits for LDA/LDX/LDY variants
-        if (aaa == 5) { // Load operations (101 in AAA)
-            if ((opcode & 0x0F) == 0x0A || (opcode & 0x0F) == 0x06) return 1; // LDX patterns
-            if ((opcode & 0x0F) == 0x08 || (opcode & 0x0F) == 0x04) return 2; // LDY patterns
-            return 0; // LDA patterns
-        }
-    }
-    
-    return 0; // Default to A register
-}
-
-// ALU operation inference from opcode AAA bits
-static inline alu_operation_t infer_alu_operation(uint8_t opcode) {
-    const uint8_t aaa = (opcode >> 5) & 0x07;
-    const uint8_t cc = opcode & 0x03;
-    
-    if (cc == 0x01) {
-        // ALU instructions - operation from AAA bits
-        switch (aaa) {
-            case 0x00: return ALU_LOGIC;      // ORA
-            case 0x01: return ALU_LOGIC;      // AND  
-            case 0x02: return ALU_LOGIC;      // EOR
-            case 0x03: return ALU_ARITHMETIC; // ADC
-            case 0x04: return ALU_TRANSFER;   // STA
-            case 0x05: return ALU_TRANSFER;   // LDA
-            case 0x06: return ALU_ARITHMETIC; // CMP
-            case 0x07: return ALU_ARITHMETIC; // SBC
-        }
-    }
-    
-    return ALU_NOP;
-}
-
-// Addressing mode details from bit patterns
-static inline bool infer_zp_x_indexing(uint8_t opcode, addressing_mode_t mode) {
-    return mode == ADDR_ZP && infer_uses_x_index(opcode);
-}
-
-static inline bool infer_zp_y_indexing(uint8_t opcode, addressing_mode_t mode) {
-    return mode == ADDR_ZP && infer_uses_y_index(opcode);
-}
 
 // ===== TIMING STATE FUNCTIONS =====
 
