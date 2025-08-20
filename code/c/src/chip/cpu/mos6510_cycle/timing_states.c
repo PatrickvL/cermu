@@ -27,7 +27,7 @@ void timing_state_init(timing_state_machine_t *tsm) {
  * Implements the complex state transitions discovered in visual6502
  */
 void timing_state_advance(timing_state_machine_t *tsm, 
-                         const cycle_definition_ultra_t *cycle) {
+                         const cycle_definition_t *cycle) {
     // Update current state from the cycle definition
     tsm->current_state = (timing_state_t)cycle->timing;
     
@@ -158,7 +158,7 @@ const char* alu_operation_name(alu_operation_t op) {
 /**
  * Dump cycle definition for debugging
  */
-void cycle_definition_dump(const cycle_definition_ultra_t *cycle, 
+void cycle_definition_dump(const cycle_definition_t *cycle, 
                           char *buffer, size_t buffer_size) {
     snprintf(buffer, buffer_size,
         "Cycle: timing=%s addr=%s cond=%d alu=%s src=%d dst=%d "

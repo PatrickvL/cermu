@@ -132,7 +132,7 @@ bool test_lagged_datapath() {
     pipeline_init(&pom);
     
     // Create a cycle definition
-    cycle_definition_ultra_t cycle = {
+    cycle_definition_t cycle = {
         .timing = TIMING_T2,
         .address = ADDR_IMMEDIATE,
         .alu = ALU_TRANSFER,
@@ -202,7 +202,7 @@ bool test_pipeline_advance_cycle() {
     // Set up multiple pipeline stages
     pipeline_delayed_decode(&pom, 0xA9);
     
-    cycle_definition_ultra_t cycle = {
+    cycle_definition_t cycle = {
         .alu = ALU_TRANSFER
     };
     pipeline_lag_datapath(&pom, &cycle);
@@ -294,7 +294,7 @@ bool test_simultaneous_states() {
     // Set up multiple active stages
     pipeline_delayed_decode(&pom, 0xA9);
     
-    cycle_definition_ultra_t cycle = {
+    cycle_definition_t cycle = {
         .alu = ALU_TRANSFER
     };
     pipeline_lag_datapath(&pom, &cycle);
@@ -321,7 +321,7 @@ bool test_complex_state_transitions() {
     pipeline_overlap_manager_t pom;
     pipeline_init(&pom);
     
-    cycle_definition_ultra_t cycle = {
+    cycle_definition_t cycle = {
         .timing = TIMING_T0,
         .alu = ALU_TRANSFER
     };
@@ -353,7 +353,7 @@ bool test_pipeline_timing_example() {
     // Set up the famous "2 instructions!" case from spec
     pipeline_delayed_decode(&pom, 0xAD); // LDA $nnnn (4-cycle)
     
-    cycle_definition_ultra_t cycle = {
+    cycle_definition_t cycle = {
         .alu = ALU_TRANSFER
     };
     pipeline_lag_datapath(&pom, &cycle);
@@ -384,7 +384,7 @@ bool test_multiple_instructions_detection() {
     bool single_ok = !pipeline_has_multiple_instructions(&pom);
     
     // Multiple instructions case
-    cycle_definition_ultra_t cycle = {
+    cycle_definition_t cycle = {
         .alu = ALU_TRANSFER
     };
     pipeline_lag_datapath(&pom, &cycle);
@@ -413,7 +413,7 @@ bool test_pipeline_state_validation() {
     
     // Set up complex but valid state
     pipeline_delayed_decode(&pom, 0xA9);
-    cycle_definition_ultra_t cycle = {
+    cycle_definition_t cycle = {
         .alu = ALU_TRANSFER
     };
     pipeline_lag_datapath(&pom, &cycle);

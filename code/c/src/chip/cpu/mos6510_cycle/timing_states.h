@@ -122,12 +122,12 @@ typedef struct {
     uint32_t bus_routing : 8;  // Bus transfer mask
     uint32_t cycle_flags : 6;  // Control flags
     uint32_t reserved    : 2;  // Reserved for alignment
-} cycle_definition_ultra_t;
+} cycle_definition_t;
 
 // Verify the structure is exactly 32 bits
 // Note: static_assert requires C11, using compile-time size check instead
 typedef char cycle_definition_size_check[
-    (sizeof(cycle_definition_ultra_t) == 4) ? 1 : -1];
+    (sizeof(cycle_definition_t) == 4) ? 1 : -1];
 
 // ===== INSTRUCTION DEFINITION =====
 
@@ -138,7 +138,7 @@ typedef char cycle_definition_size_check[
  */
 typedef struct {
     uint32_t flags;                         // Packed instruction properties
-    cycle_definition_ultra_t cycles[8];     // Up to 8 cycles (32 bytes)
+    cycle_definition_t cycles[8];     // Up to 8 cycles (32 bytes)
 } instruction_definition_t;                 // Total: 36 bytes (4 + 32), 32-bit aligned
 
 // ===== INSTRUCTION FLAG BIT MASKS =====
@@ -227,7 +227,7 @@ void timing_state_init(timing_state_machine_t *tsm);
  * Advance timing state machine for next cycle
  */
 void timing_state_advance(timing_state_machine_t *tsm, 
-                         const cycle_definition_ultra_t *cycle);
+                         const cycle_definition_t *cycle);
 
 /**
  * Check if SYNC should be asserted
@@ -263,7 +263,7 @@ const char* alu_operation_name(alu_operation_t op);
 /**
  * Dump cycle definition for debugging
  */
-void cycle_definition_dump(const cycle_definition_ultra_t *cycle, 
+void cycle_definition_dump(const cycle_definition_t *cycle, 
                           char *buffer, size_t buffer_size);
 
 /**

@@ -238,7 +238,7 @@ typedef struct {
 typedef struct {
     uint8_t cycle_count     : 4;            // Number of cycles (4 bits)
     uint8_t special_props   : 4;            // Special properties (4 bits)
-    cycle_definition_ultra_t cycles[8];     // Up to 8 cycles (32 bytes)
+    cycle_definition_t cycles[8];           // Up to 8 cycles (32 bytes)
 } instruction_definition_t;                 // Total: ~33 bytes (256 bytes saved vs original)
 
 // Direct O(1) lookup with opcode inferred from array index
