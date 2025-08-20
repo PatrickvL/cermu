@@ -8,12 +8,12 @@
  */
 
 // Ultra-compact instruction table using literal 32-bit definitions
-const instruction_definition_ultra_t instruction_table[256] = {
+const instruction_definition_t instruction_table[256] = {
     
     // ===== IMMEDIATE LOAD INSTRUCTIONS (2-cycle ultra-compact pattern) =====
     
     [0xA9] = {  // LDA #$nn
-        .opcode = 0xA9, .cycle_count = 2, .special_props = 0,
+        .cycle_count = 2, .special_props = 0,
         .cycles = {
             // T1F fetch cycle with SYNC
             { .timing = TIMING_T1F, .address = ADDR_IMMEDIATE, .condition = COND_ALWAYS,
@@ -27,7 +27,7 @@ const instruction_definition_ultra_t instruction_table[256] = {
     },
     
     [0xA2] = {  // LDX #$nn
-        .opcode = 0xA2, .cycle_count = 2, .special_props = 0,
+        .cycle_count = 2, .special_props = 0,
         .cycles = {
             { .timing = TIMING_T1F, .address = ADDR_IMMEDIATE, .condition = COND_ALWAYS,
               .alu = ALU_NOP, .data_src = DATA_NONE, .data_dst = DATA_NONE,
@@ -39,7 +39,7 @@ const instruction_definition_ultra_t instruction_table[256] = {
     },
     
     [0xA0] = {  // LDY #$nn
-        .opcode = 0xA0, .cycle_count = 2, .special_props = 0,
+        .cycle_count = 2, .special_props = 0,
         .cycles = {
             { .timing = TIMING_T1F, .address = ADDR_IMMEDIATE, .condition = COND_ALWAYS,
               .alu = ALU_NOP, .data_src = DATA_NONE, .data_dst = DATA_NONE,
@@ -53,7 +53,7 @@ const instruction_definition_ultra_t instruction_table[256] = {
     // ===== ABSOLUTE LOAD INSTRUCTIONS (4-cycle pipeline test pattern) =====
     
     [0xAD] = {  // LDA $nnnn
-        .opcode = 0xAD, .cycle_count = 4, .special_props = 0,
+        .cycle_count = 4, .special_props = 0,
         .cycles = {
             // T1F: Fetch opcode
             { .timing = TIMING_T1F, .address = ADDR_ABSOLUTE, .condition = COND_ALWAYS,
@@ -75,7 +75,7 @@ const instruction_definition_ultra_t instruction_table[256] = {
     },
     
     [0xAE] = {  // LDX $nnnn
-        .opcode = 0xAE, .cycle_count = 4, .special_props = 0,
+        .cycle_count = 4, .special_props = 0,
         .cycles = {
             { .timing = TIMING_T1F, .address = ADDR_ABSOLUTE, .condition = COND_ALWAYS,
               .alu = ALU_NOP, .data_src = DATA_NONE, .data_dst = DATA_NONE,
@@ -93,7 +93,7 @@ const instruction_definition_ultra_t instruction_table[256] = {
     },
     
     [0xAC] = {  // LDY $nnnn
-        .opcode = 0xAC, .cycle_count = 4, .special_props = 0,
+        .cycle_count = 4, .special_props = 0,
         .cycles = {
             { .timing = TIMING_T1F, .address = ADDR_ABSOLUTE, .condition = COND_ALWAYS,
               .alu = ALU_NOP, .data_src = DATA_NONE, .data_dst = DATA_NONE,
@@ -113,7 +113,7 @@ const instruction_definition_ultra_t instruction_table[256] = {
     // ===== ZERO PAGE LOAD (3-cycle pattern) =====
     
     [0xA5] = {  // LDA $nn
-        .opcode = 0xA5, .cycle_count = 3, .special_props = 0,
+        .cycle_count = 3, .special_props = 0,
         .cycles = {
             { .timing = TIMING_T1F, .address = ADDR_ZP, .condition = COND_ALWAYS,
               .alu = ALU_NOP, .data_src = DATA_NONE, .data_dst = DATA_NONE,
@@ -130,7 +130,7 @@ const instruction_definition_ultra_t instruction_table[256] = {
     // ===== BRANCH INSTRUCTION (conditional pipeline behavior) =====
     
     [0x10] = {  // BPL (Branch if Plus)
-        .opcode = 0x10, .cycle_count = 2, .special_props = INSTR_PROP_BRANCH,
+        .cycle_count = 2, .special_props = INSTR_PROP_BRANCH,
         .cycles = {
             { .timing = TIMING_T1F, .address = ADDR_RELATIVE, .condition = COND_ALWAYS,
               .alu = ALU_NOP, .data_src = DATA_NONE, .data_dst = DATA_NONE,
@@ -144,7 +144,7 @@ const instruction_definition_ultra_t instruction_table[256] = {
     // ===== ALU IMMEDIATE INSTRUCTIONS (2-cycle ALU pattern) =====
     
     [0x09] = {  // ORA #$nn
-        .opcode = 0x09, .cycle_count = 2, .special_props = 0,
+        .cycle_count = 2, .special_props = 0,
         .cycles = {
             { .timing = TIMING_T1F, .address = ADDR_IMMEDIATE, .condition = COND_ALWAYS,
               .alu = ALU_NOP, .data_src = DATA_NONE, .data_dst = DATA_NONE,
@@ -156,7 +156,7 @@ const instruction_definition_ultra_t instruction_table[256] = {
     },
     
     [0x29] = {  // AND #$nn
-        .opcode = 0x29, .cycle_count = 2, .special_props = 0,
+        .cycle_count = 2, .special_props = 0,
         .cycles = {
             { .timing = TIMING_T1F, .address = ADDR_IMMEDIATE, .condition = COND_ALWAYS,
               .alu = ALU_NOP, .data_src = DATA_NONE, .data_dst = DATA_NONE,
@@ -168,7 +168,7 @@ const instruction_definition_ultra_t instruction_table[256] = {
     },
     
     [0x49] = {  // EOR #$nn
-        .opcode = 0x49, .cycle_count = 2, .special_props = 0,
+        .cycle_count = 2, .special_props = 0,
         .cycles = {
             { .timing = TIMING_T1F, .address = ADDR_IMMEDIATE, .condition = COND_ALWAYS,
               .alu = ALU_NOP, .data_src = DATA_NONE, .data_dst = DATA_NONE,
@@ -180,7 +180,7 @@ const instruction_definition_ultra_t instruction_table[256] = {
     },
     
     [0x69] = {  // ADC #$nn
-        .opcode = 0x69, .cycle_count = 2, .special_props = 0,
+        .cycle_count = 2, .special_props = 0,
         .cycles = {
             { .timing = TIMING_T1F, .address = ADDR_IMMEDIATE, .condition = COND_ALWAYS,
               .alu = ALU_NOP, .data_src = DATA_NONE, .data_dst = DATA_NONE,
@@ -194,7 +194,7 @@ const instruction_definition_ultra_t instruction_table[256] = {
     // ===== READ-MODIFY-WRITE (5-cycle RMW pattern with dummy write) =====
     
     [0x06] = {  // ASL $nn
-        .opcode = 0x06, .cycle_count = 5, .special_props = INSTR_PROP_RMW,
+        .cycle_count = 5, .special_props = INSTR_PROP_RMW,
         .cycles = {
             // T1F: Fetch instruction
             { .timing = TIMING_T1F, .address = ADDR_ZP, .condition = COND_ALWAYS,
@@ -222,7 +222,7 @@ const instruction_definition_ultra_t instruction_table[256] = {
     // ===== ILLEGAL OPCODE EXAMPLE (demonstrates illegal instruction support) =====
     
     [0x0B] = {  // ANC #$nn (illegal opcode that does AND then copies N to C)
-        .opcode = 0x0B, .cycle_count = 2, .special_props = INSTR_PROP_ILLEGAL,
+        .cycle_count = 2, .special_props = INSTR_PROP_ILLEGAL,
         .cycles = {
             { .timing = TIMING_T1F, .address = ADDR_IMMEDIATE, .condition = COND_ALWAYS,
               .alu = ALU_NOP, .data_src = DATA_NONE, .data_dst = DATA_NONE,
@@ -314,8 +314,8 @@ void instruction_table_init(void) {
 
 bool instruction_table_validate(void) {
     // Simple validation for testing
-    return (instruction_table[0xA9].opcode == 0xA9) &&
-           (instruction_table[0xAD].opcode == 0xAD);
+    return (instruction_table[0xA9].cycle_count == 2) &&
+           (instruction_table[0xAD].cycle_count == 4);
 }
 
 instruction_table_stats_t get_instruction_table_stats(void) {

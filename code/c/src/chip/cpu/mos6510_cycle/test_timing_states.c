@@ -43,8 +43,8 @@ bool test_cycle_definition_size() {
 
 bool test_instruction_definition_size() {
     // Verify instruction definition size is reasonable
-    size_t size = sizeof(instruction_definition_ultra_t);
-    printf("  instruction_definition_ultra_t size: %zu bytes\n", size);
+    size_t size = sizeof(instruction_definition_t);
+    printf("  instruction_definition_t size: %zu bytes\n", size);
     
     // Should be around 40 bytes (8 + 4 + 8*4 = 44 bytes with padding)
     if (size > 48) {
@@ -282,7 +282,7 @@ bool test_cycle_definition_dump() {
 bool test_storage_optimization() {
     // Calculate theoretical storage reduction
     size_t compact_cycle = sizeof(cycle_definition_ultra_t);
-    size_t compact_instruction = sizeof(instruction_definition_ultra_t);
+    size_t compact_instruction = sizeof(instruction_definition_t);
     
     // Original unoptimized estimate: ~150 bytes per instruction
     size_t original_estimate = 150;

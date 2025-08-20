@@ -58,7 +58,7 @@ typedef struct {
     
     // Delayed decode state  
     uint8_t decode_delay_cycles;           // T0/T1 decode delay
-    const instruction_definition_ultra_t *delayed_instruction; // Delayed decode result
+    const instruction_definition_t *delayed_instruction; // Delayed decode result
     
     // Lagged datapath state
     uint8_t datapath_lag_cycles;           // 1-2 cycle datapath delay
@@ -121,7 +121,7 @@ static inline bool pipeline_decode_ready(const pipeline_overlap_manager_t *pom) 
 /**
  * Get delayed decode instruction definition
  */
-static inline const instruction_definition_ultra_t* pipeline_get_decoded_instruction(
+static inline const instruction_definition_t* pipeline_get_decoded_instruction(
     const pipeline_overlap_manager_t *pom) {
     return pom->delayed_instruction;
 }
