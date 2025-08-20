@@ -221,7 +221,6 @@ static inline void* create_and_register_chip(c64_t* c64, chip_descriptor_t* desc
     if (!chip) {
         printf("ERROR: Failed to create chip: %s\n", desc->description);
         fflush(stdout);
-        c64_system_destroy(c64);
         return NULL;
     }
     
@@ -229,7 +228,6 @@ static inline void* create_and_register_chip(c64_t* c64, chip_descriptor_t* desc
     if (chip_id == 0xFF) {
         printf("ERROR: Failed to register chip: %s\n", desc->description);
         fflush(stdout);
-        c64_system_destroy(c64);
         return NULL;
     }
     return chip;
@@ -265,19 +263,19 @@ c64_t* c64_system_create(const c64_config_t* config) {
     c64->bus.system_lines = SYS_MASK_EXROM | SYS_MASK_GAME;
     // Initialize the integrated adapter interfaces
     c64_bus_init_adapters(&c64->bus);
-    if (!(c64->ram = create_and_register_chip(c64, &ram_descriptor, 0x0000, 65536))) return NULL;
-    if (!(c64->mos6510 = create_and_register_chip(c64, &mos6510_descriptor, 0x0000, 4096))) return NULL;
-    if (!(c64->cartridge_roml = create_and_register_chip(c64, &rom_descriptor, 0x8000, 8192))) return NULL;
-    if (!(c64->basic = create_and_register_chip(c64, &rom_descriptor, 0xA000, 8192))) return NULL;
-    if (!(c64->cartridge_romh = create_and_register_chip(c64, &rom_descriptor, 0xC000, 8192))) return NULL;
-    if (!(c64->charrom = create_and_register_chip(c64, &rom_descriptor, 0xD000, 4096))) return NULL;
-    if (!(c64->vicii = create_and_register_chip(c64, vicii_descriptor, 0xD000, 1024))) return NULL;
-    if (!(c64->sid = create_and_register_chip(c64, &mos6581_descriptor, 0xD400, 1024))) return NULL;
-    if (!(c64->colorram = create_and_register_chip(c64, &mos2114_descriptor, 0xD800, 1024))) return NULL;
+    if (!(c64->ram = create_and_register_chip(c64, &ram_descriptor, 0x0000, 65536))) { c64_system_destroy(c64); return NULL; }
+    if (!(c64->mos6510 = create_and_register_chip(c64, &mos6510_descriptor, 0x0000, 4096))) { c64_system_destroy(c64); return NULL; }
+    if (!(c64->cartridge_roml = create_and_register_chip(c64, &rom_descriptor, 0x8000, 8192))) { c64_system_destroy(c64); return NULL; }
+    if (!(c64->basic = create_and_register_chip(c64, &rom_descriptor, 0xA000, 8192))) { c64_system_destroy(c64); return NULL; }
+    if (!(c64->cartridge_romh = create_and_register_chip(c64, &rom_descriptor, 0xC000, 8192))) { c64_system_destroy(c64); return NULL; }
+    if (!(c64->charrom = create_and_register_chip(c64, &rom_descriptor, 0xD000, 4096))) { c64_system_destroy(c64); return NULL; }
+    if (!(c64->vicii = create_and_register_chip(c64, vicii_descriptor, 0xD000, 1024))) { c64_system_destroy(c64); return NULL; }
+    if (!(c64->sid = create_and_register_chip(c64, &mos6581_descriptor, 0xD400, 1024))) { c64_system_destroy(c64); return NULL; }
+    if (!(c64->colorram = create_and_register_chip(c64, &mos2114_descriptor, 0xD800, 1024))) { c64_system_destroy(c64); return NULL; }
     c64->vicii->colorram = c64->colorram; // Also assign to VIC-II for compatibility
-    if (!(c64->cia1 = create_and_register_chip(c64, &mos6526_descriptor, 0xDC00, 256))) return NULL;
-    if (!(c64->cia2 = create_and_register_chip(c64, &mos6526_descriptor, 0xDD00, 256))) return NULL;
-    if (!(c64->kernal = create_and_register_chip(c64, &rom_descriptor, 0xE000, 8192))) return NULL;
+    if (!(c64->cia1 = create_and_register_chip(c64, &mos6526_descriptor, 0xDC00, 256))) { c64_system_destroy(c64); return NULL; }
+    if (!(c64->cia2 = create_and_register_chip(c64, &mos6526_descriptor, 0xDD00, 256))) { c64_system_destroy(c64); return NULL; }
+    if (!(c64->kernal = create_and_register_chip(c64, &rom_descriptor, 0xE000, 8192))) { c64_system_destroy(c64); return NULL; }
     
     // Initialize placeholders for missing components
     c64->io1 = NULL; // No cartridge I/O by default
