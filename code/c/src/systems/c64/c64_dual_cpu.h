@@ -50,6 +50,7 @@ typedef struct {
     // CPU instances
     mos6510_t* legacy_cpu;              // Legacy instruction-based CPU
     mos6510_state_t* cycle_cpu;         // Cycle-accurate CPU
+    tick_context_t tick_context;        // Tick context for cycle CPU
     
     // Runtime configuration
     cpu_execution_mode_t mode;          // Current execution mode

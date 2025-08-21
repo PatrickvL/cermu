@@ -43,6 +43,9 @@ bool c64_dual_cpu_init(c64_dual_cpu_t* dual_cpu, mos6510_t* legacy_cpu) {
     dual_cpu->consecutive_matches = 0;
     dual_cpu->state_mismatch_detected = false;
     
+    // Initialize tick context for cycle CPU
+    mos6510_tick_context_init(&dual_cpu->tick_context, false, false);
+    
     printf("Dual CPU system initialized successfully (legacy CPU mode)\n");
     return true;
 }
@@ -54,7 +57,7 @@ void c64_dual_cpu_destroy(c64_dual_cpu_t* dual_cpu) {
     dual_cpu->legacy_cpu = NULL;
     
     if (dual_cpu->cycle_cpu) {
-        mos6510_state_destroy(dual_cpu->cycle_cpu);
+        mos6510_destroy(dual_cpu->cycle_cpu);
         dual_cpu->cycle_cpu = NULL;
     }
     
@@ -75,7 +78,7 @@ bool c64_dual_cpu_set_mode(c64_dual_cpu_t* dual_cpu, cpu_execution_mode_t new_mo
     
     // Create cycle-accurate CPU if switching to a mode that needs it
     if ((new_mode != CPU_MODE_LEGACY_ONLY) && (!dual_cpu->cycle_cpu)) {
-        dual_cpu->cycle_cpu = mos6510_state_create();
+        dual_cpu->cycle_cpu = mos6510_create(NULL); // Use default 6510 config
         if (!dual_cpu->cycle_cpu) {
             printf("ERROR: Failed to create cycle-accurate CPU for mode switch\n");
             return false;
@@ -164,8 +167,9 @@ bus_state_t c64_dual_cpu_execute(c64_dual_cpu_t* dual_cpu, bus_state_t bus_state
         case CPU_MODE_CYCLE_ONLY:
             // Execute cycle-accurate CPU only
             if (dual_cpu->cycle_cpu) {
-                bus_state = mos6510_cycle_tick(dual_cpu->cycle_cpu, bus_state);
-                dual_cpu->cycle_ticks++;
+                if (mos6510_tick(dual_cpu->cycle_cpu, &dual_cpu->tick_context)) {
+                    dual_cpu->cycle_ticks++;
+                }
             }
             return bus_state;
             
@@ -193,10 +197,10 @@ static bus_state_t c64_dual_cpu_execute_validation(c64_dual_cpu_t* dual_cpu, bus
     }
     
     // Execute cycle-accurate CPU
-    bus_state_t result_bus_state = bus_state;
     if (dual_cpu->cycle_cpu) {
-        result_bus_state = mos6510_cycle_tick(dual_cpu->cycle_cpu, bus_state);
-        dual_cpu->cycle_ticks++;
+        if (mos6510_tick(dual_cpu->cycle_cpu, &dual_cpu->tick_context)) {
+            dual_cpu->cycle_ticks++;
+        }
     }
     
     // Perform validation at checkpoints
@@ -214,7 +218,7 @@ static bus_state_t c64_dual_cpu_execute_validation(c64_dual_cpu_t* dual_cpu, bus
         }
     }
     
-    return result_bus_state;
+    return bus_state;
 }
 
 // ===== BENCHMARK MODE EXECUTION =====
@@ -226,13 +230,13 @@ static bus_state_t c64_dual_cpu_execute_benchmark(c64_dual_cpu_t* dual_cpu, bus_
     }
     
     // Execute cycle-accurate CPU
-    bus_state_t result_bus_state = bus_state;
     if (dual_cpu->cycle_cpu) {
-        result_bus_state = mos6510_cycle_tick(dual_cpu->cycle_cpu, bus_state);
-        dual_cpu->cycle_ticks++;
+        if (mos6510_tick(dual_cpu->cycle_cpu, &dual_cpu->tick_context)) {
+            dual_cpu->cycle_ticks++;
+        }
     }
     
-    return result_bus_state;
+    return bus_state;
 }
 
 // ===== STATE VALIDATION =====
@@ -255,16 +259,24 @@ bool c64_dual_cpu_compare_registers(const c64_dual_cpu_t* dual_cpu) {
     }
     
     // Compare PC, A, X, Y, SP registers
-    // Note: This assumes we can access cycle CPU registers (API TBD)
     uint16_t legacy_pc = dual_cpu->legacy_cpu->base.pc;
     uint8_t legacy_a = dual_cpu->legacy_cpu->base.a;
     uint8_t legacy_x = dual_cpu->legacy_cpu->base.x;
     uint8_t legacy_y = dual_cpu->legacy_cpu->base.y;
     uint8_t legacy_sp = dual_cpu->legacy_cpu->base.sp;
     
-    // TODO: Add cycle CPU register access when API is available
-    // For now, assume they match
-    return true;
+    // Get cycle CPU registers
+    uint16_t cycle_pc = mos6510_get_pc(dual_cpu->cycle_cpu);
+    uint8_t cycle_a = mos6510_get_a(dual_cpu->cycle_cpu);
+    uint8_t cycle_x = mos6510_get_x(dual_cpu->cycle_cpu);
+    uint8_t cycle_y = mos6510_get_y(dual_cpu->cycle_cpu);
+    uint8_t cycle_sp = mos6510_get_sp(dual_cpu->cycle_cpu);
+    
+    return (legacy_pc == cycle_pc &&
+            legacy_a == cycle_a &&
+            legacy_x == cycle_x &&
+            legacy_y == cycle_y &&
+            legacy_sp == cycle_sp);
 }
 
 bool c64_dual_cpu_compare_flags(const c64_dual_cpu_t* dual_cpu) {
@@ -274,10 +286,9 @@ bool c64_dual_cpu_compare_flags(const c64_dual_cpu_t* dual_cpu) {
     
     // Compare processor status flags
     uint8_t legacy_flags = dual_cpu->legacy_cpu->base.p;
+    uint8_t cycle_flags = mos6510_get_p(dual_cpu->cycle_cpu);
     
-    // TODO: Add cycle CPU flags access when API is available
-    // For now, assume they match
-    return true;
+    return (legacy_flags == cycle_flags);
 }
 
 void c64_dual_cpu_get_metrics(const c64_dual_cpu_t* dual_cpu, dual_cpu_metrics_t* metrics) {
@@ -392,7 +403,7 @@ void c64_dual_cpu_reset(c64_dual_cpu_t* dual_cpu) {
     }
     
     if (dual_cpu->cycle_cpu) {
-        mos6510_state_reset(dual_cpu->cycle_cpu);
+        mos6510_reset(dual_cpu->cycle_cpu);
     }
     
     // Reset counters
