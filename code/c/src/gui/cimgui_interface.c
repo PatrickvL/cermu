@@ -1568,11 +1568,11 @@ static int gui_emulation_thread_main(void* data) {
                     const uint32_t sim_log_interval_ms = 10000; // Log every 10 seconds for simulation
                       while (context->current_state == EMU_STATE_RUNNING && context->thread_running && sim_cycles < MAX_SIM_CYCLES) {
                         // Simulate CPU step - this executes one instruction safely
-                        printf("Emulation thread: About to call mos6510_step, cycle %llu\n", (unsigned long long)sim_cycles);
-                        if (mos6510_step(context->c64->mos6510)) {
+                        printf("Emulation thread: About to call c64_cpu_step, cycle %llu\n", (unsigned long long)sim_cycles);
+                        if (c64_cpu_step(context->c64)) {
                             context->total_cycles_executed++;
                             sim_cycles++;
-                            printf("Emulation thread: mos6510_step succeeded, cycle %llu\n", (unsigned long long)sim_cycles);
+                            printf("Emulation thread: c64_cpu_step succeeded, cycle %llu\n", (unsigned long long)sim_cycles);
                         } else {
                             printf("Emulation thread: CPU step failed, stopping simulation\n");
                             break;
@@ -1682,7 +1682,7 @@ static int gui_emulation_thread_main(void* data) {
                 context->current_state = EMU_STATE_STEPPING;
                 printf("Emulation thread: Single step execution\n");
                 // Execute single CPU instruction
-                mos6510_step(context->c64->mos6510);
+                c64_cpu_step_instruction(context->c64);
                 context->current_state = EMU_STATE_PAUSED;
                 break;
                 

@@ -163,6 +163,7 @@ set(SYSTEM_SOURCES
     src/systems/c64/c64.c
     src/systems/c64/c64_bus.c
     src/systems/c64/c64_config.c
+    src/systems/c64/c64_dual_cpu.c
 )
 
 # Core utility sources (generic functionality)

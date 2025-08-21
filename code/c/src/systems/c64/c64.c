@@ -8,6 +8,7 @@
 #include "c64.h"
 #include "c64_bus.h"
 #include "c64_config.h"
+#include "c64_dual_cpu.h"
 #include "../../core/storage/rom_loader.h"
 #include "../../core/config/path_discovery.h"
 #include "../../chip/cpu/mos6510/mos6510.h" // cpu
@@ -238,6 +239,9 @@ static inline void* create_and_register_chip(c64_t* c64, chip_descriptor_t* desc
 void c64_system_destroy(c64_t* c64) {
     if (!c64) return;
 
+    // Destroy dual CPU system
+    c64_dual_cpu_destroy(&c64->dual_cpu);
+    
     system_chips_destroy(&c64->system);
     free(c64);
 }
@@ -317,6 +321,11 @@ c64_t* c64_system_create(const c64_config_t* config) {
     // Set CIA2 interrupt line to NMI (CIA1 defaults to IRQ in constructor)
     ((mos6526_t*)c64->cia2)->interrupt_line = BUS_MASK_NMI;
     
+    // Initialize the dual CPU system with the main CPU
+    if (!c64_dual_cpu_init(&c64->dual_cpu, c64->mos6510)) {
+        printf("Warning: Failed to initialize dual CPU system, using legacy CPU only\n");
+    }
+    
     return c64;
 }
 
@@ -339,4 +348,39 @@ bool c64_reload_roms(c64_t* c64, const rom_config_t* rom_config) {
     
     printf("ROMs reloaded successfully\n");
     return true;
+}
+
+// Step the CPU using the dual CPU system
+bool c64_cpu_step(c64_t* c64) {
+    if (!c64) return false;
+    
+    return c64_dual_cpu_step(&c64->dual_cpu);
+}
+
+// Step a single instruction using the dual CPU system
+bool c64_cpu_step_instruction(c64_t* c64) {
+    if (!c64) return false;
+    
+    return c64_dual_cpu_step_instruction(&c64->dual_cpu);
+}
+
+// Set the CPU execution mode
+bool c64_set_cpu_mode(c64_t* c64, cpu_execution_mode_t mode) {
+    if (!c64) return false;
+    
+    return c64_dual_cpu_set_mode(&c64->dual_cpu, mode);
+}
+
+// Get the current CPU execution mode
+cpu_execution_mode_t c64_get_cpu_mode(const c64_t* c64) {
+    if (!c64) return CPU_MODE_LEGACY_ONLY;
+    
+    return c64_dual_cpu_get_mode(&c64->dual_cpu);
+}
+
+// Get dual CPU performance metrics
+void c64_get_cpu_metrics(const c64_t* c64, dual_cpu_metrics_t* metrics) {
+    if (!c64 || !metrics) return;
+    
+    c64_dual_cpu_get_metrics(&c64->dual_cpu, metrics);
 }
