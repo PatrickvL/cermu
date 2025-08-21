@@ -4,9 +4,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "../../chip/cpu/mos6510/mos6510.h"
-#include "../../chip/cpu/mos6510_cycle/mos6510_state.h"
-#include "../../chip/cpu/mos6510_cycle/mos6510_tick.h"
 #include "../../core/system_lines.h"
+
+// Forward declarations to avoid header conflicts
+typedef struct mos6510_state_t mos6510_state_t;
+typedef struct tick_context_t tick_context_t;
 
 /**
  * C64 Dual CPU Architecture Support
@@ -50,7 +52,8 @@ typedef struct {
     // CPU instances
     mos6510_t* legacy_cpu;              // Legacy instruction-based CPU
     mos6510_state_t* cycle_cpu;         // Cycle-accurate CPU
-    tick_context_t tick_context;        // Tick context for cycle CPU
+    // Internal tick context for cycle CPU (opaque)
+    void* tick_context_data;
     
     // Runtime configuration
     cpu_execution_mode_t mode;          // Current execution mode
