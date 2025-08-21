@@ -432,7 +432,8 @@
 - Advanced operation queue system with priority-based execution (LOW, NORMAL, HIGH, URGENT)
 - Hardware-accurate address setup timing - address setup is always the final operation per spec
 - RDY line handling correctly implemented for read cycles only (write cycles ignore RDY)
-- Comprehensive operation types: register load/store, ALU operations, memory access, stack operations
+- Comprehensive operation types: register load/store, ALU operations, stack operations, internal bus transfers
+- **ARCHITECTURAL DECISION**: Memory operations are NOT handled by deferred operations - external `c64_memory_tick()` handles all memory access after CPU tick
 - Complete phase coordination with deferred execution until φ1 phase
 - Extensive validation with comprehensive test suite covering all timing requirements
 

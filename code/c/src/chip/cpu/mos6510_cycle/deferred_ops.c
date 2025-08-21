@@ -185,18 +185,6 @@ deferred_operation_t deferred_ops_create(deferred_op_type_t type,
     
     // Set operation flags based on type
     switch (type) {
-        case DEFERRED_OP_MEMORY_READ:
-            op.is_memory_op = true;
-            op.is_read_cycle = true;
-            op.defer_cycles = 1;
-            break;
-            
-        case DEFERRED_OP_MEMORY_WRITE:
-            op.is_memory_op = true;
-            op.is_write_cycle = true;
-            op.defer_cycles = 1;
-            break;
-            
         case DEFERRED_OP_FLAG_UPDATE:
             op.updates_flags = true;
             op.defer_cycles = 0;  // Immediate
@@ -228,16 +216,6 @@ deferred_operation_t deferred_ops_register_load(uint8_t dest_reg, uint8_t data) 
 
 deferred_operation_t deferred_ops_register_store(uint8_t source_reg, uint16_t address) {
     return deferred_ops_create(DEFERRED_OP_REGISTER_STORE, DEFERRED_PRIORITY_NORMAL,
-                              source_reg, 0, 0, address);
-}
-
-deferred_operation_t deferred_ops_memory_read(uint16_t address, uint8_t dest_reg) {
-    return deferred_ops_create(DEFERRED_OP_MEMORY_READ, DEFERRED_PRIORITY_HIGH,
-                              0, dest_reg, 0, address);
-}
-
-deferred_operation_t deferred_ops_memory_write(uint16_t address, uint8_t source_reg) {
-    return deferred_ops_create(DEFERRED_OP_MEMORY_WRITE, DEFERRED_PRIORITY_HIGH,
                               source_reg, 0, 0, address);
 }
 
@@ -459,8 +437,6 @@ const char* deferred_ops_type_name(deferred_op_type_t type) {
         case DEFERRED_OP_ALU_OPERATION:   return "ALU_OPERATION";
         case DEFERRED_OP_FLAG_UPDATE:     return "FLAG_UPDATE";
         case DEFERRED_OP_BUS_TRANSFER:    return "BUS_TRANSFER";
-        case DEFERRED_OP_MEMORY_READ:     return "MEMORY_READ";
-        case DEFERRED_OP_MEMORY_WRITE:    return "MEMORY_WRITE";
         case DEFERRED_OP_PC_INCREMENT:    return "PC_INCREMENT";
         case DEFERRED_OP_STACK_PUSH:      return "STACK_PUSH";
         case DEFERRED_OP_STACK_PULL:      return "STACK_PULL";

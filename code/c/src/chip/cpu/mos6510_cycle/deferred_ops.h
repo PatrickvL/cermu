@@ -33,8 +33,6 @@ typedef enum {
     DEFERRED_OP_ALU_OPERATION,     // Perform ALU operation
     DEFERRED_OP_FLAG_UPDATE,       // Update processor status flags
     DEFERRED_OP_BUS_TRANSFER,      // Internal bus transfer
-    DEFERRED_OP_MEMORY_READ,       // Memory read operation
-    DEFERRED_OP_MEMORY_WRITE,      // Memory write operation
     DEFERRED_OP_PC_INCREMENT,      // Program counter increment
     DEFERRED_OP_STACK_PUSH,        // Stack push operation
     DEFERRED_OP_STACK_PULL,        // Stack pull operation
@@ -245,8 +243,6 @@ void deferred_ops_execute_address_setup(deferred_ops_state_t* deferred_state,
  */
 deferred_operation_t deferred_ops_register_load(uint8_t dest_reg, uint8_t data);
 deferred_operation_t deferred_ops_register_store(uint8_t source_reg, uint16_t address);
-deferred_operation_t deferred_ops_memory_read(uint16_t address, uint8_t dest_reg);
-deferred_operation_t deferred_ops_memory_write(uint16_t address, uint8_t source_reg);
 deferred_operation_t deferred_ops_alu_operation(uint8_t source_reg, uint8_t dest_reg);
 deferred_operation_t deferred_ops_flag_update(uint8_t flag_mask, bool set_flags);
 

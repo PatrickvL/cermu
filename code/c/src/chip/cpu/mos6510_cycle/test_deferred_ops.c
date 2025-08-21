@@ -284,7 +284,8 @@ static void test_rdy_line_read_cycles(test_result_t *result) {
     TEST_ASSERT_EQ(true, deferred_ops_should_stall_for_rdy(deferred_state), "RDY should halt during read cycle");
     
     // Try to execute operations while RDY is halted
-    deferred_operation_t op = deferred_ops_memory_read(0x1000, REG_DL);
+    deferred_operation_t op = deferred_ops_register_load(REG_DL, 0x42);
+    op.is_read_cycle = true;  // Simulate read cycle behavior
     
     bool queued = deferred_ops_enqueue(deferred_state, &op);
     TEST_ASSERT(queued, "Operation should still queue during RDY halt");
@@ -318,7 +319,8 @@ static void test_rdy_line_write_cycles(test_result_t *result) {
     TEST_ASSERT_EQ(false, deferred_ops_should_stall_for_rdy(deferred_state), "RDY should be ignored during write cycles");
     
     // Queue and execute operations during write cycle with RDY low
-    deferred_operation_t op = deferred_ops_memory_write(0x1000, REG_A);
+    deferred_operation_t op = deferred_ops_register_store(REG_A, 0x1000);
+    op.is_write_cycle = true;  // Simulate write cycle behavior
     
     bool queued = deferred_ops_enqueue(deferred_state, &op);
     TEST_ASSERT(queued, "Operation should queue during write cycle");
