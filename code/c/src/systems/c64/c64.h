@@ -15,14 +15,16 @@
 #include "../../chip/video/vic_ii/mos6569.h"
 #include "c64_bus.h"  // Include the bus header to get c64_bus_t definition
 #include "c64_config.h"
+#include "c64_dual_cpu.h"
 
 // No forward declarations needed - all types are defined in included headers
 
 typedef struct c64_s {
     system_8bit_t system;
     c64_bus_t bus;
-    void* mos6510;          // mos6510_t* - opaque pointer to avoid circular dependency
-    ram_t* ram;             // RAM memory $0000-$FFFF (64KB)
+    c64_dual_cpu_t dual_cpu;    // Dual CPU architecture support
+    void* mos6510;              // Legacy pointer - DEPRECATED (use dual_cpu instead)
+    ram_t* ram;                 // RAM memory $0000-$FFFF (64KB)
     rom_t* cartridge_roml;  // Cartridge ROM Low $8000-$9FFF (8KB)
     rom_t* cartridge_romh;  // Cartridge ROM High $A000-$BFFF (8KB)
     rom_t* basic;           // Basic ROM $A000-$BFFF (8KB)
@@ -50,6 +52,16 @@ typedef struct c64_s {
 // Function declarations
 c64_t* c64_system_create(const c64_config_t* config);
 void c64_system_destroy(c64_t* c64);
+
+// CPU execution functions
+void c64_cpu_cycle(c64_t* c64);     // Execute CPU (legacy or cycle-accurate based on mode)
+bool c64_cpu_step(c64_t* c64);      // Single instruction step (legacy mode only)
+bus_state_t c64_cpu_tick(c64_t* c64, bus_state_t bus_state); // Single cycle tick (cycle-accurate mode)
+
+// CPU mode management
+bool c64_set_cpu_mode(c64_t* c64, cpu_execution_mode_t mode);
+cpu_execution_mode_t c64_get_cpu_mode(const c64_t* c64);
+bool c64_is_using_cycle_cpu(const c64_t* c64);
 
 // Ticks all non-CPU chips once to complete a cycle.
 void c64_non_cpu_cycle(void* c64_ptr);
