@@ -1011,8 +1011,8 @@ bus_state_t mos6581_registers_write(void* context, bus_state_t bus_state) {
     mos6581_t* sid = (mos6581_t*)context;
     if (!sid) return bus_state;
     
-    uint32_t r = bus_state.addr & SID_REGS_MASK;
-    uint8_t value = bus_state.data;
+    uint32_t r = BUS_GET_ADDR(bus_state) & SID_REGS_MASK;
+    uint8_t value = BUS_GET_DATA(bus_state);
     sid->bus_value = value; // Store for potential bus reads
     
     if (r < 21) { // Voice registers (0x00-0x14)
@@ -1099,34 +1099,34 @@ bus_state_t mos6581_registers_read(void* context, bus_state_t bus_state) {
     mos6581_t* sid = (mos6581_t*)context;
     if (!sid) return bus_state;
     
-    uint32_t r = bus_state.addr & SID_REGS_MASK;
+    uint32_t r = BUS_GET_ADDR(bus_state) & SID_REGS_MASK;
     
     switch (r) {
         case 0x19: // POTX - Game paddle 1 position
-            bus_state.data = sid->pot_x_value;
+            BUS_SET_DATA(bus_state, sid->pot_x_value);
             break;
             
         case 0x1A: // POTY - Game paddle 2 position
-            bus_state.data = sid->pot_y_value;
+            BUS_SET_DATA(bus_state, sid->pot_y_value);
             break;
             
         case 0x1B: // OSC3 - Oscillator 3 / Random number generator
-            bus_state.data = (uint8_t)(sid->voice3.oscillator_waveform >> 4);
+            BUS_SET_DATA(bus_state, (uint8_t)(sid->voice3.oscillator_waveform >> 4));
             break;
             
         case 0x1C: // ENV3 - Envelope generator 3 output
-            bus_state.data = (uint8_t)(sid->voice3.gated ? (sid->voice3.envelope_amplitude >> 8) : 0);
+            BUS_SET_DATA(bus_state, (uint8_t)(sid->voice3.gated ? (sid->voice3.envelope_amplitude >> 8) : 0));
             break;
             
         case 0x1D: // Unused register
         case 0x1E: // Unused register
         case 0x1F: // Unused register
-            bus_state.data = 0xFF;
+            BUS_SET_DATA(bus_state, 0xFF);
             break;
             
         default:
-            // Return bus value for write-only registers (already in bus_state.data)
-            // No action needed - bus_state.data already contains what was on the bus
+            // Return bus value for write-only registers (already in BUS_GET_DATA(bus_state))
+            // No action needed - BUS_GET_DATA(bus_state) already contains what was on the bus
             break;
     }
     
@@ -1265,10 +1265,10 @@ bus_state_t mos6581_tick(void* chip, bus_state_t bus_state) {
     // Check for I/O register access when I/O pending
     if (unlikely(bus_is_io_pending(&bus_state))) {
         // Check if address is within SID range ($D400-$D7FF)
-        if ((bus_state.addr & 0x0C00) == 0x0400) {
+        if ((BUS_GET_ADDR(bus_state) & 0x0C00) == 0x0400) {
             bus_clear_io_pending(&bus_state);
             // Handle register access directly
-            bool is_read = bus_state.lines & BUS_MASK_RW;
+            bool is_read = BUS_GET_LINES(bus_state) & BUS_MASK_RW;
             if (is_read) {
                 bus_state = mos6581_registers_read(sid, bus_state);
             } else {
@@ -1385,7 +1385,7 @@ void mos6581_load_preset(mos6581_t* sid, const mos6581_preset_t* preset) {
     // Load all registers
     for (uint32_t i = 0; i < SID_REGS_SIZE; i++) {
         if (i < 0x19 || i > 0x1C) { // Skip read-only registers
-            bus_state_t preset_bus_state = { .addr = 0xD400 + i, .data = preset->registers[i] };
+            bus_state_t preset_bus_state = BUS_STATE(0xD400 + i, preset->registers[i], 0);
             mos6581_registers_write(sid, preset_bus_state);
         }
     }

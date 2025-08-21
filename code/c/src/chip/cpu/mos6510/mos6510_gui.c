@@ -87,8 +87,8 @@ void mos6510_render_settings_window(void* chip, bool* show_window) {
     igSliderInt("Port Default", &port_value, 0, 255, "$%02X", 0);
     
     if (igButton("Apply Defaults", (ImVec2){0, 0})) {
-        bus_state_t bus_state_ddr = { .addr = 0, .data = (uint8_t)ddr_value, .lines = 0 };
-        bus_state_t bus_state_port = { .addr = 1, .data = (uint8_t)port_value, .lines = 0 };
+        bus_state_t bus_state_ddr = BUS_STATE(0, (uint8_t)ddr_value, 0 );
+        bus_state_t bus_state_port = BUS_STATE(1, (uint8_t)port_value, 0 );
         mos6510_handle_io_write(cpu, bus_state_ddr);
         mos6510_handle_io_write(cpu, bus_state_port);
     }
@@ -129,12 +129,12 @@ void mos6510_render_cpu_specific(void* chip) {
     igText("I/O Ports:");
     
     // Show the I/O ports with their current values
-    bus_state_t bus_state_ddr = { .addr = 0, .data = 0xFF, .lines = BUS_MASK_RW };
-    bus_state_t bus_state_port = { .addr = 1, .data = 0xFF, .lines = BUS_MASK_RW };
+    bus_state_t bus_state_ddr = BUS_STATE(0, 0xFF, BUS_MASK_RW );
+    bus_state_t bus_state_port = BUS_STATE(1, 0xFF, BUS_MASK_RW );
     bus_state_ddr = mos6510_handle_io_read(cpu, bus_state_ddr);
     bus_state_port = mos6510_handle_io_read(cpu, bus_state_port);
-    uint8_t ddr_val = bus_state_ddr.data;
-    uint8_t port_val = bus_state_port.data;
+    uint8_t ddr_val = BUS_GET_DATA(bus_state_ddr);
+    uint8_t port_val = BUS_GET_DATA(bus_state_port);
     
     igText("Port 0 (DDR): $%02X", ddr_val);
     igText("Port 1 (Data): $%02X", port_val);

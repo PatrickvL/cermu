@@ -35,13 +35,13 @@ bus_state_t mos2114_read(void* context, bus_state_t bus_state) {
     mos2114_t* mos2114 = (mos2114_t*)context;
     // Color RAM is mapped at $D800-$DBFF (1024 bytes)
     // Mask to 10 bits for 1K addressing
-    uint16_t offset = bus_state.addr & 0x3FF;  // 0x3FF = 1023, ensures we stay within bounds
+    uint16_t offset = BUS_GET_ADDR(bus_state) & 0x3FF;  // 0x3FF = 1023, ensures we stay within bounds
     
     // MOS2114 is 4-bit wide - only lower 4 bits are valid (and written by mos2114_write)
     // Upper 4 bits return undefined/floating values (use previous bus data)
     uint8_t color_nibble = mos2114->memory[offset]; // No need to mask, already 4 bits
-    uint8_t floating_upper_bits = bus_state.data & 0xF0;  // Keep upper bits from bus
-    bus_state.data = floating_upper_bits | color_nibble;
+    uint8_t floating_upper_bits = BUS_GET_DATA(bus_state) & 0xF0;  // Keep upper bits from bus
+    BUS_SET_DATA(bus_state, floating_upper_bits | color_nibble);
     return bus_state;
 }
 
@@ -75,8 +75,8 @@ bus_state_t mos2114_write(void* context, bus_state_t bus_state) {
     // PLA signal checking in the Color RAM chip itself.
     
     // MOS2114 is 4-bit wide, so only store lower 4 bits
-    uint16_t offset = bus_state.addr & 0x3FF;  // Mask to 1K boundary
-    mos2114->memory[offset] = bus_state.data & 0x0F;
+    uint16_t offset = BUS_GET_ADDR(bus_state) & 0x3FF;  // Mask to 1K boundary
+    mos2114->memory[offset] = BUS_GET_DATA(bus_state) & 0x0F;
     return bus_state;
 }
 
@@ -99,9 +99,9 @@ bus_state_t REGISTER_CALL mos2114_tick(void* context, bus_state_t bus_state) {
     if (unlikely(bus_is_io_pending(&bus_state))) {
         // Color RAM occupies $D800-$DBFF (1024 bytes)
         // Since we're already in I/O bank, check lower 12 bits and ensure it's in $800-$BFF range
-        if ((bus_state.addr & 0x0C00) == 0x0800) {  // $D800-$DBFF range (1024 bytes)
+        if ((BUS_GET_ADDR(bus_state) & 0x0C00) == 0x0800) {  // $D800-$DBFF range (1024 bytes)
             // Determine if this is a read or write operation
-            bool is_read = bus_state.lines & BUS_MASK_RW;
+            bool is_read = BUS_GET_LINES(bus_state) & BUS_MASK_RW;
             
             if (is_read) {
                 // Handle Color RAM read

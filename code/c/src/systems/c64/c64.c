@@ -199,10 +199,10 @@ void c64_non_cpu_cycle(void* c64_ptr) {
     }
 */
     // Update RDY line based on BA (hardware accurate)
-    if (c64->bus.state.lines & BUS_MASK_BA) {
-        c64->bus.state.lines |= BUS_MASK_RDY;
+    if (BUS_GET_LINES(c64->bus.state) & BUS_MASK_BA) {
+        BUS_SET_LINES(c64->bus.state, BUS_GET_LINES(c64->bus.state) | BUS_MASK_RDY);
     } else {
-        c64->bus.state.lines &= ~BUS_MASK_RDY;
+        BUS_SET_LINES(c64->bus.state, BUS_GET_LINES(c64->bus.state) & ~BUS_MASK_RDY);
     }
 //}
 }
@@ -256,9 +256,9 @@ c64_t* c64_system_create(const c64_config_t* config) {
     c64->bus.desc = &c64_bus_descriptor;
     c64->bus.c64 = c64;
     // Initialize bus state
-    c64->bus.state.addr = 0;
-    c64->bus.state.data = 0;
-    c64->bus.state.lines = BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY;
+    BUS_SET_ADDR(c64->bus.state, 0);
+    BUS_SET_DATA(c64->bus.state, 0);
+    BUS_SET_LINES(c64->bus.state, BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY);
     // Initialize system lines with default cartridge signals (no cartridge)
     c64->bus.system_lines = SYS_MASK_EXROM | SYS_MASK_GAME;
     // Initialize the integrated adapter interfaces

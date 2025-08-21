@@ -452,10 +452,10 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, struct emulation_co
                 
                 if (current_time - last_cycle_time > 2000) { // Change every 2 seconds
                     // Write to VIC-II background color register - this affects the center area
-                    bus_state_t bg_bus_state = { .addr = VICII_B0C, .data = current_bg_color };
+                    bus_state_t bg_bus_state = BUS_STATE(VICII_B0C, current_bg_color, 0);
                     vicii_registers_write(c64->vicii, bg_bus_state);
                     // Also cycle border (exterior) color to be more visible
-                    bus_state_t border_bus_state = { .addr = VICII_EC, .data = (current_bg_color + 8) % 16 };
+                    bus_state_t border_bus_state = BUS_STATE(VICII_EC, (current_bg_color + 8) % 16, 0);
                     vicii_registers_write(c64->vicii, border_bus_state);
                     printf("DEBUG: Set VIC-II background color 0 (center) to %d, border to %d\n",
                            current_bg_color, (current_bg_color + 8) % 16);

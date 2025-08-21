@@ -260,15 +260,15 @@ void mos6510_attach_bus_state(mos6510_t* cpu, bus_state_t* bus_state) {
  * Uses actual bus data for proper floating bus behavior.
  */
 bus_state_t mos6510_handle_io_read(mos6510_t* cpu, bus_state_t bus_state) {
-    if (!cpu || bus_state.addr > 1) {
+    if (!cpu || BUS_GET_ADDR(bus_state) > 1) {
         return bus_state; // Return unchanged for invalid addresses
     }
     
     // Use single I/O port for the read operation
     // Address 0 = DDR, Address 1 = Port Data
     // Pass actual bus data for proper floating bus behavior (bits 6-7)
-    uint32_t bus_data = (uint32_t)bus_state.data;
-    bus_state.data = (uint8_t)ioport_read(&cpu->io_port, (uint8_t)bus_state.addr, bus_data);
+    uint32_t bus_data = (uint32_t)BUS_GET_DATA(bus_state);
+    BUS_SET_DATA(bus_state, (uint8_t)ioport_read(&cpu->io_port, (uint8_t)BUS_GET_ADDR(bus_state), bus_data));
     return bus_state;
 }
 
@@ -278,7 +278,7 @@ bus_state_t mos6510_handle_io_read(mos6510_t* cpu, bus_state_t bus_state) {
  * Uses actual bus data for proper floating bus behavior.
  */
 bus_state_t mos6510_handle_io_write(mos6510_t* cpu, bus_state_t bus_state) {
-    if (!cpu || bus_state.addr > 1) {
+    if (!cpu || BUS_GET_ADDR(bus_state) > 1) {
         return bus_state; // Return unchanged for invalid addresses
     }
     
@@ -286,8 +286,8 @@ bus_state_t mos6510_handle_io_write(mos6510_t* cpu, bus_state_t bus_state) {
     // This will trigger banking change detection through the callback system
     // Address 0 = DDR, Address 1 = Port Data
     // Pass actual bus data for proper floating bus behavior
-    uint32_t bus_data = (uint32_t)bus_state.data;
-    ioport_write(&cpu->io_port, (uint8_t)bus_state.addr, bus_state.data, bus_data);
+    uint32_t bus_data = (uint32_t)BUS_GET_DATA(bus_state);
+    ioport_write(&cpu->io_port, (uint8_t)BUS_GET_ADDR(bus_state), BUS_GET_DATA(bus_state), bus_data);
     return bus_state;
 }
 
@@ -335,10 +335,10 @@ void mos6510_tick(mos6510_t* cpu, bus_state_t* bus_state) {
     // CRITICAL: Handle I/O port addresses (0-1) EARLY in the tick
     // This must be done before any other processing to prevent memory system
     // from overwriting I/O port read data with RAM data
-    uint16_t address = bus_state->addr;
+    uint16_t address = BUS_GET_ADDR(*bus_state);
     if (unlikely(address <= 1)) {
         // Determine if this is a read or write operation
-        bool is_read = bus_state->lines & BUS_MASK_RW;
+        bool is_read = BUS_GET_LINES(*bus_state) & BUS_MASK_RW;
         
         if (is_read) {
             // I/O port read - handle directly and update bus data
@@ -378,18 +378,15 @@ uint8_t mos6510_read_cycle(mos6510_t* cpu, uint16_t address) {
     if (!cpu) return 0xFF;
     
     // Set up bus state for the read operation
-    bus_state_t bus_state = {
-        .addr = address,
-        .data = 0,
-        .lines = BUS_MASK_RW  // Read operation (RW line high)
-    };
+    bus_state_t bus_state = BUS_STATE(address, 0, BUS_MASK_RW  // Read operation (RW line high)
+    );
     
     // Use MOS6510 tick to handle potential I/O port access
     mos6510_tick(cpu, &bus_state);
     
     // If it was an I/O port access (address 0-1), tick handled it and we're done
     if (unlikely(address <= 1)) {
-        return bus_state.data;
+        return BUS_GET_DATA(bus_state);
     }
     
     // For non-I/O addresses, perform normal memory read through family interface
@@ -405,11 +402,8 @@ void mos6510_write_cycle(mos6510_t* cpu, uint16_t address, uint8_t data) {
     if (!cpu) return;
     
     // Set up bus state for the write operation
-    bus_state_t bus_state = {
-        .addr = address,
-        .data = data,
-        .lines = 0  // Write operation (RW line low)
-    };
+    bus_state_t bus_state = BUS_STATE(address, data, 0  // Write operation (RW line low)
+    );
     
     // Use MOS6510 tick to handle potential I/O port access
     mos6510_tick(cpu, &bus_state);
@@ -441,13 +435,9 @@ static uint8_t mos6510_bus_read_callback(void* context, uint16_t address) {
     
     // For I/O port addresses, also get I/O port data and use it as the final result
     if (unlikely(address <= 1)) {
-        bus_state_t bus_state = {
-            .addr = address,
-            .data = memory_data,  // Start with memory data
-            .lines = BUS_MASK_RW  // Read operation
-        };
+        bus_state_t bus_state = BUS_STATE(address, memory_data, BUS_MASK_RW);
         bus_state = mos6510_handle_io_read(cpu, bus_state);
-        return bus_state.data;  // Return I/O port result
+        return BUS_GET_DATA(bus_state);  // Return I/O port result
     }
     
     // For non-I/O addresses, return memory data as-is
@@ -470,11 +460,8 @@ static void mos6510_bus_write_callback(void* context, uint16_t address, uint8_t 
     // For I/O port addresses, also handle through the I/O port system
     // This ensures banking changes and other I/O port functionality works
     if (unlikely(address <= 1)) {
-        bus_state_t bus_state = {
-            .addr = address,
-            .data = data,
-            .lines = 0  // Write operation
-        };
+        bus_state_t bus_state = BUS_STATE(address, data, 0  // Write operation
+        );
         mos6510_handle_io_write(cpu, bus_state);
     }
 }

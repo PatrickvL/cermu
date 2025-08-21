@@ -84,7 +84,7 @@ static inline uint32_t c64_bus_unified_address_calc(uint8_t chip, uint16_t addr)
 // VIC-II uses pre-selected active array (indexed by CHIP), can only read, never write
 // Uses unified memory buffer for branchless access to ROM and RAM
 void c64_bus_vic_read(c64_bus_t* c64_bus, uint16_t address) {
-    c64_bus->state.addr = address; // Perhaps this is no longer needed
+    BUS_SET_ADDR(c64_bus->state, address); // Perhaps this is no longer needed
     // Extract 4KB bank from address (0-15 for VIC-II's 64KB addressable space)
     uint8_t vicii_bank = c64_bus_get_bank(address);
     // Get raw CHIP directly from pre-selected active array (no mode indexing)
@@ -92,13 +92,13 @@ void c64_bus_vic_read(c64_bus_t* c64_bus, uint16_t address) {
     
     // Early return for unmapped regions - use whatever is on the bus
     if (chip == CHIP_UNMAPPED) {
-        return; // Leave c64_bus->state.data unchanged (floating bus state)
+        return; // Leave bus data unchanged (floating bus state)
     }
     
     // BRANCHLESS unified address calculation using shared function
     // Address calculation depends on CHIP_* enum ordering (see function documentation)
     uint32_t unified_addr = c64_bus_unified_address_calc(chip, address);
-    c64_bus->state.data = c64_bus->unified_memory_buffer[unified_addr];
+    BUS_SET_DATA(c64_bus->state, c64_bus->unified_memory_buffer[unified_addr]);
 }
 
 /**
@@ -124,8 +124,8 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
     if (unlikely(!c64_bus)) return bus_state;
     
     // Determine if this is a read or write operation
-    bool is_read = bus_state.lines & BUS_MASK_RW;
-    uint16_t address = bus_state.addr;
+    bool is_read = BUS_GET_LINES(bus_state) & BUS_MASK_RW;
+    uint16_t address = BUS_GET_ADDR(bus_state);
     uint8_t cpu_bank = c64_bus_get_bank(address);     // Extract 4KB bank (0-15)
     
     // NOTE: I/O port addresses (0-1) are now handled by mos6510_tick() early in the CPU tick
@@ -141,14 +141,14 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
             // Unified address calculation using shared function - covers all ROM/RAM types
             // Address calculation depends on CHIP_* enum ordering (see function documentation)
             uint32_t unified_addr = c64_bus_unified_address_calc(chip, address);
-            bus_state.data = c64_bus->unified_memory_buffer[unified_addr];
+            BUS_SET_DATA(bus_state, c64_bus->unified_memory_buffer[unified_addr]);
         } else if (chip == CHIP_IO) {
             // I/O region: set pending flag for chips to handle in their tick functions
             bus_set_io_pending(&bus_state);
-            // Leave bus_state.data unchanged (floating bus behavior)
+            // Leave bus data unchanged (floating bus behavior)
         } else {
             // CHIP_UNMAPPED and others: floating bus behavior
-            // Leave bus_state.data unchanged (floating bus state)
+            // Leave BUS_GET_DATA(bus_state) unchanged (floating bus state)
         }
         
     } else {
@@ -160,7 +160,7 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
             // Direct unified buffer write for RAM (most common writable case)
             // RAM is at offset 0x7000 in the strategic layout
             uint32_t unified_addr = c64_bus_unified_address_calc(chip, address);
-            c64_bus->unified_memory_buffer[unified_addr] = bus_state.data;
+            c64_bus->unified_memory_buffer[unified_addr] = BUS_GET_DATA(bus_state);
         } else if (chip == CHIP_IO) {
             // I/O region: set pending flag for chips to handle in their tick functions
             bus_set_io_pending(&bus_state);
@@ -186,9 +186,7 @@ void* c64_bus_system_create(chip_descriptor_t* desc) {
     if (!c64_bus) return NULL;
     c64_bus->desc = desc;
     // Initialize bus state
-    c64_bus->state.addr = 0;
-    c64_bus->state.data = 0;
-    c64_bus->state.lines = BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY;
+    c64_bus->state = BUS_STATE(0, 0, BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY);
       // Initialize system lines with default cartridge signals (no cartridge)
     c64_bus->system_lines = SYS_MASK_EXROM | SYS_MASK_GAME;  // Both high = no cartridge
     
@@ -244,14 +242,18 @@ void c64_wait_for_bus_ready(c64_bus_t *c64_bus, bool is_read_cycle) {
     if (is_read_cycle) {
         // A CPU read must wait for VIC to release the bus (AEC high) AND
         // for the BA/RDY line to be high.
-        while (!(c64_bus->state.lines & BUS_MASK_AEC) || !(c64_bus->state.lines & BUS_MASK_BA)) {
+        uint8_t lines = BUS_GET_LINES(c64_bus->state);
+        while (!(lines & BUS_MASK_AEC) || !(lines & BUS_MASK_BA)) {
             c64_non_cpu_cycle(c64);
+            lines = BUS_GET_LINES(c64_bus->state);
         }
     } else {
         // A CPU write only needs to wait for VIC to release the address bus.
         // It is NOT affected by the BA/RDY line.
-        while (!(c64_bus->state.lines & BUS_MASK_AEC)) {
+        uint8_t lines = BUS_GET_LINES(c64_bus->state);
+        while (!(lines & BUS_MASK_AEC)) {
             c64_non_cpu_cycle(c64);
+            lines = BUS_GET_LINES(c64_bus->state);
         }
     }
 }
@@ -263,12 +265,12 @@ uint8_t c64_bus_read_cycle(c64_bus_t *c64_bus, uint16_t addr) {
     c64_wait_for_bus_ready(c64_bus, true);
     // The bus is now guaranteed to be ready for the CPU.
     bus_state_t bus_state = c64_bus->state;
-    bus_state.addr = addr;
-    bus_state.lines |= BUS_MASK_RW; // Set read mode
+    BUS_SET_ADDR(bus_state, addr);
+    BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | BUS_MASK_RW); // Set read mode
     c64_bus->state = c64_memory_tick(c64_bus, bus_state);
     // Tick system through complete cycle
     c64_non_cpu_cycle(c64_bus->c64);
-    return c64_bus->state.data;
+    return BUS_GET_DATA(c64_bus->state);
 }
 
 void c64_bus_write_cycle(c64_bus_t* c64_bus, uint16_t addr, uint8_t value) {
@@ -277,9 +279,9 @@ void c64_bus_write_cycle(c64_bus_t* c64_bus, uint16_t addr, uint8_t value) {
     c64_wait_for_bus_ready(c64_bus, false);
     // The bus is now guaranteed to be ready for the CPU.
     bus_state_t bus_state = c64_bus->state;
-    bus_state.addr = addr;
-    bus_state.data = value;
-    bus_state.lines &= ~BUS_MASK_RW; // Clear read/write bit for write mode
+    BUS_SET_ADDR(bus_state, addr);
+    BUS_SET_DATA(bus_state, value);
+    BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) & ~BUS_MASK_RW); // Clear read/write bit for write mode
     c64_bus->state = c64_memory_tick(c64_bus, bus_state);
     // Advance system
     c64_non_cpu_cycle(c64_bus->c64);
@@ -447,16 +449,14 @@ static void c64_bus_adapter_bus_write_cycle(void* context, uint16_t address, uin
 // Control lines adapter functions
 static uint32_t c64_control_lines_get(void* context) {
     c64_bus_t* c64_bus = (c64_bus_t*)context;
-    // Convert the C64's uint8_t control_lines to the new uint32_t format
-    // For now, just extend it to 32 bits
-    return (uint32_t)c64_bus->state.lines;
+    // Convert the C64's bus state to the new uint32_t format
+    return (uint32_t)BUS_GET_LINES(c64_bus->state);
 }
 
 static void c64_control_lines_set(void* context, uint32_t lines) {
     c64_bus_t* c64_bus = (c64_bus_t*)context;
-    // Convert back to the C64's uint8_t format
-    // For now, just truncate (assumes lower 8 bits contain the relevant data)
-    c64_bus->state.lines = (uint8_t)(lines & 0xFF);
+    // Convert back to the C64's bus state format
+    BUS_SET_LINES(c64_bus->state, (uint8_t)(lines & 0xFF));
 }
 
 void c64_bus_init_adapters(c64_bus_t* c64_bus) {

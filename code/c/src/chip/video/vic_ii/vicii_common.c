@@ -28,19 +28,23 @@ uint32_t* vicii_get_default_palette(void) {
 
 // Bus control helpers
 static inline void vicii_bus_control_aec_high(vicii_t* vicii) {
-    ((c64_bus_t*)vicii->bus.bus)->state.lines |= BUS_MASK_AEC;
+    c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
+    BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) | BUS_MASK_AEC);
 }
 
 static inline void vicii_bus_control_aec_low(vicii_t* vicii) {
-    ((c64_bus_t*)vicii->bus.bus)->state.lines &= ~BUS_MASK_AEC;
+    c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
+    BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) & ~BUS_MASK_AEC);
 }
 
 static inline void vicii_bus_control_ba_high(vicii_t* vicii) {
-    ((c64_bus_t*)vicii->bus.bus)->state.lines |= BUS_MASK_BA;
+    c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
+    BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) | BUS_MASK_BA);
 }
 
 static inline void vicii_bus_control_ba_low(vicii_t* vicii) {
-    ((c64_bus_t*)vicii->bus.bus)->state.lines &= ~BUS_MASK_BA;
+    c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
+    BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) & ~BUS_MASK_BA);
 }
 
 // ========================================================================================
@@ -150,7 +154,7 @@ void vicii_memory_access(vicii_t* vicii, uint8_t access_type, int access_param) 
         case VIC_ACCESS_P:
             address = vicii->memory.vm_base + 0x3F8 + (uint16_t)access_param;
             vicii_memory_read(vicii, address);
-            vicii->sprites.sprites[access_param].data_pointer = bus->state.data;
+            vicii->sprites.sprites[access_param].data_pointer = BUS_GET_DATA(bus->state);
             break;            
         case VIC_ACCESS_S:
             {
@@ -158,7 +162,7 @@ void vicii_memory_access(vicii_t* vicii, uint8_t access_type, int access_param) 
                 if (sprite->mc_counter < 3) {
                     address = sprite->data_pointer * 64 + sprite->mc_counter;
                     vicii_memory_read(vicii, address);
-                    sprite->data_buffer[sprite->mc_counter] = bus->state.data;
+                    sprite->data_buffer[sprite->mc_counter] = BUS_GET_DATA(bus->state);
                     sprite->mc_counter++;
                 } else {
                     // "Whatever appears on the VIC-II internal bus during the fetch cycles
@@ -176,15 +180,15 @@ void vicii_memory_access(vicii_t* vicii, uint8_t access_type, int access_param) 
             // we still calculate the absolute address
             // TODO : Should this incorporate vicii_bank_base too? 
             address = 0xD800 + vicii->video_logic.vc;
-            bus_state_t color_bus_state = { .addr = address, .data = 0 };
+            bus_state_t color_bus_state = BUS_STATE(address, 0 , 0);
             color_bus_state = mos2114_read(vicii->colorram, color_bus_state);
-            uint8_t color_data = color_bus_state.data;
+            uint8_t color_data = BUS_GET_DATA(color_bus_state);
             vicii->video_data.video_color_line[vicii->video_logic.vmli] = color_data & 0x0F;
             
             // Video matrix access  
             address = vicii->memory.vm_base + vicii->video_logic.vc;
             vicii_memory_read(vicii, address);
-            vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = bus->state.data;
+            vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = BUS_GET_DATA(bus->state);
             
             // Increment VC and VMLI after c-access in display state
             if (vicii->video_logic.display_state) {
@@ -219,7 +223,7 @@ void vicii_memory_access(vicii_t* vicii, uint8_t access_type, int access_param) 
                 }
                 
                 vicii_memory_read(vicii, address);
-                vicii_graphics_sequencer(vicii, bus->state.data);
+                vicii_graphics_sequencer(vicii, BUS_GET_DATA(bus->state));
             }
             break;
             
@@ -610,8 +614,8 @@ static inline void vicii_registers_write_interrupt(vicii_registers_unit_t* regs,
 // Register write function (uses all the above handlers)
 bus_state_t vicii_registers_write(void* context, bus_state_t bus_state) {
     vicii_t* vicii = (vicii_t*)context;
-    uint8_t value = bus_state.data;
-    uint8_t reg = bus_state.addr & VICII_REGS_MASK; // The VIC registers are repeated each 64 bytes in the area $d000-$d3ff
+    uint8_t value = BUS_GET_DATA(bus_state);
+    uint8_t reg = BUS_GET_ADDR(bus_state) & VICII_REGS_MASK; // The VIC registers are repeated each 64 bytes in the area $d000-$d3ff
     // Notes:
     // * Some not-connected bits (marked with '-') are written anyway here,
     //   because determing the mask for those would only be slower, for no benefit
@@ -713,10 +717,10 @@ static inline uint8_t vicii_read_clear(vicii_registers_unit_t* regs, uint8_t reg
 // Register read function (uses the above helper)
 bus_state_t vicii_registers_read(void* context, bus_state_t bus_state) {
     vicii_t* vicii = (vicii_t*)context;
-    uint16_t address = bus_state.addr;
+    uint16_t address = BUS_GET_ADDR(bus_state);
     uint8_t reg = address & VICII_REGS_MASK;
     // Used for "floating" bus state for subsequent unattached reads
-    uint8_t data = bus_state.data;
+    uint8_t data = BUS_GET_DATA(bus_state);
     
     // Fast path for most common registers
     switch (reg) {
@@ -756,7 +760,7 @@ bus_state_t vicii_registers_read(void* context, bus_state_t bus_state) {
             break;
     }
 
-    bus_state.data = data;
+    BUS_SET_DATA(bus_state, data);
     return bus_state;
 }
 
@@ -1234,10 +1238,10 @@ bus_state_t vicii_tick(void* chip, bus_state_t bus_state) {
     // Check for I/O register access when I/O pending
     if (unlikely(bus_is_io_pending(&bus_state))) {
         // Check if address is within VIC-II range ($D000-$D3FF)
-        if (bus_state.addr <= 0xD3FF) {
+        if (BUS_GET_ADDR(bus_state) <= 0xD3FF) {
             bus_clear_io_pending(&bus_state);
             // Handle register access directly
-            bool is_read = bus_state.lines & BUS_MASK_RW;
+            bool is_read = BUS_GET_LINES(bus_state) & BUS_MASK_RW;
             if (is_read) {
                 bus_state = vicii_registers_read(vicii, bus_state);
             } else {
@@ -1248,10 +1252,10 @@ bus_state_t vicii_tick(void* chip, bus_state_t bus_state) {
     
     // Monitor CIA2 writes to $DD00 for VIC-II bank changes
     // VIC-II watches CIA2 writes directly without callbacks or io_pending flags
-    if (bus_state.addr == 0xDD00 && !(bus_state.lines & BUS_MASK_RW)) {
+    if (BUS_GET_ADDR(bus_state) == 0xDD00 && !(BUS_GET_LINES(bus_state) & BUS_MASK_RW)) {
         // CIA2 Data Port A write detected - extract VIC-II bank bits (0-1)
         // Hardware mapping: 00→Bank 3, 01→Bank 2, 10→Bank 1, 11→Bank 0
-        uint8_t vic_bank = 3 - (bus_state.data & 0x03);
+        uint8_t vic_bank = 3 - (BUS_GET_DATA(bus_state) & 0x03);
         vicii_bank_change(vicii, vic_bank);
     }
     

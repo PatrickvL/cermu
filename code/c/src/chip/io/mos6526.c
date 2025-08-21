@@ -67,65 +67,69 @@ void mos6526_reset(mos6526_t* cia) {
 // The CIA 2 registers are repeated each 16 bytes in the area $dd00-$ddff
 bus_state_t mos6526_registers_read(void* context, bus_state_t bus_state) {
     mos6526_t* cia = (mos6526_t*)context;
-    uint8_t reg = bus_state.addr & REGS_MASK;
+    uint8_t reg = BUS_GET_ADDR(bus_state) & REGS_MASK;
     
     switch (reg) {
         // Read ports
         case PRA:
-            bus_state.data = mos6526_read_port_data(cia, A);
+            BUS_SET_DATA(bus_state, mos6526_read_port_data(cia, A));
             break;
         case PRB:
-            bus_state.data = mos6526_read_port_data(cia, B);
+            BUS_SET_DATA(bus_state, mos6526_read_port_data(cia, B));
             break;
         case DDRA:
-            bus_state.data = cia->reg[DDRA];
+            BUS_SET_DATA(bus_state, cia->reg[DDRA]);
             break;
         case DDRB:
             // Note : Assume this always excludes the optional PBON output mask? (If not, use IDDRB!)
-            bus_state.data = cia->reg[DDRB];
+            BUS_SET_DATA(bus_state, cia->reg[DDRB]);
             break;
         // Read timers
         case TA_LO:
-            bus_state.data = cia->reg[TA_LO];
+            BUS_SET_DATA(bus_state, cia->reg[TA_LO]);
             break;
         case TA_HI:
-            bus_state.data = cia->reg[TA_HI];
+            BUS_SET_DATA(bus_state, cia->reg[TA_HI]);
             break;
         case TB_LO:
-            bus_state.data = cia->reg[TB_LO];
+            BUS_SET_DATA(bus_state, cia->reg[TB_LO]);
             break;
         case TB_HI:
-            bus_state.data = cia->reg[TB_HI];
+            BUS_SET_DATA(bus_state, cia->reg[TB_HI]);
             break;
         // Read TOD registers
-        case TOD_10THS:
-            bus_state.data = cia->read_tod_delta > 0 ? mos6526_unlatch_read_tod_10ths(cia) : cia->reg[TOD_10THS];
+        case TOD_10THS: {
+            uint8_t tod_value = (cia->read_tod_delta > 0) ? mos6526_unlatch_read_tod_10ths(cia) : cia->reg[TOD_10THS];
+            BUS_SET_DATA(bus_state, tod_value);
             break;
+        }
         case TOD_SEC:
-            bus_state.data = cia->reg[cia->read_tod_delta + TOD_SEC];
+            BUS_SET_DATA(bus_state, cia->reg[cia->read_tod_delta + TOD_SEC]);
             break;
         case TOD_MIN:
-            bus_state.data = cia->reg[cia->read_tod_delta + TOD_MIN];
+            BUS_SET_DATA(bus_state, cia->reg[cia->read_tod_delta + TOD_MIN]);
             break;
-        case TOD_HR:
-            bus_state.data = cia->read_tod_delta > 0 ? cia->reg[CLOCK_OFFSET + TOD_HR] : mos6526_latch_read_tod_hr(cia);
+        case TOD_HR: {
+            uint8_t tod_hr_value = (cia->read_tod_delta > 0) ? cia->reg[CLOCK_OFFSET + TOD_HR] : mos6526_latch_read_tod_hr(cia);
+            BUS_SET_DATA(bus_state, tod_hr_value);
             break;
+        }
         // Read control registers
         case SDR:
-            bus_state.data = cia->reg[SDR];
+            BUS_SET_DATA(bus_state, cia->reg[SDR]);
             break;
         case ICR:
-            bus_state.data = mos6526_read_and_clear_interrupt_control_register(cia);
+            BUS_SET_DATA(bus_state, mos6526_read_and_clear_interrupt_control_register(cia));
             break;
         case CRA:
-            bus_state.data = cia->reg[CRA];
+            BUS_SET_DATA(bus_state, cia->reg[CRA]);
             break;
         case CRB:
-            bus_state.data = cia->reg[CRB];
+            BUS_SET_DATA(bus_state, cia->reg[CRB]);
             break;
         default:
-            // Unused registers return the last value on the bus (already in bus_state.data)
-            // No action needed - bus_state.data already contains what was on the bus
+            // Unused registers return the last value on the bus (already in BUS_GET_DATA(bus_state))
+            // No action needed - BUS_GET_DATA(bus_state) already contains what was on the bus
             break;
     }
     return bus_state;
@@ -133,8 +137,8 @@ bus_state_t mos6526_registers_read(void* context, bus_state_t bus_state) {
 
 bus_state_t mos6526_registers_write(void* context, bus_state_t bus_state) {
     mos6526_t* cia = (mos6526_t*)context;
-    uint8_t reg = bus_state.addr & REGS_MASK;
-    uint8_t value = bus_state.data;
+    uint8_t reg = BUS_GET_ADDR(bus_state) & REGS_MASK;
+    uint8_t value = BUS_GET_DATA(bus_state);
     
     switch (reg) {
         // Write ports
@@ -387,7 +391,7 @@ bus_state_t mos6526_advance_cycle(mos6526_t* cia, bus_state_t bus_state) {
     
     // "The CIA6526 will raise an interrupt with a delay of one ø2 clock"
     if (cia->delayed_irq) {
-        bus_state.lines |= cia->interrupt_line;
+        BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | cia->interrupt_line);
         cia->delayed_irq = false;
     }
 
@@ -474,14 +478,14 @@ bus_state_t mos6526_tick(void* chip, bus_state_t bus_state) {
         // Use interrupt line to determine CIA address range:
         // CIA1 (IRQ=0x01): $DC00-$DCFF, CIA2 (NMI=0x02): $DD00-$DDFF
         // Optimal bit-hack: Check if address matches this CIA's page
-        uint16_t addr_page = bus_state.addr & 0xFF00;
+        uint16_t addr_page = BUS_GET_ADDR(bus_state) & 0xFF00;
         uint16_t expected_page = 0xDC00 + ((cia->interrupt_line & BUS_MASK_NMI) << 7);
         
         if (addr_page == expected_page) {
             bus_clear_io_pending(&bus_state);
             
             // Handle register access directly in the tick function
-            bool is_read = bus_state.lines & BUS_MASK_RW;
+            bool is_read = BUS_GET_LINES(bus_state) & BUS_MASK_RW;
             if (is_read) {
                 bus_state = mos6526_registers_read(cia, bus_state);
             } else {

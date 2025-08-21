@@ -110,7 +110,7 @@ struct fam65xx_s {
 // Control line access and testing (shared)
 #ifdef REDESIGN
     #define FAM65XX_CONTROL_LINES(cpu) \
-        (bus_state->lines)
+        BUS_GET_LINES(*bus_state)
 #else
     #define FAM65XX_CONTROL_LINES(cpu) \
         ((cpu)->control_interface.get_lines((cpu)->control_interface.context))
@@ -397,7 +397,7 @@ static inline void fam65xx_optimized_dispatch(fam65xx_t* cpu, void* c64_bus_ptr)
         // Initialize bus state - allocated on stack for all handlers to share
     // TODO : Arrange that a global bus state is used for execution
         bus_state_t shared_bus = {0};
-        shared_bus.lines = FAM65XX_MASK_BA | FAM65XX_MASK_AEC | FAM65XX_MASK_RDY;  // Default line states
+        BUS_SET_LINES(shared_bus, FAM65XX_MASK_BA | FAM65XX_MASK_AEC | FAM65XX_MASK_RDY);  // Default line states
         
         // Nostradamus Distributor pattern - use stackless execution
         fam65xx_opcode_handler_t current_handler = (fam65xx_opcode_handler_t)fam65xx_optimized_dispatch(cpu, &shared_bus);
