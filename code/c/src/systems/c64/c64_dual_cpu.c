@@ -408,10 +408,53 @@ void c64_dual_cpu_print_state_mismatch(const c64_dual_cpu_t* dual_cpu) {
            dual_cpu->legacy_cpu->base.y,
            dual_cpu->legacy_cpu->base.sp,
            dual_cpu->legacy_cpu->base.p);
-    
     printf("Cycle-Accurate CPU State:\n");
-    printf("  [State access API not yet implemented]\n");
+#if C64_ENABLE_CYCLE_CPU
+    if (dual_cpu->cycle_cpu) {
+        printf("  PC=0x%04X A=0x%02X X=0x%02X Y=0x%02X SP=0x%02X P=0x%02X\n",
+               cycle_cpu_get_pc(dual_cpu->cycle_cpu),
+               cycle_cpu_get_a(dual_cpu->cycle_cpu),
+               cycle_cpu_get_x(dual_cpu->cycle_cpu),
+               cycle_cpu_get_y(dual_cpu->cycle_cpu),
+               cycle_cpu_get_sp(dual_cpu->cycle_cpu),
+               cycle_cpu_get_p(dual_cpu->cycle_cpu));
+    } else {
+        printf("  [Cycle CPU not instantiated]\n");
+    }
+#else
+    printf("  [Cycle CPU not enabled in build]\n");
+#endif
     
+    
+#if C64_ENABLE_CYCLE_CPU
+    // Per-field mismatch diagnostics
+    if (dual_cpu->cycle_cpu && dual_cpu->legacy_cpu) {
+        uint16_t lpc = dual_cpu->legacy_cpu->base.pc;
+        uint16_t cpc = cycle_cpu_get_pc(dual_cpu->cycle_cpu);
+        uint8_t  la  = dual_cpu->legacy_cpu->base.a;
+        uint8_t  ca  = cycle_cpu_get_a(dual_cpu->cycle_cpu);
+        uint8_t  lx  = dual_cpu->legacy_cpu->base.x;
+        uint8_t  cx  = cycle_cpu_get_x(dual_cpu->cycle_cpu);
+        uint8_t  ly  = dual_cpu->legacy_cpu->base.y;
+        uint8_t  cy  = cycle_cpu_get_y(dual_cpu->cycle_cpu);
+        uint8_t  lsp = dual_cpu->legacy_cpu->base.sp;
+        uint8_t  csp = cycle_cpu_get_sp(dual_cpu->cycle_cpu);
+        uint8_t  lp  = dual_cpu->legacy_cpu->base.p;
+        uint8_t  cp  = cycle_cpu_get_p(dual_cpu->cycle_cpu);
+
+        bool any = false;
+        if (lpc != cpc) { printf("DIFF PC : L=0x%04X C=0x%04X\n", lpc, cpc); any = true; }
+        if (la  != ca ) { printf("DIFF A  : L=0x%02X C=0x%02X\n",  la,  ca ); any = true; }
+        if (lx  != cx ) { printf("DIFF X  : L=0x%02X C=0x%02X\n",  lx,  cx ); any = true; }
+        if (ly  != cy ) { printf("DIFF Y  : L=0x%02X C=0x%02X\n",  ly,  cy ); any = true; }
+        if (lsp != csp) { printf("DIFF SP : L=0x%02X C=0x%02X\n",  lsp, csp); any = true; }
+        if (lp  != cp ) { printf("DIFF P  : L=0x%02X C=0x%02X\n",  lp,  cp ); any = true; }
+
+        if (!any) {
+            printf("No per-field architectural mismatches detected.\n");
+        }
+    }
+#endif
     printf("Instructions executed: %llu\n", (unsigned long long)dual_cpu->legacy_instructions);
     printf("Cycles executed: %llu\n", (unsigned long long)dual_cpu->cycle_ticks);
     printf("================================\n");
