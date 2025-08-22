@@ -2,6 +2,13 @@
 #include <string.h>
 #include <stdio.h>
 
+// Provide a simple default implementation to satisfy references.
+// TODO: Replace with real mapping based on cycle_definition_t.
+static inline uint8_t infer_target_register_index(int alu_op) {
+    (void)alu_op;
+    return 0; // Default to REG_A
+}
+
 /**
  * MOS6510 Advanced Pipeline Implementation
  * Based on visual6502.org "hidden pipeline" discovery

@@ -7,6 +7,9 @@ project(aiemuc
     LANGUAGES C CXX
 )
 
+# Optionally enable the cycle-accurate MOS6510 core (experimental)
+option(C64_ENABLE_CYCLE_CPU "Enable cycle-accurate MOS6510 core" OFF)
+
 # Set C standard
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -100,6 +103,11 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/src/gui
 )
 
+# Add cycle-accurate MOS6510 include path only when enabled
+if(C64_ENABLE_CYCLE_CPU)
+    include_directories(${CMAKE_SOURCE_DIR}/src/chip/cpu/mos6510_cycle)
+endif()
+
 # Add GUI-specific includes only if building GUI
 if(BUILD_GUI)
     include_directories(
@@ -137,21 +145,51 @@ set(CHIP_SOURCES    # CPU family core functions (shared by all family members)
     src/chip/cpu/fam65xx/fam65xx_core.c
     src/chip/cpu/fam65xx/fam65xx_opcodes.c
     src/chip/cpu/mos6510/mos6510.c
-    
+)
+
+# Conditionally add cycle-accurate MOS6510 sources
+if(C64_ENABLE_CYCLE_CPU)
+    set(CYCLE_CPU_SOURCES
+        src/chip/cpu/mos6510_cycle/cpu_config.c
+        src/chip/cpu/mos6510_cycle/deferred_ops.c
+        src/chip/cpu/mos6510_cycle/instruction_table.c
+        src/chip/cpu/mos6510_cycle/internal_bus.c
+        src/chip/cpu/mos6510_cycle/interrupt_recognition.c
+        src/chip/cpu/mos6510_cycle/mos6510_registers.c
+        src/chip/cpu/mos6510_cycle/mos6510_state.c
+        src/chip/cpu/mos6510_cycle/mos6510_tick.c
+        src/chip/cpu/mos6510_cycle/nmi_skipping.c
+        src/chip/cpu/mos6510_cycle/pipeline.c
+        src/chip/cpu/mos6510_cycle/pla_lookup.c
+        src/chip/cpu/mos6510_cycle/timing_states.c
+    )
+    list(APPEND CHIP_SOURCES ${CYCLE_CPU_SOURCES})
+
+    # Relax warnings for cycle core sources only to allow build on MSVC
+    if(MSVC)
+        set_source_files_properties(${CYCLE_CPU_SOURCES} PROPERTIES
+            COMPILE_FLAGS "/WX- /wd4244 /wd4996 /wd4133 /wd4013"
+            COMPILE_DEFINITIONS "_CRT_SECURE_NO_WARNINGS"
+        )
+    endif()
+endif()
+
+# Always include other chip sources
+list(APPEND CHIP_SOURCES
     # I/O
     src/chip/io/mos6526.c
-    
+
     # Logic
     src/chip/logic/pla.c
-    
+
     # Memory
     src/chip/memory/ram.c
     src/chip/memory/rom.c
     src/chip/memory/mos2114.c
-    
+
     # Sound
     src/chip/sound/mos6581.c
-    
+
     # Video
     src/chip/video/vic_ii/mos6569.c
     src/chip/video/vic_ii/mos6567.c
@@ -165,6 +203,10 @@ set(SYSTEM_SOURCES
     src/systems/c64/c64_config.c
     src/systems/c64/c64_dual_cpu.c
 )
+
+if(C64_ENABLE_CYCLE_CPU)
+    list(APPEND SYSTEM_SOURCES src/systems/c64/c64_dual_cpu_cycle.c)
+endif()
 
 # Core utility sources (generic functionality)
 set(CORE_UTIL_SOURCES
@@ -182,6 +224,11 @@ add_executable(c64emu
 )
 # Enable REDESIGN CPU dispatch mechanism with Nostradamus Distributor
 target_compile_definitions(c64emu PRIVATE REDESIGN=1)
+if(C64_ENABLE_CYCLE_CPU)
+    target_compile_definitions(c64emu PRIVATE C64_ENABLE_CYCLE_CPU=1)
+else()
+    target_compile_definitions(c64emu PRIVATE C64_ENABLE_CYCLE_CPU=0)
+endif()
 
 
 # Link required libraries
@@ -221,6 +268,11 @@ if(BUILD_GUI)
     target_compile_definitions(c64emu_gui PRIVATE CIMGUI_DEFINE_ENUMS_AND_STRUCTS=1)
     # Enable REDESIGN CPU dispatch mechanism with Nostradamus Distributor
     target_compile_definitions(c64emu_gui PRIVATE REDESIGN=1)
+    if(C64_ENABLE_CYCLE_CPU)
+        target_compile_definitions(c64emu_gui PRIVATE C64_ENABLE_CYCLE_CPU=1)
+    else()
+        target_compile_definitions(c64emu_gui PRIVATE C64_ENABLE_CYCLE_CPU=0)
+    endif()
 
     
     # Add SDL2 include directories to the GUI target

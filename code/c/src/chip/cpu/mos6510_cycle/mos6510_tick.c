@@ -16,6 +16,9 @@
  */
 
 #include "mos6510_tick.h"
+#define mos6510_tick mos6510_cycle_tick
+#define mos6510_tick_process_interrupts mos6510_cycle_tick_process_interrupts
+#define mos6510_tick_validate_state     mos6510_cycle_tick_validate_state
 #include "mos6510_state.h"
 #include "mos6510_registers.h"
 #include "deferred_ops.h"

@@ -7,156 +7,31 @@
 #include <stdbool.h>
 #include <assert.h>
 
+#define REG_P_Reset (uint8_t)(FLAG_UNUSED | FLAG_I)
+
 // Register properties table
 // Defines characteristics of each register in the 16-register array
 const register_properties_t register_properties[MOS6510_REGISTER_COUNT] = {
-    // Architectural Registers (0-6)
-    [REG_A] = {
-        .name = "A",
-        .category = REG_CATEGORY_ARCHITECTURAL,
-        .is_architectural = true,
-        .is_internal_bus = false,
-        .is_address_related = false,
-        .is_alu_related = true,
-        .reset_value = 0x00
-    },
-    [REG_X] = {
-        .name = "X",
-        .category = REG_CATEGORY_ARCHITECTURAL,
-        .is_architectural = true,
-        .is_internal_bus = false,
-        .is_address_related = false,
-        .is_alu_related = false,
-        .reset_value = 0x00
-    },
-    [REG_Y] = {
-        .name = "Y", 
-        .category = REG_CATEGORY_ARCHITECTURAL,
-        .is_architectural = true,
-        .is_internal_bus = false,
-        .is_address_related = false,
-        .is_alu_related = false,
-        .reset_value = 0x00
-    },
-    [REG_P] = {
-        .name = "P",
-        .category = REG_CATEGORY_ARCHITECTURAL,
-        .is_architectural = true,
-        .is_internal_bus = false,
-        .is_address_related = false,
-        .is_alu_related = true,
-        .reset_value = FLAG_UNUSED | FLAG_I  // Unused=1, I=1 after reset
-    },
-    [REG_SP] = {
-        .name = "SP",
-        .category = REG_CATEGORY_ARCHITECTURAL,
-        .is_architectural = true,
-        .is_internal_bus = false,
-        .is_address_related = true,
-        .is_alu_related = false,
-        .reset_value = 0xFF  // Stack pointer starts at top
-    },
-    [REG_PCL] = {
-        .name = "PCL",
-        .category = REG_CATEGORY_ARCHITECTURAL,
-        .is_architectural = true,
-        .is_internal_bus = false,
-        .is_address_related = true,
-        .is_alu_related = false,
-        .reset_value = 0x00  // Will be loaded from reset vector
-    },
-    [REG_PCH] = {
-        .name = "PCH",
-        .category = REG_CATEGORY_ARCHITECTURAL,
-        .is_architectural = true,
-        .is_internal_bus = false,
-        .is_address_related = true,
-        .is_alu_related = false,
-        .reset_value = 0x00  // Will be loaded from reset vector
-    },
-    
-    // Visual6502 Internal Registers (7-15)
-    [REG_DL] = {
-        .name = "DL",
-        .category = REG_CATEGORY_INTERNAL_DATA,
-        .is_architectural = false,
-        .is_internal_bus = true,
-        .is_address_related = false,
-        .is_alu_related = false,
-        .reset_value = 0x00
-    },
-    [REG_DOR] = {
-        .name = "DOR",
-        .category = REG_CATEGORY_INTERNAL_DATA,
-        .is_architectural = false,
-        .is_internal_bus = true,
-        .is_address_related = false,
-        .is_alu_related = false,
-        .reset_value = 0x00
-    },
-    [REG_SB] = {
-        .name = "SB",
-        .category = REG_CATEGORY_INTERNAL_DATA,
-        .is_architectural = false,
-        .is_internal_bus = true,
-        .is_address_related = false,
-        .is_alu_related = true,
-        .reset_value = 0x00
-    },
-    [REG_ADL] = {
-        .name = "ADL",
-        .category = REG_CATEGORY_INTERNAL_ADDR,
-        .is_architectural = false,
-        .is_internal_bus = true,
-        .is_address_related = true,
-        .is_alu_related = false,
-        .reset_value = 0x00
-    },
-    [REG_ADH] = {
-        .name = "ADH",
-        .category = REG_CATEGORY_INTERNAL_ADDR,
-        .is_architectural = false,
-        .is_internal_bus = true,
-        .is_address_related = true,
-        .is_alu_related = false,
-        .reset_value = 0x00
-    },
-    [REG_ABL] = {
-        .name = "ABL",
-        .category = REG_CATEGORY_INTERNAL_ADDR,
-        .is_architectural = false,
-        .is_internal_bus = true,
-        .is_address_related = true,
-        .is_alu_related = false,
-        .reset_value = 0x00
-    },
-    [REG_ABH] = {
-        .name = "ABH",
-        .category = REG_CATEGORY_INTERNAL_ADDR,
-        .is_architectural = false,
-        .is_internal_bus = true,
-        .is_address_related = true,
-        .is_alu_related = false,
-        .reset_value = 0x00
-    },
-    [REG_AC] = {
-        .name = "AC",
-        .category = REG_CATEGORY_INTERNAL_ALU,
-        .is_architectural = false,
-        .is_internal_bus = false,
-        .is_address_related = false,
-        .is_alu_related = true,
-        .reset_value = 0x00
-    },
-    [REG_ADD] = {
-        .name = "ADD",
-        .category = REG_CATEGORY_INTERNAL_ALU,
-        .is_architectural = false,
-        .is_internal_bus = false,
-        .is_address_related = false,
-        .is_alu_related = true,
-        .reset_value = 0x00
-    }
+    // Architectural (category only; no separate ARCH flag)
+    { "A",   REG_PROP_CAT(REG_CATEGORY_ARCHITECTURAL) | REG_PROP_FLAG_ALU,            0x00 }, // REG_A
+    { "X",   REG_PROP_CAT(REG_CATEGORY_ARCHITECTURAL),                                0x00 }, // REG_X
+    { "Y",   REG_PROP_CAT(REG_CATEGORY_ARCHITECTURAL),                                0x00 }, // REG_Y
+    { "P",   REG_PROP_CAT(REG_CATEGORY_ARCHITECTURAL) | REG_PROP_FLAG_ALU,     REG_P_Reset }, // REG_P   // Unused=1, I=1 after reset
+    { "SP",  REG_PROP_CAT(REG_CATEGORY_ARCHITECTURAL) | REG_PROP_FLAG_ADDRESS,        0xFF }, // REG_SP  // Stack pointer starts at top
+    { "PCL", REG_PROP_CAT(REG_CATEGORY_ARCHITECTURAL) | REG_PROP_FLAG_ADDRESS,        0x00 }, // REG_PCL // Will be loaded from reset vector
+    { "PCH", REG_PROP_CAT(REG_CATEGORY_ARCHITECTURAL) | REG_PROP_FLAG_ADDRESS,        0x00 }, // REG_PCH // Will be loaded from reset vector
+    // Internal Data (category only; no separate INTERNAL flag)
+    { "DL",  REG_PROP_CAT(REG_CATEGORY_INTERNAL_DATA),                                0x00 }, // REG_DL
+    { "DOR", REG_PROP_CAT(REG_CATEGORY_INTERNAL_DATA),                                0x00 }, // REG_DOR
+    { "SB",  REG_PROP_CAT(REG_CATEGORY_INTERNAL_DATA) | REG_PROP_FLAG_ALU,            0x00 }, // REG_SB
+    // Internal Address (category only; address cross-flag where applicable)
+    { "ADL", REG_PROP_CAT(REG_CATEGORY_INTERNAL_ADDR) | REG_PROP_FLAG_ADDRESS,        0x00 }, // REG_ADL
+    { "ADH", REG_PROP_CAT(REG_CATEGORY_INTERNAL_ADDR) | REG_PROP_FLAG_ADDRESS,        0x00 }, // REG_ADH
+    { "ABL", REG_PROP_CAT(REG_CATEGORY_INTERNAL_ADDR) | REG_PROP_FLAG_ADDRESS,        0x00 }, // REG_ABL
+    { "ABH", REG_PROP_CAT(REG_CATEGORY_INTERNAL_ADDR) | REG_PROP_FLAG_ADDRESS,        0x00 }, // REG_ABH
+    // Internal ALU (category alone implies ALU; no cross-flag needed)
+    { "AC",  REG_PROP_CAT(REG_CATEGORY_INTERNAL_ALU),                                 0x00 }, // REG_AC
+    { "ADD", REG_PROP_CAT(REG_CATEGORY_INTERNAL_ALU),                                 0x00 }  // REG_ADD
 };
 
 // ===== SHARED OPERATION FUNCTION IMPLEMENTATIONS =====
@@ -281,10 +156,4 @@ void mos6510_registers_reset(mos6510_state_t *cpu) {
     for (int i = 0; i < MOS6510_REGISTER_COUNT; i++) {
         cpu->registers[i] = register_properties[i].reset_value;
     }
-}
-
-// Get register category for debugging/inspection
-register_category_t mos6510_register_get_category(uint8_t reg) {
-    if (!IS_VALID_REG(reg)) return REG_CATEGORY_ARCHITECTURAL;
-    return register_properties[reg].category;
 }

@@ -11,6 +11,12 @@
 // Forward declarations
 typedef struct mos6510_state_s mos6510_state_t;
 
+// Avoid symbol collisions with legacy mos6510 by prefixing cycle exports
+#define mos6510_create mos6510_cycle_create
+#define mos6510_destroy mos6510_cycle_destroy
+#define mos6510_init    mos6510_cycle_init
+#define mos6510_reset   mos6510_cycle_reset
+
 // MOS6510 CPU State Structure
 // Based on visual6502 internal structure (spec lines 62-76)
 // All CPU state fits in a register array plus control state

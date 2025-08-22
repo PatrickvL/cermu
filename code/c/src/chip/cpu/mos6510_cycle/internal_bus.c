@@ -3,6 +3,10 @@
 #include "register_access.h"
 #include <stdio.h>
 #include <string.h>
+#ifdef _MSC_VER
+#define _CRT_SECURE_NO_WARNINGS
+#pragma warning(disable:4996)
+#endif
 #include <assert.h>
 
 // ===== BUS INITIALIZATION AND MANAGEMENT =====
