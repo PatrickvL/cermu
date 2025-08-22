@@ -148,7 +148,21 @@ bool c64_dual_cpu_synchronize_state(c64_dual_cpu_t* dual_cpu);
  */
 bool c64_dual_cpu_validate_state(c64_dual_cpu_t* dual_cpu);
 
-// ===== PERFORMANCE MONITORING =====
+ // ===== VALIDATION CONFIGURATION =====
+ /**
+  * Set validation checkpoint interval (minimum 1)
+  * @param dual_cpu Dual CPU state structure
+  * @param interval Checkpoint interval in legacy instructions (0 coerced to 1)
+  */
+ void c64_dual_cpu_set_checkpoint_interval(c64_dual_cpu_t* dual_cpu, uint64_t interval);
+ /**
+  * Get validation checkpoint interval
+  * @param dual_cpu Dual CPU state structure
+  * @return Current checkpoint interval (0 if dual_cpu is NULL)
+  */
+ uint64_t c64_dual_cpu_get_checkpoint_interval(const c64_dual_cpu_t* dual_cpu);
+
+ // ===== PERFORMANCE MONITORING =====
 
 /**
  * Start performance measurement

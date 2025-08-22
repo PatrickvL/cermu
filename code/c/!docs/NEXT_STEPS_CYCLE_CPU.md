@@ -32,6 +32,7 @@
 - Integrated cycle core into dual CPU paths:
   - Validation/benchmark modes now tick cycle CPU in [C.c64_dual_cpu_step()](code/c/src/systems/c64/c64_dual_cpu.c:153) and [C.c64_dual_cpu_execute()](code/c/src/systems/c64/c64_dual_cpu.c:209)
   - Checkpoint validation wired; mismatch prints both CPU states in [C.c64_dual_cpu_print_state_mismatch()](code/c/src/systems/c64/c64_dual_cpu.c:375)
+  - Checkpoints now route through [C.c64_dual_cpu_synchronize_state()](code/c/src/systems/c64/c64_dual_cpu.h:142) for compare+counter updates (calls in [code/c/src/systems/c64/c64_dual_cpu.c](code/c/src/systems/c64/c64_dual_cpu.c))
 
 Migration pattern
 ```c
@@ -47,6 +48,7 @@ Checklist
 - [x] Print cycle-core state in mismatch printer [C.c64_dual_cpu_print_state_mismatch()](code/c/src/systems/c64/c64_dual_cpu.c:375)
 - [x] Enable and smoke-test CPU_MODE_CYCLE_ONLY path end-to-end
 - [x] Add per-field mismatch diagnostics (which register/flag differs)
+- [x] Introduce [C.c64_dual_cpu_synchronize_state()](code/c/src/systems/c64/c64_dual_cpu.h:142) and route validation checkpoints through it
 - [ ] Expose cycle CPU perf metrics (ticks/sec) in GUI
 
 ## 🚀 Next Steps (Priority Order)
@@ -115,11 +117,12 @@ void c64_get_cpu_metrics(const c64_t* c64, dual_cpu_metrics_t* metrics);
 ### Cycle CPU Integration Points
 ```c
 // In c64_dual_cpu.c - functions that need cycle CPU calls:
-c64_dual_cpu_set_mode()         // Create cycle CPU instance
-c64_dual_cpu_execute()          // Call mos6510_cycle_tick()
+c64_dual_cpu_set_mode()          // Create cycle CPU instance
+c64_dual_cpu_execute()           // Call mos6510_cycle_tick()
+c64_dual_cpu_synchronize_state() // Compare-and-update at checkpoints
 c64_dual_cpu_compare_registers() // Read cycle CPU registers
 c64_dual_cpu_compare_flags()     // Read cycle CPU flags
-c64_dual_cpu_reset()            // Reset cycle CPU
+c64_dual_cpu_reset()             // Reset cycle CPU
 ```
 
 ### Expected Issues to Debug
@@ -178,13 +181,15 @@ c64_dual_cpu_reset()            // Reset cycle CPU
 
 ---
 
-**Next Action**: Start with Step 1 - Review cycle CPU API and connect to dual CPU framework
+**Next Action**: Proceed to Step 2 - Enable CPU Validation Mode, using [C.c64_dual_cpu_synchronize_state()](code/c/src/systems/c64/c64_dual_cpu.h:142) to drive checkpoints
 
 ## Progress Update (continued) — 2025-08-22
 
 - Added validation checkpoint tracking via `last_sync_point` in [C.c64_dual_cpu_step()](code/c/src/systems/c64/c64_dual_cpu.c:153) and [C.c64_dual_cpu_execute_validation()](code/c/src/systems/c64/c64_dual_cpu.c:272)
 - Guarded build when `C64_ENABLE_CYCLE_CPU` isn’t predefined by adding a default in [code/c/src/systems/c64/c64_dual_cpu.c](code/c/src/systems/c64/c64_dual_cpu.c:1)
 - Broadened cycle-core usage detection in [C.c64_dual_cpu_is_using_cycle_cpu()](code/c/src/systems/c64/c64_dual_cpu.c:497) to report true for any non-legacy mode with an instantiated cycle CPU
+- Refactored checkpoints to use [C.c64_dual_cpu_synchronize_state()](code/c/src/systems/c64/c64_dual_cpu.h:142) for validation and counters
+- Documented metrics getter [C.c64_dual_cpu_get_metrics()](code/c/src/systems/c64/c64_dual_cpu.h:199)
 
 Checklist additions
 - [x] Track `last_sync_point` for validation checkpoints

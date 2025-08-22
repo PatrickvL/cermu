@@ -194,18 +194,10 @@ bool c64_dual_cpu_step(c64_dual_cpu_t* dual_cpu) {
                 }
 #endif
 
-                // In validation mode, periodically compare state
+                // In validation mode, periodically synchronize state (compare + counters)
                 if (dual_cpu->mode == CPU_MODE_VALIDATION &&
                     (dual_cpu->legacy_instructions % dual_cpu->sync_checkpoint_interval) == 0) {
-                    if (c64_dual_cpu_validate_state(dual_cpu)) {
-                        dual_cpu->consecutive_matches++;
-                        dual_cpu->last_sync_point = dual_cpu->legacy_instructions;
-                    } else {
-                        dual_cpu->validation_failures++;
-                        dual_cpu->consecutive_matches = 0;
-                        dual_cpu->state_mismatch_detected = true;
-                        c64_dual_cpu_print_state_mismatch(dual_cpu);
-                    }
+                    (void)c64_dual_cpu_synchronize_state(dual_cpu);
                 }
 
                 return result;
@@ -291,20 +283,9 @@ static bus_state_t c64_dual_cpu_execute_validation(c64_dual_cpu_t* dual_cpu, bus
 #endif
             }
     
-    // Perform validation at checkpoints
+    // Perform validation at checkpoints (synchronize state)
     if ((dual_cpu->legacy_instructions % dual_cpu->sync_checkpoint_interval) == 0) {
-        if (c64_dual_cpu_validate_state(dual_cpu)) {
-            dual_cpu->consecutive_matches++;
-            dual_cpu->last_sync_point = dual_cpu->legacy_instructions;
-        } else {
-            dual_cpu->validation_failures++;
-            dual_cpu->consecutive_matches = 0;
-            dual_cpu->state_mismatch_detected = true;
-            
-            printf("WARNING: CPU state validation failed at instruction %llu\n",
-                   (unsigned long long)dual_cpu->legacy_instructions);
-            c64_dual_cpu_print_state_mismatch(dual_cpu);
-        }
+        (void)c64_dual_cpu_synchronize_state(dual_cpu);
     }
     
     return bus_state;
@@ -568,4 +549,42 @@ const char* c64_dual_cpu_mode_str(cpu_execution_mode_t mode) {
         case CPU_MODE_BENCHMARK:   return "BENCHMARK";
         default:                   return "UNKNOWN";
     }
+}
+
+// ===== STATE SYNCHRONIZATION =====
+bool c64_dual_cpu_synchronize_state(c64_dual_cpu_t* dual_cpu) {
+    if (!dual_cpu) return false;
+
+    // Both CPUs must exist to synchronize/validate
+    if (!dual_cpu->legacy_cpu || !dual_cpu->cycle_cpu) {
+        return false;
+    }
+
+    // For now, perform validation and update counters; later we can copy state when APIs allow.
+    bool ok = c64_dual_cpu_validate_state(dual_cpu);
+    if (ok) {
+        dual_cpu->consecutive_matches++;
+        dual_cpu->last_sync_point = dual_cpu->legacy_instructions;
+        dual_cpu->state_mismatch_detected = false;
+    } else {
+        dual_cpu->validation_failures++;
+        dual_cpu->consecutive_matches = 0;
+        dual_cpu->state_mismatch_detected = true;
+        printf("WARNING: c64_dual_cpu_synchronize_state: state mismatch at instruction %llu\n",
+               (unsigned long long)dual_cpu->legacy_instructions);
+        c64_dual_cpu_print_state_mismatch(dual_cpu);
+    }
+    return ok;
+}
+
+// ===== VALIDATION CONFIGURATION =====
+void c64_dual_cpu_set_checkpoint_interval(c64_dual_cpu_t* dual_cpu, uint64_t interval) {
+    if (!dual_cpu) return;
+    if (interval == 0) interval = 1; // coerce to minimum 1
+    dual_cpu->sync_checkpoint_interval = interval;
+}
+
+uint64_t c64_dual_cpu_get_checkpoint_interval(const c64_dual_cpu_t* dual_cpu) {
+    if (!dual_cpu) return 0;
+    return dual_cpu->sync_checkpoint_interval;
 }
