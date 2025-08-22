@@ -106,6 +106,7 @@ typedef struct {
  * @param context Tick execution context
  * @return true if tick executed successfully, false on error
  */
+#define mos6510_tick mos6510_cycle_tick
 bool mos6510_tick(struct mos6510_state_s* cpu, tick_context_t* context);
 
 /**
@@ -188,6 +189,7 @@ bool mos6510_tick_pla_decode(struct mos6510_state_s* cpu, tick_context_t* contex
  * @param context Tick execution context
  * @return true if interrupt processing completed successfully
  */
+#define mos6510_tick_process_interrupts mos6510_cycle_tick_process_interrupts
 bool mos6510_tick_process_interrupts(struct mos6510_state_s* cpu, tick_context_t* context);
 
 /**
@@ -240,6 +242,7 @@ bool mos6510_tick_handle_pipeline_stalls(struct mos6510_state_s* cpu, tick_conte
  * @param context Tick execution context
  * @return true if validation passed, false if errors detected
  */
+#define mos6510_tick_validate_state mos6510_cycle_tick_validate_state
 bool mos6510_tick_validate_state(const struct mos6510_state_s* cpu, const tick_context_t* context);
 
 /**

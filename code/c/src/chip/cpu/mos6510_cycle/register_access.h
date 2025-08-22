@@ -141,15 +141,19 @@
 // ===== GENERIC REGISTER ACCESS =====
 
 // Direct register array access with validation
-#define CPU_REG(cpu, reg) ({ \
-    VALIDATE_REG(reg); \
-    (cpu)->registers[reg]; \
-})
+// MSVC doesn't support GNU statement expressions; use inline helpers instead
+static inline uint8_t CPU_REG_fn(mos6510_state_t *cpu, uint8_t reg) {
+    VALIDATE_REG(reg);
+    return cpu->registers[reg];
+}
 
-#define SET_CPU_REG(cpu, reg, val) do { \
-    VALIDATE_REG(reg); \
-    (cpu)->registers[reg] = (val); \
-} while(0)
+static inline void SET_CPU_REG_fn(mos6510_state_t *cpu, uint8_t reg, uint8_t val) {
+    VALIDATE_REG(reg);
+    cpu->registers[reg] = val;
+}
+
+#define CPU_REG(cpu, reg)               CPU_REG_fn((cpu), (uint8_t)(reg))
+#define SET_CPU_REG(cpu, reg, val)      SET_CPU_REG_fn((cpu), (uint8_t)(reg), (uint8_t)(val))
 
 // ===== HARDWARE-ACCURATE FLAG OPERATIONS =====
 

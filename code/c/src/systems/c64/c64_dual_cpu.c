@@ -1,62 +1,25 @@
 #include "c64_dual_cpu.h"
-#include "../../chip/cpu/mos6510_cycle/mos6510_state.h"
-#include "../../chip/cpu/mos6510_cycle/mos6510_tick.h"
-#include "../../chip/cpu/mos6510_cycle/register_access.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
-// Wrapper functions to avoid naming conflicts
-// These wrapper functions allow us to use the cycle CPU without header conflicts
-
-static mos6510_state_t* cycle_cpu_create(void) {
-    return mos6510_create(NULL); // Use default config
-}
-
-static void cycle_cpu_destroy(mos6510_state_t* cpu) {
-    if (cpu) {
-        mos6510_destroy(cpu);
-    }
-}
-
-static void cycle_cpu_reset(mos6510_state_t* cpu) {
-    if (cpu) {
-        mos6510_reset(cpu);
-    }
-}
-
-static bus_state_t cycle_cpu_tick(mos6510_state_t* cpu, tick_context_t* context) {
-    if (cpu && context) {
-        return mos6510_tick(cpu, context);
-    }
-    return 0; // Return neutral bus state if invalid
-}
-
-// Register access wrappers to avoid incomplete type errors
-static uint16_t cycle_cpu_get_pc(const mos6510_state_t* cpu) {
-    return cpu ? CPU_PC(cpu) : 0;
-}
-
-static uint8_t cycle_cpu_get_a(const mos6510_state_t* cpu) {
-    return cpu ? CPU_A(cpu) : 0;
-}
-
-static uint8_t cycle_cpu_get_x(const mos6510_state_t* cpu) {
-    return cpu ? CPU_X(cpu) : 0;
-}
-
-static uint8_t cycle_cpu_get_y(const mos6510_state_t* cpu) {
-    return cpu ? CPU_Y(cpu) : 0;
-}
-
-static uint8_t cycle_cpu_get_sp(const mos6510_state_t* cpu) {
-    return cpu ? CPU_SP(cpu) : 0;
-}
-
-static uint8_t cycle_cpu_get_p(const mos6510_state_t* cpu) {
-    return cpu ? CPU_P(cpu) : 0;
-}
+#if C64_ENABLE_CYCLE_CPU
+// Cycle CPU wrapper functions implemented in c64_dual_cpu_cycle.c
+extern void* cycle_cpu_create(void);
+extern void  cycle_cpu_destroy(void* cpu);
+extern void  cycle_cpu_reset(void* cpu);
+extern bool  cycle_cpu_tick(void* cpu, void* context);
+extern uint16_t cycle_cpu_get_pc(void* cpu);
+extern uint8_t  cycle_cpu_get_a(void* cpu);
+extern uint8_t  cycle_cpu_get_x(void* cpu);
+extern uint8_t  cycle_cpu_get_y(void* cpu);
+extern uint8_t  cycle_cpu_get_sp(void* cpu);
+extern uint8_t  cycle_cpu_get_p(void* cpu);
+extern void* cycle_tick_context_create(void);
+extern void  cycle_tick_context_init(void* context, bool enable_debug, bool enable_validation);
+extern void  cycle_tick_context_destroy(void* context);
+#endif
 
 // Forward declarations for internal functions
 static bus_state_t c64_dual_cpu_execute_validation(c64_dual_cpu_t* dual_cpu, bus_state_t bus_state);
@@ -85,15 +48,18 @@ bool c64_dual_cpu_init(c64_dual_cpu_t* dual_cpu, mos6510_t* legacy_cpu) {
     
     // TODO: Create cycle CPU when implementation is ready
     dual_cpu->cycle_cpu = NULL;
-    
-    // Allocate tick context (cast to opaque pointer)
-    tick_context_t* context = malloc(sizeof(tick_context_t));
-    if (!context) {
+
+#if C64_ENABLE_CYCLE_CPU
+    // Allocate tick context via wrapper (opaque)
+    void* tctx = cycle_tick_context_create();
+    if (!tctx) {
         printf("ERROR: c64_dual_cpu_init - Failed to allocate tick context\n");
         return false;
     }
-    memset(context, 0, sizeof(tick_context_t));
-    dual_cpu->tick_context_data = context;
+    dual_cpu->tick_context_data = tctx;
+#else
+    dual_cpu->tick_context_data = NULL;
+#endif
     
     // Initialize performance metrics
     dual_cpu->legacy_instructions = 0;
@@ -107,8 +73,9 @@ bool c64_dual_cpu_init(c64_dual_cpu_t* dual_cpu, mos6510_t* legacy_cpu) {
     dual_cpu->state_mismatch_detected = false;
     
     // Initialize tick context for cycle CPU
-    tick_context_t* context = (tick_context_t*)dual_cpu->tick_context_data;
-    mos6510_tick_context_init(context, false, false);
+#if C64_ENABLE_CYCLE_CPU
+    cycle_tick_context_init(dual_cpu->tick_context_data, false, false);
+#endif
     
     printf("Dual CPU system initialized successfully (legacy CPU mode)\n");
     return true;
@@ -121,8 +88,17 @@ void c64_dual_cpu_destroy(c64_dual_cpu_t* dual_cpu) {
     dual_cpu->legacy_cpu = NULL;
     
     if (dual_cpu->cycle_cpu) {
-        mos6510_destroy(dual_cpu->cycle_cpu);
-        dual_cpu->cycle_cpu = NULL;
+#if C64_ENABLE_CYCLE_CPU
+    cycle_cpu_destroy(dual_cpu->cycle_cpu);
+#endif
+    dual_cpu->cycle_cpu = NULL;
+    }
+    
+    if (dual_cpu->tick_context_data) {
+#if C64_ENABLE_CYCLE_CPU
+    cycle_tick_context_destroy(dual_cpu->tick_context_data);
+#endif
+    dual_cpu->tick_context_data = NULL;
     }
     
     printf("INFO: Dual CPU system destroyed\n");
@@ -142,12 +118,21 @@ bool c64_dual_cpu_set_mode(c64_dual_cpu_t* dual_cpu, cpu_execution_mode_t new_mo
     
     // Create cycle-accurate CPU if switching to a mode that needs it
     if ((new_mode != CPU_MODE_LEGACY_ONLY) && (!dual_cpu->cycle_cpu)) {
+#if !C64_ENABLE_CYCLE_CPU
+        printf("ERROR: Cycle CPU not enabled in build. Reconfigure with -DC64_ENABLE_CYCLE_CPU=ON.\n");
+        return false;
+#else
         dual_cpu->cycle_cpu = cycle_cpu_create(); // Use wrapper function
         if (!dual_cpu->cycle_cpu) {
             printf("ERROR: Failed to create cycle-accurate CPU for mode switch\n");
             return false;
         }
         // Note: cycle_cpu_create already initializes the CPU
+        if (!dual_cpu->tick_context_data) {
+            dual_cpu->tick_context_data = cycle_tick_context_create();
+            if (dual_cpu->tick_context_data) cycle_tick_context_init(dual_cpu->tick_context_data, false, false);
+        }
+#endif
     }
     
     // Update configuration
@@ -176,8 +161,14 @@ bool c64_dual_cpu_step(c64_dual_cpu_t* dual_cpu) {
             return false;
             
         case CPU_MODE_CYCLE_ONLY:
-            // TODO: Implement cycle CPU stepping when API is available
-            printf("Cycle-only CPU mode not yet implemented\n");
+            // Step cycle CPU when enabled
+#if C64_ENABLE_CYCLE_CPU
+            if (dual_cpu->cycle_cpu) {
+                bool ticked = cycle_cpu_tick(dual_cpu->cycle_cpu, dual_cpu->tick_context_data);
+                if (ticked) dual_cpu->cycle_ticks++;
+                return ticked;
+            }
+#endif
             return false;
             
         case CPU_MODE_VALIDATION:
@@ -232,9 +223,11 @@ bus_state_t c64_dual_cpu_execute(c64_dual_cpu_t* dual_cpu, bus_state_t bus_state
         case CPU_MODE_CYCLE_ONLY:
             // Execute cycle-accurate CPU only
             if (dual_cpu->cycle_cpu) {
-                if (cycle_cpu_tick(dual_cpu->cycle_cpu, (tick_context_t*)dual_cpu->tick_context_data)) {
+#if C64_ENABLE_CYCLE_CPU
+                if (cycle_cpu_tick(dual_cpu->cycle_cpu, dual_cpu->tick_context_data)) {
                     dual_cpu->cycle_ticks++;
                 }
+#endif
             }
             return bus_state;
             
@@ -262,11 +255,13 @@ static bus_state_t c64_dual_cpu_execute_validation(c64_dual_cpu_t* dual_cpu, bus
     }
     
     // Execute cycle-accurate CPU
-    if (dual_cpu->cycle_cpu) {
-        if (cycle_cpu_tick(dual_cpu->cycle_cpu, (tick_context_t*)dual_cpu->tick_context_data)) {
-            dual_cpu->cycle_ticks++;
-        }
-    }
+            if (dual_cpu->cycle_cpu) {
+#if C64_ENABLE_CYCLE_CPU
+                if (cycle_cpu_tick(dual_cpu->cycle_cpu, dual_cpu->tick_context_data)) {
+                    dual_cpu->cycle_ticks++;
+                }
+#endif
+            }
     
     // Perform validation at checkpoints
     if ((dual_cpu->legacy_instructions % dual_cpu->sync_checkpoint_interval) == 0) {
@@ -296,9 +291,11 @@ static bus_state_t c64_dual_cpu_execute_benchmark(c64_dual_cpu_t* dual_cpu, bus_
     
     // Execute cycle-accurate CPU
     if (dual_cpu->cycle_cpu) {
-        if (cycle_cpu_tick(dual_cpu->cycle_cpu, (tick_context_t*)dual_cpu->tick_context_data)) {
+#if C64_ENABLE_CYCLE_CPU
+        if (cycle_cpu_tick(dual_cpu->cycle_cpu, dual_cpu->tick_context_data)) {
             dual_cpu->cycle_ticks++;
         }
+#endif
     }
     
     return bus_state;
@@ -331,11 +328,14 @@ bool c64_dual_cpu_compare_registers(const c64_dual_cpu_t* dual_cpu) {
     uint8_t legacy_sp = dual_cpu->legacy_cpu->base.sp;
     
     // Get cycle CPU registers using wrapper functions
-    uint16_t cycle_pc = cycle_cpu_get_pc(dual_cpu->cycle_cpu);
-    uint8_t cycle_a = cycle_cpu_get_a(dual_cpu->cycle_cpu);
-    uint8_t cycle_x = cycle_cpu_get_x(dual_cpu->cycle_cpu);
-    uint8_t cycle_y = cycle_cpu_get_y(dual_cpu->cycle_cpu);
-    uint8_t cycle_sp = cycle_cpu_get_sp(dual_cpu->cycle_cpu);
+    uint16_t cycle_pc = 0; uint8_t cycle_a = 0, cycle_x = 0, cycle_y = 0, cycle_sp = 0;
+#if C64_ENABLE_CYCLE_CPU
+    cycle_pc = cycle_cpu_get_pc(dual_cpu->cycle_cpu);
+    cycle_a = cycle_cpu_get_a(dual_cpu->cycle_cpu);
+    cycle_x = cycle_cpu_get_x(dual_cpu->cycle_cpu);
+    cycle_y = cycle_cpu_get_y(dual_cpu->cycle_cpu);
+    cycle_sp = cycle_cpu_get_sp(dual_cpu->cycle_cpu);
+#endif
     
     return (legacy_pc == cycle_pc &&
             legacy_a == cycle_a &&
@@ -351,7 +351,10 @@ bool c64_dual_cpu_compare_flags(const c64_dual_cpu_t* dual_cpu) {
     
     // Compare processor status flags
     uint8_t legacy_flags = dual_cpu->legacy_cpu->base.p;
-    uint8_t cycle_flags = cycle_cpu_get_p(dual_cpu->cycle_cpu);
+    uint8_t cycle_flags = 0;
+#if C64_ENABLE_CYCLE_CPU
+    cycle_flags = cycle_cpu_get_p(dual_cpu->cycle_cpu);
+#endif
     
     return (legacy_flags == cycle_flags);
 }
@@ -468,7 +471,9 @@ void c64_dual_cpu_reset(c64_dual_cpu_t* dual_cpu) {
     }
     
     if (dual_cpu->cycle_cpu) {
-        mos6510_reset(dual_cpu->cycle_cpu);
+#if C64_ENABLE_CYCLE_CPU
+        cycle_cpu_reset(dual_cpu->cycle_cpu);
+#endif
     }
     
     // Reset counters

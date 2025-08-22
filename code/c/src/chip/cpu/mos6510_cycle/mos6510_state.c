@@ -1,4 +1,8 @@
 #include "mos6510_state.h"
+#define mos6510_create mos6510_cycle_create
+#define mos6510_destroy mos6510_cycle_destroy
+#define mos6510_init    mos6510_cycle_init
+#define mos6510_reset   mos6510_cycle_reset
 #include "mos6510_registers.h" 
 #include "register_access.h"
 #include <stdlib.h>

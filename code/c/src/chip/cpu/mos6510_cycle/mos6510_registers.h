@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <assert.h>
 
 // MOS6510 Register Array Layout
 // Based on visual6502 internal structure (spec lines 80-97)
@@ -50,25 +51,42 @@ typedef enum {
     REG_CATEGORY_INTERNAL_ALU = 3    // AC, ADD
 } register_category_t;
 
-// Register properties for hardware-accurate behavior
+ // Register properties for hardware-accurate behavior (bit-packed flags)
+ // Flags layout in 'flags' byte:
+ //  - bits 0-1: register_category_t (0..3)
+ //  - bit 4   : address related (cross-cutting; e.g., SP/PCL/PCH)
+ //  - bit 5   : ALU related (cross-cutting; e.g., A/P/SB)
+ #define REG_PROP_CATEGORY_MASK        0x03u  // Mask for register category
+ #define REG_PROP_FLAG_ADDRESS         0x10u  // Set for address calculation registers
+ #define REG_PROP_FLAG_ALU             0x20u  // Set for ALU operation registers
+
+// Helpers to encode/decode category in flags
+#define REG_PROP_CAT(cat) ((uint8_t)((cat) & REG_PROP_CATEGORY_MASK))
+#define REG_PROP_GET_CATEGORY(flags)  ((register_category_t)((flags) & REG_PROP_CATEGORY_MASK))
+#define REG_PROP_SET_CATEGORY(flags, cat) \
+    ( (uint8_t)(((flags) & (uint8_t)~REG_PROP_CATEGORY_MASK) | REG_PROP_CAT(cat)) )
+
 typedef struct {
-    const char* name;               // Human-readable register name
-    register_category_t category;   // Register category
-    bool is_architectural;          // True for user-visible registers
-    bool is_internal_bus;          // True for internal bus registers
-    bool is_address_related;       // True for address calculation registers
-    bool is_alu_related;           // True for ALU operation registers
-    uint8_t reset_value;           // Value after reset
+    const char* name;      // Human-readable register name
+    uint8_t     flags;     // Category (bits 0-1) + property flags (bits 2..)
+    uint8_t     reset_value; // Value after reset
 } register_properties_t;
 
 // Register properties table (defined in corresponding .c file)
 extern const register_properties_t register_properties[MOS6510_REGISTER_COUNT];
 
-// Convenience macros for register classification
-#define IS_ARCHITECTURAL_REG(reg)    (register_properties[reg].is_architectural)
-#define IS_INTERNAL_BUS_REG(reg)     (register_properties[reg].is_internal_bus)
-#define IS_ADDRESS_REG(reg)          (register_properties[reg].is_address_related)
-#define IS_ALU_REG(reg)              (register_properties[reg].is_alu_related)
+ // Convenience macros for register classification (deduplicated with category)
+ #define REG_CATEGORY_OF(reg)         REG_PROP_GET_CATEGORY(register_properties[(reg)].flags)
+ #define IS_ARCHITECTURAL_REG(reg)    (REG_CATEGORY_OF(reg) == REG_CATEGORY_ARCHITECTURAL)
+ // "internal bus" covers internal data + internal address categories
+ #define IS_INTERNAL_BUS_REG(reg)     (REG_CATEGORY_OF(reg) == REG_CATEGORY_INTERNAL_DATA || \
+                                       REG_CATEGORY_OF(reg) == REG_CATEGORY_INTERNAL_ADDR)
+ // Address-related if internal address category OR explicitly flagged (e.g., SP/PCL/PCH)
+ #define IS_ADDRESS_REG(reg)          (REG_CATEGORY_OF(reg) == REG_CATEGORY_INTERNAL_ADDR || \
+                                       (register_properties[(reg)].flags & REG_PROP_FLAG_ADDRESS))
+ // ALU-related if internal ALU category OR explicitly flagged (e.g., A/P/SB)
+ #define IS_ALU_REG(reg)              (REG_CATEGORY_OF(reg) == REG_CATEGORY_INTERNAL_ALU || \
+                                       (register_properties[(reg)].flags & REG_PROP_FLAG_ALU))
 
 // Register validation macros
 #define IS_VALID_REG(reg)            ((reg) < MOS6510_REGISTER_COUNT)
@@ -81,6 +99,11 @@ typedef struct mos6510_state_s mos6510_state_t;
 void mos6510_registers_reset(mos6510_state_t *cpu);
 bool mos6510_registers_validate(const mos6510_state_t *cpu);
 void mos6510_registers_dump(const mos6510_state_t *cpu, char *buffer, size_t buffer_size);
-register_category_t mos6510_register_get_category(uint8_t reg);
+
+// Inline accessor to decode category from the packed flags
+static inline register_category_t mos6510_register_get_category(uint8_t reg) {
+    VALIDATE_REG(reg);
+    return REG_PROP_GET_CATEGORY(register_properties[reg].flags);
+}
 
 #endif // MOS6510_CYCLE_REGISTERS_H
