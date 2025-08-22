@@ -4,6 +4,10 @@
 #include <string.h>
 #include <time.h>
 
+#ifndef C64_ENABLE_CYCLE_CPU
+#define C64_ENABLE_CYCLE_CPU 0
+#endif
+
 #if C64_ENABLE_CYCLE_CPU
 // Cycle CPU wrapper functions implemented in c64_dual_cpu_cycle.c
 extern void* cycle_cpu_create(void);
@@ -146,6 +150,7 @@ bool c64_dual_cpu_set_mode(c64_dual_cpu_t* dual_cpu, cpu_execution_mode_t new_mo
     dual_cpu->validation_failures = 0;
     dual_cpu->consecutive_matches = 0;
     dual_cpu->state_mismatch_detected = false;
+    dual_cpu->last_sync_point = 0;
     
     return true;
 }
@@ -194,6 +199,7 @@ bool c64_dual_cpu_step(c64_dual_cpu_t* dual_cpu) {
                     (dual_cpu->legacy_instructions % dual_cpu->sync_checkpoint_interval) == 0) {
                     if (c64_dual_cpu_validate_state(dual_cpu)) {
                         dual_cpu->consecutive_matches++;
+                        dual_cpu->last_sync_point = dual_cpu->legacy_instructions;
                     } else {
                         dual_cpu->validation_failures++;
                         dual_cpu->consecutive_matches = 0;
@@ -289,12 +295,13 @@ static bus_state_t c64_dual_cpu_execute_validation(c64_dual_cpu_t* dual_cpu, bus
     if ((dual_cpu->legacy_instructions % dual_cpu->sync_checkpoint_interval) == 0) {
         if (c64_dual_cpu_validate_state(dual_cpu)) {
             dual_cpu->consecutive_matches++;
+            dual_cpu->last_sync_point = dual_cpu->legacy_instructions;
         } else {
             dual_cpu->validation_failures++;
             dual_cpu->consecutive_matches = 0;
             dual_cpu->state_mismatch_detected = true;
             
-            printf("WARNING: CPU state validation failed at instruction %llu\n", 
+            printf("WARNING: CPU state validation failed at instruction %llu\n",
                    (unsigned long long)dual_cpu->legacy_instructions);
             c64_dual_cpu_print_state_mismatch(dual_cpu);
         }
@@ -525,7 +532,8 @@ void* c64_dual_cpu_get_active_cpu(const c64_dual_cpu_t* dual_cpu) {
 
 bool c64_dual_cpu_is_using_cycle_cpu(const c64_dual_cpu_t* dual_cpu) {
     if (!dual_cpu) return false;
-    return (dual_cpu->mode == CPU_MODE_CYCLE_ONLY);
+    // Report true whenever the cycle core is active in any mode
+    return (dual_cpu->cycle_cpu != NULL) && (dual_cpu->mode != CPU_MODE_LEGACY_ONLY);
 }
 
 void c64_dual_cpu_reset(c64_dual_cpu_t* dual_cpu) {
@@ -549,4 +557,15 @@ void c64_dual_cpu_reset(c64_dual_cpu_t* dual_cpu) {
     dual_cpu->state_mismatch_detected = false;
     
     printf("INFO: Dual CPU system reset\n");
+}
+
+// Human-readable mode string helper
+const char* c64_dual_cpu_mode_str(cpu_execution_mode_t mode) {
+    switch (mode) {
+        case CPU_MODE_LEGACY_ONLY: return "LEGACY_ONLY";
+        case CPU_MODE_CYCLE_ONLY:  return "CYCLE_ONLY";
+        case CPU_MODE_VALIDATION:  return "VALIDATION";
+        case CPU_MODE_BENCHMARK:   return "BENCHMARK";
+        default:                   return "UNKNOWN";
+    }
 }

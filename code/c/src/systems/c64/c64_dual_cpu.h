@@ -119,6 +119,12 @@ bool c64_dual_cpu_step_instruction(c64_dual_cpu_t* dual_cpu);
  * @return Current execution mode
  */
 cpu_execution_mode_t c64_dual_cpu_get_mode(const c64_dual_cpu_t* dual_cpu);
+/**
+ * Get human-readable name for a CPU execution mode
+ * @param mode CPU execution mode enum
+ * @return Const string like "LEGACY_ONLY", "CYCLE_ONLY", "VALIDATION", "BENCHMARK"
+ */
+const char* c64_dual_cpu_mode_str(cpu_execution_mode_t mode);
 
 /**
  * Execute CPU based on current mode

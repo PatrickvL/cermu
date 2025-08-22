@@ -45,7 +45,7 @@ Checklist
 - [x] Review cycle CPU API for dual-CPU wiring (mos6510_state.h, mos6510_tick.h) and identify call sites in c64_dual_cpu.c
 - [x] Tick cycle CPU in validation/benchmark paths [C.c64_dual_cpu_step()](code/c/src/systems/c64/c64_dual_cpu.c:153), [C.c64_dual_cpu_execute()](code/c/src/systems/c64/c64_dual_cpu.c:209)
 - [x] Print cycle-core state in mismatch printer [C.c64_dual_cpu_print_state_mismatch()](code/c/src/systems/c64/c64_dual_cpu.c:375)
-- [-] Enable and smoke-test CPU_MODE_CYCLE_ONLY path end-to-end
+- [x] Enable and smoke-test CPU_MODE_CYCLE_ONLY path end-to-end
 - [x] Add per-field mismatch diagnostics (which register/flag differs)
 - [ ] Expose cycle CPU perf metrics (ticks/sec) in GUI
 
@@ -179,3 +179,14 @@ c64_dual_cpu_reset()            // Reset cycle CPU
 ---
 
 **Next Action**: Start with Step 1 - Review cycle CPU API and connect to dual CPU framework
+
+## Progress Update (continued) — 2025-08-22
+
+- Added validation checkpoint tracking via `last_sync_point` in [C.c64_dual_cpu_step()](code/c/src/systems/c64/c64_dual_cpu.c:153) and [C.c64_dual_cpu_execute_validation()](code/c/src/systems/c64/c64_dual_cpu.c:272)
+- Guarded build when `C64_ENABLE_CYCLE_CPU` isn’t predefined by adding a default in [code/c/src/systems/c64/c64_dual_cpu.c](code/c/src/systems/c64/c64_dual_cpu.c:1)
+- Broadened cycle-core usage detection in [C.c64_dual_cpu_is_using_cycle_cpu()](code/c/src/systems/c64/c64_dual_cpu.c:497) to report true for any non-legacy mode with an instantiated cycle CPU
+
+Checklist additions
+- [x] Track `last_sync_point` for validation checkpoints
+- [x] Provide default `C64_ENABLE_CYCLE_CPU` compile guard
+- [x] Update `c64_dual_cpu_is_using_cycle_cpu()` semantics
