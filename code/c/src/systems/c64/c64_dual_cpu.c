@@ -173,13 +173,35 @@ bool c64_dual_cpu_step(c64_dual_cpu_t* dual_cpu) {
             
         case CPU_MODE_VALIDATION:
         case CPU_MODE_BENCHMARK:
-            // For validation and benchmark modes, step legacy CPU and compare
+            // For validation and benchmark modes, step legacy CPU and cycle CPU (when available)
             if (dual_cpu->legacy_cpu) {
                 bool result = mos6510_step(dual_cpu->legacy_cpu);
-                dual_cpu->legacy_instructions++;
-                
-                // TODO: Also step cycle CPU and validate when available
-                
+                if (result) {
+                    dual_cpu->legacy_instructions++;
+                }
+
+                // Step cycle-accurate CPU when enabled
+#if C64_ENABLE_CYCLE_CPU
+                if (dual_cpu->cycle_cpu) {
+                    if (cycle_cpu_tick(dual_cpu->cycle_cpu, dual_cpu->tick_context_data)) {
+                        dual_cpu->cycle_ticks++;
+                    }
+                }
+#endif
+
+                // In validation mode, periodically compare state
+                if (dual_cpu->mode == CPU_MODE_VALIDATION &&
+                    (dual_cpu->legacy_instructions % dual_cpu->sync_checkpoint_interval) == 0) {
+                    if (c64_dual_cpu_validate_state(dual_cpu)) {
+                        dual_cpu->consecutive_matches++;
+                    } else {
+                        dual_cpu->validation_failures++;
+                        dual_cpu->consecutive_matches = 0;
+                        dual_cpu->state_mismatch_detected = true;
+                        c64_dual_cpu_print_state_mismatch(dual_cpu);
+                    }
+                }
+
                 return result;
             }
             return false;

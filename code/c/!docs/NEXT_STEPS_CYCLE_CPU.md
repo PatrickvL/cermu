@@ -21,6 +21,25 @@
 - Hardware-accurate timing and behavior
 
 ---
+## Progress Update (2025-08-22)
+
+- Completed register metadata compaction and deduplication:
+  - Packed category + flags into one byte in [C.register_properties_t()](code/c/src/chip/cpu/mos6510_cycle/mos6510_registers.h:73)
+  - Category encoded in bits 0-1 via [C.REG_PROP_CATEGORY_MASK()](code/c/src/chip/cpu/mos6510_cycle/mos6510_registers.h:61)
+  - Removed ARCH/INTERNAL flags duplication; kept cross-cutting flags [C.REG_PROP_FLAG_ADDRESS()](code/c/src/chip/cpu/mos6510_cycle/mos6510_registers.h:62) and [C.REG_PROP_FLAG_ALU()](code/c/src/chip/cpu/mos6510_cycle/mos6510_registers.h:63)
+  - Inline category accessor [C.mos6510_register_get_category()](code/c/src/chip/cpu/mos6510_cycle/mos6510_registers.h:101)
+  - Updated initializer table in [code/c/src/chip/cpu/mos6510_cycle/mos6510_registers.c](code/c/src/chip/cpu/mos6510_cycle/mos6510_registers.c:12)
+
+Migration pattern
+```c
+// c
+// Compose category + cross-cutting flags with ORs
+.flags = REG_PROP_ENCODE_CATEGORY(REG_CATEGORY_INTERNAL_ADDR) | REG_PROP_FLAG_ADDRESS;
+```
+
+Checklist
+- [x] Deduplicate register_properties flags (remove ARCH/INTERNAL duplication, keep ADDRESS/ALU)
+- [-] Review cycle CPU API for dual-CPU wiring (mos6510_state.h, mos6510_tick.h) and identify call sites in c64_dual_cpu.c
 
 ## 🚀 Next Steps (Priority Order)
 
