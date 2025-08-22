@@ -29,6 +29,9 @@
   - Removed ARCH/INTERNAL flags duplication; kept cross-cutting flags [C.REG_PROP_FLAG_ADDRESS()](code/c/src/chip/cpu/mos6510_cycle/mos6510_registers.h:62) and [C.REG_PROP_FLAG_ALU()](code/c/src/chip/cpu/mos6510_cycle/mos6510_registers.h:63)
   - Inline category accessor [C.mos6510_register_get_category()](code/c/src/chip/cpu/mos6510_cycle/mos6510_registers.h:101)
   - Updated initializer table in [code/c/src/chip/cpu/mos6510_cycle/mos6510_registers.c](code/c/src/chip/cpu/mos6510_cycle/mos6510_registers.c:12)
+- Integrated cycle core into dual CPU paths:
+  - Validation/benchmark modes now tick cycle CPU in [C.c64_dual_cpu_step()](code/c/src/systems/c64/c64_dual_cpu.c:153) and [C.c64_dual_cpu_execute()](code/c/src/systems/c64/c64_dual_cpu.c:209)
+  - Checkpoint validation wired; mismatch prints both CPU states in [C.c64_dual_cpu_print_state_mismatch()](code/c/src/systems/c64/c64_dual_cpu.c:375)
 
 Migration pattern
 ```c
@@ -39,7 +42,12 @@ Migration pattern
 
 Checklist
 - [x] Deduplicate register_properties flags (remove ARCH/INTERNAL duplication, keep ADDRESS/ALU)
-- [-] Review cycle CPU API for dual-CPU wiring (mos6510_state.h, mos6510_tick.h) and identify call sites in c64_dual_cpu.c
+- [x] Review cycle CPU API for dual-CPU wiring (mos6510_state.h, mos6510_tick.h) and identify call sites in c64_dual_cpu.c
+- [x] Tick cycle CPU in validation/benchmark paths [C.c64_dual_cpu_step()](code/c/src/systems/c64/c64_dual_cpu.c:153), [C.c64_dual_cpu_execute()](code/c/src/systems/c64/c64_dual_cpu.c:209)
+- [x] Print cycle-core state in mismatch printer [C.c64_dual_cpu_print_state_mismatch()](code/c/src/systems/c64/c64_dual_cpu.c:375)
+- [-] Enable and smoke-test CPU_MODE_CYCLE_ONLY path end-to-end
+- [x] Add per-field mismatch diagnostics (which register/flag differs)
+- [ ] Expose cycle CPU perf metrics (ticks/sec) in GUI
 
 ## 🚀 Next Steps (Priority Order)
 
