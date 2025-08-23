@@ -8,27 +8,18 @@
 // ============================================================================
 // CIMGUI VERSION COMPATIBILITY LAYER
 // ============================================================================
-// This handles API differences between different versions of cimgui/ImGui
-// The original code worked on Linux with an older cimgui version that used
-// ImTextureRef struct, while newer versions use ImTextureID directly.
+// This handles API differences between different versions of cimgui/ImGui.
+// Our vendored cimgui currently uses ImTextureRef in igImage(). We default
+// to that calling convention, but allow opting into ImTextureID via a define.
 
-#ifdef IMGUI_VERSION_NUM
-    // Modern ImGui/cimgui with version information available
+// Default: use ImTextureRef-based API
+#ifndef CIMGUI_IMAGE_USES_ID
+    #define CIMGUI_IMAGE_CALL(tex_id, size, uv0, uv1) \
+        igImage((ImTextureRef){._TexData = NULL, ._TexID = (ImTextureID)(intptr_t)(tex_id)}, size, uv0, uv1)
+#else
+    // Opt-in: direct ImTextureID-based API
     #define CIMGUI_IMAGE_CALL(tex_id, size, uv0, uv1) \
         igImage((ImTextureID)(intptr_t)(tex_id), size, uv0, uv1)
-#else
-    // Legacy cimgui without IMGUI_VERSION_NUM defined
-    // Try to detect if ImTextureRef is available at compile time
-    #ifdef CIMGUI_USE_LEGACY_TEXTURE_REF
-        // Only use ImTextureRef if explicitly requested (for very old cimgui)
-        // Note : Linux build has #ifndef CIMGUI_USE_LEGACY_TEXTURE_API here?
-        #define CIMGUI_IMAGE_CALL(tex_id, size, uv0, uv1) \
-            igImage((ImTextureRef){._TexData = NULL, ._TexID = (ImTextureID)(intptr_t)(tex_id)}, size, uv0, uv1)
-    #else
-        // Default to modern direct ImTextureID approach
-        #define CIMGUI_IMAGE_CALL(tex_id, size, uv0, uv1) \
-            igImage((ImTextureID)(intptr_t)(tex_id), size, uv0, uv1)
-    #endif
 #endif
 
 #include "cimgui_interface.h"
