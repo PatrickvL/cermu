@@ -59,6 +59,25 @@ uint8_t cycle_cpu_get_sp(void* cpu) {
 uint8_t cycle_cpu_get_p(void* cpu) {
     return cpu ? CPU_P((mos6510_state_t*)cpu) : 0;
 }
+// Setters for synchronizing cycle CPU state from legacy CPU
+void cycle_cpu_set_pc(void* cpu, uint16_t pc) {
+    if (cpu) { SET_CPU_PC((mos6510_state_t*)cpu, pc); }
+}
+void cycle_cpu_set_a(void* cpu, uint8_t v) {
+    if (cpu) { SET_CPU_A((mos6510_state_t*)cpu, v); }
+}
+void cycle_cpu_set_x(void* cpu, uint8_t v) {
+    if (cpu) { SET_CPU_X((mos6510_state_t*)cpu, v); }
+}
+void cycle_cpu_set_y(void* cpu, uint8_t v) {
+    if (cpu) { SET_CPU_Y((mos6510_state_t*)cpu, v); }
+}
+void cycle_cpu_set_sp(void* cpu, uint8_t v) {
+    if (cpu) { SET_CPU_SP((mos6510_state_t*)cpu, v); }
+}
+void cycle_cpu_set_p(void* cpu, uint8_t v) {
+    if (cpu) { SET_CPU_P((mos6510_state_t*)cpu, v); }
+}
 
 void* cycle_tick_context_create(void) {
     tick_context_t* ctx = (tick_context_t*)malloc(sizeof(tick_context_t));
