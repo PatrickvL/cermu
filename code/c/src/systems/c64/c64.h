@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include "../../core/aiemuc.h"
 #include "../../core/system.h"
 #include "../../chip/memory/ram.h"
@@ -56,12 +57,16 @@ void c64_system_destroy(c64_t* c64);
 // CPU execution functions
 void c64_cpu_cycle(c64_t* c64);     // Execute CPU (legacy or cycle-accurate based on mode)
 bool c64_cpu_step(c64_t* c64);      // Single instruction step (legacy mode only)
+bool c64_cpu_step_instruction(c64_t* c64); // Explicit single-instruction step
 bus_state_t c64_cpu_tick(c64_t* c64, bus_state_t bus_state); // Single cycle tick (cycle-accurate mode)
 
 // CPU mode management
 bool c64_set_cpu_mode(c64_t* c64, cpu_execution_mode_t mode);
 cpu_execution_mode_t c64_get_cpu_mode(const c64_t* c64);
 bool c64_is_using_cycle_cpu(const c64_t* c64);
+
+// CPU metrics
+void c64_get_cpu_metrics(const c64_t* c64, dual_cpu_metrics_t* metrics);
 
 // Validation configuration
 void c64_set_validation_checkpoint_interval(c64_t* c64, uint64_t interval);
