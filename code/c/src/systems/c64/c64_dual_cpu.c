@@ -176,6 +176,18 @@ bool c64_dual_cpu_set_mode(c64_dual_cpu_t* dual_cpu, cpu_execution_mode_t new_mo
     dual_cpu->consecutive_matches = 0;
     dual_cpu->state_mismatch_detected = false;
     dual_cpu->last_sync_point = 0;
+
+    // Eager one-time sync when entering validation to align initial state
+#if C64_ENABLE_CYCLE_CPU
+    if (dual_cpu->mode == CPU_MODE_VALIDATION && dual_cpu->cycle_cpu && dual_cpu->legacy_cpu) {
+        cycle_cpu_set_pc(dual_cpu->cycle_cpu, dual_cpu->legacy_cpu->base.pc);
+        cycle_cpu_set_a(dual_cpu->cycle_cpu,  dual_cpu->legacy_cpu->base.a);
+        cycle_cpu_set_x(dual_cpu->cycle_cpu,  dual_cpu->legacy_cpu->base.x);
+        cycle_cpu_set_y(dual_cpu->cycle_cpu,  dual_cpu->legacy_cpu->base.y);
+        cycle_cpu_set_sp(dual_cpu->cycle_cpu, dual_cpu->legacy_cpu->base.sp);
+        cycle_cpu_set_p(dual_cpu->cycle_cpu,  dual_cpu->legacy_cpu->base.p);
+    }
+#endif
     
     return true;
 }
@@ -219,10 +231,14 @@ bool c64_dual_cpu_step(c64_dual_cpu_t* dual_cpu) {
                 }
 #endif
 
-                // In validation mode, periodically synchronize state (compare + counters)
-                if (dual_cpu->mode == CPU_MODE_VALIDATION &&
-                    (dual_cpu->legacy_instructions % dual_cpu->sync_checkpoint_interval) == 0) {
-                    (void)c64_dual_cpu_synchronize_state(dual_cpu);
+                // In validation mode, synchronize early and at checkpoints
+                if (dual_cpu->mode == CPU_MODE_VALIDATION) {
+                    // Eager first-sync after the very first instruction to avoid drift from reset semantics
+                    if (dual_cpu->legacy_instructions == 1) {
+                        (void)c64_dual_cpu_synchronize_state(dual_cpu);
+                    } else if ((dual_cpu->legacy_instructions % dual_cpu->sync_checkpoint_interval) == 0) {
+                        (void)c64_dual_cpu_synchronize_state(dual_cpu);
+                    }
                 }
 
                 return result;
@@ -308,7 +324,22 @@ static bus_state_t c64_dual_cpu_execute_validation(c64_dual_cpu_t* dual_cpu, bus
 #endif
             }
     
-    // Perform validation at checkpoints (synchronize state)
+    // Perform early one-time alignment at first instruction, then checkpoint syncs
+#if C64_ENABLE_CYCLE_CPU
+    if (dual_cpu->legacy_instructions == 1) {
+        if (dual_cpu->cycle_cpu && dual_cpu->legacy_cpu) {
+            // Directly align without emitting a validation warning
+            cycle_cpu_set_pc(dual_cpu->cycle_cpu, dual_cpu->legacy_cpu->base.pc);
+            cycle_cpu_set_a(dual_cpu->cycle_cpu,  dual_cpu->legacy_cpu->base.a);
+            cycle_cpu_set_x(dual_cpu->cycle_cpu,  dual_cpu->legacy_cpu->base.x);
+            cycle_cpu_set_y(dual_cpu->cycle_cpu,  dual_cpu->legacy_cpu->base.y);
+            cycle_cpu_set_sp(dual_cpu->cycle_cpu, dual_cpu->legacy_cpu->base.sp);
+            cycle_cpu_set_p(dual_cpu->cycle_cpu,  dual_cpu->legacy_cpu->base.p);
+            dual_cpu->state_mismatch_detected = false;
+            dual_cpu->last_sync_point = dual_cpu->legacy_instructions;
+        }
+    } else
+#endif
     if ((dual_cpu->legacy_instructions % dual_cpu->sync_checkpoint_interval) == 0) {
         (void)c64_dual_cpu_synchronize_state(dual_cpu);
     }
