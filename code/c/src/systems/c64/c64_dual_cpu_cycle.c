@@ -11,10 +11,12 @@
 #include "../../chip/cpu/mos6510_cycle/mos6510_state.h"
 #include "../../chip/cpu/mos6510_cycle/mos6510_tick.h"
 #include "../../chip/cpu/mos6510_cycle/register_access.h"
-
+#include "../../chip/cpu/mos6510_cycle/cpu_config.h"
 // Opaque wrappers used by c64_dual_cpu.c
 void* cycle_cpu_create(void) {
-    return mos6510_create(NULL);
+    // Create MOS6510 cycle-accurate core with 6510 configuration
+    const cpu_config_t* cfg = &CPU_CONFIG_6510;
+    return mos6510_create(cfg);
 }
 
 void cycle_cpu_destroy(void* cpu) {

@@ -325,6 +325,31 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, struct emulation_co
                     gui_emulation_set_speed(emu_context, speed_multiplier);
                 }
             }
+
+            // CPU mode controls
+            igSeparator();
+            if (c64) {
+                int mode_i = (int)c64_get_cpu_mode(c64);
+                const char* cpu_mode_items[] = {
+                    "LEGACY_ONLY", "CYCLE_ONLY", "VALIDATION", "BENCHMARK"
+                };
+                if (igCombo_Str_arr("CPU Mode", &mode_i, cpu_mode_items, 4, -1)) {
+                    c64_set_cpu_mode(c64, (cpu_execution_mode_t)mode_i);
+                }
+
+                // Validation settings
+                if (mode_i == (int)CPU_MODE_VALIDATION) {
+                    uint64_t interval64 = c64_get_validation_checkpoint_interval(c64);
+                    int interval = (int)(interval64 > 100000 ? 100000 : interval64);
+                    if (igSliderInt("Validation interval", &interval, 1, 100000, "%d", ImGuiSliderFlags_None)) {
+                        c64_set_validation_checkpoint_interval(c64, (uint64_t)interval);
+                    }
+                    if (igButton("Validate Now", (ImVec2){0, 0})) {
+                        bool ok = c64_validate_sync(c64);
+                        printf("GUI: Validation %s\n", ok ? "OK" : "FAILED");
+                    }
+                }
+            }
             
             igEndMenu();
         }
@@ -528,23 +553,66 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, struct emulation_co
             igEndMenu();
         }
           // Status bar on the right
-        igSameLine(igGetWindowWidth() - 300, -1.0f);
-        igText("Cycles: %llu", c64 ? c64->total_cycles : 0);
-        igSameLine(0, -1.0f);
-        
-        // Show actual emulation state from context if available
-        if (emu_context) {
-            const char* state_text = 
-                emu_context->current_state == EMU_STATE_RUNNING ? "Running" :
-                emu_context->current_state == EMU_STATE_PAUSED ? "Paused" :
-                emu_context->current_state == EMU_STATE_STEPPING ? "Stepping" :
-                emu_context->current_state == EMU_STATE_STOPPED ? "Stopped" : "Unknown";
-            igText("%s", state_text);
-        } else {
-            igText("%s", gui_state->emulation_running ? "Running" : "Paused");
-        }
-        
-        igEndMainMenuBar();
+         igSameLine(igGetWindowWidth() - 450, -1.0f);
+         igText("Cycles: %llu", c64 ? c64->total_cycles : 0);
+         igSameLine(0, -1.0f);
+
+         // CPU mode + perf metrics (instantaneous)
+         static uint32_t last_metrics_time = 0;
+         static uint64_t last_legacy_instr = 0;
+         static uint64_t last_cycle_ticks = 0;
+         static float legacy_ips = 0.0f;
+         static float cycle_cps = 0.0f;
+
+         if (c64) {
+             dual_cpu_metrics_t m = {0};
+             c64_get_cpu_metrics(c64, &m);
+             uint32_t now = SDL_GetTicks();
+             if (last_metrics_time == 0) {
+                 last_metrics_time = now;
+                 last_legacy_instr = m.legacy_instructions;
+                 last_cycle_ticks = m.cycle_ticks;
+             } else {
+                 uint32_t dt = now - last_metrics_time;
+                 if (dt >= 500) { // update at 2 Hz
+                     uint64_t d_legacy = (m.legacy_instructions >= last_legacy_instr) ? (m.legacy_instructions - last_legacy_instr) : 0;
+                     uint64_t d_cycle  = (m.cycle_ticks >= last_cycle_ticks) ? (m.cycle_ticks - last_cycle_ticks) : 0;
+                     legacy_ips = (float)((double)d_legacy * 1000.0 / (double)dt);
+                     cycle_cps  = (float)((double)d_cycle  * 1000.0 / (double)dt);
+                     last_metrics_time = now;
+                     last_legacy_instr = m.legacy_instructions;
+                     last_cycle_ticks  = m.cycle_ticks;
+                 }
+             }
+
+             cpu_execution_mode_t mode = c64_get_cpu_mode(c64);
+             igText("Mode: %s", c64_dual_cpu_mode_str(mode));
+             igSameLine(0, -1.0f);
+             igText("IPS: %.0f", legacy_ips);
+             if (c64_is_using_cycle_cpu(c64)) {
+                 igSameLine(0, -1.0f);
+                 igText("Cyc/s: %.0f", cycle_cps);
+             }
+             if (mode == CPU_MODE_VALIDATION) {
+                 igSameLine(0, -1.0f);
+                 igText("Val: %u fail, %u ok", m.validation_failures, m.consecutive_matches);
+             }
+             igSameLine(0, -1.0f);
+         }
+
+         // Show actual emulation state from context if available
+         if (emu_context) {
+             const char* state_text =
+                 emu_context->current_state == EMU_STATE_RUNNING ? "Running" :
+                 emu_context->current_state == EMU_STATE_PAUSED ? "Paused" :
+                 emu_context->current_state == EMU_STATE_STEPPING ? "Stepping" :
+                 emu_context->current_state == EMU_STATE_STOPPED ? "Stopped" : "Unknown";
+             igText("%s", state_text);
+         } else {
+             igText("%s", gui_state->emulation_running ? "Running" : "Paused");
+         }
+         
+         igEndMainMenuBar();
     }
 }
 

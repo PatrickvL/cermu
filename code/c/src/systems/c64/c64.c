@@ -350,6 +350,17 @@ bool c64_reload_roms(c64_t* c64, const rom_config_t* rom_config) {
     return true;
 }
 
+// Execute one CPU cycle based on current mode
+void c64_cpu_cycle(c64_t* c64) {
+    if (!c64) return;
+    (void)c64_dual_cpu_step(&c64->dual_cpu);
+}
+
+// Execute one CPU tick with bus state (used by cycle-accurate core)
+bus_state_t c64_cpu_tick(c64_t* c64, bus_state_t bus_state) {
+    if (!c64) return bus_state;
+    return c64_dual_cpu_execute(&c64->dual_cpu, bus_state);
+}
 // Step the CPU using the dual CPU system
 bool c64_cpu_step(c64_t* c64) {
     if (!c64) return false;
@@ -383,4 +394,40 @@ void c64_get_cpu_metrics(const c64_t* c64, dual_cpu_metrics_t* metrics) {
     if (!c64 || !metrics) return;
     
     c64_dual_cpu_get_metrics(&c64->dual_cpu, metrics);
+}
+bool c64_is_using_cycle_cpu(const c64_t* c64) {
+    if (!c64) return false;
+    return c64_dual_cpu_is_using_cycle_cpu(&c64->dual_cpu);
+}
+// Validation configuration wrappers
+void c64_set_validation_checkpoint_interval(c64_t* c64, uint64_t interval) {
+    if (!c64) return;
+    c64_dual_cpu_set_checkpoint_interval(&c64->dual_cpu, interval);
+}
+
+uint64_t c64_get_validation_checkpoint_interval(const c64_t* c64) {
+    if (!c64) return 0;
+    return c64_dual_cpu_get_checkpoint_interval(&c64->dual_cpu);
+}
+
+// Validation control
+bool c64_validate_sync(c64_t* c64) {
+    if (!c64) return false;
+    return c64_dual_cpu_synchronize_state(&c64->dual_cpu);
+}
+
+// Benchmark controls
+void c64_start_benchmark(c64_t* c64) {
+    if (!c64) return;
+    c64_dual_cpu_start_benchmark(&c64->dual_cpu);
+}
+
+void c64_stop_benchmark(c64_t* c64, double elapsed_seconds) {
+    if (!c64) return;
+    c64_dual_cpu_stop_benchmark(&c64->dual_cpu, elapsed_seconds);
+}
+
+void c64_print_benchmark_results(const c64_t* c64) {
+    if (!c64) return;
+    c64_dual_cpu_print_benchmark_results(&c64->dual_cpu);
 }

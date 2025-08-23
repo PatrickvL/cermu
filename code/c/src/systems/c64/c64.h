@@ -63,6 +63,18 @@ bool c64_set_cpu_mode(c64_t* c64, cpu_execution_mode_t mode);
 cpu_execution_mode_t c64_get_cpu_mode(const c64_t* c64);
 bool c64_is_using_cycle_cpu(const c64_t* c64);
 
+// Validation configuration
+void c64_set_validation_checkpoint_interval(c64_t* c64, uint64_t interval);
+uint64_t c64_get_validation_checkpoint_interval(const c64_t* c64);
+
+// Validation control
+bool c64_validate_sync(c64_t* c64);
+
+// Benchmark controls
+void c64_start_benchmark(c64_t* c64);
+void c64_stop_benchmark(c64_t* c64, double elapsed_seconds);
+void c64_print_benchmark_results(const c64_t* c64);
+
 // Ticks all non-CPU chips once to complete a cycle.
 void c64_non_cpu_cycle(void* c64_ptr);
 bool c64_pla_maps_generate(c64_t* c64);  // PLA memory mapping generation
