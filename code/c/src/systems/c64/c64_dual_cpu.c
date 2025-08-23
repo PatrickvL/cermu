@@ -20,6 +20,13 @@ extern uint8_t  cycle_cpu_get_x(void* cpu);
 extern uint8_t  cycle_cpu_get_y(void* cpu);
 extern uint8_t  cycle_cpu_get_sp(void* cpu);
 extern uint8_t  cycle_cpu_get_p(void* cpu);
+// Synchronization setters
+extern void  cycle_cpu_set_pc(void* cpu, uint16_t pc);
+extern void  cycle_cpu_set_a(void* cpu, uint8_t v);
+extern void  cycle_cpu_set_x(void* cpu, uint8_t v);
+extern void  cycle_cpu_set_y(void* cpu, uint8_t v);
+extern void  cycle_cpu_set_sp(void* cpu, uint8_t v);
+extern void  cycle_cpu_set_p(void* cpu, uint8_t v);
 extern void* cycle_tick_context_create(void);
 extern void  cycle_tick_context_init(void* context, bool enable_debug, bool enable_validation);
 extern void  cycle_tick_context_destroy(void* context);
@@ -131,13 +138,31 @@ bool c64_dual_cpu_set_mode(c64_dual_cpu_t* dual_cpu, cpu_execution_mode_t new_mo
             printf("ERROR: Failed to create cycle-accurate CPU for mode switch\n");
             return false;
         }
-        // Note: cycle_cpu_create already initializes the CPU
+        // Ensure cycle CPU is brought into reset state to match legacy on mode entry
+        cycle_cpu_reset(dual_cpu->cycle_cpu);
+
+        // Allocate/init tick context if needed
         if (!dual_cpu->tick_context_data) {
             dual_cpu->tick_context_data = cycle_tick_context_create();
-            if (dual_cpu->tick_context_data) cycle_tick_context_init(dual_cpu->tick_context_data, false, false);
+        }
+        if (dual_cpu->tick_context_data) {
+            // Reinitialize context with validation flag reflecting the new mode
+            cycle_tick_context_init(dual_cpu->tick_context_data, false, (new_mode == CPU_MODE_VALIDATION));
         }
 #endif
     }
+
+#if C64_ENABLE_CYCLE_CPU
+    // Initial register sync: align cycle CPU to legacy CPU state
+    if (dual_cpu->cycle_cpu && dual_cpu->legacy_cpu) {
+        cycle_cpu_set_pc(dual_cpu->cycle_cpu, dual_cpu->legacy_cpu->base.pc);
+        cycle_cpu_set_a(dual_cpu->cycle_cpu,  dual_cpu->legacy_cpu->base.a);
+        cycle_cpu_set_x(dual_cpu->cycle_cpu,  dual_cpu->legacy_cpu->base.x);
+        cycle_cpu_set_y(dual_cpu->cycle_cpu,  dual_cpu->legacy_cpu->base.y);
+        cycle_cpu_set_sp(dual_cpu->cycle_cpu, dual_cpu->legacy_cpu->base.sp);
+        cycle_cpu_set_p(dual_cpu->cycle_cpu,  dual_cpu->legacy_cpu->base.p);
+    }
+#endif
     
     // Update configuration
     dual_cpu->mode = new_mode;
@@ -573,6 +598,18 @@ bool c64_dual_cpu_synchronize_state(c64_dual_cpu_t* dual_cpu) {
         printf("WARNING: c64_dual_cpu_synchronize_state: state mismatch at instruction %llu\n",
                (unsigned long long)dual_cpu->legacy_instructions);
         c64_dual_cpu_print_state_mismatch(dual_cpu);
+
+        // Bring cycle CPU in sync with legacy to continue validation meaningfully
+#if C64_ENABLE_CYCLE_CPU
+        if (dual_cpu->cycle_cpu && dual_cpu->legacy_cpu) {
+            cycle_cpu_set_pc(dual_cpu->cycle_cpu, dual_cpu->legacy_cpu->base.pc);
+            cycle_cpu_set_a(dual_cpu->cycle_cpu,  dual_cpu->legacy_cpu->base.a);
+            cycle_cpu_set_x(dual_cpu->cycle_cpu,  dual_cpu->legacy_cpu->base.x);
+            cycle_cpu_set_y(dual_cpu->cycle_cpu,  dual_cpu->legacy_cpu->base.y);
+            cycle_cpu_set_sp(dual_cpu->cycle_cpu, dual_cpu->legacy_cpu->base.sp);
+            cycle_cpu_set_p(dual_cpu->cycle_cpu,  dual_cpu->legacy_cpu->base.p);
+        }
+#endif
     }
     return ok;
 }
