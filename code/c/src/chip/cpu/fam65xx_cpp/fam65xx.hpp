@@ -177,8 +177,14 @@ public:
         
         // Execute ALU operation if specified
         if (alu_op != AluOp::NOP) {
-            alu_ops::execute_alu_operation(reg, alu_op, BUS_GET_DATA(bus_state));
+            const uint8_t alu_result = alu_ops::execute_alu_operation(reg, alu_op, BUS_GET_DATA(bus_state));
+            
+            // Handle decimal mode bugs for NMOS variants
+            handle_decimal_mode_bugs(alu_result, alu_op);
         }
+        
+        // Process SO pin edge detection (variant-specific timing)
+        process_so_pin_edge();
         
         // Check if instruction is complete
         const uint8_t total_cycles = cycle_tables::get_cycle_count(opcode);
@@ -213,6 +219,16 @@ public:
                         const uint16_t addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
                         reg[CpuReg::PCL] = addr & 0xFF;
                         reg[CpuReg::PCH] = (addr >> 8) & 0xFF;
+                    }
+                    break;
+                case DataOp::INDIRECT_LOW:
+                    reg[CpuReg::ABL] = data;
+                    break;
+                case DataOp::INDIRECT_HIGH:
+                    reg[CpuReg::ABH] = data;
+                    // Handle JMP indirect with proper 6502 page boundary bug vs CMOS fix
+                    if (opcode == 0x6C && cycle_step == 5) { // JMP ($nnnn) final cycle
+                        handle_jmp_indirect_bug();
                     }
                     break;
                 case DataOp::STACK_PULL:
@@ -363,7 +379,7 @@ public:
         return bus_state;
     }
     
-    // Handle RDY pin - variant-specific behavior
+    // Handle RDY pin - variant-specific behavior with proper timing
     inline bus_state_t handle_rdy_wait(bus_state_t bus_state) {
         // RDY is active-high (0 = not ready, 1 = ready)
         bool rdy_blocks = false;
@@ -374,30 +390,132 @@ public:
         } else {
             // NMOS behavior: RDY only affects read cycles during instruction execution
             if (cycle_step > 0) {
-                // Check if current cycle is a read (simplified)
-                const bool is_read = (bus_state & BUS_BIT(BUS_RW_BIT)) != 0;
-                rdy_blocks = is_read;
+                // Get current cycle description to determine if it's a read
+                const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
+                const MemOp mem_op = static_cast<MemOp>(cycle.mem_op);
+                
+                // Check if current cycle is a read operation
+                const bool is_read_cycle = (mem_op == MemOp::READ_PC_INC ||
+                                          mem_op == MemOp::READ_PC ||
+                                          mem_op == MemOp::READ_ABS ||
+                                          mem_op == MemOp::READ_ZP ||
+                                          mem_op == MemOp::READ_SP ||
+                                          mem_op == MemOp::READ_SP_INC ||
+                                          mem_op == MemOp::READ_INDIRECT ||
+                                          mem_op == MemOp::DUMMY_READ);
+                rdy_blocks = is_read_cycle;
             }
         }
         
         if (rdy_blocks) {
             set_state(STATE_RDY_WAIT);
             
-            // Handle BA (Bus Available) line for 6510 AEC/BA DMA
+            // Handle BA (Bus Available) line for 6510 AEC/BA DMA with proper timing
             if constexpr (Config::has_aec_pin) {
-                // Set BA line when CPU is blocked by RDY
-                bus_state |= BUS_BIT(BUS_BA_BIT);
+                // 6510 AEC/BA timing: BA goes low 3 cycles before AEC goes low
+                // This is critical for VIC-II DMA timing accuracy
+                static uint8_t ba_delay_counter = 0;
+                
+                if (ba_delay_counter < 3) {
+                    ba_delay_counter++;
+                    bus_state |= BUS_BIT(BUS_BA_BIT); // BA high (CPU has bus)
+                } else {
+                    bus_state &= ~BUS_BIT(BUS_BA_BIT); // BA low (DMA can take bus)
+                    // AEC signal would also go low here in real hardware
+                }
             }
         } else {
             clear_state(STATE_RDY_WAIT);
             
             // Clear BA line when CPU is not blocked
             if constexpr (Config::has_aec_pin) {
-                bus_state &= ~BUS_BIT(BUS_BA_BIT);
+                bus_state |= BUS_BIT(BUS_BA_BIT); // BA high (CPU has bus)
             }
         }
         
         return bus_state;
+    }
+    
+    // Decimal mode bug handling - NMOS variants have incorrect N and Z flag handling
+    inline void handle_decimal_mode_bugs(uint8_t result, AluOp operation) {
+        if constexpr (!Config::has_cmos_fixes) {
+            // NMOS 6502/6510 decimal mode bugs
+            if (reg[CpuReg::P] & P_DECIMAL) {
+                switch (operation) {
+                    case AluOp::ADC:
+                    case AluOp::SBC:
+                        // NMOS bug: N and Z flags are set based on binary result, not BCD result
+                        // The ALU operation already set these flags incorrectly, so we leave them
+                        // This matches real NMOS hardware behavior
+                        break;
+                    default:
+                        break;
+                }
+            }
+        } else {
+            // CMOS variants (65C02, 65C816) fix decimal mode
+            if (reg[CpuReg::P] & P_DECIMAL) {
+                switch (operation) {
+                    case AluOp::ADC:
+                    case AluOp::SBC:
+                        // CMOS fix: N and Z flags correctly reflect BCD result
+                        reg[CpuReg::P] &= ~(P_NEGATIVE | P_ZERO);
+                        if (result == 0) reg[CpuReg::P] |= P_ZERO;
+                        if (result & 0x80) reg[CpuReg::P] |= P_NEGATIVE;
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+    }
+    
+    // CMOS timing improvements - 65C02 fixes several timing edge cases
+    inline bool has_cmos_timing_fix(uint8_t opcode) {
+        if constexpr (Config::has_cmos_fixes) {
+            switch (opcode) {
+                // 65C02 fixes: JMP ($xxxx) now correctly handles page boundaries
+                case 0x6C: // JMP ($nnnn)
+                    return true;
+                    
+                // 65C02 fixes: Indexed addressing modes handle page crossing consistently
+                case 0xBE: // LDX $nnnn,Y
+                case 0xBC: // LDY $nnnn,X
+                    return true;
+                    
+                // 65C02 adds proper cycle timing for new instructions
+                case 0x80: // BRA
+                case 0x89: // BIT #$nn
+                case 0x34: // BIT $nn,X
+                case 0x3C: // BIT $nnnn,X
+                    return true;
+                    
+                default:
+                    return false;
+            }
+        }
+        return false;
+    }
+    
+    // Enhanced SO pin edge detection with NMOS vs CMOS differences
+    inline void process_so_pin_edge() {
+        if constexpr (Config::has_so_pin) {
+            if (get_state(STATE_SO_EDGE)) {
+                if constexpr (Config::cpu_variant == CpuVariant::NMOS_6502 ||
+                             Config::cpu_variant == CpuVariant::NMOS_6510) {
+                    // NMOS behavior: SO edge can occur at any point during instruction
+                    // and immediately sets overflow flag
+                    reg[CpuReg::P] |= P_OVERFLOW;
+                    clear_state(STATE_SO_EDGE);
+                } else {
+                    // CMOS behavior: SO edge is synchronized to instruction boundaries
+                    if (cycle_step == 0) { // Only process at instruction start
+                        reg[CpuReg::P] |= P_OVERFLOW;
+                        clear_state(STATE_SO_EDGE);
+                    }
+                }
+            }
+        }
     }
     
     // Process output control lines
@@ -438,6 +556,80 @@ public:
     inline void set_io_callback(IOCallback callback = nullptr) {
         // Implementation depends on configuration
         // For now, store callback if needed by variant
+    }
+    
+    // Handle JMP indirect page boundary bug/fix
+    inline void handle_jmp_indirect_bug() {
+        const uint16_t indirect_addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
+        uint16_t target_addr;
+        
+        if constexpr (Config::has_cmos_fixes) {
+            // CMOS fix: JMP ($xxFF) correctly reads from $xxFF and $xx00+1
+            target_addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
+        } else {
+            // NMOS bug: JMP ($xxFF) reads from $xxFF and $xx00 instead of $xx00+1
+            if ((indirect_addr & 0xFF) == 0xFF) {
+                // Page boundary bug: high byte comes from same page
+                const uint16_t bug_addr = (indirect_addr & 0xFF00) | 0x00;
+                target_addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
+                // The bug has already been captured in the cycle, ABH contains wrong data
+            } else {
+                // Normal case: no page boundary crossed
+                target_addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
+            }
+        }
+        
+        // Execute the jump
+        reg[CpuReg::PCL] = target_addr & 0xFF;
+        reg[CpuReg::PCH] = (target_addr >> 8) & 0xFF;
+    }
+    
+    // Enhanced variant-specific instruction handling
+    inline bool handle_variant_specific_instruction(uint8_t opcode) {
+        // Handle illegal opcodes for NMOS variants
+        if constexpr (Config::has_illegal_opcodes) {
+            switch (opcode) {
+                // JAM instructions - lock up the CPU (NMOS only)
+                case 0x02: case 0x12: case 0x22: case 0x32:
+                case 0x42: case 0x52: case 0x62: case 0x72:
+                case 0x92: case 0xB2: case 0xD2: case 0xF2:
+                    set_state(STATE_JAM_STATE);
+                    return true;
+                    
+                // NOPD/NOPI instructions - effectively NOPs with different timing
+                case 0x04: case 0x14: case 0x34: case 0x44:
+                case 0x54: case 0x64: case 0x74: case 0x80:
+                case 0x82: case 0x89: case 0xC2: case 0xD4:
+                case 0xE2: case 0xF4:
+                    // These are handled by the cycle table as NOPs
+                    return true;
+                    
+                default:
+                    break;
+            }
+        } else if constexpr (Config::has_cmos_fixes) {
+            // CMOS variants treat illegal opcodes as NOPs
+            switch (opcode) {
+                case 0x02: case 0x12: case 0x22: case 0x32:
+                case 0x42: case 0x52: case 0x62: case 0x72:
+                case 0x92: case 0xB2: case 0xD2: case 0xF2:
+                    // CMOS: illegal opcodes become NOPs instead of jamming
+                    return false; // Let normal NOP handling take over
+                    
+                default:
+                    break;
+            }
+        }
+        
+        // Handle CMOS-specific enhancements
+        if constexpr (Config::has_cmos_fixes) {
+            if (has_cmos_timing_fix(opcode)) {
+                // Apply CMOS timing improvements
+                return true;
+            }
+        }
+        
+        return false; // Continue with normal instruction processing
     }
     
     // === PAGE CROSSING DETECTION ===

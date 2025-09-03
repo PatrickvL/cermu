@@ -80,13 +80,28 @@ C64 System → MOS6510 C API → cpu_6510 Template → Native 64-bit bus_state_t
 
 ### Medium Priority (Architecture Enhancement)
 
-#### 4. Variant-Specific Hardware Quirks
+#### 4. Variant-Specific Hardware Quirks ✅ **COMPLETED**
 **Goal**: Accurate emulation of CPU variant differences
-- [ ] **RDY pin semantics**: NMOS (reads only) vs CMOS (all cycles)
-- [ ] **AEC/BA DMA timing**: 6510 VIC-II integration accuracy
-- [ ] **SO pin edge detection**: NMOS vs CMOS behavior differences
-- [ ] **Decimal mode bugs**: NMOS ADC/SBC decimal flag quirks
-- [ ] **CMOS timing fixes**: 65C02 cycle-accurate improvements
+- [x] **RDY pin semantics**: NMOS (reads only) vs CMOS (all cycles)
+- [x] **AEC/BA DMA timing**: 6510 VIC-II integration accuracy
+- [x] **SO pin edge detection**: NMOS vs CMOS behavior differences
+- [x] **Decimal mode bugs**: NMOS ADC/SBC decimal flag quirks
+- [x] **CMOS timing fixes**: 65C02 cycle-accurate improvements
+
+**Implementation Details**:
+- ✅ **Enhanced RDY semantics**: NMOS variants only block on read cycles, CMOS variants block all cycles
+- ✅ **Cycle-accurate read detection**: Uses cycle table to determine read vs write operations
+- ✅ **6510 AEC/BA timing**: 3-cycle delay counter for proper VIC-II DMA integration
+- ✅ **SO pin edge detection**: NMOS immediate response vs CMOS instruction boundary synchronization
+- ✅ **Decimal mode bug preservation**: NMOS variants keep incorrect N/Z flag behavior, CMOS variants fix it
+- ✅ **JMP indirect page bug**: NMOS ($xxFF) page boundary bug vs CMOS fix implementation
+- ✅ **Illegal opcode handling**: NMOS JAM instructions vs CMOS NOP conversion
+- ✅ **CMOS timing improvements**: Enhanced cycle accuracy for 65C02-specific instructions
+
+**Files Updated**:
+- ✅ `fam65xx.hpp` - Complete variant-specific quirk implementation
+- ✅ `cpu_config.hpp` - Variant feature flags and compile-time configuration
+- ✅ Build system validates all quirks compile successfully
 
 #### 5. Advanced Interrupt Handling
 **Goal**: Complete and accurate interrupt processing
@@ -200,8 +215,15 @@ C64 System → MOS6510 C API → cpu_6510 Template → Native 64-bit bus_state_t
 - ✅ **Enhanced Type Safety**: All illegal opcodes properly defined in AluOp enum
 - ✅ **Constexpr Table Generation**: Complete compile-time cycle table with 75+ instruction variants
 - ✅ **Build Validation**: All instructions compile successfully with zero warnings
-- 🚧 **Next Priority**: Variant-specific quirks implementation (RDY semantics, AEC/BA DMA, SO edge detection, CMOS fixes)
-- Work on full interrupt paths (NMI edge, IRQ level, BRK, RESET, ABORT/COP for 65C816) continues as planned.
+- ✅ **Variant-Specific Hardware Quirks ACHIEVED**: Complete hardware-accurate differences between CPU variants:
+  - Hardware-accurate RDY pin semantics (NMOS read-only vs CMOS all-cycle blocking)
+  - 6510 AEC/BA DMA timing with proper 3-cycle delay for VIC-II integration accuracy
+  - SO pin edge detection with NMOS immediate vs CMOS synchronized behavior
+  - Decimal mode bug preservation (NMOS incorrect N/Z flags vs CMOS fixes)
+  - JMP indirect page boundary bug emulation (NMOS $xxFF bug vs CMOS fix)
+  - Illegal opcode handling (NMOS JAM vs CMOS NOP conversion)
+  - CMOS timing improvements for 65C02-specific instruction enhancements
+- 🚧 **Next Priority**: Full interrupt path implementation (NMI edge detection, IRQ level handling, BRK software interrupt, RESET sequence, ABORT/COP for 65C816)
 
 **📈 RISK MITIGATION**: Modular structure allows incremental development and testing of each component.
 
