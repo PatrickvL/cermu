@@ -421,6 +421,233 @@ public:
         }
     }
 
+    // Complete addressing modes for STA operations
+    static constexpr cycle_desc_t make_sta_zpx(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::ADDR_ADD_X, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::WRITE_ZP, DataOp::STORE_A, AluOp::NOP);
+            default: return make_nop();
+        }
+    }
+
+    static constexpr cycle_desc_t make_sta_absx(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::READ_ABS, DataOp::ADDR_ADD_X, AluOp::NOP); // Always read first (6502 quirk)
+            case 4: return CD_MAKE(MemOp::WRITE_ABS, DataOp::STORE_A, AluOp::NOP);
+            default: return make_nop();
+        }
+    }
+
+    static constexpr cycle_desc_t make_sta_absy(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::READ_ABS, DataOp::ADDR_ADD_Y, AluOp::NOP); // Always read first (6502 quirk)
+            case 4: return CD_MAKE(MemOp::WRITE_ABS, DataOp::STORE_A, AluOp::NOP);
+            default: return make_nop();
+        }
+    }
+
+    static constexpr cycle_desc_t make_sta_indx(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::ADDR_ADD_X, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_LOW, AluOp::NOP);
+            case 4: return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_HIGH, AluOp::NOP);
+            case 5: return CD_MAKE(MemOp::WRITE_ABS, DataOp::STORE_A, AluOp::NOP);
+            default: return make_nop();
+        }
+    }
+
+    static constexpr cycle_desc_t make_sta_indy(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_LOW, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_HIGH, AluOp::NOP);
+            case 4: return CD_MAKE(MemOp::READ_ABS, DataOp::ADDR_ADD_Y, AluOp::NOP); // Always read first (6502 quirk)
+            case 5: return CD_MAKE(MemOp::WRITE_ABS, DataOp::STORE_A, AluOp::NOP);
+            default: return make_nop();
+        }
+    }
+
+    // Complete addressing modes for STX/STY
+    static constexpr cycle_desc_t make_stx_zp(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        return CD_MAKE(MemOp::WRITE_ZP, DataOp::STORE_X, AluOp::NOP);
+    }
+
+    static constexpr cycle_desc_t make_stx_zpy(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::ADDR_ADD_Y, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::WRITE_ZP, DataOp::STORE_X, AluOp::NOP);
+            default: return make_nop();
+        }
+    }
+
+    static constexpr cycle_desc_t make_stx_abs(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
+        return CD_MAKE(MemOp::WRITE_ABS, DataOp::STORE_X, AluOp::NOP);
+    }
+
+    static constexpr cycle_desc_t make_sty_zp(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        return CD_MAKE(MemOp::WRITE_ZP, DataOp::STORE_Y, AluOp::NOP);
+    }
+
+    static constexpr cycle_desc_t make_sty_zpx(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::ADDR_ADD_X, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::WRITE_ZP, DataOp::STORE_Y, AluOp::NOP);
+            default: return make_nop();
+        }
+    }
+
+    static constexpr cycle_desc_t make_sty_abs(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
+        return CD_MAKE(MemOp::WRITE_ABS, DataOp::STORE_Y, AluOp::NOP);
+    }
+
+    // Complete addressing modes for ALU operations
+    static constexpr cycle_desc_t make_adc_zp(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        return CD_MAKE(MemOp::READ_ZP, DataOp::ALU, AluOp::ADC);
+    }
+
+    static constexpr cycle_desc_t make_adc_abs(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
+        return CD_MAKE(MemOp::READ_ABS, DataOp::ALU, AluOp::ADC);
+    }
+
+    static constexpr cycle_desc_t make_sbc_imm() { return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ALU, AluOp::SBC); }
+    static constexpr cycle_desc_t make_sbc_zp(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        return CD_MAKE(MemOp::READ_ZP, DataOp::ALU, AluOp::SBC);
+    }
+
+    static constexpr cycle_desc_t make_sbc_abs(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
+        return CD_MAKE(MemOp::READ_ABS, DataOp::ALU, AluOp::SBC);
+    }
+
+    // Indirect JMP - 5 cycles
+    static constexpr cycle_desc_t make_jmp_ind(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::READ_ABS, DataOp::INDIRECT_LOW, AluOp::NOP);
+            case 4: return CD_MAKE(MemOp::READ_ABS, DataOp::INDIRECT_HIGH, AluOp::NOP); // Note: 6502 bug with page boundary
+            default: return CD_MAKE(MemOp::NOP, DataOp::JMP, AluOp::NOP);
+        }
+    }
+
+    // Major illegal opcodes (NMOS 6502)
+    static constexpr cycle_desc_t make_sax_zp(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        return CD_MAKE(MemOp::WRITE_ZP, DataOp::ILLEGAL_COMBO, AluOp::SAX);
+    }
+
+    static constexpr cycle_desc_t make_dcp_zp(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::TEMP_STORE, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_STORE, AluOp::NOP);
+            case 4: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_MODIFY, AluOp::DCP); // DEC then CMP
+            default: return make_nop();
+        }
+    }
+
+    static constexpr cycle_desc_t make_isc_zp(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::TEMP_STORE, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_STORE, AluOp::NOP);
+            case 4: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_MODIFY, AluOp::ISC); // INC then SBC
+            default: return make_nop();
+        }
+    }
+
+    static constexpr cycle_desc_t make_slo_zp(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::TEMP_STORE, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_STORE, AluOp::NOP);
+            case 4: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_MODIFY, AluOp::SLO); // ASL then ORA
+            default: return make_nop();
+        }
+    }
+
+    static constexpr cycle_desc_t make_rla_zp(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::TEMP_STORE, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_STORE, AluOp::NOP);
+            case 4: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_MODIFY, AluOp::RLA); // ROL then AND
+            default: return make_nop();
+        }
+    }
+
+    static constexpr cycle_desc_t make_sre_zp(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::TEMP_STORE, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_STORE, AluOp::NOP);
+            case 4: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_MODIFY, AluOp::SRE); // LSR then EOR
+            default: return make_nop();
+        }
+    }
+
+    static constexpr cycle_desc_t make_rra_zp(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::TEMP_STORE, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_STORE, AluOp::NOP);
+            case 4: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_MODIFY, AluOp::RRA); // ROR then ADC
+            default: return make_nop();
+        }
+    }
+
+    // 65C02 additional instructions
+    static constexpr cycle_desc_t make_tsb_zp(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::TEMP_STORE, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_STORE, AluOp::NOP);
+            case 4: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_MODIFY, AluOp::TSB); // Test and set bits
+            default: return make_nop();
+        }
+    }
+
+    static constexpr cycle_desc_t make_trb_zp(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::TEMP_STORE, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_STORE, AluOp::NOP);
+            case 4: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_MODIFY, AluOp::TRB); // Test and reset bits
+            default: return make_nop();
+        }
+    }
+
+    // BIT instruction variations
+    static constexpr cycle_desc_t make_bit_zp(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        return CD_MAKE(MemOp::READ_ZP, DataOp::ALU, AluOp::BIT);
+    }
+
+    static constexpr cycle_desc_t make_bit_abs(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
+        return CD_MAKE(MemOp::READ_ABS, DataOp::ALU, AluOp::BIT);
+    }
+
     // Main cycle table lookup
     static constexpr cycle_desc_t get_cycle(uint8_t opcode, uint8_t cycle) {
         constexpr auto cycle_table = []() {
@@ -514,6 +741,44 @@ public:
                     case 0xA1: table[i] = make_lda_indx(cycle); break;    // LDA ($nn,X)
                     case 0xB1: table[i] = make_lda_indy(cycle); break;    // LDA ($nn),Y
                     
+                    // Complete STA addressing modes
+                    case 0x95: table[i] = make_sta_zpx(cycle); break;     // STA $nn,X
+                    case 0x9D: table[i] = make_sta_absx(cycle); break;    // STA $nnnn,X
+                    case 0x99: table[i] = make_sta_absy(cycle); break;    // STA $nnnn,Y
+                    case 0x81: table[i] = make_sta_indx(cycle); break;    // STA ($nn,X)
+                    case 0x91: table[i] = make_sta_indy(cycle); break;    // STA ($nn),Y
+                    
+                    // STX/STY addressing modes
+                    case 0x86: table[i] = make_stx_zp(cycle); break;      // STX $nn
+                    case 0x96: table[i] = make_stx_zpy(cycle); break;     // STX $nn,Y
+                    case 0x8E: table[i] = make_stx_abs(cycle); break;     // STX $nnnn
+                    case 0x84: table[i] = make_sty_zp(cycle); break;      // STY $nn
+                    case 0x94: table[i] = make_sty_zpx(cycle); break;     // STY $nn,X
+                    case 0x8C: table[i] = make_sty_abs(cycle); break;     // STY $nnnn
+                    
+                    // Complete ADC/SBC addressing modes
+                    case 0x65: table[i] = make_adc_zp(cycle); break;      // ADC $nn
+                    case 0x6D: table[i] = make_adc_abs(cycle); break;     // ADC $nnnn
+                    case 0xE9: table[i] = make_sbc_imm(); break;          // SBC #$nn
+                    case 0xE5: table[i] = make_sbc_zp(cycle); break;      // SBC $nn
+                    case 0xED: table[i] = make_sbc_abs(cycle); break;     // SBC $nnnn
+                    
+                    // Indirect JMP
+                    case 0x6C: table[i] = make_jmp_ind(cycle); break;     // JMP ($nnnn)
+                    
+                    // BIT instruction
+                    case 0x24: table[i] = make_bit_zp(cycle); break;      // BIT $nn
+                    case 0x2C: table[i] = make_bit_abs(cycle); break;     // BIT $nnnn
+                    
+                    // Major illegal opcodes (NMOS 6502)
+                    case 0x87: table[i] = make_sax_zp(cycle); break;      // SAX $nn
+                    case 0xC7: table[i] = make_dcp_zp(cycle); break;      // DCP $nn
+                    case 0xE7: table[i] = make_isc_zp(cycle); break;      // ISC $nn
+                    case 0x07: table[i] = make_slo_zp(cycle); break;      // SLO $nn
+                    case 0x27: table[i] = make_rla_zp(cycle); break;      // RLA $nn
+                    case 0x47: table[i] = make_sre_zp(cycle); break;      // SRE $nn
+                    case 0x67: table[i] = make_rra_zp(cycle); break;      // RRA $nn
+                    
                     // 65C02 specific instructions (will be NOP on NMOS)
                     case 0x80: table[i] = make_bra(cycle); break;         // BRA (65C02)
                     case 0xDA: table[i] = make_phx(cycle); break;         // PHX (65C02)
@@ -522,6 +787,8 @@ public:
                     case 0x7A: table[i] = make_ply(cycle); break;         // PLY (65C02)
                     case 0x64: table[i] = make_stz_zp(cycle); break;      // STZ $nn (65C02)
                     case 0x9C: table[i] = make_stz_abs(cycle); break;     // STZ $nnnn (65C02)
+                    case 0x04: table[i] = make_tsb_zp(cycle); break;      // TSB $nn (65C02)
+                    case 0x14: table[i] = make_trb_zp(cycle); break;      // TRB $nn (65C02)
                     
                     default: table[i] = make_nop(); break;                // Default to NOP
                 }
@@ -586,7 +853,13 @@ public:
             case 0xA6:   // LDX $nn
             case 0xA4:   // LDY $nn
             case 0x85:   // STA $nn
+            case 0x86:   // STX $nn
+            case 0x84:   // STY $nn
+            case 0x65:   // ADC $nn
+            case 0xE5:   // SBC $nn
+            case 0x24:   // BIT $nn
             case 0xA7:   // LAX $nn (illegal)
+            case 0x87:   // SAX $nn (illegal)
             case 0x48:   // PHA
             case 0x68:   // PLA
             case 0x08:   // PHP
@@ -601,11 +874,19 @@ public:
             // Zero page indexed instructions - 4 cycles
             case 0xB5:   // LDA $nn,X
             case 0xB6:   // LDX $nn,Y
+            case 0x95:   // STA $nn,X
+            case 0x96:   // STX $nn,Y
+            case 0x94:   // STY $nn,X
                 return 4;
                 
             // Absolute instructions - 4 cycles
             case 0xAD:   // LDA $nnnn
             case 0x8D:   // STA $nnnn
+            case 0x8E:   // STX $nnnn
+            case 0x8C:   // STY $nnnn
+            case 0x6D:   // ADC $nnnn
+            case 0xED:   // SBC $nnnn
+            case 0x2C:   // BIT $nnnn
             case 0x4C:   // JMP $nnnn
             case 0x9C:   // STZ $nnnn (65C02)
                 return 4;
@@ -613,7 +894,13 @@ public:
             // Absolute indexed instructions - 4+ cycles (base case, +1 if page crossed)
             case 0xBD:   // LDA $nnnn,X
             case 0xB9:   // LDA $nnnn,Y
-                return 4;
+            case 0x9D:   // STA $nnnn,X (always 5 cycles)
+            case 0x99:   // STA $nnnn,Y (always 5 cycles)
+                return 5;
+                
+            // Indirect JMP - 5 cycles
+            case 0x6C:   // JMP ($nnnn)
+                return 5;
                 
             // Zero page memory operations - 5 cycles
             case 0xE6:   // INC $nn
@@ -622,11 +909,21 @@ public:
             case 0x46:   // LSR $nn
             case 0x26:   // ROL $nn
             case 0x66:   // ROR $nn
+            case 0xC7:   // DCP $nn (illegal)
+            case 0xE7:   // ISC $nn (illegal)
+            case 0x07:   // SLO $nn (illegal)
+            case 0x27:   // RLA $nn (illegal)
+            case 0x47:   // SRE $nn (illegal)
+            case 0x67:   // RRA $nn (illegal)
+            case 0x04:   // TSB $nn (65C02)
+            case 0x14:   // TRB $nn (65C02)
                 return 5;
                 
             // Indirect indexed instructions - 6 cycles
             case 0xA1:   // LDA ($nn,X)
             case 0xB1:   // LDA ($nn),Y
+            case 0x81:   // STA ($nn,X)
+            case 0x91:   // STA ($nn),Y
                 return 6;
                 
             // JSR and RTS - 6 cycles
