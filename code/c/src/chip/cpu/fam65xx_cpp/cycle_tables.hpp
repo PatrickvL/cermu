@@ -6,24 +6,34 @@
 
 namespace fam65xx_cpp {
 
-// Cycle descriptor structure - still uses bit fields for packing
+// Cycle descriptor structure - uses bit fields for packing (16 bits total)
 struct cycle_desc_t {
-    uint8_t mem_op : 4;   // Packed as uint8_t for efficiency
-    uint8_t data_op : 4;  // Packed as uint8_t for efficiency
-    uint8_t alu_op : 8;   // Packed as uint8_t for efficiency
+    uint16_t mem_op : 4;      // 4 bits for MemOp (max 15)
+    uint16_t data_op : 5;     // 5 bits for DataOp (max 31, need for new values)
+    uint16_t alu_op : 5;      // 5 bits for AluOp (max 31, reduced from 7)
+    uint16_t sync : 1;        // 1 bit - marks final cycle of instruction (SYNC)
+    uint16_t conditional : 1; // 1 bit - marks cycles that might be skipped (page crossing, branch taken)
     
     // Type-safe accessors that return proper enum types
     constexpr MemOp get_mem_op() const noexcept { return static_cast<MemOp>(mem_op); }
     constexpr DataOp get_data_op() const noexcept { return static_cast<DataOp>(data_op); }
     constexpr AluOp get_alu_op() const noexcept { return static_cast<AluOp>(alu_op); }
+    constexpr bool is_sync() const noexcept { return sync != 0; }
+    constexpr bool is_conditional() const noexcept { return conditional != 0; }
 };
+
+// Verify the structure size remains 2 bytes (16 bits)
+static_assert(sizeof(cycle_desc_t) == 2, "cycle_desc_t must be exactly 2 bytes");
 
 // Cycle descriptor creation macros
 #define CD_MAKE_SYNC(mem, data, alu) \
-    cycle_desc_t{static_cast<uint8_t>(mem), static_cast<uint8_t>(data), static_cast<uint8_t>(alu)}
+    cycle_desc_t{static_cast<uint16_t>(mem), static_cast<uint16_t>(data), static_cast<uint16_t>(alu), 1, 0}
 
 #define CD_MAKE(mem, data, alu) \
-    cycle_desc_t{static_cast<uint8_t>(mem), static_cast<uint8_t>(data), static_cast<uint8_t>(alu)}
+    cycle_desc_t{static_cast<uint16_t>(mem), static_cast<uint16_t>(data), static_cast<uint16_t>(alu), 0, 0}
+
+#define CD_MAKE_CONDITIONAL(mem, data, alu) \
+    cycle_desc_t{static_cast<uint16_t>(mem), static_cast<uint16_t>(data), static_cast<uint16_t>(alu), 0, 1}
 
 template<typename BusConfig>
 class CycleTables {
@@ -160,42 +170,42 @@ public:
     // Branch instructions - 2 cycles base, +1 if taken, +1 if page crossed
     static constexpr cycle_desc_t make_bcc(uint8_t cycle) {
         if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::BRANCH, AluOp::NOP);
-        return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP);
+        return CD_MAKE_CONDITIONAL(MemOp::READ_PC, DataOp::NOP, AluOp::NOP); // Conditional: branch taken
     }
     
     static constexpr cycle_desc_t make_bcs(uint8_t cycle) {
         if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::BRANCH, AluOp::NOP);
-        return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP);
+        return CD_MAKE_CONDITIONAL(MemOp::READ_PC, DataOp::NOP, AluOp::NOP); // Conditional: branch taken
     }
     
     static constexpr cycle_desc_t make_beq(uint8_t cycle) {
         if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::BRANCH, AluOp::NOP);
-        return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP);
+        return CD_MAKE_CONDITIONAL(MemOp::READ_PC, DataOp::NOP, AluOp::NOP); // Conditional: branch taken
     }
     
     static constexpr cycle_desc_t make_bne(uint8_t cycle) {
         if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::BRANCH, AluOp::NOP);
-        return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP);
+        return CD_MAKE_CONDITIONAL(MemOp::READ_PC, DataOp::NOP, AluOp::NOP); // Conditional: branch taken
     }
     
     static constexpr cycle_desc_t make_bpl(uint8_t cycle) {
         if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::BRANCH, AluOp::NOP);
-        return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP);
+        return CD_MAKE_CONDITIONAL(MemOp::READ_PC, DataOp::NOP, AluOp::NOP); // Conditional: branch taken
     }
     
     static constexpr cycle_desc_t make_bmi(uint8_t cycle) {
         if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::BRANCH, AluOp::NOP);
-        return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP);
+        return CD_MAKE_CONDITIONAL(MemOp::READ_PC, DataOp::NOP, AluOp::NOP); // Conditional: branch taken
     }
     
     static constexpr cycle_desc_t make_bvc(uint8_t cycle) {
         if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::BRANCH, AluOp::NOP);
-        return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP);
+        return CD_MAKE_CONDITIONAL(MemOp::READ_PC, DataOp::NOP, AluOp::NOP); // Conditional: branch taken
     }
     
     static constexpr cycle_desc_t make_bvs(uint8_t cycle) {
         if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::BRANCH, AluOp::NOP);
-        return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP);
+        return CD_MAKE_CONDITIONAL(MemOp::READ_PC, DataOp::NOP, AluOp::NOP); // Conditional: branch taken
     }
     
     // Jump instructions
@@ -225,6 +235,188 @@ public:
             case 3: return CD_MAKE(MemOp::READ_SP_INC, DataOp::STACK_PULL, AluOp::NOP);
             case 4: return CD_MAKE(MemOp::READ_SP_INC, DataOp::STACK_PULL, AluOp::NOP);
             case 5: return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP); // Internal operation
+            default: return make_nop();
+        }
+    }
+
+    // Shift/Rotate operations - ASL, LSR, ROL, ROR
+    static constexpr cycle_desc_t make_asl_acc() { return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::ASL); }
+    static constexpr cycle_desc_t make_lsr_acc() { return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::LSR); }
+    static constexpr cycle_desc_t make_rol_acc() { return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::ROL); }
+    static constexpr cycle_desc_t make_ror_acc() { return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::ROR); }
+    
+    // Memory INC/DEC operations - 5 cycles for zero page
+    static constexpr cycle_desc_t make_inc_zp(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::TEMP_STORE, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_STORE, AluOp::NOP); // Write old value
+            case 4: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_MODIFY, AluOp::INC); // Write new value
+            default: return make_nop();
+        }
+    }
+    
+    static constexpr cycle_desc_t make_dec_zp(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::TEMP_STORE, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_STORE, AluOp::NOP); // Write old value
+            case 4: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_MODIFY, AluOp::DEC); // Write new value
+            default: return make_nop();
+        }
+    }
+
+    // Memory shift operations - 5 cycles for zero page
+    static constexpr cycle_desc_t make_asl_zp(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::TEMP_STORE, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_STORE, AluOp::NOP); // Write old value
+            case 4: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_MODIFY, AluOp::ASL); // Write new value
+            default: return make_nop();
+        }
+    }
+    
+    static constexpr cycle_desc_t make_lsr_zp(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::TEMP_STORE, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_STORE, AluOp::NOP); // Write old value
+            case 4: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_MODIFY, AluOp::LSR); // Write new value
+            default: return make_nop();
+        }
+    }
+
+    static constexpr cycle_desc_t make_rol_zp(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::TEMP_STORE, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_STORE, AluOp::NOP); // Write old value
+            case 4: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_MODIFY, AluOp::ROL); // Write new value
+            default: return make_nop();
+        }
+    }
+
+    static constexpr cycle_desc_t make_ror_zp(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::TEMP_STORE, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_STORE, AluOp::NOP); // Write old value
+            case 4: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_MODIFY, AluOp::ROR); // Write new value
+            default: return make_nop();
+        }
+    }
+
+    // Zero page indexed addressing modes (zp,x and zp,y)
+    static constexpr cycle_desc_t make_lda_zpx(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::ADDR_ADD_X, AluOp::NOP); // Add X to zero page address
+            case 3: return CD_MAKE(MemOp::READ_ZP, DataOp::LOAD_A, AluOp::NOP);
+            default: return make_nop();
+        }
+    }
+
+    static constexpr cycle_desc_t make_ldx_zpy(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::ADDR_ADD_Y, AluOp::NOP); // Add Y to zero page address
+            case 3: return CD_MAKE(MemOp::READ_ZP, DataOp::LOAD_X, AluOp::NOP);
+            default: return make_nop();
+        }
+    }
+
+    // Absolute indexed addressing modes (abs,x and abs,y)
+    static constexpr cycle_desc_t make_lda_absx(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::READ_ABS, DataOp::ADDR_ADD_X, AluOp::NOP); // Add X, may cross page
+            case 4: return CD_MAKE_CONDITIONAL(MemOp::READ_ABS, DataOp::LOAD_A, AluOp::NOP); // Conditional: page crossed
+            default: return make_nop();
+        }
+    }
+
+    static constexpr cycle_desc_t make_lda_absy(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
+            case 3: return CD_MAKE(MemOp::READ_ABS, DataOp::ADDR_ADD_Y, AluOp::NOP); // Add Y, may cross page
+            case 4: return CD_MAKE_CONDITIONAL(MemOp::READ_ABS, DataOp::LOAD_A, AluOp::NOP); // Conditional: page crossed
+            default: return make_nop();
+        }
+    }
+
+    // Indirect indexed addressing modes - (zp,x) and (zp),y
+    static constexpr cycle_desc_t make_lda_indx(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::ADDR_ADD_X, AluOp::NOP); // Add X to zero page pointer
+            case 3: return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_LOW, AluOp::NOP); // Read low byte of target
+            case 4: return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_HIGH, AluOp::NOP); // Read high byte of target
+            case 5: return CD_MAKE(MemOp::READ_ABS, DataOp::LOAD_A, AluOp::NOP); // Read from target address
+            default: return make_nop();
+        }
+    }
+
+    static constexpr cycle_desc_t make_lda_indy(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_LOW, AluOp::NOP); // Read low byte of base
+            case 3: return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_HIGH, AluOp::NOP); // Read high byte of base
+            case 4: return CD_MAKE(MemOp::READ_ABS, DataOp::ADDR_ADD_Y, AluOp::NOP); // Add Y, may cross page
+            case 5: return CD_MAKE_CONDITIONAL(MemOp::READ_ABS, DataOp::LOAD_A, AluOp::NOP); // Conditional: page crossed
+            default: return make_nop();
+        }
+    }
+
+    // 65C02 specific instructions
+    static constexpr cycle_desc_t make_bra(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::BRANCH, AluOp::NOP);
+        return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP);
+    }
+
+    static constexpr cycle_desc_t make_phx(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
+        return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STORE_X, AluOp::NOP);
+    }
+
+    static constexpr cycle_desc_t make_phy(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
+        return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STORE_Y, AluOp::NOP);
+    }
+
+    static constexpr cycle_desc_t make_plx(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_SP_INC, DataOp::NOP, AluOp::NOP);
+        return CD_MAKE(MemOp::READ_SP, DataOp::LOAD_X, AluOp::NOP);
+    }
+
+    static constexpr cycle_desc_t make_ply(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_SP_INC, DataOp::NOP, AluOp::NOP);
+        return CD_MAKE(MemOp::READ_SP, DataOp::LOAD_Y, AluOp::NOP);
+    }
+
+    static constexpr cycle_desc_t make_stz_zp(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        return CD_MAKE(MemOp::WRITE_ZP, DataOp::STORE_ZERO, AluOp::NOP);
+    }
+
+    static constexpr cycle_desc_t make_stz_abs(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
+        return CD_MAKE(MemOp::WRITE_ABS, DataOp::STORE_ZERO, AluOp::NOP);
+    }
+
+    // RTI - Return from interrupt, 6 cycles
+    static constexpr cycle_desc_t make_rti(uint8_t cycle) {
+        switch (cycle) {
+            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
+            case 2: return CD_MAKE(MemOp::READ_SP, DataOp::NOP, AluOp::NOP); // Internal operation
+            case 3: return CD_MAKE(MemOp::READ_SP_INC, DataOp::STACK_PULL, AluOp::NOP); // Pull status
+            case 4: return CD_MAKE(MemOp::READ_SP_INC, DataOp::STACK_PULL, AluOp::NOP); // Pull PCL
+            case 5: return CD_MAKE(MemOp::READ_SP_INC, DataOp::STACK_PULL, AluOp::NOP); // Pull PCH
             default: return make_nop();
         }
     }
@@ -273,6 +465,64 @@ public:
                     case 0xEA: table[i] = make_nop(); break;              // NOP
                     case 0x00: table[i] = make_brk(cycle); break;         // BRK
                     case 0xA7: table[i] = make_lax_zp(cycle); break;      // LAX $nn (illegal)
+                    
+                    // Branch instructions
+                    case 0x90: table[i] = make_bcc(cycle); break;         // BCC
+                    case 0xB0: table[i] = make_bcs(cycle); break;         // BCS
+                    case 0xF0: table[i] = make_beq(cycle); break;         // BEQ
+                    case 0xD0: table[i] = make_bne(cycle); break;         // BNE
+                    case 0x10: table[i] = make_bpl(cycle); break;         // BPL
+                    case 0x30: table[i] = make_bmi(cycle); break;         // BMI
+                    case 0x50: table[i] = make_bvc(cycle); break;         // BVC
+                    case 0x70: table[i] = make_bvs(cycle); break;         // BVS
+                    
+                    // Stack operations
+                    case 0x48: table[i] = make_pha(cycle); break;         // PHA
+                    case 0x68: table[i] = make_pla(cycle); break;         // PLA
+                    case 0x08: table[i] = make_php(cycle); break;         // PHP
+                    case 0x28: table[i] = make_plp(cycle); break;         // PLP
+                    
+                    // Jump operations
+                    case 0x4C: table[i] = make_jmp_abs(cycle); break;     // JMP $nnnn
+                    case 0x20: table[i] = make_jsr(cycle); break;         // JSR $nnnn
+                    case 0x60: table[i] = make_rts(cycle); break;         // RTS
+                    case 0x40: table[i] = make_rti(cycle); break;         // RTI
+                    
+                    // Shift/Rotate accumulator
+                    case 0x0A: table[i] = make_asl_acc(); break;          // ASL A
+                    case 0x4A: table[i] = make_lsr_acc(); break;          // LSR A
+                    case 0x2A: table[i] = make_rol_acc(); break;          // ROL A
+                    case 0x6A: table[i] = make_ror_acc(); break;          // ROR A
+                    
+                    // Memory increment/decrement
+                    case 0xE6: table[i] = make_inc_zp(cycle); break;      // INC $nn
+                    case 0xC6: table[i] = make_dec_zp(cycle); break;      // DEC $nn
+                    
+                    // Memory shift/rotate
+                    case 0x06: table[i] = make_asl_zp(cycle); break;      // ASL $nn
+                    case 0x46: table[i] = make_lsr_zp(cycle); break;      // LSR $nn
+                    case 0x26: table[i] = make_rol_zp(cycle); break;      // ROL $nn
+                    case 0x66: table[i] = make_ror_zp(cycle); break;      // ROR $nn
+                    
+                    // Indexed addressing modes
+                    case 0xB5: table[i] = make_lda_zpx(cycle); break;     // LDA $nn,X
+                    case 0xB6: table[i] = make_ldx_zpy(cycle); break;     // LDX $nn,Y
+                    case 0xBD: table[i] = make_lda_absx(cycle); break;    // LDA $nnnn,X
+                    case 0xB9: table[i] = make_lda_absy(cycle); break;    // LDA $nnnn,Y
+                    
+                    // Indirect addressing modes
+                    case 0xA1: table[i] = make_lda_indx(cycle); break;    // LDA ($nn,X)
+                    case 0xB1: table[i] = make_lda_indy(cycle); break;    // LDA ($nn),Y
+                    
+                    // 65C02 specific instructions (will be NOP on NMOS)
+                    case 0x80: table[i] = make_bra(cycle); break;         // BRA (65C02)
+                    case 0xDA: table[i] = make_phx(cycle); break;         // PHX (65C02)
+                    case 0x5A: table[i] = make_phy(cycle); break;         // PHY (65C02)
+                    case 0xFA: table[i] = make_plx(cycle); break;         // PLX (65C02)
+                    case 0x7A: table[i] = make_ply(cycle); break;         // PLY (65C02)
+                    case 0x64: table[i] = make_stz_zp(cycle); break;      // STZ $nn (65C02)
+                    case 0x9C: table[i] = make_stz_abs(cycle); break;     // STZ $nnnn (65C02)
+                    
                     default: table[i] = make_nop(); break;                // Default to NOP
                 }
             }
@@ -313,6 +563,22 @@ public:
             case 0xCA:   // DEX
             case 0x88:   // DEY
             case 0xEA:   // NOP
+            case 0x0A:   // ASL A
+            case 0x4A:   // LSR A
+            case 0x2A:   // ROL A
+            case 0x6A:   // ROR A
+                return 2;
+                
+            // Branch instructions - 2+ cycles (base case, +1 if taken, +1 if page crossed)
+            case 0x90:   // BCC
+            case 0xB0:   // BCS
+            case 0xF0:   // BEQ
+            case 0xD0:   // BNE
+            case 0x10:   // BPL
+            case 0x30:   // BMI
+            case 0x50:   // BVC
+            case 0x70:   // BVS
+            case 0x80:   // BRA (65C02)
                 return 2;
                 
             // Zero page instructions - 3 cycles
@@ -321,12 +587,53 @@ public:
             case 0xA4:   // LDY $nn
             case 0x85:   // STA $nn
             case 0xA7:   // LAX $nn (illegal)
+            case 0x48:   // PHA
+            case 0x68:   // PLA
+            case 0x08:   // PHP
+            case 0x28:   // PLP
+            case 0xDA:   // PHX (65C02)
+            case 0x5A:   // PHY (65C02)
+            case 0xFA:   // PLX (65C02)
+            case 0x7A:   // PLY (65C02)
+            case 0x64:   // STZ $nn (65C02)
                 return 3;
+                
+            // Zero page indexed instructions - 4 cycles
+            case 0xB5:   // LDA $nn,X
+            case 0xB6:   // LDX $nn,Y
+                return 4;
                 
             // Absolute instructions - 4 cycles
             case 0xAD:   // LDA $nnnn
             case 0x8D:   // STA $nnnn
+            case 0x4C:   // JMP $nnnn
+            case 0x9C:   // STZ $nnnn (65C02)
                 return 4;
+                
+            // Absolute indexed instructions - 4+ cycles (base case, +1 if page crossed)
+            case 0xBD:   // LDA $nnnn,X
+            case 0xB9:   // LDA $nnnn,Y
+                return 4;
+                
+            // Zero page memory operations - 5 cycles
+            case 0xE6:   // INC $nn
+            case 0xC6:   // DEC $nn
+            case 0x06:   // ASL $nn
+            case 0x46:   // LSR $nn
+            case 0x26:   // ROL $nn
+            case 0x66:   // ROR $nn
+                return 5;
+                
+            // Indirect indexed instructions - 6 cycles
+            case 0xA1:   // LDA ($nn,X)
+            case 0xB1:   // LDA ($nn),Y
+                return 6;
+                
+            // JSR and RTS - 6 cycles
+            case 0x20:   // JSR $nnnn
+            case 0x60:   // RTS
+            case 0x40:   // RTI
+                return 6;
                 
             // BRK instruction - 7 cycles
             case 0x00:   // BRK
