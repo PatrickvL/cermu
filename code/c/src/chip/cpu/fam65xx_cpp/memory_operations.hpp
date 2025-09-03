@@ -1,0 +1,139 @@
+#ifndef MEMORY_OPERATIONS_HPP
+#define MEMORY_OPERATIONS_HPP
+
+#include "cpu_defs.hpp"
+#include "../../../core/system_lines.h"
+
+// Direct bus operations - no legacy compatibility macros
+// Use native system_lines.h macros directly for maximum performance
+
+namespace fam65xx_cpp {
+
+template<typename BusConfig>
+class MemoryOperations {
+public:
+    template<typename RegArray>
+    static inline void execute_memory_operation(bus_state_t& bus_state, RegArray& reg,
+                                               MemOp mem_op, DataOp data_op) {
+        if (mem_op == MemOp::NOP) return;
+        
+        uint16_t addr = 0;
+        uint16_t pc = 0;
+        
+        // Execute memory operation based on opcode
+        switch (mem_op) {
+            case MemOp::NOP: return;
+            
+            case MemOp::READ_PC_INC:
+                pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+                BUS_SET_ADDR(bus_state, pc);
+                pc = (pc + 1) & 0xFFFF;
+                reg[CpuReg::PCL] = pc & 0xFF;
+                reg[CpuReg::PCH] = (pc >> 8) & 0xFF;
+                break;
+                
+            case MemOp::READ_PC:
+                pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+                BUS_SET_ADDR(bus_state, pc);
+                break;
+                
+            case MemOp::READ_ABS:
+                addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
+                BUS_SET_ADDR(bus_state, addr);
+                break;
+                
+            case MemOp::WRITE_ABS:
+                addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
+                BUS_SET_ADDR(bus_state, addr);
+                bus_state &= ~BUS_RW_BIT; // Write (RW=0)
+                break;
+                
+            case MemOp::READ_ZP:
+                BUS_SET_ADDR(bus_state, reg[CpuReg::ABL]);
+                break;
+                
+            case MemOp::WRITE_ZP:
+                BUS_SET_ADDR(bus_state, reg[CpuReg::ABL]);
+                bus_state &= ~BUS_RW_BIT; // Write (RW=0)
+                break;
+                
+            case MemOp::READ_ZPX:
+                addr = (reg[CpuReg::ABL] + reg[CpuReg::X]) & 0xFF;
+                BUS_SET_ADDR(bus_state, addr);
+                break;
+                
+            case MemOp::WRITE_ZPX:
+                addr = (reg[CpuReg::ABL] + reg[CpuReg::X]) & 0xFF;
+                BUS_SET_ADDR(bus_state, addr);
+                bus_state &= ~BUS_RW_BIT; // Write (RW=0)
+                break;
+                
+            case MemOp::READ_ZPY:
+                addr = (reg[CpuReg::ABL] + reg[CpuReg::Y]) & 0xFF;
+                BUS_SET_ADDR(bus_state, addr);
+                break;
+                
+            case MemOp::WRITE_ZPY:
+                addr = (reg[CpuReg::ABL] + reg[CpuReg::Y]) & 0xFF;
+                BUS_SET_ADDR(bus_state, addr);
+                bus_state &= ~BUS_RW_BIT; // Write (RW=0)
+                break;
+                
+            case MemOp::READ_SP:
+                BUS_SET_ADDR(bus_state, 0x0100 | reg[CpuReg::S]);
+                break;
+                
+            case MemOp::WRITE_SP_DEC:
+                BUS_SET_ADDR(bus_state, 0x0100 | reg[CpuReg::S]);
+                reg[CpuReg::S] = (reg[CpuReg::S] - 1) & 0xFF;
+                bus_state &= ~BUS_RW_BIT; // Write (RW=0)
+                break;
+                
+            case MemOp::READ_SP_INC:
+                reg[CpuReg::S] = (reg[CpuReg::S] + 1) & 0xFF;
+                BUS_SET_ADDR(bus_state, 0x0100 | reg[CpuReg::S]);
+                break;
+                
+            case MemOp::READ_INDIRECT:
+                addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
+                BUS_SET_ADDR(bus_state, addr);
+                break;
+                
+            case MemOp::DUMMY_READ:
+                // Dummy read for timing - use current PC
+                pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+                BUS_SET_ADDR(bus_state, pc);
+                break;
+                
+            default:
+                // Unknown operation - default to PC read
+                pc = (reg[static_cast<uint8_t>(CpuReg::PCH)] << 8) | reg[static_cast<uint8_t>(CpuReg::PCL)];
+                BUS_SET_ADDR(bus_state, pc);
+                break;
+        }
+    }
+    
+    template<typename RegArray>
+    static inline void handle_write_data(bus_state_t& bus_state, RegArray& reg,
+                                        MemOp mem_op, DataOp data_op) {
+        // Handle data output for write operations
+        constexpr uint16_t WRITE_OPS = (1 << static_cast<uint8_t>(MemOp::WRITE_ABS)) |
+                                       (1 << static_cast<uint8_t>(MemOp::WRITE_ZP)) |
+                                       (1 << static_cast<uint8_t>(MemOp::WRITE_ZPX)) |
+                                       (1 << static_cast<uint8_t>(MemOp::WRITE_ZPY));
+        
+        if (WRITE_OPS & (1 << static_cast<uint8_t>(mem_op))) {
+            if (static_cast<uint8_t>(data_op) < static_cast<uint8_t>(CpuReg::COUNT)) {
+                BUS_SET_DATA(bus_state, reg[static_cast<uint8_t>(data_op)]);
+            } else if (data_op == DataOp::ALU) {
+                // ALU result will be set by caller
+            }
+        } else if (mem_op == MemOp::WRITE_SP_DEC) {
+            // Stack write operations handled specially
+        }
+    }
+};
+
+} // namespace fam65xx_cpp
+
+#endif // MEMORY_OPERATIONS_HPP

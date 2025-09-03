@@ -31,6 +31,9 @@ default_target: all
 
 .SUFFIXES: .hpux_make_needs_suffix_list
 
+# Produce verbose output by default.
+VERBOSE = 1
+
 # Command-line flag to silence nested $(MAKE).
 $(VERBOSE)MAKESILENT = -s
 
@@ -48,10 +51,10 @@ cmake_force:
 SHELL = /bin/sh
 
 # The CMake executable.
-CMAKE_COMMAND = /snap/cmake/1479/bin/cmake
+CMAKE_COMMAND = /snap/cmake/1481/bin/cmake
 
 # The command to remove a file.
-RM = /snap/cmake/1479/bin/cmake -E rm -f
+RM = /snap/cmake/1481/bin/cmake -E rm -f
 
 # Escaping for special characters.
 EQUALS = =
@@ -68,7 +71,7 @@ CMAKE_BINARY_DIR = /home/patrick/Git/aiemu/build
 # Special rule for the target test
 test:
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Running tests..."
-	/snap/cmake/1479/bin/ctest $(ARGS)
+	/snap/cmake/1481/bin/ctest $(ARGS)
 .PHONY : test
 
 # Special rule for the target test
@@ -88,7 +91,7 @@ edit_cache/fast: edit_cache
 # Special rule for the target rebuild_cache
 rebuild_cache:
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Running CMake to regenerate build system..."
-	/snap/cmake/1479/bin/cmake --regenerate-during-build -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
+	/snap/cmake/1481/bin/cmake --regenerate-during-build -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
 .PHONY : rebuild_cache
 
 # Special rule for the target rebuild_cache
@@ -107,37 +110,37 @@ list_install_components/fast: list_install_components
 # Special rule for the target install
 install: preinstall
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Install the project..."
-	/snap/cmake/1479/bin/cmake -P cmake_install.cmake
+	/snap/cmake/1481/bin/cmake -P cmake_install.cmake
 .PHONY : install
 
 # Special rule for the target install
 install/fast: preinstall/fast
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Install the project..."
-	/snap/cmake/1479/bin/cmake -P cmake_install.cmake
+	/snap/cmake/1481/bin/cmake -P cmake_install.cmake
 .PHONY : install/fast
 
 # Special rule for the target install/local
 install/local: preinstall
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing only the local directory..."
-	/snap/cmake/1479/bin/cmake -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
+	/snap/cmake/1481/bin/cmake -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
 .PHONY : install/local
 
 # Special rule for the target install/local
 install/local/fast: preinstall/fast
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing only the local directory..."
-	/snap/cmake/1479/bin/cmake -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
+	/snap/cmake/1481/bin/cmake -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
 .PHONY : install/local/fast
 
 # Special rule for the target install/strip
 install/strip: preinstall
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing the project stripped..."
-	/snap/cmake/1479/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
+	/snap/cmake/1481/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
 .PHONY : install/strip
 
 # Special rule for the target install/strip
 install/strip/fast: preinstall/fast
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing the project stripped..."
-	/snap/cmake/1479/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
+	/snap/cmake/1481/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
 .PHONY : install/strip/fast
 
 # The main all target
@@ -184,325 +187,53 @@ c64emu/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/build
 .PHONY : c64emu/fast
 
-#=============================================================================
-# Target rules for targets named c64emu_gui
-
-# Build rule for target.
-c64emu_gui: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 c64emu_gui
-.PHONY : c64emu_gui
-
-# fast build rule for target.
-c64emu_gui/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/build
-.PHONY : c64emu_gui/fast
-
-#=============================================================================
-# Target rules for targets named test_mos6510_basic
-
-# Build rule for target.
-test_mos6510_basic: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test_mos6510_basic
-.PHONY : test_mos6510_basic
-
-# fast build rule for target.
-test_mos6510_basic/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/build
-.PHONY : test_mos6510_basic/fast
-
-#=============================================================================
-# Target rules for targets named cimgui
-
-# Build rule for target.
-cimgui: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 cimgui
-.PHONY : cimgui
-
-# fast build rule for target.
-cimgui/fast:
-	$(MAKE) $(MAKESILENT) -f external/cimgui/CMakeFiles/cimgui.dir/build.make external/cimgui/CMakeFiles/cimgui.dir/build
-.PHONY : cimgui/fast
-
-#=============================================================================
-# Target rules for targets named mos6510_lib
-
-# Build rule for target.
-mos6510_lib: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 mos6510_lib
-.PHONY : mos6510_lib
-
-# fast build rule for target.
-mos6510_lib/fast:
-	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/mos6510_lib.dir/build.make tests/CMakeFiles/mos6510_lib.dir/build
-.PHONY : mos6510_lib/fast
-
-#=============================================================================
-# Target rules for targets named json_parser
-
-# Build rule for target.
-json_parser: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 json_parser
-.PHONY : json_parser
-
-# fast build rule for target.
-json_parser/fast:
-	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/json_parser.dir/build.make tests/CMakeFiles/json_parser.dir/build
-.PHONY : json_parser/fast
-
-#=============================================================================
-# Target rules for targets named test_mos6510_comprehensive
-
-# Build rule for target.
-test_mos6510_comprehensive: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test_mos6510_comprehensive
-.PHONY : test_mos6510_comprehensive
-
-# fast build rule for target.
-test_mos6510_comprehensive/fast:
-	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test_mos6510_comprehensive.dir/build.make tests/CMakeFiles/test_mos6510_comprehensive.dir/build
-.PHONY : test_mos6510_comprehensive/fast
-
-#=============================================================================
-# Target rules for targets named test_mos6510_basic_tests
-
-# Build rule for target.
-test_mos6510_basic_tests: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 test_mos6510_basic_tests
-.PHONY : test_mos6510_basic_tests
-
-# fast build rule for target.
-test_mos6510_basic_tests/fast:
-	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test_mos6510_basic_tests.dir/build.make tests/CMakeFiles/test_mos6510_basic_tests.dir/build
-.PHONY : test_mos6510_basic_tests/fast
-
-#=============================================================================
-# Target rules for targets named run_comprehensive_test
-
-# Build rule for target.
-run_comprehensive_test: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 run_comprehensive_test
-.PHONY : run_comprehensive_test
-
-# fast build rule for target.
-run_comprehensive_test/fast:
-	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/run_comprehensive_test.dir/build.make tests/CMakeFiles/run_comprehensive_test.dir/build
-.PHONY : run_comprehensive_test/fast
-
-#=============================================================================
-# Target rules for targets named run_basic_test
-
-# Build rule for target.
-run_basic_test: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 run_basic_test
-.PHONY : run_basic_test
-
-# fast build rule for target.
-run_basic_test/fast:
-	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/run_basic_test.dir/build.make tests/CMakeFiles/run_basic_test.dir/build
-.PHONY : run_basic_test/fast
-
-#=============================================================================
-# Target rules for targets named run_all_tests
-
-# Build rule for target.
-run_all_tests: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 run_all_tests
-.PHONY : run_all_tests
-
-# fast build rule for target.
-run_all_tests/fast:
-	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/run_all_tests.dir/build.make tests/CMakeFiles/run_all_tests.dir/build
-.PHONY : run_all_tests/fast
-
-#=============================================================================
-# Target rules for targets named mos6502_family
-
-# Build rule for target.
-mos6502_family: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 mos6502_family
-.PHONY : mos6502_family
-
-# fast build rule for target.
-mos6502_family/fast:
-	$(MAKE) $(MAKESILENT) -f tests/cpu_build/CMakeFiles/mos6502_family.dir/build.make tests/cpu_build/CMakeFiles/mos6502_family.dir/build
-.PHONY : mos6502_family/fast
-
-#=============================================================================
-# Target rules for targets named mos6502
-
-# Build rule for target.
-mos6502: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 mos6502
-.PHONY : mos6502
-
-# fast build rule for target.
-mos6502/fast:
-	$(MAKE) $(MAKESILENT) -f tests/cpu_build/CMakeFiles/mos6502.dir/build.make tests/cpu_build/CMakeFiles/mos6502.dir/build
-.PHONY : mos6502/fast
-
-#=============================================================================
-# Target rules for targets named mos6510
-
-# Build rule for target.
-mos6510: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 mos6510
-.PHONY : mos6510
-
-# fast build rule for target.
-mos6510/fast:
-	$(MAKE) $(MAKESILENT) -f tests/cpu_build/CMakeFiles/mos6510.dir/build.make tests/cpu_build/CMakeFiles/mos6510.dir/build
-.PHONY : mos6510/fast
-
-#=============================================================================
-# Target rules for targets named nes6502
-
-# Build rule for target.
-nes6502: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 nes6502
-.PHONY : nes6502
-
-# fast build rule for target.
-nes6502/fast:
-	$(MAKE) $(MAKESILENT) -f tests/cpu_build/CMakeFiles/nes6502.dir/build.make tests/cpu_build/CMakeFiles/nes6502.dir/build
-.PHONY : nes6502/fast
-
-src/chip/cpu/fam65xx/fam65xx_core.o: src/chip/cpu/fam65xx/fam65xx_core.c.o
-.PHONY : src/chip/cpu/fam65xx/fam65xx_core.o
+src/chip/cpu/fam65xx_cpp/fam65xx_cpp_adapter.o: src/chip/cpu/fam65xx_cpp/fam65xx_cpp_adapter.cpp.o
+.PHONY : src/chip/cpu/fam65xx_cpp/fam65xx_cpp_adapter.o
 
 # target to build an object file
-src/chip/cpu/fam65xx/fam65xx_core.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/fam65xx/fam65xx_core.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/fam65xx/fam65xx_core.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/fam65xx/fam65xx_core.c.o
-.PHONY : src/chip/cpu/fam65xx/fam65xx_core.c.o
+src/chip/cpu/fam65xx_cpp/fam65xx_cpp_adapter.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/fam65xx_cpp/fam65xx_cpp_adapter.cpp.o
+.PHONY : src/chip/cpu/fam65xx_cpp/fam65xx_cpp_adapter.cpp.o
 
-src/chip/cpu/fam65xx/fam65xx_core.i: src/chip/cpu/fam65xx/fam65xx_core.c.i
-.PHONY : src/chip/cpu/fam65xx/fam65xx_core.i
+src/chip/cpu/fam65xx_cpp/fam65xx_cpp_adapter.i: src/chip/cpu/fam65xx_cpp/fam65xx_cpp_adapter.cpp.i
+.PHONY : src/chip/cpu/fam65xx_cpp/fam65xx_cpp_adapter.i
 
 # target to preprocess a source file
-src/chip/cpu/fam65xx/fam65xx_core.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/fam65xx/fam65xx_core.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/fam65xx/fam65xx_core.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/fam65xx/fam65xx_core.c.i
-.PHONY : src/chip/cpu/fam65xx/fam65xx_core.c.i
+src/chip/cpu/fam65xx_cpp/fam65xx_cpp_adapter.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/fam65xx_cpp/fam65xx_cpp_adapter.cpp.i
+.PHONY : src/chip/cpu/fam65xx_cpp/fam65xx_cpp_adapter.cpp.i
 
-src/chip/cpu/fam65xx/fam65xx_core.s: src/chip/cpu/fam65xx/fam65xx_core.c.s
-.PHONY : src/chip/cpu/fam65xx/fam65xx_core.s
+src/chip/cpu/fam65xx_cpp/fam65xx_cpp_adapter.s: src/chip/cpu/fam65xx_cpp/fam65xx_cpp_adapter.cpp.s
+.PHONY : src/chip/cpu/fam65xx_cpp/fam65xx_cpp_adapter.s
 
 # target to generate assembly for a file
-src/chip/cpu/fam65xx/fam65xx_core.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/fam65xx/fam65xx_core.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/fam65xx/fam65xx_core.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/fam65xx/fam65xx_core.c.s
-.PHONY : src/chip/cpu/fam65xx/fam65xx_core.c.s
+src/chip/cpu/fam65xx_cpp/fam65xx_cpp_adapter.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/fam65xx_cpp/fam65xx_cpp_adapter.cpp.s
+.PHONY : src/chip/cpu/fam65xx_cpp/fam65xx_cpp_adapter.cpp.s
 
-src/chip/cpu/fam65xx/fam65xx_gui.o: src/chip/cpu/fam65xx/fam65xx_gui.c.o
-.PHONY : src/chip/cpu/fam65xx/fam65xx_gui.o
+src/chip/cpu/mos6510_cpp/mos6510_cpp.o: src/chip/cpu/mos6510_cpp/mos6510_cpp.c.o
+.PHONY : src/chip/cpu/mos6510_cpp/mos6510_cpp.o
 
 # target to build an object file
-src/chip/cpu/fam65xx/fam65xx_gui.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/fam65xx/fam65xx_gui.c.o
-.PHONY : src/chip/cpu/fam65xx/fam65xx_gui.c.o
+src/chip/cpu/mos6510_cpp/mos6510_cpp.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cpp/mos6510_cpp.c.o
+.PHONY : src/chip/cpu/mos6510_cpp/mos6510_cpp.c.o
 
-src/chip/cpu/fam65xx/fam65xx_gui.i: src/chip/cpu/fam65xx/fam65xx_gui.c.i
-.PHONY : src/chip/cpu/fam65xx/fam65xx_gui.i
-
-# target to preprocess a source file
-src/chip/cpu/fam65xx/fam65xx_gui.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/fam65xx/fam65xx_gui.c.i
-.PHONY : src/chip/cpu/fam65xx/fam65xx_gui.c.i
-
-src/chip/cpu/fam65xx/fam65xx_gui.s: src/chip/cpu/fam65xx/fam65xx_gui.c.s
-.PHONY : src/chip/cpu/fam65xx/fam65xx_gui.s
-
-# target to generate assembly for a file
-src/chip/cpu/fam65xx/fam65xx_gui.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/fam65xx/fam65xx_gui.c.s
-.PHONY : src/chip/cpu/fam65xx/fam65xx_gui.c.s
-
-src/chip/cpu/fam65xx/fam65xx_opcodes.o: src/chip/cpu/fam65xx/fam65xx_opcodes.c.o
-.PHONY : src/chip/cpu/fam65xx/fam65xx_opcodes.o
-
-# target to build an object file
-src/chip/cpu/fam65xx/fam65xx_opcodes.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/fam65xx/fam65xx_opcodes.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/fam65xx/fam65xx_opcodes.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/fam65xx/fam65xx_opcodes.c.o
-.PHONY : src/chip/cpu/fam65xx/fam65xx_opcodes.c.o
-
-src/chip/cpu/fam65xx/fam65xx_opcodes.i: src/chip/cpu/fam65xx/fam65xx_opcodes.c.i
-.PHONY : src/chip/cpu/fam65xx/fam65xx_opcodes.i
+src/chip/cpu/mos6510_cpp/mos6510_cpp.i: src/chip/cpu/mos6510_cpp/mos6510_cpp.c.i
+.PHONY : src/chip/cpu/mos6510_cpp/mos6510_cpp.i
 
 # target to preprocess a source file
-src/chip/cpu/fam65xx/fam65xx_opcodes.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/fam65xx/fam65xx_opcodes.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/fam65xx/fam65xx_opcodes.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/fam65xx/fam65xx_opcodes.c.i
-.PHONY : src/chip/cpu/fam65xx/fam65xx_opcodes.c.i
+src/chip/cpu/mos6510_cpp/mos6510_cpp.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cpp/mos6510_cpp.c.i
+.PHONY : src/chip/cpu/mos6510_cpp/mos6510_cpp.c.i
 
-src/chip/cpu/fam65xx/fam65xx_opcodes.s: src/chip/cpu/fam65xx/fam65xx_opcodes.c.s
-.PHONY : src/chip/cpu/fam65xx/fam65xx_opcodes.s
+src/chip/cpu/mos6510_cpp/mos6510_cpp.s: src/chip/cpu/mos6510_cpp/mos6510_cpp.c.s
+.PHONY : src/chip/cpu/mos6510_cpp/mos6510_cpp.s
 
 # target to generate assembly for a file
-src/chip/cpu/fam65xx/fam65xx_opcodes.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/fam65xx/fam65xx_opcodes.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/fam65xx/fam65xx_opcodes.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/fam65xx/fam65xx_opcodes.c.s
-.PHONY : src/chip/cpu/fam65xx/fam65xx_opcodes.c.s
-
-src/chip/cpu/mos6510/mos6510.o: src/chip/cpu/mos6510/mos6510.c.o
-.PHONY : src/chip/cpu/mos6510/mos6510.o
-
-# target to build an object file
-src/chip/cpu/mos6510/mos6510.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510/mos6510.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510/mos6510.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510/mos6510.c.o
-.PHONY : src/chip/cpu/mos6510/mos6510.c.o
-
-src/chip/cpu/mos6510/mos6510.i: src/chip/cpu/mos6510/mos6510.c.i
-.PHONY : src/chip/cpu/mos6510/mos6510.i
-
-# target to preprocess a source file
-src/chip/cpu/mos6510/mos6510.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510/mos6510.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510/mos6510.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510/mos6510.c.i
-.PHONY : src/chip/cpu/mos6510/mos6510.c.i
-
-src/chip/cpu/mos6510/mos6510.s: src/chip/cpu/mos6510/mos6510.c.s
-.PHONY : src/chip/cpu/mos6510/mos6510.s
-
-# target to generate assembly for a file
-src/chip/cpu/mos6510/mos6510.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510/mos6510.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510/mos6510.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510/mos6510.c.s
-.PHONY : src/chip/cpu/mos6510/mos6510.c.s
-
-src/chip/cpu/mos6510/mos6510_gui.o: src/chip/cpu/mos6510/mos6510_gui.c.o
-.PHONY : src/chip/cpu/mos6510/mos6510_gui.o
-
-# target to build an object file
-src/chip/cpu/mos6510/mos6510_gui.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510/mos6510_gui.c.o
-.PHONY : src/chip/cpu/mos6510/mos6510_gui.c.o
-
-src/chip/cpu/mos6510/mos6510_gui.i: src/chip/cpu/mos6510/mos6510_gui.c.i
-.PHONY : src/chip/cpu/mos6510/mos6510_gui.i
-
-# target to preprocess a source file
-src/chip/cpu/mos6510/mos6510_gui.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510/mos6510_gui.c.i
-.PHONY : src/chip/cpu/mos6510/mos6510_gui.c.i
-
-src/chip/cpu/mos6510/mos6510_gui.s: src/chip/cpu/mos6510/mos6510_gui.c.s
-.PHONY : src/chip/cpu/mos6510/mos6510_gui.s
-
-# target to generate assembly for a file
-src/chip/cpu/mos6510/mos6510_gui.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510/mos6510_gui.c.s
-.PHONY : src/chip/cpu/mos6510/mos6510_gui.c.s
+src/chip/cpu/mos6510_cpp/mos6510_cpp.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cpp/mos6510_cpp.c.s
+.PHONY : src/chip/cpu/mos6510_cpp/mos6510_cpp.c.s
 
 src/chip/cpu/mos6510_cycle/cpu_config.o: src/chip/cpu/mos6510_cycle/cpu_config.c.o
 .PHONY : src/chip/cpu/mos6510_cycle/cpu_config.o
@@ -510,8 +241,6 @@ src/chip/cpu/mos6510_cycle/cpu_config.o: src/chip/cpu/mos6510_cycle/cpu_config.c
 # target to build an object file
 src/chip/cpu/mos6510_cycle/cpu_config.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/cpu_config.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/cpu_config.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/cpu_config.c.o
 .PHONY : src/chip/cpu/mos6510_cycle/cpu_config.c.o
 
 src/chip/cpu/mos6510_cycle/cpu_config.i: src/chip/cpu/mos6510_cycle/cpu_config.c.i
@@ -520,8 +249,6 @@ src/chip/cpu/mos6510_cycle/cpu_config.i: src/chip/cpu/mos6510_cycle/cpu_config.c
 # target to preprocess a source file
 src/chip/cpu/mos6510_cycle/cpu_config.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/cpu_config.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/cpu_config.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/cpu_config.c.i
 .PHONY : src/chip/cpu/mos6510_cycle/cpu_config.c.i
 
 src/chip/cpu/mos6510_cycle/cpu_config.s: src/chip/cpu/mos6510_cycle/cpu_config.c.s
@@ -530,8 +257,6 @@ src/chip/cpu/mos6510_cycle/cpu_config.s: src/chip/cpu/mos6510_cycle/cpu_config.c
 # target to generate assembly for a file
 src/chip/cpu/mos6510_cycle/cpu_config.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/cpu_config.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/cpu_config.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/cpu_config.c.s
 .PHONY : src/chip/cpu/mos6510_cycle/cpu_config.c.s
 
 src/chip/cpu/mos6510_cycle/deferred_ops.o: src/chip/cpu/mos6510_cycle/deferred_ops.c.o
@@ -540,8 +265,6 @@ src/chip/cpu/mos6510_cycle/deferred_ops.o: src/chip/cpu/mos6510_cycle/deferred_o
 # target to build an object file
 src/chip/cpu/mos6510_cycle/deferred_ops.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/deferred_ops.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/deferred_ops.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/deferred_ops.c.o
 .PHONY : src/chip/cpu/mos6510_cycle/deferred_ops.c.o
 
 src/chip/cpu/mos6510_cycle/deferred_ops.i: src/chip/cpu/mos6510_cycle/deferred_ops.c.i
@@ -550,8 +273,6 @@ src/chip/cpu/mos6510_cycle/deferred_ops.i: src/chip/cpu/mos6510_cycle/deferred_o
 # target to preprocess a source file
 src/chip/cpu/mos6510_cycle/deferred_ops.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/deferred_ops.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/deferred_ops.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/deferred_ops.c.i
 .PHONY : src/chip/cpu/mos6510_cycle/deferred_ops.c.i
 
 src/chip/cpu/mos6510_cycle/deferred_ops.s: src/chip/cpu/mos6510_cycle/deferred_ops.c.s
@@ -560,8 +281,6 @@ src/chip/cpu/mos6510_cycle/deferred_ops.s: src/chip/cpu/mos6510_cycle/deferred_o
 # target to generate assembly for a file
 src/chip/cpu/mos6510_cycle/deferred_ops.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/deferred_ops.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/deferred_ops.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/deferred_ops.c.s
 .PHONY : src/chip/cpu/mos6510_cycle/deferred_ops.c.s
 
 src/chip/cpu/mos6510_cycle/instruction_table.o: src/chip/cpu/mos6510_cycle/instruction_table.c.o
@@ -570,8 +289,6 @@ src/chip/cpu/mos6510_cycle/instruction_table.o: src/chip/cpu/mos6510_cycle/instr
 # target to build an object file
 src/chip/cpu/mos6510_cycle/instruction_table.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/instruction_table.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/instruction_table.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/instruction_table.c.o
 .PHONY : src/chip/cpu/mos6510_cycle/instruction_table.c.o
 
 src/chip/cpu/mos6510_cycle/instruction_table.i: src/chip/cpu/mos6510_cycle/instruction_table.c.i
@@ -580,8 +297,6 @@ src/chip/cpu/mos6510_cycle/instruction_table.i: src/chip/cpu/mos6510_cycle/instr
 # target to preprocess a source file
 src/chip/cpu/mos6510_cycle/instruction_table.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/instruction_table.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/instruction_table.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/instruction_table.c.i
 .PHONY : src/chip/cpu/mos6510_cycle/instruction_table.c.i
 
 src/chip/cpu/mos6510_cycle/instruction_table.s: src/chip/cpu/mos6510_cycle/instruction_table.c.s
@@ -590,8 +305,6 @@ src/chip/cpu/mos6510_cycle/instruction_table.s: src/chip/cpu/mos6510_cycle/instr
 # target to generate assembly for a file
 src/chip/cpu/mos6510_cycle/instruction_table.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/instruction_table.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/instruction_table.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/instruction_table.c.s
 .PHONY : src/chip/cpu/mos6510_cycle/instruction_table.c.s
 
 src/chip/cpu/mos6510_cycle/internal_bus.o: src/chip/cpu/mos6510_cycle/internal_bus.c.o
@@ -600,8 +313,6 @@ src/chip/cpu/mos6510_cycle/internal_bus.o: src/chip/cpu/mos6510_cycle/internal_b
 # target to build an object file
 src/chip/cpu/mos6510_cycle/internal_bus.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/internal_bus.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/internal_bus.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/internal_bus.c.o
 .PHONY : src/chip/cpu/mos6510_cycle/internal_bus.c.o
 
 src/chip/cpu/mos6510_cycle/internal_bus.i: src/chip/cpu/mos6510_cycle/internal_bus.c.i
@@ -610,8 +321,6 @@ src/chip/cpu/mos6510_cycle/internal_bus.i: src/chip/cpu/mos6510_cycle/internal_b
 # target to preprocess a source file
 src/chip/cpu/mos6510_cycle/internal_bus.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/internal_bus.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/internal_bus.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/internal_bus.c.i
 .PHONY : src/chip/cpu/mos6510_cycle/internal_bus.c.i
 
 src/chip/cpu/mos6510_cycle/internal_bus.s: src/chip/cpu/mos6510_cycle/internal_bus.c.s
@@ -620,8 +329,6 @@ src/chip/cpu/mos6510_cycle/internal_bus.s: src/chip/cpu/mos6510_cycle/internal_b
 # target to generate assembly for a file
 src/chip/cpu/mos6510_cycle/internal_bus.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/internal_bus.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/internal_bus.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/internal_bus.c.s
 .PHONY : src/chip/cpu/mos6510_cycle/internal_bus.c.s
 
 src/chip/cpu/mos6510_cycle/interrupt_recognition.o: src/chip/cpu/mos6510_cycle/interrupt_recognition.c.o
@@ -630,8 +337,6 @@ src/chip/cpu/mos6510_cycle/interrupt_recognition.o: src/chip/cpu/mos6510_cycle/i
 # target to build an object file
 src/chip/cpu/mos6510_cycle/interrupt_recognition.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/interrupt_recognition.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/interrupt_recognition.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/interrupt_recognition.c.o
 .PHONY : src/chip/cpu/mos6510_cycle/interrupt_recognition.c.o
 
 src/chip/cpu/mos6510_cycle/interrupt_recognition.i: src/chip/cpu/mos6510_cycle/interrupt_recognition.c.i
@@ -640,8 +345,6 @@ src/chip/cpu/mos6510_cycle/interrupt_recognition.i: src/chip/cpu/mos6510_cycle/i
 # target to preprocess a source file
 src/chip/cpu/mos6510_cycle/interrupt_recognition.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/interrupt_recognition.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/interrupt_recognition.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/interrupt_recognition.c.i
 .PHONY : src/chip/cpu/mos6510_cycle/interrupt_recognition.c.i
 
 src/chip/cpu/mos6510_cycle/interrupt_recognition.s: src/chip/cpu/mos6510_cycle/interrupt_recognition.c.s
@@ -650,8 +353,6 @@ src/chip/cpu/mos6510_cycle/interrupt_recognition.s: src/chip/cpu/mos6510_cycle/i
 # target to generate assembly for a file
 src/chip/cpu/mos6510_cycle/interrupt_recognition.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/interrupt_recognition.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/interrupt_recognition.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/interrupt_recognition.c.s
 .PHONY : src/chip/cpu/mos6510_cycle/interrupt_recognition.c.s
 
 src/chip/cpu/mos6510_cycle/mos6510_registers.o: src/chip/cpu/mos6510_cycle/mos6510_registers.c.o
@@ -660,8 +361,6 @@ src/chip/cpu/mos6510_cycle/mos6510_registers.o: src/chip/cpu/mos6510_cycle/mos65
 # target to build an object file
 src/chip/cpu/mos6510_cycle/mos6510_registers.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/mos6510_registers.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/mos6510_registers.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/mos6510_registers.c.o
 .PHONY : src/chip/cpu/mos6510_cycle/mos6510_registers.c.o
 
 src/chip/cpu/mos6510_cycle/mos6510_registers.i: src/chip/cpu/mos6510_cycle/mos6510_registers.c.i
@@ -670,8 +369,6 @@ src/chip/cpu/mos6510_cycle/mos6510_registers.i: src/chip/cpu/mos6510_cycle/mos65
 # target to preprocess a source file
 src/chip/cpu/mos6510_cycle/mos6510_registers.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/mos6510_registers.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/mos6510_registers.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/mos6510_registers.c.i
 .PHONY : src/chip/cpu/mos6510_cycle/mos6510_registers.c.i
 
 src/chip/cpu/mos6510_cycle/mos6510_registers.s: src/chip/cpu/mos6510_cycle/mos6510_registers.c.s
@@ -680,8 +377,6 @@ src/chip/cpu/mos6510_cycle/mos6510_registers.s: src/chip/cpu/mos6510_cycle/mos65
 # target to generate assembly for a file
 src/chip/cpu/mos6510_cycle/mos6510_registers.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/mos6510_registers.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/mos6510_registers.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/mos6510_registers.c.s
 .PHONY : src/chip/cpu/mos6510_cycle/mos6510_registers.c.s
 
 src/chip/cpu/mos6510_cycle/mos6510_state.o: src/chip/cpu/mos6510_cycle/mos6510_state.c.o
@@ -690,8 +385,6 @@ src/chip/cpu/mos6510_cycle/mos6510_state.o: src/chip/cpu/mos6510_cycle/mos6510_s
 # target to build an object file
 src/chip/cpu/mos6510_cycle/mos6510_state.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/mos6510_state.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/mos6510_state.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/mos6510_state.c.o
 .PHONY : src/chip/cpu/mos6510_cycle/mos6510_state.c.o
 
 src/chip/cpu/mos6510_cycle/mos6510_state.i: src/chip/cpu/mos6510_cycle/mos6510_state.c.i
@@ -700,8 +393,6 @@ src/chip/cpu/mos6510_cycle/mos6510_state.i: src/chip/cpu/mos6510_cycle/mos6510_s
 # target to preprocess a source file
 src/chip/cpu/mos6510_cycle/mos6510_state.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/mos6510_state.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/mos6510_state.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/mos6510_state.c.i
 .PHONY : src/chip/cpu/mos6510_cycle/mos6510_state.c.i
 
 src/chip/cpu/mos6510_cycle/mos6510_state.s: src/chip/cpu/mos6510_cycle/mos6510_state.c.s
@@ -710,8 +401,6 @@ src/chip/cpu/mos6510_cycle/mos6510_state.s: src/chip/cpu/mos6510_cycle/mos6510_s
 # target to generate assembly for a file
 src/chip/cpu/mos6510_cycle/mos6510_state.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/mos6510_state.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/mos6510_state.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/mos6510_state.c.s
 .PHONY : src/chip/cpu/mos6510_cycle/mos6510_state.c.s
 
 src/chip/cpu/mos6510_cycle/mos6510_tick.o: src/chip/cpu/mos6510_cycle/mos6510_tick.c.o
@@ -720,8 +409,6 @@ src/chip/cpu/mos6510_cycle/mos6510_tick.o: src/chip/cpu/mos6510_cycle/mos6510_ti
 # target to build an object file
 src/chip/cpu/mos6510_cycle/mos6510_tick.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/mos6510_tick.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/mos6510_tick.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/mos6510_tick.c.o
 .PHONY : src/chip/cpu/mos6510_cycle/mos6510_tick.c.o
 
 src/chip/cpu/mos6510_cycle/mos6510_tick.i: src/chip/cpu/mos6510_cycle/mos6510_tick.c.i
@@ -730,8 +417,6 @@ src/chip/cpu/mos6510_cycle/mos6510_tick.i: src/chip/cpu/mos6510_cycle/mos6510_ti
 # target to preprocess a source file
 src/chip/cpu/mos6510_cycle/mos6510_tick.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/mos6510_tick.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/mos6510_tick.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/mos6510_tick.c.i
 .PHONY : src/chip/cpu/mos6510_cycle/mos6510_tick.c.i
 
 src/chip/cpu/mos6510_cycle/mos6510_tick.s: src/chip/cpu/mos6510_cycle/mos6510_tick.c.s
@@ -740,8 +425,6 @@ src/chip/cpu/mos6510_cycle/mos6510_tick.s: src/chip/cpu/mos6510_cycle/mos6510_ti
 # target to generate assembly for a file
 src/chip/cpu/mos6510_cycle/mos6510_tick.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/mos6510_tick.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/mos6510_tick.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/mos6510_tick.c.s
 .PHONY : src/chip/cpu/mos6510_cycle/mos6510_tick.c.s
 
 src/chip/cpu/mos6510_cycle/nmi_skipping.o: src/chip/cpu/mos6510_cycle/nmi_skipping.c.o
@@ -750,8 +433,6 @@ src/chip/cpu/mos6510_cycle/nmi_skipping.o: src/chip/cpu/mos6510_cycle/nmi_skippi
 # target to build an object file
 src/chip/cpu/mos6510_cycle/nmi_skipping.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/nmi_skipping.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/nmi_skipping.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/nmi_skipping.c.o
 .PHONY : src/chip/cpu/mos6510_cycle/nmi_skipping.c.o
 
 src/chip/cpu/mos6510_cycle/nmi_skipping.i: src/chip/cpu/mos6510_cycle/nmi_skipping.c.i
@@ -760,8 +441,6 @@ src/chip/cpu/mos6510_cycle/nmi_skipping.i: src/chip/cpu/mos6510_cycle/nmi_skippi
 # target to preprocess a source file
 src/chip/cpu/mos6510_cycle/nmi_skipping.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/nmi_skipping.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/nmi_skipping.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/nmi_skipping.c.i
 .PHONY : src/chip/cpu/mos6510_cycle/nmi_skipping.c.i
 
 src/chip/cpu/mos6510_cycle/nmi_skipping.s: src/chip/cpu/mos6510_cycle/nmi_skipping.c.s
@@ -770,8 +449,6 @@ src/chip/cpu/mos6510_cycle/nmi_skipping.s: src/chip/cpu/mos6510_cycle/nmi_skippi
 # target to generate assembly for a file
 src/chip/cpu/mos6510_cycle/nmi_skipping.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/nmi_skipping.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/nmi_skipping.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/nmi_skipping.c.s
 .PHONY : src/chip/cpu/mos6510_cycle/nmi_skipping.c.s
 
 src/chip/cpu/mos6510_cycle/pipeline.o: src/chip/cpu/mos6510_cycle/pipeline.c.o
@@ -780,8 +457,6 @@ src/chip/cpu/mos6510_cycle/pipeline.o: src/chip/cpu/mos6510_cycle/pipeline.c.o
 # target to build an object file
 src/chip/cpu/mos6510_cycle/pipeline.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/pipeline.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/pipeline.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/pipeline.c.o
 .PHONY : src/chip/cpu/mos6510_cycle/pipeline.c.o
 
 src/chip/cpu/mos6510_cycle/pipeline.i: src/chip/cpu/mos6510_cycle/pipeline.c.i
@@ -790,8 +465,6 @@ src/chip/cpu/mos6510_cycle/pipeline.i: src/chip/cpu/mos6510_cycle/pipeline.c.i
 # target to preprocess a source file
 src/chip/cpu/mos6510_cycle/pipeline.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/pipeline.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/pipeline.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/pipeline.c.i
 .PHONY : src/chip/cpu/mos6510_cycle/pipeline.c.i
 
 src/chip/cpu/mos6510_cycle/pipeline.s: src/chip/cpu/mos6510_cycle/pipeline.c.s
@@ -800,8 +473,6 @@ src/chip/cpu/mos6510_cycle/pipeline.s: src/chip/cpu/mos6510_cycle/pipeline.c.s
 # target to generate assembly for a file
 src/chip/cpu/mos6510_cycle/pipeline.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/pipeline.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/pipeline.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/pipeline.c.s
 .PHONY : src/chip/cpu/mos6510_cycle/pipeline.c.s
 
 src/chip/cpu/mos6510_cycle/pla_lookup.o: src/chip/cpu/mos6510_cycle/pla_lookup.c.o
@@ -810,8 +481,6 @@ src/chip/cpu/mos6510_cycle/pla_lookup.o: src/chip/cpu/mos6510_cycle/pla_lookup.c
 # target to build an object file
 src/chip/cpu/mos6510_cycle/pla_lookup.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/pla_lookup.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/pla_lookup.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/pla_lookup.c.o
 .PHONY : src/chip/cpu/mos6510_cycle/pla_lookup.c.o
 
 src/chip/cpu/mos6510_cycle/pla_lookup.i: src/chip/cpu/mos6510_cycle/pla_lookup.c.i
@@ -820,8 +489,6 @@ src/chip/cpu/mos6510_cycle/pla_lookup.i: src/chip/cpu/mos6510_cycle/pla_lookup.c
 # target to preprocess a source file
 src/chip/cpu/mos6510_cycle/pla_lookup.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/pla_lookup.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/pla_lookup.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/pla_lookup.c.i
 .PHONY : src/chip/cpu/mos6510_cycle/pla_lookup.c.i
 
 src/chip/cpu/mos6510_cycle/pla_lookup.s: src/chip/cpu/mos6510_cycle/pla_lookup.c.s
@@ -830,8 +497,6 @@ src/chip/cpu/mos6510_cycle/pla_lookup.s: src/chip/cpu/mos6510_cycle/pla_lookup.c
 # target to generate assembly for a file
 src/chip/cpu/mos6510_cycle/pla_lookup.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/pla_lookup.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/pla_lookup.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/pla_lookup.c.s
 .PHONY : src/chip/cpu/mos6510_cycle/pla_lookup.c.s
 
 src/chip/cpu/mos6510_cycle/timing_states.o: src/chip/cpu/mos6510_cycle/timing_states.c.o
@@ -840,8 +505,6 @@ src/chip/cpu/mos6510_cycle/timing_states.o: src/chip/cpu/mos6510_cycle/timing_st
 # target to build an object file
 src/chip/cpu/mos6510_cycle/timing_states.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/timing_states.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/timing_states.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/timing_states.c.o
 .PHONY : src/chip/cpu/mos6510_cycle/timing_states.c.o
 
 src/chip/cpu/mos6510_cycle/timing_states.i: src/chip/cpu/mos6510_cycle/timing_states.c.i
@@ -850,8 +513,6 @@ src/chip/cpu/mos6510_cycle/timing_states.i: src/chip/cpu/mos6510_cycle/timing_st
 # target to preprocess a source file
 src/chip/cpu/mos6510_cycle/timing_states.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/timing_states.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/timing_states.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/timing_states.c.i
 .PHONY : src/chip/cpu/mos6510_cycle/timing_states.c.i
 
 src/chip/cpu/mos6510_cycle/timing_states.s: src/chip/cpu/mos6510_cycle/timing_states.c.s
@@ -860,8 +521,6 @@ src/chip/cpu/mos6510_cycle/timing_states.s: src/chip/cpu/mos6510_cycle/timing_st
 # target to generate assembly for a file
 src/chip/cpu/mos6510_cycle/timing_states.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/cpu/mos6510_cycle/timing_states.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/mos6510_cycle/timing_states.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/cpu/mos6510_cycle/timing_states.c.s
 .PHONY : src/chip/cpu/mos6510_cycle/timing_states.c.s
 
 src/chip/io/mos6526.o: src/chip/io/mos6526.c.o
@@ -870,8 +529,6 @@ src/chip/io/mos6526.o: src/chip/io/mos6526.c.o
 # target to build an object file
 src/chip/io/mos6526.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/io/mos6526.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/io/mos6526.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/io/mos6526.c.o
 .PHONY : src/chip/io/mos6526.c.o
 
 src/chip/io/mos6526.i: src/chip/io/mos6526.c.i
@@ -880,8 +537,6 @@ src/chip/io/mos6526.i: src/chip/io/mos6526.c.i
 # target to preprocess a source file
 src/chip/io/mos6526.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/io/mos6526.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/io/mos6526.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/io/mos6526.c.i
 .PHONY : src/chip/io/mos6526.c.i
 
 src/chip/io/mos6526.s: src/chip/io/mos6526.c.s
@@ -890,8 +545,6 @@ src/chip/io/mos6526.s: src/chip/io/mos6526.c.s
 # target to generate assembly for a file
 src/chip/io/mos6526.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/io/mos6526.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/io/mos6526.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/io/mos6526.c.s
 .PHONY : src/chip/io/mos6526.c.s
 
 src/chip/logic/pla.o: src/chip/logic/pla.c.o
@@ -900,8 +553,6 @@ src/chip/logic/pla.o: src/chip/logic/pla.c.o
 # target to build an object file
 src/chip/logic/pla.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/logic/pla.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/logic/pla.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/logic/pla.c.o
 .PHONY : src/chip/logic/pla.c.o
 
 src/chip/logic/pla.i: src/chip/logic/pla.c.i
@@ -910,8 +561,6 @@ src/chip/logic/pla.i: src/chip/logic/pla.c.i
 # target to preprocess a source file
 src/chip/logic/pla.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/logic/pla.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/logic/pla.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/logic/pla.c.i
 .PHONY : src/chip/logic/pla.c.i
 
 src/chip/logic/pla.s: src/chip/logic/pla.c.s
@@ -920,33 +569,7 @@ src/chip/logic/pla.s: src/chip/logic/pla.c.s
 # target to generate assembly for a file
 src/chip/logic/pla.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/logic/pla.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/logic/pla.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/logic/pla.c.s
 .PHONY : src/chip/logic/pla.c.s
-
-src/chip/logic/pla_gui.o: src/chip/logic/pla_gui.c.o
-.PHONY : src/chip/logic/pla_gui.o
-
-# target to build an object file
-src/chip/logic/pla_gui.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/logic/pla_gui.c.o
-.PHONY : src/chip/logic/pla_gui.c.o
-
-src/chip/logic/pla_gui.i: src/chip/logic/pla_gui.c.i
-.PHONY : src/chip/logic/pla_gui.i
-
-# target to preprocess a source file
-src/chip/logic/pla_gui.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/logic/pla_gui.c.i
-.PHONY : src/chip/logic/pla_gui.c.i
-
-src/chip/logic/pla_gui.s: src/chip/logic/pla_gui.c.s
-.PHONY : src/chip/logic/pla_gui.s
-
-# target to generate assembly for a file
-src/chip/logic/pla_gui.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/logic/pla_gui.c.s
-.PHONY : src/chip/logic/pla_gui.c.s
 
 src/chip/memory/mos2114.o: src/chip/memory/mos2114.c.o
 .PHONY : src/chip/memory/mos2114.o
@@ -954,8 +577,6 @@ src/chip/memory/mos2114.o: src/chip/memory/mos2114.c.o
 # target to build an object file
 src/chip/memory/mos2114.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/memory/mos2114.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/memory/mos2114.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/memory/mos2114.c.o
 .PHONY : src/chip/memory/mos2114.c.o
 
 src/chip/memory/mos2114.i: src/chip/memory/mos2114.c.i
@@ -964,8 +585,6 @@ src/chip/memory/mos2114.i: src/chip/memory/mos2114.c.i
 # target to preprocess a source file
 src/chip/memory/mos2114.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/memory/mos2114.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/memory/mos2114.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/memory/mos2114.c.i
 .PHONY : src/chip/memory/mos2114.c.i
 
 src/chip/memory/mos2114.s: src/chip/memory/mos2114.c.s
@@ -974,8 +593,6 @@ src/chip/memory/mos2114.s: src/chip/memory/mos2114.c.s
 # target to generate assembly for a file
 src/chip/memory/mos2114.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/memory/mos2114.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/memory/mos2114.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/memory/mos2114.c.s
 .PHONY : src/chip/memory/mos2114.c.s
 
 src/chip/memory/ram.o: src/chip/memory/ram.c.o
@@ -984,8 +601,6 @@ src/chip/memory/ram.o: src/chip/memory/ram.c.o
 # target to build an object file
 src/chip/memory/ram.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/memory/ram.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/memory/ram.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/memory/ram.c.o
 .PHONY : src/chip/memory/ram.c.o
 
 src/chip/memory/ram.i: src/chip/memory/ram.c.i
@@ -994,8 +609,6 @@ src/chip/memory/ram.i: src/chip/memory/ram.c.i
 # target to preprocess a source file
 src/chip/memory/ram.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/memory/ram.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/memory/ram.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/memory/ram.c.i
 .PHONY : src/chip/memory/ram.c.i
 
 src/chip/memory/ram.s: src/chip/memory/ram.c.s
@@ -1004,8 +617,6 @@ src/chip/memory/ram.s: src/chip/memory/ram.c.s
 # target to generate assembly for a file
 src/chip/memory/ram.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/memory/ram.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/memory/ram.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/memory/ram.c.s
 .PHONY : src/chip/memory/ram.c.s
 
 src/chip/memory/rom.o: src/chip/memory/rom.c.o
@@ -1014,8 +625,6 @@ src/chip/memory/rom.o: src/chip/memory/rom.c.o
 # target to build an object file
 src/chip/memory/rom.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/memory/rom.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/memory/rom.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/memory/rom.c.o
 .PHONY : src/chip/memory/rom.c.o
 
 src/chip/memory/rom.i: src/chip/memory/rom.c.i
@@ -1024,8 +633,6 @@ src/chip/memory/rom.i: src/chip/memory/rom.c.i
 # target to preprocess a source file
 src/chip/memory/rom.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/memory/rom.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/memory/rom.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/memory/rom.c.i
 .PHONY : src/chip/memory/rom.c.i
 
 src/chip/memory/rom.s: src/chip/memory/rom.c.s
@@ -1034,8 +641,6 @@ src/chip/memory/rom.s: src/chip/memory/rom.c.s
 # target to generate assembly for a file
 src/chip/memory/rom.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/memory/rom.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/memory/rom.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/memory/rom.c.s
 .PHONY : src/chip/memory/rom.c.s
 
 src/chip/sound/mos6581.o: src/chip/sound/mos6581.c.o
@@ -1044,8 +649,6 @@ src/chip/sound/mos6581.o: src/chip/sound/mos6581.c.o
 # target to build an object file
 src/chip/sound/mos6581.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/sound/mos6581.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/sound/mos6581.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/sound/mos6581.c.o
 .PHONY : src/chip/sound/mos6581.c.o
 
 src/chip/sound/mos6581.i: src/chip/sound/mos6581.c.i
@@ -1054,8 +657,6 @@ src/chip/sound/mos6581.i: src/chip/sound/mos6581.c.i
 # target to preprocess a source file
 src/chip/sound/mos6581.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/sound/mos6581.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/sound/mos6581.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/sound/mos6581.c.i
 .PHONY : src/chip/sound/mos6581.c.i
 
 src/chip/sound/mos6581.s: src/chip/sound/mos6581.c.s
@@ -1064,8 +665,6 @@ src/chip/sound/mos6581.s: src/chip/sound/mos6581.c.s
 # target to generate assembly for a file
 src/chip/sound/mos6581.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/sound/mos6581.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/sound/mos6581.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/sound/mos6581.c.s
 .PHONY : src/chip/sound/mos6581.c.s
 
 src/chip/video/vic_ii/mos6567.o: src/chip/video/vic_ii/mos6567.c.o
@@ -1074,8 +673,6 @@ src/chip/video/vic_ii/mos6567.o: src/chip/video/vic_ii/mos6567.c.o
 # target to build an object file
 src/chip/video/vic_ii/mos6567.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/video/vic_ii/mos6567.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/video/vic_ii/mos6567.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/video/vic_ii/mos6567.c.o
 .PHONY : src/chip/video/vic_ii/mos6567.c.o
 
 src/chip/video/vic_ii/mos6567.i: src/chip/video/vic_ii/mos6567.c.i
@@ -1084,8 +681,6 @@ src/chip/video/vic_ii/mos6567.i: src/chip/video/vic_ii/mos6567.c.i
 # target to preprocess a source file
 src/chip/video/vic_ii/mos6567.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/video/vic_ii/mos6567.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/video/vic_ii/mos6567.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/video/vic_ii/mos6567.c.i
 .PHONY : src/chip/video/vic_ii/mos6567.c.i
 
 src/chip/video/vic_ii/mos6567.s: src/chip/video/vic_ii/mos6567.c.s
@@ -1094,8 +689,6 @@ src/chip/video/vic_ii/mos6567.s: src/chip/video/vic_ii/mos6567.c.s
 # target to generate assembly for a file
 src/chip/video/vic_ii/mos6567.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/video/vic_ii/mos6567.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/video/vic_ii/mos6567.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/video/vic_ii/mos6567.c.s
 .PHONY : src/chip/video/vic_ii/mos6567.c.s
 
 src/chip/video/vic_ii/mos6569.o: src/chip/video/vic_ii/mos6569.c.o
@@ -1104,8 +697,6 @@ src/chip/video/vic_ii/mos6569.o: src/chip/video/vic_ii/mos6569.c.o
 # target to build an object file
 src/chip/video/vic_ii/mos6569.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/video/vic_ii/mos6569.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/video/vic_ii/mos6569.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/video/vic_ii/mos6569.c.o
 .PHONY : src/chip/video/vic_ii/mos6569.c.o
 
 src/chip/video/vic_ii/mos6569.i: src/chip/video/vic_ii/mos6569.c.i
@@ -1114,8 +705,6 @@ src/chip/video/vic_ii/mos6569.i: src/chip/video/vic_ii/mos6569.c.i
 # target to preprocess a source file
 src/chip/video/vic_ii/mos6569.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/video/vic_ii/mos6569.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/video/vic_ii/mos6569.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/video/vic_ii/mos6569.c.i
 .PHONY : src/chip/video/vic_ii/mos6569.c.i
 
 src/chip/video/vic_ii/mos6569.s: src/chip/video/vic_ii/mos6569.c.s
@@ -1124,8 +713,6 @@ src/chip/video/vic_ii/mos6569.s: src/chip/video/vic_ii/mos6569.c.s
 # target to generate assembly for a file
 src/chip/video/vic_ii/mos6569.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/video/vic_ii/mos6569.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/video/vic_ii/mos6569.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/video/vic_ii/mos6569.c.s
 .PHONY : src/chip/video/vic_ii/mos6569.c.s
 
 src/chip/video/vic_ii/vicii_common.o: src/chip/video/vic_ii/vicii_common.c.o
@@ -1134,8 +721,6 @@ src/chip/video/vic_ii/vicii_common.o: src/chip/video/vic_ii/vicii_common.c.o
 # target to build an object file
 src/chip/video/vic_ii/vicii_common.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/video/vic_ii/vicii_common.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/video/vic_ii/vicii_common.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/video/vic_ii/vicii_common.c.o
 .PHONY : src/chip/video/vic_ii/vicii_common.c.o
 
 src/chip/video/vic_ii/vicii_common.i: src/chip/video/vic_ii/vicii_common.c.i
@@ -1144,8 +729,6 @@ src/chip/video/vic_ii/vicii_common.i: src/chip/video/vic_ii/vicii_common.c.i
 # target to preprocess a source file
 src/chip/video/vic_ii/vicii_common.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/video/vic_ii/vicii_common.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/video/vic_ii/vicii_common.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/video/vic_ii/vicii_common.c.i
 .PHONY : src/chip/video/vic_ii/vicii_common.c.i
 
 src/chip/video/vic_ii/vicii_common.s: src/chip/video/vic_ii/vicii_common.c.s
@@ -1154,33 +737,7 @@ src/chip/video/vic_ii/vicii_common.s: src/chip/video/vic_ii/vicii_common.c.s
 # target to generate assembly for a file
 src/chip/video/vic_ii/vicii_common.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/chip/video/vic_ii/vicii_common.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/video/vic_ii/vicii_common.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/chip/video/vic_ii/vicii_common.c.s
 .PHONY : src/chip/video/vic_ii/vicii_common.c.s
-
-src/chip/video/vic_ii/vicii_gui.o: src/chip/video/vic_ii/vicii_gui.c.o
-.PHONY : src/chip/video/vic_ii/vicii_gui.o
-
-# target to build an object file
-src/chip/video/vic_ii/vicii_gui.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/video/vic_ii/vicii_gui.c.o
-.PHONY : src/chip/video/vic_ii/vicii_gui.c.o
-
-src/chip/video/vic_ii/vicii_gui.i: src/chip/video/vic_ii/vicii_gui.c.i
-.PHONY : src/chip/video/vic_ii/vicii_gui.i
-
-# target to preprocess a source file
-src/chip/video/vic_ii/vicii_gui.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/video/vic_ii/vicii_gui.c.i
-.PHONY : src/chip/video/vic_ii/vicii_gui.c.i
-
-src/chip/video/vic_ii/vicii_gui.s: src/chip/video/vic_ii/vicii_gui.c.s
-.PHONY : src/chip/video/vic_ii/vicii_gui.s
-
-# target to generate assembly for a file
-src/chip/video/vic_ii/vicii_gui.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/video/vic_ii/vicii_gui.c.s
-.PHONY : src/chip/video/vic_ii/vicii_gui.c.s
 
 src/core/chip.o: src/core/chip.c.o
 .PHONY : src/core/chip.o
@@ -1188,8 +745,6 @@ src/core/chip.o: src/core/chip.c.o
 # target to build an object file
 src/core/chip.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/core/chip.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/core/chip.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/core/chip.c.o
 .PHONY : src/core/chip.c.o
 
 src/core/chip.i: src/core/chip.c.i
@@ -1198,8 +753,6 @@ src/core/chip.i: src/core/chip.c.i
 # target to preprocess a source file
 src/core/chip.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/core/chip.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/core/chip.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/core/chip.c.i
 .PHONY : src/core/chip.c.i
 
 src/core/chip.s: src/core/chip.c.s
@@ -1208,8 +761,6 @@ src/core/chip.s: src/core/chip.c.s
 # target to generate assembly for a file
 src/core/chip.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/core/chip.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/core/chip.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/core/chip.c.s
 .PHONY : src/core/chip.c.s
 
 src/core/config/path_discovery.o: src/core/config/path_discovery.c.o
@@ -1218,8 +769,6 @@ src/core/config/path_discovery.o: src/core/config/path_discovery.c.o
 # target to build an object file
 src/core/config/path_discovery.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/core/config/path_discovery.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/core/config/path_discovery.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/core/config/path_discovery.c.o
 .PHONY : src/core/config/path_discovery.c.o
 
 src/core/config/path_discovery.i: src/core/config/path_discovery.c.i
@@ -1228,8 +777,6 @@ src/core/config/path_discovery.i: src/core/config/path_discovery.c.i
 # target to preprocess a source file
 src/core/config/path_discovery.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/core/config/path_discovery.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/core/config/path_discovery.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/core/config/path_discovery.c.i
 .PHONY : src/core/config/path_discovery.c.i
 
 src/core/config/path_discovery.s: src/core/config/path_discovery.c.s
@@ -1238,8 +785,6 @@ src/core/config/path_discovery.s: src/core/config/path_discovery.c.s
 # target to generate assembly for a file
 src/core/config/path_discovery.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/core/config/path_discovery.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/core/config/path_discovery.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/core/config/path_discovery.c.s
 .PHONY : src/core/config/path_discovery.c.s
 
 src/core/ioport.o: src/core/ioport.c.o
@@ -1248,8 +793,6 @@ src/core/ioport.o: src/core/ioport.c.o
 # target to build an object file
 src/core/ioport.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/core/ioport.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/core/ioport.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/core/ioport.c.o
 .PHONY : src/core/ioport.c.o
 
 src/core/ioport.i: src/core/ioport.c.i
@@ -1258,8 +801,6 @@ src/core/ioport.i: src/core/ioport.c.i
 # target to preprocess a source file
 src/core/ioport.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/core/ioport.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/core/ioport.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/core/ioport.c.i
 .PHONY : src/core/ioport.c.i
 
 src/core/ioport.s: src/core/ioport.c.s
@@ -1268,8 +809,6 @@ src/core/ioport.s: src/core/ioport.c.s
 # target to generate assembly for a file
 src/core/ioport.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/core/ioport.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/core/ioport.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/core/ioport.c.s
 .PHONY : src/core/ioport.c.s
 
 src/core/storage/rom_loader.o: src/core/storage/rom_loader.c.o
@@ -1278,8 +817,6 @@ src/core/storage/rom_loader.o: src/core/storage/rom_loader.c.o
 # target to build an object file
 src/core/storage/rom_loader.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/core/storage/rom_loader.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/core/storage/rom_loader.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/core/storage/rom_loader.c.o
 .PHONY : src/core/storage/rom_loader.c.o
 
 src/core/storage/rom_loader.i: src/core/storage/rom_loader.c.i
@@ -1288,8 +825,6 @@ src/core/storage/rom_loader.i: src/core/storage/rom_loader.c.i
 # target to preprocess a source file
 src/core/storage/rom_loader.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/core/storage/rom_loader.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/core/storage/rom_loader.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/core/storage/rom_loader.c.i
 .PHONY : src/core/storage/rom_loader.c.i
 
 src/core/storage/rom_loader.s: src/core/storage/rom_loader.c.s
@@ -1298,8 +833,6 @@ src/core/storage/rom_loader.s: src/core/storage/rom_loader.c.s
 # target to generate assembly for a file
 src/core/storage/rom_loader.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/core/storage/rom_loader.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/core/storage/rom_loader.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/core/storage/rom_loader.c.s
 .PHONY : src/core/storage/rom_loader.c.s
 
 src/core/system.o: src/core/system.c.o
@@ -1308,8 +841,6 @@ src/core/system.o: src/core/system.c.o
 # target to build an object file
 src/core/system.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/core/system.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/core/system.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/core/system.c.o
 .PHONY : src/core/system.c.o
 
 src/core/system.i: src/core/system.c.i
@@ -1318,8 +849,6 @@ src/core/system.i: src/core/system.c.i
 # target to preprocess a source file
 src/core/system.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/core/system.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/core/system.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/core/system.c.i
 .PHONY : src/core/system.c.i
 
 src/core/system.s: src/core/system.c.s
@@ -1328,57 +857,7 @@ src/core/system.s: src/core/system.c.s
 # target to generate assembly for a file
 src/core/system.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/core/system.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/core/system.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/core/system.c.s
 .PHONY : src/core/system.c.s
-
-src/gui/cimgui_backends.o: src/gui/cimgui_backends.cpp.o
-.PHONY : src/gui/cimgui_backends.o
-
-# target to build an object file
-src/gui/cimgui_backends.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/gui/cimgui_backends.cpp.o
-.PHONY : src/gui/cimgui_backends.cpp.o
-
-src/gui/cimgui_backends.i: src/gui/cimgui_backends.cpp.i
-.PHONY : src/gui/cimgui_backends.i
-
-# target to preprocess a source file
-src/gui/cimgui_backends.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/gui/cimgui_backends.cpp.i
-.PHONY : src/gui/cimgui_backends.cpp.i
-
-src/gui/cimgui_backends.s: src/gui/cimgui_backends.cpp.s
-.PHONY : src/gui/cimgui_backends.s
-
-# target to generate assembly for a file
-src/gui/cimgui_backends.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/gui/cimgui_backends.cpp.s
-.PHONY : src/gui/cimgui_backends.cpp.s
-
-src/gui/cimgui_interface.o: src/gui/cimgui_interface.c.o
-.PHONY : src/gui/cimgui_interface.o
-
-# target to build an object file
-src/gui/cimgui_interface.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/gui/cimgui_interface.c.o
-.PHONY : src/gui/cimgui_interface.c.o
-
-src/gui/cimgui_interface.i: src/gui/cimgui_interface.c.i
-.PHONY : src/gui/cimgui_interface.i
-
-# target to preprocess a source file
-src/gui/cimgui_interface.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/gui/cimgui_interface.c.i
-.PHONY : src/gui/cimgui_interface.c.i
-
-src/gui/cimgui_interface.s: src/gui/cimgui_interface.c.s
-.PHONY : src/gui/cimgui_interface.s
-
-# target to generate assembly for a file
-src/gui/cimgui_interface.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/gui/cimgui_interface.c.s
-.PHONY : src/gui/cimgui_interface.c.s
 
 src/main/c64_main.o: src/main/c64_main.c.o
 .PHONY : src/main/c64_main.o
@@ -1404,38 +883,12 @@ src/main/c64_main.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/main/c64_main.c.s
 .PHONY : src/main/c64_main.c.s
 
-src/main/c64_main_gui.o: src/main/c64_main_gui.c.o
-.PHONY : src/main/c64_main_gui.o
-
-# target to build an object file
-src/main/c64_main_gui.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/main/c64_main_gui.c.o
-.PHONY : src/main/c64_main_gui.c.o
-
-src/main/c64_main_gui.i: src/main/c64_main_gui.c.i
-.PHONY : src/main/c64_main_gui.i
-
-# target to preprocess a source file
-src/main/c64_main_gui.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/main/c64_main_gui.c.i
-.PHONY : src/main/c64_main_gui.c.i
-
-src/main/c64_main_gui.s: src/main/c64_main_gui.c.s
-.PHONY : src/main/c64_main_gui.s
-
-# target to generate assembly for a file
-src/main/c64_main_gui.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/main/c64_main_gui.c.s
-.PHONY : src/main/c64_main_gui.c.s
-
 src/systems/c64/c64.o: src/systems/c64/c64.c.o
 .PHONY : src/systems/c64/c64.o
 
 # target to build an object file
 src/systems/c64/c64.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/systems/c64/c64.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/systems/c64/c64.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/systems/c64/c64.c.o
 .PHONY : src/systems/c64/c64.c.o
 
 src/systems/c64/c64.i: src/systems/c64/c64.c.i
@@ -1444,8 +897,6 @@ src/systems/c64/c64.i: src/systems/c64/c64.c.i
 # target to preprocess a source file
 src/systems/c64/c64.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/systems/c64/c64.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/systems/c64/c64.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/systems/c64/c64.c.i
 .PHONY : src/systems/c64/c64.c.i
 
 src/systems/c64/c64.s: src/systems/c64/c64.c.s
@@ -1454,8 +905,6 @@ src/systems/c64/c64.s: src/systems/c64/c64.c.s
 # target to generate assembly for a file
 src/systems/c64/c64.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/systems/c64/c64.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/systems/c64/c64.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/systems/c64/c64.c.s
 .PHONY : src/systems/c64/c64.c.s
 
 src/systems/c64/c64_bus.o: src/systems/c64/c64_bus.c.o
@@ -1464,8 +913,6 @@ src/systems/c64/c64_bus.o: src/systems/c64/c64_bus.c.o
 # target to build an object file
 src/systems/c64/c64_bus.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/systems/c64/c64_bus.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/systems/c64/c64_bus.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/systems/c64/c64_bus.c.o
 .PHONY : src/systems/c64/c64_bus.c.o
 
 src/systems/c64/c64_bus.i: src/systems/c64/c64_bus.c.i
@@ -1474,8 +921,6 @@ src/systems/c64/c64_bus.i: src/systems/c64/c64_bus.c.i
 # target to preprocess a source file
 src/systems/c64/c64_bus.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/systems/c64/c64_bus.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/systems/c64/c64_bus.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/systems/c64/c64_bus.c.i
 .PHONY : src/systems/c64/c64_bus.c.i
 
 src/systems/c64/c64_bus.s: src/systems/c64/c64_bus.c.s
@@ -1484,8 +929,6 @@ src/systems/c64/c64_bus.s: src/systems/c64/c64_bus.c.s
 # target to generate assembly for a file
 src/systems/c64/c64_bus.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/systems/c64/c64_bus.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/systems/c64/c64_bus.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/systems/c64/c64_bus.c.s
 .PHONY : src/systems/c64/c64_bus.c.s
 
 src/systems/c64/c64_config.o: src/systems/c64/c64_config.c.o
@@ -1494,8 +937,6 @@ src/systems/c64/c64_config.o: src/systems/c64/c64_config.c.o
 # target to build an object file
 src/systems/c64/c64_config.c.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/systems/c64/c64_config.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/systems/c64/c64_config.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/systems/c64/c64_config.c.o
 .PHONY : src/systems/c64/c64_config.c.o
 
 src/systems/c64/c64_config.i: src/systems/c64/c64_config.c.i
@@ -1504,8 +945,6 @@ src/systems/c64/c64_config.i: src/systems/c64/c64_config.c.i
 # target to preprocess a source file
 src/systems/c64/c64_config.c.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/systems/c64/c64_config.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/systems/c64/c64_config.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/systems/c64/c64_config.c.i
 .PHONY : src/systems/c64/c64_config.c.i
 
 src/systems/c64/c64_config.s: src/systems/c64/c64_config.c.s
@@ -1514,93 +953,7 @@ src/systems/c64/c64_config.s: src/systems/c64/c64_config.c.s
 # target to generate assembly for a file
 src/systems/c64/c64_config.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/systems/c64/c64_config.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/systems/c64/c64_config.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/systems/c64/c64_config.c.s
 .PHONY : src/systems/c64/c64_config.c.s
-
-src/systems/c64/c64_dual_cpu.o: src/systems/c64/c64_dual_cpu.c.o
-.PHONY : src/systems/c64/c64_dual_cpu.o
-
-# target to build an object file
-src/systems/c64/c64_dual_cpu.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/systems/c64/c64_dual_cpu.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/systems/c64/c64_dual_cpu.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/systems/c64/c64_dual_cpu.c.o
-.PHONY : src/systems/c64/c64_dual_cpu.c.o
-
-src/systems/c64/c64_dual_cpu.i: src/systems/c64/c64_dual_cpu.c.i
-.PHONY : src/systems/c64/c64_dual_cpu.i
-
-# target to preprocess a source file
-src/systems/c64/c64_dual_cpu.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/systems/c64/c64_dual_cpu.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/systems/c64/c64_dual_cpu.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/systems/c64/c64_dual_cpu.c.i
-.PHONY : src/systems/c64/c64_dual_cpu.c.i
-
-src/systems/c64/c64_dual_cpu.s: src/systems/c64/c64_dual_cpu.c.s
-.PHONY : src/systems/c64/c64_dual_cpu.s
-
-# target to generate assembly for a file
-src/systems/c64/c64_dual_cpu.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/systems/c64/c64_dual_cpu.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/systems/c64/c64_dual_cpu.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/systems/c64/c64_dual_cpu.c.s
-.PHONY : src/systems/c64/c64_dual_cpu.c.s
-
-src/systems/c64/c64_dual_cpu_cycle.o: src/systems/c64/c64_dual_cpu_cycle.c.o
-.PHONY : src/systems/c64/c64_dual_cpu_cycle.o
-
-# target to build an object file
-src/systems/c64/c64_dual_cpu_cycle.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/systems/c64/c64_dual_cpu_cycle.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/systems/c64/c64_dual_cpu_cycle.c.o
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/systems/c64/c64_dual_cpu_cycle.c.o
-.PHONY : src/systems/c64/c64_dual_cpu_cycle.c.o
-
-src/systems/c64/c64_dual_cpu_cycle.i: src/systems/c64/c64_dual_cpu_cycle.c.i
-.PHONY : src/systems/c64/c64_dual_cpu_cycle.i
-
-# target to preprocess a source file
-src/systems/c64/c64_dual_cpu_cycle.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/systems/c64/c64_dual_cpu_cycle.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/systems/c64/c64_dual_cpu_cycle.c.i
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/systems/c64/c64_dual_cpu_cycle.c.i
-.PHONY : src/systems/c64/c64_dual_cpu_cycle.c.i
-
-src/systems/c64/c64_dual_cpu_cycle.s: src/systems/c64/c64_dual_cpu_cycle.c.s
-.PHONY : src/systems/c64/c64_dual_cpu_cycle.s
-
-# target to generate assembly for a file
-src/systems/c64/c64_dual_cpu_cycle.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu.dir/build.make CMakeFiles/c64emu.dir/src/systems/c64/c64_dual_cpu_cycle.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/systems/c64/c64_dual_cpu_cycle.c.s
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/src/systems/c64/c64_dual_cpu_cycle.c.s
-.PHONY : src/systems/c64/c64_dual_cpu_cycle.c.s
-
-test_mos6510_basic.o: test_mos6510_basic.c.o
-.PHONY : test_mos6510_basic.o
-
-# target to build an object file
-test_mos6510_basic.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/test_mos6510_basic.c.o
-.PHONY : test_mos6510_basic.c.o
-
-test_mos6510_basic.i: test_mos6510_basic.c.i
-.PHONY : test_mos6510_basic.i
-
-# target to preprocess a source file
-test_mos6510_basic.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/test_mos6510_basic.c.i
-.PHONY : test_mos6510_basic.c.i
-
-test_mos6510_basic.s: test_mos6510_basic.c.s
-.PHONY : test_mos6510_basic.s
-
-# target to generate assembly for a file
-test_mos6510_basic.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_mos6510_basic.dir/build.make CMakeFiles/test_mos6510_basic.dir/test_mos6510_basic.c.s
-.PHONY : test_mos6510_basic.c.s
 
 # Help Target
 help:
@@ -1615,36 +968,13 @@ help:
 	@echo "... list_install_components"
 	@echo "... rebuild_cache"
 	@echo "... test"
-	@echo "... run_all_tests"
-	@echo "... run_basic_test"
-	@echo "... run_comprehensive_test"
 	@echo "... c64emu"
-	@echo "... c64emu_gui"
-	@echo "... cimgui"
-	@echo "... json_parser"
-	@echo "... mos6502"
-	@echo "... mos6502_family"
-	@echo "... mos6510"
-	@echo "... mos6510_lib"
-	@echo "... nes6502"
-	@echo "... test_mos6510_basic"
-	@echo "... test_mos6510_basic_tests"
-	@echo "... test_mos6510_comprehensive"
-	@echo "... src/chip/cpu/fam65xx/fam65xx_core.o"
-	@echo "... src/chip/cpu/fam65xx/fam65xx_core.i"
-	@echo "... src/chip/cpu/fam65xx/fam65xx_core.s"
-	@echo "... src/chip/cpu/fam65xx/fam65xx_gui.o"
-	@echo "... src/chip/cpu/fam65xx/fam65xx_gui.i"
-	@echo "... src/chip/cpu/fam65xx/fam65xx_gui.s"
-	@echo "... src/chip/cpu/fam65xx/fam65xx_opcodes.o"
-	@echo "... src/chip/cpu/fam65xx/fam65xx_opcodes.i"
-	@echo "... src/chip/cpu/fam65xx/fam65xx_opcodes.s"
-	@echo "... src/chip/cpu/mos6510/mos6510.o"
-	@echo "... src/chip/cpu/mos6510/mos6510.i"
-	@echo "... src/chip/cpu/mos6510/mos6510.s"
-	@echo "... src/chip/cpu/mos6510/mos6510_gui.o"
-	@echo "... src/chip/cpu/mos6510/mos6510_gui.i"
-	@echo "... src/chip/cpu/mos6510/mos6510_gui.s"
+	@echo "... src/chip/cpu/fam65xx_cpp/fam65xx_cpp_adapter.o"
+	@echo "... src/chip/cpu/fam65xx_cpp/fam65xx_cpp_adapter.i"
+	@echo "... src/chip/cpu/fam65xx_cpp/fam65xx_cpp_adapter.s"
+	@echo "... src/chip/cpu/mos6510_cpp/mos6510_cpp.o"
+	@echo "... src/chip/cpu/mos6510_cpp/mos6510_cpp.i"
+	@echo "... src/chip/cpu/mos6510_cpp/mos6510_cpp.s"
 	@echo "... src/chip/cpu/mos6510_cycle/cpu_config.o"
 	@echo "... src/chip/cpu/mos6510_cycle/cpu_config.i"
 	@echo "... src/chip/cpu/mos6510_cycle/cpu_config.s"
@@ -1687,9 +1017,6 @@ help:
 	@echo "... src/chip/logic/pla.o"
 	@echo "... src/chip/logic/pla.i"
 	@echo "... src/chip/logic/pla.s"
-	@echo "... src/chip/logic/pla_gui.o"
-	@echo "... src/chip/logic/pla_gui.i"
-	@echo "... src/chip/logic/pla_gui.s"
 	@echo "... src/chip/memory/mos2114.o"
 	@echo "... src/chip/memory/mos2114.i"
 	@echo "... src/chip/memory/mos2114.s"
@@ -1711,9 +1038,6 @@ help:
 	@echo "... src/chip/video/vic_ii/vicii_common.o"
 	@echo "... src/chip/video/vic_ii/vicii_common.i"
 	@echo "... src/chip/video/vic_ii/vicii_common.s"
-	@echo "... src/chip/video/vic_ii/vicii_gui.o"
-	@echo "... src/chip/video/vic_ii/vicii_gui.i"
-	@echo "... src/chip/video/vic_ii/vicii_gui.s"
 	@echo "... src/core/chip.o"
 	@echo "... src/core/chip.i"
 	@echo "... src/core/chip.s"
@@ -1729,18 +1053,9 @@ help:
 	@echo "... src/core/system.o"
 	@echo "... src/core/system.i"
 	@echo "... src/core/system.s"
-	@echo "... src/gui/cimgui_backends.o"
-	@echo "... src/gui/cimgui_backends.i"
-	@echo "... src/gui/cimgui_backends.s"
-	@echo "... src/gui/cimgui_interface.o"
-	@echo "... src/gui/cimgui_interface.i"
-	@echo "... src/gui/cimgui_interface.s"
 	@echo "... src/main/c64_main.o"
 	@echo "... src/main/c64_main.i"
 	@echo "... src/main/c64_main.s"
-	@echo "... src/main/c64_main_gui.o"
-	@echo "... src/main/c64_main_gui.i"
-	@echo "... src/main/c64_main_gui.s"
 	@echo "... src/systems/c64/c64.o"
 	@echo "... src/systems/c64/c64.i"
 	@echo "... src/systems/c64/c64.s"
@@ -1750,15 +1065,6 @@ help:
 	@echo "... src/systems/c64/c64_config.o"
 	@echo "... src/systems/c64/c64_config.i"
 	@echo "... src/systems/c64/c64_config.s"
-	@echo "... src/systems/c64/c64_dual_cpu.o"
-	@echo "... src/systems/c64/c64_dual_cpu.i"
-	@echo "... src/systems/c64/c64_dual_cpu.s"
-	@echo "... src/systems/c64/c64_dual_cpu_cycle.o"
-	@echo "... src/systems/c64/c64_dual_cpu_cycle.i"
-	@echo "... src/systems/c64/c64_dual_cpu_cycle.s"
-	@echo "... test_mos6510_basic.o"
-	@echo "... test_mos6510_basic.i"
-	@echo "... test_mos6510_basic.s"
 .PHONY : help
 
 

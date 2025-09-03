@@ -90,7 +90,7 @@ endif
 
 # Compiler flags
 CFLAGS := -std=c99 -Wall -Wextra -Wno-unused-parameter -Wno-unused-variable $(OPT_FLAGS) $(PLATFORM_CFLAGS)
-CXXFLAGS := -std=c++11 -Wall -Wextra -Wno-unused-parameter $(OPT_FLAGS) $(PLATFORM_CFLAGS)
+CXXFLAGS := -std=c++17 -Wall -Wextra -Wno-unused-parameter $(OPT_FLAGS) $(PLATFORM_CFLAGS)
 
 # Enable redesign CPU dispatch
 CFLAGS += -DREDESIGN=1
@@ -99,6 +99,7 @@ CXXFLAGS += -DREDESIGN=1
 # Include directories
 INCLUDES := -I$(CORE_DIR) \
            -I$(CHIP_DIR)/cpu/mos6510 \
+           -I$(CHIP_DIR)/cpu/fam65xx_cpp \
            -I$(CHIP_DIR)/io \
            -I$(CHIP_DIR)/logic \
            -I$(CHIP_DIR)/memory \
@@ -167,6 +168,7 @@ CORE_SOURCES := $(CORE_DIR)/system.c \
 CHIP_SOURCES := $(CHIP_DIR)/cpu/fam65xx/fam65xx_core.c \
                $(CHIP_DIR)/cpu/fam65xx/fam65xx_opcodes.c \
                $(CHIP_DIR)/cpu/mos6510/mos6510.c \
+               $(CHIP_DIR)/cpu/mos6510/mos6510.cpp \
                $(CHIP_DIR)/io/mos6526.c \
                $(CHIP_DIR)/logic/pla.c \
                $(CHIP_DIR)/memory/ram.c \
@@ -265,7 +267,7 @@ test: $(TEST_TARGET)
 # Build console executable
 $(CONSOLE_TARGET): $(COMMON_OBJECTS) $(OBJ_DIR)/$(MAIN_DIR)/c64_main.o | $(BIN_DIR)
 	$(ECHO) "Linking $@"
-	$(Q)$(CC) $(CFLAGS) $^ -o $@ $(LIBS)
+	$(Q)$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
 
 # Build GUI executable
 $(GUI_TARGET): $(COMMON_OBJECTS) $(GUI_OBJECTS) $(OBJ_DIR)/$(MAIN_DIR)/c64_main_gui.o | $(BIN_DIR)
@@ -275,7 +277,7 @@ $(GUI_TARGET): $(COMMON_OBJECTS) $(GUI_OBJECTS) $(OBJ_DIR)/$(MAIN_DIR)/c64_main_
 # Build test executable
 $(TEST_TARGET): $(COMMON_OBJECTS) $(TEST_OBJECTS) | $(BIN_DIR)
 	$(ECHO) "Linking $@"
-	$(Q)$(CC) $(CFLAGS) $^ -o $@ $(LIBS)
+	$(Q)$(CXX) $(CXXFLAGS) $^ -o $@ $(LIBS)
 
 # Compile C source files
 $(OBJ_DIR)/%.o: %.c | $(OBJ_DIR) $(DEP_DIR)

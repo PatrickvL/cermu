@@ -8,10 +8,10 @@
 #include "c64.h"
 #include "c64_bus.h"
 #include "c64_config.h"
-#include "c64_dual_cpu.h"
+/* dual CPU include removed */
 #include "../../core/storage/rom_loader.h"
 #include "../../core/config/path_discovery.h"
-#include "../../chip/cpu/mos6510/mos6510.h" // cpu
+#include "../../chip/cpu/mos6510/mos6510.h" // Direct C++ core
 #include "../../chip/io/mos6526.h" // cia
 #include "../../chip/sound/mos6581.h" // sid
 #include "../../chip/video/vic_ii/mos6569.h" // vicii PAL
@@ -239,9 +239,6 @@ static inline void* create_and_register_chip(c64_t* c64, chip_descriptor_t* desc
 void c64_system_destroy(c64_t* c64) {
     if (!c64) return;
 
-    // Destroy dual CPU system
-    c64_dual_cpu_destroy(&c64->dual_cpu);
-    
     system_chips_destroy(&c64->system);
     free(c64);
 }
@@ -307,12 +304,6 @@ c64_t* c64_system_create(const c64_config_t* config) {
         }
     }
     
-    // Attach CPU interfaces to the MOS6510 using the new direct adapter access
-    mos6510_attach_bus_interface(c64->mos6510, &(c64->bus.bus_adapter));
-    mos6510_attach_control_lines_interface(c64->mos6510, &(c64->bus.control_lines_adapter));
-    
-    // Register banking change callback to update PLA mapping when I/O port changes banking bits
-    mos6510_set_banking_callback(c64->mos6510, &(c64->bus), c64_bus_on_banking_change);
     
     // Hardware: CIA2 Data Port A bits 0-1 control VIC-II memory bank selection
     // Note: VIC-II will monitor CIA2 writes at $DD00 directly in its tick function
@@ -320,11 +311,6 @@ c64_t* c64_system_create(const c64_config_t* config) {
     
     // Set CIA2 interrupt line to NMI (CIA1 defaults to IRQ in constructor)
     ((mos6526_t*)c64->cia2)->interrupt_line = BUS_MASK_NMI;
-    
-    // Initialize the dual CPU system with the main CPU
-    if (!c64_dual_cpu_init(&c64->dual_cpu, c64->mos6510)) {
-        printf("Warning: Failed to initialize dual CPU system, using legacy CPU only\n");
-    }
     
     return c64;
 }
@@ -353,81 +339,21 @@ bool c64_reload_roms(c64_t* c64, const rom_config_t* rom_config) {
 // Execute one CPU cycle based on current mode
 void c64_cpu_cycle(c64_t* c64) {
     if (!c64) return;
-    (void)c64_dual_cpu_step(&c64->dual_cpu);
+    // CPU tick -> memory service -> system tick
+    bus_state_t s = c64->bus.state;
+    s = mos6510_tick_chip(c64->mos6510, s);
+    s = c64_memory_tick(&c64->bus, s);
+    c64->bus.state = s;
+    // Advance the rest of the system to complete the cycle
+    c64_non_cpu_cycle(c64);
 }
 
 // Execute one CPU tick with bus state (used by cycle-accurate core)
 bus_state_t c64_cpu_tick(c64_t* c64, bus_state_t bus_state) {
     if (!c64) return bus_state;
-    return c64_dual_cpu_execute(&c64->dual_cpu, bus_state);
+    bus_state = mos6510_tick_chip(c64->mos6510, bus_state);
+    bus_state = c64_memory_tick(&c64->bus, bus_state);
+    return bus_state;
 }
 // Step the CPU using the dual CPU system
-bool c64_cpu_step(c64_t* c64) {
-    if (!c64) return false;
-    
-    return c64_dual_cpu_step(&c64->dual_cpu);
-}
-
-// Step a single instruction using the dual CPU system
-bool c64_cpu_step_instruction(c64_t* c64) {
-    if (!c64) return false;
-    
-    return c64_dual_cpu_step_instruction(&c64->dual_cpu);
-}
-
-// Set the CPU execution mode
-bool c64_set_cpu_mode(c64_t* c64, cpu_execution_mode_t mode) {
-    if (!c64) return false;
-    
-    return c64_dual_cpu_set_mode(&c64->dual_cpu, mode);
-}
-
-// Get the current CPU execution mode
-cpu_execution_mode_t c64_get_cpu_mode(const c64_t* c64) {
-    if (!c64) return CPU_MODE_LEGACY_ONLY;
-    
-    return c64_dual_cpu_get_mode(&c64->dual_cpu);
-}
-
-// Get dual CPU performance metrics
-void c64_get_cpu_metrics(const c64_t* c64, dual_cpu_metrics_t* metrics) {
-    if (!c64 || !metrics) return;
-    
-    c64_dual_cpu_get_metrics(&c64->dual_cpu, metrics);
-}
-bool c64_is_using_cycle_cpu(const c64_t* c64) {
-    if (!c64) return false;
-    return c64_dual_cpu_is_using_cycle_cpu(&c64->dual_cpu);
-}
-// Validation configuration wrappers
-void c64_set_validation_checkpoint_interval(c64_t* c64, uint64_t interval) {
-    if (!c64) return;
-    c64_dual_cpu_set_checkpoint_interval(&c64->dual_cpu, interval);
-}
-
-uint64_t c64_get_validation_checkpoint_interval(const c64_t* c64) {
-    if (!c64) return 0;
-    return c64_dual_cpu_get_checkpoint_interval(&c64->dual_cpu);
-}
-
-// Validation control
-bool c64_validate_sync(c64_t* c64) {
-    if (!c64) return false;
-    return c64_dual_cpu_synchronize_state(&c64->dual_cpu);
-}
-
-// Benchmark controls
-void c64_start_benchmark(c64_t* c64) {
-    if (!c64) return;
-    c64_dual_cpu_start_benchmark(&c64->dual_cpu);
-}
-
-void c64_stop_benchmark(c64_t* c64, double elapsed_seconds) {
-    if (!c64) return;
-    c64_dual_cpu_stop_benchmark(&c64->dual_cpu, elapsed_seconds);
-}
-
-void c64_print_benchmark_results(const c64_t* c64) {
-    if (!c64) return;
-    c64_dual_cpu_print_benchmark_results(&c64->dual_cpu);
-}
+/* Dual-CPU utility functions removed */

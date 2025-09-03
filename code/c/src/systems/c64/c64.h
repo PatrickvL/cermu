@@ -16,15 +16,14 @@
 #include "../../chip/video/vic_ii/mos6569.h"
 #include "c64_bus.h"  // Include the bus header to get c64_bus_t definition
 #include "c64_config.h"
-#include "c64_dual_cpu.h"
+/* dual CPU path removed */
 
 // No forward declarations needed - all types are defined in included headers
 
 typedef struct c64_s {
     system_8bit_t system;
     c64_bus_t bus;
-    c64_dual_cpu_t dual_cpu;    // Dual CPU architecture support
-    void* mos6510;              // Legacy pointer - DEPRECATED (use dual_cpu instead)
+    void* mos6510;              // MOS6510 instance (C++ core)
     ram_t* ram;                 // RAM memory $0000-$FFFF (64KB)
     rom_t* cartridge_roml;  // Cartridge ROM Low $8000-$9FFF (8KB)
     rom_t* cartridge_romh;  // Cartridge ROM High $A000-$BFFF (8KB)
@@ -55,30 +54,10 @@ c64_t* c64_system_create(const c64_config_t* config);
 void c64_system_destroy(c64_t* c64);
 
 // CPU execution functions
-void c64_cpu_cycle(c64_t* c64);     // Execute CPU (legacy or cycle-accurate based on mode)
-bool c64_cpu_step(c64_t* c64);      // Single instruction step (legacy mode only)
-bool c64_cpu_step_instruction(c64_t* c64); // Explicit single-instruction step
-bus_state_t c64_cpu_tick(c64_t* c64, bus_state_t bus_state); // Single cycle tick (cycle-accurate mode)
+void c64_cpu_cycle(c64_t* c64);     // Execute one CPU cycle (C++ core)
+bus_state_t c64_cpu_tick(c64_t* c64, bus_state_t bus_state); // Single cycle tick (C++ core)
 
-// CPU mode management
-bool c64_set_cpu_mode(c64_t* c64, cpu_execution_mode_t mode);
-cpu_execution_mode_t c64_get_cpu_mode(const c64_t* c64);
-bool c64_is_using_cycle_cpu(const c64_t* c64);
-
-// CPU metrics
-void c64_get_cpu_metrics(const c64_t* c64, dual_cpu_metrics_t* metrics);
-
-// Validation configuration
-void c64_set_validation_checkpoint_interval(c64_t* c64, uint64_t interval);
-uint64_t c64_get_validation_checkpoint_interval(const c64_t* c64);
-
-// Validation control
-bool c64_validate_sync(c64_t* c64);
-
-// Benchmark controls
-void c64_start_benchmark(c64_t* c64);
-void c64_stop_benchmark(c64_t* c64, double elapsed_seconds);
-void c64_print_benchmark_results(const c64_t* c64);
+/* Dual-CPU APIs removed */
 
 // Ticks all non-CPU chips once to complete a cycle.
 void c64_non_cpu_cycle(void* c64_ptr);
