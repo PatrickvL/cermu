@@ -1,9 +1,9 @@
-#ifndef CPU_HPP
-#define CPU_HPP
+#ifndef FAM65XX_HPP
+#define FAM65XX_HPP
 
 #include "cpu_defs.hpp"
 #include "cpu_config.hpp"
-#include "alu_operations.hpp" 
+#include "alu_operations.hpp"
 #include "memory_operations.hpp"
 #include "cycle_tables.hpp"
 #include "../../../core/system_lines.h"
@@ -11,7 +11,7 @@
 namespace fam65xx_cpp {
 
 template<typename Config>
-class cpu_6510 {
+class fam65xx {
 private:
     // CPU state
     uint8_t opcode = 0;
@@ -31,7 +31,7 @@ private:
 
 public:
     // Constructor
-    cpu_6510() {
+    fam65xx() {
         init();
     }
     
@@ -73,45 +73,45 @@ public:
     }
     
     // Execute one CPU cycle
-    inline void step(bus_state_t& bus_state) {
+    inline bus_state_t cycle_tick(bus_state_t bus_state) {
         // Process input control lines first
-        process_input_pins(bus_state);
+        bus_state = process_input_pins(bus_state);
         
         // Handle RDY line - variant-specific behavior
         if (!(bus_state & BUS_BIT(BUS_RDY_BIT))) {
-            if (handle_rdy_wait(bus_state)) {
-                return; // Skip this cycle
+            bus_state = handle_rdy_wait(bus_state);
+            if (get_state(STATE_RDY_WAIT)) {
+                return bus_state; // Skip this cycle
             }
         }
         
         // Handle reset
         if (get_state(STATE_RESET_PENDING)) {
-            handle_reset(bus_state);
-            return;
+            return handle_reset(bus_state);
         }
         
         // Handle interrupts
         if (cycle_step == 0) {
             if (get_state(STATE_NMI_PENDING)) {
-                handle_nmi(bus_state);
-                return;
+                return handle_nmi(bus_state);
             } else if (get_state(STATE_IRQ_PENDING)) {
                 if (!(reg[static_cast<uint8_t>(CpuReg::P)] & P_IRQ_DIS)) {
-                    handle_irq(bus_state);
-                    return;
+                    return handle_irq(bus_state);
                 }
             }
         }
         
         // Execute instruction cycle
-        execute_cycle(bus_state);
+        bus_state = execute_cycle(bus_state);
         
         // Process output control lines
-        process_output_pins(bus_state);
+        bus_state = process_output_pins(bus_state);
+        
+        return bus_state;
     }
     
     // Handle reset sequence
-    inline void handle_reset(bus_state_t& bus_state) {
+    inline bus_state_t handle_reset(bus_state_t bus_state) {
         // Reset takes 7 cycles, simplified implementation
         if (cycle_step == 0) {
             reg[CpuReg::S] = 0xFF;
@@ -127,32 +127,35 @@ public:
         } else {
             cycle_step++;
         }
+        return bus_state;
     }
     
     // Handle NMI interrupt
-    inline void handle_nmi(bus_state_t& bus_state) {
+    inline bus_state_t handle_nmi(bus_state_t bus_state) {
         // NMI sequence - simplified
         clear_state(STATE_NMI_PENDING);
         reg[CpuReg::P] |= P_IRQ_DIS;
         BUS_SET_ADDR(bus_state, 0xFFFA);
+        return bus_state;
     }
     
-    // Handle IRQ interrupt  
-    inline void handle_irq(bus_state_t& bus_state) {
+    // Handle IRQ interrupt
+    inline bus_state_t handle_irq(bus_state_t bus_state) {
         // IRQ sequence - simplified
         clear_state(STATE_IRQ_PENDING);
         reg[CpuReg::P] |= P_IRQ_DIS;
         BUS_SET_ADDR(bus_state, 0xFFFE);
+        return bus_state;
     }
     
     // Execute one instruction cycle
-    inline void execute_cycle(bus_state_t& bus_state) {
+    inline bus_state_t execute_cycle(bus_state_t bus_state) {
         // Fetch opcode on cycle 0
         if (cycle_step == 0) {
             opcode = BUS_GET_DATA(bus_state);
             cycle_step = 1;
             set_state(STATE_SYNC_NEXT);
-            return;
+            return bus_state;
         }
         
         // Get cycle description for current instruction step
@@ -164,10 +167,10 @@ public:
         AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
         
         // Execute memory operation
-        memory_ops::execute_memory_operation(bus_state, reg, mem_op, data_op);
-        
+        bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op, data_op);
+
         // Handle write data if needed
-        memory_ops::handle_write_data(bus_state, reg, mem_op, data_op);
+        bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op);
         
         // Execute data operation
         execute_data_operation(cycle.data_op, BUS_GET_DATA(bus_state));
@@ -184,6 +187,7 @@ public:
         } else {
             cycle_step++;
         }
+        return bus_state;
     }
     
     // Execute data operation
@@ -312,7 +316,7 @@ public:
     // === CONTROL LINE PROCESSING ===
     
     // Process input control lines - hardware-accurate pin handling
-    inline void process_input_pins(bus_state_t& bus_state) {
+    inline bus_state_t process_input_pins(bus_state_t bus_state) {
         // SO (Set Overflow) pin - edge detection for NMOS variants
         if constexpr (Config::has_so_pin) {
             static bool prev_so_state = true; // SO is active-low
@@ -340,7 +344,7 @@ public:
                 // BE low: CPU should tri-state its outputs
                 // Set internal flag to indicate bus is disabled
                 set_state(STATE_DMA_CYCLE);
-                return; // Skip processing when bus is disabled
+                return bus_state; // Skip processing when bus is disabled
             } else {
                 clear_state(STATE_DMA_CYCLE);
             }
@@ -356,10 +360,11 @@ public:
                 }
             }
         }
+        return bus_state;
     }
     
     // Handle RDY pin - variant-specific behavior
-    inline bool handle_rdy_wait(bus_state_t& bus_state) {
+    inline bus_state_t handle_rdy_wait(bus_state_t bus_state) {
         // RDY is active-high (0 = not ready, 1 = ready)
         bool rdy_blocks = false;
         
@@ -383,8 +388,6 @@ public:
                 // Set BA line when CPU is blocked by RDY
                 bus_state |= BUS_BIT(BUS_BA_BIT);
             }
-            
-            return true; // Skip this cycle
         } else {
             clear_state(STATE_RDY_WAIT);
             
@@ -392,13 +395,13 @@ public:
             if constexpr (Config::has_aec_pin) {
                 bus_state &= ~BUS_BIT(BUS_BA_BIT);
             }
-            
-            return false; // Continue processing
         }
+        
+        return bus_state;
     }
     
     // Process output control lines
-    inline void process_output_pins(bus_state_t& bus_state) {
+    inline bus_state_t process_output_pins(bus_state_t bus_state) {
         // SYNC pin - indicates opcode fetch cycle
         if constexpr (Config::has_sync_pin) {
             if (get_state(STATE_SYNC_NEXT)) {
@@ -427,6 +430,7 @@ public:
             // For now, always clear (no memory lock active)
             bus_state &= ~BUS_BIT(BUS_ML_BIT);
         }
+        return bus_state;
     }
     
     // === I/O PORT HANDLING (6510 SPECIFIC) ===
@@ -444,4 +448,4 @@ public:
 
 } // namespace fam65xx_cpp
 
-#endif // CPU_HPP
+#endif // FAM65XX_HPP
