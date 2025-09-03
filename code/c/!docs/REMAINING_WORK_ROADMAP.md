@@ -21,7 +21,7 @@ C64 System → MOS6510 C API → cpu_6510 Template → Native 64-bit bus_state_t
 - **[`alu_operations.hpp`](src/chip/cpu/fam65xx_cpp/alu_operations.hpp)** - Complete ALU instruction set
 - **[`memory_operations.hpp`](src/chip/cpu/fam65xx_cpp/memory_operations.hpp)** - Memory operations with native bus API
 - **[`cycle_tables.hpp`](src/chip/cpu/fam65xx_cpp/cycle_tables.hpp)** - Constexpr cycle table generation
-- **[`cpu.hpp`](src/chip/cpu/fam65xx_cpp/cpu.hpp)** - Main CPU implementation
+- **[`fam65xx.hpp`](src/chip/cpu/fam65xx_cpp/fam65xx.hpp)** - Main CPU implementation (`fam65xx` class with `cycle_tick()` method)
 
 ## PHASE 2: Extended Functionality and Optimization
 
@@ -43,6 +43,8 @@ C64 System → MOS6510 C API → cpu_6510 Template → Native 64-bit bus_state_t
 - ✅ **Variant-specific behavior**: Implemented NMOS vs CMOS differences for SO/RDY handling
 - ✅ **Template optimization**: Compile-time pin selection based on CPU variant capabilities
 - ✅ **Hardware-accurate timing**: SYNC pin indicates opcode fetch, VP pin detects vector pulls
+- ✅ **API Standardization**: Renamed `cpu_6510` to `fam65xx`, `step()` to `cycle_tick()`, returns bus_state_t
+- ✅ **Functional Interface**: All bus_state_t parameters pass-by-value with return values for modifications
 
 #### 2. Complete Instruction Set Implementation
 **Goal**: Full 6502/6510/65C02/6507/65C816 instruction coverage

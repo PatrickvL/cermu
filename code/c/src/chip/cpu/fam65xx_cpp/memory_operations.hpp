@@ -13,16 +13,16 @@ template<typename BusConfig>
 class MemoryOperations {
 public:
     template<typename RegArray>
-    static inline void execute_memory_operation(bus_state_t& bus_state, RegArray& reg,
-                                               MemOp mem_op, DataOp data_op) {
-        if (mem_op == MemOp::NOP) return;
+    static inline bus_state_t execute_memory_operation(bus_state_t bus_state, RegArray& reg,
+                                                      MemOp mem_op, DataOp data_op) {
+        if (mem_op == MemOp::NOP) return bus_state;
         
         uint16_t addr = 0;
         uint16_t pc = 0;
         
         // Execute memory operation based on opcode
         switch (mem_op) {
-            case MemOp::NOP: return;
+            case MemOp::NOP: return bus_state;
             
             case MemOp::READ_PC_INC:
                 pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
@@ -111,11 +111,12 @@ public:
                 BUS_SET_ADDR(bus_state, pc);
                 break;
         }
+        return bus_state;
     }
     
     template<typename RegArray>
-    static inline void handle_write_data(bus_state_t& bus_state, RegArray& reg,
-                                        MemOp mem_op, DataOp data_op) {
+    static inline bus_state_t handle_write_data(bus_state_t bus_state, RegArray& reg,
+                                               MemOp mem_op, DataOp data_op) {
         // Handle data output for write operations
         constexpr uint16_t WRITE_OPS = (1 << static_cast<uint8_t>(MemOp::WRITE_ABS)) |
                                        (1 << static_cast<uint8_t>(MemOp::WRITE_ZP)) |
@@ -131,6 +132,7 @@ public:
         } else if (mem_op == MemOp::WRITE_SP_DEC) {
             // Stack write operations handled specially
         }
+        return bus_state;
     }
 };
 
