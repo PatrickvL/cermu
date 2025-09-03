@@ -1,7 +1,6 @@
 #include "c64_bus.h"
 #include "c64.h"
 #include "../../chip/io/mos6526.h"
-#include "../../chip/cpu/mos6510/mos6510.h"
 #include "../../core/aiemuc.h"
 #include <stdlib.h>
 #include <string.h>

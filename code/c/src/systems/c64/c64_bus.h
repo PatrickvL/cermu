@@ -10,7 +10,6 @@
 #include "../../core/system_lines.h"
 #include "../../core/bus_cycle_interface.h"
 #include "../../core/control_lines_interface.h"
-#include "../../chip/cpu/mos6510/mos6510.h"
 #include "c64_config.h"
 
 // =============================
