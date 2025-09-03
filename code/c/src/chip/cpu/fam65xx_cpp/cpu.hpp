@@ -27,6 +27,7 @@ private:
     using cycle_tables = CycleTables<Config>;
     using alu_ops = AluOperations<Config>;
     using memory_ops = MemoryOperations<Config>;
+    using pin_config = cpu_pin_config<Config>;
 
 public:
     // Constructor
@@ -73,40 +74,13 @@ public:
     
     // Execute one CPU cycle
     inline void step(bus_state_t& bus_state) {
-        // Handle RDY line - NMOS behavior (constexpr conditions first)
-        if constexpr (Config::cpu_variant == CpuVariant::NMOS_6502 ||
-                     Config::cpu_variant == CpuVariant::NMOS_6510) {
-            if (get_state(STATE_RDY_WAIT)) {
-                bool rdy_blocks = false;
-                
-                if (cycle_step > 0) {
-                    // NMOS: RDY blocks read cycles during instruction execution
-                    rdy_blocks = true; // Simplified - should check if it's a read
-                }
-                
-                // Handle BA (Bus Available) line for C64 6510
-                if constexpr (Config::cpu_variant == CpuVariant::NMOS_6510) {
-                    if (rdy_blocks) {
-                        // Set BA line when blocked
-                    } else {
-                        // Clear BA line when not blocked
-                    }
-                }
-                
-                if (rdy_blocks) {
-                    return; // Skip this cycle
-                }
-            }
-        }
+        // Process input control lines first
+        process_input_pins(bus_state);
         
-        // Handle SO (Set Overflow) edge detection (constexpr conditions first)
-        if constexpr (Config::cpu_variant != CpuVariant::CMOS_65C02) {
-            if (get_state(STATE_SO_EDGE)) {
-                clear_state(STATE_SO_EDGE);
-                // NMOS behavior: SO sets overflow flag
-                if (cycle_step > 0) { // Only during instruction execution
-                    reg[CpuReg::P] |= P_OVERFLOW;
-                }
+        // Handle RDY line - variant-specific behavior
+        if (!(bus_state & BUS_BIT(BUS_RDY_BIT))) {
+            if (handle_rdy_wait(bus_state)) {
+                return; // Skip this cycle
             }
         }
         
@@ -131,6 +105,9 @@ public:
         
         // Execute instruction cycle
         execute_cycle(bus_state);
+        
+        // Process output control lines
+        process_output_pins(bus_state);
     }
     
     // Handle reset sequence
@@ -197,7 +174,7 @@ public:
         
         // Execute ALU operation if specified
         if (alu_op != AluOp::NOP) {
-            alu_ops::execute_alu_operation(reg, alu_op, data_op);
+            alu_ops::execute_alu_operation(reg, alu_op, BUS_GET_DATA(bus_state));
         }
         
         // Check if instruction is complete
@@ -330,6 +307,126 @@ public:
     }
     inline void reset() {
         set_state(STATE_RESET_PENDING);
+    }
+    
+    // === CONTROL LINE PROCESSING ===
+    
+    // Process input control lines - hardware-accurate pin handling
+    inline void process_input_pins(bus_state_t& bus_state) {
+        // SO (Set Overflow) pin - edge detection for NMOS variants
+        if constexpr (Config::has_so_pin) {
+            static bool prev_so_state = true; // SO is active-low
+            bool current_so = (bus_state & BUS_BIT(BUS_SO_BIT)) != 0;
+            
+            // Edge detection: transition from high to low
+            if (prev_so_state && !current_so) {
+                set_state(STATE_SO_EDGE);
+            }
+            prev_so_state = current_so;
+            
+            // Handle SO edge during instruction execution (NMOS behavior)
+            if constexpr (Config::cpu_variant == CpuVariant::NMOS_6502 ||
+                         Config::cpu_variant == CpuVariant::NMOS_6510) {
+                if (get_state(STATE_SO_EDGE) && cycle_step > 0) {
+                    clear_state(STATE_SO_EDGE);
+                    reg[CpuReg::P] |= P_OVERFLOW;
+                }
+            }
+        }
+        
+        // BE (Bus Enable) pin - 65C02/65C816 bus control
+        if constexpr (Config::has_be_pin) {
+            if (!(bus_state & BUS_BIT(BUS_BE_BIT))) {
+                // BE low: CPU should tri-state its outputs
+                // Set internal flag to indicate bus is disabled
+                set_state(STATE_DMA_CYCLE);
+                return; // Skip processing when bus is disabled
+            } else {
+                clear_state(STATE_DMA_CYCLE);
+            }
+        }
+        
+        // ABORT pin - 65C816 abort interrupt
+        if constexpr (Config::has_abort_pin) {
+            if (!(bus_state & BUS_BIT(BUS_ABORT_BIT))) {
+                // ABORT is active-low, triggers abort interrupt
+                if (!get_state(STATE_RESET_PENDING)) {
+                    // TODO: Implement full ABORT interrupt sequence
+                    set_state(STATE_IRQ_PENDING); // Simplified for now
+                }
+            }
+        }
+    }
+    
+    // Handle RDY pin - variant-specific behavior
+    inline bool handle_rdy_wait(bus_state_t& bus_state) {
+        // RDY is active-high (0 = not ready, 1 = ready)
+        bool rdy_blocks = false;
+        
+        if constexpr (Config::rdy_affects_writes) {
+            // CMOS behavior: RDY affects all cycles
+            rdy_blocks = true;
+        } else {
+            // NMOS behavior: RDY only affects read cycles during instruction execution
+            if (cycle_step > 0) {
+                // Check if current cycle is a read (simplified)
+                const bool is_read = (bus_state & BUS_BIT(BUS_RW_BIT)) != 0;
+                rdy_blocks = is_read;
+            }
+        }
+        
+        if (rdy_blocks) {
+            set_state(STATE_RDY_WAIT);
+            
+            // Handle BA (Bus Available) line for 6510 AEC/BA DMA
+            if constexpr (Config::has_aec_pin) {
+                // Set BA line when CPU is blocked by RDY
+                bus_state |= BUS_BIT(BUS_BA_BIT);
+            }
+            
+            return true; // Skip this cycle
+        } else {
+            clear_state(STATE_RDY_WAIT);
+            
+            // Clear BA line when CPU is not blocked
+            if constexpr (Config::has_aec_pin) {
+                bus_state &= ~BUS_BIT(BUS_BA_BIT);
+            }
+            
+            return false; // Continue processing
+        }
+    }
+    
+    // Process output control lines
+    inline void process_output_pins(bus_state_t& bus_state) {
+        // SYNC pin - indicates opcode fetch cycle
+        if constexpr (Config::has_sync_pin) {
+            if (get_state(STATE_SYNC_NEXT)) {
+                bus_state |= BUS_BIT(BUS_SYNC_BIT);
+                clear_state(STATE_SYNC_NEXT);
+            } else {
+                bus_state &= ~BUS_BIT(BUS_SYNC_BIT);
+            }
+        }
+        
+        // VP (Vector Pull) pin - indicates interrupt vector fetch
+        if constexpr (Config::has_vp_pin) {
+            const uint16_t pc = get_pc();
+            const bool is_vector_area = (pc >= 0xFFFA && pc <= 0xFFFF);
+            
+            if (is_vector_area && cycle_step > 0) {
+                bus_state |= BUS_BIT(BUS_VP_BIT);
+            } else {
+                bus_state &= ~BUS_BIT(BUS_VP_BIT);
+            }
+        }
+        
+        // ML (Memory Lock) pin - 65C816 memory protection
+        if constexpr (Config::has_ml_pin) {
+            // TODO: Implement proper memory lock detection
+            // For now, always clear (no memory lock active)
+            bus_state &= ~BUS_BIT(BUS_ML_BIT);
+        }
     }
     
     // === I/O PORT HANDLING (6510 SPECIFIC) ===

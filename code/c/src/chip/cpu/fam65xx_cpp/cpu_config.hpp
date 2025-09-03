@@ -24,11 +24,12 @@ enum class CpuVariant {
  */
 
 // Template-based CPU variant configuration - compile-time feature detection
-template<bool HasDecimalMode, bool HasIOPorts, bool HasSyncPin, bool HasSOPin, 
+template<fam65xx_cpp::CpuVariant Variant, bool HasDecimalMode, bool HasIOPorts, bool HasSyncPin, bool HasSOPin,
          bool HasAECPin, bool HasBEPin, bool HasAbortPin, bool HasVPPin,
          bool HasMLPin, bool HasBankPins, bool HasIllegalOpcodes, bool HasCMOSFixes,
          uint8_t AddressLines, bool RDYAffectsWrites, bool HasWAI, bool HasSTP>
 struct cpu_config {
+    static constexpr fam65xx_cpp::CpuVariant cpu_variant = Variant;
     static constexpr bool has_decimal_mode = HasDecimalMode;
     static constexpr bool has_io_ports = HasIOPorts;
     static constexpr bool has_sync_pin = HasSyncPin;
@@ -49,19 +50,21 @@ struct cpu_config {
 };
 
 // Pre-defined CPU variant configurations
-using config_6502 = cpu_config<true, false, true, true, false, false, false, false, 
+// Parameters: variant, decimal, io_ports, sync, so, aec, be, abort, vp, ml, bank, illegal, cmos, addr_lines, rdy_writes, wai, stp
+
+using config_6502 = cpu_config<fam65xx_cpp::CpuVariant::NMOS_6502, true, false, true, true, false, false, false, false,
                               false, false, true, false, 16, false, false, false>;
 
-using config_65c02 = cpu_config<true, false, true, true, false, true, false, true,
+using config_65c02 = cpu_config<fam65xx_cpp::CpuVariant::CMOS_65C02, true, false, true, true, false, true, false, true,
                                true, false, false, true, 16, true, true, true>;
 
-using config_6510 = cpu_config<true, true, false, false, true, false, false, false,
+using config_6510 = cpu_config<fam65xx_cpp::CpuVariant::NMOS_6510, true, true, true, true, true, false, false, false,
                               false, false, true, false, 16, false, false, false>;
 
-using config_6507 = cpu_config<true, false, false, false, false, false, false, false,
+using config_6507 = cpu_config<fam65xx_cpp::CpuVariant::NMOS_6502, true, false, false, false, false, false, false, false,
                               false, false, true, false, 13, false, false, false>;
 
-using config_65c816 = cpu_config<true, false, false, false, false, true, true, true,
+using config_65c816 = cpu_config<fam65xx_cpp::CpuVariant::WDC_65C816, true, false, true, true, false, true, true, true,
                                 true, true, false, true, 16, true, true, true>;
 
 /**
@@ -74,23 +77,25 @@ using config_65c816 = cpu_config<true, false, false, false, false, true, true, t
 template<typename Config>
 struct cpu_pin_config {
     // Combined input pin check - compile-time optimized pin set
+    // Maps to actual bit positions from system_lines.h
     static constexpr uint64_t variant_input_pins() {
-        return (Config::has_so_pin ? (1ULL << 16) : 0) |        // BUS_SO_BIT
-               (Config::has_aec_pin ? (1ULL << 17) : 0) |       // BUS_AEC_BIT  
-               (Config::has_be_pin ? (1ULL << 18) : 0) |        // BUS_BE_BIT
-               (Config::has_abort_pin ? (1ULL << 19) : 0) |     // BUS_ABORT_BIT
-               (1ULL << 20) |                                   // BUS_RES_BIT (always present)
-               (1ULL << 21) |                                   // BUS_IRQ_BIT (always present)
-               (1ULL << 22) |                                   // BUS_NMI_BIT (always present)
-               (1ULL << 23);                                    // BUS_RDY_BIT (always present)
+        return (1ULL << 32) |                                   // BUS_RES_BIT (always present)
+               (1ULL << 33) |                                   // BUS_IRQ_BIT (always present)
+               (1ULL << 34) |                                   // BUS_NMI_BIT (always present)
+               (1ULL << 35) |                                   // BUS_RDY_BIT (always present)
+               (Config::has_so_pin ? (1ULL << 36) : 0) |        // BUS_SO_BIT
+               (Config::has_aec_pin ? (1ULL << 37) : 0) |       // BUS_AEC_BIT
+               (Config::has_be_pin ? (1ULL << 38) : 0) |        // BUS_BE_BIT
+               (Config::has_abort_pin ? (1ULL << 39) : 0);      // BUS_ABORT_BIT
     }
     
-    // Output pin configuration
+    // Output pin configuration - maps to actual bit positions from system_lines.h
     static constexpr uint64_t variant_output_pins() {
-        return (Config::has_sync_pin ? (1ULL << 24) : 0) |      // BUS_SYNC_BIT
-               (Config::has_vp_pin ? (1ULL << 25) : 0) |        // BUS_VP_BIT
-               (Config::has_ml_pin ? (1ULL << 26) : 0) |        // BUS_ML_BIT
-               (1ULL << 27);                                     // BUS_BA_BIT (always present)
+        return (1ULL << 48) |                                   // BUS_RW_BIT (always present)
+               (Config::has_sync_pin ? (1ULL << 49) : 0) |      // BUS_SYNC_BIT
+               (1ULL << 52) |                                   // BUS_BA_BIT (always present)
+               (Config::has_vp_pin ? (1ULL << 53) : 0) |        // BUS_VP_BIT
+               (Config::has_ml_pin ? (1ULL << 54) : 0);         // BUS_ML_BIT
     }
     
     // Special state masks - compile-time conditional

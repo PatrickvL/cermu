@@ -27,19 +27,22 @@ C64 System → MOS6510 C API → cpu_6510 Template → Native 64-bit bus_state_t
 
 ### Immediate Priorities (High Impact)
 
-#### 1. Control Line Extensions
+#### 1. Control Line Extensions ✅ **COMPLETED**
 **Goal**: Complete hardware-accurate control line support
-- [ ] **SYNC pin enhancement**: Full cycle-accurate SYNC timing
-- [ ] **SO pin (Set Overflow)**: NMOS edge detection and CMOS differences
-- [ ] **BE pin (Bus Enable)**: 65C02/65C816 bus control
-- [ ] **ABORT pin**: 65C816 abort interrupt support
-- [ ] **VP pin (Vector Pull)**: Hardware interrupt vector detection
-- [ ] **ML pin (Memory Lock)**: 65C816 memory protection
+- [x] **SYNC pin enhancement**: Full cycle-accurate SYNC timing
+- [x] **SO pin (Set Overflow)**: NMOS edge detection and CMOS differences
+- [x] **BE pin (Bus Enable)**: 65C02/65C816 bus control
+- [x] **ABORT pin**: 65C816 abort interrupt support
+- [x] **VP pin (Vector Pull)**: Hardware interrupt vector detection
+- [x] **ML pin (Memory Lock)**: 65C816 memory protection
 
-**Files to Update**:
-- `system_lines.h` - Add new pin definitions
-- `cpu.hpp` - Implement pin handling in tick() method
-- `cpu_config.hpp` - Add pin configuration flags
+**Implementation Details**:
+- ✅ **Pin definitions**: All control lines mapped to correct bit positions in `system_lines.h`
+- ✅ **CPU variant configuration**: Updated `cpu_config.hpp` with proper pin feature flags
+- ✅ **Pin processing**: Added `process_input_pins()` and `process_output_pins()` methods
+- ✅ **Variant-specific behavior**: Implemented NMOS vs CMOS differences for SO/RDY handling
+- ✅ **Template optimization**: Compile-time pin selection based on CPU variant capabilities
+- ✅ **Hardware-accurate timing**: SYNC pin indicates opcode fetch, VP pin detects vector pulls
 
 #### 2. Complete Instruction Set Implementation
 **Goal**: Full 6502/6510/65C02/6507/65C816 instruction coverage

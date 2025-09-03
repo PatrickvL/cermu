@@ -1,10 +1,11 @@
 #include "mos6510.h"
-#include "../fam65xx_cpp/fam65xx_cpp_core.cpp"
+#include "../fam65xx_cpp/cpu.hpp"
+#include "../fam65xx_cpp/cpu_config.hpp"
 #include "../../../core/chip.h"
 
 // C wrapper around the template-based CPU - zero overhead
 struct mos6510_chip {
-    cpu_6510 cpu;
+    fam65xx_cpp::cpu_6510<config_6510> cpu;
 };
 
 mos6510_chip_t* mos6510_create(void) {
@@ -17,11 +18,13 @@ void mos6510_destroy(mos6510_chip_t* cpu) {
 
 void mos6510_init(mos6510_chip_t* cpu,
                   void (*io_callback)(uint16_t addr, uint8_t data, bool write)) {
-    cpu->cpu.init(io_callback);
+    (void)io_callback; // TODO: Implement IO callback integration
+    cpu->cpu.init();
 }
 
 bus_state_t mos6510_tick(mos6510_chip_t* cpu, bus_state_t bus_state) {
-    return cpu->cpu.tick(bus_state);
+    cpu->cpu.step(bus_state);
+    return bus_state;
 }
 
 uint16_t mos6510_get_pc(mos6510_chip_t* cpu) {
