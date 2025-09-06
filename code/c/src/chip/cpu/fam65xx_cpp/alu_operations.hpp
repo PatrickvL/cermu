@@ -10,9 +10,9 @@ class AluOperations {
 public:
     template<typename RegArray>
     static inline void set_nz_flags(RegArray& reg, uint8_t value) {
-        uint8_t flags = 0;
-        if (value == 0) flags |= P_ZERO;
-        if (value & 0x80) flags |= P_NEGATIVE;
+        // Batch flag computation for maximum speed
+        const uint8_t flags = ((value == 0) ? P_ZERO : 0) |
+                              ((value & 0x80) ? P_NEGATIVE : 0);
         
         reg[CpuReg::P] = (reg[CpuReg::P] & ~(P_NEGATIVE | P_ZERO)) | flags;
     }
@@ -232,15 +232,21 @@ public:
                 break;
         }
         
-        // Set N and Z flags for most operations (except those that handle flags specially)
-        if (alu_op != AluOp::TXS && alu_op != AluOp::BIT &&
-            alu_op != AluOp::CLC && alu_op != AluOp::SEC && alu_op != AluOp::CLI &&
-            alu_op != AluOp::SEI && alu_op != AluOp::CLV && alu_op != AluOp::CLD &&
-            alu_op != AluOp::SED && alu_op != AluOp::WAI && alu_op != AluOp::STP &&
-            alu_op != AluOp::JAM && alu_op != AluOp::DCP && alu_op != AluOp::ISC &&
-            alu_op != AluOp::SLO && alu_op != AluOp::RLA && alu_op != AluOp::SRE &&
-            alu_op != AluOp::RRA) {
-            set_nz_flags(reg, result);
+        // Optimized check for operations that need N/Z flag updates
+        // Group common flag operations and special cases for faster branching
+        switch (alu_op) {
+            // Flag-only operations (no N/Z update needed)
+            case AluOp::TXS: case AluOp::BIT:
+            case AluOp::CLC: case AluOp::SEC: case AluOp::CLI: case AluOp::SEI:
+            case AluOp::CLV: case AluOp::CLD: case AluOp::SED:
+            case AluOp::WAI: case AluOp::STP: case AluOp::JAM:
+            // Illegal ops that handle their own flags
+            case AluOp::DCP: case AluOp::ISC: case AluOp::SLO:
+            case AluOp::RLA: case AluOp::SRE: case AluOp::RRA:
+                break; // No N/Z flag update
+            default:
+                set_nz_flags(reg, result);
+                break;
         }
     }
 };

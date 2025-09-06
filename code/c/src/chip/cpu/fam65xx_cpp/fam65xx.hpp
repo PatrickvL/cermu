@@ -85,17 +85,20 @@ public:
             }
         }
         
-        // Handle reset
-        if (get_state(STATE_RESET_PENDING)) {
-            return handle_reset(bus_state);
-        }
-        
-        // Handle interrupts
-        if (cycle_step == 0) {
-            if (get_state(STATE_NMI_PENDING)) {
-                return handle_nmi(bus_state);
-            } else if (get_state(STATE_IRQ_PENDING)) {
-                if (!(reg[static_cast<uint8_t>(CpuReg::P)] & P_IRQ_DIS)) {
+        // Batch check critical state flags for speed
+        const uint16_t critical_states = state_flags & (STATE_RESET_PENDING | STATE_NMI_PENDING | STATE_IRQ_PENDING);
+        if (critical_states) {
+            // Handle reset first (highest priority)
+            if (critical_states & STATE_RESET_PENDING) {
+                return handle_reset(bus_state);
+            }
+            
+            // Handle interrupts only at instruction boundaries
+            if (cycle_step == 0) {
+                if (critical_states & STATE_NMI_PENDING) {
+                    return handle_nmi(bus_state);
+                } else if ((critical_states & STATE_IRQ_PENDING) &&
+                          !(reg[static_cast<uint8_t>(CpuReg::P)] & P_IRQ_DIS)) {
                     return handle_irq(bus_state);
                 }
             }
@@ -332,46 +335,57 @@ public:
     
     // Process input control lines - hardware-accurate pin handling
     inline bus_state_t process_input_pins(bus_state_t bus_state) {
-        // SO (Set Overflow) pin - edge detection for NMOS variants
-        if constexpr (Config::has_so_pin) {
-            static bool prev_so_state = true; // SO is active-low
-            bool current_so = (bus_state & BUS_BIT(BUS_SO_BIT)) != 0;
-            
-            // Edge detection: transition from high to low
-            if (prev_so_state && !current_so) {
-                set_state(STATE_SO_EDGE);
-            }
-            prev_so_state = current_so;
-            
-            // Handle SO edge during instruction execution (NMOS behavior)
-            if constexpr (Config::cpu_variant == CpuVariant::NMOS_6502 ||
-                         Config::cpu_variant == CpuVariant::NMOS_6510) {
-                if (get_state(STATE_SO_EDGE) && cycle_step > 0) {
-                    clear_state(STATE_SO_EDGE);
-                    reg[CpuReg::P] |= P_OVERFLOW;
+        // Batch check all control pins at once for maximum speed
+        constexpr bus_state_t control_pin_mask =
+            (Config::has_so_pin ? BUS_BIT(BUS_SO_BIT) : 0) |
+            (Config::has_be_pin ? BUS_BIT(BUS_BE_BIT) : 0) |
+            (Config::has_abort_pin ? BUS_BIT(BUS_ABORT_BIT) : 0);
+        
+        const bus_state_t active_pins = bus_state & control_pin_mask;
+        
+        // Only process if any control pins are relevant
+        if constexpr (control_pin_mask != 0) {
+            // SO (Set Overflow) pin - edge detection for NMOS variants
+            if constexpr (Config::has_so_pin) {
+                static bool prev_so_state = true; // SO is active-low
+                const bool current_so = (active_pins & BUS_BIT(BUS_SO_BIT)) != 0;
+                
+                // Edge detection: transition from high to low
+                if (prev_so_state && !current_so) {
+                    set_state(STATE_SO_EDGE);
+                }
+                prev_so_state = current_so;
+                
+                // Handle SO edge during instruction execution (NMOS behavior)
+                if constexpr (Config::cpu_variant == CpuVariant::NMOS_6502 ||
+                             Config::cpu_variant == CpuVariant::NMOS_6510) {
+                    if (get_state(STATE_SO_EDGE) && cycle_step > 0) {
+                        clear_state(STATE_SO_EDGE);
+                        reg[CpuReg::P] |= P_OVERFLOW;
+                    }
                 }
             }
-        }
-        
-        // BE (Bus Enable) pin - 65C02/65C816 bus control
-        if constexpr (Config::has_be_pin) {
-            if (!(bus_state & BUS_BIT(BUS_BE_BIT))) {
-                // BE low: CPU should tri-state its outputs
-                // Set internal flag to indicate bus is disabled
-                set_state(STATE_DMA_CYCLE);
-                return bus_state; // Skip processing when bus is disabled
-            } else {
-                clear_state(STATE_DMA_CYCLE);
+            
+            // BE (Bus Enable) pin - 65C02/65C816 bus control
+            if constexpr (Config::has_be_pin) {
+                if (!(active_pins & BUS_BIT(BUS_BE_BIT))) {
+                    // BE low: CPU should tri-state its outputs
+                    // Set internal flag to indicate bus is disabled
+                    set_state(STATE_DMA_CYCLE);
+                    return bus_state; // Skip processing when bus is disabled
+                } else {
+                    clear_state(STATE_DMA_CYCLE);
+                }
             }
-        }
-        
-        // ABORT pin - 65C816 abort interrupt
-        if constexpr (Config::has_abort_pin) {
-            if (!(bus_state & BUS_BIT(BUS_ABORT_BIT))) {
-                // ABORT is active-low, triggers abort interrupt
-                if (!get_state(STATE_RESET_PENDING)) {
-                    // TODO: Implement full ABORT interrupt sequence
-                    set_state(STATE_IRQ_PENDING); // Simplified for now
+            
+            // ABORT pin - 65C816 abort interrupt
+            if constexpr (Config::has_abort_pin) {
+                if (!(active_pins & BUS_BIT(BUS_ABORT_BIT))) {
+                    // ABORT is active-low, triggers abort interrupt
+                    if (!get_state(STATE_RESET_PENDING)) {
+                        // TODO: Implement full ABORT interrupt sequence
+                        set_state(STATE_IRQ_PENDING); // Simplified for now
+                    }
                 }
             }
         }
@@ -499,7 +513,9 @@ public:
     // Enhanced SO pin edge detection with NMOS vs CMOS differences
     inline void process_so_pin_edge() {
         if constexpr (Config::has_so_pin) {
-            if (get_state(STATE_SO_EDGE)) {
+            // Batch check SO-related states
+            const uint16_t so_states = state_flags & STATE_SO_EDGE;
+            if (so_states) {
                 if constexpr (Config::cpu_variant == CpuVariant::NMOS_6502 ||
                              Config::cpu_variant == CpuVariant::NMOS_6510) {
                     // NMOS behavior: SO edge can occur at any point during instruction
@@ -519,9 +535,12 @@ public:
     
     // Process output control lines
     inline bus_state_t process_output_pins(bus_state_t bus_state) {
+        // Batch check output state flags for speed
+        const uint16_t output_states = state_flags & (STATE_SYNC_NEXT);
+        
         // SYNC pin - indicates opcode fetch cycle
         if constexpr (Config::has_sync_pin) {
-            if (get_state(STATE_SYNC_NEXT)) {
+            if (output_states & STATE_SYNC_NEXT) {
                 bus_state |= BUS_BIT(BUS_SYNC_BIT);
                 clear_state(STATE_SYNC_NEXT);
             } else {
