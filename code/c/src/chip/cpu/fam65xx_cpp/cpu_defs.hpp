@@ -20,9 +20,14 @@ constexpr uint16_t STATE_JAM_STATE = 0x0004, STATE_PAGE_CROSSED = 0x0008;
 constexpr uint16_t STATE_BRANCH_TAKEN = 0x0010, STATE_NMI_EDGE = 0x0020;
 constexpr uint16_t STATE_IRQ_LINE = 0x0040, STATE_NMI_PENDING = 0x0080;
 constexpr uint16_t STATE_IRQ_PENDING = 0x0100, STATE_PENDING_DATA = 0x0200;
-constexpr uint16_t STATE_RDY_WAIT = 0x0400, STATE_DMA_CYCLE = 0x1000;
-constexpr uint16_t STATE_WAI_MODE = 0x2000, STATE_STP_MODE = 0x4000;
-constexpr uint16_t STATE_SO_EDGE = 0x8000;
+constexpr uint16_t STATE_RDY_WAIT = 0x0400, STATE_INTERRUPT_SEQUENCE = 0x0800;
+constexpr uint16_t STATE_DMA_CYCLE = 0x1000, STATE_WAI_MODE = 0x2000;
+constexpr uint16_t STATE_STP_MODE = 0x4000, STATE_SO_EDGE = 0x8000;
+
+// Virtual opcode constants for interrupt handlers (stored at indices 256+ in cycle table)
+constexpr uint16_t VIRTUAL_OPCODE_RESET = 256;  // Virtual opcode for RESET sequence
+constexpr uint16_t VIRTUAL_OPCODE_NMI   = 257;  // Virtual opcode for NMI sequence
+constexpr uint16_t VIRTUAL_OPCODE_IRQ   = 258;  // Virtual opcode for IRQ sequence
 
 // Memory operations - type-safe enum
 enum class MemOp : uint8_t {
@@ -43,7 +48,7 @@ enum class DataOp : uint8_t {
     INDIRECT_LOW = 20, INDIRECT_HIGH = 21
 };
 
-// ALU operations - type-safe enum
+// ALU operations - type-safe enum (expanded for 6-bit field)
 enum class AluOp : uint8_t {
     NOP = 0, ADC, SBC, AND, ORA, EOR, CMP, CPX, CPY,
     ASL, LSR, ROL, ROR, INC, DEC, BIT,
