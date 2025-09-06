@@ -14,7 +14,7 @@ template<typename Config>
 class fam65xx {
 private:
     // CPU state
-    uint8_t opcode = 0;
+    uint16_t opcode = 0;           // Changed to uint16_t to support virtual opcodes 256+
     uint8_t cycle_step = 0;
     uint16_t state_flags = 0;
     uint8_t pending_data = 0;
@@ -36,7 +36,7 @@ public:
     }
     
     // Get cycle information for instruction
-    static inline constexpr fam65xx_cpp::cycle_desc_t GET_CYCLE(uint8_t opcode, uint8_t step) {
+    static inline constexpr fam65xx_cpp::cycle_desc_t GET_CYCLE(uint16_t opcode, uint8_t step) {
         return cycle_tables::get_cycle(opcode, step);
     }
     
@@ -70,6 +70,8 @@ public:
         cycle_step = 0;
         pending_data = 0;
         pending_data_op = 0;
+        
+        // No separate interrupt_opcode field needed - using main opcode field
     }
     
     // Execute one CPU cycle
@@ -85,26 +87,31 @@ public:
             }
         }
         
+        // Check if we're in an interrupt sequence
+        if (get_state(STATE_INTERRUPT_SEQUENCE)) {
+            return execute_interrupt_cycle(bus_state);
+        }
+        
         // Batch check critical state flags for speed
         const uint16_t critical_states = state_flags & (STATE_RESET_PENDING | STATE_NMI_PENDING | STATE_IRQ_PENDING);
         if (critical_states) {
             // Handle reset first (highest priority)
             if (critical_states & STATE_RESET_PENDING) {
-                return handle_reset(bus_state);
+                return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_RESET);
             }
             
             // Handle interrupts only at instruction boundaries
             if (cycle_step == 0) {
                 if (critical_states & STATE_NMI_PENDING) {
-                    return handle_nmi(bus_state);
+                    return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_NMI);
                 } else if ((critical_states & STATE_IRQ_PENDING) &&
                           !(reg[static_cast<uint8_t>(CpuReg::P)] & P_IRQ_DIS)) {
-                    return handle_irq(bus_state);
+                    return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_IRQ);
                 }
             }
         }
         
-        // Execute instruction cycle
+        // Execute normal instruction cycle
         bus_state = execute_cycle(bus_state);
         
         // Process output control lines
@@ -113,41 +120,79 @@ public:
         return bus_state;
     }
     
-    // Handle reset sequence
-    inline bus_state_t handle_reset(bus_state_t bus_state) {
-        // Reset takes 7 cycles, simplified implementation
-        if (cycle_step == 0) {
-            reg[CpuReg::S] = 0xFF;
-            reg[CpuReg::P] = P_IRQ_DIS | P_UNUSED;
-            cycle_step = 1;
+    // Start interrupt sequence using cycle-based approach
+    inline bus_state_t start_interrupt_sequence(bus_state_t bus_state, uint16_t virtual_opcode) {
+        // Clear the appropriate interrupt pending flag
+        switch (virtual_opcode) {
+            case VIRTUAL_OPCODE_RESET:
+                clear_state(STATE_RESET_PENDING);
+                // Reset special initialization
+                reg[CpuReg::S] = 0xFF;
+                reg[CpuReg::P] = P_IRQ_DIS | P_UNUSED;
+                break;
+            case VIRTUAL_OPCODE_NMI:
+                clear_state(STATE_NMI_PENDING);
+                break;
+            case VIRTUAL_OPCODE_IRQ:
+                clear_state(STATE_IRQ_PENDING);
+                break;
         }
         
-        if (cycle_step >= 7) {
-            // Load reset vector
-            BUS_SET_ADDR(bus_state, 0xFFFC);
-            clear_state(STATE_RESET_PENDING);
-            cycle_step = 0;
+        // Initialize interrupt sequence state - use main opcode field
+        set_state(STATE_INTERRUPT_SEQUENCE);
+        opcode = virtual_opcode;  // Store virtual opcode in main opcode field
+        cycle_step = 1;  // Start interrupt cycle sequence
+        
+        return execute_interrupt_cycle(bus_state);
+    }
+    
+    // Execute one cycle of interrupt sequence using cycle table approach
+    inline bus_state_t execute_interrupt_cycle(bus_state_t bus_state) {
+        // Get cycle description for current interrupt step using main opcode field
+        const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
+        
+        // Convert raw values to type-safe enums
+        MemOp mem_op = static_cast<MemOp>(cycle.mem_op);
+        DataOp data_op = static_cast<DataOp>(cycle.data_op);
+        AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
+        
+        // Set interrupt vector addresses based on interrupt type
+        if (mem_op == MemOp::READ_ABS && data_op == DataOp::INTERRUPT_VEC) {
+            switch (opcode) {
+                case VIRTUAL_OPCODE_RESET:
+                    BUS_SET_ADDR(bus_state, cycle_step == 6 ? 0xFFFC : 0xFFFD);
+                    break;
+                case VIRTUAL_OPCODE_NMI:
+                    BUS_SET_ADDR(bus_state, cycle_step == 6 ? 0xFFFA : 0xFFFB);
+                    break;
+                case VIRTUAL_OPCODE_IRQ:
+                    BUS_SET_ADDR(bus_state, cycle_step == 6 ? 0xFFFE : 0xFFFF);
+                    break;
+            }
+        }
+        
+        // Execute memory operation
+        bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op, data_op);
+
+        // Handle write data if needed
+        bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op);
+        
+        // Execute data operation
+        execute_data_operation(cycle.data_op, BUS_GET_DATA(bus_state));
+        
+        // Execute ALU operation if specified (for setting interrupt disable flag)
+        if (alu_op != AluOp::NOP) {
+            alu_ops::execute_alu_operation(reg, alu_op, BUS_GET_DATA(bus_state));
+        }
+        
+        // Check if interrupt sequence is complete using sync bit
+        if (cycle.is_sync()) {
+            clear_state(STATE_INTERRUPT_SEQUENCE);  // End interrupt sequence
+            cycle_step = 0;                         // Ready for next instruction
         } else {
             cycle_step++;
         }
-        return bus_state;
-    }
-    
-    // Handle NMI interrupt
-    inline bus_state_t handle_nmi(bus_state_t bus_state) {
-        // NMI sequence - simplified
-        clear_state(STATE_NMI_PENDING);
-        reg[CpuReg::P] |= P_IRQ_DIS;
-        BUS_SET_ADDR(bus_state, 0xFFFA);
-        return bus_state;
-    }
-    
-    // Handle IRQ interrupt
-    inline bus_state_t handle_irq(bus_state_t bus_state) {
-        // IRQ sequence - simplified
-        clear_state(STATE_IRQ_PENDING);
-        reg[CpuReg::P] |= P_IRQ_DIS;
-        BUS_SET_ADDR(bus_state, 0xFFFE);
+        
         return bus_state;
     }
     
@@ -278,7 +323,7 @@ public:
     }
     
     // Get current opcode
-    inline uint8_t get_opcode() const { return opcode; }
+    inline uint16_t get_opcode() const { return opcode; }
     
     // Get current cycle step
     inline uint8_t get_cycle_step() const { return cycle_step; }
