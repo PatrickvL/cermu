@@ -177,18 +177,17 @@ public:
         
         // Execute ALU operation if specified
         if (alu_op != AluOp::NOP) {
-            const uint8_t alu_result = alu_ops::execute_alu_operation(reg, alu_op, BUS_GET_DATA(bus_state));
+            alu_ops::execute_alu_operation(reg, alu_op, BUS_GET_DATA(bus_state));
             
             // Handle decimal mode bugs for NMOS variants
-            handle_decimal_mode_bugs(alu_result, alu_op);
+            handle_decimal_mode_bugs(reg[CpuReg::A], alu_op);
         }
         
         // Process SO pin edge detection (variant-specific timing)
         process_so_pin_edge();
         
-        // Check if instruction is complete
-        const uint8_t total_cycles = cycle_tables::get_cycle_count(opcode);
-        if (cycle_step >= total_cycles - 1) {
+        // Check if instruction is complete using sync bit
+        if (cycle.is_sync()) {
             cycle_step = 0; // Start next instruction
         } else {
             cycle_step++;
