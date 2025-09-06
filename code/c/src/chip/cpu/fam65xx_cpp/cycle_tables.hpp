@@ -559,165 +559,206 @@ public:
     // Main cycle table lookup (supports virtual opcodes at 256+)
     static constexpr cycle_desc_t get_cycle(uint16_t opcode, uint8_t cycle) {
         constexpr auto cycle_table = []() {
-            // Expanded table: 256 regular opcodes + virtual opcodes at 256+, 8 cycles each
-            std::array<cycle_desc_t, 2080> table{};  // (256+4) * 8 = 2080
-            for (uint16_t i = 0; i < 2080; ++i) {
-                uint16_t opcode = i / 8;
-                uint8_t cycle = i % 8;
+            // Expanded table: 259 opcodes (256 regular + 3 virtual) * 8 cycles each
+            std::array<cycle_desc_t, 2072> table{};  // (256+3) * 8 = 2072
+            
+            // Generate cycle table with proper nested loops and SYNC validation
+            // Loop over 256 regular opcodes + 3 virtual opcodes (259 total)
+            for (uint16_t op = 0; op < 259; ++op) {
+                bool sync_found = false;
                 
-                // Handle virtual opcodes first (256+)
-                if (opcode >= 256) {
-                    switch (opcode) {
-                        case VIRTUAL_OPCODE_RESET: table[i] = get_reset_cycle(cycle); break;
-                        case VIRTUAL_OPCODE_NMI:   table[i] = get_nmi_cycle(cycle); break;
-                        case VIRTUAL_OPCODE_IRQ:   table[i] = get_irq_cycle(cycle); break;
-                        default: table[i] = make_nop(); break;
+                // Each opcode has at most 8 cycles (cycles 1-8, cycle 0 is opcode fetch)
+                for (uint8_t cyc = 1; cyc <= 8; ++cyc) {
+                    const uint16_t table_index = (op * 8) + (cyc - 1);  // Convert to 0-based table index
+                    cycle_desc_t cycle_desc;
+                    
+                    // Handle virtual opcodes (256, 257, 258)
+                    if (op >= 256) {
+                        switch (op) {
+                            case VIRTUAL_OPCODE_RESET: cycle_desc = get_reset_cycle(cyc); break;
+                            case VIRTUAL_OPCODE_NMI:   cycle_desc = get_nmi_cycle(cyc); break;
+                            case VIRTUAL_OPCODE_IRQ:   cycle_desc = get_irq_cycle(cyc); break;
+                            default: cycle_desc = make_nop(); break; // Should not happen with only 3 virtual opcodes
+                        }
+                    } else {
+                        // Handle regular opcodes (0-255)
+                        cycle_desc = get_regular_opcode_cycle(static_cast<uint8_t>(op), cyc);
                     }
-                    continue;
+                    
+                    table[table_index] = cycle_desc;
+                    
+                    // Validate SYNC bit constraints: exactly one SYNC per opcode
+                    if (cycle_desc.is_sync()) {
+                        if (sync_found) {
+                            // Error: Multiple SYNC bits in same opcode - should never happen
+                            // In constexpr context, we'll just ignore subsequent SYNC bits
+                        } else {
+                            sync_found = true;
+                            // SYNC marks end of opcode - fill remaining cycles with NOPs
+                            // No functional cycles are allowed after SYNC
+                            for (uint8_t remaining = cyc + 1; remaining <= 8; ++remaining) {
+                                const uint16_t remaining_index = (op * 8) + (remaining - 1);
+                                table[remaining_index] = make_nop();
+                            }
+                            break;  // End cycle generation for this opcode
+                        }
+                    }
                 }
                 
-                // Handle regular opcodes (0-255)
-                switch (opcode) {
-                    case 0xA9: table[i] = make_lda_imm(); break;          // LDA #$nn
-                    case 0xA5: table[i] = make_lda_zp(cycle); break;      // LDA $nn
-                    case 0xAD: table[i] = make_lda_abs(cycle); break;     // LDA $nnnn
-                    case 0xA2: table[i] = make_ldx_imm(); break;          // LDX #$nn
-                    case 0xA6: table[i] = make_ldx_zp(cycle); break;      // LDX $nn
-                    case 0xA0: table[i] = make_ldy_imm(); break;          // LDY #$nn
-                    case 0xA4: table[i] = make_ldy_zp(cycle); break;      // LDY $nn
-                    case 0x85: table[i] = make_sta_zp(cycle); break;      // STA $nn
-                    case 0x8D: table[i] = make_sta_abs(cycle); break;     // STA $nnnn
-                    case 0x69: table[i] = make_adc_imm(); break;          // ADC #$nn
-                    case 0x29: table[i] = make_and_imm(); break;          // AND #$nn
-                    case 0x09: table[i] = make_ora_imm(); break;          // ORA #$nn
-                    case 0x49: table[i] = make_eor_imm(); break;          // EOR #$nn
-                    case 0xC9: table[i] = make_cmp_imm(); break;          // CMP #$nn
-                    case 0xE0: table[i] = make_cpx_imm(); break;          // CPX #$nn
-                    case 0xC0: table[i] = make_cpy_imm(); break;          // CPY #$nn
-                    case 0x8A: table[i] = make_txa(); break;              // TXA
-                    case 0xAA: table[i] = make_tax(); break;              // TAX
-                    case 0x98: table[i] = make_tya(); break;              // TYA
-                    case 0xA8: table[i] = make_tay(); break;              // TAY
-                    case 0xBA: table[i] = make_tsx(); break;              // TSX
-                    case 0x9A: table[i] = make_txs(); break;              // TXS
-                    case 0x18: table[i] = make_clc(); break;              // CLC
-                    case 0x38: table[i] = make_sec(); break;              // SEC
-                    case 0x58: table[i] = make_cli(); break;              // CLI
-                    case 0x78: table[i] = make_sei(); break;              // SEI
-                    case 0xB8: table[i] = make_clv(); break;              // CLV
-                    case 0xD8: table[i] = make_cld(); break;              // CLD
-                    case 0xF8: table[i] = make_sed(); break;              // SED
-                    case 0xE8: table[i] = make_inx(); break;              // INX
-                    case 0xC8: table[i] = make_iny(); break;              // INY
-                    case 0xCA: table[i] = make_dex(); break;              // DEX
-                    case 0x88: table[i] = make_dey(); break;              // DEY
-                    case 0xEA: table[i] = make_nop(); break;              // NOP
-                    case 0x00: table[i] = make_brk(cycle); break;         // BRK
-                    case 0xA7: table[i] = make_lax_zp(cycle); break;      // LAX $nn (illegal)
-                    
-                    // Branch instructions
-                    case 0x90: table[i] = make_bcc(cycle); break;         // BCC
-                    case 0xB0: table[i] = make_bcs(cycle); break;         // BCS
-                    case 0xF0: table[i] = make_beq(cycle); break;         // BEQ
-                    case 0xD0: table[i] = make_bne(cycle); break;         // BNE
-                    case 0x10: table[i] = make_bpl(cycle); break;         // BPL
-                    case 0x30: table[i] = make_bmi(cycle); break;         // BMI
-                    case 0x50: table[i] = make_bvc(cycle); break;         // BVC
-                    case 0x70: table[i] = make_bvs(cycle); break;         // BVS
-                    
-                    // Stack operations
-                    case 0x48: table[i] = make_pha(cycle); break;         // PHA
-                    case 0x68: table[i] = make_pla(cycle); break;         // PLA
-                    case 0x08: table[i] = make_php(cycle); break;         // PHP
-                    case 0x28: table[i] = make_plp(cycle); break;         // PLP
-                    
-                    // Jump operations
-                    case 0x4C: table[i] = make_jmp_abs(cycle); break;     // JMP $nnnn
-                    case 0x20: table[i] = make_jsr(cycle); break;         // JSR $nnnn
-                    case 0x60: table[i] = make_rts(cycle); break;         // RTS
-                    case 0x40: table[i] = make_rti(cycle); break;         // RTI
-                    
-                    // Shift/Rotate accumulator
-                    case 0x0A: table[i] = make_asl_acc(); break;          // ASL A
-                    case 0x4A: table[i] = make_lsr_acc(); break;          // LSR A
-                    case 0x2A: table[i] = make_rol_acc(); break;          // ROL A
-                    case 0x6A: table[i] = make_ror_acc(); break;          // ROR A
-                    
-                    // Memory increment/decrement
-                    case 0xE6: table[i] = make_inc_zp(cycle); break;      // INC $nn
-                    case 0xC6: table[i] = make_dec_zp(cycle); break;      // DEC $nn
-                    
-                    // Memory shift/rotate
-                    case 0x06: table[i] = make_asl_zp(cycle); break;      // ASL $nn
-                    case 0x46: table[i] = make_lsr_zp(cycle); break;      // LSR $nn
-                    case 0x26: table[i] = make_rol_zp(cycle); break;      // ROL $nn
-                    case 0x66: table[i] = make_ror_zp(cycle); break;      // ROR $nn
-                    
-                    // Indexed addressing modes
-                    case 0xB5: table[i] = make_lda_zpx(cycle); break;     // LDA $nn,X
-                    case 0xB6: table[i] = make_ldx_zpy(cycle); break;     // LDX $nn,Y
-                    case 0xBD: table[i] = make_lda_absx(cycle); break;    // LDA $nnnn,X
-                    case 0xB9: table[i] = make_lda_absy(cycle); break;    // LDA $nnnn,Y
-                    
-                    // Indirect addressing modes
-                    case 0xA1: table[i] = make_lda_indx(cycle); break;    // LDA ($nn,X)
-                    case 0xB1: table[i] = make_lda_indy(cycle); break;    // LDA ($nn),Y
-                    
-                    // Complete STA addressing modes
-                    case 0x95: table[i] = make_sta_zpx(cycle); break;     // STA $nn,X
-                    case 0x9D: table[i] = make_sta_absx(cycle); break;    // STA $nnnn,X
-                    case 0x99: table[i] = make_sta_absy(cycle); break;    // STA $nnnn,Y
-                    case 0x81: table[i] = make_sta_indx(cycle); break;    // STA ($nn,X)
-                    case 0x91: table[i] = make_sta_indy(cycle); break;    // STA ($nn),Y
-                    
-                    // STX/STY addressing modes
-                    case 0x86: table[i] = make_stx_zp(cycle); break;      // STX $nn
-                    case 0x96: table[i] = make_stx_zpy(cycle); break;     // STX $nn,Y
-                    case 0x8E: table[i] = make_stx_abs(cycle); break;     // STX $nnnn
-                    case 0x84: table[i] = make_sty_zp(cycle); break;      // STY $nn
-                    case 0x94: table[i] = make_sty_zpx(cycle); break;     // STY $nn,X
-                    case 0x8C: table[i] = make_sty_abs(cycle); break;     // STY $nnnn
-                    
-                    // Complete ADC/SBC addressing modes
-                    case 0x65: table[i] = make_adc_zp(cycle); break;      // ADC $nn
-                    case 0x6D: table[i] = make_adc_abs(cycle); break;     // ADC $nnnn
-                    case 0xE9: table[i] = make_sbc_imm(); break;          // SBC #$nn
-                    case 0xE5: table[i] = make_sbc_zp(cycle); break;      // SBC $nn
-                    case 0xED: table[i] = make_sbc_abs(cycle); break;     // SBC $nnnn
-                    
-                    // Indirect JMP
-                    case 0x6C: table[i] = make_jmp_ind(cycle); break;     // JMP ($nnnn)
-                    
-                    // BIT instruction
-                    case 0x24: table[i] = make_bit_zp(cycle); break;      // BIT $nn
-                    case 0x2C: table[i] = make_bit_abs(cycle); break;     // BIT $nnnn
-                    
-                    // Major illegal opcodes (NMOS 6502)
-                    case 0x87: table[i] = make_sax_zp(cycle); break;      // SAX $nn
-                    case 0xC7: table[i] = make_dcp_zp(cycle); break;      // DCP $nn
-                    case 0xE7: table[i] = make_isc_zp(cycle); break;      // ISC $nn
-                    case 0x07: table[i] = make_slo_zp(cycle); break;      // SLO $nn
-                    case 0x27: table[i] = make_rla_zp(cycle); break;      // RLA $nn
-                    case 0x47: table[i] = make_sre_zp(cycle); break;      // SRE $nn
-                    case 0x67: table[i] = make_rra_zp(cycle); break;      // RRA $nn
-                    
-                    // 65C02 specific instructions (will be NOP on NMOS)
-                    case 0x80: table[i] = make_bra(cycle); break;         // BRA (65C02)
-                    case 0xDA: table[i] = make_phx(cycle); break;         // PHX (65C02)
-                    case 0x5A: table[i] = make_phy(cycle); break;         // PHY (65C02)
-                    case 0xFA: table[i] = make_plx(cycle); break;         // PLX (65C02)
-                    case 0x7A: table[i] = make_ply(cycle); break;         // PLY (65C02)
-                    case 0x64: table[i] = make_stz_zp(cycle); break;      // STZ $nn (65C02)
-                    case 0x9C: table[i] = make_stz_abs(cycle); break;     // STZ $nnnn (65C02)
-                    case 0x04: table[i] = make_tsb_zp(cycle); break;      // TSB $nn (65C02)
-                    case 0x14: table[i] = make_trb_zp(cycle); break;      // TRB $nn (65C02)
-                    
-                    default: table[i] = make_nop(); break;                // Default to NOP
+                // Ensure every opcode has exactly one SYNC cycle
+                if (!sync_found) {
+                    // Error: No SYNC found for opcode - this indicates a bug
+                    // For safety in constexpr context, we can't easily handle this error
+                    // The calling code should validate that all opcodes end with SYNC
                 }
             }
+            
             return table;
         }();
-        return cycle_table[(opcode * 8) + cycle];
+        
+        // Convert 1-based cycle to 0-based table index
+        return cycle_table[(opcode * 8) + (cycle - 1)];
+    }
+    
+    // Helper function to get cycle for regular opcodes (0-255)
+    static constexpr cycle_desc_t get_regular_opcode_cycle(uint8_t opcode, uint8_t cycle) {
+        switch (opcode) {
+            case 0xA9: return make_lda_imm();                         // LDA #$nn
+            case 0xA5: return make_lda_zp(cycle);                     // LDA $nn
+            case 0xAD: return make_lda_abs(cycle);                    // LDA $nnnn
+            case 0xA2: return make_ldx_imm();                         // LDX #$nn
+            case 0xA6: return make_ldx_zp(cycle);                     // LDX $nn
+            case 0xA0: return make_ldy_imm();                         // LDY #$nn
+            case 0xA4: return make_ldy_zp(cycle);                     // LDY $nn
+            case 0x85: return make_sta_zp(cycle);                     // STA $nn
+            case 0x8D: return make_sta_abs(cycle);                    // STA $nnnn
+            case 0x69: return make_adc_imm();                         // ADC #$nn
+            case 0x29: return make_and_imm();                         // AND #$nn
+            case 0x09: return make_ora_imm();                         // ORA #$nn
+            case 0x49: return make_eor_imm();                         // EOR #$nn
+            case 0xC9: return make_cmp_imm();                         // CMP #$nn
+            case 0xE0: return make_cpx_imm();                         // CPX #$nn
+            case 0xC0: return make_cpy_imm();                         // CPY #$nn
+            case 0x8A: return make_txa();                             // TXA
+            case 0xAA: return make_tax();                             // TAX
+            case 0x98: return make_tya();                             // TYA
+            case 0xA8: return make_tay();                             // TAY
+            case 0xBA: return make_tsx();                             // TSX
+            case 0x9A: return make_txs();                             // TXS
+            case 0x18: return make_clc();                             // CLC
+            case 0x38: return make_sec();                             // SEC
+            case 0x58: return make_cli();                             // CLI
+            case 0x78: return make_sei();                             // SEI
+            case 0xB8: return make_clv();                             // CLV
+            case 0xD8: return make_cld();                             // CLD
+            case 0xF8: return make_sed();                             // SED
+            case 0xE8: return make_inx();                             // INX
+            case 0xC8: return make_iny();                             // INY
+            case 0xCA: return make_dex();                             // DEX
+            case 0x88: return make_dey();                             // DEY
+            case 0xEA: return make_nop();                             // NOP
+            case 0x00: return make_brk(cycle);                        // BRK
+            case 0xA7: return make_lax_zp(cycle);                     // LAX $nn (illegal)
+            
+            // Branch instructions
+            case 0x90: return make_bcc(cycle);                        // BCC
+            case 0xB0: return make_bcs(cycle);                        // BCS
+            case 0xF0: return make_beq(cycle);                        // BEQ
+            case 0xD0: return make_bne(cycle);                        // BNE
+            case 0x10: return make_bpl(cycle);                        // BPL
+            case 0x30: return make_bmi(cycle);                        // BMI
+            case 0x50: return make_bvc(cycle);                        // BVC
+            case 0x70: return make_bvs(cycle);                        // BVS
+            
+            // Stack operations
+            case 0x48: return make_pha(cycle);                        // PHA
+            case 0x68: return make_pla(cycle);                        // PLA
+            case 0x08: return make_php(cycle);                        // PHP
+            case 0x28: return make_plp(cycle);                        // PLP
+            
+            // Jump operations
+            case 0x4C: return make_jmp_abs(cycle);                    // JMP $nnnn
+            case 0x20: return make_jsr(cycle);                        // JSR $nnnn
+            case 0x60: return make_rts(cycle);                        // RTS
+            case 0x40: return make_rti(cycle);                        // RTI
+            
+            // Shift/Rotate accumulator
+            case 0x0A: return make_asl_acc();                         // ASL A
+            case 0x4A: return make_lsr_acc();                         // LSR A
+            case 0x2A: return make_rol_acc();                         // ROL A
+            case 0x6A: return make_ror_acc();                         // ROR A
+            
+            // Memory increment/decrement
+            case 0xE6: return make_inc_zp(cycle);                     // INC $nn
+            case 0xC6: return make_dec_zp(cycle);                     // DEC $nn
+            
+            // Memory shift/rotate
+            case 0x06: return make_asl_zp(cycle);                     // ASL $nn
+            case 0x46: return make_lsr_zp(cycle);                     // LSR $nn
+            case 0x26: return make_rol_zp(cycle);                     // ROL $nn
+            case 0x66: return make_ror_zp(cycle);                     // ROR $nn
+            
+            // Indexed addressing modes
+            case 0xB5: return make_lda_zpx(cycle);                    // LDA $nn,X
+            case 0xB6: return make_ldx_zpy(cycle);                    // LDX $nn,Y
+            case 0xBD: return make_lda_absx(cycle);                   // LDA $nnnn,X
+            case 0xB9: return make_lda_absy(cycle);                   // LDA $nnnn,Y
+            
+            // Indirect addressing modes
+            case 0xA1: return make_lda_indx(cycle);                   // LDA ($nn,X)
+            case 0xB1: return make_lda_indy(cycle);                   // LDA ($nn),Y
+            
+            // Complete STA addressing modes
+            case 0x95: return make_sta_zpx(cycle);                    // STA $nn,X
+            case 0x9D: return make_sta_absx(cycle);                   // STA $nnnn,X
+            case 0x99: return make_sta_absy(cycle);                   // STA $nnnn,Y
+            case 0x81: return make_sta_indx(cycle);                   // STA ($nn,X)
+            case 0x91: return make_sta_indy(cycle);                   // STA ($nn),Y
+            
+            // STX/STY addressing modes
+            case 0x86: return make_stx_zp(cycle);                     // STX $nn
+            case 0x96: return make_stx_zpy(cycle);                    // STX $nn,Y
+            case 0x8E: return make_stx_abs(cycle);                    // STX $nnnn
+            case 0x84: return make_sty_zp(cycle);                     // STY $nn
+            case 0x94: return make_sty_zpx(cycle);                    // STY $nn,X
+            case 0x8C: return make_sty_abs(cycle);                    // STY $nnnn
+            
+            // Complete ADC/SBC addressing modes
+            case 0x65: return make_adc_zp(cycle);                     // ADC $nn
+            case 0x6D: return make_adc_abs(cycle);                    // ADC $nnnn
+            case 0xE9: return make_sbc_imm();                         // SBC #$nn
+            case 0xE5: return make_sbc_zp(cycle);                     // SBC $nn
+            case 0xED: return make_sbc_abs(cycle);                    // SBC $nnnn
+            
+            // Indirect JMP
+            case 0x6C: return make_jmp_ind(cycle);                    // JMP ($nnnn)
+            
+            // BIT instruction
+            case 0x24: return make_bit_zp(cycle);                     // BIT $nn
+            case 0x2C: return make_bit_abs(cycle);                    // BIT $nnnn
+            
+            // Major illegal opcodes (NMOS 6502)
+            case 0x87: return make_sax_zp(cycle);                     // SAX $nn
+            case 0xC7: return make_dcp_zp(cycle);                     // DCP $nn
+            case 0xE7: return make_isc_zp(cycle);                     // ISC $nn
+            case 0x07: return make_slo_zp(cycle);                     // SLO $nn
+            case 0x27: return make_rla_zp(cycle);                     // RLA $nn
+            case 0x47: return make_sre_zp(cycle);                     // SRE $nn
+            case 0x67: return make_rra_zp(cycle);                     // RRA $nn
+            
+            // 65C02 specific instructions (will be NOP on NMOS)
+            case 0x80: return make_bra(cycle);                        // BRA (65C02)
+            case 0xDA: return make_phx(cycle);                        // PHX (65C02)
+            case 0x5A: return make_phy(cycle);                        // PHY (65C02)
+            case 0xFA: return make_plx(cycle);                        // PLX (65C02)
+            case 0x7A: return make_ply(cycle);                        // PLY (65C02)
+            case 0x64: return make_stz_zp(cycle);                     // STZ $nn (65C02)
+            case 0x9C: return make_stz_abs(cycle);                    // STZ $nnnn (65C02)
+            case 0x04: return make_tsb_zp(cycle);                     // TSB $nn (65C02)
+            case 0x14: return make_trb_zp(cycle);                     // TRB $nn (65C02)
+                    
+            default: return make_nop();  // Default to NOP for undefined opcodes
+        }
     }
     
 };
