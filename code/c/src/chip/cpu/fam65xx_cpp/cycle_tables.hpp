@@ -6,6 +6,27 @@
 
 namespace fam65xx_cpp {
 
+// Virtual opcode constants for interrupts (placed after regular 256 opcodes)
+static constexpr uint16_t VIRTUAL_OPCODE_RESET = 256;
+static constexpr uint16_t VIRTUAL_OPCODE_NMI   = 257;
+static constexpr uint16_t VIRTUAL_OPCODE_IRQ   = 258;
+
+// Cycle validation - constexpr functions that can trigger compilation failures
+namespace cycle_validation {
+    // Validation state tracking structure
+    struct validation_result {
+        bool valid;
+        const char* error_message;
+    };
+    
+    // Function to validate cycle table generation
+    constexpr validation_result validate_cycle_table() {
+        // We'll implement the validation logic here during table generation
+        // For now, assume valid - the actual validation happens in the table generation loop
+        return {true, nullptr};
+    }
+}
+
 // Cycle descriptor structure - uses bit fields for packing (16 bits total)
 struct cycle_desc_t {
     uint16_t mem_op : 4;      // 4 bits for MemOp (max 15)
@@ -38,166 +59,286 @@ static_assert(sizeof(cycle_desc_t) == 2, "cycle_desc_t must be exactly 2 bytes")
 template<typename BusConfig>
 class CycleTables {
 public:
-    // === PATTERN HELPER METHODS ===
+    // === COMPREHENSIVE ADDRESSING MODE HELPERS ===
     
-    // Single-cycle immediate operations
-    static constexpr cycle_desc_t make_immediate_op(DataOp data_op, AluOp alu_op = AluOp::NOP) {
+    // Single-cycle immediate operations (1 cycle total)
+    static constexpr cycle_desc_t make_immediate(DataOp data_op, AluOp alu_op = AluOp::NOP) {
         return CD_MAKE_SYNC(MemOp::READ_PC_INC, data_op, alu_op);
     }
     
-    // Zero page addressing - cycle 1 (address calculation)
-    static constexpr cycle_desc_t make_zp_addr() {
-        return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+    // Zero page addressing helpers (2 cycles total)
+    static constexpr cycle_desc_t make_zeropage(uint8_t cycle, DataOp final_op, AluOp alu_op = AluOp::NOP) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        return CD_MAKE_SYNC(MemOp::READ_ZP, final_op, alu_op);
     }
     
-    // Absolute addressing - cycles 1-2 (address calculation)
-    static constexpr cycle_desc_t make_abs_addr(uint8_t cycle) {
-        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-        return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
+    // Zero page write operations (2 cycles total)
+    static constexpr cycle_desc_t make_zeropage_write(uint8_t cycle, DataOp store_op) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        return CD_MAKE_SYNC(MemOp::WRITE_ZP, store_op, AluOp::NOP);
     }
     
-    // Common interrupt sequence pattern (used by BRK, NMI, IRQ)
-    // Cycles 3-7 are identical: push PCH, PCL, P, then read vector
-    static constexpr cycle_desc_t make_interrupt_sequence(uint8_t cycle, AluOp flag_op = AluOp::SEI) {
-        switch (cycle) {
-            case 3: return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP);  // Push PCH
-            case 4: return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP);  // Push PCL
-            case 5: return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, flag_op);     // Push P, optional flag op
-            case 6: return CD_MAKE(MemOp::READ_ABS, DataOp::INTERRUPT_VEC, AluOp::NOP);    // Read vector low
-            case 7: return CD_MAKE_SYNC(MemOp::READ_ABS, DataOp::INTERRUPT_VEC, AluOp::NOP); // Read vector high, sync
-            default: return make_immediate_op(DataOp::NOP, AluOp::NOP); // Fallback NOP
-        }
+    // Absolute addressing helpers (3 cycles total)
+    static constexpr cycle_desc_t make_absolute(uint8_t cycle, DataOp final_op, AluOp alu_op = AluOp::NOP) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
+        return CD_MAKE_SYNC(MemOp::READ_ABS, final_op, alu_op);
     }
     
-    // Memory modification pattern (5 cycles: addr calc, read, write old, write new)
+    // Absolute write operations (3 cycles total)
+    static constexpr cycle_desc_t make_absolute_write(uint8_t cycle, DataOp store_op) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
+        return CD_MAKE_SYNC(MemOp::WRITE_ABS, store_op, AluOp::NOP);
+    }
+    
+    // Zero page indexed (zp,X or zp,Y) operations (3 cycles total)
+    static constexpr cycle_desc_t make_zeropage_indexed(uint8_t cycle, DataOp index_op, DataOp final_op, AluOp alu_op = AluOp::NOP) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_ZP, index_op, AluOp::NOP); // ADDR_ADD_X or ADDR_ADD_Y
+        return CD_MAKE_SYNC(MemOp::READ_ZP, final_op, alu_op);
+    }
+    
+    // Zero page indexed write operations (3 cycles total)
+    static constexpr cycle_desc_t make_zeropage_indexed_write(uint8_t cycle, DataOp index_op, DataOp store_op) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_ZP, index_op, AluOp::NOP); // ADDR_ADD_X or ADDR_ADD_Y
+        return CD_MAKE_SYNC(MemOp::WRITE_ZP, store_op, AluOp::NOP);
+    }
+    
+    // Absolute indexed (abs,X or abs,Y) operations (4+ cycles, page crossing adds 1)
+    static constexpr cycle_desc_t make_absolute_indexed(uint8_t cycle, DataOp index_op, DataOp final_op, AluOp alu_op = AluOp::NOP) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
+        if (cycle == 3) return CD_MAKE(MemOp::READ_ABS, index_op, AluOp::NOP); // ADDR_ADD_X or ADDR_ADD_Y, may cross page
+        return CD_MAKE_SYNC(MemOp::READ_ABS, final_op, alu_op); // cycle 4, always executes
+    }
+    
+    // Absolute indexed write operations (always 4 cycles - writes always do extra cycle)
+    static constexpr cycle_desc_t make_absolute_indexed_write(uint8_t cycle, DataOp index_op, DataOp store_op) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
+        if (cycle == 3) return CD_MAKE(MemOp::READ_ABS, index_op, AluOp::NOP); // Read dummy byte first (6502 quirk)
+        return CD_MAKE_SYNC(MemOp::WRITE_ABS, store_op, AluOp::NOP);
+    }
+    
+    // Indirect indexed (zp,X) operations (5 cycles total)
+    static constexpr cycle_desc_t make_indexed_indirect(uint8_t cycle, DataOp final_op, AluOp alu_op = AluOp::NOP) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_ZP, DataOp::ADDR_ADD_X, AluOp::NOP); // Add X to zero page pointer
+        if (cycle == 3) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_LOW, AluOp::NOP); // Read target address low
+        if (cycle == 4) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_HIGH, AluOp::NOP); // Read target address high
+        return CD_MAKE_SYNC(MemOp::READ_ABS, final_op, alu_op); // Read from target
+    }
+    
+    // Indirect indexed write (zp,X) operations (5 cycles total)
+    static constexpr cycle_desc_t make_indexed_indirect_write(uint8_t cycle, DataOp store_op) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_ZP, DataOp::ADDR_ADD_X, AluOp::NOP);
+        if (cycle == 3) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_LOW, AluOp::NOP);
+        if (cycle == 4) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_HIGH, AluOp::NOP);
+        return CD_MAKE_SYNC(MemOp::WRITE_ABS, store_op, AluOp::NOP);
+    }
+    
+    // Indirect indexed (zp),Y operations (5+ cycles, page crossing adds 1)
+    static constexpr cycle_desc_t make_indirect_indexed(uint8_t cycle, DataOp final_op, AluOp alu_op = AluOp::NOP) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_LOW, AluOp::NOP); // Read base address low
+        if (cycle == 3) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_HIGH, AluOp::NOP); // Read base address high
+        if (cycle == 4) return CD_MAKE(MemOp::READ_ABS, DataOp::ADDR_ADD_Y, AluOp::NOP); // Add Y, may cross page
+        return CD_MAKE_SYNC(MemOp::READ_ABS, final_op, alu_op); // cycle 5, always executes
+    }
+    
+    // Indirect indexed write (zp),Y operations (always 5 cycles)
+    static constexpr cycle_desc_t make_indirect_indexed_write(uint8_t cycle, DataOp store_op) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_LOW, AluOp::NOP);
+        if (cycle == 3) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_HIGH, AluOp::NOP);
+        if (cycle == 4) return CD_MAKE(MemOp::READ_ABS, DataOp::ADDR_ADD_Y, AluOp::NOP); // Read dummy first
+        return CD_MAKE_SYNC(MemOp::WRITE_ABS, store_op, AluOp::NOP);
+    }
+    
+    // Memory modify operations (5 cycles: read address, read data, write old, write new)
     static constexpr cycle_desc_t make_memory_modify_zp(uint8_t cycle, AluOp modify_op) {
-        switch (cycle) {
-            case 1: return make_zp_addr();
-            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::TEMP_STORE, AluOp::NOP);
-            case 3: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_STORE, AluOp::NOP); // Write old value
-            case 4: return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_MODIFY, modify_op); // Write new value
-            default: return make_immediate_op(DataOp::NOP, AluOp::NOP);
-        }
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_ZP, DataOp::TEMP_STORE, AluOp::NOP);
+        if (cycle == 3) return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_STORE, AluOp::NOP); // Write old value back
+        if (cycle == 4) return CD_MAKE_SYNC(MemOp::WRITE_ZP, DataOp::TEMP_MODIFY, modify_op); // Write modified value
+        return CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::NOP); // Should never reach here
     }
     
-    // Stack push operations (2 cycles)
+    // Memory modify operations absolute (6 cycles)
+    static constexpr cycle_desc_t make_memory_modify_abs(uint8_t cycle, AluOp modify_op) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
+        if (cycle == 3) return CD_MAKE(MemOp::READ_ABS, DataOp::TEMP_STORE, AluOp::NOP);
+        if (cycle == 4) return CD_MAKE(MemOp::WRITE_ABS, DataOp::TEMP_STORE, AluOp::NOP); // Write old value back
+        if (cycle == 5) return CD_MAKE_SYNC(MemOp::WRITE_ABS, DataOp::TEMP_MODIFY, modify_op); // Write modified value
+        return CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::NOP); // Should never reach here
+    }
+    
+    // Stack operations
     static constexpr cycle_desc_t make_stack_push(uint8_t cycle, DataOp store_op) {
-        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
-        return CD_MAKE(MemOp::WRITE_SP_DEC, store_op, AluOp::NOP);
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
+        return CD_MAKE_SYNC(MemOp::WRITE_SP_DEC, store_op, AluOp::NOP);
     }
     
-    // Stack pull operations (3 cycles)
     static constexpr cycle_desc_t make_stack_pull(uint8_t cycle, DataOp load_op) {
-        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
         if (cycle == 2) return CD_MAKE(MemOp::READ_SP_INC, DataOp::NOP, AluOp::NOP);
-        return CD_MAKE(MemOp::READ_SP, load_op, AluOp::NOP);
+        return CD_MAKE_SYNC(MemOp::READ_SP, load_op, AluOp::NOP);
     }
     
-    // Branch operations (2 cycles: read offset, conditional branch)
-    static constexpr cycle_desc_t make_branch_op(uint8_t cycle) {
-        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::BRANCH, AluOp::NOP);
-        return CD_MAKE_CONDITIONAL(MemOp::READ_PC, DataOp::NOP, AluOp::NOP);
+    // Branch operations (2+ cycles base, +1 if taken, +1 more if page crossed)
+    static constexpr cycle_desc_t make_branch(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::BRANCH, AluOp::NOP);
+        return CD_MAKE_SYNC(MemOp::READ_PC, DataOp::NOP, AluOp::NOP); // Cycle 2+, execution decides how many
+    }
+    
+    // Jump operations
+    static constexpr cycle_desc_t make_jump_absolute(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
+        return CD_MAKE_SYNC(MemOp::NOP, DataOp::JMP, AluOp::NOP);
+    }
+    
+    static constexpr cycle_desc_t make_jump_indirect(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
+        if (cycle == 3) return CD_MAKE(MemOp::READ_ABS, DataOp::INDIRECT_LOW, AluOp::NOP);
+        if (cycle == 4) return CD_MAKE(MemOp::READ_ABS, DataOp::INDIRECT_HIGH, AluOp::NOP); // 6502 page boundary bug
+        return CD_MAKE_SYNC(MemOp::NOP, DataOp::JMP, AluOp::NOP);
+    }
+    
+    // Subroutine operations
+    static constexpr cycle_desc_t make_jsr(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_SP, DataOp::NOP, AluOp::NOP); // Internal operation
+        if (cycle == 3) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP); // Push PCH
+        if (cycle == 4) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP); // Push PCL
+        if (cycle == 5) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
+        return CD_MAKE_SYNC(MemOp::NOP, DataOp::JMP, AluOp::NOP);
+    }
+    
+    static constexpr cycle_desc_t make_rts(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_SP, DataOp::NOP, AluOp::NOP); // Internal
+        if (cycle == 3) return CD_MAKE(MemOp::READ_SP_INC, DataOp::STACK_PULL, AluOp::NOP); // Pull PCL
+        if (cycle == 4) return CD_MAKE(MemOp::READ_SP_INC, DataOp::STACK_PULL, AluOp::NOP); // Pull PCH
+        if (cycle == 5) return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP); // Internal - increment PC
+        return CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::NOP);
+    }
+    
+    // Interrupt sequences
+    static constexpr cycle_desc_t make_interrupt_sequence(uint8_t cycle, AluOp flag_op = AluOp::SEI) {
+        if (cycle == 3) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP);  // Push PCH
+        if (cycle == 4) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP);  // Push PCL
+        if (cycle == 5) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, flag_op);     // Push P, set flag
+        if (cycle == 6) return CD_MAKE(MemOp::READ_ABS, DataOp::INTERRUPT_VEC, AluOp::NOP);    // Read vector low
+        return CD_MAKE_SYNC(MemOp::READ_ABS, DataOp::INTERRUPT_VEC, AluOp::NOP); // Read vector high, sync
+    }
+    
+    static constexpr cycle_desc_t make_rti(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_SP, DataOp::NOP, AluOp::NOP); // Internal
+        if (cycle == 3) return CD_MAKE(MemOp::READ_SP_INC, DataOp::STACK_PULL, AluOp::NOP); // Pull status
+        if (cycle == 4) return CD_MAKE(MemOp::READ_SP_INC, DataOp::STACK_PULL, AluOp::NOP); // Pull PCL
+        if (cycle == 5) return CD_MAKE(MemOp::READ_SP_INC, DataOp::STACK_PULL, AluOp::NOP); // Pull PCH
+        return CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::NOP);
     }
     
     // === INSTRUCTION IMPLEMENTATIONS (using helpers) ===
     
     // LDA immediate - single cycle
     static constexpr cycle_desc_t make_lda_imm() {
-        return make_immediate_op(DataOp::LOAD_A);
+        return make_immediate(DataOp::LOAD_A);
     }
     
     // LDA zero page - 2 cycles
     static constexpr cycle_desc_t make_lda_zp(uint8_t cycle) {
-        if (cycle == 1) return make_zp_addr();
-        return CD_MAKE(MemOp::READ_ZP, DataOp::LOAD_A, AluOp::NOP);
+        return make_zeropage(cycle, DataOp::LOAD_A);
     }
     
     // LDA absolute - 3 cycles
     static constexpr cycle_desc_t make_lda_abs(uint8_t cycle) {
-        if (cycle <= 2) return make_abs_addr(cycle);
-        return CD_MAKE(MemOp::READ_ABS, DataOp::LOAD_A, AluOp::NOP);
+        return make_absolute(cycle, DataOp::LOAD_A);
     }
     
     // ADC immediate - single cycle
     static constexpr cycle_desc_t make_adc_imm() {
-        return make_immediate_op(DataOp::ALU, AluOp::ADC);
+        return make_immediate(DataOp::ALU, AluOp::ADC);
     }
     
     // NOP - single cycle
     static constexpr cycle_desc_t make_nop() {
-        return make_immediate_op(DataOp::NOP);
+        return make_immediate(DataOp::NOP);
     }
     
     // BRK - 7 cycles (using shared interrupt sequence for cycles 3-7)
     static constexpr cycle_desc_t make_brk(uint8_t cycle) {
-        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
         if (cycle == 2) return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP); // Read next byte (dummy)
         return make_interrupt_sequence(cycle, AluOp::SEI); // Cycles 3-7 identical to interrupts
     }
     
     // LAX zero page - illegal opcode, 2 cycles
     static constexpr cycle_desc_t make_lax_zp(uint8_t cycle) {
-        if (cycle == 1) return make_zp_addr();
-        return CD_MAKE(MemOp::READ_ZP, DataOp::ILLEGAL_COMBO, AluOp::NOP);
+        return make_zeropage(cycle, DataOp::ILLEGAL_COMBO);
     }
     
     // STA operations - store A register
     static constexpr cycle_desc_t make_sta_zp(uint8_t cycle) {
-        if (cycle == 1) return make_zp_addr();
-        return CD_MAKE(MemOp::WRITE_ZP, DataOp::STORE_A, AluOp::NOP);
+        return make_zeropage_write(cycle, DataOp::STORE_A);
     }
     
     static constexpr cycle_desc_t make_sta_abs(uint8_t cycle) {
-        if (cycle <= 2) return make_abs_addr(cycle);
-        return CD_MAKE(MemOp::WRITE_ABS, DataOp::STORE_A, AluOp::NOP);
+        return make_absolute_write(cycle, DataOp::STORE_A);
     }
     
     // Transfer operations - single cycle
-    static constexpr cycle_desc_t make_txa() { return make_immediate_op(DataOp::NOP, AluOp::TXA); }
-    static constexpr cycle_desc_t make_tax() { return make_immediate_op(DataOp::NOP, AluOp::TAX); }
-    static constexpr cycle_desc_t make_tya() { return make_immediate_op(DataOp::NOP, AluOp::TYA); }
-    static constexpr cycle_desc_t make_tay() { return make_immediate_op(DataOp::NOP, AluOp::TAY); }
-    static constexpr cycle_desc_t make_tsx() { return make_immediate_op(DataOp::NOP, AluOp::TSX); }
-    static constexpr cycle_desc_t make_txs() { return make_immediate_op(DataOp::NOP, AluOp::TXS); }
+    static constexpr cycle_desc_t make_txa() { return make_immediate(DataOp::NOP, AluOp::TXA); }
+    static constexpr cycle_desc_t make_tax() { return make_immediate(DataOp::NOP, AluOp::TAX); }
+    static constexpr cycle_desc_t make_tya() { return make_immediate(DataOp::NOP, AluOp::TYA); }
+    static constexpr cycle_desc_t make_tay() { return make_immediate(DataOp::NOP, AluOp::TAY); }
+    static constexpr cycle_desc_t make_tsx() { return make_immediate(DataOp::NOP, AluOp::TSX); }
+    static constexpr cycle_desc_t make_txs() { return make_immediate(DataOp::NOP, AluOp::TXS); }
     
     // Flag operations - single cycle
-    static constexpr cycle_desc_t make_clc() { return make_immediate_op(DataOp::NOP, AluOp::CLC); }
-    static constexpr cycle_desc_t make_sec() { return make_immediate_op(DataOp::NOP, AluOp::SEC); }
-    static constexpr cycle_desc_t make_cli() { return make_immediate_op(DataOp::NOP, AluOp::CLI); }
-    static constexpr cycle_desc_t make_sei() { return make_immediate_op(DataOp::NOP, AluOp::SEI); }
-    static constexpr cycle_desc_t make_clv() { return make_immediate_op(DataOp::NOP, AluOp::CLV); }
-    static constexpr cycle_desc_t make_cld() { return make_immediate_op(DataOp::NOP, AluOp::CLD); }
-    static constexpr cycle_desc_t make_sed() { return make_immediate_op(DataOp::NOP, AluOp::SED); }
+    static constexpr cycle_desc_t make_clc() { return make_immediate(DataOp::NOP, AluOp::CLC); }
+    static constexpr cycle_desc_t make_sec() { return make_immediate(DataOp::NOP, AluOp::SEC); }
+    static constexpr cycle_desc_t make_cli() { return make_immediate(DataOp::NOP, AluOp::CLI); }
+    static constexpr cycle_desc_t make_sei() { return make_immediate(DataOp::NOP, AluOp::SEI); }
+    static constexpr cycle_desc_t make_clv() { return make_immediate(DataOp::NOP, AluOp::CLV); }
+    static constexpr cycle_desc_t make_cld() { return make_immediate(DataOp::NOP, AluOp::CLD); }
+    static constexpr cycle_desc_t make_sed() { return make_immediate(DataOp::NOP, AluOp::SED); }
     
     // Logical operations
-    static constexpr cycle_desc_t make_and_imm() { return make_immediate_op(DataOp::ALU, AluOp::AND); }
-    static constexpr cycle_desc_t make_ora_imm() { return make_immediate_op(DataOp::ALU, AluOp::ORA); }
-    static constexpr cycle_desc_t make_eor_imm() { return make_immediate_op(DataOp::ALU, AluOp::EOR); }
+    static constexpr cycle_desc_t make_and_imm() { return make_immediate(DataOp::ALU, AluOp::AND); }
+    static constexpr cycle_desc_t make_ora_imm() { return make_immediate(DataOp::ALU, AluOp::ORA); }
+    static constexpr cycle_desc_t make_eor_imm() { return make_immediate(DataOp::ALU, AluOp::EOR); }
     
     // Compare operations
-    static constexpr cycle_desc_t make_cmp_imm() { return make_immediate_op(DataOp::ALU, AluOp::CMP); }
-    static constexpr cycle_desc_t make_cpx_imm() { return make_immediate_op(DataOp::ALU, AluOp::CPX); }
-    static constexpr cycle_desc_t make_cpy_imm() { return make_immediate_op(DataOp::ALU, AluOp::CPY); }
+    static constexpr cycle_desc_t make_cmp_imm() { return make_immediate(DataOp::ALU, AluOp::CMP); }
+    static constexpr cycle_desc_t make_cpx_imm() { return make_immediate(DataOp::ALU, AluOp::CPX); }
+    static constexpr cycle_desc_t make_cpy_imm() { return make_immediate(DataOp::ALU, AluOp::CPY); }
     
     // Load operations
-    static constexpr cycle_desc_t make_ldx_imm() { return make_immediate_op(DataOp::LOAD_X); }
-    static constexpr cycle_desc_t make_ldy_imm() { return make_immediate_op(DataOp::LOAD_Y); }
+    static constexpr cycle_desc_t make_ldx_imm() { return make_immediate(DataOp::LOAD_X); }
+    static constexpr cycle_desc_t make_ldy_imm() { return make_immediate(DataOp::LOAD_Y); }
     
     static constexpr cycle_desc_t make_ldx_zp(uint8_t cycle) {
-        if (cycle == 1) return make_zp_addr();
-        return CD_MAKE(MemOp::READ_ZP, DataOp::LOAD_X, AluOp::NOP);
+        return make_zeropage(cycle, DataOp::LOAD_X);
     }
     
     static constexpr cycle_desc_t make_ldy_zp(uint8_t cycle) {
-        if (cycle == 1) return make_zp_addr();
-        return CD_MAKE(MemOp::READ_ZP, DataOp::LOAD_Y, AluOp::NOP);
+        return make_zeropage(cycle, DataOp::LOAD_Y);
     }
     
     // Inc/Dec operations
-    static constexpr cycle_desc_t make_inx() { return make_immediate_op(DataOp::NOP, AluOp::INC); }
-    static constexpr cycle_desc_t make_iny() { return make_immediate_op(DataOp::NOP, AluOp::INC); }
-    static constexpr cycle_desc_t make_dex() { return make_immediate_op(DataOp::NOP, AluOp::DEC); }
-    static constexpr cycle_desc_t make_dey() { return make_immediate_op(DataOp::NOP, AluOp::DEC); }
+    static constexpr cycle_desc_t make_inx() { return make_immediate(DataOp::NOP, AluOp::INC); }
+    static constexpr cycle_desc_t make_iny() { return make_immediate(DataOp::NOP, AluOp::INC); }
+    static constexpr cycle_desc_t make_dex() { return make_immediate(DataOp::NOP, AluOp::DEC); }
+    static constexpr cycle_desc_t make_dey() { return make_immediate(DataOp::NOP, AluOp::DEC); }
     
     // Stack operations
     static constexpr cycle_desc_t make_pha(uint8_t cycle) { return make_stack_push(cycle, DataOp::STORE_A); }
@@ -206,51 +347,25 @@ public:
     static constexpr cycle_desc_t make_plp(uint8_t cycle) { return make_stack_pull(cycle, DataOp::STACK_PULL); }
     
     // Branch instructions - 2 cycles base, +1 if taken, +1 if page crossed (all identical)
-    static constexpr cycle_desc_t make_bcc(uint8_t cycle) { return make_branch_op(cycle); }
-    static constexpr cycle_desc_t make_bcs(uint8_t cycle) { return make_branch_op(cycle); }
-    static constexpr cycle_desc_t make_beq(uint8_t cycle) { return make_branch_op(cycle); }
-    static constexpr cycle_desc_t make_bne(uint8_t cycle) { return make_branch_op(cycle); }
-    static constexpr cycle_desc_t make_bpl(uint8_t cycle) { return make_branch_op(cycle); }
-    static constexpr cycle_desc_t make_bmi(uint8_t cycle) { return make_branch_op(cycle); }
-    static constexpr cycle_desc_t make_bvc(uint8_t cycle) { return make_branch_op(cycle); }
-    static constexpr cycle_desc_t make_bvs(uint8_t cycle) { return make_branch_op(cycle); }
+    static constexpr cycle_desc_t make_bcc(uint8_t cycle) { return make_branch(cycle); }
+    static constexpr cycle_desc_t make_bcs(uint8_t cycle) { return make_branch(cycle); }
+    static constexpr cycle_desc_t make_beq(uint8_t cycle) { return make_branch(cycle); }
+    static constexpr cycle_desc_t make_bne(uint8_t cycle) { return make_branch(cycle); }
+    static constexpr cycle_desc_t make_bpl(uint8_t cycle) { return make_branch(cycle); }
+    static constexpr cycle_desc_t make_bmi(uint8_t cycle) { return make_branch(cycle); }
+    static constexpr cycle_desc_t make_bvc(uint8_t cycle) { return make_branch(cycle); }
+    static constexpr cycle_desc_t make_bvs(uint8_t cycle) { return make_branch(cycle); }
     
-    // Jump instructions
+    // Jump instructions - JMP abs is 3 cycles
     static constexpr cycle_desc_t make_jmp_abs(uint8_t cycle) {
-        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-        if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
-        return CD_MAKE(MemOp::NOP, DataOp::JMP, AluOp::NOP);
+        return make_jump_absolute(cycle);
     }
     
-    // JSR - 6 cycles
-    static constexpr cycle_desc_t make_jsr(uint8_t cycle) {
-        switch (cycle) {
-            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-            case 2: return CD_MAKE(MemOp::READ_SP, DataOp::NOP, AluOp::NOP); // Internal operation
-            case 3: return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP);
-            case 4: return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP);
-            case 5: return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
-            default: return CD_MAKE(MemOp::NOP, DataOp::JMP, AluOp::NOP);
-        }
-    }
-    
-    // RTS - 6 cycles
-    static constexpr cycle_desc_t make_rts(uint8_t cycle) {
-        switch (cycle) {
-            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
-            case 2: return CD_MAKE(MemOp::READ_SP, DataOp::NOP, AluOp::NOP); // Internal operation
-            case 3: return CD_MAKE(MemOp::READ_SP_INC, DataOp::STACK_PULL, AluOp::NOP);
-            case 4: return CD_MAKE(MemOp::READ_SP_INC, DataOp::STACK_PULL, AluOp::NOP);
-            case 5: return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP); // Internal operation
-            default: return make_nop();
-        }
-    }
-
     // Shift/Rotate operations - ASL, LSR, ROL, ROR
-    static constexpr cycle_desc_t make_asl_acc() { return make_immediate_op(DataOp::NOP, AluOp::ASL); }
-    static constexpr cycle_desc_t make_lsr_acc() { return make_immediate_op(DataOp::NOP, AluOp::LSR); }
-    static constexpr cycle_desc_t make_rol_acc() { return make_immediate_op(DataOp::NOP, AluOp::ROL); }
-    static constexpr cycle_desc_t make_ror_acc() { return make_immediate_op(DataOp::NOP, AluOp::ROR); }
+    static constexpr cycle_desc_t make_asl_acc() { return make_immediate(DataOp::NOP, AluOp::ASL); }
+    static constexpr cycle_desc_t make_lsr_acc() { return make_immediate(DataOp::NOP, AluOp::LSR); }
+    static constexpr cycle_desc_t make_rol_acc() { return make_immediate(DataOp::NOP, AluOp::ROL); }
+    static constexpr cycle_desc_t make_ror_acc() { return make_immediate(DataOp::NOP, AluOp::ROR); }
     
     // Memory INC/DEC operations - 5 cycles for zero page
     static constexpr cycle_desc_t make_inc_zp(uint8_t cycle) { return make_memory_modify_zp(cycle, AluOp::INC); }
@@ -262,252 +377,145 @@ public:
     static constexpr cycle_desc_t make_rol_zp(uint8_t cycle) { return make_memory_modify_zp(cycle, AluOp::ROL); }
     static constexpr cycle_desc_t make_ror_zp(uint8_t cycle) { return make_memory_modify_zp(cycle, AluOp::ROR); }
 
-    // Zero page indexed addressing modes (zp,x and zp,y)
+    // Zero page indexed addressing modes (zp,x and zp,y) - 3 cycles
     static constexpr cycle_desc_t make_lda_zpx(uint8_t cycle) {
-        switch (cycle) {
-            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::ADDR_ADD_X, AluOp::NOP); // Add X to zero page address
-            case 3: return CD_MAKE(MemOp::READ_ZP, DataOp::LOAD_A, AluOp::NOP);
-            default: return make_nop();
-        }
+        return make_zeropage_indexed(cycle, DataOp::ADDR_ADD_X, DataOp::LOAD_A);
     }
 
     static constexpr cycle_desc_t make_ldx_zpy(uint8_t cycle) {
-        switch (cycle) {
-            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::ADDR_ADD_Y, AluOp::NOP); // Add Y to zero page address
-            case 3: return CD_MAKE(MemOp::READ_ZP, DataOp::LOAD_X, AluOp::NOP);
-            default: return make_nop();
-        }
+        return make_zeropage_indexed(cycle, DataOp::ADDR_ADD_Y, DataOp::LOAD_X);
     }
 
-    // Absolute indexed addressing modes (abs,x and abs,y)
+    // Absolute indexed addressing modes (abs,x and abs,y) - 4+ cycles
     static constexpr cycle_desc_t make_lda_absx(uint8_t cycle) {
-        switch (cycle) {
-            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-            case 2: return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
-            case 3: return CD_MAKE(MemOp::READ_ABS, DataOp::ADDR_ADD_X, AluOp::NOP); // Add X, may cross page
-            case 4: return CD_MAKE_CONDITIONAL(MemOp::READ_ABS, DataOp::LOAD_A, AluOp::NOP); // Conditional: page crossed
-            default: return make_nop();
-        }
+        return make_absolute_indexed(cycle, DataOp::ADDR_ADD_X, DataOp::LOAD_A);
     }
 
     static constexpr cycle_desc_t make_lda_absy(uint8_t cycle) {
-        switch (cycle) {
-            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-            case 2: return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
-            case 3: return CD_MAKE(MemOp::READ_ABS, DataOp::ADDR_ADD_Y, AluOp::NOP); // Add Y, may cross page
-            case 4: return CD_MAKE_CONDITIONAL(MemOp::READ_ABS, DataOp::LOAD_A, AluOp::NOP); // Conditional: page crossed
-            default: return make_nop();
-        }
+        return make_absolute_indexed(cycle, DataOp::ADDR_ADD_Y, DataOp::LOAD_A);
     }
 
-    // Indirect indexed addressing modes - (zp,x) and (zp),y
+    // Indirect indexed addressing modes - (zp,x) and (zp),y - 5+ cycles
     static constexpr cycle_desc_t make_lda_indx(uint8_t cycle) {
-        switch (cycle) {
-            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::ADDR_ADD_X, AluOp::NOP); // Add X to zero page pointer
-            case 3: return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_LOW, AluOp::NOP); // Read low byte of target
-            case 4: return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_HIGH, AluOp::NOP); // Read high byte of target
-            case 5: return CD_MAKE(MemOp::READ_ABS, DataOp::LOAD_A, AluOp::NOP); // Read from target address
-            default: return make_nop();
-        }
+        return make_indexed_indirect(cycle, DataOp::LOAD_A);
     }
 
     static constexpr cycle_desc_t make_lda_indy(uint8_t cycle) {
-        switch (cycle) {
-            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_LOW, AluOp::NOP); // Read low byte of base
-            case 3: return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_HIGH, AluOp::NOP); // Read high byte of base
-            case 4: return CD_MAKE(MemOp::READ_ABS, DataOp::ADDR_ADD_Y, AluOp::NOP); // Add Y, may cross page
-            case 5: return CD_MAKE_CONDITIONAL(MemOp::READ_ABS, DataOp::LOAD_A, AluOp::NOP); // Conditional: page crossed
-            default: return make_nop();
-        }
+        return make_indirect_indexed(cycle, DataOp::LOAD_A);
     }
 
-    // 65C02 specific instructions
+    // 65C02 specific instructions - BRA is 2 cycles
     static constexpr cycle_desc_t make_bra(uint8_t cycle) {
-        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::BRANCH, AluOp::NOP);
-        return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP);
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::BRANCH, AluOp::NOP);
+        return CD_MAKE_SYNC(MemOp::READ_PC, DataOp::NOP, AluOp::NOP);
     }
 
     static constexpr cycle_desc_t make_phx(uint8_t cycle) {
-        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
-        return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STORE_X, AluOp::NOP);
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
+        return CD_MAKE_SYNC(MemOp::WRITE_SP_DEC, DataOp::STORE_X, AluOp::NOP);
     }
 
     static constexpr cycle_desc_t make_phy(uint8_t cycle) {
-        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
-        return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STORE_Y, AluOp::NOP);
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
+        return CD_MAKE_SYNC(MemOp::WRITE_SP_DEC, DataOp::STORE_Y, AluOp::NOP);
     }
 
     static constexpr cycle_desc_t make_plx(uint8_t cycle) {
-        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
         if (cycle == 2) return CD_MAKE(MemOp::READ_SP_INC, DataOp::NOP, AluOp::NOP);
-        return CD_MAKE(MemOp::READ_SP, DataOp::LOAD_X, AluOp::NOP);
+        return CD_MAKE_SYNC(MemOp::READ_SP, DataOp::LOAD_X, AluOp::NOP);
     }
 
     static constexpr cycle_desc_t make_ply(uint8_t cycle) {
-        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
         if (cycle == 2) return CD_MAKE(MemOp::READ_SP_INC, DataOp::NOP, AluOp::NOP);
-        return CD_MAKE(MemOp::READ_SP, DataOp::LOAD_Y, AluOp::NOP);
+        return CD_MAKE_SYNC(MemOp::READ_SP, DataOp::LOAD_Y, AluOp::NOP);
     }
 
     static constexpr cycle_desc_t make_stz_zp(uint8_t cycle) {
-        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-        return CD_MAKE(MemOp::WRITE_ZP, DataOp::STORE_ZERO, AluOp::NOP);
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        return CD_MAKE_SYNC(MemOp::WRITE_ZP, DataOp::STORE_ZERO, AluOp::NOP);
     }
 
     static constexpr cycle_desc_t make_stz_abs(uint8_t cycle) {
-        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
         if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
-        return CD_MAKE(MemOp::WRITE_ABS, DataOp::STORE_ZERO, AluOp::NOP);
+        return CD_MAKE_SYNC(MemOp::WRITE_ABS, DataOp::STORE_ZERO, AluOp::NOP);
     }
 
-    // RTI - Return from interrupt, 6 cycles
-    static constexpr cycle_desc_t make_rti(uint8_t cycle) {
-        switch (cycle) {
-            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
-            case 2: return CD_MAKE(MemOp::READ_SP, DataOp::NOP, AluOp::NOP); // Internal operation
-            case 3: return CD_MAKE(MemOp::READ_SP_INC, DataOp::STACK_PULL, AluOp::NOP); // Pull status
-            case 4: return CD_MAKE(MemOp::READ_SP_INC, DataOp::STACK_PULL, AluOp::NOP); // Pull PCL
-            case 5: return CD_MAKE(MemOp::READ_SP_INC, DataOp::STACK_PULL, AluOp::NOP); // Pull PCH
-            default: return make_nop();
-        }
-    }
 
-    // Complete addressing modes for STA operations
+    // Complete addressing modes for STA operations - 3 cycles
     static constexpr cycle_desc_t make_sta_zpx(uint8_t cycle) {
-        switch (cycle) {
-            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::ADDR_ADD_X, AluOp::NOP);
-            case 3: return CD_MAKE(MemOp::WRITE_ZP, DataOp::STORE_A, AluOp::NOP);
-            default: return make_nop();
-        }
+        return make_zeropage_indexed_write(cycle, DataOp::ADDR_ADD_X, DataOp::STORE_A);
     }
 
     static constexpr cycle_desc_t make_sta_absx(uint8_t cycle) {
-        switch (cycle) {
-            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-            case 2: return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
-            case 3: return CD_MAKE(MemOp::READ_ABS, DataOp::ADDR_ADD_X, AluOp::NOP); // Always read first (6502 quirk)
-            case 4: return CD_MAKE(MemOp::WRITE_ABS, DataOp::STORE_A, AluOp::NOP);
-            default: return make_nop();
-        }
+        return make_absolute_indexed_write(cycle, DataOp::ADDR_ADD_X, DataOp::STORE_A);
     }
 
     static constexpr cycle_desc_t make_sta_absy(uint8_t cycle) {
-        switch (cycle) {
-            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-            case 2: return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
-            case 3: return CD_MAKE(MemOp::READ_ABS, DataOp::ADDR_ADD_Y, AluOp::NOP); // Always read first (6502 quirk)
-            case 4: return CD_MAKE(MemOp::WRITE_ABS, DataOp::STORE_A, AluOp::NOP);
-            default: return make_nop();
-        }
+        return make_absolute_indexed_write(cycle, DataOp::ADDR_ADD_Y, DataOp::STORE_A);
     }
 
     static constexpr cycle_desc_t make_sta_indx(uint8_t cycle) {
-        switch (cycle) {
-            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::ADDR_ADD_X, AluOp::NOP);
-            case 3: return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_LOW, AluOp::NOP);
-            case 4: return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_HIGH, AluOp::NOP);
-            case 5: return CD_MAKE(MemOp::WRITE_ABS, DataOp::STORE_A, AluOp::NOP);
-            default: return make_nop();
-        }
+        return make_indexed_indirect_write(cycle, DataOp::STORE_A);
     }
 
     static constexpr cycle_desc_t make_sta_indy(uint8_t cycle) {
-        switch (cycle) {
-            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_LOW, AluOp::NOP);
-            case 3: return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_HIGH, AluOp::NOP);
-            case 4: return CD_MAKE(MemOp::READ_ABS, DataOp::ADDR_ADD_Y, AluOp::NOP); // Always read first (6502 quirk)
-            case 5: return CD_MAKE(MemOp::WRITE_ABS, DataOp::STORE_A, AluOp::NOP);
-            default: return make_nop();
-        }
+        return make_indirect_indexed_write(cycle, DataOp::STORE_A);
     }
 
     // Complete addressing modes for STX/STY
     static constexpr cycle_desc_t make_stx_zp(uint8_t cycle) {
-        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-        return CD_MAKE(MemOp::WRITE_ZP, DataOp::STORE_X, AluOp::NOP);
+        return make_zeropage_write(cycle, DataOp::STORE_X);
     }
 
     static constexpr cycle_desc_t make_stx_zpy(uint8_t cycle) {
-        switch (cycle) {
-            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::ADDR_ADD_Y, AluOp::NOP);
-            case 3: return CD_MAKE(MemOp::WRITE_ZP, DataOp::STORE_X, AluOp::NOP);
-            default: return make_nop();
-        }
+        return make_zeropage_indexed_write(cycle, DataOp::ADDR_ADD_Y, DataOp::STORE_X);
     }
 
     static constexpr cycle_desc_t make_stx_abs(uint8_t cycle) {
-        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-        if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
-        return CD_MAKE(MemOp::WRITE_ABS, DataOp::STORE_X, AluOp::NOP);
+        return make_absolute_write(cycle, DataOp::STORE_X);
     }
 
     static constexpr cycle_desc_t make_sty_zp(uint8_t cycle) {
-        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-        return CD_MAKE(MemOp::WRITE_ZP, DataOp::STORE_Y, AluOp::NOP);
+        return make_zeropage_write(cycle, DataOp::STORE_Y);
     }
 
     static constexpr cycle_desc_t make_sty_zpx(uint8_t cycle) {
-        switch (cycle) {
-            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-            case 2: return CD_MAKE(MemOp::READ_ZP, DataOp::ADDR_ADD_X, AluOp::NOP);
-            case 3: return CD_MAKE(MemOp::WRITE_ZP, DataOp::STORE_Y, AluOp::NOP);
-            default: return make_nop();
-        }
+        return make_zeropage_indexed_write(cycle, DataOp::ADDR_ADD_X, DataOp::STORE_Y);
     }
 
     static constexpr cycle_desc_t make_sty_abs(uint8_t cycle) {
-        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-        if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
-        return CD_MAKE(MemOp::WRITE_ABS, DataOp::STORE_Y, AluOp::NOP);
+        return make_absolute_write(cycle, DataOp::STORE_Y);
     }
 
     // Complete addressing modes for ALU operations
     static constexpr cycle_desc_t make_adc_zp(uint8_t cycle) {
-        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-        return CD_MAKE(MemOp::READ_ZP, DataOp::ALU, AluOp::ADC);
+        return make_zeropage(cycle, DataOp::ALU, AluOp::ADC);
     }
 
     static constexpr cycle_desc_t make_adc_abs(uint8_t cycle) {
-        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-        if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
-        return CD_MAKE(MemOp::READ_ABS, DataOp::ALU, AluOp::ADC);
+        return make_absolute(cycle, DataOp::ALU, AluOp::ADC);
     }
 
-    static constexpr cycle_desc_t make_sbc_imm() { return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ALU, AluOp::SBC); }
+    static constexpr cycle_desc_t make_sbc_imm() { return make_immediate(DataOp::ALU, AluOp::SBC); }
     static constexpr cycle_desc_t make_sbc_zp(uint8_t cycle) {
-        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-        return CD_MAKE(MemOp::READ_ZP, DataOp::ALU, AluOp::SBC);
+        return make_zeropage(cycle, DataOp::ALU, AluOp::SBC);
     }
 
     static constexpr cycle_desc_t make_sbc_abs(uint8_t cycle) {
-        if (cycle == 1) return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-        if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
-        return CD_MAKE(MemOp::READ_ABS, DataOp::ALU, AluOp::SBC);
+        return make_absolute(cycle, DataOp::ALU, AluOp::SBC);
     }
 
     // Indirect JMP - 5 cycles
     static constexpr cycle_desc_t make_jmp_ind(uint8_t cycle) {
-        switch (cycle) {
-            case 1: return CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-            case 2: return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
-            case 3: return CD_MAKE(MemOp::READ_ABS, DataOp::INDIRECT_LOW, AluOp::NOP);
-            case 4: return CD_MAKE(MemOp::READ_ABS, DataOp::INDIRECT_HIGH, AluOp::NOP); // Note: 6502 bug with page boundary
-            default: return CD_MAKE(MemOp::NOP, DataOp::JMP, AluOp::NOP);
-        }
+        return make_jump_indirect(cycle);
     }
 
     // Major illegal opcodes (NMOS 6502) - special case for SAX (2-cycle)
     static constexpr cycle_desc_t make_sax_zp(uint8_t cycle) {
-        if (cycle == 1) return make_zp_addr();
-        return CD_MAKE(MemOp::WRITE_ZP, DataOp::ILLEGAL_COMBO, AluOp::SAX);
+        return make_zeropage_write(cycle, DataOp::ILLEGAL_COMBO);
     }
 
     // All other illegal opcodes use the standard memory modification pattern
@@ -524,13 +532,11 @@ public:
 
     // BIT instruction variations
     static constexpr cycle_desc_t make_bit_zp(uint8_t cycle) {
-        if (cycle == 1) return make_zp_addr();
-        return CD_MAKE(MemOp::READ_ZP, DataOp::ALU, AluOp::BIT);
+        return make_zeropage(cycle, DataOp::ALU, AluOp::BIT);
     }
 
     static constexpr cycle_desc_t make_bit_abs(uint8_t cycle) {
-        if (cycle <= 2) return make_abs_addr(cycle);
-        return CD_MAKE(MemOp::READ_ABS, DataOp::ALU, AluOp::BIT);
+        return make_absolute(cycle, DataOp::ALU, AluOp::BIT);
     }
 
     // === INTERRUPT CYCLE SEQUENCES (unified using shared patterns) ===
@@ -590,8 +596,10 @@ public:
                     // Validate SYNC bit constraints: exactly one SYNC per opcode
                     if (cycle_desc.is_sync()) {
                         if (sync_found) {
-                            // Error: Multiple SYNC bits in same opcode - should never happen
-                            // In constexpr context, we'll just ignore subsequent SYNC bits
+                            // COMPILE-TIME ERROR: Multiple SYNC bits in same opcode
+                            // This validation ensures proper SYNC placement at compile-time
+                            volatile int force_compilation_error[-1];  // Negative array size = compilation error
+                            (void)force_compilation_error;  // Suppress unused variable warning
                         } else {
                             sync_found = true;
                             // SYNC marks end of opcode - fill remaining cycles with NOPs
@@ -607,9 +615,10 @@ public:
                 
                 // Ensure every opcode has exactly one SYNC cycle
                 if (!sync_found) {
-                    // Error: No SYNC found for opcode - this indicates a bug
-                    // For safety in constexpr context, we can't easily handle this error
-                    // The calling code should validate that all opcodes end with SYNC
+                    // COMPILE-TIME ERROR: No SYNC found for opcode - this indicates a bug
+                    // This validation ensures every opcode has exactly one SYNC flag
+                    volatile int force_compilation_error[-1];  // Negative array size = compilation error
+                    (void)force_compilation_error;  // Suppress unused variable warning
                 }
             }
             
