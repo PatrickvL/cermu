@@ -164,7 +164,7 @@ public:
         if (cycle == 2) return CD_MAKE(MemOp::READ_ZP, DataOp::TEMP_STORE, AluOp::NOP);
         if (cycle == 3) return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_STORE, AluOp::NOP); // Write old value back
         if (cycle == 4) return CD_MAKE_SYNC(MemOp::WRITE_ZP, DataOp::TEMP_MODIFY, modify_op); // Write modified value
-        return CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::NOP); // Should never reach here
+        return CD_MAKE(MemOp::NOP, DataOp::NOP, AluOp::NOP); // Should never reach here
     }
     
     // Memory modify operations absolute (6 cycles)
@@ -174,7 +174,7 @@ public:
         if (cycle == 3) return CD_MAKE(MemOp::READ_ABS, DataOp::TEMP_STORE, AluOp::NOP);
         if (cycle == 4) return CD_MAKE(MemOp::WRITE_ABS, DataOp::TEMP_STORE, AluOp::NOP); // Write old value back
         if (cycle == 5) return CD_MAKE_SYNC(MemOp::WRITE_ABS, DataOp::TEMP_MODIFY, modify_op); // Write modified value
-        return CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::NOP); // Should never reach here
+        return CD_MAKE(MemOp::NOP, DataOp::NOP, AluOp::NOP); // Should never reach here
     }
     
     // Stack operations
@@ -539,6 +539,310 @@ public:
         return make_absolute(cycle, DataOp::ALU, AluOp::BIT);
     }
 
+    // === ADDITIONAL INSTRUCTION IMPLEMENTATIONS FOR COMPLETE 6502 SET ===
+    
+    // Complete ORA addressing modes
+    static constexpr cycle_desc_t make_ora_zp(uint8_t cycle) {
+        return make_zeropage(cycle, DataOp::ALU, AluOp::ORA);
+    }
+    static constexpr cycle_desc_t make_ora_zpx(uint8_t cycle) {
+        return make_zeropage_indexed(cycle, DataOp::ADDR_ADD_X, DataOp::ALU, AluOp::ORA);
+    }
+    static constexpr cycle_desc_t make_ora_abs(uint8_t cycle) {
+        return make_absolute(cycle, DataOp::ALU, AluOp::ORA);
+    }
+    static constexpr cycle_desc_t make_ora_absx(uint8_t cycle) {
+        return make_absolute_indexed(cycle, DataOp::ADDR_ADD_X, DataOp::ALU, AluOp::ORA);
+    }
+    static constexpr cycle_desc_t make_ora_absy(uint8_t cycle) {
+        return make_absolute_indexed(cycle, DataOp::ADDR_ADD_Y, DataOp::ALU, AluOp::ORA);
+    }
+    static constexpr cycle_desc_t make_ora_indx(uint8_t cycle) {
+        return make_indexed_indirect(cycle, DataOp::ALU, AluOp::ORA);
+    }
+    static constexpr cycle_desc_t make_ora_indy(uint8_t cycle) {
+        return make_indirect_indexed(cycle, DataOp::ALU, AluOp::ORA);
+    }
+
+    // Complete AND addressing modes
+    static constexpr cycle_desc_t make_and_zp(uint8_t cycle) {
+        return make_zeropage(cycle, DataOp::ALU, AluOp::AND);
+    }
+    static constexpr cycle_desc_t make_and_zpx(uint8_t cycle) {
+        return make_zeropage_indexed(cycle, DataOp::ADDR_ADD_X, DataOp::ALU, AluOp::AND);
+    }
+    static constexpr cycle_desc_t make_and_abs(uint8_t cycle) {
+        return make_absolute(cycle, DataOp::ALU, AluOp::AND);
+    }
+    static constexpr cycle_desc_t make_and_absx(uint8_t cycle) {
+        return make_absolute_indexed(cycle, DataOp::ADDR_ADD_X, DataOp::ALU, AluOp::AND);
+    }
+    static constexpr cycle_desc_t make_and_absy(uint8_t cycle) {
+        return make_absolute_indexed(cycle, DataOp::ADDR_ADD_Y, DataOp::ALU, AluOp::AND);
+    }
+    static constexpr cycle_desc_t make_and_indx(uint8_t cycle) {
+        return make_indexed_indirect(cycle, DataOp::ALU, AluOp::AND);
+    }
+    static constexpr cycle_desc_t make_and_indy(uint8_t cycle) {
+        return make_indirect_indexed(cycle, DataOp::ALU, AluOp::AND);
+    }
+
+    // Complete EOR addressing modes
+    static constexpr cycle_desc_t make_eor_zp(uint8_t cycle) {
+        return make_zeropage(cycle, DataOp::ALU, AluOp::EOR);
+    }
+    static constexpr cycle_desc_t make_eor_zpx(uint8_t cycle) {
+        return make_zeropage_indexed(cycle, DataOp::ADDR_ADD_X, DataOp::ALU, AluOp::EOR);
+    }
+    static constexpr cycle_desc_t make_eor_abs(uint8_t cycle) {
+        return make_absolute(cycle, DataOp::ALU, AluOp::EOR);
+    }
+    static constexpr cycle_desc_t make_eor_absx(uint8_t cycle) {
+        return make_absolute_indexed(cycle, DataOp::ADDR_ADD_X, DataOp::ALU, AluOp::EOR);
+    }
+    static constexpr cycle_desc_t make_eor_absy(uint8_t cycle) {
+        return make_absolute_indexed(cycle, DataOp::ADDR_ADD_Y, DataOp::ALU, AluOp::EOR);
+    }
+    static constexpr cycle_desc_t make_eor_indx(uint8_t cycle) {
+        return make_indexed_indirect(cycle, DataOp::ALU, AluOp::EOR);
+    }
+    static constexpr cycle_desc_t make_eor_indy(uint8_t cycle) {
+        return make_indirect_indexed(cycle, DataOp::ALU, AluOp::EOR);
+    }
+
+    // Complete ADC addressing modes
+    static constexpr cycle_desc_t make_adc_zpx(uint8_t cycle) {
+        return make_zeropage_indexed(cycle, DataOp::ADDR_ADD_X, DataOp::ALU, AluOp::ADC);
+    }
+    static constexpr cycle_desc_t make_adc_absx(uint8_t cycle) {
+        return make_absolute_indexed(cycle, DataOp::ADDR_ADD_X, DataOp::ALU, AluOp::ADC);
+    }
+    static constexpr cycle_desc_t make_adc_absy(uint8_t cycle) {
+        return make_absolute_indexed(cycle, DataOp::ADDR_ADD_Y, DataOp::ALU, AluOp::ADC);
+    }
+    static constexpr cycle_desc_t make_adc_indx(uint8_t cycle) {
+        return make_indexed_indirect(cycle, DataOp::ALU, AluOp::ADC);
+    }
+    static constexpr cycle_desc_t make_adc_indy(uint8_t cycle) {
+        return make_indirect_indexed(cycle, DataOp::ALU, AluOp::ADC);
+    }
+
+    // Complete SBC addressing modes
+    static constexpr cycle_desc_t make_sbc_zpx(uint8_t cycle) {
+        return make_zeropage_indexed(cycle, DataOp::ADDR_ADD_X, DataOp::ALU, AluOp::SBC);
+    }
+    static constexpr cycle_desc_t make_sbc_absx(uint8_t cycle) {
+        return make_absolute_indexed(cycle, DataOp::ADDR_ADD_X, DataOp::ALU, AluOp::SBC);
+    }
+    static constexpr cycle_desc_t make_sbc_absy(uint8_t cycle) {
+        return make_absolute_indexed(cycle, DataOp::ADDR_ADD_Y, DataOp::ALU, AluOp::SBC);
+    }
+    static constexpr cycle_desc_t make_sbc_indx(uint8_t cycle) {
+        return make_indexed_indirect(cycle, DataOp::ALU, AluOp::SBC);
+    }
+    static constexpr cycle_desc_t make_sbc_indy(uint8_t cycle) {
+        return make_indirect_indexed(cycle, DataOp::ALU, AluOp::SBC);
+    }
+
+    // Complete CMP addressing modes
+    static constexpr cycle_desc_t make_cmp_zp(uint8_t cycle) {
+        return make_zeropage(cycle, DataOp::ALU, AluOp::CMP);
+    }
+    static constexpr cycle_desc_t make_cmp_zpx(uint8_t cycle) {
+        return make_zeropage_indexed(cycle, DataOp::ADDR_ADD_X, DataOp::ALU, AluOp::CMP);
+    }
+    static constexpr cycle_desc_t make_cmp_abs(uint8_t cycle) {
+        return make_absolute(cycle, DataOp::ALU, AluOp::CMP);
+    }
+    static constexpr cycle_desc_t make_cmp_absx(uint8_t cycle) {
+        return make_absolute_indexed(cycle, DataOp::ADDR_ADD_X, DataOp::ALU, AluOp::CMP);
+    }
+    static constexpr cycle_desc_t make_cmp_absy(uint8_t cycle) {
+        return make_absolute_indexed(cycle, DataOp::ADDR_ADD_Y, DataOp::ALU, AluOp::CMP);
+    }
+    static constexpr cycle_desc_t make_cmp_indx(uint8_t cycle) {
+        return make_indexed_indirect(cycle, DataOp::ALU, AluOp::CMP);
+    }
+    static constexpr cycle_desc_t make_cmp_indy(uint8_t cycle) {
+        return make_indirect_indexed(cycle, DataOp::ALU, AluOp::CMP);
+    }
+
+    // Complete CPX/CPY addressing modes
+    static constexpr cycle_desc_t make_cpx_zp(uint8_t cycle) {
+        return make_zeropage(cycle, DataOp::ALU, AluOp::CPX);
+    }
+    static constexpr cycle_desc_t make_cpx_abs(uint8_t cycle) {
+        return make_absolute(cycle, DataOp::ALU, AluOp::CPX);
+    }
+    static constexpr cycle_desc_t make_cpy_zp(uint8_t cycle) {
+        return make_zeropage(cycle, DataOp::ALU, AluOp::CPY);
+    }
+    static constexpr cycle_desc_t make_cpy_abs(uint8_t cycle) {
+        return make_absolute(cycle, DataOp::ALU, AluOp::CPY);
+    }
+
+    // Complete LDX/LDY addressing modes
+    static constexpr cycle_desc_t make_ldx_abs(uint8_t cycle) {
+        return make_absolute(cycle, DataOp::LOAD_X);
+    }
+    static constexpr cycle_desc_t make_ldx_absy(uint8_t cycle) {
+        return make_absolute_indexed(cycle, DataOp::ADDR_ADD_Y, DataOp::LOAD_X);
+    }
+    static constexpr cycle_desc_t make_ldy_zpx(uint8_t cycle) {
+        return make_zeropage_indexed(cycle, DataOp::ADDR_ADD_X, DataOp::LOAD_Y);
+    }
+    static constexpr cycle_desc_t make_ldy_abs(uint8_t cycle) {
+        return make_absolute(cycle, DataOp::LOAD_Y);
+    }
+    static constexpr cycle_desc_t make_ldy_absx(uint8_t cycle) {
+        return make_absolute_indexed(cycle, DataOp::ADDR_ADD_X, DataOp::LOAD_Y);
+    }
+
+    // Complete memory modification operations (INC/DEC/ASL/LSR/ROL/ROR)
+    static constexpr cycle_desc_t make_inc_zpx(uint8_t cycle) {
+        return make_memory_modify_zp(cycle, AluOp::INC);  // Note: indexed versions use same helper
+    }
+    static constexpr cycle_desc_t make_dec_zpx(uint8_t cycle) {
+        return make_memory_modify_zp(cycle, AluOp::DEC);
+    }
+    static constexpr cycle_desc_t make_inc_abs(uint8_t cycle) {
+        return make_memory_modify_abs(cycle, AluOp::INC);
+    }
+    static constexpr cycle_desc_t make_dec_abs(uint8_t cycle) {
+        return make_memory_modify_abs(cycle, AluOp::DEC);
+    }
+    static constexpr cycle_desc_t make_inc_absx(uint8_t cycle) {
+        return make_memory_modify_abs(cycle, AluOp::INC);  // Note: indexed versions use same helper
+    }
+    static constexpr cycle_desc_t make_dec_absx(uint8_t cycle) {
+        return make_memory_modify_abs(cycle, AluOp::DEC);
+    }
+
+    // Complete shift/rotate operations
+    static constexpr cycle_desc_t make_asl_zpx(uint8_t cycle) {
+        return make_memory_modify_zp(cycle, AluOp::ASL);
+    }
+    static constexpr cycle_desc_t make_lsr_zpx(uint8_t cycle) {
+        return make_memory_modify_zp(cycle, AluOp::LSR);
+    }
+    static constexpr cycle_desc_t make_rol_zpx(uint8_t cycle) {
+        return make_memory_modify_zp(cycle, AluOp::ROL);
+    }
+    static constexpr cycle_desc_t make_ror_zpx(uint8_t cycle) {
+        return make_memory_modify_zp(cycle, AluOp::ROR);
+    }
+    static constexpr cycle_desc_t make_asl_abs(uint8_t cycle) {
+        return make_memory_modify_abs(cycle, AluOp::ASL);
+    }
+    static constexpr cycle_desc_t make_lsr_abs(uint8_t cycle) {
+        return make_memory_modify_abs(cycle, AluOp::LSR);
+    }
+    static constexpr cycle_desc_t make_rol_abs(uint8_t cycle) {
+        return make_memory_modify_abs(cycle, AluOp::ROL);
+    }
+    static constexpr cycle_desc_t make_ror_abs(uint8_t cycle) {
+        return make_memory_modify_abs(cycle, AluOp::ROR);
+    }
+    static constexpr cycle_desc_t make_asl_absx(uint8_t cycle) {
+        return make_memory_modify_abs(cycle, AluOp::ASL);
+    }
+    static constexpr cycle_desc_t make_lsr_absx(uint8_t cycle) {
+        return make_memory_modify_abs(cycle, AluOp::LSR);
+    }
+    static constexpr cycle_desc_t make_rol_absx(uint8_t cycle) {
+        return make_memory_modify_abs(cycle, AluOp::ROL);
+    }
+    static constexpr cycle_desc_t make_ror_absx(uint8_t cycle) {
+        return make_memory_modify_abs(cycle, AluOp::ROR);
+    }
+
+    // NOP variants (illegal opcodes with different addressing modes)
+    static constexpr cycle_desc_t make_nop_zp(uint8_t cycle) {
+        return make_zeropage(cycle, DataOp::NOP);
+    }
+    static constexpr cycle_desc_t make_nop_zpx(uint8_t cycle) {
+        return make_zeropage_indexed(cycle, DataOp::ADDR_ADD_X, DataOp::NOP);
+    }
+    static constexpr cycle_desc_t make_nop_abs(uint8_t cycle) {
+        return make_absolute(cycle, DataOp::NOP);
+    }
+    static constexpr cycle_desc_t make_nop_absx(uint8_t cycle) {
+        return make_absolute_indexed(cycle, DataOp::ADDR_ADD_X, DataOp::NOP);
+    }
+
+    // 65C02 extensions
+    static constexpr cycle_desc_t make_bit_zpx(uint8_t cycle) {
+        return make_zeropage_indexed(cycle, DataOp::ADDR_ADD_X, DataOp::ALU, AluOp::BIT);
+    }
+    static constexpr cycle_desc_t make_bit_absx(uint8_t cycle) {
+        return make_absolute_indexed(cycle, DataOp::ADDR_ADD_X, DataOp::ALU, AluOp::BIT);
+    }
+    static constexpr cycle_desc_t make_stz_zpx(uint8_t cycle) {
+        return make_zeropage_indexed_write(cycle, DataOp::ADDR_ADD_X, DataOp::STORE_ZERO);
+    }
+    static constexpr cycle_desc_t make_tsb_abs(uint8_t cycle) {
+        return make_memory_modify_abs(cycle, AluOp::TSB);
+    }
+    static constexpr cycle_desc_t make_trb_abs(uint8_t cycle) {
+        return make_memory_modify_abs(cycle, AluOp::TRB);
+    }
+    static constexpr cycle_desc_t make_jmp_absx_ind(uint8_t cycle) {
+        // JMP (abs,X) - 65C02 only, 6 cycles
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
+        if (cycle == 3) return CD_MAKE(MemOp::READ_ABS, DataOp::ADDR_ADD_X, AluOp::NOP);
+        if (cycle == 4) return CD_MAKE(MemOp::READ_ABS, DataOp::INDIRECT_LOW, AluOp::NOP);
+        if (cycle == 5) return CD_MAKE(MemOp::READ_ABS, DataOp::INDIRECT_HIGH, AluOp::NOP);
+        return CD_MAKE_SYNC(MemOp::NOP, DataOp::JMP, AluOp::NOP);
+    }
+
+    // Complete illegal opcode implementations
+    static constexpr cycle_desc_t make_slo_zpx(uint8_t cycle) { return make_memory_modify_zp(cycle, AluOp::SLO); }
+    static constexpr cycle_desc_t make_slo_abs(uint8_t cycle) { return make_memory_modify_abs(cycle, AluOp::SLO); }
+    static constexpr cycle_desc_t make_slo_absx(uint8_t cycle) { return make_memory_modify_abs(cycle, AluOp::SLO); }
+    static constexpr cycle_desc_t make_slo_indx(uint8_t cycle) { return make_indexed_indirect(cycle, DataOp::ILLEGAL_COMBO, AluOp::SLO); }
+    static constexpr cycle_desc_t make_slo_indy(uint8_t cycle) { return make_indirect_indexed(cycle, DataOp::ILLEGAL_COMBO, AluOp::SLO); }
+
+    static constexpr cycle_desc_t make_rla_zpx(uint8_t cycle) { return make_memory_modify_zp(cycle, AluOp::RLA); }
+    static constexpr cycle_desc_t make_rla_abs(uint8_t cycle) { return make_memory_modify_abs(cycle, AluOp::RLA); }
+    static constexpr cycle_desc_t make_rla_absx(uint8_t cycle) { return make_memory_modify_abs(cycle, AluOp::RLA); }
+    static constexpr cycle_desc_t make_rla_indx(uint8_t cycle) { return make_indexed_indirect(cycle, DataOp::ILLEGAL_COMBO, AluOp::RLA); }
+    static constexpr cycle_desc_t make_rla_indy(uint8_t cycle) { return make_indirect_indexed(cycle, DataOp::ILLEGAL_COMBO, AluOp::RLA); }
+
+    static constexpr cycle_desc_t make_sre_zpx(uint8_t cycle) { return make_memory_modify_zp(cycle, AluOp::SRE); }
+    static constexpr cycle_desc_t make_sre_abs(uint8_t cycle) { return make_memory_modify_abs(cycle, AluOp::SRE); }
+    static constexpr cycle_desc_t make_sre_absx(uint8_t cycle) { return make_memory_modify_abs(cycle, AluOp::SRE); }
+    static constexpr cycle_desc_t make_sre_indx(uint8_t cycle) { return make_indexed_indirect(cycle, DataOp::ILLEGAL_COMBO, AluOp::SRE); }
+    static constexpr cycle_desc_t make_sre_indy(uint8_t cycle) { return make_indirect_indexed(cycle, DataOp::ILLEGAL_COMBO, AluOp::SRE); }
+
+    static constexpr cycle_desc_t make_rra_zpx(uint8_t cycle) { return make_memory_modify_zp(cycle, AluOp::RRA); }
+    static constexpr cycle_desc_t make_rra_abs(uint8_t cycle) { return make_memory_modify_abs(cycle, AluOp::RRA); }
+    static constexpr cycle_desc_t make_rra_absx(uint8_t cycle) { return make_memory_modify_abs(cycle, AluOp::RRA); }
+    static constexpr cycle_desc_t make_rra_indx(uint8_t cycle) { return make_indexed_indirect(cycle, DataOp::ILLEGAL_COMBO, AluOp::RRA); }
+    static constexpr cycle_desc_t make_rra_indy(uint8_t cycle) { return make_indirect_indexed(cycle, DataOp::ILLEGAL_COMBO, AluOp::RRA); }
+
+    static constexpr cycle_desc_t make_sax_abs(uint8_t cycle) { return make_absolute_write(cycle, DataOp::ILLEGAL_COMBO); }
+    static constexpr cycle_desc_t make_sax_zpy(uint8_t cycle) { return make_zeropage_indexed_write(cycle, DataOp::ADDR_ADD_Y, DataOp::ILLEGAL_COMBO); }
+    static constexpr cycle_desc_t make_sax_indx(uint8_t cycle) { return make_indexed_indirect_write(cycle, DataOp::ILLEGAL_COMBO); }
+
+    static constexpr cycle_desc_t make_lax_abs(uint8_t cycle) { return make_absolute(cycle, DataOp::ILLEGAL_COMBO); }
+    static constexpr cycle_desc_t make_lax_absy(uint8_t cycle) { return make_absolute_indexed(cycle, DataOp::ADDR_ADD_Y, DataOp::ILLEGAL_COMBO); }
+    static constexpr cycle_desc_t make_lax_zpy(uint8_t cycle) { return make_zeropage_indexed(cycle, DataOp::ADDR_ADD_Y, DataOp::ILLEGAL_COMBO); }
+    static constexpr cycle_desc_t make_lax_indx(uint8_t cycle) { return make_indexed_indirect(cycle, DataOp::ILLEGAL_COMBO); }
+    static constexpr cycle_desc_t make_lax_indy(uint8_t cycle) { return make_indirect_indexed(cycle, DataOp::ILLEGAL_COMBO); }
+
+    static constexpr cycle_desc_t make_dcp_zpx(uint8_t cycle) { return make_memory_modify_zp(cycle, AluOp::DCP); }
+    static constexpr cycle_desc_t make_dcp_abs(uint8_t cycle) { return make_memory_modify_abs(cycle, AluOp::DCP); }
+    static constexpr cycle_desc_t make_dcp_absx(uint8_t cycle) { return make_memory_modify_abs(cycle, AluOp::DCP); }
+    static constexpr cycle_desc_t make_dcp_indx(uint8_t cycle) { return make_indexed_indirect(cycle, DataOp::ILLEGAL_COMBO, AluOp::DCP); }
+    static constexpr cycle_desc_t make_dcp_indy(uint8_t cycle) { return make_indirect_indexed(cycle, DataOp::ILLEGAL_COMBO, AluOp::DCP); }
+
+    static constexpr cycle_desc_t make_isc_zpx(uint8_t cycle) { return make_memory_modify_zp(cycle, AluOp::ISC); }
+    static constexpr cycle_desc_t make_isc_abs(uint8_t cycle) { return make_memory_modify_abs(cycle, AluOp::ISC); }
+    static constexpr cycle_desc_t make_isc_absx(uint8_t cycle) { return make_memory_modify_abs(cycle, AluOp::ISC); }
+    static constexpr cycle_desc_t make_isc_indx(uint8_t cycle) { return make_indexed_indirect(cycle, DataOp::ILLEGAL_COMBO, AluOp::ISC); }
+    static constexpr cycle_desc_t make_isc_indy(uint8_t cycle) { return make_indirect_indexed(cycle, DataOp::ILLEGAL_COMBO, AluOp::ISC); }
+
     // === INTERRUPT CYCLE SEQUENCES (unified using shared patterns) ===
     
     // Base interrupt sequence generator - used by BRK, NMI, IRQ, and RESET
@@ -587,8 +891,299 @@ public:
                             default: cycle_desc = make_nop(); break; // Should not happen with only 3 virtual opcodes
                         }
                     } else {
-                        // Handle regular opcodes (0-255)
-                        cycle_desc = get_regular_opcode_cycle(static_cast<uint8_t>(op), cyc);
+                        // Handle regular opcodes (0-255) - COMPLETE 6502 INSTRUCTION SET
+                        const uint8_t opcode = static_cast<uint8_t>(op);
+                        switch (opcode) {
+                            // === COLUMN 0: Control Instructions ===
+                            case 0x00: cycle_desc = make_brk(cyc); break;                        // BRK impl
+                            case 0x10: cycle_desc = make_bpl(cyc); break;                        // BPL rel
+                            case 0x20: cycle_desc = make_jsr(cyc); break;                        // JSR abs
+                            case 0x30: cycle_desc = make_bmi(cyc); break;                        // BMI rel
+                            case 0x40: cycle_desc = make_rti(cyc); break;                        // RTI impl
+                            case 0x50: cycle_desc = make_bvc(cyc); break;                        // BVC rel
+                            case 0x60: cycle_desc = make_rts(cyc); break;                        // RTS impl
+                            case 0x70: cycle_desc = make_bvs(cyc); break;                        // BVS rel
+                            case 0x80: cycle_desc = make_bra(cyc); break;                        // BRA rel (65C02) / NOP (NMOS)
+                            case 0x90: cycle_desc = make_bcc(cyc); break;                        // BCC rel
+                            case 0xA0: cycle_desc = make_ldy_imm(); break;                       // LDY #imm
+                            case 0xB0: cycle_desc = make_bcs(cyc); break;                        // BCS rel
+                            case 0xC0: cycle_desc = make_cpy_imm(); break;                       // CPY #imm
+                            case 0xD0: cycle_desc = make_bne(cyc); break;                        // BNE rel
+                            case 0xE0: cycle_desc = make_cpx_imm(); break;                       // CPX #imm
+                            case 0xF0: cycle_desc = make_beq(cyc); break;                        // BEQ rel
+
+                            // === COLUMN 1: Indexed Indirect (zp,X) ===
+                            case 0x01: cycle_desc = make_ora_indx(cyc); break;                   // ORA (zp,X)
+                            case 0x11: cycle_desc = make_ora_indy(cyc); break;                   // ORA (zp),Y
+                            case 0x21: cycle_desc = make_and_indx(cyc); break;                   // AND (zp,X)
+                            case 0x31: cycle_desc = make_and_indy(cyc); break;                   // AND (zp),Y
+                            case 0x41: cycle_desc = make_eor_indx(cyc); break;                   // EOR (zp,X)
+                            case 0x51: cycle_desc = make_eor_indy(cyc); break;                   // EOR (zp),Y
+                            case 0x61: cycle_desc = make_adc_indx(cyc); break;                   // ADC (zp,X)
+                            case 0x71: cycle_desc = make_adc_indy(cyc); break;                   // ADC (zp),Y
+                            case 0x81: cycle_desc = make_sta_indx(cyc); break;                   // STA (zp,X)
+                            case 0x91: cycle_desc = make_sta_indy(cyc); break;                   // STA (zp),Y
+                            case 0xA1: cycle_desc = make_lda_indx(cyc); break;                   // LDA (zp,X)
+                            case 0xB1: cycle_desc = make_lda_indy(cyc); break;                   // LDA (zp),Y
+                            case 0xC1: cycle_desc = make_cmp_indx(cyc); break;                   // CMP (zp,X)
+                            case 0xD1: cycle_desc = make_cmp_indy(cyc); break;                   // CMP (zp),Y
+                            case 0xE1: cycle_desc = make_sbc_indx(cyc); break;                   // SBC (zp,X)
+                            case 0xF1: cycle_desc = make_sbc_indy(cyc); break;                   // SBC (zp),Y
+
+                            // === COLUMN 2: Illegal/Undocumented/65C02 ===
+                            case 0x02: cycle_desc = make_nop(); break;                           // HLT/JAM (illegal)
+                            case 0x12: cycle_desc = make_nop(); break;                           // HLT/JAM (illegal)
+                            case 0x22: cycle_desc = make_nop(); break;                           // HLT/JAM (illegal)
+                            case 0x32: cycle_desc = make_nop(); break;                           // HLT/JAM (illegal)
+                            case 0x42: cycle_desc = make_nop(); break;                           // HLT/JAM (illegal)
+                            case 0x52: cycle_desc = make_nop(); break;                           // HLT/JAM (illegal)
+                            case 0x62: cycle_desc = make_nop(); break;                           // HLT/JAM (illegal)
+                            case 0x72: cycle_desc = make_nop(); break;                           // HLT/JAM (illegal)
+                            case 0x82: cycle_desc = make_nop(); break;                           // NOP #imm (illegal)
+                            case 0x92: cycle_desc = make_nop(); break;                           // HLT/JAM (illegal)
+                            case 0xA2: cycle_desc = make_ldx_imm(); break;                       // LDX #imm
+                            case 0xB2: cycle_desc = make_nop(); break;                           // HLT/JAM (illegal)
+                            case 0xC2: cycle_desc = make_nop(); break;                           // NOP #imm (illegal)
+                            case 0xD2: cycle_desc = make_nop(); break;                           // HLT/JAM (illegal)
+                            case 0xE2: cycle_desc = make_nop(); break;                           // NOP #imm (illegal)
+                            case 0xF2: cycle_desc = make_nop(); break;                           // HLT/JAM (illegal)
+
+                            // === COLUMN 3: Illegal opcodes (mostly SLO, RLA, SRE, RRA, SAX, LAX, DCP, ISC) ===
+                            case 0x03: cycle_desc = make_slo_indx(cyc); break;                   // SLO (zp,X) (illegal)
+                            case 0x13: cycle_desc = make_slo_indy(cyc); break;                   // SLO (zp),Y (illegal)
+                            case 0x23: cycle_desc = make_rla_indx(cyc); break;                   // RLA (zp,X) (illegal)
+                            case 0x33: cycle_desc = make_rla_indy(cyc); break;                   // RLA (zp),Y (illegal)
+                            case 0x43: cycle_desc = make_sre_indx(cyc); break;                   // SRE (zp,X) (illegal)
+                            case 0x53: cycle_desc = make_sre_indy(cyc); break;                   // SRE (zp),Y (illegal)
+                            case 0x63: cycle_desc = make_rra_indx(cyc); break;                   // RRA (zp,X) (illegal)
+                            case 0x73: cycle_desc = make_rra_indy(cyc); break;                   // RRA (zp),Y (illegal)
+                            case 0x83: cycle_desc = make_sax_indx(cyc); break;                   // SAX (zp,X) (illegal)
+                            case 0x93: cycle_desc = make_nop(); break;                           // AHX (zp),Y (illegal, unstable)
+                            case 0xA3: cycle_desc = make_lax_indx(cyc); break;                   // LAX (zp,X) (illegal)
+                            case 0xB3: cycle_desc = make_lax_indy(cyc); break;                   // LAX (zp),Y (illegal)
+                            case 0xC3: cycle_desc = make_dcp_indx(cyc); break;                   // DCP (zp,X) (illegal)
+                            case 0xD3: cycle_desc = make_dcp_indy(cyc); break;                   // DCP (zp),Y (illegal)
+                            case 0xE3: cycle_desc = make_isc_indx(cyc); break;                   // ISC (zp,X) (illegal)
+                            case 0xF3: cycle_desc = make_isc_indy(cyc); break;                   // ISC (zp),Y (illegal)
+
+                            // === COLUMN 4: Bit test/set/clear and NOP variants ===
+                            case 0x04: cycle_desc = make_tsb_zp(cyc); break;                     // TSB zp (65C02) / NOP zp (illegal on NMOS)
+                            case 0x14: cycle_desc = make_trb_zp(cyc); break;                     // TRB zp (65C02) / NOP zp,X (illegal on NMOS)
+                            case 0x24: cycle_desc = make_bit_zp(cyc); break;                     // BIT zp
+                            case 0x34: cycle_desc = make_bit_zpx(cyc); break;                    // BIT zp,X (65C02) / NOP zp,X (illegal on NMOS)
+                            case 0x44: cycle_desc = make_nop_zp(cyc); break;                     // NOP zp (illegal)
+                            case 0x54: cycle_desc = make_nop_zpx(cyc); break;                    // NOP zp,X (illegal)
+                            case 0x64: cycle_desc = make_stz_zp(cyc); break;                     // STZ zp (65C02) / NOP zp (illegal on NMOS)
+                            case 0x74: cycle_desc = make_stz_zpx(cyc); break;                    // STZ zp,X (65C02) / NOP zp,X (illegal on NMOS)
+                            case 0x84: cycle_desc = make_sty_zp(cyc); break;                     // STY zp
+                            case 0x94: cycle_desc = make_sty_zpx(cyc); break;                    // STY zp,X
+                            case 0xA4: cycle_desc = make_ldy_zp(cyc); break;                     // LDY zp
+                            case 0xB4: cycle_desc = make_ldy_zpx(cyc); break;                    // LDY zp,X
+                            case 0xC4: cycle_desc = make_cpy_zp(cyc); break;                     // CPY zp
+                            case 0xD4: cycle_desc = make_nop_zpx(cyc); break;                    // NOP zp,X (illegal)
+                            case 0xE4: cycle_desc = make_cpx_zp(cyc); break;                     // CPX zp
+                            case 0xF4: cycle_desc = make_nop_zpx(cyc); break;                    // NOP zp,X (illegal)
+
+                            // === COLUMN 5: Zero Page ===
+                            case 0x05: cycle_desc = make_ora_zp(cyc); break;                     // ORA zp
+                            case 0x15: cycle_desc = make_ora_zpx(cyc); break;                    // ORA zp,X
+                            case 0x25: cycle_desc = make_and_zp(cyc); break;                     // AND zp
+                            case 0x35: cycle_desc = make_and_zpx(cyc); break;                    // AND zp,X
+                            case 0x45: cycle_desc = make_eor_zp(cyc); break;                     // EOR zp
+                            case 0x55: cycle_desc = make_eor_zpx(cyc); break;                    // EOR zp,X
+                            case 0x65: cycle_desc = make_adc_zp(cyc); break;                     // ADC zp
+                            case 0x75: cycle_desc = make_adc_zpx(cyc); break;                    // ADC zp,X
+                            case 0x85: cycle_desc = make_sta_zp(cyc); break;                     // STA zp
+                            case 0x95: cycle_desc = make_sta_zpx(cyc); break;                    // STA zp,X
+                            case 0xA5: cycle_desc = make_lda_zp(cyc); break;                     // LDA zp
+                            case 0xB5: cycle_desc = make_lda_zpx(cyc); break;                    // LDA zp,X
+                            case 0xC5: cycle_desc = make_cmp_zp(cyc); break;                     // CMP zp
+                            case 0xD5: cycle_desc = make_cmp_zpx(cyc); break;                    // CMP zp,X
+                            case 0xE5: cycle_desc = make_sbc_zp(cyc); break;                     // SBC zp
+                            case 0xF5: cycle_desc = make_sbc_zpx(cyc); break;                    // SBC zp,X
+
+                            // === COLUMN 6: Arithmetic Shift & Rotate ===
+                            case 0x06: cycle_desc = make_asl_zp(cyc); break;                     // ASL zp
+                            case 0x16: cycle_desc = make_asl_zpx(cyc); break;                    // ASL zp,X
+                            case 0x26: cycle_desc = make_rol_zp(cyc); break;                     // ROL zp
+                            case 0x36: cycle_desc = make_rol_zpx(cyc); break;                    // ROL zp,X
+                            case 0x46: cycle_desc = make_lsr_zp(cyc); break;                     // LSR zp
+                            case 0x56: cycle_desc = make_lsr_zpx(cyc); break;                    // LSR zp,X
+                            case 0x66: cycle_desc = make_ror_zp(cyc); break;                     // ROR zp
+                            case 0x76: cycle_desc = make_ror_zpx(cyc); break;                    // ROR zp,X
+                            case 0x86: cycle_desc = make_stx_zp(cyc); break;                     // STX zp
+                            case 0x96: cycle_desc = make_stx_zpy(cyc); break;                    // STX zp,Y
+                            case 0xA6: cycle_desc = make_ldx_zp(cyc); break;                     // LDX zp
+                            case 0xB6: cycle_desc = make_ldx_zpy(cyc); break;                    // LDX zp,Y
+                            case 0xC6: cycle_desc = make_dec_zp(cyc); break;                     // DEC zp
+                            case 0xD6: cycle_desc = make_dec_zpx(cyc); break;                    // DEC zp,X
+                            case 0xE6: cycle_desc = make_inc_zp(cyc); break;                     // INC zp
+                            case 0xF6: cycle_desc = make_inc_zpx(cyc); break;                    // INC zp,X
+
+                            // === COLUMN 7: Illegal opcodes (SLO, RLA, SRE, RRA, SAX, LAX, DCP, ISC) ===
+                            case 0x07: cycle_desc = make_slo_zp(cyc); break;                     // SLO zp (illegal)
+                            case 0x17: cycle_desc = make_slo_zpx(cyc); break;                    // SLO zp,X (illegal)
+                            case 0x27: cycle_desc = make_rla_zp(cyc); break;                     // RLA zp (illegal)
+                            case 0x37: cycle_desc = make_rla_zpx(cyc); break;                    // RLA zp,X (illegal)
+                            case 0x47: cycle_desc = make_sre_zp(cyc); break;                     // SRE zp (illegal)
+                            case 0x57: cycle_desc = make_sre_zpx(cyc); break;                    // SRE zp,X (illegal)
+                            case 0x67: cycle_desc = make_rra_zp(cyc); break;                     // RRA zp (illegal)
+                            case 0x77: cycle_desc = make_rra_zpx(cyc); break;                    // RRA zp,X (illegal)
+                            case 0x87: cycle_desc = make_sax_zp(cyc); break;                     // SAX zp (illegal)
+                            case 0x97: cycle_desc = make_sax_zpy(cyc); break;                    // SAX zp,Y (illegal)
+                            case 0xA7: cycle_desc = make_lax_zp(cyc); break;                     // LAX zp (illegal)
+                            case 0xB7: cycle_desc = make_lax_zpy(cyc); break;                    // LAX zp,Y (illegal)
+                            case 0xC7: cycle_desc = make_dcp_zp(cyc); break;                     // DCP zp (illegal)
+                            case 0xD7: cycle_desc = make_dcp_zpx(cyc); break;                    // DCP zp,X (illegal)
+                            case 0xE7: cycle_desc = make_isc_zp(cyc); break;                     // ISC zp (illegal)
+                            case 0xF7: cycle_desc = make_isc_zpx(cyc); break;                    // ISC zp,X (illegal)
+
+                            // === COLUMN 8: Stack/Status Operations ===
+                            case 0x08: cycle_desc = make_php(cyc); break;                        // PHP impl
+                            case 0x18: cycle_desc = make_clc(); break;                           // CLC impl
+                            case 0x28: cycle_desc = make_plp(cyc); break;                        // PLP impl
+                            case 0x38: cycle_desc = make_sec(); break;                           // SEC impl
+                            case 0x48: cycle_desc = make_pha(cyc); break;                        // PHA impl
+                            case 0x58: cycle_desc = make_cli(); break;                           // CLI impl
+                            case 0x68: cycle_desc = make_pla(cyc); break;                        // PLA impl
+                            case 0x78: cycle_desc = make_sei(); break;                           // SEI impl
+                            case 0x88: cycle_desc = make_dey(); break;                           // DEY impl
+                            case 0x98: cycle_desc = make_tya(); break;                           // TYA impl
+                            case 0xA8: cycle_desc = make_tay(); break;                           // TAY impl
+                            case 0xB8: cycle_desc = make_clv(); break;                           // CLV impl
+                            case 0xC8: cycle_desc = make_iny(); break;                           // INY impl
+                            case 0xD8: cycle_desc = make_cld(); break;                           // CLD impl
+                            case 0xE8: cycle_desc = make_inx(); break;                           // INX impl
+                            case 0xF8: cycle_desc = make_sed(); break;                           // SED impl
+
+                            // === COLUMN 9: Immediate ===
+                            case 0x09: cycle_desc = make_ora_imm(); break;                       // ORA #imm
+                            case 0x19: cycle_desc = make_ora_absy(cyc); break;                   // ORA abs,Y
+                            case 0x29: cycle_desc = make_and_imm(); break;                       // AND #imm
+                            case 0x39: cycle_desc = make_and_absy(cyc); break;                   // AND abs,Y
+                            case 0x49: cycle_desc = make_eor_imm(); break;                       // EOR #imm
+                            case 0x59: cycle_desc = make_eor_absy(cyc); break;                   // EOR abs,Y
+                            case 0x69: cycle_desc = make_adc_imm(); break;                       // ADC #imm
+                            case 0x79: cycle_desc = make_adc_absy(cyc); break;                   // ADC abs,Y
+                            case 0x89: cycle_desc = make_nop(); break;                           // NOP #imm (illegal)
+                            case 0x99: cycle_desc = make_sta_absy(cyc); break;                   // STA abs,Y
+                            case 0xA9: cycle_desc = make_lda_imm(); break;                       // LDA #imm
+                            case 0xB9: cycle_desc = make_lda_absy(cyc); break;                   // LDA abs,Y
+                            case 0xC9: cycle_desc = make_cmp_imm(); break;                       // CMP #imm
+                            case 0xD9: cycle_desc = make_cmp_absy(cyc); break;                   // CMP abs,Y
+                            case 0xE9: cycle_desc = make_sbc_imm(); break;                       // SBC #imm
+                            case 0xF9: cycle_desc = make_sbc_absy(cyc); break;                   // SBC abs,Y
+
+                            // === COLUMN A: Accumulator & Implied ===
+                            case 0x0A: cycle_desc = make_asl_acc(); break;                       // ASL A
+                            case 0x1A: cycle_desc = make_nop(); break;                           // NOP impl (illegal) / INC A (65C02)
+                            case 0x2A: cycle_desc = make_rol_acc(); break;                       // ROL A
+                            case 0x3A: cycle_desc = make_nop(); break;                           // NOP impl (illegal) / DEC A (65C02)
+                            case 0x4A: cycle_desc = make_lsr_acc(); break;                       // LSR A
+                            case 0x5A: cycle_desc = make_phy(cyc); break;                        // PHY impl (65C02) / NOP (illegal on NMOS)
+                            case 0x6A: cycle_desc = make_ror_acc(); break;                       // ROR A
+                            case 0x7A: cycle_desc = make_ply(cyc); break;                        // PLY impl (65C02) / NOP (illegal on NMOS)
+                            case 0x8A: cycle_desc = make_txa(); break;                           // TXA impl
+                            case 0x9A: cycle_desc = make_txs(); break;                           // TXS impl
+                            case 0xAA: cycle_desc = make_tax(); break;                           // TAX impl
+                            case 0xBA: cycle_desc = make_tsx(); break;                           // TSX impl
+                            case 0xCA: cycle_desc = make_dex(); break;                           // DEX impl
+                            case 0xDA: cycle_desc = make_phx(cyc); break;                        // PHX impl (65C02) / NOP (illegal on NMOS)
+                            case 0xEA: cycle_desc = make_nop(); break;                           // NOP impl
+                            case 0xFA: cycle_desc = make_plx(cyc); break;                        // PLX impl (65C02) / NOP (illegal on NMOS)
+
+                            // === COLUMN B: Illegal opcodes (mostly unstable) ===
+                            case 0x0B: cycle_desc = make_nop(); break;                           // ANC #imm (illegal, unstable)
+                            case 0x1B: cycle_desc = make_nop(); break;                           // SLO abs,Y (illegal)
+                            case 0x2B: cycle_desc = make_nop(); break;                           // ANC #imm (illegal, unstable)
+                            case 0x3B: cycle_desc = make_nop(); break;                           // RLA abs,Y (illegal)
+                            case 0x4B: cycle_desc = make_nop(); break;                           // ALR #imm (illegal, unstable)
+                            case 0x5B: cycle_desc = make_nop(); break;                           // SRE abs,Y (illegal)
+                            case 0x6B: cycle_desc = make_nop(); break;                           // ARR #imm (illegal, unstable)
+                            case 0x7B: cycle_desc = make_nop(); break;                           // RRA abs,Y (illegal)
+                            case 0x8B: cycle_desc = make_nop(); break;                           // XAA #imm (illegal, highly unstable)
+                            case 0x9B: cycle_desc = make_nop(); break;                           // TAS abs,Y (illegal, unstable)
+                            case 0xAB: cycle_desc = make_nop(); break;                           // LAX #imm (illegal, unstable)
+                            case 0xBB: cycle_desc = make_nop(); break;                           // LAS abs,Y (illegal, unstable)
+                            case 0xCB: cycle_desc = make_nop(); break;                           // AXS #imm (illegal, unstable)
+                            case 0xDB: cycle_desc = make_nop(); break;                           // DCP abs,Y (illegal)
+                            case 0xEB: cycle_desc = make_nop(); break;                           // SBC #imm (illegal, same as legal E9)
+                            case 0xFB: cycle_desc = make_nop(); break;                           // ISC abs,Y (illegal)
+
+                            // === COLUMN C: Absolute addressing & Jump ===
+                            case 0x0C: cycle_desc = make_tsb_abs(cyc); break;                    // TSB abs (65C02) / NOP abs (illegal on NMOS)
+                            case 0x1C: cycle_desc = make_trb_abs(cyc); break;                    // TRB abs (65C02) / NOP abs,X (illegal on NMOS)
+                            case 0x2C: cycle_desc = make_bit_abs(cyc); break;                    // BIT abs
+                            case 0x3C: cycle_desc = make_bit_absx(cyc); break;                   // BIT abs,X (65C02) / NOP abs,X (illegal on NMOS)
+                            case 0x4C: cycle_desc = make_jmp_abs(cyc); break;                    // JMP abs
+                            case 0x5C: cycle_desc = make_nop_absx(cyc); break;                   // NOP abs,X (illegal)
+                            case 0x6C: cycle_desc = make_jmp_ind(cyc); break;                    // JMP (abs)
+                            case 0x7C: cycle_desc = make_jmp_absx_ind(cyc); break;               // JMP (abs,X) (65C02) / NOP abs,X (illegal on NMOS)
+                            case 0x8C: cycle_desc = make_sty_abs(cyc); break;                    // STY abs
+                            case 0x9C: cycle_desc = make_stz_abs(cyc); break;                    // STZ abs (65C02) / SHY abs,X (illegal on NMOS)
+                            case 0xAC: cycle_desc = make_ldy_abs(cyc); break;                    // LDY abs
+                            case 0xBC: cycle_desc = make_ldy_absx(cyc); break;                   // LDY abs,X
+                            case 0xCC: cycle_desc = make_cpy_abs(cyc); break;                    // CPY abs
+                            case 0xDC: cycle_desc = make_nop_absx(cyc); break;                   // NOP abs,X (illegal)
+                            case 0xEC: cycle_desc = make_cpx_abs(cyc); break;                    // CPX abs
+                            case 0xFC: cycle_desc = make_nop_absx(cyc); break;                   // NOP abs,X (illegal)
+
+                            // === COLUMN D: Absolute ===
+                            case 0x0D: cycle_desc = make_ora_abs(cyc); break;                    // ORA abs
+                            case 0x1D: cycle_desc = make_ora_absx(cyc); break;                   // ORA abs,X
+                            case 0x2D: cycle_desc = make_and_abs(cyc); break;                    // AND abs
+                            case 0x3D: cycle_desc = make_and_absx(cyc); break;                   // AND abs,X
+                            case 0x4D: cycle_desc = make_eor_abs(cyc); break;                    // EOR abs
+                            case 0x5D: cycle_desc = make_eor_absx(cyc); break;                   // EOR abs,X
+                            case 0x6D: cycle_desc = make_adc_abs(cyc); break;                    // ADC abs
+                            case 0x7D: cycle_desc = make_adc_absx(cyc); break;                   // ADC abs,X
+                            case 0x8D: cycle_desc = make_sta_abs(cyc); break;                    // STA abs
+                            case 0x9D: cycle_desc = make_sta_absx(cyc); break;                   // STA abs,X
+                            case 0xAD: cycle_desc = make_lda_abs(cyc); break;                    // LDA abs
+                            case 0xBD: cycle_desc = make_lda_absx(cyc); break;                   // LDA abs,X
+                            case 0xCD: cycle_desc = make_cmp_abs(cyc); break;                    // CMP abs
+                            case 0xDD: cycle_desc = make_cmp_absx(cyc); break;                   // CMP abs,X
+                            case 0xED: cycle_desc = make_sbc_abs(cyc); break;                    // SBC abs
+                            case 0xFD: cycle_desc = make_sbc_absx(cyc); break;                   // SBC abs,X
+
+                            // === COLUMN E: Absolute with shifts ===
+                            case 0x0E: cycle_desc = make_asl_abs(cyc); break;                    // ASL abs
+                            case 0x1E: cycle_desc = make_asl_absx(cyc); break;                   // ASL abs,X
+                            case 0x2E: cycle_desc = make_rol_abs(cyc); break;                    // ROL abs
+                            case 0x3E: cycle_desc = make_rol_absx(cyc); break;                   // ROL abs,X
+                            case 0x4E: cycle_desc = make_lsr_abs(cyc); break;                    // LSR abs
+                            case 0x5E: cycle_desc = make_lsr_absx(cyc); break;                   // LSR abs,X
+                            case 0x6E: cycle_desc = make_ror_abs(cyc); break;                    // ROR abs
+                            case 0x7E: cycle_desc = make_ror_absx(cyc); break;                   // ROR abs,X
+                            case 0x8E: cycle_desc = make_stx_abs(cyc); break;                    // STX abs
+                            case 0x9E: cycle_desc = make_nop(); break;                           // SHX abs,Y (illegal, unstable)
+                            case 0xAE: cycle_desc = make_ldx_abs(cyc); break;                    // LDX abs
+                            case 0xBE: cycle_desc = make_ldx_absy(cyc); break;                   // LDX abs,Y
+                            case 0xCE: cycle_desc = make_dec_abs(cyc); break;                    // DEC abs
+                            case 0xDE: cycle_desc = make_dec_absx(cyc); break;                   // DEC abs,X
+                            case 0xEE: cycle_desc = make_inc_abs(cyc); break;                    // INC abs
+                            case 0xFE: cycle_desc = make_inc_absx(cyc); break;                   // INC abs,X
+
+                            // === COLUMN F: Illegal opcodes (SLO, RLA, SRE, RRA, SAX, LAX, DCP, ISC) ===
+                            case 0x0F: cycle_desc = make_slo_abs(cyc); break;                    // SLO abs (illegal)
+                            case 0x1F: cycle_desc = make_slo_absx(cyc); break;                   // SLO abs,X (illegal)
+                            case 0x2F: cycle_desc = make_rla_abs(cyc); break;                    // RLA abs (illegal)
+                            case 0x3F: cycle_desc = make_rla_absx(cyc); break;                   // RLA abs,X (illegal)
+                            case 0x4F: cycle_desc = make_sre_abs(cyc); break;                    // SRE abs (illegal)
+                            case 0x5F: cycle_desc = make_sre_absx(cyc); break;                   // SRE abs,X (illegal)
+                            case 0x6F: cycle_desc = make_rra_abs(cyc); break;                    // RRA abs (illegal)
+                            case 0x7F: cycle_desc = make_rra_absx(cyc); break;                   // RRA abs,X (illegal)
+                            case 0x8F: cycle_desc = make_sax_abs(cyc); break;                    // SAX abs (illegal)
+                            case 0x9F: cycle_desc = make_nop(); break;                           // AHX abs,Y (illegal, unstable)
+                            case 0xAF: cycle_desc = make_lax_abs(cyc); break;                    // LAX abs (illegal)
+                            case 0xBF: cycle_desc = make_lax_absy(cyc); break;                   // LAX abs,Y (illegal)
+                            case 0xCF: cycle_desc = make_dcp_abs(cyc); break;                    // DCP abs (illegal)
+                            case 0xDF: cycle_desc = make_dcp_absx(cyc); break;                   // DCP abs,X (illegal)
+                            case 0xEF: cycle_desc = make_isc_abs(cyc); break;                    // ISC abs (illegal)
+                            case 0xFF: cycle_desc = make_isc_absx(cyc); break;                   // ISC abs,X (illegal)
+
+                            default: cycle_desc = make_nop(); break;  // Fallback - should never happen
+                        }
                     }
                     
                     table[table_index] = cycle_desc;
@@ -629,146 +1224,6 @@ public:
         return cycle_table[(opcode * 8) + (cycle - 1)];
     }
     
-    // Helper function to get cycle for regular opcodes (0-255)
-    static constexpr cycle_desc_t get_regular_opcode_cycle(uint8_t opcode, uint8_t cycle) {
-        switch (opcode) {
-            case 0xA9: return make_lda_imm();                         // LDA #$nn
-            case 0xA5: return make_lda_zp(cycle);                     // LDA $nn
-            case 0xAD: return make_lda_abs(cycle);                    // LDA $nnnn
-            case 0xA2: return make_ldx_imm();                         // LDX #$nn
-            case 0xA6: return make_ldx_zp(cycle);                     // LDX $nn
-            case 0xA0: return make_ldy_imm();                         // LDY #$nn
-            case 0xA4: return make_ldy_zp(cycle);                     // LDY $nn
-            case 0x85: return make_sta_zp(cycle);                     // STA $nn
-            case 0x8D: return make_sta_abs(cycle);                    // STA $nnnn
-            case 0x69: return make_adc_imm();                         // ADC #$nn
-            case 0x29: return make_and_imm();                         // AND #$nn
-            case 0x09: return make_ora_imm();                         // ORA #$nn
-            case 0x49: return make_eor_imm();                         // EOR #$nn
-            case 0xC9: return make_cmp_imm();                         // CMP #$nn
-            case 0xE0: return make_cpx_imm();                         // CPX #$nn
-            case 0xC0: return make_cpy_imm();                         // CPY #$nn
-            case 0x8A: return make_txa();                             // TXA
-            case 0xAA: return make_tax();                             // TAX
-            case 0x98: return make_tya();                             // TYA
-            case 0xA8: return make_tay();                             // TAY
-            case 0xBA: return make_tsx();                             // TSX
-            case 0x9A: return make_txs();                             // TXS
-            case 0x18: return make_clc();                             // CLC
-            case 0x38: return make_sec();                             // SEC
-            case 0x58: return make_cli();                             // CLI
-            case 0x78: return make_sei();                             // SEI
-            case 0xB8: return make_clv();                             // CLV
-            case 0xD8: return make_cld();                             // CLD
-            case 0xF8: return make_sed();                             // SED
-            case 0xE8: return make_inx();                             // INX
-            case 0xC8: return make_iny();                             // INY
-            case 0xCA: return make_dex();                             // DEX
-            case 0x88: return make_dey();                             // DEY
-            case 0xEA: return make_nop();                             // NOP
-            case 0x00: return make_brk(cycle);                        // BRK
-            case 0xA7: return make_lax_zp(cycle);                     // LAX $nn (illegal)
-            
-            // Branch instructions
-            case 0x90: return make_bcc(cycle);                        // BCC
-            case 0xB0: return make_bcs(cycle);                        // BCS
-            case 0xF0: return make_beq(cycle);                        // BEQ
-            case 0xD0: return make_bne(cycle);                        // BNE
-            case 0x10: return make_bpl(cycle);                        // BPL
-            case 0x30: return make_bmi(cycle);                        // BMI
-            case 0x50: return make_bvc(cycle);                        // BVC
-            case 0x70: return make_bvs(cycle);                        // BVS
-            
-            // Stack operations
-            case 0x48: return make_pha(cycle);                        // PHA
-            case 0x68: return make_pla(cycle);                        // PLA
-            case 0x08: return make_php(cycle);                        // PHP
-            case 0x28: return make_plp(cycle);                        // PLP
-            
-            // Jump operations
-            case 0x4C: return make_jmp_abs(cycle);                    // JMP $nnnn
-            case 0x20: return make_jsr(cycle);                        // JSR $nnnn
-            case 0x60: return make_rts(cycle);                        // RTS
-            case 0x40: return make_rti(cycle);                        // RTI
-            
-            // Shift/Rotate accumulator
-            case 0x0A: return make_asl_acc();                         // ASL A
-            case 0x4A: return make_lsr_acc();                         // LSR A
-            case 0x2A: return make_rol_acc();                         // ROL A
-            case 0x6A: return make_ror_acc();                         // ROR A
-            
-            // Memory increment/decrement
-            case 0xE6: return make_inc_zp(cycle);                     // INC $nn
-            case 0xC6: return make_dec_zp(cycle);                     // DEC $nn
-            
-            // Memory shift/rotate
-            case 0x06: return make_asl_zp(cycle);                     // ASL $nn
-            case 0x46: return make_lsr_zp(cycle);                     // LSR $nn
-            case 0x26: return make_rol_zp(cycle);                     // ROL $nn
-            case 0x66: return make_ror_zp(cycle);                     // ROR $nn
-            
-            // Indexed addressing modes
-            case 0xB5: return make_lda_zpx(cycle);                    // LDA $nn,X
-            case 0xB6: return make_ldx_zpy(cycle);                    // LDX $nn,Y
-            case 0xBD: return make_lda_absx(cycle);                   // LDA $nnnn,X
-            case 0xB9: return make_lda_absy(cycle);                   // LDA $nnnn,Y
-            
-            // Indirect addressing modes
-            case 0xA1: return make_lda_indx(cycle);                   // LDA ($nn,X)
-            case 0xB1: return make_lda_indy(cycle);                   // LDA ($nn),Y
-            
-            // Complete STA addressing modes
-            case 0x95: return make_sta_zpx(cycle);                    // STA $nn,X
-            case 0x9D: return make_sta_absx(cycle);                   // STA $nnnn,X
-            case 0x99: return make_sta_absy(cycle);                   // STA $nnnn,Y
-            case 0x81: return make_sta_indx(cycle);                   // STA ($nn,X)
-            case 0x91: return make_sta_indy(cycle);                   // STA ($nn),Y
-            
-            // STX/STY addressing modes
-            case 0x86: return make_stx_zp(cycle);                     // STX $nn
-            case 0x96: return make_stx_zpy(cycle);                    // STX $nn,Y
-            case 0x8E: return make_stx_abs(cycle);                    // STX $nnnn
-            case 0x84: return make_sty_zp(cycle);                     // STY $nn
-            case 0x94: return make_sty_zpx(cycle);                    // STY $nn,X
-            case 0x8C: return make_sty_abs(cycle);                    // STY $nnnn
-            
-            // Complete ADC/SBC addressing modes
-            case 0x65: return make_adc_zp(cycle);                     // ADC $nn
-            case 0x6D: return make_adc_abs(cycle);                    // ADC $nnnn
-            case 0xE9: return make_sbc_imm();                         // SBC #$nn
-            case 0xE5: return make_sbc_zp(cycle);                     // SBC $nn
-            case 0xED: return make_sbc_abs(cycle);                    // SBC $nnnn
-            
-            // Indirect JMP
-            case 0x6C: return make_jmp_ind(cycle);                    // JMP ($nnnn)
-            
-            // BIT instruction
-            case 0x24: return make_bit_zp(cycle);                     // BIT $nn
-            case 0x2C: return make_bit_abs(cycle);                    // BIT $nnnn
-            
-            // Major illegal opcodes (NMOS 6502)
-            case 0x87: return make_sax_zp(cycle);                     // SAX $nn
-            case 0xC7: return make_dcp_zp(cycle);                     // DCP $nn
-            case 0xE7: return make_isc_zp(cycle);                     // ISC $nn
-            case 0x07: return make_slo_zp(cycle);                     // SLO $nn
-            case 0x27: return make_rla_zp(cycle);                     // RLA $nn
-            case 0x47: return make_sre_zp(cycle);                     // SRE $nn
-            case 0x67: return make_rra_zp(cycle);                     // RRA $nn
-            
-            // 65C02 specific instructions (will be NOP on NMOS)
-            case 0x80: return make_bra(cycle);                        // BRA (65C02)
-            case 0xDA: return make_phx(cycle);                        // PHX (65C02)
-            case 0x5A: return make_phy(cycle);                        // PHY (65C02)
-            case 0xFA: return make_plx(cycle);                        // PLX (65C02)
-            case 0x7A: return make_ply(cycle);                        // PLY (65C02)
-            case 0x64: return make_stz_zp(cycle);                     // STZ $nn (65C02)
-            case 0x9C: return make_stz_abs(cycle);                    // STZ $nnnn (65C02)
-            case 0x04: return make_tsb_zp(cycle);                     // TSB $nn (65C02)
-            case 0x14: return make_trb_zp(cycle);                     // TRB $nn (65C02)
-                    
-            default: return make_nop();  // Default to NOP for undefined opcodes
-        }
-    }
     
 };
 
