@@ -153,8 +153,7 @@ set(CORE_SOURCES
 
 # Chip library sources
 set(CHIP_SOURCES
-    src/chip/cpu/mos6510_cpp/mos6510_cpp.c
-    src/chip/cpu/fam65xx_cpp/fam65xx_cpp_adapter.cpp
+    src/chip/cpu/mos6510/mos6510.cpp
 )
 
 # Conditionally add cycle-accurate MOS6510 sources
@@ -378,7 +377,7 @@ endif()
 enable_testing()
 
 # Add tests subdirectory for comprehensive MOS6510 testing
-# add_subdirectory(tests)  # disabled while migrating to C++ 65xx core
+add_subdirectory(tests)  # Re-enabled for fam65xx_cpp testing
 
 # Add tests (currently disabled due to API compatibility issues)
 # add_test(NAME minimal_test COMMAND minimal_test)
