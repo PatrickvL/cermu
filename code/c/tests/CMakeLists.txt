@@ -5,6 +5,10 @@ project(MOS6510Tests)
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
+# Set C++ standard for fam65xx_cpp tests
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # Compiler-specific flags
 if(MSVC)
     # Microsoft Visual C++ flags
@@ -99,6 +103,20 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../test_mos6510_basic.c)
     target_compile_definitions(test_mos6510_basic_tests PRIVATE REDESIGN=1)
 endif()
 
+# fam65xx_cpp Klaus Test Suite - New C++ CPU Core Testing
+add_executable(fam65xx_cpp_klaus_test_runner
+    fam65xx_cpp_klaus_test_runner.cpp
+    fam65xx_cpp_test_harness.cpp
+)
+target_include_directories(fam65xx_cpp_klaus_test_runner PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
+)
+# Link math library if needed
+if(NOT WIN32 AND NOT MSVC)
+    target_link_libraries(fam65xx_cpp_klaus_test_runner m)
+endif()
+
 # Enable testing
 enable_testing()
 
@@ -129,6 +147,14 @@ if(TARGET test_mos6510_basic_tests)
         PASS_REGULAR_EXPRESSION "ALL TESTS PASSED"
     )
 endif()
+
+# fam65xx_cpp Klaus test
+add_test(NAME fam65xx_cpp_klaus_test COMMAND fam65xx_cpp_klaus_test_runner --functional)
+set_tests_properties(fam65xx_cpp_klaus_test PROPERTIES
+    TIMEOUT 300
+    PASS_REGULAR_EXPRESSION "ALL TESTS PASSED"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
 
 # Custom targets for convenience
 # TEMPORARILY DISABLED due to header compatibility issues with MSVC
@@ -171,6 +197,11 @@ if(TARGET test_mos6510_basic_tests)
     )
 endif()
 
+# Install fam65xx_cpp test runner
+install(TARGETS fam65xx_cpp_klaus_test_runner
+    RUNTIME DESTINATION bin
+)
+
 # Print summary
 message(STATUS "MOS6510 Tests Configuration:")
 message(STATUS "  C Standard: ${CMAKE_C_STANDARD}")
@@ -183,3 +214,4 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/processor_tests)
 else()
     message(STATUS "  ProcessorTests Available: No")
 endif()
+message(STATUS "  fam65xx_cpp Klaus Test Runner: Built")
