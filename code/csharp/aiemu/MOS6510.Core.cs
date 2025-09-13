@@ -37,7 +37,7 @@ public partial class MOS6510
     // Shared state for addressing modes
     private byte lo, hi, val;
     private ushort addr;
-    private CycleAction nextStepAction;
+    private CycleAction nextStepAction = null!;
 
     // Pre-allocated operations to avoid delegate creation
     private readonly CycleAction addWithCarryAction;
