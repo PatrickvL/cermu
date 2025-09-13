@@ -146,13 +146,39 @@ int main(int argc, char* argv[]) {
             break;
         }
 
-        case TEST_MODE_DECIMAL:
-            printf("Decimal test mode not yet implemented for fam65xx_cpp\n");
-            all_passed = false;
+        case TEST_MODE_DECIMAL: {
+            fam65xx_test_harness_t* harness = fam65xx_test_harness_create();
+            if (!harness) {
+                fprintf(stderr, "Failed to create test harness\n");
+                return 1;
+            }
+
+            // Configure trace if requested
+            if (trace_file) {
+                fam65xx_test_harness_enable_trace(harness, trace_file);
+            }
+
+            // Load and run 65C02 extended opcodes test
+            char test_path[512];
+            snprintf(test_path, sizeof(test_path),
+                     "/home/patrick/Git/aiemu/external/6502-tests/6502_65C02_functional_tests/bin_files/65C02_extended_opcodes_test.bin");
+
+            if (fam65xx_test_harness_load_binary(harness, test_path)) {
+                harness->max_cycles = max_cycles;
+                fam65xx_test_status_t status = fam65xx_test_harness_run_klaus_test(harness);
+                fam65xx_test_harness_print_status(&status);
+                all_passed = (status.result == TEST_PASSED);
+            } else {
+                all_passed = false;
+            }
+
+            fam65xx_test_harness_destroy(harness);
             break;
+        }
 
         case TEST_MODE_INTERRUPT:
-            printf("Interrupt test mode not yet implemented for fam65xx_cpp\n");
+            printf("Interrupt test mode requires assembly from source\n");
+            printf("6502_interrupt_test.a65 source available but not assembled\n");
             all_passed = false;
             break;
     }
