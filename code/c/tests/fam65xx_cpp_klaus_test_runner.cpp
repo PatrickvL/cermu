@@ -130,10 +130,8 @@ int main(int argc, char* argv[]) {
 
             // Load and run functional test
             char test_path[512];
-            const char* pwd = getenv("PWD");
             snprintf(test_path, sizeof(test_path),
-                     "%s/external/6502-tests/bin_files/6502_functional_test.bin",
-                     pwd ? pwd : ".");
+                     "/home/patrick/Git/aiemu/external/6502-tests/6502_65C02_functional_tests/bin_files/6502_functional_test.bin");
 
             if (fam65xx_test_harness_load_binary(harness, test_path)) {
                 harness->max_cycles = max_cycles;
