@@ -156,24 +156,27 @@ public:
         DataOp data_op = static_cast<DataOp>(cycle.data_op);
         AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
         
-        // Set interrupt vector addresses based on interrupt type
-        if (mem_op == MemOp::READ_ABS && data_op == DataOp::INTERRUPT_VEC) {
+        // Set interrupt vector addresses for READ_VECTOR operations
+        if (mem_op == MemOp::READ_VECTOR) {
             switch (opcode) {
                 case VIRTUAL_OPCODE_RESET:
-                    BUS_SET_ADDR(bus_state, cycle_step == 6 ? 0xFFFC : 0xFFFD);
+                    reg[CpuReg::ABL] = (cycle_step == 6) ? 0xFC : 0xFD;
+                    reg[CpuReg::ABH] = 0xFF;
                     break;
                 case VIRTUAL_OPCODE_NMI:
-                    BUS_SET_ADDR(bus_state, cycle_step == 6 ? 0xFFFA : 0xFFFB);
+                    reg[CpuReg::ABL] = (cycle_step == 6) ? 0xFA : 0xFB;
+                    reg[CpuReg::ABH] = 0xFF;
                     break;
                 case VIRTUAL_OPCODE_IRQ:
-                    BUS_SET_ADDR(bus_state, cycle_step == 6 ? 0xFFFE : 0xFFFF);
+                    reg[CpuReg::ABL] = (cycle_step == 6) ? 0xFE : 0xFF;
+                    reg[CpuReg::ABH] = 0xFF;
                     break;
             }
         }
         
         // Execute memory operation
         bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op, data_op);
-
+        
         // Handle write data if needed
         bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op);
         
@@ -386,10 +389,11 @@ public:
     
     // Handle interrupt vector reads
     inline void handle_interrupt_vector(uint8_t data) {
-        if (cycle_step % 2 == 1) {
-            reg[CpuReg::PCL] = data;
-        } else {
-            reg[CpuReg::PCH] = data;
+        // Cycle 6 reads low byte, cycle 7 reads high byte for all interrupt types
+        if (cycle_step == 6) {
+            reg[CpuReg::PCL] = data;  // Store low byte
+        } else if (cycle_step == 7) {
+            reg[CpuReg::PCH] = data;  // Store high byte
         }
     }
     
@@ -541,7 +545,7 @@ public:
                                           mem_op == MemOp::READ_SP ||
                                           mem_op == MemOp::READ_SP_INC ||
                                           mem_op == MemOp::READ_INDIRECT ||
-                                          mem_op == MemOp::DUMMY_READ);
+                                          mem_op == MemOp::READ_VECTOR);
                 rdy_blocks = is_read_cycle;
             }
         }
