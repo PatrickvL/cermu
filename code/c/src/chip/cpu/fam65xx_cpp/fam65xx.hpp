@@ -5,7 +5,7 @@
 #include "cpu_config.hpp"
 #include "alu_operations.hpp"
 #include "memory_operations.hpp"
-#include "cycle_tables.hpp"
+#include "cycle_tables_new.hpp"
 #include "../../../core/system_lines.h"
 
 namespace fam65xx_cpp {
@@ -633,9 +633,8 @@ public:
             // NMOS bug: JMP ($xxFF) reads from $xxFF and $xx00 instead of $xx00+1
             if ((indirect_addr & 0xFF) == 0xFF) {
                 // Page boundary bug: high byte comes from same page
-                const uint16_t bug_addr = (indirect_addr & 0xFF00) | 0x00;
-                target_addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
                 // The bug has already been captured in the cycle, ABH contains wrong data
+                target_addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
             } else {
                 // Normal case: no page boundary crossed
                 target_addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
