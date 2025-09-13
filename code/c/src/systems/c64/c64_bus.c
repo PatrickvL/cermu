@@ -214,6 +214,10 @@ chip_descriptor_t c64_bus_descriptor = {
     .destroy = c64_bus_system_destroy,
     .bus_attach = NULL,
     .bank_change = NULL
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    ,.render_debug_window = NULL, // No GUI debug window implemented yet
+    .render_settings_window = NULL // No GUI settings window implemented yet
+#endif
 };
 
 void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {

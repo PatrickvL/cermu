@@ -70,5 +70,9 @@ chip_descriptor_t mos6510_descriptor = {
     .create = mos6510_chip_create,
     .destroy = mos6510_chip_destroy,
     .bus_attach = NULL, // No special bus attachment needed
-    .bank_change = NULL // No banking change needed
+    .bank_change = NULL, // No banking change needed
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    .render_debug_window = NULL, // No GUI debug window implemented yet
+    .render_settings_window = NULL // No GUI settings window implemented yet
+#endif
 };
