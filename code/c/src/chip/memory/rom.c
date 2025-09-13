@@ -39,4 +39,8 @@ chip_descriptor_t rom_descriptor = {
     .destroy = rom_system_destroy,
     .bus_attach = NULL,
     .bank_change = NULL
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    ,.render_debug_window = NULL, // No GUI debug window implemented yet
+    .render_settings_window = NULL // No GUI settings window implemented yet
+#endif
 };

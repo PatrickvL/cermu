@@ -3,8 +3,6 @@
 
 #include "cycle_types.hpp"
 #include "cycle_validation.hpp"
-#include "cycle_addressing.hpp"
-#include "cycle_interrupts.hpp"
 #include "cycle_instructions.hpp"
 #include <array>
 
@@ -13,20 +11,6 @@ namespace fam65xx_cpp {
 template<typename BusConfig>
 class CycleTables : public CycleInstructions<BusConfig> {
 public:
-    // Import all instruction implementations
-    using CycleInstructions<BusConfig>::make_empty_cycle;
-    using CycleInstructions<BusConfig>::make_nop;
-    using CycleInstructions<BusConfig>::make_lda_imm;
-    using CycleInstructions<BusConfig>::make_lda_zp;
-    using CycleInstructions<BusConfig>::make_lda_abs;
-    using CycleInstructions<BusConfig>::make_adc_imm;
-    using CycleInstructions<BusConfig>::make_brk;
-    // Import interrupt sequences
-    using CycleInterrupts<BusConfig>::get_reset_cycle;
-    using CycleInterrupts<BusConfig>::get_nmi_cycle;
-    using CycleInterrupts<BusConfig>::get_irq_cycle;
-    // Import all other instructions (abbreviated for brevity - all are available)
-
     // === COMPILE-TIME 1D CYCLE TABLE IMPLEMENTATION ===
     
     // Template-based get_cycle method that adapts using template arguments for compile-time generation
@@ -35,11 +19,11 @@ public:
     static constexpr cycle_desc_t get_cycle() {
         switch (OpCode) {
             // For all other opcodes, return empty cycle
-            default: return make_empty_cycle();  // Fallback for any missing opcodes
+            default: return CycleInstructions<BusConfig>::make_empty_cycle();  // Fallback for any missing opcodes
             // Handle virtual opcodes (256, 257, 258)
-            case VIRTUAL_OPCODE_RESET: return get_reset_cycle(Cycle);
-            case VIRTUAL_OPCODE_NMI: return get_nmi_cycle(Cycle);
-            case VIRTUAL_OPCODE_IRQ: return get_irq_cycle(Cycle);
+            case VIRTUAL_OPCODE_RESET: return CycleInstructions<BusConfig>::get_reset_cycle(Cycle);
+            case VIRTUAL_OPCODE_NMI: return CycleInstructions<BusConfig>::get_nmi_cycle(Cycle);
+            case VIRTUAL_OPCODE_IRQ: return CycleInstructions<BusConfig>::get_irq_cycle(Cycle);
             // Handle regular opcodes (0-255) - COMPLETE 6502 INSTRUCTION SET
             case 0x00: return CycleInstructions<BusConfig>::make_brk(Cycle);                        // BRK impl
             case 0x10: return CycleInstructions<BusConfig>::make_bpl(Cycle);                   // BPL rel
@@ -353,7 +337,7 @@ public:
     // Table lookup function
     static constexpr cycle_desc_t get_cycle_from_table(uint16_t opcode, uint8_t cycle) {
         if (opcode >= TOTAL_OPCODES || cycle < 1 || cycle > MAX_CYCLES) {
-            return make_empty_cycle();
+            return CycleInstructions<BusConfig>::make_empty_cycle();
         }
         return cycle_table[get_cycle_index(opcode, cycle)];
     }
