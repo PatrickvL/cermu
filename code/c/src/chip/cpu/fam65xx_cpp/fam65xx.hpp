@@ -5,7 +5,7 @@
 #include "cpu_config.hpp"
 #include "alu_operations.hpp"
 #include "memory_operations.hpp"
-#include "cycle_tables.hpp"
+#include "cycle_table_gen.hpp"
 #include "../../../core/system_lines.h"
 
 namespace fam65xx_cpp {
@@ -248,11 +248,13 @@ public:
         // Store data for potential ALU use
         reg[CpuReg::DL] = data;
         
-        if (pending_data_op < static_cast<uint8_t>(CpuReg::COUNT)) {
-            // Direct register load
-            reg[pending_data_op] = data;
+        // Check if data_op corresponds to a direct register load (values 0-5: A, X, Y, S, P, PCL)
+        // Values 6+ (PCH, ABL, ABH, DL, etc.) and special operations should use switch statement
+        if (data_op <= static_cast<uint8_t>(CpuReg::P)) {
+            // Direct register load for A, X, Y, S, P only
+            reg[data_op] = data;
         } else {
-            switch (static_cast<DataOp>(pending_data_op)) {
+            switch (static_cast<DataOp>(data_op)) {
                 case DataOp::ALU:
                     pending_data = data;
                     break;
@@ -261,6 +263,10 @@ public:
                     break;
                 case DataOp::ADDR_CALC_HIGH:
                     reg[CpuReg::ABH] = data;
+                    break;
+                case DataOp::BRANCH:
+                    // Handle branch instructions (BCC, BCS, BEQ, BNE, BMI, BPL, BVC, BVS, BRA)
+                    handle_branch_instruction(data);
                     break;
                 case DataOp::JMP:
                     // Execute jump using the address calculated in ABL/ABH
@@ -293,6 +299,79 @@ public:
         
         // Set pending data operation for next cycle
         pending_data_op = data_op;
+    }
+    
+    // Handle branch instructions (BCC, BCS, BEQ, BNE, BMI, BPL, BVC, BVS, BRA)
+    inline void handle_branch_instruction(uint8_t offset) {
+        // Special handling for BRA (Branch Always) - 65C02 unconditional branch
+        if (opcode == 0x80) {
+            // BRA is always a simple 2-cycle unconditional branch
+            // Calculate target address
+            const uint16_t current_pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+            int16_t signed_offset = static_cast<int8_t>(offset); // Sign extend
+            const uint16_t target_pc = current_pc + signed_offset;
+
+            // Update PC immediately - BRA doesn't use conditional branch logic
+            reg[CpuReg::PCL] = target_pc & 0xFF;
+            reg[CpuReg::PCH] = (target_pc >> 8) & 0xFF;
+            
+            // BRA doesn't set STATE_BRANCH_TAKEN or STATE_PAGE_CROSSED
+            // It always executes in exactly 2 cycles regardless of page crossing
+            return;
+        }
+        
+        // Conditional branch handling for other branch instructions
+        bool should_branch = false;
+        
+        // Determine if branch should be taken based on opcode
+        switch (opcode) {
+            case 0x10: // BPL (Branch if PLus)
+                should_branch = !(reg[CpuReg::P] & P_NEGATIVE);
+                break;
+            case 0x30: // BMI (Branch if MInus)
+                should_branch = (reg[CpuReg::P] & P_NEGATIVE);
+                break;
+            case 0x50: // BVC (Branch if oVerflow Clear)
+                should_branch = !(reg[CpuReg::P] & P_OVERFLOW);
+                break;
+            case 0x70: // BVS (Branch if oVerflow Set)
+                should_branch = (reg[CpuReg::P] & P_OVERFLOW);
+                break;
+            case 0x90: // BCC (Branch if Carry Clear)
+                should_branch = !(reg[CpuReg::P] & P_CARRY);
+                break;
+            case 0xB0: // BCS (Branch if Carry Set)
+                should_branch = (reg[CpuReg::P] & P_CARRY);
+                break;
+            case 0xD0: // BNE (Branch if Not Equal)
+                should_branch = !(reg[CpuReg::P] & P_ZERO);
+                break;
+            case 0xF0: // BEQ (Branch if EQual)
+                should_branch = (reg[CpuReg::P] & P_ZERO);
+                break;
+            default:
+                // Unknown branch instruction
+                break;
+        }
+        
+        if (should_branch) {
+            // Calculate branch target address
+            const uint16_t current_pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+            int16_t signed_offset = static_cast<int8_t>(offset); // Sign extend
+            const uint16_t target_pc = current_pc + signed_offset;
+            
+            // Update PC
+            reg[CpuReg::PCL] = target_pc & 0xFF;
+            reg[CpuReg::PCH] = (target_pc >> 8) & 0xFF;
+            
+            // Set branch taken flag for cycle timing
+            set_state(STATE_BRANCH_TAKEN);
+            
+            // Check for page crossing (affects cycle count)
+            if ((current_pc ^ target_pc) & 0xFF00) {
+                set_state(STATE_PAGE_CROSSED);
+            }
+        }
     }
     
     // Handle stack pull operations

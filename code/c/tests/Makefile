@@ -48,10 +48,10 @@ cmake_force:
 SHELL = /bin/sh
 
 # The CMake executable.
-CMAKE_COMMAND = /snap/cmake/1479/bin/cmake
+CMAKE_COMMAND = /snap/cmake/1481/bin/cmake
 
 # The command to remove a file.
-RM = /snap/cmake/1479/bin/cmake -E rm -f
+RM = /snap/cmake/1481/bin/cmake -E rm -f
 
 # Escaping for special characters.
 EQUALS = =
@@ -68,7 +68,7 @@ CMAKE_BINARY_DIR = /home/patrick/Git/aiemu/code/c
 # Special rule for the target test
 test:
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Running tests..."
-	/snap/cmake/1479/bin/ctest $(ARGS)
+	/snap/cmake/1481/bin/ctest $(ARGS)
 .PHONY : test
 
 # Special rule for the target test
@@ -88,7 +88,7 @@ edit_cache/fast: edit_cache
 # Special rule for the target rebuild_cache
 rebuild_cache:
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Running CMake to regenerate build system..."
-	/snap/cmake/1479/bin/cmake --regenerate-during-build -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
+	/snap/cmake/1481/bin/cmake --regenerate-during-build -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
 .PHONY : rebuild_cache
 
 # Special rule for the target rebuild_cache
@@ -107,37 +107,37 @@ list_install_components/fast: list_install_components
 # Special rule for the target install
 install: preinstall
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Install the project..."
-	/snap/cmake/1479/bin/cmake -P cmake_install.cmake
+	/snap/cmake/1481/bin/cmake -P cmake_install.cmake
 .PHONY : install
 
 # Special rule for the target install
 install/fast: preinstall/fast
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Install the project..."
-	/snap/cmake/1479/bin/cmake -P cmake_install.cmake
+	/snap/cmake/1481/bin/cmake -P cmake_install.cmake
 .PHONY : install/fast
 
 # Special rule for the target install/local
 install/local: preinstall
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing only the local directory..."
-	/snap/cmake/1479/bin/cmake -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
+	/snap/cmake/1481/bin/cmake -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
 .PHONY : install/local
 
 # Special rule for the target install/local
 install/local/fast: preinstall/fast
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing only the local directory..."
-	/snap/cmake/1479/bin/cmake -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
+	/snap/cmake/1481/bin/cmake -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
 .PHONY : install/local/fast
 
 # Special rule for the target install/strip
 install/strip: preinstall
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing the project stripped..."
-	/snap/cmake/1479/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
+	/snap/cmake/1481/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
 .PHONY : install/strip
 
 # Special rule for the target install/strip
 install/strip/fast: preinstall/fast
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing the project stripped..."
-	/snap/cmake/1479/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
+	/snap/cmake/1481/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
 .PHONY : install/strip/fast
 
 # The main all target
@@ -240,6 +240,34 @@ fam65xx_cpp_klaus_test_runner: tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.di
 fam65xx_cpp_klaus_test_runner/fast:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/build
 .PHONY : fam65xx_cpp_klaus_test_runner/fast
+
+# Convenience name for target.
+tests/CMakeFiles/fam65xx_cpp_lorenz_test_runner.dir/rule:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/fam65xx_cpp_lorenz_test_runner.dir/rule
+.PHONY : tests/CMakeFiles/fam65xx_cpp_lorenz_test_runner.dir/rule
+
+# Convenience name for target.
+fam65xx_cpp_lorenz_test_runner: tests/CMakeFiles/fam65xx_cpp_lorenz_test_runner.dir/rule
+.PHONY : fam65xx_cpp_lorenz_test_runner
+
+# fast build rule for target.
+fam65xx_cpp_lorenz_test_runner/fast:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_lorenz_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_lorenz_test_runner.dir/build
+.PHONY : fam65xx_cpp_lorenz_test_runner/fast
+
+# Convenience name for target.
+tests/CMakeFiles/fam65xx_cpp_65c02_test_runner.dir/rule:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/fam65xx_cpp_65c02_test_runner.dir/rule
+.PHONY : tests/CMakeFiles/fam65xx_cpp_65c02_test_runner.dir/rule
+
+# Convenience name for target.
+fam65xx_cpp_65c02_test_runner: tests/CMakeFiles/fam65xx_cpp_65c02_test_runner.dir/rule
+.PHONY : fam65xx_cpp_65c02_test_runner
+
+# fast build rule for target.
+fam65xx_cpp_65c02_test_runner/fast:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_65c02_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_65c02_test_runner.dir/build
+.PHONY : fam65xx_cpp_65c02_test_runner/fast
 
 # Convenience name for target.
 tests/CMakeFiles/run_comprehensive_test.dir/rule:
@@ -403,6 +431,54 @@ __/test_mos6510_basic.c.s:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test_mos6510_basic_tests.dir/build.make tests/CMakeFiles/test_mos6510_basic_tests.dir/__/test_mos6510_basic.c.s
 .PHONY : __/test_mos6510_basic.c.s
 
+fam65xx_cpp_65c02_test_harness.o: fam65xx_cpp_65c02_test_harness.cpp.o
+.PHONY : fam65xx_cpp_65c02_test_harness.o
+
+# target to build an object file
+fam65xx_cpp_65c02_test_harness.cpp.o:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_65c02_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_65c02_test_runner.dir/fam65xx_cpp_65c02_test_harness.cpp.o
+.PHONY : fam65xx_cpp_65c02_test_harness.cpp.o
+
+fam65xx_cpp_65c02_test_harness.i: fam65xx_cpp_65c02_test_harness.cpp.i
+.PHONY : fam65xx_cpp_65c02_test_harness.i
+
+# target to preprocess a source file
+fam65xx_cpp_65c02_test_harness.cpp.i:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_65c02_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_65c02_test_runner.dir/fam65xx_cpp_65c02_test_harness.cpp.i
+.PHONY : fam65xx_cpp_65c02_test_harness.cpp.i
+
+fam65xx_cpp_65c02_test_harness.s: fam65xx_cpp_65c02_test_harness.cpp.s
+.PHONY : fam65xx_cpp_65c02_test_harness.s
+
+# target to generate assembly for a file
+fam65xx_cpp_65c02_test_harness.cpp.s:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_65c02_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_65c02_test_runner.dir/fam65xx_cpp_65c02_test_harness.cpp.s
+.PHONY : fam65xx_cpp_65c02_test_harness.cpp.s
+
+fam65xx_cpp_65c02_test_runner.o: fam65xx_cpp_65c02_test_runner.cpp.o
+.PHONY : fam65xx_cpp_65c02_test_runner.o
+
+# target to build an object file
+fam65xx_cpp_65c02_test_runner.cpp.o:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_65c02_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_65c02_test_runner.dir/fam65xx_cpp_65c02_test_runner.cpp.o
+.PHONY : fam65xx_cpp_65c02_test_runner.cpp.o
+
+fam65xx_cpp_65c02_test_runner.i: fam65xx_cpp_65c02_test_runner.cpp.i
+.PHONY : fam65xx_cpp_65c02_test_runner.i
+
+# target to preprocess a source file
+fam65xx_cpp_65c02_test_runner.cpp.i:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_65c02_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_65c02_test_runner.dir/fam65xx_cpp_65c02_test_runner.cpp.i
+.PHONY : fam65xx_cpp_65c02_test_runner.cpp.i
+
+fam65xx_cpp_65c02_test_runner.s: fam65xx_cpp_65c02_test_runner.cpp.s
+.PHONY : fam65xx_cpp_65c02_test_runner.s
+
+# target to generate assembly for a file
+fam65xx_cpp_65c02_test_runner.cpp.s:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_65c02_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_65c02_test_runner.dir/fam65xx_cpp_65c02_test_runner.cpp.s
+.PHONY : fam65xx_cpp_65c02_test_runner.cpp.s
+
 fam65xx_cpp_klaus_test_runner.o: fam65xx_cpp_klaus_test_runner.cpp.o
 .PHONY : fam65xx_cpp_klaus_test_runner.o
 
@@ -426,6 +502,54 @@ fam65xx_cpp_klaus_test_runner.s: fam65xx_cpp_klaus_test_runner.cpp.s
 fam65xx_cpp_klaus_test_runner.cpp.s:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/fam65xx_cpp_klaus_test_runner.cpp.s
 .PHONY : fam65xx_cpp_klaus_test_runner.cpp.s
+
+fam65xx_cpp_lorenz_test_harness.o: fam65xx_cpp_lorenz_test_harness.cpp.o
+.PHONY : fam65xx_cpp_lorenz_test_harness.o
+
+# target to build an object file
+fam65xx_cpp_lorenz_test_harness.cpp.o:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_lorenz_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_lorenz_test_runner.dir/fam65xx_cpp_lorenz_test_harness.cpp.o
+.PHONY : fam65xx_cpp_lorenz_test_harness.cpp.o
+
+fam65xx_cpp_lorenz_test_harness.i: fam65xx_cpp_lorenz_test_harness.cpp.i
+.PHONY : fam65xx_cpp_lorenz_test_harness.i
+
+# target to preprocess a source file
+fam65xx_cpp_lorenz_test_harness.cpp.i:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_lorenz_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_lorenz_test_runner.dir/fam65xx_cpp_lorenz_test_harness.cpp.i
+.PHONY : fam65xx_cpp_lorenz_test_harness.cpp.i
+
+fam65xx_cpp_lorenz_test_harness.s: fam65xx_cpp_lorenz_test_harness.cpp.s
+.PHONY : fam65xx_cpp_lorenz_test_harness.s
+
+# target to generate assembly for a file
+fam65xx_cpp_lorenz_test_harness.cpp.s:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_lorenz_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_lorenz_test_runner.dir/fam65xx_cpp_lorenz_test_harness.cpp.s
+.PHONY : fam65xx_cpp_lorenz_test_harness.cpp.s
+
+fam65xx_cpp_lorenz_test_runner.o: fam65xx_cpp_lorenz_test_runner.cpp.o
+.PHONY : fam65xx_cpp_lorenz_test_runner.o
+
+# target to build an object file
+fam65xx_cpp_lorenz_test_runner.cpp.o:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_lorenz_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_lorenz_test_runner.dir/fam65xx_cpp_lorenz_test_runner.cpp.o
+.PHONY : fam65xx_cpp_lorenz_test_runner.cpp.o
+
+fam65xx_cpp_lorenz_test_runner.i: fam65xx_cpp_lorenz_test_runner.cpp.i
+.PHONY : fam65xx_cpp_lorenz_test_runner.i
+
+# target to preprocess a source file
+fam65xx_cpp_lorenz_test_runner.cpp.i:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_lorenz_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_lorenz_test_runner.dir/fam65xx_cpp_lorenz_test_runner.cpp.i
+.PHONY : fam65xx_cpp_lorenz_test_runner.cpp.i
+
+fam65xx_cpp_lorenz_test_runner.s: fam65xx_cpp_lorenz_test_runner.cpp.s
+.PHONY : fam65xx_cpp_lorenz_test_runner.s
+
+# target to generate assembly for a file
+fam65xx_cpp_lorenz_test_runner.cpp.s:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_lorenz_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_lorenz_test_runner.dir/fam65xx_cpp_lorenz_test_runner.cpp.s
+.PHONY : fam65xx_cpp_lorenz_test_runner.cpp.s
 
 fam65xx_cpp_test_harness.o: fam65xx_cpp_test_harness.cpp.o
 .PHONY : fam65xx_cpp_test_harness.o
@@ -515,7 +639,9 @@ help:
 	@echo "... run_all_tests"
 	@echo "... run_basic_test"
 	@echo "... run_comprehensive_test"
+	@echo "... fam65xx_cpp_65c02_test_runner"
 	@echo "... fam65xx_cpp_klaus_test_runner"
+	@echo "... fam65xx_cpp_lorenz_test_runner"
 	@echo "... json_parser"
 	@echo "... mos6510_lib"
 	@echo "... test_mos6510_basic_tests"
@@ -535,9 +661,21 @@ help:
 	@echo "... __/test_mos6510_basic.o"
 	@echo "... __/test_mos6510_basic.i"
 	@echo "... __/test_mos6510_basic.s"
+	@echo "... fam65xx_cpp_65c02_test_harness.o"
+	@echo "... fam65xx_cpp_65c02_test_harness.i"
+	@echo "... fam65xx_cpp_65c02_test_harness.s"
+	@echo "... fam65xx_cpp_65c02_test_runner.o"
+	@echo "... fam65xx_cpp_65c02_test_runner.i"
+	@echo "... fam65xx_cpp_65c02_test_runner.s"
 	@echo "... fam65xx_cpp_klaus_test_runner.o"
 	@echo "... fam65xx_cpp_klaus_test_runner.i"
 	@echo "... fam65xx_cpp_klaus_test_runner.s"
+	@echo "... fam65xx_cpp_lorenz_test_harness.o"
+	@echo "... fam65xx_cpp_lorenz_test_harness.i"
+	@echo "... fam65xx_cpp_lorenz_test_harness.s"
+	@echo "... fam65xx_cpp_lorenz_test_runner.o"
+	@echo "... fam65xx_cpp_lorenz_test_runner.i"
+	@echo "... fam65xx_cpp_lorenz_test_runner.s"
 	@echo "... fam65xx_cpp_test_harness.o"
 	@echo "... fam65xx_cpp_test_harness.i"
 	@echo "... fam65xx_cpp_test_harness.s"
