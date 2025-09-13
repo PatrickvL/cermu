@@ -136,9 +136,15 @@ fam65xx_test_status_t fam65xx_test_harness_run_klaus_test(fam65xx_test_harness_t
         return status;
     }
 
-    // Initialize CPU
+    // Set up reset vector to point to Klaus test start address
+    // This ensures that when the CPU executes the reset sequence, it will jump to $0400
+    harness->memory->write(0xFFFC, KLAUS_TEST_START_ADDRESS & 0xFF);        // Reset vector low byte
+    harness->memory->write(0xFFFD, (KLAUS_TEST_START_ADDRESS >> 8) & 0xFF); // Reset vector high byte
+    
+    // Initialize CPU - this will set STATE_RESET_PENDING
     harness->cpu->init();
-    harness->cpu->set_pc(KLAUS_TEST_START_ADDRESS);
+    
+    // Note: We don't call set_pc() here because the reset sequence will set PC from the reset vector
     
     printf("Starting Klaus functional test...\n");
     printf("Initial PC: $%04X\n", harness->cpu->get_pc());

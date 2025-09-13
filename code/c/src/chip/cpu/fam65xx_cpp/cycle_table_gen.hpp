@@ -22,33 +22,33 @@ public:
     static constexpr cycle_desc_t get_cycle() {
         switch (OpCode) {
             // For all other opcodes, return empty cycle
-            default: return inst::make_empty_cycle();  // Fallback for any missing opcodes
+            default: return addr::make_empty_cycle();  // Fallback for any missing opcodes
             // Handle virtual opcodes (256, 257, 258)
             case VIRTUAL_OPCODE_RESET: return inst::get_reset_cycle(Cycle);
             case VIRTUAL_OPCODE_NMI: return inst::get_nmi_cycle(Cycle);
             case VIRTUAL_OPCODE_IRQ: return inst::get_irq_cycle(Cycle);
             // Handle regular opcodes (0-255) - COMPLETE 6502 INSTRUCTION SET
             case 0x00: return inst::make_brk(Cycle);                        // BRK impl
-            case 0x10: return inst::make_branch(Cycle);                // BPL rel
-            case 0x20: return inst::make_jsr(Cycle);                   // JSR abs
-            case 0x30: return inst::make_branch(Cycle);                // BMI rel
-            case 0x40: return inst::make_rti(Cycle);                   // RTI impl
-            case 0x50: return inst::make_branch(Cycle);                // BVC rel
-            case 0x60: return inst::make_rts(Cycle);                   // RTS impl
-            case 0x70: return inst::make_branch(Cycle);                // BVS rel
+            case 0x10: return addr::make_branch(Cycle);                // BPL rel
+            case 0x20: return addr::make_jsr(Cycle);                   // JSR abs
+            case 0x30: return addr::make_branch(Cycle);                // BMI rel
+            case 0x40: return addr::make_rti(Cycle);                   // RTI impl
+            case 0x50: return addr::make_branch(Cycle);                // BVC rel
+            case 0x60: return addr::make_rts(Cycle);                   // RTS impl
+            case 0x70: return addr::make_branch(Cycle);                // BVS rel
             case 0x80:
                 if constexpr (BusConfig::has_cmos_fixes) {
-                    return inst::make_branch(Cycle);                // BRA rel (65C02)
+                    return addr::make_branch(Cycle);                // BRA rel (65C02)
                 } else {
                     return inst::make_nop(Cycle);                   // NOP #imm (illegal on NMOS)
                 }
-            case 0x90: return inst::make_branch(Cycle);                // BCC rel
+            case 0x90: return addr::make_branch(Cycle);                // BCC rel
             case 0xA0: return inst::make_ldy_imm(Cycle);               // LDY #imm
-            case 0xB0: return inst::make_branch(Cycle);                // BCS rel
+            case 0xB0: return addr::make_branch(Cycle);                // BCS rel
             case 0xC0: return inst::make_cpy_imm(Cycle);               // CPY #imm
-            case 0xD0: return inst::make_branch(Cycle);                // BNE rel
+            case 0xD0: return addr::make_branch(Cycle);                // BNE rel
             case 0xE0: return inst::make_cpx_imm(Cycle);               // CPX #imm
-            case 0xF0: return inst::make_branch(Cycle);                // BEQ rel
+            case 0xF0: return addr::make_branch(Cycle);                // BEQ rel
 
             // Column 1: Indexed Indirect (zp,X)
             case 0x01: return addr::make_indexed_indirect(Cycle, DataOp::ALU, AluOp::ORA);     // ORA (zp,X)
@@ -492,7 +492,7 @@ public:
     // Table lookup function
     static constexpr cycle_desc_t get_cycle_from_table(uint16_t opcode, uint8_t cycle) {
         if (opcode >= TOTAL_OPCODES || cycle < 1 || cycle > MAX_CYCLES) {
-            return inst::make_empty_cycle();
+            return addr::make_empty_cycle();
         }
         return cycle_table[get_cycle_index(opcode, cycle)];
     }
