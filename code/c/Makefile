@@ -48,10 +48,10 @@ cmake_force:
 SHELL = /bin/sh
 
 # The CMake executable.
-CMAKE_COMMAND = /snap/cmake/1479/bin/cmake
+CMAKE_COMMAND = /snap/cmake/1481/bin/cmake
 
 # The command to remove a file.
-RM = /snap/cmake/1479/bin/cmake -E rm -f
+RM = /snap/cmake/1481/bin/cmake -E rm -f
 
 # Escaping for special characters.
 EQUALS = =
@@ -68,7 +68,7 @@ CMAKE_BINARY_DIR = /home/patrick/Git/aiemu/code/c
 # Special rule for the target test
 test:
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Running tests..."
-	/snap/cmake/1479/bin/ctest $(ARGS)
+	/snap/cmake/1481/bin/ctest $(ARGS)
 .PHONY : test
 
 # Special rule for the target test
@@ -88,7 +88,7 @@ edit_cache/fast: edit_cache
 # Special rule for the target rebuild_cache
 rebuild_cache:
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Running CMake to regenerate build system..."
-	/snap/cmake/1479/bin/cmake --regenerate-during-build -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
+	/snap/cmake/1481/bin/cmake --regenerate-during-build -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
 .PHONY : rebuild_cache
 
 # Special rule for the target rebuild_cache
@@ -107,37 +107,37 @@ list_install_components/fast: list_install_components
 # Special rule for the target install
 install: preinstall
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Install the project..."
-	/snap/cmake/1479/bin/cmake -P cmake_install.cmake
+	/snap/cmake/1481/bin/cmake -P cmake_install.cmake
 .PHONY : install
 
 # Special rule for the target install
 install/fast: preinstall/fast
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Install the project..."
-	/snap/cmake/1479/bin/cmake -P cmake_install.cmake
+	/snap/cmake/1481/bin/cmake -P cmake_install.cmake
 .PHONY : install/fast
 
 # Special rule for the target install/local
 install/local: preinstall
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing only the local directory..."
-	/snap/cmake/1479/bin/cmake -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
+	/snap/cmake/1481/bin/cmake -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
 .PHONY : install/local
 
 # Special rule for the target install/local
 install/local/fast: preinstall/fast
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing only the local directory..."
-	/snap/cmake/1479/bin/cmake -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
+	/snap/cmake/1481/bin/cmake -DCMAKE_INSTALL_LOCAL_ONLY=1 -P cmake_install.cmake
 .PHONY : install/local/fast
 
 # Special rule for the target install/strip
 install/strip: preinstall
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing the project stripped..."
-	/snap/cmake/1479/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
+	/snap/cmake/1481/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
 .PHONY : install/strip
 
 # Special rule for the target install/strip
 install/strip/fast: preinstall/fast
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Installing the project stripped..."
-	/snap/cmake/1479/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
+	/snap/cmake/1481/bin/cmake -DCMAKE_INSTALL_DO_STRIP=1 -P cmake_install.cmake
 .PHONY : install/strip/fast
 
 # The main all target
@@ -248,6 +248,32 @@ fam65xx_cpp_klaus_test_runner: cmake_check_build_system
 fam65xx_cpp_klaus_test_runner/fast:
 	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/build
 .PHONY : fam65xx_cpp_klaus_test_runner/fast
+
+#=============================================================================
+# Target rules for targets named fam65xx_cpp_lorenz_test_runner
+
+# Build rule for target.
+fam65xx_cpp_lorenz_test_runner: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 fam65xx_cpp_lorenz_test_runner
+.PHONY : fam65xx_cpp_lorenz_test_runner
+
+# fast build rule for target.
+fam65xx_cpp_lorenz_test_runner/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_lorenz_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_lorenz_test_runner.dir/build
+.PHONY : fam65xx_cpp_lorenz_test_runner/fast
+
+#=============================================================================
+# Target rules for targets named fam65xx_cpp_65c02_test_runner
+
+# Build rule for target.
+fam65xx_cpp_65c02_test_runner: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 fam65xx_cpp_65c02_test_runner
+.PHONY : fam65xx_cpp_65c02_test_runner
+
+# fast build rule for target.
+fam65xx_cpp_65c02_test_runner/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_65c02_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_65c02_test_runner.dir/build
+.PHONY : fam65xx_cpp_65c02_test_runner/fast
 
 #=============================================================================
 # Target rules for targets named run_comprehensive_test
@@ -761,7 +787,9 @@ help:
 	@echo "... run_basic_test"
 	@echo "... run_comprehensive_test"
 	@echo "... c64emu"
+	@echo "... fam65xx_cpp_65c02_test_runner"
 	@echo "... fam65xx_cpp_klaus_test_runner"
+	@echo "... fam65xx_cpp_lorenz_test_runner"
 	@echo "... json_parser"
 	@echo "... mos6510_lib"
 	@echo "... test_mos6510_basic_tests"

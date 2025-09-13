@@ -1,5 +1,5 @@
 {
-    "cmake.sourceDirectory": "/home/patrick/Git/aiemu/aiemuc",
+    "cmake.sourceDirectory": "/home/patrick/Git/aiemu/code/c",
     "files.associations": {
         "c64.h": "c",
         "cpu6510.h": "c",
