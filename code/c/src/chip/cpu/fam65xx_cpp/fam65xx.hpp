@@ -5,7 +5,7 @@
 #include "cpu_config.hpp"
 #include "alu_operations.hpp"
 #include "memory_operations.hpp"
-#include "cycle_tables_new.hpp"
+#include "cycle_tables.hpp"
 #include "../../../core/system_lines.h"
 
 namespace fam65xx_cpp {
