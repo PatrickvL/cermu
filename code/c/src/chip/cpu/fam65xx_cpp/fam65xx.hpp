@@ -261,8 +261,10 @@ public:
                     break;
                 case DataOp::ADDR_CALC_HIGH:
                     reg[CpuReg::ABH] = data;
-                    // For JMP absolute, execute the jump now
-                    if (opcode == 0x4C) {
+                    break;
+                case DataOp::JMP:
+                    // Execute jump using the address calculated in ABL/ABH
+                    {
                         const uint16_t addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
                         reg[CpuReg::PCL] = addr & 0xFF;
                         reg[CpuReg::PCH] = (addr >> 8) & 0xFF;

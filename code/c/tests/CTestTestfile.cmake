@@ -1,37 +1,13 @@
 # CMake generated Testfile for 
-# Source directory: D:/Workspaces/Git/aiemu/code/c/tests
-# Build directory: D:/Workspaces/Git/aiemu/code/c/tests
+# Source directory: /home/patrick/Git/aiemu/code/c/tests
+# Build directory: /home/patrick/Git/aiemu/code/c/tests
 # 
 # This file includes the relevant testing commands required for 
 # testing this directory and lists subdirectories to be tested as well.
-if(CTEST_CONFIGURATION_TYPE MATCHES "^([Dd][Ee][Bb][Uu][Gg])$")
-  add_test(comprehensive_test "D:/Workspaces/Git/aiemu/code/c/tests/Debug/test_mos6510_comprehensive.exe")
-  set_tests_properties(comprehensive_test PROPERTIES  PASS_REGULAR_EXPRESSION "ALL TESTS PASSED" TIMEOUT "60" _BACKTRACE_TRIPLES "D:/Workspaces/Git/aiemu/code/c/tests/CMakeLists.txt;118;add_test;D:/Workspaces/Git/aiemu/code/c/tests/CMakeLists.txt;0;")
-elseif(CTEST_CONFIGURATION_TYPE MATCHES "^([Rr][Ee][Ll][Ee][Aa][Ss][Ee])$")
-  add_test(comprehensive_test "D:/Workspaces/Git/aiemu/code/c/tests/Release/test_mos6510_comprehensive.exe")
-  set_tests_properties(comprehensive_test PROPERTIES  PASS_REGULAR_EXPRESSION "ALL TESTS PASSED" TIMEOUT "60" _BACKTRACE_TRIPLES "D:/Workspaces/Git/aiemu/code/c/tests/CMakeLists.txt;118;add_test;D:/Workspaces/Git/aiemu/code/c/tests/CMakeLists.txt;0;")
-elseif(CTEST_CONFIGURATION_TYPE MATCHES "^([Rr][Ee][Ll][Ww][Ii][Tt][Hh][Dd][Ee][Bb][Ii][Nn][Ff][Oo])$")
-  add_test(comprehensive_test "D:/Workspaces/Git/aiemu/code/c/tests/RelWithDebInfo/test_mos6510_comprehensive.exe")
-  set_tests_properties(comprehensive_test PROPERTIES  PASS_REGULAR_EXPRESSION "ALL TESTS PASSED" TIMEOUT "60" _BACKTRACE_TRIPLES "D:/Workspaces/Git/aiemu/code/c/tests/CMakeLists.txt;118;add_test;D:/Workspaces/Git/aiemu/code/c/tests/CMakeLists.txt;0;")
-elseif(CTEST_CONFIGURATION_TYPE MATCHES "^([Mm][Ii][Nn][Ss][Ii][Zz][Ee][Rr][Ee][Ll])$")
-  add_test(comprehensive_test "D:/Workspaces/Git/aiemu/code/c/tests/MinSizeRel/test_mos6510_comprehensive.exe")
-  set_tests_properties(comprehensive_test PROPERTIES  PASS_REGULAR_EXPRESSION "ALL TESTS PASSED" TIMEOUT "60" _BACKTRACE_TRIPLES "D:/Workspaces/Git/aiemu/code/c/tests/CMakeLists.txt;118;add_test;D:/Workspaces/Git/aiemu/code/c/tests/CMakeLists.txt;0;")
-else()
-  add_test(comprehensive_test NOT_AVAILABLE)
-endif()
-if(CTEST_CONFIGURATION_TYPE MATCHES "^([Dd][Ee][Bb][Uu][Gg])$")
-  add_test(basic_test "D:/Workspaces/Git/aiemu/code/c/tests/Debug/test_mos6510_basic_tests.exe")
-  set_tests_properties(basic_test PROPERTIES  PASS_REGULAR_EXPRESSION "ALL TESTS PASSED" TIMEOUT "30" _BACKTRACE_TRIPLES "D:/Workspaces/Git/aiemu/code/c/tests/CMakeLists.txt;126;add_test;D:/Workspaces/Git/aiemu/code/c/tests/CMakeLists.txt;0;")
-elseif(CTEST_CONFIGURATION_TYPE MATCHES "^([Rr][Ee][Ll][Ee][Aa][Ss][Ee])$")
-  add_test(basic_test "D:/Workspaces/Git/aiemu/code/c/tests/Release/test_mos6510_basic_tests.exe")
-  set_tests_properties(basic_test PROPERTIES  PASS_REGULAR_EXPRESSION "ALL TESTS PASSED" TIMEOUT "30" _BACKTRACE_TRIPLES "D:/Workspaces/Git/aiemu/code/c/tests/CMakeLists.txt;126;add_test;D:/Workspaces/Git/aiemu/code/c/tests/CMakeLists.txt;0;")
-elseif(CTEST_CONFIGURATION_TYPE MATCHES "^([Rr][Ee][Ll][Ww][Ii][Tt][Hh][Dd][Ee][Bb][Ii][Nn][Ff][Oo])$")
-  add_test(basic_test "D:/Workspaces/Git/aiemu/code/c/tests/RelWithDebInfo/test_mos6510_basic_tests.exe")
-  set_tests_properties(basic_test PROPERTIES  PASS_REGULAR_EXPRESSION "ALL TESTS PASSED" TIMEOUT "30" _BACKTRACE_TRIPLES "D:/Workspaces/Git/aiemu/code/c/tests/CMakeLists.txt;126;add_test;D:/Workspaces/Git/aiemu/code/c/tests/CMakeLists.txt;0;")
-elseif(CTEST_CONFIGURATION_TYPE MATCHES "^([Mm][Ii][Nn][Ss][Ii][Zz][Ee][Rr][Ee][Ll])$")
-  add_test(basic_test "D:/Workspaces/Git/aiemu/code/c/tests/MinSizeRel/test_mos6510_basic_tests.exe")
-  set_tests_properties(basic_test PROPERTIES  PASS_REGULAR_EXPRESSION "ALL TESTS PASSED" TIMEOUT "30" _BACKTRACE_TRIPLES "D:/Workspaces/Git/aiemu/code/c/tests/CMakeLists.txt;126;add_test;D:/Workspaces/Git/aiemu/code/c/tests/CMakeLists.txt;0;")
-else()
-  add_test(basic_test NOT_AVAILABLE)
-endif()
+add_test(comprehensive_test "/home/patrick/Git/aiemu/code/c/tests/test_mos6510_comprehensive")
+set_tests_properties(comprehensive_test PROPERTIES  PASS_REGULAR_EXPRESSION "ALL TESTS PASSED" TIMEOUT "60" _BACKTRACE_TRIPLES "/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;136;add_test;/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;0;")
+add_test(basic_test "/home/patrick/Git/aiemu/code/c/tests/test_mos6510_basic_tests")
+set_tests_properties(basic_test PROPERTIES  PASS_REGULAR_EXPRESSION "ALL TESTS PASSED" TIMEOUT "30" _BACKTRACE_TRIPLES "/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;144;add_test;/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;0;")
+add_test(fam65xx_cpp_klaus_test "/home/patrick/Git/aiemu/code/c/tests/fam65xx_cpp_klaus_test_runner" "--functional")
+set_tests_properties(fam65xx_cpp_klaus_test PROPERTIES  PASS_REGULAR_EXPRESSION "ALL TESTS PASSED" TIMEOUT "300" WORKING_DIRECTORY "/home/patrick/Git/aiemu/code/c/tests/.." _BACKTRACE_TRIPLES "/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;152;add_test;/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;0;")
 subdirs("cpu_build")

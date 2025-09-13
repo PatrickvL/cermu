@@ -78,7 +78,7 @@ test/fast: test
 # Special rule for the target edit_cache
 edit_cache:
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Running CMake cache editor..."
-	/snap/cmake/1463/bin/ccmake -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
+	/snap/cmake/1481/bin/ccmake -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
 .PHONY : edit_cache
 
 # Special rule for the target edit_cache
@@ -200,20 +200,6 @@ json_parser/fast:
 .PHONY : json_parser/fast
 
 # Convenience name for target.
-tests/CMakeFiles/processor_tests_runner.dir/rule:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/processor_tests_runner.dir/rule
-.PHONY : tests/CMakeFiles/processor_tests_runner.dir/rule
-
-# Convenience name for target.
-processor_tests_runner: tests/CMakeFiles/processor_tests_runner.dir/rule
-.PHONY : processor_tests_runner
-
-# fast build rule for target.
-processor_tests_runner/fast:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/processor_tests_runner.dir/build.make tests/CMakeFiles/processor_tests_runner.dir/build
-.PHONY : processor_tests_runner/fast
-
-# Convenience name for target.
 tests/CMakeFiles/test_mos6510_comprehensive.dir/rule:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/test_mos6510_comprehensive.dir/rule
 .PHONY : tests/CMakeFiles/test_mos6510_comprehensive.dir/rule
@@ -242,18 +228,18 @@ test_mos6510_basic_tests/fast:
 .PHONY : test_mos6510_basic_tests/fast
 
 # Convenience name for target.
-tests/CMakeFiles/run_processor_tests.dir/rule:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/run_processor_tests.dir/rule
-.PHONY : tests/CMakeFiles/run_processor_tests.dir/rule
+tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/rule:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/rule
+.PHONY : tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/rule
 
 # Convenience name for target.
-run_processor_tests: tests/CMakeFiles/run_processor_tests.dir/rule
-.PHONY : run_processor_tests
+fam65xx_cpp_klaus_test_runner: tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/rule
+.PHONY : fam65xx_cpp_klaus_test_runner
 
 # fast build rule for target.
-run_processor_tests/fast:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/run_processor_tests.dir/build.make tests/CMakeFiles/run_processor_tests.dir/build
-.PHONY : run_processor_tests/fast
+fam65xx_cpp_klaus_test_runner/fast:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/build
+.PHONY : fam65xx_cpp_klaus_test_runner/fast
 
 # Convenience name for target.
 tests/CMakeFiles/run_comprehensive_test.dir/rule:
@@ -345,37 +331,12 @@ __/src/chip/cpu/fam65xx/fam65xx_opcodes.c.s:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/mos6510_lib.dir/build.make tests/CMakeFiles/mos6510_lib.dir/__/src/chip/cpu/fam65xx/fam65xx_opcodes.c.s
 .PHONY : __/src/chip/cpu/fam65xx/fam65xx_opcodes.c.s
 
-__/src/chip/cpu/mos6510/mos6510.o: __/src/chip/cpu/mos6510/mos6510.c.o
-.PHONY : __/src/chip/cpu/mos6510/mos6510.o
-
-# target to build an object file
-__/src/chip/cpu/mos6510/mos6510.c.o:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/mos6510_lib.dir/build.make tests/CMakeFiles/mos6510_lib.dir/__/src/chip/cpu/mos6510/mos6510.c.o
-.PHONY : __/src/chip/cpu/mos6510/mos6510.c.o
-
-__/src/chip/cpu/mos6510/mos6510.i: __/src/chip/cpu/mos6510/mos6510.c.i
-.PHONY : __/src/chip/cpu/mos6510/mos6510.i
-
-# target to preprocess a source file
-__/src/chip/cpu/mos6510/mos6510.c.i:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/mos6510_lib.dir/build.make tests/CMakeFiles/mos6510_lib.dir/__/src/chip/cpu/mos6510/mos6510.c.i
-.PHONY : __/src/chip/cpu/mos6510/mos6510.c.i
-
-__/src/chip/cpu/mos6510/mos6510.s: __/src/chip/cpu/mos6510/mos6510.c.s
-.PHONY : __/src/chip/cpu/mos6510/mos6510.s
-
-# target to generate assembly for a file
-__/src/chip/cpu/mos6510/mos6510.c.s:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/mos6510_lib.dir/build.make tests/CMakeFiles/mos6510_lib.dir/__/src/chip/cpu/mos6510/mos6510.c.s
-.PHONY : __/src/chip/cpu/mos6510/mos6510.c.s
-
 __/src/core/chip.o: __/src/core/chip.c.o
 .PHONY : __/src/core/chip.o
 
 # target to build an object file
 __/src/core/chip.c.o:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/mos6510_lib.dir/build.make tests/CMakeFiles/mos6510_lib.dir/__/src/core/chip.c.o
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/processor_tests_runner.dir/build.make tests/CMakeFiles/processor_tests_runner.dir/__/src/core/chip.c.o
 .PHONY : __/src/core/chip.c.o
 
 __/src/core/chip.i: __/src/core/chip.c.i
@@ -384,7 +345,6 @@ __/src/core/chip.i: __/src/core/chip.c.i
 # target to preprocess a source file
 __/src/core/chip.c.i:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/mos6510_lib.dir/build.make tests/CMakeFiles/mos6510_lib.dir/__/src/core/chip.c.i
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/processor_tests_runner.dir/build.make tests/CMakeFiles/processor_tests_runner.dir/__/src/core/chip.c.i
 .PHONY : __/src/core/chip.c.i
 
 __/src/core/chip.s: __/src/core/chip.c.s
@@ -393,8 +353,31 @@ __/src/core/chip.s: __/src/core/chip.c.s
 # target to generate assembly for a file
 __/src/core/chip.c.s:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/mos6510_lib.dir/build.make tests/CMakeFiles/mos6510_lib.dir/__/src/core/chip.c.s
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/processor_tests_runner.dir/build.make tests/CMakeFiles/processor_tests_runner.dir/__/src/core/chip.c.s
 .PHONY : __/src/core/chip.c.s
+
+__/src/core/ioport.o: __/src/core/ioport.c.o
+.PHONY : __/src/core/ioport.o
+
+# target to build an object file
+__/src/core/ioport.c.o:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/mos6510_lib.dir/build.make tests/CMakeFiles/mos6510_lib.dir/__/src/core/ioport.c.o
+.PHONY : __/src/core/ioport.c.o
+
+__/src/core/ioport.i: __/src/core/ioport.c.i
+.PHONY : __/src/core/ioport.i
+
+# target to preprocess a source file
+__/src/core/ioport.c.i:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/mos6510_lib.dir/build.make tests/CMakeFiles/mos6510_lib.dir/__/src/core/ioport.c.i
+.PHONY : __/src/core/ioport.c.i
+
+__/src/core/ioport.s: __/src/core/ioport.c.s
+.PHONY : __/src/core/ioport.s
+
+# target to generate assembly for a file
+__/src/core/ioport.c.s:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/mos6510_lib.dir/build.make tests/CMakeFiles/mos6510_lib.dir/__/src/core/ioport.c.s
+.PHONY : __/src/core/ioport.c.s
 
 __/test_mos6510_basic.o: __/test_mos6510_basic.c.o
 .PHONY : __/test_mos6510_basic.o
@@ -420,6 +403,54 @@ __/test_mos6510_basic.c.s:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test_mos6510_basic_tests.dir/build.make tests/CMakeFiles/test_mos6510_basic_tests.dir/__/test_mos6510_basic.c.s
 .PHONY : __/test_mos6510_basic.c.s
 
+fam65xx_cpp_klaus_test_runner.o: fam65xx_cpp_klaus_test_runner.cpp.o
+.PHONY : fam65xx_cpp_klaus_test_runner.o
+
+# target to build an object file
+fam65xx_cpp_klaus_test_runner.cpp.o:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/fam65xx_cpp_klaus_test_runner.cpp.o
+.PHONY : fam65xx_cpp_klaus_test_runner.cpp.o
+
+fam65xx_cpp_klaus_test_runner.i: fam65xx_cpp_klaus_test_runner.cpp.i
+.PHONY : fam65xx_cpp_klaus_test_runner.i
+
+# target to preprocess a source file
+fam65xx_cpp_klaus_test_runner.cpp.i:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/fam65xx_cpp_klaus_test_runner.cpp.i
+.PHONY : fam65xx_cpp_klaus_test_runner.cpp.i
+
+fam65xx_cpp_klaus_test_runner.s: fam65xx_cpp_klaus_test_runner.cpp.s
+.PHONY : fam65xx_cpp_klaus_test_runner.s
+
+# target to generate assembly for a file
+fam65xx_cpp_klaus_test_runner.cpp.s:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/fam65xx_cpp_klaus_test_runner.cpp.s
+.PHONY : fam65xx_cpp_klaus_test_runner.cpp.s
+
+fam65xx_cpp_test_harness.o: fam65xx_cpp_test_harness.cpp.o
+.PHONY : fam65xx_cpp_test_harness.o
+
+# target to build an object file
+fam65xx_cpp_test_harness.cpp.o:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/fam65xx_cpp_test_harness.cpp.o
+.PHONY : fam65xx_cpp_test_harness.cpp.o
+
+fam65xx_cpp_test_harness.i: fam65xx_cpp_test_harness.cpp.i
+.PHONY : fam65xx_cpp_test_harness.i
+
+# target to preprocess a source file
+fam65xx_cpp_test_harness.cpp.i:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/fam65xx_cpp_test_harness.cpp.i
+.PHONY : fam65xx_cpp_test_harness.cpp.i
+
+fam65xx_cpp_test_harness.s: fam65xx_cpp_test_harness.cpp.s
+.PHONY : fam65xx_cpp_test_harness.s
+
+# target to generate assembly for a file
+fam65xx_cpp_test_harness.cpp.s:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/fam65xx_cpp_test_harness.cpp.s
+.PHONY : fam65xx_cpp_test_harness.cpp.s
+
 json_parser.o: json_parser.c.o
 .PHONY : json_parser.o
 
@@ -443,30 +474,6 @@ json_parser.s: json_parser.c.s
 json_parser.c.s:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/json_parser.dir/build.make tests/CMakeFiles/json_parser.dir/json_parser.c.s
 .PHONY : json_parser.c.s
-
-processor_tests_runner.o: processor_tests_runner.c.o
-.PHONY : processor_tests_runner.o
-
-# target to build an object file
-processor_tests_runner.c.o:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/processor_tests_runner.dir/build.make tests/CMakeFiles/processor_tests_runner.dir/processor_tests_runner.c.o
-.PHONY : processor_tests_runner.c.o
-
-processor_tests_runner.i: processor_tests_runner.c.i
-.PHONY : processor_tests_runner.i
-
-# target to preprocess a source file
-processor_tests_runner.c.i:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/processor_tests_runner.dir/build.make tests/CMakeFiles/processor_tests_runner.dir/processor_tests_runner.c.i
-.PHONY : processor_tests_runner.c.i
-
-processor_tests_runner.s: processor_tests_runner.c.s
-.PHONY : processor_tests_runner.s
-
-# target to generate assembly for a file
-processor_tests_runner.c.s:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/processor_tests_runner.dir/build.make tests/CMakeFiles/processor_tests_runner.dir/processor_tests_runner.c.s
-.PHONY : processor_tests_runner.c.s
 
 test_mos6510_comprehensive.o: test_mos6510_comprehensive.c.o
 .PHONY : test_mos6510_comprehensive.o
@@ -508,10 +515,9 @@ help:
 	@echo "... run_all_tests"
 	@echo "... run_basic_test"
 	@echo "... run_comprehensive_test"
-	@echo "... run_processor_tests"
+	@echo "... fam65xx_cpp_klaus_test_runner"
 	@echo "... json_parser"
 	@echo "... mos6510_lib"
-	@echo "... processor_tests_runner"
 	@echo "... test_mos6510_basic_tests"
 	@echo "... test_mos6510_comprehensive"
 	@echo "... __/src/chip/cpu/fam65xx/fam65xx_core.o"
@@ -520,21 +526,24 @@ help:
 	@echo "... __/src/chip/cpu/fam65xx/fam65xx_opcodes.o"
 	@echo "... __/src/chip/cpu/fam65xx/fam65xx_opcodes.i"
 	@echo "... __/src/chip/cpu/fam65xx/fam65xx_opcodes.s"
-	@echo "... __/src/chip/cpu/mos6510/mos6510.o"
-	@echo "... __/src/chip/cpu/mos6510/mos6510.i"
-	@echo "... __/src/chip/cpu/mos6510/mos6510.s"
 	@echo "... __/src/core/chip.o"
 	@echo "... __/src/core/chip.i"
 	@echo "... __/src/core/chip.s"
+	@echo "... __/src/core/ioport.o"
+	@echo "... __/src/core/ioport.i"
+	@echo "... __/src/core/ioport.s"
 	@echo "... __/test_mos6510_basic.o"
 	@echo "... __/test_mos6510_basic.i"
 	@echo "... __/test_mos6510_basic.s"
+	@echo "... fam65xx_cpp_klaus_test_runner.o"
+	@echo "... fam65xx_cpp_klaus_test_runner.i"
+	@echo "... fam65xx_cpp_klaus_test_runner.s"
+	@echo "... fam65xx_cpp_test_harness.o"
+	@echo "... fam65xx_cpp_test_harness.i"
+	@echo "... fam65xx_cpp_test_harness.s"
 	@echo "... json_parser.o"
 	@echo "... json_parser.i"
 	@echo "... json_parser.s"
-	@echo "... processor_tests_runner.o"
-	@echo "... processor_tests_runner.i"
-	@echo "... processor_tests_runner.s"
 	@echo "... test_mos6510_comprehensive.o"
 	@echo "... test_mos6510_comprehensive.i"
 	@echo "... test_mos6510_comprehensive.s"
