@@ -33,7 +33,12 @@ public:
             case 0x50: return CycleInstructions<BusConfig>::make_bvc(Cycle);                   // BVC rel
             case 0x60: return CycleInstructions<BusConfig>::make_rts(Cycle);                   // RTS impl
             case 0x70: return CycleInstructions<BusConfig>::make_bvs(Cycle);                   // BVS rel
-            case 0x80: return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP #imm (illegal on NMOS) / BRA rel (65C02)
+            case 0x80:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_bra(Cycle);                   // BRA rel (65C02)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP #imm (illegal on NMOS)
+                }
             case 0x90: return CycleInstructions<BusConfig>::make_bcc(Cycle);                   // BCC rel
             case 0xA0: return CycleInstructions<BusConfig>::make_ldy_imm(Cycle);               // LDY #imm
             case 0xB0: return CycleInstructions<BusConfig>::make_bcs(Cycle);                   // BCS rel
@@ -60,23 +65,85 @@ public:
             case 0xE1: return CycleInstructions<BusConfig>::make_sbc_indx(Cycle);              // SBC (zp,X)
             case 0xF1: return CycleInstructions<BusConfig>::make_sbc_indy(Cycle);              // SBC (zp),Y
 
-            // Column 2: Illegal/Undocumented/65C02
-            case 0x02: return CycleInstructions<BusConfig>::make_nop(Cycle);                   // HLT/JAM (illegal)
-            case 0x12: return CycleInstructions<BusConfig>::make_nop(Cycle);                   // HLT/JAM (illegal)
-            case 0x22: return CycleInstructions<BusConfig>::make_nop(Cycle);                   // HLT/JAM (illegal)
-            case 0x32: return CycleInstructions<BusConfig>::make_nop(Cycle);                   // HLT/JAM (illegal)
-            case 0x42: return CycleInstructions<BusConfig>::make_nop(Cycle);                   // HLT/JAM (illegal)
-            case 0x52: return CycleInstructions<BusConfig>::make_nop(Cycle);                   // HLT/JAM (illegal)
-            case 0x62: return CycleInstructions<BusConfig>::make_nop(Cycle);                   // HLT/JAM (illegal)
-            case 0x72: return CycleInstructions<BusConfig>::make_nop(Cycle);                   // HLT/JAM (illegal)
-            case 0x82: return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP #imm (illegal)
-            case 0x92: return CycleInstructions<BusConfig>::make_nop(Cycle);                   // HLT/JAM (illegal)
-            case 0xA2: return CycleInstructions<BusConfig>::make_ldx_imm(Cycle);               // LDX #imm
-            case 0xB2: return CycleInstructions<BusConfig>::make_nop(Cycle);                   // HLT/JAM (illegal)
-            case 0xC2: return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP #imm (illegal)
-            case 0xD2: return CycleInstructions<BusConfig>::make_nop(Cycle);                   // HLT/JAM (illegal)
-            case 0xE2: return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP #imm (illegal)
-            case 0xF2: return CycleInstructions<BusConfig>::make_nop(Cycle);                   // HLT/JAM (illegal)
+            // Column 2: Illegal/Undocumented/65C02 - variant-specific behavior
+            case 0x02:
+                if constexpr (BusConfig::has_illegal_opcodes) {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // HLT/JAM (NMOS illegal)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP (CMOS)
+                }
+            case 0x12:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_ora_zp_ind(Cycle);            // ORA ($zp) (65C02)
+                } else if constexpr (BusConfig::has_illegal_opcodes) {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // HLT/JAM (NMOS illegal)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP (CMOS)
+                }
+            case 0x22:
+                if constexpr (BusConfig::has_illegal_opcodes) {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // HLT/JAM (NMOS illegal)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP (CMOS)
+                }
+            case 0x32:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_and_zp_ind(Cycle);            // AND ($zp) (65C02)
+                } else if constexpr (BusConfig::has_illegal_opcodes) {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // HLT/JAM (NMOS illegal)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP (CMOS)
+                }
+            case 0x42:
+            case 0x62:
+            case 0x92:
+            case 0xD2:
+            case 0xF2:
+                if constexpr (BusConfig::has_illegal_opcodes) {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // HLT/JAM (NMOS illegal)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP (CMOS)
+                }
+            case 0x52:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_eor_zp_ind(Cycle);            // EOR ($zp) (65C02)
+                } else if constexpr (BusConfig::has_illegal_opcodes) {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // HLT/JAM (NMOS illegal)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP (CMOS)
+                }
+            case 0x72:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_adc_zp_ind(Cycle);            // ADC ($zp) (65C02)
+                } else if constexpr (BusConfig::has_illegal_opcodes) {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // HLT/JAM (NMOS illegal)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP (CMOS)
+                }
+            case 0xB2:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_lda_zp_ind(Cycle);            // LDA ($zp) (65C02)
+                } else if constexpr (BusConfig::has_illegal_opcodes) {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // HLT/JAM (NMOS illegal)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP (CMOS)
+                }
+            case 0x82:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // Reserved for future use (65C02)
+                } else if constexpr (BusConfig::has_illegal_opcodes) {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP #imm (NMOS illegal)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP (CMOS)
+                }
+            case 0xC2:
+            case 0xE2:
+                if constexpr (BusConfig::has_illegal_opcodes) {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP #imm (NMOS illegal)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP (CMOS)
+                }
+            case 0xA2: return CycleInstructions<BusConfig>::make_ldx_imm(Cycle);               // LDX #imm (all variants)
 
             // Column 3: Illegal opcodes (mostly SLO, RLA, SRE, RRA, SAX, LAX, DCP, ISC)
             case 0x03: return CycleInstructions<BusConfig>::make_slo_indx(Cycle);              // SLO (zp,X) (illegal)
@@ -97,14 +164,39 @@ public:
             case 0xF3: return CycleInstructions<BusConfig>::make_isc_indy(Cycle);              // ISC (zp),Y (illegal)
 
             // Column 4: Bit test/set/clear and NOP variants
-            case 0x04: return CycleInstructions<BusConfig>::make_tsb_zp(Cycle);                // TSB zp (65C02) / NOP zp (illegal on NMOS)
-            case 0x14: return CycleInstructions<BusConfig>::make_trb_zp(Cycle);                // TRB zp (65C02) / NOP zp,X (illegal on NMOS)
+            case 0x04:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_tsb_zp(Cycle);                // TSB zp (65C02)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop_zp(Cycle);                // NOP zp (illegal on NMOS)
+                }
+            case 0x14:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_trb_zp(Cycle);                // TRB zp (65C02)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop_zpx(Cycle);               // NOP zp,X (illegal on NMOS)
+                }
             case 0x24: return CycleInstructions<BusConfig>::make_bit_zp(Cycle);                // BIT zp
-            case 0x34: return CycleInstructions<BusConfig>::make_bit_zpx(Cycle);               // BIT zp,X (65C02) / NOP zp,X (illegal on NMOS)
+            case 0x34:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_bit_zpx(Cycle);               // BIT zp,X (65C02)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop_zpx(Cycle);               // NOP zp,X (illegal on NMOS)
+                }
             case 0x44: return CycleInstructions<BusConfig>::make_nop_zp(Cycle);                // NOP zp (illegal)
             case 0x54: return CycleInstructions<BusConfig>::make_nop_zpx(Cycle);               // NOP zp,X (illegal)
-            case 0x64: return CycleInstructions<BusConfig>::make_stz_zp(Cycle);                // STZ zp (65C02) / NOP zp (illegal on NMOS)
-            case 0x74: return CycleInstructions<BusConfig>::make_stz_zpx(Cycle);               // STZ zp,X (65C02) / NOP zp,X (illegal on NMOS)
+            case 0x64:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_stz_zp(Cycle);                // STZ zp (65C02)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop_zp(Cycle);                // NOP zp (illegal on NMOS)
+                }
+            case 0x74:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_stz_zpx(Cycle);               // STZ zp,X (65C02)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop_zpx(Cycle);               // NOP zp,X (illegal on NMOS)
+                }
             case 0x84: return CycleInstructions<BusConfig>::make_sty_zp(Cycle);                // STY zp
             case 0x94: return CycleInstructions<BusConfig>::make_sty_zpx(Cycle);               // STY zp,X
             case 0xA4: return CycleInstructions<BusConfig>::make_ldy_zp(Cycle);                // LDY zp
@@ -195,7 +287,12 @@ public:
             case 0x59: return CycleInstructions<BusConfig>::make_eor_absy(Cycle);              // EOR abs,Y
             case 0x69: return CycleInstructions<BusConfig>::make_adc_imm(Cycle);               // ADC #imm
             case 0x79: return CycleInstructions<BusConfig>::make_adc_absy(Cycle);              // ADC abs,Y
-            case 0x89: return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP #imm (illegal)
+            case 0x89:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_bit_imm(Cycle);               // BIT #imm (65C02)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP #imm (illegal)
+                }
             case 0x99: return CycleInstructions<BusConfig>::make_sta_absy(Cycle);              // STA abs,Y
             case 0xA9: return CycleInstructions<BusConfig>::make_lda_imm(Cycle);               // LDA #imm
             case 0xB9: return CycleInstructions<BusConfig>::make_lda_absy(Cycle);              // LDA abs,Y
@@ -206,21 +303,51 @@ public:
             
             // Column A: Accumulator & Implied
             case 0x0A: return CycleInstructions<BusConfig>::make_asl_acc(Cycle);               // ASL A
-            case 0x1A: return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP impl (illegal) / INC A (65C02)
+            case 0x1A:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_inc_acc(Cycle);               // INC A (65C02)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP impl (illegal)
+                }
             case 0x2A: return CycleInstructions<BusConfig>::make_rol_acc(Cycle);               // ROL A
-            case 0x3A: return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP impl (illegal) / DEC A (65C02)
+            case 0x3A:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_dec_acc(Cycle);               // DEC A (65C02)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP impl (illegal)
+                }
             case 0x4A: return CycleInstructions<BusConfig>::make_lsr_acc(Cycle);               // LSR A
-            case 0x5A: return CycleInstructions<BusConfig>::make_phy(Cycle);                   // PHY impl (65C02) / NOP (illegal on NMOS)
+            case 0x5A:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_phy(Cycle);                   // PHY impl (65C02)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP (illegal on NMOS)
+                }
             case 0x6A: return CycleInstructions<BusConfig>::make_ror_acc(Cycle);               // ROR A
-            case 0x7A: return CycleInstructions<BusConfig>::make_ply(Cycle);                   // PLY impl (65C02) / NOP (illegal on NMOS)
+            case 0x7A:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_ply(Cycle);                   // PLY impl (65C02)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP (illegal on NMOS)
+                }
             case 0x8A: return CycleInstructions<BusConfig>::make_txa(Cycle);                   // TXA impl
             case 0x9A: return CycleInstructions<BusConfig>::make_txs(Cycle);                   // TXS impl
             case 0xAA: return CycleInstructions<BusConfig>::make_tax(Cycle);                   // TAX impl
             case 0xBA: return CycleInstructions<BusConfig>::make_tsx(Cycle);                   // TSX impl
             case 0xCA: return CycleInstructions<BusConfig>::make_dex(Cycle);                   // DEX impl
-            case 0xDA: return CycleInstructions<BusConfig>::make_phx(Cycle);                   // PHX impl (65C02) / NOP (illegal on NMOS)
+            case 0xDA:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_phx(Cycle);                   // PHX impl (65C02)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP (illegal on NMOS)
+                }
             case 0xEA: return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP impl
-            case 0xFA: return CycleInstructions<BusConfig>::make_plx(Cycle);                   // PLX impl (65C02) / NOP (illegal on NMOS)
+            case 0xFA:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_plx(Cycle);                   // PLX impl (65C02)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // NOP (illegal on NMOS)
+                }
             
             // Column B: Illegal opcodes (mostly unstable)
             case 0x0B: return CycleInstructions<BusConfig>::make_nop(Cycle);                   // ANC #imm (illegal, unstable)
@@ -241,16 +368,41 @@ public:
             case 0xFB: return CycleInstructions<BusConfig>::make_nop(Cycle);                   // ISC abs,Y (illegal)
             
             // Column C: Absolute addressing & Jump
-            case 0x0C: return CycleInstructions<BusConfig>::make_tsb_abs(Cycle);               // TSB abs (65C02) / NOP abs (illegal on NMOS)
-            case 0x1C: return CycleInstructions<BusConfig>::make_trb_abs(Cycle);               // TRB abs (65C02) / NOP abs,X (illegal on NMOS)
+            case 0x0C:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_tsb_abs(Cycle);               // TSB abs (65C02)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop_abs(Cycle);               // NOP abs (illegal on NMOS)
+                }
+            case 0x1C:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_trb_abs(Cycle);               // TRB abs (65C02)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop_absx(Cycle);              // NOP abs,X (illegal on NMOS)
+                }
             case 0x2C: return CycleInstructions<BusConfig>::make_bit_abs(Cycle);               // BIT abs
-            case 0x3C: return CycleInstructions<BusConfig>::make_bit_absx(Cycle);              // BIT abs,X (65C02) / NOP abs,X (illegal on NMOS)
+            case 0x3C:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_bit_absx(Cycle);              // BIT abs,X (65C02)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop_absx(Cycle);              // NOP abs,X (illegal on NMOS)
+                }
             case 0x4C: return CycleInstructions<BusConfig>::make_jmp_abs(Cycle);               // JMP abs
             case 0x5C: return CycleInstructions<BusConfig>::make_nop_absx(Cycle);              // NOP abs,X (illegal)
             case 0x6C: return CycleInstructions<BusConfig>::make_jmp_ind(Cycle);               // JMP (abs)
-            case 0x7C: return CycleInstructions<BusConfig>::make_jmp_absx_ind(Cycle);          // JMP (abs,X) (65C02) / NOP abs,X (illegal on NMOS)
+            case 0x7C:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_jmp_absx_ind(Cycle);          // JMP (abs,X) (65C02)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop_absx(Cycle);              // NOP abs,X (illegal on NMOS)
+                }
             case 0x8C: return CycleInstructions<BusConfig>::make_sty_abs(Cycle);               // STY abs
-            case 0x9C: return CycleInstructions<BusConfig>::make_stz_abs(Cycle);               // STZ abs (65C02) / SHY abs,X (illegal on NMOS)
+            case 0x9C:
+                if constexpr (BusConfig::has_cmos_fixes) {
+                    return CycleInstructions<BusConfig>::make_stz_abs(Cycle);               // STZ abs (65C02)
+                } else {
+                    return CycleInstructions<BusConfig>::make_nop(Cycle);                   // SHY abs,X (illegal on NMOS, unstable)
+                }
             case 0xAC: return CycleInstructions<BusConfig>::make_ldy_abs(Cycle);               // LDY abs
             case 0xBC: return CycleInstructions<BusConfig>::make_ldy_absx(Cycle);              // LDY abs,X
             case 0xCC: return CycleInstructions<BusConfig>::make_cpy_abs(Cycle);               // CPY abs
