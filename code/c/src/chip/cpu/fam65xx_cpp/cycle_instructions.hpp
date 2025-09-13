@@ -291,6 +291,84 @@ public:
         return make_empty_cycle();
     }
 
+    // 65C02 accumulator increment/decrement operations
+    static constexpr cycle_desc_t make_inc_acc(uint8_t cycle = 1) {
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::INC) : make_empty_cycle();
+    }
+    
+    static constexpr cycle_desc_t make_dec_acc(uint8_t cycle = 1) {
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::DEC) : make_empty_cycle();
+    }
+
+    // 65C02 immediate BIT operation - 2 cycles
+    static constexpr cycle_desc_t make_bit_imm(uint8_t cycle = 1) {
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ALU, AluOp::BIT) : make_empty_cycle();
+    }
+
+    // 65C02 zero page indirect addressing modes - ($zp)
+    static constexpr cycle_desc_t make_ora_zp_ind(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_LOW, AluOp::NOP);
+        if (cycle == 3) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_HIGH, AluOp::NOP);
+        if (cycle == 4) return CD_MAKE_SYNC(MemOp::READ_ABS, DataOp::ALU, AluOp::ORA);
+        return make_empty_cycle();
+    }
+
+    static constexpr cycle_desc_t make_and_zp_ind(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_LOW, AluOp::NOP);
+        if (cycle == 3) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_HIGH, AluOp::NOP);
+        if (cycle == 4) return CD_MAKE_SYNC(MemOp::READ_ABS, DataOp::ALU, AluOp::AND);
+        return make_empty_cycle();
+    }
+
+    static constexpr cycle_desc_t make_eor_zp_ind(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_LOW, AluOp::NOP);
+        if (cycle == 3) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_HIGH, AluOp::NOP);
+        if (cycle == 4) return CD_MAKE_SYNC(MemOp::READ_ABS, DataOp::ALU, AluOp::EOR);
+        return make_empty_cycle();
+    }
+
+    static constexpr cycle_desc_t make_adc_zp_ind(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_LOW, AluOp::NOP);
+        if (cycle == 3) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_HIGH, AluOp::NOP);
+        if (cycle == 4) return CD_MAKE_SYNC(MemOp::READ_ABS, DataOp::ALU, AluOp::ADC);
+        return make_empty_cycle();
+    }
+
+    static constexpr cycle_desc_t make_sta_zp_ind(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_LOW, AluOp::NOP);
+        if (cycle == 3) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_HIGH, AluOp::NOP);
+        if (cycle == 4) return CD_MAKE_SYNC(MemOp::WRITE_ABS, DataOp::STORE_A, AluOp::NOP);
+        return make_empty_cycle();
+    }
+
+    static constexpr cycle_desc_t make_lda_zp_ind(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_LOW, AluOp::NOP);
+        if (cycle == 3) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_HIGH, AluOp::NOP);
+        if (cycle == 4) return CD_MAKE_SYNC(MemOp::READ_ABS, DataOp::LOAD_A, AluOp::NOP);
+        return make_empty_cycle();
+    }
+
+    static constexpr cycle_desc_t make_cmp_zp_ind(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_LOW, AluOp::NOP);
+        if (cycle == 3) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_HIGH, AluOp::NOP);
+        if (cycle == 4) return CD_MAKE_SYNC(MemOp::READ_ABS, DataOp::ALU, AluOp::CMP);
+        return make_empty_cycle();
+    }
+
+    static constexpr cycle_desc_t make_sbc_zp_ind(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
+        if (cycle == 2) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_LOW, AluOp::NOP);
+        if (cycle == 3) return CD_MAKE(MemOp::READ_ZP, DataOp::INDIRECT_HIGH, AluOp::NOP);
+        if (cycle == 4) return CD_MAKE_SYNC(MemOp::READ_ABS, DataOp::ALU, AluOp::SBC);
+        return make_empty_cycle();
+    }
 
     // Complete addressing modes for STA operations - 3 cycles
     static constexpr cycle_desc_t make_sta_zpx(uint8_t cycle) {
