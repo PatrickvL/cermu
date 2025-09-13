@@ -182,16 +182,21 @@ fam65xx_test_status_t fam65xx_test_harness_run_klaus_test(fam65xx_test_harness_t
         // Execute one CPU cycle
         bus_state_t bus_state = 0;
         
-        // Set up bus for memory read at PC
-        BUS_SET_ADDR(bus_state, current_pc);
-        uint8_t data = harness->memory->read(BUS_GET_ADDR(bus_state));
-        BUS_SET_DATA(bus_state, data);
+        // Initialize bus with default values (RW=1 for read, RDY=1 for ready)
+        bus_state |= BUS_BIT(BUS_RW_BIT);  // Default to read
+        bus_state |= BUS_BIT(BUS_RDY_BIT); // CPU is ready
         
-        // Execute CPU cycle
+        // Execute CPU cycle - this will set up the address and control lines
         bus_state = harness->cpu->cycle_tick(bus_state);
         
-        // Handle memory writes
-        if (!(bus_state & BUS_BIT(BUS_RW_BIT))) { // Write cycle
+        // Respond to CPU memory operations
+        if (bus_state & BUS_BIT(BUS_RW_BIT)) {
+            // Read cycle - provide data to CPU
+            uint16_t addr = BUS_GET_ADDR(bus_state);
+            uint8_t data = harness->memory->read(addr);
+            BUS_SET_DATA(bus_state, data);
+        } else {
+            // Write cycle - store data from CPU
             uint16_t addr = BUS_GET_ADDR(bus_state);
             uint8_t write_data = BUS_GET_DATA(bus_state);
             harness->memory->write(addr, write_data);
