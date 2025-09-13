@@ -20,6 +20,9 @@ private:
     uint8_t pending_data = 0;
     uint8_t pending_data_op = 0;
     
+    // Hardware pin state tracking for interrupt edge detection
+    bool prev_nmi_pin_state = true;  // NMI pin state tracking (starts high)
+    
     // CPU registers - type-safe array that accepts CpuReg enum directly
     CpuRegisterArray reg;
     
@@ -100,11 +103,16 @@ public:
                 return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_RESET);
             }
             
-            // Handle interrupts only at instruction boundaries
+            // Handle interrupts only at instruction boundaries for proper timing
             if (cycle_step == 0) {
+                // NMI has highest priority among interrupts and is non-maskable
                 if (critical_states & STATE_NMI_PENDING) {
+                    // Clear the NMI edge flag when servicing the interrupt
+                    clear_state(STATE_NMI_EDGE);
                     return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_NMI);
-                } else if ((critical_states & STATE_IRQ_PENDING) &&
+                }
+                // IRQ has lower priority and is maskable
+                else if ((critical_states & STATE_IRQ_PENDING) &&
                           !(reg[static_cast<uint8_t>(CpuReg::P)] & P_IRQ_DIS)) {
                     return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_IRQ);
                 }
@@ -180,12 +188,13 @@ public:
         // Handle write data if needed
         bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op);
         
-        // Execute data operation
-        execute_data_operation(cycle.data_op, BUS_GET_DATA(bus_state));
+        // Execute data operation and ALU operation using same bus data
+        uint8_t bus_data = BUS_GET_DATA(bus_state);
+        execute_data_operation(cycle.data_op, bus_data);
         
         // Execute ALU operation if specified (for setting interrupt disable flag)
         if (alu_op != AluOp::NOP) {
-            alu_ops::execute_alu_operation(reg, alu_op, BUS_GET_DATA(bus_state));
+            alu_ops::execute_alu_operation(reg, alu_op, bus_data);
         }
         
         // Check if interrupt sequence is complete using sync bit
@@ -223,12 +232,13 @@ public:
         // Handle write data if needed
         bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op);
         
-        // Execute data operation
-        execute_data_operation(cycle.data_op, BUS_GET_DATA(bus_state));
+        // Execute data operation and ALU operation using same bus data
+        uint8_t bus_data = BUS_GET_DATA(bus_state);
+        execute_data_operation(cycle.data_op, bus_data);
         
         // Execute ALU operation if specified
         if (alu_op != AluOp::NOP) {
-            alu_ops::execute_alu_operation(reg, alu_op, BUS_GET_DATA(bus_state));
+            alu_ops::execute_alu_operation(reg, alu_op, bus_data);
             
             // Handle decimal mode bugs for NMOS variants
             handle_decimal_mode_bugs(reg[CpuReg::A], alu_op);
@@ -248,6 +258,7 @@ public:
     
     // Execute data operation
     inline void execute_data_operation(uint8_t data_op, uint8_t data) {
+        
         // Store data for potential ALU use
         reg[CpuReg::DL] = data;
         
@@ -444,21 +455,44 @@ public:
     }
     
     // Interrupt control - inline for performance
+    
+    // Hardware-accurate NMI pin control with proper edge detection
+    inline void nmi_pin(bool pin_state) {
+        // NMI is active-low, so detect falling edge (high to low transition)
+        if (prev_nmi_pin_state && !pin_state) {
+            // Falling edge detected - latch NMI interrupt
+            set_state(STATE_NMI_EDGE | STATE_NMI_PENDING);
+        }
+        prev_nmi_pin_state = pin_state;
+    }
+    
+    // Legacy NMI trigger method for compatibility (software-triggered NMI)
     inline void nmi() {
+        // Software-triggered NMI - immediately set edge and pending
         set_state(STATE_NMI_EDGE | STATE_NMI_PENDING);
     }
-    inline void irq(bool state) {
-        if (!state) {
+    
+    // IRQ pin control with level-sensitive detection
+    inline void irq(bool pin_state) {
+        if (!pin_state) {
+            // IRQ pin active (low) - set line state
             set_state(STATE_IRQ_LINE);
+            // IRQ is maskable - only set pending if interrupts enabled
             if (!(reg[CpuReg::P] & P_IRQ_DIS)) {
                 set_state(STATE_IRQ_PENDING);
             }
         } else {
-            clear_state(STATE_IRQ_LINE);
+            // IRQ pin inactive (high) - clear line and pending states
+            clear_state(STATE_IRQ_LINE | STATE_IRQ_PENDING);
         }
     }
+    
+    // RESET pin control
     inline void reset() {
         set_state(STATE_RESET_PENDING);
+        // Reset also clears all pending interrupts
+        clear_state(STATE_NMI_PENDING | STATE_IRQ_PENDING | STATE_NMI_EDGE);
+        prev_nmi_pin_state = true; // Reset NMI pin state to high
     }
     
     // === CONTROL LINE PROCESSING ===
