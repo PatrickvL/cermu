@@ -76,3 +76,31 @@ data/**/*.p00
 data/**/*.img
 data/**/*.adf
 !data/**/README.md
+
+# External test suites and ROM files - keep setup documentation
+external/6502-tests/*
+external/65c02-tests/*
+external/lorenz-tests/*
+external/**/*.bin
+external/**/*.rom
+external/**/*.prg
+external/**/*.d64
+external/**/*.d71
+external/**/*.d81
+external/**/*.tap
+external/**/*.t64
+external/**/*.p00
+external/**/*.img
+external/**/*.adf
+external/**/*.tar.gz
+external/**/*.zip
+!external/**/README.md
+!external/**/*_SETUP*.md
+!external/**/*_RESULTS*.md
+
+# Test runner executables and build artifacts
+code/c/tests/build/external/
+code/c/tests/fam65xx_cpp_65c02_test_runner
+code/c/tests/fam65xx_cpp_klaus_test_runner
+code/c/tests/fam65xx_cpp_lorenz_test_runner
+code/csharp/aiemu/obj/*

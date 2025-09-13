@@ -117,6 +117,34 @@ if(NOT WIN32 AND NOT MSVC)
     target_link_libraries(fam65xx_cpp_klaus_test_runner m)
 endif()
 
+# fam65xx_cpp Wolfgang Lorenz Test Suite - Cycle-accurate timing validation
+add_executable(fam65xx_cpp_lorenz_test_runner
+    fam65xx_cpp_lorenz_test_runner.cpp
+    fam65xx_cpp_lorenz_test_harness.cpp
+)
+target_include_directories(fam65xx_cpp_lorenz_test_runner PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
+)
+# Link math library if needed
+if(NOT WIN32 AND NOT MSVC)
+    target_link_libraries(fam65xx_cpp_lorenz_test_runner m)
+endif()
+
+# fam65xx_cpp 65C02 CMOS Test Suite - CMOS feature validation
+add_executable(fam65xx_cpp_65c02_test_runner
+    fam65xx_cpp_65c02_test_runner.cpp
+    fam65xx_cpp_65c02_test_harness.cpp
+)
+target_include_directories(fam65xx_cpp_65c02_test_runner PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
+)
+# Link math library if needed
+if(NOT WIN32 AND NOT MSVC)
+    target_link_libraries(fam65xx_cpp_65c02_test_runner m)
+endif()
+
 # Enable testing
 enable_testing()
 
