@@ -984,9 +984,8 @@ public:
             // ABORT is active-low, edge-triggered interrupt
             // Detect falling edge (high to low transition)
             if (prev_abort_pin_state && !pin_state) {
-                if (!get_state(STATE_RESET_PENDING)) {
-                    set_state(STATE_ABORT_PENDING);
-                }
+                // ABORT interrupt can occur even during reset - hardware behavior
+                set_state(STATE_ABORT_PENDING);
             }
             prev_abort_pin_state = pin_state;
         }
