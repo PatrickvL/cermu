@@ -52,7 +52,7 @@ public:
 void test_brk_flag_setting() {
     std::cout << "\n=== Testing BRK Flag Setting Behavior ===" << std::endl;
     
-    fam65xx<TestConfig> cpu;
+    fam65xx_with_cycle_count<TestConfig> cpu;
     TestMemory memory;
     
     cpu.init();

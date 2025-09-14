@@ -17,10 +17,9 @@ private:
     // CPU state
     uint16_t opcode = 0;           // Changed to uint16_t to support virtual opcodes 256+
     uint8_t cycle_step = 0;
-    uint16_t state_flags = 0;
+    uint32_t state_flags = 0;
     uint8_t pending_data = 0;
     uint8_t pending_data_op = 0;
-    uint64_t cycle_counter = 0;    // Real cycle counter for debugging
     
     // Hardware pin state tracking for interrupt edge detection
     bool prev_nmi_pin_state = true;  // NMI pin state tracking (starts high)
@@ -48,27 +47,27 @@ public:
     }
     
     // BRANCH ELIMINATION: Branchless state flag helpers with bit manipulation optimization
-    inline bool get_state(uint16_t flag) const {
+    inline bool get_state(uint32_t flag) const {
         return (state_flags & flag) != 0;
     }
     
-    inline void set_state(uint16_t flag) {
+    inline void set_state(uint32_t flag) {
         state_flags |= flag;
     }
     
-    inline void clear_state(uint16_t flag) {
+    inline void clear_state(uint32_t flag) {
         state_flags &= ~flag;
     }
     
     // BRANCH ELIMINATION: Branchless conditional state operations
-    inline void set_state_conditional(uint16_t flag, bool condition) {
+    inline void set_state_conditional(uint32_t flag, bool condition) {
         // Branchless: Set flag if condition is true, clear if false
         state_flags = (state_flags & ~flag) | (condition ? flag : 0);
     }
     
-    inline void toggle_state_conditional(uint16_t flag, bool condition) {
+    inline void toggle_state_conditional(uint32_t flag, bool condition) {
         // Branchless: Toggle flag based on condition
-        const uint16_t mask = condition ? flag : 0;
+        const uint32_t mask = condition ? flag : 0;
         state_flags ^= mask;
     }
     
@@ -89,7 +88,6 @@ public:
         cycle_step = 0;
         pending_data = 0;
         pending_data_op = 0;
-        cycle_counter = 0;          // Reset cycle counter
         
         // Reset interrupt pin state tracking
         prev_nmi_pin_state = true;  // NMI pin starts high (inactive)
@@ -101,13 +99,11 @@ public:
     
     // Execute one CPU cycle - OPTIMIZED HOT PATH
     inline bus_state_t cycle_tick(bus_state_t bus_state) {
-        // Increment cycle counter for real execution tracking
-        cycle_counter++;
         
         // HOT PATH OPTIMIZATION: Branch prediction hints and batched checks
         
         // Likely path: normal instruction execution (90%+ of cycles)
-        if (__builtin_expect(!(state_flags & (STATE_INTERRUPT_SEQUENCE | STATE_RESET_PENDING | STATE_NMI_PENDING | STATE_IRQ_PENDING)), 1)) {
+        if (__builtin_expect(!(state_flags & (STATE_INTERRUPT_SEQUENCE | STATE_RESET_PENDING | STATE_NMI_PENDING | STATE_IRQ_PENDING | STATE_ABORT_PENDING | STATE_COP_PENDING)), 1)) {
             // Fast path: normal instruction execution without interrupts
             return execute_cycle_fast_path(bus_state);
         }
@@ -128,24 +124,40 @@ public:
             return execute_interrupt_cycle(bus_state);
         }
         
-        // Batch check critical state flags for speed
-        const uint16_t critical_states = state_flags & (STATE_RESET_PENDING | STATE_NMI_PENDING | STATE_IRQ_PENDING);
+        // Batch check critical state flags for speed (including 65C816 extended interrupts)
+        const uint32_t critical_states = state_flags & (STATE_RESET_PENDING | STATE_NMI_PENDING | STATE_IRQ_PENDING | STATE_ABORT_PENDING | STATE_COP_PENDING);
         if (__builtin_expect(critical_states != 0, 0)) {
             // Handle reset first (highest priority)
             if (__builtin_expect(critical_states & STATE_RESET_PENDING, 0)) {
                 return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_RESET);
             }
             
-            // Handle interrupts only at instruction boundaries for proper timing
+            // Re-check state flags after potential reset handling to ensure accurate priority
+            const uint32_t current_states = state_flags & (STATE_NMI_PENDING | STATE_IRQ_PENDING | STATE_ABORT_PENDING | STATE_COP_PENDING);
+            
+            // ABORT has highest priority among interrupts and can interrupt at any cycle (65C816 only)
+            if constexpr (Config::has_abort_pin) {
+                if (__builtin_expect(current_states & STATE_ABORT_PENDING, 0)) {
+                    return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_ABORT);
+                }
+            }
+            
+            // Handle other interrupts only at instruction boundaries for proper timing
             if (__builtin_expect(cycle_step == 0, 0)) {
-                // NMI has highest priority among interrupts and is non-maskable
-                if (__builtin_expect(critical_states & STATE_NMI_PENDING, 0)) {
+                // NMI has next highest priority among interrupts and is non-maskable
+                if (__builtin_expect(current_states & STATE_NMI_PENDING, 0)) {
                     // Clear the NMI edge flag when servicing the interrupt
                     state_flags &= ~STATE_NMI_EDGE; // Direct bit clear for speed
                     return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_NMI);
                 }
-                // IRQ has lower priority and is maskable - check I flag synchronously
-                else if (__builtin_expect((critical_states & STATE_IRQ_PENDING) &&
+                
+                // COP has priority over IRQ (65C816 software interrupt)
+                if (__builtin_expect(current_states & STATE_COP_PENDING, 0)) {
+                    return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_COP);
+                }
+                
+                // IRQ has lowest priority and is maskable - check I flag synchronously
+                else if (__builtin_expect((current_states & STATE_IRQ_PENDING) &&
                           !(reg[static_cast<uint8_t>(CpuReg::P)] & P_IRQ_DIS), 0)) {
                     return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_IRQ);
                 }
@@ -174,6 +186,14 @@ public:
                 // BRK should start interrupt sequence immediately after opcode fetch
                 // Use special BRK virtual opcode to set B flag correctly
                 return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_BRK);
+            }
+            
+            // Special case: COP instruction ($02) triggers co-processor interrupt (65C816)
+            if constexpr (Config::has_abort_pin) { // 65C816 has COP instruction
+                if (__builtin_expect(opcode == 0x02, 0)) {
+                    // COP should start interrupt sequence immediately after opcode fetch
+                    return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_COP);
+                }
             }
             
             return bus_state;
@@ -260,6 +280,12 @@ public:
                 // BRK doesn't clear any pending flags, it's a software interrupt
                 // PC increment happens automatically in the BRK sequence
                 break;
+            case VIRTUAL_OPCODE_ABORT:
+                clear_state(STATE_ABORT_PENDING);
+                break;
+            case VIRTUAL_OPCODE_COP:
+                clear_state(STATE_COP_PENDING);
+                break;
         }
         
         // Initialize interrupt sequence state - use main opcode field
@@ -298,6 +324,16 @@ public:
                 case VIRTUAL_OPCODE_BRK:
                     // BRK uses IRQ vector ($FFFE/$FFFF)
                     reg[CpuReg::ABL] = (cycle_step == 6) ? 0xFE : 0xFF;
+                    reg[CpuReg::ABH] = 0xFF;
+                    break;
+                case VIRTUAL_OPCODE_ABORT:
+                    // ABORT uses vector ($FFE8/$FFE9) - 65C816
+                    reg[CpuReg::ABL] = (cycle_step == 6) ? 0xE8 : 0xE9;
+                    reg[CpuReg::ABH] = 0xFF;
+                    break;
+                case VIRTUAL_OPCODE_COP:
+                    // COP uses vector ($FFE4/$FFE5) - 65C816
+                    reg[CpuReg::ABL] = (cycle_step == 6) ? 0xE4 : 0xE5;
                     reg[CpuReg::ABH] = 0xFF;
                     break;
             }
@@ -385,6 +421,14 @@ public:
                 // BRK should start interrupt sequence immediately after opcode fetch
                 // Use special BRK virtual opcode to set B flag correctly
                 return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_BRK);
+            }
+            
+            // Special case: COP instruction ($02) triggers co-processor interrupt (65C816)
+            if constexpr (Config::has_abort_pin) { // 65C816 has COP instruction
+                if (opcode == 0x02) {
+                    // COP should start interrupt sequence immediately after opcode fetch
+                    return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_COP);
+                }
             }
             
             return bus_state;
@@ -680,7 +724,7 @@ public:
     inline uint8_t get_cycle_step() const { return cycle_step; }
     
     // Get state flags
-    inline uint16_t get_state_flags() const { return state_flags; }
+    inline uint32_t get_state_flags() const { return state_flags; }
     
     // === API COMPATIBILITY METHODS ===
     // Register access methods for C wrapper compatibility
@@ -728,7 +772,7 @@ public:
             
             if (mem_op == MemOp::READ_PC || mem_op == MemOp::READ_PC_INC) {
                 return (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
-            } else if (mem_op == MemOp::WRITE_SP_DEC) {
+            } else if (mem_op == MemOp::WRITE_SP_DEC || mem_op == MemOp::READ_SP) {
                 return 0x0100 | reg[CpuReg::S];
             } else if (mem_op == MemOp::READ_VECTOR) {
                 // Predict vector address based on interrupt type and cycle
@@ -740,6 +784,10 @@ public:
                     case VIRTUAL_OPCODE_IRQ:
                     case VIRTUAL_OPCODE_BRK:
                         return (cycle_step == 6) ? 0xFFFE : 0xFFFF;
+                    case VIRTUAL_OPCODE_ABORT:
+                        return (cycle_step == 6) ? 0xFFE8 : 0xFFE9;
+                    case VIRTUAL_OPCODE_COP:
+                        return (cycle_step == 6) ? 0xFFE4 : 0xFFE5;
                 }
             }
         }
@@ -807,14 +855,6 @@ public:
         return 0;
     }
     
-    // Cycle counting for performance analysis
-    inline uint64_t get_cycle_count() const {
-        return cycle_counter;
-    }
-    
-    inline void reset_cycle_count() {
-        cycle_counter = 0;
-    }
     
     // Enhanced IRQ pin control for test compatibility
     inline void irq_pin(bool pin_state) {
@@ -909,10 +949,33 @@ public:
     inline void reset() {
         set_state(STATE_RESET_PENDING);
         // Reset also clears all pending interrupts and state tracking
-        clear_state(STATE_NMI_PENDING | STATE_IRQ_PENDING | STATE_NMI_EDGE | STATE_IRQ_LINE);
+        clear_state(STATE_NMI_PENDING | STATE_IRQ_PENDING | STATE_ABORT_PENDING | STATE_COP_PENDING | STATE_NMI_EDGE | STATE_IRQ_LINE);
         prev_nmi_pin_state = true; // Reset NMI pin state to high
         prev_irq_pin_state = true; // Reset IRQ pin state to high
         irq_sources = 0;           // Clear all IRQ sources
+    }
+    
+    // ABORT pin control (65C816)
+    inline void abort_pin(bool pin_state) {
+        if constexpr (Config::has_abort_pin) {
+            // ABORT is active-low, edge-triggered interrupt
+            static bool prev_abort_state = true;
+            
+            // Detect falling edge (high to low transition)
+            if (prev_abort_state && !pin_state) {
+                if (!get_state(STATE_RESET_PENDING)) {
+                    set_state(STATE_ABORT_PENDING);
+                }
+            }
+            prev_abort_state = pin_state;
+        }
+    }
+    
+    // COP instruction trigger (65C816 software interrupt)
+    inline void cop_instruction() {
+        if constexpr (Config::has_abort_pin) { // 65C816 has COP instruction
+            set_state(STATE_COP_PENDING);
+        }
     }
     
     // === CONTROL LINE PROCESSING ===
@@ -964,13 +1027,17 @@ public:
             
             // ABORT pin - 65C816 abort interrupt
             if constexpr (Config::has_abort_pin) {
-                if (!(active_pins & BUS_BIT(BUS_ABORT_BIT))) {
-                    // ABORT is active-low, triggers abort interrupt
+                static bool prev_abort_state = true; // ABORT pin starts high (inactive)
+                const bool current_abort = (active_pins & BUS_BIT(BUS_ABORT_BIT)) != 0;
+                
+                // ABORT is edge-triggered (falling edge detection)
+                if (prev_abort_state && !current_abort) {
+                    // Falling edge detected - trigger ABORT interrupt
                     if (!get_state(STATE_RESET_PENDING)) {
-                        // TODO: Implement full ABORT interrupt sequence
-                        set_state(STATE_IRQ_PENDING); // Simplified for now
+                        set_state(STATE_ABORT_PENDING);
                     }
                 }
+                prev_abort_state = current_abort;
             }
         }
         return bus_state;
@@ -1096,7 +1163,7 @@ public:
     inline void process_so_pin_edge() {
         if constexpr (Config::has_so_pin) {
             // Batch check SO-related states
-            const uint16_t so_states = state_flags & STATE_SO_EDGE;
+            const uint32_t so_states = state_flags & STATE_SO_EDGE;
             if (so_states) {
                 if constexpr (Config::cpu_variant == CpuVariant::NMOS_6502 ||
                              Config::cpu_variant == CpuVariant::NMOS_6510) {
@@ -1118,7 +1185,7 @@ public:
     // Process output control lines
     inline bus_state_t process_output_pins(bus_state_t bus_state) {
         // Batch check output state flags for speed
-        const uint16_t output_states = state_flags & (STATE_SYNC_NEXT);
+        const uint32_t output_states = state_flags & (STATE_SYNC_NEXT);
         
         // SYNC pin - indicates opcode fetch cycle
         if constexpr (Config::has_sync_pin) {
@@ -1235,6 +1302,87 @@ public:
     inline constexpr uint16_t page_crossed(uint16_t addr1, uint16_t addr2) {
         return (addr1 ^ addr2) & 0xFF00;
     }
+};
+
+// Cycle counting wrapper for performance analysis and debugging
+template<typename Config>
+class fam65xx_with_cycle_count {
+private:
+    fam65xx<Config> cpu;
+    uint64_t cycle_counter = 0;
+
+public:
+    // Constructor
+    fam65xx_with_cycle_count() : cpu() {}
+    
+    // Cycle counting wrapper
+    inline bus_state_t cycle_tick(bus_state_t bus_state) {
+        cycle_counter++;
+        return cpu.cycle_tick(bus_state);
+    }
+    
+    // Cycle counting methods
+    inline uint64_t get_cycle_count() const {
+        return cycle_counter;
+    }
+    
+    inline void reset_cycle_count() {
+        cycle_counter = 0;
+    }
+    
+    // Forward all other methods to the underlying CPU
+    inline void init() { cpu.init(); }
+    inline uint8_t get_reg(CpuReg register_id) const { return cpu.get_reg(register_id); }
+    inline void set_reg(CpuReg register_id, uint8_t value) { cpu.set_reg(register_id, value); }
+    inline uint16_t get_opcode() const { return cpu.get_opcode(); }
+    inline uint8_t get_cycle_step() const { return cpu.get_cycle_step(); }
+    inline uint32_t get_state_flags() const { return cpu.get_state_flags(); }
+    
+    // Register access methods
+    inline uint8_t get_a() const { return cpu.get_a(); }
+    inline uint8_t get_x() const { return cpu.get_x(); }
+    inline uint8_t get_y() const { return cpu.get_y(); }
+    inline uint8_t get_s() const { return cpu.get_s(); }
+    inline uint8_t get_p() const { return cpu.get_p(); }
+    inline uint16_t get_pc() const { return cpu.get_pc(); }
+    
+    inline void set_a(uint8_t val) { cpu.set_a(val); }
+    inline void set_x(uint8_t val) { cpu.set_x(val); }
+    inline void set_y(uint8_t val) { cpu.set_y(val); }
+    inline void set_s(uint8_t val) { cpu.set_s(val); }
+    inline void set_p(uint8_t val) { cpu.set_p(val); }
+    inline void set_pc(uint16_t val) { cpu.set_pc(val); }
+    
+    // Alternative register access methods
+    inline uint8_t get_sp() const { return cpu.get_sp(); }
+    inline uint8_t get_status() const { return cpu.get_status(); }
+    inline void set_sp(uint8_t val) { cpu.set_sp(val); }
+    inline void set_status(uint8_t val) { cpu.set_status(val); }
+    
+    // Hardware interface
+    inline uint16_t get_address() const { return cpu.get_address(); }
+    inline bool get_rw() const { return cpu.get_rw(); }
+    inline uint8_t get_write_data() const { return cpu.get_write_data(); }
+    
+    // Interrupt control
+    inline void nmi_pin(bool pin_state) { cpu.nmi_pin(pin_state); }
+    inline void nmi() { cpu.nmi(); }
+    inline void irq(bool pin_state) { cpu.irq(pin_state); }
+    inline void irq_pin(bool pin_state) { cpu.irq_pin(pin_state); }
+    inline void irq_source(uint8_t source_bit, bool active) { cpu.irq_source(source_bit, active); }
+    inline bool is_irq_masked() const { return cpu.is_irq_masked(); }
+    inline void reset() { cpu.reset(); }
+    inline void abort_pin(bool pin_state) { cpu.abort_pin(pin_state); }
+    inline void cop_instruction() { cpu.cop_instruction(); }
+    
+    // Debug functions
+    inline uint8_t get_reg(int r) const { return cpu.get_reg(r); }
+    inline void set_reg(int r, uint8_t val) { cpu.set_reg(r, val); }
+    
+    // State flag helpers
+    inline bool get_state(uint32_t flag) const { return cpu.get_state(flag); }
+    inline void set_state(uint32_t flag) { cpu.set_state(flag); }
+    inline void clear_state(uint32_t flag) { cpu.clear_state(flag); }
 };
 
 } // namespace fam65xx_cpp

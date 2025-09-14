@@ -24,11 +24,20 @@ constexpr uint16_t STATE_RDY_WAIT = 0x0400, STATE_INTERRUPT_SEQUENCE = 0x0800;
 constexpr uint16_t STATE_DMA_CYCLE = 0x1000, STATE_WAI_MODE = 0x2000;
 constexpr uint16_t STATE_STP_MODE = 0x4000, STATE_SO_EDGE = 0x8000;
 
+// Extended state flags for 65C816
+// All 16 bits are used, so we need unique values that don't conflict
+// Since PENDING_DATA (0x0200) might not be actively used, let's repurpose bits
+// Or find a better solution: extend to 32-bit state_flags later
+constexpr uint32_t STATE_ABORT_PENDING = 0x10000; // Bit 16 (requires 32-bit state_flags)
+constexpr uint32_t STATE_COP_PENDING = 0x20000;   // Bit 17 (requires 32-bit state_flags)
+
 // Virtual opcode constants for interrupt handlers (stored at indices 256+ in cycle table)
 constexpr uint16_t VIRTUAL_OPCODE_RESET = 256;  // Virtual opcode for RESET sequence
 constexpr uint16_t VIRTUAL_OPCODE_NMI   = 257;  // Virtual opcode for NMI sequence
 constexpr uint16_t VIRTUAL_OPCODE_IRQ   = 258;  // Virtual opcode for IRQ sequence
 constexpr uint16_t VIRTUAL_OPCODE_BRK   = 259;  // Virtual opcode for BRK sequence
+constexpr uint16_t VIRTUAL_OPCODE_ABORT = 260;  // Virtual opcode for ABORT sequence (65C816)
+constexpr uint16_t VIRTUAL_OPCODE_COP   = 261;  // Virtual opcode for COP sequence (65C816)
 
 // Memory operations - type-safe enum (OPTIMIZED: reads first, writes second for branchless comparison)
 enum class MemOp : uint8_t {
