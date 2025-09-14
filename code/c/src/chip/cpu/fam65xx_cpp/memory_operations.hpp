@@ -120,6 +120,33 @@ public:
         }
         return bus_state;
     }
+    
+    // PERFORMANCE: Fast path memory operation execution (optimized for hot path)
+    template<typename RegArray>
+    static inline bus_state_t execute_memory_operation_fast(bus_state_t bus_state, RegArray& reg,
+                                                          MemOp mem_op) {
+        // Hot path optimization: Most common operations first with branch prediction
+        
+        // HOTTEST PATH: PC read with increment (instruction fetch and operand reads)
+        if (__builtin_expect(mem_op == MemOp::READ_PC_INC, 1)) {
+            const uint16_t pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+            BUS_SET_ADDR(bus_state, pc);
+            const uint16_t new_pc = (pc + 1) & 0xFFFF;
+            reg[CpuReg::PCL] = new_pc & 0xFF;
+            reg[CpuReg::PCH] = (new_pc >> 8) & 0xFF;
+            return bus_state;
+        }
+        
+        // COMMON PATH: Absolute addressing (most memory operations)
+        if (__builtin_expect(mem_op == MemOp::READ_ABS, 1)) {
+            const uint16_t addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
+            BUS_SET_ADDR(bus_state, addr);
+            return bus_state;
+        }
+        
+        // LESS COMMON: Fall back to full implementation for other operations
+        return execute_memory_operation(bus_state, reg, mem_op);
+    }
 };
 
 } // namespace fam65xx_cpp
