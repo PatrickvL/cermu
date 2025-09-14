@@ -7,6 +7,7 @@
 #include "memory_operations.hpp"
 #include "cycle_table_gen.hpp"
 #include "../../../core/system_lines.h"
+#include <cstdio>  // For printf debug output
 
 namespace fam65xx_cpp {
 
@@ -758,6 +759,52 @@ public:
             return mem_op_value < MEMOP_WRITE_CUTOFF;
         }
         return true; // Default to read during opcode fetch
+    }
+    
+    // Get the data that should be written during the current cycle (for test harnesses)
+    inline uint8_t get_write_data() const {
+        if (cycle_step > 0 && (state_flags & STATE_INTERRUPT_SEQUENCE)) {
+            const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
+            const MemOp mem_op = static_cast<MemOp>(cycle.mem_op);
+            const DataOp data_op = static_cast<DataOp>(cycle.data_op);
+            
+            if (mem_op == MemOp::WRITE_SP_DEC && data_op == DataOp::STACK_PUSH) {
+                // Calculate what to push based on cycle step
+                switch (cycle_step) {
+                    case 3: // Push PCH (high byte of return address)
+                        if (opcode == VIRTUAL_OPCODE_BRK) {
+                            // For BRK, return address is PC + 2 from original PC
+                            // Since PC was incremented during opcode fetch, we need PC + 1
+                            uint16_t return_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) + 1;
+                            return (return_addr >> 8) & 0xFF;
+                        } else {
+                            return reg[CpuReg::PCH];
+                        }
+                    case 4: // Push PCL (low byte of return address)
+                        if (opcode == VIRTUAL_OPCODE_BRK) {
+                            // For BRK, return address is PC + 2 from original PC
+                            // Since PC was incremented during opcode fetch, we need PC + 1
+                            uint16_t return_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) + 1;
+                            return return_addr & 0xFF;
+                        } else {
+                            return reg[CpuReg::PCL];
+                        }
+                    case 5: // Push P (processor status)
+                        {
+                            uint8_t push_data = reg[CpuReg::P];
+                            // For BRK, the B flag should be set in the pushed status
+                            if (opcode == VIRTUAL_OPCODE_BRK) {
+                                push_data |= P_BREAK; // Set B flag in pushed status
+                                push_data |= P_IRQ_DIS; // Set I flag in pushed status
+                            }
+                            return push_data;
+                        }
+                    default:
+                        return 0;
+                }
+            }
+        }
+        return 0;
     }
     
     // Cycle counting for performance analysis

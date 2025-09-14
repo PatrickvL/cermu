@@ -1,115 +1,156 @@
-#include "src/chip/cpu/fam65xx_cpp/fam65xx.hpp"
-#include "src/chip/cpu/fam65xx_cpp/cpu_config.hpp"
 #include <iostream>
 #include <iomanip>
-
-// Simple memory implementation for debugging
-class DebugMemory {
-private:
-    uint8_t memory[65536];
-    
-public:
-    DebugMemory() {
-        // Clear memory
-        for (int i = 0; i < 65536; i++) {
-            memory[i] = 0;
-        }
-        
-        // Set reset vector to match Klaus test binary
-        memory[0xFFFC] = 0x9d;  // Low byte of $379d
-        memory[0xFFFD] = 0x37;  // High byte of $379d
-        
-        // Put a simple infinite loop at $0400 for testing
-        memory[0x0400] = 0x4C;  // JMP absolute
-        memory[0x0401] = 0x00;  // Jump to $0400 (infinite loop)
-        memory[0x0402] = 0x04;
-    }
-    
-    uint8_t read(uint16_t addr) {
-        std::cout << "Memory read: $" << std::hex << std::setw(4) << std::setfill('0') 
-                  << addr << " = $" << std::hex << std::setw(2) << std::setfill('0') 
-                  << (int)memory[addr] << std::dec << std::endl;
-        return memory[addr];
-    }
-    
-    void write(uint16_t addr, uint8_t data) {
-        std::cout << "Memory write: $" << std::hex << std::setw(4) << std::setfill('0') 
-                  << addr << " = $" << std::hex << std::setw(2) << std::setfill('0') 
-                  << (int)data << std::dec << std::endl;
-        memory[addr] = data;
-    }
-};
+#include "src/chip/cpu/fam65xx_cpp/fam65xx.hpp"
+#include "src/chip/cpu/fam65xx_cpp/cpu_config.hpp"
+#include "src/core/system_lines.h"
 
 int main() {
-    std::cout << "=== DEBUG RESET SEQUENCE TEST ===" << std::endl;
-    
-    // Create CPU and memory
-    fam65xx_cpp::fam65xx<config_6502> cpu;
-    DebugMemory memory;
-    
-    std::cout << "Initial CPU state:" << std::endl;
-    std::cout << "PC: $" << std::hex << std::setw(4) << std::setfill('0') << cpu.get_pc() << std::dec << std::endl;
-    std::cout << "State flags: $" << std::hex << std::setw(4) << std::setfill('0') << cpu.get_state_flags() << std::dec << std::endl;
-    std::cout << "Opcode: $" << std::hex << std::setw(4) << std::setfill('0') << cpu.get_opcode() << std::dec << std::endl;
-    std::cout << "Cycle step: " << (int)cpu.get_cycle_step() << std::endl;
+    // Test direct RESET cycle function call
+    std::cout << "=== DIRECT RESET CYCLE FUNCTION TEST ===" << std::endl;
+    for (int cycle = 1; cycle <= 7; ++cycle) {
+        auto desc = fam65xx_cpp::CycleInterrupts<config_6502>::get_reset_cycle(cycle);
+        std::cout << "Direct RESET cycle " << cycle << ":" << std::endl;
+        std::cout << "  mem_op: " << (int)desc.mem_op << std::endl;
+        std::cout << "  data_op: " << (int)desc.data_op << std::endl;
+        std::cout << "  alu_op: " << (int)desc.alu_op << std::endl;
+        std::cout << "  sync: " << (desc.is_sync() ? "YES" : "NO") << std::endl;
+    }
     std::cout << std::endl;
+
+    // Test table indexing directly
+    std::cout << "=== TABLE INDEX TEST ===" << std::endl;
+    fam65xx_cpp::fam65xx<config_6502> test_cpu;
+    for (int cycle = 1; cycle <= 7; ++cycle) {
+        auto desc = test_cpu.GET_CYCLE(256, cycle);  // VIRTUAL_OPCODE_RESET = 256
+        std::cout << "Table RESET cycle " << cycle << ":" << std::endl;
+        std::cout << "  mem_op: " << (int)desc.mem_op << std::endl;
+        std::cout << "  data_op: " << (int)desc.data_op << std::endl;
+        std::cout << "  alu_op: " << (int)desc.alu_op << std::endl;
+        std::cout << "  sync: " << (desc.is_sync() ? "YES" : "NO") << std::endl;
+        
+        // Show index calculation
+        size_t index = 256 * 8 + (cycle - 1);
+        std::cout << "  table index: " << index << std::endl;
+    }
+    std::cout << std::endl;
+
+    fam65xx_cpp::fam65xx<config_6502> cpu;
+    bus_state_t bus_state = BUS_BIT(BUS_RDY_BIT); // Set RDY high (ready)
     
-    // Execute cycles and trace the reset sequence
-    for (int cycle = 0; cycle < 20; cycle++) {
-        std::cout << "=== CYCLE " << cycle + 1 << " ===" << std::endl;
+    // Initialize CPU
+    cpu.init();
+    cpu.set_pc(0x1234);
+    cpu.set_sp(0x55);
+    
+    std::cout << "Initial state:" << std::endl;
+    std::cout << "  PC: $" << std::hex << cpu.get_pc() << std::endl;
+    std::cout << "  SP: $" << std::hex << (int)cpu.get_sp() << std::endl;
+    std::cout << "  State flags: $" << std::hex << cpu.get_state_flags() << std::endl;
+    std::cout << "  Opcode: $" << std::hex << cpu.get_opcode() << std::endl;
+    std::cout << "  Cycle step: " << (int)cpu.get_cycle_step() << std::endl;
+    
+    // Trigger RESET
+    cpu.reset();
+    
+    std::cout << std::endl << "After reset() call:" << std::endl;
+    std::cout << "  PC: $" << std::hex << cpu.get_pc() << std::endl;
+    std::cout << "  SP: $" << std::hex << (int)cpu.get_sp() << std::endl;
+    std::cout << "  State flags: $" << std::hex << cpu.get_state_flags() << std::endl;
+    std::cout << "  Opcode: $" << std::hex << cpu.get_opcode() << std::endl;
+    std::cout << "  Cycle step: " << (int)cpu.get_cycle_step() << std::endl;
+    
+    // Execute cycles and debug the RESET sequence
+    for (int cycle = 1; cycle <= 8; cycle++) {
+        std::cout << std::endl << "Executing cycle " << cycle << ":" << std::endl;
         
-        // Set up bus state
-        bus_state_t bus_state = 0;
-        bus_state |= BUS_BIT(BUS_RW_BIT);  // Default to read
-        bus_state |= BUS_BIT(BUS_RDY_BIT); // CPU is ready
+        // Get state before cycle execution
+        uint16_t addr_before = cpu.get_address();
+        bool rw_before = cpu.get_rw();
+        uint16_t opcode_before = cpu.get_opcode();
+        uint8_t step_before = cpu.get_cycle_step();
+        uint16_t state_flags_before = cpu.get_state_flags();
         
-        // Execute CPU cycle
-        std::cout << "Before cycle_tick:" << std::endl;
-        std::cout << "  PC: $" << std::hex << std::setw(4) << std::setfill('0') << cpu.get_pc() << std::dec << std::endl;
-        std::cout << "  State flags: $" << std::hex << std::setw(4) << std::setfill('0') << cpu.get_state_flags() << std::dec << std::endl;
-        std::cout << "  Opcode: $" << std::hex << std::setw(4) << std::setfill('0') << cpu.get_opcode() << std::dec << std::endl;
-        std::cout << "  Cycle step: " << (int)cpu.get_cycle_step() << std::endl;
+        std::cout << "  Before cycle:" << std::endl;
+        std::cout << "    Address: $" << std::hex << std::setw(4) << std::setfill('0') << addr_before << std::endl;
+        std::cout << "    R/W: " << (rw_before ? "R" : "W") << std::endl;
+        std::cout << "    Opcode: $" << std::hex << opcode_before << std::endl;
+        std::cout << "    Step: " << (int)step_before << std::endl;
+        std::cout << "    State flags: $" << std::hex << state_flags_before << std::endl;
         
+        // Check what cycle descriptor would be returned for this step
+        if (opcode_before == 0x100 && step_before > 0) { // VIRTUAL_OPCODE_RESET
+            fam65xx_cpp::cycle_desc_t cycle_desc = cpu.GET_CYCLE(opcode_before, step_before);
+            std::cout << "    Cycle descriptor for step " << (int)step_before << ":" << std::endl;
+            std::cout << "      mem_op: " << (int)cycle_desc.mem_op << std::endl;
+            std::cout << "      data_op: " << (int)cycle_desc.data_op << std::endl;
+            std::cout << "      alu_op: " << (int)cycle_desc.alu_op << std::endl;
+            std::cout << "      sync: " << (cycle_desc.is_sync() ? "YES" : "NO") << std::endl;
+            
+            // Show what SHOULD be returned for this step according to direct function call
+            auto expected_desc = fam65xx_cpp::CycleInterrupts<config_6502>::get_reset_cycle(step_before);
+            std::cout << "    Expected descriptor for step " << (int)step_before << ":" << std::endl;
+            std::cout << "      mem_op: " << (int)expected_desc.mem_op << std::endl;
+            std::cout << "      data_op: " << (int)expected_desc.data_op << std::endl;
+            std::cout << "      alu_op: " << (int)expected_desc.alu_op << std::endl;
+            std::cout << "      sync: " << (expected_desc.is_sync() ? "YES" : "NO") << std::endl;
+        }
+        
+        // Set up data for reads
+        if (rw_before) {
+            uint8_t read_data = 0x00;
+            if (addr_before == 0xFFFC) read_data = 0x00; // RESET vector low
+            if (addr_before == 0xFFFD) read_data = 0x80; // RESET vector high
+            BUS_SET_DATA(bus_state, read_data);
+        }
+        
+        // Test what the table returns for step 1 since that's where the issue might be
+        if (cycle == 1 && opcode_before == 0x0) {
+            std::cout << "    RESET step 1 table lookup:" << std::endl;
+            auto step1_desc = cpu.GET_CYCLE(0x100, 1);
+            std::cout << "      mem_op: " << (int)step1_desc.mem_op << std::endl;
+            std::cout << "      data_op: " << (int)step1_desc.data_op << std::endl;
+            std::cout << "      alu_op: " << (int)step1_desc.alu_op << std::endl;
+            std::cout << "      sync: " << (step1_desc.is_sync() ? "YES" : "NO") << std::endl;
+            std::cout << "      sync raw: " << (int)step1_desc.sync << std::endl;
+            
+            // Also check the raw bytes of the descriptor
+            uint16_t* raw_desc = reinterpret_cast<uint16_t*>(&step1_desc);
+            std::cout << "      raw descriptor: 0x" << std::hex << *raw_desc << std::dec << std::endl;
+        }
+        
+        // Execute cycle
         bus_state = cpu.cycle_tick(bus_state);
         
-        std::cout << "After cycle_tick:" << std::endl;
-        std::cout << "  Address: $" << std::hex << std::setw(4) << std::setfill('0') << BUS_GET_ADDR(bus_state) << std::dec << std::endl;
-        std::cout << "  RW: " << ((bus_state & BUS_BIT(BUS_RW_BIT)) ? "READ" : "write") << std::endl;
+        // Get state after cycle execution
+        uint16_t addr_after = cpu.get_address();
+        bool rw_after = cpu.get_rw();
+        uint16_t opcode_after = cpu.get_opcode();
+        uint8_t step_after = cpu.get_cycle_step();
+        uint16_t state_flags_after = cpu.get_state_flags();
+        uint8_t bus_data = BUS_GET_DATA(bus_state);
         
-        // Handle memory operations
-        if (bus_state & BUS_BIT(BUS_RW_BIT)) {
-            // Read cycle
-            uint16_t addr = BUS_GET_ADDR(bus_state);
-            uint8_t data = memory.read(addr);
-            BUS_SET_DATA(bus_state, data);
-            std::cout << "  Data on bus: $" << std::hex << std::setw(2) << std::setfill('0') << (int)data << std::dec << std::endl;
-        } else {
-            // Write cycle
-            uint16_t addr = BUS_GET_ADDR(bus_state);
-            uint8_t data = BUS_GET_DATA(bus_state);
-            memory.write(addr, data);
-            std::cout << "  Data written: $" << std::hex << std::setw(2) << std::setfill('0') << (int)data << std::dec << std::endl;
-        }
+        std::cout << "  After cycle:" << std::endl;
+        std::cout << "    Address: $" << std::hex << std::setw(4) << std::setfill('0') << addr_after << std::endl;
+        std::cout << "    R/W: " << (rw_after ? "R" : "W") << std::endl;
+        std::cout << "    Opcode: $" << std::hex << opcode_after << std::endl;
+        std::cout << "    Step: " << (int)step_after << std::endl;
+        std::cout << "    State flags: $" << std::hex << state_flags_after << std::endl;
+        std::cout << "    Bus data: $" << std::hex << std::setw(2) << std::setfill('0') << (int)bus_data << std::endl;
         
-        std::cout << "Final state:" << std::endl;
-        std::cout << "  PC: $" << std::hex << std::setw(4) << std::setfill('0') << cpu.get_pc() << std::dec << std::endl;
-        std::cout << "  State flags: $" << std::hex << std::setw(4) << std::setfill('0') << cpu.get_state_flags() << std::dec << std::endl;
-        std::cout << "  Opcode: $" << std::hex << std::setw(4) << std::setfill('0') << cpu.get_opcode() << std::dec << std::endl;
-        std::cout << "  Cycle step: " << (int)cpu.get_cycle_step() << std::endl;
-        std::cout << std::endl;
+        // Check if we're still in interrupt sequence
+        bool in_interrupt_seq = (state_flags_after & 0x800) != 0; // STATE_INTERRUPT_SEQUENCE
+        std::cout << "    In interrupt sequence: " << (in_interrupt_seq ? "YES" : "NO") << std::endl;
         
-        // Check if PC has changed from $0000
-        if (cpu.get_pc() != 0x0000) {
-            std::cout << "SUCCESS: PC changed to $" << std::hex << std::setw(4) << std::setfill('0') << cpu.get_pc() << std::dec << std::endl;
-            break;
-        }
-        
-        // Stop if we've clearly finished reset sequence
-        if (cycle > 10 && cpu.get_cycle_step() == 0) {
-            std::cout << "Reset sequence appears complete but PC still at $0000" << std::endl;
+        if (!in_interrupt_seq && cycle > 1) {
+            std::cout << "  RESET sequence completed at cycle " << cycle << std::endl;
             break;
         }
     }
+    
+    std::cout << std::endl << "Final state:" << std::endl;
+    std::cout << "  PC: $" << std::hex << cpu.get_pc() << std::endl;
+    std::cout << "  SP: $" << std::hex << (int)cpu.get_sp() << std::endl;
+    std::cout << "  P: $" << std::hex << (int)cpu.get_p() << std::endl;
     
     return 0;
 }

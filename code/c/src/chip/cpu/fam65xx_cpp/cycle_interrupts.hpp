@@ -14,15 +14,15 @@ public:
 
     // === INTERRUPT CYCLE SEQUENCES (unified using shared patterns) ===
     
-    // Base interrupt sequence generator - used by BRK, NMI, IRQ, and RESET
+    // RESET sequence - 7 cycles but NO stack pushes (hardware difference from other interrupts)
     static constexpr cycle_desc_t get_reset_cycle(uint8_t cycle) {
-        if (cycle == 1) return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP);           // Dummy read (RESET specific)
-        if (cycle == 2) return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP);           // Dummy read (RESET specific)
-        if (cycle == 3) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP);  // Push PCH
-        if (cycle == 4) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP);  // Push PCL
-        if (cycle == 5) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::SEI);  // Push P, set flag
-        if (cycle == 6) return CD_MAKE(MemOp::READ_VECTOR, DataOp::INTERRUPT_VEC, AluOp::NOP);   // Read vector low
-        if (cycle == 7) return CD_MAKE_SYNC(MemOp::READ_VECTOR, DataOp::INTERRUPT_VEC, AluOp::NOP); // Read vector high, sync
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP);           // Dummy read PC
+        if (cycle == 2) return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP);           // Dummy read PC+1
+        if (cycle == 3) return CD_MAKE(MemOp::READ_SP, DataOp::NOP, AluOp::NOP);           // Dummy read stack (SP not decremented)
+        if (cycle == 4) return CD_MAKE(MemOp::READ_SP, DataOp::NOP, AluOp::NOP);           // Dummy read stack (SP not decremented)
+        if (cycle == 5) return CD_MAKE(MemOp::READ_SP, DataOp::NOP, AluOp::SEI);           // Dummy read stack, set I flag
+        if (cycle == 6) return CD_MAKE(MemOp::READ_VECTOR, DataOp::INTERRUPT_VEC, AluOp::NOP);   // Read vector low ($FFFC)
+        if (cycle == 7) return CD_MAKE_SYNC(MemOp::READ_VECTOR, DataOp::INTERRUPT_VEC, AluOp::NOP); // Read vector high ($FFFD), sync
         return addr::make_empty_cycle();
     }
     

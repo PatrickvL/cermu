@@ -15,7 +15,7 @@ public:
         // Optimized flag computation using bit manipulation
         constexpr uint8_t NZ_MASK = P_NEGATIVE | P_ZERO;
         const uint8_t flags = ((value == 0) ? P_ZERO : 0) |
-                              ((value & 0x80) ? P_NEGATIVE : 0);
+                              (value & P_NEGATIVE);
         
         reg[CpuReg::P] = (reg[CpuReg::P] & ~NZ_MASK) | flags;
     }
