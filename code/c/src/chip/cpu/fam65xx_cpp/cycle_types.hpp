@@ -78,7 +78,7 @@ constexpr size_t max_value_for_bits() {
 }
 
 // MEMOP FIELD VALIDATION (4 bits = max value 15)
-static_assert(static_cast<size_t>(MemOp::READ_INDIRECT) <= max_value_for_bits<4>(),
+static_assert(static_cast<size_t>(MemOp::READ_VECTOR) <= max_value_for_bits<4>(),
     "MemOp enum values exceed 4-bit field capacity in cycle_desc_t! "
     "Maximum allowed value: 15. Consider expanding mem_op bit field.");
 
@@ -90,7 +90,7 @@ constexpr size_t count_enum_values<MemOp>() {
     return 15; // NOP=0, READ_PC_INC=1, READ_PC=2, READ_ABS=3, WRITE_ABS=4,
                // READ_ZP=5, WRITE_ZP=6, READ_ZPX=7, WRITE_ZPX=8, READ_ZPY=9,
                // WRITE_ZPY=10, READ_SP=11, WRITE_SP_DEC=12, READ_SP_INC=13,
-               // READ_INDIRECT=14
+               // READ_VECTOR=14
 }
 
 static_assert(count_enum_values<MemOp>() <= (max_value_for_bits<4>() + 1),

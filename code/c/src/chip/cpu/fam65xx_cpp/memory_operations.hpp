@@ -44,7 +44,7 @@ public:
                 bus_state &= ~BUS_RW_BIT; // Write (RW=0)
                 [[fallthrough]];
             case MemOp::READ_ABS:
-            case MemOp::READ_INDIRECT:
+            // Note: READ_VECTOR is aliased to READ_ABS, so it's handled by this same case
                 addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
                 BUS_SET_ADDR(bus_state, addr);
                 break;

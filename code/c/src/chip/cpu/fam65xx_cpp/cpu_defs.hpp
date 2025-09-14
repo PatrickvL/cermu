@@ -34,7 +34,8 @@ enum class MemOp : uint8_t {
     NOP = 0, READ_PC_INC, READ_PC, READ_ABS, WRITE_ABS,
     READ_ZP, WRITE_ZP, READ_ZPX, WRITE_ZPX, READ_ZPY,
     WRITE_ZPY, READ_SP, WRITE_SP_DEC, READ_SP_INC,
-    READ_INDIRECT
+    // Interrupt vector reading - functionally identical to READ_ABS but semantically distinct
+    READ_VECTOR = READ_ABS  // Alias to READ_ABS - same memory operation, different semantic meaning
 };
 
 // Data operations - type-safe enum
