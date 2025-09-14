@@ -345,21 +345,31 @@ public:
             uint8_t push_data = 0;
             switch (cycle_step) {
                 case 3: // Push PCH (high byte of return address)
-                    if (opcode == VIRTUAL_OPCODE_BRK) {
-                        // For BRK, return address is PC + 2 from original PC
+                    if (opcode == VIRTUAL_OPCODE_BRK || opcode == VIRTUAL_OPCODE_COP) {
+                        // For BRK and COP, return address is PC + 2 from original PC
                         // Since PC was incremented during opcode fetch, we need PC + 1
                         uint16_t return_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) + 1;
                         push_data = (return_addr >> 8) & 0xFF;
+                    } else if (opcode == VIRTUAL_OPCODE_ABORT) {
+                        // For ABORT, push the current instruction address (PC was incremented during fetch)
+                        // ABORT should return to the aborted instruction, so push PC - 1
+                        uint16_t abort_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) - 1;
+                        push_data = (abort_addr >> 8) & 0xFF;
                     } else {
                         push_data = reg[CpuReg::PCH];
                     }
                     break;
                 case 4: // Push PCL (low byte of return address)
-                    if (opcode == VIRTUAL_OPCODE_BRK) {
-                        // For BRK, return address is PC + 2 from original PC
+                    if (opcode == VIRTUAL_OPCODE_BRK || opcode == VIRTUAL_OPCODE_COP) {
+                        // For BRK and COP, return address is PC + 2 from original PC
                         // Since PC was incremented during opcode fetch, we need PC + 1
                         uint16_t return_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) + 1;
                         push_data = return_addr & 0xFF;
+                    } else if (opcode == VIRTUAL_OPCODE_ABORT) {
+                        // For ABORT, push the current instruction address (PC was incremented during fetch)
+                        // ABORT should return to the aborted instruction, so push PC - 1
+                        uint16_t abort_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) - 1;
+                        push_data = abort_addr & 0xFF;
                     } else {
                         push_data = reg[CpuReg::PCL];
                     }
@@ -820,20 +830,30 @@ public:
                 // Calculate what to push based on cycle step
                 switch (cycle_step) {
                     case 3: // Push PCH (high byte of return address)
-                        if (opcode == VIRTUAL_OPCODE_BRK) {
-                            // For BRK, return address is PC + 2 from original PC
+                        if (opcode == VIRTUAL_OPCODE_BRK || opcode == VIRTUAL_OPCODE_COP) {
+                            // For BRK and COP, return address is PC + 2 from original PC
                             // Since PC was incremented during opcode fetch, we need PC + 1
                             uint16_t return_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) + 1;
                             return (return_addr >> 8) & 0xFF;
+                        } else if (opcode == VIRTUAL_OPCODE_ABORT) {
+                            // For ABORT, push the current instruction address (PC was incremented during fetch)
+                            // ABORT should return to the aborted instruction, so push PC - 1
+                            uint16_t abort_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) - 1;
+                            return (abort_addr >> 8) & 0xFF;
                         } else {
                             return reg[CpuReg::PCH];
                         }
                     case 4: // Push PCL (low byte of return address)
-                        if (opcode == VIRTUAL_OPCODE_BRK) {
-                            // For BRK, return address is PC + 2 from original PC
+                        if (opcode == VIRTUAL_OPCODE_BRK || opcode == VIRTUAL_OPCODE_COP) {
+                            // For BRK and COP, return address is PC + 2 from original PC
                             // Since PC was incremented during opcode fetch, we need PC + 1
                             uint16_t return_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) + 1;
                             return return_addr & 0xFF;
+                        } else if (opcode == VIRTUAL_OPCODE_ABORT) {
+                            // For ABORT, push the current instruction address (PC was incremented during fetch)
+                            // ABORT should return to the aborted instruction, so push PC - 1
+                            uint16_t abort_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) - 1;
+                            return abort_addr & 0xFF;
                         } else {
                             return reg[CpuReg::PCL];
                         }

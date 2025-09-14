@@ -13,11 +13,13 @@ static constexpr uint16_t VIRTUAL_OPCODE_RESET = 256;
 static constexpr uint16_t VIRTUAL_OPCODE_NMI   = 257;
 static constexpr uint16_t VIRTUAL_OPCODE_IRQ   = 258;
 static constexpr uint16_t VIRTUAL_OPCODE_BRK   = 259;
+static constexpr uint16_t VIRTUAL_OPCODE_ABORT = 260;  // 65C816 ABORT interrupt
+static constexpr uint16_t VIRTUAL_OPCODE_COP   = 261;  // 65C816 COP instruction
 
 // Constants for 1D array layout
 static constexpr uint8_t MAX_CYCLES = 8;
-static constexpr uint16_t TOTAL_OPCODES = 260;  // 256 regular + 4 virtual opcodes
-static constexpr size_t CYCLE_TABLE_SIZE = TOTAL_OPCODES * MAX_CYCLES;  // 259 * 8 = 2072
+static constexpr uint16_t TOTAL_OPCODES = 262;  // 256 regular + 6 virtual opcodes (RESET, NMI, IRQ, BRK, ABORT, COP)
+static constexpr size_t CYCLE_TABLE_SIZE = TOTAL_OPCODES * MAX_CYCLES;  // 262 * 8 = 2096
 
 // Cycle descriptor structure - uses bit fields for packing (16 bits total)
 struct cycle_desc_t {
