@@ -23,11 +23,13 @@ public:
         switch (OpCode) {
             // For all other opcodes, return empty cycle
             default: return addr::make_empty_cycle();  // Fallback for any missing opcodes
-            // Handle virtual opcodes (256, 257, 258, 259)
+            // Handle virtual opcodes (256, 257, 258, 259, 260, 261)
             case VIRTUAL_OPCODE_RESET: return inst::get_reset_cycle(Cycle);
             case VIRTUAL_OPCODE_NMI: return inst::get_nmi_cycle(Cycle);
             case VIRTUAL_OPCODE_IRQ: return inst::get_irq_cycle(Cycle);
             case VIRTUAL_OPCODE_BRK: return inst::make_brk(Cycle);
+            case VIRTUAL_OPCODE_ABORT: return inst::get_abort_cycle(Cycle);
+            case VIRTUAL_OPCODE_COP: return inst::get_cop_cycle(Cycle);
             // Handle regular opcodes (0-255) - COMPLETE 6502 INSTRUCTION SET
             case 0x00: return inst::make_brk(Cycle);                        // BRK impl
             case 0x10: return addr::make_branch(Cycle);                // BPL rel
@@ -71,7 +73,9 @@ public:
 
             // Column 2: Illegal/Undocumented/65C02 - variant-specific behavior
             case 0x02:
-                if constexpr (BusConfig::has_illegal_opcodes) {
+                if constexpr (BusConfig::has_abort_pin) {
+                    return inst::get_cop_cycle(Cycle);              // COP signature (65C816)
+                } else if constexpr (BusConfig::has_illegal_opcodes) {
                     return inst::make_nop(Cycle);                   // HLT/JAM (NMOS illegal)
                 } else {
                     return inst::make_nop(Cycle);                   // NOP (CMOS)
@@ -572,6 +576,9 @@ public:
         validate_sync_placement<VIRTUAL_OPCODE_RESET>(),  // RESET
         validate_sync_placement<VIRTUAL_OPCODE_NMI>(),    // NMI
         validate_sync_placement<VIRTUAL_OPCODE_IRQ>(),    // IRQ
+        validate_sync_placement<VIRTUAL_OPCODE_BRK>(),    // BRK
+        validate_sync_placement<VIRTUAL_OPCODE_ABORT>(),  // ABORT
+        validate_sync_placement<VIRTUAL_OPCODE_COP>(),    // COP
         true  // Final value for the expression
     );
 

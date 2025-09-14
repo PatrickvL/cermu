@@ -71,6 +71,30 @@ public:
         if (cycle == 7) return CD_MAKE_SYNC(MemOp::READ_VECTOR, DataOp::INTERRUPT_VEC, AluOp::NOP); // Read vector high, sync
         return addr::make_empty_cycle();
     }
+    
+    // ABORT sequence (65C816) - Hardware interrupt, identical to NMI/IRQ pattern
+    static constexpr cycle_desc_t get_abort_cycle(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);     // Read next instruction byte
+        if (cycle == 2) return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP);         // Read next instruction byte (dummy)
+        if (cycle == 3) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP);  // Push PCH
+        if (cycle == 4) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP);  // Push PCL
+        if (cycle == 5) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::SEI);  // Push P, set I flag
+        if (cycle == 6) return CD_MAKE(MemOp::READ_VECTOR, DataOp::INTERRUPT_VEC, AluOp::NOP);   // Read vector low ($FFE8)
+        if (cycle == 7) return CD_MAKE_SYNC(MemOp::READ_VECTOR, DataOp::INTERRUPT_VEC, AluOp::NOP); // Read vector high ($FFE9), sync
+        return addr::make_empty_cycle();
+    }
+    
+    // COP sequence (65C816) - Software interrupt, similar to BRK but different vector
+    static constexpr cycle_desc_t get_cop_cycle(uint8_t cycle) {
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);     // Read signature byte
+        if (cycle == 2) return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP);         // Read signature byte (dummy)
+        if (cycle == 3) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP);  // Push PCH
+        if (cycle == 4) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP);  // Push PCL
+        if (cycle == 5) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::SEI);  // Push P, set I flag
+        if (cycle == 6) return CD_MAKE(MemOp::READ_VECTOR, DataOp::INTERRUPT_VEC, AluOp::NOP);   // Read vector low ($FFE4)
+        if (cycle == 7) return CD_MAKE_SYNC(MemOp::READ_VECTOR, DataOp::INTERRUPT_VEC, AluOp::NOP); // Read vector high ($FFE5), sync
+        return addr::make_empty_cycle();
+    }
 };
 
 } // namespace fam65xx_cpp
