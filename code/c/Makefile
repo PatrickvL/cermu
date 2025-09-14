@@ -276,6 +276,45 @@ fam65xx_cpp_65c02_test_runner/fast:
 .PHONY : fam65xx_cpp_65c02_test_runner/fast
 
 #=============================================================================
+# Target rules for targets named nmi_edge_detection_test
+
+# Build rule for target.
+nmi_edge_detection_test: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 nmi_edge_detection_test
+.PHONY : nmi_edge_detection_test
+
+# fast build rule for target.
+nmi_edge_detection_test/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/nmi_edge_detection_test.dir/build.make tests/CMakeFiles/nmi_edge_detection_test.dir/build
+.PHONY : nmi_edge_detection_test/fast
+
+#=============================================================================
+# Target rules for targets named irq_level_handling_test
+
+# Build rule for target.
+irq_level_handling_test: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 irq_level_handling_test
+.PHONY : irq_level_handling_test
+
+# fast build rule for target.
+irq_level_handling_test/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/irq_level_handling_test.dir/build.make tests/CMakeFiles/irq_level_handling_test.dir/build
+.PHONY : irq_level_handling_test/fast
+
+#=============================================================================
+# Target rules for targets named brk_flag_setting_test
+
+# Build rule for target.
+brk_flag_setting_test: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 brk_flag_setting_test
+.PHONY : brk_flag_setting_test
+
+# fast build rule for target.
+brk_flag_setting_test/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/brk_flag_setting_test.dir/build.make tests/CMakeFiles/brk_flag_setting_test.dir/build
+.PHONY : brk_flag_setting_test/fast
+
+#=============================================================================
 # Target rules for targets named run_comprehensive_test
 
 # Build rule for target.
@@ -786,12 +825,15 @@ help:
 	@echo "... run_all_tests"
 	@echo "... run_basic_test"
 	@echo "... run_comprehensive_test"
+	@echo "... brk_flag_setting_test"
 	@echo "... c64emu"
 	@echo "... fam65xx_cpp_65c02_test_runner"
 	@echo "... fam65xx_cpp_klaus_test_runner"
 	@echo "... fam65xx_cpp_lorenz_test_runner"
+	@echo "... irq_level_handling_test"
 	@echo "... json_parser"
 	@echo "... mos6510_lib"
+	@echo "... nmi_edge_detection_test"
 	@echo "... test_mos6510_basic_tests"
 	@echo "... test_mos6510_comprehensive"
 	@echo "... src/chip/cpu/mos6510/mos6510.o"

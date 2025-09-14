@@ -5,9 +5,9 @@
 # This file includes the relevant testing commands required for 
 # testing this directory and lists subdirectories to be tested as well.
 add_test(comprehensive_test "/home/patrick/Git/aiemu/code/c/tests/test_mos6510_comprehensive")
-set_tests_properties(comprehensive_test PROPERTIES  PASS_REGULAR_EXPRESSION "ALL TESTS PASSED" TIMEOUT "60" _BACKTRACE_TRIPLES "/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;164;add_test;/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;0;")
+set_tests_properties(comprehensive_test PROPERTIES  PASS_REGULAR_EXPRESSION "ALL TESTS PASSED" TIMEOUT "60" _BACKTRACE_TRIPLES "/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;201;add_test;/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;0;")
 add_test(basic_test "/home/patrick/Git/aiemu/code/c/tests/test_mos6510_basic_tests")
-set_tests_properties(basic_test PROPERTIES  PASS_REGULAR_EXPRESSION "ALL TESTS PASSED" TIMEOUT "30" _BACKTRACE_TRIPLES "/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;172;add_test;/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;0;")
+set_tests_properties(basic_test PROPERTIES  PASS_REGULAR_EXPRESSION "ALL TESTS PASSED" TIMEOUT "30" _BACKTRACE_TRIPLES "/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;209;add_test;/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;0;")
 add_test(fam65xx_cpp_klaus_test "/home/patrick/Git/aiemu/code/c/tests/fam65xx_cpp_klaus_test_runner" "--functional")
-set_tests_properties(fam65xx_cpp_klaus_test PROPERTIES  PASS_REGULAR_EXPRESSION "ALL TESTS PASSED" TIMEOUT "300" WORKING_DIRECTORY "/home/patrick/Git/aiemu/code/c/tests/.." _BACKTRACE_TRIPLES "/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;180;add_test;/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;0;")
+set_tests_properties(fam65xx_cpp_klaus_test PROPERTIES  PASS_REGULAR_EXPRESSION "ALL TESTS PASSED" TIMEOUT "300" WORKING_DIRECTORY "/home/patrick/Git/aiemu/code/c/tests/.." _BACKTRACE_TRIPLES "/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;217;add_test;/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;0;")
 subdirs("cpu_build")

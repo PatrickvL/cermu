@@ -270,6 +270,48 @@ fam65xx_cpp_65c02_test_runner/fast:
 .PHONY : fam65xx_cpp_65c02_test_runner/fast
 
 # Convenience name for target.
+tests/CMakeFiles/nmi_edge_detection_test.dir/rule:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/nmi_edge_detection_test.dir/rule
+.PHONY : tests/CMakeFiles/nmi_edge_detection_test.dir/rule
+
+# Convenience name for target.
+nmi_edge_detection_test: tests/CMakeFiles/nmi_edge_detection_test.dir/rule
+.PHONY : nmi_edge_detection_test
+
+# fast build rule for target.
+nmi_edge_detection_test/fast:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/nmi_edge_detection_test.dir/build.make tests/CMakeFiles/nmi_edge_detection_test.dir/build
+.PHONY : nmi_edge_detection_test/fast
+
+# Convenience name for target.
+tests/CMakeFiles/irq_level_handling_test.dir/rule:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/irq_level_handling_test.dir/rule
+.PHONY : tests/CMakeFiles/irq_level_handling_test.dir/rule
+
+# Convenience name for target.
+irq_level_handling_test: tests/CMakeFiles/irq_level_handling_test.dir/rule
+.PHONY : irq_level_handling_test
+
+# fast build rule for target.
+irq_level_handling_test/fast:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/irq_level_handling_test.dir/build.make tests/CMakeFiles/irq_level_handling_test.dir/build
+.PHONY : irq_level_handling_test/fast
+
+# Convenience name for target.
+tests/CMakeFiles/brk_flag_setting_test.dir/rule:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/brk_flag_setting_test.dir/rule
+.PHONY : tests/CMakeFiles/brk_flag_setting_test.dir/rule
+
+# Convenience name for target.
+brk_flag_setting_test: tests/CMakeFiles/brk_flag_setting_test.dir/rule
+.PHONY : brk_flag_setting_test
+
+# fast build rule for target.
+brk_flag_setting_test/fast:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/brk_flag_setting_test.dir/build.make tests/CMakeFiles/brk_flag_setting_test.dir/build
+.PHONY : brk_flag_setting_test/fast
+
+# Convenience name for target.
 tests/CMakeFiles/run_comprehensive_test.dir/rule:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/run_comprehensive_test.dir/rule
 .PHONY : tests/CMakeFiles/run_comprehensive_test.dir/rule
@@ -431,6 +473,30 @@ __/test_mos6510_basic.c.s:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test_mos6510_basic_tests.dir/build.make tests/CMakeFiles/test_mos6510_basic_tests.dir/__/test_mos6510_basic.c.s
 .PHONY : __/test_mos6510_basic.c.s
 
+brk_flag_setting_test.o: brk_flag_setting_test.cpp.o
+.PHONY : brk_flag_setting_test.o
+
+# target to build an object file
+brk_flag_setting_test.cpp.o:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/brk_flag_setting_test.dir/build.make tests/CMakeFiles/brk_flag_setting_test.dir/brk_flag_setting_test.cpp.o
+.PHONY : brk_flag_setting_test.cpp.o
+
+brk_flag_setting_test.i: brk_flag_setting_test.cpp.i
+.PHONY : brk_flag_setting_test.i
+
+# target to preprocess a source file
+brk_flag_setting_test.cpp.i:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/brk_flag_setting_test.dir/build.make tests/CMakeFiles/brk_flag_setting_test.dir/brk_flag_setting_test.cpp.i
+.PHONY : brk_flag_setting_test.cpp.i
+
+brk_flag_setting_test.s: brk_flag_setting_test.cpp.s
+.PHONY : brk_flag_setting_test.s
+
+# target to generate assembly for a file
+brk_flag_setting_test.cpp.s:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/brk_flag_setting_test.dir/build.make tests/CMakeFiles/brk_flag_setting_test.dir/brk_flag_setting_test.cpp.s
+.PHONY : brk_flag_setting_test.cpp.s
+
 fam65xx_cpp_65c02_test_harness.o: fam65xx_cpp_65c02_test_harness.cpp.o
 .PHONY : fam65xx_cpp_65c02_test_harness.o
 
@@ -575,6 +641,30 @@ fam65xx_cpp_test_harness.cpp.s:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/fam65xx_cpp_test_harness.cpp.s
 .PHONY : fam65xx_cpp_test_harness.cpp.s
 
+irq_level_handling_test.o: irq_level_handling_test.cpp.o
+.PHONY : irq_level_handling_test.o
+
+# target to build an object file
+irq_level_handling_test.cpp.o:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/irq_level_handling_test.dir/build.make tests/CMakeFiles/irq_level_handling_test.dir/irq_level_handling_test.cpp.o
+.PHONY : irq_level_handling_test.cpp.o
+
+irq_level_handling_test.i: irq_level_handling_test.cpp.i
+.PHONY : irq_level_handling_test.i
+
+# target to preprocess a source file
+irq_level_handling_test.cpp.i:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/irq_level_handling_test.dir/build.make tests/CMakeFiles/irq_level_handling_test.dir/irq_level_handling_test.cpp.i
+.PHONY : irq_level_handling_test.cpp.i
+
+irq_level_handling_test.s: irq_level_handling_test.cpp.s
+.PHONY : irq_level_handling_test.s
+
+# target to generate assembly for a file
+irq_level_handling_test.cpp.s:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/irq_level_handling_test.dir/build.make tests/CMakeFiles/irq_level_handling_test.dir/irq_level_handling_test.cpp.s
+.PHONY : irq_level_handling_test.cpp.s
+
 json_parser.o: json_parser.c.o
 .PHONY : json_parser.o
 
@@ -598,6 +688,30 @@ json_parser.s: json_parser.c.s
 json_parser.c.s:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/json_parser.dir/build.make tests/CMakeFiles/json_parser.dir/json_parser.c.s
 .PHONY : json_parser.c.s
+
+nmi_edge_detection_test.o: nmi_edge_detection_test.cpp.o
+.PHONY : nmi_edge_detection_test.o
+
+# target to build an object file
+nmi_edge_detection_test.cpp.o:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/nmi_edge_detection_test.dir/build.make tests/CMakeFiles/nmi_edge_detection_test.dir/nmi_edge_detection_test.cpp.o
+.PHONY : nmi_edge_detection_test.cpp.o
+
+nmi_edge_detection_test.i: nmi_edge_detection_test.cpp.i
+.PHONY : nmi_edge_detection_test.i
+
+# target to preprocess a source file
+nmi_edge_detection_test.cpp.i:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/nmi_edge_detection_test.dir/build.make tests/CMakeFiles/nmi_edge_detection_test.dir/nmi_edge_detection_test.cpp.i
+.PHONY : nmi_edge_detection_test.cpp.i
+
+nmi_edge_detection_test.s: nmi_edge_detection_test.cpp.s
+.PHONY : nmi_edge_detection_test.s
+
+# target to generate assembly for a file
+nmi_edge_detection_test.cpp.s:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/nmi_edge_detection_test.dir/build.make tests/CMakeFiles/nmi_edge_detection_test.dir/nmi_edge_detection_test.cpp.s
+.PHONY : nmi_edge_detection_test.cpp.s
 
 test_mos6510_comprehensive.o: test_mos6510_comprehensive.c.o
 .PHONY : test_mos6510_comprehensive.o
@@ -639,11 +753,14 @@ help:
 	@echo "... run_all_tests"
 	@echo "... run_basic_test"
 	@echo "... run_comprehensive_test"
+	@echo "... brk_flag_setting_test"
 	@echo "... fam65xx_cpp_65c02_test_runner"
 	@echo "... fam65xx_cpp_klaus_test_runner"
 	@echo "... fam65xx_cpp_lorenz_test_runner"
+	@echo "... irq_level_handling_test"
 	@echo "... json_parser"
 	@echo "... mos6510_lib"
+	@echo "... nmi_edge_detection_test"
 	@echo "... test_mos6510_basic_tests"
 	@echo "... test_mos6510_comprehensive"
 	@echo "... __/src/chip/cpu/fam65xx/fam65xx_core.o"
@@ -661,6 +778,9 @@ help:
 	@echo "... __/test_mos6510_basic.o"
 	@echo "... __/test_mos6510_basic.i"
 	@echo "... __/test_mos6510_basic.s"
+	@echo "... brk_flag_setting_test.o"
+	@echo "... brk_flag_setting_test.i"
+	@echo "... brk_flag_setting_test.s"
 	@echo "... fam65xx_cpp_65c02_test_harness.o"
 	@echo "... fam65xx_cpp_65c02_test_harness.i"
 	@echo "... fam65xx_cpp_65c02_test_harness.s"
@@ -679,9 +799,15 @@ help:
 	@echo "... fam65xx_cpp_test_harness.o"
 	@echo "... fam65xx_cpp_test_harness.i"
 	@echo "... fam65xx_cpp_test_harness.s"
+	@echo "... irq_level_handling_test.o"
+	@echo "... irq_level_handling_test.i"
+	@echo "... irq_level_handling_test.s"
 	@echo "... json_parser.o"
 	@echo "... json_parser.i"
 	@echo "... json_parser.s"
+	@echo "... nmi_edge_detection_test.o"
+	@echo "... nmi_edge_detection_test.i"
+	@echo "... nmi_edge_detection_test.s"
 	@echo "... test_mos6510_comprehensive.o"
 	@echo "... test_mos6510_comprehensive.i"
 	@echo "... test_mos6510_comprehensive.s"
