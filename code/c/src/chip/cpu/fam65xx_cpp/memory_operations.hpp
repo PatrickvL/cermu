@@ -37,6 +37,9 @@ public:
             case MemOp::READ_PC:
                 pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
                 BUS_SET_ADDR(bus_state, pc);
+                // Update ABL/ABH registers so get_address() returns correct values
+                reg[CpuReg::ABL] = pc & 0xFF;
+                reg[CpuReg::ABH] = (pc >> 8) & 0xFF;
                 break;
                 
             // Absolute addressing - shared address calculation with fallthrough
@@ -81,9 +84,15 @@ public:
                 break;
                 
             case MemOp::WRITE_SP_DEC:
-                BUS_SET_ADDR(bus_state, 0x0100 | reg[CpuReg::S]);
-                reg[CpuReg::S] = (reg[CpuReg::S] - 1) & 0xFF;
-                bus_state &= ~BUS_RW_BIT; // Write (RW=0)
+                {
+                    const uint16_t stack_addr = 0x0100 | reg[CpuReg::S];
+                    BUS_SET_ADDR(bus_state, stack_addr);
+                    // Update ABL/ABH registers so get_address() returns correct values
+                    reg[CpuReg::ABL] = stack_addr & 0xFF;
+                    reg[CpuReg::ABH] = (stack_addr >> 8) & 0xFF;
+                    reg[CpuReg::S] = (reg[CpuReg::S] - 1) & 0xFF;
+                    bus_state &= ~BUS_RW_BIT; // Write (RW=0)
+                }
                 break;
                 
             case MemOp::READ_SP_INC:
@@ -116,7 +125,20 @@ public:
                 // ALU result will be set by caller
             }
         } else if (mem_op == MemOp::WRITE_SP_DEC) {
-            // Stack write operations handled specially
+            // Stack write operations - handle data based on data operation
+            switch (data_op) {
+                case DataOp::STACK_PUSH:
+                    // For STACK_PUSH, the data to write is determined by handle_stack_push()
+                    // and stored in pending_data. We need access to pending_data from the CPU.
+                    // For now, use a simpler approach - the data should be set by the caller
+                    break;
+                default:
+                    // Direct register push operations
+                    if (static_cast<uint8_t>(data_op) < static_cast<uint8_t>(CpuReg::COUNT)) {
+                        BUS_SET_DATA(bus_state, reg[static_cast<uint8_t>(data_op)]);
+                    }
+                    break;
+            }
         }
         return bus_state;
     }

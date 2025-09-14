@@ -192,6 +192,9 @@ public:
         // Handle write data if needed - BRANCH PREDICTION
         if (__builtin_expect(mem_op >= MemOp::WRITE_ABS, 0)) {
             bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op);
+        } else if (__builtin_expect(mem_op == MemOp::WRITE_SP_DEC && data_op == DataOp::STACK_PUSH, 0)) {
+            // For stack push operations, use the pending data set by handle_stack_push
+            BUS_SET_DATA(bus_state, pending_data);
         }
         
         // Execute data operation and ALU operation using same bus data
@@ -299,11 +302,54 @@ public:
             }
         }
         
+        // For stack push operations during interrupts, calculate the data to push BEFORE memory operation
+        if (mem_op == MemOp::WRITE_SP_DEC && data_op == DataOp::STACK_PUSH) {
+            // Calculate what to push based on cycle step
+            uint8_t push_data = 0;
+            switch (cycle_step) {
+                case 3: // Push PCH (high byte of return address)
+                    if (opcode == VIRTUAL_OPCODE_BRK) {
+                        // For BRK, return address is PC + 2 from original PC
+                        // Since PC was incremented during opcode fetch, we need PC + 1
+                        uint16_t return_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) + 1;
+                        push_data = (return_addr >> 8) & 0xFF;
+                    } else {
+                        push_data = reg[CpuReg::PCH];
+                    }
+                    break;
+                case 4: // Push PCL (low byte of return address)
+                    if (opcode == VIRTUAL_OPCODE_BRK) {
+                        // For BRK, return address is PC + 2 from original PC
+                        // Since PC was incremented during opcode fetch, we need PC + 1
+                        uint16_t return_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) + 1;
+                        push_data = return_addr & 0xFF;
+                    } else {
+                        push_data = reg[CpuReg::PCL];
+                    }
+                    break;
+                case 5: // Push P (processor status)
+                    push_data = reg[CpuReg::P];
+                    // For BRK, the B flag should be set in the pushed status
+                    if (opcode == VIRTUAL_OPCODE_BRK) {
+                        push_data |= P_BREAK; // Set B flag in pushed status
+                        push_data |= P_IRQ_DIS; // Set I flag in pushed status
+                    }
+                    break;
+                default:
+                    push_data = 0;
+                    break;
+            }
+            // Set the data on the bus for the memory write operation
+            bus_state = BUS_SET_DATA(bus_state, push_data);
+        }
+        
         // Execute memory operation
         bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op);
         
         // Handle write data if needed
-        bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op);
+        if (mem_op >= MemOp::WRITE_ABS) {
+            bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op);
+        }
         
         // Execute data operation and ALU operation using same bus data
         uint8_t bus_data = BUS_GET_DATA(bus_state);
@@ -430,6 +476,9 @@ public:
                         handle_jmp_indirect_bug();
                     }
                     break;
+                case DataOp::STACK_PUSH:
+                    handle_stack_push();
+                    break;
                 case DataOp::STACK_PULL:
                     handle_stack_pull(data);
                     break;
@@ -491,6 +540,9 @@ public:
                 if (__builtin_expect(opcode == 0x6C && cycle_step == 5, 0)) {
                     handle_jmp_indirect_bug();
                 }
+                break;
+            case DataOp::STACK_PUSH:
+                handle_stack_push();
                 break;
             case DataOp::STACK_PULL:
                 handle_stack_pull(data);
@@ -556,6 +608,37 @@ public:
             if ((current_pc ^ target_pc) & 0xFF00) {
                 set_state(STATE_PAGE_CROSSED);
             }
+        }
+    }
+    
+    // Handle stack push operations for interrupt sequences
+    inline void handle_stack_push() {
+        // During interrupt sequences, determine what to push based on cycle
+        if (state_flags & STATE_INTERRUPT_SEQUENCE) {
+            uint8_t push_data = 0;
+            
+            switch (cycle_step) {
+                case 3: // Push PCH (high byte of return address)
+                    push_data = reg[CpuReg::PCH];
+                    break;
+                case 4: // Push PCL (low byte of return address)
+                    push_data = reg[CpuReg::PCL];
+                    break;
+                case 5: // Push P (processor status)
+                    push_data = reg[CpuReg::P];
+                    // For BRK, the B flag should be set in the pushed status
+                    if (opcode == VIRTUAL_OPCODE_BRK) {
+                        push_data |= P_BREAK; // Set B flag in pushed status
+                    }
+                    break;
+                default:
+                    push_data = 0;
+                    break;
+            }
+            
+            // Set the data on the bus for the memory write operation
+            // This will be picked up by handle_write_data in memory_operations.hpp
+            pending_data = push_data;
         }
     }
     
@@ -628,16 +711,40 @@ public:
     
     // Hardware interface for test harnesses
     inline uint16_t get_address() const {
-        // Return the current address being accessed by the CPU
-        // During opcode fetch (cycle_step == 0), use PC
-        // During instruction execution, use the calculated address from ABL/ABH
+        // Return the address that will be used in the NEXT cycle execution
+        // This is needed for test harnesses that call get_address() before cycle_tick()
+        
         if (cycle_step == 0) {
             // Opcode fetch: use current PC
             return (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
-        } else {
-            // Instruction execution: use calculated address
-            return (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
         }
+        
+        // For interrupt sequences, predict the address based on cycle step
+        if (state_flags & STATE_INTERRUPT_SEQUENCE) {
+            // Get the cycle description for the current step
+            const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
+            const MemOp mem_op = static_cast<MemOp>(cycle.mem_op);
+            
+            if (mem_op == MemOp::READ_PC || mem_op == MemOp::READ_PC_INC) {
+                return (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+            } else if (mem_op == MemOp::WRITE_SP_DEC) {
+                return 0x0100 | reg[CpuReg::S];
+            } else if (mem_op == MemOp::READ_VECTOR) {
+                // Predict vector address based on interrupt type and cycle
+                switch (opcode) {
+                    case VIRTUAL_OPCODE_RESET:
+                        return (cycle_step == 6) ? 0xFFFC : 0xFFFD;
+                    case VIRTUAL_OPCODE_NMI:
+                        return (cycle_step == 6) ? 0xFFFA : 0xFFFB;
+                    case VIRTUAL_OPCODE_IRQ:
+                    case VIRTUAL_OPCODE_BRK:
+                        return (cycle_step == 6) ? 0xFFFE : 0xFFFF;
+                }
+            }
+        }
+        
+        // Normal instruction execution: use calculated address
+        return (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
     }
     
     inline bool get_rw() const {
