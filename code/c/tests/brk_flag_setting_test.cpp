@@ -99,8 +99,9 @@ void test_brk_flag_setting() {
             uint8_t data = memory.read(addr);
             bus_state = BUS_SET_DATA(bus_state, data);
         } else {
-            // Write operation
-            uint8_t data = BUS_GET_DATA(bus_state);
+            // Write operation - get data from CPU
+            uint8_t data = cpu.get_write_data();
+            bus_state = BUS_SET_DATA(bus_state, data);
             memory.write(addr, data);
         }
         
@@ -246,7 +247,8 @@ void test_brk_vs_irq_flag_difference() {
             uint8_t data = memory.read(addr);
             bus_state = BUS_SET_DATA(bus_state, data);
         } else {
-            uint8_t data = BUS_GET_DATA(bus_state);
+            uint8_t data = cpu.get_write_data();
+            bus_state = BUS_SET_DATA(bus_state, data);
             memory.write(addr, data);
         }
         
@@ -286,7 +288,8 @@ void test_brk_vs_irq_flag_difference() {
             uint8_t data = memory.read(addr);
             bus_state = BUS_SET_DATA(bus_state, data);
         } else {
-            uint8_t data = BUS_GET_DATA(bus_state);
+            uint8_t data = cpu.get_write_data();
+            bus_state = BUS_SET_DATA(bus_state, data);
             memory.write(addr, data);
         }
         
