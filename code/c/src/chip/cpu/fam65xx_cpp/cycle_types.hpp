@@ -78,11 +78,6 @@ constexpr size_t max_value_for_bits() {
 }
 
 // MEMOP FIELD VALIDATION (4 bits = max value 15)
-static_assert(static_cast<size_t>(MemOp::READ_VECTOR) <= max_value_for_bits<4>(),
-    "MemOp::read_VECTOR value exceeds 4-bit field capacity in cycle_desc_t! "
-    "Current value: " /* static_cast<size_t>(MemOp::read_VECTOR) */ " >= 16. "
-    "Either expand mem_op bit field or reduce MemOp enum values.");
-
 static_assert(static_cast<size_t>(MemOp::READ_INDIRECT) <= max_value_for_bits<4>(),
     "MemOp enum values exceed 4-bit field capacity in cycle_desc_t! "
     "Maximum allowed value: 15. Consider expanding mem_op bit field.");
@@ -92,10 +87,10 @@ template<>
 constexpr size_t count_enum_values<MemOp>() {
     // Manually count MemOp values since they're not consecutive
     // Update this if new MemOp values are added
-    return 16; // NOP=0, READ_PC_INC=1, READ_PC=2, READ_ABS=3, WRITE_ABS=4,
+    return 15; // NOP=0, READ_PC_INC=1, READ_PC=2, READ_ABS=3, WRITE_ABS=4,
                // READ_ZP=5, WRITE_ZP=6, READ_ZPX=7, WRITE_ZPX=8, READ_ZPY=9,
                // WRITE_ZPY=10, READ_SP=11, WRITE_SP_DEC=12, READ_SP_INC=13,
-               // READ_INDIRECT=14, READ_VECTOR=15
+               // READ_INDIRECT=14
 }
 
 static_assert(count_enum_values<MemOp>() <= (max_value_for_bits<4>() + 1),
@@ -156,8 +151,8 @@ static_assert(count_enum_values<AluOp>() <= 60,
     "Consider expanding alu_op bit field before adding more values.");
 
 // Specific check for MemOp since we're at exactly the limit
-static_assert(count_enum_values<MemOp>() == 16,
-    "MemOp enum count has changed! Expected exactly 16 values (0-15) for 4-bit field. "
+static_assert(count_enum_values<MemOp>() == 15,
+    "MemOp enum count has changed! Expected exactly 15 values (0-14) for 4-bit field. "
     "If adding new MemOp values, you MUST expand the mem_op bit field size.");
 
 // Cycle descriptor creation macros
