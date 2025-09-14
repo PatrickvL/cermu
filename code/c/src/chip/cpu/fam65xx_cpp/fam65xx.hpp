@@ -171,8 +171,8 @@ public:
         DataOp data_op = static_cast<DataOp>(cycle.data_op);
         AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
         
-        // Set interrupt vector addresses for READ_INDIRECT operations during interrupts
-        if (mem_op == MemOp::READ_INDIRECT) {
+        // Set interrupt vector addresses for READ_VECTOR operations during interrupts
+        if (mem_op == MemOp::READ_VECTOR) {
             switch (opcode) {
                 case VIRTUAL_OPCODE_RESET:
                     reg[CpuReg::ABL] = (cycle_step == 6) ? 0xFC : 0xFD;
@@ -638,7 +638,7 @@ public:
                                           mem_op == MemOp::READ_ZP ||
                                           mem_op == MemOp::READ_SP ||
                                           mem_op == MemOp::READ_SP_INC ||
-                                          mem_op == MemOp::READ_INDIRECT);
+                                          mem_op == MemOp::READ_VECTOR);
                 rdy_blocks = is_read_cycle;
             }
         }

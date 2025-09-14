@@ -21,8 +21,8 @@ public:
         if (cycle == 3) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP);  // Push PCH
         if (cycle == 4) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP);  // Push PCL
         if (cycle == 5) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::SEI);  // Push P, set flag
-        if (cycle == 6) return CD_MAKE(MemOp::READ_INDIRECT, DataOp::INTERRUPT_VEC, AluOp::NOP);   // Read vector low
-        if (cycle == 7) return CD_MAKE_SYNC(MemOp::READ_INDIRECT, DataOp::INTERRUPT_VEC, AluOp::NOP); // Read vector high, sync
+        if (cycle == 6) return CD_MAKE(MemOp::READ_VECTOR, DataOp::INTERRUPT_VEC, AluOp::NOP);   // Read vector low
+        if (cycle == 7) return CD_MAKE_SYNC(MemOp::READ_VECTOR, DataOp::INTERRUPT_VEC, AluOp::NOP); // Read vector high, sync
         return addr::make_empty_cycle();
     }
     
@@ -33,8 +33,8 @@ public:
         if (cycle == 3) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP);  // Push PCH
         if (cycle == 4) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP);  // Push PCL
         if (cycle == 5) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::SEI);  // Push P, set flag
-        if (cycle == 6) return CD_MAKE(MemOp::READ_INDIRECT, DataOp::INTERRUPT_VEC, AluOp::NOP);   // Read vector low
-        if (cycle == 7) return CD_MAKE_SYNC(MemOp::READ_INDIRECT, DataOp::INTERRUPT_VEC, AluOp::NOP); // Read vector high, sync
+        if (cycle == 6) return CD_MAKE(MemOp::READ_VECTOR, DataOp::INTERRUPT_VEC, AluOp::NOP);   // Read vector low
+        if (cycle == 7) return CD_MAKE_SYNC(MemOp::READ_VECTOR, DataOp::INTERRUPT_VEC, AluOp::NOP); // Read vector high, sync
         return addr::make_empty_cycle();
     }
     
@@ -45,8 +45,8 @@ public:
         if (cycle == 3) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP);  // Push PCH
         if (cycle == 4) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP);  // Push PCL
         if (cycle == 5) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::SEI);  // Push P, set flag
-        if (cycle == 6) return CD_MAKE(MemOp::READ_INDIRECT, DataOp::INTERRUPT_VEC, AluOp::NOP);   // Read vector low
-        if (cycle == 7) return CD_MAKE_SYNC(MemOp::READ_INDIRECT, DataOp::INTERRUPT_VEC, AluOp::NOP); // Read vector high, sync
+        if (cycle == 6) return CD_MAKE(MemOp::READ_VECTOR, DataOp::INTERRUPT_VEC, AluOp::NOP);   // Read vector low
+        if (cycle == 7) return CD_MAKE_SYNC(MemOp::READ_VECTOR, DataOp::INTERRUPT_VEC, AluOp::NOP); // Read vector high, sync
         return addr::make_empty_cycle();
     }
     
@@ -55,8 +55,8 @@ public:
         if (cycle == 3) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP);  // Push PCH
         if (cycle == 4) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP);  // Push PCL
         if (cycle == 5) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, flag_op);     // Push P, set flag
-        if (cycle == 6) return CD_MAKE(MemOp::READ_INDIRECT, DataOp::INTERRUPT_VEC, AluOp::NOP);    // Read vector low
-        if (cycle == 7) return CD_MAKE_SYNC(MemOp::READ_INDIRECT, DataOp::INTERRUPT_VEC, AluOp::NOP); // Read vector high, sync
+        if (cycle == 6) return CD_MAKE(MemOp::READ_VECTOR, DataOp::INTERRUPT_VEC, AluOp::NOP);    // Read vector low
+        if (cycle == 7) return CD_MAKE_SYNC(MemOp::READ_VECTOR, DataOp::INTERRUPT_VEC, AluOp::NOP); // Read vector high, sync
         return addr::make_empty_cycle(); // Invalid cycle
     }
     
@@ -67,8 +67,8 @@ public:
         if (cycle == 3) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP);  // Push PCH
         if (cycle == 4) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::NOP);  // Push PCL
         if (cycle == 5) return CD_MAKE(MemOp::WRITE_SP_DEC, DataOp::STACK_PUSH, AluOp::BRK_FLAG);  // Push P, set B+I flags
-        if (cycle == 6) return CD_MAKE(MemOp::READ_INDIRECT, DataOp::INTERRUPT_VEC, AluOp::NOP);   // Read vector low
-        if (cycle == 7) return CD_MAKE_SYNC(MemOp::READ_INDIRECT, DataOp::INTERRUPT_VEC, AluOp::NOP); // Read vector high, sync
+        if (cycle == 6) return CD_MAKE(MemOp::READ_VECTOR, DataOp::INTERRUPT_VEC, AluOp::NOP);   // Read vector low
+        if (cycle == 7) return CD_MAKE_SYNC(MemOp::READ_VECTOR, DataOp::INTERRUPT_VEC, AluOp::NOP); // Read vector high, sync
         return addr::make_empty_cycle();
     }
 };
