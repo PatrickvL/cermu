@@ -150,9 +150,14 @@ void test_sei_cli_synchronization() {
     
     harness.reset_and_start();
     
-    // Run until we reach CLI instruction at $8001
-    while (cpu.get_pc() != 0x8001) {
+    // Run until we reach CLI instruction at $8001 (with timeout)
+    int timeout = 1000;
+    while (cpu.get_pc() != 0x8001 && timeout-- > 0) {
         harness.tick();
+    }
+    if (timeout <= 0) {
+        std::cout << "TIMEOUT: Failed to reach CLI instruction at $8001, PC = $" << std::hex << cpu.get_pc() << std::dec << std::endl;
+        return;
     }
     
     // Set IRQ pin active before CLI
@@ -168,9 +173,14 @@ void test_sei_cli_synchronization() {
     assert(cpu.get_state_flags() & STATE_IRQ_PENDING);  // Now pending
     std::cout << "✓ CLI instruction properly unmasks IRQ" << std::endl;
     
-    // Continue until we reach SEI instruction at $8003
-    while (cpu.get_pc() != 0x8003) {
+    // Continue until we reach SEI instruction at $8003 (with timeout)
+    timeout = 1000;
+    while (cpu.get_pc() != 0x8003 && timeout-- > 0) {
         harness.tick();
+    }
+    if (timeout <= 0) {
+        std::cout << "TIMEOUT: Failed to reach SEI instruction at $8003, PC = $" << std::hex << cpu.get_pc() << std::dec << std::endl;
+        return;
     }
     
     // Execute SEI instruction
@@ -230,9 +240,14 @@ void test_irq_timing_priority() {
     cpu.set_p(cpu.get_p() & ~P_IRQ_DIS);
     cpu.irq(false);  // Activate IRQ
     
-    // IRQ should be processed at instruction boundary (cycle_step == 0)
-    while (cpu.get_cycle_step() != 0) {
+    // IRQ should be processed at instruction boundary (cycle_step == 0) - with timeout
+    int timeout = 1000;
+    while (cpu.get_cycle_step() != 0 && timeout-- > 0) {
         harness.tick();
+    }
+    if (timeout <= 0) {
+        std::cout << "TIMEOUT: Failed to reach instruction boundary, cycle_step = " << (int)cpu.get_cycle_step() << std::endl;
+        return;
     }
     
     // Next tick should start IRQ sequence

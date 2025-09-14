@@ -145,6 +145,43 @@ if(NOT WIN32 AND NOT MSVC)
     target_link_libraries(fam65xx_cpp_65c02_test_runner m)
 endif()
 
+# fam65xx_cpp Interrupt Handling Tests - Advanced interrupt behavior validation
+add_executable(nmi_edge_detection_test
+    nmi_edge_detection_test.cpp
+)
+target_include_directories(nmi_edge_detection_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
+)
+# Link math library if needed
+if(NOT WIN32 AND NOT MSVC)
+    target_link_libraries(nmi_edge_detection_test m)
+endif()
+
+add_executable(irq_level_handling_test
+    irq_level_handling_test.cpp
+)
+target_include_directories(irq_level_handling_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
+)
+# Link math library if needed
+if(NOT WIN32 AND NOT MSVC)
+    target_link_libraries(irq_level_handling_test m)
+endif()
+
+add_executable(brk_flag_setting_test
+    brk_flag_setting_test.cpp
+)
+target_include_directories(brk_flag_setting_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
+)
+# Link math library if needed
+if(NOT WIN32 AND NOT MSVC)
+    target_link_libraries(brk_flag_setting_test m)
+endif()
+
 # Enable testing
 enable_testing()
 

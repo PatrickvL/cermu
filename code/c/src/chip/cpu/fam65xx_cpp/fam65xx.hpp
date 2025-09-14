@@ -84,43 +84,51 @@ public:
         // No separate interrupt_opcode field needed - using main opcode field
     }
     
-    // Execute one CPU cycle
+    // Execute one CPU cycle - OPTIMIZED HOT PATH
     inline bus_state_t cycle_tick(bus_state_t bus_state) {
-        // Process input control lines first
+        // HOT PATH OPTIMIZATION: Branch prediction hints and batched checks
+        
+        // Likely path: normal instruction execution (90%+ of cycles)
+        if (__builtin_expect(!(state_flags & (STATE_INTERRUPT_SEQUENCE | STATE_RESET_PENDING | STATE_NMI_PENDING | STATE_IRQ_PENDING)), 1)) {
+            // Fast path: normal instruction execution without interrupts
+            return execute_cycle_fast_path(bus_state);
+        }
+        
+        // Process input control lines first (inlined for hot path)
         bus_state = process_input_pins(bus_state);
         
         // Handle RDY line - variant-specific behavior
-        if (!(bus_state & BUS_BIT(BUS_RDY_BIT))) {
+        if (__builtin_expect(!(bus_state & BUS_BIT(BUS_RDY_BIT)), 0)) {
             bus_state = handle_rdy_wait(bus_state);
-            if (get_state(STATE_RDY_WAIT)) {
+            if (__builtin_expect(state_flags & STATE_RDY_WAIT, 0)) {
                 return bus_state; // Skip this cycle
             }
         }
         
         // Check if we're in an interrupt sequence
-        if (get_state(STATE_INTERRUPT_SEQUENCE)) {
+        if (__builtin_expect(state_flags & STATE_INTERRUPT_SEQUENCE, 0)) {
             return execute_interrupt_cycle(bus_state);
         }
         
         // Batch check critical state flags for speed
         const uint16_t critical_states = state_flags & (STATE_RESET_PENDING | STATE_NMI_PENDING | STATE_IRQ_PENDING);
-        if (critical_states) {
+        if (__builtin_expect(critical_states != 0, 0)) {
             // Handle reset first (highest priority)
-            if (critical_states & STATE_RESET_PENDING) {
+            if (__builtin_expect(critical_states & STATE_RESET_PENDING, 0)) {
                 return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_RESET);
             }
             
             // Handle interrupts only at instruction boundaries for proper timing
-            if (cycle_step == 0) {
+            if (__builtin_expect(cycle_step == 0, 0)) {
                 // NMI has highest priority among interrupts and is non-maskable
-                if (critical_states & STATE_NMI_PENDING) {
+                if (__builtin_expect(critical_states & STATE_NMI_PENDING, 0)) {
                     // Clear the NMI edge flag when servicing the interrupt
-                    clear_state(STATE_NMI_EDGE);
+                    state_flags &= ~STATE_NMI_EDGE; // Direct bit clear for speed
                     return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_NMI);
                 }
                 // IRQ has lower priority and is maskable - check I flag synchronously
-                else if ((critical_states & STATE_IRQ_PENDING) &&
-                          !(reg[static_cast<uint8_t>(CpuReg::P)] & P_IRQ_DIS)) {
+                else if (__builtin_expect((critical_states & STATE_IRQ_PENDING) &&
+                          !(reg[static_cast<uint8_t>(CpuReg::P)] & P_IRQ_DIS), 0)) {
                     return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_IRQ);
                 }
             }
@@ -131,6 +139,74 @@ public:
         
         // Process output control lines
         bus_state = process_output_pins(bus_state);
+        
+        return bus_state;
+    }
+    
+    // PERFORMANCE: Fast path for normal instruction execution (90%+ of cycles)
+    inline bus_state_t execute_cycle_fast_path(bus_state_t bus_state) {
+        // Fetch opcode on cycle 0 - HOT PATH
+        if (__builtin_expect(cycle_step == 0, 1)) {
+            opcode = BUS_GET_DATA(bus_state);
+            cycle_step = 1;
+            state_flags |= STATE_SYNC_NEXT; // Direct bit set for speed
+            return bus_state;
+        }
+        
+        // Get cycle description for current instruction step - OPTIMIZED LOOKUP
+        const fam65xx_cpp::cycle_desc_t cycle = cycle_tables::get_cycle_fast(opcode, cycle_step);
+        
+        // Convert raw values to type-safe enums - CACHED FOR SPEED
+        const MemOp mem_op = static_cast<MemOp>(cycle.mem_op);
+        const DataOp data_op = static_cast<DataOp>(cycle.data_op);
+        const AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
+        
+        // Execute memory operation - INLINED FOR HOT PATH
+        bus_state = memory_ops::execute_memory_operation_fast(bus_state, reg, mem_op);
+
+        // Handle write data if needed - BRANCH PREDICTION
+        if (__builtin_expect(mem_op >= MemOp::WRITE_ABS, 0)) {
+            bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op);
+        }
+        
+        // Execute data operation and ALU operation using same bus data
+        const uint8_t bus_data = BUS_GET_DATA(bus_state);
+        execute_data_operation_fast(data_op, bus_data);
+        
+        // Execute ALU operation if specified - BRANCH PREDICTION
+        if (__builtin_expect(alu_op != AluOp::NOP, 0)) {
+            alu_ops::execute_alu_operation_fast(reg, alu_op, bus_data);
+            
+            // Handle interrupt flag changes for SEI/CLI instructions - RARE PATH
+            if (__builtin_expect(alu_op == AluOp::SEI || alu_op == AluOp::CLI, 0)) {
+                handle_interrupt_flag_change();
+            }
+            
+            // Handle decimal mode bugs for NMOS variants - RARE PATH
+            if constexpr (!Config::has_cmos_fixes) {
+                if (__builtin_expect((reg[CpuReg::P] & P_DECIMAL) &&
+                    (alu_op == AluOp::ADC || alu_op == AluOp::SBC), 0)) {
+                    handle_decimal_mode_bugs(reg[CpuReg::A], alu_op);
+                }
+            }
+        }
+        
+        // Check if instruction is complete using sync bit - FAST SYNC CHECK
+        if (__builtin_expect(cycle.is_sync(), 1)) {
+            cycle_step = 0; // Start next instruction
+        } else {
+            cycle_step++;
+        }
+        
+        // Process output control lines - INLINED FOR SPEED
+        if constexpr (Config::has_sync_pin) {
+            if (__builtin_expect(state_flags & STATE_SYNC_NEXT, 1)) {
+                bus_state |= BUS_BIT(BUS_SYNC_BIT);
+                state_flags &= ~STATE_SYNC_NEXT; // Direct bit clear
+            } else {
+                bus_state &= ~BUS_BIT(BUS_SYNC_BIT);
+            }
+        }
         
         return bus_state;
     }
