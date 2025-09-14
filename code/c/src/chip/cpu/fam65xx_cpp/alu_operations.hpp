@@ -227,6 +227,11 @@ public:
                 // JAM instruction - CPU enters infinite loop
                 return;
                 
+            case AluOp::BRK_FLAG:
+                // BRK instruction - set B flag and I flag when pushing P to stack
+                reg[CpuReg::P] |= (P_BREAK | P_IRQ_DIS);
+                return;
+                
             default:
                 result = data; // Default pass-through
                 break;
@@ -239,7 +244,7 @@ public:
             case AluOp::TXS: case AluOp::BIT:
             case AluOp::CLC: case AluOp::SEC: case AluOp::CLI: case AluOp::SEI:
             case AluOp::CLV: case AluOp::CLD: case AluOp::SED:
-            case AluOp::WAI: case AluOp::STP: case AluOp::JAM:
+            case AluOp::WAI: case AluOp::STP: case AluOp::JAM: case AluOp::BRK_FLAG:
             // Illegal ops that handle their own flags
             case AluOp::DCP: case AluOp::ISC: case AluOp::SLO:
             case AluOp::RLA: case AluOp::SRE: case AluOp::RRA:

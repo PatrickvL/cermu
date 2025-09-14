@@ -99,14 +99,6 @@ public:
                 BUS_SET_ADDR(bus_state, addr);
                 break;
                 
-            // Note: DUMMY_READ removed to make room for READ_VECTOR (4-bit limit)
-                
-            case MemOp::READ_VECTOR:
-                // Read from interrupt vector - address set by interrupt cycle handler
-                addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
-                BUS_SET_ADDR(bus_state, addr);
-                break;
-                
             default:
                 // Unknown operation - default to PC read
                 pc = (reg[static_cast<uint8_t>(CpuReg::PCH)] << 8) | reg[static_cast<uint8_t>(CpuReg::PCL)];

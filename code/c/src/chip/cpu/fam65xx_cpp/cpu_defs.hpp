@@ -34,7 +34,7 @@ enum class MemOp : uint8_t {
     NOP = 0, READ_PC_INC, READ_PC, READ_ABS, WRITE_ABS,
     READ_ZP, WRITE_ZP, READ_ZPX, WRITE_ZPX, READ_ZPY,
     WRITE_ZPY, READ_SP, WRITE_SP_DEC, READ_SP_INC,
-    READ_INDIRECT, READ_VECTOR
+    READ_INDIRECT
 };
 
 // Data operations - type-safe enum
@@ -56,7 +56,7 @@ enum class AluOp : uint8_t {
     CLC, SEC, CLI, SEI, CLV, CLD, SED,
     STZ, TSB, TRB, WAI, STP, PHX, PHY, PLX, PLY,
     LAX, SAX, DCP, ISC, SLO, RLA, SRE, RRA,
-    ANC, ALR, ARR, JAM
+    ANC, ALR, ARR, JAM, BRK_FLAG
 };
 
 // Type-safe register array wrapper
