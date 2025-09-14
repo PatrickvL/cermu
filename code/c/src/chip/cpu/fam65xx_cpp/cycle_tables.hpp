@@ -9,7 +9,7 @@
 #include "cycle_types.hpp"
 
 // Validation system
-#include "cycle_validation.hpp"
+#include "fam65xx_validation.hpp"
 
 // Addressing mode helpers
 #include "cycle_addressing.hpp"

@@ -2,7 +2,7 @@
 #define CYCLE_ADDRESSING_HPP
 
 #include "cycle_types.hpp"
-#include "cycle_validation.hpp"
+#include "fam65xx_validation.hpp"
 
 namespace fam65xx_cpp {
 
