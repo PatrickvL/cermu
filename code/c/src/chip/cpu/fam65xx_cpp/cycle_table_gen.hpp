@@ -23,10 +23,11 @@ public:
         switch (OpCode) {
             // For all other opcodes, return empty cycle
             default: return addr::make_empty_cycle();  // Fallback for any missing opcodes
-            // Handle virtual opcodes (256, 257, 258)
+            // Handle virtual opcodes (256, 257, 258, 259)
             case VIRTUAL_OPCODE_RESET: return inst::get_reset_cycle(Cycle);
             case VIRTUAL_OPCODE_NMI: return inst::get_nmi_cycle(Cycle);
             case VIRTUAL_OPCODE_IRQ: return inst::get_irq_cycle(Cycle);
+            case VIRTUAL_OPCODE_BRK: return inst::make_brk(Cycle);
             // Handle regular opcodes (0-255) - COMPLETE 6502 INSTRUCTION SET
             case 0x00: return inst::make_brk(Cycle);                        // BRK impl
             case 0x10: return addr::make_branch(Cycle);                // BPL rel

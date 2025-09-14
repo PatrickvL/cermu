@@ -12,6 +12,7 @@ namespace fam65xx_cpp {
 static constexpr uint16_t VIRTUAL_OPCODE_RESET = 256;
 static constexpr uint16_t VIRTUAL_OPCODE_NMI   = 257;
 static constexpr uint16_t VIRTUAL_OPCODE_IRQ   = 258;
+static constexpr uint16_t VIRTUAL_OPCODE_BRK   = 259;
 
 // Constants for 1D array layout
 static constexpr uint8_t MAX_CYCLES = 8;
