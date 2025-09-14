@@ -296,9 +296,16 @@ void test_interrupt_priority() {
     
     // Trigger multiple interrupts simultaneously
     cpu.abort_pin(false);  // ABORT active
+    std::cout << "After ABORT pin: state flags = 0x" << std::hex << cpu.get_state_flags() << std::endl;
+    
     cpu.nmi_pin(false);    // NMI active
+    std::cout << "After NMI pin: state flags = 0x" << std::hex << cpu.get_state_flags() << std::endl;
+    
     cpu.cop_instruction(); // COP pending
+    std::cout << "After COP instruction: state flags = 0x" << std::hex << cpu.get_state_flags() << std::endl;
+    
     cpu.irq_pin(false);    // IRQ active
+    std::cout << "After IRQ pin: state flags = 0x" << std::hex << cpu.get_state_flags() << std::endl;
     
     // Execute one cycle - ABORT should win due to highest priority
     bus_state_t bus_state = 0;
@@ -306,6 +313,11 @@ void test_interrupt_priority() {
     
     // First cycle should start ABORT sequence
     bus_state = cpu.cycle_tick(bus_state);
+    
+    // Debug output
+    std::cout << "After cycle_tick: opcode=" << cpu.get_opcode()
+              << " (expected=" << VIRTUAL_OPCODE_ABORT << ")" << std::endl;
+    std::cout << "State flags: 0x" << std::hex << cpu.get_state_flags() << std::endl;
     
     // Check that ABORT interrupt is being serviced
     assert((cpu.get_state_flags() & STATE_INTERRUPT_SEQUENCE) != 0);
