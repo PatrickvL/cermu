@@ -190,7 +190,7 @@ public:
         }
         
         // Execute memory operation
-        bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op, data_op);
+        bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op);
         
         // Handle write data if needed
         bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op);
@@ -234,7 +234,7 @@ public:
         AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
         
         // Execute memory operation
-        bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op, data_op);
+        bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op);
 
         // Handle write data if needed
         bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op);
