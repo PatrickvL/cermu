@@ -7,14 +7,63 @@ namespace fam65xx_cpp {
 
 template<typename BusConfig>
 class AluOperations {
+private:
+    // Compile-time validation of ALU operations that should NOT call set_nz_flags
+    static constexpr bool is_no_nz_flag_op(AluOp op) {
+        switch (op) {
+            case AluOp::TXS: case AluOp::BIT:
+            case AluOp::CLC: case AluOp::SEC: case AluOp::CLI: case AluOp::SEI:
+            case AluOp::CLV: case AluOp::CLD: case AluOp::SED:
+            case AluOp::WAI: case AluOp::STP: case AluOp::JAM: case AluOp::BRK_FLAG:
+            // Illegal ops that handle their own flags
+            case AluOp::DCP: case AluOp::ISC: case AluOp::SLO:
+            case AluOp::RLA: case AluOp::SRE: case AluOp::RRA:
+                return true;
+            default:
+                return false;
+        }
+    }
+    
+    // Compile-time validation for operations that modify flags directly
+    static constexpr bool is_flag_only_op(AluOp op) {
+        switch (op) {
+            case AluOp::CLC: case AluOp::SEC: case AluOp::CLI: case AluOp::SEI:
+            case AluOp::CLV: case AluOp::CLD: case AluOp::SED: case AluOp::BRK_FLAG:
+                return true;
+            default:
+                return false;
+        }
+    }
+
 public:
     template<typename RegArray>
     static inline void set_nz_flags(RegArray& reg, uint8_t value) {
-        // Batch flag computation for maximum speed
+        // Optimized flag computation using bit manipulation
+        constexpr uint8_t NZ_MASK = P_NEGATIVE | P_ZERO;
         const uint8_t flags = ((value == 0) ? P_ZERO : 0) |
                               ((value & 0x80) ? P_NEGATIVE : 0);
         
-        reg[CpuReg::P] = (reg[CpuReg::P] & ~(P_NEGATIVE | P_ZERO)) | flags;
+        reg[CpuReg::P] = (reg[CpuReg::P] & ~NZ_MASK) | flags;
+    }
+    
+    // Optimized flag operations with compile-time constants
+    template<typename RegArray>
+    static constexpr void set_flag(RegArray& reg, uint8_t flag_mask) {
+        reg[CpuReg::P] |= flag_mask;
+    }
+    
+    template<typename RegArray>
+    static constexpr void clear_flag(RegArray& reg, uint8_t flag_mask) {
+        reg[CpuReg::P] &= ~flag_mask;
+    }
+    
+    template<typename RegArray, uint8_t FLAG_MASK>
+    static constexpr void toggle_flag_conditionally(RegArray& reg, bool condition) {
+        if (condition) {
+            reg[CpuReg::P] |= FLAG_MASK;
+        } else {
+            reg[CpuReg::P] &= ~FLAG_MASK;
+        }
     }
 
     template<typename RegArray>
@@ -114,14 +163,14 @@ public:
                             ((a & data) ? 0 : P_ZERO);
                 return; // BIT has special flag handling
                 
-            // Flag operations - early returns
-            case AluOp::CLC: reg[CpuReg::P] &= ~P_CARRY; return;
-            case AluOp::SEC: reg[CpuReg::P] |= P_CARRY; return;
-            case AluOp::CLI: reg[CpuReg::P] &= ~P_IRQ_DIS; return;
-            case AluOp::SEI: reg[CpuReg::P] |= P_IRQ_DIS; return;
-            case AluOp::CLV: reg[CpuReg::P] &= ~P_OVERFLOW; return;
-            case AluOp::CLD: reg[CpuReg::P] &= ~P_DECIMAL; return;
-            case AluOp::SED: reg[CpuReg::P] |= P_DECIMAL; return;
+            // Flag operations - optimized with helper functions
+            case AluOp::CLC: clear_flag(reg, P_CARRY); return;
+            case AluOp::SEC: set_flag(reg, P_CARRY); return;
+            case AluOp::CLI: clear_flag(reg, P_IRQ_DIS); return;
+            case AluOp::SEI: set_flag(reg, P_IRQ_DIS); return;
+            case AluOp::CLV: clear_flag(reg, P_OVERFLOW); return;
+            case AluOp::CLD: clear_flag(reg, P_DECIMAL); return;
+            case AluOp::SED: set_flag(reg, P_DECIMAL); return;
             
             // CMOS additions - compile-time conditional
             case AluOp::WAI:
@@ -229,7 +278,7 @@ public:
                 
             case AluOp::BRK_FLAG:
                 // BRK instruction - set B flag and I flag when pushing P to stack
-                reg[CpuReg::P] |= (P_BREAK | P_IRQ_DIS);
+                set_flag(reg, P_BREAK | P_IRQ_DIS);
                 return;
                 
             default:
@@ -237,21 +286,17 @@ public:
                 break;
         }
         
-        // Optimized check for operations that need N/Z flag updates
-        // Group common flag operations and special cases for faster branching
-        switch (alu_op) {
-            // Flag-only operations (no N/Z update needed)
-            case AluOp::TXS: case AluOp::BIT:
-            case AluOp::CLC: case AluOp::SEC: case AluOp::CLI: case AluOp::SEI:
-            case AluOp::CLV: case AluOp::CLD: case AluOp::SED:
-            case AluOp::WAI: case AluOp::STP: case AluOp::JAM: case AluOp::BRK_FLAG:
-            // Illegal ops that handle their own flags
-            case AluOp::DCP: case AluOp::ISC: case AluOp::SLO:
-            case AluOp::RLA: case AluOp::SRE: case AluOp::RRA:
-                break; // No N/Z flag update
-            default:
+        // Compile-time optimized flag handling - uses constexpr validation
+        if constexpr (true) {
+            // Static assertion to validate our constexpr function works
+            static_assert(is_no_nz_flag_op(AluOp::TXS), "TXS should not update N/Z flags");
+            static_assert(is_no_nz_flag_op(AluOp::BRK_FLAG), "BRK_FLAG should not update N/Z flags");
+            static_assert(is_flag_only_op(AluOp::CLC), "CLC should be flag-only operation");
+            
+            // Runtime check using constexpr function for better optimization
+            if (!is_no_nz_flag_op(alu_op)) {
                 set_nz_flags(reg, result);
-                break;
+            }
         }
     }
 };

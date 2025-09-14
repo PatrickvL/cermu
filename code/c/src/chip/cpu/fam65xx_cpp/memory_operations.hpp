@@ -20,10 +20,12 @@ public:
         uint16_t addr = 0;
         uint16_t pc = 0;
         
-        // Execute memory operation based on opcode
+        // Execute memory operation - optimized with fallthrough for shared functionality
         switch (mem_op) {
-            case MemOp::NOP: return bus_state;
+            case MemOp::NOP:
+                return bus_state;
             
+            // PC operations
             case MemOp::READ_PC_INC:
                 pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
                 BUS_SET_ADDR(bus_state, pc);
@@ -37,48 +39,43 @@ public:
                 BUS_SET_ADDR(bus_state, pc);
                 break;
                 
-            case MemOp::READ_ABS:
-                addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
-                BUS_SET_ADDR(bus_state, addr);
-                break;
-                
+            // Absolute addressing - shared address calculation with fallthrough
             case MemOp::WRITE_ABS:
+                bus_state &= ~BUS_RW_BIT; // Write (RW=0)
+                [[fallthrough]];
+            case MemOp::READ_ABS:
+            case MemOp::READ_INDIRECT:
                 addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
                 BUS_SET_ADDR(bus_state, addr);
-                bus_state &= ~BUS_RW_BIT; // Write (RW=0)
                 break;
                 
+            // Zero page addressing - shared address calculation with fallthrough
+            case MemOp::WRITE_ZP:
+                bus_state &= ~BUS_RW_BIT; // Write (RW=0)
+                [[fallthrough]];
             case MemOp::READ_ZP:
                 BUS_SET_ADDR(bus_state, reg[CpuReg::ABL]);
                 break;
                 
-            case MemOp::WRITE_ZP:
-                BUS_SET_ADDR(bus_state, reg[CpuReg::ABL]);
+            // Zero page X indexed - shared calculation with fallthrough
+            case MemOp::WRITE_ZPX:
                 bus_state &= ~BUS_RW_BIT; // Write (RW=0)
-                break;
-                
+                [[fallthrough]];
             case MemOp::READ_ZPX:
                 addr = (reg[CpuReg::ABL] + reg[CpuReg::X]) & 0xFF;
                 BUS_SET_ADDR(bus_state, addr);
                 break;
                 
-            case MemOp::WRITE_ZPX:
-                addr = (reg[CpuReg::ABL] + reg[CpuReg::X]) & 0xFF;
-                BUS_SET_ADDR(bus_state, addr);
+            // Zero page Y indexed - shared calculation with fallthrough
+            case MemOp::WRITE_ZPY:
                 bus_state &= ~BUS_RW_BIT; // Write (RW=0)
-                break;
-                
+                [[fallthrough]];
             case MemOp::READ_ZPY:
                 addr = (reg[CpuReg::ABL] + reg[CpuReg::Y]) & 0xFF;
                 BUS_SET_ADDR(bus_state, addr);
                 break;
                 
-            case MemOp::WRITE_ZPY:
-                addr = (reg[CpuReg::ABL] + reg[CpuReg::Y]) & 0xFF;
-                BUS_SET_ADDR(bus_state, addr);
-                bus_state &= ~BUS_RW_BIT; // Write (RW=0)
-                break;
-                
+            // Stack operations
             case MemOp::READ_SP:
                 BUS_SET_ADDR(bus_state, 0x0100 | reg[CpuReg::S]);
                 break;
@@ -94,14 +91,9 @@ public:
                 BUS_SET_ADDR(bus_state, 0x0100 | reg[CpuReg::S]);
                 break;
                 
-            case MemOp::READ_INDIRECT:
-                addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
-                BUS_SET_ADDR(bus_state, addr);
-                break;
-                
             default:
                 // Unknown operation - default to PC read
-                pc = (reg[static_cast<uint8_t>(CpuReg::PCH)] << 8) | reg[static_cast<uint8_t>(CpuReg::PCL)];
+                pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
                 BUS_SET_ADDR(bus_state, pc);
                 break;
         }
