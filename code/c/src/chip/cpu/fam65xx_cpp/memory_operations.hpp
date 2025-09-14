@@ -14,7 +14,7 @@ class MemoryOperations {
 public:
     template<typename RegArray>
     static inline bus_state_t execute_memory_operation(bus_state_t bus_state, RegArray& reg,
-                                                      MemOp mem_op, DataOp data_op) {
+                                                      MemOp mem_op, DataOp /* data_op */) {
         if (mem_op == MemOp::NOP) return bus_state;
         
         uint16_t addr = 0;

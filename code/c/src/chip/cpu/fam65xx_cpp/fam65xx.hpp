@@ -22,6 +22,8 @@ private:
     
     // Hardware pin state tracking for interrupt edge detection
     bool prev_nmi_pin_state = true;  // NMI pin state tracking (starts high)
+    bool prev_irq_pin_state = true;  // IRQ pin state tracking (starts high)
+    uint8_t irq_sources = 0;         // Multiple IRQ source tracking (8 possible sources)
     
     // CPU registers - type-safe array that accepts CpuReg enum directly
     CpuRegisterArray reg;
@@ -74,6 +76,11 @@ public:
         pending_data = 0;
         pending_data_op = 0;
         
+        // Reset interrupt pin state tracking
+        prev_nmi_pin_state = true;  // NMI pin starts high (inactive)
+        prev_irq_pin_state = true;  // IRQ pin starts high (inactive)
+        irq_sources = 0;            // No IRQ sources active
+        
         // No separate interrupt_opcode field needed - using main opcode field
     }
     
@@ -111,7 +118,7 @@ public:
                     clear_state(STATE_NMI_EDGE);
                     return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_NMI);
                 }
-                // IRQ has lower priority and is maskable
+                // IRQ has lower priority and is maskable - check I flag synchronously
                 else if ((critical_states & STATE_IRQ_PENDING) &&
                           !(reg[static_cast<uint8_t>(CpuReg::P)] & P_IRQ_DIS)) {
                     return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_IRQ);
@@ -239,6 +246,11 @@ public:
         // Execute ALU operation if specified
         if (alu_op != AluOp::NOP) {
             alu_ops::execute_alu_operation(reg, alu_op, bus_data);
+            
+            // Handle interrupt flag changes for SEI/CLI instructions
+            if (alu_op == AluOp::SEI || alu_op == AluOp::CLI) {
+                handle_interrupt_flag_change();
+            }
             
             // Handle decimal mode bugs for NMOS variants
             handle_decimal_mode_bugs(reg[CpuReg::A], alu_op);
@@ -472,27 +484,75 @@ public:
         set_state(STATE_NMI_EDGE | STATE_NMI_PENDING);
     }
     
-    // IRQ pin control with level-sensitive detection
+    // Enhanced IRQ pin control with proper level-sensitive detection
     inline void irq(bool pin_state) {
+        // Track pin state changes for debugging and edge case handling
+        // bool pin_changed = (prev_irq_pin_state != pin_state);  // Reserved for future use
+        prev_irq_pin_state = pin_state;
+        
         if (!pin_state) {
             // IRQ pin active (low) - set line state
             set_state(STATE_IRQ_LINE);
-            // IRQ is maskable - only set pending if interrupts enabled
-            if (!(reg[CpuReg::P] & P_IRQ_DIS)) {
-                set_state(STATE_IRQ_PENDING);
-            }
+            // Update IRQ pending state based on current mask status
+            update_irq_pending_state();
         } else {
             // IRQ pin inactive (high) - clear line and pending states
             clear_state(STATE_IRQ_LINE | STATE_IRQ_PENDING);
         }
     }
     
+    // Enhanced IRQ control with multiple source support
+    inline void irq_source(uint8_t source_bit, bool active) {
+        if (active) {
+            irq_sources |= (1 << source_bit);  // Set source bit
+        } else {
+            irq_sources &= ~(1 << source_bit); // Clear source bit
+        }
+        
+        // Update IRQ line state based on any active sources
+        if (irq_sources != 0) {
+            set_state(STATE_IRQ_LINE);
+            update_irq_pending_state();
+        } else {
+            clear_state(STATE_IRQ_LINE | STATE_IRQ_PENDING);
+        }
+    }
+    
+    // Check if IRQ is currently masked by I flag
+    inline bool is_irq_masked() const {
+        return (reg[CpuReg::P] & P_IRQ_DIS) != 0;
+    }
+    
+    // Update IRQ pending state based on current mask status
+    inline void update_irq_pending_state() {
+        if (get_state(STATE_IRQ_LINE)) {
+            // IRQ line is active - set pending only if not masked
+            if (!is_irq_masked()) {
+                set_state(STATE_IRQ_PENDING);
+            } else {
+                clear_state(STATE_IRQ_PENDING);
+            }
+        } else {
+            // IRQ line inactive - clear pending
+            clear_state(STATE_IRQ_PENDING);
+        }
+    }
+    
+    // Handle SEI/CLI instruction effects on IRQ processing
+    inline void handle_interrupt_flag_change() {
+        // When I flag changes, update IRQ pending state accordingly
+        // This ensures proper hardware-accurate behavior when CLI/SEI are executed
+        update_irq_pending_state();
+    }
+    
     // RESET pin control
     inline void reset() {
         set_state(STATE_RESET_PENDING);
-        // Reset also clears all pending interrupts
-        clear_state(STATE_NMI_PENDING | STATE_IRQ_PENDING | STATE_NMI_EDGE);
+        // Reset also clears all pending interrupts and state tracking
+        clear_state(STATE_NMI_PENDING | STATE_IRQ_PENDING | STATE_NMI_EDGE | STATE_IRQ_LINE);
         prev_nmi_pin_state = true; // Reset NMI pin state to high
+        prev_irq_pin_state = true; // Reset IRQ pin state to high
+        irq_sources = 0;           // Clear all IRQ sources
     }
     
     // === CONTROL LINE PROCESSING ===
