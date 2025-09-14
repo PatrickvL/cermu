@@ -2,7 +2,7 @@
 #define CYCLE_TABLE_GEN_HPP
 
 #include "cycle_types.hpp"
-#include "cycle_validation.hpp"
+#include "fam65xx_validation.hpp"
 #include "cycle_instructions.hpp"
 #include <array>
 
