@@ -14,22 +14,19 @@ enum class CpuReg : uint8_t {
 constexpr uint8_t P_CARRY = 0x01, P_ZERO = 0x02, P_IRQ_DIS = 0x04, P_DECIMAL = 0x08;
 constexpr uint8_t P_BREAK = 0x10, P_UNUSED = 0x20, P_OVERFLOW = 0x40, P_NEGATIVE = 0x80;
 
-// State flags
-constexpr uint16_t STATE_RESET_PENDING = 0x0001, STATE_SYNC_NEXT = 0x0002;
-constexpr uint16_t STATE_JAM_STATE = 0x0004, STATE_PAGE_CROSSED = 0x0008;
-constexpr uint16_t STATE_BRANCH_TAKEN = 0x0010, STATE_NMI_EDGE = 0x0020;
-constexpr uint16_t STATE_IRQ_LINE = 0x0040, STATE_NMI_PENDING = 0x0080;
-constexpr uint16_t STATE_IRQ_PENDING = 0x0100, STATE_PENDING_DATA = 0x0200;
-constexpr uint16_t STATE_RDY_WAIT = 0x0400, STATE_INTERRUPT_SEQUENCE = 0x0800;
-constexpr uint16_t STATE_DMA_CYCLE = 0x1000, STATE_WAI_MODE = 0x2000;
-constexpr uint16_t STATE_STP_MODE = 0x4000, STATE_SO_EDGE = 0x8000;
+// State flags - ALL USE uint32_t to prevent type casting bugs with extended flags
+constexpr uint32_t STATE_RESET_PENDING = 0x0001, STATE_SYNC_NEXT = 0x0002;
+constexpr uint32_t STATE_JAM_STATE = 0x0004, STATE_PAGE_CROSSED = 0x0008;
+constexpr uint32_t STATE_BRANCH_TAKEN = 0x0010, STATE_NMI_EDGE = 0x0020;
+constexpr uint32_t STATE_IRQ_LINE = 0x0040, STATE_NMI_PENDING = 0x0080;
+constexpr uint32_t STATE_IRQ_PENDING = 0x0100, STATE_PENDING_DATA = 0x0200;
+constexpr uint32_t STATE_RDY_WAIT = 0x0400, STATE_INTERRUPT_SEQUENCE = 0x0800;
+constexpr uint32_t STATE_DMA_CYCLE = 0x1000, STATE_WAI_MODE = 0x2000;
+constexpr uint32_t STATE_STP_MODE = 0x4000, STATE_SO_EDGE = 0x8000;
 
-// Extended state flags for 65C816
-// All 16 bits are used, so we need unique values that don't conflict
-// Since PENDING_DATA (0x0200) might not be actively used, let's repurpose bits
-// Or find a better solution: extend to 32-bit state_flags later
-constexpr uint32_t STATE_ABORT_PENDING = 0x10000; // Bit 16 (requires 32-bit state_flags)
-constexpr uint32_t STATE_COP_PENDING = 0x20000;   // Bit 17 (requires 32-bit state_flags)
+// Extended state flags for 65C816 - consistent uint32_t type prevents casting bugs
+constexpr uint32_t STATE_ABORT_PENDING = 0x10000; // Bit 16
+constexpr uint32_t STATE_COP_PENDING = 0x20000;   // Bit 17
 
 // Memory operations - type-safe enum (OPTIMIZED: reads first, writes second for branchless comparison)
 enum class MemOp : uint8_t {
