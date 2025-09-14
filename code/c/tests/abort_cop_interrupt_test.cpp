@@ -80,6 +80,14 @@ void test_abort_interrupt() {
     
     // Execute several cycles to complete the ABORT interrupt sequence
     bus_state_t bus_state = 0;
+    // Set all control pins to their inactive (high) state to prevent interference
+    bus_state |= BUS_BIT(BUS_RDY_BIT);   // RDY high (ready)
+    if constexpr (config::has_be_pin) {
+        bus_state |= BUS_BIT(BUS_BE_BIT);    // BE high (bus enabled)
+    }
+    if constexpr (config::has_abort_pin) {
+        bus_state |= BUS_BIT(BUS_ABORT_BIT); // ABORT high (inactive)
+    }
     
     // ABORT interrupt should have 7 cycles like other interrupts
     for (int cycle = 0; cycle < 10; cycle++) {
@@ -187,6 +195,14 @@ void test_cop_instruction() {
     
     // Execute several cycles to complete the COP instruction sequence
     bus_state_t bus_state = 0;
+    // Set all control pins to their inactive (high) state to prevent interference
+    bus_state |= BUS_BIT(BUS_RDY_BIT);   // RDY high (ready)
+    if constexpr (config::has_be_pin) {
+        bus_state |= BUS_BIT(BUS_BE_BIT);    // BE high (bus enabled)
+    }
+    if constexpr (config::has_abort_pin) {
+        bus_state |= BUS_BIT(BUS_ABORT_BIT); // ABORT high (inactive)
+    }
     
     // COP instruction should have 7 cycles like BRK
     for (int cycle = 0; cycle < 10; cycle++) {
@@ -294,6 +310,11 @@ void test_interrupt_priority() {
     // Initialize harness state
     harness.reset_bus_state();
     
+    // Debug: Check if ABORT pin support is working
+    std::cout << "Before ABORT pin: state flags = 0x" << std::hex << cpu.get_state_flags() << std::endl;
+    std::cout << "STATE_ABORT_PENDING constant = 0x" << std::hex << STATE_ABORT_PENDING << std::endl;
+    std::cout << "STATE_DMA_CYCLE constant = 0x" << std::hex << STATE_DMA_CYCLE << std::endl;
+    
     // Trigger multiple interrupts simultaneously
     cpu.abort_pin(false);  // ABORT active
     std::cout << "After ABORT pin: state flags = 0x" << std::hex << cpu.get_state_flags() << std::endl;
@@ -309,7 +330,13 @@ void test_interrupt_priority() {
     
     // Execute one cycle - ABORT should win due to highest priority
     bus_state_t bus_state = 0;
-    bus_state |= BUS_BIT(BUS_RDY_BIT);  // RDY high
+    // Set control pins to their inactive state but DON'T manipulate ABORT pin
+    // as we want to preserve the edge detection that was triggered by abort_pin(false)
+    bus_state |= BUS_BIT(BUS_RDY_BIT);   // RDY high (ready)
+    if constexpr (config::has_be_pin) {
+        bus_state |= BUS_BIT(BUS_BE_BIT);    // BE high (bus enabled)
+    }
+    // NOTE: Deliberately NOT setting BUS_ABORT_BIT to avoid interfering with edge detection
     
     // First cycle should start ABORT sequence
     bus_state = cpu.cycle_tick(bus_state);
@@ -326,8 +353,30 @@ void test_interrupt_priority() {
     std::cout << "Interrupt priority test passed - ABORT has highest priority!" << std::endl;
 }
 
+void test_simple_abort_flag() {
+    std::cout << "Testing simple ABORT flag setting..." << std::endl;
+    
+    using config = config_65c816;
+    fam65xx<config> cpu;
+    
+    cpu.init();
+    std::cout << "After init: flags = 0x" << std::hex << cpu.get_state_flags() << std::endl;
+    
+    // Simple test: just call abort_pin
+    cpu.abort_pin(false);
+    std::cout << "After abort_pin(false): flags = 0x" << std::hex << cpu.get_state_flags() << std::endl;
+    
+    // Check if ABORT flag is set
+    if (cpu.get_state_flags() & STATE_ABORT_PENDING) {
+        std::cout << "ABORT flag is correctly set!" << std::endl;
+    } else {
+        std::cout << "ERROR: ABORT flag is NOT set!" << std::endl;
+    }
+}
+
 int main() {
     try {
+        test_simple_abort_flag();
         test_abort_interrupt();
         test_cop_instruction();
         test_interrupt_priority();
