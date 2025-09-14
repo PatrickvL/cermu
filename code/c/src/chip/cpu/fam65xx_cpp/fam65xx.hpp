@@ -19,6 +19,7 @@ private:
     uint16_t state_flags = 0;
     uint8_t pending_data = 0;
     uint8_t pending_data_op = 0;
+    uint64_t cycle_counter = 0;    // Real cycle counter for debugging
     
     // Hardware pin state tracking for interrupt edge detection
     bool prev_nmi_pin_state = true;  // NMI pin state tracking (starts high)
@@ -87,6 +88,7 @@ public:
         cycle_step = 0;
         pending_data = 0;
         pending_data_op = 0;
+        cycle_counter = 0;          // Reset cycle counter
         
         // Reset interrupt pin state tracking
         prev_nmi_pin_state = true;  // NMI pin starts high (inactive)
@@ -98,6 +100,9 @@ public:
     
     // Execute one CPU cycle - OPTIMIZED HOT PATH
     inline bus_state_t cycle_tick(bus_state_t bus_state) {
+        // Increment cycle counter for real execution tracking
+        cycle_counter++;
+        
         // HOT PATH OPTIMIZATION: Branch prediction hints and batched checks
         
         // Likely path: normal instruction execution (90%+ of cycles)
@@ -162,6 +167,14 @@ public:
             opcode = BUS_GET_DATA(bus_state);
             cycle_step = 1;
             state_flags |= STATE_SYNC_NEXT; // Direct bit set for speed
+            
+            // Special case: BRK instruction ($00) triggers software interrupt
+            if (__builtin_expect(opcode == 0x00, 0)) {
+                // BRK should start interrupt sequence immediately after opcode fetch
+                // Use special BRK virtual opcode to set B flag correctly
+                return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_BRK);
+            }
+            
             return bus_state;
         }
         
@@ -239,6 +252,10 @@ public:
             case VIRTUAL_OPCODE_IRQ:
                 clear_state(STATE_IRQ_PENDING);
                 break;
+            case VIRTUAL_OPCODE_BRK:
+                // BRK doesn't clear any pending flags, it's a software interrupt
+                // PC increment happens automatically in the BRK sequence
+                break;
         }
         
         // Initialize interrupt sequence state - use main opcode field
@@ -271,6 +288,11 @@ public:
                     reg[CpuReg::ABH] = 0xFF;
                     break;
                 case VIRTUAL_OPCODE_IRQ:
+                    reg[CpuReg::ABL] = (cycle_step == 6) ? 0xFE : 0xFF;
+                    reg[CpuReg::ABH] = 0xFF;
+                    break;
+                case VIRTUAL_OPCODE_BRK:
+                    // BRK uses IRQ vector ($FFFE/$FFFF)
                     reg[CpuReg::ABL] = (cycle_step == 6) ? 0xFE : 0xFF;
                     reg[CpuReg::ABH] = 0xFF;
                     break;
@@ -310,6 +332,14 @@ public:
             opcode = BUS_GET_DATA(bus_state);
             cycle_step = 1;
             set_state(STATE_SYNC_NEXT);
+            
+            // Special case: BRK instruction ($00) triggers software interrupt
+            if (opcode == 0x00) {
+                // BRK should start interrupt sequence immediately after opcode fetch
+                // Use special BRK virtual opcode to set B flag correctly
+                return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_BRK);
+            }
+            
             return bus_state;
         }
         
@@ -585,6 +615,57 @@ public:
     inline void set_pc(uint16_t val) {
         reg[CpuReg::PCL] = val & 0xFF;
         reg[CpuReg::PCH] = (val >> 8) & 0xFF;
+    }
+    
+    // === TEST INFRASTRUCTURE API ===
+    // Additional methods needed for test harnesses and debugging
+    
+    // Alternative register access methods
+    inline uint8_t get_sp() const { return reg[CpuReg::S]; }
+    inline uint8_t get_status() const { return reg[CpuReg::P]; }
+    inline void set_sp(uint8_t val) { reg[CpuReg::S] = val; }
+    inline void set_status(uint8_t val) { reg[CpuReg::P] = val; }
+    
+    // Hardware interface for test harnesses
+    inline uint16_t get_address() const {
+        // Return the current address being accessed by the CPU
+        // During opcode fetch (cycle_step == 0), use PC
+        // During instruction execution, use the calculated address from ABL/ABH
+        if (cycle_step == 0) {
+            // Opcode fetch: use current PC
+            return (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+        } else {
+            // Instruction execution: use calculated address
+            return (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
+        }
+    }
+    
+    inline bool get_rw() const {
+        // Return read/write line state (true = read, false = write)
+        // Check if current cycle is a write operation
+        if (cycle_step > 0) {
+            const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
+            const MemOp mem_op = static_cast<MemOp>(cycle.mem_op);
+            const uint8_t mem_op_value = static_cast<uint8_t>(mem_op);
+            // Write operations are >= MEMOP_WRITE_CUTOFF
+            return mem_op_value < MEMOP_WRITE_CUTOFF;
+        }
+        return true; // Default to read during opcode fetch
+    }
+    
+    // Cycle counting for performance analysis
+    inline uint64_t get_cycle_count() const {
+        return cycle_counter;
+    }
+    
+    inline void reset_cycle_count() {
+        cycle_counter = 0;
+    }
+    
+    // Enhanced IRQ pin control for test compatibility
+    inline void irq_pin(bool pin_state) {
+        // Forward to existing irq() method
+        irq(pin_state);
     }
     
     // Debug functions - inline for performance

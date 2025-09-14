@@ -28,6 +28,7 @@ constexpr uint16_t STATE_STP_MODE = 0x4000, STATE_SO_EDGE = 0x8000;
 constexpr uint16_t VIRTUAL_OPCODE_RESET = 256;  // Virtual opcode for RESET sequence
 constexpr uint16_t VIRTUAL_OPCODE_NMI   = 257;  // Virtual opcode for NMI sequence
 constexpr uint16_t VIRTUAL_OPCODE_IRQ   = 258;  // Virtual opcode for IRQ sequence
+constexpr uint16_t VIRTUAL_OPCODE_BRK   = 259;  // Virtual opcode for BRK sequence
 
 // Memory operations - type-safe enum (OPTIMIZED: reads first, writes second for branchless comparison)
 enum class MemOp : uint8_t {
