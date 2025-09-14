@@ -307,6 +307,75 @@ public:
             default: execute_alu_operation_constexpr<AluOp::NOP>(reg, data); break;
         }
     }
+    
+    // PERFORMANCE: Fast path ALU operation execution (optimized for hot path)
+    template<typename RegArray>
+    static inline void execute_alu_operation_fast(RegArray& reg, AluOp alu_op, uint8_t data) {
+        // Hot path optimization: Most common operations first with branch prediction
+        
+        // HOTTEST PATH: NOP operation (most cycles don't use ALU)
+        if (__builtin_expect(alu_op == AluOp::NOP, 1)) {
+            return; // No operation - fastest path
+        }
+        
+        // COMMON PATHS: Register transfers and loads (very frequent)
+        if (__builtin_expect(alu_op >= AluOp::TXA && alu_op <= AluOp::TSX, 1)) {
+            switch (alu_op) {
+                case AluOp::TXA:
+                    reg[CpuReg::A] = reg[CpuReg::X];
+                    set_nz_flags(reg, reg[CpuReg::A]);
+                    return;
+                case AluOp::TAX:
+                    reg[CpuReg::X] = reg[CpuReg::A];
+                    set_nz_flags(reg, reg[CpuReg::X]);
+                    return;
+                case AluOp::TYA:
+                    reg[CpuReg::A] = reg[CpuReg::Y];
+                    set_nz_flags(reg, reg[CpuReg::A]);
+                    return;
+                case AluOp::TAY:
+                    reg[CpuReg::Y] = reg[CpuReg::A];
+                    set_nz_flags(reg, reg[CpuReg::Y]);
+                    return;
+                case AluOp::TSX:
+                    reg[CpuReg::X] = reg[CpuReg::S];
+                    set_nz_flags(reg, reg[CpuReg::X]);
+                    return;
+                case AluOp::TXS:
+                    reg[CpuReg::S] = reg[CpuReg::X];
+                    return; // TXS doesn't set flags
+                default:
+                    break;
+            }
+        }
+        
+        // COMMON PATHS: Logical operations (AND, ORA, EOR are frequent)
+        if (__builtin_expect(alu_op >= AluOp::AND && alu_op <= AluOp::EOR, 1)) {
+            uint8_t result;
+            switch (alu_op) {
+                case AluOp::AND:
+                    result = reg[CpuReg::A] & data;
+                    reg[CpuReg::A] = result;
+                    set_nz_flags(reg, result);
+                    return;
+                case AluOp::ORA:
+                    result = reg[CpuReg::A] | data;
+                    reg[CpuReg::A] = result;
+                    set_nz_flags(reg, result);
+                    return;
+                case AluOp::EOR:
+                    result = reg[CpuReg::A] ^ data;
+                    reg[CpuReg::A] = result;
+                    set_nz_flags(reg, result);
+                    return;
+                default:
+                    break;
+            }
+        }
+        
+        // LESS COMMON: Fall back to full implementation for other operations
+        execute_alu_operation(reg, alu_op, data);
+    }
 };
 
 } // namespace fam65xx_cpp

@@ -29,14 +29,19 @@ constexpr uint16_t VIRTUAL_OPCODE_RESET = 256;  // Virtual opcode for RESET sequ
 constexpr uint16_t VIRTUAL_OPCODE_NMI   = 257;  // Virtual opcode for NMI sequence
 constexpr uint16_t VIRTUAL_OPCODE_IRQ   = 258;  // Virtual opcode for IRQ sequence
 
-// Memory operations - type-safe enum
+// Memory operations - type-safe enum (OPTIMIZED: reads first, writes second for branchless comparison)
 enum class MemOp : uint8_t {
-    NOP = 0, READ_PC_INC, READ_PC, READ_ABS, WRITE_ABS,
-    READ_ZP, WRITE_ZP, READ_ZPX, WRITE_ZPX, READ_ZPY,
-    WRITE_ZPY, READ_SP, WRITE_SP_DEC, READ_SP_INC,
+    // === READ OPERATIONS (0-8) ===
+    NOP = 0, READ_PC_INC, READ_PC, READ_ABS, READ_ZP,
+    READ_ZPX, READ_ZPY, READ_SP, READ_SP_INC,
+    // === WRITE OPERATIONS (9+) ===
+    WRITE_ABS = 9, WRITE_ZP, WRITE_ZPX, WRITE_ZPY, WRITE_SP_DEC,
     // Interrupt vector reading - functionally identical to READ_ABS but semantically distinct
     READ_VECTOR = READ_ABS  // Alias to READ_ABS - same memory operation, different semantic meaning
 };
+
+// PERFORMANCE: Branchless read/write detection cutoff point
+constexpr uint8_t MEMOP_WRITE_CUTOFF = static_cast<uint8_t>(MemOp::WRITE_ABS);
 
 // Data operations - type-safe enum
 enum class DataOp : uint8_t {

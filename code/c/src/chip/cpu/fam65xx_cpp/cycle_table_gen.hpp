@@ -497,6 +497,21 @@ public:
         return cycle_table[get_cycle_index(opcode, cycle)];
     }
     
+    // PERFORMANCE: Fast path cycle table lookup (optimized for hot path)
+    static constexpr cycle_desc_t get_cycle_fast(uint16_t opcode, uint8_t cycle) {
+        // Hot path optimization: Direct table lookup with bounds checking
+        // Most common opcodes (instruction fetch and common operations) get priority
+        
+        // HOTTEST PATH: Bounds check with branch prediction
+        if (__builtin_expect(opcode < TOTAL_OPCODES && cycle >= 1 && cycle <= MAX_CYCLES, 1)) {
+            // Direct table access - fastest possible lookup
+            return cycle_table[get_cycle_index(opcode, cycle)];
+        }
+        
+        // RARE PATH: Out of bounds - return empty cycle
+        return addr::make_empty_cycle();
+    }
+    
     // === COMPILE-TIME VALIDATION SYSTEM ===
     
     // Template function to validate SYNC placement for a specific opcode

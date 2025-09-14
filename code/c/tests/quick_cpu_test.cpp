@@ -67,33 +67,33 @@ int main() {
         bus_state |= BUS_BIT(BUS_RDY_BIT);  // RDY high (ready)
         bus_state |= BUS_BIT(BUS_RW_BIT);   // Default to read mode
         
-        // Execute one CPU cycle - this sets up the address and control lines
+        // Get the address the CPU wants to access first
         bus_state = cpu.cycle_tick(bus_state);
-        
-        // Get the address the CPU put on the bus
         uint16_t addr = BUS_GET_ADDR(bus_state);
         
-        // Respond to CPU memory operations - must be immediate for correct timing
+        // Respond to CPU memory operations
         if (bus_state & BUS_BIT(BUS_RW_BIT)) {
-            // Read cycle - provide data to CPU immediately
+            // Read cycle - provide data to CPU
             uint8_t data = memory.read(addr);
             BUS_SET_DATA(bus_state, data);
             
-            // Debug: Show what data we're providing for reset vector reads
+            // Debug: Show what data we're providing for specific addresses
             if (addr == 0xFFFC || addr == 0xFFFD) {
-                std::cout << "  DEBUG: Reading reset vector $" << std::hex << addr
+                std::cout << "  DEBUG: Pre-loading reset vector $" << std::hex << addr
+                          << " -> $" << std::setw(2) << (int)data << std::endl;
+            }
+            
+            // Debug: Show data operation details
+            if (addr >= 0x1000 && addr <= 0x1010) {
+                std::cout << "  DEBUG: Reading program memory $" << std::hex << addr
                           << " -> $" << std::setw(2) << (int)data << std::endl;
             }
         } else {
             // Write cycle - CPU wants to write to memory
             uint8_t data = BUS_GET_DATA(bus_state);
             memory.write(addr, data);
-        }
-        
-        // CRITICAL: Call CPU again to process the updated bus data
-        // This ensures data operations see the correct memory contents
-        if (bus_state & BUS_BIT(BUS_RW_BIT)) {
-            bus_state = cpu.cycle_tick(bus_state);
+            std::cout << "  DEBUG: Writing to $" << std::hex << addr
+                      << " <- $" << std::setw(2) << (int)data << std::endl;
         }
         
         // Get CPU state for monitoring

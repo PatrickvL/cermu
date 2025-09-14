@@ -45,7 +45,7 @@ public:
         return cycle_tables::get_cycle(opcode, step);
     }
     
-    // State flag helpers
+    // BRANCH ELIMINATION: Branchless state flag helpers with bit manipulation optimization
     inline bool get_state(uint16_t flag) const {
         return (state_flags & flag) != 0;
     }
@@ -56,6 +56,18 @@ public:
     
     inline void clear_state(uint16_t flag) {
         state_flags &= ~flag;
+    }
+    
+    // BRANCH ELIMINATION: Branchless conditional state operations
+    inline void set_state_conditional(uint16_t flag, bool condition) {
+        // Branchless: Set flag if condition is true, clear if false
+        state_flags = (state_flags & ~flag) | (condition ? flag : 0);
+    }
+    
+    inline void toggle_state_conditional(uint16_t flag, bool condition) {
+        // Branchless: Toggle flag based on condition
+        const uint16_t mask = condition ? flag : 0;
+        state_flags ^= mask;
     }
     
     // Initialize CPU
@@ -403,6 +415,67 @@ public:
         pending_data_op = data_op;
     }
     
+    // PERFORMANCE: Fast path data operation execution (optimized for hot path)
+    inline void execute_data_operation_fast(DataOp data_op, uint8_t data) {
+        // Store data for potential ALU use - DIRECT ASSIGNMENT FOR SPEED
+        reg[CpuReg::DL] = data;
+        
+        // Fast path optimization: Most common operations first with branch prediction
+        // Direct register loads are most common (A, X, Y, S, P registers)
+        if (__builtin_expect(static_cast<uint8_t>(data_op) <= static_cast<uint8_t>(CpuReg::P), 1)) {
+            // HOTTEST PATH: Direct register load for A, X, Y, S, P only
+            reg[static_cast<uint8_t>(data_op)] = data;
+            pending_data_op = static_cast<uint8_t>(data_op); // Cache for speed
+            return;
+        }
+        
+        // Handle less common operations with optimized switch
+        switch (data_op) {
+            case DataOp::ALU:
+                pending_data = data;
+                break;
+            case DataOp::ADDR_CALC_LOW:
+                reg[CpuReg::ABL] = data;
+                break;
+            case DataOp::ADDR_CALC_HIGH:
+                reg[CpuReg::ABH] = data;
+                break;
+            case DataOp::BRANCH:
+                // Branch handling - RARE PATH
+                handle_branch_instruction(data);
+                break;
+            case DataOp::JMP:
+                // Jump execution - RARE PATH
+                {
+                    const uint16_t addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
+                    reg[CpuReg::PCL] = addr & 0xFF;
+                    reg[CpuReg::PCH] = (addr >> 8) & 0xFF;
+                }
+                break;
+            case DataOp::INDIRECT_LOW:
+                reg[CpuReg::ABL] = data;
+                break;
+            case DataOp::INDIRECT_HIGH:
+                reg[CpuReg::ABH] = data;
+                // Handle JMP indirect with proper 6502 page boundary bug vs CMOS fix - RARE PATH
+                if (__builtin_expect(opcode == 0x6C && cycle_step == 5, 0)) {
+                    handle_jmp_indirect_bug();
+                }
+                break;
+            case DataOp::STACK_PULL:
+                handle_stack_pull(data);
+                break;
+            case DataOp::INTERRUPT_VEC:
+                handle_interrupt_vector(data);
+                break;
+            default:
+                break;
+        }
+        
+        // Set pending data operation for next cycle - DIRECT ASSIGNMENT
+        pending_data_op = static_cast<uint8_t>(data_op);
+    }
+    
     // Handle branch instructions (BCC, BCS, BEQ, BNE, BMI, BPL, BVC, BVS, BRA)
     inline void handle_branch_instruction(uint8_t offset) {
         // Special handling for BRA (Branch Always) - 65C02 unconditional branch
@@ -422,41 +495,21 @@ public:
             return;
         }
         
-        // Conditional branch handling for other branch instructions
-        bool should_branch = false;
+        // Extract flag selection bits 6-7, pre-shifted for byte indexing
+        constexpr uint32_t FLAG_PACKED = (P_ZERO << 24) | (P_CARRY << 16) | (P_OVERFLOW << 8) | P_NEGATIVE;
+        // Get flag mask by extracting the appropriate byte from packed constant (shift by 0, 8, 16 or 24)
+        const uint8_t flag_mask = static_cast<uint8_t>(FLAG_PACKED >> ((opcode >> 3) & 0x18));
         
-        // Determine if branch should be taken based on opcode
-        switch (opcode) {
-            case 0x10: // BPL (Branch if PLus)
-                should_branch = !(reg[CpuReg::P] & P_NEGATIVE);
-                break;
-            case 0x30: // BMI (Branch if MInus)
-                should_branch = (reg[CpuReg::P] & P_NEGATIVE);
-                break;
-            case 0x50: // BVC (Branch if oVerflow Clear)
-                should_branch = !(reg[CpuReg::P] & P_OVERFLOW);
-                break;
-            case 0x70: // BVS (Branch if oVerflow Set)
-                should_branch = (reg[CpuReg::P] & P_OVERFLOW);
-                break;
-            case 0x90: // BCC (Branch if Carry Clear)
-                should_branch = !(reg[CpuReg::P] & P_CARRY);
-                break;
-            case 0xB0: // BCS (Branch if Carry Set)
-                should_branch = (reg[CpuReg::P] & P_CARRY);
-                break;
-            case 0xD0: // BNE (Branch if Not Equal)
-                should_branch = !(reg[CpuReg::P] & P_ZERO);
-                break;
-            case 0xF0: // BEQ (Branch if EQual)
-                should_branch = (reg[CpuReg::P] & P_ZERO);
-                break;
-            default:
-                // Unknown branch instruction
-                break;
-        }
+        // Extract opcode bits 4,6 to check for inversion pattern (opcodes x1x0:xxxx)
+        const uint8_t pattern = (opcode >> 4) & 5;
+        // Create all-ones mask when pattern equals 1 (only opcodes 0x10, 0x50, 0x90, 0xD0)
+        const uint8_t invert_mask = ~(((pattern ^ 1) | ((pattern ^ 1) - 1)));
         
-        if (should_branch) {
+        // Test flag bit and conditionally invert based on opcode pattern
+        const uint8_t effective_flags = (reg[CpuReg::P] & flag_mask) ^ (flag_mask & invert_mask);
+        
+        // Branch if effective flag evaluation is non-zero
+        if (effective_flags) {
             // Calculate branch target address
             const uint16_t current_pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
             int16_t signed_offset = static_cast<int8_t>(offset); // Sign extend
@@ -599,19 +652,15 @@ public:
         return (reg[CpuReg::P] & P_IRQ_DIS) != 0;
     }
     
-    // Update IRQ pending state based on current mask status
+    // BRANCH ELIMINATION: Branchless IRQ pending state update using bit manipulation
     inline void update_irq_pending_state() {
-        if (get_state(STATE_IRQ_LINE)) {
-            // IRQ line is active - set pending only if not masked
-            if (!is_irq_masked()) {
-                set_state(STATE_IRQ_PENDING);
-            } else {
-                clear_state(STATE_IRQ_PENDING);
-            }
-        } else {
-            // IRQ line inactive - clear pending
-            clear_state(STATE_IRQ_PENDING);
-        }
+        // BRANCHLESS: Use boolean arithmetic for conditional state setting
+        const bool irq_line_active = get_state(STATE_IRQ_LINE);
+        const bool irq_not_masked = !is_irq_masked();
+        const bool should_set_pending = irq_line_active & irq_not_masked;
+        
+        // BRANCHLESS: Set or clear IRQ pending state using conditional bit manipulation
+        set_state_conditional(STATE_IRQ_PENDING, should_set_pending);
     }
     
     // Handle SEI/CLI instruction effects on IRQ processing
@@ -692,30 +741,29 @@ public:
         return bus_state;
     }
     
-    // Handle RDY pin - variant-specific behavior with proper timing
+    // BRANCH ELIMINATION: Template-specialized RDY pin handling with compile-time optimization
     inline bus_state_t handle_rdy_wait(bus_state_t bus_state) {
         // RDY is active-high (0 = not ready, 1 = ready)
-        bool rdy_blocks = false;
+        bool rdy_blocks;
         
         if constexpr (Config::rdy_affects_writes) {
-            // CMOS behavior: RDY affects all cycles
+            // CMOS behavior: RDY affects all cycles - COMPILE-TIME BRANCH ELIMINATION
             rdy_blocks = true;
         } else {
             // NMOS behavior: RDY only affects read cycles during instruction execution
-            if (cycle_step > 0) {
-                // Get current cycle description to determine if it's a read
+            // BRANCH ELIMINATION: Pure branchless comparison (no lookup table needed!)
+            const bool in_instruction = cycle_step > 0;
+            if (in_instruction) {
                 const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
                 const MemOp mem_op = static_cast<MemOp>(cycle.mem_op);
+                const uint8_t mem_op_value = static_cast<uint8_t>(mem_op);
                 
-                // Check if current cycle is a read operation
-                const bool is_read_cycle = (mem_op == MemOp::READ_PC_INC ||
-                                          mem_op == MemOp::READ_PC ||
-                                          mem_op == MemOp::READ_ABS ||
-                                          mem_op == MemOp::READ_ZP ||
-                                          mem_op == MemOp::READ_SP ||
-                                          mem_op == MemOp::READ_SP_INC ||
-                                          mem_op == MemOp::READ_VECTOR);
+                // BRANCHLESS: Read operations are < MEMOP_WRITE_CUTOFF, writes are >= MEMOP_WRITE_CUTOFF
+                // Special case: NOP (0) is not a read operation
+                const bool is_read_cycle = (mem_op_value > 0) & (mem_op_value < MEMOP_WRITE_CUTOFF);
                 rdy_blocks = is_read_cycle;
+            } else {
+                rdy_blocks = false;
             }
         }
         
