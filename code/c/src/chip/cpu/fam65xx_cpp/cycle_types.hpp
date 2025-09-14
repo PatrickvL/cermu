@@ -16,7 +16,7 @@ static constexpr uint16_t VIRTUAL_OPCODE_BRK   = 259;
 
 // Constants for 1D array layout
 static constexpr uint8_t MAX_CYCLES = 8;
-static constexpr uint16_t TOTAL_OPCODES = 259;  // 256 regular + 3 virtual opcodes
+static constexpr uint16_t TOTAL_OPCODES = 260;  // 256 regular + 4 virtual opcodes
 static constexpr size_t CYCLE_TABLE_SIZE = TOTAL_OPCODES * MAX_CYCLES;  // 259 * 8 = 2072
 
 // Cycle descriptor structure - uses bit fields for packing (16 bits total)
