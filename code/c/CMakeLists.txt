@@ -86,23 +86,19 @@ else()
     endif()
 endif()
 
-# Temporarily disable GUI during C++ core migration
-message(STATUS "GUI temporarily disabled during C++ core migration")
-set(BUILD_GUI FALSE)
-
-# Original GUI detection logic (commented out during migration)
-# if(SDL2_FOUND AND OpenGL_FOUND)
-#     message(STATUS "SDL2 and OpenGL found - GUI will be built")
-#     set(BUILD_GUI TRUE)
-# else()
-#     message(STATUS "SDL2 or OpenGL not found - GUI will be skipped")
-#     set(BUILD_GUI FALSE)
-# endif()
+# GUI detection logic - re-enabled with new fam65xx_cpp support
+if(SDL2_FOUND AND OpenGL_FOUND)
+    message(STATUS "SDL2 and OpenGL found - GUI will be built with fam65xx_cpp support")
+    set(BUILD_GUI TRUE)
+else()
+    message(STATUS "SDL2 or OpenGL not found - GUI will be skipped")
+    set(BUILD_GUI FALSE)
+endif()
 
 # Include directories
 include_directories(
     ${CMAKE_SOURCE_DIR}/src/core
-    ${CMAKE_SOURCE_DIR}/src/chip/cpu/mos6510_cpp
+    ${CMAKE_SOURCE_DIR}/src/chip/cpu/mos6510
     ${CMAKE_SOURCE_DIR}/src/chip/cpu/fam65xx_cpp
     ${CMAKE_SOURCE_DIR}/src/chip/io
     ${CMAKE_SOURCE_DIR}/src/chip/logic
@@ -256,6 +252,8 @@ if(BUILD_GUI)
             src/gui/cimgui_backends.cpp
             src/chip/video/vic_ii/vicii_gui.c
             src/chip/logic/pla_gui.c
+            src/chip/cpu/fam65xx_cpp/fam65xx_gui.hpp
+            src/chip/cpu/fam65xx_cpp/fam65xx_gui.cpp
         )
 
     add_executable(c64emu_gui

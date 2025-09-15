@@ -200,34 +200,6 @@ json_parser/fast:
 .PHONY : json_parser/fast
 
 # Convenience name for target.
-tests/CMakeFiles/test_mos6510_comprehensive.dir/rule:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/test_mos6510_comprehensive.dir/rule
-.PHONY : tests/CMakeFiles/test_mos6510_comprehensive.dir/rule
-
-# Convenience name for target.
-test_mos6510_comprehensive: tests/CMakeFiles/test_mos6510_comprehensive.dir/rule
-.PHONY : test_mos6510_comprehensive
-
-# fast build rule for target.
-test_mos6510_comprehensive/fast:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test_mos6510_comprehensive.dir/build.make tests/CMakeFiles/test_mos6510_comprehensive.dir/build
-.PHONY : test_mos6510_comprehensive/fast
-
-# Convenience name for target.
-tests/CMakeFiles/test_mos6510_basic_tests.dir/rule:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/test_mos6510_basic_tests.dir/rule
-.PHONY : tests/CMakeFiles/test_mos6510_basic_tests.dir/rule
-
-# Convenience name for target.
-test_mos6510_basic_tests: tests/CMakeFiles/test_mos6510_basic_tests.dir/rule
-.PHONY : test_mos6510_basic_tests
-
-# fast build rule for target.
-test_mos6510_basic_tests/fast:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test_mos6510_basic_tests.dir/build.make tests/CMakeFiles/test_mos6510_basic_tests.dir/build
-.PHONY : test_mos6510_basic_tests/fast
-
-# Convenience name for target.
 tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/rule:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/rule
 .PHONY : tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/rule
@@ -312,34 +284,6 @@ brk_flag_setting_test/fast:
 .PHONY : brk_flag_setting_test/fast
 
 # Convenience name for target.
-tests/CMakeFiles/run_comprehensive_test.dir/rule:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/run_comprehensive_test.dir/rule
-.PHONY : tests/CMakeFiles/run_comprehensive_test.dir/rule
-
-# Convenience name for target.
-run_comprehensive_test: tests/CMakeFiles/run_comprehensive_test.dir/rule
-.PHONY : run_comprehensive_test
-
-# fast build rule for target.
-run_comprehensive_test/fast:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/run_comprehensive_test.dir/build.make tests/CMakeFiles/run_comprehensive_test.dir/build
-.PHONY : run_comprehensive_test/fast
-
-# Convenience name for target.
-tests/CMakeFiles/run_basic_test.dir/rule:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/run_basic_test.dir/rule
-.PHONY : tests/CMakeFiles/run_basic_test.dir/rule
-
-# Convenience name for target.
-run_basic_test: tests/CMakeFiles/run_basic_test.dir/rule
-.PHONY : run_basic_test
-
-# fast build rule for target.
-run_basic_test/fast:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/run_basic_test.dir/build.make tests/CMakeFiles/run_basic_test.dir/build
-.PHONY : run_basic_test/fast
-
-# Convenience name for target.
 tests/CMakeFiles/run_all_tests.dir/rule:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/run_all_tests.dir/rule
 .PHONY : tests/CMakeFiles/run_all_tests.dir/rule
@@ -353,53 +297,29 @@ run_all_tests/fast:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/run_all_tests.dir/build.make tests/CMakeFiles/run_all_tests.dir/build
 .PHONY : run_all_tests/fast
 
-__/src/chip/cpu/fam65xx/fam65xx_core.o: __/src/chip/cpu/fam65xx/fam65xx_core.c.o
-.PHONY : __/src/chip/cpu/fam65xx/fam65xx_core.o
+__/src/chip/cpu/mos6510/mos6510.o: __/src/chip/cpu/mos6510/mos6510.cpp.o
+.PHONY : __/src/chip/cpu/mos6510/mos6510.o
 
 # target to build an object file
-__/src/chip/cpu/fam65xx/fam65xx_core.c.o:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/mos6510_lib.dir/build.make tests/CMakeFiles/mos6510_lib.dir/__/src/chip/cpu/fam65xx/fam65xx_core.c.o
-.PHONY : __/src/chip/cpu/fam65xx/fam65xx_core.c.o
+__/src/chip/cpu/mos6510/mos6510.cpp.o:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/mos6510_lib.dir/build.make tests/CMakeFiles/mos6510_lib.dir/__/src/chip/cpu/mos6510/mos6510.cpp.o
+.PHONY : __/src/chip/cpu/mos6510/mos6510.cpp.o
 
-__/src/chip/cpu/fam65xx/fam65xx_core.i: __/src/chip/cpu/fam65xx/fam65xx_core.c.i
-.PHONY : __/src/chip/cpu/fam65xx/fam65xx_core.i
-
-# target to preprocess a source file
-__/src/chip/cpu/fam65xx/fam65xx_core.c.i:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/mos6510_lib.dir/build.make tests/CMakeFiles/mos6510_lib.dir/__/src/chip/cpu/fam65xx/fam65xx_core.c.i
-.PHONY : __/src/chip/cpu/fam65xx/fam65xx_core.c.i
-
-__/src/chip/cpu/fam65xx/fam65xx_core.s: __/src/chip/cpu/fam65xx/fam65xx_core.c.s
-.PHONY : __/src/chip/cpu/fam65xx/fam65xx_core.s
-
-# target to generate assembly for a file
-__/src/chip/cpu/fam65xx/fam65xx_core.c.s:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/mos6510_lib.dir/build.make tests/CMakeFiles/mos6510_lib.dir/__/src/chip/cpu/fam65xx/fam65xx_core.c.s
-.PHONY : __/src/chip/cpu/fam65xx/fam65xx_core.c.s
-
-__/src/chip/cpu/fam65xx/fam65xx_opcodes.o: __/src/chip/cpu/fam65xx/fam65xx_opcodes.c.o
-.PHONY : __/src/chip/cpu/fam65xx/fam65xx_opcodes.o
-
-# target to build an object file
-__/src/chip/cpu/fam65xx/fam65xx_opcodes.c.o:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/mos6510_lib.dir/build.make tests/CMakeFiles/mos6510_lib.dir/__/src/chip/cpu/fam65xx/fam65xx_opcodes.c.o
-.PHONY : __/src/chip/cpu/fam65xx/fam65xx_opcodes.c.o
-
-__/src/chip/cpu/fam65xx/fam65xx_opcodes.i: __/src/chip/cpu/fam65xx/fam65xx_opcodes.c.i
-.PHONY : __/src/chip/cpu/fam65xx/fam65xx_opcodes.i
+__/src/chip/cpu/mos6510/mos6510.i: __/src/chip/cpu/mos6510/mos6510.cpp.i
+.PHONY : __/src/chip/cpu/mos6510/mos6510.i
 
 # target to preprocess a source file
-__/src/chip/cpu/fam65xx/fam65xx_opcodes.c.i:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/mos6510_lib.dir/build.make tests/CMakeFiles/mos6510_lib.dir/__/src/chip/cpu/fam65xx/fam65xx_opcodes.c.i
-.PHONY : __/src/chip/cpu/fam65xx/fam65xx_opcodes.c.i
+__/src/chip/cpu/mos6510/mos6510.cpp.i:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/mos6510_lib.dir/build.make tests/CMakeFiles/mos6510_lib.dir/__/src/chip/cpu/mos6510/mos6510.cpp.i
+.PHONY : __/src/chip/cpu/mos6510/mos6510.cpp.i
 
-__/src/chip/cpu/fam65xx/fam65xx_opcodes.s: __/src/chip/cpu/fam65xx/fam65xx_opcodes.c.s
-.PHONY : __/src/chip/cpu/fam65xx/fam65xx_opcodes.s
+__/src/chip/cpu/mos6510/mos6510.s: __/src/chip/cpu/mos6510/mos6510.cpp.s
+.PHONY : __/src/chip/cpu/mos6510/mos6510.s
 
 # target to generate assembly for a file
-__/src/chip/cpu/fam65xx/fam65xx_opcodes.c.s:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/mos6510_lib.dir/build.make tests/CMakeFiles/mos6510_lib.dir/__/src/chip/cpu/fam65xx/fam65xx_opcodes.c.s
-.PHONY : __/src/chip/cpu/fam65xx/fam65xx_opcodes.c.s
+__/src/chip/cpu/mos6510/mos6510.cpp.s:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/mos6510_lib.dir/build.make tests/CMakeFiles/mos6510_lib.dir/__/src/chip/cpu/mos6510/mos6510.cpp.s
+.PHONY : __/src/chip/cpu/mos6510/mos6510.cpp.s
 
 __/src/core/chip.o: __/src/core/chip.c.o
 .PHONY : __/src/core/chip.o
@@ -448,30 +368,6 @@ __/src/core/ioport.s: __/src/core/ioport.c.s
 __/src/core/ioport.c.s:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/mos6510_lib.dir/build.make tests/CMakeFiles/mos6510_lib.dir/__/src/core/ioport.c.s
 .PHONY : __/src/core/ioport.c.s
-
-__/test_mos6510_basic.o: __/test_mos6510_basic.c.o
-.PHONY : __/test_mos6510_basic.o
-
-# target to build an object file
-__/test_mos6510_basic.c.o:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test_mos6510_basic_tests.dir/build.make tests/CMakeFiles/test_mos6510_basic_tests.dir/__/test_mos6510_basic.c.o
-.PHONY : __/test_mos6510_basic.c.o
-
-__/test_mos6510_basic.i: __/test_mos6510_basic.c.i
-.PHONY : __/test_mos6510_basic.i
-
-# target to preprocess a source file
-__/test_mos6510_basic.c.i:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test_mos6510_basic_tests.dir/build.make tests/CMakeFiles/test_mos6510_basic_tests.dir/__/test_mos6510_basic.c.i
-.PHONY : __/test_mos6510_basic.c.i
-
-__/test_mos6510_basic.s: __/test_mos6510_basic.c.s
-.PHONY : __/test_mos6510_basic.s
-
-# target to generate assembly for a file
-__/test_mos6510_basic.c.s:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test_mos6510_basic_tests.dir/build.make tests/CMakeFiles/test_mos6510_basic_tests.dir/__/test_mos6510_basic.c.s
-.PHONY : __/test_mos6510_basic.c.s
 
 brk_flag_setting_test.o: brk_flag_setting_test.cpp.o
 .PHONY : brk_flag_setting_test.o
@@ -713,30 +609,6 @@ nmi_edge_detection_test.cpp.s:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/nmi_edge_detection_test.dir/build.make tests/CMakeFiles/nmi_edge_detection_test.dir/nmi_edge_detection_test.cpp.s
 .PHONY : nmi_edge_detection_test.cpp.s
 
-test_mos6510_comprehensive.o: test_mos6510_comprehensive.c.o
-.PHONY : test_mos6510_comprehensive.o
-
-# target to build an object file
-test_mos6510_comprehensive.c.o:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test_mos6510_comprehensive.dir/build.make tests/CMakeFiles/test_mos6510_comprehensive.dir/test_mos6510_comprehensive.c.o
-.PHONY : test_mos6510_comprehensive.c.o
-
-test_mos6510_comprehensive.i: test_mos6510_comprehensive.c.i
-.PHONY : test_mos6510_comprehensive.i
-
-# target to preprocess a source file
-test_mos6510_comprehensive.c.i:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test_mos6510_comprehensive.dir/build.make tests/CMakeFiles/test_mos6510_comprehensive.dir/test_mos6510_comprehensive.c.i
-.PHONY : test_mos6510_comprehensive.c.i
-
-test_mos6510_comprehensive.s: test_mos6510_comprehensive.c.s
-.PHONY : test_mos6510_comprehensive.s
-
-# target to generate assembly for a file
-test_mos6510_comprehensive.c.s:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/test_mos6510_comprehensive.dir/build.make tests/CMakeFiles/test_mos6510_comprehensive.dir/test_mos6510_comprehensive.c.s
-.PHONY : test_mos6510_comprehensive.c.s
-
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -751,8 +623,6 @@ help:
 	@echo "... rebuild_cache"
 	@echo "... test"
 	@echo "... run_all_tests"
-	@echo "... run_basic_test"
-	@echo "... run_comprehensive_test"
 	@echo "... brk_flag_setting_test"
 	@echo "... fam65xx_cpp_65c02_test_runner"
 	@echo "... fam65xx_cpp_klaus_test_runner"
@@ -761,23 +631,15 @@ help:
 	@echo "... json_parser"
 	@echo "... mos6510_lib"
 	@echo "... nmi_edge_detection_test"
-	@echo "... test_mos6510_basic_tests"
-	@echo "... test_mos6510_comprehensive"
-	@echo "... __/src/chip/cpu/fam65xx/fam65xx_core.o"
-	@echo "... __/src/chip/cpu/fam65xx/fam65xx_core.i"
-	@echo "... __/src/chip/cpu/fam65xx/fam65xx_core.s"
-	@echo "... __/src/chip/cpu/fam65xx/fam65xx_opcodes.o"
-	@echo "... __/src/chip/cpu/fam65xx/fam65xx_opcodes.i"
-	@echo "... __/src/chip/cpu/fam65xx/fam65xx_opcodes.s"
+	@echo "... __/src/chip/cpu/mos6510/mos6510.o"
+	@echo "... __/src/chip/cpu/mos6510/mos6510.i"
+	@echo "... __/src/chip/cpu/mos6510/mos6510.s"
 	@echo "... __/src/core/chip.o"
 	@echo "... __/src/core/chip.i"
 	@echo "... __/src/core/chip.s"
 	@echo "... __/src/core/ioport.o"
 	@echo "... __/src/core/ioport.i"
 	@echo "... __/src/core/ioport.s"
-	@echo "... __/test_mos6510_basic.o"
-	@echo "... __/test_mos6510_basic.i"
-	@echo "... __/test_mos6510_basic.s"
 	@echo "... brk_flag_setting_test.o"
 	@echo "... brk_flag_setting_test.i"
 	@echo "... brk_flag_setting_test.s"
@@ -808,9 +670,6 @@ help:
 	@echo "... nmi_edge_detection_test.o"
 	@echo "... nmi_edge_detection_test.i"
 	@echo "... nmi_edge_detection_test.s"
-	@echo "... test_mos6510_comprehensive.o"
-	@echo "... test_mos6510_comprehensive.i"
-	@echo "... test_mos6510_comprehensive.s"
 .PHONY : help
 
 
