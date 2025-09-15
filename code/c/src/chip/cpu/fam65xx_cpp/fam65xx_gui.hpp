@@ -15,7 +15,7 @@ extern "C" {
     void igEnd(void);
     bool igButton(const char* label, float size_x, float size_y);
     void igSeparator(void);
-    bool igTreeNodeStr(const char* label);
+    bool igTreeNode_Str(const char* label);
     void igTreePop(void);
     void igSameLine(float offset_from_start_x, float spacing);
     void igTextColored(float col_r, float col_g, float col_b, float col_a, const char* fmt, ...);
@@ -125,7 +125,7 @@ public:
 private:
     // Core register display (common to all configurations)
     static void render_cpu_registers(const cpu_type& cpu) {
-        if (igTreeNodeStr("CPU Registers")) {
+        if (igTreeNode_Str("CPU Registers")) {
             igColumns(2, "RegColumns", true);
             
             igText("PC:"); igNextColumn();
@@ -150,7 +150,7 @@ private:
     
     // Status flags display (common to all configurations)
     static void render_cpu_flags(const cpu_type& cpu) {
-        if (igTreeNodeStr("Status Flags")) {
+        if (igTreeNode_Str("Status Flags")) {
             igColumns(4, "FlagColumns", true);
             
             uint8_t p = cpu.get_p();
@@ -214,7 +214,7 @@ private:
     
     // Execution information (common to all configurations)
     static void render_execution_info(const cpu_type& cpu) {
-        if (igTreeNodeStr("Execution Info")) {
+        if (igTreeNode_Str("Execution Info")) {
             igText("Current Opcode: $%04X", cpu.get_opcode());
             igText("Cycle Step: %d", cpu.get_cycle_step());
             igText("Address: $%04X", cpu.get_address());
@@ -228,7 +228,7 @@ private:
     
     // State flags display
     static void render_state_flags(const cpu_type& cpu) {
-        if (igTreeNodeStr("Internal State Flags")) {
+        if (igTreeNode_Str("Internal State Flags")) {
             uint32_t state = cpu.get_state_flags();
             
             igColumns(2, "StateColumns", true);
@@ -271,7 +271,7 @@ private:
     
     // Interrupt status (common to all configurations)
     static void render_interrupt_status(const cpu_type& cpu) {
-        if (igTreeNodeStr("Interrupt Status")) {
+        if (igTreeNode_Str("Interrupt Status")) {
             uint32_t state = cpu.get_state_flags();
             
             igColumns(2, "IntColumns", true);
@@ -307,7 +307,7 @@ private:
     // MOS6510-specific I/O ports (only for configurations with I/O ports)
     static void render_io_ports(const cpu_type& cpu) {
         if constexpr (Config::has_io_ports) {
-            if (igTreeNodeStr("I/O Ports (MOS6510)")) {
+            if (igTreeNode_Str("I/O Ports (MOS6510)")) {
                 igColumns(2, "IOColumns", true);
                 
                 // Note: The actual I/O port values would need to be exposed
@@ -327,7 +327,7 @@ private:
     // CMOS-specific features
     static void render_cmos_features(const cpu_type& cpu) {
         if constexpr (Config::wai_instruction || Config::stp_instruction) {
-            if (igTreeNodeStr("CMOS Features")) {
+            if (igTreeNode_Str("CMOS Features")) {
                 uint32_t state = cpu.get_state_flags();
                 
                 if constexpr (Config::wai_instruction) {
@@ -346,7 +346,7 @@ private:
     // 65C816-specific 16-bit features
     static void render_65c816_features(const cpu_type& cpu) {
         if constexpr (Config::cpu_variant == CpuVariant::WDC_65C816) {
-            if (igTreeNodeStr("16-bit Features (65C816)")) {
+            if (igTreeNode_Str("16-bit Features (65C816)")) {
                 igColumns(2, "C816Columns", true);
                 
                 uint8_t p = cpu.get_p();
@@ -367,7 +367,7 @@ private:
     
     // Configuration information display
     static void render_configuration_info() {
-        if (igTreeNodeStr("CPU Configuration")) {
+        if (igTreeNode_Str("CPU Configuration")) {
             igText("Variant: %s", get_variant_name());
             igText("Decimal Mode: %s", Config::has_decimal_mode ? "YES" : "NO");
             igText("I/O Ports: %s", Config::has_io_ports ? "YES" : "NO");
@@ -390,7 +390,7 @@ private:
     
     // Debug controls
     static void render_debug_controls(cpu_type& cpu) {
-        if (igTreeNodeStr("Debug Controls")) {
+        if (igTreeNode_Str("Debug Controls")) {
             if (igButton("Reset CPU", 100, 0)) {
                 cpu.reset();
             }
@@ -423,7 +423,7 @@ private:
     // Configuration-specific settings
     static void render_io_settings(cpu_type& cpu) {
         if constexpr (Config::has_io_ports) {
-            if (igTreeNodeStr("I/O Port Settings")) {
+            if (igTreeNode_Str("I/O Port Settings")) {
                 igText("I/O port configuration would go here");
                 igText("(Requires extended CPU interface)");
                 igTreePop();
@@ -433,7 +433,7 @@ private:
     
     static void render_cmos_settings(cpu_type& cpu) {
         if constexpr (Config::wai_instruction || Config::stp_instruction) {
-            if (igTreeNodeStr("CMOS Settings")) {
+            if (igTreeNode_Str("CMOS Settings")) {
                 igText("CMOS-specific settings would go here");
                 igText("(WAI/STP control, etc.)");
                 igTreePop();
@@ -443,7 +443,7 @@ private:
     
     static void render_65c816_settings(cpu_type& cpu) {
         if constexpr (Config::cpu_variant == CpuVariant::WDC_65C816) {
-            if (igTreeNodeStr("65C816 Settings")) {
+            if (igTreeNode_Str("65C816 Settings")) {
                 igText("65C816-specific settings would go here");
                 igText("(Memory banking, 16-bit mode, etc.)");
                 igTreePop();
