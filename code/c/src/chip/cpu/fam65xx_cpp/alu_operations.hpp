@@ -424,6 +424,23 @@ public:
                 return;
         }
     }
+    
+    // === ADAPTIVE PERFORMANCE ALU DISPATCH ===
+    
+    // Adaptive dispatch that chooses the optimal execution path based on operation frequency
+    template<typename RegArray>
+    static inline void execute_alu_operation_adaptive(RegArray& reg, AluOp alu_op, uint8_t data) {
+        // Use branch prediction hints for maximum performance
+        const auto op_index = static_cast<uint8_t>(alu_op);
+        
+        // Hot path operations get direct execution (most common ALU operations)
+        if (__builtin_expect(op_index <= static_cast<uint8_t>(AluOp::SED), 1)) {
+            execute_alu_operation_fast(reg, alu_op, data);
+        } else {
+            // Cold path operations use full implementation
+            execute_alu_operation(reg, alu_op, data);
+        }
+    }
 };
 
 } // namespace fam65xx_cpp

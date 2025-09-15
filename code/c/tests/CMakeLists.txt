@@ -35,11 +35,9 @@ set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 set(CPU_DIR ${SRC_DIR}/chip/cpu)
 set(CORE_DIR ${SRC_DIR}/core)
 
-# Collect CPU source files
+# Collect CPU source files (legacy fam65xx removed - using modern C++ core)
 set(CPU_SOURCES
-    ${CPU_DIR}/mos6510/mos6510.c
-    ${CPU_DIR}/fam65xx/fam65xx_core.c
-    ${CPU_DIR}/fam65xx/fam65xx_opcodes.c
+    ${CPU_DIR}/mos6510/mos6510.cpp
 )
 
 # Collect core source files
@@ -65,11 +63,13 @@ endforeach()
 
 # Create a library for the MOS6510 CPU
 add_library(mos6510_lib STATIC ${CPU_SOURCES} ${CORE_SOURCES})
-target_include_directories(mos6510_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../)
+target_include_directories(mos6510_lib PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/../
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp
+)
 # Enable REDESIGN CPU dispatch mechanism for MOS6510 library
 target_compile_definitions(mos6510_lib PRIVATE REDESIGN=1)
-# Link against the mos6502_family library which contains shared fam65xx functions
-target_link_libraries(mos6510_lib mos6502_family)
+# No longer linking legacy mos6502_family - using modern C++ fam65xx_cpp
 
 # JSON Parser library for ProcessorTests
 add_library(json_parser STATIC json_parser.c)
@@ -85,23 +85,10 @@ target_include_directories(json_parser PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 # # Enable REDESIGN CPU dispatch mechanism for processor tests
 # target_compile_definitions(processor_tests_runner PRIVATE REDESIGN=1)
 
-# Comprehensive Test Suite (fallback/custom tests)
-add_executable(test_mos6510_comprehensive
-    test_mos6510_comprehensive.c
-)
-target_link_libraries(test_mos6510_comprehensive mos6510_lib)
-# Enable REDESIGN CPU dispatch mechanism for comprehensive tests
-target_compile_definitions(test_mos6510_comprehensive PRIVATE REDESIGN=1)
+# Comprehensive Test Suite removed - was referencing deleted legacy headers
+# Modern fam65xx_cpp tests are used instead
 
-# Basic test (if exists) - renamed to avoid conflict with main project
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../test_mos6510_basic.c)
-    add_executable(test_mos6510_basic_tests
-        ${CMAKE_CURRENT_SOURCE_DIR}/../test_mos6510_basic.c
-    )
-    target_link_libraries(test_mos6510_basic_tests mos6510_lib)
-    # Enable REDESIGN CPU dispatch mechanism for basic tests
-    target_compile_definitions(test_mos6510_basic_tests PRIVATE REDESIGN=1)
-endif()
+# Basic test removed - was using legacy API incompatible with modern C++ core
 
 # fam65xx_cpp Klaus Test Suite - New C++ CPU Core Testing
 add_executable(fam65xx_cpp_klaus_test_runner
@@ -197,21 +184,9 @@ enable_testing()
 #     )
 # endif()
 
-# Comprehensive test - Secondary validation
-add_test(NAME comprehensive_test COMMAND test_mos6510_comprehensive)
-set_tests_properties(comprehensive_test PROPERTIES
-    TIMEOUT 60
-    PASS_REGULAR_EXPRESSION "ALL TESTS PASSED"
-)
+# Comprehensive test removed - using modern fam65xx_cpp tests instead
 
-# Basic test (if available)
-if(TARGET test_mos6510_basic_tests)
-    add_test(NAME basic_test COMMAND test_mos6510_basic_tests)
-    set_tests_properties(basic_test PROPERTIES
-        TIMEOUT 30
-        PASS_REGULAR_EXPRESSION "ALL TESTS PASSED"
-    )
-endif()
+# Basic test removed - using modern fam65xx_cpp tests instead
 
 # fam65xx_cpp Klaus test
 add_test(NAME fam65xx_cpp_klaus_test COMMAND fam65xx_cpp_klaus_test_runner --functional)
@@ -229,32 +204,19 @@ set_tests_properties(fam65xx_cpp_klaus_test PROPERTIES
 #     COMMENT "Running ProcessorTests ground truth validation"
 # )
 
-add_custom_target(run_comprehensive_test
-    COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -R comprehensive_test --verbose
-    DEPENDS test_mos6510_comprehensive
-    COMMENT "Running comprehensive MOS6510 tests"
-)
+# Comprehensive test target removed - using modern fam65xx_cpp tests instead
 
-if(TARGET test_mos6510_basic_tests)
-    add_custom_target(run_basic_test
-        COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -R basic_test --verbose
-        DEPENDS test_mos6510_basic_tests
-        COMMENT "Running basic MOS6510 tests"
-    )
-endif()
+# Basic test target removed - using modern fam65xx_cpp tests instead
 
 add_custom_target(run_all_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} --verbose
-    DEPENDS test_mos6510_comprehensive
+    DEPENDS fam65xx_cpp_klaus_test_runner
     COMMENT "Running all MOS6510 tests"
 )
 
 # Install targets (optional)
 # TEMPORARILY DISABLED due to header compatibility issues with MSVC
-# install(TARGETS processor_tests_runner test_mos6510_comprehensive
-install(TARGETS test_mos6510_comprehensive
-    RUNTIME DESTINATION bin
-)
+# Legacy test_mos6510_comprehensive removed - using modern fam65xx_cpp tests
 
 if(TARGET test_mos6510_basic_tests)
     install(TARGETS test_mos6510_basic_tests
@@ -266,6 +228,8 @@ endif()
 install(TARGETS fam65xx_cpp_klaus_test_runner
     RUNTIME DESTINATION bin
 )
+
+# Legacy basic test removed from install targets
 
 # Print summary
 message(STATUS "MOS6510 Tests Configuration:")
