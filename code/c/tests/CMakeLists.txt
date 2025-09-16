@@ -76,14 +76,13 @@ add_library(json_parser STATIC json_parser.c)
 target_include_directories(json_parser PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ProcessorTests Runner - Ground Truth Validation
-# TEMPORARILY DISABLED due to header compatibility issues with MSVC
-# add_executable(processor_tests_runner
-#     processor_tests_runner.c
-# )
-# target_link_libraries(processor_tests_runner mos6502 nes6502 mos6510 json_parser)
-# target_sources(processor_tests_runner PRIVATE ${CORE_SOURCES})
-# # Enable REDESIGN CPU dispatch mechanism for processor tests
-# target_compile_definitions(processor_tests_runner PRIVATE REDESIGN=1)
+add_executable(processor_tests_runner
+    processor_tests_runner.c
+)
+target_link_libraries(processor_tests_runner mos6510_lib json_parser)
+target_sources(processor_tests_runner PRIVATE ${CORE_SOURCES})
+# Enable REDESIGN CPU dispatch mechanism for processor tests
+target_compile_definitions(processor_tests_runner PRIVATE REDESIGN=1)
 
 # Comprehensive Test Suite removed - was referencing deleted legacy headers
 # Modern fam65xx_cpp tests are used instead
@@ -132,6 +131,20 @@ if(NOT WIN32 AND NOT MSVC)
     target_link_libraries(fam65xx_cpp_65c02_test_runner m)
 endif()
 
+# fam65xx_cpp ProcessorTests Runner - Hardware-verified ground truth validation
+add_executable(fam65xx_cpp_processor_tests_runner
+    fam65xx_cpp_processor_tests_runner.cpp
+    json_parser.c
+)
+target_include_directories(fam65xx_cpp_processor_tests_runner PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
+)
+# Link math library if needed
+if(NOT WIN32 AND NOT MSVC)
+    target_link_libraries(fam65xx_cpp_processor_tests_runner m)
+endif()
+
 # fam65xx_cpp Interrupt Handling Tests - Advanced interrupt behavior validation
 add_executable(nmi_edge_detection_test
     nmi_edge_detection_test.cpp
@@ -173,16 +186,15 @@ endif()
 enable_testing()
 
 # ProcessorTests - Primary validation (if ProcessorTests directory exists)
-# TEMPORARILY DISABLED due to header compatibility issues with MSVC
-# if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/processor_tests)
-#     add_test(NAME processor_tests
-#              COMMAND processor_tests_runner processor_tests/6502/v1/
-#              WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-#     set_tests_properties(processor_tests PROPERTIES
-#         TIMEOUT 300
-#         PASS_REGULAR_EXPRESSION "ALL TESTS PASSED"
-#     )
-# endif()
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/processor_tests)
+    add_test(NAME processor_tests
+             COMMAND processor_tests_runner processor_tests/6502/v1/
+             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    set_tests_properties(processor_tests PROPERTIES
+        TIMEOUT 300
+        PASS_REGULAR_EXPRESSION "ALL TESTS PASSED"
+    )
+endif()
 
 # Comprehensive test removed - using modern fam65xx_cpp tests instead
 
@@ -197,12 +209,11 @@ set_tests_properties(fam65xx_cpp_klaus_test PROPERTIES
 )
 
 # Custom targets for convenience
-# TEMPORARILY DISABLED due to header compatibility issues with MSVC
-# add_custom_target(run_processor_tests
-#     COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -R processor_tests --verbose
-#     DEPENDS processor_tests_runner
-#     COMMENT "Running ProcessorTests ground truth validation"
-# )
+add_custom_target(run_processor_tests
+    COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -R processor_tests --verbose
+    DEPENDS processor_tests_runner
+    COMMENT "Running ProcessorTests ground truth validation"
+)
 
 # Comprehensive test target removed - using modern fam65xx_cpp tests instead
 
@@ -210,7 +221,7 @@ set_tests_properties(fam65xx_cpp_klaus_test PROPERTIES
 
 add_custom_target(run_all_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} --verbose
-    DEPENDS fam65xx_cpp_klaus_test_runner
+    DEPENDS fam65xx_cpp_klaus_test_runner processor_tests_runner
     COMMENT "Running all MOS6510 tests"
 )
 

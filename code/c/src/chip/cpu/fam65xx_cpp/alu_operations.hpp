@@ -409,6 +409,30 @@ public:
                 return;
             }
             
+            // Arithmetic operations - highly optimized inline
+            case AluOp::ADC: {
+                const uint8_t a = reg[CpuReg::A];
+                const uint16_t temp = a + data + (reg[CpuReg::P] & P_CARRY ? 1 : 0);
+                const uint8_t result = temp & 0xFF;
+                const uint8_t flags = (temp > 0xFF ? P_CARRY : 0) |
+                                      ((a ^ result) & (data ^ result) & 0x80 ? P_OVERFLOW : 0);
+                reg[CpuReg::P] = (reg[CpuReg::P] & ~(P_CARRY | P_OVERFLOW)) | flags;
+                reg[CpuReg::A] = result;
+                set_nz_flags(reg, result);
+                return;
+            }
+            case AluOp::SBC: {
+                const uint8_t a = reg[CpuReg::A];
+                const uint16_t temp = a - data - (reg[CpuReg::P] & P_CARRY ? 0 : 1);
+                const uint8_t result = temp & 0xFF;
+                const uint8_t flags = (temp < 0x100 ? P_CARRY : 0) |
+                                      ((a ^ data) & (a ^ result) & 0x80 ? P_OVERFLOW : 0);
+                reg[CpuReg::P] = (reg[CpuReg::P] & ~(P_CARRY | P_OVERFLOW)) | flags;
+                reg[CpuReg::A] = result;
+                set_nz_flags(reg, result);
+                return;
+            }
+            
             // Flag operations - optimized inline
             case AluOp::CLC: reg[CpuReg::P] &= ~P_CARRY; return;
             case AluOp::SEC: reg[CpuReg::P] |= P_CARRY; return;

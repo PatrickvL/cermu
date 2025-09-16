@@ -21,8 +21,10 @@ public:
         return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::LOAD_A, AluOp::NOP) : addr::make_empty_cycle();
     }
     
-    // ADC immediate - direct SYNC implementation
+    // ADC immediate - 2 cycles total: opcode fetch (cycle 0), then operand fetch + execute (cycle 1)
     static constexpr cycle_desc_t make_adc_imm(uint8_t cycle = 1) {
+        // Cycle 1: Read immediate operand from PC, increment PC, execute ADC
+        // This gives us the correct PC advancement (+1 from opcode fetch, +1 from operand fetch = +2 total)
         return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ALU, AluOp::ADC) : addr::make_empty_cycle();
     }
     
