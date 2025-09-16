@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <chrono>
 #include <iomanip>
+#include <bitset>
 
 extern "C" {
 #include "json_parser.h"
@@ -205,8 +206,25 @@ bool run_processor_test(const processor_test_t* test) {
     }
     if (harness.get_status() != test->final.p) {
         if (verbose_output) {
-            std::cout << "FAIL " << test->name << ": P - expected 0x" << std::hex 
+            std::cout << "FAIL " << test->name << ": P - expected 0x" << std::hex
                       << (int)test->final.p << ", got 0x" << (int)harness.get_status() << std::dec << std::endl;
+            
+            // DEBUG: Add detailed flag analysis
+            uint8_t expected = test->final.p;
+            uint8_t actual = harness.get_status();
+            std::cout << "  DEBUG: Expected P=0x" << std::hex << (int)expected << std::endl;
+            std::cout << "  DEBUG: Actual P=0x" << std::hex << (int)actual << std::endl;
+            std::cout << "  DEBUG: Difference=0x" << std::hex << (int)(actual ^ expected) << std::endl;
+            
+            // Flag breakdown
+            std::cout << "  DEBUG: N=" << ((actual & 0x80) ? 1 : 0) << " (exp=" << ((expected & 0x80) ? 1 : 0) << ")" << std::endl;
+            std::cout << "  DEBUG: V=" << ((actual & 0x40) ? 1 : 0) << " (exp=" << ((expected & 0x40) ? 1 : 0) << ")" << std::endl;
+            std::cout << "  DEBUG: U=" << ((actual & 0x20) ? 1 : 0) << " (exp=" << ((expected & 0x20) ? 1 : 0) << ")" << std::endl;
+            std::cout << "  DEBUG: B=" << ((actual & 0x10) ? 1 : 0) << " (exp=" << ((expected & 0x10) ? 1 : 0) << ")" << std::endl;
+            std::cout << "  DEBUG: D=" << ((actual & 0x08) ? 1 : 0) << " (exp=" << ((expected & 0x08) ? 1 : 0) << ")" << std::endl;
+            std::cout << "  DEBUG: I=" << ((actual & 0x04) ? 1 : 0) << " (exp=" << ((expected & 0x04) ? 1 : 0) << ")" << std::endl;
+            std::cout << "  DEBUG: Z=" << ((actual & 0x02) ? 1 : 0) << " (exp=" << ((expected & 0x02) ? 1 : 0) << ")" << std::endl;
+            std::cout << "  DEBUG: C=" << ((actual & 0x01) ? 1 : 0) << " (exp=" << ((expected & 0x01) ? 1 : 0) << ")" << std::endl;
         }
         passed = false;
     }

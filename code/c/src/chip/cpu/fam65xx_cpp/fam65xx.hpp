@@ -546,6 +546,14 @@ public:
         if (data_op <= static_cast<uint8_t>(DataOp::LOAD_Y)) {
             // Direct register load for A, X, Y only
             reg[data_op] = data;
+            
+            // CRITICAL FIX: Set N and Z flags for load instructions
+            // Load instructions always set N/Z flags based on the loaded value
+            // Preserve all other flags, only modify N and Z
+            // PERFORMANCE: Use direct bit manipulation instead of conditional operations
+            reg[CpuReg::P] = (reg[CpuReg::P] & ~(P_NEGATIVE | P_ZERO)) |
+                            (data & P_NEGATIVE) |
+                            ((data == 0) << 1);
         } else {
             switch (static_cast<DataOp>(data_op)) {
                 case DataOp::ALU:
@@ -609,6 +617,15 @@ public:
         if (__builtin_expect(static_cast<uint8_t>(data_op) <= static_cast<uint8_t>(DataOp::LOAD_Y), 1)) {
             // HOTTEST PATH: Direct register load for A, X, Y only (LOAD_A=0, LOAD_X=1, LOAD_Y=2)
             reg[static_cast<uint8_t>(data_op)] = data;
+            
+            // CRITICAL FIX: Set N and Z flags for load instructions
+            // Load instructions always set N/Z flags based on the loaded value
+            // Preserve all other flags, only modify N and Z
+            // PERFORMANCE: Use direct bit manipulation instead of conditional operations
+            reg[CpuReg::P] = (reg[CpuReg::P] & ~(P_NEGATIVE | P_ZERO)) |
+                            (data & P_NEGATIVE) |
+                            ((data == 0) << 1);
+            
             pending_data_op = static_cast<uint8_t>(data_op); // Cache for speed
             return;
         }
