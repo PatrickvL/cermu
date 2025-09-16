@@ -2,69 +2,65 @@
 #include <iomanip>
 #include "src/chip/cpu/fam65xx_cpp/fam65xx.hpp"
 
-void test_adc_specific() {
-    std::cout << "=== ADC Debugging Test - Exact ProcessorTests Case ===" << std::endl;
+int main() {
+    // Create a test case for the failing "69 d5 74" test
+    // This is ADC immediate with operand 0xd5
     
-    // Create CPU instance using correct config name
-    fam65xx_cpp::fam65xx<config_6502> cpu;
+    fam65xx_cpp::Fam65xx<fam65xx_cpp::DefaultBusConfig> cpu;
     
-    // Initialize for testing (avoiding reset state)
+    // Initialize CPU for test
     cpu.init_for_test();
     
-    // EXACT TEST CASE FROM ProcessorTests: "69 1b 91"
-    // Initial: a: 76, p: 228  Final: a: 103, p: 36
-    // 76 = 0x4c, 228 = 0xe4, 103 = 0x67, 36 = 0x24
+    // Set up the failing test state
+    // From the failing test, we need to load the initial state first
+    // Let's manually test different register states
     
-    // Set up EXACT initial state from ProcessorTests
-    cpu.set_a(76);       // A register = 0x4c
-    cpu.set_p(228);      // Status register = 0xe4
+    std::cout << "=== BCD ADC Debug Test ===" << std::endl;
     
-    std::cout << "EXACT ProcessorTests initial state:" << std::endl;
-    std::cout << "A = " << (int)cpu.get_a() << " (0x" << std::hex << std::setw(2) << std::setfill('0')
-              << (int)cpu.get_a() << ")" << std::dec << std::endl;
-    std::cout << "P = " << (int)cpu.get_p() << " (0x" << std::hex << std::setw(2) << std::setfill('0')
-              << (int)cpu.get_p() << ")" << std::dec << std::endl;
-    std::cout << "Carry flag = " << ((cpu.get_p() & 0x01) ? 1 : 0) << std::endl;
+    // Test various scenarios
+    for (uint8_t a_val = 0x70; a_val <= 0x80; a_val += 1) {
+        for (uint8_t carry = 0; carry <= 1; carry++) {
+            for (uint8_t decimal = 0; decimal <= 1; decimal++) {
+                cpu.init_for_test();
+                cpu.get_registers()[fam65xx_cpp::CpuReg::A] = a_val;
+                cpu.get_registers()[fam65xx_cpp::CpuReg::P] = 
+                    (carry ? fam65xx_cpp::P_CARRY : 0) |
+                    (decimal ? fam65xx_cpp::P_DECIMAL : 0);
+                
+                uint8_t initial_p = cpu.get_registers()[fam65xx_cpp::CpuReg::P];
+                
+                // Execute ADC #0xd5
+                cpu.get_registers()[fam65xx_cpp::pending_data] = 0xd5;
+                fam65xx_cpp::AluOperations<fam65xx_cpp::DefaultBusConfig>::execute_alu_operation_fast(
+                    cpu.get_registers(), fam65xx_cpp::AluOp::ADC, 0xd5);
+                
+                uint8_t final_a = cpu.get_registers()[fam65xx_cpp::CpuReg::A];
+                uint8_t final_p = cpu.get_registers()[fam65xx_cpp::CpuReg::P];
+                
+                std::cout << std::hex << std::uppercase
+                          << "A=" << std::setw(2) << std::setfill('0') << (int)a_val
+                          << " P=" << std::setw(2) << std::setfill('0') << (int)initial_p
+                          << " D=" << (int)decimal
+                          << " C=" << (int)carry
+                          << " -> A=" << std::setw(2) << std::setfill('0') << (int)final_a
+                          << " P=" << std::setw(2) << std::setfill('0') << (int)final_p;
+                
+                // Analyze the flags
+                bool n = final_p & fam65xx_cpp::P_NEGATIVE;
+                bool v = final_p & fam65xx_cpp::P_OVERFLOW;
+                bool z = final_p & fam65xx_cpp::P_ZERO;
+                bool c_out = final_p & fam65xx_cpp::P_CARRY;
+                
+                std::cout << " [N=" << (int)n << " V=" << (int)v << " Z=" << (int)z << " C=" << (int)c_out << "]";
+                
+                if (decimal && (a_val == 0x78 || a_val == 0x79)) {
+                    std::cout << " ***";
+                }
+                
+                std::cout << std::endl;
+            }
+        }
+    }
     
-    // ADC immediate with 0x1b (27)
-    uint8_t data = 27;  // 0x1b
-    
-    // Manual calculation
-    uint8_t a = cpu.get_a();
-    uint8_t carry_in = (cpu.get_p() & 0x01) ? 1 : 0;
-    uint16_t temp = a + data + carry_in;
-    uint8_t result = temp & 0xFF;
-    
-    std::cout << "Manual calculation:" << std::endl;
-    std::cout << (int)a << " + " << (int)data << " + " << (int)carry_in
-              << " = " << temp << " (0x" << std::hex << temp << ")" << std::dec << std::endl;
-    std::cout << "Result = " << (int)result << " (0x" << std::hex << (int)result << ")" << std::dec << std::endl;
-    
-    // Create a register array and set values for ALU test
-    CpuRegisterArray test_reg;
-    test_reg[CpuReg::A] = cpu.get_a();
-    test_reg[CpuReg::P] = cpu.get_p();
-    
-    // Execute using ALU
-    fam65xx_cpp::AluOperations<config_6502>::execute_alu_operation(
-        test_reg, AluOp::ADC, data);
-    
-    std::cout << "After ADC:" << std::endl;
-    std::cout << "A = " << (int)test_reg[CpuReg::A] << " (0x" << std::hex << std::setw(2) << std::setfill('0')
-              << (int)test_reg[CpuReg::A] << ")" << std::dec << std::endl;
-    std::cout << "P = " << (int)test_reg[CpuReg::P] << " (0x" << std::hex << std::setw(2) << std::setfill('0')
-              << (int)test_reg[CpuReg::P] << ")" << std::dec << std::endl;
-    
-    std::cout << "\nProcessorTests expectations:" << std::endl;
-    std::cout << "Expected A = 103 (0x67)" << std::endl;
-    std::cout << "Expected P = 36 (0x24)" << std::endl;
-    std::cout << "Actual A   = " << (int)test_reg[CpuReg::A] << " (0x" << std::hex << (int)test_reg[CpuReg::A] << ")" << std::dec << std::endl;
-    std::cout << "Actual P   = " << (int)test_reg[CpuReg::P] << " (0x" << std::hex << (int)test_reg[CpuReg::P] << ")" << std::dec << std::endl;
-    std::cout << "A Match: " << ((test_reg[CpuReg::A] == 103) ? "YES" : "NO") << std::endl;
-    std::cout << "P Match: " << ((test_reg[CpuReg::P] == 36) ? "YES" : "NO") << std::endl;
-}
-
-int main() {
-    test_adc_specific();
     return 0;
 }
