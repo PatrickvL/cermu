@@ -247,7 +247,7 @@ public:
 
         // Handle write data if needed - BRANCH PREDICTION
         if (__builtin_expect(mem_op >= MemOp::WRITE_ABS, 0)) {
-            bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op);
+            bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op, pending_data);
         } else if (__builtin_expect(mem_op == MemOp::WRITE_SP_DEC && data_op == DataOp::STACK_PUSH, 0)) {
             // For stack push operations, use the pending data set by handle_stack_push
             BUS_SET_DATA(bus_state, pending_data);
@@ -433,7 +433,7 @@ public:
         
         // Handle write data if needed
         if (mem_op >= MemOp::WRITE_ABS) {
-            bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op);
+            bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op, pending_data);
         }
         
         // Execute data operation and ALU operation using same bus data
@@ -501,7 +501,7 @@ public:
         bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op);
 
         // Handle write data if needed
-        bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op);
+        bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op, pending_data);
         
         // Execute data operation and ALU operation using same bus data
         uint8_t bus_data = BUS_GET_DATA(bus_state);
@@ -673,8 +673,8 @@ public:
                 handle_interrupt_vector(data);
                 break;
             default:
-                // Handle store operations and other cases that don't need special processing
-                // Store operations are handled by memory operations, not data operations
+                // Store operations (STORE_A, STORE_X, STORE_Y, STORE_ZERO) are handled
+                // by the memory operations system, not here
                 break;
         }
         
