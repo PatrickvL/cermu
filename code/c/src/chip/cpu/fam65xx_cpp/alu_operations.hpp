@@ -81,20 +81,79 @@ public:
             case AluOp::BRK_FLAG: reg[CpuReg::P] |= (P_BREAK | P_IRQ_DIS); return; // BRK flags only
                 
             // === ARITHMETIC OPERATIONS - Set N/Z flags ===
-            case AluOp::ADC:
-                temp = a + data + (reg[CpuReg::P] & P_CARRY);
-                result = temp & 0xFF;
-                flags = (temp > 0xFF ? P_CARRY : 0) |
-                        ((a ^ result) & (data ^ result) & 0x80 ? P_OVERFLOW : 0);
+            case AluOp::ADC: {
+                uint8_t nz_flag_value;
+                if (reg[CpuReg::P] & P_DECIMAL) {
+                    // Decimal (BCD) mode addition
+                    // CRITICAL: On 6502, N/Z/V flags are set based on BINARY result, not BCD result
+                    uint8_t carry_in = (reg[CpuReg::P] & P_CARRY) ? 1 : 0;
+                    
+                    // First perform binary addition for flag calculation
+                    temp = a + data + carry_in;
+                    uint8_t binary_result = temp & 0xFF;
+                    nz_flag_value = binary_result; // N/Z flags based on binary result
+                    
+                    // Calculate flags based on binary arithmetic
+                    flags = (temp > 0xFF ? P_CARRY : 0) |
+                            ((~(a ^ data) & (a ^ binary_result) & 0x80) ? P_OVERFLOW : 0);
+                    
+                    // Then perform BCD correction for the final stored result
+                    uint16_t lo_nibble = (a & 0x0F) + (data & 0x0F) + carry_in;
+                    uint16_t hi_nibble = (a >> 4) + (data >> 4);
+                    
+                    if (lo_nibble > 9) {
+                        lo_nibble += 6;
+                        hi_nibble += 1;
+                    }
+                    if (hi_nibble > 9) {
+                        hi_nibble += 6;
+                    }
+                    
+                    result = ((hi_nibble & 0x0F) << 4) | (lo_nibble & 0x0F);
+                    
+                    // Update carry flag based on BCD overflow
+                    if (hi_nibble > 0x0F) {
+                        flags |= P_CARRY;
+                    }
+                } else {
+                    // Binary mode addition
+                    temp = a + data + (reg[CpuReg::P] & P_CARRY);
+                    result = temp & 0xFF;
+                    nz_flag_value = result; // N/Z flags based on actual result
+                    flags = (temp > 0xFF ? P_CARRY : 0) |
+                            ((~(a ^ data) & (a ^ result) & 0x80) ? P_OVERFLOW : 0);
+                }
                 reg[CpuReg::P] = (reg[CpuReg::P] & ~(P_CARRY | P_OVERFLOW)) | flags;
                 reg[CpuReg::A] = result;
-                break; // Sets N/Z flags
+                set_nz_flags(reg, nz_flag_value);
+                return; // Skip the common N/Z flag setting at end
+            }
                 
             case AluOp::SBC:
-                temp = a - data - !(reg[CpuReg::P] & P_CARRY);
-                result = temp & 0xFF;
-                flags = (temp < 0x100 ? P_CARRY : 0) |
-                        ((a ^ data) & (a ^ result) & 0x80 ? P_OVERFLOW : 0);
+                if (reg[CpuReg::P] & P_DECIMAL) {
+                    // Decimal (BCD) mode subtraction
+                    uint8_t borrow = (reg[CpuReg::P] & P_CARRY) ? 0 : 1;
+                    int16_t lo_nibble = (a & 0x0F) - (data & 0x0F) - borrow;
+                    int16_t hi_nibble = (a >> 4) - (data >> 4);
+                    
+                    if (lo_nibble < 0) {
+                        lo_nibble -= 6;
+                        hi_nibble -= 1;
+                    }
+                    if (hi_nibble < 0) {
+                        hi_nibble -= 6;
+                    }
+                    
+                    result = ((hi_nibble & 0x0F) << 4) | (lo_nibble & 0x0F);
+                    flags = (hi_nibble >= 0 ? P_CARRY : 0) |
+                            ((a ^ data) & (a ^ result) & 0x80 ? P_OVERFLOW : 0);
+                } else {
+                    // Binary mode subtraction
+                    temp = a - data - !(reg[CpuReg::P] & P_CARRY);
+                    result = temp & 0xFF;
+                    flags = (temp < 0x100 ? P_CARRY : 0) |
+                            ((a ^ data) & (a ^ result) & 0x80 ? P_OVERFLOW : 0);
+                }
                 reg[CpuReg::P] = (reg[CpuReg::P] & ~(P_CARRY | P_OVERFLOW)) | flags;
                 reg[CpuReg::A] = result;
                 break; // Sets N/Z flags
@@ -412,21 +471,86 @@ public:
             // Arithmetic operations - highly optimized inline
             case AluOp::ADC: {
                 const uint8_t a = reg[CpuReg::A];
-                const uint16_t temp = a + data + (reg[CpuReg::P] & P_CARRY ? 1 : 0);
-                const uint8_t result = temp & 0xFF;
-                const uint8_t flags = (temp > 0xFF ? P_CARRY : 0) |
-                                      ((a ^ result) & (data ^ result) & 0x80 ? P_OVERFLOW : 0);
+                uint8_t result;
+                uint8_t flags;
+                uint8_t nz_flag_value; // Value to use for N/Z flag calculation
+                
+                if (reg[CpuReg::P] & P_DECIMAL) {
+                    // Decimal (BCD) mode addition
+                    // CRITICAL: On 6502, N/Z/V flags are set based on BINARY result, not BCD result
+                    uint8_t carry_in = (reg[CpuReg::P] & P_CARRY) ? 1 : 0;
+                    
+                    // First perform binary addition for flag calculation
+                    const uint16_t temp = a + data + carry_in;
+                    uint8_t binary_result = temp & 0xFF;
+                    nz_flag_value = binary_result; // N/Z flags based on binary result
+                    
+                    // Calculate flags based on binary arithmetic
+                    flags = (temp > 0xFF ? P_CARRY : 0) |
+                            ((~(a ^ data) & (a ^ binary_result) & 0x80) ? P_OVERFLOW : 0);
+                    
+                    // Then perform BCD correction for the final stored result
+                    uint16_t lo_nibble = (a & 0x0F) + (data & 0x0F) + carry_in;
+                    uint16_t hi_nibble = (a >> 4) + (data >> 4);
+                    
+                    if (lo_nibble > 9) {
+                        lo_nibble += 6;
+                        hi_nibble += 1;
+                    }
+                    if (hi_nibble > 9) {
+                        hi_nibble += 6;
+                    }
+                    
+                    result = ((hi_nibble & 0x0F) << 4) | (lo_nibble & 0x0F);
+                    
+                    // Update carry flag based on BCD overflow
+                    if (hi_nibble > 0x0F) {
+                        flags |= P_CARRY;
+                    }
+                } else {
+                    // Binary mode addition
+                    const uint16_t temp = a + data + (reg[CpuReg::P] & P_CARRY ? 1 : 0);
+                    result = temp & 0xFF;
+                    nz_flag_value = result; // N/Z flags based on actual result
+                    flags = (temp > 0xFF ? P_CARRY : 0) |
+                            ((~(a ^ data) & (a ^ result) & 0x80) ? P_OVERFLOW : 0);
+                }
+                
                 reg[CpuReg::P] = (reg[CpuReg::P] & ~(P_CARRY | P_OVERFLOW)) | flags;
                 reg[CpuReg::A] = result;
-                set_nz_flags(reg, result);
+                set_nz_flags(reg, nz_flag_value);
                 return;
             }
             case AluOp::SBC: {
                 const uint8_t a = reg[CpuReg::A];
-                const uint16_t temp = a - data - (reg[CpuReg::P] & P_CARRY ? 0 : 1);
-                const uint8_t result = temp & 0xFF;
-                const uint8_t flags = (temp < 0x100 ? P_CARRY : 0) |
-                                      ((a ^ data) & (a ^ result) & 0x80 ? P_OVERFLOW : 0);
+                uint8_t result;
+                uint8_t flags;
+                
+                if (reg[CpuReg::P] & P_DECIMAL) {
+                    // Decimal (BCD) mode subtraction
+                    uint8_t borrow = (reg[CpuReg::P] & P_CARRY) ? 0 : 1;
+                    int16_t lo_nibble = (a & 0x0F) - (data & 0x0F) - borrow;
+                    int16_t hi_nibble = (a >> 4) - (data >> 4);
+                    
+                    if (lo_nibble < 0) {
+                        lo_nibble -= 6;
+                        hi_nibble -= 1;
+                    }
+                    if (hi_nibble < 0) {
+                        hi_nibble -= 6;
+                    }
+                    
+                    result = ((hi_nibble & 0x0F) << 4) | (lo_nibble & 0x0F);
+                    flags = (hi_nibble >= 0 ? P_CARRY : 0) |
+                            ((a ^ data) & (a ^ result) & 0x80 ? P_OVERFLOW : 0);
+                } else {
+                    // Binary mode subtraction
+                    const uint16_t temp = a - data - (reg[CpuReg::P] & P_CARRY ? 0 : 1);
+                    result = temp & 0xFF;
+                    flags = (temp < 0x100 ? P_CARRY : 0) |
+                            ((a ^ data) & (a ^ result) & 0x80 ? P_OVERFLOW : 0);
+                }
+                
                 reg[CpuReg::P] = (reg[CpuReg::P] & ~(P_CARRY | P_OVERFLOW)) | flags;
                 reg[CpuReg::A] = result;
                 set_nz_flags(reg, result);
