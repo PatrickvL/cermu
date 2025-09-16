@@ -99,6 +99,32 @@ public:
         // No separate interrupt_opcode field needed - using main opcode field
     }
     
+    // Initialize CPU for testing - sets up normal execution state without reset pending
+    inline void init_for_test() {
+        // Reset all registers
+        for (auto& r : reg) {
+            r = 0;
+        }
+        
+        // Initialize key registers
+        reg[CpuReg::S] = 0xFF;
+        reg[CpuReg::P] = P_IRQ_DIS | P_UNUSED;
+        
+        // CRITICAL: Do NOT set STATE_RESET_PENDING for testing
+        // We want the CPU in normal execution mode, not reset mode
+        state_flags = 0;  // Clear all state flags
+        opcode = 0;
+        cycle_step = 0;
+        pending_data = 0;
+        pending_data_op = 0;
+        
+        // Reset interrupt pin state tracking
+        prev_nmi_pin_state = true;   // NMI pin starts high (inactive)
+        prev_irq_pin_state = true;   // IRQ pin starts high (inactive)
+        prev_abort_pin_state = true; // ABORT pin starts high (inactive)
+        irq_sources = 0;             // No IRQ sources active
+    }
+    
     // Execute one CPU cycle - OPTIMIZED HOT PATH
     inline bus_state_t cycle_tick(bus_state_t bus_state) {
         
@@ -183,6 +209,13 @@ public:
             cycle_step = 1;
             state_flags |= STATE_SYNC_NEXT; // Direct bit set for speed
             
+            // CRITICAL FIX: Increment PC after opcode fetch
+            // The opcode fetch must increment PC so that cycle 1 reads the next byte
+            const uint16_t pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+            const uint16_t new_pc = (pc + 1) & 0xFFFF;
+            reg[CpuReg::PCL] = new_pc & 0xFF;
+            reg[CpuReg::PCH] = (new_pc >> 8) & 0xFF;
+            
             // Special case: BRK instruction ($00) triggers software interrupt
             if (__builtin_expect(opcode == 0x00, 0)) {
                 // BRK should start interrupt sequence immediately after opcode fetch
@@ -226,7 +259,10 @@ public:
         
         // Execute ALU operation if specified - BRANCH PREDICTION
         if (__builtin_expect(alu_op != AluOp::NOP, 0)) {
-            alu_ops::execute_alu_operation_fast(reg, alu_op, bus_data);
+            // CRITICAL FIX: Use pending_data for ALU operations when DataOp::ALU was executed
+            // DataOp::ALU sets pending_data to prepare operand for ALU operation
+            const uint8_t alu_data = (data_op == DataOp::ALU) ? pending_data : bus_data;
+            alu_ops::execute_alu_operation_fast(reg, alu_op, alu_data);
             
             // Handle interrupt flag changes for SEI/CLI instructions - RARE PATH
             if (__builtin_expect(alu_op == AluOp::SEI || alu_op == AluOp::CLI, 0)) {
@@ -428,6 +464,13 @@ public:
             cycle_step = 1;
             set_state(STATE_SYNC_NEXT);
             
+            // CRITICAL FIX: Increment PC after opcode fetch
+            // The opcode fetch must increment PC so that cycle 1 reads the next byte
+            const uint16_t pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+            const uint16_t new_pc = (pc + 1) & 0xFFFF;
+            reg[CpuReg::PCL] = new_pc & 0xFF;
+            reg[CpuReg::PCH] = (new_pc >> 8) & 0xFF;
+            
             // Special case: BRK instruction ($00) triggers software interrupt
             if (opcode == 0x00) {
                 // BRK should start interrupt sequence immediately after opcode fetch
@@ -466,7 +509,10 @@ public:
         
         // Execute ALU operation if specified
         if (alu_op != AluOp::NOP) {
-            alu_ops::execute_alu_operation(reg, alu_op, bus_data);
+            // CRITICAL FIX: Use pending_data for ALU operations when DataOp::ALU was executed
+            // DataOp::ALU sets pending_data to prepare operand for ALU operation
+            const uint8_t alu_data = (data_op == DataOp::ALU) ? pending_data : bus_data;
+            alu_ops::execute_alu_operation(reg, alu_op, alu_data);
             
             // Handle interrupt flag changes for SEI/CLI instructions
             if (alu_op == AluOp::SEI || alu_op == AluOp::CLI) {
@@ -804,7 +850,20 @@ public:
             }
         }
         
-        // Normal instruction execution: use calculated address
+        // CRITICAL FIX: For normal instructions, check if this cycle uses PC addressing
+        // Get the cycle description for the current step
+        const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
+        const MemOp mem_op = static_cast<MemOp>(cycle.mem_op);
+        
+        if (mem_op == MemOp::READ_PC || mem_op == MemOp::READ_PC_INC) {
+            // PC-based addressing: return current PC for immediate/PC-relative operations
+            return (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+        } else if (mem_op == MemOp::WRITE_SP_DEC || mem_op == MemOp::READ_SP || mem_op == MemOp::READ_SP_INC) {
+            // Stack addressing: return stack address
+            return 0x0100 | reg[CpuReg::S];
+        }
+        
+        // Normal instruction execution: use calculated address from ABL/ABH
         return (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
     }
     
@@ -1332,6 +1391,7 @@ public:
     
     // Forward all other methods to the underlying CPU
     inline void init() { cpu.init(); }
+    inline void init_for_test() { cpu.init_for_test(); }
     inline uint8_t get_reg(CpuReg register_id) const { return cpu.get_reg(register_id); }
     inline void set_reg(CpuReg register_id, uint8_t value) { cpu.set_reg(register_id, value); }
     inline uint16_t get_opcode() const { return cpu.get_opcode(); }

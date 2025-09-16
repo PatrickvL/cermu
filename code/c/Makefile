@@ -237,6 +237,19 @@ json_parser/fast:
 .PHONY : json_parser/fast
 
 #=============================================================================
+# Target rules for targets named processor_tests_runner
+
+# Build rule for target.
+processor_tests_runner: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 processor_tests_runner
+.PHONY : processor_tests_runner
+
+# fast build rule for target.
+processor_tests_runner/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/processor_tests_runner.dir/build.make tests/CMakeFiles/processor_tests_runner.dir/build
+.PHONY : processor_tests_runner/fast
+
+#=============================================================================
 # Target rules for targets named fam65xx_cpp_klaus_test_runner
 
 # Build rule for target.
@@ -276,6 +289,19 @@ fam65xx_cpp_65c02_test_runner/fast:
 .PHONY : fam65xx_cpp_65c02_test_runner/fast
 
 #=============================================================================
+# Target rules for targets named fam65xx_cpp_processor_tests_runner
+
+# Build rule for target.
+fam65xx_cpp_processor_tests_runner: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 fam65xx_cpp_processor_tests_runner
+.PHONY : fam65xx_cpp_processor_tests_runner
+
+# fast build rule for target.
+fam65xx_cpp_processor_tests_runner/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_processor_tests_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_processor_tests_runner.dir/build
+.PHONY : fam65xx_cpp_processor_tests_runner/fast
+
+#=============================================================================
 # Target rules for targets named nmi_edge_detection_test
 
 # Build rule for target.
@@ -313,6 +339,19 @@ brk_flag_setting_test: cmake_check_build_system
 brk_flag_setting_test/fast:
 	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/brk_flag_setting_test.dir/build.make tests/CMakeFiles/brk_flag_setting_test.dir/build
 .PHONY : brk_flag_setting_test/fast
+
+#=============================================================================
+# Target rules for targets named run_processor_tests
+
+# Build rule for target.
+run_processor_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 run_processor_tests
+.PHONY : run_processor_tests
+
+# fast build rule for target.
+run_processor_tests/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/run_processor_tests.dir/build.make tests/CMakeFiles/run_processor_tests.dir/build
+.PHONY : run_processor_tests/fast
 
 #=============================================================================
 # Target rules for targets named run_all_tests
@@ -995,6 +1034,7 @@ help:
 	@echo "... rebuild_cache"
 	@echo "... test"
 	@echo "... run_all_tests"
+	@echo "... run_processor_tests"
 	@echo "... brk_flag_setting_test"
 	@echo "... c64emu"
 	@echo "... c64emu_gui"
@@ -1002,10 +1042,12 @@ help:
 	@echo "... fam65xx_cpp_65c02_test_runner"
 	@echo "... fam65xx_cpp_klaus_test_runner"
 	@echo "... fam65xx_cpp_lorenz_test_runner"
+	@echo "... fam65xx_cpp_processor_tests_runner"
 	@echo "... irq_level_handling_test"
 	@echo "... json_parser"
 	@echo "... mos6510_lib"
 	@echo "... nmi_edge_detection_test"
+	@echo "... processor_tests_runner"
 	@echo "... src/chip/cpu/fam65xx_cpp/fam65xx_gui.o"
 	@echo "... src/chip/cpu/fam65xx_cpp/fam65xx_gui.i"
 	@echo "... src/chip/cpu/fam65xx_cpp/fam65xx_gui.s"
