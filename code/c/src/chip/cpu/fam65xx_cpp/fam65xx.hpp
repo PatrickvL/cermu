@@ -541,10 +541,10 @@ public:
         // Store data for potential ALU use
         reg[CpuReg::DL] = data;
         
-        // Check if data_op corresponds to a direct register load (values 0-5: A, X, Y, S, P, PCL)
-        // Values 6+ (PCH, ABL, ABH, DL, etc.) and special operations should use switch statement
-        if (data_op <= static_cast<uint8_t>(CpuReg::P)) {
-            // Direct register load for A, X, Y, S, P only
+        // Check if data_op corresponds to a direct register load (LOAD_A=0, LOAD_X=1, LOAD_Y=2 only)
+        // All other operations should use switch statement
+        if (data_op <= static_cast<uint8_t>(DataOp::LOAD_Y)) {
+            // Direct register load for A, X, Y only
             reg[data_op] = data;
         } else {
             switch (static_cast<DataOp>(data_op)) {
@@ -589,6 +589,8 @@ public:
                     handle_interrupt_vector(data);
                     break;
                 default:
+                    // Handle store operations and other cases that don't need special processing
+                    // Store operations are handled by memory operations, not data operations
                     break;
             }
         }
@@ -603,9 +605,9 @@ public:
         reg[CpuReg::DL] = data;
         
         // Fast path optimization: Most common operations first with branch prediction
-        // Direct register loads are most common (A, X, Y, S, P registers)
-        if (__builtin_expect(static_cast<uint8_t>(data_op) <= static_cast<uint8_t>(CpuReg::P), 1)) {
-            // HOTTEST PATH: Direct register load for A, X, Y, S, P only
+        // Direct register loads are most common (LOAD_A, LOAD_X, LOAD_Y only)
+        if (__builtin_expect(static_cast<uint8_t>(data_op) <= static_cast<uint8_t>(DataOp::LOAD_Y), 1)) {
+            // HOTTEST PATH: Direct register load for A, X, Y only (LOAD_A=0, LOAD_X=1, LOAD_Y=2)
             reg[static_cast<uint8_t>(data_op)] = data;
             pending_data_op = static_cast<uint8_t>(data_op); // Cache for speed
             return;
@@ -654,6 +656,8 @@ public:
                 handle_interrupt_vector(data);
                 break;
             default:
+                // Handle store operations and other cases that don't need special processing
+                // Store operations are handled by memory operations, not data operations
                 break;
         }
         
