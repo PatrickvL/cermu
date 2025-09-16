@@ -190,21 +190,25 @@ public:
             case AluOp::ASL:
                 result = (data << 1) & 0xFF;
                 reg[CpuReg::P] = (reg[CpuReg::P] & ~P_CARRY) | (data & 0x80 ? P_CARRY : 0);
+                reg[CpuReg::A] = result; // CRITICAL FIX: Write result back to accumulator
                 break; // Sets N/Z flags
                 
             case AluOp::LSR:
                 result = data >> 1;
                 reg[CpuReg::P] = (reg[CpuReg::P] & ~P_CARRY) | (data & 0x01 ? P_CARRY : 0);
+                reg[CpuReg::A] = result; // CRITICAL FIX: Write result back to accumulator
                 break; // Sets N/Z flags
                 
             case AluOp::ROL:
                 result = ((data << 1) | (reg[CpuReg::P] & P_CARRY ? 1 : 0)) & 0xFF;
                 reg[CpuReg::P] = (reg[CpuReg::P] & ~P_CARRY) | (data & 0x80 ? P_CARRY : 0);
+                reg[CpuReg::A] = result; // CRITICAL FIX: Write result back to accumulator
                 break; // Sets N/Z flags
                 
             case AluOp::ROR:
                 result = (data >> 1) | (reg[CpuReg::P] & P_CARRY ? 0x80 : 0);
                 reg[CpuReg::P] = (reg[CpuReg::P] & ~P_CARRY) | (data & 0x01 ? P_CARRY : 0);
+                reg[CpuReg::A] = result; // CRITICAL FIX: Write result back to accumulator
                 break; // Sets N/Z flags
                 
             // === INCREMENT/DECREMENT OPERATIONS - Set N/Z flags ===

@@ -122,16 +122,16 @@ public:
 
     // Shift/Rotate operations - direct SYNC implementation
     static constexpr cycle_desc_t make_asl_acc(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::ASL) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::ALU, AluOp::ASL) : addr::make_empty_cycle();
     }
     static constexpr cycle_desc_t make_lsr_acc(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::LSR) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::ALU, AluOp::LSR) : addr::make_empty_cycle();
     }
     static constexpr cycle_desc_t make_rol_acc(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::ROL) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::ALU, AluOp::ROL) : addr::make_empty_cycle();
     }
     static constexpr cycle_desc_t make_ror_acc(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::ROR) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::ALU, AluOp::ROR) : addr::make_empty_cycle();
     }
 
     static constexpr cycle_desc_t make_phx(uint8_t cycle) {

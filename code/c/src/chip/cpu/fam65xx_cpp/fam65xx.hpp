@@ -557,7 +557,24 @@ public:
         } else {
             switch (static_cast<DataOp>(data_op)) {
                 case DataOp::ALU:
-                    pending_data = data;
+                    // CRITICAL FIX: For accumulator shift/rotate operations, use accumulator value
+                    // Check if this is an accumulator operation by looking at the ALU operation
+                    if (cycle_step > 0) {
+                        const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
+                        const MemOp mem_op = static_cast<MemOp>(cycle.mem_op);
+                        const AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
+                        
+                        // If MemOp::NOP and ALU operation is shift/rotate, use accumulator value
+                        if (mem_op == MemOp::NOP &&
+                            (alu_op == AluOp::ASL || alu_op == AluOp::LSR ||
+                             alu_op == AluOp::ROL || alu_op == AluOp::ROR)) {
+                            pending_data = reg[CpuReg::A];  // Use accumulator value for accumulator operations
+                        } else {
+                            pending_data = data;  // Use bus data for memory operations
+                        }
+                    } else {
+                        pending_data = data;  // Default case
+                    }
                     break;
                 case DataOp::ADDR_CALC_LOW:
                     reg[CpuReg::ABL] = data;
@@ -633,7 +650,24 @@ public:
         // Handle less common operations with optimized switch
         switch (data_op) {
             case DataOp::ALU:
-                pending_data = data;
+                // CRITICAL FIX: For accumulator shift/rotate operations, use accumulator value
+                // Check if this is an accumulator operation by looking at the ALU operation
+                if (__builtin_expect(cycle_step > 0, 1)) {
+                    const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
+                    const MemOp mem_op = static_cast<MemOp>(cycle.mem_op);
+                    const AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
+                    
+                    // If MemOp::NOP and ALU operation is shift/rotate, use accumulator value
+                    if (mem_op == MemOp::NOP &&
+                        (alu_op == AluOp::ASL || alu_op == AluOp::LSR ||
+                         alu_op == AluOp::ROL || alu_op == AluOp::ROR)) {
+                        pending_data = reg[CpuReg::A];  // Use accumulator value for accumulator operations
+                    } else {
+                        pending_data = data;  // Use bus data for memory operations
+                    }
+                } else {
+                    pending_data = data;  // Default case
+                }
                 break;
             case DataOp::ADDR_CALC_LOW:
                 reg[CpuReg::ABL] = data;
