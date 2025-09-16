@@ -93,11 +93,10 @@ public:
                     uint8_t binary_result = temp & 0xFF;
                     nz_flag_value = binary_result; // N/Z flags based on binary result
                     
-                    // Calculate flags based on binary arithmetic
-                    flags = (temp > 0xFF ? P_CARRY : 0) |
-                            ((~(a ^ data) & (a ^ binary_result) & 0x80) ? P_OVERFLOW : 0);
+                    // Calculate V flag based on binary arithmetic (NOT carry flag yet)
+                    flags = ((~(a ^ data) & (a ^ binary_result) & 0x80) ? P_OVERFLOW : 0);
                     
-                    // Then perform BCD correction for the final stored result
+                    // Then perform BCD correction for the final stored result and carry flag
                     uint16_t lo_nibble = (a & 0x0F) + (data & 0x0F) + carry_in;
                     uint16_t hi_nibble = (a >> 4) + (data >> 4);
                     
@@ -111,10 +110,8 @@ public:
                     
                     result = ((hi_nibble & 0x0F) << 4) | (lo_nibble & 0x0F);
                     
-                    // Update carry flag based on BCD overflow
-                    if (hi_nibble > 0x0F) {
-                        flags |= P_CARRY;
-                    }
+                    // Set carry flag based on BCD overflow (NOT binary overflow)
+                    flags |= (hi_nibble > 0x0F ? P_CARRY : 0);
                 } else {
                     // Binary mode addition
                     temp = a + data + (reg[CpuReg::P] & P_CARRY);
@@ -485,11 +482,10 @@ public:
                     uint8_t binary_result = temp & 0xFF;
                     nz_flag_value = binary_result; // N/Z flags based on binary result
                     
-                    // Calculate flags based on binary arithmetic
-                    flags = (temp > 0xFF ? P_CARRY : 0) |
-                            ((~(a ^ data) & (a ^ binary_result) & 0x80) ? P_OVERFLOW : 0);
+                    // Calculate V flag based on binary arithmetic (but NOT carry flag yet)
+                    flags = ((~(a ^ data) & (a ^ binary_result) & 0x80) ? P_OVERFLOW : 0);
                     
-                    // Then perform BCD correction for the final stored result
+                    // Then perform BCD correction for the final stored result and carry flag
                     uint16_t lo_nibble = (a & 0x0F) + (data & 0x0F) + carry_in;
                     uint16_t hi_nibble = (a >> 4) + (data >> 4);
                     
@@ -503,10 +499,8 @@ public:
                     
                     result = ((hi_nibble & 0x0F) << 4) | (lo_nibble & 0x0F);
                     
-                    // Update carry flag based on BCD overflow
-                    if (hi_nibble > 0x0F) {
-                        flags |= P_CARRY;
-                    }
+                    // Set carry flag based on BCD overflow (NOT binary overflow)
+                    flags |= (hi_nibble > 0x0F ? P_CARRY : 0);
                 } else {
                     // Binary mode addition
                     const uint16_t temp = a + data + (reg[CpuReg::P] & P_CARRY ? 1 : 0);
