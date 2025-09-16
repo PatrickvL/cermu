@@ -111,7 +111,7 @@ public:
     
     template<typename RegArray>
     static inline bus_state_t handle_write_data(bus_state_t bus_state, RegArray& reg,
-                                               MemOp mem_op, DataOp data_op) {
+                                               MemOp mem_op, DataOp data_op, uint8_t pending_data = 0) {
         // Handle data output for write operations
         constexpr uint16_t WRITE_OPS = (1 << static_cast<uint8_t>(MemOp::WRITE_ABS)) |
                                        (1 << static_cast<uint8_t>(MemOp::WRITE_ZP)) |
@@ -119,18 +119,37 @@ public:
                                        (1 << static_cast<uint8_t>(MemOp::WRITE_ZPY));
         
         if (WRITE_OPS & (1 << static_cast<uint8_t>(mem_op))) {
-            if (static_cast<uint8_t>(data_op) < static_cast<uint8_t>(CpuReg::COUNT)) {
-                BUS_SET_DATA(bus_state, reg[static_cast<uint8_t>(data_op)]);
-            } else if (data_op == DataOp::ALU) {
-                // ALU result will be set by caller
+            // Handle store operations first
+            switch (data_op) {
+                case DataOp::STORE_A:
+                    BUS_SET_DATA(bus_state, reg[CpuReg::A]);
+                    break;
+                case DataOp::STORE_X:
+                    BUS_SET_DATA(bus_state, reg[CpuReg::X]);
+                    break;
+                case DataOp::STORE_Y:
+                    BUS_SET_DATA(bus_state, reg[CpuReg::Y]);
+                    break;
+                case DataOp::STORE_ZERO:
+                    BUS_SET_DATA(bus_state, 0);
+                    break;
+                case DataOp::ALU:
+                    // ALU result will be set by caller using pending_data
+                    BUS_SET_DATA(bus_state, pending_data);
+                    break;
+                default:
+                    // Legacy: direct register mapping for load operations (should not be used for writes)
+                    if (static_cast<uint8_t>(data_op) < static_cast<uint8_t>(CpuReg::COUNT)) {
+                        BUS_SET_DATA(bus_state, reg[static_cast<uint8_t>(data_op)]);
+                    }
+                    break;
             }
         } else if (mem_op == MemOp::WRITE_SP_DEC) {
             // Stack write operations - handle data based on data operation
             switch (data_op) {
                 case DataOp::STACK_PUSH:
-                    // For STACK_PUSH, the data to write is determined by handle_stack_push()
-                    // and stored in pending_data. We need access to pending_data from the CPU.
-                    // For now, use a simpler approach - the data should be set by the caller
+                    // For STACK_PUSH, the data to write is provided via pending_data
+                    BUS_SET_DATA(bus_state, pending_data);
                     break;
                 default:
                     // Direct register push operations

@@ -46,11 +46,10 @@ constexpr uint8_t MEMOP_WRITE_CUTOFF = static_cast<uint8_t>(MemOp::WRITE_ABS);
 enum class DataOp : uint8_t {
     LOAD_A = 0, LOAD_X = 1, LOAD_Y = 2,
     STORE_A = 3, STORE_X = 4, STORE_Y = 5, STORE_ZERO = 6,
-    ALU = 14, BRANCH = 13, ADDR_CALC_LOW = 12, ADDR_CALC_HIGH = 11,
-    STACK_PUSH = 10, STACK_PULL = 9, INTERRUPT_VEC = 8,
-    BIT_TEST = 7, ILLEGAL_COMBO = 6, JMP = 5, NOP = 15,
+    BIT_TEST = 7, INTERRUPT_VEC = 8, STACK_PULL = 9, STACK_PUSH = 10,
+    ADDR_CALC_HIGH = 11, ADDR_CALC_LOW = 12, BRANCH = 13, ALU = 14, NOP = 15,
     TEMP_STORE = 16, TEMP_MODIFY = 17, ADDR_ADD_X = 18, ADDR_ADD_Y = 19,
-    INDIRECT_LOW = 20, INDIRECT_HIGH = 21
+    INDIRECT_LOW = 20, INDIRECT_HIGH = 21, JMP = 22, ILLEGAL_COMBO = 23
 };
 
 // ALU operations - type-safe enum (expanded for 6-bit field)
