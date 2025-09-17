@@ -261,7 +261,19 @@ public:
         if (__builtin_expect(alu_op != AluOp::NOP, 0)) {
             // CRITICAL FIX: Use pending_data for ALU operations when DataOp::ALU was executed
             // DataOp::ALU sets pending_data to prepare operand for ALU operation
-            const uint8_t alu_data = (data_op == DataOp::ALU) ? pending_data : bus_data;
+            // TRANSFER/FLAG FIX: Transfer and flag operations don't need external data
+            uint8_t alu_data;
+            if (data_op == DataOp::ALU) {
+                alu_data = pending_data;
+            } else if (alu_op >= AluOp::TXA && alu_op <= AluOp::TXS) {
+                // Transfer operations: TAX, TXA, TAY, TYA, TSX, TXS - don't use bus data
+                alu_data = 0; // Transfer operations use register values internally
+            } else if (alu_op >= AluOp::CLC && alu_op <= AluOp::SED) {
+                // Flag operations: CLC, SEC, CLI, SEI, CLV, CLD, SED - don't use bus data
+                alu_data = 0; // Flag operations don't need data
+            } else {
+                alu_data = bus_data;
+            }
             alu_ops::execute_alu_operation_fast(reg, alu_op, alu_data);
             
             // Handle interrupt flag changes for SEI/CLI instructions - RARE PATH
@@ -511,7 +523,19 @@ public:
         if (alu_op != AluOp::NOP) {
             // CRITICAL FIX: Use pending_data for ALU operations when DataOp::ALU was executed
             // DataOp::ALU sets pending_data to prepare operand for ALU operation
-            const uint8_t alu_data = (data_op == DataOp::ALU) ? pending_data : bus_data;
+            // TRANSFER/FLAG FIX: Transfer and flag operations don't need external data
+            uint8_t alu_data;
+            if (data_op == DataOp::ALU) {
+                alu_data = pending_data;
+            } else if (alu_op >= AluOp::TXA && alu_op <= AluOp::TXS) {
+                // Transfer operations: TAX, TXA, TAY, TYA, TSX, TXS - don't use bus data
+                alu_data = 0; // Transfer operations use register values internally
+            } else if (alu_op >= AluOp::CLC && alu_op <= AluOp::SED) {
+                // Flag operations: CLC, SEC, CLI, SEI, CLV, CLD, SED - don't use bus data
+                alu_data = 0; // Flag operations don't need data
+            } else {
+                alu_data = bus_data;
+            }
             alu_ops::execute_alu_operation(reg, alu_op, alu_data);
             
             // Handle interrupt flag changes for SEI/CLI instructions
