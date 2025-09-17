@@ -137,6 +137,18 @@ public:
                     // ALU result will be set by caller using pending_data
                     BUS_SET_DATA(bus_state, pending_data);
                     break;
+                case DataOp::TEMP_MODIFY:
+                    // MEMORY SHIFT/ROTATE FIX: For memory modify operations (shift/rotate $nn),
+                    // the ALU result is stored in DL register and must be written to memory
+                    // This handles the final write cycle of read-modify-write operations
+                    BUS_SET_DATA(bus_state, reg[CpuReg::DL]);
+                    break;
+                case DataOp::TEMP_STORE:
+                    // MEMORY MODIFY FIX: For memory modify operations cycle 3,
+                    // write the original value stored in pending_data back to memory
+                    // This is the "write old value back" cycle in the 6502 read-modify-write sequence
+                    BUS_SET_DATA(bus_state, pending_data);
+                    break;
                 default:
                     // Legacy: direct register mapping for load operations (should not be used for writes)
                     if (static_cast<uint8_t>(data_op) < static_cast<uint8_t>(CpuReg::COUNT)) {
