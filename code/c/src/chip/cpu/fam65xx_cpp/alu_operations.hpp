@@ -498,12 +498,16 @@ public:
                     uint16_t lo_nibble = (a & 0x0F) + (data & 0x0F) + carry_in;
                     uint16_t hi_nibble = (a >> 4) + (data >> 4);
                     
+                    // Track if we need BCD carry before adjustment
+                    bool bcd_carry = false;
+                    
                     if (lo_nibble > 9) {
                         lo_nibble += 6;
                         hi_nibble += 1;
                     }
                     if (hi_nibble > 9) {
                         hi_nibble += 6;
+                        bcd_carry = true; // Set carry when hi_nibble overflows past 9
                     }
                     
                     uint8_t bcd_result = ((hi_nibble & 0x0F) << 4) | (lo_nibble & 0x0F);
@@ -522,7 +526,7 @@ public:
                     flags = ((~(a ^ data) & (a ^ binary_result) & 0x80) ? P_OVERFLOW : 0);
                     
                     // Set carry flag based on BCD overflow
-                    flags |= (hi_nibble > 0x0F ? P_CARRY : 0);
+                    flags |= (bcd_carry ? P_CARRY : 0);
                 } else {
                     // Binary mode addition - consistent across all cores
                     const uint16_t temp = a + data + (reg[CpuReg::P] & P_CARRY ? 1 : 0);
