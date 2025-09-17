@@ -1015,6 +1015,49 @@ public:
             const MemOp mem_op = static_cast<MemOp>(cycle.mem_op);
             const DataOp data_op = static_cast<DataOp>(cycle.data_op);
             
+            // CRITICAL FIX: Handle TEMP_STORE and TEMP_MODIFY operations for memory modify cycles
+            // These operations are used for memory modify cycles (ASL/LSR/ROL/ROR $nn, INC/DEC $nn, etc.)
+            if (data_op == DataOp::TEMP_STORE) {
+                // First write cycle: write back the original value
+                // The original value is stored in the DL register from the previous read cycle
+                return reg[CpuReg::DL];
+            }
+            
+            if (data_op == DataOp::TEMP_MODIFY) {
+                // Second write cycle: write the computed ALU result
+                // We need to compute the result predictively since ALU hasn't executed yet
+                const AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
+                if (alu_op == AluOp::ASL || alu_op == AluOp::LSR ||
+                    alu_op == AluOp::ROL || alu_op == AluOp::ROR) {
+                    // Get the original value that was read and stored in DL
+                    uint8_t original_value = reg[CpuReg::DL];
+                    uint8_t result = original_value;
+                    
+                    // Perform the shift/rotate operation predictively
+                    switch (alu_op) {
+                        case AluOp::ASL:
+                            result = original_value << 1;
+                            break;
+                        case AluOp::LSR:
+                            result = original_value >> 1;
+                            break;
+                        case AluOp::ROL:
+                            result = (original_value << 1) | ((reg[CpuReg::P] & P_CARRY) ? 1 : 0);
+                            break;
+                        case AluOp::ROR:
+                            result = (original_value >> 1) | ((reg[CpuReg::P] & P_CARRY) ? 0x80 : 0);
+                            break;
+                        default:
+                            break;
+                    }
+                    
+                    return result;
+                } else {
+                    // For other ALU operations (INC/DEC), use DL register result
+                    return reg[CpuReg::DL];
+                }
+            }
+            
             // Handle interrupt sequences (stack pushes)
             if (state_flags & STATE_INTERRUPT_SEQUENCE) {
                 if (mem_op == MemOp::WRITE_SP_DEC && data_op == DataOp::STACK_PUSH) {
