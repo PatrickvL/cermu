@@ -259,22 +259,36 @@ public:
         
         // Execute ALU operation if specified - BRANCH PREDICTION
         if (__builtin_expect(alu_op != AluOp::NOP, 0)) {
-            // CRITICAL FIX: Use pending_data for ALU operations when DataOp::ALU was executed
-            // DataOp::ALU sets pending_data to prepare operand for ALU operation
-            // TRANSFER/FLAG FIX: Transfer and flag operations don't need external data
-            uint8_t alu_data;
-            if (data_op == DataOp::ALU) {
-                alu_data = pending_data;
-            } else if (alu_op >= AluOp::TXA && alu_op <= AluOp::TXS) {
-                // Transfer operations: TAX, TXA, TAY, TYA, TSX, TXS - don't use bus data
-                alu_data = 0; // Transfer operations use register values internally
-            } else if (alu_op >= AluOp::CLC && alu_op <= AluOp::SED) {
-                // Flag operations: CLC, SEC, CLI, SEI, CLV, CLD, SED - don't use bus data
-                alu_data = 0; // Flag operations don't need data
-            } else {
-                alu_data = bus_data;
+            // CRITICAL FIX: Skip ALU execution if it was already done during TEMP_MODIFY
+            if (data_op != DataOp::TEMP_MODIFY) {
+                // CRITICAL FIX: Use pending_data for ALU operations when DataOp::ALU was executed
+                // DataOp::ALU sets pending_data to prepare operand for ALU operation
+                // TRANSFER/FLAG FIX: Transfer and flag operations don't need external data
+                uint8_t alu_data;
+                if (data_op == DataOp::ALU) {
+                    alu_data = pending_data;
+                } else if (alu_op >= AluOp::TXA && alu_op <= AluOp::TXS) {
+                    // Transfer operations: TAX, TXA, TAY, TYA, TSX, TXS - don't use bus data
+                    alu_data = 0; // Transfer operations use register values internally
+                } else if (alu_op >= AluOp::CLC && alu_op <= AluOp::SED) {
+                    // Flag operations: CLC, SEC, CLI, SEI, CLV, CLD, SED - don't use bus data
+                    alu_data = 0; // Flag operations don't need data
+                } else {
+                    alu_data = bus_data;
+                }
+                alu_ops::execute_alu_operation_fast(reg, alu_op, alu_data);
             }
-            alu_ops::execute_alu_operation_fast(reg, alu_op, alu_data);
+            
+            // ACCUMULATOR MODE FIX: For accumulator shift/rotate operations, copy result from DL to accumulator
+            if (alu_op == AluOp::ASL || alu_op == AluOp::LSR || alu_op == AluOp::ROL || alu_op == AluOp::ROR) {
+                const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
+                const MemOp mem_op = static_cast<MemOp>(cycle.mem_op);
+                
+                // Accumulator mode operations use MemOp::NOP, memory mode operations use memory addressing
+                if (mem_op == MemOp::NOP) {
+                    reg[CpuReg::A] = reg[CpuReg::DL]; // Copy result from DL to accumulator for accumulator mode
+                }
+            }
             
             // Handle interrupt flag changes for SEI/CLI instructions - RARE PATH
             if (__builtin_expect(alu_op == AluOp::SEI || alu_op == AluOp::CLI, 0)) {
@@ -637,6 +651,24 @@ public:
                 case DataOp::INTERRUPT_VEC:
                     handle_interrupt_vector(data);
                     break;
+                case DataOp::TEMP_STORE:
+                    // Store data temporarily for memory modify operations (cycle 2)
+                    // This saves the original memory value before modification
+                    pending_data = data;
+                    break;
+                case DataOp::TEMP_MODIFY:
+                    // Memory modify operations: Execute ALU operation NOW to compute result
+                    // The result must be available immediately for the memory write in this cycle
+                    // Use pending_data from TEMP_STORE cycle as ALU input
+                    if (cycle_step > 0) {
+                        const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
+                        const AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
+                        if (alu_op != AluOp::NOP) {
+                            // Execute ALU operation immediately using pending_data
+                            alu_ops::execute_alu_operation(reg, alu_op, pending_data);
+                        }
+                    }
+                    break;
                 default:
                     // Handle store operations and other cases that don't need special processing
                     // Store operations are handled by memory operations, not data operations
@@ -729,6 +761,22 @@ public:
                 break;
             case DataOp::INTERRUPT_VEC:
                 handle_interrupt_vector(data);
+                break;
+            case DataOp::TEMP_STORE:
+                // Store data temporarily for memory modify operations (cycle 2)
+                pending_data = data;
+                break;
+            case DataOp::TEMP_MODIFY:
+                // Memory modify operations: Execute ALU operation NOW to compute result
+                // The result must be available immediately for the memory write in this cycle
+                if (__builtin_expect(cycle_step > 0, 1)) {
+                    const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
+                    const AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
+                    if (__builtin_expect(alu_op != AluOp::NOP, 1)) {
+                        // Execute ALU operation immediately using pending_data
+                        alu_ops::execute_alu_operation_fast(reg, alu_op, pending_data);
+                    }
+                }
                 break;
             default:
                 // Store operations (STORE_A, STORE_X, STORE_Y, STORE_ZERO) are handled
@@ -1034,8 +1082,19 @@ public:
                     case DataOp::STORE_ZERO:
                         return 0;
                     case DataOp::ALU:
-                        // ALU result - use pending_data when available
-                        return pending_data;
+                        {
+                            // ALU result - for memory-mode shift/rotate operations, use DL register
+                            // For other ALU operations, use pending_data
+                            const AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
+                            if (alu_op == AluOp::ASL || alu_op == AluOp::LSR ||
+                                alu_op == AluOp::ROL || alu_op == AluOp::ROR) {
+                                // Memory-mode shift/rotate: result is stored in DL register
+                                return reg[CpuReg::DL];
+                            } else {
+                                // Other ALU operations: use pending_data
+                                return pending_data;
+                            }
+                        }
                     default:
                         // Legacy: direct register mapping for load operations (should not be used for writes)
                         if (static_cast<uint8_t>(data_op) < static_cast<uint8_t>(CpuReg::COUNT)) {
