@@ -91,9 +91,10 @@ int main() {
             
             // Handle writes
             if (!cpu.get_rw()) {
-                memory[addr] = cpu.get_write_data();
-                std::cout << "    Cycle " << cycle_count << ": WRITE 0x" 
-                          << std::hex << std::setfill('0') << std::setw(2) << (int)cpu.get_write_data()
+                uint8_t write_data = cpu.get_write_data();
+                memory[addr] = write_data;
+                std::cout << "    Cycle " << cycle_count << ": WRITE 0x"
+                          << std::hex << std::setfill('0') << std::setw(2) << (int)write_data
                           << " to $" << std::setw(4) << addr << std::dec << "\n";
             } else {
                 std::cout << "    Cycle " << cycle_count << ": READ 0x" 
