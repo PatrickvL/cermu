@@ -157,17 +157,27 @@ public:
                     break;
             }
         } else if (mem_op == MemOp::WRITE_SP_DEC) {
-            // Stack write operations - handle data based on data operation
+            // STACK OPERATIONS FIX: Handle all stack write operations properly
             switch (data_op) {
                 case DataOp::STACK_PUSH:
-                    // For STACK_PUSH, the data to write is provided via pending_data
+                    // For STACK_PUSH (PHP), the data to write is provided via pending_data
                     BUS_SET_DATA(bus_state, pending_data);
                     break;
+                case DataOp::STORE_A:
+                    // PHA - Push Accumulator to stack
+                    BUS_SET_DATA(bus_state, reg[CpuReg::A]);
+                    break;
+                case DataOp::STORE_X:
+                    // PHX - Push X register to stack (65C02 instruction)
+                    BUS_SET_DATA(bus_state, reg[CpuReg::X]);
+                    break;
+                case DataOp::STORE_Y:
+                    // PHY - Push Y register to stack (65C02 instruction)
+                    BUS_SET_DATA(bus_state, reg[CpuReg::Y]);
+                    break;
                 default:
-                    // Direct register push operations
-                    if (static_cast<uint8_t>(data_op) < static_cast<uint8_t>(CpuReg::COUNT)) {
-                        BUS_SET_DATA(bus_state, reg[static_cast<uint8_t>(data_op)]);
-                    }
+                    // Fallback for unknown stack operations
+                    BUS_SET_DATA(bus_state, 0);
                     break;
             }
         }

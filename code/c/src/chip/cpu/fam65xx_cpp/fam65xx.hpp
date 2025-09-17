@@ -253,9 +253,6 @@ public:
         // CRITICAL FIX: Move this AFTER data operation so pending_data is set correctly
         if (__builtin_expect(mem_op >= MemOp::WRITE_ABS, 0)) {
             bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op, pending_data);
-        } else if (__builtin_expect(mem_op == MemOp::WRITE_SP_DEC && data_op == DataOp::STACK_PUSH, 0)) {
-            // For stack push operations, use the pending data set by handle_stack_push
-            BUS_SET_DATA(bus_state, pending_data);
         }
         
         // Execute ALU operation if specified - BRANCH PREDICTION
@@ -912,12 +909,12 @@ public:
         }
     }
     
-    // Handle stack push operations for interrupt sequences
+    // Handle stack push operations for both interrupt sequences and normal instructions
     inline void handle_stack_push() {
+        uint8_t push_data = 0;
+        
         // During interrupt sequences, determine what to push based on cycle
         if (state_flags & STATE_INTERRUPT_SEQUENCE) {
-            uint8_t push_data = 0;
-            
             switch (cycle_step) {
                 case 3: // Push PCH (high byte of return address)
                     push_data = reg[CpuReg::PCH];
@@ -936,20 +933,54 @@ public:
                     push_data = 0;
                     break;
             }
-            
-            // Set the data on the bus for the memory write operation
-            // This will be picked up by handle_write_data in memory_operations.hpp
-            pending_data = push_data;
+        } else {
+            // STACK OPERATIONS FIX: Handle normal stack push instructions (PHA/PHP)
+            // Determine what to push based on the opcode
+            switch (opcode) {
+                case 0x08: // PHP - Push Processor Status
+                    push_data = reg[CpuReg::P];
+                    break;
+                case 0x48: // PHA - Push Accumulator
+                    push_data = reg[CpuReg::A];
+                    break;
+                default:
+                    // For other instructions using STACK_PUSH (JSR, etc.), use context
+                    push_data = 0;
+                    break;
+            }
         }
+        
+        // Set the data on the bus for the memory write operation
+        // This will be picked up by handle_write_data in memory_operations.hpp
+        pending_data = push_data;
     }
     
     // Handle stack pull operations
     inline void handle_stack_pull(uint8_t data) {
-        // Stack pull operations (RTI, RTS, PLA, etc.)
-        if (opcode == 0x40) { // RTI
-            if (cycle_step == 4) reg[CpuReg::P] = data;
-            else if (cycle_step == 5) reg[CpuReg::PCL] = data;
-            else if (cycle_step == 6) reg[CpuReg::PCH] = data;
+        // STACK OPERATIONS FIX: Handle all stack pull operations, not just RTI
+        switch (opcode) {
+            case 0x28: // PLP - Pull Processor Status
+                reg[CpuReg::P] = data;
+                break;
+            case 0x68: // PLA - Pull Accumulator
+                reg[CpuReg::A] = data;
+                // PLA sets N and Z flags based on the pulled value
+                reg[CpuReg::P] = (reg[CpuReg::P] & ~(P_NEGATIVE | P_ZERO)) |
+                                (data & P_NEGATIVE) |
+                                ((data == 0) << 1);
+                break;
+            case 0x40: // RTI - Return from Interrupt
+                if (cycle_step == 4) reg[CpuReg::P] = data;
+                else if (cycle_step == 5) reg[CpuReg::PCL] = data;
+                else if (cycle_step == 6) reg[CpuReg::PCH] = data;
+                break;
+            case 0x60: // RTS - Return from Subroutine
+                if (cycle_step == 4) reg[CpuReg::PCL] = data;
+                else if (cycle_step == 5) reg[CpuReg::PCH] = data;
+                break;
+            default:
+                // Handle other stack pull operations if needed
+                break;
         }
     }
     
