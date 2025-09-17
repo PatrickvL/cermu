@@ -148,13 +148,13 @@ public:
     
     // Stack operations
     static constexpr cycle_desc_t make_stack_push(uint8_t cycle, DataOp store_op) {
-        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP);
         if (cycle == 2) return CD_MAKE_SYNC(MemOp::WRITE_SP_DEC, store_op, AluOp::NOP);
         return make_empty_cycle();
     }
     
     static constexpr cycle_desc_t make_stack_pull(uint8_t cycle, DataOp load_op) {
-        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP);
         if (cycle == 2) return CD_MAKE(MemOp::READ_SP_INC, DataOp::NOP, AluOp::NOP);
         if (cycle == 3) return CD_MAKE_SYNC(MemOp::READ_SP, load_op, AluOp::NOP);
         return make_empty_cycle();
