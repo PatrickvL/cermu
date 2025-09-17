@@ -306,7 +306,30 @@ public:
         }
         
         // Check if instruction is complete using sync bit - FAST SYNC CHECK
-        if (__builtin_expect(cycle.is_sync(), 1)) {
+        // CONDITIONAL CYCLE SOLUTION: Branch instructions use dynamic SYNC determination
+        bool instruction_complete = cycle.is_sync();
+        
+        // ZERO-OVERHEAD BRANCH CONDITIONAL CYCLES: Handle branch instructions specially
+        if (__builtin_expect(opcode >= 0x10 && opcode <= 0xF0 && (opcode & 0x1F) == 0x10, 0)) {
+            // Branch instruction: Use conditional timing based on branch state
+            if (cycle_step == 2) {
+                // Cycle 2: Always complete if branch not taken, continue if branch taken
+                instruction_complete = !get_state(STATE_BRANCH_TAKEN);
+            } else if (cycle_step == 3) {
+                // Cycle 3: Complete if branch taken but no page crossing
+                instruction_complete = get_state(STATE_BRANCH_TAKEN) && !get_state(STATE_PAGE_CROSSED);
+            } else if (cycle_step >= 4) {
+                // Cycle 4+: Always complete (branch taken with page crossing)
+                instruction_complete = true;
+            }
+            
+            // Clear branch state flags when instruction completes
+            if (instruction_complete) {
+                clear_state(STATE_BRANCH_TAKEN | STATE_PAGE_CROSSED);
+            }
+        }
+        
+        if (__builtin_expect(instruction_complete, 1)) {
             cycle_step = 0; // Start next instruction
         } else {
             cycle_step++;
@@ -566,7 +589,30 @@ public:
         process_so_pin_edge();
         
         // Check if instruction is complete using sync bit
-        if (cycle.is_sync()) {
+        // CONDITIONAL CYCLE SOLUTION: Branch instructions use dynamic SYNC determination
+        bool instruction_complete = cycle.is_sync();
+        
+        // ZERO-OVERHEAD BRANCH CONDITIONAL CYCLES: Handle branch instructions specially
+        if (opcode >= 0x10 && opcode <= 0xF0 && (opcode & 0x1F) == 0x10) {
+            // Branch instruction: Use conditional timing based on branch state
+            if (cycle_step == 2) {
+                // Cycle 2: Always complete if branch not taken, continue if branch taken
+                instruction_complete = !get_state(STATE_BRANCH_TAKEN);
+            } else if (cycle_step == 3) {
+                // Cycle 3: Complete if branch taken but no page crossing
+                instruction_complete = get_state(STATE_BRANCH_TAKEN) && !get_state(STATE_PAGE_CROSSED);
+            } else if (cycle_step >= 4) {
+                // Cycle 4+: Always complete (branch taken with page crossing)
+                instruction_complete = true;
+            }
+            
+            // Clear branch state flags when instruction completes
+            if (instruction_complete) {
+                clear_state(STATE_BRANCH_TAKEN | STATE_PAGE_CROSSED);
+            }
+        }
+        
+        if (instruction_complete) {
             cycle_step = 0; // Start next instruction
         } else {
             cycle_step++;
@@ -808,21 +854,43 @@ public:
             return;
         }
         
-        // Extract flag selection bits 6-7, pre-shifted for byte indexing
-        constexpr uint32_t FLAG_PACKED = (P_ZERO << 24) | (P_CARRY << 16) | (P_OVERFLOW << 8) | P_NEGATIVE;
-        // Get flag mask by extracting the appropriate byte from packed constant (shift by 0, 8, 16 or 24)
-        const uint8_t flag_mask = static_cast<uint8_t>(FLAG_PACKED >> ((opcode >> 3) & 0x18));
+        // BRANCH INSTRUCTION FIX: Use direct opcode-to-condition mapping
+        // This fixes the complex bit manipulation algorithm that had inversion bugs
+        bool should_branch = false;
         
-        // Extract opcode bits 4,6 to check for inversion pattern (opcodes x1x0:xxxx)
-        const uint8_t pattern = (opcode >> 4) & 5;
-        // Create all-ones mask when pattern equals 1 (only opcodes 0x10, 0x50, 0x90, 0xD0)
-        const uint8_t invert_mask = ~(((pattern ^ 1) | ((pattern ^ 1) - 1)));
+        switch (opcode) {
+            case 0x10: // BPL - Branch if Plus (N=0)
+                should_branch = !(reg[CpuReg::P] & P_NEGATIVE);
+                break;
+            case 0x30: // BMI - Branch if Minus (N=1)
+                should_branch = (reg[CpuReg::P] & P_NEGATIVE);
+                break;
+            case 0x50: // BVC - Branch if Overflow Clear (V=0)
+                should_branch = !(reg[CpuReg::P] & P_OVERFLOW);
+                break;
+            case 0x70: // BVS - Branch if Overflow Set (V=1)
+                should_branch = (reg[CpuReg::P] & P_OVERFLOW);
+                break;
+            case 0x90: // BCC - Branch if Carry Clear (C=0)
+                should_branch = !(reg[CpuReg::P] & P_CARRY);
+                break;
+            case 0xB0: // BCS - Branch if Carry Set (C=1)
+                should_branch = (reg[CpuReg::P] & P_CARRY);
+                break;
+            case 0xD0: // BNE - Branch if Not Equal (Z=0)
+                should_branch = !(reg[CpuReg::P] & P_ZERO);
+                break;
+            case 0xF0: // BEQ - Branch if Equal (Z=1)
+                should_branch = (reg[CpuReg::P] & P_ZERO);
+                break;
+            default:
+                // Unknown branch opcode - should not happen
+                should_branch = false;
+                break;
+        }
         
-        // Test flag bit and conditionally invert based on opcode pattern
-        const uint8_t effective_flags = (reg[CpuReg::P] & flag_mask) ^ (flag_mask & invert_mask);
-        
-        // Branch if effective flag evaluation is non-zero
-        if (effective_flags) {
+        // Branch if condition is met
+        if (should_branch) {
             // Calculate branch target address
             const uint16_t current_pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
             int16_t signed_offset = static_cast<int8_t>(offset); // Sign extend
