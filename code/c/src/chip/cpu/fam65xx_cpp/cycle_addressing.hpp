@@ -160,10 +160,13 @@ public:
         return make_empty_cycle();
     }
     
-    // Branch operations (2+ cycles base, +1 if taken, +1 more if page crossed)
+    // Branch operations (2-4 cycles: 2 if not taken, 3 if taken, 4 if taken + page crossed)
+    // CONDITIONAL CYCLE SOLUTION: The CPU execution logic dynamically determines the final cycle
     static constexpr cycle_desc_t make_branch(uint8_t cycle) {
         if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::BRANCH, AluOp::NOP);
-        if (cycle == 2) return CD_MAKE_SYNC(MemOp::READ_PC, DataOp::NOP, AluOp::NOP); // Cycle 2+, execution decides how many
+        if (cycle == 2) return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP); // NO SYNC - conditional
+        if (cycle == 3) return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP); // NO SYNC - conditional
+        if (cycle == 4) return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP); // NO SYNC - conditional
         return make_empty_cycle();
     }
     
