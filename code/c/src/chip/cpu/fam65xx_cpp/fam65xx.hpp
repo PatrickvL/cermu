@@ -244,18 +244,19 @@ public:
         
         // Execute memory operation - INLINED FOR HOT PATH
         bus_state = memory_ops::execute_memory_operation_fast(bus_state, reg, mem_op);
+        
+        // Execute data operation and ALU operation using same bus data
+        const uint8_t bus_data = BUS_GET_DATA(bus_state);
+        execute_data_operation_fast(data_op, bus_data);
 
         // Handle write data if needed - BRANCH PREDICTION
+        // CRITICAL FIX: Move this AFTER data operation so pending_data is set correctly
         if (__builtin_expect(mem_op >= MemOp::WRITE_ABS, 0)) {
             bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op, pending_data);
         } else if (__builtin_expect(mem_op == MemOp::WRITE_SP_DEC && data_op == DataOp::STACK_PUSH, 0)) {
             // For stack push operations, use the pending data set by handle_stack_push
             BUS_SET_DATA(bus_state, pending_data);
         }
-        
-        // Execute data operation and ALU operation using same bus data
-        const uint8_t bus_data = BUS_GET_DATA(bus_state);
-        execute_data_operation_fast(data_op, bus_data);
         
         // Execute ALU operation if specified - BRANCH PREDICTION
         if (__builtin_expect(alu_op != AluOp::NOP, 0)) {
@@ -1102,6 +1103,65 @@ public:
                         }
                         return 0;
                 }
+            }
+            
+            // CRITICAL FIX: Handle TEMP_STORE and TEMP_MODIFY operations for memory modify cycles
+            switch (data_op) {
+                case DataOp::TEMP_STORE:
+                    // First write cycle: write back the original value
+                    // For memory modify operations, the original value is stored at the current address
+                    // We need to predict this value since the TEMP_STORE hasn't been executed yet
+                    {
+                        uint16_t addr = get_address();
+                        // This is a predictive read - get the current memory value at the target address
+                        // In real hardware, this is the value that was read in Step 2
+                        // For our simulation, we need to determine what value would be read
+                        
+                        // The original value is what's currently at the memory location
+                        // Since we're called before cycle_tick(), we need to predict this
+                        // For memory modify operations like ASL $nn, the original value
+                        // is stored in the DL register from the previous read cycle
+                        return reg[CpuReg::DL];
+                    }
+                    
+                case DataOp::TEMP_MODIFY:
+                    // Second write cycle: write the computed ALU result
+                    // We need to compute the result predictively since ALU hasn't executed yet
+                    {
+                        const AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
+                        if (alu_op == AluOp::ASL || alu_op == AluOp::LSR ||
+                            alu_op == AluOp::ROL || alu_op == AluOp::ROR) {
+                            // Get the original value that was read and stored in DL
+                            uint8_t original_value = reg[CpuReg::DL];
+                            uint8_t result = original_value;
+                            
+                            // Perform the shift/rotate operation predictively
+                            switch (alu_op) {
+                                case AluOp::ASL:
+                                    result = original_value << 1;
+                                    break;
+                                case AluOp::LSR:
+                                    result = original_value >> 1;
+                                    break;
+                                case AluOp::ROL:
+                                    result = (original_value << 1) | ((reg[CpuReg::P] & P_CARRY) ? 1 : 0);
+                                    break;
+                                case AluOp::ROR:
+                                    result = (original_value >> 1) | ((reg[CpuReg::P] & P_CARRY) ? 0x80 : 0);
+                                    break;
+                                default:
+                                    break;
+                            }
+                            
+                            return result;
+                        } else {
+                            // For other ALU operations, use DL register result
+                            return reg[CpuReg::DL];
+                        }
+                    }
+                    
+                default:
+                    break;
             }
         }
         return 0;
