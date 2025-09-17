@@ -255,6 +255,11 @@ public:
             bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op, pending_data);
         }
         
+        // STACK OPERATIONS FIX: Handle stack operations write data separately
+        else if (__builtin_expect(mem_op == MemOp::WRITE_SP_DEC, 0)) {
+            bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op, pending_data);
+        }
+        
         // Execute ALU operation if specified - BRANCH PREDICTION
         if (__builtin_expect(alu_op != AluOp::NOP, 0)) {
             // CRITICAL FIX: Skip ALU execution if it was already done during TEMP_MODIFY
