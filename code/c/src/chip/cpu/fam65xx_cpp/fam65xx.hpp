@@ -594,15 +594,17 @@ public:
         
         // ZERO-OVERHEAD BRANCH CONDITIONAL CYCLES: Handle branch instructions specially
         if (opcode >= 0x10 && opcode <= 0xF0 && (opcode & 0x1F) == 0x10) {
-            // Branch instruction: Use conditional timing based on branch state
-            if (cycle_step == 2) {
-                // Cycle 2: Always complete if branch not taken, continue if branch taken
+            // Branch instruction: Check state flags AFTER execution to determine completion
+            // The branch logic in handle_branch_instruction sets STATE_BRANCH_TAKEN during cycle 1
+            if (cycle_step == 1) {
+                // After cycle 1 (offset read): branch decision has been made
+                // Complete now if branch not taken (total: 2 cycles)
                 instruction_complete = !get_state(STATE_BRANCH_TAKEN);
-            } else if (cycle_step == 3) {
-                // Cycle 3: Complete if branch taken but no page crossing
+            } else if (cycle_step == 2) {
+                // After cycle 2: Complete if branch taken but no page crossing (total: 3 cycles)
                 instruction_complete = get_state(STATE_BRANCH_TAKEN) && !get_state(STATE_PAGE_CROSSED);
-            } else if (cycle_step >= 4) {
-                // Cycle 4+: Always complete (branch taken with page crossing)
+            } else if (cycle_step >= 3) {
+                // After cycle 3+: Always complete (branch taken with page crossing, total: 4 cycles)
                 instruction_complete = true;
             }
             

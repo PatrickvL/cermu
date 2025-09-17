@@ -157,7 +157,7 @@ public:
                     // Binary mode subtraction
                     temp = a - data - !(reg[CpuReg::P] & P_CARRY);
                     result = temp & 0xFF;
-                    flags = (temp < 0x100 ? P_CARRY : 0) |
+                    flags = (temp > 0xFF ? 0 : P_CARRY) |
                             ((a ^ data) & (a ^ result) & 0x80 ? P_OVERFLOW : 0);
                 }
                 reg[CpuReg::P] = (reg[CpuReg::P] & ~(P_CARRY | P_OVERFLOW)) | flags;
@@ -567,7 +567,7 @@ public:
                     // Binary mode subtraction
                     const uint16_t temp = a - data - (reg[CpuReg::P] & P_CARRY ? 0 : 1);
                     result = temp & 0xFF;
-                    flags = (temp < 0x100 ? P_CARRY : 0) |
+                    flags = (temp > 0xFF ? 0 : P_CARRY) |
                             ((a ^ data) & (a ^ result) & 0x80 ? P_OVERFLOW : 0);
                 }
                 
