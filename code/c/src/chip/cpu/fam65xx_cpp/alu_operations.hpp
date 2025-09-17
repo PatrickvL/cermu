@@ -84,19 +84,15 @@ public:
             case AluOp::ADC: {
                 uint8_t nz_flag_value;
                 if (reg[CpuReg::P] & P_DECIMAL) {
-                    // Decimal (BCD) mode addition
-                    // CRITICAL: On 6502, N/Z/V flags are set based on BINARY result, not BCD result
+                    // === CONSTEXPR CROSS-CORE COMPATIBILITY ===
+                    // Decimal (BCD) mode addition with zero runtime overhead core differentiation
                     uint8_t carry_in = (reg[CpuReg::P] & P_CARRY) ? 1 : 0;
                     
                     // First perform binary addition for flag calculation
                     temp = a + data + carry_in;
                     uint8_t binary_result = temp & 0xFF;
-                    nz_flag_value = binary_result; // N/Z flags based on binary result
                     
-                    // Calculate V flag based on binary arithmetic (NOT carry flag yet)
-                    flags = ((~(a ^ data) & (a ^ binary_result) & 0x80) ? P_OVERFLOW : 0);
-                    
-                    // Then perform BCD correction for the final stored result and carry flag
+                    // Calculate BCD result for actual storage (all variants need this)
                     uint16_t lo_nibble = (a & 0x0F) + (data & 0x0F) + carry_in;
                     uint16_t hi_nibble = (a >> 4) + (data >> 4);
                     
@@ -108,12 +104,25 @@ public:
                         hi_nibble += 6;
                     }
                     
-                    result = ((hi_nibble & 0x0F) << 4) | (lo_nibble & 0x0F);
+                    uint8_t bcd_result = ((hi_nibble & 0x0F) << 4) | (lo_nibble & 0x0F);
+                    result = bcd_result;
                     
-                    // Set carry flag based on BCD overflow (NOT binary overflow)
+                    // CROSS-CORE COMPATIBILITY: N/Z flag handling varies by CPU variant
+                    if constexpr (BusConfig::has_cmos_fixes) {
+                        // CMOS variants: N/Z flags set based on BCD result (bug fixed)
+                        nz_flag_value = bcd_result;
+                    } else {
+                        // NMOS variants: N/Z flags set based on BINARY result (hardware bug)
+                        nz_flag_value = binary_result;
+                    }
+                    
+                    // Calculate V flag based on binary arithmetic for all variants
+                    flags = ((~(a ^ data) & (a ^ binary_result) & 0x80) ? P_OVERFLOW : 0);
+                    
+                    // Set carry flag based on BCD overflow
                     flags |= (hi_nibble > 0x0F ? P_CARRY : 0);
                 } else {
-                    // Binary mode addition
+                    // Binary mode addition - consistent across all cores
                     temp = a + data + (reg[CpuReg::P] & P_CARRY);
                     result = temp & 0xFF;
                     nz_flag_value = result; // N/Z flags based on actual result
@@ -477,19 +486,15 @@ public:
                 uint8_t nz_flag_value; // Value to use for N/Z flag calculation
                 
                 if (reg[CpuReg::P] & P_DECIMAL) {
-                    // Decimal (BCD) mode addition
-                    // CRITICAL: On 6502, N/Z/V flags are set based on BINARY result, not BCD result
+                    // === CONSTEXPR CROSS-CORE COMPATIBILITY ===
+                    // Decimal (BCD) mode addition with zero runtime overhead core differentiation
                     uint8_t carry_in = (reg[CpuReg::P] & P_CARRY) ? 1 : 0;
                     
                     // First perform binary addition for flag calculation
                     const uint16_t temp = a + data + carry_in;
                     uint8_t binary_result = temp & 0xFF;
-                    nz_flag_value = binary_result; // N/Z flags based on binary result
                     
-                    // Calculate V flag based on binary arithmetic (but NOT carry flag yet)
-                    flags = ((~(a ^ data) & (a ^ binary_result) & 0x80) ? P_OVERFLOW : 0);
-                    
-                    // Then perform BCD correction for the final stored result and carry flag
+                    // Calculate BCD result for actual storage (all variants need this)
                     uint16_t lo_nibble = (a & 0x0F) + (data & 0x0F) + carry_in;
                     uint16_t hi_nibble = (a >> 4) + (data >> 4);
                     
@@ -501,12 +506,25 @@ public:
                         hi_nibble += 6;
                     }
                     
-                    result = ((hi_nibble & 0x0F) << 4) | (lo_nibble & 0x0F);
+                    uint8_t bcd_result = ((hi_nibble & 0x0F) << 4) | (lo_nibble & 0x0F);
+                    result = bcd_result;
                     
-                    // Set carry flag based on BCD overflow (NOT binary overflow)
+                    // CROSS-CORE COMPATIBILITY: N/Z flag handling varies by CPU variant
+                    if constexpr (BusConfig::has_cmos_fixes) {
+                        // CMOS variants: N/Z flags set based on BCD result (bug fixed)
+                        nz_flag_value = bcd_result;
+                    } else {
+                        // NMOS variants: N/Z flags set based on BINARY result (hardware bug)
+                        nz_flag_value = binary_result;
+                    }
+                    
+                    // Calculate V flag based on binary arithmetic for all variants
+                    flags = ((~(a ^ data) & (a ^ binary_result) & 0x80) ? P_OVERFLOW : 0);
+                    
+                    // Set carry flag based on BCD overflow
                     flags |= (hi_nibble > 0x0F ? P_CARRY : 0);
                 } else {
-                    // Binary mode addition
+                    // Binary mode addition - consistent across all cores
                     const uint16_t temp = a + data + (reg[CpuReg::P] & P_CARRY ? 1 : 0);
                     result = temp & 0xFF;
                     nz_flag_value = result; // N/Z flags based on actual result
