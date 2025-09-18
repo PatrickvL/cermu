@@ -125,16 +125,8 @@ public:
         irq_sources = 0;             // No IRQ sources active
     }
     
-    // Execute one CPU cycle - OPTIMIZED HOT PATH
+    // Execute one CPU cycle
     inline bus_state_t cycle_tick(bus_state_t bus_state) {
-        
-        // HOT PATH OPTIMIZATION: Branch prediction hints and batched checks
-        
-        // Likely path: normal instruction execution (90%+ of cycles)
-        if (__builtin_expect(!(state_flags & (STATE_INTERRUPT_SEQUENCE | STATE_RESET_PENDING | STATE_NMI_PENDING | STATE_IRQ_PENDING | STATE_ABORT_PENDING | STATE_COP_PENDING)), 1)) {
-            // Fast path: normal instruction execution without interrupts
-            return execute_cycle_fast_path(bus_state);
-        }
         
         // Process input control lines first (inlined for hot path)
         bus_state = process_input_pins(bus_state);
@@ -201,154 +193,6 @@ public:
         return bus_state;
     }
     
-    // PERFORMANCE: Fast path for normal instruction execution (90%+ of cycles)
-    inline bus_state_t execute_cycle_fast_path(bus_state_t bus_state) {
-        // Fetch opcode on cycle 0 - HOT PATH
-        if (__builtin_expect(cycle_step == 0, 1)) {
-            opcode = BUS_GET_DATA(bus_state);
-            cycle_step = 1;
-            state_flags |= STATE_SYNC_NEXT; // Direct bit set for speed
-            
-            // CRITICAL FIX: Increment PC after opcode fetch
-            // The opcode fetch must increment PC so that cycle 1 reads the next byte
-            const uint16_t pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
-            const uint16_t new_pc = (pc + 1) & 0xFFFF;
-            reg[CpuReg::PCL] = new_pc & 0xFF;
-            reg[CpuReg::PCH] = (new_pc >> 8) & 0xFF;
-            
-            // Special case: BRK instruction ($00) triggers software interrupt
-            if (__builtin_expect(opcode == 0x00, 0)) {
-                // BRK should start interrupt sequence immediately after opcode fetch
-                // Use special BRK virtual opcode to set B flag correctly
-                return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_BRK);
-            }
-            
-            // Special case: COP instruction ($02) triggers co-processor interrupt (65C816)
-            if constexpr (Config::has_abort_pin) { // 65C816 has COP instruction
-                if (__builtin_expect(opcode == 0x02, 0)) {
-                    // COP should start interrupt sequence immediately after opcode fetch
-                    return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_COP);
-                }
-            }
-            
-            return bus_state;
-        }
-        
-        // Get cycle description for current instruction step - OPTIMIZED LOOKUP
-        const fam65xx_cpp::cycle_desc_t cycle = cycle_tables::get_cycle_fast(opcode, cycle_step);
-        
-        // Convert raw values to type-safe enums - CACHED FOR SPEED
-        const MemOp mem_op = static_cast<MemOp>(cycle.mem_op);
-        const DataOp data_op = static_cast<DataOp>(cycle.data_op);
-        const AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
-        
-        // Execute memory operation - INLINED FOR HOT PATH
-        bus_state = memory_ops::execute_memory_operation_fast(bus_state, reg, mem_op);
-        
-        // Execute data operation and ALU operation using same bus data
-        const uint8_t bus_data = BUS_GET_DATA(bus_state);
-        execute_data_operation_fast(data_op, bus_data);
-
-        // Handle write data if needed - BRANCH PREDICTION
-        // CRITICAL FIX: Move this AFTER data operation so pending_data is set correctly
-        if (__builtin_expect(mem_op >= MemOp::WRITE_ABS, 0)) {
-            bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op, pending_data);
-        }
-        
-        // STACK OPERATIONS FIX: Handle stack operations write data separately
-        else if (__builtin_expect(mem_op == MemOp::WRITE_SP_DEC, 0)) {
-            bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op, pending_data);
-        }
-        
-        // Execute ALU operation if specified - BRANCH PREDICTION
-        if (__builtin_expect(alu_op != AluOp::NOP, 0)) {
-            // CRITICAL FIX: Skip ALU execution if it was already done during TEMP_MODIFY
-            if (data_op != DataOp::TEMP_MODIFY) {
-                // CRITICAL FIX: Use pending_data for ALU operations when DataOp::ALU was executed
-                // DataOp::ALU sets pending_data to prepare operand for ALU operation
-                // TRANSFER/FLAG FIX: Transfer and flag operations don't need external data
-                uint8_t alu_data;
-                if (data_op == DataOp::ALU) {
-                    alu_data = pending_data;
-                } else if (alu_op >= AluOp::TXA && alu_op <= AluOp::TXS) {
-                    // Transfer operations: TAX, TXA, TAY, TYA, TSX, TXS - don't use bus data
-                    alu_data = 0; // Transfer operations use register values internally
-                } else if (alu_op >= AluOp::CLC && alu_op <= AluOp::SED) {
-                    // Flag operations: CLC, SEC, CLI, SEI, CLV, CLD, SED - don't use bus data
-                    alu_data = 0; // Flag operations don't need data
-                } else {
-                    alu_data = bus_data;
-                }
-                alu_ops::execute_alu_operation_fast(reg, alu_op, alu_data);
-            }
-            
-            // ACCUMULATOR MODE FIX: For accumulator shift/rotate operations, copy result from DL to accumulator
-            if (alu_op == AluOp::ASL || alu_op == AluOp::LSR || alu_op == AluOp::ROL || alu_op == AluOp::ROR) {
-                const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
-                const MemOp mem_op = static_cast<MemOp>(cycle.mem_op);
-                
-                // Accumulator mode operations use MemOp::NOP, memory mode operations use memory addressing
-                if (mem_op == MemOp::NOP) {
-                    reg[CpuReg::A] = reg[CpuReg::DL]; // Copy result from DL to accumulator for accumulator mode
-                }
-            }
-            
-            // Handle interrupt flag changes for SEI/CLI instructions - RARE PATH
-            if (__builtin_expect(alu_op == AluOp::SEI || alu_op == AluOp::CLI, 0)) {
-                handle_interrupt_flag_change();
-            }
-            
-            // Handle decimal mode bugs for NMOS variants - RARE PATH
-            if constexpr (!Config::has_cmos_fixes) {
-                if (__builtin_expect((reg[CpuReg::P] & P_DECIMAL) &&
-                    (alu_op == AluOp::ADC || alu_op == AluOp::SBC), 0)) {
-                    handle_decimal_mode_bugs(reg[CpuReg::A], alu_op);
-                }
-            }
-        }
-        
-        // Check if instruction is complete using sync bit - FAST SYNC CHECK
-        // CONDITIONAL CYCLE SOLUTION: Branch instructions use dynamic SYNC determination
-        bool instruction_complete = cycle.is_sync();
-        
-        // ZERO-OVERHEAD BRANCH CONDITIONAL CYCLES: Handle branch instructions specially
-        if (__builtin_expect(opcode >= 0x10 && opcode <= 0xF0 && (opcode & 0x1F) == 0x10, 0)) {
-            // Branch instruction: Use conditional timing based on branch state
-            if (cycle_step == 2) {
-                // Cycle 2: Always complete if branch not taken, continue if branch taken
-                instruction_complete = !get_state(STATE_BRANCH_TAKEN);
-            } else if (cycle_step == 3) {
-                // Cycle 3: Complete if branch taken but no page crossing
-                instruction_complete = get_state(STATE_BRANCH_TAKEN) && !get_state(STATE_PAGE_CROSSED);
-            } else if (cycle_step >= 4) {
-                // Cycle 4+: Always complete (branch taken with page crossing)
-                instruction_complete = true;
-            }
-            
-            // Clear branch state flags when instruction completes
-            if (instruction_complete) {
-                clear_state(STATE_BRANCH_TAKEN | STATE_PAGE_CROSSED);
-            }
-        }
-        
-        if (__builtin_expect(instruction_complete, 1)) {
-            cycle_step = 0; // Start next instruction
-        } else {
-            cycle_step++;
-        }
-        
-        // Process output control lines - INLINED FOR SPEED
-        if constexpr (Config::has_sync_pin) {
-            if (__builtin_expect(state_flags & STATE_SYNC_NEXT, 1)) {
-                bus_state |= BUS_BIT(BUS_SYNC_BIT);
-                state_flags &= ~STATE_SYNC_NEXT; // Direct bit clear
-            } else {
-                bus_state &= ~BUS_BIT(BUS_SYNC_BIT);
-            }
-        }
-        
-        return bus_state;
-    }
     
     // Start interrupt sequence using cycle-based approach
     inline bus_state_t start_interrupt_sequence(bus_state_t bus_state, uint16_t virtual_opcode) {
@@ -485,7 +329,7 @@ public:
         
         // Handle write data if needed
         if (mem_op >= MemOp::WRITE_ABS) {
-            bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op, pending_data);
+            bus_state = memory_ops::handle_write_data(bus_state, *this, mem_op, data_op, pending_data);
         }
         
         // Execute data operation and ALU operation using same bus data
@@ -553,7 +397,25 @@ public:
         bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op);
 
         // Handle write data if needed
-        bus_state = memory_ops::handle_write_data(bus_state, reg, mem_op, data_op, pending_data);
+        if (mem_op >= MemOp::WRITE_ABS || mem_op == MemOp::WRITE_SP_DEC) {
+            // Set pending_data for STORE operations using helper function
+            if (data_op >= DataOp::STORE_A && data_op <= DataOp::STORE_ZERO) {
+                pending_data = get_store_register_value(data_op);
+            } else if (data_op == DataOp::STACK_PUSH) {
+                // STACK OPERATIONS FIX: Handle PHP instruction - set pending_data to processor status
+                // PHP (0x08) uses DataOp::STACK_PUSH and needs to push the P register
+                switch (opcode) {
+                    case 0x08: // PHP - Push Processor Status
+                        pending_data = reg[CpuReg::P];
+                        break;
+                    default:
+                        // For other STACK_PUSH operations, use handle_stack_push()
+                        handle_stack_push();
+                        break;
+                }
+            }
+            bus_state = memory_ops::handle_write_data(bus_state, *this, mem_op, data_op, pending_data);
+        }
         
         // Execute data operation and ALU operation using same bus data
         uint8_t bus_data = BUS_GET_DATA(bus_state);
@@ -829,14 +691,39 @@ public:
                     }
                 }
                 break;
+            case DataOp::STORE_A:
+            case DataOp::STORE_X:
+            case DataOp::STORE_Y:
+            case DataOp::STORE_ZERO:
+                // DEDUPLICATION: Use helper function for all STORE operations
+                pending_data = get_store_register_value(data_op);
+                break;
             default:
-                // Store operations (STORE_A, STORE_X, STORE_Y, STORE_ZERO) are handled
-                // by the memory operations system, not here
+                // Other operations that don't need special processing
                 break;
         }
         
         // Set pending data operation for next cycle - DIRECT ASSIGNMENT
         pending_data_op = static_cast<uint8_t>(data_op);
+    }
+    
+    // Helper function to get register value for STORE operations using enum order mapping
+    inline uint8_t get_store_register_value(DataOp data_op) const {
+        // ENUM ORDER OPTIMIZATION: Use arithmetic mapping instead of switch statement
+        // DataOp::STORE_A = 3 maps to CpuReg::A = 0 (3 - 3 = 0)
+        // DataOp::STORE_X = 4 maps to CpuReg::X = 1 (4 - 3 = 1)
+        // DataOp::STORE_Y = 5 maps to CpuReg::Y = 2 (5 - 3 = 2)
+        // DataOp::STORE_ZERO = 6 is the default case (returns 0)
+        
+        const uint8_t data_op_value = static_cast<uint8_t>(data_op);
+        if (data_op_value >= static_cast<uint8_t>(DataOp::STORE_A) &&
+            data_op_value <= static_cast<uint8_t>(DataOp::STORE_Y)) {
+            // Use enum order arithmetic: subtract STORE_A to get CpuReg index
+            const uint8_t reg_index = data_op_value - static_cast<uint8_t>(DataOp::STORE_A);
+            return reg[reg_index];
+        }
+        // Default case: STORE_ZERO or invalid
+        return 0x00;
     }
     
     // Handle branch instructions (BCC, BCS, BEQ, BNE, BMI, BPL, BVC, BVS, BRA)
@@ -1221,16 +1108,13 @@ public:
                                            (1 << static_cast<uint8_t>(MemOp::WRITE_ZPY));
             
             if (WRITE_OPS & (1 << static_cast<uint8_t>(mem_op))) {
-                // Handle store operations based on DataOp
+                // Handle store operations based on DataOp - DEDUPLICATION: Use helper function
                 switch (data_op) {
                     case DataOp::STORE_A:
-                        return reg[CpuReg::A];
                     case DataOp::STORE_X:
-                        return reg[CpuReg::X];
                     case DataOp::STORE_Y:
-                        return reg[CpuReg::Y];
                     case DataOp::STORE_ZERO:
-                        return 0;
+                        return get_store_register_value(data_op);
                     case DataOp::ALU:
                         {
                             // ALU result - for memory-mode shift/rotate operations, use DL register
@@ -1250,6 +1134,23 @@ public:
                         if (static_cast<uint8_t>(data_op) < static_cast<uint8_t>(CpuReg::COUNT)) {
                             return reg[static_cast<uint8_t>(data_op)];
                         }
+                        return 0;
+                }
+            }
+            
+            // STACK OPERATIONS FIX: Handle normal stack operations (PHA/PHP) outside interrupt sequences
+            if (mem_op == MemOp::WRITE_SP_DEC && !(state_flags & STATE_INTERRUPT_SEQUENCE)) {
+                // Handle normal stack push operations based on DataOp - DEDUPLICATION: Use helper function
+                switch (data_op) {
+                    case DataOp::STORE_A:
+                    case DataOp::STORE_X:
+                    case DataOp::STORE_Y:
+                    case DataOp::STORE_ZERO:
+                        return get_store_register_value(data_op);
+                    case DataOp::STACK_PUSH:
+                        // For PHP, the data would be in pending_data set by handle_stack_push()
+                        return pending_data;
+                    default:
                         return 0;
                 }
             }

@@ -109,29 +109,28 @@ public:
         return bus_state;
     }
     
-    template<typename RegArray>
-    static inline bus_state_t handle_write_data(bus_state_t bus_state, RegArray& reg,
+    template<typename CpuInstance>
+    static inline bus_state_t handle_write_data(bus_state_t bus_state, CpuInstance& cpu,
                                                MemOp mem_op, DataOp data_op, uint8_t pending_data = 0) {
         // Handle data output for write operations
         constexpr uint16_t WRITE_OPS = (1 << static_cast<uint8_t>(MemOp::WRITE_ABS)) |
                                        (1 << static_cast<uint8_t>(MemOp::WRITE_ZP)) |
                                        (1 << static_cast<uint8_t>(MemOp::WRITE_ZPX)) |
-                                       (1 << static_cast<uint8_t>(MemOp::WRITE_ZPY));
+                                       (1 << static_cast<uint8_t>(MemOp::WRITE_ZPY)) |
+                                       (1 << static_cast<uint8_t>(MemOp::WRITE_SP_DEC));
         
         if (WRITE_OPS & (1 << static_cast<uint8_t>(mem_op))) {
-            // Handle store operations first
+            // Handle store operations first - DEDUPLICATION: Use CPU helper function
             switch (data_op) {
                 case DataOp::STORE_A:
-                    BUS_SET_DATA(bus_state, reg[CpuReg::A]);
-                    break;
                 case DataOp::STORE_X:
-                    BUS_SET_DATA(bus_state, reg[CpuReg::X]);
-                    break;
                 case DataOp::STORE_Y:
-                    BUS_SET_DATA(bus_state, reg[CpuReg::Y]);
-                    break;
                 case DataOp::STORE_ZERO:
-                    BUS_SET_DATA(bus_state, 0);
+                    {
+                        // DEDUPLICATION: Actually call the CPU's helper function instead of duplicating logic
+                        uint8_t value = cpu.get_store_register_value(data_op);
+                        BUS_SET_DATA(bus_state, value);
+                    }
                     break;
                 case DataOp::ALU:
                     // ALU result will be set by caller using pending_data
@@ -141,7 +140,7 @@ public:
                     // MEMORY SHIFT/ROTATE FIX: For memory modify operations (shift/rotate $nn),
                     // the ALU result is stored in DL register and must be written to memory
                     // This handles the final write cycle of read-modify-write operations
-                    BUS_SET_DATA(bus_state, reg[CpuReg::DL]);
+                    BUS_SET_DATA(bus_state, cpu.get_reg(CpuReg::DL));
                     break;
                 case DataOp::TEMP_STORE:
                     // MEMORY MODIFY FIX: For memory modify operations cycle 3,
@@ -149,35 +148,18 @@ public:
                     // This is the "write old value back" cycle in the 6502 read-modify-write sequence
                     BUS_SET_DATA(bus_state, pending_data);
                     break;
-                default:
-                    // Legacy: direct register mapping for load operations (should not be used for writes)
-                    if (static_cast<uint8_t>(data_op) < static_cast<uint8_t>(CpuReg::COUNT)) {
-                        BUS_SET_DATA(bus_state, reg[static_cast<uint8_t>(data_op)]);
-                    }
-                    break;
-            }
-        } else if (mem_op == MemOp::WRITE_SP_DEC) {
-            // STACK OPERATIONS FIX: Handle all stack write operations properly
-            switch (data_op) {
                 case DataOp::STACK_PUSH:
                     // For STACK_PUSH (PHP), the data to write is provided via pending_data
                     BUS_SET_DATA(bus_state, pending_data);
                     break;
-                case DataOp::STORE_A:
-                    // PHA - Push Accumulator to stack
-                    BUS_SET_DATA(bus_state, reg[CpuReg::A]);
-                    break;
-                case DataOp::STORE_X:
-                    // PHX - Push X register to stack (65C02 instruction)
-                    BUS_SET_DATA(bus_state, reg[CpuReg::X]);
-                    break;
-                case DataOp::STORE_Y:
-                    // PHY - Push Y register to stack (65C02 instruction)
-                    BUS_SET_DATA(bus_state, reg[CpuReg::Y]);
-                    break;
                 default:
-                    // Fallback for unknown stack operations
-                    BUS_SET_DATA(bus_state, 0);
+                    // Legacy: direct register mapping for load operations (should not be used for writes)
+                    if (static_cast<uint8_t>(data_op) < static_cast<uint8_t>(CpuReg::COUNT)) {
+                        BUS_SET_DATA(bus_state, cpu.get_reg(static_cast<CpuReg>(static_cast<uint8_t>(data_op))));
+                    } else {
+                        // Fallback for unknown operations
+                        BUS_SET_DATA(bus_state, 0);
+                    }
                     break;
             }
         }
