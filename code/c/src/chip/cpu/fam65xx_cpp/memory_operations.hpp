@@ -150,7 +150,10 @@ public:
                     break;
                 case DataOp::STACK_PUSH:
                     // For STACK_PUSH (PHP), the data to write is provided via pending_data
-                    BUS_SET_DATA(bus_state, pending_data);
+                    // JSR EXCLUSION: Skip JSR (opcode 0x20) as it handles stack push data coordination itself
+                    if (cpu.get_opcode() != 0x20) {
+                        BUS_SET_DATA(bus_state, pending_data);
+                    }
                     break;
                 default:
                     // Legacy: direct register mapping for load operations (should not be used for writes)
