@@ -1367,21 +1367,26 @@ public:
         if constexpr (control_pin_mask != 0) {
             // SO (Set Overflow) pin - edge detection for NMOS variants
             if constexpr (Config::has_so_pin) {
-                // Add SO pin state tracking as member variable if needed
-                // For now, handle SO pin edge detection without static state
+                // CRITICAL FIX: SO pin should only trigger for specific external hardware conditions
+                // Stack operations and normal CPU operations should NOT trigger SO pin processing
+                // SO pin is for external hardware signaling (like arithmetic coprocessors), not internal CPU operations
                 const bool current_so = (active_pins & BUS_BIT(BUS_SO_BIT)) != 0;
                 
-                // Simple SO pin handling - set overflow flag when pin is low
-                if (!current_so) {
-                    set_state(STATE_SO_EDGE);
-                }
-                
-                // Handle SO edge during instruction execution (NMOS behavior)
-                if constexpr (Config::cpu_variant == CpuVariant::NMOS_6502 ||
-                             Config::cpu_variant == CpuVariant::NMOS_6510) {
-                    if (get_state(STATE_SO_EDGE) && cycle_step > 0) {
-                        clear_state(STATE_SO_EDGE);
-                        reg[CpuReg::P] |= P_OVERFLOW;
+                // Only process SO pin for non-stack operations and when externally triggered
+                // Skip SO processing for stack operations (PHA/PHP/PLA/PLP)
+                if (opcode != 0x48 && opcode != 0x08 && opcode != 0x68 && opcode != 0x28) {
+                    // Simple SO pin handling - set overflow flag when pin is low (external signal)
+                    if (!current_so) {
+                        set_state(STATE_SO_EDGE);
+                    }
+                    
+                    // Handle SO edge during instruction execution (NMOS behavior)
+                    if constexpr (Config::cpu_variant == CpuVariant::NMOS_6502 ||
+                                 Config::cpu_variant == CpuVariant::NMOS_6510) {
+                        if (get_state(STATE_SO_EDGE) && cycle_step > 0) {
+                            clear_state(STATE_SO_EDGE);
+                            reg[CpuReg::P] |= P_OVERFLOW;
+                        }
                     }
                 }
             }
@@ -1515,6 +1520,14 @@ public:
     // Enhanced SO pin edge detection with NMOS vs CMOS differences
     inline void process_so_pin_edge() {
         if constexpr (Config::has_so_pin) {
+            // CRITICAL FIX: Only process SO pin for instructions that should trigger it
+            // Stack operations (PHA/PHP/PLA/PLP) should NOT trigger SO pin processing
+            // SO pin is primarily used for external hardware signaling, not normal CPU operations
+            if (opcode == 0x48 || opcode == 0x08 || opcode == 0x68 || opcode == 0x28) {
+                // Skip SO pin processing for stack operations - they preserve all flags
+                return;
+            }
+            
             // Batch check SO-related states
             const uint32_t so_states = state_flags & STATE_SO_EDGE;
             if (so_states) {

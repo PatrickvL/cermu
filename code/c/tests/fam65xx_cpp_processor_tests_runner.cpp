@@ -86,8 +86,9 @@ public:
                     BUS_SET_DATA(bus_state, data);
                 }
                 
-                // Set RDY line (ready)
+                // Set RDY line (ready) and SO pin (inactive high)
                 bus_state |= BUS_BIT(BUS_RDY_BIT);
+                bus_state |= BUS_BIT(BUS_SO_BIT);  // SO pin inactive (high)
                 
                 // Execute one CPU cycle
                 bus_state = cpu.cycle_tick(bus_state);
