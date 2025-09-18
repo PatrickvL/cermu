@@ -393,37 +393,66 @@ public:
         DataOp data_op = static_cast<DataOp>(cycle.data_op);
         AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
         
-        // JSR COORDINATION: Handle JSR stack push operations BEFORE memory operation (like interrupts)
-        if (opcode == 0x20 && mem_op == MemOp::WRITE_SP_DEC && data_op == DataOp::STACK_PUSH) {
-            // Calculate what to push based on cycle step (same pattern as interrupt coordination)
-            uint8_t push_data = 0;
-            const uint16_t current_pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
-            // JSR pushes return address = current PC (pointing to high byte of JSR operand)
-            const uint16_t return_address = current_pc;
+        // JSR COORDINATION: Handle JSR operations BEFORE memory operation (like interrupts)
+        // CRITICAL FIX: Shared static variables for target address preservation across JSR cycles
+        static uint8_t jsr_target_low = 0;
+        static uint8_t jsr_target_high = 0;
+        
+        if (opcode == 0x20) {
             
-            printf("JSR COORDINATION: cycle=%d, current_pc=0x%04x, return_address=0x%04x\n",
-                   cycle_step, current_pc, return_address);
-            
-            switch (cycle_step) {
-                case 3: // Push PCH (high byte of return address)
-                    push_data = (return_address >> 8) & 0xFF;
-                    printf("JSR: Push PCH = 0x%02x\n", push_data);
-                    break;
-                case 4: // Push PCL (low byte of return address)
-                    push_data = return_address & 0xFF;
-                    printf("JSR: Push PCL = 0x%02x\n", push_data);
-                    break;
-                default:
-                    push_data = 0;
-                    break;
+            if (mem_op == MemOp::WRITE_SP_DEC && data_op == DataOp::STACK_PUSH) {
+                // Stack push cycles 3-4: handle stack coordination
+                if (cycle_step == 3) {
+                    // First stack push cycle: save the target address from ABL/ABH
+                    jsr_target_low = reg[CpuReg::ABL];
+                    jsr_target_high = reg[CpuReg::ABH];
+                    printf("JSR: Saved target address 0x%02x%02x\n", jsr_target_high, jsr_target_low);
+                }
+                
+                // Calculate what to push based on cycle step (same pattern as interrupt coordination)
+                uint8_t push_data = 0;
+                const uint16_t current_pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+                // JSR pushes return address = current PC (pointing to high byte of JSR operand)
+                const uint16_t return_address = current_pc;
+                
+                printf("JSR COORDINATION: cycle=%d, current_pc=0x%04x, return_address=0x%04x\n",
+                       cycle_step, current_pc, return_address);
+                
+                switch (cycle_step) {
+                    case 3: // Push PCH (high byte of return address)
+                        push_data = (return_address >> 8) & 0xFF;
+                        printf("JSR: Push PCH = 0x%02x\n", push_data);
+                        break;
+                    case 4: // Push PCL (low byte of return address)
+                        push_data = return_address & 0xFF;
+                        printf("JSR: Push PCL = 0x%02x\n", push_data);
+                        break;
+                    default:
+                        push_data = 0;
+                        break;
+                }
+                // Set the data on the bus for the memory write operation (like interrupt coordination)
+                bus_state = BUS_SET_DATA(bus_state, push_data);
+                printf("JSR: Set bus data = 0x%02x\n", push_data);
+            } else if (mem_op == MemOp::READ_PC_INC && data_op == DataOp::ADDR_CALC_HIGH && cycle_step == 5) {
+                // Cycle 5: After reading high byte, restore the complete target address before it gets overwritten
+                printf("JSR: Pre-restore check - ABL=0x%02x, should restore to 0x%02x\n", reg[CpuReg::ABL], jsr_target_low);
             }
-            // Set the data on the bus for the memory write operation (like interrupt coordination)
-            bus_state = BUS_SET_DATA(bus_state, push_data);
-            printf("JSR: Set bus data = 0x%02x\n", push_data);
         }
+        
         
         // Execute memory operation
         bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op);
+        
+        // JSR POST-MEMORY COORDINATION: Restore target address after memory operations that overwrite ABL/ABH
+        if (opcode == 0x20 && mem_op == MemOp::READ_PC_INC && data_op == DataOp::ADDR_CALC_HIGH && cycle_step == 5) {
+            // CRITICAL FIX: After cycle 5 reads high byte and overwrites ABL, restore the low byte
+            // Note: jsr_target_low was set during cycle 3, now restore it
+            printf("JSR: Post-memory restore - setting ABL from 0x%02x to 0x%02x\n", reg[CpuReg::ABL], jsr_target_low);
+            reg[CpuReg::ABL] = jsr_target_low;
+            printf("JSR: Final target address 0x%02x%02x\n", reg[CpuReg::ABH], reg[CpuReg::ABL]);
+        }
+        
 
         // Handle write data if needed
         if (mem_op >= MemOp::WRITE_ABS || mem_op == MemOp::WRITE_SP_DEC) {
