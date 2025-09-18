@@ -148,7 +148,7 @@ public:
     
     // Stack operations
     static constexpr cycle_desc_t make_stack_push(uint8_t cycle, DataOp store_op) {
-        if (cycle == 1) return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP);
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP);  // Dummy read at PC (no increment)
         if (cycle == 2) return CD_MAKE_SYNC(MemOp::WRITE_SP_DEC, store_op, AluOp::NOP);
         return make_empty_cycle();
     }
