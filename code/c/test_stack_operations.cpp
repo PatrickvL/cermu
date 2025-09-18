@@ -1,4 +1,4 @@
-#include <iostream>
+g#include <iostream>
 #include <iomanip>
 #include <cassert>
 #include "src/chip/cpu/fam65xx_cpp/fam65xx.hpp"
@@ -37,28 +37,34 @@ public:
     uint16_t get_program_counter() { return cpu->get_pc(); }
     
     void execute_instruction() {
-        bus_state_t bus = 0;
         int cycles = 0;
         do {
+            // Create bus state for reading
             uint16_t addr = cpu->get_address();
-            BUS_SET_ADDR(bus, addr);
-            BUS_SET_DATA(bus, read_memory(addr));  // Always provide data first
+            bool is_write = !cpu->get_rw();
             
-            // Let CPU execute the cycle
-            cpu->cycle_tick(bus);
-            
-            // Check if CPU wants to write (R/W line = 0)
-            uint8_t lines = BUS_GET_LINES(bus);
-            if (!(lines & BUS_MASK_RW)) {
-                // Write operation: save CPU's data to memory
-                uint8_t data = BUS_GET_DATA(bus);
+            bus_state_t bus_state = 0;
+            if (is_write) {
+                // Write cycle
+                uint8_t data = cpu->get_write_data();
                 write_memory(addr, data);
                 // Debug output to see what's being written
                 if (cycles > 1) {  // Skip instruction fetch cycles
                     cout << "    DEBUG: Writing 0x" << hex << setw(2) << setfill('0') << (int)data
                          << " to address 0x" << hex << setw(4) << setfill('0') << addr << endl;
                 }
+                BUS_SET_DATA(bus_state, data);
+            } else {
+                // Read cycle
+                uint8_t data = read_memory(addr);
+                BUS_SET_DATA(bus_state, data);
             }
+            
+            // Set RDY line (ready)
+            bus_state |= BUS_BIT(BUS_RDY_BIT);
+            
+            // Execute one CPU cycle
+            bus_state = cpu->cycle_tick(bus_state);
             
             cycles++;
         } while (cpu->get_cycle_step() != 0 && cycles < 10);
