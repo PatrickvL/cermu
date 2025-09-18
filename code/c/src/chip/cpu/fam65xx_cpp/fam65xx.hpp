@@ -462,11 +462,24 @@ public:
             // The branch logic in handle_branch_instruction sets STATE_BRANCH_TAKEN during cycle 1
             if (cycle_step == 1) {
                 // After cycle 1 (offset read): branch decision has been made
-                // Complete now if branch not taken (total: 2 cycles)
-                instruction_complete = !get_state(STATE_BRANCH_TAKEN);
+                // CRITICAL FIX: Always complete after cycle 1 if branch not taken (total: 2 cycles)
+                if (!get_state(STATE_BRANCH_TAKEN)) {
+                    instruction_complete = true;
+                } else {
+                    // Branch taken: need cycle 2 for branch execution
+                    instruction_complete = false;
+                }
             } else if (cycle_step == 2) {
                 // After cycle 2: Complete if branch taken but no page crossing (total: 3 cycles)
-                instruction_complete = get_state(STATE_BRANCH_TAKEN) && !get_state(STATE_PAGE_CROSSED);
+                if (get_state(STATE_BRANCH_TAKEN) && !get_state(STATE_PAGE_CROSSED)) {
+                    instruction_complete = true;
+                } else if (get_state(STATE_BRANCH_TAKEN) && get_state(STATE_PAGE_CROSSED)) {
+                    // Page crossed: need cycle 3
+                    instruction_complete = false;
+                } else {
+                    // Should not happen: branch not taken should complete after cycle 1
+                    instruction_complete = true;
+                }
             } else if (cycle_step >= 3) {
                 // After cycle 3+: Always complete (branch taken with page crossing, total: 4 cycles)
                 instruction_complete = true;
