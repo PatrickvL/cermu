@@ -393,6 +393,35 @@ public:
         DataOp data_op = static_cast<DataOp>(cycle.data_op);
         AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
         
+        // JSR COORDINATION: Handle JSR stack push operations BEFORE memory operation (like interrupts)
+        if (opcode == 0x20 && mem_op == MemOp::WRITE_SP_DEC && data_op == DataOp::STACK_PUSH) {
+            // Calculate what to push based on cycle step (same pattern as interrupt coordination)
+            uint8_t push_data = 0;
+            const uint16_t current_pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+            // JSR pushes return address = current PC (pointing to high byte of JSR operand)
+            const uint16_t return_address = current_pc;
+            
+            printf("JSR COORDINATION: cycle=%d, current_pc=0x%04x, return_address=0x%04x\n",
+                   cycle_step, current_pc, return_address);
+            
+            switch (cycle_step) {
+                case 3: // Push PCH (high byte of return address)
+                    push_data = (return_address >> 8) & 0xFF;
+                    printf("JSR: Push PCH = 0x%02x\n", push_data);
+                    break;
+                case 4: // Push PCL (low byte of return address)
+                    push_data = return_address & 0xFF;
+                    printf("JSR: Push PCL = 0x%02x\n", push_data);
+                    break;
+                default:
+                    push_data = 0;
+                    break;
+            }
+            // Set the data on the bus for the memory write operation (like interrupt coordination)
+            bus_state = BUS_SET_DATA(bus_state, push_data);
+            printf("JSR: Set bus data = 0x%02x\n", push_data);
+        }
+        
         // Execute memory operation
         bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op);
 
@@ -407,6 +436,9 @@ public:
                 switch (opcode) {
                     case 0x08: // PHP - Push Processor Status
                         pending_data = reg[CpuReg::P];
+                        break;
+                    case 0x20: // JSR - Jump to Subroutine (handled by JSR coordination above)
+                        // JSR stack push data is already set by JSR coordination - skip handle_stack_push()
                         break;
                     default:
                         // For other STACK_PUSH operations, use handle_stack_push()
@@ -839,7 +871,7 @@ public:
                     break;
             }
         } else {
-            // STACK OPERATIONS FIX: Handle normal stack push instructions (PHA/PHP)
+            // STACK OPERATIONS FIX: Handle normal stack push instructions (PHA/PHP/JSR)
             // Determine what to push based on the opcode
             switch (opcode) {
                 case 0x08: // PHP - Push Processor Status
@@ -848,8 +880,24 @@ public:
                 case 0x48: // PHA - Push Accumulator
                     push_data = reg[CpuReg::A];
                     break;
+                case 0x20: // JSR - Jump to Subroutine
+                    // JSR pushes the current PC which points to the high byte location
+                    // During cycles 3-4, PC contains the return address to push
+                    {
+                        const uint16_t current_pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+                        if (cycle_step == 3) {
+                            // Cycle 3: Push PCH of current PC
+                            push_data = (current_pc >> 8) & 0xFF;
+                        } else if (cycle_step == 4) {
+                            // Cycle 4: Push PCL of current PC
+                            push_data = current_pc & 0xFF;
+                        } else {
+                            push_data = 0;
+                        }
+                    }
+                    break;
                 default:
-                    // For other instructions using STACK_PUSH (JSR, etc.), use context
+                    // For other instructions using STACK_PUSH, use context
                     push_data = 0;
                     break;
             }
@@ -1151,7 +1199,7 @@ public:
                 }
             }
             
-            // STACK OPERATIONS FIX: Handle normal stack operations (PHA/PHP) outside interrupt sequences
+            // STACK OPERATIONS FIX: Handle normal stack operations (PHA/PHP/JSR) outside interrupt sequences
             if (mem_op == MemOp::WRITE_SP_DEC && !(state_flags & STATE_INTERRUPT_SEQUENCE)) {
                 // Handle normal stack push operations based on DataOp - DEDUPLICATION: Use helper function
                 switch (data_op) {
@@ -1161,8 +1209,24 @@ public:
                     case DataOp::STORE_ZERO:
                         return get_store_register_value(data_op);
                     case DataOp::STACK_PUSH:
-                        // For PHP, the data would be in pending_data set by handle_stack_push()
-                        return pending_data;
+                        // JSR COORDINATION FIX: Handle JSR stack push prediction for get_write_data()
+                        if (opcode == 0x20) { // JSR instruction
+                            // Calculate JSR stack push data predictively (same logic as JSR coordination)
+                            const uint16_t current_pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+                            const uint16_t return_address = current_pc;
+                            
+                            switch (cycle_step) {
+                                case 3: // Push PCH (high byte of return address)
+                                    return (return_address >> 8) & 0xFF;
+                                case 4: // Push PCL (low byte of return address)
+                                    return return_address & 0xFF;
+                                default:
+                                    return 0;
+                            }
+                        } else {
+                            // For PHP, the data would be in pending_data set by handle_stack_push()
+                            return pending_data;
+                        }
                     default:
                         return 0;
                 }
@@ -1373,8 +1437,8 @@ public:
                 const bool current_so = (active_pins & BUS_BIT(BUS_SO_BIT)) != 0;
                 
                 // Only process SO pin for non-stack operations and when externally triggered
-                // Skip SO processing for stack operations (PHA/PHP/PLA/PLP)
-                if (opcode != 0x48 && opcode != 0x08 && opcode != 0x68 && opcode != 0x28) {
+                // Skip SO processing for stack operations (PHA/PHP/PLA/PLP) and JSR
+                if (opcode != 0x48 && opcode != 0x08 && opcode != 0x68 && opcode != 0x28 && opcode != 0x20) {
                     // Simple SO pin handling - set overflow flag when pin is low (external signal)
                     if (!current_so) {
                         set_state(STATE_SO_EDGE);
@@ -1521,9 +1585,9 @@ public:
     inline void process_so_pin_edge() {
         if constexpr (Config::has_so_pin) {
             // CRITICAL FIX: Only process SO pin for instructions that should trigger it
-            // Stack operations (PHA/PHP/PLA/PLP) should NOT trigger SO pin processing
+            // Stack operations (PHA/PHP/PLA/PLP) and JSR should NOT trigger SO pin processing
             // SO pin is primarily used for external hardware signaling, not normal CPU operations
-            if (opcode == 0x48 || opcode == 0x08 || opcode == 0x68 || opcode == 0x28) {
+            if (opcode == 0x48 || opcode == 0x08 || opcode == 0x68 || opcode == 0x28 || opcode == 0x20) {
                 // Skip SO pin processing for stack operations - they preserve all flags
                 return;
             }
