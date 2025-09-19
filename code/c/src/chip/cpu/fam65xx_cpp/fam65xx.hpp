@@ -393,6 +393,7 @@ public:
         DataOp data_op = static_cast<DataOp>(cycle.data_op);
         AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
         
+        
         // JSR COORDINATION: Handle JSR operations BEFORE memory operation (like interrupts)
         // CRITICAL FIX: Shared static variables for target address preservation across JSR cycles
         static uint8_t jsr_target_low = 0;
@@ -406,7 +407,6 @@ public:
                     // First stack push cycle: save the target address from ABL/ABH
                     jsr_target_low = reg[CpuReg::ABL];
                     jsr_target_high = reg[CpuReg::ABH];
-                    printf("JSR: Saved target address 0x%02x%02x\n", jsr_target_high, jsr_target_low);
                 }
                 
                 // Calculate what to push based on cycle step (same pattern as interrupt coordination)
@@ -415,17 +415,12 @@ public:
                 // JSR pushes return address = current PC (pointing to high byte of JSR operand)
                 const uint16_t return_address = current_pc;
                 
-                printf("JSR COORDINATION: cycle=%d, current_pc=0x%04x, return_address=0x%04x\n",
-                       cycle_step, current_pc, return_address);
-                
                 switch (cycle_step) {
                     case 3: // Push PCH (high byte of return address)
                         push_data = (return_address >> 8) & 0xFF;
-                        printf("JSR: Push PCH = 0x%02x\n", push_data);
                         break;
                     case 4: // Push PCL (low byte of return address)
                         push_data = return_address & 0xFF;
-                        printf("JSR: Push PCL = 0x%02x\n", push_data);
                         break;
                     default:
                         push_data = 0;
@@ -433,27 +428,20 @@ public:
                 }
                 // Set the data on the bus for the memory write operation (like interrupt coordination)
                 bus_state = BUS_SET_DATA(bus_state, push_data);
-                printf("JSR: Set bus data = 0x%02x\n", push_data);
-            } else if (mem_op == MemOp::READ_PC_INC && data_op == DataOp::ADDR_CALC_HIGH && cycle_step == 5) {
-                // Cycle 5: After reading high byte, restore the complete target address before it gets overwritten
-                printf("JSR: Pre-restore check - ABL=0x%02x, should restore to 0x%02x\n", reg[CpuReg::ABL], jsr_target_low);
             }
         }
         
         
-        // Execute memory operation
+        // Execute normal memory operation
         bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op);
         
         // JSR POST-MEMORY COORDINATION: Restore target address after memory operations that overwrite ABL/ABH
         if (opcode == 0x20 && mem_op == MemOp::READ_PC_INC && data_op == DataOp::ADDR_CALC_HIGH && cycle_step == 5) {
             // CRITICAL FIX: After cycle 5 reads high byte and overwrites ABL, restore the low byte
             // Note: jsr_target_low was set during cycle 3, now restore it
-            printf("JSR: Post-memory restore - setting ABL from 0x%02x to 0x%02x\n", reg[CpuReg::ABL], jsr_target_low);
             reg[CpuReg::ABL] = jsr_target_low;
-            printf("JSR: Final target address 0x%02x%02x\n", reg[CpuReg::ABH], reg[CpuReg::ABL]);
         }
         
-
         // Handle write data if needed
         if (mem_op >= MemOp::WRITE_ABS || mem_op == MemOp::WRITE_SP_DEC) {
             // Set pending_data for STORE operations using helper function
@@ -562,6 +550,7 @@ public:
     
     // Execute data operation
     inline void execute_data_operation(uint8_t data_op, uint8_t data) {
+        
         
         // Store data for potential ALU use
         reg[CpuReg::DL] = data;
@@ -939,6 +928,7 @@ public:
     
     // Handle stack pull operations
     inline void handle_stack_pull(uint8_t data) {
+        
         // STACK OPERATIONS FIX: Handle all stack pull operations, not just RTI
         switch (opcode) {
             case 0x28: // PLP - Pull Processor Status
@@ -957,8 +947,20 @@ public:
                 else if (cycle_step == 6) reg[CpuReg::PCH] = data;
                 break;
             case 0x60: // RTS - Return from Subroutine
-                if (cycle_step == 4) reg[CpuReg::PCL] = data;
-                else if (cycle_step == 5) reg[CpuReg::PCH] = data;
+                // Use simple approach similar to PLA
+                if (cycle_step == 3) {
+                    // Cycle 3: Pull PCL from stack
+                    reg[CpuReg::PCL] = data;
+                } else if (cycle_step == 4) {
+                    // Cycle 4: Pull PCH from stack
+                    reg[CpuReg::PCH] = data;
+                    
+                    // Increment PC by 1 (RTS returns to address+1)
+                    const uint16_t pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+                    const uint16_t return_pc = pc + 1;
+                    reg[CpuReg::PCL] = return_pc & 0xFF;
+                    reg[CpuReg::PCH] = (return_pc >> 8) & 0xFF;
+                }
                 break;
             default:
                 // Handle other stack pull operations if needed
@@ -1467,7 +1469,7 @@ public:
                 
                 // Only process SO pin for non-stack operations and when externally triggered
                 // Skip SO processing for stack operations (PHA/PHP/PLA/PLP) and JSR
-                if (opcode != 0x48 && opcode != 0x08 && opcode != 0x68 && opcode != 0x28 && opcode != 0x20) {
+                if (opcode != 0x48 && opcode != 0x08 && opcode != 0x68 && opcode != 0x28 && opcode != 0x20 && opcode != 0x60) {
                     // Simple SO pin handling - set overflow flag when pin is low (external signal)
                     if (!current_so) {
                         set_state(STATE_SO_EDGE);
@@ -1614,9 +1616,9 @@ public:
     inline void process_so_pin_edge() {
         if constexpr (Config::has_so_pin) {
             // CRITICAL FIX: Only process SO pin for instructions that should trigger it
-            // Stack operations (PHA/PHP/PLA/PLP) and JSR should NOT trigger SO pin processing
+            // Stack operations (PHA/PHP/PLA/PLP), JSR, and RTS should NOT trigger SO pin processing
             // SO pin is primarily used for external hardware signaling, not normal CPU operations
-            if (opcode == 0x48 || opcode == 0x08 || opcode == 0x68 || opcode == 0x28 || opcode == 0x20) {
+            if (opcode == 0x48 || opcode == 0x08 || opcode == 0x68 || opcode == 0x28 || opcode == 0x20 || opcode == 0x60) {
                 // Skip SO pin processing for stack operations - they preserve all flags
                 return;
             }

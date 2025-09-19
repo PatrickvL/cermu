@@ -199,7 +199,7 @@ public:
     }
     
     static constexpr cycle_desc_t make_rts(uint8_t cycle) {
-        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP);
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC, DataOp::NOP, AluOp::NOP); // NO PC INCREMENT
         if (cycle == 2) return CD_MAKE(MemOp::READ_SP, DataOp::NOP, AluOp::NOP); // Internal
         if (cycle == 3) return CD_MAKE(MemOp::READ_SP_INC, DataOp::STACK_PULL, AluOp::NOP); // Pull PCL
         if (cycle == 4) return CD_MAKE(MemOp::READ_SP_INC, DataOp::STACK_PULL, AluOp::NOP); // Pull PCH
