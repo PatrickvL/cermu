@@ -983,10 +983,10 @@ public:
                 break;
             case 0x40: // RTI - Return from Interrupt
                 if (cycle_step == 3) {
-                    // RTI CRITICAL FIX: Always clear B flag when restoring status register
+                    // RTI CRITICAL FIX: Restore status register from stack but always clear B flag and set U flag
                     // The B flag should only be set during BRK/interrupt sequences, never restored by RTI
-                    // BUT preserve the U flag (bit 5) which should always be set on 6502
-                    reg[CpuReg::P] = (data & ~P_BREAK) | P_UNUSED;  // Clear B flag (bit 4), set U flag (bit 5)
+                    // The U flag should always be set on 6502 (hardware pulls this bit high)
+                    reg[CpuReg::P] = (data & ~P_BREAK) | P_UNUSED;  // Clear B flag, set U flag
                 }
                 else if (cycle_step == 4) reg[CpuReg::PCL] = data; // Cycle 4: Pull PCL
                 else if (cycle_step == 5) reg[CpuReg::PCH] = data; // Cycle 5: Pull PCH
