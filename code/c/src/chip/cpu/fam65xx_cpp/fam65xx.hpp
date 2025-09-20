@@ -661,6 +661,7 @@ public:
                     handle_stack_push();
                     break;
                 case DataOp::STACK_PULL:
+                    // RTI FIX: Handle stack pull operations - RTI must not set flags during PC restoration
                     handle_stack_pull(data);
                     break;
                 case DataOp::INTERRUPT_VEC:
@@ -981,9 +982,14 @@ public:
                                 ((data == 0) << 1);
                 break;
             case 0x40: // RTI - Return from Interrupt
-                if (cycle_step == 4) reg[CpuReg::P] = data;
-                else if (cycle_step == 5) reg[CpuReg::PCL] = data;
-                else if (cycle_step == 6) reg[CpuReg::PCH] = data;
+                if (cycle_step == 3) {
+                    // RTI CRITICAL FIX: Always clear B flag when restoring status register
+                    // The B flag should only be set during BRK/interrupt sequences, never restored by RTI
+                    // BUT preserve the U flag (bit 5) which should always be set on 6502
+                    reg[CpuReg::P] = (data & ~P_BREAK) | P_UNUSED;  // Clear B flag (bit 4), set U flag (bit 5)
+                }
+                else if (cycle_step == 4) reg[CpuReg::PCL] = data; // Cycle 4: Pull PCL
+                else if (cycle_step == 5) reg[CpuReg::PCH] = data; // Cycle 5: Pull PCH
                 break;
             case 0x60: // RTS - Return from Subroutine
                 // RTS COORDINATION: Use coordination logic similar to JSR
@@ -1518,8 +1524,8 @@ public:
                 const bool current_so = (active_pins & BUS_BIT(BUS_SO_BIT)) != 0;
                 
                 // Only process SO pin for non-stack operations and when externally triggered
-                // Skip SO processing for stack operations (PHA/PHP/PLA/PLP) and JSR
-                if (opcode != 0x48 && opcode != 0x08 && opcode != 0x68 && opcode != 0x28 && opcode != 0x20 && opcode != 0x60) {
+                // Skip SO processing for stack operations (PHA/PHP/PLA/PLP), JSR, RTS, and RTI
+                if (opcode != 0x48 && opcode != 0x08 && opcode != 0x68 && opcode != 0x28 && opcode != 0x20 && opcode != 0x60 && opcode != 0x40) {
                     // Simple SO pin handling - set overflow flag when pin is low (external signal)
                     if (!current_so) {
                         set_state(STATE_SO_EDGE);
@@ -1666,10 +1672,10 @@ public:
     inline void process_so_pin_edge() {
         if constexpr (Config::has_so_pin) {
             // CRITICAL FIX: Only process SO pin for instructions that should trigger it
-            // Stack operations (PHA/PHP/PLA/PLP), JSR, and RTS should NOT trigger SO pin processing
+            // Stack operations (PHA/PHP/PLA/PLP), JSR, RTS, and RTI should NOT trigger SO pin processing
             // SO pin is primarily used for external hardware signaling, not normal CPU operations
-            if (opcode == 0x48 || opcode == 0x08 || opcode == 0x68 || opcode == 0x28 || opcode == 0x20 || opcode == 0x60) {
-                // Skip SO pin processing for stack operations - they preserve all flags
+            if (opcode == 0x48 || opcode == 0x08 || opcode == 0x68 || opcode == 0x28 || opcode == 0x20 || opcode == 0x60 || opcode == 0x40) {
+                // Skip SO pin processing for stack operations and interrupt returns - they preserve all flags
                 return;
             }
             
