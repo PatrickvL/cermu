@@ -21,6 +21,10 @@ private:
     uint8_t pending_data = 0;
     uint8_t pending_data_op = 0;
     
+    // RTS coordination variables (similar to JSR static variables)
+    uint8_t rts_return_low = 0;
+    uint8_t rts_return_high = 0;
+    
     // Hardware pin state tracking for interrupt edge detection
     bool prev_nmi_pin_state = true;  // NMI pin state tracking (starts high)
     bool prev_irq_pin_state = true;  // IRQ pin state tracking (starts high)
@@ -128,25 +132,40 @@ public:
     // Execute one CPU cycle
     inline bus_state_t cycle_tick(bus_state_t bus_state) {
         
+        // CRITICAL DEBUG: Add debug output for ALL cycle_tick calls
+        // printf("CYCLE_TICK ALL: opcode=0x%02X, step=%d\n", opcode, cycle_step);
+        
         // Process input control lines first (inlined for hot path)
         bus_state = process_input_pins(bus_state);
         
         // Handle RDY line - variant-specific behavior
         if (__builtin_expect(!(bus_state & BUS_BIT(BUS_RDY_BIT)), 0)) {
+            if (opcode == 0xEA && cycle_step == 1) {
+                printf("NOP DEBUG: RDY line not ready, handling wait\n");
+            }
             bus_state = handle_rdy_wait(bus_state);
             if (__builtin_expect(state_flags & STATE_RDY_WAIT, 0)) {
+                if (opcode == 0xEA && cycle_step == 1) {
+                    printf("NOP DEBUG: RDY wait active, skipping cycle\n");
+                }
                 return bus_state; // Skip this cycle
             }
         }
         
         // Check if we're in an interrupt sequence
         if (__builtin_expect(state_flags & STATE_INTERRUPT_SEQUENCE, 0)) {
+            if (opcode == 0xEA && cycle_step == 1) {
+                printf("NOP DEBUG: In interrupt sequence, calling execute_interrupt_cycle\n");
+            }
             return execute_interrupt_cycle(bus_state);
         }
         
         // Batch check critical state flags for speed (including 65C816 extended interrupts)
         const uint32_t critical_states = state_flags & (STATE_RESET_PENDING | STATE_NMI_PENDING | STATE_IRQ_PENDING | STATE_ABORT_PENDING | STATE_COP_PENDING);
         if (__builtin_expect(critical_states != 0, 0)) {
+            if (opcode == 0xEA && cycle_step == 1) {
+                printf("NOP DEBUG: Critical states detected: 0x%08X\n", critical_states);
+            }
             // Handle reset first (highest priority)
             if (__builtin_expect(critical_states & STATE_RESET_PENDING, 0)) {
                 return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_RESET);
@@ -354,6 +373,11 @@ public:
     
     // Execute one instruction cycle
     inline bus_state_t execute_cycle(bus_state_t bus_state) {
+        // CRITICAL DEBUG: Add debug output at start of execute_cycle
+        if (opcode == 0xEA) {
+            printf("EXECUTE_CYCLE DEBUG: NOP entry - opcode=0x%02X, step=%d\n", opcode, cycle_step);
+        }
+        
         // Fetch opcode on cycle 0
         if (cycle_step == 0) {
             opcode = BUS_GET_DATA(bus_state);
@@ -432,6 +456,15 @@ public:
         }
         
         
+        // RTS COORDINATION: Handle RTS operations BEFORE memory operation (similar to JSR)
+        if (opcode == 0x60) {
+            // RTS coordination: handle stack pull operations
+            if (mem_op == MemOp::READ_SP_INC && data_op == DataOp::STACK_PULL) {
+                // Cycles 3-4: Pull return address from stack
+                // Don't modify PC until both bytes are pulled
+            }
+        }
+        
         // Execute normal memory operation
         bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op);
         
@@ -504,6 +537,12 @@ public:
         // Check if instruction is complete using sync bit
         // CONDITIONAL CYCLE SOLUTION: Branch instructions use dynamic SYNC determination
         bool instruction_complete = cycle.is_sync();
+        
+        // CRITICAL DEBUG: Add debug output for step progression bug
+        if (opcode == 0xEA) { // NOP instruction
+            printf("NOP DEBUG: opcode=0x%02X, step=%d, instruction_complete=%s, sync_bit=%d\n",
+                   opcode, cycle_step, instruction_complete ? "true" : "false", cycle.is_sync() ? 1 : 0);
+        }
         
         // ZERO-OVERHEAD BRANCH CONDITIONAL CYCLES: Handle branch instructions specially
         if (opcode >= 0x10 && opcode <= 0xF0 && (opcode & 0x1F) == 0x10) {
@@ -947,17 +986,19 @@ public:
                 else if (cycle_step == 6) reg[CpuReg::PCH] = data;
                 break;
             case 0x60: // RTS - Return from Subroutine
-                // Use simple approach similar to PLA
+                // RTS COORDINATION: Use coordination logic similar to JSR
                 if (cycle_step == 3) {
-                    // Cycle 3: Pull PCL from stack
-                    reg[CpuReg::PCL] = data;
+                    // Cycle 3: Pull PCL from stack, store in static variable
+                    rts_return_low = data;
                 } else if (cycle_step == 4) {
-                    // Cycle 4: Pull PCH from stack
-                    reg[CpuReg::PCH] = data;
+                    // Cycle 4: Pull PCH from stack, store in static variable
+                    rts_return_high = data;
                     
-                    // Increment PC by 1 (RTS returns to address+1)
-                    const uint16_t pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
-                    const uint16_t return_pc = pc + 1;
+                    // Now calculate final return address (pulled address + 1)
+                    const uint16_t pulled_pc = (rts_return_high << 8) | rts_return_low;
+                    const uint16_t return_pc = pulled_pc + 1;
+                    
+                    // Set final PC
                     reg[CpuReg::PCL] = return_pc & 0xFF;
                     reg[CpuReg::PCH] = (return_pc >> 8) & 0xFF;
                 }
@@ -1073,7 +1114,16 @@ public:
             return (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
         } else if (mem_op == MemOp::WRITE_SP_DEC || mem_op == MemOp::READ_SP || mem_op == MemOp::READ_SP_INC) {
             // Stack addressing: return stack address
-            return 0x0100 | reg[CpuReg::S];
+            // CRITICAL RTS FIX: Handle READ_SP_INC properly to return incremented stack address
+            if (mem_op == MemOp::READ_SP_INC) {
+                // For READ_SP_INC operations (like RTS), we need to predict the incremented SP
+                // The memory operation will increment SP, but get_address() is called BEFORE the operation
+                // So we need to return the address that WILL be accessed after SP increment
+                return 0x0100 | ((reg[CpuReg::S] + 1) & 0xFF);
+            } else {
+                // For READ_SP and WRITE_SP_DEC, use current SP
+                return 0x0100 | reg[CpuReg::S];
+            }
         }
         
         // Normal instruction execution: use calculated address from ABL/ABH
