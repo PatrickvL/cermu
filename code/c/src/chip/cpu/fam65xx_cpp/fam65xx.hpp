@@ -343,8 +343,8 @@ public:
             bus_state = BUS_SET_DATA(bus_state, push_data);
         }
         
-        // Execute memory operation
-        bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op);
+        // Execute memory operation with CPU context for NMOS page boundary bug
+        bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op, *this);
         
         // Handle write data if needed
         if (mem_op >= MemOp::WRITE_ABS) {
@@ -465,8 +465,8 @@ public:
             }
         }
         
-        // Execute normal memory operation
-        bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op);
+        // Execute normal memory operation with CPU context for NMOS page boundary bug
+        bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op, *this);
         
         // JSR POST-MEMORY COORDINATION: Restore target address after memory operations that overwrite ABL/ABH
         if (opcode == 0x20 && mem_op == MemOp::READ_PC_INC && data_op == DataOp::ADDR_CALC_HIGH && cycle_step == 5) {
@@ -648,13 +648,47 @@ public:
                     }
                     break;
                 case DataOp::INDIRECT_LOW:
-                    reg[CpuReg::ABL] = data;
+                    // For JMP indirect, we need to increment the address for the next cycle
+                    if (opcode == 0x6C && cycle_step == 3) {
+                        // Store the target low byte we just read
+                        uint8_t target_low = data;
+                        
+                        // Get the current indirect pointer address
+                        uint16_t indirect_addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
+                        
+                        // Increment for reading high byte in cycle 4
+                        indirect_addr = (indirect_addr + 1) & 0xFFFF;
+                        
+                        // Store the incremented address back to ABL/ABH for cycle 4
+                        reg[CpuReg::ABL] = indirect_addr & 0xFF;
+                        reg[CpuReg::ABH] = (indirect_addr >> 8) & 0xFF;
+                        
+                        // Store the target low byte in a temporary location
+                        // We'll use the DL register to preserve it
+                        reg[CpuReg::DL] = target_low;
+                    } else {
+                        // For other instructions, just store the data normally
+                        reg[CpuReg::ABL] = data;
+                    }
                     break;
                 case DataOp::INDIRECT_HIGH:
-                    reg[CpuReg::ABH] = data;
-                    // Handle JMP indirect with proper 6502 page boundary bug vs CMOS fix
-                    if (opcode == 0x6C && cycle_step == 5) { // JMP ($nnnn) final cycle
-                        handle_jmp_indirect_bug();
+                    // For JMP indirect, we need to reconstruct the target address
+                    if (opcode == 0x6C && cycle_step == 4) {
+                        // The target low byte was stored in DL register during INDIRECT_LOW
+                        // The target high byte is the data we just read
+                        uint8_t target_low = reg[CpuReg::DL];
+                        uint8_t target_high = data;
+                        
+                        // Set up ABL/ABH with the final target address for the JMP in cycle 5
+                        reg[CpuReg::ABL] = target_low;
+                        reg[CpuReg::ABH] = target_high;
+                    } else {
+                        // For other instructions, just store the data normally
+                        reg[CpuReg::ABH] = data;
+                        // Handle JMP indirect with proper 6502 page boundary bug vs CMOS fix
+                        if (opcode == 0x6C && cycle_step == 5) { // JMP ($nnnn) final cycle
+                            handle_jmp_indirect_bug();
+                        }
                     }
                     break;
                 case DataOp::STACK_PUSH:

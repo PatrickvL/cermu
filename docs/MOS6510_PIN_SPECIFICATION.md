@@ -125,10 +125,3 @@ This document provides a systematic description of all pins on the MOS 6510 micr
 ## Implementation Notes
 
 The 6510's pin behavior is tightly coupled to its internal state machine, with most control signals following predictable patterns relative to the two-phase clock system.
-
-### SO Pin (Set Overflow) - Hardware Specification
-- **Type**: Edge-sensitive input (HIGH-to-LOW transition)
-- **Normal State**: Tri-state during normal operation
-- **Function**: Sets V (overflow) flag when activated
-- **JMP Behavior**: JMP instructions should behave normally regarding SO pin (no special driving)
-- **Critical**: ProcessorTests sets SO pin HIGH (inactive) on every cycle for proper testing
