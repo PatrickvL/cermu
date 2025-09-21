@@ -57,6 +57,7 @@ enum class AluOp : uint8_t {
     NOP = 0, ADC, SBC, AND, ORA, EOR, CMP, CPX, CPY,
     ASL, LSR, ROL, ROR, INC, DEC, BIT,
     TXA, TAX, TYA, TAY, TSX, TXS,
+    INX, DEX, INY, DEY,  // Register-specific increment/decrement operations
     CLC, SEC, CLI, SEI, CLV, CLD, SED,
     STZ, TSB, TRB, WAI, STP, PHX, PHY, PLX, PLY,
     LAX, SAX, DCP, ISC, SLO, RLA, SRE, RRA,

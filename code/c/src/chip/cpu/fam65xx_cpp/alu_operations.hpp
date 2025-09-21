@@ -176,6 +176,12 @@ public:
             case AluOp::TAY: result = a; reg[CpuReg::Y] = result; break; // Sets N/Z flags
             case AluOp::TSX: result = reg[CpuReg::S]; reg[CpuReg::X] = result; break; // Sets N/Z flags
             
+            // === REGISTER INCREMENT/DECREMENT OPERATIONS - Set N/Z flags ===
+            case AluOp::INX: result = (reg[CpuReg::X] + 1) & 0xFF; reg[CpuReg::X] = result; break; // Sets N/Z flags
+            case AluOp::DEX: result = (reg[CpuReg::X] - 1) & 0xFF; reg[CpuReg::X] = result; break; // Sets N/Z flags
+            case AluOp::INY: result = (reg[CpuReg::Y] + 1) & 0xFF; reg[CpuReg::Y] = result; break; // Sets N/Z flags
+            case AluOp::DEY: result = (reg[CpuReg::Y] - 1) & 0xFF; reg[CpuReg::Y] = result; break; // Sets N/Z flags
+            
             // === COMPARISON OPERATIONS - Set N/Z flags (+ Carry) ===
             case AluOp::CMP:
                 temp = a - data;
@@ -371,6 +377,10 @@ public:
             case AluOp::ANC: execute_alu_operation_constexpr<AluOp::ANC>(reg, data); break;
             case AluOp::ALR: execute_alu_operation_constexpr<AluOp::ALR>(reg, data); break;
             case AluOp::ARR: execute_alu_operation_constexpr<AluOp::ARR>(reg, data); break;
+            case AluOp::INX: execute_alu_operation_constexpr<AluOp::INX>(reg, data); break;
+            case AluOp::DEX: execute_alu_operation_constexpr<AluOp::DEX>(reg, data); break;
+            case AluOp::INY: execute_alu_operation_constexpr<AluOp::INY>(reg, data); break;
+            case AluOp::DEY: execute_alu_operation_constexpr<AluOp::DEY>(reg, data); break;
             case AluOp::JAM: execute_alu_operation_constexpr<AluOp::JAM>(reg, data); break;
             case AluOp::BRK_FLAG: execute_alu_operation_constexpr<AluOp::BRK_FLAG>(reg, data); break;
             default: execute_alu_operation_constexpr<AluOp::NOP>(reg, data); break;
