@@ -50,7 +50,7 @@ constexpr size_t count_enum_values<DataOp>() {
 
 template<>
 constexpr size_t count_enum_values<AluOp>() {
-    return static_cast<size_t>(AluOp::BRK_FLAG) + 1;
+    return static_cast<size_t>(AluOp::ROR_ACC) + 1;
 }
 
 // =============================================================================
