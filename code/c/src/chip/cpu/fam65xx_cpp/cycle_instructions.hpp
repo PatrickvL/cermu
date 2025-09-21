@@ -106,18 +106,18 @@ public:
         return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::LOAD_Y, AluOp::NOP) : addr::make_empty_cycle();
     }
 
-    // Inc/Dec operations - direct SYNC implementation
+    // Inc/Dec operations - fixed to use NOP memory operation like accumulator operations
     static constexpr cycle_desc_t make_inx(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::INC) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::INX) : addr::make_empty_cycle();
     }
     static constexpr cycle_desc_t make_iny(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::INC) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::INY) : addr::make_empty_cycle();
     }
     static constexpr cycle_desc_t make_dex(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::DEC) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::DEX) : addr::make_empty_cycle();
     }
     static constexpr cycle_desc_t make_dey(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::DEC) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::DEY) : addr::make_empty_cycle();
     }
 
     // Shift/Rotate operations - direct SYNC implementation
