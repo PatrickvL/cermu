@@ -61,7 +61,8 @@ enum class AluOp : uint8_t {
     CLC, SEC, CLI, SEI, CLV, CLD, SED,
     STZ, TSB, TRB, WAI, STP, PHX, PHY, PLX, PLY,
     LAX, SAX, DCP, ISC, SLO, RLA, SRE, RRA,
-    ANC, ALR, ARR, JAM, BRK_FLAG
+    ANC, ALR, ARR, JAM, BRK_FLAG,
+    ASL_ACC, LSR_ACC, ROL_ACC, ROR_ACC  // Accumulator-specific shift/rotate operations
 };
 
 // Type-safe register array wrapper

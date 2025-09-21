@@ -40,17 +40,17 @@ constexpr size_t count_enum_values() {
 // Specializations for enums that don't have _COUNT
 template<>
 constexpr size_t count_enum_values<MemOp>() {
-    return 15; // Known count: READ_VECTOR is the highest at 14, so 15 total (0-14)
+    return static_cast<size_t>(MemOp::WRITE_SP_DEC) + 1;
 }
 
 template<>
 constexpr size_t count_enum_values<DataOp>() {
-    return static_cast<size_t>(DataOp::INDIRECT_HIGH) + 1;
+    return static_cast<size_t>(DataOp::ILLEGAL_COMBO) + 1;
 }
 
 template<>
 constexpr size_t count_enum_values<AluOp>() {
-    return static_cast<size_t>(AluOp::JAM) + 1;
+    return static_cast<size_t>(AluOp::BRK_FLAG) + 1;
 }
 
 // =============================================================================
@@ -245,9 +245,9 @@ namespace cycle_validation {
 static_assert(sizeof(cycle_desc_t) == 2, "cycle_desc_t must be exactly 2 bytes");
 
 // MEMOP FIELD VALIDATION (4 bits = max value 15)
-static_assert(static_cast<size_t>(MemOp::READ_VECTOR) <= max_value_for_bits<4>(),
+static_assert(static_cast<size_t>(MemOp::WRITE_SP_DEC) <= max_value_for_bits<4>(),
     "MemOp enum values exceed 4-bit field capacity in cycle_desc_t! "
-    "Current highest value READ_VECTOR must fit in 4 bits (max 15). "
+    "Current highest value WRITE_SP_DEC must fit in 4 bits (max 15). "
     "Either reduce enum values or increase field size in cycle_desc_t. "
     "This error indicates that the MemOp enum has grown beyond the allocated "
     "4-bit field in the packed cycle descriptor structure.");
@@ -302,8 +302,8 @@ static_assert(count_enum_values<AluOp>() <= 60,
 
 // SPECIFIC CRITICAL CHECKS
 // Specific check for MemOp since we're at exactly the limit
-static_assert(count_enum_values<MemOp>() == 15,
-    "MemOp enum count has changed! Expected exactly 15 values (0-14) for 4-bit field. "
+static_assert(count_enum_values<MemOp>() == 14,
+    "MemOp enum count has changed! Expected exactly 14 values (0-13) for 4-bit field. "
     "If adding new MemOp values, you MUST increase the bit field size in cycle_desc_t. "
     "Current allocation: MemOp(4 bits) + DataOp(5 bits) + AluOp(6 bits) + sync(1 bit) = 16 bits");
 

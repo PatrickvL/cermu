@@ -28,52 +28,52 @@ public:
         return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::ALU, AluOp::ADC) : addr::make_empty_cycle();
     }
     
-    // Real NOP opcode (0xEA) - 1 cycle instruction
+    // Real NOP opcode (0xEA) - 2 cycle instruction (opcode fetch + NOP cycle)
     static constexpr cycle_desc_t make_nop(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::NOP) : addr::make_empty_cycle();
     }
     
     // Transfer operations - direct SYNC implementation to avoid helper issues
     static constexpr cycle_desc_t make_txa(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::TXA) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::TXA) : addr::make_empty_cycle();
     }
     static constexpr cycle_desc_t make_tax(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::TAX) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::TAX) : addr::make_empty_cycle();
     }
     static constexpr cycle_desc_t make_tya(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::TYA) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::TYA) : addr::make_empty_cycle();
     }
     static constexpr cycle_desc_t make_tay(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::TAY) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::TAY) : addr::make_empty_cycle();
     }
     static constexpr cycle_desc_t make_tsx(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::TSX) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::TSX) : addr::make_empty_cycle();
     }
     static constexpr cycle_desc_t make_txs(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::TXS) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::TXS) : addr::make_empty_cycle();
     }
     
     // Flag operations - direct SYNC implementation to avoid helper issues
     static constexpr cycle_desc_t make_clc(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::CLC) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::CLC) : addr::make_empty_cycle();
     }
     static constexpr cycle_desc_t make_sec(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::SEC) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::SEC) : addr::make_empty_cycle();
     }
     static constexpr cycle_desc_t make_cli(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::CLI) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::CLI) : addr::make_empty_cycle();
     }
     static constexpr cycle_desc_t make_sei(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::SEI) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::SEI) : addr::make_empty_cycle();
     }
     static constexpr cycle_desc_t make_clv(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::CLV) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::CLV) : addr::make_empty_cycle();
     }
     static constexpr cycle_desc_t make_cld(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::CLD) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::CLD) : addr::make_empty_cycle();
     }
     static constexpr cycle_desc_t make_sed(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::SED) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::SED) : addr::make_empty_cycle();
     }
     
     // Logical operations - direct SYNC implementation
@@ -120,18 +120,18 @@ public:
         return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::DEY) : addr::make_empty_cycle();
     }
 
-    // Shift/Rotate operations - direct SYNC implementation
+    // Shift/Rotate operations - using accumulator-specific ALU operations
     static constexpr cycle_desc_t make_asl_acc(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::ALU, AluOp::ASL) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::ASL_ACC) : addr::make_empty_cycle();
     }
     static constexpr cycle_desc_t make_lsr_acc(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::ALU, AluOp::LSR) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::LSR_ACC) : addr::make_empty_cycle();
     }
     static constexpr cycle_desc_t make_rol_acc(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::ALU, AluOp::ROL) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::ROL_ACC) : addr::make_empty_cycle();
     }
     static constexpr cycle_desc_t make_ror_acc(uint8_t cycle = 1) {
-        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::ALU, AluOp::ROR) : addr::make_empty_cycle();
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::ROR_ACC) : addr::make_empty_cycle();
     }
 
     static constexpr cycle_desc_t make_phx(uint8_t cycle) {
