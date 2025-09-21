@@ -1576,8 +1576,9 @@ public:
                             if (cycle_step == 0 ||
                                 opcode == 0x48 || opcode == 0x08 || opcode == 0x68 || opcode == 0x28 ||
                                 opcode == 0x20 || opcode == 0x60 || opcode == 0x40 ||
-                                opcode == 0x4C || opcode == 0x6C) {
-                                // Skip SO pin processing for excluded instructions - they preserve flags
+                                opcode == 0x4C || opcode == 0x6C ||
+                                opcode == 0x0A || opcode == 0x4A || opcode == 0x2A || opcode == 0x6A) {
+                                // Skip SO pin processing for excluded instructions (stack, control flow, JMP, accumulator) - they preserve flags
                                 clear_state(STATE_SO_EDGE);
                             } else {
                                 clear_state(STATE_SO_EDGE);
@@ -1722,8 +1723,9 @@ public:
             if (cycle_step == 0 ||
                 opcode == 0x48 || opcode == 0x08 || opcode == 0x68 || opcode == 0x28 ||
                 opcode == 0x20 || opcode == 0x60 || opcode == 0x40 ||
-                opcode == 0x4C || opcode == 0x6C) {
-                // Skip SO pin processing for stack operations, interrupt returns, and JMP instructions - they preserve flags
+                opcode == 0x4C || opcode == 0x6C ||
+                opcode == 0x0A || opcode == 0x4A || opcode == 0x2A || opcode == 0x6A) {
+                // Skip SO pin processing for stack operations, interrupt returns, JMP instructions, and accumulator operations - they preserve flags
                 return;
             }
             

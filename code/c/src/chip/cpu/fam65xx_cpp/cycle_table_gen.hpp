@@ -234,21 +234,21 @@ public:
             
             // Column 6: Arithmetic Shift & Rotate
             case 0x06: return addr::make_memory_modify_zp(Cycle, AluOp::ASL);                 // ASL zp
-            case 0x16: return addr::make_memory_modify_zp(Cycle, AluOp::ASL);                 // ASL zp,X
+            case 0x16: return addr::make_memory_modify_zp_indexed(Cycle, DataOp::ADDR_ADD_X, AluOp::ASL); // ASL zp,X
             case 0x26: return addr::make_memory_modify_zp(Cycle, AluOp::ROL);                 // ROL zp
-            case 0x36: return addr::make_memory_modify_zp(Cycle, AluOp::ROL);                 // ROL zp,X
+            case 0x36: return addr::make_memory_modify_zp_indexed(Cycle, DataOp::ADDR_ADD_X, AluOp::ROL); // ROL zp,X
             case 0x46: return addr::make_memory_modify_zp(Cycle, AluOp::LSR);                 // LSR zp
-            case 0x56: return addr::make_memory_modify_zp(Cycle, AluOp::LSR);                 // LSR zp,X
+            case 0x56: return addr::make_memory_modify_zp_indexed(Cycle, DataOp::ADDR_ADD_X, AluOp::LSR); // LSR zp,X
             case 0x66: return addr::make_memory_modify_zp(Cycle, AluOp::ROR);                 // ROR zp
-            case 0x76: return addr::make_memory_modify_zp(Cycle, AluOp::ROR);                 // ROR zp,X
+            case 0x76: return addr::make_memory_modify_zp_indexed(Cycle, DataOp::ADDR_ADD_X, AluOp::ROR); // ROR zp,X
             case 0x86: return addr::make_zeropage_write(Cycle, DataOp::STORE_X);              // STX zp
             case 0x96: return addr::make_zeropage_indexed_write(Cycle, DataOp::ADDR_ADD_Y, DataOp::STORE_X); // STX zp,Y
             case 0xA6: return addr::make_zeropage(Cycle, DataOp::LOAD_X);                     // LDX zp
             case 0xB6: return addr::make_zeropage_indexed(Cycle, DataOp::ADDR_ADD_Y, DataOp::LOAD_X); // LDX zp,Y
             case 0xC6: return addr::make_memory_modify_zp(Cycle, AluOp::DEC);                 // DEC zp
-            case 0xD6: return addr::make_memory_modify_zp(Cycle, AluOp::DEC);                 // DEC zp,X
+            case 0xD6: return addr::make_memory_modify_zp_indexed(Cycle, DataOp::ADDR_ADD_X, AluOp::DEC); // DEC zp,X
             case 0xE6: return addr::make_memory_modify_zp(Cycle, AluOp::INC);                 // INC zp
-            case 0xF6: return addr::make_memory_modify_zp(Cycle, AluOp::INC);                 // INC zp,X
+            case 0xF6: return addr::make_memory_modify_zp_indexed(Cycle, DataOp::ADDR_ADD_X, AluOp::INC); // INC zp,X
             
             // Column 7: Illegal opcodes (SLO, RLA, SRE, RRA, SAX, LAX, DCP, ISC)
             case 0x07: return addr::make_memory_modify_zp(Cycle, AluOp::SLO);               // SLO zp (illegal)
@@ -438,21 +438,21 @@ public:
             
             // Column E: Absolute with shifts
             case 0x0E: return addr::make_memory_modify_abs(Cycle, AluOp::ASL);              // ASL abs
-            case 0x1E: return addr::make_memory_modify_abs(Cycle, AluOp::ASL);              // ASL abs,X
+            case 0x1E: return addr::make_memory_modify_abs_indexed(Cycle, DataOp::ADDR_ADD_X, AluOp::ASL); // ASL abs,X
             case 0x2E: return addr::make_memory_modify_abs(Cycle, AluOp::ROL);              // ROL abs
-            case 0x3E: return addr::make_memory_modify_abs(Cycle, AluOp::ROL);              // ROL abs,X
+            case 0x3E: return addr::make_memory_modify_abs_indexed(Cycle, DataOp::ADDR_ADD_X, AluOp::ROL); // ROL abs,X
             case 0x4E: return addr::make_memory_modify_abs(Cycle, AluOp::LSR);              // LSR abs
-            case 0x5E: return addr::make_memory_modify_abs(Cycle, AluOp::LSR);              // LSR abs,X
+            case 0x5E: return addr::make_memory_modify_abs_indexed(Cycle, DataOp::ADDR_ADD_X, AluOp::LSR); // LSR abs,X
             case 0x6E: return addr::make_memory_modify_abs(Cycle, AluOp::ROR);              // ROR abs
-            case 0x7E: return addr::make_memory_modify_abs(Cycle, AluOp::ROR);              // ROR abs,X
+            case 0x7E: return addr::make_memory_modify_abs_indexed(Cycle, DataOp::ADDR_ADD_X, AluOp::ROR); // ROR abs,X
             case 0x8E: return addr::make_absolute_write(Cycle, DataOp::STORE_X);            // STX abs
             case 0x9E: return inst::make_nop(Cycle);                   // SHX abs,Y (illegal, unstable)
             case 0xAE: return addr::make_absolute(Cycle, DataOp::LOAD_X);                   // LDX abs
             case 0xBE: return addr::make_absolute_indexed(Cycle, DataOp::ADDR_ADD_Y, DataOp::LOAD_X); // LDX abs,Y
             case 0xCE: return addr::make_memory_modify_abs(Cycle, AluOp::DEC);              // DEC abs
-            case 0xDE: return addr::make_memory_modify_abs(Cycle, AluOp::DEC);              // DEC abs,X
+            case 0xDE: return addr::make_memory_modify_abs_indexed(Cycle, DataOp::ADDR_ADD_X, AluOp::DEC); // DEC abs,X
             case 0xEE: return addr::make_memory_modify_abs(Cycle, AluOp::INC);              // INC abs
-            case 0xFE: return addr::make_memory_modify_abs(Cycle, AluOp::INC);              // INC abs,X
+            case 0xFE: return addr::make_memory_modify_abs_indexed(Cycle, DataOp::ADDR_ADD_X, AluOp::INC); // INC abs,X
             
             // Column F: Illegal opcodes (SLO, RLA, SRE, RRA, SAX, LAX, DCP, ISC)
             case 0x0F: return addr::make_memory_modify_abs(Cycle, AluOp::SLO);               // SLO abs (illegal)
