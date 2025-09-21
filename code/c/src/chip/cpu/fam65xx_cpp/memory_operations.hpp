@@ -12,9 +12,9 @@ namespace fam65xx_cpp {
 template<typename BusConfig>
 class MemoryOperations {
 public:
-    template<typename RegArray>
+    template<typename RegArray, typename CpuInstance>
     static inline bus_state_t execute_memory_operation(bus_state_t bus_state, RegArray& reg,
-                                                      MemOp mem_op) {
+                                                              MemOp mem_op, CpuInstance& cpu) {
         if (mem_op == MemOp::NOP) return bus_state;
         
         uint16_t addr = 0;
@@ -49,6 +49,28 @@ public:
             case MemOp::READ_ABS:
             // Note: READ_VECTOR is aliased to READ_ABS, so it's handled by this same case
                 addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
+                
+                // CONSTEXPR NMOS 6502 PAGE BOUNDARY BUG IMPLEMENTATION - TEMPORARILY DISABLED FOR TESTING
+                // Only apply for NMOS variants and JMP indirect instruction cycle 4
+                if constexpr (false && !BusConfig::has_cmos_fixes) {
+                    if (cpu.get_opcode() == 0x6C && cpu.get_cycle_step() == 4) {
+                        // JMP indirect cycle 4: reading high byte of target address
+                        // NMOS bug: when indirect pointer's low byte is 0xFF,
+                        // the high byte is read from $xx00 instead of $(xx+1)00
+                        
+                        // The ABL/ABH registers should contain the indirect pointer address + 1
+                        // for reading the high byte. The bug prevents proper page crossing.
+                        
+                        // Check if we're about to read from address $xx00 (indicating previous was $xxFF)
+                        if ((addr & 0xFF) == 0x00) {
+                            // This suggests the original indirect pointer was $xxFF
+                            // NMOS bug: instead of reading from $(xx+1)00, read from $xx00
+                            // Keep the same page but reset low byte to 0x00
+                            addr = (addr & 0xFF00) | 0x00;
+                        }
+                    }
+                }
+                
                 BUS_SET_ADDR(bus_state, addr);
                 break;
                 
@@ -167,33 +189,6 @@ public:
             }
         }
         return bus_state;
-    }
-    
-    // PERFORMANCE: Fast path memory operation execution (optimized for hot path)
-    template<typename RegArray>
-    static inline bus_state_t execute_memory_operation_fast(bus_state_t bus_state, RegArray& reg,
-                                                          MemOp mem_op) {
-        // Hot path optimization: Most common operations first with branch prediction
-        
-        // HOTTEST PATH: PC read with increment (instruction fetch and operand reads)
-        if (__builtin_expect(mem_op == MemOp::READ_PC_INC, 1)) {
-            const uint16_t pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
-            BUS_SET_ADDR(bus_state, pc);
-            const uint16_t new_pc = (pc + 1) & 0xFFFF;
-            reg[CpuReg::PCL] = new_pc & 0xFF;
-            reg[CpuReg::PCH] = (new_pc >> 8) & 0xFF;
-            return bus_state;
-        }
-        
-        // COMMON PATH: Absolute addressing (most memory operations)
-        if (__builtin_expect(mem_op == MemOp::READ_ABS, 1)) {
-            const uint16_t addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
-            BUS_SET_ADDR(bus_state, addr);
-            return bus_state;
-        }
-        
-        // LESS COMMON: Fall back to full implementation for other operations
-        return execute_memory_operation(bus_state, reg, mem_op);
     }
 };
 
