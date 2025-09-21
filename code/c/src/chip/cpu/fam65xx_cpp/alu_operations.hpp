@@ -2,6 +2,7 @@
 #define ALU_OPERATIONS_HPP
 
 #include "cpu_defs.hpp"
+#include "cpu_config.hpp"
 #include "fam65xx_validation.hpp"
 
 namespace fam65xx_cpp {
@@ -83,7 +84,8 @@ public:
             // === ARITHMETIC OPERATIONS - Set N/Z flags ===
             case AluOp::ADC: {
                 uint8_t nz_flag_value;
-                if (reg[CpuReg::P] & P_DECIMAL) {
+                if constexpr (BusConfig::has_decimal_mode) {
+                    if (reg[CpuReg::P] & P_DECIMAL) {
                     // === CONSTEXPR CROSS-CORE COMPATIBILITY ===
                     // Decimal (BCD) mode addition with zero runtime overhead core differentiation
                     uint8_t carry_in = (reg[CpuReg::P] & P_CARRY) ? 1 : 0;
@@ -109,10 +111,16 @@ public:
                     
                     // CROSS-CORE COMPATIBILITY: N/Z flag handling varies by CPU variant
                     if constexpr (BusConfig::has_cmos_fixes) {
-                        // CMOS variants: N/Z flags set based on BCD result (bug fixed)
+                        // CMOS variants (65C02, 65C816): N/Z flags set based on BCD result (bug fixed)
                         nz_flag_value = bcd_result;
+                    } else if constexpr (BusConfig::cpu_variant == CpuVariant::NMOS_6502) {
+                        // NMOS 6502: N/Z flags set based on BINARY result (hardware bug)
+                        nz_flag_value = binary_result;
+                    } else if constexpr (BusConfig::cpu_variant == CpuVariant::NMOS_6510) {
+                        // NMOS 6510: Same behavior as 6502 - N/Z flags set based on BINARY result
+                        nz_flag_value = binary_result;
                     } else {
-                        // NMOS variants: N/Z flags set based on BINARY result (hardware bug)
+                        // Default NMOS behavior for other variants
                         nz_flag_value = binary_result;
                     }
                     
@@ -121,8 +129,16 @@ public:
                     
                     // Set carry flag based on BCD overflow
                     flags |= (hi_nibble > 0x0F ? P_CARRY : 0);
+                    } else {
+                        // Binary mode addition - consistent across all cores
+                        temp = a + data + (reg[CpuReg::P] & P_CARRY);
+                        result = temp & 0xFF;
+                        nz_flag_value = result; // N/Z flags based on actual result
+                        flags = (temp > 0xFF ? P_CARRY : 0) |
+                                ((~(a ^ data) & (a ^ result) & 0x80) ? P_OVERFLOW : 0);
+                    }
                 } else {
-                    // Binary mode addition - consistent across all cores
+                    // CPU variant doesn't support decimal mode - always binary
                     temp = a + data + (reg[CpuReg::P] & P_CARRY);
                     result = temp & 0xFF;
                     nz_flag_value = result; // N/Z flags based on actual result
@@ -135,10 +151,19 @@ public:
                 return; // Skip the common N/Z flag setting at end
             }
                 
-            case AluOp::SBC:
-                if (reg[CpuReg::P] & P_DECIMAL) {
-                    // Decimal (BCD) mode subtraction
+            case AluOp::SBC: {
+                uint8_t nz_flag_value;
+                if constexpr (BusConfig::has_decimal_mode) {
+                    if (reg[CpuReg::P] & P_DECIMAL) {
+                    // === CONSTEXPR CROSS-CORE COMPATIBILITY ===
+                    // Decimal (BCD) mode subtraction with zero runtime overhead core differentiation
                     uint8_t borrow = (reg[CpuReg::P] & P_CARRY) ? 0 : 1;
+                    
+                    // First perform binary subtraction for flag calculation
+                    temp = a - data - borrow;
+                    uint8_t binary_result = temp & 0xFF;
+                    
+                    // Calculate BCD result for actual storage (all variants need this)
                     int16_t lo_nibble = (a & 0x0F) - (data & 0x0F) - borrow;
                     int16_t hi_nibble = (a >> 4) - (data >> 4);
                     
@@ -150,19 +175,48 @@ public:
                         hi_nibble -= 6;
                     }
                     
-                    result = ((hi_nibble & 0x0F) << 4) | (lo_nibble & 0x0F);
-                    flags = (hi_nibble >= 0 ? P_CARRY : 0) |
-                            ((a ^ data) & (a ^ result) & 0x80 ? P_OVERFLOW : 0);
+                    uint8_t bcd_result = ((hi_nibble & 0x0F) << 4) | (lo_nibble & 0x0F);
+                    result = bcd_result;
+                    
+                    // CROSS-CORE COMPATIBILITY: N/Z flag handling varies by CPU variant
+                    if constexpr (BusConfig::has_cmos_fixes) {
+                        // CMOS variants (65C02, 65C816): N/Z flags set based on BCD result (bug fixed)
+                        nz_flag_value = bcd_result;
+                    } else if constexpr (BusConfig::cpu_variant == CpuVariant::NMOS_6502) {
+                        // NMOS 6502: N/Z flags set based on BINARY result (hardware bug)
+                        nz_flag_value = binary_result;
+                    } else if constexpr (BusConfig::cpu_variant == CpuVariant::NMOS_6510) {
+                        // NMOS 6510: Same behavior as 6502 - N/Z flags set based on BINARY result
+                        nz_flag_value = binary_result;
+                    } else {
+                        // Default NMOS behavior for other variants
+                        nz_flag_value = binary_result;
+                    }
+                    
+                    // Calculate flags based on binary arithmetic for all variants
+                    flags = (temp >= 0 ? P_CARRY : 0) |
+                            ((a ^ data) & (a ^ binary_result) & 0x80 ? P_OVERFLOW : 0);
+                    } else {
+                        // Binary mode subtraction - consistent across all cores
+                        temp = a - data - !(reg[CpuReg::P] & P_CARRY);
+                        result = temp & 0xFF;
+                        nz_flag_value = result; // N/Z flags based on actual result
+                        flags = (temp >= 0 ? P_CARRY : 0) |
+                                ((a ^ data) & (a ^ result) & 0x80 ? P_OVERFLOW : 0);
+                    }
                 } else {
-                    // Binary mode subtraction
+                    // CPU variant doesn't support decimal mode - always binary
                     temp = a - data - !(reg[CpuReg::P] & P_CARRY);
                     result = temp & 0xFF;
-                    flags = (temp > 0xFF ? 0 : P_CARRY) |
+                    nz_flag_value = result; // N/Z flags based on actual result
+                    flags = (temp >= 0 ? P_CARRY : 0) |
                             ((a ^ data) & (a ^ result) & 0x80 ? P_OVERFLOW : 0);
                 }
                 reg[CpuReg::P] = (reg[CpuReg::P] & ~(P_CARRY | P_OVERFLOW)) | flags;
                 reg[CpuReg::A] = result;
-                break; // Sets N/Z flags
+                set_nz_flags(reg, nz_flag_value);
+                return; // Skip the common N/Z flag setting at end
+            }
    
             // === LOGICAL OPERATIONS - Set N/Z flags ===
             case AluOp::AND: result = a & data; reg[CpuReg::A] = result; break; // Sets N/Z flags
@@ -312,6 +366,31 @@ public:
                 reg[CpuReg::P] = (reg[CpuReg::P] & ~(P_CARRY | P_OVERFLOW)) | flags;
                 break; // Sets N/Z flags
                 
+            // === ACCUMULATOR-SPECIFIC SHIFT/ROTATE OPERATIONS - Set N/Z flags ===
+            case AluOp::ASL_ACC:
+                result = (reg[CpuReg::A] << 1) & 0xFF;
+                reg[CpuReg::P] = (reg[CpuReg::P] & ~P_CARRY) | (reg[CpuReg::A] & 0x80 ? P_CARRY : 0);
+                reg[CpuReg::A] = result; // Store directly in accumulator
+                break; // Sets N/Z flags
+                
+            case AluOp::LSR_ACC:
+                result = reg[CpuReg::A] >> 1;
+                reg[CpuReg::P] = (reg[CpuReg::P] & ~P_CARRY) | (reg[CpuReg::A] & 0x01 ? P_CARRY : 0);
+                reg[CpuReg::A] = result; // Store directly in accumulator
+                break; // Sets N/Z flags
+                
+            case AluOp::ROL_ACC:
+                result = ((reg[CpuReg::A] << 1) | (reg[CpuReg::P] & P_CARRY ? 1 : 0)) & 0xFF;
+                reg[CpuReg::P] = (reg[CpuReg::P] & ~P_CARRY) | (reg[CpuReg::A] & 0x80 ? P_CARRY : 0);
+                reg[CpuReg::A] = result; // Store directly in accumulator
+                break; // Sets N/Z flags
+                
+            case AluOp::ROR_ACC:
+                result = (reg[CpuReg::A] >> 1) | (reg[CpuReg::P] & P_CARRY ? 0x80 : 0);
+                reg[CpuReg::P] = (reg[CpuReg::P] & ~P_CARRY) | (reg[CpuReg::A] & 0x01 ? P_CARRY : 0);
+                reg[CpuReg::A] = result; // Store directly in accumulator
+                break; // Sets N/Z flags
+                
             default:
                 result = data; // Default pass-through for unknown operations
                 break; // Sets N/Z flags
@@ -383,6 +462,10 @@ public:
             case AluOp::DEY: execute_alu_operation_constexpr<AluOp::DEY>(reg, data); break;
             case AluOp::JAM: execute_alu_operation_constexpr<AluOp::JAM>(reg, data); break;
             case AluOp::BRK_FLAG: execute_alu_operation_constexpr<AluOp::BRK_FLAG>(reg, data); break;
+            case AluOp::ASL_ACC: execute_alu_operation_constexpr<AluOp::ASL_ACC>(reg, data); break;
+            case AluOp::LSR_ACC: execute_alu_operation_constexpr<AluOp::LSR_ACC>(reg, data); break;
+            case AluOp::ROL_ACC: execute_alu_operation_constexpr<AluOp::ROL_ACC>(reg, data); break;
+            case AluOp::ROR_ACC: execute_alu_operation_constexpr<AluOp::ROR_ACC>(reg, data); break;
             default: execute_alu_operation_constexpr<AluOp::NOP>(reg, data); break;
         }
     }
@@ -495,7 +578,8 @@ public:
                 uint8_t flags;
                 uint8_t nz_flag_value; // Value to use for N/Z flag calculation
                 
-                if (reg[CpuReg::P] & P_DECIMAL) {
+                if constexpr (BusConfig::has_decimal_mode) {
+                    if (reg[CpuReg::P] & P_DECIMAL) {
                     // === CONSTEXPR CROSS-CORE COMPATIBILITY ===
                     // Decimal (BCD) mode addition with zero runtime overhead core differentiation
                     uint8_t carry_in = (reg[CpuReg::P] & P_CARRY) ? 1 : 0;
@@ -525,10 +609,16 @@ public:
                     
                     // CROSS-CORE COMPATIBILITY: N/Z flag handling varies by CPU variant
                     if constexpr (BusConfig::has_cmos_fixes) {
-                        // CMOS variants: N/Z flags set based on BCD result (bug fixed)
+                        // CMOS variants (65C02, 65C816): N/Z flags set based on BCD result (bug fixed)
                         nz_flag_value = bcd_result;
+                    } else if constexpr (BusConfig::cpu_variant == CpuVariant::NMOS_6502) {
+                        // NMOS 6502: N/Z flags set based on BINARY result (hardware bug)
+                        nz_flag_value = binary_result;
+                    } else if constexpr (BusConfig::cpu_variant == CpuVariant::NMOS_6510) {
+                        // NMOS 6510: Same behavior as 6502 - N/Z flags set based on BINARY result
+                        nz_flag_value = binary_result;
                     } else {
-                        // NMOS variants: N/Z flags set based on BINARY result (hardware bug)
+                        // Default NMOS behavior for other variants
                         nz_flag_value = binary_result;
                     }
                     
@@ -537,8 +627,16 @@ public:
                     
                     // Set carry flag based on BCD overflow
                     flags |= (bcd_carry ? P_CARRY : 0);
+                    } else {
+                        // Binary mode addition - consistent across all cores
+                        const uint16_t temp = a + data + (reg[CpuReg::P] & P_CARRY ? 1 : 0);
+                        result = temp & 0xFF;
+                        nz_flag_value = result; // N/Z flags based on actual result
+                        flags = (temp > 0xFF ? P_CARRY : 0) |
+                                ((~(a ^ data) & (a ^ result) & 0x80) ? P_OVERFLOW : 0);
+                    }
                 } else {
-                    // Binary mode addition - consistent across all cores
+                    // CPU variant doesn't support decimal mode - always binary
                     const uint16_t temp = a + data + (reg[CpuReg::P] & P_CARRY ? 1 : 0);
                     result = temp & 0xFF;
                     nz_flag_value = result; // N/Z flags based on actual result
@@ -555,10 +653,19 @@ public:
                 const uint8_t a = reg[CpuReg::A];
                 uint8_t result;
                 uint8_t flags;
+                uint8_t nz_flag_value; // Value to use for N/Z flag calculation
                 
-                if (reg[CpuReg::P] & P_DECIMAL) {
-                    // Decimal (BCD) mode subtraction
+                if constexpr (BusConfig::has_decimal_mode) {
+                    if (reg[CpuReg::P] & P_DECIMAL) {
+                    // === CONSTEXPR CROSS-CORE COMPATIBILITY ===
+                    // Decimal (BCD) mode subtraction with zero runtime overhead core differentiation
                     uint8_t borrow = (reg[CpuReg::P] & P_CARRY) ? 0 : 1;
+                    
+                    // First perform binary subtraction for flag calculation
+                    const uint16_t temp = a - data - borrow;
+                    uint8_t binary_result = temp & 0xFF;
+                    
+                    // Calculate BCD result for actual storage (all variants need this)
                     int16_t lo_nibble = (a & 0x0F) - (data & 0x0F) - borrow;
                     int16_t hi_nibble = (a >> 4) - (data >> 4);
                     
@@ -570,20 +677,47 @@ public:
                         hi_nibble -= 6;
                     }
                     
-                    result = ((hi_nibble & 0x0F) << 4) | (lo_nibble & 0x0F);
-                    flags = (hi_nibble >= 0 ? P_CARRY : 0) |
-                            ((a ^ data) & (a ^ result) & 0x80 ? P_OVERFLOW : 0);
+                    uint8_t bcd_result = ((hi_nibble & 0x0F) << 4) | (lo_nibble & 0x0F);
+                    result = bcd_result;
+                    
+                    // CROSS-CORE COMPATIBILITY: N/Z flag handling varies by CPU variant
+                    if constexpr (BusConfig::has_cmos_fixes) {
+                        // CMOS variants (65C02, 65C816): N/Z flags set based on BCD result (bug fixed)
+                        nz_flag_value = bcd_result;
+                    } else if constexpr (BusConfig::cpu_variant == CpuVariant::NMOS_6502) {
+                        // NMOS 6502: N/Z flags set based on BINARY result (hardware bug)
+                        nz_flag_value = binary_result;
+                    } else if constexpr (BusConfig::cpu_variant == CpuVariant::NMOS_6510) {
+                        // NMOS 6510: Same behavior as 6502 - N/Z flags set based on BINARY result
+                        nz_flag_value = binary_result;
+                    } else {
+                        // Default NMOS behavior for other variants
+                        nz_flag_value = binary_result;
+                    }
+                    
+                    // Calculate flags based on binary arithmetic for all variants
+                    flags = (temp >= 0 ? P_CARRY : 0) |
+                            ((a ^ data) & (a ^ binary_result) & 0x80 ? P_OVERFLOW : 0);
+                    } else {
+                        // Binary mode subtraction - consistent across all cores
+                        const uint16_t temp = a - data - (reg[CpuReg::P] & P_CARRY ? 0 : 1);
+                        result = temp & 0xFF;
+                        nz_flag_value = result; // N/Z flags based on actual result
+                        flags = (temp >= 0 ? P_CARRY : 0) |
+                                ((a ^ data) & (a ^ result) & 0x80 ? P_OVERFLOW : 0);
+                    }
                 } else {
-                    // Binary mode subtraction
+                    // CPU variant doesn't support decimal mode - always binary
                     const uint16_t temp = a - data - (reg[CpuReg::P] & P_CARRY ? 0 : 1);
                     result = temp & 0xFF;
-                    flags = (temp > 0xFF ? 0 : P_CARRY) |
+                    nz_flag_value = result; // N/Z flags based on actual result
+                    flags = (temp >= 0 ? P_CARRY : 0) |
                             ((a ^ data) & (a ^ result) & 0x80 ? P_OVERFLOW : 0);
                 }
                 
                 reg[CpuReg::P] = (reg[CpuReg::P] & ~(P_CARRY | P_OVERFLOW)) | flags;
                 reg[CpuReg::A] = result;
-                set_nz_flags(reg, result);
+                set_nz_flags(reg, nz_flag_value);
                 return;
             }
             

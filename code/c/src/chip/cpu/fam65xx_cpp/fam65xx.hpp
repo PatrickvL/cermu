@@ -468,7 +468,8 @@ public:
                 // PHP (0x08) uses DataOp::STACK_PUSH and needs to push the P register
                 switch (opcode) {
                     case 0x08: // PHP - Push Processor Status
-                        pending_data = reg[CpuReg::P];
+                        // PHP sets the B and U flags in the pushed status (hardware behavior)
+                        pending_data = reg[CpuReg::P] | P_BREAK | P_UNUSED;
                         break;
                     case 0x20: // JSR - Jump to Subroutine (handled by JSR coordination above)
                         // JSR stack push data is already set by JSR coordination - skip handle_stack_push()
@@ -963,7 +964,8 @@ public:
             // Determine what to push based on the opcode
             switch (opcode) {
                 case 0x08: // PHP - Push Processor Status
-                    push_data = reg[CpuReg::P];
+                    // PHP sets the B and U flags in the pushed status (hardware behavior)
+                    push_data = reg[CpuReg::P] | P_BREAK | P_UNUSED;
                     break;
                 case 0x48: // PHA - Push Accumulator
                     push_data = reg[CpuReg::A];
@@ -1002,7 +1004,8 @@ public:
         // STACK OPERATIONS FIX: Handle all stack pull operations, not just RTI
         switch (opcode) {
             case 0x28: // PLP - Pull Processor Status
-                reg[CpuReg::P] = data;
+                // PLP always sets U flag to 1 and clears B flag (like RTI)
+                reg[CpuReg::P] = (data & ~P_BREAK) | P_UNUSED;
                 break;
             case 0x68: // PLA - Pull Accumulator
                 reg[CpuReg::A] = data;
