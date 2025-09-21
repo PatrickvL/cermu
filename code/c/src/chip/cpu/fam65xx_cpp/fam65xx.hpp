@@ -7,7 +7,6 @@
 #include "memory_operations.hpp"
 #include "cycle_table_gen.hpp"
 #include "../../../core/system_lines.h"
-#include <cstdio>  // For printf debug output
 
 namespace fam65xx_cpp {
 
@@ -24,6 +23,9 @@ private:
     // RTS coordination variables (similar to JSR static variables)
     uint8_t rts_return_low = 0;
     uint8_t rts_return_high = 0;
+    
+    // JMP indirect coordination variable
+    uint8_t jmp_indirect_target_low = 0;
     
     // Hardware pin state tracking for interrupt edge detection
     bool prev_nmi_pin_state = true;  // NMI pin state tracking (starts high)
@@ -132,40 +134,25 @@ public:
     // Execute one CPU cycle
     inline bus_state_t cycle_tick(bus_state_t bus_state) {
         
-        // CRITICAL DEBUG: Add debug output for ALL cycle_tick calls
-        // printf("CYCLE_TICK ALL: opcode=0x%02X, step=%d\n", opcode, cycle_step);
-        
         // Process input control lines first (inlined for hot path)
         bus_state = process_input_pins(bus_state);
         
         // Handle RDY line - variant-specific behavior
         if (__builtin_expect(!(bus_state & BUS_BIT(BUS_RDY_BIT)), 0)) {
-            if (opcode == 0xEA && cycle_step == 1) {
-                printf("NOP DEBUG: RDY line not ready, handling wait\n");
-            }
             bus_state = handle_rdy_wait(bus_state);
             if (__builtin_expect(state_flags & STATE_RDY_WAIT, 0)) {
-                if (opcode == 0xEA && cycle_step == 1) {
-                    printf("NOP DEBUG: RDY wait active, skipping cycle\n");
-                }
                 return bus_state; // Skip this cycle
             }
         }
         
         // Check if we're in an interrupt sequence
         if (__builtin_expect(state_flags & STATE_INTERRUPT_SEQUENCE, 0)) {
-            if (opcode == 0xEA && cycle_step == 1) {
-                printf("NOP DEBUG: In interrupt sequence, calling execute_interrupt_cycle\n");
-            }
             return execute_interrupt_cycle(bus_state);
         }
         
         // Batch check critical state flags for speed (including 65C816 extended interrupts)
         const uint32_t critical_states = state_flags & (STATE_RESET_PENDING | STATE_NMI_PENDING | STATE_IRQ_PENDING | STATE_ABORT_PENDING | STATE_COP_PENDING);
         if (__builtin_expect(critical_states != 0, 0)) {
-            if (opcode == 0xEA && cycle_step == 1) {
-                printf("NOP DEBUG: Critical states detected: 0x%08X\n", critical_states);
-            }
             // Handle reset first (highest priority)
             if (__builtin_expect(critical_states & STATE_RESET_PENDING, 0)) {
                 return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_RESET);
@@ -373,10 +360,6 @@ public:
     
     // Execute one instruction cycle
     inline bus_state_t execute_cycle(bus_state_t bus_state) {
-        // CRITICAL DEBUG: Add debug output at start of execute_cycle
-        if (opcode == 0xEA) {
-            printf("EXECUTE_CYCLE DEBUG: NOP entry - opcode=0x%02X, step=%d\n", opcode, cycle_step);
-        }
         
         // Fetch opcode on cycle 0
         if (cycle_step == 0) {
@@ -538,11 +521,6 @@ public:
         // CONDITIONAL CYCLE SOLUTION: Branch instructions use dynamic SYNC determination
         bool instruction_complete = cycle.is_sync();
         
-        // CRITICAL DEBUG: Add debug output for step progression bug
-        if (opcode == 0xEA) { // NOP instruction
-            printf("NOP DEBUG: opcode=0x%02X, step=%d, instruction_complete=%s, sync_bit=%d\n",
-                   opcode, cycle_step, instruction_complete ? "true" : "false", cycle.is_sync() ? 1 : 0);
-        }
         
         // ZERO-OVERHEAD BRANCH CONDITIONAL CYCLES: Handle branch instructions specially
         if (opcode >= 0x10 && opcode <= 0xF0 && (opcode & 0x1F) == 0x10) {
@@ -643,6 +621,7 @@ public:
                     // Execute jump using the address calculated in ABL/ABH
                     {
                         const uint16_t addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
+                        
                         reg[CpuReg::PCL] = addr & 0xFF;
                         reg[CpuReg::PCH] = (addr >> 8) & 0xFF;
                     }
@@ -656,16 +635,32 @@ public:
                         // Get the current indirect pointer address
                         uint16_t indirect_addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
                         
-                        // Increment for reading high byte in cycle 4
-                        indirect_addr = (indirect_addr + 1) & 0xFFFF;
+                        // NMOS 6502 PAGE BOUNDARY BUG IMPLEMENTATION
+                        // For JMP indirect, when the indirect pointer's low byte is 0xFF,
+                        // the high byte is read from $xx00 instead of $(xx+1)00
+                        uint16_t high_byte_addr;
                         
-                        // Store the incremented address back to ABL/ABH for cycle 4
-                        reg[CpuReg::ABL] = indirect_addr & 0xFF;
-                        reg[CpuReg::ABH] = (indirect_addr >> 8) & 0xFF;
+                        if constexpr (!Config::has_cmos_fixes) {
+                            // NMOS behavior: page boundary bug
+                            if ((indirect_addr & 0xFF) == 0xFF) {
+                                // Page boundary bug: high byte comes from same page $xx00
+                                high_byte_addr = (indirect_addr & 0xFF00) | 0x00;
+                            } else {
+                                // Normal case: increment normally
+                                high_byte_addr = (indirect_addr + 1) & 0xFFFF;
+                            }
+                        } else {
+                            // CMOS behavior: always increment correctly (fixes the bug)
+                            high_byte_addr = (indirect_addr + 1) & 0xFFFF;
+                        }
                         
-                        // Store the target low byte in a temporary location
-                        // We'll use the DL register to preserve it
-                        reg[CpuReg::DL] = target_low;
+                        // Store the calculated address back to ABL/ABH for cycle 4
+                        reg[CpuReg::ABL] = high_byte_addr & 0xFF;
+                        reg[CpuReg::ABH] = (high_byte_addr >> 8) & 0xFF;
+                        
+                        // CRITICAL FIX: Store the target low byte in dedicated coordination variable
+                        // The DL register gets overwritten by execute_data_operation() line 648!
+                        jmp_indirect_target_low = target_low;
                     } else {
                         // For other instructions, just store the data normally
                         reg[CpuReg::ABL] = data;
@@ -674,9 +669,10 @@ public:
                 case DataOp::INDIRECT_HIGH:
                     // For JMP indirect, we need to reconstruct the target address
                     if (opcode == 0x6C && cycle_step == 4) {
-                        // The target low byte was stored in DL register during INDIRECT_LOW
+                        // CRITICAL FIX: Use dedicated coordination variable instead of DL register
+                        // The target low byte was stored in jmp_indirect_target_low during INDIRECT_LOW
                         // The target high byte is the data we just read
-                        uint8_t target_low = reg[CpuReg::DL];
+                        uint8_t target_low = jmp_indirect_target_low;
                         uint8_t target_high = data;
                         
                         // Set up ABL/ABH with the final target address for the JMP in cycle 5
