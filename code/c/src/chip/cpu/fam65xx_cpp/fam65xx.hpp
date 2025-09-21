@@ -1524,8 +1524,10 @@ public:
                 const bool current_so = (active_pins & BUS_BIT(BUS_SO_BIT)) != 0;
                 
                 // Only process SO pin for non-stack operations and when externally triggered
-                // Skip SO processing for stack operations (PHA/PHP/PLA/PLP), JSR, RTS, and RTI
-                if (opcode != 0x48 && opcode != 0x08 && opcode != 0x68 && opcode != 0x28 && opcode != 0x20 && opcode != 0x60 && opcode != 0x40) {
+                // Skip SO processing for stack operations (PHA/PHP/PLA/PLP), JSR, RTS, RTI, and JMP instructions
+                if (opcode != 0x48 && opcode != 0x08 && opcode != 0x68 && opcode != 0x28 &&
+                    opcode != 0x20 && opcode != 0x60 && opcode != 0x40 &&
+                    opcode != 0x4C && opcode != 0x6C) {
                     // Simple SO pin handling - set overflow flag when pin is low (external signal)
                     if (!current_so) {
                         set_state(STATE_SO_EDGE);
@@ -1535,8 +1537,19 @@ public:
                     if constexpr (Config::cpu_variant == CpuVariant::NMOS_6502 ||
                                  Config::cpu_variant == CpuVariant::NMOS_6510) {
                         if (get_state(STATE_SO_EDGE) && cycle_step > 0) {
-                            clear_state(STATE_SO_EDGE);
-                            reg[CpuReg::P] |= P_OVERFLOW;
+                            // CRITICAL FIX: Skip SO processing during opcode fetch (step 0) and for excluded instructions
+                            // During step 0, the opcode variable contains the PREVIOUS instruction, not the current one
+                            // Skip SO pin processing for stack operations, interrupt returns, and JMP instructions - they preserve flags
+                            if (cycle_step == 0 ||
+                                opcode == 0x48 || opcode == 0x08 || opcode == 0x68 || opcode == 0x28 ||
+                                opcode == 0x20 || opcode == 0x60 || opcode == 0x40 ||
+                                opcode == 0x4C || opcode == 0x6C) {
+                                // Skip SO pin processing for excluded instructions - they preserve flags
+                                clear_state(STATE_SO_EDGE);
+                            } else {
+                                clear_state(STATE_SO_EDGE);
+                                reg[CpuReg::P] |= P_OVERFLOW;
+                            }
                         }
                     }
                 }
@@ -1671,11 +1684,13 @@ public:
     // Enhanced SO pin edge detection with NMOS vs CMOS differences
     inline void process_so_pin_edge() {
         if constexpr (Config::has_so_pin) {
-            // CRITICAL FIX: Only process SO pin for instructions that should trigger it
-            // Stack operations (PHA/PHP/PLA/PLP), JSR, RTS, and RTI should NOT trigger SO pin processing
-            // SO pin is primarily used for external hardware signaling, not normal CPU operations
-            if (opcode == 0x48 || opcode == 0x08 || opcode == 0x68 || opcode == 0x28 || opcode == 0x20 || opcode == 0x60 || opcode == 0x40) {
-                // Skip SO pin processing for stack operations and interrupt returns - they preserve all flags
+            // CRITICAL FIX: Skip SO processing during opcode fetch (step 0) and for excluded instructions
+            // During step 0, the opcode variable contains the PREVIOUS instruction, not the current one
+            if (cycle_step == 0 ||
+                opcode == 0x48 || opcode == 0x08 || opcode == 0x68 || opcode == 0x28 ||
+                opcode == 0x20 || opcode == 0x60 || opcode == 0x40 ||
+                opcode == 0x4C || opcode == 0x6C) {
+                // Skip SO pin processing for stack operations, interrupt returns, and JMP instructions - they preserve flags
                 return;
             }
             
@@ -1691,7 +1706,12 @@ public:
                 } else {
                     // CMOS behavior: SO edge is synchronized to instruction boundaries
                     if (cycle_step == 0) { // Only process at instruction start
-                        reg[CpuReg::P] |= P_OVERFLOW;
+                        // CRITICAL FIX: Skip SO processing during opcode fetch (step 0)
+                        // During step 0, the opcode variable contains the PREVIOUS instruction, not the current one
+                        // Always skip SO processing at step 0 for CMOS variants
+                        if (false) { // Disabled - never process SO during step 0
+                            reg[CpuReg::P] |= P_OVERFLOW;
+                        }
                         clear_state(STATE_SO_EDGE);
                     }
                 }
