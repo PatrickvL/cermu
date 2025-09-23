@@ -489,30 +489,39 @@ public:
         
         // Execute ALU operation if specified
         if (alu_op != AluOp::NOP) {
-            // CRITICAL FIX: Use pending_data for ALU operations when DataOp::ALU was executed
-            // DataOp::ALU sets pending_data to prepare operand for ALU operation
-            // TRANSFER/FLAG FIX: Transfer and flag operations don't need external data
-            uint8_t alu_data;
-            if (data_op == DataOp::ALU) {
-                alu_data = pending_data;
-            } else if (alu_op >= AluOp::TXA && alu_op <= AluOp::TXS) {
-                // Transfer operations: TAX, TXA, TAY, TYA, TSX, TXS - don't use bus data
-                alu_data = 0; // Transfer operations use register values internally
-            } else if (alu_op >= AluOp::CLC && alu_op <= AluOp::SED) {
-                // Flag operations: CLC, SEC, CLI, SEI, CLV, CLD, SED - don't use bus data
-                alu_data = 0; // Flag operations don't need data
+            // CRITICAL FIX: Skip ALU execution if already done in TEMP_MODIFY
+            // Memory modify operations (ROR, ASL, LSR, ROL, INC, DEC) execute ALU during TEMP_MODIFY
+            // to ensure the result is available for the memory write in the same cycle
+            if (pending_data_op == static_cast<uint8_t>(DataOp::TEMP_MODIFY)) {
+                // ALU operation already executed in TEMP_MODIFY - skip duplicate execution
+                pending_data_op = 0; // Clear the flag
             } else {
-                alu_data = bus_data;
+                // Normal ALU execution path
+                // CRITICAL FIX: Use pending_data for ALU operations when DataOp::ALU was executed
+                // DataOp::ALU sets pending_data to prepare operand for ALU operation
+                // TRANSFER/FLAG FIX: Transfer and flag operations don't need external data
+                uint8_t alu_data;
+                if (data_op == DataOp::ALU) {
+                    alu_data = pending_data;
+                } else if (alu_op >= AluOp::TXA && alu_op <= AluOp::TXS) {
+                    // Transfer operations: TAX, TXA, TAY, TYA, TSX, TXS - don't use bus data
+                    alu_data = 0; // Transfer operations use register values internally
+                } else if (alu_op >= AluOp::CLC && alu_op <= AluOp::SED) {
+                    // Flag operations: CLC, SEC, CLI, SEI, CLV, CLD, SED - don't use bus data
+                    alu_data = 0; // Flag operations don't need data
+                } else {
+                    alu_data = bus_data;
+                }
+                alu_ops::execute_alu_operation(reg, alu_op, alu_data);
+                
+                // Handle interrupt flag changes for SEI/CLI instructions
+                if (alu_op == AluOp::SEI || alu_op == AluOp::CLI) {
+                    handle_interrupt_flag_change();
+                }
+                
+                // Handle decimal mode bugs for NMOS variants
+                handle_decimal_mode_bugs(reg[CpuReg::A], alu_op);
             }
-            alu_ops::execute_alu_operation(reg, alu_op, alu_data);
-            
-            // Handle interrupt flag changes for SEI/CLI instructions
-            if (alu_op == AluOp::SEI || alu_op == AluOp::CLI) {
-                handle_interrupt_flag_change();
-            }
-            
-            // Handle decimal mode bugs for NMOS variants
-            handle_decimal_mode_bugs(reg[CpuReg::A], alu_op);
         }
         
         // Process SO pin edge detection (variant-specific timing)
@@ -713,7 +722,29 @@ public:
                         if (alu_op != AluOp::NOP) {
                             // Execute ALU operation immediately using pending_data
                             alu_ops::execute_alu_operation(reg, alu_op, pending_data);
+                            // Set flag to skip duplicate ALU execution later in the cycle
+                            pending_data_op = static_cast<uint8_t>(DataOp::TEMP_MODIFY);
                         }
+                    }
+                    break;
+                case DataOp::ADDR_ADD_X:
+                    // CRITICAL FIX: Add X register to the base address in ABL for indexed addressing
+                    // This handles zero page and absolute indexed operations like ASL $nn,X and ASL $nnnn,X
+                    {
+                        uint16_t base_addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
+                        uint16_t indexed_addr = (base_addr + reg[CpuReg::X]) & 0xFFFF;
+                        reg[CpuReg::ABL] = indexed_addr & 0xFF;
+                        reg[CpuReg::ABH] = (indexed_addr >> 8) & 0xFF;
+                    }
+                    break;
+                case DataOp::ADDR_ADD_Y:
+                    // CRITICAL FIX: Add Y register to the base address in ABL for indexed addressing
+                    // This handles zero page and absolute indexed operations with Y indexing
+                    {
+                        uint16_t base_addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
+                        uint16_t indexed_addr = (base_addr + reg[CpuReg::Y]) & 0xFFFF;
+                        reg[CpuReg::ABL] = indexed_addr & 0xFF;
+                        reg[CpuReg::ABH] = (indexed_addr >> 8) & 0xFF;
                     }
                     break;
                 default:
@@ -727,119 +758,6 @@ public:
         pending_data_op = data_op;
     }
     
-    // PERFORMANCE: Fast path data operation execution (optimized for hot path)
-    inline void execute_data_operation_fast(DataOp data_op, uint8_t data) {
-        // Store data for potential ALU use - DIRECT ASSIGNMENT FOR SPEED
-        reg[CpuReg::DL] = data;
-        
-        // Fast path optimization: Most common operations first with branch prediction
-        // Direct register loads are most common (LOAD_A, LOAD_X, LOAD_Y only)
-        if (__builtin_expect(static_cast<uint8_t>(data_op) <= static_cast<uint8_t>(DataOp::LOAD_Y), 1)) {
-            // HOTTEST PATH: Direct register load for A, X, Y only (LOAD_A=0, LOAD_X=1, LOAD_Y=2)
-            reg[static_cast<uint8_t>(data_op)] = data;
-            
-            // CRITICAL FIX: Set N and Z flags for load instructions
-            // Load instructions always set N/Z flags based on the loaded value
-            // Preserve all other flags, only modify N and Z
-            // PERFORMANCE: Use direct bit manipulation instead of conditional operations
-            reg[CpuReg::P] = (reg[CpuReg::P] & ~(P_NEGATIVE | P_ZERO)) |
-                            (data & P_NEGATIVE) |
-                            ((data == 0) << 1);
-            
-            pending_data_op = static_cast<uint8_t>(data_op); // Cache for speed
-            return;
-        }
-        
-        // Handle less common operations with optimized switch
-        switch (data_op) {
-            case DataOp::ALU:
-                // CRITICAL FIX: For accumulator shift/rotate operations, use accumulator value
-                // Check if this is an accumulator operation by looking at the ALU operation
-                if (__builtin_expect(cycle_step > 0, 1)) {
-                    const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
-                    const MemOp mem_op = static_cast<MemOp>(cycle.mem_op);
-                    const AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
-                    
-                    // If MemOp::NOP and ALU operation is shift/rotate, use accumulator value
-                    if (mem_op == MemOp::NOP &&
-                        (alu_op == AluOp::ASL || alu_op == AluOp::LSR ||
-                         alu_op == AluOp::ROL || alu_op == AluOp::ROR)) {
-                        pending_data = reg[CpuReg::A];  // Use accumulator value for accumulator operations
-                    } else {
-                        pending_data = data;  // Use bus data for memory operations
-                    }
-                } else {
-                    pending_data = data;  // Default case
-                }
-                break;
-            case DataOp::ADDR_CALC_LOW:
-                reg[CpuReg::ABL] = data;
-                break;
-            case DataOp::ADDR_CALC_HIGH:
-                reg[CpuReg::ABH] = data;
-                break;
-            case DataOp::BRANCH:
-                // Branch handling - RARE PATH
-                handle_branch_instruction(data);
-                break;
-            case DataOp::JMP:
-                // Jump execution - RARE PATH
-                {
-                    const uint16_t addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
-                    reg[CpuReg::PCL] = addr & 0xFF;
-                    reg[CpuReg::PCH] = (addr >> 8) & 0xFF;
-                }
-                break;
-            case DataOp::INDIRECT_LOW:
-                reg[CpuReg::ABL] = data;
-                break;
-            case DataOp::INDIRECT_HIGH:
-                reg[CpuReg::ABH] = data;
-                // Handle JMP indirect with proper 6502 page boundary bug vs CMOS fix - RARE PATH
-                if (__builtin_expect(opcode == 0x6C && cycle_step == 5, 0)) {
-                    handle_jmp_indirect_bug();
-                }
-                break;
-            case DataOp::STACK_PUSH:
-                handle_stack_push();
-                break;
-            case DataOp::STACK_PULL:
-                handle_stack_pull(data);
-                break;
-            case DataOp::INTERRUPT_VEC:
-                handle_interrupt_vector(data);
-                break;
-            case DataOp::TEMP_STORE:
-                // Store data temporarily for memory modify operations (cycle 2)
-                pending_data = data;
-                break;
-            case DataOp::TEMP_MODIFY:
-                // Memory modify operations: Execute ALU operation NOW to compute result
-                // The result must be available immediately for the memory write in this cycle
-                if (__builtin_expect(cycle_step > 0, 1)) {
-                    const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
-                    const AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
-                    if (__builtin_expect(alu_op != AluOp::NOP, 1)) {
-                        // Execute ALU operation immediately using pending_data
-                        alu_ops::execute_alu_operation_fast(reg, alu_op, pending_data);
-                    }
-                }
-                break;
-            case DataOp::STORE_A:
-            case DataOp::STORE_X:
-            case DataOp::STORE_Y:
-            case DataOp::STORE_ZERO:
-                // DEDUPLICATION: Use helper function for all STORE operations
-                pending_data = get_store_register_value(data_op);
-                break;
-            default:
-                // Other operations that don't need special processing
-                break;
-        }
-        
-        // Set pending data operation for next cycle - DIRECT ASSIGNMENT
-        pending_data_op = static_cast<uint8_t>(data_op);
-    }
     
     // Helper function to get register value for STORE operations using enum order mapping
     inline uint8_t get_store_register_value(DataOp data_op) const {
@@ -1226,8 +1144,16 @@ public:
                     }
                     
                     return result;
+                } else if (alu_op == AluOp::INC || alu_op == AluOp::DEC) {
+                    // CRITICAL FIX: Predictive computation for INC/DEC operations
+                    // Get the original value that was read and stored in DL
+                    uint8_t original_value = reg[CpuReg::DL];
+                    uint8_t result = (alu_op == AluOp::INC) ?
+                        ((original_value + 1) & 0xFF) :
+                        ((original_value - 1) & 0xFF);
+                    return result;
                 } else {
-                    // For other ALU operations (INC/DEC), use DL register result
+                    // For other ALU operations, use DL register result
                     return reg[CpuReg::DL];
                 }
             }
@@ -1401,6 +1327,14 @@ public:
                             }
                             
                             return result;
+                        } else if (alu_op == AluOp::INC || alu_op == AluOp::DEC) {
+                            // CRITICAL FIX: Predictive computation for INC/DEC operations
+                            // Get the original value that was read and stored in DL
+                            uint8_t original_value = reg[CpuReg::DL];
+                            uint8_t result = (alu_op == AluOp::INC) ?
+                                ((original_value + 1) & 0xFF) :
+                                ((original_value - 1) & 0xFF);
+                            return result;
                         } else {
                             // For other ALU operations, use DL register result
                             return reg[CpuReg::DL];
@@ -1557,10 +1491,14 @@ public:
                 const bool current_so = (active_pins & BUS_BIT(BUS_SO_BIT)) != 0;
                 
                 // Only process SO pin for non-stack operations and when externally triggered
-                // Skip SO processing for stack operations (PHA/PHP/PLA/PLP), JSR, RTS, RTI, and JMP instructions
+                // Skip SO processing for stack operations (PHA/PHP/PLA/PLP), JSR, RTS, RTI, JMP instructions, and shift/rotate operations
                 if (opcode != 0x48 && opcode != 0x08 && opcode != 0x68 && opcode != 0x28 &&
                     opcode != 0x20 && opcode != 0x60 && opcode != 0x40 &&
-                    opcode != 0x4C && opcode != 0x6C) {
+                    opcode != 0x4C && opcode != 0x6C &&
+                    opcode != 0x06 && opcode != 0x16 && opcode != 0x0E && opcode != 0x1E &&  // ASL
+                    opcode != 0x46 && opcode != 0x56 && opcode != 0x4E && opcode != 0x5E &&  // LSR
+                    opcode != 0x26 && opcode != 0x36 && opcode != 0x2E && opcode != 0x3E &&  // ROL
+                    opcode != 0x66 && opcode != 0x76 && opcode != 0x6E && opcode != 0x7E) {  // ROR
                     // Simple SO pin handling - set overflow flag when pin is low (external signal)
                     if (!current_so) {
                         set_state(STATE_SO_EDGE);
@@ -1724,8 +1662,12 @@ public:
                 opcode == 0x48 || opcode == 0x08 || opcode == 0x68 || opcode == 0x28 ||
                 opcode == 0x20 || opcode == 0x60 || opcode == 0x40 ||
                 opcode == 0x4C || opcode == 0x6C ||
-                opcode == 0x0A || opcode == 0x4A || opcode == 0x2A || opcode == 0x6A) {
-                // Skip SO pin processing for stack operations, interrupt returns, JMP instructions, and accumulator operations - they preserve flags
+                opcode == 0x0A || opcode == 0x4A || opcode == 0x2A || opcode == 0x6A ||
+                opcode == 0x06 || opcode == 0x16 || opcode == 0x0E || opcode == 0x1E ||  // ASL
+                opcode == 0x46 || opcode == 0x56 || opcode == 0x4E || opcode == 0x5E ||  // LSR
+                opcode == 0x26 || opcode == 0x36 || opcode == 0x2E || opcode == 0x3E ||  // ROL
+                opcode == 0x66 || opcode == 0x76 || opcode == 0x6E || opcode == 0x7E) {  // ROR
+                // Skip SO pin processing for stack operations, interrupt returns, JMP instructions, accumulator operations, and memory shift/rotate operations - they preserve flags
                 return;
             }
             

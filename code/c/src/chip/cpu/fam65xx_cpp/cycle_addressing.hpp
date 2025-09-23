@@ -138,10 +138,10 @@ public:
     // Memory modify operations zero page indexed (6 cycles: read address, add index, read data, write old, write new)
     static constexpr cycle_desc_t make_memory_modify_zp_indexed(uint8_t cycle, DataOp index_op, AluOp modify_op) {
         if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-        if (cycle == 2) return CD_MAKE(MemOp::READ_ZP, index_op, AluOp::NOP); // ADDR_ADD_X or ADDR_ADD_Y
-        if (cycle == 3) return CD_MAKE(MemOp::READ_ZP, DataOp::TEMP_STORE, AluOp::NOP);
-        if (cycle == 4) return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_STORE, AluOp::NOP); // Write old value back
-        if (cycle == 5) return CD_MAKE(MemOp::WRITE_ZP, DataOp::TEMP_MODIFY, modify_op); // Write modified value WITHOUT SYNC
+        if (cycle == 2) return CD_MAKE(MemOp::READ_ZP, index_op, AluOp::NOP); // ADDR_ADD_X or ADDR_ADD_Y - dummy read while calculating indexed address
+        if (cycle == 3) return CD_MAKE(MemOp::READ_ZPX, DataOp::TEMP_STORE, AluOp::NOP); // Read from indexed address
+        if (cycle == 4) return CD_MAKE(MemOp::WRITE_ZPX, DataOp::TEMP_STORE, AluOp::NOP); // Write old value back to indexed address
+        if (cycle == 5) return CD_MAKE(MemOp::WRITE_ZPX, DataOp::TEMP_MODIFY, modify_op); // Write modified value to indexed address WITHOUT SYNC
         if (cycle == 6) return CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::NOP); // SYNC on cycle 6
         return make_empty_cycle();
     }
@@ -150,10 +150,10 @@ public:
     static constexpr cycle_desc_t make_memory_modify_abs_indexed(uint8_t cycle, DataOp index_op, AluOp modify_op) {
         if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
         if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
-        if (cycle == 3) return CD_MAKE(MemOp::READ_ABS, index_op, AluOp::NOP); // ADDR_ADD_X or ADDR_ADD_Y
-        if (cycle == 4) return CD_MAKE(MemOp::READ_ABS, DataOp::TEMP_STORE, AluOp::NOP);
-        if (cycle == 5) return CD_MAKE(MemOp::WRITE_ABS, DataOp::TEMP_STORE, AluOp::NOP); // Write old value back
-        if (cycle == 6) return CD_MAKE(MemOp::WRITE_ABS, DataOp::TEMP_MODIFY, modify_op); // Write modified value WITHOUT SYNC
+        if (cycle == 3) return CD_MAKE(MemOp::READ_ABS, index_op, AluOp::NOP); // ADDR_ADD_X or ADDR_ADD_Y - dummy read for indexing
+        if (cycle == 4) return CD_MAKE(MemOp::READ_ABS, DataOp::TEMP_STORE, AluOp::NOP); // Read from final indexed address
+        if (cycle == 5) return CD_MAKE(MemOp::WRITE_ABS, DataOp::TEMP_STORE, AluOp::NOP); // Write old value back to indexed address
+        if (cycle == 6) return CD_MAKE(MemOp::WRITE_ABS, DataOp::TEMP_MODIFY, modify_op); // Write modified value to indexed address WITHOUT SYNC
         if (cycle == 7) return CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::NOP); // SYNC on cycle 7
         return make_empty_cycle();
     }
