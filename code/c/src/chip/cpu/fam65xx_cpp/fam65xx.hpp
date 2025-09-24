@@ -6,6 +6,7 @@
 #include "alu_operations.hpp"
 #include "memory_operations.hpp"
 #include "cycle_table_gen.hpp"
+#include "unified_helpers.hpp"
 #include "../../../core/system_lines.h"
 
 namespace fam65xx_cpp {
@@ -131,30 +132,30 @@ public:
         irq_sources = 0;             // No IRQ sources active
     }
     
-    // Execute one CPU cycle
-    inline bus_state_t cycle_tick(bus_state_t bus_state) {
+    // Execute one CPU cycle - HOT PATH OPTIMIZED
+    HOT_PATH inline bus_state_t cycle_tick(bus_state_t bus_state) {
         
         // Process input control lines first (inlined for hot path)
         bus_state = process_input_pins(bus_state);
         
         // Handle RDY line - variant-specific behavior
-        if (__builtin_expect(!(bus_state & BUS_BIT(BUS_RDY_BIT)), 0)) {
+        if (UNLIKELY(!(bus_state & BUS_BIT(BUS_RDY_BIT)))) {
             bus_state = handle_rdy_wait(bus_state);
-            if (__builtin_expect(state_flags & STATE_RDY_WAIT, 0)) {
+            if (UNLIKELY(state_flags & STATE_RDY_WAIT)) {
                 return bus_state; // Skip this cycle
             }
         }
         
         // Check if we're in an interrupt sequence
-        if (__builtin_expect(state_flags & STATE_INTERRUPT_SEQUENCE, 0)) {
+        if (UNLIKELY(state_flags & STATE_INTERRUPT_SEQUENCE)) {
             return execute_interrupt_cycle(bus_state);
         }
         
         // Batch check critical state flags for speed (including 65C816 extended interrupts)
         const uint32_t critical_states = state_flags & (STATE_RESET_PENDING | STATE_NMI_PENDING | STATE_IRQ_PENDING | STATE_ABORT_PENDING | STATE_COP_PENDING);
-        if (__builtin_expect(critical_states != 0, 0)) {
+        if (UNLIKELY(critical_states != 0)) {
             // Handle reset first (highest priority)
-            if (__builtin_expect(critical_states & STATE_RESET_PENDING, 0)) {
+            if (UNLIKELY(critical_states & STATE_RESET_PENDING)) {
                 return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_RESET);
             }
             
@@ -163,34 +164,34 @@ public:
             
             // ABORT has highest priority among interrupts and can interrupt at any cycle (65C816 only)
             if constexpr (Config::has_abort_pin) {
-                if (__builtin_expect(current_states & STATE_ABORT_PENDING, 0)) {
+                if (UNLIKELY(current_states & STATE_ABORT_PENDING)) {
                     return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_ABORT);
                 }
             }
             
             // Handle other interrupts only at instruction boundaries for proper timing
-            if (__builtin_expect(cycle_step == 0, 0)) {
+            if (UNLIKELY(cycle_step == 0)) {
                 // NMI has next highest priority among interrupts and is non-maskable
-                if (__builtin_expect(current_states & STATE_NMI_PENDING, 0)) {
+                if (UNLIKELY(current_states & STATE_NMI_PENDING)) {
                     // Clear the NMI edge flag when servicing the interrupt
                     state_flags &= ~STATE_NMI_EDGE; // Direct bit clear for speed
                     return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_NMI);
                 }
                 
                 // COP has priority over IRQ (65C816 software interrupt)
-                if (__builtin_expect(current_states & STATE_COP_PENDING, 0)) {
+                if (UNLIKELY(current_states & STATE_COP_PENDING)) {
                     return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_COP);
                 }
                 
                 // IRQ has lowest priority and is maskable - check I flag synchronously
-                else if (__builtin_expect((current_states & STATE_IRQ_PENDING) &&
-                          !(reg[static_cast<uint8_t>(CpuReg::P)] & P_IRQ_DIS), 0)) {
+                else if (UNLIKELY((current_states & STATE_IRQ_PENDING) &&
+                          !(reg[static_cast<uint8_t>(CpuReg::P)] & P_IRQ_DIS))) {
                     return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_IRQ);
                 }
             }
         }
         
-        // Execute normal instruction cycle
+        // Execute normal instruction cycle - HOT PATH
         bus_state = execute_cycle(bus_state);
         
         // Process output control lines
@@ -358,24 +359,20 @@ public:
         return bus_state;
     }
     
-    // Execute one instruction cycle
-    inline bus_state_t execute_cycle(bus_state_t bus_state) {
+    // Execute one instruction cycle - HOT PATH OPTIMIZED
+    HOT_PATH inline bus_state_t execute_cycle(bus_state_t bus_state) {
         
-        // Fetch opcode on cycle 0
-        if (cycle_step == 0) {
-            opcode = BUS_GET_DATA(bus_state);
+        // Fetch opcode on cycle 0 - MOST COMMON PATH
+        if (LIKELY(cycle_step == 0)) {
+            opcode = get_bus_data_unified(bus_state);
             cycle_step = 1;
             set_state(STATE_SYNC_NEXT);
             
-            // CRITICAL FIX: Increment PC after opcode fetch
-            // The opcode fetch must increment PC so that cycle 1 reads the next byte
-            const uint16_t pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
-            const uint16_t new_pc = (pc + 1) & 0xFFFF;
-            reg[CpuReg::PCL] = new_pc & 0xFF;
-            reg[CpuReg::PCH] = (new_pc >> 8) & 0xFF;
+            // OPTIMIZED: Use fast PC increment helper
+            increment_pc_unified(reg);
             
             // Special case: BRK instruction ($00) triggers software interrupt
-            if (opcode == 0x00) {
+            if (UNLIKELY(opcode == 0x00)) {
                 // BRK should start interrupt sequence immediately after opcode fetch
                 // Use special BRK virtual opcode to set B flag correctly
                 return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_BRK);
@@ -383,7 +380,7 @@ public:
             
             // Special case: COP instruction ($02) triggers co-processor interrupt (65C816)
             if constexpr (Config::has_abort_pin) { // 65C816 has COP instruction
-                if (opcode == 0x02) {
+                if (UNLIKELY(opcode == 0x02)) {
                     // COP should start interrupt sequence immediately after opcode fetch
                     return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_COP);
                 }
@@ -593,10 +590,8 @@ public:
             // CRITICAL FIX: Set N and Z flags for load instructions
             // Load instructions always set N/Z flags based on the loaded value
             // Preserve all other flags, only modify N and Z
-            // PERFORMANCE: Use direct bit manipulation instead of conditional operations
-            reg[CpuReg::P] = (reg[CpuReg::P] & ~(P_NEGATIVE | P_ZERO)) |
-                            (data & P_NEGATIVE) |
-                            ((data == 0) << 1);
+            // PERFORMANCE: Use optimized N/Z flag setting
+            set_nz_flags_unified(reg, data);
         } else {
             switch (static_cast<DataOp>(data_op)) {
                 case DataOp::ALU:
@@ -933,9 +928,7 @@ public:
             case 0x68: // PLA - Pull Accumulator
                 reg[CpuReg::A] = data;
                 // PLA sets N and Z flags based on the pulled value
-                reg[CpuReg::P] = (reg[CpuReg::P] & ~(P_NEGATIVE | P_ZERO)) |
-                                (data & P_NEGATIVE) |
-                                ((data == 0) << 1);
+                set_nz_flags_unified(reg, data);
                 break;
             case 0x40: // RTI - Return from Interrupt
                 if (cycle_step == 3) {
@@ -1425,14 +1418,14 @@ public:
         return (reg[CpuReg::P] & P_IRQ_DIS) != 0;
     }
     
-    // BRANCH ELIMINATION: Branchless IRQ pending state update using bit manipulation
+    // OPTIMIZED: Branchless IRQ pending state update using bit manipulation
     inline void update_irq_pending_state() {
         // BRANCHLESS: Use boolean arithmetic for conditional state setting
         const bool irq_line_active = get_state(STATE_IRQ_LINE);
         const bool irq_not_masked = !is_irq_masked();
         const bool should_set_pending = irq_line_active & irq_not_masked;
         
-        // BRANCHLESS: Set or clear IRQ pending state using conditional bit manipulation
+        // OPTIMIZED: Use performance helper for branchless flag setting
         set_state_conditional(STATE_IRQ_PENDING, should_set_pending);
     }
     
