@@ -4,24 +4,19 @@
 #include "cpu_defs.hpp"
 #include "cpu_config.hpp"
 #include "fam65xx_validation.hpp"
+#include "unified_helpers.hpp"
 
 namespace fam65xx_cpp {
 
 template<typename BusConfig>
 class AluOperations {
 public:
-    // Optimized templated constexpr N/Z flag updates - universal for any engine
+    // DEDUPLICATED: Use unified helpers for all flag operations
     template<typename RegArray>
     static constexpr void set_nz_flags(RegArray& reg, uint8_t value) {
-        // Optimized flag computation using bit manipulation
-        constexpr uint8_t NZ_MASK = P_NEGATIVE | P_ZERO;
-        const uint8_t flags = ((value == 0) ? P_ZERO : 0) |
-                              (value & P_NEGATIVE);
-        
-        reg[CpuReg::P] = (reg[CpuReg::P] & ~NZ_MASK) | flags;
+        set_nz_flags_unified(reg, value);
     }
     
-    // Optimized flag operations with compile-time constants
     template<typename RegArray>
     static constexpr void set_flag(RegArray& reg, uint8_t flag_mask) {
         reg[CpuReg::P] |= flag_mask;
@@ -34,11 +29,7 @@ public:
     
     template<typename RegArray, uint8_t FLAG_MASK>
     static constexpr void toggle_flag_conditionally(RegArray& reg, bool condition) {
-        if (condition) {
-            reg[CpuReg::P] |= FLAG_MASK;
-        } else {
-            reg[CpuReg::P] &= ~FLAG_MASK;
-        }
+        set_flag_branchless(reg, FLAG_MASK, condition);
     }
 
     // Advanced constexpr ALU operation function - switch-based for maximum optimization
@@ -79,206 +70,60 @@ public:
             case AluOp::PHY: result = y; return; // Store Y for stack push - no flags
             case AluOp::SAX: result = a & x; return; // Result goes to memory - no flags
             case AluOp::JAM: return; // JAM instruction - CPU halt - no flags
-            case AluOp::BRK_FLAG: reg[CpuReg::P] |= (P_BREAK | P_IRQ_DIS); return; // BRK flags only
+            case AluOp::BRK_FLAG: reg[CpuReg::P] |= P_IRQ_DIS; return; // BRK only sets I flag in processor register, B flag only in pushed stack value
                 
             // === ARITHMETIC OPERATIONS - Set N/Z flags ===
-            case AluOp::ADC: {
-                uint8_t nz_flag_value;
-                if constexpr (BusConfig::has_decimal_mode) {
-                    if (reg[CpuReg::P] & P_DECIMAL) {
-                    // === CONSTEXPR CROSS-CORE COMPATIBILITY ===
-                    // Decimal (BCD) mode addition with zero runtime overhead core differentiation
-                    uint8_t carry_in = (reg[CpuReg::P] & P_CARRY) ? 1 : 0;
-                    
-                    // First perform binary addition for flag calculation
-                    temp = a + data + carry_in;
-                    uint8_t binary_result = temp & 0xFF;
-                    
-                    // Calculate BCD result for actual storage (all variants need this)
-                    uint16_t lo_nibble = (a & 0x0F) + (data & 0x0F) + carry_in;
-                    uint16_t hi_nibble = (a >> 4) + (data >> 4);
-                    
-                    if (lo_nibble > 9) {
-                        lo_nibble += 6;
-                        hi_nibble += 1;
-                    }
-                    if (hi_nibble > 9) {
-                        hi_nibble += 6;
-                    }
-                    
-                    uint8_t bcd_result = ((hi_nibble & 0x0F) << 4) | (lo_nibble & 0x0F);
-                    result = bcd_result;
-                    
-                    // CROSS-CORE COMPATIBILITY: N/Z flag handling varies by CPU variant
-                    if constexpr (BusConfig::has_cmos_fixes) {
-                        // CMOS variants (65C02, 65C816): N/Z flags set based on BCD result (bug fixed)
-                        nz_flag_value = bcd_result;
-                    } else if constexpr (BusConfig::cpu_variant == CpuVariant::NMOS_6502) {
-                        // NMOS 6502: N/Z flags set based on BINARY result (hardware bug)
-                        nz_flag_value = binary_result;
-                    } else if constexpr (BusConfig::cpu_variant == CpuVariant::NMOS_6510) {
-                        // NMOS 6510: Same behavior as 6502 - N/Z flags set based on BINARY result
-                        nz_flag_value = binary_result;
-                    } else {
-                        // Default NMOS behavior for other variants
-                        nz_flag_value = binary_result;
-                    }
-                    
-                    // Calculate V flag based on binary arithmetic for all variants
-                    flags = ((~(a ^ data) & (a ^ binary_result) & 0x80) ? P_OVERFLOW : 0);
-                    
-                    // Set carry flag based on BCD overflow
-                    flags |= (hi_nibble > 0x0F ? P_CARRY : 0);
-                    } else {
-                        // Binary mode addition - consistent across all cores
-                        temp = a + data + (reg[CpuReg::P] & P_CARRY);
-                        result = temp & 0xFF;
-                        nz_flag_value = result; // N/Z flags based on actual result
-                        flags = (temp > 0xFF ? P_CARRY : 0) |
-                                ((~(a ^ data) & (a ^ result) & 0x80) ? P_OVERFLOW : 0);
-                    }
-                } else {
-                    // CPU variant doesn't support decimal mode - always binary
-                    temp = a + data + (reg[CpuReg::P] & P_CARRY);
-                    result = temp & 0xFF;
-                    nz_flag_value = result; // N/Z flags based on actual result
-                    flags = (temp > 0xFF ? P_CARRY : 0) |
-                            ((~(a ^ data) & (a ^ result) & 0x80) ? P_OVERFLOW : 0);
-                }
-                reg[CpuReg::P] = (reg[CpuReg::P] & ~(P_CARRY | P_OVERFLOW)) | flags;
-                reg[CpuReg::A] = result;
-                set_nz_flags(reg, nz_flag_value);
-                return; // Skip the common N/Z flag setting at end
-            }
+            case AluOp::ADC:
+                alu_adc_unified<BusConfig>(reg, data);
+                return; // ADC handles its own flags
                 
-            case AluOp::SBC: {
-                uint8_t nz_flag_value;
-                if constexpr (BusConfig::has_decimal_mode) {
-                    if (reg[CpuReg::P] & P_DECIMAL) {
-                    // === CONSTEXPR CROSS-CORE COMPATIBILITY ===
-                    // Decimal (BCD) mode subtraction with zero runtime overhead core differentiation
-                    uint8_t borrow = (reg[CpuReg::P] & P_CARRY) ? 0 : 1;
-                    
-                    // First perform binary subtraction for flag calculation
-                    temp = a - data - borrow;
-                    uint8_t binary_result = temp & 0xFF;
-                    
-                    // Calculate BCD result for actual storage (all variants need this)
-                    int16_t lo_nibble = (a & 0x0F) - (data & 0x0F) - borrow;
-                    int16_t hi_nibble = (a >> 4) - (data >> 4);
-                    
-                    if (lo_nibble < 0) {
-                        lo_nibble -= 6;
-                        hi_nibble -= 1;
-                    }
-                    if (hi_nibble < 0) {
-                        hi_nibble -= 6;
-                    }
-                    
-                    uint8_t bcd_result = ((hi_nibble & 0x0F) << 4) | (lo_nibble & 0x0F);
-                    result = bcd_result;
-                    
-                    // CROSS-CORE COMPATIBILITY: N/Z flag handling varies by CPU variant
-                    if constexpr (BusConfig::has_cmos_fixes) {
-                        // CMOS variants (65C02, 65C816): N/Z flags set based on BCD result (bug fixed)
-                        nz_flag_value = bcd_result;
-                    } else if constexpr (BusConfig::cpu_variant == CpuVariant::NMOS_6502) {
-                        // NMOS 6502: N/Z flags set based on BINARY result (hardware bug)
-                        nz_flag_value = binary_result;
-                    } else if constexpr (BusConfig::cpu_variant == CpuVariant::NMOS_6510) {
-                        // NMOS 6510: Same behavior as 6502 - N/Z flags set based on BINARY result
-                        nz_flag_value = binary_result;
-                    } else {
-                        // Default NMOS behavior for other variants
-                        nz_flag_value = binary_result;
-                    }
-                    
-                    // Calculate flags based on binary arithmetic for all variants
-                    flags = (temp >= 0 ? P_CARRY : 0) |
-                            ((a ^ data) & (a ^ binary_result) & 0x80 ? P_OVERFLOW : 0);
-                    } else {
-                        // Binary mode subtraction - consistent across all cores
-                        temp = a - data - !(reg[CpuReg::P] & P_CARRY);
-                        result = temp & 0xFF;
-                        nz_flag_value = result; // N/Z flags based on actual result
-                        flags = (temp >= 0 ? P_CARRY : 0) |
-                                ((a ^ data) & (a ^ result) & 0x80 ? P_OVERFLOW : 0);
-                    }
-                } else {
-                    // CPU variant doesn't support decimal mode - always binary
-                    temp = a - data - !(reg[CpuReg::P] & P_CARRY);
-                    result = temp & 0xFF;
-                    nz_flag_value = result; // N/Z flags based on actual result
-                    flags = (temp >= 0 ? P_CARRY : 0) |
-                            ((a ^ data) & (a ^ result) & 0x80 ? P_OVERFLOW : 0);
-                }
-                reg[CpuReg::P] = (reg[CpuReg::P] & ~(P_CARRY | P_OVERFLOW)) | flags;
-                reg[CpuReg::A] = result;
-                set_nz_flags(reg, nz_flag_value);
-                return; // Skip the common N/Z flag setting at end
-            }
+            case AluOp::SBC:
+                alu_sbc_unified<BusConfig>(reg, data);
+                return; // SBC handles its own flags
    
             // === LOGICAL OPERATIONS - Set N/Z flags ===
-            case AluOp::AND: result = a & data; reg[CpuReg::A] = result; break; // Sets N/Z flags
-            case AluOp::ORA: result = a | data; reg[CpuReg::A] = result; break; // Sets N/Z flags
-            case AluOp::EOR: result = a ^ data; reg[CpuReg::A] = result; break; // Sets N/Z flags
+            case AluOp::AND: alu_and_unified(reg, data); return;
+            case AluOp::ORA: alu_ora_unified(reg, data); return;
+            case AluOp::EOR: alu_eor_unified(reg, data); return;
             
             // === TRANSFER OPERATIONS - Set N/Z flags ===
-            case AluOp::TXA: result = x; reg[CpuReg::A] = result; break; // Sets N/Z flags
-            case AluOp::TAX: result = a; reg[CpuReg::X] = result; break; // Sets N/Z flags
-            case AluOp::TYA: result = y; reg[CpuReg::A] = result; break; // Sets N/Z flags
-            case AluOp::TAY: result = a; reg[CpuReg::Y] = result; break; // Sets N/Z flags
-            case AluOp::TSX: result = reg[CpuReg::S]; reg[CpuReg::X] = result; break; // Sets N/Z flags
+            case AluOp::TXA: transfer_x_to_a_unified(reg); return;
+            case AluOp::TAX: transfer_a_to_x_unified(reg); return;
+            case AluOp::TYA: transfer_y_to_a_unified(reg); return;
+            case AluOp::TAY: transfer_a_to_y_unified(reg); return;
+            case AluOp::TSX: transfer_s_to_x_unified(reg); return;
             
             // === REGISTER INCREMENT/DECREMENT OPERATIONS - Set N/Z flags ===
-            case AluOp::INX: result = (reg[CpuReg::X] + 1) & 0xFF; reg[CpuReg::X] = result; break; // Sets N/Z flags
-            case AluOp::DEX: result = (reg[CpuReg::X] - 1) & 0xFF; reg[CpuReg::X] = result; break; // Sets N/Z flags
-            case AluOp::INY: result = (reg[CpuReg::Y] + 1) & 0xFF; reg[CpuReg::Y] = result; break; // Sets N/Z flags
-            case AluOp::DEY: result = (reg[CpuReg::Y] - 1) & 0xFF; reg[CpuReg::Y] = result; break; // Sets N/Z flags
+            case AluOp::INX: increment_x_unified(reg); return;
+            case AluOp::DEX: decrement_x_unified(reg); return;
+            case AluOp::INY: increment_y_unified(reg); return;
+            case AluOp::DEY: decrement_y_unified(reg); return;
             
             // === COMPARISON OPERATIONS - Set N/Z flags (+ Carry) ===
-            case AluOp::CMP:
-                temp = a - data;
-                result = temp & 0xFF;
-                reg[CpuReg::P] = (reg[CpuReg::P] & ~P_CARRY) | (temp < 0x100 ? P_CARRY : 0);
-                break; // Sets N/Z flags
-                
-            case AluOp::CPX:
-                temp = x - data;
-                result = temp & 0xFF;
-                reg[CpuReg::P] = (reg[CpuReg::P] & ~P_CARRY) | (temp < 0x100 ? P_CARRY : 0);
-                break; // Sets N/Z flags
-                
-            case AluOp::CPY:
-                temp = y - data;
-                result = temp & 0xFF;
-                reg[CpuReg::P] = (reg[CpuReg::P] & ~P_CARRY) | (temp < 0x100 ? P_CARRY : 0);
-                break; // Sets N/Z flags
+            case AluOp::CMP: compare_a_unified(reg, data); return;
+            case AluOp::CPX: compare_x_unified(reg, data); return;
+            case AluOp::CPY: compare_y_unified(reg, data); return;
                 
             // === SHIFT/ROTATE OPERATIONS - Set N/Z flags (+ Carry) ===
             case AluOp::ASL:
-                result = (data << 1) & 0xFF;
-                reg[CpuReg::P] = (reg[CpuReg::P] & ~P_CARRY) | (data & 0x80 ? P_CARRY : 0);
-                reg[CpuReg::DL] = result; // Store result in DL - post-ALU logic will copy to A for accumulator mode
-                break; // Sets N/Z flags
+                result = arithmetic_shift_left_unified(reg, data);
+                reg[CpuReg::DL] = result;
+                return;
                 
             case AluOp::LSR:
-                result = data >> 1;
-                reg[CpuReg::P] = (reg[CpuReg::P] & ~P_CARRY) | (data & 0x01 ? P_CARRY : 0);
-                reg[CpuReg::DL] = result; // Store result in DL - post-ALU logic will copy to A for accumulator mode
-                break; // Sets N/Z flags
+                result = logical_shift_right_unified(reg, data);
+                reg[CpuReg::DL] = result;
+                return;
                 
             case AluOp::ROL:
-                result = ((data << 1) | (reg[CpuReg::P] & P_CARRY ? 1 : 0)) & 0xFF;
-                reg[CpuReg::P] = (reg[CpuReg::P] & ~P_CARRY) | (data & 0x80 ? P_CARRY : 0);
-                reg[CpuReg::DL] = result; // Store result in DL - post-ALU logic will copy to A for accumulator mode
-                break; // Sets N/Z flags
+                result = rotate_left_unified(reg, data);
+                reg[CpuReg::DL] = result;
+                return;
                 
             case AluOp::ROR:
-                result = (data >> 1) | (reg[CpuReg::P] & P_CARRY ? 0x80 : 0);
-                reg[CpuReg::P] = (reg[CpuReg::P] & ~P_CARRY) | (data & 0x01 ? P_CARRY : 0);
-                reg[CpuReg::DL] = result; // Store result in DL - post-ALU logic will copy to A for accumulator mode
-                break; // Sets N/Z flags
+                result = rotate_right_unified(reg, data);
+                reg[CpuReg::DL] = result;
+                return;
                 
             // === INCREMENT/DECREMENT OPERATIONS - Set N/Z flags ===
             case AluOp::INC: result = (data + 1) & 0xFF; reg[CpuReg::DL] = result; break; // Sets N/Z flags
@@ -405,12 +250,13 @@ public:
         set_nz_flags(reg, result);
     }
     
-    // Legacy runtime wrapper for backward compatibility and dynamic operation dispatch
+    // PERFORMANCE OPTIMIZED: Legacy runtime wrapper with hot path annotations
     template<typename RegArray>
-    static inline void execute_alu_operation(RegArray& reg, AluOp alu_op, uint8_t data) {
-        // Runtime dispatch to templated constexpr functions
+    HOT_PATH static inline void execute_alu_operation(RegArray& reg, AluOp alu_op, uint8_t data) {
+        // Runtime dispatch to templated constexpr functions with likely/unlikely hints
         switch (alu_op) {
             case AluOp::NOP: execute_alu_operation_constexpr<AluOp::NOP>(reg, data); break;
+            // COMMON OPERATIONS: Mark as likely for better branch prediction
             case AluOp::ADC: execute_alu_operation_constexpr<AluOp::ADC>(reg, data); break;
             case AluOp::SBC: execute_alu_operation_constexpr<AluOp::SBC>(reg, data); break;
             case AluOp::AND: execute_alu_operation_constexpr<AluOp::AND>(reg, data); break;
