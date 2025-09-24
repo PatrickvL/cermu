@@ -43,7 +43,7 @@ public:
                 if constexpr (BusConfig::has_cmos_fixes) {
                     return addr::make_branch(Cycle);                // BRA rel (65C02)
                 } else {
-                    return inst::make_nop(Cycle);                   // NOP #imm (illegal on NMOS)
+                    return inst::make_nop_imm(Cycle);               // NOP #imm (illegal on NMOS)
                 }
             case 0x90: return addr::make_branch(Cycle);                // BCC rel
             case 0xA0: return inst::make_ldy_imm(Cycle);               // LDY #imm
@@ -138,18 +138,18 @@ public:
                 }
             case 0x82:
                 if constexpr (BusConfig::has_cmos_fixes) {
-                    return inst::make_nop(Cycle);                   // Reserved for future use (65C02)
+                    return inst::make_nop_imm(Cycle);               // Reserved for future use (65C02)
                 } else if constexpr (BusConfig::has_illegal_opcodes) {
-                    return inst::make_nop(Cycle);                   // NOP #imm (NMOS illegal)
+                    return inst::make_nop_imm(Cycle);               // NOP #imm (NMOS illegal)
                 } else {
-                    return inst::make_nop(Cycle);                   // NOP (CMOS)
+                    return inst::make_nop_imm(Cycle);               // NOP #imm (CMOS)
                 }
             case 0xC2:
             case 0xE2:
                 if constexpr (BusConfig::has_illegal_opcodes) {
-                    return inst::make_nop(Cycle);                   // NOP #imm (NMOS illegal)
+                    return inst::make_nop_imm(Cycle);               // NOP #imm (NMOS illegal)
                 } else {
-                    return inst::make_nop(Cycle);                   // NOP (CMOS)
+                    return inst::make_nop_imm(Cycle);               // NOP #imm (CMOS)
                 }
             case 0xA2: return inst::make_ldx_imm(Cycle);               // LDX #imm (all variants)
 
@@ -299,7 +299,7 @@ public:
                 if constexpr (BusConfig::has_cmos_fixes) {
                     return inst::make_bit_imm(Cycle);               // BIT #imm (65C02)
                 } else {
-                    return inst::make_nop(Cycle);                   // NOP #imm (illegal)
+                    return inst::make_nop_imm(Cycle);               // NOP #imm (illegal)
                 }
             case 0x99: return addr::make_absolute_indexed_write(Cycle, DataOp::ADDR_ADD_Y, DataOp::STORE_A); // STA abs,Y
             case 0xA9: return inst::make_lda_imm(Cycle);               // LDA #imm
