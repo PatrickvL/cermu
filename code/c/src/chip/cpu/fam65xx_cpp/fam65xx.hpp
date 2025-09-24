@@ -578,10 +578,12 @@ public:
     // Execute data operation
     inline void execute_data_operation(uint8_t data_op, uint8_t data) {
         
-        
-        // Store data for potential ALU use
-        reg[CpuReg::DL] = data;
-        
+        // Store data for potential ALU use for register loads and other operations (but not NOP)
+        if (static_cast<DataOp>(data_op) != DataOp::NOP) {
+            reg[CpuReg::DL] = data;
+            reg[CpuReg::DL] = data;
+        }
+                    
         // Check if data_op corresponds to a direct register load (LOAD_A=0, LOAD_X=1, LOAD_Y=2 only)
         // All other operations should use switch statement
         if (data_op <= static_cast<uint8_t>(DataOp::LOAD_Y)) {
@@ -746,6 +748,9 @@ public:
                         reg[CpuReg::ABL] = indexed_addr & 0xFF;
                         reg[CpuReg::ABH] = (indexed_addr >> 8) & 0xFF;
                     }
+                    break;
+                case DataOp::NOP:
+                    // NOP data operation: do absolutely nothing
                     break;
                 default:
                     // Handle store operations and other cases that don't need special processing
@@ -1491,14 +1496,21 @@ public:
                 const bool current_so = (active_pins & BUS_BIT(BUS_SO_BIT)) != 0;
                 
                 // Only process SO pin for non-stack operations and when externally triggered
-                // Skip SO processing for stack operations (PHA/PHP/PLA/PLP), JSR, RTS, RTI, JMP instructions, and shift/rotate operations
+                // Skip SO processing for stack operations (PHA/PHP/PLA/PLP), JSR, RTS, RTI, JMP instructions, shift/rotate operations, and NOP instructions
                 if (opcode != 0x48 && opcode != 0x08 && opcode != 0x68 && opcode != 0x28 &&
                     opcode != 0x20 && opcode != 0x60 && opcode != 0x40 &&
                     opcode != 0x4C && opcode != 0x6C &&
                     opcode != 0x06 && opcode != 0x16 && opcode != 0x0E && opcode != 0x1E &&  // ASL
                     opcode != 0x46 && opcode != 0x56 && opcode != 0x4E && opcode != 0x5E &&  // LSR
                     opcode != 0x26 && opcode != 0x36 && opcode != 0x2E && opcode != 0x3E &&  // ROL
-                    opcode != 0x66 && opcode != 0x76 && opcode != 0x6E && opcode != 0x7E) {  // ROR
+                    opcode != 0x66 && opcode != 0x76 && opcode != 0x6E && opcode != 0x7E &&  // ROR
+                    // NOP instructions - all variants should preserve flags
+                    opcode != 0xEA && opcode != 0x1A && opcode != 0x3A && opcode != 0x5A && opcode != 0x7A && opcode != 0xDA && opcode != 0xFA &&  // Single-byte NOPs
+                    opcode != 0x80 && opcode != 0x82 && opcode != 0x89 && opcode != 0xC2 && opcode != 0xE2 &&  // Immediate NOPs
+                    opcode != 0x04 && opcode != 0x44 && opcode != 0x64 &&  // Zero page NOPs
+                    opcode != 0x0C &&  // Absolute NOP
+                    opcode != 0x14 && opcode != 0x34 && opcode != 0x54 && opcode != 0x74 && opcode != 0xD4 && opcode != 0xF4 &&  // Zero page,X NOPs
+                    opcode != 0x1C && opcode != 0x3C && opcode != 0x5C && opcode != 0x7C && opcode != 0xDC && opcode != 0xFC) {  // Absolute,X NOPs
                     // Simple SO pin handling - set overflow flag when pin is low (external signal)
                     if (!current_so) {
                         set_state(STATE_SO_EDGE);
@@ -1666,8 +1678,15 @@ public:
                 opcode == 0x06 || opcode == 0x16 || opcode == 0x0E || opcode == 0x1E ||  // ASL
                 opcode == 0x46 || opcode == 0x56 || opcode == 0x4E || opcode == 0x5E ||  // LSR
                 opcode == 0x26 || opcode == 0x36 || opcode == 0x2E || opcode == 0x3E ||  // ROL
-                opcode == 0x66 || opcode == 0x76 || opcode == 0x6E || opcode == 0x7E) {  // ROR
-                // Skip SO pin processing for stack operations, interrupt returns, JMP instructions, accumulator operations, and memory shift/rotate operations - they preserve flags
+                opcode == 0x66 || opcode == 0x76 || opcode == 0x6E || opcode == 0x7E ||  // ROR
+                // NOP instructions - all variants should preserve flags
+                opcode == 0xEA || opcode == 0x1A || opcode == 0x3A || opcode == 0x5A || opcode == 0x7A || opcode == 0xDA || opcode == 0xFA ||  // Single-byte NOPs
+                opcode == 0x80 || opcode == 0x82 || opcode == 0x89 || opcode == 0xC2 || opcode == 0xE2 ||  // Immediate NOPs
+                opcode == 0x04 || opcode == 0x44 || opcode == 0x64 ||  // Zero page NOPs
+                opcode == 0x0C ||  // Absolute NOP
+                opcode == 0x14 || opcode == 0x34 || opcode == 0x54 || opcode == 0x74 || opcode == 0xD4 || opcode == 0xF4 ||  // Zero page,X NOPs
+                opcode == 0x1C || opcode == 0x3C || opcode == 0x5C || opcode == 0x7C || opcode == 0xDC || opcode == 0xFC) {  // Absolute,X NOPs
+                // Skip SO pin processing for stack operations, interrupt returns, JMP instructions, accumulator operations, memory shift/rotate operations, and NOP instructions - they preserve flags
                 return;
             }
             

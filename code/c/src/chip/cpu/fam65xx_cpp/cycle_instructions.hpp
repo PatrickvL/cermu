@@ -33,6 +33,12 @@ public:
         return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::NOP) : addr::make_empty_cycle();
     }
     
+    // Immediate mode NOP (illegal opcodes like 0x80, 0x82, 0x89, 0xC2, 0xE2)
+    // 2-byte instruction: reads immediate operand but ignores it
+    static constexpr cycle_desc_t make_nop_imm(uint8_t cycle = 1) {
+        return (cycle == 1) ? CD_MAKE_SYNC(MemOp::READ_PC_INC, DataOp::NOP, AluOp::NOP) : addr::make_empty_cycle();
+    }
+    
     // Transfer operations - direct SYNC implementation to avoid helper issues
     static constexpr cycle_desc_t make_txa(uint8_t cycle = 1) {
         return (cycle == 1) ? CD_MAKE_SYNC(MemOp::NOP, DataOp::NOP, AluOp::TXA) : addr::make_empty_cycle();
