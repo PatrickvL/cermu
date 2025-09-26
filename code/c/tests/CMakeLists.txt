@@ -157,6 +157,15 @@ if(NOT WIN32 AND NOT MSVC)
     target_link_libraries(unified_processor_test m)
 endif()
 
+# Simple Unified Processor Test - Working version without template issues
+add_executable(unified_processor_test_simple
+    ../unified_processor_test_simple.cpp
+)
+# Link math library if needed
+if(NOT WIN32 AND NOT MSVC)
+    target_link_libraries(unified_processor_test_simple m)
+endif()
+
 
 # fam65xx_cpp Interrupt Handling Tests - Advanced interrupt behavior validation
 add_executable(nmi_edge_detection_test
