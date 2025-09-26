@@ -2,6 +2,7 @@
 #define CPU_DEFS_HPP
 
 #include <cstdint>
+#include <cstddef>
 
 // CPU register indices - type-safe enum
 enum class CpuReg : uint8_t {
