@@ -145,6 +145,19 @@ if(NOT WIN32 AND NOT MSVC)
     target_link_libraries(fam65xx_cpp_processor_tests_runner m)
 endif()
 
+# Unified Processor Test Framework - Consolidates ALL debug and test programs
+add_executable(unified_processor_test
+    ../unified_processor_test.cpp
+)
+target_include_directories(unified_processor_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
+)
+# Link math library if needed
+if(NOT WIN32 AND NOT MSVC)
+    target_link_libraries(unified_processor_test m)
+endif()
+
+
 # fam65xx_cpp Interrupt Handling Tests - Advanced interrupt behavior validation
 add_executable(nmi_edge_detection_test
     nmi_edge_detection_test.cpp

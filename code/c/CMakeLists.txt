@@ -152,32 +152,32 @@ set(CHIP_SOURCES
     src/chip/cpu/mos6510/mos6510.cpp
 )
 
-# Conditionally add cycle-accurate MOS6510 sources
-if(C64_ENABLE_CYCLE_CPU)
-    set(CYCLE_CPU_SOURCES
-        src/chip/cpu/mos6510_cycle/cpu_config.c
-        src/chip/cpu/mos6510_cycle/deferred_ops.c
-        src/chip/cpu/mos6510_cycle/instruction_table.c
-        src/chip/cpu/mos6510_cycle/internal_bus.c
-        src/chip/cpu/mos6510_cycle/interrupt_recognition.c
-        src/chip/cpu/mos6510_cycle/mos6510_registers.c
-        src/chip/cpu/mos6510_cycle/mos6510_state.c
-        src/chip/cpu/mos6510_cycle/mos6510_tick.c
-        src/chip/cpu/mos6510_cycle/nmi_skipping.c
-        src/chip/cpu/mos6510_cycle/pipeline.c
-        src/chip/cpu/mos6510_cycle/pla_lookup.c
-        src/chip/cpu/mos6510_cycle/timing_states.c
-    )
-    list(APPEND CHIP_SOURCES ${CYCLE_CPU_SOURCES})
-
-    # Relax warnings for cycle core sources only to allow build on MSVC
-    if(MSVC)
-        set_source_files_properties(${CYCLE_CPU_SOURCES} PROPERTIES
-            COMPILE_FLAGS "/WX- /wd4244 /wd4996 /wd4133 /wd4013"
-            COMPILE_DEFINITIONS "_CRT_SECURE_NO_WARNINGS"
-        )
-    endif()
-endif()
+# Conditionally add cycle-accurate MOS6510 sources (DISABLED - sources not available)
+# if(C64_ENABLE_CYCLE_CPU)
+#     set(CYCLE_CPU_SOURCES
+#         src/chip/cpu/mos6510_cycle/cpu_config.c
+#         src/chip/cpu/mos6510_cycle/deferred_ops.c
+#         src/chip/cpu/mos6510_cycle/instruction_table.c
+#         src/chip/cpu/mos6510_cycle/internal_bus.c
+#         src/chip/cpu/mos6510_cycle/interrupt_recognition.c
+#         src/chip/cpu/mos6510_cycle/mos6510_registers.c
+#         src/chip/cpu/mos6510_cycle/mos6510_state.c
+#         src/chip/cpu/mos6510_cycle/mos6510_tick.c
+#         src/chip/cpu/mos6510_cycle/nmi_skipping.c
+#         src/chip/cpu/mos6510_cycle/pipeline.c
+#         src/chip/cpu/mos6510_cycle/pla_lookup.c
+#         src/chip/cpu/mos6510_cycle/timing_states.c
+#     )
+#     list(APPEND CHIP_SOURCES ${CYCLE_CPU_SOURCES})
+#
+#     # Relax warnings for cycle core sources only to allow build on MSVC
+#     if(MSVC)
+#         set_source_files_properties(${CYCLE_CPU_SOURCES} PROPERTIES
+#             COMPILE_FLAGS "/WX- /wd4244 /wd4996 /wd4133 /wd4013"
+#             COMPILE_DEFINITIONS "_CRT_SECURE_NO_WARNINGS"
+#         )
+#     endif()
+# endif()
 
 # Always include other chip sources
 list(APPEND CHIP_SOURCES
