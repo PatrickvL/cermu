@@ -372,7 +372,7 @@ public:
         
         // Template specialization for most common memory operation patterns
         if (LIKELY(mem_op == MemOp::READ_PC_INC && data_op == DataOp::NOP)) {
-            return phi2_execute_cycle_template<MemOp::read_PC_INC, DataOp::NOP>(bus_state);
+            return phi2_execute_cycle_template<MemOp::READ_PC_INC, DataOp::NOP>(bus_state);
         } else if (mem_op == MemOp::READ_ABS && data_op == DataOp::LOAD_A) {
             return phi2_execute_cycle_template<MemOp::READ_ABS, DataOp::LOAD_A>(bus_state);
         } else if (mem_op == MemOp::READ_ABS && data_op == DataOp::ALU) {
