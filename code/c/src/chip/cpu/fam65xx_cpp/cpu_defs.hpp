@@ -106,7 +106,112 @@ public:
     constexpr std::size_t size() const noexcept { return N; }
 };
 
-// Type alias for CPU register array
-using CpuRegisterArray = type_safe_array<uint8_t, static_cast<std::size_t>(CpuReg::COUNT)>;
+// 16-bit CPU register pairs for union-based access (similar to CIA timers)
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+enum class CpuReg16 : uint8_t {
+    PC = static_cast<uint8_t>(CpuReg::PCL) / 2,    // PCL/PCH pair
+    AB = static_cast<uint8_t>(CpuReg::ABL) / 2,    // ABL/ABH pair
+    AD = static_cast<uint8_t>(CpuReg::ADL) / 2,    // ADL/ADH pair
+    COUNT_16 = 7  // Half of 14 registers (rounded up)
+};
+#else
+enum class CpuReg16 : uint8_t {
+    PC = static_cast<uint8_t>(CpuReg::PCH) / 2,    // PCH/PCL pair (big-endian)
+    AB = static_cast<uint8_t>(CpuReg::ABH) / 2,    // ABH/ABL pair (big-endian)
+    AD = static_cast<uint8_t>(CpuReg::ADH) / 2,    // ADH/ADL pair (big-endian)
+    COUNT_16 = 7  // Half of 14 registers (rounded up)
+};
+#endif
+
+// Enhanced type-safe register array with union-based 16-bit access
+template<typename T, std::size_t N>
+class enhanced_register_array {
+private:
+    union {
+        T data[N];
+        uint16_t words[N / 2];
+    };
+    
+public:
+    // 8-bit register access with enum class members directly
+    constexpr T& operator[](CpuReg reg) noexcept {
+        return data[static_cast<std::size_t>(reg)];
+    }
+    
+    constexpr const T& operator[](CpuReg reg) const noexcept {
+        return data[static_cast<std::size_t>(reg)];
+    }
+    
+    // 16-bit register access for register pairs
+    constexpr uint16_t& get_word(CpuReg16 reg16) noexcept {
+        return words[static_cast<std::size_t>(reg16)];
+    }
+    
+    constexpr const uint16_t& get_word(CpuReg16 reg16) const noexcept {
+        return words[static_cast<std::size_t>(reg16)];
+    }
+    
+    // Traditional integer indexing for compatibility
+    constexpr T& operator[](std::size_t index) noexcept {
+        return data[index];
+    }
+    
+    constexpr const T& operator[](std::size_t index) const noexcept {
+        return data[index];
+    }
+    
+    // Iterator support for range-based loops
+    constexpr T* begin() noexcept { return data; }
+    constexpr const T* begin() const noexcept { return data; }
+    constexpr T* end() noexcept { return data + N; }
+    constexpr const T* end() const noexcept { return data + N; }
+    
+    // Size information
+    constexpr std::size_t size() const noexcept { return N; }
+};
+
+// Type alias for enhanced CPU register array with union-based 16-bit access
+using CpuRegisterArray = enhanced_register_array<uint8_t, static_cast<std::size_t>(CpuReg::COUNT)>;
+
+// Inline helper functions for 16-bit CPU register operations (following CIA timer pattern)
+// These provide convenient, endian-safe access to 16-bit register pairs
+
+// Program Counter (PC) helpers
+inline uint16_t get_pc_unified(const CpuRegisterArray& reg) {
+    return reg.get_word(CpuReg16::PC);
+}
+
+inline void set_pc_unified(CpuRegisterArray& reg, uint16_t value) {
+    reg.get_word(CpuReg16::PC) = value;
+}
+
+inline void increment_pc_unified(CpuRegisterArray& reg) {
+    reg.get_word(CpuReg16::PC)++;
+}
+
+// Address Bus (AB) helpers
+inline uint16_t get_ab_unified(const CpuRegisterArray& reg) {
+    return reg.get_word(CpuReg16::AB);
+}
+
+inline void set_ab_unified(CpuRegisterArray& reg, uint16_t value) {
+    reg.get_word(CpuReg16::AB) = value;
+}
+
+// Address Data (AD) helpers
+inline uint16_t get_ad_unified(const CpuRegisterArray& reg) {
+    return reg.get_word(CpuReg16::AD);
+}
+
+inline void set_ad_unified(CpuRegisterArray& reg, uint16_t value) {
+    reg.get_word(CpuReg16::AD) = value;
+}
+
+// Optimized N/Z flag setting helper (extracted from fam65xx.hpp for reuse)
+inline void set_nz_flags_unified(CpuRegisterArray& reg, uint8_t value) {
+    reg[CpuReg::P] = (reg[CpuReg::P] & ~(P_NEGATIVE | P_ZERO)) |
+                     ((value & 0x80) ? P_NEGATIVE : 0) |
+                     (value == 0 ? P_ZERO : 0);
+}
 
 #endif // CPU_DEFS_HPP
