@@ -119,7 +119,7 @@ public:
                 
             default:
                 // Unknown operation - default to PC read
-                pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+                pc = get_pc_unified(reg);
                 BUS_SET_ADDR(bus_state, pc);
                 break;
         }

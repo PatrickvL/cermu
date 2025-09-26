@@ -279,7 +279,7 @@ public:
         // Fetch opcode on cycle 0 - MOST COMMON PATH
         if (LIKELY(cycle_step == 0)) {
             // Use current PC for opcode fetch address
-            uint16_t pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+            uint16_t pc = get_pc_unified(reg);
             BUS_SET_ADDR(bus_state, pc);
             
             // Setup for opcode fetch during next φ1
@@ -508,21 +508,21 @@ public:
         switch (cycle_step) {
             case 3: // Push PCH (high byte of return address)
                 if (opcode == VIRTUAL_OPCODE_BRK || opcode == VIRTUAL_OPCODE_COP) {
-                    uint16_t return_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) + 1;
-                    return (return_addr >> 8) & 0xFF;
+                    // OPTIMIZED: Single-expression carry calculation for PC + 1
+                    return reg[CpuReg::PCH] + ((reg[CpuReg::PCL] == 255) & 1);
                 } else if (opcode == VIRTUAL_OPCODE_ABORT) {
-                    uint16_t abort_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) - 1;
-                    return (abort_addr >> 8) & 0xFF;
+                    // OPTIMIZED: Single-expression borrow calculation for PC - 1
+                    return reg[CpuReg::PCH] - ((reg[CpuReg::PCL] == 0) & 1);
                 } else {
                     return reg[CpuReg::PCH];
                 }
             case 4: // Push PCL (low byte of return address)
                 if (opcode == VIRTUAL_OPCODE_BRK || opcode == VIRTUAL_OPCODE_COP) {
-                    uint16_t return_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) + 1;
-                    return return_addr & 0xFF;
+                    // Direct low byte calculation for PC + 1
+                    return reg[CpuReg::PCL] + 1;
                 } else if (opcode == VIRTUAL_OPCODE_ABORT) {
-                    uint16_t abort_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) - 1;
-                    return abort_addr & 0xFF;
+                    // Direct low byte calculation for PC - 1
+                    return reg[CpuReg::PCL] - 1;
                 } else {
                     return reg[CpuReg::PCL];
                 }
@@ -543,17 +543,14 @@ public:
     HOT_PATH inline bus_state_t phi2_handle_instruction_coordination(bus_state_t bus_state, MemOp mem_op, DataOp data_op) {
         // JSR coordination: Handle stack push operations
         if (opcode == 0x20 && mem_op == MemOp::WRITE_SP_DEC && data_op == DataOp::STACK_PUSH) {
-            // Calculate JSR push data
-            const uint16_t current_pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
-            const uint16_t return_address = current_pc;
-            
+            // Optimized JSR push data calculation - direct register access
             uint8_t push_data = 0;
             switch (cycle_step) {
-                case 3: // Push PCH
-                    push_data = (return_address >> 8) & 0xFF;
+                case 3: // Push PCH - direct high byte access
+                    push_data = reg[CpuReg::PCH];
                     break;
-                case 4: // Push PCL
-                    push_data = return_address & 0xFF;
+                case 4: // Push PCL - direct low byte access
+                    push_data = reg[CpuReg::PCL];
                     break;
                 default:
                     push_data = 0;
@@ -694,30 +691,22 @@ public:
             switch (cycle_step) {
                 case 3: // Push PCH (high byte of return address)
                     if (opcode == VIRTUAL_OPCODE_BRK || opcode == VIRTUAL_OPCODE_COP) {
-                        // For BRK and COP, return address is PC + 2 from original PC
-                        // Since PC was incremented during opcode fetch, we need PC + 1
-                        uint16_t return_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) + 1;
-                        push_data = (return_addr >> 8) & 0xFF;
+                        // OPTIMIZED: Single-expression carry calculation for PC + 1
+                        push_data = reg[CpuReg::PCH] + ((reg[CpuReg::PCL] == 255) & 1);
                     } else if (opcode == VIRTUAL_OPCODE_ABORT) {
-                        // For ABORT, push the current instruction address (PC was incremented during fetch)
-                        // ABORT should return to the aborted instruction, so push PC - 1
-                        uint16_t abort_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) - 1;
-                        push_data = (abort_addr >> 8) & 0xFF;
+                        // OPTIMIZED: Single-expression borrow calculation for PC - 1
+                        push_data = reg[CpuReg::PCH] - ((reg[CpuReg::PCL] == 0) & 1);
                     } else {
                         push_data = reg[CpuReg::PCH];
                     }
                     break;
                 case 4: // Push PCL (low byte of return address)
                     if (opcode == VIRTUAL_OPCODE_BRK || opcode == VIRTUAL_OPCODE_COP) {
-                        // For BRK and COP, return address is PC + 2 from original PC
-                        // Since PC was incremented during opcode fetch, we need PC + 1
-                        uint16_t return_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) + 1;
-                        push_data = return_addr & 0xFF;
+                        // Direct low byte calculation for PC + 1
+                        push_data = reg[CpuReg::PCL] + 1;
                     } else if (opcode == VIRTUAL_OPCODE_ABORT) {
-                        // For ABORT, push the current instruction address (PC was incremented during fetch)
-                        // ABORT should return to the aborted instruction, so push PC - 1
-                        uint16_t abort_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) - 1;
-                        push_data = abort_addr & 0xFF;
+                        // Direct low byte calculation for PC - 1
+                        push_data = reg[CpuReg::PCL] - 1;
                     } else {
                         push_data = reg[CpuReg::PCL];
                     }
@@ -822,10 +811,8 @@ public:
                 case DataOp::JMP:
                     // Execute jump using the address calculated in ABL/ABH
                     {
-                        const uint16_t addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
-                        
-                        reg[CpuReg::PCL] = addr & 0xFF;
-                        reg[CpuReg::PCH] = (addr >> 8) & 0xFF;
+                        const uint16_t addr = get_ab_unified(reg);
+                        set_pc_unified(reg, addr);
                     }
                     break;
                 case DataOp::INDIRECT_LOW:
@@ -835,7 +822,7 @@ public:
                         uint8_t target_low = data;
                         
                         // Get the current indirect pointer address
-                        uint16_t indirect_addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
+                        uint16_t indirect_addr = get_ab_unified(reg);
                         
                         // NMOS 6502 PAGE BOUNDARY BUG IMPLEMENTATION
                         // For JMP indirect, when the indirect pointer's low byte is 0xFF,
@@ -923,20 +910,16 @@ public:
                     // CRITICAL FIX: Add X register to the base address in ABL for indexed addressing
                     // This handles zero page and absolute indexed operations like ASL $nn,X and ASL $nnnn,X
                     {
-                        uint16_t base_addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
-                        uint16_t indexed_addr = (base_addr + reg[CpuReg::X]) & 0xFFFF;
-                        reg[CpuReg::ABL] = indexed_addr & 0xFF;
-                        reg[CpuReg::ABH] = (indexed_addr >> 8) & 0xFF;
+                        uint16_t indexed_addr = (get_ab_unified(reg) + reg[CpuReg::X]) & 0xFFFF;
+                        set_ab_unified(reg, indexed_addr);
                     }
                     break;
                 case DataOp::ADDR_ADD_Y:
                     // CRITICAL FIX: Add Y register to the base address in ABL for indexed addressing
                     // This handles zero page and absolute indexed operations with Y indexing
                     {
-                        uint16_t base_addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
-                        uint16_t indexed_addr = (base_addr + reg[CpuReg::Y]) & 0xFFFF;
-                        reg[CpuReg::ABL] = indexed_addr & 0xFF;
-                        reg[CpuReg::ABH] = (indexed_addr >> 8) & 0xFF;
+                        uint16_t indexed_addr = (get_ab_unified(reg) + reg[CpuReg::Y]) & 0xFFFF;
+                        set_ab_unified(reg, indexed_addr);
                     }
                     break;
                 case DataOp::NOP:
@@ -979,13 +962,12 @@ public:
         if (opcode == 0x80) {
             // BRA is always a simple 2-cycle unconditional branch
             // Calculate target address
-            const uint16_t current_pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+            const uint16_t current_pc = get_pc_unified(reg);
             int16_t signed_offset = static_cast<int8_t>(offset); // Sign extend
             const uint16_t target_pc = current_pc + signed_offset;
 
             // Update PC immediately - BRA doesn't use conditional branch logic
-            reg[CpuReg::PCL] = target_pc & 0xFF;
-            reg[CpuReg::PCH] = (target_pc >> 8) & 0xFF;
+            set_pc_unified(reg, target_pc);
             
             // BRA doesn't set STATE_BRANCH_TAKEN or STATE_PAGE_CROSSED
             // It always executes in exactly 2 cycles regardless of page crossing
@@ -1030,13 +1012,12 @@ public:
         // Branch if condition is met
         if (should_branch) {
             // Calculate branch target address
-            const uint16_t current_pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+            const uint16_t current_pc = get_pc_unified(reg);
             int16_t signed_offset = static_cast<int8_t>(offset); // Sign extend
             const uint16_t target_pc = current_pc + signed_offset;
             
             // Update PC
-            reg[CpuReg::PCL] = target_pc & 0xFF;
-            reg[CpuReg::PCH] = (target_pc >> 8) & 0xFF;
+            set_pc_unified(reg, target_pc);
             
             // Set branch taken flag for cycle timing
             set_state(STATE_BRANCH_TAKEN);
@@ -1084,19 +1065,15 @@ public:
                     push_data = reg[CpuReg::A];
                     break;
                 case 0x20: // JSR - Jump to Subroutine
-                    // JSR pushes the current PC which points to the high byte location
-                    // During cycles 3-4, PC contains the return address to push
-                    {
-                        const uint16_t current_pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
-                        if (cycle_step == 3) {
-                            // Cycle 3: Push PCH of current PC
-                            push_data = (current_pc >> 8) & 0xFF;
-                        } else if (cycle_step == 4) {
-                            // Cycle 4: Push PCL of current PC
-                            push_data = current_pc & 0xFF;
-                        } else {
-                            push_data = 0;
-                        }
+                    // Optimized JSR stack push - direct register access
+                    if (cycle_step == 3) {
+                        // Cycle 3: Push PCH - direct high byte access
+                        push_data = reg[CpuReg::PCH];
+                    } else if (cycle_step == 4) {
+                        // Cycle 4: Push PCL - direct low byte access
+                        push_data = reg[CpuReg::PCL];
+                    } else {
+                        push_data = 0;
                     }
                     break;
                 default:
@@ -1149,8 +1126,7 @@ public:
                     const uint16_t return_pc = pulled_pc + 1;
                     
                     // Set final PC
-                    reg[CpuReg::PCL] = return_pc & 0xFF;
-                    reg[CpuReg::PCH] = (return_pc >> 8) & 0xFF;
+                    set_pc_unified(reg, return_pc);
                 }
                 break;
             default:
@@ -1195,17 +1171,14 @@ public:
     inline uint8_t get_y() const { return reg[CpuReg::Y]; }
     inline uint8_t get_s() const { return reg[CpuReg::S]; }
     inline uint8_t get_p() const { return reg[CpuReg::P]; }
-    inline uint16_t get_pc() const { return (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]; }
+    inline uint16_t get_pc() const { return get_pc_unified(reg); }
     
     inline void set_a(uint8_t val) { reg[CpuReg::A] = val; }
     inline void set_x(uint8_t val) { reg[CpuReg::X] = val; }
     inline void set_y(uint8_t val) { reg[CpuReg::Y] = val; }
     inline void set_s(uint8_t val) { reg[CpuReg::S] = val; }
     inline void set_p(uint8_t val) { reg[CpuReg::P] = val; }
-    inline void set_pc(uint16_t val) {
-        reg[CpuReg::PCL] = val & 0xFF;
-        reg[CpuReg::PCH] = (val >> 8) & 0xFF;
-    }
+    inline void set_pc(uint16_t val) { set_pc_unified(reg, val); }
     
     // === TEST INFRASTRUCTURE API ===
     // Additional methods needed for test harnesses and debugging
@@ -1223,7 +1196,7 @@ public:
         
         if (cycle_step == 0) {
             // Opcode fetch: use current PC
-            return (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+            return get_pc_unified(reg);
         }
         
         // For interrupt sequences, predict the address based on cycle step
@@ -1233,7 +1206,7 @@ public:
             const MemOp mem_op = static_cast<MemOp>(cycle.mem_op);
             
             if (mem_op == MemOp::READ_PC || mem_op == MemOp::READ_PC_INC) {
-                return (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+                return get_pc_unified(reg);
             } else if (mem_op == MemOp::WRITE_SP_DEC || mem_op == MemOp::READ_SP) {
                 return 0x0100 | reg[CpuReg::S];
             } else if (mem_op == MemOp::READ_VECTOR) {
@@ -1261,7 +1234,7 @@ public:
         
         if (mem_op == MemOp::READ_PC || mem_op == MemOp::READ_PC_INC) {
             // PC-based addressing: return current PC for immediate/PC-relative operations
-            return (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+            return get_pc_unified(reg);
         } else if (mem_op == MemOp::WRITE_SP_DEC || mem_op == MemOp::READ_SP || mem_op == MemOp::READ_SP_INC) {
             // Stack addressing: return stack address
             // CRITICAL RTS FIX: Handle READ_SP_INC properly to return incremented stack address
@@ -1277,7 +1250,7 @@ public:
         }
         
         // Normal instruction execution: use calculated address from ABL/ABH
-        return (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
+        return get_ab_unified(reg);
     }
     
     inline bool get_rw() const {
@@ -1358,29 +1331,21 @@ public:
                     switch (cycle_step) {
                         case 3: // Push PCH (high byte of return address)
                             if (opcode == VIRTUAL_OPCODE_BRK || opcode == VIRTUAL_OPCODE_COP) {
-                                // For BRK and COP, return address is PC + 2 from original PC
-                                // Since PC was incremented during opcode fetch, we need PC + 1
-                                uint16_t return_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) + 1;
-                                return (return_addr >> 8) & 0xFF;
+                                // OPTIMIZED: Single-expression carry calculation for PC + 1
+                                return reg[CpuReg::PCH] + ((reg[CpuReg::PCL] == 255) & 1);
                             } else if (opcode == VIRTUAL_OPCODE_ABORT) {
-                                // For ABORT, push the current instruction address (PC was incremented during fetch)
-                                // ABORT should return to the aborted instruction, so push PC - 1
-                                uint16_t abort_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) - 1;
-                                return (abort_addr >> 8) & 0xFF;
+                                // OPTIMIZED: Single-expression borrow calculation for PC - 1
+                                return reg[CpuReg::PCH] - ((reg[CpuReg::PCL] == 0) & 1);
                             } else {
                                 return reg[CpuReg::PCH];
                             }
                         case 4: // Push PCL (low byte of return address)
                             if (opcode == VIRTUAL_OPCODE_BRK || opcode == VIRTUAL_OPCODE_COP) {
-                                // For BRK and COP, return address is PC + 2 from original PC
-                                // Since PC was incremented during opcode fetch, we need PC + 1
-                                uint16_t return_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) + 1;
-                                return return_addr & 0xFF;
+                                // Direct low byte calculation for PC + 1
+                                return reg[CpuReg::PCL] + 1;
                             } else if (opcode == VIRTUAL_OPCODE_ABORT) {
-                                // For ABORT, push the current instruction address (PC was incremented during fetch)
-                                // ABORT should return to the aborted instruction, so push PC - 1
-                                uint16_t abort_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) - 1;
-                                return abort_addr & 0xFF;
+                                // Direct low byte calculation for PC - 1
+                                return reg[CpuReg::PCL] - 1;
                             } else {
                                 return reg[CpuReg::PCL];
                             }
@@ -1450,15 +1415,12 @@ public:
                     case DataOp::STACK_PUSH:
                         // JSR COORDINATION FIX: Handle JSR stack push prediction for get_write_data()
                         if (opcode == 0x20) { // JSR instruction
-                            // Calculate JSR stack push data predictively (same logic as JSR coordination)
-                            const uint16_t current_pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
-                            const uint16_t return_address = current_pc;
-                            
+                            // Optimized JSR stack push data - direct register access
                             switch (cycle_step) {
-                                case 3: // Push PCH (high byte of return address)
-                                    return (return_address >> 8) & 0xFF;
-                                case 4: // Push PCL (low byte of return address)
-                                    return return_address & 0xFF;
+                                case 3: // Push PCH - direct high byte access
+                                    return reg[CpuReg::PCH];
+                                case 4: // Push PCL - direct low byte access
+                                    return reg[CpuReg::PCL];
                                 default:
                                     return 0;
                             }
@@ -1869,27 +1831,26 @@ public:
     
     // Handle JMP indirect page boundary bug/fix
     inline void handle_jmp_indirect_bug() {
-        const uint16_t indirect_addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
+        const uint16_t indirect_addr = get_ab_unified(reg);
         uint16_t target_addr;
         
         if constexpr (Config::has_cmos_fixes) {
             // CMOS fix: JMP ($xxFF) correctly reads from $xxFF and $xx00+1
-            target_addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
+            target_addr = get_ab_unified(reg);
         } else {
             // NMOS bug: JMP ($xxFF) reads from $xxFF and $xx00 instead of $xx00+1
             if ((indirect_addr & 0xFF) == 0xFF) {
                 // Page boundary bug: high byte comes from same page
                 // The bug has already been captured in the cycle, ABH contains wrong data
-                target_addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
+                target_addr = get_ab_unified(reg);
             } else {
                 // Normal case: no page boundary crossed
-                target_addr = (reg[CpuReg::ABH] << 8) | reg[CpuReg::ABL];
+                target_addr = get_ab_unified(reg);
             }
         }
         
         // Execute the jump
-        reg[CpuReg::PCL] = target_addr & 0xFF;
-        reg[CpuReg::PCH] = (target_addr >> 8) & 0xFF;
+        set_pc_unified(reg, target_addr);
     }
     
     // Enhanced variant-specific instruction handling

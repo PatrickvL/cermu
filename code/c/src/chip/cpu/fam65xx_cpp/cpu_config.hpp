@@ -47,11 +47,6 @@ struct cpu_config {
     static constexpr bool wai_instruction = HasWAI;
     static constexpr bool stp_instruction = HasSTP;
     static constexpr uint16_t address_mask = (1 << AddressLines) - 1;
-    
-    // φ1/φ2 Phase coordination optimization flags
-    static constexpr bool phi1_phi2_split = true;          // Enable φ1/φ2 phase split architecture
-    static constexpr bool optimize_bus_coordination = true; // Enable compile-time bus coordination optimizations
-    static constexpr bool hardware_accurate_timing = true;  // Enable hardware-accurate φ1/φ2 timing
 };
 
 // Pre-defined CPU variant configurations
@@ -118,8 +113,82 @@ struct cpu_pin_config {
 };
 
 /**
+ * Template Helper Class: φ1/φ2 Phase Timing Configuration
+ *
+ * Provides variant-specific φ1/φ2 timing characteristics and behaviors.
+ * Different CPU variants have different phase coordination requirements.
+ */
+template<typename Config>
+struct cpu_phi_timing {
+    // φ1/φ2 Phase behavior characteristics based on CPU variant
+    static constexpr bool is_nmos_variant() {
+        return Config::cpu_variant == fam65xx_cpp::CpuVariant::NMOS_6502 ||
+               Config::cpu_variant == fam65xx_cpp::CpuVariant::NMOS_6510;
+    }
+    
+    static constexpr bool is_cmos_variant() {
+        return Config::cpu_variant == fam65xx_cpp::CpuVariant::CMOS_65C02 ||
+               Config::cpu_variant == fam65xx_cpp::CpuVariant::WDC_65C816;
+    }
+    
+    // RDY line phase-specific behavior (NMOS vs CMOS timing differences)
+    static constexpr bool rdy_affects_phi1() {
+        return is_nmos_variant();  // NMOS: RDY affects φ1 phase
+    }
+    
+    static constexpr bool rdy_affects_phi2() {
+        return is_cmos_variant() && Config::rdy_affects_writes;  // CMOS: RDY affects φ2 phase for writes
+    }
+    
+    // AEC/BA line coordination timing (VIC-II DMA coordination)
+    static constexpr bool has_aec_coordination() {
+        return Config::has_aec_pin;  // 6510 and advanced variants
+    }
+    
+    static constexpr bool aec_blocks_phi2() {
+        return has_aec_coordination();  // AEC blocks φ2 address setup
+    }
+    
+    // Bus arbitration timing characteristics
+    static constexpr bool needs_phi1_bus_arbitration() {
+        return is_nmos_variant() && has_aec_coordination();  // NMOS with AEC needs φ1 arbitration
+    }
+    
+    static constexpr bool needs_phi2_bus_arbitration() {
+        return is_cmos_variant() || Config::has_be_pin;  // CMOS or BE pin variants
+    }
+    
+    // Interrupt handling phase timing
+    static constexpr bool interrupts_sampled_phi1() {
+        return is_nmos_variant();  // NMOS: interrupts sampled during φ1
+    }
+    
+    static constexpr bool interrupts_sampled_phi2() {
+        return is_cmos_variant();  // CMOS: interrupts sampled during φ2
+    }
+    
+    // Memory access phase coordination
+    static constexpr bool memory_setup_phi2() {
+        return true;  // All variants: memory address setup in φ2
+    }
+    
+    static constexpr bool memory_data_phi1() {
+        return true;  // All variants: memory data processing in φ1
+    }
+    
+    // Advanced variant-specific optimizations
+    static constexpr bool supports_phi_optimization() {
+        return is_cmos_variant() || has_aec_coordination();  // Advanced variants support φ1/φ2 optimizations
+    }
+    
+    static constexpr bool needs_phase_dependent_cycles() {
+        return Config::has_abort_pin || Config::has_be_pin;  // Advanced variants need phase-dependent cycle handling
+    }
+};
+
+/**
  * Template Helper Class: CPU Feature Detection
- * 
+ *
  * Provides compile-time feature detection and capability queries.
  * Used by other helper classes to enable/disable functionality
  * based on CPU variant capabilities.
@@ -131,10 +200,10 @@ struct cpu_features {
     static constexpr bool supports_decimal_mode() { return Config::has_decimal_mode; }
     static constexpr bool supports_wai_stp() { return Config::wai_instruction || Config::stp_instruction; }
     
-    // Hardware capabilities  
+    // Hardware capabilities
     static constexpr bool has_memory_banking() { return Config::has_bank_pins; }
     static constexpr bool has_io_processing() { return Config::has_io_ports; }
-    static constexpr bool has_advanced_pins() { 
+    static constexpr bool has_advanced_pins() {
         return Config::has_sync_pin || Config::has_so_pin || Config::has_be_pin;
     }
     
@@ -142,11 +211,22 @@ struct cpu_features {
     static constexpr bool rdy_blocks_writes() { return Config::rdy_affects_writes; }
     static constexpr uint16_t max_address() { return Config::address_mask; }
     
+    // φ1/φ2 phase-aware features
+    static constexpr bool needs_phi_coordination() {
+        return cpu_phi_timing<Config>::has_aec_coordination() ||
+               cpu_phi_timing<Config>::supports_phi_optimization();
+    }
+    
+    static constexpr bool supports_advanced_timing() {
+        return cpu_phi_timing<Config>::is_cmos_variant() || has_advanced_pins();
+    }
+    
     // Performance hints for optimization
     static constexpr bool needs_pin_processing() { return has_advanced_pins(); }
     static constexpr bool needs_special_states() { return supports_wai_stp(); }
-    static constexpr bool is_minimal_variant() { 
-        return !Config::has_io_ports && !has_advanced_pins() && !supports_illegal_opcodes();
+    static constexpr bool needs_phase_processing() { return needs_phi_coordination(); }
+    static constexpr bool is_minimal_variant() {
+        return !Config::has_io_ports && !has_advanced_pins() && !supports_illegal_opcodes() && !needs_phi_coordination();
     }
 };
 

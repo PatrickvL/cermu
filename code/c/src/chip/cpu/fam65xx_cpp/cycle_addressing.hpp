@@ -14,40 +14,40 @@ public:
         return CD_MAKE(MemOp::NOP, DataOp::NOP, AluOp::NOP);  // No SYNC
     }
     
-    // === COMPREHENSIVE ADDRESSING MODE HELPERS ===
+    // === COMPREHENSIVE ADDRESSING MODE HELPERS WITH φ1/φ2 INFERENCE ===
     
-    // Single-cycle immediate operations (1 cycle total) - VALIDATED SYNC PLACEMENT
+    // Single-cycle immediate operations (1 cycle total) - phase inferred from operation characteristics
     static constexpr cycle_desc_t make_immediate(DataOp data_op, AluOp alu_op = AluOp::NOP) {
-        return CD_MAKE_SYNC(MemOp::READ_PC_INC, data_op, alu_op);
+        return CD_MAKE_SYNC(MemOp::READ_PC_INC, data_op, alu_op);  // Phase inferred: PC increment (φ2) + data processing (φ1)
     }
     
-    // Zero page addressing helpers (2 cycles total)
+    // Zero page addressing helpers (2 cycles total) - phase inferred from operation characteristics
     static constexpr cycle_desc_t make_zeropage(uint8_t cycle, DataOp final_op, AluOp alu_op = AluOp::NOP) {
-        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-        if (cycle == 2) return CD_MAKE_SYNC(MemOp::READ_ZP, final_op, alu_op);
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);  // Address setup (φ2)
+        if (cycle == 2) return CD_MAKE_SYNC(MemOp::READ_ZP, final_op, alu_op);                  // Data processing (φ1)
         return make_empty_cycle();
     }
     
-    // Zero page write operations (2 cycles total)
+    // Zero page write operations (2 cycles total) - phase inferred from operation characteristics
     static constexpr cycle_desc_t make_zeropage_write(uint8_t cycle, DataOp store_op) {
-        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-        if (cycle == 2) return CD_MAKE_SYNC(MemOp::WRITE_ZP, store_op, AluOp::NOP);
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);  // Address setup (φ2)
+        if (cycle == 2) return CD_MAKE_SYNC(MemOp::WRITE_ZP, store_op, AluOp::NOP);             // Bus control (φ2)
         return make_empty_cycle();
     }
     
-    // Absolute addressing helpers (3 cycles total)
+    // Absolute addressing helpers (3 cycles total) - phase inferred from operation characteristics
     static constexpr cycle_desc_t make_absolute(uint8_t cycle, DataOp final_op, AluOp alu_op = AluOp::NOP) {
-        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-        if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
-        if (cycle == 3) return CD_MAKE_SYNC(MemOp::READ_ABS, final_op, alu_op);
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);   // Address setup (φ2)
+        if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);  // Address setup (φ2)
+        if (cycle == 3) return CD_MAKE_SYNC(MemOp::READ_ABS, final_op, alu_op);                  // Data processing (φ1)
         return make_empty_cycle();
     }
     
-    // Absolute write operations (3 cycles total)
+    // Absolute write operations (3 cycles total) - phase inferred from operation characteristics
     static constexpr cycle_desc_t make_absolute_write(uint8_t cycle, DataOp store_op) {
-        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);
-        if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);
-        if (cycle == 3) return CD_MAKE_SYNC(MemOp::WRITE_ABS, store_op, AluOp::NOP);
+        if (cycle == 1) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_LOW, AluOp::NOP);   // Address setup (φ2)
+        if (cycle == 2) return CD_MAKE(MemOp::READ_PC_INC, DataOp::ADDR_CALC_HIGH, AluOp::NOP);  // Address setup (φ2)
+        if (cycle == 3) return CD_MAKE_SYNC(MemOp::WRITE_ABS, store_op, AluOp::NOP);             // Bus control (φ2)
         return make_empty_cycle();
     }
     
