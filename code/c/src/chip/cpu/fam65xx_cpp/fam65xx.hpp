@@ -230,23 +230,23 @@ public:
     
     // === φ1/φ2 PHASE HELPER METHODS ===
     
-    // φ1 Phase: Internal instruction processing and data operations
-    HOT_PATH inline bus_state_t phi1_instruction_processing(bus_state_t bus_state, uint8_t bus_data) {
-        // Get cycle description for current instruction step
-        const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
-        
-        // Execute data operation using sampled bus data
-        execute_data_operation(cycle.data_op, bus_data);
+    // φ1 Phase: Template-specialized instruction processing
+    // PERFORMANCE: Eliminates runtime enum conversion overhead for common patterns
+    template<DataOp data_op, AluOp alu_op>
+    HOT_PATH inline bus_state_t phi1_instruction_processing_template(bus_state_t bus_state, uint8_t bus_data) {
+        // Execute data operation using sampled bus data - compile-time dispatch
+        if constexpr (data_op != DataOp::NOP) {
+            execute_data_operation(static_cast<uint8_t>(data_op), bus_data);
+        }
         
         // Execute ALU operation if specified (internal processing during φ1)
-        AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
-        if (alu_op != AluOp::NOP) {
+        if constexpr (alu_op != AluOp::NOP) {
             // Handle special ALU data preparation
-            uint8_t alu_data = prepare_alu_data(alu_op, bus_data, cycle.data_op);
+            uint8_t alu_data = prepare_alu_data(alu_op, bus_data, static_cast<uint8_t>(data_op));
             alu_ops::execute_alu_operation(reg, alu_op, alu_data);
             
             // Handle interrupt flag changes for SEI/CLI instructions
-            if (alu_op == AluOp::SEI || alu_op == AluOp::CLI) {
+            if constexpr (alu_op == AluOp::SEI || alu_op == AluOp::CLI) {
                 handle_interrupt_flag_change();
             }
             
@@ -255,6 +255,50 @@ public:
         }
         
         return bus_state;
+    }
+    
+    // φ1 Phase: Runtime wrapper with fallback to template specialization
+    HOT_PATH inline bus_state_t phi1_instruction_processing(bus_state_t bus_state, uint8_t bus_data) {
+        // Get cycle description for current instruction step
+        const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
+        
+        const DataOp data_op = static_cast<DataOp>(cycle.data_op);
+        const AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
+        
+        // Template specialization for most common combinations to eliminate runtime overhead
+        if (LIKELY(data_op == DataOp::NOP && alu_op == AluOp::NOP)) {
+            return phi1_instruction_processing_template<DataOp::NOP, AluOp::NOP>(bus_state, bus_data);
+        } else if (data_op == DataOp::LOAD_A && alu_op == AluOp::NOP) {
+            return phi1_instruction_processing_template<DataOp::LOAD_A, AluOp::NOP>(bus_state, bus_data);
+        } else if (data_op == DataOp::ALU && alu_op == AluOp::ORA) {
+            return phi1_instruction_processing_template<DataOp::ALU, AluOp::ORA>(bus_state, bus_data);
+        } else if (data_op == DataOp::ALU && alu_op == AluOp::AND) {
+            return phi1_instruction_processing_template<DataOp::ALU, AluOp::AND>(bus_state, bus_data);
+        } else if (data_op == DataOp::ALU && alu_op == AluOp::EOR) {
+            return phi1_instruction_processing_template<DataOp::ALU, AluOp::EOR>(bus_state, bus_data);
+        } else if (data_op == DataOp::ALU && alu_op == AluOp::ADC) {
+            return phi1_instruction_processing_template<DataOp::ALU, AluOp::ADC>(bus_state, bus_data);
+        } else if (data_op == DataOp::ALU && alu_op == AluOp::SBC) {
+            return phi1_instruction_processing_template<DataOp::ALU, AluOp::SBC>(bus_state, bus_data);
+        } else if (data_op == DataOp::ALU && alu_op == AluOp::CMP) {
+            return phi1_instruction_processing_template<DataOp::ALU, AluOp::CMP>(bus_state, bus_data);
+        } else {
+            // Fallback to original logic for uncommon combinations
+            execute_data_operation(cycle.data_op, bus_data);
+            
+            if (alu_op != AluOp::NOP) {
+                uint8_t alu_data = prepare_alu_data(alu_op, bus_data, cycle.data_op);
+                alu_ops::execute_alu_operation(reg, alu_op, alu_data);
+                
+                if (alu_op == AluOp::SEI || alu_op == AluOp::CLI) {
+                    handle_interrupt_flag_change();
+                }
+                
+                handle_decimal_mode_bugs(reg[CpuReg::A], alu_op);
+            }
+            
+            return bus_state;
+        }
     }
     
     // φ1 Phase: Internal interrupt processing
@@ -274,7 +318,38 @@ public:
         return bus_state;
     }
     
-    // φ2 Phase: Address setup and memory operations for normal instructions
+    // φ2 Phase: Template-specialized cycle execution
+    // PERFORMANCE: Eliminates runtime enum conversion overhead for common memory operations
+    template<MemOp mem_op, DataOp data_op>
+    HOT_PATH inline bus_state_t phi2_execute_cycle_template(bus_state_t bus_state) {
+        // Handle special instruction coordination BEFORE memory operation
+        if constexpr (mem_op == MemOp::WRITE_SP_DEC && data_op == DataOp::STACK_PUSH) {
+            bus_state = phi2_handle_instruction_coordination(bus_state, mem_op, data_op);
+        }
+        
+        // Execute memory operation (address setup and R/W control) - compile-time dispatch
+        bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op, *this);
+        
+        // Handle write data if needed - compile-time evaluation
+        if constexpr (mem_op >= MemOp::WRITE_ABS || mem_op == MemOp::WRITE_SP_DEC) {
+            bus_state = memory_ops::handle_write_data(bus_state, *this, mem_op, data_op, pending_data);
+        }
+        
+        // Get cycle description for instruction completion check
+        const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
+        bool instruction_complete = phi2_check_instruction_complete(cycle);
+        
+        if (instruction_complete) {
+            cycle_step = 0; // Start next instruction
+            clear_state(STATE_BRANCH_TAKEN | STATE_PAGE_CROSSED); // Clear branch state
+        } else {
+            cycle_step++;
+        }
+        
+        return bus_state;
+    }
+    
+    // φ2 Phase: Runtime wrapper with template specialization for common patterns
     HOT_PATH inline bus_state_t phi2_execute_cycle(bus_state_t bus_state) {
         // Fetch opcode on cycle 0 - MOST COMMON PATH
         if (LIKELY(cycle_step == 0)) {
@@ -292,31 +367,44 @@ public:
         
         // Get cycle description for current instruction step
         const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
-        MemOp mem_op = static_cast<MemOp>(cycle.mem_op);
-        DataOp data_op = static_cast<DataOp>(cycle.data_op);
+        const MemOp mem_op = static_cast<MemOp>(cycle.mem_op);
+        const DataOp data_op = static_cast<DataOp>(cycle.data_op);
         
-        // Handle special instruction coordination BEFORE memory operation
-        bus_state = phi2_handle_instruction_coordination(bus_state, mem_op, data_op);
-        
-        // Execute memory operation (address setup and R/W control)
-        bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op, *this);
-        
-        // Handle write data if needed
-        if (mem_op >= MemOp::WRITE_ABS || mem_op == MemOp::WRITE_SP_DEC) {
-            bus_state = memory_ops::handle_write_data(bus_state, *this, mem_op, data_op, pending_data);
-        }
-        
-        // Check if instruction is complete and advance cycle step
-        bool instruction_complete = phi2_check_instruction_complete(cycle);
-        
-        if (instruction_complete) {
-            cycle_step = 0; // Start next instruction
-            clear_state(STATE_BRANCH_TAKEN | STATE_PAGE_CROSSED); // Clear branch state
+        // Template specialization for most common memory operation patterns
+        if (LIKELY(mem_op == MemOp::READ_PC_INC && data_op == DataOp::NOP)) {
+            return phi2_execute_cycle_template<MemOp::read_PC_INC, DataOp::NOP>(bus_state);
+        } else if (mem_op == MemOp::READ_ABS && data_op == DataOp::LOAD_A) {
+            return phi2_execute_cycle_template<MemOp::READ_ABS, DataOp::LOAD_A>(bus_state);
+        } else if (mem_op == MemOp::READ_ABS && data_op == DataOp::ALU) {
+            return phi2_execute_cycle_template<MemOp::READ_ABS, DataOp::ALU>(bus_state);
+        } else if (mem_op == MemOp::WRITE_ABS && data_op == DataOp::STORE_A) {
+            return phi2_execute_cycle_template<MemOp::WRITE_ABS, DataOp::STORE_A>(bus_state);
+        } else if (mem_op == MemOp::READ_ZP && data_op == DataOp::LOAD_A) {
+            return phi2_execute_cycle_template<MemOp::READ_ZP, DataOp::LOAD_A>(bus_state);
+        } else if (mem_op == MemOp::READ_ZP && data_op == DataOp::ALU) {
+            return phi2_execute_cycle_template<MemOp::READ_ZP, DataOp::ALU>(bus_state);
+        } else if (mem_op == MemOp::WRITE_ZP && data_op == DataOp::STORE_A) {
+            return phi2_execute_cycle_template<MemOp::WRITE_ZP, DataOp::STORE_A>(bus_state);
         } else {
-            cycle_step++;
+            // Fallback to original logic for uncommon patterns
+            bus_state = phi2_handle_instruction_coordination(bus_state, mem_op, data_op);
+            bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op, *this);
+            
+            if (mem_op >= MemOp::WRITE_ABS || mem_op == MemOp::WRITE_SP_DEC) {
+                bus_state = memory_ops::handle_write_data(bus_state, *this, mem_op, data_op, pending_data);
+            }
+            
+            bool instruction_complete = phi2_check_instruction_complete(cycle);
+            
+            if (instruction_complete) {
+                cycle_step = 0;
+                clear_state(STATE_BRANCH_TAKEN | STATE_PAGE_CROSSED);
+            } else {
+                cycle_step++;
+            }
+            
+            return bus_state;
         }
-        
-        return bus_state;
     }
     
     // φ2 Phase: Address setup for interrupt cycles
@@ -503,36 +591,89 @@ public:
         }
     }
     
-    // φ2 Phase: Calculate interrupt push data
+    // φ2 Phase: Template-specialized interrupt push data calculation
+    // PERFORMANCE: Eliminates runtime opcode and cycle_step switching overhead
+    template<uint16_t interrupt_opcode, uint8_t cycle_step>
+    HOT_PATH constexpr uint8_t phi2_calculate_interrupt_push_data_template() const {
+        if constexpr (cycle_step == 3) {
+            // Push PCH (high byte of return address)
+            if constexpr (interrupt_opcode == VIRTUAL_OPCODE_BRK || interrupt_opcode == VIRTUAL_OPCODE_COP) {
+                // OPTIMIZED: Single-expression carry calculation for PC + 1
+                return reg[CpuReg::PCH] + ((reg[CpuReg::PCL] == 255) & 1);
+            } else if constexpr (interrupt_opcode == VIRTUAL_OPCODE_ABORT) {
+                // OPTIMIZED: Single-expression borrow calculation for PC - 1
+                return reg[CpuReg::PCH] - ((reg[CpuReg::PCL] == 0) & 1);
+            } else {
+                return reg[CpuReg::PCH];
+            }
+        } else if constexpr (cycle_step == 4) {
+            // Push PCL (low byte of return address)
+            if constexpr (interrupt_opcode == VIRTUAL_OPCODE_BRK || interrupt_opcode == VIRTUAL_OPCODE_COP) {
+                // Direct low byte calculation for PC + 1
+                return reg[CpuReg::PCL] + 1;
+            } else if constexpr (interrupt_opcode == VIRTUAL_OPCODE_ABORT) {
+                // Direct low byte calculation for PC - 1
+                return reg[CpuReg::PCL] - 1;
+            } else {
+                return reg[CpuReg::PCL];
+            }
+        } else if constexpr (cycle_step == 5) {
+            // Push P (processor status)
+            uint8_t push_data = reg[CpuReg::P];
+            if constexpr (interrupt_opcode == VIRTUAL_OPCODE_BRK) {
+                push_data |= P_BREAK | P_IRQ_DIS;
+            }
+            return push_data;
+        } else {
+            return 0;
+        }
+    }
+    
+    // φ2 Phase: Runtime wrapper with template dispatch
     HOT_PATH inline uint8_t phi2_calculate_interrupt_push_data() {
-        switch (cycle_step) {
-            case 3: // Push PCH (high byte of return address)
-                if (opcode == VIRTUAL_OPCODE_BRK || opcode == VIRTUAL_OPCODE_COP) {
-                    // OPTIMIZED: Single-expression carry calculation for PC + 1
-                    return reg[CpuReg::PCH] + ((reg[CpuReg::PCL] == 255) & 1);
-                } else if (opcode == VIRTUAL_OPCODE_ABORT) {
-                    // OPTIMIZED: Single-expression borrow calculation for PC - 1
-                    return reg[CpuReg::PCH] - ((reg[CpuReg::PCL] == 0) & 1);
-                } else {
-                    return reg[CpuReg::PCH];
+        // Template dispatch eliminates runtime switching overhead for common cases
+        switch (opcode) {
+            case VIRTUAL_OPCODE_RESET:
+                switch (cycle_step) {
+                    case 3: return phi2_calculate_interrupt_push_data_template<VIRTUAL_OPCODE_RESET, 3>();
+                    case 4: return phi2_calculate_interrupt_push_data_template<VIRTUAL_OPCODE_RESET, 4>();
+                    case 5: return phi2_calculate_interrupt_push_data_template<VIRTUAL_OPCODE_RESET, 5>();
+                    default: return 0;
                 }
-            case 4: // Push PCL (low byte of return address)
-                if (opcode == VIRTUAL_OPCODE_BRK || opcode == VIRTUAL_OPCODE_COP) {
-                    // Direct low byte calculation for PC + 1
-                    return reg[CpuReg::PCL] + 1;
-                } else if (opcode == VIRTUAL_OPCODE_ABORT) {
-                    // Direct low byte calculation for PC - 1
-                    return reg[CpuReg::PCL] - 1;
-                } else {
-                    return reg[CpuReg::PCL];
+            case VIRTUAL_OPCODE_NMI:
+                switch (cycle_step) {
+                    case 3: return phi2_calculate_interrupt_push_data_template<VIRTUAL_OPCODE_NMI, 3>();
+                    case 4: return phi2_calculate_interrupt_push_data_template<VIRTUAL_OPCODE_NMI, 4>();
+                    case 5: return phi2_calculate_interrupt_push_data_template<VIRTUAL_OPCODE_NMI, 5>();
+                    default: return 0;
                 }
-            case 5: // Push P (processor status)
-                {
-                    uint8_t push_data = reg[CpuReg::P];
-                    if (opcode == VIRTUAL_OPCODE_BRK) {
-                        push_data |= P_BREAK | P_IRQ_DIS;
-                    }
-                    return push_data;
+            case VIRTUAL_OPCODE_IRQ:
+                switch (cycle_step) {
+                    case 3: return phi2_calculate_interrupt_push_data_template<VIRTUAL_OPCODE_IRQ, 3>();
+                    case 4: return phi2_calculate_interrupt_push_data_template<VIRTUAL_OPCODE_IRQ, 4>();
+                    case 5: return phi2_calculate_interrupt_push_data_template<VIRTUAL_OPCODE_IRQ, 5>();
+                    default: return 0;
+                }
+            case VIRTUAL_OPCODE_BRK:
+                switch (cycle_step) {
+                    case 3: return phi2_calculate_interrupt_push_data_template<VIRTUAL_OPCODE_BRK, 3>();
+                    case 4: return phi2_calculate_interrupt_push_data_template<VIRTUAL_OPCODE_BRK, 4>();
+                    case 5: return phi2_calculate_interrupt_push_data_template<VIRTUAL_OPCODE_BRK, 5>();
+                    default: return 0;
+                }
+            case VIRTUAL_OPCODE_ABORT:
+                switch (cycle_step) {
+                    case 3: return phi2_calculate_interrupt_push_data_template<VIRTUAL_OPCODE_ABORT, 3>();
+                    case 4: return phi2_calculate_interrupt_push_data_template<VIRTUAL_OPCODE_ABORT, 4>();
+                    case 5: return phi2_calculate_interrupt_push_data_template<VIRTUAL_OPCODE_ABORT, 5>();
+                    default: return 0;
+                }
+            case VIRTUAL_OPCODE_COP:
+                switch (cycle_step) {
+                    case 3: return phi2_calculate_interrupt_push_data_template<VIRTUAL_OPCODE_COP, 3>();
+                    case 4: return phi2_calculate_interrupt_push_data_template<VIRTUAL_OPCODE_COP, 4>();
+                    case 5: return phi2_calculate_interrupt_push_data_template<VIRTUAL_OPCODE_COP, 5>();
+                    default: return 0;
                 }
             default:
                 return 0;
@@ -1899,6 +2040,42 @@ public:
         }
         
         return false; // Continue with normal instruction processing
+    }
+    
+    // MOCK-UP INSPIRED: Branchless bus state pin management helpers
+    HOT_PATH inline bus_state_t bus_set_ba_aec_branchless(bus_state_t state, bool ba, bool aec) {
+        // BRANCHLESS: Use bit manipulation instead of conditional logic
+        const bus_state_t ba_bit = ba ? BUS_BIT(BUS_BA_BIT) : 0;
+        const bus_state_t aec_bit = aec ? BUS_BIT(BUS_AEC_BIT) : 0;
+        
+        // Clear both bits and set new values atomically
+        state = (state & ~(BUS_BIT(BUS_BA_BIT) | BUS_BIT(BUS_AEC_BIT))) | ba_bit | aec_bit;
+        return state;
+    }
+    
+    // MOCK-UP INSPIRED: Branchless RW line control
+    HOT_PATH inline bus_state_t bus_set_rw_branchless(bus_state_t state, bool rw) {
+        // BRANCHLESS: Single bit manipulation operation
+        const bus_state_t rw_bit = rw ? BUS_BIT(BUS_RW_BIT) : 0;
+        return (state & ~BUS_BIT(BUS_RW_BIT)) | rw_bit;
+    }
+    
+    // MOCK-UP INSPIRED: Batch state flag operations to reduce multiple checks
+    HOT_PATH inline void batch_update_state_flags(uint32_t flags_to_set, uint32_t flags_to_clear) {
+        // BRANCHLESS: Single atomic operation for multiple flag changes
+        state_flags = (state_flags & ~flags_to_clear) | flags_to_set;
+    }
+    
+    // MOCK-UP INSPIRED: Branchless interrupt pending state management
+    HOT_PATH inline void update_interrupt_pending_branchless() {
+        // BRANCHLESS: Use boolean arithmetic for conditional state setting
+        const uint32_t irq_line_mask = state_flags & STATE_IRQ_LINE;
+        const uint32_t irq_not_masked_mask = -(!(reg[CpuReg::P] & P_IRQ_DIS));
+        const uint32_t should_set_pending_mask = (irq_line_mask != 0) & (irq_not_masked_mask != 0);
+        const uint32_t irq_pending_flag = should_set_pending_mask ? STATE_IRQ_PENDING : 0;
+        
+        // Atomic update of IRQ pending state
+        state_flags = (state_flags & ~STATE_IRQ_PENDING) | irq_pending_flag;
     }
     
     // === PAGE CROSSING DETECTION ===
