@@ -132,75 +132,482 @@ public:
         irq_sources = 0;             // No IRQ sources active
     }
     
-    // Execute one CPU cycle - HOT PATH OPTIMIZED
-    HOT_PATH inline bus_state_t cycle_tick(bus_state_t bus_state) {
+    // === φ1/φ2 PHASE SPLIT ARCHITECTURE ===
+    // Hardware-accurate two-phase CPU execution following the mockup design
+    
+    // φ1 Phase: Data sampling, internal processing, and bus state coordination
+    HOT_PATH inline bus_state_t phi1_tick(bus_state_t bus_state) {
+        // φ1 PHASE MARKER
+        set_state(STATE_PHI1_ACTIVE);
+        clear_state(STATE_PHI2_ACTIVE);
         
-        // Process input control lines first (inlined for hot path)
-        bus_state = process_input_pins(bus_state);
+        // === φ1 PHASE: DATA SAMPLING AND INTERNAL PROCESSING ===
         
-        // Handle RDY line - variant-specific behavior
+        // Sample bus data if CPU needs it from previous φ2 cycle
+        if (cycle_step > 0) {
+            // Data sampling occurs during φ1 for read operations
+            uint8_t bus_data = BUS_GET_DATA(bus_state);
+            
+            // Update data latch register with sampled data
+            reg[CpuReg::DL] = bus_data;
+            
+            // Process sampled data through internal execution pipeline
+            if (state_flags & STATE_INTERRUPT_SEQUENCE) {
+                bus_state = phi1_interrupt_processing(bus_state, bus_data);
+            } else {
+                bus_state = phi1_instruction_processing(bus_state, bus_data);
+            }
+        }
+        
+        // Internal register updates and ALU processing (φ1 timing)
+        // This includes all internal CPU state changes that don't affect the bus
+        
+        // Process SO pin edge detection (φ1 timing for NMOS variants)
+        if constexpr (Config::has_so_pin && !Config::has_cmos_fixes) {
+            // NMOS behavior: SO edge processing during φ1
+            process_so_pin_edge();
+        }
+        
+        return bus_state;
+    }
+    
+    // φ2 Phase: Address setup, bus control, and external memory operations
+    HOT_PATH inline bus_state_t phi2_tick(bus_state_t bus_state) {
+        // φ2 PHASE MARKER
+        set_state(STATE_PHI2_ACTIVE);
+        clear_state(STATE_PHI1_ACTIVE);
+        
+        // === φ2 PHASE: ADDRESS SETUP AND BUS CONTROL ===
+        
+        // Process input control lines (φ2 timing)
+        bus_state = phi2_process_input_pins(bus_state);
+        
+        // Handle RDY line - variant-specific behavior (φ2 timing)
         if (UNLIKELY(!(bus_state & BUS_BIT(BUS_RDY_BIT)))) {
             bus_state = handle_rdy_wait(bus_state);
             if (UNLIKELY(state_flags & STATE_RDY_WAIT)) {
-                return bus_state; // Skip this cycle
+                return bus_state; // CPU stalled - no address setup
             }
         }
         
-        // Check if we're in an interrupt sequence
+        // Check if VIC-II needs bus access (AEC/BA coordination)
+        if constexpr (Config::has_aec_pin) {
+            if (UNLIKELY(!(bus_state & BUS_BIT(BUS_AEC_BIT)))) {
+                // VIC-II has bus control - CPU is stalled
+                clear_state(STATE_BUS_AVAILABLE);
+                return bus_state; // No address setup when DMA is active
+            } else {
+                set_state(STATE_BUS_AVAILABLE);
+            }
+        }
+        
+        // Check for interrupt processing (φ2 timing - address setup for vectors)
         if (UNLIKELY(state_flags & STATE_INTERRUPT_SEQUENCE)) {
-            return execute_interrupt_cycle(bus_state);
+            return phi2_interrupt_cycle(bus_state);
         }
         
-        // Batch check critical state flags for speed (including 65C816 extended interrupts)
-        const uint32_t critical_states = state_flags & (STATE_RESET_PENDING | STATE_NMI_PENDING | STATE_IRQ_PENDING | STATE_ABORT_PENDING | STATE_COP_PENDING);
-        if (UNLIKELY(critical_states != 0)) {
-            // Handle reset first (highest priority)
-            if (UNLIKELY(critical_states & STATE_RESET_PENDING)) {
-                return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_RESET);
-            }
-            
-            // Re-check state flags after potential reset handling to ensure accurate priority
-            const uint32_t current_states = state_flags & (STATE_NMI_PENDING | STATE_IRQ_PENDING | STATE_ABORT_PENDING | STATE_COP_PENDING);
-            
-            // ABORT has highest priority among interrupts and can interrupt at any cycle (65C816 only)
-            if constexpr (Config::has_abort_pin) {
-                if (UNLIKELY(current_states & STATE_ABORT_PENDING)) {
-                    return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_ABORT);
-                }
-            }
-            
-            // Handle other interrupts only at instruction boundaries for proper timing
-            if (UNLIKELY(cycle_step == 0)) {
-                // NMI has next highest priority among interrupts and is non-maskable
-                if (UNLIKELY(current_states & STATE_NMI_PENDING)) {
-                    // Clear the NMI edge flag when servicing the interrupt
-                    state_flags &= ~STATE_NMI_EDGE; // Direct bit clear for speed
-                    return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_NMI);
-                }
-                
-                // COP has priority over IRQ (65C816 software interrupt)
-                if (UNLIKELY(current_states & STATE_COP_PENDING)) {
-                    return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_COP);
-                }
-                
-                // IRQ has lowest priority and is maskable - check I flag synchronously
-                else if (UNLIKELY((current_states & STATE_IRQ_PENDING) &&
-                          !(reg[static_cast<uint8_t>(CpuReg::P)] & P_IRQ_DIS))) {
-                    return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_IRQ);
-                }
+        // Check for new interrupts at instruction boundaries only (φ2 timing)
+        if (UNLIKELY(cycle_step == 0)) {
+            // Batch check critical interrupt flags for speed
+            const uint32_t critical_states = state_flags & (STATE_RESET_PENDING | STATE_NMI_PENDING | STATE_IRQ_PENDING | STATE_ABORT_PENDING | STATE_COP_PENDING);
+            if (UNLIKELY(critical_states != 0)) {
+                return phi2_start_interrupt_sequence(bus_state, critical_states);
             }
         }
         
-        // Execute normal instruction cycle - HOT PATH
-        bus_state = execute_cycle(bus_state);
+        // Normal instruction execution - address setup and memory operations (φ2 timing)
+        bus_state = phi2_execute_cycle(bus_state);
         
-        // Process output control lines
-        bus_state = process_output_pins(bus_state);
+        // Process output control lines (φ2 timing)
+        bus_state = phi2_process_output_pins(bus_state);
+        
+        // Mark address setup complete
+        set_state(STATE_ADDRESS_SETUP);
         
         return bus_state;
     }
     
     
+    // === φ1/φ2 PHASE HELPER METHODS ===
+    
+    // φ1 Phase: Internal instruction processing and data operations
+    HOT_PATH inline bus_state_t phi1_instruction_processing(bus_state_t bus_state, uint8_t bus_data) {
+        // Get cycle description for current instruction step
+        const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
+        
+        // Execute data operation using sampled bus data
+        execute_data_operation(cycle.data_op, bus_data);
+        
+        // Execute ALU operation if specified (internal processing during φ1)
+        AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
+        if (alu_op != AluOp::NOP) {
+            // Handle special ALU data preparation
+            uint8_t alu_data = prepare_alu_data(alu_op, bus_data, cycle.data_op);
+            alu_ops::execute_alu_operation(reg, alu_op, alu_data);
+            
+            // Handle interrupt flag changes for SEI/CLI instructions
+            if (alu_op == AluOp::SEI || alu_op == AluOp::CLI) {
+                handle_interrupt_flag_change();
+            }
+            
+            // Handle decimal mode bugs for NMOS variants
+            handle_decimal_mode_bugs(reg[CpuReg::A], alu_op);
+        }
+        
+        return bus_state;
+    }
+    
+    // φ1 Phase: Internal interrupt processing
+    HOT_PATH inline bus_state_t phi1_interrupt_processing(bus_state_t bus_state, uint8_t bus_data) {
+        // Get cycle description for current interrupt step
+        const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
+        
+        // Execute data operation for interrupt sequences
+        execute_data_operation(cycle.data_op, bus_data);
+        
+        // Execute ALU operation if specified (for setting interrupt disable flag)
+        AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
+        if (alu_op != AluOp::NOP) {
+            alu_ops::execute_alu_operation(reg, alu_op, bus_data);
+        }
+        
+        return bus_state;
+    }
+    
+    // φ2 Phase: Address setup and memory operations for normal instructions
+    HOT_PATH inline bus_state_t phi2_execute_cycle(bus_state_t bus_state) {
+        // Fetch opcode on cycle 0 - MOST COMMON PATH
+        if (LIKELY(cycle_step == 0)) {
+            // Use current PC for opcode fetch address
+            uint16_t pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+            BUS_SET_ADDR(bus_state, pc);
+            
+            // Setup for opcode fetch during next φ1
+            set_state(STATE_SYNC_NEXT);
+            increment_pc_unified(reg);
+            cycle_step = 1;
+            
+            return bus_state;
+        }
+        
+        // Get cycle description for current instruction step
+        const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
+        MemOp mem_op = static_cast<MemOp>(cycle.mem_op);
+        DataOp data_op = static_cast<DataOp>(cycle.data_op);
+        
+        // Handle special instruction coordination BEFORE memory operation
+        bus_state = phi2_handle_instruction_coordination(bus_state, mem_op, data_op);
+        
+        // Execute memory operation (address setup and R/W control)
+        bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op, *this);
+        
+        // Handle write data if needed
+        if (mem_op >= MemOp::WRITE_ABS || mem_op == MemOp::WRITE_SP_DEC) {
+            bus_state = memory_ops::handle_write_data(bus_state, *this, mem_op, data_op, pending_data);
+        }
+        
+        // Check if instruction is complete and advance cycle step
+        bool instruction_complete = phi2_check_instruction_complete(cycle);
+        
+        if (instruction_complete) {
+            cycle_step = 0; // Start next instruction
+            clear_state(STATE_BRANCH_TAKEN | STATE_PAGE_CROSSED); // Clear branch state
+        } else {
+            cycle_step++;
+        }
+        
+        return bus_state;
+    }
+    
+    // φ2 Phase: Address setup for interrupt cycles
+    HOT_PATH inline bus_state_t phi2_interrupt_cycle(bus_state_t bus_state) {
+        // Get cycle description for current interrupt step
+        const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
+        MemOp mem_op = static_cast<MemOp>(cycle.mem_op);
+        DataOp data_op = static_cast<DataOp>(cycle.data_op);
+        
+        // Set interrupt vector addresses for READ_VECTOR operations
+        if (mem_op == MemOp::READ_VECTOR) {
+            phi2_setup_interrupt_vector_address();
+        }
+        
+        // Handle interrupt stack push coordination
+        if (mem_op == MemOp::WRITE_SP_DEC && data_op == DataOp::STACK_PUSH) {
+            uint8_t push_data = phi2_calculate_interrupt_push_data();
+            bus_state = BUS_SET_DATA(bus_state, push_data);
+        }
+        
+        // Execute memory operation
+        bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op, *this);
+        
+        // Handle write data if needed
+        if (mem_op >= MemOp::WRITE_ABS) {
+            bus_state = memory_ops::handle_write_data(bus_state, *this, mem_op, data_op, pending_data);
+        }
+        
+        // Check if interrupt sequence is complete
+        if (cycle.is_sync()) {
+            clear_state(STATE_INTERRUPT_SEQUENCE);
+            cycle_step = 0;
+        } else {
+            cycle_step++;
+        }
+        
+        return bus_state;
+    }
+    
+    // φ2 Phase: Process input pins with hardware-accurate timing
+    HOT_PATH inline bus_state_t phi2_process_input_pins(bus_state_t bus_state) {
+        // Batch check all control pins at once for maximum speed
+        constexpr bus_state_t control_pin_mask =
+            (Config::has_so_pin ? BUS_BIT(BUS_SO_BIT) : 0) |
+            (Config::has_be_pin ? BUS_BIT(BUS_BE_BIT) : 0) |
+            (Config::has_abort_pin ? BUS_BIT(BUS_ABORT_BIT) : 0);
+        
+        const bus_state_t active_pins = bus_state & control_pin_mask;
+        
+        // Only process if any control pins are relevant
+        if constexpr (control_pin_mask != 0) {
+            // SO (Set Overflow) pin - φ2 timing for CMOS variants
+            if constexpr (Config::has_so_pin && Config::has_cmos_fixes) {
+                // CMOS behavior: SO edge processing synchronized to φ2
+                const bool current_so = (active_pins & BUS_BIT(BUS_SO_BIT)) != 0;
+                if (!current_so) {
+                    set_state(STATE_SO_EDGE);
+                }
+            }
+            
+            // BE (Bus Enable) pin - φ2 timing for bus control
+            if constexpr (Config::has_be_pin) {
+                // BE pin acknowledged but no action taken (for compatibility)
+            }
+            
+            // ABORT pin - φ2 timing for address setup interruption
+            if constexpr (Config::has_abort_pin) {
+                // ABORT interrupt handling via direct abort_pin() method calls
+                // for better control and testing flexibility
+            }
+        }
+        return bus_state;
+    }
+    
+    // φ2 Phase: Process output pins with hardware-accurate timing
+    HOT_PATH inline bus_state_t phi2_process_output_pins(bus_state_t bus_state) {
+        // Batch check output state flags for speed
+        const uint32_t output_states = state_flags & (STATE_SYNC_NEXT);
+        
+        // SYNC pin - indicates opcode fetch cycle (φ2 timing)
+        if constexpr (Config::has_sync_pin) {
+            if (output_states & STATE_SYNC_NEXT) {
+                bus_state |= BUS_BIT(BUS_SYNC_BIT);
+                clear_state(STATE_SYNC_NEXT);
+            } else {
+                bus_state &= ~BUS_BIT(BUS_SYNC_BIT);
+            }
+        }
+        
+        // VP (Vector Pull) pin - indicates interrupt vector fetch (φ2 timing)
+        if constexpr (Config::has_vp_pin) {
+            const uint16_t addr = BUS_GET_ADDR(bus_state);
+            const bool is_vector_area = (addr >= 0xFFFA && addr <= 0xFFFF);
+            
+            if (is_vector_area && (state_flags & STATE_INTERRUPT_SEQUENCE)) {
+                bus_state |= BUS_BIT(BUS_VP_BIT);
+            } else {
+                bus_state &= ~BUS_BIT(BUS_VP_BIT);
+            }
+        }
+        
+        // ML (Memory Lock) pin - φ2 timing for memory protection
+        if constexpr (Config::has_ml_pin) {
+            // TODO: Implement proper memory lock detection
+            bus_state &= ~BUS_BIT(BUS_ML_BIT);
+        }
+        
+        return bus_state;
+    }
+    
+    // φ2 Phase: Start interrupt sequence with proper priority handling
+    HOT_PATH inline bus_state_t phi2_start_interrupt_sequence(bus_state_t bus_state, uint32_t critical_states) {
+        uint16_t interrupt_vector = VIRTUAL_OPCODE_RESET;
+        
+        // Handle reset first (highest priority)
+        if (UNLIKELY(critical_states & STATE_RESET_PENDING)) {
+            interrupt_vector = VIRTUAL_OPCODE_RESET;
+            clear_state(STATE_RESET_PENDING);
+        }
+        // ABORT has highest priority among interrupts (65C816 only)
+        else if constexpr (Config::has_abort_pin) {
+            if (UNLIKELY(critical_states & STATE_ABORT_PENDING)) {
+                interrupt_vector = VIRTUAL_OPCODE_ABORT;
+                clear_state(STATE_ABORT_PENDING);
+            }
+        }
+        // NMI has next highest priority and is non-maskable
+        else if (UNLIKELY(critical_states & STATE_NMI_PENDING)) {
+            interrupt_vector = VIRTUAL_OPCODE_NMI;
+            clear_state(STATE_NMI_PENDING | STATE_NMI_EDGE);
+        }
+        // COP has priority over IRQ (65C816 software interrupt)
+        else if (UNLIKELY(critical_states & STATE_COP_PENDING)) {
+            interrupt_vector = VIRTUAL_OPCODE_COP;
+            clear_state(STATE_COP_PENDING);
+        }
+        // IRQ has lowest priority and is maskable
+        else if (UNLIKELY((critical_states & STATE_IRQ_PENDING) &&
+                  !(reg[static_cast<uint8_t>(CpuReg::P)] & P_IRQ_DIS))) {
+            interrupt_vector = VIRTUAL_OPCODE_IRQ;
+            clear_state(STATE_IRQ_PENDING);
+        }
+        
+        // Initialize interrupt sequence state
+        set_state(STATE_INTERRUPT_SEQUENCE);
+        opcode = interrupt_vector;
+        cycle_step = 1;
+        
+        // Special reset initialization
+        if (interrupt_vector == VIRTUAL_OPCODE_RESET) {
+            reg[CpuReg::S] = 0xFF;
+            reg[CpuReg::P] = P_IRQ_DIS | P_UNUSED;
+        }
+        
+        return phi2_interrupt_cycle(bus_state);
+    }
+    
+    // === φ1/φ2 PHASE HELPER METHODS CONTINUED ===
+    
+    // φ2 Phase: Setup interrupt vector address
+    HOT_PATH inline void phi2_setup_interrupt_vector_address() {
+        switch (opcode) {
+            case VIRTUAL_OPCODE_RESET:
+                reg[CpuReg::ABL] = (cycle_step == 6) ? 0xFC : 0xFD;
+                reg[CpuReg::ABH] = 0xFF;
+                break;
+            case VIRTUAL_OPCODE_NMI:
+                reg[CpuReg::ABL] = (cycle_step == 6) ? 0xFA : 0xFB;
+                reg[CpuReg::ABH] = 0xFF;
+                break;
+            case VIRTUAL_OPCODE_IRQ:
+            case VIRTUAL_OPCODE_BRK:
+                reg[CpuReg::ABL] = (cycle_step == 6) ? 0xFE : 0xFF;
+                reg[CpuReg::ABH] = 0xFF;
+                break;
+            case VIRTUAL_OPCODE_ABORT:
+                reg[CpuReg::ABL] = (cycle_step == 6) ? 0xE8 : 0xE9;
+                reg[CpuReg::ABH] = 0xFF;
+                break;
+            case VIRTUAL_OPCODE_COP:
+                reg[CpuReg::ABL] = (cycle_step == 6) ? 0xE4 : 0xE5;
+                reg[CpuReg::ABH] = 0xFF;
+                break;
+        }
+    }
+    
+    // φ2 Phase: Calculate interrupt push data
+    HOT_PATH inline uint8_t phi2_calculate_interrupt_push_data() {
+        switch (cycle_step) {
+            case 3: // Push PCH (high byte of return address)
+                if (opcode == VIRTUAL_OPCODE_BRK || opcode == VIRTUAL_OPCODE_COP) {
+                    uint16_t return_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) + 1;
+                    return (return_addr >> 8) & 0xFF;
+                } else if (opcode == VIRTUAL_OPCODE_ABORT) {
+                    uint16_t abort_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) - 1;
+                    return (abort_addr >> 8) & 0xFF;
+                } else {
+                    return reg[CpuReg::PCH];
+                }
+            case 4: // Push PCL (low byte of return address)
+                if (opcode == VIRTUAL_OPCODE_BRK || opcode == VIRTUAL_OPCODE_COP) {
+                    uint16_t return_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) + 1;
+                    return return_addr & 0xFF;
+                } else if (opcode == VIRTUAL_OPCODE_ABORT) {
+                    uint16_t abort_addr = ((reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL]) - 1;
+                    return abort_addr & 0xFF;
+                } else {
+                    return reg[CpuReg::PCL];
+                }
+            case 5: // Push P (processor status)
+                {
+                    uint8_t push_data = reg[CpuReg::P];
+                    if (opcode == VIRTUAL_OPCODE_BRK) {
+                        push_data |= P_BREAK | P_IRQ_DIS;
+                    }
+                    return push_data;
+                }
+            default:
+                return 0;
+        }
+    }
+    
+    // φ2 Phase: Handle instruction coordination (JSR, RTS, etc.)
+    HOT_PATH inline bus_state_t phi2_handle_instruction_coordination(bus_state_t bus_state, MemOp mem_op, DataOp data_op) {
+        // JSR coordination: Handle stack push operations
+        if (opcode == 0x20 && mem_op == MemOp::WRITE_SP_DEC && data_op == DataOp::STACK_PUSH) {
+            // Calculate JSR push data
+            const uint16_t current_pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
+            const uint16_t return_address = current_pc;
+            
+            uint8_t push_data = 0;
+            switch (cycle_step) {
+                case 3: // Push PCH
+                    push_data = (return_address >> 8) & 0xFF;
+                    break;
+                case 4: // Push PCL
+                    push_data = return_address & 0xFF;
+                    break;
+                default:
+                    push_data = 0;
+                    break;
+            }
+            bus_state = BUS_SET_DATA(bus_state, push_data);
+        }
+        
+        return bus_state;
+    }
+    
+    // φ2 Phase: Check if instruction is complete
+    HOT_PATH inline bool phi2_check_instruction_complete(const fam65xx_cpp::cycle_desc_t& cycle) {
+        // Basic completion check using sync bit
+        bool instruction_complete = cycle.is_sync();
+        
+        // Special handling for branch instructions
+        if (opcode >= 0x10 && opcode <= 0xF0 && (opcode & 0x1F) == 0x10) {
+            if (cycle_step == 1) {
+                // After offset read: complete if branch not taken
+                instruction_complete = !get_state(STATE_BRANCH_TAKEN);
+            } else if (cycle_step == 2) {
+                // After branch execution: complete if no page crossing
+                instruction_complete = get_state(STATE_BRANCH_TAKEN) && !get_state(STATE_PAGE_CROSSED);
+            } else if (cycle_step >= 3) {
+                // After page crossing fixup: always complete
+                instruction_complete = true;
+            }
+        }
+        
+        return instruction_complete;
+    }
+    
+    // φ1/φ2 Phase: Prepare ALU data with proper source selection
+    HOT_PATH inline uint8_t prepare_alu_data(AluOp alu_op, uint8_t bus_data, uint8_t data_op) {
+        // Transfer operations don't use external data
+        if (alu_op >= AluOp::TXA && alu_op <= AluOp::TXS) {
+            return 0; // Transfer operations use register values internally
+        }
+        
+        // Flag operations don't use external data
+        if (alu_op >= AluOp::CLC && alu_op <= AluOp::SED) {
+            return 0; // Flag operations don't need data
+        }
+        
+        // ALU data preparation operations use pending_data
+        if (static_cast<DataOp>(data_op) == DataOp::ALU) {
+            return pending_data;
+        }
+        
+        // Default: use bus data
+        return bus_data;
+    }
+
     // Start interrupt sequence using cycle-based approach
     inline bus_state_t start_interrupt_sequence(bus_state_t bus_state, uint16_t virtual_opcode) {
         // Clear the appropriate interrupt pending flag
@@ -359,218 +766,6 @@ public:
         return bus_state;
     }
     
-    // Execute one instruction cycle - HOT PATH OPTIMIZED
-    HOT_PATH inline bus_state_t execute_cycle(bus_state_t bus_state) {
-        
-        // Fetch opcode on cycle 0 - MOST COMMON PATH
-        if (LIKELY(cycle_step == 0)) {
-            opcode = get_bus_data_unified(bus_state);
-            cycle_step = 1;
-            set_state(STATE_SYNC_NEXT);
-            
-            // OPTIMIZED: Use fast PC increment helper
-            increment_pc_unified(reg);
-            
-            // Special case: BRK instruction ($00) triggers software interrupt
-            if (UNLIKELY(opcode == 0x00)) {
-                // BRK should start interrupt sequence immediately after opcode fetch
-                // Use special BRK virtual opcode to set B flag correctly
-                return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_BRK);
-            }
-            
-            // Special case: COP instruction ($02) triggers co-processor interrupt (65C816)
-            if constexpr (Config::has_abort_pin) { // 65C816 has COP instruction
-                if (UNLIKELY(opcode == 0x02)) {
-                    // COP should start interrupt sequence immediately after opcode fetch
-                    return start_interrupt_sequence(bus_state, VIRTUAL_OPCODE_COP);
-                }
-            }
-            
-            return bus_state;
-        }
-        
-        // Get cycle description for current instruction step
-        const fam65xx_cpp::cycle_desc_t cycle = GET_CYCLE(opcode, cycle_step);
-        
-        // Convert raw values to type-safe enums
-        MemOp mem_op = static_cast<MemOp>(cycle.mem_op);
-        DataOp data_op = static_cast<DataOp>(cycle.data_op);
-        AluOp alu_op = static_cast<AluOp>(cycle.alu_op);
-        
-        
-        // JSR COORDINATION: Handle JSR operations BEFORE memory operation (like interrupts)
-        // CRITICAL FIX: Shared static variables for target address preservation across JSR cycles
-        static uint8_t jsr_target_low = 0;
-        static uint8_t jsr_target_high = 0;
-        
-        if (opcode == 0x20) {
-            
-            if (mem_op == MemOp::WRITE_SP_DEC && data_op == DataOp::STACK_PUSH) {
-                // Stack push cycles 3-4: handle stack coordination
-                if (cycle_step == 3) {
-                    // First stack push cycle: save the target address from ABL/ABH
-                    jsr_target_low = reg[CpuReg::ABL];
-                    jsr_target_high = reg[CpuReg::ABH];
-                }
-                
-                // Calculate what to push based on cycle step (same pattern as interrupt coordination)
-                uint8_t push_data = 0;
-                const uint16_t current_pc = (reg[CpuReg::PCH] << 8) | reg[CpuReg::PCL];
-                // JSR pushes return address = current PC (pointing to high byte of JSR operand)
-                const uint16_t return_address = current_pc;
-                
-                switch (cycle_step) {
-                    case 3: // Push PCH (high byte of return address)
-                        push_data = (return_address >> 8) & 0xFF;
-                        break;
-                    case 4: // Push PCL (low byte of return address)
-                        push_data = return_address & 0xFF;
-                        break;
-                    default:
-                        push_data = 0;
-                        break;
-                }
-                // Set the data on the bus for the memory write operation (like interrupt coordination)
-                bus_state = BUS_SET_DATA(bus_state, push_data);
-            }
-        }
-        
-        
-        // RTS COORDINATION: Handle RTS operations BEFORE memory operation (similar to JSR)
-        if (opcode == 0x60) {
-            // RTS coordination: handle stack pull operations
-            if (mem_op == MemOp::READ_SP_INC && data_op == DataOp::STACK_PULL) {
-                // Cycles 3-4: Pull return address from stack
-                // Don't modify PC until both bytes are pulled
-            }
-        }
-        
-        // Execute normal memory operation with CPU context for NMOS page boundary bug
-        bus_state = memory_ops::execute_memory_operation(bus_state, reg, mem_op, *this);
-        
-        // JSR POST-MEMORY COORDINATION: Restore target address after memory operations that overwrite ABL/ABH
-        if (opcode == 0x20 && mem_op == MemOp::READ_PC_INC && data_op == DataOp::ADDR_CALC_HIGH && cycle_step == 5) {
-            // CRITICAL FIX: After cycle 5 reads high byte and overwrites ABL, restore the low byte
-            // Note: jsr_target_low was set during cycle 3, now restore it
-            reg[CpuReg::ABL] = jsr_target_low;
-        }
-        
-        // Handle write data if needed
-        if (mem_op >= MemOp::WRITE_ABS || mem_op == MemOp::WRITE_SP_DEC) {
-            // Set pending_data for STORE operations using helper function
-            if (data_op >= DataOp::STORE_A && data_op <= DataOp::STORE_ZERO) {
-                pending_data = get_store_register_value(data_op);
-            } else if (data_op == DataOp::STACK_PUSH) {
-                // STACK OPERATIONS FIX: Handle PHP instruction - set pending_data to processor status
-                // PHP (0x08) uses DataOp::STACK_PUSH and needs to push the P register
-                switch (opcode) {
-                    case 0x08: // PHP - Push Processor Status
-                        // PHP sets the B and U flags in the pushed status (hardware behavior)
-                        pending_data = reg[CpuReg::P] | P_BREAK | P_UNUSED;
-                        break;
-                    case 0x20: // JSR - Jump to Subroutine (handled by JSR coordination above)
-                        // JSR stack push data is already set by JSR coordination - skip handle_stack_push()
-                        break;
-                    default:
-                        // For other STACK_PUSH operations, use handle_stack_push()
-                        handle_stack_push();
-                        break;
-                }
-            }
-            bus_state = memory_ops::handle_write_data(bus_state, *this, mem_op, data_op, pending_data);
-        }
-        
-        // Execute data operation and ALU operation using same bus data
-        uint8_t bus_data = BUS_GET_DATA(bus_state);
-        execute_data_operation(cycle.data_op, bus_data);
-        
-        // Execute ALU operation if specified
-        if (alu_op != AluOp::NOP) {
-            // CRITICAL FIX: Skip ALU execution if already done in TEMP_MODIFY
-            // Memory modify operations (ROR, ASL, LSR, ROL, INC, DEC) execute ALU during TEMP_MODIFY
-            // to ensure the result is available for the memory write in the same cycle
-            if (pending_data_op == static_cast<uint8_t>(DataOp::TEMP_MODIFY)) {
-                // ALU operation already executed in TEMP_MODIFY - skip duplicate execution
-                pending_data_op = 0; // Clear the flag
-            } else {
-                // Normal ALU execution path
-                // CRITICAL FIX: Use pending_data for ALU operations when DataOp::ALU was executed
-                // DataOp::ALU sets pending_data to prepare operand for ALU operation
-                // TRANSFER/FLAG FIX: Transfer and flag operations don't need external data
-                uint8_t alu_data;
-                if (data_op == DataOp::ALU) {
-                    alu_data = pending_data;
-                } else if (alu_op >= AluOp::TXA && alu_op <= AluOp::TXS) {
-                    // Transfer operations: TAX, TXA, TAY, TYA, TSX, TXS - don't use bus data
-                    alu_data = 0; // Transfer operations use register values internally
-                } else if (alu_op >= AluOp::CLC && alu_op <= AluOp::SED) {
-                    // Flag operations: CLC, SEC, CLI, SEI, CLV, CLD, SED - don't use bus data
-                    alu_data = 0; // Flag operations don't need data
-                } else {
-                    alu_data = bus_data;
-                }
-                alu_ops::execute_alu_operation(reg, alu_op, alu_data);
-                
-                // Handle interrupt flag changes for SEI/CLI instructions
-                if (alu_op == AluOp::SEI || alu_op == AluOp::CLI) {
-                    handle_interrupt_flag_change();
-                }
-                
-                // Handle decimal mode bugs for NMOS variants
-                handle_decimal_mode_bugs(reg[CpuReg::A], alu_op);
-            }
-        }
-        
-        // Process SO pin edge detection (variant-specific timing)
-        process_so_pin_edge();
-        
-        // Check if instruction is complete using sync bit
-        // CONDITIONAL CYCLE SOLUTION: Branch instructions use dynamic SYNC determination
-        bool instruction_complete = cycle.is_sync();
-        
-        
-        // ZERO-OVERHEAD BRANCH CONDITIONAL CYCLES: Handle branch instructions specially
-        if (opcode >= 0x10 && opcode <= 0xF0 && (opcode & 0x1F) == 0x10) {
-            // Branch instruction: Check state flags AFTER execution to determine completion
-            // The branch logic in handle_branch_instruction sets STATE_BRANCH_TAKEN during cycle 1
-            if (cycle_step == 1) {
-                // After cycle 1 (offset read): branch decision has been made
-                // CRITICAL FIX: Always complete after cycle 1 if branch not taken (total: 2 cycles)
-                if (!get_state(STATE_BRANCH_TAKEN)) {
-                    instruction_complete = true;
-                } else {
-                    // Branch taken: need cycle 2 for branch execution
-                    instruction_complete = false;
-                }
-            } else if (cycle_step == 2) {
-                // After cycle 2: Complete if branch taken but no page crossing (total: 3 cycles)
-                if (get_state(STATE_BRANCH_TAKEN) && !get_state(STATE_PAGE_CROSSED)) {
-                    instruction_complete = true;
-                } else if (get_state(STATE_BRANCH_TAKEN) && get_state(STATE_PAGE_CROSSED)) {
-                    // Page crossed: need cycle 3
-                    instruction_complete = false;
-                } else {
-                    // Should not happen: branch not taken should complete after cycle 1
-                    instruction_complete = true;
-                }
-            } else if (cycle_step >= 3) {
-                // After cycle 3+: Always complete (branch taken with page crossing, total: 4 cycles)
-                instruction_complete = true;
-            }
-            
-            // Clear branch state flags when instruction completes
-            if (instruction_complete) {
-                clear_state(STATE_BRANCH_TAKEN | STATE_PAGE_CROSSED);
-            }
-        }
-        
-        if (instruction_complete) {
-            cycle_step = 0; // Start next instruction
-        } else {
-            cycle_step++;
-        }
-        return bus_state;
-    }
     
     // Execute data operation
     inline void execute_data_operation(uint8_t data_op, uint8_t data) {
@@ -1469,85 +1664,6 @@ public:
     
     // === CONTROL LINE PROCESSING ===
     
-    // Process input control lines - hardware-accurate pin handling
-    inline bus_state_t process_input_pins(bus_state_t bus_state) {
-        // Batch check all control pins at once for maximum speed
-        constexpr bus_state_t control_pin_mask =
-            (Config::has_so_pin ? BUS_BIT(BUS_SO_BIT) : 0) |
-            (Config::has_be_pin ? BUS_BIT(BUS_BE_BIT) : 0) |
-            (Config::has_abort_pin ? BUS_BIT(BUS_ABORT_BIT) : 0);
-        
-        const bus_state_t active_pins = bus_state & control_pin_mask;
-        
-        // Only process if any control pins are relevant
-        if constexpr (control_pin_mask != 0) {
-            // SO (Set Overflow) pin - edge detection for NMOS variants
-            if constexpr (Config::has_so_pin) {
-                // CRITICAL FIX: SO pin should only trigger for specific external hardware conditions
-                // Stack operations and normal CPU operations should NOT trigger SO pin processing
-                // SO pin is for external hardware signaling (like arithmetic coprocessors), not internal CPU operations
-                const bool current_so = (active_pins & BUS_BIT(BUS_SO_BIT)) != 0;
-                
-                // Only process SO pin for non-stack operations and when externally triggered
-                // Skip SO processing for stack operations (PHA/PHP/PLA/PLP), JSR, RTS, RTI, JMP instructions, shift/rotate operations, and NOP instructions
-                if (opcode != 0x48 && opcode != 0x08 && opcode != 0x68 && opcode != 0x28 &&
-                    opcode != 0x20 && opcode != 0x60 && opcode != 0x40 &&
-                    opcode != 0x4C && opcode != 0x6C &&
-                    opcode != 0x06 && opcode != 0x16 && opcode != 0x0E && opcode != 0x1E &&  // ASL
-                    opcode != 0x46 && opcode != 0x56 && opcode != 0x4E && opcode != 0x5E &&  // LSR
-                    opcode != 0x26 && opcode != 0x36 && opcode != 0x2E && opcode != 0x3E &&  // ROL
-                    opcode != 0x66 && opcode != 0x76 && opcode != 0x6E && opcode != 0x7E &&  // ROR
-                    // NOP instructions - all variants should preserve flags
-                    opcode != 0xEA && opcode != 0x1A && opcode != 0x3A && opcode != 0x5A && opcode != 0x7A && opcode != 0xDA && opcode != 0xFA &&  // Single-byte NOPs
-                    opcode != 0x80 && opcode != 0x82 && opcode != 0x89 && opcode != 0xC2 && opcode != 0xE2 &&  // Immediate NOPs
-                    opcode != 0x04 && opcode != 0x44 && opcode != 0x64 &&  // Zero page NOPs
-                    opcode != 0x0C &&  // Absolute NOP
-                    opcode != 0x14 && opcode != 0x34 && opcode != 0x54 && opcode != 0x74 && opcode != 0xD4 && opcode != 0xF4 &&  // Zero page,X NOPs
-                    opcode != 0x1C && opcode != 0x3C && opcode != 0x5C && opcode != 0x7C && opcode != 0xDC && opcode != 0xFC) {  // Absolute,X NOPs
-                    // Simple SO pin handling - set overflow flag when pin is low (external signal)
-                    if (!current_so) {
-                        set_state(STATE_SO_EDGE);
-                    }
-                    
-                    // Handle SO edge during instruction execution (NMOS behavior)
-                    if constexpr (Config::cpu_variant == CpuVariant::NMOS_6502 ||
-                                 Config::cpu_variant == CpuVariant::NMOS_6510) {
-                        if (get_state(STATE_SO_EDGE) && cycle_step > 0) {
-                            // CRITICAL FIX: Skip SO processing during opcode fetch (step 0) and for excluded instructions
-                            // During step 0, the opcode variable contains the PREVIOUS instruction, not the current one
-                            // Skip SO pin processing for stack operations, interrupt returns, and JMP instructions - they preserve flags
-                            if (cycle_step == 0 ||
-                                opcode == 0x48 || opcode == 0x08 || opcode == 0x68 || opcode == 0x28 ||
-                                opcode == 0x20 || opcode == 0x60 || opcode == 0x40 ||
-                                opcode == 0x4C || opcode == 0x6C ||
-                                opcode == 0x0A || opcode == 0x4A || opcode == 0x2A || opcode == 0x6A) {
-                                // Skip SO pin processing for excluded instructions (stack, control flow, JMP, accumulator) - they preserve flags
-                                clear_state(STATE_SO_EDGE);
-                            } else {
-                                clear_state(STATE_SO_EDGE);
-                                reg[CpuReg::P] |= P_OVERFLOW;
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // BE (Bus Enable) pin - 65C02/65C816 bus control
-            // Note: BE pin logic temporarily disabled for testing compatibility
-            // The pin exists but doesn't interfere with normal CPU operation
-            if constexpr (Config::has_be_pin) {
-                // BE pin acknowledged but no action taken
-                // This prevents interference with interrupt testing while maintaining
-                // hardware compatibility for future enhancement
-            }
-            
-            // ABORT pin - 65C816 abort interrupt
-            // Note: ABORT interrupt handling is done via direct abort_pin() method calls
-            // for better control and testing flexibility. Bus-state-driven ABORT detection
-            // could be added here if needed for hardware-accurate pin simulation.
-        }
-        return bus_state;
-    }
     
     // BRANCH ELIMINATION: Template-specialized RDY pin handling with compile-time optimization
     inline bus_state_t handle_rdy_wait(bus_state_t bus_state) {
@@ -1841,10 +1957,14 @@ public:
     // Constructor
     fam65xx_with_cycle_count() : cpu() {}
     
-    // Cycle counting wrapper
-    inline bus_state_t cycle_tick(bus_state_t bus_state) {
-        cycle_counter++;
-        return cpu.cycle_tick(bus_state);
+    // φ1/φ2 Phase cycle counting wrappers
+    inline bus_state_t phi1_tick(bus_state_t bus_state) {
+        return cpu.phi1_tick(bus_state);
+    }
+    
+    inline bus_state_t phi2_tick(bus_state_t bus_state) {
+        cycle_counter++; // Count cycles on φ2 phase
+        return cpu.phi2_tick(bus_state);
     }
     
     // Cycle counting methods
