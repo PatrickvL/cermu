@@ -47,6 +47,11 @@ struct cpu_config {
     static constexpr bool wai_instruction = HasWAI;
     static constexpr bool stp_instruction = HasSTP;
     static constexpr uint16_t address_mask = (1 << AddressLines) - 1;
+    
+    // φ1/φ2 Phase coordination optimization flags
+    static constexpr bool phi1_phi2_split = true;          // Enable φ1/φ2 phase split architecture
+    static constexpr bool optimize_bus_coordination = true; // Enable compile-time bus coordination optimizations
+    static constexpr bool hardware_accurate_timing = true;  // Enable hardware-accurate φ1/φ2 timing
 };
 
 // Pre-defined CPU variant configurations

@@ -28,6 +28,12 @@ constexpr uint32_t STATE_STP_MODE = 0x4000, STATE_SO_EDGE = 0x8000;
 constexpr uint32_t STATE_ABORT_PENDING = 0x10000; // Bit 16
 constexpr uint32_t STATE_COP_PENDING = 0x20000;   // Bit 17
 
+// φ1/φ2 Phase coordination flags - hardware-accurate timing
+constexpr uint32_t STATE_PHI1_ACTIVE = 0x40000;   // Bit 18 - φ1 phase active
+constexpr uint32_t STATE_PHI2_ACTIVE = 0x80000;   // Bit 19 - φ2 phase active
+constexpr uint32_t STATE_BUS_AVAILABLE = 0x100000; // Bit 20 - Bus available to CPU (not DMA)
+constexpr uint32_t STATE_ADDRESS_SETUP = 0x200000; // Bit 21 - Address setup complete
+
 // Memory operations - type-safe enum (OPTIMIZED: reads first, writes second for branchless comparison)
 enum class MemOp : uint8_t {
     // === READ OPERATIONS (0-8) ===
