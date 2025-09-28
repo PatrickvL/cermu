@@ -451,19 +451,19 @@ HOT_PATH inline void alu_sbc_unified(RegArray& reg, uint8_t data) {
         } else {
             // Binary mode
             const uint8_t borrow = (reg[CpuReg::P] & P_CARRY) ? 0 : 1;
-            const uint16_t temp = a - data - borrow;
+            const int16_t temp = (int16_t)a - (int16_t)data - (int16_t)borrow;
             result = temp & 0xFF;
             nz_flag_value = result;
-            flags = (temp >= 0x100 ? 0 : P_CARRY) |
+            flags = (temp >= 0 ? P_CARRY : 0) |
                     (((a ^ data) & (a ^ result) & 0x80) ? P_OVERFLOW : 0);
         }
     } else {
         // No decimal mode support
         const uint8_t borrow = (reg[CpuReg::P] & P_CARRY) ? 0 : 1;
-        const uint16_t temp = a - data - borrow;
+        const int16_t temp = (int16_t)a - (int16_t)data - (int16_t)borrow;
         result = temp & 0xFF;
         nz_flag_value = result;
-        flags = (temp >= 0x100 ? 0 : P_CARRY) |
+        flags = (temp >= 0 ? P_CARRY : 0) |
                 (((a ^ data) & (a ^ result) & 0x80) ? P_OVERFLOW : 0);
     }
     
