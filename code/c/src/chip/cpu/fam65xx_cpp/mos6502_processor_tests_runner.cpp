@@ -26,6 +26,12 @@ extern "C" {
 namespace fs = std::filesystem;
 using namespace fam65xx_cpp;
 
+// Global configuration
+static bool verbose_output = false;
+static bool debug_cycles = false;
+static int test_index_filter = -1;  // -1 = run all tests
+static int opcode_filter = -1;      // -1 = run all opcodes
+
 // ProcessorTests harness for the optimized MOS6502 emulator
 class OptimizedProcessorTestHarness {
 private:
@@ -74,8 +80,27 @@ public:
             uint8_t initial_cycle = cpu.get_current_cycle();
             
             // Execute cycles until instruction completion
+            uint8_t opcode = memory[initial_pc];
+            bool debug_this = debug_cycles && (opcode_filter == -1 || opcode_filter == opcode);
+            
+            // Handle initial opcode fetch if CPU is starting fresh
+            if (cpu.get_current_cycle() == 0 && cpu.get_current_opcode() == 0x00) {
+                if (debug_this) {
+                    std::cout << "    Initial opcode fetch: fetching 0x" << std::hex << (int)opcode
+                              << " from PC 0x" << initial_pc << std::dec << std::endl;
+                }
+                cpu.complete_opcode_fetch(opcode);
+            }
+            
             for (int max_cycles = 0; max_cycles < 10; max_cycles++) {
                 cycle_count++;
+                
+                if (debug_this) {
+                    std::cout << "    Cycle " << (max_cycles + 1) << ": CPU cycle=" << (int)cpu.get_current_cycle()
+                              << " opcode=0x" << std::hex << (int)cpu.get_current_opcode()
+                              << " PC=0x" << cpu.get_pc() << " SP=0x" << (int)cpu.get_sp()
+                              << " P=0x" << (int)cpu.get_p() << std::dec << std::endl;
+                }
                 
                 // Create bus state for memory interface
                 uint16_t addr = 0;
@@ -85,25 +110,59 @@ public:
                 // φ1 phase - internal CPU operations
                 bus_state = cpu.tick_phi1(bus_state);
                 
-                // φ2 phase - external bus operations  
+                // φ2 phase - external bus operations
                 bus_state = cpu.tick_phi2(bus_state);
                 
                 // Memory access occurs AFTER φ2 completes
                 addr = BUS_GET_ADDR(bus_state);
                 bool is_write = !(bus_state & BUS_BIT(BUS_RW_BIT));
                 
+                if (debug_this) {
+                    std::cout << "      Bus: addr=0x" << std::hex << addr << " "
+                              << (is_write ? "WRITE" : "READ");
+                }
+                
                 if (is_write) {
                     // Write cycle
                     data = BUS_GET_DATA(bus_state);
                     memory[addr] = data;
+                    if (debug_this) {
+                        std::cout << " data=0x" << std::hex << (int)data << " -> memory[0x" << addr << "]" << std::dec;
+                    }
                 } else {
-                    // Read cycle - provide data to CPU
+                    // Read cycle - provide data to CPU via external interface
                     data = memory[addr];
                     bus_state = BUS_SET_DATA(bus_state, data);
+                    if (debug_this) {
+                        std::cout << " data=0x" << std::hex << (int)data << std::dec;
+                    }
+                    
+                    // For opcode fetches (when instruction completed), handle separately
+                    if (cpu.get_current_cycle() == 0 && max_cycles > 0) {
+                        cpu.complete_opcode_fetch(data);
+                        if (debug_this) {
+                            std::cout << " (opcode fetch)";
+                        }
+                    } else {
+                        cpu.sample_bus_data(data);
+                        if (debug_this) {
+                            std::cout << " (data sample)";
+                        }
+                    }
+                }
+                
+                if (debug_this) {
+                    std::cout << std::endl;
+                    std::cout << "      After: PC=0x" << std::hex << cpu.get_pc()
+                              << " SP=0x" << (int)cpu.get_sp() << " P=0x" << (int)cpu.get_p()
+                              << " cycle=" << (int)cpu.get_current_cycle() << std::dec << std::endl;
                 }
                 
                 // Check if instruction completed (cycle reset to 0)
                 if (cpu.get_current_cycle() == 0 && max_cycles > 0) {
+                    if (debug_this) {
+                        std::cout << "    INSTRUCTION COMPLETED" << std::endl;
+                    }
                     break;
                 }
                 
@@ -132,11 +191,10 @@ struct TestResults {
     uint32_t opcode_totals[256] = {0};
 };
 
-static bool verbose_output = false;
 static TestResults results;
 
 // Run a single ProcessorTests test case
-bool run_processor_test(const processor_test_t* test) {
+bool run_processor_test(const processor_test_t* test, int test_number = -1) {
     results.total_tests++;
     
     if (verbose_output) {
@@ -166,13 +224,25 @@ bool run_processor_test(const processor_test_t* test) {
     uint8_t opcode = harness.get_memory(test->initial.pc);
     results.opcode_totals[opcode]++;
     
+    // Apply opcode filter if specified
+    if (opcode_filter != -1 && opcode != opcode_filter) {
+        return true; // Skip this test, but don't count as failure
+    }
+    
     if (verbose_output) {
-        std::cout << "  Opcode at PC 0x" << std::hex << test->initial.pc 
+        if (test_number >= 0) {
+            std::cout << "  Test #" << test_number << " - ";
+        }
+        std::cout << "Opcode at PC 0x" << std::hex << test->initial.pc 
                   << ": 0x" << std::hex << (int)opcode << std::dec << std::endl;
         std::cout << "  Initial state: A=0x" << std::hex << (int)test->initial.a
                   << " X=0x" << (int)test->initial.x << " Y=0x" << (int)test->initial.y
                   << " P=0x" << (int)test->initial.p << " SP=0x" << (int)test->initial.s
                   << " PC=0x" << test->initial.pc << std::dec << std::endl;
+        
+        if (debug_cycles) {
+            std::cout << "  === DETAILED CYCLE EXECUTION ===" << std::endl;
+        }
     }
     
     // Execute one instruction
@@ -312,6 +382,7 @@ bool run_tests_from_file(const std::string& filepath) {
         // Array of tests
         pos++; // Skip opening bracket
         
+        int test_counter = 0;
         while (*pos) {
             pos = json_skip_whitespace(pos);
             if (*pos == ']') break;
@@ -328,7 +399,10 @@ bool run_tests_from_file(const std::string& filepath) {
                 // Parse and run the test
                 processor_test_t test;
                 if (json_parse_processor_test(test_json.c_str(), &test)) {
-                    run_processor_test(&test);
+                    if (test_index_filter == -1 || test_counter == test_index_filter) {
+                        run_processor_test(&test, test_counter);
+                    }
+                    test_counter++;
                 } else {
                     std::cout << "ERROR: Failed to parse test in file: " << filepath << std::endl;
                 }
@@ -346,7 +420,9 @@ bool run_tests_from_file(const std::string& filepath) {
         // Single test
         processor_test_t test;
         if (json_parse_processor_test(json_content.c_str(), &test)) {
-            run_processor_test(&test);
+            if (test_index_filter == -1 || test_index_filter == 0) {
+                run_processor_test(&test, 0);
+            }
         } else {
             std::cout << "ERROR: Failed to parse test in file: " << filepath << std::endl;
         }
@@ -373,12 +449,17 @@ void print_usage(const char* program_name) {
     std::cout << "MOS6502 Optimized ProcessorTests Runner - Hardware-accurate validation\n";
     std::cout << "Usage: " << program_name << " [options] <test_file_or_directory>\n";
     std::cout << "Options:\n";
-    std::cout << "  -v, --verbose    Enable verbose output\n";
-    std::cout << "  -h, --help       Show this help message\n";
+    std::cout << "  -v, --verbose       Enable verbose output\n";
+    std::cout << "  --debug-cycles      Enable detailed cycle-by-cycle debugging\n";
+    std::cout << "  --test-index N      Run only test case N from the file (0-based)\n";
+    std::cout << "  --opcode 0xXX       Filter tests to only run specified opcode\n";
+    std::cout << "  -h, --help          Show this help message\n";
     std::cout << "\n";
     std::cout << "Examples:\n";
     std::cout << "  " << program_name << " processor_tests/6502/v1/\n";
     std::cout << "  " << program_name << " -v processor_tests/6502/v1/69.json\n";
+    std::cout << "  " << program_name << " --debug-cycles --opcode 0x00 processor_tests/6502/v1/00.json\n";
+    std::cout << "  " << program_name << " --test-index 0 processor_tests/6502/v1/00.json\n";
     std::cout << "\n";
     std::cout << "This runner tests the new MOS6502Optimized implementation with:\n";
     std::cout << "  • Compact cycle storage through mutually exclusive circuit groups\n";
@@ -400,6 +481,32 @@ int main(int argc, char* argv[]) {
         std::string arg = argv[i];
         if (arg == "-v" || arg == "--verbose") {
             verbose_output = true;
+        } else if (arg == "--debug-cycles") {
+            debug_cycles = true;
+            verbose_output = true; // Enable verbose when debugging cycles
+        } else if (arg == "--test-index") {
+            if (i + 1 < argc) {
+                test_index_filter = std::atoi(argv[++i]);
+            } else {
+                std::cout << "ERROR: --test-index requires a number\n";
+                return 1;
+            }
+        } else if (arg == "--opcode") {
+            if (i + 1 < argc) {
+                std::string opcode_str = argv[++i];
+                if (opcode_str.substr(0, 2) == "0x") {
+                    opcode_filter = std::stoi(opcode_str, nullptr, 16);
+                } else {
+                    opcode_filter = std::stoi(opcode_str);
+                }
+                if (opcode_filter < 0 || opcode_filter > 255) {
+                    std::cout << "ERROR: Opcode must be 0-255 or 0x00-0xFF\n";
+                    return 1;
+                }
+            } else {
+                std::cout << "ERROR: --opcode requires a value\n";
+                return 1;
+            }
         } else if (arg == "-h" || arg == "--help") {
             print_usage(argv[0]);
             return 0;
@@ -416,7 +523,11 @@ int main(int argc, char* argv[]) {
     
     std::cout << "=== MOS6502 Optimized ProcessorTests Runner ===\n";
     std::cout << "Test paths: " << test_paths.size() << " specified\n";
-    std::cout << "Verbose: " << (verbose_output ? "enabled" : "disabled") << "\n\n";
+    std::cout << "Verbose: " << (verbose_output ? "enabled" : "disabled") << "\n";
+    if (debug_cycles) std::cout << "Debug cycles: enabled\n";
+    if (test_index_filter >= 0) std::cout << "Test index filter: " << test_index_filter << "\n";
+    if (opcode_filter >= 0) std::cout << "Opcode filter: 0x" << std::hex << opcode_filter << std::dec << "\n";
+    std::cout << "\n";
     
     auto start_time = std::chrono::high_resolution_clock::now();
     
