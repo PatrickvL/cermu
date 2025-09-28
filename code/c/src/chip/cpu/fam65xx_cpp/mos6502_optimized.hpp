@@ -169,8 +169,8 @@ private:
     bool branch_taken = false;
     bool page_crossed = false;
     
-    // Compact cycle table: 256 opcodes × 8 cycles = 2048 entries × 16 bits = 4KB
-    static const std::array<CompactCycleDef, 2048> cycle_table;
+    // Compact cycle table: 256 opcodes × 8 cycles + interrupt sequences = 2072 entries × 16 bits = 4.1KB
+    static const std::array<CompactCycleDef, 2072> cycle_table;
     
 public:
     // Constructor
@@ -579,11 +579,11 @@ private:
 
 // Forward declaration for cycle table generator
 template<typename Config>
-constexpr std::array<CompactCycleDef, 2048> generate_complete_cycle_table();
+constexpr std::array<CompactCycleDef, 2072> generate_complete_cycle_table();
 
 // Cycle table definition - implemented in mos6502_cycle_table.hpp
 template<typename Config>
-const std::array<CompactCycleDef, 2048> MOS6502Optimized<Config>::cycle_table = generate_complete_cycle_table<Config>();
+const std::array<CompactCycleDef, 2072> MOS6502Optimized<Config>::cycle_table = generate_complete_cycle_table<Config>();
 
 } // namespace fam65xx_cpp
 
