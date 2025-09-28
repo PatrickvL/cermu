@@ -598,7 +598,7 @@ constexpr std::array<CompactCycleDef, 2048> generate_complete_cycle_table() {
     
     // 0xEA: NOP - No Operation (2 cycles)
     set_cycles(0xEA, {
-        CD(NONE, NONE, NONE, NONE, false),    // Cycle 1: Internal operation
+        CD(NONE, PC, DL, READ, false),        // Cycle 1: Fetch NOP opcode, PC++
         LAST_CYCLE(NONE, NONE, NONE, NONE)   // Cycle 2: Complete
     });
     

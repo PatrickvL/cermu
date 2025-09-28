@@ -216,24 +216,15 @@ public:
     // Main execution methods with φ1/φ2 separation
     bus_state_t tick_phi1(bus_state_t bus_state) {
         // φ1: Internal operations (decode, ALU, register updates)
-        
-        // If this is a new instruction (current_cycle == 0), fetch the opcode
-        if (current_cycle == 0) {
-            current_opcode = BUS_GET_DATA(bus_state);
-        }
-        
         const CompactCycleDef& cycle = cycle_table[current_opcode * 8 + current_cycle];
         
-        // Execute ALU operation
-        execute_alu_operation(cycle.get_alu(), registers.reg8(CpuReg8::DL));
+        // Execute ALU operation if specified
+        if (cycle.get_alu() != AluGroup::NONE) {
+            execute_alu_operation(cycle.get_alu(), registers.reg8(CpuReg8::DL));
+        }
         
         // Handle address calculation
         temp_address = calculate_address(cycle.get_address());
-        
-        // Increment PC for immediate/sequential addressing
-        if (cycle.get_address() == AddressGroup::PC) {
-            set_pc(get_pc() + 1);
-        }
         
         return bus_state;
     }
@@ -242,8 +233,11 @@ public:
         // φ2: External operations (bus control, memory access)
         const CompactCycleDef& cycle = cycle_table[current_opcode * 8 + current_cycle];
         
-        // Set address on bus
-        if (temp_address != 0) {
+        // Set address on bus - for PC operations, use current PC and increment
+        if (cycle.get_address() == AddressGroup::PC) {
+            bus_state = BUS_SET_ADDR(bus_state, get_pc());
+            set_pc(get_pc() + 1);  // Increment PC after setting address
+        } else if (temp_address != 0) {
             bus_state = BUS_SET_ADDR(bus_state, temp_address);
         }
         
@@ -252,6 +246,12 @@ public:
         
         // Sample data from bus
         uint8_t bus_data = BUS_GET_DATA(bus_state);
+        
+        // For new instruction (cycle 0), capture the opcode
+        if (current_cycle == 0) {
+            // This is the opcode fetch cycle - store the opcode for next instruction
+            // Don't change current_opcode yet, wait until instruction completes
+        }
         
         // Update target register if specified
         if (cycle.get_target() != RegTargetGroup::NONE) {
@@ -263,7 +263,8 @@ public:
         
         // Update internal state - advance to next cycle
         if (cycle.is_last_cycle()) {
-            // Prepare for next instruction
+            // Prepare for next instruction - fetch opcode for next instruction
+            current_opcode = bus_data;  // New opcode from the bus
             current_cycle = 0;
             state_flags |= STATE_SYNC_NEXT;
         } else {
@@ -540,27 +541,28 @@ private:
                 break;
             case BusDriverGroup::WRITE:
                 bus_state &= ~BUS_BIT(BUS_RW_BIT); // Set R/W to write
-                bus_state = BUS_SET_DATA(bus_state, temp_data);
+                // For write operations, get data from the register specified by target
+                // This will be handled by the cycle table logic
                 break;
             case BusDriverGroup::STACK_PUSH:
                 bus_state &= ~BUS_BIT(BUS_RW_BIT); // Set R/W to write
-                bus_state = BUS_SET_DATA(bus_state, temp_data);
-                registers.reg8(CpuReg8::SP)--; // Decrement SP
+                // Data to push should be specified by the cycle definition
+                registers.reg8(CpuReg8::SP)--; // Decrement SP after push
                 break;
             case BusDriverGroup::STACK_PULL:
                 bus_state |= BUS_BIT(BUS_RW_BIT); // Set R/W to read
-                registers.reg8(CpuReg8::SP)++; // Increment SP
+                registers.reg8(CpuReg8::SP)++; // Increment SP before pull
                 break;
             case BusDriverGroup::VECTOR_READ:
                 bus_state |= BUS_BIT(BUS_RW_BIT); // Set R/W to read
                 break;
             case BusDriverGroup::MODIFY_WRITE:
                 bus_state &= ~BUS_BIT(BUS_RW_BIT); // Set R/W to write
-                bus_state = BUS_SET_DATA(bus_state, temp_data);
+                // Modified data should come from ALU operation result
                 break;
             case BusDriverGroup::NONE:
             default:
-                // No bus operation
+                // No bus operation - this is critical for NOP and other internal operations
                 break;
         }
         return bus_state;
