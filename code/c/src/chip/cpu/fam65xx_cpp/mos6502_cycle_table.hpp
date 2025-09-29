@@ -450,6 +450,51 @@ constexpr std::array<CompactCycleDef, 2072> generate_complete_cycle_table() {
         LAST_CYCLE(NONE, NONE, NONE, NONE)               // Cycle 6: Complete
     });
     
+    // 0x41: EOR (zp,X) - Exclusive OR with Accumulator Indexed Indirect (6 cycles)
+    set_cycles(0x41, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch zp address, PC++
+        CD(NONE, ZP, DL, READ, false),                   // Cycle 2: Add X to zp address
+        CD(NONE, INDEXED_X, ABL, READ, false),           // Cycle 3: Read target address low
+        CD(NONE, INDEXED_X, ABH, READ, false),           // Cycle 4: Read target address high
+        CD(NONE, ABH_ABL, DL, READ, false),              // Cycle 5: Read data from target
+        LAST_CYCLE(EOR, NONE, A, NONE)                   // Cycle 6: A = A ^ data, set N,Z
+    });
+    
+    // 0x45: EOR zp - Exclusive OR with Accumulator Zero Page (3 cycles)
+    set_cycles(0x45, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch zp address, PC++
+        CD(NONE, ZP, DL, READ, false),                   // Cycle 2: Read from zero page
+        LAST_CYCLE(EOR, NONE, A, NONE)                   // Cycle 3: A = A ^ data, set N,Z
+    });
+    
+    // 0x46: LSR zp - Logical Shift Right Zero Page (5 cycles)
+    set_cycles(0x46, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch zp address, PC++
+        CD(NONE, ZP, DL, READ, false),                   // Cycle 2: Read from zp
+        CD(NONE, ZP, DL, WRITE, false),                  // Cycle 3: Write original back
+        CD(LSR, ZP, NONE, MODIFY_WRITE, false),          // Cycle 4: Write shifted data
+        LAST_CYCLE(NONE, NONE, NONE, NONE)               // Cycle 5: Complete
+    });
+    
+    // 0x48: PHA - Push Accumulator (3 cycles)
+    set_cycles(0x48, {
+        CD(NONE, NONE, NONE, NONE, false),               // Cycle 1: Internal operation
+        CD(NONE, SP, A, STACK_PUSH, false),              // Cycle 2: Push A to stack
+        LAST_CYCLE(NONE, NONE, NONE, NONE)               // Cycle 3: Complete
+    });
+    
+    // 0x49: EOR #nn - Exclusive OR with Accumulator Immediate (2 cycles)
+    set_cycles(0x49, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch immediate, PC++
+        LAST_CYCLE(EOR, NONE, A, NONE)                   // Cycle 2: A = A ^ immediate, set N,Z
+    });
+    
+    // 0x4A: LSR A - Logical Shift Right Accumulator (2 cycles)
+    set_cycles(0x4A, {
+        CD(NONE, NONE, NONE, NONE, false),               // Cycle 1: Internal operation
+        LAST_CYCLE(LSR, NONE, A, NONE)                   // Cycle 2: A = A >> 1, set N,Z,C
+    });
+    
     // 0x4C: JMP nnnn - Jump Absolute (3 cycles)
     set_cycles(0x4C, {
         CD(NONE, PC, ABL, READ, false),                  // Cycle 1: Fetch target low, PC++
@@ -482,7 +527,156 @@ constexpr std::array<CompactCycleDef, 2072> generate_complete_cycle_table() {
         LAST_CYCLE(NONE, NONE, NONE, NONE)               // Cycle 5: Complete (PC set by ABL/ABH)
     });
     
-    // Load/Store Instructions - Critical for ProcessorTests
+    // Additional Core Instructions - Store and Arithmetic Operations
+    
+    // 0x70: BVS nn - Branch if Overflow Set (2+ cycles)
+    set_cycles(0x70, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch branch offset, PC++
+        LAST_CYCLE(NONE, NONE, NONE, PAGE_CROSS_FIX)     // Cycle 2+: Conditional branch
+    });
+    
+    // 0x78: SEI - Set Interrupt Disable Flag (2 cycles)
+    set_cycles(0x78, {
+        CD(NONE, NONE, NONE, NONE, false),               // Cycle 1: Internal operation
+        LAST_CYCLE(NONE, NONE, P, NONE)                  // Cycle 2: Set interrupt disable flag
+    });
+    
+    // 0x81: STA (zp,X) - Store Accumulator Indexed Indirect (6 cycles)
+    set_cycles(0x81, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch zp address, PC++
+        CD(NONE, ZP, DL, READ, false),                   // Cycle 2: Add X to zp address
+        CD(NONE, INDEXED_X, ABL, READ, false),           // Cycle 3: Read target address low
+        CD(NONE, INDEXED_X, ABH, READ, false),           // Cycle 4: Read target address high
+        CD(NONE, ABH_ABL, A, WRITE, false),              // Cycle 5: Write A to target address
+        LAST_CYCLE(NONE, NONE, NONE, NONE)               // Cycle 6: Complete
+    });
+    
+    // 0x84: STY zp - Store Y Zero Page (3 cycles)
+    set_cycles(0x84, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch zp address, PC++
+        CD(NONE, ZP, Y, WRITE, false),                   // Cycle 2: Write Y to zero page
+        LAST_CYCLE(NONE, NONE, NONE, NONE)               // Cycle 3: Complete
+    });
+    
+    // 0x85: STA zp - Store Accumulator Zero Page (3 cycles)
+    set_cycles(0x85, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch zp address, PC++
+        CD(NONE, ZP, A, WRITE, false),                   // Cycle 2: Write A to zero page
+        LAST_CYCLE(NONE, NONE, NONE, NONE)               // Cycle 3: Complete
+    });
+    
+    // 0x86: STX zp - Store X Zero Page (3 cycles)
+    set_cycles(0x86, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch zp address, PC++
+        CD(NONE, ZP, X, WRITE, false),                   // Cycle 2: Write X to zero page
+        LAST_CYCLE(NONE, NONE, NONE, NONE)               // Cycle 3: Complete
+    });
+    
+    // 0x88: DEY - Decrement Y (2 cycles)
+    set_cycles(0x88, {
+        CD(NONE, NONE, NONE, NONE, false),               // Cycle 1: Internal operation
+        LAST_CYCLE(DEC, NONE, Y, NONE)                   // Cycle 2: Y = Y - 1, set N,Z flags
+    });
+    
+    // 0x8A: TXA - Transfer X to A (2 cycles) - HARDWARE-ACCURATE IMPLEMENTATION
+    set_cycles(0x8A, {
+        CD(NONE, NONE, ADL, NONE, false),                // Cycle 1: Latch X into ADL register
+        LAST_CYCLE(NONE, NONE, A, NONE)                  // Cycle 2: Transfer ADL→A, set N,Z flags
+    });
+    
+    // 0x8C: STY nnnn - Store Y Absolute (4 cycles)
+    set_cycles(0x8C, {
+        CD(NONE, PC, ABL, READ, false),                  // Cycle 1: Fetch address low, PC++
+        CD(NONE, PC, ABH, READ, false),                  // Cycle 2: Fetch address high, PC++
+        CD(NONE, ABH_ABL, Y, WRITE, false),              // Cycle 3: Write Y to address
+        LAST_CYCLE(NONE, NONE, NONE, NONE)               // Cycle 4: Complete
+    });
+    
+    // 0x8D: STA nnnn - Store Accumulator Absolute (4 cycles)
+    set_cycles(0x8D, {
+        CD(NONE, PC, ABL, READ, false),                  // Cycle 1: Fetch address low, PC++
+        CD(NONE, PC, ABH, READ, false),                  // Cycle 2: Fetch address high, PC++
+        CD(NONE, ABH_ABL, A, WRITE, false),              // Cycle 3: Write A to address
+        LAST_CYCLE(NONE, NONE, NONE, NONE)               // Cycle 4: Complete
+    });
+    
+    // 0x8E: STX nnnn - Store X Absolute (4 cycles)
+    set_cycles(0x8E, {
+        CD(NONE, PC, ABL, READ, false),                  // Cycle 1: Fetch address low, PC++
+        CD(NONE, PC, ABH, READ, false),                  // Cycle 2: Fetch address high, PC++
+        CD(NONE, ABH_ABL, X, WRITE, false),              // Cycle 3: Write X to address
+        LAST_CYCLE(NONE, NONE, NONE, NONE)               // Cycle 4: Complete
+    });
+    
+    // 0x90: BCC nn - Branch if Carry Clear (2+ cycles)
+    set_cycles(0x90, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch branch offset, PC++
+        LAST_CYCLE(NONE, NONE, NONE, PAGE_CROSS_FIX)     // Cycle 2+: Conditional branch
+    });
+    
+    // 0x91: STA (zp),Y - Store Accumulator Indirect Indexed (6 cycles)
+    set_cycles(0x91, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch zp address, PC++
+        CD(NONE, ZP, ABL, READ, false),                  // Cycle 2: Read target address low from zp
+        CD(NONE, ZP, ABH, READ, false),                  // Cycle 3: Read target address high from zp+1
+        CD(NONE, INDEXED_Y, DL, READ, false),            // Cycle 4: Calculate final address (target+Y)
+        CD(NONE, INDEXED_Y, A, WRITE, false),            // Cycle 5: Write A to (target+Y)
+        LAST_CYCLE(NONE, NONE, NONE, NONE)               // Cycle 6: Complete
+    });
+    
+    // 0x94: STY zp,X - Store Y Zero Page,X (4 cycles)
+    set_cycles(0x94, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch zp address, PC++
+        CD(NONE, ZP, DL, READ, false),                   // Cycle 2: Add X to zp address (dummy read)
+        CD(NONE, INDEXED_X, Y, WRITE, false),            // Cycle 3: Write Y to zp+X
+        LAST_CYCLE(NONE, NONE, NONE, NONE)               // Cycle 4: Complete
+    });
+    
+    // 0x95: STA zp,X - Store Accumulator Zero Page,X (4 cycles)
+    set_cycles(0x95, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch zp address, PC++
+        CD(NONE, ZP, DL, READ, false),                   // Cycle 2: Add X to zp address (dummy read)
+        CD(NONE, INDEXED_X, A, WRITE, false),            // Cycle 3: Write A to zp+X
+        LAST_CYCLE(NONE, NONE, NONE, NONE)               // Cycle 4: Complete
+    });
+    
+    // 0x96: STX zp,Y - Store X Zero Page,Y (4 cycles)
+    set_cycles(0x96, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch zp address, PC++
+        CD(NONE, ZP, DL, READ, false),                   // Cycle 2: Add Y to zp address (dummy read)
+        CD(NONE, INDEXED_Y, X, WRITE, false),            // Cycle 3: Write X to zp+Y
+        LAST_CYCLE(NONE, NONE, NONE, NONE)               // Cycle 4: Complete
+    });
+    
+    // 0x98: TYA - Transfer Y to A (2 cycles) - HARDWARE-ACCURATE IMPLEMENTATION
+    set_cycles(0x98, {
+        CD(NONE, NONE, ADL, NONE, false),                // Cycle 1: Latch Y into ADL register
+        LAST_CYCLE(NONE, NONE, A, NONE)                  // Cycle 2: Transfer ADL→A, set N,Z flags
+    });
+    
+    // 0x99: STA nnnn,Y - Store Accumulator Absolute,Y (5 cycles)
+    set_cycles(0x99, {
+        CD(NONE, PC, ABL, READ, false),                  // Cycle 1: Fetch address low, PC++
+        CD(NONE, PC, ABH, READ, false),                  // Cycle 2: Fetch address high, PC++
+        CD(NONE, INDEXED_Y, DL, READ, false),            // Cycle 3: Calculate final address (address+Y)
+        CD(NONE, INDEXED_Y, A, WRITE, false),            // Cycle 4: Write A to address+Y
+        LAST_CYCLE(NONE, NONE, NONE, NONE)               // Cycle 5: Complete
+    });
+    
+    // 0x9A: TXS - Transfer X to Stack Pointer (2 cycles)
+    set_cycles(0x9A, {
+        CD(NONE, NONE, NONE, NONE, false),               // Cycle 1: Internal operation
+        LAST_CYCLE(NONE, NONE, SP, NONE)                 // Cycle 2: SP = X (no flags affected)
+    });
+    
+    // 0x9D: STA nnnn,X - Store Accumulator Absolute,X (5 cycles)
+    set_cycles(0x9D, {
+        CD(NONE, PC, ABL, READ, false),                  // Cycle 1: Fetch address low, PC++
+        CD(NONE, PC, ABH, READ, false),                  // Cycle 2: Fetch address high, PC++
+        CD(NONE, INDEXED_X, DL, READ, false),            // Cycle 3: Calculate final address (address+X)
+        CD(NONE, INDEXED_X, A, WRITE, false),            // Cycle 4: Write A to address+X
+        LAST_CYCLE(NONE, NONE, NONE, NONE)               // Cycle 5: Complete
+    });
     
     // 0xA0: LDY #nn - Load Y Immediate (2 cycles)
     set_cycles(0xA0, {
@@ -547,10 +741,247 @@ constexpr std::array<CompactCycleDef, 2072> generate_complete_cycle_table() {
         LAST_CYCLE(NONE, NONE, X, NONE)                  // Cycle 2: Transfer ADL→X, set N,Z flags
     });
     
+    
+    // 0xB0: BCS nn - Branch if Carry Set (2+ cycles)
+    set_cycles(0xB0, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch branch offset, PC++
+        LAST_CYCLE(NONE, NONE, NONE, PAGE_CROSS_FIX)     // Cycle 2+: Conditional branch
+    });
+    
+    // 0xB1: LDA (zp),Y - Load Accumulator Indirect Indexed (5+ cycles)
+    set_cycles(0xB1, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch zp address, PC++
+        CD(NONE, ZP, ABL, READ, false),                  // Cycle 2: Read target address low from zp
+        CD(NONE, ZP, ABH, READ, false),                  // Cycle 3: Read target address high from zp+1
+        CD(NONE, INDEXED_Y, DL, READ, false),            // Cycle 4: Read data from (target+Y)
+        LAST_CYCLE(NONE, NONE, A, PAGE_CROSS_FIX)        // Cycle 5: A = data, +1 if page crossed
+    });
+    
+    // 0xB4: LDY zp,X - Load Y Zero Page,X (4 cycles)
+    set_cycles(0xB4, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch zp address, PC++
+        CD(NONE, ZP, DL, READ, false),                   // Cycle 2: Add X to zp address (dummy read)
+        CD(NONE, INDEXED_X, DL, READ, false),            // Cycle 3: Read from zp+X
+        LAST_CYCLE(NONE, NONE, Y, NONE)                  // Cycle 4: Y = data, set N,Z flags
+    });
+    
+    // 0xB5: LDA zp,X - Load Accumulator Zero Page,X (4 cycles)
+    set_cycles(0xB5, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch zp address, PC++
+        CD(NONE, ZP, DL, READ, false),                   // Cycle 2: Add X to zp address (dummy read)
+        CD(NONE, INDEXED_X, DL, READ, false),            // Cycle 3: Read from zp+X
+        LAST_CYCLE(NONE, NONE, A, NONE)                  // Cycle 4: A = data, set N,Z flags
+    });
+    
+    // 0xB6: LDX zp,Y - Load X Zero Page,Y (4 cycles)
+    set_cycles(0xB6, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch zp address, PC++
+        CD(NONE, ZP, DL, READ, false),                   // Cycle 2: Add Y to zp address (dummy read)
+        CD(NONE, INDEXED_Y, DL, READ, false),            // Cycle 3: Read from zp+Y
+        LAST_CYCLE(NONE, NONE, X, NONE)                  // Cycle 4: X = data, set N,Z flags
+    });
+    
+    // 0xB8: CLV - Clear Overflow Flag (2 cycles)
+    set_cycles(0xB8, {
+        CD(NONE, NONE, NONE, NONE, false),               // Cycle 1: Internal operation
+        LAST_CYCLE(NONE, NONE, P, NONE)                  // Cycle 2: Clear overflow flag
+    });
+    
+    // 0xB9: LDA nnnn,Y - Load Accumulator Absolute,Y (4+ cycles)
+    set_cycles(0xB9, {
+        CD(NONE, PC, ABL, READ, false),                  // Cycle 1: Fetch address low, PC++
+        CD(NONE, PC, ABH, READ, false),                  // Cycle 2: Fetch address high, PC++
+        CD(NONE, INDEXED_Y, DL, READ, false),            // Cycle 3: Read from address+Y
+        LAST_CYCLE(NONE, NONE, A, PAGE_CROSS_FIX)        // Cycle 4: A = data, +1 if page crossed
+    });
+    
+    // 0xBA: TSX - Transfer Stack Pointer to X (2 cycles)
+    set_cycles(0xBA, {
+        CD(NONE, NONE, NONE, NONE, false),               // Cycle 1: Internal operation
+        LAST_CYCLE(NONE, NONE, X, NONE)                  // Cycle 2: X = SP, set N,Z flags
+    });
+    
+    // 0xBC: LDY nnnn,X - Load Y Absolute,X (4+ cycles)
+    set_cycles(0xBC, {
+        CD(NONE, PC, ABL, READ, false),                  // Cycle 1: Fetch address low, PC++
+        CD(NONE, PC, ABH, READ, false),                  // Cycle 2: Fetch address high, PC++
+        CD(NONE, INDEXED_X, DL, READ, false),            // Cycle 3: Read from address+X
+        LAST_CYCLE(NONE, NONE, Y, PAGE_CROSS_FIX)        // Cycle 4: Y = data, +1 if page crossed
+    });
+    
+    // 0xBD: LDA nnnn,X - Load Accumulator Absolute,X (4+ cycles)
+    set_cycles(0xBD, {
+        CD(NONE, PC, ABL, READ, false),                  // Cycle 1: Fetch address low, PC++
+        CD(NONE, PC, ABH, READ, false),                  // Cycle 2: Fetch address high, PC++
+        CD(NONE, INDEXED_X, DL, READ, false),            // Cycle 3: Read from address+X
+        LAST_CYCLE(NONE, NONE, A, PAGE_CROSS_FIX)        // Cycle 4: A = data, +1 if page crossed
+    });
+    
+    // 0xBE: LDX nnnn,Y - Load X Absolute,Y (4+ cycles)
+    set_cycles(0xBE, {
+        CD(NONE, PC, ABL, READ, false),                  // Cycle 1: Fetch address low, PC++
+        CD(NONE, PC, ABH, READ, false),                  // Cycle 2: Fetch address high, PC++
+        CD(NONE, INDEXED_Y, DL, READ, false),            // Cycle 3: Read from address+Y
+        LAST_CYCLE(NONE, NONE, X, PAGE_CROSS_FIX)        // Cycle 4: X = data, +1 if page crossed
+    });
+    
+    // 0xC0: CPY #nn - Compare Y Immediate (2 cycles)
+    set_cycles(0xC0, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch immediate, PC++
+        LAST_CYCLE(CPY, NONE, NONE, NONE)                // Cycle 2: Compare Y with immediate, set N,Z,C
+    });
+    
+    // 0xC1: CMP (zp,X) - Compare Accumulator Indexed Indirect (6 cycles)
+    set_cycles(0xC1, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch zp address, PC++
+        CD(NONE, ZP, DL, READ, false),                   // Cycle 2: Add X to zp address
+        CD(NONE, INDEXED_X, ABL, READ, false),           // Cycle 3: Read target address low
+        CD(NONE, INDEXED_X, ABH, READ, false),           // Cycle 4: Read target address high
+        CD(NONE, ABH_ABL, DL, READ, false),              // Cycle 5: Read data from target
+        LAST_CYCLE(CMP, NONE, NONE, NONE)                // Cycle 6: Compare A with data, set N,Z,C
+    });
+    
+    // 0xC4: CPY zp - Compare Y Zero Page (3 cycles)
+    set_cycles(0xC4, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch zp address, PC++
+        CD(NONE, ZP, DL, READ, false),                   // Cycle 2: Read from zero page
+        LAST_CYCLE(CPY, NONE, NONE, NONE)                // Cycle 3: Compare Y with data, set N,Z,C
+    });
+    
+    // 0xC5: CMP zp - Compare Accumulator Zero Page (3 cycles)
+    set_cycles(0xC5, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch zp address, PC++
+        CD(NONE, ZP, DL, READ, false),                   // Cycle 2: Read from zero page
+        LAST_CYCLE(CMP, NONE, NONE, NONE)                // Cycle 3: Compare A with data, set N,Z,C
+    });
+    
+    // 0xC6: DEC zp - Decrement Zero Page (5 cycles)
+    set_cycles(0xC6, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch zp address, PC++
+        CD(NONE, ZP, DL, READ, false),                   // Cycle 2: Read from zp
+        CD(NONE, ZP, DL, WRITE, false),                  // Cycle 3: Write original back
+        CD(DEC, ZP, NONE, MODIFY_WRITE, false),          // Cycle 4: Write decremented data
+        LAST_CYCLE(NONE, NONE, NONE, NONE)               // Cycle 5: Complete
+    });
+    
+    // 0xC8: INY - Increment Y (2 cycles)
+    set_cycles(0xC8, {
+        CD(NONE, NONE, NONE, NONE, false),               // Cycle 1: Internal operation
+        LAST_CYCLE(INC, NONE, Y, NONE)                   // Cycle 2: Y = Y + 1, set N,Z flags
+    });
+    
+    // 0xC9: CMP #nn - Compare Accumulator Immediate (2 cycles)
+    set_cycles(0xC9, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch immediate, PC++
+        LAST_CYCLE(CMP, NONE, NONE, NONE)                // Cycle 2: Compare A with immediate, set N,Z,C
+    });
+    
+    // 0xCA: DEX - Decrement X (2 cycles)
+    set_cycles(0xCA, {
+        CD(NONE, NONE, NONE, NONE, false),               // Cycle 1: Internal operation
+        LAST_CYCLE(DEC, NONE, X, NONE)                   // Cycle 2: X = X - 1, set N,Z flags
+    });
+    
+    // 0xCC: CPY nnnn - Compare Y Absolute (4 cycles)
+    set_cycles(0xCC, {
+        CD(NONE, PC, ABL, READ, false),                  // Cycle 1: Fetch address low, PC++
+        CD(NONE, PC, ABH, READ, false),                  // Cycle 2: Fetch address high, PC++
+        CD(NONE, ABH_ABL, DL, READ, false),              // Cycle 3: Read from address
+        LAST_CYCLE(CPY, NONE, NONE, NONE)                // Cycle 4: Compare Y with data, set N,Z,C
+    });
+    
+    // 0xCD: CMP nnnn - Compare Accumulator Absolute (4 cycles)
+    set_cycles(0xCD, {
+        CD(NONE, PC, ABL, READ, false),                  // Cycle 1: Fetch address low, PC++
+        CD(NONE, PC, ABH, READ, false),                  // Cycle 2: Fetch address high, PC++
+        CD(NONE, ABH_ABL, DL, READ, false),              // Cycle 3: Read from address
+        LAST_CYCLE(CMP, NONE, NONE, NONE)                // Cycle 4: Compare A with data, set N,Z,C
+    });
+    
+    // 0xCE: DEC nnnn - Decrement Absolute (6 cycles)
+    set_cycles(0xCE, {
+        CD(NONE, PC, ABL, READ, false),                  // Cycle 1: Fetch address low, PC++
+        CD(NONE, PC, ABH, READ, false),                  // Cycle 2: Fetch address high, PC++
+        CD(NONE, ABH_ABL, DL, READ, false),              // Cycle 3: Read from address
+        CD(NONE, ABH_ABL, DL, WRITE, false),             // Cycle 4: Write original back
+        CD(DEC, ABH_ABL, NONE, MODIFY_WRITE, false),     // Cycle 5: Write decremented data
+        LAST_CYCLE(NONE, NONE, NONE, NONE)               // Cycle 6: Complete
+    });
+    
+    // 0xD0: BNE nn - Branch if Not Equal (2+ cycles)
+    set_cycles(0xD0, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch branch offset, PC++
+        LAST_CYCLE(NONE, NONE, NONE, PAGE_CROSS_FIX)     // Cycle 2+: Conditional branch
+    });
+    
+    // 0xD8: CLD - Clear Decimal Mode (2 cycles)
+    set_cycles(0xD8, {
+        CD(NONE, NONE, NONE, NONE, false),               // Cycle 1: Internal operation
+        LAST_CYCLE(NONE, NONE, P, NONE)                  // Cycle 2: Clear decimal flag
+    });
+    
+    // 0xE0: CPX #nn - Compare X Immediate (2 cycles)
+    set_cycles(0xE0, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch immediate, PC++
+        LAST_CYCLE(CPX, NONE, NONE, NONE)                // Cycle 2: Compare X with immediate, set N,Z,C
+    });
+    
+    // 0xE4: CPX zp - Compare X Zero Page (3 cycles)
+    set_cycles(0xE4, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch zp address, PC++
+        CD(NONE, ZP, DL, READ, false),                   // Cycle 2: Read from zero page
+        LAST_CYCLE(CPX, NONE, NONE, NONE)                // Cycle 3: Compare X with data, set N,Z,C
+    });
+    
+    // 0xE6: INC zp - Increment Zero Page (5 cycles)
+    set_cycles(0xE6, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch zp address, PC++
+        CD(NONE, ZP, DL, READ, false),                   // Cycle 2: Read from zp
+        CD(NONE, ZP, DL, WRITE, false),                  // Cycle 3: Write original back
+        CD(INC, ZP, NONE, MODIFY_WRITE, false),          // Cycle 4: Write incremented data
+        LAST_CYCLE(NONE, NONE, NONE, NONE)               // Cycle 5: Complete
+    });
+    
+    // 0xE8: INX - Increment X (2 cycles)
+    set_cycles(0xE8, {
+        CD(NONE, NONE, NONE, NONE, false),               // Cycle 1: Internal operation
+        LAST_CYCLE(INC, NONE, X, NONE)                   // Cycle 2: X = X + 1, set N,Z flags
+    });
+    
     // 0xEA: NOP - No Operation (2 cycles) - CRITICAL FOR PROCESSORTESTS
     set_cycles(0xEA, {
         CD(NONE, NONE, NONE, NONE, false),               // Cycle 1: Internal (DO NOT READ PC)
         LAST_CYCLE(NONE, NONE, NONE, NONE)               // Cycle 2: Complete
+    });
+    
+    // 0xEC: CPX nnnn - Compare X Absolute (4 cycles)
+    set_cycles(0xEC, {
+        CD(NONE, PC, ABL, READ, false),                  // Cycle 1: Fetch address low, PC++
+        CD(NONE, PC, ABH, READ, false),                  // Cycle 2: Fetch address high, PC++
+        CD(NONE, ABH_ABL, DL, READ, false),              // Cycle 3: Read from address
+        LAST_CYCLE(CPX, NONE, NONE, NONE)                // Cycle 4: Compare X with data, set N,Z,C
+    });
+    
+    // 0xEE: INC nnnn - Increment Absolute (6 cycles)
+    set_cycles(0xEE, {
+        CD(NONE, PC, ABL, READ, false),                  // Cycle 1: Fetch address low, PC++
+        CD(NONE, PC, ABH, READ, false),                  // Cycle 2: Fetch address high, PC++
+        CD(NONE, ABH_ABL, DL, READ, false),              // Cycle 3: Read from address
+        CD(NONE, ABH_ABL, DL, WRITE, false),             // Cycle 4: Write original back
+        CD(INC, ABH_ABL, NONE, MODIFY_WRITE, false),     // Cycle 5: Write incremented data
+        LAST_CYCLE(NONE, NONE, NONE, NONE)               // Cycle 6: Complete
+    });
+    
+    // 0xF0: BEQ nn - Branch if Equal (2+ cycles)
+    set_cycles(0xF0, {
+        CD(NONE, PC, DL, READ, false),                   // Cycle 1: Fetch branch offset, PC++
+        LAST_CYCLE(NONE, NONE, NONE, PAGE_CROSS_FIX)     // Cycle 2+: Conditional branch
+    });
+    
+    // 0xF8: SED - Set Decimal Mode (2 cycles)
+    set_cycles(0xF8, {
+        CD(NONE, NONE, NONE, NONE, false),               // Cycle 1: Internal operation
+        LAST_CYCLE(NONE, NONE, P, NONE)                  // Cycle 2: Set decimal flag
     });
     
     // Fill remaining undefined opcodes systematically
