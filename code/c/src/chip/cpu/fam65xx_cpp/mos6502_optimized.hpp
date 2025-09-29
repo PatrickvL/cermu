@@ -38,26 +38,6 @@ namespace fam65xx_cpp {
  * - Hardware-accurate timing and pin state management
  */
 
-// Extended register indices for hardware accuracy with unified system
-enum class CpuReg : uint8_t {
-    // Special cases
-    NONE = 0,
-    // Core 6502 registers
-    A = 1, X = 2, Y = 3, P = 4, SP = 5,
-    // Data latch
-    DL = 6,
-    // Program counter (split, adjacent Low/High pairs)
-    PCL = 7, PCH = 8,
-    // Address bus registers (internal, adjacent Low/High pairs)
-    ABL = 9, ABH = 10,
-    // Address latch registers (internal, adjacent Low/High pairs)
-    ADL = 11, ADH = 12,
-    // Bank registers (65816 only, adjacent Low/High pairs)
-    DBR = 13, PBR = 14,
-    // Count (must be ≤15 for 4-bit CompactCycleDef constraint)
-    COUNT = 15
-};
-
 // ALU operations (mutually exclusive - reduces storage dramatically)
 enum class AluOp : uint8_t {
     NONE = 0, ADC = 1, SBC = 2, AND = 3, ORA = 4, EOR = 5, CMP = 6, CPX = 7, CPY = 8,
@@ -70,6 +50,45 @@ enum class AddressMode : uint8_t {
     IMM = 5, ZP = 6, ABS = 7, INDEXED_X = 8, INDEXED_Y = 9,
     // Unified vector address - actual vector determined by opcode
     VECTOR = 10          // Vector addressing (IRQ/NMI/RESET determined by opcode)
+};
+
+// Register indices (8-bit registers with 16-bit pairs aligned for endianness)
+enum class CpuReg : uint8_t {
+    // Core 6502 registers
+    A = 0, X = 1, Y = 2, P = 3, SP = 4,
+    // Data latch
+    DL = 5,
+    // 16-bit register pairs - aligned for host-native access after DL
+    // Program counter (Low/High byte order for endianness)
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    PCL = 6, PCH = 7,           // Little endian: Low byte at lower address
+#else
+    PCH = 6, PCL = 7,           // Big endian: High byte at lower address
+#endif
+    // Address bus registers (Low/High byte order for endianness)
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    ABL = 8, ABH = 9,           // Little endian: Low byte at lower address
+#else
+    ABH = 8, ABL = 9,           // Big endian: High byte at lower address
+#endif
+    // Address latch registers (Low/High byte order for endianness)
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    ADL = 10, ADH = 11,         // Little endian: Low byte at lower address
+#else
+    ADH = 10, ADL = 11,         // Big endian: High byte at lower address
+#endif
+    // Bank registers (65816 only, Low/High byte order for endianness)
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    DBR = 12, PBR = 13,         // Little endian: Low byte at lower address
+#else
+    PBR = 12, DBR = 13,         // Big endian: High byte at lower address
+#endif
+    // Reserved for future expansion
+    RESERVED = 14,
+    // Special cases (must be ≤15 for 4-bit CompactCycleDef constraint)
+    NONE = 15,
+    // Total registers
+    COUNT = 16
 };
 
 // Bus control operations (mutually exclusive bus operations)
@@ -107,27 +126,26 @@ union CompactCycleDef {
     constexpr BusControl get_bus() const { return static_cast<BusControl>(bus_ctrl); }
 };
 
-
-// 16-bit register indices (aligned to 16-bit boundaries)
+// 16-bit register indices (aligned to 16-bit boundaries with endianness support)
 enum class CpuReg16 : uint8_t {
-    // Program counter (PCL=7, PCH=8 -> word index 4 = bytes 8,9)
+    // Program counter
     PC = static_cast<uint8_t>(CpuReg::PCH) / 2,
-    // Address bus (ABL=9, ABH=10 -> word index 5 = bytes 10,11)
+    // Address bus
     AB = static_cast<uint8_t>(CpuReg::ABH) / 2,
-    // Address latch (ADL=11, ADH=12 -> word index 6 = bytes 12,13)
+    // Address latch
     AD = static_cast<uint8_t>(CpuReg::ADH) / 2,
-    // Bank registers (DBR=13, PBR=14 -> word index 7 = bytes 14,15)
+    // Bank registers
     BANK = static_cast<uint8_t>(CpuReg::PBR) / 2,
     // Count
-    COUNT = static_cast<uint8_t>(CpuReg::COUNT) / 2
+    COUNT = static_cast<uint8_t>(CpuReg::COUNT) / 2,
 };
 
 // Optimized register array with union for zero-overhead 8/16-bit access
-template<std::size_t N8, std::size_t N16>
+template<std::size_t N8>
 struct CpuRegArray {
     union {
         uint8_t bytes[N8];
-        uint16_t words[N16];
+        uint16_t words[N8 / 2];
     };
     
     // Zero-overhead 8-bit register access
@@ -159,7 +177,7 @@ struct CpuRegArray {
 };
 
 // Type alias for the MOS6502 register array
-using MOS6502RegArray = CpuRegArray<16, 8>;  // 16 bytes, 8 words (with padding for alignment)
+using MOS6502RegArray = CpuRegArray<static_cast<int>(CpuReg::COUNT)>; // 16 bytes, 8 words (proper alignment for 16-bit access)
 
 template<typename Config>
 class MOS6502Optimized {
@@ -313,15 +331,14 @@ public:
             // Handle vector reads by determining if this is low or high byte based on target
             if (cycle.get_target() == CpuReg::ABL) {
                 // Reading vector low byte - store in ABL (Address Bus Low) like real hardware
-                registers.reg8(CpuReg::ABL) = data;  // Store vector low in ABL
+                registers.reg8(CpuReg::ABL) = data;  // Store vector low using endianness-aware access
                 // Vector read complete for low byte - don't do normal register handling
                 return;
             } else if (cycle.get_target() == CpuReg::ABH) {
                 // Reading vector high byte and complete vector jump
-                registers.reg8(CpuReg::ABH) = data;  // Store vector high in ABH
+                registers.reg8(CpuReg::ABH) = data;  // Store vector high using endianness-aware access
                 // Jump to interrupt vector using properly aligned AB register
-                registers.reg8(CpuReg::ABH) = data;  // Store vector high in ABH
-                set_pc(get_ab());  // Jump to interrupt vector (now properly aligned)
+                set_pc(get_ab());  // Jump to interrupt vector (now properly aligned with endianness)
                 
                 // Set processor flags based on interrupt type
                 if (current_opcode == 0x00) {
@@ -591,49 +608,13 @@ private:
     
     // Target register write
     void write_target_register(CpuReg target, uint8_t data) {
+        if (target == CpuReg::NONE) return;
+        registers.reg8(target) = data;
         switch (target) {
             case CpuReg::A:
-                registers.reg8(CpuReg::A) = data;
-                update_flags_for_result(data);
-                break;
             case CpuReg::X:
-                registers.reg8(CpuReg::X) = data;
-                update_flags_for_result(data);
-                break;
             case CpuReg::Y:
-                registers.reg8(CpuReg::Y) = data;
                 update_flags_for_result(data);
-                break;
-            case CpuReg::P:
-                registers.reg8(CpuReg::P) = data;
-                break;
-            case CpuReg::SP:
-                registers.reg8(CpuReg::SP) = data;
-                break;
-            case CpuReg::PCL:
-                registers.reg8(CpuReg::PCL) = data;
-                break;
-            case CpuReg::PCH:
-                registers.reg8(CpuReg::PCH) = data;
-                break;
-            case CpuReg::ABL:
-                registers.reg8(CpuReg::ABL) = data;
-                break;
-            case CpuReg::ABH:
-                registers.reg8(CpuReg::ABH) = data;
-                break;
-            case CpuReg::DL:
-                registers.reg8(CpuReg::DL) = data;
-                break;
-            case CpuReg::ADL:
-                registers.reg8(CpuReg::ADL) = data;
-                break;
-            case CpuReg::ADH:
-                registers.reg8(CpuReg::ADH) = data;
-                break;
-            case CpuReg::NONE:
-            default:
-                // No register write
                 break;
         }
     }
@@ -693,25 +674,18 @@ private:
     
     // Helper function to get write data for a target register
     uint8_t get_write_data_for_target(CpuReg target) {
+        if (target == CpuReg::NONE) return 0;
+
+        uint8_t value = registers.reg8(target);
         switch (target) {
-            case CpuReg::A:
-                return registers.reg8(CpuReg::A);
-            case CpuReg::X:
-                return registers.reg8(CpuReg::X);
-            case CpuReg::Y:
-                return registers.reg8(CpuReg::Y);
             case CpuReg::P: {
                 // For stack push during BRK, set B flag and ensure U flag is set
-                uint8_t p_value = registers.reg8(CpuReg::P);
                 if (current_opcode == 0x00) { // BRK instruction
-                    p_value |= P_BREAK | P_UNUSED;  // Set B and U flags
+                    value |= P_BREAK | P_UNUSED;  // Set B and U flags
                     // Clear V flag - BRK should not affect overflow flag
-                    p_value &= ~P_OVERFLOW;
+                    value &= ~P_OVERFLOW;
                 }
-                return p_value;
             }
-            case CpuReg::SP:
-                return registers.reg8(CpuReg::SP);
             case CpuReg::PCL: {
                 // For BRK, push PC+2 (the instruction after BRK's 2-byte pattern)
                 uint16_t push_pc = get_pc();
@@ -730,20 +704,8 @@ private:
                 }
                 return (push_pc >> 8) & 0xFF;
             }
-            case CpuReg::ABL:
-                return registers.reg8(CpuReg::ABL);
-            case CpuReg::ABH:
-                return registers.reg8(CpuReg::ABH);
-            case CpuReg::DL:
-                return registers.reg8(CpuReg::DL);
-            case CpuReg::ADL:
-                return registers.reg8(CpuReg::ADL);
-            case CpuReg::ADH:
-                return registers.reg8(CpuReg::ADH);
-            case CpuReg::NONE:
-            default:
-                return 0;
         }
+        return value;
     }
     
     // Helper function to update N and Z flags
