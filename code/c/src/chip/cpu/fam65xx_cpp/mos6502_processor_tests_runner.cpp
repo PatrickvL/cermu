@@ -1,6 +1,6 @@
 /**
  * MOS6502 Optimized ProcessorTests Runner
- * 
+ *
  * Tests the new optimized MOS6502 emulator against Klaus Dormann's ProcessorTests
  * Hardware-accurate validation using the compact cycle definition architecture
  */
@@ -80,7 +80,8 @@ public:
             uint8_t initial_cycle = cpu.get_current_cycle();
             
             // Execute cycles until instruction completion
-            uint8_t opcode = memory[initial_pc];
+            uint8_t opcode_byte = memory[initial_pc];
+            uint16_t opcode = opcode_byte;  // Convert to uint16_t for pseudo opcode support
             bool debug_this = debug_cycles && (opcode_filter == -1 || opcode_filter == opcode);
             
             // Handle initial opcode fetch if CPU is starting fresh
@@ -137,16 +138,19 @@ public:
                         std::cout << " data=0x" << std::hex << (int)data << std::dec;
                     }
                     
-                    // For opcode fetches (when instruction completed), handle separately
+                    // Always call sample_bus_data first to handle vector completion
+                    cpu.sample_bus_data(data);
+                    if (debug_this) {
+                        std::cout << " (data sample)";
+                    }
+                    
+                    // For normal opcode fetches (when instruction completed and not vector jump), handle opcode fetch
                     if (cpu.get_current_cycle() == 0 && max_cycles > 0) {
+                        // Only treat as opcode fetch if this is a normal instruction completion
+                        // Vector jumps are handled by sample_bus_data and don't need opcode fetch setup
                         cpu.complete_opcode_fetch(data);
                         if (debug_this) {
-                            std::cout << " (opcode fetch)";
-                        }
-                    } else {
-                        cpu.sample_bus_data(data);
-                        if (debug_this) {
-                            std::cout << " (data sample)";
+                            std::cout << " (also opcode fetch)";
                         }
                     }
                 }
@@ -209,6 +213,11 @@ bool run_processor_test(const processor_test_t* test, int test_number = -1) {
         uint16_t addr = test->initial.ram[i].address;
         for (uint8_t j = 0; j < test->initial.ram[i].byte_count; j++) {
             harness.set_memory(addr + j, test->initial.ram[i].bytes[j]);
+            
+            if (verbose_output && debug_cycles) {
+                std::cout << "  Memory setup: [0x" << std::hex << (addr + j) << "] = 0x"
+                          << (int)test->initial.ram[i].bytes[j] << std::dec << std::endl;
+            }
         }
     }
     
@@ -221,8 +230,9 @@ bool run_processor_test(const processor_test_t* test, int test_number = -1) {
     harness.set_status(test->initial.p);
     
     // Get the opcode for tracking
-    uint8_t opcode = harness.get_memory(test->initial.pc);
-    results.opcode_totals[opcode]++;
+    uint8_t opcode_byte = harness.get_memory(test->initial.pc);
+    uint16_t opcode = opcode_byte;  // Convert to uint16_t for pseudo opcode support
+    results.opcode_totals[opcode_byte]++;  // Still track in 256-element array
     
     // Apply opcode filter if specified
     if (opcode_filter != -1 && opcode != opcode_filter) {
@@ -255,7 +265,7 @@ bool run_processor_test(const processor_test_t* test, int test_number = -1) {
             std::cout << "FAIL " << test->name << ": Instruction execution failed (opcode 0x" 
                       << std::hex << (int)opcode << ")" << std::dec << std::endl;
         }
-        results.opcode_failures[opcode]++;
+        results.opcode_failures[opcode_byte]++;
         return false;
     }
     
@@ -352,7 +362,7 @@ bool run_processor_test(const processor_test_t* test, int test_number = -1) {
                       << (int)opcode << ")" << std::dec << std::endl;
         }
     } else {
-        results.opcode_failures[opcode]++;
+        results.opcode_failures[opcode_byte]++;
         if (verbose_output) {
             std::cout << "FAIL " << test->name << ": State mismatch (opcode 0x" 
                       << std::hex << (int)opcode << ")" << std::dec << std::endl;
