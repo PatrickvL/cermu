@@ -116,7 +116,7 @@ bool json_parse_string(const char* json, const char* key, char* output, size_t m
     return *value == '"';
 }
 
-// Parse RAM array: [[address, value], ...] - ProcessorTests format
+// Parse RAM array: supports both [[address, value], ...] and [{"address": N, "bytes": [...]}, ...]
 bool json_parse_ram_array(const char* json, cpu_state_t* state) {
     const char* ram_start = json_find_key(json, "ram");
     if (!ram_start || *ram_start != '[') return true; // RAM is optional
@@ -128,27 +128,78 @@ bool json_parse_ram_array(const char* json, cpu_state_t* state) {
         pos = json_skip_whitespace(pos);
         if (*pos == ']') break;
         
-        // Expect [address, value] pair
-        if (*pos != '[') break;
-        pos++;
-        
-        // Parse address
-        pos = json_skip_whitespace(pos);
-        state->ram[state->ram_count].address = (uint16_t)strtol(pos, (char**)&pos, 10);
-        
-        // Expect comma
-        pos = json_skip_whitespace(pos);
-        if (*pos != ',') break;
-        pos++;
-        
-        // Parse single value (ProcessorTests format is [addr, value] not [addr, [values...]])
-        pos = json_skip_whitespace(pos);
-        state->ram[state->ram_count].bytes[0] = (uint8_t)strtol(pos, (char**)&pos, 10);
-        state->ram[state->ram_count].byte_count = 1;
-        
-        // Skip closing bracket for this pair
-        pos = json_skip_whitespace(pos);
-        if (*pos == ']') pos++;
+        if (*pos == '[') {
+            // ProcessorTests format: [address, value]
+            pos++;
+            
+            // Parse address
+            pos = json_skip_whitespace(pos);
+            state->ram[state->ram_count].address = (uint16_t)strtol(pos, (char**)&pos, 10);
+            
+            // Expect comma
+            pos = json_skip_whitespace(pos);
+            if (*pos != ',') break;
+            pos++;
+            
+            // Parse single value
+            pos = json_skip_whitespace(pos);
+            state->ram[state->ram_count].bytes[0] = (uint8_t)strtol(pos, (char**)&pos, 10);
+            state->ram[state->ram_count].byte_count = 1;
+            
+            // Skip closing bracket for this pair
+            pos = json_skip_whitespace(pos);
+            if (*pos == ']') pos++;
+            
+        } else if (*pos == '{') {
+            // Extended format: {"address": N, "bytes": [...]}
+            const char* obj_end = json_find_object_end(pos);
+            if (!obj_end) break;
+            
+            // Create temporary buffer for this object
+            size_t obj_len = obj_end - pos + 1;
+            char* obj_json = (char*)malloc(obj_len + 1);
+            if (!obj_json) break;
+            
+            strncpy(obj_json, pos, obj_len);
+            obj_json[obj_len] = '\0';
+            
+            // Parse address
+            int addr = json_parse_number(obj_json, "address");
+            if (addr < 0) {
+                free(obj_json);
+                break;
+            }
+            state->ram[state->ram_count].address = (uint16_t)addr;
+            
+            // Parse bytes array
+            const char* bytes_start = json_find_key(obj_json, "bytes");
+            if (bytes_start && *bytes_start == '[') {
+                const char* bytes_pos = bytes_start + 1;
+                state->ram[state->ram_count].byte_count = 0;
+                
+                while (*bytes_pos && *bytes_pos != ']' &&
+                       state->ram[state->ram_count].byte_count < MAX_RAM_BYTES) {
+                    bytes_pos = json_skip_whitespace(bytes_pos);
+                    if (*bytes_pos == ']') break;
+                    
+                    int byte_val = (int)strtol(bytes_pos, (char**)&bytes_pos, 10);
+                    state->ram[state->ram_count].bytes[state->ram[state->ram_count].byte_count++] =
+                        (uint8_t)byte_val;
+                    
+                    bytes_pos = json_skip_whitespace(bytes_pos);
+                    if (*bytes_pos == ',') bytes_pos++;
+                }
+            } else {
+                // Fallback: single value
+                state->ram[state->ram_count].bytes[0] = 0;
+                state->ram[state->ram_count].byte_count = 1;
+            }
+            
+            free(obj_json);
+            pos = obj_end + 1;
+        } else {
+            break; // Unknown format
+        }
         
         state->ram_count++;
         
@@ -170,7 +221,7 @@ bool json_parse_cpu_state(const char* json, const char* state_name, cpu_state_t*
     
     // Create a temporary buffer for the state object
     size_t state_len = state_end - state_start + 1;
-    char* state_json = malloc(state_len + 1);
+    char* state_json = (char*)malloc(state_len + 1);
     if (!state_json) return false;
     
     strncpy(state_json, state_start, state_len);
