@@ -59,51 +59,163 @@ continuation_sequences = {}  # sequence_code -> {index, name, code}
 next_continuation_index = CONT_SEQ_START
 opcode_groups = {}  # implementation_code -> [opcodes]
 
-# Addressing modes, memory accesses, and mnemonics for each instruction
+#-------------------------------------------------------------------------------
+# Mnemonic Symbol Definitions
+# Each symbol contains: (name, mem_access, implementation_code, flags)
+#-------------------------------------------------------------------------------
+
+# Simple implied mode operations
+OP_BRK = ("BRK", M___, "if (0 == (c->brk_flags & (FAM65XX_BRK_IRQ | FAM65XX_BRK_NMI))) {\n\tc->PC++;\n}\nBUS_WRITE(0x0100 | c->S--, c->PC >> 8);\nc->IR = C_BRK;", 'CONT')
+OP_PHP = ("PHP", M__W, "BUS_WRITE(0x0100 | c->S--, c->P | FAM65XX_XF);\n_FETCH();", None)
+OP_PLP = ("PLP", M___, "BUS_INTERNAL(0x0100 | c->S++);\nc->IR = C_PLP;", 'CONT')
+OP_PHA = ("PHA", M__W, "BUS_WRITE(0x0100 | c->S--, c->A);\n_FETCH();", None)
+OP_PLA = ("PLA", M___, "BUS_INTERNAL(0x0100 | c->S++);\nc->IR = C_PLA;", 'CONT')
+OP_RTI = ("RTI", M_R_, "BUS_INTERNAL(0x0100 | c->S++);\nc->IR = C_RTI;", 'CONT')
+OP_RTS = ("RTS", M_R_, "BUS_INTERNAL(0x0100 | c->S++);\nc->IR = C_RTS;", 'CONT')
+OP_JSR = ("JSR", M_R_, "BUS_READ(c->PC++);\nc->AD = BUS_DATA();\nc->IR = C_JSR;", 'CONT')
+OP_JMP = ("JMP", M_R_, "BUS_READ(c->PC++);\nc->AD = BUS_DATA();\nc->IR = C_JMP_ABS;", 'CONT')
+OP_JMI = ("JMP", M_R_, "BUS_READ(c->PC++);\nc->AD = BUS_DATA();\nc->IR = C_JMP_IND;", 'CONT')  # JMP indirect
+
+# Register transfer operations
+OP_TAX = ("TAX", M___, "BUS_INTERNAL(c->PC); c->X = c->A; _NZ(c->X); _FETCH();", None)
+OP_TXA = ("TXA", M___, "BUS_INTERNAL(c->PC); c->A = c->X; _NZ(c->A); _FETCH();", None)
+OP_TAY = ("TAY", M___, "BUS_INTERNAL(c->PC); c->Y = c->A; _NZ(c->Y); _FETCH();", None)
+OP_TYA = ("TYA", M___, "BUS_INTERNAL(c->PC); c->A = c->Y; _NZ(c->A); _FETCH();", None)
+OP_TSX = ("TSX", M___, "BUS_INTERNAL(c->PC); c->X = c->S; _NZ(c->X); _FETCH();", None)
+OP_TXS = ("TXS", M___, "BUS_INTERNAL(c->PC); c->S = c->X; _FETCH();", None)
+
+# Increment/Decrement operations
+OP_DEX = ("DEX", M___, "BUS_INTERNAL(c->PC); c->X--; _NZ(c->X); _FETCH();", None)
+OP_INX = ("INX", M___, "BUS_INTERNAL(c->PC); c->X++; _NZ(c->X); _FETCH();", None)
+OP_DEY = ("DEY", M___, "BUS_INTERNAL(c->PC); c->Y--; _NZ(c->Y); _FETCH();", None)
+OP_INY = ("INY", M___, "BUS_INTERNAL(c->PC); c->Y++; _NZ(c->Y); _FETCH();", None)
+
+# Flag operations
+OP_CLC = ("CLC", M___, "BUS_INTERNAL(c->PC); c->P &= ~FAM65XX_CF; _FETCH();", None)
+OP_SEC = ("SEC", M___, "BUS_INTERNAL(c->PC); c->P |= FAM65XX_CF; _FETCH();", None)
+OP_CLI = ("CLI", M___, "BUS_INTERNAL(c->PC); c->P &= ~FAM65XX_IF; _FETCH();", None)
+OP_SEI = ("SEI", M___, "BUS_INTERNAL(c->PC); c->P |= FAM65XX_IF; _FETCH();", None)
+OP_CLV = ("CLV", M___, "BUS_INTERNAL(c->PC); c->P &= ~FAM65XX_VF; _FETCH();", None)
+OP_CLD = ("CLD", M___, "BUS_INTERNAL(c->PC); c->P &= ~FAM65XX_DF; _FETCH();", None)
+OP_SED = ("SED", M___, "BUS_INTERNAL(c->PC); c->P |= FAM65XX_DF; _FETCH();", None)
+
+# Branch operations (all share BRANCH_TAKEN continuation)
+OP_BPL = ("BPL", M_R_, None, 'BRANCH')
+OP_BMI = ("BMI", M_R_, None, 'BRANCH')
+OP_BVC = ("BVC", M_R_, None, 'BRANCH')
+OP_BVS = ("BVS", M_R_, None, 'BRANCH')
+OP_BCC = ("BCC", M_R_, None, 'BRANCH')
+OP_BCS = ("BCS", M_R_, None, 'BRANCH')
+OP_BNE = ("BNE", M_R_, None, 'BRANCH')
+OP_BEQ = ("BEQ", M_R_, None, 'BRANCH')
+
+# ALU operations (memory read)
+OP_ORA = ("ORA", M_R_, "BUS_READ(c->AD);\nc->A |= BUS_DATA();\n_NZ(c->A);\n_FETCH();", None)
+OP_AND = ("AND", M_R_, "BUS_READ(c->AD);\nc->A &= BUS_DATA();\n_NZ(c->A);\n_FETCH();", None)
+OP_EOR = ("EOR", M_R_, "BUS_READ(c->AD);\nc->A ^= BUS_DATA();\n_NZ(c->A);\n_FETCH();", None)
+OP_ADC = ("ADC", M_R_, "BUS_READ(c->AD);\n_fam65xx_adc(c, BUS_DATA());\n_FETCH();", None)
+OP_SBC = ("SBC", M_R_, "BUS_READ(c->AD);\n_fam65xx_sbc(c, BUS_DATA());\n_FETCH();", None)
+OP_CMP = ("CMP", M_R_, "BUS_READ(c->AD);\n_fam65xx_cmp(c, c->A, BUS_DATA());\n_FETCH();", None)
+OP_BIT = ("BIT", M_R_, "BUS_READ(c->AD);\n_fam65xx_bit(c, BUS_DATA());\n_FETCH();", None)
+
+# Load operations
+OP_LDA = ("LDA", M_R_, "BUS_READ(c->AD);\nc->A = BUS_DATA();\n_NZ(c->A);\n_FETCH();", None)
+OP_LDX = ("LDX", M_R_, "BUS_READ(c->AD);\nc->X = BUS_DATA();\n_NZ(c->X);\n_FETCH();", None)
+OP_LDY = ("LDY", M_R_, "BUS_READ(c->AD);\nc->Y = BUS_DATA();\n_NZ(c->Y);\n_FETCH();", None)
+
+# Store operations
+OP_STA = ("STA", M__W, "BUS_WRITE(c->AD, c->A);\n_FETCH();", None)
+OP_STX = ("STX", M__W, "BUS_WRITE(c->AD, c->X);\n_FETCH();", None)
+OP_STY = ("STY", M__W, "BUS_WRITE(c->AD, c->Y);\n_FETCH();", None)
+
+# Compare operations
+OP_CPX = ("CPX", M_R_, "BUS_READ(c->AD); _fam65xx_cmp(c, c->X, BUS_DATA()); _FETCH();", None)
+OP_CPY = ("CPY", M_R_, "BUS_READ(c->AD); _fam65xx_cmp(c, c->Y, BUS_DATA()); _FETCH();", None)
+
+# RMW operations - have two variants (accumulator vs memory)
+OP_ASL_A = ("ASL", M___, "BUS_INTERNAL(c->PC); c->A = _fam65xx_asl(c, c->A); _FETCH();", None)
+OP_ASL_M = ("ASL", M_RW, "BUS_READ(c->AD); c->AD = BUS_DATA(); c->IR = C_ASL_RMW;", 'RMW')
+OP_LSR_A = ("LSR", M___, "BUS_INTERNAL(c->PC); c->A = _fam65xx_lsr(c, c->A); _FETCH();", None)
+OP_LSR_M = ("LSR", M_RW, "BUS_READ(c->AD); c->AD = BUS_DATA(); c->IR = C_LSR_RMW;", 'RMW')
+OP_ROL_A = ("ROL", M___, "BUS_INTERNAL(c->PC); c->A = _fam65xx_rol(c, c->A); _FETCH();", None)
+OP_ROL_M = ("ROL", M_RW, "BUS_READ(c->AD); c->AD = BUS_DATA(); c->IR = C_ROL_RMW;", 'RMW')
+OP_ROR_A = ("ROR", M___, "BUS_INTERNAL(c->PC); c->A = _fam65xx_ror(c, c->A); _FETCH();", None)
+OP_ROR_M = ("ROR", M_RW, "BUS_READ(c->AD); c->AD = BUS_DATA(); c->IR = C_ROR_RMW;", 'RMW')
+OP_INC_M = ("INC", M_RW, "BUS_READ(c->AD); c->AD = BUS_DATA(); c->IR = C_INC_RMW;", 'RMW')
+OP_DEC_M = ("DEC", M_RW, "BUS_READ(c->AD); c->AD = BUS_DATA(); c->IR = C_DEC_RMW;", 'RMW')
+
+# NOP variants
+OP_NOP_I = ("NOP", M___, "BUS_INTERNAL(c->PC); _FETCH();", None)  # Implied NOP
+OP_NOP_R = ("NOP", M_R_, "BUS_READ(c->AD); _FETCH();", None)      # NOPs that read
+
+# Illegal/undocumented instructions
+OP_LAX = ("LAX", M_R_, "BUS_READ(c->AD);c->A=c->X=BUS_DATA();_NZ(c->A);_FETCH();", None)
+OP_SAX = ("SAX", M__W, "BUS_WRITE(c->AD,c->A&c->X);_FETCH();", None)
+OP_SLO = ("SLO", M_RW, "BUS_READ(c->AD);c->AD=BUS_DATA();c->IR=C_SLO_RMW;", 'RMW')
+OP_RLA = ("RLA", M_RW, "BUS_READ(c->AD);c->AD=BUS_DATA();c->IR=C_RLA_RMW;", 'RMW')
+OP_SRE = ("SRE", M_RW, "BUS_READ(c->AD);c->AD=BUS_DATA();c->IR=C_SRE_RMW;", 'RMW')
+OP_RRA = ("RRA", M_RW, "BUS_READ(c->AD);c->AD=BUS_DATA();c->IR=C_RRA_RMW;", 'RMW')
+OP_DCP = ("DCP", M_RW, "BUS_READ(c->AD);c->AD=BUS_DATA();c->IR=C_DCP_RMW;", 'RMW')
+OP_ISC = ("ISC", M_RW, "BUS_READ(c->AD);c->AD=BUS_DATA();c->IR=C_ISC_RMW;", 'RMW')
+OP_ANC = ("ANC", M_R_, "BUS_READ(c->AD);c->A&=BUS_DATA();_NZ(c->A);c->P=(c->P&~FAM65XX_CF)|((c->A&0x80)?FAM65XX_CF:0);_FETCH();", None)
+OP_ASR = ("ASR", M_R_, "BUS_READ(c->AD);c->A&=BUS_DATA();c->P=(c->P&~FAM65XX_CF)|(c->A&1);c->A>>=1;_NZ(c->A);_FETCH();", None)
+OP_ARR = ("ARR", M_R_, "BUS_READ(c->AD);c->A=(c->A&BUS_DATA())>>1|(c->P&FAM65XX_CF?0x80:0);_NZ(c->A);c->P=(c->P&~(FAM65XX_CF|FAM65XX_VF))|((c->A&0x40)?FAM65XX_CF:0)|((c->A&0x20)^(c->A&0x40)?FAM65XX_VF:0);_FETCH();", None)
+OP_XAA = ("XAA", M_R_, "BUS_READ(c->AD);c->A=(c->A|0xEE)&c->X&BUS_DATA();_NZ(c->A);_FETCH();", None)
+OP_SBX = ("SBX", M_R_, "BUS_READ(c->AD);{uint16_t t=(c->A&c->X)-BUS_DATA();c->X=t;_NZ(c->X);c->P=(c->P&~FAM65XX_CF)|((t&0x100)?0:FAM65XX_CF);}_FETCH();", None)
+OP_SHY = ("SHY", M__W, "BUS_WRITE(c->AD,c->Y&((c->AD>>8)+1));_FETCH();", None)
+OP_SHX = ("SHX", M__W, "BUS_WRITE(c->AD,c->X&((c->AD>>8)+1));_FETCH();", None)
+OP_SHA = ("SHA", M_RW, "BUS_WRITE(c->AD,c->A&c->X&((c->AD>>8)+1));_FETCH();", None)
+OP_SHS = ("SHS", M__W, "c->S=c->A&c->X;BUS_WRITE(c->AD,c->S&((c->AD>>8)+1));_FETCH();", None)
+OP_LAS = ("LAS", M_R_, "BUS_READ(c->AD);c->A=c->X=c->S=c->S&BUS_DATA();_NZ(c->A);_FETCH();", None)
+OP_JAM = ("JAM", M_RW, "BUS_READ(c->PC);c->IR--;", None)  # JAM locks up
+
+#-------------------------------------------------------------------------------
+# Instruction table: [mnemonic_symbol, addressing_mode]
+#-------------------------------------------------------------------------------
 ops = [
     # cc = 00
     [
-        [[A____,M___,"BRK"],[A_JSR,M_R_,"JSR"],[A____,M_R_,"RTI"],[A____,M_R_,"RTS"],[A_IMM,M_R_,"NOP"],[A_IMM,M_R_,"LDY"],[A_IMM,M_R_,"CPY"],[A_IMM,M_R_,"CPX"]],
-        [[A_ZER,M_R_,"NOP"],[A_ZER,M_R_,"BIT"],[A_ZER,M_R_,"NOP"],[A_ZER,M_R_,"NOP"],[A_ZER,M__W,"STY"],[A_ZER,M_R_,"LDY"],[A_ZER,M_R_,"CPY"],[A_ZER,M_R_,"CPX"]],
-        [[A____,M__W,"PHP"],[A____,M___,"PLP"],[A____,M__W,"PHA"],[A____,M___,"PLA"],[A____,M___,"DEY"],[A____,M___,"TAY"],[A____,M___,"INY"],[A____,M___,"INX"]],
-        [[A_ABS,M_R_,"NOP"],[A_ABS,M_R_,"BIT"],[A_JMP,M_R_,"JMP"],[A_JMP,M_R_,"JMP"],[A_ABS,M__W,"STY"],[A_ABS,M_R_,"LDY"],[A_ABS,M_R_,"CPY"],[A_ABS,M_R_,"CPX"]],
-        [[A_IMM,M_R_,"BPL"],[A_IMM,M_R_,"BMI"],[A_IMM,M_R_,"BVC"],[A_IMM,M_R_,"BVS"],[A_IMM,M_R_,"BCC"],[A_IMM,M_R_,"BCS"],[A_IMM,M_R_,"BNE"],[A_IMM,M_R_,"BEQ"]],
-        [[A_ZPX,M_R_,"NOP"],[A_ZPX,M_R_,"NOP"],[A_ZPX,M_R_,"NOP"],[A_ZPX,M_R_,"NOP"],[A_ZPX,M__W,"STY"],[A_ZPX,M_R_,"LDY"],[A_ZPX,M_R_,"NOP"],[A_ZPX,M_R_,"NOP"]],
-        [[A____,M___,"CLC"],[A____,M___,"SEC"],[A____,M___,"CLI"],[A____,M___,"SEI"],[A____,M___,"TYA"],[A____,M___,"CLV"],[A____,M___,"CLD"],[A____,M___,"SED"]],
-        [[A_ABX,M_R_,"NOP"],[A_ABX,M_R_,"NOP"],[A_ABX,M_R_,"NOP"],[A_ABX,M_R_,"NOP"],[A_ABX,M__W,"SHY"],[A_ABX,M_R_,"LDY"],[A_ABX,M_R_,"NOP"],[A_ABX,M_R_,"NOP"]]
+        [[OP_BRK,A____],[OP_JSR,A_JSR],[OP_RTI,A____],[OP_RTS,A____],[OP_NOP_R,A_IMM],[OP_LDY,A_IMM],[OP_CPY,A_IMM],[OP_CPX,A_IMM]],
+        [[OP_NOP_R,A_ZER],[OP_BIT,A_ZER],[OP_NOP_R,A_ZER],[OP_NOP_R,A_ZER],[OP_STY,A_ZER],[OP_LDY,A_ZER],[OP_CPY,A_ZER],[OP_CPX,A_ZER]],
+        [[OP_PHP,A____],[OP_PLP,A____],[OP_PHA,A____],[OP_PLA,A____],[OP_DEY,A____],[OP_TAY,A____],[OP_INY,A____],[OP_INX,A____]],
+        [[OP_NOP_R,A_ABS],[OP_BIT,A_ABS],[OP_JMP,A_JMP],[OP_JMI,A_JMP],[OP_STY,A_ABS],[OP_LDY,A_ABS],[OP_CPY,A_ABS],[OP_CPX,A_ABS]],
+        [[OP_BPL,A_IMM],[OP_BMI,A_IMM],[OP_BVC,A_IMM],[OP_BVS,A_IMM],[OP_BCC,A_IMM],[OP_BCS,A_IMM],[OP_BNE,A_IMM],[OP_BEQ,A_IMM]],
+        [[OP_NOP_R,A_ZPX],[OP_NOP_R,A_ZPX],[OP_NOP_R,A_ZPX],[OP_NOP_R,A_ZPX],[OP_STY,A_ZPX],[OP_LDY,A_ZPX],[OP_NOP_R,A_ZPX],[OP_NOP_R,A_ZPX]],
+        [[OP_CLC,A____],[OP_SEC,A____],[OP_CLI,A____],[OP_SEI,A____],[OP_TYA,A____],[OP_CLV,A____],[OP_CLD,A____],[OP_SED,A____]],
+        [[OP_NOP_R,A_ABX],[OP_NOP_R,A_ABX],[OP_NOP_R,A_ABX],[OP_NOP_R,A_ABX],[OP_SHY,A_ABX],[OP_LDY,A_ABX],[OP_NOP_R,A_ABX],[OP_NOP_R,A_ABX]]
     ],
     # cc = 01
     [
-        [[A_IDX,M_R_,"ORA"],[A_IDX,M_R_,"AND"],[A_IDX,M_R_,"EOR"],[A_IDX,M_R_,"ADC"],[A_IDX,M__W,"STA"],[A_IDX,M_R_,"LDA"],[A_IDX,M_R_,"CMP"],[A_IDX,M_R_,"SBC"]],
-        [[A_ZER,M_R_,"ORA"],[A_ZER,M_R_,"AND"],[A_ZER,M_R_,"EOR"],[A_ZER,M_R_,"ADC"],[A_ZER,M__W,"STA"],[A_ZER,M_R_,"LDA"],[A_ZER,M_R_,"CMP"],[A_ZER,M_R_,"SBC"]],
-        [[A_IMM,M_R_,"ORA"],[A_IMM,M_R_,"AND"],[A_IMM,M_R_,"EOR"],[A_IMM,M_R_,"ADC"],[A_IMM,M_R_,"NOP"],[A_IMM,M_R_,"LDA"],[A_IMM,M_R_,"CMP"],[A_IMM,M_R_,"SBC"]],
-        [[A_ABS,M_R_,"ORA"],[A_ABS,M_R_,"AND"],[A_ABS,M_R_,"EOR"],[A_ABS,M_R_,"ADC"],[A_ABS,M__W,"STA"],[A_ABS,M_R_,"LDA"],[A_ABS,M_R_,"CMP"],[A_ABS,M_R_,"SBC"]],
-        [[A_IDY,M_R_,"ORA"],[A_IDY,M_R_,"AND"],[A_IDY,M_R_,"EOR"],[A_IDY,M_R_,"ADC"],[A_IDY,M__W,"STA"],[A_IDY,M_R_,"LDA"],[A_IDY,M_R_,"CMP"],[A_IDY,M_R_,"SBC"]],
-        [[A_ZPX,M_R_,"ORA"],[A_ZPX,M_R_,"AND"],[A_ZPX,M_R_,"EOR"],[A_ZPX,M_R_,"ADC"],[A_ZPX,M__W,"STA"],[A_ZPX,M_R_,"LDA"],[A_ZPX,M_R_,"CMP"],[A_ZPX,M_R_,"SBC"]],
-        [[A_ABY,M_R_,"ORA"],[A_ABY,M_R_,"AND"],[A_ABY,M_R_,"EOR"],[A_ABY,M_R_,"ADC"],[A_ABY,M__W,"STA"],[A_ABY,M_R_,"LDA"],[A_ABY,M_R_,"CMP"],[A_ABY,M_R_,"SBC"]],
-        [[A_ABX,M_R_,"ORA"],[A_ABX,M_R_,"AND"],[A_ABX,M_R_,"EOR"],[A_ABX,M_R_,"ADC"],[A_ABX,M__W,"STA"],[A_ABX,M_R_,"LDA"],[A_ABX,M_R_,"CMP"],[A_ABX,M_R_,"SBC"]]
+        [[OP_ORA,A_IDX],[OP_AND,A_IDX],[OP_EOR,A_IDX],[OP_ADC,A_IDX],[OP_STA,A_IDX],[OP_LDA,A_IDX],[OP_CMP,A_IDX],[OP_SBC,A_IDX]],
+        [[OP_ORA,A_ZER],[OP_AND,A_ZER],[OP_EOR,A_ZER],[OP_ADC,A_ZER],[OP_STA,A_ZER],[OP_LDA,A_ZER],[OP_CMP,A_ZER],[OP_SBC,A_ZER]],
+        [[OP_ORA,A_IMM],[OP_AND,A_IMM],[OP_EOR,A_IMM],[OP_ADC,A_IMM],[OP_NOP_R,A_IMM],[OP_LDA,A_IMM],[OP_CMP,A_IMM],[OP_SBC,A_IMM]],
+        [[OP_ORA,A_ABS],[OP_AND,A_ABS],[OP_EOR,A_ABS],[OP_ADC,A_ABS],[OP_STA,A_ABS],[OP_LDA,A_ABS],[OP_CMP,A_ABS],[OP_SBC,A_ABS]],
+        [[OP_ORA,A_IDY],[OP_AND,A_IDY],[OP_EOR,A_IDY],[OP_ADC,A_IDY],[OP_STA,A_IDY],[OP_LDA,A_IDY],[OP_CMP,A_IDY],[OP_SBC,A_IDY]],
+        [[OP_ORA,A_ZPX],[OP_AND,A_ZPX],[OP_EOR,A_ZPX],[OP_ADC,A_ZPX],[OP_STA,A_ZPX],[OP_LDA,A_ZPX],[OP_CMP,A_ZPX],[OP_SBC,A_ZPX]],
+        [[OP_ORA,A_ABY],[OP_AND,A_ABY],[OP_EOR,A_ABY],[OP_ADC,A_ABY],[OP_STA,A_ABY],[OP_LDA,A_ABY],[OP_CMP,A_ABY],[OP_SBC,A_ABY]],
+        [[OP_ORA,A_ABX],[OP_AND,A_ABX],[OP_EOR,A_ABX],[OP_ADC,A_ABX],[OP_STA,A_ABX],[OP_LDA,A_ABX],[OP_CMP,A_ABX],[OP_SBC,A_ABX]]
     ],
     # cc = 02
     [
-        [[A_INV,M_RW,"JAM"],[A_INV,M_RW,"JAM"],[A_INV,M_RW,"JAM"],[A_INV,M_RW,"JAM"],[A_IMM,M_R_,"NOP"],[A_IMM,M_R_,"LDX"],[A_IMM,M_R_,"NOP"],[A_IMM,M_R_,"NOP"]],
-        [[A_ZER,M_RW,"ASL"],[A_ZER,M_RW,"ROL"],[A_ZER,M_RW,"LSR"],[A_ZER,M_RW,"ROR"],[A_ZER,M__W,"STX"],[A_ZER,M_R_,"LDX"],[A_ZER,M_RW,"DEC"],[A_ZER,M_RW,"INC"]],
-        [[A____,M___,"ASL"],[A____,M___,"ROL"],[A____,M___,"LSR"],[A____,M___,"ROR"],[A____,M___,"TXA"],[A____,M___,"TAX"],[A____,M___,"DEX"],[A____,M___,"NOP"]],
-        [[A_ABS,M_RW,"ASL"],[A_ABS,M_RW,"ROL"],[A_ABS,M_RW,"LSR"],[A_ABS,M_RW,"ROR"],[A_ABS,M__W,"STX"],[A_ABS,M_R_,"LDX"],[A_ABS,M_RW,"DEC"],[A_ABS,M_RW,"INC"]],
-        [[A_INV,M_RW,"JAM"],[A_INV,M_RW,"JAM"],[A_INV,M_RW,"JAM"],[A_INV,M_RW,"JAM"],[A_INV,M__W,"JAM"],[A_INV,M_R_,"JAM"],[A_INV,M_RW,"JAM"],[A_INV,M_RW,"JAM"]],
-        [[A_ZPX,M_RW,"ASL"],[A_ZPX,M_RW,"ROL"],[A_ZPX,M_RW,"LSR"],[A_ZPX,M_RW,"ROR"],[A_ZPY,M__W,"STX"],[A_ZPY,M_R_,"LDX"],[A_ZPX,M_RW,"DEC"],[A_ZPX,M_RW,"INC"]],
-        [[A____,M_R_,"NOP"],[A____,M_R_,"NOP"],[A____,M_R_,"NOP"],[A____,M_R_,"NOP"],[A____,M___,"TXS"],[A____,M___,"TSX"],[A____,M_R_,"NOP"],[A____,M_R_,"NOP"]],
-        [[A_ABX,M_RW,"ASL"],[A_ABX,M_RW,"ROL"],[A_ABX,M_RW,"LSR"],[A_ABX,M_RW,"ROR"],[A_ABY,M__W,"SHX"],[A_ABY,M_R_,"LDX"],[A_ABX,M_RW,"DEC"],[A_ABX,M_RW,"INC"]]
+        [[OP_JAM,A_INV],[OP_JAM,A_INV],[OP_JAM,A_INV],[OP_JAM,A_INV],[OP_NOP_R,A_IMM],[OP_LDX,A_IMM],[OP_NOP_R,A_IMM],[OP_NOP_R,A_IMM]],
+        [[OP_ASL_M,A_ZER],[OP_ROL_M,A_ZER],[OP_LSR_M,A_ZER],[OP_ROR_M,A_ZER],[OP_STX,A_ZER],[OP_LDX,A_ZER],[OP_DEC_M,A_ZER],[OP_INC_M,A_ZER]],
+        [[OP_ASL_A,A____],[OP_ROL_A,A____],[OP_LSR_A,A____],[OP_ROR_A,A____],[OP_TXA,A____],[OP_TAX,A____],[OP_DEX,A____],[OP_NOP_I,A____]],
+        [[OP_ASL_M,A_ABS],[OP_ROL_M,A_ABS],[OP_LSR_M,A_ABS],[OP_ROR_M,A_ABS],[OP_STX,A_ABS],[OP_LDX,A_ABS],[OP_DEC_M,A_ABS],[OP_INC_M,A_ABS]],
+        [[OP_JAM,A_INV],[OP_JAM,A_INV],[OP_JAM,A_INV],[OP_JAM,A_INV],[OP_JAM,A_INV],[OP_JAM,A_INV],[OP_JAM,A_INV],[OP_JAM,A_INV]],
+        [[OP_ASL_M,A_ZPX],[OP_ROL_M,A_ZPX],[OP_LSR_M,A_ZPX],[OP_ROR_M,A_ZPX],[OP_STX,A_ZPY],[OP_LDX,A_ZPY],[OP_DEC_M,A_ZPX],[OP_INC_M,A_ZPX]],
+        [[OP_NOP_R,A____],[OP_NOP_R,A____],[OP_NOP_R,A____],[OP_NOP_R,A____],[OP_TXS,A____],[OP_TSX,A____],[OP_NOP_R,A____],[OP_NOP_R,A____]],
+        [[OP_ASL_M,A_ABX],[OP_ROL_M,A_ABX],[OP_LSR_M,A_ABX],[OP_ROR_M,A_ABX],[OP_SHX,A_ABY],[OP_LDX,A_ABY],[OP_DEC_M,A_ABX],[OP_INC_M,A_ABX]]
     ],
     # cc = 03
     [
-        [[A_IDX,M_RW,"SLO"],[A_IDX,M_RW,"RLA"],[A_IDX,M_RW,"SRE"],[A_IDX,M_RW,"RRA"],[A_IDX,M__W,"SAX"],[A_IDX,M_R_,"LAX"],[A_IDX,M_RW,"DCP"],[A_IDX,M_RW,"ISC"]],
-        [[A_ZER,M_RW,"SLO"],[A_ZER,M_RW,"RLA"],[A_ZER,M_RW,"SRE"],[A_ZER,M_RW,"RRA"],[A_ZER,M__W,"SAX"],[A_ZER,M_R_,"LAX"],[A_ZER,M_RW,"DCP"],[A_ZER,M_RW,"ISC"]],
-        [[A_IMM,M_R_,"ANC"],[A_IMM,M_R_,"ANC"],[A_IMM,M_R_,"ASR"],[A_IMM,M_R_,"ARR"],[A_IMM,M_R_,"XAA"],[A_IMM,M_R_,"LAX"],[A_IMM,M_R_,"SBX"],[A_IMM,M_R_,"SBC"]],
-        [[A_ABS,M_RW,"SLO"],[A_ABS,M_RW,"RLA"],[A_ABS,M_RW,"SRE"],[A_ABS,M_RW,"RRA"],[A_ABS,M__W,"SAX"],[A_ABS,M_R_,"LAX"],[A_ABS,M_RW,"DCP"],[A_ABS,M_RW,"ISC"]],
-        [[A_IDY,M_RW,"SLO"],[A_IDY,M_RW,"RLA"],[A_IDY,M_RW,"SRE"],[A_IDY,M_RW,"RRA"],[A_IDY,M_RW,"SHA"],[A_IDY,M_R_,"LAX"],[A_IDY,M_RW,"DCP"],[A_IDY,M_RW,"ISC"]],
-        [[A_ZPX,M_RW,"SLO"],[A_ZPX,M_RW,"RLA"],[A_ZPX,M_RW,"SRE"],[A_ZPX,M_RW,"RRA"],[A_ZPY,M__W,"SAX"],[A_ZPY,M_R_,"LAX"],[A_ZPX,M_RW,"DCP"],[A_ZPX,M_RW,"ISC"]],
-        [[A_ABY,M_RW,"SLO"],[A_ABY,M_RW,"RLA"],[A_ABY,M_RW,"SRE"],[A_ABY,M_RW,"RRA"],[A_ABY,M__W,"SHS"],[A_ABY,M_R_,"LAS"],[A_ABY,M_RW,"DCP"],[A_ABY,M_RW,"ISC"]],
-        [[A_ABX,M_RW,"SLO"],[A_ABX,M_RW,"RLA"],[A_ABX,M_RW,"SRE"],[A_ABX,M_RW,"RRA"],[A_ABY,M__W,"SHY"],[A_ABY,M_R_,"LAX"],[A_ABX,M_RW,"DCP"],[A_ABX,M_RW,"ISC"]]
+        [[OP_SLO,A_IDX],[OP_RLA,A_IDX],[OP_SRE,A_IDX],[OP_RRA,A_IDX],[OP_SAX,A_IDX],[OP_LAX,A_IDX],[OP_DCP,A_IDX],[OP_ISC,A_IDX]],
+        [[OP_SLO,A_ZER],[OP_RLA,A_ZER],[OP_SRE,A_ZER],[OP_RRA,A_ZER],[OP_SAX,A_ZER],[OP_LAX,A_ZER],[OP_DCP,A_ZER],[OP_ISC,A_ZER]],
+        [[OP_ANC,A_IMM],[OP_ANC,A_IMM],[OP_ASR,A_IMM],[OP_ARR,A_IMM],[OP_XAA,A_IMM],[OP_LAX,A_IMM],[OP_SBX,A_IMM],[OP_SBC,A_IMM]],
+        [[OP_SLO,A_ABS],[OP_RLA,A_ABS],[OP_SRE,A_ABS],[OP_RRA,A_ABS],[OP_SAX,A_ABS],[OP_LAX,A_ABS],[OP_DCP,A_ABS],[OP_ISC,A_ABS]],
+        [[OP_SLO,A_IDY],[OP_RLA,A_IDY],[OP_SRE,A_IDY],[OP_RRA,A_IDY],[OP_SHA,A_IDY],[OP_LAX,A_IDY],[OP_DCP,A_IDY],[OP_ISC,A_IDY]],
+        [[OP_SLO,A_ZPX],[OP_RLA,A_ZPX],[OP_SRE,A_ZPX],[OP_RRA,A_ZPX],[OP_SAX,A_ZPY],[OP_LAX,A_ZPY],[OP_DCP,A_ZPX],[OP_ISC,A_ZPX]],
+        [[OP_SLO,A_ABY],[OP_RLA,A_ABY],[OP_SRE,A_ABY],[OP_RRA,A_ABY],[OP_SHS,A_ABY],[OP_LAS,A_ABY],[OP_DCP,A_ABY],[OP_ISC,A_ABY]],
+        [[OP_SLO,A_ABX],[OP_RLA,A_ABX],[OP_SRE,A_ABX],[OP_RRA,A_ABX],[OP_SHY,A_ABY],[OP_LAX,A_ABY],[OP_DCP,A_ABX],[OP_ISC,A_ABX]]
     ]
 ]
 
@@ -111,23 +223,29 @@ def l(s):
     """Output a line"""
     print(s)
 
-def get_addr_mode(op):
+def get_mnemonic_symbol(op):
     cc = op & 3
     bbb = (op >> 2) & 7
     aaa = (op >> 5) & 7
     return ops[cc][bbb][aaa][0]
 
-def get_mem_access(op):
+def get_addr_mode(op):
     cc = op & 3
     bbb = (op >> 2) & 7
     aaa = (op >> 5) & 7
     return ops[cc][bbb][aaa][1]
 
 def get_mnemonic(op):
-    cc = op & 3
-    bbb = (op >> 2) & 7
-    aaa = (op >> 5) & 7
-    return ops[cc][bbb][aaa][2]
+    return get_mnemonic_symbol(op)[0]
+
+def get_mem_access(op):
+    return get_mnemonic_symbol(op)[1]
+
+def get_implementation(op):
+    return get_mnemonic_symbol(op)[2]
+
+def get_flags(op):
+    return get_mnemonic_symbol(op)[3]
 
 def get_or_create_continuation(sequence_code, name):
     """Get existing continuation sequence index or create new one"""
@@ -147,84 +265,88 @@ def get_or_create_continuation(sequence_code, name):
     return continuation_sequences[sequence_code]['index']
 
 def analyze_continuation_needs(op):
-    """Determine if opcode needs a continuation sequence"""
+    """Determine if opcode needs a continuation sequence - handle special RMW cases"""
+    flags = get_flags(op)
     
-    # Multi-cycle unique sequences
+    # Handle special multi-cycle operations with hardcoded continuations FIRST
     if op == 0x00:  # BRK
-        seq = ('BUS_WRITE(0x0100|c->S--,c->PC);break;' +
-               'BUS_WRITE(0x0100|c->S--,c->P|FAM65XX_XF);if(c->brk_flags&FAM65XX_BRK_RESET){c->AD=0xFFFC;}else{if(c->brk_flags&FAM65XX_BRK_NMI){c->AD=0xFFFA;}else{c->AD=0xFFFE;}};break;' +
-               'BUS_READ(c->AD++);c->P|=(FAM65XX_IF|FAM65XX_BF);c->brk_flags=0;break;' +
-               'BUS_READ(c->AD);c->AD=BUS_DATA();break;' +
-               'c->PC=(BUS_DATA()<<8)|c->AD;_FETCH();')
+        seq = ('BUS_WRITE(0x0100 | c->S--, c->P | FAM65XX_XF);\nif (c->brk_flags & FAM65XX_BRK_RESET) {\n<INDENT>c->AD = 0xFFFC;\n<OUTDENT>} else {\n<INDENT>if (c->brk_flags & FAM65XX_BRK_NMI) {\n<INDENT>c->AD = 0xFFFA;\n<OUTDENT>} else {\n<INDENT>c->AD = 0xFFFE;\n<OUTDENT>}\n<OUTDENT>}; break;' +
+               'BUS_READ(c->AD++);\nc->P |= (FAM65XX_IF | FAM65XX_BF);\nc->brk_flags = 0; break;' +
+               'BUS_READ(c->AD);\nc->AD = BUS_DATA(); break;' +
+               'c->PC = (BUS_DATA() << 8) | c->AD;\n_FETCH();')
+        get_or_create_continuation(seq, 'BRK')
         return ('BRK', seq)
-    
     elif op == 0x20:  # JSR
-        seq = ('BUS_INTERNAL(0x0100|c->S);break;' +
-               'BUS_WRITE(0x0100|c->S--,c->PC>>8);break;' +
-               'BUS_WRITE(0x0100|c->S--,c->PC);break;' +
-               'BUS_READ(c->PC);break;' +
-               'c->PC=(BUS_DATA()<<8)|c->AD;_FETCH();')
+        seq = ('BUS_INTERNAL(0x0100 | c->S); break;' +
+               'BUS_WRITE(0x0100 | c->S--, c->PC >> 8); break;' +
+               'BUS_WRITE(0x0100 | c->S--, c->PC); break;' +
+               'BUS_READ(c->PC); break;' +
+               'c->PC = (BUS_DATA() << 8) | c->AD; _FETCH();')
+        get_or_create_continuation(seq, 'JSR')
         return ('JSR', seq)
-    
     elif op == 0x40:  # RTI
-        seq = ('BUS_READ(0x0100|c->S++);break;' +
-               'BUS_READ(0x0100|c->S++);c->P=(BUS_DATA()|FAM65XX_BF)&~FAM65XX_XF;break;' +
-               'BUS_READ(0x0100|c->S);c->AD=BUS_DATA();break;' +
-               'c->PC=(BUS_DATA()<<8)|c->AD;_FETCH();')
+        seq = ('BUS_READ(0x0100 | c->S++); break;' +
+               'BUS_READ(0x0100 | c->S++); c->P = (BUS_DATA() | FAM65XX_BF) & ~FAM65XX_XF; break;' +
+               'BUS_READ(0x0100 | c->S); c->AD = BUS_DATA(); break;' +
+               'c->PC = (BUS_DATA() << 8) | c->AD; _FETCH();')
+        get_or_create_continuation(seq, 'RTI')
         return ('RTI', seq)
-    
     elif op == 0x60:  # RTS
-        seq = ('BUS_READ(0x0100|c->S++);break;' +
-               'BUS_READ(0x0100|c->S);c->AD=BUS_DATA();break;' +
-               'c->PC=(BUS_DATA()<<8)|c->AD;break;' +
-               'BUS_READ(c->PC++);_FETCH();')
+        seq = ('BUS_READ(0x0100 | c->S++); break;' +
+               'BUS_READ(0x0100 | c->S); c->AD = BUS_DATA(); break;' +
+               'c->PC = (BUS_DATA() << 8) | c->AD; break;' +
+               'BUS_READ(c->PC++); _FETCH();')
+        get_or_create_continuation(seq, 'RTS')
         return ('RTS', seq)
-    
     elif op == 0x4C:  # JMP abs
-        seq = ('BUS_READ(c->PC++);c->AD|=BUS_DATA()<<8;break;' +
-               'c->PC=c->AD;_FETCH();')
+        seq = ('BUS_READ(c->PC++); c->AD |= BUS_DATA() << 8; break;' +
+               'c->PC = c->AD; _FETCH();')
+        get_or_create_continuation(seq, 'JMP_ABS')
         return ('JMP_ABS', seq)
-    
     elif op == 0x6C:  # JMP ind
-        seq = ('BUS_READ(c->PC++);c->AD|=BUS_DATA()<<8;break;' +
-               'BUS_READ(c->AD);break;' +
-               'BUS_READ((c->AD&0xFF00)|((c->AD+1)&0xFF));c->AD=BUS_DATA();break;' +
-               'c->PC=(BUS_DATA()<<8)|c->AD;_FETCH();')
+        seq = ('BUS_READ(c->PC++); c->AD |= BUS_DATA() << 8; break;' +
+               'BUS_READ(c->AD); break;' +
+               'BUS_READ((c->AD & 0xFF00) | ((c->AD + 1) & 0xFF)); c->AD = BUS_DATA(); break;' +
+               'c->PC = (BUS_DATA() << 8) | c->AD; _FETCH();')
+        get_or_create_continuation(seq, 'JMP_IND')
         return ('JMP_IND', seq)
-    
     elif op == 0x28:  # PLP
-        seq = ('BUS_READ(0x0100|c->S);break;' +
-               'c->P=(BUS_DATA()|FAM65XX_BF)&~FAM65XX_XF;_FETCH();')
+        seq = ('BUS_READ(0x0100 | c->S); break;' +
+               'c->P = (BUS_DATA() | FAM65XX_BF) & ~FAM65XX_XF; _FETCH();')
+        get_or_create_continuation(seq, 'PLP')
         return ('PLP', seq)
-    
     elif op == 0x68:  # PLA
-        seq = ('BUS_READ(0x0100|c->S);break;' +
-               'c->A=BUS_DATA();_NZ(c->A);_FETCH();')
+        seq = ('BUS_READ(0x0100 | c->S); break;' +
+               'c->A = BUS_DATA(); _NZ(c->A); _FETCH();')
+        get_or_create_continuation(seq, 'PLA')
         return ('PLA', seq)
-    
-    # Branch taken (shared by all branches)
-    cc = op & 3
-    bbb = (op >> 2) & 7
-    aaa = (op >> 5) & 7
-    
-    if bbb == 4 and cc == 0 and aaa >= 4:
-        seq = ('BUS_INTERNAL((c->PC&0xFF00)|(c->AD&0xFF));if((c->AD&0xFF00)==(c->PC&0xFF00)){c->PC=c->AD;c->irq_pip>>=1;c->nmi_pip>>=1;_FETCH()};break;' +
+    elif flags == 'BRANCH':
+        # Branch taken continuation
+        seq = ('BUS_INTERNAL((c->PC&0xFF00)|(c->AD&0xFF));if((c->AD&0xFF00)==(c->PC&0xFF00)){c->PC=c->AD;c->irq_pip>>=1;c->nmi_pip>>=1;_FETCH();};break;' +
                'c->PC=c->AD;_FETCH();')
+        get_or_create_continuation(seq, 'BRANCH_TAKEN')
         return ('BRANCH_TAKEN', seq)
-    
-    # RMW operations (shared patterns)
-    mem_access = get_mem_access(op)
-    if mem_access == M_RW and cc in [2, 3]:
+    elif flags == 'RMW':
+        # RMW continuations
+        mnemonic = get_mnemonic(op)
         rmw_seqs = {
-            0: ('ASL_RMW', 'BUS_WRITE(c->AD,c->AD);break;c->AD=_fam65xx_asl(c,c->AD);break;BUS_WRITE(c->AD,c->AD);_FETCH();'),
-            1: ('ROL_RMW', 'BUS_WRITE(c->AD,c->AD);break;c->AD=_fam65xx_rol(c,c->AD);break;BUS_WRITE(c->AD,c->AD);_FETCH();'),
-            2: ('LSR_RMW', 'BUS_WRITE(c->AD,c->AD);break;c->AD=_fam65xx_lsr(c,c->AD);break;BUS_WRITE(c->AD,c->AD);_FETCH();'),
-            3: ('ROR_RMW', 'BUS_WRITE(c->AD,c->AD);break;c->AD=_fam65xx_ror(c,c->AD);break;BUS_WRITE(c->AD,c->AD);_FETCH();'),
-            6: ('DEC_RMW', 'BUS_WRITE(c->AD,c->AD);break;c->AD--;_NZ(c->AD);break;BUS_WRITE(c->AD,c->AD);_FETCH();'),
-            7: ('INC_RMW', 'BUS_WRITE(c->AD,c->AD);break;c->AD++;_NZ(c->AD);break;BUS_WRITE(c->AD,c->AD);_FETCH();'),
+            'ASL': ('ASL_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD = _fam65xx_asl(c, c->AD); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
+            'ROL': ('ROL_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD = _fam65xx_rol(c, c->AD); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
+            'LSR': ('LSR_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD = _fam65xx_lsr(c, c->AD); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
+            'ROR': ('ROR_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD = _fam65xx_ror(c, c->AD); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
+            'DEC': ('DEC_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD--; _NZ(c->AD); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
+            'INC': ('INC_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD++; _NZ(c->AD); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
+            'SLO': ('SLO_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD = _fam65xx_asl(c, c->AD); c->A |= c->AD; _NZ(c->A); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
+            'RLA': ('RLA_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD = _fam65xx_rol(c, c->AD); c->A &= c->AD; _NZ(c->A); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
+            'SRE': ('SRE_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD = _fam65xx_lsr(c, c->AD); c->A ^= c->AD; _NZ(c->A); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
+            'RRA': ('RRA_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD = _fam65xx_ror(c, c->AD); _fam65xx_adc(c, c->AD); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
+            'DCP': ('DCP_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD--; _fam65xx_cmp(c, c->A, c->AD); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
+            'ISC': ('ISC_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD++; _fam65xx_sbc(c, c->AD); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
         }
-        if aaa in rmw_seqs:
-            return rmw_seqs[aaa]
+        if mnemonic in rmw_seqs:
+            name, seq = rmw_seqs[mnemonic]
+            get_or_create_continuation(seq, name)
+            return rmw_seqs[mnemonic]
     
     return None
 
@@ -242,108 +364,37 @@ def get_continuation_constant_name(name):
     """Get the constant name for a continuation sequence"""
     return f"C_{name}"
 
+def get_indent(level):
+    """Helper function to generate indentation string"""
+    return '            ' + '    ' * level
+
+def format_code(code):
+    """Format code using embedded newlines and tabs for indentation"""
+    lines = code.split('\n')
+    formatted_lines = []
+    
+    for line in lines:
+        line = line.rstrip()  # Remove trailing whitespace but preserve leading tabs
+        if line:  # Only add non-empty lines
+            formatted_lines.append('            ' + line)
+    
+    return '\n'.join(formatted_lines)
+
 def generate_opcode_implementation(op):
     """Generate the implementation code for this opcode's specific cycle"""
-    cc = op & 3
-    bbb = (op >> 2) & 7
-    aaa = (op >> 5) & 7
-    addr_mode = get_addr_mode(op)
-    mem_access = get_mem_access(op)
+    impl = get_implementation(op)
+    flags = get_flags(op)
     
-    # Check if needs continuation
-    cont = analyze_continuation_needs(op)
-    if cont:
-        name, sequence = cont
-        cont_idx = get_or_create_continuation(sequence, name)
-        const_name = get_continuation_constant_name(name)
-        
-        # Generate first cycle that jumps to continuation
-        if op == 0x00:  # BRK
-            return f"if(0==(c->brk_flags&(FAM65XX_BRK_IRQ|FAM65XX_BRK_NMI))){{c->PC++;}}BUS_WRITE(0x0100|c->S--,c->PC>>8);c->IR={const_name};"
-        elif op in [0x20, 0x4C, 0x6C]:  # JSR, JMP
-            return f"BUS_READ(c->PC++);c->AD=BUS_DATA();c->IR={const_name};"
-        elif op in [0x28, 0x40, 0x60, 0x68]:  # Stack ops
-            return f"BUS_INTERNAL(0x0100|c->S++);c->IR={const_name};"
-        elif bbb == 4 and cc == 0:  # Branches
-            return f"BUS_READ(c->PC);c->AD=c->PC+(int8_t)BUS_DATA();if((c->P&{get_branch_mask(op)})=={get_branch_val(op)}){{c->IR={const_name};}}else{{_FETCH();}}"
+    # Handle branch instructions specially
+    if flags == 'BRANCH':
+        return f"BUS_READ(c->PC);\nc->AD = c->PC + (int8_t)BUS_DATA();\nif ((c->P & {get_branch_mask(op)}) == {get_branch_val(op)}) {{\n\tc->IR = C_BRANCH_TAKEN;\n}} else {{\n\t_FETCH();\n}}"
     
-    # RMW operations - read, then jump to continuation
-    if mem_access == M_RW and cc in [2, 3]:
-        cont = analyze_continuation_needs(op)
-        if cont:
-            name, sequence = cont
-            cont_idx = get_or_create_continuation(sequence, name)
-            const_name = get_continuation_constant_name(name)
-            return f"BUS_READ(c->AD);c->AD=BUS_DATA();c->IR={const_name};"
+    # Return the implementation from the mnemonic symbol
+    if impl:
+        return impl
     
-    # Accumulator mode shifts
-    if cc == 2 and bbb == 2 and addr_mode == A____:
-        ops_map = {0:'asl', 1:'rol', 2:'lsr', 3:'ror'}
-        if aaa in ops_map:
-            return f"BUS_INTERNAL(c->PC);c->A=_fam65xx_{ops_map[aaa]}(c,c->A);_FETCH();"
-    
-    # Simple single-cycle operations
-    simple_ops = {
-        0x8A: "BUS_INTERNAL(c->PC);c->A=c->X;_NZ(c->A);_FETCH();",
-        0x98: "BUS_INTERNAL(c->PC);c->A=c->Y;_NZ(c->A);_FETCH();",
-        0x9A: "BUS_INTERNAL(c->PC);c->S=c->X;_FETCH();",
-        0xA8: "BUS_INTERNAL(c->PC);c->Y=c->A;_NZ(c->Y);_FETCH();",
-        0xAA: "BUS_INTERNAL(c->PC);c->X=c->A;_NZ(c->X);_FETCH();",
-        0xBA: "BUS_INTERNAL(c->PC);c->X=c->S;_NZ(c->X);_FETCH();",
-        0xCA: "BUS_INTERNAL(c->PC);c->X--;_NZ(c->X);_FETCH();",
-        0x88: "BUS_INTERNAL(c->PC);c->Y--;_NZ(c->Y);_FETCH();",
-        0xE8: "BUS_INTERNAL(c->PC);c->X++;_NZ(c->X);_FETCH();",
-        0xC8: "BUS_INTERNAL(c->PC);c->Y++;_NZ(c->Y);_FETCH();",
-        0x18: "BUS_INTERNAL(c->PC);c->P&=~FAM65XX_CF;_FETCH();",
-        0x38: "BUS_INTERNAL(c->PC);c->P|=FAM65XX_CF;_FETCH();",
-        0x58: "BUS_INTERNAL(c->PC);c->P&=~FAM65XX_IF;_FETCH();",
-        0x78: "BUS_INTERNAL(c->PC);c->P|=FAM65XX_IF;_FETCH();",
-        0xB8: "BUS_INTERNAL(c->PC);c->P&=~FAM65XX_VF;_FETCH();",
-        0xD8: "BUS_INTERNAL(c->PC);c->P&=~FAM65XX_DF;_FETCH();",
-        0xF8: "BUS_INTERNAL(c->PC);c->P|=FAM65XX_DF;_FETCH();",
-        0xEA: "BUS_INTERNAL(c->PC);_FETCH();",
-        0x08: "BUS_WRITE(0x0100|c->S--,c->P|FAM65XX_XF);_FETCH();",
-        0x48: "BUS_WRITE(0x0100|c->S--,c->A);_FETCH();",
-    }
-    
-    if op in simple_ops:
-        return simple_ops[op]
-    
-    # ALU group (cc=1)
-    if cc == 1:
-        alu_ops = [
-            "BUS_READ(c->AD);c->A|=BUS_DATA();_NZ(c->A);_FETCH();",
-            "BUS_READ(c->AD);c->A&=BUS_DATA();_NZ(c->A);_FETCH();",
-            "BUS_READ(c->AD);c->A^=BUS_DATA();_NZ(c->A);_FETCH();",
-            "BUS_READ(c->AD);_fam65xx_adc(c,BUS_DATA());_FETCH();",
-            "BUS_WRITE(c->AD,c->A);_FETCH();",
-            "BUS_READ(c->AD);c->A=BUS_DATA();_NZ(c->A);_FETCH();",
-            "BUS_READ(c->AD);_fam65xx_cmp(c,c->A,BUS_DATA());_FETCH();",
-            "BUS_READ(c->AD);_fam65xx_sbc(c,BUS_DATA());_FETCH();",
-        ]
-        return alu_ops[aaa]
-    
-    # Load/Store/Compare operations (cc=2 and cc=0)
-    if cc == 2:
-        if aaa == 5:  # LDX
-            return "BUS_READ(c->AD);c->X=BUS_DATA();_NZ(c->X);_FETCH();"
-        elif aaa == 4 and mem_access == M__W:  # STX
-            return "BUS_WRITE(c->AD,c->X);_FETCH();"
-    
-    if cc == 0:
-        if aaa == 5:  # LDY
-            return "BUS_READ(c->AD);c->Y=BUS_DATA();_NZ(c->Y);_FETCH();"
-        elif aaa == 4 and mem_access == M__W:  # STY
-            return "BUS_WRITE(c->AD,c->Y);_FETCH();"
-        elif aaa == 7 and bbb in [0,1,3]:  # CPX
-            return "BUS_READ(c->AD);_fam65xx_cmp(c,c->X,BUS_DATA());_FETCH();"
-        elif aaa == 6 and bbb in [0,1,3]:  # CPY
-            return "BUS_READ(c->AD);_fam65xx_cmp(c,c->Y,BUS_DATA());_FETCH();"
-        elif aaa == 1 and bbb in [1,3]:  # BIT
-            return "BUS_READ(c->AD);_fam65xx_bit(c,BUS_DATA());_FETCH();"
-    
-    # Invalid opcode - JAM
-    return "BUS_READ(c->PC);c->IR--;"
+    # Fallback for any unhandled cases
+    return "BUS_READ(c->PC);\nc->IR--;"
 
 def generate_addressing_constants():
     """Generate addressing mode offset constants"""
@@ -444,7 +495,7 @@ def generate_opcode_cases():
             l(f"        case 0x{opc:02X}:  // {get_mnemonic(opc)}")
             emitted.add(opc)
         
-        l(f"            {code}")
+        l(format_code(code))
         l(f"            break;")
         l("")
 
@@ -626,7 +677,9 @@ def generate_continuations():
         
         l(f"        // {name} continuation")
         for i, cycle_code in enumerate(cycles):
-            l(f"        case {const_name} + {i}: {cycle_code}break;")
+            l(f"        case {const_name} + {i}:")
+            l(format_code(cycle_code))
+            l("            break;")
         l("")
 
 def generate_continuation_constants():
@@ -641,7 +694,7 @@ def generate_continuation_constants():
 def main():
     # First pass: analyze all opcodes to discover continuation sequences
     for op in range(256):
-        generate_opcode_implementation(op)
+        analyze_continuation_needs(op)
     
     l("/*")
     l(" * AUTO-GENERATED by fam65xx_gen.py")
