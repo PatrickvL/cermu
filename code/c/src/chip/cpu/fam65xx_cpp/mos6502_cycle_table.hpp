@@ -580,7 +580,7 @@ constexpr std::array<CompactCycleDef, 2072> generate_complete_cycle_table() {
     
     // 0x8A: TXA - Transfer X to A (2 cycles) - HARDWARE-ACCURATE IMPLEMENTATION
     set_cycles(0x8A, {
-        CD(NONE, NONE, ADL, NONE, false),                // Cycle 1: Latch X into ADL register
+        CD(NONE, LOAD_ADL, X, NONE, false),             // Cycle 1: Load X into ADL register
         LAST_CYCLE(NONE, NONE, A, NONE)                  // Cycle 2: Transfer ADL→A, set N,Z flags
     });
     
@@ -650,7 +650,7 @@ constexpr std::array<CompactCycleDef, 2072> generate_complete_cycle_table() {
     
     // 0x98: TYA - Transfer Y to A (2 cycles) - HARDWARE-ACCURATE IMPLEMENTATION
     set_cycles(0x98, {
-        CD(NONE, NONE, ADL, NONE, false),                // Cycle 1: Latch Y into ADL register
+        CD(NONE, LOAD_ADL, Y, NONE, false),             // Cycle 1: Load Y into ADL register
         LAST_CYCLE(NONE, NONE, A, NONE)                  // Cycle 2: Transfer ADL→A, set N,Z flags
     });
     
@@ -665,8 +665,8 @@ constexpr std::array<CompactCycleDef, 2072> generate_complete_cycle_table() {
     
     // 0x9A: TXS - Transfer X to Stack Pointer (2 cycles)
     set_cycles(0x9A, {
-        CD(NONE, NONE, NONE, NONE, false),               // Cycle 1: Internal operation
-        LAST_CYCLE(NONE, NONE, SP, NONE)                 // Cycle 2: SP = X (no flags affected)
+        CD(NONE, LOAD_ADL, X, NONE, false),             // Cycle 1: Load X into ADL register
+        LAST_CYCLE(NONE, NONE, SP, NONE)                 // Cycle 2: SP = ADL (no flags affected)
     });
     
     // 0x9D: STA nnnn,X - Store Accumulator Absolute,X (5 cycles)
@@ -724,7 +724,7 @@ constexpr std::array<CompactCycleDef, 2072> generate_complete_cycle_table() {
     // 0xA8: TAY - Transfer A to Y (2 cycles) - HARDWARE-ACCURATE IMPLEMENTATION
     // Hardware: A → ADL (latch) → Y (transfer + flag update)
     set_cycles(0xA8, {
-        CD(NONE, NONE, ADL, NONE, false),                // Cycle 1: Latch A into ADL register
+        CD(NONE, LOAD_ADL, A, NONE, false),             // Cycle 1: Load A into ADL register
         LAST_CYCLE(NONE, NONE, Y, NONE)                  // Cycle 2: Transfer ADL→Y, set N,Z flags
     });
     
@@ -737,7 +737,7 @@ constexpr std::array<CompactCycleDef, 2072> generate_complete_cycle_table() {
     // 0xAA: TAX - Transfer A to X (2 cycles) - HARDWARE-ACCURATE IMPLEMENTATION
     // Hardware: A → ADL (latch) → X (transfer + flag update)
     set_cycles(0xAA, {
-        CD(NONE, NONE, ADL, NONE, false),                // Cycle 1: Latch A into ADL register  
+        CD(NONE, LOAD_ADL, A, NONE, false),             // Cycle 1: Load A into ADL register
         LAST_CYCLE(NONE, NONE, X, NONE)                  // Cycle 2: Transfer ADL→X, set N,Z flags
     });
     
@@ -797,8 +797,8 @@ constexpr std::array<CompactCycleDef, 2072> generate_complete_cycle_table() {
     
     // 0xBA: TSX - Transfer Stack Pointer to X (2 cycles)
     set_cycles(0xBA, {
-        CD(NONE, NONE, NONE, NONE, false),               // Cycle 1: Internal operation
-        LAST_CYCLE(NONE, NONE, X, NONE)                  // Cycle 2: X = SP, set N,Z flags
+        CD(NONE, LOAD_ADL, SP, NONE, false),            // Cycle 1: Load SP into ADL register
+        LAST_CYCLE(NONE, NONE, X, NONE)                  // Cycle 2: X = ADL, set N,Z flags
     });
     
     // 0xBC: LDY nnnn,X - Load Y Absolute,X (4+ cycles)

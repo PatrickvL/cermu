@@ -16,7 +16,7 @@
 #include <bitset>
 
 extern "C" {
-#include "../../../../tests/json_parser.h"
+#include "json_parser.h"
 }
 
 #include "mos6502_optimized.hpp"
@@ -85,7 +85,7 @@ public:
             bool debug_this = debug_cycles && (opcode_filter == -1 || opcode_filter == opcode);
             
             // Handle initial opcode fetch if CPU is starting fresh
-            if (cpu.get_current_cycle() == 0 && cpu.get_current_opcode() == 0x00) {
+            if (cpu.get_current_cycle() == 0 && cpu.get_current_opcode() == 0xFFFF) {
                 if (debug_this) {
                     std::cout << "    Initial opcode fetch: fetching 0x" << std::hex << (int)opcode
                               << " from PC 0x" << initial_pc << std::dec << std::endl;
@@ -138,20 +138,10 @@ public:
                         std::cout << " data=0x" << std::hex << (int)data << std::dec;
                     }
                     
-                    // Always call sample_bus_data first to handle vector completion
+                    // Always call sample_bus_data first to handle the current instruction's data needs
                     cpu.sample_bus_data(data);
                     if (debug_this) {
                         std::cout << " (data sample)";
-                    }
-                    
-                    // For normal opcode fetches (when instruction completed and not vector jump), handle opcode fetch
-                    if (cpu.get_current_cycle() == 0 && max_cycles > 0) {
-                        // Only treat as opcode fetch if this is a normal instruction completion
-                        // Vector jumps are handled by sample_bus_data and don't need opcode fetch setup
-                        cpu.complete_opcode_fetch(data);
-                        if (debug_this) {
-                            std::cout << " (also opcode fetch)";
-                        }
                     }
                 }
                 
@@ -167,6 +157,17 @@ public:
                     if (debug_this) {
                         std::cout << "    INSTRUCTION COMPLETED" << std::endl;
                     }
+                    
+                    // Now that instruction is complete, fetch the next opcode
+                    uint16_t next_pc = cpu.get_pc();
+                    uint8_t next_opcode = memory[next_pc];
+                    cpu.complete_opcode_fetch(next_opcode);
+                    
+                    if (debug_this) {
+                        std::cout << "    Next opcode fetch: 0x" << std::hex << (int)next_opcode
+                                  << " from PC 0x" << next_pc << std::dec << std::endl;
+                    }
+                    
                     break;
                 }
                 

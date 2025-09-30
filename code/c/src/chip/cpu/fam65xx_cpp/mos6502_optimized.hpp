@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <array>
 #include <cstddef>
+#include <iostream>
+#include <iomanip>
 #include "cpu_config.hpp"
 #include "../../../core/system_lines.h"
 
@@ -49,7 +51,9 @@ enum class AddressMode : uint8_t {
     NONE = 0, PC = 1, SP = 2, ABH_ABL = 3, ZERO = 4,
     IMM = 5, ZP = 6, ABS = 7, INDEXED_X = 8, INDEXED_Y = 9,
     // Unified vector address - actual vector determined by opcode
-    VECTOR = 10          // Vector addressing (IRQ/NMI/RESET determined by opcode)
+    VECTOR = 10,         // Vector addressing (IRQ/NMI/RESET determined by opcode)
+    // Transfer instruction addressing - source register encoded in target_reg
+    LOAD_ADL = 11        // Load ADL from source register (source encoded in target_reg)
 };
 
 // Register indices (8-bit registers with 16-bit pairs aligned for endianness)
@@ -86,6 +90,7 @@ enum class CpuReg : uint8_t {
     // Reserved for future expansion
     RESERVED = 14,
     // Special cases (must be ≤15 for 4-bit CompactCycleDef constraint)
+    // NONE = 15 acts as a waste slot - writes allowed, never read from
     NONE = 15,
     // Total registers
     COUNT = 16
@@ -187,7 +192,7 @@ private:
     
     // CPU execution state
     uint16_t current_opcode = 0;  // Support pseudo opcodes 256+ for IRQ/NMI/RESET
-    uint8_t current_cycle = 0;
+    uint8_t current_cycle = 0;    // Hardware-accurate: 0-based cycle within instruction
     uint32_t state_flags = 0;
     
     // Memory coordination
@@ -212,8 +217,8 @@ public:
     // Constructor
     MOS6502Optimized() {
         init_registers();
-        current_opcode = 0x00;  // Will be set by first opcode fetch
-        current_cycle = 0;      // Start ready to fetch first opcode
+        current_opcode = 0xFFFF;  // Invalid initial value - will be set by first opcode fetch
+        current_cycle = 0;       // Start ready to fetch first opcode
     }
     
     // Zero-overhead register access
@@ -253,9 +258,25 @@ public:
     // Main execution methods with φ1/φ2 separation
     bus_state_t tick_phi1(bus_state_t bus_state) {
         // φ1: Internal operations (decode, ALU, register updates)
-        const CompactCycleDef& cycle = cycle_table[current_opcode * 8 + current_cycle];
         
-        // Execute ALU operation if specified
+        // For cycle 0 (opcode fetch), no internal operations needed
+        if (current_cycle == 0) {
+            return bus_state;
+        }
+        
+        // Execute instruction cycle - use current_cycle - 1 for table lookup
+        // This maps current_cycle=1 to table_index=0, current_cycle=2 to table_index=1, etc.
+        const CompactCycleDef& cycle = cycle_table[current_opcode * 8 + (current_cycle - 1)];
+        
+        // Handle LOAD_ADL addressing mode - load source register into ADL
+        if (cycle.get_address() == AddressMode::LOAD_ADL) {
+            // Source register is encoded in target_reg field
+            CpuReg source_reg = cycle.get_target();
+            uint8_t source_value = registers.reg8(source_reg);
+            registers.reg8(CpuReg::ADL) = source_value;
+        }
+        
+        // Execute ALU operation if specified - but only if this cycle uses the ALU
         if (cycle.get_alu() != AluOp::NONE) {
             execute_alu_operation(cycle.get_alu(), registers.reg8(CpuReg::DL));
         }
@@ -268,9 +289,18 @@ public:
     
     bus_state_t tick_phi2(bus_state_t bus_state) {
         // φ2: External operations (bus control, memory access)
-        const CompactCycleDef& cycle = cycle_table[current_opcode * 8 + current_cycle];
         
-        // Set address on bus with vector address adjustment
+        // Handle opcode fetch (cycle 0)
+        if (current_cycle == 0) {
+            // Opcode fetch - address should already be set to PC by test harness
+            current_cycle++;
+            return bus_state;
+        }
+        
+        // Get cycle definition - use current_cycle - 1 for table lookup
+        const CompactCycleDef& cycle = cycle_table[current_opcode * 8 + (current_cycle - 1)];
+        
+        // Set address on bus with vector address adjustment (only if address mode specified)
         if (cycle.get_address() != AddressMode::NONE) {
             uint16_t final_address = temp_address;
             
@@ -285,10 +315,10 @@ public:
             }
             
             bus_state = BUS_SET_ADDR(bus_state, final_address);
+            
+            // Handle bus operations only when address mode is specified
+            bus_state = execute_bus_operation(cycle.get_bus(), bus_state);
         }
-        
-        // Handle bus operations
-        bus_state = execute_bus_operation(cycle.get_bus(), bus_state);
         
         // NOTE: Data sampling happens externally after phi2 completes
         // The test harness will provide read data via external interface
@@ -307,9 +337,6 @@ public:
                 // Normal instruction completion - fetch next opcode
                 bus_state = BUS_SET_ADDR(bus_state, get_pc());
                 bus_state = execute_bus_operation(BusControl::READ, bus_state);
-                
-                // PC increment for opcode fetch happens here
-                set_pc(get_pc() + 1);
                 current_cycle = 0;
             }
         } else {
@@ -321,10 +348,17 @@ public:
     
     // External interface for memory coordination - called by test harness after phi2
     void sample_bus_data(uint8_t data) {
-        // Get the cycle definition for the cycle that just completed
-        // If current_cycle is 0, we just completed the last cycle (7 for BRK), so use cycle 6 (0-indexed)
-        uint8_t cycle_index = (current_cycle == 0) ? 7 : current_cycle;  // Cycle that just executed
-        const CompactCycleDef& cycle = cycle_table[current_opcode * 8 + cycle_index - 1];  // Convert to 0-indexed
+        // Skip data sampling for opcode fetch (cycle 0 -> cycle 1 transition)
+        // But allow normal data sampling for all instruction cycles
+        if (current_cycle == 0) {
+            // This shouldn't happen - sample_bus_data called when cycle=0
+            return;
+        }
+        
+        // Get the cycle definition for the cycle that was just executed
+        // Use current_cycle - 2 since we're looking at the cycle that just completed
+        // (current_cycle was already incremented in φ2)
+        const CompactCycleDef& cycle = cycle_table[current_opcode * 8 + (current_cycle - 2)];
         
         // Cycle-driven vector handling - unified for all vector types
         if (cycle.get_address() == AddressMode::VECTOR) {
@@ -366,9 +400,23 @@ public:
         
         // Update target register if specified (normal non-vector operations)
         if (cycle.get_target() != CpuReg::NONE) {
-            // For non-read operations, use data from DL (previous cycle's read)
-            uint8_t target_data = (cycle.get_bus() == BusControl::READ) ? data : registers.reg8(CpuReg::DL);
-            write_target_register(cycle.get_target(), target_data);
+            // For read operations, always use the data directly from bus
+            if (cycle.get_bus() == BusControl::READ) {
+                write_target_register(cycle.get_target(), data);
+            } else {
+                // For non-read operations with BusControl::NONE (internal cycles)
+                // Check if this is the second cycle of a transfer instruction
+                const CompactCycleDef& prev_cycle = cycle_table[current_opcode * 8 + (current_cycle - 3)];
+                if (current_cycle >= 2 && prev_cycle.get_address() == AddressMode::LOAD_ADL) {
+                    // This is a transfer instruction's second cycle - use ADL
+                    uint8_t transfer_data = registers.reg8(CpuReg::ADL);
+                    write_target_register(cycle.get_target(), transfer_data);
+                } else {
+                    // Load instruction final cycle - use DL from previous read
+                    uint8_t load_data = registers.reg8(CpuReg::DL);
+                    write_target_register(cycle.get_target(), load_data);
+                }
+            }
         } else if (cycle.get_bus() == BusControl::READ) {
             // Always update DL for read operations if no specific target
             registers.reg8(CpuReg::DL) = data;
@@ -378,6 +426,9 @@ public:
     // External interface to complete opcode fetch
     void complete_opcode_fetch(uint16_t opcode) {
         current_opcode = opcode;
+        // PC increment is handled by test harness externally
+        // Start at cycle 1 for instruction execution (cycle 0 was the opcode fetch)
+        current_cycle = 1;
     }
     
     // Memory coordination interface
@@ -581,7 +632,7 @@ private:
             case AddressMode::PC: {
                 uint16_t addr = get_pc();
                 set_pc(get_pc() + 1);  // Increment PC for fetch operations
-                return addr;
+                return addr;  // Return the OLD PC value before increment
             }
             case AddressMode::SP:
                 return 0x0100 | registers.reg8(CpuReg::SP);
@@ -600,27 +651,38 @@ private:
             case AddressMode::VECTOR:
                 // Vector address determined by opcode - base address returned here
                 return get_vector_address_for_opcode(current_opcode);
+            case AddressMode::LOAD_ADL:
+                // For transfer instructions - no memory access, just return 0
+                return 0;
             case AddressMode::NONE:
             default:
                 return 0;
         }
     }
     
-    // Target register write
+    // Target register write - optimized with range checking (no switch needed)
     void write_target_register(CpuReg target, uint8_t data) {
-        if (target == CpuReg::NONE) return;
+        // Normal register write (NONE writes to index 15 waste slot)
         registers.reg8(target) = data;
-        switch (target) {
-            case CpuReg::A:
-            case CpuReg::X:
-            case CpuReg::Y:
-                update_flags_for_result(data);
-                break;
+        
+        // Update flags for A, X, Y (registers 0-2) - range check is faster than switch
+        if (static_cast<uint8_t>(target) <= static_cast<uint8_t>(CpuReg::Y)) {
+            update_flags_for_result(data);
         }
     }
     
     // Bus operation execution
     bus_state_t execute_bus_operation(BusControl bus_op, bus_state_t bus_state) {
+        // For opcode fetch operations (when SYNC is high), handle separately
+        if (current_cycle == 0) {
+            // Opcode fetch is always a read operation
+            if (bus_op == BusControl::READ) {
+                bus_state |= BUS_BIT(BUS_RW_BIT); // Set R/W to read
+            }
+            return bus_state;
+        }
+        
+        // Use current_cycle directly - much simpler with new cycle management
         const CompactCycleDef& cycle = cycle_table[current_opcode * 8 + current_cycle];
         
         switch (bus_op) {
@@ -685,6 +747,7 @@ private:
                     // Clear V flag - BRK should not affect overflow flag
                     value &= ~P_OVERFLOW;
                 }
+                break;
             }
             case CpuReg::PCL: {
                 // For BRK, push PC+2 (the instruction after BRK's 2-byte pattern)
@@ -704,6 +767,8 @@ private:
                 }
                 return (push_pc >> 8) & 0xFF;
             }
+            default:
+                break;
         }
         return value;
     }
