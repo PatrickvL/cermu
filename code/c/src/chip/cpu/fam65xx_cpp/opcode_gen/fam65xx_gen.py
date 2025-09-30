@@ -134,7 +134,7 @@ def get_or_create_continuation(sequence_code, name):
     global next_continuation_index
     
     if sequence_code not in continuation_sequences:
-        # Count cycles in this sequence
+        # Split on 'break;' to get individual cycles
         cycles = [c.strip() for c in sequence_code.split('break;') if c.strip()]
         
         continuation_sequences[sequence_code] = {
@@ -151,54 +151,54 @@ def analyze_continuation_needs(op):
     
     # Multi-cycle unique sequences
     if op == 0x00:  # BRK
-        seq = ('BUS_WRITE(0x0100|c->S--,c->PC);' +
-               'BUS_WRITE(0x0100|c->S--,c->P|FAM65XX_XF);if(c->brk_flags&FAM65XX_BRK_RESET){c->AD=0xFFFC;}else{if(c->brk_flags&FAM65XX_BRK_NMI){c->AD=0xFFFA;}else{c->AD=0xFFFE;}};' +
-               'BUS_READ(c->AD++);c->P|=(FAM65XX_IF|FAM65XX_BF);c->brk_flags=0;' +
-               'BUS_READ(c->AD);c->AD=BUS_DATA();' +
+        seq = ('BUS_WRITE(0x0100|c->S--,c->PC);break;' +
+               'BUS_WRITE(0x0100|c->S--,c->P|FAM65XX_XF);if(c->brk_flags&FAM65XX_BRK_RESET){c->AD=0xFFFC;}else{if(c->brk_flags&FAM65XX_BRK_NMI){c->AD=0xFFFA;}else{c->AD=0xFFFE;}};break;' +
+               'BUS_READ(c->AD++);c->P|=(FAM65XX_IF|FAM65XX_BF);c->brk_flags=0;break;' +
+               'BUS_READ(c->AD);c->AD=BUS_DATA();break;' +
                'c->PC=(BUS_DATA()<<8)|c->AD;_FETCH();')
         return ('BRK', seq)
     
     elif op == 0x20:  # JSR
-        seq = ('BUS_INTERNAL(0x0100|c->S);' +
-               'BUS_WRITE(0x0100|c->S--,c->PC>>8);' +
-               'BUS_WRITE(0x0100|c->S--,c->PC);' +
-               'BUS_READ(c->PC);' +
+        seq = ('BUS_INTERNAL(0x0100|c->S);break;' +
+               'BUS_WRITE(0x0100|c->S--,c->PC>>8);break;' +
+               'BUS_WRITE(0x0100|c->S--,c->PC);break;' +
+               'BUS_READ(c->PC);break;' +
                'c->PC=(BUS_DATA()<<8)|c->AD;_FETCH();')
         return ('JSR', seq)
     
     elif op == 0x40:  # RTI
-        seq = ('BUS_READ(0x0100|c->S++);' +
-               'BUS_READ(0x0100|c->S++);c->P=(BUS_DATA()|FAM65XX_BF)&~FAM65XX_XF;' +
-               'BUS_READ(0x0100|c->S);c->AD=BUS_DATA();' +
+        seq = ('BUS_READ(0x0100|c->S++);break;' +
+               'BUS_READ(0x0100|c->S++);c->P=(BUS_DATA()|FAM65XX_BF)&~FAM65XX_XF;break;' +
+               'BUS_READ(0x0100|c->S);c->AD=BUS_DATA();break;' +
                'c->PC=(BUS_DATA()<<8)|c->AD;_FETCH();')
         return ('RTI', seq)
     
     elif op == 0x60:  # RTS
-        seq = ('BUS_READ(0x0100|c->S++);' +
-               'BUS_READ(0x0100|c->S);c->AD=BUS_DATA();' +
-               'c->PC=(BUS_DATA()<<8)|c->AD;' +
+        seq = ('BUS_READ(0x0100|c->S++);break;' +
+               'BUS_READ(0x0100|c->S);c->AD=BUS_DATA();break;' +
+               'c->PC=(BUS_DATA()<<8)|c->AD;break;' +
                'BUS_READ(c->PC++);_FETCH();')
         return ('RTS', seq)
     
     elif op == 0x4C:  # JMP abs
-        seq = ('BUS_READ(c->PC++);c->AD|=BUS_DATA()<<8;' +
+        seq = ('BUS_READ(c->PC++);c->AD|=BUS_DATA()<<8;break;' +
                'c->PC=c->AD;_FETCH();')
         return ('JMP_ABS', seq)
     
     elif op == 0x6C:  # JMP ind
-        seq = ('BUS_READ(c->PC++);c->AD|=BUS_DATA()<<8;' +
-               'BUS_READ(c->AD);' +
-               'BUS_READ((c->AD&0xFF00)|((c->AD+1)&0xFF));c->AD=BUS_DATA();' +
+        seq = ('BUS_READ(c->PC++);c->AD|=BUS_DATA()<<8;break;' +
+               'BUS_READ(c->AD);break;' +
+               'BUS_READ((c->AD&0xFF00)|((c->AD+1)&0xFF));c->AD=BUS_DATA();break;' +
                'c->PC=(BUS_DATA()<<8)|c->AD;_FETCH();')
         return ('JMP_IND', seq)
     
     elif op == 0x28:  # PLP
-        seq = ('BUS_READ(0x0100|c->S);' +
+        seq = ('BUS_READ(0x0100|c->S);break;' +
                'c->P=(BUS_DATA()|FAM65XX_BF)&~FAM65XX_XF;_FETCH();')
         return ('PLP', seq)
     
     elif op == 0x68:  # PLA
-        seq = ('BUS_READ(0x0100|c->S);' +
+        seq = ('BUS_READ(0x0100|c->S);break;' +
                'c->A=BUS_DATA();_NZ(c->A);_FETCH();')
         return ('PLA', seq)
     
@@ -208,7 +208,7 @@ def analyze_continuation_needs(op):
     aaa = (op >> 5) & 7
     
     if bbb == 4 and cc == 0 and aaa >= 4:
-        seq = ('BUS_INTERNAL((c->PC&0xFF00)|(c->AD&0xFF));if((c->AD&0xFF00)==(c->PC&0xFF00)){c->PC=c->AD;c->irq_pip>>=1;c->nmi_pip>>=1;_FETCH()};' +
+        seq = ('BUS_INTERNAL((c->PC&0xFF00)|(c->AD&0xFF));if((c->AD&0xFF00)==(c->PC&0xFF00)){c->PC=c->AD;c->irq_pip>>=1;c->nmi_pip>>=1;_FETCH()};break;' +
                'c->PC=c->AD;_FETCH();')
         return ('BRANCH_TAKEN', seq)
     
@@ -216,12 +216,12 @@ def analyze_continuation_needs(op):
     mem_access = get_mem_access(op)
     if mem_access == M_RW and cc in [2, 3]:
         rmw_seqs = {
-            0: ('ASL_RMW', 'BUS_WRITE(c->AD,c->AD);c->AD=_fam65xx_asl(c,c->AD);BUS_WRITE(c->AD,c->AD);_FETCH();'),
-            1: ('ROL_RMW', 'BUS_WRITE(c->AD,c->AD);c->AD=_fam65xx_rol(c,c->AD);BUS_WRITE(c->AD,c->AD);_FETCH();'),
-            2: ('LSR_RMW', 'BUS_WRITE(c->AD,c->AD);c->AD=_fam65xx_lsr(c,c->AD);BUS_WRITE(c->AD,c->AD);_FETCH();'),
-            3: ('ROR_RMW', 'BUS_WRITE(c->AD,c->AD);c->AD=_fam65xx_ror(c,c->AD);BUS_WRITE(c->AD,c->AD);_FETCH();'),
-            6: ('DEC_RMW', 'BUS_WRITE(c->AD,c->AD);c->AD--;_NZ(c->AD);BUS_WRITE(c->AD,c->AD);_FETCH();'),
-            7: ('INC_RMW', 'BUS_WRITE(c->AD,c->AD);c->AD++;_NZ(c->AD);BUS_WRITE(c->AD,c->AD);_FETCH();'),
+            0: ('ASL_RMW', 'BUS_WRITE(c->AD,c->AD);break;c->AD=_fam65xx_asl(c,c->AD);break;BUS_WRITE(c->AD,c->AD);_FETCH();'),
+            1: ('ROL_RMW', 'BUS_WRITE(c->AD,c->AD);break;c->AD=_fam65xx_rol(c,c->AD);break;BUS_WRITE(c->AD,c->AD);_FETCH();'),
+            2: ('LSR_RMW', 'BUS_WRITE(c->AD,c->AD);break;c->AD=_fam65xx_lsr(c,c->AD);break;BUS_WRITE(c->AD,c->AD);_FETCH();'),
+            3: ('ROR_RMW', 'BUS_WRITE(c->AD,c->AD);break;c->AD=_fam65xx_ror(c,c->AD);break;BUS_WRITE(c->AD,c->AD);_FETCH();'),
+            6: ('DEC_RMW', 'BUS_WRITE(c->AD,c->AD);break;c->AD--;_NZ(c->AD);break;BUS_WRITE(c->AD,c->AD);_FETCH();'),
+            7: ('INC_RMW', 'BUS_WRITE(c->AD,c->AD);break;c->AD++;_NZ(c->AD);break;BUS_WRITE(c->AD,c->AD);_FETCH();'),
         }
         if aaa in rmw_seqs:
             return rmw_seqs[aaa]
@@ -238,6 +238,10 @@ def get_branch_val(op):
     """Get branch condition value"""
     return '0' if op in [0x10, 0x50, 0x90, 0xD0] else get_branch_mask(op)
 
+def get_continuation_constant_name(name):
+    """Get the constant name for a continuation sequence"""
+    return f"C_{name}"
+
 def generate_opcode_implementation(op):
     """Generate the implementation code for this opcode's specific cycle"""
     cc = op & 3
@@ -251,16 +255,17 @@ def generate_opcode_implementation(op):
     if cont:
         name, sequence = cont
         cont_idx = get_or_create_continuation(sequence, name)
+        const_name = get_continuation_constant_name(name)
         
         # Generate first cycle that jumps to continuation
         if op == 0x00:  # BRK
-            return f"if(0==(c->brk_flags&(FAM65XX_BRK_IRQ|FAM65XX_BRK_NMI))){{c->PC++;}}BUS_WRITE(0x0100|c->S--,c->PC>>8);c->IR={cont_idx};"
+            return f"if(0==(c->brk_flags&(FAM65XX_BRK_IRQ|FAM65XX_BRK_NMI))){{c->PC++;}}BUS_WRITE(0x0100|c->S--,c->PC>>8);c->IR={const_name};"
         elif op in [0x20, 0x4C, 0x6C]:  # JSR, JMP
-            return f"BUS_READ(c->PC++);c->AD=BUS_DATA();c->IR={cont_idx};"
+            return f"BUS_READ(c->PC++);c->AD=BUS_DATA();c->IR={const_name};"
         elif op in [0x28, 0x40, 0x60, 0x68]:  # Stack ops
-            return f"BUS_INTERNAL(0x0100|c->S++);c->IR={cont_idx};"
+            return f"BUS_INTERNAL(0x0100|c->S++);c->IR={const_name};"
         elif bbb == 4 and cc == 0:  # Branches
-            return f"BUS_READ(c->PC);c->AD=c->PC+(int8_t)BUS_DATA();if((c->P&{get_branch_mask(op)})=={get_branch_val(op)}){{c->IR={cont_idx};}}else{{_FETCH();}}"
+            return f"BUS_READ(c->PC);c->AD=c->PC+(int8_t)BUS_DATA();if((c->P&{get_branch_mask(op)})=={get_branch_val(op)}){{c->IR={const_name};}}else{{_FETCH();}}"
     
     # RMW operations - read, then jump to continuation
     if mem_access == M_RW and cc in [2, 3]:
@@ -268,7 +273,8 @@ def generate_opcode_implementation(op):
         if cont:
             name, sequence = cont
             cont_idx = get_or_create_continuation(sequence, name)
-            return f"BUS_READ(c->AD);c->AD=BUS_DATA();c->IR={cont_idx};"
+            const_name = get_continuation_constant_name(name)
+            return f"BUS_READ(c->AD);c->AD=BUS_DATA();c->IR={const_name};"
     
     # Accumulator mode shifts
     if cc == 2 and bbb == 2 and addr_mode == A____:
@@ -609,25 +615,27 @@ def generate_continuations():
     l("")
     
     # Sort by index to emit in order without gaps
-    sorted_seqs = sorted(continuation_sequences.items(), 
+    sorted_seqs = sorted(continuation_sequences.items(),
                         key=lambda x: x[1]['index'])
     
     for seq_code, seq_info in sorted_seqs:
         idx = seq_info['index']
         name = seq_info['name']
         cycles = seq_info['cycles']
+        const_name = get_continuation_constant_name(name)
         
-        l(f"        // {name} continuation (starting at {idx})")
+        l(f"        // {name} continuation")
         for i, cycle_code in enumerate(cycles):
-            l(f"        case {idx + i}: {cycle_code}break;")
+            l(f"        case {const_name} + {i}: {cycle_code}break;")
         l("")
 
-def generate_continuation_lookup():
-    """Generate comment showing continuation sequence indices"""
-    l("// Continuation sequence indices:")
-    for seq_code, seq_info in sorted(continuation_sequences.items(), 
+def generate_continuation_constants():
+    """Generate constant declarations for continuation sequences"""
+    l("// Continuation sequence constants")
+    for seq_code, seq_info in sorted(continuation_sequences.items(),
                                      key=lambda x: x[1]['index']):
-        l(f"// {seq_info['name']}: {seq_info['index']}")
+        const_name = get_continuation_constant_name(seq_info['name'])
+        l(f"#define {const_name:<16} {seq_info['index']}")
     l("")
 
 def main():
@@ -648,7 +656,7 @@ def main():
     l(" */")
     l("")
     
-    generate_continuation_lookup()
+    generate_continuation_constants()
     generate_addressing_constants()
     generate_lookup_table()
     
