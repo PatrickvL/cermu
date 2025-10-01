@@ -48,14 +48,28 @@ AM_ABS = ("ABS", "absolute", "ADDR_ABS", (
 AM_ABX = ("ABX", "absolute,X", "ADDR_ABX", (
     "BUS_READ(c->PC++);\nc->AD = BUS_DATA();",
     "BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;",
-    "BUS_READ((c->AD & 0xFF00) | ((c->AD + c->X) & 0xFF));\nif (((c->AD >> 8) == ((c->AD + c->X) >> 8))) {\n\tc->AD += c->X;\n\tc->IR = c->opcode;\n}",
+    "BUS_READ((c->AD & 0xFF00) | ((c->AD + c->X) & 0xFF));\nc->IR += (~((c->AD >> 8) - ((c->AD + c->X) >> 8))) & 1;",
+    "c->AD += c->X;\nc->IR = c->opcode;"
+))
+
+AM_ABX_W = ("ABX", "absolute,X (write - always takes extra cycle)", "ADDR_ABX_W", (
+    "BUS_READ(c->PC++);\nc->AD = BUS_DATA();",
+    "BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;",
+    "BUS_READ((c->AD & 0xFF00) | ((c->AD + c->X) & 0xFF));",
     "c->AD += c->X;\nc->IR = c->opcode;"
 ))
 
 AM_ABY = ("ABY", "absolute,Y", "ADDR_ABY", (
     "BUS_READ(c->PC++);\nc->AD = BUS_DATA();",
     "BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;",
-    "BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nif (((c->AD >> 8) == ((c->AD + c->Y) >> 8))) {\n\tc->AD += c->Y;\n\tc->IR = c->opcode;\n}",
+    "BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nc->IR += (~((c->AD >> 8) - ((c->AD + c->Y) >> 8))) & 1;",
+    "c->AD += c->Y;\nc->IR = c->opcode;"
+))
+
+AM_ABY_W = ("ABY", "absolute,Y (write - always takes extra cycle)", "ADDR_ABY_W", (
+    "BUS_READ(c->PC++);\nc->AD = BUS_DATA();",
+    "BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;",
+    "BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));",
     "c->AD += c->Y;\nc->IR = c->opcode;"
 ))
 
@@ -71,7 +85,15 @@ AM_IDY = ("IDY", "indirect indexed (zp),Y", "ADDR_IDY", (
     "BUS_READ(c->PC++);",
     "c->AD = BUS_DATA();\nBUS_READ(c->AD);",
     "BUS_READ((c->AD + 1) & 0xFF);\nc->AD = BUS_DATA();",
-    "c->AD |= BUS_DATA() << 8;\nBUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nif (((c->AD >> 8) == ((c->AD + c->Y) >> 8))) {\n\tc->AD += c->Y;\n\tc->IR = c->opcode;\n}",
+    "c->AD |= BUS_DATA() << 8;\nBUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nc->IR += (~((c->AD >> 8) - ((c->AD + c->Y) >> 8))) & 1;",
+    "c->AD += c->Y;\nc->IR = c->opcode;"
+))
+
+AM_IDY_W = ("IDY", "indirect indexed (zp),Y (write - always takes extra cycle)", "ADDR_IDY_W", (
+    "BUS_READ(c->PC++);",
+    "c->AD = BUS_DATA();\nBUS_READ(c->AD);",
+    "BUS_READ((c->AD + 1) & 0xFF);\nc->AD = BUS_DATA();",
+    "c->AD |= BUS_DATA() << 8;\nBUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));",
     "c->AD += c->Y;\nc->IR = c->opcode;"
 ))
 
@@ -83,9 +105,12 @@ ADDRESSING_MODES = [
     AM_ZPY,
     AM_ABS,
     AM_ABX,
+    AM_ABX_W,
     AM_ABY,
+    AM_ABY_W,
     AM_IDX,
     AM_IDY,
+    AM_IDY_W,
 ]
 
 # Memory access modes
@@ -226,6 +251,23 @@ rmw_seqs = {
 #-------------------------------------------------------------------------------
 # Instruction table: [operation, addressing_mode]
 #-------------------------------------------------------------------------------
+def get_hardware_accurate_addr_mode(operation, base_addr_mode):
+    """Select appropriate addressing mode variant based on memory access pattern for hardware accuracy"""
+    mem_access = operation[1]  # memory access is at index 1
+    
+    # For addressing modes that have read/write variants, choose based on memory access
+    # Read operations (M_R_) use the base mode (read-optimized page boundary crossing)
+    # Write/RMW operations (M__W, M_RW) use the _W variant (always takes extra cycle)
+    if base_addr_mode == AM_ABX:
+        return AM_ABX if mem_access == M_R_ else AM_ABX_W
+    elif base_addr_mode == AM_ABY:
+        return AM_ABY if mem_access == M_R_ else AM_ABY_W
+    elif base_addr_mode == AM_IDY:
+        return AM_IDY if mem_access == M_R_ else AM_IDY_W
+    
+    # For all other modes, return the original mode
+    return base_addr_mode
+
 ops = [
     # cc = 00
     [
@@ -305,11 +347,16 @@ def format_code(code):
 
 # Helper functions for direct ops array access
 def get_ops_entry(op):
-    """Get the full ops entry for an opcode"""
+    """Get the full ops entry for an opcode with hardware-accurate addressing mode selection"""
     cc = op & 3
     bbb = (op >> 2) & 7
     aaa = (op >> 5) & 7
-    return ops[cc][bbb][aaa]
+    operation, base_addr_mode = ops[cc][bbb][aaa]
+    
+    # Select hardware-accurate addressing mode variant based on memory access
+    addr_mode = get_hardware_accurate_addr_mode(operation, base_addr_mode)
+    
+    return operation, addr_mode
 
 def get_or_create_continuation(sequence_code, name):
     """Get existing continuation sequence index or create new one"""
@@ -494,7 +541,10 @@ def generate_lookup_table():
         
         # Format with comma except for last element
         comma = "," if op < 255 else " "
-        l(f"    {const_name}{comma}  // 0x{op:02X}: {operation[0]}")
+        
+        # Show memory access type in comment for clarity
+        mem_access_str = {M___: "---", M_R_: "R", M__W: "W", M_RW: "RW"}[operation[1]]
+        l(f"    {const_name}{comma}  // 0x{op:02X}: {operation[0]} [{mem_access_str}] {addr_mode[1]}")
     
     l("};")
     l("")
@@ -528,9 +578,10 @@ def generate_opcode_cases():
         # Emit all opcodes that share this implementation
         for opc in sorted(opcodes):
             operation, addr_mode = get_ops_entry(opc)
-            addr_acronym = addr_mode[0]            
+            addr_acronym = addr_mode[0]
             cycle_num = len(addr_mode[3]) + 1
-            l(f"        case 0x{opc:02X}:  // {operation[0]} {addr_acronym} cycle {cycle_num}")
+            mem_access_str = {M___: "---", M_R_: "R", M__W: "W", M_RW: "RW"}[operation[1]]
+            l(f"        case 0x{opc:02X}:  // {operation[0]} [{mem_access_str}] {addr_acronym} cycle {cycle_num}")
             emitted.add(opc)
         
         l(format_code(code))
