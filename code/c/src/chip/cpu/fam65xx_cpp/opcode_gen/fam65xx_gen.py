@@ -12,7 +12,7 @@
 #-------------------------------------------------------------------------------
 
 # Special addressing mode objects for non-standard cases
-AM_NON = ("---", "no addressing mode", "ADDR_NON", ())  # No addressing mode
+AM_NON = ("---", "no addressing mode", "ADDR_NON", ())   # No addressing mode
 AM_JMP = ("---", "special JMP", "ADDR_NON", ())          # Special JMP cases
 AM_JSR = ("---", "special JSR", "ADDR_NON", ())          # Special JSR case
 AM_INV = ("---", "invalid instruction", "ADDR_NON", ())  # Invalid instruction
@@ -24,25 +24,24 @@ AM_IMM = ("IMM", "immediate", "ADDR_IMM", (
 
 AM_ZER = ("ZP", "zero page", "ADDR_ZER", (
     "BUS_READ(c->PC++);",
-    "c->AD = BUS_DATA();\nc->IR = c->opcode;"
+    "c->AD = BUS_DATA();\nDUMMY_BUS_READ(c->PC);\nc->IR = c->opcode;"
 ))
 
 AM_ZPX = ("ZPX", "zero page,X", "ADDR_ZPX", (
     "BUS_READ(c->PC++);",
-    "c->AD = BUS_DATA();\nBUS_INTERNAL(c->AD);",
-    "c->AD = (c->AD + c->X) & 0xFF;\nc->IR = c->opcode;"
+    "c->AD = BUS_DATA();\nDUMMY_BUS_READ(c->PC);",
+    "DUMMY_BUS_READ(c->AD);\nc->AD = (c->AD + c->X) & 0xFF;\nc->IR = c->opcode;"
 ))
 
 AM_ZPY = ("ZPY", "zero page,Y", "ADDR_ZPY", (
     "BUS_READ(c->PC++);",
-    "c->AD = BUS_DATA();\nBUS_INTERNAL(c->AD);",
-    "c->AD = (c->AD + c->Y) & 0xFF;\nc->IR = c->opcode;"
+    "c->AD = BUS_DATA();\nDUMMY_BUS_READ(c->PC);",
+    "DUMMY_BUS_READ(c->AD);\nc->AD = (c->AD + c->Y) & 0xFF;\nc->IR = c->opcode;"
 ))
 
 AM_ABS = ("ABS", "absolute", "ADDR_ABS", (
     "BUS_READ(c->PC++);\nc->AD = BUS_DATA();",
-    "BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;",
-    "c->IR = c->opcode;"
+    "BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;\nc->IR = c->opcode;"
 ))
 
 AM_ABX = ("ABX", "absolute,X", "ADDR_ABX", (
@@ -75,26 +74,26 @@ AM_ABY_W = ("ABY", "absolute,Y (write - always takes extra cycle)", "ADDR_ABY_W"
 
 AM_IDX = ("IDX", "indexed indirect (zp,X)", "ADDR_IDX", (
     "BUS_READ(c->PC++);",
-    "c->AD = BUS_DATA();\nBUS_INTERNAL(c->AD);",
-    "c->AD = (c->AD + c->X) & 0xFF;\nBUS_READ(c->AD);",
-    "BUS_READ((c->AD + 1) & 0xFF);\nc->AD = BUS_DATA();",
-    "c->AD |= BUS_DATA() << 8;\nc->IR = c->opcode;"
+    "c->AD = BUS_DATA();\nDUMMY_BUS_READ(c->PC);",
+    "DUMMY_BUS_READ(c->AD);\nc->AD = (c->AD + c->X) & 0xFF;",
+    "BUS_READ(c->AD);",
+    "BUS_READ((c->AD + 1) & 0xFF);\nc->AD = BUS_DATA();\nc->AD |= BUS_DATA() << 8;\nc->IR = c->opcode;"
 ))
 
 AM_IDY = ("IDY", "indirect indexed (zp),Y", "ADDR_IDY", (
     "BUS_READ(c->PC++);",
-    "c->AD = BUS_DATA();\nBUS_READ(c->AD);",
-    "BUS_READ((c->AD + 1) & 0xFF);\nc->AD = BUS_DATA();",
-    "c->AD |= BUS_DATA() << 8;\nBUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nc->IR += (~((c->AD >> 8) - ((c->AD + c->Y) >> 8))) & 1;",
-    "c->AD += c->Y;\nc->IR = c->opcode;"
+    "c->AD = BUS_DATA();\nDUMMY_BUS_READ(c->PC);",
+    "BUS_READ(c->AD);",
+    "BUS_READ((c->AD + 1) & 0xFF);\nc->AD = BUS_DATA();\nc->AD |= BUS_DATA() << 8;",
+    "BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nc->IR += (~((c->AD >> 8) - ((c->AD + c->Y) >> 8))) & 1;\nc->AD += c->Y;\nc->IR = c->opcode;"
 ))
 
 AM_IDY_W = ("IDY", "indirect indexed (zp),Y (write - always takes extra cycle)", "ADDR_IDY_W", (
     "BUS_READ(c->PC++);",
-    "c->AD = BUS_DATA();\nBUS_READ(c->AD);",
-    "BUS_READ((c->AD + 1) & 0xFF);\nc->AD = BUS_DATA();",
-    "c->AD |= BUS_DATA() << 8;\nBUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));",
-    "c->AD += c->Y;\nc->IR = c->opcode;"
+    "c->AD = BUS_DATA();\nDUMMY_BUS_READ(c->PC);",
+    "BUS_READ(c->AD);",
+    "BUS_READ((c->AD + 1) & 0xFF);\nc->AD = BUS_DATA();\nc->AD |= BUS_DATA() << 8;",
+    "DUMMY_BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nc->AD += c->Y;\nc->IR = c->opcode;"
 ))
 
 # Addressing mode list
@@ -126,48 +125,48 @@ M_RW = 3        # read-modify-write
 
 # Simple implied mode operations
 OP_BRK = ("BRK", M___, "if (0 == (c->brk_flags & (FAM65XX_BRK_IRQ | FAM65XX_BRK_NMI))) {\n\tc->PC++;\n}\nBUS_WRITE(0x0100 | c->S--, c->PC >> 8);\nc->IR = C_BRK;", 'CONT')
-OP_PHP = ("PHP", M__W, "BUS_WRITE(0x0100 | c->S--, c->P | FAM65XX_XF);", None)  # M__W - separate _FETCH cycle
-OP_PLP = ("PLP", M___, "BUS_INTERNAL(0x0100 | c->S++);\nc->IR = C_PLP;", 'CONT')
-OP_PHA = ("PHA", M__W, "BUS_WRITE(0x0100 | c->S--, c->A);", None)  # M__W - separate _FETCH cycle
-OP_PLA = ("PLA", M___, "BUS_INTERNAL(0x0100 | c->S++);\nc->IR = C_PLA;", 'CONT')
-OP_RTI = ("RTI", M_R_, "BUS_INTERNAL(0x0100 | c->S++);\nc->IR = C_RTI;", 'CONT')
-OP_RTS = ("RTS", M_R_, "BUS_INTERNAL(0x0100 | c->S++);\nc->IR = C_RTS;", 'CONT')
-OP_JSR = ("JSR", M_R_, "BUS_READ(c->PC++);\nc->AD = BUS_DATA();\nc->IR = C_JSR;", 'CONT')
-OP_JMP = ("JMP", M_R_, "BUS_READ(c->PC++);\nc->AD = BUS_DATA();\nc->IR = C_JMP_ABS;", 'CONT')
-OP_JMI = ("JMP", M_R_, "BUS_READ(c->PC++);\nc->AD = BUS_DATA();\nc->IR = C_JMP_IND;", 'CONT')  # JMP indirect
+OP_PHP = ("PHP", M__W, "BUS_WRITE(0x0100 | c->S--, c->P | FAM65XX_XF);", None)  
+OP_PLP = ("PLP", M___, "DUMMY_BUS_READ(0x0100 | c->S++);\nc->IR = C_PLP;", 'CONT')
+OP_PHA = ("PHA", M__W, "BUS_WRITE(0x0100 | c->S--, c->A);", None)  # Write A to stack - M__W separate _FETCH cycle
+OP_PLA = ("PLA", M___, "DUMMY_BUS_READ(0x0100 | c->S++);\nc->IR = C_PLA;", 'CONT')  # Dummy stack access - increment S
+OP_RTI = ("RTI", M_R_, "DUMMY_BUS_READ(0x0100 | c->S++);\nc->IR = C_RTI;", 'CONT')  # Dummy stack access - increment S
+OP_RTS = ("RTS", M_R_, "DUMMY_BUS_READ(0x0100 | c->S++);\nc->IR = C_RTS;", 'CONT')  # Dummy stack access - increment S
+OP_JSR = ("JSR", M_R_, "BUS_READ(c->PC++);\nc->AD = BUS_DATA();\nc->IR = C_JSR;", 'CONT')  # Read low byte of target address
+OP_JMP = ("JMP", M_R_, "BUS_READ(c->PC++);\nc->AD = BUS_DATA();\nc->IR = C_JMP_ABS;", 'CONT')  # Read low byte of target address
+OP_JMI = ("JMP", M_R_, "BUS_READ(c->PC++);\nc->AD = BUS_DATA();\nc->IR = C_JMP_IND;", 'CONT')  # Read low byte of indirect address
 
 # Register transfer operations (M___ - _FETCH appended to current cycle)
-OP_TAX = ("TAX", M___, "BUS_INTERNAL(c->PC);\nc->X = c->A;\n_NZ(c->X);", None)
-OP_TXA = ("TXA", M___, "BUS_INTERNAL(c->PC);\nc->A = c->X;\n_NZ(c->A);", None)
-OP_TAY = ("TAY", M___, "BUS_INTERNAL(c->PC);\nc->Y = c->A;\n_NZ(c->Y);", None)
-OP_TYA = ("TYA", M___, "BUS_INTERNAL(c->PC);\nc->A = c->Y;\n_NZ(c->A);", None)
-OP_TSX = ("TSX", M___, "BUS_INTERNAL(c->PC);\nc->X = c->S;\n_NZ(c->X);", None)
-OP_TXS = ("TXS", M___, "BUS_INTERNAL(c->PC);\nc->S = c->X;", None)
+OP_TAX = ("TAX", M___, "DUMMY_BUS_READ(c->PC);\nc->X = c->A;\n_NZ(c->X);", None)  
+OP_TXA = ("TXA", M___, "DUMMY_BUS_READ(c->PC);\nc->A = c->X;\n_NZ(c->A);", None)  
+OP_TAY = ("TAY", M___, "DUMMY_BUS_READ(c->PC);\nc->Y = c->A;\n_NZ(c->Y);", None)  
+OP_TYA = ("TYA", M___, "DUMMY_BUS_READ(c->PC);\nc->A = c->Y;\n_NZ(c->A);", None)  
+OP_TSX = ("TSX", M___, "DUMMY_BUS_READ(c->PC);\nc->X = c->S;\n_NZ(c->X);", None)  
+OP_TXS = ("TXS", M___, "DUMMY_BUS_READ(c->PC);\nc->S = c->X;", None)  
 
 # Increment/Decrement operations (M___ - _FETCH appended to current cycle)
-OP_DEX = ("DEX", M___, "BUS_INTERNAL(c->PC);\nc->X--;\n_NZ(c->X);", None)
-OP_INX = ("INX", M___, "BUS_INTERNAL(c->PC);\nc->X++;\n_NZ(c->X);", None)
-OP_DEY = ("DEY", M___, "BUS_INTERNAL(c->PC);\nc->Y--;\n_NZ(c->Y);", None)
-OP_INY = ("INY", M___, "BUS_INTERNAL(c->PC);\nc->Y++;\n_NZ(c->Y);", None)
+OP_DEX = ("DEX", M___, "DUMMY_BUS_READ(c->PC);\nc->X--;\n_NZ(c->X);", None)  
+OP_INX = ("INX", M___, "DUMMY_BUS_READ(c->PC);\nc->X++;\n_NZ(c->X);", None)  
+OP_DEY = ("DEY", M___, "DUMMY_BUS_READ(c->PC);\nc->Y--;\n_NZ(c->Y);", None)  
+OP_INY = ("INY", M___, "DUMMY_BUS_READ(c->PC);\nc->Y++;\n_NZ(c->Y);", None)  
 
 # Flag operations (M___ - _FETCH appended to current cycle)
-OP_CLC = ("CLC", M___, "BUS_INTERNAL(c->PC);\nc->P &= ~FAM65XX_CF;", None)
-OP_SEC = ("SEC", M___, "BUS_INTERNAL(c->PC);\nc->P |= FAM65XX_CF;", None)
-OP_CLI = ("CLI", M___, "BUS_INTERNAL(c->PC);\nc->P &= ~FAM65XX_IF;", None)
-OP_SEI = ("SEI", M___, "BUS_INTERNAL(c->PC);\nc->P |= FAM65XX_IF;", None)
-OP_CLV = ("CLV", M___, "BUS_INTERNAL(c->PC);\nc->P &= ~FAM65XX_VF;", None)
-OP_CLD = ("CLD", M___, "BUS_INTERNAL(c->PC);\nc->P &= ~FAM65XX_DF;", None)
-OP_SED = ("SED", M___, "BUS_INTERNAL(c->PC);\nc->P |= FAM65XX_DF;", None)
+OP_CLC = ("CLC", M___, "DUMMY_BUS_READ(c->PC);\nc->P &= ~FAM65XX_CF;", None)  
+OP_SEC = ("SEC", M___, "DUMMY_BUS_READ(c->PC);\nc->P |= FAM65XX_CF;", None)  
+OP_CLI = ("CLI", M___, "DUMMY_BUS_READ(c->PC);\nc->P &= ~FAM65XX_IF;", None)  
+OP_SEI = ("SEI", M___, "DUMMY_BUS_READ(c->PC);\nc->P |= FAM65XX_IF;", None)  
+OP_CLV = ("CLV", M___, "DUMMY_BUS_READ(c->PC);\nc->P &= ~FAM65XX_VF;", None)  
+OP_CLD = ("CLD", M___, "DUMMY_BUS_READ(c->PC);\nc->P &= ~FAM65XX_DF;", None)  
+OP_SED = ("SED", M___, "DUMMY_BUS_READ(c->PC);\nc->P |= FAM65XX_DF;", None)  
 
 # Branch operations (all share BRANCH_TAKEN continuation)
-OP_BPL = ("BPL", M_R_, None, 'BRANCH')
-OP_BMI = ("BMI", M_R_, None, 'BRANCH')
-OP_BVC = ("BVC", M_R_, None, 'BRANCH')
-OP_BVS = ("BVS", M_R_, None, 'BRANCH')
-OP_BCC = ("BCC", M_R_, None, 'BRANCH')
-OP_BCS = ("BCS", M_R_, None, 'BRANCH')
-OP_BNE = ("BNE", M_R_, None, 'BRANCH')
-OP_BEQ = ("BEQ", M_R_, None, 'BRANCH')
+OP_BPL = ("BPL", M_R_, None, 'BRANCH')  # Read branch offset from PC
+OP_BMI = ("BMI", M_R_, None, 'BRANCH')  # Read branch offset from PC
+OP_BVC = ("BVC", M_R_, None, 'BRANCH')  # Read branch offset from PC
+OP_BVS = ("BVS", M_R_, None, 'BRANCH')  # Read branch offset from PC
+OP_BCC = ("BCC", M_R_, None, 'BRANCH')  # Read branch offset from PC
+OP_BCS = ("BCS", M_R_, None, 'BRANCH')  # Read branch offset from PC
+OP_BNE = ("BNE", M_R_, None, 'BRANCH')  # Read branch offset from PC
+OP_BEQ = ("BEQ", M_R_, None, 'BRANCH')  # Read branch offset from PC
 
 # ALU operations (M_R_ - _FETCH appended to current cycle)
 OP_ORA = ("ORA", M_R_, "BUS_READ(c->AD);\nc->A |= BUS_DATA();\n_NZ(c->A);", None)
@@ -193,41 +192,41 @@ OP_CPX = ("CPX", M_R_, "BUS_READ(c->AD);\n_fam65xx_cmp(c, c->X, BUS_DATA());", N
 OP_CPY = ("CPY", M_R_, "BUS_READ(c->AD);\n_fam65xx_cmp(c, c->Y, BUS_DATA());", None)
 
 # RMW operations - have two variants (accumulator vs memory)
-OP_ASL_A = ("ASL", M___, "BUS_INTERNAL(c->PC);\nc->A = _fam65xx_asl(c, c->A);", None)  # M___ - _FETCH appended
+OP_ASL_A = ("ASL", M___, "DUMMY_BUS_READ(c->PC);\nc->A = _fam65xx_asl(c, c->A);", None)  
 OP_ASL_M = ("ASL", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_ASL_RMW;", 'RMW')  # M_RW - separate _FETCH
-OP_LSR_A = ("LSR", M___, "BUS_INTERNAL(c->PC);\nc->A = _fam65xx_lsr(c, c->A);", None)  # M___ - _FETCH appended
+OP_LSR_A = ("LSR", M___, "DUMMY_BUS_READ(c->PC);\nc->A = _fam65xx_lsr(c, c->A);", None)  
 OP_LSR_M = ("LSR", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_LSR_RMW;", 'RMW')  # M_RW - separate _FETCH
-OP_ROL_A = ("ROL", M___, "BUS_INTERNAL(c->PC);\nc->A = _fam65xx_rol(c, c->A);", None)  # M___ - _FETCH appended
+OP_ROL_A = ("ROL", M___, "DUMMY_BUS_READ(c->PC);\nc->A = _fam65xx_rol(c, c->A);", None)  
 OP_ROL_M = ("ROL", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_ROL_RMW;", 'RMW')  # M_RW - separate _FETCH
-OP_ROR_A = ("ROR", M___, "BUS_INTERNAL(c->PC);\nc->A = _fam65xx_ror(c, c->A);", None)  # M___ - _FETCH appended
+OP_ROR_A = ("ROR", M___, "DUMMY_BUS_READ(c->PC);\nc->A = _fam65xx_ror(c, c->A);", None)  
 OP_ROR_M = ("ROR", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_ROR_RMW;", 'RMW')  # M_RW - separate _FETCH
 OP_INC_M = ("INC", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_INC_RMW;", 'RMW')  # M_RW - separate _FETCH
 OP_DEC_M = ("DEC", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_DEC_RMW;", 'RMW')  # M_RW - separate _FETCH
 
 # NOP variants
-OP_NOP_I = ("NOP", M___, "BUS_INTERNAL(c->PC);", None)  # M___ - _FETCH appended
-OP_NOP_R = ("NOP", M_R_, "BUS_READ(c->AD);", None)      # M_R_ - _FETCH appended
+OP_NOP_I = ("NOP", M___, "DUMMY_BUS_READ(c->PC);", None)  # Dummy read of current PC - M___ _FETCH appended
+OP_NOP_R = ("NOP", M_R_, "BUS_READ(c->AD);", None)      # Read from effective address - M_R_ _FETCH appended
 
 # Illegal/undocumented instructions
-OP_LAX = ("LAX", M_R_, "BUS_READ(c->AD);\nc->A = c->X = BUS_DATA();\n_NZ(c->A);", None)  # M_R_ - _FETCH appended
-OP_SAX = ("SAX", M__W, "BUS_WRITE(c->AD, c->A & c->X);", None)  # M__W - separate _FETCH cycle
-OP_SLO = ("SLO", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_SLO_RMW;", 'RMW')  # M_RW - separate _FETCH
-OP_RLA = ("RLA", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_RLA_RMW;", 'RMW')  # M_RW - separate _FETCH
-OP_SRE = ("SRE", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_SRE_RMW;", 'RMW')  # M_RW - separate _FETCH
-OP_RRA = ("RRA", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_RRA_RMW;", 'RMW')  # M_RW - separate _FETCH
-OP_DCP = ("DCP", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_DCP_RMW;", 'RMW')  # M_RW - separate _FETCH
-OP_ISC = ("ISC", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_ISC_RMW;", 'RMW')  # M_RW - separate _FETCH
-OP_ANC = ("ANC", M_R_, "BUS_READ(c->AD);\nc->A &= BUS_DATA();\n_NZ(c->A);\nc->P = (c->P & ~FAM65XX_CF) | ((c->A & 0x80) ? FAM65XX_CF : 0);", None)  # M_R_ - _FETCH appended
-OP_ASR = ("ASR", M_R_, "BUS_READ(c->AD);\nc->A &= BUS_DATA();\nc->P = (c->P & ~FAM65XX_CF) | (c->A & 1);\nc->A>>=1;\n_NZ(c->A);", None)  # M_R_ - _FETCH appended
-OP_ARR = ("ARR", M_R_, "BUS_READ(c->AD);\nc->A = (c->A & BUS_DATA()) >> 1 | (c->P & FAM65XX_CF ? 0x80 : 0);\n_NZ(c->A);\nc->P = (c->P & ~(FAM65XX_CF | FAM65XX_VF)) | ((c->A & 0x40) ? FAM65XX_CF : 0) | ((c->A & 0x20) ^ (c->A & 0x40) ? FAM65XX_VF : 0);", None)  # M_R_ - _FETCH appended
-OP_XAA = ("XAA", M_R_, "BUS_READ(c->AD);\nc->A = (c->A | 0xEE) & c->X & BUS_DATA();\n_NZ(c->A);", None)  # M_R_ - _FETCH appended
-OP_SBX = ("SBX", M_R_, "BUS_READ(c->AD);\n{\n\tuint16_t t = (c->A & c->X) - BUS_DATA();\n\tc->X = t;\n_NZ(c->X);\nc->P = (c->P & ~FAM65XX_CF) | ((t & 0x100) ? 0 : FAM65XX_CF);\n}", None)  # M_R_ - _FETCH appended
-OP_SHY = ("SHY", M__W, "BUS_WRITE(c->AD, c->Y & ((c->AD >> 8) + 1));", None)  # M__W - separate _FETCH cycle
-OP_SHX = ("SHX", M__W, "BUS_WRITE(c->AD, c->X & ((c->AD >> 8) + 1));", None)  # M__W - separate _FETCH cycle
-OP_SHA = ("SHA", M_RW, "BUS_WRITE(c->AD, c->A & c->X & ((c->AD >> 8) + 1));", None)  # M_RW - separate _FETCH cycle
-OP_SHS = ("SHS", M__W, "c->S = c->A & c->X;\nBUS_WRITE(c->AD, c->S & ((c->AD >> 8) + 1));", None)  # M__W - separate _FETCH cycle
-OP_LAS = ("LAS", M_R_, "BUS_READ(c->AD);\nc->A = c->X = c->S = c->S & BUS_DATA();\n_NZ(c->A);", None)  # M_R_ - _FETCH appended
-OP_JAM = ("JAM", M_RW, "BUS_READ(c->PC);\nc->IR--;", None)  # JAM locks up - decrements IR to repeat same cycle
+OP_LAX = ("LAX", M_R_, "BUS_READ(c->AD);\nc->A = c->X = BUS_DATA();\n_NZ(c->A);", None)  # Read and load into A and X - M_R_ _FETCH appended
+OP_SAX = ("SAX", M__W, "BUS_WRITE(c->AD, c->A & c->X);", None)  # Write A&X to memory - M__W separate _FETCH cycle
+OP_SLO = ("SLO", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_SLO_RMW;", 'RMW')  # Read memory for RMW - M_RW separate _FETCH
+OP_RLA = ("RLA", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_RLA_RMW;", 'RMW')  # Read memory for RMW - M_RW separate _FETCH
+OP_SRE = ("SRE", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_SRE_RMW;", 'RMW')  # Read memory for RMW - M_RW separate _FETCH
+OP_RRA = ("RRA", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_RRA_RMW;", 'RMW')  # Read memory for RMW - M_RW separate _FETCH
+OP_DCP = ("DCP", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_DCP_RMW;", 'RMW')  # Read memory for RMW - M_RW separate _FETCH
+OP_ISC = ("ISC", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_ISC_RMW;", 'RMW')  # Read memory for RMW - M_RW separate _FETCH
+OP_ANC = ("ANC", M_R_, "BUS_READ(c->AD);\nc->A &= BUS_DATA();\n_NZ(c->A);\nc->P = (c->P & ~FAM65XX_CF) | ((c->A & 0x80) ? FAM65XX_CF : 0);", None)  # AND with carry flag update - M_R_ _FETCH appended
+OP_ASR = ("ASR", M_R_, "BUS_READ(c->AD);\nc->A &= BUS_DATA();\nc->P = (c->P & ~FAM65XX_CF) | (c->A & 1);\nc->A>>=1;\n_NZ(c->A);", None)  # AND then LSR - M_R_ _FETCH appended
+OP_ARR = ("ARR", M_R_, "BUS_READ(c->AD);\nc->A = (c->A & BUS_DATA()) >> 1 | (c->P & FAM65XX_CF ? 0x80 : 0);\n_NZ(c->A);\nc->P = (c->P & ~(FAM65XX_CF | FAM65XX_VF)) | ((c->A & 0x40) ? FAM65XX_CF : 0) | ((c->A & 0x20) ^ (c->A & 0x40) ? FAM65XX_VF : 0);", None)  # AND then ROR - M_R_ _FETCH appended
+OP_XAA = ("XAA", M_R_, "BUS_READ(c->AD);\nc->A = (c->A | 0xEE) & c->X & BUS_DATA();\n_NZ(c->A);", None)  # Unstable AND operation - M_R_ _FETCH appended
+OP_SBX = ("SBX", M_R_, "BUS_READ(c->AD);\n{\n\tuint16_t t = (c->A & c->X) - BUS_DATA();\n\tc->X = t;\n_NZ(c->X);\nc->P = (c->P & ~FAM65XX_CF) | ((t & 0x100) ? 0 : FAM65XX_CF);\n}", None)  # CMP and DEX combined - M_R_ _FETCH appended
+OP_SHY = ("SHY", M__W, "BUS_WRITE(c->AD, c->Y & ((c->AD >> 8) + 1));", None)  # Store Y with high byte AND - M__W separate _FETCH cycle
+OP_SHX = ("SHX", M__W, "BUS_WRITE(c->AD, c->X & ((c->AD >> 8) + 1));", None)  # Store X with high byte AND - M__W separate _FETCH cycle
+OP_SHA = ("SHA", M_RW, "BUS_WRITE(c->AD, c->A & c->X & ((c->AD >> 8) + 1));", None)  # Store A&X with high byte AND - M_RW separate _FETCH cycle
+OP_SHS = ("SHS", M__W, "c->S = c->A & c->X;\nBUS_WRITE(c->AD, c->S & ((c->AD >> 8) + 1));", None)  # Transfer A&X to S and store - M__W separate _FETCH cycle
+OP_LAS = ("LAS", M_R_, "BUS_READ(c->AD);\nc->A = c->X = c->S = c->S & BUS_DATA();\n_NZ(c->A);", None)  # AND S with memory to A,X,S - M_R_ _FETCH appended
+OP_JAM = ("JAM", M_RW, "BUS_READ(c->PC);\nc->IR--;", None)  # Read current PC and lock up (decrement IR to repeat)
 
 #-------------------------------------------------------------------------------
 # RMW Continuation Definitions
@@ -237,65 +236,66 @@ OP_JAM = ("JAM", M_RW, "BUS_READ(c->PC);\nc->IR--;", None)  # JAM locks up - dec
 
 rmw_seqs = {
     # RMW operations: M_RW memory access means _FETCH() gets separate cycle
+    # Each RMW has exactly 3 cycles: dummy write (old value), internal operation, real write (new value)
     # Optimized: final cycle jumps to C_FETCH instead of having dedicated _FETCH case
     'ASL': ('ASL_RMW', (
-        "BUS_WRITE(c->AD, c->AD);",
-        "c->AD = _fam65xx_asl(c, c->AD);",
+        "DUMMY_BUS_WRITE(c->AD, c->AD);",
+        "DUMMY_BUS_READ(c->AD);\nc->AD = _fam65xx_asl(c, c->AD);",
         "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
     )),
     'ROL': ('ROL_RMW', (
-        "BUS_WRITE(c->AD, c->AD);",
-        "c->AD = _fam65xx_rol(c, c->AD);",
+        "DUMMY_BUS_WRITE(c->AD, c->AD);",
+        "DUMMY_BUS_READ(c->AD);\nc->AD = _fam65xx_rol(c, c->AD);",  # Dummy read during internal computation
         "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
     )),
     'LSR': ('LSR_RMW', (
-        "BUS_WRITE(c->AD, c->AD);",
-        "c->AD = _fam65xx_lsr(c, c->AD);",
+        "DUMMY_BUS_WRITE(c->AD, c->AD);",
+        "DUMMY_BUS_READ(c->AD);\nc->AD = _fam65xx_lsr(c, c->AD);",  # Dummy read during internal computation
         "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
     )),
     'ROR': ('ROR_RMW', (
-        "BUS_WRITE(c->AD, c->AD);",
-        "c->AD = _fam65xx_ror(c, c->AD);",
+        "DUMMY_BUS_WRITE(c->AD, c->AD);",
+        "DUMMY_BUS_READ(c->AD);\nc->AD = _fam65xx_ror(c, c->AD);",  # Dummy read during internal computation
         "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
     )),
     'DEC': ('DEC_RMW', (
-        "BUS_WRITE(c->AD, c->AD);",
-        "c->AD--;\n_NZ(c->AD);",
+        "DUMMY_BUS_WRITE(c->AD, c->AD);",
+        "DUMMY_BUS_READ(c->AD);\nc->AD--;\n_NZ(c->AD);",  # Dummy read during internal computation
         "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
     )),
     'INC': ('INC_RMW', (
-        "BUS_WRITE(c->AD, c->AD);",
-        "c->AD++;\n_NZ(c->AD);",
+        "DUMMY_BUS_WRITE(c->AD, c->AD);",
+        "DUMMY_BUS_READ(c->AD);\nc->AD++;\n_NZ(c->AD);",  # Dummy read during internal computation
         "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
     )),
     'SLO': ('SLO_RMW', (
-        "BUS_WRITE(c->AD, c->AD);",
-        "c->AD = _fam65xx_asl(c, c->AD);\nc->A |= c->AD;\n_NZ(c->A);",
+        "DUMMY_BUS_WRITE(c->AD, c->AD);",
+        "DUMMY_BUS_READ(c->AD);\nc->AD = _fam65xx_asl(c, c->AD);\nc->A |= c->AD;\n_NZ(c->A);",  # Dummy read during internal computation
         "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
     )),
     'RLA': ('RLA_RMW', (
-        "BUS_WRITE(c->AD, c->AD);",
-        "c->AD = _fam65xx_rol(c, c->AD);\nc->A &= c->AD;\n_NZ(c->A);",
+        "DUMMY_BUS_WRITE(c->AD, c->AD);",
+        "DUMMY_BUS_READ(c->AD);\nc->AD = _fam65xx_rol(c, c->AD);\nc->A &= c->AD;\n_NZ(c->A);",  # Dummy read during internal computation
         "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
     )),
     'SRE': ('SRE_RMW', (
-        "BUS_WRITE(c->AD, c->AD);",
-        "c->AD = _fam65xx_lsr(c, c->AD);\nc->A ^= c->AD;\n_NZ(c->A);",
+        "DUMMY_BUS_WRITE(c->AD, c->AD);",
+        "DUMMY_BUS_READ(c->AD);\nc->AD = _fam65xx_lsr(c, c->AD);\nc->A ^= c->AD;\n_NZ(c->A);",  # Dummy read during internal computation
         "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
     )),
     'RRA': ('RRA_RMW', (
-        "BUS_WRITE(c->AD, c->AD);",
-        "c->AD = _fam65xx_ror(c, c->AD);\n_fam65xx_adc(c, c->AD);",
+        "DUMMY_BUS_WRITE(c->AD, c->AD);",
+        "DUMMY_BUS_READ(c->AD);\nc->AD = _fam65xx_ror(c, c->AD);\n_fam65xx_adc(c, c->AD);",  # Dummy read during internal computation
         "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
     )),
     'DCP': ('DCP_RMW', (
-        "BUS_WRITE(c->AD, c->AD);",
-        "c->AD--;\n_fam65xx_cmp(c, c->A, c->AD);",
+        "DUMMY_BUS_WRITE(c->AD, c->AD);",
+        "DUMMY_BUS_READ(c->AD);\nc->AD--;\n_fam65xx_cmp(c, c->A, c->AD);",  # Dummy read during internal computation
         "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
     )),
     'ISC': ('ISC_RMW', (
-        "BUS_WRITE(c->AD, c->AD);",
-        "c->AD++;\n_fam65xx_sbc(c, c->AD);",
+        "DUMMY_BUS_WRITE(c->AD, c->AD);",
+        "DUMMY_BUS_READ(c->AD);\nc->AD++;\n_fam65xx_sbc(c, c->AD);",  # Dummy read during internal computation
         "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
     )),
 }
@@ -434,76 +434,75 @@ def analyze_continuation_needs(op):
     # Handle special multi-cycle operations with hardcoded continuations FIRST
     if op == 0x00:  # BRK - M___ access mode, so _FETCH appended to final cycle
         cycles = (
-            'BUS_WRITE(0x0100 | c->S--, c->P | FAM65XX_XF);\nif (c->brk_flags & FAM65XX_BRK_RESET) {\n\tc->AD = 0xFFFC;\n} else {\n\tif (c->brk_flags & FAM65XX_BRK_NMI) {\n\t\tc->AD = 0xFFFA;\n\t} else {\n\t\tc->AD = 0xFFFE;\n\t}\n};',
-            'BUS_READ(c->AD++);\nc->P |= (FAM65XX_IF | FAM65XX_BF);\nc->brk_flags = 0;',
-            'BUS_READ(c->AD);\nc->AD = BUS_DATA();',
-            'c->PC = (BUS_DATA() << 8) | c->AD;\n_FETCH();'
+            'BUS_WRITE(0x0100 | c->S--, c->P | FAM65XX_XF);\nif (c->brk_flags & FAM65XX_BRK_RESET) {\n\tc->AD = 0xFFFC;\n} else {\n\tif (c->brk_flags & FAM65XX_BRK_NMI) {\n\t\tc->AD = 0xFFFA;\n\t} else {\n\t\tc->AD = 0xFFFE;\n\t}\n};',  # Write P to stack
+            'BUS_READ(c->AD++);\nc->P |= (FAM65XX_IF | FAM65XX_BF);\nc->brk_flags = 0;',  # Read low byte of vector
+            'BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->PC = (BUS_DATA() << 8) | c->AD;',  # Read high byte of vector and set PC
+            'DUMMY_BUS_READ(c->PC);\n_FETCH();'  # Dummy read then fetch
         )
         get_or_create_continuation(cycles, 'BRK')
         return ('BRK', cycles)
     elif op == 0x20:  # JSR - M_R_ access mode, so _FETCH appended to final cycle
         cycles = (
-            'BUS_INTERNAL(0x0100 | c->S);',
-            'BUS_WRITE(0x0100 | c->S--, c->PC >> 8);',
-            'BUS_WRITE(0x0100 | c->S--, c->PC);',
-            'BUS_READ(c->PC);',
-            'c->PC = (BUS_DATA() << 8) | c->AD;\n_FETCH();'
+            'DUMMY_BUS_READ(0x0100 | c->S);',  # Dummy stack access
+            'BUS_WRITE(0x0100 | c->S--, c->PC >> 8);',  # Write PCH to stack
+            'BUS_WRITE(0x0100 | c->S--, c->PC);',  # Write PCL to stack
+            'BUS_READ(c->PC);\nc->PC = (BUS_DATA() << 8) | c->AD;',  # Read high byte and set PC
+            'DUMMY_BUS_READ(c->PC);\n_FETCH();'  # Dummy read then fetch
         )
         get_or_create_continuation(cycles, 'JSR')
         return ('JSR', cycles)
     elif op == 0x40:  # RTI - M_R_ access mode, so _FETCH appended to final cycle
         cycles = (
-            'BUS_READ(0x0100 | c->S++);',
-            'BUS_READ(0x0100 | c->S++);\nc->P = (BUS_DATA() | FAM65XX_BF) & ~FAM65XX_XF;',
-            'BUS_READ(0x0100 | c->S);\nc->AD = BUS_DATA();',
-            'c->PC = (BUS_DATA() << 8) | c->AD;\n_FETCH();'
+            'BUS_READ(0x0100 | c->S++);\nc->P = (BUS_DATA() | FAM65XX_BF) & ~FAM65XX_XF;',  # Read status register from stack
+            'BUS_READ(0x0100 | c->S++);',  # Read PCL from stack
+            'BUS_READ(0x0100 | c->S);\nc->AD = BUS_DATA();\nc->PC = (BUS_DATA() << 8) | c->AD;',  # Read PCH from stack and set PC
+            'DUMMY_BUS_READ(c->PC);\n_FETCH();'  # Dummy read then fetch
         )
         get_or_create_continuation(cycles, 'RTI')
         return ('RTI', cycles)
     elif op == 0x60:  # RTS - M_R_ access mode, so _FETCH appended to final cycle
         cycles = (
-            'BUS_READ(0x0100 | c->S++);',
-            'BUS_READ(0x0100 | c->S);\nc->AD = BUS_DATA();',
-            'c->PC = (BUS_DATA() << 8) | c->AD;',
-            'BUS_READ(c->PC++);\n_FETCH();'
+            'BUS_READ(0x0100 | c->S++);',  # Read PCL from stack
+            'BUS_READ(0x0100 | c->S);\nc->AD = BUS_DATA();\nc->PC = (BUS_DATA() << 8) | c->AD;',  # Read PCH from stack and set PC
+            'BUS_READ(c->PC++);\n_FETCH();'  # Increment PC and fetch next instruction
         )
         get_or_create_continuation(cycles, 'RTS')
         return ('RTS', cycles)
     elif op == 0x4C:  # JMP abs - M_R_ access mode, so _FETCH appended to final cycle
         cycles = (
-            'BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;',
-            'c->PC = c->AD;\n_FETCH();'
+            'BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;\nc->PC = c->AD;',  # Read high byte and set PC
+            'DUMMY_BUS_READ(c->PC);\n_FETCH();'  # Dummy read then fetch
         )
         get_or_create_continuation(cycles, 'JMP_ABS')
         return ('JMP_ABS', cycles)
     elif op == 0x6C:  # JMP ind - M_R_ access mode, so _FETCH appended to final cycle
         cycles = (
-            'BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;',
-            'BUS_READ(c->AD);',
-            'BUS_READ((c->AD & 0xFF00) | ((c->AD + 1) & 0xFF));\nc->AD = BUS_DATA();',
-            'c->PC = (BUS_DATA() << 8) | c->AD;\n_FETCH();'
+            'BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;',  # Read high byte of indirect address
+            'BUS_READ(c->AD);',  # Read low byte of target address from indirect location
+            'BUS_READ((c->AD & 0xFF00) | ((c->AD + 1) & 0xFF));\nc->AD = BUS_DATA();\nc->PC = (BUS_DATA() << 8) | c->AD;',  # Read high byte (with page boundary bug) and set PC
+            'DUMMY_BUS_READ(c->PC);\n_FETCH();'  # Dummy read then fetch
         )
         get_or_create_continuation(cycles, 'JMP_IND')
         return ('JMP_IND', cycles)
     elif op == 0x28:  # PLP - M___ access mode, so _FETCH appended to final cycle
         cycles = (
-            'BUS_READ(0x0100 | c->S);',
-            'c->P = (BUS_DATA() | FAM65XX_BF) & ~FAM65XX_XF;\n_FETCH();'
+            'BUS_READ(0x0100 | c->S);\nc->P = (BUS_DATA() | FAM65XX_BF) & ~FAM65XX_XF;',  # Read status register from stack and process
+            'DUMMY_BUS_READ(c->PC);\n_FETCH();'  # Dummy read then fetch
         )
         get_or_create_continuation(cycles, 'PLP')
         return ('PLP', cycles)
     elif op == 0x68:  # PLA - M___ access mode, so _FETCH appended to final cycle
         cycles = (
-            'BUS_READ(0x0100 | c->S);',
-            'c->A = BUS_DATA();\n_NZ(c->A);\n_FETCH();'
+            'BUS_READ(0x0100 | c->S);\nc->A = BUS_DATA();\n_NZ(c->A);',  # Read accumulator from stack and process
+            'DUMMY_BUS_READ(c->PC);\n_FETCH();'  # Dummy read then fetch
         )
         get_or_create_continuation(cycles, 'PLA')
         return ('PLA', cycles)
     elif flags == 'BRANCH':
         # Branch taken continuation - M_R_ access mode, so _FETCH appended to final cycle
         cycles = (
-            'BUS_INTERNAL((c->PC & 0xFF00) | (c->AD & 0xFF));\nif((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\t_FETCH();\n};',
-            'c->PC = c->AD;\n_FETCH();'
+            'DUMMY_BUS_READ((c->PC & 0xFF00) | (c->AD & 0xFF));\nif((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\t_FETCH();\n};',  # Dummy read for page boundary check
+            'DUMMY_BUS_READ(c->PC);\nc->PC = c->AD;\n_FETCH();'  # Dummy read for page crossed case and fetch
         )
         get_or_create_continuation(cycles, 'BRANCH_TAKEN')
         return ('BRANCH_TAKEN', cycles)

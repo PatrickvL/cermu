@@ -186,9 +186,19 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
     c->mem_write(c->user_data, (addr), (data)); \
 } while(0)
 
-// Internal operation: no memory access
-#define BUS_INTERNAL(addr) do { \
-    /* Internal cycle - could check AEC here for advanced timing */ \
+// Dummy bus operations for hardware-accurate 6502 timing
+// Every cycle must perform exactly one memory access
+// These perform actual bus operations for niche software compatibility
+#define DUMMY_BUS_READ(addr) do { \
+    if (!(pins & FAM65XX_RDY)) { \
+        return pins; \
+    } \
+    uint8_t data = c->mem_read(c->user_data, (addr), FAM65XX_GET_DATA(pins)); \
+    FAM65XX_SET_DATA(pins, data); \
+} while(0)
+
+#define DUMMY_BUS_WRITE(addr, data) do { \
+    c->mem_write(c->user_data, (addr), (data)); \
 } while(0)
 
 // Extract data from pins
