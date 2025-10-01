@@ -77,27 +77,27 @@ OP_JMP = ("JMP", M_R_, "BUS_READ(c->PC++);\nc->AD = BUS_DATA();\nc->IR = C_JMP_A
 OP_JMI = ("JMP", M_R_, "BUS_READ(c->PC++);\nc->AD = BUS_DATA();\nc->IR = C_JMP_IND;", 'CONT')  # JMP indirect
 
 # Register transfer operations
-OP_TAX = ("TAX", M___, "BUS_INTERNAL(c->PC); c->X = c->A; _NZ(c->X); _FETCH();", None)
-OP_TXA = ("TXA", M___, "BUS_INTERNAL(c->PC); c->A = c->X; _NZ(c->A); _FETCH();", None)
-OP_TAY = ("TAY", M___, "BUS_INTERNAL(c->PC); c->Y = c->A; _NZ(c->Y); _FETCH();", None)
-OP_TYA = ("TYA", M___, "BUS_INTERNAL(c->PC); c->A = c->Y; _NZ(c->A); _FETCH();", None)
-OP_TSX = ("TSX", M___, "BUS_INTERNAL(c->PC); c->X = c->S; _NZ(c->X); _FETCH();", None)
-OP_TXS = ("TXS", M___, "BUS_INTERNAL(c->PC); c->S = c->X; _FETCH();", None)
+OP_TAX = ("TAX", M___, "BUS_INTERNAL(c->PC);\nc->X = c->A;\n_NZ(c->X);\n_FETCH();", None)
+OP_TXA = ("TXA", M___, "BUS_INTERNAL(c->PC);\nc->A = c->X;\n_NZ(c->A);\n_FETCH();", None)
+OP_TAY = ("TAY", M___, "BUS_INTERNAL(c->PC);\nc->Y = c->A;\n_NZ(c->Y);\n_FETCH();", None)
+OP_TYA = ("TYA", M___, "BUS_INTERNAL(c->PC);\nc->A = c->Y;\n_NZ(c->A);\n_FETCH();", None)
+OP_TSX = ("TSX", M___, "BUS_INTERNAL(c->PC);\nc->X = c->S;\n_NZ(c->X);\n_FETCH();", None)
+OP_TXS = ("TXS", M___, "BUS_INTERNAL(c->PC);\nc->S = c->X;\n_FETCH();", None)
 
 # Increment/Decrement operations
-OP_DEX = ("DEX", M___, "BUS_INTERNAL(c->PC); c->X--; _NZ(c->X); _FETCH();", None)
-OP_INX = ("INX", M___, "BUS_INTERNAL(c->PC); c->X++; _NZ(c->X); _FETCH();", None)
-OP_DEY = ("DEY", M___, "BUS_INTERNAL(c->PC); c->Y--; _NZ(c->Y); _FETCH();", None)
-OP_INY = ("INY", M___, "BUS_INTERNAL(c->PC); c->Y++; _NZ(c->Y); _FETCH();", None)
+OP_DEX = ("DEX", M___, "BUS_INTERNAL(c->PC);\nc->X--;\n_NZ(c->X);\n_FETCH();", None)
+OP_INX = ("INX", M___, "BUS_INTERNAL(c->PC);\nc->X++;\n_NZ(c->X);\n_FETCH();", None)
+OP_DEY = ("DEY", M___, "BUS_INTERNAL(c->PC);\nc->Y--;\n_NZ(c->Y);\n_FETCH();", None)
+OP_INY = ("INY", M___, "BUS_INTERNAL(c->PC);\nc->Y++;\n_NZ(c->Y);\n_FETCH();", None)
 
 # Flag operations
-OP_CLC = ("CLC", M___, "BUS_INTERNAL(c->PC); c->P &= ~FAM65XX_CF; _FETCH();", None)
-OP_SEC = ("SEC", M___, "BUS_INTERNAL(c->PC); c->P |= FAM65XX_CF; _FETCH();", None)
-OP_CLI = ("CLI", M___, "BUS_INTERNAL(c->PC); c->P &= ~FAM65XX_IF; _FETCH();", None)
-OP_SEI = ("SEI", M___, "BUS_INTERNAL(c->PC); c->P |= FAM65XX_IF; _FETCH();", None)
-OP_CLV = ("CLV", M___, "BUS_INTERNAL(c->PC); c->P &= ~FAM65XX_VF; _FETCH();", None)
-OP_CLD = ("CLD", M___, "BUS_INTERNAL(c->PC); c->P &= ~FAM65XX_DF; _FETCH();", None)
-OP_SED = ("SED", M___, "BUS_INTERNAL(c->PC); c->P |= FAM65XX_DF; _FETCH();", None)
+OP_CLC = ("CLC", M___, "BUS_INTERNAL(c->PC);\nc->P &= ~FAM65XX_CF;\n_FETCH();", None)
+OP_SEC = ("SEC", M___, "BUS_INTERNAL(c->PC);\nc->P |= FAM65XX_CF;\n_FETCH();", None)
+OP_CLI = ("CLI", M___, "BUS_INTERNAL(c->PC);\nc->P &= ~FAM65XX_IF;\n_FETCH();", None)
+OP_SEI = ("SEI", M___, "BUS_INTERNAL(c->PC);\nc->P |= FAM65XX_IF;\n_FETCH();", None)
+OP_CLV = ("CLV", M___, "BUS_INTERNAL(c->PC);\nc->P &= ~FAM65XX_VF;\n_FETCH();", None)
+OP_CLD = ("CLD", M___, "BUS_INTERNAL(c->PC);\nc->P &= ~FAM65XX_DF;\n_FETCH();", None)
+OP_SED = ("SED", M___, "BUS_INTERNAL(c->PC);\nc->P |= FAM65XX_DF;\n_FETCH();", None)
 
 # Branch operations (all share BRANCH_TAKEN continuation)
 OP_BPL = ("BPL", M_R_, None, 'BRANCH')
@@ -129,45 +129,45 @@ OP_STX = ("STX", M__W, "BUS_WRITE(c->AD, c->X);\n_FETCH();", None)
 OP_STY = ("STY", M__W, "BUS_WRITE(c->AD, c->Y);\n_FETCH();", None)
 
 # Compare operations
-OP_CPX = ("CPX", M_R_, "BUS_READ(c->AD); _fam65xx_cmp(c, c->X, BUS_DATA()); _FETCH();", None)
-OP_CPY = ("CPY", M_R_, "BUS_READ(c->AD); _fam65xx_cmp(c, c->Y, BUS_DATA()); _FETCH();", None)
+OP_CPX = ("CPX", M_R_, "BUS_READ(c->AD);\n_fam65xx_cmp(c, c->X, BUS_DATA());\n_FETCH();", None)
+OP_CPY = ("CPY", M_R_, "BUS_READ(c->AD);\n_fam65xx_cmp(c, c->Y, BUS_DATA());\n_FETCH();", None)
 
 # RMW operations - have two variants (accumulator vs memory)
-OP_ASL_A = ("ASL", M___, "BUS_INTERNAL(c->PC); c->A = _fam65xx_asl(c, c->A); _FETCH();", None)
-OP_ASL_M = ("ASL", M_RW, "BUS_READ(c->AD); c->AD = BUS_DATA(); c->IR = C_ASL_RMW;", 'RMW')
-OP_LSR_A = ("LSR", M___, "BUS_INTERNAL(c->PC); c->A = _fam65xx_lsr(c, c->A); _FETCH();", None)
-OP_LSR_M = ("LSR", M_RW, "BUS_READ(c->AD); c->AD = BUS_DATA(); c->IR = C_LSR_RMW;", 'RMW')
-OP_ROL_A = ("ROL", M___, "BUS_INTERNAL(c->PC); c->A = _fam65xx_rol(c, c->A); _FETCH();", None)
-OP_ROL_M = ("ROL", M_RW, "BUS_READ(c->AD); c->AD = BUS_DATA(); c->IR = C_ROL_RMW;", 'RMW')
-OP_ROR_A = ("ROR", M___, "BUS_INTERNAL(c->PC); c->A = _fam65xx_ror(c, c->A); _FETCH();", None)
-OP_ROR_M = ("ROR", M_RW, "BUS_READ(c->AD); c->AD = BUS_DATA(); c->IR = C_ROR_RMW;", 'RMW')
-OP_INC_M = ("INC", M_RW, "BUS_READ(c->AD); c->AD = BUS_DATA(); c->IR = C_INC_RMW;", 'RMW')
-OP_DEC_M = ("DEC", M_RW, "BUS_READ(c->AD); c->AD = BUS_DATA(); c->IR = C_DEC_RMW;", 'RMW')
+OP_ASL_A = ("ASL", M___, "BUS_INTERNAL(c->PC);\nc->A = _fam65xx_asl(c, c->A);\n_FETCH();", None)
+OP_ASL_M = ("ASL", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_ASL_RMW;", 'RMW')
+OP_LSR_A = ("LSR", M___, "BUS_INTERNAL(c->PC);\nc->A = _fam65xx_lsr(c, c->A);\n_FETCH();", None)
+OP_LSR_M = ("LSR", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_LSR_RMW;", 'RMW')
+OP_ROL_A = ("ROL", M___, "BUS_INTERNAL(c->PC);\nc->A = _fam65xx_rol(c, c->A);\n_FETCH();", None)
+OP_ROL_M = ("ROL", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_ROL_RMW;", 'RMW')
+OP_ROR_A = ("ROR", M___, "BUS_INTERNAL(c->PC);\nc->A = _fam65xx_ror(c, c->A);\n_FETCH();", None)
+OP_ROR_M = ("ROR", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_ROR_RMW;", 'RMW')
+OP_INC_M = ("INC", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_INC_RMW;", 'RMW')
+OP_DEC_M = ("DEC", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_DEC_RMW;", 'RMW')
 
 # NOP variants
-OP_NOP_I = ("NOP", M___, "BUS_INTERNAL(c->PC); _FETCH();", None)  # Implied NOP
-OP_NOP_R = ("NOP", M_R_, "BUS_READ(c->AD); _FETCH();", None)      # NOPs that read
+OP_NOP_I = ("NOP", M___, "BUS_INTERNAL(c->PC);\n_FETCH();", None)  # Implied NOP
+OP_NOP_R = ("NOP", M_R_, "BUS_READ(c->AD);\n_FETCH();", None)      # NOPs that read
 
 # Illegal/undocumented instructions
-OP_LAX = ("LAX", M_R_, "BUS_READ(c->AD);c->A=c->X=BUS_DATA();_NZ(c->A);_FETCH();", None)
-OP_SAX = ("SAX", M__W, "BUS_WRITE(c->AD,c->A&c->X);_FETCH();", None)
-OP_SLO = ("SLO", M_RW, "BUS_READ(c->AD);c->AD=BUS_DATA();c->IR=C_SLO_RMW;", 'RMW')
-OP_RLA = ("RLA", M_RW, "BUS_READ(c->AD);c->AD=BUS_DATA();c->IR=C_RLA_RMW;", 'RMW')
-OP_SRE = ("SRE", M_RW, "BUS_READ(c->AD);c->AD=BUS_DATA();c->IR=C_SRE_RMW;", 'RMW')
-OP_RRA = ("RRA", M_RW, "BUS_READ(c->AD);c->AD=BUS_DATA();c->IR=C_RRA_RMW;", 'RMW')
-OP_DCP = ("DCP", M_RW, "BUS_READ(c->AD);c->AD=BUS_DATA();c->IR=C_DCP_RMW;", 'RMW')
-OP_ISC = ("ISC", M_RW, "BUS_READ(c->AD);c->AD=BUS_DATA();c->IR=C_ISC_RMW;", 'RMW')
-OP_ANC = ("ANC", M_R_, "BUS_READ(c->AD);c->A&=BUS_DATA();_NZ(c->A);c->P=(c->P&~FAM65XX_CF)|((c->A&0x80)?FAM65XX_CF:0);_FETCH();", None)
-OP_ASR = ("ASR", M_R_, "BUS_READ(c->AD);c->A&=BUS_DATA();c->P=(c->P&~FAM65XX_CF)|(c->A&1);c->A>>=1;_NZ(c->A);_FETCH();", None)
-OP_ARR = ("ARR", M_R_, "BUS_READ(c->AD);c->A=(c->A&BUS_DATA())>>1|(c->P&FAM65XX_CF?0x80:0);_NZ(c->A);c->P=(c->P&~(FAM65XX_CF|FAM65XX_VF))|((c->A&0x40)?FAM65XX_CF:0)|((c->A&0x20)^(c->A&0x40)?FAM65XX_VF:0);_FETCH();", None)
-OP_XAA = ("XAA", M_R_, "BUS_READ(c->AD);c->A=(c->A|0xEE)&c->X&BUS_DATA();_NZ(c->A);_FETCH();", None)
-OP_SBX = ("SBX", M_R_, "BUS_READ(c->AD);{uint16_t t=(c->A&c->X)-BUS_DATA();c->X=t;_NZ(c->X);c->P=(c->P&~FAM65XX_CF)|((t&0x100)?0:FAM65XX_CF);}_FETCH();", None)
-OP_SHY = ("SHY", M__W, "BUS_WRITE(c->AD,c->Y&((c->AD>>8)+1));_FETCH();", None)
-OP_SHX = ("SHX", M__W, "BUS_WRITE(c->AD,c->X&((c->AD>>8)+1));_FETCH();", None)
-OP_SHA = ("SHA", M_RW, "BUS_WRITE(c->AD,c->A&c->X&((c->AD>>8)+1));_FETCH();", None)
-OP_SHS = ("SHS", M__W, "c->S=c->A&c->X;BUS_WRITE(c->AD,c->S&((c->AD>>8)+1));_FETCH();", None)
-OP_LAS = ("LAS", M_R_, "BUS_READ(c->AD);c->A=c->X=c->S=c->S&BUS_DATA();_NZ(c->A);_FETCH();", None)
-OP_JAM = ("JAM", M_RW, "BUS_READ(c->PC);c->IR--;", None)  # JAM locks up
+OP_LAX = ("LAX", M_R_, "BUS_READ(c->AD);\nc->A = c->X = BUS_DATA();\n_NZ(c->A);\n_FETCH();", None)
+OP_SAX = ("SAX", M__W, "BUS_WRITE(c->AD, c->A & c->X);\n_FETCH();", None)
+OP_SLO = ("SLO", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_SLO_RMW;", 'RMW')
+OP_RLA = ("RLA", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_RLA_RMW;", 'RMW')
+OP_SRE = ("SRE", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_SRE_RMW;", 'RMW')
+OP_RRA = ("RRA", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_RRA_RMW;", 'RMW')
+OP_DCP = ("DCP", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_DCP_RMW;", 'RMW')
+OP_ISC = ("ISC", M_RW, "BUS_READ(c->AD);\nc->AD = BUS_DATA();\nc->IR = C_ISC_RMW;", 'RMW')
+OP_ANC = ("ANC", M_R_, "BUS_READ(c->AD);\nc->A &= BUS_DATA();\n_NZ(c->A);\nc->P = (c->P & ~FAM65XX_CF) | ((c->A & 0x80) ? FAM65XX_CF : 0);\n_FETCH();", None)
+OP_ASR = ("ASR", M_R_, "BUS_READ(c->AD);\nc->A &= BUS_DATA();\nc->P = (c->P & ~FAM65XX_CF) | (c->A & 1);\nc->A>>=1;\n_NZ(c->A);\n_FETCH();", None)
+OP_ARR = ("ARR", M_R_, "BUS_READ(c->AD);\nc->A = (c->A & BUS_DATA()) >> 1 | (c->P & FAM65XX_CF ? 0x80 : 0);\n_NZ(c->A);\nc->P = (c->P & ~(FAM65XX_CF | FAM65XX_VF)) | ((c->A & 0x40) ? FAM65XX_CF : 0) | ((c->A & 0x20) ^ (c->A & 0x40) ? FAM65XX_VF : 0);\n_FETCH();", None)
+OP_XAA = ("XAA", M_R_, "BUS_READ(c->AD);\nc->A = (c->A | 0xEE) & c->X & BUS_DATA();\n_NZ(c->A);\n_FETCH();", None)
+OP_SBX = ("SBX", M_R_, "BUS_READ(c->AD);\n{\n\tuint16_t t = (c->A & c->X) - BUS_DATA();\n\tc->X = t;\n_NZ(c->X);\nc->P = (c->P & ~FAM65XX_CF) | ((t & 0x100) ? 0 : FAM65XX_CF);\n}\n_FETCH();", None)
+OP_SHY = ("SHY", M__W, "BUS_WRITE(c->AD, c->Y & ((c->AD >> 8) + 1));\n_FETCH();", None)
+OP_SHX = ("SHX", M__W, "BUS_WRITE(c->AD, c->X & ((c->AD >> 8) + 1));\n_FETCH();", None)
+OP_SHA = ("SHA", M_RW, "BUS_WRITE(c->AD, c->A & c->X & ((c->AD >> 8) + 1));\n_FETCH();", None)
+OP_SHS = ("SHS", M__W, "c->S = c->A & c->X;\nBUS_WRITE(c->AD, c->S & ((c->AD >> 8) + 1));\n_FETCH();", None)
+OP_LAS = ("LAS", M_R_, "BUS_READ(c->AD);\nc->A = c->X = c->S = c->S & BUS_DATA();\n_NZ(c->A);\n_FETCH();", None)
+OP_JAM = ("JAM", M_RW, "BUS_READ(c->PC);\nc->IR--;", None)  # JAM locks up
 
 #-------------------------------------------------------------------------------
 # Instruction table: [mnemonic_symbol, addressing_mode]
@@ -270,78 +270,78 @@ def analyze_continuation_needs(op):
     
     # Handle special multi-cycle operations with hardcoded continuations FIRST
     if op == 0x00:  # BRK
-        seq = ('BUS_WRITE(0x0100 | c->S--, c->P | FAM65XX_XF);\nif (c->brk_flags & FAM65XX_BRK_RESET) {\n<INDENT>c->AD = 0xFFFC;\n<OUTDENT>} else {\n<INDENT>if (c->brk_flags & FAM65XX_BRK_NMI) {\n<INDENT>c->AD = 0xFFFA;\n<OUTDENT>} else {\n<INDENT>c->AD = 0xFFFE;\n<OUTDENT>}\n<OUTDENT>}; break;' +
+        seq = ('BUS_WRITE(0x0100 | c->S--, c->P | FAM65XX_XF);\nif (c->brk_flags & FAM65XX_BRK_RESET) {\n\tc->AD = 0xFFFC;\n} else {\n\tif (c->brk_flags & FAM65XX_BRK_NMI) {\n\t\tc->AD = 0xFFFA;\n\t} else {\n\t\tc->AD = 0xFFFE;\n\t}\n};\nbreak;' +
                'BUS_READ(c->AD++);\nc->P |= (FAM65XX_IF | FAM65XX_BF);\nc->brk_flags = 0; break;' +
-               'BUS_READ(c->AD);\nc->AD = BUS_DATA(); break;' +
+               'BUS_READ(c->AD);\nc->AD = BUS_DATA();\nbreak;' +
                'c->PC = (BUS_DATA() << 8) | c->AD;\n_FETCH();')
         get_or_create_continuation(seq, 'BRK')
         return ('BRK', seq)
     elif op == 0x20:  # JSR
-        seq = ('BUS_INTERNAL(0x0100 | c->S); break;' +
-               'BUS_WRITE(0x0100 | c->S--, c->PC >> 8); break;' +
-               'BUS_WRITE(0x0100 | c->S--, c->PC); break;' +
-               'BUS_READ(c->PC); break;' +
-               'c->PC = (BUS_DATA() << 8) | c->AD; _FETCH();')
+        seq = ('BUS_INTERNAL(0x0100 | c->S);\nbreak;' +
+               'BUS_WRITE(0x0100 | c->S--, c->PC >> 8);\nbreak;' +
+               'BUS_WRITE(0x0100 | c->S--, c->PC);\nbreak;' +
+               'BUS_READ(c->PC);\nbreak;' +
+               'c->PC = (BUS_DATA() << 8) | c->AD;\n_FETCH();')
         get_or_create_continuation(seq, 'JSR')
         return ('JSR', seq)
     elif op == 0x40:  # RTI
-        seq = ('BUS_READ(0x0100 | c->S++); break;' +
-               'BUS_READ(0x0100 | c->S++); c->P = (BUS_DATA() | FAM65XX_BF) & ~FAM65XX_XF; break;' +
-               'BUS_READ(0x0100 | c->S); c->AD = BUS_DATA(); break;' +
-               'c->PC = (BUS_DATA() << 8) | c->AD; _FETCH();')
+        seq = ('BUS_READ(0x0100 | c->S++);\nbreak;' +
+               'BUS_READ(0x0100 | c->S++);\nc->P = (BUS_DATA() | FAM65XX_BF) & ~FAM65XX_XF;\nbreak;' +
+               'BUS_READ(0x0100 | c->S);\nc->AD = BUS_DATA();\nbreak;' +
+               'c->PC = (BUS_DATA() << 8) | c->AD;\n_FETCH();')
         get_or_create_continuation(seq, 'RTI')
         return ('RTI', seq)
     elif op == 0x60:  # RTS
-        seq = ('BUS_READ(0x0100 | c->S++); break;' +
-               'BUS_READ(0x0100 | c->S); c->AD = BUS_DATA(); break;' +
-               'c->PC = (BUS_DATA() << 8) | c->AD; break;' +
-               'BUS_READ(c->PC++); _FETCH();')
+        seq = ('BUS_READ(0x0100 | c->S++);\nbreak;' +
+               'BUS_READ(0x0100 | c->S);\nc->AD = BUS_DATA();\nbreak;' +
+               'c->PC = (BUS_DATA() << 8) | c->AD;\nbreak;' +
+               'BUS_READ(c->PC++);\n_FETCH();')
         get_or_create_continuation(seq, 'RTS')
         return ('RTS', seq)
     elif op == 0x4C:  # JMP abs
-        seq = ('BUS_READ(c->PC++); c->AD |= BUS_DATA() << 8; break;' +
-               'c->PC = c->AD; _FETCH();')
+        seq = ('BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;\nbreak;' +
+               'c->PC = c->AD;\n_FETCH();')
         get_or_create_continuation(seq, 'JMP_ABS')
         return ('JMP_ABS', seq)
     elif op == 0x6C:  # JMP ind
-        seq = ('BUS_READ(c->PC++); c->AD |= BUS_DATA() << 8; break;' +
-               'BUS_READ(c->AD); break;' +
-               'BUS_READ((c->AD & 0xFF00) | ((c->AD + 1) & 0xFF)); c->AD = BUS_DATA(); break;' +
-               'c->PC = (BUS_DATA() << 8) | c->AD; _FETCH();')
+        seq = ('BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;\nbreak;' +
+               'BUS_READ(c->AD);\nbreak;' +
+               'BUS_READ((c->AD & 0xFF00) | ((c->AD + 1) & 0xFF));\nc->AD = BUS_DATA();\nbreak;' +
+               'c->PC = (BUS_DATA() << 8) | c->AD;\n_FETCH();')
         get_or_create_continuation(seq, 'JMP_IND')
         return ('JMP_IND', seq)
     elif op == 0x28:  # PLP
-        seq = ('BUS_READ(0x0100 | c->S); break;' +
-               'c->P = (BUS_DATA() | FAM65XX_BF) & ~FAM65XX_XF; _FETCH();')
+        seq = ('BUS_READ(0x0100 | c->S);\nbreak;' +
+               'c->P = (BUS_DATA() | FAM65XX_BF) & ~FAM65XX_XF;\n_FETCH();')
         get_or_create_continuation(seq, 'PLP')
         return ('PLP', seq)
     elif op == 0x68:  # PLA
-        seq = ('BUS_READ(0x0100 | c->S); break;' +
-               'c->A = BUS_DATA(); _NZ(c->A); _FETCH();')
+        seq = ('BUS_READ(0x0100 | c->S);\nbreak;' +
+               'c->A = BUS_DATA();\n_NZ(c->A);\n_FETCH();')
         get_or_create_continuation(seq, 'PLA')
         return ('PLA', seq)
     elif flags == 'BRANCH':
         # Branch taken continuation
-        seq = ('BUS_INTERNAL((c->PC&0xFF00)|(c->AD&0xFF));if((c->AD&0xFF00)==(c->PC&0xFF00)){c->PC=c->AD;c->irq_pip>>=1;c->nmi_pip>>=1;_FETCH();};break;' +
-               'c->PC=c->AD;_FETCH();')
+        seq = ('BUS_INTERNAL((c->PC & 0xFF00) | (c->AD & 0xFF));\nif((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\t_FETCH();\n};\nbreak;' +
+               'c->PC = c->AD;\n_FETCH();')
         get_or_create_continuation(seq, 'BRANCH_TAKEN')
         return ('BRANCH_TAKEN', seq)
     elif flags == 'RMW':
         # RMW continuations
         mnemonic = get_mnemonic(op)
         rmw_seqs = {
-            'ASL': ('ASL_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD = _fam65xx_asl(c, c->AD); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
-            'ROL': ('ROL_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD = _fam65xx_rol(c, c->AD); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
-            'LSR': ('LSR_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD = _fam65xx_lsr(c, c->AD); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
-            'ROR': ('ROR_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD = _fam65xx_ror(c, c->AD); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
-            'DEC': ('DEC_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD--; _NZ(c->AD); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
-            'INC': ('INC_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD++; _NZ(c->AD); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
-            'SLO': ('SLO_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD = _fam65xx_asl(c, c->AD); c->A |= c->AD; _NZ(c->A); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
-            'RLA': ('RLA_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD = _fam65xx_rol(c, c->AD); c->A &= c->AD; _NZ(c->A); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
-            'SRE': ('SRE_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD = _fam65xx_lsr(c, c->AD); c->A ^= c->AD; _NZ(c->A); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
-            'RRA': ('RRA_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD = _fam65xx_ror(c, c->AD); _fam65xx_adc(c, c->AD); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
-            'DCP': ('DCP_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD--; _fam65xx_cmp(c, c->A, c->AD); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
-            'ISC': ('ISC_RMW', 'BUS_WRITE(c->AD, c->AD); break; c->AD++; _fam65xx_sbc(c, c->AD); break; BUS_WRITE(c->AD, c->AD); _FETCH();'),
+            'ASL': ('ASL_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_asl(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
+            'ROL': ('ROL_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_rol(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
+            'LSR': ('LSR_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_lsr(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
+            'ROR': ('ROR_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_ror(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
+            'DEC': ('DEC_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD--;\n_NZ(c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
+            'INC': ('INC_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD++;\n_NZ(c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
+            'SLO': ('SLO_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_asl(c, c->AD);\nc->A |= c->AD;\n_NZ(c->A);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
+            'RLA': ('RLA_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_rol(c, c->AD);\nc->A &= c->AD;\n_NZ(c->A);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
+            'SRE': ('SRE_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_lsr(c, c->AD);\nc->A ^= c->AD;\n_NZ(c->A);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
+            'RRA': ('RRA_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_ror(c, c->AD);\n_fam65xx_adc(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
+            'DCP': ('DCP_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD--;\n_fam65xx_cmp(c, c->A, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
+            'ISC': ('ISC_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD++;\n_fam65xx_sbc(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
         }
         if mnemonic in rmw_seqs:
             name, seq = rmw_seqs[mnemonic]
@@ -401,7 +401,7 @@ def generate_addressing_constants():
     l("// Addressing mode offset constants")
     l("// Offset 0 = direct opcode jump (no addressing mode)")
     l("// Other offsets use base correction of 255")
-    l("#define ADDR_NONE       0   // Direct opcode execution (no addressing mode)")
+    l("#define ADDR_NON     0   // Direct opcode execution (no addressing mode)")
     
     # Generate constants for addressing modes
     addr_mode_names = {
@@ -426,7 +426,7 @@ def generate_addressing_constants():
 def generate_lookup_table():
     """Generate opcode_addr_start lookup table"""
     # Create reverse mapping from offset to constant name
-    offset_to_const = {0: "ADDR_NONE"}
+    offset_to_const = {0: "ADDR_NON"}
     addr_mode_names = {
         A_IMM: "ADDR_IMM",
         A_ZER: "ADDR_ZER",
