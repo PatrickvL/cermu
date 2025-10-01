@@ -37,84 +37,75 @@ M__W = 2        # write access
 M_RW = 3        # read-modify-write
 
 # Layout constants
-ADDR_MODE_INDICES = {
-    A_IMM: 1,   # offset 1 + 255 = 256 (immediate addressing mode)
-    A_ZER: 3,   # offset 3 + 255 = 258 (zero page)
-    A_ZPX: 6,   # offset 6 + 255 = 261 (zero page,X)
-    A_ZPY: 10,  # offset 10 + 255 = 265 (zero page,Y)
-    A_ABS: 14,  # offset 14 + 255 = 269 (absolute)
-    A_ABX: 18,  # offset 18 + 255 = 273 (absolute,X)
-    A_ABY: 23,  # offset 23 + 255 = 278 (absolute,Y)
-    A_IDX: 28,  # offset 28 + 255 = 283 (indexed indirect)
-    A_IDY: 34,  # offset 34 + 255 = 289 (indirect indexed)
-}
-
 ADDR_SEQ_BASE = 255
-ADDR_SEQ_END = 294      # Last addressing mode at 293
-CONT_SEQ_START = 294    # Continuations start here
 NO_ADDR_SEQ = 0         # Direct opcode jump (no addressing mode)
+
+# These will be calculated dynamically in main() after addressing modes are defined
+ADDR_MODE_INDICES = {}
+ADDR_SEQ_END = 0
+CONT_SEQ_START = 0
 
 #-------------------------------------------------------------------------------
 # Addressing Mode Definitions
-# Each definition contains: (acronym, long_name, cycles_list)
-# Each cycle is a tuple: (cycle_code, is_final_cycle)
+# Each definition contains: (acronym, long_name, const_name, cycles_list)
+# Each cycle is a string containing the cycle code
 #-------------------------------------------------------------------------------
 
-ADDR_IMM = ("IMM", "immediate", [
-    ("BUS_READ(c->PC++);\nc->AD = BUS_DATA();\nc->IR = c->opcode;", True)
+ADDR_IMM = ("IMM", "immediate", "ADDR_IMM", [
+    "BUS_READ(c->PC++);\nc->AD = BUS_DATA();\nc->IR = c->opcode;"
 ])
 
-ADDR_ZER = ("ZP", "zero page", [
-    ("BUS_READ(c->PC++);", False),
-    ("c->AD = BUS_DATA();\nc->IR = c->opcode;", True)
+ADDR_ZER = ("ZP", "zero page", "ADDR_ZER", [
+    "BUS_READ(c->PC++);",
+    "c->AD = BUS_DATA();\nc->IR = c->opcode;"
 ])
 
-ADDR_ZPX = ("ZPX", "zero page,X", [
-    ("BUS_READ(c->PC++);", False),
-    ("c->AD = BUS_DATA();\nBUS_INTERNAL(c->AD);", False),
-    ("c->AD = (c->AD + c->X) & 0xFF;\nc->IR = c->opcode;", True)
+ADDR_ZPX = ("ZPX", "zero page,X", "ADDR_ZPX", [
+    "BUS_READ(c->PC++);",
+    "c->AD = BUS_DATA();\nBUS_INTERNAL(c->AD);",
+    "c->AD = (c->AD + c->X) & 0xFF;\nc->IR = c->opcode;"
 ])
 
-ADDR_ZPY = ("ZPY", "zero page,Y", [
-    ("BUS_READ(c->PC++);", False),
-    ("c->AD = BUS_DATA();\nBUS_INTERNAL(c->AD);", False),
-    ("c->AD = (c->AD + c->Y) & 0xFF;\nc->IR = c->opcode;", True)
+ADDR_ZPY = ("ZPY", "zero page,Y", "ADDR_ZPY", [
+    "BUS_READ(c->PC++);",
+    "c->AD = BUS_DATA();\nBUS_INTERNAL(c->AD);",
+    "c->AD = (c->AD + c->Y) & 0xFF;\nc->IR = c->opcode;"
 ])
 
-ADDR_ABS = ("ABS", "absolute", [
-    ("BUS_READ(c->PC++);\nc->AD = BUS_DATA();", False),
-    ("BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;", False),
-    ("c->IR = c->opcode;", True)
+ADDR_ABS = ("ABS", "absolute", "ADDR_ABS", [
+    "BUS_READ(c->PC++);\nc->AD = BUS_DATA();",
+    "BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;",
+    "c->IR = c->opcode;"
 ])
 
-ADDR_ABX = ("ABX", "absolute,X", [
-    ("BUS_READ(c->PC++);\nc->AD = BUS_DATA();", False),
-    ("BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;", False),
-    ("BUS_READ((c->AD & 0xFF00) | ((c->AD + c->X) & 0xFF));\nif (((c->AD >> 8) == ((c->AD + c->X) >> 8))) {\n\tc->AD += c->X;\n\tc->IR = c->opcode;\n}", False),
-    ("c->AD += c->X;\nc->IR = c->opcode;", True)
+ADDR_ABX = ("ABX", "absolute,X", "ADDR_ABX", [
+    "BUS_READ(c->PC++);\nc->AD = BUS_DATA();",
+    "BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;",
+    "BUS_READ((c->AD & 0xFF00) | ((c->AD + c->X) & 0xFF));\nif (((c->AD >> 8) == ((c->AD + c->X) >> 8))) {\n\tc->AD += c->X;\n\tc->IR = c->opcode;\n}",
+    "c->AD += c->X;\nc->IR = c->opcode;"
 ])
 
-ADDR_ABY = ("ABY", "absolute,Y", [
-    ("BUS_READ(c->PC++);\nc->AD = BUS_DATA();", False),
-    ("BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;", False),
-    ("BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nif (((c->AD >> 8) == ((c->AD + c->Y) >> 8))) {\n\tc->AD += c->Y;\n\tc->IR = c->opcode;\n}", False),
-    ("c->AD += c->Y;\nc->IR = c->opcode;", True)
+ADDR_ABY = ("ABY", "absolute,Y", "ADDR_ABY", [
+    "BUS_READ(c->PC++);\nc->AD = BUS_DATA();",
+    "BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;",
+    "BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nif (((c->AD >> 8) == ((c->AD + c->Y) >> 8))) {\n\tc->AD += c->Y;\n\tc->IR = c->opcode;\n}",
+    "c->AD += c->Y;\nc->IR = c->opcode;"
 ])
 
-ADDR_IDX = ("IDX", "indexed indirect (zp,X)", [
-    ("BUS_READ(c->PC++);", False),
-    ("c->AD = BUS_DATA();\nBUS_INTERNAL(c->AD);", False),
-    ("c->AD = (c->AD + c->X) & 0xFF;\nBUS_READ(c->AD);", False),
-    ("BUS_READ((c->AD + 1) & 0xFF);\nc->AD = BUS_DATA();", False),
-    ("c->AD |= BUS_DATA() << 8;\nc->IR = c->opcode;", True)
+ADDR_IDX = ("IDX", "indexed indirect (zp,X)", "ADDR_IDX", [
+    "BUS_READ(c->PC++);",
+    "c->AD = BUS_DATA();\nBUS_INTERNAL(c->AD);",
+    "c->AD = (c->AD + c->X) & 0xFF;\nBUS_READ(c->AD);",
+    "BUS_READ((c->AD + 1) & 0xFF);\nc->AD = BUS_DATA();",
+    "c->AD |= BUS_DATA() << 8;\nc->IR = c->opcode;"
 ])
 
-ADDR_IDY = ("IDY", "indirect indexed (zp),Y", [
-    ("BUS_READ(c->PC++);", False),
-    ("c->AD = BUS_DATA();\nBUS_READ(c->AD);", False),
-    ("BUS_READ((c->AD + 1) & 0xFF);\nc->AD = BUS_DATA();", False),
-    ("c->AD |= BUS_DATA() << 8;\nBUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nif (((c->AD >> 8) == ((c->AD + c->Y) >> 8))) {\n\tc->AD += c->Y;\n\tc->IR = c->opcode;\n}", False),
-    ("c->AD += c->Y;\nc->IR = c->opcode;", True)
+ADDR_IDY = ("IDY", "indirect indexed (zp),Y", "ADDR_IDY", [
+    "BUS_READ(c->PC++);",
+    "c->AD = BUS_DATA();\nBUS_READ(c->AD);",
+    "BUS_READ((c->AD + 1) & 0xFF);\nc->AD = BUS_DATA();",
+    "c->AD |= BUS_DATA() << 8;\nBUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nif (((c->AD >> 8) == ((c->AD + c->Y) >> 8))) {\n\tc->AD += c->Y;\n\tc->IR = c->opcode;\n}",
+    "c->AD += c->Y;\nc->IR = c->opcode;"
 ])
 
 # Addressing mode lookup table
@@ -132,7 +123,7 @@ ADDRESSING_MODES = {
 
 # Global state
 continuation_sequences = {}  # sequence_code -> {index, name, code}
-next_continuation_index = CONT_SEQ_START
+next_continuation_index = 0  # Will be set to CONT_SEQ_START in main()
 opcode_groups = {}  # implementation_code -> [opcodes]
 
 #-------------------------------------------------------------------------------
@@ -478,33 +469,47 @@ def get_addr_mode_acronym(addr_mode):
         return ADDRESSING_MODES[addr_mode][0]
     return "---"
 
+def get_addr_mode_const_name(addr_mode):
+    """Get the constant name for an addressing mode"""
+    if addr_mode in ADDRESSING_MODES:
+        return ADDRESSING_MODES[addr_mode][2]
+    return "ADDR_NON"
+
+def calculate_addressing_mode_offsets():
+    """Calculate addressing mode offsets dynamically based on cycle counts"""
+    global ADDR_MODE_INDICES, ADDR_SEQ_END, CONT_SEQ_START
+    
+    addr_mode_indices = {}
+    current_offset = 1  # Start at offset 1 (after direct opcodes at 0)
+    
+    # Process addressing modes
+    for addr_mode in ADDRESSING_MODES:
+        addr_mode_indices[addr_mode] = current_offset
+        cycle_count = len(ADDRESSING_MODES[addr_mode][3])  # cycles are at index 3
+        current_offset += cycle_count
+    
+    # Update global variables
+    ADDR_MODE_INDICES = addr_mode_indices
+    ADDR_SEQ_END = ADDR_SEQ_BASE + current_offset
+    CONT_SEQ_START = ADDR_SEQ_END
+
 def get_addr_mode_cycle_count(addr_mode):
     """Get the number of cycles for an addressing mode"""
     if addr_mode in ADDRESSING_MODES:
-        return len(ADDRESSING_MODES[addr_mode][2])
+        return len(ADDRESSING_MODES[addr_mode][3])
     return 0
 
 def generate_addressing_constants():
     """Generate addressing mode offset constants"""
     l("// Addressing mode offset constants")
     l("// Offset 0 = direct opcode jump (no addressing mode)")
-    l("// Other offsets use base correction of 255")
+    l(f"// Other offsets use base correction of ADDR_SEQ_BASE ({ADDR_SEQ_BASE})")
     l("#define ADDR_NON     0   // Direct opcode execution (no addressing mode)")
+    l(f"#define ADDR_SEQ_BASE {ADDR_SEQ_BASE}")
     
-    # Generate constants for addressing modes
-    addr_mode_names = {
-        A_IMM: "ADDR_IMM",
-        A_ZER: "ADDR_ZER",
-        A_ZPX: "ADDR_ZPX",
-        A_ZPY: "ADDR_ZPY",
-        A_ABS: "ADDR_ABS",
-        A_ABX: "ADDR_ABX",
-        A_ABY: "ADDR_ABY",
-        A_IDX: "ADDR_IDX",
-        A_IDY: "ADDR_IDY",
-    }
-    
-    for addr_mode, const_name in addr_mode_names.items():
+    # Generate constants for addressing modes using definitions
+    for addr_mode in ADDRESSING_MODES.keys():
+        const_name = get_addr_mode_const_name(addr_mode)
         offset = ADDR_MODE_INDICES[addr_mode]
         actual_index = ADDR_SEQ_BASE + offset
         l(f"#define {const_name:<12} {offset:<3} // Index {actual_index}")
@@ -515,19 +520,9 @@ def generate_lookup_table():
     """Generate opcode_addr_start lookup table"""
     # Create reverse mapping from offset to constant name
     offset_to_const = {0: "ADDR_NON"}
-    addr_mode_names = {
-        A_IMM: "ADDR_IMM",
-        A_ZER: "ADDR_ZER",
-        A_ZPX: "ADDR_ZPX",
-        A_ZPY: "ADDR_ZPY",
-        A_ABS: "ADDR_ABS",
-        A_ABX: "ADDR_ABX",
-        A_ABY: "ADDR_ABY",
-        A_IDX: "ADDR_IDX",
-        A_IDY: "ADDR_IDY",
-    }
     
-    for addr_mode, const_name in addr_mode_names.items():
+    for addr_mode in ADDRESSING_MODES.keys():
+        const_name = get_addr_mode_const_name(addr_mode)
         if addr_mode in ADDR_MODE_INDICES:
             offset = ADDR_MODE_INDICES[addr_mode]
             offset_to_const[offset] = const_name
@@ -605,17 +600,15 @@ def generate_addressing_modes():
     
     # Generate addressing mode sequences from definitions
     for addr_mode, mode_def in ADDRESSING_MODES.items():
-        acronym, long_name, cycles = mode_def
-        offset = ADDR_MODE_INDICES[addr_mode]
+        acronym, long_name, const_name, cycles = mode_def
         
         # Emit long name comment before the cycles
         l(f"        // {acronym}: {long_name}")
         
-        for cycle_idx, (cycle_code, is_final) in enumerate(cycles):
-            case_num = ADDR_SEQ_BASE + offset + cycle_idx
+        for cycle_idx, cycle_code in enumerate(cycles):
             cycle_num = cycle_idx + 1
             
-            l(f"        case {case_num}:  // {acronym} cycle {cycle_num}")
+            l(f"        case ADDR_SEQ_BASE + {const_name} + {cycle_idx}:  // {acronym} cycle {cycle_num}")
             l(format_code(cycle_code))
             l("            break;")
             
@@ -655,9 +648,19 @@ def generate_continuation_constants():
     l("")
 
 def main():
+    # Calculate addressing mode layout dynamically
+    calculate_addressing_mode_offsets()
+    
+    # Initialize continuation index after layout is calculated
+    global next_continuation_index
+    next_continuation_index = CONT_SEQ_START
+    
     # First pass: analyze all opcodes to discover continuation sequences
     for op in range(256):
         analyze_continuation_needs(op)
+    
+    # Calculate final continuation index for correct comment
+    final_continuation_index = next_continuation_index
     
     l("/*")
     l(" * AUTO-GENERATED by fam65xx_gen.py")
@@ -667,8 +670,8 @@ def main():
     l(f" * Layout:")
     l(f" *   [0-255]   : Opcode-specific cycles")
     l(f" *   [256-{ADDR_SEQ_END-1}] : Shared addressing mode sequences")
-    l(f" *   [{CONT_SEQ_START}-{next_continuation_index-1}]  : Shared continuation sequences")
-    l(f" * Total cases: {next_continuation_index}")
+    l(f" *   [{CONT_SEQ_START}-{final_continuation_index-1}]  : Shared continuation sequences")
+    l(f" * Total cases: {final_continuation_index}")
     l(" */")
     l("")
     

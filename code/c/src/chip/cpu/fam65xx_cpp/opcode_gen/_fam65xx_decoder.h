@@ -5,47 +5,48 @@
  * 
  * Layout:
  *   [0-255]   : Opcode-specific cycles
- *   [256-293] : Shared addressing mode sequences
- *   [294-358]  : Shared continuation sequences
- * Total cases: 359
+ *   [256-285] : Shared addressing mode sequences
+ *   [286-350]  : Shared continuation sequences
+ * Total cases: 351
  */
 
 // Continuation sequence constants
-#define C_BRK            294
-#define C_SLO_RMW        298
-#define C_ASL_RMW        301
-#define C_BRANCH_TAKEN   304
-#define C_JSR            306
-#define C_RLA_RMW        311
-#define C_ROL_RMW        314
-#define C_PLP            317
-#define C_RTI            319
-#define C_SRE_RMW        323
-#define C_LSR_RMW        326
-#define C_JMP_ABS        329
-#define C_RTS            331
-#define C_RRA_RMW        335
-#define C_ROR_RMW        338
-#define C_PLA            341
-#define C_JMP_IND        343
-#define C_DCP_RMW        347
-#define C_DEC_RMW        350
-#define C_ISC_RMW        353
-#define C_INC_RMW        356
+#define C_BRK            286
+#define C_SLO_RMW        290
+#define C_ASL_RMW        293
+#define C_BRANCH_TAKEN   296
+#define C_JSR            298
+#define C_RLA_RMW        303
+#define C_ROL_RMW        306
+#define C_PLP            309
+#define C_RTI            311
+#define C_SRE_RMW        315
+#define C_LSR_RMW        318
+#define C_JMP_ABS        321
+#define C_RTS            323
+#define C_RRA_RMW        327
+#define C_ROR_RMW        330
+#define C_PLA            333
+#define C_JMP_IND        335
+#define C_DCP_RMW        339
+#define C_DEC_RMW        342
+#define C_ISC_RMW        345
+#define C_INC_RMW        348
 
 // Addressing mode offset constants
 // Offset 0 = direct opcode jump (no addressing mode)
-// Other offsets use base correction of 255
+// Other offsets use base correction of ADDR_SEQ_BASE (255)
 #define ADDR_NON     0   // Direct opcode execution (no addressing mode)
+#define ADDR_SEQ_BASE 255
 #define ADDR_IMM     1   // Index 256
-#define ADDR_ZER     3   // Index 258
-#define ADDR_ZPX     6   // Index 261
-#define ADDR_ZPY     10  // Index 265
-#define ADDR_ABS     14  // Index 269
-#define ADDR_ABX     18  // Index 273
-#define ADDR_ABY     23  // Index 278
-#define ADDR_IDX     28  // Index 283
-#define ADDR_IDY     34  // Index 289
+#define ADDR_ZER     2   // Index 257
+#define ADDR_ZPX     4   // Index 259
+#define ADDR_ZPY     7   // Index 262
+#define ADDR_ABS     10  // Index 265
+#define ADDR_ABX     13  // Index 268
+#define ADDR_ABY     17  // Index 272
+#define ADDR_IDX     21  // Index 276
+#define ADDR_IDY     26  // Index 281
 
 // Lookup table: addressing mode start index for each opcode
 static const uint8_t opcode_addr_start[256] = {
@@ -304,7 +305,7 @@ static const uint8_t opcode_addr_start[256] = {
     ADDR_ABX,  // 0xFC: NOP
     ADDR_ABX,  // 0xFD: SBC
     ADDR_ABX,  // 0xFE: INC
-    ADDR_ABX  // 0xFF: ISC
+    ADDR_ABX   // 0xFF: ISC
 };
 
 // Decoder switch statement
@@ -315,7 +316,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         // [0-255] OPCODE-SPECIFIC CYCLES
         // ==========================================
 
-        case 0x00:  // BRK
+        case 0x00:  // BRK --- cycle 1
             if (0 == (c->brk_flags & (FAM65XX_BRK_IRQ | FAM65XX_BRK_NMI))) {
             	c->PC++;
             }
@@ -323,101 +324,101 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->IR = C_BRK;
             break;
 
-        case 0x01:  // ORA
-        case 0x05:  // ORA
-        case 0x09:  // ORA
-        case 0x0D:  // ORA
-        case 0x11:  // ORA
-        case 0x15:  // ORA
-        case 0x19:  // ORA
-        case 0x1D:  // ORA
+        case 0x01:  // ORA IDX cycle 6
+        case 0x05:  // ORA ZP cycle 3
+        case 0x09:  // ORA IMM cycle 2
+        case 0x0D:  // ORA ABS cycle 4
+        case 0x11:  // ORA IDY cycle 6
+        case 0x15:  // ORA ZPX cycle 4
+        case 0x19:  // ORA ABY cycle 5
+        case 0x1D:  // ORA ABX cycle 5
             BUS_READ(c->AD);
             c->A |= BUS_DATA();
             _NZ(c->A);
             _FETCH();
             break;
 
-        case 0x02:  // JAM
-        case 0x12:  // JAM
-        case 0x22:  // JAM
-        case 0x32:  // JAM
-        case 0x42:  // JAM
-        case 0x52:  // JAM
-        case 0x62:  // JAM
-        case 0x72:  // JAM
-        case 0x92:  // JAM
-        case 0xB2:  // JAM
-        case 0xD2:  // JAM
-        case 0xF2:  // JAM
+        case 0x02:  // JAM --- cycle 1
+        case 0x12:  // JAM --- cycle 1
+        case 0x22:  // JAM --- cycle 1
+        case 0x32:  // JAM --- cycle 1
+        case 0x42:  // JAM --- cycle 1
+        case 0x52:  // JAM --- cycle 1
+        case 0x62:  // JAM --- cycle 1
+        case 0x72:  // JAM --- cycle 1
+        case 0x92:  // JAM --- cycle 1
+        case 0xB2:  // JAM --- cycle 1
+        case 0xD2:  // JAM --- cycle 1
+        case 0xF2:  // JAM --- cycle 1
             BUS_READ(c->PC);
             c->IR--;
             break;
 
-        case 0x03:  // SLO
-        case 0x07:  // SLO
-        case 0x0F:  // SLO
-        case 0x13:  // SLO
-        case 0x17:  // SLO
-        case 0x1B:  // SLO
-        case 0x1F:  // SLO
+        case 0x03:  // SLO IDX cycle 6
+        case 0x07:  // SLO ZP cycle 3
+        case 0x0F:  // SLO ABS cycle 4
+        case 0x13:  // SLO IDY cycle 6
+        case 0x17:  // SLO ZPX cycle 4
+        case 0x1B:  // SLO ABY cycle 5
+        case 0x1F:  // SLO ABX cycle 5
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_SLO_RMW;
             break;
 
-        case 0x04:  // NOP
-        case 0x0C:  // NOP
-        case 0x14:  // NOP
-        case 0x1A:  // NOP
-        case 0x1C:  // NOP
-        case 0x34:  // NOP
-        case 0x3A:  // NOP
-        case 0x3C:  // NOP
-        case 0x44:  // NOP
-        case 0x54:  // NOP
-        case 0x5A:  // NOP
-        case 0x5C:  // NOP
-        case 0x64:  // NOP
-        case 0x74:  // NOP
-        case 0x7A:  // NOP
-        case 0x7C:  // NOP
-        case 0x80:  // NOP
-        case 0x82:  // NOP
-        case 0x89:  // NOP
-        case 0xC2:  // NOP
-        case 0xD4:  // NOP
-        case 0xDA:  // NOP
-        case 0xDC:  // NOP
-        case 0xE2:  // NOP
-        case 0xF4:  // NOP
-        case 0xFA:  // NOP
-        case 0xFC:  // NOP
+        case 0x04:  // NOP ZP cycle 3
+        case 0x0C:  // NOP ABS cycle 4
+        case 0x14:  // NOP ZPX cycle 4
+        case 0x1A:  // NOP --- cycle 1
+        case 0x1C:  // NOP ABX cycle 5
+        case 0x34:  // NOP ZPX cycle 4
+        case 0x3A:  // NOP --- cycle 1
+        case 0x3C:  // NOP ABX cycle 5
+        case 0x44:  // NOP ZP cycle 3
+        case 0x54:  // NOP ZPX cycle 4
+        case 0x5A:  // NOP --- cycle 1
+        case 0x5C:  // NOP ABX cycle 5
+        case 0x64:  // NOP ZP cycle 3
+        case 0x74:  // NOP ZPX cycle 4
+        case 0x7A:  // NOP --- cycle 1
+        case 0x7C:  // NOP ABX cycle 5
+        case 0x80:  // NOP IMM cycle 2
+        case 0x82:  // NOP IMM cycle 2
+        case 0x89:  // NOP IMM cycle 2
+        case 0xC2:  // NOP IMM cycle 2
+        case 0xD4:  // NOP ZPX cycle 4
+        case 0xDA:  // NOP --- cycle 1
+        case 0xDC:  // NOP ABX cycle 5
+        case 0xE2:  // NOP IMM cycle 2
+        case 0xF4:  // NOP ZPX cycle 4
+        case 0xFA:  // NOP --- cycle 1
+        case 0xFC:  // NOP ABX cycle 5
             BUS_READ(c->AD);
             _FETCH();
             break;
 
-        case 0x06:  // ASL
-        case 0x0E:  // ASL
-        case 0x16:  // ASL
-        case 0x1E:  // ASL
+        case 0x06:  // ASL ZP cycle 3
+        case 0x0E:  // ASL ABS cycle 4
+        case 0x16:  // ASL ZPX cycle 4
+        case 0x1E:  // ASL ABX cycle 5
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_ASL_RMW;
             break;
 
-        case 0x08:  // PHP
+        case 0x08:  // PHP --- cycle 1
             BUS_WRITE(0x0100 | c->S--, c->P | FAM65XX_XF);
             _FETCH();
             break;
 
-        case 0x0A:  // ASL
+        case 0x0A:  // ASL --- cycle 1
             BUS_INTERNAL(c->PC);
             c->A = _fam65xx_asl(c, c->A);
             _FETCH();
             break;
 
-        case 0x0B:  // ANC
-        case 0x2B:  // ANC
+        case 0x0B:  // ANC IMM cycle 2
+        case 0x2B:  // ANC IMM cycle 2
             BUS_READ(c->AD);
             c->A &= BUS_DATA();
             _NZ(c->A);
@@ -425,8 +426,8 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             _FETCH();
             break;
 
-        case 0x10:  // BPL
-        case 0x90:  // BCC
+        case 0x10:  // BPL IMM cycle 2
+        case 0x90:  // BCC IMM cycle 2
             BUS_READ(c->PC);
             c->AD = c->PC + (int8_t)BUS_DATA();
             if ((c->P & FAM65XX_NF) == 0) {
@@ -436,73 +437,73 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             }
             break;
 
-        case 0x18:  // CLC
+        case 0x18:  // CLC --- cycle 1
             BUS_INTERNAL(c->PC);
             c->P &= ~FAM65XX_CF;
             _FETCH();
             break;
 
-        case 0x20:  // JSR
+        case 0x20:  // JSR --- cycle 1
             BUS_READ(c->PC++);
             c->AD = BUS_DATA();
             c->IR = C_JSR;
             break;
 
-        case 0x21:  // AND
-        case 0x25:  // AND
-        case 0x29:  // AND
-        case 0x2D:  // AND
-        case 0x31:  // AND
-        case 0x35:  // AND
-        case 0x39:  // AND
-        case 0x3D:  // AND
+        case 0x21:  // AND IDX cycle 6
+        case 0x25:  // AND ZP cycle 3
+        case 0x29:  // AND IMM cycle 2
+        case 0x2D:  // AND ABS cycle 4
+        case 0x31:  // AND IDY cycle 6
+        case 0x35:  // AND ZPX cycle 4
+        case 0x39:  // AND ABY cycle 5
+        case 0x3D:  // AND ABX cycle 5
             BUS_READ(c->AD);
             c->A &= BUS_DATA();
             _NZ(c->A);
             _FETCH();
             break;
 
-        case 0x23:  // RLA
-        case 0x27:  // RLA
-        case 0x2F:  // RLA
-        case 0x33:  // RLA
-        case 0x37:  // RLA
-        case 0x3B:  // RLA
-        case 0x3F:  // RLA
+        case 0x23:  // RLA IDX cycle 6
+        case 0x27:  // RLA ZP cycle 3
+        case 0x2F:  // RLA ABS cycle 4
+        case 0x33:  // RLA IDY cycle 6
+        case 0x37:  // RLA ZPX cycle 4
+        case 0x3B:  // RLA ABY cycle 5
+        case 0x3F:  // RLA ABX cycle 5
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_RLA_RMW;
             break;
 
-        case 0x24:  // BIT
-        case 0x2C:  // BIT
+        case 0x24:  // BIT ZP cycle 3
+        case 0x2C:  // BIT ABS cycle 4
             BUS_READ(c->AD);
             _fam65xx_bit(c, BUS_DATA());
             _FETCH();
             break;
 
-        case 0x26:  // ROL
-        case 0x2E:  // ROL
-        case 0x36:  // ROL
-        case 0x3E:  // ROL
+        case 0x26:  // ROL ZP cycle 3
+        case 0x2E:  // ROL ABS cycle 4
+        case 0x36:  // ROL ZPX cycle 4
+        case 0x3E:  // ROL ABX cycle 5
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_ROL_RMW;
             break;
 
-        case 0x28:  // PLP
+        case 0x28:  // PLP --- cycle 1
             BUS_INTERNAL(0x0100 | c->S++);
             c->IR = C_PLP;
             break;
 
-        case 0x2A:  // ROL
+        case 0x2A:  // ROL --- cycle 1
             BUS_INTERNAL(c->PC);
             c->A = _fam65xx_rol(c, c->A);
             _FETCH();
             break;
 
-        case 0x30:  // BMI
-        case 0xB0:  // BCS
+        case 0x30:  // BMI IMM cycle 2
+        case 0xB0:  // BCS IMM cycle 2
             BUS_READ(c->PC);
             c->AD = c->PC + (int8_t)BUS_DATA();
             if ((c->P & FAM65XX_VF) == FAM65XX_VF) {
@@ -512,64 +513,64 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             }
             break;
 
-        case 0x38:  // SEC
+        case 0x38:  // SEC --- cycle 1
             BUS_INTERNAL(c->PC);
             c->P |= FAM65XX_CF;
             _FETCH();
             break;
 
-        case 0x40:  // RTI
+        case 0x40:  // RTI --- cycle 1
             BUS_INTERNAL(0x0100 | c->S++);
             c->IR = C_RTI;
             break;
 
-        case 0x41:  // EOR
-        case 0x45:  // EOR
-        case 0x49:  // EOR
-        case 0x4D:  // EOR
-        case 0x51:  // EOR
-        case 0x55:  // EOR
-        case 0x59:  // EOR
-        case 0x5D:  // EOR
+        case 0x41:  // EOR IDX cycle 6
+        case 0x45:  // EOR ZP cycle 3
+        case 0x49:  // EOR IMM cycle 2
+        case 0x4D:  // EOR ABS cycle 4
+        case 0x51:  // EOR IDY cycle 6
+        case 0x55:  // EOR ZPX cycle 4
+        case 0x59:  // EOR ABY cycle 5
+        case 0x5D:  // EOR ABX cycle 5
             BUS_READ(c->AD);
             c->A ^= BUS_DATA();
             _NZ(c->A);
             _FETCH();
             break;
 
-        case 0x43:  // SRE
-        case 0x47:  // SRE
-        case 0x4F:  // SRE
-        case 0x53:  // SRE
-        case 0x57:  // SRE
-        case 0x5B:  // SRE
-        case 0x5F:  // SRE
+        case 0x43:  // SRE IDX cycle 6
+        case 0x47:  // SRE ZP cycle 3
+        case 0x4F:  // SRE ABS cycle 4
+        case 0x53:  // SRE IDY cycle 6
+        case 0x57:  // SRE ZPX cycle 4
+        case 0x5B:  // SRE ABY cycle 5
+        case 0x5F:  // SRE ABX cycle 5
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_SRE_RMW;
             break;
 
-        case 0x46:  // LSR
-        case 0x4E:  // LSR
-        case 0x56:  // LSR
-        case 0x5E:  // LSR
+        case 0x46:  // LSR ZP cycle 3
+        case 0x4E:  // LSR ABS cycle 4
+        case 0x56:  // LSR ZPX cycle 4
+        case 0x5E:  // LSR ABX cycle 5
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_LSR_RMW;
             break;
 
-        case 0x48:  // PHA
+        case 0x48:  // PHA --- cycle 1
             BUS_WRITE(0x0100 | c->S--, c->A);
             _FETCH();
             break;
 
-        case 0x4A:  // LSR
+        case 0x4A:  // LSR --- cycle 1
             BUS_INTERNAL(c->PC);
             c->A = _fam65xx_lsr(c, c->A);
             _FETCH();
             break;
 
-        case 0x4B:  // ASR
+        case 0x4B:  // ASR IMM cycle 2
             BUS_READ(c->AD);
             c->A &= BUS_DATA();
             c->P = (c->P & ~FAM65XX_CF) | (c->A & 1);
@@ -578,14 +579,14 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             _FETCH();
             break;
 
-        case 0x4C:  // JMP
+        case 0x4C:  // JMP --- cycle 1
             BUS_READ(c->PC++);
             c->AD = BUS_DATA();
             c->IR = C_JMP_ABS;
             break;
 
-        case 0x50:  // BVC
-        case 0xD0:  // BNE
+        case 0x50:  // BVC IMM cycle 2
+        case 0xD0:  // BNE IMM cycle 2
             BUS_READ(c->PC);
             c->AD = c->PC + (int8_t)BUS_DATA();
             if ((c->P & FAM65XX_CF) == 0) {
@@ -595,63 +596,63 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             }
             break;
 
-        case 0x58:  // CLI
+        case 0x58:  // CLI --- cycle 1
             BUS_INTERNAL(c->PC);
             c->P &= ~FAM65XX_IF;
             _FETCH();
             break;
 
-        case 0x60:  // RTS
+        case 0x60:  // RTS --- cycle 1
             BUS_INTERNAL(0x0100 | c->S++);
             c->IR = C_RTS;
             break;
 
-        case 0x61:  // ADC
-        case 0x65:  // ADC
-        case 0x69:  // ADC
-        case 0x6D:  // ADC
-        case 0x71:  // ADC
-        case 0x75:  // ADC
-        case 0x79:  // ADC
-        case 0x7D:  // ADC
+        case 0x61:  // ADC IDX cycle 6
+        case 0x65:  // ADC ZP cycle 3
+        case 0x69:  // ADC IMM cycle 2
+        case 0x6D:  // ADC ABS cycle 4
+        case 0x71:  // ADC IDY cycle 6
+        case 0x75:  // ADC ZPX cycle 4
+        case 0x79:  // ADC ABY cycle 5
+        case 0x7D:  // ADC ABX cycle 5
             BUS_READ(c->AD);
             _fam65xx_adc(c, BUS_DATA());
             _FETCH();
             break;
 
-        case 0x63:  // RRA
-        case 0x67:  // RRA
-        case 0x6F:  // RRA
-        case 0x73:  // RRA
-        case 0x77:  // RRA
-        case 0x7B:  // RRA
-        case 0x7F:  // RRA
+        case 0x63:  // RRA IDX cycle 6
+        case 0x67:  // RRA ZP cycle 3
+        case 0x6F:  // RRA ABS cycle 4
+        case 0x73:  // RRA IDY cycle 6
+        case 0x77:  // RRA ZPX cycle 4
+        case 0x7B:  // RRA ABY cycle 5
+        case 0x7F:  // RRA ABX cycle 5
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_RRA_RMW;
             break;
 
-        case 0x66:  // ROR
-        case 0x6E:  // ROR
-        case 0x76:  // ROR
-        case 0x7E:  // ROR
+        case 0x66:  // ROR ZP cycle 3
+        case 0x6E:  // ROR ABS cycle 4
+        case 0x76:  // ROR ZPX cycle 4
+        case 0x7E:  // ROR ABX cycle 5
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_ROR_RMW;
             break;
 
-        case 0x68:  // PLA
+        case 0x68:  // PLA --- cycle 1
             BUS_INTERNAL(0x0100 | c->S++);
             c->IR = C_PLA;
             break;
 
-        case 0x6A:  // ROR
+        case 0x6A:  // ROR --- cycle 1
             BUS_INTERNAL(c->PC);
             c->A = _fam65xx_ror(c, c->A);
             _FETCH();
             break;
 
-        case 0x6B:  // ARR
+        case 0x6B:  // ARR IMM cycle 2
             BUS_READ(c->AD);
             c->A = (c->A & BUS_DATA()) >> 1 | (c->P & FAM65XX_CF ? 0x80 : 0);
             _NZ(c->A);
@@ -659,14 +660,14 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             _FETCH();
             break;
 
-        case 0x6C:  // JMP
+        case 0x6C:  // JMP --- cycle 1
             BUS_READ(c->PC++);
             c->AD = BUS_DATA();
             c->IR = C_JMP_IND;
             break;
 
-        case 0x70:  // BVS
-        case 0xF0:  // BEQ
+        case 0x70:  // BVS IMM cycle 2
+        case 0xF0:  // BEQ IMM cycle 2
             BUS_READ(c->PC);
             c->AD = c->PC + (int8_t)BUS_DATA();
             if ((c->P & FAM65XX_ZF) == FAM65XX_ZF) {
@@ -676,241 +677,241 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             }
             break;
 
-        case 0x78:  // SEI
+        case 0x78:  // SEI --- cycle 1
             BUS_INTERNAL(c->PC);
             c->P |= FAM65XX_IF;
             _FETCH();
             break;
 
-        case 0x81:  // STA
-        case 0x85:  // STA
-        case 0x8D:  // STA
-        case 0x91:  // STA
-        case 0x95:  // STA
-        case 0x99:  // STA
-        case 0x9D:  // STA
+        case 0x81:  // STA IDX cycle 6
+        case 0x85:  // STA ZP cycle 3
+        case 0x8D:  // STA ABS cycle 4
+        case 0x91:  // STA IDY cycle 6
+        case 0x95:  // STA ZPX cycle 4
+        case 0x99:  // STA ABY cycle 5
+        case 0x9D:  // STA ABX cycle 5
             BUS_WRITE(c->AD, c->A);
             _FETCH();
             break;
 
-        case 0x83:  // SAX
-        case 0x87:  // SAX
-        case 0x8F:  // SAX
-        case 0x97:  // SAX
+        case 0x83:  // SAX IDX cycle 6
+        case 0x87:  // SAX ZP cycle 3
+        case 0x8F:  // SAX ABS cycle 4
+        case 0x97:  // SAX ZPY cycle 4
             BUS_WRITE(c->AD, c->A & c->X);
             _FETCH();
             break;
 
-        case 0x84:  // STY
-        case 0x8C:  // STY
-        case 0x94:  // STY
+        case 0x84:  // STY ZP cycle 3
+        case 0x8C:  // STY ABS cycle 4
+        case 0x94:  // STY ZPX cycle 4
             BUS_WRITE(c->AD, c->Y);
             _FETCH();
             break;
 
-        case 0x86:  // STX
-        case 0x8E:  // STX
-        case 0x96:  // STX
+        case 0x86:  // STX ZP cycle 3
+        case 0x8E:  // STX ABS cycle 4
+        case 0x96:  // STX ZPY cycle 4
             BUS_WRITE(c->AD, c->X);
             _FETCH();
             break;
 
-        case 0x88:  // DEY
+        case 0x88:  // DEY --- cycle 1
             BUS_INTERNAL(c->PC);
             c->Y--;
             _NZ(c->Y);
             _FETCH();
             break;
 
-        case 0x8A:  // TXA
+        case 0x8A:  // TXA --- cycle 1
             BUS_INTERNAL(c->PC);
             c->A = c->X;
             _NZ(c->A);
             _FETCH();
             break;
 
-        case 0x8B:  // XAA
+        case 0x8B:  // XAA IMM cycle 2
             BUS_READ(c->AD);
             c->A = (c->A | 0xEE) & c->X & BUS_DATA();
             _NZ(c->A);
             _FETCH();
             break;
 
-        case 0x93:  // SHA
+        case 0x93:  // SHA IDY cycle 6
             BUS_WRITE(c->AD, c->A & c->X & ((c->AD >> 8) + 1));
             _FETCH();
             break;
 
-        case 0x98:  // TYA
+        case 0x98:  // TYA --- cycle 1
             BUS_INTERNAL(c->PC);
             c->A = c->Y;
             _NZ(c->A);
             _FETCH();
             break;
 
-        case 0x9A:  // TXS
+        case 0x9A:  // TXS --- cycle 1
             BUS_INTERNAL(c->PC);
             c->S = c->X;
             _FETCH();
             break;
 
-        case 0x9B:  // SHS
+        case 0x9B:  // SHS ABY cycle 5
             c->S = c->A & c->X;
             BUS_WRITE(c->AD, c->S & ((c->AD >> 8) + 1));
             _FETCH();
             break;
 
-        case 0x9C:  // SHY
-        case 0x9F:  // SHY
+        case 0x9C:  // SHY ABX cycle 5
+        case 0x9F:  // SHY ABY cycle 5
             BUS_WRITE(c->AD, c->Y & ((c->AD >> 8) + 1));
             _FETCH();
             break;
 
-        case 0x9E:  // SHX
+        case 0x9E:  // SHX ABY cycle 5
             BUS_WRITE(c->AD, c->X & ((c->AD >> 8) + 1));
             _FETCH();
             break;
 
-        case 0xA0:  // LDY
-        case 0xA4:  // LDY
-        case 0xAC:  // LDY
-        case 0xB4:  // LDY
-        case 0xBC:  // LDY
+        case 0xA0:  // LDY IMM cycle 2
+        case 0xA4:  // LDY ZP cycle 3
+        case 0xAC:  // LDY ABS cycle 4
+        case 0xB4:  // LDY ZPX cycle 4
+        case 0xBC:  // LDY ABX cycle 5
             BUS_READ(c->AD);
             c->Y = BUS_DATA();
             _NZ(c->Y);
             _FETCH();
             break;
 
-        case 0xA1:  // LDA
-        case 0xA5:  // LDA
-        case 0xA9:  // LDA
-        case 0xAD:  // LDA
-        case 0xB1:  // LDA
-        case 0xB5:  // LDA
-        case 0xB9:  // LDA
-        case 0xBD:  // LDA
+        case 0xA1:  // LDA IDX cycle 6
+        case 0xA5:  // LDA ZP cycle 3
+        case 0xA9:  // LDA IMM cycle 2
+        case 0xAD:  // LDA ABS cycle 4
+        case 0xB1:  // LDA IDY cycle 6
+        case 0xB5:  // LDA ZPX cycle 4
+        case 0xB9:  // LDA ABY cycle 5
+        case 0xBD:  // LDA ABX cycle 5
             BUS_READ(c->AD);
             c->A = BUS_DATA();
             _NZ(c->A);
             _FETCH();
             break;
 
-        case 0xA2:  // LDX
-        case 0xA6:  // LDX
-        case 0xAE:  // LDX
-        case 0xB6:  // LDX
-        case 0xBE:  // LDX
+        case 0xA2:  // LDX IMM cycle 2
+        case 0xA6:  // LDX ZP cycle 3
+        case 0xAE:  // LDX ABS cycle 4
+        case 0xB6:  // LDX ZPY cycle 4
+        case 0xBE:  // LDX ABY cycle 5
             BUS_READ(c->AD);
             c->X = BUS_DATA();
             _NZ(c->X);
             _FETCH();
             break;
 
-        case 0xA3:  // LAX
-        case 0xA7:  // LAX
-        case 0xAB:  // LAX
-        case 0xAF:  // LAX
-        case 0xB3:  // LAX
-        case 0xB7:  // LAX
-        case 0xBF:  // LAX
+        case 0xA3:  // LAX IDX cycle 6
+        case 0xA7:  // LAX ZP cycle 3
+        case 0xAB:  // LAX IMM cycle 2
+        case 0xAF:  // LAX ABS cycle 4
+        case 0xB3:  // LAX IDY cycle 6
+        case 0xB7:  // LAX ZPY cycle 4
+        case 0xBF:  // LAX ABY cycle 5
             BUS_READ(c->AD);
             c->A = c->X = BUS_DATA();
             _NZ(c->A);
             _FETCH();
             break;
 
-        case 0xA8:  // TAY
+        case 0xA8:  // TAY --- cycle 1
             BUS_INTERNAL(c->PC);
             c->Y = c->A;
             _NZ(c->Y);
             _FETCH();
             break;
 
-        case 0xAA:  // TAX
+        case 0xAA:  // TAX --- cycle 1
             BUS_INTERNAL(c->PC);
             c->X = c->A;
             _NZ(c->X);
             _FETCH();
             break;
 
-        case 0xB8:  // CLV
+        case 0xB8:  // CLV --- cycle 1
             BUS_INTERNAL(c->PC);
             c->P &= ~FAM65XX_VF;
             _FETCH();
             break;
 
-        case 0xBA:  // TSX
+        case 0xBA:  // TSX --- cycle 1
             BUS_INTERNAL(c->PC);
             c->X = c->S;
             _NZ(c->X);
             _FETCH();
             break;
 
-        case 0xBB:  // LAS
+        case 0xBB:  // LAS ABY cycle 5
             BUS_READ(c->AD);
             c->A = c->X = c->S = c->S & BUS_DATA();
             _NZ(c->A);
             _FETCH();
             break;
 
-        case 0xC0:  // CPY
-        case 0xC4:  // CPY
-        case 0xCC:  // CPY
+        case 0xC0:  // CPY IMM cycle 2
+        case 0xC4:  // CPY ZP cycle 3
+        case 0xCC:  // CPY ABS cycle 4
             BUS_READ(c->AD);
             _fam65xx_cmp(c, c->Y, BUS_DATA());
             _FETCH();
             break;
 
-        case 0xC1:  // CMP
-        case 0xC5:  // CMP
-        case 0xC9:  // CMP
-        case 0xCD:  // CMP
-        case 0xD1:  // CMP
-        case 0xD5:  // CMP
-        case 0xD9:  // CMP
-        case 0xDD:  // CMP
+        case 0xC1:  // CMP IDX cycle 6
+        case 0xC5:  // CMP ZP cycle 3
+        case 0xC9:  // CMP IMM cycle 2
+        case 0xCD:  // CMP ABS cycle 4
+        case 0xD1:  // CMP IDY cycle 6
+        case 0xD5:  // CMP ZPX cycle 4
+        case 0xD9:  // CMP ABY cycle 5
+        case 0xDD:  // CMP ABX cycle 5
             BUS_READ(c->AD);
             _fam65xx_cmp(c, c->A, BUS_DATA());
             _FETCH();
             break;
 
-        case 0xC3:  // DCP
-        case 0xC7:  // DCP
-        case 0xCF:  // DCP
-        case 0xD3:  // DCP
-        case 0xD7:  // DCP
-        case 0xDB:  // DCP
-        case 0xDF:  // DCP
+        case 0xC3:  // DCP IDX cycle 6
+        case 0xC7:  // DCP ZP cycle 3
+        case 0xCF:  // DCP ABS cycle 4
+        case 0xD3:  // DCP IDY cycle 6
+        case 0xD7:  // DCP ZPX cycle 4
+        case 0xDB:  // DCP ABY cycle 5
+        case 0xDF:  // DCP ABX cycle 5
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_DCP_RMW;
             break;
 
-        case 0xC6:  // DEC
-        case 0xCE:  // DEC
-        case 0xD6:  // DEC
-        case 0xDE:  // DEC
+        case 0xC6:  // DEC ZP cycle 3
+        case 0xCE:  // DEC ABS cycle 4
+        case 0xD6:  // DEC ZPX cycle 4
+        case 0xDE:  // DEC ABX cycle 5
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_DEC_RMW;
             break;
 
-        case 0xC8:  // INY
+        case 0xC8:  // INY --- cycle 1
             BUS_INTERNAL(c->PC);
             c->Y++;
             _NZ(c->Y);
             _FETCH();
             break;
 
-        case 0xCA:  // DEX
+        case 0xCA:  // DEX --- cycle 1
             BUS_INTERNAL(c->PC);
             c->X--;
             _NZ(c->X);
             _FETCH();
             break;
 
-        case 0xCB:  // SBX
+        case 0xCB:  // SBX IMM cycle 2
             BUS_READ(c->AD);
             {
             	uint16_t t = (c->A & c->X) - BUS_DATA();
@@ -921,213 +922,222 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             _FETCH();
             break;
 
-        case 0xD8:  // CLD
+        case 0xD8:  // CLD --- cycle 1
             BUS_INTERNAL(c->PC);
             c->P &= ~FAM65XX_DF;
             _FETCH();
             break;
 
-        case 0xE0:  // CPX
-        case 0xE4:  // CPX
-        case 0xEC:  // CPX
+        case 0xE0:  // CPX IMM cycle 2
+        case 0xE4:  // CPX ZP cycle 3
+        case 0xEC:  // CPX ABS cycle 4
             BUS_READ(c->AD);
             _fam65xx_cmp(c, c->X, BUS_DATA());
             _FETCH();
             break;
 
-        case 0xE1:  // SBC
-        case 0xE5:  // SBC
-        case 0xE9:  // SBC
-        case 0xEB:  // SBC
-        case 0xED:  // SBC
-        case 0xF1:  // SBC
-        case 0xF5:  // SBC
-        case 0xF9:  // SBC
-        case 0xFD:  // SBC
+        case 0xE1:  // SBC IDX cycle 6
+        case 0xE5:  // SBC ZP cycle 3
+        case 0xE9:  // SBC IMM cycle 2
+        case 0xEB:  // SBC IMM cycle 2
+        case 0xED:  // SBC ABS cycle 4
+        case 0xF1:  // SBC IDY cycle 6
+        case 0xF5:  // SBC ZPX cycle 4
+        case 0xF9:  // SBC ABY cycle 5
+        case 0xFD:  // SBC ABX cycle 5
             BUS_READ(c->AD);
             _fam65xx_sbc(c, BUS_DATA());
             _FETCH();
             break;
 
-        case 0xE3:  // ISC
-        case 0xE7:  // ISC
-        case 0xEF:  // ISC
-        case 0xF3:  // ISC
-        case 0xF7:  // ISC
-        case 0xFB:  // ISC
-        case 0xFF:  // ISC
+        case 0xE3:  // ISC IDX cycle 6
+        case 0xE7:  // ISC ZP cycle 3
+        case 0xEF:  // ISC ABS cycle 4
+        case 0xF3:  // ISC IDY cycle 6
+        case 0xF7:  // ISC ZPX cycle 4
+        case 0xFB:  // ISC ABY cycle 5
+        case 0xFF:  // ISC ABX cycle 5
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_ISC_RMW;
             break;
 
-        case 0xE6:  // INC
-        case 0xEE:  // INC
-        case 0xF6:  // INC
-        case 0xFE:  // INC
+        case 0xE6:  // INC ZP cycle 3
+        case 0xEE:  // INC ABS cycle 4
+        case 0xF6:  // INC ZPX cycle 4
+        case 0xFE:  // INC ABX cycle 5
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_INC_RMW;
             break;
 
-        case 0xE8:  // INX
+        case 0xE8:  // INX --- cycle 1
             BUS_INTERNAL(c->PC);
             c->X++;
             _NZ(c->X);
             _FETCH();
             break;
 
-        case 0xEA:  // NOP
+        case 0xEA:  // NOP --- cycle 1
             BUS_INTERNAL(c->PC);
             _FETCH();
             break;
 
-        case 0xF8:  // SED
+        case 0xF8:  // SED --- cycle 1
             BUS_INTERNAL(c->PC);
             c->P |= FAM65XX_DF;
             _FETCH();
             break;
 
         // ==========================================
-        // [256-293] SHARED ADDRESSING SEQUENCES
+        // [256-285] SHARED ADDRESSING SEQUENCES
         // ==========================================
 
-        case 256:  // IMM: immediate
+        // IMM: immediate
+        case ADDR_SEQ_BASE + ADDR_IMM + 0:  // IMM cycle 1
             BUS_READ(c->PC++);
             c->AD = BUS_DATA();
             c->IR = c->opcode;
             break;
 
-        case 258:  // ZP cycle 1
+        // ZP: zero page
+        case ADDR_SEQ_BASE + ADDR_ZER + 0:  // ZP cycle 1
             BUS_READ(c->PC++);
             break;
-        case 259:  // ZP cycle 2
+        case ADDR_SEQ_BASE + ADDR_ZER + 1:  // ZP cycle 2
             c->AD = BUS_DATA();
             c->IR = c->opcode;
             break;
 
-        case 261:  // ZPX cycle 1
+        // ZPX: zero page,X
+        case ADDR_SEQ_BASE + ADDR_ZPX + 0:  // ZPX cycle 1
             BUS_READ(c->PC++);
             break;
-        case 262:  // ZPX cycle 2
+        case ADDR_SEQ_BASE + ADDR_ZPX + 1:  // ZPX cycle 2
             c->AD = BUS_DATA();
             BUS_INTERNAL(c->AD);
             break;
-        case 263:  // ZPX cycle 3
+        case ADDR_SEQ_BASE + ADDR_ZPX + 2:  // ZPX cycle 3
             c->AD = (c->AD + c->X) & 0xFF;
             c->IR = c->opcode;
             break;
 
-        case 265:  // ZPY cycle 1
+        // ZPY: zero page,Y
+        case ADDR_SEQ_BASE + ADDR_ZPY + 0:  // ZPY cycle 1
             BUS_READ(c->PC++);
             break;
-        case 266:  // ZPY cycle 2
+        case ADDR_SEQ_BASE + ADDR_ZPY + 1:  // ZPY cycle 2
             c->AD = BUS_DATA();
             BUS_INTERNAL(c->AD);
             break;
-        case 267:  // ZPY cycle 3
+        case ADDR_SEQ_BASE + ADDR_ZPY + 2:  // ZPY cycle 3
             c->AD = (c->AD + c->Y) & 0xFF;
             c->IR = c->opcode;
             break;
 
-        case 269:  // ABS cycle 1
+        // ABS: absolute
+        case ADDR_SEQ_BASE + ADDR_ABS + 0:  // ABS cycle 1
             BUS_READ(c->PC++);
             c->AD = BUS_DATA();
             break;
-        case 270:  // ABS cycle 2
+        case ADDR_SEQ_BASE + ADDR_ABS + 1:  // ABS cycle 2
             BUS_READ(c->PC++);
             c->AD |= BUS_DATA() << 8;
             break;
-        case 271:  // ABS cycle 3
+        case ADDR_SEQ_BASE + ADDR_ABS + 2:  // ABS cycle 3
             c->IR = c->opcode;
             break;
 
-        case 273:  // ABX cycle 1
+        // ABX: absolute,X
+        case ADDR_SEQ_BASE + ADDR_ABX + 0:  // ABX cycle 1
             BUS_READ(c->PC++);
             c->AD = BUS_DATA();
             break;
-        case 274:  // ABX cycle 2
+        case ADDR_SEQ_BASE + ADDR_ABX + 1:  // ABX cycle 2
             BUS_READ(c->PC++);
             c->AD |= BUS_DATA() << 8;
             break;
-        case 275:  // ABX cycle 3: check page crossing
+        case ADDR_SEQ_BASE + ADDR_ABX + 2:  // ABX cycle 3
             BUS_READ((c->AD & 0xFF00) | ((c->AD + c->X) & 0xFF));
             if (((c->AD >> 8) == ((c->AD + c->X) >> 8))) {
-                c->AD += c->X;
-                c->IR = c->opcode;
+            	c->AD += c->X;
+            	c->IR = c->opcode;
             }
             break;
-        case 276:  // ABX cycle 4: page crossed
+        case ADDR_SEQ_BASE + ADDR_ABX + 3:  // ABX cycle 4
             c->AD += c->X;
             c->IR = c->opcode;
             break;
 
-        case 278:  // ABY cycle 1
+        // ABY: absolute,Y
+        case ADDR_SEQ_BASE + ADDR_ABY + 0:  // ABY cycle 1
             BUS_READ(c->PC++);
             c->AD = BUS_DATA();
             break;
-        case 279:  // ABY cycle 2
+        case ADDR_SEQ_BASE + ADDR_ABY + 1:  // ABY cycle 2
             BUS_READ(c->PC++);
             c->AD |= BUS_DATA() << 8;
             break;
-        case 280:  // ABY cycle 3: check page crossing
+        case ADDR_SEQ_BASE + ADDR_ABY + 2:  // ABY cycle 3
             BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));
             if (((c->AD >> 8) == ((c->AD + c->Y) >> 8))) {
-                c->AD += c->Y;
-                c->IR = c->opcode;
+            	c->AD += c->Y;
+            	c->IR = c->opcode;
             }
             break;
-        case 281:  // ABY cycle 4: page crossed
+        case ADDR_SEQ_BASE + ADDR_ABY + 3:  // ABY cycle 4
             c->AD += c->Y;
             c->IR = c->opcode;
             break;
 
-        case 283:  // IDX cycle 1
+        // IDX: indexed indirect (zp,X)
+        case ADDR_SEQ_BASE + ADDR_IDX + 0:  // IDX cycle 1
             BUS_READ(c->PC++);
             break;
-        case 284:  // IDX cycle 2
+        case ADDR_SEQ_BASE + ADDR_IDX + 1:  // IDX cycle 2
             c->AD = BUS_DATA();
             BUS_INTERNAL(c->AD);
             break;
-        case 285:  // IDX cycle 3
+        case ADDR_SEQ_BASE + ADDR_IDX + 2:  // IDX cycle 3
             c->AD = (c->AD + c->X) & 0xFF;
             BUS_READ(c->AD);
             break;
-        case 286:  // IDX cycle 4
+        case ADDR_SEQ_BASE + ADDR_IDX + 3:  // IDX cycle 4
             BUS_READ((c->AD + 1) & 0xFF);
             c->AD = BUS_DATA();
             break;
-        case 287:  // IDX cycle 5
+        case ADDR_SEQ_BASE + ADDR_IDX + 4:  // IDX cycle 5
             c->AD |= BUS_DATA() << 8;
             c->IR = c->opcode;
             break;
 
-        case 289:  // IDY cycle 1
+        // IDY: indirect indexed (zp),Y
+        case ADDR_SEQ_BASE + ADDR_IDY + 0:  // IDY cycle 1
             BUS_READ(c->PC++);
             break;
-        case 290:  // IDY cycle 2
+        case ADDR_SEQ_BASE + ADDR_IDY + 1:  // IDY cycle 2
             c->AD = BUS_DATA();
             BUS_READ(c->AD);
             break;
-        case 291:  // IDY cycle 3
+        case ADDR_SEQ_BASE + ADDR_IDY + 2:  // IDY cycle 3
             BUS_READ((c->AD + 1) & 0xFF);
             c->AD = BUS_DATA();
             break;
-        case 292:  // IDY cycle 4: check page crossing
+        case ADDR_SEQ_BASE + ADDR_IDY + 3:  // IDY cycle 4
             c->AD |= BUS_DATA() << 8;
             BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));
             if (((c->AD >> 8) == ((c->AD + c->Y) >> 8))) {
-                c->AD += c->Y;
-                c->IR = c->opcode;
+            	c->AD += c->Y;
+            	c->IR = c->opcode;
             }
             break;
-        case 293:  // IDY cycle 5: page crossed
+        case ADDR_SEQ_BASE + ADDR_IDY + 4:  // IDY cycle 5
             c->AD += c->Y;
             c->IR = c->opcode;
             break;
 
         // ==========================================
-        // [294+] SHARED CONTINUATIONS
+        // [286+] SHARED CONTINUATIONS
         // ==========================================
 
         // BRK continuation
