@@ -95,8 +95,8 @@ M__W = 2        # write access
 M_RW = 3        # read-modify-write
 
 #-------------------------------------------------------------------------------
-# Mnemonic Symbol Definitions
-# Each symbol contains: (name, mem_access, implementation_code, flags)
+# Operation Definitions
+# Each definition contains: (mnemonic, mem_access, implementation_code, flags)
 #-------------------------------------------------------------------------------
 
 # Simple implied mode operations
@@ -205,7 +205,26 @@ OP_LAS = ("LAS", M_R_, "BUS_READ(c->AD);\nc->A = c->X = c->S = c->S & BUS_DATA()
 OP_JAM = ("JAM", M_RW, "BUS_READ(c->PC);\nc->IR--;", None)  # JAM locks up
 
 #-------------------------------------------------------------------------------
-# Instruction table: [mnemonic_symbol, addressing_mode]
+# RMW Continuation Definitions
+# Each definition contains: (name, implementation_code)
+#-------------------------------------------------------------------------------
+
+rmw_seqs = {
+    'ASL': ('ASL_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_asl(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
+    'ROL': ('ROL_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_rol(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
+    'LSR': ('LSR_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_lsr(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
+    'ROR': ('ROR_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_ror(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
+    'DEC': ('DEC_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD--;\n_NZ(c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
+    'INC': ('INC_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD++;\n_NZ(c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
+    'SLO': ('SLO_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_asl(c, c->AD);\nc->A |= c->AD;\n_NZ(c->A);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
+    'RLA': ('RLA_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_rol(c, c->AD);\nc->A &= c->AD;\n_NZ(c->A);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
+    'SRE': ('SRE_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_lsr(c, c->AD);\nc->A ^= c->AD;\n_NZ(c->A);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
+    'RRA': ('RRA_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_ror(c, c->AD);\n_fam65xx_adc(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
+    'DCP': ('DCP_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD--;\n_fam65xx_cmp(c, c->A, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
+    'ISC': ('ISC_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD++;\n_fam65xx_sbc(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
+}
+#-------------------------------------------------------------------------------
+# Instruction table: [operation, addressing_mode]
 #-------------------------------------------------------------------------------
 ops = [
     # cc = 00
@@ -315,8 +334,8 @@ def get_or_create_continuation(sequence_code, name):
 
 def analyze_continuation_needs(op):
     """Determine if opcode needs a continuation sequence - handle special RMW cases"""
-    mnemonic_symbol, addr_mode = get_ops_entry(op)
-    flags = mnemonic_symbol[3]  # flags are at index 3
+    operation, addr_mode = get_ops_entry(op)
+    flags = operation[3]  # flags are at index 3
     
     # Handle special multi-cycle operations with hardcoded continuations FIRST
     if op == 0x00:  # BRK
@@ -378,21 +397,7 @@ def analyze_continuation_needs(op):
         return ('BRANCH_TAKEN', seq)
     elif flags == 'RMW':
         # RMW continuations
-        mnemonic = mnemonic_symbol[0]  # mnemonic name is at index 0
-        rmw_seqs = {
-            'ASL': ('ASL_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_asl(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
-            'ROL': ('ROL_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_rol(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
-            'LSR': ('LSR_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_lsr(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
-            'ROR': ('ROR_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_ror(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
-            'DEC': ('DEC_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD--;\n_NZ(c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
-            'INC': ('INC_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD++;\n_NZ(c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
-            'SLO': ('SLO_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_asl(c, c->AD);\nc->A |= c->AD;\n_NZ(c->A);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
-            'RLA': ('RLA_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_rol(c, c->AD);\nc->A &= c->AD;\n_NZ(c->A);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
-            'SRE': ('SRE_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_lsr(c, c->AD);\nc->A ^= c->AD;\n_NZ(c->A);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
-            'RRA': ('RRA_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_ror(c, c->AD);\n_fam65xx_adc(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
-            'DCP': ('DCP_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD--;\n_fam65xx_cmp(c, c->A, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
-            'ISC': ('ISC_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD++;\n_fam65xx_sbc(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
-        }
+        mnemonic = operation[0]  # mnemonic is at index 0
         if mnemonic in rmw_seqs:
             name, seq = rmw_seqs[mnemonic]
             get_or_create_continuation(seq, name)
@@ -416,15 +421,15 @@ def get_continuation_constant_name(name):
 
 def generate_opcode_implementation(op):
     """Generate the implementation code for this opcode's specific cycle"""
-    mnemonic_symbol, addr_mode = get_ops_entry(op)
-    impl = mnemonic_symbol[2]  # implementation is at index 2
-    flags = mnemonic_symbol[3]  # flags are at index 3
+    operation, addr_mode = get_ops_entry(op)
+    impl = operation[2]  # implementation is at index 2
+    flags = operation[3]  # flags are at index 3
     
     # Handle branch instructions specially
     if flags == 'BRANCH':
         return f"BUS_READ(c->PC);\nc->AD = c->PC + (int8_t)BUS_DATA();\nif ((c->P & {get_branch_mask(op)}) == {get_branch_val(op)}) {{\n\tc->IR = C_BRANCH_TAKEN;\n}} else {{\n\t_FETCH();\n}}"
     
-    # Return the implementation from the mnemonic symbol
+    # Return the implementation from the operation
     if impl:
         return impl
     
@@ -440,10 +445,9 @@ def calculate_addressing_mode_offsets():
     
     # Process addressing mode objects that have cycles
     for addr_mode in ADDRESSING_MODES:
-        if len(addr_mode[3]) > 0:  # Only process addressing modes with cycles
-            addr_mode_indices[addr_mode] = current_offset
-            cycle_count = len(addr_mode[3])  # cycles are at index 3
-            current_offset += cycle_count
+        addr_mode_indices[addr_mode] = current_offset
+        cycle_count = len(addr_mode[3])  # cycles are at index 3
+        current_offset += cycle_count
     
     # Update global variables
     ADDR_MODE_INDICES = addr_mode_indices
@@ -483,7 +487,7 @@ def generate_lookup_table():
     l("static const uint8_t opcode_addr_start[256] = {")
     
     for op in range(256):
-        mnemonic_symbol, addr_mode = get_ops_entry(op)
+        operation, addr_mode = get_ops_entry(op)
         
         if addr_mode in ADDR_MODE_INDICES:
             offset = ADDR_MODE_INDICES[addr_mode]
@@ -494,7 +498,7 @@ def generate_lookup_table():
         
         # Format with comma except for last element
         comma = "," if op < 255 else " "
-        l(f"    {const_name}{comma}  // 0x{op:02X}: {mnemonic_symbol[0]}")
+        l(f"    {const_name}{comma}  // 0x{op:02X}: {operation[0]}")
     
     l("};")
     l("")
@@ -527,14 +531,14 @@ def generate_opcode_cases():
         
         # Emit all opcodes that share this implementation
         for opc in sorted(opcodes):
-            mnemonic_symbol, addr_mode = get_ops_entry(opc)
+            operation, addr_mode = get_ops_entry(opc)
             addr_acronym = addr_mode[0]
             
             # Calculate cycle number: 1 if no addressing cycles, otherwise 1 + addressing_cycles
             cycle_count = len(addr_mode[3])
             cycle_num = 1 + cycle_count if cycle_count > 0 else 1
                 
-            l(f"        case 0x{opc:02X}:  // {mnemonic_symbol[0]} {addr_acronym} cycle {cycle_num}")
+            l(f"        case 0x{opc:02X}:  // {operation[0]} {addr_acronym} cycle {cycle_num}")
             emitted.add(opc)
         
         l(format_code(code))
@@ -550,20 +554,19 @@ def generate_addressing_modes():
     
     # Generate addressing mode sequences from definitions
     for addr_mode in ADDRESSING_MODES:
-        if len(addr_mode[3]) > 0:  # Only generate sequences for modes with cycles
-            acronym, long_name, const_name, cycles = addr_mode
+        acronym, long_name, const_name, cycles = addr_mode
+        
+        # Emit long name comment before the cycles
+        l(f"        // {acronym}: {long_name}")
+        
+        for cycle_idx, cycle_code in enumerate(cycles):
+            cycle_num = cycle_idx + 1
             
-            # Emit long name comment before the cycles
-            l(f"        // {acronym}: {long_name}")
+            l(f"        case ADDR_SEQ_BASE + {const_name} + {cycle_idx}:  // {acronym} cycle {cycle_num}")
+            l(format_code(cycle_code))
+            l("            break;")
             
-            for cycle_idx, cycle_code in enumerate(cycles):
-                cycle_num = cycle_idx + 1
-                
-                l(f"        case ADDR_SEQ_BASE + {const_name} + {cycle_idx}:  // {acronym} cycle {cycle_num}")
-                l(format_code(cycle_code))
-                l("            break;")
-                
-            l("")
+        l("")
 
 def generate_continuations():
     """Generate shared multi-cycle continuation sequences"""
