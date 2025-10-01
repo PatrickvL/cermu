@@ -591,7 +591,7 @@ def calculate_addressing_mode_offsets():
     global ADDR_MODE_INDICES, ADDR_SEQ_END, CONT_SEQ_START
     
     addr_mode_indices = {}
-    current_offset = 0  # Start at offset 0 (no +1 needed since FETCH_CASE is at 256)
+    current_offset = 1  # Start at offset 1 (0 is reserved for ADDR_NON)
     
     # Process addressing mode objects that have cycles
     for addr_mode in ADDRESSING_MODES:
@@ -695,7 +695,10 @@ def generate_opcode_cases():
             emitted.add(opc)
         
         l(format_code(code))
-        l(f"            break;")
+        if "_FETCH();" in code or "c->IR =" in code:
+            l(f"            goto end;")
+        else:
+            l(f"            break;")
         l("")
 
 def generate_addressing_modes():
@@ -717,7 +720,10 @@ def generate_addressing_modes():
             
             l(f"        case ADDR_SEQ_BASE + {const_name} + {cycle_idx}:  // {acronym} cycle {cycle_num}")
             l(format_code(cycle_code))
-            l("            break;")
+            if "_FETCH();" in cycle_code or "c->IR =" in cycle_code:
+                l("            goto end;")
+            else:
+                l("            break;")
             
         l("")
 
@@ -742,7 +748,10 @@ def generate_continuations():
         for i, cycle_code in enumerate(cycles):
             l(f"        case {const_name} + {i}:")
             l(format_code(cycle_code))
-            l("            break;")
+            if "_FETCH();" in cycle_code or "c->IR =" in cycle_code:
+                l("            goto end;")
+            else:
+                l("            break;")
         l("")
 
 def generate_continuation_constants():
@@ -801,7 +810,7 @@ def main():
     l("")
     l(f"        case {C_FETCH_CYCLE}:  // Dedicated _FETCH() cycle for write/RMW operations")
     l("            _FETCH();")
-    l("            break;")
+    l("            goto end;")
     l("")
     
     generate_addressing_modes()
@@ -809,6 +818,7 @@ def main():
     
     l("    }")
     l("    c->IR++;")
+    l("end:")
     l("    return pins;")
     l("}")
 
