@@ -231,24 +231,73 @@ OP_JAM = ("JAM", M_RW, "BUS_READ(c->PC);\nc->IR--;", None)  # JAM locks up - dec
 
 #-------------------------------------------------------------------------------
 # RMW Continuation Definitions
-# Each definition contains: (name, implementation_code)
+# Each definition contains: (name, cycles)
+# Each cycle is a separate string object (standardized format)
 #-------------------------------------------------------------------------------
 
 rmw_seqs = {
     # RMW operations: M_RW memory access means _FETCH() gets separate cycle
     # Optimized: final cycle jumps to C_FETCH instead of having dedicated _FETCH case
-    'ASL': ('ASL_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_asl(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;'),
-    'ROL': ('ROL_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_rol(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;'),
-    'LSR': ('LSR_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_lsr(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;'),
-    'ROR': ('ROR_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_ror(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;'),
-    'DEC': ('DEC_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD--;\n_NZ(c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;'),
-    'INC': ('INC_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD++;\n_NZ(c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;'),
-    'SLO': ('SLO_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_asl(c, c->AD);\nc->A |= c->AD;\n_NZ(c->A);\nbreak; BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;'),
-    'RLA': ('RLA_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_rol(c, c->AD);\nc->A &= c->AD;\n_NZ(c->A);\nbreak; BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;'),
-    'SRE': ('SRE_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_lsr(c, c->AD);\nc->A ^= c->AD;\n_NZ(c->A);\nbreak; BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;'),
-    'RRA': ('RRA_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_ror(c, c->AD);\n_fam65xx_adc(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;'),
-    'DCP': ('DCP_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD--;\n_fam65xx_cmp(c, c->A, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;'),
-    'ISC': ('ISC_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD++;\n_fam65xx_sbc(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;'),
+    'ASL': ('ASL_RMW', (
+        "BUS_WRITE(c->AD, c->AD);",
+        "c->AD = _fam65xx_asl(c, c->AD);",
+        "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
+    )),
+    'ROL': ('ROL_RMW', (
+        "BUS_WRITE(c->AD, c->AD);",
+        "c->AD = _fam65xx_rol(c, c->AD);",
+        "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
+    )),
+    'LSR': ('LSR_RMW', (
+        "BUS_WRITE(c->AD, c->AD);",
+        "c->AD = _fam65xx_lsr(c, c->AD);",
+        "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
+    )),
+    'ROR': ('ROR_RMW', (
+        "BUS_WRITE(c->AD, c->AD);",
+        "c->AD = _fam65xx_ror(c, c->AD);",
+        "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
+    )),
+    'DEC': ('DEC_RMW', (
+        "BUS_WRITE(c->AD, c->AD);",
+        "c->AD--;\n_NZ(c->AD);",
+        "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
+    )),
+    'INC': ('INC_RMW', (
+        "BUS_WRITE(c->AD, c->AD);",
+        "c->AD++;\n_NZ(c->AD);",
+        "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
+    )),
+    'SLO': ('SLO_RMW', (
+        "BUS_WRITE(c->AD, c->AD);",
+        "c->AD = _fam65xx_asl(c, c->AD);\nc->A |= c->AD;\n_NZ(c->A);",
+        "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
+    )),
+    'RLA': ('RLA_RMW', (
+        "BUS_WRITE(c->AD, c->AD);",
+        "c->AD = _fam65xx_rol(c, c->AD);\nc->A &= c->AD;\n_NZ(c->A);",
+        "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
+    )),
+    'SRE': ('SRE_RMW', (
+        "BUS_WRITE(c->AD, c->AD);",
+        "c->AD = _fam65xx_lsr(c, c->AD);\nc->A ^= c->AD;\n_NZ(c->A);",
+        "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
+    )),
+    'RRA': ('RRA_RMW', (
+        "BUS_WRITE(c->AD, c->AD);",
+        "c->AD = _fam65xx_ror(c, c->AD);\n_fam65xx_adc(c, c->AD);",
+        "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
+    )),
+    'DCP': ('DCP_RMW', (
+        "BUS_WRITE(c->AD, c->AD);",
+        "c->AD--;\n_fam65xx_cmp(c, c->A, c->AD);",
+        "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
+    )),
+    'ISC': ('ISC_RMW', (
+        "BUS_WRITE(c->AD, c->AD);",
+        "c->AD++;\n_fam65xx_sbc(c, c->AD);",
+        "BUS_WRITE(c->AD, c->AD);\nc->IR = C_FETCH_CYCLE;"
+    )),
 }
 #-------------------------------------------------------------------------------
 # Instruction table: [operation, addressing_mode]
@@ -362,22 +411,20 @@ def get_ops_entry(op):
     
     return operation, addr_mode
 
-def get_or_create_continuation(sequence_code, name):
+def get_or_create_continuation(cycles, name):
     """Get existing continuation sequence index or create new one"""
     global next_continuation_index
     
-    if sequence_code not in continuation_sequences:
-        # Split on 'break;' to get individual cycles
-        cycles = [c.strip() for c in sequence_code.split('break;') if c.strip()]
-        
-        continuation_sequences[sequence_code] = {
+    # Use tuple as key for deduplication
+    if cycles not in continuation_sequences:
+        continuation_sequences[cycles] = {
             'index': next_continuation_index,
             'name': name,
             'cycles': cycles
         }
         next_continuation_index += len(cycles)
     
-    return continuation_sequences[sequence_code]['index']
+    return continuation_sequences[cycles]['index']
 
 def analyze_continuation_needs(op):
     """Determine if opcode needs a continuation sequence - handle special RMW cases"""
@@ -386,68 +433,86 @@ def analyze_continuation_needs(op):
     
     # Handle special multi-cycle operations with hardcoded continuations FIRST
     if op == 0x00:  # BRK - M___ access mode, so _FETCH appended to final cycle
-        seq = ('BUS_WRITE(0x0100 | c->S--, c->P | FAM65XX_XF);\nif (c->brk_flags & FAM65XX_BRK_RESET) {\n\tc->AD = 0xFFFC;\n} else {\n\tif (c->brk_flags & FAM65XX_BRK_NMI) {\n\t\tc->AD = 0xFFFA;\n\t} else {\n\t\tc->AD = 0xFFFE;\n\t}\n};\nbreak;' +
-               'BUS_READ(c->AD++);\nc->P |= (FAM65XX_IF | FAM65XX_BF);\nc->brk_flags = 0;\nbreak;' +
-               'BUS_READ(c->AD);\nc->AD = BUS_DATA();\nbreak;' +
-               'c->PC = (BUS_DATA() << 8) | c->AD;\n_FETCH();')
-        get_or_create_continuation(seq, 'BRK')
-        return ('BRK', seq)
+        cycles = (
+            'BUS_WRITE(0x0100 | c->S--, c->P | FAM65XX_XF);\nif (c->brk_flags & FAM65XX_BRK_RESET) {\n\tc->AD = 0xFFFC;\n} else {\n\tif (c->brk_flags & FAM65XX_BRK_NMI) {\n\t\tc->AD = 0xFFFA;\n\t} else {\n\t\tc->AD = 0xFFFE;\n\t}\n};',
+            'BUS_READ(c->AD++);\nc->P |= (FAM65XX_IF | FAM65XX_BF);\nc->brk_flags = 0;',
+            'BUS_READ(c->AD);\nc->AD = BUS_DATA();',
+            'c->PC = (BUS_DATA() << 8) | c->AD;\n_FETCH();'
+        )
+        get_or_create_continuation(cycles, 'BRK')
+        return ('BRK', cycles)
     elif op == 0x20:  # JSR - M_R_ access mode, so _FETCH appended to final cycle
-        seq = ('BUS_INTERNAL(0x0100 | c->S);\nbreak;' +
-               'BUS_WRITE(0x0100 | c->S--, c->PC >> 8);\nbreak;' +
-               'BUS_WRITE(0x0100 | c->S--, c->PC);\nbreak;' +
-               'BUS_READ(c->PC);\nbreak;' +
-               'c->PC = (BUS_DATA() << 8) | c->AD;\n_FETCH();')
-        get_or_create_continuation(seq, 'JSR')
-        return ('JSR', seq)
+        cycles = (
+            'BUS_INTERNAL(0x0100 | c->S);',
+            'BUS_WRITE(0x0100 | c->S--, c->PC >> 8);',
+            'BUS_WRITE(0x0100 | c->S--, c->PC);',
+            'BUS_READ(c->PC);',
+            'c->PC = (BUS_DATA() << 8) | c->AD;\n_FETCH();'
+        )
+        get_or_create_continuation(cycles, 'JSR')
+        return ('JSR', cycles)
     elif op == 0x40:  # RTI - M_R_ access mode, so _FETCH appended to final cycle
-        seq = ('BUS_READ(0x0100 | c->S++);\nbreak;' +
-               'BUS_READ(0x0100 | c->S++);\nc->P = (BUS_DATA() | FAM65XX_BF) & ~FAM65XX_XF;\nbreak;' +
-               'BUS_READ(0x0100 | c->S);\nc->AD = BUS_DATA();\nbreak;' +
-               'c->PC = (BUS_DATA() << 8) | c->AD;\n_FETCH();')
-        get_or_create_continuation(seq, 'RTI')
-        return ('RTI', seq)
+        cycles = (
+            'BUS_READ(0x0100 | c->S++);',
+            'BUS_READ(0x0100 | c->S++);\nc->P = (BUS_DATA() | FAM65XX_BF) & ~FAM65XX_XF;',
+            'BUS_READ(0x0100 | c->S);\nc->AD = BUS_DATA();',
+            'c->PC = (BUS_DATA() << 8) | c->AD;\n_FETCH();'
+        )
+        get_or_create_continuation(cycles, 'RTI')
+        return ('RTI', cycles)
     elif op == 0x60:  # RTS - M_R_ access mode, so _FETCH appended to final cycle
-        seq = ('BUS_READ(0x0100 | c->S++);\nbreak;' +
-               'BUS_READ(0x0100 | c->S);\nc->AD = BUS_DATA();\nbreak;' +
-               'c->PC = (BUS_DATA() << 8) | c->AD;\nbreak;' +
-               'BUS_READ(c->PC++);\n_FETCH();')
-        get_or_create_continuation(seq, 'RTS')
-        return ('RTS', seq)
+        cycles = (
+            'BUS_READ(0x0100 | c->S++);',
+            'BUS_READ(0x0100 | c->S);\nc->AD = BUS_DATA();',
+            'c->PC = (BUS_DATA() << 8) | c->AD;',
+            'BUS_READ(c->PC++);\n_FETCH();'
+        )
+        get_or_create_continuation(cycles, 'RTS')
+        return ('RTS', cycles)
     elif op == 0x4C:  # JMP abs - M_R_ access mode, so _FETCH appended to final cycle
-        seq = ('BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;\nbreak;' +
-               'c->PC = c->AD;\n_FETCH();')
-        get_or_create_continuation(seq, 'JMP_ABS')
-        return ('JMP_ABS', seq)
+        cycles = (
+            'BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;',
+            'c->PC = c->AD;\n_FETCH();'
+        )
+        get_or_create_continuation(cycles, 'JMP_ABS')
+        return ('JMP_ABS', cycles)
     elif op == 0x6C:  # JMP ind - M_R_ access mode, so _FETCH appended to final cycle
-        seq = ('BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;\nbreak;' +
-               'BUS_READ(c->AD);\nbreak;' +
-               'BUS_READ((c->AD & 0xFF00) | ((c->AD + 1) & 0xFF));\nc->AD = BUS_DATA();\nbreak;' +
-               'c->PC = (BUS_DATA() << 8) | c->AD;\n_FETCH();')
-        get_or_create_continuation(seq, 'JMP_IND')
-        return ('JMP_IND', seq)
+        cycles = (
+            'BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;',
+            'BUS_READ(c->AD);',
+            'BUS_READ((c->AD & 0xFF00) | ((c->AD + 1) & 0xFF));\nc->AD = BUS_DATA();',
+            'c->PC = (BUS_DATA() << 8) | c->AD;\n_FETCH();'
+        )
+        get_or_create_continuation(cycles, 'JMP_IND')
+        return ('JMP_IND', cycles)
     elif op == 0x28:  # PLP - M___ access mode, so _FETCH appended to final cycle
-        seq = ('BUS_READ(0x0100 | c->S);\nbreak;' +
-               'c->P = (BUS_DATA() | FAM65XX_BF) & ~FAM65XX_XF;\n_FETCH();')
-        get_or_create_continuation(seq, 'PLP')
-        return ('PLP', seq)
+        cycles = (
+            'BUS_READ(0x0100 | c->S);',
+            'c->P = (BUS_DATA() | FAM65XX_BF) & ~FAM65XX_XF;\n_FETCH();'
+        )
+        get_or_create_continuation(cycles, 'PLP')
+        return ('PLP', cycles)
     elif op == 0x68:  # PLA - M___ access mode, so _FETCH appended to final cycle
-        seq = ('BUS_READ(0x0100 | c->S);\nbreak;' +
-               'c->A = BUS_DATA();\n_NZ(c->A);\n_FETCH();')
-        get_or_create_continuation(seq, 'PLA')
-        return ('PLA', seq)
+        cycles = (
+            'BUS_READ(0x0100 | c->S);',
+            'c->A = BUS_DATA();\n_NZ(c->A);\n_FETCH();'
+        )
+        get_or_create_continuation(cycles, 'PLA')
+        return ('PLA', cycles)
     elif flags == 'BRANCH':
         # Branch taken continuation - M_R_ access mode, so _FETCH appended to final cycle
-        seq = ('BUS_INTERNAL((c->PC & 0xFF00) | (c->AD & 0xFF));\nif((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\t_FETCH();\n};\nbreak;' +
-               'c->PC = c->AD;\n_FETCH();')
-        get_or_create_continuation(seq, 'BRANCH_TAKEN')
-        return ('BRANCH_TAKEN', seq)
+        cycles = (
+            'BUS_INTERNAL((c->PC & 0xFF00) | (c->AD & 0xFF));\nif((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\t_FETCH();\n};',
+            'c->PC = c->AD;\n_FETCH();'
+        )
+        get_or_create_continuation(cycles, 'BRANCH_TAKEN')
+        return ('BRANCH_TAKEN', cycles)
     elif flags == 'RMW':
         # RMW continuations
         mnemonic = operation[0]  # mnemonic is at index 0
         if mnemonic in rmw_seqs:
-            name, seq = rmw_seqs[mnemonic]
-            get_or_create_continuation(seq, name)
+            name, cycles = rmw_seqs[mnemonic]
+            get_or_create_continuation(cycles, name)
             return rmw_seqs[mnemonic]
     
     return None
