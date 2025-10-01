@@ -391,7 +391,7 @@ uint64_t fam65xx_init(fam65xx_t* c, const fam65xx_desc_t* desc) {
     // ProcessorTests-compatible initialization: ready for immediate execution
     c->P = FAM65XX_XF;  // Only set unused flag, no interrupt disable
     c->S = 0xFF;        // Stack pointer starts at top
-    c->IR = 0;
+    c->IR = C_FETCH_CYCLE; // Start in fetch state to get first instruction
     c->opcode = 0;
     
     // No reset sequence for ProcessorTests - CPU ready for direct execution

@@ -435,12 +435,12 @@ def analyze_continuation_needs(op):
     # Handle special multi-cycle operations with hardcoded continuations FIRST
     if op == 0x00:  # BRK - 7 cycles total (1 opcode + 6 continuation cycles)
         cycles = (
-            'BUS_WRITE(0x0100 | c->S--, c->P | FAM65XX_XF);\nif (c->brk_flags & FAM65XX_BRK_RESET) {\n\tc->AD = 0xFFFC;\n} else {\n\tif (c->brk_flags & FAM65XX_BRK_NMI) {\n\t\tc->AD = 0xFFFA;\n\t} else {\n\t\tc->AD = 0xFFFE;\n\t}\n};',  # Cycle 2: Write P to stack, determine vector
-            'BUS_READ(c->AD++);\nc->P |= (FAM65XX_IF | FAM65XX_BF);\nc->brk_flags = 0;',  # Cycle 3: Read low byte of vector
-            'BUS_READ(c->AD);\nc->AD = BUS_DATA();',  # Cycle 4: Read high byte of vector
-            'c->PC = (BUS_DATA() << 8) | c->AD;',  # Cycle 5: Set PC from vector data
-            'DUMMY_BUS_READ(c->PC);',  # Cycle 6: Dummy read from new PC
-            'DUMMY_BUS_READ(c->PC);\n_FETCH();'  # Cycle 7: Another dummy read then fetch
+            'BUS_WRITE(0x0100 | c->S--, c->PC);',  # Cycle 2: Write PCL to stack
+            'BUS_WRITE(0x0100 | c->S--, c->P | FAM65XX_BF);\nc->P |= FAM65XX_IF;\nc->P &= ~FAM65XX_BF;\nc->brk_flags = 0;',  # Cycle 3: Write P to stack, set IF, clear BF
+            'c->AD = _fam65xx_get_vector_addr(c);\nBUS_READ(c->AD);\nc->PC = BUS_DATA();',  # Cycle 4: Read low byte of vector, store in PC
+            'BUS_READ(c->AD + 1);\nc->PC |= BUS_DATA() << 8;',  # Cycle 5: Read high byte of vector, OR into PC
+            'DUMMY_BUS_READ(c->PC);',  # Cycle 6: Hardware dummy read from new PC location
+            '_FETCH();'  # Cycle 7: Fetch next instruction
         )
         get_or_create_continuation(cycles, 'BRK')
         return ('BRK', cycles)
