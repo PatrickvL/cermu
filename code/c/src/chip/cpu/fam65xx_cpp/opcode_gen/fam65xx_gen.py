@@ -560,15 +560,11 @@ def generate_lookup_table():
     for op in range(256):
         operation, addr_mode = get_ops_entry(op)
         
-        # Check if this is a special addressing mode that should use NO_ADDR_SEQ
-        if addr_mode in [AM_NON, AM_JMP, AM_JSR, AM_INV]:
-            offset = NO_ADDR_SEQ
-            const_name = "ADDR_NON"
-        elif addr_mode in ADDR_MODE_INDICES:
+        if addr_mode in ADDR_MODE_INDICES:
             offset = ADDR_MODE_INDICES[addr_mode]
             const_name = offset_to_const[offset]
         else:
-            # Fallback - this shouldn't happen if our addressing modes are defined correctly
+            # Special addressing modes (AM_NON, AM_JMP, AM_JSR, AM_INV) and fallback
             offset = NO_ADDR_SEQ
             const_name = "ADDR_NON"
         
