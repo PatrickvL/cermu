@@ -6,35 +6,35 @@
  * Layout:
  *   [0-255]   : Opcode-specific cycles
  *   [256]     : Dedicated _FETCH() case
- *   [257-299] : Shared addressing mode sequences
- *   [300-369]  : Shared continuation sequences
- * Total cases: 370
+ *   [257-300] : Shared addressing mode sequences
+ *   [301-370]  : Shared continuation sequences
+ * Total cases: 371
  */
 
 // Continuation sequence constants
-#define C_BRK            300
-#define C_SLO_RMW        306
-#define C_ASL_RMW        309
-#define C_PHP            312
-#define C_BRANCH_TAKEN   314
-#define C_JSR            316
-#define C_RLA_RMW        321
-#define C_ROL_RMW        324
-#define C_PLP            327
-#define C_RTI            329
-#define C_SRE_RMW        333
-#define C_LSR_RMW        336
-#define C_PHA            339
-#define C_JMP_ABS        341
-#define C_RTS            343
-#define C_RRA_RMW        346
-#define C_ROR_RMW        349
-#define C_PLA            352
-#define C_JMP_IND        354
-#define C_DCP_RMW        358
-#define C_DEC_RMW        361
-#define C_ISC_RMW        364
-#define C_INC_RMW        367
+#define C_BRK            301
+#define C_SLO_RMW        307
+#define C_ASL_RMW        310
+#define C_PHP            313
+#define C_BRANCH_TAKEN   315
+#define C_JSR            317
+#define C_RLA_RMW        322
+#define C_ROL_RMW        325
+#define C_PLP            328
+#define C_RTI            330
+#define C_SRE_RMW        334
+#define C_LSR_RMW        337
+#define C_PHA            340
+#define C_JMP_ABS        342
+#define C_RTS            344
+#define C_RRA_RMW        347
+#define C_ROR_RMW        350
+#define C_PLA            353
+#define C_JMP_IND        355
+#define C_DCP_RMW        359
+#define C_DEC_RMW        362
+#define C_ISC_RMW        365
+#define C_INC_RMW        368
 
 // Layout constants
 // [0-255]   : Opcode-specific cycles
@@ -43,18 +43,18 @@
 #define ADDR_NON     0   // Direct opcode execution (no addressing mode)
 #define C_FETCH_CYCLE   256
 #define ADDR_SEQ_BASE 257
-#define ADDR_IMM     0   // Index 257
-#define ADDR_ZER     1   // Index 258
-#define ADDR_ZPX     3   // Index 260
-#define ADDR_ZPY     6   // Index 263
-#define ADDR_ABS     9   // Index 266
-#define ADDR_ABX     12  // Index 269
-#define ADDR_ABX_W   16  // Index 273
-#define ADDR_ABY     20  // Index 277
-#define ADDR_ABY_W   24  // Index 281
-#define ADDR_IDX     28  // Index 285
-#define ADDR_IDY     33  // Index 290
-#define ADDR_IDY_W   38  // Index 295
+#define ADDR_IMM     1   // Index 258
+#define ADDR_ZER     2   // Index 259
+#define ADDR_ZPX     4   // Index 261
+#define ADDR_ZPY     7   // Index 264
+#define ADDR_ABS     10  // Index 267
+#define ADDR_ABX     13  // Index 270
+#define ADDR_ABX_W   17  // Index 274
+#define ADDR_ABY     21  // Index 278
+#define ADDR_ABY_W   25  // Index 282
+#define ADDR_IDX     29  // Index 286
+#define ADDR_IDY     34  // Index 291
+#define ADDR_IDY_W   39  // Index 296
 
 // Lookup table: addressing mode start index for each opcode
 static const uint8_t opcode_addr_start[256] = {
@@ -325,12 +325,10 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         // ==========================================
 
         case 0x00:  // BRK [---] --- cycle 1
-            if (0 == (c->brk_flags & (FAM65XX_BRK_IRQ | FAM65XX_BRK_NMI))) {
-            	c->PC++;
-            }
+            c->PC++;
             BUS_WRITE(0x0100 | c->S--, c->PC >> 8);
             c->IR = C_BRK;
-            break;
+            goto end;
 
         case 0x01:  // ORA [R] IDX cycle 6
         case 0x05:  // ORA [R] ZP cycle 3
@@ -344,7 +342,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->A |= BUS_DATA();
             _NZ(c->A);
             _FETCH();
-            break;
+            goto end;
 
         case 0x02:  // JAM [RW] --- cycle 1
         case 0x12:  // JAM [RW] --- cycle 1
@@ -372,7 +370,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_SLO_RMW;
-            break;
+            goto end;
 
         case 0x04:  // NOP [R] ZP cycle 3
         case 0x0C:  // NOP [R] ABS cycle 4
@@ -403,7 +401,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0xFC:  // NOP [R] ABX cycle 5
             BUS_READ(c->AD);
             _FETCH();
-            break;
+            goto end;
 
         case 0x06:  // ASL [RW] ZP cycle 3
         case 0x0E:  // ASL [RW] ABS cycle 4
@@ -412,18 +410,18 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_ASL_RMW;
-            break;
+            goto end;
 
         case 0x08:  // PHP [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             c->IR = C_PHP;
-            break;
+            goto end;
 
         case 0x0A:  // ASL [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             c->A = _fam65xx_asl(c, c->A);
             _FETCH();
-            break;
+            goto end;
 
         case 0x0B:  // ANC [R] IMM cycle 2
         case 0x2B:  // ANC [R] IMM cycle 2
@@ -432,7 +430,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             _NZ(c->A);
             c->P = (c->P & ~FAM65XX_CF) | ((c->A & 0x80) ? FAM65XX_CF : 0);
             _FETCH();
-            break;
+            goto end;
 
         case 0x10:  // BPL [R] IMM cycle 2
         case 0x90:  // BCC [R] IMM cycle 2
@@ -443,19 +441,19 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             } else {
             	_FETCH();
             }
-            break;
+            goto end;
 
         case 0x18:  // CLC [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             c->P &= ~FAM65XX_CF;
             _FETCH();
-            break;
+            goto end;
 
         case 0x20:  // JSR [R] --- cycle 1
             BUS_READ(c->PC++);
             c->AD = BUS_DATA();
             c->IR = C_JSR;
-            break;
+            goto end;
 
         case 0x21:  // AND [R] IDX cycle 6
         case 0x25:  // AND [R] ZP cycle 3
@@ -469,7 +467,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->A &= BUS_DATA();
             _NZ(c->A);
             _FETCH();
-            break;
+            goto end;
 
         case 0x23:  // RLA [RW] IDX cycle 6
         case 0x27:  // RLA [RW] ZP cycle 3
@@ -481,14 +479,14 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_RLA_RMW;
-            break;
+            goto end;
 
         case 0x24:  // BIT [R] ZP cycle 3
         case 0x2C:  // BIT [R] ABS cycle 4
             BUS_READ(c->AD);
             _fam65xx_bit(c, BUS_DATA());
             _FETCH();
-            break;
+            goto end;
 
         case 0x26:  // ROL [RW] ZP cycle 3
         case 0x2E:  // ROL [RW] ABS cycle 4
@@ -497,18 +495,18 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_ROL_RMW;
-            break;
+            goto end;
 
         case 0x28:  // PLP [---] --- cycle 1
             DUMMY_BUS_READ(0x0100 | c->S++);
             c->IR = C_PLP;
-            break;
+            goto end;
 
         case 0x2A:  // ROL [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             c->A = _fam65xx_rol(c, c->A);
             _FETCH();
-            break;
+            goto end;
 
         case 0x30:  // BMI [R] IMM cycle 2
         case 0xB0:  // BCS [R] IMM cycle 2
@@ -519,18 +517,18 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             } else {
             	_FETCH();
             }
-            break;
+            goto end;
 
         case 0x38:  // SEC [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             c->P |= FAM65XX_CF;
             _FETCH();
-            break;
+            goto end;
 
         case 0x40:  // RTI [R] --- cycle 1
             DUMMY_BUS_READ(0x0100 | c->S++);
             c->IR = C_RTI;
-            break;
+            goto end;
 
         case 0x41:  // EOR [R] IDX cycle 6
         case 0x45:  // EOR [R] ZP cycle 3
@@ -544,7 +542,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->A ^= BUS_DATA();
             _NZ(c->A);
             _FETCH();
-            break;
+            goto end;
 
         case 0x43:  // SRE [RW] IDX cycle 6
         case 0x47:  // SRE [RW] ZP cycle 3
@@ -556,7 +554,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_SRE_RMW;
-            break;
+            goto end;
 
         case 0x46:  // LSR [RW] ZP cycle 3
         case 0x4E:  // LSR [RW] ABS cycle 4
@@ -565,18 +563,18 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_LSR_RMW;
-            break;
+            goto end;
 
         case 0x48:  // PHA [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             c->IR = C_PHA;
-            break;
+            goto end;
 
         case 0x4A:  // LSR [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             c->A = _fam65xx_lsr(c, c->A);
             _FETCH();
-            break;
+            goto end;
 
         case 0x4B:  // ASR [R] IMM cycle 2
             BUS_READ(c->AD);
@@ -585,13 +583,13 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->A>>=1;
             _NZ(c->A);
             _FETCH();
-            break;
+            goto end;
 
         case 0x4C:  // JMP [R] --- cycle 1
             BUS_READ(c->PC++);
             c->AD = BUS_DATA();
             c->IR = C_JMP_ABS;
-            break;
+            goto end;
 
         case 0x50:  // BVC [R] IMM cycle 2
         case 0xD0:  // BNE [R] IMM cycle 2
@@ -602,18 +600,18 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             } else {
             	_FETCH();
             }
-            break;
+            goto end;
 
         case 0x58:  // CLI [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             c->P &= ~FAM65XX_IF;
             _FETCH();
-            break;
+            goto end;
 
         case 0x60:  // RTS [R] --- cycle 1
             DUMMY_BUS_READ(0x0100 | c->S++);
             c->IR = C_RTS;
-            break;
+            goto end;
 
         case 0x61:  // ADC [R] IDX cycle 6
         case 0x65:  // ADC [R] ZP cycle 3
@@ -626,7 +624,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             BUS_READ(c->AD);
             _fam65xx_adc(c, BUS_DATA());
             _FETCH();
-            break;
+            goto end;
 
         case 0x63:  // RRA [RW] IDX cycle 6
         case 0x67:  // RRA [RW] ZP cycle 3
@@ -638,7 +636,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_RRA_RMW;
-            break;
+            goto end;
 
         case 0x66:  // ROR [RW] ZP cycle 3
         case 0x6E:  // ROR [RW] ABS cycle 4
@@ -647,18 +645,18 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_ROR_RMW;
-            break;
+            goto end;
 
         case 0x68:  // PLA [---] --- cycle 1
             DUMMY_BUS_READ(0x0100 | c->S++);
             c->IR = C_PLA;
-            break;
+            goto end;
 
         case 0x6A:  // ROR [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             c->A = _fam65xx_ror(c, c->A);
             _FETCH();
-            break;
+            goto end;
 
         case 0x6B:  // ARR [R] IMM cycle 2
             BUS_READ(c->AD);
@@ -666,13 +664,13 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             _NZ(c->A);
             c->P = (c->P & ~(FAM65XX_CF | FAM65XX_VF)) | ((c->A & 0x40) ? FAM65XX_CF : 0) | ((c->A & 0x20) ^ (c->A & 0x40) ? FAM65XX_VF : 0);
             _FETCH();
-            break;
+            goto end;
 
         case 0x6C:  // JMP [R] --- cycle 1
             BUS_READ(c->PC++);
             c->AD = BUS_DATA();
             c->IR = C_JMP_IND;
-            break;
+            goto end;
 
         case 0x70:  // BVS [R] IMM cycle 2
         case 0xF0:  // BEQ [R] IMM cycle 2
@@ -683,13 +681,13 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             } else {
             	_FETCH();
             }
-            break;
+            goto end;
 
         case 0x78:  // SEI [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             c->P |= FAM65XX_IF;
             _FETCH();
-            break;
+            goto end;
 
         case 0x81:  // STA [W] IDX cycle 6
         case 0x85:  // STA [W] ZP cycle 3
@@ -700,7 +698,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0x9D:  // STA [W] ABX cycle 5
             BUS_WRITE(c->AD, c->A);
             c->IR = C_FETCH_CYCLE;
-            break;
+            goto end;
 
         case 0x83:  // SAX [W] IDX cycle 6
         case 0x87:  // SAX [W] ZP cycle 3
@@ -708,77 +706,77 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0x97:  // SAX [W] ZPY cycle 4
             BUS_WRITE(c->AD, c->A & c->X);
             c->IR = C_FETCH_CYCLE;
-            break;
+            goto end;
 
         case 0x84:  // STY [W] ZP cycle 3
         case 0x8C:  // STY [W] ABS cycle 4
         case 0x94:  // STY [W] ZPX cycle 4
             BUS_WRITE(c->AD, c->Y);
             c->IR = C_FETCH_CYCLE;
-            break;
+            goto end;
 
         case 0x86:  // STX [W] ZP cycle 3
         case 0x8E:  // STX [W] ABS cycle 4
         case 0x96:  // STX [W] ZPY cycle 4
             BUS_WRITE(c->AD, c->X);
             c->IR = C_FETCH_CYCLE;
-            break;
+            goto end;
 
         case 0x88:  // DEY [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             c->Y--;
             _NZ(c->Y);
             _FETCH();
-            break;
+            goto end;
 
         case 0x8A:  // TXA [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             c->A = c->X;
             _NZ(c->A);
             _FETCH();
-            break;
+            goto end;
 
         case 0x8B:  // XAA [R] IMM cycle 2
             BUS_READ(c->AD);
             c->A = (c->A | 0xEE) & c->X & BUS_DATA();
             _NZ(c->A);
             _FETCH();
-            break;
+            goto end;
 
         case 0x93:  // SHA [RW] IDY cycle 6
             BUS_WRITE(c->AD, c->A & c->X & ((c->AD >> 8) + 1));
             c->IR = C_FETCH_CYCLE;
-            break;
+            goto end;
 
         case 0x98:  // TYA [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             c->A = c->Y;
             _NZ(c->A);
             _FETCH();
-            break;
+            goto end;
 
         case 0x9A:  // TXS [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             c->S = c->X;
             _FETCH();
-            break;
+            goto end;
 
         case 0x9B:  // SHS [W] ABY cycle 5
             c->S = c->A & c->X;
             BUS_WRITE(c->AD, c->S & ((c->AD >> 8) + 1));
             c->IR = C_FETCH_CYCLE;
-            break;
+            goto end;
 
         case 0x9C:  // SHY [W] ABX cycle 5
         case 0x9F:  // SHY [W] ABY cycle 5
             BUS_WRITE(c->AD, c->Y & ((c->AD >> 8) + 1));
             c->IR = C_FETCH_CYCLE;
-            break;
+            goto end;
 
         case 0x9E:  // SHX [W] ABY cycle 5
             BUS_WRITE(c->AD, c->X & ((c->AD >> 8) + 1));
             c->IR = C_FETCH_CYCLE;
-            break;
+            goto end;
 
         case 0xA0:  // LDY [R] IMM cycle 2
         case 0xA4:  // LDY [R] ZP cycle 3
@@ -789,7 +787,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->Y = BUS_DATA();
             _NZ(c->Y);
             _FETCH();
-            break;
+            goto end;
 
         case 0xA1:  // LDA [R] IDX cycle 6
         case 0xA5:  // LDA [R] ZP cycle 3
@@ -803,7 +801,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->A = BUS_DATA();
             _NZ(c->A);
             _FETCH();
-            break;
+            goto end;
 
         case 0xA2:  // LDX [R] IMM cycle 2
         case 0xA6:  // LDX [R] ZP cycle 3
@@ -814,7 +812,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->X = BUS_DATA();
             _NZ(c->X);
             _FETCH();
-            break;
+            goto end;
 
         case 0xA3:  // LAX [R] IDX cycle 6
         case 0xA7:  // LAX [R] ZP cycle 3
@@ -827,41 +825,41 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->A = c->X = BUS_DATA();
             _NZ(c->A);
             _FETCH();
-            break;
+            goto end;
 
         case 0xA8:  // TAY [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             c->Y = c->A;
             _NZ(c->Y);
             _FETCH();
-            break;
+            goto end;
 
         case 0xAA:  // TAX [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             c->X = c->A;
             _NZ(c->X);
             _FETCH();
-            break;
+            goto end;
 
         case 0xB8:  // CLV [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             c->P &= ~FAM65XX_VF;
             _FETCH();
-            break;
+            goto end;
 
         case 0xBA:  // TSX [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             c->X = c->S;
             _NZ(c->X);
             _FETCH();
-            break;
+            goto end;
 
         case 0xBB:  // LAS [R] ABY cycle 5
             BUS_READ(c->AD);
             c->A = c->X = c->S = c->S & BUS_DATA();
             _NZ(c->A);
             _FETCH();
-            break;
+            goto end;
 
         case 0xC0:  // CPY [R] IMM cycle 2
         case 0xC4:  // CPY [R] ZP cycle 3
@@ -869,7 +867,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             BUS_READ(c->AD);
             _fam65xx_cmp(c, c->Y, BUS_DATA());
             _FETCH();
-            break;
+            goto end;
 
         case 0xC1:  // CMP [R] IDX cycle 6
         case 0xC5:  // CMP [R] ZP cycle 3
@@ -882,7 +880,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             BUS_READ(c->AD);
             _fam65xx_cmp(c, c->A, BUS_DATA());
             _FETCH();
-            break;
+            goto end;
 
         case 0xC3:  // DCP [RW] IDX cycle 6
         case 0xC7:  // DCP [RW] ZP cycle 3
@@ -894,7 +892,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_DCP_RMW;
-            break;
+            goto end;
 
         case 0xC6:  // DEC [RW] ZP cycle 3
         case 0xCE:  // DEC [RW] ABS cycle 4
@@ -903,21 +901,21 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_DEC_RMW;
-            break;
+            goto end;
 
         case 0xC8:  // INY [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             c->Y++;
             _NZ(c->Y);
             _FETCH();
-            break;
+            goto end;
 
         case 0xCA:  // DEX [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             c->X--;
             _NZ(c->X);
             _FETCH();
-            break;
+            goto end;
 
         case 0xCB:  // SBX [R] IMM cycle 2
             BUS_READ(c->AD);
@@ -928,13 +926,13 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->P = (c->P & ~FAM65XX_CF) | ((t & 0x100) ? 0 : FAM65XX_CF);
             }
             _FETCH();
-            break;
+            goto end;
 
         case 0xD8:  // CLD [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             c->P &= ~FAM65XX_DF;
             _FETCH();
-            break;
+            goto end;
 
         case 0xE0:  // CPX [R] IMM cycle 2
         case 0xE4:  // CPX [R] ZP cycle 3
@@ -942,7 +940,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             BUS_READ(c->AD);
             _fam65xx_cmp(c, c->X, BUS_DATA());
             _FETCH();
-            break;
+            goto end;
 
         case 0xE1:  // SBC [R] IDX cycle 6
         case 0xE5:  // SBC [R] ZP cycle 3
@@ -956,7 +954,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             BUS_READ(c->AD);
             _fam65xx_sbc(c, BUS_DATA());
             _FETCH();
-            break;
+            goto end;
 
         case 0xE3:  // ISC [RW] IDX cycle 6
         case 0xE7:  // ISC [RW] ZP cycle 3
@@ -968,7 +966,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_ISC_RMW;
-            break;
+            goto end;
 
         case 0xE6:  // INC [RW] ZP cycle 3
         case 0xEE:  // INC [RW] ABS cycle 4
@@ -977,25 +975,25 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             BUS_READ(c->AD);
             c->AD = BUS_DATA();
             c->IR = C_INC_RMW;
-            break;
+            goto end;
 
         case 0xE8:  // INX [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             c->X++;
             _NZ(c->X);
             _FETCH();
-            break;
+            goto end;
 
         case 0xEA:  // NOP [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             _FETCH();
-            break;
+            goto end;
 
         case 0xF8:  // SED [---] --- cycle 1
             DUMMY_BUS_READ(c->PC);
             c->P |= FAM65XX_DF;
             _FETCH();
-            break;
+            goto end;
 
         // ==========================================
         // [256] DEDICATED _FETCH() CASE
@@ -1003,10 +1001,10 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
 
         case C_FETCH_CYCLE:  // Dedicated _FETCH() cycle for write/RMW operations
             _FETCH();
-            break;
+            goto end;
 
         // ==========================================
-        // [257-299] SHARED ADDRESSING SEQUENCES
+        // [257-300] SHARED ADDRESSING SEQUENCES
         // ==========================================
 
         // IMM: immediate
@@ -1014,7 +1012,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             BUS_READ(c->PC++);
             c->AD = BUS_DATA();
             c->IR = c->opcode;
-            break;
+            goto end;
 
         // ZP: zero page
         case ADDR_SEQ_BASE + ADDR_ZER + 0:  // ZP cycle 1
@@ -1024,7 +1022,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->AD = BUS_DATA();
             DUMMY_BUS_READ(c->PC);
             c->IR = c->opcode;
-            break;
+            goto end;
 
         // ZPX: zero page,X
         case ADDR_SEQ_BASE + ADDR_ZPX + 0:  // ZPX cycle 1
@@ -1038,7 +1036,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             DUMMY_BUS_READ(c->AD);
             c->AD = (c->AD + c->X) & 0xFF;
             c->IR = c->opcode;
-            break;
+            goto end;
 
         // ZPY: zero page,Y
         case ADDR_SEQ_BASE + ADDR_ZPY + 0:  // ZPY cycle 1
@@ -1052,7 +1050,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             DUMMY_BUS_READ(c->AD);
             c->AD = (c->AD + c->Y) & 0xFF;
             c->IR = c->opcode;
-            break;
+            goto end;
 
         // ABS: absolute
         case ADDR_SEQ_BASE + ADDR_ABS + 0:  // ABS cycle 1
@@ -1066,7 +1064,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case ADDR_SEQ_BASE + ADDR_ABS + 2:  // ABS cycle 3
             DUMMY_BUS_READ(c->PC);
             c->IR = c->opcode;
-            break;
+            goto end;
 
         // ABX: absolute,X
         case ADDR_SEQ_BASE + ADDR_ABX + 0:  // ABX cycle 1
@@ -1084,7 +1082,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case ADDR_SEQ_BASE + ADDR_ABX + 3:  // ABX cycle 4
             c->AD += c->X;
             c->IR = c->opcode;
-            break;
+            goto end;
 
         // ABX: absolute,X (write - always takes extra cycle)
         case ADDR_SEQ_BASE + ADDR_ABX_W + 0:  // ABX cycle 1
@@ -1101,7 +1099,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case ADDR_SEQ_BASE + ADDR_ABX_W + 3:  // ABX cycle 4
             c->AD += c->X;
             c->IR = c->opcode;
-            break;
+            goto end;
 
         // ABY: absolute,Y
         case ADDR_SEQ_BASE + ADDR_ABY + 0:  // ABY cycle 1
@@ -1119,7 +1117,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case ADDR_SEQ_BASE + ADDR_ABY + 3:  // ABY cycle 4
             c->AD += c->Y;
             c->IR = c->opcode;
-            break;
+            goto end;
 
         // ABY: absolute,Y (write - always takes extra cycle)
         case ADDR_SEQ_BASE + ADDR_ABY_W + 0:  // ABY cycle 1
@@ -1136,7 +1134,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case ADDR_SEQ_BASE + ADDR_ABY_W + 3:  // ABY cycle 4
             c->AD += c->Y;
             c->IR = c->opcode;
-            break;
+            goto end;
 
         // IDX: indexed indirect (zp,X)
         case ADDR_SEQ_BASE + ADDR_IDX + 0:  // IDX cycle 1
@@ -1158,7 +1156,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->AD = BUS_DATA();
             c->AD |= BUS_DATA() << 8;
             c->IR = c->opcode;
-            break;
+            goto end;
 
         // IDY: indirect indexed (zp),Y
         case ADDR_SEQ_BASE + ADDR_IDY + 0:  // IDY cycle 1
@@ -1181,7 +1179,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->IR += (~((c->AD >> 8) - ((c->AD + c->Y) >> 8))) & 1;
             c->AD += c->Y;
             c->IR = c->opcode;
-            break;
+            goto end;
 
         // IDY: indirect indexed (zp),Y (write - always takes extra cycle)
         case ADDR_SEQ_BASE + ADDR_IDY_W + 0:  // IDY cycle 1
@@ -1203,36 +1201,29 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             DUMMY_BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));
             c->AD += c->Y;
             c->IR = c->opcode;
-            break;
+            goto end;
 
         // ==========================================
-        // [300+] SHARED CONTINUATIONS
+        // [301+] SHARED CONTINUATIONS
         // ==========================================
 
         // BRK continuation
         case C_BRK + 0:
-            BUS_WRITE(0x0100 | c->S--, c->P | FAM65XX_XF);
-            if (c->brk_flags & FAM65XX_BRK_RESET) {
-            	c->AD = 0xFFFC;
-            } else {
-            	if (c->brk_flags & FAM65XX_BRK_NMI) {
-            		c->AD = 0xFFFA;
-            	} else {
-            		c->AD = 0xFFFE;
-            	}
-            };
+            BUS_WRITE(0x0100 | c->S--, c->P | FAM65XX_BF);
+            c->AD = _fam65xx_get_vector_addr(c);
             break;
         case C_BRK + 1:
-            BUS_READ(c->AD++);
-            c->P |= (FAM65XX_IF | FAM65XX_BF);
+            BUS_READ(c->AD);
+            c->PC = BUS_DATA();
+            c->P |= FAM65XX_IF;
             c->brk_flags = 0;
             break;
         case C_BRK + 2:
-            BUS_READ(c->AD);
-            c->AD = BUS_DATA();
+            BUS_READ(c->AD + 1);
+            c->PC |= BUS_DATA() << 8;
             break;
         case C_BRK + 3:
-            c->PC = (BUS_DATA() << 8) | c->AD;
+            DUMMY_BUS_READ(c->PC);
             break;
         case C_BRK + 4:
             DUMMY_BUS_READ(c->PC);
@@ -1240,7 +1231,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_BRK + 5:
             DUMMY_BUS_READ(c->PC);
             _FETCH();
-            break;
+            goto end;
 
         // SLO_RMW continuation
         case C_SLO_RMW + 0:
@@ -1255,7 +1246,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_SLO_RMW + 2:
             BUS_WRITE(c->AD, c->AD);
             _FETCH();
-            break;
+            goto end;
 
         // ASL_RMW continuation
         case C_ASL_RMW + 0:
@@ -1268,7 +1259,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_ASL_RMW + 2:
             BUS_WRITE(c->AD, c->AD);
             _FETCH();
-            break;
+            goto end;
 
         // PHP continuation
         case C_PHP + 0:
@@ -1277,7 +1268,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_PHP + 1:
             DUMMY_BUS_READ(c->PC);
             _FETCH();
-            break;
+            goto end;
 
         // BRANCH_TAKEN continuation
         case C_BRANCH_TAKEN + 0:
@@ -1289,12 +1280,12 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             	c->nmi_pip >>= 1;
             	_FETCH();
             };
-            break;
+            goto end;
         case C_BRANCH_TAKEN + 1:
             DUMMY_BUS_READ(c->PC);
             c->PC = c->AD;
             _FETCH();
-            break;
+            goto end;
 
         // JSR continuation
         case C_JSR + 0:
@@ -1313,7 +1304,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_JSR + 4:
             DUMMY_BUS_READ(c->PC);
             _FETCH();
-            break;
+            goto end;
 
         // RLA_RMW continuation
         case C_RLA_RMW + 0:
@@ -1328,7 +1319,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_RLA_RMW + 2:
             BUS_WRITE(c->AD, c->AD);
             _FETCH();
-            break;
+            goto end;
 
         // ROL_RMW continuation
         case C_ROL_RMW + 0:
@@ -1341,7 +1332,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_ROL_RMW + 2:
             BUS_WRITE(c->AD, c->AD);
             _FETCH();
-            break;
+            goto end;
 
         // PLP continuation
         case C_PLP + 0:
@@ -1351,7 +1342,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_PLP + 1:
             DUMMY_BUS_READ(c->PC);
             _FETCH();
-            break;
+            goto end;
 
         // RTI continuation
         case C_RTI + 0:
@@ -1369,7 +1360,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_RTI + 3:
             DUMMY_BUS_READ(c->PC);
             _FETCH();
-            break;
+            goto end;
 
         // SRE_RMW continuation
         case C_SRE_RMW + 0:
@@ -1384,7 +1375,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_SRE_RMW + 2:
             BUS_WRITE(c->AD, c->AD);
             _FETCH();
-            break;
+            goto end;
 
         // LSR_RMW continuation
         case C_LSR_RMW + 0:
@@ -1397,7 +1388,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_LSR_RMW + 2:
             BUS_WRITE(c->AD, c->AD);
             _FETCH();
-            break;
+            goto end;
 
         // PHA continuation
         case C_PHA + 0:
@@ -1406,7 +1397,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_PHA + 1:
             DUMMY_BUS_READ(c->PC);
             _FETCH();
-            break;
+            goto end;
 
         // JMP_ABS continuation
         case C_JMP_ABS + 0:
@@ -1417,7 +1408,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_JMP_ABS + 1:
             DUMMY_BUS_READ(c->PC);
             _FETCH();
-            break;
+            goto end;
 
         // RTS continuation
         case C_RTS + 0:
@@ -1431,7 +1422,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_RTS + 2:
             BUS_READ(c->PC++);
             _FETCH();
-            break;
+            goto end;
 
         // RRA_RMW continuation
         case C_RRA_RMW + 0:
@@ -1445,7 +1436,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_RRA_RMW + 2:
             BUS_WRITE(c->AD, c->AD);
             _FETCH();
-            break;
+            goto end;
 
         // ROR_RMW continuation
         case C_ROR_RMW + 0:
@@ -1458,7 +1449,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_ROR_RMW + 2:
             BUS_WRITE(c->AD, c->AD);
             _FETCH();
-            break;
+            goto end;
 
         // PLA continuation
         case C_PLA + 0:
@@ -1469,7 +1460,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_PLA + 1:
             DUMMY_BUS_READ(c->PC);
             _FETCH();
-            break;
+            goto end;
 
         // JMP_IND continuation
         case C_JMP_IND + 0:
@@ -1487,7 +1478,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_JMP_IND + 3:
             DUMMY_BUS_READ(c->PC);
             _FETCH();
-            break;
+            goto end;
 
         // DCP_RMW continuation
         case C_DCP_RMW + 0:
@@ -1501,7 +1492,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_DCP_RMW + 2:
             BUS_WRITE(c->AD, c->AD);
             _FETCH();
-            break;
+            goto end;
 
         // DEC_RMW continuation
         case C_DEC_RMW + 0:
@@ -1515,7 +1506,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_DEC_RMW + 2:
             BUS_WRITE(c->AD, c->AD);
             _FETCH();
-            break;
+            goto end;
 
         // ISC_RMW continuation
         case C_ISC_RMW + 0:
@@ -1529,7 +1520,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_ISC_RMW + 2:
             BUS_WRITE(c->AD, c->AD);
             _FETCH();
-            break;
+            goto end;
 
         // INC_RMW continuation
         case C_INC_RMW + 0:
@@ -1543,9 +1534,10 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_INC_RMW + 2:
             BUS_WRITE(c->AD, c->AD);
             _FETCH();
-            break;
+            goto end;
 
     }
     c->IR++;
+end:
     return pins;
 }

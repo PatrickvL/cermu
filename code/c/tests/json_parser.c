@@ -141,10 +141,32 @@ bool json_parse_ram_array(const char* json, cpu_state_t* state) {
             if (*pos != ',') break;
             pos++;
             
-            // Parse single value
+            // Parse value or array of values
             pos = json_skip_whitespace(pos);
-            state->ram[state->ram_count].bytes[0] = (uint8_t)strtol(pos, (char**)&pos, 10);
-            state->ram[state->ram_count].byte_count = 1;
+            if (*pos == '[') {
+                // Array of bytes: [byte1, byte2, ...]
+                pos++; // Skip opening bracket
+                state->ram[state->ram_count].byte_count = 0;
+                
+                while (*pos && *pos != ']' && state->ram[state->ram_count].byte_count < MAX_RAM_BYTES) {
+                    pos = json_skip_whitespace(pos);
+                    if (*pos == ']') break;
+                    
+                    state->ram[state->ram_count].bytes[state->ram[state->ram_count].byte_count++] =
+                        (uint8_t)strtol(pos, (char**)&pos, 10);
+                    
+                    pos = json_skip_whitespace(pos);
+                    if (*pos == ',') pos++;
+                }
+                
+                // Skip closing bracket
+                pos = json_skip_whitespace(pos);
+                if (*pos == ']') pos++;
+            } else {
+                // Single value
+                state->ram[state->ram_count].bytes[0] = (uint8_t)strtol(pos, (char**)&pos, 10);
+                state->ram[state->ram_count].byte_count = 1;
+            }
             
             // Skip closing bracket for this pair
             pos = json_skip_whitespace(pos);
