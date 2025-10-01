@@ -5,126 +5,94 @@
 #   Optimized for world's fastest 100% hardware accurate implementation.
 #-------------------------------------------------------------------------------
 
-# Flag bits
-CF = (1<<0)
-ZF = (1<<1)
-IF = (1<<2)
-DF = (1<<3)
-BF = (1<<4)
-XF = (1<<5)
-VF = (1<<6)
-NF = (1<<7)
-
-# Addressing mode constants
-A____ = 0       # no addressing mode
-A_IMM = 1       # immediate
-A_ZER = 2       # zero-page
-A_ZPX = 3       # zp,X
-A_ZPY = 4       # zp,Y
-A_ABS = 5       # abs
-A_ABX = 6       # abs,X
-A_ABY = 7       # abs,Y
-A_IDX = 8       # (zp,X)
-A_IDY = 9       # (zp),Y
-A_JMP = 10      # (abs) special JMP
-A_JSR = 11      # special JSR abs
-A_INV = 12      # invalid instruction
-
-# Memory access modes
-M___ = 0        # no memory access
-M_R_ = 1        # read access
-M__W = 2        # write access
-M_RW = 3        # read-modify-write
-
-# Layout constants
-ADDR_SEQ_BASE = 255
-NO_ADDR_SEQ = 0         # Direct opcode jump (no addressing mode)
-
-# These will be calculated dynamically in main() after addressing modes are defined
-ADDR_MODE_INDICES = {}
-ADDR_SEQ_END = 0
-CONT_SEQ_START = 0
-
 #-------------------------------------------------------------------------------
 # Addressing Mode Definitions
 # Each definition contains: (acronym, long_name, const_name, cycles_list)
 # Each cycle is a string containing the cycle code
 #-------------------------------------------------------------------------------
 
-ADDR_IMM = ("IMM", "immediate", "ADDR_IMM", [
-    "BUS_READ(c->PC++);\nc->AD = BUS_DATA();\nc->IR = c->opcode;"
-])
+# Special addressing mode objects for non-standard cases
+AM_NON = ("---", "no addressing mode", "ADDR_NON", ())  # No addressing mode
+AM_JMP = ("---", "special JMP", "ADDR_NON", ())          # Special JMP cases
+AM_JSR = ("---", "special JSR", "ADDR_NON", ())          # Special JSR case
+AM_INV = ("---", "invalid instruction", "ADDR_NON", ())  # Invalid instruction
 
-ADDR_ZER = ("ZP", "zero page", "ADDR_ZER", [
+# Addressing mode objects for standard cases
+AM_IMM = ("IMM", "immediate", "ADDR_IMM", (
+    "BUS_READ(c->PC++);\nc->AD = BUS_DATA();\nc->IR = c->opcode;",
+))
+
+AM_ZER = ("ZP", "zero page", "ADDR_ZER", (
     "BUS_READ(c->PC++);",
     "c->AD = BUS_DATA();\nc->IR = c->opcode;"
-])
+))
 
-ADDR_ZPX = ("ZPX", "zero page,X", "ADDR_ZPX", [
+AM_ZPX = ("ZPX", "zero page,X", "ADDR_ZPX", (
     "BUS_READ(c->PC++);",
     "c->AD = BUS_DATA();\nBUS_INTERNAL(c->AD);",
     "c->AD = (c->AD + c->X) & 0xFF;\nc->IR = c->opcode;"
-])
+))
 
-ADDR_ZPY = ("ZPY", "zero page,Y", "ADDR_ZPY", [
+AM_ZPY = ("ZPY", "zero page,Y", "ADDR_ZPY", (
     "BUS_READ(c->PC++);",
     "c->AD = BUS_DATA();\nBUS_INTERNAL(c->AD);",
     "c->AD = (c->AD + c->Y) & 0xFF;\nc->IR = c->opcode;"
-])
+))
 
-ADDR_ABS = ("ABS", "absolute", "ADDR_ABS", [
+AM_ABS = ("ABS", "absolute", "ADDR_ABS", (
     "BUS_READ(c->PC++);\nc->AD = BUS_DATA();",
     "BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;",
     "c->IR = c->opcode;"
-])
+))
 
-ADDR_ABX = ("ABX", "absolute,X", "ADDR_ABX", [
+AM_ABX = ("ABX", "absolute,X", "ADDR_ABX", (
     "BUS_READ(c->PC++);\nc->AD = BUS_DATA();",
     "BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;",
     "BUS_READ((c->AD & 0xFF00) | ((c->AD + c->X) & 0xFF));\nif (((c->AD >> 8) == ((c->AD + c->X) >> 8))) {\n\tc->AD += c->X;\n\tc->IR = c->opcode;\n}",
     "c->AD += c->X;\nc->IR = c->opcode;"
-])
+))
 
-ADDR_ABY = ("ABY", "absolute,Y", "ADDR_ABY", [
+AM_ABY = ("ABY", "absolute,Y", "ADDR_ABY", (
     "BUS_READ(c->PC++);\nc->AD = BUS_DATA();",
     "BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;",
     "BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nif (((c->AD >> 8) == ((c->AD + c->Y) >> 8))) {\n\tc->AD += c->Y;\n\tc->IR = c->opcode;\n}",
     "c->AD += c->Y;\nc->IR = c->opcode;"
-])
+))
 
-ADDR_IDX = ("IDX", "indexed indirect (zp,X)", "ADDR_IDX", [
+AM_IDX = ("IDX", "indexed indirect (zp,X)", "ADDR_IDX", (
     "BUS_READ(c->PC++);",
     "c->AD = BUS_DATA();\nBUS_INTERNAL(c->AD);",
     "c->AD = (c->AD + c->X) & 0xFF;\nBUS_READ(c->AD);",
     "BUS_READ((c->AD + 1) & 0xFF);\nc->AD = BUS_DATA();",
     "c->AD |= BUS_DATA() << 8;\nc->IR = c->opcode;"
-])
+))
 
-ADDR_IDY = ("IDY", "indirect indexed (zp),Y", "ADDR_IDY", [
+AM_IDY = ("IDY", "indirect indexed (zp),Y", "ADDR_IDY", (
     "BUS_READ(c->PC++);",
     "c->AD = BUS_DATA();\nBUS_READ(c->AD);",
     "BUS_READ((c->AD + 1) & 0xFF);\nc->AD = BUS_DATA();",
     "c->AD |= BUS_DATA() << 8;\nBUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nif (((c->AD >> 8) == ((c->AD + c->Y) >> 8))) {\n\tc->AD += c->Y;\n\tc->IR = c->opcode;\n}",
     "c->AD += c->Y;\nc->IR = c->opcode;"
-])
+))
 
-# Addressing mode lookup table
-ADDRESSING_MODES = {
-    A_IMM: ADDR_IMM,
-    A_ZER: ADDR_ZER,
-    A_ZPX: ADDR_ZPX,
-    A_ZPY: ADDR_ZPY,
-    A_ABS: ADDR_ABS,
-    A_ABX: ADDR_ABX,
-    A_ABY: ADDR_ABY,
-    A_IDX: ADDR_IDX,
-    A_IDY: ADDR_IDY,
-}
+# Addressing mode list
+ADDRESSING_MODES = [
+    AM_IMM,
+    AM_ZER,
+    AM_ZPX,
+    AM_ZPY,
+    AM_ABS,
+    AM_ABX,
+    AM_ABY,
+    AM_IDX,
+    AM_IDY,
+]
 
-# Global state
-continuation_sequences = {}  # sequence_code -> {index, name, code}
-next_continuation_index = 0  # Will be set to CONT_SEQ_START in main()
-opcode_groups = {}  # implementation_code -> [opcodes]
+# Memory access modes
+M___ = 0        # no memory access
+M_R_ = 1        # read access
+M__W = 2        # write access
+M_RW = 3        # read-modify-write
 
 #-------------------------------------------------------------------------------
 # Mnemonic Symbol Definitions
@@ -242,77 +210,91 @@ OP_JAM = ("JAM", M_RW, "BUS_READ(c->PC);\nc->IR--;", None)  # JAM locks up
 ops = [
     # cc = 00
     [
-        [[OP_BRK,A____],[OP_JSR,A_JSR],[OP_RTI,A____],[OP_RTS,A____],[OP_NOP_R,A_IMM],[OP_LDY,A_IMM],[OP_CPY,A_IMM],[OP_CPX,A_IMM]],
-        [[OP_NOP_R,A_ZER],[OP_BIT,A_ZER],[OP_NOP_R,A_ZER],[OP_NOP_R,A_ZER],[OP_STY,A_ZER],[OP_LDY,A_ZER],[OP_CPY,A_ZER],[OP_CPX,A_ZER]],
-        [[OP_PHP,A____],[OP_PLP,A____],[OP_PHA,A____],[OP_PLA,A____],[OP_DEY,A____],[OP_TAY,A____],[OP_INY,A____],[OP_INX,A____]],
-        [[OP_NOP_R,A_ABS],[OP_BIT,A_ABS],[OP_JMP,A_JMP],[OP_JMI,A_JMP],[OP_STY,A_ABS],[OP_LDY,A_ABS],[OP_CPY,A_ABS],[OP_CPX,A_ABS]],
-        [[OP_BPL,A_IMM],[OP_BMI,A_IMM],[OP_BVC,A_IMM],[OP_BVS,A_IMM],[OP_BCC,A_IMM],[OP_BCS,A_IMM],[OP_BNE,A_IMM],[OP_BEQ,A_IMM]],
-        [[OP_NOP_R,A_ZPX],[OP_NOP_R,A_ZPX],[OP_NOP_R,A_ZPX],[OP_NOP_R,A_ZPX],[OP_STY,A_ZPX],[OP_LDY,A_ZPX],[OP_NOP_R,A_ZPX],[OP_NOP_R,A_ZPX]],
-        [[OP_CLC,A____],[OP_SEC,A____],[OP_CLI,A____],[OP_SEI,A____],[OP_TYA,A____],[OP_CLV,A____],[OP_CLD,A____],[OP_SED,A____]],
-        [[OP_NOP_R,A_ABX],[OP_NOP_R,A_ABX],[OP_NOP_R,A_ABX],[OP_NOP_R,A_ABX],[OP_SHY,A_ABX],[OP_LDY,A_ABX],[OP_NOP_R,A_ABX],[OP_NOP_R,A_ABX]]
+        [[OP_BRK,AM_NON],[OP_JSR,AM_JSR],[OP_RTI,AM_NON],[OP_RTS,AM_NON],[OP_NOP_R,AM_IMM],[OP_LDY,AM_IMM],[OP_CPY,AM_IMM],[OP_CPX,AM_IMM]],
+        [[OP_NOP_R,AM_ZER],[OP_BIT,AM_ZER],[OP_NOP_R,AM_ZER],[OP_NOP_R,AM_ZER],[OP_STY,AM_ZER],[OP_LDY,AM_ZER],[OP_CPY,AM_ZER],[OP_CPX,AM_ZER]],
+        [[OP_PHP,AM_NON],[OP_PLP,AM_NON],[OP_PHA,AM_NON],[OP_PLA,AM_NON],[OP_DEY,AM_NON],[OP_TAY,AM_NON],[OP_INY,AM_NON],[OP_INX,AM_NON]],
+        [[OP_NOP_R,AM_ABS],[OP_BIT,AM_ABS],[OP_JMP,AM_JMP],[OP_JMI,AM_JMP],[OP_STY,AM_ABS],[OP_LDY,AM_ABS],[OP_CPY,AM_ABS],[OP_CPX,AM_ABS]],
+        [[OP_BPL,AM_IMM],[OP_BMI,AM_IMM],[OP_BVC,AM_IMM],[OP_BVS,AM_IMM],[OP_BCC,AM_IMM],[OP_BCS,AM_IMM],[OP_BNE,AM_IMM],[OP_BEQ,AM_IMM]],
+        [[OP_NOP_R,AM_ZPX],[OP_NOP_R,AM_ZPX],[OP_NOP_R,AM_ZPX],[OP_NOP_R,AM_ZPX],[OP_STY,AM_ZPX],[OP_LDY,AM_ZPX],[OP_NOP_R,AM_ZPX],[OP_NOP_R,AM_ZPX]],
+        [[OP_CLC,AM_NON],[OP_SEC,AM_NON],[OP_CLI,AM_NON],[OP_SEI,AM_NON],[OP_TYA,AM_NON],[OP_CLV,AM_NON],[OP_CLD,AM_NON],[OP_SED,AM_NON]],
+        [[OP_NOP_R,AM_ABX],[OP_NOP_R,AM_ABX],[OP_NOP_R,AM_ABX],[OP_NOP_R,AM_ABX],[OP_SHY,AM_ABX],[OP_LDY,AM_ABX],[OP_NOP_R,AM_ABX],[OP_NOP_R,AM_ABX]]
     ],
     # cc = 01
     [
-        [[OP_ORA,A_IDX],[OP_AND,A_IDX],[OP_EOR,A_IDX],[OP_ADC,A_IDX],[OP_STA,A_IDX],[OP_LDA,A_IDX],[OP_CMP,A_IDX],[OP_SBC,A_IDX]],
-        [[OP_ORA,A_ZER],[OP_AND,A_ZER],[OP_EOR,A_ZER],[OP_ADC,A_ZER],[OP_STA,A_ZER],[OP_LDA,A_ZER],[OP_CMP,A_ZER],[OP_SBC,A_ZER]],
-        [[OP_ORA,A_IMM],[OP_AND,A_IMM],[OP_EOR,A_IMM],[OP_ADC,A_IMM],[OP_NOP_R,A_IMM],[OP_LDA,A_IMM],[OP_CMP,A_IMM],[OP_SBC,A_IMM]],
-        [[OP_ORA,A_ABS],[OP_AND,A_ABS],[OP_EOR,A_ABS],[OP_ADC,A_ABS],[OP_STA,A_ABS],[OP_LDA,A_ABS],[OP_CMP,A_ABS],[OP_SBC,A_ABS]],
-        [[OP_ORA,A_IDY],[OP_AND,A_IDY],[OP_EOR,A_IDY],[OP_ADC,A_IDY],[OP_STA,A_IDY],[OP_LDA,A_IDY],[OP_CMP,A_IDY],[OP_SBC,A_IDY]],
-        [[OP_ORA,A_ZPX],[OP_AND,A_ZPX],[OP_EOR,A_ZPX],[OP_ADC,A_ZPX],[OP_STA,A_ZPX],[OP_LDA,A_ZPX],[OP_CMP,A_ZPX],[OP_SBC,A_ZPX]],
-        [[OP_ORA,A_ABY],[OP_AND,A_ABY],[OP_EOR,A_ABY],[OP_ADC,A_ABY],[OP_STA,A_ABY],[OP_LDA,A_ABY],[OP_CMP,A_ABY],[OP_SBC,A_ABY]],
-        [[OP_ORA,A_ABX],[OP_AND,A_ABX],[OP_EOR,A_ABX],[OP_ADC,A_ABX],[OP_STA,A_ABX],[OP_LDA,A_ABX],[OP_CMP,A_ABX],[OP_SBC,A_ABX]]
+        [[OP_ORA,AM_IDX],[OP_AND,AM_IDX],[OP_EOR,AM_IDX],[OP_ADC,AM_IDX],[OP_STA,AM_IDX],[OP_LDA,AM_IDX],[OP_CMP,AM_IDX],[OP_SBC,AM_IDX]],
+        [[OP_ORA,AM_ZER],[OP_AND,AM_ZER],[OP_EOR,AM_ZER],[OP_ADC,AM_ZER],[OP_STA,AM_ZER],[OP_LDA,AM_ZER],[OP_CMP,AM_ZER],[OP_SBC,AM_ZER]],
+        [[OP_ORA,AM_IMM],[OP_AND,AM_IMM],[OP_EOR,AM_IMM],[OP_ADC,AM_IMM],[OP_NOP_R,AM_IMM],[OP_LDA,AM_IMM],[OP_CMP,AM_IMM],[OP_SBC,AM_IMM]],
+        [[OP_ORA,AM_ABS],[OP_AND,AM_ABS],[OP_EOR,AM_ABS],[OP_ADC,AM_ABS],[OP_STA,AM_ABS],[OP_LDA,AM_ABS],[OP_CMP,AM_ABS],[OP_SBC,AM_ABS]],
+        [[OP_ORA,AM_IDY],[OP_AND,AM_IDY],[OP_EOR,AM_IDY],[OP_ADC,AM_IDY],[OP_STA,AM_IDY],[OP_LDA,AM_IDY],[OP_CMP,AM_IDY],[OP_SBC,AM_IDY]],
+        [[OP_ORA,AM_ZPX],[OP_AND,AM_ZPX],[OP_EOR,AM_ZPX],[OP_ADC,AM_ZPX],[OP_STA,AM_ZPX],[OP_LDA,AM_ZPX],[OP_CMP,AM_ZPX],[OP_SBC,AM_ZPX]],
+        [[OP_ORA,AM_ABY],[OP_AND,AM_ABY],[OP_EOR,AM_ABY],[OP_ADC,AM_ABY],[OP_STA,AM_ABY],[OP_LDA,AM_ABY],[OP_CMP,AM_ABY],[OP_SBC,AM_ABY]],
+        [[OP_ORA,AM_ABX],[OP_AND,AM_ABX],[OP_EOR,AM_ABX],[OP_ADC,AM_ABX],[OP_STA,AM_ABX],[OP_LDA,AM_ABX],[OP_CMP,AM_ABX],[OP_SBC,AM_ABX]]
     ],
     # cc = 02
     [
-        [[OP_JAM,A_INV],[OP_JAM,A_INV],[OP_JAM,A_INV],[OP_JAM,A_INV],[OP_NOP_R,A_IMM],[OP_LDX,A_IMM],[OP_NOP_R,A_IMM],[OP_NOP_R,A_IMM]],
-        [[OP_ASL_M,A_ZER],[OP_ROL_M,A_ZER],[OP_LSR_M,A_ZER],[OP_ROR_M,A_ZER],[OP_STX,A_ZER],[OP_LDX,A_ZER],[OP_DEC_M,A_ZER],[OP_INC_M,A_ZER]],
-        [[OP_ASL_A,A____],[OP_ROL_A,A____],[OP_LSR_A,A____],[OP_ROR_A,A____],[OP_TXA,A____],[OP_TAX,A____],[OP_DEX,A____],[OP_NOP_I,A____]],
-        [[OP_ASL_M,A_ABS],[OP_ROL_M,A_ABS],[OP_LSR_M,A_ABS],[OP_ROR_M,A_ABS],[OP_STX,A_ABS],[OP_LDX,A_ABS],[OP_DEC_M,A_ABS],[OP_INC_M,A_ABS]],
-        [[OP_JAM,A_INV],[OP_JAM,A_INV],[OP_JAM,A_INV],[OP_JAM,A_INV],[OP_JAM,A_INV],[OP_JAM,A_INV],[OP_JAM,A_INV],[OP_JAM,A_INV]],
-        [[OP_ASL_M,A_ZPX],[OP_ROL_M,A_ZPX],[OP_LSR_M,A_ZPX],[OP_ROR_M,A_ZPX],[OP_STX,A_ZPY],[OP_LDX,A_ZPY],[OP_DEC_M,A_ZPX],[OP_INC_M,A_ZPX]],
-        [[OP_NOP_R,A____],[OP_NOP_R,A____],[OP_NOP_R,A____],[OP_NOP_R,A____],[OP_TXS,A____],[OP_TSX,A____],[OP_NOP_R,A____],[OP_NOP_R,A____]],
-        [[OP_ASL_M,A_ABX],[OP_ROL_M,A_ABX],[OP_LSR_M,A_ABX],[OP_ROR_M,A_ABX],[OP_SHX,A_ABY],[OP_LDX,A_ABY],[OP_DEC_M,A_ABX],[OP_INC_M,A_ABX]]
+        [[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_NOP_R,AM_IMM],[OP_LDX,AM_IMM],[OP_NOP_R,AM_IMM],[OP_NOP_R,AM_IMM]],
+        [[OP_ASL_M,AM_ZER],[OP_ROL_M,AM_ZER],[OP_LSR_M,AM_ZER],[OP_ROR_M,AM_ZER],[OP_STX,AM_ZER],[OP_LDX,AM_ZER],[OP_DEC_M,AM_ZER],[OP_INC_M,AM_ZER]],
+        [[OP_ASL_A,AM_NON],[OP_ROL_A,AM_NON],[OP_LSR_A,AM_NON],[OP_ROR_A,AM_NON],[OP_TXA,AM_NON],[OP_TAX,AM_NON],[OP_DEX,AM_NON],[OP_NOP_I,AM_NON]],
+        [[OP_ASL_M,AM_ABS],[OP_ROL_M,AM_ABS],[OP_LSR_M,AM_ABS],[OP_ROR_M,AM_ABS],[OP_STX,AM_ABS],[OP_LDX,AM_ABS],[OP_DEC_M,AM_ABS],[OP_INC_M,AM_ABS]],
+        [[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_JAM,AM_INV]],
+        [[OP_ASL_M,AM_ZPX],[OP_ROL_M,AM_ZPX],[OP_LSR_M,AM_ZPX],[OP_ROR_M,AM_ZPX],[OP_STX,AM_ZPY],[OP_LDX,AM_ZPY],[OP_DEC_M,AM_ZPX],[OP_INC_M,AM_ZPX]],
+        [[OP_NOP_R,AM_NON],[OP_NOP_R,AM_NON],[OP_NOP_R,AM_NON],[OP_NOP_R,AM_NON],[OP_TXS,AM_NON],[OP_TSX,AM_NON],[OP_NOP_R,AM_NON],[OP_NOP_R,AM_NON]],
+        [[OP_ASL_M,AM_ABX],[OP_ROL_M,AM_ABX],[OP_LSR_M,AM_ABX],[OP_ROR_M,AM_ABX],[OP_SHX,AM_ABY],[OP_LDX,AM_ABY],[OP_DEC_M,AM_ABX],[OP_INC_M,AM_ABX]]
     ],
     # cc = 03
     [
-        [[OP_SLO,A_IDX],[OP_RLA,A_IDX],[OP_SRE,A_IDX],[OP_RRA,A_IDX],[OP_SAX,A_IDX],[OP_LAX,A_IDX],[OP_DCP,A_IDX],[OP_ISC,A_IDX]],
-        [[OP_SLO,A_ZER],[OP_RLA,A_ZER],[OP_SRE,A_ZER],[OP_RRA,A_ZER],[OP_SAX,A_ZER],[OP_LAX,A_ZER],[OP_DCP,A_ZER],[OP_ISC,A_ZER]],
-        [[OP_ANC,A_IMM],[OP_ANC,A_IMM],[OP_ASR,A_IMM],[OP_ARR,A_IMM],[OP_XAA,A_IMM],[OP_LAX,A_IMM],[OP_SBX,A_IMM],[OP_SBC,A_IMM]],
-        [[OP_SLO,A_ABS],[OP_RLA,A_ABS],[OP_SRE,A_ABS],[OP_RRA,A_ABS],[OP_SAX,A_ABS],[OP_LAX,A_ABS],[OP_DCP,A_ABS],[OP_ISC,A_ABS]],
-        [[OP_SLO,A_IDY],[OP_RLA,A_IDY],[OP_SRE,A_IDY],[OP_RRA,A_IDY],[OP_SHA,A_IDY],[OP_LAX,A_IDY],[OP_DCP,A_IDY],[OP_ISC,A_IDY]],
-        [[OP_SLO,A_ZPX],[OP_RLA,A_ZPX],[OP_SRE,A_ZPX],[OP_RRA,A_ZPX],[OP_SAX,A_ZPY],[OP_LAX,A_ZPY],[OP_DCP,A_ZPX],[OP_ISC,A_ZPX]],
-        [[OP_SLO,A_ABY],[OP_RLA,A_ABY],[OP_SRE,A_ABY],[OP_RRA,A_ABY],[OP_SHS,A_ABY],[OP_LAS,A_ABY],[OP_DCP,A_ABY],[OP_ISC,A_ABY]],
-        [[OP_SLO,A_ABX],[OP_RLA,A_ABX],[OP_SRE,A_ABX],[OP_RRA,A_ABX],[OP_SHY,A_ABY],[OP_LAX,A_ABY],[OP_DCP,A_ABX],[OP_ISC,A_ABX]]
+        [[OP_SLO,AM_IDX],[OP_RLA,AM_IDX],[OP_SRE,AM_IDX],[OP_RRA,AM_IDX],[OP_SAX,AM_IDX],[OP_LAX,AM_IDX],[OP_DCP,AM_IDX],[OP_ISC,AM_IDX]],
+        [[OP_SLO,AM_ZER],[OP_RLA,AM_ZER],[OP_SRE,AM_ZER],[OP_RRA,AM_ZER],[OP_SAX,AM_ZER],[OP_LAX,AM_ZER],[OP_DCP,AM_ZER],[OP_ISC,AM_ZER]],
+        [[OP_ANC,AM_IMM],[OP_ANC,AM_IMM],[OP_ASR,AM_IMM],[OP_ARR,AM_IMM],[OP_XAA,AM_IMM],[OP_LAX,AM_IMM],[OP_SBX,AM_IMM],[OP_SBC,AM_IMM]],
+        [[OP_SLO,AM_ABS],[OP_RLA,AM_ABS],[OP_SRE,AM_ABS],[OP_RRA,AM_ABS],[OP_SAX,AM_ABS],[OP_LAX,AM_ABS],[OP_DCP,AM_ABS],[OP_ISC,AM_ABS]],
+        [[OP_SLO,AM_IDY],[OP_RLA,AM_IDY],[OP_SRE,AM_IDY],[OP_RRA,AM_IDY],[OP_SHA,AM_IDY],[OP_LAX,AM_IDY],[OP_DCP,AM_IDY],[OP_ISC,AM_IDY]],
+        [[OP_SLO,AM_ZPX],[OP_RLA,AM_ZPX],[OP_SRE,AM_ZPX],[OP_RRA,AM_ZPX],[OP_SAX,AM_ZPY],[OP_LAX,AM_ZPY],[OP_DCP,AM_ZPX],[OP_ISC,AM_ZPX]],
+        [[OP_SLO,AM_ABY],[OP_RLA,AM_ABY],[OP_SRE,AM_ABY],[OP_RRA,AM_ABY],[OP_SHS,AM_ABY],[OP_LAS,AM_ABY],[OP_DCP,AM_ABY],[OP_ISC,AM_ABY]],
+        [[OP_SLO,AM_ABX],[OP_RLA,AM_ABX],[OP_SRE,AM_ABX],[OP_RRA,AM_ABX],[OP_SHY,AM_ABY],[OP_LAX,AM_ABY],[OP_DCP,AM_ABX],[OP_ISC,AM_ABX]]
     ]
 ]
+
+# Layout constants
+ADDR_SEQ_BASE = 255
+NO_ADDR_SEQ = 0         # Direct opcode jump (no addressing mode)
+
+# These will be calculated dynamically in main() after addressing modes are defined
+ADDR_MODE_INDICES = {}
+ADDR_SEQ_END = 0
+CONT_SEQ_START = 0
+
+# Global state
+continuation_sequences = {}  # sequence_code -> {index, name, code}
+next_continuation_index = 0  # Will be set to CONT_SEQ_START in main()
+opcode_groups = {}  # implementation_code -> [opcodes]
 
 def l(s):
     """Output a line"""
     print(s)
 
-def get_mnemonic_symbol(op):
+def get_indent(level):
+    """Helper function to generate indentation string"""
+    return '            ' + '    ' * level
+
+def format_code(code):
+    """Format code using embedded newlines and tabs for indentation"""
+    lines = code.split('\n')
+    formatted_lines = []
+    
+    for line in lines:
+        line = line.rstrip()  # Remove trailing whitespace but preserve leading tabs
+        if line:  # Only add non-empty lines
+            formatted_lines.append('            ' + line)
+    
+    return '\n'.join(formatted_lines)
+
+# Helper functions for direct ops array access
+def get_ops_entry(op):
+    """Get the full ops entry for an opcode"""
     cc = op & 3
     bbb = (op >> 2) & 7
     aaa = (op >> 5) & 7
-    return ops[cc][bbb][aaa][0]
-
-def get_addr_mode(op):
-    cc = op & 3
-    bbb = (op >> 2) & 7
-    aaa = (op >> 5) & 7
-    return ops[cc][bbb][aaa][1]
-
-def get_mnemonic(op):
-    return get_mnemonic_symbol(op)[0]
-
-def get_mem_access(op):
-    return get_mnemonic_symbol(op)[1]
-
-def get_implementation(op):
-    return get_mnemonic_symbol(op)[2]
-
-def get_flags(op):
-    return get_mnemonic_symbol(op)[3]
+    return ops[cc][bbb][aaa]
 
 def get_or_create_continuation(sequence_code, name):
     """Get existing continuation sequence index or create new one"""
@@ -333,7 +315,8 @@ def get_or_create_continuation(sequence_code, name):
 
 def analyze_continuation_needs(op):
     """Determine if opcode needs a continuation sequence - handle special RMW cases"""
-    flags = get_flags(op)
+    mnemonic_symbol, addr_mode = get_ops_entry(op)
+    flags = mnemonic_symbol[3]  # flags are at index 3
     
     # Handle special multi-cycle operations with hardcoded continuations FIRST
     if op == 0x00:  # BRK
@@ -395,7 +378,7 @@ def analyze_continuation_needs(op):
         return ('BRANCH_TAKEN', seq)
     elif flags == 'RMW':
         # RMW continuations
-        mnemonic = get_mnemonic(op)
+        mnemonic = mnemonic_symbol[0]  # mnemonic name is at index 0
         rmw_seqs = {
             'ASL': ('ASL_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_asl(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
             'ROL': ('ROL_RMW', 'BUS_WRITE(c->AD, c->AD);\nbreak; c->AD = _fam65xx_rol(c, c->AD);\nbreak; BUS_WRITE(c->AD, c->AD);\n_FETCH();'),
@@ -431,26 +414,11 @@ def get_continuation_constant_name(name):
     """Get the constant name for a continuation sequence"""
     return f"C_{name}"
 
-def get_indent(level):
-    """Helper function to generate indentation string"""
-    return '            ' + '    ' * level
-
-def format_code(code):
-    """Format code using embedded newlines and tabs for indentation"""
-    lines = code.split('\n')
-    formatted_lines = []
-    
-    for line in lines:
-        line = line.rstrip()  # Remove trailing whitespace but preserve leading tabs
-        if line:  # Only add non-empty lines
-            formatted_lines.append('            ' + line)
-    
-    return '\n'.join(formatted_lines)
-
 def generate_opcode_implementation(op):
     """Generate the implementation code for this opcode's specific cycle"""
-    impl = get_implementation(op)
-    flags = get_flags(op)
+    mnemonic_symbol, addr_mode = get_ops_entry(op)
+    impl = mnemonic_symbol[2]  # implementation is at index 2
+    flags = mnemonic_symbol[3]  # flags are at index 3
     
     # Handle branch instructions specially
     if flags == 'BRANCH':
@@ -463,18 +431,6 @@ def generate_opcode_implementation(op):
     # Fallback for any unhandled cases
     return "BUS_READ(c->PC);\nc->IR--;"
 
-def get_addr_mode_acronym(addr_mode):
-    """Get acronym for addressing mode"""
-    if addr_mode in ADDRESSING_MODES:
-        return ADDRESSING_MODES[addr_mode][0]
-    return "---"
-
-def get_addr_mode_const_name(addr_mode):
-    """Get the constant name for an addressing mode"""
-    if addr_mode in ADDRESSING_MODES:
-        return ADDRESSING_MODES[addr_mode][2]
-    return "ADDR_NON"
-
 def calculate_addressing_mode_offsets():
     """Calculate addressing mode offsets dynamically based on cycle counts"""
     global ADDR_MODE_INDICES, ADDR_SEQ_END, CONT_SEQ_START
@@ -482,22 +438,17 @@ def calculate_addressing_mode_offsets():
     addr_mode_indices = {}
     current_offset = 1  # Start at offset 1 (after direct opcodes at 0)
     
-    # Process addressing modes
+    # Process addressing mode objects that have cycles
     for addr_mode in ADDRESSING_MODES:
-        addr_mode_indices[addr_mode] = current_offset
-        cycle_count = len(ADDRESSING_MODES[addr_mode][3])  # cycles are at index 3
-        current_offset += cycle_count
+        if len(addr_mode[3]) > 0:  # Only process addressing modes with cycles
+            addr_mode_indices[addr_mode] = current_offset
+            cycle_count = len(addr_mode[3])  # cycles are at index 3
+            current_offset += cycle_count
     
     # Update global variables
     ADDR_MODE_INDICES = addr_mode_indices
     ADDR_SEQ_END = ADDR_SEQ_BASE + current_offset
     CONT_SEQ_START = ADDR_SEQ_END
-
-def get_addr_mode_cycle_count(addr_mode):
-    """Get the number of cycles for an addressing mode"""
-    if addr_mode in ADDRESSING_MODES:
-        return len(ADDRESSING_MODES[addr_mode][3])
-    return 0
 
 def generate_addressing_constants():
     """Generate addressing mode offset constants"""
@@ -508,11 +459,12 @@ def generate_addressing_constants():
     l(f"#define ADDR_SEQ_BASE {ADDR_SEQ_BASE}")
     
     # Generate constants for addressing modes using definitions
-    for addr_mode in ADDRESSING_MODES.keys():
-        const_name = get_addr_mode_const_name(addr_mode)
-        offset = ADDR_MODE_INDICES[addr_mode]
-        actual_index = ADDR_SEQ_BASE + offset
-        l(f"#define {const_name:<12} {offset:<3} // Index {actual_index}")
+    for addr_mode in ADDRESSING_MODES:
+        if addr_mode in ADDR_MODE_INDICES:  # Only generate constants for modes with cycles
+            const_name = addr_mode[2]
+            offset = ADDR_MODE_INDICES[addr_mode]
+            actual_index = ADDR_SEQ_BASE + offset
+            l(f"#define {const_name:<12} {offset:<3} // Index {actual_index}")
     
     l("")
 
@@ -521,9 +473,9 @@ def generate_lookup_table():
     # Create reverse mapping from offset to constant name
     offset_to_const = {0: "ADDR_NON"}
     
-    for addr_mode in ADDRESSING_MODES.keys():
-        const_name = get_addr_mode_const_name(addr_mode)
+    for addr_mode in ADDRESSING_MODES:
         if addr_mode in ADDR_MODE_INDICES:
+            const_name = addr_mode[2]
             offset = ADDR_MODE_INDICES[addr_mode]
             offset_to_const[offset] = const_name
     
@@ -531,7 +483,7 @@ def generate_lookup_table():
     l("static const uint8_t opcode_addr_start[256] = {")
     
     for op in range(256):
-        addr_mode = get_addr_mode(op)
+        mnemonic_symbol, addr_mode = get_ops_entry(op)
         
         if addr_mode in ADDR_MODE_INDICES:
             offset = ADDR_MODE_INDICES[addr_mode]
@@ -542,7 +494,7 @@ def generate_lookup_table():
         
         # Format with comma except for last element
         comma = "," if op < 255 else " "
-        l(f"    {const_name}{comma}  // 0x{op:02X}: {get_mnemonic(op)}")
+        l(f"    {const_name}{comma}  // 0x{op:02X}: {mnemonic_symbol[0]}")
     
     l("};")
     l("")
@@ -575,16 +527,14 @@ def generate_opcode_cases():
         
         # Emit all opcodes that share this implementation
         for opc in sorted(opcodes):
-            addr_mode = get_addr_mode(opc)
-            addr_acronym = get_addr_mode_acronym(addr_mode)
+            mnemonic_symbol, addr_mode = get_ops_entry(opc)
+            addr_acronym = addr_mode[0]
             
-            # Calculate cycle number: 1 if ADDR_NON, otherwise 1 + addressing_cycles
-            if addr_mode in ADDRESSING_MODES:
-                cycle_num = 1 + get_addr_mode_cycle_count(addr_mode)
-            else:
-                cycle_num = 1
+            # Calculate cycle number: 1 if no addressing cycles, otherwise 1 + addressing_cycles
+            cycle_count = len(addr_mode[3])
+            cycle_num = 1 + cycle_count if cycle_count > 0 else 1
                 
-            l(f"        case 0x{opc:02X}:  // {get_mnemonic(opc)} {addr_acronym} cycle {cycle_num}")
+            l(f"        case 0x{opc:02X}:  // {mnemonic_symbol[0]} {addr_acronym} cycle {cycle_num}")
             emitted.add(opc)
         
         l(format_code(code))
@@ -599,20 +549,21 @@ def generate_addressing_modes():
     l("")
     
     # Generate addressing mode sequences from definitions
-    for addr_mode, mode_def in ADDRESSING_MODES.items():
-        acronym, long_name, const_name, cycles = mode_def
-        
-        # Emit long name comment before the cycles
-        l(f"        // {acronym}: {long_name}")
-        
-        for cycle_idx, cycle_code in enumerate(cycles):
-            cycle_num = cycle_idx + 1
+    for addr_mode in ADDRESSING_MODES:
+        if len(addr_mode[3]) > 0:  # Only generate sequences for modes with cycles
+            acronym, long_name, const_name, cycles = addr_mode
             
-            l(f"        case ADDR_SEQ_BASE + {const_name} + {cycle_idx}:  // {acronym} cycle {cycle_num}")
-            l(format_code(cycle_code))
-            l("            break;")
+            # Emit long name comment before the cycles
+            l(f"        // {acronym}: {long_name}")
             
-        l("")
+            for cycle_idx, cycle_code in enumerate(cycles):
+                cycle_num = cycle_idx + 1
+                
+                l(f"        case ADDR_SEQ_BASE + {const_name} + {cycle_idx}:  // {acronym} cycle {cycle_num}")
+                l(format_code(cycle_code))
+                l("            break;")
+                
+            l("")
 
 def generate_continuations():
     """Generate shared multi-cycle continuation sequences"""
