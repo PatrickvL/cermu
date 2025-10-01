@@ -291,10 +291,6 @@ def l(s):
     """Output a line"""
     print(s)
 
-def get_indent(level):
-    """Helper function to generate indentation string"""
-    return '            ' + '    ' * level
-
 def format_code(code):
     """Format code using embedded newlines and tabs for indentation"""
     lines = code.split('\n')
@@ -532,12 +528,8 @@ def generate_opcode_cases():
         # Emit all opcodes that share this implementation
         for opc in sorted(opcodes):
             operation, addr_mode = get_ops_entry(opc)
-            addr_acronym = addr_mode[0]
-            
-            # Calculate cycle number: 1 if no addressing cycles, otherwise 1 + addressing_cycles
-            cycle_count = len(addr_mode[3])
-            cycle_num = 1 + cycle_count if cycle_count > 0 else 1
-                
+            addr_acronym = addr_mode[0]            
+            cycle_num = len(addr_mode[3]) + 1
             l(f"        case 0x{opc:02X}:  // {operation[0]} {addr_acronym} cycle {cycle_num}")
             emitted.add(opc)
         
