@@ -49,10 +49,86 @@ ADDR_MODE_INDICES = {
     A_IDY: 34,  # offset 34 + 255 = 289 (indirect indexed)
 }
 
-ADDR_SEQ_BASE = 256
+ADDR_SEQ_BASE = 255
 ADDR_SEQ_END = 294      # Last addressing mode at 293
 CONT_SEQ_START = 294    # Continuations start here
 NO_ADDR_SEQ = 0         # Direct opcode jump (no addressing mode)
+
+#-------------------------------------------------------------------------------
+# Addressing Mode Definitions
+# Each definition contains: (acronym, long_name, cycles_list)
+# Each cycle is a tuple: (cycle_code, is_final_cycle)
+#-------------------------------------------------------------------------------
+
+ADDR_IMM = ("IMM", "immediate", [
+    ("BUS_READ(c->PC++);\nc->AD = BUS_DATA();\nc->IR = c->opcode;", True)
+])
+
+ADDR_ZER = ("ZP", "zero page", [
+    ("BUS_READ(c->PC++);", False),
+    ("c->AD = BUS_DATA();\nc->IR = c->opcode;", True)
+])
+
+ADDR_ZPX = ("ZPX", "zero page,X", [
+    ("BUS_READ(c->PC++);", False),
+    ("c->AD = BUS_DATA();\nBUS_INTERNAL(c->AD);", False),
+    ("c->AD = (c->AD + c->X) & 0xFF;\nc->IR = c->opcode;", True)
+])
+
+ADDR_ZPY = ("ZPY", "zero page,Y", [
+    ("BUS_READ(c->PC++);", False),
+    ("c->AD = BUS_DATA();\nBUS_INTERNAL(c->AD);", False),
+    ("c->AD = (c->AD + c->Y) & 0xFF;\nc->IR = c->opcode;", True)
+])
+
+ADDR_ABS = ("ABS", "absolute", [
+    ("BUS_READ(c->PC++);\nc->AD = BUS_DATA();", False),
+    ("BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;", False),
+    ("c->IR = c->opcode;", True)
+])
+
+ADDR_ABX = ("ABX", "absolute,X", [
+    ("BUS_READ(c->PC++);\nc->AD = BUS_DATA();", False),
+    ("BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;", False),
+    ("BUS_READ((c->AD & 0xFF00) | ((c->AD + c->X) & 0xFF));\nif (((c->AD >> 8) == ((c->AD + c->X) >> 8))) {\n\tc->AD += c->X;\n\tc->IR = c->opcode;\n}", False),
+    ("c->AD += c->X;\nc->IR = c->opcode;", True)
+])
+
+ADDR_ABY = ("ABY", "absolute,Y", [
+    ("BUS_READ(c->PC++);\nc->AD = BUS_DATA();", False),
+    ("BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;", False),
+    ("BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nif (((c->AD >> 8) == ((c->AD + c->Y) >> 8))) {\n\tc->AD += c->Y;\n\tc->IR = c->opcode;\n}", False),
+    ("c->AD += c->Y;\nc->IR = c->opcode;", True)
+])
+
+ADDR_IDX = ("IDX", "indexed indirect (zp,X)", [
+    ("BUS_READ(c->PC++);", False),
+    ("c->AD = BUS_DATA();\nBUS_INTERNAL(c->AD);", False),
+    ("c->AD = (c->AD + c->X) & 0xFF;\nBUS_READ(c->AD);", False),
+    ("BUS_READ((c->AD + 1) & 0xFF);\nc->AD = BUS_DATA();", False),
+    ("c->AD |= BUS_DATA() << 8;\nc->IR = c->opcode;", True)
+])
+
+ADDR_IDY = ("IDY", "indirect indexed (zp),Y", [
+    ("BUS_READ(c->PC++);", False),
+    ("c->AD = BUS_DATA();\nBUS_READ(c->AD);", False),
+    ("BUS_READ((c->AD + 1) & 0xFF);\nc->AD = BUS_DATA();", False),
+    ("c->AD |= BUS_DATA() << 8;\nBUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nif (((c->AD >> 8) == ((c->AD + c->Y) >> 8))) {\n\tc->AD += c->Y;\n\tc->IR = c->opcode;\n}", False),
+    ("c->AD += c->Y;\nc->IR = c->opcode;", True)
+])
+
+# Addressing mode lookup table
+ADDRESSING_MODES = {
+    A_IMM: ADDR_IMM,
+    A_ZER: ADDR_ZER,
+    A_ZPX: ADDR_ZPX,
+    A_ZPY: ADDR_ZPY,
+    A_ABS: ADDR_ABS,
+    A_ABX: ADDR_ABX,
+    A_ABY: ADDR_ABY,
+    A_IDX: ADDR_IDX,
+    A_IDY: ADDR_IDY,
+}
 
 # Global state
 continuation_sequences = {}  # sequence_code -> {index, name, code}
@@ -396,6 +472,18 @@ def generate_opcode_implementation(op):
     # Fallback for any unhandled cases
     return "BUS_READ(c->PC);\nc->IR--;"
 
+def get_addr_mode_acronym(addr_mode):
+    """Get acronym for addressing mode"""
+    if addr_mode in ADDRESSING_MODES:
+        return ADDRESSING_MODES[addr_mode][0]
+    return "---"
+
+def get_addr_mode_cycle_count(addr_mode):
+    """Get the number of cycles for an addressing mode"""
+    if addr_mode in ADDRESSING_MODES:
+        return len(ADDRESSING_MODES[addr_mode][2])
+    return 0
+
 def generate_addressing_constants():
     """Generate addressing mode offset constants"""
     l("// Addressing mode offset constants")
@@ -418,7 +506,7 @@ def generate_addressing_constants():
     
     for addr_mode, const_name in addr_mode_names.items():
         offset = ADDR_MODE_INDICES[addr_mode]
-        actual_index = offset + 255
+        actual_index = ADDR_SEQ_BASE + offset
         l(f"#define {const_name:<12} {offset:<3} // Index {actual_index}")
     
     l("")
@@ -458,7 +546,7 @@ def generate_lookup_table():
         const_name = offset_to_const.get(offset, str(offset))
         
         # Format with comma except for last element
-        comma = "," if op < 255 else ""
+        comma = "," if op < 255 else " "
         l(f"    {const_name}{comma}  // 0x{op:02X}: {get_mnemonic(op)}")
     
     l("};")
@@ -492,7 +580,16 @@ def generate_opcode_cases():
         
         # Emit all opcodes that share this implementation
         for opc in sorted(opcodes):
-            l(f"        case 0x{opc:02X}:  // {get_mnemonic(opc)}")
+            addr_mode = get_addr_mode(opc)
+            addr_acronym = get_addr_mode_acronym(addr_mode)
+            
+            # Calculate cycle number: 1 if ADDR_NON, otherwise 1 + addressing_cycles
+            if addr_mode in ADDRESSING_MODES:
+                cycle_num = 1 + get_addr_mode_cycle_count(addr_mode)
+            else:
+                cycle_num = 1
+                
+            l(f"        case 0x{opc:02X}:  // {get_mnemonic(opc)} {addr_acronym} cycle {cycle_num}")
             emitted.add(opc)
         
         l(format_code(code))
@@ -500,163 +597,29 @@ def generate_opcode_cases():
         l("")
 
 def generate_addressing_modes():
-    """Generate shared addressing mode sequences"""
+    """Generate shared addressing mode sequences using definitions"""
     l("        // ==========================================")
     l(f"        // [256-{ADDR_SEQ_END-1}] SHARED ADDRESSING SEQUENCES")
     l("        // ==========================================")
     l("")
     
-    # Immediate (256+0)
-    l("        case 256:  // IMM: immediate")
-    l("            BUS_READ(c->PC++);")
-    l("            c->AD = BUS_DATA();")
-    l("            c->IR = c->opcode;")
-    l("            break;")
-    l("")
-    
-    # Zero Page (256+2,3)
-    l("        case 258:  // ZP cycle 1")
-    l("            BUS_READ(c->PC++);")
-    l("            break;")
-    l("        case 259:  // ZP cycle 2")
-    l("            c->AD = BUS_DATA();")
-    l("            c->IR = c->opcode;")
-    l("            break;")
-    l("")
-    
-    # Zero Page,X (256+5,6,7)
-    l("        case 261:  // ZPX cycle 1")
-    l("            BUS_READ(c->PC++);")
-    l("            break;")
-    l("        case 262:  // ZPX cycle 2")
-    l("            c->AD = BUS_DATA();")
-    l("            BUS_INTERNAL(c->AD);")
-    l("            break;")
-    l("        case 263:  // ZPX cycle 3")
-    l("            c->AD = (c->AD + c->X) & 0xFF;")
-    l("            c->IR = c->opcode;")
-    l("            break;")
-    l("")
-    
-    # Zero Page,Y (256+9,10,11)
-    l("        case 265:  // ZPY cycle 1")
-    l("            BUS_READ(c->PC++);")
-    l("            break;")
-    l("        case 266:  // ZPY cycle 2")
-    l("            c->AD = BUS_DATA();")
-    l("            BUS_INTERNAL(c->AD);")
-    l("            break;")
-    l("        case 267:  // ZPY cycle 3")
-    l("            c->AD = (c->AD + c->Y) & 0xFF;")
-    l("            c->IR = c->opcode;")
-    l("            break;")
-    l("")
-    
-    # Absolute (256+13,14,15)
-    l("        case 269:  // ABS cycle 1")
-    l("            BUS_READ(c->PC++);")
-    l("            c->AD = BUS_DATA();")
-    l("            break;")
-    l("        case 270:  // ABS cycle 2")
-    l("            BUS_READ(c->PC++);")
-    l("            c->AD |= BUS_DATA() << 8;")
-    l("            break;")
-    l("        case 271:  // ABS cycle 3")
-    l("            c->IR = c->opcode;")
-    l("            break;")
-    l("")
-    
-    # Absolute,X (256+17,18,19,20)
-    l("        case 273:  // ABX cycle 1")
-    l("            BUS_READ(c->PC++);")
-    l("            c->AD = BUS_DATA();")
-    l("            break;")
-    l("        case 274:  // ABX cycle 2")
-    l("            BUS_READ(c->PC++);")
-    l("            c->AD |= BUS_DATA() << 8;")
-    l("            break;")
-    l("        case 275:  // ABX cycle 3: check page crossing")
-    l("            BUS_READ((c->AD & 0xFF00) | ((c->AD + c->X) & 0xFF));")
-    l("            if (((c->AD >> 8) == ((c->AD + c->X) >> 8))) {")
-    l("                c->AD += c->X;")
-    l("                c->IR = c->opcode;")
-    l("            }")
-    l("            break;")
-    l("        case 276:  // ABX cycle 4: page crossed")
-    l("            c->AD += c->X;")
-    l("            c->IR = c->opcode;")
-    l("            break;")
-    l("")
-    
-    # Absolute,Y (256+22,23,24,25)
-    l("        case 278:  // ABY cycle 1")
-    l("            BUS_READ(c->PC++);")
-    l("            c->AD = BUS_DATA();")
-    l("            break;")
-    l("        case 279:  // ABY cycle 2")
-    l("            BUS_READ(c->PC++);")
-    l("            c->AD |= BUS_DATA() << 8;")
-    l("            break;")
-    l("        case 280:  // ABY cycle 3: check page crossing")
-    l("            BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));")
-    l("            if (((c->AD >> 8) == ((c->AD + c->Y) >> 8))) {")
-    l("                c->AD += c->Y;")
-    l("                c->IR = c->opcode;")
-    l("            }")
-    l("            break;")
-    l("        case 281:  // ABY cycle 4: page crossed")
-    l("            c->AD += c->Y;")
-    l("            c->IR = c->opcode;")
-    l("            break;")
-    l("")
-    
-    # Indexed Indirect (256+27-31)
-    l("        case 283:  // IDX cycle 1")
-    l("            BUS_READ(c->PC++);")
-    l("            break;")
-    l("        case 284:  // IDX cycle 2")
-    l("            c->AD = BUS_DATA();")
-    l("            BUS_INTERNAL(c->AD);")
-    l("            break;")
-    l("        case 285:  // IDX cycle 3")
-    l("            c->AD = (c->AD + c->X) & 0xFF;")
-    l("            BUS_READ(c->AD);")
-    l("            break;")
-    l("        case 286:  // IDX cycle 4")
-    l("            BUS_READ((c->AD + 1) & 0xFF);")
-    l("            c->AD = BUS_DATA();")
-    l("            break;")
-    l("        case 287:  // IDX cycle 5")
-    l("            c->AD |= BUS_DATA() << 8;")
-    l("            c->IR = c->opcode;")
-    l("            break;")
-    l("")
-    
-    # Indirect Indexed (256+33-37)
-    l("        case 289:  // IDY cycle 1")
-    l("            BUS_READ(c->PC++);")
-    l("            break;")
-    l("        case 290:  // IDY cycle 2")
-    l("            c->AD = BUS_DATA();")
-    l("            BUS_READ(c->AD);")
-    l("            break;")
-    l("        case 291:  // IDY cycle 3")
-    l("            BUS_READ((c->AD + 1) & 0xFF);")
-    l("            c->AD = BUS_DATA();")
-    l("            break;")
-    l("        case 292:  // IDY cycle 4: check page crossing")
-    l("            c->AD |= BUS_DATA() << 8;")
-    l("            BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));")
-    l("            if (((c->AD >> 8) == ((c->AD + c->Y) >> 8))) {")
-    l("                c->AD += c->Y;")
-    l("                c->IR = c->opcode;")
-    l("            }")
-    l("            break;")
-    l("        case 293:  // IDY cycle 5: page crossed")
-    l("            c->AD += c->Y;")
-    l("            c->IR = c->opcode;")
-    l("            break;")
-    l("")
+    # Generate addressing mode sequences from definitions
+    for addr_mode, mode_def in ADDRESSING_MODES.items():
+        acronym, long_name, cycles = mode_def
+        offset = ADDR_MODE_INDICES[addr_mode]
+        
+        # Emit long name comment before the cycles
+        l(f"        // {acronym}: {long_name}")
+        
+        for cycle_idx, (cycle_code, is_final) in enumerate(cycles):
+            case_num = ADDR_SEQ_BASE + offset + cycle_idx
+            cycle_num = cycle_idx + 1
+            
+            l(f"        case {case_num}:  // {acronym} cycle {cycle_num}")
+            l(format_code(cycle_code))
+            l("            break;")
+            
+        l("")
 
 def generate_continuations():
     """Generate shared multi-cycle continuation sequences"""
