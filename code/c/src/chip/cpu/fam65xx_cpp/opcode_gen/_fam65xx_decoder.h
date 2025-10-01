@@ -325,7 +325,9 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         // ==========================================
 
         case 0x00:  // BRK [---] --- cycle 1
-            c->PC++;
+            if (0 == (c->brk_flags & (FAM65XX_BRK_IRQ | FAM65XX_BRK_NMI))) {
+            	c->PC++;
+            }
             BUS_WRITE(0x0100 | c->S--, c->PC >> 8);
             c->IR = C_BRK;
             goto end;
@@ -1150,11 +1152,12 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             break;
         case ADDR_SEQ_BASE + ADDR_IDX + 3:  // IDX cycle 4
             BUS_READ(c->AD);
+            c->PC = BUS_DATA();
             break;
         case ADDR_SEQ_BASE + ADDR_IDX + 4:  // IDX cycle 5
             BUS_READ((c->AD + 1) & 0xFF);
-            c->AD = BUS_DATA();
-            c->AD |= BUS_DATA() << 8;
+            c->PC |= BUS_DATA() << 8;
+            c->AD = c->PC;
             c->IR = c->opcode;
             goto end;
 
@@ -1168,11 +1171,12 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             break;
         case ADDR_SEQ_BASE + ADDR_IDY + 2:  // IDY cycle 3
             BUS_READ(c->AD);
+            c->PC = BUS_DATA();
             break;
         case ADDR_SEQ_BASE + ADDR_IDY + 3:  // IDY cycle 4
             BUS_READ((c->AD + 1) & 0xFF);
-            c->AD = BUS_DATA();
-            c->AD |= BUS_DATA() << 8;
+            c->PC |= BUS_DATA() << 8;
+            c->AD = c->PC;
             break;
         case ADDR_SEQ_BASE + ADDR_IDY + 4:  // IDY cycle 5
             BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));
@@ -1191,11 +1195,12 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             break;
         case ADDR_SEQ_BASE + ADDR_IDY_W + 2:  // IDY cycle 3
             BUS_READ(c->AD);
+            c->PC = BUS_DATA();
             break;
         case ADDR_SEQ_BASE + ADDR_IDY_W + 3:  // IDY cycle 4
             BUS_READ((c->AD + 1) & 0xFF);
-            c->AD = BUS_DATA();
-            c->AD |= BUS_DATA() << 8;
+            c->PC |= BUS_DATA() << 8;
+            c->AD = c->PC;
             break;
         case ADDR_SEQ_BASE + ADDR_IDY_W + 4:  // IDY cycle 5
             DUMMY_BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));
@@ -1209,27 +1214,27 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
 
         // BRK continuation
         case C_BRK + 0:
-            BUS_WRITE(0x0100 | c->S--, c->P | FAM65XX_BF);
-            c->AD = _fam65xx_get_vector_addr(c);
+            BUS_WRITE(0x0100 | c->S--, c->PC);
             break;
         case C_BRK + 1:
-            BUS_READ(c->AD);
-            c->PC = BUS_DATA();
+            BUS_WRITE(0x0100 | c->S--, c->P | FAM65XX_BF);
             c->P |= FAM65XX_IF;
+            c->P &= ~FAM65XX_BF;
             c->brk_flags = 0;
             break;
         case C_BRK + 2:
-            BUS_READ(c->AD + 1);
-            c->PC |= BUS_DATA() << 8;
+            c->AD = _fam65xx_get_vector_addr(c);
+            BUS_READ(c->AD);
+            c->PC = BUS_DATA();
             break;
         case C_BRK + 3:
-            DUMMY_BUS_READ(c->PC);
+            BUS_READ(c->AD + 1);
+            c->PC |= BUS_DATA() << 8;
             break;
         case C_BRK + 4:
             DUMMY_BUS_READ(c->PC);
             break;
         case C_BRK + 5:
-            DUMMY_BUS_READ(c->PC);
             _FETCH();
             goto end;
 
@@ -1351,11 +1356,11 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             break;
         case C_RTI + 1:
             BUS_READ(0x0100 | c->S++);
+            c->PC = BUS_DATA();
             break;
         case C_RTI + 2:
             BUS_READ(0x0100 | c->S);
-            c->AD = BUS_DATA();
-            c->PC = (BUS_DATA() << 8) | c->AD;
+            c->PC |= BUS_DATA() << 8;
             break;
         case C_RTI + 3:
             DUMMY_BUS_READ(c->PC);
@@ -1413,11 +1418,11 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         // RTS continuation
         case C_RTS + 0:
             BUS_READ(0x0100 | c->S++);
+            c->PC = BUS_DATA();
             break;
         case C_RTS + 1:
             BUS_READ(0x0100 | c->S);
-            c->AD = BUS_DATA();
-            c->PC = (BUS_DATA() << 8) | c->AD;
+            c->PC |= BUS_DATA() << 8;
             break;
         case C_RTS + 2:
             BUS_READ(c->PC++);
@@ -1469,11 +1474,11 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             break;
         case C_JMP_IND + 1:
             BUS_READ(c->AD);
+            c->PC = BUS_DATA();
             break;
         case C_JMP_IND + 2:
             BUS_READ((c->AD & 0xFF00) | ((c->AD + 1) & 0xFF));
-            c->AD = BUS_DATA();
-            c->PC = (BUS_DATA() << 8) | c->AD;
+            c->PC |= BUS_DATA() << 8;
             break;
         case C_JMP_IND + 3:
             DUMMY_BUS_READ(c->PC);
