@@ -88,12 +88,14 @@ typedef void (*fam65xx_mem_write_t)(void* user_data, uint16_t addr, uint8_t data
 
 // CPU state
 typedef struct {
-    // Registers
-    uint16_t PC;
-    uint8_t A, X, Y, S, P;
-    
-    // Internal working register for address calculations
-    uint16_t AD;
+    // Public registers
+    uint16_t PC;      // Program counter
+    uint8_t A, X, Y;  // Accumulator, X and Y index registers
+    uint8_t S;        // Stack pointer
+    uint8_t P;        // Processor status
+    // Internal registers
+    uint8_t DL;       // Data latch
+    uint16_t AD;      // Address data (compposed of ADL and ADH in hardware)
     
     // Cycle decoder state
     uint16_t CI;      // Current cycle index
