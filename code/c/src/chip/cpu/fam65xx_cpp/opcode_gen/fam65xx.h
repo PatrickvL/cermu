@@ -96,7 +96,7 @@ typedef struct {
     uint16_t AD;
     
     // Cycle decoder state
-    uint16_t IR;      // Current cycle index
+    uint16_t CI;      // Current cycle index
     uint8_t opcode;   // Current opcode byte
     
     // Memory callbacks
@@ -172,7 +172,7 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
 //=============================================================================
 
 // Bus read: Check RDY, then call memory callback
-// If RDY is low, CPU stalls (returns without incrementing IR)
+// If RDY is low, CPU stalls (returns without incrementing CI)
 #define BUS_READ(addr) do { \
     if (!(pins & FAM65XX_RDY)) { \
         return pins; \
@@ -218,9 +218,9 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
     c->opcode = c->mem_read(c->user_data, c->PC++, FAM65XX_GET_DATA(pins)); \
     uint8_t addr_seq = opcode_addr_start[c->opcode]; \
     if (addr_seq == 0) { \
-        c->IR = c->opcode; \
+        c->CI = c->opcode; \
     } else { \
-        c->IR = 256 + addr_seq; \
+        c->CI = 256 + addr_seq; \
     } \
     pins |= FAM65XX_SYNC; \
 } while(0)
@@ -391,7 +391,7 @@ uint64_t fam65xx_init(fam65xx_t* c, const fam65xx_desc_t* desc) {
     // ProcessorTests-compatible initialization: ready for immediate execution
     c->P = FAM65XX_XF;  // Only set unused flag, no interrupt disable
     c->S = 0xFF;        // Stack pointer starts at top
-    c->IR = C_FETCH_CYCLE; // Start in fetch state to get first instruction
+    c->CI = C_FETCH_CYCLE; // Start in fetch state to get first instruction
     c->opcode = 0;
     
     // No reset sequence for ProcessorTests - CPU ready for direct execution
@@ -406,7 +406,7 @@ uint64_t fam65xx_init(fam65xx_t* c, const fam65xx_desc_t* desc) {
 void fam65xx_reset(fam65xx_t* c) {
     CHIPS_ASSERT(c);
     c->brk_flags = FAM65XX_BRK_RESET;
-    c->IR = 0x00;
+    c->CI = 0x00;
     c->P |= FAM65XX_IF;
 }
 
@@ -417,21 +417,21 @@ uint64_t fam65xx_tick(fam65xx_t* c, uint64_t pins) {
     pins &= ~FAM65XX_SYNC;
     
     // Check for interrupts at end of instruction
-    if (c->IR == c->opcode && (c->opcode & 0x07) == 0) {
+    if (c->CI == c->opcode && (c->opcode & 0x07) == 0) {
         // Instruction just completed, check for pending interrupts
         if (pins & FAM65XX_RES) {
             c->brk_flags |= FAM65XX_BRK_RESET;
-            c->IR = 0x00;
+            c->CI = 0x00;
         } else {
             // NMI edge detection
             if ((c->nmi_pip & 0x80) && !(c->nmi_pip & 0x40)) {
                 c->brk_flags |= FAM65XX_BRK_NMI;
-                c->IR = 0x00;
+                c->CI = 0x00;
             }
             // IRQ level detection
             else if ((pins & FAM65XX_IRQ) && !(c->P & FAM65XX_IF)) {
                 c->brk_flags |= FAM65XX_BRK_IRQ;
-                c->IR = 0x00;
+                c->CI = 0x00;
             }
         }
         
@@ -448,7 +448,7 @@ uint64_t fam65xx_tick(fam65xx_t* c, uint64_t pins) {
 }
 
 bool fam65xx_opdone(fam65xx_t* c) {
-    return (c->IR == c->opcode);
+    return (c->CI == c->opcode);
 }
 
 // 6510 I/O port handling
