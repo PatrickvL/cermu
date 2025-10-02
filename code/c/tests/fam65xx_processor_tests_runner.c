@@ -48,6 +48,10 @@ typedef struct {
 
 static test_results_t g_results = {0};
 
+// Global execution control
+static bool g_stop_on_failure = true;  // Default: stop on first failure
+static bool g_test_failed = false;     // Track if any test has failed
+
 // Debug and performance tracking
 typedef struct {
     clock_t start_time;
@@ -687,12 +691,65 @@ static bool run_single_test(test_harness_t* harness, const processor_test_t* tes
         g_results.failed_tests++;
         if (!state_match) g_results.state_mismatches++;
         g_results.opcode_failures[opcode]++;
+        
+        // Set global failure flag
+        g_test_failed = true;
+        
         if (harness->verbose) {
-            printf("FAIL %s: %s%s%s\n", test->name, 
+            printf("FAIL %s: %s%s%s\n", test->name,
                    state_match ? "" : "state ",
                    (state_match || cycle_match) ? "" : "and ",
                    cycle_match ? "" : "cycle");
         }
+        
+        // If stop-on-failure is enabled, show complete failure analysis
+        if (g_stop_on_failure) {
+            printf("\n=== FIRST FAILURE DETECTED - STOPPING EXECUTION ===\n");
+            printf("Failed test: %s\n", test->name);
+            printf("Opcode: 0x%02X\n", opcode);
+            
+            const cpu_state_t* expected = &test->final;  // Get reference to expected state
+            
+            if (!state_match) {
+                printf("State mismatches detected:\n");
+                // Re-check each component to show all differences
+                if (fam65xx_pc(&harness->cpu) != expected->pc) {
+                    printf("  PC: expected 0x%04X, got 0x%04X (diff: %+d)\n",
+                           expected->pc, fam65xx_pc(&harness->cpu),
+                           (int)fam65xx_pc(&harness->cpu) - (int)expected->pc);
+                }
+                if (fam65xx_a(&harness->cpu) != expected->a) {
+                    printf("  A:  expected 0x%02X, got 0x%02X\n",
+                           expected->a, fam65xx_a(&harness->cpu));
+                }
+                if (fam65xx_x(&harness->cpu) != expected->x) {
+                    printf("  X:  expected 0x%02X, got 0x%02X\n",
+                           expected->x, fam65xx_x(&harness->cpu));
+                }
+                if (fam65xx_y(&harness->cpu) != expected->y) {
+                    printf("  Y:  expected 0x%02X, got 0x%02X\n",
+                           expected->y, fam65xx_y(&harness->cpu));
+                }
+                if (fam65xx_s(&harness->cpu) != expected->s) {
+                    printf("  SP: expected 0x%02X, got 0x%02X\n",
+                           expected->s, fam65xx_s(&harness->cpu));
+                }
+                if (fam65xx_p(&harness->cpu) != expected->p) {
+                    printf("  P:  expected 0x%02X, got 0x%02X\n",
+                           expected->p, fam65xx_p(&harness->cpu));
+                }
+            }
+            
+            if (!cycle_match && test->final.has_cycles) {
+                printf("Cycle mismatch:\n");
+                printf("  Expected: %u cycles, Got: %u cycles (diff: %+d)\n",
+                       test->final.cycles, cycles_executed,
+                       (int)cycles_executed - (int)test->final.cycles);
+            }
+            
+            printf("\nUse --continue flag to run through all tests despite failures.\n");
+        }
+        
         return false;
     }
 }
@@ -817,6 +874,11 @@ static void process_directory(const char* dirpath, bool verbose) {
                     printf("Processing file: %s\n", filepath);
                 }
                 process_test_file(filepath, verbose);
+                
+                // Check if we should stop on failure
+                if (g_stop_on_failure && g_test_failed) {
+                    return;
+                }
             }
         }
     } while (FindNextFile(hFind, &find_data) != 0);
@@ -848,6 +910,11 @@ static void process_directory(const char* dirpath, bool verbose) {
                         printf("Processing file: %s\n", filepath);
                     }
                     process_test_file(filepath, verbose);
+                    
+                    // Check if we should stop on failure
+                    if (g_stop_on_failure && g_test_failed) {
+                        return;
+                    }
                 }
             }
         }
@@ -942,6 +1009,10 @@ int main(int argc, char* argv[]) {
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--verbose") == 0) {
             verbose = true;
+        } else if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--continue") == 0) {
+            g_stop_on_failure = false;
+        } else if (strcmp(argv[i], "-s") == 0 || strcmp(argv[i], "--stop-first") == 0) {
+            g_stop_on_failure = true;
         } else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--debug") == 0) {
             debug_mode = true;
         } else if (strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--perf") == 0) {
