@@ -1,8 +1,15 @@
 /*
  * fam65xx_processor_tests_runner.c
- * 
+ *
  * Comprehensive ProcessorTests runner using the fam65xx 6502 core
  * Tests cycle and hardware accuracy against ProcessorTests ground truth
+ *
+ * Enhanced with advanced debugging features from unified_processor_test.cpp:
+ * - Interactive debugging session with step/cycle/reset commands
+ * - Performance benchmarking and timing analysis
+ * - Memory inspection and dumping capabilities
+ * - Bus cycle tracing and detailed state analysis
+ * - Enhanced error reporting with formatted output
  */
 
 #include <stdio.h>
@@ -33,6 +40,9 @@ typedef struct {
     uint8_t memory[65536];
     uint32_t cycle_count;
     bool verbose;
+    bool debug_mode;
+    bool interactive_mode;
+    uint32_t max_cycles_per_test;
 } test_harness_t;
 
 // Test results tracking
@@ -48,6 +58,29 @@ typedef struct {
 
 static test_results_t g_results = {0};
 
+// Enhanced debugging and analysis features
+typedef struct {
+    bool interactive_mode;
+    bool performance_mode;
+    bool memory_trace;
+    bool bus_trace;
+    bool step_mode;
+    uint32_t break_address;
+    uint32_t watch_address;
+} debug_options_t;
+
+// Performance tracking
+typedef struct {
+    clock_t start_time;
+    clock_t end_time;
+    uint64_t total_cycles;
+    uint64_t total_instructions;
+    uint32_t tests_per_second;
+} performance_stats_t;
+
+static debug_options_t g_debug_opts = {0};
+static performance_stats_t g_perf = {0};
+
 // Global execution control
 static bool g_stop_on_failure = true;  // Default: stop on first failure
 static bool g_test_failed = false;     // Track if any test has failed
@@ -61,7 +94,7 @@ typedef struct {
     bool performance_mode;
 } debug_context_t;
 
-static debug_context_t g_debug = {0};
+static debug_context_t g_debug_ctx = {0};
 
 // Memory callbacks for the CPU
 static uint8_t test_mem_read(void* user_data, uint16_t addr, uint8_t bus_state) {
@@ -78,9 +111,12 @@ static void test_mem_write(void* user_data, uint16_t addr, uint8_t data) {
 }
 
 // Initialize test harness
-static void init_test_harness(test_harness_t* harness, bool verbose) {
+static void init_test_harness(test_harness_t* harness, bool verbose, bool debug_mode, bool interactive_mode) {
     memset(harness, 0, sizeof(test_harness_t));
     harness->verbose = verbose;
+    harness->debug_mode = debug_mode;
+    harness->interactive_mode = interactive_mode;
+    harness->max_cycles_per_test = 100; // Safety limit for debug mode
     
     // Clear memory
     memset(harness->memory, 0, sizeof(harness->memory));
@@ -220,53 +256,43 @@ static bool execute_instruction(test_harness_t* harness) {
 static bool compare_cpu_state(test_harness_t* harness, const cpu_state_t* expected, const char* test_name) {
     bool match = true;
     
-    // Check registers
+    // Check registers - FAIL messages are always shown as they're critical
     if (fam65xx_pc(&harness->cpu) != expected->pc) {
-        if (harness->verbose) {
-            printf("FAIL %s: PC mismatch - expected 0x%04X, got 0x%04X\n", 
-                   test_name, expected->pc, fam65xx_pc(&harness->cpu));
-        }
+        printf("FAIL %s: PC mismatch - expected 0x%04X, got 0x%04X\n",
+               test_name, expected->pc, fam65xx_pc(&harness->cpu));
         match = false;
     }
     
     if (fam65xx_a(&harness->cpu) != expected->a) {
-        if (harness->verbose) {
-            printf("FAIL %s: A mismatch - expected 0x%02X, got 0x%02X\n", 
-                   test_name, expected->a, fam65xx_a(&harness->cpu));
-        }
+        printf("FAIL %s: A mismatch - expected 0x%02X, got 0x%02X\n",
+               test_name, expected->a, fam65xx_a(&harness->cpu));
         match = false;
     }
     
     if (fam65xx_x(&harness->cpu) != expected->x) {
-        if (harness->verbose) {
-            printf("FAIL %s: X mismatch - expected 0x%02X, got 0x%02X\n", 
-                   test_name, expected->x, fam65xx_x(&harness->cpu));
-        }
+        printf("FAIL %s: X mismatch - expected 0x%02X, got 0x%02X\n",
+               test_name, expected->x, fam65xx_x(&harness->cpu));
         match = false;
     }
     
     if (fam65xx_y(&harness->cpu) != expected->y) {
-        if (harness->verbose) {
-            printf("FAIL %s: Y mismatch - expected 0x%02X, got 0x%02X\n", 
-                   test_name, expected->y, fam65xx_y(&harness->cpu));
-        }
+        printf("FAIL %s: Y mismatch - expected 0x%02X, got 0x%02X\n",
+               test_name, expected->y, fam65xx_y(&harness->cpu));
         match = false;
     }
     
     if (fam65xx_s(&harness->cpu) != expected->s) {
-        if (harness->verbose) {
-            printf("FAIL %s: S mismatch - expected 0x%02X, got 0x%02X\n", 
-                   test_name, expected->s, fam65xx_s(&harness->cpu));
-        }
+        printf("FAIL %s: S mismatch - expected 0x%02X, got 0x%02X\n",
+               test_name, expected->s, fam65xx_s(&harness->cpu));
         match = false;
     }
     
     if (fam65xx_p(&harness->cpu) != expected->p) {
+        printf("FAIL %s: P mismatch - expected 0x%02X, got 0x%02X\n",
+               test_name, expected->p, fam65xx_p(&harness->cpu));
+        
+        // Detailed flag analysis - show in verbose mode
         if (harness->verbose) {
-            printf("FAIL %s: P mismatch - expected 0x%02X, got 0x%02X\n", 
-                   test_name, expected->p, fam65xx_p(&harness->cpu));
-            
-            // Detailed flag analysis
             uint8_t exp_p = expected->p;
             uint8_t got_p = fam65xx_p(&harness->cpu);
             printf("  Flag breakdown: N=%d/%d V=%d/%d U=%d/%d B=%d/%d D=%d/%d I=%d/%d Z=%d/%d C=%d/%d\n",
@@ -290,10 +316,8 @@ static bool compare_cpu_state(test_harness_t* harness, const cpu_state_t* expect
             uint8_t actual_val = harness->memory[addr + j];
             
             if (actual_val != expected_val) {
-                if (harness->verbose) {
-                    printf("FAIL %s: Memory[0x%04X] mismatch - expected 0x%02X, got 0x%02X\n", 
-                           test_name, addr + j, expected_val, actual_val);
-                }
+                printf("FAIL %s: Memory[0x%04X] mismatch - expected 0x%02X, got 0x%02X\n",
+                       test_name, addr + j, expected_val, actual_val);
                 match = false;
             }
         }
@@ -347,7 +371,7 @@ static void run_debug_session(test_harness_t* harness) {
             harness->cycle_count++;
             print_cpu_state_detailed(harness, "After cycle");
         } else if (strcmp(command, "reset") == 0 || strcmp(command, "r") == 0) {
-            init_test_harness(harness, harness->verbose);
+            init_test_harness(harness, harness->verbose, false, false);
             print_cpu_state_detailed(harness, "After reset");
         } else if (strcmp(command, "state") == 0) {
             print_cpu_state_detailed(harness, "Current");
@@ -374,7 +398,7 @@ static void run_performance_benchmark(test_harness_t* harness, int num_instructi
     clock_t start_time = clock();
     uint32_t start_cycles = harness->cycle_count;
     
-    init_test_harness(harness, false);  // Non-verbose for benchmark
+    init_test_harness(harness, false, false, false);  // Non-verbose for benchmark
     
     // Set up a simple test program
     harness->memory[0x1000] = 0xEA;  // NOP
@@ -470,7 +494,7 @@ static void analyze_opcode(test_harness_t* harness, uint8_t opcode) {
     printf("\n=== ANALYZING OPCODE 0x%02X ===\n", opcode);
     
     // Set up a simple test state
-    init_test_harness(harness, true);
+    init_test_harness(harness, true, false, false);
     harness->memory[0x1000] = opcode;
     harness->memory[0x1001] = 0x42;  // Potential immediate operand
     harness->memory[0x1002] = 0x34;  // Potential address low
@@ -564,7 +588,7 @@ static void run_enhanced_debug_session(test_harness_t* harness) {
             harness->cycle_count++;
             print_cpu_state_detailed(harness, "After cycle");
         } else if (strcmp(token, "reset") == 0 || strcmp(token, "r") == 0) {
-            init_test_harness(harness, harness->verbose);
+            init_test_harness(harness, harness->verbose, false, false);
             print_cpu_state_detailed(harness, "After reset");
         } else if (strcmp(token, "state") == 0) {
             print_cpu_state_detailed(harness, "Current");
@@ -657,9 +681,7 @@ static bool run_single_test(test_harness_t* harness, const processor_test_t* tes
     // Execute instruction
     uint32_t cycles_before = harness->cycle_count;
     if (!execute_instruction(harness)) {
-        if (harness->verbose) {
-            printf("FAIL %s: Instruction execution failed\n", test->name);
-        }
+        printf("FAIL %s: Instruction execution failed\n", test->name);
         g_results.failed_tests++;
         g_results.opcode_failures[opcode]++;
         return false;
@@ -673,10 +695,8 @@ static bool run_single_test(test_harness_t* harness, const processor_test_t* tes
     
     // Check cycle count if provided
     if (test->final.has_cycles && cycles_executed != test->final.cycles) {
-        if (harness->verbose) {
-            printf("FAIL %s: Cycle mismatch - expected %u, got %u\n", 
-                   test->name, test->final.cycles, cycles_executed);
-        }
+        printf("FAIL %s: Cycle mismatch - expected %u, got %u\n",
+               test->name, test->final.cycles, cycles_executed);
         cycle_match = false;
         g_results.cycle_mismatches++;
     }
@@ -779,7 +799,7 @@ static bool process_test_file(const char* filepath, bool verbose) {
     
     // Initialize test harness
     test_harness_t harness;
-    init_test_harness(&harness, verbose);
+    init_test_harness(&harness, verbose, false, false);
     
     // Parse and run tests
     const char* pos = json_content;
@@ -1093,14 +1113,14 @@ int main(int argc, char* argv[]) {
     
     if (opcode_analysis_mode) {
         test_harness_t harness;
-        init_test_harness(&harness, verbose);
+        init_test_harness(&harness, verbose, false, false);
         analyze_opcode(&harness, target_opcode);
         return 0;
     }
     
     if (perf_mode) {
         test_harness_t harness;
-        init_test_harness(&harness, verbose);
+        init_test_harness(&harness, verbose, false, false);
         run_performance_benchmark(&harness, perf_instructions);
         return 0;
     }
@@ -1108,7 +1128,7 @@ int main(int argc, char* argv[]) {
     if ((debug_mode || enhanced_debug_mode) && !test_path) {
         // Interactive debug mode without test file
         test_harness_t harness;
-        init_test_harness(&harness, verbose);
+        init_test_harness(&harness, verbose, false, false);
         
         // Set up a simple test program for debugging
         harness.memory[0x1000] = 0xEA;  // NOP
@@ -1158,7 +1178,7 @@ int main(int argc, char* argv[]) {
             // If debug mode is enabled, start debug session after tests
             if (debug_mode || enhanced_debug_mode) {
                 test_harness_t debug_harness;
-                init_test_harness(&debug_harness, verbose);
+                init_test_harness(&debug_harness, verbose, false, false);
                 printf("\n=== Starting debug session after test completion ===\n");
                 if (enhanced_debug_mode) {
                     run_enhanced_debug_session(&debug_harness);
