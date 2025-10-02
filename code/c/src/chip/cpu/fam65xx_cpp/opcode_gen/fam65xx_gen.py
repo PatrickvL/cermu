@@ -48,7 +48,7 @@ AM_ABS = ("ABS", "absolute", "ADDR_ABS", (
 AM_ABX = ("ABX", "absolute,X", "ADDR_ABX", (
     "BUS_READ(c->PC++);\nc->AD = BUS_DATA();",
     "BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;",
-    "BUS_READ((c->AD & 0xFF00) | ((c->AD + c->X) & 0xFF));\nc->IR += (~((c->AD >> 8) - ((c->AD + c->X) >> 8))) & 1;",
+    "BUS_READ((c->AD & 0xFF00) | ((c->AD + c->X) & 0xFF));\nif ((c->AD >> 8) != ((c->AD + c->X) >> 8)) { c->AD += c->X; c->IR = c->opcode; } else { c->IR++; }",
     "c->AD += c->X;\nc->IR = c->opcode;"
 ))
 
@@ -62,7 +62,7 @@ AM_ABX_W = ("ABX", "absolute,X (write - always takes extra cycle)", "ADDR_ABX_W"
 AM_ABY = ("ABY", "absolute,Y", "ADDR_ABY", (
     "BUS_READ(c->PC++);\nc->AD = BUS_DATA();",
     "BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;",
-    "BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nc->IR += (~((c->AD >> 8) - ((c->AD + c->Y) >> 8))) & 1;",
+    "BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nif ((c->AD >> 8) != ((c->AD + c->Y) >> 8)) { c->AD += c->Y; c->IR = c->opcode; } else { c->IR++; }",
     "c->AD += c->Y;\nc->IR = c->opcode;"
 ))
 
@@ -86,7 +86,8 @@ AM_IDY = ("IDY", "indirect indexed (zp),Y", "ADDR_IDY", (
     "c->AD = BUS_DATA();\nDUMMY_BUS_READ(c->PC);",
     "BUS_READ(c->AD);\nc->PC = BUS_DATA();",
     "BUS_READ((c->AD + 1) & 0xFF);\nc->AD = c->PC | (BUS_DATA() << 8);",
-    "BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nc->IR += (~((c->AD >> 8) - ((c->AD + c->Y) >> 8))) & 1;\nc->AD += c->Y;\nc->IR = c->opcode;"
+    "BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nif ((c->AD >> 8) != ((c->AD + c->Y) >> 8)) { c->IR++; } else { c->AD += c->Y; c->IR = c->opcode; }",
+    "c->AD += c->Y;\nc->IR = c->opcode;"
 ))
 
 AM_IDY_W = ("IDY", "indirect indexed (zp),Y (write - always takes extra cycle)", "ADDR_IDY_W", (
@@ -227,7 +228,7 @@ OP_SHX = ("SHX", M__W, "BUS_WRITE(c->AD, c->X & ((c->AD >> 8) + 1));", None)  # 
 OP_SHA = ("SHA", M_RW, "BUS_WRITE(c->AD, c->A & c->X & ((c->AD >> 8) + 1));", None)  # Store A&X with high byte AND - M_RW separate _FETCH cycle
 OP_SHS = ("SHS", M__W, "c->S = c->A & c->X;\nBUS_WRITE(c->AD, c->S & ((c->AD >> 8) + 1));", None)  # Transfer A&X to S and store - M__W separate _FETCH cycle
 OP_LAS = ("LAS", M_R_, "BUS_READ(c->AD);\nc->A = c->X = c->S = c->S & BUS_DATA();\n_NZ(c->A);", None)  # AND S with memory to A,X,S - M_R_ _FETCH appended
-OP_JAM = ("JAM", M_RW, "BUS_READ(c->PC);\nc->IR--;", None)  # Read current PC and lock up (decrement IR to repeat)
+OP_JAM = ("JAM", M_RW, "DUMMY_BUS_READ(c->PC);\nc->IR--;", None)  # Read current PC and lock up (decrement IR to repeat)
 
 #-------------------------------------------------------------------------------
 # RMW Continuation Definitions
