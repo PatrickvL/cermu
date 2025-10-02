@@ -129,7 +129,7 @@ static void setup_cpu_state(test_harness_t* harness, const cpu_state_t* initial)
     harness->cpu.brk_flags = 0;
     // For ProcessorTests: CPU starts by fetching instruction at PC
     // This will read the opcode and set up the instruction execution
-    harness->cpu.IR = 256;  // Start at fetch cycle to read first opcode
+    harness->cpu.CI = 256;  // Start at fetch cycle to read first opcode
     
     // Reset cycle count
     harness->cycle_count = 0;
@@ -153,14 +153,14 @@ static bool execute_instruction(test_harness_t* harness) {
     uint32_t instruction_cycles = 0;  // Count only instruction execution cycles
     
     if (harness->verbose) {
-        printf("  Execution start: PC=0x%04X, IR=0x%04X, A=0x%02X, P=0x%02X\n",
-               fam65xx_pc(&harness->cpu), harness->cpu.IR, fam65xx_a(&harness->cpu), fam65xx_p(&harness->cpu));
+        printf("  Execution start: PC=0x%04X, CI=0x%04X, A=0x%02X, P=0x%02X\n",
+               fam65xx_pc(&harness->cpu), harness->cpu.CI, fam65xx_a(&harness->cpu), fam65xx_p(&harness->cpu));
     }
     
     for (int i = 0; i < max_cycles; i++) {
         if (harness->verbose) {
-            printf("    Cycle %d: IR=0x%04X, PC=0x%04X, A=0x%02X\n",
-                   i, harness->cpu.IR, fam65xx_pc(&harness->cpu), fam65xx_a(&harness->cpu));
+            printf("    Cycle %d: CI=0x%04X, PC=0x%04X, A=0x%02X\n",
+                   i, harness->cpu.CI, fam65xx_pc(&harness->cpu), fam65xx_a(&harness->cpu));
         }
         
         // Execute one CPU cycle
@@ -168,8 +168,8 @@ static bool execute_instruction(test_harness_t* harness) {
         harness->cycle_count++;
         
         if (harness->verbose) {
-            printf("    After tick: IR=0x%04X, PC=0x%04X, A=0x%02X, SYNC=%d\n",
-                   harness->cpu.IR, fam65xx_pc(&harness->cpu), fam65xx_a(&harness->cpu),
+            printf("    After tick: CI=0x%04X, PC=0x%04X, A=0x%02X, SYNC=%d\n",
+                   harness->cpu.CI, fam65xx_pc(&harness->cpu), fam65xx_a(&harness->cpu),
                    (pins & FAM65XX_SYNC) ? 1 : 0);
         }
         
@@ -203,8 +203,8 @@ static bool execute_instruction(test_harness_t* harness) {
         // Safety check for infinite loops
         if (i == max_cycles - 1) {
             if (harness->verbose) {
-                printf("ERROR: Instruction execution exceeded max cycles (PC=0x%04X, IR=0x%02X, pins=0x%lX)\n",
-                       fam65xx_pc(&harness->cpu), harness->cpu.IR, pins);
+                printf("ERROR: Instruction execution exceeded max cycles (PC=0x%04X, CI=0x%02X, pins=0x%lX)\n",
+                       fam65xx_pc(&harness->cpu), harness->cpu.CI, pins);
             }
             return false;
         }
@@ -304,7 +304,7 @@ static bool compare_cpu_state(test_harness_t* harness, const cpu_state_t* expect
 
 // Enhanced CPU state printing with better formatting
 static void print_cpu_state_detailed(test_harness_t* harness, const char* context) {
-    printf("%s: A:%02X X:%02X Y:%02X SP:%02X P:%02X PC:%04X Cycles:%u IR:%04X\n",
+    printf("%s: A:%02X X:%02X Y:%02X SP:%02X P:%02X PC:%04X Cycles:%u CI:%04X\n",
            context,
            fam65xx_a(&harness->cpu),
            fam65xx_x(&harness->cpu),
@@ -313,7 +313,7 @@ static void print_cpu_state_detailed(test_harness_t* harness, const char* contex
            fam65xx_p(&harness->cpu),
            fam65xx_pc(&harness->cpu),
            harness->cycle_count,
-           harness->cpu.IR);
+           harness->cpu.CI);
 }
 
 // Interactive debug session
