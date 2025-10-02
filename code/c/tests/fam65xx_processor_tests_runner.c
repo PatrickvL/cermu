@@ -11,10 +11,19 @@
 #include <stdbool.h>
 #include <string.h>
 #include <time.h>
-#include <dirent.h>
-#include <sys/stat.h>
+#ifdef _WIN32
+    #include <windows.h>
+    #include <io.h>
+    #include <direct.h>
+    #include <sys/stat.h>
+    #define stat _stat
+    #define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
+    #define S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
+#else
+    #include <dirent.h>
+    #include <sys/stat.h>
+#endif
 
-#define CHIPS_IMPL
 #include "../src/chip/cpu/fam65xx_cpp/opcode_gen/fam65xx.h"
 #include "json_parser.h"
 
@@ -425,6 +434,198 @@ static void run_optimization_analysis(void) {
     printf("- Comprehensive test coverage analysis\n");
 }
 
+// Memory dump functionality
+static void dump_memory(const test_harness_t* harness, uint16_t start, uint16_t length) {
+    printf("\nMemory dump from 0x%04X to 0x%04X:\n", start, start + length - 1);
+    
+    for (uint16_t addr = start; addr < start + length; addr += 16) {
+        printf("0x%04X: ", addr);
+        
+        // Hex bytes
+        for (int i = 0; i < 16 && addr + i < start + length; i++) {
+            printf("%02X ", harness->memory[addr + i]);
+        }
+        
+        // Pad if less than 16 bytes on this line
+        for (int i = (start + length - addr < 16) ? (start + length - addr) : 16; i < 16; i++) {
+            printf("   ");
+        }
+        
+        // ASCII representation
+        printf(" |");
+        for (int i = 0; i < 16 && addr + i < start + length; i++) {
+            uint8_t byte = harness->memory[addr + i];
+            printf("%c", (byte >= 32 && byte < 127) ? byte : '.');
+        }
+        printf("|\n");
+    }
+}
+
+// Analyze specific opcode
+static void analyze_opcode(test_harness_t* harness, uint8_t opcode) {
+    printf("\n=== ANALYZING OPCODE 0x%02X ===\n", opcode);
+    
+    // Set up a simple test state
+    init_test_harness(harness, true);
+    harness->memory[0x1000] = opcode;
+    harness->memory[0x1001] = 0x42;  // Potential immediate operand
+    harness->memory[0x1002] = 0x34;  // Potential address low
+    harness->memory[0x1003] = 0x12;  // Potential address high
+    fam65xx_set_pc(&harness->cpu, 0x1000);
+    
+    printf("Before execution:\n");
+    print_cpu_state_detailed(harness, "Pre-opcode");
+    
+    // Show memory around PC
+    printf("Memory context:\n");
+    dump_memory(harness, 0x1000, 8);
+    
+    uint32_t cycles_before = harness->cycle_count;
+    if (execute_instruction(harness)) {
+        printf("After execution:\n");
+        print_cpu_state_detailed(harness, "Post-opcode");
+        printf("Instruction took %u cycles\n", harness->cycle_count - cycles_before);
+        
+        // Show any memory changes
+        printf("Memory after execution:\n");
+        dump_memory(harness, 0x1000, 8);
+    } else {
+        printf("ERROR: Instruction execution failed!\n");
+    }
+}
+
+// CPU architecture information display
+static void print_cpu_info(void) {
+    printf("\n=== CPU ARCHITECTURE INFO ===\n");
+    printf("CPU: fam65xx 6502 core\n");
+    printf("Architecture: Cycle-accurate hardware emulation\n");
+    printf("Features:\n");
+    printf("- Hardware-accurate timing\n");
+    printf("- Cycle-by-cycle execution\n");
+    printf("- ProcessorTests compatibility\n");
+    printf("- Full 6502 instruction set\n");
+    printf("- Memory-mapped I/O support\n");
+    printf("- Interactive debugging\n");
+    printf("- Performance benchmarking\n");
+    printf("- Optimization analysis\n");
+    printf("\nMemory Layout:\n");
+    printf("- Total memory: 64KB (0x0000-0xFFFF)\n");
+    printf("- Zero page: 0x0000-0x00FF\n");
+    printf("- Stack: 0x0100-0x01FF\n");
+    printf("- Test program area: 0x1000+\n");
+    printf("- Vectors: 0xFFFA-0xFFFF\n");
+}
+
+// Enhanced interactive debug with more commands
+static void run_enhanced_debug_session(test_harness_t* harness) {
+    char command[128];
+    char *token;
+    
+    printf("\n=== ENHANCED DEBUG SESSION ===\n");
+    printf("Commands:\n");
+    printf("  step, s             - Execute one instruction\n");
+    printf("  cycle, c            - Execute one cycle\n");
+    printf("  reset, r            - Reset CPU\n");
+    printf("  state               - Show CPU state\n");
+    printf("  mem <addr> [len]    - Dump memory (default len=16)\n");
+    printf("  set <reg> <val>     - Set register (a,x,y,sp,p,pc)\n");
+    printf("  opcode <xx>         - Analyze specific opcode\n");
+    printf("  info                - Show CPU info\n");
+    printf("  quit, q             - Exit debug session\n");
+    print_cpu_state_detailed(harness, "Initial");
+    
+    while (1) {
+        printf("debug> ");
+        if (!fgets(command, sizeof(command), stdin)) {
+            break;
+        }
+        
+        // Remove newline and parse command
+        command[strcspn(command, "\n")] = 0;
+        token = strtok(command, " ");
+        
+        if (!token) continue;
+        
+        if (strcmp(token, "quit") == 0 || strcmp(token, "q") == 0) {
+            break;
+        } else if (strcmp(token, "step") == 0 || strcmp(token, "s") == 0) {
+            if (execute_instruction(harness)) {
+                print_cpu_state_detailed(harness, "After step");
+            } else {
+                printf("ERROR: Instruction execution failed\n");
+            }
+        } else if (strcmp(token, "cycle") == 0 || strcmp(token, "c") == 0) {
+            uint64_t pins = FAM65XX_RDY;
+            pins = fam65xx_tick(&harness->cpu, pins);
+            harness->cycle_count++;
+            print_cpu_state_detailed(harness, "After cycle");
+        } else if (strcmp(token, "reset") == 0 || strcmp(token, "r") == 0) {
+            init_test_harness(harness, harness->verbose);
+            print_cpu_state_detailed(harness, "After reset");
+        } else if (strcmp(token, "state") == 0) {
+            print_cpu_state_detailed(harness, "Current");
+            uint16_t pc = fam65xx_pc(&harness->cpu);
+            printf("Memory around PC:\n");
+            dump_memory(harness, pc - 2, 8);
+        } else if (strcmp(token, "mem") == 0) {
+            char* addr_str = strtok(NULL, " ");
+            char* len_str = strtok(NULL, " ");
+            
+            if (addr_str) {
+                uint16_t addr = (uint16_t)strtol(addr_str, NULL, 0);
+                uint16_t len = len_str ? (uint16_t)strtol(len_str, NULL, 0) : 16;
+                dump_memory(harness, addr, len);
+            } else {
+                printf("Usage: mem <addr> [len]\n");
+            }
+        } else if (strcmp(token, "set") == 0) {
+            char* reg_str = strtok(NULL, " ");
+            char* val_str = strtok(NULL, " ");
+            
+            if (reg_str && val_str) {
+                uint16_t val = (uint16_t)strtol(val_str, NULL, 0);
+                
+                if (strcmp(reg_str, "a") == 0) {
+                    fam65xx_set_a(&harness->cpu, (uint8_t)val);
+                } else if (strcmp(reg_str, "x") == 0) {
+                    fam65xx_set_x(&harness->cpu, (uint8_t)val);
+                } else if (strcmp(reg_str, "y") == 0) {
+                    fam65xx_set_y(&harness->cpu, (uint8_t)val);
+                } else if (strcmp(reg_str, "sp") == 0) {
+                    fam65xx_set_s(&harness->cpu, (uint8_t)val);
+                } else if (strcmp(reg_str, "p") == 0) {
+                    fam65xx_set_p(&harness->cpu, (uint8_t)val);
+                } else if (strcmp(reg_str, "pc") == 0) {
+                    fam65xx_set_pc(&harness->cpu, val);
+                } else {
+                    printf("Unknown register: %s (use: a,x,y,sp,p,pc)\n", reg_str);
+                    continue;
+                }
+                printf("Set %s = 0x%X\n", reg_str, val);
+                print_cpu_state_detailed(harness, "After set");
+            } else {
+                printf("Usage: set <reg> <val>\n");
+            }
+        } else if (strcmp(token, "opcode") == 0) {
+            char* opcode_str = strtok(NULL, " ");
+            
+            if (opcode_str) {
+                uint8_t opcode = (uint8_t)strtol(opcode_str, NULL, 0);
+                analyze_opcode(harness, opcode);
+            } else {
+                printf("Usage: opcode <hex_value>\n");
+            }
+        } else if (strcmp(token, "info") == 0) {
+            print_cpu_info();
+        } else if (strlen(token) > 0) {
+            printf("Unknown command: %s\n", token);
+            printf("Type 'quit' to exit or use available commands listed above.\n");
+        }
+    }
+    
+    printf("Debug session ended.\n");
+}
+
 // Run a single test case
 static bool run_single_test(test_harness_t* harness, const processor_test_t* test) {
     g_results.total_tests++;
@@ -587,6 +788,41 @@ static bool process_test_file(const char* filepath, bool verbose) {
 
 // Process directory recursively
 static void process_directory(const char* dirpath, bool verbose) {
+#ifdef _WIN32
+    WIN32_FIND_DATA find_data;
+    HANDLE hFind;
+    
+    char search_path[1024];
+    snprintf(search_path, sizeof(search_path), "%s\\*", dirpath);
+    
+    hFind = FindFirstFile(search_path, &find_data);
+    if (hFind == INVALID_HANDLE_VALUE) {
+        printf("ERROR: Cannot open directory %s\n", dirpath);
+        return;
+    }
+    
+    do {
+        if (find_data.cFileName[0] == '.') continue;
+        
+        char filepath[1024];
+        snprintf(filepath, sizeof(filepath), "%s\\%s", dirpath, find_data.cFileName);
+        
+        if (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            process_directory(filepath, verbose);
+        } else {
+            // Check for .json extension
+            char* ext = strrchr(find_data.cFileName, '.');
+            if (ext && strcmp(ext, ".json") == 0) {
+                if (verbose) {
+                    printf("Processing file: %s\n", filepath);
+                }
+                process_test_file(filepath, verbose);
+            }
+        }
+    } while (FindNextFile(hFind, &find_data) != 0);
+    
+    FindClose(hFind);
+#else
     DIR* dir = opendir(dirpath);
     if (!dir) {
         printf("ERROR: Cannot open directory %s\n", dirpath);
@@ -618,6 +854,7 @@ static void process_directory(const char* dirpath, bool verbose) {
     }
     
     closedir(dir);
+#endif
 }
 
 // Print usage information
@@ -629,18 +866,28 @@ static void print_usage(const char* program_name) {
     printf("  -d, --debug        Enable interactive debug session\n");
     printf("  -p, --perf [NUM]   Run performance benchmark (default: 1000 instructions)\n");
     printf("  -a, --analyze      Run optimization analysis\n");
+    printf("  --enhanced-debug   Use enhanced debug session with more commands\n");
+    printf("  --opcode <XX>      Analyze specific opcode (hex)\n");
+    printf("  --cpu-info         Show CPU architecture information\n");
     printf("  -h, --help         Show this help message\n");
     printf("\nCommands (instead of test files):\n");
     printf("  debug              Interactive debug session\n");
+    printf("  enhanced-debug     Enhanced debug session\n");
     printf("  perf [NUM]         Performance benchmark\n");
     printf("  analyze            Optimization analysis\n");
+    printf("  cpu-info           Show CPU information\n");
+    printf("  opcode <XX>        Analyze specific opcode\n");
     printf("\nExamples:\n");
     printf("  %s processor_tests/6502/v1/\n", program_name);
     printf("  %s -v processor_tests/6502/v1/69.json\n", program_name);
     printf("  %s debug\n", program_name);
+    printf("  %s enhanced-debug\n", program_name);
     printf("  %s -d -v single_test.json\n", program_name);
     printf("  %s perf 5000\n", program_name);
     printf("  %s analyze\n", program_name);
+    printf("  %s opcode 0x01\n", program_name);
+    printf("  %s --opcode 69 --verbose\n", program_name);
+    printf("  %s cpu-info\n", program_name);
 }
 
 // Print detailed results
@@ -682,9 +929,13 @@ static void print_results(void) {
 int main(int argc, char* argv[]) {
     bool verbose = false;
     bool debug_mode = false;
+    bool enhanced_debug_mode = false;
     bool perf_mode = false;
     bool analyze_mode = false;
+    bool cpu_info_mode = false;
+    bool opcode_analysis_mode = false;
     int perf_instructions = 1000;
+    uint8_t target_opcode = 0;
     char* test_path = NULL;
     
     // Parse command line arguments
@@ -701,11 +952,35 @@ int main(int argc, char* argv[]) {
             }
         } else if (strcmp(argv[i], "-a") == 0 || strcmp(argv[i], "--analyze") == 0) {
             analyze_mode = true;
+        } else if (strcmp(argv[i], "--enhanced-debug") == 0) {
+            enhanced_debug_mode = true;
+        } else if (strcmp(argv[i], "--opcode") == 0) {
+            opcode_analysis_mode = true;
+            if (i + 1 < argc) {
+                target_opcode = (uint8_t)strtol(argv[++i], NULL, 0);
+            } else {
+                printf("ERROR: --opcode requires hex value\n");
+                return 1;
+            }
+        } else if (strcmp(argv[i], "--cpu-info") == 0) {
+            cpu_info_mode = true;
         } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
             print_usage(argv[0]);
             return 0;
         } else if (strcmp(argv[i], "debug") == 0) {
             debug_mode = true;
+        } else if (strcmp(argv[i], "enhanced-debug") == 0) {
+            enhanced_debug_mode = true;
+        } else if (strcmp(argv[i], "cpu-info") == 0) {
+            cpu_info_mode = true;
+        } else if (strcmp(argv[i], "opcode") == 0) {
+            opcode_analysis_mode = true;
+            if (i + 1 < argc) {
+                target_opcode = (uint8_t)strtol(argv[++i], NULL, 0);
+            } else {
+                printf("ERROR: opcode command requires hex value\n");
+                return 1;
+            }
         } else if (strcmp(argv[i], "perf") == 0) {
             perf_mode = true;
             // Check if next argument is a number
@@ -722,8 +997,20 @@ int main(int argc, char* argv[]) {
     printf("=== fam65xx ProcessorTests Runner (Enhanced) ===\n");
     
     // Handle special modes
+    if (cpu_info_mode) {
+        print_cpu_info();
+        return 0;
+    }
+    
     if (analyze_mode) {
         run_optimization_analysis();
+        return 0;
+    }
+    
+    if (opcode_analysis_mode) {
+        test_harness_t harness;
+        init_test_harness(&harness, verbose);
+        analyze_opcode(&harness, target_opcode);
         return 0;
     }
     
@@ -734,7 +1021,7 @@ int main(int argc, char* argv[]) {
         return 0;
     }
     
-    if (debug_mode && !test_path) {
+    if ((debug_mode || enhanced_debug_mode) && !test_path) {
         // Interactive debug mode without test file
         test_harness_t harness;
         init_test_harness(&harness, verbose);
@@ -755,7 +1042,11 @@ int main(int argc, char* argv[]) {
         
         fam65xx_set_pc(&harness.cpu, 0x1000);
         
-        run_debug_session(&harness);
+        if (enhanced_debug_mode) {
+            run_enhanced_debug_session(&harness);
+        } else {
+            run_debug_session(&harness);
+        }
         return 0;
     }
     
@@ -781,11 +1072,15 @@ int main(int argc, char* argv[]) {
             process_test_file(test_path, verbose);
             
             // If debug mode is enabled, start debug session after tests
-            if (debug_mode) {
+            if (debug_mode || enhanced_debug_mode) {
                 test_harness_t debug_harness;
                 init_test_harness(&debug_harness, verbose);
                 printf("\n=== Starting debug session after test completion ===\n");
-                run_debug_session(&debug_harness);
+                if (enhanced_debug_mode) {
+                    run_enhanced_debug_session(&debug_harness);
+                } else {
+                    run_debug_session(&debug_harness);
+                }
             }
         } else {
             printf("ERROR: Invalid path type: %s\n", test_path);
