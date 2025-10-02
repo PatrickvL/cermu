@@ -126,6 +126,7 @@ static bool execute_instruction(test_harness_t* harness) {
     // Execute cycles until instruction completes
     int max_cycles = 20;  // Increase safety limit for complex instructions
     bool instruction_started = false;
+    uint32_t instruction_cycles = 0;  // Count only instruction execution cycles
     
     if (harness->verbose) {
         printf("  Execution start: PC=0x%04X, IR=0x%04X, A=0x%02X, P=0x%02X\n",
@@ -151,29 +152,42 @@ static bool execute_instruction(test_harness_t* harness) {
         // Check if we're at the start of a new instruction (SYNC high)
         if (pins & FAM65XX_SYNC) {
             if (instruction_started) {
-                // We've completed the previous instruction and started a new one
+                // We've completed the previous instruction and started fetch for next
+                // ProcessorTests expects PC to point to next instruction, but not advanced by fetch
+                // So decrement PC to compensate for the _FETCH() that advanced it
+                uint16_t corrected_pc = fam65xx_pc(&harness->cpu) - 1;
+                fam65xx_set_pc(&harness->cpu, corrected_pc);
+                
                 if (harness->verbose) {
-                    printf("  Instruction completed\n");
+                    printf("  Instruction completed, PC corrected from 0x%04X to 0x%04X\n",
+                           fam65xx_pc(&harness->cpu) + 1, corrected_pc);
                 }
                 break;
             } else {
                 // This is the start of our instruction
                 instruction_started = true;
+                instruction_cycles = 1;  // Count this cycle
                 if (harness->verbose) {
                     printf("  Instruction started with opcode 0x%02X\n", harness->cpu.opcode);
                 }
             }
+        } else if (instruction_started) {
+            // Count cycles that are part of instruction execution (not the final fetch)
+            instruction_cycles++;
         }
         
         // Safety check for infinite loops
         if (i == max_cycles - 1) {
             if (harness->verbose) {
-                printf("ERROR: Instruction execution exceeded max cycles (PC=0x%04X, IR=0x%02X, pins=0x%llX)\n",
+                printf("ERROR: Instruction execution exceeded max cycles (PC=0x%04X, IR=0x%02X, pins=0x%lX)\n",
                        fam65xx_pc(&harness->cpu), harness->cpu.IR, pins);
             }
             return false;
         }
     }
+    
+    // Update cycle count with only instruction cycles (excluding final fetch)
+    harness->cycle_count = initial_cycles + instruction_cycles;
     
     return true;
 }

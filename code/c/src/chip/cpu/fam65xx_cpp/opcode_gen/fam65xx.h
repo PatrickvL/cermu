@@ -217,10 +217,10 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
     } \
     c->opcode = c->mem_read(c->user_data, c->PC++, FAM65XX_GET_DATA(pins)); \
     uint8_t addr_seq = opcode_addr_start[c->opcode]; \
-    if (addr_seq == ADDR_NON) { \
+    if (addr_seq == 0) { \
         c->IR = c->opcode; \
     } else { \
-        c->IR = ADDR_SEQ_BASE + addr_seq; \
+        c->IR = 256 + addr_seq; \
     } \
     pins |= FAM65XX_SYNC; \
 } while(0)

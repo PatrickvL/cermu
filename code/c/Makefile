@@ -302,6 +302,32 @@ fam65xx_cpp_processor_tests_runner/fast:
 .PHONY : fam65xx_cpp_processor_tests_runner/fast
 
 #=============================================================================
+# Target rules for targets named unified_processor_test
+
+# Build rule for target.
+unified_processor_test: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 unified_processor_test
+.PHONY : unified_processor_test
+
+# fast build rule for target.
+unified_processor_test/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/unified_processor_test.dir/build.make tests/CMakeFiles/unified_processor_test.dir/build
+.PHONY : unified_processor_test/fast
+
+#=============================================================================
+# Target rules for targets named unified_processor_test_simple
+
+# Build rule for target.
+unified_processor_test_simple: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 unified_processor_test_simple
+.PHONY : unified_processor_test_simple
+
+# fast build rule for target.
+unified_processor_test_simple/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/unified_processor_test_simple.dir/build.make tests/CMakeFiles/unified_processor_test_simple.dir/build
+.PHONY : unified_processor_test_simple/fast
+
+#=============================================================================
 # Target rules for targets named nmi_edge_detection_test
 
 # Build rule for target.
@@ -1048,6 +1074,8 @@ help:
 	@echo "... mos6510_lib"
 	@echo "... nmi_edge_detection_test"
 	@echo "... processor_tests_runner"
+	@echo "... unified_processor_test"
+	@echo "... unified_processor_test_simple"
 	@echo "... src/chip/cpu/fam65xx_cpp/fam65xx_gui.o"
 	@echo "... src/chip/cpu/fam65xx_cpp/fam65xx_gui.i"
 	@echo "... src/chip/cpu/fam65xx_cpp/fam65xx_gui.s"
