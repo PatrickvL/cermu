@@ -39,6 +39,17 @@ typedef struct {
 
 static test_results_t g_results = {0};
 
+// Debug and performance tracking
+typedef struct {
+    clock_t start_time;
+    uint64_t total_cycles;
+    uint64_t total_instructions;
+    bool interactive_mode;
+    bool performance_mode;
+} debug_context_t;
+
+static debug_context_t g_debug = {0};
+
 // Memory callbacks for the CPU
 static uint8_t test_mem_read(void* user_data, uint16_t addr, uint8_t bus_state) {
     test_harness_t* harness = (test_harness_t*)user_data;
@@ -278,6 +289,142 @@ static bool compare_cpu_state(test_harness_t* harness, const cpu_state_t* expect
     return match;
 }
 
+// Enhanced CPU state printing with better formatting
+static void print_cpu_state_detailed(test_harness_t* harness, const char* context) {
+    printf("%s: A:%02X X:%02X Y:%02X SP:%02X P:%02X PC:%04X Cycles:%u IR:%04X\n",
+           context,
+           fam65xx_a(&harness->cpu),
+           fam65xx_x(&harness->cpu),
+           fam65xx_y(&harness->cpu),
+           fam65xx_s(&harness->cpu),
+           fam65xx_p(&harness->cpu),
+           fam65xx_pc(&harness->cpu),
+           harness->cycle_count,
+           harness->cpu.IR);
+}
+
+// Interactive debug session
+static void run_debug_session(test_harness_t* harness) {
+    char command[32];
+    
+    printf("\n=== INTERACTIVE DEBUG SESSION ===\n");
+    printf("Commands: step, cycle, reset, state, quit\n");
+    print_cpu_state_detailed(harness, "Initial");
+    
+    while (1) {
+        printf("debug> ");
+        if (!fgets(command, sizeof(command), stdin)) {
+            break;
+        }
+        
+        // Remove newline
+        command[strcspn(command, "\n")] = 0;
+        
+        if (strcmp(command, "quit") == 0 || strcmp(command, "q") == 0) {
+            break;
+        } else if (strcmp(command, "step") == 0 || strcmp(command, "s") == 0) {
+            if (execute_instruction(harness)) {
+                print_cpu_state_detailed(harness, "After step");
+            } else {
+                printf("ERROR: Instruction execution failed\n");
+            }
+        } else if (strcmp(command, "cycle") == 0 || strcmp(command, "c") == 0) {
+            uint64_t pins = FAM65XX_RDY;
+            pins = fam65xx_tick(&harness->cpu, pins);
+            harness->cycle_count++;
+            print_cpu_state_detailed(harness, "After cycle");
+        } else if (strcmp(command, "reset") == 0 || strcmp(command, "r") == 0) {
+            init_test_harness(harness, harness->verbose);
+            print_cpu_state_detailed(harness, "After reset");
+        } else if (strcmp(command, "state") == 0) {
+            print_cpu_state_detailed(harness, "Current");
+            // Show memory around PC
+            uint16_t pc = fam65xx_pc(&harness->cpu);
+            printf("Memory around PC:\n");
+            for (int i = -2; i <= 5; i++) {
+                uint16_t addr = pc + i;
+                printf("  %04X: %02X %s\n", addr, harness->memory[addr],
+                       (i == 0) ? "<-- PC" : "");
+            }
+        } else if (strlen(command) > 0) {
+            printf("Unknown command. Available: step, cycle, reset, state, quit\n");
+        }
+    }
+    
+    printf("Debug session ended.\n");
+}
+
+// Performance benchmarking
+static void run_performance_benchmark(test_harness_t* harness, int num_instructions) {
+    printf("\n=== PERFORMANCE BENCHMARK ===\n");
+    
+    clock_t start_time = clock();
+    uint32_t start_cycles = harness->cycle_count;
+    
+    init_test_harness(harness, false);  // Non-verbose for benchmark
+    
+    // Set up a simple test program
+    harness->memory[0x1000] = 0xEA;  // NOP
+    harness->memory[0x1001] = 0xA9;  // LDA #$42
+    harness->memory[0x1002] = 0x42;
+    harness->memory[0x1003] = 0x4C;  // JMP $1000 (loop)
+    harness->memory[0x1004] = 0x00;
+    harness->memory[0x1005] = 0x10;
+    
+    fam65xx_set_pc(&harness->cpu, 0x1000);
+    
+    int executed = 0;
+    for (int i = 0; i < num_instructions; i++) {
+        if (execute_instruction(harness)) {
+            executed++;
+        } else {
+            printf("Execution failed at instruction %d\n", i);
+            break;
+        }
+    }
+    
+    clock_t end_time = clock();
+    uint32_t end_cycles = harness->cycle_count;
+    
+    double execution_time = ((double)(end_time - start_time)) / CLOCKS_PER_SEC;
+    uint32_t total_cycles = end_cycles - start_cycles;
+    
+    printf("Executed %d instructions in %.3f seconds\n", executed, execution_time);
+    printf("Total cycles: %u\n", total_cycles);
+    printf("Performance: %.0f instructions/second\n", executed / execution_time);
+    printf("Average cycles/instruction: %.2f\n", (double)total_cycles / executed);
+    printf("CPU frequency equivalent: %.2f MHz (assuming 1 MHz = 1M cycles/sec)\n",
+           total_cycles / execution_time / 1000000.0);
+}
+
+// Optimization analysis
+static void run_optimization_analysis(void) {
+    printf("\n=== OPTIMIZATION ANALYSIS ===\n");
+    printf("fam65xx Core Architecture Analysis:\n");
+    printf("- Hardware-accurate cycle timing\n");
+    printf("- Memory callback system for flexibility\n");
+    printf("- Comprehensive flag handling\n");
+    printf("- Support for all 6502 addressing modes\n");
+    printf("- ProcessorTests compatible execution model\n");
+    
+    printf("\nMemory Efficiency:\n");
+    printf("- CPU state: %zu bytes\n", sizeof(fam65xx_t));
+    printf("- Test harness: %zu bytes\n", sizeof(test_harness_t));
+    printf("- Memory array: 64KB\n");
+    
+    printf("\nOptimization Opportunities:\n");
+    printf("- Opcode dispatch optimization\n");
+    printf("- Memory access pattern analysis\n");
+    printf("- Cycle counting accuracy vs speed tradeoffs\n");
+    printf("- Instruction pipeline simulation\n");
+    
+    printf("\nProcessorTests Integration:\n");
+    printf("- JSON parsing and validation\n");
+    printf("- Cycle-accurate execution verification\n");
+    printf("- Register and memory state comparison\n");
+    printf("- Comprehensive test coverage analysis\n");
+}
+
 // Run a single test case
 static bool run_single_test(test_harness_t* harness, const processor_test_t* test) {
     g_results.total_tests++;
@@ -476,13 +623,24 @@ static void process_directory(const char* dirpath, bool verbose) {
 // Print usage information
 static void print_usage(const char* program_name) {
     printf("fam65xx ProcessorTests Runner - Hardware-accurate 6502 verification\n");
-    printf("Usage: %s [options] <test_file_or_directory>\n", program_name);
+    printf("Usage: %s [options] <test_file_or_directory|command>\n", program_name);
     printf("Options:\n");
-    printf("  -v, --verbose    Enable verbose output\n");
-    printf("  -h, --help       Show this help message\n");
+    printf("  -v, --verbose      Enable verbose output\n");
+    printf("  -d, --debug        Enable interactive debug session\n");
+    printf("  -p, --perf [NUM]   Run performance benchmark (default: 1000 instructions)\n");
+    printf("  -a, --analyze      Run optimization analysis\n");
+    printf("  -h, --help         Show this help message\n");
+    printf("\nCommands (instead of test files):\n");
+    printf("  debug              Interactive debug session\n");
+    printf("  perf [NUM]         Performance benchmark\n");
+    printf("  analyze            Optimization analysis\n");
     printf("\nExamples:\n");
     printf("  %s processor_tests/6502/v1/\n", program_name);
     printf("  %s -v processor_tests/6502/v1/69.json\n", program_name);
+    printf("  %s debug\n", program_name);
+    printf("  %s -d -v single_test.json\n", program_name);
+    printf("  %s perf 5000\n", program_name);
+    printf("  %s analyze\n", program_name);
 }
 
 // Print detailed results
@@ -523,29 +681,94 @@ static void print_results(void) {
 // Main function
 int main(int argc, char* argv[]) {
     bool verbose = false;
+    bool debug_mode = false;
+    bool perf_mode = false;
+    bool analyze_mode = false;
+    int perf_instructions = 1000;
     char* test_path = NULL;
     
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--verbose") == 0) {
             verbose = true;
+        } else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--debug") == 0) {
+            debug_mode = true;
+        } else if (strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--perf") == 0) {
+            perf_mode = true;
+            // Check if next argument is a number
+            if (i + 1 < argc && argv[i + 1][0] >= '0' && argv[i + 1][0] <= '9') {
+                perf_instructions = atoi(argv[++i]);
+            }
+        } else if (strcmp(argv[i], "-a") == 0 || strcmp(argv[i], "--analyze") == 0) {
+            analyze_mode = true;
         } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
             print_usage(argv[0]);
             return 0;
+        } else if (strcmp(argv[i], "debug") == 0) {
+            debug_mode = true;
+        } else if (strcmp(argv[i], "perf") == 0) {
+            perf_mode = true;
+            // Check if next argument is a number
+            if (i + 1 < argc && argv[i + 1][0] >= '0' && argv[i + 1][0] <= '9') {
+                perf_instructions = atoi(argv[++i]);
+            }
+        } else if (strcmp(argv[i], "analyze") == 0) {
+            analyze_mode = true;
         } else if (!test_path) {
             test_path = argv[i];
         }
     }
     
+    printf("=== fam65xx ProcessorTests Runner (Enhanced) ===\n");
+    
+    // Handle special modes
+    if (analyze_mode) {
+        run_optimization_analysis();
+        return 0;
+    }
+    
+    if (perf_mode) {
+        test_harness_t harness;
+        init_test_harness(&harness, verbose);
+        run_performance_benchmark(&harness, perf_instructions);
+        return 0;
+    }
+    
+    if (debug_mode && !test_path) {
+        // Interactive debug mode without test file
+        test_harness_t harness;
+        init_test_harness(&harness, verbose);
+        
+        // Set up a simple test program for debugging
+        harness.memory[0x1000] = 0xEA;  // NOP
+        harness.memory[0x1001] = 0xA9;  // LDA #$42
+        harness.memory[0x1002] = 0x42;
+        harness.memory[0x1003] = 0x8D;  // STA $2000
+        harness.memory[0x1004] = 0x00;
+        harness.memory[0x1005] = 0x20;
+        harness.memory[0x1006] = 0xAD;  // LDA $2000
+        harness.memory[0x1007] = 0x00;
+        harness.memory[0x1008] = 0x20;
+        harness.memory[0x1009] = 0x4C;  // JMP $1000 (loop)
+        harness.memory[0x100A] = 0x00;
+        harness.memory[0x100B] = 0x10;
+        
+        fam65xx_set_pc(&harness.cpu, 0x1000);
+        
+        run_debug_session(&harness);
+        return 0;
+    }
+    
+    // Regular test execution
     if (!test_path) {
         printf("ERROR: No test file or directory specified\n");
         print_usage(argv[0]);
         return 1;
     }
     
-    printf("=== fam65xx ProcessorTests Runner ===\n");
     printf("Test path: %s\n", test_path);
-    printf("Verbose: %s\n\n", verbose ? "enabled" : "disabled");
+    printf("Verbose: %s\n", verbose ? "enabled" : "disabled");
+    printf("Debug mode: %s\n\n", debug_mode ? "enabled" : "disabled");
     
     clock_t start_time = clock();
     
@@ -556,6 +779,14 @@ int main(int argc, char* argv[]) {
             process_directory(test_path, verbose);
         } else if (S_ISREG(st.st_mode)) {
             process_test_file(test_path, verbose);
+            
+            // If debug mode is enabled, start debug session after tests
+            if (debug_mode) {
+                test_harness_t debug_harness;
+                init_test_harness(&debug_harness, verbose);
+                printf("\n=== Starting debug session after test completion ===\n");
+                run_debug_session(&debug_harness);
+            }
         } else {
             printf("ERROR: Invalid path type: %s\n", test_path);
             return 1;
