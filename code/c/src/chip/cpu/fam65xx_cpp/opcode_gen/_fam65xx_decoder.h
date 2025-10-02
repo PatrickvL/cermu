@@ -1272,7 +1272,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
 
         // PHP continuation
         case C_PHP + 0:
-            BUS_WRITE(0x0100 | c->S--, c->P | FAM65XX_XF);
+            BUS_WRITE(0x0100 | c->S--, c->P | FAM65XX_BF);
             break;
         case C_PHP + 1:
             DUMMY_BUS_READ(c->PC);
