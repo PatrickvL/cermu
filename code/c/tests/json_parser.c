@@ -233,6 +233,82 @@ bool json_parse_ram_array(const char* json, cpu_state_t* state) {
     return true;
 }
 
+// Parse cycles array: [[address, data, "read/write"], ...]
+bool json_parse_cycles_array(const char* json, cpu_state_t* state) {
+    const char* cycles_start = json_find_key(json, "cycles");
+    if (!cycles_start || *cycles_start != '[') {
+        state->bus_cycle_count = 0;
+        state->has_bus_cycles = false;
+        return true; // Cycles array is optional
+    }
+    
+    state->bus_cycle_count = 0;
+    state->has_bus_cycles = true;
+    const char* pos = cycles_start + 1; // Skip opening bracket
+    
+    while (*pos && *pos != ']' && state->bus_cycle_count < MAX_BUS_CYCLES) {
+        pos = json_skip_whitespace(pos);
+        if (*pos == ']') break;
+        
+        if (*pos == '[') {
+            // Parse cycle entry: [address, data, "read"/"write"]
+            pos++;
+            
+            // Parse address
+            pos = json_skip_whitespace(pos);
+            state->bus_cycles[state->bus_cycle_count].address = (uint16_t)strtol(pos, (char**)&pos, 10);
+            
+            // Expect comma
+            pos = json_skip_whitespace(pos);
+            if (*pos != ',') break;
+            pos++;
+            
+            // Parse data
+            pos = json_skip_whitespace(pos);
+            state->bus_cycles[state->bus_cycle_count].data = (uint8_t)strtol(pos, (char**)&pos, 10);
+            
+            // Expect comma
+            pos = json_skip_whitespace(pos);
+            if (*pos != ',') break;
+            pos++;
+            
+            // Parse "read" or "write"
+            pos = json_skip_whitespace(pos);
+            if (*pos == '"') {
+                pos++; // Skip opening quote
+                if (strncmp(pos, "write", 5) == 0) {
+                    state->bus_cycles[state->bus_cycle_count].is_write = true;
+                    pos += 5;
+                } else if (strncmp(pos, "read", 4) == 0) {
+                    state->bus_cycles[state->bus_cycle_count].is_write = false;
+                    pos += 4;
+                } else {
+                    break; // Invalid read/write type
+                }
+                
+                // Skip closing quote
+                if (*pos == '"') pos++;
+            } else {
+                break; // Expected quoted string
+            }
+            
+            // Skip closing bracket for this cycle
+            pos = json_skip_whitespace(pos);
+            if (*pos == ']') pos++;
+            
+            state->bus_cycle_count++;
+        } else {
+            break; // Unknown format
+        }
+        
+        // Skip comma between entries
+        pos = json_skip_whitespace(pos);
+        if (*pos == ',') pos++;
+    }
+    
+    return true;
+}
+
 // Parse CPU state (initial or final)
 bool json_parse_cpu_state(const char* json, const char* state_name, cpu_state_t* state) {
     const char* state_start = json_find_key(json, state_name);
@@ -270,8 +346,11 @@ bool json_parse_cpu_state(const char* json, const char* state_name, cpu_state_t*
     // Parse RAM array
     bool ram_ok = json_parse_ram_array(state_json, state);
     
+    // Parse cycles array (bus trace)
+    bool cycles_ok = json_parse_cycles_array(state_json, state);
+    
     free(state_json);
-    return ram_ok;
+    return ram_ok && cycles_ok;
 }
 
 // Parse a complete processor test from JSON

@@ -18,71 +18,56 @@ AM_JSR = ("---", "special JSR", "ADDR_NON", ())          # Special JSR case
 AM_INV = ("---", "invalid instruction", "ADDR_NON", ())  # Invalid instruction
 
 # Addressing mode objects for standard cases
-AM_IMM = ("IMM", "immediate", "ADDR_IMM", (
-    "BUS_READ(c->PC++);\nc->AD = BUS_DATA();\nc->CI = c->opcode;",
-))
+AM_IMM = ("IMM", "immediate", "ADDR_IMM", ())  # No addressing cycles - immediate operand is in next byte
 
 AM_ZER = ("ZP", "zero page", "ADDR_ZER", (
-    "BUS_READ(c->PC++);",
-    "c->AD = BUS_DATA();\nDUMMY_BUS_READ(c->PC);\nc->CI = c->opcode;"
+    "DUMMY_BUS_READ(c->PC);\nc->CI = c->opcode;",
 ))
 
 AM_ZPX = ("ZPX", "zero page,X", "ADDR_ZPX", (
-    "BUS_READ(c->PC++);",
-    "c->AD = BUS_DATA();\nDUMMY_BUS_READ(c->PC);",
-    "DUMMY_BUS_READ(c->AD);\nc->AD = (c->AD + c->X) & 0xFF;\nc->CI = c->opcode;"
+    "DUMMY_BUS_READ(c->AD);\nc->AD = (c->AD + c->X) & 0xFF;\nc->CI = c->opcode;",
 ))
 
 AM_ZPY = ("ZPY", "zero page,Y", "ADDR_ZPY", (
-    "BUS_READ(c->PC++);",
-    "c->AD = BUS_DATA();\nDUMMY_BUS_READ(c->PC);",
-    "DUMMY_BUS_READ(c->AD);\nc->AD = (c->AD + c->Y) & 0xFF;\nc->CI = c->opcode;"
+    "DUMMY_BUS_READ(c->AD);\nc->AD = (c->AD + c->Y) & 0xFF;\nc->CI = c->opcode;",
 ))
 
 AM_ABS = ("ABS", "absolute", "ADDR_ABS", (
-    "BUS_READ(c->PC++);\nc->AD = BUS_DATA();",
     "BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;",
     "DUMMY_BUS_READ(c->PC);\nc->CI = c->opcode;"
 ))
 
 AM_ABX = ("ABX", "absolute,X", "ADDR_ABX", (
-    "BUS_READ(c->PC++);\nc->AD = BUS_DATA();",
     "BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;",
     "BUS_READ((c->AD & 0xFF00) | ((c->AD + c->X) & 0xFF));\nif ((c->AD >> 8) != ((c->AD + c->X) >> 8)) { c->AD += c->X; c->CI = c->opcode; } else { c->CI++; }",
     "c->AD += c->X;\nc->CI = c->opcode;"
 ))
 
 AM_ABX_W = ("ABX", "absolute,X (write - always takes extra cycle)", "ADDR_ABX_W", (
-    "BUS_READ(c->PC++);\nc->AD = BUS_DATA();",
     "BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;",
     "BUS_READ((c->AD & 0xFF00) | ((c->AD + c->X) & 0xFF));",
     "c->AD += c->X;\nc->CI = c->opcode;"
 ))
 
 AM_ABY = ("ABY", "absolute,Y", "ADDR_ABY", (
-    "BUS_READ(c->PC++);\nc->AD = BUS_DATA();",
     "BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;",
     "BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nif ((c->AD >> 8) != ((c->AD + c->Y) >> 8)) { c->AD += c->Y; c->CI = c->opcode; } else { c->CI++; }",
     "c->AD += c->Y;\nc->CI = c->opcode;"
 ))
 
 AM_ABY_W = ("ABY", "absolute,Y (write - always takes extra cycle)", "ADDR_ABY_W", (
-    "BUS_READ(c->PC++);\nc->AD = BUS_DATA();",
     "BUS_READ(c->PC++);\nc->AD |= BUS_DATA() << 8;",
     "BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));",
     "c->AD += c->Y;\nc->CI = c->opcode;"
 ))
 
 AM_IDX = ("IDX", "indexed indirect (zp,X)", "ADDR_IDX", (
-    "BUS_READ(c->PC++);\nc->AD = BUS_DATA();",
     "DUMMY_BUS_READ(c->AD);\nc->AD = (c->AD + c->X) & 0xFF;",
     "BUS_READ(c->AD);\nc->DL = BUS_DATA();",
     "BUS_READ((c->AD + 1) & 0xFF);\nc->AD = (BUS_DATA() << 8) | c->DL;\nc->CI = c->opcode;"
 ))
 
 AM_IDY = ("IDY", "indirect indexed (zp),Y", "ADDR_IDY", (
-    "BUS_READ(c->PC++);",
-    "c->AD = BUS_DATA();\nDUMMY_BUS_READ(c->PC);",
     "BUS_READ(c->AD);\nc->PC = BUS_DATA();",
     "BUS_READ((c->AD + 1) & 0xFF);\nc->AD = c->PC | (BUS_DATA() << 8);",
     "BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nif ((c->AD >> 8) != ((c->AD + c->Y) >> 8)) { c->CI++; } else { c->AD += c->Y; c->CI = c->opcode; }",
@@ -90,8 +75,6 @@ AM_IDY = ("IDY", "indirect indexed (zp),Y", "ADDR_IDY", (
 ))
 
 AM_IDY_W = ("IDY", "indirect indexed (zp),Y (write - always takes extra cycle)", "ADDR_IDY_W", (
-    "BUS_READ(c->PC++);",
-    "c->AD = BUS_DATA();\nDUMMY_BUS_READ(c->PC);",
     "BUS_READ(c->AD);\nc->PC = BUS_DATA();",
     "BUS_READ((c->AD + 1) & 0xFF);\nc->AD = c->PC | (BUS_DATA() << 8);",
     "DUMMY_BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nc->AD += c->Y;\nc->CI = c->opcode;"
@@ -169,7 +152,7 @@ OP_BCS = ("BCS", M_R_, None, 'BRANCH')  # Read branch offset from PC
 OP_BNE = ("BNE", M_R_, None, 'BRANCH')  # Read branch offset from PC
 OP_BEQ = ("BEQ", M_R_, None, 'BRANCH')  # Read branch offset from PC
 
-# ALU operations (M_R_ - _FETCH appended to current cycle)
+# ALU operations - Memory variants (M_R_ - _FETCH appended to current cycle)
 OP_ORA = ("ORA", M_R_, "BUS_READ(c->AD);\nc->A |= BUS_DATA();\n_NZ(c->A);", None)
 OP_AND = ("AND", M_R_, "BUS_READ(c->AD);\nc->A &= BUS_DATA();\n_NZ(c->A);", None)
 OP_EOR = ("EOR", M_R_, "BUS_READ(c->AD);\nc->A ^= BUS_DATA();\n_NZ(c->A);", None)
@@ -178,10 +161,25 @@ OP_SBC = ("SBC", M_R_, "BUS_READ(c->AD);\n_fam65xx_sbc(c, BUS_DATA());", None)
 OP_CMP = ("CMP", M_R_, "BUS_READ(c->AD);\n_fam65xx_cmp(c, c->A, BUS_DATA());", None)
 OP_BIT = ("BIT", M_R_, "BUS_READ(c->AD);\n_fam65xx_bit(c, BUS_DATA());", None)
 
+# ALU operations - Immediate variants (M___ - data is in opcode byte already read by FETCH)
+OP_ORA_IMM = ("ORA", M___, "BUS_READ(c->PC++);\nc->A |= BUS_DATA();\n_NZ(c->A);", None)
+OP_AND_IMM = ("AND", M___, "BUS_READ(c->PC++);\nc->A &= BUS_DATA();\n_NZ(c->A);", None)
+OP_EOR_IMM = ("EOR", M___, "BUS_READ(c->PC++);\nc->A ^= BUS_DATA();\n_NZ(c->A);", None)
+OP_ADC_IMM = ("ADC", M___, "BUS_READ(c->PC++);\n_fam65xx_adc(c, BUS_DATA());", None)
+OP_SBC_IMM = ("SBC", M___, "BUS_READ(c->PC++);\n_fam65xx_sbc(c, BUS_DATA());", None)
+OP_CMP_IMM = ("CMP", M___, "BUS_READ(c->PC++);\n_fam65xx_cmp(c, c->A, BUS_DATA());", None)
+
 # Load operations (M_R_ - _FETCH appended to current cycle)
 OP_LDA = ("LDA", M_R_, "BUS_READ(c->AD);\nc->A = BUS_DATA();\n_NZ(c->A);", None)
 OP_LDX = ("LDX", M_R_, "BUS_READ(c->AD);\nc->X = BUS_DATA();\n_NZ(c->X);", None)
 OP_LDY = ("LDY", M_R_, "BUS_READ(c->AD);\nc->Y = BUS_DATA();\n_NZ(c->Y);", None)
+
+# Load operations - Immediate variants (data is in immediate byte following opcode)
+OP_LDA_IMM = ("LDA", M___, "BUS_READ(c->PC++);\nc->A = BUS_DATA();\n_NZ(c->A);", None)
+OP_LDX_IMM = ("LDX", M___, "BUS_READ(c->PC++);\nc->X = BUS_DATA();\n_NZ(c->X);", None)
+OP_LDY_IMM = ("LDY", M___, "BUS_READ(c->PC++);\nc->Y = BUS_DATA();\n_NZ(c->Y);", None)
+OP_CPX_IMM = ("CPX", M___, "BUS_READ(c->PC++);\n_fam65xx_cmp(c, c->X, BUS_DATA());", None)
+OP_CPY_IMM = ("CPY", M___, "BUS_READ(c->PC++);\n_fam65xx_cmp(c, c->Y, BUS_DATA());", None)
 
 # Store operations (M__W - _FETCH in separate cycle)
 OP_STA = ("STA", M__W, "BUS_WRITE(c->AD, c->A);", None)
@@ -323,7 +321,7 @@ def get_hardware_accurate_addr_mode(operation, base_addr_mode):
 ops = [
     # cc = 00
     [
-        [[OP_BRK,AM_NON],[OP_JSR,AM_JSR],[OP_RTI,AM_NON],[OP_RTS,AM_NON],[OP_NOP_R,AM_IMM],[OP_LDY,AM_IMM],[OP_CPY,AM_IMM],[OP_CPX,AM_IMM]],
+        [[OP_BRK,AM_NON],[OP_JSR,AM_JSR],[OP_RTI,AM_NON],[OP_RTS,AM_NON],[OP_NOP_R,AM_IMM],[OP_LDY_IMM,AM_IMM],[OP_CPY_IMM,AM_IMM],[OP_CPX_IMM,AM_IMM]],
         [[OP_NOP_R,AM_ZER],[OP_BIT,AM_ZER],[OP_NOP_R,AM_ZER],[OP_NOP_R,AM_ZER],[OP_STY,AM_ZER],[OP_LDY,AM_ZER],[OP_CPY,AM_ZER],[OP_CPX,AM_ZER]],
         [[OP_PHP,AM_NON],[OP_PLP,AM_NON],[OP_PHA,AM_NON],[OP_PLA,AM_NON],[OP_DEY,AM_NON],[OP_TAY,AM_NON],[OP_INY,AM_NON],[OP_INX,AM_NON]],
         [[OP_NOP_R,AM_ABS],[OP_BIT,AM_ABS],[OP_JMP,AM_JMP],[OP_JMI,AM_JMP],[OP_STY,AM_ABS],[OP_LDY,AM_ABS],[OP_CPY,AM_ABS],[OP_CPX,AM_ABS]],
@@ -336,7 +334,7 @@ ops = [
     [
         [[OP_ORA,AM_IDX],[OP_AND,AM_IDX],[OP_EOR,AM_IDX],[OP_ADC,AM_IDX],[OP_STA,AM_IDX],[OP_LDA,AM_IDX],[OP_CMP,AM_IDX],[OP_SBC,AM_IDX]],
         [[OP_ORA,AM_ZER],[OP_AND,AM_ZER],[OP_EOR,AM_ZER],[OP_ADC,AM_ZER],[OP_STA,AM_ZER],[OP_LDA,AM_ZER],[OP_CMP,AM_ZER],[OP_SBC,AM_ZER]],
-        [[OP_ORA,AM_IMM],[OP_AND,AM_IMM],[OP_EOR,AM_IMM],[OP_ADC,AM_IMM],[OP_NOP_R,AM_IMM],[OP_LDA,AM_IMM],[OP_CMP,AM_IMM],[OP_SBC,AM_IMM]],
+        [[OP_ORA_IMM,AM_IMM],[OP_AND_IMM,AM_IMM],[OP_EOR_IMM,AM_IMM],[OP_ADC_IMM,AM_IMM],[OP_NOP_R,AM_IMM],[OP_LDA_IMM,AM_IMM],[OP_CMP_IMM,AM_IMM],[OP_SBC_IMM,AM_IMM]],
         [[OP_ORA,AM_ABS],[OP_AND,AM_ABS],[OP_EOR,AM_ABS],[OP_ADC,AM_ABS],[OP_STA,AM_ABS],[OP_LDA,AM_ABS],[OP_CMP,AM_ABS],[OP_SBC,AM_ABS]],
         [[OP_ORA,AM_IDY],[OP_AND,AM_IDY],[OP_EOR,AM_IDY],[OP_ADC,AM_IDY],[OP_STA,AM_IDY],[OP_LDA,AM_IDY],[OP_CMP,AM_IDY],[OP_SBC,AM_IDY]],
         [[OP_ORA,AM_ZPX],[OP_AND,AM_ZPX],[OP_EOR,AM_ZPX],[OP_ADC,AM_ZPX],[OP_STA,AM_ZPX],[OP_LDA,AM_ZPX],[OP_CMP,AM_ZPX],[OP_SBC,AM_ZPX]],
@@ -345,7 +343,7 @@ ops = [
     ],
     # cc = 02
     [
-        [[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_NOP_R,AM_IMM],[OP_LDX,AM_IMM],[OP_NOP_R,AM_IMM],[OP_NOP_R,AM_IMM]],
+        [[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_NOP_R,AM_IMM],[OP_LDX_IMM,AM_IMM],[OP_NOP_R,AM_IMM],[OP_NOP_R,AM_IMM]],
         [[OP_ASL_M,AM_ZER],[OP_ROL_M,AM_ZER],[OP_LSR_M,AM_ZER],[OP_ROR_M,AM_ZER],[OP_STX,AM_ZER],[OP_LDX,AM_ZER],[OP_DEC_M,AM_ZER],[OP_INC_M,AM_ZER]],
         [[OP_ASL_A,AM_NON],[OP_ROL_A,AM_NON],[OP_LSR_A,AM_NON],[OP_ROR_A,AM_NON],[OP_TXA,AM_NON],[OP_TAX,AM_NON],[OP_DEX,AM_NON],[OP_NOP_I,AM_NON]],
         [[OP_ASL_M,AM_ABS],[OP_ROL_M,AM_ABS],[OP_LSR_M,AM_ABS],[OP_ROR_M,AM_ABS],[OP_STX,AM_ABS],[OP_LDX,AM_ABS],[OP_DEC_M,AM_ABS],[OP_INC_M,AM_ABS]],
@@ -600,9 +598,14 @@ def calculate_addressing_mode_offsets():
     
     # Process addressing mode objects that have cycles
     for addr_mode in ADDRESSING_MODES:
-        addr_mode_indices[addr_mode] = current_offset
         cycle_count = len(addr_mode[3])  # cycles are at index 3
-        current_offset += cycle_count
+        if cycle_count > 0:
+            # Only assign offset to modes with cycles
+            addr_mode_indices[addr_mode] = current_offset
+            current_offset += cycle_count
+        else:
+            # Modes with 0 cycles (like AM_IMM) get ADDR_NON (0)
+            addr_mode_indices[addr_mode] = 0
     
     # Update global variables
     ADDR_MODE_INDICES = addr_mode_indices
@@ -621,11 +624,14 @@ def generate_addressing_constants():
     
     # Generate constants for addressing modes using definitions
     for addr_mode in ADDRESSING_MODES:
-        if addr_mode in ADDR_MODE_INDICES:  # Only generate constants for modes with cycles
+        if addr_mode in ADDR_MODE_INDICES:
             const_name = addr_mode[2]
             offset = ADDR_MODE_INDICES[addr_mode]
-            actual_index = ADDR_SEQ_BASE + offset
-            l(f"#define {const_name:<12} {offset:<3} // Index {actual_index}")
+            if offset == 0:
+                l(f"#define {const_name:<12} {offset:<3} // Direct opcode execution (0 cycles)")
+            else:
+                actual_index = ADDR_SEQ_BASE + offset
+                l(f"#define {const_name:<12} {offset:<3} // Index {actual_index}")
     
     l("")
 
@@ -716,6 +722,10 @@ def generate_addressing_modes():
     # Generate addressing mode sequences from definitions
     for addr_mode in ADDRESSING_MODES:
         acronym, long_name, const_name, cycles = addr_mode
+        
+        # Skip modes with no cycles (they execute directly in opcode case)
+        if len(cycles) == 0:
+            continue
         
         # Emit long name comment before the cycles
         l(f"        // {acronym}: {long_name}")

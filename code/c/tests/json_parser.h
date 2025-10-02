@@ -8,6 +8,7 @@
 // Maximum array sizes for processor tests
 #define MAX_RAM_ENTRIES 16
 #define MAX_RAM_BYTES 8
+#define MAX_BUS_CYCLES 32
 
 // JSON value types
 typedef enum {
@@ -18,6 +19,13 @@ typedef enum {
     JSON_ARRAY,
     JSON_OBJECT
 } json_type_t;
+
+// Bus cycle trace entry
+typedef struct {
+    uint16_t address;
+    uint8_t data;
+    bool is_write;  // true = write, false = read
+} bus_cycle_t;
 
 // CPU state structure matching ProcessorTests format
 typedef struct {
@@ -36,7 +44,12 @@ typedef struct {
     } ram[MAX_RAM_ENTRIES];
     uint8_t ram_count;
     
-    // Cycles (only in final state)
+    // Bus cycle trace (detailed memory access sequence)
+    bus_cycle_t bus_cycles[MAX_BUS_CYCLES];
+    uint8_t bus_cycle_count;
+    bool has_bus_cycles;
+    
+    // Cycles count (only in final state for compatibility)
     uint32_t cycles;
     bool has_cycles;
 } cpu_state_t;
@@ -52,6 +65,7 @@ typedef struct {
 bool json_parse_processor_test(const char* json_content, processor_test_t* test);
 bool json_parse_cpu_state(const char* json, const char* state_name, cpu_state_t* state);
 bool json_parse_ram_array(const char* json, cpu_state_t* state);
+bool json_parse_cycles_array(const char* json, cpu_state_t* state);
 int json_parse_number(const char* json, const char* key);
 bool json_parse_string(const char* json, const char* key, char* output, size_t max_len);
 

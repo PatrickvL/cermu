@@ -99,7 +99,7 @@ typedef struct {
     
     // Cycle decoder state
     uint16_t CI;      // Current cycle index
-    uint8_t opcode;   // Current opcode byte
+    uint8_t opcode;   // Current opcode byte (IR: Instruction Register)
     
     // Memory callbacks
     fam65xx_mem_read_t mem_read;
@@ -295,6 +295,7 @@ static inline void _fam65xx_cmp(fam65xx_t* c, uint8_t reg, uint8_t val) {
 
 static inline void _fam65xx_adc(fam65xx_t* c, uint8_t val) {
     if (c->P & FAM65XX_DF) {
+#if 0 // floooh original
         // BCD mode
         uint16_t t = (c->A & 0x0F) + (val & 0x0F) + (c->P & FAM65XX_CF ? 1 : 0);
         if (t > 9) t += 6;
@@ -305,6 +306,49 @@ static inline void _fam65xx_adc(fam65xx_t* c, uint8_t val) {
         if (!((c->A + val + (c->P & FAM65XX_CF ? 1 : 0)) & 0xFF)) c->P |= FAM65XX_ZF;
         if (t & 0x80) c->P |= FAM65XX_NF;
         c->A = t & 0xFF;
+#else // Claude's wooly fix
+        // BCD mode - fixed implementation
+        uint8_t carry_in = (c->P & FAM65XX_CF) ? 1 : 0;
+        
+        // Convert inputs to BCD
+        uint8_t a_lo = c->A & 0x0F;
+        uint8_t a_hi = (c->A & 0xF0) >> 4;
+        uint8_t v_lo = val & 0x0F;
+        uint8_t v_hi = (val & 0xF0) >> 4;
+        
+        // Add low nibbles
+        uint16_t sum_lo = a_lo + v_lo + carry_in;
+        uint8_t carry_mid = 0;
+        if (sum_lo > 9) {
+            sum_lo += 6;
+            carry_mid = 1;
+        }
+        
+        // Add high nibbles
+        uint16_t sum_hi = a_hi + v_hi + carry_mid;
+        uint8_t carry_out = 0;
+        if (sum_hi > 9) {
+            sum_hi += 6;
+            carry_out = 1;
+        }
+        
+        // Combine result
+        uint8_t result = ((sum_hi & 0x0F) << 4) | (sum_lo & 0x0F);
+        
+        // Set flags based on BCD result
+        c->P &= ~(FAM65XX_CF | FAM65XX_NF | FAM65XX_ZF | FAM65XX_VF);
+        if (carry_out) c->P |= FAM65XX_CF;
+        if (result & 0x80) c->P |= FAM65XX_NF;
+        if (result == 0) c->P |= FAM65XX_ZF;
+        
+        // V flag: BCD overflow detection (same as binary for practical purposes)
+        uint16_t bin_result = c->A + val + carry_in;
+        if (~(c->A ^ val) & (c->A ^ bin_result) & 0x80) {
+            c->P |= FAM65XX_VF;
+        }
+        
+        c->A = result;
+#endif        
     } else {
         // Binary mode
         uint16_t t = c->A + val + (c->P & FAM65XX_CF ? 1 : 0);
