@@ -145,6 +145,42 @@ if(NOT WIN32 AND NOT MSVC)
     target_link_libraries(fam65xx_cpp_processor_tests_runner m)
 endif()
 
+# fam65xx Enhanced C ProcessorTests Runner - With debugging features
+add_executable(fam65xx_processor_tests_runner
+    fam65xx_processor_tests_runner.c
+    json_parser.c
+)
+target_include_directories(fam65xx_processor_tests_runner PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
+)
+target_compile_definitions(fam65xx_processor_tests_runner PRIVATE CHIPS_IMPL)
+# Disable warnings as errors for this target due to generated code warnings
+if(MSVC)
+    target_compile_options(fam65xx_processor_tests_runner PRIVATE /WX- /wd4244 /wd4189 /wd4477)
+else()
+    target_compile_options(fam65xx_processor_tests_runner PRIVATE -Wno-error)
+endif()
+# Link math library if needed
+if(NOT WIN32 AND NOT MSVC)
+    target_link_libraries(fam65xx_processor_tests_runner m)
+endif()
+
+# Custom target for automatic decoder regeneration
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp/opcode_gen/_fam65xx_decoder.h
+    COMMAND python fam65xx_gen.py > _fam65xx_decoder.h
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp/opcode_gen/fam65xx_gen.py
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp/opcode_gen
+    COMMENT "Regenerating fam65xx decoder from Python script"
+)
+
+# Make the fam65xx_processor_tests_runner depend on the generated decoder
+add_custom_target(regenerate_decoder
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp/opcode_gen/_fam65xx_decoder.h
+)
+add_dependencies(fam65xx_processor_tests_runner regenerate_decoder)
+
 # Unified Processor Test Framework - Consolidates ALL debug and test programs
 add_executable(unified_processor_test
     ../unified_processor_test.cpp
