@@ -810,6 +810,13 @@ static bool process_test_file(const char* filepath, bool verbose) {
                     processor_test_t test;
                     if (json_parse_processor_test(test_json, &test)) {
                         run_single_test(&harness, &test);
+                        
+                        // Check if we should stop on failure
+                        if (g_stop_on_failure && g_test_failed) {
+                            free(test_json);
+                            free(json_content);
+                            return false;
+                        }
                     } else if (verbose) {
                         printf("ERROR: Failed to parse test\n");
                     }
@@ -830,6 +837,12 @@ static bool process_test_file(const char* filepath, bool verbose) {
             processor_test_t test;
             if (json_parse_processor_test(json_content, &test)) {
                 run_single_test(&harness, &test);
+                
+                // Check if we should stop on failure
+                if (g_stop_on_failure && g_test_failed) {
+                    free(json_content);
+                    return false;
+                }
             } else if (verbose) {
                 printf("ERROR: Failed to parse test\n");
             }
