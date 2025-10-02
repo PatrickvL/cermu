@@ -71,4 +71,4 @@ if exist "bin\%CONFIGURATION%" (
     dir /b "bin\%CONFIGURATION%\*.exe"
 )
 
-pause
+rem pause
