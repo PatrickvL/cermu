@@ -77,23 +77,23 @@ AM_IDX = ("IDX", "indexed indirect (zp,X)", "ADDR_IDX", (
     "BUS_READ(c->PC++);",
     "c->AD = BUS_DATA();\nDUMMY_BUS_READ(c->PC);",
     "DUMMY_BUS_READ(c->AD);\nc->AD = (c->AD + c->X) & 0xFF;",
-    "BUS_READ(c->AD);",
-    "BUS_READ((c->AD + 1) & 0xFF);\nc->AD = BUS_DATA();\nc->AD |= BUS_DATA() << 8;\nc->IR = c->opcode;"
+    "BUS_READ(c->AD);\nc->PC = BUS_DATA();",
+    "BUS_READ((c->AD + 1) & 0xFF);\nc->AD = c->PC | (BUS_DATA() << 8);\nc->IR = c->opcode;"
 ))
 
 AM_IDY = ("IDY", "indirect indexed (zp),Y", "ADDR_IDY", (
     "BUS_READ(c->PC++);",
     "c->AD = BUS_DATA();\nDUMMY_BUS_READ(c->PC);",
-    "BUS_READ(c->AD);",
-    "BUS_READ((c->AD + 1) & 0xFF);\nc->AD = BUS_DATA();\nc->AD |= BUS_DATA() << 8;",
+    "BUS_READ(c->AD);\nc->PC = BUS_DATA();",
+    "BUS_READ((c->AD + 1) & 0xFF);\nc->AD = c->PC | (BUS_DATA() << 8);",
     "BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nc->IR += (~((c->AD >> 8) - ((c->AD + c->Y) >> 8))) & 1;\nc->AD += c->Y;\nc->IR = c->opcode;"
 ))
 
 AM_IDY_W = ("IDY", "indirect indexed (zp),Y (write - always takes extra cycle)", "ADDR_IDY_W", (
     "BUS_READ(c->PC++);",
     "c->AD = BUS_DATA();\nDUMMY_BUS_READ(c->PC);",
-    "BUS_READ(c->AD);",
-    "BUS_READ((c->AD + 1) & 0xFF);\nc->AD = BUS_DATA();\nc->AD |= BUS_DATA() << 8;",
+    "BUS_READ(c->AD);\nc->PC = BUS_DATA();",
+    "BUS_READ((c->AD + 1) & 0xFF);\nc->AD = c->PC | (BUS_DATA() << 8);",
     "DUMMY_BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));\nc->AD += c->Y;\nc->IR = c->opcode;"
 ))
 

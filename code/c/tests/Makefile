@@ -270,6 +270,34 @@ fam65xx_cpp_processor_tests_runner/fast:
 .PHONY : fam65xx_cpp_processor_tests_runner/fast
 
 # Convenience name for target.
+tests/CMakeFiles/unified_processor_test.dir/rule:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/unified_processor_test.dir/rule
+.PHONY : tests/CMakeFiles/unified_processor_test.dir/rule
+
+# Convenience name for target.
+unified_processor_test: tests/CMakeFiles/unified_processor_test.dir/rule
+.PHONY : unified_processor_test
+
+# fast build rule for target.
+unified_processor_test/fast:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/unified_processor_test.dir/build.make tests/CMakeFiles/unified_processor_test.dir/build
+.PHONY : unified_processor_test/fast
+
+# Convenience name for target.
+tests/CMakeFiles/unified_processor_test_simple.dir/rule:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/unified_processor_test_simple.dir/rule
+.PHONY : tests/CMakeFiles/unified_processor_test_simple.dir/rule
+
+# Convenience name for target.
+unified_processor_test_simple: tests/CMakeFiles/unified_processor_test_simple.dir/rule
+.PHONY : unified_processor_test_simple
+
+# fast build rule for target.
+unified_processor_test_simple/fast:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/unified_processor_test_simple.dir/build.make tests/CMakeFiles/unified_processor_test_simple.dir/build
+.PHONY : unified_processor_test_simple/fast
+
+# Convenience name for target.
 tests/CMakeFiles/nmi_edge_detection_test.dir/rule:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/nmi_edge_detection_test.dir/rule
 .PHONY : tests/CMakeFiles/nmi_edge_detection_test.dir/rule
@@ -416,6 +444,54 @@ __/src/core/ioport.c.s:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/mos6510_lib.dir/build.make tests/CMakeFiles/mos6510_lib.dir/__/src/core/ioport.c.s
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/processor_tests_runner.dir/build.make tests/CMakeFiles/processor_tests_runner.dir/__/src/core/ioport.c.s
 .PHONY : __/src/core/ioport.c.s
+
+__/unified_processor_test.o: __/unified_processor_test.cpp.o
+.PHONY : __/unified_processor_test.o
+
+# target to build an object file
+__/unified_processor_test.cpp.o:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/unified_processor_test.dir/build.make tests/CMakeFiles/unified_processor_test.dir/__/unified_processor_test.cpp.o
+.PHONY : __/unified_processor_test.cpp.o
+
+__/unified_processor_test.i: __/unified_processor_test.cpp.i
+.PHONY : __/unified_processor_test.i
+
+# target to preprocess a source file
+__/unified_processor_test.cpp.i:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/unified_processor_test.dir/build.make tests/CMakeFiles/unified_processor_test.dir/__/unified_processor_test.cpp.i
+.PHONY : __/unified_processor_test.cpp.i
+
+__/unified_processor_test.s: __/unified_processor_test.cpp.s
+.PHONY : __/unified_processor_test.s
+
+# target to generate assembly for a file
+__/unified_processor_test.cpp.s:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/unified_processor_test.dir/build.make tests/CMakeFiles/unified_processor_test.dir/__/unified_processor_test.cpp.s
+.PHONY : __/unified_processor_test.cpp.s
+
+__/unified_processor_test_simple.o: __/unified_processor_test_simple.cpp.o
+.PHONY : __/unified_processor_test_simple.o
+
+# target to build an object file
+__/unified_processor_test_simple.cpp.o:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/unified_processor_test_simple.dir/build.make tests/CMakeFiles/unified_processor_test_simple.dir/__/unified_processor_test_simple.cpp.o
+.PHONY : __/unified_processor_test_simple.cpp.o
+
+__/unified_processor_test_simple.i: __/unified_processor_test_simple.cpp.i
+.PHONY : __/unified_processor_test_simple.i
+
+# target to preprocess a source file
+__/unified_processor_test_simple.cpp.i:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/unified_processor_test_simple.dir/build.make tests/CMakeFiles/unified_processor_test_simple.dir/__/unified_processor_test_simple.cpp.i
+.PHONY : __/unified_processor_test_simple.cpp.i
+
+__/unified_processor_test_simple.s: __/unified_processor_test_simple.cpp.s
+.PHONY : __/unified_processor_test_simple.s
+
+# target to generate assembly for a file
+__/unified_processor_test_simple.cpp.s:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/unified_processor_test_simple.dir/build.make tests/CMakeFiles/unified_processor_test_simple.dir/__/unified_processor_test_simple.cpp.s
+.PHONY : __/unified_processor_test_simple.cpp.s
 
 brk_flag_setting_test.o: brk_flag_setting_test.cpp.o
 .PHONY : brk_flag_setting_test.o
@@ -733,6 +809,8 @@ help:
 	@echo "... mos6510_lib"
 	@echo "... nmi_edge_detection_test"
 	@echo "... processor_tests_runner"
+	@echo "... unified_processor_test"
+	@echo "... unified_processor_test_simple"
 	@echo "... __/src/chip/cpu/mos6510/mos6510.o"
 	@echo "... __/src/chip/cpu/mos6510/mos6510.i"
 	@echo "... __/src/chip/cpu/mos6510/mos6510.s"
@@ -742,6 +820,12 @@ help:
 	@echo "... __/src/core/ioport.o"
 	@echo "... __/src/core/ioport.i"
 	@echo "... __/src/core/ioport.s"
+	@echo "... __/unified_processor_test.o"
+	@echo "... __/unified_processor_test.i"
+	@echo "... __/unified_processor_test.s"
+	@echo "... __/unified_processor_test_simple.o"
+	@echo "... __/unified_processor_test_simple.i"
+	@echo "... __/unified_processor_test_simple.s"
 	@echo "... brk_flag_setting_test.o"
 	@echo "... brk_flag_setting_test.i"
 	@echo "... brk_flag_setting_test.s"
