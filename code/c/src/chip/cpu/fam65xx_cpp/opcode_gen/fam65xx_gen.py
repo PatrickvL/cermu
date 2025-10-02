@@ -502,7 +502,7 @@ def analyze_continuation_needs(op):
         return ('PLA', cycles)
     elif op == 0x08:  # PHP - 3 cycles total (1 opcode + 2 continuation cycles)
         cycles = (
-            'BUS_WRITE(0x0100 | c->S--, c->P | FAM65XX_XF);',  # Cycle 2: Write P to stack
+            'BUS_WRITE(0x0100 | c->S--, c->P | FAM65XX_BF);',  # Cycle 2: Write P to stack with B flag set
             'DUMMY_BUS_READ(c->PC);\n_FETCH();'  # Cycle 3: Dummy read then fetch
         )
         get_or_create_continuation(cycles, 'PHP')
