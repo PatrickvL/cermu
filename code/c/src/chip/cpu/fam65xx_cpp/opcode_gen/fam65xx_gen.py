@@ -76,8 +76,8 @@ AM_ABY_W = ("ABY", "absolute,Y (write - always takes extra cycle)", "ADDR_ABY_W"
 AM_IDX = ("IDX", "indexed indirect (zp,X)", "ADDR_IDX", (
     "BUS_READ(c->PC++);\nc->AD = BUS_DATA();",
     "DUMMY_BUS_READ(c->AD);\nc->AD = (c->AD + c->X) & 0xFF;",
-    "BUS_READ(c->AD);",
-    "{\n\tuint8_t tmp = c->AD;\n\tBUS_READ((c->AD + 1) & 0xFF);\n\tc->AD = (BUS_DATA() << 8) | tmp;\n};\nc->CI = c->opcode;"
+    "BUS_READ(c->AD);\nc->AD |= BUS_DATA() << 8;",  # Store low byte in high byte temporarily
+    "{\n\tuint8_t low_byte = c->AD >> 8;\n\tBUS_READ((c->AD + 1) & 0xFF);\n\tc->AD = (BUS_DATA() << 8) | low_byte;\n};\nc->CI = c->opcode;"
 ))
 
 AM_IDY = ("IDY", "indirect indexed (zp),Y", "ADDR_IDY", (

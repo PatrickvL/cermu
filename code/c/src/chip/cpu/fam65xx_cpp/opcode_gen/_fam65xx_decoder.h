@@ -1149,12 +1149,13 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             break;
         case ADDR_SEQ_BASE + ADDR_IDX + 2:  // IDX cycle 3
             BUS_READ(c->AD);
+            c->AD |= BUS_DATA() << 8;
             break;
         case ADDR_SEQ_BASE + ADDR_IDX + 3:  // IDX cycle 4
             {
-            	uint8_t tmp = c->AD;
+            	uint8_t low_byte = c->AD >> 8;
             	BUS_READ((c->AD + 1) & 0xFF);
-            	c->AD = (BUS_DATA() << 8) | tmp;
+            	c->AD = (BUS_DATA() << 8) | low_byte;
             };
             c->CI = c->opcode;
             goto end;
