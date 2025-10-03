@@ -5,37 +5,37 @@
  * 
  * Layout:
  *   [0-255]   : Opcode-specific cycles
- *   [256]     : Dedicated _FETCH() case
- *   [257-283] : Shared addressing mode sequences
- *   [284-354]  : Shared continuation sequences
- * Total cases: 355
+ *   [256]     : Dedicated FETCH cycle
+ *   [257-292] : Shared addressing mode sequences
+ *   [293-363]  : Shared continuation sequences
+ * Total cases: 364
  */
 
 // Continuation sequence constants
-#define C_BRK            284
-#define C_JAM            290
-#define C_SLO_RMW        291
-#define C_ASL_RMW        294
-#define C_PHP            297
-#define C_BRANCH_TAKEN   299
-#define C_JSR            301
-#define C_RLA_RMW        306
-#define C_ROL_RMW        309
-#define C_PLP            312
-#define C_RTI            314
-#define C_SRE_RMW        318
-#define C_LSR_RMW        321
-#define C_PHA            324
-#define C_JMP_ABS        326
-#define C_RTS            328
-#define C_RRA_RMW        331
-#define C_ROR_RMW        334
-#define C_PLA            337
-#define C_JMP_IND        339
-#define C_DCP_RMW        343
-#define C_DEC_RMW        346
-#define C_ISC_RMW        349
-#define C_INC_RMW        352
+#define C_BRK            293
+#define C_JAM            299
+#define C_SLO_RMW        300
+#define C_ASL_RMW        303
+#define C_PHP            306
+#define C_BRANCH_TAKEN   308
+#define C_JSR            310
+#define C_RLA_RMW        315
+#define C_ROL_RMW        318
+#define C_PLP            321
+#define C_RTI            323
+#define C_SRE_RMW        327
+#define C_LSR_RMW        330
+#define C_PHA            333
+#define C_JMP_ABS        335
+#define C_RTS            337
+#define C_RRA_RMW        340
+#define C_ROR_RMW        343
+#define C_PLA            346
+#define C_JMP_IND        348
+#define C_DCP_RMW        352
+#define C_DEC_RMW        355
+#define C_ISC_RMW        358
+#define C_INC_RMW        361
 
 // Layout constants
 // [0-255]   : Opcode-specific cycles
@@ -47,15 +47,15 @@
 #define ADDR_IMM     0   // Direct opcode execution (0 cycles)
 #define ADDR_ZER     1   // Index 257
 #define ADDR_ZPX     2   // Index 258
-#define ADDR_ZPY     3   // Index 259
-#define ADDR_ABS     4   // Index 260
-#define ADDR_ABX     6   // Index 262
-#define ADDR_ABX_W   9   // Index 265
-#define ADDR_ABY     12  // Index 268
-#define ADDR_ABY_W   15  // Index 271
-#define ADDR_IDX     18  // Index 274
-#define ADDR_IDY     21  // Index 277
-#define ADDR_IDY_W   25  // Index 281
+#define ADDR_ZPY     4   // Index 260
+#define ADDR_ABS     6   // Index 262
+#define ADDR_ABX     9   // Index 265
+#define ADDR_ABX_W   13  // Index 269
+#define ADDR_ABY     17  // Index 273
+#define ADDR_ABY_W   21  // Index 277
+#define ADDR_IDX     25  // Index 281
+#define ADDR_IDY     29  // Index 285
+#define ADDR_IDY_W   33  // Index 289
 
 // Lookup table: addressing mode start index for each opcode
 static const uint8_t opcode_addr_start[256] = {
@@ -317,7 +317,7 @@ static const uint8_t opcode_addr_start[256] = {
     ADDR_ABX_W   // 0xFF: ISC [RW] absolute,X (write - always takes extra cycle)
 };
 
-// Decoder switch statement
+// Decoder function
 static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
     switch (c->CI) {
 
@@ -329,21 +329,24 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             if (0 == (c->brk_flags & (FAM65XX_BRK_IRQ | FAM65XX_BRK_NMI))) {
             	c->PC++;
             }
-            BUS_WRITE(0x0100 | c->S--, c->PC >> 8);
+            c->write_src = R_PCH;
+            pins &= ~FAM65XX_RW;
+            c->AD = 0x0100 | c->S--;
             c->CI = C_BRK;
             goto end;
 
-        case 0x01:  // ORA [R] IDX cycle 4
+        case 0x01:  // ORA [R] IDX cycle 5
         case 0x05:  // ORA [R] ZP cycle 2
-        case 0x0D:  // ORA [R] ABS cycle 3
+        case 0x09:  // ORA [---] IMM cycle 1
+        case 0x0D:  // ORA [R] ABS cycle 4
         case 0x11:  // ORA [R] IDY cycle 5
-        case 0x15:  // ORA [R] ZPX cycle 2
-        case 0x19:  // ORA [R] ABY cycle 4
-        case 0x1D:  // ORA [R] ABX cycle 4
-            BUS_READ(c->AD);
-            c->A |= BUS_DATA();
+        case 0x15:  // ORA [R] ZPX cycle 3
+        case 0x19:  // ORA [R] ABY cycle 5
+        case 0x1D:  // ORA [R] ABX cycle 5
+            c->A |= c->DL;
             _NZ(c->A);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0x02:  // JAM [R] --- cycle 1
@@ -358,830 +361,800 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0xB2:  // JAM [R] --- cycle 1
         case 0xD2:  // JAM [R] --- cycle 1
         case 0xF2:  // JAM [R] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
             c->PC--;
             c->CI = C_JAM;
             goto end;
 
-        case 0x03:  // SLO [RW] IDX cycle 4
+        case 0x03:  // SLO [RW] IDX cycle 5
         case 0x07:  // SLO [RW] ZP cycle 2
-        case 0x0F:  // SLO [RW] ABS cycle 3
-        case 0x13:  // SLO [RW] IDY cycle 4
-        case 0x17:  // SLO [RW] ZPX cycle 2
-        case 0x1B:  // SLO [RW] ABY cycle 4
-        case 0x1F:  // SLO [RW] ABX cycle 4
-            BUS_READ(c->AD);
-            c->DL = BUS_DATA();
+        case 0x0F:  // SLO [RW] ABS cycle 4
+        case 0x13:  // SLO [RW] IDY cycle 5
+        case 0x17:  // SLO [RW] ZPX cycle 3
+        case 0x1B:  // SLO [RW] ABY cycle 5
+        case 0x1F:  // SLO [RW] ABX cycle 5
             c->CI = C_SLO_RMW;
             goto end;
 
         case 0x04:  // NOP [R] ZP cycle 2
-        case 0x0C:  // NOP [R] ABS cycle 3
-        case 0x14:  // NOP [R] ZPX cycle 2
+        case 0x0C:  // NOP [R] ABS cycle 4
+        case 0x14:  // NOP [R] ZPX cycle 3
         case 0x1A:  // NOP [R] --- cycle 1
-        case 0x1C:  // NOP [R] ABX cycle 4
-        case 0x34:  // NOP [R] ZPX cycle 2
+        case 0x1C:  // NOP [R] ABX cycle 5
+        case 0x34:  // NOP [R] ZPX cycle 3
         case 0x3A:  // NOP [R] --- cycle 1
-        case 0x3C:  // NOP [R] ABX cycle 4
+        case 0x3C:  // NOP [R] ABX cycle 5
         case 0x44:  // NOP [R] ZP cycle 2
-        case 0x54:  // NOP [R] ZPX cycle 2
+        case 0x54:  // NOP [R] ZPX cycle 3
         case 0x5A:  // NOP [R] --- cycle 1
-        case 0x5C:  // NOP [R] ABX cycle 4
+        case 0x5C:  // NOP [R] ABX cycle 5
         case 0x64:  // NOP [R] ZP cycle 2
-        case 0x74:  // NOP [R] ZPX cycle 2
+        case 0x74:  // NOP [R] ZPX cycle 3
         case 0x7A:  // NOP [R] --- cycle 1
-        case 0x7C:  // NOP [R] ABX cycle 4
+        case 0x7C:  // NOP [R] ABX cycle 5
         case 0x80:  // NOP [R] IMM cycle 1
         case 0x82:  // NOP [R] IMM cycle 1
         case 0x89:  // NOP [R] IMM cycle 1
         case 0xC2:  // NOP [R] IMM cycle 1
-        case 0xD4:  // NOP [R] ZPX cycle 2
+        case 0xD4:  // NOP [R] ZPX cycle 3
         case 0xDA:  // NOP [R] --- cycle 1
-        case 0xDC:  // NOP [R] ABX cycle 4
+        case 0xDC:  // NOP [R] ABX cycle 5
         case 0xE2:  // NOP [R] IMM cycle 1
-        case 0xF4:  // NOP [R] ZPX cycle 2
+        case 0xEA:  // NOP [---] --- cycle 1
+        case 0xF4:  // NOP [R] ZPX cycle 3
         case 0xFA:  // NOP [R] --- cycle 1
-        case 0xFC:  // NOP [R] ABX cycle 4
-            BUS_READ(c->AD);
-            _FETCH();
+        case 0xFC:  // NOP [R] ABX cycle 5
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0x06:  // ASL [RW] ZP cycle 2
-        case 0x0E:  // ASL [RW] ABS cycle 3
-        case 0x16:  // ASL [RW] ZPX cycle 2
-        case 0x1E:  // ASL [RW] ABX cycle 4
-            BUS_READ(c->AD);
-            c->DL = BUS_DATA();
+        case 0x0E:  // ASL [RW] ABS cycle 4
+        case 0x16:  // ASL [RW] ZPX cycle 3
+        case 0x1E:  // ASL [RW] ABX cycle 5
             c->CI = C_ASL_RMW;
             goto end;
 
         case 0x08:  // PHP [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
+            c->AD = c->PC;
             c->CI = C_PHP;
             goto end;
 
-        case 0x09:  // ORA [---] IMM cycle 1
-            BUS_READ(c->PC++);
-            c->A |= BUS_DATA();
-            _NZ(c->A);
-            _FETCH();
-            goto end;
-
         case 0x0A:  // ASL [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
             c->A = _fam65xx_asl(c, c->A);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0x0B:  // ANC [R] IMM cycle 1
         case 0x2B:  // ANC [R] IMM cycle 1
-            BUS_READ(c->AD);
-            c->A &= BUS_DATA();
+            c->A &= c->DL;
             _NZ(c->A);
             c->P = (c->P & ~FAM65XX_CF) | ((c->A & 0x80) ? FAM65XX_CF : 0);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0x10:  // BPL [R] IMM cycle 1
         case 0x90:  // BCC [R] IMM cycle 1
-            BUS_READ(c->PC);
-            c->AD = c->PC + (int8_t)BUS_DATA();
+            c->AD = c->PC;
+            c->TMP = (int8_t)c->DL;
             if ((c->P & FAM65XX_NF) == 0) {
+            	c->AD = c->PC + c->TMP;
             	c->CI = C_BRANCH_TAKEN;
             } else {
-            	_FETCH();
+            	c->AD = c->PC++;
+            	c->CI = C_FETCH_CYCLE;
             }
             goto end;
 
         case 0x18:  // CLC [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
             c->P &= ~FAM65XX_CF;
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0x20:  // JSR [R] --- cycle 1
-            BUS_READ(c->PC++);
-            c->AD = BUS_DATA();
+            c->TMP = c->DL;
+            c->AD = c->PC++;
             c->CI = C_JSR;
             goto end;
 
-        case 0x21:  // AND [R] IDX cycle 4
+        case 0x21:  // AND [R] IDX cycle 5
         case 0x25:  // AND [R] ZP cycle 2
-        case 0x2D:  // AND [R] ABS cycle 3
+        case 0x29:  // AND [---] IMM cycle 1
+        case 0x2D:  // AND [R] ABS cycle 4
         case 0x31:  // AND [R] IDY cycle 5
-        case 0x35:  // AND [R] ZPX cycle 2
-        case 0x39:  // AND [R] ABY cycle 4
-        case 0x3D:  // AND [R] ABX cycle 4
-            BUS_READ(c->AD);
-            c->A &= BUS_DATA();
+        case 0x35:  // AND [R] ZPX cycle 3
+        case 0x39:  // AND [R] ABY cycle 5
+        case 0x3D:  // AND [R] ABX cycle 5
+            c->A &= c->DL;
             _NZ(c->A);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
-        case 0x23:  // RLA [RW] IDX cycle 4
+        case 0x23:  // RLA [RW] IDX cycle 5
         case 0x27:  // RLA [RW] ZP cycle 2
-        case 0x2F:  // RLA [RW] ABS cycle 3
-        case 0x33:  // RLA [RW] IDY cycle 4
-        case 0x37:  // RLA [RW] ZPX cycle 2
-        case 0x3B:  // RLA [RW] ABY cycle 4
-        case 0x3F:  // RLA [RW] ABX cycle 4
-            BUS_READ(c->AD);
-            c->DL = BUS_DATA();
+        case 0x2F:  // RLA [RW] ABS cycle 4
+        case 0x33:  // RLA [RW] IDY cycle 5
+        case 0x37:  // RLA [RW] ZPX cycle 3
+        case 0x3B:  // RLA [RW] ABY cycle 5
+        case 0x3F:  // RLA [RW] ABX cycle 5
             c->CI = C_RLA_RMW;
             goto end;
 
         case 0x24:  // BIT [R] ZP cycle 2
-        case 0x2C:  // BIT [R] ABS cycle 3
-            BUS_READ(c->AD);
-            _fam65xx_bit(c, BUS_DATA());
-            _FETCH();
+        case 0x2C:  // BIT [R] ABS cycle 4
+            _fam65xx_bit(c, c->DL);
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0x26:  // ROL [RW] ZP cycle 2
-        case 0x2E:  // ROL [RW] ABS cycle 3
-        case 0x36:  // ROL [RW] ZPX cycle 2
-        case 0x3E:  // ROL [RW] ABX cycle 4
-            BUS_READ(c->AD);
-            c->DL = BUS_DATA();
+        case 0x2E:  // ROL [RW] ABS cycle 4
+        case 0x36:  // ROL [RW] ZPX cycle 3
+        case 0x3E:  // ROL [RW] ABX cycle 5
             c->CI = C_ROL_RMW;
             goto end;
 
         case 0x28:  // PLP [---] --- cycle 1
-            DUMMY_BUS_READ(0x0100 | c->S++);
+            c->AD = 0x0100 | c->S++;
             c->CI = C_PLP;
             goto end;
 
-        case 0x29:  // AND [---] IMM cycle 1
-            BUS_READ(c->PC++);
-            c->A &= BUS_DATA();
-            _NZ(c->A);
-            _FETCH();
-            goto end;
-
         case 0x2A:  // ROL [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
             c->A = _fam65xx_rol(c, c->A);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0x30:  // BMI [R] IMM cycle 1
         case 0xB0:  // BCS [R] IMM cycle 1
-            BUS_READ(c->PC);
-            c->AD = c->PC + (int8_t)BUS_DATA();
+            c->AD = c->PC;
+            c->TMP = (int8_t)c->DL;
             if ((c->P & FAM65XX_VF) == FAM65XX_VF) {
+            	c->AD = c->PC + c->TMP;
             	c->CI = C_BRANCH_TAKEN;
             } else {
-            	_FETCH();
+            	c->AD = c->PC++;
+            	c->CI = C_FETCH_CYCLE;
             }
             goto end;
 
         case 0x38:  // SEC [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
             c->P |= FAM65XX_CF;
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0x40:  // RTI [R] --- cycle 1
-            DUMMY_BUS_READ(0x0100 | c->S++);
+            c->AD = 0x0100 | c->S++;
             c->CI = C_RTI;
             goto end;
 
-        case 0x41:  // EOR [R] IDX cycle 4
+        case 0x41:  // EOR [R] IDX cycle 5
         case 0x45:  // EOR [R] ZP cycle 2
-        case 0x4D:  // EOR [R] ABS cycle 3
+        case 0x49:  // EOR [---] IMM cycle 1
+        case 0x4D:  // EOR [R] ABS cycle 4
         case 0x51:  // EOR [R] IDY cycle 5
-        case 0x55:  // EOR [R] ZPX cycle 2
-        case 0x59:  // EOR [R] ABY cycle 4
-        case 0x5D:  // EOR [R] ABX cycle 4
-            BUS_READ(c->AD);
-            c->A ^= BUS_DATA();
+        case 0x55:  // EOR [R] ZPX cycle 3
+        case 0x59:  // EOR [R] ABY cycle 5
+        case 0x5D:  // EOR [R] ABX cycle 5
+            c->A ^= c->DL;
             _NZ(c->A);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
-        case 0x43:  // SRE [RW] IDX cycle 4
+        case 0x43:  // SRE [RW] IDX cycle 5
         case 0x47:  // SRE [RW] ZP cycle 2
-        case 0x4F:  // SRE [RW] ABS cycle 3
-        case 0x53:  // SRE [RW] IDY cycle 4
-        case 0x57:  // SRE [RW] ZPX cycle 2
-        case 0x5B:  // SRE [RW] ABY cycle 4
-        case 0x5F:  // SRE [RW] ABX cycle 4
-            BUS_READ(c->AD);
-            c->DL = BUS_DATA();
+        case 0x4F:  // SRE [RW] ABS cycle 4
+        case 0x53:  // SRE [RW] IDY cycle 5
+        case 0x57:  // SRE [RW] ZPX cycle 3
+        case 0x5B:  // SRE [RW] ABY cycle 5
+        case 0x5F:  // SRE [RW] ABX cycle 5
             c->CI = C_SRE_RMW;
             goto end;
 
         case 0x46:  // LSR [RW] ZP cycle 2
-        case 0x4E:  // LSR [RW] ABS cycle 3
-        case 0x56:  // LSR [RW] ZPX cycle 2
-        case 0x5E:  // LSR [RW] ABX cycle 4
-            BUS_READ(c->AD);
-            c->DL = BUS_DATA();
+        case 0x4E:  // LSR [RW] ABS cycle 4
+        case 0x56:  // LSR [RW] ZPX cycle 3
+        case 0x5E:  // LSR [RW] ABX cycle 5
             c->CI = C_LSR_RMW;
             goto end;
 
         case 0x48:  // PHA [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
+            c->AD = c->PC;
             c->CI = C_PHA;
             goto end;
 
-        case 0x49:  // EOR [---] IMM cycle 1
-            BUS_READ(c->PC++);
-            c->A ^= BUS_DATA();
-            _NZ(c->A);
-            _FETCH();
-            goto end;
-
         case 0x4A:  // LSR [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
             c->A = _fam65xx_lsr(c, c->A);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0x4B:  // ASR [R] IMM cycle 1
-            BUS_READ(c->AD);
-            c->A &= BUS_DATA();
+            c->A &= c->DL;
             c->P = (c->P & ~FAM65XX_CF) | (c->A & 1);
             c->A>>=1;
             _NZ(c->A);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0x4C:  // JMP [R] --- cycle 1
-            BUS_READ(c->PC++);
-            c->AD = BUS_DATA();
+            c->TMP = c->DL;
+            c->AD = c->PC++;
             c->CI = C_JMP_ABS;
             goto end;
 
         case 0x50:  // BVC [R] IMM cycle 1
         case 0xD0:  // BNE [R] IMM cycle 1
-            BUS_READ(c->PC);
-            c->AD = c->PC + (int8_t)BUS_DATA();
+            c->AD = c->PC;
+            c->TMP = (int8_t)c->DL;
             if ((c->P & FAM65XX_CF) == 0) {
+            	c->AD = c->PC + c->TMP;
             	c->CI = C_BRANCH_TAKEN;
             } else {
-            	_FETCH();
+            	c->AD = c->PC++;
+            	c->CI = C_FETCH_CYCLE;
             }
             goto end;
 
         case 0x58:  // CLI [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
             c->P &= ~FAM65XX_IF;
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0x60:  // RTS [R] --- cycle 1
-            DUMMY_BUS_READ(0x0100 | c->S++);
+            c->AD = 0x0100 | c->S++;
             c->CI = C_RTS;
             goto end;
 
-        case 0x61:  // ADC [R] IDX cycle 4
+        case 0x61:  // ADC [R] IDX cycle 5
         case 0x65:  // ADC [R] ZP cycle 2
-        case 0x6D:  // ADC [R] ABS cycle 3
+        case 0x69:  // ADC [---] IMM cycle 1
+        case 0x6D:  // ADC [R] ABS cycle 4
         case 0x71:  // ADC [R] IDY cycle 5
-        case 0x75:  // ADC [R] ZPX cycle 2
-        case 0x79:  // ADC [R] ABY cycle 4
-        case 0x7D:  // ADC [R] ABX cycle 4
-            BUS_READ(c->AD);
-            _fam65xx_adc(c, BUS_DATA());
-            _FETCH();
+        case 0x75:  // ADC [R] ZPX cycle 3
+        case 0x79:  // ADC [R] ABY cycle 5
+        case 0x7D:  // ADC [R] ABX cycle 5
+            _fam65xx_adc(c, c->DL);
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
-        case 0x63:  // RRA [RW] IDX cycle 4
+        case 0x63:  // RRA [RW] IDX cycle 5
         case 0x67:  // RRA [RW] ZP cycle 2
-        case 0x6F:  // RRA [RW] ABS cycle 3
-        case 0x73:  // RRA [RW] IDY cycle 4
-        case 0x77:  // RRA [RW] ZPX cycle 2
-        case 0x7B:  // RRA [RW] ABY cycle 4
-        case 0x7F:  // RRA [RW] ABX cycle 4
-            BUS_READ(c->AD);
-            c->DL = BUS_DATA();
+        case 0x6F:  // RRA [RW] ABS cycle 4
+        case 0x73:  // RRA [RW] IDY cycle 5
+        case 0x77:  // RRA [RW] ZPX cycle 3
+        case 0x7B:  // RRA [RW] ABY cycle 5
+        case 0x7F:  // RRA [RW] ABX cycle 5
             c->CI = C_RRA_RMW;
             goto end;
 
         case 0x66:  // ROR [RW] ZP cycle 2
-        case 0x6E:  // ROR [RW] ABS cycle 3
-        case 0x76:  // ROR [RW] ZPX cycle 2
-        case 0x7E:  // ROR [RW] ABX cycle 4
-            BUS_READ(c->AD);
-            c->DL = BUS_DATA();
+        case 0x6E:  // ROR [RW] ABS cycle 4
+        case 0x76:  // ROR [RW] ZPX cycle 3
+        case 0x7E:  // ROR [RW] ABX cycle 5
             c->CI = C_ROR_RMW;
             goto end;
 
         case 0x68:  // PLA [---] --- cycle 1
-            DUMMY_BUS_READ(0x0100 | c->S++);
+            c->AD = 0x0100 | c->S++;
             c->CI = C_PLA;
             goto end;
 
-        case 0x69:  // ADC [---] IMM cycle 1
-            BUS_READ(c->PC++);
-            _fam65xx_adc(c, BUS_DATA());
-            _FETCH();
-            goto end;
-
         case 0x6A:  // ROR [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
             c->A = _fam65xx_ror(c, c->A);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0x6B:  // ARR [R] IMM cycle 1
-            BUS_READ(c->AD);
-            c->A = (c->A & BUS_DATA()) >> 1 | (c->P & FAM65XX_CF ? 0x80 : 0);
+            c->A = (c->A & c->DL) >> 1 | (c->P & FAM65XX_CF ? 0x80 : 0);
             _NZ(c->A);
             c->P = (c->P & ~(FAM65XX_CF | FAM65XX_VF)) | ((c->A & 0x40) ? FAM65XX_CF : 0) | ((c->A & 0x20) ^ (c->A & 0x40) ? FAM65XX_VF : 0);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0x6C:  // JMP [R] --- cycle 1
-            BUS_READ(c->PC++);
-            c->AD = BUS_DATA();
+            c->TMP = c->DL;
+            c->AD = c->PC++;
             c->CI = C_JMP_IND;
             goto end;
 
         case 0x70:  // BVS [R] IMM cycle 1
         case 0xF0:  // BEQ [R] IMM cycle 1
-            BUS_READ(c->PC);
-            c->AD = c->PC + (int8_t)BUS_DATA();
+            c->AD = c->PC;
+            c->TMP = (int8_t)c->DL;
             if ((c->P & FAM65XX_ZF) == FAM65XX_ZF) {
+            	c->AD = c->PC + c->TMP;
             	c->CI = C_BRANCH_TAKEN;
             } else {
-            	_FETCH();
+            	c->AD = c->PC++;
+            	c->CI = C_FETCH_CYCLE;
             }
             goto end;
 
         case 0x78:  // SEI [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
             c->P |= FAM65XX_IF;
-            _FETCH();
-            goto end;
-
-        case 0x81:  // STA [W] IDX cycle 4
-        case 0x85:  // STA [W] ZP cycle 2
-        case 0x8D:  // STA [W] ABS cycle 3
-        case 0x91:  // STA [W] IDY cycle 4
-        case 0x95:  // STA [W] ZPX cycle 2
-        case 0x99:  // STA [W] ABY cycle 4
-        case 0x9D:  // STA [W] ABX cycle 4
-            BUS_WRITE(c->AD, c->A);
+            c->AD = c->PC++;
             c->CI = C_FETCH_CYCLE;
             goto end;
 
-        case 0x83:  // SAX [W] IDX cycle 4
+        case 0x81:  // STA [W] IDX cycle 5
+        case 0x85:  // STA [W] ZP cycle 2
+        case 0x8D:  // STA [W] ABS cycle 4
+        case 0x91:  // STA [W] IDY cycle 5
+        case 0x95:  // STA [W] ZPX cycle 3
+        case 0x99:  // STA [W] ABY cycle 5
+        case 0x9D:  // STA [W] ABX cycle 5
+            c->write_src = R_A;
+            pins &= ~FAM65XX_RW;
+            c->CI = C_FETCH_CYCLE;
+            goto end;
+
+        case 0x83:  // SAX [W] IDX cycle 5
         case 0x87:  // SAX [W] ZP cycle 2
-        case 0x8F:  // SAX [W] ABS cycle 3
-        case 0x97:  // SAX [W] ZPY cycle 2
-            BUS_WRITE(c->AD, c->A & c->X);
+        case 0x8F:  // SAX [W] ABS cycle 4
+        case 0x97:  // SAX [W] ZPY cycle 3
+            c->write_src = R_TMP;
+            c->TMP = c->A & c->X;
+            pins &= ~FAM65XX_RW;
             c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0x84:  // STY [W] ZP cycle 2
-        case 0x8C:  // STY [W] ABS cycle 3
-        case 0x94:  // STY [W] ZPX cycle 2
-            BUS_WRITE(c->AD, c->Y);
+        case 0x8C:  // STY [W] ABS cycle 4
+        case 0x94:  // STY [W] ZPX cycle 3
+            c->write_src = R_Y;
+            pins &= ~FAM65XX_RW;
             c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0x86:  // STX [W] ZP cycle 2
-        case 0x8E:  // STX [W] ABS cycle 3
-        case 0x96:  // STX [W] ZPY cycle 2
-            BUS_WRITE(c->AD, c->X);
+        case 0x8E:  // STX [W] ABS cycle 4
+        case 0x96:  // STX [W] ZPY cycle 3
+            c->write_src = R_X;
+            pins &= ~FAM65XX_RW;
             c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0x88:  // DEY [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
             c->Y--;
             _NZ(c->Y);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0x8A:  // TXA [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
             c->A = c->X;
             _NZ(c->A);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0x8B:  // XAA [R] IMM cycle 1
-            BUS_READ(c->AD);
-            c->A = (c->A | 0xEE) & c->X & BUS_DATA();
+            c->A = (c->A | 0xEE) & c->X & c->DL;
             _NZ(c->A);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
-        case 0x93:  // SHA [RW] IDY cycle 4
-            BUS_WRITE(c->AD, c->A & c->X & ((c->AD >> 8) + 1));
+        case 0x93:  // SHA [RW] IDY cycle 5
+            c->write_src = R_TMP;
+            c->TMP = c->A & c->X & ((c->AD >> 8) + 1);
+            pins &= ~FAM65XX_RW;
             c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0x98:  // TYA [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
             c->A = c->Y;
             _NZ(c->A);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0x9A:  // TXS [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
             c->S = c->X;
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
-        case 0x9B:  // SHS [W] ABY cycle 4
+        case 0x9B:  // SHS [W] ABY cycle 5
             c->S = c->A & c->X;
-            BUS_WRITE(c->AD, c->S & ((c->AD >> 8) + 1));
+            c->write_src = R_TMP;
+            c->TMP = c->S & ((c->AD >> 8) + 1);
+            pins &= ~FAM65XX_RW;
             c->CI = C_FETCH_CYCLE;
             goto end;
 
-        case 0x9C:  // SHY [W] ABX cycle 4
-        case 0x9F:  // SHY [W] ABY cycle 4
-            BUS_WRITE(c->AD, c->Y & ((c->AD >> 8) + 1));
+        case 0x9C:  // SHY [W] ABX cycle 5
+        case 0x9F:  // SHY [W] ABY cycle 5
+            c->write_src = R_TMP;
+            c->TMP = c->Y & ((c->AD >> 8) + 1);
+            pins &= ~FAM65XX_RW;
             c->CI = C_FETCH_CYCLE;
             goto end;
 
-        case 0x9E:  // SHX [W] ABY cycle 4
-            BUS_WRITE(c->AD, c->X & ((c->AD >> 8) + 1));
+        case 0x9E:  // SHX [W] ABY cycle 5
+            c->write_src = R_TMP;
+            c->TMP = c->X & ((c->AD >> 8) + 1);
+            pins &= ~FAM65XX_RW;
             c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0xA0:  // LDY [---] IMM cycle 1
-            BUS_READ(c->PC++);
-            c->Y = BUS_DATA();
+        case 0xA4:  // LDY [R] ZP cycle 2
+        case 0xAC:  // LDY [R] ABS cycle 4
+        case 0xB4:  // LDY [R] ZPX cycle 3
+        case 0xBC:  // LDY [R] ABX cycle 5
+            c->Y = c->DL;
             _NZ(c->Y);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
-        case 0xA1:  // LDA [R] IDX cycle 4
+        case 0xA1:  // LDA [R] IDX cycle 5
         case 0xA5:  // LDA [R] ZP cycle 2
-        case 0xAD:  // LDA [R] ABS cycle 3
+        case 0xA9:  // LDA [---] IMM cycle 1
+        case 0xAD:  // LDA [R] ABS cycle 4
         case 0xB1:  // LDA [R] IDY cycle 5
-        case 0xB5:  // LDA [R] ZPX cycle 2
-        case 0xB9:  // LDA [R] ABY cycle 4
-        case 0xBD:  // LDA [R] ABX cycle 4
-            BUS_READ(c->AD);
-            c->A = BUS_DATA();
+        case 0xB5:  // LDA [R] ZPX cycle 3
+        case 0xB9:  // LDA [R] ABY cycle 5
+        case 0xBD:  // LDA [R] ABX cycle 5
+            c->A = c->DL;
             _NZ(c->A);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0xA2:  // LDX [---] IMM cycle 1
-            BUS_READ(c->PC++);
-            c->X = BUS_DATA();
+        case 0xA6:  // LDX [R] ZP cycle 2
+        case 0xAE:  // LDX [R] ABS cycle 4
+        case 0xB6:  // LDX [R] ZPY cycle 3
+        case 0xBE:  // LDX [R] ABY cycle 5
+            c->X = c->DL;
             _NZ(c->X);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
-        case 0xA3:  // LAX [R] IDX cycle 4
+        case 0xA3:  // LAX [R] IDX cycle 5
         case 0xA7:  // LAX [R] ZP cycle 2
         case 0xAB:  // LAX [R] IMM cycle 1
-        case 0xAF:  // LAX [R] ABS cycle 3
+        case 0xAF:  // LAX [R] ABS cycle 4
         case 0xB3:  // LAX [R] IDY cycle 5
-        case 0xB7:  // LAX [R] ZPY cycle 2
-        case 0xBF:  // LAX [R] ABY cycle 4
-            BUS_READ(c->AD);
-            c->A = c->X = BUS_DATA();
+        case 0xB7:  // LAX [R] ZPY cycle 3
+        case 0xBF:  // LAX [R] ABY cycle 5
+            c->A = c->X = c->DL;
             _NZ(c->A);
-            _FETCH();
-            goto end;
-
-        case 0xA4:  // LDY [R] ZP cycle 2
-        case 0xAC:  // LDY [R] ABS cycle 3
-        case 0xB4:  // LDY [R] ZPX cycle 2
-        case 0xBC:  // LDY [R] ABX cycle 4
-            BUS_READ(c->AD);
-            c->Y = BUS_DATA();
-            _NZ(c->Y);
-            _FETCH();
-            goto end;
-
-        case 0xA6:  // LDX [R] ZP cycle 2
-        case 0xAE:  // LDX [R] ABS cycle 3
-        case 0xB6:  // LDX [R] ZPY cycle 2
-        case 0xBE:  // LDX [R] ABY cycle 4
-            BUS_READ(c->AD);
-            c->X = BUS_DATA();
-            _NZ(c->X);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0xA8:  // TAY [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
             c->Y = c->A;
             _NZ(c->Y);
-            _FETCH();
-            goto end;
-
-        case 0xA9:  // LDA [---] IMM cycle 1
-            BUS_READ(c->PC++);
-            c->A = BUS_DATA();
-            _NZ(c->A);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0xAA:  // TAX [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
             c->X = c->A;
             _NZ(c->X);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0xB8:  // CLV [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
             c->P &= ~FAM65XX_VF;
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0xBA:  // TSX [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
             c->X = c->S;
             _NZ(c->X);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
-        case 0xBB:  // LAS [R] ABY cycle 4
-            BUS_READ(c->AD);
-            c->A = c->X = c->S = c->S & BUS_DATA();
+        case 0xBB:  // LAS [R] ABY cycle 5
+            c->A = c->X = c->S = c->S & c->DL;
             _NZ(c->A);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0xC0:  // CPY [---] IMM cycle 1
-            BUS_READ(c->PC++);
-            _fam65xx_cmp(c, c->Y, BUS_DATA());
-            _FETCH();
+        case 0xC4:  // CPY [R] ZP cycle 2
+        case 0xCC:  // CPY [R] ABS cycle 4
+            _fam65xx_cmp(c, c->Y, c->DL);
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
-        case 0xC1:  // CMP [R] IDX cycle 4
+        case 0xC1:  // CMP [R] IDX cycle 5
         case 0xC5:  // CMP [R] ZP cycle 2
-        case 0xCD:  // CMP [R] ABS cycle 3
+        case 0xC9:  // CMP [---] IMM cycle 1
+        case 0xCD:  // CMP [R] ABS cycle 4
         case 0xD1:  // CMP [R] IDY cycle 5
-        case 0xD5:  // CMP [R] ZPX cycle 2
-        case 0xD9:  // CMP [R] ABY cycle 4
-        case 0xDD:  // CMP [R] ABX cycle 4
-            BUS_READ(c->AD);
-            _fam65xx_cmp(c, c->A, BUS_DATA());
-            _FETCH();
+        case 0xD5:  // CMP [R] ZPX cycle 3
+        case 0xD9:  // CMP [R] ABY cycle 5
+        case 0xDD:  // CMP [R] ABX cycle 5
+            _fam65xx_cmp(c, c->A, c->DL);
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
-        case 0xC3:  // DCP [RW] IDX cycle 4
+        case 0xC3:  // DCP [RW] IDX cycle 5
         case 0xC7:  // DCP [RW] ZP cycle 2
-        case 0xCF:  // DCP [RW] ABS cycle 3
-        case 0xD3:  // DCP [RW] IDY cycle 4
-        case 0xD7:  // DCP [RW] ZPX cycle 2
-        case 0xDB:  // DCP [RW] ABY cycle 4
-        case 0xDF:  // DCP [RW] ABX cycle 4
-            BUS_READ(c->AD);
-            c->DL = BUS_DATA();
+        case 0xCF:  // DCP [RW] ABS cycle 4
+        case 0xD3:  // DCP [RW] IDY cycle 5
+        case 0xD7:  // DCP [RW] ZPX cycle 3
+        case 0xDB:  // DCP [RW] ABY cycle 5
+        case 0xDF:  // DCP [RW] ABX cycle 5
             c->CI = C_DCP_RMW;
             goto end;
 
-        case 0xC4:  // CPY [R] ZP cycle 2
-        case 0xCC:  // CPY [R] ABS cycle 3
-            BUS_READ(c->AD);
-            _fam65xx_cmp(c, c->Y, BUS_DATA());
-            _FETCH();
-            goto end;
-
         case 0xC6:  // DEC [RW] ZP cycle 2
-        case 0xCE:  // DEC [RW] ABS cycle 3
-        case 0xD6:  // DEC [RW] ZPX cycle 2
-        case 0xDE:  // DEC [RW] ABX cycle 4
-            BUS_READ(c->AD);
-            c->DL = BUS_DATA();
+        case 0xCE:  // DEC [RW] ABS cycle 4
+        case 0xD6:  // DEC [RW] ZPX cycle 3
+        case 0xDE:  // DEC [RW] ABX cycle 5
             c->CI = C_DEC_RMW;
             goto end;
 
         case 0xC8:  // INY [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
             c->Y++;
             _NZ(c->Y);
-            _FETCH();
-            goto end;
-
-        case 0xC9:  // CMP [---] IMM cycle 1
-            BUS_READ(c->PC++);
-            _fam65xx_cmp(c, c->A, BUS_DATA());
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0xCA:  // DEX [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
             c->X--;
             _NZ(c->X);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0xCB:  // SBX [R] IMM cycle 1
-            BUS_READ(c->AD);
             {
-            	uint16_t t = (c->A & c->X) - BUS_DATA();
+            	uint16_t t = (c->A & c->X) - c->DL;
             	c->X = t;
             	_NZ(c->X);
             	c->P = (c->P & ~FAM65XX_CF) | ((t & 0x100) ? 0 : FAM65XX_CF);
             }
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0xD8:  // CLD [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
             c->P &= ~FAM65XX_DF;
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0xE0:  // CPX [---] IMM cycle 1
-            BUS_READ(c->PC++);
-            _fam65xx_cmp(c, c->X, BUS_DATA());
-            _FETCH();
+        case 0xE4:  // CPX [R] ZP cycle 2
+        case 0xEC:  // CPX [R] ABS cycle 4
+            _fam65xx_cmp(c, c->X, c->DL);
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
-        case 0xE1:  // SBC [R] IDX cycle 4
+        case 0xE1:  // SBC [R] IDX cycle 5
         case 0xE5:  // SBC [R] ZP cycle 2
+        case 0xE9:  // SBC [---] IMM cycle 1
         case 0xEB:  // SBC [R] IMM cycle 1
-        case 0xED:  // SBC [R] ABS cycle 3
+        case 0xED:  // SBC [R] ABS cycle 4
         case 0xF1:  // SBC [R] IDY cycle 5
-        case 0xF5:  // SBC [R] ZPX cycle 2
-        case 0xF9:  // SBC [R] ABY cycle 4
-        case 0xFD:  // SBC [R] ABX cycle 4
-            BUS_READ(c->AD);
-            _fam65xx_sbc(c, BUS_DATA());
-            _FETCH();
+        case 0xF5:  // SBC [R] ZPX cycle 3
+        case 0xF9:  // SBC [R] ABY cycle 5
+        case 0xFD:  // SBC [R] ABX cycle 5
+            _fam65xx_sbc(c, c->DL);
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
-        case 0xE3:  // ISC [RW] IDX cycle 4
+        case 0xE3:  // ISC [RW] IDX cycle 5
         case 0xE7:  // ISC [RW] ZP cycle 2
-        case 0xEF:  // ISC [RW] ABS cycle 3
-        case 0xF3:  // ISC [RW] IDY cycle 4
-        case 0xF7:  // ISC [RW] ZPX cycle 2
-        case 0xFB:  // ISC [RW] ABY cycle 4
-        case 0xFF:  // ISC [RW] ABX cycle 4
-            BUS_READ(c->AD);
-            c->DL = BUS_DATA();
+        case 0xEF:  // ISC [RW] ABS cycle 4
+        case 0xF3:  // ISC [RW] IDY cycle 5
+        case 0xF7:  // ISC [RW] ZPX cycle 3
+        case 0xFB:  // ISC [RW] ABY cycle 5
+        case 0xFF:  // ISC [RW] ABX cycle 5
             c->CI = C_ISC_RMW;
             goto end;
 
-        case 0xE4:  // CPX [R] ZP cycle 2
-        case 0xEC:  // CPX [R] ABS cycle 3
-            BUS_READ(c->AD);
-            _fam65xx_cmp(c, c->X, BUS_DATA());
-            _FETCH();
-            goto end;
-
         case 0xE6:  // INC [RW] ZP cycle 2
-        case 0xEE:  // INC [RW] ABS cycle 3
-        case 0xF6:  // INC [RW] ZPX cycle 2
-        case 0xFE:  // INC [RW] ABX cycle 4
-            BUS_READ(c->AD);
-            c->DL = BUS_DATA();
+        case 0xEE:  // INC [RW] ABS cycle 4
+        case 0xF6:  // INC [RW] ZPX cycle 3
+        case 0xFE:  // INC [RW] ABX cycle 5
             c->CI = C_INC_RMW;
             goto end;
 
         case 0xE8:  // INX [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
             c->X++;
             _NZ(c->X);
-            _FETCH();
-            goto end;
-
-        case 0xE9:  // SBC [---] IMM cycle 1
-            BUS_READ(c->PC++);
-            _fam65xx_sbc(c, BUS_DATA());
-            _FETCH();
-            goto end;
-
-        case 0xEA:  // NOP [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         case 0xF8:  // SED [---] --- cycle 1
-            DUMMY_BUS_READ(c->PC);
             c->P |= FAM65XX_DF;
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
+            goto end;
+
+        //=================================================================
+        // FETCH CYCLE
+        //=================================================================
+        case C_FETCH_CYCLE: // 256
             _FETCH();
             goto end;
 
         // ==========================================
-        // [256] DEDICATED _FETCH() CASE
-        // ==========================================
-
-        case C_FETCH_CYCLE:  // Dedicated _FETCH() cycle for write/RMW operations
-            _FETCH();
-            goto end;
-
-        // ==========================================
-        // [257-283] SHARED ADDRESSING SEQUENCES
+        // [257-292] SHARED ADDRESSING SEQUENCES
         // ==========================================
 
         // ZP: zero page
         case ADDR_SEQ_BASE + ADDR_ZER + 0:  // ZP cycle 1
-            DUMMY_BUS_READ(c->PC);
+            c->AD = c->DL;
             c->CI = c->opcode;
             goto end;
 
         // ZPX: zero page,X
         case ADDR_SEQ_BASE + ADDR_ZPX + 0:  // ZPX cycle 1
-            DUMMY_BUS_READ(c->AD);
-            c->AD = (c->AD + c->X) & 0xFF;
+            c->TMP = c->DL;
+            c->AD = c->DL;
+            c->CI++;
+            break;
+        case ADDR_SEQ_BASE + ADDR_ZPX + 1:  // ZPX cycle 2
+            c->AD = (c->TMP + c->X) & 0xFF;
             c->CI = c->opcode;
             goto end;
 
         // ZPY: zero page,Y
         case ADDR_SEQ_BASE + ADDR_ZPY + 0:  // ZPY cycle 1
-            DUMMY_BUS_READ(c->AD);
-            c->AD = (c->AD + c->Y) & 0xFF;
+            c->TMP = c->DL;
+            c->AD = c->DL;
+            c->CI++;
+            break;
+        case ADDR_SEQ_BASE + ADDR_ZPY + 1:  // ZPY cycle 2
+            c->AD = (c->TMP + c->Y) & 0xFF;
             c->CI = c->opcode;
             goto end;
 
         // ABS: absolute
         case ADDR_SEQ_BASE + ADDR_ABS + 0:  // ABS cycle 1
-            BUS_READ(c->PC++);
-            c->AD |= BUS_DATA() << 8;
+            c->AD = c->PC++;
+            c->CI++;
             break;
         case ADDR_SEQ_BASE + ADDR_ABS + 1:  // ABS cycle 2
-            DUMMY_BUS_READ(c->PC);
+            c->ADL = c->DL;
+            c->AD = c->PC++;
+            c->CI++;
+            break;
+        case ADDR_SEQ_BASE + ADDR_ABS + 2:  // ABS cycle 3
+            c->ADH = c->DL;
             c->CI = c->opcode;
             goto end;
 
         // ABX: absolute,X
         case ADDR_SEQ_BASE + ADDR_ABX + 0:  // ABX cycle 1
-            BUS_READ(c->PC++);
-            c->AD |= BUS_DATA() << 8;
+            c->AD = c->PC++;
+            c->CI++;
             break;
         case ADDR_SEQ_BASE + ADDR_ABX + 1:  // ABX cycle 2
-            BUS_READ((c->AD & 0xFF00) | ((c->AD + c->X) & 0xFF));
-            if ((c->AD >> 8) != ((c->AD + c->X) >> 8)) { c->AD += c->X; c->CI = c->opcode; } else { c->CI++; }
-            goto end;
+            c->ADL = c->DL;
+            c->AD = c->PC++;
+            c->CI++;
+            break;
         case ADDR_SEQ_BASE + ADDR_ABX + 2:  // ABX cycle 3
+            c->ADH = c->DL;
+            if ((c->ADL + c->X) > 0xFF) { c->AD += c->X; c->CI = c->opcode; } else { c->AD = c->ADL | (c->ADH << 8); c->CI++; }
+            goto end;
+        case ADDR_SEQ_BASE + ADDR_ABX + 3:  // ABX cycle 4
             c->AD += c->X;
             c->CI = c->opcode;
             goto end;
 
         // ABX: absolute,X (write - always takes extra cycle)
         case ADDR_SEQ_BASE + ADDR_ABX_W + 0:  // ABX cycle 1
-            BUS_READ(c->PC++);
-            c->AD |= BUS_DATA() << 8;
+            c->AD = c->PC++;
+            c->CI++;
             break;
         case ADDR_SEQ_BASE + ADDR_ABX_W + 1:  // ABX cycle 2
-            BUS_READ((c->AD & 0xFF00) | ((c->AD + c->X) & 0xFF));
+            c->ADL = c->DL;
+            c->AD = c->PC++;
+            c->CI++;
             break;
         case ADDR_SEQ_BASE + ADDR_ABX_W + 2:  // ABX cycle 3
-            c->AD += c->X;
+            c->ADH = c->DL;
+            c->CI++;
+            break;
+        case ADDR_SEQ_BASE + ADDR_ABX_W + 3:  // ABX cycle 4
+            c->AD = (c->ADL + c->X) | (c->ADH << 8);
             c->CI = c->opcode;
             goto end;
 
         // ABY: absolute,Y
         case ADDR_SEQ_BASE + ADDR_ABY + 0:  // ABY cycle 1
-            BUS_READ(c->PC++);
-            c->AD |= BUS_DATA() << 8;
+            c->AD = c->PC++;
+            c->CI++;
             break;
         case ADDR_SEQ_BASE + ADDR_ABY + 1:  // ABY cycle 2
-            BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));
-            if ((c->AD >> 8) != ((c->AD + c->Y) >> 8)) { c->AD += c->Y; c->CI = c->opcode; } else { c->CI++; }
-            goto end;
+            c->ADL = c->DL;
+            c->AD = c->PC++;
+            c->CI++;
+            break;
         case ADDR_SEQ_BASE + ADDR_ABY + 2:  // ABY cycle 3
+            c->ADH = c->DL;
+            if ((c->ADL + c->Y) > 0xFF) { c->AD += c->Y; c->CI = c->opcode; } else { c->AD = c->ADL | (c->ADH << 8); c->CI++; }
+            goto end;
+        case ADDR_SEQ_BASE + ADDR_ABY + 3:  // ABY cycle 4
             c->AD += c->Y;
             c->CI = c->opcode;
             goto end;
 
         // ABY: absolute,Y (write - always takes extra cycle)
         case ADDR_SEQ_BASE + ADDR_ABY_W + 0:  // ABY cycle 1
-            BUS_READ(c->PC++);
-            c->AD |= BUS_DATA() << 8;
+            c->AD = c->PC++;
+            c->CI++;
             break;
         case ADDR_SEQ_BASE + ADDR_ABY_W + 1:  // ABY cycle 2
-            BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));
+            c->ADL = c->DL;
+            c->AD = c->PC++;
+            c->CI++;
             break;
         case ADDR_SEQ_BASE + ADDR_ABY_W + 2:  // ABY cycle 3
-            c->AD += c->Y;
+            c->ADH = c->DL;
+            c->CI++;
+            break;
+        case ADDR_SEQ_BASE + ADDR_ABY_W + 3:  // ABY cycle 4
+            c->AD = (c->ADL + c->Y) | (c->ADH << 8);
             c->CI = c->opcode;
             goto end;
 
         // IDX: indexed indirect (zp,X)
         case ADDR_SEQ_BASE + ADDR_IDX + 0:  // IDX cycle 1
-            DUMMY_BUS_READ(c->AD);
-            c->AD = (c->AD + c->X) & 0xFF;
+            c->TMP = c->DL;
+            c->AD = c->DL;
+            c->CI++;
             break;
         case ADDR_SEQ_BASE + ADDR_IDX + 1:  // IDX cycle 2
-            BUS_READ(c->AD);
-            c->DL = BUS_DATA();
+            c->AD = (c->TMP + c->X) & 0xFF;
+            c->CI++;
             break;
         case ADDR_SEQ_BASE + ADDR_IDX + 2:  // IDX cycle 3
-            BUS_READ((c->AD + 1) & 0xFF);
-            c->AD = (BUS_DATA() << 8) | c->DL;
+            c->TMP = c->DL;
+            c->AD = (c->AD + 1) & 0xFF;
+            c->CI++;
+            break;
+        case ADDR_SEQ_BASE + ADDR_IDX + 3:  // IDX cycle 4
+            c->AD = (c->DL << 8) | c->TMP;
             c->CI = c->opcode;
             goto end;
 
         // IDY: indirect indexed (zp),Y
         case ADDR_SEQ_BASE + ADDR_IDY + 0:  // IDY cycle 1
-            BUS_READ(c->AD);
-            c->PC = BUS_DATA();
+            c->AD = c->DL;
+            c->CI++;
             break;
         case ADDR_SEQ_BASE + ADDR_IDY + 1:  // IDY cycle 2
-            BUS_READ((c->AD + 1) & 0xFF);
-            c->AD = c->PC | (BUS_DATA() << 8);
+            c->TMP = c->DL;
+            c->AD = (c->AD + 1) & 0xFF;
+            c->CI++;
             break;
         case ADDR_SEQ_BASE + ADDR_IDY + 2:  // IDY cycle 3
-            BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));
+            c->AD = c->TMP | (c->DL << 8);
             if ((c->AD >> 8) != ((c->AD + c->Y) >> 8)) { c->CI++; } else { c->AD += c->Y; c->CI = c->opcode; }
             goto end;
         case ADDR_SEQ_BASE + ADDR_IDY + 3:  // IDY cycle 4
@@ -1191,360 +1164,395 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
 
         // IDY: indirect indexed (zp),Y (write - always takes extra cycle)
         case ADDR_SEQ_BASE + ADDR_IDY_W + 0:  // IDY cycle 1
-            BUS_READ(c->AD);
-            c->PC = BUS_DATA();
+            c->AD = c->DL;
+            c->CI++;
             break;
         case ADDR_SEQ_BASE + ADDR_IDY_W + 1:  // IDY cycle 2
-            BUS_READ((c->AD + 1) & 0xFF);
-            c->AD = c->PC | (BUS_DATA() << 8);
+            c->TMP = c->DL;
+            c->AD = (c->AD + 1) & 0xFF;
+            c->CI++;
             break;
         case ADDR_SEQ_BASE + ADDR_IDY_W + 2:  // IDY cycle 3
-            DUMMY_BUS_READ((c->AD & 0xFF00) | ((c->AD + c->Y) & 0xFF));
+            c->AD = c->TMP | (c->DL << 8);
+            c->CI++;
+            break;
+        case ADDR_SEQ_BASE + ADDR_IDY_W + 3:  // IDY cycle 4
             c->AD += c->Y;
             c->CI = c->opcode;
             goto end;
 
         // ==========================================
-        // [284+] SHARED CONTINUATIONS
+        // [293+] SHARED CONTINUATIONS
         // ==========================================
 
         // BRK continuation
         case C_BRK + 0:
-            BUS_WRITE(0x0100 | c->S--, c->PC);
+            c->write_src = R_PCL;
+            pins &= ~FAM65XX_RW;
+            c->AD = 0x0100 | c->S--;
             break;
         case C_BRK + 1:
-            BUS_WRITE(0x0100 | c->S--, c->P | FAM65XX_BF);
+            c->write_src = R_P;
+            c->TMP = c->P | FAM65XX_BF;
+            pins &= ~FAM65XX_RW;
+            c->AD = 0x0100 | c->S--;
             c->P |= FAM65XX_IF;
             c->P &= ~FAM65XX_BF;
             c->brk_flags = 0;
             break;
         case C_BRK + 2:
             c->AD = _fam65xx_get_vector_addr(c);
-            BUS_READ(c->AD);
-            c->PC = BUS_DATA();
+            c->PCL = c->DL;
             break;
         case C_BRK + 3:
-            BUS_READ(c->AD + 1);
-            c->PC |= BUS_DATA() << 8;
+            c->AD++;
+            c->PCH = c->DL;
             break;
         case C_BRK + 4:
-            DUMMY_BUS_READ(c->PC);
+            c->AD = c->PC;
             break;
         case C_BRK + 5:
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         // JAM continuation
         case C_JAM + 0:
-            DUMMY_BUS_READ(c->PC);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         // SLO_RMW continuation
         case C_SLO_RMW + 0:
-            DUMMY_BUS_WRITE(c->AD, c->DL);
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
             break;
         case C_SLO_RMW + 1:
-            DUMMY_BUS_READ(c->PC);
             c->DL = _fam65xx_asl(c, c->DL);
             c->A |= c->DL;
             _NZ(c->A);
             break;
         case C_SLO_RMW + 2:
-            BUS_WRITE(c->AD, c->DL);
-            _FETCH();
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         // ASL_RMW continuation
         case C_ASL_RMW + 0:
-            DUMMY_BUS_WRITE(c->AD, c->DL);
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
             break;
         case C_ASL_RMW + 1:
-            DUMMY_BUS_READ(c->PC);
             c->DL = _fam65xx_asl(c, c->DL);
             break;
         case C_ASL_RMW + 2:
-            BUS_WRITE(c->AD, c->DL);
-            _FETCH();
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         // PHP continuation
         case C_PHP + 0:
-            BUS_WRITE(0x0100 | c->S--, c->P | FAM65XX_BF);
+            c->write_src = R_TMP;
+            c->TMP = c->P | FAM65XX_BF;
+            pins &= ~FAM65XX_RW;
+            c->AD = 0x0100 | c->S--;
             break;
         case C_PHP + 1:
-            DUMMY_BUS_READ(c->PC);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         // BRANCH_TAKEN continuation
         case C_BRANCH_TAKEN + 0:
-            DUMMY_BUS_READ((c->PC & 0xFF00) | (c->AD & 0xFF));
             if((c->AD & 0xFF00) == (c->PC & 0xFF00))
             {
             	c->PC = c->AD;
             	c->irq_pip >>= 1;
             	c->nmi_pip >>= 1;
-            	_FETCH();
-            };
+            	c->AD = c->PC++;
+            	c->CI = C_FETCH_CYCLE;
+            } else {
+            	c->AD = (c->PC & 0xFF00) | (c->AD & 0xFF);
+            }
             goto end;
         case C_BRANCH_TAKEN + 1:
-            DUMMY_BUS_READ(c->PC);
             c->PC = c->AD;
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         // JSR continuation
         case C_JSR + 0:
-            DUMMY_BUS_READ(0x0100 | c->S);
+            c->AD = 0x0100 | c->S;
             break;
         case C_JSR + 1:
-            BUS_WRITE(0x0100 | c->S--, c->PC >> 8);
+            c->write_src = R_PCH;
+            pins &= ~FAM65XX_RW;
+            c->AD = 0x0100 | c->S--;
             break;
         case C_JSR + 2:
-            BUS_WRITE(0x0100 | c->S--, c->PC);
+            c->write_src = R_PCL;
+            pins &= ~FAM65XX_RW;
+            c->AD = 0x0100 | c->S--;
             break;
         case C_JSR + 3:
-            BUS_READ(c->PC);
-            c->PC = (BUS_DATA() << 8) | c->AD;
+            c->AD = c->PC;
+            c->PCH = c->DL;
+            c->PC = (c->DL << 8) | c->TMP;
             break;
         case C_JSR + 4:
-            DUMMY_BUS_READ(c->PC);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         // RLA_RMW continuation
         case C_RLA_RMW + 0:
-            DUMMY_BUS_WRITE(c->AD, c->DL);
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
             break;
         case C_RLA_RMW + 1:
-            DUMMY_BUS_READ(c->PC);
             c->DL = _fam65xx_rol(c, c->DL);
             c->A &= c->DL;
             _NZ(c->A);
             break;
         case C_RLA_RMW + 2:
-            BUS_WRITE(c->AD, c->DL);
-            _FETCH();
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         // ROL_RMW continuation
         case C_ROL_RMW + 0:
-            DUMMY_BUS_WRITE(c->AD, c->DL);
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
             break;
         case C_ROL_RMW + 1:
-            DUMMY_BUS_READ(c->PC);
             c->DL = _fam65xx_rol(c, c->DL);
             break;
         case C_ROL_RMW + 2:
-            BUS_WRITE(c->AD, c->DL);
-            _FETCH();
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         // PLP continuation
         case C_PLP + 0:
-            BUS_READ(0x0100 | c->S);
-            c->P = (BUS_DATA() | FAM65XX_BF) & ~FAM65XX_XF;
+            c->AD = 0x0100 | c->S;
+            c->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;
             break;
         case C_PLP + 1:
-            DUMMY_BUS_READ(c->PC);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         // RTI continuation
         case C_RTI + 0:
-            BUS_READ(0x0100 | c->S++);
-            c->P = (BUS_DATA() | FAM65XX_BF) & ~FAM65XX_XF;
+            c->AD = 0x0100 | c->S++;
+            c->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;
             break;
         case C_RTI + 1:
-            BUS_READ(0x0100 | c->S++);
+            c->AD = 0x0100 | c->S++;
+            c->PCL = c->DL;
             break;
         case C_RTI + 2:
-            BUS_READ(0x0100 | c->S);
-            c->AD = BUS_DATA();
-            c->PC = (BUS_DATA() << 8) | c->AD;
+            c->AD = 0x0100 | c->S;
+            c->PCH = c->DL;
             break;
         case C_RTI + 3:
-            DUMMY_BUS_READ(c->PC);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         // SRE_RMW continuation
         case C_SRE_RMW + 0:
-            DUMMY_BUS_WRITE(c->AD, c->DL);
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
             break;
         case C_SRE_RMW + 1:
-            DUMMY_BUS_READ(c->PC);
             c->DL = _fam65xx_lsr(c, c->DL);
             c->A ^= c->DL;
             _NZ(c->A);
             break;
         case C_SRE_RMW + 2:
-            BUS_WRITE(c->AD, c->DL);
-            _FETCH();
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         // LSR_RMW continuation
         case C_LSR_RMW + 0:
-            DUMMY_BUS_WRITE(c->AD, c->DL);
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
             break;
         case C_LSR_RMW + 1:
-            DUMMY_BUS_READ(c->PC);
             c->DL = _fam65xx_lsr(c, c->DL);
             break;
         case C_LSR_RMW + 2:
-            BUS_WRITE(c->AD, c->DL);
-            _FETCH();
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         // PHA continuation
         case C_PHA + 0:
-            BUS_WRITE(0x0100 | c->S--, c->A);
+            c->write_src = R_A;
+            pins &= ~FAM65XX_RW;
+            c->AD = 0x0100 | c->S--;
             break;
         case C_PHA + 1:
-            DUMMY_BUS_READ(c->PC);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         // JMP_ABS continuation
         case C_JMP_ABS + 0:
-            BUS_READ(c->PC++);
-            c->AD |= BUS_DATA() << 8;
-            c->PC = c->AD;
+            c->AD = c->PC++;
+            c->PCH = c->DL;
+            c->PC = (c->DL << 8) | c->TMP;
             break;
         case C_JMP_ABS + 1:
-            DUMMY_BUS_READ(c->PC);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         // RTS continuation
         case C_RTS + 0:
-            BUS_READ(0x0100 | c->S++);
+            c->AD = 0x0100 | c->S++;
+            c->PCL = c->DL;
             break;
         case C_RTS + 1:
-            BUS_READ(0x0100 | c->S);
-            c->AD = BUS_DATA();
-            c->PC = (BUS_DATA() << 8) | c->AD;
+            c->AD = 0x0100 | c->S;
+            c->PCH = c->DL;
             break;
         case C_RTS + 2:
-            BUS_READ(c->PC++);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         // RRA_RMW continuation
         case C_RRA_RMW + 0:
-            DUMMY_BUS_WRITE(c->AD, c->DL);
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
             break;
         case C_RRA_RMW + 1:
-            DUMMY_BUS_READ(c->PC);
             c->DL = _fam65xx_ror(c, c->DL);
             _fam65xx_adc(c, c->DL);
             break;
         case C_RRA_RMW + 2:
-            BUS_WRITE(c->AD, c->DL);
-            _FETCH();
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         // ROR_RMW continuation
         case C_ROR_RMW + 0:
-            DUMMY_BUS_WRITE(c->AD, c->DL);
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
             break;
         case C_ROR_RMW + 1:
-            DUMMY_BUS_READ(c->PC);
             c->DL = _fam65xx_ror(c, c->DL);
             break;
         case C_ROR_RMW + 2:
-            BUS_WRITE(c->AD, c->DL);
-            _FETCH();
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         // PLA continuation
         case C_PLA + 0:
-            BUS_READ(0x0100 | c->S);
-            c->A = BUS_DATA();
+            c->AD = 0x0100 | c->S;
+            c->A = c->DL;
             _NZ(c->A);
             break;
         case C_PLA + 1:
-            DUMMY_BUS_READ(c->PC);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         // JMP_IND continuation
         case C_JMP_IND + 0:
-            BUS_READ(c->PC++);
-            c->AD |= BUS_DATA() << 8;
+            c->AD = c->PC++;
+            c->TMP = c->DL;
+            c->AD = (c->DL << 8) | c->TMP;
             break;
         case C_JMP_IND + 1:
-            BUS_READ(c->AD);
+            c->AD = c->AD;
+            c->PCL = c->DL;
             break;
         case C_JMP_IND + 2:
-            BUS_READ((c->AD & 0xFF00) | ((c->AD + 1) & 0xFF));
-            c->AD = BUS_DATA();
-            c->PC = (BUS_DATA() << 8) | c->AD;
+            c->AD = (c->AD & 0xFF00) | ((c->AD + 1) & 0xFF);
+            c->PCH = c->DL;
             break;
         case C_JMP_IND + 3:
-            DUMMY_BUS_READ(c->PC);
-            _FETCH();
+            c->AD = c->PC++;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         // DCP_RMW continuation
         case C_DCP_RMW + 0:
-            DUMMY_BUS_WRITE(c->AD, c->DL);
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
             break;
         case C_DCP_RMW + 1:
-            DUMMY_BUS_READ(c->PC);
             c->DL--;
             _fam65xx_cmp(c, c->A, c->DL);
             break;
         case C_DCP_RMW + 2:
-            BUS_WRITE(c->AD, c->DL);
-            _FETCH();
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         // DEC_RMW continuation
         case C_DEC_RMW + 0:
-            DUMMY_BUS_WRITE(c->AD, c->DL);
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
             break;
         case C_DEC_RMW + 1:
-            DUMMY_BUS_READ(c->PC);
             c->DL--;
             _NZ(c->DL);
             break;
         case C_DEC_RMW + 2:
-            BUS_WRITE(c->AD, c->DL);
-            _FETCH();
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         // ISC_RMW continuation
         case C_ISC_RMW + 0:
-            DUMMY_BUS_WRITE(c->AD, c->DL);
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
             break;
         case C_ISC_RMW + 1:
-            DUMMY_BUS_READ(c->PC);
             c->DL++;
             _fam65xx_sbc(c, c->DL);
             break;
         case C_ISC_RMW + 2:
-            BUS_WRITE(c->AD, c->DL);
-            _FETCH();
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
         // INC_RMW continuation
         case C_INC_RMW + 0:
-            DUMMY_BUS_WRITE(c->AD, c->DL);
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
             break;
         case C_INC_RMW + 1:
-            DUMMY_BUS_READ(c->PC);
             c->DL++;
             _NZ(c->DL);
             break;
         case C_INC_RMW + 2:
-            BUS_WRITE(c->AD, c->DL);
-            _FETCH();
+            c->write_src = R_DL;
+            pins &= ~FAM65XX_RW;
+            c->CI = C_FETCH_CYCLE;
             goto end;
 
     }
     c->CI++;
+
 end:
     return pins;
 }
