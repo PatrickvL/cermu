@@ -1462,8 +1462,8 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
     return pins;
 
 fetch_next:
-    c->PC++;
     c->AD = c->PC;
+    c->PC++;
     pins |= FAM65XX_SYNC;
     return pins;
 }
