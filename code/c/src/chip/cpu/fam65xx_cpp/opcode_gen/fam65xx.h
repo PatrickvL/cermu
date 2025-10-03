@@ -519,15 +519,15 @@ uint64_t fam65xx_tick(fam65xx_t* c, uint64_t pins) {
     // Execute one cycle using generated decoder
     pins = _fam65xx_decode(c, pins);
     
-    // NEW SYNC-BASED ARCHITECTURE: Handle opcode decoding when SYNC is raised
+    // NEW SYNC-based ARCHITECTURE: Handle opcode decoding when SYNC is raised
     if (pins & FAM65XX_SYNC) {
-        // Instruction completed, fetch_next has set AD = PC++ for next opcode
+        // Instruction completed, fetch_next has set AD = PC for next opcode
         if (!(pins & FAM65XX_RDY)) {
             // CPU stalled, don't decode yet
             return pins;
         }
         
-        // Read the next opcode from the address set by fetch_next (which is PC-1 after increment)
+        // Read the next opcode from the address set by fetch_next (PC after increment)
         c->DL = c->mem_read(c->user_data, c->AD, pins_data);
         c->opcode = c->DL;
         
