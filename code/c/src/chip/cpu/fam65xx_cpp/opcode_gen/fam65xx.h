@@ -86,17 +86,63 @@ typedef uint8_t (*fam65xx_mem_read_t)(void* user_data, uint16_t addr, uint8_t bu
 // cpu_write: called during PHI2 when CPU writes
 typedef void (*fam65xx_mem_write_t)(void* user_data, uint16_t addr, uint8_t data);
 
+// 8-bit register indices
+enum {
+    R_ZERO = 0,  // Always zero, never written
+    // Public registers
+    R_A,         // Accumulator
+    R_X,         // X index
+    R_Y,         // Y index
+    R_S,         // Stack pointer
+    R_P,         // Processor status
+    // Internal registers
+    R_DL,        // Data latch
+    // Start of 16 bit aligned registers :
+    R_PCL,       // Program counter low
+    R_PCH,       // Program counter high
+    R_ADL,       // Address low
+    R_ADH,       // Address high
+    // End of 16 bit aligned registers :
+    R_TMP,       // Temporary storage
+};
+
+// 16-bit register indices (native endian aware)
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    #define R16(lo, hi) ((lo) / 2)
+#else
+    #define R16(hi, lo) ((hi) / 2)
+#endif
+
+enum {
+    R_AD = R16(R_ADL, R_ADH),
+    R_PC = R16(R_PCL, R_PCH),
+};
+
 // CPU state
 typedef struct {
-    // Public registers
-    uint16_t PC;      // Program counter
-    uint8_t A, X, Y;  // Accumulator, X and Y index registers
-    uint8_t S;        // Stack pointer
-    uint8_t P;        // Processor status
-    // Internal registers
-    uint8_t DL;       // Data latch
-    uint16_t AD;      // Address data (compposed of ADL and ADH in hardware)
-    
+    union {
+        uint8_t r8[16];  // 8-bit register array
+        uint16_t r16[8]; // 16-bit overlay (native endian)
+    };    
+
+// Accessors (c-> required before use)
+
+// Public registers
+#define PC    (r16[R_PC])  // Program counter (16 bit)
+#define PCL   (r8[R_PCL])  // Program counter low
+#define PCH   (r8[R_PCH])  // Program counter high
+#define A     (r8[R_A])    // Accumulator register
+#define X     (r8[R_X])    // X index register
+#define Y     (r8[R_Y])    // Y index register
+#define S     (r8[R_S])    // Stack pointer
+#define P     (r8[R_P])    // Processor status
+// Internal registers
+#define DL    (r8[R_DL])   // Data latch
+#define AD    (r16[R_AD])  // Address data (16 bit)
+#define ADL   (r8[R_ADL])  // Address data low
+#define ADH   (r8[R_ADH])  // Address data high
+#define TMP   (r8[R_TMP])
+
     // Cycle decoder state
     uint16_t CI;      // Current cycle index
     uint8_t opcode;   // Current opcode byte (IR: Instruction Register)
@@ -212,6 +258,15 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
            (((v) & 0xFF) ? ((v) & FAM65XX_NF) : FAM65XX_ZF); \
 } while(0)
 
+// Cycle index layout:
+enum {
+    // [0..255]   = Opcode execution cycles
+    C_FETCH_CYCLE = 256,
+    // [257..399] = Addressing modes (ADDR_SEQ_BASE + addr_seq), where addr_seq 0 = opcode only
+    ADDR_SEQ_BASE = 256,  // Base for addressing mode calculation
+    // [400+]     = Continuation cycles for complex operations
+};
+
 // Fetch next opcode
 #define _FETCH() do { \
     if (!(pins & FAM65XX_RDY)) { \
@@ -219,11 +274,7 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
     } \
     c->opcode = c->mem_read(c->user_data, c->PC++, FAM65XX_GET_DATA(pins)); \
     uint8_t addr_seq = opcode_addr_start[c->opcode]; \
-    if (addr_seq == 0) { \
-        c->CI = c->opcode; \
-    } else { \
-        c->CI = 256 + addr_seq; \
-    } \
+    c->CI = addr_seq == 0 ? c->opcode : ADDR_SEQ_BASE + addr_seq; \
     pins |= FAM65XX_SYNC; \
 } while(0)
 
