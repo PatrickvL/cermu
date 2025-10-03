@@ -108,16 +108,17 @@ static uint8_t test_mem_read(void* user_data, uint16_t addr, uint8_t bus_state) 
     // Get the actual memory value
     uint8_t data = harness->memory[addr];
     
+    // DEBUG: Always show memory reads to trace opcode fetch bug
+    if (harness->verbose) {
+        printf("    MEM READ:  addr=0x%04X data=0x%02X bus_state=0x%02X\n", addr, data, bus_state);
+    }
+    
     // Record bus cycle if tracking is enabled
     if (harness->bus_cycle_recording && harness->actual_bus_cycle_count < MAX_BUS_CYCLES) {
         bus_cycle_t* cycle = &harness->actual_bus_cycles[harness->actual_bus_cycle_count++];
         cycle->address = addr;
         cycle->data = data;
         cycle->is_write = false; // This is a read operation
-        
-        if (harness->verbose) {
-            printf("    BUS READ:  addr=0x%04X data=0x%02X\n", addr, data);
-        }
     }
     
     // For ProcessorTests, return the actual memory value, ignoring bus_state
@@ -251,12 +252,15 @@ static void setup_cpu_state(test_harness_t* harness, const cpu_state_t* initial)
     fam65xx_set_s(&harness->cpu, initial->s);
     fam65xx_set_p(&harness->cpu, initial->p);
     
-    // Set up CPU for immediate instruction execution
+    // Set up CPU for immediate instruction execution with new SYNC-based architecture
     // Clear any interrupt/reset state from initialization
     harness->cpu.brk_flags = 0;
-    // For ProcessorTests: CPU starts by fetching instruction at PC
-    // This will read the opcode and set up the instruction execution
-    harness->cpu.CI = 256;  // Start at fetch cycle to read first opcode
+    
+    // NEW SYNC ARCHITECTURE: Start by raising SYNC to trigger opcode decode in fam65xx_tick()
+    // Set CI to a special bootstrap state that will immediately trigger SYNC
+    harness->cpu.CI = 0xEA;    // Bootstrap with NOP instruction case
+    harness->cpu.opcode = 0xEA; // Set opcode for bootstrap
+    harness->cpu.AD = harness->cpu.PC;  // Address setup for memory read
     
     // Reset cycle count
     harness->cycle_count = 0;
@@ -274,7 +278,8 @@ static bool execute_instruction(test_harness_t* harness) {
     uint64_t pins = FAM65XX_RDY;  // Ready signal active
     
     // Execute cycles until instruction completes
-    int max_cycles = 10;  // Increase safety limit for complex instructions
+    int max_cycles = 10;  // Safety limit for complex instructions
+    bool instruction_started = false;
     
     if (harness->verbose) {
         printf("  Execution start: PC=0x%04X, CI=0x%04X, A=0x%02X, P=0x%02X\n",
@@ -296,30 +301,26 @@ static bool execute_instruction(test_harness_t* harness) {
                    (pins & FAM65XX_SYNC) ? 1 : 0);
         }
         
+        // Count all cycles including fetch cycles (ProcessorTests includes both)
+        harness->cycle_count++;
+        
         // Check if we're at the start of a new instruction (SYNC high)
         if (pins & FAM65XX_SYNC) {
-            if (i == 0) {
-                // This is the start of our instruction
+            if (!instruction_started) {
+                // This is the start of our target instruction
+                instruction_started = true;
                 if (harness->verbose) {
                     printf("  Instruction started with opcode 0x%02X\n", harness->cpu.opcode);
                 }
             } else {
-                // We've completed the instruction and started fetch for next
-                // ProcessorTests expects PC to point to next instruction, but not advanced by fetch
-                // So decrement PC to compensate for the _FETCH() that advanced it
-                uint16_t corrected_pc = fam65xx_pc(&harness->cpu) - 1;
-                fam65xx_set_pc(&harness->cpu, corrected_pc);
-                
+                // We've completed the instruction and are fetching the next one
+                // ProcessorTests expects us to complete the fetch cycle but stop here
                 if (harness->verbose) {
-                    printf("  Instruction completed, PC corrected from 0x%04X to 0x%04X\n",
-                           fam65xx_pc(&harness->cpu) + 1, corrected_pc);
+                    printf("  Instruction completed, PC now at 0x%04X\n", fam65xx_pc(&harness->cpu));
                 }
                 break;
             }
         }
-
-        // Count cycles that are part of instruction execution (not the final fetch)
-        harness->cycle_count++;
         
         // Safety check for infinite loops
         if (i == max_cycles - 1) {
