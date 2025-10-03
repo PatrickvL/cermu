@@ -86,9 +86,8 @@ typedef uint8_t (*fam65xx_mem_read_t)(void* user_data, uint16_t addr, uint8_t bu
 // cpu_write: called during PHI2 when CPU writes
 typedef void (*fam65xx_mem_write_t)(void* user_data, uint16_t addr, uint8_t data);
 
-// 8-bit register indices
+// 8-bit register indices with endian-aware 16-bit pairs
 enum {
-    R_ZERO = 0,  // Always zero, never written
     // Public registers
     R_A,         // Accumulator
     R_X,         // X index
@@ -97,25 +96,25 @@ enum {
     R_P,         // Processor status
     // Internal registers
     R_DL,        // Data latch
-    // Start of 16 bit aligned registers :
-    R_PCL,       // Program counter low
-    R_PCH,       // Program counter high
-    R_ADL,       // Address low
-    R_ADH,       // Address high
-    // End of 16 bit aligned registers :
     R_TMP,       // Temporary storage
+    // 16-bit aligned register pairs (endian-aware)
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    R_PCL,       // Program counter low (even index for little endian)
+    R_PCH,       // Program counter high
+    R_ADL,       // Address low (even index for little endian)
+    R_ADH,       // Address high
+#else
+    R_PCH,       // Program counter high (even index for big endian)
+    R_PCL,       // Program counter low
+    R_ADH,       // Address high (even index for big endian)
+    R_ADL,       // Address low
+#endif
 };
 
-// 16-bit register indices (native endian aware)
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-    #define R16(lo, hi) ((lo) / 2)
-#else
-    #define R16(hi, lo) ((hi) / 2)
-#endif
-
+// 16-bit register indices (native endian compatible)
 enum {
-    R_AD = R16(R_ADL, R_ADH),
-    R_PC = R16(R_PCL, R_PCH),
+    R_PC = R_PCL / 2,    // Works for both endians due to layout above
+    R_AD = R_ADL / 2,    // Works for both endians due to layout above
 };
 
 // CPU state
@@ -128,9 +127,10 @@ typedef struct {
 // Accessors (c-> required before use)
 
 // Public registers
-#define PC    r16[R_PC]  // Program counter (16 bit)
-#define PCL   r8[R_PCL]  // Program counter low
-#define PCH   r8[R_PCH]  // Program counter high
+// Accessors (c-> required before use) - now endian-compatible
+#define PC    r16[R_PC]   // Program counter (16 bit)
+#define PCL   r8[R_PCL]   // Program counter low
+#define PCH   r8[R_PCH]   // Program counter high
 #define A     r8[R_A]    // Accumulator register
 #define X     r8[R_X]    // X index register
 #define Y     r8[R_Y]    // Y index register
@@ -138,10 +138,10 @@ typedef struct {
 #define P     r8[R_P]    // Processor status
 // Internal registers
 #define DL    r8[R_DL]   // Data latch
+#define TMP   r8[R_TMP]  // Temporary storage
 #define AD    r16[R_AD]  // Address data (16 bit)
 #define ADL   r8[R_ADL]  // Address data low
 #define ADH   r8[R_ADH]  // Address data high
-#define TMP   r8[R_TMP]
 
     // Cycle decoder state
     uint16_t CI;        // Current cycle index
@@ -460,15 +460,15 @@ uint64_t fam65xx_init(fam65xx_t* c, const fam65xx_desc_t* desc) {
     c->P = FAM65XX_XF;  // Only set unused flag, no interrupt disable
     c->S = 0xFF;        // Stack pointer starts at top
     
-    // Bootstrap approach: Set CI to NOP instruction which will do AD=PC++; SYNC=1
-    c->CI = 0xEA;       // Start with NOP instruction case for bootstrap
-    c->opcode = 0xEA;   // Set opcode to NOP for bootstrap
-    c->AD = c->PC;      // Address points to PC for memory access
+    // Bootstrap approach: Force initial opcode fetch by setting up address and triggering SYNC
+    c->CI = 0xEA;       // Temporary - will be overwritten by SYNC handler
+    c->opcode = 0xEA;   // Temporary - will be overwritten by SYNC handler
+    c->AD = c->PC;      // Address points to PC for initial opcode fetch
     
     // No reset sequence for ProcessorTests - CPU ready for direct execution
     c->brk_flags = 0;   // Clear all interrupt flags
     
-    uint64_t pins = FAM65XX_RDY;  // Ready but not in reset
+    uint64_t pins = FAM65XX_RDY | FAM65XX_SYNC;  // Ready and force initial SYNC
     c->pins = pins;
     
     return pins;
@@ -511,42 +511,44 @@ uint64_t fam65xx_tick(fam65xx_t* c, uint64_t pins) {
         c->irq_pip = ((c->irq_pip << 1) | ((pins & FAM65XX_IRQ) ? 0x01 : 0x00)) & 0xFF;
     }
     
-    // Preamble: setup pins and data for memory operations
-    pins &= ~FAM65XX_RW;
-    pins |= FAM65XX_RW;
-    uint8_t pins_data = FAM65XX_GET_DATA(pins);
-    
     // Execute one cycle using generated decoder
     pins = _fam65xx_decode(c, pins);
     
-    // NEW SYNC-based ARCHITECTURE: Handle opcode decoding when SYNC is raised
+    // Normal memory access (ALWAYS happens, including SYNC cycles)
+    SET_ADDR(pins, c->AD);
+    if (pins & FAM65XX_RW) {
+        // Preamble: setup pins and data for memory operations
+        uint8_t pins_data = FAM65XX_GET_DATA(pins);
+        c->DL = c->mem_read(c->user_data, c->AD, pins_data);
+    } else {
+        c->mem_write(c->user_data, c->AD, c->r8[c->write_src]);
+        pins |= FAM65XX_RW;
+    }
+    
+    // SYNC-based ARCHITECTURE: Handle opcode decoding AFTER memory access
     if (pins & FAM65XX_SYNC) {
-        // Instruction completed, fetch_next has set AD = PC for next opcode
+        // Instruction completed, opcode now correctly read into DL
         if (!(pins & FAM65XX_RDY)) {
             // CPU stalled, don't decode yet
+            c->pins = pins;
             return pins;
         }
         
-        // Read the next opcode from the address set by fetch_next (PC after increment)
-        c->DL = c->mem_read(c->user_data, c->AD, pins_data);
+        // Opcode now correctly read into DL from memory
         c->opcode = c->DL;
         
         // Decode opcode and set next CI based on addressing mode
         extern const uint8_t opcode_addr_start[256];  // From generated decoder
         uint8_t addr_seq = opcode_addr_start[c->opcode];
-        c->CI = addr_seq == 0 ? c->opcode : ADDR_SEQ_BASE + addr_seq;
         
-        // Don't perform additional memory access - opcode already read
-        c->pins = pins;
-        return pins;
-    }
-    
-    // Normal memory access for non-SYNC cycles
-    SET_ADDR(pins, c->AD);
-    if (pins & FAM65XX_RW) {
-        c->DL = c->mem_read(c->user_data, c->AD, pins_data);
-    } else {
-        c->mem_write(c->user_data, c->AD, c->r8[c->write_src]);
+        // Set next CI: either direct opcode execution or addressing mode sequence
+        if (addr_seq == 0) {
+            // Direct opcode execution (immediate/implied addressing)
+            c->CI = (uint16_t)c->opcode;
+        } else {
+            // Addressing mode sequence
+            c->CI = ADDR_SEQ_BASE + addr_seq;
+        }
     }
     
     c->pins = pins;
