@@ -163,9 +163,6 @@ typedef struct {
     uint8_t io_port;   // I/O port data
     uint8_t io_drive;  // What CPU is driving
     uint8_t io_pins;   // External pin state
-    
-    // Pins (data + control only, no address)
-    uint64_t pins;
 } fam65xx_t;
 
 // Initialization descriptor
@@ -460,16 +457,12 @@ uint64_t fam65xx_init(fam65xx_t* c, const fam65xx_desc_t* desc) {
     c->P = FAM65XX_XF;  // Only set unused flag, no interrupt disable
     c->S = 0xFF;        // Stack pointer starts at top
     
-    // Bootstrap approach: Force initial opcode fetch by setting up address and triggering SYNC
-    c->CI = 0xEA;       // Temporary - will be overwritten by SYNC handler
-    c->opcode = 0xEA;   // Temporary - will be overwritten by SYNC handler
-    c->AD = c->PC;      // Address points to PC for initial opcode fetch
-    
     // No reset sequence for ProcessorTests - CPU ready for direct execution
     c->brk_flags = 0;   // Clear all interrupt flags
     
+    // Bootstrap approach: Force initial opcode fetch by setting up address and triggering SYNC
+    c->AD = c->PC;      // Address points to PC for initial opcode fetch
     uint64_t pins = FAM65XX_RDY | FAM65XX_SYNC;  // Ready and force initial SYNC
-    c->pins = pins;
     
     return pins;
 }
@@ -484,74 +477,71 @@ void fam65xx_reset(fam65xx_t* c) {
 uint64_t fam65xx_tick(fam65xx_t* c, uint64_t pins) {
     CHIPS_ASSERT(c);
     
-    // Clear SYNC by default - will be set by instruction completion
-    pins &= ~FAM65XX_SYNC;
+    // RDY check: stall CPU BEFORE calling decode if not ready
+    if (!(pins & FAM65XX_RDY)) {
+        // CPU is stalled - don't advance, return current state
+        return pins;
+    }
     
-    // Check for interrupts at end of instruction
-    if (c->CI == c->opcode && (c->opcode & 0x07) == 0) {
+    // Memory access happens FIRST (hardware-accurate)
+    SET_ADDR(pins, c->AD);
+    if (pins & FAM65XX_RW) {
+        // Read operation - perform memory read
+        uint8_t pins_data = FAM65XX_GET_DATA(pins);
+        c->DL = c->mem_read(c->user_data, c->AD, pins_data);
+    } else {
+        // Write operation - perform memory write
+        c->mem_write(c->user_data, c->AD, c->r8[c->write_src]);
+        pins |= FAM65XX_RW;  // Return to read mode after write
+    }
+    
+    // SYNC-based opcode decoding with RDY stalling BEFORE decode
+    if (pins & FAM65XX_SYNC) {
+        pins &= ~FAM65XX_SYNC;
+        
         // Instruction just completed, check for pending interrupts
         if (pins & FAM65XX_RES) {
             c->brk_flags |= FAM65XX_BRK_RESET;
-            c->CI = 0x00;
+            c->CI = 0x00; // BRK/IRQ/NMI/RESET handling starts at cycle 0
         } else {
             // NMI edge detection
             if ((c->nmi_pip & 0x80) && !(c->nmi_pip & 0x40)) {
                 c->brk_flags |= FAM65XX_BRK_NMI;
-                c->CI = 0x00;
+                c->CI = 0x00; // BRK/IRQ/NMI/RESET handling starts at cycle 0
             }
             // IRQ level detection
             else if ((pins & FAM65XX_IRQ) && !(c->P & FAM65XX_IF)) {
                 c->brk_flags |= FAM65XX_BRK_IRQ;
-                c->CI = 0x00;
+                c->CI = 0x00; // BRK/IRQ/NMI/RESET handling starts at cycle 0
             }
         }
         
-        // Shift interrupt pipelines
-        c->nmi_pip = ((c->nmi_pip << 1) | ((pins & FAM65XX_NMI) ? 0x01 : 0x00)) & 0xFF;
-        c->irq_pip = ((c->irq_pip << 1) | ((pins & FAM65XX_IRQ) ? 0x01 : 0x00)) & 0xFF;
-    }
-    
-    // Execute one cycle using generated decoder
-    pins = _fam65xx_decode(c, pins);
-    
-    // Normal memory access (ALWAYS happens, including SYNC cycles)
-    SET_ADDR(pins, c->AD);
-    if (pins & FAM65XX_RW) {
-        // Preamble: setup pins and data for memory operations
-        uint8_t pins_data = FAM65XX_GET_DATA(pins);
-        c->DL = c->mem_read(c->user_data, c->AD, pins_data);
-    } else {
-        c->mem_write(c->user_data, c->AD, c->r8[c->write_src]);
-        pins |= FAM65XX_RW;
-    }
-    
-    // SYNC-based ARCHITECTURE: Handle opcode decoding AFTER memory access
-    if (pins & FAM65XX_SYNC) {
-        // Instruction completed, opcode now correctly read into DL
-        if (!(pins & FAM65XX_RDY)) {
-            // CPU stalled, don't decode yet
-            c->pins = pins;
-            return pins;
-        }
-        
-        // Opcode now correctly read into DL from memory
-        c->opcode = c->DL;
-        
-        // Decode opcode and set next CI based on addressing mode
-        extern const uint8_t opcode_addr_start[256];  // From generated decoder
-        uint8_t addr_seq = opcode_addr_start[c->opcode];
-        
-        // Set next CI: either direct opcode execution or addressing mode sequence
-        if (addr_seq == 0) {
-            // Direct opcode execution (immediate/implied addressing)
-            c->CI = (uint16_t)c->opcode;
-        } else {
-            // Addressing mode sequence
-            c->CI = ADDR_SEQ_BASE + addr_seq;
+        if (!c->brk_flags) {
+            // Shift interrupt pipelines
+            c->nmi_pip = ((c->nmi_pip << 1) | ((pins & FAM65XX_NMI) ? 0x01 : 0x00)) & 0xFF;
+            c->irq_pip = ((c->irq_pip << 1) | ((pins & FAM65XX_IRQ) ? 0x01 : 0x00)) & 0xFF;
+
+            // CPU is ready - decode the opcode that was just read
+            c->opcode = c->DL;
+            
+            // Decode opcode and set next CI based on addressing mode
+            extern const uint8_t opcode_addr_start[256];  // From generated decoder
+            uint8_t addr_seq = opcode_addr_start[c->opcode];
+            
+            // Set next CI: either direct opcode execution or addressing mode sequence
+            if (addr_seq == 0) {
+                // Direct opcode execution (immediate/implied addressing)
+                c->CI = (uint16_t)c->opcode;
+            } else {
+                // Addressing mode sequence
+                c->CI = ADDR_SEQ_BASE + addr_seq;
+            }
         }
     }
     
-    c->pins = pins;
+    // Execute one cycle using generated decoder (after memory access)
+    pins = _fam65xx_decode(c, pins);    
+    
     return pins;
 }
 

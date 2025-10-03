@@ -289,6 +289,15 @@ static bool execute_instruction(test_harness_t* harness) {
                    i, harness->cpu.CI, fam65xx_pc(&harness->cpu), fam65xx_a(&harness->cpu));
         }
         
+        // SYNC-based bootstrapping: For fetch cycles, copy PC to AD
+        if (pins & FAM65XX_SYNC) {
+            harness->cpu.AD = fam65xx_pc(&harness->cpu);  // Bootstrap: PC→AD for opcode fetch
+            if (harness->verbose) {
+                printf("    SYNC detected: PC(0x%04X) -> AD(0x%04X) for opcode fetch\n",
+                       fam65xx_pc(&harness->cpu), harness->cpu.AD);
+            }
+        }
+        
         // Execute one CPU cycle
         pins = fam65xx_tick(&harness->cpu, pins);
         
@@ -310,10 +319,16 @@ static bool execute_instruction(test_harness_t* harness) {
                     printf("  Instruction started with opcode 0x%02X\n", harness->cpu.opcode);
                 }
             } else {
-                // We've completed the instruction and are fetching the next one
-                // ProcessorTests expects us to complete the fetch cycle but stop here
+                // We've completed the instruction and started fetch for next
+                // ProcessorTests expects PC to point to next instruction, but not advanced by fetch
+                // So decrement PC to compensate for the fetch that advanced it
+                uint16_t current_pc = fam65xx_pc(&harness->cpu);
+                uint16_t corrected_pc = (current_pc == 0x0000) ? 0xFFFF : current_pc - 1;
+                fam65xx_set_pc(&harness->cpu, corrected_pc);
+                
                 if (harness->verbose) {
-                    printf("  Instruction completed, PC now at 0x%04X\n", fam65xx_pc(&harness->cpu));
+                    printf("  Instruction completed, PC corrected from 0x%04X to 0x%04X\n",
+                           current_pc, corrected_pc);
                 }
                 break;
             }
@@ -485,6 +500,7 @@ static void run_debug_session(test_harness_t* harness) {
     printf("Commands: step, cycle, reset, state, quit\n");
     print_cpu_state_detailed(harness, "Initial");
     
+    uint64_t pins = FAM65XX_RDY;
     while (1) {
         printf("debug> ");
         if (!fgets(command, sizeof(command), stdin)) {
@@ -503,7 +519,12 @@ static void run_debug_session(test_harness_t* harness) {
                 printf("ERROR: Instruction execution failed\n");
             }
         } else if (strcmp(command, "cycle") == 0 || strcmp(command, "c") == 0) {
-            uint64_t pins = FAM65XX_RDY;
+            // SYNC-based bootstrapping: For fetch cycles, copy PC to AD
+            if (pins & FAM65XX_SYNC) {
+                harness->cpu.AD = fam65xx_pc(&harness->cpu);
+                printf("    SYNC detected: PC(0x%04X) -> AD(0x%04X)\n",
+                       fam65xx_pc(&harness->cpu), harness->cpu.AD);
+            }
             pins = fam65xx_tick(&harness->cpu, pins);
             harness->cycle_count++;
             print_cpu_state_detailed(harness, "After cycle");
@@ -770,6 +791,7 @@ static void run_enhanced_debug_session(test_harness_t* harness) {
     printf("  quit, q             - Exit debug session\n");
     print_cpu_state_detailed(harness, "Initial");
     
+    uint64_t pins = FAM65XX_RDY;
     while (1) {
         printf("debug> ");
         if (!fgets(command, sizeof(command), stdin)) {
@@ -791,7 +813,12 @@ static void run_enhanced_debug_session(test_harness_t* harness) {
                 printf("ERROR: Instruction execution failed\n");
             }
         } else if (strcmp(token, "cycle") == 0 || strcmp(token, "c") == 0) {
-            uint64_t pins = FAM65XX_RDY;
+            // SYNC-based bootstrapping: For fetch cycles, copy PC to AD
+            if (pins & FAM65XX_SYNC) {
+                harness->cpu.AD = fam65xx_pc(&harness->cpu);
+                printf("    SYNC detected: PC(0x%04X) -> AD(0x%04X)\n",
+                       fam65xx_pc(&harness->cpu), harness->cpu.AD);
+            }
             pins = fam65xx_tick(&harness->cpu, pins);
             harness->cycle_count++;
             print_cpu_state_detailed(harness, "After cycle");
@@ -869,6 +896,14 @@ static bool run_single_test(test_harness_t* harness, const processor_test_t* tes
     if (harness->verbose) {
         printf("Running test: %s\n", test->name);
     }
+    
+    // Completely reinitialize CPU for each test to ensure clean state
+    fam65xx_desc_t desc = {
+        .mem_read = test_mem_read,
+        .mem_write = test_mem_write,
+        .mem_user_data = harness
+    };
+    fam65xx_init(&harness->cpu, &desc);
     
     // Setup initial state
     setup_cpu_state(harness, &test->initial);
