@@ -212,12 +212,12 @@ OP_INC_M = ("INC", M_RW, "c->CI = C_INC_RMW;", 'RMW')  # M_RW - separate _FETCH
 OP_DEC_M = ("DEC", M_RW, "c->CI = C_DEC_RMW;", 'RMW')  # M_RW - separate _FETCH
 
 # NOP variants
-OP_NOP_I = ("NOP", M___, "goto fetch_next;", None)  # Dummy read of current PC - M___ immediate fetch
+OP_NOP_I = ("NOP", M___, "break;", None)  # Dummy read of current PC - M___ immediate fetch - single cycle, no fetch
 OP_NOP_R = ("NOP", M_R_, "goto fetch_next;", None)      # Read from effective address - M_R_ immediate fetch
 
 # Illegal/undocumented instructions
 OP_LAX = ("LAX", M_R_, "c->A = c->X = c->DL;\n_NZ(c->A);\ngoto fetch_next;", None)  # Read and load into A and X - M_R_ immediate fetch
-OP_SAX = ("SAX", M__W, "c->write_src = R_TMP;\nc->TMP = c->A & c->X;\npins &= ~FAM65XX_RW;\ngoto fetch_next;", None)  # Write A&X to memory - M__W deferred fetch
+OP_SAX = ("SAX", M__W, "c->TMP = c->A & c->X;\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\ngoto fetch_next;", None)  # Write A&X to memory - M__W deferred fetch
 OP_SLO = ("SLO", M_RW, "c->CI = C_SLO_RMW;", 'RMW')  # Read memory for RMW - M_RW separate _FETCH
 OP_RLA = ("RLA", M_RW, "c->CI = C_RLA_RMW;", 'RMW')  # Read memory for RMW - M_RW separate _FETCH
 OP_SRE = ("SRE", M_RW, "c->CI = C_SRE_RMW;", 'RMW')  # Read memory for RMW - M_RW separate _FETCH
@@ -229,10 +229,10 @@ OP_ASR = ("ASR", M_R_, "c->A &= c->DL;\nc->P = (c->P & ~FAM65XX_CF) | (c->A & 1)
 OP_ARR = ("ARR", M_R_, "c->A = (c->A & c->DL) >> 1 | (c->P & FAM65XX_CF ? 0x80 : 0);\n_NZ(c->A);\nc->P = (c->P & ~(FAM65XX_CF | FAM65XX_VF)) | ((c->A & 0x40) ? FAM65XX_CF : 0) | ((c->A & 0x20) ^ (c->A & 0x40) ? FAM65XX_VF : 0);\ngoto fetch_next;", None)  # AND then ROR - M_R_ immediate fetch
 OP_XAA = ("XAA", M_R_, "c->A = (c->A | 0xEE) & c->X & c->DL;\n_NZ(c->A);\ngoto fetch_next;", None)  # Unstable AND operation - M_R_ immediate fetch
 OP_SBX = ("SBX", M_R_, "{\n\tuint16_t t = (c->A & c->X) - c->DL;\n\tc->X = t;\n\t_NZ(c->X);\n\tc->P = (c->P & ~FAM65XX_CF) | ((t & 0x100) ? 0 : FAM65XX_CF);\n}\ngoto fetch_next;", None)  # CMP and DEX combined - M_R_ immediate fetch
-OP_SHY = ("SHY", M__W, "c->write_src = R_TMP;\nc->TMP = c->Y & ((c->AD >> 8) + 1);\npins &= ~FAM65XX_RW;\ngoto fetch_next;", None)  # Store Y with high byte AND - M__W deferred fetch
-OP_SHX = ("SHX", M__W, "c->write_src = R_TMP;\nc->TMP = c->X & ((c->AD >> 8) + 1);\npins &= ~FAM65XX_RW;\ngoto fetch_next;", None)  # Store X with high byte AND - M__W deferred fetch
-OP_SHA = ("SHA", M_RW, "c->write_src = R_TMP;\nc->TMP = c->A & c->X & ((c->AD >> 8) + 1);\npins &= ~FAM65XX_RW;\ngoto fetch_next;", None)  # Store A&X with high byte AND - M_RW deferred fetch (note: should be M__W)
-OP_SHS = ("SHS", M__W, "c->S = c->A & c->X;\nc->write_src = R_TMP;\nc->TMP = c->S & ((c->AD >> 8) + 1);\npins &= ~FAM65XX_RW;\ngoto fetch_next;", None)  # Transfer A&X to S and store - M__W deferred fetch
+OP_SHY = ("SHY", M__W, "c->TMP = c->Y & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\ngoto fetch_next;", None)  # Store Y with high byte AND - M__W deferred fetch
+OP_SHX = ("SHX", M__W, "c->TMP = c->X & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\ngoto fetch_next;", None)  # Store X with high byte AND - M__W deferred fetch
+OP_SHA = ("SHA", M_RW, "c->TMP = c->A & c->X & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\ngoto fetch_next;", None)  # Store A&X with high byte AND - M_RW deferred fetch (note: should be M__W)
+OP_SHS = ("SHS", M__W, "c->S = c->A & c->X;\nc->TMP = c->S & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\ngoto fetch_next;", None)  # Transfer A&X to S and store - M__W deferred fetch
 OP_LAS = ("LAS", M_R_, "c->A = c->X = c->S = c->S & c->DL;\n_NZ(c->A);\ngoto fetch_next;", None)  # AND S with memory to A,X,S - M_R_ immediate fetch
 OP_JAM = ("JAM", M_R_, "c->PC--;\nc->CI = C_JAM;", 'CONT')  # Read byte after opcode, restore PC, then continue JAM
 
@@ -441,7 +441,7 @@ def analyze_continuation_needs(op):
     if op == 0x00:  # BRK - 7 cycles total (1 opcode + 6 continuation cycles)
         cycles = (
             'c->write_src = R_PCL;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI++;',  # Cycle 2: Write PCL to stack
-            'c->write_src = R_P;\nc->TMP = c->P | FAM65XX_BF;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->P |= FAM65XX_IF;\nc->P &= ~FAM65XX_BF;\nc->brk_flags = 0;\nc->CI++;',  # Cycle 3: Write P to stack, set IF, clear BF
+            'c->TMP = c->P | FAM65XX_BF;\nc->write_src = R_P;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->P |= FAM65XX_IF;\nc->P &= ~FAM65XX_BF;\nc->brk_flags = 0;\nc->CI++;',  # Cycle 3: Write P to stack, set IF, clear BF
             'c->AD = _fam65xx_get_vector_addr(c);\nc->PCL = c->DL;\nc->CI++;',  # Cycle 4: Read low byte of vector, store in PCL
             'c->AD++;\nc->PCH = c->DL;\nc->CI++;',  # Cycle 5: Read high byte of vector, store in PCH
             'c->AD = c->PC;\nc->CI++;',  # Cycle 6: Hardware dummy read from new PC location
@@ -508,7 +508,7 @@ def analyze_continuation_needs(op):
         return ('PLA', cycles)
     elif op == 0x08:  # PHP - 3 cycles total (1 opcode + 2 continuation cycles)
         cycles = (
-            'c->write_src = R_TMP;\nc->TMP = c->P | FAM65XX_BF;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI++;',  # Cycle 2: Write P to stack with B flag set
+            'c->TMP = c->P | FAM65XX_BF;\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI++;',  # Cycle 2: Write P to stack with B flag set
             'goto fetch_next;'  # Cycle 3: Fetch next instruction
         )
         get_or_create_continuation(cycles, 'PHP')

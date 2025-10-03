@@ -252,15 +252,12 @@ static void setup_cpu_state(test_harness_t* harness, const cpu_state_t* initial)
     fam65xx_set_s(&harness->cpu, initial->s);
     fam65xx_set_p(&harness->cpu, initial->p);
     
-    // Set up CPU for immediate instruction execution with new SYNC-based architecture
+    // Set up CPU for immediate instruction execution with SYNC-based architecture
     // Clear any interrupt/reset state from initialization
     harness->cpu.brk_flags = 0;
     
-    // NEW SYNC ARCHITECTURE: Start by raising SYNC to trigger opcode decode in fam65xx_tick()
-    // Set CI to a special bootstrap state that will immediately trigger SYNC
-    harness->cpu.CI = 0xEA;    // Bootstrap with NOP instruction case
-    harness->cpu.opcode = 0xEA; // Set opcode for bootstrap
-    harness->cpu.AD = harness->cpu.PC;  // Address setup for memory read
+    // CPU initialization already sets CI correctly for bootstrap
+    // No need to override CI here - let fam65xx_init() handle bootstrap
     
     // Reset cycle count
     harness->cycle_count = 0;
