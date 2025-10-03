@@ -5,57 +5,54 @@
  * 
  * Layout:
  *   [0-255]   : Opcode-specific cycles
- *   [256]     : Dedicated FETCH cycle
- *   [257-292] : Shared addressing mode sequences
- *   [293-363]  : Shared continuation sequences
- * Total cases: 364
+ *   [256-291] : Shared addressing mode sequences
+ *   [292-362]  : Shared continuation sequences
+ * Total cases: 363
  */
 
 // Continuation sequence constants
-#define C_BRK            293
-#define C_JAM            299
-#define C_SLO_RMW        300
-#define C_ASL_RMW        303
-#define C_PHP            306
-#define C_BRANCH_TAKEN   308
-#define C_JSR            310
-#define C_RLA_RMW        315
-#define C_ROL_RMW        318
-#define C_PLP            321
-#define C_RTI            323
-#define C_SRE_RMW        327
-#define C_LSR_RMW        330
-#define C_PHA            333
-#define C_JMP_ABS        335
-#define C_RTS            337
-#define C_RRA_RMW        340
-#define C_ROR_RMW        343
-#define C_PLA            346
-#define C_JMP_IND        348
-#define C_DCP_RMW        352
-#define C_DEC_RMW        355
-#define C_ISC_RMW        358
-#define C_INC_RMW        361
+#define C_BRK            292
+#define C_JAM            298
+#define C_SLO_RMW        299
+#define C_ASL_RMW        302
+#define C_PHP            305
+#define C_BRANCH_TAKEN   307
+#define C_JSR            309
+#define C_RLA_RMW        314
+#define C_ROL_RMW        317
+#define C_PLP            320
+#define C_RTI            322
+#define C_SRE_RMW        326
+#define C_LSR_RMW        329
+#define C_PHA            332
+#define C_JMP_ABS        334
+#define C_RTS            336
+#define C_RRA_RMW        339
+#define C_ROR_RMW        342
+#define C_PLA            345
+#define C_JMP_IND        347
+#define C_DCP_RMW        351
+#define C_DEC_RMW        354
+#define C_ISC_RMW        357
+#define C_INC_RMW        360
 
 // Layout constants
 // [0-255]   : Opcode-specific cycles
-// [256]     : Dedicated _FETCH() case
-// [257+]    : Addressing mode sequences
+// [256+]    : Shared addressing mode sequences
 #define ADDR_NON     0   // Direct opcode execution (no addressing mode)
-#define C_FETCH_CYCLE   256
-#define ADDR_SEQ_BASE 256
+#define ADDR_SEQ_BASE 255
 #define ADDR_IMM     0   // Direct opcode execution (0 cycles)
-#define ADDR_ZER     1   // Index 257
-#define ADDR_ZPX     2   // Index 258
-#define ADDR_ZPY     4   // Index 260
-#define ADDR_ABS     6   // Index 262
-#define ADDR_ABX     9   // Index 265
-#define ADDR_ABX_W   13  // Index 269
-#define ADDR_ABY     17  // Index 273
-#define ADDR_ABY_W   21  // Index 277
-#define ADDR_IDX     25  // Index 281
-#define ADDR_IDY     29  // Index 285
-#define ADDR_IDY_W   33  // Index 289
+#define ADDR_ZER     1   // Index 256
+#define ADDR_ZPX     2   // Index 257
+#define ADDR_ZPY     4   // Index 259
+#define ADDR_ABS     6   // Index 261
+#define ADDR_ABX     9   // Index 264
+#define ADDR_ABX_W   13  // Index 268
+#define ADDR_ABY     17  // Index 272
+#define ADDR_ABY_W   21  // Index 276
+#define ADDR_IDX     25  // Index 280
+#define ADDR_IDY     29  // Index 284
+#define ADDR_IDY_W   33  // Index 288
 
 // Lookup table: addressing mode start index for each opcode
 static const uint8_t opcode_addr_start[256] = {
@@ -317,7 +314,7 @@ static const uint8_t opcode_addr_start[256] = {
     ADDR_ABX_W   // 0xFF: ISC [RW] absolute,X (write - always takes extra cycle)
 };
 
-// Decoder function
+// Decoder switch statement
 static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
     switch (c->CI) {
 
@@ -333,7 +330,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             pins &= ~FAM65XX_RW;
             c->AD = 0x0100 | c->S--;
             c->CI = C_BRK;
-            goto end;
+            break;
 
         case 0x01:  // ORA [R] IDX cycle 5
         case 0x05:  // ORA [R] ZP cycle 2
@@ -345,9 +342,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0x1D:  // ORA [R] ABX cycle 5
             c->A |= c->DL;
             _NZ(c->A);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x02:  // JAM [R] --- cycle 1
         case 0x12:  // JAM [R] --- cycle 1
@@ -363,7 +358,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0xF2:  // JAM [R] --- cycle 1
             c->PC--;
             c->CI = C_JAM;
-            goto end;
+            break;
 
         case 0x03:  // SLO [RW] IDX cycle 5
         case 0x07:  // SLO [RW] ZP cycle 2
@@ -373,7 +368,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0x1B:  // SLO [RW] ABY cycle 5
         case 0x1F:  // SLO [RW] ABX cycle 5
             c->CI = C_SLO_RMW;
-            goto end;
+            break;
 
         case 0x04:  // NOP [R] ZP cycle 2
         case 0x0C:  // NOP [R] ABS cycle 4
@@ -403,36 +398,30 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0xF4:  // NOP [R] ZPX cycle 3
         case 0xFA:  // NOP [R] --- cycle 1
         case 0xFC:  // NOP [R] ABX cycle 5
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x06:  // ASL [RW] ZP cycle 2
         case 0x0E:  // ASL [RW] ABS cycle 4
         case 0x16:  // ASL [RW] ZPX cycle 3
         case 0x1E:  // ASL [RW] ABX cycle 5
             c->CI = C_ASL_RMW;
-            goto end;
+            break;
 
         case 0x08:  // PHP [---] --- cycle 1
             c->AD = c->PC;
             c->CI = C_PHP;
-            goto end;
+            break;
 
         case 0x0A:  // ASL [---] --- cycle 1
             c->A = _fam65xx_asl(c, c->A);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x0B:  // ANC [R] IMM cycle 1
         case 0x2B:  // ANC [R] IMM cycle 1
             c->A &= c->DL;
             _NZ(c->A);
             c->P = (c->P & ~FAM65XX_CF) | ((c->A & 0x80) ? FAM65XX_CF : 0);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x10:  // BPL [R] IMM cycle 1
         case 0x90:  // BCC [R] IMM cycle 1
@@ -442,22 +431,19 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             	c->AD = c->PC + c->TMP;
             	c->CI = C_BRANCH_TAKEN;
             } else {
-            	c->AD = c->PC++;
-            	c->CI = C_FETCH_CYCLE;
+            	goto fetch_next;
             }
-            goto end;
+            break;
 
         case 0x18:  // CLC [---] --- cycle 1
             c->P &= ~FAM65XX_CF;
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x20:  // JSR [R] --- cycle 1
             c->TMP = c->DL;
             c->AD = c->PC++;
             c->CI = C_JSR;
-            goto end;
+            break;
 
         case 0x21:  // AND [R] IDX cycle 5
         case 0x25:  // AND [R] ZP cycle 2
@@ -469,9 +455,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0x3D:  // AND [R] ABX cycle 5
             c->A &= c->DL;
             _NZ(c->A);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x23:  // RLA [RW] IDX cycle 5
         case 0x27:  // RLA [RW] ZP cycle 2
@@ -481,32 +465,28 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0x3B:  // RLA [RW] ABY cycle 5
         case 0x3F:  // RLA [RW] ABX cycle 5
             c->CI = C_RLA_RMW;
-            goto end;
+            break;
 
         case 0x24:  // BIT [R] ZP cycle 2
         case 0x2C:  // BIT [R] ABS cycle 4
             _fam65xx_bit(c, c->DL);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x26:  // ROL [RW] ZP cycle 2
         case 0x2E:  // ROL [RW] ABS cycle 4
         case 0x36:  // ROL [RW] ZPX cycle 3
         case 0x3E:  // ROL [RW] ABX cycle 5
             c->CI = C_ROL_RMW;
-            goto end;
+            break;
 
         case 0x28:  // PLP [---] --- cycle 1
             c->AD = 0x0100 | c->S++;
             c->CI = C_PLP;
-            goto end;
+            break;
 
         case 0x2A:  // ROL [---] --- cycle 1
             c->A = _fam65xx_rol(c, c->A);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x30:  // BMI [R] IMM cycle 1
         case 0xB0:  // BCS [R] IMM cycle 1
@@ -516,21 +496,18 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             	c->AD = c->PC + c->TMP;
             	c->CI = C_BRANCH_TAKEN;
             } else {
-            	c->AD = c->PC++;
-            	c->CI = C_FETCH_CYCLE;
+            	goto fetch_next;
             }
-            goto end;
+            break;
 
         case 0x38:  // SEC [---] --- cycle 1
             c->P |= FAM65XX_CF;
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x40:  // RTI [R] --- cycle 1
             c->AD = 0x0100 | c->S++;
             c->CI = C_RTI;
-            goto end;
+            break;
 
         case 0x41:  // EOR [R] IDX cycle 5
         case 0x45:  // EOR [R] ZP cycle 2
@@ -542,9 +519,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0x5D:  // EOR [R] ABX cycle 5
             c->A ^= c->DL;
             _NZ(c->A);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x43:  // SRE [RW] IDX cycle 5
         case 0x47:  // SRE [RW] ZP cycle 2
@@ -554,40 +529,36 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0x5B:  // SRE [RW] ABY cycle 5
         case 0x5F:  // SRE [RW] ABX cycle 5
             c->CI = C_SRE_RMW;
-            goto end;
+            break;
 
         case 0x46:  // LSR [RW] ZP cycle 2
         case 0x4E:  // LSR [RW] ABS cycle 4
         case 0x56:  // LSR [RW] ZPX cycle 3
         case 0x5E:  // LSR [RW] ABX cycle 5
             c->CI = C_LSR_RMW;
-            goto end;
+            break;
 
         case 0x48:  // PHA [---] --- cycle 1
             c->AD = c->PC;
             c->CI = C_PHA;
-            goto end;
+            break;
 
         case 0x4A:  // LSR [---] --- cycle 1
             c->A = _fam65xx_lsr(c, c->A);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x4B:  // ASR [R] IMM cycle 1
             c->A &= c->DL;
             c->P = (c->P & ~FAM65XX_CF) | (c->A & 1);
             c->A>>=1;
             _NZ(c->A);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x4C:  // JMP [R] --- cycle 1
             c->TMP = c->DL;
             c->AD = c->PC++;
             c->CI = C_JMP_ABS;
-            goto end;
+            break;
 
         case 0x50:  // BVC [R] IMM cycle 1
         case 0xD0:  // BNE [R] IMM cycle 1
@@ -597,21 +568,18 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             	c->AD = c->PC + c->TMP;
             	c->CI = C_BRANCH_TAKEN;
             } else {
-            	c->AD = c->PC++;
-            	c->CI = C_FETCH_CYCLE;
+            	goto fetch_next;
             }
-            goto end;
+            break;
 
         case 0x58:  // CLI [---] --- cycle 1
             c->P &= ~FAM65XX_IF;
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x60:  // RTS [R] --- cycle 1
             c->AD = 0x0100 | c->S++;
             c->CI = C_RTS;
-            goto end;
+            break;
 
         case 0x61:  // ADC [R] IDX cycle 5
         case 0x65:  // ADC [R] ZP cycle 2
@@ -622,9 +590,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0x79:  // ADC [R] ABY cycle 5
         case 0x7D:  // ADC [R] ABX cycle 5
             _fam65xx_adc(c, c->DL);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x63:  // RRA [RW] IDX cycle 5
         case 0x67:  // RRA [RW] ZP cycle 2
@@ -634,39 +600,35 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0x7B:  // RRA [RW] ABY cycle 5
         case 0x7F:  // RRA [RW] ABX cycle 5
             c->CI = C_RRA_RMW;
-            goto end;
+            break;
 
         case 0x66:  // ROR [RW] ZP cycle 2
         case 0x6E:  // ROR [RW] ABS cycle 4
         case 0x76:  // ROR [RW] ZPX cycle 3
         case 0x7E:  // ROR [RW] ABX cycle 5
             c->CI = C_ROR_RMW;
-            goto end;
+            break;
 
         case 0x68:  // PLA [---] --- cycle 1
             c->AD = 0x0100 | c->S++;
             c->CI = C_PLA;
-            goto end;
+            break;
 
         case 0x6A:  // ROR [---] --- cycle 1
             c->A = _fam65xx_ror(c, c->A);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x6B:  // ARR [R] IMM cycle 1
             c->A = (c->A & c->DL) >> 1 | (c->P & FAM65XX_CF ? 0x80 : 0);
             _NZ(c->A);
             c->P = (c->P & ~(FAM65XX_CF | FAM65XX_VF)) | ((c->A & 0x40) ? FAM65XX_CF : 0) | ((c->A & 0x20) ^ (c->A & 0x40) ? FAM65XX_VF : 0);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x6C:  // JMP [R] --- cycle 1
             c->TMP = c->DL;
             c->AD = c->PC++;
             c->CI = C_JMP_IND;
-            goto end;
+            break;
 
         case 0x70:  // BVS [R] IMM cycle 1
         case 0xF0:  // BEQ [R] IMM cycle 1
@@ -676,16 +638,13 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             	c->AD = c->PC + c->TMP;
             	c->CI = C_BRANCH_TAKEN;
             } else {
-            	c->AD = c->PC++;
-            	c->CI = C_FETCH_CYCLE;
+            	goto fetch_next;
             }
-            goto end;
+            break;
 
         case 0x78:  // SEI [---] --- cycle 1
             c->P |= FAM65XX_IF;
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x81:  // STA [W] IDX cycle 5
         case 0x85:  // STA [W] ZP cycle 2
@@ -696,8 +655,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0x9D:  // STA [W] ABX cycle 5
             c->write_src = R_A;
             pins &= ~FAM65XX_RW;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x83:  // SAX [W] IDX cycle 5
         case 0x87:  // SAX [W] ZP cycle 2
@@ -706,88 +664,71 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->write_src = R_TMP;
             c->TMP = c->A & c->X;
             pins &= ~FAM65XX_RW;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x84:  // STY [W] ZP cycle 2
         case 0x8C:  // STY [W] ABS cycle 4
         case 0x94:  // STY [W] ZPX cycle 3
             c->write_src = R_Y;
             pins &= ~FAM65XX_RW;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x86:  // STX [W] ZP cycle 2
         case 0x8E:  // STX [W] ABS cycle 4
         case 0x96:  // STX [W] ZPY cycle 3
             c->write_src = R_X;
             pins &= ~FAM65XX_RW;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x88:  // DEY [---] --- cycle 1
             c->Y--;
             _NZ(c->Y);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x8A:  // TXA [---] --- cycle 1
             c->A = c->X;
             _NZ(c->A);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x8B:  // XAA [R] IMM cycle 1
             c->A = (c->A | 0xEE) & c->X & c->DL;
             _NZ(c->A);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x93:  // SHA [RW] IDY cycle 5
             c->write_src = R_TMP;
             c->TMP = c->A & c->X & ((c->AD >> 8) + 1);
             pins &= ~FAM65XX_RW;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x98:  // TYA [---] --- cycle 1
             c->A = c->Y;
             _NZ(c->A);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x9A:  // TXS [---] --- cycle 1
             c->S = c->X;
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x9B:  // SHS [W] ABY cycle 5
             c->S = c->A & c->X;
             c->write_src = R_TMP;
             c->TMP = c->S & ((c->AD >> 8) + 1);
             pins &= ~FAM65XX_RW;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x9C:  // SHY [W] ABX cycle 5
         case 0x9F:  // SHY [W] ABY cycle 5
             c->write_src = R_TMP;
             c->TMP = c->Y & ((c->AD >> 8) + 1);
             pins &= ~FAM65XX_RW;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0x9E:  // SHX [W] ABY cycle 5
             c->write_src = R_TMP;
             c->TMP = c->X & ((c->AD >> 8) + 1);
             pins &= ~FAM65XX_RW;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0xA0:  // LDY [---] IMM cycle 1
         case 0xA4:  // LDY [R] ZP cycle 2
@@ -796,9 +737,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0xBC:  // LDY [R] ABX cycle 5
             c->Y = c->DL;
             _NZ(c->Y);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0xA1:  // LDA [R] IDX cycle 5
         case 0xA5:  // LDA [R] ZP cycle 2
@@ -810,9 +749,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0xBD:  // LDA [R] ABX cycle 5
             c->A = c->DL;
             _NZ(c->A);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0xA2:  // LDX [---] IMM cycle 1
         case 0xA6:  // LDX [R] ZP cycle 2
@@ -821,9 +758,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0xBE:  // LDX [R] ABY cycle 5
             c->X = c->DL;
             _NZ(c->X);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0xA3:  // LAX [R] IDX cycle 5
         case 0xA7:  // LAX [R] ZP cycle 2
@@ -834,51 +769,37 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0xBF:  // LAX [R] ABY cycle 5
             c->A = c->X = c->DL;
             _NZ(c->A);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0xA8:  // TAY [---] --- cycle 1
             c->Y = c->A;
             _NZ(c->Y);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0xAA:  // TAX [---] --- cycle 1
             c->X = c->A;
             _NZ(c->X);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0xB8:  // CLV [---] --- cycle 1
             c->P &= ~FAM65XX_VF;
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0xBA:  // TSX [---] --- cycle 1
             c->X = c->S;
             _NZ(c->X);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0xBB:  // LAS [R] ABY cycle 5
             c->A = c->X = c->S = c->S & c->DL;
             _NZ(c->A);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0xC0:  // CPY [---] IMM cycle 1
         case 0xC4:  // CPY [R] ZP cycle 2
         case 0xCC:  // CPY [R] ABS cycle 4
             _fam65xx_cmp(c, c->Y, c->DL);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0xC1:  // CMP [R] IDX cycle 5
         case 0xC5:  // CMP [R] ZP cycle 2
@@ -889,9 +810,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0xD9:  // CMP [R] ABY cycle 5
         case 0xDD:  // CMP [R] ABX cycle 5
             _fam65xx_cmp(c, c->A, c->DL);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0xC3:  // DCP [RW] IDX cycle 5
         case 0xC7:  // DCP [RW] ZP cycle 2
@@ -901,28 +820,24 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0xDB:  // DCP [RW] ABY cycle 5
         case 0xDF:  // DCP [RW] ABX cycle 5
             c->CI = C_DCP_RMW;
-            goto end;
+            break;
 
         case 0xC6:  // DEC [RW] ZP cycle 2
         case 0xCE:  // DEC [RW] ABS cycle 4
         case 0xD6:  // DEC [RW] ZPX cycle 3
         case 0xDE:  // DEC [RW] ABX cycle 5
             c->CI = C_DEC_RMW;
-            goto end;
+            break;
 
         case 0xC8:  // INY [---] --- cycle 1
             c->Y++;
             _NZ(c->Y);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0xCA:  // DEX [---] --- cycle 1
             c->X--;
             _NZ(c->X);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0xCB:  // SBX [R] IMM cycle 1
             {
@@ -931,23 +846,17 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             	_NZ(c->X);
             	c->P = (c->P & ~FAM65XX_CF) | ((t & 0x100) ? 0 : FAM65XX_CF);
             }
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0xD8:  // CLD [---] --- cycle 1
             c->P &= ~FAM65XX_DF;
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0xE0:  // CPX [---] IMM cycle 1
         case 0xE4:  // CPX [R] ZP cycle 2
         case 0xEC:  // CPX [R] ABS cycle 4
             _fam65xx_cmp(c, c->X, c->DL);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0xE1:  // SBC [R] IDX cycle 5
         case 0xE5:  // SBC [R] ZP cycle 2
@@ -959,9 +868,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0xF9:  // SBC [R] ABY cycle 5
         case 0xFD:  // SBC [R] ABX cycle 5
             _fam65xx_sbc(c, c->DL);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0xE3:  // ISC [RW] IDX cycle 5
         case 0xE7:  // ISC [RW] ZP cycle 2
@@ -971,44 +878,33 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0xFB:  // ISC [RW] ABY cycle 5
         case 0xFF:  // ISC [RW] ABX cycle 5
             c->CI = C_ISC_RMW;
-            goto end;
+            break;
 
         case 0xE6:  // INC [RW] ZP cycle 2
         case 0xEE:  // INC [RW] ABS cycle 4
         case 0xF6:  // INC [RW] ZPX cycle 3
         case 0xFE:  // INC [RW] ABX cycle 5
             c->CI = C_INC_RMW;
-            goto end;
+            break;
 
         case 0xE8:  // INX [---] --- cycle 1
             c->X++;
             _NZ(c->X);
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         case 0xF8:  // SED [---] --- cycle 1
             c->P |= FAM65XX_DF;
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
-
-        //=================================================================
-        // FETCH CYCLE
-        //=================================================================
-        case C_FETCH_CYCLE: // 256
-            _FETCH();
-            goto end;
+            goto fetch_next;
 
         // ==========================================
-        // [257-292] SHARED ADDRESSING SEQUENCES
+        // [256-291] SHARED ADDRESSING SEQUENCES
         // ==========================================
 
         // ZP: zero page
         case ADDR_SEQ_BASE + ADDR_ZER + 0:  // ZP cycle 1
             c->AD = c->DL;
             c->CI = c->opcode;
-            goto end;
+            break;
 
         // ZPX: zero page,X
         case ADDR_SEQ_BASE + ADDR_ZPX + 0:  // ZPX cycle 1
@@ -1019,7 +915,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case ADDR_SEQ_BASE + ADDR_ZPX + 1:  // ZPX cycle 2
             c->AD = (c->TMP + c->X) & 0xFF;
             c->CI = c->opcode;
-            goto end;
+            break;
 
         // ZPY: zero page,Y
         case ADDR_SEQ_BASE + ADDR_ZPY + 0:  // ZPY cycle 1
@@ -1030,7 +926,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case ADDR_SEQ_BASE + ADDR_ZPY + 1:  // ZPY cycle 2
             c->AD = (c->TMP + c->Y) & 0xFF;
             c->CI = c->opcode;
-            goto end;
+            break;
 
         // ABS: absolute
         case ADDR_SEQ_BASE + ADDR_ABS + 0:  // ABS cycle 1
@@ -1045,7 +941,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case ADDR_SEQ_BASE + ADDR_ABS + 2:  // ABS cycle 3
             c->ADH = c->DL;
             c->CI = c->opcode;
-            goto end;
+            break;
 
         // ABX: absolute,X
         case ADDR_SEQ_BASE + ADDR_ABX + 0:  // ABX cycle 1
@@ -1060,11 +956,11 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case ADDR_SEQ_BASE + ADDR_ABX + 2:  // ABX cycle 3
             c->ADH = c->DL;
             if ((c->ADL + c->X) > 0xFF) { c->AD += c->X; c->CI = c->opcode; } else { c->AD = c->ADL | (c->ADH << 8); c->CI++; }
-            goto end;
+            break;
         case ADDR_SEQ_BASE + ADDR_ABX + 3:  // ABX cycle 4
             c->AD += c->X;
             c->CI = c->opcode;
-            goto end;
+            break;
 
         // ABX: absolute,X (write - always takes extra cycle)
         case ADDR_SEQ_BASE + ADDR_ABX_W + 0:  // ABX cycle 1
@@ -1083,7 +979,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case ADDR_SEQ_BASE + ADDR_ABX_W + 3:  // ABX cycle 4
             c->AD = (c->ADL + c->X) | (c->ADH << 8);
             c->CI = c->opcode;
-            goto end;
+            break;
 
         // ABY: absolute,Y
         case ADDR_SEQ_BASE + ADDR_ABY + 0:  // ABY cycle 1
@@ -1098,11 +994,11 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case ADDR_SEQ_BASE + ADDR_ABY + 2:  // ABY cycle 3
             c->ADH = c->DL;
             if ((c->ADL + c->Y) > 0xFF) { c->AD += c->Y; c->CI = c->opcode; } else { c->AD = c->ADL | (c->ADH << 8); c->CI++; }
-            goto end;
+            break;
         case ADDR_SEQ_BASE + ADDR_ABY + 3:  // ABY cycle 4
             c->AD += c->Y;
             c->CI = c->opcode;
-            goto end;
+            break;
 
         // ABY: absolute,Y (write - always takes extra cycle)
         case ADDR_SEQ_BASE + ADDR_ABY_W + 0:  // ABY cycle 1
@@ -1121,7 +1017,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case ADDR_SEQ_BASE + ADDR_ABY_W + 3:  // ABY cycle 4
             c->AD = (c->ADL + c->Y) | (c->ADH << 8);
             c->CI = c->opcode;
-            goto end;
+            break;
 
         // IDX: indexed indirect (zp,X)
         case ADDR_SEQ_BASE + ADDR_IDX + 0:  // IDX cycle 1
@@ -1141,7 +1037,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case ADDR_SEQ_BASE + ADDR_IDX + 3:  // IDX cycle 4
             c->AD = (c->DL << 8) | c->TMP;
             c->CI = c->opcode;
-            goto end;
+            break;
 
         // IDY: indirect indexed (zp),Y
         case ADDR_SEQ_BASE + ADDR_IDY + 0:  // IDY cycle 1
@@ -1156,11 +1052,11 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case ADDR_SEQ_BASE + ADDR_IDY + 2:  // IDY cycle 3
             c->AD = c->TMP | (c->DL << 8);
             if ((c->AD >> 8) != ((c->AD + c->Y) >> 8)) { c->CI++; } else { c->AD += c->Y; c->CI = c->opcode; }
-            goto end;
+            break;
         case ADDR_SEQ_BASE + ADDR_IDY + 3:  // IDY cycle 4
             c->AD += c->Y;
             c->CI = c->opcode;
-            goto end;
+            break;
 
         // IDY: indirect indexed (zp),Y (write - always takes extra cycle)
         case ADDR_SEQ_BASE + ADDR_IDY_W + 0:  // IDY cycle 1
@@ -1179,10 +1075,10 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case ADDR_SEQ_BASE + ADDR_IDY_W + 3:  // IDY cycle 4
             c->AD += c->Y;
             c->CI = c->opcode;
-            goto end;
+            break;
 
         // ==========================================
-        // [293+] SHARED CONTINUATIONS
+        // [292-362] SHARED CONTINUATIONS
         // ==========================================
 
         // BRK continuation
@@ -1190,6 +1086,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->write_src = R_PCL;
             pins &= ~FAM65XX_RW;
             c->AD = 0x0100 | c->S--;
+            c->CI++;
             break;
         case C_BRK + 1:
             c->write_src = R_P;
@@ -1199,58 +1096,60 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->P |= FAM65XX_IF;
             c->P &= ~FAM65XX_BF;
             c->brk_flags = 0;
+            c->CI++;
             break;
         case C_BRK + 2:
             c->AD = _fam65xx_get_vector_addr(c);
             c->PCL = c->DL;
+            c->CI++;
             break;
         case C_BRK + 3:
             c->AD++;
             c->PCH = c->DL;
+            c->CI++;
             break;
         case C_BRK + 4:
             c->AD = c->PC;
+            c->CI++;
             break;
         case C_BRK + 5:
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         // JAM continuation
         case C_JAM + 0:
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         // SLO_RMW continuation
         case C_SLO_RMW + 0:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
+            c->CI++;
             break;
         case C_SLO_RMW + 1:
             c->DL = _fam65xx_asl(c, c->DL);
             c->A |= c->DL;
             _NZ(c->A);
+            c->CI++;
             break;
         case C_SLO_RMW + 2:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         // ASL_RMW continuation
         case C_ASL_RMW + 0:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
+            c->CI++;
             break;
         case C_ASL_RMW + 1:
             c->DL = _fam65xx_asl(c, c->DL);
+            c->CI++;
             break;
         case C_ASL_RMW + 2:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         // PHP continuation
         case C_PHP + 0:
@@ -1258,11 +1157,10 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->TMP = c->P | FAM65XX_BF;
             pins &= ~FAM65XX_RW;
             c->AD = 0x0100 | c->S--;
+            c->CI++;
             break;
         case C_PHP + 1:
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         // BRANCH_TAKEN continuation
         case C_BRANCH_TAKEN + 0:
@@ -1271,288 +1169,301 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             	c->PC = c->AD;
             	c->irq_pip >>= 1;
             	c->nmi_pip >>= 1;
-            	c->AD = c->PC++;
-            	c->CI = C_FETCH_CYCLE;
+            	goto fetch_next;
             } else {
             	c->AD = (c->PC & 0xFF00) | (c->AD & 0xFF);
             }
-            goto end;
+            c->CI++;
+            break;
         case C_BRANCH_TAKEN + 1:
             c->PC = c->AD;
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         // JSR continuation
         case C_JSR + 0:
             c->AD = 0x0100 | c->S;
+            c->CI++;
             break;
         case C_JSR + 1:
             c->write_src = R_PCH;
             pins &= ~FAM65XX_RW;
             c->AD = 0x0100 | c->S--;
+            c->CI++;
             break;
         case C_JSR + 2:
             c->write_src = R_PCL;
             pins &= ~FAM65XX_RW;
             c->AD = 0x0100 | c->S--;
+            c->CI++;
             break;
         case C_JSR + 3:
             c->AD = c->PC;
             c->PCH = c->DL;
             c->PC = (c->DL << 8) | c->TMP;
+            c->CI++;
             break;
         case C_JSR + 4:
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         // RLA_RMW continuation
         case C_RLA_RMW + 0:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
+            c->CI++;
             break;
         case C_RLA_RMW + 1:
             c->DL = _fam65xx_rol(c, c->DL);
             c->A &= c->DL;
             _NZ(c->A);
+            c->CI++;
             break;
         case C_RLA_RMW + 2:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         // ROL_RMW continuation
         case C_ROL_RMW + 0:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
+            c->CI++;
             break;
         case C_ROL_RMW + 1:
             c->DL = _fam65xx_rol(c, c->DL);
+            c->CI++;
             break;
         case C_ROL_RMW + 2:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         // PLP continuation
         case C_PLP + 0:
             c->AD = 0x0100 | c->S;
             c->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;
+            c->CI++;
             break;
         case C_PLP + 1:
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         // RTI continuation
         case C_RTI + 0:
             c->AD = 0x0100 | c->S++;
             c->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;
+            c->CI++;
             break;
         case C_RTI + 1:
             c->AD = 0x0100 | c->S++;
             c->PCL = c->DL;
+            c->CI++;
             break;
         case C_RTI + 2:
             c->AD = 0x0100 | c->S;
             c->PCH = c->DL;
+            c->CI++;
             break;
         case C_RTI + 3:
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         // SRE_RMW continuation
         case C_SRE_RMW + 0:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
+            c->CI++;
             break;
         case C_SRE_RMW + 1:
             c->DL = _fam65xx_lsr(c, c->DL);
             c->A ^= c->DL;
             _NZ(c->A);
+            c->CI++;
             break;
         case C_SRE_RMW + 2:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         // LSR_RMW continuation
         case C_LSR_RMW + 0:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
+            c->CI++;
             break;
         case C_LSR_RMW + 1:
             c->DL = _fam65xx_lsr(c, c->DL);
+            c->CI++;
             break;
         case C_LSR_RMW + 2:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         // PHA continuation
         case C_PHA + 0:
             c->write_src = R_A;
             pins &= ~FAM65XX_RW;
             c->AD = 0x0100 | c->S--;
+            c->CI++;
             break;
         case C_PHA + 1:
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         // JMP_ABS continuation
         case C_JMP_ABS + 0:
             c->AD = c->PC++;
             c->PCH = c->DL;
             c->PC = (c->DL << 8) | c->TMP;
+            c->CI++;
             break;
         case C_JMP_ABS + 1:
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         // RTS continuation
         case C_RTS + 0:
             c->AD = 0x0100 | c->S++;
             c->PCL = c->DL;
+            c->CI++;
             break;
         case C_RTS + 1:
             c->AD = 0x0100 | c->S;
             c->PCH = c->DL;
+            c->CI++;
             break;
         case C_RTS + 2:
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         // RRA_RMW continuation
         case C_RRA_RMW + 0:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
+            c->CI++;
             break;
         case C_RRA_RMW + 1:
             c->DL = _fam65xx_ror(c, c->DL);
             _fam65xx_adc(c, c->DL);
+            c->CI++;
             break;
         case C_RRA_RMW + 2:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         // ROR_RMW continuation
         case C_ROR_RMW + 0:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
+            c->CI++;
             break;
         case C_ROR_RMW + 1:
             c->DL = _fam65xx_ror(c, c->DL);
+            c->CI++;
             break;
         case C_ROR_RMW + 2:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         // PLA continuation
         case C_PLA + 0:
             c->AD = 0x0100 | c->S;
             c->A = c->DL;
             _NZ(c->A);
+            c->CI++;
             break;
         case C_PLA + 1:
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         // JMP_IND continuation
         case C_JMP_IND + 0:
             c->AD = c->PC++;
             c->TMP = c->DL;
             c->AD = (c->DL << 8) | c->TMP;
+            c->CI++;
             break;
         case C_JMP_IND + 1:
             c->AD = c->AD;
             c->PCL = c->DL;
+            c->CI++;
             break;
         case C_JMP_IND + 2:
             c->AD = (c->AD & 0xFF00) | ((c->AD + 1) & 0xFF);
             c->PCH = c->DL;
+            c->CI++;
             break;
         case C_JMP_IND + 3:
-            c->AD = c->PC++;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         // DCP_RMW continuation
         case C_DCP_RMW + 0:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
+            c->CI++;
             break;
         case C_DCP_RMW + 1:
             c->DL--;
             _fam65xx_cmp(c, c->A, c->DL);
+            c->CI++;
             break;
         case C_DCP_RMW + 2:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         // DEC_RMW continuation
         case C_DEC_RMW + 0:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
+            c->CI++;
             break;
         case C_DEC_RMW + 1:
             c->DL--;
             _NZ(c->DL);
+            c->CI++;
             break;
         case C_DEC_RMW + 2:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         // ISC_RMW continuation
         case C_ISC_RMW + 0:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
+            c->CI++;
             break;
         case C_ISC_RMW + 1:
             c->DL++;
             _fam65xx_sbc(c, c->DL);
+            c->CI++;
             break;
         case C_ISC_RMW + 2:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
         // INC_RMW continuation
         case C_INC_RMW + 0:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
+            c->CI++;
             break;
         case C_INC_RMW + 1:
             c->DL++;
             _NZ(c->DL);
+            c->CI++;
             break;
         case C_INC_RMW + 2:
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_FETCH_CYCLE;
-            goto end;
+            goto fetch_next;
 
+    default:
+        break;
     }
-    c->CI++;
+    return pins;
 
-end:
+fetch_next:
+    c->PC++;
+    c->AD = c->PC;
+    pins |= FAM65XX_SYNC;
     return pins;
 }

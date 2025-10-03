@@ -128,20 +128,20 @@ typedef struct {
 // Accessors (c-> required before use)
 
 // Public registers
-#define PC    (r16[R_PC])  // Program counter (16 bit)
-#define PCL   (r8[R_PCL])  // Program counter low
-#define PCH   (r8[R_PCH])  // Program counter high
-#define A     (r8[R_A])    // Accumulator register
-#define X     (r8[R_X])    // X index register
-#define Y     (r8[R_Y])    // Y index register
-#define S     (r8[R_S])    // Stack pointer
-#define P     (r8[R_P])    // Processor status
+#define PC    r16[R_PC]  // Program counter (16 bit)
+#define PCL   r8[R_PCL]  // Program counter low
+#define PCH   r8[R_PCH]  // Program counter high
+#define A     r8[R_A]    // Accumulator register
+#define X     r8[R_X]    // X index register
+#define Y     r8[R_Y]    // Y index register
+#define S     r8[R_S]    // Stack pointer
+#define P     r8[R_P]    // Processor status
 // Internal registers
-#define DL    (r8[R_DL])   // Data latch
-#define AD    (r16[R_AD])  // Address data (16 bit)
-#define ADL   (r8[R_ADL])  // Address data low
-#define ADH   (r8[R_ADH])  // Address data high
-#define TMP   (r8[R_TMP])
+#define DL    r8[R_DL]   // Data latch
+#define AD    r16[R_AD]  // Address data (16 bit)
+#define ADL   r8[R_ADL]  // Address data low
+#define ADH   r8[R_ADH]  // Address data high
+#define TMP   r8[R_TMP]
 
     // Cycle decoder state
     uint16_t CI;        // Current cycle index
@@ -236,24 +236,15 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
 // Cycle index layout:
 enum {
     // [0..255]   = Opcode execution cycles
-    C_FETCH_CYCLE = 256,
-    // [257..399] = Addressing modes (ADDR_SEQ_BASE + addr_seq), where addr_seq 0 = opcode only
-    ADDR_SEQ_BASE = 256,  // Base for addressing mode calculation
+    // [256+]     = Addressing modes (ADDR_SEQ_BASE + addr_seq), where addr_seq 0 = opcode only
+    ADDR_SEQ_BASE = 255,  // Addressing modes start at offset 1, so first mode at 256 (no gap after opcodes 0-255)
     // [400+]     = Continuation cycles for complex operations
 };
 
-// Fetch next opcode
+// SYNC-based fetch architecture:
 // addr_seq 0 = implied/accumulator (jump to opcode directly)
 // addr_seq > 0 = addressing mode offset (ADDR_SEQ_BASE + addr_seq)
-#define _FETCH() do { \
-    if (!(pins & FAM65XX_RDY)) { \
-        return pins; \
-    } \
-    c->opcode = c->DL; \
-    uint8_t addr_seq = opcode_addr_start[c->opcode]; \
-    c->CI = addr_seq == 0 ? c->opcode : ADDR_SEQ_BASE + addr_seq; \
-    pins |= FAM65XX_SYNC; \
-} while(0)
+// Opcode decoding handled in fam65xx_tick() when SYNC is detected
 
 //=============================================================================
 // HELPER FUNCTIONS
@@ -468,8 +459,11 @@ uint64_t fam65xx_init(fam65xx_t* c, const fam65xx_desc_t* desc) {
     // ProcessorTests-compatible initialization: ready for immediate execution
     c->P = FAM65XX_XF;  // Only set unused flag, no interrupt disable
     c->S = 0xFF;        // Stack pointer starts at top
-    c->CI = C_FETCH_CYCLE; // Start in fetch state to get first instruction
-    c->opcode = 0;
+    
+    // Bootstrap approach: Set CI to NOP instruction which will do AD=PC++; SYNC=1
+    c->CI = 0xEA;       // Start with NOP instruction case for bootstrap
+    c->opcode = 0xEA;   // Set opcode to NOP for bootstrap
+    c->AD = c->PC;      // Address points to PC for memory access
     
     // No reset sequence for ProcessorTests - CPU ready for direct execution
     c->brk_flags = 0;   // Clear all interrupt flags
@@ -490,7 +484,7 @@ void fam65xx_reset(fam65xx_t* c) {
 uint64_t fam65xx_tick(fam65xx_t* c, uint64_t pins) {
     CHIPS_ASSERT(c);
     
-    // Clear SYNC by default
+    // Clear SYNC by default - will be set by instruction completion
     pins &= ~FAM65XX_SYNC;
     
     // Check for interrupts at end of instruction
@@ -518,15 +512,37 @@ uint64_t fam65xx_tick(fam65xx_t* c, uint64_t pins) {
     }
     
     // Preamble: setup pins and data for memory operations
-    pins &= ~(FAM65XX_SYNC | FAM65XX_RW);
+    pins &= ~FAM65XX_RW;
     pins |= FAM65XX_RW;
     uint8_t pins_data = FAM65XX_GET_DATA(pins);
     
     // Execute one cycle using generated decoder
     pins = _fam65xx_decode(c, pins);
     
-    // Memory access: perform actual memory operations based on pin state
-    pins = SET_ADDR(pins, c->AD);
+    // NEW SYNC-BASED ARCHITECTURE: Handle opcode decoding when SYNC is raised
+    if (pins & FAM65XX_SYNC) {
+        // Instruction completed, fetch_next has set AD = PC++ for next opcode
+        if (!(pins & FAM65XX_RDY)) {
+            // CPU stalled, don't decode yet
+            return pins;
+        }
+        
+        // Read the next opcode from the address set by fetch_next (which is PC-1 after increment)
+        c->DL = c->mem_read(c->user_data, c->AD, pins_data);
+        c->opcode = c->DL;
+        
+        // Decode opcode and set next CI based on addressing mode
+        extern const uint8_t opcode_addr_start[256];  // From generated decoder
+        uint8_t addr_seq = opcode_addr_start[c->opcode];
+        c->CI = addr_seq == 0 ? c->opcode : ADDR_SEQ_BASE + addr_seq;
+        
+        // Don't perform additional memory access - opcode already read
+        c->pins = pins;
+        return pins;
+    }
+    
+    // Normal memory access for non-SYNC cycles
+    SET_ADDR(pins, c->AD);
     if (pins & FAM65XX_RW) {
         c->DL = c->mem_read(c->user_data, c->AD, pins_data);
     } else {
