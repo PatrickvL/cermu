@@ -512,8 +512,8 @@ def analyze_continuation_needs(op):
     elif flags == 'BRANCH':
         # Branch taken continuation
         cycles = (
-            'if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tgoto fetch_next;\n} else {\n\tc->AD = (c->PC & 0xFF00) | (c->AD & 0xFF);\n}\nc->CI++;',  # Page boundary check
-            'c->PC = c->AD;\ngoto fetch_next;'  # Page crossed case and fetch
+            'if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\t// Same page - branch takes 3 cycles total\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tgoto fetch_next;\n} else {\n\t// Page boundary crossed - fix high byte calculation\n\t// The 6502 does a dummy read with wrong high byte, then corrects it\n\tc->CI++;\n}',  # Page boundary check
+            '// Page boundary crossing dummy cycle complete - set correct PC\nc->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\ngoto fetch_next;'  # Page crossed case and fetch
         )
         get_or_create_continuation(cycles, 'BRANCH_TAKEN')
         return ('BRANCH_TAKEN', cycles)
@@ -528,14 +528,42 @@ def analyze_continuation_needs(op):
     return None
 
 def get_branch_mask(op):
-    """Get branch condition mask"""
-    aaa = (op >> 5) & 7
-    masks = ['FAM65XX_NF', 'FAM65XX_VF', 'FAM65XX_CF', 'FAM65XX_ZF']
-    return masks[aaa - 4]
+    """Get branch condition mask - returns the specific flag for each branch"""
+    if op == 0x10 or op == 0x30:  # BPL, BMI
+        return 'FAM65XX_NF'
+    elif op == 0x50 or op == 0x70:  # BVC, BVS
+        return 'FAM65XX_VF'
+    elif op == 0x90 or op == 0xB0:  # BCC, BCS
+        return 'FAM65XX_CF'
+    elif op == 0xD0 or op == 0xF0:  # BNE, BEQ
+        return 'FAM65XX_ZF'
+    return 'FAM65XX_NF'  # fallback
 
 def get_branch_val(op):
     """Get branch condition value"""
-    return '0' if op in [0x10, 0x50, 0x90, 0xD0] else get_branch_mask(op)
+    if op == 0x10: return '0'          # BPL - branch if N=0
+    if op == 0x30: return 'FAM65XX_NF' # BMI - branch if N=1
+    if op == 0x50: return '0'          # BVC - branch if V=0
+    if op == 0x70: return 'FAM65XX_VF' # BVS - branch if V=1
+    if op == 0x90: return '0'          # BCC - branch if C=0
+    if op == 0xB0: return 'FAM65XX_CF' # BCS - branch if C=1
+    if op == 0xD0: return '0'          # BNE - branch if Z=0
+    if op == 0xF0: return 'FAM65XX_ZF' # BEQ - branch if Z=1
+    return '0'
+
+def get_branch_name(op):
+    """Get branch instruction name for documentation"""
+    names = {
+        0x10: "BPL - Branch if Plus",
+        0x30: "BMI - Branch if Minus",
+        0x50: "BVC - Branch if Overflow Clear",
+        0x70: "BVS - Branch if Overflow Set",
+        0x90: "BCC - Branch if Carry Clear",
+        0xB0: "BCS - Branch if Carry Set",
+        0xD0: "BNE - Branch if Not Equal",
+        0xF0: "BEQ - Branch if Equal"
+    }
+    return names.get(op, "Unknown Branch")
 
 def get_continuation_constant_name(name):
     """Get the constant name for a continuation sequence"""
@@ -548,9 +576,23 @@ def generate_opcode_implementation(op):
     flags = operation[3]  # flags are at index 3
     mem_access = operation[1]  # memory access is at index 1
     
-    # Handle branch instructions specially
+    # Handle branch instructions specially - each gets individual condition
     if flags == 'BRANCH':
-        return f"c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & {get_branch_mask(op)}) == {get_branch_val(op)}) {{\n\tc->AD = c->PC + c->TMP;\n\tc->CI = C_BRANCH_TAKEN;\n}} else {{\n\tgoto fetch_next;\n}}"
+        mask = get_branch_mask(op)
+        val = get_branch_val(op)
+        # Force each branch to have unique implementation text by including opcode
+        opcode_specific = f"0x{op:02X}"
+        
+        # Fix condition logic: for "flag set" conditions, check if flag is set
+        # For "flag clear" conditions, check if flag is clear
+        if val == '0':
+            # Flag clear condition: check if (flag & mask) == 0
+            condition = f"(c->P & {mask}) == 0"
+        else:
+            # Flag set condition: check if (flag & mask) != 0
+            condition = f"(c->P & {mask}) != 0"
+        
+        return f"// Opcode {opcode_specific} - {get_branch_name(op)}\nc->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ({condition}) {{\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;  // Proper signed arithmetic\n\tc->CI = C_BRANCH_TAKEN;\n}} else {{\n\tgoto fetch_next;\n}}"
     
     # Return the implementation from the operation - simplified, no more _FETCH() logic needed
     if impl:
@@ -780,7 +822,7 @@ def main():
     l(f" * Layout:")
     l(f" *   [0-255]   : Opcode-specific cycles")
     l(f" *   [256-{ADDR_SEQ_END-1}] : Shared addressing mode sequences")
-    l(f" *   [{CONT_SEQ_START}-{final_continuation_index-1}]  : Shared continuation sequences")
+    l(f" *   [{CONT_SEQ_START}-{final_continuation_index-1}] : Shared continuation sequences")
     l(f" * Total cases: {final_continuation_index}")
     l(" */")
     l("")

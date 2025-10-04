@@ -222,7 +222,8 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
 #define SET_ADDR(pins, addr) do { \
     /* Address bits would be set on external address bus in real hardware */ \
     /* For emulation, address is passed directly to memory callbacks */ \
-    (pins); /* Keep pins unchanged - address handled in footer */ \
+    (void)(pins); /* Keep pins unchanged - address handled in footer */ \
+    (void)(addr); \
 } while(0)
 
 // Flag operations
@@ -511,7 +512,7 @@ uint64_t fam65xx_tick(fam65xx_t* c, uint64_t pins) {
     } else {
         // Write operation - perform memory write
         c->mem_write(c->user_data, c->AD, c->r8[c->write_src]);
-        // Automatically raise RW pin after write completes (test runner can infer state from mem_write call)
+        // Automatically raise RW pin after write completes - test runner can infer write from mem_write call
         pins |= FAM65XX_RW;
     }
     

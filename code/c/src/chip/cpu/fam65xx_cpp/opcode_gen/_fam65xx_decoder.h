@@ -6,7 +6,7 @@
  * Layout:
  *   [0-255]   : Opcode-specific cycles
  *   [256-295] : Shared addressing mode sequences
- *   [296-355]  : Shared continuation sequences
+ *   [296-355] : Shared continuation sequences
  * Total cases: 356
  */
 
@@ -423,21 +423,11 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             goto fetch_next;
 
         case 0x10:  // BPL [R] IMM cycle 2
+            // Opcode 0x10 - BPL - Branch if Plus
             c->AD = c->PC;
             c->TMP = (int8_t)c->DL;
-            if ((c->P & FAM65XX_NF) == 0) {  // Branch if Negative flag clear
-            	c->AD = c->PC + c->TMP;
-            	c->CI = C_BRANCH_TAKEN;
-            } else {
-            	goto fetch_next;
-            }
-            break;
-
-        case 0x90:  // BCC [R] IMM cycle 2
-            c->AD = c->PC;
-            c->TMP = (int8_t)c->DL;
-            if ((c->P & FAM65XX_CF) == 0) {  // Branch if Carry flag clear
-            	c->AD = c->PC + c->TMP;
+            if ((c->P & FAM65XX_NF) == 0) {
+            	c->AD = c->PC + (int16_t)(int8_t)c->DL;  // Proper signed arithmetic
             	c->CI = C_BRANCH_TAKEN;
             } else {
             	goto fetch_next;
@@ -502,21 +492,11 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             goto fetch_next;
 
         case 0x30:  // BMI [R] IMM cycle 2
+            // Opcode 0x30 - BMI - Branch if Minus
             c->AD = c->PC;
             c->TMP = (int8_t)c->DL;
-            if ((c->P & FAM65XX_NF) == FAM65XX_NF) {  // Branch if Negative flag set
-            	c->AD = c->PC + c->TMP;
-            	c->CI = C_BRANCH_TAKEN;
-            } else {
-            	goto fetch_next;
-            }
-            break;
-
-        case 0xB0:  // BCS [R] IMM cycle 2
-            c->AD = c->PC;
-            c->TMP = (int8_t)c->DL;
-            if ((c->P & FAM65XX_CF) == FAM65XX_CF) {  // Branch if Carry flag set
-            	c->AD = c->PC + c->TMP;
+            if ((c->P & FAM65XX_NF) != 0) {
+            	c->AD = c->PC + (int16_t)(int8_t)c->DL;  // Proper signed arithmetic
             	c->CI = C_BRANCH_TAKEN;
             } else {
             	goto fetch_next;
@@ -588,21 +568,11 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             break;
 
         case 0x50:  // BVC [R] IMM cycle 2
+            // Opcode 0x50 - BVC - Branch if Overflow Clear
             c->AD = c->PC;
             c->TMP = (int8_t)c->DL;
-            if ((c->P & FAM65XX_VF) == 0) {  // Branch if Overflow flag clear
-            	c->AD = c->PC + c->TMP;
-            	c->CI = C_BRANCH_TAKEN;
-            } else {
-            	goto fetch_next;
-            }
-            break;
-
-        case 0xD0:  // BNE [R] IMM cycle 2
-            c->AD = c->PC;
-            c->TMP = (int8_t)c->DL;
-            if ((c->P & FAM65XX_ZF) == 0) {  // Branch if Zero flag clear
-            	c->AD = c->PC + c->TMP;
+            if ((c->P & FAM65XX_VF) == 0) {
+            	c->AD = c->PC + (int16_t)(int8_t)c->DL;  // Proper signed arithmetic
             	c->CI = C_BRANCH_TAKEN;
             } else {
             	goto fetch_next;
@@ -672,21 +642,11 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             break;
 
         case 0x70:  // BVS [R] IMM cycle 2
+            // Opcode 0x70 - BVS - Branch if Overflow Set
             c->AD = c->PC;
             c->TMP = (int8_t)c->DL;
-            if ((c->P & FAM65XX_VF) == FAM65XX_VF) {  // Branch if Overflow flag set
-            	c->AD = c->PC + c->TMP;
-            	c->CI = C_BRANCH_TAKEN;
-            } else {
-            	goto fetch_next;
-            }
-            break;
-
-        case 0xF0:  // BEQ [R] IMM cycle 2
-            c->AD = c->PC;
-            c->TMP = (int8_t)c->DL;
-            if ((c->P & FAM65XX_ZF) == FAM65XX_ZF) {  // Branch if Zero flag set
-            	c->AD = c->PC + c->TMP;
+            if ((c->P & FAM65XX_VF) != 0) {
+            	c->AD = c->PC + (int16_t)(int8_t)c->DL;  // Proper signed arithmetic
             	c->CI = C_BRANCH_TAKEN;
             } else {
             	goto fetch_next;
@@ -755,6 +715,18 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->A = (c->A | 0xEE) & c->X & c->DL;
             _NZ(c->A);
             goto fetch_next;
+
+        case 0x90:  // BCC [R] IMM cycle 2
+            // Opcode 0x90 - BCC - Branch if Carry Clear
+            c->AD = c->PC;
+            c->TMP = (int8_t)c->DL;
+            if ((c->P & FAM65XX_CF) == 0) {
+            	c->AD = c->PC + (int16_t)(int8_t)c->DL;  // Proper signed arithmetic
+            	c->CI = C_BRANCH_TAKEN;
+            } else {
+            	goto fetch_next;
+            }
+            break;
 
         case 0x93:  // SHA [RW] IDY cycle 5
             c->TMP = c->A & c->X & ((c->AD >> 8) + 1);
@@ -842,6 +814,18 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             _NZ(c->X);
             goto fetch_next;
 
+        case 0xB0:  // BCS [R] IMM cycle 2
+            // Opcode 0xB0 - BCS - Branch if Carry Set
+            c->AD = c->PC;
+            c->TMP = (int8_t)c->DL;
+            if ((c->P & FAM65XX_CF) != 0) {
+            	c->AD = c->PC + (int16_t)(int8_t)c->DL;  // Proper signed arithmetic
+            	c->CI = C_BRANCH_TAKEN;
+            } else {
+            	goto fetch_next;
+            }
+            break;
+
         case 0xB8:  // CLV [---] --- cycle 1
             c->P &= ~FAM65XX_VF;
             goto fetch_next;
@@ -911,6 +895,18 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->P = (c->P & ~FAM65XX_CF) | ((c->TMP & 0x100) ? 0 : FAM65XX_CF);
             goto fetch_next;
 
+        case 0xD0:  // BNE [R] IMM cycle 2
+            // Opcode 0xD0 - BNE - Branch if Not Equal
+            c->AD = c->PC;
+            c->TMP = (int8_t)c->DL;
+            if ((c->P & FAM65XX_ZF) == 0) {
+            	c->AD = c->PC + (int16_t)(int8_t)c->DL;  // Proper signed arithmetic
+            	c->CI = C_BRANCH_TAKEN;
+            } else {
+            	goto fetch_next;
+            }
+            break;
+
         case 0xD8:  // CLD [---] --- cycle 1
             c->P &= ~FAM65XX_DF;
             goto fetch_next;
@@ -958,6 +954,18 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->X++;
             _NZ(c->X);
             goto fetch_next;
+
+        case 0xF0:  // BEQ [R] IMM cycle 2
+            // Opcode 0xF0 - BEQ - Branch if Equal
+            c->AD = c->PC;
+            c->TMP = (int8_t)c->DL;
+            if ((c->P & FAM65XX_ZF) != 0) {
+            	c->AD = c->PC + (int16_t)(int8_t)c->DL;  // Proper signed arithmetic
+            	c->CI = C_BRANCH_TAKEN;
+            } else {
+            	goto fetch_next;
+            }
+            break;
 
         case 0xF8:  // SED [---] --- cycle 1
             c->P |= FAM65XX_DF;
@@ -1243,13 +1251,13 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             	c->nmi_pip >>= 1;
             	goto fetch_next;
             } else {
-            	// Page boundary crossed - need dummy read cycle, branch takes 4 cycles total
-            	// AD already contains correct target address, just continue to next cycle
+            	// Page boundary crossed - fix high byte calculation
+            	// The 6502 does a dummy read with wrong high byte, then corrects it
             	c->CI++;
             }
             break;
         case C_BRANCH_TAKEN + 1:
-            // Page boundary crossing dummy cycle complete - set final PC
+            // Page boundary crossing dummy cycle complete - set correct PC
             c->PC = c->AD;
             c->irq_pip >>= 1;
             c->nmi_pip >>= 1;
