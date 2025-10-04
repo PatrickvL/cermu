@@ -270,6 +270,34 @@ fam65xx_cpp_processor_tests_runner/fast:
 .PHONY : fam65xx_cpp_processor_tests_runner/fast
 
 # Convenience name for target.
+tests/CMakeFiles/fam65xx_processor_tests_runner.dir/rule:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/fam65xx_processor_tests_runner.dir/rule
+.PHONY : tests/CMakeFiles/fam65xx_processor_tests_runner.dir/rule
+
+# Convenience name for target.
+fam65xx_processor_tests_runner: tests/CMakeFiles/fam65xx_processor_tests_runner.dir/rule
+.PHONY : fam65xx_processor_tests_runner
+
+# fast build rule for target.
+fam65xx_processor_tests_runner/fast:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_processor_tests_runner.dir/build.make tests/CMakeFiles/fam65xx_processor_tests_runner.dir/build
+.PHONY : fam65xx_processor_tests_runner/fast
+
+# Convenience name for target.
+tests/CMakeFiles/regenerate_decoder.dir/rule:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/regenerate_decoder.dir/rule
+.PHONY : tests/CMakeFiles/regenerate_decoder.dir/rule
+
+# Convenience name for target.
+regenerate_decoder: tests/CMakeFiles/regenerate_decoder.dir/rule
+.PHONY : regenerate_decoder
+
+# fast build rule for target.
+regenerate_decoder/fast:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/regenerate_decoder.dir/build.make tests/CMakeFiles/regenerate_decoder.dir/build
+.PHONY : regenerate_decoder/fast
+
+# Convenience name for target.
 tests/CMakeFiles/unified_processor_test.dir/rule:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests/CMakeFiles/unified_processor_test.dir/rule
 .PHONY : tests/CMakeFiles/unified_processor_test.dir/rule
@@ -685,6 +713,30 @@ fam65xx_cpp_test_harness.cpp.s:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/fam65xx_cpp_test_harness.cpp.s
 .PHONY : fam65xx_cpp_test_harness.cpp.s
 
+fam65xx_processor_tests_runner.o: fam65xx_processor_tests_runner.c.o
+.PHONY : fam65xx_processor_tests_runner.o
+
+# target to build an object file
+fam65xx_processor_tests_runner.c.o:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_processor_tests_runner.dir/build.make tests/CMakeFiles/fam65xx_processor_tests_runner.dir/fam65xx_processor_tests_runner.c.o
+.PHONY : fam65xx_processor_tests_runner.c.o
+
+fam65xx_processor_tests_runner.i: fam65xx_processor_tests_runner.c.i
+.PHONY : fam65xx_processor_tests_runner.i
+
+# target to preprocess a source file
+fam65xx_processor_tests_runner.c.i:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_processor_tests_runner.dir/build.make tests/CMakeFiles/fam65xx_processor_tests_runner.dir/fam65xx_processor_tests_runner.c.i
+.PHONY : fam65xx_processor_tests_runner.c.i
+
+fam65xx_processor_tests_runner.s: fam65xx_processor_tests_runner.c.s
+.PHONY : fam65xx_processor_tests_runner.s
+
+# target to generate assembly for a file
+fam65xx_processor_tests_runner.c.s:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_processor_tests_runner.dir/build.make tests/CMakeFiles/fam65xx_processor_tests_runner.dir/fam65xx_processor_tests_runner.c.s
+.PHONY : fam65xx_processor_tests_runner.c.s
+
 irq_level_handling_test.o: irq_level_handling_test.cpp.o
 .PHONY : irq_level_handling_test.o
 
@@ -716,6 +768,7 @@ json_parser.o: json_parser.c.o
 json_parser.c.o:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/json_parser.dir/build.make tests/CMakeFiles/json_parser.dir/json_parser.c.o
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_processor_tests_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_processor_tests_runner.dir/json_parser.c.o
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_processor_tests_runner.dir/build.make tests/CMakeFiles/fam65xx_processor_tests_runner.dir/json_parser.c.o
 .PHONY : json_parser.c.o
 
 json_parser.i: json_parser.c.i
@@ -725,6 +778,7 @@ json_parser.i: json_parser.c.i
 json_parser.c.i:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/json_parser.dir/build.make tests/CMakeFiles/json_parser.dir/json_parser.c.i
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_processor_tests_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_processor_tests_runner.dir/json_parser.c.i
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_processor_tests_runner.dir/build.make tests/CMakeFiles/fam65xx_processor_tests_runner.dir/json_parser.c.i
 .PHONY : json_parser.c.i
 
 json_parser.s: json_parser.c.s
@@ -734,6 +788,7 @@ json_parser.s: json_parser.c.s
 json_parser.c.s:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/json_parser.dir/build.make tests/CMakeFiles/json_parser.dir/json_parser.c.s
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_processor_tests_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_processor_tests_runner.dir/json_parser.c.s
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_processor_tests_runner.dir/build.make tests/CMakeFiles/fam65xx_processor_tests_runner.dir/json_parser.c.s
 .PHONY : json_parser.c.s
 
 nmi_edge_detection_test.o: nmi_edge_detection_test.cpp.o
@@ -797,6 +852,7 @@ help:
 	@echo "... list_install_components"
 	@echo "... rebuild_cache"
 	@echo "... test"
+	@echo "... regenerate_decoder"
 	@echo "... run_all_tests"
 	@echo "... run_processor_tests"
 	@echo "... brk_flag_setting_test"
@@ -804,6 +860,7 @@ help:
 	@echo "... fam65xx_cpp_klaus_test_runner"
 	@echo "... fam65xx_cpp_lorenz_test_runner"
 	@echo "... fam65xx_cpp_processor_tests_runner"
+	@echo "... fam65xx_processor_tests_runner"
 	@echo "... irq_level_handling_test"
 	@echo "... json_parser"
 	@echo "... mos6510_lib"
@@ -850,6 +907,9 @@ help:
 	@echo "... fam65xx_cpp_test_harness.o"
 	@echo "... fam65xx_cpp_test_harness.i"
 	@echo "... fam65xx_cpp_test_harness.s"
+	@echo "... fam65xx_processor_tests_runner.o"
+	@echo "... fam65xx_processor_tests_runner.i"
+	@echo "... fam65xx_processor_tests_runner.s"
 	@echo "... irq_level_handling_test.o"
 	@echo "... irq_level_handling_test.i"
 	@echo "... irq_level_handling_test.s"

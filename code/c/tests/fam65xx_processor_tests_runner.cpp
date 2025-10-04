@@ -80,7 +80,7 @@ public:
     // Execute one instruction
     bool step() {
         try {
-            uint32_t initial_cycles = cycle_count;
+            uint32_t max_cycles = 100; // Safety limit
             
             // Execute cycles until instruction is complete
             uint64_t pins = FAM65XX_RDY; // Set RDY high
@@ -88,6 +88,10 @@ public:
             do {
                 pins = fam65xx_tick(&cpu, pins);
                 cycle_count++;
+                max_cycles--;
+                if (max_cycles == 0) {
+                    return false; // Exceeded cycle limit
+                }
             } while (!fam65xx_opdone(&cpu));
             
             return true;
@@ -104,7 +108,7 @@ struct TestResults {
     uint32_t opcode_totals[256] = {0};
 };
 
-static bool verbose_output = false;
+bool verbose_output = false;
 static TestResults results;
 
 // Run a single ProcessorTests test case
@@ -134,26 +138,42 @@ bool run_processor_test(const processor_test_t* test) {
     harness.set_sp(test->initial.s);
     harness.set_status(test->initial.p);
     
+    // CRITICAL: Set up CPU for fetch at the test PC
+    // This ensures the first tick will read the opcode from the correct address
+    // and trigger SYNC processing
+    
     // Get the opcode for tracking
-    uint8_t opcode = harness.get_memory(test->initial.pc);
-    results.opcode_totals[opcode]++;
+    uint16_t pc_addr = test->initial.pc;
+    uint8_t current_opcode = harness.get_memory(pc_addr);
+    results.opcode_totals[current_opcode]++;
     
     if (verbose_output) {
-        std::cout << "  Opcode at PC 0x" << std::hex << test->initial.pc 
-                  << ": 0x" << std::hex << (int)opcode << std::dec << std::endl;
+        std::cout << "  Opcode at PC 0x" << std::hex << test->initial.pc
+                  << ": 0x" << std::hex << (int)current_opcode << std::dec << std::endl;
     }
     
     // Execute one instruction
     uint32_t initial_cycle_count = harness.get_cycle_count();
+    
+    if (verbose_output) {
+        std::cout << "  DEBUG: About to execute opcode 0x" << std::hex << (int)current_opcode
+                  << " at PC 0x" << test->initial.pc << std::dec << std::endl;
+    }
+    
     bool step_result = harness.step();
     uint32_t cycles_executed = harness.get_cycle_count() - initial_cycle_count;
     
+    if (verbose_output) {
+        std::cout << "  DEBUG: After execution - PC = 0x" << std::hex << harness.get_pc()
+                  << ", SP = 0x" << (int)harness.get_sp() << ", cycles = " << std::dec << cycles_executed << std::endl;
+    }
+    
     if (!step_result) {
         if (verbose_output) {
-            std::cout << "FAIL " << test->name << ": Instruction execution failed (opcode 0x" 
-                      << std::hex << (int)opcode << ")" << std::dec << std::endl;
+            std::cout << "FAIL " << test->name << ": Instruction execution failed (opcode 0x"
+                      << std::hex << (int)current_opcode << ")" << std::dec << std::endl;
         }
-        results.opcode_failures[opcode]++;
+        results.opcode_failures[current_opcode]++;
         return false;
     }
     
@@ -250,14 +270,14 @@ bool run_processor_test(const processor_test_t* test) {
     if (passed) {
         results.passed_tests++;
         if (verbose_output) {
-            std::cout << "PASS " << test->name << " (opcode 0x" << std::hex 
-                      << (int)opcode << ")" << std::dec << std::endl;
+            std::cout << "PASS " << test->name << " (opcode 0x" << std::hex
+                      << (int)current_opcode << ")" << std::dec << std::endl;
         }
     } else {
-        results.opcode_failures[opcode]++;
+        results.opcode_failures[current_opcode]++;
         if (verbose_output) {
-            std::cout << "FAIL " << test->name << ": State mismatch (opcode 0x" 
-                      << std::hex << (int)opcode << ")" << std::dec << std::endl;
+            std::cout << "FAIL " << test->name << ": State mismatch (opcode 0x"
+                      << std::hex << (int)current_opcode << ")" << std::dec << std::endl;
         }
     }
     
