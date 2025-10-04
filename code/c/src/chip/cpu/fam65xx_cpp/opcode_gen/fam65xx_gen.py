@@ -23,17 +23,18 @@ AM_IMM = ("IMM", "immediate", "ADDR_IMM", (
 ))
 
 AM_ZER = ("ZP", "zero page", "ADDR_ZER", (
-    "c->AD = c->DL;\nc->CI = c->opcode;",
+    "c->AD = c->PC++;\nc->CI++;",
+    "c->AD = c->DL;\nc->CI = c->opcode;"
 ))
 
 AM_ZPX = ("ZPX", "zero page,X", "ADDR_ZPX", (
-    "c->TMP = c->DL;\nc->AD = c->DL;\nc->CI++;",
-    "c->AD = (c->TMP + c->X) & 0xFF;\nc->CI = c->opcode;"
+    "c->AD = c->PC++;\nc->CI++;",
+    "c->AD = (c->DL + c->X) & 0xFF;\nc->CI = c->opcode;"
 ))
 
 AM_ZPY = ("ZPY", "zero page,Y", "ADDR_ZPY", (
-    "c->TMP = c->DL;\nc->AD = c->DL;\nc->CI++;",
-    "c->AD = (c->TMP + c->Y) & 0xFF;\nc->CI = c->opcode;"
+    "c->AD = c->PC++;\nc->CI++;",
+    "c->AD = (c->DL + c->Y) & 0xFF;\nc->CI = c->opcode;"
 ))
 
 AM_ABS = ("ABS", "absolute", "ADDR_ABS", (
@@ -71,24 +72,26 @@ AM_ABY_W = ("ABY", "absolute,Y (write - always takes extra cycle)", "ADDR_ABY_W"
 ))
 
 AM_IDX = ("IDX", "indexed indirect (zp,X)", "ADDR_IDX", (
-    "c->TMP = c->DL;\nc->AD = c->DL;\nc->CI++;",
-    "c->AD = (c->TMP + c->X) & 0xFF;\nc->CI++;",
+    "c->AD = c->PC++;\nc->CI++;",
+    "c->AD = (c->DL + c->X) & 0xFF;\nc->CI++;",
     "c->TMP = c->DL;\nc->AD = (c->AD + 1) & 0xFF;\nc->CI++;",
-    "c->AD = (c->DL << 8) | c->TMP;\nc->CI = c->opcode;"
+    "c->AD = (c->DL << 8) | c->TMP;\nc->CI++;",
+    "c->CI = c->opcode;"
 ))
 
 AM_IDY = ("IDY", "indirect indexed (zp),Y", "ADDR_IDY", (
-    "c->AD = c->DL;\nc->CI++;",
-    "c->TMP = c->DL;\nc->AD = (c->AD + 1) & 0xFF;\nc->CI++;",
-    "c->AD = c->TMP | (c->DL << 8);\nif ((c->AD >> 8) != ((c->AD + c->Y) >> 8)) { c->CI++; } else { c->AD += c->Y; c->CI = c->opcode; }",
-    "c->AD += c->Y;\nc->CI = c->opcode;"
+    "c->AD = c->PC++;\nc->CI++;",
+    "c->TMP = c->DL;\nc->AD = (c->DL + 1) & 0xFF;\nc->CI++;",
+    "c->AD = c->TMP | (c->DL << 8);\nif ((c->AD >> 8) != ((c->AD + c->Y) >> 8)) { c->CI++; } else { c->AD += c->Y; c->CI++; }",
+    "c->AD += c->Y;\nc->CI++;",
+    "c->CI = c->opcode;"
 ))
 
 AM_IDY_W = ("IDY", "indirect indexed (zp),Y (write - always takes extra cycle)", "ADDR_IDY_W", (
-    "c->AD = c->DL;\nc->CI++;",
-    "c->TMP = c->DL;\nc->AD = (c->AD + 1) & 0xFF;\nc->CI++;",
+    "c->AD = c->PC++;\nc->CI++;",
+    "c->TMP = c->DL;\nc->AD = (c->DL + 1) & 0xFF;\nc->CI++;",
     "c->AD = c->TMP | (c->DL << 8);\nc->CI++;",
-    "c->AD += c->Y;\nc->CI = c->opcode;"
+    "c->AD += c->Y;\nc->CI++;"
 ))
 
 # Addressing mode list
@@ -199,7 +202,7 @@ OP_INC_M = ("INC", M_RW, "c->CI = C_INC_RMW;", 'RMW')  # M_RW - separate _FETCH
 OP_DEC_M = ("DEC", M_RW, "c->CI = C_DEC_RMW;", 'RMW')  # M_RW - separate _FETCH
 
 # NOP variants
-OP_NOP_I = ("NOP", M___, "break;", None)  # Dummy read of current PC - M___ immediate fetch - single cycle, no fetch
+OP_NOP_I = ("NOP", M___, "c->AD = c->PC;\nc->CI = C_NOP_DUMMY;", 'CONT')  # Dummy read of current PC - 2-cycle instruction
 OP_NOP_R = ("NOP", M_R_, "goto fetch_next;", None)      # Read from effective address - M_R_ immediate fetch
 
 # Illegal/undocumented instructions
@@ -507,6 +510,12 @@ def analyze_continuation_needs(op):
         )
         get_or_create_continuation(cycles, 'PHA')
         return ('PHA', cycles)
+    elif operation[0] == 'NOP' and operation[3] == 'CONT':  # NOP implied - 2 cycles total (1 opcode + 1 continuation cycle)
+        cycles = (
+            'c->PC++;\ngoto fetch_next;',  # Cycle 2: Dummy read from PC (already set in cycle 1), increment PC, fetch next
+        )
+        get_or_create_continuation(cycles, 'NOP_DUMMY')
+        return ('NOP_DUMMY', cycles)
     elif operation[0] == 'JAM':  # JAM instruction - ProcessorTests expects exactly 2 cycles
         cycles = (
             'goto fetch_next;',  # Cycle 2: Fetch next instruction
@@ -630,7 +639,7 @@ def generate_lookup_table():
             offset_to_const[offset] = const_name
     
     l("// Lookup table: addressing mode start index for each opcode")
-    l("static const uint8_t opcode_addr_start[256] = {")
+    l("const uint8_t opcode_addr_start[256] = {")
     
     for op in range(256):
         operation, addr_mode = get_ops_entry(op)
@@ -808,8 +817,8 @@ def main():
     l("    return pins;")
     l("")
     l("fetch_next:")
+    l("    c->CI = 0xFFFE;  // Signal instruction completion")
     l("    c->AD = c->PC;")
-    l("    c->PC++;")
     l("    pins |= FAM65XX_SYNC;")
     l("    return pins;")
     l("}")

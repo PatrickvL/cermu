@@ -5,6 +5,10 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Maximum array sizes for processor tests
 #define MAX_RAM_ENTRIES 16
 #define MAX_RAM_BYTES 8
@@ -74,5 +78,9 @@ const char* json_find_key(const char* json, const char* key);
 const char* json_skip_whitespace(const char* str);
 const char* json_find_object_end(const char* json);
 const char* json_find_array_end(const char* json);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // JSON_PARSER_H
