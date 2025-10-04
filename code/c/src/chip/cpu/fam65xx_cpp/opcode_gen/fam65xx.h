@@ -324,8 +324,11 @@ static inline void _fam65xx_adc(fam65xx_t* c, uint8_t val) {
         if (t & 0x80) c->P |= FAM65XX_NF;
         c->A = t & 0xFF;
 #else // Claude's wooly fix
-        // BCD mode - fixed implementation
+        // BCD mode - hardware accurate implementation
         uint8_t carry_in = (c->P & FAM65XX_CF) ? 1 : 0;
+        
+        // CRITICAL: Calculate binary result first for N/Z flags (6502 quirk)
+        uint16_t bin_result = c->A + val + carry_in;
         
         // Convert inputs to BCD
         uint8_t a_lo = c->A & 0x0F;
@@ -349,22 +352,23 @@ static inline void _fam65xx_adc(fam65xx_t* c, uint8_t val) {
             carry_out = 1;
         }
         
-        // Combine result
-        uint8_t result = ((sum_hi & 0x0F) << 4) | (sum_lo & 0x0F);
+        // Combine BCD result
+        uint8_t bcd_result = ((sum_hi & 0x0F) << 4) | (sum_lo & 0x0F);
         
-        // Set flags based on BCD result
+        // Set flags: C/V from BCD operation, N/Z from binary result (hardware quirk)
         c->P &= ~(FAM65XX_CF | FAM65XX_NF | FAM65XX_ZF | FAM65XX_VF);
         if (carry_out) c->P |= FAM65XX_CF;
-        if (result & 0x80) c->P |= FAM65XX_NF;
-        if (result == 0) c->P |= FAM65XX_ZF;
         
-        // V flag: BCD overflow detection (same as binary for practical purposes)
-        uint16_t bin_result = c->A + val + carry_in;
+        // N and Z flags based on BINARY result, not BCD result (6502 hardware behavior)
+        if (bin_result & 0x80) c->P |= FAM65XX_NF;
+        if ((bin_result & 0xFF) == 0) c->P |= FAM65XX_ZF;
+        
+        // V flag: overflow detection based on binary operation
         if (~(c->A ^ val) & (c->A ^ bin_result) & 0x80) {
             c->P |= FAM65XX_VF;
         }
         
-        c->A = result;
+        c->A = bcd_result;
 #endif        
     } else {
         // Binary mode
@@ -507,7 +511,8 @@ uint64_t fam65xx_tick(fam65xx_t* c, uint64_t pins) {
     } else {
         // Write operation - perform memory write
         c->mem_write(c->user_data, c->AD, c->r8[c->write_src]);
-        pins |= FAM65XX_RW;  // Return to read mode after write
+        // Automatically raise RW pin after write completes (test runner can infer state from mem_write call)
+        pins |= FAM65XX_RW;
     }
     
     // SYNC-based opcode decoding with RDY stalling BEFORE decode
