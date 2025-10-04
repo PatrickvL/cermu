@@ -27,11 +27,20 @@ private:
     // Memory callbacks for fam65xx.h
     static uint8_t mem_read(void* user_data, uint16_t addr, uint8_t bus_state) {
         ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(user_data);
-        return harness->memory[addr];
+        uint8_t value = harness->memory[addr];
+        extern bool verbose_output;
+        if (verbose_output) {
+            std::cout << "    MEM_READ: addr=0x" << std::hex << addr << ", data=0x" << (int)value << std::dec << std::endl;
+        }
+        return value;
     }
     
     static void mem_write(void* user_data, uint16_t addr, uint8_t data) {
         ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(user_data);
+        extern bool verbose_output;
+        if (verbose_output) {
+            std::cout << "    MEM_WRITE: addr=0x" << std::hex << addr << ", data=0x" << (int)data << std::dec << std::endl;
+        }
         harness->memory[addr] = data;
     }
 
@@ -81,18 +90,36 @@ public:
     bool step() {
         try {
             uint32_t max_cycles = 100; // Safety limit
+            extern bool verbose_output;
             
             // Execute cycles until instruction is complete
             uint64_t pins = FAM65XX_RDY; // Set RDY high
             
+            if (verbose_output) {
+                std::cout << "  DEBUG: Starting step execution, initial PC=0x" << std::hex << get_pc() << std::dec << std::endl;
+            }
+            
             do {
+                if (verbose_output) {
+                    std::cout << "  DEBUG: Before tick " << (cycle_count + 1) << " - PC=0x" << std::hex << get_pc()
+                              << ", CI=0x" << cpu.CI << ", RW=" << ((pins & FAM65XX_RW) ? 1 : 0) << std::dec << std::endl;
+                }
                 pins = fam65xx_tick(&cpu, pins);
                 cycle_count++;
+                if (verbose_output) {
+                    std::cout << "  DEBUG: After tick " << cycle_count << " - PC=0x" << std::hex << get_pc()
+                              << ", CI=0x" << cpu.CI << ", RW=" << ((pins & FAM65XX_RW) ? 1 : 0)
+                              << ", opdone=" << fam65xx_opdone(&cpu) << std::dec << std::endl;
+                }
                 max_cycles--;
                 if (max_cycles == 0) {
                     return false; // Exceeded cycle limit
                 }
             } while (!fam65xx_opdone(&cpu));
+            
+            if (verbose_output) {
+                std::cout << "  DEBUG: Step completed after " << (100 - max_cycles) << " cycles" << std::endl;
+            }
             
             return true;
         } catch (...) {

@@ -191,15 +191,15 @@ OP_CPY = ("CPY", M_R_, "_fam65xx_cmp(c, c->Y, c->DL);\ngoto fetch_next;", None)
 
 # RMW operations - have two variants (accumulator vs memory)
 OP_ASL_A = ("ASL", M___, "c->A = _fam65xx_asl(c, c->A);\ngoto fetch_next;", None)
-OP_ASL_M = ("ASL", M_RW, "c->CI = C_ASL_RMW;", 'RMW')  # M_RW - separate _FETCH
+OP_ASL_M = ("ASL", M_RW, "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI = C_ASL_RMW;", 'RMW')  # Set up dummy write and jump to RMW
 OP_LSR_A = ("LSR", M___, "c->A = _fam65xx_lsr(c, c->A);\ngoto fetch_next;", None)
-OP_LSR_M = ("LSR", M_RW, "c->CI = C_LSR_RMW;", 'RMW')  # M_RW - separate _FETCH
+OP_LSR_M = ("LSR", M_RW, "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI = C_LSR_RMW;", 'RMW')  # Set up dummy write and jump to RMW
 OP_ROL_A = ("ROL", M___, "c->A = _fam65xx_rol(c, c->A);\ngoto fetch_next;", None)
-OP_ROL_M = ("ROL", M_RW, "c->CI = C_ROL_RMW;", 'RMW')  # M_RW - separate _FETCH
+OP_ROL_M = ("ROL", M_RW, "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI = C_ROL_RMW;", 'RMW')  # Set up dummy write and jump to RMW
 OP_ROR_A = ("ROR", M___, "c->A = _fam65xx_ror(c, c->A);\ngoto fetch_next;", None)
-OP_ROR_M = ("ROR", M_RW, "c->CI = C_ROR_RMW;", 'RMW')  # M_RW - separate _FETCH
-OP_INC_M = ("INC", M_RW, "c->CI = C_INC_RMW;", 'RMW')  # M_RW - separate _FETCH
-OP_DEC_M = ("DEC", M_RW, "c->CI = C_DEC_RMW;", 'RMW')  # M_RW - separate _FETCH
+OP_ROR_M = ("ROR", M_RW, "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI = C_ROR_RMW;", 'RMW')  # Set up dummy write and jump to RMW
+OP_INC_M = ("INC", M_RW, "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI = C_INC_RMW;", 'RMW')  # Set up dummy write and jump to RMW
+OP_DEC_M = ("DEC", M_RW, "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI = C_DEC_RMW;", 'RMW')  # Set up dummy write and jump to RMW
 
 # NOP variants
 OP_NOP_I = ("NOP", M___, "c->AD = c->PC;\nc->CI = C_NOP_DUMMY;", 'CONT')  # Dummy read of current PC - 2-cycle instruction
@@ -208,12 +208,12 @@ OP_NOP_R = ("NOP", M_R_, "goto fetch_next;", None)      # Read from effective ad
 # Illegal/undocumented instructions
 OP_LAX = ("LAX", M_R_, "c->A = c->X = c->DL;\n_NZ(c->A);\ngoto fetch_next;", None)  # Read and load into A and X - M_R_ immediate fetch
 OP_SAX = ("SAX", M__W, "c->TMP = c->A & c->X;\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\ngoto fetch_next;", None)  # Write A&X to memory - M__W deferred fetch
-OP_SLO = ("SLO", M_RW, "c->CI = C_SLO_RMW;", 'RMW')  # Read memory for RMW - M_RW separate _FETCH
-OP_RLA = ("RLA", M_RW, "c->CI = C_RLA_RMW;", 'RMW')  # Read memory for RMW - M_RW separate _FETCH
-OP_SRE = ("SRE", M_RW, "c->CI = C_SRE_RMW;", 'RMW')  # Read memory for RMW - M_RW separate _FETCH
-OP_RRA = ("RRA", M_RW, "c->CI = C_RRA_RMW;", 'RMW')  # Read memory for RMW - M_RW separate _FETCH
-OP_DCP = ("DCP", M_RW, "c->CI = C_DCP_RMW;", 'RMW')  # Read memory for RMW - M_RW separate _FETCH
-OP_ISC = ("ISC", M_RW, "c->CI = C_ISC_RMW;", 'RMW')  # Read memory for RMW - M_RW separate _FETCH
+OP_SLO = ("SLO", M_RW, "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI = C_SLO_RMW;", 'RMW')  # Set up dummy write and jump to RMW
+OP_RLA = ("RLA", M_RW, "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI = C_RLA_RMW;", 'RMW')  # Set up dummy write and jump to RMW
+OP_SRE = ("SRE", M_RW, "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI = C_SRE_RMW;", 'RMW')  # Set up dummy write and jump to RMW
+OP_RRA = ("RRA", M_RW, "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI = C_RRA_RMW;", 'RMW')  # Set up dummy write and jump to RMW
+OP_DCP = ("DCP", M_RW, "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI = C_DCP_RMW;", 'RMW')  # Set up dummy write and jump to RMW
+OP_ISC = ("ISC", M_RW, "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI = C_ISC_RMW;", 'RMW')  # Set up dummy write and jump to RMW
 OP_ANC = ("ANC", M_R_, "c->A &= c->DL;\n_NZ(c->A);\nc->P = (c->P & ~FAM65XX_CF) | ((c->A & 0x80) ? FAM65XX_CF : 0);\ngoto fetch_next;", None)  # AND with carry flag update - M_R_ immediate fetch
 OP_ASR = ("ASR", M_R_, "c->A &= c->DL;\nc->P = (c->P & ~FAM65XX_CF) | (c->A & 1);\nc->A>>=1;\n_NZ(c->A);\ngoto fetch_next;", None)  # AND then LSR - M_R_ immediate fetch
 OP_ARR = ("ARR", M_R_, "c->A = (c->A & c->DL) >> 1 | (c->P & FAM65XX_CF ? 0x80 : 0);\n_NZ(c->A);\nc->P = (c->P & ~(FAM65XX_CF | FAM65XX_VF)) | ((c->A & 0x40) ? FAM65XX_CF : 0) | ((c->A & 0x20) ^ (c->A & 0x40) ? FAM65XX_VF : 0);\ngoto fetch_next;", None)  # AND then ROR - M_R_ immediate fetch
@@ -233,66 +233,53 @@ OP_JAM = ("JAM", M_R_, "c->PC--;\nc->CI = C_JAM;", 'CONT')  # Read byte after op
 #-------------------------------------------------------------------------------
 
 rmw_seqs = {
-    # RMW operations: M_RW memory access means separate cycle for opcode fetch
-    # Each RMW has exactly 3 cycles: dummy write (old value), internal operation, real write (new value)
-    # Final cycle uses new SYNC-based architecture (c->AD = c->PC++; pins |= FAM65XX_SYNC)
+    # RMW operations: Dummy write setup moved to opcode case for proper timing
+    # Each RMW now has exactly 2 cycles: internal operation, real write (new value)
     'ASL': ('ASL_RMW', (
-        "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",
         "c->DL = _fam65xx_asl(c, c->DL);\nc->CI++;",
         "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"
     )),
     'ROL': ('ROL_RMW', (
-        "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",
         "c->DL = _fam65xx_rol(c, c->DL);\nc->CI++;",
         "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"
     )),
     'LSR': ('LSR_RMW', (
-        "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",
         "c->DL = _fam65xx_lsr(c, c->DL);\nc->CI++;",  # Internal computation
         "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"
     )),
     'ROR': ('ROR_RMW', (
-        "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",
         "c->DL = _fam65xx_ror(c, c->DL);\nc->CI++;",
         "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"
     )),
     'DEC': ('DEC_RMW', (
-        "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",
         "c->DL--;\n_NZ(c->DL);\nc->CI++;",
         "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"
     )),
     'INC': ('INC_RMW', (
-        "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",
         "c->DL++;\n_NZ(c->DL);\nc->CI++;",
         "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"
     )),
     'SLO': ('SLO_RMW', (
-        "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",
         "c->DL = _fam65xx_asl(c, c->DL);\nc->A |= c->DL;\n_NZ(c->A);\nc->CI++;",
         "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"
     )),
     'RLA': ('RLA_RMW', (
-        "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",
         "c->DL = _fam65xx_rol(c, c->DL);\nc->A &= c->DL;\n_NZ(c->A);\nc->CI++;",
         "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"
     )),
     'SRE': ('SRE_RMW', (
-        "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",
         "c->DL = _fam65xx_lsr(c, c->DL);\nc->A ^= c->DL;\n_NZ(c->A);\nc->CI++;",
         "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"
     )),
     'RRA': ('RRA_RMW', (
-        "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",
         "c->DL = _fam65xx_ror(c, c->DL);\n_fam65xx_adc(c, c->DL);\nc->CI++;",
         "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"
     )),
     'DCP': ('DCP_RMW', (
-        "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",
         "c->DL--;\n_fam65xx_cmp(c, c->A, c->DL);\nc->CI++;",
         "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"
     )),
     'ISC': ('ISC_RMW', (
-        "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",
         "c->DL++;\n_fam65xx_sbc(c, c->DL);\nc->CI++;",
         "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"
     )),
