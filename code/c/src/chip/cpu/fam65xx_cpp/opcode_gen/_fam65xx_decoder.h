@@ -1194,6 +1194,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->DL = _fam65xx_asl(c, c->DL);
             c->A |= c->DL;
             _NZ(c->A);
+            pins &= ~FAM65XX_RW;
             c->CI++;
             break;
         case C_SLO_RMW + 2:
@@ -1212,6 +1213,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             break;
         case C_ASL_RMW + 1:
             c->DL = _fam65xx_asl(c, c->DL);
+            pins &= ~FAM65XX_RW;
             c->CI++;
             break;
         case C_ASL_RMW + 2:
@@ -1291,6 +1293,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->DL = _fam65xx_rol(c, c->DL);
             c->A &= c->DL;
             _NZ(c->A);
+            pins &= ~FAM65XX_RW;
             c->CI++;
             break;
         case C_RLA_RMW + 2:
@@ -1309,6 +1312,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             break;
         case C_ROL_RMW + 1:
             c->DL = _fam65xx_rol(c, c->DL);
+            pins &= ~FAM65XX_RW;
             c->CI++;
             break;
         case C_ROL_RMW + 2:
@@ -1357,6 +1361,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->DL = _fam65xx_lsr(c, c->DL);
             c->A ^= c->DL;
             _NZ(c->A);
+            pins &= ~FAM65XX_RW;
             c->CI++;
             break;
         case C_SRE_RMW + 2:
@@ -1375,6 +1380,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             break;
         case C_LSR_RMW + 1:
             c->DL = _fam65xx_lsr(c, c->DL);
+            pins &= ~FAM65XX_RW;
             c->CI++;
             break;
         case C_LSR_RMW + 2:
@@ -1428,6 +1434,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_RRA_RMW + 1:
             c->DL = _fam65xx_ror(c, c->DL);
             _fam65xx_adc(c, c->DL);
+            pins &= ~FAM65XX_RW;
             c->CI++;
             break;
         case C_RRA_RMW + 2:
@@ -1446,6 +1453,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             break;
         case C_ROR_RMW + 1:
             c->DL = _fam65xx_ror(c, c->DL);
+            pins &= ~FAM65XX_RW;
             c->CI++;
             break;
         case C_ROR_RMW + 2:
@@ -1500,6 +1508,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_DCP_RMW + 1:
             c->DL--;
             _fam65xx_cmp(c, c->A, c->DL);
+            pins &= ~FAM65XX_RW;
             c->CI++;
             break;
         case C_DCP_RMW + 2:
@@ -1519,6 +1528,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_DEC_RMW + 1:
             c->DL--;
             _NZ(c->DL);
+            pins &= ~FAM65XX_RW;
             c->CI++;
             break;
         case C_DEC_RMW + 2:
@@ -1538,6 +1548,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_ISC_RMW + 1:
             c->DL++;
             _fam65xx_sbc(c, c->DL);
+            pins &= ~FAM65XX_RW;
             c->CI++;
             break;
         case C_ISC_RMW + 2:
@@ -1557,6 +1568,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_INC_RMW + 1:
             c->DL++;
             _NZ(c->DL);
+            pins &= ~FAM65XX_RW;
             c->CI++;
             break;
         case C_INC_RMW + 2:
