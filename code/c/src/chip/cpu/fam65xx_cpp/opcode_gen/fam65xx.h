@@ -95,8 +95,9 @@ enum {
     R_S,         // Stack pointer
     R_P,         // Processor status
     // Internal registers
-    R_DL,        // Data latch
     R_TMP,       // Temporary storage
+    R_DL,        // Data latch
+    R_IR,        // Instruction register
     // 16-bit aligned register pairs (endian-aware)
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
     R_PCL,       // Program counter low (even index for little endian)
@@ -128,25 +129,24 @@ typedef struct {
 
 // Public registers
 // Accessors (c-> required before use) - now endian-compatible
-#define PC    r16[R_PC]   // Program counter (16 bit)
-#define PCL   r8[R_PCL]   // Program counter low
-#define PCH   r8[R_PCH]   // Program counter high
-#define A     r8[R_A]    // Accumulator register
-#define X     r8[R_X]    // X index register
-#define Y     r8[R_Y]    // Y index register
-#define S     r8[R_S]    // Stack pointer
-#define P     r8[R_P]    // Processor status
+#define PC     r16[R_PC]  // Program counter (16 bit)
+#define PCL    r8[R_PCL]  // Program counter low
+#define PCH    r8[R_PCH]  // Program counter high
+#define A      r8[R_A]    // Accumulator register
+#define X      r8[R_X]    // X index register
+#define Y      r8[R_Y]    // Y index register
+#define S      r8[R_S]    // Stack pointer
+#define P      r8[R_P]    // Processor status
 // Internal registers
-#define DL    r8[R_DL]   // Data latch
-#define TMP   r8[R_TMP]  // Temporary storage
-#define AD    r16[R_AD]  // Address data (16 bit)
-#define ADL   r8[R_ADL]  // Address data low
-#define ADH   r8[R_ADH]  // Address data high
-
+#define opcode r8[R_IR]   // Current opcode
+#define DL     r8[R_DL]   // Data latch
+#define TMP    r8[R_TMP]  // Temporary storage
+#define AD     r16[R_AD]  // Address data (16 bit)
+#define ADL    r8[R_ADL]  // Address data low
+#define ADH    r8[R_ADH]  // Address data high
     // Cycle decoder state
-    uint16_t CI;        // Current cycle index
-    uint8_t opcode;     // Current opcode byte (IR: Instruction Register)
-    uint8_t write_src;  // Source register index for writes
+    uint16_t CI;          // Current cycle index
+    uint8_t write_src;    // Source register index for writes
 
     // Memory callbacks
     fam65xx_mem_read_t mem_read;
