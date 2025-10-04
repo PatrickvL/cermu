@@ -45,30 +45,28 @@ AM_ABS = ("ABS", "absolute", "ADDR_ABS", (
 
 AM_ABX = ("ABX", "absolute,X", "ADDR_ABX", (
     "c->AD = c->PC++;\nc->CI++;",
-    "c->ADL = c->DL;\nc->AD = c->PC++;\nc->CI++;",
-    "c->ADH = c->DL;\nif ((c->ADL + c->X) > 0xFF) { c->AD += c->X; c->CI = c->opcode; } else { c->AD = c->ADL | (c->ADH << 8); c->CI++; }",
-    "c->AD += c->X;\nc->CI = c->opcode;"
+    "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI++;",
+    "{ uint16_t sum = c->TMP + c->X; if (sum > 0xFF) { c->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8); c->CI = c->opcode; } else { c->AD = sum | (c->DL << 8); c->CI++; } }",
+    "c->CI = c->opcode;"
 ))
 
 AM_ABX_W = ("ABX", "absolute,X (write - always takes extra cycle)", "ADDR_ABX_W", (
     "c->AD = c->PC++;\nc->CI++;",
-    "c->ADL = c->DL;\nc->AD = c->PC++;\nc->CI++;",
-    "c->ADH = c->DL;\nc->CI++;",
-    "c->TMP = c->ADL + c->X;\nc->AD = c->TMP | ((c->ADH + (c->TMP >> 8)) << 8);\nc->CI = c->opcode;"
+    "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI++;",
+    "{ uint16_t sum = c->TMP + c->X; c->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8); c->CI = c->opcode; }"
 ))
 
 AM_ABY = ("ABY", "absolute,Y", "ADDR_ABY", (
     "c->AD = c->PC++;\nc->CI++;",
-    "c->ADL = c->DL;\nc->AD = c->PC++;\nc->CI++;",
-    "c->ADH = c->DL;\nif ((c->ADL + c->Y) > 0xFF) { c->AD += c->Y; c->CI = c->opcode; } else { c->AD = c->ADL | (c->ADH << 8); c->CI++; }",
-    "c->AD += c->Y;\nc->CI = c->opcode;"
+    "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI++;",
+    "{ uint16_t sum = c->TMP + c->Y; if (sum > 0xFF) { c->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8); c->CI = c->opcode; } else { c->AD = sum | (c->DL << 8); c->CI++; } }",
+    "c->CI = c->opcode;"
 ))
 
 AM_ABY_W = ("ABY", "absolute,Y (write - always takes extra cycle)", "ADDR_ABY_W", (
     "c->AD = c->PC++;\nc->CI++;",
-    "c->ADL = c->DL;\nc->AD = c->PC++;\nc->CI++;",
-    "c->ADH = c->DL;\nc->CI++;",
-    "c->TMP = c->ADL + c->Y;\nc->AD = c->TMP | ((c->ADH + (c->TMP >> 8)) << 8);\nc->CI = c->opcode;"
+    "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI++;",
+    "{ uint16_t sum = c->TMP + c->Y; c->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8); c->CI = c->opcode; }"
 ))
 
 AM_IDX = ("IDX", "indexed indirect (zp,X)", "ADDR_IDX", (
@@ -245,68 +243,57 @@ rmw_seqs = {
     )),
     'ROL': ('ROL_RMW', (
         "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Dummy write original value
-        "c->DL = _fam65xx_rol(c, c->DL);\npins &= ~FAM65XX_RW;\nc->CI++;",  # Internal computation + prepare write
-        "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Real write modified value
+        "c->DL = _fam65xx_rol(c, c->DL);\nc->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Internal computation + real write
         "goto fetch_next;"                                       # Complete instruction
     )),
     'LSR': ('LSR_RMW', (
         "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Dummy write original value
-        "c->DL = _fam65xx_lsr(c, c->DL);\npins &= ~FAM65XX_RW;\nc->CI++;",  # Internal computation + prepare write
-        "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Real write modified value
+        "c->DL = _fam65xx_lsr(c, c->DL);\nc->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Internal computation + real write
         "goto fetch_next;"                                       # Complete instruction
     )),
     'ROR': ('ROR_RMW', (
         "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Dummy write original value
-        "c->DL = _fam65xx_ror(c, c->DL);\npins &= ~FAM65XX_RW;\nc->CI++;",  # Internal computation + prepare write
-        "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Real write modified value
+        "c->DL = _fam65xx_ror(c, c->DL);\nc->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Internal computation + real write
         "goto fetch_next;"                                       # Complete instruction
     )),
     'DEC': ('DEC_RMW', (
         "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Dummy write original value
-        "c->DL--;\n_NZ(c->DL);\npins &= ~FAM65XX_RW;\nc->CI++;",  # Internal computation + prepare write
-        "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Real write modified value
+        "c->DL--;\n_NZ(c->DL);\nc->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Internal computation + real write
         "goto fetch_next;"                                       # Complete instruction
     )),
     'INC': ('INC_RMW', (
         "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Dummy write original value
-        "c->DL++;\n_NZ(c->DL);\npins &= ~FAM65XX_RW;\nc->CI++;",  # Internal computation + prepare write
-        "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Real write modified value
+        "c->DL++;\n_NZ(c->DL);\nc->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Internal computation + real write
         "goto fetch_next;"                                       # Complete instruction
     )),
     'SLO': ('SLO_RMW', (
         "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Dummy write original value
-        "c->DL = _fam65xx_asl(c, c->DL);\nc->A |= c->DL;\n_NZ(c->A);\npins &= ~FAM65XX_RW;\nc->CI++;",  # Internal computation + prepare write
-        "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Real write modified value
+        "c->DL = _fam65xx_asl(c, c->DL);\nc->A |= c->DL;\n_NZ(c->A);\nc->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Internal computation + real write
         "goto fetch_next;"                                       # Complete instruction
     )),
     'RLA': ('RLA_RMW', (
         "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Dummy write original value
-        "c->DL = _fam65xx_rol(c, c->DL);\nc->A &= c->DL;\n_NZ(c->A);\npins &= ~FAM65XX_RW;\nc->CI++;",  # Internal computation + prepare write
-        "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Real write modified value
+        "c->DL = _fam65xx_rol(c, c->DL);\nc->A &= c->DL;\n_NZ(c->A);\nc->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Internal computation + real write
         "goto fetch_next;"                                       # Complete instruction
     )),
     'SRE': ('SRE_RMW', (
         "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Dummy write original value
-        "c->DL = _fam65xx_lsr(c, c->DL);\nc->A ^= c->DL;\n_NZ(c->A);\npins &= ~FAM65XX_RW;\nc->CI++;",  # Internal computation + prepare write
-        "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Real write modified value
+        "c->DL = _fam65xx_lsr(c, c->DL);\nc->A ^= c->DL;\n_NZ(c->A);\nc->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Internal computation + real write
         "goto fetch_next;"                                       # Complete instruction
     )),
     'RRA': ('RRA_RMW', (
         "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Dummy write original value
-        "c->DL = _fam65xx_ror(c, c->DL);\n_fam65xx_adc(c, c->DL);\npins &= ~FAM65XX_RW;\nc->CI++;",  # Internal computation + prepare write
-        "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Real write modified value
+        "c->DL = _fam65xx_ror(c, c->DL);\n_fam65xx_adc(c, c->DL);\nc->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Internal computation + real write
         "goto fetch_next;"                                       # Complete instruction
     )),
     'DCP': ('DCP_RMW', (
         "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Dummy write original value
-        "c->DL--;\n_fam65xx_cmp(c, c->A, c->DL);\npins &= ~FAM65XX_RW;\nc->CI++;",  # Internal computation + prepare write
-        "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Real write modified value
+        "c->DL--;\n_fam65xx_cmp(c, c->A, c->DL);\nc->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Internal computation + real write
         "goto fetch_next;"                                       # Complete instruction
     )),
     'ISC': ('ISC_RMW', (
         "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Dummy write original value
-        "c->DL++;\n_fam65xx_sbc(c, c->DL);\npins &= ~FAM65XX_RW;\nc->CI++;",  # Internal computation + prepare write
-        "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Real write modified value
+        "c->DL++;\n_fam65xx_sbc(c, c->DL);\nc->write_src = R_DL;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Internal computation + real write
         "goto fetch_next;"                                       # Complete instruction
     )),
 }
