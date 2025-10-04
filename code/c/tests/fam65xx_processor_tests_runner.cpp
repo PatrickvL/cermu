@@ -7,6 +7,7 @@
 #include <chrono>
 #include <iomanip>
 #include <bitset>
+#include <cstring>
 
 extern "C" {
 #include "json_parser.h"
@@ -17,16 +18,21 @@ extern "C" {
 
 namespace fs = std::filesystem;
 
-// Simple test harness class for ProcessorTests using fam65xx.h
-class ProcessorTestHarness {
+// Consolidated test harness combining C++ reliability with C optimizations
+class ConsolidatedProcessorTestHarness {
 private:
     fam65xx_t cpu;
     uint8_t memory[65536];
     uint32_t cycle_count;
     
-    // Memory callbacks for fam65xx.h
+    // Performance optimizations from C version
+    uint16_t dirty_memory_regions[256];  // Track which memory pages are dirty
+    uint8_t dirty_region_count;
+    bool memory_tracking_enabled;
+    
+    // Memory callbacks - reliable approach from C++ version
     static uint8_t mem_read(void* user_data, uint16_t addr, uint8_t bus_state) {
-        ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(user_data);
+        ConsolidatedProcessorTestHarness* harness = static_cast<ConsolidatedProcessorTestHarness*>(user_data);
         uint8_t value = harness->memory[addr];
         extern bool verbose_output;
         if (verbose_output) {
@@ -36,20 +42,42 @@ private:
     }
     
     static void mem_write(void* user_data, uint16_t addr, uint8_t data) {
-        ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(user_data);
+        ConsolidatedProcessorTestHarness* harness = static_cast<ConsolidatedProcessorTestHarness*>(user_data);
         extern bool verbose_output;
         if (verbose_output) {
             std::cout << "    MEM_WRITE: addr=0x" << std::hex << addr << ", data=0x" << (int)data << std::dec << std::endl;
         }
         harness->memory[addr] = data;
+        
+        // Mark memory page as dirty for optimization
+        harness->mark_memory_page_dirty(addr);
+    }
+
+    // Mark memory page as dirty for selective clearing (C version optimization)
+    void mark_memory_page_dirty(uint16_t addr) {
+        if (!memory_tracking_enabled) return;
+        
+        uint16_t page = addr >> 8;
+        
+        // Check if page is already marked dirty
+        for (uint8_t i = 0; i < dirty_region_count; i++) {
+            if (dirty_memory_regions[i] == page) {
+                return; // Already marked
+            }
+        }
+        
+        // Add new dirty page if we have space
+        if (dirty_region_count < 256) {
+            dirty_memory_regions[dirty_region_count++] = page;
+        }
     }
 
 public:
-    ProcessorTestHarness() : cycle_count(0) {
-        // Clear memory
+    ConsolidatedProcessorTestHarness() : cycle_count(0), dirty_region_count(0), memory_tracking_enabled(true) {
+        // Clear memory (optimized approach from C version)
         std::fill(memory, memory + 65536, 0);
         
-        // Initialize CPU with memory callbacks
+        // Initialize CPU with memory callbacks (reliable C++ approach)
         fam65xx_desc_t desc = {};
         desc.mem_read = mem_read;
         desc.mem_write = mem_write;
@@ -58,12 +86,39 @@ public:
         uint64_t pins = fam65xx_init(&cpu, &desc);
         
         // ProcessorTests expects CPU to be ready for immediate execution
-        // No reset sequence - the CPU should be initialized in a state
-        // where it can directly execute instructions starting with _FETCH()
         cycle_count = 0;
     }
     
-    // CPU state accessors
+    // Fast memory clearing - only clear regions that were actually used (C version optimization)
+    void clear_dirty_memory_regions() {
+        if (!memory_tracking_enabled) {
+            std::fill(memory, memory + 65536, 0);
+            return;
+        }
+        
+        for (uint8_t i = 0; i < dirty_region_count; i++) {
+            uint16_t page = dirty_memory_regions[i];
+            std::fill(&memory[page << 8], &memory[(page << 8) + 256], 0);
+        }
+        dirty_region_count = 0;
+    }
+    
+    // Setup memory for new test with optimizations
+    void setup_memory_for_test(const cpu_state_t* initial) {
+        // Clear only previously used memory regions for performance
+        clear_dirty_memory_regions();
+        
+        // Set up memory from RAM entries and track dirty pages
+        for (int i = 0; i < initial->ram_count; i++) {
+            uint16_t addr = initial->ram[i].address;
+            for (int j = 0; j < initial->ram[i].byte_count; j++) {
+                memory[addr + j] = initial->ram[i].bytes[j];
+                mark_memory_page_dirty(addr + j);
+            }
+        }
+    }
+    
+    // CPU state accessors (C++ version approach)
     void set_pc(uint16_t pc) { fam65xx_set_pc(&cpu, pc); }
     void set_a(uint8_t a) { fam65xx_set_a(&cpu, a); }
     void set_x(uint8_t x) { fam65xx_set_x(&cpu, x); }
@@ -79,14 +134,17 @@ public:
     uint8_t get_status() const { return fam65xx_p(const_cast<fam65xx_t*>(&cpu)); }
     
     // Memory access
-    void set_memory(uint16_t addr, uint8_t data) { memory[addr] = data; }
+    void set_memory(uint16_t addr, uint8_t data) { 
+        memory[addr] = data; 
+        mark_memory_page_dirty(addr);
+    }
     uint8_t get_memory(uint16_t addr) const { return memory[addr]; }
     
     // Cycle counting
     uint32_t get_cycle_count() const { return cycle_count; }
     void reset_cycle_count() { cycle_count = 0; }
     
-    // Execute one instruction
+    // Execute one instruction - reliable C++ approach
     bool step() {
         try {
             uint32_t max_cycles = 100; // Safety limit
@@ -128,46 +186,45 @@ public:
     }
 };
 
-struct TestResults {
+// Test results tracking with enhanced statistics (C version features)
+struct ConsolidatedTestResults {
     uint32_t total_tests = 0;
     uint32_t passed_tests = 0;
+    uint32_t failed_tests = 0;
+    uint32_t cycle_mismatches = 0;
+    uint32_t state_mismatches = 0;
     uint32_t opcode_failures[256] = {0};
     uint32_t opcode_totals[256] = {0};
 };
 
+// Global variables with enhanced options (C version features)
 bool verbose_output = false;
-static TestResults results;
+static bool g_quiet_mode = false;
+static bool g_stop_on_failure = true;
+static bool g_test_failed = false;
+static ConsolidatedTestResults results;
 
-// Run a single ProcessorTests test case
-bool run_processor_test(const processor_test_t* test) {
+// Run a single test with consolidated best practices
+bool run_consolidated_processor_test(const processor_test_t* test) {
     results.total_tests++;
     
     if (verbose_output) {
-        std::cout << "Running test: " << test->name << " on fam65xx.h" << std::endl;
+        std::cout << "Running test: " << test->name << " on fam65xx.h (consolidated)" << std::endl;
     }
     
-    // Create test harness
-    ProcessorTestHarness harness;
+    // Create test harness with optimizations
+    ConsolidatedProcessorTestHarness harness;
     
-    // Setup memory from initial state
-    for (uint8_t i = 0; i < test->initial.ram_count; i++) {
-        uint16_t addr = test->initial.ram[i].address;
-        for (uint8_t j = 0; j < test->initial.ram[i].byte_count; j++) {
-            harness.set_memory(addr + j, test->initial.ram[i].bytes[j]);
-        }
-    }
+    // Setup memory with performance optimizations
+    harness.setup_memory_for_test(&test->initial);
     
-    // Set initial CPU state
+    // Set initial CPU state (C++ reliable approach)
     harness.set_pc(test->initial.pc);
     harness.set_a(test->initial.a);
     harness.set_x(test->initial.x);
     harness.set_y(test->initial.y);
     harness.set_sp(test->initial.s);
     harness.set_status(test->initial.p);
-    
-    // CRITICAL: Set up CPU for fetch at the test PC
-    // This ensures the first tick will read the opcode from the correct address
-    // and trigger SYNC processing
     
     // Get the opcode for tracking
     uint16_t pc_addr = test->initial.pc;
@@ -179,7 +236,7 @@ bool run_processor_test(const processor_test_t* test) {
                   << ": 0x" << std::hex << (int)current_opcode << std::dec << std::endl;
     }
     
-    // Execute one instruction
+    // Execute one instruction (reliable C++ approach)
     uint32_t initial_cycle_count = harness.get_cycle_count();
     
     if (verbose_output) {
@@ -196,75 +253,80 @@ bool run_processor_test(const processor_test_t* test) {
     }
     
     if (!step_result) {
-        if (verbose_output) {
+        if (!g_quiet_mode) {
             std::cout << "FAIL " << test->name << ": Instruction execution failed (opcode 0x"
                       << std::hex << (int)current_opcode << ")" << std::dec << std::endl;
         }
+        results.failed_tests++;
         results.opcode_failures[current_opcode]++;
         return false;
     }
     
-    // Compare CPU state
-    bool passed = true;
+    // Compare CPU state with enhanced reporting
+    bool state_match = true;
+    bool cycle_match = true;
     
+    // Check registers - FAIL messages shown unless in quiet mode (C version feature)
     if (harness.get_pc() != test->final.pc) {
-        if (verbose_output) {
+        if (!g_quiet_mode) {
             std::cout << "FAIL " << test->name << ": PC - expected 0x" << std::hex 
                       << test->final.pc << ", got 0x" << harness.get_pc() << std::dec << std::endl;
         }
-        passed = false;
+        state_match = false;
     }
     if (harness.get_sp() != test->final.s) {
-        if (verbose_output) {
+        if (!g_quiet_mode) {
             std::cout << "FAIL " << test->name << ": SP - expected 0x" << std::hex 
                       << (int)test->final.s << ", got 0x" << (int)harness.get_sp() << std::dec << std::endl;
         }
-        passed = false;
+        state_match = false;
     }
     if (harness.get_a() != test->final.a) {
-        if (verbose_output) {
+        if (!g_quiet_mode) {
             std::cout << "FAIL " << test->name << ": A - expected 0x" << std::hex 
                       << (int)test->final.a << ", got 0x" << (int)harness.get_a() << std::dec << std::endl;
         }
-        passed = false;
+        state_match = false;
     }
     if (harness.get_x() != test->final.x) {
-        if (verbose_output) {
+        if (!g_quiet_mode) {
             std::cout << "FAIL " << test->name << ": X - expected 0x" << std::hex 
                       << (int)test->final.x << ", got 0x" << (int)harness.get_x() << std::dec << std::endl;
         }
-        passed = false;
+        state_match = false;
     }
     if (harness.get_y() != test->final.y) {
-        if (verbose_output) {
+        if (!g_quiet_mode) {
             std::cout << "FAIL " << test->name << ": Y - expected 0x" << std::hex 
                       << (int)test->final.y << ", got 0x" << (int)harness.get_y() << std::dec << std::endl;
         }
-        passed = false;
+        state_match = false;
     }
     if (harness.get_status() != test->final.p) {
-        if (verbose_output) {
+        if (!g_quiet_mode) {
             std::cout << "FAIL " << test->name << ": P - expected 0x" << std::hex
                       << (int)test->final.p << ", got 0x" << (int)harness.get_status() << std::dec << std::endl;
             
-            // DEBUG: Add detailed flag analysis
-            uint8_t expected = test->final.p;
-            uint8_t actual = harness.get_status();
-            std::cout << "  DEBUG: Expected P=0x" << std::hex << (int)expected << std::endl;
-            std::cout << "  DEBUG: Actual P=0x" << std::hex << (int)actual << std::endl;
-            std::cout << "  DEBUG: Difference=0x" << std::hex << (int)(actual ^ expected) << std::endl;
-            
-            // Flag breakdown
-            std::cout << "  DEBUG: N=" << ((actual & 0x80) ? 1 : 0) << " (exp=" << ((expected & 0x80) ? 1 : 0) << ")" << std::endl;
-            std::cout << "  DEBUG: V=" << ((actual & 0x40) ? 1 : 0) << " (exp=" << ((expected & 0x40) ? 1 : 0) << ")" << std::endl;
-            std::cout << "  DEBUG: U=" << ((actual & 0x20) ? 1 : 0) << " (exp=" << ((expected & 0x20) ? 1 : 0) << ")" << std::endl;
-            std::cout << "  DEBUG: B=" << ((actual & 0x10) ? 1 : 0) << " (exp=" << ((expected & 0x10) ? 1 : 0) << ")" << std::endl;
-            std::cout << "  DEBUG: D=" << ((actual & 0x08) ? 1 : 0) << " (exp=" << ((expected & 0x08) ? 1 : 0) << ")" << std::endl;
-            std::cout << "  DEBUG: I=" << ((actual & 0x04) ? 1 : 0) << " (exp=" << ((expected & 0x04) ? 1 : 0) << ")" << std::endl;
-            std::cout << "  DEBUG: Z=" << ((actual & 0x02) ? 1 : 0) << " (exp=" << ((expected & 0x02) ? 1 : 0) << ")" << std::endl;
-            std::cout << "  DEBUG: C=" << ((actual & 0x01) ? 1 : 0) << " (exp=" << ((expected & 0x01) ? 1 : 0) << ")" << std::endl;
+            // DEBUG: Add detailed flag analysis (C++ version feature)
+            if (verbose_output) {
+                uint8_t expected = test->final.p;
+                uint8_t actual = harness.get_status();
+                std::cout << "  DEBUG: Expected P=0x" << std::hex << (int)expected << std::endl;
+                std::cout << "  DEBUG: Actual P=0x" << std::hex << (int)actual << std::endl;
+                std::cout << "  DEBUG: Difference=0x" << std::hex << (int)(actual ^ expected) << std::endl;
+                
+                // Flag breakdown
+                std::cout << "  DEBUG: N=" << ((actual & 0x80) ? 1 : 0) << " (exp=" << ((expected & 0x80) ? 1 : 0) << ")" << std::endl;
+                std::cout << "  DEBUG: V=" << ((actual & 0x40) ? 1 : 0) << " (exp=" << ((expected & 0x40) ? 1 : 0) << ")" << std::endl;
+                std::cout << "  DEBUG: U=" << ((actual & 0x20) ? 1 : 0) << " (exp=" << ((expected & 0x20) ? 1 : 0) << ")" << std::endl;
+                std::cout << "  DEBUG: B=" << ((actual & 0x10) ? 1 : 0) << " (exp=" << ((expected & 0x10) ? 1 : 0) << ")" << std::endl;
+                std::cout << "  DEBUG: D=" << ((actual & 0x08) ? 1 : 0) << " (exp=" << ((expected & 0x08) ? 1 : 0) << ")" << std::endl;
+                std::cout << "  DEBUG: I=" << ((actual & 0x04) ? 1 : 0) << " (exp=" << ((expected & 0x04) ? 1 : 0) << ")" << std::endl;
+                std::cout << "  DEBUG: Z=" << ((actual & 0x02) ? 1 : 0) << " (exp=" << ((expected & 0x02) ? 1 : 0) << ")" << std::endl;
+                std::cout << "  DEBUG: C=" << ((actual & 0x01) ? 1 : 0) << " (exp=" << ((expected & 0x01) ? 1 : 0) << ")" << std::endl;
+            }
         }
-        passed = false;
+        state_match = false;
     }
     
     // Compare memory state
@@ -275,43 +337,77 @@ bool run_processor_test(const processor_test_t* test) {
             uint8_t actual_value = harness.get_memory(addr + j);
             
             if (actual_value != expected_value) {
-                if (verbose_output) {
+                if (!g_quiet_mode) {
                     std::cout << "FAIL " << test->name << ": Memory[0x" << std::hex << (addr + j) 
                               << "] - expected 0x" << (int)expected_value 
                               << ", got 0x" << (int)actual_value << std::dec << std::endl;
                 }
-                passed = false;
+                state_match = false;
             }
         }
     }
     
     // Check cycle count if provided
     if (test->final.has_cycles && cycles_executed != test->final.cycles) {
-        if (verbose_output) {
+        if (!g_quiet_mode) {
             std::cout << "FAIL " << test->name << ": Cycles - expected " << test->final.cycles 
                       << ", got " << cycles_executed << std::endl;
         }
-        passed = false;
+        cycle_match = false;
+        results.cycle_mismatches++;
     }
     
-    if (passed) {
+    if (state_match && cycle_match) {
         results.passed_tests++;
         if (verbose_output) {
             std::cout << "PASS " << test->name << " (opcode 0x" << std::hex
                       << (int)current_opcode << ")" << std::dec << std::endl;
         }
+        return true;
     } else {
+        results.failed_tests++;
+        if (!state_match) results.state_mismatches++;
         results.opcode_failures[current_opcode]++;
+        
+        // Set global failure flag for stop-on-failure mode
+        g_test_failed = true;
+        
+        // Enhanced failure reporting (C version feature)
+        if (g_stop_on_failure && !g_quiet_mode) {
+            std::cout << "\n=== FIRST FAILURE DETECTED - STOPPING EXECUTION ===\n";
+            std::cout << "Failed test: " << test->name << "\n";
+            std::cout << "Opcode: 0x" << std::hex << (int)current_opcode << std::dec << "\n";
+            
+            if (!state_match) {
+                std::cout << "State mismatches detected:\n";
+                if (harness.get_pc() != test->final.pc) {
+                    std::cout << "  PC: expected 0x" << std::hex << test->final.pc 
+                              << ", got 0x" << harness.get_pc() << " (diff: " << std::dec 
+                              << ((int)harness.get_pc() - (int)test->final.pc) << ")\n";
+                }
+            }
+            
+            if (!cycle_match && test->final.has_cycles) {
+                std::cout << "Cycle mismatch:\n";
+                std::cout << "  Expected: " << test->final.cycles << " cycles, Got: " 
+                          << cycles_executed << " cycles (diff: " 
+                          << ((int)cycles_executed - (int)test->final.cycles) << ")\n";
+            }
+            
+            std::cout << "\nUse --continue flag to run through all tests despite failures.\n";
+        }
+        
         if (verbose_output) {
             std::cout << "FAIL " << test->name << ": State mismatch (opcode 0x"
                       << std::hex << (int)current_opcode << ")" << std::dec << std::endl;
         }
+        
+        return false;
     }
-    
-    return passed;
 }
 
-bool run_tests_from_file(const std::string& filepath) {
+// File processing with enhanced error handling (combined approach)
+bool process_consolidated_test_file(const std::string& filepath) {
     std::ifstream file(filepath);
     if (!file.is_open()) {
         std::cout << "ERROR: Could not open file: " << filepath << std::endl;
@@ -323,7 +419,7 @@ bool run_tests_from_file(const std::string& filepath) {
                             std::istreambuf_iterator<char>());
     file.close();
     
-    // Parse JSON - handle both single tests and arrays
+    // Parse JSON - handle both single tests and arrays (C++ approach)
     const char* pos = json_content.c_str();
     pos = json_skip_whitespace(pos);
     
@@ -347,7 +443,12 @@ bool run_tests_from_file(const std::string& filepath) {
                 // Parse and run the test
                 processor_test_t test;
                 if (json_parse_processor_test(test_json.c_str(), &test)) {
-                    run_processor_test(&test);
+                    run_consolidated_processor_test(&test);
+                    
+                    // Check if we should stop on failure (C version feature)
+                    if (g_stop_on_failure && g_test_failed) {
+                        return false;
+                    }
                 } else {
                     std::cout << "ERROR: Failed to parse test in file: " << filepath << std::endl;
                 }
@@ -365,7 +466,12 @@ bool run_tests_from_file(const std::string& filepath) {
         // Single test
         processor_test_t test;
         if (json_parse_processor_test(json_content.c_str(), &test)) {
-            run_processor_test(&test);
+            run_consolidated_processor_test(&test);
+            
+            // Check if we should stop on failure
+            if (g_stop_on_failure && g_test_failed) {
+                return false;
+            }
         } else {
             std::cout << "ERROR: Failed to parse test in file: " << filepath << std::endl;
         }
@@ -374,12 +480,20 @@ bool run_tests_from_file(const std::string& filepath) {
     return true;
 }
 
-void run_tests_from_directory(const std::string& dirpath) {
+// Directory processing with enhanced features
+void process_consolidated_directory(const std::string& dirpath) {
     try {
         for (const auto& entry : fs::recursive_directory_iterator(dirpath)) {
             if (entry.is_regular_file() && entry.path().extension() == ".json") {
-                std::cout << "Processing file: " << entry.path() << std::endl;
-                run_tests_from_file(entry.path().string());
+                if (!g_quiet_mode) {
+                    std::cout << "Processing file: " << entry.path() << std::endl;
+                }
+                process_consolidated_test_file(entry.path().string());
+                
+                // Check if we should stop on failure
+                if (g_stop_on_failure && g_test_failed) {
+                    return;
+                }
             }
         }
     } catch (const fs::filesystem_error& ex) {
@@ -388,81 +502,47 @@ void run_tests_from_directory(const std::string& dirpath) {
     }
 }
 
-void print_usage(const char* program_name) {
-    std::cout << "fam65xx.h ProcessorTests Runner - Hardware-verified test validation\n";
+// Enhanced usage information (C version features)
+void print_consolidated_usage(const char* program_name) {
+    std::cout << "Consolidated fam65xx ProcessorTests Runner - Hardware-verified test validation\n";
     std::cout << "Usage: " << program_name << " [options] <test_file_or_directory>\n";
-    std::cout << "Options:\n";
-    std::cout << "  -v, --verbose    Enable verbose output\n";
-    std::cout << "  -h, --help       Show this help message\n";
-    std::cout << "\n";
-    std::cout << "Examples:\n";
-    std::cout << "  " << program_name << " processor_tests/6502/v1/\n";
-    std::cout << "  " << program_name << " -v processor_tests/6502/v1/69.json\n";
+    std::cout << "\nTest Execution Options:\n";
+    std::cout << "  -v, --verbose      Enable verbose output with detailed execution logs\n";
+    std::cout << "  -q, --quiet        Quiet mode - only show final summary (no individual test failures)\n";
+    std::cout << "  -c, --continue     Continue testing after failures (default: stop on first failure)\n";
+    std::cout << "  -s, --stop-first   Stop on first failure (default behavior)\n";
+    std::cout << "  -h, --help         Show this help message\n";
+    std::cout << "\nExamples:\n";
+    std::cout << "  " << program_name << " processor_tests/6502/v1/                    # Run all tests in directory\n";
+    std::cout << "  " << program_name << " -v processor_tests/6502/v1/69.json         # Single test with verbose output\n";
+    std::cout << "  " << program_name << " -q -c processor_tests/6502/v1/             # Quiet mode, continue on failures\n";
+    std::cout << "\nFeatures:\n";
+    std::cout << "  ✓ Reliable CPU execution (C++ approach)\n";
+    std::cout << "  ✓ Performance optimizations (C approach)\n";
+    std::cout << "  ✓ Enhanced error reporting\n";
+    std::cout << "  ✓ Memory usage optimization\n";
+    std::cout << "  ✓ ProcessorTests JSON compatibility\n";
+    std::cout << "  ✓ Hardware-accurate timing validation\n";
 }
 
-int main(int argc, char* argv[]) {
-    if (argc < 2) {
-        print_usage(argv[0]);
-        return 1;
-    }
-    
-    std::vector<std::string> test_paths;
-    
-    // Parse command line arguments
-    for (int i = 1; i < argc; i++) {
-        std::string arg = argv[i];
-        if (arg == "-v" || arg == "--verbose") {
-            verbose_output = true;
-        } else if (arg == "-h" || arg == "--help") {
-            print_usage(argv[0]);
-            return 0;
-        } else {
-            test_paths.push_back(arg);
-        }
-    }
-    
-    if (test_paths.empty()) {
-        std::cout << "ERROR: No test file or directory specified\n";
-        print_usage(argv[0]);
-        return 1;
-    }
-    
-    std::cout << "=== fam65xx.h ProcessorTests Runner ===\n";
-    std::cout << "Test paths: " << test_paths.size() << " specified\n";
-    std::cout << "Verbose: " << (verbose_output ? "enabled" : "disabled") << "\n\n";
-    
-    auto start_time = std::chrono::high_resolution_clock::now();
-    
-    // Process all test paths
-    for (const auto& test_path : test_paths) {
-        std::cout << "Processing test path: " << test_path << std::endl;
-        
-        try {
-            if (fs::is_directory(test_path)) {
-                run_tests_from_directory(test_path);
-            } else if (fs::is_regular_file(test_path)) {
-                run_tests_from_file(test_path);
-            } else {
-                std::cout << "ERROR: Invalid path: " << test_path << std::endl;
-            }
-        } catch (const fs::filesystem_error& ex) {
-            std::cout << "ERROR: Could not access path: " << test_path 
-                      << " (" << ex.what() << ")" << std::endl;
-        }
-    }
-    
-    auto end_time = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-    
-    std::cout << "\n=== TEST SUMMARY for fam65xx.h ===\n";
+// Enhanced results printing (C version features)
+void print_consolidated_results() {
+    std::cout << "\n=== CONSOLIDATED FAM65XX PROCESSOR TESTS RESULTS ===\n";
     std::cout << "Total tests run: " << results.total_tests << "\n";
     std::cout << "Tests passed: " << results.passed_tests << "\n";
-    std::cout << "Tests failed: " << (results.total_tests - results.passed_tests) << "\n";
-    std::cout << "Execution time: " << duration.count() << " ms\n";
+    std::cout << "Tests failed: " << results.failed_tests << "\n";
     
-    // Print opcode failure summary
-    if (results.total_tests - results.passed_tests > 0) {
-        std::cout << "\n=== FAILURE BREAKDOWN BY OPCODE ===\n";
+    if (results.total_tests > 0) {
+        double pass_rate = (double)results.passed_tests / results.total_tests * 100.0;
+        std::cout << "Pass rate: " << std::fixed << std::setprecision(2) << pass_rate << "%\n";
+    }
+    
+    if (results.failed_tests > 0) {
+        std::cout << "\nFailure breakdown:\n";
+        std::cout << "State mismatches: " << results.state_mismatches << "\n";
+        std::cout << "Cycle mismatches: " << results.cycle_mismatches << "\n";
+        
+        std::cout << "\nFailing opcodes:\n";
         uint32_t failing_opcodes = 0;
         for (int i = 0; i < 256; i++) {
             if (results.opcode_failures[i] > 0) {
@@ -475,15 +555,95 @@ int main(int argc, char* argv[]) {
         std::cout << "Total failing opcodes: " << failing_opcodes << "\n";
     }
     
+    if (results.passed_tests == results.total_tests) {
+        std::cout << "\n🎉 ALL TESTS PASSED - fam65xx is hardware-accurate! 🎉\n";
+    } else {
+        std::cout << "\n❌ SOME TESTS FAILED - implementation differs from hardware\n";
+    }
+}
+
+// Main function with consolidated features
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        print_consolidated_usage(argv[0]);
+        return 1;
+    }
+    
+    std::vector<std::string> test_paths;
+    
+    // Parse command line arguments (enhanced C version approach)
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg == "-v" || arg == "--verbose") {
+            verbose_output = true;
+        } else if (arg == "-q" || arg == "--quiet") {
+            g_quiet_mode = true;
+        } else if (arg == "-c" || arg == "--continue") {
+            g_stop_on_failure = false;
+        } else if (arg == "-s" || arg == "--stop-first") {
+            g_stop_on_failure = true;
+        } else if (arg == "-h" || arg == "--help") {
+            print_consolidated_usage(argv[0]);
+            return 0;
+        } else {
+            test_paths.push_back(arg);
+        }
+    }
+    
+    if (test_paths.empty()) {
+        std::cout << "ERROR: No test file or directory specified\n";
+        print_consolidated_usage(argv[0]);
+        return 1;
+    }
+    
+    std::cout << "=== Consolidated fam65xx ProcessorTests Runner ===\n";
+    std::cout << "Test paths: " << test_paths.size() << " specified\n";
+    std::cout << "Verbose: " << (verbose_output ? "enabled" : "disabled") << "\n";
+    std::cout << "Quiet mode: " << (g_quiet_mode ? "enabled" : "disabled") << "\n";
+    std::cout << "Stop on failure: " << (g_stop_on_failure ? "enabled" : "disabled") << "\n\n";
+    
+    auto start_time = std::chrono::high_resolution_clock::now();
+    
+    // Process all test paths
+    for (const auto& test_path : test_paths) {
+        if (!g_quiet_mode) {
+            std::cout << "Processing test path: " << test_path << std::endl;
+        }
+        
+        try {
+            if (fs::is_directory(test_path)) {
+                process_consolidated_directory(test_path);
+            } else if (fs::is_regular_file(test_path)) {
+                process_consolidated_test_file(test_path);
+            } else {
+                std::cout << "ERROR: Invalid path: " << test_path << std::endl;
+            }
+        } catch (const fs::filesystem_error& ex) {
+            std::cout << "ERROR: Could not access path: " << test_path 
+                      << " (" << ex.what() << ")" << std::endl;
+        }
+        
+        // Check if we should stop on failure
+        if (g_stop_on_failure && g_test_failed) {
+            break;
+        }
+    }
+    
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    
+    std::cout << "\nExecution time: " << duration.count() << " ms\n";
+    print_consolidated_results();
+    
     if (results.total_tests == 0) {
         std::cout << "\nNo tests found in specified path!\n";
         return 1;
     } else if (results.passed_tests == results.total_tests) {
-        std::cout << "\nALL TESTS PASSED - fam65xx.h matches ProcessorTests ground truth!\n";
+        std::cout << "\nALL TESTS PASSED - Consolidated fam65xx matches ProcessorTests ground truth!\n";
         return 0;
     } else {
         double pass_rate = (double)results.passed_tests / results.total_tests * 100.0;
-        std::cout << "\nSOME TESTS FAILED - fam65xx.h pass rate: " 
+        std::cout << "\nSOME TESTS FAILED - Consolidated fam65xx pass rate: " 
                   << std::fixed << std::setprecision(1) << pass_rate << "%\n";
         std::cout << "Implementation differs from hardware-verified ground truth\n";
         return 1;
