@@ -54,7 +54,7 @@ AM_ABX_W = ("ABX", "absolute,X (write - always takes extra cycle)", "ADDR_ABX_W"
     "c->AD = c->PC++;\nc->CI++;",
     "c->ADL = c->DL;\nc->AD = c->PC++;\nc->CI++;",
     "c->ADH = c->DL;\nc->CI++;",
-    "c->AD = (c->ADL + c->X) | (c->ADH << 8);\nc->CI = c->opcode;"
+    "c->TMP = c->ADL + c->X;\nc->AD = c->TMP | ((c->ADH + (c->TMP >> 8)) << 8);\nc->CI = c->opcode;"
 ))
 
 AM_ABY = ("ABY", "absolute,Y", "ADDR_ABY", (
@@ -68,7 +68,7 @@ AM_ABY_W = ("ABY", "absolute,Y (write - always takes extra cycle)", "ADDR_ABY_W"
     "c->AD = c->PC++;\nc->CI++;",
     "c->ADL = c->DL;\nc->AD = c->PC++;\nc->CI++;",
     "c->ADH = c->DL;\nc->CI++;",
-    "c->AD = (c->ADL + c->Y) | (c->ADH << 8);\nc->CI = c->opcode;"
+    "c->TMP = c->ADL + c->Y;\nc->AD = c->TMP | ((c->ADH + (c->TMP >> 8)) << 8);\nc->CI = c->opcode;"
 ))
 
 AM_IDX = ("IDX", "indexed indirect (zp,X)", "ADDR_IDX", (

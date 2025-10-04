@@ -1037,7 +1037,8 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI++;
             break;
         case ADDR_SEQ_BASE + ADDR_ABX_W + 3:  // ABX cycle 4
-            c->AD = (c->ADL + c->X) | (c->ADH << 8);
+            c->TMP = c->ADL + c->X;
+            c->AD = c->TMP | ((c->ADH + (c->TMP >> 8)) << 8);
             c->CI = c->opcode;
             break;
 
@@ -1075,7 +1076,8 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI++;
             break;
         case ADDR_SEQ_BASE + ADDR_ABY_W + 3:  // ABY cycle 4
-            c->AD = (c->ADL + c->Y) | (c->ADH << 8);
+            c->TMP = c->ADL + c->Y;
+            c->AD = c->TMP | ((c->ADH + (c->TMP >> 8)) << 8);
             c->CI = c->opcode;
             break;
 
