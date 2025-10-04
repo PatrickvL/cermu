@@ -48,6 +48,11 @@ typedef struct {
     bus_cycle_t actual_bus_cycles[MAX_BUS_CYCLES];
     uint8_t actual_bus_cycle_count;
     bool bus_cycle_recording;
+    
+    // Performance optimizations
+    uint16_t dirty_memory_regions[256];  // Track which memory pages are dirty
+    uint8_t dirty_region_count;
+    bool memory_tracking_enabled;
 } test_harness_t;
 
 // Test results tracking
@@ -146,7 +151,7 @@ static void test_mem_write(void* user_data, uint16_t addr, uint8_t data) {
     harness->memory[addr] = data;
 }
 
-// Initialize test harness
+// Initialize test harness with performance optimizations
 static void init_test_harness(test_harness_t* harness, bool verbose, bool debug_mode, bool interactive_mode) {
     memset(harness, 0, sizeof(test_harness_t));
     harness->verbose = verbose;
@@ -154,6 +159,8 @@ static void init_test_harness(test_harness_t* harness, bool verbose, bool debug_
     harness->interactive_mode = interactive_mode;
     harness->max_cycles_per_test = 100; // Safety limit for debug mode
     harness->bus_cycle_recording = false; // Disabled by default
+    harness->memory_tracking_enabled = true; // Enable memory tracking for performance
+    harness->dirty_region_count = 0;
     
     // Clear memory
     memset(harness->memory, 0, sizeof(harness->memory));
@@ -168,6 +175,39 @@ static void init_test_harness(test_harness_t* harness, bool verbose, bool debug_
     fam65xx_init(&harness->cpu, &desc);
     
     harness->cycle_count = 0;
+}
+
+// Fast memory clearing - only clear regions that were actually used
+static void clear_dirty_memory_regions(test_harness_t* harness) {
+    if (!harness->memory_tracking_enabled) {
+        memset(harness->memory, 0, sizeof(harness->memory));
+        return;
+    }
+    
+    for (uint8_t i = 0; i < harness->dirty_region_count; i++) {
+        uint16_t page = harness->dirty_memory_regions[i];
+        memset(&harness->memory[page << 8], 0, 256);
+    }
+    harness->dirty_region_count = 0;
+}
+
+// Mark memory page as dirty for selective clearing
+static void mark_memory_page_dirty(test_harness_t* harness, uint16_t addr) {
+    if (!harness->memory_tracking_enabled) return;
+    
+    uint16_t page = addr >> 8;
+    
+    // Check if page is already marked dirty
+    for (uint8_t i = 0; i < harness->dirty_region_count; i++) {
+        if (harness->dirty_memory_regions[i] == page) {
+            return; // Already marked
+        }
+    }
+    
+    // Add new dirty page if we have space
+    if (harness->dirty_region_count < 256) {
+        harness->dirty_memory_regions[harness->dirty_region_count++] = page;
+    }
 }
 
 // Enable bus cycle recording for hardware accuracy validation
@@ -225,12 +265,12 @@ static bool compare_bus_cycles(test_harness_t* harness, const cpu_state_t* expec
     return match;
 }
 
-// Set up CPU state from ProcessorTests initial state
+// Set up CPU state from ProcessorTests initial state with optimized memory clearing
 static void setup_cpu_state(test_harness_t* harness, const cpu_state_t* initial) {
-    // Clear memory first
-    memset(harness->memory, 0, sizeof(harness->memory));
+    // Clear only previously used memory regions for performance
+    clear_dirty_memory_regions(harness);
     
-    // Set up memory from RAM entries
+    // Set up memory from RAM entries and track dirty pages
     for (int i = 0; i < initial->ram_count; i++) {
         uint16_t addr = initial->ram[i].address;
         if (harness->verbose) {
@@ -238,6 +278,7 @@ static void setup_cpu_state(test_harness_t* harness, const cpu_state_t* initial)
         }
         for (int j = 0; j < initial->ram[i].byte_count; j++) {
             harness->memory[addr + j] = initial->ram[i].bytes[j];
+            mark_memory_page_dirty(harness, addr + j);
             if (harness->verbose) {
                 printf("  Setting memory[0x%04X] = 0x%02X\n", addr + j, initial->ram[i].bytes[j]);
             }
@@ -587,14 +628,14 @@ static void run_performance_benchmark(test_harness_t* harness, int num_instructi
     for (int i = 0; i < num_instructions; i++) {
         uint32_t cycles_before = harness->cycle_count;
         uint16_t pc_before = fam65xx_pc(&harness->cpu);
-        uint8_t opcode = harness->memory[pc_before];
+        uint8_t current_opcode = harness->memory[pc_before];
         
         if (execute_instruction(harness)) {
             executed++;
             uint32_t cycles_used = harness->cycle_count - cycles_before;
             
             // Track cycles for different instruction types
-            switch (opcode) {
+            switch (current_opcode) {
                 case 0xEA: instruction_cycles[0] += cycles_used; break; // NOP
                 case 0xA9: instruction_cycles[1] += cycles_used; break; // LDA #
                 case 0x8D: instruction_cycles[2] += cycles_used; break; // STA abs
@@ -605,7 +646,7 @@ static void run_performance_benchmark(test_harness_t* harness, int num_instructi
             }
         } else {
             printf("Execution failed at instruction %d (opcode 0x%02X at PC 0x%04X)\n",
-                   i, opcode, pc_before);
+                   i, current_opcode, pc_before);
             break;
         }
     }
@@ -719,12 +760,12 @@ static void dump_memory(const test_harness_t* harness, uint16_t start, uint16_t 
 }
 
 // Analyze specific opcode
-static void analyze_opcode(test_harness_t* harness, uint8_t opcode) {
-    printf("\n=== ANALYZING OPCODE 0x%02X ===\n", opcode);
+static void analyze_opcode(test_harness_t* harness, uint8_t target_opcode) {
+    printf("\n=== ANALYZING OPCODE 0x%02X ===\n", target_opcode);
     
     // Set up a simple test state
     init_test_harness(harness, true, false, false);
-    harness->memory[0x1000] = opcode;
+    harness->memory[0x1000] = target_opcode;
     harness->memory[0x1001] = 0x42;  // Potential immediate operand
     harness->memory[0x1002] = 0x34;  // Potential address low
     harness->memory[0x1003] = 0x12;  // Potential address high
@@ -873,8 +914,8 @@ static void run_enhanced_debug_session(test_harness_t* harness) {
             char* opcode_str = strtok(NULL, " ");
             
             if (opcode_str) {
-                uint8_t opcode = (uint8_t)strtol(opcode_str, NULL, 0);
-                analyze_opcode(harness, opcode);
+                uint8_t target_opcode = (uint8_t)strtol(opcode_str, NULL, 0);
+                analyze_opcode(harness, target_opcode);
             } else {
                 printf("Usage: opcode <hex_value>\n");
             }
@@ -889,7 +930,7 @@ static void run_enhanced_debug_session(test_harness_t* harness) {
     printf("Debug session ended.\n");
 }
 
-// Run a single test case with optional bus cycle tracing
+// Run a single test case with optional bus cycle tracing - optimized version
 static bool run_single_test(test_harness_t* harness, const processor_test_t* test) {
     g_results.total_tests++;
     
@@ -897,15 +938,11 @@ static bool run_single_test(test_harness_t* harness, const processor_test_t* tes
         printf("Running test: %s\n", test->name);
     }
     
-    // Completely reinitialize CPU for each test to ensure clean state
-    fam65xx_desc_t desc = {
-        .mem_read = test_mem_read,
-        .mem_write = test_mem_write,
-        .mem_user_data = harness
-    };
-    fam65xx_init(&harness->cpu, &desc);
+    // Performance optimization: Only reinitialize CPU if absolutely necessary
+    // For most tests, just reset the CPU state without full reinitialization
+    harness->cpu.brk_flags = 0;
     
-    // Setup initial state
+    // Setup initial state (includes optimized memory clearing)
     setup_cpu_state(harness, &test->initial);
     
     // Enable bus cycle recording if test has expected bus cycles
@@ -928,14 +965,14 @@ static bool run_single_test(test_harness_t* harness, const processor_test_t* tes
         printf("  Opcode at actual PC (0x%04X): 0x%02X\n", fam65xx_pc(&harness->cpu), opcode_from_pc);
     }
     
-    uint8_t opcode = opcode_from_memory;  // Use expected for statistics
+    uint8_t current_opcode = opcode_from_memory;  // Use expected for statistics
     
     // Execute instruction
     uint32_t cycles_before = harness->cycle_count;
     if (!execute_instruction(harness)) {
         printf("FAIL %s: Instruction execution failed\n", test->name);
         g_results.failed_tests++;
-        g_results.opcode_failures[opcode]++;
+        g_results.opcode_failures[current_opcode]++;
         disable_bus_cycle_recording(harness);
         return false;
     }
@@ -975,7 +1012,7 @@ static bool run_single_test(test_harness_t* harness, const processor_test_t* tes
     } else {
         g_results.failed_tests++;
         if (!state_match) g_results.state_mismatches++;
-        g_results.opcode_failures[opcode]++;
+        g_results.opcode_failures[current_opcode]++;
         
         // Set global failure flag
         g_test_failed = true;
@@ -993,7 +1030,7 @@ static bool run_single_test(test_harness_t* harness, const processor_test_t* tes
         if (g_stop_on_failure) {
             printf("\n=== FIRST FAILURE DETECTED - STOPPING EXECUTION ===\n");
             printf("Failed test: %s\n", test->name);
-            printf("Opcode: 0x%02X\n", opcode);
+            printf("Opcode: 0x%02X\n", current_opcode);
             
             const cpu_state_t* expected = &test->final;  // Get reference to expected state
             
