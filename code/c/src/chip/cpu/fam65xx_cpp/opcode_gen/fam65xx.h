@@ -328,7 +328,7 @@ static inline void _fam65xx_adc(fam65xx_t* c, uint8_t val) {
         // BCD mode - hardware accurate implementation
         uint8_t carry_in = (c->P & FAM65XX_CF) ? 1 : 0;
         
-        // CRITICAL: Calculate binary result first for N/Z flags (6502 quirk)
+        // Calculate binary result for V flag detection
         uint16_t bin_result = c->A + val + carry_in;
         
         // Convert inputs to BCD
@@ -356,13 +356,13 @@ static inline void _fam65xx_adc(fam65xx_t* c, uint8_t val) {
         // Combine BCD result
         uint8_t bcd_result = ((sum_hi & 0x0F) << 4) | (sum_lo & 0x0F);
         
-        // Set flags: C/V from BCD operation, N/Z from binary result (hardware quirk)
+        // Set flags: C from BCD carry, N/Z from BCD result, V from binary overflow
         c->P &= ~(FAM65XX_CF | FAM65XX_NF | FAM65XX_ZF | FAM65XX_VF);
         if (carry_out) c->P |= FAM65XX_CF;
         
-        // N and Z flags based on BINARY result, not BCD result (6502 hardware behavior)
-        if (bin_result & 0x80) c->P |= FAM65XX_NF;
-        if ((bin_result & 0xFF) == 0) c->P |= FAM65XX_ZF;
+        // N and Z flags based on BCD result (hardware-accurate)
+        if (bcd_result & 0x80) c->P |= FAM65XX_NF;
+        if (bcd_result == 0) c->P |= FAM65XX_ZF;
         
         // V flag: overflow detection based on binary operation
         if (~(c->A ^ val) & (c->A ^ bin_result) & 0x80) {
@@ -488,15 +488,6 @@ void fam65xx_reset(fam65xx_t* c) {
 uint64_t fam65xx_tick(fam65xx_t* c, uint64_t pins) {
     CHIPS_ASSERT(c);
     
-    // For ProcessorTests: ensure first tick starts with proper fetch setup
-    if (c->CI == 0xFFFF) {
-        // First tick after initialization - set up for instruction fetch
-        c->AD = c->PC;
-        pins |= FAM65XX_SYNC;  // Set SYNC for instruction fetch
-        pins |= FAM65XX_RW;    // CRITICAL: Ensure RW is set for read operation!
-        c->CI = 0x0000;        // Clear the invalid marker
-    }
-    
     // RDY check: stall CPU BEFORE calling decode if not ready
     if (!(pins & FAM65XX_RDY)) {
         // CPU is stalled - don't advance, return current state
@@ -546,13 +537,6 @@ uint64_t fam65xx_tick(fam65xx_t* c, uint64_t pins) {
     
     // Execute one cycle using generated decoder (after memory access)
     pins = _fam65xx_decode(c, pins);
-    
-    // Check if instruction completed
-    if (c->CI == 0xFFFE) {
-        // Instruction completed - for ProcessorTests, do NOT automatically start next fetch
-        // The test harness will create a new CPU instance for the next test
-        // Do NOT set SYNC - let the test harness handle next instruction
-    }
     
     return pins;
 }

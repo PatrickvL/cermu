@@ -859,7 +859,6 @@ def main():
     l("    return pins;")
     l("")
     l("fetch_next:")
-    l("    c->CI = 0xFFFE;  // Signal instruction completion")
     l("    c->AD = c->PC;")
     l("    pins |= FAM65XX_SYNC;")
     l("    return pins;")
