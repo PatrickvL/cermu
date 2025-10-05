@@ -72,6 +72,16 @@ private:
         }
     }
 
+    // Bootstrap processor for ProcessorTests compatibility
+    void bootstrap_processor_for_tests() {
+        // For ProcessorTests: ensure first tick starts with proper fetch setup
+        if (cpu.CI == 0xFFFF) {
+            // First tick after initialization - set up for instruction fetch
+            cpu.AD = cpu.PC;
+            // Don't set CI here - let the step function handle the first fetch
+        }
+    }
+
 public:
     ConsolidatedProcessorTestHarness() : cycle_count(0), dirty_region_count(0), memory_tracking_enabled(true) {
         // Clear memory (optimized approach from C version)
@@ -158,10 +168,20 @@ public:
             }
             
             do {
+                // For ProcessorTests: ensure first tick starts with proper fetch setup
+                if (cpu.CI == 0xFFFF) {
+                    // First tick after initialization - set up for instruction fetch
+                    cpu.AD = cpu.PC;
+                    pins |= FAM65XX_SYNC;  // Set SYNC for instruction fetch
+                    pins |= FAM65XX_RW;    // CRITICAL: Ensure RW is set for read operation!
+                    cpu.CI = 0x0000;        // Clear the invalid marker
+                }
+                
                 if (verbose_output) {
                     std::cout << "  DEBUG: Before tick " << (cycle_count + 1) << " - PC=0x" << std::hex << get_pc()
                               << ", CI=0x" << cpu.CI << ", RW=" << ((pins & FAM65XX_RW) ? 1 : 0) << std::dec << std::endl;
                 }
+
                 pins = fam65xx_tick(&cpu, pins);
                 cycle_count++;
                 if (verbose_output) {
@@ -225,7 +245,7 @@ bool run_consolidated_processor_test(const processor_test_t* test) {
     harness.set_y(test->initial.y);
     harness.set_sp(test->initial.s);
     harness.set_status(test->initial.p);
-    
+
     // Get the opcode for tracking
     uint16_t pc_addr = test->initial.pc;
     uint8_t current_opcode = harness.get_memory(pc_addr);
