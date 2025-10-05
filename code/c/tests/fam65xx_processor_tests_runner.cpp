@@ -18,8 +18,8 @@ extern "C" {
 
 namespace fs = std::filesystem;
 
-// Consolidated test harness combining C++ reliability with C optimizations
-class ConsolidatedProcessorTestHarness {
+//  test harness combining C++ reliability with C optimizations
+class ProcessorTestHarness {
 private:
     fam65xx_t cpu;
     uint8_t memory[65536];
@@ -32,7 +32,7 @@ private:
     
     // Memory callbacks - reliable approach from C++ version
     static uint8_t mem_read(void* user_data, uint16_t addr, uint8_t bus_state) {
-        ConsolidatedProcessorTestHarness* harness = static_cast<ConsolidatedProcessorTestHarness*>(user_data);
+        ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(user_data);
         uint8_t value = harness->memory[addr];
         extern bool verbose_output;
         if (verbose_output) {
@@ -42,7 +42,7 @@ private:
     }
     
     static void mem_write(void* user_data, uint16_t addr, uint8_t data) {
-        ConsolidatedProcessorTestHarness* harness = static_cast<ConsolidatedProcessorTestHarness*>(user_data);
+        ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(user_data);
         extern bool verbose_output;
         if (verbose_output) {
             std::cout << "    MEM_WRITE: addr=0x" << std::hex << addr << ", data=0x" << (int)data << std::dec << std::endl;
@@ -83,7 +83,7 @@ private:
     }
 
 public:
-    ConsolidatedProcessorTestHarness() : cycle_count(0), dirty_region_count(0), memory_tracking_enabled(true) {
+    ProcessorTestHarness() : cycle_count(0), dirty_region_count(0), memory_tracking_enabled(true) {
         // Clear memory (optimized approach from C version)
         std::fill(memory, memory + 65536, 0);
         
@@ -207,7 +207,7 @@ public:
 };
 
 // Test results tracking with enhanced statistics (C version features)
-struct ConsolidatedTestResults {
+struct TestResults {
     uint32_t total_tests = 0;
     uint32_t passed_tests = 0;
     uint32_t failed_tests = 0;
@@ -222,18 +222,18 @@ bool verbose_output = false;
 static bool g_quiet_mode = false;
 static bool g_stop_on_failure = true;
 static bool g_test_failed = false;
-static ConsolidatedTestResults results;
+static TestResults results;
 
-// Run a single test with consolidated best practices
-bool run_consolidated_processor_test(const processor_test_t* test) {
+// Run a single test with  best practices
+bool run__processor_test(const processor_test_t* test) {
     results.total_tests++;
     
     if (verbose_output) {
-        std::cout << "Running test: " << test->name << " on fam65xx.h (consolidated)" << std::endl;
+        std::cout << "Running test: " << test->name << " on fam65xx.h" << std::endl;
     }
     
     // Create test harness with optimizations
-    ConsolidatedProcessorTestHarness harness;
+    ProcessorTestHarness harness;
     
     // Setup memory with performance optimizations
     harness.setup_memory_for_test(&test->initial);
@@ -427,7 +427,7 @@ bool run_consolidated_processor_test(const processor_test_t* test) {
 }
 
 // File processing with enhanced error handling (combined approach)
-bool process_consolidated_test_file(const std::string& filepath) {
+bool process__test_file(const std::string& filepath) {
     std::ifstream file(filepath);
     if (!file.is_open()) {
         std::cout << "ERROR: Could not open file: " << filepath << std::endl;
@@ -463,7 +463,7 @@ bool process_consolidated_test_file(const std::string& filepath) {
                 // Parse and run the test
                 processor_test_t test;
                 if (json_parse_processor_test(test_json.c_str(), &test)) {
-                    run_consolidated_processor_test(&test);
+                    run__processor_test(&test);
                     
                     // Check if we should stop on failure (C version feature)
                     if (g_stop_on_failure && g_test_failed) {
@@ -486,7 +486,7 @@ bool process_consolidated_test_file(const std::string& filepath) {
         // Single test
         processor_test_t test;
         if (json_parse_processor_test(json_content.c_str(), &test)) {
-            run_consolidated_processor_test(&test);
+            run__processor_test(&test);
             
             // Check if we should stop on failure
             if (g_stop_on_failure && g_test_failed) {
@@ -501,14 +501,14 @@ bool process_consolidated_test_file(const std::string& filepath) {
 }
 
 // Directory processing with enhanced features
-void process_consolidated_directory(const std::string& dirpath) {
+void process__directory(const std::string& dirpath) {
     try {
         for (const auto& entry : fs::recursive_directory_iterator(dirpath)) {
             if (entry.is_regular_file() && entry.path().extension() == ".json") {
                 if (!g_quiet_mode) {
                     std::cout << "Processing file: " << entry.path() << std::endl;
                 }
-                process_consolidated_test_file(entry.path().string());
+                process__test_file(entry.path().string());
                 
                 // Check if we should stop on failure
                 if (g_stop_on_failure && g_test_failed) {
@@ -523,8 +523,8 @@ void process_consolidated_directory(const std::string& dirpath) {
 }
 
 // Enhanced usage information (C version features)
-void print_consolidated_usage(const char* program_name) {
-    std::cout << "Consolidated fam65xx ProcessorTests Runner - Hardware-verified test validation\n";
+void print__usage(const char* program_name) {
+    std::cout << "fam65xx ProcessorTests Runner - Hardware-verified test validation\n";
     std::cout << "Usage: " << program_name << " [options] <test_file_or_directory>\n";
     std::cout << "\nTest Execution Options:\n";
     std::cout << "  -v, --verbose      Enable verbose output with detailed execution logs\n";
@@ -546,7 +546,7 @@ void print_consolidated_usage(const char* program_name) {
 }
 
 // Enhanced results printing (C version features)
-void print_consolidated_results() {
+void print__results() {
     std::cout << "\n=== CONSOLIDATED FAM65XX PROCESSOR TESTS RESULTS ===\n";
     std::cout << "Total tests run: " << results.total_tests << "\n";
     std::cout << "Tests passed: " << results.passed_tests << "\n";
@@ -582,10 +582,10 @@ void print_consolidated_results() {
     }
 }
 
-// Main function with consolidated features
+// Main function with  features
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        print_consolidated_usage(argv[0]);
+        print__usage(argv[0]);
         return 1;
     }
     
@@ -603,7 +603,7 @@ int main(int argc, char* argv[]) {
         } else if (arg == "-s" || arg == "--stop-first") {
             g_stop_on_failure = true;
         } else if (arg == "-h" || arg == "--help") {
-            print_consolidated_usage(argv[0]);
+            print__usage(argv[0]);
             return 0;
         } else {
             test_paths.push_back(arg);
@@ -612,11 +612,11 @@ int main(int argc, char* argv[]) {
     
     if (test_paths.empty()) {
         std::cout << "ERROR: No test file or directory specified\n";
-        print_consolidated_usage(argv[0]);
+        print__usage(argv[0]);
         return 1;
     }
     
-    std::cout << "=== Consolidated fam65xx ProcessorTests Runner ===\n";
+    std::cout << "=== fam65xx ProcessorTests Runner ===\n";
     std::cout << "Test paths: " << test_paths.size() << " specified\n";
     std::cout << "Verbose: " << (verbose_output ? "enabled" : "disabled") << "\n";
     std::cout << "Quiet mode: " << (g_quiet_mode ? "enabled" : "disabled") << "\n";
@@ -632,9 +632,9 @@ int main(int argc, char* argv[]) {
         
         try {
             if (fs::is_directory(test_path)) {
-                process_consolidated_directory(test_path);
+                process__directory(test_path);
             } else if (fs::is_regular_file(test_path)) {
-                process_consolidated_test_file(test_path);
+                process__test_file(test_path);
             } else {
                 std::cout << "ERROR: Invalid path: " << test_path << std::endl;
             }
@@ -653,17 +653,17 @@ int main(int argc, char* argv[]) {
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
     
     std::cout << "\nExecution time: " << duration.count() << " ms\n";
-    print_consolidated_results();
+    print__results();
     
     if (results.total_tests == 0) {
         std::cout << "\nNo tests found in specified path!\n";
         return 1;
     } else if (results.passed_tests == results.total_tests) {
-        std::cout << "\nALL TESTS PASSED - Consolidated fam65xx matches ProcessorTests ground truth!\n";
+        std::cout << "\nALL TESTS PASSED - fam65xx matches ProcessorTests ground truth!\n";
         return 0;
     } else {
         double pass_rate = (double)results.passed_tests / results.total_tests * 100.0;
-        std::cout << "\nSOME TESTS FAILED - Consolidated fam65xx pass rate: " 
+        std::cout << "\nSOME TESTS FAILED - fam65xx pass rate: "
                   << std::fixed << std::setprecision(1) << pass_rate << "%\n";
         std::cout << "Implementation differs from hardware-verified ground truth\n";
         return 1;
