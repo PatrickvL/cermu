@@ -25,9 +25,8 @@ private:
     uint8_t memory[65536];
     uint32_t cycle_count;
     
-    // Performance optimizations from C version
-    uint16_t dirty_memory_regions[256];  // Track which memory pages are dirty
-    uint8_t dirty_region_count;
+    // Performance optimizations - track individual written addresses
+    std::vector<uint16_t> written_addresses;  // Track which addresses were written to
     bool memory_tracking_enabled;
     
     // Memory callbacks - reliable approach from C++ version
@@ -49,27 +48,23 @@ private:
         }
         harness->memory[addr] = data;
         
-        // Mark memory page as dirty for optimization
-        harness->mark_memory_page_dirty(addr);
+        // Track individual write for optimization
+        harness->track_written_address(addr);
     }
 
-    // Mark memory page as dirty for selective clearing (C version optimization)
-    void mark_memory_page_dirty(uint16_t addr) {
+    // Track individual written address for selective clearing
+    void track_written_address(uint16_t addr) {
         if (!memory_tracking_enabled) return;
         
-        uint16_t page = addr >> 8;
-        
-        // Check if page is already marked dirty
-        for (uint8_t i = 0; i < dirty_region_count; i++) {
-            if (dirty_memory_regions[i] == page) {
-                return; // Already marked
+        // Check if address is already tracked (avoid duplicates)
+        for (uint16_t written_addr : written_addresses) {
+            if (written_addr == addr) {
+                return; // Already tracked
             }
         }
         
-        // Add new dirty page if we have space
-        if (dirty_region_count < 256) {
-            dirty_memory_regions[dirty_region_count++] = page;
-        }
+        // Add new written address
+        written_addresses.push_back(addr);
     }
 
     // Bootstrap processor for ProcessorTests compatibility
@@ -83,7 +78,7 @@ private:
     }
 
 public:
-    ProcessorTestHarness() : cycle_count(0), dirty_region_count(0), memory_tracking_enabled(true) {
+    ProcessorTestHarness() : cycle_count(0), memory_tracking_enabled(true) {
         // Clear memory (optimized approach from C version)
         std::fill(memory, memory + 65536, 0);
         
@@ -99,31 +94,31 @@ public:
         cycle_count = 0;
     }
     
-    // Fast memory clearing - only clear regions that were actually used (C version optimization)
-    void clear_dirty_memory_regions() {
+    // Fast memory clearing - only clear bytes that were actually written
+    void clear_written_memory() {
         if (!memory_tracking_enabled) {
             std::fill(memory, memory + 65536, 0);
             return;
         }
         
-        for (uint8_t i = 0; i < dirty_region_count; i++) {
-            uint16_t page = dirty_memory_regions[i];
-            std::fill(&memory[page << 8], &memory[(page << 8) + 256], 0);
+        // Clear only the addresses that were written to
+        for (uint16_t addr : written_addresses) {
+            memory[addr] = 0;
         }
-        dirty_region_count = 0;
+        written_addresses.clear();
     }
     
     // Setup memory for new test with optimizations
     void setup_memory_for_test(const cpu_state_t* initial) {
-        // Clear only previously used memory regions for performance
-        clear_dirty_memory_regions();
+        // Clear only previously written addresses for performance
+        clear_written_memory();
         
-        // Set up memory from RAM entries and track dirty pages
+        // Set up memory from RAM entries and track written addresses
         for (int i = 0; i < initial->ram_count; i++) {
             uint16_t addr = initial->ram[i].address;
             for (int j = 0; j < initial->ram[i].byte_count; j++) {
                 memory[addr + j] = initial->ram[i].bytes[j];
-                mark_memory_page_dirty(addr + j);
+                track_written_address(addr + j);
             }
         }
     }
@@ -144,9 +139,9 @@ public:
     uint8_t get_status() const { return fam65xx_p(const_cast<fam65xx_t*>(&cpu)); }
     
     // Memory access
-    void set_memory(uint16_t addr, uint8_t data) { 
-        memory[addr] = data; 
-        mark_memory_page_dirty(addr);
+    void set_memory(uint16_t addr, uint8_t data) {
+        memory[addr] = data;
+        track_written_address(addr);
     }
     uint8_t get_memory(uint16_t addr) const { return memory[addr]; }
     
