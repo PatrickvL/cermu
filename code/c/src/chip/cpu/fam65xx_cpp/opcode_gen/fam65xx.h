@@ -185,6 +185,7 @@ uint64_t fam65xx_init(fam65xx_t* cpu, const fam65xx_desc_t* desc);
 void fam65xx_reset(fam65xx_t* cpu);
 uint64_t fam65xx_tick(fam65xx_t* cpu, uint64_t pins);
 bool fam65xx_opdone(fam65xx_t* cpu);
+uint64_t fam65xx_bootstrap(fam65xx_t* cpu, uint64_t pins);
 
 // 6510-specific
 uint64_t fam6510_iorq(fam65xx_t* cpu, uint64_t pins);
@@ -478,6 +479,22 @@ uint64_t fam65xx_init(fam65xx_t* c, const fam65xx_desc_t* desc) {
     return pins;
 }
 
+// Bootstrap function for proper CPU initialization
+uint64_t fam65xx_bootstrap(fam65xx_t* c, uint64_t pins) {
+    CHIPS_ASSERT(c);
+    
+    // Only bootstrap if CPU is in uninitialized state
+    if (c->CI == 0xFFFF) {
+        // Set up for first instruction fetch
+        c->AD = c->PC;
+        pins |= FAM65XX_RDY;   // Ensure RDY is high for execution
+        pins |= FAM65XX_RW;    // Ensure RW is set for read operation
+        pins |= FAM65XX_SYNC;  // Set SYNC for instruction fetch
+    }
+    
+    return pins;
+}
+
 void fam65xx_reset(fam65xx_t* c) {
     CHIPS_ASSERT(c);
     c->brk_flags = FAM65XX_BRK_RESET;
@@ -578,72 +595,3 @@ uint16_t fam65xx_pc(fam65xx_t* c) { return c->PC; }
 #ifdef __cplusplus
 }
 #endif
-
-/*
- * USAGE EXAMPLE:
- * 
- * // Memory callbacks
- * uint8_t cpu_read(void* user_data, uint16_t addr, uint8_t bus_state) {
- *     c64_t* sys = (c64_t*)user_data;
- *     
- *     // Handle I/O area
- *     if (addr >= 0xD800 && addr < 0xDC00) {
- *         // Color RAM: preserve high nibble from bus_state!
- *         return (bus_state & 0xF0) | (sys->color_ram[addr & 0x3FF] & 0x0F);
- *     }
- *     
- *     return sys->ram[addr];
- * }
- * 
- * void cpu_write(void* user_data, uint16_t addr, uint8_t data) {
- *     c64_t* sys = (c64_t*)user_data;
- *     
- *     if (addr >= 0xD800 && addr < 0xDC00) {
- *         sys->color_ram[addr & 0x3FF] = data & 0x0F;
- *         return;
- *     }
- *     
- *     sys->ram[addr] = data;
- * }
- * 
- * // Initialize CPU
- * fam65xx_t cpu;
- * fam65xx_desc_t desc = {
- *     .mem_read = cpu_read,
- *     .mem_write = cpu_write,
- *     .mem_user_data = &sys
- * };
- * uint64_t pins = fam65xx_init(&cpu, &desc);
- * 
- * // C64 tick with PHI1/PHI2 separation
- * uint32_t c64_tick(c64_t* sys) {
- *     uint64_t pins = sys->pins;
- *     
- *     // PHI1: VIC-II memory access
- *     m6569_tick_phi1(&sys->vic);
- *     if (sys->vic.needs_bus_phi1) {
- *         uint8_t vic_data = vic_mem_read(sys, sys->vic.addr);
- *         FAM65XX_SET_DATA(pins, vic_data);
- *         m6569_store_data(&sys->vic, vic_data);
- *     }
- *     
- *     // Set BA/RDY for badlines
- *     if (sys->vic.needs_bus_phi2) {
- *         pins &= ~FAM65XX_RDY;
- *     } else {
- *         pins |= FAM65XX_RDY;
- *     }
- *     
- *     // PHI2: CPU or VIC badline access
- *     if (sys->vic.needs_bus_phi2) {
- *         uint8_t vic_data = vic_mem_read(sys, sys->vic.addr2);
- *         FAM65XX_SET_DATA(pins, vic_data);
- *         m6569_store_data2(&sys->vic, vic_data);
- *     } else {
- *         pins = fam65xx_tick(&sys->cpu, pins);
- *     }
- *     
- *     sys->pins = pins;
- *     return 1;
- * }
- */
