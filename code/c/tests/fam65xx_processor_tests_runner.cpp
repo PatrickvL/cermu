@@ -69,10 +69,13 @@ private:
     }
 
 
-public:    
+public:
     // Bootstrap processor for ProcessorTests compatibility
     void bootstrap_processor_for_tests() {
-        pins = fam65xx_bootstrap(&cpu, pins);
+        // Only bootstrap if not already done
+        if (cpu.CI == 0xFFFF) {
+            pins = fam65xx_bootstrap(&cpu, pins);
+        }
     }
 
     ProcessorTestHarness() : cycle_count(0), memory_tracking_enabled(true) {
@@ -258,7 +261,7 @@ bool run_processor_test(const processor_test_t* test) {
                   << " at PC 0x" << test->initial.pc << std::dec << std::endl;
     }
     
-    // Bootstrap processor before stepping starts
+    // Bootstrap processor after PC is set properly
     harness.bootstrap_processor_for_tests();
     
     bool step_result = harness.step();
