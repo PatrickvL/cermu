@@ -24,6 +24,7 @@ private:
     fam65xx_t cpu;
     uint8_t memory[65536];
     uint32_t cycle_count;
+    uint64_t pins;  // Maintain pins state across steps
     
     // Performance optimizations - track individual written addresses
     std::vector<uint16_t> written_addresses;  // Track which addresses were written to
@@ -67,17 +68,13 @@ private:
         written_addresses.push_back(addr);
     }
 
+
+public:    
     // Bootstrap processor for ProcessorTests compatibility
     void bootstrap_processor_for_tests() {
-        // For ProcessorTests: ensure first tick starts with proper fetch setup
-        if (cpu.CI == 0xFFFF) {
-            // First tick after initialization - set up for instruction fetch
-            cpu.AD = cpu.PC;
-            // Don't set CI here - let the step function handle the first fetch
-        }
+        pins = fam65xx_bootstrap(&cpu, pins);
     }
 
-public:
     ProcessorTestHarness() : cycle_count(0), memory_tracking_enabled(true) {
         // Clear memory (optimized approach from C version)
         std::fill(memory, memory + 65536, 0);
@@ -88,7 +85,7 @@ public:
         desc.mem_write = mem_write;
         desc.mem_user_data = this;
         
-        uint64_t pins = fam65xx_init(&cpu, &desc);
+        pins = fam65xx_init(&cpu, &desc);
         
         // ProcessorTests expects CPU to be ready for immediate execution
         cycle_count = 0;
@@ -155,23 +152,11 @@ public:
             uint32_t max_cycles = 100; // Safety limit
             extern bool verbose_output;
             
-            // Execute cycles until instruction is complete
-            uint64_t pins = FAM65XX_RDY; // Set RDY high
-            
             if (verbose_output) {
                 std::cout << "  DEBUG: Starting step execution, initial PC=0x" << std::hex << get_pc() << std::dec << std::endl;
             }
             
             do {
-                // For ProcessorTests: ensure first tick starts with proper fetch setup
-                if (cpu.CI == 0xFFFF) {
-                    // First tick after initialization - set up for instruction fetch
-                    cpu.AD = cpu.PC;
-                    pins |= FAM65XX_SYNC;  // Set SYNC for instruction fetch
-                    pins |= FAM65XX_RW;    // CRITICAL: Ensure RW is set for read operation!
-                    cpu.CI = 0x0000;        // Clear the invalid marker
-                }
-                
                 if (verbose_output) {
                     std::cout << "  DEBUG: Before tick " << (cycle_count + 1) << " - PC=0x" << std::hex << get_pc()
                               << ", CI=0x" << cpu.CI << ", RW=" << ((pins & FAM65XX_RW) ? 1 : 0) << std::dec << std::endl;
@@ -219,8 +204,8 @@ static bool g_stop_on_failure = true;
 static bool g_test_failed = false;
 static TestResults results;
 
-// Run a single test with  best practices
-bool run__processor_test(const processor_test_t* test) {
+// Run a single test with best practices
+bool run_processor_test(const processor_test_t* test) {
     results.total_tests++;
     
     if (verbose_output) {
@@ -258,6 +243,9 @@ bool run__processor_test(const processor_test_t* test) {
         std::cout << "  DEBUG: About to execute opcode 0x" << std::hex << (int)current_opcode
                   << " at PC 0x" << test->initial.pc << std::dec << std::endl;
     }
+    
+    // Bootstrap processor before stepping starts
+    harness.bootstrap_processor_for_tests();
     
     bool step_result = harness.step();
     uint32_t cycles_executed = harness.get_cycle_count() - initial_cycle_count;
@@ -422,7 +410,7 @@ bool run__processor_test(const processor_test_t* test) {
 }
 
 // File processing with enhanced error handling (combined approach)
-bool process__test_file(const std::string& filepath) {
+bool process_test_file(const std::string& filepath) {
     std::ifstream file(filepath);
     if (!file.is_open()) {
         std::cout << "ERROR: Could not open file: " << filepath << std::endl;
@@ -458,7 +446,7 @@ bool process__test_file(const std::string& filepath) {
                 // Parse and run the test
                 processor_test_t test;
                 if (json_parse_processor_test(test_json.c_str(), &test)) {
-                    run__processor_test(&test);
+                    run_processor_test(&test);
                     
                     // Check if we should stop on failure (C version feature)
                     if (g_stop_on_failure && g_test_failed) {
@@ -481,7 +469,7 @@ bool process__test_file(const std::string& filepath) {
         // Single test
         processor_test_t test;
         if (json_parse_processor_test(json_content.c_str(), &test)) {
-            run__processor_test(&test);
+            run_processor_test(&test);
             
             // Check if we should stop on failure
             if (g_stop_on_failure && g_test_failed) {
@@ -496,14 +484,14 @@ bool process__test_file(const std::string& filepath) {
 }
 
 // Directory processing with enhanced features
-void process__directory(const std::string& dirpath) {
+void process_directory(const std::string& dirpath) {
     try {
         for (const auto& entry : fs::recursive_directory_iterator(dirpath)) {
             if (entry.is_regular_file() && entry.path().extension() == ".json") {
                 if (!g_quiet_mode) {
                     std::cout << "Processing file: " << entry.path() << std::endl;
                 }
-                process__test_file(entry.path().string());
+                process_test_file(entry.path().string());
                 
                 // Check if we should stop on failure
                 if (g_stop_on_failure && g_test_failed) {
@@ -518,7 +506,7 @@ void process__directory(const std::string& dirpath) {
 }
 
 // Enhanced usage information (C version features)
-void print__usage(const char* program_name) {
+void print_usage(const char* program_name) {
     std::cout << "fam65xx ProcessorTests Runner - Hardware-verified test validation\n";
     std::cout << "Usage: " << program_name << " [options] <test_file_or_directory>\n";
     std::cout << "\nTest Execution Options:\n";
@@ -541,8 +529,8 @@ void print__usage(const char* program_name) {
 }
 
 // Enhanced results printing (C version features)
-void print__results() {
-    std::cout << "\n=== CONSOLIDATED FAM65XX PROCESSOR TESTS RESULTS ===\n";
+void print_results() {
+    std::cout << "\n=== FAM65XX PROCESSOR TESTS RESULTS ===\n";
     std::cout << "Total tests run: " << results.total_tests << "\n";
     std::cout << "Tests passed: " << results.passed_tests << "\n";
     std::cout << "Tests failed: " << results.failed_tests << "\n";
@@ -577,10 +565,10 @@ void print__results() {
     }
 }
 
-// Main function with  features
+// Main function with features
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        print__usage(argv[0]);
+        print_usage(argv[0]);
         return 1;
     }
     
@@ -598,7 +586,7 @@ int main(int argc, char* argv[]) {
         } else if (arg == "-s" || arg == "--stop-first") {
             g_stop_on_failure = true;
         } else if (arg == "-h" || arg == "--help") {
-            print__usage(argv[0]);
+            print_usage(argv[0]);
             return 0;
         } else {
             test_paths.push_back(arg);
@@ -607,7 +595,7 @@ int main(int argc, char* argv[]) {
     
     if (test_paths.empty()) {
         std::cout << "ERROR: No test file or directory specified\n";
-        print__usage(argv[0]);
+        print_usage(argv[0]);
         return 1;
     }
     
@@ -627,9 +615,9 @@ int main(int argc, char* argv[]) {
         
         try {
             if (fs::is_directory(test_path)) {
-                process__directory(test_path);
+                process_directory(test_path);
             } else if (fs::is_regular_file(test_path)) {
-                process__test_file(test_path);
+                process_test_file(test_path);
             } else {
                 std::cout << "ERROR: Invalid path: " << test_path << std::endl;
             }
@@ -648,7 +636,7 @@ int main(int argc, char* argv[]) {
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
     
     std::cout << "\nExecution time: " << duration.count() << " ms\n";
-    print__results();
+    print_results();
     
     if (results.total_tests == 0) {
         std::cout << "\nNo tests found in specified path!\n";
