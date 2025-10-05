@@ -188,13 +188,13 @@ OP_CPX = ("CPX", M_R_, "_fam65xx_cmp(c, c->X, c->DL);\ngoto fetch_next;", None)
 OP_CPY = ("CPY", M_R_, "_fam65xx_cmp(c, c->Y, c->DL);\ngoto fetch_next;", None)
 
 # RMW operations - have two variants (accumulator vs memory)
-OP_ASL_A = ("ASL", M___, "c->A = _fam65xx_asl(c, c->A);\ngoto fetch_next;", None)
+OP_ASL_A = ("ASL", M___, "c->A = _fam65xx_asl(c, c->A);\nc->CI = C_ASL_A;", 'CONT')  # 2-cycle accumulator instruction
 OP_ASL_M = ("ASL", M_RW, "c->CI = C_ASL_RMW;", 'RMW')  # Jump directly to RMW continuation
-OP_LSR_A = ("LSR", M___, "c->A = _fam65xx_lsr(c, c->A);\ngoto fetch_next;", None)
+OP_LSR_A = ("LSR", M___, "c->A = _fam65xx_lsr(c, c->A);\nc->CI = C_LSR_A;", 'CONT')  # 2-cycle accumulator instruction
 OP_LSR_M = ("LSR", M_RW, "c->CI = C_LSR_RMW;", 'RMW')  # Jump directly to RMW continuation
-OP_ROL_A = ("ROL", M___, "c->A = _fam65xx_rol(c, c->A);\ngoto fetch_next;", None)
+OP_ROL_A = ("ROL", M___, "c->A = _fam65xx_rol(c, c->A);\nc->CI = C_ROL_A;", 'CONT')  # 2-cycle accumulator instruction
 OP_ROL_M = ("ROL", M_RW, "c->CI = C_ROL_RMW;", 'RMW')  # Jump directly to RMW continuation
-OP_ROR_A = ("ROR", M___, "c->A = _fam65xx_ror(c, c->A);\ngoto fetch_next;", None)
+OP_ROR_A = ("ROR", M___, "c->A = _fam65xx_ror(c, c->A);\nc->CI = C_ROR_A;", 'CONT')  # 2-cycle accumulator instruction
 OP_ROR_M = ("ROR", M_RW, "c->CI = C_ROR_RMW;", 'RMW')  # Jump directly to RMW continuation
 OP_INC_M = ("INC", M_RW, "c->CI = C_INC_RMW;", 'RMW')  # Jump directly to RMW continuation
 OP_DEC_M = ("DEC", M_RW, "c->CI = C_DEC_RMW;", 'RMW')  # Jump directly to RMW continuation
@@ -399,16 +399,16 @@ def get_or_create_continuation(cycles, name):
     """Get existing continuation sequence index or create new one"""
     global next_continuation_index
     
-    # Use tuple as key for deduplication
-    if cycles not in continuation_sequences:
-        continuation_sequences[cycles] = {
+    # Use name as key to avoid conflicts between different instructions with same cycles
+    if name not in continuation_sequences:
+        continuation_sequences[name] = {
             'index': next_continuation_index,
             'name': name,
             'cycles': cycles
         }
         next_continuation_index += len(cycles)
     
-    return continuation_sequences[cycles]['index']
+    return continuation_sequences[name]['index']
 
 def analyze_continuation_needs(op):
     """Determine if opcode needs a continuation sequence - handle special RMW cases"""
@@ -510,6 +510,31 @@ def analyze_continuation_needs(op):
         )
         get_or_create_continuation(cycles, 'JAM')
         return ('JAM', cycles)
+    elif operation[3] == 'CONT':  # Handle all accumulator instructions with CONT flag
+        if operation[0] == 'ASL':  # ASL accumulator - 2 cycles total (1 opcode + 1 continuation cycle)
+            cycles = (
+                'goto fetch_next;',  # Cycle 2: Complete ASL execution, fetch next
+            )
+            get_or_create_continuation(cycles, 'ASL_A')
+            return ('ASL_A', cycles)
+        elif operation[0] == 'LSR':  # LSR accumulator - 2 cycles total (1 opcode + 1 continuation cycle)
+            cycles = (
+                'goto fetch_next;',  # Cycle 2: Complete LSR execution, fetch next
+            )
+            get_or_create_continuation(cycles, 'LSR_A')
+            return ('LSR_A', cycles)
+        elif operation[0] == 'ROL':  # ROL accumulator - 2 cycles total (1 opcode + 1 continuation cycle)
+            cycles = (
+                'goto fetch_next;',  # Cycle 2: Complete ROL execution, fetch next
+            )
+            get_or_create_continuation(cycles, 'ROL_A')
+            return ('ROL_A', cycles)
+        elif operation[0] == 'ROR':  # ROR accumulator - 2 cycles total (1 opcode + 1 continuation cycle)
+            cycles = (
+                'goto fetch_next;',  # Cycle 2: Complete ROR execution, fetch next
+            )
+            get_or_create_continuation(cycles, 'ROR_A')
+            return ('ROR_A', cycles)
     elif flags == 'BRANCH':
         # Branch taken continuation
         cycles = (
@@ -775,7 +800,7 @@ def generate_continuations():
     sorted_seqs = sorted(continuation_sequences.items(),
                         key=lambda x: x[1]['index'])
     
-    for seq_code, seq_info in sorted_seqs:
+    for name, seq_info in sorted_seqs:
         idx = seq_info['index']
         name = seq_info['name']
         cycles = seq_info['cycles']
@@ -794,7 +819,7 @@ def generate_continuations():
 def generate_continuation_constants():
     """Generate constant declarations for continuation sequences"""
     l("// Continuation sequence constants")
-    for seq_code, seq_info in sorted(continuation_sequences.items(),
+    for name, seq_info in sorted(continuation_sequences.items(),
                                      key=lambda x: x[1]['index']):
         const_name = get_continuation_constant_name(seq_info['name'])
         l(f"#define {const_name:<16} {seq_info['index']}")

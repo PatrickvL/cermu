@@ -6,8 +6,8 @@
  * Layout:
  *   [0-255]   : Opcode-specific cycles
  *   [256-293] : Shared addressing mode sequences
- *   [294-353] : Shared continuation sequences
- * Total cases : 354
+ *   [294-357] : Shared continuation sequences
+ * Total cases : 358
  */
 
 // Continuation sequence constants
@@ -16,26 +16,30 @@
 #define C_SLO_RMW        301
 #define C_ASL_RMW        303
 #define C_PHP            305
-#define C_BRANCH_TAKEN   307
-#define C_JSR            309
-#define C_RLA_RMW        314
-#define C_ROL_RMW        316
-#define C_PLP            318
-#define C_RTI            320
-#define C_SRE_RMW        324
-#define C_LSR_RMW        326
-#define C_PHA            328
-#define C_JMP_ABS        330
-#define C_RTS            332
-#define C_RRA_RMW        335
-#define C_ROR_RMW        337
-#define C_PLA            339
-#define C_JMP_IND        341
-#define C_NOP_DUMMY      345
-#define C_DCP_RMW        346
-#define C_DEC_RMW        348
-#define C_ISC_RMW        350
-#define C_INC_RMW        352
+#define C_ASL_A          307
+#define C_BRANCH_TAKEN   308
+#define C_JSR            310
+#define C_RLA_RMW        315
+#define C_ROL_RMW        317
+#define C_PLP            319
+#define C_ROL_A          321
+#define C_RTI            322
+#define C_SRE_RMW        326
+#define C_LSR_RMW        328
+#define C_PHA            330
+#define C_LSR_A          332
+#define C_JMP_ABS        333
+#define C_RTS            335
+#define C_RRA_RMW        338
+#define C_ROR_RMW        340
+#define C_PLA            342
+#define C_ROR_A          344
+#define C_JMP_IND        345
+#define C_NOP_DUMMY      349
+#define C_DCP_RMW        350
+#define C_DEC_RMW        352
+#define C_ISC_RMW        354
+#define C_INC_RMW        356
 
 // Layout constants
 // [0-255]   : Opcode-specific cycles
@@ -410,7 +414,8 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
 
         case 0x0A:  // ASL [---] --- cycle 1
             c->A = _fam65xx_asl(c, c->A);
-            goto fetch_next;
+            c->CI = C_ASL_A;
+            break;
 
         case 0x0B:  // ANC [R] IMM cycle 2
         case 0x2B:  // ANC [R] IMM cycle 2
@@ -482,7 +487,8 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
 
         case 0x2A:  // ROL [---] --- cycle 1
             c->A = _fam65xx_rol(c, c->A);
-            goto fetch_next;
+            c->CI = C_ROL_A;
+            break;
 
         case 0x30:  // BMI [R] --- cycle 1
             // Opcode 0x30 - BMI - Branch if Minus
@@ -541,7 +547,8 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
 
         case 0x4A:  // LSR [---] --- cycle 1
             c->A = _fam65xx_lsr(c, c->A);
-            goto fetch_next;
+            c->CI = C_LSR_A;
+            break;
 
         case 0x4B:  // ASR [R] IMM cycle 2
             c->A &= c->DL;
@@ -612,7 +619,8 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
 
         case 0x6A:  // ROR [---] --- cycle 1
             c->A = _fam65xx_ror(c, c->A);
-            goto fetch_next;
+            c->CI = C_ROR_A;
+            break;
 
         case 0x6B:  // ARR [R] IMM cycle 2
             c->A = (c->A & c->DL) >> 1 | (c->P & FAM65XX_CF ? 0x80 : 0);
@@ -1129,7 +1137,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             break;
 
         // ==========================================
-        // [294-353] SHARED CONTINUATIONS
+        // [294-357] SHARED CONTINUATIONS
         // ==========================================
 
         // BRK continuation
@@ -1201,6 +1209,10 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI++;
             break;
         case C_PHP + 1:
+            goto fetch_next;
+
+        // ASL_A continuation
+        case C_ASL_A + 0:
             goto fetch_next;
 
         // BRANCH_TAKEN continuation
@@ -1282,6 +1294,10 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_PLP + 1:
             goto fetch_next;
 
+        // ROL_A continuation
+        case C_ROL_A + 0:
+            goto fetch_next;
+
         // RTI continuation
         case C_RTI + 0:
             c->AD = 0x0100 | c->S++;
@@ -1331,6 +1347,10 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI++;
             break;
         case C_PHA + 1:
+            goto fetch_next;
+
+        // LSR_A continuation
+        case C_LSR_A + 0:
             goto fetch_next;
 
         // JMP_ABS continuation
@@ -1386,6 +1406,10 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI++;
             break;
         case C_PLA + 1:
+            goto fetch_next;
+
+        // ROR_A continuation
+        case C_ROR_A + 0:
             goto fetch_next;
 
         // JMP_IND continuation
