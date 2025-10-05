@@ -146,11 +146,12 @@ public:
     uint32_t get_cycle_count() const { return cycle_count; }
     void reset_cycle_count() { cycle_count = 0; }
     
-    // Execute one instruction - reliable C++ approach
+    // Execute one instruction - SYNC-based completion detection
     bool step() {
         try {
             uint32_t max_cycles = 100; // Safety limit
             extern bool verbose_output;
+            bool first_cycle = true;
             
             if (verbose_output) {
                 std::cout << "  DEBUG: Starting step execution, initial PC=0x" << std::hex << get_pc() << std::dec << std::endl;
@@ -159,21 +160,34 @@ public:
             do {
                 if (verbose_output) {
                     std::cout << "  DEBUG: Before tick " << (cycle_count + 1) << " - PC=0x" << std::hex << get_pc()
-                              << ", CI=0x" << cpu.CI << ", RW=" << ((pins & FAM65XX_RW) ? 1 : 0) << std::dec << std::endl;
+                              << ", CI=0x" << cpu.CI << ", RW=" << ((pins & FAM65XX_RW) ? 1 : 0)
+                              << ", SYNC=" << ((pins & FAM65XX_SYNC) ? 1 : 0) << std::dec << std::endl;
                 }
 
                 pins = fam65xx_tick(&cpu, pins);
                 cycle_count++;
+                
+                // Check if instruction completed by detecting SYNC on non-first cycle
+                bool instruction_done = !first_cycle && (pins & FAM65XX_SYNC);
+                
                 if (verbose_output) {
                     std::cout << "  DEBUG: After tick " << cycle_count << " - PC=0x" << std::hex << get_pc()
                               << ", CI=0x" << cpu.CI << ", RW=" << ((pins & FAM65XX_RW) ? 1 : 0)
-                              << ", opdone=" << fam65xx_opdone(&cpu) << std::dec << std::endl;
+                              << ", SYNC=" << ((pins & FAM65XX_SYNC) ? 1 : 0)
+                              << ", opdone=" << (instruction_done ? 1 : 0) << std::dec << std::endl;
                 }
+                
                 max_cycles--;
                 if (max_cycles == 0) {
                     return false; // Exceeded cycle limit
                 }
-            } while (!fam65xx_opdone(&cpu));
+                
+                first_cycle = false;
+                
+                if (instruction_done) {
+                    break; // Instruction completed - SYNC indicates ready for next instruction
+                }
+            } while (true);
             
             if (verbose_output) {
                 std::cout << "  DEBUG: Step completed after " << (100 - max_cycles) << " cycles" << std::endl;
