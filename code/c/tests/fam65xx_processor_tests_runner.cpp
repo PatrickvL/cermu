@@ -154,10 +154,10 @@ public:
         try {
             uint32_t max_cycles = 100; // Safety limit
             extern bool verbose_output;
-            bool first_cycle = true;
+            uint16_t initial_pc = get_pc();
             
             if (verbose_output) {
-                std::cout << "  DEBUG: Starting step execution, initial PC=0x" << std::hex << get_pc() << std::dec << std::endl;
+                std::cout << "  DEBUG: Starting step execution, initial PC=0x" << std::hex << initial_pc << std::dec << std::endl;
             }
             
             do {
@@ -170,8 +170,8 @@ public:
                 pins = fam65xx_tick(&cpu, pins);
                 cycle_count++;
                 
-                // Check if instruction completed by detecting SYNC on non-first cycle
-                bool instruction_done = !first_cycle && (pins & FAM65XX_SYNC);
+                // Instruction completes when SYNC is set, indicating fetch_next was called
+                bool instruction_done = (pins & FAM65XX_SYNC) != 0;
                 
                 if (verbose_output) {
                     std::cout << "  DEBUG: After tick " << cycle_count << " - PC=0x" << std::hex << get_pc()
@@ -184,8 +184,6 @@ public:
                 if (max_cycles == 0) {
                     return false; // Exceeded cycle limit
                 }
-                
-                first_cycle = false;
                 
                 if (instruction_done) {
                     break; // Instruction completed - SYNC indicates ready for next instruction
