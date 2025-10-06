@@ -147,7 +147,7 @@ endif()
 
 # fam65xx Enhanced C ProcessorTests Runner - With debugging features
 add_executable(fam65xx_processor_tests_runner
-    fam65xx_processor_tests_runner.c
+    fam65xx_processor_tests_runner.cpp
     json_parser.c
 )
 target_include_directories(fam65xx_processor_tests_runner PRIVATE

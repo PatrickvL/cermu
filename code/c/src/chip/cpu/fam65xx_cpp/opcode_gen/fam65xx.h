@@ -486,11 +486,12 @@ uint64_t fam65xx_bootstrap(fam65xx_t* c, uint64_t pins) {
     // Only bootstrap if CPU is in uninitialized state
     if (c->CI == 0xFFFF) {
         // Set up for first instruction fetch
-        c->AD = c->PC;
         pins |= FAM65XX_RDY;   // Ensure RDY is high for execution
         pins |= FAM65XX_RW;    // Ensure RW is set for read operation
         pins |= FAM65XX_SYNC;  // Set SYNC for instruction fetch
         c->CI = 0x0000;        // Clear the invalid marker
+        // Copy PC (post-incremented) to AD
+        c->AD = c->PC++;
     }
     
     return pins;
@@ -536,19 +537,16 @@ uint64_t fam65xx_tick(fam65xx_t* c, uint64_t pins) {
         // CPU is ready - decode the opcode that was just read
         c->opcode = c->DL;
         
-        // CRITICAL: Advance PC for opcode read (all instructions need this)
-        c->PC++;
-        
         // Decode opcode and set next CI based on addressing mode
         extern const uint8_t opcode_addr_start[256];  // From generated decoder
         uint8_t addr_seq = opcode_addr_start[c->opcode];
         
         // Set next CI: either direct opcode execution or addressing mode sequence
         if (addr_seq == 0) {
-            // Direct opcode execution (immediate/implied addressing)
+            // Direct opcode execution (implied addressing)
             c->CI = (uint16_t)c->opcode;
         } else {
-            // Addressing mode sequence - addressing modes will advance PC for operands
+            // Addressing mode sequence
             c->CI = ADDR_SEQ_BASE + addr_seq;
         }
     }

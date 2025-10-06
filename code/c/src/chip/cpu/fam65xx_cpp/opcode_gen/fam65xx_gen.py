@@ -201,7 +201,7 @@ OP_DEC_M = ("DEC", M_RW, "c->CI = C_DEC_RMW;", 'RMW')  # Jump directly to RMW co
 
 # NOP variants
 OP_NOP_I = ("NOP", M___, "c->AD = c->PC;\nc->CI = C_NOP_DUMMY;", 'CONT')  # Immediate NOP - dummy read of PC then increment - 2-cycle instruction
-OP_NOP_IMPLIED = ("NOP", M___, "goto fetch_next;", None)  # Implied NOP - no memory access, complete immediately - 2-cycle instruction
+OP_NOP_IMPLIED = ("NOP", M___, "c->PC++;\ngoto fetch_next;", None)  # Implied NOP - increment PC then complete - 2-cycle instruction
 OP_NOP_R = ("NOP", M_R_, "goto fetch_next;", None)      # Read from effective address - M_R_ immediate fetch
 
 # Illegal/undocumented instructions
@@ -872,7 +872,7 @@ def main():
     l("    return pins;")
     l("")
     l("fetch_next:")
-    l("    c->AD = c->PC;")
+    l("    c->AD = c->PC++;")
     l("    pins |= FAM65XX_SYNC;")
     l("    return pins;")
     l("}")
