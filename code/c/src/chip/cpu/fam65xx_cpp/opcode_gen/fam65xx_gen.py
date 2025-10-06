@@ -3,6 +3,12 @@
 #   fam65xx_gen.py
 #   Generate instruction decoder for FAM65xx family CPU emulator.
 #   Optimized for world's fastest 100% hardware accurate implementation.
+#   
+#   ARCHITECTURAL REDESIGN:
+#   - Unified cycle sequences (no more first cycle + continuation split)
+#   - Auto-generated labels based on opcode name + memory access mode
+#   - Data-driven branch instructions (no hardcoded logic)
+#   - Clean separation of concerns
 #-------------------------------------------------------------------------------
 
 #-------------------------------------------------------------------------------
@@ -89,7 +95,8 @@ AM_IDY_W = ("IDY", "indirect indexed (zp),Y (write - always takes extra cycle)",
     "c->AD = c->PC++;\nc->CI++;",
     "c->TMP = c->DL;\nc->AD = (c->DL + 1) & 0xFF;\nc->CI++;",
     "c->AD = c->TMP | (c->DL << 8);\nc->CI++;",
-    "c->AD += c->Y;\nc->CI++;"
+    "c->AD += c->Y;\nc->CI++;",
+    "c->CI = c->opcode;"
 ))
 
 # Addressing mode list
@@ -115,216 +122,322 @@ M__W = 2        # write access
 M_RW = 3        # read-modify-write
 
 #-------------------------------------------------------------------------------
-# Cycle Sequence Definitions
-# Each cycle sequence defines the remaining cycles after the initial opcode execution
+# Unified Operation Definitions
+# Each definition contains: (mnemonic, mem_access, cycles_list)
+# cycles_list is a complete list of all cycles needed for the operation
 #-------------------------------------------------------------------------------
 
-# Branch cycle sequence - used by all branch instructions
-BRANCH_CYCLES = ('C_BRANCH_TAKEN', (
-    'if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\t// Same page - branch takes 3 cycles total\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tgoto fetch_next;\n} else {\n\t// Page boundary crossed - fix high byte calculation\n\t// The 6502 does a dummy read with wrong high byte, then corrects it\n\tc->CI++;\n}',  # Page boundary check
-    '// Page boundary crossing dummy cycle complete - set correct PC\nc->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\ngoto fetch_next;'  # Page crossed case and fetch
-))
-
-#-------------------------------------------------------------------------------
-# Operation Definitions
-# Each definition contains: (mnemonic, mem_access, implementation_code, cycle_sequence)
-# cycle_sequence can be None (immediate completion) or a cycle sequence object
-#-------------------------------------------------------------------------------
+def generate_label(mnemonic, mem_access, addressing_mode=None):
+    """Generate unique label for operation cycle sequence"""
+    mem_suffix = {M___: "", M_R_: "_R", M__W: "_W", M_RW: "_RW"}[mem_access]
+    # Only add addressing mode suffix if it's a real addressing mode (not AM_NON, AM_JMP, AM_JSR, AM_INV)
+    addr_suffix = ""
+    if addressing_mode and addressing_mode not in [AM_NON, AM_JMP, AM_JSR, AM_INV]:
+        # Use the const name instead of acronym to avoid invalid C identifiers
+        addr_suffix = f"_{addressing_mode[2].replace('ADDR_', '')}"
+    return f"C_{mnemonic}{mem_suffix}{addr_suffix}"
 
 # Simple implied mode operations
-OP_BRK = ("BRK", M___, "if (0 == (c->brk_flags & (FAM65XX_BRK_IRQ | FAM65XX_BRK_NMI))) {\n\tc->PC++;\n}\nc->write_src = R_PCH;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI = C_BRK;", ('C_BRK', (
-    'c->write_src = R_PCL;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI++;',  # Cycle 2: Write PCL to stack
-    'c->TMP = c->P | FAM65XX_BF;\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->P |= FAM65XX_IF;\nc->P &= ~FAM65XX_BF;\nc->brk_flags = 0;\nc->CI++;',  # Cycle 3: Write P to stack, set IF, clear BF
-    'c->AD = _fam65xx_get_vector_addr(c);\nc->PCL = c->DL;\nc->CI++;',  # Cycle 4: Read low byte of vector, store in PCL
-    'c->AD++;\nc->PCH = c->DL;\nc->CI++;',  # Cycle 5: Read high byte of vector, store in PCH
-    'c->AD = c->PC;\nc->CI++;',  # Cycle 6: Hardware dummy read from new PC location
-    'goto fetch_next;'  # Cycle 7: Fetch next instruction
-)))
-OP_PHP = ("PHP", M___, "c->AD = c->PC;\nc->CI = C_PHP;", ('C_PHP', (
-    'c->TMP = c->P | FAM65XX_BF;\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI++;',  # Cycle 2: Write P to stack with B flag set
-    'goto fetch_next;'  # Cycle 3: Fetch next instruction
-)))  # 3-cycle: dummy read, stack write, fetch
-OP_PLP = ("PLP", M___, "c->AD = 0x0100 | c->S++;\nc->CI = C_PLP;", ('C_PLP', (
-    'c->AD = 0x0100 | c->S;\nc->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;\nc->CI++;',  # Read status register from stack and process
-    'goto fetch_next;'  # Fetch next instruction
-)))
-OP_PHA = ("PHA", M___, "c->AD = c->PC;\nc->CI = C_PHA;", ('C_PHA', (
-    'c->write_src = R_A;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI++;',  # Cycle 2: Write A to stack
-    'goto fetch_next;'  # Cycle 3: Fetch next instruction
-)))  # 3-cycle: dummy read, stack write, fetch
-OP_PLA = ("PLA", M___, "c->AD = 0x0100 | c->S++;\nc->CI = C_PLA;", ('C_PLA', (
-    'c->AD = 0x0100 | c->S;\nc->A = c->DL;\n_NZ(c->A);\nc->CI++;',  # Read accumulator from stack and process
-    'goto fetch_next;'  # Fetch next instruction
-)))  # Dummy stack access - increment S
-OP_RTI = ("RTI", M_R_, "c->AD = 0x0100 | c->S++;\nc->CI = C_RTI;", ('C_RTI', (
-    'c->AD = 0x0100 | c->S++;\nc->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;\nc->CI++;',  # Read status register from stack
-    'c->AD = 0x0100 | c->S++;\nc->PCL = c->DL;\nc->CI++;',  # Read PCL from stack
-    'c->AD = 0x0100 | c->S;\nc->PCH = c->DL;\nc->CI++;',  # Read PCH from stack and set PC
-    'goto fetch_next;'  # Fetch next instruction
-)))  # Dummy stack access - increment S
-OP_RTS = ("RTS", M_R_, "c->AD = 0x0100 | c->S++;\nc->CI = C_RTS;", ('C_RTS', (
-    'c->AD = 0x0100 | c->S++;\nc->PCL = c->DL;\nc->CI++;',  # Read PCL from stack
-    'c->AD = 0x0100 | c->S;\nc->PCH = c->DL;\nc->CI++;',  # Read PCH from stack and set PC
-    'goto fetch_next;'  # Increment PC and fetch next instruction
-)))  # Dummy stack access - increment S
-OP_JSR = ("JSR", M_R_, "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI = C_JSR;", ('C_JSR', (
-    'c->AD = 0x0100 | c->S;\nc->CI++;',  # Dummy stack access
-    'c->write_src = R_PCH;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI++;',  # Write PCH to stack
-    'c->write_src = R_PCL;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI++;',  # Write PCL to stack
-    'c->AD = c->PC;\nc->PCH = c->DL;\nc->PC = (c->DL << 8) | c->TMP;\nc->CI++;',  # Read high byte and set PC
-    'goto fetch_next;'  # Fetch next instruction
-)))  # Read low byte of target address
-OP_JMP = ("JMP", M_R_, "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI = C_JMP_ABS;", ('C_JMP_ABS', (
-    'c->AD = c->PC++;\nc->PCH = c->DL;\nc->PC = (c->DL << 8) | c->TMP;\nc->CI++;',  # Read high byte and set PC
-    'goto fetch_next;'  # Fetch next instruction
-)))  # Read low byte of target address
-OP_JMP_I = ("JMP", M_R_, "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI = C_JMP_IND;", ('C_JMP_IND', (
-    'c->AD = c->PC++;\nc->TMP = c->DL;\nc->AD = (c->DL << 8) | c->TMP;\nc->CI++;',  # Read high byte of indirect address
-    'c->AD = c->AD;\nc->PCL = c->DL;\nc->CI++;',  # Read low byte of target address from indirect location
-    'c->AD = (c->AD & 0xFF00) | ((c->AD + 1) & 0xFF);\nc->PCH = c->DL;\nc->CI++;',  # Read high byte (with page boundary bug) and set PC
-    'goto fetch_next;'  # Fetch next instruction
-)))  # Read low byte of indirect address
+OP_BRK = ("BRK", M___, [
+    "if (0 == (c->brk_flags & (FAM65XX_BRK_IRQ | FAM65XX_BRK_NMI))) {\n\tc->PC++;\n}\nc->write_src = R_PCH;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI++;",
+    "c->write_src = R_PCL;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI++;",
+    "c->TMP = c->P | FAM65XX_BF;\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->P |= FAM65XX_IF;\nc->P &= ~FAM65XX_BF;\nc->brk_flags = 0;\nc->CI++;",
+    "c->AD = _fam65xx_get_vector_addr(c);\nc->PCL = c->DL;\nc->CI++;",
+    "c->AD++;\nc->PCH = c->DL;\nc->CI++;",
+    "c->AD = c->PC;\nc->CI++;",
+    "goto fetch_next;"
+])
 
-# Register transfer operations (M___ - immediate fetch)
-OP_TAX = ("TAX", M___, "c->X = c->A;\n_NZ(c->X);\ngoto fetch_next;", None)
-OP_TXA = ("TXA", M___, "c->A = c->X;\n_NZ(c->A);\ngoto fetch_next;", None)
-OP_TAY = ("TAY", M___, "c->Y = c->A;\n_NZ(c->Y);\ngoto fetch_next;", None)
-OP_TYA = ("TYA", M___, "c->A = c->Y;\n_NZ(c->A);\ngoto fetch_next;", None)
-OP_TSX = ("TSX", M___, "c->X = c->S;\n_NZ(c->X);\ngoto fetch_next;", None)
-OP_TXS = ("TXS", M___, "c->S = c->X;\ngoto fetch_next;", None)
+OP_PHP = ("PHP", M___, [
+    "c->AD = c->PC;\nc->CI++;",
+    "c->TMP = c->P | FAM65XX_BF;\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI++;",
+    "goto fetch_next;"
+])
 
-# Increment/Decrement operations (M___ - immediate fetch)
-OP_DEX = ("DEX", M___, "c->X--;\n_NZ(c->X);\ngoto fetch_next;", None)
-OP_INX = ("INX", M___, "c->X++;\n_NZ(c->X);\ngoto fetch_next;", None)
-OP_DEY = ("DEY", M___, "c->Y--;\n_NZ(c->Y);\ngoto fetch_next;", None)
-OP_INY = ("INY", M___, "c->Y++;\n_NZ(c->Y);\ngoto fetch_next;", None)
+OP_PLP = ("PLP", M___, [
+    "c->AD = 0x0100 | c->S++;\nc->CI++;",
+    "c->AD = 0x0100 | c->S;\nc->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;\nc->CI++;",
+    "goto fetch_next;"
+])
 
-# Flag operations (M___ - immediate fetch)
-OP_CLC = ("CLC", M___, "c->P &= ~FAM65XX_CF;\ngoto fetch_next;", None)
-OP_SEC = ("SEC", M___, "c->P |= FAM65XX_CF;\ngoto fetch_next;", None)
-OP_CLI = ("CLI", M___, "c->P &= ~FAM65XX_IF;\ngoto fetch_next;", None)
-OP_SEI = ("SEI", M___, "c->P |= FAM65XX_IF;\ngoto fetch_next;", None)
-OP_CLV = ("CLV", M___, "c->P &= ~FAM65XX_VF;\ngoto fetch_next;", None)
-OP_CLD = ("CLD", M___, "c->P &= ~FAM65XX_DF;\ngoto fetch_next;", None)
-OP_SED = ("SED", M___, "c->P |= FAM65XX_DF;\ngoto fetch_next;", None)
+OP_PHA = ("PHA", M___, [
+    "c->AD = c->PC;\nc->CI++;",
+    "c->write_src = R_A;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI++;",
+    "goto fetch_next;"
+])
 
-# Branch operations (all share C_BRANCH_TAKEN continuation)
-OP_BPL = ("BPL", M_R_, None, BRANCH_CYCLES)  # Read branch offset from PC
-OP_BMI = ("BMI", M_R_, None, BRANCH_CYCLES)  # Read branch offset from PC
-OP_BVC = ("BVC", M_R_, None, BRANCH_CYCLES)  # Read branch offset from PC
-OP_BVS = ("BVS", M_R_, None, BRANCH_CYCLES)  # Read branch offset from PC
-OP_BCC = ("BCC", M_R_, None, BRANCH_CYCLES)  # Read branch offset from PC
-OP_BCS = ("BCS", M_R_, None, BRANCH_CYCLES)  # Read branch offset from PC
-OP_BNE = ("BNE", M_R_, None, BRANCH_CYCLES)  # Read branch offset from PC
-OP_BEQ = ("BEQ", M_R_, None, BRANCH_CYCLES)  # Read branch offset from PC
+OP_PLA = ("PLA", M___, [
+    "c->AD = 0x0100 | c->S++;\nc->CI++;",
+    "c->AD = 0x0100 | c->S;\nc->A = c->DL;\n_NZ(c->A);\nc->CI++;",
+    "goto fetch_next;"
+])
 
-# ALU operations - Memory variants (M_R_ - immediate fetch)
-OP_ORA = ("ORA", M_R_, "c->A |= c->DL;\n_NZ(c->A);\ngoto fetch_next;", None)
-OP_AND = ("AND", M_R_, "c->A &= c->DL;\n_NZ(c->A);\ngoto fetch_next;", None)
-OP_EOR = ("EOR", M_R_, "c->A ^= c->DL;\n_NZ(c->A);\ngoto fetch_next;", None)
-OP_ADC = ("ADC", M_R_, "_fam65xx_adc(c, c->DL);\ngoto fetch_next;", None)
-OP_SBC = ("SBC", M_R_, "_fam65xx_sbc(c, c->DL);\ngoto fetch_next;", None)
-OP_CMP = ("CMP", M_R_, "_fam65xx_cmp(c, c->A, c->DL);\ngoto fetch_next;", None)
-OP_BIT = ("BIT", M_R_, "_fam65xx_bit(c, c->DL);\ngoto fetch_next;", None)
+OP_RTI = ("RTI", M_R_, [
+    "c->AD = 0x0100 | c->S++;\nc->CI++;",
+    "c->AD = 0x0100 | c->S++;\nc->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;\nc->CI++;",
+    "c->AD = 0x0100 | c->S++;\nc->PCL = c->DL;\nc->CI++;",
+    "c->AD = 0x0100 | c->S;\nc->PCH = c->DL;\nc->CI++;",
+    "goto fetch_next;"
+])
 
-# Load operations (M_R_ - immediate fetch)
-OP_LDA = ("LDA", M_R_, "c->A = c->DL;\n_NZ(c->A);\ngoto fetch_next;", None)
-OP_LDX = ("LDX", M_R_, "c->X = c->DL;\n_NZ(c->X);\ngoto fetch_next;", None)
-OP_LDY = ("LDY", M_R_, "c->Y = c->DL;\n_NZ(c->Y);\ngoto fetch_next;", None)
+OP_RTS = ("RTS", M_R_, [
+    "c->AD = 0x0100 | c->S++;\nc->CI++;",
+    "c->AD = 0x0100 | c->S++;\nc->PCL = c->DL;\nc->CI++;",
+    "c->AD = 0x0100 | c->S;\nc->PCH = c->DL;\nc->CI++;",
+    "goto fetch_next;"
+])
 
-# Store operations (M__W - deferred fetch)
-OP_STA = ("STA", M__W, "c->write_src = R_A;\npins &= ~FAM65XX_RW;\ngoto fetch_next;", None)
-OP_STX = ("STX", M__W, "c->write_src = R_X;\npins &= ~FAM65XX_RW;\ngoto fetch_next;", None)
-OP_STY = ("STY", M__W, "c->write_src = R_Y;\npins &= ~FAM65XX_RW;\ngoto fetch_next;", None)
+OP_JSR = ("JSR", M_R_, [
+    "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI++;",
+    "c->AD = 0x0100 | c->S;\nc->CI++;",
+    "c->write_src = R_PCH;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI++;",
+    "c->write_src = R_PCL;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI++;",
+    "c->AD = c->PC;\nc->PCH = c->DL;\nc->PC = (c->DL << 8) | c->TMP;\nc->CI++;",
+    "goto fetch_next;"
+])
 
-# Compare operations (M_R_ - immediate fetch)
-OP_CPX = ("CPX", M_R_, "_fam65xx_cmp(c, c->X, c->DL);\ngoto fetch_next;", None)
-OP_CPY = ("CPY", M_R_, "_fam65xx_cmp(c, c->Y, c->DL);\ngoto fetch_next;", None)
+OP_JMP = ("JMP", M_R_, [
+    "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI++;",
+    "c->AD = c->PC++;\nc->PCH = c->DL;\nc->PC = (c->DL << 8) | c->TMP;\nc->CI++;",
+    "goto fetch_next;"
+])
+
+OP_JMP_I = ("JMP", M_R_, [
+    "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI++;",
+    "c->AD = c->PC++;\nc->TMP = c->DL;\nc->AD = (c->DL << 8) | c->TMP;\nc->CI++;",
+    "c->AD = c->AD;\nc->PCL = c->DL;\nc->CI++;",
+    "c->AD = (c->AD & 0xFF00) | ((c->AD + 1) & 0xFF);\nc->PCH = c->DL;\nc->CI++;",
+    "goto fetch_next;"
+])
+
+# Register transfer operations (single cycle - immediate completion)
+OP_TAX = ("TAX", M___, ["c->X = c->A;\n_NZ(c->X);\ngoto fetch_next;"])
+OP_TXA = ("TXA", M___, ["c->A = c->X;\n_NZ(c->A);\ngoto fetch_next;"])
+OP_TAY = ("TAY", M___, ["c->Y = c->A;\n_NZ(c->Y);\ngoto fetch_next;"])
+OP_TYA = ("TYA", M___, ["c->A = c->Y;\n_NZ(c->A);\ngoto fetch_next;"])
+OP_TSX = ("TSX", M___, ["c->X = c->S;\n_NZ(c->X);\ngoto fetch_next;"])
+OP_TXS = ("TXS", M___, ["c->S = c->X;\ngoto fetch_next;"])
+
+# Increment/Decrement operations (single cycle - immediate completion)
+OP_DEX = ("DEX", M___, ["c->X--;\n_NZ(c->X);\ngoto fetch_next;"])
+OP_INX = ("INX", M___, ["c->X++;\n_NZ(c->X);\ngoto fetch_next;"])
+OP_DEY = ("DEY", M___, ["c->Y--;\n_NZ(c->Y);\ngoto fetch_next;"])
+OP_INY = ("INY", M___, ["c->Y++;\n_NZ(c->Y);\ngoto fetch_next;"])
+
+# Flag operations (single cycle - immediate completion)
+OP_CLC = ("CLC", M___, ["c->P &= ~FAM65XX_CF;\ngoto fetch_next;"])
+OP_SEC = ("SEC", M___, ["c->P |= FAM65XX_CF;\ngoto fetch_next;"])
+OP_CLI = ("CLI", M___, ["c->P &= ~FAM65XX_IF;\ngoto fetch_next;"])
+OP_SEI = ("SEI", M___, ["c->P |= FAM65XX_IF;\ngoto fetch_next;"])
+OP_CLV = ("CLV", M___, ["c->P &= ~FAM65XX_VF;\ngoto fetch_next;"])
+OP_CLD = ("CLD", M___, ["c->P &= ~FAM65XX_DF;\ngoto fetch_next;"])
+OP_SED = ("SED", M___, ["c->P |= FAM65XX_DF;\ngoto fetch_next;"])
+
+# Data-driven branch operations
+OP_BPL = ("BPL", M_R_, [
+    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_NF) == 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tc->CI++;\n} else {\n\tgoto fetch_next;\n}",
+    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tgoto fetch_next;\n} else {\n\tc->CI++;\n}",
+    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\ngoto fetch_next;"
+])
+
+OP_BMI = ("BMI", M_R_, [
+    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_NF) != 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tc->CI++;\n} else {\n\tgoto fetch_next;\n}",
+    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tgoto fetch_next;\n} else {\n\tc->CI++;\n}",
+    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\ngoto fetch_next;"
+])
+
+OP_BVC = ("BVC", M_R_, [
+    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_VF) == 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tc->CI++;\n} else {\n\tgoto fetch_next;\n}",
+    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tgoto fetch_next;\n} else {\n\tc->CI++;\n}",
+    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\ngoto fetch_next;"
+])
+
+OP_BVS = ("BVS", M_R_, [
+    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_VF) != 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tc->CI++;\n} else {\n\tgoto fetch_next;\n}",
+    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tgoto fetch_next;\n} else {\n\tc->CI++;\n}",
+    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\ngoto fetch_next;"
+])
+
+OP_BCC = ("BCC", M_R_, [
+    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_CF) == 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tc->CI++;\n} else {\n\tgoto fetch_next;\n}",
+    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tgoto fetch_next;\n} else {\n\tc->CI++;\n}",
+    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\ngoto fetch_next;"
+])
+
+OP_BCS = ("BCS", M_R_, [
+    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_CF) != 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tc->CI++;\n} else {\n\tgoto fetch_next;\n}",
+    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tgoto fetch_next;\n} else {\n\tc->CI++;\n}",
+    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\ngoto fetch_next;"
+])
+
+OP_BNE = ("BNE", M_R_, [
+    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_ZF) == 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tc->CI++;\n} else {\n\tgoto fetch_next;\n}",
+    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tgoto fetch_next;\n} else {\n\tc->CI++;\n}",
+    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\ngoto fetch_next;"
+])
+
+OP_BEQ = ("BEQ", M_R_, [
+    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_ZF) != 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tc->CI++;\n} else {\n\tgoto fetch_next;\n}",
+    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tgoto fetch_next;\n} else {\n\tc->CI++;\n}",
+    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\ngoto fetch_next;"
+])
+
+# ALU operations - Memory variants (single cycle after addressing mode)
+OP_ORA = ("ORA", M_R_, ["c->A |= c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
+OP_AND = ("AND", M_R_, ["c->A &= c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
+OP_EOR = ("EOR", M_R_, ["c->A ^= c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
+OP_ADC = ("ADC", M_R_, ["_fam65xx_adc(c, c->DL);\ngoto fetch_next;"])
+OP_SBC = ("SBC", M_R_, ["_fam65xx_sbc(c, c->DL);\ngoto fetch_next;"])
+OP_CMP = ("CMP", M_R_, ["_fam65xx_cmp(c, c->A, c->DL);\ngoto fetch_next;"])
+OP_BIT = ("BIT", M_R_, ["_fam65xx_bit(c, c->DL);\ngoto fetch_next;"])
+
+# Immediate mode variants (read operand directly and execute)
+OP_ORA_IMM = ("ORA", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->A |= c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
+OP_AND_IMM = ("AND", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->A &= c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
+OP_EOR_IMM = ("EOR", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->A ^= c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
+OP_ADC_IMM = ("ADC", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;_fam65xx_adc(c, c->DL);\ngoto fetch_next;"])
+OP_SBC_IMM = ("SBC", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;_fam65xx_sbc(c, c->DL);\ngoto fetch_next;"])
+OP_CMP_IMM = ("CMP", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;_fam65xx_cmp(c, c->A, c->DL);\ngoto fetch_next;"])
+
+# Load operations (single cycle after addressing mode)
+OP_LDA = ("LDA", M_R_, ["c->A = c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
+OP_LDX = ("LDX", M_R_, ["c->X = c->DL;\n_NZ(c->X);\ngoto fetch_next;"])
+OP_LDY = ("LDY", M_R_, ["c->Y = c->DL;\n_NZ(c->Y);\ngoto fetch_next;"])
+
+# Immediate load operations (read operand directly and execute)
+OP_LDA_IMM = ("LDA", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->A = c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
+OP_LDX_IMM = ("LDX", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->X = c->DL;\n_NZ(c->X);\ngoto fetch_next;"])
+OP_LDY_IMM = ("LDY", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->Y = c->DL;\n_NZ(c->Y);\ngoto fetch_next;"])
+
+# Store operations (single cycle after addressing mode)
+OP_STA = ("STA", M__W, ["c->write_src = R_A;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"])
+OP_STX = ("STX", M__W, ["c->write_src = R_X;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"])
+OP_STY = ("STY", M__W, ["c->write_src = R_Y;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"])
+
+# Compare operations (single cycle after addressing mode)
+OP_CPX = ("CPX", M_R_, ["_fam65xx_cmp(c, c->X, c->DL);\ngoto fetch_next;"])
+OP_CPY = ("CPY", M_R_, ["_fam65xx_cmp(c, c->Y, c->DL);\ngoto fetch_next;"])
+
+# Immediate compare operations
+OP_CPX_IMM = ("CPX", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;_fam65xx_cmp(c, c->X, c->DL);\ngoto fetch_next;"])
+OP_CPY_IMM = ("CPY", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;_fam65xx_cmp(c, c->Y, c->DL);\ngoto fetch_next;"])
 
 # RMW operations - have two variants (accumulator vs memory)
-OP_ASL_A = ("ASL", M___, "c->A = _fam65xx_asl(c, c->A);\nc->CI = C_ASL_A;", ('C_ASL_A', (
-    'goto fetch_next;',  # Cycle 2: Complete ASL execution, fetch next
-)))  # 2-cycle accumulator instruction
-OP_ASL_M = ("ASL", M_RW, "c->CI = C_ASL_M;", ('C_ASL_M', (
-    "c->TMP = _fam65xx_asl(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Compute result + setup write
-    "goto fetch_next;",  # Write occurs + fetch next
-)))
-OP_LSR_A = ("LSR", M___, "c->A = _fam65xx_lsr(c, c->A);\nc->CI = C_LSR_A;", ('C_LSR_A', (
-    'goto fetch_next;',  # Cycle 2: Complete LSR execution, fetch next
-)))  # 2-cycle accumulator instruction
-OP_LSR_M = ("LSR", M_RW, "c->CI = C_LSR_M;", ('C_LSR_M', (
-    "c->TMP = _fam65xx_lsr(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Compute result + setup write
-    "goto fetch_next;",  # Write occurs + fetch next
-)))
-OP_ROL_A = ("ROL", M___, "c->A = _fam65xx_rol(c, c->A);\nc->CI = C_ROL_A;", ('C_ROL_A', (
-    'goto fetch_next;',  # Cycle 2: Complete ROL execution, fetch next
-)))  # 2-cycle accumulator instruction
-OP_ROL_M = ("ROL", M_RW, "c->CI = C_ROL_M;", ('C_ROL_M', (
-    "c->TMP = _fam65xx_rol(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Compute result + setup write
-    "goto fetch_next;",  # Write occurs + fetch next
-)))
-OP_ROR_A = ("ROR", M___, "c->A = _fam65xx_ror(c, c->A);\nc->CI = C_ROR_A;", ('C_ROR_A', (
-    'goto fetch_next;',  # Cycle 2: Complete ROR execution, fetch next
-)))  # 2-cycle accumulator instruction
-OP_ROR_M = ("ROR", M_RW, "c->CI = C_ROR_M;", ('C_ROR_M', (
-    "c->TMP = _fam65xx_ror(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Compute result + setup write
-    "goto fetch_next;",  # Write occurs + fetch next
-)))
-OP_INC = ("INC", M_RW, "c->CI = C_INC;", ('C_INC', (
-    "c->TMP = c->DL + 1;\n_NZ(c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Compute result + setup write
-    "goto fetch_next;",  # Write occurs + fetch next
-)))
-OP_DEC = ("DEC", M_RW, "c->CI = C_DEC;", ('C_DEC', (
-    "c->TMP = c->DL - 1;\n_NZ(c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Compute result + setup write
-    "goto fetch_next;",  # Write occurs + fetch next
-)))
+OP_ASL_A = ("ASL", M___, [
+    "c->A = _fam65xx_asl(c, c->A);\nc->CI++;",
+    "goto fetch_next;"
+])
+
+OP_ASL_M = ("ASL", M_RW, [
+    "c->TMP = _fam65xx_asl(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
+    "goto fetch_next;"
+])
+
+OP_LSR_A = ("LSR", M___, [
+    "c->A = _fam65xx_lsr(c, c->A);\nc->CI++;",
+    "goto fetch_next;"
+])
+
+OP_LSR_M = ("LSR", M_RW, [
+    "c->TMP = _fam65xx_lsr(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
+    "goto fetch_next;"
+])
+
+OP_ROL_A = ("ROL", M___, [
+    "c->A = _fam65xx_rol(c, c->A);\nc->CI++;",
+    "goto fetch_next;"
+])
+
+OP_ROL_M = ("ROL", M_RW, [
+    "c->TMP = _fam65xx_rol(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
+    "goto fetch_next;"
+])
+
+OP_ROR_A = ("ROR", M___, [
+    "c->A = _fam65xx_ror(c, c->A);\nc->CI++;",
+    "goto fetch_next;"
+])
+
+OP_ROR_M = ("ROR", M_RW, [
+    "c->TMP = _fam65xx_ror(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
+    "goto fetch_next;"
+])
+
+OP_INC = ("INC", M_RW, [
+    "c->TMP = c->DL + 1;\n_NZ(c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
+    "goto fetch_next;"
+])
+
+OP_DEC = ("DEC", M_RW, [
+    "c->TMP = c->DL - 1;\n_NZ(c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
+    "goto fetch_next;"
+])
 
 # NOP variants
-OP_NOP_I = ("NOP", M___, "c->AD = c->PC;\nc->CI = C_NOP_I;", ('C_NOP_I', (
-    'goto fetch_next;',  # Cycle 2: Dummy read from PC (already set in cycle 1), increment PC, fetch next
-)))  # Immediate NOP - dummy read of PC then increment - 2-cycle instruction
-OP_NOP_R = ("NOP", M_R_, "goto fetch_next;", None)      # Read from effective address - M_R_ immediate fetch
+OP_NOP_I = ("NOP", M___, [
+    "c->AD = c->PC;\nc->CI++;",
+    "goto fetch_next;"
+])
+
+OP_NOP_R = ("NOP", M_R_, ["goto fetch_next;"])
 
 # Illegal/undocumented instructions
-OP_LAX = ("LAX", M_R_, "c->A = c->X = c->DL;\n_NZ(c->A);\ngoto fetch_next;", None)  # Read and load into A and X - M_R_ immediate fetch
-OP_SAX = ("SAX", M__W, "c->TMP = c->A & c->X;\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\ngoto fetch_next;", None)  # Write A&X to memory - M__W deferred fetch
-OP_SLO = ("SLO", M_RW, "c->CI = C_SLO;", ('C_SLO', (
-    "c->TMP = _fam65xx_asl(c, c->DL);\nc->A |= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Compute + additional op + setup write
-    "goto fetch_next;",  # Write occurs + fetch next
-)))
-OP_RLA = ("RLA", M_RW, "c->CI = C_RLA;", ('C_RLA', (
-    "c->TMP = _fam65xx_rol(c, c->DL);\nc->A &= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Compute + additional op + setup write
-    "goto fetch_next;",  # Write occurs + fetch next
-)))
-OP_SRE = ("SRE", M_RW, "c->CI = C_SRE;", ('C_SRE', (
-    "c->TMP = _fam65xx_lsr(c, c->DL);\nc->A ^= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Compute + additional op + setup write
-    "goto fetch_next;",  # Write occurs + fetch next
-)))
-OP_RRA = ("RRA", M_RW, "c->CI = C_RRA;", ('C_RRA', (
-    "c->TMP = _fam65xx_ror(c, c->DL);\n_fam65xx_adc(c, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Compute + additional op + setup write
-    "goto fetch_next;",  # Write occurs + fetch next
-)))
-OP_DCP = ("DCP", M_RW, "c->CI = C_DCP;", ('C_DCP', (
-    "c->TMP = c->DL - 1;\n_fam65xx_cmp(c, c->A, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Compute + additional op + setup write
-    "goto fetch_next;",  # Write occurs + fetch next
-)))
-OP_ISC = ("ISC", M_RW, "c->CI = C_ISC;", ('C_ISC', (
-    "c->TMP = c->DL + 1;\n_fam65xx_sbc(c, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",  # Compute + additional op + setup write
-    "goto fetch_next;",  # Write occurs + fetch next
-)))
-OP_ANC = ("ANC", M_R_, "c->A &= c->DL;\n_NZ(c->A);\nc->P = (c->P & ~FAM65XX_CF) | ((c->A & 0x80) ? FAM65XX_CF : 0);\ngoto fetch_next;", None)  # AND with carry flag update - M_R_ immediate fetch
-OP_ASR = ("ASR", M_R_, "c->A &= c->DL;\nc->P = (c->P & ~FAM65XX_CF) | (c->A & 1);\nc->A>>=1;\n_NZ(c->A);\ngoto fetch_next;", None)  # AND then LSR - M_R_ immediate fetch
-OP_ARR = ("ARR", M_R_, "c->A = (c->A & c->DL) >> 1 | (c->P & FAM65XX_CF ? 0x80 : 0);\n_NZ(c->A);\nc->P = (c->P & ~(FAM65XX_CF | FAM65XX_VF)) | ((c->A & 0x40) ? FAM65XX_CF : 0) | ((c->A & 0x20) ^ (c->A & 0x40) ? FAM65XX_VF : 0);\ngoto fetch_next;", None)  # AND then ROR - M_R_ immediate fetch
-OP_XAA = ("XAA", M_R_, "c->A = (c->A | 0xEE) & c->X & c->DL;\n_NZ(c->A);\ngoto fetch_next;", None)  # Unstable AND operation - M_R_ immediate fetch
-OP_SBX = ("SBX", M_R_, "c->TMP = (c->A & c->X) - c->DL;\nc->X = c->TMP;\n_NZ(c->X);\nc->P = (c->P & ~FAM65XX_CF) | ((c->TMP & 0x100) ? 0 : FAM65XX_CF);\ngoto fetch_next;", None)  # CMP and DEX combined - M_R_ immediate fetch
-OP_SHY = ("SHY", M__W, "c->TMP = c->Y & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\ngoto fetch_next;", None)  # Store Y with high byte AND - M__W deferred fetch
-OP_SHX = ("SHX", M__W, "c->TMP = c->X & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\ngoto fetch_next;", None)  # Store X with high byte AND - M__W deferred fetch
-OP_SHA = ("SHA", M_RW, "c->TMP = c->A & c->X & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\ngoto fetch_next;", None)  # Store A&X with high byte AND - M_RW deferred fetch (note: should be M__W)
-OP_SHS = ("SHS", M__W, "c->S = c->A & c->X;\nc->TMP = c->S & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\ngoto fetch_next;", None)  # Transfer A&X to S and store - M__W deferred fetch
-OP_LAS = ("LAS", M_R_, "c->A = c->X = c->S = c->S & c->DL;\n_NZ(c->A);\ngoto fetch_next;", None)  # AND S with memory to A,X,S - M_R_ immediate fetch
-OP_JAM = ("JAM", M_R_, "c->PC--;\nc->CI = C_JAM;", ('C_JAM', (
-    'goto fetch_next;',  # Cycle 2: Fetch next instruction
-)))  # Read byte after opcode, restore PC, then continue JAM
+OP_LAX = ("LAX", M_R_, ["c->A = c->X = c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
+OP_SAX = ("SAX", M__W, ["c->TMP = c->A & c->X;\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"])
+
+OP_SLO = ("SLO", M_RW, [
+    "c->TMP = _fam65xx_asl(c, c->DL);\nc->A |= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
+    "goto fetch_next;"
+])
+
+OP_RLA = ("RLA", M_RW, [
+    "c->TMP = _fam65xx_rol(c, c->DL);\nc->A &= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
+    "goto fetch_next;"
+])
+
+OP_SRE = ("SRE", M_RW, [
+    "c->TMP = _fam65xx_lsr(c, c->DL);\nc->A ^= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
+    "goto fetch_next;"
+])
+
+OP_RRA = ("RRA", M_RW, [
+    "c->TMP = _fam65xx_ror(c, c->DL);\n_fam65xx_adc(c, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
+    "goto fetch_next;"
+])
+
+OP_DCP = ("DCP", M_RW, [
+    "c->TMP = c->DL - 1;\n_fam65xx_cmp(c, c->A, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
+    "goto fetch_next;"
+])
+
+OP_ISC = ("ISC", M_RW, [
+    "c->TMP = c->DL + 1;\n_fam65xx_sbc(c, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
+    "goto fetch_next;"
+])
+
+OP_ANC = ("ANC", M_R_, ["c->A &= c->DL;\n_NZ(c->A);\nc->P = (c->P & ~FAM65XX_CF) | ((c->A & 0x80) ? FAM65XX_CF : 0);\ngoto fetch_next;"])
+OP_ASR = ("ASR", M_R_, ["c->A &= c->DL;\nc->P = (c->P & ~FAM65XX_CF) | (c->A & 1);\nc->A>>=1;\n_NZ(c->A);\ngoto fetch_next;"])
+OP_ARR = ("ARR", M_R_, ["c->A = (c->A & c->DL) >> 1 | (c->P & FAM65XX_CF ? 0x80 : 0);\n_NZ(c->A);\nc->P = (c->P & ~(FAM65XX_CF | FAM65XX_VF)) | ((c->A & 0x40) ? FAM65XX_CF : 0) | ((c->A & 0x20) ^ (c->A & 0x40) ? FAM65XX_VF : 0);\ngoto fetch_next;"])
+OP_XAA = ("XAA", M_R_, ["c->A = (c->A | 0xEE) & c->X & c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
+OP_SBX = ("SBX", M_R_, ["c->TMP = (c->A & c->X) - c->DL;\nc->X = c->TMP;\n_NZ(c->X);\nc->P = (c->P & ~FAM65XX_CF) | ((c->TMP & 0x100) ? 0 : FAM65XX_CF);\ngoto fetch_next;"])
+
+# Immediate mode illegal operations (read operand directly and execute)
+OP_ANC_IMM = ("ANC", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->A &= c->DL;\n_NZ(c->A);\nc->P = (c->P & ~FAM65XX_CF) | ((c->A & 0x80) ? FAM65XX_CF : 0);\ngoto fetch_next;"])
+OP_ASR_IMM = ("ASR", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->A &= c->DL;\nc->P = (c->P & ~FAM65XX_CF) | (c->A & 1);\nc->A>>=1;\n_NZ(c->A);\ngoto fetch_next;"])
+OP_ARR_IMM = ("ARR", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->A = (c->A & c->DL) >> 1 | (c->P & FAM65XX_CF ? 0x80 : 0);\n_NZ(c->A);\nc->P = (c->P & ~(FAM65XX_CF | FAM65XX_VF)) | ((c->A & 0x40) ? FAM65XX_CF : 0) | ((c->A & 0x20) ^ (c->A & 0x40) ? FAM65XX_VF : 0);\ngoto fetch_next;"])
+OP_XAA_IMM = ("XAA", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->A = (c->A | 0xEE) & c->X & c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
+OP_SBX_IMM = ("SBX", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->TMP = (c->A & c->X) - c->DL;\nc->X = c->TMP;\n_NZ(c->X);\nc->P = (c->P & ~FAM65XX_CF) | ((c->TMP & 0x100) ? 0 : FAM65XX_CF);\ngoto fetch_next;"])
+OP_LAX_IMM = ("LAX", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->A = c->X = c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
+OP_SHY = ("SHY", M__W, ["c->TMP = c->Y & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"])
+OP_SHX = ("SHX", M__W, ["c->TMP = c->X & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"])
+OP_SHA = ("SHA", M_RW, ["c->TMP = c->A & c->X & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"])
+OP_SHS = ("SHS", M__W, ["c->S = c->A & c->X;\nc->TMP = c->S & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"])
+OP_LAS = ("LAS", M_R_, ["c->A = c->X = c->S = c->S & c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
+
+OP_JAM = ("JAM", M_R_, [
+    "c->PC--;\nc->CI++;",
+    "goto fetch_next;"
+])
 
 #-------------------------------------------------------------------------------
 # Instruction table: [operation, addressing_mode]
@@ -403,7 +516,7 @@ ADDR_SEQ_END = 0
 CONT_SEQ_START = 0
 
 # Global state
-continuation_sequences = {}  # sequence_code -> {index, label, code}
+continuation_sequences = {}  # label -> {index, cycles}
 next_continuation_index = 0  # Will be set to CONT_SEQ_START in main()
 opcode_groups = {}  # implementation_code -> [opcodes]
 
@@ -436,119 +549,51 @@ def get_ops_entry(op):
     
     return operation, addr_mode
 
-def get_or_create_continuation(cycles, label, opcode=None):
+def get_or_create_continuation(cycles, label):
     """Get existing continuation sequence index or create new one"""
     global next_continuation_index
     
-    # Use label as key to avoid conflicts between different instructions with same cycles
+    # Use label as key to avoid conflicts between different instructions
     if label not in continuation_sequences:
         continuation_sequences[label] = {
             'index': next_continuation_index,
-            'label': label,
-            'cycles': cycles,
-            'opcode': opcode  # Store the opcode for comment generation
+            'cycles': cycles
         }
         next_continuation_index += len(cycles)
     
     return continuation_sequences[label]['index']
 
 def analyze_continuation_needs(op):
-    """Determine if opcode needs a continuation sequence - handle cycle sequence objects"""
+    """Determine if opcode needs a continuation sequence"""
     operation, addr_mode = get_ops_entry(op)
-    cycle_sequence = operation[3]  # cycle sequence is at index 3
-
-    # Handle cycle sequence objects - now only None or (label, cycles_tuple)
-    if cycle_sequence is None:
-        # No continuation needed
-        return None
-    else:
-        # This is a cycle sequence object: (label, cycles_tuple)
-        label, cycles = cycle_sequence
-        # Extract opcode mnemonic from operation for comment generation
-        opcode_mnemonic = operation[0]  # mnemonic is at index 0
-        get_or_create_continuation(cycles, label, opcode_mnemonic)
-        return cycle_sequence
-
-def get_branch_mask(op):
-    """Get branch condition mask - returns the specific flag for each branch"""
-    if op == 0x10 or op == 0x30:  # BPL, BMI
-        return 'FAM65XX_NF'
-    elif op == 0x50 or op == 0x70:  # BVC, BVS
-        return 'FAM65XX_VF'
-    elif op == 0x90 or op == 0xB0:  # BCC, BCS
-        return 'FAM65XX_CF'
-    elif op == 0xD0 or op == 0xF0:  # BNE, BEQ
-        return 'FAM65XX_ZF'
-    return 'FAM65XX_NF'  # fallback
-
-def get_branch_val(op):
-    """Get branch condition value"""
-    if op == 0x10: return '0'          # BPL - branch if N=0
-    if op == 0x30: return 'FAM65XX_NF' # BMI - branch if N=1
-    if op == 0x50: return '0'          # BVC - branch if V=0
-    if op == 0x70: return 'FAM65XX_VF' # BVS - branch if V=1
-    if op == 0x90: return '0'          # BCC - branch if C=0
-    if op == 0xB0: return 'FAM65XX_CF' # BCS - branch if C=1
-    if op == 0xD0: return '0'          # BNE - branch if Z=0
-    if op == 0xF0: return 'FAM65XX_ZF' # BEQ - branch if Z=1
-    return '0'
-
-def get_branch_name(op):
-    """Get branch instruction name for documentation"""
-    names = {
-        0x10: "BPL - Branch if Plus",
-        0x30: "BMI - Branch if Minus",
-        0x50: "BVC - Branch if Overflow Clear",
-        0x70: "BVS - Branch if Overflow Set",
-        0x90: "BCC - Branch if Carry Clear",
-        0xB0: "BCS - Branch if Carry Set",
-        0xD0: "BNE - Branch if Not Equal",
-        0xF0: "BEQ - Branch if Equal"
-    }
-    return names.get(op, "Unknown Branch")
+    
+    # All operations now have unified cycle lists
+    cycles = operation[2]  # cycles are at index 2
+    
+    # If operation has more than 1 cycle, create continuation sequence
+    if len(cycles) > 1:
+        # Generate unique label for this operation + addressing mode combination
+        label = generate_label(operation[0], operation[1], addr_mode if addr_mode != AM_NON else None)
+        get_or_create_continuation(cycles[1:], label)  # Skip first cycle
+        return label
+    
+    return None
 
 def generate_opcode_implementation(op):
-    """Generate the implementation code for this opcode's specific cycle"""
+    """Generate the implementation code for this opcode's first cycle only"""
     operation, addr_mode = get_ops_entry(op)
-    impl = operation[2]  # implementation is at index 2
-    cycle_sequence = operation[3]  # cycle sequence is at index 3
-    mem_access = operation[1]  # memory access is at index 1
+    cycles = operation[2]  # cycles are at index 2
     
-    # Handle branch instructions specially - each gets individual condition
-    if isinstance(cycle_sequence, tuple) and cycle_sequence[0] == 'C_BRANCH_TAKEN':
-        mask = get_branch_mask(op)
-        val = get_branch_val(op)
-        # Force each branch to have unique implementation text by including opcode
-        opcode_specific = f"0x{op:02X}"
-        
-        # Fix condition logic: for "flag set" conditions, check if flag is set
-        # For "flag clear" conditions, check if flag is clear
-        if val == '0':
-            # Flag clear condition: check if (flag & mask) == 0
-            condition = f"(c->P & {mask}) == 0"
-        else:
-            # Flag set condition: check if (flag & mask) != 0
-            condition = f"(c->P & {mask}) != 0"
-        
-        return f"// Opcode {opcode_specific} - {get_branch_name(op)}\nc->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ({condition}) {{\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;  // Proper signed arithmetic\n\tc->CI = C_BRANCH_TAKEN;\n}} else {{\n\tgoto fetch_next;\n}}"
+    # Always return the first cycle
+    first_cycle = cycles[0]
     
-    # Return the implementation from the operation - simplified, no more fetch_next logic needed
-    if impl:
-        # Special case for JAM: it should only decrement CI to repeat the same cycle, no additional CI assignment
-        if operation[0] == "JAM":  # mnemonic is at index 0
-            return impl
-        
-        # Check if this operation has a continuation sequence (cycle_sequence is not None)
-        # If so, it should NOT get additional processing
-        if cycle_sequence is not None:
-            # Operations with continuation sequences handle their own next cycle setup
-            return impl
-        
-        # All other operations just return their implementation - CI setup is already included
-        return impl
+    # If there are more cycles, replace c->CI++ with c->CI = label
+    if len(cycles) > 1:
+        label = generate_label(operation[0], operation[1], addr_mode if addr_mode != AM_NON else None)
+        # Replace any c->CI++ with c->CI = label
+        first_cycle = first_cycle.replace("c->CI++", f"c->CI = {label}")
     
-    # Fallback for any unhandled cases
-    return "c->CI++;"
+    return first_cycle
 
 def calculate_addressing_mode_offsets():
     """Calculate addressing mode offsets dynamically based on cycle counts"""
@@ -712,15 +757,13 @@ def generate_continuations():
     sorted_seqs = sorted(continuation_sequences.items(),
                         key=lambda x: x[1]['index'])
     
-    for name, seq_info in sorted_seqs:
+    for label, seq_info in sorted_seqs:
         idx = seq_info['index']
-        seq_label = seq_info['label']
         cycles = seq_info['cycles']
-        opcode = seq_info.get('opcode', seq_label)  # Use stored opcode or fallback to label
         
-        l(f"        // {opcode} continuation")
+        l(f"        // {label} continuation")
         for i, cycle_code in enumerate(cycles):
-            l(f"        case {seq_label} + {i}:")
+            l(f"        case {label} + {i}:")
             l(format_code(cycle_code))
             
             # Only emit break if the code doesn't end with a goto fetch_next that's not in an if/else block
@@ -731,10 +774,9 @@ def generate_continuations():
 def generate_continuation_constants():
     """Generate constant declarations for continuation sequences"""
     l("// Continuation sequence constants")
-    for name, seq_info in sorted(continuation_sequences.items(),
+    for label, seq_info in sorted(continuation_sequences.items(),
                                      key=lambda x: x[1]['index']):
-        seq_label = seq_info['label']
-        l(f"#define {seq_label:<16} {seq_info['index']}")
+        l(f"#define {label:<16} {seq_info['index']}")
     l("")
 
 def main():
