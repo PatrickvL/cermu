@@ -13,33 +13,33 @@
 // Continuation sequence constants
 #define C_BRK            294
 #define C_JAM            300
-#define C_SLO_RMW        301
-#define C_ASL_RMW        303
+#define C_SLO            301
+#define C_ASL_M          303
 #define C_PHP            305
 #define C_ASL_A          307
-#define C_BRANCH_TAKEN   308
+#define BRANCH_TAKEN     308
 #define C_JSR            310
-#define C_RLA_RMW        315
-#define C_ROL_RMW        317
+#define C_RLA            315
+#define C_ROL_M          317
 #define C_PLP            319
 #define C_ROL_A          321
 #define C_RTI            322
-#define C_SRE_RMW        326
-#define C_LSR_RMW        328
+#define C_SRE            326
+#define C_LSR_M          328
 #define C_PHA            330
 #define C_LSR_A          332
 #define C_JMP_ABS        333
 #define C_RTS            335
-#define C_RRA_RMW        338
-#define C_ROR_RMW        340
+#define C_RRA            338
+#define C_ROR_M          340
 #define C_PLA            342
 #define C_ROR_A          344
 #define C_JMP_IND        345
-#define C_NOP_DUMMY      349
-#define C_DCP_RMW        350
-#define C_DEC_RMW        352
-#define C_ISC_RMW        354
-#define C_INC_RMW        356
+#define C_NOP_I          349
+#define C_DCP            350
+#define C_DEC            352
+#define C_ISC            354
+#define C_INC            356
 
 // Layout constants
 // [0-255]   : Opcode-specific cycles
@@ -372,7 +372,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0x17:  // SLO [RW] ZPX cycle 3
         case 0x1B:  // SLO [RW] ABY cycle 4
         case 0x1F:  // SLO [RW] ABX cycle 4
-            c->CI = C_SLO_RMW;
+            c->CI = C_SLO;
             break;
 
         case 0x04:  // NOP [R] ZP cycle 3
@@ -403,7 +403,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0x0E:  // ASL [RW] ABS cycle 4
         case 0x16:  // ASL [RW] ZPX cycle 3
         case 0x1E:  // ASL [RW] ABX cycle 4
-            c->CI = C_ASL_RMW;
+            c->CI = C_ASL_M;
             break;
 
         case 0x08:  // PHP [---] --- cycle 1
@@ -429,7 +429,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->TMP = (int8_t)c->DL;
             if ((c->P & FAM65XX_NF) == 0) {
             	c->AD = c->PC + (int16_t)(int8_t)c->DL;  // Proper signed arithmetic
-            	c->CI = C_BRANCH_TAKEN;
+            	c->CI = BRANCH_TAKEN;
             } else {
             	goto fetch_next;
             }
@@ -464,7 +464,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0x37:  // RLA [RW] ZPX cycle 3
         case 0x3B:  // RLA [RW] ABY cycle 4
         case 0x3F:  // RLA [RW] ABX cycle 4
-            c->CI = C_RLA_RMW;
+            c->CI = C_RLA;
             break;
 
         case 0x24:  // BIT [R] ZP cycle 3
@@ -476,7 +476,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0x2E:  // ROL [RW] ABS cycle 4
         case 0x36:  // ROL [RW] ZPX cycle 3
         case 0x3E:  // ROL [RW] ABX cycle 4
-            c->CI = C_ROL_RMW;
+            c->CI = C_ROL_M;
             break;
 
         case 0x28:  // PLP [---] --- cycle 1
@@ -495,7 +495,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->TMP = (int8_t)c->DL;
             if ((c->P & FAM65XX_NF) != 0) {
             	c->AD = c->PC + (int16_t)(int8_t)c->DL;  // Proper signed arithmetic
-            	c->CI = C_BRANCH_TAKEN;
+            	c->CI = BRANCH_TAKEN;
             } else {
             	goto fetch_next;
             }
@@ -529,14 +529,14 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0x57:  // SRE [RW] ZPX cycle 3
         case 0x5B:  // SRE [RW] ABY cycle 4
         case 0x5F:  // SRE [RW] ABX cycle 4
-            c->CI = C_SRE_RMW;
+            c->CI = C_SRE;
             break;
 
         case 0x46:  // LSR [RW] ZP cycle 3
         case 0x4E:  // LSR [RW] ABS cycle 4
         case 0x56:  // LSR [RW] ZPX cycle 3
         case 0x5E:  // LSR [RW] ABX cycle 4
-            c->CI = C_LSR_RMW;
+            c->CI = C_LSR_M;
             break;
 
         case 0x48:  // PHA [---] --- cycle 1
@@ -568,7 +568,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->TMP = (int8_t)c->DL;
             if ((c->P & FAM65XX_VF) == 0) {
             	c->AD = c->PC + (int16_t)(int8_t)c->DL;  // Proper signed arithmetic
-            	c->CI = C_BRANCH_TAKEN;
+            	c->CI = BRANCH_TAKEN;
             } else {
             	goto fetch_next;
             }
@@ -601,14 +601,14 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0x77:  // RRA [RW] ZPX cycle 3
         case 0x7B:  // RRA [RW] ABY cycle 4
         case 0x7F:  // RRA [RW] ABX cycle 4
-            c->CI = C_RRA_RMW;
+            c->CI = C_RRA;
             break;
 
         case 0x66:  // ROR [RW] ZP cycle 3
         case 0x6E:  // ROR [RW] ABS cycle 4
         case 0x76:  // ROR [RW] ZPX cycle 3
         case 0x7E:  // ROR [RW] ABX cycle 4
-            c->CI = C_ROR_RMW;
+            c->CI = C_ROR_M;
             break;
 
         case 0x68:  // PLA [---] --- cycle 1
@@ -639,7 +639,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->TMP = (int8_t)c->DL;
             if ((c->P & FAM65XX_VF) != 0) {
             	c->AD = c->PC + (int16_t)(int8_t)c->DL;  // Proper signed arithmetic
-            	c->CI = C_BRANCH_TAKEN;
+            	c->CI = BRANCH_TAKEN;
             } else {
             	goto fetch_next;
             }
@@ -656,7 +656,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0xE2:  // NOP [---] --- cycle 1
         case 0xEA:  // NOP [---] --- cycle 1
             c->AD = c->PC;
-            c->CI = C_NOP_DUMMY;
+            c->CI = C_NOP_I;
             break;
 
         case 0x81:  // STA [W] IDX cycle 6
@@ -714,7 +714,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->TMP = (int8_t)c->DL;
             if ((c->P & FAM65XX_CF) == 0) {
             	c->AD = c->PC + (int16_t)(int8_t)c->DL;  // Proper signed arithmetic
-            	c->CI = C_BRANCH_TAKEN;
+            	c->CI = BRANCH_TAKEN;
             } else {
             	goto fetch_next;
             }
@@ -812,7 +812,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->TMP = (int8_t)c->DL;
             if ((c->P & FAM65XX_CF) != 0) {
             	c->AD = c->PC + (int16_t)(int8_t)c->DL;  // Proper signed arithmetic
-            	c->CI = C_BRANCH_TAKEN;
+            	c->CI = BRANCH_TAKEN;
             } else {
             	goto fetch_next;
             }
@@ -856,14 +856,14 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0xD7:  // DCP [RW] ZPX cycle 3
         case 0xDB:  // DCP [RW] ABY cycle 4
         case 0xDF:  // DCP [RW] ABX cycle 4
-            c->CI = C_DCP_RMW;
+            c->CI = C_DCP;
             break;
 
         case 0xC6:  // DEC [RW] ZP cycle 3
         case 0xCE:  // DEC [RW] ABS cycle 4
         case 0xD6:  // DEC [RW] ZPX cycle 3
         case 0xDE:  // DEC [RW] ABX cycle 4
-            c->CI = C_DEC_RMW;
+            c->CI = C_DEC;
             break;
 
         case 0xC8:  // INY [---] --- cycle 1
@@ -889,7 +889,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->TMP = (int8_t)c->DL;
             if ((c->P & FAM65XX_ZF) == 0) {
             	c->AD = c->PC + (int16_t)(int8_t)c->DL;  // Proper signed arithmetic
-            	c->CI = C_BRANCH_TAKEN;
+            	c->CI = BRANCH_TAKEN;
             } else {
             	goto fetch_next;
             }
@@ -924,14 +924,14 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0xF7:  // ISC [RW] ZPX cycle 3
         case 0xFB:  // ISC [RW] ABY cycle 4
         case 0xFF:  // ISC [RW] ABX cycle 4
-            c->CI = C_ISC_RMW;
+            c->CI = C_ISC;
             break;
 
         case 0xE6:  // INC [RW] ZP cycle 3
         case 0xEE:  // INC [RW] ABS cycle 4
         case 0xF6:  // INC [RW] ZPX cycle 3
         case 0xFE:  // INC [RW] ABX cycle 4
-            c->CI = C_INC_RMW;
+            c->CI = C_INC;
             break;
 
         case 0xE8:  // INX [---] --- cycle 1
@@ -945,7 +945,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->TMP = (int8_t)c->DL;
             if ((c->P & FAM65XX_ZF) != 0) {
             	c->AD = c->PC + (int16_t)(int8_t)c->DL;  // Proper signed arithmetic
-            	c->CI = C_BRANCH_TAKEN;
+            	c->CI = BRANCH_TAKEN;
             } else {
             	goto fetch_next;
             }
@@ -1022,7 +1022,15 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI++;
             break;
         case ADDR_SEQ_BASE + ADDR_ABX + 2:  // ABX cycle 3
-            { uint16_t sum = c->TMP + c->X; if (sum > 0xFF) { c->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8); c->CI = c->opcode; } else { c->AD = sum | (c->DL << 8); c->CI++; } }
+            {
+            	uint16_t sum = c->TMP + c->X;
+            	if (sum > 0xFF) {
+            		c->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);
+            		c->CI = c->opcode;
+            	} else {
+            		c->AD = sum | (c->DL << 8); c->CI++;
+            	}
+            }
             break;
         case ADDR_SEQ_BASE + ADDR_ABX + 3:  // ABX cycle 4
             c->CI = c->opcode;
@@ -1039,7 +1047,11 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI++;
             break;
         case ADDR_SEQ_BASE + ADDR_ABX_W + 2:  // ABX cycle 3
-            { uint16_t sum = c->TMP + c->X; c->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8); c->CI = c->opcode; }
+            {
+            	uint16_t sum = c->TMP + c->X;
+            	c->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);
+            	c->CI = c->opcode;
+            }
             break;
 
         // ABY: absolute,Y
@@ -1053,7 +1065,16 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI++;
             break;
         case ADDR_SEQ_BASE + ADDR_ABY + 2:  // ABY cycle 3
-            { uint16_t sum = c->TMP + c->Y; if (sum > 0xFF) { c->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8); c->CI = c->opcode; } else { c->AD = sum | (c->DL << 8); c->CI++; } }
+            {
+            	uint16_t sum = c->TMP + c->Y;
+            	if (sum > 0xFF) {
+            		c->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);
+            		c->CI = c->opcode;
+            	} else {
+            		c->AD = sum | (c->DL << 8);
+            		c->CI++;
+            	}
+            }
             break;
         case ADDR_SEQ_BASE + ADDR_ABY + 3:  // ABY cycle 4
             c->CI = c->opcode;
@@ -1070,7 +1091,11 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI++;
             break;
         case ADDR_SEQ_BASE + ADDR_ABY_W + 2:  // ABY cycle 3
-            { uint16_t sum = c->TMP + c->Y; c->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8); c->CI = c->opcode; }
+            {
+            	uint16_t sum = c->TMP + c->Y;
+            	c->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);
+            	c->CI = c->opcode;
+            }
             break;
 
         // IDX: indexed indirect (zp,X)
@@ -1107,7 +1132,11 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             break;
         case ADDR_SEQ_BASE + ADDR_IDY + 2:  // IDY cycle 3
             c->AD = c->TMP | (c->DL << 8);
-            if ((c->AD >> 8) != ((c->AD + c->Y) >> 8)) { c->CI++; } else { c->AD += c->Y; c->CI++; }
+            if ((c->AD >> 8) != ((c->AD + c->Y) >> 8)) {
+            	c->CI++;
+            } else {
+            	c->AD += c->Y; c->CI++;
+            }
             break;
         case ADDR_SEQ_BASE + ADDR_IDY + 3:  // IDY cycle 4
             c->AD += c->Y;
@@ -1178,8 +1207,8 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_JAM + 0:
             goto fetch_next;
 
-        // SLO_RMW continuation
-        case C_SLO_RMW + 0:
+        // SLO continuation
+        case C_SLO + 0:
             c->TMP = _fam65xx_asl(c, c->DL);
             c->A |= c->TMP;
             _NZ(c->A);
@@ -1187,17 +1216,17 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             pins &= ~FAM65XX_RW;
             c->CI++;
             break;
-        case C_SLO_RMW + 1:
+        case C_SLO + 1:
             goto fetch_next;
 
-        // ASL_RMW continuation
-        case C_ASL_RMW + 0:
+        // ASL continuation
+        case C_ASL_M + 0:
             c->TMP = _fam65xx_asl(c, c->DL);
             c->write_src = R_TMP;
             pins &= ~FAM65XX_RW;
             c->CI++;
             break;
-        case C_ASL_RMW + 1:
+        case C_ASL_M + 1:
             goto fetch_next;
 
         // PHP continuation
@@ -1211,12 +1240,12 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_PHP + 1:
             goto fetch_next;
 
-        // ASL_A continuation
+        // ASL continuation
         case C_ASL_A + 0:
             goto fetch_next;
 
-        // BRANCH_TAKEN continuation
-        case C_BRANCH_TAKEN + 0:
+        // BPL continuation
+        case BRANCH_TAKEN + 0:
             if((c->AD & 0xFF00) == (c->PC & 0xFF00))
             {
             	// Same page - branch takes 3 cycles total
@@ -1230,7 +1259,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             	c->CI++;
             }
             break;
-        case C_BRANCH_TAKEN + 1:
+        case BRANCH_TAKEN + 1:
             // Page boundary crossing dummy cycle complete - set correct PC
             c->PC = c->AD;
             c->irq_pip >>= 1;
@@ -1263,8 +1292,8 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_JSR + 4:
             goto fetch_next;
 
-        // RLA_RMW continuation
-        case C_RLA_RMW + 0:
+        // RLA continuation
+        case C_RLA + 0:
             c->TMP = _fam65xx_rol(c, c->DL);
             c->A &= c->TMP;
             _NZ(c->A);
@@ -1272,17 +1301,17 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             pins &= ~FAM65XX_RW;
             c->CI++;
             break;
-        case C_RLA_RMW + 1:
+        case C_RLA + 1:
             goto fetch_next;
 
-        // ROL_RMW continuation
-        case C_ROL_RMW + 0:
+        // ROL continuation
+        case C_ROL_M + 0:
             c->TMP = _fam65xx_rol(c, c->DL);
             c->write_src = R_TMP;
             pins &= ~FAM65XX_RW;
             c->CI++;
             break;
-        case C_ROL_RMW + 1:
+        case C_ROL_M + 1:
             goto fetch_next;
 
         // PLP continuation
@@ -1294,7 +1323,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_PLP + 1:
             goto fetch_next;
 
-        // ROL_A continuation
+        // ROL continuation
         case C_ROL_A + 0:
             goto fetch_next;
 
@@ -1317,8 +1346,8 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_RTI + 3:
             goto fetch_next;
 
-        // SRE_RMW continuation
-        case C_SRE_RMW + 0:
+        // SRE continuation
+        case C_SRE + 0:
             c->TMP = _fam65xx_lsr(c, c->DL);
             c->A ^= c->TMP;
             _NZ(c->A);
@@ -1326,17 +1355,17 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             pins &= ~FAM65XX_RW;
             c->CI++;
             break;
-        case C_SRE_RMW + 1:
+        case C_SRE + 1:
             goto fetch_next;
 
-        // LSR_RMW continuation
-        case C_LSR_RMW + 0:
+        // LSR continuation
+        case C_LSR_M + 0:
             c->TMP = _fam65xx_lsr(c, c->DL);
             c->write_src = R_TMP;
             pins &= ~FAM65XX_RW;
             c->CI++;
             break;
-        case C_LSR_RMW + 1:
+        case C_LSR_M + 1:
             goto fetch_next;
 
         // PHA continuation
@@ -1349,11 +1378,11 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_PHA + 1:
             goto fetch_next;
 
-        // LSR_A continuation
+        // LSR continuation
         case C_LSR_A + 0:
             goto fetch_next;
 
-        // JMP_ABS continuation
+        // JMP continuation
         case C_JMP_ABS + 0:
             c->AD = c->PC++;
             c->PCH = c->DL;
@@ -1377,25 +1406,25 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_RTS + 2:
             goto fetch_next;
 
-        // RRA_RMW continuation
-        case C_RRA_RMW + 0:
+        // RRA continuation
+        case C_RRA + 0:
             c->TMP = _fam65xx_ror(c, c->DL);
             _fam65xx_adc(c, c->TMP);
             c->write_src = R_TMP;
             pins &= ~FAM65XX_RW;
             c->CI++;
             break;
-        case C_RRA_RMW + 1:
+        case C_RRA + 1:
             goto fetch_next;
 
-        // ROR_RMW continuation
-        case C_ROR_RMW + 0:
+        // ROR continuation
+        case C_ROR_M + 0:
             c->TMP = _fam65xx_ror(c, c->DL);
             c->write_src = R_TMP;
             pins &= ~FAM65XX_RW;
             c->CI++;
             break;
-        case C_ROR_RMW + 1:
+        case C_ROR_M + 1:
             goto fetch_next;
 
         // PLA continuation
@@ -1408,11 +1437,11 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_PLA + 1:
             goto fetch_next;
 
-        // ROR_A continuation
+        // ROR continuation
         case C_ROR_A + 0:
             goto fetch_next;
 
-        // JMP_IND continuation
+        // JMP continuation
         case C_JMP_IND + 0:
             c->AD = c->PC++;
             c->TMP = c->DL;
@@ -1432,52 +1461,52 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_JMP_IND + 3:
             goto fetch_next;
 
-        // NOP_DUMMY continuation
-        case C_NOP_DUMMY + 0:
+        // NOP continuation
+        case C_NOP_I + 0:
             goto fetch_next;
 
-        // DCP_RMW continuation
-        case C_DCP_RMW + 0:
+        // DCP continuation
+        case C_DCP + 0:
             c->TMP = c->DL - 1;
             _fam65xx_cmp(c, c->A, c->TMP);
             c->write_src = R_TMP;
             pins &= ~FAM65XX_RW;
             c->CI++;
             break;
-        case C_DCP_RMW + 1:
+        case C_DCP + 1:
             goto fetch_next;
 
-        // DEC_RMW continuation
-        case C_DEC_RMW + 0:
+        // DEC continuation
+        case C_DEC + 0:
             c->TMP = c->DL - 1;
             _NZ(c->TMP);
             c->write_src = R_TMP;
             pins &= ~FAM65XX_RW;
             c->CI++;
             break;
-        case C_DEC_RMW + 1:
+        case C_DEC + 1:
             goto fetch_next;
 
-        // ISC_RMW continuation
-        case C_ISC_RMW + 0:
+        // ISC continuation
+        case C_ISC + 0:
             c->TMP = c->DL + 1;
             _fam65xx_sbc(c, c->TMP);
             c->write_src = R_TMP;
             pins &= ~FAM65XX_RW;
             c->CI++;
             break;
-        case C_ISC_RMW + 1:
+        case C_ISC + 1:
             goto fetch_next;
 
-        // INC_RMW continuation
-        case C_INC_RMW + 0:
+        // INC continuation
+        case C_INC + 0:
             c->TMP = c->DL + 1;
             _NZ(c->TMP);
             c->write_src = R_TMP;
             pins &= ~FAM65XX_RW;
             c->CI++;
             break;
-        case C_INC_RMW + 1:
+        case C_INC + 1:
             goto fetch_next;
 
     default:
@@ -1486,6 +1515,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
     return pins;
 
 fetch_next:
+    c->AD = c->PC++;
     pins |= FAM65XX_SYNC;
     return pins;
 }
