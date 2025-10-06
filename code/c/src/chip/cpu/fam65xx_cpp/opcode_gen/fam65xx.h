@@ -509,8 +509,12 @@ uint64_t fam65xx_tick(fam65xx_t* c, uint64_t pins) {
     
     // RDY check: stall CPU BEFORE calling decode if not ready
     if (!(pins & FAM65XX_RDY)) {
-        // CPU is stalled - don't advance, return current state
-        return pins;
+        if (pins & FAM65XX_RW) {
+            // Only stall READ cycles
+            // CPU is stalled - don't advance, return current state
+            return pins;
+        }
+        // WRITE cycles proceed regardless
     }
     
     // Memory access happens FIRST (hardware-accurate)
