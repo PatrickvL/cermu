@@ -713,29 +713,29 @@ fam65xx_cpp_test_harness.cpp.s:
 	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/fam65xx_cpp_test_harness.cpp.s
 .PHONY : fam65xx_cpp_test_harness.cpp.s
 
-fam65xx_processor_tests_runner.o: fam65xx_processor_tests_runner.c.o
+fam65xx_processor_tests_runner.o: fam65xx_processor_tests_runner.cpp.o
 .PHONY : fam65xx_processor_tests_runner.o
 
 # target to build an object file
-fam65xx_processor_tests_runner.c.o:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_processor_tests_runner.dir/build.make tests/CMakeFiles/fam65xx_processor_tests_runner.dir/fam65xx_processor_tests_runner.c.o
-.PHONY : fam65xx_processor_tests_runner.c.o
+fam65xx_processor_tests_runner.cpp.o:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_processor_tests_runner.dir/build.make tests/CMakeFiles/fam65xx_processor_tests_runner.dir/fam65xx_processor_tests_runner.cpp.o
+.PHONY : fam65xx_processor_tests_runner.cpp.o
 
-fam65xx_processor_tests_runner.i: fam65xx_processor_tests_runner.c.i
+fam65xx_processor_tests_runner.i: fam65xx_processor_tests_runner.cpp.i
 .PHONY : fam65xx_processor_tests_runner.i
 
 # target to preprocess a source file
-fam65xx_processor_tests_runner.c.i:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_processor_tests_runner.dir/build.make tests/CMakeFiles/fam65xx_processor_tests_runner.dir/fam65xx_processor_tests_runner.c.i
-.PHONY : fam65xx_processor_tests_runner.c.i
+fam65xx_processor_tests_runner.cpp.i:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_processor_tests_runner.dir/build.make tests/CMakeFiles/fam65xx_processor_tests_runner.dir/fam65xx_processor_tests_runner.cpp.i
+.PHONY : fam65xx_processor_tests_runner.cpp.i
 
-fam65xx_processor_tests_runner.s: fam65xx_processor_tests_runner.c.s
+fam65xx_processor_tests_runner.s: fam65xx_processor_tests_runner.cpp.s
 .PHONY : fam65xx_processor_tests_runner.s
 
 # target to generate assembly for a file
-fam65xx_processor_tests_runner.c.s:
-	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_processor_tests_runner.dir/build.make tests/CMakeFiles/fam65xx_processor_tests_runner.dir/fam65xx_processor_tests_runner.c.s
-.PHONY : fam65xx_processor_tests_runner.c.s
+fam65xx_processor_tests_runner.cpp.s:
+	cd /home/patrick/Git/aiemu/code/c && $(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_processor_tests_runner.dir/build.make tests/CMakeFiles/fam65xx_processor_tests_runner.dir/fam65xx_processor_tests_runner.cpp.s
+.PHONY : fam65xx_processor_tests_runner.cpp.s
 
 irq_level_handling_test.o: irq_level_handling_test.cpp.o
 .PHONY : irq_level_handling_test.o
