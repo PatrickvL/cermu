@@ -285,10 +285,12 @@ bool run_processor_test(const processor_test_t* test) {
     bool cycle_match = true;
     
     // Check registers - FAIL messages shown unless in quiet mode (C version feature)
-    if (harness.get_pc() != test->final.pc) {
+    // Note: PC is incremented by fetch_next, so subtract 1 when comparing to ProcessorTests expectation
+    uint16_t actual_pc = harness.get_pc() - 1;
+    if (actual_pc != test->final.pc) {
         if (!g_quiet_mode) {
-            std::cout << "FAIL " << test->name << ": PC - expected 0x" << std::hex 
-                      << test->final.pc << ", got 0x" << harness.get_pc() << std::dec << std::endl;
+            std::cout << "FAIL " << test->name << ": PC - expected 0x" << std::hex
+                      << test->final.pc << ", got 0x" << actual_pc << std::dec << std::endl;
         }
         state_match = false;
     }
@@ -398,10 +400,11 @@ bool run_processor_test(const processor_test_t* test) {
             
             if (!state_match) {
                 std::cout << "State mismatches detected:\n";
-                if (harness.get_pc() != test->final.pc) {
-                    std::cout << "  PC: expected 0x" << std::hex << test->final.pc 
-                              << ", got 0x" << harness.get_pc() << " (diff: " << std::dec 
-                              << ((int)harness.get_pc() - (int)test->final.pc) << ")\n";
+                uint16_t actual_pc = harness.get_pc() - 1;
+                if (actual_pc != test->final.pc) {
+                    std::cout << "  PC: expected 0x" << std::hex << test->final.pc
+                              << ", got 0x" << actual_pc << " (diff: " << std::dec
+                              << ((int)actual_pc - (int)test->final.pc) << ")\n";
                 }
             }
             
