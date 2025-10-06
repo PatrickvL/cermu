@@ -490,7 +490,7 @@ uint64_t fam65xx_bootstrap(fam65xx_t* c, uint64_t pins) {
         pins |= FAM65XX_RW;    // Ensure RW is set for read operation
         pins |= FAM65XX_SYNC;  // Set SYNC for instruction fetch
         c->CI = 0x0000;        // Clear the invalid marker
-        // Copy PC (post-incremented) to AD
+        // Set up first instruction fetch with PC increment
         c->AD = c->PC++;
     }
     
