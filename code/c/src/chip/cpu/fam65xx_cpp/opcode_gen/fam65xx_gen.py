@@ -46,27 +46,27 @@ AM_ABS = ("ABS", "absolute", "ADDR_ABS", (
 AM_ABX = ("ABX", "absolute,X", "ADDR_ABX", (
     "c->AD = c->PC++;\nc->CI++;",
     "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI++;",
-    "{ uint16_t sum = c->TMP + c->X; if (sum > 0xFF) { c->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8); c->CI = c->opcode; } else { c->AD = sum | (c->DL << 8); c->CI++; } }",
+    "{\n\tuint16_t sum = c->TMP + c->X;\n\tif (sum > 0xFF) {\n\t\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\t\tc->CI = c->opcode;\n\t} else {\n\t\tc->AD = sum | (c->DL << 8); c->CI++;\n\t}\n}",
     "c->CI = c->opcode;"
 ))
 
 AM_ABX_W = ("ABX", "absolute,X (write - always takes extra cycle)", "ADDR_ABX_W", (
     "c->AD = c->PC++;\nc->CI++;",
     "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI++;",
-    "{ uint16_t sum = c->TMP + c->X; c->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8); c->CI = c->opcode; }"
+    "{\n\tuint16_t sum = c->TMP + c->X;\n\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\tc->CI = c->opcode;\n}"
 ))
 
 AM_ABY = ("ABY", "absolute,Y", "ADDR_ABY", (
     "c->AD = c->PC++;\nc->CI++;",
     "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI++;",
-    "{ uint16_t sum = c->TMP + c->Y; if (sum > 0xFF) { c->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8); c->CI = c->opcode; } else { c->AD = sum | (c->DL << 8); c->CI++; } }",
+    "{\n\tuint16_t sum = c->TMP + c->Y;\n\tif (sum > 0xFF) {\n\t\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\t\tc->CI = c->opcode;\n\t} else {\n\t\tc->AD = sum | (c->DL << 8);\n\t\tc->CI++;\n\t}\n}",
     "c->CI = c->opcode;"
 ))
 
 AM_ABY_W = ("ABY", "absolute,Y (write - always takes extra cycle)", "ADDR_ABY_W", (
     "c->AD = c->PC++;\nc->CI++;",
     "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI++;",
-    "{ uint16_t sum = c->TMP + c->Y; c->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8); c->CI = c->opcode; }"
+    "{\n\tuint16_t sum = c->TMP + c->Y;\n\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\tc->CI = c->opcode;\n}"
 ))
 
 AM_IDX = ("IDX", "indexed indirect (zp,X)", "ADDR_IDX", (
@@ -80,7 +80,7 @@ AM_IDX = ("IDX", "indexed indirect (zp,X)", "ADDR_IDX", (
 AM_IDY = ("IDY", "indirect indexed (zp),Y", "ADDR_IDY", (
     "c->AD = c->PC++;\nc->CI++;",
     "c->TMP = c->DL;\nc->AD = (c->DL + 1) & 0xFF;\nc->CI++;",
-    "c->AD = c->TMP | (c->DL << 8);\nif ((c->AD >> 8) != ((c->AD + c->Y) >> 8)) { c->CI++; } else { c->AD += c->Y; c->CI++; }",
+    "c->AD = c->TMP | (c->DL << 8);\nif ((c->AD >> 8) != ((c->AD + c->Y) >> 8)) {\n\tc->CI++;\n} else {\n\tc->AD += c->Y; c->CI++;\n}",
     "c->AD += c->Y;\nc->CI++;",
     "c->CI = c->opcode;"
 ))
@@ -499,7 +499,7 @@ def analyze_continuation_needs(op):
         return ('PHA', cycles)
     elif operation[0] == 'NOP' and operation[3] == 'CONT':  # NOP implied - 2 cycles total (1 opcode + 1 continuation cycle)
         cycles = (
-            'c->PC++;\ngoto fetch_next;',  # Cycle 2: Dummy read from PC (already set in cycle 1), increment PC, fetch next
+            'goto fetch_next;',  # Cycle 2: Dummy read from PC (already set in cycle 1), increment PC, fetch next
         )
         get_or_create_continuation(cycles, 'NOP_DUMMY')
         return ('NOP_DUMMY', cycles)
