@@ -654,6 +654,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0x89:  // NOP [---] --- cycle 1
         case 0xC2:  // NOP [---] --- cycle 1
         case 0xE2:  // NOP [---] --- cycle 1
+        case 0xEA:  // NOP [---] --- cycle 1
             c->AD = c->PC;
             c->CI = C_NOP_DUMMY;
             break;
@@ -936,10 +937,6 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0xE8:  // INX [---] --- cycle 1
             c->X++;
             _NZ(c->X);
-            goto fetch_next;
-
-        case 0xEA:  // NOP [---] --- cycle 1
-            c->PC++;
             goto fetch_next;
 
         case 0xF0:  // BEQ [R] --- cycle 1

@@ -201,7 +201,6 @@ OP_DEC_M = ("DEC", M_RW, "c->CI = C_DEC_RMW;", 'RMW')  # Jump directly to RMW co
 
 # NOP variants
 OP_NOP_I = ("NOP", M___, "c->AD = c->PC;\nc->CI = C_NOP_DUMMY;", 'CONT')  # Immediate NOP - dummy read of PC then increment - 2-cycle instruction
-OP_NOP_IMPLIED = ("NOP", M___, "c->PC++;\ngoto fetch_next;", None)  # Implied NOP - increment PC then complete - 2-cycle instruction
 OP_NOP_R = ("NOP", M_R_, "goto fetch_next;", None)      # Read from effective address - M_R_ immediate fetch
 
 # Illegal/undocumented instructions
@@ -332,7 +331,7 @@ ops = [
     [
         [[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_NOP_I,AM_NON],[OP_LDX,AM_IMM],[OP_NOP_I,AM_NON],[OP_NOP_I,AM_NON]],
         [[OP_ASL_M,AM_ZER],[OP_ROL_M,AM_ZER],[OP_LSR_M,AM_ZER],[OP_ROR_M,AM_ZER],[OP_STX,AM_ZER],[OP_LDX,AM_ZER],[OP_DEC_M,AM_ZER],[OP_INC_M,AM_ZER]],
-        [[OP_ASL_A,AM_NON],[OP_ROL_A,AM_NON],[OP_LSR_A,AM_NON],[OP_ROR_A,AM_NON],[OP_TXA,AM_NON],[OP_TAX,AM_NON],[OP_DEX,AM_NON],[OP_NOP_IMPLIED,AM_NON]],
+        [[OP_ASL_A,AM_NON],[OP_ROL_A,AM_NON],[OP_LSR_A,AM_NON],[OP_ROR_A,AM_NON],[OP_TXA,AM_NON],[OP_TAX,AM_NON],[OP_DEX,AM_NON],[OP_NOP_I,AM_NON]],
         [[OP_ASL_M,AM_ABS],[OP_ROL_M,AM_ABS],[OP_LSR_M,AM_ABS],[OP_ROR_M,AM_ABS],[OP_STX,AM_ABS],[OP_LDX,AM_ABS],[OP_DEC_M,AM_ABS],[OP_INC_M,AM_ABS]],
         [[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_JAM,AM_INV],[OP_JAM,AM_INV]],
         [[OP_ASL_M,AM_ZPX],[OP_ROL_M,AM_ZPX],[OP_LSR_M,AM_ZPX],[OP_ROR_M,AM_ZPX],[OP_STX,AM_ZPY],[OP_LDX,AM_ZPY],[OP_DEC_M,AM_ZPX],[OP_INC_M,AM_ZPX]],
