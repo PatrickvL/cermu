@@ -50,23 +50,17 @@ private:
     
     // Record bus cycle for comparison with JSON test data
     void record_bus_cycle(uint16_t addr, uint8_t data, bool is_write) {
-        // Only record bus cycles if we actually need them for comparison
-        extern bool verbose_output;
-        static bool bus_cycles_needed = false;
+        bus_cycle_t cycle;
+        cycle.address = addr;
+        cycle.data = data;
+        cycle.is_write = is_write;
+        actual_bus_cycles.push_back(cycle);
         
-        // Check if we need to record bus cycles (only in verbose mode or if test has bus cycle data)
-        if (verbose_output || bus_cycles_needed) {
-            bus_cycle_t cycle;
-            cycle.address = addr;
-            cycle.data = data;
-            cycle.is_write = is_write;
-            actual_bus_cycles.push_back(cycle);
-            
-            if (verbose_output) {
-                std::cout << "    BUS_CYCLE: " << (is_write ? "WRITE" : "READ")
-                          << " addr=0x" << std::hex << addr
-                          << ", data=0x" << (int)data << std::dec << std::endl;
-            }
+        extern bool verbose_output;
+        if (verbose_output) {
+            std::cout << "    BUS_CYCLE: " << (is_write ? "WRITE" : "READ")
+                      << " addr=0x" << std::hex << addr
+                      << ", data=0x" << (int)data << std::dec << std::endl;
         }
     }
 
@@ -208,7 +202,7 @@ public:
             } while (true);
             
             if (verbose_output) {
-                std::cout << "  DEBUG: Step completed after " << (100 - max_cycles) << " cycles" << std::endl;
+                std::cout << "  DEBUG: Step completed after " << (10 - max_cycles) << " cycles" << std::endl;
             }
             
             return true;
@@ -237,14 +231,8 @@ static bool g_stop_on_failure = true;
 static bool g_test_failed = false;
 static TestResults results;
 
-// Helper function to compare bus cycles - optimized for performance
+// Helper function to compare bus cycles
 bool compare_bus_cycles(const std::vector<bus_cycle_t>& actual, const cpu_state_t& expected, const std::string& test_name) {
-    // Skip bus cycle comparison entirely if test doesn't have bus cycle data and we're not in verbose mode
-    extern bool verbose_output;
-    if (!expected.has_bus_cycles && !verbose_output) {
-        return true;
-    }
-    
     if (!expected.has_bus_cycles) {
         // No expected bus cycles to compare
         return true;
@@ -499,18 +487,15 @@ bool run_processor_test(const processor_test_t* test) {
         results.cycle_mismatches++;
     }
     
-    // Compare bus cycles if available - skip expensive comparison unless needed
-    bus_cycle_match = true;  // Default to true for performance
-    if (test->final.has_bus_cycles || verbose_output) {
-        if (verbose_output) {
-            std::cout << "  DEBUG: About to compare bus cycles, has_bus_cycles=" << (test->final.has_bus_cycles ? "true" : "false")
-                      << ", cycle_count=" << (int)test->final.bus_cycle_count << std::endl;
-        }
-        
-        bus_cycle_match = compare_bus_cycles(harness.get_bus_cycles(), test->final, test->name);
-        if (!bus_cycle_match) {
-            results.bus_cycle_mismatches++;
-        }
+    // Compare bus cycles if available
+    if (verbose_output) {
+        std::cout << "  DEBUG: About to compare bus cycles, has_bus_cycles=" << (test->final.has_bus_cycles ? "true" : "false")
+                  << ", cycle_count=" << (int)test->final.bus_cycle_count << std::endl;
+    }
+    
+    bus_cycle_match = compare_bus_cycles(harness.get_bus_cycles(), test->final, test->name);
+    if (!bus_cycle_match) {
+        results.bus_cycle_mismatches++;
     }
     
     // Clean up memory after test completion
