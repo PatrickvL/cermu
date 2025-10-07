@@ -100,6 +100,18 @@ AM_IDY_W = ("IDY", "indirect indexed (zp),Y (write - always takes extra cycle)",
 ))
 
 # RMW-specific addressing modes with dummy read cycles
+AM_ZPX_RMW = ("ZPX", "zero page,X (RMW with dummy write)", "ADDR_ZPX_RMW", (
+    "c->AD = c->PC++;\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nc->AD = c->DL;\nNEXT_CYCLE;",
+    "c->AD = (c->TMP + c->X) & 0xFF;\nNEXT_OPCODE;"
+))
+
+AM_ZPY_RMW = ("ZPY", "zero page,Y (RMW with dummy write)", "ADDR_ZPY_RMW", (
+    "c->AD = c->PC++;\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nc->AD = c->DL;\nNEXT_CYCLE;",
+    "c->AD = (c->TMP + c->Y) & 0xFF;\nNEXT_OPCODE;"
+))
+
 AM_ABX_RMW = ("ABX", "absolute,X (RMW with dummy read)", "ADDR_ABX_RMW", (
     "c->AD = c->PC++;\nNEXT_CYCLE;",
     "c->TMP = c->DL;\nc->AD = c->PC++;\nNEXT_CYCLE;",
@@ -137,6 +149,8 @@ ADDRESSING_MODES = [
     AM_IDX,
     AM_IDY,
     AM_IDY_W,
+    AM_ZPX_RMW,
+    AM_ZPY_RMW,
     AM_ABX_RMW,
     AM_ABY_RMW,
     AM_IDY_RMW,
@@ -487,8 +501,18 @@ def get_hardware_accurate_addr_mode(operation, base_addr_mode):
     # For addressing modes that have read/write/RMW variants, choose based on memory access
     # Read operations (M_R_) use the base mode (read-optimized page boundary crossing)
     # Write operations (M__W) use the _W variant (always takes extra cycle)
-    # RMW operations (M_RW) use the _RMW variant (includes dummy read cycle for hardware accuracy)
-    if base_addr_mode == AM_ABX:
+    # RMW operations (M_RW) use the _RMW variant (includes dummy cycles for hardware accuracy)
+    if base_addr_mode == AM_ZPX:
+        if mem_access == M_RW:
+            return AM_ZPX_RMW  # Use RMW variant with dummy write cycle
+        else:
+            return AM_ZPX
+    elif base_addr_mode == AM_ZPY:
+        if mem_access == M_RW:
+            return AM_ZPY_RMW  # Use RMW variant with dummy write cycle
+        else:
+            return AM_ZPY
+    elif base_addr_mode == AM_ABX:
         if mem_access == M_R_:
             return AM_ABX
         elif mem_access == M_RW:

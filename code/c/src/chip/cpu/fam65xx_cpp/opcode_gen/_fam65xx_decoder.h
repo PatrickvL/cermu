@@ -5,9 +5,9 @@
  * 
  * Layout:
  *   [0-255]     : Opcode-specific cycles
- *   [256-307]   : Shared addressing mode sequences
- *   [308-402]   : Shared sequences
- * Total cases   : 403
+ *   [256-313]   : Shared addressing mode sequences
+ *   [314-408]   : Shared sequences
+ * Total cases   : 409
  */
 
 // Layout constants
@@ -28,99 +28,101 @@
 #define ADDR_IDX           280
 #define ADDR_IDY           285
 #define ADDR_IDY_W         290
-#define ADDR_ABX_RMW       295
-#define ADDR_ABY_RMW       299
-#define ADDR_IDY_RMW       303
+#define ADDR_ZPX_RMW       295
+#define ADDR_ZPY_RMW       298
+#define ADDR_ABX_RMW       301
+#define ADDR_ABY_RMW       305
+#define ADDR_IDY_RMW       309
 
 // Continuation sequence constants
-#define C_BRK              308
-#define C_SLO_RW_IDX       313
-#define C_ASL_RW_ZER       314
-#define C_SLO_RW_ZER       315
-#define C_PHP              316
-#define C_ASL_RW_ABS       317
-#define C_SLO_RW_ABS       318
-#define C_BPL_R            319
-#define C_SLO_RW_IDY_RMW   320
-#define C_ASL_RW_ZPX       321
-#define C_SLO_RW_ZPX       322
-#define C_SLO_RW_ABY_RMW   323
-#define C_ASL_RW_ABX_RMW   324
-#define C_SLO_RW_ABX_RMW   325
-#define C_JSR_R            326
-#define C_RLA_RW_IDX       330
-#define C_ROL_RW_ZER       331
-#define C_RLA_RW_ZER       332
-#define C_PLP              333
-#define C_ROL_RW_ABS       334
-#define C_RLA_RW_ABS       335
-#define C_BMI_R            336
-#define C_RLA_RW_IDY_RMW   337
-#define C_ROL_RW_ZPX       338
-#define C_RLA_RW_ZPX       339
-#define C_RLA_RW_ABY_RMW   340
-#define C_ROL_RW_ABX_RMW   341
-#define C_RLA_RW_ABX_RMW   342
-#define C_RTI_R            343
-#define C_SRE_RW_IDX       344
-#define C_LSR_RW_ZER       345
-#define C_SRE_RW_ZER       346
-#define C_PHA              347
-#define C_JMP_R            348
-#define C_LSR_RW_ABS       349
-#define C_SRE_RW_ABS       350
-#define C_BVC_R            351
-#define C_SRE_RW_IDY_RMW   352
-#define C_LSR_RW_ZPX       353
-#define C_SRE_RW_ZPX       354
-#define C_SRE_RW_ABY_RMW   355
-#define C_LSR_RW_ABX_RMW   356
-#define C_SRE_RW_ABX_RMW   357
-#define C_RTS_R            358
-#define C_RRA_RW_IDX       359
-#define C_ROR_RW_ZER       360
-#define C_RRA_RW_ZER       361
-#define C_PLA              362
-#define C_ROR_RW_ABS       363
-#define C_RRA_RW_ABS       364
-#define C_BVS_R            365
-#define C_RRA_RW_IDY_RMW   366
-#define C_ROR_RW_ZPX       367
-#define C_RRA_RW_ZPX       368
-#define C_RRA_RW_ABY_RMW   369
-#define C_ROR_RW_ABX_RMW   370
-#define C_RRA_RW_ABX_RMW   371
-#define C_BCC_R            372
-#define C_BCS_R            373
-#define C_DCP_RW_IDX       374
-#define C_DEC_RW_ZER       375
-#define C_DCP_RW_ZER       376
-#define C_DEC_RW_ABS       377
-#define C_DCP_RW_ABS       378
-#define C_BNE_R            379
-#define C_DCP_RW_IDY_RMW   380
-#define C_DEC_RW_ZPX       381
-#define C_DCP_RW_ZPX       382
-#define C_DCP_RW_ABY_RMW   383
-#define C_DEC_RW_ABX_RMW   384
-#define C_DCP_RW_ABX_RMW   385
-#define C_ISC_RW_IDX       386
-#define C_INC_RW_ZER       387
-#define C_ISC_RW_ZER       388
-#define C_INC_RW_ABS       389
-#define C_ISC_RW_ABS       390
-#define C_BEQ_R            391
-#define C_ISC_RW_IDY_RMW   392
-#define C_INC_RW_ZPX       393
-#define C_ISC_RW_ZPX       394
-#define C_ISC_RW_ABY_RMW   395
-#define C_INC_RW_ABX_RMW   396
-#define C_ISC_RW_ABX_RMW   397
+#define C_BRK              314
+#define C_SLO_RW_IDX       319
+#define C_ASL_RW_ZER       320
+#define C_SLO_RW_ZER       321
+#define C_PHP              322
+#define C_ASL_RW_ABS       323
+#define C_SLO_RW_ABS       324
+#define C_BPL_R            325
+#define C_SLO_RW_IDY_RMW   326
+#define C_ASL_RW_ZPX_RMW   327
+#define C_SLO_RW_ZPX_RMW   328
+#define C_SLO_RW_ABY_RMW   329
+#define C_ASL_RW_ABX_RMW   330
+#define C_SLO_RW_ABX_RMW   331
+#define C_JSR_R            332
+#define C_RLA_RW_IDX       336
+#define C_ROL_RW_ZER       337
+#define C_RLA_RW_ZER       338
+#define C_PLP              339
+#define C_ROL_RW_ABS       340
+#define C_RLA_RW_ABS       341
+#define C_BMI_R            342
+#define C_RLA_RW_IDY_RMW   343
+#define C_ROL_RW_ZPX_RMW   344
+#define C_RLA_RW_ZPX_RMW   345
+#define C_RLA_RW_ABY_RMW   346
+#define C_ROL_RW_ABX_RMW   347
+#define C_RLA_RW_ABX_RMW   348
+#define C_RTI_R            349
+#define C_SRE_RW_IDX       350
+#define C_LSR_RW_ZER       351
+#define C_SRE_RW_ZER       352
+#define C_PHA              353
+#define C_JMP_R            354
+#define C_LSR_RW_ABS       355
+#define C_SRE_RW_ABS       356
+#define C_BVC_R            357
+#define C_SRE_RW_IDY_RMW   358
+#define C_LSR_RW_ZPX_RMW   359
+#define C_SRE_RW_ZPX_RMW   360
+#define C_SRE_RW_ABY_RMW   361
+#define C_LSR_RW_ABX_RMW   362
+#define C_SRE_RW_ABX_RMW   363
+#define C_RTS_R            364
+#define C_RRA_RW_IDX       365
+#define C_ROR_RW_ZER       366
+#define C_RRA_RW_ZER       367
+#define C_PLA              368
+#define C_ROR_RW_ABS       369
+#define C_RRA_RW_ABS       370
+#define C_BVS_R            371
+#define C_RRA_RW_IDY_RMW   372
+#define C_ROR_RW_ZPX_RMW   373
+#define C_RRA_RW_ZPX_RMW   374
+#define C_RRA_RW_ABY_RMW   375
+#define C_ROR_RW_ABX_RMW   376
+#define C_RRA_RW_ABX_RMW   377
+#define C_BCC_R            378
+#define C_BCS_R            379
+#define C_DCP_RW_IDX       380
+#define C_DEC_RW_ZER       381
+#define C_DCP_RW_ZER       382
+#define C_DEC_RW_ABS       383
+#define C_DCP_RW_ABS       384
+#define C_BNE_R            385
+#define C_DCP_RW_IDY_RMW   386
+#define C_DEC_RW_ZPX_RMW   387
+#define C_DCP_RW_ZPX_RMW   388
+#define C_DCP_RW_ABY_RMW   389
+#define C_DEC_RW_ABX_RMW   390
+#define C_DCP_RW_ABX_RMW   391
+#define C_ISC_RW_IDX       392
+#define C_INC_RW_ZER       393
+#define C_ISC_RW_ZER       394
+#define C_INC_RW_ABS       395
+#define C_ISC_RW_ABS       396
+#define C_BEQ_R            397
+#define C_ISC_RW_IDY_RMW   398
+#define C_INC_RW_ZPX_RMW   399
+#define C_ISC_RW_ZPX_RMW   400
+#define C_ISC_RW_ABY_RMW   401
+#define C_INC_RW_ABX_RMW   402
+#define C_ISC_RW_ABX_RMW   403
 
 // Shared sequence constants
-#define S_BRANCH_2_9748    398
-#define S_CONT_2_1308      400
-#define SHARED_FETCH_NEXT  402
+#define S_BRANCH_2_9748    404
+#define S_CONT_2_1308      406
+#define SHARED_FETCH_NEXT  408
 
 // Lookup table: addressing mode start index for each opcode
 const uint8_t opcode_addr_start[256] = {
@@ -146,8 +148,8 @@ const uint8_t opcode_addr_start[256] = {
     ADDR_IDY_RMW - ADDR_SEQ_BASE,  // 0x13: SLO [RW] indirect indexed (zp),Y (RMW with dummy read)
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x14: NOP [R] zero page,X
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x15: ORA [R] zero page,X
-    ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x16: ASL [RW] zero page,X
-    ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x17: SLO [RW] zero page,X
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x16: ASL [RW] zero page,X (RMW with dummy write)
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x17: SLO [RW] zero page,X (RMW with dummy write)
     ADDR_NON,                    // 0x18: CLC [---] no addressing mode
     ADDR_ABY   - ADDR_SEQ_BASE,  // 0x19: ORA [R] absolute,Y
     ADDR_NON,                    // 0x1A: NOP [R] no addressing mode
@@ -178,8 +180,8 @@ const uint8_t opcode_addr_start[256] = {
     ADDR_IDY_RMW - ADDR_SEQ_BASE,  // 0x33: RLA [RW] indirect indexed (zp),Y (RMW with dummy read)
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x34: NOP [R] zero page,X
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x35: AND [R] zero page,X
-    ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x36: ROL [RW] zero page,X
-    ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x37: RLA [RW] zero page,X
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x36: ROL [RW] zero page,X (RMW with dummy write)
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x37: RLA [RW] zero page,X (RMW with dummy write)
     ADDR_NON,                    // 0x38: SEC [---] no addressing mode
     ADDR_ABY   - ADDR_SEQ_BASE,  // 0x39: AND [R] absolute,Y
     ADDR_NON,                    // 0x3A: NOP [R] no addressing mode
@@ -210,8 +212,8 @@ const uint8_t opcode_addr_start[256] = {
     ADDR_IDY_RMW - ADDR_SEQ_BASE,  // 0x53: SRE [RW] indirect indexed (zp),Y (RMW with dummy read)
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x54: NOP [R] zero page,X
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x55: EOR [R] zero page,X
-    ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x56: LSR [RW] zero page,X
-    ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x57: SRE [RW] zero page,X
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x56: LSR [RW] zero page,X (RMW with dummy write)
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x57: SRE [RW] zero page,X (RMW with dummy write)
     ADDR_NON,                    // 0x58: CLI [---] no addressing mode
     ADDR_ABY   - ADDR_SEQ_BASE,  // 0x59: EOR [R] absolute,Y
     ADDR_NON,                    // 0x5A: NOP [R] no addressing mode
@@ -242,8 +244,8 @@ const uint8_t opcode_addr_start[256] = {
     ADDR_IDY_RMW - ADDR_SEQ_BASE,  // 0x73: RRA [RW] indirect indexed (zp),Y (RMW with dummy read)
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x74: NOP [R] zero page,X
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x75: ADC [R] zero page,X
-    ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x76: ROR [RW] zero page,X
-    ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x77: RRA [RW] zero page,X
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x76: ROR [RW] zero page,X (RMW with dummy write)
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x77: RRA [RW] zero page,X (RMW with dummy write)
     ADDR_NON,                    // 0x78: SEI [---] no addressing mode
     ADDR_ABY   - ADDR_SEQ_BASE,  // 0x79: ADC [R] absolute,Y
     ADDR_NON,                    // 0x7A: NOP [R] no addressing mode
@@ -338,8 +340,8 @@ const uint8_t opcode_addr_start[256] = {
     ADDR_IDY_RMW - ADDR_SEQ_BASE,  // 0xD3: DCP [RW] indirect indexed (zp),Y (RMW with dummy read)
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0xD4: NOP [R] zero page,X
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0xD5: CMP [R] zero page,X
-    ADDR_ZPX   - ADDR_SEQ_BASE,  // 0xD6: DEC [RW] zero page,X
-    ADDR_ZPX   - ADDR_SEQ_BASE,  // 0xD7: DCP [RW] zero page,X
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0xD6: DEC [RW] zero page,X (RMW with dummy write)
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0xD7: DCP [RW] zero page,X (RMW with dummy write)
     ADDR_NON,                    // 0xD8: CLD [---] no addressing mode
     ADDR_ABY   - ADDR_SEQ_BASE,  // 0xD9: CMP [R] absolute,Y
     ADDR_NON,                    // 0xDA: NOP [R] no addressing mode
@@ -370,8 +372,8 @@ const uint8_t opcode_addr_start[256] = {
     ADDR_IDY_RMW - ADDR_SEQ_BASE,  // 0xF3: ISC [RW] indirect indexed (zp),Y (RMW with dummy read)
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0xF4: NOP [R] zero page,X
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0xF5: SBC [R] zero page,X
-    ADDR_ZPX   - ADDR_SEQ_BASE,  // 0xF6: INC [RW] zero page,X
-    ADDR_ZPX   - ADDR_SEQ_BASE,  // 0xF7: ISC [RW] zero page,X
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0xF6: INC [RW] zero page,X (RMW with dummy write)
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0xF7: ISC [RW] zero page,X (RMW with dummy write)
     ADDR_NON,                    // 0xF8: SED [---] no addressing mode
     ADDR_ABY   - ADDR_SEQ_BASE,  // 0xF9: SBC [R] absolute,Y
     ADDR_NON,                    // 0xFA: NOP [R] no addressing mode
@@ -517,16 +519,16 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI = C_SLO_RW_IDY_RMW;
             break;
 
-        case 0x16:  // ASL [RW] ZPX cycle 3
+        case 0x16:  // ASL [RW] ZPX cycle 4
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_ASL_RW_ZPX;
+            c->CI = C_ASL_RW_ZPX_RMW;
             break;
 
-        case 0x17:  // SLO [RW] ZPX cycle 3
+        case 0x17:  // SLO [RW] ZPX cycle 4
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_SLO_RW_ZPX;
+            c->CI = C_SLO_RW_ZPX_RMW;
             break;
 
         case 0x18:  // CLC [---] --- cycle 1
@@ -631,16 +633,16 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI = C_RLA_RW_IDY_RMW;
             break;
 
-        case 0x36:  // ROL [RW] ZPX cycle 3
+        case 0x36:  // ROL [RW] ZPX cycle 4
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_ROL_RW_ZPX;
+            c->CI = C_ROL_RW_ZPX_RMW;
             break;
 
-        case 0x37:  // RLA [RW] ZPX cycle 3
+        case 0x37:  // RLA [RW] ZPX cycle 4
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_RLA_RW_ZPX;
+            c->CI = C_RLA_RW_ZPX_RMW;
             break;
 
         case 0x38:  // SEC [---] --- cycle 1
@@ -753,16 +755,16 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI = C_SRE_RW_IDY_RMW;
             break;
 
-        case 0x56:  // LSR [RW] ZPX cycle 3
+        case 0x56:  // LSR [RW] ZPX cycle 4
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_LSR_RW_ZPX;
+            c->CI = C_LSR_RW_ZPX_RMW;
             break;
 
-        case 0x57:  // SRE [RW] ZPX cycle 3
+        case 0x57:  // SRE [RW] ZPX cycle 4
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_SRE_RW_ZPX;
+            c->CI = C_SRE_RW_ZPX_RMW;
             break;
 
         case 0x58:  // CLI [---] --- cycle 1
@@ -866,16 +868,16 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI = C_RRA_RW_IDY_RMW;
             break;
 
-        case 0x76:  // ROR [RW] ZPX cycle 3
+        case 0x76:  // ROR [RW] ZPX cycle 4
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_ROR_RW_ZPX;
+            c->CI = C_ROR_RW_ZPX_RMW;
             break;
 
-        case 0x77:  // RRA [RW] ZPX cycle 3
+        case 0x77:  // RRA [RW] ZPX cycle 4
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_RRA_RW_ZPX;
+            c->CI = C_RRA_RW_ZPX_RMW;
             break;
 
         case 0x78:  // SEI [---] --- cycle 1
@@ -1162,16 +1164,16 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI = C_DCP_RW_IDY_RMW;
             break;
 
-        case 0xD6:  // DEC [RW] ZPX cycle 3
+        case 0xD6:  // DEC [RW] ZPX cycle 4
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_DEC_RW_ZPX;
+            c->CI = C_DEC_RW_ZPX_RMW;
             break;
 
-        case 0xD7:  // DCP [RW] ZPX cycle 3
+        case 0xD7:  // DCP [RW] ZPX cycle 4
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_DCP_RW_ZPX;
+            c->CI = C_DCP_RW_ZPX_RMW;
             break;
 
         case 0xD8:  // CLD [---] --- cycle 1
@@ -1266,16 +1268,16 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI = C_ISC_RW_IDY_RMW;
             break;
 
-        case 0xF6:  // INC [RW] ZPX cycle 3
+        case 0xF6:  // INC [RW] ZPX cycle 4
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_INC_RW_ZPX;
+            c->CI = C_INC_RW_ZPX_RMW;
             break;
 
-        case 0xF7:  // ISC [RW] ZPX cycle 3
+        case 0xF7:  // ISC [RW] ZPX cycle 4
             c->write_src = R_DL;
             pins &= ~FAM65XX_RW;
-            c->CI = C_ISC_RW_ZPX;
+            c->CI = C_ISC_RW_ZPX_RMW;
             break;
 
         case 0xF8:  // SED [---] --- cycle 1
@@ -1301,7 +1303,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             break;
 
         // ==========================================
-        // [256-307] SHARED ADDRESSING SEQUENCES
+        // [256-313] SHARED ADDRESSING SEQUENCES
         // ==========================================
 
         // IMM: immediate
@@ -1515,6 +1517,36 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI = c->opcode;
             break;
 
+        // ZPX: zero page,X (RMW with dummy write)
+        case ADDR_ZPX_RMW + 0:  // ZPX cycle 1
+            c->AD = c->PC++;
+            c->CI++;
+            break;
+        case ADDR_ZPX_RMW + 1:  // ZPX cycle 2
+            c->TMP = c->DL;
+            c->AD = c->DL;
+            c->CI++;
+            break;
+        case ADDR_ZPX_RMW + 2:  // ZPX cycle 3
+            c->AD = (c->TMP + c->X) & 0xFF;
+            c->CI = c->opcode;
+            break;
+
+        // ZPY: zero page,Y (RMW with dummy write)
+        case ADDR_ZPY_RMW + 0:  // ZPY cycle 1
+            c->AD = c->PC++;
+            c->CI++;
+            break;
+        case ADDR_ZPY_RMW + 1:  // ZPY cycle 2
+            c->TMP = c->DL;
+            c->AD = c->DL;
+            c->CI++;
+            break;
+        case ADDR_ZPY_RMW + 2:  // ZPY cycle 3
+            c->AD = (c->TMP + c->Y) & 0xFF;
+            c->CI = c->opcode;
+            break;
+
         // ABX: absolute,X (RMW with dummy read)
         case ADDR_ABX_RMW + 0:  // ABX cycle 1
             c->AD = c->PC++;
@@ -1696,16 +1728,16 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI = SHARED_FETCH_NEXT;
             break;
 
-        // C_ASL_RW_ZPX continuation
-        case C_ASL_RW_ZPX + 0:
+        // C_ASL_RW_ZPX_RMW continuation
+        case C_ASL_RW_ZPX_RMW + 0:
             c->TMP = _fam65xx_asl(c, c->DL);
             c->write_src = R_TMP;
             pins &= ~FAM65XX_RW;
             c->CI = SHARED_FETCH_NEXT;
             break;
 
-        // C_SLO_RW_ZPX continuation
-        case C_SLO_RW_ZPX + 0:
+        // C_SLO_RW_ZPX_RMW continuation
+        case C_SLO_RW_ZPX_RMW + 0:
             c->TMP = _fam65xx_asl(c, c->DL);
             c->A |= c->TMP;
             _NZ(c->A);
@@ -1832,16 +1864,16 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI = SHARED_FETCH_NEXT;
             break;
 
-        // C_ROL_RW_ZPX continuation
-        case C_ROL_RW_ZPX + 0:
+        // C_ROL_RW_ZPX_RMW continuation
+        case C_ROL_RW_ZPX_RMW + 0:
             c->TMP = _fam65xx_rol(c, c->DL);
             c->write_src = R_TMP;
             pins &= ~FAM65XX_RW;
             c->CI = SHARED_FETCH_NEXT;
             break;
 
-        // C_RLA_RW_ZPX continuation
-        case C_RLA_RW_ZPX + 0:
+        // C_RLA_RW_ZPX_RMW continuation
+        case C_RLA_RW_ZPX_RMW + 0:
             c->TMP = _fam65xx_rol(c, c->DL);
             c->A &= c->TMP;
             _NZ(c->A);
@@ -1960,16 +1992,16 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI = SHARED_FETCH_NEXT;
             break;
 
-        // C_LSR_RW_ZPX continuation
-        case C_LSR_RW_ZPX + 0:
+        // C_LSR_RW_ZPX_RMW continuation
+        case C_LSR_RW_ZPX_RMW + 0:
             c->TMP = _fam65xx_lsr(c, c->DL);
             c->write_src = R_TMP;
             pins &= ~FAM65XX_RW;
             c->CI = SHARED_FETCH_NEXT;
             break;
 
-        // C_SRE_RW_ZPX continuation
-        case C_SRE_RW_ZPX + 0:
+        // C_SRE_RW_ZPX_RMW continuation
+        case C_SRE_RW_ZPX_RMW + 0:
             c->TMP = _fam65xx_lsr(c, c->DL);
             c->A ^= c->TMP;
             _NZ(c->A);
@@ -2075,16 +2107,16 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI = SHARED_FETCH_NEXT;
             break;
 
-        // C_ROR_RW_ZPX continuation
-        case C_ROR_RW_ZPX + 0:
+        // C_ROR_RW_ZPX_RMW continuation
+        case C_ROR_RW_ZPX_RMW + 0:
             c->TMP = _fam65xx_ror(c, c->DL);
             c->write_src = R_TMP;
             pins &= ~FAM65XX_RW;
             c->CI = SHARED_FETCH_NEXT;
             break;
 
-        // C_RRA_RW_ZPX continuation
-        case C_RRA_RW_ZPX + 0:
+        // C_RRA_RW_ZPX_RMW continuation
+        case C_RRA_RW_ZPX_RMW + 0:
             c->TMP = _fam65xx_ror(c, c->DL);
             _fam65xx_adc(c, c->TMP);
             c->write_src = R_TMP;
@@ -2187,8 +2219,8 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI = SHARED_FETCH_NEXT;
             break;
 
-        // C_DEC_RW_ZPX continuation
-        case C_DEC_RW_ZPX + 0:
+        // C_DEC_RW_ZPX_RMW continuation
+        case C_DEC_RW_ZPX_RMW + 0:
             c->TMP = c->DL - 1;
             _NZ(c->TMP);
             c->write_src = R_TMP;
@@ -2196,8 +2228,8 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI = SHARED_FETCH_NEXT;
             break;
 
-        // C_DCP_RW_ZPX continuation
-        case C_DCP_RW_ZPX + 0:
+        // C_DCP_RW_ZPX_RMW continuation
+        case C_DCP_RW_ZPX_RMW + 0:
             c->TMP = c->DL - 1;
             _fam65xx_cmp(c, c->A, c->TMP);
             c->write_src = R_TMP;
@@ -2291,8 +2323,8 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI = SHARED_FETCH_NEXT;
             break;
 
-        // C_INC_RW_ZPX continuation
-        case C_INC_RW_ZPX + 0:
+        // C_INC_RW_ZPX_RMW continuation
+        case C_INC_RW_ZPX_RMW + 0:
             c->TMP = c->DL + 1;
             _NZ(c->TMP);
             c->write_src = R_TMP;
@@ -2300,8 +2332,8 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI = SHARED_FETCH_NEXT;
             break;
 
-        // C_ISC_RW_ZPX continuation
-        case C_ISC_RW_ZPX + 0:
+        // C_ISC_RW_ZPX_RMW continuation
+        case C_ISC_RW_ZPX_RMW + 0:
             c->TMP = c->DL + 1;
             _fam65xx_sbc(c, c->TMP);
             c->write_src = R_TMP;
