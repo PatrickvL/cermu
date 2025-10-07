@@ -77,10 +77,10 @@ AM_ABY_W = ("ABY", "absolute,Y (write - always takes extra cycle)", "ADDR_ABY_W"
 
 AM_IDX = ("IDX", "indexed indirect (zp,X)", "ADDR_IDX", (
     "c->AD = c->PC++;\nNEXT_CYCLE;",
-    "c->AD = (c->DL + c->X) & 0xFF;\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nc->AD = c->DL;\nNEXT_CYCLE;",
+    "c->AD = (c->TMP + c->X) & 0xFF;\nNEXT_CYCLE;",
     "c->TMP = c->DL;\nc->AD = (c->AD + 1) & 0xFF;\nNEXT_CYCLE;",
-    "c->AD = (c->DL << 8) | c->TMP;\nNEXT_CYCLE;",
-    "NEXT_OPCODE;"
+    "c->AD = (c->DL << 8) | c->TMP;\nNEXT_OPCODE;"
 ))
 
 AM_IDY = ("IDY", "indirect indexed (zp),Y", "ADDR_IDY", (
@@ -121,6 +121,7 @@ AM_IDY_RMW = ("IDY", "indirect indexed (zp),Y (RMW with dummy read)", "ADDR_IDY_
     "c->AD += c->Y;\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ))
+
 
 # Addressing mode list
 ADDRESSING_MODES = [
@@ -508,6 +509,9 @@ def get_hardware_accurate_addr_mode(operation, base_addr_mode):
             return AM_IDY_RMW
         else:  # M__W
             return AM_IDY_W
+    elif base_addr_mode == AM_IDX:
+        # IDX addressing mode doesn't need RMW variant - regular IDX works for all access types
+        return AM_IDX
     
     # For all other modes, return the original mode
     return base_addr_mode

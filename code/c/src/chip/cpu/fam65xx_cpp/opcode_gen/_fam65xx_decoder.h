@@ -1449,19 +1449,21 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI++;
             break;
         case ADDR_IDX + 1:  // IDX cycle 2
-            c->AD = (c->DL + c->X) & 0xFF;
+            c->TMP = c->DL;
+            c->AD = c->DL;
             c->CI++;
             break;
         case ADDR_IDX + 2:  // IDX cycle 3
+            c->AD = (c->TMP + c->X) & 0xFF;
+            c->CI++;
+            break;
+        case ADDR_IDX + 3:  // IDX cycle 4
             c->TMP = c->DL;
             c->AD = (c->AD + 1) & 0xFF;
             c->CI++;
             break;
-        case ADDR_IDX + 3:  // IDX cycle 4
-            c->AD = (c->DL << 8) | c->TMP;
-            c->CI++;
-            break;
         case ADDR_IDX + 4:  // IDX cycle 5
+            c->AD = (c->DL << 8) | c->TMP;
             c->CI = c->opcode;
             break;
 

@@ -197,12 +197,14 @@ public:
                 }
                 
                 if (instruction_done) {
+                    // SYNC cycle belongs to next instruction, so subtract 1 from cycle count
+                    cycle_count--;
                     break; // Instruction completed - SYNC indicates ready for next instruction
                 }
             } while (true);
             
             if (verbose_output) {
-                std::cout << "  DEBUG: Step completed after " << (10 - max_cycles) << " cycles" << std::endl;
+                std::cout << "  DEBUG: Step completed after " << (10 - max_cycles - 1) << " cycles (excluding SYNC)" << std::endl;
             }
             
             return true;
