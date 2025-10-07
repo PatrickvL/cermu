@@ -346,11 +346,8 @@ bool json_parse_cpu_state(const char* json, const char* state_name, cpu_state_t*
     // Parse RAM array
     bool ram_ok = json_parse_ram_array(state_json, state);
     
-    // Parse cycles array (bus trace)
-    bool cycles_ok = json_parse_cycles_array(state_json, state);
-    
     free(state_json);
-    return ram_ok && cycles_ok;
+    return ram_ok;
 }
 
 // Parse a complete processor test from JSON
@@ -372,6 +369,11 @@ bool json_parse_processor_test(const char* json_content, processor_test_t* test)
     
     // Parse final state
     if (!json_parse_cpu_state(json_content, "final", &test->final)) {
+        return false;
+    }
+    
+    // Parse cycles array (ProcessorTests format)
+    if (!json_parse_cycles_array(json_content, &test->final)) {
         return false;
     }
     
