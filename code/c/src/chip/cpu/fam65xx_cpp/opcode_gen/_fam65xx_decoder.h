@@ -31,25 +31,25 @@
 
 // Continuation sequence constants
 #define C_BRK              295
-#define C_JAM_R            300
-#define C_PHP              301
-#define C_BPL_R            302
-#define C_JSR_R            303
-#define C_PLP              307
-#define C_BMI_R            308
-#define C_RTI_R            309
-#define C_PHA              310
-#define C_JMP_R            311
-#define C_BVC_R            312
-#define C_RTS_R            313
-#define C_PLA              314
-#define C_BVS_R            315
-#define C_BCC_R            316
-#define C_BCS_R            317
-#define C_BNE_R            318
-#define C_BEQ_R            319
+#define C_PHP              300
+#define C_BPL_R            301
+#define C_JSR_R            302
+#define C_PLP              306
+#define C_BMI_R            307
+#define C_RTI_R            308
+#define C_PHA              309
+#define C_JMP_R            310
+#define C_BVC_R            311
+#define C_RTS_R            312
+#define C_PLA              313
+#define C_BVS_R            314
+#define C_BCC_R            315
+#define C_BCS_R            316
+#define C_BNE_R            317
+#define C_BEQ_R            318
 
 // Shared sequence constants
+#define S_CONT_1_6A19      319
 #define S_FETCH_1B05       320
 #define S_FETCH_2_CA6E     321
 #define S_FETCH_2_E62F     323
@@ -359,7 +359,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0xD2:  // JAM [R] --- cycle 1
         case 0xF2:  // JAM [R] --- cycle 1
             c->PC--;
-            c->CI = C_JAM_R;
+            c->CI = SHARED_FETCH_NEXT;
             break;
 
         case 0x03:  // SLO [RW] IDX cycle 6
@@ -1236,10 +1236,6 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI = SHARED_FETCH_NEXT;
             break;
 
-        // C_JAM_R continuation
-        case C_JAM_R + 0:
-            goto fetch_next;
-
         // C_PHP continuation
         case C_PHP + 0:
             c->TMP = c->P | FAM65XX_BF;
@@ -1353,6 +1349,13 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         // ==========================================
         // SHARED SEQUENCES
         // ==========================================
+
+        // S_CONT_1_6A19: 1 cycles, used by 2 sources
+        // Sources: OP_BRK, OP_NOP
+        case S_CONT_1_6A19 + 0:
+            c->AD = c->PC;
+            c->CI++;
+            break;
 
         // S_FETCH_1B05: 1 cycles, used by 2 sources
         // Sources: OP_RTI_R, OP_RTS_R

@@ -25,7 +25,7 @@ AM_INV = ("---", "invalid instruction", "ADDR_NON", ())  # Invalid instruction
 
 # Addressing mode objects for standard cases
 AM_IMM = ("IMM", "immediate", "ADDR_IMM", (
-    "c->AD = c->PC++;\nc->CI = c->opcode;",
+    "c->AD = c->PC++;\nNEXT_OPCODE;",
 ))
 
 AM_ZER = ("ZP", "zero page", "ADDR_ZER", (
@@ -305,48 +305,59 @@ OP_CPY_IMM = ("CPY", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\n_fam65xx_c
 
 # RMW operations - have two variants (accumulator vs memory)
 OP_ASL_A = ("ASL", M___, [
-    "c->A = _fam65xx_asl(c, c->A);\nc->CI = SHARED_FETCH_NEXT;"
+    "c->A = _fam65xx_asl(c, c->A);\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
 ])
 
 OP_ASL_M = ("ASL", M_RW, [
-    "c->TMP = _fam65xx_asl(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
+    "c->TMP = _fam65xx_asl(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
 ])
 
 OP_LSR_A = ("LSR", M___, [
-    "c->A = _fam65xx_lsr(c, c->A);\nc->CI = SHARED_FETCH_NEXT;"
+    "c->A = _fam65xx_lsr(c, c->A);\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
 ])
 
 OP_LSR_M = ("LSR", M_RW, [
-    "c->TMP = _fam65xx_lsr(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
+    "c->TMP = _fam65xx_lsr(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
 ])
 
 OP_ROL_A = ("ROL", M___, [
-    "c->A = _fam65xx_rol(c, c->A);\nc->CI = SHARED_FETCH_NEXT;"
+    "c->A = _fam65xx_rol(c, c->A);\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
 ])
 
 OP_ROL_M = ("ROL", M_RW, [
-    "c->TMP = _fam65xx_rol(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
+    "c->TMP = _fam65xx_rol(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
 ])
 
 OP_ROR_A = ("ROR", M___, [
-    "c->A = _fam65xx_ror(c, c->A);\nc->CI = SHARED_FETCH_NEXT;"
+    "c->A = _fam65xx_ror(c, c->A);\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
 ])
 
 OP_ROR_M = ("ROR", M_RW, [
-    "c->TMP = _fam65xx_ror(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
+    "c->TMP = _fam65xx_ror(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
 ])
 
 OP_INC = ("INC", M_RW, [
-    "c->TMP = c->DL + 1;\n_NZ(c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
+    "c->TMP = c->DL + 1;\n_NZ(c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
 ])
 
 OP_DEC = ("DEC", M_RW, [
-    "c->TMP = c->DL - 1;\n_NZ(c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
+    "c->TMP = c->DL - 1;\n_NZ(c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
 ])
 
 # NOP variants
 OP_NOP_I = ("NOP", M___, [
-    "c->AD = c->PC;\nc->CI = SHARED_FETCH_NEXT;"
+    "c->AD = c->PC;\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
 ])
 
 OP_NOP_R = ("NOP", M_R_, ["NEXT_OPCODE;"])
@@ -356,27 +367,33 @@ OP_LAX = ("LAX", M_R_, ["c->A = c->X = c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
 OP_SAX = ("SAX", M__W, ["c->TMP = c->A & c->X;\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_OPCODE;"])
 
 OP_SLO = ("SLO", M_RW, [
-    "c->TMP = _fam65xx_asl(c, c->DL);\nc->A |= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
+    "c->TMP = _fam65xx_asl(c, c->DL);\nc->A |= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
 ])
 
 OP_RLA = ("RLA", M_RW, [
-    "c->TMP = _fam65xx_rol(c, c->DL);\nc->A &= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
+    "c->TMP = _fam65xx_rol(c, c->DL);\nc->A &= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
 ])
 
 OP_SRE = ("SRE", M_RW, [
-    "c->TMP = _fam65xx_lsr(c, c->DL);\nc->A ^= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
+    "c->TMP = _fam65xx_lsr(c, c->DL);\nc->A ^= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
 ])
 
 OP_RRA = ("RRA", M_RW, [
-    "c->TMP = _fam65xx_ror(c, c->DL);\n_fam65xx_adc(c, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
+    "c->TMP = _fam65xx_ror(c, c->DL);\n_fam65xx_adc(c, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
 ])
 
 OP_DCP = ("DCP", M_RW, [
-    "c->TMP = c->DL - 1;\n_fam65xx_cmp(c, c->A, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
+    "c->TMP = c->DL - 1;\n_fam65xx_cmp(c, c->A, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
 ])
 
 OP_ISC = ("ISC", M_RW, [
-    "c->TMP = c->DL + 1;\n_fam65xx_sbc(c, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
+    "c->TMP = c->DL + 1;\n_fam65xx_sbc(c, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
 ])
 
 OP_ANC = ("ANC", M_R_, ["c->A &= c->DL;\n_NZ(c->A);\nc->P = (c->P & ~FAM65XX_CF) | ((c->A & 0x80) ? FAM65XX_CF : 0);\nNEXT_OPCODE;"])
@@ -741,6 +758,14 @@ def analyze_continuation_needs(op):
     # All operations now have unified cycle lists
     cycles = operation[2]  # cycles are at index 2
     
+    # Special case: Check if this is a two-cycle operation where the second cycle is just NEXT_OPCODE
+    if len(cycles) == 2:
+        second_cycle = cycles[1]
+        expanded_second = expand_macro(second_cycle, {})
+        if expanded_second.strip() == "goto fetch_next;":
+            # This will be optimized to c->CI = SHARED_FETCH_NEXT, no continuation needed
+            return None
+    
     # If operation has more than 1 cycle, create continuation sequence
     if len(cycles) > 1:
         # Generate unique label for this operation + addressing mode combination
@@ -757,6 +782,16 @@ def generate_opcode_implementation(op):
     
     # Always return the first cycle
     first_cycle = cycles[0]
+    
+    # Special case: Check if this is a two-cycle operation where the second cycle is just NEXT_OPCODE
+    if len(cycles) == 2:
+        second_cycle = cycles[1]
+        expanded_second = expand_macro(second_cycle, {})
+        if expanded_second.strip() == "goto fetch_next;":
+            # This is the pattern: NEXT_CYCLE + NEXT_OPCODE -> optimize to c->CI = SHARED_FETCH_NEXT
+            first_cycle = first_cycle.replace("NEXT_CYCLE", f"c->CI = {SHARED_FETCH_NEXT}")
+            first_cycle = first_cycle.replace("c->CI++", f"c->CI = {SHARED_FETCH_NEXT}")
+            return first_cycle
     
     # If there are more cycles, replace NEXT_CYCLE and c->CI++ with c->CI = label
     if len(cycles) > 1:
