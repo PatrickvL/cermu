@@ -608,17 +608,8 @@ def collect_opcode_cycles_only():
                     mem_suffix = {M___: "", M_R_: "_R", M__W: "_W", M_RW: "_RW"}[operation[1]]
                     key = f"OP_{operation[0]}{mem_suffix}"
                     if key not in all_cycles:  # Avoid duplicates
-                        # Expand macros for analysis (operations use default context)
-                        context = {}
-                        expanded_cycles = [expand_macro(cycle, context) for cycle in operation[2]]
-                        # Filter out cycles that are just "goto fetch_next" - these should use SHARED_FETCH_NEXT
-                        filtered_cycles = []
-                        for cycle in expanded_cycles:
-                            if cycle.strip() != "goto fetch_next;":
-                                filtered_cycles.append(cycle)
-                        # Only include if there are meaningful cycles beyond goto fetch_next
-                        if filtered_cycles:
-                            all_cycles[key] = filtered_cycles
+                        # DON'T EXPAND MACROS - keep original macro form for suffix analysis
+                        all_cycles[key] = list(operation[2])  # Keep original cycles with macros
     
     return all_cycles
 
@@ -654,8 +645,6 @@ def analyze_and_create_suffix_sequences():
 
 def optimize_cycles_with_suffixes(cycles, suffix_sequences):
     """Replace cycle suffixes with jumps to shared suffix sequences"""
-    # First expand macros to get the actual cycle content for comparison
-    expanded_cycles = [expand_macro(cycle, {}) for cycle in cycles]
     optimized = list(cycles)  # Keep original cycles with macros
     
     # Special case: Check for NEXT_CYCLE followed by NEXT_OPCODE pattern
@@ -668,27 +657,30 @@ def optimize_cycles_with_suffixes(cycles, suffix_sequences):
             second_to_last = optimized[-2]
             if "NEXT_CYCLE" in second_to_last:
                 optimized[-2] = second_to_last.replace("NEXT_CYCLE", f"c->CI = {SHARED_FETCH_NEXT}")
-                # Remove the last cycle since it's now handled by SHARED_FETCH_NEXT
+            # Remove the last cycle since it's now handled by SHARED_FETCH_NEXT
                 optimized = optimized[:-1]
                 return optimized
     
-    # Check for each suffix sequence (longest first)
+    # Check for each suffix sequence (longest first) - work with macro forms only
     for suffix_tuple, suffix_info in sorted(suffix_sequences.items(),
                                           key=lambda x: len(x[0]), reverse=True):
         suffix_len = len(suffix_tuple)
-        if suffix_len <= len(expanded_cycles):
-            # Check if the end of our expanded cycles matches this suffix
-            if tuple(expanded_cycles[-suffix_len:]) == suffix_tuple:
-                # Replace the suffix with a jump to the shared sequence
-                optimized = optimized[:-suffix_len]  # Remove the suffix from original
+        if suffix_len <= len(cycles):
+            # Get the last suffix_len cycles (in macro form)
+            cycle_suffix = tuple(cycles[-suffix_len:])
+            
+            # Direct comparison with macro forms
+            if cycle_suffix == suffix_tuple:
+                # Found a matching suffix - replace it
+                optimized = optimized[:-suffix_len]  # Remove the suffix
                 if optimized:  # If there are remaining cycles
                     # Modify the last remaining cycle to jump to suffix
                     last_cycle = optimized[-1]
-                    # Replace NEXT_CYCLE macro with jump to suffix (this is the primary case now)
                     if "NEXT_CYCLE" in last_cycle:
                         optimized[-1] = last_cycle.replace("NEXT_CYCLE", f"c->CI = {suffix_info['label']}")
+                    elif "c->CI++" in last_cycle:
+                        optimized[-1] = last_cycle.replace("c->CI++", f"c->CI = {suffix_info['label']}")
                     elif not any(jump in last_cycle for jump in ["c->CI = ", "goto fetch_next"]):
-                        # If no jump instruction exists, append the jump
                         optimized[-1] = last_cycle.rstrip(';') + f";\nc->CI = {suffix_info['label']};"
                 else:
                     # The entire sequence is a suffix, return a direct jump
