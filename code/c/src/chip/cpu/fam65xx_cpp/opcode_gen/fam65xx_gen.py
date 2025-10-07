@@ -127,16 +127,6 @@ M_RW = 3        # read-modify-write
 # cycles_list is a complete list of all cycles needed for the operation
 #-------------------------------------------------------------------------------
 
-def generate_label(mnemonic, mem_access, addressing_mode=None):
-    """Generate unique label for operation cycle sequence"""
-    mem_suffix = {M___: "", M_R_: "_R", M__W: "_W", M_RW: "_RW"}[mem_access]
-    # Only add addressing mode suffix if it's a real addressing mode (not AM_NON, AM_JMP, AM_JSR, AM_INV)
-    addr_suffix = ""
-    if addressing_mode and addressing_mode not in [AM_NON, AM_JMP, AM_JSR, AM_INV]:
-        # Use the const name instead of acronym to avoid invalid C identifiers
-        addr_suffix = f"_{addressing_mode[2].replace('ADDR_', '')}"
-    return f"C_{mnemonic}{mem_suffix}{addr_suffix}"
-
 # Simple implied mode operations
 OP_BRK = ("BRK", M___, [
     "if (0 == (c->brk_flags & (FAM65XX_BRK_IRQ | FAM65XX_BRK_NMI))) {\n\tc->PC++;\n}\nc->write_src = R_PCH;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI++;",
@@ -682,18 +672,6 @@ def optimize_cycles_with_suffixes(cycles, suffix_sequences):
     
     return optimized
 
-def format_code(code):
-    """Format code using embedded newlines and tabs for indentation"""
-    lines = code.split('\n')
-    formatted_lines = []
-    
-    for line in lines:
-        line = line.rstrip()  # Remove trailing whitespace but preserve leading tabs
-        if line:  # Only add non-empty lines
-            formatted_lines.append('            ' + line)
-    
-    return formatted_lines
-
 def assign_label_index(label, length=1):
     """Assign the next available index to a label and advance the counter"""
     global current_case_index
@@ -701,64 +679,6 @@ def assign_label_index(label, length=1):
         label_to_index[label] = current_case_index
         current_case_index += length
     return label_to_index[label]
-
-def generate_suffix_sequences():
-    """Generate shared suffix sequence cases and assign their indices"""
-    if not suffix_sequences:
-        return
-        
-    # Sort by label for consistent ordering
-    for suffix_tuple, suffix_info in sorted(suffix_sequences.items(),
-                                          key=lambda x: x[1]['label']):
-        label = suffix_info['label']
-        cycles = suffix_info['cycles']
-        sources = suffix_info['sources']
-        
-        # Assign index for this label
-        assign_label_index(label, len(cycles))
-        
-        # Optimize cycles: if last cycle is only "goto fetch_next", merge it with previous cycle
-        optimized_cycles = []
-        for i, cycle_code in enumerate(cycles):
-            expanded_code = expand_macro(cycle_code, {})
-            
-            # Check if this is the last cycle and it's only "goto fetch_next"
-            if i == len(cycles) - 1 and expanded_code.strip() == "goto fetch_next;":
-                # If we have a previous cycle, modify it to jump to SHARED_FETCH_NEXT instead of incrementing
-                if optimized_cycles:
-                    prev_cycle = optimized_cycles[-1]
-                    # Replace NEXT_CYCLE or c->CI++ with jump to SHARED_FETCH_NEXT
-                    if "NEXT_CYCLE" in prev_cycle:
-                        optimized_cycles[-1] = prev_cycle.replace("NEXT_CYCLE", f"c->CI = {SHARED_FETCH_NEXT}")
-                    elif "c->CI++" in prev_cycle:
-                        optimized_cycles[-1] = prev_cycle.replace("c->CI++", f"c->CI = {SHARED_FETCH_NEXT}")
-                    else:
-                        # Add the jump at the end of the previous cycle
-                        optimized_cycles[-1] = prev_cycle + f";\nc->CI = {SHARED_FETCH_NEXT}"
-                # Skip this cycle since it's been merged
-                continue
-            else:
-                optimized_cycles.append(cycle_code)
-        
-        # Only emit if we have remaining cycles after optimization
-        if optimized_cycles:
-            output_shared_sequences.append(f"        // {label}: {len(optimized_cycles)} cycles, used by {len(sources)} sources")
-            output_shared_sequences.append(f"        // Sources: {', '.join(sources[:3])}{'...' if len(sources) > 3 else ''}")
-            
-            for i, cycle_code in enumerate(optimized_cycles):
-                output_shared_sequences.append(f"        case {label} + {i}:")
-                
-                # Format the expanded code with proper indentation
-                expanded_code = expand_macro(cycle_code, {})
-                lines = format_code(expanded_code)
-                for line in lines:
-                    output_shared_sequences.append(line)
-                
-                # Only emit break if the code doesn't end with goto fetch_next
-                if not expanded_code.strip().endswith('goto fetch_next;'):
-                    output_shared_sequences.append("            break;")
-            
-            output_shared_sequences.append("")
 
 def generate_shared_fetch_next():
     """Generate the final shared fetch_next case"""
@@ -795,6 +715,16 @@ def get_or_create_continuation(cycles, label):
         next_continuation_index += len(cycles)
     
     return continuation_sequences[label]['index']
+
+def generate_label(mnemonic, mem_access, addressing_mode=None):
+    """Generate unique label for operation cycle sequence"""
+    mem_suffix = {M___: "", M_R_: "_R", M__W: "_W", M_RW: "_RW"}[mem_access]
+    # Only add addressing mode suffix if it's a real addressing mode (not AM_NON, AM_JMP, AM_JSR, AM_INV)
+    addr_suffix = ""
+    if addressing_mode and addressing_mode not in [AM_NON, AM_JMP, AM_JSR, AM_INV]:
+        # Use the const name instead of acronym to avoid invalid C identifiers
+        addr_suffix = f"_{addressing_mode[2].replace('ADDR_', '')}"
+    return f"C_{mnemonic}{mem_suffix}{addr_suffix}"
 
 def analyze_continuation_needs(op):
     """Determine if opcode needs a continuation sequence"""
@@ -840,32 +770,17 @@ def generate_opcode_implementation(op):
     
     return first_cycle
 
-def get_addr_mode_label(addr_mode):
-    """Get the label name for an addressing mode"""
-    return addr_mode[2]  # const_name like "ADDR_IMM"
-
-def generate_lookup_table():
-    """Generate opcode_addr_start lookup table with base-corrected addressing mode offsets"""
-    for op in range(256):
-        operation, addr_mode = get_ops_entry(op)
-        
-        # Get the addressing mode label and check if it has cycles
-        if len(addr_mode[3]) > 0:  # Has cycles - needs base correction
-            # Calculate base-corrected offset (subtract ADDR_SEQ_BASE for lookup table)
-            const_name = f"{addr_mode[2]:<10} - ADDR_SEQ_BASE"  # Use the const name like "ADDR_IMM"
-        else:
-            # No cycles - use ADDR_NON
-            const_name = "ADDR_NON"
-        
-        # Format with comma except for last element
-        comma = "," if op < 255 else " "
-        const_comma = f"{const_name}{comma}"
-
-        # Show memory access type in comment for clarity
-        mem_access_str = {M___: "---", M_R_: "R", M__W: "W", M_RW: "RW"}[operation[1]]
-        output_lookup_table.append(f"    {const_comma:<27}  // 0x{op:02X}: {operation[0]} [{mem_access_str}] {addr_mode[1]}")
+def format_code(code):
+    """Format code using embedded newlines and tabs for indentation"""
+    lines = code.split('\n')
+    formatted_lines = []
     
-# This function has been replaced by generate_opcode_cycles() in the streamlined approach
+    for line in lines:
+        line = line.rstrip()  # Remove trailing whitespace but preserve leading tabs
+        if line:  # Only add non-empty lines
+            formatted_lines.append('            ' + line)
+    
+    return formatted_lines
 
 def generate_addressing_modes():
     """Generate shared addressing mode sequences and assign their indices"""
@@ -959,6 +874,64 @@ def generate_continuations():
                     output_cases_continues.append("            break;")
             output_cases_continues.append("")
 
+def generate_suffix_sequences():
+    """Generate shared suffix sequence cases and assign their indices"""
+    if not suffix_sequences:
+        return
+        
+    # Sort by label for consistent ordering
+    for suffix_tuple, suffix_info in sorted(suffix_sequences.items(),
+                                          key=lambda x: x[1]['label']):
+        label = suffix_info['label']
+        cycles = suffix_info['cycles']
+        sources = suffix_info['sources']
+        
+        # Assign index for this label
+        assign_label_index(label, len(cycles))
+        
+        # Optimize cycles: if last cycle is only "goto fetch_next", merge it with previous cycle
+        optimized_cycles = []
+        for i, cycle_code in enumerate(cycles):
+            expanded_code = expand_macro(cycle_code, {})
+            
+            # Check if this is the last cycle and it's only "goto fetch_next"
+            if i == len(cycles) - 1 and expanded_code.strip() == "goto fetch_next;":
+                # If we have a previous cycle, modify it to jump to SHARED_FETCH_NEXT instead of incrementing
+                if optimized_cycles:
+                    prev_cycle = optimized_cycles[-1]
+                    # Replace NEXT_CYCLE or c->CI++ with jump to SHARED_FETCH_NEXT
+                    if "NEXT_CYCLE" in prev_cycle:
+                        optimized_cycles[-1] = prev_cycle.replace("NEXT_CYCLE", f"c->CI = {SHARED_FETCH_NEXT}")
+                    elif "c->CI++" in prev_cycle:
+                        optimized_cycles[-1] = prev_cycle.replace("c->CI++", f"c->CI = {SHARED_FETCH_NEXT}")
+                    else:
+                        # Add the jump at the end of the previous cycle
+                        optimized_cycles[-1] = prev_cycle + f";\nc->CI = {SHARED_FETCH_NEXT}"
+                # Skip this cycle since it's been merged
+                continue
+            else:
+                optimized_cycles.append(cycle_code)
+        
+        # Only emit if we have remaining cycles after optimization
+        if optimized_cycles:
+            output_shared_sequences.append(f"        // {label}: {len(optimized_cycles)} cycles, used by {len(sources)} sources")
+            output_shared_sequences.append(f"        // Sources: {', '.join(sources[:3])}{'...' if len(sources) > 3 else ''}")
+            
+            for i, cycle_code in enumerate(optimized_cycles):
+                output_shared_sequences.append(f"        case {label} + {i}:")
+                
+                # Format the expanded code with proper indentation
+                expanded_code = expand_macro(cycle_code, {})
+                lines = format_code(expanded_code)
+                for line in lines:
+                    output_shared_sequences.append(line)
+                
+                # Only emit break if the code doesn't end with goto fetch_next
+                if not expanded_code.strip().endswith('goto fetch_next;'):
+                    output_shared_sequences.append("            break;")
+            
+            output_shared_sequences.append("")
+
 def generate_all_constants():
     """Generate all constant declarations from the collected labels"""
     # Generate layout constants
@@ -1000,10 +973,27 @@ def generate_all_constants():
             output_constants.append(f"#define {label:<18} {index}")
         output_constants.append("")
 
-def l(s):
-    """Output a line"""
-    print(s)
+def generate_lookup_table():
+    """Generate opcode_addr_start lookup table with base-corrected addressing mode offsets"""
+    for op in range(256):
+        operation, addr_mode = get_ops_entry(op)
+        
+        # Get the addressing mode label and check if it has cycles
+        if len(addr_mode[3]) > 0:  # Has cycles - needs base correction
+            # Calculate base-corrected offset (subtract ADDR_SEQ_BASE for lookup table)
+            const_name = f"{addr_mode[2]:<10} - ADDR_SEQ_BASE"  # Use the const name like "ADDR_IMM"
+        else:
+            # No cycles - use ADDR_NON
+            const_name = "ADDR_NON"
+        
+        # Format with comma except for last element
+        comma = "," if op < 255 else " "
+        const_comma = f"{const_name}{comma}"
 
+        # Show memory access type in comment for clarity
+        mem_access_str = {M___: "---", M_R_: "R", M__W: "W", M_RW: "RW"}[operation[1]]
+        output_lookup_table.append(f"    {const_comma:<27}  // 0x{op:02X}: {operation[0]} [{mem_access_str}] {addr_mode[1]}")
+    
 def generate_opcode_cycles():
     """Generate opcode-specific cases with fallthrough optimization"""
     global opcode_groups
@@ -1059,6 +1049,10 @@ def generate_opcode_cycles():
                 if not expanded_code.strip().endswith('goto fetch_next;'):
                     output_opcode_cycles.append("            break;")
         output_opcode_cycles.append("")
+
+def l(s):
+    """Output a line"""
+    print(s)
 
 def write_decoder_file():
     """Write the complete decoder file with all generated content"""
