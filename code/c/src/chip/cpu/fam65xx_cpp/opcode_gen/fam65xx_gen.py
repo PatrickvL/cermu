@@ -617,35 +617,31 @@ def analyze_and_create_suffix_sequences():
     """Analyze OPCODE cycles only and create optimized suffix sequences"""
     global suffix_sequences, suffix_labels, SUFFIX_SEQ_START
     
-    # Only analyze opcode cycles, not addressing mode cycles
+    # Collect cycle sequences from opcodes only (not addressing modes)
     all_cycles = collect_opcode_cycles_only()
+    
+    # Find common suffixes
     common_suffixes = find_common_suffixes(all_cycles)
     
-    # Sort by suffix length (longest first) to prioritize larger optimizations
-    sorted_suffixes = sorted(common_suffixes.items(),
-                           key=lambda x: len(x[0]), reverse=True)
-    
-    # Calculate suffix sequence start after addressing modes
-    # This will be set properly in main() after addressing mode layout is known
-    current_index = 0  # Will be updated to real start index later
-    
-    for suffix_cycles, sources in sorted_suffixes:
-        if len(sources) > 1:  # Only create if truly shared
-            label = generate_suffix_label(suffix_cycles)
-            suffix_sequences[suffix_cycles] = {
+    # Create suffix sequences for suffixes longer than 1 cycle and used by multiple sources
+    suffix_sequences = {}
+    for suffix_tuple, sources in common_suffixes.items():
+        if len(suffix_tuple) > 1 and len(sources) > 1:
+            label = generate_suffix_label(suffix_tuple)
+            suffix_sequences[suffix_tuple] = {
                 'label': label,
-                'cycles': list(suffix_cycles),
+                'cycles': list(suffix_tuple),
                 'sources': sources
             }
-            # Store label to index mapping for constants
-            suffix_labels[label] = current_index
-            current_index += len(suffix_cycles)
+    
+    # Build suffix_labels mapping for constant generation
+    suffix_labels = {info['label']: 0 for info in suffix_sequences.values()}
     
     return suffix_sequences
 
 def optimize_cycles_with_suffixes(cycles, suffix_sequences):
     """Replace cycle suffixes with jumps to shared suffix sequences"""
-    optimized = list(cycles)  # Keep original cycles with macros
+    optimized = list(cycles)  # Start with original cycles
     
     # Special case: Check for NEXT_CYCLE followed by NEXT_OPCODE pattern
     if len(optimized) >= 2 and "NEXT_CYCLE" in optimized[-2] and "NEXT_OPCODE" in optimized[-1]:
@@ -661,31 +657,34 @@ def optimize_cycles_with_suffixes(cycles, suffix_sequences):
                 optimized = optimized[:-1]
                 return optimized
     
-    # Check for each suffix sequence (longest first) - work with macro forms only
-    for suffix_tuple, suffix_info in sorted(suffix_sequences.items(),
-                                          key=lambda x: len(x[0]), reverse=True):
-        suffix_len = len(suffix_tuple)
-        if suffix_len <= len(cycles):
-            # Get the last suffix_len cycles (in macro form)
-            cycle_suffix = tuple(cycles[-suffix_len:])
-            
-            # Direct comparison with macro forms
-            if cycle_suffix == suffix_tuple:
-                # Found a matching suffix - replace it
-                optimized = optimized[:-suffix_len]  # Remove the suffix
-                if optimized:  # If there are remaining cycles
-                    # Modify the last remaining cycle to jump to suffix
-                    last_cycle = optimized[-1]
-                    if "NEXT_CYCLE" in last_cycle:
-                        optimized[-1] = last_cycle.replace("NEXT_CYCLE", f"c->CI = {suffix_info['label']}")
-                    elif "c->CI++" in last_cycle:
-                        optimized[-1] = last_cycle.replace("c->CI++", f"c->CI = {suffix_info['label']}")
-                    elif not any(jump in last_cycle for jump in ["c->CI = ", "goto fetch_next"]):
-                        optimized[-1] = last_cycle.rstrip(';') + f";\nc->CI = {suffix_info['label']};"
-                else:
-                    # The entire sequence is a suffix, return a direct jump
-                    optimized = [f"c->CI = {suffix_info['label']};"]
-                break  # Only apply the longest matching suffix
+    # Apply suffix optimization: Check if the end of this cycle sequence matches any suffix
+    if suffix_sequences:
+        for suffix_tuple, suffix_info in suffix_sequences.items():
+            suffix_len = len(suffix_tuple)
+            # Check if this cycle sequence ends with this suffix
+            if len(optimized) >= suffix_len:
+                # Compare the last suffix_len cycles
+                cycle_suffix = tuple(optimized[-suffix_len:])
+                if cycle_suffix == suffix_tuple:
+                    # Replace the suffix with a jump to the shared sequence
+                    suffix_label = suffix_info['label']
+                    # Remove the suffix cycles
+                    optimized = optimized[:-suffix_len]
+                    # Add a jump to the suffix label instead
+                    if optimized:
+                        # Replace NEXT_CYCLE in the last remaining cycle with the jump
+                        last_cycle = optimized[-1]
+                        if "NEXT_CYCLE" in last_cycle:
+                            optimized[-1] = last_cycle.replace("NEXT_CYCLE", f"c->CI = {suffix_label}")
+                        elif "c->CI++" in last_cycle:
+                            optimized[-1] = last_cycle.replace("c->CI++", f"c->CI = {suffix_label}")
+                        else:
+                            # Add a new cycle that jumps to the suffix
+                            optimized.append(f"c->CI = {suffix_label};")
+                    else:
+                        # This entire sequence is a suffix, replace with a single jump
+                        optimized = [f"c->CI = {suffix_label};"]
+                    break  # Only apply one suffix optimization per sequence
     
     return optimized
 
@@ -905,6 +904,26 @@ def generate_suffix_sequences():
             if expanded_first.strip() == "goto fetch_next;":
                 # Skip this suffix - operations should use SHARED_FETCH_NEXT instead
                 continue
+        
+        # Check if this suffix is actually used by any continuation sequence
+        # We need to check if optimize_cycles_with_suffixes would create jumps to this suffix
+        suffix_actually_used = False
+        for cont_label, cont_info in continuation_sequences.items():
+            # Apply the same optimization logic to see if it would create a jump
+            original_cycles = cont_info['cycles']
+            optimized_cycles = optimize_cycles_with_suffixes(original_cycles, {suffix_tuple: suffix_info})
+            
+            # Check if the optimization created a jump to this suffix label
+            for cycle in optimized_cycles:
+                if suffix_info['label'] in cycle:
+                    suffix_actually_used = True
+                    break
+            if suffix_actually_used:
+                break
+        
+        if not suffix_actually_used:
+            # This suffix is not actually used by any continuation sequence
+            continue
         
         # Assign index for this label
         assign_label_index(label, len(cycles))
