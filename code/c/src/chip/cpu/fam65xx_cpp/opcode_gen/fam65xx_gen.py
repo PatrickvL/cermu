@@ -103,15 +103,15 @@ AM_IDY_W = ("IDY", "indirect indexed (zp),Y (write - always takes extra cycle)",
 AM_ABX_RMW = ("ABX", "absolute,X (RMW with dummy read)", "ADDR_ABX_RMW", (
     "c->AD = c->PC++;\nNEXT_CYCLE;",
     "c->TMP = c->DL;\nc->AD = c->PC++;\nNEXT_CYCLE;",
-    "{\n\tuint16_t sum = c->TMP + c->X;\n\tuint8_t high_byte = c->DL;\n\tc->AD = (sum & 0xFF) | (high_byte << 8);\n\tNEXT_CYCLE;\n}",
-    "{\n\tuint16_t sum = c->TMP + c->X;\n\tuint8_t high_byte = ((c->AD >> 8) & 0xFF);\n\tif (sum > 0xFF) {\n\t\thigh_byte = (high_byte + 1) & 0xFF;\n\t}\n\tc->AD = (sum & 0xFF) | (high_byte << 8);\n\tNEXT_OPCODE;\n}"
+    "{\n\tuint16_t sum = c->TMP + c->X;\n\tc->AD = (sum & 0xFF) | (c->DL << 8);\n\tNEXT_CYCLE;\n}",
+    "{\n\tuint16_t sum = c->TMP + c->X;\n\tuint8_t high = (c->AD >> 8) & 0xFF;\n\tif (sum > 0xFF) high = (high + 1) & 0xFF;\n\tc->AD = (sum & 0xFF) | (high << 8);\n\tNEXT_OPCODE;\n}"
 ))
 
 AM_ABY_RMW = ("ABY", "absolute,Y (RMW with dummy read)", "ADDR_ABY_RMW", (
     "c->AD = c->PC++;\nNEXT_CYCLE;",
     "c->TMP = c->DL;\nc->AD = c->PC++;\nNEXT_CYCLE;",
-    "{\n\tuint16_t sum = c->TMP + c->Y;\n\tuint8_t high_byte = c->DL;\n\tc->AD = (sum & 0xFF) | (high_byte << 8);\n\tNEXT_CYCLE;\n}",
-    "{\n\tuint16_t sum = c->TMP + c->Y;\n\tuint8_t high_byte = ((c->AD >> 8) & 0xFF);\n\tif (sum > 0xFF) {\n\t\thigh_byte = (high_byte + 1) & 0xFF;\n\t}\n\tc->AD = (sum & 0xFF) | (high_byte << 8);\n\tNEXT_OPCODE;\n}"
+    "{\n\tuint16_t sum = c->TMP + c->Y;\n\tc->AD = (sum & 0xFF) | (c->DL << 8);\n\tNEXT_CYCLE;\n}",
+    "{\n\tuint16_t sum = c->TMP + c->Y;\n\tuint8_t high = (c->AD >> 8) & 0xFF;\n\tif (sum > 0xFF) high = (high + 1) & 0xFF;\n\tc->AD = (sum & 0xFF) | (high << 8);\n\tNEXT_OPCODE;\n}"
 ))
 
 AM_IDY_RMW = ("IDY", "indirect indexed (zp),Y (RMW with dummy read)", "ADDR_IDY_RMW", (
