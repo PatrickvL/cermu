@@ -29,74 +29,74 @@ AM_IMM = ("IMM", "immediate", "ADDR_IMM", (
 ))
 
 AM_ZER = ("ZP", "zero page", "ADDR_ZER", (
-    "c->AD = c->PC++;\nc->CI++;",
-    "c->AD = c->DL;\nc->CI = c->opcode;"
+    "c->AD = c->PC++;\nNEXT_CYCLE;",
+    "c->AD = c->DL;\nNEXT_OPCODE;"
 ))
 
 AM_ZPX = ("ZPX", "zero page,X", "ADDR_ZPX", (
-    "c->AD = c->PC++;\nc->CI++;",
-    "c->AD = (c->DL + c->X) & 0xFF;\nc->CI = c->opcode;"
+    "c->AD = c->PC++;\nNEXT_CYCLE;",
+    "c->AD = (c->DL + c->X) & 0xFF;\nNEXT_OPCODE;"
 ))
 
 AM_ZPY = ("ZPY", "zero page,Y", "ADDR_ZPY", (
-    "c->AD = c->PC++;\nc->CI++;",
-    "c->AD = (c->DL + c->Y) & 0xFF;\nc->CI = c->opcode;"
+    "c->AD = c->PC++;\nNEXT_CYCLE;",
+    "c->AD = (c->DL + c->Y) & 0xFF;\nNEXT_OPCODE;"
 ))
 
 AM_ABS = ("ABS", "absolute", "ADDR_ABS", (
-    "c->AD = c->PC++;\nc->CI++;",
-    "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI++;",
-    "c->ADL = c->TMP;\nc->ADH = c->DL;\nc->CI = c->opcode;"
+    "c->AD = c->PC++;\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nc->AD = c->PC++;\nNEXT_CYCLE;",
+    "c->ADL = c->TMP;\nc->ADH = c->DL;\nNEXT_OPCODE;"
 ))
 
 AM_ABX = ("ABX", "absolute,X", "ADDR_ABX", (
-    "c->AD = c->PC++;\nc->CI++;",
-    "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI++;",
-    "{\n\tuint16_t sum = c->TMP + c->X;\n\tif (sum > 0xFF) {\n\t\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\t\tc->CI = c->opcode;\n\t} else {\n\t\tc->AD = sum | (c->DL << 8); c->CI++;\n\t}\n}",
-    "c->CI = c->opcode;"
+    "c->AD = c->PC++;\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nc->AD = c->PC++;\nNEXT_CYCLE;",
+    "{\n\tuint16_t sum = c->TMP + c->X;\n\tif (sum > 0xFF) {\n\t\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\t\tNEXT_OPCODE;\n\t} else {\n\t\tc->AD = sum | (c->DL << 8); NEXT_CYCLE;\n\t}\n}",
+    "NEXT_OPCODE;"
 ))
 
 AM_ABX_W = ("ABX", "absolute,X (write - always takes extra cycle)", "ADDR_ABX_W", (
-    "c->AD = c->PC++;\nc->CI++;",
-    "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI++;",
-    "{\n\tuint16_t sum = c->TMP + c->X;\n\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\tc->CI = c->opcode;\n}"
+    "c->AD = c->PC++;\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nc->AD = c->PC++;\nNEXT_CYCLE;",
+    "{\n\tuint16_t sum = c->TMP + c->X;\n\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\tNEXT_OPCODE;\n}"
 ))
 
 AM_ABY = ("ABY", "absolute,Y", "ADDR_ABY", (
-    "c->AD = c->PC++;\nc->CI++;",
-    "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI++;",
-    "{\n\tuint16_t sum = c->TMP + c->Y;\n\tif (sum > 0xFF) {\n\t\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\t\tc->CI = c->opcode;\n\t} else {\n\t\tc->AD = sum | (c->DL << 8);\n\t\tc->CI++;\n\t}\n}",
-    "c->CI = c->opcode;"
+    "c->AD = c->PC++;\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nc->AD = c->PC++;\nNEXT_CYCLE;",
+    "{\n\tuint16_t sum = c->TMP + c->Y;\n\tif (sum > 0xFF) {\n\t\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\t\tNEXT_OPCODE;\n\t} else {\n\t\tc->AD = sum | (c->DL << 8);\n\t\tNEXT_CYCLE;\n\t}\n}",
+    "NEXT_OPCODE;"
 ))
 
 AM_ABY_W = ("ABY", "absolute,Y (write - always takes extra cycle)", "ADDR_ABY_W", (
-    "c->AD = c->PC++;\nc->CI++;",
-    "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI++;",
-    "{\n\tuint16_t sum = c->TMP + c->Y;\n\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\tc->CI = c->opcode;\n}"
+    "c->AD = c->PC++;\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nc->AD = c->PC++;\nNEXT_CYCLE;",
+    "{\n\tuint16_t sum = c->TMP + c->Y;\n\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\tNEXT_OPCODE;\n}"
 ))
 
 AM_IDX = ("IDX", "indexed indirect (zp,X)", "ADDR_IDX", (
-    "c->AD = c->PC++;\nc->CI++;",
-    "c->AD = (c->DL + c->X) & 0xFF;\nc->CI++;",
-    "c->TMP = c->DL;\nc->AD = (c->AD + 1) & 0xFF;\nc->CI++;",
-    "c->AD = (c->DL << 8) | c->TMP;\nc->CI++;",
-    "c->CI = c->opcode;"
+    "c->AD = c->PC++;\nNEXT_CYCLE;",
+    "c->AD = (c->DL + c->X) & 0xFF;\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nc->AD = (c->AD + 1) & 0xFF;\nNEXT_CYCLE;",
+    "c->AD = (c->DL << 8) | c->TMP;\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
 ))
 
 AM_IDY = ("IDY", "indirect indexed (zp),Y", "ADDR_IDY", (
-    "c->AD = c->PC++;\nc->CI++;",
-    "c->TMP = c->DL;\nc->AD = (c->DL + 1) & 0xFF;\nc->CI++;",
-    "c->AD = c->TMP | (c->DL << 8);\nif ((c->AD >> 8) != ((c->AD + c->Y) >> 8)) {\n\tc->CI++;\n} else {\n\tc->AD += c->Y; c->CI++;\n}",
-    "c->AD += c->Y;\nc->CI++;",
-    "c->CI = c->opcode;"
+    "c->AD = c->PC++;\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nc->AD = (c->DL + 1) & 0xFF;\nNEXT_CYCLE;",
+    "c->AD = c->TMP | (c->DL << 8);\nif ((c->AD >> 8) != ((c->AD + c->Y) >> 8)) {\n\tNEXT_CYCLE;\n} else {\n\tc->AD += c->Y; NEXT_CYCLE;\n}",
+    "c->AD += c->Y;\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
 ))
 
 AM_IDY_W = ("IDY", "indirect indexed (zp),Y (write - always takes extra cycle)", "ADDR_IDY_W", (
-    "c->AD = c->PC++;\nc->CI++;",
-    "c->TMP = c->DL;\nc->AD = (c->DL + 1) & 0xFF;\nc->CI++;",
-    "c->AD = c->TMP | (c->DL << 8);\nc->CI++;",
-    "c->AD += c->Y;\nc->CI++;",
-    "c->CI = c->opcode;"
+    "c->AD = c->PC++;\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nc->AD = (c->DL + 1) & 0xFF;\nNEXT_CYCLE;",
+    "c->AD = c->TMP | (c->DL << 8);\nNEXT_CYCLE;",
+    "c->AD += c->Y;\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
 ))
 
 # Addressing mode list
@@ -127,181 +127,181 @@ M_RW = 3        # read-modify-write
 # cycles_list is a complete list of all cycles needed for the operation
 #-------------------------------------------------------------------------------
 
-# Simple implied mode operations
+# Simple implied mode operations using NEXT_CYCLE macros
 OP_BRK = ("BRK", M___, [
-    "if (0 == (c->brk_flags & (FAM65XX_BRK_IRQ | FAM65XX_BRK_NMI))) {\n\tc->PC++;\n}\nc->write_src = R_PCH;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI++;",
-    "c->write_src = R_PCL;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI++;",
-    "c->TMP = c->P | FAM65XX_BF;\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->P |= FAM65XX_IF;\nc->P &= ~FAM65XX_BF;\nc->brk_flags = 0;\nc->CI++;",
-    "c->AD = _fam65xx_get_vector_addr(c);\nc->PCL = c->DL;\nc->CI++;",
-    "c->AD++;\nc->PCH = c->DL;\nc->CI++;",
-    "c->AD = c->PC;\nc->CI++;",
-    "goto fetch_next;"
+    "if (0 == (c->brk_flags & (FAM65XX_BRK_IRQ | FAM65XX_BRK_NMI))) {\n\tc->PC++;\n}\nc->write_src = R_PCH;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nNEXT_CYCLE;",
+    "c->write_src = R_PCL;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nNEXT_CYCLE;",
+    "c->TMP = c->P | FAM65XX_BF;\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->P |= FAM65XX_IF;\nc->P &= ~FAM65XX_BF;\nc->brk_flags = 0;\nNEXT_CYCLE;",
+    "c->AD = _fam65xx_get_vector_addr(c);\nc->PCL = c->DL;\nNEXT_CYCLE;",
+    "c->AD++;\nc->PCH = c->DL;\nNEXT_CYCLE;",
+    "c->AD = c->PC;\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
 ])
 
 OP_PHP = ("PHP", M___, [
-    "c->AD = c->PC;\nc->CI++;",
-    "c->TMP = c->P | FAM65XX_BF;\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI = SHARED_FETCH_NEXT;"
+    "c->AD = c->PC;\nNEXT_CYCLE;",
+    "c->TMP = c->P | FAM65XX_BF;\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nNEXT_OPCODE;"
 ])
 
 OP_PLP = ("PLP", M___, [
-    "c->AD = 0x0100 | c->S++;\nc->CI++;",
-    "c->AD = 0x0100 | c->S;\nc->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;\nc->CI = SHARED_FETCH_NEXT;"
+    "c->AD = 0x0100 | c->S++;\nNEXT_CYCLE;",
+    "c->AD = 0x0100 | c->S;\nc->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;\nNEXT_OPCODE;"
 ])
 
 OP_PHA = ("PHA", M___, [
-    "c->AD = c->PC;\nc->CI++;",
-    "c->write_src = R_A;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI = SHARED_FETCH_NEXT;"
+    "c->AD = c->PC;\nNEXT_CYCLE;",
+    "c->write_src = R_A;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nNEXT_OPCODE;"
 ])
 
 OP_PLA = ("PLA", M___, [
-    "c->AD = 0x0100 | c->S++;\nc->CI++;",
-    "c->AD = 0x0100 | c->S;\nc->A = c->DL;\n_NZ(c->A);\nc->CI = SHARED_FETCH_NEXT;"
+    "c->AD = 0x0100 | c->S++;\nNEXT_CYCLE;",
+    "c->AD = 0x0100 | c->S;\nc->A = c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"
 ])
 
 OP_RTI = ("RTI", M_R_, [
-    "c->AD = 0x0100 | c->S++;\nc->CI++;",
-    "c->AD = 0x0100 | c->S++;\nc->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;\nc->CI++;",
-    "c->AD = 0x0100 | c->S++;\nc->PCL = c->DL;\nc->CI++;",
-    "c->AD = 0x0100 | c->S;\nc->PCH = c->DL;\nc->CI = SHARED_FETCH_NEXT;"
+    "c->AD = 0x0100 | c->S++;\nNEXT_CYCLE;",
+    "c->AD = 0x0100 | c->S++;\nc->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;\nNEXT_CYCLE;",
+    "c->AD = 0x0100 | c->S++;\nc->PCL = c->DL;\nNEXT_CYCLE;",
+    "c->AD = 0x0100 | c->S;\nc->PCH = c->DL;\nNEXT_OPCODE;"
 ])
 
 OP_RTS = ("RTS", M_R_, [
-    "c->AD = 0x0100 | c->S++;\nc->CI++;",
-    "c->AD = 0x0100 | c->S++;\nc->PCL = c->DL;\nc->CI++;",
-    "c->AD = 0x0100 | c->S;\nc->PCH = c->DL;\nc->CI = SHARED_FETCH_NEXT;"
+    "c->AD = 0x0100 | c->S++;\nNEXT_CYCLE;",
+    "c->AD = 0x0100 | c->S++;\nc->PCL = c->DL;\nNEXT_CYCLE;",
+    "c->AD = 0x0100 | c->S;\nc->PCH = c->DL;\nNEXT_OPCODE;"
 ])
 
 OP_JSR = ("JSR", M_R_, [
-    "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI++;",
-    "c->AD = 0x0100 | c->S;\nc->CI++;",
-    "c->write_src = R_PCH;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI++;",
-    "c->write_src = R_PCL;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI++;",
-    "c->AD = c->PC;\nc->PCH = c->DL;\nc->PC = (c->DL << 8) | c->TMP;\nc->CI = SHARED_FETCH_NEXT;"
+    "c->TMP = c->DL;\nc->AD = c->PC++;\nNEXT_CYCLE;",
+    "c->AD = 0x0100 | c->S;\nNEXT_CYCLE;",
+    "c->write_src = R_PCH;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nNEXT_CYCLE;",
+    "c->write_src = R_PCL;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nNEXT_CYCLE;",
+    "c->AD = c->PC;\nc->PCH = c->DL;\nc->PC = (c->DL << 8) | c->TMP;\nNEXT_OPCODE;"
 ])
 
 OP_JMP = ("JMP", M_R_, [
-    "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI++;",
-    "c->AD = c->PC++;\nc->PCH = c->DL;\nc->PC = (c->DL << 8) | c->TMP;\nc->CI = SHARED_FETCH_NEXT;"
+    "c->TMP = c->DL;\nc->AD = c->PC++;\nNEXT_CYCLE;",
+    "c->AD = c->PC++;\nc->PCH = c->DL;\nc->PC = (c->DL << 8) | c->TMP;\nNEXT_OPCODE;"
 ])
 
 OP_JMP_I = ("JMP", M_R_, [
-    "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI++;",
-    "c->AD = c->PC++;\nc->TMP = c->DL;\nc->AD = (c->DL << 8) | c->TMP;\nc->CI++;",
-    "c->AD = c->AD;\nc->PCL = c->DL;\nc->CI++;",
-    "c->AD = (c->AD & 0xFF00) | ((c->AD + 1) & 0xFF);\nc->PCH = c->DL;\nc->CI = SHARED_FETCH_NEXT;"
+    "c->TMP = c->DL;\nc->AD = c->PC++;\nNEXT_CYCLE;",
+    "c->AD = c->PC++;\nc->TMP = c->DL;\nc->AD = (c->DL << 8) | c->TMP;\nNEXT_CYCLE;",
+    "c->AD = c->AD;\nc->PCL = c->DL;\nNEXT_CYCLE;",
+    "c->AD = (c->AD & 0xFF00) | ((c->AD + 1) & 0xFF);\nc->PCH = c->DL;\nNEXT_OPCODE;"
 ])
 
-# Register transfer operations (single cycle - immediate completion)
-OP_TAX = ("TAX", M___, ["c->X = c->A;\n_NZ(c->X);\ngoto fetch_next;"])
-OP_TXA = ("TXA", M___, ["c->A = c->X;\n_NZ(c->A);\ngoto fetch_next;"])
-OP_TAY = ("TAY", M___, ["c->Y = c->A;\n_NZ(c->Y);\ngoto fetch_next;"])
-OP_TYA = ("TYA", M___, ["c->A = c->Y;\n_NZ(c->A);\ngoto fetch_next;"])
-OP_TSX = ("TSX", M___, ["c->X = c->S;\n_NZ(c->X);\ngoto fetch_next;"])
-OP_TXS = ("TXS", M___, ["c->S = c->X;\ngoto fetch_next;"])
+# Register transfer operations using NEXT_OPCODE macro
+OP_TAX = ("TAX", M___, ["c->X = c->A;\n_NZ(c->X);\nNEXT_OPCODE;"])
+OP_TXA = ("TXA", M___, ["c->A = c->X;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_TAY = ("TAY", M___, ["c->Y = c->A;\n_NZ(c->Y);\nNEXT_OPCODE;"])
+OP_TYA = ("TYA", M___, ["c->A = c->Y;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_TSX = ("TSX", M___, ["c->X = c->S;\n_NZ(c->X);\nNEXT_OPCODE;"])
+OP_TXS = ("TXS", M___, ["c->S = c->X;\nNEXT_OPCODE;"])
 
-# Increment/Decrement operations (single cycle - immediate completion)
-OP_DEX = ("DEX", M___, ["c->X--;\n_NZ(c->X);\ngoto fetch_next;"])
-OP_INX = ("INX", M___, ["c->X++;\n_NZ(c->X);\ngoto fetch_next;"])
-OP_DEY = ("DEY", M___, ["c->Y--;\n_NZ(c->Y);\ngoto fetch_next;"])
-OP_INY = ("INY", M___, ["c->Y++;\n_NZ(c->Y);\ngoto fetch_next;"])
+# Increment/Decrement operations using NEXT_OPCODE macro
+OP_DEX = ("DEX", M___, ["c->X--;\n_NZ(c->X);\nNEXT_OPCODE;"])
+OP_INX = ("INX", M___, ["c->X++;\n_NZ(c->X);\nNEXT_OPCODE;"])
+OP_DEY = ("DEY", M___, ["c->Y--;\n_NZ(c->Y);\nNEXT_OPCODE;"])
+OP_INY = ("INY", M___, ["c->Y++;\n_NZ(c->Y);\nNEXT_OPCODE;"])
 
-# Flag operations (single cycle - immediate completion)
-OP_CLC = ("CLC", M___, ["c->P &= ~FAM65XX_CF;\ngoto fetch_next;"])
-OP_SEC = ("SEC", M___, ["c->P |= FAM65XX_CF;\ngoto fetch_next;"])
-OP_CLI = ("CLI", M___, ["c->P &= ~FAM65XX_IF;\ngoto fetch_next;"])
-OP_SEI = ("SEI", M___, ["c->P |= FAM65XX_IF;\ngoto fetch_next;"])
-OP_CLV = ("CLV", M___, ["c->P &= ~FAM65XX_VF;\ngoto fetch_next;"])
-OP_CLD = ("CLD", M___, ["c->P &= ~FAM65XX_DF;\ngoto fetch_next;"])
-OP_SED = ("SED", M___, ["c->P |= FAM65XX_DF;\ngoto fetch_next;"])
+# Flag operations using NEXT_OPCODE macro
+OP_CLC = ("CLC", M___, ["c->P &= ~FAM65XX_CF;\nNEXT_OPCODE;"])
+OP_SEC = ("SEC", M___, ["c->P |= FAM65XX_CF;\nNEXT_OPCODE;"])
+OP_CLI = ("CLI", M___, ["c->P &= ~FAM65XX_IF;\nNEXT_OPCODE;"])
+OP_SEI = ("SEI", M___, ["c->P |= FAM65XX_IF;\nNEXT_OPCODE;"])
+OP_CLV = ("CLV", M___, ["c->P &= ~FAM65XX_VF;\nNEXT_OPCODE;"])
+OP_CLD = ("CLD", M___, ["c->P &= ~FAM65XX_DF;\nNEXT_OPCODE;"])
+OP_SED = ("SED", M___, ["c->P |= FAM65XX_DF;\nNEXT_OPCODE;"])
 
-# Data-driven branch operations
+# Data-driven branch operations using NEXT_CYCLE and NEXT_OPCODE macros
 OP_BPL = ("BPL", M_R_, [
-    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_NF) == 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tc->CI++;\n} else {\n\tgoto fetch_next;\n}",
-    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tgoto fetch_next;\n} else {\n\tc->CI++;\n}",
-    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\ngoto fetch_next;"
+    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_NF) == 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tNEXT_CYCLE;\n} else {\n\tNEXT_OPCODE;\n}",
+    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tNEXT_OPCODE;\n} else {\n\tNEXT_CYCLE;\n}",
+    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\nNEXT_OPCODE;"
 ])
 
 OP_BMI = ("BMI", M_R_, [
-    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_NF) != 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tc->CI++;\n} else {\n\tgoto fetch_next;\n}",
-    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tgoto fetch_next;\n} else {\n\tc->CI++;\n}",
-    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\ngoto fetch_next;"
+    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_NF) != 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tNEXT_CYCLE;\n} else {\n\tNEXT_OPCODE;\n}",
+    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tNEXT_OPCODE;\n} else {\n\tNEXT_CYCLE;\n}",
+    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\nNEXT_OPCODE;"
 ])
 
 OP_BVC = ("BVC", M_R_, [
-    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_VF) == 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tc->CI++;\n} else {\n\tgoto fetch_next;\n}",
-    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tgoto fetch_next;\n} else {\n\tc->CI++;\n}",
-    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\ngoto fetch_next;"
+    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_VF) == 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tNEXT_CYCLE;\n} else {\n\tNEXT_OPCODE;\n}",
+    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tNEXT_OPCODE;\n} else {\n\tNEXT_CYCLE;\n}",
+    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\nNEXT_OPCODE;"
 ])
 
 OP_BVS = ("BVS", M_R_, [
-    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_VF) != 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tc->CI++;\n} else {\n\tgoto fetch_next;\n}",
-    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tgoto fetch_next;\n} else {\n\tc->CI++;\n}",
-    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\ngoto fetch_next;"
+    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_VF) != 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tNEXT_CYCLE;\n} else {\n\tNEXT_OPCODE;\n}",
+    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tNEXT_OPCODE;\n} else {\n\tNEXT_CYCLE;\n}",
+    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\nNEXT_OPCODE;"
 ])
 
 OP_BCC = ("BCC", M_R_, [
-    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_CF) == 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tc->CI++;\n} else {\n\tgoto fetch_next;\n}",
-    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tgoto fetch_next;\n} else {\n\tc->CI++;\n}",
-    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\ngoto fetch_next;"
+    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_CF) == 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tNEXT_CYCLE;\n} else {\n\tNEXT_OPCODE;\n}",
+    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tNEXT_OPCODE;\n} else {\n\tNEXT_CYCLE;\n}",
+    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\nNEXT_OPCODE;"
 ])
 
 OP_BCS = ("BCS", M_R_, [
-    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_CF) != 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tc->CI++;\n} else {\n\tgoto fetch_next;\n}",
-    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tgoto fetch_next;\n} else {\n\tc->CI++;\n}",
-    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\ngoto fetch_next;"
+    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_CF) != 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tNEXT_CYCLE;\n} else {\n\tNEXT_OPCODE;\n}",
+    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tNEXT_OPCODE;\n} else {\n\tNEXT_CYCLE;\n}",
+    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\nNEXT_OPCODE;"
 ])
 
 OP_BNE = ("BNE", M_R_, [
-    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_ZF) == 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tc->CI++;\n} else {\n\tgoto fetch_next;\n}",
-    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tgoto fetch_next;\n} else {\n\tc->CI++;\n}",
-    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\ngoto fetch_next;"
+    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_ZF) == 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tNEXT_CYCLE;\n} else {\n\tNEXT_OPCODE;\n}",
+    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tNEXT_OPCODE;\n} else {\n\tNEXT_CYCLE;\n}",
+    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\nNEXT_OPCODE;"
 ])
 
 OP_BEQ = ("BEQ", M_R_, [
-    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_ZF) != 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tc->CI++;\n} else {\n\tgoto fetch_next;\n}",
-    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tgoto fetch_next;\n} else {\n\tc->CI++;\n}",
-    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\ngoto fetch_next;"
+    "c->AD = c->PC;\nc->TMP = (int8_t)c->DL;\nif ((c->P & FAM65XX_ZF) != 0) {\n\tc->AD = c->PC + (int16_t)(int8_t)c->DL;\n\tNEXT_CYCLE;\n} else {\n\tNEXT_OPCODE;\n}",
+    "if((c->AD & 0xFF00) == (c->PC & 0xFF00))\n{\n\tc->PC = c->AD;\n\tc->irq_pip >>= 1;\n\tc->nmi_pip >>= 1;\n\tNEXT_OPCODE;\n} else {\n\tNEXT_CYCLE;\n}",
+    "c->PC = c->AD;\nc->irq_pip >>= 1;\nc->nmi_pip >>= 1;\nNEXT_OPCODE;"
 ])
 
-# ALU operations - Memory variants (single cycle after addressing mode)
-OP_ORA = ("ORA", M_R_, ["c->A |= c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
-OP_AND = ("AND", M_R_, ["c->A &= c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
-OP_EOR = ("EOR", M_R_, ["c->A ^= c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
-OP_ADC = ("ADC", M_R_, ["_fam65xx_adc(c, c->DL);\ngoto fetch_next;"])
-OP_SBC = ("SBC", M_R_, ["_fam65xx_sbc(c, c->DL);\ngoto fetch_next;"])
-OP_CMP = ("CMP", M_R_, ["_fam65xx_cmp(c, c->A, c->DL);\ngoto fetch_next;"])
-OP_BIT = ("BIT", M_R_, ["_fam65xx_bit(c, c->DL);\ngoto fetch_next;"])
+# ALU operations - Memory variants using NEXT_OPCODE macro
+OP_ORA = ("ORA", M_R_, ["c->A |= c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_AND = ("AND", M_R_, ["c->A &= c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_EOR = ("EOR", M_R_, ["c->A ^= c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_ADC = ("ADC", M_R_, ["_fam65xx_adc(c, c->DL);\nNEXT_OPCODE;"])
+OP_SBC = ("SBC", M_R_, ["_fam65xx_sbc(c, c->DL);\nNEXT_OPCODE;"])
+OP_CMP = ("CMP", M_R_, ["_fam65xx_cmp(c, c->A, c->DL);\nNEXT_OPCODE;"])
+OP_BIT = ("BIT", M_R_, ["_fam65xx_bit(c, c->DL);\nNEXT_OPCODE;"])
 
-# Immediate mode variants (read operand directly and execute)
-OP_ORA_IMM = ("ORA", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->A |= c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
-OP_AND_IMM = ("AND", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->A &= c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
-OP_EOR_IMM = ("EOR", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->A ^= c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
-OP_ADC_IMM = ("ADC", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;_fam65xx_adc(c, c->DL);\ngoto fetch_next;"])
-OP_SBC_IMM = ("SBC", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;_fam65xx_sbc(c, c->DL);\ngoto fetch_next;"])
-OP_CMP_IMM = ("CMP", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;_fam65xx_cmp(c, c->A, c->DL);\ngoto fetch_next;"])
+# Immediate mode variants using NEXT_CYCLE and NEXT_OPCODE macros
+OP_ORA_IMM = ("ORA", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->A |= c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_AND_IMM = ("AND", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->A &= c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_EOR_IMM = ("EOR", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->A ^= c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_ADC_IMM = ("ADC", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\n_fam65xx_adc(c, c->DL);\nNEXT_OPCODE;"])
+OP_SBC_IMM = ("SBC", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\n_fam65xx_sbc(c, c->DL);\nNEXT_OPCODE;"])
+OP_CMP_IMM = ("CMP", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\n_fam65xx_cmp(c, c->A, c->DL);\nNEXT_OPCODE;"])
 
-# Load operations (single cycle after addressing mode)
-OP_LDA = ("LDA", M_R_, ["c->A = c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
-OP_LDX = ("LDX", M_R_, ["c->X = c->DL;\n_NZ(c->X);\ngoto fetch_next;"])
-OP_LDY = ("LDY", M_R_, ["c->Y = c->DL;\n_NZ(c->Y);\ngoto fetch_next;"])
+# Load operations using NEXT_OPCODE macro
+OP_LDA = ("LDA", M_R_, ["c->A = c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_LDX = ("LDX", M_R_, ["c->X = c->DL;\n_NZ(c->X);\nNEXT_OPCODE;"])
+OP_LDY = ("LDY", M_R_, ["c->Y = c->DL;\n_NZ(c->Y);\nNEXT_OPCODE;"])
 
-# Immediate load operations (read operand directly and execute)
-OP_LDA_IMM = ("LDA", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->A = c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
-OP_LDX_IMM = ("LDX", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->X = c->DL;\n_NZ(c->X);\ngoto fetch_next;"])
-OP_LDY_IMM = ("LDY", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->Y = c->DL;\n_NZ(c->Y);\ngoto fetch_next;"])
+# Immediate load operations using NEXT_CYCLE and NEXT_OPCODE macros
+OP_LDA_IMM = ("LDA", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->A = c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_LDX_IMM = ("LDX", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->X = c->DL;\n_NZ(c->X);\nNEXT_OPCODE;"])
+OP_LDY_IMM = ("LDY", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->Y = c->DL;\n_NZ(c->Y);\nNEXT_OPCODE;"])
 
-# Store operations (single cycle after addressing mode)
-OP_STA = ("STA", M__W, ["c->write_src = R_A;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"])
-OP_STX = ("STX", M__W, ["c->write_src = R_X;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"])
-OP_STY = ("STY", M__W, ["c->write_src = R_Y;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"])
+# Store operations using NEXT_OPCODE macro
+OP_STA = ("STA", M__W, ["c->write_src = R_A;\npins &= ~FAM65XX_RW;\nNEXT_OPCODE;"])
+OP_STX = ("STX", M__W, ["c->write_src = R_X;\npins &= ~FAM65XX_RW;\nNEXT_OPCODE;"])
+OP_STY = ("STY", M__W, ["c->write_src = R_Y;\npins &= ~FAM65XX_RW;\nNEXT_OPCODE;"])
 
-# Compare operations (single cycle after addressing mode)
-OP_CPX = ("CPX", M_R_, ["_fam65xx_cmp(c, c->X, c->DL);\ngoto fetch_next;"])
-OP_CPY = ("CPY", M_R_, ["_fam65xx_cmp(c, c->Y, c->DL);\ngoto fetch_next;"])
+# Compare operations using NEXT_OPCODE macro
+OP_CPX = ("CPX", M_R_, ["_fam65xx_cmp(c, c->X, c->DL);\nNEXT_OPCODE;"])
+OP_CPY = ("CPY", M_R_, ["_fam65xx_cmp(c, c->Y, c->DL);\nNEXT_OPCODE;"])
 
-# Immediate compare operations
-OP_CPX_IMM = ("CPX", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;_fam65xx_cmp(c, c->X, c->DL);\ngoto fetch_next;"])
-OP_CPY_IMM = ("CPY", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;_fam65xx_cmp(c, c->Y, c->DL);\ngoto fetch_next;"])
+# Immediate compare operations using NEXT_CYCLE and NEXT_OPCODE macros
+OP_CPX_IMM = ("CPX", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\n_fam65xx_cmp(c, c->X, c->DL);\nNEXT_OPCODE;"])
+OP_CPY_IMM = ("CPY", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\n_fam65xx_cmp(c, c->Y, c->DL);\nNEXT_OPCODE;"])
 
 # RMW operations - have two variants (accumulator vs memory)
 OP_ASL_A = ("ASL", M___, [
@@ -349,11 +349,11 @@ OP_NOP_I = ("NOP", M___, [
     "c->AD = c->PC;\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
-OP_NOP_R = ("NOP", M_R_, ["goto fetch_next;"])
+OP_NOP_R = ("NOP", M_R_, ["NEXT_OPCODE;"])
 
-# Illegal/undocumented instructions
-OP_LAX = ("LAX", M_R_, ["c->A = c->X = c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
-OP_SAX = ("SAX", M__W, ["c->TMP = c->A & c->X;\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"])
+# Illegal/undocumented instructions using NEXT_OPCODE macro
+OP_LAX = ("LAX", M_R_, ["c->A = c->X = c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_SAX = ("SAX", M__W, ["c->TMP = c->A & c->X;\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_OPCODE;"])
 
 OP_SLO = ("SLO", M_RW, [
     "c->TMP = _fam65xx_asl(c, c->DL);\nc->A |= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
@@ -379,24 +379,24 @@ OP_ISC = ("ISC", M_RW, [
     "c->TMP = c->DL + 1;\n_fam65xx_sbc(c, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
-OP_ANC = ("ANC", M_R_, ["c->A &= c->DL;\n_NZ(c->A);\nc->P = (c->P & ~FAM65XX_CF) | ((c->A & 0x80) ? FAM65XX_CF : 0);\ngoto fetch_next;"])
-OP_ASR = ("ASR", M_R_, ["c->A &= c->DL;\nc->P = (c->P & ~FAM65XX_CF) | (c->A & 1);\nc->A>>=1;\n_NZ(c->A);\ngoto fetch_next;"])
-OP_ARR = ("ARR", M_R_, ["c->A = (c->A & c->DL) >> 1 | (c->P & FAM65XX_CF ? 0x80 : 0);\n_NZ(c->A);\nc->P = (c->P & ~(FAM65XX_CF | FAM65XX_VF)) | ((c->A & 0x40) ? FAM65XX_CF : 0) | ((c->A & 0x20) ^ (c->A & 0x40) ? FAM65XX_VF : 0);\ngoto fetch_next;"])
-OP_XAA = ("XAA", M_R_, ["c->A = (c->A | 0xEE) & c->X & c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
-OP_SBX = ("SBX", M_R_, ["c->TMP = (c->A & c->X) - c->DL;\nc->X = c->TMP;\n_NZ(c->X);\nc->P = (c->P & ~FAM65XX_CF) | ((c->TMP & 0x100) ? 0 : FAM65XX_CF);\ngoto fetch_next;"])
+OP_ANC = ("ANC", M_R_, ["c->A &= c->DL;\n_NZ(c->A);\nc->P = (c->P & ~FAM65XX_CF) | ((c->A & 0x80) ? FAM65XX_CF : 0);\nNEXT_OPCODE;"])
+OP_ASR = ("ASR", M_R_, ["c->A &= c->DL;\nc->P = (c->P & ~FAM65XX_CF) | (c->A & 1);\nc->A>>=1;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_ARR = ("ARR", M_R_, ["c->A = (c->A & c->DL) >> 1 | (c->P & FAM65XX_CF ? 0x80 : 0);\n_NZ(c->A);\nc->P = (c->P & ~(FAM65XX_CF | FAM65XX_VF)) | ((c->A & 0x40) ? FAM65XX_CF : 0) | ((c->A & 0x20) ^ (c->A & 0x40) ? FAM65XX_VF : 0);\nNEXT_OPCODE;"])
+OP_XAA = ("XAA", M_R_, ["c->A = (c->A | 0xEE) & c->X & c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_SBX = ("SBX", M_R_, ["c->TMP = (c->A & c->X) - c->DL;\nc->X = c->TMP;\n_NZ(c->X);\nc->P = (c->P & ~FAM65XX_CF) | ((c->TMP & 0x100) ? 0 : FAM65XX_CF);\nNEXT_OPCODE;"])
 
-# Immediate mode illegal operations (read operand directly and execute)
-OP_ANC_IMM = ("ANC", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->A &= c->DL;\n_NZ(c->A);\nc->P = (c->P & ~FAM65XX_CF) | ((c->A & 0x80) ? FAM65XX_CF : 0);\ngoto fetch_next;"])
-OP_ASR_IMM = ("ASR", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->A &= c->DL;\nc->P = (c->P & ~FAM65XX_CF) | (c->A & 1);\nc->A>>=1;\n_NZ(c->A);\ngoto fetch_next;"])
-OP_ARR_IMM = ("ARR", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->A = (c->A & c->DL) >> 1 | (c->P & FAM65XX_CF ? 0x80 : 0);\n_NZ(c->A);\nc->P = (c->P & ~(FAM65XX_CF | FAM65XX_VF)) | ((c->A & 0x40) ? FAM65XX_CF : 0) | ((c->A & 0x20) ^ (c->A & 0x40) ? FAM65XX_VF : 0);\ngoto fetch_next;"])
-OP_XAA_IMM = ("XAA", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->A = (c->A | 0xEE) & c->X & c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
-OP_SBX_IMM = ("SBX", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->TMP = (c->A & c->X) - c->DL;\nc->X = c->TMP;\n_NZ(c->X);\nc->P = (c->P & ~FAM65XX_CF) | ((c->TMP & 0x100) ? 0 : FAM65XX_CF);\ngoto fetch_next;"])
-OP_LAX_IMM = ("LAX", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;\nc->A = c->X = c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
-OP_SHY = ("SHY", M__W, ["c->TMP = c->Y & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"])
-OP_SHX = ("SHX", M__W, ["c->TMP = c->X & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"])
-OP_SHA = ("SHA", M_RW, ["c->TMP = c->A & c->X & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"])
-OP_SHS = ("SHS", M__W, ["c->S = c->A & c->X;\nc->TMP = c->S & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"])
-OP_LAS = ("LAS", M_R_, ["c->A = c->X = c->S = c->S & c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
+# Immediate mode illegal operations using NEXT_CYCLE and NEXT_OPCODE macros
+OP_ANC_IMM = ("ANC", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->A &= c->DL;\n_NZ(c->A);\nc->P = (c->P & ~FAM65XX_CF) | ((c->A & 0x80) ? FAM65XX_CF : 0);\nNEXT_OPCODE;"])
+OP_ASR_IMM = ("ASR", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->A &= c->DL;\nc->P = (c->P & ~FAM65XX_CF) | (c->A & 1);\nc->A>>=1;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_ARR_IMM = ("ARR", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->A = (c->A & c->DL) >> 1 | (c->P & FAM65XX_CF ? 0x80 : 0);\n_NZ(c->A);\nc->P = (c->P & ~(FAM65XX_CF | FAM65XX_VF)) | ((c->A & 0x40) ? FAM65XX_CF : 0) | ((c->A & 0x20) ^ (c->A & 0x40) ? FAM65XX_VF : 0);\nNEXT_OPCODE;"])
+OP_XAA_IMM = ("XAA", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->A = (c->A | 0xEE) & c->X & c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_SBX_IMM = ("SBX", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->TMP = (c->A & c->X) - c->DL;\nc->X = c->TMP;\n_NZ(c->X);\nc->P = (c->P & ~FAM65XX_CF) | ((c->TMP & 0x100) ? 0 : FAM65XX_CF);\nNEXT_OPCODE;"])
+OP_LAX_IMM = ("LAX", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->A = c->X = c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_SHY = ("SHY", M__W, ["c->TMP = c->Y & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_OPCODE;"])
+OP_SHX = ("SHX", M__W, ["c->TMP = c->X & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_OPCODE;"])
+OP_SHA = ("SHA", M_RW, ["c->TMP = c->A & c->X & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_OPCODE;"])
+OP_SHS = ("SHS", M__W, ["c->S = c->A & c->X;\nc->TMP = c->S & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_OPCODE;"])
+OP_LAS = ("LAS", M_R_, ["c->A = c->X = c->S = c->S & c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
 
 OP_JAM = ("JAM", M_R_, [
     "c->PC--;\nNEXT_CYCLE;",
@@ -528,30 +528,15 @@ def expand_macro(code, context):
         code = code.replace("NEXT_CYCLE", "c->CI++")
     
     if "NEXT_OPCODE" in code:
-        # Replace NEXT_OPCODE with goto fetch_next
-        code = code.replace("NEXT_OPCODE", "goto fetch_next")
+        # Replace NEXT_OPCODE with c->CI = c->opcode (for addressing modes) or goto fetch_next (for operations)
+        # Check context to determine which replacement to use
+        if hasattr(context, 'get') and context.get('is_addressing_mode', False):
+            code = code.replace("NEXT_OPCODE", "c->CI = c->opcode")
+        else:
+            code = code.replace("NEXT_OPCODE", "goto fetch_next")
     
     return code
 
-def convert_cycles_to_macros(cycles):
-    """Convert hardcoded cycle transitions to use NEXT_CYCLE/NEXT_OPCODE macros"""
-    converted = []
-    
-    for cycle_code in cycles:
-        # Replace common patterns with macros
-        new_code = cycle_code
-        
-        # Replace c->CI++ with NEXT_CYCLE (but not in complex conditions)
-        if "c->CI++" in new_code and "if" not in new_code and "else" not in new_code:
-            new_code = new_code.replace("c->CI++", "NEXT_CYCLE")
-        
-        # Replace goto fetch_next with NEXT_OPCODE
-        if "goto fetch_next" in new_code:
-            new_code = new_code.replace("goto fetch_next", "NEXT_OPCODE")
-        
-        converted.append(new_code)
-    
-    return converted
 
 def find_common_suffixes(all_cycles):
     """Find common suffix sequences across all cycle definitions"""
@@ -606,9 +591,17 @@ def collect_opcode_cycles_only():
                     mem_suffix = {M___: "", M_R_: "_R", M__W: "_W", M_RW: "_RW"}[operation[1]]
                     key = f"OP_{operation[0]}{mem_suffix}"
                     if key not in all_cycles:  # Avoid duplicates
-                        # Expand macros for analysis
-                        expanded_cycles = [expand_macro(cycle, {}) for cycle in operation[2]]
-                        all_cycles[key] = expanded_cycles
+                        # Expand macros for analysis (operations use default context)
+                        context = {}
+                        expanded_cycles = [expand_macro(cycle, context) for cycle in operation[2]]
+                        # Filter out cycles that are just "goto fetch_next" - these should use SHARED_FETCH_NEXT
+                        filtered_cycles = []
+                        for cycle in expanded_cycles:
+                            if cycle.strip() != "goto fetch_next;":
+                                filtered_cycles.append(cycle)
+                        # Only include if there are meaningful cycles beyond goto fetch_next
+                        if filtered_cycles:
+                            all_cycles[key] = filtered_cycles
     
     return all_cycles
 
@@ -648,6 +641,20 @@ def optimize_cycles_with_suffixes(cycles, suffix_sequences):
     expanded_cycles = [expand_macro(cycle, {}) for cycle in cycles]
     optimized = list(cycles)  # Keep original cycles with macros
     
+    # Special case: Check for NEXT_CYCLE followed by NEXT_OPCODE pattern
+    if len(optimized) >= 2 and "NEXT_CYCLE" in optimized[-2] and "NEXT_OPCODE" in optimized[-1]:
+        # If the last cycle is just NEXT_OPCODE (which expands to goto fetch_next),
+        # optimize by replacing NEXT_CYCLE with c->CI = SHARED_FETCH_NEXT
+        expanded_last = expand_macro(optimized[-1], {})
+        if expanded_last.strip() == "goto fetch_next;":
+            # Replace the NEXT_CYCLE in the second-to-last cycle with jump to SHARED_FETCH_NEXT
+            second_to_last = optimized[-2]
+            if "NEXT_CYCLE" in second_to_last:
+                optimized[-2] = second_to_last.replace("NEXT_CYCLE", f"c->CI = {SHARED_FETCH_NEXT}")
+                # Remove the last cycle since it's now handled by SHARED_FETCH_NEXT
+                optimized = optimized[:-1]
+                return optimized
+    
     # Check for each suffix sequence (longest first)
     for suffix_tuple, suffix_info in sorted(suffix_sequences.items(),
                                           key=lambda x: len(x[0]), reverse=True):
@@ -660,11 +667,12 @@ def optimize_cycles_with_suffixes(cycles, suffix_sequences):
                 if optimized:  # If there are remaining cycles
                     # Modify the last remaining cycle to jump to suffix
                     last_cycle = optimized[-1]
-                    # Replace NEXT_CYCLE macro with jump to suffix
+                    # Replace NEXT_CYCLE macro with jump to suffix (this is the primary case now)
                     if "NEXT_CYCLE" in last_cycle:
                         optimized[-1] = last_cycle.replace("NEXT_CYCLE", f"c->CI = {suffix_info['label']}")
-                    elif "c->CI++" in last_cycle:
-                        optimized[-1] = last_cycle.replace("c->CI++", f"c->CI = {suffix_info['label']}")
+                    elif not any(jump in last_cycle for jump in ["c->CI = ", "goto fetch_next"]):
+                        # If no jump instruction exists, append the jump
+                        optimized[-1] = last_cycle.rstrip(';') + f";\nc->CI = {suffix_info['label']};"
                 else:
                     # The entire sequence is a suffix, return a direct jump
                     optimized = [f"c->CI = {suffix_info['label']};"]
@@ -750,23 +758,22 @@ def generate_opcode_implementation(op):
     # Always return the first cycle
     first_cycle = cycles[0]
     
-    # If there are more cycles, replace c->CI++ with c->CI = label
+    # If there are more cycles, replace NEXT_CYCLE and c->CI++ with c->CI = label
     if len(cycles) > 1:
         label = generate_label(operation[0], operation[1], addr_mode if addr_mode != AM_NON else None)
-        # Replace any c->CI++ with c->CI = label
+        # Replace NEXT_CYCLE macro with c->CI = label
+        first_cycle = first_cycle.replace("NEXT_CYCLE", f"c->CI = {label}")
+        # Also replace any remaining c->CI++ with c->CI = label
         first_cycle = first_cycle.replace("c->CI++", f"c->CI = {label}")
     else:
-        # Single cycle - check if it should jump to a shared suffix
+        # Single cycle - expand macros and handle appropriately
         expanded_first = expand_macro(first_cycle, {})
         if expanded_first.strip() == "goto fetch_next;":
-            # Replace with jump to shared fetch_next case
-            first_cycle = "c->CI = SHARED_FETCH_NEXT;"
-        elif expanded_first.strip().endswith("goto fetch_next;"):
-            # Check if this cycle matches any suffix
-            for suffix_tuple, suffix_info in suffix_sequences.items():
-                if len(suffix_tuple) == 1 and suffix_tuple[0] == expanded_first.strip():
-                    first_cycle = f"c->CI = {suffix_info['label']};"
-                    break
+            # Replace NEXT_OPCODE/goto fetch_next with jump to SHARED_FETCH_NEXT
+            first_cycle = f"c->CI = {SHARED_FETCH_NEXT};"
+        # For single cycles that are NOT goto fetch_next, don't apply suffix optimization
+        # This prevents creating redundant S_FETCH_* labels for simple operations
+        # The original cycle implementation should be used as-is
     
     return first_cycle
 
@@ -805,7 +812,9 @@ def generate_addressing_modes():
             output_cases_addrmode.append(f"        case {const_name} + {cycle_idx}:  // {acronym} cycle {cycle_num}")
             
             # Expand macros and format the code with proper indentation
-            expanded_code = expand_macro(cycle_code, {})
+            # Pass addressing mode context for proper NEXT_OPCODE expansion
+            context = {'is_addressing_mode': True}
+            expanded_code = expand_macro(cycle_code, context)
             lines = format_code(expanded_code)
             for line in lines:
                 output_cases_addrmode.append(line)
@@ -831,36 +840,13 @@ def generate_continuations():
         # Apply suffix optimization to the continuation cycles
         optimized_cycles = optimize_cycles_with_suffixes(cycles, suffix_sequences)
         
-        # Further optimize: if last cycle is only "goto fetch_next", merge it with previous cycle
-        final_cycles = []
-        for i, cycle_code in enumerate(optimized_cycles):
-            expanded_code = expand_macro(cycle_code, {})
-            
-            # Check if this is the last cycle and it's only "goto fetch_next"
-            if i == len(optimized_cycles) - 1 and expanded_code.strip() == "goto fetch_next;":
-                # If we have a previous cycle, modify it to jump to SHARED_FETCH_NEXT instead of incrementing
-                if final_cycles:
-                    prev_cycle = final_cycles[-1]
-                    # Replace NEXT_CYCLE or c->CI++ with jump to SHARED_FETCH_NEXT
-                    if "NEXT_CYCLE" in prev_cycle:
-                        final_cycles[-1] = prev_cycle.replace("NEXT_CYCLE", f"c->CI = {SHARED_FETCH_NEXT}")
-                    elif "c->CI++" in prev_cycle:
-                        final_cycles[-1] = prev_cycle.replace("c->CI++", f"c->CI = {SHARED_FETCH_NEXT}")
-                    else:
-                        # Add the jump at the end of the previous cycle
-                        final_cycles[-1] = prev_cycle + f";\nc->CI = {SHARED_FETCH_NEXT}"
-                # Skip this cycle since it's been merged
-                continue
-            else:
-                final_cycles.append(cycle_code)
-        
         # Assign index for this label AFTER optimization to get correct length
-        assign_label_index(label, len(final_cycles))
+        assign_label_index(label, len(optimized_cycles))
         
         # Only emit if we have remaining cycles after optimization
-        if final_cycles:
+        if optimized_cycles:
             output_cases_continues.append(f"        // {label} continuation")
-            for i, cycle_code in enumerate(final_cycles):
+            for i, cycle_code in enumerate(optimized_cycles):
                 output_cases_continues.append(f"        case {label} + {i}:")
                 
                 # Format the expanded code with proper indentation
@@ -886,6 +872,13 @@ def generate_suffix_sequences():
         cycles = suffix_info['cycles']
         sources = suffix_info['sources']
         
+        # Check if this suffix is just a single "goto fetch_next" - skip it since SHARED_FETCH_NEXT handles this
+        if len(cycles) == 1:
+            expanded_first = expand_macro(cycles[0], {})
+            if expanded_first.strip() == "goto fetch_next;":
+                # Skip this suffix - operations should use SHARED_FETCH_NEXT instead
+                continue
+        
         # Assign index for this label
         assign_label_index(label, len(cycles))
         
@@ -896,17 +889,17 @@ def generate_suffix_sequences():
             
             # Check if this is the last cycle and it's only "goto fetch_next"
             if i == len(cycles) - 1 and expanded_code.strip() == "goto fetch_next;":
-                # If we have a previous cycle, modify it to jump to SHARED_FETCH_NEXT instead of incrementing
+                # If we have a previous cycle, modify it to use goto fetch_next instead of incrementing
                 if optimized_cycles:
                     prev_cycle = optimized_cycles[-1]
-                    # Replace NEXT_CYCLE or c->CI++ with jump to SHARED_FETCH_NEXT
+                    # Replace NEXT_CYCLE or c->CI++ with goto fetch_next
                     if "NEXT_CYCLE" in prev_cycle:
-                        optimized_cycles[-1] = prev_cycle.replace("NEXT_CYCLE", f"c->CI = {SHARED_FETCH_NEXT}")
+                        optimized_cycles[-1] = prev_cycle.replace("NEXT_CYCLE", "goto fetch_next")
                     elif "c->CI++" in prev_cycle:
-                        optimized_cycles[-1] = prev_cycle.replace("c->CI++", f"c->CI = {SHARED_FETCH_NEXT}")
+                        optimized_cycles[-1] = prev_cycle.replace("c->CI++", "goto fetch_next")
                     else:
-                        # Add the jump at the end of the previous cycle
-                        optimized_cycles[-1] = prev_cycle + f";\nc->CI = {SHARED_FETCH_NEXT}"
+                        # Add goto fetch_next at the end of the previous cycle
+                        optimized_cycles[-1] = prev_cycle + ";\ngoto fetch_next"
                 # Skip this cycle since it's been merged
                 continue
             else:
@@ -946,10 +939,10 @@ def generate_all_constants():
             const_name = addr_mode[2]
             if const_name in label_to_index:
                 actual_index = label_to_index[const_name]
-                output_constants.append(f"#define {const_name:<13} {actual_index:<3}")
+                output_constants.append(f"#define {const_name:<18} {actual_index:<3}")
             elif len(addr_mode[3]) == 0:
                 # Modes with no cycles use ADDR_NON (0)
-                output_constants.append(f"#define {const_name:<13} 0   // Direct opcode execution (no addressing mode)")
+                output_constants.append(f"#define {const_name:<18} 0   // Direct opcode execution (no addressing mode)")
     
     output_constants.append("")
     
@@ -960,7 +953,7 @@ def generate_all_constants():
         # Sort by index value instead of alphabetically
         for label in sorted(continuation_labels, key=lambda x: label_to_index[x]):
             index = label_to_index[label]
-            output_constants.append(f"#define {label:<20} {index}")
+            output_constants.append(f"#define {label:<18} {index}")
         output_constants.append("")
     
     # Generate shared sequence constants
@@ -1024,30 +1017,21 @@ def generate_opcode_cycles():
             output_opcode_cycles.append(f"        case 0x{opc:02X}:  // {operation[0]} [{mem_access_str}] {addr_acronym} cycle {cycle_num}")
             emitted.add(opc)
         
-        # Check if this should be replaced with jump to shared fetch_next or suffix
+        # Check if this should be replaced with jump to shared fetch_next
         expanded_code = expand_macro(code, {})
         if expanded_code.strip() == "goto fetch_next;":
             output_opcode_cycles.append(f"            c->CI = {SHARED_FETCH_NEXT};")
             output_opcode_cycles.append("            break;")
         else:
-            # Check if this matches any suffix sequence for optimization
-            optimized = False
-            for suffix_tuple, suffix_info in suffix_sequences.items():
-                if len(suffix_tuple) == 1 and suffix_tuple[0] == expanded_code.strip():
-                    output_opcode_cycles.append(f"            c->CI = {suffix_info['label']};")
-                    output_opcode_cycles.append("            break;")
-                    optimized = True
-                    break
+            # Format the expanded code with proper indentation - don't try to optimize with suffix sequences here
+            # All single-cycle "goto fetch_next" operations should use SHARED_FETCH_NEXT directly
+            lines = format_code(expanded_code)
+            for line in lines:
+                output_opcode_cycles.append(line)
             
-            if not optimized:
-                # Format the expanded code with proper indentation
-                lines = format_code(expanded_code)
-                for line in lines:
-                    output_opcode_cycles.append(line)
-                
-                # Only emit break if the code doesn't end with a goto fetch_next that's not in an if/else block
-                if not expanded_code.strip().endswith('goto fetch_next;'):
-                    output_opcode_cycles.append("            break;")
+            # Only emit break if the code doesn't end with a goto fetch_next that's not in an if/else block
+            if not expanded_code.strip().endswith('goto fetch_next;'):
+                output_opcode_cycles.append("            break;")
         output_opcode_cycles.append("")
 
 def l(s):
@@ -1083,8 +1067,8 @@ def write_decoder_file():
         shared_range = f"[{current_case_index}]"
     
     l(f" *   [0-255]     : Opcode-specific cycles")
-    l(f" *   {addr_range:<12} : Shared addressing mode sequences")
-    l(f" *   {shared_range:<12} : Shared sequences")
+    l(f" *   {addr_range:<11} : Shared addressing mode sequences")
+    l(f" *   {shared_range:<11} : Shared sequences")
     l(f" * Total cases   : {current_case_index}")
     l(" */")
     l("")

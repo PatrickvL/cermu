@@ -5,9 +5,9 @@
  * 
  * Layout:
  *   [0-255]     : Opcode-specific cycles
- *   [256-294]    : Shared addressing mode sequences
- *   [295-327]    : Shared sequences
- * Total cases   : 328
+ *   [256-294]   : Shared addressing mode sequences
+ *   [295-326]   : Shared sequences
+ * Total cases   : 327
  */
 
 // Layout constants
@@ -16,46 +16,45 @@
 #define ADDR_NON      0   // Direct opcode execution (no addressing mode)
 #define ADDR_SEQ_BASE 255
 
-#define ADDR_IMM      256
-#define ADDR_ZER      257
-#define ADDR_ZPX      259
-#define ADDR_ZPY      261
-#define ADDR_ABS      263
-#define ADDR_ABX      266
-#define ADDR_ABX_W    270
-#define ADDR_ABY      273
-#define ADDR_ABY_W    277
-#define ADDR_IDX      280
-#define ADDR_IDY      285
-#define ADDR_IDY_W    290
+#define ADDR_IMM           256
+#define ADDR_ZER           257
+#define ADDR_ZPX           259
+#define ADDR_ZPY           261
+#define ADDR_ABS           263
+#define ADDR_ABX           266
+#define ADDR_ABX_W         270
+#define ADDR_ABY           273
+#define ADDR_ABY_W         277
+#define ADDR_IDX           280
+#define ADDR_IDY           285
+#define ADDR_IDY_W         290
 
 // Continuation sequence constants
-#define C_BRK                295
-#define C_JAM_R              300
-#define C_PHP                301
-#define C_BPL_R              302
-#define C_JSR_R              303
-#define C_PLP                307
-#define C_BMI_R              308
-#define C_RTI_R              309
-#define C_PHA                310
-#define C_JMP_R              311
-#define C_BVC_R              312
-#define C_RTS_R              313
-#define C_PLA                314
-#define C_BVS_R              315
-#define C_BCC_R              316
-#define C_BCS_R              317
-#define C_BNE_R              318
-#define C_BEQ_R              319
+#define C_BRK              295
+#define C_JAM_R            300
+#define C_PHP              301
+#define C_BPL_R            302
+#define C_JSR_R            303
+#define C_PLP              307
+#define C_BMI_R            308
+#define C_RTI_R            309
+#define C_PHA              310
+#define C_JMP_R            311
+#define C_BVC_R            312
+#define C_RTS_R            313
+#define C_PLA              314
+#define C_BVS_R            315
+#define C_BCC_R            316
+#define C_BCS_R            317
+#define C_BNE_R            318
+#define C_BEQ_R            319
 
 // Shared sequence constants
-#define S_CONT_1_0938      320
-#define S_CONT_2_6E68      321
-#define S_FETCH_2_CA6E     323
+#define S_FETCH_1B05       320
+#define S_FETCH_2_CA6E     321
+#define S_FETCH_2_E62F     323
 #define S_FETCH_663F       325
-#define S_FETCH_C535       326
-#define SHARED_FETCH_NEXT  327
+#define SHARED_FETCH_NEXT  326
 
 // Lookup table: addressing mode start index for each opcode
 const uint8_t opcode_addr_start[256] = {
@@ -360,7 +359,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0xD2:  // JAM [R] --- cycle 1
         case 0xF2:  // JAM [R] --- cycle 1
             c->PC--;
-            c->CI++;
+            c->CI = C_JAM_R;
             break;
 
         case 0x03:  // SLO [RW] IDX cycle 6
@@ -1234,13 +1233,12 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             break;
         case C_BRK + 4:
             c->AD = c->PC;
-            c->CI = S_FETCH_C535;
+            c->CI = SHARED_FETCH_NEXT;
             break;
 
         // C_JAM_R continuation
         case C_JAM_R + 0:
-            c->CI = S_FETCH_C535;
-            break;
+            goto fetch_next;
 
         // C_PHP continuation
         case C_PHP + 0:
@@ -1248,8 +1246,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->write_src = R_TMP;
             pins &= ~FAM65XX_RW;
             c->AD = 0x0100 | c->S--;
-            c->CI = SHARED_FETCH_NEXT;
-            break;
+            goto fetch_next;
 
         // C_BPL_R continuation
         case C_BPL_R + 0:
@@ -1277,15 +1274,13 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->AD = c->PC;
             c->PCH = c->DL;
             c->PC = (c->DL << 8) | c->TMP;
-            c->CI = SHARED_FETCH_NEXT;
-            break;
+            goto fetch_next;
 
         // C_PLP continuation
         case C_PLP + 0:
             c->AD = 0x0100 | c->S;
             c->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;
-            c->CI = SHARED_FETCH_NEXT;
-            break;
+            goto fetch_next;
 
         // C_BMI_R continuation
         case C_BMI_R + 0:
@@ -1296,7 +1291,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case C_RTI_R + 0:
             c->AD = 0x0100 | c->S++;
             c->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;
-            c->CI = S_CONT_2_6E68;
+            c->CI = S_FETCH_2_E62F;
             break;
 
         // C_PHA continuation
@@ -1304,16 +1299,14 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->write_src = R_A;
             pins &= ~FAM65XX_RW;
             c->AD = 0x0100 | c->S--;
-            c->CI = SHARED_FETCH_NEXT;
-            break;
+            goto fetch_next;
 
         // C_JMP_R continuation
         case C_JMP_R + 0:
             c->AD = c->PC++;
             c->PCH = c->DL;
             c->PC = (c->DL << 8) | c->TMP;
-            c->CI = SHARED_FETCH_NEXT;
-            break;
+            goto fetch_next;
 
         // C_BVC_R continuation
         case C_BVC_R + 0:
@@ -1322,7 +1315,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
 
         // C_RTS_R continuation
         case C_RTS_R + 0:
-            c->CI = S_CONT_2_6E68;
+            c->CI = S_FETCH_2_E62F;
             break;
 
         // C_PLA continuation
@@ -1330,8 +1323,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->AD = 0x0100 | c->S;
             c->A = c->DL;
             _NZ(c->A);
-            c->CI = SHARED_FETCH_NEXT;
-            break;
+            goto fetch_next;
 
         // C_BVS_R continuation
         case C_BVS_R + 0:
@@ -1362,26 +1354,12 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         // SHARED SEQUENCES
         // ==========================================
 
-        // S_CONT_1_0938: 1 cycles, used by 2 sources
+        // S_FETCH_1B05: 1 cycles, used by 2 sources
         // Sources: OP_RTI_R, OP_RTS_R
-        case S_CONT_1_0938 + 0:
+        case S_FETCH_1B05 + 0:
             c->AD = 0x0100 | c->S;
             c->PCH = c->DL;
-            c->CI = SHARED_FETCH_NEXT;
-            break;
-
-        // S_CONT_2_6E68: 2 cycles, used by 2 sources
-        // Sources: OP_RTI_R, OP_RTS_R
-        case S_CONT_2_6E68 + 0:
-            c->AD = 0x0100 | c->S++;
-            c->PCL = c->DL;
-            c->CI++;
-            break;
-        case S_CONT_2_6E68 + 1:
-            c->AD = 0x0100 | c->S;
-            c->PCH = c->DL;
-            c->CI = SHARED_FETCH_NEXT;
-            break;
+            goto fetch_next;
 
         // S_FETCH_2_CA6E: 2 cycles, used by 8 sources
         // Sources: OP_BPL_R, OP_BMI_R, OP_BVC_R...
@@ -1400,6 +1378,18 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->PC = c->AD;
             c->irq_pip >>= 1;
             c->nmi_pip >>= 1;
+            goto fetch_next;
+
+        // S_FETCH_2_E62F: 2 cycles, used by 2 sources
+        // Sources: OP_RTI_R, OP_RTS_R
+        case S_FETCH_2_E62F + 0:
+            c->AD = 0x0100 | c->S++;
+            c->PCL = c->DL;
+            c->CI++;
+            break;
+        case S_FETCH_2_E62F + 1:
+            c->AD = 0x0100 | c->S;
+            c->PCH = c->DL;
             goto fetch_next;
 
         // S_FETCH_663F: 1 cycles, used by 8 sources
