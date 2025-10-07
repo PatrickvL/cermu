@@ -100,15 +100,15 @@ AM_IDY_W = ("IDY", "indirect indexed (zp),Y (write - always takes extra cycle)",
 ))
 
 # RMW-specific addressing modes with dummy read cycles
-AM_ZPX_RMW = ("ZPX", "zero page,X (RMW with dummy write)", "ADDR_ZPX_RMW", (
+AM_ZPX_RMW = ("ZPX", "zero page,X (RMW with dummy read)", "ADDR_ZPX_RMW", (
     "c->AD = c->PC++;\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nc->AD = c->DL;\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nc->AD = c->TMP;\nNEXT_CYCLE;",
     "c->AD = (c->TMP + c->X) & 0xFF;\nNEXT_OPCODE;"
 ))
 
-AM_ZPY_RMW = ("ZPY", "zero page,Y (RMW with dummy write)", "ADDR_ZPY_RMW", (
+AM_ZPY_RMW = ("ZPY", "zero page,Y (RMW with dummy read)", "ADDR_ZPY_RMW", (
     "c->AD = c->PC++;\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nc->AD = c->DL;\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nc->AD = c->TMP;\nNEXT_CYCLE;",
     "c->AD = (c->TMP + c->Y) & 0xFF;\nNEXT_OPCODE;"
 ))
 

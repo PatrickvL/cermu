@@ -148,8 +148,8 @@ const uint8_t opcode_addr_start[256] = {
     ADDR_IDY_RMW - ADDR_SEQ_BASE,  // 0x13: SLO [RW] indirect indexed (zp),Y (RMW with dummy read)
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x14: NOP [R] zero page,X
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x15: ORA [R] zero page,X
-    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x16: ASL [RW] zero page,X (RMW with dummy write)
-    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x17: SLO [RW] zero page,X (RMW with dummy write)
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x16: ASL [RW] zero page,X (RMW with dummy read)
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x17: SLO [RW] zero page,X (RMW with dummy read)
     ADDR_NON,                    // 0x18: CLC [---] no addressing mode
     ADDR_ABY   - ADDR_SEQ_BASE,  // 0x19: ORA [R] absolute,Y
     ADDR_NON,                    // 0x1A: NOP [R] no addressing mode
@@ -180,8 +180,8 @@ const uint8_t opcode_addr_start[256] = {
     ADDR_IDY_RMW - ADDR_SEQ_BASE,  // 0x33: RLA [RW] indirect indexed (zp),Y (RMW with dummy read)
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x34: NOP [R] zero page,X
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x35: AND [R] zero page,X
-    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x36: ROL [RW] zero page,X (RMW with dummy write)
-    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x37: RLA [RW] zero page,X (RMW with dummy write)
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x36: ROL [RW] zero page,X (RMW with dummy read)
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x37: RLA [RW] zero page,X (RMW with dummy read)
     ADDR_NON,                    // 0x38: SEC [---] no addressing mode
     ADDR_ABY   - ADDR_SEQ_BASE,  // 0x39: AND [R] absolute,Y
     ADDR_NON,                    // 0x3A: NOP [R] no addressing mode
@@ -212,8 +212,8 @@ const uint8_t opcode_addr_start[256] = {
     ADDR_IDY_RMW - ADDR_SEQ_BASE,  // 0x53: SRE [RW] indirect indexed (zp),Y (RMW with dummy read)
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x54: NOP [R] zero page,X
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x55: EOR [R] zero page,X
-    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x56: LSR [RW] zero page,X (RMW with dummy write)
-    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x57: SRE [RW] zero page,X (RMW with dummy write)
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x56: LSR [RW] zero page,X (RMW with dummy read)
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x57: SRE [RW] zero page,X (RMW with dummy read)
     ADDR_NON,                    // 0x58: CLI [---] no addressing mode
     ADDR_ABY   - ADDR_SEQ_BASE,  // 0x59: EOR [R] absolute,Y
     ADDR_NON,                    // 0x5A: NOP [R] no addressing mode
@@ -244,8 +244,8 @@ const uint8_t opcode_addr_start[256] = {
     ADDR_IDY_RMW - ADDR_SEQ_BASE,  // 0x73: RRA [RW] indirect indexed (zp),Y (RMW with dummy read)
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x74: NOP [R] zero page,X
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0x75: ADC [R] zero page,X
-    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x76: ROR [RW] zero page,X (RMW with dummy write)
-    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x77: RRA [RW] zero page,X (RMW with dummy write)
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x76: ROR [RW] zero page,X (RMW with dummy read)
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0x77: RRA [RW] zero page,X (RMW with dummy read)
     ADDR_NON,                    // 0x78: SEI [---] no addressing mode
     ADDR_ABY   - ADDR_SEQ_BASE,  // 0x79: ADC [R] absolute,Y
     ADDR_NON,                    // 0x7A: NOP [R] no addressing mode
@@ -340,8 +340,8 @@ const uint8_t opcode_addr_start[256] = {
     ADDR_IDY_RMW - ADDR_SEQ_BASE,  // 0xD3: DCP [RW] indirect indexed (zp),Y (RMW with dummy read)
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0xD4: NOP [R] zero page,X
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0xD5: CMP [R] zero page,X
-    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0xD6: DEC [RW] zero page,X (RMW with dummy write)
-    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0xD7: DCP [RW] zero page,X (RMW with dummy write)
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0xD6: DEC [RW] zero page,X (RMW with dummy read)
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0xD7: DCP [RW] zero page,X (RMW with dummy read)
     ADDR_NON,                    // 0xD8: CLD [---] no addressing mode
     ADDR_ABY   - ADDR_SEQ_BASE,  // 0xD9: CMP [R] absolute,Y
     ADDR_NON,                    // 0xDA: NOP [R] no addressing mode
@@ -372,8 +372,8 @@ const uint8_t opcode_addr_start[256] = {
     ADDR_IDY_RMW - ADDR_SEQ_BASE,  // 0xF3: ISC [RW] indirect indexed (zp),Y (RMW with dummy read)
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0xF4: NOP [R] zero page,X
     ADDR_ZPX   - ADDR_SEQ_BASE,  // 0xF5: SBC [R] zero page,X
-    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0xF6: INC [RW] zero page,X (RMW with dummy write)
-    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0xF7: ISC [RW] zero page,X (RMW with dummy write)
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0xF6: INC [RW] zero page,X (RMW with dummy read)
+    ADDR_ZPX_RMW - ADDR_SEQ_BASE,  // 0xF7: ISC [RW] zero page,X (RMW with dummy read)
     ADDR_NON,                    // 0xF8: SED [---] no addressing mode
     ADDR_ABY   - ADDR_SEQ_BASE,  // 0xF9: SBC [R] absolute,Y
     ADDR_NON,                    // 0xFA: NOP [R] no addressing mode
@@ -1517,14 +1517,14 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI = c->opcode;
             break;
 
-        // ZPX: zero page,X (RMW with dummy write)
+        // ZPX: zero page,X (RMW with dummy read)
         case ADDR_ZPX_RMW + 0:  // ZPX cycle 1
             c->AD = c->PC++;
             c->CI++;
             break;
         case ADDR_ZPX_RMW + 1:  // ZPX cycle 2
             c->TMP = c->DL;
-            c->AD = c->DL;
+            c->AD = c->TMP;
             c->CI++;
             break;
         case ADDR_ZPX_RMW + 2:  // ZPX cycle 3
@@ -1532,14 +1532,14 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI = c->opcode;
             break;
 
-        // ZPY: zero page,Y (RMW with dummy write)
+        // ZPY: zero page,Y (RMW with dummy read)
         case ADDR_ZPY_RMW + 0:  // ZPY cycle 1
             c->AD = c->PC++;
             c->CI++;
             break;
         case ADDR_ZPY_RMW + 1:  // ZPY cycle 2
             c->TMP = c->DL;
-            c->AD = c->DL;
+            c->AD = c->TMP;
             c->CI++;
             break;
         case ADDR_ZPY_RMW + 2:  // ZPY cycle 3
