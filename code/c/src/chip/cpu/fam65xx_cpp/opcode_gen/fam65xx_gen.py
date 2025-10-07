@@ -150,41 +150,35 @@ OP_BRK = ("BRK", M___, [
 
 OP_PHP = ("PHP", M___, [
     "c->AD = c->PC;\nc->CI++;",
-    "c->TMP = c->P | FAM65XX_BF;\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI++;",
-    "goto fetch_next;"
+    "c->TMP = c->P | FAM65XX_BF;\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_PLP = ("PLP", M___, [
     "c->AD = 0x0100 | c->S++;\nc->CI++;",
-    "c->AD = 0x0100 | c->S;\nc->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;\nc->CI++;",
-    "goto fetch_next;"
+    "c->AD = 0x0100 | c->S;\nc->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_PHA = ("PHA", M___, [
     "c->AD = c->PC;\nc->CI++;",
-    "c->write_src = R_A;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI++;",
-    "goto fetch_next;"
+    "c->write_src = R_A;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_PLA = ("PLA", M___, [
     "c->AD = 0x0100 | c->S++;\nc->CI++;",
-    "c->AD = 0x0100 | c->S;\nc->A = c->DL;\n_NZ(c->A);\nc->CI++;",
-    "goto fetch_next;"
+    "c->AD = 0x0100 | c->S;\nc->A = c->DL;\n_NZ(c->A);\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_RTI = ("RTI", M_R_, [
     "c->AD = 0x0100 | c->S++;\nc->CI++;",
     "c->AD = 0x0100 | c->S++;\nc->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;\nc->CI++;",
     "c->AD = 0x0100 | c->S++;\nc->PCL = c->DL;\nc->CI++;",
-    "c->AD = 0x0100 | c->S;\nc->PCH = c->DL;\nc->CI++;",
-    "goto fetch_next;"
+    "c->AD = 0x0100 | c->S;\nc->PCH = c->DL;\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_RTS = ("RTS", M_R_, [
     "c->AD = 0x0100 | c->S++;\nc->CI++;",
     "c->AD = 0x0100 | c->S++;\nc->PCL = c->DL;\nc->CI++;",
-    "c->AD = 0x0100 | c->S;\nc->PCH = c->DL;\nc->CI++;",
-    "goto fetch_next;"
+    "c->AD = 0x0100 | c->S;\nc->PCH = c->DL;\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_JSR = ("JSR", M_R_, [
@@ -192,22 +186,19 @@ OP_JSR = ("JSR", M_R_, [
     "c->AD = 0x0100 | c->S;\nc->CI++;",
     "c->write_src = R_PCH;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI++;",
     "c->write_src = R_PCL;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->CI++;",
-    "c->AD = c->PC;\nc->PCH = c->DL;\nc->PC = (c->DL << 8) | c->TMP;\nc->CI++;",
-    "goto fetch_next;"
+    "c->AD = c->PC;\nc->PCH = c->DL;\nc->PC = (c->DL << 8) | c->TMP;\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_JMP = ("JMP", M_R_, [
     "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI++;",
-    "c->AD = c->PC++;\nc->PCH = c->DL;\nc->PC = (c->DL << 8) | c->TMP;\nc->CI++;",
-    "goto fetch_next;"
+    "c->AD = c->PC++;\nc->PCH = c->DL;\nc->PC = (c->DL << 8) | c->TMP;\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_JMP_I = ("JMP", M_R_, [
     "c->TMP = c->DL;\nc->AD = c->PC++;\nc->CI++;",
     "c->AD = c->PC++;\nc->TMP = c->DL;\nc->AD = (c->DL << 8) | c->TMP;\nc->CI++;",
     "c->AD = c->AD;\nc->PCL = c->DL;\nc->CI++;",
-    "c->AD = (c->AD & 0xFF00) | ((c->AD + 1) & 0xFF);\nc->PCH = c->DL;\nc->CI++;",
-    "goto fetch_next;"
+    "c->AD = (c->AD & 0xFF00) | ((c->AD + 1) & 0xFF);\nc->PCH = c->DL;\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 # Register transfer operations (single cycle - immediate completion)
@@ -324,59 +315,48 @@ OP_CPY_IMM = ("CPY", M_R_, ["c->AD = c->PC;\nc->CI++;", "c->PC++;_fam65xx_cmp(c,
 
 # RMW operations - have two variants (accumulator vs memory)
 OP_ASL_A = ("ASL", M___, [
-    "c->A = _fam65xx_asl(c, c->A);\nc->CI++;",
-    "goto fetch_next;"
+    "c->A = _fam65xx_asl(c, c->A);\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_ASL_M = ("ASL", M_RW, [
-    "c->TMP = _fam65xx_asl(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
-    "goto fetch_next;"
+    "c->TMP = _fam65xx_asl(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_LSR_A = ("LSR", M___, [
-    "c->A = _fam65xx_lsr(c, c->A);\nc->CI++;",
-    "goto fetch_next;"
+    "c->A = _fam65xx_lsr(c, c->A);\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_LSR_M = ("LSR", M_RW, [
-    "c->TMP = _fam65xx_lsr(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
-    "goto fetch_next;"
+    "c->TMP = _fam65xx_lsr(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_ROL_A = ("ROL", M___, [
-    "c->A = _fam65xx_rol(c, c->A);\nc->CI++;",
-    "goto fetch_next;"
+    "c->A = _fam65xx_rol(c, c->A);\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_ROL_M = ("ROL", M_RW, [
-    "c->TMP = _fam65xx_rol(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
-    "goto fetch_next;"
+    "c->TMP = _fam65xx_rol(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_ROR_A = ("ROR", M___, [
-    "c->A = _fam65xx_ror(c, c->A);\nc->CI++;",
-    "goto fetch_next;"
+    "c->A = _fam65xx_ror(c, c->A);\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_ROR_M = ("ROR", M_RW, [
-    "c->TMP = _fam65xx_ror(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
-    "goto fetch_next;"
+    "c->TMP = _fam65xx_ror(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_INC = ("INC", M_RW, [
-    "c->TMP = c->DL + 1;\n_NZ(c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
-    "goto fetch_next;"
+    "c->TMP = c->DL + 1;\n_NZ(c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_DEC = ("DEC", M_RW, [
-    "c->TMP = c->DL - 1;\n_NZ(c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
-    "goto fetch_next;"
+    "c->TMP = c->DL - 1;\n_NZ(c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 # NOP variants
 OP_NOP_I = ("NOP", M___, [
-    "c->AD = c->PC;\nc->CI++;",
-    "goto fetch_next;"
+    "c->AD = c->PC;\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_NOP_R = ("NOP", M_R_, ["goto fetch_next;"])
@@ -386,33 +366,27 @@ OP_LAX = ("LAX", M_R_, ["c->A = c->X = c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
 OP_SAX = ("SAX", M__W, ["c->TMP = c->A & c->X;\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\ngoto fetch_next;"])
 
 OP_SLO = ("SLO", M_RW, [
-    "c->TMP = _fam65xx_asl(c, c->DL);\nc->A |= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
-    "goto fetch_next;"
+    "c->TMP = _fam65xx_asl(c, c->DL);\nc->A |= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_RLA = ("RLA", M_RW, [
-    "c->TMP = _fam65xx_rol(c, c->DL);\nc->A &= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
-    "goto fetch_next;"
+    "c->TMP = _fam65xx_rol(c, c->DL);\nc->A &= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_SRE = ("SRE", M_RW, [
-    "c->TMP = _fam65xx_lsr(c, c->DL);\nc->A ^= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
-    "goto fetch_next;"
+    "c->TMP = _fam65xx_lsr(c, c->DL);\nc->A ^= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_RRA = ("RRA", M_RW, [
-    "c->TMP = _fam65xx_ror(c, c->DL);\n_fam65xx_adc(c, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
-    "goto fetch_next;"
+    "c->TMP = _fam65xx_ror(c, c->DL);\n_fam65xx_adc(c, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_DCP = ("DCP", M_RW, [
-    "c->TMP = c->DL - 1;\n_fam65xx_cmp(c, c->A, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
-    "goto fetch_next;"
+    "c->TMP = c->DL - 1;\n_fam65xx_cmp(c, c->A, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_ISC = ("ISC", M_RW, [
-    "c->TMP = c->DL + 1;\n_fam65xx_sbc(c, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI++;",
-    "goto fetch_next;"
+    "c->TMP = c->DL + 1;\n_fam65xx_sbc(c, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->CI = SHARED_FETCH_NEXT;"
 ])
 
 OP_ANC = ("ANC", M_R_, ["c->A &= c->DL;\n_NZ(c->A);\nc->P = (c->P & ~FAM65XX_CF) | ((c->A & 0x80) ? FAM65XX_CF : 0);\ngoto fetch_next;"])
@@ -435,9 +409,27 @@ OP_SHS = ("SHS", M__W, ["c->S = c->A & c->X;\nc->TMP = c->S & ((c->AD >> 8) + 1)
 OP_LAS = ("LAS", M_R_, ["c->A = c->X = c->S = c->S & c->DL;\n_NZ(c->A);\ngoto fetch_next;"])
 
 OP_JAM = ("JAM", M_R_, [
-    "c->PC--;\nc->CI++;",
-    "goto fetch_next;"
+    "c->PC--;\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
 ])
+
+# Example of new macro-based definitions for improved readability
+OP_PHA_MACRO = ("PHA", M___, [
+    "c->AD = c->PC;\nNEXT_CYCLE;",
+    "c->write_src = R_A;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
+])
+
+OP_PLA_MACRO = ("PLA", M___, [
+    "c->AD = 0x0100 | c->S++;\nNEXT_CYCLE;",
+    "c->AD = 0x0100 | c->S;\nc->A = c->DL;\n_NZ(c->A);\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
+])
+
+# Macro-based load operations (single cycle after addressing mode)
+OP_LDA_MACRO = ("LDA", M_R_, ["c->A = c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_LDX_MACRO = ("LDX", M_R_, ["c->X = c->DL;\n_NZ(c->X);\nNEXT_OPCODE;"])
+OP_LDY_MACRO = ("LDY", M_R_, ["c->Y = c->DL;\n_NZ(c->Y);\nNEXT_OPCODE;"])
 
 #-------------------------------------------------------------------------------
 # Instruction table: [operation, addressing_mode]
@@ -508,21 +500,187 @@ ops = [
 
 # Layout constants
 NO_ADDR_SEQ = 0             # Direct opcode jump (no addressing mode)
-ADDR_SEQ_BASE = 255         # Addressing modes start at offset 1, so first mode at 256 (no gap after opcodes 0-255)
-
-# These will be calculated dynamically in main() after addressing modes are defined
-ADDR_MODE_INDICES = {}
-ADDR_SEQ_END = 0
-CONT_SEQ_START = 0
+ADDR_SEQ_BASE = 255         # Addressing modes start at 256
 
 # Global state
 continuation_sequences = {}  # label -> {index, cycles}
 next_continuation_index = 0  # Will be set to CONT_SEQ_START in main()
 opcode_groups = {}  # implementation_code -> [opcodes]
 
-def l(s):
-    """Output a line"""
-    print(s)
+# New: Suffix optimization state
+suffix_sequences = {}  # suffix_tuple -> {label, cycles, sources}
+suffix_labels = {}     # label -> index (for constant generation)
+SUFFIX_SEQ_START = 0   # Will be calculated after addressing modes
+
+# Output arrays for clean emission
+output_constants = []
+output_lookup_table = []
+output_opcode_cycles = []
+output_cases_addrmode = []
+output_shared_sequences = []
+output_cases_continues = []
+
+# Simplified dynamic constant tracking
+label_to_index = {}      # Maps label names to their case indices
+current_case_index = 256 # Start after opcodes (0-255)
+
+# Shared fetch_next case
+SHARED_FETCH_NEXT = "SHARED_FETCH_NEXT"
+
+#-------------------------------------------------------------------------------
+# Macro Support Functions
+#-------------------------------------------------------------------------------
+
+def expand_macro(code, context):
+    """Expand NEXT_CYCLE and NEXT_OPCODE macros based on context"""
+    if "NEXT_CYCLE" in code:
+        # Replace NEXT_CYCLE with c->CI++
+        code = code.replace("NEXT_CYCLE", "c->CI++")
+    
+    if "NEXT_OPCODE" in code:
+        # Replace NEXT_OPCODE with goto fetch_next
+        code = code.replace("NEXT_OPCODE", "goto fetch_next")
+    
+    return code
+
+def convert_cycles_to_macros(cycles):
+    """Convert hardcoded cycle transitions to use NEXT_CYCLE/NEXT_OPCODE macros"""
+    converted = []
+    
+    for cycle_code in cycles:
+        # Replace common patterns with macros
+        new_code = cycle_code
+        
+        # Replace c->CI++ with NEXT_CYCLE (but not in complex conditions)
+        if "c->CI++" in new_code and "if" not in new_code and "else" not in new_code:
+            new_code = new_code.replace("c->CI++", "NEXT_CYCLE")
+        
+        # Replace goto fetch_next with NEXT_OPCODE
+        if "goto fetch_next" in new_code:
+            new_code = new_code.replace("goto fetch_next", "NEXT_OPCODE")
+        
+        converted.append(new_code)
+    
+    return converted
+
+def find_common_suffixes(all_cycles):
+    """Find common suffix sequences across all cycle definitions"""
+    suffixes = {}  # tuple_of_cycles -> [sources]
+    
+    for source, cycles in all_cycles.items():
+        # Check all possible suffixes of this cycle sequence
+        for i in range(1, len(cycles) + 1):
+            suffix = tuple(cycles[-i:])  # Last i cycles as tuple
+            if suffix not in suffixes:
+                suffixes[suffix] = []
+            suffixes[suffix].append(source)
+    
+    # Only keep suffixes that are shared by multiple sources
+    common_suffixes = {suffix: sources for suffix, sources in suffixes.items()
+                      if len(sources) > 1 and len(suffix) > 0}
+    
+    return common_suffixes
+
+def generate_suffix_label(suffix_cycles):
+    """Generate a label name for a common suffix"""
+    # Create a descriptive label based on the suffix content
+    last_cycle = suffix_cycles[-1]
+    suffix_len = len(suffix_cycles)
+    
+    # Generate unique hash for this specific suffix
+    import hashlib
+    suffix_hash = hashlib.md5(''.join(suffix_cycles).encode()).hexdigest()[:4]
+    
+    if "goto fetch_next" in last_cycle:
+        if suffix_len == 1:
+            return f"S_FETCH_{suffix_hash.upper()}"
+        else:
+            return f"S_FETCH_{suffix_len}_{suffix_hash.upper()}"
+    elif "c->PC = c->AD" in last_cycle and "irq_pip" in last_cycle:
+        return f"S_BRANCH_{suffix_len}_{suffix_hash.upper()}"
+    else:
+        # Generic label with length and hash for uniqueness
+        return f"S_CONT_{suffix_len}_{suffix_hash.upper()}"
+
+def collect_opcode_cycles_only():
+    """Collect cycle sequences ONLY from opcode operations for suffix analysis"""
+    all_cycles = {}
+    
+    # Only collect from operations (not addressing modes)
+    for cc in range(len(ops)):
+        for bbb in range(len(ops[cc])):
+            for aaa in range(len(ops[cc][bbb])):
+                operation, _ = ops[cc][bbb][aaa]
+                if len(operation[2]) > 1:  # Multi-cycle operation
+                    # Use operation name + memory access as key for uniqueness
+                    mem_suffix = {M___: "", M_R_: "_R", M__W: "_W", M_RW: "_RW"}[operation[1]]
+                    key = f"OP_{operation[0]}{mem_suffix}"
+                    if key not in all_cycles:  # Avoid duplicates
+                        # Expand macros for analysis
+                        expanded_cycles = [expand_macro(cycle, {}) for cycle in operation[2]]
+                        all_cycles[key] = expanded_cycles
+    
+    return all_cycles
+
+def analyze_and_create_suffix_sequences():
+    """Analyze OPCODE cycles only and create optimized suffix sequences"""
+    global suffix_sequences, suffix_labels, SUFFIX_SEQ_START
+    
+    # Only analyze opcode cycles, not addressing mode cycles
+    all_cycles = collect_opcode_cycles_only()
+    common_suffixes = find_common_suffixes(all_cycles)
+    
+    # Sort by suffix length (longest first) to prioritize larger optimizations
+    sorted_suffixes = sorted(common_suffixes.items(),
+                           key=lambda x: len(x[0]), reverse=True)
+    
+    # Calculate suffix sequence start after addressing modes
+    # This will be set properly in main() after addressing mode layout is known
+    current_index = 0  # Will be updated to real start index later
+    
+    for suffix_cycles, sources in sorted_suffixes:
+        if len(sources) > 1:  # Only create if truly shared
+            label = generate_suffix_label(suffix_cycles)
+            suffix_sequences[suffix_cycles] = {
+                'label': label,
+                'cycles': list(suffix_cycles),
+                'sources': sources
+            }
+            # Store label to index mapping for constants
+            suffix_labels[label] = current_index
+            current_index += len(suffix_cycles)
+    
+    return suffix_sequences
+
+def optimize_cycles_with_suffixes(cycles, suffix_sequences):
+    """Replace cycle suffixes with jumps to shared suffix sequences"""
+    # First expand macros to get the actual cycle content for comparison
+    expanded_cycles = [expand_macro(cycle, {}) for cycle in cycles]
+    optimized = list(cycles)  # Keep original cycles with macros
+    
+    # Check for each suffix sequence (longest first)
+    for suffix_tuple, suffix_info in sorted(suffix_sequences.items(),
+                                          key=lambda x: len(x[0]), reverse=True):
+        suffix_len = len(suffix_tuple)
+        if suffix_len <= len(expanded_cycles):
+            # Check if the end of our expanded cycles matches this suffix
+            if tuple(expanded_cycles[-suffix_len:]) == suffix_tuple:
+                # Replace the suffix with a jump to the shared sequence
+                optimized = optimized[:-suffix_len]  # Remove the suffix from original
+                if optimized:  # If there are remaining cycles
+                    # Modify the last remaining cycle to jump to suffix
+                    last_cycle = optimized[-1]
+                    # Replace NEXT_CYCLE macro with jump to suffix
+                    if "NEXT_CYCLE" in last_cycle:
+                        optimized[-1] = last_cycle.replace("NEXT_CYCLE", f"c->CI = {suffix_info['label']}")
+                    elif "c->CI++" in last_cycle:
+                        optimized[-1] = last_cycle.replace("c->CI++", f"c->CI = {suffix_info['label']}")
+                else:
+                    # The entire sequence is a suffix, return a direct jump
+                    optimized = [f"c->CI = {suffix_info['label']};"]
+                break  # Only apply the longest matching suffix
+    
+    return optimized
 
 def format_code(code):
     """Format code using embedded newlines and tabs for indentation"""
@@ -534,7 +692,82 @@ def format_code(code):
         if line:  # Only add non-empty lines
             formatted_lines.append('            ' + line)
     
-    return '\n'.join(formatted_lines)
+    return formatted_lines
+
+def assign_label_index(label, length=1):
+    """Assign the next available index to a label and advance the counter"""
+    global current_case_index
+    if label not in label_to_index:
+        label_to_index[label] = current_case_index
+        current_case_index += length
+    return label_to_index[label]
+
+def generate_suffix_sequences():
+    """Generate shared suffix sequence cases and assign their indices"""
+    if not suffix_sequences:
+        return
+        
+    # Sort by label for consistent ordering
+    for suffix_tuple, suffix_info in sorted(suffix_sequences.items(),
+                                          key=lambda x: x[1]['label']):
+        label = suffix_info['label']
+        cycles = suffix_info['cycles']
+        sources = suffix_info['sources']
+        
+        # Assign index for this label
+        assign_label_index(label, len(cycles))
+        
+        # Optimize cycles: if last cycle is only "goto fetch_next", merge it with previous cycle
+        optimized_cycles = []
+        for i, cycle_code in enumerate(cycles):
+            expanded_code = expand_macro(cycle_code, {})
+            
+            # Check if this is the last cycle and it's only "goto fetch_next"
+            if i == len(cycles) - 1 and expanded_code.strip() == "goto fetch_next;":
+                # If we have a previous cycle, modify it to jump to SHARED_FETCH_NEXT instead of incrementing
+                if optimized_cycles:
+                    prev_cycle = optimized_cycles[-1]
+                    # Replace NEXT_CYCLE or c->CI++ with jump to SHARED_FETCH_NEXT
+                    if "NEXT_CYCLE" in prev_cycle:
+                        optimized_cycles[-1] = prev_cycle.replace("NEXT_CYCLE", f"c->CI = {SHARED_FETCH_NEXT}")
+                    elif "c->CI++" in prev_cycle:
+                        optimized_cycles[-1] = prev_cycle.replace("c->CI++", f"c->CI = {SHARED_FETCH_NEXT}")
+                    else:
+                        # Add the jump at the end of the previous cycle
+                        optimized_cycles[-1] = prev_cycle + f";\nc->CI = {SHARED_FETCH_NEXT}"
+                # Skip this cycle since it's been merged
+                continue
+            else:
+                optimized_cycles.append(cycle_code)
+        
+        # Only emit if we have remaining cycles after optimization
+        if optimized_cycles:
+            output_shared_sequences.append(f"        // {label}: {len(optimized_cycles)} cycles, used by {len(sources)} sources")
+            output_shared_sequences.append(f"        // Sources: {', '.join(sources[:3])}{'...' if len(sources) > 3 else ''}")
+            
+            for i, cycle_code in enumerate(optimized_cycles):
+                output_shared_sequences.append(f"        case {label} + {i}:")
+                
+                # Format the expanded code with proper indentation
+                expanded_code = expand_macro(cycle_code, {})
+                lines = format_code(expanded_code)
+                for line in lines:
+                    output_shared_sequences.append(line)
+                
+                # Only emit break if the code doesn't end with goto fetch_next
+                if not expanded_code.strip().endswith('goto fetch_next;'):
+                    output_shared_sequences.append("            break;")
+            
+            output_shared_sequences.append("")
+
+def generate_shared_fetch_next():
+    """Generate the final shared fetch_next case"""
+    assign_label_index(SHARED_FETCH_NEXT, 1)
+    
+    output_shared_sequences.append(f"        // {SHARED_FETCH_NEXT}: Universal fetch next opcode")
+    output_shared_sequences.append(f"        case {SHARED_FETCH_NEXT}:")
+    output_shared_sequences.append("            goto fetch_next;")
+    output_shared_sequences.append("")
 
 # Helper functions for direct ops array access
 def get_ops_entry(op):
@@ -592,89 +825,186 @@ def generate_opcode_implementation(op):
         label = generate_label(operation[0], operation[1], addr_mode if addr_mode != AM_NON else None)
         # Replace any c->CI++ with c->CI = label
         first_cycle = first_cycle.replace("c->CI++", f"c->CI = {label}")
+    else:
+        # Single cycle - check if it should jump to a shared suffix
+        expanded_first = expand_macro(first_cycle, {})
+        if expanded_first.strip() == "goto fetch_next;":
+            # Replace with jump to shared fetch_next case
+            first_cycle = "c->CI = SHARED_FETCH_NEXT;"
+        elif expanded_first.strip().endswith("goto fetch_next;"):
+            # Check if this cycle matches any suffix
+            for suffix_tuple, suffix_info in suffix_sequences.items():
+                if len(suffix_tuple) == 1 and suffix_tuple[0] == expanded_first.strip():
+                    first_cycle = f"c->CI = {suffix_info['label']};"
+                    break
     
     return first_cycle
 
-def calculate_addressing_mode_offsets():
-    """Calculate addressing mode offsets dynamically based on cycle counts"""
-    global ADDR_MODE_INDICES, ADDR_SEQ_END, CONT_SEQ_START
-    
-    addr_mode_indices = {}
-    current_offset = 1  # Start at offset 1 (0 is reserved for ADDR_NON)
-    
-    # Process addressing mode objects that have cycles
-    for addr_mode in ADDRESSING_MODES:
-        cycle_count = len(addr_mode[3])  # cycles are at index 3
-        if cycle_count > 0:
-            # Only assign offset to modes with cycles
-            addr_mode_indices[addr_mode] = current_offset
-            current_offset += cycle_count
-        else:
-            # Modes with 0 cycles (like AM_IMM) get ADDR_NON (0)
-            addr_mode_indices[addr_mode] = 0
-    
-    # Update global variables
-    ADDR_MODE_INDICES = addr_mode_indices
-    ADDR_SEQ_END = ADDR_SEQ_BASE + current_offset
-    CONT_SEQ_START = ADDR_SEQ_END
-
-def generate_addressing_constants():
-    """Generate addressing mode offset constants"""
-    l("// Layout constants")
-    l("// [0-255]   : Opcode-specific cycles")
-    l("// [256+]    : Shared addressing mode sequences")
-    l("#define ADDR_NON     0   // Direct opcode execution (no addressing mode)")
-    l(f"#define ADDR_SEQ_BASE {ADDR_SEQ_BASE}")
-    
-    # Generate constants for addressing modes using definitions
-    for addr_mode in ADDRESSING_MODES:
-        if addr_mode in ADDR_MODE_INDICES:
-            const_name = addr_mode[2]
-            offset = ADDR_MODE_INDICES[addr_mode]
-            if offset == 0:
-                l(f"#define {const_name:<12} {offset:<3} // Direct opcode execution (0 cycles)")
-            else:
-                actual_index = ADDR_SEQ_BASE + offset
-                l(f"#define {const_name:<12} {offset:<3} // Index {actual_index}")
-    
-    l("")
+def get_addr_mode_label(addr_mode):
+    """Get the label name for an addressing mode"""
+    return addr_mode[2]  # const_name like "ADDR_IMM"
 
 def generate_lookup_table():
-    """Generate opcode_addr_start lookup table"""
-    # Create reverse mapping from offset to constant name
-    offset_to_const = {0: "ADDR_NON"}
-    
-    for addr_mode in ADDRESSING_MODES:
-        if addr_mode in ADDR_MODE_INDICES:
-            const_name = addr_mode[2]
-            offset = ADDR_MODE_INDICES[addr_mode]
-            offset_to_const[offset] = const_name
-    
-    l("// Lookup table: addressing mode start index for each opcode")
-    l("const uint8_t opcode_addr_start[256] = {")
-    
+    """Generate opcode_addr_start lookup table with base-corrected addressing mode offsets"""
     for op in range(256):
         operation, addr_mode = get_ops_entry(op)
         
-        if addr_mode in ADDR_MODE_INDICES:
-            offset = ADDR_MODE_INDICES[addr_mode]
-            const_name = offset_to_const[offset]
+        # Get the addressing mode label and check if it has cycles
+        if len(addr_mode[3]) > 0:  # Has cycles - needs base correction
+            # Calculate base-corrected offset (subtract ADDR_SEQ_BASE for lookup table)
+            const_name = f"{addr_mode[2]:<10} - ADDR_SEQ_BASE"  # Use the const name like "ADDR_IMM"
         else:
-            # Special addressing modes (AM_NON, AM_JMP, AM_JSR, AM_INV) and fallback
-            offset = NO_ADDR_SEQ
+            # No cycles - use ADDR_NON
             const_name = "ADDR_NON"
         
         # Format with comma except for last element
         comma = "," if op < 255 else " "
-        
+        const_comma = f"{const_name}{comma}"
+
         # Show memory access type in comment for clarity
         mem_access_str = {M___: "---", M_R_: "R", M__W: "W", M_RW: "RW"}[operation[1]]
-        l(f"    {const_name}{comma}  // 0x{op:02X}: {operation[0]} [{mem_access_str}] {addr_mode[1]}")
+        output_lookup_table.append(f"    {const_comma:<27}  // 0x{op:02X}: {operation[0]} [{mem_access_str}] {addr_mode[1]}")
     
-    l("};")
-    l("")
+# This function has been replaced by generate_opcode_cycles() in the streamlined approach
 
-def generate_opcode_cases():
+def generate_addressing_modes():
+    """Generate shared addressing mode sequences and assign their indices"""
+    
+    # Generate addressing mode sequences from definitions
+    for addr_mode in ADDRESSING_MODES:
+        acronym, long_name, const_name, cycles = addr_mode
+        
+        # Skip modes with no cycles (they execute directly in opcode case)
+        if len(cycles) == 0:
+            continue
+        
+        # Assign index for this addressing mode label
+        assign_label_index(const_name, len(cycles))
+        
+        # Emit long name comment before the cycles
+        output_cases_addrmode.append(f"        // {acronym}: {long_name}")
+        
+        for cycle_idx, cycle_code in enumerate(cycles):
+            cycle_num = cycle_idx + 1
+            
+            output_cases_addrmode.append(f"        case {const_name} + {cycle_idx}:  // {acronym} cycle {cycle_num}")
+            
+            # Expand macros and format the code with proper indentation
+            expanded_code = expand_macro(cycle_code, {})
+            lines = format_code(expanded_code)
+            for line in lines:
+                output_cases_addrmode.append(line)
+            
+            # Only emit break if the code doesn't end with a goto fetch_next that's not in an if/else block
+            if not expanded_code.strip().endswith('goto fetch_next;'):
+                output_cases_addrmode.append("            break;")
+            
+        output_cases_addrmode.append("")
+
+def generate_continuations():
+    """Generate shared multi-cycle continuation sequences and assign their indices"""
+    if not continuation_sequences:
+        return
+        
+    # Sort by original index to maintain order
+    sorted_seqs = sorted(continuation_sequences.items(),
+                        key=lambda x: x[1]['index'])
+    
+    for label, seq_info in sorted_seqs:
+        cycles = seq_info['cycles']
+        
+        # Apply suffix optimization to the continuation cycles
+        optimized_cycles = optimize_cycles_with_suffixes(cycles, suffix_sequences)
+        
+        # Further optimize: if last cycle is only "goto fetch_next", merge it with previous cycle
+        final_cycles = []
+        for i, cycle_code in enumerate(optimized_cycles):
+            expanded_code = expand_macro(cycle_code, {})
+            
+            # Check if this is the last cycle and it's only "goto fetch_next"
+            if i == len(optimized_cycles) - 1 and expanded_code.strip() == "goto fetch_next;":
+                # If we have a previous cycle, modify it to jump to SHARED_FETCH_NEXT instead of incrementing
+                if final_cycles:
+                    prev_cycle = final_cycles[-1]
+                    # Replace NEXT_CYCLE or c->CI++ with jump to SHARED_FETCH_NEXT
+                    if "NEXT_CYCLE" in prev_cycle:
+                        final_cycles[-1] = prev_cycle.replace("NEXT_CYCLE", f"c->CI = {SHARED_FETCH_NEXT}")
+                    elif "c->CI++" in prev_cycle:
+                        final_cycles[-1] = prev_cycle.replace("c->CI++", f"c->CI = {SHARED_FETCH_NEXT}")
+                    else:
+                        # Add the jump at the end of the previous cycle
+                        final_cycles[-1] = prev_cycle + f";\nc->CI = {SHARED_FETCH_NEXT}"
+                # Skip this cycle since it's been merged
+                continue
+            else:
+                final_cycles.append(cycle_code)
+        
+        # Assign index for this label AFTER optimization to get correct length
+        assign_label_index(label, len(final_cycles))
+        
+        # Only emit if we have remaining cycles after optimization
+        if final_cycles:
+            output_cases_continues.append(f"        // {label} continuation")
+            for i, cycle_code in enumerate(final_cycles):
+                output_cases_continues.append(f"        case {label} + {i}:")
+                
+                # Format the expanded code with proper indentation
+                expanded_code = expand_macro(cycle_code, {})
+                lines = format_code(expanded_code)
+                for line in lines:
+                    output_cases_continues.append(line)
+                
+                # Only emit break if the code doesn't end with a goto fetch_next that's not in an if/else block
+                if not expanded_code.strip().endswith('goto fetch_next;'):
+                    output_cases_continues.append("            break;")
+            output_cases_continues.append("")
+
+def generate_all_constants():
+    """Generate all constant declarations from the collected labels"""
+    # Generate layout constants
+    output_constants.append("#define ADDR_NON      0   // Direct opcode execution (no addressing mode)")
+    output_constants.append(f"#define ADDR_SEQ_BASE {ADDR_SEQ_BASE}")
+    
+    # Generate constants for addressing modes with base corrections
+    addr_labels = [label for label in label_to_index.keys() if label.startswith('ADDR_')]
+    if addr_labels:
+        output_constants.append("")
+        for addr_mode in ADDRESSING_MODES:
+            const_name = addr_mode[2]
+            if const_name in label_to_index:
+                actual_index = label_to_index[const_name]
+                output_constants.append(f"#define {const_name:<13} {actual_index:<3}")
+            elif len(addr_mode[3]) == 0:
+                # Modes with no cycles use ADDR_NON (0)
+                output_constants.append(f"#define {const_name:<13} 0   // Direct opcode execution (no addressing mode)")
+    
+    output_constants.append("")
+    
+    # Generate continuation sequence constants
+    continuation_labels = [label for label in label_to_index.keys() if label.startswith('C_')]
+    if continuation_labels:
+        output_constants.append("// Continuation sequence constants")
+        # Sort by index value instead of alphabetically
+        for label in sorted(continuation_labels, key=lambda x: label_to_index[x]):
+            index = label_to_index[label]
+            output_constants.append(f"#define {label:<20} {index}")
+        output_constants.append("")
+    
+    # Generate shared sequence constants
+    shared_labels = [label for label in label_to_index.keys() if label.startswith('S_') or label == SHARED_FETCH_NEXT]
+    if shared_labels:
+        output_constants.append("// Shared sequence constants")
+        # Sort by index value instead of alphabetically
+        for label in sorted(shared_labels, key=lambda x: label_to_index[x]):
+            index = label_to_index[label]
+            output_constants.append(f"#define {label:<18} {index}")
+        output_constants.append("")
+
+def l(s):
+    """Output a line"""
+    print(s)
+
+def generate_opcode_cycles():
     """Generate opcode-specific cases with fallthrough optimization"""
     global opcode_groups
     
@@ -685,11 +1015,6 @@ def generate_opcode_cases():
         if code not in opcode_groups:
             opcode_groups[code] = []
         opcode_groups[code].append(op)
-    
-    l("        // ==========================================")
-    l("        // [0-255] OPCODE-SPECIFIC CYCLES")
-    l("        // ==========================================")
-    l("")
     
     # Emit grouped cases
     emitted = set()
@@ -706,120 +1031,134 @@ def generate_opcode_cases():
             addr_acronym = addr_mode[0]
             cycle_num = len(addr_mode[3]) + 1
             mem_access_str = {M___: "---", M_R_: "R", M__W: "W", M_RW: "RW"}[operation[1]]
-            l(f"        case 0x{opc:02X}:  // {operation[0]} [{mem_access_str}] {addr_acronym} cycle {cycle_num}")
+            output_opcode_cycles.append(f"        case 0x{opc:02X}:  // {operation[0]} [{mem_access_str}] {addr_acronym} cycle {cycle_num}")
             emitted.add(opc)
         
-        l(format_code(code))
-        
-        # Only emit break if the code doesn't end with a goto fetch_next that's not in an if/else block
-        if not code.strip().endswith('goto fetch_next;'):
-            l(f"            break;")
-        l("")
-
-def generate_addressing_modes():
-    """Generate shared addressing mode sequences using definitions"""
-    l("        // ==========================================")
-    l(f"        // [256-{ADDR_SEQ_END-1}] SHARED ADDRESSING SEQUENCES")
-    l("        // ==========================================")
-    l("")
-    
-    # Generate addressing mode sequences from definitions
-    for addr_mode in ADDRESSING_MODES:
-        acronym, long_name, const_name, cycles = addr_mode
-        
-        # Skip modes with no cycles (they execute directly in opcode case)
-        if len(cycles) == 0:
-            continue
-        
-        # Emit long name comment before the cycles
-        l(f"        // {acronym}: {long_name}")
-        
-        for cycle_idx, cycle_code in enumerate(cycles):
-            cycle_num = cycle_idx + 1
+        # Check if this should be replaced with jump to shared fetch_next or suffix
+        expanded_code = expand_macro(code, {})
+        if expanded_code.strip() == "goto fetch_next;":
+            output_opcode_cycles.append(f"            c->CI = {SHARED_FETCH_NEXT};")
+            output_opcode_cycles.append("            break;")
+        else:
+            # Check if this matches any suffix sequence for optimization
+            optimized = False
+            for suffix_tuple, suffix_info in suffix_sequences.items():
+                if len(suffix_tuple) == 1 and suffix_tuple[0] == expanded_code.strip():
+                    output_opcode_cycles.append(f"            c->CI = {suffix_info['label']};")
+                    output_opcode_cycles.append("            break;")
+                    optimized = True
+                    break
             
-            l(f"        case ADDR_SEQ_BASE + {const_name} + {cycle_idx}:  // {acronym} cycle {cycle_num}")
-            l(format_code(cycle_code))
-            
-            # Only emit break if the code doesn't end with a goto fetch_next that's not in an if/else block
-            if not cycle_code.strip().endswith('goto fetch_next;'):
-                l("            break;")
-            
-        l("")
+            if not optimized:
+                # Format the expanded code with proper indentation
+                lines = format_code(expanded_code)
+                for line in lines:
+                    output_opcode_cycles.append(line)
+                
+                # Only emit break if the code doesn't end with a goto fetch_next that's not in an if/else block
+                if not expanded_code.strip().endswith('goto fetch_next;'):
+                    output_opcode_cycles.append("            break;")
+        output_opcode_cycles.append("")
 
-def generate_continuations():
-    """Generate shared multi-cycle continuation sequences"""
-    l("        // ==========================================")
-    l(f"        // [{CONT_SEQ_START}-{next_continuation_index-1}] SHARED CONTINUATIONS")
-    l("        // ==========================================")
-    l("")
-    
-    # Sort by index to emit in order without gaps
-    sorted_seqs = sorted(continuation_sequences.items(),
-                        key=lambda x: x[1]['index'])
-    
-    for label, seq_info in sorted_seqs:
-        idx = seq_info['index']
-        cycles = seq_info['cycles']
-        
-        l(f"        // {label} continuation")
-        for i, cycle_code in enumerate(cycles):
-            l(f"        case {label} + {i}:")
-            l(format_code(cycle_code))
-            
-            # Only emit break if the code doesn't end with a goto fetch_next that's not in an if/else block
-            if not cycle_code.strip().endswith('goto fetch_next;'):
-                l("            break;")
-        l("")
-
-def generate_continuation_constants():
-    """Generate constant declarations for continuation sequences"""
-    l("// Continuation sequence constants")
-    for label, seq_info in sorted(continuation_sequences.items(),
-                                     key=lambda x: x[1]['index']):
-        l(f"#define {label:<16} {seq_info['index']}")
-    l("")
-
-def main():
-    # Calculate addressing mode layout dynamically
-    calculate_addressing_mode_offsets()
-    
-    # Initialize continuation index after layout is calculated
-    global next_continuation_index
-    next_continuation_index = CONT_SEQ_START
-    
-    # First pass: analyze all opcodes to discover continuation sequences
-    for op in range(256):
-        analyze_continuation_needs(op)
-    
-    # Calculate final continuation index for correct comment
-    final_continuation_index = next_continuation_index
-    
+def write_decoder_file():
+    """Write the complete decoder file with all generated content"""
+    # Header
     l("/*")
     l(" * AUTO-GENERATED by fam65xx_gen.py")
     l(" * 65xx Family CPU Decoder")
     l(" * Optimized for maximum performance and 100% hardware accuracy")
     l(f" * ")
     l(f" * Layout:")
-    l(f" *   [0-255]   : Opcode-specific cycles")
-    l(f" *   [256-{ADDR_SEQ_END-1}] : Shared addressing mode sequences")
-    l(f" *   [{CONT_SEQ_START}-{final_continuation_index-1}] : Shared continuation sequences")
-    l(f" * Total cases : {final_continuation_index}")
+    
+    # Find addressing mode range
+    addr_indices = [idx for label, idx in label_to_index.items() if label.startswith('ADDR_')]
+    if addr_indices:
+        addr_start = min(addr_indices)
+        addr_end = max(addr_indices) + max(len(addr_mode[3]) for addr_mode in ADDRESSING_MODES if len(addr_mode[3]) > 0) - 1
+        addr_range = f"[{addr_start}-{addr_end}]"
+    else:
+        addr_range = "[256]"
+    
+    # Find the range of shared sequences (continuations + shared)
+    shared_indices = [idx for label, idx in label_to_index.items() if not label.startswith('ADDR_')]
+    if shared_indices:
+        shared_start = min(shared_indices)
+        shared_end = current_case_index - 1
+        shared_range = f"[{shared_start}-{shared_end}]"
+    else:
+        shared_range = f"[{current_case_index}]"
+    
+    l(f" *   [0-255]     : Opcode-specific cycles")
+    l(f" *   {addr_range:<12} : Shared addressing mode sequences")
+    l(f" *   {shared_range:<12} : Shared sequences")
+    l(f" * Total cases   : {current_case_index}")
     l(" */")
     l("")
     
-    generate_continuation_constants()
-    generate_addressing_constants()
-    generate_lookup_table()
+    # Constants
+    l("// Layout constants")
+    l("// [0-255]   : Opcode-specific cycles")
+    l("// [256+]    : Shared addressing mode sequences")
+    for line in output_constants:
+        l(line)
+
+    # Lookup table
+    l("// Lookup table: addressing mode start index for each opcode")
+    l("const uint8_t opcode_addr_start[256] = {")
+    for line in output_lookup_table:
+        l(line)
+    l("};")
+    l("")
     
+    # Decoder function
     l("// Decoder switch statement")
     l("static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {")
     l("    switch (c->CI) {")
     l("")
     
-    generate_opcode_cases()
-    generate_addressing_modes()
-    generate_continuations()
+    # Opcode cases
+    l("        // ==========================================")
+    l("        // [0-255] OPCODE-SPECIFIC CYCLES")
+    l("        // ==========================================")
+    l("")
+    for line in output_opcode_cycles:
+        l(line)
+
+    # Addressing mode cases
+    addr_indices = [idx for label, idx in label_to_index.items() if label.startswith('ADDR_')]
+    if addr_indices:
+        addr_start = min(addr_indices)
+        addr_end = max(addr_indices) + max(len(addr_mode[3]) for addr_mode in ADDRESSING_MODES if len(addr_mode[3]) > 0) - 1
+        l("        // ==========================================")
+        l(f"        // [{addr_start}-{addr_end}] SHARED ADDRESSING SEQUENCES")
+        l("        // ==========================================")
+    else:
+        l("        // ==========================================")
+        l("        // [256] SHARED ADDRESSING SEQUENCES")
+        l("        // ==========================================")
+    l("")
+    for line in output_cases_addrmode:
+        l(line)
     
+    # Continuation cases
+    if output_cases_continues:
+        l("        // ==========================================")
+        l("        // SHARED CONTINUATIONS")
+        l("        // ==========================================")
+        l("")
+        for line in output_cases_continues:
+            l(line)
+    
+    # Shared sequence cases
+    if output_shared_sequences:
+        l("        // ==========================================")
+        l("        // SHARED SEQUENCES")
+        l("        // ==========================================")
+        l("")
+        for line in output_shared_sequences:
+            l(line)
+
+    # Footer
     l("    default:")
     l("        break;")
     l("    }")
@@ -830,6 +1169,41 @@ def main():
     l("    pins |= FAM65XX_SYNC;")
     l("    return pins;")
     l("}")
+
+def analyze_opcodes():
+    """Analyze opcodes and collect continuation/suffix sequences"""
+    # Analyze suffix sequences for optimization (opcode cycles only)
+    analyze_and_create_suffix_sequences()
+    
+    # First pass: analyze all opcodes to discover continuation sequences
+    for op in range(256):
+        analyze_continuation_needs(op)
+
+def main():
+    """Main function to generate the decoder file with streamlined generation order"""
+    global output_constants, output_lookup_table, output_opcode_cycles
+    global output_cases_addrmode, output_shared_sequences, output_cases_continues
+    global current_case_index
+    
+    # Step 1: Analyze opcodes and collect sequences (but don't generate constants yet)
+    analyze_opcodes()
+    # Step 2: Generate cases in optimal order, building label map as we go
+    # 2a. Generate addressing modes first (start at 256, no labels needed)
+    generate_addressing_modes()
+    # 2b. Generate continuation sequences (build labels as we go)
+    generate_continuations()
+    # 2c. Generate shared sequences (build labels as we go)
+    generate_suffix_sequences()
+    # 2d. Generate shared fetch_next as the last case
+    generate_shared_fetch_next()
+    # Step 3: Now generate all constants from the collected labels
+    generate_all_constants()
+    # Step 4: Generate lookup table (can now reference all constants)
+    generate_lookup_table()
+    # Step 5: Generate opcode cycles (can reference all labels)
+    generate_opcode_cycles()
+    # Step 6: Write the complete decoder file
+    write_decoder_file()
 
 if __name__ == '__main__':
     main()
