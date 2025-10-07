@@ -1526,19 +1526,16 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case ADDR_ABX_RMW + 2:  // ABX cycle 3
             {
             	uint16_t sum = c->TMP + c->X;
-            	uint8_t high_byte = c->DL;
-            	c->AD = (sum & 0xFF) | (high_byte << 8);
+            	c->AD = (sum & 0xFF) | (c->DL << 8);
             	c->CI++;
             }
             break;
         case ADDR_ABX_RMW + 3:  // ABX cycle 4
             {
             	uint16_t sum = c->TMP + c->X;
-            	uint8_t high_byte = ((c->AD >> 8) & 0xFF);
-            	if (sum > 0xFF) {
-            		high_byte = (high_byte + 1) & 0xFF;
-            	}
-            	c->AD = (sum & 0xFF) | (high_byte << 8);
+            	uint8_t high = (c->AD >> 8) & 0xFF;
+            	if (sum > 0xFF) high = (high + 1) & 0xFF;
+            	c->AD = (sum & 0xFF) | (high << 8);
             	c->CI = c->opcode;
             }
             break;
@@ -1556,19 +1553,16 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case ADDR_ABY_RMW + 2:  // ABY cycle 3
             {
             	uint16_t sum = c->TMP + c->Y;
-            	uint8_t high_byte = c->DL;
-            	c->AD = (sum & 0xFF) | (high_byte << 8);
+            	c->AD = (sum & 0xFF) | (c->DL << 8);
             	c->CI++;
             }
             break;
         case ADDR_ABY_RMW + 3:  // ABY cycle 4
             {
             	uint16_t sum = c->TMP + c->Y;
-            	uint8_t high_byte = ((c->AD >> 8) & 0xFF);
-            	if (sum > 0xFF) {
-            		high_byte = (high_byte + 1) & 0xFF;
-            	}
-            	c->AD = (sum & 0xFF) | (high_byte << 8);
+            	uint8_t high = (c->AD >> 8) & 0xFF;
+            	if (sum > 0xFF) high = (high + 1) & 0xFF;
+            	c->AD = (sum & 0xFF) | (high << 8);
             	c->CI = c->opcode;
             }
             break;
