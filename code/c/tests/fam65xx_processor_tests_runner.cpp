@@ -26,46 +26,42 @@ private:
     uint32_t cycle_count;
     uint64_t pins;  // Maintain pins state across steps
     
-    // Performance optimizations - track individual written addresses
-    std::vector<uint16_t> written_addresses;  // Track which addresses were written to
-    bool memory_tracking_enabled;
+    // Bus cycle tracking for comparing against JSON test data
+    std::vector<bus_cycle_t> actual_bus_cycles;
     
     // Memory callbacks - reliable approach from C++ version
     static uint8_t mem_read(void* user_data, uint16_t addr, uint8_t bus_state) {
         ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(user_data);
         uint8_t value = harness->memory[addr];
-        extern bool verbose_output;
-        if (verbose_output) {
-            std::cout << "    MEM_READ: addr=0x" << std::hex << addr << ", data=0x" << (int)value << std::dec << std::endl;
-        }
+        
+        // Record bus cycle for tracking
+        harness->record_bus_cycle(addr, value, false);
+        
         return value;
     }
     
     static void mem_write(void* user_data, uint16_t addr, uint8_t data) {
         ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(user_data);
-        extern bool verbose_output;
-        if (verbose_output) {
-            std::cout << "    MEM_WRITE: addr=0x" << std::hex << addr << ", data=0x" << (int)data << std::dec << std::endl;
-        }
         harness->memory[addr] = data;
         
-        // Track individual write for optimization
-        harness->track_written_address(addr);
+        // Record bus cycle for tracking
+        harness->record_bus_cycle(addr, data, true);
     }
-
-    // Track individual written address for selective clearing
-    void track_written_address(uint16_t addr) {
-        if (!memory_tracking_enabled) return;
+    
+    // Record bus cycle for comparison with JSON test data
+    void record_bus_cycle(uint16_t addr, uint8_t data, bool is_write) {
+        bus_cycle_t cycle;
+        cycle.address = addr;
+        cycle.data = data;
+        cycle.is_write = is_write;
+        actual_bus_cycles.push_back(cycle);
         
-        // Check if address is already tracked (avoid duplicates)
-        for (uint16_t written_addr : written_addresses) {
-            if (written_addr == addr) {
-                return; // Already tracked
-            }
+        extern bool verbose_output;
+        if (verbose_output) {
+            std::cout << "    BUS_CYCLE: " << (is_write ? "WRITE" : "READ")
+                      << " addr=0x" << std::hex << addr
+                      << ", data=0x" << (int)data << std::dec << std::endl;
         }
-        
-        // Add new written address
-        written_addresses.push_back(addr);
     }
 
 
@@ -78,7 +74,7 @@ public:
         }
     }
 
-    ProcessorTestHarness() : cycle_count(0), memory_tracking_enabled(true) {
+    ProcessorTestHarness() : cycle_count(0) {
         // Clear memory (optimized approach from C version)
         std::fill(memory, memory + 65536, 0);
         
@@ -94,33 +90,47 @@ public:
         cycle_count = 0;
     }
     
-    // Fast memory clearing - only clear bytes that were actually written
-    void clear_written_memory() {
-        if (!memory_tracking_enabled) {
-            std::fill(memory, memory + 65536, 0);
-            return;
+    // Clear memory based on bus cycle writes and test data
+    void clear_written_memory(const cpu_state_t* test_data) {
+        // Clear test data addresses if provided
+        if (test_data && test_data->ram_count > 0) {
+            for (int i = 0; i < test_data->ram_count; i++) {
+                for (int j = 0; j < test_data->ram[i].byte_count; j++) {
+                    memory[test_data->ram[i].address + j] = 0;
+                }
+            }
         }
-        
-        // Clear only the addresses that were written to
-        for (uint16_t addr : written_addresses) {
-            memory[addr] = 0;
-        }
-        written_addresses.clear();
+
+        // Clear memory based on bus cycle writes
+        for (const auto& cycle : actual_bus_cycles) {
+            if (cycle.is_write) {
+                memory[cycle.address] = 0;
+            }
+        }        
     }
     
     // Setup memory for new test with optimizations
     void setup_memory_for_test(const cpu_state_t* initial) {
-        // Clear only previously written addresses for performance
-        clear_written_memory();
+        // Clear bus cycle tracking for new test
+        clear_bus_cycles();
         
-        // Set up memory from RAM entries and track written addresses
+        // Set up memory from RAM entries
         for (int i = 0; i < initial->ram_count; i++) {
             uint16_t addr = initial->ram[i].address;
             for (int j = 0; j < initial->ram[i].byte_count; j++) {
                 memory[addr + j] = initial->ram[i].bytes[j];
-                track_written_address(addr + j);
             }
         }
+    }
+    
+    // Clear bus cycle tracking
+    void clear_bus_cycles() {
+        actual_bus_cycles.clear();
+    }
+    
+    // Get recorded bus cycles
+    const std::vector<bus_cycle_t>& get_bus_cycles() const {
+        return actual_bus_cycles;
     }
     
     // CPU state accessors (C++ version approach)
@@ -138,10 +148,9 @@ public:
     uint8_t get_sp() const { return fam65xx_s(const_cast<fam65xx_t*>(&cpu)); }
     uint8_t get_status() const { return fam65xx_p(const_cast<fam65xx_t*>(&cpu)); }
     
-    // Memory access
+    // Memory access (for direct memory setup, not during CPU execution)
     void set_memory(uint16_t addr, uint8_t data) {
         memory[addr] = data;
-        track_written_address(addr);
     }
     uint8_t get_memory(uint16_t addr) const { return memory[addr]; }
     
@@ -152,7 +161,7 @@ public:
     // Execute one instruction - SYNC-based completion detection
     bool step() {
         try {
-            uint32_t max_cycles = 100; // Safety limit
+            uint32_t max_cycles = 10; // Safety limit
             extern bool verbose_output;
             uint16_t initial_pc = get_pc();
             
@@ -208,6 +217,7 @@ struct TestResults {
     uint32_t failed_tests = 0;
     uint32_t cycle_mismatches = 0;
     uint32_t state_mismatches = 0;
+    uint32_t bus_cycle_mismatches = 0;
     uint32_t opcode_failures[256] = {0};
     uint32_t opcode_totals[256] = {0};
 };
@@ -218,6 +228,103 @@ static bool g_quiet_mode = false;
 static bool g_stop_on_failure = true;
 static bool g_test_failed = false;
 static TestResults results;
+
+// Helper function to compare bus cycles
+bool compare_bus_cycles(const std::vector<bus_cycle_t>& actual, const cpu_state_t& expected, const std::string& test_name) {
+    if (!expected.has_bus_cycles) {
+        // No expected bus cycles to compare
+        return true;
+    }
+    
+    bool match = true;
+    size_t max_cycles = std::max(actual.size(), (size_t)expected.bus_cycle_count);
+    
+    extern bool verbose_output;
+    if (verbose_output) {
+        std::cout << "  BUS_CYCLE_COMPARE: Expected " << (int)expected.bus_cycle_count
+                  << " cycles, got " << actual.size() << " cycles" << std::endl;
+    }
+    
+    // Check cycle count first
+    if (actual.size() != expected.bus_cycle_count) {
+        if (!g_quiet_mode) {
+            std::cout << "FAIL " << test_name << ": Bus cycle count - expected "
+                      << (int)expected.bus_cycle_count << ", got " << actual.size() << std::endl;
+        }
+        match = false;
+    }
+    
+    // Compare individual cycles up to the minimum count
+    size_t min_cycles = std::min(actual.size(), (size_t)expected.bus_cycle_count);
+    for (size_t i = 0; i < min_cycles; i++) {
+        const bus_cycle_t& actual_cycle = actual[i];
+        const bus_cycle_t& expected_cycle = expected.bus_cycles[i];
+        
+        bool cycle_match = true;
+        
+        if (actual_cycle.address != expected_cycle.address) {
+            if (!g_quiet_mode) {
+                std::cout << "FAIL " << test_name << ": Bus cycle[" << i << "] address - expected 0x"
+                          << std::hex << expected_cycle.address << ", got 0x" << actual_cycle.address << std::dec << std::endl;
+            }
+            cycle_match = false;
+        }
+        
+        if (actual_cycle.data != expected_cycle.data) {
+            if (!g_quiet_mode) {
+                std::cout << "FAIL " << test_name << ": Bus cycle[" << i << "] data - expected 0x"
+                          << std::hex << (int)expected_cycle.data << ", got 0x" << (int)actual_cycle.data << std::dec << std::endl;
+            }
+            cycle_match = false;
+        }
+        
+        if (actual_cycle.is_write != expected_cycle.is_write) {
+            if (!g_quiet_mode) {
+                std::cout << "FAIL " << test_name << ": Bus cycle[" << i << "] type - expected "
+                          << (expected_cycle.is_write ? "WRITE" : "READ") << ", got "
+                          << (actual_cycle.is_write ? "WRITE" : "READ") << std::endl;
+            }
+            cycle_match = false;
+        }
+        
+        if (verbose_output && cycle_match) {
+            std::cout << "  BUS_CYCLE[" << i << "] MATCH: " << (actual_cycle.is_write ? "WRITE" : "READ")
+                      << " addr=0x" << std::hex << actual_cycle.address
+                      << ", data=0x" << (int)actual_cycle.data << std::dec << std::endl;
+        }
+        
+        if (!cycle_match) {
+            match = false;
+        }
+    }
+    
+    // Report any extra cycles
+    if (actual.size() > expected.bus_cycle_count) {
+        if (!g_quiet_mode) {
+            std::cout << "FAIL " << test_name << ": Extra actual bus cycles:" << std::endl;
+            for (size_t i = expected.bus_cycle_count; i < actual.size(); i++) {
+                const bus_cycle_t& cycle = actual[i];
+                std::cout << "  [" << i << "] " << (cycle.is_write ? "WRITE" : "READ")
+                          << " addr=0x" << std::hex << cycle.address
+                          << ", data=0x" << (int)cycle.data << std::dec << std::endl;
+            }
+        }
+    }
+    
+    if (expected.bus_cycle_count > actual.size()) {
+        if (!g_quiet_mode) {
+            std::cout << "FAIL " << test_name << ": Missing actual bus cycles:" << std::endl;
+            for (size_t i = actual.size(); i < expected.bus_cycle_count; i++) {
+                const bus_cycle_t& cycle = expected.bus_cycles[i];
+                std::cout << "  [" << i << "] " << (cycle.is_write ? "WRITE" : "READ")
+                          << " addr=0x" << std::hex << cycle.address
+                          << ", data=0x" << (int)cycle.data << std::dec << std::endl;
+            }
+        }
+    }
+    
+    return match;
+}
 
 // Run a single test with best practices
 bool run_processor_test(const processor_test_t* test) {
@@ -283,6 +390,7 @@ bool run_processor_test(const processor_test_t* test) {
     // Compare CPU state with enhanced reporting
     bool state_match = true;
     bool cycle_match = true;
+    bool bus_cycle_match = true;
     
     // Check registers - FAIL messages shown unless in quiet mode (C version feature)
     // Note: PC is incremented by fetch_next, so subtract 1 when comparing to ProcessorTests expectation
@@ -377,11 +485,30 @@ bool run_processor_test(const processor_test_t* test) {
         results.cycle_mismatches++;
     }
     
-    if (state_match && cycle_match) {
+    // Compare bus cycles if available
+    extern bool verbose_output;
+    if (verbose_output) {
+        std::cout << "  DEBUG: About to compare bus cycles, has_bus_cycles=" << (test->final.has_bus_cycles ? "true" : "false")
+                  << ", cycle_count=" << (int)test->final.bus_cycle_count << std::endl;
+    }
+    
+    bus_cycle_match = compare_bus_cycles(harness.get_bus_cycles(), test->final, test->name);
+    if (!bus_cycle_match) {
+        results.bus_cycle_mismatches++;
+    }
+    
+    // Clean up memory after test completion
+    harness.clear_written_memory(&test->initial);
+
+    if (state_match && cycle_match && bus_cycle_match) {
         results.passed_tests++;
         if (verbose_output) {
             std::cout << "PASS " << test->name << " (opcode 0x" << std::hex
-                      << (int)current_opcode << ")" << std::dec << std::endl;
+                      << (int)current_opcode << ")" << std::dec;
+            if (test->final.has_bus_cycles) {
+                std::cout << " bus_cycles=" << harness.get_bus_cycles().size();
+            }
+            std::cout << std::endl;
         }
         return true;
     } else {
@@ -411,21 +538,35 @@ bool run_processor_test(const processor_test_t* test) {
             if (!cycle_match && test->final.has_cycles) {
                 std::cout << "Cycle mismatch:\n";
                 std::cout << "  Expected: " << test->final.cycles << " cycles, Got: " 
-                          << cycles_executed << " cycles (diff: " 
+                          << cycles_executed << " cycles (diff: "
                           << ((int)cycles_executed - (int)test->final.cycles) << ")\n";
+            }
+            
+            if (!bus_cycle_match && test->final.has_bus_cycles) {
+                std::cout << "Bus cycle mismatch:\n";
+                std::cout << "  Expected: " << (int)test->final.bus_cycle_count
+                          << " bus cycles, Got: " << harness.get_bus_cycles().size()
+                          << " bus cycles\n";
             }
             
             std::cout << "\nUse --continue flag to run through all tests despite failures.\n";
         }
         
         if (verbose_output) {
-            std::cout << "FAIL " << test->name << ": State mismatch (opcode 0x"
-                      << std::hex << (int)current_opcode << ")" << std::dec << std::endl;
+            std::cout << "FAIL " << test->name << ": ";
+            if (!state_match) std::cout << "State ";
+            if (!cycle_match) std::cout << "Cycle ";
+            if (!bus_cycle_match) std::cout << "BusCycle ";
+            std::cout << "mismatch (opcode 0x" << std::hex << (int)current_opcode << ")" << std::dec << std::endl;
         }
+        
         
         return false;
     }
+    
+    return true;
 }
+
 
 // File processing with enhanced error handling (combined approach)
 bool process_test_file(const std::string& filepath) {
@@ -562,6 +703,7 @@ void print_results() {
         std::cout << "\nFailure breakdown:\n";
         std::cout << "State mismatches: " << results.state_mismatches << "\n";
         std::cout << "Cycle mismatches: " << results.cycle_mismatches << "\n";
+        std::cout << "Bus cycle mismatches: " << results.bus_cycle_mismatches << "\n";
         
         std::cout << "\nFailing opcodes:\n";
         uint32_t failing_opcodes = 0;
