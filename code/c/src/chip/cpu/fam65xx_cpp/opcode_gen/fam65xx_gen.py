@@ -310,6 +310,7 @@ OP_ASL_A = ("ASL", M___, [
 ])
 
 OP_ASL_M = ("ASL", M_RW, [
+    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
     "c->TMP = _fam65xx_asl(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
@@ -320,6 +321,7 @@ OP_LSR_A = ("LSR", M___, [
 ])
 
 OP_LSR_M = ("LSR", M_RW, [
+    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
     "c->TMP = _fam65xx_lsr(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
@@ -330,6 +332,7 @@ OP_ROL_A = ("ROL", M___, [
 ])
 
 OP_ROL_M = ("ROL", M_RW, [
+    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
     "c->TMP = _fam65xx_rol(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
@@ -340,16 +343,19 @@ OP_ROR_A = ("ROR", M___, [
 ])
 
 OP_ROR_M = ("ROR", M_RW, [
+    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
     "c->TMP = _fam65xx_ror(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
 
 OP_INC = ("INC", M_RW, [
+    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
     "c->TMP = c->DL + 1;\n_NZ(c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
 
 OP_DEC = ("DEC", M_RW, [
+    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
     "c->TMP = c->DL - 1;\n_NZ(c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
@@ -367,31 +373,37 @@ OP_LAX = ("LAX", M_R_, ["c->A = c->X = c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
 OP_SAX = ("SAX", M__W, ["c->TMP = c->A & c->X;\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_OPCODE;"])
 
 OP_SLO = ("SLO", M_RW, [
+    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
     "c->TMP = _fam65xx_asl(c, c->DL);\nc->A |= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
 
 OP_RLA = ("RLA", M_RW, [
+    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
     "c->TMP = _fam65xx_rol(c, c->DL);\nc->A &= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
 
 OP_SRE = ("SRE", M_RW, [
+    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
     "c->TMP = _fam65xx_lsr(c, c->DL);\nc->A ^= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
 
 OP_RRA = ("RRA", M_RW, [
+    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
     "c->TMP = _fam65xx_ror(c, c->DL);\n_fam65xx_adc(c, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
 
 OP_DCP = ("DCP", M_RW, [
+    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
     "c->TMP = c->DL - 1;\n_fam65xx_cmp(c, c->A, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
 
 OP_ISC = ("ISC", M_RW, [
+    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
     "c->TMP = c->DL + 1;\n_fam65xx_sbc(c, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
