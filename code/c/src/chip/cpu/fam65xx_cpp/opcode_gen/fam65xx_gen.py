@@ -99,6 +99,29 @@ AM_IDY_W = ("IDY", "indirect indexed (zp),Y (write - always takes extra cycle)",
     "NEXT_OPCODE;"
 ))
 
+# RMW-specific addressing modes with dummy read cycles
+AM_ABX_RMW = ("ABX", "absolute,X (RMW with dummy read)", "ADDR_ABX_RMW", (
+    "c->AD = c->PC++;\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nc->AD = c->PC++;\nNEXT_CYCLE;",
+    "{\n\tuint16_t sum = c->TMP + c->X;\n\tuint8_t high_byte = c->DL;\n\tc->AD = (sum & 0xFF) | (high_byte << 8);\n\tNEXT_CYCLE;\n}",
+    "{\n\tuint16_t sum = c->TMP + c->X;\n\tuint8_t high_byte = ((c->AD >> 8) & 0xFF);\n\tif (sum > 0xFF) {\n\t\thigh_byte = (high_byte + 1) & 0xFF;\n\t}\n\tc->AD = (sum & 0xFF) | (high_byte << 8);\n\tNEXT_OPCODE;\n}"
+))
+
+AM_ABY_RMW = ("ABY", "absolute,Y (RMW with dummy read)", "ADDR_ABY_RMW", (
+    "c->AD = c->PC++;\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nc->AD = c->PC++;\nNEXT_CYCLE;",
+    "{\n\tuint16_t sum = c->TMP + c->Y;\n\tuint8_t high_byte = c->DL;\n\tc->AD = (sum & 0xFF) | (high_byte << 8);\n\tNEXT_CYCLE;\n}",
+    "{\n\tuint16_t sum = c->TMP + c->Y;\n\tuint8_t high_byte = ((c->AD >> 8) & 0xFF);\n\tif (sum > 0xFF) {\n\t\thigh_byte = (high_byte + 1) & 0xFF;\n\t}\n\tc->AD = (sum & 0xFF) | (high_byte << 8);\n\tNEXT_OPCODE;\n}"
+))
+
+AM_IDY_RMW = ("IDY", "indirect indexed (zp),Y (RMW with dummy read)", "ADDR_IDY_RMW", (
+    "c->AD = c->PC++;\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nc->AD = (c->DL + 1) & 0xFF;\nNEXT_CYCLE;",
+    "c->AD = c->TMP | (c->DL << 8);\nNEXT_CYCLE;",
+    "c->AD += c->Y;\nNEXT_CYCLE;",
+    "NEXT_OPCODE;"
+))
+
 # Addressing mode list
 ADDRESSING_MODES = [
     AM_IMM,
@@ -113,6 +136,9 @@ ADDRESSING_MODES = [
     AM_IDX,
     AM_IDY,
     AM_IDY_W,
+    AM_ABX_RMW,
+    AM_ABY_RMW,
+    AM_IDY_RMW,
 ]
 
 # Memory access modes
@@ -457,15 +483,31 @@ def get_hardware_accurate_addr_mode(operation, base_addr_mode):
     """Select appropriate addressing mode variant based on memory access pattern for hardware accuracy"""
     mem_access = operation[1]  # memory access is at index 1
     
-    # For addressing modes that have read/write variants, choose based on memory access
+    # For addressing modes that have read/write/RMW variants, choose based on memory access
     # Read operations (M_R_) use the base mode (read-optimized page boundary crossing)
-    # Write/RMW operations (M__W, M_RW) use the _W variant (always takes extra cycle)
+    # Write operations (M__W) use the _W variant (always takes extra cycle)
+    # RMW operations (M_RW) use the _RMW variant (includes dummy read cycle for hardware accuracy)
     if base_addr_mode == AM_ABX:
-        return AM_ABX if mem_access == M_R_ else AM_ABX_W
+        if mem_access == M_R_:
+            return AM_ABX
+        elif mem_access == M_RW:
+            return AM_ABX_RMW
+        else:  # M__W
+            return AM_ABX_W
     elif base_addr_mode == AM_ABY:
-        return AM_ABY if mem_access == M_R_ else AM_ABY_W
+        if mem_access == M_R_:
+            return AM_ABY
+        elif mem_access == M_RW:
+            return AM_ABY_RMW
+        else:  # M__W
+            return AM_ABY_W
     elif base_addr_mode == AM_IDY:
-        return AM_IDY if mem_access == M_R_ else AM_IDY_W
+        if mem_access == M_R_:
+            return AM_IDY
+        elif mem_access == M_RW:
+            return AM_IDY_RMW
+        else:  # M__W
+            return AM_IDY_W
     
     # For all other modes, return the original mode
     return base_addr_mode
