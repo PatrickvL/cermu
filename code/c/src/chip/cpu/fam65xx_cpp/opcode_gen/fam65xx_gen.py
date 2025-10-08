@@ -102,35 +102,35 @@ AM_IDY_W = ("IDY", "indirect indexed (zp),Y (write - always takes extra cycle)",
 # RMW-specific addressing modes with dummy read cycles
 AM_ZPX_RMW = ("ZPX", "zero page,X (RMW with dummy read)", "ADDR_ZPX_RMW", (
     "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nc->ADL = c->TMP;\nc->ADH = 0x00;\nLETS_READ(R_AD, R_DL);\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nc->ADL = c->TMP;\nc->ADH = 0x00;\nDUMMY_READ(R_AD);\nNEXT_CYCLE;",
     "c->ADL = (c->TMP + c->X) & 0xFF;\nc->ADH = 0x00;\nLETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
 ))
 
 AM_ZPY_RMW = ("ZPY", "zero page,Y (RMW with dummy read)", "ADDR_ZPY_RMW", (
     "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nc->ADL = c->TMP;\nc->ADH = 0x00;\nLETS_READ(R_AD, R_DL);\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nc->ADL = c->TMP;\nc->ADH = 0x00;\nDUMMY_READ(R_AD);\nNEXT_CYCLE;",
     "c->ADL = (c->TMP + c->Y) & 0xFF;\nc->ADH = 0x00;\nLETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
 ))
 
 AM_ABX_RMW = ("ABX", "absolute,X (RMW with dummy read)", "ADDR_ABX_RMW", (
     "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
     "c->TMP = c->DL;\nLETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
-    "{\n\tuint16_t sum = c->TMP + c->X;\n\tc->AD = (sum & 0xFF) | (c->DL << 8);\n\tLETS_READ(R_AD, R_DL);\n\tNEXT_CYCLE;\n}",
+    "{\n\tuint16_t sum = c->TMP + c->X;\n\tc->AD = (sum & 0xFF) | (c->DL << 8);\n\tDUMMY_READ(R_AD);\n\tNEXT_CYCLE;\n}",
     "{\n\tuint16_t sum = c->TMP + c->X;\n\tuint8_t high = (c->AD >> 8) & 0xFF;\n\tif (sum > 0xFF) high = (high + 1) & 0xFF;\n\tc->AD = (sum & 0xFF) | (high << 8);\n\tLETS_READ(R_AD, R_DL);\n\tNEXT_OPCODE;\n}"
 ))
 
 AM_ABY_RMW = ("ABY", "absolute,Y (RMW with dummy read)", "ADDR_ABY_RMW", (
     "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
     "c->TMP = c->DL;\nLETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
-    "{\n\tuint16_t sum = c->TMP + c->Y;\n\tc->AD = (sum & 0xFF) | (c->DL << 8);\n\tLETS_READ(R_AD, R_DL);\n\tNEXT_CYCLE;\n}",
+    "{\n\tuint16_t sum = c->TMP + c->Y;\n\tc->AD = (sum & 0xFF) | (c->DL << 8);\n\tDUMMY_READ(R_AD);\n\tNEXT_CYCLE;\n}",
     "{\n\tuint16_t sum = c->TMP + c->Y;\n\tuint8_t high = (c->AD >> 8) & 0xFF;\n\tif (sum > 0xFF) high = (high + 1) & 0xFF;\n\tc->AD = (sum & 0xFF) | (high << 8);\n\tLETS_READ(R_AD, R_DL);\n\tNEXT_OPCODE;\n}"
 ))
 
 AM_IDY_RMW = ("IDY", "indirect indexed (zp),Y (RMW with dummy read)", "ADDR_IDY_RMW", (
     "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
     "c->TMP = c->DL;\nc->ZPL = (c->DL + 1) & 0xFF;\nLETS_READ(R_ZP16, R_DL);\nNEXT_CYCLE;",
-    "c->AD = c->TMP | (c->DL << 8);\nLETS_READ(R_AD, R_DL);\nNEXT_CYCLE;",
-    "c->AD += c->Y;\nLETS_READ(R_AD, R_DL);\nNEXT_CYCLE;",
+    "c->AD = c->TMP | (c->DL << 8);\nDUMMY_READ(R_AD);\nNEXT_CYCLE;",
+    "c->AD += c->Y;\nDUMMY_READ(R_AD);\nNEXT_CYCLE;",
     "LETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
 ))
 
