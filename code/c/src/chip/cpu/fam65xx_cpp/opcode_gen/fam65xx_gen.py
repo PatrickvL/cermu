@@ -1272,9 +1272,7 @@ def write_decoder_file():
     l("    return pins;")
     l("")
     l("fetch_next:")
-    l("    c->AD = c->PC++;")
-    l("    LETS_READ(R_AD, R_IR);")
-    l("    pins |= FAM65XX_SYNC;")
+    l("    PC_INC_READ_IR();")
     l("    return pins;")
     l("}")
 

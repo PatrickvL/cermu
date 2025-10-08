@@ -323,6 +323,14 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
     LETS_WRITE(addr_register, data_register); \
 } while(0)
 
+// PC increment and instruction register read centralization
+// PC_INC_READ_IR: Centralized PC increment and instruction register read for both bootstrap and fetch_next
+#define PC_INC_READ_IR() do { \
+    c->AD = c->PC++; \
+    LETS_READ(R_AD, R_IR); \
+    pins |= FAM65XX_SYNC; \
+} while(0)
+
 // Legacy address setup helper (maintained for compatibility)
 #define SET_ADDR(pins, addr) do { \
     /* Address bits would be set on external address bus in real hardware */ \
@@ -599,9 +607,7 @@ uint64_t fam65xx_bootstrap(fam65xx_t* c, uint64_t pins) {
         pins |= FAM65XX_RW;    // Ensure RW is set for read operation
         c->CI = 0x0000;        // Clear the invalid marker
         // Set up first instruction fetch - read opcode from current PC into IR
-        c->AD = c->PC++;       // Set address for opcode fetch and increment PC
-        LETS_READ(R_AD, R_IR); // Read opcode into instruction register
-        pins |= FAM65XX_SYNC;  // Set SYNC for instruction fetch
+        PC_INC_READ_IR();      // Centralized PC increment, instruction register read, and SYNC
     }
     
     return pins;

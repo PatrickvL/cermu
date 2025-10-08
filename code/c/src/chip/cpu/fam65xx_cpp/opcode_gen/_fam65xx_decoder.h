@@ -2325,8 +2325,6 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
     return pins;
 
 fetch_next:
-    c->AD = c->PC++;
-    LETS_READ(R_AD, R_IR);
-    pins |= FAM65XX_SYNC;
+    PC_INC_READ_IR();
     return pins;
 }
