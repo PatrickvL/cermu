@@ -324,9 +324,10 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
 } while(0)
 
 // PC increment and instruction register read centralization
-// PC_INC_READ_IR: Centralized PC increment and instruction register read for both bootstrap and fetch_next
-#define PC_INC_READ_IR() do { \
-    c->AD = c->PC++; \
+// FETCH_IR: Centralized PC increment and instruction register read
+#define FETCH_IR() do { \
+    c->AD = c->PC; \
+    c->PC++; \
     LETS_READ(R_AD, R_IR); \
     pins |= FAM65XX_SYNC; \
 } while(0)
@@ -607,7 +608,7 @@ uint64_t fam65xx_bootstrap(fam65xx_t* c, uint64_t pins) {
         pins |= FAM65XX_RW;    // Ensure RW is set for read operation
         c->CI = 0x0000;        // Clear the invalid marker
         // Set up first instruction fetch - read opcode from current PC into IR
-        PC_INC_READ_IR();      // Centralized PC increment, instruction register read, and SYNC
+        FETCH_IR(); // Set up instruction fetch and SYNC pin
     }
     
     return pins;

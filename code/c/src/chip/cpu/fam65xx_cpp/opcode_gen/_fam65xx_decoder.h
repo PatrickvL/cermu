@@ -2325,6 +2325,6 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
     return pins;
 
 fetch_next:
-    PC_INC_READ_IR();
+    FETCH_IR();
     return pins;
 }
