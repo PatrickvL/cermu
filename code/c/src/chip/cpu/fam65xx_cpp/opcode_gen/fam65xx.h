@@ -88,34 +88,43 @@ typedef void (*fam65xx_mem_write_t)(void* user_data, uint16_t addr, uint8_t data
 
 // 8-bit register indices with endian-aware 16-bit pairs
 enum {
+    // 16-bit aligned register pairs (endian-aware) for memory addresses
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    R_PCL,       // Program counter (low byte, even index for little endian)
+    R_PCH,       // Program counter (high byte)
+    R_S,         // Stack pointer (low byte)
+    R_SH,        // Stack pointer (high byte, always 0x01 for 6502/6510)
+    R_ADL,       // Address (low byte, even index for little endian)
+    R_ADH,       // Address (high byte)
+    R_ZP,        // Zero page (low byte)
+    R_ZPH,       // Zero page (high byte, always 0x00 for 6502/6510)
+#else
+    R_PCH,       // Program counter (high byte, even index for big endian)
+    R_PCL,       // Program counter (low byte)
+    R_SH,        // Stack pointer (high byte, always 0x01 for 6502/6510)
+    R_S,         // Stack pointer (low byte)
+    R_ADH,       // Address (high byte, even index for big endian)
+    R_ADL,       // Address (low byte)
+    R_ZPH,       // Zero page (high byte, always 0x00 for 6502/6510)
+    R_ZP,        // Zero page (low byte)
+#endif
     // Public registers
     R_A,         // Accumulator
     R_X,         // X index
     R_Y,         // Y index
-    R_S,         // Stack pointer
     R_P,         // Processor status
     // Internal registers
-    R_TMP,       // Temporary storage
-    R_DL,        // Data latch
     R_IR,        // Instruction register
-    // 16-bit aligned register pairs (endian-aware)
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-    R_PCL,       // Program counter low (even index for little endian)
-    R_PCH,       // Program counter high
-    R_ADL,       // Address low (even index for little endian)
-    R_ADH,       // Address high
-#else
-    R_PCH,       // Program counter high (even index for big endian)
-    R_PCL,       // Program counter low
-    R_ADH,       // Address high (even index for big endian)
-    R_ADL,       // Address low
-#endif
+    R_DL,        // Data latch
+    R_TMP,       // Temporary storage
 };
 
 // 16-bit register indices (native endian compatible)
 enum {
-    R_PC = R_PCL / 2,    // Works for both endians due to layout above
-    R_AD = R_ADL / 2,    // Works for both endians due to layout above
+    R_PC = R_PCL / 2,    // Ptrogram counter (16 bits)
+    R_SP = R_S / 2,      // Stack pointer (16 bits
+    R_AD = R_ADL / 2,    // Address (16 bits)
+    R_ZP16 = R_ZP / 2,   // Zero page (16 bits)
 };
 
 // CPU state
@@ -459,7 +468,11 @@ uint64_t fam65xx_init(fam65xx_t* c, const fam65xx_desc_t* desc) {
     c->io_port = 0;
     c->io_drive = 0;
     c->io_pins = desc->m6510_io_pullup;
-    
+
+    // Set initial register state
+    c->r8[R_SH] = 0x01;   // Stack pointer (high byte, always 0x01 for 6502/6510)
+    c->r8[R_ZPH] = 0x00;  // Zero page (high byte, always 0x00 for 6502/6510)
+
     // ProcessorTests compatibility: Initialize to fetch first instruction
     c->P = FAM65XX_XF;  // Only set unused flag
     c->S = 0xFF;        // Stack pointer at top
