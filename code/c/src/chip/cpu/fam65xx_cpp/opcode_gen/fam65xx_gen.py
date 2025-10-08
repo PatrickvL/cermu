@@ -112,15 +112,15 @@ AM_ZPY_RMW = ("ZPY", "zero page,Y (RMW with dummy read)", "ADDR_ZPY_RMW", (
 AM_ABX_RMW = ("ABX", "absolute,X (RMW with dummy read)", "ADDR_ABX_RMW", (
     "FETCH(R_ADL);\nNEXT_CYCLE;",
     "FETCH(R_ADH);\nNEXT_CYCLE;",
-    "{\n\tuint16_t sum = c->ADL + c->X;\n\tc->AD = (sum & 0xFF) | (c->ADH << 8);\n\tDUMMY_READ(R_AD);\n\tNEXT_CYCLE;\n}",
-    "{\n\tuint16_t sum = c->ADL + c->X;\n\tc->AD = (sum & 0xFF) | (((c->ADH + (sum >> 8)) & 0xFF) << 8);\n\tLETS_READ(R_AD, R_DL);\n\tNEXT_OPCODE;\n}"
+    "{\n\tuint16_t sum = c->ADL + c->X;\n\tc->TMP = sum >> 8;\n\tc->AD = (sum & 0xFF) | (c->ADH << 8);\n\tDUMMY_READ(R_AD);\n\tNEXT_CYCLE;\n}",
+    "c->AD = (c->AD & 0xFF) | (((c->ADH + c->TMP) & 0xFF) << 8);\n\tLETS_READ(R_AD, R_DL);\n\tNEXT_OPCODE;"
 ))
 
 AM_ABY_RMW = ("ABY", "absolute,Y (RMW with dummy read)", "ADDR_ABY_RMW", (
     "FETCH(R_ADL);\nNEXT_CYCLE;",
     "FETCH(R_ADH);\nNEXT_CYCLE;",
-    "{\n\tuint16_t sum = c->ADL + c->Y;\n\tc->AD = (sum & 0xFF) | (c->ADH << 8);\n\tDUMMY_READ(R_AD);\n\tNEXT_CYCLE;\n}",
-    "{\n\tuint16_t sum = c->ADL + c->Y;\n\tc->AD = (sum & 0xFF) | (((c->ADH + (sum >> 8)) & 0xFF) << 8);\n\tLETS_READ(R_AD, R_DL);\n\tNEXT_OPCODE;\n}"
+    "{\n\tuint16_t sum = c->ADL + c->Y;\n\tc->TMP = sum >> 8;\n\tc->AD = (sum & 0xFF) | (c->ADH << 8);\n\tDUMMY_READ(R_AD);\n\tNEXT_CYCLE;\n}",
+    "c->AD = (c->AD & 0xFF) | (((c->ADH + c->TMP) & 0xFF) << 8);\n\tLETS_READ(R_AD, R_DL);\n\tNEXT_OPCODE;"
 ))
 
 AM_IDY_RMW = ("IDY", "indirect indexed (zp),Y (RMW with dummy read)", "ADDR_IDY_RMW", (
@@ -349,9 +349,9 @@ OP_ASL_A = ("ASL", M___, [
 ])
 
 OP_ASL_M = ("ASL", M_RW, [
-    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = _fam65xx_asl(c, c->DL);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
-    "NEXT_OPCODE;"
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write (cycle 1)
+    "c->TMP = _fam65xx_asl(c, c->DL);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",  # Calculate and final write (cycle 2)
+    "NEXT_OPCODE;"  # Fetch next instruction (cycle 3)
 ])
 
 OP_LSR_A = ("LSR", M___, [
@@ -360,9 +360,9 @@ OP_LSR_A = ("LSR", M___, [
 ])
 
 OP_LSR_M = ("LSR", M_RW, [
-    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = _fam65xx_lsr(c, c->DL);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
-    "NEXT_OPCODE;"
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write (cycle 1)
+    "c->TMP = _fam65xx_lsr(c, c->DL);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",  # Calculate and final write (cycle 2)
+    "NEXT_OPCODE;"  # Fetch next instruction (cycle 3)
 ])
 
 OP_ROL_A = ("ROL", M___, [
@@ -371,9 +371,9 @@ OP_ROL_A = ("ROL", M___, [
 ])
 
 OP_ROL_M = ("ROL", M_RW, [
-    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = _fam65xx_rol(c, c->DL);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
-    "NEXT_OPCODE;"
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write (cycle 1)
+    "c->TMP = _fam65xx_rol(c, c->DL);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",  # Calculate and final write (cycle 2)
+    "NEXT_OPCODE;"  # Fetch next instruction (cycle 3)
 ])
 
 OP_ROR_A = ("ROR", M___, [
@@ -382,21 +382,21 @@ OP_ROR_A = ("ROR", M___, [
 ])
 
 OP_ROR_M = ("ROR", M_RW, [
-    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = _fam65xx_ror(c, c->DL);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
-    "NEXT_OPCODE;"
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write (cycle 1)
+    "c->TMP = _fam65xx_ror(c, c->DL);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",  # Calculate and final write (cycle 2)
+    "NEXT_OPCODE;"  # Fetch next instruction (cycle 3)
 ])
 
 OP_INC = ("INC", M_RW, [
-    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = c->DL + 1;\n_NZ(c->TMP);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
-    "NEXT_OPCODE;"
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write (cycle 1)
+    "c->TMP = c->DL + 1;\n_NZ(c->TMP);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",  # Calculate and final write (cycle 2)
+    "NEXT_OPCODE;"  # Fetch next instruction (cycle 3)
 ])
 
 OP_DEC = ("DEC", M_RW, [
-    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = c->DL - 1;\n_NZ(c->TMP);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
-    "NEXT_OPCODE;"
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write (cycle 1)
+    "c->TMP = c->DL - 1;\n_NZ(c->TMP);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",  # Calculate and final write (cycle 2)
+    "NEXT_OPCODE;"  # Fetch next instruction (cycle 3)
 ])
 
 # NOP variants
@@ -412,39 +412,39 @@ OP_LAX = ("LAX", M_R_, ["c->A = c->X = c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
 OP_SAX = ("SAX", M__W, ["c->TMP = c->A & c->X;\nSTORE_WRITE(R_TMP);\nNEXT_OPCODE;"])
 
 OP_SLO = ("SLO", M_RW, [
-    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = _fam65xx_asl(c, c->DL);\nc->A |= c->TMP;\n_NZ(c->A);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
-    "NEXT_OPCODE;"
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write (cycle 1)
+    "c->TMP = _fam65xx_asl(c, c->DL);\nc->A |= c->TMP;\n_NZ(c->A);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",  # Calculate and final write (cycle 2)
+    "NEXT_OPCODE;"  # Fetch next instruction (cycle 3)
 ])
 
 OP_RLA = ("RLA", M_RW, [
-    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = _fam65xx_rol(c, c->DL);\nc->A &= c->TMP;\n_NZ(c->A);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
-    "NEXT_OPCODE;"
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write (cycle 1)
+    "c->TMP = _fam65xx_rol(c, c->DL);\nc->A &= c->TMP;\n_NZ(c->A);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",  # Calculate and final write (cycle 2)
+    "NEXT_OPCODE;"  # Fetch next instruction (cycle 3)
 ])
 
 OP_SRE = ("SRE", M_RW, [
-    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = _fam65xx_lsr(c, c->DL);\nc->A ^= c->TMP;\n_NZ(c->A);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
-    "NEXT_OPCODE;"
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write (cycle 1)
+    "c->TMP = _fam65xx_lsr(c, c->DL);\nc->A ^= c->TMP;\n_NZ(c->A);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",  # Calculate and final write (cycle 2)
+    "NEXT_OPCODE;"  # Fetch next instruction (cycle 3)
 ])
 
 OP_RRA = ("RRA", M_RW, [
-    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = _fam65xx_ror(c, c->DL);\n_fam65xx_adc(c, c->TMP);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
-    "NEXT_OPCODE;"
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write (cycle 1)
+    "c->TMP = _fam65xx_ror(c, c->DL);\n_fam65xx_adc(c, c->TMP);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",  # Calculate and final write (cycle 2)
+    "NEXT_OPCODE;"  # Fetch next instruction (cycle 3)
 ])
 
 OP_DCP = ("DCP", M_RW, [
-    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = c->DL - 1;\n_fam65xx_cmp(c, c->A, c->TMP);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
-    "NEXT_OPCODE;"
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write (cycle 1)
+    "c->TMP = c->DL - 1;\n_fam65xx_cmp(c, c->A, c->TMP);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",  # Calculate and final write (cycle 2)
+    "NEXT_OPCODE;"  # Fetch next instruction (cycle 3)
 ])
 
 OP_ISC = ("ISC", M_RW, [
-    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = c->DL + 1;\n_fam65xx_sbc(c, c->TMP);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
-    "NEXT_OPCODE;"
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write (cycle 1)
+    "c->TMP = c->DL + 1;\n_fam65xx_sbc(c, c->TMP);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",  # Calculate and final write (cycle 2)
+    "NEXT_OPCODE;"  # Fetch next instruction (cycle 3)
 ])
 
 OP_ANC = ("ANC", M_R_, ["c->A &= c->DL;\n_NZ(c->A);\nc->P = (c->P & ~FAM65XX_CF) | ((c->A & 0x80) ? FAM65XX_CF : 0);\nNEXT_OPCODE;"])
@@ -860,9 +860,13 @@ def generate_opcode_implementation(op):
         expanded_second = expand_macro(second_cycle, {})
         if expanded_second.strip() == "goto fetch_next;":
             # This is the pattern: NEXT_CYCLE + NEXT_OPCODE -> optimize to c->CI = SHARED_FETCH_NEXT
-            first_cycle = first_cycle.replace("NEXT_CYCLE", f"c->CI = {SHARED_FETCH_NEXT}")
-            first_cycle = first_cycle.replace("c->CI++", f"c->CI = {SHARED_FETCH_NEXT}")
-            return first_cycle
+            # BUT: Do NOT optimize RMW operations - they need proper 2-cycle execution
+            # Check the original first cycle (not expanded) for RMW_WRITE
+            if "RMW_WRITE" not in first_cycle:
+                first_cycle = first_cycle.replace("NEXT_CYCLE", f"c->CI = {SHARED_FETCH_NEXT}")
+                first_cycle = first_cycle.replace("c->CI++", f"c->CI = {SHARED_FETCH_NEXT}")
+                return first_cycle
+            # For RMW operations, don't optimize - let them use proper continuation
     
     # If there are more cycles, replace NEXT_CYCLE and c->CI++ with c->CI = label
     if len(cycles) > 1:

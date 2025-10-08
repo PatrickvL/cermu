@@ -1488,18 +1488,16 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case ADDR_ABX_RMW + 2:  // ABX cycle 3
             {
             	uint16_t sum = c->ADL + c->X;
+            	c->TMP = sum >> 8;
             	c->AD = (sum & 0xFF) | (c->ADH << 8);
             	DUMMY_READ(R_AD);
             	c->CI++;
             }
             break;
         case ADDR_ABX_RMW + 3:  // ABX cycle 4
-            {
-            	uint16_t sum = c->ADL + c->X;
-            	c->AD = (sum & 0xFF) | (((c->ADH + (sum >> 8)) & 0xFF) << 8);
+            c->AD = (c->AD & 0xFF) | (((c->ADH + c->TMP) & 0xFF) << 8);
             	LETS_READ(R_AD, R_DL);
             	c->CI = c->opcode;
-            }
             break;
 
         // ABY: absolute,Y (RMW with dummy read)
@@ -1514,18 +1512,16 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case ADDR_ABY_RMW + 2:  // ABY cycle 3
             {
             	uint16_t sum = c->ADL + c->Y;
+            	c->TMP = sum >> 8;
             	c->AD = (sum & 0xFF) | (c->ADH << 8);
             	DUMMY_READ(R_AD);
             	c->CI++;
             }
             break;
         case ADDR_ABY_RMW + 3:  // ABY cycle 4
-            {
-            	uint16_t sum = c->ADL + c->Y;
-            	c->AD = (sum & 0xFF) | (((c->ADH + (sum >> 8)) & 0xFF) << 8);
+            c->AD = (c->AD & 0xFF) | (((c->ADH + c->TMP) & 0xFF) << 8);
             	LETS_READ(R_AD, R_DL);
             	c->CI = c->opcode;
-            }
             break;
 
         // IDY: indirect indexed (zp),Y (RMW with dummy read)
