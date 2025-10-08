@@ -1493,7 +1493,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->TMP = c->DL;
             c->ADL = c->TMP;
             c->ADH = 0x00;
-            LETS_READ(R_AD, R_DL);
+            DUMMY_READ(R_AD);
             c->CI++;
             break;
         case ADDR_ZPX_RMW + 2:  // ZPX cycle 3
@@ -1513,7 +1513,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->TMP = c->DL;
             c->ADL = c->TMP;
             c->ADH = 0x00;
-            LETS_READ(R_AD, R_DL);
+            DUMMY_READ(R_AD);
             c->CI++;
             break;
         case ADDR_ZPY_RMW + 2:  // ZPY cycle 3
@@ -1539,7 +1539,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             {
             	uint16_t sum = c->TMP + c->X;
             	c->AD = (sum & 0xFF) | (c->DL << 8);
-            	LETS_READ(R_AD, R_DL);
+            	DUMMY_READ(R_AD);
             	c->CI++;
             }
             break;
@@ -1570,7 +1570,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             {
             	uint16_t sum = c->TMP + c->Y;
             	c->AD = (sum & 0xFF) | (c->DL << 8);
-            	LETS_READ(R_AD, R_DL);
+            	DUMMY_READ(R_AD);
             	c->CI++;
             }
             break;
@@ -1599,12 +1599,12 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             break;
         case ADDR_IDY_RMW + 2:  // IDY cycle 3
             c->AD = c->TMP | (c->DL << 8);
-            LETS_READ(R_AD, R_DL);
+            DUMMY_READ(R_AD);
             c->CI++;
             break;
         case ADDR_IDY_RMW + 3:  // IDY cycle 4
             c->AD += c->Y;
-            LETS_READ(R_AD, R_DL);
+            DUMMY_READ(R_AD);
             c->CI++;
             break;
         case ADDR_IDY_RMW + 4:  // IDY cycle 5

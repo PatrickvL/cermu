@@ -116,7 +116,8 @@ enum {
     // Internal registers
     R_IR,        // Instruction register
     R_DL,        // Data latch
-    R_TMP        // Temporary storage (no comma for last element)
+    R_TMP,       // Temporary storage
+    R_DISCARD    // Discard register for dummy reads (no comma for last element)
 };
 
 // Compatibility mapping for 8-bit stack pointer
@@ -166,6 +167,7 @@ typedef struct {
 #define opcode r8[R_IR]    // Current opcode
 #define DL     r8[R_DL]    // Data latch
 #define TMP    r8[R_TMP]   // Temporary storage
+#define DISCARD r8[R_DISCARD] // Discard register for dummy operations
     // Cycle decoder state
     uint16_t CI;          // Current cycle index
     uint8_t reg_idx;      // Register index for memory accesses
@@ -307,6 +309,18 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
     /* c->adr_idx already set by addressing mode */ \
     c->reg_idx = data_register; \
     pins &= ~FAM65XX_RW; \
+} while(0)
+
+// Dummy memory access macros for hardware-accurate dummy cycles
+// DUMMY_READ: Perform a dummy read cycle (data discarded, but bus cycle occurs)
+#define DUMMY_READ(addr_register) do { \
+    LETS_READ(addr_register, R_DISCARD); \
+} while(0)
+
+// DUMMY_WRITE: Perform a dummy write cycle (no actual write, but bus cycle occurs)
+// Note: In hardware, dummy writes don't actually modify memory, but the bus cycle happens
+#define DUMMY_WRITE(addr_register, data_register) do { \
+    LETS_WRITE(addr_register, data_register); \
 } while(0)
 
 // Legacy address setup helper (maintained for compatibility)
@@ -583,12 +597,11 @@ uint64_t fam65xx_bootstrap(fam65xx_t* c, uint64_t pins) {
         // Set up for first instruction fetch
         pins |= FAM65XX_RDY;   // Ensure RDY is high for execution
         pins |= FAM65XX_RW;    // Ensure RW is set for read operation
-        pins |= FAM65XX_SYNC;  // Set SYNC for instruction fetch
         c->CI = 0x0000;        // Clear the invalid marker
         // Set up first instruction fetch - read opcode from current PC into IR
-        c->adr_idx = R_PC;     // Use PC register for address
-        c->reg_idx = R_IR;     // Read opcode into instruction register
-        c->AD = c->PC++;       // Set address and increment PC
+        c->AD = c->PC++;       // Set address for opcode fetch and increment PC
+        LETS_READ(R_AD, R_IR); // Read opcode into instruction register
+        pins |= FAM65XX_SYNC;  // Set SYNC for instruction fetch
     }
     
     return pins;
