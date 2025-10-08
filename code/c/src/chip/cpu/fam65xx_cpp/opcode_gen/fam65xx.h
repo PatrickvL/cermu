@@ -248,32 +248,28 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
 
 // LETS_READ: Setup memory read operation with backward compatible default
 // Uses R_AD by default for compatibility, but sets adr_idx for optimization
-#define LETS_READ(reg_idx_param, data_reg) do { \
-    c->adr_idx = reg_idx_param; \
-    c->AD = c->r16[reg_idx_param]; \
-    c->reg_idx = data_reg; \
+#define LETS_READ(addr_register, data_register) do { \
+    c->adr_idx = addr_register; \
+    c->reg_idx = data_register; \
 } while(0)
 
 // LETS_WRITE: Setup memory write operation with backward compatible default
 // Uses R_AD by default for compatibility, but sets adr_idx for optimization
-#define LETS_WRITE(reg_idx_param, data_reg) do { \
-    c->adr_idx = reg_idx_param; \
-    c->AD = c->r16[reg_idx_param]; \
-    c->reg_idx = data_reg; \
+#define LETS_WRITE(addr_register, data_register) do { \
+    c->adr_idx = addr_register; \
+    c->reg_idx = data_register; \
     pins &= ~FAM65XX_RW; \
 } while(0)
 
 // Stack operation helpers using dedicated SP register
-#define STACK_PUSH(data_reg) do { \
-    c->adr_idx = R_SP16; \
-    c->reg_idx = data_reg; \
-    pins &= ~FAM65XX_RW; \
+#define STACK_PUSH(data_register) do { \
     c->AD = c->SP--; /* Use full 16-bit SP register, auto-decrement */ \
+    LETS_WRITE(R_AD, data_register); \
 } while(0)
 
 #define STACK_PULL() do { \
-    c->adr_idx = R_SP16; \
-    c->AD = ++c->SP; /* Pre-increment SP, then use for address */ \
+    c->SP++; /* Increment SP, then use for address */  \
+    LETS_READ(R_SP16, R_DL); \
 } while(0)
 
 #define STACK_PEEK() do { \
@@ -282,19 +278,14 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
 } while(0)
 
 // Zero page operation helpers using dedicated ZP register
-#define ZP_READ(offset, data_reg) do { \
-    c->adr_idx = R_ZP16; \
-    c->ZPL = offset; /* Set low byte, high is always 0x00 */ \
-    c->AD = c->ZP; \
-    c->reg_idx = data_reg; \
+#define ZP_READ(zp_offset, data_register) do { \
+    c->ZPL = zp_offset; /* Set low byte, high is always 0x00 */ \
+    LETS_READ(R_ZP16, data_register); \
 } while(0)
 
-#define ZP_WRITE(offset, data_reg) do { \
-    c->adr_idx = R_ZP16; \
-    c->ZPL = offset; /* Set low byte, high is always 0x00 */ \
-    c->AD = c->ZP; \
-    c->reg_idx = data_reg; \
-    pins &= ~FAM65XX_RW; \
+#define ZP_WRITE(zp_offset, data_register) do { \
+    c->ZPL = zp_offset; /* Set low byte, high is always 0x00 */ \
+    LETS_WRITE(R_ZP16, data_register); \
 } while(0)
 
 // RMW operation helpers using address set up by addressing modes
@@ -303,18 +294,18 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
     /* c->adr_idx already set by addressing mode */ \
 } while(0)
 
-#define RMW_WRITE(data_reg) do { \
+#define RMW_WRITE(data_register) do { \
     /* Address already set up by addressing mode in c->AD */ \
     /* c->adr_idx already set by addressing mode */ \
-    c->reg_idx = data_reg; \
+    c->reg_idx = data_register; \
     pins &= ~FAM65XX_RW; \
 } while(0)
 
 // Store operation helper using address set up by addressing modes
-#define STORE_WRITE(data_reg) do { \
+#define STORE_WRITE(data_register) do { \
     /* Address already set up by addressing mode in c->AD */ \
     /* c->adr_idx already set by addressing mode */ \
-    c->reg_idx = data_reg; \
+    c->reg_idx = data_register; \
     pins &= ~FAM65XX_RW; \
 } while(0)
 
@@ -594,9 +585,10 @@ uint64_t fam65xx_bootstrap(fam65xx_t* c, uint64_t pins) {
         pins |= FAM65XX_RW;    // Ensure RW is set for read operation
         pins |= FAM65XX_SYNC;  // Set SYNC for instruction fetch
         c->CI = 0x0000;        // Clear the invalid marker
-        // Set up first instruction fetch with PC increment
-        c->adr_idx = R_PC;
-        c->AD = c->PC++;
+        // Set up first instruction fetch - read opcode from current PC into IR
+        c->adr_idx = R_PC;     // Use PC register for address
+        c->reg_idx = R_IR;     // Read opcode into instruction register
+        c->AD = c->PC++;       // Set address and increment PC
     }
     
     return pins;
@@ -624,14 +616,15 @@ uint64_t fam65xx_tick(fam65xx_t* c, uint64_t pins) {
     
     // Memory access happens FIRST (hardware-accurate)
     // For now, keep using AD for compatibility while adding adr_idx optimization
-    SET_ADDR(pins, c->AD);
+    uint16_t mem_addr = c->r16[c->adr_idx];
+    SET_ADDR(pins, mem_addr);
     if (pins & FAM65XX_RW) {
         // Read operation - perform memory read
         uint8_t pins_data = FAM65XX_GET_DATA(pins);
-        c->DL = c->mem_read(c->user_data, c->AD, pins_data);
+        c->r8[c->reg_idx]= c->mem_read(c->user_data, mem_addr, pins_data);
     } else {
         // Write operation - perform memory write
-        c->mem_write(c->user_data, c->AD, c->r8[c->reg_idx]);
+        c->mem_write(c->user_data, mem_addr, c->r8[c->reg_idx]);
         // Automatically raise RW pin after write completes - test runner can infer write from mem_write call
         pins |= FAM65XX_RW;
     }
@@ -644,9 +637,6 @@ uint64_t fam65xx_tick(fam65xx_t* c, uint64_t pins) {
         c->nmi_pip = ((c->nmi_pip << 1) | ((pins & FAM65XX_NMI) ? 0x01 : 0x00)) & 0xFF;
         c->irq_pip = ((c->irq_pip << 1) | ((pins & FAM65XX_IRQ) ? 0x01 : 0x00)) & 0xFF;
 
-        // CPU is ready - decode the opcode that was just read
-        c->opcode = c->DL;
-        
         // Decode opcode and set next CI based on addressing mode
         extern const uint8_t opcode_addr_start[256];  // From generated decoder
         uint8_t addr_seq = opcode_addr_start[c->opcode];
