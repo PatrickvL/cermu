@@ -44,92 +44,89 @@ AM_ZPY = ("ZPY", "zero page,Y", "ADDR_ZPY", (
 ))
 
 AM_ABS = ("ABS", "absolute", "ADDR_ABS", (
-    "FETCH(R_DL);\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nFETCH(R_DL);\nNEXT_CYCLE;",
-    "c->ADL = c->TMP;\nc->ADH = c->DL;\nLETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
+    "FETCH(R_ADL);\nNEXT_CYCLE;",
+    "FETCH(R_ADH);\nNEXT_CYCLE;",
+    "LETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
 ))
 
 AM_ABX = ("ABX", "absolute,X", "ADDR_ABX", (
-    "FETCH(R_DL);\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nFETCH(R_DL);\nNEXT_CYCLE;",
-    "{\n\tuint16_t sum = c->TMP + c->X;\n\tif (sum > 0xFF) {\n\t\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\t\tLETS_READ(R_AD, R_DL);\n\t\tNEXT_OPCODE;\n\t} else {\n\t\tc->AD = sum | (c->DL << 8);\n\t\tLETS_READ(R_AD, R_DL);\n\t\tNEXT_CYCLE;\n\t}\n}",
+    "FETCH(R_ADL);\nNEXT_CYCLE;",
+    "FETCH(R_ADH);\nNEXT_CYCLE;",
+    "{\n\tuint16_t sum = c->ADL + c->X;\n\tif (sum > 0xFF) {\n\t\tc->AD = (sum & 0xFF) | (((c->ADH + (sum >> 8)) & 0xFF) << 8);\n\t\tLETS_READ(R_AD, R_DL);\n\t\tNEXT_OPCODE;\n\t} else {\n\t\tc->AD = sum | (c->ADH << 8);\n\t\tLETS_READ(R_AD, R_DL);\n\t\tNEXT_CYCLE;\n\t}\n}",
     "LETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
 ))
 
 AM_ABX_W = ("ABX", "absolute,X (write - always takes extra cycle)", "ADDR_ABX_W", (
-    "FETCH(R_DL);\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nFETCH(R_DL);\nNEXT_CYCLE;",
-    "{\n\tuint16_t sum = c->TMP + c->X;\n\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\tLETS_WRITE(R_AD, R_DL);\n\tNEXT_OPCODE;\n}"
+    "FETCH(R_ADL);\nNEXT_CYCLE;",
+    "FETCH(R_ADH);\nNEXT_CYCLE;",
+    "{\n\tuint16_t sum = c->ADL + c->X;\n\tc->AD = (sum & 0xFF) | (((c->ADH + (sum >> 8)) & 0xFF) << 8);\n\tLETS_WRITE(R_AD, R_DL);\n\tNEXT_OPCODE;\n}"
 ))
 
 AM_ABY = ("ABY", "absolute,Y", "ADDR_ABY", (
-    "FETCH(R_DL);\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nFETCH(R_DL);\nNEXT_CYCLE;",
-    "{\n\tuint16_t sum = c->TMP + c->Y;\n\tif (sum > 0xFF) {\n\t\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\t\tLETS_READ(R_AD, R_DL);\n\t\tNEXT_OPCODE;\n\t} else {\n\t\tc->AD = sum | (c->DL << 8);\n\t\tLETS_READ(R_AD, R_DL);\n\t\tNEXT_CYCLE;\n\t}\n}",
+    "FETCH(R_ADL);\nNEXT_CYCLE;",
+    "FETCH(R_ADH);\nNEXT_CYCLE;",
+    "{\n\tuint16_t sum = c->ADL + c->Y;\n\tif (sum > 0xFF) {\n\t\tc->AD = (sum & 0xFF) | (((c->ADH + (sum >> 8)) & 0xFF) << 8);\n\t\tLETS_READ(R_AD, R_DL);\n\t\tNEXT_OPCODE;\n\t} else {\n\t\tc->AD = sum | (c->ADH << 8);\n\t\tLETS_READ(R_AD, R_DL);\n\t\tNEXT_CYCLE;\n\t}\n}",
     "LETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
 ))
 
 AM_ABY_W = ("ABY", "absolute,Y (write - always takes extra cycle)", "ADDR_ABY_W", (
-    "FETCH(R_DL);\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nFETCH(R_DL);\nNEXT_CYCLE;",
-    "{\n\tuint16_t sum = c->TMP + c->Y;\n\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\tLETS_WRITE(R_AD, R_DL);\n\tNEXT_OPCODE;\n}"
+    "FETCH(R_ADL);\nNEXT_CYCLE;",
+    "FETCH(R_ADH);\nNEXT_CYCLE;",
+    "{\n\tuint16_t sum = c->ADL + c->Y;\n\tc->AD = (sum & 0xFF) | (((c->ADH + (sum >> 8)) & 0xFF) << 8);\n\tLETS_WRITE(R_AD, R_DL);\n\tNEXT_OPCODE;\n}"
 ))
 
 AM_IDX = ("IDX", "indexed indirect (zp,X)", "ADDR_IDX", (
-    "FETCH(R_DL);\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nLETS_READ(R_ZP16, R_DL);\nc->ZPL = c->TMP;\nNEXT_CYCLE;",
-    "c->ZPL = (c->TMP + c->X) & 0xFF;\nLETS_READ(R_ZP16, R_DL);\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nc->ZPL = (c->ZPL + 1) & 0xFF;\nLETS_READ(R_ZP16, R_DL);\nNEXT_CYCLE;",
-    "c->AD = (c->DL << 8) | c->TMP;\nLETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
-))
-
-AM_IDY = ("IDY", "indirect indexed (zp),Y", "ADDR_IDY", (
-    "FETCH(R_DL);\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nc->ZPL = (c->DL + 1) & 0xFF;\nLETS_READ(R_ZP16, R_DL);\nNEXT_CYCLE;",
-    "c->AD = c->TMP | (c->DL << 8);\nif ((c->AD >> 8) != ((c->AD + c->Y) >> 8)) {\n\tLETS_READ(R_AD, R_DL);\n\tNEXT_CYCLE;\n} else {\n\tc->AD += c->Y;\n\tLETS_READ(R_AD, R_DL);\n\tNEXT_CYCLE;\n}",
-    "c->AD += c->Y;\nLETS_READ(R_AD, R_DL);\nNEXT_CYCLE;",
+    "FETCH(R_TMP);\nNEXT_CYCLE;",
+    "c->ZPL = (c->TMP + c->X) & 0xFF;\nLETS_READ(R_ZP16, R_ADL);\nNEXT_CYCLE;",
+    "c->ZPL = (c->ZPL + 1) & 0xFF;\nLETS_READ(R_ZP16, R_ADH);\nNEXT_CYCLE;",
     "LETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
 ))
 
+AM_IDY = ("IDY", "indirect indexed (zp),Y", "ADDR_IDY", (
+    "FETCH(R_ZPL);\nNEXT_CYCLE;",
+    "c->ZPL = (c->ZPL + 1) & 0xFF;\nLETS_READ(R_ZP16, R_ADH);\nc->ZPL--;\nLETS_READ(R_ZP16, R_ADL);\nNEXT_CYCLE;",
+    "if ((c->ADH) != ((c->AD + c->Y) >> 8)) {\n\tDUMMY_READ(R_AD);\n\tNEXT_CYCLE;\n} else {\n\tc->AD += c->Y;\n\tLETS_READ(R_AD, R_DL);\n\tNEXT_OPCODE;\n}",
+    "c->AD += c->Y;\nLETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
+))
+
 AM_IDY_W = ("IDY", "indirect indexed (zp),Y (write - always takes extra cycle)", "ADDR_IDY_W", (
-    "FETCH(R_DL);\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nc->ZPL = (c->DL + 1) & 0xFF;\nLETS_READ(R_ZP16, R_DL);\nNEXT_CYCLE;",
-    "c->AD = c->TMP | (c->DL << 8);\nNEXT_CYCLE;",
-    "c->AD += c->Y;\nLETS_WRITE(R_AD, R_DL);\nNEXT_CYCLE;",
-    "LETS_WRITE(R_AD, R_DL);\nNEXT_OPCODE;"
+    "FETCH(R_ZPL);\nNEXT_CYCLE;",
+    "c->ZPL = (c->ZPL + 1) & 0xFF;\nLETS_READ(R_ZP16, R_ADH);\nc->ZPL--;\nLETS_READ(R_ZP16, R_ADL);\nNEXT_CYCLE;",
+    "DUMMY_READ(R_AD);\nNEXT_CYCLE;",
+    "c->AD += c->Y;\nLETS_WRITE(R_AD, R_DL);\nNEXT_OPCODE;"
 ))
 
 # RMW-specific addressing modes with dummy read cycles
 AM_ZPX_RMW = ("ZPX", "zero page,X (RMW with dummy read)", "ADDR_ZPX_RMW", (
-    "FETCH(R_DL);\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nc->ADL = c->TMP;\nc->ADH = 0x00;\nDUMMY_READ(R_AD);\nNEXT_CYCLE;",
-    "c->ADL = (c->TMP + c->X) & 0xFF;\nc->ADH = 0x00;\nLETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
+    "FETCH(R_ADL);\nNEXT_CYCLE;",
+    "c->ADH = 0x00;\nDUMMY_READ(R_AD);\nNEXT_CYCLE;",
+    "c->ADL = (c->ADL + c->X) & 0xFF;\nLETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
 ))
 
 AM_ZPY_RMW = ("ZPY", "zero page,Y (RMW with dummy read)", "ADDR_ZPY_RMW", (
-    "FETCH(R_DL);\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nc->ADL = c->TMP;\nc->ADH = 0x00;\nDUMMY_READ(R_AD);\nNEXT_CYCLE;",
-    "c->ADL = (c->TMP + c->Y) & 0xFF;\nc->ADH = 0x00;\nLETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
+    "FETCH(R_ADL);\nNEXT_CYCLE;",
+    "c->ADH = 0x00;\nDUMMY_READ(R_AD);\nNEXT_CYCLE;",
+    "c->ADL = (c->ADL + c->Y) & 0xFF;\nLETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
 ))
 
 AM_ABX_RMW = ("ABX", "absolute,X (RMW with dummy read)", "ADDR_ABX_RMW", (
-    "FETCH(R_DL);;\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nFETCH(R_DL);\nNEXT_CYCLE;",
-    "{\n\tuint16_t sum = c->TMP + c->X;\n\tc->AD = (sum & 0xFF) | (c->DL << 8);\n\tDUMMY_READ(R_AD);\n\tNEXT_CYCLE;\n}",
-    "{\n\tuint16_t sum = c->TMP + c->X;\n\tuint8_t high = (c->AD >> 8) & 0xFF;\n\tif (sum > 0xFF) high = (high + 1) & 0xFF;\n\tc->AD = (sum & 0xFF) | (high << 8);\n\tLETS_READ(R_AD, R_DL);\n\tNEXT_OPCODE;\n}"
+    "FETCH(R_ADL);\nNEXT_CYCLE;",
+    "FETCH(R_ADH);\nNEXT_CYCLE;",
+    "{\n\tuint16_t sum = c->ADL + c->X;\n\tc->AD = (sum & 0xFF) | (c->ADH << 8);\n\tDUMMY_READ(R_AD);\n\tNEXT_CYCLE;\n}",
+    "{\n\tuint16_t sum = c->ADL + c->X;\n\tc->AD = (sum & 0xFF) | (((c->ADH + (sum >> 8)) & 0xFF) << 8);\n\tLETS_READ(R_AD, R_DL);\n\tNEXT_OPCODE;\n}"
 ))
 
 AM_ABY_RMW = ("ABY", "absolute,Y (RMW with dummy read)", "ADDR_ABY_RMW", (
-    "FETCH(R_DL);\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nFETCH(R_DL);\nNEXT_CYCLE;",
-    "{\n\tuint16_t sum = c->TMP + c->Y;\n\tc->AD = (sum & 0xFF) | (c->DL << 8);\n\tDUMMY_READ(R_AD);\n\tNEXT_CYCLE;\n}",
-    "{\n\tuint16_t sum = c->TMP + c->Y;\n\tuint8_t high = (c->AD >> 8) & 0xFF;\n\tif (sum > 0xFF) high = (high + 1) & 0xFF;\n\tc->AD = (sum & 0xFF) | (high << 8);\n\tLETS_READ(R_AD, R_DL);\n\tNEXT_OPCODE;\n}"
+    "FETCH(R_ADL);\nNEXT_CYCLE;",
+    "FETCH(R_ADH);\nNEXT_CYCLE;",
+    "{\n\tuint16_t sum = c->ADL + c->Y;\n\tc->AD = (sum & 0xFF) | (c->ADH << 8);\n\tDUMMY_READ(R_AD);\n\tNEXT_CYCLE;\n}",
+    "{\n\tuint16_t sum = c->ADL + c->Y;\n\tc->AD = (sum & 0xFF) | (((c->ADH + (sum >> 8)) & 0xFF) << 8);\n\tLETS_READ(R_AD, R_DL);\n\tNEXT_OPCODE;\n}"
 ))
 
 AM_IDY_RMW = ("IDY", "indirect indexed (zp),Y (RMW with dummy read)", "ADDR_IDY_RMW", (
-    "FETCH(R_DL);\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nc->ZPL = (c->DL + 1) & 0xFF;\nLETS_READ(R_ZP16, R_DL);\nNEXT_CYCLE;",
-    "c->AD = c->TMP | (c->DL << 8);\nDUMMY_READ(R_AD);\nNEXT_CYCLE;",
+    "FETCH(R_ZPL);\nNEXT_CYCLE;",
+    "c->ZPL = (c->ZPL + 1) & 0xFF;\nLETS_READ(R_ZP16, R_ADH);\nc->ZPL--;\nLETS_READ(R_ZP16, R_ADL);\nNEXT_CYCLE;",
+    "DUMMY_READ(R_AD);\nNEXT_CYCLE;",
     "c->AD += c->Y;\nDUMMY_READ(R_AD);\nNEXT_CYCLE;",
     "LETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
 ))
@@ -213,23 +210,23 @@ OP_RTS = ("RTS", M_R_, [
 ])
 
 OP_JSR = ("JSR", M_R_, [
-    "c->TMP = c->DL;\nFETCH(R_DL);\nNEXT_CYCLE;",
+    "FETCH(R_PCL);\nNEXT_CYCLE;",
     "STACK_PEEK();\nNEXT_CYCLE;",
     "STACK_PUSH(R_PCH);\nNEXT_CYCLE;",
     "STACK_PUSH(R_PCL);\nNEXT_CYCLE;",
-    "FETCH(R_DL);\nc->PCH = c->DL;\nc->PC = (c->DL << 8) | c->TMP;\nNEXT_OPCODE;"
+    "FETCH(R_PCH);\nNEXT_OPCODE;"
 ])
 
 OP_JMP = ("JMP", M_R_, [
-    "c->TMP = c->DL;\nFETCH(R_DL);\nNEXT_CYCLE;",
-    "FETCH(R_DL);\nc->PCH = c->DL;\nc->PC = (c->DL << 8) | c->TMP;\nNEXT_OPCODE;"
+    "FETCH(R_PCL);\nNEXT_CYCLE;",
+    "FETCH(R_PCH);\nNEXT_OPCODE;"
 ])
 
 OP_JMP_I = ("JMP", M_R_, [
-    "c->TMP = c->DL;\nFETCH(R_DL);\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nFETCH(R_DL);\nLETS_READ(R_AD, R_DL);\nNEXT_CYCLE;",
-    "LETS_READ(R_AD, R_DL);\nc->PCL = c->DL;\nNEXT_CYCLE;",
-    "c->AD = (c->AD & 0xFF00) | ((c->AD + 1) & 0xFF);\nLETS_READ(R_AD, R_DL);\nc->PCH = c->DL;\nNEXT_OPCODE;"
+    "FETCH(R_ADL);\nNEXT_CYCLE;",
+    "FETCH(R_ADH);\nNEXT_CYCLE;",
+    "LETS_READ(R_AD, R_PCL);\nNEXT_CYCLE;",
+    "c->AD = (c->AD & 0xFF00) | ((c->AD + 1) & 0xFF);\nLETS_READ(R_AD, R_PCH);\nNEXT_OPCODE;"
 ])
 
 # Register transfer operations using NEXT_OPCODE macro

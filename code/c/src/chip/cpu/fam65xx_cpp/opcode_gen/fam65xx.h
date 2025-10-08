@@ -20,16 +20,23 @@
 extern "C" {
 #endif
 
-// Pin definitions - only data bus and control signals
-#define FAM65XX_PIN_D0      0
-#define FAM65XX_PIN_D1      1
-#define FAM65XX_PIN_D2      2
-#define FAM65XX_PIN_D3      3
-#define FAM65XX_PIN_D4      4
-#define FAM65XX_PIN_D5      5
-#define FAM65XX_PIN_D6      6
-#define FAM65XX_PIN_D7      7
+// Copied from system_lines.h for fam65xx.h to avoid dependency
 
+/* Field shifts and masks */
+#define BUS_ADDR_SHIFT      0
+#define BUS_DATA_SHIFT      16
+
+#define BUS_ADDR_MASK       0x000000000000FFFFULL
+#define BUS_DATA_MASK       0x0000000000FF0000ULL
+
+/* High-performance field access macros */
+#define BUS_GET_ADDR(state)     ((uint16_t)((state) & BUS_ADDR_MASK))
+#define BUS_GET_DATA(state)     ((uint8_t) (((state) & BUS_DATA_MASK) >> BUS_DATA_SHIFT))
+
+#define BUS_SET_ADDR(state, addr)   { ((state) = ((state) & ~BUS_ADDR_MASK) | ((uint64_t)(addr) & 0xFFFFULL)); } while(0)
+#define BUS_SET_DATA(state, data)   { ((state) = ((state) & ~BUS_DATA_MASK) | (((uint64_t)(data) & 0xFFULL) << BUS_DATA_SHIFT)); } while(0)
+
+// Pin definitions - only control signals
 #define FAM65XX_PIN_RW      24
 #define FAM65XX_PIN_SYNC    25
 #define FAM65XX_PIN_IRQ     26
@@ -70,11 +77,13 @@ extern "C" {
 #define FAM65XX_BRK_NMI     (1<<1)
 #define FAM65XX_BRK_RESET   (1<<2)
 
+// Address bus access
+#define FAM65XX_GET_ADDR(p) BUS_GET_ADDR(p)
+#define FAM65XX_SET_ADDR(p, d) BUS_SET_ADDR(p, d)
+
 // Data bus access
-#define FAM65XX_GET_DATA(p) ((uint8_t)((p) & 0xFF))
-#define FAM65XX_SET_DATA(p, d) do { \
-    (p) = ((p) & ~0xFFULL) | ((d) & 0xFF); \
-} while(0)
+#define FAM65XX_GET_DATA(p) BUS_GET_DATA(p)
+#define FAM65XX_SET_DATA(p, d) BUS_SET_DATA(p, d)
 
 // Memory access callbacks
 // cpu_read: called during PHI2 when CPU reads
@@ -175,7 +184,6 @@ typedef struct {
     // Cycle decoder state
     uint16_t CI;          // Current cycle index
     uint8_t reg_idx;      // Register index for memory accesses
-    uint8_t adr_idx;      // 16-bit address register index (0=PC, 1=SP, 2=AD, 3=ZP, 4=ME)
 
     // Memory callbacks
     fam65xx_mem_read_t mem_read;
@@ -252,18 +260,18 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
 // These macros enable direct use of 16-bit memory address registers,
 // eliminating the need for address arithmetic and improving code generation
 
-// LETS_READ: Setup memory read operation with backward compatible default
-// Uses R_AD by default for compatibility, but sets adr_idx for optimization
+// LETS_READ: Setup memory read operation using adr_idx for hardware-accurate addressing
+// Sets up addressing mode register and data register indices for memory access
 #define LETS_READ(addr_register, data_register) do { \
-    c->adr_idx = addr_register; \
+    FAM65XX_SET_ADDR(pins, c->r16[addr_register]); \
     c->reg_idx = data_register; \
 } while(0)
 
-// LETS_WRITE: Setup memory write operation with backward compatible default
-// Uses R_AD by default for compatibility, but sets adr_idx for optimization
+// LETS_WRITE: Setup memory write operation using adr_idx for hardware-accurate addressing
+// Sets up addressing mode register and data register indices for memory access
 #define LETS_WRITE(addr_register, data_register) do { \
-    c->adr_idx = addr_register; \
-    c->reg_idx = data_register; \
+    FAM65XX_SET_ADDR(pins, c->r16[addr_register]); \
+    FAM65XX_SET_DATA(pins, c->r8[data_register]); \
     pins &= ~FAM65XX_RW; \
 } while(0)
 
@@ -279,8 +287,8 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
 } while(0)
 
 #define STACK_PEEK() do { \
-    c->adr_idx = R_SP16; \
-    c->AD = c->SP; /* Use current SP for address without changing it */ \
+    FAM65XX_SET_ADDR(pins, c->SP); /* Use current SP for address without changing it */ \
+    c->reg_idx = R_DL; \
 } while(0)
 
 // Zero page operation helpers using dedicated ZP register
@@ -301,17 +309,15 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
 } while(0)
 
 #define RMW_WRITE(data_register) do { \
-    /* Address already set up by addressing mode in c->AD */ \
-    /* c->adr_idx already set by addressing mode */ \
-    c->reg_idx = data_register; \
+    /* Bus address already set up by addressing mode */ \
+    FAM65XX_SET_DATA(pins, c->r8[data_register]); \
     pins &= ~FAM65XX_RW; \
 } while(0)
 
 // Store operation helper using address set up by addressing modes
 #define STORE_WRITE(data_register) do { \
-    /* Address already set up by addressing mode in c->AD */ \
-    /* c->adr_idx already set by addressing mode */ \
-    c->reg_idx = data_register; \
+    /* Bus address already set up by addressing mode */ \
+    FAM65XX_SET_DATA(pins, c->r8[data_register]); \
     pins &= ~FAM65XX_RW; \
 } while(0)
 
@@ -330,8 +336,8 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
 // PC increment and data fetch centralization
 // FETCH: Read from PC and increment PC, storing result in specified register
 #define FETCH(dst_reg) do { \
-    c->AD = c->PC++; \
-    LETS_READ(R_AD, dst_reg); \
+    LETS_READ(R_PC, dst_reg); \
+    c->PC++; \
 } while(0)
 
 // Instruction fetch with SYNC - used only for fetching next instruction
@@ -598,7 +604,7 @@ uint64_t fam65xx_init(fam65xx_t* c, const fam65xx_desc_t* desc) {
     // Initialize for immediate instruction fetch
     c->CI = 0xFFFF;     // Invalid CI to force proper initialization
     c->AD = 0x0000;     // Will point to PC during first fetch
-    c->adr_idx = R_PC;  // Initialize to PC register for instruction fetch
+    c->reg_idx = R_IR;  // Initialize to instruction register for instruction fetch
     
     uint64_t pins = FAM65XX_RDY;  // Ready, but no SYNC yet
     
@@ -643,16 +649,15 @@ uint64_t fam65xx_tick(fam65xx_t* c, uint64_t pins) {
     }
     
     // Memory access happens FIRST (hardware-accurate)
-    // For now, keep using AD for compatibility while adding adr_idx optimization
-    uint16_t mem_addr = c->r16[c->adr_idx];
-    SET_ADDR(pins, mem_addr);
+    // Use adr_idx to select address register, with address passed via pins
+    uint16_t mem_addr = FAM65XX_GET_ADDR(pins);
+    uint8_t pins_data = FAM65XX_GET_DATA(pins);
     if (pins & FAM65XX_RW) {
         // Read operation - perform memory read
-        uint8_t pins_data = FAM65XX_GET_DATA(pins);
-        c->r8[c->reg_idx]= c->mem_read(c->user_data, mem_addr, pins_data);
+        c->r8[c->reg_idx] = c->mem_read(c->user_data, mem_addr, pins_data);
     } else {
         // Write operation - perform memory write
-        c->mem_write(c->user_data, mem_addr, c->r8[c->reg_idx]);
+        c->mem_write(c->user_data, mem_addr, pins_data);
         // Automatically raise RW pin after write completes - test runner can infer write from mem_write call
         pins |= FAM65XX_RW;
     }
