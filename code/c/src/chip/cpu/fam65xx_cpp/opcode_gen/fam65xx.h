@@ -90,23 +90,23 @@ typedef void (*fam65xx_mem_write_t)(void* user_data, uint16_t addr, uint8_t data
 enum {
     // 16-bit aligned register pairs (endian-aware) for memory addresses
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-    R_PCL,       // Program counter (low byte, even index for little endian)
-    R_PCH,       // Program counter (high byte)
+    R_ZPL,       // Zero page (low byte) - full 16-bit zero page register
+    R_ZPH,       // Zero page (high byte) - always 0x00 for 6502/6510
     R_SPL,       // Stack pointer (low byte) - full 16-bit stack register
     R_SPH,       // Stack pointer (high byte) - always 0x01 for 6502/6510
     R_ADL,       // Address (low byte, even index for little endian)
     R_ADH,       // Address (high byte)
-    R_ZPL,       // Zero page (low byte) - full 16-bit zero page register
-    R_ZPH,       // Zero page (high byte) - always 0x00 for 6502/6510
+    R_PCL,       // Program counter (low byte, even index for little endian)
+    R_PCH,       // Program counter (high byte)
 #else
-    R_PCH,       // Program counter (high byte, even index for big endian)
-    R_PCL,       // Program counter (low byte)
+    R_ZPH,       // Zero page (high byte) - always 0x00 for 6502/6510
+    R_ZPL,       // Zero page (low byte) - full 16-bit zero page register
     R_SPH,       // Stack pointer (high byte) - always 0x01 for 6502/6510
     R_SPL,       // Stack pointer (low byte) - full 16-bit stack register
     R_ADH,       // Address (high byte, even index for big endian)
     R_ADL,       // Address (low byte)
-    R_ZPH,       // Zero page (high byte) - always 0x00 for 6502/6510
-    R_ZPL,       // Zero page (low byte) - full 16-bit zero page register
+    R_PCH,       // Program counter (high byte, even index for big endian)
+    R_PCL,       // Program counter (low byte)
 #endif
     // Public registers (maintain compatibility)
     R_A,         // Accumulator
@@ -117,33 +117,32 @@ enum {
     R_IR,        // Instruction register
     R_DL,        // Data latch
     R_TMP,       // Temporary storage
-    R_DISCARD    // Discard register for dummy reads (no comma for last element)
-};
+    R_DISCARD,   // Discard register for dummy reads
 
-// Compatibility mapping for 8-bit stack pointer
-#define R_S R_SPL  // Map legacy S register to SPL for compatibility
+    // Compatibility mapping for 8-bit stack pointer
+    R_S = R_SPL,  // Map legacy S register to SPL for compatibility
+
+    R_COUNT = R_DISCARD + 1 //  (no comma for last element)
+};    
 
 // 16-bit register indices (native endian compatible)
 enum {
-    R_PC = R_PCL / 2,    // Program counter (16 bits)
+    R_ZP16 = R_ZPL / 2,  // Zero page (16 bits) - full zero page register
     R_SP16 = R_SPL / 2,  // Stack pointer (16 bits) - full stack register
     R_AD = R_ADL / 2,    // Address (16 bits)
-    R_ZP16 = R_ZPL / 2,  // Zero page (16 bits) - full zero page register
+    R_PC = R_PCL / 2,    // Program counter (16 bits)
 };
 
 // CPU state
 typedef struct {
     union {
-        uint8_t r8[16];   // 8-bit register array (reduced, removed MEL/MEH)
-        uint16_t r16[8];  // 16-bit overlay (native endian)
+        uint8_t r8[R_COUNT];        // 8-bit register array (reduced, removed MEL/MEH)
+        uint16_t r16[R_COUNT / 2];  // 16-bit overlay (native endian)
     };
 
 // Accessors (c-> required before use) - enhanced for 16-bit memory registers
 
-// Public registers (maintain compatibility)
-#define PC     r16[R_PC]   // Program counter (16 bit)
-#define PCL    r8[R_PCL]   // Program counter low
-#define PCH    r8[R_PCH]   // Program counter high
+// Public registers (transparent array accessors)
 #define A      r8[R_A]     // Accumulator register
 #define X      r8[R_X]     // X index register
 #define Y      r8[R_Y]     // Y index register
@@ -151,23 +150,28 @@ typedef struct {
 #define P      r8[R_P]     // Processor status
 
 // Enhanced 16-bit memory address registers
-#define SP     r16[R_SP16] // Stack pointer (full 16-bit with high=0x01)
-#define SPL    r8[R_SPL]   // Stack pointer low
-#define SPH    r8[R_SPH]   // Stack pointer high (always 0x01)
 #define ZP     r16[R_ZP16] // Zero page register (full 16-bit with high=0x00)
 #define ZPL    r8[R_ZPL]   // Zero page low
 #define ZPH    r8[R_ZPH]   // Zero page high (always 0x00)
 
-// Legacy registers (maintain compatibility)
+#define SP     r16[R_SP16] // Stack pointer (full 16-bit with high=0x01)
+#define SPL    r8[R_SPL]   // Stack pointer low
+#define SPH    r8[R_SPH]   // Stack pointer high (always 0x01)
+
 #define AD     r16[R_AD]   // Address data (16 bit)
 #define ADL    r8[R_ADL]   // Address data low
 #define ADH    r8[R_ADH]   // Address data high
+
+#define PC     r16[R_PC]   // Program counter (16 bit)
+#define PCL    r8[R_PCL]   // Program counter low
+#define PCH    r8[R_PCH]   // Program counter high
 
 // Internal registers
 #define opcode r8[R_IR]    // Current opcode
 #define DL     r8[R_DL]    // Data latch
 #define TMP    r8[R_TMP]   // Temporary storage
 #define DISCARD r8[R_DISCARD] // Discard register for dummy operations
+
     // Cycle decoder state
     uint16_t CI;          // Current cycle index
     uint8_t reg_idx;      // Register index for memory accesses
@@ -270,7 +274,7 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
 } while(0)
 
 #define STACK_PULL() do { \
-    c->SP++; /* Increment SP, then use for address */  \
+    c->S++; /* Increment S, then use for address */  \
     LETS_READ(R_SP16, R_DL); \
 } while(0)
 
@@ -323,12 +327,16 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
     LETS_WRITE(addr_register, data_register); \
 } while(0)
 
-// PC increment and instruction register read centralization
-// FETCH_IR: Centralized PC increment and instruction register read
+// PC increment and data fetch centralization
+// FETCH: Read from PC and increment PC, storing result in specified register
+#define FETCH(dst_reg) do { \
+    c->AD = c->PC++; \
+    LETS_READ(R_AD, dst_reg); \
+} while(0)
+
+// Instruction fetch with SYNC - used only for fetching next instruction
 #define FETCH_IR() do { \
-    c->AD = c->PC; \
-    c->PC++; \
-    LETS_READ(R_AD, R_IR); \
+    FETCH(R_IR); \
     pins |= FAM65XX_SYNC; \
 } while(0)
 

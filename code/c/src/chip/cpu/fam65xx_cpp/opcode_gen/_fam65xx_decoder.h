@@ -542,8 +542,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
 
         case 0x20:  // JSR [R] --- cycle 1
             c->TMP = c->DL;
-            LETS_READ(R_PC, R_DL);
-            c->PC++;
+            FETCH(R_DL);
             c->CI = C_JSR_R;
             break;
 
@@ -694,10 +693,8 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             goto fetch_next;
 
         case 0x4C:  // JMP [R] --- cycle 1
-        case 0x6C:  // JMP [R] --- cycle 1
             c->TMP = c->DL;
-            LETS_READ(R_PC, R_DL);
-            c->PC++;
+            FETCH(R_DL);
             c->CI = C_JMP_R;
             break;
 
@@ -803,6 +800,13 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->P = (c->P & ~(FAM65XX_CF | FAM65XX_VF)) | ((c->A & 0x40) ? FAM65XX_CF : 0) | ((c->A & 0x20) ^ (c->A & 0x40) ? FAM65XX_VF : 0);
             goto fetch_next;
 
+        case 0x6C:  // JMP [R] --- cycle 1
+            c->TMP = c->DL;
+            LETS_READ(R_PC, R_DL);
+            c->PC++;
+            c->CI = C_JMP_R;
+            break;
+
         case 0x6E:  // ROR [RW] ABS cycle 4
             RMW_WRITE(R_DL);
             c->CI = C_ROR_RW_ABS;
@@ -864,7 +868,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
         case 0xC2:  // NOP [---] --- cycle 1
         case 0xE2:  // NOP [---] --- cycle 1
         case 0xEA:  // NOP [---] --- cycle 1
-            LETS_READ(R_PC, R_DL);
+            FETCH(R_DL);
             c->CI = SHARED_FETCH_NEXT;
             break;
 
@@ -1234,15 +1238,13 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
 
         // IMM: immediate
         case ADDR_IMM + 0:  // IMM cycle 1
-            LETS_READ(R_PC, R_DL);
-            c->PC++;
+            FETCH(R_DL);
             c->CI = c->opcode;
             break;
 
         // ZP: zero page
         case ADDR_ZER + 0:  // ZP cycle 1
-            LETS_READ(R_PC, R_DL);
-            c->PC++;
+            FETCH(R_DL);
             c->CI++;
             break;
         case ADDR_ZER + 1:  // ZP cycle 2
@@ -1252,8 +1254,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
 
         // ZPX: zero page,X
         case ADDR_ZPX + 0:  // ZPX cycle 1
-            LETS_READ(R_PC, R_DL);
-            c->PC++;
+            FETCH(R_DL);
             c->CI++;
             break;
         case ADDR_ZPX + 1:  // ZPX cycle 2
@@ -1263,8 +1264,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
 
         // ZPY: zero page,Y
         case ADDR_ZPY + 0:  // ZPY cycle 1
-            LETS_READ(R_PC, R_DL);
-            c->PC++;
+            FETCH(R_DL);
             c->CI++;
             break;
         case ADDR_ZPY + 1:  // ZPY cycle 2
@@ -1274,14 +1274,12 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
 
         // ABS: absolute
         case ADDR_ABS + 0:  // ABS cycle 1
-            LETS_READ(R_PC, R_DL);
-            c->PC++;
+            FETCH(R_DL);
             c->CI++;
             break;
         case ADDR_ABS + 1:  // ABS cycle 2
             c->TMP = c->DL;
-            LETS_READ(R_PC, R_DL);
-            c->PC++;
+            FETCH(R_DL);
             c->CI++;
             break;
         case ADDR_ABS + 2:  // ABS cycle 3
@@ -1293,14 +1291,12 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
 
         // ABX: absolute,X
         case ADDR_ABX + 0:  // ABX cycle 1
-            LETS_READ(R_PC, R_DL);
-            c->PC++;
+            FETCH(R_DL);
             c->CI++;
             break;
         case ADDR_ABX + 1:  // ABX cycle 2
             c->TMP = c->DL;
-            LETS_READ(R_PC, R_DL);
-            c->PC++;
+            FETCH(R_DL);
             c->CI++;
             break;
         case ADDR_ABX + 2:  // ABX cycle 3
@@ -1324,14 +1320,12 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
 
         // ABX: absolute,X (write - always takes extra cycle)
         case ADDR_ABX_W + 0:  // ABX cycle 1
-            LETS_READ(R_PC, R_DL);
-            c->PC++;
+            FETCH(R_DL);
             c->CI++;
             break;
         case ADDR_ABX_W + 1:  // ABX cycle 2
             c->TMP = c->DL;
-            LETS_READ(R_PC, R_DL);
-            c->PC++;
+            FETCH(R_DL);
             c->CI++;
             break;
         case ADDR_ABX_W + 2:  // ABX cycle 3
@@ -1345,14 +1339,12 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
 
         // ABY: absolute,Y
         case ADDR_ABY + 0:  // ABY cycle 1
-            LETS_READ(R_PC, R_DL);
-            c->PC++;
+            FETCH(R_DL);
             c->CI++;
             break;
         case ADDR_ABY + 1:  // ABY cycle 2
             c->TMP = c->DL;
-            LETS_READ(R_PC, R_DL);
-            c->PC++;
+            FETCH(R_DL);
             c->CI++;
             break;
         case ADDR_ABY + 2:  // ABY cycle 3
@@ -1376,14 +1368,12 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
 
         // ABY: absolute,Y (write - always takes extra cycle)
         case ADDR_ABY_W + 0:  // ABY cycle 1
-            LETS_READ(R_PC, R_DL);
-            c->PC++;
+            FETCH(R_DL);
             c->CI++;
             break;
         case ADDR_ABY_W + 1:  // ABY cycle 2
             c->TMP = c->DL;
-            LETS_READ(R_PC, R_DL);
-            c->PC++;
+            FETCH(R_DL);
             c->CI++;
             break;
         case ADDR_ABY_W + 2:  // ABY cycle 3
@@ -1760,7 +1750,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->CI++;
             break;
         case C_JSR_R + 3:
-            LETS_READ(R_PC, R_DL);
+            FETCH(R_DL);
             c->PCH = c->DL;
             c->PC = (c->DL << 8) | c->TMP;
             goto fetch_next;
@@ -1906,8 +1896,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
 
         // C_JMP_R continuation
         case C_JMP_R + 0:
-            LETS_READ(R_PC, R_DL);
-            c->PC++;
+            FETCH(R_DL);
             c->PCH = c->DL;
             c->PC = (c->DL << 8) | c->TMP;
             goto fetch_next;
