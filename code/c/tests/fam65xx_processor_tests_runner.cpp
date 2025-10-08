@@ -197,9 +197,8 @@ public:
                 }
                 
                 if (instruction_done) {
-                    // SYNC cycle belongs to next instruction, so subtract 1 from cycle count
-                    cycle_count--;
-                    break; // Instruction completed - SYNC indicates ready for next instruction
+                    // SYNC indicates ready for next instruction
+                    break; // Instruction completed - don't subtract cycle as SYNC is part of the instruction
                 }
             } while (true);
             
@@ -397,8 +396,8 @@ bool run_processor_test(const processor_test_t* test) {
     bool bus_cycle_match = true;
     
     // Check registers - FAIL messages shown unless in quiet mode (C version feature)
-    // Note: PC is incremented by fetch_next, so subtract 1 when comparing to ProcessorTests expectation
-    uint16_t actual_pc = harness.get_pc() - 1;
+    // PC should match the final value after instruction completion
+    uint16_t actual_pc = harness.get_pc();
     if (actual_pc != test->final.pc) {
         if (!g_quiet_mode) {
             std::cout << "FAIL " << test->name << ": PC - expected 0x" << std::hex
@@ -530,7 +529,7 @@ bool run_processor_test(const processor_test_t* test) {
             
             if (!state_match) {
                 std::cout << "State mismatches detected:\n";
-                uint16_t actual_pc = harness.get_pc() - 1;
+                uint16_t actual_pc = harness.get_pc();
                 if (actual_pc != test->final.pc) {
                     std::cout << "  PC: expected 0x" << std::hex << test->final.pc
                               << ", got 0x" << actual_pc << " (diff: " << std::dec
