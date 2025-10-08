@@ -25,41 +25,41 @@ AM_INV = ("---", "invalid instruction", "ADDR_NON", ())  # Invalid instruction
 
 # Addressing mode objects for standard cases
 AM_IMM = ("IMM", "immediate", "ADDR_IMM", (
-    "c->AD = c->PC++;\nNEXT_OPCODE;",
+    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_OPCODE;",
 ))
 
 AM_ZER = ("ZP", "zero page", "ADDR_ZER", (
-    "c->AD = c->PC++;\nNEXT_CYCLE;",
-    "c->AD = c->DL;\nNEXT_OPCODE;"
+    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "ZP_READ(c->DL, R_AD);\nNEXT_OPCODE;"
 ))
 
 AM_ZPX = ("ZPX", "zero page,X", "ADDR_ZPX", (
-    "c->AD = c->PC++;\nNEXT_CYCLE;",
-    "c->AD = (c->DL + c->X) & 0xFF;\nNEXT_OPCODE;"
+    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "ZP_READ((c->DL + c->X) & 0xFF, R_AD);\nNEXT_OPCODE;"
 ))
 
 AM_ZPY = ("ZPY", "zero page,Y", "ADDR_ZPY", (
-    "c->AD = c->PC++;\nNEXT_CYCLE;",
-    "c->AD = (c->DL + c->Y) & 0xFF;\nNEXT_OPCODE;"
+    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "ZP_READ((c->DL + c->Y) & 0xFF, R_AD);\nNEXT_OPCODE;"
 ))
 
 AM_ABS = ("ABS", "absolute", "ADDR_ABS", (
-    "c->AD = c->PC++;\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nc->AD = c->PC++;\nNEXT_CYCLE;",
-    "c->ADL = c->TMP;\nc->ADH = c->DL;\nNEXT_OPCODE;"
+    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nLETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "c->ADL = c->TMP;\nc->ADH = c->DL;\nLETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
 ))
 
 AM_ABX = ("ABX", "absolute,X", "ADDR_ABX", (
-    "c->AD = c->PC++;\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nc->AD = c->PC++;\nNEXT_CYCLE;",
-    "{\n\tuint16_t sum = c->TMP + c->X;\n\tif (sum > 0xFF) {\n\t\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\t\tNEXT_OPCODE;\n\t} else {\n\t\tc->AD = sum | (c->DL << 8); NEXT_CYCLE;\n\t}\n}",
-    "NEXT_OPCODE;"
+    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nLETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "{\n\tuint16_t sum = c->TMP + c->X;\n\tif (sum > 0xFF) {\n\t\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\t\tLETS_READ(R_AD, R_DL);\n\t\tNEXT_OPCODE;\n\t} else {\n\t\tc->AD = sum | (c->DL << 8);\n\t\tLETS_READ(R_AD, R_DL);\n\t\tNEXT_CYCLE;\n\t}\n}",
+    "LETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
 ))
 
 AM_ABX_W = ("ABX", "absolute,X (write - always takes extra cycle)", "ADDR_ABX_W", (
-    "c->AD = c->PC++;\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nc->AD = c->PC++;\nNEXT_CYCLE;",
-    "{\n\tuint16_t sum = c->TMP + c->X;\n\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\tNEXT_OPCODE;\n}"
+    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nLETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "{\n\tuint16_t sum = c->TMP + c->X;\n\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\tLETS_WRITE(R_AD, R_DL);\n\tNEXT_OPCODE;\n}"
 ))
 
 AM_ABY = ("ABY", "absolute,Y", "ADDR_ABY", (
@@ -101,15 +101,15 @@ AM_IDY_W = ("IDY", "indirect indexed (zp),Y (write - always takes extra cycle)",
 
 # RMW-specific addressing modes with dummy read cycles
 AM_ZPX_RMW = ("ZPX", "zero page,X (RMW with dummy read)", "ADDR_ZPX_RMW", (
-    "c->AD = c->PC++;\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nc->AD = c->TMP;\nNEXT_CYCLE;",
-    "c->AD = (c->TMP + c->X) & 0xFF;\nNEXT_OPCODE;"
+    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nc->ADL = c->TMP;\nc->ADH = 0x00;\nLETS_READ(R_AD, R_DL);\nNEXT_CYCLE;",
+    "c->ADL = (c->TMP + c->X) & 0xFF;\nc->ADH = 0x00;\nLETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
 ))
 
 AM_ZPY_RMW = ("ZPY", "zero page,Y (RMW with dummy read)", "ADDR_ZPY_RMW", (
-    "c->AD = c->PC++;\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nc->AD = c->TMP;\nNEXT_CYCLE;",
-    "c->AD = (c->TMP + c->Y) & 0xFF;\nNEXT_OPCODE;"
+    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nc->ADL = c->TMP;\nc->ADH = 0x00;\nLETS_READ(R_AD, R_DL);\nNEXT_CYCLE;",
+    "c->ADL = (c->TMP + c->Y) & 0xFF;\nc->ADH = 0x00;\nLETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
 ))
 
 AM_ABX_RMW = ("ABX", "absolute,X (RMW with dummy read)", "ADDR_ABX_RMW", (
@@ -170,9 +170,9 @@ M_RW = 3        # read-modify-write
 
 # Simple implied mode operations using NEXT_CYCLE macros
 OP_BRK = ("BRK", M___, [
-    "if (0 == (c->brk_flags & (FAM65XX_BRK_IRQ | FAM65XX_BRK_NMI))) {\n\tc->PC++;\n}\nc->write_src = R_PCH;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nNEXT_CYCLE;",
-    "c->write_src = R_PCL;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nNEXT_CYCLE;",
-    "c->TMP = c->P | FAM65XX_BF;\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nc->P |= FAM65XX_IF;\nc->P &= ~FAM65XX_BF;\nc->brk_flags = 0;\nNEXT_CYCLE;",
+    "if (0 == (c->brk_flags & (FAM65XX_BRK_IRQ | FAM65XX_BRK_NMI))) {\n\tc->PC++;\n}\nSTACK_PUSH(R_PCH);\nNEXT_CYCLE;",
+    "STACK_PUSH(R_PCL);\nNEXT_CYCLE;",
+    "c->TMP = c->P | FAM65XX_BF;\nSTACK_PUSH(R_TMP);\nc->P |= FAM65XX_IF;\nc->P &= ~FAM65XX_BF;\nc->brk_flags = 0;\nNEXT_CYCLE;",
     "c->AD = _fam65xx_get_vector_addr(c);\nc->PCL = c->DL;\nNEXT_CYCLE;",
     "c->AD++;\nc->PCH = c->DL;\nNEXT_CYCLE;",
     "c->AD = c->PC;\nNEXT_CYCLE;",
@@ -181,55 +181,55 @@ OP_BRK = ("BRK", M___, [
 
 OP_PHP = ("PHP", M___, [
     "c->AD = c->PC;\nNEXT_CYCLE;",
-    "c->TMP = c->P | FAM65XX_BF;\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nNEXT_OPCODE;"
+    "c->TMP = c->P | FAM65XX_BF;\nSTACK_PUSH(R_TMP);\nNEXT_OPCODE;"
 ])
 
 OP_PLP = ("PLP", M___, [
-    "c->AD = 0x0100 | c->S++;\nNEXT_CYCLE;",
-    "c->AD = 0x0100 | c->S;\nc->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;\nNEXT_OPCODE;"
+    "STACK_PULL();\nNEXT_CYCLE;",
+    "STACK_PEEK();\nc->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;\nNEXT_OPCODE;"
 ])
 
 OP_PHA = ("PHA", M___, [
     "c->AD = c->PC;\nNEXT_CYCLE;",
-    "c->write_src = R_A;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nNEXT_OPCODE;"
+    "STACK_PUSH(R_A);\nNEXT_OPCODE;"
 ])
 
 OP_PLA = ("PLA", M___, [
-    "c->AD = 0x0100 | c->S++;\nNEXT_CYCLE;",
-    "c->AD = 0x0100 | c->S;\nc->A = c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"
+    "STACK_PULL();\nNEXT_CYCLE;",
+    "STACK_PEEK();\nc->A = c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"
 ])
 
 OP_RTI = ("RTI", M_R_, [
-    "c->AD = 0x0100 | c->S++;\nNEXT_CYCLE;",
-    "c->AD = 0x0100 | c->S++;\nc->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;\nNEXT_CYCLE;",
-    "c->AD = 0x0100 | c->S++;\nc->PCL = c->DL;\nNEXT_CYCLE;",
-    "c->AD = 0x0100 | c->S;\nc->PCH = c->DL;\nNEXT_OPCODE;"
+    "STACK_PULL();\nNEXT_CYCLE;",
+    "STACK_PULL();\nc->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;\nNEXT_CYCLE;",
+    "STACK_PULL();\nc->PCL = c->DL;\nNEXT_CYCLE;",
+    "STACK_PEEK();\nc->PCH = c->DL;\nNEXT_OPCODE;"
 ])
 
 OP_RTS = ("RTS", M_R_, [
-    "c->AD = 0x0100 | c->S++;\nNEXT_CYCLE;",
-    "c->AD = 0x0100 | c->S++;\nc->PCL = c->DL;\nNEXT_CYCLE;",
-    "c->AD = 0x0100 | c->S;\nc->PCH = c->DL;\nNEXT_OPCODE;"
+    "STACK_PULL();\nNEXT_CYCLE;",
+    "STACK_PULL();\nc->PCL = c->DL;\nNEXT_CYCLE;",
+    "STACK_PEEK();\nc->PCH = c->DL;\nNEXT_OPCODE;"
 ])
 
 OP_JSR = ("JSR", M_R_, [
-    "c->TMP = c->DL;\nc->AD = c->PC++;\nNEXT_CYCLE;",
-    "c->AD = 0x0100 | c->S;\nNEXT_CYCLE;",
-    "c->write_src = R_PCH;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nNEXT_CYCLE;",
-    "c->write_src = R_PCL;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nNEXT_CYCLE;",
-    "c->AD = c->PC;\nc->PCH = c->DL;\nc->PC = (c->DL << 8) | c->TMP;\nNEXT_OPCODE;"
+    "c->TMP = c->DL;\nLETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "STACK_PEEK();\nNEXT_CYCLE;",
+    "STACK_PUSH(R_PCH);\nNEXT_CYCLE;",
+    "STACK_PUSH(R_PCL);\nNEXT_CYCLE;",
+    "LETS_READ(R_PC, R_DL);\nc->PCH = c->DL;\nc->PC = (c->DL << 8) | c->TMP;\nNEXT_OPCODE;"
 ])
 
 OP_JMP = ("JMP", M_R_, [
-    "c->TMP = c->DL;\nc->AD = c->PC++;\nNEXT_CYCLE;",
-    "c->AD = c->PC++;\nc->PCH = c->DL;\nc->PC = (c->DL << 8) | c->TMP;\nNEXT_OPCODE;"
+    "c->TMP = c->DL;\nLETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "LETS_READ(R_PC, R_DL);\nc->PC++;\nc->PCH = c->DL;\nc->PC = (c->DL << 8) | c->TMP;\nNEXT_OPCODE;"
 ])
 
 OP_JMP_I = ("JMP", M_R_, [
-    "c->TMP = c->DL;\nc->AD = c->PC++;\nNEXT_CYCLE;",
-    "c->AD = c->PC++;\nc->TMP = c->DL;\nc->AD = (c->DL << 8) | c->TMP;\nNEXT_CYCLE;",
-    "c->AD = c->AD;\nc->PCL = c->DL;\nNEXT_CYCLE;",
-    "c->AD = (c->AD & 0xFF00) | ((c->AD + 1) & 0xFF);\nc->PCH = c->DL;\nNEXT_OPCODE;"
+    "c->TMP = c->DL;\nLETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "LETS_READ(R_PC, R_DL);\nc->PC++;\nc->TMP = c->DL;\nLETS_READ(R_AD, R_DL);\nNEXT_CYCLE;",
+    "LETS_READ(R_AD, R_DL);\nc->PCL = c->DL;\nNEXT_CYCLE;",
+    "c->AD = (c->AD & 0xFF00) | ((c->AD + 1) & 0xFF);\nLETS_READ(R_AD, R_DL);\nc->PCH = c->DL;\nNEXT_OPCODE;"
 ])
 
 # Register transfer operations using NEXT_OPCODE macro
@@ -313,36 +313,37 @@ OP_SBC = ("SBC", M_R_, ["_fam65xx_sbc(c, c->DL);\nNEXT_OPCODE;"])
 OP_CMP = ("CMP", M_R_, ["_fam65xx_cmp(c, c->A, c->DL);\nNEXT_OPCODE;"])
 OP_BIT = ("BIT", M_R_, ["_fam65xx_bit(c, c->DL);\nNEXT_OPCODE;"])
 
-# Immediate mode variants using NEXT_CYCLE and NEXT_OPCODE macros
-OP_ORA_IMM = ("ORA", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->A |= c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
-OP_AND_IMM = ("AND", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->A &= c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
-OP_EOR_IMM = ("EOR", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->A ^= c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
-OP_ADC_IMM = ("ADC", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\n_fam65xx_adc(c, c->DL);\nNEXT_OPCODE;"])
-OP_SBC_IMM = ("SBC", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\n_fam65xx_sbc(c, c->DL);\nNEXT_OPCODE;"])
-OP_CMP_IMM = ("CMP", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\n_fam65xx_cmp(c, c->A, c->DL);\nNEXT_OPCODE;"])
+# Immediate mode variants using LETS_READ macro
+OP_ORA_IMM = ("ORA", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->A |= c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_AND_IMM = ("AND", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->A &= c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_EOR_IMM = ("EOR", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->A ^= c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_ADC_IMM = ("ADC", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\n_fam65xx_adc(c, c->DL);\nNEXT_OPCODE;"])
+OP_SBC_IMM = ("SBC", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\n_fam65xx_sbc(c, c->DL);\nNEXT_OPCODE;"])
+OP_CMP_IMM = ("CMP", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\n_fam65xx_cmp(c, c->A, c->DL);\nNEXT_OPCODE;"])
 
 # Load operations using NEXT_OPCODE macro
 OP_LDA = ("LDA", M_R_, ["c->A = c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
 OP_LDX = ("LDX", M_R_, ["c->X = c->DL;\n_NZ(c->X);\nNEXT_OPCODE;"])
 OP_LDY = ("LDY", M_R_, ["c->Y = c->DL;\n_NZ(c->Y);\nNEXT_OPCODE;"])
 
-# Immediate load operations using NEXT_CYCLE and NEXT_OPCODE macros
-OP_LDA_IMM = ("LDA", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->A = c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
-OP_LDX_IMM = ("LDX", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->X = c->DL;\n_NZ(c->X);\nNEXT_OPCODE;"])
-OP_LDY_IMM = ("LDY", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->Y = c->DL;\n_NZ(c->Y);\nNEXT_OPCODE;"])
+# Immediate load operations using LETS_READ macro
+OP_LDA_IMM = ("LDA", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->A = c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_LDX_IMM = ("LDX", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->X = c->DL;\n_NZ(c->X);\nNEXT_OPCODE;"])
+OP_LDY_IMM = ("LDY", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->Y = c->DL;\n_NZ(c->Y);\nNEXT_OPCODE;"])
 
-# Store operations using NEXT_OPCODE macro
-OP_STA = ("STA", M__W, ["c->write_src = R_A;\npins &= ~FAM65XX_RW;\nNEXT_OPCODE;"])
-OP_STX = ("STX", M__W, ["c->write_src = R_X;\npins &= ~FAM65XX_RW;\nNEXT_OPCODE;"])
-OP_STY = ("STY", M__W, ["c->write_src = R_Y;\npins &= ~FAM65XX_RW;\nNEXT_OPCODE;"])
+# Store operations using memory access coordination through addressing modes
+# The addressing mode sets up c->AD and c->adr_idx, store operations just specify data register
+OP_STA = ("STA", M__W, ["STORE_WRITE(R_A);\nNEXT_OPCODE;"])
+OP_STX = ("STX", M__W, ["STORE_WRITE(R_X);\nNEXT_OPCODE;"])
+OP_STY = ("STY", M__W, ["STORE_WRITE(R_Y);\nNEXT_OPCODE;"])
 
 # Compare operations using NEXT_OPCODE macro
 OP_CPX = ("CPX", M_R_, ["_fam65xx_cmp(c, c->X, c->DL);\nNEXT_OPCODE;"])
 OP_CPY = ("CPY", M_R_, ["_fam65xx_cmp(c, c->Y, c->DL);\nNEXT_OPCODE;"])
 
-# Immediate compare operations using NEXT_CYCLE and NEXT_OPCODE macros
-OP_CPX_IMM = ("CPX", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\n_fam65xx_cmp(c, c->X, c->DL);\nNEXT_OPCODE;"])
-OP_CPY_IMM = ("CPY", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\n_fam65xx_cmp(c, c->Y, c->DL);\nNEXT_OPCODE;"])
+# Immediate compare operations using LETS_READ macro
+OP_CPX_IMM = ("CPX", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\n_fam65xx_cmp(c, c->X, c->DL);\nNEXT_OPCODE;"])
+OP_CPY_IMM = ("CPY", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\n_fam65xx_cmp(c, c->Y, c->DL);\nNEXT_OPCODE;"])
 
 # RMW operations - have two variants (accumulator vs memory)
 OP_ASL_A = ("ASL", M___, [
@@ -351,8 +352,8 @@ OP_ASL_A = ("ASL", M___, [
 ])
 
 OP_ASL_M = ("ASL", M_RW, [
-    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = _fam65xx_asl(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
+    "c->TMP = _fam65xx_asl(c, c->DL);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
 
@@ -362,8 +363,8 @@ OP_LSR_A = ("LSR", M___, [
 ])
 
 OP_LSR_M = ("LSR", M_RW, [
-    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = _fam65xx_lsr(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
+    "c->TMP = _fam65xx_lsr(c, c->DL);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
 
@@ -373,8 +374,8 @@ OP_ROL_A = ("ROL", M___, [
 ])
 
 OP_ROL_M = ("ROL", M_RW, [
-    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = _fam65xx_rol(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
+    "c->TMP = _fam65xx_rol(c, c->DL);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
 
@@ -384,26 +385,26 @@ OP_ROR_A = ("ROR", M___, [
 ])
 
 OP_ROR_M = ("ROR", M_RW, [
-    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = _fam65xx_ror(c, c->DL);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
+    "c->TMP = _fam65xx_ror(c, c->DL);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
 
 OP_INC = ("INC", M_RW, [
-    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = c->DL + 1;\n_NZ(c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
+    "c->TMP = c->DL + 1;\n_NZ(c->TMP);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
 
 OP_DEC = ("DEC", M_RW, [
-    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = c->DL - 1;\n_NZ(c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
+    "c->TMP = c->DL - 1;\n_NZ(c->TMP);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
 
 # NOP variants
 OP_NOP_I = ("NOP", M___, [
-    "c->AD = c->PC;\nNEXT_CYCLE;",
+    "LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
 
@@ -411,41 +412,41 @@ OP_NOP_R = ("NOP", M_R_, ["NEXT_OPCODE;"])
 
 # Illegal/undocumented instructions using NEXT_OPCODE macro
 OP_LAX = ("LAX", M_R_, ["c->A = c->X = c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
-OP_SAX = ("SAX", M__W, ["c->TMP = c->A & c->X;\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_OPCODE;"])
+OP_SAX = ("SAX", M__W, ["c->TMP = c->A & c->X;\nSTORE_WRITE(R_TMP);\nNEXT_OPCODE;"])
 
 OP_SLO = ("SLO", M_RW, [
-    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = _fam65xx_asl(c, c->DL);\nc->A |= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
+    "c->TMP = _fam65xx_asl(c, c->DL);\nc->A |= c->TMP;\n_NZ(c->A);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
 
 OP_RLA = ("RLA", M_RW, [
-    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = _fam65xx_rol(c, c->DL);\nc->A &= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
+    "c->TMP = _fam65xx_rol(c, c->DL);\nc->A &= c->TMP;\n_NZ(c->A);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
 
 OP_SRE = ("SRE", M_RW, [
-    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = _fam65xx_lsr(c, c->DL);\nc->A ^= c->TMP;\n_NZ(c->A);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
+    "c->TMP = _fam65xx_lsr(c, c->DL);\nc->A ^= c->TMP;\n_NZ(c->A);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
 
 OP_RRA = ("RRA", M_RW, [
-    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = _fam65xx_ror(c, c->DL);\n_fam65xx_adc(c, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
+    "c->TMP = _fam65xx_ror(c, c->DL);\n_fam65xx_adc(c, c->TMP);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
 
 OP_DCP = ("DCP", M_RW, [
-    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = c->DL - 1;\n_fam65xx_cmp(c, c->A, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
+    "c->TMP = c->DL - 1;\n_fam65xx_cmp(c, c->A, c->TMP);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
 
 OP_ISC = ("ISC", M_RW, [
-    "c->write_src = R_DL;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",  # Dummy write
-    "c->TMP = c->DL + 1;\n_fam65xx_sbc(c, c->TMP);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_CYCLE;",
+    "RMW_WRITE(R_DL);\nNEXT_CYCLE;",  # Dummy write
+    "c->TMP = c->DL + 1;\n_fam65xx_sbc(c, c->TMP);\nRMW_WRITE(R_TMP);\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
 
@@ -455,17 +456,17 @@ OP_ARR = ("ARR", M_R_, ["c->A = (c->A & c->DL) >> 1 | (c->P & FAM65XX_CF ? 0x80 
 OP_XAA = ("XAA", M_R_, ["c->A = (c->A | 0xEE) & c->X & c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
 OP_SBX = ("SBX", M_R_, ["c->TMP = (c->A & c->X) - c->DL;\nc->X = c->TMP;\n_NZ(c->X);\nc->P = (c->P & ~FAM65XX_CF) | ((c->TMP & 0x100) ? 0 : FAM65XX_CF);\nNEXT_OPCODE;"])
 
-# Immediate mode illegal operations using NEXT_CYCLE and NEXT_OPCODE macros
-OP_ANC_IMM = ("ANC", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->A &= c->DL;\n_NZ(c->A);\nc->P = (c->P & ~FAM65XX_CF) | ((c->A & 0x80) ? FAM65XX_CF : 0);\nNEXT_OPCODE;"])
-OP_ASR_IMM = ("ASR", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->A &= c->DL;\nc->P = (c->P & ~FAM65XX_CF) | (c->A & 1);\nc->A>>=1;\n_NZ(c->A);\nNEXT_OPCODE;"])
-OP_ARR_IMM = ("ARR", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->A = (c->A & c->DL) >> 1 | (c->P & FAM65XX_CF ? 0x80 : 0);\n_NZ(c->A);\nc->P = (c->P & ~(FAM65XX_CF | FAM65XX_VF)) | ((c->A & 0x40) ? FAM65XX_CF : 0) | ((c->A & 0x20) ^ (c->A & 0x40) ? FAM65XX_VF : 0);\nNEXT_OPCODE;"])
-OP_XAA_IMM = ("XAA", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->A = (c->A | 0xEE) & c->X & c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
-OP_SBX_IMM = ("SBX", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->TMP = (c->A & c->X) - c->DL;\nc->X = c->TMP;\n_NZ(c->X);\nc->P = (c->P & ~FAM65XX_CF) | ((c->TMP & 0x100) ? 0 : FAM65XX_CF);\nNEXT_OPCODE;"])
-OP_LAX_IMM = ("LAX", M_R_, ["c->AD = c->PC;\nNEXT_CYCLE;", "c->PC++;\nc->A = c->X = c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
-OP_SHY = ("SHY", M__W, ["c->TMP = c->Y & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_OPCODE;"])
-OP_SHX = ("SHX", M__W, ["c->TMP = c->X & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_OPCODE;"])
-OP_SHA = ("SHA", M_RW, ["c->TMP = c->A & c->X & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_OPCODE;"])
-OP_SHS = ("SHS", M__W, ["c->S = c->A & c->X;\nc->TMP = c->S & ((c->AD >> 8) + 1);\nc->write_src = R_TMP;\npins &= ~FAM65XX_RW;\nNEXT_OPCODE;"])
+# Immediate mode illegal operations using LETS_READ macro
+OP_ANC_IMM = ("ANC", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->A &= c->DL;\n_NZ(c->A);\nc->P = (c->P & ~FAM65XX_CF) | ((c->A & 0x80) ? FAM65XX_CF : 0);\nNEXT_OPCODE;"])
+OP_ASR_IMM = ("ASR", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->A &= c->DL;\nc->P = (c->P & ~FAM65XX_CF) | (c->A & 1);\nc->A>>=1;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_ARR_IMM = ("ARR", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->A = (c->A & c->DL) >> 1 | (c->P & FAM65XX_CF ? 0x80 : 0);\n_NZ(c->A);\nc->P = (c->P & ~(FAM65XX_CF | FAM65XX_VF)) | ((c->A & 0x40) ? FAM65XX_CF : 0) | ((c->A & 0x20) ^ (c->A & 0x40) ? FAM65XX_VF : 0);\nNEXT_OPCODE;"])
+OP_XAA_IMM = ("XAA", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->A = (c->A | 0xEE) & c->X & c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_SBX_IMM = ("SBX", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->TMP = (c->A & c->X) - c->DL;\nc->X = c->TMP;\n_NZ(c->X);\nc->P = (c->P & ~FAM65XX_CF) | ((c->TMP & 0x100) ? 0 : FAM65XX_CF);\nNEXT_OPCODE;"])
+OP_LAX_IMM = ("LAX", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->A = c->X = c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_SHY = ("SHY", M__W, ["c->TMP = c->Y & ((c->AD >> 8) + 1);\nSTORE_WRITE(R_TMP);\nNEXT_OPCODE;"])
+OP_SHX = ("SHX", M__W, ["c->TMP = c->X & ((c->AD >> 8) + 1);\nSTORE_WRITE(R_TMP);\nNEXT_OPCODE;"])
+OP_SHA = ("SHA", M_RW, ["c->TMP = c->A & c->X & ((c->AD >> 8) + 1);\nSTORE_WRITE(R_TMP);\nNEXT_OPCODE;"])
+OP_SHS = ("SHS", M__W, ["c->S = c->A & c->X;\nc->TMP = c->S & ((c->AD >> 8) + 1);\nSTORE_WRITE(R_TMP);\nNEXT_OPCODE;"])
 OP_LAS = ("LAS", M_R_, ["c->A = c->X = c->S = c->S & c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
 
 OP_JAM = ("JAM", M_R_, [
@@ -476,13 +477,13 @@ OP_JAM = ("JAM", M_R_, [
 # Example of new macro-based definitions for improved readability
 OP_PHA_MACRO = ("PHA", M___, [
     "c->AD = c->PC;\nNEXT_CYCLE;",
-    "c->write_src = R_A;\npins &= ~FAM65XX_RW;\nc->AD = 0x0100 | c->S--;\nNEXT_CYCLE;",
+    "STACK_PUSH(R_A);\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
 
 OP_PLA_MACRO = ("PLA", M___, [
-    "c->AD = 0x0100 | c->S++;\nNEXT_CYCLE;",
-    "c->AD = 0x0100 | c->S;\nc->A = c->DL;\n_NZ(c->A);\nNEXT_CYCLE;",
+    "STACK_PULL();\nNEXT_CYCLE;",
+    "STACK_PEEK();\nc->A = c->DL;\n_NZ(c->A);\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
 
