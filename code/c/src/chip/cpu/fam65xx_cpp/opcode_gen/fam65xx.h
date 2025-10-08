@@ -92,23 +92,23 @@ enum {
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
     R_PCL,       // Program counter (low byte, even index for little endian)
     R_PCH,       // Program counter (high byte)
-    R_S,         // Stack pointer (low byte)
-    R_SH,        // Stack pointer (high byte, always 0x01 for 6502/6510)
+    R_SPL,       // Stack pointer (low byte) - full 16-bit stack register
+    R_SPH,       // Stack pointer (high byte) - always 0x01 for 6502/6510
     R_ADL,       // Address (low byte, even index for little endian)
     R_ADH,       // Address (high byte)
-    R_ZP,        // Zero page (low byte)
-    R_ZPH,       // Zero page (high byte, always 0x00 for 6502/6510)
+    R_ZPL,       // Zero page (low byte) - full 16-bit zero page register
+    R_ZPH,       // Zero page (high byte) - always 0x00 for 6502/6510
 #else
     R_PCH,       // Program counter (high byte, even index for big endian)
     R_PCL,       // Program counter (low byte)
-    R_SH,        // Stack pointer (high byte, always 0x01 for 6502/6510)
-    R_S,         // Stack pointer (low byte)
+    R_SPH,       // Stack pointer (high byte) - always 0x01 for 6502/6510
+    R_SPL,       // Stack pointer (low byte) - full 16-bit stack register
     R_ADH,       // Address (high byte, even index for big endian)
     R_ADL,       // Address (low byte)
-    R_ZPH,       // Zero page (high byte, always 0x00 for 6502/6510)
-    R_ZP,        // Zero page (low byte)
+    R_ZPH,       // Zero page (high byte) - always 0x00 for 6502/6510
+    R_ZPL,       // Zero page (low byte) - full 16-bit zero page register
 #endif
-    // Public registers
+    // Public registers (maintain compatibility)
     R_A,         // Accumulator
     R_X,         // X index
     R_Y,         // Y index
@@ -116,46 +116,60 @@ enum {
     // Internal registers
     R_IR,        // Instruction register
     R_DL,        // Data latch
-    R_TMP,       // Temporary storage
+    R_TMP        // Temporary storage (no comma for last element)
 };
+
+// Compatibility mapping for 8-bit stack pointer
+#define R_S R_SPL  // Map legacy S register to SPL for compatibility
 
 // 16-bit register indices (native endian compatible)
 enum {
-    R_PC = R_PCL / 2,    // Ptrogram counter (16 bits)
-    R_SP = R_S / 2,      // Stack pointer (16 bits
+    R_PC = R_PCL / 2,    // Program counter (16 bits)
+    R_SP16 = R_SPL / 2,  // Stack pointer (16 bits) - full stack register
     R_AD = R_ADL / 2,    // Address (16 bits)
-    R_ZP16 = R_ZP / 2,   // Zero page (16 bits)
+    R_ZP16 = R_ZPL / 2,  // Zero page (16 bits) - full zero page register
 };
 
 // CPU state
 typedef struct {
     union {
-        uint8_t r8[16];  // 8-bit register array
-        uint16_t r16[8]; // 16-bit overlay (native endian)
-    };    
+        uint8_t r8[16];   // 8-bit register array (reduced, removed MEL/MEH)
+        uint16_t r16[8];  // 16-bit overlay (native endian)
+    };
 
-// Accessors (c-> required before use)
+// Accessors (c-> required before use) - enhanced for 16-bit memory registers
 
-// Public registers
-// Accessors (c-> required before use) - now endian-compatible
-#define PC     r16[R_PC]  // Program counter (16 bit)
-#define PCL    r8[R_PCL]  // Program counter low
-#define PCH    r8[R_PCH]  // Program counter high
-#define A      r8[R_A]    // Accumulator register
-#define X      r8[R_X]    // X index register
-#define Y      r8[R_Y]    // Y index register
-#define S      r8[R_S]    // Stack pointer
-#define P      r8[R_P]    // Processor status
+// Public registers (maintain compatibility)
+#define PC     r16[R_PC]   // Program counter (16 bit)
+#define PCL    r8[R_PCL]   // Program counter low
+#define PCH    r8[R_PCH]   // Program counter high
+#define A      r8[R_A]     // Accumulator register
+#define X      r8[R_X]     // X index register
+#define Y      r8[R_Y]     // Y index register
+#define S      r8[R_SPL]   // Stack pointer (8-bit compatibility, maps to SPL)
+#define P      r8[R_P]     // Processor status
+
+// Enhanced 16-bit memory address registers
+#define SP     r16[R_SP16] // Stack pointer (full 16-bit with high=0x01)
+#define SPL    r8[R_SPL]   // Stack pointer low
+#define SPH    r8[R_SPH]   // Stack pointer high (always 0x01)
+#define ZP     r16[R_ZP16] // Zero page register (full 16-bit with high=0x00)
+#define ZPL    r8[R_ZPL]   // Zero page low
+#define ZPH    r8[R_ZPH]   // Zero page high (always 0x00)
+
+// Legacy registers (maintain compatibility)
+#define AD     r16[R_AD]   // Address data (16 bit)
+#define ADL    r8[R_ADL]   // Address data low
+#define ADH    r8[R_ADH]   // Address data high
+
 // Internal registers
-#define opcode r8[R_IR]   // Current opcode
-#define DL     r8[R_DL]   // Data latch
-#define TMP    r8[R_TMP]  // Temporary storage
-#define AD     r16[R_AD]  // Address data (16 bit)
-#define ADL    r8[R_ADL]  // Address data low
-#define ADH    r8[R_ADH]  // Address data high
+#define opcode r8[R_IR]    // Current opcode
+#define DL     r8[R_DL]    // Data latch
+#define TMP    r8[R_TMP]   // Temporary storage
     // Cycle decoder state
     uint16_t CI;          // Current cycle index
-    uint8_t write_src;    // Source register index for writes
+    uint8_t reg_idx;      // Register index for memory accesses
+    uint8_t adr_idx;      // 16-bit address register index (0=PC, 1=SP, 2=AD, 3=ZP, 4=ME)
 
     // Memory callbacks
     fam65xx_mem_read_t mem_read;
@@ -228,7 +242,83 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
 // INTERNAL MACROS
 //=============================================================================
 
-// Address setup helper for unified memory access pattern
+// Enhanced memory access macros for optimized register allocation
+// These macros enable direct use of 16-bit memory address registers,
+// eliminating the need for address arithmetic and improving code generation
+
+// LETS_READ: Setup memory read operation with backward compatible default
+// Uses R_AD by default for compatibility, but sets adr_idx for optimization
+#define LETS_READ(reg_idx_param, data_reg) do { \
+    c->adr_idx = reg_idx_param; \
+    c->AD = c->r16[reg_idx_param]; \
+    c->reg_idx = data_reg; \
+} while(0)
+
+// LETS_WRITE: Setup memory write operation with backward compatible default
+// Uses R_AD by default for compatibility, but sets adr_idx for optimization
+#define LETS_WRITE(reg_idx_param, data_reg) do { \
+    c->adr_idx = reg_idx_param; \
+    c->AD = c->r16[reg_idx_param]; \
+    c->reg_idx = data_reg; \
+    pins &= ~FAM65XX_RW; \
+} while(0)
+
+// Stack operation helpers using dedicated SP register
+#define STACK_PUSH(data_reg) do { \
+    c->adr_idx = R_SP16; \
+    c->reg_idx = data_reg; \
+    pins &= ~FAM65XX_RW; \
+    c->AD = c->SP--; /* Use full 16-bit SP register, auto-decrement */ \
+} while(0)
+
+#define STACK_PULL() do { \
+    c->adr_idx = R_SP16; \
+    c->AD = ++c->SP; /* Pre-increment SP, then use for address */ \
+} while(0)
+
+#define STACK_PEEK() do { \
+    c->adr_idx = R_SP16; \
+    c->AD = c->SP; /* Use current SP for address without changing it */ \
+} while(0)
+
+// Zero page operation helpers using dedicated ZP register
+#define ZP_READ(offset, data_reg) do { \
+    c->adr_idx = R_ZP16; \
+    c->ZPL = offset; /* Set low byte, high is always 0x00 */ \
+    c->AD = c->ZP; \
+    c->reg_idx = data_reg; \
+} while(0)
+
+#define ZP_WRITE(offset, data_reg) do { \
+    c->adr_idx = R_ZP16; \
+    c->ZPL = offset; /* Set low byte, high is always 0x00 */ \
+    c->AD = c->ZP; \
+    c->reg_idx = data_reg; \
+    pins &= ~FAM65XX_RW; \
+} while(0)
+
+// RMW operation helpers using address set up by addressing modes
+#define RMW_READ() do { \
+    /* Address already set up by addressing mode in c->AD */ \
+    /* c->adr_idx already set by addressing mode */ \
+} while(0)
+
+#define RMW_WRITE(data_reg) do { \
+    /* Address already set up by addressing mode in c->AD */ \
+    /* c->adr_idx already set by addressing mode */ \
+    c->reg_idx = data_reg; \
+    pins &= ~FAM65XX_RW; \
+} while(0)
+
+// Store operation helper using address set up by addressing modes
+#define STORE_WRITE(data_reg) do { \
+    /* Address already set up by addressing mode in c->AD */ \
+    /* c->adr_idx already set by addressing mode */ \
+    c->reg_idx = data_reg; \
+    pins &= ~FAM65XX_RW; \
+} while(0)
+
+// Legacy address setup helper (maintained for compatibility)
 #define SET_ADDR(pins, addr) do { \
     /* Address bits would be set on external address bus in real hardware */ \
     /* For emulation, address is passed directly to memory callbacks */ \
@@ -469,13 +559,13 @@ uint64_t fam65xx_init(fam65xx_t* c, const fam65xx_desc_t* desc) {
     c->io_drive = 0;
     c->io_pins = desc->m6510_io_pullup;
 
-    // Set initial register state
-    c->r8[R_SH] = 0x01;   // Stack pointer (high byte, always 0x01 for 6502/6510)
-    c->r8[R_ZPH] = 0x00;  // Zero page (high byte, always 0x00 for 6502/6510)
+    // Set initial register state for 16-bit memory registers
+    c->r8[R_SPH] = 0x01;   // Stack pointer high byte (always 0x01 for 6502/6510)
+    c->r8[R_ZPH] = 0x00;   // Zero page high byte (always 0x00 for 6502/6510)
 
     // ProcessorTests compatibility: Initialize to fetch first instruction
     c->P = FAM65XX_XF;  // Only set unused flag
-    c->S = 0xFF;        // Stack pointer at top
+    c->SPL = 0xFF;      // Stack pointer low byte at top
     c->PC = 0x0000;     // Will be set by test harness
     
     // Clear all interrupt/BRK state
@@ -486,6 +576,7 @@ uint64_t fam65xx_init(fam65xx_t* c, const fam65xx_desc_t* desc) {
     // Initialize for immediate instruction fetch
     c->CI = 0xFFFF;     // Invalid CI to force proper initialization
     c->AD = 0x0000;     // Will point to PC during first fetch
+    c->adr_idx = R_PC;  // Initialize to PC register for instruction fetch
     
     uint64_t pins = FAM65XX_RDY;  // Ready, but no SYNC yet
     
@@ -504,6 +595,7 @@ uint64_t fam65xx_bootstrap(fam65xx_t* c, uint64_t pins) {
         pins |= FAM65XX_SYNC;  // Set SYNC for instruction fetch
         c->CI = 0x0000;        // Clear the invalid marker
         // Set up first instruction fetch with PC increment
+        c->adr_idx = R_PC;
         c->AD = c->PC++;
     }
     
@@ -531,6 +623,7 @@ uint64_t fam65xx_tick(fam65xx_t* c, uint64_t pins) {
     }
     
     // Memory access happens FIRST (hardware-accurate)
+    // For now, keep using AD for compatibility while adding adr_idx optimization
     SET_ADDR(pins, c->AD);
     if (pins & FAM65XX_RW) {
         // Read operation - perform memory read
@@ -538,7 +631,7 @@ uint64_t fam65xx_tick(fam65xx_t* c, uint64_t pins) {
         c->DL = c->mem_read(c->user_data, c->AD, pins_data);
     } else {
         // Write operation - perform memory write
-        c->mem_write(c->user_data, c->AD, c->r8[c->write_src]);
+        c->mem_write(c->user_data, c->AD, c->r8[c->reg_idx]);
         // Automatically raise RW pin after write completes - test runner can infer write from mem_write call
         pins |= FAM65XX_RW;
     }
