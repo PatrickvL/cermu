@@ -25,58 +25,58 @@ AM_INV = ("---", "invalid instruction", "ADDR_NON", ())  # Invalid instruction
 
 # Addressing mode objects for standard cases
 AM_IMM = ("IMM", "immediate", "ADDR_IMM", (
-    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_OPCODE;",
+    "FETCH(R_DL);\nNEXT_OPCODE;",
 ))
 
 AM_ZER = ("ZP", "zero page", "ADDR_ZER", (
-    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "FETCH(R_DL);\nNEXT_CYCLE;",
     "ZP_READ(c->DL, R_DL);\nNEXT_OPCODE;"
 ))
 
 AM_ZPX = ("ZPX", "zero page,X", "ADDR_ZPX", (
-    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "FETCH(R_DL);\nNEXT_CYCLE;",
     "ZP_READ((c->DL + c->X) & 0xFF, R_DL);\nNEXT_OPCODE;"
 ))
 
 AM_ZPY = ("ZPY", "zero page,Y", "ADDR_ZPY", (
-    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "FETCH(R_DL);\nNEXT_CYCLE;",
     "ZP_READ((c->DL + c->Y) & 0xFF, R_DL);\nNEXT_OPCODE;"
 ))
 
 AM_ABS = ("ABS", "absolute", "ADDR_ABS", (
-    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nLETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "FETCH(R_DL);\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nFETCH(R_DL);\nNEXT_CYCLE;",
     "c->ADL = c->TMP;\nc->ADH = c->DL;\nLETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
 ))
 
 AM_ABX = ("ABX", "absolute,X", "ADDR_ABX", (
-    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nLETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "FETCH(R_DL);\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nFETCH(R_DL);\nNEXT_CYCLE;",
     "{\n\tuint16_t sum = c->TMP + c->X;\n\tif (sum > 0xFF) {\n\t\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\t\tLETS_READ(R_AD, R_DL);\n\t\tNEXT_OPCODE;\n\t} else {\n\t\tc->AD = sum | (c->DL << 8);\n\t\tLETS_READ(R_AD, R_DL);\n\t\tNEXT_CYCLE;\n\t}\n}",
     "LETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
 ))
 
 AM_ABX_W = ("ABX", "absolute,X (write - always takes extra cycle)", "ADDR_ABX_W", (
-    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nLETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "FETCH(R_DL);\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nFETCH(R_DL);\nNEXT_CYCLE;",
     "{\n\tuint16_t sum = c->TMP + c->X;\n\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\tLETS_WRITE(R_AD, R_DL);\n\tNEXT_OPCODE;\n}"
 ))
 
 AM_ABY = ("ABY", "absolute,Y", "ADDR_ABY", (
-    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nLETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "FETCH(R_DL);\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nFETCH(R_DL);\nNEXT_CYCLE;",
     "{\n\tuint16_t sum = c->TMP + c->Y;\n\tif (sum > 0xFF) {\n\t\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\t\tLETS_READ(R_AD, R_DL);\n\t\tNEXT_OPCODE;\n\t} else {\n\t\tc->AD = sum | (c->DL << 8);\n\t\tLETS_READ(R_AD, R_DL);\n\t\tNEXT_CYCLE;\n\t}\n}",
     "LETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
 ))
 
 AM_ABY_W = ("ABY", "absolute,Y (write - always takes extra cycle)", "ADDR_ABY_W", (
-    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nLETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "FETCH(R_DL);\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nFETCH(R_DL);\nNEXT_CYCLE;",
     "{\n\tuint16_t sum = c->TMP + c->Y;\n\tc->AD = (sum & 0xFF) | (((c->DL + (sum >> 8)) & 0xFF) << 8);\n\tLETS_WRITE(R_AD, R_DL);\n\tNEXT_OPCODE;\n}"
 ))
 
 AM_IDX = ("IDX", "indexed indirect (zp,X)", "ADDR_IDX", (
-    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "FETCH(R_DL);\nNEXT_CYCLE;",
     "c->TMP = c->DL;\nLETS_READ(R_ZP16, R_DL);\nc->ZPL = c->TMP;\nNEXT_CYCLE;",
     "c->ZPL = (c->TMP + c->X) & 0xFF;\nLETS_READ(R_ZP16, R_DL);\nNEXT_CYCLE;",
     "c->TMP = c->DL;\nc->ZPL = (c->ZPL + 1) & 0xFF;\nLETS_READ(R_ZP16, R_DL);\nNEXT_CYCLE;",
@@ -84,7 +84,7 @@ AM_IDX = ("IDX", "indexed indirect (zp,X)", "ADDR_IDX", (
 ))
 
 AM_IDY = ("IDY", "indirect indexed (zp),Y", "ADDR_IDY", (
-    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "FETCH(R_DL);\nNEXT_CYCLE;",
     "c->TMP = c->DL;\nc->ZPL = (c->DL + 1) & 0xFF;\nLETS_READ(R_ZP16, R_DL);\nNEXT_CYCLE;",
     "c->AD = c->TMP | (c->DL << 8);\nif ((c->AD >> 8) != ((c->AD + c->Y) >> 8)) {\n\tLETS_READ(R_AD, R_DL);\n\tNEXT_CYCLE;\n} else {\n\tc->AD += c->Y;\n\tLETS_READ(R_AD, R_DL);\n\tNEXT_CYCLE;\n}",
     "c->AD += c->Y;\nLETS_READ(R_AD, R_DL);\nNEXT_CYCLE;",
@@ -92,7 +92,7 @@ AM_IDY = ("IDY", "indirect indexed (zp),Y", "ADDR_IDY", (
 ))
 
 AM_IDY_W = ("IDY", "indirect indexed (zp),Y (write - always takes extra cycle)", "ADDR_IDY_W", (
-    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "FETCH(R_DL);\nNEXT_CYCLE;",
     "c->TMP = c->DL;\nc->ZPL = (c->DL + 1) & 0xFF;\nLETS_READ(R_ZP16, R_DL);\nNEXT_CYCLE;",
     "c->AD = c->TMP | (c->DL << 8);\nNEXT_CYCLE;",
     "c->AD += c->Y;\nLETS_WRITE(R_AD, R_DL);\nNEXT_CYCLE;",
@@ -101,33 +101,33 @@ AM_IDY_W = ("IDY", "indirect indexed (zp),Y (write - always takes extra cycle)",
 
 # RMW-specific addressing modes with dummy read cycles
 AM_ZPX_RMW = ("ZPX", "zero page,X (RMW with dummy read)", "ADDR_ZPX_RMW", (
-    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "FETCH(R_DL);\nNEXT_CYCLE;",
     "c->TMP = c->DL;\nc->ADL = c->TMP;\nc->ADH = 0x00;\nDUMMY_READ(R_AD);\nNEXT_CYCLE;",
     "c->ADL = (c->TMP + c->X) & 0xFF;\nc->ADH = 0x00;\nLETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
 ))
 
 AM_ZPY_RMW = ("ZPY", "zero page,Y (RMW with dummy read)", "ADDR_ZPY_RMW", (
-    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "FETCH(R_DL);\nNEXT_CYCLE;",
     "c->TMP = c->DL;\nc->ADL = c->TMP;\nc->ADH = 0x00;\nDUMMY_READ(R_AD);\nNEXT_CYCLE;",
     "c->ADL = (c->TMP + c->Y) & 0xFF;\nc->ADH = 0x00;\nLETS_READ(R_AD, R_DL);\nNEXT_OPCODE;"
 ))
 
 AM_ABX_RMW = ("ABX", "absolute,X (RMW with dummy read)", "ADDR_ABX_RMW", (
-    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nLETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "FETCH(R_DL);;\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nFETCH(R_DL);\nNEXT_CYCLE;",
     "{\n\tuint16_t sum = c->TMP + c->X;\n\tc->AD = (sum & 0xFF) | (c->DL << 8);\n\tDUMMY_READ(R_AD);\n\tNEXT_CYCLE;\n}",
     "{\n\tuint16_t sum = c->TMP + c->X;\n\tuint8_t high = (c->AD >> 8) & 0xFF;\n\tif (sum > 0xFF) high = (high + 1) & 0xFF;\n\tc->AD = (sum & 0xFF) | (high << 8);\n\tLETS_READ(R_AD, R_DL);\n\tNEXT_OPCODE;\n}"
 ))
 
 AM_ABY_RMW = ("ABY", "absolute,Y (RMW with dummy read)", "ADDR_ABY_RMW", (
-    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
-    "c->TMP = c->DL;\nLETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "FETCH(R_DL);\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nFETCH(R_DL);\nNEXT_CYCLE;",
     "{\n\tuint16_t sum = c->TMP + c->Y;\n\tc->AD = (sum & 0xFF) | (c->DL << 8);\n\tDUMMY_READ(R_AD);\n\tNEXT_CYCLE;\n}",
     "{\n\tuint16_t sum = c->TMP + c->Y;\n\tuint8_t high = (c->AD >> 8) & 0xFF;\n\tif (sum > 0xFF) high = (high + 1) & 0xFF;\n\tc->AD = (sum & 0xFF) | (high << 8);\n\tLETS_READ(R_AD, R_DL);\n\tNEXT_OPCODE;\n}"
 ))
 
 AM_IDY_RMW = ("IDY", "indirect indexed (zp),Y (RMW with dummy read)", "ADDR_IDY_RMW", (
-    "LETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "FETCH(R_DL);\nNEXT_CYCLE;",
     "c->TMP = c->DL;\nc->ZPL = (c->DL + 1) & 0xFF;\nLETS_READ(R_ZP16, R_DL);\nNEXT_CYCLE;",
     "c->AD = c->TMP | (c->DL << 8);\nDUMMY_READ(R_AD);\nNEXT_CYCLE;",
     "c->AD += c->Y;\nDUMMY_READ(R_AD);\nNEXT_CYCLE;",
@@ -213,21 +213,21 @@ OP_RTS = ("RTS", M_R_, [
 ])
 
 OP_JSR = ("JSR", M_R_, [
-    "c->TMP = c->DL;\nLETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nFETCH(R_DL);\nNEXT_CYCLE;",
     "STACK_PEEK();\nNEXT_CYCLE;",
     "STACK_PUSH(R_PCH);\nNEXT_CYCLE;",
     "STACK_PUSH(R_PCL);\nNEXT_CYCLE;",
-    "LETS_READ(R_PC, R_DL);\nc->PCH = c->DL;\nc->PC = (c->DL << 8) | c->TMP;\nNEXT_OPCODE;"
+    "FETCH(R_DL);\nc->PCH = c->DL;\nc->PC = (c->DL << 8) | c->TMP;\nNEXT_OPCODE;"
 ])
 
 OP_JMP = ("JMP", M_R_, [
-    "c->TMP = c->DL;\nLETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
-    "LETS_READ(R_PC, R_DL);\nc->PC++;\nc->PCH = c->DL;\nc->PC = (c->DL << 8) | c->TMP;\nNEXT_OPCODE;"
+    "c->TMP = c->DL;\nFETCH(R_DL);\nNEXT_CYCLE;",
+    "FETCH(R_DL);\nc->PCH = c->DL;\nc->PC = (c->DL << 8) | c->TMP;\nNEXT_OPCODE;"
 ])
 
 OP_JMP_I = ("JMP", M_R_, [
-    "c->TMP = c->DL;\nLETS_READ(R_PC, R_DL);\nc->PC++;\nNEXT_CYCLE;",
-    "LETS_READ(R_PC, R_DL);\nc->PC++;\nc->TMP = c->DL;\nLETS_READ(R_AD, R_DL);\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nFETCH(R_DL);\nNEXT_CYCLE;",
+    "c->TMP = c->DL;\nFETCH(R_DL);\nLETS_READ(R_AD, R_DL);\nNEXT_CYCLE;",
     "LETS_READ(R_AD, R_DL);\nc->PCL = c->DL;\nNEXT_CYCLE;",
     "c->AD = (c->AD & 0xFF00) | ((c->AD + 1) & 0xFF);\nLETS_READ(R_AD, R_DL);\nc->PCH = c->DL;\nNEXT_OPCODE;"
 ])
@@ -314,12 +314,12 @@ OP_CMP = ("CMP", M_R_, ["_fam65xx_cmp(c, c->A, c->DL);\nNEXT_OPCODE;"])
 OP_BIT = ("BIT", M_R_, ["_fam65xx_bit(c, c->DL);\nNEXT_OPCODE;"])
 
 # Immediate mode variants using LETS_READ macro
-OP_ORA_IMM = ("ORA", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->A |= c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
-OP_AND_IMM = ("AND", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->A &= c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
-OP_EOR_IMM = ("EOR", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->A ^= c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
-OP_ADC_IMM = ("ADC", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\n_fam65xx_adc(c, c->DL);\nNEXT_OPCODE;"])
-OP_SBC_IMM = ("SBC", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\n_fam65xx_sbc(c, c->DL);\nNEXT_OPCODE;"])
-OP_CMP_IMM = ("CMP", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\n_fam65xx_cmp(c, c->A, c->DL);\nNEXT_OPCODE;"])
+OP_ORA_IMM = ("ORA", M_R_, ["FETCH(R_DL);\nNEXT_CYCLE;", "c->A |= c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_AND_IMM = ("AND", M_R_, ["FETCH(R_DL);\nNEXT_CYCLE;", "c->A &= c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_EOR_IMM = ("EOR", M_R_, ["FETCH(R_DL);\nNEXT_CYCLE;", "c->A ^= c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_ADC_IMM = ("ADC", M_R_, ["FETCH(R_DL);\nNEXT_CYCLE;", "_fam65xx_adc(c, c->DL);\nNEXT_OPCODE;"])
+OP_SBC_IMM = ("SBC", M_R_, ["FETCH(R_DL);\nNEXT_CYCLE;", "_fam65xx_sbc(c, c->DL);\nNEXT_OPCODE;"])
+OP_CMP_IMM = ("CMP", M_R_, ["FETCH(R_DL);\nNEXT_CYCLE;", "_fam65xx_cmp(c, c->A, c->DL);\nNEXT_OPCODE;"])
 
 # Load operations using NEXT_OPCODE macro
 OP_LDA = ("LDA", M_R_, ["c->A = c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
@@ -327,9 +327,9 @@ OP_LDX = ("LDX", M_R_, ["c->X = c->DL;\n_NZ(c->X);\nNEXT_OPCODE;"])
 OP_LDY = ("LDY", M_R_, ["c->Y = c->DL;\n_NZ(c->Y);\nNEXT_OPCODE;"])
 
 # Immediate load operations using LETS_READ macro
-OP_LDA_IMM = ("LDA", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->A = c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
-OP_LDX_IMM = ("LDX", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->X = c->DL;\n_NZ(c->X);\nNEXT_OPCODE;"])
-OP_LDY_IMM = ("LDY", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->Y = c->DL;\n_NZ(c->Y);\nNEXT_OPCODE;"])
+OP_LDA_IMM = ("LDA", M_R_, ["FETCH(R_DL);\nNEXT_CYCLE;", "c->A = c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_LDX_IMM = ("LDX", M_R_, ["FETCH(R_DL);\nNEXT_CYCLE;", "c->X = c->DL;\n_NZ(c->X);\nNEXT_OPCODE;"])
+OP_LDY_IMM = ("LDY", M_R_, ["FETCH(R_DL);\nNEXT_CYCLE;", "c->Y = c->DL;\n_NZ(c->Y);\nNEXT_OPCODE;"])
 
 # Store operations using memory access coordination through addressing modes
 # The addressing mode sets up c->AD and c->adr_idx, store operations just specify data register
@@ -342,8 +342,8 @@ OP_CPX = ("CPX", M_R_, ["_fam65xx_cmp(c, c->X, c->DL);\nNEXT_OPCODE;"])
 OP_CPY = ("CPY", M_R_, ["_fam65xx_cmp(c, c->Y, c->DL);\nNEXT_OPCODE;"])
 
 # Immediate compare operations using LETS_READ macro
-OP_CPX_IMM = ("CPX", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\n_fam65xx_cmp(c, c->X, c->DL);\nNEXT_OPCODE;"])
-OP_CPY_IMM = ("CPY", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\n_fam65xx_cmp(c, c->Y, c->DL);\nNEXT_OPCODE;"])
+OP_CPX_IMM = ("CPX", M_R_, ["FETCH(R_DL);\nNEXT_CYCLE;", "_fam65xx_cmp(c, c->X, c->DL);\nNEXT_OPCODE;"])
+OP_CPY_IMM = ("CPY", M_R_, ["FETCH(R_DL);\nNEXT_CYCLE;", "_fam65xx_cmp(c, c->Y, c->DL);\nNEXT_OPCODE;"])
 
 # RMW operations - have two variants (accumulator vs memory)
 OP_ASL_A = ("ASL", M___, [
@@ -404,7 +404,7 @@ OP_DEC = ("DEC", M_RW, [
 
 # NOP variants
 OP_NOP_I = ("NOP", M___, [
-    "LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;",
+    "FETCH(R_DL);\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
 
@@ -457,12 +457,12 @@ OP_XAA = ("XAA", M_R_, ["c->A = (c->A | 0xEE) & c->X & c->DL;\n_NZ(c->A);\nNEXT_
 OP_SBX = ("SBX", M_R_, ["c->TMP = (c->A & c->X) - c->DL;\nc->X = c->TMP;\n_NZ(c->X);\nc->P = (c->P & ~FAM65XX_CF) | ((c->TMP & 0x100) ? 0 : FAM65XX_CF);\nNEXT_OPCODE;"])
 
 # Immediate mode illegal operations using LETS_READ macro
-OP_ANC_IMM = ("ANC", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->A &= c->DL;\n_NZ(c->A);\nc->P = (c->P & ~FAM65XX_CF) | ((c->A & 0x80) ? FAM65XX_CF : 0);\nNEXT_OPCODE;"])
-OP_ASR_IMM = ("ASR", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->A &= c->DL;\nc->P = (c->P & ~FAM65XX_CF) | (c->A & 1);\nc->A>>=1;\n_NZ(c->A);\nNEXT_OPCODE;"])
-OP_ARR_IMM = ("ARR", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->A = (c->A & c->DL) >> 1 | (c->P & FAM65XX_CF ? 0x80 : 0);\n_NZ(c->A);\nc->P = (c->P & ~(FAM65XX_CF | FAM65XX_VF)) | ((c->A & 0x40) ? FAM65XX_CF : 0) | ((c->A & 0x20) ^ (c->A & 0x40) ? FAM65XX_VF : 0);\nNEXT_OPCODE;"])
-OP_XAA_IMM = ("XAA", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->A = (c->A | 0xEE) & c->X & c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
-OP_SBX_IMM = ("SBX", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->TMP = (c->A & c->X) - c->DL;\nc->X = c->TMP;\n_NZ(c->X);\nc->P = (c->P & ~FAM65XX_CF) | ((c->TMP & 0x100) ? 0 : FAM65XX_CF);\nNEXT_OPCODE;"])
-OP_LAX_IMM = ("LAX", M_R_, ["LETS_READ(R_PC, R_DL);\nNEXT_CYCLE;", "c->PC++;\nc->A = c->X = c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_ANC_IMM = ("ANC", M_R_, ["FETCH(R_DL);\nNEXT_CYCLE;", "c->A &= c->DL;\n_NZ(c->A);\nc->P = (c->P & ~FAM65XX_CF) | ((c->A & 0x80) ? FAM65XX_CF : 0);\nNEXT_OPCODE;"])
+OP_ASR_IMM = ("ASR", M_R_, ["FETCH(R_DL);\nNEXT_CYCLE;", "c->A &= c->DL;\nc->P = (c->P & ~FAM65XX_CF) | (c->A & 1);\nc->A>>=1;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_ARR_IMM = ("ARR", M_R_, ["FETCH(R_DL);\nNEXT_CYCLE;", "c->A = (c->A & c->DL) >> 1 | (c->P & FAM65XX_CF ? 0x80 : 0);\n_NZ(c->A);\nc->P = (c->P & ~(FAM65XX_CF | FAM65XX_VF)) | ((c->A & 0x40) ? FAM65XX_CF : 0) | ((c->A & 0x20) ^ (c->A & 0x40) ? FAM65XX_VF : 0);\nNEXT_OPCODE;"])
+OP_XAA_IMM = ("XAA", M_R_, ["FETCH(R_DL);\nNEXT_CYCLE;", "c->A = (c->A | 0xEE) & c->X & c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
+OP_SBX_IMM = ("SBX", M_R_, ["FETCH(R_DL);\nNEXT_CYCLE;", "c->TMP = (c->A & c->X) - c->DL;\nc->X = c->TMP;\n_NZ(c->X);\nc->P = (c->P & ~FAM65XX_CF) | ((c->TMP & 0x100) ? 0 : FAM65XX_CF);\nNEXT_OPCODE;"])
+OP_LAX_IMM = ("LAX", M_R_, ["FETCH(R_DL);\nNEXT_CYCLE;", "c->A = c->X = c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"])
 OP_SHY = ("SHY", M__W, ["c->TMP = c->Y & ((c->AD >> 8) + 1);\nSTORE_WRITE(R_TMP);\nNEXT_OPCODE;"])
 OP_SHX = ("SHX", M__W, ["c->TMP = c->X & ((c->AD >> 8) + 1);\nSTORE_WRITE(R_TMP);\nNEXT_OPCODE;"])
 OP_SHA = ("SHA", M_RW, ["c->TMP = c->A & c->X & ((c->AD >> 8) + 1);\nSTORE_WRITE(R_TMP);\nNEXT_OPCODE;"])
