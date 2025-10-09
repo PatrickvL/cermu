@@ -14,7 +14,8 @@ extern "C" {
 }
 
 #define CHIPS_IMPL
-#include "../src/chip/cpu/fam65xx_cpp/opcode_gen/fam65xx.h"
+// Was #include "../src/chip/cpu/fam65xx_cpp/opcode_gen/fam65xx.h"
+#include "../src/chip/cpu/fam65xx_cpp/opcode_gen/fam65xx_callbacks.h"
 
 namespace fs = std::filesystem;
 
