@@ -1642,7 +1642,9 @@ bus_state_t fam65xx_tick(fam65xx_t* cpu, bus_state_t pins) {
     if (pins & RW_FLAG) {
         // Read operation - perform memory read via callback if available
         if (cpu->mem_read) {
-            uint8_t read_data = cpu->mem_read(cpu->user_data, mem_addr, 0);
+            // Pass current bus data to allow VIC-II graphics data leaking in color RAM
+            uint8_t current_bus_data = GET_DATA(pins);
+            uint8_t read_data = cpu->mem_read(cpu->user_data, mem_addr, current_bus_data);
             pins = SET_DATA(pins, read_data);
         }
     } else {
