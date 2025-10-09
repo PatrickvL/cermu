@@ -1759,19 +1759,14 @@ bus_state_t fam65xx_callbacks_tick(fam65xx_t* cpu, bus_state_t pins) {
             
             // Only process explicit interrupt flags, not automatic IRQ/NMI detection
             if (cpu->brk_flags & BRK_NMI) {
-                if (verbose_output) printf("  DEBUG: NMI interrupt triggered (explicit)\n");
-                cpu->callback = op_brk;  // Use BRK handler for NMI
+                if (verbose_output) 
+                {
+                    if (cpu->brk_flags & BRK_NMI) printf("  DEBUG: NMI interrupt triggered (explicit)\n");
+                    else if (cpu->brk_flags & BRK_IRQ) printf("  DEBUG: IRQ interrupt triggered (explicit)\n");
+                    else if (cpu->brk_flags & BRK_RESET) printf("  DEBUG: RESET interrupt triggered (explicit)\n");
+                }
                 cpu->cb_index = 0;
-            } else if (cpu->brk_flags & BRK_IRQ) {
-                if (verbose_output) printf("  DEBUG: IRQ interrupt triggered (explicit)\n");
-                cpu->callback = op_brk;  // Use BRK handler for IRQ
-                cpu->cb_index = 0;
-            } else if (cpu->brk_flags & BRK_RESET) {
-                if (verbose_output) printf("  DEBUG: RESET interrupt triggered (explicit)\n");
-                cpu->callback = op_brk;  // Use BRK handler for RESET
-                cpu->cb_index = 0;
-            } else {
-                if (verbose_output) printf("  DEBUG: Normal instruction fetch - no interrupts pending\n");
+                cpu->callback = op_brk;  // Use BRK handler for interrupts
             }
         } else {
             if (verbose_output) printf("  DEBUG: SYNC during instruction execution - ignoring\n");
