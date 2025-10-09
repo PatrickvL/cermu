@@ -329,8 +329,8 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
 
 // Instruction fetch with SYNC - used only for fetching next instruction
 #define FETCH_IR() do { \
-    FETCH(R_IR); \
-    pins |= BUS_BIT(BUS_SYNC_BIT); \
+    FETCH( R_IR); \
+    pins |= BUS_BIT(FAM65XX_PIN_SYNC); \
 } while(0)
 
 // Legacy address setup helper (maintained for compatibility)

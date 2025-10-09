@@ -375,6 +375,12 @@ bool run_processor_test(const processor_test_t* test) {
     bool step_result = harness.step();
     uint32_t cycles_executed = harness.get_cycle_count() - initial_cycle_count;
     
+    // PC correction - the FETCH_IR macro increments PC when fetching the next instruction,
+    // but ProcessorTests expects PC to point to the instruction after the current one,
+    // not the one after that. Adjust by -1 to match hardware test expectations.
+    uint16_t corrected_pc = harness.get_pc() - 1;
+    harness.set_pc(corrected_pc);
+    
     if (verbose_output) {
         std::cout << "  DEBUG: After execution - PC = 0x" << std::hex << harness.get_pc()
                   << ", SP = 0x" << (int)harness.get_sp() << ", cycles = " << std::dec << cycles_executed << std::endl;
