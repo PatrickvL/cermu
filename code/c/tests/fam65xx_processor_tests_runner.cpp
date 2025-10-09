@@ -175,7 +175,8 @@ public:
             do {
                 if (verbose_output) {
                     std::cout << "  DEBUG: Before tick " << (cycle_count + 1) << " - PC=0x" << std::hex << get_pc()
-                              << ", CI=0x" << cpu.CI << ", RW=" << ((pins & FAM65XX_RW) ? 1 : 0)
+                              << ", CI=0x" << cpu.CI << ", cb_index=" << std::dec << (int)cpu.cb_index
+                              << ", RW=" << ((pins & FAM65XX_RW) ? 1 : 0)
                               << ", SYNC=" << ((pins & FAM65XX_SYNC) ? 1 : 0) << std::dec << std::endl;
                 }
 
@@ -187,7 +188,8 @@ public:
                 
                 if (verbose_output) {
                     std::cout << "  DEBUG: After tick " << cycle_count << " - PC=0x" << std::hex << get_pc()
-                              << ", CI=0x" << cpu.CI << ", RW=" << ((pins & FAM65XX_RW) ? 1 : 0)
+                              << ", CI=0x" << cpu.CI << ", cb_index=" << std::dec << (int)cpu.cb_index
+                              << ", RW=" << ((pins & FAM65XX_RW) ? 1 : 0)
                               << ", SYNC=" << ((pins & FAM65XX_SYNC) ? 1 : 0)
                               << ", opdone=" << (instruction_done ? 1 : 0) << std::dec << std::endl;
                 }
