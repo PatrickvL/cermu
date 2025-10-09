@@ -362,6 +362,7 @@ static bus_state_t am_zero_page_y(fam65xx_t* cpu, bus_state_t pins) {
             
         case 1:
             cpu->ZPL = cpu->ZPL + cpu->Y;
+            cpu->effective_addr = cpu->ZP; // Set effective address for operations
             cpu->cb_index = 0;
             cpu->callback = get_op_cb(cpu);
             return READ_CYCLE(cpu->ZP);
@@ -429,14 +430,7 @@ static bool opcode_can_skip_cycle_init() {
 }
 
 static bool get_opcode_can_skip_cycle(uint8_t opcode) {
-    static bool init_done = opcode_can_skip_cycle_init();
-    static bool table[256];
-    
-    // Re-initialize table on first call
-    if (init_done) {
-        opcode_can_skip_cycle_init(); // This will populate the static table
-    }
-    
+    // Remove unused variables and initialization logic
     // Simple lookup for specific opcodes
     switch (opcode) {
         case 0x11: case 0x19: case 0x1D: // ORA variants
@@ -464,7 +458,7 @@ static bus_state_t am_absolute_x(fam65xx_t* cpu, bus_state_t pins) {
             cpu->effective_addr = cpu->AD + cpu->X;
             
             // Check page cross - TODO : use opcode_can_skip_cycle table or otherwise
-            if (page_crossed(cpu->effective_addr, cpu->AD)) {
+            if (!page_crossed(cpu->effective_addr, cpu->AD)) {
                 // No page cross - might skip for reads
                 cpu->cb_index = 0;
                 cpu->callback = get_op_cb(cpu);
@@ -491,7 +485,7 @@ static bus_state_t am_absolute_y(fam65xx_t* cpu, bus_state_t pins) {
             cpu->ADH = GET_DATA(pins);
             cpu->effective_addr = cpu->AD + cpu->Y;
             
-            if (page_crossed(cpu->effective_addr, cpu->AD)) {
+            if (!page_crossed(cpu->effective_addr, cpu->AD)) {
                 cpu->cb_index = 0;
                 cpu->callback = get_op_cb(cpu);
                 return READ_CYCLE(cpu->effective_addr);
@@ -559,7 +553,7 @@ static bus_state_t am_indirect_indexed(fam65xx_t* cpu, bus_state_t pins) {
             uint16_t base_addr = (cpu->ADH << 8) | cpu->DL;
             cpu->effective_addr = base_addr + cpu->Y;
             
-            if (page_crossed(cpu->effective_addr, base_addr)) {
+            if (!page_crossed(cpu->effective_addr, base_addr)) {
                 cpu->cb_index = 0;
                 cpu->callback = get_op_cb(cpu);
                 return READ_CYCLE(cpu->effective_addr);
@@ -1020,7 +1014,7 @@ static bus_state_t op_sbc(fam65xx_t* cpu, bus_state_t pins) {
                  ((result & 0x80) ? FLAG_N : 0) |
                  (((cpu->A ^ operand) & (cpu->A ^ result) & 0x80) ? FLAG_V : 0) |
                  ((result & 0xFF) == 0 ? FLAG_Z : 0) |
-                 ((result < 0x100) ? FLAG_C : 0);
+                 ((result >= 0x100) ? FLAG_C : 0);
         cpu->A = result & 0xFF;
     }
     
@@ -1252,19 +1246,19 @@ static bus_state_t op_bmi(fam65xx_t* cpu, bus_state_t pins) {
 }
 
 static bus_state_t op_bvs(fam65xx_t* cpu, bus_state_t pins) {
-	return op_branch(cpu, pins, FLAG_V, false);
-}
-
-static bus_state_t op_bcc(fam65xx_t* cpu, bus_state_t pins) {
 	return op_branch(cpu, pins, FLAG_V, true);
 }
 
-static bus_state_t op_bcs(fam65xx_t* cpu, bus_state_t pins) {
+static bus_state_t op_bcc(fam65xx_t* cpu, bus_state_t pins) {
 	return op_branch(cpu, pins, FLAG_C, false);
 }
 
-static bus_state_t op_bvc(fam65xx_t* cpu, bus_state_t pins) {
+static bus_state_t op_bcs(fam65xx_t* cpu, bus_state_t pins) {
 	return op_branch(cpu, pins, FLAG_C, true);
+}
+
+static bus_state_t op_bvc(fam65xx_t* cpu, bus_state_t pins) {
+	return op_branch(cpu, pins, FLAG_V, false);
 }
 
 static bus_state_t op_bne(fam65xx_t* cpu, bus_state_t pins) {
@@ -1344,7 +1338,7 @@ enum {
     OP_BIT, OP_NOP, OP_JAM
 };
 
-static const cycle_fn_t op_handlers[65] = {
+static const cycle_fn_t op_handlers[] = {
     op_lda, // OP_LDA
 	op_ldx, // OP_LDX
 	op_ldy, // OP_LDY,
