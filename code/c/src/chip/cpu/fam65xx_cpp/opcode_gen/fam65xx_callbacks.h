@@ -310,16 +310,10 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
 // IMPLEMENTATION
 // ============================================================================
 
-// Instruction descriptor combining addressing mode and operation info
-typedef struct {
-    uint8_t am;        // Addressing mode index
-    uint8_t op;        // Operation index
-    uint8_t flags;     // Instruction flags (RMW, page crossing, etc.)
-} instr_desc_t;
-
-// Instruction flags
-#define INSTR_RMW           0x01    // Read-Modify-Write instruction
-#define INSTR_PAGE_CROSS    0x02    // Can skip cycle on page crossing for reads
+// Instruction flags (encoded in high bits of opcode_to_am)
+#define INSTR_RMW       0x80    // Read-Modify-Write instruction
+#define INSTR_PAGE_CROSS 0x40   // Can skip cycle on page cross
+#define AM_MASK         0x0F    // Addressing mode mask (low 4 bits)
 
 // Helper function to check if opcode is RMW (all addressing modes)
 static inline bool is_rmw_opcode(uint8_t op) {
@@ -377,17 +371,7 @@ static inline uint16_t get_vector_addr(fam65xx_t* cpu) {
 static cycle_fn_t get_op_cb(fam65xx_t* cpu);
 static bus_state_t fetch_next(fam65xx_t* cpu, bus_state_t pins);
 static bus_state_t rmw_handler(fam65xx_t* cpu, bus_state_t pins);
-
-// Helper method to set next callback based on instruction type
-static inline void set_next_callback(fam65xx_t* cpu) {
-    uint8_t flags = opcode_to_flags[cpu->opcode];
-    if (flags & INSTR_RMW) {
-        cpu->callback = rmw_handler;
-    } else {
-        cpu->callback = get_op_cb(cpu);
-    }
-    cpu->cb_index = 0;
-}
+static void set_next_callback(fam65xx_t* cpu);
 
 // ============================================================================
 // Addressing Mode Handlers
@@ -1551,52 +1535,49 @@ static const cycle_fn_t op_handlers[] = {
 // Forward declarations for RMW handler
 static bus_state_t rmw_handler(fam65xx_t* cpu, bus_state_t pins);
 
-// Macro to define instruction descriptors for all 256 MOS6502 opcodes
-#define OPCODES(LRF) \
-    LRF(AM_NON, OP_BRK, 0), LRF(AM_INX, OP_ORA, 0), LRF(AM_NON, OP_JAM, 0), LRF(AM_INX, OP_NOP, 0), LRF(AM_ZER, OP_NOP, 0), LRF(AM_ZER, OP_ORA, 0), LRF(AM_ZER, OP_ASL_MEM, INSTR_RMW), LRF(AM_ZER, OP_NOP, 0), \
-    LRF(AM_NON, OP_PHP, 0), LRF(AM_IMM, OP_ORA, 0), LRF(AM_ACC, OP_ASL_ACC, 0), LRF(AM_IMM, OP_NOP, 0), LRF(AM_ABS, OP_NOP, 0), LRF(AM_ABS, OP_ORA, 0), LRF(AM_ABS, OP_ASL_MEM, INSTR_RMW), LRF(AM_ABS, OP_NOP, 0), \
-    LRF(AM_REL, OP_BPL, 0), LRF(AM_INY, OP_ORA, INSTR_PAGE_CROSS), LRF(AM_NON, OP_JAM, 0), LRF(AM_INY, OP_NOP, 0), LRF(AM_ZPX, OP_NOP, 0), LRF(AM_ZPX, OP_ORA, 0), LRF(AM_ZPX, OP_ASL_MEM, INSTR_RMW), LRF(AM_ZPX, OP_NOP, 0), \
-    LRF(AM_NON, OP_CLC, 0), LRF(AM_ABY, OP_ORA, INSTR_PAGE_CROSS), LRF(AM_NON, OP_NOP, 0), LRF(AM_ABY, OP_NOP, 0), LRF(AM_ABX, OP_NOP, 0), LRF(AM_ABX, OP_ORA, INSTR_PAGE_CROSS), LRF(AM_ABX, OP_ASL_MEM, INSTR_RMW), LRF(AM_ABX, OP_NOP, 0), \
-    LRF(AM_NON, OP_JSR, 0), LRF(AM_INX, OP_AND, 0), LRF(AM_NON, OP_JAM, 0), LRF(AM_INX, OP_NOP, 0), LRF(AM_ZER, OP_BIT, 0), LRF(AM_ZER, OP_AND, 0), LRF(AM_ZER, OP_ROL_MEM, INSTR_RMW), LRF(AM_ZER, OP_NOP, 0), \
-    LRF(AM_NON, OP_PLP, 0), LRF(AM_IMM, OP_AND, 0), LRF(AM_ACC, OP_ROL_ACC, 0), LRF(AM_IMM, OP_NOP, 0), LRF(AM_ABS, OP_BIT, 0), LRF(AM_ABS, OP_AND, 0), LRF(AM_ABS, OP_ROL_MEM, INSTR_RMW), LRF(AM_ABS, OP_NOP, 0), \
-    LRF(AM_REL, OP_BMI, 0), LRF(AM_INY, OP_AND, INSTR_PAGE_CROSS), LRF(AM_NON, OP_JAM, 0), LRF(AM_INY, OP_NOP, 0), LRF(AM_ZPX, OP_NOP, 0), LRF(AM_ZPX, OP_AND, 0), LRF(AM_ZPX, OP_ROL_MEM, INSTR_RMW), LRF(AM_ZPX, OP_NOP, 0), \
-    LRF(AM_NON, OP_SEC, 0), LRF(AM_ABY, OP_AND, INSTR_PAGE_CROSS), LRF(AM_NON, OP_NOP, 0), LRF(AM_ABY, OP_NOP, 0), LRF(AM_ABX, OP_NOP, 0), LRF(AM_ABX, OP_AND, INSTR_PAGE_CROSS), LRF(AM_ABX, OP_ROL_MEM, INSTR_RMW), LRF(AM_ABX, OP_NOP, 0), \
-    LRF(AM_NON, OP_RTI, 0), LRF(AM_INX, OP_EOR, 0), LRF(AM_NON, OP_JAM, 0), LRF(AM_INX, OP_NOP, 0), LRF(AM_ZER, OP_NOP, 0), LRF(AM_ZER, OP_EOR, 0), LRF(AM_ZER, OP_LSR_MEM, INSTR_RMW), LRF(AM_ZER, OP_NOP, 0), \
-    LRF(AM_NON, OP_PHA, 0), LRF(AM_IMM, OP_EOR, 0), LRF(AM_ACC, OP_LSR_ACC, 0), LRF(AM_IMM, OP_NOP, 0), LRF(AM_ABS, OP_JMP, 0), LRF(AM_ABS, OP_EOR, 0), LRF(AM_ABS, OP_LSR_MEM, INSTR_RMW), LRF(AM_ABS, OP_NOP, 0), \
-    LRF(AM_REL, OP_BVC, 0), LRF(AM_INY, OP_EOR, INSTR_PAGE_CROSS), LRF(AM_NON, OP_JAM, 0), LRF(AM_INY, OP_NOP, 0), LRF(AM_ZPX, OP_NOP, 0), LRF(AM_ZPX, OP_EOR, 0), LRF(AM_ZPX, OP_LSR_MEM, INSTR_RMW), LRF(AM_ZPX, OP_NOP, 0), \
-    LRF(AM_NON, OP_CLI, 0), LRF(AM_ABY, OP_EOR, INSTR_PAGE_CROSS), LRF(AM_NON, OP_NOP, 0), LRF(AM_ABY, OP_NOP, 0), LRF(AM_ABX, OP_NOP, 0), LRF(AM_ABX, OP_EOR, INSTR_PAGE_CROSS), LRF(AM_ABX, OP_LSR_MEM, INSTR_RMW), LRF(AM_ABX, OP_NOP, 0), \
-    LRF(AM_NON, OP_RTS, 0), LRF(AM_INX, OP_ADC, 0), LRF(AM_NON, OP_JAM, 0), LRF(AM_INX, OP_NOP, 0), LRF(AM_ZER, OP_NOP, 0), LRF(AM_ZER, OP_ADC, 0), LRF(AM_ZER, OP_ROR_MEM, INSTR_RMW), LRF(AM_ZER, OP_NOP, 0), \
-    LRF(AM_NON, OP_PLA, 0), LRF(AM_IMM, OP_ADC, 0), LRF(AM_ACC, OP_ROR_ACC, 0), LRF(AM_IMM, OP_NOP, 0), LRF(AM_IND, OP_JMP, 0), LRF(AM_ABS, OP_ADC, 0), LRF(AM_ABS, OP_ROR_MEM, INSTR_RMW), LRF(AM_ABS, OP_NOP, 0), \
-    LRF(AM_REL, OP_BVS, 0), LRF(AM_INY, OP_ADC, INSTR_PAGE_CROSS), LRF(AM_NON, OP_JAM, 0), LRF(AM_INY, OP_NOP, 0), LRF(AM_ZPX, OP_NOP, 0), LRF(AM_ZPX, OP_ADC, 0), LRF(AM_ZPX, OP_ROR_MEM, INSTR_RMW), LRF(AM_ZPX, OP_NOP, 0), \
-    LRF(AM_NON, OP_SEI, 0), LRF(AM_ABY, OP_ADC, INSTR_PAGE_CROSS), LRF(AM_NON, OP_NOP, 0), LRF(AM_ABY, OP_NOP, 0), LRF(AM_ABX, OP_NOP, 0), LRF(AM_ABX, OP_ADC, INSTR_PAGE_CROSS), LRF(AM_ABX, OP_ROR_MEM, INSTR_RMW), LRF(AM_ABX, OP_NOP, 0), \
-    LRF(AM_IMM, OP_NOP, 0), LRF(AM_INX, OP_STA, 0), LRF(AM_IMM, OP_NOP, 0), LRF(AM_INX, OP_NOP, 0), LRF(AM_ZER, OP_STY, 0), LRF(AM_ZER, OP_STA, 0), LRF(AM_ZER, OP_STX, 0), LRF(AM_ZER, OP_NOP, 0), \
-    LRF(AM_NON, OP_DEY, 0), LRF(AM_IMM, OP_NOP, 0), LRF(AM_NON, OP_TXA, 0), LRF(AM_IMM, OP_NOP, 0), LRF(AM_ABS, OP_STY, 0), LRF(AM_ABS, OP_STA, 0), LRF(AM_ABS, OP_STX, 0), LRF(AM_ABS, OP_NOP, 0), \
-    LRF(AM_REL, OP_BCC, 0), LRF(AM_INY, OP_STA, 0), LRF(AM_NON, OP_JAM, 0), LRF(AM_INY, OP_NOP, 0), LRF(AM_ZPX, OP_STY, 0), LRF(AM_ZPX, OP_STA, 0), LRF(AM_ZPY, OP_STX, 0), LRF(AM_ZPY, OP_NOP, 0), \
-    LRF(AM_NON, OP_TYA, 0), LRF(AM_ABY, OP_STA, 0), LRF(AM_NON, OP_TXS, 0), LRF(AM_ABY, OP_NOP, 0), LRF(AM_ABX, OP_NOP, 0), LRF(AM_ABX, OP_STA, 0), LRF(AM_ABY, OP_NOP, 0), LRF(AM_ABY, OP_NOP, 0), \
-    LRF(AM_IMM, OP_LDY, 0), LRF(AM_INX, OP_LDA, 0), LRF(AM_IMM, OP_LDX, 0), LRF(AM_INX, OP_NOP, 0), LRF(AM_ZER, OP_LDY, 0), LRF(AM_ZER, OP_LDA, 0), LRF(AM_ZER, OP_LDX, 0), LRF(AM_ZER, OP_NOP, 0), \
-    LRF(AM_NON, OP_TAY, 0), LRF(AM_IMM, OP_LDA, 0), LRF(AM_NON, OP_TAX, 0), LRF(AM_IMM, OP_NOP, 0), LRF(AM_ABS, OP_LDY, 0), LRF(AM_ABS, OP_LDA, 0), LRF(AM_ABS, OP_LDX, 0), LRF(AM_ABS, OP_NOP, 0), \
-    LRF(AM_REL, OP_BCS, 0), LRF(AM_INY, OP_LDA, INSTR_PAGE_CROSS), LRF(AM_NON, OP_JAM, 0), LRF(AM_INY, OP_NOP, 0), LRF(AM_ZPX, OP_LDY, 0), LRF(AM_ZPX, OP_LDA, 0), LRF(AM_ZPY, OP_LDX, 0), LRF(AM_ZPY, OP_NOP, 0), \
-    LRF(AM_NON, OP_CLV, 0), LRF(AM_ABY, OP_LDA, INSTR_PAGE_CROSS), LRF(AM_NON, OP_TSX, 0), LRF(AM_ABY, OP_NOP, 0), LRF(AM_ABX, OP_LDY, INSTR_PAGE_CROSS), LRF(AM_ABX, OP_LDA, INSTR_PAGE_CROSS), LRF(AM_ABY, OP_LDX, INSTR_PAGE_CROSS), LRF(AM_ABY, OP_NOP, 0), \
-    LRF(AM_IMM, OP_CPY, 0), LRF(AM_INX, OP_CMP, 0), LRF(AM_IMM, OP_NOP, 0), LRF(AM_INX, OP_NOP, 0), LRF(AM_ZER, OP_CPY, 0), LRF(AM_ZER, OP_CMP, 0), LRF(AM_ZER, OP_DEC, INSTR_RMW), LRF(AM_ZER, OP_NOP, 0), \
-    LRF(AM_NON, OP_INY, 0), LRF(AM_IMM, OP_CMP, 0), LRF(AM_NON, OP_DEX, 0), LRF(AM_IMM, OP_NOP, 0), LRF(AM_ABS, OP_CPY, 0), LRF(AM_ABS, OP_CMP, 0), LRF(AM_ABS, OP_DEC, INSTR_RMW), LRF(AM_ABS, OP_NOP, 0), \
-    LRF(AM_REL, OP_BNE, 0), LRF(AM_INY, OP_CMP, INSTR_PAGE_CROSS), LRF(AM_NON, OP_JAM, 0), LRF(AM_INY, OP_NOP, 0), LRF(AM_ZPX, OP_NOP, 0), LRF(AM_ZPX, OP_CMP, 0), LRF(AM_ZPX, OP_DEC, INSTR_RMW), LRF(AM_ZPX, OP_NOP, 0), \
-    LRF(AM_NON, OP_CLD, 0), LRF(AM_ABY, OP_CMP, INSTR_PAGE_CROSS), LRF(AM_NON, OP_NOP, 0), LRF(AM_ABY, OP_NOP, 0), LRF(AM_ABX, OP_NOP, 0), LRF(AM_ABX, OP_CMP, INSTR_PAGE_CROSS), LRF(AM_ABX, OP_DEC, INSTR_RMW), LRF(AM_ABX, OP_NOP, 0), \
-    LRF(AM_IMM, OP_CPX, 0), LRF(AM_INX, OP_SBC, 0), LRF(AM_IMM, OP_NOP, 0), LRF(AM_INX, OP_NOP, 0), LRF(AM_ZER, OP_CPX, 0), LRF(AM_ZER, OP_SBC, 0), LRF(AM_ZER, OP_INC, INSTR_RMW), LRF(AM_ZER, OP_NOP, 0), \
-    LRF(AM_NON, OP_INX, 0), LRF(AM_IMM, OP_SBC, 0), LRF(AM_NON, OP_NOP, 0), LRF(AM_IMM, OP_SBC, 0), LRF(AM_ABS, OP_CPX, 0), LRF(AM_ABS, OP_SBC, 0), LRF(AM_ABS, OP_INC, INSTR_RMW), LRF(AM_ABS, OP_NOP, 0), \
-    LRF(AM_REL, OP_BEQ, 0), LRF(AM_INY, OP_SBC, INSTR_PAGE_CROSS), LRF(AM_NON, OP_JAM, 0), LRF(AM_INY, OP_NOP, 0), LRF(AM_ZPX, OP_NOP, 0), LRF(AM_ZPX, OP_SBC, 0), LRF(AM_ZPX, OP_INC, INSTR_RMW), LRF(AM_ZPX, OP_NOP, 0), \
-    LRF(AM_NON, OP_SED, 0), LRF(AM_ABY, OP_SBC, INSTR_PAGE_CROSS), LRF(AM_NON, OP_NOP, 0), LRF(AM_ABY, OP_NOP, 0), LRF(AM_ABX, OP_NOP, 0), LRF(AM_ABX, OP_SBC, INSTR_PAGE_CROSS), LRF(AM_ABX, OP_INC, INSTR_RMW), LRF(AM_ABX, OP_NOP, 0)
+// Macro to define opcodes with flags encoded in addressing mode entries
+#define OPCODES(LR) \
+    LR(AM_NON, OP_BRK), LR(AM_INX, OP_ORA), LR(AM_NON, OP_JAM), LR(AM_INX, OP_NOP), LR(AM_ZER, OP_NOP), LR(AM_ZER, OP_ORA), LR(AM_ZER|INSTR_RMW, OP_ASL_MEM), LR(AM_ZER, OP_NOP), \
+    LR(AM_NON, OP_PHP), LR(AM_IMM, OP_ORA), LR(AM_ACC, OP_ASL_ACC), LR(AM_IMM, OP_NOP), LR(AM_ABS, OP_NOP), LR(AM_ABS, OP_ORA), LR(AM_ABS|INSTR_RMW, OP_ASL_MEM), LR(AM_ABS, OP_NOP), \
+    LR(AM_REL, OP_BPL), LR(AM_INY|INSTR_PAGE_CROSS, OP_ORA), LR(AM_NON, OP_JAM), LR(AM_INY, OP_NOP), LR(AM_ZPX, OP_NOP), LR(AM_ZPX, OP_ORA), LR(AM_ZPX|INSTR_RMW, OP_ASL_MEM), LR(AM_ZPX, OP_NOP), \
+    LR(AM_NON, OP_CLC), LR(AM_ABY|INSTR_PAGE_CROSS, OP_ORA), LR(AM_NON, OP_NOP), LR(AM_ABY, OP_NOP), LR(AM_ABX, OP_NOP), LR(AM_ABX|INSTR_PAGE_CROSS, OP_ORA), LR(AM_ABX|INSTR_RMW, OP_ASL_MEM), LR(AM_ABX, OP_NOP), \
+    LR(AM_NON, OP_JSR), LR(AM_INX, OP_AND), LR(AM_NON, OP_JAM), LR(AM_INX, OP_NOP), LR(AM_ZER, OP_BIT), LR(AM_ZER, OP_AND), LR(AM_ZER|INSTR_RMW, OP_ROL_MEM), LR(AM_ZER, OP_NOP), \
+    LR(AM_NON, OP_PLP), LR(AM_IMM, OP_AND), LR(AM_ACC, OP_ROL_ACC), LR(AM_IMM, OP_NOP), LR(AM_ABS, OP_BIT), LR(AM_ABS, OP_AND), LR(AM_ABS|INSTR_RMW, OP_ROL_MEM), LR(AM_ABS, OP_NOP), \
+    LR(AM_REL, OP_BMI), LR(AM_INY|INSTR_PAGE_CROSS, OP_AND), LR(AM_NON, OP_JAM), LR(AM_INY, OP_NOP), LR(AM_ZPX, OP_NOP), LR(AM_ZPX, OP_AND), LR(AM_ZPX|INSTR_RMW, OP_ROL_MEM), LR(AM_ZPX, OP_NOP), \
+    LR(AM_NON, OP_SEC), LR(AM_ABY|INSTR_PAGE_CROSS, OP_AND), LR(AM_NON, OP_NOP), LR(AM_ABY, OP_NOP), LR(AM_ABX, OP_NOP), LR(AM_ABX|INSTR_PAGE_CROSS, OP_AND), LR(AM_ABX|INSTR_RMW, OP_ROL_MEM), LR(AM_ABX, OP_NOP), \
+    LR(AM_NON, OP_RTI), LR(AM_INX, OP_EOR), LR(AM_NON, OP_JAM), LR(AM_INX, OP_NOP), LR(AM_ZER, OP_NOP), LR(AM_ZER, OP_EOR), LR(AM_ZER|INSTR_RMW, OP_LSR_MEM), LR(AM_ZER, OP_NOP), \
+    LR(AM_NON, OP_PHA), LR(AM_IMM, OP_EOR), LR(AM_ACC, OP_LSR_ACC), LR(AM_IMM, OP_NOP), LR(AM_ABS, OP_JMP), LR(AM_ABS, OP_EOR), LR(AM_ABS|INSTR_RMW, OP_LSR_MEM), LR(AM_ABS, OP_NOP), \
+    LR(AM_REL, OP_BVC), LR(AM_INY|INSTR_PAGE_CROSS, OP_EOR), LR(AM_NON, OP_JAM), LR(AM_INY, OP_NOP), LR(AM_ZPX, OP_NOP), LR(AM_ZPX, OP_EOR), LR(AM_ZPX|INSTR_RMW, OP_LSR_MEM), LR(AM_ZPX, OP_NOP), \
+    LR(AM_NON, OP_CLI), LR(AM_ABY|INSTR_PAGE_CROSS, OP_EOR), LR(AM_NON, OP_NOP), LR(AM_ABY, OP_NOP), LR(AM_ABX, OP_NOP), LR(AM_ABX|INSTR_PAGE_CROSS, OP_EOR), LR(AM_ABX|INSTR_RMW, OP_LSR_MEM), LR(AM_ABX, OP_NOP), \
+    LR(AM_NON, OP_RTS), LR(AM_INX, OP_ADC), LR(AM_NON, OP_JAM), LR(AM_INX, OP_NOP), LR(AM_ZER, OP_NOP), LR(AM_ZER, OP_ADC), LR(AM_ZER|INSTR_RMW, OP_ROR_MEM), LR(AM_ZER, OP_NOP), \
+    LR(AM_NON, OP_PLA), LR(AM_IMM, OP_ADC), LR(AM_ACC, OP_ROR_ACC), LR(AM_IMM, OP_NOP), LR(AM_IND, OP_JMP), LR(AM_ABS, OP_ADC), LR(AM_ABS|INSTR_RMW, OP_ROR_MEM), LR(AM_ABS, OP_NOP), \
+    LR(AM_REL, OP_BVS), LR(AM_INY|INSTR_PAGE_CROSS, OP_ADC), LR(AM_NON, OP_JAM), LR(AM_INY, OP_NOP), LR(AM_ZPX, OP_NOP), LR(AM_ZPX, OP_ADC), LR(AM_ZPX|INSTR_RMW, OP_ROR_MEM), LR(AM_ZPX, OP_NOP), \
+    LR(AM_NON, OP_SEI), LR(AM_ABY|INSTR_PAGE_CROSS, OP_ADC), LR(AM_NON, OP_NOP), LR(AM_ABY, OP_NOP), LR(AM_ABX, OP_NOP), LR(AM_ABX|INSTR_PAGE_CROSS, OP_ADC), LR(AM_ABX|INSTR_RMW, OP_ROR_MEM), LR(AM_ABX, OP_NOP), \
+    LR(AM_IMM, OP_NOP), LR(AM_INX, OP_STA), LR(AM_IMM, OP_NOP), LR(AM_INX, OP_NOP), LR(AM_ZER, OP_STY), LR(AM_ZER, OP_STA), LR(AM_ZER, OP_STX), LR(AM_ZER, OP_NOP), \
+    LR(AM_NON, OP_DEY), LR(AM_IMM, OP_NOP), LR(AM_NON, OP_TXA), LR(AM_IMM, OP_NOP), LR(AM_ABS, OP_STY), LR(AM_ABS, OP_STA), LR(AM_ABS, OP_STX), LR(AM_ABS, OP_NOP), \
+    LR(AM_REL, OP_BCC), LR(AM_INY, OP_STA), LR(AM_NON, OP_JAM), LR(AM_INY, OP_NOP), LR(AM_ZPX, OP_STY), LR(AM_ZPX, OP_STA), LR(AM_ZPY, OP_STX), LR(AM_ZPY, OP_NOP), \
+    LR(AM_NON, OP_TYA), LR(AM_ABY, OP_STA), LR(AM_NON, OP_TXS), LR(AM_ABY, OP_NOP), LR(AM_ABX, OP_NOP), LR(AM_ABX, OP_STA), LR(AM_ABY, OP_NOP), LR(AM_ABY, OP_NOP), \
+    LR(AM_IMM, OP_LDY), LR(AM_INX, OP_LDA), LR(AM_IMM, OP_LDX), LR(AM_INX, OP_NOP), LR(AM_ZER, OP_LDY), LR(AM_ZER, OP_LDA), LR(AM_ZER, OP_LDX), LR(AM_ZER, OP_NOP), \
+    LR(AM_NON, OP_TAY), LR(AM_IMM, OP_LDA), LR(AM_NON, OP_TAX), LR(AM_IMM, OP_NOP), LR(AM_ABS, OP_LDY), LR(AM_ABS, OP_LDA), LR(AM_ABS, OP_LDX), LR(AM_ABS, OP_NOP), \
+    LR(AM_REL, OP_BCS), LR(AM_INY|INSTR_PAGE_CROSS, OP_LDA), LR(AM_NON, OP_JAM), LR(AM_INY, OP_NOP), LR(AM_ZPX, OP_LDY), LR(AM_ZPX, OP_LDA), LR(AM_ZPY, OP_LDX), LR(AM_ZPY, OP_NOP), \
+    LR(AM_NON, OP_CLV), LR(AM_ABY|INSTR_PAGE_CROSS, OP_LDA), LR(AM_NON, OP_TSX), LR(AM_ABY, OP_NOP), LR(AM_ABX|INSTR_PAGE_CROSS, OP_LDY), LR(AM_ABX|INSTR_PAGE_CROSS, OP_LDA), LR(AM_ABY|INSTR_PAGE_CROSS, OP_LDX), LR(AM_ABY, OP_NOP), \
+    LR(AM_IMM, OP_CPY), LR(AM_INX, OP_CMP), LR(AM_IMM, OP_NOP), LR(AM_INX, OP_NOP), LR(AM_ZER, OP_CPY), LR(AM_ZER, OP_CMP), LR(AM_ZER|INSTR_RMW, OP_DEC), LR(AM_ZER, OP_NOP), \
+    LR(AM_NON, OP_INY), LR(AM_IMM, OP_CMP), LR(AM_NON, OP_DEX), LR(AM_IMM, OP_NOP), LR(AM_ABS, OP_CPY), LR(AM_ABS, OP_CMP), LR(AM_ABS|INSTR_RMW, OP_DEC), LR(AM_ABS, OP_NOP), \
+    LR(AM_REL, OP_BNE), LR(AM_INY|INSTR_PAGE_CROSS, OP_CMP), LR(AM_NON, OP_JAM), LR(AM_INY, OP_NOP), LR(AM_ZPX, OP_NOP), LR(AM_ZPX, OP_CMP), LR(AM_ZPX|INSTR_RMW, OP_DEC), LR(AM_ZPX, OP_NOP), \
+    LR(AM_NON, OP_CLD), LR(AM_ABY|INSTR_PAGE_CROSS, OP_CMP), LR(AM_NON, OP_NOP), LR(AM_ABY, OP_NOP), LR(AM_ABX, OP_NOP), LR(AM_ABX|INSTR_PAGE_CROSS, OP_CMP), LR(AM_ABX|INSTR_RMW, OP_DEC), LR(AM_ABX, OP_NOP), \
+    LR(AM_IMM, OP_CPX), LR(AM_INX, OP_SBC), LR(AM_IMM, OP_NOP), LR(AM_INX, OP_NOP), LR(AM_ZER, OP_CPX), LR(AM_ZER, OP_SBC), LR(AM_ZER|INSTR_RMW, OP_INC), LR(AM_ZER, OP_NOP), \
+    LR(AM_NON, OP_INX), LR(AM_IMM, OP_SBC), LR(AM_NON, OP_NOP), LR(AM_IMM, OP_SBC), LR(AM_ABS, OP_CPX), LR(AM_ABS, OP_SBC), LR(AM_ABS|INSTR_RMW, OP_INC), LR(AM_ABS, OP_NOP), \
+    LR(AM_REL, OP_BEQ), LR(AM_INY|INSTR_PAGE_CROSS, OP_SBC), LR(AM_NON, OP_JAM), LR(AM_INY, OP_NOP), LR(AM_ZPX, OP_NOP), LR(AM_ZPX, OP_SBC), LR(AM_ZPX|INSTR_RMW, OP_INC), LR(AM_ZPX, OP_NOP), \
+    LR(AM_NON, OP_SED), LR(AM_ABY|INSTR_PAGE_CROSS, OP_SBC), LR(AM_NON, OP_NOP), LR(AM_ABY, OP_NOP), LR(AM_ABX, OP_NOP), LR(AM_ABX|INSTR_PAGE_CROSS, OP_SBC), LR(AM_ABX|INSTR_RMW, OP_INC), LR(AM_ABX, OP_NOP)
 
-#define L(AM, OP, FLAGS) AM
-#define R(AM, OP, FLAGS) OP
-#define F(AM, OP, FLAGS) FLAGS
+#define L(AM, OP) AM
+#define R(AM, OP) OP
 
-// Enhanced lookup tables
+// Lookup tables with flags encoded in opcode_to_am
 static const uint8_t opcode_to_am[256] = { OPCODES(L) };
 static const uint8_t opcode_to_op[256] = { OPCODES(R) };
-static const uint8_t opcode_to_flags[256] = { OPCODES(F) };
 
 // Clean up macros
-#undef F
 #undef R
 #undef L
 #undef OPCODES
@@ -1612,20 +1593,26 @@ static cycle_fn_t get_op_cb(fam65xx_t* cpu) {
 	return op_handlers[op_index];
 }
 
+// Helper method to set next callback based on instruction type
+static void set_next_callback(fam65xx_t* cpu) {
+    uint8_t am_flags = opcode_to_am[cpu->opcode];
+    if (am_flags & INSTR_RMW) {
+        cpu->callback = rmw_handler;
+    } else {
+        cpu->callback = get_op_cb(cpu);
+    }
+    cpu->cb_index = 0;
+}
+
 extern bool verbose_output;
 
 static bus_state_t fetch_next(fam65xx_t* cpu, bus_state_t pins) {
     cpu->opcode = GET_DATA(pins);
     
-    // Get instruction information from enhanced lookup tables
-    uint8_t am_index = opcode_to_am[cpu->opcode];
+    // Get instruction information from encoded lookup table
+    uint8_t am_flags = opcode_to_am[cpu->opcode];
+    uint8_t am_index = am_flags & AM_MASK;  // Extract addressing mode
     uint8_t op_index = opcode_to_op[cpu->opcode];
-    uint8_t flags = opcode_to_flags[cpu->opcode];
-    
-    if (verbose_output) {
-        printf("  DEBUG: fetch_next opcode=0x%02x, am=%d, op=%d, flags=0x%02x\n",
-               cpu->opcode, am_index, op_index, flags);
-    }
     
     cycle_fn_t next_handler = am_handlers[am_index];
     
@@ -1633,33 +1620,15 @@ static bus_state_t fetch_next(fam65xx_t* cpu, bus_state_t pins) {
     if (next_handler == NULL) {
         // Direct operation - go straight to operation handler
         next_handler = op_handlers[op_index];
-        if (verbose_output) {
-            printf("  DEBUG: Using direct operation handler: %p\n", (void*)next_handler);
-        }
         cpu->callback = next_handler;
         cpu->cb_index = 0;
         return next_handler(cpu, pins);
-    }
-    
-    // Check if this is an RMW instruction
-    if (flags & INSTR_RMW) {
-        // Store the RMW handler to be called after addressing completes
-        cpu->TMP = (uint8_t)((uintptr_t)rmw_handler & 0xFF); // Store handler reference
-        if (verbose_output) {
-            printf("  DEBUG: RMW instruction - will use rmw_handler after addressing\n");
-        }
     }
     
     // Set up addressing mode
     cpu->callback = next_handler;
     cpu->cb_index = 0;
     cpu->effective_addr = cpu->PC;
-    
-    if (verbose_output) {
-        printf("  DEBUG: Setting up addressing mode handler: %p\n", (void*)next_handler);
-        printf("  DEBUG: PC increment %04x->%04x\n", cpu->PC, cpu->PC+1);
-    }
-    
     cpu->PC++; // Advance to operand
     return READ_CYCLE(cpu->PC);
 }
