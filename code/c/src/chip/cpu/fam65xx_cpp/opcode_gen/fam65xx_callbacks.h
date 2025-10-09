@@ -1233,16 +1233,16 @@ static bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins) {
             cpu->S--;
             return pins;
             
-        case 4:
+        case 4: {
             cpu->P |= FLAG_I;
             uint16_t vector_addr = get_vector_addr(cpu);
             return READ_CYCLE(vector_addr);
-
-        case 5:
+        }
+        case 5: {
             cpu->DL = GET_DATA(pins);
             uint16_t vector_addr = get_vector_addr(cpu);
             return READ_CYCLE(vector_addr + 1);
-            
+        }
         case 6:
             cpu->PC = (GET_DATA(pins) << 8) | cpu->DL;
             cpu->cb_index = 0;
@@ -1522,13 +1522,15 @@ static bus_state_t fetch_next(fam65xx_t* cpu, bus_state_t pins) {
     cpu->cb_index = 0;  // Reset callback index for new instruction
     cpu->effective_addr = cpu->PC;  // Set effective address for next instruction fetch
     
-    // Execute the callback immediately if it's a direct operation (no addressing mode)
+    // For direct operations (AM_NON), we don't increment PC here
+    // The operation callback will handle PC increment and next instruction fetch
     if (am_handlers[am_index] == NULL) {
-        // This is a direct operation, execute it now
+        // Direct operation - let the callback handle everything
         return am_or_op(cpu, pins);
     } else {
-        // This needs addressing mode resolution first
-        return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+        // Addressing mode needed - increment PC and read operand
+        cpu->PC++;
+        return READ_CYCLE(cpu->PC);
     }
 }
 

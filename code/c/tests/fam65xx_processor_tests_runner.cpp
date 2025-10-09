@@ -183,8 +183,8 @@ public:
                 pins = fam65xx_tick(&cpu, pins);
                 cycle_count++;
                 
-                // Instruction completes when SYNC is set, indicating fetch_next was called
-                bool instruction_done = (pins & FAM65XX_SYNC) != 0;
+                // Instruction completes when opdone() returns true
+                bool instruction_done = fam65xx_opdone(&cpu);
                 
                 if (verbose_output) {
                     std::cout << "  DEBUG: After tick " << cycle_count << " - PC=0x" << std::hex << get_pc()
