@@ -121,7 +121,7 @@
 
 // Shared sequence constants
 #define S_BRANCH_2_9748    401
-#define S_CONT_2_9DE2      403
+#define S_CONT_2_14C6      403
 #define SHARED_FETCH_NEXT  405
 
 // Lookup table: addressing mode start index for each opcode
@@ -578,7 +578,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             break;
 
         case 0x28:  // PLP [---] --- cycle 1
-            STACK_PULL();
+            STACK_PULL(R_DL);
             c->CI = C_PLP;
             break;
 
@@ -643,7 +643,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             break;
 
         case 0x40:  // RTI [R] --- cycle 1
-            STACK_PULL();
+            STACK_PULL(R_DL);
             c->CI = C_RTI_R;
             break;
 
@@ -752,7 +752,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             break;
 
         case 0x60:  // RTS [R] --- cycle 1
-            STACK_PULL();
+            STACK_PULL(R_DL);
             c->CI = C_RTS_R;
             break;
 
@@ -783,7 +783,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             break;
 
         case 0x68:  // PLA [---] --- cycle 1
-            STACK_PULL();
+            STACK_PULL(R_DL);
             c->CI = C_PLA;
             break;
 
@@ -1805,9 +1805,9 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
 
         // C_RTI_R continuation
         case C_RTI_R + 0:
-            STACK_PULL();
+            STACK_PULL(R_DL);
             c->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;
-            c->CI = S_CONT_2_9DE2;
+            c->CI = S_CONT_2_14C6;
             break;
 
         // C_SRE_RW_IDX continuation
@@ -1918,7 +1918,7 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
 
         // C_RTS_R continuation
         case C_RTS_R + 0:
-            c->CI = S_CONT_2_9DE2;
+            c->CI = S_CONT_2_14C6;
             break;
 
         // C_RRA_RW_IDX continuation
@@ -2236,14 +2236,14 @@ static inline uint64_t _fam65xx_decode(fam65xx_t* c, uint64_t pins) {
             c->nmi_pip >>= 1;
             goto fetch_next;
 
-        // S_CONT_2_9DE2: 2 cycles, used by 2 sources
+        // S_CONT_2_14C6: 2 cycles, used by 2 sources
         // Sources: OP_RTI_R, OP_RTS_R
-        case S_CONT_2_9DE2 + 0:
-            STACK_PULL();
+        case S_CONT_2_14C6 + 0:
+            STACK_PULL(R_DL);
             c->PCL = c->DL;
             c->CI++;
             break;
-        case S_CONT_2_9DE2 + 1:
+        case S_CONT_2_14C6 + 1:
             STACK_PEEK();
             c->PCH = c->DL;
             goto fetch_next;
