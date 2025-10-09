@@ -369,7 +369,6 @@ static bus_state_t am_zero_page(fam65xx_t* cpu, bus_state_t pins) {
             // First call: Get zero page address from operand
             cpu->ZPL = GET_DATA(pins);  // Get zero page address from operand (0x89)
             cpu->effective_addr = cpu->ZP;  // Set effective address for operation
-            printf("*** am_zero_page case 0 - ZPL=0x%02x ***\n", cpu->ZPL);
             return READ_CYCLE(cpu->ZP);  // Read from zero page address
             
         case 1: {
@@ -383,14 +382,10 @@ static bus_state_t am_zero_page(fam65xx_t* cpu, bus_state_t pins) {
                     cpu->P = (cpu->P & ~FLAG_C) | ((original_data & 0x80) ? FLAG_C : 0);
                     cpu->DL = original_data << 1;
                     SET_NZ(cpu, cpu->DL);
-                    printf("*** am_zero_page RMW ASL - original=0x%02x, modified=0x%02x ***\n",
-                           original_data, cpu->DL);
                 }
-                // TODO: Add other RMW operations as needed
                 
-                // Set up for final write in next cycle
-                cpu->cb_index = 0;
-                cpu->callback = cont_rmw_write;
+                // Stay in this handler for next cycle (final write)
+                // Don't reset cb_index = 0 yet!
                 
                 // Return dummy write of original data for THIS cycle
                 return WRITE_CYCLE(cpu->effective_addr, original_data);
@@ -398,9 +393,23 @@ static bus_state_t am_zero_page(fam65xx_t* cpu, bus_state_t pins) {
                 // Regular operation - set up operation handler for next cycle
                 cpu->cb_index = 0;
                 cpu->callback = get_op_cb(cpu);
-                printf("*** am_zero_page case 1 - set callback=%p ***\n", (void*)cpu->callback);
                 return pins;
             }
+        }
+        
+        case 2: {
+            // Third call: Final write for RMW operations
+            // Don't reset callback yet - need one more cycle for instruction fetch
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
+        }
+        
+        case 3: {
+            // Fourth call: Complete instruction and fetch next
+            cpu->cb_index = 0;
+            cpu->callback = fetch_next;
+            cpu->PC++;  // Advance PC to complete the instruction (ec82 -> ec83)
+            
+            return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
         }
     }
     return pins;
@@ -584,20 +593,17 @@ static bus_state_t am_indirect_indexed(fam65xx_t* cpu, bus_state_t pins) {
 
 // RMW write sequence (dummy write + modified write)
 static bus_state_t cont_rmw_write(fam65xx_t* cpu, bus_state_t pins) {
-    printf("*** cont_rmw_write called! cb_index=%d, effective_addr=0x%04x, DL=0x%02x ***\n",
-           cpu->cb_index, cpu->effective_addr, cpu->DL);
-    
     switch(cpu->cb_index++) {
-        case 0: {
-            // Final write of modified value and advance PC
+        case 0:
+            // Final write of modified value (cycle 5)
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
+            
+        case 1:
+            // Advance PC and fetch next instruction (cycle 6)
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
             cpu->PC++;  // Advance PC to complete the instruction (ec82 -> ec83)
-            printf("*** cont_rmw_write case 0 - final write DL=0x%02x to addr=0x%04x, PC advanced to 0x%04x ***\n",
-                   cpu->DL, cpu->effective_addr, cpu->PC);
-            // Final write of modified value and prepare for next instruction fetch
-            return WRITE_CYCLE(cpu->effective_addr, cpu->DL) | SYNC_FLAG;
-        }
+            return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
     }
     return pins;
 }
@@ -775,8 +781,6 @@ static bus_state_t op_dec(fam65xx_t* cpu, bus_state_t pins) {
 }
 
 static bus_state_t op_asl_mem(fam65xx_t* cpu, bus_state_t pins) {
-    printf("*** op_asl_mem called! cb_index=%d ***\n", cpu->cb_index);
-    
     switch(cpu->cb_index++) {
         case 0: {
             // Read data from memory and process it
@@ -784,9 +788,6 @@ static bus_state_t op_asl_mem(fam65xx_t* cpu, bus_state_t pins) {
             cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x80) ? FLAG_C : 0);
             cpu->DL = original << 1;
             SET_NZ(cpu, cpu->DL);
-            
-            printf("*** op_asl_mem setting up RMW sequence - original=0x%02x, modified=0x%02x ***\n",
-                   original, cpu->DL);
             
             // Return dummy write of original value for THIS cycle
             return WRITE_CYCLE(cpu->effective_addr, original);
@@ -796,9 +797,6 @@ static bus_state_t op_asl_mem(fam65xx_t* cpu, bus_state_t pins) {
             // Final write of modified value and prepare for next instruction
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            
-            printf("*** op_asl_mem final write DL=0x%02x to addr=0x%04x ***\n",
-                   cpu->DL, cpu->effective_addr);
             
             return WRITE_CYCLE(cpu->effective_addr, cpu->DL) | SYNC_FLAG;
         }
@@ -1524,14 +1522,15 @@ static cycle_fn_t get_op_cb(fam65xx_t* cpu) {
 	return op_handlers[op_index];
 }
 
+extern bool verbose_output;
+
 static bus_state_t fetch_next(fam65xx_t* cpu, bus_state_t pins) {
     cpu->opcode = GET_DATA(pins);
     
     // Debug: Print opcode and its mappings
-    extern bool verbose_output;
-    printf("  DEBUG: fetch_next opcode=0x%02x\n", cpu->opcode);
     
     if (verbose_output) {
+        printf("  DEBUG: fetch_next opcode=0x%02x\n", cpu->opcode);
         uint8_t am_index = opcode_to_am[cpu->opcode];
         uint8_t op_index = opcode_to_op[cpu->opcode];
         cycle_fn_t am_handler = am_handlers[am_index];
@@ -1646,7 +1645,6 @@ bus_state_t fam65xx_callbacks_bootstrap(fam65xx_t* cpu, bus_state_t pins) {
         pins = READ_CYCLE(cpu->PC) | SYNC_FLAG;
         
         // Debug bootstrap
-        extern bool verbose_output;
         if (verbose_output) {
             printf("  DEBUG: Bootstrap - pins=0x%016llx, SYNC_FLAG=0x%016llx, has_sync=%d\n",
                    (unsigned long long)pins, (unsigned long long)SYNC_FLAG,
@@ -1686,12 +1684,15 @@ uint8_t fam65xx_p(fam65xx_t* cpu) { return cpu->P; }
 uint16_t fam65xx_pc(fam65xx_t* cpu) { return cpu->PC; }
 
 bus_state_t fam65xx_callbacks_tick(fam65xx_t* cpu, bus_state_t pins) {
-    // UNCONDITIONAL debug to verify function is being called
     static int tick_counter = 0;
     tick_counter++;
-    printf("  UNCONDITIONAL_DEBUG: fam65xx_tick called #%d - callback=%p, cb_index=%d\n",
-           tick_counter, (void*)cpu->callback, cpu->cb_index);
-    
+    // Debug interrupt state BEFORE clearing SYNC
+    // Debug to verify function is being called
+    if (verbose_output) {
+        printf("  UNCONDITIONAL_DEBUG: fam65xx_tick called #%d - callback=%p, cb_index=%d\n",
+                   tick_counter, (void*)cpu->callback, cpu->cb_index);
+    }
+
     // Debug and fix initial state - unconditional debug first
     static bool first_tick = true;
     if (first_tick) {
@@ -1743,7 +1744,6 @@ bus_state_t fam65xx_callbacks_tick(fam65xx_t* cpu, bus_state_t pins) {
     // SYNC-based opcode decoding with interrupt handling - BEFORE callback execution
     if (pins & SYNC_FLAG) {
         // Debug interrupt state BEFORE clearing SYNC
-        extern bool verbose_output;
         if (verbose_output) {
             printf("  DEBUG: SYNC detected, brk_flags=0x%02x, nmi_pip=0x%02x, irq_pip=0x%02x, P=0x%02x\n",
                    cpu->brk_flags, cpu->nmi_pip, cpu->irq_pip, cpu->P);
@@ -1780,7 +1780,6 @@ bus_state_t fam65xx_callbacks_tick(fam65xx_t* cpu, bus_state_t pins) {
     }
     
     // Execute one cycle using callback dispatch mechanism
-    extern bool verbose_output;
     if (verbose_output && cpu->cb_index == 0) {
         printf("  DEBUG: Executing callback %p (fetch_next=%p, op_brk=%p)\n",
                (void*)cpu->callback, (void*)fetch_next, (void*)op_brk);
