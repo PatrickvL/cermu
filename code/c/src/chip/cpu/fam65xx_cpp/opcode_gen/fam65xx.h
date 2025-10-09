@@ -170,6 +170,7 @@ typedef struct {
 
     // Cycle decoder state
     uint16_t CI;          // Current cycle index
+    uint16_t effective_address;
     uint8_t reg_idx;      // Register index for memory accesses
 
     // Memory callbacks
@@ -250,27 +251,27 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
 // LETS_READ: Setup memory read operation using adr_idx for hardware-accurate addressing
 // Sets up addressing mode register and data register indices for memory access
 #define LETS_READ(addr_register, data_register) do { \
-    BUS_SET_ADDR(pins, c->r16[addr_register]); \
+    c->effective_address = c->r16[addr_register]; /* Set effective address for memory access */ \
     c->reg_idx = data_register; \
 } while(0)
 
 // LETS_WRITE: Setup memory write operation using reg_idx for hardware-accurate addressing
 // Sets up addressing mode register and data register indices for memory access
 #define LETS_WRITE(addr_register, data_register) do { \
-    BUS_SET_ADDR(pins, c->r16[addr_register]); \
-    BUS_SET_DATA(pins, c->r8[data_register]); \
+    c->effective_address = c->r16[addr_register]; /* Set effective address for memory access */ \
+    c->reg_idx = data_register; \
     pins &= ~BUS_BIT(BUS_RW_BIT); \
 } while(0)
 
 // Stack operation helpers using dedicated SP register
 #define STACK_PUSH(data_register) do { \
-    c->AD = c->SP--; /* Use full 16-bit SP register, auto-decrement */ \
-    LETS_WRITE(R_AD, data_register); \
+    LETS_WRITE(R_SP16, data_register);  /* Use full 16-bit SP register */ \
+    c->S--; /* Decrement S after use for address */ \
 } while(0)
 
-#define STACK_PULL() do { \
+#define STACK_PULL(data_register) do { \
     c->S++; /* Increment S, then use for address */  \
-    LETS_READ(R_SP16, R_DL); \
+    LETS_READ(R_SP16, data_register); \
 } while(0)
 
 #define STACK_PEEK() do { \
@@ -314,7 +315,7 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
     LETS_READ(addr_register, R_DISCARD); \
 } while(0)
 
-// DUMMY_WRITE: Perform a dummy write cycle (no actual write, but bus cycle occurs)
+// DUMMY_WRITE: Perform a dummy write cycle (write back just-read value)
 // Note: In hardware, dummy writes don't actually modify memory, but the bus cycle happens
 #define DUMMY_WRITE(addr_register, data_register) do { \
     LETS_WRITE(addr_register, data_register); \
@@ -638,14 +639,14 @@ bus_state_t fam65xx_tick(fam65xx_t* c, bus_state_t pins) {
     
     // Memory access happens FIRST (hardware-accurate)
     // Use reg_idx to select address register, with address passed via pins
-    uint16_t mem_addr = BUS_GET_ADDR(pins);
-    uint8_t pins_data = BUS_GET_DATA(pins);
+    uint16_t mem_addr = c->effective_address;
     if (pins & BUS_BIT(BUS_RW_BIT)) {
         // Read operation - perform memory read
+        uint8_t pins_data = BUS_GET_DATA(pins);
         c->r8[c->reg_idx] = c->mem_read(c->user_data, mem_addr, pins_data);
     } else {
         // Write operation - perform memory write
-        c->mem_write(c->user_data, mem_addr, pins_data);
+        c->mem_write(c->user_data, mem_addr, c->r8[c->reg_idx]);
         // Automatically raise RW pin after write completes - test runner can infer write from mem_write call
         pins |= BUS_BIT(BUS_RW_BIT);
     }

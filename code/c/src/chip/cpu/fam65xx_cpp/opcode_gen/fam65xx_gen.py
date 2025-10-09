@@ -182,7 +182,7 @@ OP_PHP = ("PHP", M___, [
 ])
 
 OP_PLP = ("PLP", M___, [
-    "STACK_PULL();\nNEXT_CYCLE;",
+    "STACK_PULL(R_DL);\nNEXT_CYCLE;",
     "STACK_PEEK();\nc->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;\nNEXT_OPCODE;"
 ])
 
@@ -192,20 +192,20 @@ OP_PHA = ("PHA", M___, [
 ])
 
 OP_PLA = ("PLA", M___, [
-    "STACK_PULL();\nNEXT_CYCLE;",
+    "STACK_PULL(R_DL);\nNEXT_CYCLE;",
     "STACK_PEEK();\nc->A = c->DL;\n_NZ(c->A);\nNEXT_OPCODE;"
 ])
 
 OP_RTI = ("RTI", M_R_, [
-    "STACK_PULL();\nNEXT_CYCLE;",
-    "STACK_PULL();\nc->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;\nNEXT_CYCLE;",
-    "STACK_PULL();\nc->PCL = c->DL;\nNEXT_CYCLE;",
+    "STACK_PULL(R_DL);\nNEXT_CYCLE;",
+    "STACK_PULL(R_DL);\nc->P = (c->DL | FAM65XX_BF) & ~FAM65XX_XF;\nNEXT_CYCLE;",
+    "STACK_PULL(R_DL);\nc->PCL = c->DL;\nNEXT_CYCLE;",
     "STACK_PEEK();\nc->PCH = c->DL;\nNEXT_OPCODE;"
 ])
 
 OP_RTS = ("RTS", M_R_, [
-    "STACK_PULL();\nNEXT_CYCLE;",
-    "STACK_PULL();\nc->PCL = c->DL;\nNEXT_CYCLE;",
+    "STACK_PULL(R_DL);\nNEXT_CYCLE;",
+    "STACK_PULL(R_DL);\nc->PCL = c->DL;\nNEXT_CYCLE;",
     "STACK_PEEK();\nc->PCH = c->DL;\nNEXT_OPCODE;"
 ])
 
@@ -479,7 +479,7 @@ OP_PHA_MACRO = ("PHA", M___, [
 ])
 
 OP_PLA_MACRO = ("PLA", M___, [
-    "STACK_PULL();\nNEXT_CYCLE;",
+    "STACK_PULL(R_DL);\nNEXT_CYCLE;",
     "STACK_PEEK();\nc->A = c->DL;\n_NZ(c->A);\nNEXT_CYCLE;",
     "NEXT_OPCODE;"
 ])
