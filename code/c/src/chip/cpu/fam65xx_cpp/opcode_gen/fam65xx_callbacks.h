@@ -584,7 +584,7 @@ static bus_state_t cont_rmw_write(fam65xx_t* cpu, bus_state_t pins) {
             // Write modified value and fetch next
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            return WRITE_CYCLE(cpu->effective_addr, cpu->DL) | SYNC_FLAG;
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
     }
     return pins;
 }
@@ -654,17 +654,17 @@ static bus_state_t op_ldy(fam65xx_t* cpu, bus_state_t pins) {
 
 static bus_state_t op_sta(fam65xx_t* cpu, bus_state_t pins) {
     cpu->callback = fetch_next;
-    return WRITE_CYCLE(cpu->effective_addr, cpu->A) | SYNC_FLAG;
+    return WRITE_CYCLE(cpu->effective_addr, cpu->A);
 }
 
 static bus_state_t op_stx(fam65xx_t* cpu, bus_state_t pins) {
     cpu->callback = fetch_next;
-    return WRITE_CYCLE(cpu->effective_addr, cpu->X) | SYNC_FLAG;
+    return WRITE_CYCLE(cpu->effective_addr, cpu->X);
 }
 
 static bus_state_t op_sty(fam65xx_t* cpu, bus_state_t pins) {
     cpu->callback = fetch_next;
-    return WRITE_CYCLE(cpu->effective_addr, cpu->Y) | SYNC_FLAG;
+    return WRITE_CYCLE(cpu->effective_addr, cpu->Y);
 }
 
 // ============================================================================
@@ -1034,7 +1034,7 @@ static bus_state_t op_pha(fam65xx_t* cpu, bus_state_t pins) {
         case 1:
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            pins = WRITE_CYCLE(cpu->SP, cpu->A) | SYNC_FLAG;
+            pins = WRITE_CYCLE(cpu->SP, cpu->A);
             cpu->S--;
             return pins;
     }
@@ -1049,7 +1049,7 @@ static bus_state_t op_php(fam65xx_t* cpu, bus_state_t pins) {
         case 1:
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            pins = WRITE_CYCLE(cpu->SP, cpu->P | FLAG_B | FLAG_U) | SYNC_FLAG;
+            pins = WRITE_CYCLE(cpu->SP, cpu->P | FLAG_B | FLAG_U);
             cpu->S--;
             return pins;
     }
@@ -1484,7 +1484,8 @@ static bus_state_t fetch_next(fam65xx_t* cpu, bus_state_t pins) {
 	}
 
     cpu->callback = am_or_op;
-	return READ_CYCLE(cpu->PC++);
+    cpu->effective_addr = cpu->PC;  // Set effective address for next instruction fetch
+	return READ_CYCLE(cpu->PC++) | SYNC_FLAG;  // Set SYNC flag for instruction fetch
 }
 
 // ============================================================================
