@@ -12,7 +12,7 @@ cmake ..
 
 if %ERRORLEVEL% NEQ 0 (
     echo CMake configuration failed!
-    pause
+    rem pause
     exit /b 1
 )
 
@@ -21,7 +21,7 @@ cmake --build . --config Debug
 
 if %ERRORLEVEL% NEQ 0 (
     echo Build failed!
-    pause
+    rem pause
     exit /b 1
 )
 
@@ -40,4 +40,4 @@ if %ERRORLEVEL% NEQ 0 (
     echo All tests passed successfully!
 )
 
-pause
+REM pause
