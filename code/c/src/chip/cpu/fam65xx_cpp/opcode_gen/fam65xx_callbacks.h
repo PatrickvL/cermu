@@ -35,14 +35,7 @@ extern "C" {
 // 6510-specific pins (mapped to available bits)
 #define FAM6510_AEC     BUS_BIT(BUS_AEC_BIT)
 
-// Legacy pin numbers (for compatibility)
-#define FAM65XX_PIN_RW      BUS_RW_BIT
-#define FAM65XX_PIN_SYNC    BUS_SYNC_BIT
-#define FAM65XX_PIN_IRQ     BUS_IRQ_BIT
-#define FAM65XX_PIN_NMI     BUS_NMI_BIT
-#define FAM65XX_PIN_RDY     BUS_RDY_BIT
-#define FAM65XX_PIN_RES     BUS_RES_BIT
-#define FAM6510_PIN_AEC     BUS_AEC_BIT
+#define FAM6510_PIN_AEC BUS_AEC_BIT
 
 // 6510 I/O port pins (using reserved bit range)
 #define FAM6510_PIN_P0      40
@@ -105,22 +98,20 @@ typedef uint64_t bus_state_t;
 // [33]     = SYNC (1=Opcode fetch)
 // [34]     = RDY (1=CPU ready, 0=halted)
 
-#define RW_FLAG                 BUS_BIT(BUS_RW_BIT)
-#define SYNC_FLAG               BUS_BIT(BUS_SYNC_BIT)
-#define RDY_FLAG                BUS_BIT(BUS_RDY_BIT)
-#define IRQ_FLAG                BUS_BIT(BUS_IRQ_BIT)
-#define NMI_FLAG                BUS_BIT(BUS_NMI_BIT)
+#define RW_FLAG                 ((bus_state_t)1 << 32)
+#define SYNC_FLAG               ((bus_state_t)1 << 33)
+#define RDY_FLAG                ((bus_state_t)1 << 34)
+#define IRQ_FLAG                ((bus_state_t)1 << 35)
+#define NMI_FLAG                ((bus_state_t)1 << 36)
 
 #define GET_ADDR(pins)          ((uint16_t)((pins) & 0xFFFF))
 #define GET_DATA(pins)          ((uint8_t)(((pins) >> 16) & 0xFF))
 #define GET_RWB(pins)           (((pins) >> 32) & 1)
 #define GET_SYNC(pins)          (((pins) >> 33) & 1)
-#define SET_ADDR(pins, addr)    ((pins) & ~(bus_state_t)0xFFFF) | (((bus_state_t)(addr) & 0xFFFF))
-#define SET_DATA(pins, data)    (((pins) & ~((bus_state_t)0xFF << 16)) | (((bus_state_t)(data) & 0xFF) << 16))
 
 // Corrected macros that preserve pins state
-#define READ_CYCLE(addr)        (SET_ADDR(pins, addr))  // RW_FLAG is default state, no need to set
-#define WRITE_CYCLE(addr, data) (SET_ADDR(SET_DATA(pins, data), addr) & ~RW_FLAG)  // Clear RW for writes
+#define READ_CYCLE(addr)        (BUS_SET_ADDR(pins, addr))  // RW_FLAG is default state, no need to set
+#define WRITE_CYCLE(addr, data) (BUS_SET_ADDR(BUS_SET_DATA(pins, data), addr) & ~RW_FLAG)  // Clear RW for writes
 
 // ============================================================================
 // CPU Flags
@@ -319,6 +310,40 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
 // IMPLEMENTATION
 // ============================================================================
 
+// Helper function to check if opcode is RMW
+static inline bool is_rmw_opcode(uint8_t op) {
+    // Check zero page RMW opcodes: ASL, LSR, ROL, ROR, INC, DEC
+    return (op == 0x06 || op == 0x46 || op == 0x26 || op == 0x66 || op == 0xE6 || op == 0xC6);
+}
+
+static bool get_opcode_can_skip_cycle(uint8_t opcode) {
+    // Remove unused variables and initialization logic
+    // Simple lookup for specific opcodes
+    switch (opcode) {
+        case 0x11: case 0x19: case 0x1D: // ORA variants
+        case 0x31: case 0x39: case 0x3D: // AND variants
+        case 0x51: case 0x59: case 0x5D: // EOR variants
+        case 0x71: case 0x79: case 0x7D: // ADC variants
+        case 0xB1: case 0xB9: case 0xBC: case 0xBD: case 0xBE: // Load variants
+        case 0xD1: case 0xD9: case 0xDD: // CMP variants
+        case 0xF1: case 0xF9: case 0xFD: // SBC variants
+            return true;
+        default:
+            return false;
+    }
+}
+
+// Helper function to get interrupt vector address based on BRK flags
+static inline uint16_t get_vector_addr(fam65xx_t* cpu) {
+    if (cpu->brk_flags & FAM65XX_BRK_RESET) {
+        return 0xFFFC;
+    } else if (cpu->brk_flags & FAM65XX_BRK_NMI) {
+        return 0xFFFA;
+    } else {
+        return 0xFFFE;  // BRK/IRQ vector
+    }
+}
+
 // ============================================================================
 // Forward declarations
 // ============================================================================
@@ -344,14 +369,39 @@ static bus_state_t am_zero_page(fam65xx_t* cpu, bus_state_t pins) {
             // First call: Get zero page address from operand
             cpu->ZPL = GET_DATA(pins);  // Get zero page address from operand (0x89)
             cpu->effective_addr = cpu->ZP;  // Set effective address for operation
+            printf("*** am_zero_page case 0 - ZPL=0x%02x ***\n", cpu->ZPL);
             return READ_CYCLE(cpu->ZP);  // Read from zero page address
             
-        case 1:
-            // Second call: Data read complete, call operation handler
-            cpu->cb_index = 0;  // Reset for operation handler
-            cpu->callback = get_op_cb(cpu);  // Get operation handler
-            // Call the operation handler with current pins (containing data from ZP)
-            return cpu->callback(cpu, pins);
+        case 1: {
+            // Second call: Data read complete, check if this is an RMW operation
+            if (is_rmw_opcode(cpu->opcode)) {
+                // RMW operation - process data and return dummy write for THIS cycle
+                uint8_t original_data = GET_DATA(pins);
+                
+                // Process the operation based on opcode
+                if (cpu->opcode == 0x06) {  // ASL zp
+                    cpu->P = (cpu->P & ~FLAG_C) | ((original_data & 0x80) ? FLAG_C : 0);
+                    cpu->DL = original_data << 1;
+                    SET_NZ(cpu, cpu->DL);
+                    printf("*** am_zero_page RMW ASL - original=0x%02x, modified=0x%02x ***\n",
+                           original_data, cpu->DL);
+                }
+                // TODO: Add other RMW operations as needed
+                
+                // Set up for final write in next cycle
+                cpu->cb_index = 0;
+                cpu->callback = cont_rmw_write;
+                
+                // Return dummy write of original data for THIS cycle
+                return WRITE_CYCLE(cpu->effective_addr, original_data);
+            } else {
+                // Regular operation - set up operation handler for next cycle
+                cpu->cb_index = 0;
+                cpu->callback = get_op_cb(cpu);
+                printf("*** am_zero_page case 1 - set callback=%p ***\n", (void*)cpu->callback);
+                return pins;
+            }
+        }
     }
     return pins;
 }
@@ -403,23 +453,6 @@ static bus_state_t am_absolute(fam65xx_t* cpu, bus_state_t pins) {
             return READ_CYCLE(cpu->AD);
     }
     return pins;
-}
-
-static bool get_opcode_can_skip_cycle(uint8_t opcode) {
-    // Remove unused variables and initialization logic
-    // Simple lookup for specific opcodes
-    switch (opcode) {
-        case 0x11: case 0x19: case 0x1D: // ORA variants
-        case 0x31: case 0x39: case 0x3D: // AND variants
-        case 0x51: case 0x59: case 0x5D: // EOR variants
-        case 0x71: case 0x79: case 0x7D: // ADC variants
-        case 0xB1: case 0xB9: case 0xBC: case 0xBD: case 0xBE: // Load variants
-        case 0xD1: case 0xD9: case 0xDD: // CMP variants
-        case 0xF1: case 0xF9: case 0xFD: // SBC variants
-            return true;
-        default:
-            return false;
-    }
 }
 
 static bus_state_t am_absolute_x(fam65xx_t* cpu, bus_state_t pins) {
@@ -549,31 +582,22 @@ static bus_state_t am_indirect_indexed(fam65xx_t* cpu, bus_state_t pins) {
 // Continuation Sequences (Shared Final Cycles)
 // ============================================================================
 
-// Helper function to get interrupt vector address based on BRK flags
-static inline uint16_t get_vector_addr(fam65xx_t* cpu) {
-    if (cpu->brk_flags & FAM65XX_BRK_RESET) {
-        return 0xFFFC;
-    } else if (cpu->brk_flags & FAM65XX_BRK_NMI) {
-        return 0xFFFA;
-    } else {
-        return 0xFFFE;  // BRK/IRQ vector
-    }
-}
-
 // RMW write sequence (dummy write + modified write)
 static bus_state_t cont_rmw_write(fam65xx_t* cpu, bus_state_t pins) {
+    printf("*** cont_rmw_write called! cb_index=%d, effective_addr=0x%04x, DL=0x%02x ***\n",
+           cpu->cb_index, cpu->effective_addr, cpu->DL);
+    
     switch(cpu->cb_index++) {
-        case 0:
-            SET_NZ(cpu, cpu->DL);
-            cpu->callback = cont_rmw_write; // Callers did not set this yet
-            // Dummy write of original value
-            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
-            
-        case 1:
-            // Write modified value and fetch next
+        case 0: {
+            // Final write of modified value and advance PC
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
+            cpu->PC++;  // Advance PC to complete the instruction (ec82 -> ec83)
+            printf("*** cont_rmw_write case 0 - final write DL=0x%02x to addr=0x%04x, PC advanced to 0x%04x ***\n",
+                   cpu->DL, cpu->effective_addr, cpu->PC);
+            // Final write of modified value and prepare for next instruction fetch
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL) | SYNC_FLAG;
+        }
     }
     return pins;
 }
@@ -751,10 +775,35 @@ static bus_state_t op_dec(fam65xx_t* cpu, bus_state_t pins) {
 }
 
 static bus_state_t op_asl_mem(fam65xx_t* cpu, bus_state_t pins) {
-    cpu->DL = GET_DATA(pins);
-    cpu->P = (cpu->P & ~FLAG_C) | ((cpu->DL & 0x80) ? FLAG_C : 0);
-    cpu->DL <<= 1;
-    return cont_rmw_write(cpu, pins);
+    printf("*** op_asl_mem called! cb_index=%d ***\n", cpu->cb_index);
+    
+    switch(cpu->cb_index++) {
+        case 0: {
+            // Read data from memory and process it
+            uint8_t original = GET_DATA(pins);
+            cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x80) ? FLAG_C : 0);
+            cpu->DL = original << 1;
+            SET_NZ(cpu, cpu->DL);
+            
+            printf("*** op_asl_mem setting up RMW sequence - original=0x%02x, modified=0x%02x ***\n",
+                   original, cpu->DL);
+            
+            // Return dummy write of original value for THIS cycle
+            return WRITE_CYCLE(cpu->effective_addr, original);
+        }
+        
+        case 1: {
+            // Final write of modified value and prepare for next instruction
+            cpu->cb_index = 0;
+            cpu->callback = fetch_next;
+            
+            printf("*** op_asl_mem final write DL=0x%02x to addr=0x%04x ***\n",
+                   cpu->DL, cpu->effective_addr);
+            
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL) | SYNC_FLAG;
+        }
+    }
+    return pins;
 }
 
 static bus_state_t op_lsr_mem(fam65xx_t* cpu, bus_state_t pins) {
@@ -1679,7 +1728,7 @@ bus_state_t fam65xx_callbacks_tick(fam65xx_t* cpu, bus_state_t pins) {
             // Pass current bus data to allow VIC-II graphics data leaking in color RAM
             uint8_t current_bus_data = GET_DATA(pins);
             uint8_t read_data = cpu->mem_read(cpu->user_data, mem_addr, current_bus_data);
-            pins = SET_DATA(pins, read_data);
+            pins = BUS_SET_DATA(pins, read_data);
         }
     } else {
         // Write operation - perform memory write via callback if available
