@@ -143,8 +143,6 @@ typedef uint64_t bus_state_t;
 enum {
     // 16-bit aligned register pairs (endian-aware) for memory addresses
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-    R_ZPL,       // Zero page (low byte) - full 16-bit zero page register
-    R_ZPH,       // Zero page (high byte) - always 0x00 for 6502/6510
     R_SPL,       // Stack pointer (low byte) - full 16-bit stack register
     R_SPH,       // Stack pointer (high byte) - always 0x01 for 6502/6510
     R_ADL,       // Address (low byte, even index for little endian)
@@ -152,8 +150,6 @@ enum {
     R_PCL,       // Program counter (low byte, even index for little endian)
     R_PCH,       // Program counter (high byte)
 #else
-    R_ZPH,       // Zero page (high byte) - always 0x00 for 6502/6510
-    R_ZPL,       // Zero page (low byte) - full 16-bit zero page register
     R_SPH,       // Stack pointer (high byte) - always 0x01 for 6502/6510
     R_SPL,       // Stack pointer (low byte) - full 16-bit stack register
     R_ADH,       // Address (high byte, even index for big endian)
@@ -170,17 +166,15 @@ enum {
     R_IR,        // Instruction register
     R_DL,        // Data latch
     R_TMP,       // Temporary storage
-    R_DISCARD,   // Discard register for dummy reads
 
     // Compatibility mapping for 8-bit stack pointer
     R_S = R_SPL,  // Map legacy S register to SPL for compatibility
 
-    R_COUNT = R_DISCARD + 1 //  (no comma for last element)
-};    
+    R_COUNT = R_TMP + 1 //  (no comma for last element)
+};
 
 // 16-bit register indices (native endian compatible)
 enum {
-    R_ZP = R_ZPL / 2,  // Zero page (16 bits) - full zero page register
     R_SP = R_SPL / 2,  // Stack pointer (16 bits) - full stack register
     R_AD = R_ADL / 2,  // Address (16 bits)
     R_PC = R_PCL / 2,  // Program counter (16 bits)
@@ -208,10 +202,6 @@ struct fam65xx_s {
 #define P      r8[R_P]     // Processor status
 
 // Enhanced 16-bit memory address registers
-#define ZP     r16[R_ZP]   // Zero page register (full 16-bit with high=0x00)
-#define ZPL    r8[R_ZPL]   // Zero page low
-//#define ZPH  r8[R_ZPH]   // Zero page high (always 0x00)
-
 #define SP     r16[R_SP]   // Stack pointer (full 16-bit with high=0x01)
 #define SPL    r8[R_SPL]   // Stack pointer low
 //#define SPH  r8[R_SPH]   // Stack pointer high (always 0x01)
@@ -228,7 +218,6 @@ struct fam65xx_s {
 #define opcode r8[R_IR]    // Current opcode
 #define DL     r8[R_DL]    // Data latch
 #define TMP    r8[R_TMP]   // Temporary storage
-#define DISCARD r8[R_DISCARD] // Discard register for dummy operations
     
     // Internal state
     cycle_fn_t callback;   // Current cycle handler
@@ -347,23 +336,21 @@ static void set_next_callback(fam65xx_t* cpu);
 
 static bus_state_t am_zero_page(fam65xx_t* cpu, bus_state_t pins) {
     // Standard addressing mode handler: only resolve address, don't handle operations
-    cpu->ZPL = GET_DATA(pins);
-    cpu->effective_addr = cpu->ZP; // Set effective address for operations
+    cpu->effective_addr = GET_DATA(pins); // Set effective address for operations
     set_next_callback(cpu);
-    return READ_CYCLE(cpu->ZP);
+    return READ_CYCLE(cpu->effective_addr);
 }
 
 static bus_state_t am_zero_page_x(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0:
-            cpu->ZPL = GET_DATA(pins);
-            return READ_CYCLE(cpu->ZP);
+            cpu->effective_addr = GET_DATA(pins);
+            return READ_CYCLE(cpu->effective_addr);
             
         case 1:
-            cpu->ZPL = cpu->ZPL + cpu->X; // Fix: use ZPL not ADL
-            cpu->effective_addr = cpu->ZP; // Set effective address for operations
+            cpu->effective_addr = (cpu->effective_addr + cpu->X) & 0xFF;
             set_next_callback(cpu);
-            return READ_CYCLE(cpu->ZP);
+            return READ_CYCLE(cpu->effective_addr);
     }
     return pins;
 }
@@ -371,12 +358,21 @@ static bus_state_t am_zero_page_x(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t am_zero_page_y(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0:
-            cpu->ZPL = GET_DATA(pins);
-            return READ_CYCLE(cpu->ZP);
+            cpu->effective_addr = GET_DATA(pins);
+            return READ_CYCLE(cpu->effective_addr);
             
         case 1:
-            cpu->ZPL = cpu->ZPL + cpu->Y;
-            cpu->effective_addr = cpu->ZP; // Set effective address for operations
+            cpu->effective_addr = (cpu->effective_addr + cpu->Y) & 0xFF;
+            set_next_callback(cpu);
+            return READ_CYCLE(cpu->effective_addr);
+    }
+    return pins;
+}
+
+static bus_state_t am_absolute(fam65xx_t* cpu, bus_state_t pins) {
+    switch(cpu->cb_index++) {
+        case 0:
+            cpu->ADL = GET_DATA(pins);
             set_next_callback(cpu);
             return READ_CYCLE(cpu->ZP);
     }
@@ -1640,7 +1636,6 @@ bus_state_t fam65xx_callbacks_init(fam65xx_t* cpu, const fam65xx_desc_t* desc) {
     
     // Set initial register state for 16-bit memory registers
     cpu->r8[R_SPH] = 0x01;   // Stack pointer high byte (always 0x01 for 6502/6510)
-    cpu->r8[R_ZPH] = 0x00;   // Zero page high byte (always 0x00 for 6502/6510)
     
     // ProcessorTests compatibility: Initialize to fetch first instruction
     cpu->P = FLAG_U;         // Only set unused flag
