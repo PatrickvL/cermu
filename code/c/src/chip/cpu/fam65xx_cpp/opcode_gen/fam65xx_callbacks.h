@@ -118,8 +118,9 @@ typedef uint64_t bus_state_t;
 #define SET_ADDR(pins, addr)    ((pins) & ~(bus_state_t)0xFFFF) | (((bus_state_t)(addr) & 0xFFFF))
 #define SET_DATA(pins, data)    (((pins) & ~((bus_state_t)0xFF << 16)) | (((bus_state_t)(data) & 0xFF) << 16))
 
-#define READ_CYCLE(addr)        (SET_ADDR(pins, addr) | RW_FLAG)
-#define WRITE_CYCLE(addr, data) (((bus_state_t)(addr) & 0xFFFF) | (((bus_state_t)(data) & 0xFF) << 16))
+// Corrected macros that preserve pins state
+#define READ_CYCLE(addr)        (SET_ADDR(pins, addr))  // RW_FLAG is default state, no need to set
+#define WRITE_CYCLE(addr, data) (SET_ADDR(SET_DATA(pins, data), addr) & ~RW_FLAG)  // Clear RW for writes
 
 // ============================================================================
 // CPU Flags
@@ -326,7 +327,8 @@ static bus_state_t cont_rmw_write(fam65xx_t* cpu, bus_state_t pins);
 static bus_state_t am_immediate(fam65xx_t* cpu, bus_state_t pins) {
     // Single cycle - operand already fetched
     cpu->callback = get_op_cb(cpu);
-    return READ_CYCLE(cpu->PC++);
+    cpu->effective_addr = cpu->PC++;
+    return READ_CYCLE(cpu->effective_addr);
 }
 
 static bus_state_t am_zero_page(fam65xx_t* cpu, bus_state_t pins) {
@@ -359,7 +361,7 @@ static bus_state_t am_zero_page_y(fam65xx_t* cpu, bus_state_t pins) {
             return READ_CYCLE(cpu->ZP);
             
         case 1:
-            cpu->ZPL = cpu->ADL + cpu->Y;
+            cpu->ZPL = cpu->ZPL + cpu->Y;
             cpu->cb_index = 0;
             cpu->callback = get_op_cb(cpu);
             return READ_CYCLE(cpu->ZP);
@@ -371,7 +373,8 @@ static bus_state_t am_absolute(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0:
             cpu->ADL = GET_DATA(pins);
-            return READ_CYCLE(cpu->PC++);
+            cpu->effective_addr = cpu->PC++;
+            return READ_CYCLE(cpu->effective_addr);
             
         case 1:
             cpu->ADH = GET_DATA(pins);
@@ -453,7 +456,8 @@ static bus_state_t am_absolute_x(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0:
             cpu->ADL = GET_DATA(pins);
-            return READ_CYCLE(cpu->PC++);
+            cpu->effective_addr = cpu->PC++;
+            return READ_CYCLE(cpu->effective_addr);
             
         case 1:
             cpu->ADH = GET_DATA(pins);
@@ -480,7 +484,8 @@ static bus_state_t am_absolute_y(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0:
             cpu->ADL = GET_DATA(pins);
-            return READ_CYCLE(cpu->PC++);
+            cpu->effective_addr = cpu->PC++;
+            return READ_CYCLE(cpu->effective_addr);
             
         case 1:
             cpu->ADH = GET_DATA(pins);
@@ -502,7 +507,8 @@ static bus_state_t am_indirect(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0:
             cpu->ADL = GET_DATA(pins);
-            return READ_CYCLE(cpu->PC++);
+            cpu->effective_addr = cpu->PC++;
+            return READ_CYCLE(cpu->effective_addr);
             
         case 1:
             cpu->ADH = GET_DATA(pins);
@@ -603,19 +609,19 @@ static bus_state_t op_branch(fam65xx_t* cpu, bus_state_t pins, uint8_t flag_mask
             int8_t offset = (int8_t)GET_DATA(pins);
             uint16_t target = cpu->PC + offset;
             
-            if (page_crossed(target, cpu->PC)) {
+            if (!page_crossed(target, cpu->PC)) {
                 cpu->PC = target;
                 cpu->cb_index = 0;
                 cpu->callback = fetch_next;
                 return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
             }
             
-            cpu->AD = target; // Was effective_addr
+            cpu->AD = target; // Store target for next cycle // Was effective_addr
             return READ_CYCLE((cpu->PC & 0xFF00) | (target & 0xFF));
         }
         
         case 1:
-            cpu->PC = cpu->AD; // Was effective_addr
+            cpu->PC = cpu->AD; // Set final target // Was effective_addr
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
             return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
@@ -654,17 +660,17 @@ static bus_state_t op_ldy(fam65xx_t* cpu, bus_state_t pins) {
 
 static bus_state_t op_sta(fam65xx_t* cpu, bus_state_t pins) {
     cpu->callback = fetch_next;
-    return WRITE_CYCLE(cpu->effective_addr, cpu->A);
+    return WRITE_CYCLE(cpu->effective_addr, cpu->A) | SYNC_FLAG;
 }
 
 static bus_state_t op_stx(fam65xx_t* cpu, bus_state_t pins) {
     cpu->callback = fetch_next;
-    return WRITE_CYCLE(cpu->effective_addr, cpu->X);
+    return WRITE_CYCLE(cpu->effective_addr, cpu->X) | SYNC_FLAG;
 }
 
 static bus_state_t op_sty(fam65xx_t* cpu, bus_state_t pins) {
     cpu->callback = fetch_next;
-    return WRITE_CYCLE(cpu->effective_addr, cpu->Y);
+    return WRITE_CYCLE(cpu->effective_addr, cpu->Y) | SYNC_FLAG;
 }
 
 // ============================================================================
@@ -1034,7 +1040,7 @@ static bus_state_t op_pha(fam65xx_t* cpu, bus_state_t pins) {
         case 1:
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            pins = WRITE_CYCLE(cpu->SP, cpu->A);
+            pins = WRITE_CYCLE(cpu->SP, cpu->A) | SYNC_FLAG;
             cpu->S--;
             return pins;
     }
@@ -1049,7 +1055,7 @@ static bus_state_t op_php(fam65xx_t* cpu, bus_state_t pins) {
         case 1:
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            pins = WRITE_CYCLE(cpu->SP, cpu->P | FLAG_B | FLAG_U);
+            pins = WRITE_CYCLE(cpu->SP, cpu->P | FLAG_B | FLAG_U) | SYNC_FLAG;
             cpu->S--;
             return pins;
     }
