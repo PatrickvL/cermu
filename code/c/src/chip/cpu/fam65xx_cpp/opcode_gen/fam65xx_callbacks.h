@@ -571,6 +571,17 @@ static bus_state_t am_indirect_indexed(fam65xx_t* cpu, bus_state_t pins) {
 // Continuation Sequences (Shared Final Cycles)
 // ============================================================================
 
+// Helper function to get interrupt vector address based on BRK flags
+static inline uint16_t get_vector_addr(fam65xx_t* cpu) {
+    if (cpu->brk_flags & FAM65XX_BRK_RESET) {
+        return 0xFFFC;
+    } else if (cpu->brk_flags & FAM65XX_BRK_NMI) {
+        return 0xFFFA;
+    } else {
+        return 0xFFFE;  // BRK/IRQ vector
+    }
+}
+
 // RMW write sequence (dummy write + modified write)
 static bus_state_t cont_rmw_write(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
@@ -589,7 +600,7 @@ static bus_state_t cont_rmw_write(fam65xx_t* cpu, bus_state_t pins) {
     return pins;
 }
 
-static bus_state_t op_branch(fam65xx_t* cpu, bus_state_t pins, uint8_t flag_mask, bool flag_value) {
+static /*NOT inline!*/ bus_state_t op_branch(fam65xx_t* cpu, bus_state_t pins, uint8_t flag_mask, bool flag_value) {
     switch(cpu->cb_index++) {
         case 0: {
             bool branch_taken = ((cpu->P & flag_mask) != 0) == flag_value;
@@ -1199,10 +1210,12 @@ static bus_state_t op_rti(fam65xx_t* cpu, bus_state_t pins) {
     return pins;
 }
 
-static /*NOT inline!*/ bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins) {
+static bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0:
-            cpu->PC++;
+            if (0 == (cpu->brk_flags & (FAM65XX_BRK_IRQ | FAM65XX_BRK_NMI))) {
+                cpu->PC++;
+            }
             return READ_CYCLE(cpu->PC);
             
         case 1:
@@ -1222,11 +1235,13 @@ static /*NOT inline!*/ bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins) {
             
         case 4:
             cpu->P |= FLAG_I;
-            return READ_CYCLE(0xFFFE);
-            
+            uint16_t vector_addr = get_vector_addr(cpu);
+            return READ_CYCLE(vector_addr);
+
         case 5:
             cpu->DL = GET_DATA(pins);
-            return READ_CYCLE(0xFFFF);
+            uint16_t vector_addr = get_vector_addr(cpu);
+            return READ_CYCLE(vector_addr + 1);
             
         case 6:
             cpu->PC = (GET_DATA(pins) << 8) | cpu->DL;
@@ -1270,8 +1285,19 @@ static bus_state_t op_beq(fam65xx_t* cpu, bus_state_t pins) {
 }
 
 static bus_state_t op_nop(fam65xx_t* cpu, bus_state_t pins) {
-    cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    // NOP is a 2-cycle instruction that needs a dummy read from PC
+    switch(cpu->cb_index++) {
+        case 0:
+            // Dummy read from PC (don't increment)
+            return READ_CYCLE(cpu->PC);
+            
+        case 1:
+            // Complete instruction and fetch next
+            cpu->cb_index = 0;
+            cpu->callback = fetch_next;
+            return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    }
+    return pins;
 }
 
 static bus_state_t op_jam(fam65xx_t* cpu, bus_state_t pins) {
@@ -1299,7 +1325,7 @@ enum {
     AM_REL,     // Relative (branches)
 };
 
-static const cycle_fn_t am_handlers[14] = {
+static const cycle_fn_t am_handlers[] = {
     NULL,                   // AM_NON - not used
     NULL,                   // AM_IMP - not used
     NULL,                   // AM_ACC - not used
@@ -1473,6 +1499,15 @@ static cycle_fn_t get_op_cb(fam65xx_t* cpu) {
 static bus_state_t fetch_next(fam65xx_t* cpu, bus_state_t pins) {
     cpu->opcode = GET_DATA(pins);
     
+    // Debug: Print opcode and its mappings
+    extern bool verbose_output;
+    if (verbose_output) {
+        uint8_t am_index = opcode_to_am[cpu->opcode];
+        uint8_t op_index = opcode_to_op[cpu->opcode];
+        printf("  DEBUG: fetch_next opcode=0x%02x, am_index=%d, op_index=%d\n",
+               cpu->opcode, am_index, op_index);
+    }
+    
     // Start addressing mode resolution
     uint8_t am_index = opcode_to_am[cpu->opcode];
     cycle_fn_t am_or_op = am_handlers[am_index];
@@ -1484,8 +1519,17 @@ static bus_state_t fetch_next(fam65xx_t* cpu, bus_state_t pins) {
 	}
 
     cpu->callback = am_or_op;
+    cpu->cb_index = 0;  // Reset callback index for new instruction
     cpu->effective_addr = cpu->PC;  // Set effective address for next instruction fetch
-	return READ_CYCLE(cpu->PC++) | SYNC_FLAG;  // Set SYNC flag for instruction fetch
+    
+    // Execute the callback immediately if it's a direct operation (no addressing mode)
+    if (am_handlers[am_index] == NULL) {
+        // This is a direct operation, execute it now
+        return am_or_op(cpu, pins);
+    } else {
+        // This needs addressing mode resolution first
+        return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    }
 }
 
 // ============================================================================
@@ -1524,7 +1568,7 @@ bus_state_t fam65xx_init(fam65xx_t* cpu, const fam65xx_desc_t* desc) {
     
     bus_state_t pins = 0;
     pins |= RDY_FLAG;   // Set ready bit
-    pins |= RW_FLAG;    // Set read mode
+    pins |= RW_FLAG;    // Set read mode as default state
     
     return pins;
 }
@@ -1542,11 +1586,12 @@ bus_state_t fam65xx_bootstrap(fam65xx_t* cpu, bus_state_t pins) {
     if (cpu->CI == 0xFFFF) {
         // Set up for first instruction fetch
         pins |= RDY_FLAG;   // Ensure RDY is high for execution
-        pins |= RW_FLAG;    // Ensure RW is set for read operation
+        pins |= RW_FLAG;    // Ensure RW is set as default state
         cpu->cb_index = 0;  // Reset callback index
         cpu->CI = 0x0000;   // Clear the invalid marker
-        cpu->effective_addr = cpu->PC;  // Set up effective address for instruction fetch
         cpu->callback = fetch_next;     // Ensure callback is set to fetch_next
+        // Set up pins for first instruction fetch from PC
+        pins = READ_CYCLE(cpu->PC) | SYNC_FLAG;
     }
     
     return pins;
@@ -1591,14 +1636,13 @@ bus_state_t fam65xx_tick(fam65xx_t* cpu, bus_state_t pins) {
         // WRITE cycles proceed regardless
     }
     
-    // Memory access happens FIRST (hardware-accurate)
-    // Use effective_address for memory operations
-    uint16_t mem_addr = cpu->effective_addr;
+    // Memory access happens BEFORE callback execution (hardware-accurate)
+    // Use address from pins (set up by callbacks in previous cycle)
+    uint16_t mem_addr = GET_ADDR(pins);
     if (pins & RW_FLAG) {
         // Read operation - perform memory read via callback if available
         if (cpu->mem_read) {
-            uint8_t pins_data = GET_DATA(pins);
-            uint8_t read_data = cpu->mem_read(cpu->user_data, mem_addr, pins_data);
+            uint8_t read_data = cpu->mem_read(cpu->user_data, mem_addr, 0);
             pins = SET_DATA(pins, read_data);
         }
     } else {
@@ -1613,7 +1657,7 @@ bus_state_t fam65xx_tick(fam65xx_t* cpu, bus_state_t pins) {
     
     // SYNC-based opcode decoding with interrupt handling - BEFORE callback execution
     if (pins & SYNC_FLAG) {
-        pins &= ~SYNC_FLAG;
+        pins &= ~SYNC_FLAG;  // Clear SYNC flag after processing
         
         // Shift interrupt pipelines (required for hardware accuracy)
         cpu->nmi_pip = ((cpu->nmi_pip << 1) | ((pins & NMI_FLAG) ? 0x01 : 0x00)) & 0xFF;
