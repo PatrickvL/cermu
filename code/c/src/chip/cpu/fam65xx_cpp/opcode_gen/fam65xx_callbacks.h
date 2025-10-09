@@ -345,13 +345,6 @@ static void set_next_callback(fam65xx_t* cpu);
 // Addressing Mode Handlers
 // ============================================================================
 
-static bus_state_t am_immediate(fam65xx_t* cpu, bus_state_t pins) {
-    // Single cycle - operand already fetched
-    cpu->effective_addr = cpu->PC++;
-    set_next_callback(cpu);
-    return READ_CYCLE(cpu->effective_addr);
-}
-
 static bus_state_t am_zero_page(fam65xx_t* cpu, bus_state_t pins) {
     // Standard addressing mode handler: only resolve address, don't handle operations
     cpu->ZPL = GET_DATA(pins);
@@ -570,6 +563,7 @@ static bus_state_t op_lda(fam65xx_t* cpu, bus_state_t pins) {
     cpu->A = GET_DATA(pins);
     SET_NZ(cpu, cpu->A);
     cpu->callback = fetch_next;
+    cpu->PC++; // Advance past operand
     return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
 }
 
@@ -1354,7 +1348,7 @@ static const cycle_fn_t am_handlers[] = {
     NULL,                   // AM_NON - not used
     NULL,                   // AM_IMP - not used
     NULL,                   // AM_ACC - not used
-    am_immediate,           // AM_IMM
+    NULL,                   // AM_IMM - handled directly in fetch_next
     am_zero_page,           // AM_ZER
     am_zero_page_x,         // AM_ZPX
     am_zero_page_y,         // AM_ZPY
@@ -1542,18 +1536,45 @@ static bus_state_t rmw_handler(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0: {
             // Read data from memory (addressing mode has resolved effective_addr)
-            // Process the data using the actual operation handler
             uint8_t original = GET_DATA(pins);
-            
-            // Get the operation handler and call it to process the data
-            uint8_t op_index = opcode_to_op[cpu->opcode] & OP_MASK;
-            cycle_fn_t op_handler = op_handlers[op_index];
-            
-            // Store original value for dummy write
             cpu->TMP = original;
             
-            // Call operation handler to process data (it sets cpu->DL)
-            op_handler(cpu, pins);
+            // Process the operation (ASL, LSR, ROL, ROR, INC, DEC)
+            uint8_t op_index = opcode_to_op[cpu->opcode] & OP_MASK;
+            switch(op_index) {
+                case OP_ASL_MEM:
+                    cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x80) ? FLAG_C : 0);
+                    cpu->DL = original << 1;
+                    SET_NZ(cpu, cpu->DL);
+                    break;
+                case OP_LSR_MEM:
+                    cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x01) ? FLAG_C : 0);
+                    cpu->DL = original >> 1;
+                    SET_NZ(cpu, cpu->DL);
+                    break;
+                case OP_ROL_MEM: {
+                    uint8_t carry = (cpu->P & FLAG_C) ? 1 : 0;
+                    cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x80) ? FLAG_C : 0);
+                    cpu->DL = (original << 1) | carry;
+                    SET_NZ(cpu, cpu->DL);
+                    break;
+                }
+                case OP_ROR_MEM: {
+                    uint8_t carry = (cpu->P & FLAG_C) ? 0x80 : 0;
+                    cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x01) ? FLAG_C : 0);
+                    cpu->DL = (original >> 1) | carry;
+                    SET_NZ(cpu, cpu->DL);
+                    break;
+                }
+                case OP_INC:
+                    cpu->DL = original + 1;
+                    SET_NZ(cpu, cpu->DL);
+                    break;
+                case OP_DEC:
+                    cpu->DL = original - 1;
+                    SET_NZ(cpu, cpu->DL);
+                    break;
+            }
             
             // Dummy write of original value (required for RMW timing)
             return WRITE_CYCLE(cpu->effective_addr, cpu->TMP);
@@ -1561,14 +1582,13 @@ static bus_state_t rmw_handler(fam65xx_t* cpu, bus_state_t pins) {
         
         case 1: {
             // Final write of modified value
+            cpu->cb_index = 0;
+            cpu->callback = fetch_next;
             return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
         }
         
         case 2: {
-            // Complete instruction and fetch next
-            cpu->cb_index = 0;
-            cpu->callback = fetch_next;
-            cpu->PC++; // Advance PC to complete the instruction
+            // Complete instruction and fetch next (should not reach here normally)
             return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
         }
     }
