@@ -1387,9 +1387,9 @@ static bus_state_t op_dcp(fam65xx_t* cpu, bus_state_t pins) {
             
             // Store decremented value for write cycle
             cpu->DL = result;
-            
             // Perform CMP with decremented value
             uint16_t cmp_result = cpu->A - result;
+
             cpu->P = (cpu->P & ~(FLAG_N | FLAG_Z | FLAG_C)) |
                      ((cmp_result & 0x80) ? FLAG_N : 0) |
                      ((cmp_result & 0xFF) == 0 ? FLAG_Z : 0) |
@@ -1414,9 +1414,9 @@ static bus_state_t op_isc(fam65xx_t* cpu, bus_state_t pins) {
             
             // Store incremented value for write cycle
             cpu->DL = incremented;
-            
             // Perform SBC with incremented value
             uint16_t result = cpu->A - incremented - (cpu->P & FLAG_C ? 0 : 1);
+
             cpu->P = (cpu->P & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
                      ((result & 0x80) ? FLAG_N : 0) |
                      (((cpu->A ^ incremented) & (cpu->A ^ result) & 0x80) ? FLAG_V : 0) |
@@ -1443,12 +1443,11 @@ static bus_state_t op_slo(fam65xx_t* cpu, bus_state_t pins) {
             // Perform ASL
             cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x80) ? FLAG_C : 0);
             uint8_t shifted = original << 1;
+
             cpu->DL = shifted;
-            
             // Perform ORA
             cpu->A |= shifted;
             SET_NZ(cpu, cpu->A);
-            
             return WRITE_CYCLE(cpu->effective_addr, original);
         }
         case 1:
@@ -1464,17 +1463,15 @@ static bus_state_t op_rla(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0: {
             uint8_t original = FAM65XX_GET_DATA(pins);
-            
             // Perform ROL
             uint8_t carry = (cpu->P & FLAG_C) ? 1 : 0;
-            cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x80) ? FLAG_C : 0);
             uint8_t rotated = (original << 1) | carry;
-            cpu->DL = rotated;
             
+            cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x80) ? FLAG_C : 0);
+            cpu->DL = rotated;
             // Perform AND
             cpu->A &= rotated;
             SET_NZ(cpu, cpu->A);
-            
             return WRITE_CYCLE(cpu->effective_addr, original);
         }
         case 1:
@@ -1494,8 +1491,8 @@ static bus_state_t op_sre(fam65xx_t* cpu, bus_state_t pins) {
             // Perform LSR
             cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x01) ? FLAG_C : 0);
             uint8_t shifted = original >> 1;
+
             cpu->DL = shifted;
-            
             // Perform EOR
             cpu->A ^= shifted;
             SET_NZ(cpu, cpu->A);
@@ -1515,15 +1512,15 @@ static bus_state_t op_rra(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0: {
             uint8_t original = FAM65XX_GET_DATA(pins);
-            
             // Perform ROR
             uint8_t carry = (cpu->P & FLAG_C) ? 0x80 : 0;
-            cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x01) ? FLAG_C : 0);
             uint8_t rotated = (original >> 1) | carry;
-            cpu->DL = rotated;
             
+            cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x01) ? FLAG_C : 0);
+            cpu->DL = rotated;
             // Perform ADC with rotated value
             uint16_t result = cpu->A + rotated + (cpu->P & FLAG_C ? 1 : 0);
+
             cpu->P = (cpu->P & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
                      ((result & 0x80) ? FLAG_N : 0) |
                      (((~(cpu->A ^ rotated) & (cpu->A ^ result)) & 0x80) ? FLAG_V : 0) |
@@ -1563,8 +1560,9 @@ static bus_state_t op_asr(fam65xx_t* cpu, bus_state_t pins) {
 
 static bus_state_t op_arr(fam65xx_t* cpu, bus_state_t pins) {
     // ARR = AND + ROR A (complex behavior in decimal mode)
-    cpu->A &= FAM65XX_GET_DATA(pins);
     uint8_t carry = (cpu->P & FLAG_C) ? 0x80 : 0;
+
+    cpu->A &= FAM65XX_GET_DATA(pins);
     cpu->A = (cpu->A >> 1) | carry;
     SET_NZ(cpu, cpu->A);
     cpu->P = (cpu->P & ~(FLAG_C | FLAG_V)) |
@@ -1578,6 +1576,7 @@ static bus_state_t op_sbx(fam65xx_t* cpu, bus_state_t pins) {
     // SBX = (A & X) - data, result in X
     uint8_t data = FAM65XX_GET_DATA(pins);
     uint16_t result = (cpu->A & cpu->X) - data;
+
     cpu->P = (cpu->P & ~(FLAG_N | FLAG_Z | FLAG_C)) |
              ((result & 0x80) ? FLAG_N : 0) |
              ((result & 0xFF) == 0 ? FLAG_Z : 0) |
@@ -1591,6 +1590,7 @@ static bus_state_t op_sbx(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t op_sha(fam65xx_t* cpu, bus_state_t pins) {
     // SHA = Store A & X & (high byte of address + 1)
     uint8_t high = (cpu->effective_addr >> 8) + 1;
+
     cpu->callback = fetch_next;
     return WRITE_CYCLE(cpu->effective_addr, cpu->A & cpu->X & high) | FAM65XX_SYNC;
 }
@@ -1599,6 +1599,7 @@ static bus_state_t op_shs(fam65xx_t* cpu, bus_state_t pins) {
     // SHS = Store A & X & (high byte of address + 1), set SP to A & X
     uint8_t high = (cpu->effective_addr >> 8) + 1;
     uint8_t val = cpu->A & cpu->X & high;
+
     cpu->S = cpu->A & cpu->X;
     cpu->callback = fetch_next;
     return WRITE_CYCLE(cpu->effective_addr, val) | FAM65XX_SYNC;
@@ -1607,6 +1608,7 @@ static bus_state_t op_shs(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t op_shx(fam65xx_t* cpu, bus_state_t pins) {
     // SHX = Store X & (high byte of address + 1)
     uint8_t high = (cpu->effective_addr >> 8) + 1;
+
     cpu->callback = fetch_next;
     return WRITE_CYCLE(cpu->effective_addr, cpu->X & high) | FAM65XX_SYNC;
 }
@@ -1614,6 +1616,7 @@ static bus_state_t op_shx(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t op_shy(fam65xx_t* cpu, bus_state_t pins) {
     // SHY = Store Y & (high byte of address + 1)
     uint8_t high = (cpu->effective_addr >> 8) + 1;
+
     cpu->callback = fetch_next;
     return WRITE_CYCLE(cpu->effective_addr, cpu->Y & high) | FAM65XX_SYNC;
 }
@@ -1621,6 +1624,7 @@ static bus_state_t op_shy(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t op_las(fam65xx_t* cpu, bus_state_t pins) {
     // LAS = Load A, X, SP with memory & SP
     uint8_t val = FAM65XX_GET_DATA(pins) & cpu->S;
+
     cpu->A = val;
     cpu->X = val;
     cpu->S = val;
@@ -1732,38 +1736,38 @@ static const cycle_fn_t op_handlers[] = {
 
 // Merged opcode lookup table - 8 entries per line for readability
 static const opcode_info_t opcode_table[256] = {
-    OP(AM_NON,0,OP_BRK,0), OP(AM_INX,0,OP_ORA,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INX,0,OP_NOP,0), OP(AM_ZER,0,OP_NOP,0), OP(AM_ZER,0,OP_ORA,0), OP(AM_ZER,0,OP_ASL,1), OP(AM_ZER,0,OP_NOP,0),
-    OP(AM_NON,0,OP_PHP,0), OP(AM_IMM,0,OP_ORA,0), OP(AM_ACC,0,OP_ASL,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABS,0,OP_NOP,0), OP(AM_ABS,0,OP_ORA,0), OP(AM_ABS,0,OP_ASL,1), OP(AM_ABS,0,OP_NOP,0),
-    OP(AM_REL,0,OP_BPL,0), OP(AM_INY,1,OP_ORA,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_NOP,0), OP(AM_ZPX,0,OP_NOP,0), OP(AM_ZPX,0,OP_ORA,0), OP(AM_ZPX,0,OP_ASL,1), OP(AM_ZPX,0,OP_NOP,0),
-    OP(AM_NON,0,OP_CLC,0), OP(AM_ABY,1,OP_ORA,0), OP(AM_NON,0,OP_NOP,0), OP(AM_ABY,0,OP_NOP,0), OP(AM_ABX,0,OP_NOP,0), OP(AM_ABX,1,OP_ORA,0), OP(AM_ABX,0,OP_ASL,1), OP(AM_ABX,0,OP_NOP,0),
-    OP(AM_NON,0,OP_JSR,0), OP(AM_INX,0,OP_AND,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INX,0,OP_NOP,0), OP(AM_ZER,0,OP_BIT,0), OP(AM_ZER,0,OP_AND,0), OP(AM_ZER,0,OP_ROL,1), OP(AM_ZER,0,OP_NOP,0),
-    OP(AM_NON,0,OP_PLP,0), OP(AM_IMM,0,OP_AND,0), OP(AM_ACC,0,OP_ROL,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABS,0,OP_BIT,0), OP(AM_ABS,0,OP_AND,0), OP(AM_ABS,0,OP_ROL,1), OP(AM_ABS,0,OP_NOP,0),
-    OP(AM_REL,0,OP_BMI,0), OP(AM_INY,1,OP_AND,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_NOP,0), OP(AM_ZPX,0,OP_NOP,0), OP(AM_ZPX,0,OP_AND,0), OP(AM_ZPX,0,OP_ROL,1), OP(AM_ZPX,0,OP_NOP,0),
-    OP(AM_NON,0,OP_SEC,0), OP(AM_ABY,1,OP_AND,0), OP(AM_NON,0,OP_NOP,0), OP(AM_ABY,0,OP_NOP,0), OP(AM_ABX,0,OP_NOP,0), OP(AM_ABX,1,OP_AND,0), OP(AM_ABX,0,OP_ROL,1), OP(AM_ABX,0,OP_NOP,0),
-    OP(AM_NON,0,OP_RTI,0), OP(AM_INX,0,OP_EOR,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INX,0,OP_NOP,0), OP(AM_ZER,0,OP_NOP,0), OP(AM_ZER,0,OP_EOR,0), OP(AM_ZER,0,OP_LSR,1), OP(AM_ZER,0,OP_NOP,0),
-    OP(AM_NON,0,OP_PHA,0), OP(AM_IMM,0,OP_EOR,0), OP(AM_ACC,0,OP_LSR,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABS,0,OP_JMP,0), OP(AM_ABS,0,OP_EOR,0), OP(AM_ABS,0,OP_LSR,1), OP(AM_ABS,0,OP_NOP,0),
-    OP(AM_REL,0,OP_BVC,0), OP(AM_INY,1,OP_EOR,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_NOP,0), OP(AM_ZPX,0,OP_NOP,0), OP(AM_ZPX,0,OP_EOR,0), OP(AM_ZPX,0,OP_LSR,1), OP(AM_ZPX,0,OP_NOP,0),
-    OP(AM_NON,0,OP_CLI,0), OP(AM_ABY,1,OP_EOR,0), OP(AM_NON,0,OP_NOP,0), OP(AM_ABY,0,OP_NOP,0), OP(AM_ABX,0,OP_NOP,0), OP(AM_ABX,1,OP_EOR,0), OP(AM_ABX,0,OP_LSR,1), OP(AM_ABX,0,OP_NOP,0),
-    OP(AM_NON,0,OP_RTS,0), OP(AM_INX,0,OP_ADC,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INX,0,OP_NOP,0), OP(AM_ZER,0,OP_NOP,0), OP(AM_ZER,0,OP_ADC,0), OP(AM_ZER,0,OP_ROL,1), OP(AM_ZER,0,OP_NOP,0),
-    OP(AM_NON,0,OP_PLA,0), OP(AM_IMM,0,OP_ADC,0), OP(AM_ACC,0,OP_ROR,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_IND,0,OP_JMP,0), OP(AM_ABS,0,OP_ADC,0), OP(AM_ABS,0,OP_ROR,1), OP(AM_ABS,0,OP_NOP,0),
-    OP(AM_REL,0,OP_BVS,0), OP(AM_INY,1,OP_ADC,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_NOP,0), OP(AM_ZPX,0,OP_NOP,0), OP(AM_ZPX,0,OP_ADC,0), OP(AM_ZPX,0,OP_ROR,1), OP(AM_ZPX,0,OP_NOP,0),
-    OP(AM_NON,0,OP_SEI,0), OP(AM_ABY,1,OP_ADC,0), OP(AM_NON,0,OP_NOP,0), OP(AM_ABY,0,OP_NOP,0), OP(AM_ABX,0,OP_NOP,0), OP(AM_ABX,1,OP_ADC,0), OP(AM_ABX,0,OP_ROR,1), OP(AM_ABX,0,OP_NOP,0),
-    OP(AM_IMM,0,OP_NOP,0), OP(AM_INX,0,OP_STA,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_INX,0,OP_NOP,0), OP(AM_ZER,0,OP_STY,0), OP(AM_ZER,0,OP_STA,0), OP(AM_ZER,0,OP_STX,0), OP(AM_ZER,0,OP_NOP,0),
-    OP(AM_NON,0,OP_DEY,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_NON,0,OP_TXA,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABS,0,OP_STY,0), OP(AM_ABS,0,OP_STA,0), OP(AM_ABS,0,OP_STX,0), OP(AM_ABS,0,OP_NOP,0),
-    OP(AM_REL,0,OP_BCC,0), OP(AM_INY,0,OP_STA,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_NOP,0), OP(AM_ZPX,0,OP_STY,0), OP(AM_ZPX,0,OP_STA,0), OP(AM_ZPY,0,OP_STX,0), OP(AM_ZPY,0,OP_NOP,0),
-    OP(AM_NON,0,OP_TYA,0), OP(AM_ABY,0,OP_STA,0), OP(AM_NON,0,OP_TXS,0), OP(AM_ABY,0,OP_NOP,0), OP(AM_ABX,0,OP_NOP,0), OP(AM_ABX,0,OP_STA,0), OP(AM_ABY,0,OP_NOP,0), OP(AM_ABY,0,OP_NOP,0),
-    OP(AM_IMM,0,OP_LDY,0), OP(AM_INX,0,OP_LDA,0), OP(AM_IMM,0,OP_LDX,0), OP(AM_INX,0,OP_NOP,0), OP(AM_ZER,0,OP_LDY,0), OP(AM_ZER,0,OP_LDA,0), OP(AM_ZER,0,OP_LDX,0), OP(AM_ZER,0,OP_NOP,0),
-    OP(AM_NON,0,OP_TAY,0), OP(AM_IMM,0,OP_LDA,0), OP(AM_NON,0,OP_TAX,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABS,0,OP_LDY,0), OP(AM_ABS,0,OP_LDA,0), OP(AM_ABS,0,OP_LDX,0), OP(AM_ABS,0,OP_NOP,0),
-    OP(AM_REL,0,OP_BCS,0), OP(AM_INY,1,OP_LDA,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_NOP,0), OP(AM_ZPX,0,OP_LDY,0), OP(AM_ZPX,0,OP_LDA,0), OP(AM_ZPY,0,OP_LDX,0), OP(AM_ZPY,0,OP_NOP,0),
-    OP(AM_NON,0,OP_CLV,0), OP(AM_ABY,1,OP_LDA,0), OP(AM_NON,0,OP_TSX,0), OP(AM_ABY,0,OP_NOP,0), OP(AM_ABX,1,OP_LDY,0), OP(AM_ABX,1,OP_LDA,0), OP(AM_ABY,1,OP_LDX,0), OP(AM_ABY,0,OP_NOP,0),
-    OP(AM_IMM,0,OP_CPY,0), OP(AM_INX,0,OP_CMP,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_INX,0,OP_NOP,0), OP(AM_ZER,0,OP_CPY,0), OP(AM_ZER,0,OP_CMP,0), OP(AM_ZER,0,OP_DEC,0), OP(AM_ZER,0,OP_NOP,0),
-    OP(AM_NON,0,OP_INY,0), OP(AM_IMM,0,OP_CMP,0), OP(AM_NON,0,OP_DEX,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABS,0,OP_CPY,0), OP(AM_ABS,0,OP_CMP,0), OP(AM_ABS,0,OP_DEC,0), OP(AM_ABS,0,OP_NOP,0),
-    OP(AM_REL,0,OP_BNE,0), OP(AM_INY,1,OP_CMP,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_NOP,0), OP(AM_ZPX,0,OP_NOP,0), OP(AM_ZPX,0,OP_CMP,0), OP(AM_ZPX,0,OP_DEC,0), OP(AM_ZPX,0,OP_NOP,0),
-    OP(AM_NON,0,OP_CLD,0), OP(AM_ABY,1,OP_CMP,0), OP(AM_NON,0,OP_NOP,0), OP(AM_ABY,0,OP_NOP,0), OP(AM_ABX,0,OP_NOP,0), OP(AM_ABX,1,OP_CMP,0), OP(AM_ABX,0,OP_DEC,0), OP(AM_ABX,0,OP_NOP,0),
-    OP(AM_IMM,0,OP_CPX,0), OP(AM_INX,0,OP_SBC,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_INX,0,OP_NOP,0), OP(AM_ZER,0,OP_CPX,0), OP(AM_ZER,0,OP_SBC,0), OP(AM_ZER,0,OP_INC,0), OP(AM_ZER,0,OP_NOP,0),
-    OP(AM_NON,0,OP_INX,0), OP(AM_IMM,0,OP_SBC,0), OP(AM_NON,0,OP_NOP,0), OP(AM_IMM,0,OP_SBC,0), OP(AM_ABS,0,OP_CPX,0), OP(AM_ABS,0,OP_SBC,0), OP(AM_ABS,0,OP_INC,0), OP(AM_ABS,0,OP_NOP,0),
-    OP(AM_REL,0,OP_BEQ,0), OP(AM_INY,1,OP_SBC,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_NOP,0), OP(AM_ZPX,0,OP_NOP,0), OP(AM_ZPX,0,OP_SBC,0), OP(AM_ZPX,0,OP_INC,0), OP(AM_ZPX,0,OP_NOP,0),
-    OP(AM_NON,0,OP_SED,0), OP(AM_ABY,1,OP_SBC,0), OP(AM_NON,0,OP_NOP,0), OP(AM_ABY,0,OP_NOP,0), OP(AM_ABX,0,OP_NOP,0), OP(AM_ABX,1,OP_SBC,0), OP(AM_ABX,0,OP_INC,0), OP(AM_ABX,0,OP_NOP,0)
+    OP(AM_NON,0,OP_BRK,0), OP(AM_INX,0,OP_ORA,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INX,0,OP_SLO,1), OP(AM_ZER,0,OP_NOP,0), OP(AM_ZER,0,OP_ORA,0), OP(AM_ZER,0,OP_ASL,1), OP(AM_ZER,0,OP_SLO,1),
+    OP(AM_NON,0,OP_PHP,0), OP(AM_IMM,0,OP_ORA,0), OP(AM_ACC,0,OP_ASL,0), OP(AM_IMM,0,OP_ANC,0), OP(AM_ABS,0,OP_NOP,0), OP(AM_ABS,0,OP_ORA,0), OP(AM_ABS,0,OP_ASL,1), OP(AM_ABS,0,OP_SLO,1),
+    OP(AM_REL,0,OP_BPL,0), OP(AM_INY,1,OP_ORA,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_SLO,1), OP(AM_ZPX,0,OP_NOP,0), OP(AM_ZPX,0,OP_ORA,0), OP(AM_ZPX,0,OP_ASL,1), OP(AM_ZPX,0,OP_SLO,1),
+    OP(AM_NON,0,OP_CLC,0), OP(AM_ABY,1,OP_ORA,0), OP(AM_NON,0,OP_NOP,0), OP(AM_ABY,0,OP_SLO,1), OP(AM_ABX,0,OP_NOP,0), OP(AM_ABX,1,OP_ORA,0), OP(AM_ABX,0,OP_ASL,1), OP(AM_ABX,0,OP_SLO,1),
+    OP(AM_NON,0,OP_JSR,0), OP(AM_INX,0,OP_AND,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INX,0,OP_RLA,1), OP(AM_ZER,0,OP_BIT,0), OP(AM_ZER,0,OP_AND,0), OP(AM_ZER,0,OP_ROL,1), OP(AM_ZER,0,OP_RLA,1),
+    OP(AM_NON,0,OP_PLP,0), OP(AM_IMM,0,OP_AND,0), OP(AM_ACC,0,OP_ROL,0), OP(AM_IMM,0,OP_ANC,0), OP(AM_ABS,0,OP_BIT,0), OP(AM_ABS,0,OP_AND,0), OP(AM_ABS,0,OP_ROL,1), OP(AM_ABS,0,OP_RLA,1),
+    OP(AM_REL,0,OP_BMI,0), OP(AM_INY,1,OP_AND,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_RLA,1), OP(AM_ZPX,0,OP_NOP,0), OP(AM_ZPX,0,OP_AND,0), OP(AM_ZPX,0,OP_ROL,1), OP(AM_ZPX,0,OP_RLA,1),
+    OP(AM_NON,0,OP_SEC,0), OP(AM_ABY,1,OP_AND,0), OP(AM_NON,0,OP_NOP,0), OP(AM_ABY,0,OP_RLA,1), OP(AM_ABX,0,OP_NOP,0), OP(AM_ABX,1,OP_AND,0), OP(AM_ABX,0,OP_ROL,1), OP(AM_ABX,0,OP_RLA,1),
+    OP(AM_NON,0,OP_RTI,0), OP(AM_INX,0,OP_EOR,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INX,0,OP_SRE,1), OP(AM_ZER,0,OP_NOP,0), OP(AM_ZER,0,OP_EOR,0), OP(AM_ZER,0,OP_LSR,1), OP(AM_ZER,0,OP_SRE,1),
+    OP(AM_NON,0,OP_PHA,0), OP(AM_IMM,0,OP_EOR,0), OP(AM_ACC,0,OP_LSR,0), OP(AM_IMM,0,OP_ASR,0), OP(AM_ABS,0,OP_JMP,0), OP(AM_ABS,0,OP_EOR,0), OP(AM_ABS,0,OP_LSR,1), OP(AM_ABS,0,OP_SRE,1),
+    OP(AM_REL,0,OP_BVC,0), OP(AM_INY,1,OP_EOR,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_SRE,1), OP(AM_ZPX,0,OP_NOP,0), OP(AM_ZPX,0,OP_EOR,0), OP(AM_ZPX,0,OP_LSR,1), OP(AM_ZPX,0,OP_SRE,1),
+    OP(AM_NON,0,OP_CLI,0), OP(AM_ABY,1,OP_EOR,0), OP(AM_NON,0,OP_NOP,0), OP(AM_ABY,0,OP_SRE,1), OP(AM_ABX,0,OP_NOP,0), OP(AM_ABX,1,OP_EOR,0), OP(AM_ABX,0,OP_LSR,1), OP(AM_ABX,0,OP_SRE,1),
+    OP(AM_NON,0,OP_RTS,0), OP(AM_INX,0,OP_ADC,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INX,0,OP_RRA,1), OP(AM_ZER,0,OP_NOP,0), OP(AM_ZER,0,OP_ADC,0), OP(AM_ZER,0,OP_ROR,1), OP(AM_ZER,0,OP_RRA,1),
+    OP(AM_NON,0,OP_PLA,0), OP(AM_IMM,0,OP_ADC,0), OP(AM_ACC,0,OP_ROR,0), OP(AM_IMM,0,OP_ARR,0), OP(AM_IND,0,OP_JMP,0), OP(AM_ABS,0,OP_ADC,0), OP(AM_ABS,0,OP_ROR,1), OP(AM_ABS,0,OP_RRA,1),
+    OP(AM_REL,0,OP_BVS,0), OP(AM_INY,1,OP_ADC,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_RRA,1), OP(AM_ZPX,0,OP_NOP,0), OP(AM_ZPX,0,OP_ADC,0), OP(AM_ZPX,0,OP_ROR,1), OP(AM_ZPX,0,OP_RRA,1),
+    OP(AM_NON,0,OP_SEI,0), OP(AM_ABY,1,OP_ADC,0), OP(AM_NON,0,OP_NOP,0), OP(AM_ABY,0,OP_RRA,1), OP(AM_ABX,0,OP_NOP,0), OP(AM_ABX,1,OP_ADC,0), OP(AM_ABX,0,OP_ROR,1), OP(AM_ABX,0,OP_RRA,1),
+    OP(AM_IMM,0,OP_NOP,0), OP(AM_INX,0,OP_STA,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_INX,0,OP_SAX,0), OP(AM_ZER,0,OP_STY,0), OP(AM_ZER,0,OP_STA,0), OP(AM_ZER,0,OP_STX,0), OP(AM_ZER,0,OP_SAX,0),
+    OP(AM_NON,0,OP_DEY,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_NON,0,OP_TXA,0), OP(AM_IMM,0,OP_XAA,0), OP(AM_ABS,0,OP_STY,0), OP(AM_ABS,0,OP_STA,0), OP(AM_ABS,0,OP_STX,0), OP(AM_ABS,0,OP_SAX,0),
+    OP(AM_REL,0,OP_BCC,0), OP(AM_INY,0,OP_STA,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_SHA,0), OP(AM_ZPX,0,OP_STY,0), OP(AM_ZPX,0,OP_STA,0), OP(AM_ZPY,0,OP_STX,0), OP(AM_ZPY,0,OP_SAX,0),
+    OP(AM_NON,0,OP_TYA,0), OP(AM_ABY,0,OP_STA,0), OP(AM_NON,0,OP_TXS,0), OP(AM_ABY,0,OP_SHS,0), OP(AM_ABX,0,OP_SHY,0), OP(AM_ABX,0,OP_STA,0), OP(AM_ABY,0,OP_SHX,0), OP(AM_ABY,0,OP_SHA,0),
+    OP(AM_IMM,0,OP_LDY,0), OP(AM_INX,0,OP_LDA,0), OP(AM_IMM,0,OP_LDX,0), OP(AM_INX,0,OP_LAX,0), OP(AM_ZER,0,OP_LDY,0), OP(AM_ZER,0,OP_LDA,0), OP(AM_ZER,0,OP_LDX,0), OP(AM_ZER,0,OP_LAX,0),
+    OP(AM_NON,0,OP_TAY,0), OP(AM_IMM,0,OP_LDA,0), OP(AM_NON,0,OP_TAX,0), OP(AM_IMM,0,OP_LAX,0), OP(AM_ABS,0,OP_LDY,0), OP(AM_ABS,0,OP_LDA,0), OP(AM_ABS,0,OP_LDX,0), OP(AM_ABS,0,OP_LAX,0),
+    OP(AM_REL,0,OP_BCS,0), OP(AM_INY,1,OP_LDA,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_LAX,0), OP(AM_ZPX,0,OP_LDY,0), OP(AM_ZPX,0,OP_LDA,0), OP(AM_ZPY,0,OP_LDX,0), OP(AM_ZPY,0,OP_LAX,0),
+    OP(AM_NON,0,OP_CLV,0), OP(AM_ABY,1,OP_LDA,0), OP(AM_NON,0,OP_TSX,0), OP(AM_ABY,0,OP_LAS,0), OP(AM_ABX,1,OP_LDY,0), OP(AM_ABX,1,OP_LDA,0), OP(AM_ABY,1,OP_LDX,0), OP(AM_ABY,0,OP_LAX,0),
+    OP(AM_IMM,0,OP_CPY,0), OP(AM_INX,0,OP_CMP,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_INX,0,OP_DCP,1), OP(AM_ZER,0,OP_CPY,0), OP(AM_ZER,0,OP_CMP,0), OP(AM_ZER,0,OP_DEC,1), OP(AM_ZER,0,OP_DCP,1),
+    OP(AM_NON,0,OP_INY,0), OP(AM_IMM,0,OP_CMP,0), OP(AM_NON,0,OP_DEX,0), OP(AM_IMM,0,OP_SBX,0), OP(AM_ABS,0,OP_CPY,0), OP(AM_ABS,0,OP_CMP,0), OP(AM_ABS,0,OP_DEC,1), OP(AM_ABS,0,OP_DCP,1),
+    OP(AM_REL,0,OP_BNE,0), OP(AM_INY,1,OP_CMP,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_DCP,1), OP(AM_ZPX,0,OP_NOP,0), OP(AM_ZPX,0,OP_CMP,0), OP(AM_ZPX,0,OP_DEC,1), OP(AM_ZPX,0,OP_DCP,1),
+    OP(AM_NON,0,OP_CLD,0), OP(AM_ABY,1,OP_CMP,0), OP(AM_NON,0,OP_NOP,0), OP(AM_ABY,0,OP_DCP,1), OP(AM_ABX,0,OP_NOP,0), OP(AM_ABX,1,OP_CMP,0), OP(AM_ABX,0,OP_DEC,1), OP(AM_ABX,0,OP_DCP,1),
+    OP(AM_IMM,0,OP_CPX,0), OP(AM_INX,0,OP_SBC,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_INX,0,OP_ISC,1), OP(AM_ZER,0,OP_CPX,0), OP(AM_ZER,0,OP_SBC,0), OP(AM_ZER,0,OP_INC,1), OP(AM_ZER,0,OP_ISC,1),
+    OP(AM_NON,0,OP_INX,0), OP(AM_IMM,0,OP_SBC,0), OP(AM_NON,0,OP_NOP,0), OP(AM_IMM,0,OP_SBC,0), OP(AM_ABS,0,OP_CPX,0), OP(AM_ABS,0,OP_SBC,0), OP(AM_ABS,0,OP_INC,1), OP(AM_ABS,0,OP_ISC,1),
+    OP(AM_REL,0,OP_BEQ,0), OP(AM_INY,1,OP_SBC,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_ISC,1), OP(AM_ZPX,0,OP_NOP,0), OP(AM_ZPX,0,OP_SBC,0), OP(AM_ZPX,0,OP_INC,1), OP(AM_ZPX,0,OP_ISC,1),
+    OP(AM_NON,0,OP_SED,0), OP(AM_ABY,1,OP_SBC,0), OP(AM_NON,0,OP_NOP,0), OP(AM_ABY,0,OP_ISC,1), OP(AM_ABX,0,OP_NOP,0), OP(AM_ABX,1,OP_SBC,0), OP(AM_ABX,0,OP_INC,1), OP(AM_ABX,0,OP_ISC,1)
 };
 
 // Clean up the compact opcode macro
