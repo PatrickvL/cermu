@@ -275,20 +275,14 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
 // IMPLEMENTATION
 // ============================================================================
 
-// Instruction encoding for merged opcode table
+// Instruction encoding for merged opcode table - optimized for bit extraction
 typedef struct {
-    uint16_t am_index    : 6;   // Addressing mode index (bits 0-5)
-    uint16_t page_cross  : 1;   // Page crossing flag (bit 6)
-    uint16_t op_index    : 7;   // Operation index (bits 7-13)
-    uint16_t rmw_flag    : 1;   // RMW instruction flag (bit 14)
-    uint16_t reserved    : 1;   // Reserved bit (bit 15)
+    uint16_t am_index    : 4;   // Addressing mode index (bits 0-3, nibble-aligned)
+    uint16_t page_cross  : 1;   // Page crossing flag (bit 4)
+    uint16_t rmw_flag    : 1;   // RMW instruction flag (bit 5)
+    uint16_t reserved    : 3;   // Reserved bits (bits 6-7)
+    uint16_t op_index    : 7;   // Operation index (bits 9-15, byte-extractable with >> 9)
 } opcode_info_t;
-
-// Legacy compatibility masks
-#define AM_MASK          0x3F   // Addressing mode mask (bits 0-5)
-#define OP_MASK          0x7F   // Operation mask (bits 0-6)
-#define INSTR_RMW        0x80   // RMW instruction flag
-#define INSTR_PAGE_CROSS 0x40   // Page crossing optimization flag
 
 // Helper function to get interrupt vector address based on BRK flags
 static inline uint16_t get_vector_addr(fam65xx_t* cpu) {
@@ -1340,8 +1334,310 @@ enum {
     OP_BCC, OP_BCS, OP_BEQ, OP_BNE, OP_BMI, OP_BPL, OP_BVC, OP_BVS,
     OP_CLC, OP_SEC, OP_CLI, OP_SEI, OP_CLD, OP_SED, OP_CLV,
     OP_JMP, OP_JSR, OP_RTS, OP_RTI, OP_BRK,
-    OP_BIT, OP_NOP, OP_JAM
+    OP_BIT, OP_NOP, OP_JAM,
+    // 65C02 enhancements
+    OP_BRA,
+    // Illegal opcodes - combination instructions
+    OP_LAX, OP_SAX, OP_DCP, OP_ISC, OP_SLO, OP_RLA, OP_SRE, OP_RRA,
+    // Illegal opcodes - special accumulator operations
+    OP_ANC, OP_ASR, OP_ARR, OP_SBX,
+    // Illegal opcodes - store with AND operations
+    OP_SHA, OP_SHS, OP_SHX, OP_SHY, OP_LAS,
+    // Illegal opcodes - special operations
+    OP_XAA
 };
+
+// ============================================================================
+// Additional Operation Handlers
+// ============================================================================
+
+// 65C02 Branch Always
+static bus_state_t op_bra(fam65xx_t* cpu, bus_state_t pins) {
+    // BRA is always taken - same logic as other branches but unconditional
+    int8_t offset = (int8_t)FAM65XX_GET_DATA(pins);
+    uint16_t target = cpu->PC + offset;
+    
+    cpu->PC = target;
+    cpu->callback = fetch_next;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
+}
+
+// Illegal opcodes - combination instructions
+static bus_state_t op_lax(fam65xx_t* cpu, bus_state_t pins) {
+    // LAX = LDA + TAX (Load Accumulator and X)
+    cpu->A = FAM65XX_GET_DATA(pins);
+    cpu->X = cpu->A;
+    SET_NZ(cpu, cpu->A);
+    cpu->callback = fetch_next;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
+}
+
+static bus_state_t op_sax(fam65xx_t* cpu, bus_state_t pins) {
+    // SAX = Store A & X
+    cpu->callback = fetch_next;
+    return WRITE_CYCLE(cpu->effective_addr, cpu->A & cpu->X) | FAM65XX_SYNC;
+}
+
+static bus_state_t op_dcp(fam65xx_t* cpu, bus_state_t pins) {
+    // DCP = DEC + CMP (Decrement and Compare)
+    switch(cpu->cb_index++) {
+        case 0: {
+            uint8_t original = FAM65XX_GET_DATA(pins);
+            uint8_t result = original - 1;
+            
+            // Store decremented value for write cycle
+            cpu->DL = result;
+            
+            // Perform CMP with decremented value
+            uint16_t cmp_result = cpu->A - result;
+            cpu->P = (cpu->P & ~(FLAG_N | FLAG_Z | FLAG_C)) |
+                     ((cmp_result & 0x80) ? FLAG_N : 0) |
+                     ((cmp_result & 0xFF) == 0 ? FLAG_Z : 0) |
+                     (cpu->A >= result ? FLAG_C : 0);
+            
+            return WRITE_CYCLE(cpu->effective_addr, original);
+        }
+        case 1:
+            cpu->cb_index = 0;
+            cpu->callback = fetch_next;
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
+    }
+    return pins;
+}
+
+static bus_state_t op_isc(fam65xx_t* cpu, bus_state_t pins) {
+    // ISC = INC + SBC (Increment and Subtract with Carry)
+    switch(cpu->cb_index++) {
+        case 0: {
+            uint8_t original = FAM65XX_GET_DATA(pins);
+            uint8_t incremented = original + 1;
+            
+            // Store incremented value for write cycle
+            cpu->DL = incremented;
+            
+            // Perform SBC with incremented value
+            uint16_t result = cpu->A - incremented - (cpu->P & FLAG_C ? 0 : 1);
+            cpu->P = (cpu->P & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+                     ((result & 0x80) ? FLAG_N : 0) |
+                     (((cpu->A ^ incremented) & (cpu->A ^ result) & 0x80) ? FLAG_V : 0) |
+                     ((result & 0xFF) == 0 ? FLAG_Z : 0) |
+                     ((result >= 0x100) ? FLAG_C : 0);
+            cpu->A = result & 0xFF;
+            
+            return WRITE_CYCLE(cpu->effective_addr, original);
+        }
+        case 1:
+            cpu->cb_index = 0;
+            cpu->callback = fetch_next;
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
+    }
+    return pins;
+}
+
+static bus_state_t op_slo(fam65xx_t* cpu, bus_state_t pins) {
+    // SLO = ASL + ORA (Shift Left and OR)
+    switch(cpu->cb_index++) {
+        case 0: {
+            uint8_t original = FAM65XX_GET_DATA(pins);
+            
+            // Perform ASL
+            cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x80) ? FLAG_C : 0);
+            uint8_t shifted = original << 1;
+            cpu->DL = shifted;
+            
+            // Perform ORA
+            cpu->A |= shifted;
+            SET_NZ(cpu, cpu->A);
+            
+            return WRITE_CYCLE(cpu->effective_addr, original);
+        }
+        case 1:
+            cpu->cb_index = 0;
+            cpu->callback = fetch_next;
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
+    }
+    return pins;
+}
+
+static bus_state_t op_rla(fam65xx_t* cpu, bus_state_t pins) {
+    // RLA = ROL + AND (Rotate Left and AND)
+    switch(cpu->cb_index++) {
+        case 0: {
+            uint8_t original = FAM65XX_GET_DATA(pins);
+            
+            // Perform ROL
+            uint8_t carry = (cpu->P & FLAG_C) ? 1 : 0;
+            cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x80) ? FLAG_C : 0);
+            uint8_t rotated = (original << 1) | carry;
+            cpu->DL = rotated;
+            
+            // Perform AND
+            cpu->A &= rotated;
+            SET_NZ(cpu, cpu->A);
+            
+            return WRITE_CYCLE(cpu->effective_addr, original);
+        }
+        case 1:
+            cpu->cb_index = 0;
+            cpu->callback = fetch_next;
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
+    }
+    return pins;
+}
+
+static bus_state_t op_sre(fam65xx_t* cpu, bus_state_t pins) {
+    // SRE = LSR + EOR (Shift Right and EOR)
+    switch(cpu->cb_index++) {
+        case 0: {
+            uint8_t original = FAM65XX_GET_DATA(pins);
+            
+            // Perform LSR
+            cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x01) ? FLAG_C : 0);
+            uint8_t shifted = original >> 1;
+            cpu->DL = shifted;
+            
+            // Perform EOR
+            cpu->A ^= shifted;
+            SET_NZ(cpu, cpu->A);
+            
+            return WRITE_CYCLE(cpu->effective_addr, original);
+        }
+        case 1:
+            cpu->cb_index = 0;
+            cpu->callback = fetch_next;
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
+    }
+    return pins;
+}
+
+static bus_state_t op_rra(fam65xx_t* cpu, bus_state_t pins) {
+    // RRA = ROR + ADC (Rotate Right and Add with Carry)
+    switch(cpu->cb_index++) {
+        case 0: {
+            uint8_t original = FAM65XX_GET_DATA(pins);
+            
+            // Perform ROR
+            uint8_t carry = (cpu->P & FLAG_C) ? 0x80 : 0;
+            cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x01) ? FLAG_C : 0);
+            uint8_t rotated = (original >> 1) | carry;
+            cpu->DL = rotated;
+            
+            // Perform ADC with rotated value
+            uint16_t result = cpu->A + rotated + (cpu->P & FLAG_C ? 1 : 0);
+            cpu->P = (cpu->P & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+                     ((result & 0x80) ? FLAG_N : 0) |
+                     (((~(cpu->A ^ rotated) & (cpu->A ^ result)) & 0x80) ? FLAG_V : 0) |
+                     ((result & 0xFF) == 0 ? FLAG_Z : 0) |
+                     ((result > 0xFF) ? FLAG_C : 0);
+            cpu->A = result & 0xFF;
+            
+            return WRITE_CYCLE(cpu->effective_addr, original);
+        }
+        case 1:
+            cpu->cb_index = 0;
+            cpu->callback = fetch_next;
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
+    }
+    return pins;
+}
+
+// Illegal opcodes - special accumulator operations
+static bus_state_t op_anc(fam65xx_t* cpu, bus_state_t pins) {
+    // ANC = AND + set C to bit 7 result
+    cpu->A &= FAM65XX_GET_DATA(pins);
+    SET_NZ(cpu, cpu->A);
+    cpu->P = (cpu->P & ~FLAG_C) | ((cpu->A & 0x80) ? FLAG_C : 0);
+    cpu->callback = fetch_next;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
+}
+
+static bus_state_t op_asr(fam65xx_t* cpu, bus_state_t pins) {
+    // ASR = AND + LSR A
+    cpu->A &= FAM65XX_GET_DATA(pins);
+    cpu->P = (cpu->P & ~FLAG_C) | ((cpu->A & 0x01) ? FLAG_C : 0);
+    cpu->A >>= 1;
+    SET_NZ(cpu, cpu->A);
+    cpu->callback = fetch_next;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
+}
+
+static bus_state_t op_arr(fam65xx_t* cpu, bus_state_t pins) {
+    // ARR = AND + ROR A (complex behavior in decimal mode)
+    cpu->A &= FAM65XX_GET_DATA(pins);
+    uint8_t carry = (cpu->P & FLAG_C) ? 0x80 : 0;
+    cpu->A = (cpu->A >> 1) | carry;
+    SET_NZ(cpu, cpu->A);
+    cpu->P = (cpu->P & ~(FLAG_C | FLAG_V)) |
+             ((cpu->A & 0x40) ? FLAG_C : 0) |
+             (((cpu->A & 0x40) ^ ((cpu->A & 0x20) << 1)) ? FLAG_V : 0);
+    cpu->callback = fetch_next;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
+}
+
+static bus_state_t op_sbx(fam65xx_t* cpu, bus_state_t pins) {
+    // SBX = (A & X) - data, result in X
+    uint8_t data = FAM65XX_GET_DATA(pins);
+    uint16_t result = (cpu->A & cpu->X) - data;
+    cpu->P = (cpu->P & ~(FLAG_N | FLAG_Z | FLAG_C)) |
+             ((result & 0x80) ? FLAG_N : 0) |
+             ((result & 0xFF) == 0 ? FLAG_Z : 0) |
+             ((result < 0x100) ? FLAG_C : 0);
+    cpu->X = result & 0xFF;
+    cpu->callback = fetch_next;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
+}
+
+// Illegal opcodes - store with AND operations
+static bus_state_t op_sha(fam65xx_t* cpu, bus_state_t pins) {
+    // SHA = Store A & X & (high byte of address + 1)
+    uint8_t high = (cpu->effective_addr >> 8) + 1;
+    cpu->callback = fetch_next;
+    return WRITE_CYCLE(cpu->effective_addr, cpu->A & cpu->X & high) | FAM65XX_SYNC;
+}
+
+static bus_state_t op_shs(fam65xx_t* cpu, bus_state_t pins) {
+    // SHS = Store A & X & (high byte of address + 1), set SP to A & X
+    uint8_t high = (cpu->effective_addr >> 8) + 1;
+    uint8_t val = cpu->A & cpu->X & high;
+    cpu->S = cpu->A & cpu->X;
+    cpu->callback = fetch_next;
+    return WRITE_CYCLE(cpu->effective_addr, val) | FAM65XX_SYNC;
+}
+
+static bus_state_t op_shx(fam65xx_t* cpu, bus_state_t pins) {
+    // SHX = Store X & (high byte of address + 1)
+    uint8_t high = (cpu->effective_addr >> 8) + 1;
+    cpu->callback = fetch_next;
+    return WRITE_CYCLE(cpu->effective_addr, cpu->X & high) | FAM65XX_SYNC;
+}
+
+static bus_state_t op_shy(fam65xx_t* cpu, bus_state_t pins) {
+    // SHY = Store Y & (high byte of address + 1)
+    uint8_t high = (cpu->effective_addr >> 8) + 1;
+    cpu->callback = fetch_next;
+    return WRITE_CYCLE(cpu->effective_addr, cpu->Y & high) | FAM65XX_SYNC;
+}
+
+static bus_state_t op_las(fam65xx_t* cpu, bus_state_t pins) {
+    // LAS = Load A, X, SP with memory & SP
+    uint8_t val = FAM65XX_GET_DATA(pins) & cpu->S;
+    cpu->A = val;
+    cpu->X = val;
+    cpu->S = val;
+    SET_NZ(cpu, val);
+    cpu->callback = fetch_next;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
+}
+
+// Illegal opcodes - special operations
+static bus_state_t op_xaa(fam65xx_t* cpu, bus_state_t pins) {
+    // XAA = Transfer X to A, then AND with immediate
+    // Note: This instruction has unstable behavior on real hardware
+    cpu->A = cpu->X & FAM65XX_GET_DATA(pins);
+    SET_NZ(cpu, cpu->A);
+    cpu->callback = fetch_next;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
+}
 
 static const cycle_fn_t op_handlers[] = {
     op_lda, // OP_LDA
@@ -1400,15 +1696,39 @@ static const cycle_fn_t op_handlers[] = {
     op_brk, // OP_BRK
     op_bit, // OP_BIT
     op_nop, // OP_NOP
-    op_jam  // OP_JAM
+    op_jam, // OP_JAM
+    // 65C02 enhancements
+    op_bra, // OP_BRA
+    // Illegal opcodes - combination instructions
+    op_lax, // OP_LAX
+    op_sax, // OP_SAX
+    op_dcp, // OP_DCP
+    op_isc, // OP_ISC
+    op_slo, // OP_SLO
+    op_rla, // OP_RLA
+    op_sre, // OP_SRE
+    op_rra, // OP_RRA
+    // Illegal opcodes - special accumulator operations
+    op_anc, // OP_ANC
+    op_asr, // OP_ASR
+    op_arr, // OP_ARR
+    op_sbx, // OP_SBX
+    // Illegal opcodes - store with AND operations
+    op_sha, // OP_SHA
+    op_shs, // OP_SHS
+    op_shx, // OP_SHX
+    op_shy, // OP_SHY
+    op_las, // OP_LAS
+    // Illegal opcodes - special operations
+    op_xaa  // OP_XAA
 };
 
 // ============================================================================
 // Merged Opcode Lookup Table with Compact Bitfield Encoding
 // ============================================================================
 
-// Compact macro for opcode definition - creates properly formatted bitfield entries
-#define OP(am, pcross, op, rmw) {(am), (pcross), (op), (rmw), 0}
+// Compact macro for opcode_info_t opcode definition - creates properly formatted bitfield entries
+#define OP(am_index, page_cross, op_index, rmw_flag) {(am_index), (page_cross), (rmw_flag), 0, (op_index)}
 
 // Merged opcode lookup table - 8 entries per line for readability
 static const opcode_info_t opcode_table[256] = {
