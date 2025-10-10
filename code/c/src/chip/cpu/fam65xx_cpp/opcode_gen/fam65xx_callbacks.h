@@ -1884,11 +1884,8 @@ bus_state_t fam65xx_callbacks_bootstrap(fam65xx_t* cpu, bus_state_t pins) {
         // Set up pins for first instruction fetch from PC
         pins = READ_CYCLE(cpu->PC) | FAM65XX_SYNC;
         
-        // Debug bootstrap
         if (verbose_output) {
-            printf("  DEBUG: Bootstrap - pins=0x%016llx, FAM65XX_SYNC=0x%016llx, has_sync=%d\n",
-                   (unsigned long long)pins, (unsigned long long)FAM65XX_SYNC,
-                   (pins & FAM65XX_SYNC) ? 1 : 0);
+            printf("  BOOT: PC=0x%04x\n", cpu->PC);
         }
     }
     
@@ -1924,29 +1921,17 @@ uint8_t fam65xx_p(fam65xx_t* cpu) { return cpu->P; }
 uint16_t fam65xx_pc(fam65xx_t* cpu) { return cpu->PC; }
 
 bus_state_t fam65xx_callbacks_tick(fam65xx_t* cpu, bus_state_t pins) {
-    // Debug interrupt state BEFORE clearing SYNC
-    // Debug to verify function is being called
-    if (verbose_output) {
-        static int tick_counter = 0;
-
-        tick_counter++;
-        printf("  UNCONDITIONAL_DEBUG: fam65xx_tick called #%d - callback=%p, cb_index=%d\n",
-            tick_counter, (void*)cpu->callback, cpu->cb_index);
-    }
-
-    // Debug and fix initial state - unconditional debug first
+    // Compact debug output - only show critical information when verbose
     static bool first_tick = true;
     if (first_tick) {
-        printf("  DEBUG: TICK - First tick - callback=%p, fetch_next=%p, cb_index=%d\n",
-               (void*)cpu->callback, (void*)fetch_next, cpu->cb_index);
-        printf("  DEBUG: TICK - pins=0x%016llx, SYNC=%d, brk_flags=0x%02x\n",
-               (unsigned long long)pins, (pins & FAM65XX_SYNC) ? 1 : 0, cpu->brk_flags);
-        
+        if (verbose_output) {
+            printf("  TICK: Init - cb=%p, idx=%d, pins=0x%llx\n",
+                   (void*)cpu->callback, cpu->cb_index, (unsigned long long)pins);
+        }
         // Force initial state to be correct
         if (cpu->cb_index == 0) {
             cpu->callback = fetch_next;
             pins |= FAM65XX_SYNC;
-            printf("  DEBUG: TICK - Forced callback=fetch_next, set SYNC flag\n");
         }
         first_tick = false;
     }
@@ -1987,41 +1972,21 @@ bus_state_t fam65xx_callbacks_tick(fam65xx_t* cpu, bus_state_t pins) {
     
     // SYNC-based opcode decoding with interrupt handling - BEFORE callback execution
     if (pins & FAM65XX_SYNC) {
-        // Debug interrupt state BEFORE clearing SYNC
-        if (verbose_output) {
-            printf("  DEBUG: SYNC detected, brk_flags=0x%02x, nmi_pip=0x%02x, irq_pip=0x%02x, P=0x%02x\n",
-                   cpu->brk_flags, cpu->nmi_pip, cpu->irq_pip, cpu->P);
-        }
-        
         pins &= ~FAM65XX_SYNC;  // Clear SYNC flag after processing
         // For ProcessorTests: Disable interrupt processing during normal instruction execution
         // Only handle interrupts if explicitly set via brk_flags (BRK/RESET)
         if (cpu->callback == fetch_next && cpu->cb_index == 0) {
-            if (verbose_output) {
-                printf("  DEBUG: Instruction fetch - brk_flags=0x%02x\n", cpu->brk_flags);
-            }
-            
             // Only process explicit interrupt flags, not automatic IRQ/NMI detection
             if (cpu->brk_flags & (FAM65XX_BRK_NMI | FAM65XX_BRK_IRQ | FAM65XX_BRK_RESET)) {
-                if (verbose_output) 
-                {
-                    if (cpu->brk_flags & FAM65XX_BRK_NMI) printf("  DEBUG: NMI interrupt triggered (explicit)\n");
-                    else if (cpu->brk_flags & FAM65XX_BRK_IRQ) printf("  DEBUG: IRQ interrupt triggered (explicit)\n");
-                    else if (cpu->brk_flags & FAM65XX_BRK_RESET) printf("  DEBUG: RESET interrupt triggered (explicit)\n");
+                if (verbose_output) {
+                    printf("  INT: %s\n", (cpu->brk_flags & FAM65XX_BRK_NMI) ? "NMI" :
+                           (cpu->brk_flags & FAM65XX_BRK_IRQ) ? "IRQ" : "RESET");
                 }
                 cpu->cb_index = 0;
                 cpu->callback = op_brk;  // Use BRK handler for interrupts
             }
-        } else {
-            if (verbose_output) printf("  DEBUG: SYNC during instruction execution - ignoring\n");
         }
         // Normal instruction fetch happens in fetch_next callback
-    }
-    
-    // Execute one cycle using callback dispatch mechanism
-    if (verbose_output && cpu->cb_index == 0) {
-        printf("  DEBUG: Executing callback %p (fetch_next=%p, op_brk=%p)\n",
-               (void*)cpu->callback, (void*)fetch_next, (void*)op_brk);
     }
     pins = cpu->callback(cpu, pins);
     

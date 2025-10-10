@@ -1,43 +1,119 @@
 @echo off
-echo Building MOS6510 Comprehensive Test Suite with CMake...
+setlocal enabledelayedexpansion
 
-REM Create build directory if it doesn't exist
-if not exist build mkdir build
+REM Build script for fam65xx processor tests runner (now with parallel execution)
+REM Usage: build.bat [debug|release]
 
-REM Change to build directory
-cd build
+set BUILD_TYPE=%1
+if "%BUILD_TYPE%"=="" set BUILD_TYPE=default
 
-echo Configuring CMake...
-cmake ..
+echo Building fam65xx processor tests runner (Parallel Edition)...
+echo Build type: %BUILD_TYPE%
+echo ==============================================================
 
-if %ERRORLEVEL% NEQ 0 (
-    echo CMake configuration failed!
-    rem pause
+REM Check if required files exist
+if not exist "fam65xx_processor_tests_runner.cpp" (
+    echo ERROR: fam65xx_processor_tests_runner.cpp not found!
     exit /b 1
 )
 
-echo Building tests...
-cmake --build . --config Debug
-
-if %ERRORLEVEL% NEQ 0 (
-    echo Build failed!
-    rem pause
+if not exist "json_parser.c" (
+    echo ERROR: json_parser.c not found!
     exit /b 1
 )
 
-echo Running tests...
-ctest --verbose -C Debug
+if not exist "json_parser.h" (
+    echo ERROR: json_parser.h not found!
+    exit /b 1
+)
 
-if %ERRORLEVEL% NEQ 0 (
-    echo Some tests failed, but executables were built successfully.
-    echo You can run tests manually:
-    echo   Debug\test_mos6510_basic.exe
-    echo   Debug\test_mos6510_comprehensive.exe
-    echo.
-    echo Running comprehensive test directly...
-    Debug\test_mos6510_comprehensive.exe
+REM Check for CPU implementation header
+if not exist "..\src\chip\cpu\fam65xx_cpp\opcode_gen\fam65xx_callbacks.h" (
+    echo ERROR: fam65xx_callbacks.h not found!
+    echo Expected location: ..\src\chip\cpu\fam65xx_cpp\opcode_gen\fam65xx_callbacks.h
+    exit /b 1
+)
+
+REM Set compiler flags based on build type
+set COMMON_FLAGS=-std=c++17 -Wall -Wextra -pthread -I../src -I.
+set TARGET=fam65xx_processor_tests_runner.exe
+
+if "%BUILD_TYPE%"=="debug" (
+    set CFLAGS=%COMMON_FLAGS% -g -DDEBUG -O0
+    echo Building DEBUG version...
 ) else (
-    echo All tests passed successfully!
+    if "%BUILD_TYPE%"=="release" (
+        set CFLAGS=%COMMON_FLAGS% -O3 -DNDEBUG -march=native
+        echo Building RELEASE version (optimized)...
+    ) else (
+        set CFLAGS=%COMMON_FLAGS% -O2
+        echo Building DEFAULT version...
+    )
 )
 
-REM pause
+REM Clean previous build
+if exist "%TARGET%" del "%TARGET%"
+if exist "*.o" del "*.o"
+
+REM Compile
+echo Compiling processor tests runner...
+g++ %CFLAGS% -c fam65xx_processor_tests_runner.cpp -o fam65xx_processor_tests_runner.o
+if !errorlevel! neq 0 (
+    echo ERROR: Failed to compile C++ source!
+    exit /b 1
+)
+
+gcc %CFLAGS% -c json_parser.c -o json_parser.o
+if !errorlevel! neq 0 (
+    echo ERROR: Failed to compile C source!
+    exit /b 1
+)
+
+REM Link
+echo Linking...
+g++ %CFLAGS% -o %TARGET% fam65xx_processor_tests_runner.o json_parser.o -pthread
+if !errorlevel! neq 0 (
+    echo ERROR: Failed to link executable!
+    exit /b 1
+)
+
+REM Check if build was successful
+if exist "%TARGET%" (
+    echo.
+    echo ✅ Build successful!
+    echo Executable: %TARGET%
+    echo.
+    echo Usage examples:
+    echo   %TARGET% -h                           # Show help
+    echo   %TARGET% processor_tests\             # Run with auto-detected cores
+    echo   %TARGET% -j 4 -v tests\              # 4 workers, verbose
+    echo   %TARGET% -q -c tests\                # Quiet, continue on failures
+    echo.
+    
+    REM Show system info for optimal threading
+    for /f "tokens=2 delims==" %%i in ('wmic cpu get NumberOfLogicalProcessors /value ^| find "="') do set CORES=%%i
+    set /a RECOMMENDED=CORES-1
+    if !RECOMMENDED! lss 1 set RECOMMENDED=1
+    
+    echo System info:
+    echo   CPU cores detected: !CORES!
+    echo   Recommended workers: !RECOMMENDED! (cores - 1)
+    echo.
+    
+    REM Show performance improvement note
+    echo 🚀 Performance improvements:
+    echo   ✓ Parallel execution (up to !RECOMMENDED!x faster on this system)
+    echo   ✓ Compacted debug output for speed
+    echo   ✓ Thread-safe output (no mixed stdout)
+    echo   ✓ Smart core usage (leaves 1 core for system)
+    echo.
+) else (
+    echo.
+    echo ❌ Build failed!
+    exit /b 1
+)
+
+REM Clean up object files
+if exist "*.o" del "*.o"
+
+endlocal
