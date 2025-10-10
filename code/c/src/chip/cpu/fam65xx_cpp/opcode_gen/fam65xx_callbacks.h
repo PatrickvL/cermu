@@ -373,16 +373,6 @@ static bus_state_t am_absolute(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0:
             cpu->ADL = GET_DATA(pins);
-            set_next_callback(cpu);
-            return READ_CYCLE(cpu->ZP);
-    }
-    return pins;
-}
-
-static bus_state_t am_absolute(fam65xx_t* cpu, bus_state_t pins) {
-    switch(cpu->cb_index++) {
-        case 0:
-            cpu->ADL = GET_DATA(pins);
             cpu->effective_addr = cpu->PC++;
             return READ_CYCLE(cpu->effective_addr);
             
@@ -1581,11 +1571,6 @@ static bus_state_t rmw_handler(fam65xx_t* cpu, bus_state_t pins) {
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
             return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
-        }
-        
-        case 2: {
-            // Complete instruction and fetch next (should not reach here normally)
-            return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
         }
     }
     return pins;
