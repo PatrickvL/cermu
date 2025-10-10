@@ -1228,7 +1228,7 @@ static bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins) {
             cpu->PC = (FAM65XX_GET_DATA(pins) << 8) | cpu->DL;
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
+            return READ_CYCLE(cpu->PC) | FAM65XX_SYNC;
     }
     return pins;
 }
