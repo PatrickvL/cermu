@@ -62,9 +62,13 @@ extern "C" {
 #define FAM65XX_GET_DATA(p) BUS_GET_DATA(p)
 #define FAM65XX_SET_DATA(p, d) BUS_SET_DATA(p, d)
 
-// Memory access macros
+// Memory access macros - fix sequence point issues
 #define READ_CYCLE(addr)        (FAM65XX_SET_ADDR(pins, addr))  // FAM65XX_RW is default state, no need to set
-#define WRITE_CYCLE(addr, data) (FAM65XX_SET_ADDR(FAM65XX_SET_DATA(pins, data), addr) & ~FAM65XX_RW)
+#define WRITE_CYCLE(addr, data) ({ \
+    bus_state_t _temp_pins = FAM65XX_SET_DATA(pins, data); \
+    _temp_pins = FAM65XX_SET_ADDR(_temp_pins, addr); \
+    _temp_pins & ~FAM65XX_RW; \
+})
 
 // Memory access callbacks
 typedef uint8_t (*fam65xx_mem_read_t)(void* user_data, uint16_t addr, uint8_t bus_state);
@@ -1901,6 +1905,7 @@ bus_state_t fam6510_iorq(fam65xx_t* cpu, bus_state_t pins) {
     // This would be called from the memory callback when addr <= 1
     // Implementation depends on whether it's $0000 (DDR) or $0001 (port)
     // For now, just return pins
+    (void)cpu; // Suppress unused parameter warning
     return pins;
 }
 

@@ -51,11 +51,11 @@ struct ThreadSafeTestResults {
     uint32_t opcode_failures[256] = {0};
     uint32_t opcode_totals[256] = {0};
     
-    void record_opcode_result(uint8_t opcode, bool success) {
+    void record_opcode_result(uint8_t opcode_val, bool success) {
         std::lock_guard<std::mutex> lock(opcode_mutex);
-        opcode_totals[opcode]++;
+        opcode_totals[opcode_val]++;
         if (!success) {
-            opcode_failures[opcode]++;
+            opcode_failures[opcode_val]++;
         }
     }
     
@@ -116,6 +116,7 @@ private:
     
     // Memory callbacks - reliable approach from C++ version
     static uint8_t mem_read(void* user_data, uint16_t addr, uint8_t bus_state) {
+        (void)bus_state; // Suppress unused parameter warning
         ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(user_data);
         uint8_t value = harness->memory[addr];
         
@@ -437,7 +438,7 @@ private:
         uint8_t current_opcode = harness.get_memory(pc_addr);
         
         // Thread-safe opcode tracking
-        results.record_opcode_result(static_cast<uint8_t>(current_opcode), false); // Will be updated if successful
+        results.record_opcode_result(current_opcode, false); // Will be updated if successful
         
         if (verbose_mode) {
             output << "  [Worker " << worker_id << "] Opcode at PC 0x" << std::hex << test->initial.pc
@@ -522,7 +523,7 @@ private:
         // Update results
         if (state_match && cycle_match && bus_cycle_match) {
             results.passed_tests++;
-            results.record_opcode_result(static_cast<uint8_t>(current_opcode), true); // Mark as successful
+            results.record_opcode_result(current_opcode, true); // Mark as successful
             if (verbose_mode) {
                 output << "PASS " << test->name << " (opcode 0x" << std::hex
                        << (int)current_opcode << ")" << std::dec << std::endl;
