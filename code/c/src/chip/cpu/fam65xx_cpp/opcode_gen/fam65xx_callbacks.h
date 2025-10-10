@@ -18,6 +18,7 @@
 #include <stdbool.h>
 
 // Include system-wide bus definitions
+#include "../../../../core/aiemuc.h"
 #include "../../../../core/system_lines.h"
 
 #ifdef __cplusplus
@@ -55,16 +56,15 @@ extern "C" {
 #define FAM65XX_VF      (1<<6)
 #define FAM65XX_NF      (1<<7)
 
-// BRK flags
-#define FAM65XX_BRK_IRQ     (1<<0)
-#define FAM65XX_BRK_NMI     (1<<1)
-#define FAM65XX_BRK_RESET   (1<<2)
-
 // Legacy compatibility macros for FAM65XX bus access
 #define FAM65XX_GET_ADDR(p) BUS_GET_ADDR(p)
 #define FAM65XX_SET_ADDR(p, d) BUS_SET_ADDR(p, d)
 #define FAM65XX_GET_DATA(p) BUS_GET_DATA(p)
 #define FAM65XX_SET_DATA(p, d) BUS_SET_DATA(p, d)
+
+// Memory access macros
+#define READ_CYCLE(addr)        (FAM65XX_SET_ADDR(pins, addr))  // FAM65XX_RW is default state, no need to set
+#define WRITE_CYCLE(addr, data) (FAM65XX_SET_ADDR(FAM65XX_SET_DATA(pins, data), addr) & ~FAM65XX_RW)
 
 // Memory access callbacks
 typedef uint8_t (*fam65xx_mem_read_t)(void* user_data, uint16_t addr, uint8_t bus_state);
@@ -86,39 +86,6 @@ typedef struct {
 } fam65xx_desc_t;
 
 // ============================================================================
-// Bus State Encoding
-// ============================================================================
-
-typedef uint64_t bus_state_t;
-
-// Bus state bit layout:
-// [15:0]   = Address (16 bits)
-// [23:16]  = Data (8 bits)
-// [32]     = RWB (1=Read, 0=Write)
-// [33]     = SYNC (1=Opcode fetch)
-// [34]     = RDY (1=CPU ready, 0=halted)
-
-#define RW_FLAG                 ((bus_state_t)1 << 32)
-#define SYNC_FLAG               ((bus_state_t)1 << 33)
-#define RDY_FLAG                ((bus_state_t)1 << 34)
-#define IRQ_FLAG                ((bus_state_t)1 << 35)
-#define NMI_FLAG                ((bus_state_t)1 << 36)
-
-#define GET_ADDR(pins)          ((uint16_t)((pins) & 0xFFFF))
-#define GET_DATA(pins)          ((uint8_t)(((pins) >> 16) & 0xFF))
-#define GET_RWB(pins)           (((pins) >> 32) & 1)
-#define GET_SYNC(pins)          (((pins) >> 33) & 1)
-
-// Corrected macros that preserve pins state
-#define READ_CYCLE(addr)        (BUS_SET_ADDR(pins, addr))  // RW_FLAG is default state, no need to set
-#define WRITE_CYCLE(addr, data) ({ \
-    bus_state_t tmp_pins = pins; \
-    tmp_pins = BUS_SET_DATA(tmp_pins, data); \
-    tmp_pins = BUS_SET_ADDR(tmp_pins, addr); \
-    (tmp_pins & ~RW_FLAG); \
-})
-
-// ============================================================================
 // CPU Flags
 // ============================================================================
 
@@ -132,9 +99,9 @@ typedef uint64_t bus_state_t;
 #define FLAG_N  0x80  // Negative
 
 // BRK flags
-#define BRK_IRQ     0x01
-#define BRK_NMI     0x02
-#define BRK_RESET   0x04
+#define FAM65XX_BRK_IRQ     (1<<0)
+#define FAM65XX_BRK_NMI     (1<<1)
+#define FAM65XX_BRK_RESET   (1<<2)
 
 // ============================================================================
 // 8-bit Register indices with endian-aware 16-bit pairs
@@ -336,7 +303,7 @@ static void set_next_callback(fam65xx_t* cpu);
 
 static bus_state_t am_zero_page(fam65xx_t* cpu, bus_state_t pins) {
     // Standard addressing mode handler: only resolve address, don't handle operations
-    cpu->effective_addr = GET_DATA(pins); // Set effective address for operations
+    cpu->effective_addr = FAM65XX_GET_DATA(pins); // Set effective address for operations
     set_next_callback(cpu);
     return READ_CYCLE(cpu->effective_addr);
 }
@@ -344,7 +311,7 @@ static bus_state_t am_zero_page(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t am_zero_page_x(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0:
-            cpu->effective_addr = GET_DATA(pins);
+            cpu->effective_addr = FAM65XX_GET_DATA(pins);
             return READ_CYCLE(cpu->effective_addr);
             
         case 1:
@@ -358,7 +325,7 @@ static bus_state_t am_zero_page_x(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t am_zero_page_y(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0:
-            cpu->effective_addr = GET_DATA(pins);
+            cpu->effective_addr = FAM65XX_GET_DATA(pins);
             return READ_CYCLE(cpu->effective_addr);
             
         case 1:
@@ -372,12 +339,12 @@ static bus_state_t am_zero_page_y(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t am_absolute(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0:
-            cpu->ADL = GET_DATA(pins);
+            cpu->ADL = FAM65XX_GET_DATA(pins);
             cpu->effective_addr = cpu->PC++;
             return READ_CYCLE(cpu->effective_addr);
             
         case 1:
-            cpu->ADH = GET_DATA(pins);
+            cpu->ADH = FAM65XX_GET_DATA(pins);
             cpu->effective_addr = cpu->AD; // Set effective address for operations
             set_next_callback(cpu);
             return READ_CYCLE(cpu->AD);
@@ -388,21 +355,20 @@ static bus_state_t am_absolute(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t am_absolute_x(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0:
-            cpu->ADL = GET_DATA(pins);
+            cpu->ADL = FAM65XX_GET_DATA(pins);
             cpu->effective_addr = cpu->PC++;
             return READ_CYCLE(cpu->effective_addr);
             
         case 1:
-            cpu->ADH = GET_DATA(pins);
+            cpu->ADH = FAM65XX_GET_DATA(pins);
             cpu->effective_addr = cpu->AD + cpu->X;
             
             // Check page cross - TODO : use get_opcode_can_skip_cycle()
-            if (!page_crossed(cpu->effective_addr, cpu->AD)) {
-                // No page cross - might skip for reads
-                set_next_callback(cpu);
-                return READ_CYCLE(cpu->effective_addr);
+            if (page_crossed(cpu->effective_addr, cpu->AD)) {
+                return READ_CYCLE((cpu->ADH << 8) | ((cpu->ADL + cpu->X) & 0xFF));
             }
-            return READ_CYCLE((cpu->ADH << 8) | ((cpu->ADL + cpu->X) & 0xFF));
+
+            FALLTHROUGH // No page cross - immediately do the last cycle
 
         case 2: // Reused by am_absolute_y, am_indirect_indexed
             set_next_callback(cpu);
@@ -414,12 +380,12 @@ static bus_state_t am_absolute_x(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t am_absolute_y(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0:
-            cpu->ADL = GET_DATA(pins);
+            cpu->ADL = FAM65XX_GET_DATA(pins);
             cpu->effective_addr = cpu->PC++;
             return READ_CYCLE(cpu->effective_addr);
             
         case 1:
-            cpu->ADH = GET_DATA(pins);
+            cpu->ADH = FAM65XX_GET_DATA(pins);
             cpu->effective_addr = cpu->AD + cpu->Y;
             
             // Check page cross - TODO : use get_opcode_can_skip_cycle()
@@ -437,20 +403,20 @@ static bus_state_t am_absolute_y(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t am_indirect(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0:
-            cpu->ADL = GET_DATA(pins);
+            cpu->ADL = FAM65XX_GET_DATA(pins);
             cpu->effective_addr = cpu->PC++;
             return READ_CYCLE(cpu->effective_addr);
             
         case 1:
-            cpu->ADH = GET_DATA(pins);
+            cpu->ADH = FAM65XX_GET_DATA(pins);
             return READ_CYCLE(cpu->AD);
             
         case 2:
-            cpu->DL = GET_DATA(pins);
+            cpu->DL = FAM65XX_GET_DATA(pins);
             return READ_CYCLE((cpu->ADH << 8) | ((cpu->ADL + 1) & 0xFF));
             
         case 3:
-            cpu->effective_addr = (GET_DATA(pins) << 8) | cpu->DL;
+            cpu->effective_addr = (FAM65XX_GET_DATA(pins) << 8) | cpu->DL;
             set_next_callback(cpu);
             return READ_CYCLE(cpu->effective_addr);
     }
@@ -460,14 +426,14 @@ static bus_state_t am_indirect(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t am_indexed_indirect(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0:
-            cpu->ADL = GET_DATA(pins);
+            cpu->ADL = FAM65XX_GET_DATA(pins);
             return READ_CYCLE(cpu->ADL);
             
         case 1:
             return READ_CYCLE((cpu->ADL + cpu->X) & 0xFF);
             
         case 2:
-            cpu->DL = GET_DATA(pins);
+            cpu->DL = FAM65XX_GET_DATA(pins);
             cpu->callback = am_indirect; // remainder is the same (also at cb_index 3)
             return READ_CYCLE((cpu->ADL + cpu->X + 1) & 0xFF);
     }
@@ -477,18 +443,18 @@ static bus_state_t am_indexed_indirect(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t am_indirect_indexed(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0:
-            cpu->ADL = GET_DATA(pins);
+            cpu->ADL = FAM65XX_GET_DATA(pins);
             return READ_CYCLE(cpu->ADL);
         
         case 1:
-            cpu->DL = GET_DATA(pins);
+            cpu->DL = FAM65XX_GET_DATA(pins);
             return READ_CYCLE((cpu->ADL + 1) & 0xFF);
         
         case 2: {
-            cpu->ADH = GET_DATA(pins);
+            cpu->ADH = FAM65XX_GET_DATA(pins);
             uint16_t base_addr = (cpu->ADH << 8) | cpu->DL;
+
             cpu->effective_addr = base_addr + cpu->Y;
-            
             // Check page cross - TODO : use get_opcode_can_skip_cycle()
             if (!page_crossed(cpu->effective_addr, base_addr)) {
                 set_next_callback(cpu);
@@ -514,29 +480,25 @@ static /*NOT inline!*/ bus_state_t op_branch(fam65xx_t* cpu, bus_state_t pins, u
             if (!branch_taken) {
                 cpu->cb_index = 0;
                 cpu->callback = fetch_next;
-                return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+                return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
             }
             
-            int8_t offset = (int8_t)GET_DATA(pins);
+            int8_t offset = (int8_t)FAM65XX_GET_DATA(pins);
             uint16_t target = cpu->PC + offset;
             
-            // Check page cross - TODO : use get_opcode_can_skip_cycle()
-            if (!page_crossed(target, cpu->PC)) {
-                cpu->PC = target;
-                cpu->cb_index = 0;
-                cpu->callback = fetch_next;
-                return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
-            }
-            
             cpu->AD = target; // Store target for next cycle // Was effective_addr
-            return READ_CYCLE((cpu->PC & 0xFF00) | (target & 0xFF));
+            // Check page cross - TODO : use get_opcode_can_skip_cycle()
+            if (page_crossed(target, cpu->PC)) {
+                return READ_CYCLE((cpu->PC & 0xFF00) | (target & 0xFF));
+            }
         }
+            FALLTHROUGH // No page cross - immediately do the last cycle
         
         case 1:
             cpu->PC = cpu->AD; // Set final target // Was effective_addr
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+            return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
     }
     return pins;
 }
@@ -546,25 +508,25 @@ static /*NOT inline!*/ bus_state_t op_branch(fam65xx_t* cpu, bus_state_t pins, u
 // ============================================================================
 
 static bus_state_t op_lda(fam65xx_t* cpu, bus_state_t pins) {
-    cpu->A = GET_DATA(pins);
+    cpu->A = FAM65XX_GET_DATA(pins);
     SET_NZ(cpu, cpu->A);
     cpu->callback = fetch_next;
     cpu->PC++; // Advance past operand
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_ldx(fam65xx_t* cpu, bus_state_t pins) {
-    cpu->X = GET_DATA(pins);
+    cpu->X = FAM65XX_GET_DATA(pins);
     SET_NZ(cpu, cpu->X);
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_ldy(fam65xx_t* cpu, bus_state_t pins) {
-    cpu->Y = GET_DATA(pins);
+    cpu->Y = FAM65XX_GET_DATA(pins);
     SET_NZ(cpu, cpu->Y);
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 // ============================================================================
@@ -573,17 +535,17 @@ static bus_state_t op_ldy(fam65xx_t* cpu, bus_state_t pins) {
 
 static bus_state_t op_sta(fam65xx_t* cpu, bus_state_t pins) {
     cpu->callback = fetch_next;
-    return WRITE_CYCLE(cpu->effective_addr, cpu->A) | SYNC_FLAG;
+    return WRITE_CYCLE(cpu->effective_addr, cpu->A) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_stx(fam65xx_t* cpu, bus_state_t pins) {
     cpu->callback = fetch_next;
-    return WRITE_CYCLE(cpu->effective_addr, cpu->X) | SYNC_FLAG;
+    return WRITE_CYCLE(cpu->effective_addr, cpu->X) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_sty(fam65xx_t* cpu, bus_state_t pins) {
     cpu->callback = fetch_next;
-    return WRITE_CYCLE(cpu->effective_addr, cpu->Y) | SYNC_FLAG;
+    return WRITE_CYCLE(cpu->effective_addr, cpu->Y) | FAM65XX_SYNC;
 }
 
 // ============================================================================
@@ -594,41 +556,41 @@ static bus_state_t op_tax(fam65xx_t* cpu, bus_state_t pins) {
     cpu->X = cpu->A;
     SET_NZ(cpu, cpu->X);
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_tay(fam65xx_t* cpu, bus_state_t pins) {
     cpu->Y = cpu->A;
     SET_NZ(cpu, cpu->Y);
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_txa(fam65xx_t* cpu, bus_state_t pins) {
     cpu->A = cpu->X;
     SET_NZ(cpu, cpu->A);
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_tya(fam65xx_t* cpu, bus_state_t pins) {
     cpu->A = cpu->Y;
     SET_NZ(cpu, cpu->A);
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_tsx(fam65xx_t* cpu, bus_state_t pins) {
     cpu->X = cpu->S;
     SET_NZ(cpu, cpu->X);
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_txs(fam65xx_t* cpu, bus_state_t pins) {
     cpu->S = cpu->X;
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 // ============================================================================
@@ -639,28 +601,28 @@ static bus_state_t op_inx(fam65xx_t* cpu, bus_state_t pins) {
     cpu->X++;
     SET_NZ(cpu, cpu->X);
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_iny(fam65xx_t* cpu, bus_state_t pins) {
     cpu->Y++;
     SET_NZ(cpu, cpu->Y);
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_dex(fam65xx_t* cpu, bus_state_t pins) {
     cpu->X--;
     SET_NZ(cpu, cpu->X);
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_dey(fam65xx_t* cpu, bus_state_t pins) {
     cpu->Y--;
     SET_NZ(cpu, cpu->Y);
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 // ============================================================================
@@ -670,20 +632,21 @@ static bus_state_t op_dey(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t op_inc(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0: {
-            uint8_t original = GET_DATA(pins);
+            uint8_t original = FAM65XX_GET_DATA(pins);
+
             cpu->DL = original + 1;
             SET_NZ(cpu, cpu->DL);
             return WRITE_CYCLE(cpu->effective_addr, original);
         }
-        case 1: {
+
+        case 1:
             return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
-        }
-        case 2: {
+
+        case 2:
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
             cpu->PC++;
-            return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
-        }
+            return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
     }
     return pins;
 }
@@ -691,20 +654,21 @@ static bus_state_t op_inc(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t op_dec(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0: {
-            uint8_t original = GET_DATA(pins);
+            uint8_t original = FAM65XX_GET_DATA(pins);
+
             cpu->DL = original - 1;
             SET_NZ(cpu, cpu->DL);
             return WRITE_CYCLE(cpu->effective_addr, original);
         }
-        case 1: {
+
+        case 1:
             return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
-        }
-        case 2: {
+
+        case 2:
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
             cpu->PC++;
-            return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
-        }
+            return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
     }
     return pins;
 }
@@ -713,26 +677,25 @@ static bus_state_t op_asl_mem(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0: {
             // Read data from memory and process it
-            uint8_t original = GET_DATA(pins);
+            uint8_t original = FAM65XX_GET_DATA(pins);
+
             cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x80) ? FLAG_C : 0);
             cpu->DL = original << 1;
             SET_NZ(cpu, cpu->DL);
-            
             // Return dummy write of original value for THIS cycle
             return WRITE_CYCLE(cpu->effective_addr, original);
         }
         
-        case 1: {
+        case 1:
             // Final write of modified value
             return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
-        }
         
         case 2: {
             // Complete instruction and fetch next
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
             cpu->PC++;  // Advance PC to complete the instruction
-            return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+            return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
         }
     }
     return pins;
@@ -741,7 +704,8 @@ static bus_state_t op_asl_mem(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t op_lsr_mem(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0: {
-            uint8_t original = GET_DATA(pins);
+            uint8_t original = FAM65XX_GET_DATA(pins);
+
             cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x01) ? FLAG_C : 0);
             cpu->DL = original >> 1;
             SET_NZ(cpu, cpu->DL);
@@ -754,7 +718,7 @@ static bus_state_t op_lsr_mem(fam65xx_t* cpu, bus_state_t pins) {
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
             cpu->PC++;
-            return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+            return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
         }
     }
     return pins;
@@ -763,8 +727,9 @@ static bus_state_t op_lsr_mem(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t op_rol_mem(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0: {
-            uint8_t original = GET_DATA(pins);
+            uint8_t original = FAM65XX_GET_DATA(pins);
             uint8_t carry = (cpu->P & FLAG_C) ? 1 : 0;
+
             cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x80) ? FLAG_C : 0);
             cpu->DL = (original << 1) | carry;
             SET_NZ(cpu, cpu->DL);
@@ -777,7 +742,7 @@ static bus_state_t op_rol_mem(fam65xx_t* cpu, bus_state_t pins) {
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
             cpu->PC++;
-            return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+            return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
         }
     }
     return pins;
@@ -786,8 +751,9 @@ static bus_state_t op_rol_mem(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t op_ror_mem(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0: {
-            uint8_t original = GET_DATA(pins);
+            uint8_t original = FAM65XX_GET_DATA(pins);
             uint8_t carry = (cpu->P & FLAG_C) ? 0x80 : 0;
+
             cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x01) ? FLAG_C : 0);
             cpu->DL = (original >> 1) | carry;
             SET_NZ(cpu, cpu->DL);
@@ -800,7 +766,7 @@ static bus_state_t op_ror_mem(fam65xx_t* cpu, bus_state_t pins) {
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
             cpu->PC++;
-            return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+            return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
         }
     }
     return pins;
@@ -815,7 +781,7 @@ static bus_state_t op_asl_acc(fam65xx_t* cpu, bus_state_t pins) {
     cpu->A <<= 1;
     SET_NZ(cpu, cpu->A);
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_lsr_acc(fam65xx_t* cpu, bus_state_t pins) {
@@ -823,25 +789,27 @@ static bus_state_t op_lsr_acc(fam65xx_t* cpu, bus_state_t pins) {
     cpu->A >>= 1;
     SET_NZ(cpu, cpu->A);
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_rol_acc(fam65xx_t* cpu, bus_state_t pins) {
     uint8_t carry = (cpu->P & FLAG_C) ? 1 : 0;
+
     cpu->P = (cpu->P & ~FLAG_C) | ((cpu->A & 0x80) ? FLAG_C : 0);
     cpu->A = (cpu->A << 1) | carry;
     SET_NZ(cpu, cpu->A);
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_ror_acc(fam65xx_t* cpu, bus_state_t pins) {
     uint8_t carry = (cpu->P & FLAG_C) ? 0x80 : 0;
+
     cpu->P = (cpu->P & ~FLAG_C) | ((cpu->A & 0x01) ? FLAG_C : 0);
     cpu->A = (cpu->A >> 1) | carry;
     SET_NZ(cpu, cpu->A);
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 // ============================================================================
@@ -849,24 +817,24 @@ static bus_state_t op_ror_acc(fam65xx_t* cpu, bus_state_t pins) {
 // ============================================================================
 
 static bus_state_t op_and(fam65xx_t* cpu, bus_state_t pins) {
-    cpu->A &= GET_DATA(pins);
+    cpu->A &= FAM65XX_GET_DATA(pins);
     SET_NZ(cpu, cpu->A);
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_ora(fam65xx_t* cpu, bus_state_t pins) {
-    cpu->A |= GET_DATA(pins);
+    cpu->A |= FAM65XX_GET_DATA(pins);
     SET_NZ(cpu, cpu->A);
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_eor(fam65xx_t* cpu, bus_state_t pins) {
-    cpu->A ^= GET_DATA(pins);
+    cpu->A ^= FAM65XX_GET_DATA(pins);
     SET_NZ(cpu, cpu->A);
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 // ============================================================================
@@ -874,36 +842,39 @@ static bus_state_t op_eor(fam65xx_t* cpu, bus_state_t pins) {
 // ============================================================================
 
 static bus_state_t op_cmp(fam65xx_t* cpu, bus_state_t pins) {
-    uint8_t data = GET_DATA(pins);
+    uint8_t data = FAM65XX_GET_DATA(pins);
     uint16_t result = cpu->A - data;
+
     cpu->P = (cpu->P & ~(FLAG_N | FLAG_Z | FLAG_C)) |
              ((result & 0x80) ? FLAG_N : 0) |
              ((result & 0xFF) == 0 ? FLAG_Z : 0) |
              (cpu->A >= data ? FLAG_C : 0);
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_cpx(fam65xx_t* cpu, bus_state_t pins) {
-    uint8_t data = GET_DATA(pins);
+    uint8_t data = FAM65XX_GET_DATA(pins);
     uint16_t result = cpu->X - data;
+
     cpu->P = (cpu->P & ~(FLAG_N | FLAG_Z | FLAG_C)) |
              ((result & 0x80) ? FLAG_N : 0) |
              ((result & 0xFF) == 0 ? FLAG_Z : 0) |
              (cpu->X >= data ? FLAG_C : 0);
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_cpy(fam65xx_t* cpu, bus_state_t pins) {
-    uint8_t data = GET_DATA(pins);
+    uint8_t data = FAM65XX_GET_DATA(pins);
     uint16_t result = cpu->Y - data;
+
     cpu->P = (cpu->P & ~(FLAG_N | FLAG_Z | FLAG_C)) |
              ((result & 0x80) ? FLAG_N : 0) |
              ((result & 0xFF) == 0 ? FLAG_Z : 0) |
              (cpu->Y >= data ? FLAG_C : 0);
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 // ============================================================================
@@ -913,43 +884,43 @@ static bus_state_t op_cpy(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t op_clc(fam65xx_t* cpu, bus_state_t pins) {
     cpu->P &= ~FLAG_C;
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_sec(fam65xx_t* cpu, bus_state_t pins) {
     cpu->P |= FLAG_C;
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_cli(fam65xx_t* cpu, bus_state_t pins) {
     cpu->P &= ~FLAG_I;
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_sei(fam65xx_t* cpu, bus_state_t pins) {
     cpu->P |= FLAG_I;
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_cld(fam65xx_t* cpu, bus_state_t pins) {
     cpu->P &= ~FLAG_D;
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_sed(fam65xx_t* cpu, bus_state_t pins) {
     cpu->P |= FLAG_D;
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_clv(fam65xx_t* cpu, bus_state_t pins) {
     cpu->P &= ~FLAG_V;
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 // ============================================================================
@@ -957,13 +928,14 @@ static bus_state_t op_clv(fam65xx_t* cpu, bus_state_t pins) {
 // ============================================================================
 
 static bus_state_t op_bit(fam65xx_t* cpu, bus_state_t pins) {
-    uint8_t data = GET_DATA(pins);
+    uint8_t data = FAM65XX_GET_DATA(pins);
+
     cpu->P = (cpu->P & ~(FLAG_N | FLAG_V | FLAG_Z)) |
              (data & FLAG_N) |
              (data & FLAG_V) |
              ((cpu->A & data) == 0 ? FLAG_Z : 0);
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 // ============================================================================
@@ -971,12 +943,13 @@ static bus_state_t op_bit(fam65xx_t* cpu, bus_state_t pins) {
 // ============================================================================
 
 static bus_state_t op_adc(fam65xx_t* cpu, bus_state_t pins) {
-    uint8_t operand = GET_DATA(pins);
+    uint8_t operand = FAM65XX_GET_DATA(pins);
     uint16_t result;
     
     if (cpu->P & FLAG_D) {
         // Decimal mode
         uint8_t al = (cpu->A & 0x0F) + (operand & 0x0F) + (cpu->P & FLAG_C ? 1 : 0);
+
         if (al > 9) al += 6;
         uint8_t ah = (cpu->A >> 4) + (operand >> 4) + (al > 15 ? 1 : 0);
         
@@ -1001,11 +974,11 @@ static bus_state_t op_adc(fam65xx_t* cpu, bus_state_t pins) {
     }
     
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_sbc(fam65xx_t* cpu, bus_state_t pins) {
-    uint8_t operand = GET_DATA(pins);
+    uint8_t operand = FAM65XX_GET_DATA(pins);
     uint16_t result;
     
     if (cpu->P & FLAG_D) {
@@ -1035,7 +1008,7 @@ static bus_state_t op_sbc(fam65xx_t* cpu, bus_state_t pins) {
     }
     
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 // ============================================================================
@@ -1050,7 +1023,7 @@ static bus_state_t op_pha(fam65xx_t* cpu, bus_state_t pins) {
         case 1:
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            pins = WRITE_CYCLE(cpu->SP, cpu->A) | SYNC_FLAG;
+            pins = WRITE_CYCLE(cpu->SP, cpu->A) | FAM65XX_SYNC;
             cpu->S--;
             return pins;
     }
@@ -1065,7 +1038,7 @@ static bus_state_t op_php(fam65xx_t* cpu, bus_state_t pins) {
         case 1:
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            pins = WRITE_CYCLE(cpu->SP, cpu->P | FLAG_B | FLAG_U) | SYNC_FLAG;
+            pins = WRITE_CYCLE(cpu->SP, cpu->P | FLAG_B | FLAG_U) | FAM65XX_SYNC;
             cpu->S--;
             return pins;
     }
@@ -1085,11 +1058,11 @@ static bus_state_t op_pla(fam65xx_t* cpu, bus_state_t pins) {
             return READ_CYCLE(cpu->SP);
             
         case 3:
-            cpu->A = GET_DATA(pins);
+            cpu->A = FAM65XX_GET_DATA(pins);
             SET_NZ(cpu, cpu->A);
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+            return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
     }
     return pins;
 }
@@ -1107,10 +1080,10 @@ static bus_state_t op_plp(fam65xx_t* cpu, bus_state_t pins) {
             return READ_CYCLE(cpu->SP);
             
         case 3:
-            cpu->P = (GET_DATA(pins) & ~FLAG_B) | FLAG_U;
+            cpu->P = (FAM65XX_GET_DATA(pins) & ~FLAG_B) | FLAG_U;
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+            return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
     }
     return pins;
 }
@@ -1122,13 +1095,13 @@ static bus_state_t op_plp(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t op_jmp(fam65xx_t* cpu, bus_state_t pins) {
     cpu->PC = cpu->effective_addr;
     cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 static bus_state_t op_jsr(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0:
-            cpu->ADL = GET_DATA(pins);
+            cpu->ADL = FAM65XX_GET_DATA(pins);
             return READ_CYCLE(cpu->PC++);
             
         case 1:
@@ -1145,11 +1118,11 @@ static bus_state_t op_jsr(fam65xx_t* cpu, bus_state_t pins) {
             return pins;
             
         case 4:
-            cpu->ADH = GET_DATA(pins);
+            cpu->ADH = FAM65XX_GET_DATA(pins);
             cpu->PC = cpu->AD;
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+            return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
     }
     return pins;
 }
@@ -1167,19 +1140,19 @@ static bus_state_t op_rts(fam65xx_t* cpu, bus_state_t pins) {
             return READ_CYCLE(cpu->SP);
             
         case 3:
-            cpu->DL = GET_DATA(pins);
+            cpu->DL = FAM65XX_GET_DATA(pins);
             cpu->S++;
             return READ_CYCLE(cpu->SP);
             
         case 4:
-            cpu->PC = (GET_DATA(pins) << 8) | cpu->DL;
+            cpu->PC = (FAM65XX_GET_DATA(pins) << 8) | cpu->DL;
             return READ_CYCLE(cpu->PC);
             
         case 5:
             cpu->PC++;
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+            return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
     }
     return pins;
 }
@@ -1197,20 +1170,20 @@ static bus_state_t op_rti(fam65xx_t* cpu, bus_state_t pins) {
             return READ_CYCLE(cpu->SP);
             
         case 3:
-            cpu->P = (GET_DATA(pins) & ~FLAG_B) | FLAG_U;
+            cpu->P = (FAM65XX_GET_DATA(pins) & ~FLAG_B) | FLAG_U;
             cpu->S++;
             return READ_CYCLE(cpu->SP);
             
         case 4:
-            cpu->DL = GET_DATA(pins);
+            cpu->DL = FAM65XX_GET_DATA(pins);
             cpu->S++;
             return READ_CYCLE(cpu->SP);
             
         case 5:
-            cpu->PC = (GET_DATA(pins) << 8) | cpu->DL;
+            cpu->PC = (FAM65XX_GET_DATA(pins) << 8) | cpu->DL;
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+            return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
     }
     return pins;
 }
@@ -1241,18 +1214,20 @@ static bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins) {
         case 4: {
             cpu->P |= FLAG_I;
             uint16_t vector_addr = get_vector_addr(cpu);
+
             return READ_CYCLE(vector_addr);
         }
         case 5: {
-            cpu->DL = GET_DATA(pins);
+            cpu->DL = FAM65XX_GET_DATA(pins);
             uint16_t vector_addr = get_vector_addr(cpu);
+
             return READ_CYCLE(vector_addr + 1);
         }
         case 6:
-            cpu->PC = (GET_DATA(pins) << 8) | cpu->DL;
+            cpu->PC = (FAM65XX_GET_DATA(pins) << 8) | cpu->DL;
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+            return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
     }
     return pins;
 }
@@ -1300,13 +1275,13 @@ static bus_state_t op_nop(fam65xx_t* cpu, bus_state_t pins) {
             // Complete instruction and fetch next
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            return READ_CYCLE(cpu->PC++) | SYNC_FLAG;
+            return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
     }
     return pins;
 }
 
 static bus_state_t op_jam(fam65xx_t* cpu, bus_state_t pins) {
-    return READ_CYCLE(cpu->PC) | SYNC_FLAG;
+    return READ_CYCLE(cpu->PC) | FAM65XX_SYNC;
 }
 
 // ============================================================================
@@ -1509,6 +1484,7 @@ static cycle_fn_t get_op_cb(fam65xx_t* cpu) {
 // Helper method to set next callback based on instruction type
 static void set_next_callback(fam65xx_t* cpu) {
     uint8_t op_flags = opcode_to_op[cpu->opcode];
+
     if (op_flags & INSTR_RMW) {
         cpu->callback = rmw_handler;
     } else {
@@ -1522,11 +1498,12 @@ static bus_state_t rmw_handler(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
         case 0: {
             // Read data from memory (addressing mode has resolved effective_addr)
-            uint8_t original = GET_DATA(pins);
+            uint8_t original = FAM65XX_GET_DATA(pins);
+
             cpu->TMP = original;
-            
             // Process the operation (ASL, LSR, ROL, ROR, INC, DEC)
             uint8_t op_index = opcode_to_op[cpu->opcode] & OP_MASK;
+
             switch(op_index) {
                 case OP_ASL_MEM:
                     cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x80) ? FLAG_C : 0);
@@ -1540,6 +1517,7 @@ static bus_state_t rmw_handler(fam65xx_t* cpu, bus_state_t pins) {
                     break;
                 case OP_ROL_MEM: {
                     uint8_t carry = (cpu->P & FLAG_C) ? 1 : 0;
+
                     cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x80) ? FLAG_C : 0);
                     cpu->DL = (original << 1) | carry;
                     SET_NZ(cpu, cpu->DL);
@@ -1547,6 +1525,7 @@ static bus_state_t rmw_handler(fam65xx_t* cpu, bus_state_t pins) {
                 }
                 case OP_ROR_MEM: {
                     uint8_t carry = (cpu->P & FLAG_C) ? 0x80 : 0;
+
                     cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x01) ? FLAG_C : 0);
                     cpu->DL = (original >> 1) | carry;
                     SET_NZ(cpu, cpu->DL);
@@ -1579,13 +1558,12 @@ static bus_state_t rmw_handler(fam65xx_t* cpu, bus_state_t pins) {
 extern bool verbose_output;
 
 static bus_state_t fetch_next(fam65xx_t* cpu, bus_state_t pins) {
-    cpu->opcode = GET_DATA(pins);
+    cpu->opcode = FAM65XX_GET_DATA(pins);
     
     // Get instruction information from encoded lookup table
     uint8_t am_flags = opcode_to_am[cpu->opcode];
     uint8_t am_index = am_flags & AM_MASK;  // Extract addressing mode
     uint8_t op_index = opcode_to_op[cpu->opcode] & OP_MASK;  // Extract operation index
-    
     cycle_fn_t next_handler = am_handlers[am_index];
     
     // Check if this is a direct operation (no addressing mode)
@@ -1641,14 +1619,14 @@ bus_state_t fam65xx_callbacks_init(fam65xx_t* cpu, const fam65xx_desc_t* desc) {
     cpu->CI = 0xFFFF;   // Invalid CI to force proper initialization (test runner compatibility)
     
     bus_state_t pins = 0;
-    pins |= RDY_FLAG;   // Set ready bit
-    pins |= RW_FLAG;    // Set read mode as default state
+    pins |= FAM65XX_RDY;   // Set ready bit
+    pins |= FAM65XX_RW;    // Set read mode as default state
     
     return pins;
 }
 
 void fam65xx_callbacks_reset(fam65xx_t* cpu) {
-    cpu->brk_flags = BRK_RESET;
+    cpu->brk_flags = FAM65XX_BRK_RESET;
     cpu->cb_index = 0;
     cpu->P |= FLAG_I;
     cpu->callback = fetch_next;
@@ -1659,19 +1637,19 @@ bus_state_t fam65xx_callbacks_bootstrap(fam65xx_t* cpu, bus_state_t pins) {
     // Only bootstrap if CPU is in uninitialized state
     if (cpu->CI == 0xFFFF) {
         // Set up for first instruction fetch
-        pins |= RDY_FLAG;   // Ensure RDY is high for execution
-        pins |= RW_FLAG;    // Ensure RW is set as default state
+        pins |= FAM65XX_RDY;   // Ensure RDY is high for execution
+        pins |= FAM65XX_RW;    // Ensure RW is set as default state
         cpu->cb_index = 0;  // Reset callback index
         cpu->CI = 0x0000;   // Clear the invalid marker
         cpu->callback = fetch_next;     // Ensure callback is set to fetch_next
         // Set up pins for first instruction fetch from PC
-        pins = READ_CYCLE(cpu->PC) | SYNC_FLAG;
+        pins = READ_CYCLE(cpu->PC) | FAM65XX_SYNC;
         
         // Debug bootstrap
         if (verbose_output) {
-            printf("  DEBUG: Bootstrap - pins=0x%016llx, SYNC_FLAG=0x%016llx, has_sync=%d\n",
-                   (unsigned long long)pins, (unsigned long long)SYNC_FLAG,
-                   (pins & SYNC_FLAG) ? 1 : 0);
+            printf("  DEBUG: Bootstrap - pins=0x%016llx, FAM65XX_SYNC=0x%016llx, has_sync=%d\n",
+                   (unsigned long long)pins, (unsigned long long)FAM65XX_SYNC,
+                   (pins & FAM65XX_SYNC) ? 1 : 0);
         }
     }
     
@@ -1722,20 +1700,20 @@ bus_state_t fam65xx_callbacks_tick(fam65xx_t* cpu, bus_state_t pins) {
         printf("  DEBUG: TICK - First tick - callback=%p, fetch_next=%p, cb_index=%d\n",
                (void*)cpu->callback, (void*)fetch_next, cpu->cb_index);
         printf("  DEBUG: TICK - pins=0x%016llx, SYNC=%d, brk_flags=0x%02x\n",
-               (unsigned long long)pins, (pins & SYNC_FLAG) ? 1 : 0, cpu->brk_flags);
+               (unsigned long long)pins, (pins & FAM65XX_SYNC) ? 1 : 0, cpu->brk_flags);
         
         // Force initial state to be correct
         if (cpu->cb_index == 0) {
             cpu->callback = fetch_next;
-            pins |= SYNC_FLAG;
+            pins |= FAM65XX_SYNC;
             printf("  DEBUG: TICK - Forced callback=fetch_next, set SYNC flag\n");
         }
         first_tick = false;
     }
     
     // RDY check: stall CPU BEFORE calling callback if not ready
-    if (!(pins & RDY_FLAG)) {
-        if (pins & RW_FLAG) {
+    if (!(pins & FAM65XX_RDY)) {
+        if (pins & FAM65XX_RW) {
             // Only stall READ cycles
             // CPU is stalled - don't advance, return current state
             return pins;
@@ -1745,34 +1723,37 @@ bus_state_t fam65xx_callbacks_tick(fam65xx_t* cpu, bus_state_t pins) {
     
     // Memory access happens BEFORE callback execution (hardware-accurate)
     // Use address from pins (set up by callbacks in previous cycle)
-    uint16_t mem_addr = GET_ADDR(pins);
-    if (pins & RW_FLAG) {
+    uint16_t mem_addr = FAM65XX_GET_ADDR(pins);
+
+    if (pins & FAM65XX_RW) {
         // Read operation - perform memory read via callback if available
         if (cpu->mem_read) {
             // Pass current bus data to allow VIC-II graphics data leaking in color RAM
-            uint8_t current_bus_data = GET_DATA(pins);
+            uint8_t current_bus_data = FAM65XX_GET_DATA(pins);
             uint8_t read_data = cpu->mem_read(cpu->user_data, mem_addr, current_bus_data);
-            pins = BUS_SET_DATA(pins, read_data);
+
+            pins = FAM65XX_SET_DATA(pins, read_data);
         }
     } else {
         // Write operation - perform memory write via callback if available
         if (cpu->mem_write) {
-            uint8_t write_data = GET_DATA(pins);
+            uint8_t write_data = FAM65XX_GET_DATA(pins);
+
             cpu->mem_write(cpu->user_data, mem_addr, write_data);
         }
         // Automatically raise RW pin after write completes
-        pins |= RW_FLAG;
+        pins |= FAM65XX_RW;
     }
     
     // SYNC-based opcode decoding with interrupt handling - BEFORE callback execution
-    if (pins & SYNC_FLAG) {
+    if (pins & FAM65XX_SYNC) {
         // Debug interrupt state BEFORE clearing SYNC
         if (verbose_output) {
             printf("  DEBUG: SYNC detected, brk_flags=0x%02x, nmi_pip=0x%02x, irq_pip=0x%02x, P=0x%02x\n",
                    cpu->brk_flags, cpu->nmi_pip, cpu->irq_pip, cpu->P);
         }
         
-        pins &= ~SYNC_FLAG;  // Clear SYNC flag after processing
+        pins &= ~FAM65XX_SYNC;  // Clear SYNC flag after processing
         // For ProcessorTests: Disable interrupt processing during normal instruction execution
         // Only handle interrupts if explicitly set via brk_flags (BRK/RESET)
         if (cpu->callback == fetch_next && cpu->cb_index == 0) {
@@ -1781,12 +1762,12 @@ bus_state_t fam65xx_callbacks_tick(fam65xx_t* cpu, bus_state_t pins) {
             }
             
             // Only process explicit interrupt flags, not automatic IRQ/NMI detection
-            if (cpu->brk_flags & BRK_NMI) {
+            if (cpu->brk_flags & (FAM65XX_BRK_NMI | FAM65XX_BRK_IRQ | FAM65XX_BRK_RESET)) {
                 if (verbose_output) 
                 {
-                    if (cpu->brk_flags & BRK_NMI) printf("  DEBUG: NMI interrupt triggered (explicit)\n");
-                    else if (cpu->brk_flags & BRK_IRQ) printf("  DEBUG: IRQ interrupt triggered (explicit)\n");
-                    else if (cpu->brk_flags & BRK_RESET) printf("  DEBUG: RESET interrupt triggered (explicit)\n");
+                    if (cpu->brk_flags & FAM65XX_BRK_NMI) printf("  DEBUG: NMI interrupt triggered (explicit)\n");
+                    else if (cpu->brk_flags & FAM65XX_BRK_IRQ) printf("  DEBUG: IRQ interrupt triggered (explicit)\n");
+                    else if (cpu->brk_flags & FAM65XX_BRK_RESET) printf("  DEBUG: RESET interrupt triggered (explicit)\n");
                 }
                 cpu->cb_index = 0;
                 cpu->callback = op_brk;  // Use BRK handler for interrupts
