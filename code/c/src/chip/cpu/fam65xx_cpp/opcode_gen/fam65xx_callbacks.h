@@ -678,7 +678,7 @@ static bus_state_t op_inc(fam65xx_t* cpu, bus_state_t pins) {
         case 1:
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL) | FAM65XX_SYNC;
     }
     return pins;
 }
@@ -694,7 +694,7 @@ static bus_state_t op_dec(fam65xx_t* cpu, bus_state_t pins) {
         case 1:
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL) | FAM65XX_SYNC;
     }
     return pins;
 }
@@ -720,7 +720,7 @@ static bus_state_t op_asl(fam65xx_t* cpu, bus_state_t pins) {
             // Final write of modified value
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL) | FAM65XX_SYNC;
     }
     return pins;
 }
@@ -747,7 +747,7 @@ static bus_state_t op_lsr(fam65xx_t* cpu, bus_state_t pins) {
             // Final write of modified value
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL) | FAM65XX_SYNC;
     }
     return pins;
 }
@@ -773,7 +773,7 @@ static bus_state_t op_rol(fam65xx_t* cpu, bus_state_t pins) {
             // Final write of modified value
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL) | FAM65XX_SYNC;
     }
     return pins;
 }
@@ -799,7 +799,7 @@ static bus_state_t op_ror(fam65xx_t* cpu, bus_state_t pins) {
             // Final write of modified value
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL) | FAM65XX_SYNC;
     }
     return pins;
 }
@@ -1407,7 +1407,7 @@ static bus_state_t op_dcp(fam65xx_t* cpu, bus_state_t pins) {
         case 1:
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL) | FAM65XX_SYNC;
     }
     return pins;
 }
@@ -1436,7 +1436,7 @@ static bus_state_t op_isc(fam65xx_t* cpu, bus_state_t pins) {
         case 1:
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL) | FAM65XX_SYNC;
     }
     return pins;
 }
@@ -1460,7 +1460,7 @@ static bus_state_t op_slo(fam65xx_t* cpu, bus_state_t pins) {
         case 1:
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL) | FAM65XX_SYNC;
     }
     return pins;
 }
@@ -1484,7 +1484,7 @@ static bus_state_t op_rla(fam65xx_t* cpu, bus_state_t pins) {
         case 1:
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL) | FAM65XX_SYNC;
     }
     return pins;
 }
@@ -1509,7 +1509,7 @@ static bus_state_t op_sre(fam65xx_t* cpu, bus_state_t pins) {
         case 1:
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL) | FAM65XX_SYNC;
     }
     return pins;
 }
@@ -1540,7 +1540,7 @@ static bus_state_t op_rra(fam65xx_t* cpu, bus_state_t pins) {
         case 1:
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL) | FAM65XX_SYNC;
     }
     return pins;
 }
