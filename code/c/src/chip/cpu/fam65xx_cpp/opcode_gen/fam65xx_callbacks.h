@@ -133,12 +133,12 @@ enum {
     R_IR,        // Instruction register
     R_DL,        // Data latch
     R_TMP,       // Temporary storage
-
-    // Compatibility mapping for 8-bit stack pointer
-    R_S = R_SPL,  // Map legacy S register to SPL for compatibility
-
-    R_COUNT = R_TMP + 1 //  (no comma for last element)
+    
+    R_COUNT,
 };
+
+// Compatibility mapping for 8-bit stack pointer
+#define R_S R_SPL  // Map legacy S register to SPL for compatibility
 
 // 16-bit register indices (native endian compatible)
 enum {
@@ -482,6 +482,44 @@ static bus_state_t am_indirect_indexed(fam65xx_t* cpu, bus_state_t pins) {
     return pins;
 }
 
+// ============================================================================
+// Addressing Modes
+// ============================================================================
+
+enum {
+    AM_NON,     // No addressing mode handler needed
+    AM_ZER,     // Zero page
+    AM_ZPX,     // Zero page,X
+    AM_ZPY,     // Zero page,Y
+    AM_ABS,     // Absolute
+    AM_ABX,     // Absolute,X
+    AM_ABY,     // Absolute,Y
+    AM_IND,     // Indirect (JMP only)
+    AM_INX,     // (Indirect,X)
+    AM_INY,     // (Indirect),Y
+    // Mere markers for addressing modes that don't need handlers
+    AM_ACC = AM_NON,     // Accumulator
+    AM_IMM = AM_NON,     // Immediate - handled directly in fetch_next
+    AM_REL = AM_NON,     // Relative (branches) - handled in op_branch
+};
+
+static const cycle_fn_t am_handlers[] = {
+    NULL,                   // AM_NON - not used
+    am_zero_page,           // AM_ZER
+    am_zero_page_x,         // AM_ZPX
+    am_zero_page_y,         // AM_ZPY
+    am_absolute,            // AM_ABS
+    am_absolute_x,          // AM_ABX
+    am_absolute_y,          // AM_ABY
+    am_indirect,            // AM_IND
+    am_indexed_indirect,    // AM_INX
+    am_indirect_indexed,    // AM_INY
+};
+
+// ============================================================================
+// Operation Handlers - Branches
+// ============================================================================
+
 static /*NOT inline!*/ bus_state_t op_branch(fam65xx_t* cpu, bus_state_t pins, uint8_t flag_mask, bool flag_value) {
     switch(cpu->cb_index++) {
         case 0: {
@@ -510,6 +548,38 @@ static /*NOT inline!*/ bus_state_t op_branch(fam65xx_t* cpu, bus_state_t pins, u
             return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
     }
     return pins;
+}
+
+static bus_state_t op_bpl(fam65xx_t* cpu, bus_state_t pins) {
+	return op_branch(cpu, pins, FLAG_N, false);
+}
+
+static bus_state_t op_bmi(fam65xx_t* cpu, bus_state_t pins) {
+	return op_branch(cpu, pins, FLAG_N, true);
+}
+
+static bus_state_t op_bvs(fam65xx_t* cpu, bus_state_t pins) {
+	return op_branch(cpu, pins, FLAG_V, true);
+}
+
+static bus_state_t op_bcc(fam65xx_t* cpu, bus_state_t pins) {
+	return op_branch(cpu, pins, FLAG_C, false);
+}
+
+static bus_state_t op_bcs(fam65xx_t* cpu, bus_state_t pins) {
+	return op_branch(cpu, pins, FLAG_C, true);
+}
+
+static bus_state_t op_bvc(fam65xx_t* cpu, bus_state_t pins) {
+	return op_branch(cpu, pins, FLAG_V, false);
+}
+
+static bus_state_t op_bne(fam65xx_t* cpu, bus_state_t pins) {
+	return op_branch(cpu, pins, FLAG_Z, false);
+}
+
+static bus_state_t op_beq(fam65xx_t* cpu, bus_state_t pins) {
+	return op_branch(cpu, pins, FLAG_Z, true);
 }
 
 // ============================================================================
@@ -724,7 +794,6 @@ static bus_state_t op_asl(fam65xx_t* cpu, bus_state_t pins) {
     }
     return pins;
 }
-
 
 static bus_state_t op_lsr(fam65xx_t* cpu, bus_state_t pins) {
     if (!cpu->opcode_info.rmw_flag) {
@@ -1233,38 +1302,6 @@ static bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins) {
     return pins;
 }
 
-static bus_state_t op_bpl(fam65xx_t* cpu, bus_state_t pins) {
-	return op_branch(cpu, pins, FLAG_N, false);
-}
-
-static bus_state_t op_bmi(fam65xx_t* cpu, bus_state_t pins) {
-	return op_branch(cpu, pins, FLAG_N, true);
-}
-
-static bus_state_t op_bvs(fam65xx_t* cpu, bus_state_t pins) {
-	return op_branch(cpu, pins, FLAG_V, true);
-}
-
-static bus_state_t op_bcc(fam65xx_t* cpu, bus_state_t pins) {
-	return op_branch(cpu, pins, FLAG_C, false);
-}
-
-static bus_state_t op_bcs(fam65xx_t* cpu, bus_state_t pins) {
-	return op_branch(cpu, pins, FLAG_C, true);
-}
-
-static bus_state_t op_bvc(fam65xx_t* cpu, bus_state_t pins) {
-	return op_branch(cpu, pins, FLAG_V, false);
-}
-
-static bus_state_t op_bne(fam65xx_t* cpu, bus_state_t pins) {
-	return op_branch(cpu, pins, FLAG_Z, false);
-}
-
-static bus_state_t op_beq(fam65xx_t* cpu, bus_state_t pins) {
-	return op_branch(cpu, pins, FLAG_Z, true);
-}
-
 static bus_state_t op_nop(fam65xx_t* cpu, bus_state_t pins) {
     // NOP is a 2-cycle instruction that needs a dummy read from PC
     switch(cpu->cb_index++) {
@@ -1284,75 +1321,6 @@ static bus_state_t op_nop(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t op_jam(fam65xx_t* cpu, bus_state_t pins) {
     return READ_CYCLE(cpu->PC) | FAM65XX_SYNC;
 }
-
-// ============================================================================
-// Addressing Modes
-// ============================================================================
-
-enum {
-    AM_NON,
-    AM_IMP,     // Implied
-    AM_ACC,     // Accumulator
-    AM_IMM,     // Immediate
-    AM_ZER,     // Zero page
-    AM_ZPX,     // Zero page,X
-    AM_ZPY,     // Zero page,Y
-    AM_ABS,     // Absolute
-    AM_ABX,     // Absolute,X
-    AM_ABY,     // Absolute,Y
-    AM_IND,     // Indirect (JMP only)
-    AM_INX,     // (Indirect,X)
-    AM_INY,     // (Indirect),Y
-    AM_REL,     // Relative (branches)
-};
-
-static const cycle_fn_t am_handlers[] = {
-    NULL,                   // AM_NON - not used
-    NULL,                   // AM_IMP - not used
-    NULL,                   // AM_ACC - not used
-    NULL,                   // AM_IMM - handled directly in fetch_next
-    am_zero_page,           // AM_ZER
-    am_zero_page_x,         // AM_ZPX
-    am_zero_page_y,         // AM_ZPY
-    am_absolute,            // AM_ABS
-    am_absolute_x,          // AM_ABX
-    am_absolute_y,          // AM_ABY
-    am_indirect,            // AM_IND
-    am_indexed_indirect,    // AM_INX
-    am_indirect_indexed,    // AM_INY
-    NULL,                   // AM_REL - handled in op_branch
-};
-
-// ============================================================================
-// Operations
-// ============================================================================
-
-enum {
-    OP_LDA, OP_LDX, OP_LDY,
-    OP_STA, OP_STX, OP_STY,
-    OP_ADC, OP_SBC,
-    OP_AND, OP_ORA, OP_EOR,
-    OP_CMP, OP_CPX, OP_CPY,
-    OP_ASL, OP_LSR, OP_ROL, OP_ROR,
-    OP_INC, OP_DEC,
-    OP_INX, OP_INY, OP_DEX, OP_DEY,
-    OP_TAX, OP_TAY, OP_TXA, OP_TYA, OP_TSX, OP_TXS,
-    OP_PHA, OP_PHP, OP_PLA, OP_PLP,
-    OP_BCC, OP_BCS, OP_BEQ, OP_BNE, OP_BMI, OP_BPL, OP_BVC, OP_BVS,
-    OP_CLC, OP_SEC, OP_CLI, OP_SEI, OP_CLD, OP_SED, OP_CLV,
-    OP_JMP, OP_JSR, OP_RTS, OP_RTI, OP_BRK,
-    OP_BIT, OP_NOP, OP_JAM,
-    // 65C02 enhancements
-    OP_BRA,
-    // Illegal opcodes - combination instructions
-    OP_LAX, OP_SAX, OP_DCP, OP_ISC, OP_SLO, OP_RLA, OP_SRE, OP_RRA,
-    // Illegal opcodes - special accumulator operations
-    OP_ANC, OP_ASR, OP_ARR, OP_SBX,
-    // Illegal opcodes - store with AND operations
-    OP_SHA, OP_SHS, OP_SHX, OP_SHY, OP_LAS,
-    // Illegal opcodes - special operations
-    OP_XAA
-};
 
 // ============================================================================
 // Additional Operation Handlers
@@ -1650,13 +1618,44 @@ static bus_state_t op_xaa(fam65xx_t* cpu, bus_state_t pins) {
     return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
+// ============================================================================
+// Operations
+// ============================================================================
+
+enum {
+    OP_LDA, OP_LDX, OP_LDY,
+    OP_STA, OP_STX, OP_STY,
+    OP_ADC, OP_SBC,
+    OP_AND, OP_ORA, OP_EOR,
+    OP_CMP, OP_CPX, OP_CPY,
+    OP_ASL, OP_LSR, OP_ROL, OP_ROR,
+    OP_INC, OP_DEC,
+    OP_INX, OP_INY, OP_DEX, OP_DEY,
+    OP_TAX, OP_TAY, OP_TXA, OP_TYA, OP_TSX, OP_TXS,
+    OP_PHA, OP_PHP, OP_PLA, OP_PLP,
+    OP_BCC, OP_BCS, OP_BEQ, OP_BNE, OP_BMI, OP_BPL, OP_BVC, OP_BVS,
+    OP_CLC, OP_SEC, OP_CLI, OP_SEI, OP_CLD, OP_SED, OP_CLV,
+    OP_JMP, OP_JSR, OP_RTS, OP_RTI, OP_BRK,
+    OP_BIT, OP_NOP, OP_JAM,
+    // 65C02 enhancements
+    OP_BRA,
+    // Illegal opcodes - combination instructions
+    OP_LAX, OP_SAX, OP_DCP, OP_ISC, OP_SLO, OP_RLA, OP_SRE, OP_RRA,
+    // Illegal opcodes - special accumulator operations
+    OP_ANC, OP_ASR, OP_ARR, OP_SBX,
+    // Illegal opcodes - store with AND operations
+    OP_SHA, OP_SHS, OP_SHX, OP_SHY, OP_LAS,
+    // Illegal opcodes - special operations
+    OP_XAA
+};
+
 static const cycle_fn_t op_handlers[] = {
     op_lda, // OP_LDA
-	op_ldx, // OP_LDX
-	op_ldy, // OP_LDY,
+    op_ldx, // OP_LDX
+    op_ldy, // OP_LDY,
     op_sta, // OP_STA
-	op_stx, // OP_STX
-	op_sty, // OP_STY,
+    op_stx, // OP_STX
+    op_sty, // OP_STY,
     op_adc, // OP_ADC
     op_sbc, // OP_SBC
     op_and, // OP_AND
