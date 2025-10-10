@@ -840,7 +840,7 @@ static bus_state_t op_cmp(fam65xx_t* cpu, bus_state_t pins) {
     uint16_t result = cpu->A - data;
 
     cpu->P = (cpu->P & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-             ((result & 0x80) ? FLAG_N : 0) |
+             (result & FLAG_N) |
              ((result & 0xFF) == 0 ? FLAG_Z : 0) |
              (cpu->A >= data ? FLAG_C : 0);
     cpu->callback = fetch_next;
@@ -852,7 +852,7 @@ static bus_state_t op_cpx(fam65xx_t* cpu, bus_state_t pins) {
     uint16_t result = cpu->X - data;
 
     cpu->P = (cpu->P & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-             ((result & 0x80) ? FLAG_N : 0) |
+             (result & FLAG_N) |
              ((result & 0xFF) == 0 ? FLAG_Z : 0) |
              (cpu->X >= data ? FLAG_C : 0);
     cpu->callback = fetch_next;
@@ -864,7 +864,7 @@ static bus_state_t op_cpy(fam65xx_t* cpu, bus_state_t pins) {
     uint16_t result = cpu->Y - data;
 
     cpu->P = (cpu->P & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-             ((result & 0x80) ? FLAG_N : 0) |
+             (result & FLAG_N) |
              ((result & 0xFF) == 0 ? FLAG_Z : 0) |
              (cpu->Y >= data ? FLAG_C : 0);
     cpu->callback = fetch_next;
@@ -949,7 +949,7 @@ static bus_state_t op_adc(fam65xx_t* cpu, bus_state_t pins) {
         
         result = cpu->A + operand + (cpu->P & FLAG_C ? 1 : 0);
         cpu->P = (cpu->P & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                 ((result & 0x80) ? FLAG_N : 0) |
+                 (result & FLAG_N) |
                  (((~(cpu->A ^ operand) & (cpu->A ^ result)) & 0x80) ? FLAG_V : 0) |
                  ((result & 0xFF) == 0 ? FLAG_Z : 0);
         
@@ -960,7 +960,7 @@ static bus_state_t op_adc(fam65xx_t* cpu, bus_state_t pins) {
         // Binary mode
         result = cpu->A + operand + (cpu->P & FLAG_C ? 1 : 0);
         cpu->P = (cpu->P & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                 ((result & 0x80) ? FLAG_N : 0) |
+                 (result & FLAG_N) |
                  (((~(cpu->A ^ operand) & (cpu->A ^ result)) & 0x80) ? FLAG_V : 0) |
                  ((result & 0xFF) == 0 ? FLAG_Z : 0) |
                  ((result > 0xFF) ? FLAG_C : 0);
@@ -983,7 +983,7 @@ static bus_state_t op_sbc(fam65xx_t* cpu, bus_state_t pins) {
         
         result = cpu->A - operand - (cpu->P & FLAG_C ? 0 : 1);
         cpu->P = (cpu->P & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                 ((result & 0x80) ? FLAG_N : 0) |
+                 (result & FLAG_N) |
                  (((cpu->A ^ operand) & (cpu->A ^ result) & 0x80) ? FLAG_V : 0) |
                  ((result & 0xFF) == 0 ? FLAG_Z : 0);
         
@@ -994,7 +994,7 @@ static bus_state_t op_sbc(fam65xx_t* cpu, bus_state_t pins) {
         // Binary mode
         result = cpu->A - operand - (cpu->P & FLAG_C ? 0 : 1);
         cpu->P = (cpu->P & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                 ((result & 0x80) ? FLAG_N : 0) |
+                 (result & FLAG_N) |
                  (((cpu->A ^ operand) & (cpu->A ^ result) & 0x80) ? FLAG_V : 0) |
                  ((result & 0xFF) == 0 ? FLAG_Z : 0) |
                  ((result >= 0x100) ? FLAG_C : 0);
@@ -1391,7 +1391,7 @@ static bus_state_t op_dcp(fam65xx_t* cpu, bus_state_t pins) {
             uint16_t cmp_result = cpu->A - result;
 
             cpu->P = (cpu->P & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-                     ((cmp_result & 0x80) ? FLAG_N : 0) |
+                     (cmp_result & FLAG_N) |
                      ((cmp_result & 0xFF) == 0 ? FLAG_Z : 0) |
                      (cpu->A >= result ? FLAG_C : 0);
             
@@ -1418,7 +1418,7 @@ static bus_state_t op_isc(fam65xx_t* cpu, bus_state_t pins) {
             uint16_t result = cpu->A - incremented - (cpu->P & FLAG_C ? 0 : 1);
 
             cpu->P = (cpu->P & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                     ((result & 0x80) ? FLAG_N : 0) |
+                     (result & FLAG_N) |
                      (((cpu->A ^ incremented) & (cpu->A ^ result) & 0x80) ? FLAG_V : 0) |
                      ((result & 0xFF) == 0 ? FLAG_Z : 0) |
                      ((result >= 0x100) ? FLAG_C : 0);
@@ -1522,7 +1522,7 @@ static bus_state_t op_rra(fam65xx_t* cpu, bus_state_t pins) {
             uint16_t result = cpu->A + rotated + (cpu->P & FLAG_C ? 1 : 0);
 
             cpu->P = (cpu->P & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                     ((result & 0x80) ? FLAG_N : 0) |
+                     (result & FLAG_N) |
                      (((~(cpu->A ^ rotated) & (cpu->A ^ result)) & 0x80) ? FLAG_V : 0) |
                      ((result & 0xFF) == 0 ? FLAG_Z : 0) |
                      ((result > 0xFF) ? FLAG_C : 0);
@@ -1578,7 +1578,7 @@ static bus_state_t op_sbx(fam65xx_t* cpu, bus_state_t pins) {
     uint16_t result = (cpu->A & cpu->X) - data;
 
     cpu->P = (cpu->P & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-             ((result & 0x80) ? FLAG_N : 0) |
+             (result & FLAG_N) |
              ((result & 0xFF) == 0 ? FLAG_Z : 0) |
              ((result < 0x100) ? FLAG_C : 0);
     cpu->X = result & 0xFF;
