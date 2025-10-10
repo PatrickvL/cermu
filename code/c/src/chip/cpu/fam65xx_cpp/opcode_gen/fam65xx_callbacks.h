@@ -151,8 +151,18 @@ enum {
 // CPU State
 // ============================================================================
 
+// Forward declarations
 typedef struct fam65xx_s fam65xx_t;
 typedef bus_state_t (*cycle_fn_t)(fam65xx_t* cpu, bus_state_t pins);
+
+// Instruction encoding for merged opcode table - optimized for bit extraction
+typedef struct {
+    uint16_t am_index    : 4;   // Addressing mode index (bits 0-3, nibble-aligned)
+    uint16_t page_cross  : 1;   // Page crossing flag (bit 4)
+    uint16_t rmw_flag    : 1;   // RMW instruction flag (bit 5)
+    uint16_t reserved    : 3;   // Reserved bits (bits 6-7)
+    uint16_t op_index    : 7;   // Operation index (bits 9-15, byte-extractable with >> 9)
+} opcode_info_t;
 
 struct fam65xx_s {
     union {
@@ -275,15 +285,6 @@ uint16_t fam65xx_pc(fam65xx_t* cpu);
 // IMPLEMENTATION
 // ============================================================================
 
-// Instruction encoding for merged opcode table - optimized for bit extraction
-typedef struct {
-    uint16_t am_index    : 4;   // Addressing mode index (bits 0-3, nibble-aligned)
-    uint16_t page_cross  : 1;   // Page crossing flag (bit 4)
-    uint16_t rmw_flag    : 1;   // RMW instruction flag (bit 5)
-    uint16_t reserved    : 3;   // Reserved bits (bits 6-7)
-    uint16_t op_index    : 7;   // Operation index (bits 9-15, byte-extractable with >> 9)
-} opcode_info_t;
-
 // Helper function to get interrupt vector address based on BRK flags
 static inline uint16_t get_vector_addr(fam65xx_t* cpu) {
     if (cpu->brk_flags & FAM65XX_BRK_RESET) {
@@ -382,8 +383,7 @@ static bus_state_t am_absolute_x(fam65xx_t* cpu, bus_state_t pins) {
                 page_crossed(cpu->effective_addr, cpu->AD)) {
                 return READ_CYCLE((cpu->ADH << 8) | ((cpu->ADL + cpu->X) & 0xFF));
             }
-
-            FALLTHROUGH // No page cross - immediately do the last cycle
+            FALLTHROUGH; // No page cross - immediately do the last cycle
         case 2:
             set_next_callback(cpu);
             return READ_CYCLE(cpu->effective_addr);
@@ -406,9 +406,8 @@ static bus_state_t am_absolute_y(fam65xx_t* cpu, bus_state_t pins) {
                 page_crossed(cpu->effective_addr, cpu->AD)) {
                 return READ_CYCLE((cpu->ADH << 8) | ((cpu->ADL + cpu->Y) & 0xFF));
             }
-
-            FALLTHROUGH // No page cross - immediately do the last cycle
-        case 2:            
+            FALLTHROUGH; // No page cross - immediately do the last cycle
+        case 2:
             set_next_callback(cpu);
             return READ_CYCLE(cpu->effective_addr);
     }
@@ -475,7 +474,7 @@ static bus_state_t am_indirect_indexed(fam65xx_t* cpu, bus_state_t pins) {
                 return READ_CYCLE((cpu->ADH << 8) | ((cpu->DL + cpu->Y) & 0xFF));
             }
         }
-            FALLTHROUGH // No page cross - immediately do the last cycle
+            FALLTHROUGH; // No page cross - immediately do the last cycle
         case 3:
             set_next_callback(cpu);
             return READ_CYCLE(cpu->effective_addr);
@@ -503,7 +502,7 @@ static /*NOT inline!*/ bus_state_t op_branch(fam65xx_t* cpu, bus_state_t pins, u
                 return READ_CYCLE((cpu->PC & 0xFF00) | (target & 0xFF));
             }
         }
-            FALLTHROUGH // No page cross - immediately do the last cycle
+            FALLTHROUGH; // No page cross - immediately do the last cycle
         case 1:
             cpu->PC = cpu->AD; // Set final target // Was effective_addr
             cpu->cb_index = 0;
@@ -1184,18 +1183,27 @@ static bus_state_t op_rti(fam65xx_t* cpu, bus_state_t pins) {
 
 static bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
-        case 0:
+        case 0: {
+            // BRK does a dummy read from PC+1, then increments PC to point to PC+2 for return address
             if (0 == (cpu->brk_flags & (FAM65XX_BRK_IRQ | FAM65XX_BRK_NMI))) {
-                cpu->PC++;
+                // For software BRK, do dummy read from PC+1, then set PC to PC+2 for return address
+                uint16_t dummy_read_addr = cpu->PC + 1;
+                cpu->PC += 2;  // PC now points to PC+2 for return address
+                return READ_CYCLE(dummy_read_addr);
+            } else {
+                // For hardware interrupts, do dummy read from current PC
+                return READ_CYCLE(cpu->PC);
             }
-            return READ_CYCLE(cpu->PC);
+        }
             
         case 1:
+            // Push PCH (high byte of return address)
             pins = WRITE_CYCLE(cpu->SP, cpu->PCH);
             cpu->S--;
             return pins;
             
         case 2:
+            // Push PCL (low byte of return address)
             pins = WRITE_CYCLE(cpu->SP, cpu->PCL);
             cpu->S--;
             return pins;
@@ -1799,6 +1807,10 @@ static bus_state_t fetch_next(fam65xx_t* cpu, bus_state_t pins) {
         // Direct operation - go straight to operation handler
         next_handler = get_op_cb(cpu);
         cpu->callback = next_handler;
+        
+        // BRK instruction handles PC increment internally during dummy read
+        // No special PC handling needed here
+        
         return next_handler(cpu, pins);
     }
     
