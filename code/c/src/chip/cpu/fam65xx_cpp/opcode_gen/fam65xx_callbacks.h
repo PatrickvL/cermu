@@ -314,7 +314,7 @@ static bus_state_t fetch_next(fam65xx_t* cpu, bus_state_t pins);
 // Helper method to set next callback after addressing mode completes
 static void set_next_callback(fam65xx_t* cpu) {
     cpu->callback = get_op_cb(cpu);
-    cpu->cb_index = 0;
+    cpu->cb_index = 0;  // Reset callback index for operation handler
 }
 
 // ============================================================================
@@ -322,10 +322,20 @@ static void set_next_callback(fam65xx_t* cpu) {
 // ============================================================================
 
 static bus_state_t am_zero_page(fam65xx_t* cpu, bus_state_t pins) {
-    // Standard addressing mode handler: only resolve address, don't handle operations
-    cpu->effective_addr = FAM65XX_GET_DATA(pins); // Set effective address for operations
-    set_next_callback(cpu);
-    return READ_CYCLE(cpu->effective_addr);
+    switch(cpu->cb_index++) {
+        case 0:
+            // Cycle 2: Fetch zero page address from operand
+            cpu->effective_addr = FAM65XX_GET_DATA(pins); // Get zero page address from operand
+            cpu->PC++; // Advance PC to point to next instruction (PC+2 total: opcode + operand)
+            return READ_CYCLE(cpu->effective_addr); // Read from zero page address
+            
+        case 1:
+            // Cycle 3: Data is now available on pins, set up operation handler
+            set_next_callback(cpu); // Set up operation handler for next cycle
+            // The data from this read will be available on pins for the operation handler
+            return cpu->callback(cpu, pins); // Call operation handler directly with current data
+    }
+    return pins;
 }
 
 static bus_state_t am_zero_page_x(fam65xx_t* cpu, bus_state_t pins) {
@@ -680,10 +690,19 @@ static bus_state_t op_txs(fam65xx_t* cpu, bus_state_t pins) {
 // ============================================================================
 
 static bus_state_t op_inx(fam65xx_t* cpu, bus_state_t pins) {
-    cpu->X++;
-    SET_NZ(cpu, cpu->X);
-    cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
+    switch(cpu->cb_index++) {
+        case 0:
+            // Internal operation cycle
+            cpu->X++;
+            SET_NZ(cpu, cpu->X);
+            return READ_CYCLE(cpu->PC);
+            
+        case 1:
+            cpu->cb_index = 0;
+            cpu->callback = fetch_next;
+            return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
+    }
+    return pins;
 }
 
 static bus_state_t op_iny(fam65xx_t* cpu, bus_state_t pins) {
@@ -782,16 +801,13 @@ static bus_state_t op_asl(fam65xx_t* cpu, bus_state_t pins) {
 
     switch(cpu->cb_index++) {
         case 0:
-            // Read data from memory (addressing mode has resolved effective_addr)
-            cpu->DL = FAM65XX_GET_DATA(pins);
-            cpu->TMP = cpu->DL; // Store original value for dummy write
-            do_asl(cpu, R_DL);
-            // Return dummy write of original value for THIS cycle
-            // Dummy write of original value (required for RMW timing)
+            cpu->TMP = FAM65XX_GET_DATA(pins);
+            cpu->DL = cpu->TMP << 1;  // Perform ASL operation
+            cpu->P = (cpu->P & ~FLAG_C) | ((cpu->TMP & 0x80) ? FLAG_C : 0);  // Set carry flag
+            SET_NZ(cpu, cpu->DL);  // Set N and Z flags
             return WRITE_CYCLE(cpu->effective_addr, cpu->TMP);
 
         case 1:
-            // Final write of modified value
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
             return WRITE_CYCLE(cpu->effective_addr, cpu->DL) | FAM65XX_SYNC;
@@ -1809,6 +1825,7 @@ static bus_state_t fetch_next(fam65xx_t* cpu, bus_state_t pins) {
         // Direct operation - go straight to operation handler
         next_handler = get_op_cb(cpu);
         cpu->callback = next_handler;
+        cpu->cb_index = 0;
         
         // BRK instruction handles PC increment internally during dummy read
         // No special PC handling needed here
@@ -1816,13 +1833,10 @@ static bus_state_t fetch_next(fam65xx_t* cpu, bus_state_t pins) {
         return next_handler(cpu, pins);
     }
     
-    // Set up addressing mode
+    // Set up addressing mode - operand will be fetched in addressing mode
     cpu->callback = next_handler;
-    // This is shared with all addressing modes who all fetch an immediate byte,
-    // which the SYNC pin will be set for and leads to setting up the next opcode
-    cpu->effective_addr = cpu->PC;
-    cpu->PC++; // Advance to operand
-    return READ_CYCLE(cpu->PC);
+    cpu->cb_index = 0;  // Reset callback index for addressing mode
+    return READ_CYCLE(cpu->PC++);  // Read operand byte, PC advances to PC+1
 }
 
 // ============================================================================
