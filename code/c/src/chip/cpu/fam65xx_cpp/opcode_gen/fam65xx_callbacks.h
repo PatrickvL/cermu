@@ -186,6 +186,9 @@ struct fam65xx_s {
 #define DL     r8[R_DL]    // Data latch
 #define TMP    r8[R_TMP]   // Temporary storage
     
+    // Cached opcode information (updated when opcode changes)
+    opcode_info_t opcode_info; // Cached lookup result for current opcode
+
     // Internal state
     cycle_fn_t callback;   // Current cycle handler
     uint8_t cb_index;      // Cycle index within current handler
@@ -193,8 +196,6 @@ struct fam65xx_s {
     // Temporary registers (internal)
     uint16_t effective_addr;
     
-    // Cached opcode information (updated when opcode changes)
-    opcode_info_t opcode_info; // Cached lookup result for current opcode
     
     // Memory callbacks (for enhanced fam65xx_tick)
     uint8_t (*mem_read)(void* user_data, uint16_t addr, uint8_t bus_state);
@@ -300,14 +301,22 @@ static inline uint16_t get_vector_addr(fam65xx_t* cpu) {
     }
 }
 
+static inline bool get_opcode_can_skip_cycle(fam65xx_t* cpu) {
+    return cpu->opcode_info.page_cross;
+}
+
 // ============================================================================
 // Forward declarations
 // ============================================================================
 
 static cycle_fn_t get_op_cb(fam65xx_t* cpu);
 static bus_state_t fetch_next(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t rmw_handler(fam65xx_t* cpu, bus_state_t pins);
-static void set_next_callback(fam65xx_t* cpu);
+
+// Helper method to set next callback after addressing mode completes
+static void set_next_callback(fam65xx_t* cpu) {
+    cpu->callback = get_op_cb(cpu);
+    cpu->cb_index = 0;
+}
 
 // ============================================================================
 // Addressing Mode Handlers
@@ -375,14 +384,13 @@ static bus_state_t am_absolute_x(fam65xx_t* cpu, bus_state_t pins) {
             cpu->ADH = FAM65XX_GET_DATA(pins);
             cpu->effective_addr = cpu->AD + cpu->X;
             
-            // Check page cross - TODO : use get_opcode_can_skip_cycle()
-            if (page_crossed(cpu->effective_addr, cpu->AD)) {
+            if (get_opcode_can_skip_cycle(cpu) &&
+                page_crossed(cpu->effective_addr, cpu->AD)) {
                 return READ_CYCLE((cpu->ADH << 8) | ((cpu->ADL + cpu->X) & 0xFF));
             }
 
             FALLTHROUGH // No page cross - immediately do the last cycle
-
-        case 2: // Reused by am_absolute_y, am_indirect_indexed
+        case 2:
             set_next_callback(cpu);
             return READ_CYCLE(cpu->effective_addr);
     }
@@ -400,14 +408,15 @@ static bus_state_t am_absolute_y(fam65xx_t* cpu, bus_state_t pins) {
             cpu->ADH = FAM65XX_GET_DATA(pins);
             cpu->effective_addr = cpu->AD + cpu->Y;
             
-            // Check page cross - TODO : use get_opcode_can_skip_cycle()
-            if (!page_crossed(cpu->effective_addr, cpu->AD)) {
-                set_next_callback(cpu);
-                return READ_CYCLE(cpu->effective_addr);
+            if (get_opcode_can_skip_cycle(cpu) &&
+                page_crossed(cpu->effective_addr, cpu->AD)) {
+                return READ_CYCLE((cpu->ADH << 8) | ((cpu->ADL + cpu->Y) & 0xFF));
             }
 
-            cpu->callback = am_absolute_x; // remainder is the same (also at cb_index 2)
-            return READ_CYCLE((cpu->ADH << 8) | ((cpu->ADL + cpu->Y) & 0xFF));
+            FALLTHROUGH // No page cross - immediately do the last cycle
+        case 2:            
+            set_next_callback(cpu);
+            return READ_CYCLE(cpu->effective_addr);
     }
     return pins;
 }
@@ -467,22 +476,18 @@ static bus_state_t am_indirect_indexed(fam65xx_t* cpu, bus_state_t pins) {
             uint16_t base_addr = (cpu->ADH << 8) | cpu->DL;
 
             cpu->effective_addr = base_addr + cpu->Y;
-            // Check page cross - TODO : use get_opcode_can_skip_cycle()
-            if (!page_crossed(cpu->effective_addr, base_addr)) {
-                set_next_callback(cpu);
-                return READ_CYCLE(cpu->effective_addr);
+            if (get_opcode_can_skip_cycle(cpu) &&
+                page_crossed(cpu->effective_addr, base_addr)) {
+                return READ_CYCLE((cpu->ADH << 8) | ((cpu->DL + cpu->Y) & 0xFF));
             }
-
-            cpu->cb_index = 2;
-            cpu->callback = am_absolute_x; // remainder is the same at cb_index 2
-            return READ_CYCLE((cpu->ADH << 8) | ((cpu->DL + cpu->Y) & 0xFF));
         }
+            FALLTHROUGH // No page cross - immediately do the last cycle
+        case 3:
+            set_next_callback(cpu);
+            return READ_CYCLE(cpu->effective_addr);
     }
     return pins;
 }
-
-// Forward declaration - implemented after lookup tables
-static bus_state_t rmw_handler(fam65xx_t* cpu, bus_state_t pins);
 
 static /*NOT inline!*/ bus_state_t op_branch(fam65xx_t* cpu, bus_state_t pins, uint8_t flag_mask, bool flag_value) {
     switch(cpu->cb_index++) {
@@ -499,13 +504,12 @@ static /*NOT inline!*/ bus_state_t op_branch(fam65xx_t* cpu, bus_state_t pins, u
             uint16_t target = cpu->PC + offset;
             
             cpu->AD = target; // Store target for next cycle // Was effective_addr
-            // Check page cross - TODO : use get_opcode_can_skip_cycle()
-            if (page_crossed(target, cpu->PC)) {
+            if (get_opcode_can_skip_cycle(cpu) &&
+                page_crossed(target, cpu->PC)) {
                 return READ_CYCLE((cpu->PC & 0xFF00) | (target & 0xFF));
             }
         }
             FALLTHROUGH // No page cross - immediately do the last cycle
-        
         case 1:
             cpu->PC = cpu->AD; // Set final target // Was effective_addr
             cpu->cb_index = 0;
@@ -638,190 +642,174 @@ static bus_state_t op_dey(fam65xx_t* cpu, bus_state_t pins) {
 }
 
 // ============================================================================
+// Shifts/Rotates Accumulator helpers
+// ============================================================================
+
+static inline void do_asl(fam65xx_t* cpu, uint8_t reg_index) {
+    cpu->P = (cpu->P & ~FLAG_C) | ((cpu->r8[reg_index] & 0x80) ? FLAG_C : 0);
+    cpu->r8[reg_index] <<= 1;
+    SET_NZ(cpu, cpu->r8[reg_index]);
+}
+
+static inline void do_lsr(fam65xx_t* cpu, uint8_t reg_index) {
+    cpu->P = (cpu->P & ~FLAG_C) | ((cpu->r8[reg_index] & 0x01) ? FLAG_C : 0);
+    cpu->r8[reg_index] >>= 1;
+    SET_NZ(cpu, cpu->r8[reg_index]);
+}
+
+static inline void do_rol(fam65xx_t* cpu, uint8_t reg_index) {
+    uint8_t carry = (cpu->P & FLAG_C) ? 1 : 0;
+    cpu->P = (cpu->P & ~FLAG_C) | ((cpu->r8[reg_index] & 0x80) ? FLAG_C : 0);
+    cpu->r8[reg_index] = (cpu->r8[reg_index] << 1) | carry;
+    SET_NZ(cpu, cpu->r8[reg_index]);
+}
+
+static inline void do_ror(fam65xx_t* cpu, uint8_t reg_index) {
+    uint8_t carry = (cpu->P & FLAG_C) ? 0x80 : 0;
+    cpu->P = (cpu->P & ~FLAG_C) | ((cpu->r8[reg_index] & 0x01) ? FLAG_C : 0);
+    cpu->r8[reg_index] = (cpu->r8[reg_index] >> 1) | carry;
+    SET_NZ(cpu, cpu->r8[reg_index]);
+}
+
+// ============================================================================
 // Operation Handlers - RMW Memory Operations
 // ============================================================================
 
 static bus_state_t op_inc(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
-        case 0: {
-            uint8_t original = FAM65XX_GET_DATA(pins);
-
-            cpu->DL = original + 1;
+        case 0:
+            cpu->TMP = FAM65XX_GET_DATA(pins);
+            cpu->DL = cpu->TMP + 1;
             SET_NZ(cpu, cpu->DL);
-            return WRITE_CYCLE(cpu->effective_addr, original);
-        }
+            return WRITE_CYCLE(cpu->effective_addr, cpu->TMP);
 
         case 1:
-            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
-
-        case 2:
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            cpu->PC++;
-            return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
     }
     return pins;
 }
 
 static bus_state_t op_dec(fam65xx_t* cpu, bus_state_t pins) {
     switch(cpu->cb_index++) {
-        case 0: {
-            uint8_t original = FAM65XX_GET_DATA(pins);
-
-            cpu->DL = original - 1;
+        case 0:
+            cpu->TMP = FAM65XX_GET_DATA(pins);
+            cpu->DL = cpu->TMP - 1;
             SET_NZ(cpu, cpu->DL);
-            return WRITE_CYCLE(cpu->effective_addr, original);
-        }
+            return WRITE_CYCLE(cpu->effective_addr, cpu->TMP);
 
         case 1:
-            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
-
-        case 2:
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            cpu->PC++;
-            return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
     }
     return pins;
 }
 
-static bus_state_t op_asl_mem(fam65xx_t* cpu, bus_state_t pins) {
-    switch(cpu->cb_index++) {
-        case 0: {
-            // Read data from memory and process it
-            uint8_t original = FAM65XX_GET_DATA(pins);
+static bus_state_t op_asl(fam65xx_t* cpu, bus_state_t pins) {
+    if (!cpu->opcode_info.rmw_flag) {
+        do_asl(cpu, R_A);
+        cpu->callback = fetch_next;
+        return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
+    }
 
-            cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x80) ? FLAG_C : 0);
-            cpu->DL = original << 1;
-            SET_NZ(cpu, cpu->DL);
+    switch(cpu->cb_index++) {
+        case 0:
+            // Read data from memory (addressing mode has resolved effective_addr)
+            cpu->DL = FAM65XX_GET_DATA(pins);
+            cpu->TMP = cpu->DL; // Store original value for dummy write
+            do_asl(cpu, R_DL);
             // Return dummy write of original value for THIS cycle
-            return WRITE_CYCLE(cpu->effective_addr, original);
-        }
-        
+            // Dummy write of original value (required for RMW timing)
+            return WRITE_CYCLE(cpu->effective_addr, cpu->TMP);
+
         case 1:
             // Final write of modified value
-            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
-        
-        case 2: {
-            // Complete instruction and fetch next
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            cpu->PC++;  // Advance PC to complete the instruction
-            return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
-        }
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
     }
     return pins;
 }
 
-static bus_state_t op_lsr_mem(fam65xx_t* cpu, bus_state_t pins) {
+
+static bus_state_t op_lsr(fam65xx_t* cpu, bus_state_t pins) {
+    if (!cpu->opcode_info.rmw_flag) {
+        do_lsr(cpu, R_A);
+        cpu->callback = fetch_next;
+        return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
+    }
+
     switch(cpu->cb_index++) {
-        case 0: {
-            uint8_t original = FAM65XX_GET_DATA(pins);
+        case 0:
+            // Read data from memory (addressing mode has resolved effective_addr)
+            cpu->DL = FAM65XX_GET_DATA(pins);
+            cpu->TMP = cpu->DL; // Store original value for dummy write
+            do_lsr(cpu, R_DL);
+            // Return dummy write of original value for THIS cycle
+            // Dummy write of original value (required for RMW timing)
+            return WRITE_CYCLE(cpu->effective_addr, cpu->TMP);
 
-            cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x01) ? FLAG_C : 0);
-            cpu->DL = original >> 1;
-            SET_NZ(cpu, cpu->DL);
-            return WRITE_CYCLE(cpu->effective_addr, original);
-        }
-        case 1: {
-            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
-        }
-        case 2: {
+        case 1:
+            // Final write of modified value
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            cpu->PC++;
-            return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
-        }
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
     }
     return pins;
 }
 
-static bus_state_t op_rol_mem(fam65xx_t* cpu, bus_state_t pins) {
+static bus_state_t op_rol(fam65xx_t* cpu, bus_state_t pins) {
+    if (!cpu->opcode_info.rmw_flag) {
+        do_rol(cpu, R_A);
+        cpu->callback = fetch_next;
+        return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
+    }
+
     switch(cpu->cb_index++) {
-        case 0: {
-            uint8_t original = FAM65XX_GET_DATA(pins);
-            uint8_t carry = (cpu->P & FLAG_C) ? 1 : 0;
+        case 0:
+            // Read data from memory (addressing mode has resolved effective_addr)
+            cpu->DL = FAM65XX_GET_DATA(pins);
+            cpu->TMP = cpu->DL; // Store original value for dummy write
+            do_rol(cpu, R_DL);
+            // Return dummy write of original value for THIS cycle
+            // Dummy write of original value (required for RMW timing)
+            return WRITE_CYCLE(cpu->effective_addr, cpu->TMP);
 
-            cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x80) ? FLAG_C : 0);
-            cpu->DL = (original << 1) | carry;
-            SET_NZ(cpu, cpu->DL);
-            return WRITE_CYCLE(cpu->effective_addr, original);
-        }
-        case 1: {
-            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
-        }
-        case 2: {
+        case 1:
+            // Final write of modified value
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            cpu->PC++;
-            return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
-        }
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
     }
     return pins;
 }
 
-static bus_state_t op_ror_mem(fam65xx_t* cpu, bus_state_t pins) {
+static bus_state_t op_ror(fam65xx_t* cpu, bus_state_t pins) {
+    if (!cpu->opcode_info.rmw_flag) {
+        do_ror(cpu, R_A);
+        cpu->callback = fetch_next;
+        return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
+    }
+
     switch(cpu->cb_index++) {
-        case 0: {
-            uint8_t original = FAM65XX_GET_DATA(pins);
-            uint8_t carry = (cpu->P & FLAG_C) ? 0x80 : 0;
+        case 0:
+            // Read data from memory (addressing mode has resolved effective_addr)
+            cpu->DL = FAM65XX_GET_DATA(pins);
+            cpu->TMP = cpu->DL; // Store original value for dummy write
+            do_ror(cpu, R_DL);
+            // Return dummy write of original value for THIS cycle
+            // Dummy write of original value (required for RMW timing)
+            return WRITE_CYCLE(cpu->effective_addr, cpu->TMP);
 
-            cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x01) ? FLAG_C : 0);
-            cpu->DL = (original >> 1) | carry;
-            SET_NZ(cpu, cpu->DL);
-            return WRITE_CYCLE(cpu->effective_addr, original);
-        }
-        case 1: {
-            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
-        }
-        case 2: {
+        case 1:
+            // Final write of modified value
             cpu->cb_index = 0;
             cpu->callback = fetch_next;
-            cpu->PC++;
-            return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
-        }
+            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
     }
     return pins;
-}
-
-// ============================================================================
-// Operation Handlers - Shifts/Rotates Accumulator
-// ============================================================================
-
-static bus_state_t op_asl_acc(fam65xx_t* cpu, bus_state_t pins) {
-    cpu->P = (cpu->P & ~FLAG_C) | ((cpu->A & 0x80) ? FLAG_C : 0);
-    cpu->A <<= 1;
-    SET_NZ(cpu, cpu->A);
-    cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
-}
-
-static bus_state_t op_lsr_acc(fam65xx_t* cpu, bus_state_t pins) {
-    cpu->P = (cpu->P & ~FLAG_C) | ((cpu->A & 0x01) ? FLAG_C : 0);
-    cpu->A >>= 1;
-    SET_NZ(cpu, cpu->A);
-    cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
-}
-
-static bus_state_t op_rol_acc(fam65xx_t* cpu, bus_state_t pins) {
-    uint8_t carry = (cpu->P & FLAG_C) ? 1 : 0;
-
-    cpu->P = (cpu->P & ~FLAG_C) | ((cpu->A & 0x80) ? FLAG_C : 0);
-    cpu->A = (cpu->A << 1) | carry;
-    SET_NZ(cpu, cpu->A);
-    cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
-}
-
-static bus_state_t op_ror_acc(fam65xx_t* cpu, bus_state_t pins) {
-    uint8_t carry = (cpu->P & FLAG_C) ? 0x80 : 0;
-
-    cpu->P = (cpu->P & ~FLAG_C) | ((cpu->A & 0x01) ? FLAG_C : 0);
-    cpu->A = (cpu->A >> 1) | carry;
-    SET_NZ(cpu, cpu->A);
-    cpu->callback = fetch_next;
-    return READ_CYCLE(cpu->PC++) | FAM65XX_SYNC;
 }
 
 // ============================================================================
@@ -1344,8 +1332,7 @@ enum {
     OP_ADC, OP_SBC,
     OP_AND, OP_ORA, OP_EOR,
     OP_CMP, OP_CPX, OP_CPY,
-    OP_ASL_MEM, OP_LSR_MEM, OP_ROL_MEM, OP_ROR_MEM,
-    OP_ASL_ACC, OP_LSR_ACC, OP_ROL_ACC, OP_ROR_ACC,
+    OP_ASL, OP_LSR, OP_ROL, OP_ROR,
     OP_INC, OP_DEC,
     OP_INX, OP_INY, OP_DEX, OP_DEY,
     OP_TAX, OP_TAY, OP_TXA, OP_TYA, OP_TSX, OP_TXS,
@@ -1371,14 +1358,10 @@ static const cycle_fn_t op_handlers[] = {
     op_cmp, // OP_CMP
     op_cpx, // OP_CPX
     op_cpy, // OP_CPY
-    op_asl_mem, // OP_ASL_MEM
-    op_lsr_mem, // OP_LSR_MEM
-    op_rol_mem, // OP_ROL_MEM
-    op_ror_mem, // OP_ROR_MEM
-    op_asl_acc, // OP_ASL_ACC
-    op_lsr_acc, // OP_LSR_ACC
-    op_rol_acc, // OP_ROL_ACC
-    op_ror_acc, // OP_ROR_ACC
+    op_asl, // OP_ASL
+    op_lsr, // OP_LSR
+    op_rol, // OP_ROL
+    op_ror, // OP_ROR
     op_inc, // OP_INC
     op_dec, // OP_DEC
     op_inx, // OP_INX
@@ -1424,46 +1407,43 @@ static const cycle_fn_t op_handlers[] = {
 // Merged Opcode Lookup Table with Compact Bitfield Encoding
 // ============================================================================
 
-// Forward declarations for RMW handler
-static bus_state_t rmw_handler(fam65xx_t* cpu, bus_state_t pins);
-
 // Compact macro for opcode definition - creates properly formatted bitfield entries
 #define OP(am, pcross, op, rmw) {(am), (pcross), (op), (rmw), 0}
 
 // Merged opcode lookup table - 8 entries per line for readability
 static const opcode_info_t opcode_table[256] = {
-    OP(AM_NON,0,OP_BRK,0),     OP(AM_INX,0,OP_ORA,0),     OP(AM_NON,0,OP_JAM,0),     OP(AM_INX,0,OP_NOP,0),     OP(AM_ZER,0,OP_NOP,0),     OP(AM_ZER,0,OP_ORA,0),     OP(AM_ZER,0,OP_ASL_MEM,1), OP(AM_ZER,0,OP_NOP,0),
-    OP(AM_NON,0,OP_PHP,0),     OP(AM_IMM,0,OP_ORA,0),     OP(AM_ACC,0,OP_ASL_ACC,0), OP(AM_IMM,0,OP_NOP,0),     OP(AM_ABS,0,OP_NOP,0),     OP(AM_ABS,0,OP_ORA,0),     OP(AM_ABS,0,OP_ASL_MEM,1), OP(AM_ABS,0,OP_NOP,0),
-    OP(AM_REL,0,OP_BPL,0),     OP(AM_INY,1,OP_ORA,0),     OP(AM_NON,0,OP_JAM,0),     OP(AM_INY,0,OP_NOP,0),     OP(AM_ZPX,0,OP_NOP,0),     OP(AM_ZPX,0,OP_ORA,0),     OP(AM_ZPX,0,OP_ASL_MEM,1), OP(AM_ZPX,0,OP_NOP,0),
-    OP(AM_NON,0,OP_CLC,0),     OP(AM_ABY,1,OP_ORA,0),     OP(AM_NON,0,OP_NOP,0),     OP(AM_ABY,0,OP_NOP,0),     OP(AM_ABX,0,OP_NOP,0),     OP(AM_ABX,1,OP_ORA,0),     OP(AM_ABX,0,OP_ASL_MEM,1), OP(AM_ABX,0,OP_NOP,0),
-    OP(AM_NON,0,OP_JSR,0),     OP(AM_INX,0,OP_AND,0),     OP(AM_NON,0,OP_JAM,0),     OP(AM_INX,0,OP_NOP,0),     OP(AM_ZER,0,OP_BIT,0),     OP(AM_ZER,0,OP_AND,0),     OP(AM_ZER,0,OP_ROL_MEM,1), OP(AM_ZER,0,OP_NOP,0),
-    OP(AM_NON,0,OP_PLP,0),     OP(AM_IMM,0,OP_AND,0),     OP(AM_ACC,0,OP_ROL_ACC,0), OP(AM_IMM,0,OP_NOP,0),     OP(AM_ABS,0,OP_BIT,0),     OP(AM_ABS,0,OP_AND,0),     OP(AM_ABS,0,OP_ROL_MEM,1), OP(AM_ABS,0,OP_NOP,0),
-    OP(AM_REL,0,OP_BMI,0),     OP(AM_INY,1,OP_AND,0),     OP(AM_NON,0,OP_JAM,0),     OP(AM_INY,0,OP_NOP,0),     OP(AM_ZPX,0,OP_NOP,0),     OP(AM_ZPX,0,OP_AND,0),     OP(AM_ZPX,0,OP_ROL_MEM,1), OP(AM_ZPX,0,OP_NOP,0),
-    OP(AM_NON,0,OP_SEC,0),     OP(AM_ABY,1,OP_AND,0),     OP(AM_NON,0,OP_NOP,0),     OP(AM_ABY,0,OP_NOP,0),     OP(AM_ABX,0,OP_NOP,0),     OP(AM_ABX,1,OP_AND,0),     OP(AM_ABX,0,OP_ROL_MEM,1), OP(AM_ABX,0,OP_NOP,0),
-    OP(AM_NON,0,OP_RTI,0),     OP(AM_INX,0,OP_EOR,0),     OP(AM_NON,0,OP_JAM,0),     OP(AM_INX,0,OP_NOP,0),     OP(AM_ZER,0,OP_NOP,0),     OP(AM_ZER,0,OP_EOR,0),     OP(AM_ZER,0,OP_LSR_MEM,1), OP(AM_ZER,0,OP_NOP,0),
-    OP(AM_NON,0,OP_PHA,0),     OP(AM_IMM,0,OP_EOR,0),     OP(AM_ACC,0,OP_LSR_ACC,0), OP(AM_IMM,0,OP_NOP,0),     OP(AM_ABS,0,OP_JMP,0),     OP(AM_ABS,0,OP_EOR,0),     OP(AM_ABS,0,OP_LSR_MEM,1), OP(AM_ABS,0,OP_NOP,0),
-    OP(AM_REL,0,OP_BVC,0),     OP(AM_INY,1,OP_EOR,0),     OP(AM_NON,0,OP_JAM,0),     OP(AM_INY,0,OP_NOP,0),     OP(AM_ZPX,0,OP_NOP,0),     OP(AM_ZPX,0,OP_EOR,0),     OP(AM_ZPX,0,OP_LSR_MEM,1), OP(AM_ZPX,0,OP_NOP,0),
-    OP(AM_NON,0,OP_CLI,0),     OP(AM_ABY,1,OP_EOR,0),     OP(AM_NON,0,OP_NOP,0),     OP(AM_ABY,0,OP_NOP,0),     OP(AM_ABX,0,OP_NOP,0),     OP(AM_ABX,1,OP_EOR,0),     OP(AM_ABX,0,OP_LSR_MEM,1), OP(AM_ABX,0,OP_NOP,0),
-    OP(AM_NON,0,OP_RTS,0),     OP(AM_INX,0,OP_ADC,0),     OP(AM_NON,0,OP_JAM,0),     OP(AM_INX,0,OP_NOP,0),     OP(AM_ZER,0,OP_NOP,0),     OP(AM_ZER,0,OP_ADC,0),     OP(AM_ZER,0,OP_ROR_MEM,1), OP(AM_ZER,0,OP_NOP,0),
-    OP(AM_NON,0,OP_PLA,0),     OP(AM_IMM,0,OP_ADC,0),     OP(AM_ACC,0,OP_ROR_ACC,0), OP(AM_IMM,0,OP_NOP,0),     OP(AM_IND,0,OP_JMP,0),     OP(AM_ABS,0,OP_ADC,0),     OP(AM_ABS,0,OP_ROR_MEM,1), OP(AM_ABS,0,OP_NOP,0),
-    OP(AM_REL,0,OP_BVS,0),     OP(AM_INY,1,OP_ADC,0),     OP(AM_NON,0,OP_JAM,0),     OP(AM_INY,0,OP_NOP,0),     OP(AM_ZPX,0,OP_NOP,0),     OP(AM_ZPX,0,OP_ADC,0),     OP(AM_ZPX,0,OP_ROR_MEM,1), OP(AM_ZPX,0,OP_NOP,0),
-    OP(AM_NON,0,OP_SEI,0),     OP(AM_ABY,1,OP_ADC,0),     OP(AM_NON,0,OP_NOP,0),     OP(AM_ABY,0,OP_NOP,0),     OP(AM_ABX,0,OP_NOP,0),     OP(AM_ABX,1,OP_ADC,0),     OP(AM_ABX,0,OP_ROR_MEM,1), OP(AM_ABX,0,OP_NOP,0),
-    OP(AM_IMM,0,OP_NOP,0),     OP(AM_INX,0,OP_STA,0),     OP(AM_IMM,0,OP_NOP,0),     OP(AM_INX,0,OP_NOP,0),     OP(AM_ZER,0,OP_STY,0),     OP(AM_ZER,0,OP_STA,0),     OP(AM_ZER,0,OP_STX,0),     OP(AM_ZER,0,OP_NOP,0),
-    OP(AM_NON,0,OP_DEY,0),     OP(AM_IMM,0,OP_NOP,0),     OP(AM_NON,0,OP_TXA,0),     OP(AM_IMM,0,OP_NOP,0),     OP(AM_ABS,0,OP_STY,0),     OP(AM_ABS,0,OP_STA,0),     OP(AM_ABS,0,OP_STX,0),     OP(AM_ABS,0,OP_NOP,0),
-    OP(AM_REL,0,OP_BCC,0),     OP(AM_INY,0,OP_STA,0),     OP(AM_NON,0,OP_JAM,0),     OP(AM_INY,0,OP_NOP,0),     OP(AM_ZPX,0,OP_STY,0),     OP(AM_ZPX,0,OP_STA,0),     OP(AM_ZPY,0,OP_STX,0),     OP(AM_ZPY,0,OP_NOP,0),
-    OP(AM_NON,0,OP_TYA,0),     OP(AM_ABY,0,OP_STA,0),     OP(AM_NON,0,OP_TXS,0),     OP(AM_ABY,0,OP_NOP,0),     OP(AM_ABX,0,OP_NOP,0),     OP(AM_ABX,0,OP_STA,0),     OP(AM_ABY,0,OP_NOP,0),     OP(AM_ABY,0,OP_NOP,0),
-    OP(AM_IMM,0,OP_LDY,0),     OP(AM_INX,0,OP_LDA,0),     OP(AM_IMM,0,OP_LDX,0),     OP(AM_INX,0,OP_NOP,0),     OP(AM_ZER,0,OP_LDY,0),     OP(AM_ZER,0,OP_LDA,0),     OP(AM_ZER,0,OP_LDX,0),     OP(AM_ZER,0,OP_NOP,0),
-    OP(AM_NON,0,OP_TAY,0),     OP(AM_IMM,0,OP_LDA,0),     OP(AM_NON,0,OP_TAX,0),     OP(AM_IMM,0,OP_NOP,0),     OP(AM_ABS,0,OP_LDY,0),     OP(AM_ABS,0,OP_LDA,0),     OP(AM_ABS,0,OP_LDX,0),     OP(AM_ABS,0,OP_NOP,0),
-    OP(AM_REL,0,OP_BCS,0),     OP(AM_INY,1,OP_LDA,0),     OP(AM_NON,0,OP_JAM,0),     OP(AM_INY,0,OP_NOP,0),     OP(AM_ZPX,0,OP_LDY,0),     OP(AM_ZPX,0,OP_LDA,0),     OP(AM_ZPY,0,OP_LDX,0),     OP(AM_ZPY,0,OP_NOP,0),
-    OP(AM_NON,0,OP_CLV,0),     OP(AM_ABY,1,OP_LDA,0),     OP(AM_NON,0,OP_TSX,0),     OP(AM_ABY,0,OP_NOP,0),     OP(AM_ABX,1,OP_LDY,0),     OP(AM_ABX,1,OP_LDA,0),     OP(AM_ABY,1,OP_LDX,0),     OP(AM_ABY,0,OP_NOP,0),
-    OP(AM_IMM,0,OP_CPY,0),     OP(AM_INX,0,OP_CMP,0),     OP(AM_IMM,0,OP_NOP,0),     OP(AM_INX,0,OP_NOP,0),     OP(AM_ZER,0,OP_CPY,0),     OP(AM_ZER,0,OP_CMP,0),     OP(AM_ZER,0,OP_DEC,1),     OP(AM_ZER,0,OP_NOP,0),
-    OP(AM_NON,0,OP_INY,0),     OP(AM_IMM,0,OP_CMP,0),     OP(AM_NON,0,OP_DEX,0),     OP(AM_IMM,0,OP_NOP,0),     OP(AM_ABS,0,OP_CPY,0),     OP(AM_ABS,0,OP_CMP,0),     OP(AM_ABS,0,OP_DEC,1),     OP(AM_ABS,0,OP_NOP,0),
-    OP(AM_REL,0,OP_BNE,0),     OP(AM_INY,1,OP_CMP,0),     OP(AM_NON,0,OP_JAM,0),     OP(AM_INY,0,OP_NOP,0),     OP(AM_ZPX,0,OP_NOP,0),     OP(AM_ZPX,0,OP_CMP,0),     OP(AM_ZPX,0,OP_DEC,1),     OP(AM_ZPX,0,OP_NOP,0),
-    OP(AM_NON,0,OP_CLD,0),     OP(AM_ABY,1,OP_CMP,0),     OP(AM_NON,0,OP_NOP,0),     OP(AM_ABY,0,OP_NOP,0),     OP(AM_ABX,0,OP_NOP,0),     OP(AM_ABX,1,OP_CMP,0),     OP(AM_ABX,0,OP_DEC,1),     OP(AM_ABX,0,OP_NOP,0),
-    OP(AM_IMM,0,OP_CPX,0),     OP(AM_INX,0,OP_SBC,0),     OP(AM_IMM,0,OP_NOP,0),     OP(AM_INX,0,OP_NOP,0),     OP(AM_ZER,0,OP_CPX,0),     OP(AM_ZER,0,OP_SBC,0),     OP(AM_ZER,0,OP_INC,1),     OP(AM_ZER,0,OP_NOP,0),
-    OP(AM_NON,0,OP_INX,0),     OP(AM_IMM,0,OP_SBC,0),     OP(AM_NON,0,OP_NOP,0),     OP(AM_IMM,0,OP_SBC,0),     OP(AM_ABS,0,OP_CPX,0),     OP(AM_ABS,0,OP_SBC,0),     OP(AM_ABS,0,OP_INC,1),     OP(AM_ABS,0,OP_NOP,0),
-    OP(AM_REL,0,OP_BEQ,0),     OP(AM_INY,1,OP_SBC,0),     OP(AM_NON,0,OP_JAM,0),     OP(AM_INY,0,OP_NOP,0),     OP(AM_ZPX,0,OP_NOP,0),     OP(AM_ZPX,0,OP_SBC,0),     OP(AM_ZPX,0,OP_INC,1),     OP(AM_ZPX,0,OP_NOP,0),
-    OP(AM_NON,0,OP_SED,0),     OP(AM_ABY,1,OP_SBC,0),     OP(AM_NON,0,OP_NOP,0),     OP(AM_ABY,0,OP_NOP,0),     OP(AM_ABX,0,OP_NOP,0),     OP(AM_ABX,1,OP_SBC,0),     OP(AM_ABX,0,OP_INC,1),     OP(AM_ABX,0,OP_NOP,0)
+    OP(AM_NON,0,OP_BRK,0), OP(AM_INX,0,OP_ORA,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INX,0,OP_NOP,0), OP(AM_ZER,0,OP_NOP,0), OP(AM_ZER,0,OP_ORA,0), OP(AM_ZER,0,OP_ASL,1), OP(AM_ZER,0,OP_NOP,0),
+    OP(AM_NON,0,OP_PHP,0), OP(AM_IMM,0,OP_ORA,0), OP(AM_ACC,0,OP_ASL,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABS,0,OP_NOP,0), OP(AM_ABS,0,OP_ORA,0), OP(AM_ABS,0,OP_ASL,1), OP(AM_ABS,0,OP_NOP,0),
+    OP(AM_REL,0,OP_BPL,0), OP(AM_INY,1,OP_ORA,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_NOP,0), OP(AM_ZPX,0,OP_NOP,0), OP(AM_ZPX,0,OP_ORA,0), OP(AM_ZPX,0,OP_ASL,1), OP(AM_ZPX,0,OP_NOP,0),
+    OP(AM_NON,0,OP_CLC,0), OP(AM_ABY,1,OP_ORA,0), OP(AM_NON,0,OP_NOP,0), OP(AM_ABY,0,OP_NOP,0), OP(AM_ABX,0,OP_NOP,0), OP(AM_ABX,1,OP_ORA,0), OP(AM_ABX,0,OP_ASL,1), OP(AM_ABX,0,OP_NOP,0),
+    OP(AM_NON,0,OP_JSR,0), OP(AM_INX,0,OP_AND,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INX,0,OP_NOP,0), OP(AM_ZER,0,OP_BIT,0), OP(AM_ZER,0,OP_AND,0), OP(AM_ZER,0,OP_ROL,1), OP(AM_ZER,0,OP_NOP,0),
+    OP(AM_NON,0,OP_PLP,0), OP(AM_IMM,0,OP_AND,0), OP(AM_ACC,0,OP_ROL,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABS,0,OP_BIT,0), OP(AM_ABS,0,OP_AND,0), OP(AM_ABS,0,OP_ROL,1), OP(AM_ABS,0,OP_NOP,0),
+    OP(AM_REL,0,OP_BMI,0), OP(AM_INY,1,OP_AND,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_NOP,0), OP(AM_ZPX,0,OP_NOP,0), OP(AM_ZPX,0,OP_AND,0), OP(AM_ZPX,0,OP_ROL,1), OP(AM_ZPX,0,OP_NOP,0),
+    OP(AM_NON,0,OP_SEC,0), OP(AM_ABY,1,OP_AND,0), OP(AM_NON,0,OP_NOP,0), OP(AM_ABY,0,OP_NOP,0), OP(AM_ABX,0,OP_NOP,0), OP(AM_ABX,1,OP_AND,0), OP(AM_ABX,0,OP_ROL,1), OP(AM_ABX,0,OP_NOP,0),
+    OP(AM_NON,0,OP_RTI,0), OP(AM_INX,0,OP_EOR,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INX,0,OP_NOP,0), OP(AM_ZER,0,OP_NOP,0), OP(AM_ZER,0,OP_EOR,0), OP(AM_ZER,0,OP_LSR,1), OP(AM_ZER,0,OP_NOP,0),
+    OP(AM_NON,0,OP_PHA,0), OP(AM_IMM,0,OP_EOR,0), OP(AM_ACC,0,OP_LSR,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABS,0,OP_JMP,0), OP(AM_ABS,0,OP_EOR,0), OP(AM_ABS,0,OP_LSR,1), OP(AM_ABS,0,OP_NOP,0),
+    OP(AM_REL,0,OP_BVC,0), OP(AM_INY,1,OP_EOR,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_NOP,0), OP(AM_ZPX,0,OP_NOP,0), OP(AM_ZPX,0,OP_EOR,0), OP(AM_ZPX,0,OP_LSR,1), OP(AM_ZPX,0,OP_NOP,0),
+    OP(AM_NON,0,OP_CLI,0), OP(AM_ABY,1,OP_EOR,0), OP(AM_NON,0,OP_NOP,0), OP(AM_ABY,0,OP_NOP,0), OP(AM_ABX,0,OP_NOP,0), OP(AM_ABX,1,OP_EOR,0), OP(AM_ABX,0,OP_LSR,1), OP(AM_ABX,0,OP_NOP,0),
+    OP(AM_NON,0,OP_RTS,0), OP(AM_INX,0,OP_ADC,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INX,0,OP_NOP,0), OP(AM_ZER,0,OP_NOP,0), OP(AM_ZER,0,OP_ADC,0), OP(AM_ZER,0,OP_ROL,1), OP(AM_ZER,0,OP_NOP,0),
+    OP(AM_NON,0,OP_PLA,0), OP(AM_IMM,0,OP_ADC,0), OP(AM_ACC,0,OP_ROR,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_IND,0,OP_JMP,0), OP(AM_ABS,0,OP_ADC,0), OP(AM_ABS,0,OP_ROR,1), OP(AM_ABS,0,OP_NOP,0),
+    OP(AM_REL,0,OP_BVS,0), OP(AM_INY,1,OP_ADC,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_NOP,0), OP(AM_ZPX,0,OP_NOP,0), OP(AM_ZPX,0,OP_ADC,0), OP(AM_ZPX,0,OP_ROR,1), OP(AM_ZPX,0,OP_NOP,0),
+    OP(AM_NON,0,OP_SEI,0), OP(AM_ABY,1,OP_ADC,0), OP(AM_NON,0,OP_NOP,0), OP(AM_ABY,0,OP_NOP,0), OP(AM_ABX,0,OP_NOP,0), OP(AM_ABX,1,OP_ADC,0), OP(AM_ABX,0,OP_ROR,1), OP(AM_ABX,0,OP_NOP,0),
+    OP(AM_IMM,0,OP_NOP,0), OP(AM_INX,0,OP_STA,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_INX,0,OP_NOP,0), OP(AM_ZER,0,OP_STY,0), OP(AM_ZER,0,OP_STA,0), OP(AM_ZER,0,OP_STX,0), OP(AM_ZER,0,OP_NOP,0),
+    OP(AM_NON,0,OP_DEY,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_NON,0,OP_TXA,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABS,0,OP_STY,0), OP(AM_ABS,0,OP_STA,0), OP(AM_ABS,0,OP_STX,0), OP(AM_ABS,0,OP_NOP,0),
+    OP(AM_REL,0,OP_BCC,0), OP(AM_INY,0,OP_STA,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_NOP,0), OP(AM_ZPX,0,OP_STY,0), OP(AM_ZPX,0,OP_STA,0), OP(AM_ZPY,0,OP_STX,0), OP(AM_ZPY,0,OP_NOP,0),
+    OP(AM_NON,0,OP_TYA,0), OP(AM_ABY,0,OP_STA,0), OP(AM_NON,0,OP_TXS,0), OP(AM_ABY,0,OP_NOP,0), OP(AM_ABX,0,OP_NOP,0), OP(AM_ABX,0,OP_STA,0), OP(AM_ABY,0,OP_NOP,0), OP(AM_ABY,0,OP_NOP,0),
+    OP(AM_IMM,0,OP_LDY,0), OP(AM_INX,0,OP_LDA,0), OP(AM_IMM,0,OP_LDX,0), OP(AM_INX,0,OP_NOP,0), OP(AM_ZER,0,OP_LDY,0), OP(AM_ZER,0,OP_LDA,0), OP(AM_ZER,0,OP_LDX,0), OP(AM_ZER,0,OP_NOP,0),
+    OP(AM_NON,0,OP_TAY,0), OP(AM_IMM,0,OP_LDA,0), OP(AM_NON,0,OP_TAX,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABS,0,OP_LDY,0), OP(AM_ABS,0,OP_LDA,0), OP(AM_ABS,0,OP_LDX,0), OP(AM_ABS,0,OP_NOP,0),
+    OP(AM_REL,0,OP_BCS,0), OP(AM_INY,1,OP_LDA,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_NOP,0), OP(AM_ZPX,0,OP_LDY,0), OP(AM_ZPX,0,OP_LDA,0), OP(AM_ZPY,0,OP_LDX,0), OP(AM_ZPY,0,OP_NOP,0),
+    OP(AM_NON,0,OP_CLV,0), OP(AM_ABY,1,OP_LDA,0), OP(AM_NON,0,OP_TSX,0), OP(AM_ABY,0,OP_NOP,0), OP(AM_ABX,1,OP_LDY,0), OP(AM_ABX,1,OP_LDA,0), OP(AM_ABY,1,OP_LDX,0), OP(AM_ABY,0,OP_NOP,0),
+    OP(AM_IMM,0,OP_CPY,0), OP(AM_INX,0,OP_CMP,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_INX,0,OP_NOP,0), OP(AM_ZER,0,OP_CPY,0), OP(AM_ZER,0,OP_CMP,0), OP(AM_ZER,0,OP_DEC,0), OP(AM_ZER,0,OP_NOP,0),
+    OP(AM_NON,0,OP_INY,0), OP(AM_IMM,0,OP_CMP,0), OP(AM_NON,0,OP_DEX,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABS,0,OP_CPY,0), OP(AM_ABS,0,OP_CMP,0), OP(AM_ABS,0,OP_DEC,0), OP(AM_ABS,0,OP_NOP,0),
+    OP(AM_REL,0,OP_BNE,0), OP(AM_INY,1,OP_CMP,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_NOP,0), OP(AM_ZPX,0,OP_NOP,0), OP(AM_ZPX,0,OP_CMP,0), OP(AM_ZPX,0,OP_DEC,0), OP(AM_ZPX,0,OP_NOP,0),
+    OP(AM_NON,0,OP_CLD,0), OP(AM_ABY,1,OP_CMP,0), OP(AM_NON,0,OP_NOP,0), OP(AM_ABY,0,OP_NOP,0), OP(AM_ABX,0,OP_NOP,0), OP(AM_ABX,1,OP_CMP,0), OP(AM_ABX,0,OP_DEC,0), OP(AM_ABX,0,OP_NOP,0),
+    OP(AM_IMM,0,OP_CPX,0), OP(AM_INX,0,OP_SBC,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_INX,0,OP_NOP,0), OP(AM_ZER,0,OP_CPX,0), OP(AM_ZER,0,OP_SBC,0), OP(AM_ZER,0,OP_INC,0), OP(AM_ZER,0,OP_NOP,0),
+    OP(AM_NON,0,OP_INX,0), OP(AM_IMM,0,OP_SBC,0), OP(AM_NON,0,OP_NOP,0), OP(AM_IMM,0,OP_SBC,0), OP(AM_ABS,0,OP_CPX,0), OP(AM_ABS,0,OP_SBC,0), OP(AM_ABS,0,OP_INC,0), OP(AM_ABS,0,OP_NOP,0),
+    OP(AM_REL,0,OP_BEQ,0), OP(AM_INY,1,OP_SBC,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_NOP,0), OP(AM_ZPX,0,OP_NOP,0), OP(AM_ZPX,0,OP_SBC,0), OP(AM_ZPX,0,OP_INC,0), OP(AM_ZPX,0,OP_NOP,0),
+    OP(AM_NON,0,OP_SED,0), OP(AM_ABY,1,OP_SBC,0), OP(AM_NON,0,OP_NOP,0), OP(AM_ABY,0,OP_NOP,0), OP(AM_ABX,0,OP_NOP,0), OP(AM_ABX,1,OP_SBC,0), OP(AM_ABX,0,OP_INC,0), OP(AM_ABX,0,OP_NOP,0)
 };
 
 // Clean up the compact opcode macro
@@ -1476,78 +1456,6 @@ static const opcode_info_t opcode_table[256] = {
 static inline cycle_fn_t get_op_cb(fam65xx_t* cpu) {
 	// Fetch operation index from cached opcode info
 	return op_handlers[cpu->opcode_info.op_index];
-}
-
-// Helper method to set next callback based on instruction type
-static void set_next_callback(fam65xx_t* cpu) {
-    if (cpu->opcode_info.rmw_flag) {
-        cpu->callback = rmw_handler;
-    } else {
-        cpu->callback = get_op_cb(cpu);
-    }
-    cpu->cb_index = 0;
-}
-
-// Generic RMW handler called after addressing mode completes
-static bus_state_t rmw_handler(fam65xx_t* cpu, bus_state_t pins) {
-    switch(cpu->cb_index++) {
-        case 0: {
-            // Read data from memory (addressing mode has resolved effective_addr)
-            uint8_t original = FAM65XX_GET_DATA(pins);
-
-            cpu->TMP = original;
-            // Process the operation (ASL, LSR, ROL, ROR, INC, DEC)
-            uint8_t op_index = cpu->opcode_info.op_index;
-
-            switch(op_index) {
-                case OP_ASL_MEM:
-                    cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x80) ? FLAG_C : 0);
-                    cpu->DL = original << 1;
-                    SET_NZ(cpu, cpu->DL);
-                    break;
-                case OP_LSR_MEM:
-                    cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x01) ? FLAG_C : 0);
-                    cpu->DL = original >> 1;
-                    SET_NZ(cpu, cpu->DL);
-                    break;
-                case OP_ROL_MEM: {
-                    uint8_t carry = (cpu->P & FLAG_C) ? 1 : 0;
-
-                    cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x80) ? FLAG_C : 0);
-                    cpu->DL = (original << 1) | carry;
-                    SET_NZ(cpu, cpu->DL);
-                    break;
-                }
-                case OP_ROR_MEM: {
-                    uint8_t carry = (cpu->P & FLAG_C) ? 0x80 : 0;
-
-                    cpu->P = (cpu->P & ~FLAG_C) | ((original & 0x01) ? FLAG_C : 0);
-                    cpu->DL = (original >> 1) | carry;
-                    SET_NZ(cpu, cpu->DL);
-                    break;
-                }
-                case OP_INC:
-                    cpu->DL = original + 1;
-                    SET_NZ(cpu, cpu->DL);
-                    break;
-                case OP_DEC:
-                    cpu->DL = original - 1;
-                    SET_NZ(cpu, cpu->DL);
-                    break;
-            }
-            
-            // Dummy write of original value (required for RMW timing)
-            return WRITE_CYCLE(cpu->effective_addr, cpu->TMP);
-        }
-        
-        case 1: {
-            // Final write of modified value
-            cpu->cb_index = 0;
-            cpu->callback = fetch_next;
-            return WRITE_CYCLE(cpu->effective_addr, cpu->DL);
-        }
-    }
-    return pins;
 }
 
 extern bool verbose_output;
