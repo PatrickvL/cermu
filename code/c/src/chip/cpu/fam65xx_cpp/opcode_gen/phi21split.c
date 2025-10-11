@@ -121,7 +121,7 @@ typedef uint64_t bus_state_t;
 // 8-bit Register indices with endian-aware 16-bit pairs
 // ============================================================================
 
-enum {
+typedef enum {
     // 16-bit aligned register pairs (endian-aware) for memory addresses
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
     REG_ZPL,       // Zero page (low byte) - full 16-bit zero page register
@@ -152,22 +152,20 @@ enum {
     REG_DL,        // Data latch
     
     REG_COUNT,
-};
 
-// Compatibility mapping for 8-bit stack pointer
-#define REG_S     REG_SPL  // Map legacy S register to SPL for compatibility
+    // Compatibility mapping for 8-bit stack pointer
+    REG_S = REG_SPL  // Map legacy S register to SPL for compatibility
+} reg8_t;
 
-/* Register index typedefs for type safety */
-typedef uint8_t reg8_t;   /* 8-bit register index */
-typedef uint8_t reg16_t;  /* 16-bit register index */
+
 
 // 16-bit register indices (native endian compatible)
-enum {
+typedef enum {
     REG_ZP = REG_ZPL / 2,  // Zero page (16 bits) - full zero page register
     REG_SP = REG_SPL / 2,  // Stack pointer as 16-bit (SPL in low, 0x01 in high)
     REG_AB = REG_ABL / 2,  // Address Bus Latch as 16-bit (ADL/ADH pair)
     REG_PC = REG_PCL / 2,  // Program counter / PC as 16-bit (PCL/PCH pair)
-};
+} reg16_t;
 
 /* Processor status flags */
 #define FLAG_C  0x01   /* Carry */
@@ -296,12 +294,14 @@ static bus_state_t cpu_phi2_read(CPU6502* cpu, bus_state_t pins, reg16_t addr_re
     /* Set SYNC if this is cycle 0 (opcode fetch) */
     CPU_SET_SYNC(pins, cpu->cycle_index == 0);
     
-    uint16_t address = cpu->reg16[addr_reg];
-    
+    uint16_t address;
+
     if (CPU_GET_RDY(pins)) {
-        CPU_SET_HALT(pins, 0);
+        address = cpu->reg16[addr_reg];
         BUS_SET_ADDR(pins, address);
+        CPU_SET_HALT(pins, 0);
     } else {
+        address = BUS_GET_ADDR(pins);
         CPU_SET_HALT(pins, 1);
     }
 
@@ -811,6 +811,324 @@ static bus_state_t op_adc_imm(CPU6502* cpu, bus_state_t pins) {
     else
         CPU_P(cpu) &= ~FLAG_V;
     
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+static bus_state_t op_sbc(CPU6502* cpu, bus_state_t pins) {
+    /* PHI2: Read operand from target address */
+    pins = cpu_phi2_read(cpu, pins, REG_AB);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Perform SBC operation */
+    uint8_t operand = BUS_GET_DATA(pins);
+    uint16_t result = CPU_A(cpu) - operand - (CPU_P(cpu) & FLAG_C ? 0 : 1);
+    
+    uint8_t a_old = CPU_A(cpu);
+    CPU_A(cpu) = result & 0xFF;
+    
+    update_nz_flags(cpu, CPU_A(cpu));
+    
+    if (result < 0x100) CPU_P(cpu) |= FLAG_C;
+    else CPU_P(cpu) &= ~FLAG_C;
+    
+    if (((a_old ^ operand) & (a_old ^ result) & 0x80))
+        CPU_P(cpu) |= FLAG_V;
+    else
+        CPU_P(cpu) &= ~FLAG_V;
+    
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+static bus_state_t op_sbc_imm(CPU6502* cpu, bus_state_t pins) {
+    uint8_t operand = CPU_DL(cpu);
+    uint16_t result = CPU_A(cpu) - operand - (CPU_P(cpu) & FLAG_C ? 0 : 1);
+    
+    uint8_t a_old = CPU_A(cpu);
+    CPU_A(cpu) = result & 0xFF;
+    
+    update_nz_flags(cpu, CPU_A(cpu));
+    
+    if (result < 0x100) CPU_P(cpu) |= FLAG_C;
+    else CPU_P(cpu) &= ~FLAG_C;
+    
+    if (((a_old ^ operand) & (a_old ^ result) & 0x80))
+        CPU_P(cpu) |= FLAG_V;
+    else
+        CPU_P(cpu) &= ~FLAG_V;
+    
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+/* --- Logic Operations --- */
+
+static bus_state_t op_and(CPU6502* cpu, bus_state_t pins) {
+    /* PHI2: Read operand from target address */
+    pins = cpu_phi2_read(cpu, pins, REG_AB);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Perform AND operation */
+    CPU_A(cpu) &= BUS_GET_DATA(pins);
+    update_nz_flags(cpu, CPU_A(cpu));
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+static bus_state_t op_and_imm(CPU6502* cpu, bus_state_t pins) {
+    CPU_A(cpu) &= CPU_DL(cpu);
+    update_nz_flags(cpu, CPU_A(cpu));
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+static bus_state_t op_ora(CPU6502* cpu, bus_state_t pins) {
+    /* PHI2: Read operand from target address */
+    pins = cpu_phi2_read(cpu, pins, REG_AB);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Perform ORA operation */
+    CPU_A(cpu) |= BUS_GET_DATA(pins);
+    update_nz_flags(cpu, CPU_A(cpu));
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+static bus_state_t op_ora_imm(CPU6502* cpu, bus_state_t pins) {
+    CPU_A(cpu) |= CPU_DL(cpu);
+    update_nz_flags(cpu, CPU_A(cpu));
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+static bus_state_t op_eor(CPU6502* cpu, bus_state_t pins) {
+    /* PHI2: Read operand from target address */
+    pins = cpu_phi2_read(cpu, pins, REG_AB);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Perform EOR operation */
+    CPU_A(cpu) ^= BUS_GET_DATA(pins);
+    update_nz_flags(cpu, CPU_A(cpu));
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+static bus_state_t op_eor_imm(CPU6502* cpu, bus_state_t pins) {
+    CPU_A(cpu) ^= CPU_DL(cpu);
+    update_nz_flags(cpu, CPU_A(cpu));
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+/* --- Compare Operations --- */
+
+static bus_state_t op_cmp(CPU6502* cpu, bus_state_t pins) {
+    /* PHI2: Read operand from target address */
+    pins = cpu_phi2_read(cpu, pins, REG_AB);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Perform CMP operation */
+    uint8_t data = BUS_GET_DATA(pins);
+    uint16_t result = CPU_A(cpu) - data;
+    
+    CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
+                 (result & FLAG_N) |
+                 ((result & 0xFF) == 0 ? FLAG_Z : 0) |
+                 (CPU_A(cpu) >= data ? FLAG_C : 0);
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+static bus_state_t op_cmp_imm(CPU6502* cpu, bus_state_t pins) {
+    uint8_t data = CPU_DL(cpu);
+    uint16_t result = CPU_A(cpu) - data;
+    
+    CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
+                 (result & FLAG_N) |
+                 ((result & 0xFF) == 0 ? FLAG_Z : 0) |
+                 (CPU_A(cpu) >= data ? FLAG_C : 0);
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+static bus_state_t op_cpx(CPU6502* cpu, bus_state_t pins) {
+    /* PHI2: Read operand from target address */
+    pins = cpu_phi2_read(cpu, pins, REG_AB);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Perform CPX operation */
+    uint8_t data = BUS_GET_DATA(pins);
+    uint16_t result = CPU_X(cpu) - data;
+    
+    CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
+                 (result & FLAG_N) |
+                 ((result & 0xFF) == 0 ? FLAG_Z : 0) |
+                 (CPU_X(cpu) >= data ? FLAG_C : 0);
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+static bus_state_t op_cpx_imm(CPU6502* cpu, bus_state_t pins) {
+    uint8_t data = CPU_DL(cpu);
+    uint16_t result = CPU_X(cpu) - data;
+    
+    CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
+                 (result & FLAG_N) |
+                 ((result & 0xFF) == 0 ? FLAG_Z : 0) |
+                 (CPU_X(cpu) >= data ? FLAG_C : 0);
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+static bus_state_t op_cpy(CPU6502* cpu, bus_state_t pins) {
+    /* PHI2: Read operand from target address */
+    pins = cpu_phi2_read(cpu, pins, REG_AB);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Perform CPY operation */
+    uint8_t data = BUS_GET_DATA(pins);
+    uint16_t result = CPU_Y(cpu) - data;
+    
+    CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
+                 (result & FLAG_N) |
+                 ((result & 0xFF) == 0 ? FLAG_Z : 0) |
+                 (CPU_Y(cpu) >= data ? FLAG_C : 0);
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+static bus_state_t op_cpy_imm(CPU6502* cpu, bus_state_t pins) {
+    uint8_t data = CPU_DL(cpu);
+    uint16_t result = CPU_Y(cpu) - data;
+    
+    CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
+                 (result & FLAG_N) |
+                 ((result & 0xFF) == 0 ? FLAG_Z : 0) |
+                 (CPU_Y(cpu) >= data ? FLAG_C : 0);
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+/* --- Register Operations --- */
+
+static bus_state_t op_inx(CPU6502* cpu, bus_state_t pins) {
+    /* Dummy cycle for internal operation */
+    pins = cpu_phi2_read(cpu, pins, REG_PC);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Increment X register */
+    CPU_X(cpu)++;
+    update_nz_flags(cpu, CPU_X(cpu));
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+static bus_state_t op_iny(CPU6502* cpu, bus_state_t pins) {
+    /* Dummy cycle for internal operation */
+    pins = cpu_phi2_read(cpu, pins, REG_PC);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Increment Y register */
+    CPU_Y(cpu)++;
+    update_nz_flags(cpu, CPU_Y(cpu));
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+static bus_state_t op_dex(CPU6502* cpu, bus_state_t pins) {
+    /* Dummy cycle for internal operation */
+    pins = cpu_phi2_read(cpu, pins, REG_PC);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Decrement X register */
+    CPU_X(cpu)--;
+    update_nz_flags(cpu, CPU_X(cpu));
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+static bus_state_t op_dey(CPU6502* cpu, bus_state_t pins) {
+    /* Dummy cycle for internal operation */
+    pins = cpu_phi2_read(cpu, pins, REG_PC);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Decrement Y register */
+    CPU_Y(cpu)--;
+    update_nz_flags(cpu, CPU_Y(cpu));
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+/* --- Transfer Operations --- */
+
+static bus_state_t op_tax(CPU6502* cpu, bus_state_t pins) {
+    /* Dummy cycle for internal operation */
+    pins = cpu_phi2_read(cpu, pins, REG_PC);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Transfer A to X */
+    CPU_X(cpu) = CPU_A(cpu);
+    update_nz_flags(cpu, CPU_X(cpu));
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+static bus_state_t op_tay(CPU6502* cpu, bus_state_t pins) {
+    /* Dummy cycle for internal operation */
+    pins = cpu_phi2_read(cpu, pins, REG_PC);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Transfer A to Y */
+    CPU_Y(cpu) = CPU_A(cpu);
+    update_nz_flags(cpu, CPU_Y(cpu));
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+static bus_state_t op_txa(CPU6502* cpu, bus_state_t pins) {
+    /* Dummy cycle for internal operation */
+    pins = cpu_phi2_read(cpu, pins, REG_PC);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Transfer X to A */
+    CPU_A(cpu) = CPU_X(cpu);
+    update_nz_flags(cpu, CPU_A(cpu));
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+static bus_state_t op_tya(CPU6502* cpu, bus_state_t pins) {
+    /* Dummy cycle for internal operation */
+    pins = cpu_phi2_read(cpu, pins, REG_PC);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Transfer Y to A */
+    CPU_A(cpu) = CPU_Y(cpu);
+    update_nz_flags(cpu, CPU_A(cpu));
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+static bus_state_t op_tsx(CPU6502* cpu, bus_state_t pins) {
+    /* Dummy cycle for internal operation */
+    pins = cpu_phi2_read(cpu, pins, REG_PC);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Transfer S to X */
+    CPU_X(cpu) = CPU_S(cpu);
+    update_nz_flags(cpu, CPU_X(cpu));
+    transition_to_fetch(cpu);
+    return pins;
+}
+
+static bus_state_t op_txs(CPU6502* cpu, bus_state_t pins) {
+    /* Dummy cycle for internal operation */
+    pins = cpu_phi2_read(cpu, pins, REG_PC);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Transfer X to S */
+    CPU_S(cpu) = CPU_X(cpu);
     transition_to_fetch(cpu);
     return pins;
 }
