@@ -14,13 +14,10 @@
  *    - Registers stored as union of uint8_t[16] and uint16_t[8]
  *    - PC, AD (address latch), and SP are 16-bit pairs on little-endian hosts
  *    - Stack pointer high byte (SPH) is always 0x01, enabling 16-bit SP access
- *    - Register index 0 (REG_DUMMY) marks read cycles in metadata
  * 
  * 3. METADATA-DRIVEN PHI2
  *    - Each cycle has metadata: address source + register index
  *    - Generic PHI2 handler computes address and sets R/W̅ from metadata
- *    - If register index is 0 (REG_DUMMY) → read cycle
- *    - If register index > 0 → write cycle using that register
  * 
  * 4. ENUM-BASED OPCODE ENCODING
  *    - Opcode table is 256 × 2 bytes with bit fields
@@ -114,13 +111,11 @@ typedef uint64_t bus_state_t;
  * ============================================================================
  * Registers are stored as a union of 8-bit and 16-bit arrays.
  * PC, AD, and SP are 16-bit pairs (little-endian host assumed).
- * Register 0 (REG_DUMMY) is unused and marks read cycles in metadata.
  * Stack pointer high byte is always 0x01, enabling direct 16-bit SP access.
  */
 
 /* 8-bit register indices - arranged to align with 16-bit register pairs
  * Layout: ZP(0,1), SP(2,3), AB(4,5), PC(6,7), then others(8+)
- * REG_DUMMY is 0, which overlaps with ZP high byte (always 0x00)
  */
 // ============================================================================
 // 8-bit Register indices with endian-aware 16-bit pairs
@@ -161,7 +156,6 @@ enum {
 
 // Compatibility mapping for 8-bit stack pointer
 #define REG_S     REG_SPL  // Map legacy S register to SPL for compatibility
-#define REG_DUMMY REG_SPL  // Never used as write source, marks read cycles (ZP high)
 
 /* Register index typedefs for type safety */
 typedef uint8_t reg8_t;   /* 8-bit register index */
@@ -1369,11 +1363,11 @@ void cpu_init(CPU6502* cpu) {
     memset(cpu, 0, sizeof(CPU6502));
     
     /* Initialize register layout:
-     * ZP high byte (REG_ZPH/REG_DUMMY) = 0x00 (always zero for zero page)
+     * ZP high byte (REG_ZPH) = 0x00 (always zero for zero page)
      * SP high byte (REG_SPH) = 0x01 (stack is always in page 1)
      * S register (stack pointer low) = 0xFF (stack starts at top)
      */
-    cpu->reg8[REG_ZPH] = 0x00;  /* Zero page high byte - same as REG_DUMMY */
+    cpu->reg8[REG_ZPH] = 0x00;  /* Zero page high byte */
     cpu->reg8[REG_SPH] = 0x01;  /* Stack pointer high byte */
     CPU_S(cpu) = 0xFF;          /* Stack pointer low byte */
     
