@@ -182,102 +182,6 @@ enum {
 #define FLAG_N  0x80   /* Negative */
 
 /* ============================================================================
- * ADDRESSING MODE AND OPERATION ENUMS
- * ============================================================================
- * Addressing modes describe how operands are fetched.
- * Operations describe what the CPU does with those operands.
- * These are combined in the opcode table to minimize redundancy.
- * 
- * AM_NON (0): No addressing mode handler needed
- *   - Used by: Implicit, Immediate, Accumulator, and Relative modes
- *   - These modes either have no operand, operand in next byte, or 
- *     operate directly on registers without memory access
- */
-
-typedef enum {
-    AM_NON = 0, /* No addressing handler (Implicit/Immediate/Accumulator/Relative) */
-    AM_ZER,     /* Zero Page - operand at $00nn */
-    AM_ZPX,     /* Zero Page,X - operand at ($00nn + X) & 0xFF */
-    AM_ZPY,     /* Zero Page,Y - operand at ($00nn + Y) & 0xFF */
-    AM_ABS,     /* Absolute - operand at $nnnn */
-    AM_ABX,     /* Absolute,X - operand at $nnnn + X */
-    AM_ABY,     /* Absolute,Y - operand at $nnnn + Y */
-    AM_IND,     /* Indirect - jump target at ($nnnn) */
-    AM_INX,     /* Indexed Indirect - operand at (($nn + X) & 0xFF) */
-    AM_INY,     /* Indirect Indexed - operand at ($nn) + Y */
-    AM_COUNT
-} AddrMode;
-
-/* Aliases for documentation/clarity (all map to AM_NON) */
-#define AM_IMP  AM_NON  /* Implied/Implicit - no operand */
-#define AM_IMM  AM_NON  /* Immediate - operand is next byte */
-#define AM_ACC  AM_NON  /* Accumulator - operate on A register */
-#define AM_REL  AM_NON  /* Relative - branch offset */
-
-typedef enum {
-    OP_LDA, OP_LDX, OP_LDY,
-    OP_STA, OP_STX, OP_STY,
-    OP_ADC, OP_SBC,
-    OP_AND, OP_ORA, OP_EOR,
-    OP_CMP, OP_CPX, OP_CPY,
-    OP_ASL, OP_LSR, OP_ROL, OP_ROR,
-    OP_INC, OP_DEC,
-    OP_INX, OP_INY, OP_DEX, OP_DEY,
-    OP_TAX, OP_TAY, OP_TXA, OP_TYA, OP_TSX, OP_TXS,
-    OP_PHA, OP_PHP, OP_PLA, OP_PLP,
-    OP_BCC, OP_BCS, OP_BEQ, OP_BNE, OP_BMI, OP_BPL, OP_BVC, OP_BVS,
-    OP_CLC, OP_SEC, OP_CLI, OP_SEI, OP_CLD, OP_SED, OP_CLV,
-    OP_JMP, OP_JSR, OP_RTS, OP_RTI, OP_BRK,
-    OP_BIT, OP_NOP, OP_JAM,
-    // 65C02 enhancements
-    OP_BRA,
-    // Illegal opcodes - combination instructions
-    OP_LAX, OP_SAX, OP_DCP, OP_ISC, OP_SLO, OP_RLA, OP_SRE, OP_RRA,
-    // Illegal opcodes - special accumulator operations
-    OP_ANC, OP_ASR, OP_ARR, OP_SBX,
-    // Illegal opcodes - store with AND operations
-    OP_SHA, OP_SHS, OP_SHX, OP_SHY, OP_LAS,
-    // Illegal opcodes - special operations
-    OP_XAA,
-
-    OP_COUNT
-} Operation;
-
-/* ============================================================================
- * CYCLE METADATA
- * ============================================================================
- * Each cycle is described by metadata:
- * - addr_source: How to compute the address for this cycle
- * - reg_index: Which register to write (0 = read cycle)
- * 
- * The generic PHI2 handler uses this metadata to set up the bus.
- */
-
-typedef struct {
-    uint8_t addr_source;   /* Address computation method */
-    uint8_t reg_index;     /* Register to write (0 = read) */
-} CycleMetadata;
-
-/* Hardware-accurate address sources for metadata
- * These correspond directly to 16-bit register indices and actual hardware
- * multiplexers that select which register drives the address bus during each cycle.
- */
-#define ADDR_ZP          REG_ZP   /* Zero Page (0x00xx + ADL) */
-#define ADDR_STACK       REG_SP   /* Stack Pointer (0x01xx + S) */
-#define ADDR_ABL         REG_AB   /* Address Bus Latch (16-bit computed address) */
-#define ADDR_PC          REG_PC   /* Program Counter */
-
-/* Aliases for documentation purposes - all map to hardware address sources */
-#define ADDR_PC_INC      ADDR_PC    /* PC (will be incremented in PHI1) */
-#define ADDR_ABS         ADDR_ABL   /* Absolute addressing uses Address Bus Latch */
-#define ADDR_ABS_X       ADDR_ABL   /* Absolute,X uses ABL (after X added in PHI1) */
-#define ADDR_ABS_Y       ADDR_ABL   /* Absolute,Y uses ABL (after Y added in PHI1) */
-#define ADDR_ZP_X        ADDR_ZP    /* Zero Page,X uses ZP (after X added to ADL) */
-#define ADDR_ZP_Y        ADDR_ZP    /* Zero Page,Y uses ZP (after Y added to ADL) */
-#define ADDR_IND_X       ADDR_ABL   /* Indexed Indirect uses ABL (computed address) */
-#define ADDR_IND_Y       ADDR_ABL   /* Indirect Indexed uses ABL (computed address) */
-
-/* ============================================================================
  * OPCODE ENCODING
  * ============================================================================
  * Opcode table is 256 entries × 2 bytes = 512 bytes.
@@ -306,7 +210,7 @@ typedef struct {
  */
 
 typedef struct CPU6502 CPU6502;
-typedef Pins (*CycleFunc)(CPU6502* cpu, Pins pins);
+typedef Pins (*cycle_fn_t)(CPU6502* cpu, Pins pins);
 
 struct CPU6502 {
     /* Register array - union allows both 8-bit and 16-bit access */
@@ -318,8 +222,7 @@ struct CPU6502 {
     /* Current execution state */
     opcode_info_t opcode_entry;       /* Cached opcode entry (copied once) */
     uint8_t cycle_index;              /* Current cycle within instruction */
-    CycleFunc current_handler;        /* Current PHI1 handler */
-    CycleMetadata* current_metadata;  /* Legacy metadata - to be removed */
+    cycle_fn_t current_handler;        /* Current PHI1 handler */
     
     /* Cycle counter */
     uint64_t cycles;
@@ -347,24 +250,6 @@ struct CPU6502 {
 
 /* Legacy aliases for compatibility */
 #define CPU_AD(cpu)    CPU_AB(cpu)  /* Address latch as 16-bit - now maps to AB */
-
-/* ============================================================================
- * ADDRESSING MODE AND OPERATION DESCRIPTORS
- * ============================================================================
- * These tables describe each addressing mode and op_index.
- * They're indexed by the enum values to get handlers and metadata.
- */
-
-typedef struct {
-    CycleMetadata* metadata;
-    CycleFunc handler;
-} AddrModeDesc;
-
-typedef struct {
-    CycleMetadata* rmw_metadata;    /* For RMW mode (3 cycles) */
-    CycleMetadata* normal_metadata; /* For register/normal mode */
-    CycleFunc handler;
-} OperationDesc;
 
 /* Forward declarations */
 static Pins opcode_fetch(CPU6502* cpu, Pins pins);
@@ -417,27 +302,31 @@ static Pins phi2_handler(CPU6502* cpu, Pins pins, int addr_reg_index, uint8_t da
     /* Get address from specified register */
     uint16_t address = cpu->reg16[addr_reg_index];
     
-    /* Check RDY - halt if not ready for read cycles */
-    if (!is_write && !CPU_GET_RDY(pins)) {
-        CPU_SET_HALT(pins, 1);
-        return pins;
-    }
-    
     /* Set up address on bus */
     BUS_SET_ADDR(pins, address);
     
     if (is_write) {
-        /* Write cycle - always proceeds regardless of RDY */
+        /* Write cycle - always proceeds regardless of RDY, but PHI1 may halt */
         BUS_SET_DATA(pins, data_byte);
         memory_write(address, data_byte);
     } else {
-        /* Read cycle */
+        /* Read cycle - halt if RDY is low */
+        if (!CPU_GET_RDY(pins)) {
+            CPU_SET_HALT(pins, 1);
+            return pins;
+        }
         BUS_SET_DATA(pins, memory_read(address));
     }
     
     /* Increment address register if requested (for PC increment) */
     if (increment_addr) {
         cpu->reg16[addr_reg_index]++;
+    }
+    
+    /* Check RDY for PHI1 halt - applies to both read and write cycles */
+    if (!CPU_GET_RDY(pins)) {
+        CPU_SET_HALT(pins, 1);
+        return pins;
     }
     
     CPU_SET_HALT(pins, 0);
@@ -514,11 +403,6 @@ static Pins addr_zpx(CPU6502* cpu, Pins pins) {
 }
 
 /* Zero Page,Y - operand at ($00nn + Y) & 0xFF */
-static CycleMetadata addr_zpy_cycles[] = {
-    { ADDR_PC_INC, REG_DUMMY },
-    { ADDR_ZP_Y, REG_DUMMY }
-};
-
 static Pins addr_zpy(CPU6502* cpu, Pins pins) {
     switch (cpu->cycle_index++) {
         case 0:
@@ -544,12 +428,6 @@ static Pins addr_zpy(CPU6502* cpu, Pins pins) {
 }
 
 /* Absolute,X - operand at $nnnn + X (may skip cycle if no page cross) */
-static CycleMetadata addr_abx_cycles[] = {
-    { ADDR_PC_INC, REG_DUMMY },
-    { ADDR_PC_INC, REG_DUMMY },
-    { ADDR_ABS_X, REG_DUMMY }  /* Page cross penalty cycle */
-};
-
 static Pins addr_abx(CPU6502* cpu, Pins pins) {
     switch (cpu->cycle_index++) {
         case 0:
@@ -593,12 +471,6 @@ static Pins addr_abx(CPU6502* cpu, Pins pins) {
 }
 
 /* Absolute,Y - operand at $nnnn + Y (may skip cycle if no page cross) */
-static CycleMetadata addr_aby_cycles[] = {
-    { ADDR_PC_INC, REG_DUMMY },
-    { ADDR_PC_INC, REG_DUMMY },
-    { ADDR_ABS_Y, REG_DUMMY }
-};
-
 static Pins addr_aby(CPU6502* cpu, Pins pins) {
     switch (cpu->cycle_index++) {
         case 0:
@@ -641,13 +513,6 @@ static Pins addr_aby(CPU6502* cpu, Pins pins) {
 }
 
 /* Indirect - used only by JMP ($nnnn) */
-static CycleMetadata addr_ind_cycles[] = {
-    { ADDR_PC_INC, REG_DUMMY },  /* Read pointer low byte */
-    { ADDR_PC_INC, REG_DUMMY },  /* Read pointer high byte */
-    { ADDR_ABS, REG_DUMMY },     /* Read target low byte */
-    { ADDR_ABS, REG_DUMMY }      /* Read target high byte */
-};
-
 static Pins addr_ind(CPU6502* cpu, Pins pins) {
     switch (cpu->cycle_index++) {
         case 0:
@@ -697,13 +562,6 @@ static Pins addr_ind(CPU6502* cpu, Pins pins) {
 }
 
 /* Indexed Indirect - operand at (($nn + X) & 0xFF) */
-static CycleMetadata addr_idx_cycles[] = {
-    { ADDR_PC_INC, REG_DUMMY },  /* Read pointer */
-    { ADDR_ZP, REG_DUMMY },      /* Dummy read */
-    { ADDR_ZP_X, REG_DUMMY },    /* Read low byte of target */
-    { ADDR_ZP_X, REG_DUMMY }     /* Read high byte of target */
-};
-
 static Pins addr_idx(CPU6502* cpu, Pins pins) {
     switch (cpu->cycle_index++) {
         case 0:
@@ -748,13 +606,6 @@ static Pins addr_idx(CPU6502* cpu, Pins pins) {
 }
 
 /* Indirect Indexed - operand at ($nn) + Y (may skip cycle if no page cross) */
-static CycleMetadata addr_idy_cycles[] = {
-    { ADDR_PC_INC, REG_DUMMY },  /* Read pointer */
-    { ADDR_ZP, REG_DUMMY },      /* Read low byte */
-    { ADDR_ZP, REG_DUMMY },      /* Read high byte */
-    { ADDR_IND_Y, REG_DUMMY }    /* Page cross penalty */
-};
-
 static Pins addr_idy(CPU6502* cpu, Pins pins) {
     switch (cpu->cycle_index++) {
         case 0:
@@ -873,38 +724,37 @@ static Pins op_ldy_imm(CPU6502* cpu, Pins pins) {
 
 /* --- Store Operations --- */
 
-static CycleMetadata op_sta_cycles[] = {
-    { ADDR_ABS, REG_A }  /* Write A to address */
-};
-
 static Pins op_sta(CPU6502* cpu, Pins pins) {
+    /* PHI2: Write A to target address */
+    pins = phi2_handler(cpu, pins, REG_AB, CPU_A(cpu), true, false);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Complete instruction */
     transition_to_fetch(cpu);
     return pins;
 }
-
-static CycleMetadata op_stx_cycles[] = {
-    { ADDR_ABS, REG_X }
-};
 
 static Pins op_stx(CPU6502* cpu, Pins pins) {
+    /* PHI2: Write X to target address */
+    pins = phi2_handler(cpu, pins, REG_AB, CPU_X(cpu), true, false);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Complete instruction */
     transition_to_fetch(cpu);
     return pins;
 }
 
-static CycleMetadata op_sty_cycles[] = {
-    { ADDR_ABS, REG_Y }
-};
-
 static Pins op_sty(CPU6502* cpu, Pins pins) {
+    /* PHI2: Write Y to target address */
+    pins = phi2_handler(cpu, pins, REG_AB, CPU_Y(cpu), true, false);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Complete instruction */
     transition_to_fetch(cpu);
     return pins;
 }
 
 /* --- Arithmetic Operations --- */
-
-static CycleMetadata op_adc_cycles[] = {
-    { ADDR_ABS, REG_DUMMY }
-};
 
 static Pins op_adc(CPU6502* cpu, Pins pins) {
     /* PHI2: Read operand from target address */
@@ -960,132 +810,205 @@ static Pins op_adc_imm(CPU6502* cpu, Pins pins) {
  * Memory mode: 3 cycles (read, write original, write modified)
  */
 
-static CycleMetadata op_rmw_cycles[] = {
-    { ADDR_ABS, REG_DUMMY },   /* Read value */
-    { ADDR_ABS, REG_DL },    /* Write original (dummy) */
-    { ADDR_ABS, REG_DL }     /* Write modified */
-};
-
-static CycleMetadata op_acc_cycles[] = {
-    { ADDR_PC, REG_DUMMY }  /* Dummy read */
-};
 
 /* ASL - Arithmetic Shift Left */
-// Macro to handle RMW boilerplate
-#define RMW_HANDLER_START(cpu, pins, reg_idx_var) \
-    uint8_t reg_idx_var; \
-    if ((cpu)->opcode_entry.rmw) { \
-        switch ((cpu)->cycle_index++) { \
-            case 0: \
-                CPU_DL(cpu) = BUS_GET_DATA(pins); \
-                return pins; \
-            case 1: \
-                reg_idx_var = REG_DL; \
-                break; \
-            case 2: \
-                transition_to_fetch(cpu); \
-                return pins; \
-        } \
-    } else { \
-        reg_idx_var = REG_A; \
+static Pins op_asl(CPU6502* cpu, Pins pins) {
+    if (cpu->opcode_entry.rmw) {
+        /* Memory RMW mode: 3 cycles */
+        switch (cpu->cycle_index++) {
+            case 0:
+                /* PHI2: Read current value */
+                pins = phi2_handler(cpu, pins, REG_AB, 0xFF, false, false);
+                if (CPU_GET_HALT(pins)) return pins;
+                
+                /* PHI1: Store in data latch */
+                CPU_DL(cpu) = BUS_GET_DATA(pins);
+                break;
+                
+            case 1:
+                /* PHI2: Write back original value (hardware behavior) */
+                pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+                if (CPU_GET_HALT(pins)) return pins;
+                
+                /* PHI1: Perform ASL operation */
+                if (CPU_DL(cpu) & 0x80) CPU_P(cpu) |= FLAG_C;
+                else CPU_P(cpu) &= ~FLAG_C;
+                CPU_DL(cpu) <<= 1;
+                update_nz_flags(cpu, CPU_DL(cpu));
+                break;
+                
+            case 2:
+                /* PHI2: Write modified value */
+                pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+                if (CPU_GET_HALT(pins)) return pins;
+                
+                /* PHI1: Complete instruction */
+                transition_to_fetch(cpu);
+                break;
+        }
+    } else {
+        /* Accumulator mode: 1 cycle */
+        if (CPU_A(cpu) & 0x80) CPU_P(cpu) |= FLAG_C;
+        else CPU_P(cpu) &= ~FLAG_C;
+        CPU_A(cpu) <<= 1;
+        update_nz_flags(cpu, CPU_A(cpu));
+        transition_to_fetch(cpu);
     }
-
-    
-#define RMW_HANDLER_END(cpu) \
-    if (!(cpu)->opcode_entry.rmw) { \
-        transition_to_fetch(cpu); \
-    }
-
-Pins op_asl(CPU6502* cpu, Pins pins) {
-    RMW_HANDLER_START(cpu, pins, reg_idx);
-    
-    /* Common op_index logic */
-    uint8_t value = cpu->reg8[reg_idx];
-    if (value & 0x80) CPU_P(cpu) |= FLAG_C;
-    else CPU_P(cpu) &= ~FLAG_C;
-    value <<= 1;
-    cpu->reg8[reg_idx] = value;
-    update_nz_flags(cpu, value);
-    
-    RMW_HANDLER_END(cpu);
     return pins;
 }
 
 /* LSR - Logical Shift Right */
 static Pins op_lsr(CPU6502* cpu, Pins pins) {
-    RMW_HANDLER_START(cpu, pins, reg_idx);
-    
-    uint8_t value = cpu->reg8[reg_idx];
-    if (value & 0x01) CPU_P(cpu) |= FLAG_C;
-    else CPU_P(cpu) &= ~FLAG_C;
-    value >>= 1;
-    cpu->reg8[reg_idx] = value;
-    update_nz_flags(cpu, value);
-    
-    RMW_HANDLER_END(cpu);
+    if (cpu->opcode_entry.rmw) {
+        /* Memory RMW mode: 3 cycles */
+        switch (cpu->cycle_index++) {
+            case 0:
+                pins = phi2_handler(cpu, pins, REG_AB, 0xFF, false, false);
+                if (CPU_GET_HALT(pins)) return pins;
+                CPU_DL(cpu) = BUS_GET_DATA(pins);
+                break;
+            case 1:
+                pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+                if (CPU_GET_HALT(pins)) return pins;
+                if (CPU_DL(cpu) & 0x01) CPU_P(cpu) |= FLAG_C;
+                else CPU_P(cpu) &= ~FLAG_C;
+                CPU_DL(cpu) >>= 1;
+                update_nz_flags(cpu, CPU_DL(cpu));
+                break;
+            case 2:
+                pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+                if (CPU_GET_HALT(pins)) return pins;
+                transition_to_fetch(cpu);
+                break;
+        }
+    } else {
+        /* Accumulator mode */
+        if (CPU_A(cpu) & 0x01) CPU_P(cpu) |= FLAG_C;
+        else CPU_P(cpu) &= ~FLAG_C;
+        CPU_A(cpu) >>= 1;
+        update_nz_flags(cpu, CPU_A(cpu));
+        transition_to_fetch(cpu);
+    }
     return pins;
 }
 
 /* ROL - Rotate Left */
 static Pins op_rol(CPU6502* cpu, Pins pins) {
-    RMW_HANDLER_START(cpu, pins, reg_idx);
-    
-    uint8_t value = cpu->reg8[reg_idx];
-    uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 1 : 0;
-    if (value & 0x80) CPU_P(cpu) |= FLAG_C;
-    else CPU_P(cpu) &= ~FLAG_C;
-    value = (value << 1) | old_carry;
-    cpu->reg8[reg_idx] = value;
-    update_nz_flags(cpu, value);
-    
-    RMW_HANDLER_END(cpu);
+    if (cpu->opcode_entry.rmw) {
+        /* Memory RMW mode: 3 cycles */
+        switch (cpu->cycle_index++) {
+            case 0:
+                pins = phi2_handler(cpu, pins, REG_AB, 0xFF, false, false);
+                if (CPU_GET_HALT(pins)) return pins;
+                CPU_DL(cpu) = BUS_GET_DATA(pins);
+                break;
+            case 1:
+                pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+                if (CPU_GET_HALT(pins)) return pins;
+                uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 1 : 0;
+                if (CPU_DL(cpu) & 0x80) CPU_P(cpu) |= FLAG_C;
+                else CPU_P(cpu) &= ~FLAG_C;
+                CPU_DL(cpu) = (CPU_DL(cpu) << 1) | old_carry;
+                update_nz_flags(cpu, CPU_DL(cpu));
+                break;
+            case 2:
+                pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+                if (CPU_GET_HALT(pins)) return pins;
+                transition_to_fetch(cpu);
+                break;
+        }
+    } else {
+        /* Accumulator mode */
+        uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 1 : 0;
+        if (CPU_A(cpu) & 0x80) CPU_P(cpu) |= FLAG_C;
+        else CPU_P(cpu) &= ~FLAG_C;
+        CPU_A(cpu) = (CPU_A(cpu) << 1) | old_carry;
+        update_nz_flags(cpu, CPU_A(cpu));
+        transition_to_fetch(cpu);
+    }
     return pins;
 }
 
 /* ROR - Rotate Right */
 static Pins op_ror(CPU6502* cpu, Pins pins) {
-    RMW_HANDLER_START(cpu, pins, reg_idx);
-    
-    uint8_t value = cpu->reg8[reg_idx];
-    uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 1 : 0;
-    if (value & 0x01) CPU_P(cpu) |= FLAG_C;
-    else CPU_P(cpu) &= ~FLAG_C;
-    value = (value >> 1) | (old_carry << 7);
-    cpu->reg8[reg_idx] = value;
-    update_nz_flags(cpu, value);
-    
-    RMW_HANDLER_END(cpu);
+    if (cpu->opcode_entry.rmw) {
+        /* Memory RMW mode: 3 cycles */
+        switch (cpu->cycle_index++) {
+            case 0:
+                pins = phi2_handler(cpu, pins, REG_AB, 0xFF, false, false);
+                if (CPU_GET_HALT(pins)) return pins;
+                CPU_DL(cpu) = BUS_GET_DATA(pins);
+                break;
+            case 1:
+                pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+                if (CPU_GET_HALT(pins)) return pins;
+                uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 0x80 : 0;
+                if (CPU_DL(cpu) & 0x01) CPU_P(cpu) |= FLAG_C;
+                else CPU_P(cpu) &= ~FLAG_C;
+                CPU_DL(cpu) = (CPU_DL(cpu) >> 1) | old_carry;
+                update_nz_flags(cpu, CPU_DL(cpu));
+                break;
+            case 2:
+                pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+                if (CPU_GET_HALT(pins)) return pins;
+                transition_to_fetch(cpu);
+                break;
+        }
+    } else {
+        /* Accumulator mode */
+        uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 0x80 : 0;
+        if (CPU_A(cpu) & 0x01) CPU_P(cpu) |= FLAG_C;
+        else CPU_P(cpu) &= ~FLAG_C;
+        CPU_A(cpu) = (CPU_A(cpu) >> 1) | old_carry;
+        update_nz_flags(cpu, CPU_A(cpu));
+        transition_to_fetch(cpu);
+    }
     return pins;
 }
 
 /* INC - Increment Memory (RMW only, no accumulator mode) */
-#define RMW_ONLY_START(cpu, pins, reg_idx_var) \
-    uint8_t reg_idx_var = REG_DL; \
-    switch ((cpu)->cycle_index++) { \
-        case 0: \
-            cpu->reg8[reg_idx_var] = BUS_GET_DATA(pins); \
-            return pins; \
-        case 1: \
-            break; \
-        case 2: \
-            transition_to_fetch(cpu); \
-            return pins; \
+static Pins op_inc(CPU6502* cpu, Pins pins) {
+    switch (cpu->cycle_index++) {
+        case 0:
+            pins = phi2_handler(cpu, pins, REG_AB, 0xFF, false, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            CPU_DL(cpu) = BUS_GET_DATA(pins);
+            break;
+        case 1:
+            pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            CPU_DL(cpu)++;
+            update_nz_flags(cpu, CPU_DL(cpu));
+            break;
+        case 2:
+            pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            transition_to_fetch(cpu);
+            break;
     }
-
-Pins op_inc(CPU6502* cpu, Pins pins) {
-    RMW_ONLY_START(cpu, pins, reg_idx);
-    
-    cpu->reg8[reg_idx]++;
-    update_nz_flags(cpu, cpu->reg8[reg_idx]);
     return pins;
-}    
+}
 
 /* DEC - Decrement Memory (RMW only, no accumulator mode) */
 static Pins op_dec(CPU6502* cpu, Pins pins) {
-    RMW_ONLY_START(cpu, pins, reg_idx);
-    
-    cpu->reg8[reg_idx]--;
-    update_nz_flags(cpu, cpu->reg8[reg_idx]);
+    switch (cpu->cycle_index++) {
+        case 0:
+            pins = phi2_handler(cpu, pins, REG_AB, 0xFF, false, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            CPU_DL(cpu) = BUS_GET_DATA(pins);
+            break;
+        case 1:
+            pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            CPU_DL(cpu)--;
+            update_nz_flags(cpu, CPU_DL(cpu));
+            break;
+        case 2:
+            pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            transition_to_fetch(cpu);
+            break;
+    }
     return pins;
 }
 
@@ -1098,122 +1021,188 @@ static Pins op_dec(CPU6502* cpu, Pins pins) {
 
 /* SLO - ASL + ORA (Shift Left and OR) */
 static Pins op_slo(CPU6502* cpu, Pins pins) {
-    RMW_ONLY_START(cpu, pins, reg_idx);
-    
-    /* Perform ASL */
-    if (cpu->reg8[reg_idx] & 0x80) CPU_P(cpu) |= FLAG_C;
-    else CPU_P(cpu) &= ~FLAG_C;
-    cpu->reg8[reg_idx] <<= 1;
-    
-    /* Perform ORA with A */
-    CPU_A(cpu) |= cpu->reg8[reg_idx];
-    update_nz_flags(cpu, CPU_A(cpu));
+    switch (cpu->cycle_index++) {
+        case 0:
+            pins = phi2_handler(cpu, pins, REG_AB, 0xFF, false, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            CPU_DL(cpu) = BUS_GET_DATA(pins);
+            break;
+        case 1:
+            pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            /* Perform ASL */
+            if (CPU_DL(cpu) & 0x80) CPU_P(cpu) |= FLAG_C;
+            else CPU_P(cpu) &= ~FLAG_C;
+            CPU_DL(cpu) <<= 1;
+            /* Perform ORA with A */
+            CPU_A(cpu) |= CPU_DL(cpu);
+            update_nz_flags(cpu, CPU_A(cpu));
+            break;
+        case 2:
+            pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            transition_to_fetch(cpu);
+            break;
+    }
     return pins;
 }
 
 /* RLA - ROL + AND (Rotate Left and AND) */
 static Pins op_rla(CPU6502* cpu, Pins pins) {
-    RMW_ONLY_START(cpu, pins, reg_idx);
-    
-    /* Perform ROL */
-    uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 1 : 0;
-    if (cpu->reg8[reg_idx] & 0x80) CPU_P(cpu) |= FLAG_C;
-    else CPU_P(cpu) &= ~FLAG_C;
-    cpu->reg8[reg_idx] = (cpu->reg8[reg_idx] << 1) | old_carry;
-    
-    /* Perform AND with A */
-    CPU_A(cpu) &= cpu->reg8[reg_idx];
-    update_nz_flags(cpu, CPU_A(cpu));
+    switch (cpu->cycle_index++) {
+        case 0:
+            pins = phi2_handler(cpu, pins, REG_AB, 0xFF, false, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            CPU_DL(cpu) = BUS_GET_DATA(pins);
+            break;
+        case 1:
+            pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            /* Perform ROL */
+            uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 1 : 0;
+            if (CPU_DL(cpu) & 0x80) CPU_P(cpu) |= FLAG_C;
+            else CPU_P(cpu) &= ~FLAG_C;
+            CPU_DL(cpu) = (CPU_DL(cpu) << 1) | old_carry;
+            /* Perform AND with A */
+            CPU_A(cpu) &= CPU_DL(cpu);
+            update_nz_flags(cpu, CPU_A(cpu));
+            break;
+        case 2:
+            pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            transition_to_fetch(cpu);
+            break;
+    }
     return pins;
 }
 
 /* SRE - LSR + EOR (Shift Right and EOR) */
 static Pins op_sre(CPU6502* cpu, Pins pins) {
-    RMW_ONLY_START(cpu, pins, reg_idx);
-    
-    /* Perform LSR */
-    if (cpu->reg8[reg_idx] & 0x01) CPU_P(cpu) |= FLAG_C;
-    else CPU_P(cpu) &= ~FLAG_C;
-    cpu->reg8[reg_idx] >>= 1;
-    
-    /* Perform EOR with A */
-    CPU_A(cpu) ^= cpu->reg8[reg_idx];
-    update_nz_flags(cpu, CPU_A(cpu));
+    switch (cpu->cycle_index++) {
+        case 0:
+            pins = phi2_handler(cpu, pins, REG_AB, 0xFF, false, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            CPU_DL(cpu) = BUS_GET_DATA(pins);
+            break;
+        case 1:
+            pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            /* Perform LSR */
+            if (CPU_DL(cpu) & 0x01) CPU_P(cpu) |= FLAG_C;
+            else CPU_P(cpu) &= ~FLAG_C;
+            CPU_DL(cpu) >>= 1;
+            /* Perform EOR with A */
+            CPU_A(cpu) ^= CPU_DL(cpu);
+            update_nz_flags(cpu, CPU_A(cpu));
+            break;
+        case 2:
+            pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            transition_to_fetch(cpu);
+            break;
+    }
     return pins;
 }
 
 /* RRA - ROR + ADC (Rotate Right and Add with Carry) */
 static Pins op_rra(CPU6502* cpu, Pins pins) {
-    RMW_ONLY_START(cpu, pins, reg_idx);
-    
-    /* Perform ROR */
-    uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 0x80 : 0;
-    if (cpu->reg8[reg_idx] & 0x01) CPU_P(cpu) |= FLAG_C;
-    else CPU_P(cpu) &= ~FLAG_C;
-    cpu->reg8[reg_idx] = (cpu->reg8[reg_idx] >> 1) | old_carry;
-    
-    /* Perform ADC with A */
-    uint8_t operand = cpu->reg8[reg_idx];
-    uint16_t result = CPU_A(cpu) + operand + (CPU_P(cpu) & FLAG_C ? 1 : 0);
-    
-    uint8_t a_old = CPU_A(cpu);
-    CPU_A(cpu) = result & 0xFF;
-    
-    update_nz_flags(cpu, CPU_A(cpu));
-    
-    if (result > 0xFF) CPU_P(cpu) |= FLAG_C;
-    else CPU_P(cpu) &= ~FLAG_C;
-    
-    if (((a_old ^ result) & (operand ^ result) & 0x80))
-        CPU_P(cpu) |= FLAG_V;
-    else
-        CPU_P(cpu) &= ~FLAG_V;
-    
+    switch (cpu->cycle_index++) {
+        case 0:
+            pins = phi2_handler(cpu, pins, REG_AB, 0xFF, false, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            CPU_DL(cpu) = BUS_GET_DATA(pins);
+            break;
+        case 1:
+            pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            /* Perform ROR */
+            uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 0x80 : 0;
+            if (CPU_DL(cpu) & 0x01) CPU_P(cpu) |= FLAG_C;
+            else CPU_P(cpu) &= ~FLAG_C;
+            CPU_DL(cpu) = (CPU_DL(cpu) >> 1) | old_carry;
+            /* Perform ADC with A */
+            uint8_t operand = CPU_DL(cpu);
+            uint16_t result = CPU_A(cpu) + operand + (CPU_P(cpu) & FLAG_C ? 1 : 0);
+            uint8_t a_old = CPU_A(cpu);
+            CPU_A(cpu) = result & 0xFF;
+            update_nz_flags(cpu, CPU_A(cpu));
+            if (result > 0xFF) CPU_P(cpu) |= FLAG_C;
+            else CPU_P(cpu) &= ~FLAG_C;
+            if (((a_old ^ result) & (operand ^ result) & 0x80))
+                CPU_P(cpu) |= FLAG_V;
+            else
+                CPU_P(cpu) &= ~FLAG_V;
+            break;
+        case 2:
+            pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            transition_to_fetch(cpu);
+            break;
+    }
     return pins;
 }
 
 /* DCP - DEC + CMP (Decrement and Compare) */
 static Pins op_dcp(CPU6502* cpu, Pins pins) {
-    RMW_ONLY_START(cpu, pins, reg_idx);
-    
-    /* Perform DEC */
-    cpu->reg8[reg_idx]--;
-    
-    /* Perform CMP with A */
-    uint8_t data = cpu->reg8[reg_idx];
-    uint16_t result = CPU_A(cpu) - data;
-    
-    CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-                 (result & FLAG_N) |
-                 ((result & 0xFF) == 0 ? FLAG_Z : 0) |
-                 (CPU_A(cpu) >= data ? FLAG_C : 0);
+    switch (cpu->cycle_index++) {
+        case 0:
+            pins = phi2_handler(cpu, pins, REG_AB, 0xFF, false, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            CPU_DL(cpu) = BUS_GET_DATA(pins);
+            break;
+        case 1:
+            pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            /* Perform DEC */
+            CPU_DL(cpu)--;
+            /* Perform CMP with A */
+            uint16_t result = CPU_A(cpu) - CPU_DL(cpu);
+            CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
+                         (result & FLAG_N) |
+                         ((result & 0xFF) == 0 ? FLAG_Z : 0) |
+                         (CPU_A(cpu) >= CPU_DL(cpu) ? FLAG_C : 0);
+            break;
+        case 2:
+            pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            transition_to_fetch(cpu);
+            break;
+    }
     return pins;
 }
 
 /* ISC - INC + SBC (Increment and Subtract with Carry) */
 static Pins op_isc(CPU6502* cpu, Pins pins) {
-    RMW_ONLY_START(cpu, pins, reg_idx);
-    
-    /* Perform INC */
-    cpu->reg8[reg_idx]++;
-    
-    /* Perform SBC with A */
-    uint8_t operand = cpu->reg8[reg_idx];
-    uint16_t result = CPU_A(cpu) - operand - (CPU_P(cpu) & FLAG_C ? 0 : 1);
-    
-    uint8_t a_old = CPU_A(cpu);
-    CPU_A(cpu) = result & 0xFF;
-    
-    update_nz_flags(cpu, CPU_A(cpu));
-    
-    if (result < 0x100) CPU_P(cpu) |= FLAG_C;
-    else CPU_P(cpu) &= ~FLAG_C;
-    
-    if (((a_old ^ operand) & (a_old ^ result) & 0x80))
-        CPU_P(cpu) |= FLAG_V;
-    else
-        CPU_P(cpu) &= ~FLAG_V;
-    
+    switch (cpu->cycle_index++) {
+        case 0:
+            pins = phi2_handler(cpu, pins, REG_AB, 0xFF, false, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            CPU_DL(cpu) = BUS_GET_DATA(pins);
+            break;
+        case 1:
+            pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            /* Perform INC */
+            CPU_DL(cpu)++;
+            /* Perform SBC with A */
+            uint8_t operand = CPU_DL(cpu);
+            uint16_t result = CPU_A(cpu) - operand - (CPU_P(cpu) & FLAG_C ? 0 : 1);
+            uint8_t a_old = CPU_A(cpu);
+            CPU_A(cpu) = result & 0xFF;
+            update_nz_flags(cpu, CPU_A(cpu));
+            if (result < 0x100) CPU_P(cpu) |= FLAG_C;
+            else CPU_P(cpu) &= ~FLAG_C;
+            if (((a_old ^ operand) & (a_old ^ result) & 0x80))
+                CPU_P(cpu) |= FLAG_V;
+            else
+                CPU_P(cpu) &= ~FLAG_V;
+            break;
+        case 2:
+            pins = phi2_handler(cpu, pins, REG_AB, CPU_DL(cpu), true, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            transition_to_fetch(cpu);
+            break;
+    }
     return pins;
 }
 
@@ -1222,42 +1211,163 @@ static Pins op_isc(CPU6502* cpu, Pins pins) {
  * ============================================================================
  */
 
-/* Addressing mode table */
-static AddrModeDesc addr_mode_table[AM_COUNT] = {
-    { NULL, NULL, },  // AM_NON : No handler needed
-    { NULL, addr_zp }, // AM_ZER
-    { NULL, addr_zpx }, // AM_ZPX
-    { addr_zpy_cycles, addr_zpy }, // AM_ZPY
-    { NULL, addr_abs }, // AM_ABS
-    { addr_abx_cycles, addr_abx }, // AM_ABX
-    { addr_aby_cycles, addr_aby }, // AM_ABY
-    { addr_ind_cycles, addr_ind }, // AM_IND
-    { addr_idx_cycles, addr_idx }, // AM_INX
-    { addr_idy_cycles, addr_idy }, // AM_INY
+/* ============================================================================
+ * ADDRESSING MODE AND OPERATION ENUMS
+ * ============================================================================
+ * Addressing modes describe how operands are fetched.
+ * Operations describe what the CPU does with those operands.
+ * These are combined in the opcode table to minimize redundancy.
+ * 
+ * AM_NON (0): No addressing mode handler needed
+ *   - Used by: Implicit, Immediate, Accumulator, and Relative modes
+ *   - These modes either have no operand, operand in next byte, or 
+ *     operate directly on registers without memory access
+ */
+
+typedef enum {
+    AM_NON = 0, /* No addressing handler (Implicit/Immediate/Accumulator/Relative) */
+    AM_ZER,     /* Zero Page - operand at $00nn */
+    AM_ZPX,     /* Zero Page,X - operand at ($00nn + X) & 0xFF */
+    AM_ZPY,     /* Zero Page,Y - operand at ($00nn + Y) & 0xFF */
+    AM_ABS,     /* Absolute - operand at $nnnn */
+    AM_ABX,     /* Absolute,X - operand at $nnnn + X */
+    AM_ABY,     /* Absolute,Y - operand at $nnnn + Y */
+    AM_IND,     /* Indirect - jump target at ($nnnn) */
+    AM_INX,     /* Indexed Indirect - operand at (($nn + X) & 0xFF) */
+    AM_INY,     /* Indirect Indexed - operand at ($nn) + Y */
+    AM_COUNT
+} AddrMode;
+
+/* Aliases for documentation/clarity (all map to AM_NON) */
+#define AM_IMP  AM_NON  /* Implied/Implicit - no operand */
+#define AM_IMM  AM_NON  /* Immediate - operand is next byte */
+#define AM_ACC  AM_NON  /* Accumulator - operate on A register */
+#define AM_REL  AM_NON  /* Relative - branch offset */
+
+/* Addressing mode table - now just function pointers */
+static const cycle_fn_t addr_mode_table[AM_COUNT] = {
+    NULL,     // AM_NON : No handler needed
+    addr_zp,  // AM_ZER
+    addr_zpx, // AM_ZPX
+    addr_zpy, // AM_ZPY
+    addr_abs, // AM_ABS
+    addr_abx, // AM_ABX
+    addr_aby, // AM_ABY
+    addr_ind, // AM_IND
+    addr_idx, // AM_INX
+    addr_idy, // AM_INY
 };
 
-/* Operation table */
-static OperationDesc operation_table[OP_COUNT] = {
-    [OP_LDA] = { NULL, NULL, op_lda },
-    [OP_LDX] = { NULL, NULL, op_ldx },
-    [OP_LDY] = { NULL, NULL, op_ldy },
-    [OP_STA] = { op_sta_cycles, NULL, op_sta },
-    [OP_STX] = { op_stx_cycles, NULL, op_stx },
-    [OP_STY] = { op_sty_cycles, NULL, op_sty },
-    [OP_ADC] = { op_adc_cycles, NULL, op_adc },
-    [OP_ASL] = { op_rmw_cycles, op_acc_cycles, op_asl },
-    [OP_LSR] = { op_rmw_cycles, op_acc_cycles, op_lsr },
-    [OP_ROL] = { op_rmw_cycles, op_acc_cycles, op_rol },
-    [OP_ROR] = { op_rmw_cycles, op_acc_cycles, op_ror },
-    [OP_INC] = { op_rmw_cycles, NULL, op_inc },
-    [OP_DEC] = { op_rmw_cycles, NULL, op_dec },
-    /* Illegal RMW opcodes - all memory-only (no accumulator mode) */
-    [OP_SLO] = { op_rmw_cycles, NULL, op_slo },
-    [OP_RLA] = { op_rmw_cycles, NULL, op_rla },
-    [OP_SRE] = { op_rmw_cycles, NULL, op_sre },
-    [OP_RRA] = { op_rmw_cycles, NULL, op_rra },
-    [OP_DCP] = { op_rmw_cycles, NULL, op_dcp },
-    [OP_ISC] = { op_rmw_cycles, NULL, op_isc },
+typedef enum {
+    OP_LDA, OP_LDX, OP_LDY,
+    OP_STA, OP_STX, OP_STY,
+    OP_ADC, OP_SBC,
+    OP_AND, OP_ORA, OP_EOR,
+    OP_CMP, OP_CPX, OP_CPY,
+    OP_ASL, OP_LSR, OP_ROL, OP_ROR,
+    OP_INC, OP_DEC,
+    OP_INX, OP_INY, OP_DEX, OP_DEY,
+    OP_TAX, OP_TAY, OP_TXA, OP_TYA, OP_TSX, OP_TXS,
+    OP_PHA, OP_PHP, OP_PLA, OP_PLP,
+    OP_BCC, OP_BCS, OP_BEQ, OP_BNE, OP_BMI, OP_BPL, OP_BVC, OP_BVS,
+    OP_CLC, OP_SEC, OP_CLI, OP_SEI, OP_CLD, OP_SED, OP_CLV,
+    OP_JMP, OP_JSR, OP_RTS, OP_RTI, OP_BRK,
+    OP_BIT, OP_NOP, OP_JAM,
+    // 65C02 enhancements
+    OP_BRA,
+    // Illegal opcodes - combination instructions
+    OP_LAX, OP_SAX, OP_DCP, OP_ISC, OP_SLO, OP_RLA, OP_SRE, OP_RRA,
+    // Illegal opcodes - special accumulator operations
+    OP_ANC, OP_ASR, OP_ARR, OP_SBX,
+    // Illegal opcodes - store with AND operations
+    OP_SHA, OP_SHS, OP_SHX, OP_SHY, OP_LAS,
+    // Illegal opcodes - special operations
+    OP_XAA
+} Operation;
+
+/* Operation table - now just function pointers */
+static const cycle_fn_t op_handlers[OP_COUNT] = {
+    op_lda, // OP_LDA
+    op_ldx, // OP_LDX
+    op_ldy, // OP_LDY,
+    op_sta, // OP_STA
+    op_stx, // OP_STX
+    op_sty, // OP_STY,
+    op_adc, // OP_ADC
+    op_sbc, // OP_SBC
+    op_and, // OP_AND
+    op_ora, // OP_ORA
+    op_eor, // OP_EOR
+    op_cmp, // OP_CMP
+    op_cpx, // OP_CPX
+    op_cpy, // OP_CPY
+    op_asl, // OP_ASL
+    op_lsr, // OP_LSR
+    op_rol, // OP_ROL
+    op_ror, // OP_ROR
+    op_inc, // OP_INC
+    op_dec, // OP_DEC
+    op_inx, // OP_INX
+    op_iny, // OP_INY
+    op_dex, // OP_DEX
+    op_dey, // OP_DEY
+    op_tax, // OP_TAX
+    op_tay, // OP_TAY
+    op_txa, // OP_TXA
+    op_tya, // OP_TYA
+    op_tsx, // OP_TSX
+    op_txs, // OP_TXS
+    op_pha, // OP_PHA
+    op_php, // OP_PHP
+    op_pla, // OP_PLA
+    op_plp, // OP_PLP
+    op_bcc, // OP_BCC
+    op_bcs, // OP_BCS
+    op_beq, // OP_BEQ
+    op_bne, // OP_BNE
+    op_bmi, // OP_BMI
+    op_bpl, // OP_BPL
+    op_bvc, // OP_BVC
+    op_bvs, // OP_BVS
+    op_clc, // OP_CLC
+    op_sec, // OP_SEC
+    op_cli, // OP_CLI
+    op_sei, // OP_SEI
+    op_cld, // OP_CLD
+    op_sed, // OP_SED
+    op_clv, // OP_CLV
+    op_jmp, // OP_JMP
+    op_jsr, // OP_JSR
+    op_rts, // OP_RTS
+    op_rti, // OP_RTI
+    op_brk, // OP_BRK
+    op_bit, // OP_BIT
+    op_nop, // OP_NOP
+    op_jam, // OP_JAM
+    // 65C02 enhancements
+    op_bra, // OP_BRA
+    // Illegal opcodes - combination instructions
+    op_lax, // OP_LAX
+    op_sax, // OP_SAX
+    op_dcp, // OP_DCP
+    op_isc, // OP_ISC
+    op_slo, // OP_SLO
+    op_rla, // OP_RLA
+    op_sre, // OP_SRE
+    op_rra, // OP_RRA
+    // Illegal opcodes - special accumulator operations
+    op_anc, // OP_ANC
+    op_asr, // OP_ASR
+    op_arr, // OP_ARR
+    op_sbx, // OP_SBX
+    // Illegal opcodes - store with AND operations
+    op_sha, // OP_SHA
+    op_shs, // OP_SHS
+    op_shx, // OP_SHX
+    op_shy, // OP_SHY
+    op_las, // OP_LAS
+    // Illegal opcodes - special operations
+    op_xaa  // OP_XAA
 };
 
 // Compact macro for opcode_info_t opcode definition - creates properly formatted bitfield entries
@@ -1323,44 +1433,24 @@ static Pins opcode_fetch(CPU6502* cpu, Pins pins) {
     /* Transition based on cached entry */
     int am_index = opcode_entry.am_index;
     if (am_index > AM_NON) {
-        AddrModeDesc* am_desc = &addr_mode_table[am_index];
         /* Has addressing mode cycles */
-        cpu->current_handler = am_desc->handler;
-        cpu->current_metadata = am_desc->metadata;
+        cpu->current_handler = addr_mode_table[am_index];
     } else {
         /* No addressing mode, go straight to operation */
-        OperationDesc* op_desc = &operation_table[opcode_entry.op_index];
-        cpu->current_handler = op_desc->handler;
-        
-        /* Select metadata based on cached RMW flag */
-        if (opcode_entry.rmw) {
-            cpu->current_metadata = op_desc->rmw_metadata;
-        } else {
-            cpu->current_metadata = op_desc->normal_metadata;
-        }
+        cpu->current_handler = op_handlers[opcode_entry.op_index];
     }
     
     return pins;
 }
 
 static void transition_to_operation(CPU6502* cpu) {
-    OperationDesc* op_desc = &operation_table[cpu->opcode_entry.op_index];
-    
     cpu->cycle_index = 0;
-    cpu->current_handler = op_desc->handler;
-    
-    /* Select metadata based on RMW flag */
-    if (cpu->opcode_entry.rmw) {
-        cpu->current_metadata = op_desc->rmw_metadata;
-    } else {
-        cpu->current_metadata = op_desc->normal_metadata;
-    }
+    cpu->current_handler = op_handlers[cpu->opcode_entry.op_index];
 }
 
 static void transition_to_fetch(CPU6502* cpu) {
     cpu->cycle_index = 0;
     cpu->current_handler = opcode_fetch;
-    cpu->current_metadata = NULL;  /* No longer using metadata */
 }
 
 /* ============================================================================
@@ -1407,7 +1497,6 @@ void cpu_init(CPU6502* cpu) {
     
     /* Start at opcode fetch */
     cpu->current_handler = opcode_fetch;
-    cpu->current_metadata = NULL;  /* No longer using metadata */
     cpu->cycle_index = 0;
 }
 
