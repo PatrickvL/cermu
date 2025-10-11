@@ -1,5 +1,6 @@
+#pragma once
 /*
- * MOS 6502 Cycle-Accurate Emulator
+ * fam65xx_phi21split.h - MOS 65xx Family CPU Emulator (PHI2 Split Architecture)
  * 
  * ARCHITECTURE OVERVIEW:
  * ======================
@@ -55,17 +56,18 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <string.h>
 
 // Include system-wide bus definitions
 #include "../../../../core/aiemuc.h"
 #include "../../../../core/system_lines.h"
 
-/* ============================================================================
- * BUS STATE AND PIN DEFINITIONS
- * ============================================================================
- * Use project-specific bus types and macros for compatibility.
- */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// ============================================================================
+// Bus State and Pin Definitions
+// ============================================================================
 
 // Legacy pin compatibility - map to system_lines.h definitions
 #define FAM65XX_RW      BUS_BIT(BUS_RW_BIT)
@@ -75,7 +77,7 @@
 #define FAM65XX_RDY     BUS_BIT(BUS_RDY_BIT)
 #define FAM65XX_RES     BUS_BIT(BUS_RES_BIT)
 
-// Legacy compatibility macros for FAM65XX bus access - use system_lines.h definitions directly
+// Legacy compatibility macros for FAM65XX bus access
 #define FAM65XX_GET_ADDR(p) BUS_GET_ADDR(p)
 #define FAM65XX_SET_ADDR(p, d) BUS_SET_ADDR(p, d)
 #define FAM65XX_GET_DATA(p) BUS_GET_DATA(p)
@@ -93,17 +95,19 @@
 #define CPU_GET_HALT(pins)     (((pins) >> CPU_PIN_HALT) & 1)
 #define CPU_SET_HALT(pins, v)  ((pins) = ((pins) & ~(1ULL << CPU_PIN_HALT)) | (((uint64_t)(v) & 1) << CPU_PIN_HALT))
 
-/* ============================================================================
- * REGISTER ARRAY LAYOUT
- * ============================================================================
- * Registers are stored as a union of 8-bit and 16-bit arrays.
- * PC, AB, and SP are 16-bit pairs (little-endian host assumed).
- * Stack pointer high byte is always 0x01, enabling direct 16-bit SP access.
- */
+// ============================================================================
+// CPU Flags
+// ============================================================================
 
-/* 8-bit register indices - arranged to align with 16-bit register pairs
- * Layout: ZP(0,1), SP(2,3), AB(4,5), PC(6,7), then others(8+)
- */
+#define FLAG_C  0x01  // Carry
+#define FLAG_Z  0x02  // Zero
+#define FLAG_I  0x04  // Interrupt Disable
+#define FLAG_D  0x08  // Decimal Mode
+#define FLAG_B  0x10  // Break
+#define FLAG_U  0x20  // Unused (always 1)
+#define FLAG_V  0x40  // Overflow
+#define FLAG_N  0x80  // Negative
+
 // ============================================================================
 // 8-bit Register indices with endian-aware 16-bit pairs
 // ============================================================================
@@ -144,8 +148,6 @@ typedef enum {
     REG_S = REG_SPL  // Map legacy S register to SPL for compatibility
 } reg8_t;
 
-
-
 // 16-bit register indices (native endian compatible)
 typedef enum {
     REG_ZP = REG_ZPL / 2,  // Zero page (16 bits) - full zero page register
@@ -154,25 +156,9 @@ typedef enum {
     REG_PC = REG_PCL / 2,  // Program counter / PC as 16-bit (PCL/PCH pair)
 } reg16_t;
 
-/* Processor status flags */
-#define FLAG_C  0x01   /* Carry */
-#define FLAG_Z  0x02   /* Zero */
-#define FLAG_I  0x04   /* Interrupt disable */
-#define FLAG_D  0x08   /* Decimal mode */
-#define FLAG_B  0x10   /* Break command */
-#define FLAG_U  0x20   /* Unused (always 1) */
-#define FLAG_V  0x40   /* Overflow */
-#define FLAG_N  0x80   /* Negative */
-
-/* ============================================================================
- * OPCODE ENCODING
- * ============================================================================
- * Opcode table is 256 entries × 2 bytes = 512 bytes.
- * Each entry packs addressing mode, op_index, and flags using bit fields.
- * 
- * page_cross: If set, addressing mode can skip a cycle if no page boundary crossed
- * rmw: If set, op_index uses Read-Modify-Write (3 cycles on memory)
- */
+// ============================================================================
+// Opcode Encoding
+// ============================================================================
 
 typedef struct {
     uint16_t am_index    : 4;   // Addressing mode index (0-15, bits 0-3, nibble-aligned)
@@ -182,15 +168,9 @@ typedef struct {
     uint16_t op_index    : 7;   // Operation index (0-127, bits 9-15, byte-extractable with >> 9)
 } opcode_info_t;
 
-/* ============================================================================
- * CPU STATE
- * ============================================================================
- * The CPU maintains:
- * - Register array (with 16-bit overlays for PC, AB, SP)
- * - Current opcode and cached opcode entry
- * - Current cycle index within instruction
- * - Current handler function pointer (no metadata arrays)
- */
+// ============================================================================
+// CPU State
+// ============================================================================
 
 typedef struct fam65xx_t fam65xx_t;
 typedef bus_state_t (*cycle_fn_t)(fam65xx_t* cpu, bus_state_t pins);
@@ -234,19 +214,9 @@ struct fam65xx_t {
 /* Legacy aliases for compatibility */
 #define CPU_AD(cpu)    CPU_AB(cpu)  /* Address latch as 16-bit - now maps to AB */
 
-/* Forward declarations */
-static bus_state_t opcode_fetch(fam65xx_t* cpu, bus_state_t pins);
-static void transition_to_operation(fam65xx_t* cpu);
-static void transition_to_fetch(fam65xx_t* cpu);
-
-/* PHI2 Handler declarations */
-static bus_state_t cpu_phi2_read(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg);
-static bus_state_t cpu_phi2_write(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg, reg8_t reg_write);
-
-/* ============================================================================
- * UTILITY FUNCTIONS
- * ============================================================================
- */
+// ============================================================================
+// Utility Functions
+// ============================================================================
 
 /* Fast page cross detection using XOR and bit 8 check */
 static inline bool page_crossed(uint16_t addr1, uint16_t addr2) {
@@ -260,9 +230,42 @@ static inline void update_nz_flags(fam65xx_t* cpu, uint8_t value) {
                  (value == 0 ? FLAG_Z : 0);
 }
 
+// ============================================================================
+// API Function Declarations
+// ============================================================================
+
+/* Main API functions (PHI2 split implementation) */
+void fam65xx_phi21split_init(fam65xx_t* cpu);
+bus_state_t fam65xx_phi21split_tick(fam65xx_t* cpu, bus_state_t pins);
+
 /* Memory interface (to be implemented by system) */
 extern uint8_t memory_read(uint16_t addr);
 extern void memory_write(uint16_t addr, uint8_t data);
+
+/* Compatibility aliases for test runner integration */
+#define cpu_init fam65xx_phi21split_init
+#define cpu_tick fam65xx_phi21split_tick
+
+#ifdef CHIPS_IMPL
+#include <string.h>
+
+#ifndef CHIPS_ASSERT
+    #include <assert.h>
+    #define CHIPS_ASSERT(c) assert(c)
+#endif
+
+// ============================================================================
+// IMPLEMENTATION
+// ============================================================================
+
+/* PHI2 Handler declarations */
+static bus_state_t cpu_phi2_read(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg);
+static bus_state_t cpu_phi2_write(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg, reg8_t reg_write);
+
+/* Core function declarations */
+static bus_state_t opcode_fetch(fam65xx_t* cpu, bus_state_t pins);
+static void transition_to_operation(fam65xx_t* cpu);
+static void transition_to_fetch(fam65xx_t* cpu);
 
 /* ============================================================================
  * PHI2 HANDLERS
