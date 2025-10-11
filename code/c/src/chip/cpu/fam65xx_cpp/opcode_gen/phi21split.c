@@ -828,6 +828,62 @@ static Pins op_adc_imm(CPU6502* cpu, Pins pins) {
  * Memory mode: 3 cycles (read, write original, write modified)
  */
 
+/* ============================================================================
+ * RMW MACROS
+ * ============================================================================
+ * These macros handle the boilerplate for Read-Modify-Write operations.
+ * They work with both accumulator mode (1 cycle) and memory mode (3 cycles).
+ */
+
+/* RMW handler for operations that support both accumulator and memory modes */
+#define RMW_HANDLER_START(cpu, pins, reg_idx_var) \
+    uint8_t reg_idx_var; \
+    if ((cpu)->opcode_entry.rmw) { \
+        switch ((cpu)->cycle_index++) { \
+            case 0: \
+                pins = cpu_phi2_read(cpu, pins, CPU_AB(cpu)); \
+                if (CPU_GET_HALT(pins)) return pins; \
+                CPU_DL(cpu) = BUS_GET_DATA(pins); \
+                break; \
+            case 1: \
+                pins = cpu_phi2_write(cpu, pins, CPU_AB(cpu), REG_DL); \
+                if (CPU_GET_HALT(pins)) return pins; \
+                reg_idx_var = REG_DL; \
+                break; \
+            case 2: \
+                pins = cpu_phi2_write(cpu, pins, CPU_AB(cpu), REG_DL); \
+                if (CPU_GET_HALT(pins)) return pins; \
+                transition_to_fetch(cpu); \
+                return pins; \
+        } \
+    } else { \
+        reg_idx_var = REG_A; \
+    }
+
+#define RMW_HANDLER_END(cpu) \
+    if (!(cpu)->opcode_entry.rmw) { \
+        transition_to_fetch(cpu); \
+    }
+
+/* RMW handler for memory-only operations (no accumulator mode) */
+#define RMW_ONLY_START(cpu, pins, reg_idx_var) \
+    uint8_t reg_idx_var = REG_DL; \
+    switch ((cpu)->cycle_index++) { \
+        case 0: \
+            pins = cpu_phi2_read(cpu, pins, CPU_AB(cpu)); \
+            if (CPU_GET_HALT(pins)) return pins; \
+            CPU_DL(cpu) = BUS_GET_DATA(pins); \
+            break; \
+        case 1: \
+            pins = cpu_phi2_write(cpu, pins, CPU_AB(cpu), REG_DL); \
+            if (CPU_GET_HALT(pins)) return pins; \
+            break; \
+        case 2: \
+            pins = cpu_phi2_write(cpu, pins, CPU_AB(cpu), REG_DL); \
+            if (CPU_GET_HALT(pins)) return pins; \
+            transition_to_fetch(cpu); \
+            return pins; \
+    }
 
 /* ASL - Arithmetic Shift Left */
 static Pins op_asl(CPU6502* cpu, Pins pins) {
@@ -949,61 +1005,26 @@ static Pins op_rol(CPU6502* cpu, Pins pins) {
 
 /* ROR - Rotate Right */
 static Pins op_ror(CPU6502* cpu, Pins pins) {
-    if (cpu->opcode_entry.rmw) {
-        /* Memory RMW mode: 3 cycles */
-        switch (cpu->cycle_index++) {
-            case 0:
-                pins = cpu_phi2_read(cpu, pins, REG_AB);
-                if (CPU_GET_HALT(pins)) return pins;
-                CPU_DL(cpu) = BUS_GET_DATA(pins);
-                break;
-            case 1:
-                pins = cpu_phi2_read(cpu, pins, REG_AB);
-                if (CPU_GET_HALT(pins)) return pins;
-                uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 0x80 : 0;
-                if (CPU_DL(cpu) & 0x01) CPU_P(cpu) |= FLAG_C;
-                else CPU_P(cpu) &= ~FLAG_C;
-                CPU_DL(cpu) = (CPU_DL(cpu) >> 1) | old_carry;
-                update_nz_flags(cpu, CPU_DL(cpu));
-                break;
-            case 2:
-                pins = cpu_phi2_write(cpu, pins, REG_AB, REG_DL);
-                if (CPU_GET_HALT(pins)) return pins;
-                transition_to_fetch(cpu);
-                break;
-        }
-    } else {
-        /* Accumulator mode */
-        uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 0x80 : 0;
-        if (CPU_A(cpu) & 0x01) CPU_P(cpu) |= FLAG_C;
-        else CPU_P(cpu) &= ~FLAG_C;
-        CPU_A(cpu) = (CPU_A(cpu) >> 1) | old_carry;
-        update_nz_flags(cpu, CPU_A(cpu));
-        transition_to_fetch(cpu);
-    }
+    RMW_HANDLER_START(cpu, pins, reg_idx);
+    
+    uint8_t value = cpu->reg8[reg_idx];
+    uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 0x80 : 0;
+    if (value & 0x01) CPU_P(cpu) |= FLAG_C;
+    else CPU_P(cpu) &= ~FLAG_C;
+    value = (value >> 1) | old_carry;
+    cpu->reg8[reg_idx] = value;
+    update_nz_flags(cpu, value);
+    
+    RMW_HANDLER_END(cpu);
     return pins;
 }
 
 /* INC - Increment Memory (RMW only, no accumulator mode) */
 static Pins op_inc(CPU6502* cpu, Pins pins) {
-    switch (cpu->cycle_index++) {
-        case 0:
-            pins = cpu_phi2_read(cpu, pins, REG_AB);
-            if (CPU_GET_HALT(pins)) return pins;
-            CPU_DL(cpu) = BUS_GET_DATA(pins);
-            break;
-        case 1:
-            pins = cpu_phi2_write(cpu, pins, REG_AB, REG_DL);
-            if (CPU_GET_HALT(pins)) return pins;
-            CPU_DL(cpu)++;
-            update_nz_flags(cpu, CPU_DL(cpu));
-            break;
-        case 2:
-            pins = cpu_phi2_write(cpu, pins, REG_AB, REG_DL);
-            if (CPU_GET_HALT(pins)) return pins;
-            transition_to_fetch(cpu);
-            break;
-    }
+    RMW_ONLY_START(cpu, pins, reg_idx);
+    
+    cpu->reg8[reg_idx]++;
+    update_nz_flags(cpu, cpu->reg8[reg_idx]);
     return pins;
 }
 
@@ -1124,103 +1145,67 @@ static Pins op_sre(CPU6502* cpu, Pins pins) {
 
 /* RRA - ROR + ADC (Rotate Right and Add with Carry) */
 static Pins op_rra(CPU6502* cpu, Pins pins) {
-    switch (cpu->cycle_index++) {
-        case 0:
-            pins = cpu_phi2_read(cpu, pins, REG_AB);
-            if (CPU_GET_HALT(pins)) return pins;
-            CPU_DL(cpu) = BUS_GET_DATA(pins);
-            break;
-        case 1:
-            pins = cpu_phi2_write(cpu, pins, REG_AB, REG_DL);
-            if (CPU_GET_HALT(pins)) return pins;
-            /* Perform ROR */
-            uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 0x80 : 0;
-            if (CPU_DL(cpu) & 0x01) CPU_P(cpu) |= FLAG_C;
-            else CPU_P(cpu) &= ~FLAG_C;
-            CPU_DL(cpu) = (CPU_DL(cpu) >> 1) | old_carry;
-            /* Perform ADC with A */
-            uint8_t operand = CPU_DL(cpu);
-            uint16_t result = CPU_A(cpu) + operand + (CPU_P(cpu) & FLAG_C ? 1 : 0);
-            uint8_t a_old = CPU_A(cpu);
-            CPU_A(cpu) = result & 0xFF;
-            update_nz_flags(cpu, CPU_A(cpu));
-            if (result > 0xFF) CPU_P(cpu) |= FLAG_C;
-            else CPU_P(cpu) &= ~FLAG_C;
-            if (((a_old ^ result) & (operand ^ result) & 0x80))
-                CPU_P(cpu) |= FLAG_V;
-            else
-                CPU_P(cpu) &= ~FLAG_V;
-            break;
-        case 2:
-            pins = cpu_phi2_write(cpu, pins, REG_AB, REG_DL);
-            if (CPU_GET_HALT(pins)) return pins;
-            transition_to_fetch(cpu);
-            break;
-    }
+    RMW_ONLY_START(cpu, pins, reg_idx);
+    
+    /* Perform ROR */
+    uint8_t value = cpu->reg8[reg_idx];
+    uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 0x80 : 0;
+    if (value & 0x01) CPU_P(cpu) |= FLAG_C;
+    else CPU_P(cpu) &= ~FLAG_C;
+    value = (value >> 1) | old_carry;
+    cpu->reg8[reg_idx] = value;
+    
+    /* Perform ADC with A */
+    uint8_t operand = value;
+    uint16_t result = CPU_A(cpu) + operand + (CPU_P(cpu) & FLAG_C ? 1 : 0);
+    uint8_t a_old = CPU_A(cpu);
+    CPU_A(cpu) = result & 0xFF;
+    update_nz_flags(cpu, CPU_A(cpu));
+    if (result > 0xFF) CPU_P(cpu) |= FLAG_C;
+    else CPU_P(cpu) &= ~FLAG_C;
+    if (((a_old ^ result) & (operand ^ result) & 0x80))
+        CPU_P(cpu) |= FLAG_V;
+    else
+        CPU_P(cpu) &= ~FLAG_V;
     return pins;
 }
 
 /* DCP - DEC + CMP (Decrement and Compare) */
 static Pins op_dcp(CPU6502* cpu, Pins pins) {
-    switch (cpu->cycle_index++) {
-        case 0:
-            pins = cpu_phi2_read(cpu, pins, REG_AB);
-            if (CPU_GET_HALT(pins)) return pins;
-            CPU_DL(cpu) = BUS_GET_DATA(pins);
-            break;
-        case 1:
-            pins = cpu_phi2_read(cpu, pins, REG_AB);
-            if (CPU_GET_HALT(pins)) return pins;
-            /* Perform DEC */
-            CPU_DL(cpu)--;
-            /* Perform CMP with A */
-            uint16_t result = CPU_A(cpu) - CPU_DL(cpu);
-            CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-                         (result & FLAG_N) |
-                         ((result & 0xFF) == 0 ? FLAG_Z : 0) |
-                         (CPU_A(cpu) >= CPU_DL(cpu) ? FLAG_C : 0);
-            break;
-        case 2:
-            pins = cpu_phi2_write(cpu, pins, REG_AB, REG_DL);
-            if (CPU_GET_HALT(pins)) return pins;
-            transition_to_fetch(cpu);
-            break;
-    }
+    RMW_ONLY_START(cpu, pins, reg_idx);
+    
+    /* Perform DEC */
+    cpu->reg8[reg_idx]--;
+    
+    /* Perform CMP with A */
+    uint8_t value = cpu->reg8[reg_idx];
+    uint16_t result = CPU_A(cpu) - value;
+    CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
+                 (result & FLAG_N) |
+                 ((result & 0xFF) == 0 ? FLAG_Z : 0) |
+                 (CPU_A(cpu) >= value ? FLAG_C : 0);
     return pins;
 }
 
 /* ISC - INC + SBC (Increment and Subtract with Carry) */
 static Pins op_isc(CPU6502* cpu, Pins pins) {
-    switch (cpu->cycle_index++) {
-        case 0:
-            pins = cpu_phi2_read(cpu, pins, REG_AB);
-            if (CPU_GET_HALT(pins)) return pins;
-            CPU_DL(cpu) = BUS_GET_DATA(pins);
-            break;
-        case 1:
-            pins = cpu_phi2_write(cpu, pins, REG_AB, REG_DL);
-            if (CPU_GET_HALT(pins)) return pins;
-            /* Perform INC */
-            CPU_DL(cpu)++;
-            /* Perform SBC with A */
-            uint8_t operand = CPU_DL(cpu);
-            uint16_t result = CPU_A(cpu) - operand - (CPU_P(cpu) & FLAG_C ? 0 : 1);
-            uint8_t a_old = CPU_A(cpu);
-            CPU_A(cpu) = result & 0xFF;
-            update_nz_flags(cpu, CPU_A(cpu));
-            if (result < 0x100) CPU_P(cpu) |= FLAG_C;
-            else CPU_P(cpu) &= ~FLAG_C;
-            if (((a_old ^ operand) & (a_old ^ result) & 0x80))
-                CPU_P(cpu) |= FLAG_V;
-            else
-                CPU_P(cpu) &= ~FLAG_V;
-            break;
-        case 2:
-            pins = cpu_phi2_write(cpu, pins, REG_AB, REG_DL);
-            if (CPU_GET_HALT(pins)) return pins;
-            transition_to_fetch(cpu);
-            break;
-    }
+    RMW_ONLY_START(cpu, pins, reg_idx);
+    
+    /* Perform INC */
+    cpu->reg8[reg_idx]++;
+    
+    /* Perform SBC with A */
+    uint8_t operand = cpu->reg8[reg_idx];
+    uint16_t result = CPU_A(cpu) - operand - (CPU_P(cpu) & FLAG_C ? 0 : 1);
+    uint8_t a_old = CPU_A(cpu);
+    CPU_A(cpu) = result & 0xFF;
+    update_nz_flags(cpu, CPU_A(cpu));
+    if (result < 0x100) CPU_P(cpu) |= FLAG_C;
+    else CPU_P(cpu) &= ~FLAG_C;
+    if (((a_old ^ operand) & (a_old ^ result) & 0x80))
+        CPU_P(cpu) |= FLAG_V;
+    else
+        CPU_P(cpu) &= ~FLAG_V;
     return pins;
 }
 
