@@ -259,10 +259,10 @@ typedef struct {
  * These correspond directly to 16-bit register indices and actual hardware
  * multiplexers that select which register drives the address bus during each cycle.
  */
-#define ADDR_ZP          REG16_ZP   /* Zero Page (0x00xx + ADL) */
-#define ADDR_STACK       REG16_SP   /* Stack Pointer (0x01xx + S) */
-#define ADDR_ABL         REG16_AB   /* Address Bus Latch (16-bit computed address) */
-#define ADDR_PC          REG16_PC   /* Program Counter */
+#define ADDR_ZP          REG_ZP   /* Zero Page (0x00xx + ADL) */
+#define ADDR_STACK       REG_SP   /* Stack Pointer (0x01xx + S) */
+#define ADDR_ABL         REG_AB   /* Address Bus Latch (16-bit computed address) */
+#define ADDR_PC          REG_PC   /* Program Counter */
 
 /* Aliases for documentation purposes - all map to hardware address sources */
 #define ADDR_PC_INC      ADDR_PC    /* PC (will be incremented in PHI1) */
@@ -329,8 +329,8 @@ struct CPU6502 {
 #define CPU_PC(cpu)    ((cpu)->reg16[REG_PC])   /* Program Counter (PCL/PCH) */
 
 /* Individual byte access - using the new register layout */
-#define CPU_ADL(cpu)   ((cpu)->reg8[REG_ADL])     /* Address Bus Latch Low */
-#define CPU_ADH(cpu)   ((cpu)->reg8[REG_ADH])     /* Address Bus Latch High */
+#define CPU_ADL(cpu)   ((cpu)->reg8[REG_ABL])     /* Address Bus Latch Low */
+#define CPU_ADH(cpu)   ((cpu)->reg8[REG_ABH])     /* Address Bus Latch High */
 #define CPU_PCL(cpu)   ((cpu)->reg8[REG_PCL])     /* Program Counter Low */
 #define CPU_PCH(cpu)   ((cpu)->reg8[REG_PCH])     /* Program Counter High */
 
@@ -929,6 +929,134 @@ static Pins op_dec(CPU6502* cpu, Pins pins) {
 }
 
 /* ============================================================================
+ * ILLEGAL RMW OPERATIONS
+ * ============================================================================
+ * These are combination operations that perform two operations in sequence.
+ * All are memory-only RMW operations (no accumulator mode).
+ */
+
+/* SLO - ASL + ORA (Shift Left and OR) */
+static Pins op_slo(CPU6502* cpu, Pins pins) {
+    RMW_ONLY_START(cpu, pins, reg_idx);
+    
+    /* Perform ASL */
+    if (cpu->reg8[reg_idx] & 0x80) CPU_P(cpu) |= FLAG_C;
+    else CPU_P(cpu) &= ~FLAG_C;
+    cpu->reg8[reg_idx] <<= 1;
+    
+    /* Perform ORA with A */
+    CPU_A(cpu) |= cpu->reg8[reg_idx];
+    update_nz_flags(cpu, CPU_A(cpu));
+    return pins;
+}
+
+/* RLA - ROL + AND (Rotate Left and AND) */
+static Pins op_rla(CPU6502* cpu, Pins pins) {
+    RMW_ONLY_START(cpu, pins, reg_idx);
+    
+    /* Perform ROL */
+    uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 1 : 0;
+    if (cpu->reg8[reg_idx] & 0x80) CPU_P(cpu) |= FLAG_C;
+    else CPU_P(cpu) &= ~FLAG_C;
+    cpu->reg8[reg_idx] = (cpu->reg8[reg_idx] << 1) | old_carry;
+    
+    /* Perform AND with A */
+    CPU_A(cpu) &= cpu->reg8[reg_idx];
+    update_nz_flags(cpu, CPU_A(cpu));
+    return pins;
+}
+
+/* SRE - LSR + EOR (Shift Right and EOR) */
+static Pins op_sre(CPU6502* cpu, Pins pins) {
+    RMW_ONLY_START(cpu, pins, reg_idx);
+    
+    /* Perform LSR */
+    if (cpu->reg8[reg_idx] & 0x01) CPU_P(cpu) |= FLAG_C;
+    else CPU_P(cpu) &= ~FLAG_C;
+    cpu->reg8[reg_idx] >>= 1;
+    
+    /* Perform EOR with A */
+    CPU_A(cpu) ^= cpu->reg8[reg_idx];
+    update_nz_flags(cpu, CPU_A(cpu));
+    return pins;
+}
+
+/* RRA - ROR + ADC (Rotate Right and Add with Carry) */
+static Pins op_rra(CPU6502* cpu, Pins pins) {
+    RMW_ONLY_START(cpu, pins, reg_idx);
+    
+    /* Perform ROR */
+    uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 0x80 : 0;
+    if (cpu->reg8[reg_idx] & 0x01) CPU_P(cpu) |= FLAG_C;
+    else CPU_P(cpu) &= ~FLAG_C;
+    cpu->reg8[reg_idx] = (cpu->reg8[reg_idx] >> 1) | old_carry;
+    
+    /* Perform ADC with A */
+    uint8_t operand = cpu->reg8[reg_idx];
+    uint16_t result = CPU_A(cpu) + operand + (CPU_P(cpu) & FLAG_C ? 1 : 0);
+    
+    uint8_t a_old = CPU_A(cpu);
+    CPU_A(cpu) = result & 0xFF;
+    
+    update_nz_flags(cpu, CPU_A(cpu));
+    
+    if (result > 0xFF) CPU_P(cpu) |= FLAG_C;
+    else CPU_P(cpu) &= ~FLAG_C;
+    
+    if (((a_old ^ result) & (operand ^ result) & 0x80))
+        CPU_P(cpu) |= FLAG_V;
+    else
+        CPU_P(cpu) &= ~FLAG_V;
+    
+    return pins;
+}
+
+/* DCP - DEC + CMP (Decrement and Compare) */
+static Pins op_dcp(CPU6502* cpu, Pins pins) {
+    RMW_ONLY_START(cpu, pins, reg_idx);
+    
+    /* Perform DEC */
+    cpu->reg8[reg_idx]--;
+    
+    /* Perform CMP with A */
+    uint8_t data = cpu->reg8[reg_idx];
+    uint16_t result = CPU_A(cpu) - data;
+    
+    CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
+                 (result & FLAG_N) |
+                 ((result & 0xFF) == 0 ? FLAG_Z : 0) |
+                 (CPU_A(cpu) >= data ? FLAG_C : 0);
+    return pins;
+}
+
+/* ISC - INC + SBC (Increment and Subtract with Carry) */
+static Pins op_isc(CPU6502* cpu, Pins pins) {
+    RMW_ONLY_START(cpu, pins, reg_idx);
+    
+    /* Perform INC */
+    cpu->reg8[reg_idx]++;
+    
+    /* Perform SBC with A */
+    uint8_t operand = cpu->reg8[reg_idx];
+    uint16_t result = CPU_A(cpu) - operand - (CPU_P(cpu) & FLAG_C ? 0 : 1);
+    
+    uint8_t a_old = CPU_A(cpu);
+    CPU_A(cpu) = result & 0xFF;
+    
+    update_nz_flags(cpu, CPU_A(cpu));
+    
+    if (result < 0x100) CPU_P(cpu) |= FLAG_C;
+    else CPU_P(cpu) &= ~FLAG_C;
+    
+    if (((a_old ^ operand) & (a_old ^ result) & 0x80))
+        CPU_P(cpu) |= FLAG_V;
+    else
+        CPU_P(cpu) &= ~FLAG_V;
+    
+    return pins;
+}
+
+/* ============================================================================
  * LOOKUP TABLES
  * ============================================================================
  */
@@ -962,6 +1090,13 @@ static OperationDesc operation_table[OP_COUNT] = {
     [OP_ROR] = { op_rmw_cycles, op_acc_cycles, op_ror },
     [OP_INC] = { op_rmw_cycles, NULL, op_inc },
     [OP_DEC] = { op_rmw_cycles, NULL, op_dec },
+    /* Illegal RMW opcodes - all memory-only (no accumulator mode) */
+    [OP_SLO] = { op_rmw_cycles, NULL, op_slo },
+    [OP_RLA] = { op_rmw_cycles, NULL, op_rla },
+    [OP_SRE] = { op_rmw_cycles, NULL, op_sre },
+    [OP_RRA] = { op_rmw_cycles, NULL, op_rra },
+    [OP_DCP] = { op_rmw_cycles, NULL, op_dcp },
+    [OP_ISC] = { op_rmw_cycles, NULL, op_isc },
 };
 
 // Compact macro for opcode_info_t opcode definition - creates properly formatted bitfield entries
@@ -1016,11 +1151,11 @@ static CycleMetadata opcode_fetch_cycles[] = {
 };
 
 static Pins opcode_fetch(CPU6502* cpu, Pins pins) {
-    cpu->regs[REG_IR] = BUS_GET_DATA(pins);
+    CPU_IR(cpu) = BUS_GET_DATA(pins);
     CPU_PC(cpu)++;
     
     /* Cache the opcode entry (copy once, accessed many times) */
-    opcode_info_t opcode_entry = opcode_table[cpu->regs[REG_IR]];
+    opcode_info_t opcode_entry = opcode_table[CPU_IR(cpu)];
     cpu->opcode_entry = opcode_entry;
     cpu->cycle_index = 0;
     
