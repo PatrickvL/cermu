@@ -57,43 +57,45 @@
 #include <stdbool.h>
 #include <string.h>
 
+// Include system-wide bus definitions
+#include "../../../../core/aiemuc.h"
+#include "../../../../core/system_lines.h"
+
 /* ============================================================================
  * BUS STATE AND PIN DEFINITIONS
  * ============================================================================
- * The bus is a 64-bit packed value containing all signal lines.
- * Generic bus macros access address/data/R/W̅ that all chips can see.
- * Chip-specific pin macros access control signals private to each chip.
+ * Use project-specific bus types and macros for compatibility.
  */
 
-typedef uint64_t bus_state_t;
+// Legacy pin compatibility - map to system_lines.h definitions
+#define FAM65XX_RW      BUS_BIT(BUS_RW_BIT)
+#define FAM65XX_SYNC    BUS_BIT(BUS_SYNC_BIT)
+#define FAM65XX_IRQ     BUS_BIT(BUS_IRQ_BIT)
+#define FAM65XX_NMI     BUS_BIT(BUS_NMI_BIT)
+#define FAM65XX_RDY     BUS_BIT(BUS_RDY_BIT)
+#define FAM65XX_RES     BUS_BIT(BUS_RES_BIT)
 
-/* Generic Bus Lines (shared by all chips) */
-#define BUS_ADDR_SHIFT   0
-#define BUS_ADDR_MASK    0x000000000000FFFF
-#define BUS_DATA_SHIFT   16
-#define BUS_DATA_MASK    0x0000000000FF0000
-#define BUS_RW_SHIFT     24
-#define BUS_RW_MASK      0x0000000001000000
+// Legacy compatibility macros for FAM65XX bus access
+#define FAM65XX_GET_ADDR(p) BUS_GET_ADDR(p)
+#define FAM65XX_SET_ADDR(p, d) BUS_SET_ADDR(p, d)
+#define FAM65XX_GET_DATA(p) BUS_GET_DATA(p)
+#define FAM65XX_SET_DATA(p, d) BUS_SET_DATA(p, d)
 
-#define BUS_GET_ADDR(pins)       ((uint16_t)(((pins) >> BUS_ADDR_SHIFT) & 0xFFFF))
-#define BUS_SET_ADDR(pins, addr) ((pins) = ((pins) & ~BUS_ADDR_MASK) | (((uint64_t)(addr) & 0xFFFF) << BUS_ADDR_SHIFT))
-#define BUS_GET_DATA(pins)       ((uint8_t)(((pins) >> BUS_DATA_SHIFT) & 0xFF))
-#define BUS_SET_DATA(pins, data) ((pins) = ((pins) & ~BUS_DATA_MASK) | (((uint64_t)(data) & 0xFF) << BUS_DATA_SHIFT))
-#define BUS_GET_RW(pins)         ((((pins) >> BUS_RW_SHIFT) & 1) != 0)
-#define BUS_SET_RW(pins, val)    ((pins) = ((pins) & ~BUS_RW_MASK) | (((uint64_t)(val) & 1) << BUS_RW_SHIFT))
+// Use project bus macros with phi21split naming for consistency
+#define BUS_GET_ADDR(pins)       FAM65XX_GET_ADDR(pins)
+#define BUS_SET_ADDR(pins, addr) ((pins) = FAM65XX_SET_ADDR(pins, addr))
+#define BUS_GET_DATA(pins)       FAM65XX_GET_DATA(pins)
+#define BUS_SET_DATA(pins, data) ((pins) = FAM65XX_SET_DATA(pins, data))
 
-/* CPU-Specific bus_state_t */
-#define CPU_PIN_SYNC     25
-#define CPU_PIN_RDY      26
-#define CPU_PIN_IRQ      27
-#define CPU_PIN_NMI      28
-#define CPU_PIN_HALT     63    /* Reserved bit for cycle halting */
+// CPU pin access using project definitions
+#define CPU_GET_RDY(pins)      ((pins) & FAM65XX_RDY)
+#define CPU_SET_SYNC(pins, v)  ((pins) = ((v) ? ((pins) | FAM65XX_SYNC) : ((pins) & ~FAM65XX_SYNC)))
+#define CPU_GET_SYNC(pins)     ((pins) & FAM65XX_SYNC)
+#define CPU_GET_IRQ(pins)      ((pins) & FAM65XX_IRQ)
+#define CPU_GET_NMI(pins)      ((pins) & FAM65XX_NMI)
 
-#define CPU_GET_RDY(pins)      (((pins) >> CPU_PIN_RDY) & 1)
-#define CPU_SET_SYNC(pins, v)  ((pins) = ((pins) & ~(1ULL << CPU_PIN_SYNC)) | (((uint64_t)(v) & 1) << CPU_PIN_SYNC))
-#define CPU_GET_SYNC(pins)     (((pins) >> CPU_PIN_SYNC) & 1)
-#define CPU_GET_IRQ(pins)      (((pins) >> CPU_PIN_IRQ) & 1)
-#define CPU_GET_NMI(pins)      (((pins) >> CPU_PIN_NMI) & 1)
+// Reserved halt bit for cycle halting (using bit 63)
+#define CPU_PIN_HALT     63
 #define CPU_GET_HALT(pins)     (((pins) >> CPU_PIN_HALT) & 1)
 #define CPU_SET_HALT(pins, v)  ((pins) = ((pins) & ~(1ULL << CPU_PIN_HALT)) | (((uint64_t)(v) & 1) << CPU_PIN_HALT))
 
