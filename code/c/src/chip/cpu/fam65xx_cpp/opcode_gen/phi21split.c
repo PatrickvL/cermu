@@ -887,119 +887,47 @@ static Pins op_adc_imm(CPU6502* cpu, Pins pins) {
 
 /* ASL - Arithmetic Shift Left */
 static Pins op_asl(CPU6502* cpu, Pins pins) {
-    if (cpu->opcode_entry.rmw) {
-        /* Memory RMW mode: 3 cycles */
-        switch (cpu->cycle_index++) {
-            case 0:
-                /* PHI2: Read current value */
-                pins = cpu_phi2_read(cpu, pins, REG_AB);
-                if (CPU_GET_HALT(pins)) return pins;
-                
-                /* PHI1: Store in data latch */
-                CPU_DL(cpu) = BUS_GET_DATA(pins);
-                break;
-                
-            case 1:
-                /* PHI2: Write back original value (hardware behavior) */
-                pins = cpu_phi2_read(cpu, pins, REG_AB);
-                if (CPU_GET_HALT(pins)) return pins;
-                
-                /* PHI1: Perform ASL operation */
-                if (CPU_DL(cpu) & 0x80) CPU_P(cpu) |= FLAG_C;
-                else CPU_P(cpu) &= ~FLAG_C;
-                CPU_DL(cpu) <<= 1;
-                update_nz_flags(cpu, CPU_DL(cpu));
-                break;
-                
-            case 2:
-                /* PHI2: Write modified value */
-                pins = cpu_phi2_write(cpu, pins, REG_AB, REG_DL);
-                if (CPU_GET_HALT(pins)) return pins;
-                
-                /* PHI1: Complete instruction */
-                transition_to_fetch(cpu);
-                break;
-        }
-    } else {
-        /* Accumulator mode: 1 cycle */
-        if (CPU_A(cpu) & 0x80) CPU_P(cpu) |= FLAG_C;
-        else CPU_P(cpu) &= ~FLAG_C;
-        CPU_A(cpu) <<= 1;
-        update_nz_flags(cpu, CPU_A(cpu));
-        transition_to_fetch(cpu);
-    }
+    RMW_HANDLER_START(cpu, pins, reg_idx);
+    
+    uint8_t value = cpu->reg8[reg_idx];
+    if (value & 0x80) CPU_P(cpu) |= FLAG_C;
+    else CPU_P(cpu) &= ~FLAG_C;
+    value <<= 1;
+    cpu->reg8[reg_idx] = value;
+    update_nz_flags(cpu, value);
+    
+    RMW_HANDLER_END(cpu);
     return pins;
 }
 
 /* LSR - Logical Shift Right */
 static Pins op_lsr(CPU6502* cpu, Pins pins) {
-    if (cpu->opcode_entry.rmw) {
-        /* Memory RMW mode: 3 cycles */
-        switch (cpu->cycle_index++) {
-            case 0:
-                pins = cpu_phi2_read(cpu, pins, REG_AB);
-                if (CPU_GET_HALT(pins)) return pins;
-                CPU_DL(cpu) = BUS_GET_DATA(pins);
-                break;
-            case 1:
-                pins = cpu_phi2_write(cpu, pins, REG_AB, REG_DL);
-                if (CPU_GET_HALT(pins)) return pins;
-                if (CPU_DL(cpu) & 0x01) CPU_P(cpu) |= FLAG_C;
-                else CPU_P(cpu) &= ~FLAG_C;
-                CPU_DL(cpu) >>= 1;
-                update_nz_flags(cpu, CPU_DL(cpu));
-                break;
-            case 2:
-                pins = cpu_phi2_write(cpu, pins, REG_AB, REG_DL);
-                if (CPU_GET_HALT(pins)) return pins;
-                transition_to_fetch(cpu);
-                break;
-        }
-    } else {
-        /* Accumulator mode */
-        if (CPU_A(cpu) & 0x01) CPU_P(cpu) |= FLAG_C;
-        else CPU_P(cpu) &= ~FLAG_C;
-        CPU_A(cpu) >>= 1;
-        update_nz_flags(cpu, CPU_A(cpu));
-        transition_to_fetch(cpu);
-    }
+    RMW_HANDLER_START(cpu, pins, reg_idx);
+    
+    uint8_t value = cpu->reg8[reg_idx];
+    if (value & 0x01) CPU_P(cpu) |= FLAG_C;
+    else CPU_P(cpu) &= ~FLAG_C;
+    value >>= 1;
+    cpu->reg8[reg_idx] = value;
+    update_nz_flags(cpu, value);
+    
+    RMW_HANDLER_END(cpu);
     return pins;
 }
 
 /* ROL - Rotate Left */
 static Pins op_rol(CPU6502* cpu, Pins pins) {
-    if (cpu->opcode_entry.rmw) {
-        /* Memory RMW mode: 3 cycles */
-        switch (cpu->cycle_index++) {
-            case 0:
-                pins = cpu_phi2_read(cpu, pins, REG_AB);
-                if (CPU_GET_HALT(pins)) return pins;
-                CPU_DL(cpu) = BUS_GET_DATA(pins);
-                break;
-            case 1:
-                pins = cpu_phi2_write(cpu, pins, REG_AB, REG_DL);
-                if (CPU_GET_HALT(pins)) return pins;
-                uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 1 : 0;
-                if (CPU_DL(cpu) & 0x80) CPU_P(cpu) |= FLAG_C;
-                else CPU_P(cpu) &= ~FLAG_C;
-                CPU_DL(cpu) = (CPU_DL(cpu) << 1) | old_carry;
-                update_nz_flags(cpu, CPU_DL(cpu));
-                break;
-            case 2:
-                pins = cpu_phi2_write(cpu, pins, REG_AB, REG_DL);
-                if (CPU_GET_HALT(pins)) return pins;
-                transition_to_fetch(cpu);
-                break;
-        }
-    } else {
-        /* Accumulator mode */
-        uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 1 : 0;
-        if (CPU_A(cpu) & 0x80) CPU_P(cpu) |= FLAG_C;
-        else CPU_P(cpu) &= ~FLAG_C;
-        CPU_A(cpu) = (CPU_A(cpu) << 1) | old_carry;
-        update_nz_flags(cpu, CPU_A(cpu));
-        transition_to_fetch(cpu);
-    }
+    RMW_HANDLER_START(cpu, pins, reg_idx);
+    
+    uint8_t value = cpu->reg8[reg_idx];
+    uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 1 : 0;
+    if (value & 0x80) CPU_P(cpu) |= FLAG_C;
+    else CPU_P(cpu) &= ~FLAG_C;
+    value = (value << 1) | old_carry;
+    cpu->reg8[reg_idx] = value;
+    update_nz_flags(cpu, value);
+    
+    RMW_HANDLER_END(cpu);
     return pins;
 }
 
@@ -1030,24 +958,10 @@ static Pins op_inc(CPU6502* cpu, Pins pins) {
 
 /* DEC - Decrement Memory (RMW only, no accumulator mode) */
 static Pins op_dec(CPU6502* cpu, Pins pins) {
-    switch (cpu->cycle_index++) {
-        case 0:
-            pins = cpu_phi2_read(cpu, pins, REG_AB);
-            if (CPU_GET_HALT(pins)) return pins;
-            CPU_DL(cpu) = BUS_GET_DATA(pins);
-            break;
-        case 1:
-            pins = cpu_phi2_read(cpu, pins, REG_AB);
-            if (CPU_GET_HALT(pins)) return pins;
-            CPU_DL(cpu)--;
-            update_nz_flags(cpu, CPU_DL(cpu));
-            break;
-        case 2:
-            pins = cpu_phi2_write(cpu, pins, REG_AB, REG_DL);
-            if (CPU_GET_HALT(pins)) return pins;
-            transition_to_fetch(cpu);
-            break;
-    }
+    RMW_ONLY_START(cpu, pins, reg_idx);
+    
+    cpu->reg8[reg_idx]--;
+    update_nz_flags(cpu, cpu->reg8[reg_idx]);
     return pins;
 }
 
@@ -1060,86 +974,53 @@ static Pins op_dec(CPU6502* cpu, Pins pins) {
 
 /* SLO - ASL + ORA (Shift Left and OR) */
 static Pins op_slo(CPU6502* cpu, Pins pins) {
-    switch (cpu->cycle_index++) {
-        case 0:
-            pins = cpu_phi2_read(cpu, pins, REG_AB);
-            if (CPU_GET_HALT(pins)) return pins;
-            CPU_DL(cpu) = BUS_GET_DATA(pins);
-            break;
-        case 1:
-            pins = cpu_phi2_write(cpu, pins, REG_AB, REG_DL);
-            if (CPU_GET_HALT(pins)) return pins;
-            /* Perform ASL */
-            if (CPU_DL(cpu) & 0x80) CPU_P(cpu) |= FLAG_C;
-            else CPU_P(cpu) &= ~FLAG_C;
-            CPU_DL(cpu) <<= 1;
-            /* Perform ORA with A */
-            CPU_A(cpu) |= CPU_DL(cpu);
-            update_nz_flags(cpu, CPU_A(cpu));
-            break;
-        case 2:
-            pins = cpu_phi2_write(cpu, pins, REG_AB, REG_DL);
-            if (CPU_GET_HALT(pins)) return pins;
-            transition_to_fetch(cpu);
-            break;
-    }
+    RMW_ONLY_START(cpu, pins, reg_idx);
+    
+    /* Perform ASL */
+    uint8_t value = cpu->reg8[reg_idx];
+    if (value & 0x80) CPU_P(cpu) |= FLAG_C;
+    else CPU_P(cpu) &= ~FLAG_C;
+    value <<= 1;
+    cpu->reg8[reg_idx] = value;
+    
+    /* Perform ORA with A */
+    CPU_A(cpu) |= value;
+    update_nz_flags(cpu, CPU_A(cpu));
     return pins;
 }
 
 /* RLA - ROL + AND (Rotate Left and AND) */
 static Pins op_rla(CPU6502* cpu, Pins pins) {
-    switch (cpu->cycle_index++) {
-        case 0:
-            pins = cpu_phi2_read(cpu, pins, REG_AB);
-            if (CPU_GET_HALT(pins)) return pins;
-            CPU_DL(cpu) = BUS_GET_DATA(pins);
-            break;
-        case 1:
-            pins = cpu_phi2_read(cpu, pins, REG_AB);
-            if (CPU_GET_HALT(pins)) return pins;
-            /* Perform ROL */
-            uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 1 : 0;
-            if (CPU_DL(cpu) & 0x80) CPU_P(cpu) |= FLAG_C;
-            else CPU_P(cpu) &= ~FLAG_C;
-            CPU_DL(cpu) = (CPU_DL(cpu) << 1) | old_carry;
-            /* Perform AND with A */
-            CPU_A(cpu) &= CPU_DL(cpu);
-            update_nz_flags(cpu, CPU_A(cpu));
-            break;
-        case 2:
-            pins = cpu_phi2_write(cpu, pins, REG_AB, REG_DL);
-            if (CPU_GET_HALT(pins)) return pins;
-            transition_to_fetch(cpu);
-            break;
-    }
+    RMW_ONLY_START(cpu, pins, reg_idx);
+    
+    /* Perform ROL */
+    uint8_t value = cpu->reg8[reg_idx];
+    uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 1 : 0;
+    if (value & 0x80) CPU_P(cpu) |= FLAG_C;
+    else CPU_P(cpu) &= ~FLAG_C;
+    value = (value << 1) | old_carry;
+    cpu->reg8[reg_idx] = value;
+    
+    /* Perform AND with A */
+    CPU_A(cpu) &= value;
+    update_nz_flags(cpu, CPU_A(cpu));
     return pins;
 }
 
 /* SRE - LSR + EOR (Shift Right and EOR) */
 static Pins op_sre(CPU6502* cpu, Pins pins) {
-    switch (cpu->cycle_index++) {
-        case 0:
-            pins = cpu_phi2_read(cpu, pins, REG_AB);
-            if (CPU_GET_HALT(pins)) return pins;
-            CPU_DL(cpu) = BUS_GET_DATA(pins);
-            break;
-        case 1:
-            pins = cpu_phi2_read(cpu, pins, REG_AB);
-            if (CPU_GET_HALT(pins)) return pins;
-            /* Perform LSR */
-            if (CPU_DL(cpu) & 0x01) CPU_P(cpu) |= FLAG_C;
-            else CPU_P(cpu) &= ~FLAG_C;
-            CPU_DL(cpu) >>= 1;
-            /* Perform EOR with A */
-            CPU_A(cpu) ^= CPU_DL(cpu);
-            update_nz_flags(cpu, CPU_A(cpu));
-            break;
-        case 2:
-            pins = cpu_phi2_write(cpu, pins, REG_AB, REG_DL);
-            if (CPU_GET_HALT(pins)) return pins;
-            transition_to_fetch(cpu);
-            break;
-    }
+    RMW_ONLY_START(cpu, pins, reg_idx);
+    
+    /* Perform LSR */
+    uint8_t value = cpu->reg8[reg_idx];
+    if (value & 0x01) CPU_P(cpu) |= FLAG_C;
+    else CPU_P(cpu) &= ~FLAG_C;
+    value >>= 1;
+    cpu->reg8[reg_idx] = value;
+    
+    /* Perform EOR with A */
+    CPU_A(cpu) ^= value;
+    update_nz_flags(cpu, CPU_A(cpu));
     return pins;
 }
 
