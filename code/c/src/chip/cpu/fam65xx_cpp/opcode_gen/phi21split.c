@@ -15,9 +15,9 @@
  *    - PC, AD (address latch), and SP are 16-bit pairs on little-endian hosts
  *    - Stack pointer high byte (SPH) is always 0x01, enabling 16-bit SP access
  * 
- * 3. METADATA-DRIVEN PHI2
- *    - Each cycle has metadata: address source + register index
- *    - Generic PHI2 handler computes address and sets R/W̅ from metadata
+ * 3. DIRECT PHI2 CALLS
+ *    - Each handler makes direct PHI2 calls using register indices
+ *    - Split PHI2 handlers: cpu_phi2_read() and cpu_phi2_write()
  * 
  * 4. ENUM-BASED OPCODE ENCODING
  *    - Opcode table is 256 × 2 bytes with bit fields
@@ -31,10 +31,10 @@
  *    - Opcode fetch → addressing mode → op_index → opcode fetch
  *    - No phase tracking needed - callback pointer IS the phase
  * 
- * 6. CENTRALIZED RDY CHECKING
- *    - cpu_tick checks RDY once: in read path only
- *    - Write cycles always proceed (ignore RDY)
- *    - PHI1 handlers never check RDY (already handled)
+ * 6. SPLIT PHI2 RDY HANDLING
+ *    - cpu_phi2_read() respects RDY signal and sets HALT bit
+ *    - cpu_phi2_write() always proceeds but checks RDY for PHI1 halt
+ *    - Handlers check HALT bit after PHI2 calls and return early if set
  * 
  * 7. PAGE CROSS OPTIMIZATION
  *    - Fast detection: (addr1 ^ addr2) & 0x100
@@ -47,10 +47,10 @@
  *    - Operation logic shared, only register target differs
  * 
  * 9. HARDWARE-ACCURATE TIMING
- *    - PHI2: Set up address, R/W̅, data (for writes)
- *    - Memory access: Read or write based on R/W̅
- *    - PHI1: Process result, update CPU state
- *    - Each system tick = one full cycle (PHI2 + memory + PHI1)
+ *    - Each handler performs exactly one PHI2 access per cycle
+ *    - PHI2 calls embedded within handlers with immediate halt checking
+ *    - Proper RDY/halt behavior for VIC-II bus arbitration compatibility
+ *    - Each system tick = handler execution (PHI2 + memory + PHI1)
  */
 
 #include <stdint.h>
@@ -101,7 +101,7 @@ typedef uint64_t bus_state_t;
  * REGISTER ARRAY LAYOUT
  * ============================================================================
  * Registers are stored as a union of 8-bit and 16-bit arrays.
- * PC, AD, and SP are 16-bit pairs (little-endian host assumed).
+ * PC, AB, and SP are 16-bit pairs (little-endian host assumed).
  * Stack pointer high byte is always 0x01, enabling direct 16-bit SP access.
  */
 
@@ -190,10 +190,10 @@ typedef struct {
  * CPU STATE
  * ============================================================================
  * The CPU maintains:
- * - Register array (with 16-bit overlays for PC, AD, SP)
+ * - Register array (with 16-bit overlays for PC, AB, SP)
  * - Current opcode and cached opcode entry
  * - Current cycle index within instruction
- * - Current handler function and metadata array
+ * - Current handler function pointer (no metadata arrays)
  */
 
 typedef struct fam65xx_t fam65xx_t;
@@ -269,10 +269,10 @@ extern uint8_t memory_read(uint16_t addr);
 extern void memory_write(uint16_t addr, uint8_t data);
 
 /* ============================================================================
- * PHI2 HANDLER
+ * PHI2 HANDLERS
  * ============================================================================
- * Centralized PHI2 handler that takes address register index and data byte.
- * Returns pins with HALT bit set if the cycle should be halted.
+ * Split PHI2 handlers for reads and writes using register indices.
+ * Both return pins with HALT bit set if the cycle should be halted.
  */
 
 /* Centralized PHI2 read handler - handles memory reads during PHI2 phase
@@ -2491,11 +2491,11 @@ static void transition_to_fetch(fam65xx_t* cpu) {
 
 bus_state_t cpu_tick(fam65xx_t* cpu, bus_state_t pins) {
     /* ========================================================================
-     * PHI1 PHASE - Call current handler (PHI2 is now called within handlers)
+     * HANDLER EXECUTION - PHI2 calls embedded within each handler
      * ========================================================================
      */
     
-    /* Call current handler - PHI2 calls are now embedded within each handler */
+    /* Call current handler - embeds PHI2 calls with halt checking */
     pins = cpu->current_handler(cpu, pins);
     cpu->cycles++;
     
