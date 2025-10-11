@@ -75,17 +75,11 @@
 #define FAM65XX_RDY     BUS_BIT(BUS_RDY_BIT)
 #define FAM65XX_RES     BUS_BIT(BUS_RES_BIT)
 
-// Legacy compatibility macros for FAM65XX bus access
+// Legacy compatibility macros for FAM65XX bus access - use system_lines.h definitions directly
 #define FAM65XX_GET_ADDR(p) BUS_GET_ADDR(p)
 #define FAM65XX_SET_ADDR(p, d) BUS_SET_ADDR(p, d)
 #define FAM65XX_GET_DATA(p) BUS_GET_DATA(p)
 #define FAM65XX_SET_DATA(p, d) BUS_SET_DATA(p, d)
-
-// Use project bus macros with phi21split naming for consistency
-#define BUS_GET_ADDR(pins)       FAM65XX_GET_ADDR(pins)
-#define BUS_SET_ADDR(pins, addr) ((pins) = FAM65XX_SET_ADDR(pins, addr))
-#define BUS_GET_DATA(pins)       FAM65XX_GET_DATA(pins)
-#define BUS_SET_DATA(pins, data) ((pins) = FAM65XX_SET_DATA(pins, data))
 
 // CPU pin access using project definitions
 #define CPU_GET_RDY(pins)      ((pins) & FAM65XX_RDY)
