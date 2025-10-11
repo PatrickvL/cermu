@@ -90,12 +90,15 @@ typedef uint64_t Pins;
 #define CPU_PIN_RDY      26
 #define CPU_PIN_IRQ      27
 #define CPU_PIN_NMI      28
+#define CPU_PIN_HALT     63    /* Reserved bit for cycle halting */
 
 #define CPU_GET_RDY(pins)      (((pins) >> CPU_PIN_RDY) & 1)
 #define CPU_SET_SYNC(pins, v)  ((pins) = ((pins) & ~(1ULL << CPU_PIN_SYNC)) | (((uint64_t)(v) & 1) << CPU_PIN_SYNC))
 #define CPU_GET_SYNC(pins)     (((pins) >> CPU_PIN_SYNC) & 1)
 #define CPU_GET_IRQ(pins)      (((pins) >> CPU_PIN_IRQ) & 1)
 #define CPU_GET_NMI(pins)      (((pins) >> CPU_PIN_NMI) & 1)
+#define CPU_GET_HALT(pins)     (((pins) >> CPU_PIN_HALT) & 1)
+#define CPU_SET_HALT(pins, v)  ((pins) = ((pins) & ~(1ULL << CPU_PIN_HALT)) | (((uint64_t)(v) & 1) << CPU_PIN_HALT))
 
 /* VIC-II-Specific Pins (for multi-chip systems) */
 #define VIC_PIN_BA       30
@@ -316,7 +319,7 @@ struct CPU6502 {
     opcode_info_t opcode_entry;       /* Cached opcode entry (copied once) */
     uint8_t cycle_index;              /* Current cycle within instruction */
     CycleFunc current_handler;        /* Current PHI1 handler */
-    CycleMetadata* current_metadata;  /* Current cycle metadata array */
+    CycleMetadata* current_metadata;  /* Legacy metadata - to be removed */
     
     /* Cycle counter */
     uint64_t cycles;
@@ -368,6 +371,9 @@ static Pins opcode_fetch(CPU6502* cpu, Pins pins);
 static void transition_to_operation(CPU6502* cpu);
 static void transition_to_fetch(CPU6502* cpu);
 
+/* PHI2 Handler declaration */
+static Pins phi2_handler(CPU6502* cpu, Pins pins, int addr_reg_index, uint8_t data_byte, bool is_write, bool increment_addr);
+
 /* ============================================================================
  * UTILITY FUNCTIONS
  * ============================================================================
@@ -389,6 +395,54 @@ static inline void update_nz_flags(CPU6502* cpu, uint8_t value) {
 extern uint8_t memory_read(uint16_t addr);
 extern void memory_write(uint16_t addr, uint8_t data);
 
+/* ============================================================================
+ * PHI2 HANDLER
+ * ============================================================================
+ * Centralized PHI2 handler that takes address register index and data byte.
+ * Returns pins with HALT bit set if the cycle should be halted.
+ */
+
+/* Centralized PHI2 handler - handles all memory access during PHI2 phase
+ *
+ * Parameters:
+ *   addr_reg_index: Index of 16-bit register containing address (REG_PC, REG_AB, REG_ZP, REG_SP)
+ *   data_byte: Data to write (ignored for read cycles, 0xFF indicates read cycle)
+ *   is_write: true for write cycles, false for read cycles
+ *   increment_addr: true to increment the address register after access (PC increment)
+ */
+static Pins phi2_handler(CPU6502* cpu, Pins pins, int addr_reg_index, uint8_t data_byte, bool is_write, bool increment_addr) {
+    /* Set SYNC if this is cycle 0 (opcode fetch) */
+    CPU_SET_SYNC(pins, cpu->cycle_index == 0);
+    
+    /* Get address from specified register */
+    uint16_t address = cpu->reg16[addr_reg_index];
+    
+    /* Check RDY - halt if not ready for read cycles */
+    if (!is_write && !CPU_GET_RDY(pins)) {
+        CPU_SET_HALT(pins, 1);
+        return pins;
+    }
+    
+    /* Set up address on bus */
+    BUS_SET_ADDR(pins, address);
+    
+    if (is_write) {
+        /* Write cycle - always proceeds regardless of RDY */
+        BUS_SET_DATA(pins, data_byte);
+        memory_write(address, data_byte);
+    } else {
+        /* Read cycle */
+        BUS_SET_DATA(pins, memory_read(address));
+    }
+    
+    /* Increment address register if requested (for PC increment) */
+    if (increment_addr) {
+        cpu->reg16[addr_reg_index]++;
+    }
+    
+    CPU_SET_HALT(pins, 0);
+    return pins;
+}
 
 /* ============================================================================
  * ADDRESSING MODE HANDLERS
@@ -398,32 +452,36 @@ extern void memory_write(uint16_t addr, uint8_t data);
  */
 
 /* Zero Page - operand at $00nn */
-static CycleMetadata addr_zp_cycles[] = {
-    { ADDR_PC_INC, REG_DUMMY }
-};
-
 static Pins addr_zp(CPU6502* cpu, Pins pins) {
+    /* PHI2: Read from PC and increment */
+    pins = phi2_handler(cpu, pins, REG_PC, 0xFF, false, true);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Store operand address in ADL */
     CPU_ADL(cpu) = BUS_GET_DATA(pins);
-    CPU_PC(cpu)++;
     transition_to_operation(cpu);
     return pins;
 }
 
 /* Absolute - operand at $nnnn */
-static CycleMetadata addr_abs_cycles[] = {
-    { ADDR_PC_INC, REG_DUMMY },  /* Read low byte */
-    { ADDR_PC_INC, REG_DUMMY }   /* Read high byte */
-};
-
 static Pins addr_abs(CPU6502* cpu, Pins pins) {
     switch (cpu->cycle_index++) {
         case 0:
+            /* PHI2: Read low byte from PC and increment */
+            pins = phi2_handler(cpu, pins, REG_PC, 0xFF, false, true);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Store low byte */
             CPU_ADL(cpu) = BUS_GET_DATA(pins);
-            CPU_PC(cpu)++;
             break;
+            
         case 1:
+            /* PHI2: Read high byte from PC and increment */
+            pins = phi2_handler(cpu, pins, REG_PC, 0xFF, false, true);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Store high byte */
             CPU_ADH(cpu) = BUS_GET_DATA(pins);
-            CPU_PC(cpu)++;
             transition_to_operation(cpu);
             break;
     }
@@ -431,18 +489,23 @@ static Pins addr_abs(CPU6502* cpu, Pins pins) {
 }
 
 /* Zero Page,X - operand at ($00nn + X) & 0xFF */
-static CycleMetadata addr_zpx_cycles[] = {
-    { ADDR_PC_INC, REG_DUMMY },  /* Read base address */
-    { ADDR_ZP_X, REG_DUMMY }     /* Dummy read while adding X */
-};
-
 static Pins addr_zpx(CPU6502* cpu, Pins pins) {
     switch (cpu->cycle_index++) {
         case 0:
+            /* PHI2: Read base address from PC and increment */
+            pins = phi2_handler(cpu, pins, REG_PC, 0xFF, false, true);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Store base address */
             CPU_ADL(cpu) = BUS_GET_DATA(pins);
-            CPU_PC(cpu)++;
             break;
+            
         case 1:
+            /* PHI2: Dummy read from ZP while adding X */
+            pins = phi2_handler(cpu, pins, REG_ZP, 0xFF, false, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Add X to address */
             CPU_ADL(cpu) = (CPU_ADL(cpu) + CPU_X(cpu)) & 0xFF;
             transition_to_operation(cpu);
             break;
@@ -459,10 +522,20 @@ static CycleMetadata addr_zpy_cycles[] = {
 static Pins addr_zpy(CPU6502* cpu, Pins pins) {
     switch (cpu->cycle_index++) {
         case 0:
+            /* PHI2: Read base address from PC and increment */
+            pins = phi2_handler(cpu, pins, REG_PC, 0xFF, false, true);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Store base address */
             CPU_ADL(cpu) = BUS_GET_DATA(pins);
-            CPU_PC(cpu)++;
             break;
+            
         case 1:
+            /* PHI2: Dummy read from ZP while adding Y */
+            pins = phi2_handler(cpu, pins, REG_ZP, 0xFF, false, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Add Y to address */
             CPU_ADL(cpu) = (CPU_ADL(cpu) + CPU_Y(cpu)) & 0xFF;
             transition_to_operation(cpu);
             break;
@@ -480,13 +553,21 @@ static CycleMetadata addr_abx_cycles[] = {
 static Pins addr_abx(CPU6502* cpu, Pins pins) {
     switch (cpu->cycle_index++) {
         case 0:
+            /* PHI2: Read low byte from PC and increment */
+            pins = phi2_handler(cpu, pins, REG_PC, 0xFF, false, true);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Store low byte */
             CPU_ADL(cpu) = BUS_GET_DATA(pins);
-            CPU_PC(cpu)++;
             break;
             
         case 1: {
+            /* PHI2: Read high byte from PC and increment */
+            pins = phi2_handler(cpu, pins, REG_PC, 0xFF, false, true);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Store high byte and add X */
             CPU_ADH(cpu) = BUS_GET_DATA(pins);
-            CPU_PC(cpu)++;
             
             uint16_t base = CPU_AD(cpu);
             uint16_t effective = base + CPU_X(cpu);
@@ -500,6 +581,11 @@ static Pins addr_abx(CPU6502* cpu, Pins pins) {
         }
             
         case 2:
+            /* PHI2: Page cross penalty cycle */
+            pins = phi2_handler(cpu, pins, REG_AB, 0xFF, false, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Complete addressing */
             transition_to_operation(cpu);
             break;
     }
@@ -516,13 +602,21 @@ static CycleMetadata addr_aby_cycles[] = {
 static Pins addr_aby(CPU6502* cpu, Pins pins) {
     switch (cpu->cycle_index++) {
         case 0:
+            /* PHI2: Read low byte from PC and increment */
+            pins = phi2_handler(cpu, pins, REG_PC, 0xFF, false, true);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Store low byte */
             CPU_ADL(cpu) = BUS_GET_DATA(pins);
-            CPU_PC(cpu)++;
             break;
             
         case 1: {
+            /* PHI2: Read high byte from PC and increment */
+            pins = phi2_handler(cpu, pins, REG_PC, 0xFF, false, true);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Store high byte and add Y */
             CPU_ADH(cpu) = BUS_GET_DATA(pins);
-            CPU_PC(cpu)++;
             
             uint16_t base = CPU_AD(cpu);
             uint16_t effective = base + CPU_Y(cpu);
@@ -535,6 +629,11 @@ static Pins addr_aby(CPU6502* cpu, Pins pins) {
         }
             
         case 2:
+            /* PHI2: Page cross penalty cycle */
+            pins = phi2_handler(cpu, pins, REG_AB, 0xFF, false, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Complete addressing */
             transition_to_operation(cpu);
             break;
     }
@@ -552,19 +651,29 @@ static CycleMetadata addr_ind_cycles[] = {
 static Pins addr_ind(CPU6502* cpu, Pins pins) {
     switch (cpu->cycle_index++) {
         case 0:
-            /* Read low byte of pointer address */
+            /* PHI2: Read low byte of pointer address from PC */
+            pins = phi2_handler(cpu, pins, REG_PC, 0xFF, false, true);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Store pointer low byte */
             CPU_ADL(cpu) = BUS_GET_DATA(pins);
-            CPU_PC(cpu)++;
             break;
             
         case 1:
-            /* Read high byte of pointer address */
+            /* PHI2: Read high byte of pointer address from PC */
+            pins = phi2_handler(cpu, pins, REG_PC, 0xFF, false, true);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Store pointer high byte */
             CPU_ADH(cpu) = BUS_GET_DATA(pins);
-            CPU_PC(cpu)++;
             break;
             
         case 2:
-            /* Read low byte of target address from (pointer) */
+            /* PHI2: Read low byte of target address from (pointer) */
+            pins = phi2_handler(cpu, pins, REG_AB, 0xFF, false, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Store target low byte and prepare for 6502 bug */
             CPU_DL(cpu) = BUS_GET_DATA(pins);
             
             /* IMPORTANT: 6502 bug - if pointer is at page boundary (e.g., $xxFF),
@@ -574,7 +683,11 @@ static Pins addr_ind(CPU6502* cpu, Pins pins) {
             break;
             
         case 3:
-            /* Read high byte of target address */
+            /* PHI2: Read high byte of target address */
+            pins = phi2_handler(cpu, pins, REG_AB, 0xFF, false, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Assemble final target address */
             CPU_ADL(cpu) = CPU_DL(cpu);
             CPU_ADH(cpu) = BUS_GET_DATA(pins);
             transition_to_operation(cpu);
@@ -594,17 +707,38 @@ static CycleMetadata addr_idx_cycles[] = {
 static Pins addr_idx(CPU6502* cpu, Pins pins) {
     switch (cpu->cycle_index++) {
         case 0:
+            /* PHI2: Read pointer from PC and increment */
+            pins = phi2_handler(cpu, pins, REG_PC, 0xFF, false, true);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Store pointer */
             CPU_ADL(cpu) = BUS_GET_DATA(pins);
-            CPU_PC(cpu)++;
             break;
+            
         case 1:
-            /* Dummy cycle */
+            /* PHI2: Dummy read from ZP */
+            pins = phi2_handler(cpu, pins, REG_ZP, 0xFF, false, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Dummy cycle - no operation */
             break;
+            
         case 2:
+            /* PHI2: Read low byte of target from ZP+X */
+            pins = phi2_handler(cpu, pins, REG_ZP, 0xFF, false, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Store target low byte and increment pointer */
             CPU_DL(cpu) = BUS_GET_DATA(pins);
             CPU_ADL(cpu) = (CPU_ADL(cpu) + CPU_X(cpu) + 1) & 0xFF;
             break;
+            
         case 3:
+            /* PHI2: Read high byte of target from ZP+X+1 */
+            pins = phi2_handler(cpu, pins, REG_ZP, 0xFF, false, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Assemble final address */
             CPU_ADL(cpu) = CPU_DL(cpu);
             CPU_ADH(cpu) = BUS_GET_DATA(pins);
             transition_to_operation(cpu);
@@ -624,16 +758,30 @@ static CycleMetadata addr_idy_cycles[] = {
 static Pins addr_idy(CPU6502* cpu, Pins pins) {
     switch (cpu->cycle_index++) {
         case 0:
+            /* PHI2: Read pointer from PC and increment */
+            pins = phi2_handler(cpu, pins, REG_PC, 0xFF, false, true);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Store pointer */
             CPU_ADL(cpu) = BUS_GET_DATA(pins);
-            CPU_PC(cpu)++;
             break;
             
         case 1:
+            /* PHI2: Read low byte from ZP pointer */
+            pins = phi2_handler(cpu, pins, REG_ZP, 0xFF, false, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Store low byte and increment pointer */
             CPU_DL(cpu) = BUS_GET_DATA(pins);
             CPU_ADL(cpu) = (CPU_ADL(cpu) + 1) & 0xFF;
             break;
             
         case 2: {
+            /* PHI2: Read high byte from ZP pointer+1 */
+            pins = phi2_handler(cpu, pins, REG_ZP, 0xFF, false, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Calculate effective address with Y */
             uint16_t base = (BUS_GET_DATA(pins) << 8) | CPU_DL(cpu);
             uint16_t effective = base + CPU_Y(cpu);
             CPU_AD(cpu) = effective;
@@ -645,6 +793,11 @@ static Pins addr_idy(CPU6502* cpu, Pins pins) {
         }
             
         case 3:
+            /* PHI2: Page cross penalty cycle */
+            pins = phi2_handler(cpu, pins, REG_AB, 0xFF, false, false);
+            if (CPU_GET_HALT(pins)) return pins;
+            
+            /* PHI1: Complete addressing */
             transition_to_operation(cpu);
             break;
     }
@@ -660,11 +813,12 @@ static Pins addr_idy(CPU6502* cpu, Pins pins) {
 
 /* --- Load Operations --- */
 
-static CycleMetadata op_lda_cycles[] = {
-    { ADDR_ABS, REG_DUMMY }  /* Read from address */
-};
-
 static Pins op_lda(CPU6502* cpu, Pins pins) {
+    /* PHI2: Read from target address */
+    pins = phi2_handler(cpu, pins, REG_AB, 0xFF, false, false);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Load accumulator and set flags */
     CPU_A(cpu) = BUS_GET_DATA(pins);
     update_nz_flags(cpu, CPU_A(cpu));
     transition_to_fetch(cpu);
@@ -679,11 +833,12 @@ static Pins op_lda_imm(CPU6502* cpu, Pins pins) {
     return pins;
 }
 
-static CycleMetadata op_ldx_cycles[] = {
-    { ADDR_ABS, REG_DUMMY }
-};
-
 static Pins op_ldx(CPU6502* cpu, Pins pins) {
+    /* PHI2: Read from target address */
+    pins = phi2_handler(cpu, pins, REG_AB, 0xFF, false, false);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Load X register and set flags */
     CPU_X(cpu) = BUS_GET_DATA(pins);
     update_nz_flags(cpu, CPU_X(cpu));
     transition_to_fetch(cpu);
@@ -697,11 +852,12 @@ static Pins op_ldx_imm(CPU6502* cpu, Pins pins) {
     return pins;
 }
 
-static CycleMetadata op_ldy_cycles[] = {
-    { ADDR_ABS, REG_DUMMY }
-};
-
 static Pins op_ldy(CPU6502* cpu, Pins pins) {
+    /* PHI2: Read from target address */
+    pins = phi2_handler(cpu, pins, REG_AB, 0xFF, false, false);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Load Y register and set flags */
     CPU_Y(cpu) = BUS_GET_DATA(pins);
     update_nz_flags(cpu, CPU_Y(cpu));
     transition_to_fetch(cpu);
@@ -751,6 +907,11 @@ static CycleMetadata op_adc_cycles[] = {
 };
 
 static Pins op_adc(CPU6502* cpu, Pins pins) {
+    /* PHI2: Read operand from target address */
+    pins = phi2_handler(cpu, pins, REG_AB, 0xFF, false, false);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Perform ADC operation */
     uint8_t operand = BUS_GET_DATA(pins);
     uint16_t result = CPU_A(cpu) + operand + (CPU_P(cpu) & FLAG_C ? 1 : 0);
     
@@ -1064,10 +1225,10 @@ static Pins op_isc(CPU6502* cpu, Pins pins) {
 /* Addressing mode table */
 static AddrModeDesc addr_mode_table[AM_COUNT] = {
     { NULL, NULL, },  // AM_NON : No handler needed
-    { addr_zp_cycles,  addr_zp }, // AM_ZER
-    { addr_zpx_cycles, addr_zpx }, // AM_ZPX
+    { NULL, addr_zp }, // AM_ZER
+    { NULL, addr_zpx }, // AM_ZPX
     { addr_zpy_cycles, addr_zpy }, // AM_ZPY
-    { addr_abs_cycles, addr_abs }, // AM_ABS
+    { NULL, addr_abs }, // AM_ABS
     { addr_abx_cycles, addr_abx }, // AM_ABX
     { addr_aby_cycles, addr_aby }, // AM_ABY
     { addr_ind_cycles, addr_ind }, // AM_IND
@@ -1077,9 +1238,9 @@ static AddrModeDesc addr_mode_table[AM_COUNT] = {
 
 /* Operation table */
 static OperationDesc operation_table[OP_COUNT] = {
-    [OP_LDA] = { op_lda_cycles, NULL, op_lda },  /* Immediate mode uses special handler */
-    [OP_LDX] = { op_ldx_cycles, NULL, op_ldx },
-    [OP_LDY] = { op_ldy_cycles, NULL, op_ldy },
+    [OP_LDA] = { NULL, NULL, op_lda },
+    [OP_LDX] = { NULL, NULL, op_ldx },
+    [OP_LDY] = { NULL, NULL, op_ldy },
     [OP_STA] = { op_sta_cycles, NULL, op_sta },
     [OP_STX] = { op_stx_cycles, NULL, op_stx },
     [OP_STY] = { op_sty_cycles, NULL, op_sty },
@@ -1146,13 +1307,13 @@ static const opcode_info_t opcode_table[256] = {
  * ============================================================================
  */
 
-static CycleMetadata opcode_fetch_cycles[] = {
-    { ADDR_PC_INC, REG_DUMMY }
-};
-
 static Pins opcode_fetch(CPU6502* cpu, Pins pins) {
+    /* PHI2: Read opcode from PC and increment */
+    pins = phi2_handler(cpu, pins, REG_PC, 0xFF, false, true);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Decode opcode and set up next handler */
     CPU_IR(cpu) = BUS_GET_DATA(pins);
-    CPU_PC(cpu)++;
     
     /* Cache the opcode entry (copy once, accessed many times) */
     opcode_info_t opcode_entry = opcode_table[CPU_IR(cpu)];
@@ -1160,14 +1321,14 @@ static Pins opcode_fetch(CPU6502* cpu, Pins pins) {
     cpu->cycle_index = 0;
     
     /* Transition based on cached entry */
-    int am_index = opcode_entry.am_index;   
+    int am_index = opcode_entry.am_index;
     if (am_index > AM_NON) {
         AddrModeDesc* am_desc = &addr_mode_table[am_index];
         /* Has addressing mode cycles */
         cpu->current_handler = am_desc->handler;
         cpu->current_metadata = am_desc->metadata;
     } else {
-        /* No addressing mode, go straight to op_index */
+        /* No addressing mode, go straight to operation */
         OperationDesc* op_desc = &operation_table[opcode_entry.op_index];
         cpu->current_handler = op_desc->handler;
         
@@ -1199,7 +1360,7 @@ static void transition_to_operation(CPU6502* cpu) {
 static void transition_to_fetch(CPU6502* cpu) {
     cpu->cycle_index = 0;
     cpu->current_handler = opcode_fetch;
-    cpu->current_metadata = opcode_fetch_cycles;
+    cpu->current_metadata = NULL;  /* No longer using metadata */
 }
 
 /* ============================================================================
@@ -1212,83 +1373,14 @@ static void transition_to_fetch(CPU6502* cpu) {
  */
 
 Pins cpu_tick(CPU6502* cpu, Pins pins) {
-    /* Get metadata for current cycle */
-    CycleMetadata* meta = &cpu->current_metadata[cpu->cycle_index];
-    
     /* ========================================================================
-     * PHI2 PHASE START - Set up address bus, R/W̅, and data (for writes)
-     * ========================================================================
-     * This is metadata-driven and:
-     * - Sets SYNC if cycle_index == 0 (opcode fetch)
-     * - Computes address based on addr_source
-     * - Sets R/W̅ based on reg_index (0 = read, >0 = write)
-     * - For writes, puts register value on data bus
-     */
-    
-    /* Check if this is a write cycle - elegant: REG_DUMMY is 0, and reg 0 high byte
-     * (which overlaps ZP high byte) is always 0, so any non-zero reg_index is a write */
-    bool is_write = (meta->reg_index != REG_DUMMY);
-    uint16_t bus_address;
-
-    if (CPU_GET_RDY(pins) || is_write ) {    
-        /* Set SYNC only on cycle 0 (opcode fetch) */
-        CPU_SET_SYNC(pins, cpu->cycle_index == 0);
-        
-        /* Hardware-accurate address source selection using 16-bit register indices
-        * This directly maps to the 16-bit register array, making it very efficient.
-        * Arithmetic operations are handled by addressing mode handlers in PHI1.
-        */
-        bus_address = cpu->reg16[meta->addr_source];
-        
-        /* Set address on bus */
-        BUS_SET_ADDR(pins, bus_address);
-    } else {
-        bus_address  = BUS_GET_ADDR(pins);
-    }
-
-    /* ========================================================================
-    * PHI2 PHASE END
-    * ========================================================================
-    */
-   
-    /* ========================================================================
-    * MEMORY ACCESS PHASE START - Perform actual memory read/write
-    * ========================================================================
-    */
-
-    /* Set R/W̅ and data */
-    if (is_write) {
-        BUS_SET_DATA(pins, cpu->reg8[meta->reg_index]);
-  
-        /* Write: always proceeds regardless of RDY */
-        memory_write(bus_address, BUS_GET_DATA(pins));
-        
-    } else {
-        /* Read: perform memory access */
-        BUS_SET_DATA(pins, memory_read(bus_address));
-        
-    }
-    /* ========================================================================
-     * MEMORY ACCESS PHASE END
+     * PHI1 PHASE - Call current handler (PHI2 is now called within handlers)
      * ========================================================================
      */
     
-    /* ========================================================================
-     * PHI1 PHASE START - Process result, update CPU state
-     * ========================================================================
-     */
-    
-    /* Check RDY: if low (even during write), CPU PHI1 is halted - don't call PHI1 handler */
-    if (CPU_GET_RDY(pins)) {
-        /* Call current handler (only if not halted) */
-        pins = cpu->current_handler(cpu, pins);
-        cpu->cycles++;
-    }
-
-    /* ========================================================================
-     * PHI1 PHASE END
-     * ========================================================================
-     */
+    /* Call current handler - PHI2 calls are now embedded within each handler */
+    pins = cpu->current_handler(cpu, pins);
+    cpu->cycles++;
     
     return pins;
 }
@@ -1315,7 +1407,7 @@ void cpu_init(CPU6502* cpu) {
     
     /* Start at opcode fetch */
     cpu->current_handler = opcode_fetch;
-    cpu->current_metadata = opcode_fetch_cycles;
+    cpu->current_metadata = NULL;  /* No longer using metadata */
     cpu->cycle_index = 0;
 }
 
