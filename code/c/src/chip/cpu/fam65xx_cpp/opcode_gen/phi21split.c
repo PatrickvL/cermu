@@ -688,9 +688,15 @@ static bus_state_t op_lda(CPU6502* cpu, bus_state_t pins) {
     return pins;
 }
 
-/* LDA immediate uses TEMP from addressing mode */
+/* LDA immediate uses operand from PC */
 static bus_state_t op_lda_imm(CPU6502* cpu, bus_state_t pins) {
-    CPU_A(cpu) = CPU_DL(cpu);
+    /* PHI2: Read operand from PC and increment */
+    pins = cpu_phi2_read(cpu, pins, REG_PC);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Load accumulator and set flags */
+    CPU_A(cpu) = BUS_GET_DATA(pins);
+    CPU_PC(cpu)++;
     update_nz_flags(cpu, CPU_A(cpu));
     transition_to_fetch(cpu);
     return pins;
@@ -709,7 +715,13 @@ static bus_state_t op_ldx(CPU6502* cpu, bus_state_t pins) {
 }
 
 static bus_state_t op_ldx_imm(CPU6502* cpu, bus_state_t pins) {
-    CPU_X(cpu) = CPU_DL(cpu);
+    /* PHI2: Read operand from PC and increment */
+    pins = cpu_phi2_read(cpu, pins, REG_PC);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Load X register and set flags */
+    CPU_X(cpu) = BUS_GET_DATA(pins);
+    CPU_PC(cpu)++;
     update_nz_flags(cpu, CPU_X(cpu));
     transition_to_fetch(cpu);
     return pins;
@@ -728,7 +740,13 @@ static bus_state_t op_ldy(CPU6502* cpu, bus_state_t pins) {
 }
 
 static bus_state_t op_ldy_imm(CPU6502* cpu, bus_state_t pins) {
-    CPU_Y(cpu) = CPU_DL(cpu);
+    /* PHI2: Read operand from PC and increment */
+    pins = cpu_phi2_read(cpu, pins, REG_PC);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Load Y register and set flags */
+    CPU_Y(cpu) = BUS_GET_DATA(pins);
+    CPU_PC(cpu)++;
     update_nz_flags(cpu, CPU_Y(cpu));
     transition_to_fetch(cpu);
     return pins;
@@ -795,7 +813,13 @@ static bus_state_t op_adc(CPU6502* cpu, bus_state_t pins) {
 }
 
 static bus_state_t op_adc_imm(CPU6502* cpu, bus_state_t pins) {
-    uint8_t operand = CPU_DL(cpu);
+    /* PHI2: Read operand from PC and increment */
+    pins = cpu_phi2_read(cpu, pins, REG_PC);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Perform ADC operation */
+    uint8_t operand = BUS_GET_DATA(pins);
+    CPU_PC(cpu)++;
     uint16_t result = CPU_A(cpu) + operand + (CPU_P(cpu) & FLAG_C ? 1 : 0);
     
     uint8_t a_old = CPU_A(cpu);
@@ -842,7 +866,13 @@ static bus_state_t op_sbc(CPU6502* cpu, bus_state_t pins) {
 }
 
 static bus_state_t op_sbc_imm(CPU6502* cpu, bus_state_t pins) {
-    uint8_t operand = CPU_DL(cpu);
+    /* PHI2: Read operand from PC and increment */
+    pins = cpu_phi2_read(cpu, pins, REG_PC);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Perform SBC operation */
+    uint8_t operand = BUS_GET_DATA(pins);
+    CPU_PC(cpu)++;
     uint16_t result = CPU_A(cpu) - operand - (CPU_P(cpu) & FLAG_C ? 0 : 1);
     
     uint8_t a_old = CPU_A(cpu);
@@ -877,7 +907,13 @@ static bus_state_t op_and(CPU6502* cpu, bus_state_t pins) {
 }
 
 static bus_state_t op_and_imm(CPU6502* cpu, bus_state_t pins) {
-    CPU_A(cpu) &= CPU_DL(cpu);
+    /* PHI2: Read operand from PC and increment */
+    pins = cpu_phi2_read(cpu, pins, REG_PC);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Perform AND operation */
+    CPU_A(cpu) &= BUS_GET_DATA(pins);
+    CPU_PC(cpu)++;
     update_nz_flags(cpu, CPU_A(cpu));
     transition_to_fetch(cpu);
     return pins;
@@ -896,7 +932,13 @@ static bus_state_t op_ora(CPU6502* cpu, bus_state_t pins) {
 }
 
 static bus_state_t op_ora_imm(CPU6502* cpu, bus_state_t pins) {
-    CPU_A(cpu) |= CPU_DL(cpu);
+    /* PHI2: Read operand from PC and increment */
+    pins = cpu_phi2_read(cpu, pins, REG_PC);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Perform ORA operation */
+    CPU_A(cpu) |= BUS_GET_DATA(pins);
+    CPU_PC(cpu)++;
     update_nz_flags(cpu, CPU_A(cpu));
     transition_to_fetch(cpu);
     return pins;
@@ -915,7 +957,13 @@ static bus_state_t op_eor(CPU6502* cpu, bus_state_t pins) {
 }
 
 static bus_state_t op_eor_imm(CPU6502* cpu, bus_state_t pins) {
-    CPU_A(cpu) ^= CPU_DL(cpu);
+    /* PHI2: Read operand from PC and increment */
+    pins = cpu_phi2_read(cpu, pins, REG_PC);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Perform EOR operation */
+    CPU_A(cpu) ^= BUS_GET_DATA(pins);
+    CPU_PC(cpu)++;
     update_nz_flags(cpu, CPU_A(cpu));
     transition_to_fetch(cpu);
     return pins;
@@ -941,7 +989,13 @@ static bus_state_t op_cmp(CPU6502* cpu, bus_state_t pins) {
 }
 
 static bus_state_t op_cmp_imm(CPU6502* cpu, bus_state_t pins) {
-    uint8_t data = CPU_DL(cpu);
+    /* PHI2: Read operand from PC and increment */
+    pins = cpu_phi2_read(cpu, pins, REG_PC);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Perform CMP operation */
+    uint8_t data = BUS_GET_DATA(pins);
+    CPU_PC(cpu)++;
     uint16_t result = CPU_A(cpu) - data;
     
     CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
@@ -970,7 +1024,13 @@ static bus_state_t op_cpx(CPU6502* cpu, bus_state_t pins) {
 }
 
 static bus_state_t op_cpx_imm(CPU6502* cpu, bus_state_t pins) {
-    uint8_t data = CPU_DL(cpu);
+    /* PHI2: Read operand from PC and increment */
+    pins = cpu_phi2_read(cpu, pins, REG_PC);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Perform CPX operation */
+    uint8_t data = BUS_GET_DATA(pins);
+    CPU_PC(cpu)++;
     uint16_t result = CPU_X(cpu) - data;
     
     CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
@@ -999,7 +1059,13 @@ static bus_state_t op_cpy(CPU6502* cpu, bus_state_t pins) {
 }
 
 static bus_state_t op_cpy_imm(CPU6502* cpu, bus_state_t pins) {
-    uint8_t data = CPU_DL(cpu);
+    /* PHI2: Read operand from PC and increment */
+    pins = cpu_phi2_read(cpu, pins, REG_PC);
+    if (CPU_GET_HALT(pins)) return pins;
+    
+    /* PHI1: Perform CPY operation */
+    uint8_t data = BUS_GET_DATA(pins);
+    CPU_PC(cpu)++;
     uint16_t result = CPU_Y(cpu) - data;
     
     CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
@@ -1169,6 +1235,9 @@ static bus_state_t op_txs(CPU6502* cpu, bus_state_t pins) {
                 return pins; \
         } \
     } else { \
+        /* Accumulator mode - single cycle with dummy PHI2 read */ \
+        pins = cpu_phi2_read(cpu, pins, REG_PC); \
+        if (CPU_GET_HALT(pins)) return pins; \
         reg_idx_var = REG_A; \
     }
 
@@ -1456,13 +1525,13 @@ static bus_state_t op_php(CPU6502* cpu, bus_state_t pins) {
 static bus_state_t op_pla(CPU6502* cpu, bus_state_t pins) {
     switch (cpu->cycle_index++) {
         case 0:
-            /* Dummy cycle for internal operation */
+            /* PHI2: Dummy read from PC */
             pins = cpu_phi2_read(cpu, pins, REG_PC);
             if (CPU_GET_HALT(pins)) return pins;
             break;
             
         case 1:
-            /* Dummy cycle for stack pointer increment */
+            /* PHI2: Dummy read from current stack pointer, then increment SP */
             pins = cpu_phi2_read(cpu, pins, REG_SP);
             if (CPU_GET_HALT(pins)) return pins;
             
@@ -1471,7 +1540,7 @@ static bus_state_t op_pla(CPU6502* cpu, bus_state_t pins) {
             break;
             
         case 2:
-            /* PHI2: Read from stack */
+            /* PHI2: Read from incremented stack pointer */
             pins = cpu_phi2_read(cpu, pins, REG_SP);
             if (CPU_GET_HALT(pins)) return pins;
             
@@ -1488,13 +1557,13 @@ static bus_state_t op_pla(CPU6502* cpu, bus_state_t pins) {
 static bus_state_t op_plp(CPU6502* cpu, bus_state_t pins) {
     switch (cpu->cycle_index++) {
         case 0:
-            /* Dummy cycle for internal operation */
+            /* PHI2: Dummy read from PC */
             pins = cpu_phi2_read(cpu, pins, REG_PC);
             if (CPU_GET_HALT(pins)) return pins;
             break;
             
         case 1:
-            /* Dummy cycle for stack pointer increment */
+            /* PHI2: Dummy read from current stack pointer, then increment SP */
             pins = cpu_phi2_read(cpu, pins, REG_SP);
             if (CPU_GET_HALT(pins)) return pins;
             
@@ -1503,7 +1572,7 @@ static bus_state_t op_plp(CPU6502* cpu, bus_state_t pins) {
             break;
             
         case 2:
-            /* PHI2: Read from stack */
+            /* PHI2: Read from incremented stack pointer */
             pins = cpu_phi2_read(cpu, pins, REG_SP);
             if (CPU_GET_HALT(pins)) return pins;
             
@@ -1750,13 +1819,13 @@ static bus_state_t op_jsr(CPU6502* cpu, bus_state_t pins) {
 static bus_state_t op_rts(CPU6502* cpu, bus_state_t pins) {
     switch (cpu->cycle_index++) {
         case 0:
-            /* Dummy cycle for internal operation */
+            /* PHI2: Dummy read from PC */
             pins = cpu_phi2_read(cpu, pins, REG_PC);
             if (CPU_GET_HALT(pins)) return pins;
             break;
             
         case 1:
-            /* Dummy cycle for stack pointer increment */
+            /* PHI2: Dummy read from current stack pointer, then increment SP */
             pins = cpu_phi2_read(cpu, pins, REG_SP);
             if (CPU_GET_HALT(pins)) return pins;
             
@@ -1800,13 +1869,13 @@ static bus_state_t op_rts(CPU6502* cpu, bus_state_t pins) {
 static bus_state_t op_rti(CPU6502* cpu, bus_state_t pins) {
     switch (cpu->cycle_index++) {
         case 0:
-            /* Dummy cycle for internal operation */
+            /* PHI2: Dummy read from PC */
             pins = cpu_phi2_read(cpu, pins, REG_PC);
             if (CPU_GET_HALT(pins)) return pins;
             break;
             
         case 1:
-            /* Dummy cycle for stack pointer increment */
+            /* PHI2: Dummy read from current stack pointer, then increment SP */
             pins = cpu_phi2_read(cpu, pins, REG_SP);
             if (CPU_GET_HALT(pins)) return pins;
             
