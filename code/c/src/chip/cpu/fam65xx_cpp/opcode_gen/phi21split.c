@@ -5,7 +5,7 @@
  * ======================
  * 
  * 1. PIN-BASED BUS SYSTEM
- *    - All chips interact via a shared 64-bit bus state (Pins)
+ *    - All chips interact via a shared 64-bit bus state (bus_state_t)
  *    - Bus contains address lines, data lines, and control signals
  *    - Each chip has pin-specific macros to access only its pins
  *    - Generic bus macros for address/data/R/W̅ shared by all
@@ -68,7 +68,7 @@
  * Chip-specific pin macros access control signals private to each chip.
  */
 
-typedef uint64_t Pins;
+typedef uint64_t bus_state_t;
 
 /* Generic Bus Lines (shared by all chips) */
 #define BUS_ADDR_SHIFT   0
@@ -85,7 +85,7 @@ typedef uint64_t Pins;
 #define BUS_GET_RW(pins)         ((((pins) >> BUS_RW_SHIFT) & 1) != 0)
 #define BUS_SET_RW(pins, val)    ((pins) = ((pins) & ~BUS_RW_MASK) | (((uint64_t)(val) & 1) << BUS_RW_SHIFT))
 
-/* CPU-Specific Pins */
+/* CPU-Specific bus_state_t */
 #define CPU_PIN_SYNC     25
 #define CPU_PIN_RDY      26
 #define CPU_PIN_IRQ      27
@@ -100,7 +100,7 @@ typedef uint64_t Pins;
 #define CPU_GET_HALT(pins)     (((pins) >> CPU_PIN_HALT) & 1)
 #define CPU_SET_HALT(pins, v)  ((pins) = ((pins) & ~(1ULL << CPU_PIN_HALT)) | (((uint64_t)(v) & 1) << CPU_PIN_HALT))
 
-/* VIC-II-Specific Pins (for multi-chip systems) */
+/* VIC-II-Specific bus_state_t (for multi-chip systems) */
 #define VIC_PIN_BA       30
 #define VIC_PIN_AEC      31
 
@@ -164,12 +164,12 @@ enum {
 #define REG_DUMMY REG_SPL  // Never used as write source, marks read cycles (ZP high)
 
 // 16-bit register indices (native endian compatible)
-enum {
+typedef enum {
     REG_ZP = REG_ZPL / 2,  // Zero page (16 bits) - full zero page register
     REG_SP = REG_SPL / 2,  // Stack pointer as 16-bit (SPL in low, 0x01 in high)
     REG_AB = REG_ABL / 2,  // Address Bus Latch as 16-bit (ADL/ADH pair)
     REG_PC = REG_PCL / 2,  // Program counter / PC as 16-bit (PCL/PCH pair)
-};
+} reg16_t;
 
 /* Processor status flags */
 #define FLAG_C  0x01   /* Carry */
@@ -210,7 +210,7 @@ typedef struct {
  */
 
 typedef struct CPU6502 CPU6502;
-typedef Pins (*cycle_fn_t)(CPU6502* cpu, Pins pins);
+typedef bus_state_t (*cycle_fn_t)(CPU6502* cpu, bus_state_t pins);
 
 struct CPU6502 {
     /* Register array - union allows both 8-bit and 16-bit access */
@@ -252,13 +252,13 @@ struct CPU6502 {
 #define CPU_AD(cpu)    CPU_AB(cpu)  /* Address latch as 16-bit - now maps to AB */
 
 /* Forward declarations */
-static Pins opcode_fetch(CPU6502* cpu, Pins pins);
+static bus_state_t opcode_fetch(CPU6502* cpu, bus_state_t pins);
 static void transition_to_operation(CPU6502* cpu);
 static void transition_to_fetch(CPU6502* cpu);
 
 /* PHI2 Handler declarations */
-static Pins cpu_phi2_read(CPU6502* cpu, Pins pins, uint16_t address);
-static Pins cpu_phi2_write(CPU6502* cpu, Pins pins, uint16_t address, uint8_t reg_write);
+static bus_state_t cpu_phi2_read(CPU6502* cpu, bus_state_t pins, uint16_t address);
+static bus_state_t cpu_phi2_write(CPU6502* cpu, bus_state_t pins, uint16_t address, uint8_t reg_write);
 
 /* ============================================================================
  * UTILITY FUNCTIONS
@@ -289,33 +289,25 @@ extern void memory_write(uint16_t addr, uint8_t data);
  */
 
 /* Centralized PHI2 read handler - handles memory reads during PHI2 phase
- * Can be halted by RDY signal (VIC-II bus arbitration)
+ * CPU read cycles can be halted by RDY signal, but VIC-II memory reads are always serviced
  *
  * Parameters:
  *   address: Memory address to read from
  */
-static Pins cpu_phi2_read(CPU6502* cpu, Pins pins, uint16_t address) {
+static bus_state_t cpu_phi2_read(CPU6502* cpu, bus_state_t pins, uint16_t address) {
     /* Set SYNC if this is cycle 0 (opcode fetch) */
     CPU_SET_SYNC(pins, cpu->cycle_index == 0);
     
-    /* Read cycle - halt if RDY is low, don't interfere with VIC-II bus control */
-    if (!CPU_GET_RDY(pins)) {
-        /* VIC-II is using the bus - don't change address, let VIC-II handle it */
+    if (CPU_GET_RDY(pins)) {
+        CPU_SET_HALT(pins, 0);
+        BUS_SET_ADDR(pins, address);
+    } else {
         CPU_SET_HALT(pins, 1);
-        return pins;
     }
-    
-    /* CPU controls bus - set address and read */
-    BUS_SET_ADDR(pins, address);
+
+    /* Always perform memory read to service VIC-II even when CPU halted */
     BUS_SET_DATA(pins, memory_read(address));
     
-    /* Check RDY for PHI1 halt */
-    if (!CPU_GET_RDY(pins)) {
-        CPU_SET_HALT(pins, 1);
-        return pins;
-    }
-    
-    CPU_SET_HALT(pins, 0);
     return pins;
 }
 
@@ -326,7 +318,7 @@ static Pins cpu_phi2_read(CPU6502* cpu, Pins pins, uint16_t address) {
  *   address: Memory address to write to
  *   reg_write: Register index to write from
  */
-static Pins cpu_phi2_write(CPU6502* cpu, Pins pins, uint16_t address, uint8_t reg_write) {
+static bus_state_t cpu_phi2_write(CPU6502* cpu, bus_state_t pins, uint16_t address, uint8_t reg_write) {
     /* Set SYNC if this is cycle 0 (opcode fetch) */
     CPU_SET_SYNC(pins, cpu->cycle_index == 0);
     
@@ -354,7 +346,7 @@ static Pins cpu_phi2_write(CPU6502* cpu, Pins pins, uint16_t address, uint8_t re
  */
 
 /* Zero Page - operand at $00nn */
-static Pins addr_zp(CPU6502* cpu, Pins pins) {
+static bus_state_t addr_zp(CPU6502* cpu, bus_state_t pins) {
     /* PHI2: Read from PC and increment */
     pins = cpu_phi2_read(cpu, pins, REG_PC);
     if (CPU_GET_HALT(pins)) return pins;
@@ -367,7 +359,7 @@ static Pins addr_zp(CPU6502* cpu, Pins pins) {
 }
 
 /* Absolute - operand at $nnnn */
-static Pins addr_abs(CPU6502* cpu, Pins pins) {
+static bus_state_t addr_abs(CPU6502* cpu, bus_state_t pins) {
     switch (cpu->cycle_index++) {
         case 0:
             /* PHI2: Read low byte from PC and increment */
@@ -394,7 +386,7 @@ static Pins addr_abs(CPU6502* cpu, Pins pins) {
 }
 
 /* Zero Page,X - operand at ($00nn + X) & 0xFF */
-static Pins addr_zpx(CPU6502* cpu, Pins pins) {
+static bus_state_t addr_zpx(CPU6502* cpu, bus_state_t pins) {
     switch (cpu->cycle_index++) {
         case 0:
             /* PHI2: Read base address from PC and increment */
@@ -420,7 +412,7 @@ static Pins addr_zpx(CPU6502* cpu, Pins pins) {
 }
 
 /* Zero Page,Y - operand at ($00nn + Y) & 0xFF */
-static Pins addr_zpy(CPU6502* cpu, Pins pins) {
+static bus_state_t addr_zpy(CPU6502* cpu, bus_state_t pins) {
     switch (cpu->cycle_index++) {
         case 0:
             /* PHI2: Read base address from PC and increment */
@@ -446,7 +438,7 @@ static Pins addr_zpy(CPU6502* cpu, Pins pins) {
 }
 
 /* Absolute,X - operand at $nnnn + X (may skip cycle if no page cross) */
-static Pins addr_abx(CPU6502* cpu, Pins pins) {
+static bus_state_t addr_abx(CPU6502* cpu, bus_state_t pins) {
     switch (cpu->cycle_index++) {
         case 0:
             /* PHI2: Read low byte from PC and increment */
@@ -489,7 +481,7 @@ static Pins addr_abx(CPU6502* cpu, Pins pins) {
 }
 
 /* Absolute,Y - operand at $nnnn + Y (may skip cycle if no page cross) */
-static Pins addr_aby(CPU6502* cpu, Pins pins) {
+static bus_state_t addr_aby(CPU6502* cpu, bus_state_t pins) {
     switch (cpu->cycle_index++) {
         case 0:
             /* PHI2: Read low byte from PC and increment */
@@ -531,7 +523,7 @@ static Pins addr_aby(CPU6502* cpu, Pins pins) {
 }
 
 /* Indirect - used only by JMP ($nnnn) */
-static Pins addr_ind(CPU6502* cpu, Pins pins) {
+static bus_state_t addr_ind(CPU6502* cpu, bus_state_t pins) {
     switch (cpu->cycle_index++) {
         case 0:
             /* PHI2: Read low byte of pointer address from PC */
@@ -580,7 +572,7 @@ static Pins addr_ind(CPU6502* cpu, Pins pins) {
 }
 
 /* Indexed Indirect - operand at (($nn + X) & 0xFF) */
-static Pins addr_idx(CPU6502* cpu, Pins pins) {
+static bus_state_t addr_idx(CPU6502* cpu, bus_state_t pins) {
     switch (cpu->cycle_index++) {
         case 0:
             /* PHI2: Read pointer from PC and increment */
@@ -624,7 +616,7 @@ static Pins addr_idx(CPU6502* cpu, Pins pins) {
 }
 
 /* Indirect Indexed - operand at ($nn) + Y (may skip cycle if no page cross) */
-static Pins addr_idy(CPU6502* cpu, Pins pins) {
+static bus_state_t addr_idy(CPU6502* cpu, bus_state_t pins) {
     switch (cpu->cycle_index++) {
         case 0:
             /* PHI2: Read pointer from PC and increment */
@@ -682,7 +674,7 @@ static Pins addr_idy(CPU6502* cpu, Pins pins) {
 
 /* --- Load Operations --- */
 
-static Pins op_lda(CPU6502* cpu, Pins pins) {
+static bus_state_t op_lda(CPU6502* cpu, bus_state_t pins) {
     /* PHI2: Read from target address */
     pins = cpu_phi2_read(cpu, pins, CPU_AB(cpu));
     if (CPU_GET_HALT(pins)) return pins;
@@ -695,14 +687,14 @@ static Pins op_lda(CPU6502* cpu, Pins pins) {
 }
 
 /* LDA immediate uses TEMP from addressing mode */
-static Pins op_lda_imm(CPU6502* cpu, Pins pins) {
+static bus_state_t op_lda_imm(CPU6502* cpu, bus_state_t pins) {
     CPU_A(cpu) = CPU_DL(cpu);
     update_nz_flags(cpu, CPU_A(cpu));
     transition_to_fetch(cpu);
     return pins;
 }
 
-static Pins op_ldx(CPU6502* cpu, Pins pins) {
+static bus_state_t op_ldx(CPU6502* cpu, bus_state_t pins) {
     /* PHI2: Read from target address */
     pins = cpu_phi2_read(cpu, pins, CPU_AB(cpu));
     if (CPU_GET_HALT(pins)) return pins;
@@ -714,14 +706,14 @@ static Pins op_ldx(CPU6502* cpu, Pins pins) {
     return pins;
 }
 
-static Pins op_ldx_imm(CPU6502* cpu, Pins pins) {
+static bus_state_t op_ldx_imm(CPU6502* cpu, bus_state_t pins) {
     CPU_X(cpu) = CPU_DL(cpu);
     update_nz_flags(cpu, CPU_X(cpu));
     transition_to_fetch(cpu);
     return pins;
 }
 
-static Pins op_ldy(CPU6502* cpu, Pins pins) {
+static bus_state_t op_ldy(CPU6502* cpu, bus_state_t pins) {
     /* PHI2: Read from target address */
     pins = cpu_phi2_read(cpu, pins, CPU_AB(cpu));
     if (CPU_GET_HALT(pins)) return pins;
@@ -733,7 +725,7 @@ static Pins op_ldy(CPU6502* cpu, Pins pins) {
     return pins;
 }
 
-static Pins op_ldy_imm(CPU6502* cpu, Pins pins) {
+static bus_state_t op_ldy_imm(CPU6502* cpu, bus_state_t pins) {
     CPU_Y(cpu) = CPU_DL(cpu);
     update_nz_flags(cpu, CPU_Y(cpu));
     transition_to_fetch(cpu);
@@ -742,7 +734,7 @@ static Pins op_ldy_imm(CPU6502* cpu, Pins pins) {
 
 /* --- Store Operations --- */
 
-static Pins op_sta(CPU6502* cpu, Pins pins) {
+static bus_state_t op_sta(CPU6502* cpu, bus_state_t pins) {
     /* PHI2: Write A to target address */
     pins = cpu_phi2_write(cpu, pins, CPU_AB(cpu), REG_A);
     if (CPU_GET_HALT(pins)) return pins;
@@ -752,7 +744,7 @@ static Pins op_sta(CPU6502* cpu, Pins pins) {
     return pins;
 }
 
-static Pins op_stx(CPU6502* cpu, Pins pins) {
+static bus_state_t op_stx(CPU6502* cpu, bus_state_t pins) {
     /* PHI2: Write X to target address */
     pins = cpu_phi2_write(cpu, pins, CPU_AB(cpu), REG_X);
     if (CPU_GET_HALT(pins)) return pins;
@@ -762,7 +754,7 @@ static Pins op_stx(CPU6502* cpu, Pins pins) {
     return pins;
 }
 
-static Pins op_sty(CPU6502* cpu, Pins pins) {
+static bus_state_t op_sty(CPU6502* cpu, bus_state_t pins) {
     /* PHI2: Write Y to target address */
     pins = cpu_phi2_write(cpu, pins, CPU_AB(cpu), REG_Y);
     if (CPU_GET_HALT(pins)) return pins;
@@ -774,7 +766,7 @@ static Pins op_sty(CPU6502* cpu, Pins pins) {
 
 /* --- Arithmetic Operations --- */
 
-static Pins op_adc(CPU6502* cpu, Pins pins) {
+static bus_state_t op_adc(CPU6502* cpu, bus_state_t pins) {
     /* PHI2: Read operand from target address */
     pins = cpu_phi2_read(cpu, pins, REG_AB);
     if (CPU_GET_HALT(pins)) return pins;
@@ -800,7 +792,7 @@ static Pins op_adc(CPU6502* cpu, Pins pins) {
     return pins;
 }
 
-static Pins op_adc_imm(CPU6502* cpu, Pins pins) {
+static bus_state_t op_adc_imm(CPU6502* cpu, bus_state_t pins) {
     uint8_t operand = CPU_DL(cpu);
     uint16_t result = CPU_A(cpu) + operand + (CPU_P(cpu) & FLAG_C ? 1 : 0);
     
@@ -886,7 +878,7 @@ static Pins op_adc_imm(CPU6502* cpu, Pins pins) {
     }
 
 /* ASL - Arithmetic Shift Left */
-static Pins op_asl(CPU6502* cpu, Pins pins) {
+static bus_state_t op_asl(CPU6502* cpu, bus_state_t pins) {
     RMW_HANDLER_START(cpu, pins, reg_idx);
     
     uint8_t value = cpu->reg8[reg_idx];
@@ -901,7 +893,7 @@ static Pins op_asl(CPU6502* cpu, Pins pins) {
 }
 
 /* LSR - Logical Shift Right */
-static Pins op_lsr(CPU6502* cpu, Pins pins) {
+static bus_state_t op_lsr(CPU6502* cpu, bus_state_t pins) {
     RMW_HANDLER_START(cpu, pins, reg_idx);
     
     uint8_t value = cpu->reg8[reg_idx];
@@ -916,7 +908,7 @@ static Pins op_lsr(CPU6502* cpu, Pins pins) {
 }
 
 /* ROL - Rotate Left */
-static Pins op_rol(CPU6502* cpu, Pins pins) {
+static bus_state_t op_rol(CPU6502* cpu, bus_state_t pins) {
     RMW_HANDLER_START(cpu, pins, reg_idx);
     
     uint8_t value = cpu->reg8[reg_idx];
@@ -932,7 +924,7 @@ static Pins op_rol(CPU6502* cpu, Pins pins) {
 }
 
 /* ROR - Rotate Right */
-static Pins op_ror(CPU6502* cpu, Pins pins) {
+static bus_state_t op_ror(CPU6502* cpu, bus_state_t pins) {
     RMW_HANDLER_START(cpu, pins, reg_idx);
     
     uint8_t value = cpu->reg8[reg_idx];
@@ -948,7 +940,7 @@ static Pins op_ror(CPU6502* cpu, Pins pins) {
 }
 
 /* INC - Increment Memory (RMW only, no accumulator mode) */
-static Pins op_inc(CPU6502* cpu, Pins pins) {
+static bus_state_t op_inc(CPU6502* cpu, bus_state_t pins) {
     RMW_ONLY_START(cpu, pins, reg_idx);
     
     cpu->reg8[reg_idx]++;
@@ -957,7 +949,7 @@ static Pins op_inc(CPU6502* cpu, Pins pins) {
 }
 
 /* DEC - Decrement Memory (RMW only, no accumulator mode) */
-static Pins op_dec(CPU6502* cpu, Pins pins) {
+static bus_state_t op_dec(CPU6502* cpu, bus_state_t pins) {
     RMW_ONLY_START(cpu, pins, reg_idx);
     
     cpu->reg8[reg_idx]--;
@@ -973,7 +965,7 @@ static Pins op_dec(CPU6502* cpu, Pins pins) {
  */
 
 /* SLO - ASL + ORA (Shift Left and OR) */
-static Pins op_slo(CPU6502* cpu, Pins pins) {
+static bus_state_t op_slo(CPU6502* cpu, bus_state_t pins) {
     RMW_ONLY_START(cpu, pins, reg_idx);
     
     /* Perform ASL */
@@ -990,7 +982,7 @@ static Pins op_slo(CPU6502* cpu, Pins pins) {
 }
 
 /* RLA - ROL + AND (Rotate Left and AND) */
-static Pins op_rla(CPU6502* cpu, Pins pins) {
+static bus_state_t op_rla(CPU6502* cpu, bus_state_t pins) {
     RMW_ONLY_START(cpu, pins, reg_idx);
     
     /* Perform ROL */
@@ -1008,7 +1000,7 @@ static Pins op_rla(CPU6502* cpu, Pins pins) {
 }
 
 /* SRE - LSR + EOR (Shift Right and EOR) */
-static Pins op_sre(CPU6502* cpu, Pins pins) {
+static bus_state_t op_sre(CPU6502* cpu, bus_state_t pins) {
     RMW_ONLY_START(cpu, pins, reg_idx);
     
     /* Perform LSR */
@@ -1025,7 +1017,7 @@ static Pins op_sre(CPU6502* cpu, Pins pins) {
 }
 
 /* RRA - ROR + ADC (Rotate Right and Add with Carry) */
-static Pins op_rra(CPU6502* cpu, Pins pins) {
+static bus_state_t op_rra(CPU6502* cpu, bus_state_t pins) {
     RMW_ONLY_START(cpu, pins, reg_idx);
     
     /* Perform ROR */
@@ -1052,7 +1044,7 @@ static Pins op_rra(CPU6502* cpu, Pins pins) {
 }
 
 /* DCP - DEC + CMP (Decrement and Compare) */
-static Pins op_dcp(CPU6502* cpu, Pins pins) {
+static bus_state_t op_dcp(CPU6502* cpu, bus_state_t pins) {
     RMW_ONLY_START(cpu, pins, reg_idx);
     
     /* Perform DEC */
@@ -1069,7 +1061,7 @@ static Pins op_dcp(CPU6502* cpu, Pins pins) {
 }
 
 /* ISC - INC + SBC (Increment and Subtract with Carry) */
-static Pins op_isc(CPU6502* cpu, Pins pins) {
+static bus_state_t op_isc(CPU6502* cpu, bus_state_t pins) {
     RMW_ONLY_START(cpu, pins, reg_idx);
     
     /* Perform INC */
@@ -1302,7 +1294,7 @@ static const opcode_info_t opcode_table[256] = {
  * ============================================================================
  */
 
-static Pins opcode_fetch(CPU6502* cpu, Pins pins) {
+static bus_state_t opcode_fetch(CPU6502* cpu, bus_state_t pins) {
     /* PHI2: Read opcode from PC and increment */
     pins = cpu_phi2_read(cpu, pins, REG_PC);
     if (CPU_GET_HALT(pins)) return pins;
@@ -1347,7 +1339,7 @@ static void transition_to_fetch(CPU6502* cpu) {
  * RDY checking is centralized here: writes ignore RDY, reads respect it.
  */
 
-Pins cpu_tick(CPU6502* cpu, Pins pins) {
+bus_state_t cpu_tick(CPU6502* cpu, bus_state_t pins) {
     /* ========================================================================
      * PHI1 PHASE - Call current handler (PHI2 is now called within handlers)
      * ========================================================================
@@ -1394,7 +1386,7 @@ void cpu_init(CPU6502* cpu) {
 
 #if 0  /* Example code, not compiled */
 
-Pins glue_logic(Pins pins) {
+bus_state_t glue_logic(bus_state_t pins) {
     bool ba = VIC_GET_BA(pins);
     bool aec = VIC_GET_AEC(pins);
     
@@ -1408,7 +1400,7 @@ Pins glue_logic(Pins pins) {
     return pins;
 }
 
-Pins system_tick(CPU6502* cpu, VIC* vic, Pins pins) {
+bus_state_t system_tick(CPU6502* cpu, VIC* vic, bus_state_t pins) {
     /* 1. VIC determines if it needs the bus */
     pins = vic_tick(vic, pins);
     
