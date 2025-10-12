@@ -358,47 +358,54 @@ static inline uint16_t get_vector_addr(fam65xx_t* cpu) {
     }
 }
 
-/* Update merged interrupt shift register */
-static void update_interrupt_shift_register(fam65xx_t* cpu, bus_state_t pins) {
+/* Merged interrupt processing function - updates shift register and detects completion
+ * Optimized for minimal function call overhead by combining both operations
+ */
+static inline bool process_interrupt_detection(fam65xx_t* cpu, bus_state_t pins) {
+    /* Use intermediate variable to reduce memory accesses */
+    uint32_t shift_reg = cpu->interrupt_shift_register;
+    
     /* Shift the register left by one bit */
-    cpu->interrupt_shift_register <<= 1;
+    shift_reg <<= 1;
     
     /* Sample IRQ line and insert into IRQ bits (active low) */
     if (!(pins & FAM65XX_IRQ)) {
-        cpu->interrupt_shift_register |= (1 << INT_IRQ_START_BIT);
+        shift_reg |= (1 << INT_IRQ_START_BIT);
     }
     
     /* Sample NMI line and insert into NMI bits (active low) */
     if (!(pins & FAM65XX_NMI)) {
-        cpu->interrupt_shift_register |= (1 << INT_NMI_START_BIT);
+        shift_reg |= (1 << INT_NMI_START_BIT);
     }
     
     /* Sample RESET line and insert into RESET bits (active low) */
     if (!(pins & FAM65XX_RES)) {
-        cpu->interrupt_shift_register |= (1 << INT_RESET_START_BIT);
+        shift_reg |= (1 << INT_RESET_START_BIT);
     }
     
     /* Clear separator bits to prevent cross-over */
-    cpu->interrupt_shift_register &= ~INT_SEPARATOR_MASK;
-}
-
-/* Detect if any interrupt has completed a full shift (edge detection) */
-static bool detect_interrupt_completion(fam65xx_t* cpu) {
-    /* Check if IRQ has completed shift (3 consecutive cycles) */
-    if ((cpu->interrupt_shift_register & INT_IRQ_MASK) == INT_IRQ_MASK) {
-        cpu->brk_flags |= FAM65XX_BRK_IRQ;
+    shift_reg &= ~INT_SEPARATOR_MASK;
+    
+    /* Store back the updated shift register */
+    cpu->interrupt_shift_register = shift_reg;
+    
+    /* Check for completed interrupt sequences in order of priority */
+    
+    /* Check if RESET has completed shift (3 consecutive cycles) - highest priority */
+    if ((shift_reg & INT_RESET_MASK) == INT_RESET_MASK) {
+        cpu->brk_flags |= FAM65XX_BRK_RESET;
         return true;
     }
     
-    /* Check if NMI has completed shift (3 consecutive cycles) */
-    if ((cpu->interrupt_shift_register & INT_NMI_MASK) == INT_NMI_MASK) {
+    /* Check if NMI has completed shift (3 consecutive cycles) - middle priority */
+    if ((shift_reg & INT_NMI_MASK) == INT_NMI_MASK) {
         cpu->brk_flags |= FAM65XX_BRK_NMI;
         return true;
     }
     
-    /* Check if RESET has completed shift (3 consecutive cycles) */
-    if ((cpu->interrupt_shift_register & INT_RESET_MASK) == INT_RESET_MASK) {
-        cpu->brk_flags |= FAM65XX_BRK_RESET;
+    /* Check if IRQ has completed shift (3 consecutive cycles) - lowest priority */
+    if ((shift_reg & INT_IRQ_MASK) == INT_IRQ_MASK) {
+        cpu->brk_flags |= FAM65XX_BRK_IRQ;
         return true;
     }
     
@@ -2582,11 +2589,8 @@ bus_state_t cpu_tick(fam65xx_t* cpu, bus_state_t pins) {
      * ========================================================================
      */
     
-    /* Update merged interrupt shift register for edge detection */
-    update_interrupt_shift_register(cpu, pins);
-    
-    /* Check for completed interrupt sequences */
-    if (detect_interrupt_completion(cpu) && cpu->current_handler == opcode_fetch) {
+    /* Process interrupt detection (merged shift register update and completion check) */
+    if (process_interrupt_detection(cpu, pins) && cpu->current_handler == opcode_fetch) {
         /* Interrupt detected during instruction fetch - switch to BRK handler */
         cpu->current_handler = op_brk;
         cpu->cycle_index = 0;
