@@ -45,7 +45,7 @@ static void fam65xx_transition_to_operation(fam65xx_t* cpu);
 static bus_state_t am_abs(fam65xx_t* cpu, bus_state_t pins) {
     switch (cpu->cycle_index++) {
         case 0:
-            /* PHI2: Read low byte from PC and increment */
+            /* PHI2: Read low byte from PC */
             pins = fam65xx_phi2_read(cpu, pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
@@ -55,7 +55,7 @@ static bus_state_t am_abs(fam65xx_t* cpu, bus_state_t pins) {
             break;
             
         case 1:
-            /* PHI2: Read high byte from PC and increment */
+            /* PHI2: Read high byte from PC */
             pins = fam65xx_phi2_read(cpu, pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
@@ -72,21 +72,23 @@ static bus_state_t am_abs(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t am_abx(fam65xx_t* cpu, bus_state_t pins) {
     switch (cpu->cycle_index++) {
         case 0:
-            /* PHI2: Read low byte from PC and increment */
+            /* PHI2: Read low byte from PC */
             pins = fam65xx_phi2_read(cpu, pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Store low byte */
+            /* PHI1: Store low byte and increment PC */
             CPU_ADL(cpu) = BUS_GET_DATA(pins);
+            CPU_PC(cpu)++;
             break;
             
         case 1: {
-            /* PHI2: Read high byte from PC and increment */
+            /* PHI2: Read high byte from PC */
             pins = fam65xx_phi2_read(cpu, pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Store high byte and add X */
+            /* PHI1: Store high byte, increment PC, and add X */
             CPU_ADH(cpu) = BUS_GET_DATA(pins);
+            CPU_PC(cpu)++;
             
             uint16_t base = CPU_AB(cpu);
             uint16_t effective = base + CPU_X(cpu);
@@ -100,7 +102,7 @@ static bus_state_t am_abx(fam65xx_t* cpu, bus_state_t pins) {
         }
             
         case 2:
-            /* PHI2: Page cross penalty cycle */
+            /* PHI2: Page cross penalty cycle - dummy read from wrong address */
             pins = fam65xx_phi2_read(cpu, pins, REG_AB);
             if (!FAM65XX_GET_RDY(pins)) return pins;
 
@@ -115,21 +117,23 @@ static bus_state_t am_abx(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t am_aby(fam65xx_t* cpu, bus_state_t pins) {
     switch (cpu->cycle_index++) {
         case 0:
-            /* PHI2: Read low byte from PC and increment */
+            /* PHI2: Read low byte from PC */
             pins = fam65xx_phi2_read(cpu, pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Store low byte */
+            /* PHI1: Store low byte and increment PC */
             CPU_ADL(cpu) = BUS_GET_DATA(pins);
+            CPU_PC(cpu)++;
             break;
             
         case 1: {
-            /* PHI2: Read high byte from PC and increment */
+            /* PHI2: Read high byte from PC */
             pins = fam65xx_phi2_read(cpu, pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Store high byte and add Y */
+            /* PHI1: Store high byte, increment PC, and add Y */
             CPU_ADH(cpu) = BUS_GET_DATA(pins);
+            CPU_PC(cpu)++;
             
             uint16_t base = CPU_AB(cpu);
             uint16_t effective = base + CPU_Y(cpu);
@@ -142,7 +146,7 @@ static bus_state_t am_aby(fam65xx_t* cpu, bus_state_t pins) {
         }
             
         case 2:
-            /* PHI2: Page cross penalty cycle */
+            /* PHI2: Page cross penalty cycle - dummy read from wrong address */
             pins = fam65xx_phi2_read(cpu, pins, REG_AB);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
@@ -157,26 +161,29 @@ static bus_state_t am_aby(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t am_idx(fam65xx_t* cpu, bus_state_t pins) {
     switch (cpu->cycle_index++) {
         case 0:
-            /* PHI2: Read pointer from PC and increment */
+            /* PHI2: Read pointer from PC */
             pins = fam65xx_phi2_read(cpu, pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Store pointer */
+            /* PHI1: Store pointer and increment PC */
             CPU_ADL(cpu) = BUS_GET_DATA(pins);
+            CPU_PC(cpu)++;
             break;
             
         case 1:
-            /* PHI2: Dummy read from ZP */
+            /* PHI2: Dummy read from ZP (before adding X) */
             pins = fam65xx_phi2_read(cpu, pins, REG_ZP);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
             /* PHI1: Calculate ZP+X during dummy cycle (hardware accurate) */
             CPU_ADL(cpu) = (CPU_ADL(cpu) + CPU_X(cpu)) & 0xFF;
+            /* Ensure high byte is 0x00 for zero page */
+            CPU_ADH(cpu) = 0x00;
             break;
             
         case 2:
             /* PHI2: Read low byte of target from ZP+X */
-            pins = fam65xx_phi2_read(cpu, pins, REG_ZP);
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
             /* PHI1: Store target low byte and increment pointer for high byte read */
@@ -186,7 +193,7 @@ static bus_state_t am_idx(fam65xx_t* cpu, bus_state_t pins) {
             
         case 3:
             /* PHI2: Read high byte of target from ZP+X+1 */
-            pins = fam65xx_phi2_read(cpu, pins, REG_ZP);
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
             /* PHI1: Assemble final address */
@@ -202,17 +209,20 @@ static bus_state_t am_idx(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t am_idy(fam65xx_t* cpu, bus_state_t pins) {
     switch (cpu->cycle_index++) {
         case 0:
-            /* PHI2: Read pointer from PC and increment */
+            /* PHI2: Read pointer from PC */
             pins = fam65xx_phi2_read(cpu, pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Store pointer */
+            /* PHI1: Store pointer and increment PC */
             CPU_ADL(cpu) = BUS_GET_DATA(pins);
+            CPU_PC(cpu)++;
+            /* Ensure high byte is 0x00 for zero page */
+            CPU_ADH(cpu) = 0x00;
             break;
             
         case 1:
             /* PHI2: Read low byte from ZP pointer */
-            pins = fam65xx_phi2_read(cpu, pins, REG_ZP);
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
             /* PHI1: Store low byte and increment pointer */
@@ -222,7 +232,7 @@ static bus_state_t am_idy(fam65xx_t* cpu, bus_state_t pins) {
             
         case 2: {
             /* PHI2: Read high byte from ZP pointer+1 */
-            pins = fam65xx_phi2_read(cpu, pins, REG_ZP);
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
             /* PHI1: Calculate effective address with Y */
@@ -237,7 +247,7 @@ static bus_state_t am_idy(fam65xx_t* cpu, bus_state_t pins) {
         }
             
         case 3:
-            /* PHI2: Page cross penalty cycle */
+            /* PHI2: Page cross penalty cycle - dummy read from wrong address */
             pins = fam65xx_phi2_read(cpu, pins, REG_AB);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
@@ -256,8 +266,9 @@ static bus_state_t am_ind(fam65xx_t* cpu, bus_state_t pins) {
             pins = fam65xx_phi2_read(cpu, pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Store pointer low byte */
+            /* PHI1: Store pointer low byte and increment PC */
             CPU_ADL(cpu) = BUS_GET_DATA(pins);
+            CPU_PC(cpu)++;
             break;
             
         case 1:
@@ -265,8 +276,9 @@ static bus_state_t am_ind(fam65xx_t* cpu, bus_state_t pins) {
             pins = fam65xx_phi2_read(cpu, pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Store pointer high byte */
+            /* PHI1: Store pointer high byte and increment PC */
             CPU_ADH(cpu) = BUS_GET_DATA(pins);
+            CPU_PC(cpu)++;
             break;
             
         case 2:
@@ -299,13 +311,15 @@ static bus_state_t am_ind(fam65xx_t* cpu, bus_state_t pins) {
 
 /* Zero Page - operand at $00nn */
 static bus_state_t am_zp(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read from PC and increment */
+    /* PHI2: Read from PC */
     pins = fam65xx_phi2_read(cpu, pins, REG_PC);
     if (!FAM65XX_GET_RDY(pins)) return pins;
 
     /* PHI1: Store operand address in ADL and increment PC */
     CPU_ADL(cpu) = BUS_GET_DATA(pins);
     CPU_PC(cpu)++;
+    /* Ensure high byte is 0x00 for zero page */
+    CPU_ADH(cpu) = 0x00;
     fam65xx_transition_to_operation(cpu);
     return pins;
 }
@@ -314,18 +328,20 @@ static bus_state_t am_zp(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t am_zpx(fam65xx_t* cpu, bus_state_t pins) {
     switch (cpu->cycle_index++) {
         case 0:
-            /* PHI2: Read base address from PC and increment */
+            /* PHI2: Read base address from PC */
             pins = fam65xx_phi2_read(cpu, pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
             /* PHI1: Store base address and increment PC */
             CPU_ADL(cpu) = BUS_GET_DATA(pins);
             CPU_PC(cpu)++;
+            /* Ensure high byte is 0x00 for zero page */
+            CPU_ADH(cpu) = 0x00;
             break;
             
         case 1:
             /* PHI2: Dummy read from ZP while adding X */
-            pins = fam65xx_phi2_read(cpu, pins, REG_ZP);
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
             /* PHI1: Add X to address */
@@ -340,18 +356,20 @@ static bus_state_t am_zpx(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t am_zpy(fam65xx_t* cpu, bus_state_t pins) {
     switch (cpu->cycle_index++) {
         case 0:
-            /* PHI2: Read base address from PC and increment */
+            /* PHI2: Read base address from PC */
             pins = fam65xx_phi2_read(cpu, pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
             /* PHI1: Store base address and increment PC */
             CPU_ADL(cpu) = BUS_GET_DATA(pins);
             CPU_PC(cpu)++;
+            /* Ensure high byte is 0x00 for zero page */
+            CPU_ADH(cpu) = 0x00;
             break;
             
         case 1:
             /* PHI2: Dummy read from ZP while adding Y */
-            pins = fam65xx_phi2_read(cpu, pins, REG_ZP);
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
             /* PHI1: Add Y to address */
