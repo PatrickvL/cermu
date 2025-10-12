@@ -170,7 +170,8 @@ static bus_state_t am_idx(fam65xx_t* cpu, bus_state_t pins) {
             pins = fam65xx_phi2_read(cpu, pins, REG_ZP);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Dummy cycle - no operation */
+            /* PHI1: Calculate ZP+X during dummy cycle (hardware accurate) */
+            CPU_ADL(cpu) = (CPU_ADL(cpu) + CPU_X(cpu)) & 0xFF;
             break;
             
         case 2:
@@ -178,9 +179,9 @@ static bus_state_t am_idx(fam65xx_t* cpu, bus_state_t pins) {
             pins = fam65xx_phi2_read(cpu, pins, REG_ZP);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Store target low byte and increment pointer */
+            /* PHI1: Store target low byte and increment pointer for high byte read */
             CPU_DL(cpu) = BUS_GET_DATA(pins);
-            CPU_ADL(cpu) = (CPU_ADL(cpu) + CPU_X(cpu) + 1) & 0xFF;
+            CPU_ADL(cpu) = (CPU_ADL(cpu) + 1) & 0xFF;
             break;
             
         case 3:

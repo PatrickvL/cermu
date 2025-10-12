@@ -220,6 +220,7 @@ static void fam65xx_transition_to_fetch(fam65xx_t* cpu) {
 
 /* Hardware-accurate RESET sequence handler
  * RESET is a special interrupt that initializes the CPU state and fetches PC from $FFFC
+ * Real hardware goes through full BRK sequence including stack decrements
  */
 static void fam65xx_reset(fam65xx_t* cpu, bus_state_t pins) {
     (void)pins; /* Suppress unused parameter warning */
@@ -231,16 +232,16 @@ static void fam65xx_reset(fam65xx_t* cpu, bus_state_t pins) {
     /* Set BRK flag to indicate RESET and start interrupt sequence */
     cpu->brk_flags |= FAM65XX_BRK_RESET;
     
-    /* Switch to BRK handler to fetch vector and set PC */
+    /* Switch to BRK handler starting from cycle 0 for full hardware sequence */
     cpu->current_handler = op_brk;
-    cpu->cycle_index = 4;  /* Skip stack operations, go directly to vector fetch */
+    cpu->cycle_index = 0;  /* Start from beginning to get proper stack decrements */
 
-    /* Initialize CPU state for RESET */
+    /* Initialize CPU state for RESET - hardware accurate */
     CPU_P(cpu) = FLAG_U | FLAG_I;  /* Set unused and interrupt disable flags */
-    CPU_S(cpu) = 0xFD;             /* RESET sets stack pointer to $FD (not $FF) */
+    /* Note: SP starts at $FF and will be decremented 3 times by BRK handler to $FD */
+    CPU_S(cpu) = 0xFF;  /* Hardware starts at $FF, BRK sequence decrements to $FD */
     
-   /* Set up RESET vector address */
-   CPU_AB(cpu) = 0xFFFC;  /* RESET vector at $FFFC-$FFFD */
+    /* PC will be set by BRK handler after reading from RESET vector */
 }
 
 /* ============================================================================
