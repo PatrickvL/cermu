@@ -103,6 +103,23 @@ extern "C" {
 #define FLAG_V  0x40  // Overflow
 #define FLAG_N  0x80  // Negative
 
+// BRK flags for interrupt handling
+#define FAM65XX_BRK_IRQ     (1<<0)
+#define FAM65XX_BRK_NMI     (1<<1)
+#define FAM65XX_BRK_RESET   (1<<2)
+
+// Interrupt shift register bit layout - merged system (3 bits per interrupt + separators)
+#define INT_IRQ_START_BIT   0   // IRQ uses bits 0-2 (3 bits)
+#define INT_IRQ_SEP_BIT     3   // Separator bit after IRQ (bit 3)
+#define INT_NMI_START_BIT   4   // NMI uses bits 4-6 (3 bits)
+#define INT_NMI_SEP_BIT     7   // Separator bit after NMI (bit 7)
+#define INT_RESET_START_BIT 8   // RESET uses bits 8-10 (3 bits)
+#define INT_RESET_SEP_BIT   11  // Separator bit after RESET (bit 11)
+#define INT_IRQ_MASK        (0x7 << INT_IRQ_START_BIT)     // 3 bits: 0b111
+#define INT_NMI_MASK        (0x7 << INT_NMI_START_BIT)     // 3 bits: 0b111
+#define INT_RESET_MASK      (0x7 << INT_RESET_START_BIT)   // 3 bits: 0b111
+#define INT_SEPARATOR_MASK  ((1 << INT_IRQ_SEP_BIT) | (1 << INT_NMI_SEP_BIT) | (1 << INT_RESET_SEP_BIT))
+
 // ============================================================================
 // 8-bit Register indices with endian-aware 16-bit pairs
 // ============================================================================
@@ -181,6 +198,10 @@ struct fam65xx_t {
     opcode_info_t opcode_entry;       /* Cached opcode entry (copied once) */
     uint8_t cycle_index;              /* Current cycle within instruction */
     cycle_fn_t current_handler;        /* Current PHI1 handler */
+    
+    /* Interrupt state - merged shift register system */
+    uint32_t interrupt_shift_register; /* Combined shift register for all interrupt types */
+    uint8_t brk_flags;                /* BRK/IRQ/NMI/RESET flags */
     
     /* Cycle counter */
     uint64_t cycles;
@@ -262,6 +283,11 @@ static bus_state_t opcode_fetch(fam65xx_t* cpu, bus_state_t pins);
 static void transition_to_operation(fam65xx_t* cpu);
 static void transition_to_fetch(fam65xx_t* cpu);
 
+/* Interrupt handling functions */
+static inline uint16_t get_vector_addr(fam65xx_t* cpu);
+static void update_interrupt_shift_register(fam65xx_t* cpu, bus_state_t pins);
+static bool detect_interrupt_completion(fam65xx_t* cpu);
+
 /* ============================================================================
  * PHI2 HANDLERS
  * ============================================================================
@@ -314,6 +340,69 @@ static bus_state_t cpu_phi2_write(fam65xx_t* cpu, bus_state_t pins, reg16_t addr
     memory_write(address, data_byte);
     
     return pins;
+}
+
+/* ============================================================================
+ * INTERRUPT HANDLING FUNCTIONS
+ * ============================================================================
+ */
+
+/* Helper function to get interrupt vector address based on BRK flags */
+static inline uint16_t get_vector_addr(fam65xx_t* cpu) {
+    if (cpu->brk_flags & FAM65XX_BRK_RESET) {
+        return 0xFFFC;
+    } else if (cpu->brk_flags & FAM65XX_BRK_NMI) {
+        return 0xFFFA;
+    } else {
+        return 0xFFFE;  // BRK/IRQ vector
+    }
+}
+
+/* Update merged interrupt shift register */
+static void update_interrupt_shift_register(fam65xx_t* cpu, bus_state_t pins) {
+    /* Shift the register left by one bit */
+    cpu->interrupt_shift_register <<= 1;
+    
+    /* Sample IRQ line and insert into IRQ bits (active low) */
+    if (!(pins & FAM65XX_IRQ)) {
+        cpu->interrupt_shift_register |= (1 << INT_IRQ_START_BIT);
+    }
+    
+    /* Sample NMI line and insert into NMI bits (active low) */
+    if (!(pins & FAM65XX_NMI)) {
+        cpu->interrupt_shift_register |= (1 << INT_NMI_START_BIT);
+    }
+    
+    /* Sample RESET line and insert into RESET bits (active low) */
+    if (!(pins & FAM65XX_RES)) {
+        cpu->interrupt_shift_register |= (1 << INT_RESET_START_BIT);
+    }
+    
+    /* Clear separator bits to prevent cross-over */
+    cpu->interrupt_shift_register &= ~INT_SEPARATOR_MASK;
+}
+
+/* Detect if any interrupt has completed a full shift (edge detection) */
+static bool detect_interrupt_completion(fam65xx_t* cpu) {
+    /* Check if IRQ has completed shift (3 consecutive cycles) */
+    if ((cpu->interrupt_shift_register & INT_IRQ_MASK) == INT_IRQ_MASK) {
+        cpu->brk_flags |= FAM65XX_BRK_IRQ;
+        return true;
+    }
+    
+    /* Check if NMI has completed shift (3 consecutive cycles) */
+    if ((cpu->interrupt_shift_register & INT_NMI_MASK) == INT_NMI_MASK) {
+        cpu->brk_flags |= FAM65XX_BRK_NMI;
+        return true;
+    }
+    
+    /* Check if RESET has completed shift (3 consecutive cycles) */
+    if ((cpu->interrupt_shift_register & INT_RESET_MASK) == INT_RESET_MASK) {
+        cpu->brk_flags |= FAM65XX_BRK_RESET;
+        return true;
+    }
+    
+    return false;
 }
 
 /* ============================================================================
@@ -1895,14 +1984,23 @@ static bus_state_t op_rti(fam65xx_t* cpu, bus_state_t pins) {
 /* BRK - Break / Software Interrupt */
 static bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins) {
     switch (cpu->cycle_index++) {
-        case 0:
-            /* PHI2: Dummy read from PC+1 */
-            pins = cpu_phi2_read(cpu, pins, REG_PC);
-            if (!CPU_GET_RDY(pins)) return pins;
-            
-            /* PHI1: Increment PC to PC+2 for return address */
-            CPU_PC(cpu) += 2;
+        case 0: {
+            /* BRK does a dummy read from PC+1, then increments PC to point to PC+2 for return address */
+            if (0 == (cpu->brk_flags & (FAM65XX_BRK_IRQ | FAM65XX_BRK_NMI))) {
+                /* For software BRK, do dummy read from PC+1, then set PC to PC+2 for return address */
+                uint16_t dummy_read_addr = CPU_PC(cpu) + 1;
+                CPU_PC(cpu) += 2;  /* PC now points to PC+2 for return address */
+                pins = cpu_phi2_read(cpu, pins, REG_AB);
+                if (!CPU_GET_RDY(pins)) return pins;
+                /* Set up address for dummy read */
+                CPU_AB(cpu) = dummy_read_addr;
+            } else {
+                /* For hardware interrupts, do dummy read from current PC (don't increment) */
+                pins = cpu_phi2_read(cpu, pins, REG_PC);
+                if (!CPU_GET_RDY(pins)) return pins;
+            }
             break;
+        }
             
         case 1:
             /* PHI2: Push PCH to stack */
@@ -1932,8 +2030,8 @@ static bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins) {
             CPU_S(cpu)--;
             CPU_P(cpu) |= FLAG_I;
             
-            /* Set up vector address (0xFFFE for BRK/IRQ) */
-            CPU_AB(cpu) = 0xFFFE;
+            /* Set up vector address using helper function */
+            CPU_AB(cpu) = get_vector_addr(cpu);
             break;
             
         case 4:
@@ -1953,6 +2051,10 @@ static bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins) {
             
             /* PHI1: Set PC to vector address and transition to fetch */
             CPU_PC(cpu) = (BUS_GET_DATA(pins) << 8) | CPU_DL(cpu);
+            
+            /* Clear BRK flags after interrupt handling is complete */
+            cpu->brk_flags = 0;
+            
             transition_to_fetch(cpu);
             break;
     }
@@ -2476,13 +2578,27 @@ static void transition_to_fetch(fam65xx_t* cpu) {
 
 bus_state_t cpu_tick(fam65xx_t* cpu, bus_state_t pins) {
     /* ========================================================================
+     * INTERRUPT HANDLING - Update shift register and detect interrupts
+     * ========================================================================
+     */
+    
+    /* Update merged interrupt shift register for edge detection */
+    update_interrupt_shift_register(cpu, pins);
+    
+    /* Check for completed interrupt sequences */
+    if (detect_interrupt_completion(cpu) && cpu->current_handler == opcode_fetch) {
+        /* Interrupt detected during instruction fetch - switch to BRK handler */
+        cpu->current_handler = op_brk;
+        cpu->cycle_index = 0;
+    }
+    
+    /* ========================================================================
      * HANDLER EXECUTION - PHI2 calls embedded within each handler
      * ========================================================================
      */
     
     /* Call current handler - embeds PHI2 calls with halt checking */
     pins = cpu->current_handler(cpu, pins);
-    cpu->cycles++;
     
     return pins;
 }
@@ -2506,6 +2622,10 @@ void cpu_init(fam65xx_t* cpu) {
     
     /* Set processor status unused flag to 1 */
     CPU_P(cpu) = FLAG_U;
+    
+    /* Initialize interrupt state */
+    cpu->interrupt_shift_register = 0;
+    cpu->brk_flags = 0;
     
     /* Start at opcode fetch */
     cpu->current_handler = opcode_fetch;
@@ -2558,4 +2678,10 @@ bus_state_t system_tick(fam65xx_t* cpu, VIC* vic, bus_state_t pins) {
     return pins;
 }
 
+#endif
+
+#endif /* CHIPS_IMPL */
+
+#ifdef __cplusplus
+}
 #endif
