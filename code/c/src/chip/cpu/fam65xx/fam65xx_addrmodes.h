@@ -213,29 +213,27 @@ static bus_state_t am_idy(fam65xx_t* cpu, bus_state_t pins) {
             pins = fam65xx_phi2_read(cpu, pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Store pointer and increment PC */
-            CPU_ADL(cpu) = BUS_GET_DATA(pins);
+            /* PHI1: Store pointer in ZP and increment PC */
+            CPU_ZPL(cpu) = BUS_GET_DATA(pins);
             CPU_PC(cpu)++;
-            /* Ensure high byte is 0x00 for zero page */
-            CPU_ADH(cpu) = 0x00;
             break;
             
         case 1:
             /* PHI2: Read low byte from ZP pointer */
-            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+            pins = fam65xx_phi2_read(cpu, pins, REG_ZP);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Store low byte and increment pointer */
+            /* PHI1: Store low byte and increment ZP pointer */
             CPU_DL(cpu) = BUS_GET_DATA(pins);
-            CPU_ADL(cpu) = (CPU_ADL(cpu) + 1) & 0xFF;
+            CPU_ZPL(cpu) = (CPU_ZPL(cpu) + 1) & 0xFF;
             break;
             
         case 2: {
             /* PHI2: Read high byte from ZP pointer+1 */
-            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+            pins = fam65xx_phi2_read(cpu, pins, REG_ZP);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Calculate effective address with Y */
+            /* PHI1: Calculate effective address with Y and store in AB */
             uint16_t base = (BUS_GET_DATA(pins) << 8) | CPU_DL(cpu);
             uint16_t effective = base + CPU_Y(cpu);
             CPU_AB(cpu) = effective;
@@ -315,11 +313,11 @@ static bus_state_t am_zp(fam65xx_t* cpu, bus_state_t pins) {
     pins = fam65xx_phi2_read(cpu, pins, REG_PC);
     if (!FAM65XX_GET_RDY(pins)) return pins;
 
-    /* PHI1: Store operand address in ADL and increment PC */
-    CPU_ADL(cpu) = BUS_GET_DATA(pins);
+    /* PHI1: Store operand address in ZP, then copy to AB and increment PC */
+    CPU_ZPL(cpu) = BUS_GET_DATA(pins);
     CPU_PC(cpu)++;
-    /* Ensure high byte is 0x00 for zero page */
-    CPU_ADH(cpu) = 0x00;
+    /* Copy ZP to AB for final address (ZPH is always 0x00) */
+    CPU_AB(cpu) = CPU_ZP(cpu);
     fam65xx_transition_to_operation(cpu);
     return pins;
 }
@@ -332,20 +330,19 @@ static bus_state_t am_zpx(fam65xx_t* cpu, bus_state_t pins) {
             pins = fam65xx_phi2_read(cpu, pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Store base address and increment PC */
-            CPU_ADL(cpu) = BUS_GET_DATA(pins);
+            /* PHI1: Store base address in ZP and increment PC */
+            CPU_ZPL(cpu) = BUS_GET_DATA(pins);
             CPU_PC(cpu)++;
-            /* Ensure high byte is 0x00 for zero page */
-            CPU_ADH(cpu) = 0x00;
             break;
             
         case 1:
             /* PHI2: Dummy read from ZP while adding X */
-            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+            pins = fam65xx_phi2_read(cpu, pins, REG_ZP);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Add X to address */
-            CPU_ADL(cpu) = (CPU_ADL(cpu) + CPU_X(cpu)) & 0xFF;
+            /* PHI1: Add X to ZP address, then copy to AB */
+            CPU_ZPL(cpu) = (CPU_ZPL(cpu) + CPU_X(cpu)) & 0xFF;
+            CPU_AB(cpu) = CPU_ZP(cpu); /* Copy final ZP address to AB */
             fam65xx_transition_to_operation(cpu);
             break;
     }
@@ -360,20 +357,19 @@ static bus_state_t am_zpy(fam65xx_t* cpu, bus_state_t pins) {
             pins = fam65xx_phi2_read(cpu, pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Store base address and increment PC */
-            CPU_ADL(cpu) = BUS_GET_DATA(pins);
+            /* PHI1: Store base address in ZP and increment PC */
+            CPU_ZPL(cpu) = BUS_GET_DATA(pins);
             CPU_PC(cpu)++;
-            /* Ensure high byte is 0x00 for zero page */
-            CPU_ADH(cpu) = 0x00;
             break;
             
         case 1:
             /* PHI2: Dummy read from ZP while adding Y */
-            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+            pins = fam65xx_phi2_read(cpu, pins, REG_ZP);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Add Y to address */
-            CPU_ADL(cpu) = (CPU_ADL(cpu) + CPU_Y(cpu)) & 0xFF;
+            /* PHI1: Add Y to ZP address, then copy to AB */
+            CPU_ZPL(cpu) = (CPU_ZPL(cpu) + CPU_Y(cpu)) & 0xFF;
+            CPU_AB(cpu) = CPU_ZP(cpu); /* Copy final ZP address to AB */
             fam65xx_transition_to_operation(cpu);
             break;
     }

@@ -12,6 +12,7 @@
  */
 
 #include "fam65xx_core.h"
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {
