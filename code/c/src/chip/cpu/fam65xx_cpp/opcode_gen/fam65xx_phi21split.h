@@ -202,9 +202,9 @@ struct fam65xx_t {
     /* Interrupt state - merged shift register system */
     uint32_t interrupt_shift_register; /* Combined shift register for all interrupt types */
     uint8_t brk_flags;                /* BRK/IRQ/NMI/RESET flags */
-    
-    /* Cycle counter */
-    uint64_t cycles;
+    uint8_t nmi_prev;                 /* Previous NMI line state for edge detection
+                                       * NOTE: Consider storing complete previous pins state
+                                       * for edge detection of all signals if needed in future */
 };
 
 /* Accessor macros for cleaner code */
@@ -359,7 +359,7 @@ static inline uint16_t get_vector_addr(fam65xx_t* cpu) {
 }
 
 /* Merged interrupt processing function - updates shift register and detects completion
- * Optimized for minimal function call overhead by combining both operations
+ * Hardware accurate implementation with proper edge detection and I flag checking
  */
 static inline bool process_interrupt_detection(fam65xx_t* cpu, bus_state_t pins) {
     /* Use intermediate variable to reduce memory accesses */
@@ -373,10 +373,13 @@ static inline bool process_interrupt_detection(fam65xx_t* cpu, bus_state_t pins)
         shift_reg |= (1 << INT_IRQ_START_BIT);
     }
     
-    /* Sample NMI line and insert into NMI bits (active low) */
-    if (!(pins & FAM65XX_NMI)) {
+    /* NMI Edge Detection - only trigger on falling edge */
+    uint8_t nmi_current = (pins & FAM65XX_NMI) ? 1 : 0;
+    if (cpu->nmi_prev && !nmi_current) {
+        /* Falling edge detected - insert into NMI bits */
         shift_reg |= (1 << INT_NMI_START_BIT);
     }
+    cpu->nmi_prev = nmi_current;
     
     /* Sample RESET line and insert into RESET bits (active low) */
     if (!(pins & FAM65XX_RES)) {
@@ -404,7 +407,8 @@ static inline bool process_interrupt_detection(fam65xx_t* cpu, bus_state_t pins)
     }
     
     /* Check if IRQ has completed shift (3 consecutive cycles) - lowest priority */
-    if ((shift_reg & INT_IRQ_MASK) == INT_IRQ_MASK) {
+    /* IRQ is masked by the I flag (interrupt disable) */
+    if ((shift_reg & INT_IRQ_MASK) == INT_IRQ_MASK && !(CPU_P(cpu) & FLAG_I)) {
         cpu->brk_flags |= FAM65XX_BRK_IRQ;
         return true;
     }
@@ -2027,9 +2031,18 @@ static bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins) {
             CPU_S(cpu)--;
             break;
             
-        case 3:
-            /* PHI2: Push P|B|U to stack */
-            CPU_DL(cpu) = CPU_P(cpu) | FLAG_B | FLAG_U;
+        case 3: {
+            /* PHI2: Push P with correct B flag handling to stack */
+            uint8_t p_flags = CPU_P(cpu) | FLAG_U;  /* Always set U flag */
+            
+            /* B flag handling: only set for software BRK, not hardware interrupts */
+            if (0 == (cpu->brk_flags & (FAM65XX_BRK_IRQ | FAM65XX_BRK_NMI | FAM65XX_BRK_RESET))) {
+                /* Software BRK instruction - set B flag */
+                p_flags |= FLAG_B;
+            }
+            /* Hardware interrupts (IRQ/NMI/RESET) - B flag remains clear */
+            
+            CPU_DL(cpu) = p_flags;
             pins = cpu_phi2_write(cpu, pins, REG_SP, REG_DL);
             if (!CPU_GET_RDY(pins)) return pins;
             
@@ -2040,6 +2053,7 @@ static bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins) {
             /* Set up vector address using helper function */
             CPU_AB(cpu) = get_vector_addr(cpu);
             break;
+        }
             
         case 4:
             /* PHI2: Read vector low byte */
@@ -2627,9 +2641,10 @@ void cpu_init(fam65xx_t* cpu) {
     /* Set processor status unused flag to 1 */
     CPU_P(cpu) = FLAG_U;
     
-    /* Initialize interrupt state */
-    cpu->interrupt_shift_register = 0;
+    /* Initialize interrupt state - shift register starts inactive (lines high) */
+    cpu->interrupt_shift_register = 0xFFFFFFFF;  /* All bits high = inactive state */
     cpu->brk_flags = 0;
+    cpu->nmi_prev = 1;  /* NMI line starts high (inactive) for edge detection */
     
     /* Start at opcode fetch */
     cpu->current_handler = opcode_fetch;
