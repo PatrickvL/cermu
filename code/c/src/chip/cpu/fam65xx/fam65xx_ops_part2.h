@@ -137,7 +137,7 @@ static bus_state_t op_jsr(fam65xx_t* cpu, bus_state_t pins) {
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
             /* PHI1: Store low byte */
-            CPU_ADL(cpu) = BUS_GET_DATA(pins);
+            CPU_ABL(cpu) = BUS_GET_DATA(pins);
             CPU_PC(cpu)++;
             break;
             
@@ -171,7 +171,7 @@ static bus_state_t op_jsr(fam65xx_t* cpu, bus_state_t pins) {
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
             /* PHI1: Set PC to target address */
-            CPU_ADH(cpu) = BUS_GET_DATA(pins);
+            CPU_ABH(cpu) = BUS_GET_DATA(pins);
             CPU_PC(cpu) = CPU_AB(cpu);
             fam65xx_transition_to_fetch(cpu);
             break;
