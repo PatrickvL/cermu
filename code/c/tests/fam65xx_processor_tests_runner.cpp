@@ -21,7 +21,7 @@ extern "C" {
 }
 
 #define CHIPS_IMPL
-#include "../src/chip/cpu/fam65xx_cpp/opcode_gen/fam65xx_callbacks.h"
+#include "../src/chip/cpu/fam65xx/fam65xx.h"
 
 namespace fs = std::filesystem;
 
@@ -148,10 +148,7 @@ private:
 public:
     // Bootstrap processor for ProcessorTests compatibility
     void bootstrap_processor_for_tests() {
-        // Only bootstrap if not already done
-        if (cpu.CI == 0xFFFF) {
-            pins = fam65xx_bootstrap(&cpu, pins);
-        }
+        pins = fam65xx_bootstrap(&cpu, pins);
     }
 
     ProcessorTestHarness() : cycle_count(0) {

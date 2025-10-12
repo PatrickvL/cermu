@@ -44,7 +44,9 @@ static bus_state_t fam65xx_phi2_read(fam65xx_t* cpu, bus_state_t pins, reg16_t a
     }
 
     /* Always perform memory read to service VIC-II even when CPU halted */
-    BUS_SET_DATA(pins, memory_read(address));
+    uint8_t current_bus_data = BUS_GET_DATA(pins);
+    uint8_t data = cpu->mem_read(cpu->mem_user_data, address, current_bus_data);
+    BUS_SET_DATA(pins, data);
     
     return pins;
 }
@@ -63,7 +65,7 @@ static bus_state_t fam65xx_phi2_write(fam65xx_t* cpu, bus_state_t pins, reg16_t 
     BUS_SET_ADDR(pins, address);
     uint8_t data_byte = cpu->reg8[reg_write];
     BUS_SET_DATA(pins, data_byte);
-    memory_write(address, data_byte);
+    cpu->mem_write(cpu->mem_user_data, address, data_byte);
     
     return pins;
 }
@@ -311,17 +313,63 @@ bus_state_t fam65xx_tick(fam65xx_t* cpu, bus_state_t pins) {
  * ============================================================================
  */
 
-void fam65xx_init(fam65xx_t* cpu) {
+bus_state_t fam65xx_init(fam65xx_t* cpu, const fam65xx_desc_t* desc) {
     memset(cpu, 0, sizeof(fam65xx_t));
+    
+    /* Set up memory callbacks */
+    if (desc) {
+        cpu->mem_read = desc->mem_read;
+        cpu->mem_write = desc->mem_write;
+        cpu->mem_user_data = desc->mem_user_data;
+    }
+    
     /* Initialize register layout:
      * ZP high byte (REG_ZPH) = 0x00 (always zero for zero page)
      * SP high byte (REG_SPH) = 0x01 (stack is always in page 1)
      * S register (stack pointer low) = 0xFD (RESET sets SP to $FD)
      */
-   cpu->reg8[REG_ZPH] = 0x00;  /* Zero page high byte */
-   cpu->reg8[REG_SPH] = 0x01;  /* Stack pointer high byte */
+    cpu->reg8[REG_ZPH] = 0x00;  /* Zero page high byte */
+    cpu->reg8[REG_SPH] = 0x01;  /* Stack pointer high byte */
 
-   fam65xx_reset(cpu, 0);    
+    fam65xx_reset(cpu, 0);
+    
+    bus_state_t pins = 0;
+    pins |= FAM65XX_RDY;   /* Set ready bit */
+    pins |= FAM65XX_RW;    /* Set read mode as default state */
+    
+    return pins;
+}
+
+/* CPU state accessor functions */
+void fam65xx_set_a(fam65xx_t* cpu, uint8_t v) { CPU_A(cpu) = v; }
+void fam65xx_set_x(fam65xx_t* cpu, uint8_t v) { CPU_X(cpu) = v; }
+void fam65xx_set_y(fam65xx_t* cpu, uint8_t v) { CPU_Y(cpu) = v; }
+void fam65xx_set_s(fam65xx_t* cpu, uint8_t v) { CPU_S(cpu) = v; }
+void fam65xx_set_p(fam65xx_t* cpu, uint8_t v) { CPU_P(cpu) = v; }
+void fam65xx_set_pc(fam65xx_t* cpu, uint16_t v) { CPU_PC(cpu) = v; }
+
+uint8_t fam65xx_a(fam65xx_t* cpu) { return CPU_A(cpu); }
+uint8_t fam65xx_x(fam65xx_t* cpu) { return CPU_X(cpu); }
+uint8_t fam65xx_y(fam65xx_t* cpu) { return CPU_Y(cpu); }
+uint8_t fam65xx_s(fam65xx_t* cpu) { return CPU_S(cpu); }
+uint8_t fam65xx_p(fam65xx_t* cpu) { return CPU_P(cpu); }
+uint16_t fam65xx_pc(fam65xx_t* cpu) { return CPU_PC(cpu); }
+
+/* Instruction completion detection */
+bool fam65xx_opdone(fam65xx_t* cpu) {
+    /* Instruction is complete when we're at the fetch handler with cycle_index 0 */
+    return (cpu->current_handler == fam65xx_opcode_fetch) && (cpu->cycle_index == 0);
+}
+
+/* Bootstrap function for test runner initialization */
+bus_state_t fam65xx_bootstrap(fam65xx_t* cpu, bus_state_t pins) {
+    /* Set up for first instruction fetch */
+    pins |= FAM65XX_RDY;   /* Ensure RDY is high for execution */
+    pins |= FAM65XX_RW;    /* Ensure RW is set as default state */
+    cpu->cycle_index = 0;  /* Reset cycle index */
+    cpu->current_handler = fam65xx_opcode_fetch; /* Ensure handler is set to fetch */
+    
+    return pins;
 }
 
 

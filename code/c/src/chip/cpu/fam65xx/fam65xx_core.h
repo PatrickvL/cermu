@@ -91,6 +91,27 @@ extern "C" {
 #define FAM65XX_GET_NMI(pins)      ((pins) & FAM65XX_NMI)
 
 // ============================================================================
+// Memory Callback Types (for test runner compatibility)
+// ============================================================================
+
+typedef uint8_t (*fam65xx_mem_read_t)(void* user_data, uint16_t addr, uint8_t bus_state);
+typedef void (*fam65xx_mem_write_t)(void* user_data, uint16_t addr, uint8_t data);
+
+// Initialization descriptor for callback-based memory interface
+typedef struct {
+    fam65xx_mem_read_t mem_read;
+    fam65xx_mem_write_t mem_write;
+    void* mem_user_data;
+    
+    // 6510-specific callbacks (unused in basic implementation)
+    uint8_t (*m6510_in_cb)(void* user_data);
+    void (*m6510_out_cb)(uint8_t data, void* user_data);
+    uint8_t m6510_io_pullup;
+    uint8_t m6510_io_floating;
+    void* m6510_user_data;
+} fam65xx_desc_t;
+
+// ============================================================================
 // CPU Flags
 // ============================================================================
 
@@ -199,12 +220,18 @@ struct fam65xx_t {
     uint8_t cycle_index;              /* Current cycle within instruction */
     cycle_fn_t current_handler;        /* Current PHI1 handler */
     
+    /* Memory callbacks (for test runner compatibility) */
+    fam65xx_mem_read_t mem_read;      /* Memory read callback */
+    fam65xx_mem_write_t mem_write;    /* Memory write callback */
+    void* mem_user_data;              /* User data for memory callbacks */
+    
     /* Interrupt state - merged shift register system */
     uint32_t interrupt_shift_register; /* Combined shift register for all interrupt types */
     uint8_t brk_flags;                /* BRK/IRQ/NMI/RESET flags */
     uint8_t nmi_prev;                 /* Previous NMI line state for edge detection
                                        * NOTE: Consider storing complete previous pins state
                                        * for edge detection of all signals if needed in future */
+    
 };
 
 /* Accessor macros for cleaner code */
@@ -259,9 +286,26 @@ static void fam65xx_transition_to_operation(fam65xx_t* cpu);
 static void fam65xx_transition_to_fetch(fam65xx_t* cpu);
 #endif
 
-/* Main API functions (PHI2 split implementation) */
-void fam65xx_init(fam65xx_t* cpu);
+/* Main API functions (callback-based for test runner compatibility) */
+bus_state_t fam65xx_init(fam65xx_t* cpu, const fam65xx_desc_t* desc);
 bus_state_t fam65xx_tick(fam65xx_t* cpu, bus_state_t pins);
+bool fam65xx_opdone(fam65xx_t* cpu);
+bus_state_t fam65xx_bootstrap(fam65xx_t* cpu, bus_state_t pins);
+
+/* CPU state accessor functions (for test runner compatibility) */
+void fam65xx_set_a(fam65xx_t* cpu, uint8_t v);
+void fam65xx_set_x(fam65xx_t* cpu, uint8_t v);
+void fam65xx_set_y(fam65xx_t* cpu, uint8_t v);
+void fam65xx_set_s(fam65xx_t* cpu, uint8_t v);
+void fam65xx_set_p(fam65xx_t* cpu, uint8_t v);
+void fam65xx_set_pc(fam65xx_t* cpu, uint16_t v);
+
+uint8_t fam65xx_a(fam65xx_t* cpu);
+uint8_t fam65xx_x(fam65xx_t* cpu);
+uint8_t fam65xx_y(fam65xx_t* cpu);
+uint8_t fam65xx_s(fam65xx_t* cpu);
+uint8_t fam65xx_p(fam65xx_t* cpu);
+uint16_t fam65xx_pc(fam65xx_t* cpu);
 
 /* Memory interface (to be implemented by system) */
 extern uint8_t memory_read(uint16_t addr);
