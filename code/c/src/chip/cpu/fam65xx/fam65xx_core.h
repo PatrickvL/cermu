@@ -214,16 +214,17 @@ struct fam65xx_t {
 #define CPU_PC(cpu)    ((cpu)->reg16[REG_PC])   /* Program Counter (PCL/PCH) */
 
 /* Individual byte access - using the new register layout */
-#define CPU_ADL(cpu)   ((cpu)->reg8[REG_ABL])     /* Address Bus Latch Low */
-#define CPU_ADH(cpu)   ((cpu)->reg8[REG_ABH])     /* Address Bus Latch High */
-#define CPU_PCL(cpu)   ((cpu)->reg8[REG_PCL])     /* Program Counter Low */
+#define CPU_ZPL(cpu)   ((cpu)->reg8[REG_ZPL])     /* Zero Page Low */
+#define CPU_S(cpu)     ((cpu)->reg8[REG_SPL])
+#define CPU_ABH(cpu)   ((cpu)->reg8[REG_ABH])     /* Address Bus Latch High */
+#define CPU_ABL(cpu)   ((cpu)->reg8[REG_ABL])     /* Address Bus Latch Low */
 #define CPU_PCH(cpu)   ((cpu)->reg8[REG_PCH])     /* Program Counter High */
+#define CPU_PCL(cpu)   ((cpu)->reg8[REG_PCL])     /* Program Counter Low */
 
 #define CPU_A(cpu)     ((cpu)->reg8[REG_A])
 #define CPU_X(cpu)     ((cpu)->reg8[REG_X])
 #define CPU_Y(cpu)     ((cpu)->reg8[REG_Y])
 #define CPU_P(cpu)     ((cpu)->reg8[REG_P])
-#define CPU_S(cpu)     ((cpu)->reg8[REG_SPL])
 #define CPU_IR(cpu)    ((cpu)->reg8[REG_IR])
 #define CPU_DL(cpu)    ((cpu)->reg8[REG_DL])
 
