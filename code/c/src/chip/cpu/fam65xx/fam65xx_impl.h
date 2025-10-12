@@ -20,6 +20,9 @@ extern "C" {
 
 #ifdef CHIPS_IMPL
 
+// Forward declaration for BRK handler
+static bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins);
+
 /* ============================================================================
  * PHI2 HANDLERS
  * ============================================================================
@@ -337,6 +340,9 @@ bus_state_t fam65xx_init(fam65xx_t* cpu, const fam65xx_desc_t* desc) {
     bus_state_t pins = 0;
     pins |= FAM65XX_RDY;   /* Set ready bit */
     pins |= FAM65XX_RW;    /* Set read mode as default state */
+    pins |= FAM65XX_IRQ;   /* IRQ line starts HIGH (inactive) */
+    pins |= FAM65XX_NMI;   /* NMI line starts HIGH (inactive) */
+    pins |= FAM65XX_RES;   /* RESET line starts HIGH (inactive) */
     
     return pins;
 }

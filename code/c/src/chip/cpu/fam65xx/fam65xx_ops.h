@@ -185,11 +185,11 @@ static bus_state_t op_jam(fam65xx_t* cpu, bus_state_t pins) {
 
 /* NOP - No Operation */
 static bus_state_t op_nop(fam65xx_t* cpu, bus_state_t pins) {
-    /* Dummy cycle for internal operation */
+    /* PHI2: Read next byte from PC (dummy read for NOP) */
     pins = fam65xx_phi2_read(cpu, pins, REG_PC);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
-    /* PHI1: Do nothing, just transition to fetch */
+    /* PHI1: No need to increment PC - already done in opcode fetch */
     fam65xx_transition_to_fetch(cpu);
     return pins;
 }
