@@ -184,12 +184,13 @@ static inline void fam65xx_update_interrupt_shift_register(fam65xx_t* cpu, bus_s
 
 /* Opcode fetch handler - reads opcode and transitions to appropriate handler */
 static bus_state_t fam65xx_opcode_fetch(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read opcode from PC and increment */
+    /* PHI2: Read opcode from PC */
     pins = fam65xx_phi2_read(cpu, pins, REG_PC);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
-    /* PHI1: Decode opcode and set up next handler */
+    /* PHI1: Decode opcode, increment PC, and set up next handler */
     CPU_IR(cpu) = BUS_GET_DATA(pins);
+    CPU_PC(cpu)++;  /* CRITICAL FIX: Increment PC after reading opcode */
     
     /* Cache the opcode entry (copy once, accessed many times) */
     opcode_info_t opcode_entry = fam65xx_opcode_table[CPU_IR(cpu)];
