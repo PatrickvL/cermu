@@ -250,12 +250,10 @@ static inline void fam65xx_update_nz_flags(fam65xx_t* cpu, uint8_t value) {
 // API Function Declarations
 // ============================================================================
 
-/* Forward declarations for internal functions */
+/* Forward declarations only for functions referenced in core.h itself */
 #ifdef CHIPS_IMPL
+/* These functions are needed by the API functions below - others are now included via tables */
 static inline uint16_t fam65xx_get_vector_addr(fam65xx_t* cpu);
-static bus_state_t fam65xx_branch_helper(fam65xx_t* cpu, bus_state_t pins, uint8_t flag_mask, bool flag_value);
-static bus_state_t fam65xx_phi2_read(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg);
-static bus_state_t fam65xx_phi2_write(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg, reg8_t reg_write);
 static void fam65xx_transition_to_operation(fam65xx_t* cpu);
 static void fam65xx_transition_to_fetch(fam65xx_t* cpu);
 #endif

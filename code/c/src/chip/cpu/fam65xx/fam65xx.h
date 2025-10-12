@@ -59,19 +59,22 @@
  * 
  * MODULAR FILE ORGANIZATION:
  * ==========================
- * 
+ *
  * This modular version splits the original monolithic file into logical
- * components for better maintainability:
- * 
+ * components for better maintainability while minimizing forward declarations:
+ *
  * 1. fam65xx_core.h - Core definitions, CPU state, register mappings, API declarations
- * 3. fam65xx_addrmodes.h - Addressing mode handlers (am_* functions)
- * 9. fam65xx_impl.h - Core implementation (PHI2 handlers, interrupts, tick, init)
- * 4. fam65xx_ops.h - Arithmetic, bit test, branch, compare operations
- * 8. fam65xx_ops_illegal.h - Illegal/undocumented opcodes (LAX, SAX, etc.)
- * 5. fam65xx_ops_part2.h - Control flow and flag operations  
- * 6. fam65xx_ops_part3.h - Load, logic, register, stack, store, transfer operations
- * 7. fam65xx_ops_rmw.h - Read-modify-write operations (ASL, LSR, ROL, ROR, INC, DEC, illegal RMW)
- * 2. fam65xx_tables.h - Lookup tables, enums, opcode table (256 entries)  
+ * 2. fam65xx_tables.h - Includes ALL operation files and defines lookup tables
+ *    ├─ fam65xx_addrmodes.h - Addressing mode handlers (am_* functions)
+ *    ├─ fam65xx_ops.h - Arithmetic, bit test, branch, compare operations
+ *    ├─ fam65xx_ops_part2.h - Control flow and flag operations
+ *    ├─ fam65xx_ops_part3.h - Load, logic, register, stack, store, transfer operations
+ *    ├─ fam65xx_ops_rmw.h - Read-modify-write operations (ASL, LSR, ROL, ROR, INC, DEC, illegal RMW)
+ *    └─ fam65xx_ops_illegal.h - Illegal/undocumented opcodes (LAX, SAX, etc.)
+ * 3. fam65xx_impl.h - Core implementation (PHI2 handlers, interrupts, tick, init)
+ *
+ * This structure eliminates forward declarations by having fam65xx_tables.h include
+ * all operation implementations before defining the lookup tables that reference them.
  */
 
 #include <stdint.h>
@@ -85,29 +88,17 @@ extern "C" {
 extern uint8_t memory_read(uint16_t addr);
 extern void memory_write(uint16_t addr, uint8_t data);
 
-/* Include all modular components in dependency order */
+/* Include all modular components in dependency order to minimize forward declarations */
 
 /* 1. Core definitions - must be first (defines types and constants) */
 #include "fam65xx_core.h"
 
-/* 2. Addressing mode handlers - use core definitions only */
-#include "fam65xx_addrmodes.h"
-
-/* 3. Operation handlers - use core definitions and utility functions */
-#include "fam65xx_ops.h"
-#include "fam65xx_ops_part2.h"
-#include "fam65xx_ops_part3.h"
-
-/* 4. RMW operations - use core definitions and utility functions */
-#include "fam65xx_ops_rmw.h"
-
-/* 5. Illegal operations - use core definitions and branch helper */
-#include "fam65xx_ops_illegal.h"
-
-/* 6. Tables and enums - defines operation/addressing mode enums and tables */
+/* 2. Tables and enums - includes ALL operation and addressing mode handlers internally
+ *    This eliminates the need for forward declarations by including implementations
+ *    before defining the lookup tables that reference them. */
 #include "fam65xx_tables.h"
 
-/* 7. Implementation functions - use tables and operation handlers */
+/* 3. Implementation functions - use tables and operation handlers */
 #include "fam65xx_impl.h"
 
 /* Compatibility aliases for test runner integration */
