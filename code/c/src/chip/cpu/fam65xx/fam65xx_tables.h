@@ -1,12 +1,15 @@
 #pragma once
 /*
  * fam65xx_tables.h - MOS 65xx Family CPU Lookup Tables and Enums
- * 
+ *
  * This file contains:
  * - Addressing mode and operation enums
  * - Function pointer tables for addressing modes and operations
  * - Complete 256-entry opcode lookup table
  * - Compact opcode encoding macros
+ *
+ * Note: This file includes all operation files to eliminate forward declarations.
+ * The lookup tables reference the actual function implementations directly.
  */
 
 #include "fam65xx_core.h"
@@ -21,10 +24,10 @@ extern "C" {
 // Addressing modes describe how operands are fetched.
 // Operations describe what the CPU does with those operands.
 // These are combined in the opcode table to minimize redundancy.
-// 
+//
 // AM_NON (0): No addressing mode handler needed
 //   - Used by: Implicit, Immediate, Accumulator, and Relative modes
-//   - These modes either have no operand, operand in next byte, or 
+//   - These modes either have no operand, operand in next byte, or
 //     operate directly on registers without memory access
 
 typedef enum {
@@ -77,107 +80,13 @@ typedef enum {
 
 #ifdef CHIPS_IMPL
 
-// Forward declarations for addressing mode handlers
-static bus_state_t am_zp(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t am_abs(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t am_zpx(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t am_zpy(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t am_abx(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t am_aby(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t am_ind(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t am_idx(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t am_idy(fam65xx_t* cpu, bus_state_t pins);
-
-// Forward declarations for operation handlers - alphabetically ordered
-static bus_state_t op_adc(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_adc_imm(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_and(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_and_imm(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_asl(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_bcc(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_bcs(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_beq(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_bit(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_bmi(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_bne(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_bpl(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_bra(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_bvc(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_bvs(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_clc(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_cld(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_cli(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_clv(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_cmp(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_cmp_imm(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_cpx(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_cpx_imm(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_cpy(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_cpy_imm(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_dec(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_dex(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_dey(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_eor(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_eor_imm(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_inc(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_inx(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_iny(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_jam(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_jmp(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_jsr(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_lda(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_lda_imm(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_ldx(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_ldx_imm(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_ldy(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_ldy_imm(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_lsr(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_nop(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_ora(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_ora_imm(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_pha(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_php(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_pla(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_plp(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_rol(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_ror(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_rti(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_rts(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_sbc(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_sbc_imm(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_sec(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_sed(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_sei(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_sta(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_stx(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_sty(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_tax(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_tay(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_tsx(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_txa(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_txs(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_tya(fam65xx_t* cpu, bus_state_t pins);
-
-// Illegal opcodes - alphabetically ordered
-static bus_state_t op_anc(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_arr(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_asr(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_dcp(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_isc(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_las(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_lax(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_rla(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_rra(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_sax(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_sbx(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_sha(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_shs(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_shx(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_shy(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_slo(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_sre(fam65xx_t* cpu, bus_state_t pins);
-static bus_state_t op_xaa(fam65xx_t* cpu, bus_state_t pins);
+// Include all function implementations to eliminate forward declarations
+#include "fam65xx_addrmodes.h"
+#include "fam65xx_ops.h"
+#include "fam65xx_ops_part2.h"
+#include "fam65xx_ops_part3.h"
+#include "fam65xx_ops_rmw.h"
+#include "fam65xx_ops_illegal.h"
 
 /* Addressing mode table - function pointers ordered by enum */
 static const cycle_fn_t fam65xx_addr_mode_table[AM_COUNT] = {
