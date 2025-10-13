@@ -90,18 +90,18 @@ static bus_state_t am_abx(fam65xx_t* cpu, bus_state_t pins) {
             /* PHI1: Store high byte and set up addressing */
             CPU_ABH(cpu) = BUS_GET_DATA(pins);
             
+            /* Store original low byte in DL for later recalculation */
+            CPU_DL(cpu) = CPU_ABL(cpu);
+            
             /* Calculate base and effective addresses */
             uint16_t base = CPU_AB(cpu);
             uint16_t effective = base + CPU_X(cpu);
             
-            /* Store original low byte in DL for later recalculation */
-            CPU_DL(cpu) = CPU_ABL(cpu);
+            /* Check if we need page cross cycle - inline page cross detection */
+            bool page_crossed = fam65xx_page_crossed(base, effective);
             
             /* Add X to low byte only - this creates the "wrong" address for page cross */
-            CPU_ABL(cpu) = (CPU_ABL(cpu) + CPU_X(cpu)) & 0xFF;
-            
-            /* Check if we need page cross cycle - inline page cross detection */
-            int page_crossed = ((base ^ effective) & 0x0100) != 0;
+            CPU_ABL(cpu) += CPU_X(cpu);
             
             /* Check if we need page cross cycle */
             if (cpu->opcode_entry.page_cross && !page_crossed) {
@@ -149,15 +149,15 @@ static bus_state_t am_aby(fam65xx_t* cpu, bus_state_t pins) {
             /* PHI1: Store high byte and set up addressing */
             CPU_ABH(cpu) = BUS_GET_DATA(pins);
             
+            /* Store original low byte in DL for later recalculation */
+            CPU_DL(cpu) = CPU_ABL(cpu);
+            
             /* Calculate base and effective addresses */
             uint16_t base = CPU_AB(cpu);
             uint16_t effective = base + CPU_Y(cpu);
             
-            /* Store original low byte in DL for later recalculation */
-            CPU_DL(cpu) = CPU_ABL(cpu);
-            
             /* Add Y to low byte only - this creates the "wrong" address for page cross */
-            CPU_ABL(cpu) = (CPU_ABL(cpu) + CPU_Y(cpu)) & 0xFF;
+            CPU_ABL(cpu) += CPU_Y(cpu);
             
             /* Check if we need page cross cycle */
             if (cpu->opcode_entry.page_cross && !fam65xx_page_crossed(base, effective)) {
@@ -209,10 +209,10 @@ static bus_state_t am_idx(fam65xx_t* cpu, bus_state_t pins) {
             /* PHI2: Read low byte of target from ZP+X (read directly from ZP register) */
             pins = fam65xx_phi2_read(cpu, pins, REG_ZP);
             if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_ZPL(cpu)++;
             
             /* PHI1: Store target low byte and increment ZP pointer for high byte read */
-            CPU_DL(cpu) = BUS_GET_DATA(pins);
-            CPU_ZPL(cpu) += 1;
+            CPU_ABL(cpu) = BUS_GET_DATA(pins);
             break;
             
         case 3:
@@ -220,8 +220,7 @@ static bus_state_t am_idx(fam65xx_t* cpu, bus_state_t pins) {
             pins = fam65xx_phi2_read(cpu, pins, REG_ZP);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Assemble final address */
-            CPU_ABL(cpu) = CPU_DL(cpu);
+            /* PHI1: Store target high byte, assembling the final address */
             CPU_ABH(cpu) = BUS_GET_DATA(pins);
             fam65xx_transition_to_operation(cpu);
             break;
@@ -246,10 +245,10 @@ static bus_state_t am_idy(fam65xx_t* cpu, bus_state_t pins) {
             /* PHI2: Read low byte from ZP pointer */
             pins = fam65xx_phi2_read(cpu, pins, REG_ZP);
             if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_ZPL(cpu)++;
             
             /* PHI1: Store low byte and increment ZP pointer */
-            CPU_DL(cpu) = BUS_GET_DATA(pins);
-            CPU_ZPL(cpu) = (CPU_ZPL(cpu) + 1) & 0xFF;
+            CPU_ABL(cpu) = BUS_GET_DATA(pins);
             break;
             
         case 2: {
@@ -257,16 +256,16 @@ static bus_state_t am_idy(fam65xx_t* cpu, bus_state_t pins) {
             pins = fam65xx_phi2_read(cpu, pins, REG_ZP);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Calculate effective address with Y */
-            uint16_t base = (BUS_GET_DATA(pins) << 8) | CPU_DL(cpu);
-            uint16_t effective = base + CPU_Y(cpu);
-            
             /* Store base address parts for page cross fix-up */
-            CPU_ABL(cpu) = CPU_DL(cpu);        /* Store base low byte */
             CPU_ABH(cpu) = BUS_GET_DATA(pins); /* Store base high byte */
             
-            /* Add Y to low byte only - creates "wrong" address for page cross */
-            CPU_ABL(cpu) = (CPU_ABL(cpu) + CPU_Y(cpu)) & 0xFF;
+            /* PHI1: Calculate effective address with Y */
+            uint16_t base = CPU_AB(cpu);
+            uint16_t effective = base + CPU_Y(cpu);
+
+            /* Preserve original low byte and add Y to low byte only - creates "wrong" address for page cross */
+            CPU_DL(cpu) = CPU_ABL(cpu);
+            CPU_ABL(cpu) += CPU_Y(cpu);
             
             if (cpu->opcode_entry.page_cross && !fam65xx_page_crossed(base, effective)) {
                 /* No page cross - set correct address and skip cycle 3 */
