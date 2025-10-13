@@ -188,16 +188,18 @@ static bus_state_t op_jam(fam65xx_t* cpu, bus_state_t pins) {
 
 /* NOP - No Operation */
 static bus_state_t op_nop(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read from PC */
-    pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+    /* PHI2: Read based on addressing mode (same pattern as other operations) */
+    /* Immediate mode - read operand from PC */
+    /* Implicit mode - dummy read from PC */
+    /* Memory addressing modes (AM_ZER, AM_ABS, AM_ZPX, etc.) - read from target address set by addressing mode handler */
+    reg16_t addr_reg = cpu->opcode_entry.am_index > AM_IMM ? REG_AB : REG_PC;
+    pins = fam65xx_phi2_read(cpu, pins, addr_reg);
     if (!FAM65XX_GET_RDY(pins)) return pins;
-
     if (cpu->opcode_entry.am_index == AM_IMM) {
-        /* Immediate mode - increment PC to skip operand */
         CPU_PC(cpu)++;
     }
     
-    /* PHI1: No operation performed */
+    /* PHI1: No operation performed - just discard the data and complete instruction */
     fam65xx_transition_to_fetch(cpu);
     return pins;
 }
