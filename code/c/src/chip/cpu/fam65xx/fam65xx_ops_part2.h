@@ -135,10 +135,10 @@ static bus_state_t op_jsr(fam65xx_t* cpu, bus_state_t pins) {
             /* PHI2: Read low byte of target address */
             pins = fam65xx_phi2_read(cpu, pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_PC(cpu)++;
             
             /* PHI1: Store low byte */
             CPU_ABL(cpu) = BUS_GET_DATA(pins);
-            CPU_PC(cpu)++;
             break;
             
         case 1:
@@ -271,9 +271,9 @@ static bus_state_t op_rts(fam65xx_t* cpu, bus_state_t pins) {
             /* PHI2: Dummy read from PC */
             pins = fam65xx_phi2_read(cpu, pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_PC(cpu)++;
             
             /* PHI1: Increment PC and transition to fetch */
-            CPU_PC(cpu)++;
             fam65xx_transition_to_fetch(cpu);
             break;
     }

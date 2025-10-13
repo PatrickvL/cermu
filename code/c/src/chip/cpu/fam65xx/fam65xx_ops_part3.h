@@ -42,10 +42,10 @@ static bus_state_t op_lda_imm(fam65xx_t* cpu, bus_state_t pins) {
     /* PHI2: Read operand from PC and increment */
     pins = fam65xx_phi2_read(cpu, pins, REG_PC);
     if (!FAM65XX_GET_RDY(pins)) return pins;
+    CPU_PC(cpu)++;
     
     /* PHI1: Load accumulator and set flags */
     CPU_A(cpu) = BUS_GET_DATA(pins);
-    CPU_PC(cpu)++;
     fam65xx_update_nz_flags(cpu, CPU_A(cpu));
     fam65xx_transition_to_fetch(cpu);
     return pins;
@@ -69,10 +69,10 @@ static bus_state_t op_ldx_imm(fam65xx_t* cpu, bus_state_t pins) {
     /* PHI2: Read operand from PC and increment */
     pins = fam65xx_phi2_read(cpu, pins, REG_PC);
     if (!FAM65XX_GET_RDY(pins)) return pins;
+    CPU_PC(cpu)++;
     
     /* PHI1: Load X register and set flags */
     CPU_X(cpu) = BUS_GET_DATA(pins);
-    CPU_PC(cpu)++;
     fam65xx_update_nz_flags(cpu, CPU_X(cpu));
     fam65xx_transition_to_fetch(cpu);
     return pins;
@@ -96,10 +96,10 @@ static bus_state_t op_ldy_imm(fam65xx_t* cpu, bus_state_t pins) {
     /* PHI2: Read operand from PC and increment */
     pins = fam65xx_phi2_read(cpu, pins, REG_PC);
     if (!FAM65XX_GET_RDY(pins)) return pins;
+    CPU_PC(cpu)++;
     
     /* PHI1: Load Y register and set flags */
     CPU_Y(cpu) = BUS_GET_DATA(pins);
-    CPU_PC(cpu)++;
     fam65xx_update_nz_flags(cpu, CPU_Y(cpu));
     fam65xx_transition_to_fetch(cpu);
     return pins;
@@ -128,10 +128,10 @@ static bus_state_t op_and_imm(fam65xx_t* cpu, bus_state_t pins) {
     /* PHI2: Read operand from PC and increment */
     pins = fam65xx_phi2_read(cpu, pins, REG_PC);
     if (!FAM65XX_GET_RDY(pins)) return pins;
+    CPU_PC(cpu)++;
     
     /* PHI1: Perform AND operation */
     CPU_A(cpu) &= BUS_GET_DATA(pins);
-    CPU_PC(cpu)++;
     fam65xx_update_nz_flags(cpu, CPU_A(cpu));
     fam65xx_transition_to_fetch(cpu);
     return pins;
@@ -155,10 +155,10 @@ static bus_state_t op_eor_imm(fam65xx_t* cpu, bus_state_t pins) {
     /* PHI2: Read operand from PC and increment */
     pins = fam65xx_phi2_read(cpu, pins, REG_PC);
     if (!FAM65XX_GET_RDY(pins)) return pins;
+    CPU_PC(cpu)++;
     
     /* PHI1: Perform EOR operation */
     CPU_A(cpu) ^= BUS_GET_DATA(pins);
-    CPU_PC(cpu)++;
     fam65xx_update_nz_flags(cpu, CPU_A(cpu));
     fam65xx_transition_to_fetch(cpu);
     return pins;
@@ -182,10 +182,10 @@ static bus_state_t op_ora_imm(fam65xx_t* cpu, bus_state_t pins) {
     /* PHI2: Read operand from PC and increment */
     pins = fam65xx_phi2_read(cpu, pins, REG_PC);
     if (!FAM65XX_GET_RDY(pins)) return pins;
+    CPU_PC(cpu)++;
     
     /* PHI1: Perform ORA operation */
     CPU_A(cpu) |= BUS_GET_DATA(pins);
-    CPU_PC(cpu)++;
     fam65xx_update_nz_flags(cpu, CPU_A(cpu));
     fam65xx_transition_to_fetch(cpu);
     return pins;

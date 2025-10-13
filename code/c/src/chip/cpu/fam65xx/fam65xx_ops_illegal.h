@@ -162,9 +162,9 @@ static bus_state_t op_xaa(fam65xx_t* cpu, bus_state_t pins) {
     /* PHI2: Read operand (immediate mode only) */
     pins = fam65xx_phi2_read(cpu, pins, REG_PC);
     if (!FAM65XX_GET_RDY(pins)) return pins;
+    CPU_PC(cpu)++;
     
     /* PHI1: X -> A, then A & operand */
-    CPU_PC(cpu)++;
     CPU_A(cpu) = CPU_X(cpu) & BUS_GET_DATA(pins);
     fam65xx_update_nz_flags(cpu, CPU_A(cpu));
     fam65xx_transition_to_fetch(cpu);
