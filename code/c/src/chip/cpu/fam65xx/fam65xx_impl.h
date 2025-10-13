@@ -173,7 +173,7 @@ static bus_state_t fam65xx_opcode_fetch(fam65xx_t* cpu, bus_state_t pins) {
         /* Has addressing mode cycles */
         cpu->current_handler = fam65xx_addr_mode_table[am_index];
     } else {
-        /* No addressing mode or immediate mode, go straight to operation */
+        /* No addressing mode (AM_NON) or immediate mode (AM_IMM), go straight to operation */
         cpu->current_handler = fam65xx_op_handlers[opcode_entry.op_index];
     }
     
