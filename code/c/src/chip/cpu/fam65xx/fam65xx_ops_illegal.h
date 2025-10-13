@@ -30,9 +30,17 @@ extern "C" {
 
 /* LAX - Load A and X */
 static bus_state_t op_lax(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read operand from target address */
-    pins = fam65xx_phi2_read(cpu, pins, REG_AB);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
+    /* PHI2: Read operand from target address or PC for immediate */
+    if (cpu->opcode_entry.am_index == AM_IMM) {
+        /* Immediate mode - read from PC */
+        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+        CPU_PC(cpu)++;
+    } else {
+        /* Memory mode - read from target address */
+        pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+    }
     
     /* PHI1: Load both A and X */
     uint8_t data = BUS_GET_DATA(pins);
@@ -62,14 +70,14 @@ static bus_state_t op_sax(fam65xx_t* cpu, bus_state_t pins) {
 
 /* ANC - AND with Carry */
 static bus_state_t op_anc(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read operand from target address or use immediate */
-    if (cpu->opcode_entry.am_index == 0) {
+    /* PHI2: Read operand from target address or PC for immediate */
+    if (cpu->opcode_entry.am_index == AM_IMM) {
         /* Immediate mode - read from PC */
         pins = fam65xx_phi2_read(cpu, pins, REG_PC);
         if (!FAM65XX_GET_RDY(pins)) return pins;
         CPU_PC(cpu)++;
     } else {
-        /* Memory mode */
+        /* Memory mode - read from target address */
         pins = fam65xx_phi2_read(cpu, pins, REG_AB);
         if (!FAM65XX_GET_RDY(pins)) return pins;
     }
@@ -84,14 +92,14 @@ static bus_state_t op_anc(fam65xx_t* cpu, bus_state_t pins) {
 
 /* ARR - AND + ROR */
 static bus_state_t op_arr(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read operand from target address or use immediate */
-    if (cpu->opcode_entry.am_index == 0) {
+    /* PHI2: Read operand from target address or PC for immediate */
+    if (cpu->opcode_entry.am_index == AM_IMM) {
         /* Immediate mode - read from PC */
         pins = fam65xx_phi2_read(cpu, pins, REG_PC);
         if (!FAM65XX_GET_RDY(pins)) return pins;
         CPU_PC(cpu)++;
     } else {
-        /* Memory mode */
+        /* Memory mode - read from target address */
         pins = fam65xx_phi2_read(cpu, pins, REG_AB);
         if (!FAM65XX_GET_RDY(pins)) return pins;
     }
@@ -110,14 +118,14 @@ static bus_state_t op_arr(fam65xx_t* cpu, bus_state_t pins) {
 
 /* ASR - AND + LSR */
 static bus_state_t op_asr(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read operand from target address or use immediate */
-    if (cpu->opcode_entry.am_index == 0) {
+    /* PHI2: Read operand from target address or PC for immediate */
+    if (cpu->opcode_entry.am_index == AM_IMM) {
         /* Immediate mode - read from PC */
         pins = fam65xx_phi2_read(cpu, pins, REG_PC);
         if (!FAM65XX_GET_RDY(pins)) return pins;
         CPU_PC(cpu)++;
     } else {
-        /* Memory mode */
+        /* Memory mode - read from target address */
         pins = fam65xx_phi2_read(cpu, pins, REG_AB);
         if (!FAM65XX_GET_RDY(pins)) return pins;
     }
@@ -133,14 +141,14 @@ static bus_state_t op_asr(fam65xx_t* cpu, bus_state_t pins) {
 
 /* SBX - (A & X) - operand -> X */
 static bus_state_t op_sbx(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read operand from target address or use immediate */
-    if (cpu->opcode_entry.am_index == 0) {
+    /* PHI2: Read operand from target address or PC for immediate */
+    if (cpu->opcode_entry.am_index == AM_IMM) {
         /* Immediate mode - read from PC */
         pins = fam65xx_phi2_read(cpu, pins, REG_PC);
         if (!FAM65XX_GET_RDY(pins)) return pins;
         CPU_PC(cpu)++;
     } else {
-        /* Memory mode */
+        /* Memory mode - read from target address */
         pins = fam65xx_phi2_read(cpu, pins, REG_AB);
         if (!FAM65XX_GET_RDY(pins)) return pins;
     }
