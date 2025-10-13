@@ -20,7 +20,9 @@ extern "C" {
 #include "json_parser.h"
 }
 
-#define CHIPS_IMPL
+#ifndef CHIPS_IMPL
+    #define CHIPS_IMPL
+#endif
 #include "../src/chip/cpu/fam65xx/fam65xx.h"
 
 namespace fs = std::filesystem;

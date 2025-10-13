@@ -310,18 +310,6 @@ uint8_t fam65xx_s(fam65xx_t* cpu);
 uint8_t fam65xx_p(fam65xx_t* cpu);
 uint16_t fam65xx_pc(fam65xx_t* cpu);
 
-/* Memory interface (to be implemented by system) */
-extern uint8_t memory_read(uint16_t addr);
-extern void memory_write(uint16_t addr, uint8_t data);
-
-/* Compatibility aliases for test runner integration */
-#define cpu_init fam65xx_init
-#define cpu_tick fam65xx_tick
-
-/* Legacy compatibility aliases */
-#define page_crossed fam65xx_page_crossed
-#define update_nz_flags fam65xx_update_nz_flags
-
 #ifdef __cplusplus
 }
 #endif

@@ -84,10 +84,6 @@
 extern "C" {
 #endif
 
-/* Memory interface must be implemented by system */
-extern uint8_t memory_read(uint16_t addr);
-extern void memory_write(uint16_t addr, uint8_t data);
-
 /* Include all modular components in dependency order to minimize forward declarations */
 
 /* 1. Core definitions - must be first (defines types and constants) */
