@@ -1,14 +1,14 @@
 #pragma once
 /*
  * fam65xx_addressing.h - MOS 65xx Family CPU Addressing Mode Handlers
- * 
+ *
  * This file contains all addressing mode handlers that prepare addresses
  * for CPU operations. These handlers are called before operation handlers
  * and set up the target address in the Address Bus (AB) register.
- * 
+ *
  * Addressing modes supported:
  * - Zero Page (ZP): $00nn
- * - Zero Page,X (ZPX): ($00nn + X) & 0xFF  
+ * - Zero Page,X (ZPX): ($00nn + X) & 0xFF
  * - Zero Page,Y (ZPY): ($00nn + Y) & 0xFF
  * - Absolute (ABS): $nnnn
  * - Absolute,X (ABX): $nnnn + X (with page cross optimization)
@@ -16,7 +16,7 @@
  * - Indirect (IND): ($nnnn) - JMP only, includes 6502 page boundary bug
  * - Indexed Indirect (INX): (($nn + X) & 0xFF)
  * - Indirect Indexed (INY): ($nn) + Y (with page cross optimization)
- * 
+ *
  * Note: Immediate, Implicit, Accumulator, and Relative modes don't use
  * addressing mode handlers - they're handled directly in operations.
  */
@@ -87,17 +87,29 @@ static bus_state_t am_abx(fam65xx_t* cpu, bus_state_t pins) {
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_PC(cpu)++;
             
-            /* PHI1: Store high byte, increment PC, and add X */
+            /* PHI1: Store high byte and set up addressing */
             CPU_ABH(cpu) = BUS_GET_DATA(pins);
             
+            /* Calculate base and effective addresses */
             uint16_t base = CPU_AB(cpu);
             uint16_t effective = base + CPU_X(cpu);
-            CPU_AB(cpu) = effective;
             
-            /* Skip cycle 2 if page_cross flag set and no page crossed */
-            if (cpu->opcode_entry.page_cross && !fam65xx_page_crossed(base, effective)) {
+            /* Store original low byte in DL for later recalculation */
+            CPU_DL(cpu) = CPU_ABL(cpu);
+            
+            /* Add X to low byte only - this creates the "wrong" address for page cross */
+            CPU_ABL(cpu) = (CPU_ABL(cpu) + CPU_X(cpu)) & 0xFF;
+            
+            /* Check if we need page cross cycle - inline page cross detection */
+            int page_crossed = ((base ^ effective) & 0x0100) != 0;
+            
+            /* Check if we need page cross cycle */
+            if (cpu->opcode_entry.page_cross && !page_crossed) {
+                /* No page cross - fix address and skip cycle 2 */
+                CPU_AB(cpu) = effective;
                 fam65xx_transition_to_operation(cpu);
             }
+            /* Otherwise continue to cycle 2 with wrong address in AB */
             break;
         }
             
@@ -106,7 +118,9 @@ static bus_state_t am_abx(fam65xx_t* cpu, bus_state_t pins) {
             pins = fam65xx_phi2_read(cpu, pins, REG_AB);
             if (!FAM65XX_GET_RDY(pins)) return pins;
 
-            /* PHI1: Complete addressing */
+            /* PHI1: Restore original address and add X to get correct address */
+            CPU_ABL(cpu) = CPU_DL(cpu);
+            CPU_AB(cpu) += CPU_X(cpu);
             fam65xx_transition_to_operation(cpu);
             break;
     }
@@ -132,16 +146,26 @@ static bus_state_t am_aby(fam65xx_t* cpu, bus_state_t pins) {
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_PC(cpu)++;
             
-            /* PHI1: Store high byte, increment PC, and add Y */
+            /* PHI1: Store high byte and set up addressing */
             CPU_ABH(cpu) = BUS_GET_DATA(pins);
             
+            /* Calculate base and effective addresses */
             uint16_t base = CPU_AB(cpu);
             uint16_t effective = base + CPU_Y(cpu);
-            CPU_AB(cpu) = effective;
             
+            /* Store original low byte in DL for later recalculation */
+            CPU_DL(cpu) = CPU_ABL(cpu);
+            
+            /* Add Y to low byte only - this creates the "wrong" address for page cross */
+            CPU_ABL(cpu) = (CPU_ABL(cpu) + CPU_Y(cpu)) & 0xFF;
+            
+            /* Check if we need page cross cycle */
             if (cpu->opcode_entry.page_cross && !fam65xx_page_crossed(base, effective)) {
+                /* No page cross - fix address and skip cycle 2 */
+                CPU_AB(cpu) = effective;
                 fam65xx_transition_to_operation(cpu);
             }
+            /* Otherwise continue to cycle 2 with wrong address in AB */
             break;
         }
             
@@ -150,7 +174,9 @@ static bus_state_t am_aby(fam65xx_t* cpu, bus_state_t pins) {
             pins = fam65xx_phi2_read(cpu, pins, REG_AB);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Complete addressing */
+            /* PHI1: Restore original address and add Y to get correct address */
+            CPU_ABL(cpu) = CPU_DL(cpu);
+            CPU_AB(cpu) += CPU_Y(cpu);
             fam65xx_transition_to_operation(cpu);
             break;
     }
