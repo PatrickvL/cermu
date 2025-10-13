@@ -207,21 +207,24 @@ static bus_state_t fam65xx_branch_helper(fam65xx_t* cpu, bus_state_t pins, uint8
             uint16_t target = CPU_PC(cpu) + offset;
             CPU_AB(cpu) = target;
             
-            /* Skip cycle 2 if no page cross and page_cross flag set */
-            if (cpu->opcode_entry.page_cross && !fam65xx_page_crossed(CPU_PC(cpu), target)) {
+            /* Branch instructions ALWAYS take page cross penalty cycle when crossing pages */
+            /* Unlike load operations, branches never skip the penalty cycle */
+            if (!fam65xx_page_crossed(CPU_PC(cpu), target)) {
+                /* No page cross - can complete immediately */
                 CPU_PC(cpu) = target;
                 fam65xx_transition_to_fetch(cpu);
                 return pins;
             }
+            /* Page cross detected - continue to penalty cycle */
             break;
         }
         
         case 1:
-            /* PHI2: Page cross penalty cycle */
+            /* PHI2: Page cross penalty cycle - dummy read from PC before branch */
             pins = fam65xx_phi2_read(cpu, pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Set final PC */
+            /* PHI1: Set final PC to target address */
             CPU_PC(cpu) = CPU_AB(cpu);
             fam65xx_transition_to_fetch(cpu);
             break;
