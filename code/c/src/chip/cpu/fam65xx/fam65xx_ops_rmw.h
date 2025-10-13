@@ -39,17 +39,19 @@ extern "C" {
 
 /* RMW handler for operations that support both accumulator and memory modes */
 #define RMW_HANDLER_START(cpu, pins, reg_idx_var) \
-    uint8_t reg_idx_var = REG_DL; \
+    uint8_t reg_idx_var; \
     if ((cpu)->opcode_entry.rmw) { \
+        reg_idx_var = REG_DL; \
         switch ((cpu)->cycle_index++) { \
             case 0: \
                 pins = fam65xx_phi2_read(cpu, pins, REG_AB); \
                 if (!FAM65XX_GET_RDY(pins)) return pins; \
                 CPU_DL(cpu) = BUS_GET_DATA(pins); \
-                break; \
+                return pins; \
             case 1: \
                 pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL); \
                 if (!FAM65XX_GET_RDY(pins)) return pins; \
+                /* Operation logic goes here in cycle 1 - after dummy write, before final write */ \
                 break; \
             case 2: \
                 pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL); \
@@ -59,9 +61,9 @@ extern "C" {
         } \
     } else { \
         /* Accumulator mode - single cycle with dummy PHI2 read */ \
+        reg_idx_var = REG_A; \
         pins = fam65xx_phi2_read(cpu, pins, REG_PC); \
         if (!FAM65XX_GET_RDY(pins)) return pins; \
-        reg_idx_var = REG_A; \
     }
 
 #define RMW_HANDLER_END(cpu) \
@@ -77,10 +79,11 @@ extern "C" {
             pins = fam65xx_phi2_read(cpu, pins, REG_AB); \
             if (!FAM65XX_GET_RDY(pins)) return pins; \
             CPU_DL(cpu) = BUS_GET_DATA(pins); \
-            break; \
+            return pins; \
         case 1: \
             pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL); \
             if (!FAM65XX_GET_RDY(pins)) return pins; \
+            /* Operation logic goes here in cycle 1 - after dummy write, before final write */ \
             break; \
         case 2: \
             pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL); \
@@ -96,81 +99,268 @@ extern "C" {
 
 /* ASL - Arithmetic Shift Left */
 static bus_state_t op_asl(fam65xx_t* cpu, bus_state_t pins) {
-    RMW_HANDLER_START(cpu, pins, reg_idx);
-    
-    uint8_t value = cpu->reg8[reg_idx];
-    if (value & 0x80) CPU_P(cpu) |= FLAG_C;
-    else CPU_P(cpu) &= ~FLAG_C;
-    value <<= 1;
-    cpu->reg8[reg_idx] = value;
-    fam65xx_update_nz_flags(cpu, value);
-    
-    RMW_HANDLER_END(cpu);
+    if (cpu->opcode_entry.rmw) {
+        /* Memory mode - 3 cycle RMW */
+        switch (cpu->cycle_index++) {
+            case 0:
+                /* Cycle 0: Read original value from memory */
+                pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+                if (!FAM65XX_GET_RDY(pins)) return pins;
+                CPU_DL(cpu) = BUS_GET_DATA(pins);
+                return pins;
+                
+            case 1:
+                /* Cycle 1: Dummy write original value back (hardware accurate - no modification) */
+                pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
+                if (!FAM65XX_GET_RDY(pins)) return pins;
+                /* No operation logic in cycle 1 - just dummy write original value */
+                return pins;
+                
+            case 2: {
+                /* Cycle 2: Perform ASL operation and write modified value */
+                uint8_t value = CPU_DL(cpu);
+                if (value & 0x80) CPU_P(cpu) |= FLAG_C;
+                else CPU_P(cpu) &= ~FLAG_C;
+                value <<= 1;
+                CPU_DL(cpu) = value;
+                fam65xx_update_nz_flags(cpu, value);
+                
+                pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
+                if (!FAM65XX_GET_RDY(pins)) return pins;
+                fam65xx_transition_to_fetch(cpu);
+                return pins;
+            }
+        }
+    } else {
+        /* Accumulator mode - single cycle */
+        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+        
+        uint8_t value = CPU_A(cpu);
+        if (value & 0x80) CPU_P(cpu) |= FLAG_C;
+        else CPU_P(cpu) &= ~FLAG_C;
+        value <<= 1;
+        CPU_A(cpu) = value;
+        fam65xx_update_nz_flags(cpu, value);
+        fam65xx_transition_to_fetch(cpu);
+    }
     return pins;
 }
 
 /* DEC - Decrement Memory (RMW only, no accumulator mode) */
 static bus_state_t op_dec(fam65xx_t* cpu, bus_state_t pins) {
-    RMW_ONLY_START(cpu, pins, reg_idx);
-    
-    cpu->reg8[reg_idx]--;
-    fam65xx_update_nz_flags(cpu, cpu->reg8[reg_idx]);
+    /* Memory mode - 3 cycle RMW operation (address already set up by addressing mode) */
+    switch (cpu->cycle_index++) {
+        case 0:
+            /* Cycle 0: Read original value from memory */
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_DL(cpu) = BUS_GET_DATA(pins);
+            return pins;
+            
+        case 1:
+            /* Cycle 1: Dummy write original value back (hardware accurate - no modification) */
+            pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            return pins;
+            
+        case 2: {
+            /* Cycle 2: Perform DEC operation and write modified value */
+            uint8_t value = CPU_DL(cpu);
+            value--;
+            CPU_DL(cpu) = value;
+            fam65xx_update_nz_flags(cpu, value);
+            
+            pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            fam65xx_transition_to_fetch(cpu);
+            return pins;
+        }
+    }
     return pins;
 }
 
 /* INC - Increment Memory (RMW only, no accumulator mode) */
 static bus_state_t op_inc(fam65xx_t* cpu, bus_state_t pins) {
-    RMW_ONLY_START(cpu, pins, reg_idx);
-    
-    cpu->reg8[reg_idx]++;
-    fam65xx_update_nz_flags(cpu, cpu->reg8[reg_idx]);
+    /* Memory mode - 3 cycle RMW operation (address already set up by addressing mode) */
+    switch (cpu->cycle_index++) {
+        case 0:
+            /* Cycle 0: Read original value from memory */
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_DL(cpu) = BUS_GET_DATA(pins);
+            return pins;
+            
+        case 1:
+            /* Cycle 1: Dummy write original value back (hardware accurate - no modification) */
+            pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            return pins;
+            
+        case 2: {
+            /* Cycle 2: Perform INC operation and write modified value */
+            uint8_t value = CPU_DL(cpu);
+            value++;
+            CPU_DL(cpu) = value;
+            fam65xx_update_nz_flags(cpu, value);
+            
+            pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            fam65xx_transition_to_fetch(cpu);
+            return pins;
+        }
+    }
     return pins;
 }
 
 /* LSR - Logical Shift Right */
 static bus_state_t op_lsr(fam65xx_t* cpu, bus_state_t pins) {
-    RMW_HANDLER_START(cpu, pins, reg_idx);
-    
-    uint8_t value = cpu->reg8[reg_idx];
-    if (value & 0x01) CPU_P(cpu) |= FLAG_C;
-    else CPU_P(cpu) &= ~FLAG_C;
-    value >>= 1;
-    cpu->reg8[reg_idx] = value;
-    fam65xx_update_nz_flags(cpu, value);
-    
-    RMW_HANDLER_END(cpu);
+    if (cpu->opcode_entry.rmw) {
+        /* Memory mode - 3 cycle RMW operation */
+        switch (cpu->cycle_index++) {
+            case 0:
+                /* Cycle 0: Read original value from memory */
+                pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+                if (!FAM65XX_GET_RDY(pins)) return pins;
+                CPU_DL(cpu) = BUS_GET_DATA(pins);
+                return pins;
+                
+            case 1:
+                /* Cycle 1: Dummy write original value back (hardware accurate - no modification) */
+                pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
+                if (!FAM65XX_GET_RDY(pins)) return pins;
+                return pins;
+                
+            case 2: {
+                /* Cycle 2: Perform LSR operation and write modified value */
+                uint8_t value = CPU_DL(cpu);
+                if (value & 0x01) CPU_P(cpu) |= FLAG_C;
+                else CPU_P(cpu) &= ~FLAG_C;
+                value >>= 1;
+                CPU_DL(cpu) = value;
+                fam65xx_update_nz_flags(cpu, value);
+                
+                pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
+                if (!FAM65XX_GET_RDY(pins)) return pins;
+                fam65xx_transition_to_fetch(cpu);
+                return pins;
+            }
+        }
+    } else {
+        /* Accumulator mode - single cycle */
+        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+        
+        uint8_t value = CPU_A(cpu);
+        if (value & 0x01) CPU_P(cpu) |= FLAG_C;
+        else CPU_P(cpu) &= ~FLAG_C;
+        value >>= 1;
+        CPU_A(cpu) = value;
+        fam65xx_update_nz_flags(cpu, value);
+        fam65xx_transition_to_fetch(cpu);
+    }
     return pins;
 }
 
 /* ROL - Rotate Left */
 static bus_state_t op_rol(fam65xx_t* cpu, bus_state_t pins) {
-    RMW_HANDLER_START(cpu, pins, reg_idx);
-    
-    uint8_t value = cpu->reg8[reg_idx];
-    uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 1 : 0;
-    if (value & 0x80) CPU_P(cpu) |= FLAG_C;
-    else CPU_P(cpu) &= ~FLAG_C;
-    value = (value << 1) | old_carry;
-    cpu->reg8[reg_idx] = value;
-    fam65xx_update_nz_flags(cpu, value);
-    
-    RMW_HANDLER_END(cpu);
+    if (cpu->opcode_entry.rmw) {
+        /* Memory mode - 3 cycle RMW operation */
+        switch (cpu->cycle_index++) {
+            case 0:
+                /* Cycle 0: Read original value from memory */
+                pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+                if (!FAM65XX_GET_RDY(pins)) return pins;
+                CPU_DL(cpu) = BUS_GET_DATA(pins);
+                return pins;
+                
+            case 1:
+                /* Cycle 1: Dummy write original value back (hardware accurate - no modification) */
+                pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
+                if (!FAM65XX_GET_RDY(pins)) return pins;
+                return pins;
+                
+            case 2: {
+                /* Cycle 2: Perform ROL operation and write modified value */
+                uint8_t value = CPU_DL(cpu);
+                uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 1 : 0;
+                if (value & 0x80) CPU_P(cpu) |= FLAG_C;
+                else CPU_P(cpu) &= ~FLAG_C;
+                value = (value << 1) | old_carry;
+                CPU_DL(cpu) = value;
+                fam65xx_update_nz_flags(cpu, value);
+                
+                pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
+                if (!FAM65XX_GET_RDY(pins)) return pins;
+                fam65xx_transition_to_fetch(cpu);
+                return pins;
+            }
+        }
+    } else {
+        /* Accumulator mode - single cycle */
+        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+        
+        uint8_t value = CPU_A(cpu);
+        uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 1 : 0;
+        if (value & 0x80) CPU_P(cpu) |= FLAG_C;
+        else CPU_P(cpu) &= ~FLAG_C;
+        value = (value << 1) | old_carry;
+        CPU_A(cpu) = value;
+        fam65xx_update_nz_flags(cpu, value);
+        fam65xx_transition_to_fetch(cpu);
+    }
     return pins;
 }
 
 /* ROR - Rotate Right */
 static bus_state_t op_ror(fam65xx_t* cpu, bus_state_t pins) {
-    RMW_HANDLER_START(cpu, pins, reg_idx);
-    
-    uint8_t value = cpu->reg8[reg_idx];
-    uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 0x80 : 0;
-    if (value & 0x01) CPU_P(cpu) |= FLAG_C;
-    else CPU_P(cpu) &= ~FLAG_C;
-    value = (value >> 1) | old_carry;
-    cpu->reg8[reg_idx] = value;
-    fam65xx_update_nz_flags(cpu, value);
-    
-    RMW_HANDLER_END(cpu);
+    if (cpu->opcode_entry.rmw) {
+        /* Memory mode - 3 cycle RMW operation */
+        switch (cpu->cycle_index++) {
+            case 0:
+                /* Cycle 0: Read original value from memory */
+                pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+                if (!FAM65XX_GET_RDY(pins)) return pins;
+                CPU_DL(cpu) = BUS_GET_DATA(pins);
+                return pins;
+                
+            case 1:
+                /* Cycle 1: Dummy write original value back (hardware accurate - no modification) */
+                pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
+                if (!FAM65XX_GET_RDY(pins)) return pins;
+                return pins;
+                
+            case 2: {
+                /* Cycle 2: Perform ROR operation and write modified value */
+                uint8_t value = CPU_DL(cpu);
+                uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 0x80 : 0;
+                if (value & 0x01) CPU_P(cpu) |= FLAG_C;
+                else CPU_P(cpu) &= ~FLAG_C;
+                value = (value >> 1) | old_carry;
+                CPU_DL(cpu) = value;
+                fam65xx_update_nz_flags(cpu, value);
+                
+                pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
+                if (!FAM65XX_GET_RDY(pins)) return pins;
+                fam65xx_transition_to_fetch(cpu);
+                return pins;
+            }
+        }
+    } else {
+        /* Accumulator mode - single cycle */
+        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+        
+        uint8_t value = CPU_A(cpu);
+        uint8_t old_carry = (CPU_P(cpu) & FLAG_C) ? 0x80 : 0;
+        if (value & 0x01) CPU_P(cpu) |= FLAG_C;
+        else CPU_P(cpu) &= ~FLAG_C;
+        value = (value >> 1) | old_carry;
+        CPU_A(cpu) = value;
+        fam65xx_update_nz_flags(cpu, value);
+        fam65xx_transition_to_fetch(cpu);
+    }
     return pins;
 }
 
