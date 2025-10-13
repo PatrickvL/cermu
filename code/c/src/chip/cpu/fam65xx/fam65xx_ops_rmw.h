@@ -39,7 +39,7 @@ extern "C" {
 
 /* RMW handler for operations that support both accumulator and memory modes */
 #define RMW_HANDLER_START(cpu, pins, reg_idx_var) \
-    uint8_t reg_idx_var; \
+    uint8_t reg_idx_var = REG_DL; \
     if ((cpu)->opcode_entry.rmw) { \
         switch ((cpu)->cycle_index++) { \
             case 0: \
@@ -50,7 +50,6 @@ extern "C" {
             case 1: \
                 pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL); \
                 if (!FAM65XX_GET_RDY(pins)) return pins; \
-                reg_idx_var = REG_DL; \
                 break; \
             case 2: \
                 pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL); \
