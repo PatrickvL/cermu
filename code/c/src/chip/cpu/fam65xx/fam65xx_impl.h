@@ -157,10 +157,10 @@ static bus_state_t fam65xx_opcode_fetch(fam65xx_t* cpu, bus_state_t pins) {
     /* PHI2: Read opcode from PC */
     pins = fam65xx_phi2_read(cpu, pins, REG_PC);
     if (!FAM65XX_GET_RDY(pins)) return pins;
+    CPU_PC(cpu)++;
     
     /* PHI1: Decode opcode, increment PC, and set up next handler */
     CPU_IR(cpu) = BUS_GET_DATA(pins);
-    CPU_PC(cpu)++;  /* CRITICAL FIX: Increment PC after reading opcode */
     
     /* Cache the opcode entry (copy once, accessed many times) */
     opcode_info_t opcode_entry = fam65xx_opcode_table[CPU_IR(cpu)];
@@ -169,11 +169,11 @@ static bus_state_t fam65xx_opcode_fetch(fam65xx_t* cpu, bus_state_t pins) {
     
     /* Transition based on cached entry */
     int am_index = opcode_entry.am_index;
-    if (am_index > AM_NON) {
+    if (am_index > AM_IMM) {
         /* Has addressing mode cycles */
         cpu->current_handler = fam65xx_addr_mode_table[am_index];
     } else {
-        /* No addressing mode, go straight to operation */
+        /* No addressing mode or immediate mode, go straight to operation */
         cpu->current_handler = fam65xx_op_handlers[opcode_entry.op_index];
     }
     

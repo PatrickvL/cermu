@@ -31,7 +31,8 @@ extern "C" {
 //     operate directly on registers without memory access
 
 typedef enum {
-    AM_NON = 0, /* No addressing handler (Implicit/Immediate/Accumulator/Relative) */
+    AM_NON = 0, /* No addressing handler (Implicit/Accumulator/Relative) */
+    AM_IMM,     /* Immediate - operand is next byte */
     AM_ZER,     /* Zero Page - operand at $00nn */
     AM_ZPX,     /* Zero Page,X - operand at ($00nn + X) & 0xFF */
     AM_ZPY,     /* Zero Page,Y - operand at ($00nn + Y) & 0xFF */
@@ -46,7 +47,6 @@ typedef enum {
 
 /* Aliases for documentation/clarity (all map to AM_NON) */
 #define AM_IMP  AM_NON  /* Implied/Implicit - no operand */
-#define AM_IMM  AM_NON  /* Immediate - operand is next byte */
 #define AM_ACC  AM_NON  /* Accumulator - operate on A register */
 #define AM_REL  AM_NON  /* Relative - branch offset */
 
@@ -91,6 +91,7 @@ typedef enum {
 /* Addressing mode table - function pointers ordered by enum */
 static const cycle_fn_t fam65xx_addr_mode_table[AM_COUNT] = {
     NULL,    // AM_NON : No handler needed
+    NULL,    // AM_IMM : No handler (handled in operation)
     am_zp,   // AM_ZER
     am_zpx,  // AM_ZPX
     am_zpy,  // AM_ZPY

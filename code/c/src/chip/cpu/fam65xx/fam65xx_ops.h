@@ -76,10 +76,10 @@ static bus_state_t op_adc_imm(fam65xx_t* cpu, bus_state_t pins) {
     /* PHI2: Read operand from PC and increment */
     pins = fam65xx_phi2_read(cpu, pins, REG_PC);
     if (!FAM65XX_GET_RDY(pins)) return pins;
+    CPU_PC(cpu)++;
     
     /* PHI1: Perform ADC operation */
     uint8_t operand = BUS_GET_DATA(pins);
-    CPU_PC(cpu)++;
     uint16_t result = CPU_A(cpu) + operand + (CPU_P(cpu) & FLAG_C ? 1 : 0);
     
     uint8_t a_old = CPU_A(cpu);
@@ -131,10 +131,10 @@ static bus_state_t op_sbc_imm(fam65xx_t* cpu, bus_state_t pins) {
     /* PHI2: Read operand from PC and increment */
     pins = fam65xx_phi2_read(cpu, pins, REG_PC);
     if (!FAM65XX_GET_RDY(pins)) return pins;
+    CPU_PC(cpu)++;
     
     /* PHI1: Perform SBC operation */
     uint8_t operand = BUS_GET_DATA(pins);
-    CPU_PC(cpu)++;
     uint16_t result = CPU_A(cpu) - operand - (CPU_P(cpu) & FLAG_C ? 0 : 1);
     
     uint8_t a_old = CPU_A(cpu);
@@ -206,10 +206,10 @@ static bus_state_t fam65xx_branch_helper(fam65xx_t* cpu, bus_state_t pins, uint8
             /* PHI2: Read branch offset from PC */
             pins = fam65xx_phi2_read(cpu, pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_PC(cpu)++;
             
             /* PHI1: Check branch condition */
             bool branch_taken = ((CPU_P(cpu) & flag_mask) != 0) == flag_value;
-            CPU_PC(cpu)++;
             
             if (!branch_taken) {
                 fam65xx_transition_to_fetch(cpu);
@@ -309,10 +309,10 @@ static bus_state_t op_cmp_imm(fam65xx_t* cpu, bus_state_t pins) {
     /* PHI2: Read operand from PC and increment */
     pins = fam65xx_phi2_read(cpu, pins, REG_PC);
     if (!FAM65XX_GET_RDY(pins)) return pins;
+    CPU_PC(cpu)++;
     
     /* PHI1: Perform CMP operation */
     uint8_t data = BUS_GET_DATA(pins);
-    CPU_PC(cpu)++;
     uint16_t result = CPU_A(cpu) - data;
     
     CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
@@ -346,10 +346,10 @@ static bus_state_t op_cpx_imm(fam65xx_t* cpu, bus_state_t pins) {
     /* PHI2: Read operand from PC and increment */
     pins = fam65xx_phi2_read(cpu, pins, REG_PC);
     if (!FAM65XX_GET_RDY(pins)) return pins;
+    CPU_PC(cpu)++;
     
     /* PHI1: Perform CPX operation */
     uint8_t data = BUS_GET_DATA(pins);
-    CPU_PC(cpu)++;
     uint16_t result = CPU_X(cpu) - data;
     
     CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
@@ -383,10 +383,10 @@ static bus_state_t op_cpy_imm(fam65xx_t* cpu, bus_state_t pins) {
     /* PHI2: Read operand from PC and increment */
     pins = fam65xx_phi2_read(cpu, pins, REG_PC);
     if (!FAM65XX_GET_RDY(pins)) return pins;
+    CPU_PC(cpu)++;
     
     /* PHI1: Perform CPY operation */
     uint8_t data = BUS_GET_DATA(pins);
-    CPU_PC(cpu)++;
     uint16_t result = CPU_Y(cpu) - data;
     
     CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
