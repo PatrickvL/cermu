@@ -147,39 +147,6 @@ static inline bool fam65xx_process_interrupt_detection(fam65xx_t* cpu, bus_state
     return false;
 }
 
-/* Update interrupt shift register every cycle for hardware-accurate detection */
-static inline void fam65xx_update_interrupt_shift_register(fam65xx_t* cpu, bus_state_t pins) {
-    /* Use intermediate variable to reduce memory accesses */
-    uint32_t shift_reg = cpu->interrupt_shift_register;
-    
-    /* Shift the register left by one bit */
-    shift_reg <<= 1;
-    
-    /* Sample IRQ line and insert into IRQ bits (active low) */
-    if (!(pins & FAM65XX_IRQ)) {
-        shift_reg |= (1 << INT_IRQ_START_BIT);
-    }
-    
-    /* NMI Edge Detection - only trigger on falling edge */
-    uint8_t nmi_current = (pins & FAM65XX_NMI) ? 1 : 0;
-    if (cpu->nmi_prev && !nmi_current) {
-        /* Falling edge detected - insert into NMI bits */
-        shift_reg |= (1 << INT_NMI_START_BIT);
-    }
-    cpu->nmi_prev = nmi_current;
-    
-    /* Sample RESET line and insert into RESET bits (active low) */
-    if (!(pins & FAM65XX_RES)) {
-        shift_reg |= (1 << INT_RESET_START_BIT);
-    }
-    
-    /* Clear separator bits to prevent cross-over */
-    shift_reg &= ~INT_SEPARATOR_MASK;
-    
-    /* Store back the updated shift register */
-    cpu->interrupt_shift_register = shift_reg;
-}
-
 /* ============================================================================
  * OPCODE FETCH AND TRANSITION FUNCTIONS
  * ============================================================================
@@ -279,9 +246,6 @@ bus_state_t fam65xx_tick(fam65xx_t* cpu, bus_state_t pins) {
      */
     
     /* Update interrupt shift register every cycle for hardware-accurate detection */
-    fam65xx_update_interrupt_shift_register(cpu, pins);
-    
-    /* Process interrupt detection with cycle-accurate timing */
     if (fam65xx_process_interrupt_detection(cpu, pins)) {
         /* Interrupt detected - check if we should hijack current instruction */
         if (cpu->current_handler != op_brk) {
