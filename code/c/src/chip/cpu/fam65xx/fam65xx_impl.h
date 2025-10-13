@@ -192,31 +192,6 @@ static void fam65xx_transition_to_fetch(fam65xx_t* cpu) {
     cpu->current_handler = fam65xx_opcode_fetch;
 }
 
-/* Hardware-accurate RESET sequence handler
- * RESET is a special interrupt that initializes the CPU state and fetches PC from $FFFC
- * Real hardware goes through full BRK sequence including stack decrements
- */
-static void fam65xx_reset(fam65xx_t* cpu, bus_state_t pins) {
-    (void)pins; /* Suppress unused parameter warning */
-    
-    /* Initialize interrupt state - shift register starts inactive (lines high) */
-    cpu->interrupt_shift_register = 0xFFFFFFFF;  /* All bits high = inactive state */
-    cpu->nmi_prev = 1;  /* NMI line starts high (inactive) for edge detection */
-    
-    /* Set BRK flag to indicate RESET and start interrupt sequence */
-    cpu->brk_flags |= FAM65XX_BRK_RESET;
-    
-    /* Switch to BRK handler starting from cycle 0 for full hardware sequence */
-    cpu->current_handler = op_brk;
-    cpu->cycle_index = 0;  /* Start from beginning to get proper stack decrements */
-
-    /* Initialize CPU state for RESET - hardware accurate */
-    CPU_P(cpu) = FLAG_U | FLAG_I;  /* Set unused and interrupt disable flags */
-    /* Note: SP starts at $FF and will be decremented 3 times by BRK handler to $FD */
-    CPU_S(cpu) = 0xFF;  /* Hardware starts at $FF, BRK sequence decrements to $FD */
-    
-    /* PC will be set by BRK handler after reading from RESET vector */
-}
 
 /* ============================================================================
  * CPU TICK FUNCTION
@@ -294,13 +269,19 @@ bus_state_t fam65xx_init(fam65xx_t* cpu, const fam65xx_desc_t* desc) {
     /* Initialize register layout:
      * ZP high byte (REG_ZPH) = 0x00 (always zero for zero page)
      * SP high byte (REG_SPH) = 0x01 (stack is always in page 1)
-     * S register (stack pointer low) = 0xFD (RESET sets SP to $FD)
      */
     cpu->reg8[REG_ZPH] = 0x00;  /* Zero page high byte */
     cpu->reg8[REG_SPH] = 0x01;  /* Stack pointer high byte */
-
-    fam65xx_reset(cpu, 0);
     
+    /* Initialize interrupt state - shift register starts inactive (lines high) */
+    cpu->interrupt_shift_register = 0xFFFFFFFF;  /* All bits high = inactive state */
+    cpu->nmi_prev = 1;  /* NMI line starts high (inactive) for edge detection */
+    
+    /* Initialize default CPU state */
+    CPU_P(cpu) = FLAG_U | FLAG_I;  /* Set unused and interrupt disable flags */
+    CPU_S(cpu) = 0xFD;  /* Default stack pointer after reset */
+    
+    /* Set up default bus pins state */
     bus_state_t pins = 0;
     pins |= FAM65XX_RDY;   /* Set ready bit */
     pins |= FAM65XX_RW;    /* Set read mode as default state */
@@ -308,6 +289,32 @@ bus_state_t fam65xx_init(fam65xx_t* cpu, const fam65xx_desc_t* desc) {
     pins |= FAM65XX_NMI;   /* NMI line starts HIGH (inactive) */
     pins |= FAM65XX_RES;   /* RESET line starts HIGH (inactive) */
     
+    /* CPU is initialized but not executing - caller must call bootstrap or reset */
+    cpu->current_handler = NULL;
+    cpu->cycle_index = 0;
+    
+    return pins;
+}
+
+/* Start hardware RESET sequence for normal emulation */
+bus_state_t fam65xx_reset(fam65xx_t* cpu, bus_state_t pins) {
+    /* Initialize interrupt state - shift register starts inactive (lines high) */
+    cpu->interrupt_shift_register = 0xFFFFFFFF;  /* All bits high = inactive state */
+    cpu->nmi_prev = 1;  /* NMI line starts high (inactive) for edge detection */
+    
+    /* Set BRK flag to indicate RESET and start interrupt sequence */
+    cpu->brk_flags |= FAM65XX_BRK_RESET;
+    
+    /* Switch to BRK handler starting from cycle 0 for full hardware sequence */
+    cpu->current_handler = op_brk;
+    cpu->cycle_index = 0;  /* Start from beginning to get proper stack decrements */
+
+    /* Initialize CPU state for RESET - hardware accurate */
+    CPU_P(cpu) = FLAG_U | FLAG_I;  /* Set unused and interrupt disable flags */
+    /* Note: SP starts at $FF and will be decremented 3 times by BRK handler to $FD */
+    CPU_S(cpu) = 0xFF;  /* Hardware starts at $FF, BRK sequence decrements to $FD */
+    
+    /* PC will be set by BRK handler after reading from RESET vector */
     return pins;
 }
 
@@ -334,11 +341,19 @@ bool fam65xx_opdone(fam65xx_t* cpu) {
 
 /* Bootstrap function for test runner initialization */
 bus_state_t fam65xx_bootstrap(fam65xx_t* cpu, bus_state_t pins) {
-    /* Set up for first instruction fetch */
+    /* Set up for immediate instruction execution without RESET sequence */
     pins |= FAM65XX_RDY;   /* Ensure RDY is high for execution */
     pins |= FAM65XX_RW;    /* Ensure RW is set as default state */
-    cpu->cycle_index = 0;  /* Reset cycle index */
-    cpu->current_handler = fam65xx_opcode_fetch; /* Ensure handler is set to fetch */
+    pins |= FAM65XX_IRQ;   /* IRQ line high (inactive) */
+    pins |= FAM65XX_NMI;   /* NMI line high (inactive) */
+    pins |= FAM65XX_RES;   /* RESET line high (inactive) */
+    
+    /* Clear any interrupt flags that might have been set */
+    cpu->brk_flags = 0;
+    
+    /* Set up for instruction fetch - CPU ready to execute next instruction */
+    cpu->cycle_index = 0;
+    cpu->current_handler = fam65xx_opcode_fetch;
     
     return pins;
 }

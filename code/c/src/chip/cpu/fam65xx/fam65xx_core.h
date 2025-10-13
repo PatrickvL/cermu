@@ -288,6 +288,7 @@ static void fam65xx_transition_to_fetch(fam65xx_t* cpu);
 
 /* Main API functions (callback-based for test runner compatibility) */
 bus_state_t fam65xx_init(fam65xx_t* cpu, const fam65xx_desc_t* desc);
+bus_state_t fam65xx_reset(fam65xx_t* cpu, bus_state_t pins);
 bus_state_t fam65xx_tick(fam65xx_t* cpu, bus_state_t pins);
 bool fam65xx_opdone(fam65xx_t* cpu);
 bus_state_t fam65xx_bootstrap(fam65xx_t* cpu, bus_state_t pins);
