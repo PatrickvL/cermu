@@ -30,15 +30,13 @@ extern "C" {
 static bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins) {
     switch (cpu->cycle_index++) {
         case 0: {
-            /* BRK does a dummy read from PC+1, then increments PC to point to PC+2 for return address */
+            /* BRK does a dummy read from PC+1, then increments PC to point to PC+1 for return address */
             if (0 == (cpu->brk_flags & (FAM65XX_BRK_IRQ | FAM65XX_BRK_NMI))) {
-                /* For software BRK, do dummy read from PC+1, then set PC to PC+2 for return address */
-                uint16_t dummy_read_addr = CPU_PC(cpu) + 1;
-                CPU_PC(cpu) += 2;  /* PC now points to PC+2 for return address */
-                pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+                /* For software BRK, do dummy read from PC+1, then set PC to PC+1 for return address */
+                pins = fam65xx_phi2_read(cpu, pins, REG_PC);
                 if (!FAM65XX_GET_RDY(pins)) return pins;
-                /* Set up address for dummy read */
-                CPU_AB(cpu) = dummy_read_addr;
+                /* PHI1: Increment PC once - PC now points to PC+1 for return address */
+                CPU_PC(cpu) += 1;
             } else {
                 /* For hardware interrupts, do dummy read from current PC (don't increment) */
                 pins = fam65xx_phi2_read(cpu, pins, REG_PC);
@@ -118,11 +116,7 @@ static bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins) {
 
 /* JMP - Jump */
 static bus_state_t op_jmp(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Dummy read (JMP target address set by addressing mode) */
-    pins = fam65xx_phi2_read(cpu, pins, REG_AB);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    /* PHI1: Set PC to target address */
+    /* PHI1: Set PC to target address (no additional bus cycle needed) */
     CPU_PC(cpu) = CPU_AB(cpu);
     fam65xx_transition_to_fetch(cpu);
     return pins;
