@@ -65,54 +65,34 @@ static bus_state_t op_adc(fam65xx_t* cpu, bus_state_t pins) {
     
     if (CPU_P(cpu) & FLAG_D) {
         /* BCD (Decimal) mode - 6502 hardware behavior */
-        /* Based on research: When invalid BCD digits (A-F) are present,
-         * the 6502 uses binary arithmetic result instead of BCD correction */
+        uint8_t al = (a_old & 0x0F) + (operand & 0x0F) + carry_in;
+        uint8_t ah = (a_old >> 4) + (operand >> 4);
         
+        if (al > 9) {
+            al = (al + 6) & 0x0F;
+            ah++;
+        }
+        
+        /* Set flags before final BCD correction */
         uint16_t binary_result = a_old + operand + carry_in;
+        CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+                     (binary_result & 0x80 ? FLAG_N : 0) |                    /* N based on binary result */
+                     (binary_result == 0 ? FLAG_Z : 0) |                      /* Z based on binary result */
+                     (((a_old ^ binary_result) & (operand ^ binary_result) & 0x80) ? FLAG_V : 0); /* V based on binary */
         
-        /* Check for invalid BCD digits (A-F in either nibble) */
-        bool invalid_a = ((a_old & 0x0F) > 9) || ((a_old >> 4) > 9);
-        bool invalid_operand = ((operand & 0x0F) > 9) || ((operand >> 4) > 9);
-        
-        if (invalid_a || invalid_operand) {
-            /* Invalid BCD digits present - use binary arithmetic result */
-            CPU_A(cpu) = binary_result & 0xFF;
+        if (ah > 9) {
+            ah = (ah + 6) & 0x0F;
+            CPU_P(cpu) |= FLAG_C;
         } else {
-            /* Valid BCD digits - apply BCD correction */
-            uint8_t low_nibble = (a_old & 0x0F) + (operand & 0x0F) + carry_in;
-            uint8_t high_nibble = (a_old >> 4) + (operand >> 4);
-            
-            /* Correct low nibble */
-            if (low_nibble > 9) {
-                low_nibble += 6;
-                high_nibble++;
-            }
-            
-            /* Correct high nibble */
-            if (high_nibble > 9) {
-                high_nibble += 6;
-            }
-            
-            CPU_A(cpu) = ((high_nibble & 0x0F) << 4) | (low_nibble & 0x0F);
+            CPU_P(cpu) &= ~FLAG_C;
         }
         
-        /* Set flags based on binary calculation */
-        if (invalid_a || invalid_operand) {
-            /* For invalid BCD: special flag behavior - Z flag is NOT set even for zero result */
-            uint8_t binary_result_byte = binary_result & 0xFF;
-            CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                         (binary_result_byte & FLAG_N) |
-                         /* Z flag explicitly NOT set for invalid BCD (hardware quirk) */ 0 |
-                         (binary_result > 0xFF ? FLAG_C : 0) |
-                         (((a_old ^ binary_result) & (operand ^ binary_result) & 0x80) ? FLAG_V : 0);
-        } else {
-            /* For valid BCD: flags based on final BCD result */
-            CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                         (CPU_A(cpu) & FLAG_N) |
-                         (CPU_A(cpu) == 0 ? FLAG_Z : 0) |
-                         (binary_result > 0xFF ? FLAG_C : 0) |
-                         (((a_old ^ binary_result) & (operand ^ binary_result) & 0x80) ? FLAG_V : 0);
+        /* Final carry handling from binary operation */
+        if (binary_result > 0xFF) {
+            CPU_P(cpu) |= FLAG_C;
         }
+        
+        CPU_A(cpu) = (ah << 4) | al;
     } else {
         /* Binary mode */
         uint16_t result = a_old + operand + carry_in;
