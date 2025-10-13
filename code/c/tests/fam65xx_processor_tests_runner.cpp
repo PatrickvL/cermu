@@ -189,9 +189,18 @@ public:
     }
     
     // Setup memory for new test with optimizations
-    void setup_memory_for_test(const cpu_state_t* initial) {
+    void setup_memory_for_test(const cpu_state_t* initial, const cpu_state_t* previous_final = nullptr) {
         // Clear bus cycle tracking for new test - reserve capacity to avoid reallocations
         clear_bus_cycles();
+        
+        // PERFORMANCE OPTIMIZATION: Only clear memory that was actually used in previous test
+        if (previous_final != nullptr) {
+            // Use optimized selective clearing
+            clear_written_memory(previous_final);
+        } else {
+            // First test - clear all memory (constructor already did this, but be safe)
+            std::fill(memory, memory + 65536, 0);
+        }
         
         // Set up memory from RAM entries
         for (int i = 0; i < initial->ram_count; i++) {
@@ -351,6 +360,7 @@ private:
     std::atomic<bool>& global_test_failed;
     bool stop_on_failure;
     
+    
 public:
     TestWorkerPool(size_t num_workers, ThreadSafeOutput& output, ThreadSafeTestResults& res,
                    bool verbose, bool quiet, std::atomic<bool>& test_failed, bool stop_fail)
@@ -386,6 +396,11 @@ public:
     
 private:
     void worker_thread(size_t worker_id) {
+        // PERFORMANCE OPTIMIZATION: Create one harness per worker thread
+        // Reuse the same harness for all tests in this thread to avoid repeated initialization
+        ProcessorTestHarness harness;
+        processor_test_t* previous_test = nullptr;
+        
         while (!shutdown) {
             TestItem item;
             
@@ -405,12 +420,12 @@ private:
                 break;
             }
             
-            // Process the test
-            process_single_test(item, worker_id);
+            // Process the test with reused harness
+            process_single_test(item, worker_id, &harness, previous_test);
         }
     }
     
-    void process_single_test(const TestItem& item, size_t worker_id) {
+    void process_single_test(const TestItem& item, size_t worker_id, ProcessorTestHarness* harness, processor_test_t*& previous_test) {
         std::ostringstream thread_output;
         
         // Parse and run the test
@@ -421,7 +436,14 @@ private:
             return;
         }
         
-        bool test_result = run_processor_test_threaded(&test, thread_output, worker_id);
+        bool test_result = run_processor_test_threaded(&test, thread_output, worker_id, harness, previous_test);
+        
+        // Update previous test for next iteration's memory optimization
+        if (previous_test) {
+            *previous_test = test; // Copy test data for next iteration
+        } else {
+            previous_test = new processor_test_t(test); // First test for this thread
+        }
         
         // Add output to thread-safe handler
         if (!thread_output.str().empty()) {
@@ -479,55 +501,52 @@ private:
         return match;
     }
     
-    bool run_processor_test_threaded(const processor_test_t* test, std::ostringstream& output, size_t worker_id) {
+    bool run_processor_test_threaded(const processor_test_t* test, std::ostringstream& output, size_t worker_id,
+                                    ProcessorTestHarness* harness, const processor_test_t* previous_test) {
         results.total_tests++;
         
         if (verbose_mode) {
             output << "[Worker " << worker_id << "] Running test: " << test->name << std::endl;
         }
         
-        // Create test harness (this is thread-safe as each thread has its own instance)
-        ProcessorTestHarness harness;
+        // PERFORMANCE OPTIMIZATION: Use selective memory clearing based on previous test
+        const cpu_state_t* previous_final = previous_test ? &previous_test->final : nullptr;
+        harness->setup_memory_for_test(&test->initial, previous_final);
         
-        // Setup and run test (same logic as original)
-        harness.setup_memory_for_test(&test->initial);
+        // CRITICAL FIX: Bootstrap CPU to reset state before setting test state
+        harness->bootstrap_processor_for_tests();
         
-        harness.set_pc(test->initial.pc);
-        harness.set_a(test->initial.a);
-        harness.set_x(test->initial.x);
-        harness.set_y(test->initial.y);
-        harness.set_sp(test->initial.s);
-        harness.set_status(test->initial.p);
+        harness->set_pc(test->initial.pc);
+        harness->set_a(test->initial.a);
+        harness->set_x(test->initial.x);
+        harness->set_y(test->initial.y);
+        harness->set_sp(test->initial.s);
+        harness->set_status(test->initial.p);
 
         uint16_t pc_addr = test->initial.pc;
-        uint8_t current_opcode = harness.get_memory(pc_addr);
-        
-        // Thread-safe opcode tracking
-        results.record_opcode_result(current_opcode, false); // Will be updated if successful
+        uint8_t current_opcode = harness->get_memory(pc_addr);
         
         if (verbose_mode) {
             output << "  [Worker " << worker_id << "] Opcode at PC 0x" << std::hex << test->initial.pc
                    << ": 0x" << std::hex << (int)current_opcode << std::dec << std::endl;
         }
         
-        uint32_t initial_cycle_count = harness.get_cycle_count();
+        uint32_t initial_cycle_count = harness->get_cycle_count();
         
-        // Bootstrap and execute with detailed logging in verbose mode
-        harness.bootstrap_processor_for_tests();
-        
+        // Execute instruction (CPU already bootstrapped and configured)
         bool step_result;
         if (verbose_mode) {
             output << "  [Worker " << worker_id << "] Executing instruction with cycle-by-cycle details:" << std::endl;
-            step_result = harness.step_with_debug(&output);
+            step_result = harness->step_with_debug(&output);
         } else {
-            step_result = harness.step();
+            step_result = harness->step();
         }
         
-        uint32_t cycles_executed = harness.get_cycle_count() - initial_cycle_count;
+        uint32_t cycles_executed = harness->get_cycle_count() - initial_cycle_count;
         
         if (verbose_mode) {
             output << "  [Worker " << worker_id << "] Final state: PC=0x" << std::hex
-                   << harness.get_pc() << " A=0x" << (int)harness.get_a()
+                   << harness->get_pc() << " A=0x" << (int)harness->get_a()
                    << " Cycles=" << std::dec << cycles_executed << std::endl;
         }
         
@@ -537,6 +556,7 @@ private:
                        << std::hex << (int)current_opcode << ")" << std::dec << std::endl;
             }
             results.failed_tests++;
+            results.record_opcode_result(current_opcode, false); // Record execution failure
             return false;
         }
         
@@ -546,7 +566,7 @@ private:
         bool bus_cycle_match = true;
         
         // Check registers
-        uint16_t actual_pc = harness.get_pc();
+        uint16_t actual_pc = harness->get_pc();
         if (actual_pc != test->final.pc) {
             if (!quiet_mode) {
                 output << "FAIL " << test->name << ": PC - expected 0x" << std::hex
@@ -556,11 +576,11 @@ private:
         }
         
         // Additional register checks (abbreviated for space, but include all original checks)
-        if (harness.get_sp() != test->final.s ||
-            harness.get_a() != test->final.a ||
-            harness.get_x() != test->final.x ||
-            harness.get_y() != test->final.y ||
-            harness.get_status() != test->final.p) {
+        if (harness->get_sp() != test->final.s ||
+            harness->get_a() != test->final.a ||
+            harness->get_x() != test->final.x ||
+            harness->get_y() != test->final.y ||
+            harness->get_status() != test->final.p) {
             state_match = false;
             // Detailed failure reporting would go here
         }
@@ -570,12 +590,12 @@ private:
             uint16_t addr = test->final.ram[i].address;
             for (uint8_t j = 0; j < test->final.ram[i].byte_count; j++) {
                 uint8_t expected_value = test->final.ram[i].bytes[j];
-                uint8_t actual_value = harness.get_memory(addr + j);
+                uint8_t actual_value = harness->get_memory(addr + j);
                 
                 if (actual_value != expected_value) {
                     if (!quiet_mode) {
-                        output << "FAIL " << test->name << ": Memory[0x" << std::hex << (addr + j) 
-                               << "] - expected 0x" << (int)expected_value 
+                        output << "FAIL " << test->name << ": Memory[0x" << std::hex << (addr + j)
+                               << "] - expected 0x" << (int)expected_value
                                << ", got 0x" << (int)actual_value << std::dec << std::endl;
                     }
                     state_match = false;
@@ -586,7 +606,7 @@ private:
         // Check cycle count
         if (test->final.has_cycles && cycles_executed != test->final.cycles) {
             if (!quiet_mode) {
-                output << "FAIL " << test->name << ": Cycles - expected " << test->final.cycles 
+                output << "FAIL " << test->name << ": Cycles - expected " << test->final.cycles
                        << ", got " << cycles_executed << std::endl;
             }
             cycle_match = false;
@@ -594,7 +614,7 @@ private:
         }
         
         // Bus cycle comparison (simplified)
-        bus_cycle_match = compare_bus_cycles_threaded(harness.get_bus_cycles(), test->final, test->name, output);
+        bus_cycle_match = compare_bus_cycles_threaded(harness->get_bus_cycles(), test->final, test->name, output);
         if (!bus_cycle_match) {
             results.bus_cycle_mismatches++;
         }
@@ -611,6 +631,7 @@ private:
         } else {
             results.failed_tests++;
             if (!state_match) results.state_mismatches++;
+            results.record_opcode_result(current_opcode, false); // Record failure
             
             if (verbose_mode) {
                 output << "FAIL " << test->name << ": ";
