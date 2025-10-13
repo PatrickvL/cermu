@@ -202,12 +202,18 @@ static bus_state_t op_las(fam65xx_t* cpu, bus_state_t pins) {
 
 /* SHA - Store A & X & (H+1) */
 static bus_state_t op_sha(fam65xx_t* cpu, bus_state_t pins) {
-    /* Hardware quirk: SHA performs the store using the current address in AB
-     * For page-crossing indexed modes, this is the "wrong" intermediate address
-     * The value written is A & X & (high_byte + 1) */
-    CPU_DL(cpu) = CPU_A(cpu) & CPU_X(cpu) & (CPU_ABH(cpu) + 1);
+    /* Calculate the data value using the current high byte of the address */
+    uint8_t data_value = CPU_A(cpu) & CPU_X(cpu) & (CPU_ABH(cpu) + 1);
+    CPU_DL(cpu) = data_value;
     
-    /* PHI2: Write A&X&(H+1) to current AB address (may be wrong for page cross) */
+    /* SHA hardware quirk: For illegal store operations, the high byte of the address
+     * can become unstable. The exact behavior varies by addressing mode. */
+    if (cpu->opcode_entry.illegal_store) {
+        /* Corrupt the high byte with the data value being written */
+        CPU_ABH(cpu) = data_value;
+    }
+    
+    /* PHI2: Write to (possibly corrupted) address */
     pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
