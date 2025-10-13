@@ -64,35 +64,34 @@ static bus_state_t op_adc(fam65xx_t* cpu, bus_state_t pins) {
     uint8_t a_old = CPU_A(cpu);
     
     if (CPU_P(cpu) & FLAG_D) {
-        /* BCD (Decimal) mode - 6502 hardware behavior */
+        /* BCD (Decimal) mode - 6502 hardware-accurate behavior */
+        /* This implements the actual 6502 hardware BCD algorithm behavior */
+        uint16_t binary_result = a_old + operand + carry_in;
+        
+        /* Set N, V, Z flags based on binary result (6502 hardware behavior) */
+        CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+                     (binary_result & 0x80 ? FLAG_N : 0) |                    /* N = bit 7 of binary result */
+                     ((binary_result & 0xFF) == 0 ? FLAG_Z : 0) |             /* Z = binary result is zero */
+                     (((a_old ^ binary_result) & (operand ^ binary_result) & 0x80) ? FLAG_V : 0); /* V = signed overflow */
+        
+        /* 6502 BCD addition - based on ProcessorTests ground truth */
         uint8_t al = (a_old & 0x0F) + (operand & 0x0F) + carry_in;
         uint8_t ah = (a_old >> 4) + (operand >> 4);
         
+        /* Adjust low nibble and propagate carry */
         if (al > 9) {
-            al = (al + 6) & 0x0F;
+            al += 6;
             ah++;
         }
         
-        /* Set flags before final BCD correction */
-        uint16_t binary_result = a_old + operand + carry_in;
-        CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                     (binary_result & 0x80 ? FLAG_N : 0) |                    /* N based on binary result */
-                     (binary_result == 0 ? FLAG_Z : 0) |                      /* Z based on binary result */
-                     (((a_old ^ binary_result) & (operand ^ binary_result) & 0x80) ? FLAG_V : 0); /* V based on binary */
-        
+        /* Handle high nibble and set carry flag */
         if (ah > 9) {
-            ah = (ah + 6) & 0x0F;
-            CPU_P(cpu) |= FLAG_C;
-        } else {
-            CPU_P(cpu) &= ~FLAG_C;
-        }
-        
-        /* Final carry handling from binary operation */
-        if (binary_result > 0xFF) {
+            ah += 6;
             CPU_P(cpu) |= FLAG_C;
         }
         
-        CPU_A(cpu) = (ah << 4) | al;
+        /* Assemble result - this matches the expected behavior */
+        CPU_A(cpu) = ((ah & 0x0F) << 4) | (al & 0x0F);
     } else {
         /* Binary mode */
         uint16_t result = a_old + operand + carry_in;
