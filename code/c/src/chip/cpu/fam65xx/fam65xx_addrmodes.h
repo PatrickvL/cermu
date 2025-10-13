@@ -324,7 +324,7 @@ static bus_state_t am_ind(fam65xx_t* cpu, bus_state_t pins) {
             /* IMPORTANT: 6502 bug - if pointer is at page boundary (e.g., $xxFF),
              * high byte is read from $xx00 instead of $(xx+1)00
              * To emulate this bug: increment only low byte for next read */
-            CPU_ABL(cpu) += 1;
+            CPU_ABL(cpu)++;
             break;
             
         case 3:

@@ -171,16 +171,13 @@ static bus_state_t op_jam(fam65xx_t* cpu, bus_state_t pins) {
 
 /* NOP - No Operation */
 static bus_state_t op_nop(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read operand if in immediate mode, otherwise dummy read from PC */
+    /* PHI2: Read from PC */
+    pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+    if (!FAM65XX_GET_RDY(pins)) return pins;
+
     if (cpu->opcode_entry.am_index == AM_IMM) {
-        /* Immediate mode - read from PC and increment to skip operand */
-        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
+        /* Immediate mode - increment PC to skip operand */
         CPU_PC(cpu)++;
-    } else {
-        /* Implied mode - dummy read from PC */
-        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
     }
     
     /* PHI1: No operation performed */
