@@ -203,49 +203,41 @@ static bus_state_t fam65xx_branch_helper(fam65xx_t* cpu, bus_state_t pins, uint8
                 return pins;
             }
             
-            /* Branch taken: store offset for next cycle */
+            /* Branch taken: store offset and calculate target */
             CPU_DL(cpu) = BUS_GET_DATA(pins);
+            CPU_AB(cpu) = CPU_PC(cpu) + (int8_t)CPU_DL(cpu);
             break;
         }
         
         case 1: {
-            /* PHI2: MANDATORY dummy cycle for ALL taken branches */
-            int8_t offset = (int8_t)CPU_DL(cpu);
-            CPU_AB(cpu) = CPU_PC(cpu) + offset;
-            
-            /* Check for page cross */
-            bool page_cross = fam65xx_page_crossed(CPU_PC(cpu), CPU_AB(cpu));
-            
-            /* Set up dummy read address */
-            if (page_cross) {
-                /* Page cross: dummy read from "wrong" address */
-                CPU_ABH(cpu) = CPU_PCH(cpu);
-            } else {
-                /* Same page: dummy read from AB */
-            }
-            
-            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+            /* PHI2: Dummy read from incremented PC (hardware behavior) */
+            pins = fam65xx_phi2_read(cpu, pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Set PC to target */
-            CPU_PC(cpu) += offset;
+            /* PHI1: Check for page cross */
+            bool page_crossed = fam65xx_page_crossed(CPU_PC(cpu), CPU_AB(cpu));
             
-            if (!page_cross) {
-                /* Same page: instruction completes after 3 cycles */
+            if (!page_crossed) {
+                /* No page cross: set final PC and complete after 3 cycles */
+                CPU_PC(cpu) = CPU_AB(cpu);
                 fam65xx_transition_to_fetch(cpu);
                 return pins;
             }
             
-            /* Page cross: continue to penalty cycle */
+            /* Page cross detected: Set up wrong intermediate address for penalty cycle */
+            /* Hardware adds offset to low byte only, keeping original high byte */
+            int8_t signed_offset = (int8_t)CPU_DL(cpu);
+            CPU_PCL(cpu) += signed_offset;
             break;
         }
         
         case 2:
-            /* PHI2: Page cross penalty cycle */
+            /* PHI2: Page cross penalty - dummy read from wrong intermediate address */
             pins = fam65xx_phi2_read(cpu, pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Page cross penalty complete - instruction completes after 4 cycles */
+            /* PHI1: Set final correct target PC and complete instruction */
+            CPU_PC(cpu) = CPU_AB(cpu);
             fam65xx_transition_to_fetch(cpu);
             break;
     }
