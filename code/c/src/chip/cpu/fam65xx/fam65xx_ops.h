@@ -58,22 +58,46 @@ static bus_state_t op_adc(fam65xx_t* cpu, bus_state_t pins) {
         if (!FAM65XX_GET_RDY(pins)) return pins;
     }
     
-    /* PHI1: Perform ADC operation */
+    /* PHI1: Perform ADC operation with BCD support */
     uint8_t operand = BUS_GET_DATA(pins);
-    uint16_t result = CPU_A(cpu) + operand + (CPU_P(cpu) & FLAG_C ? 1 : 0);
-    
+    uint8_t carry_in = (CPU_P(cpu) & FLAG_C) ? 1 : 0;
     uint8_t a_old = CPU_A(cpu);
-    CPU_A(cpu) = result & 0xFF;
     
-    fam65xx_update_nz_flags(cpu, CPU_A(cpu));
-    
-    if (result > 0xFF) CPU_P(cpu) |= FLAG_C;
-    else CPU_P(cpu) &= ~FLAG_C;
-    
-    if (((a_old ^ result) & (operand ^ result) & 0x80))
-        CPU_P(cpu) |= FLAG_V;
-    else
-        CPU_P(cpu) &= ~FLAG_V;
+    if (CPU_P(cpu) & FLAG_D) {
+        /* BCD (Decimal) mode - 6502 hardware behavior */
+        uint8_t al = (a_old & 0x0F) + (operand & 0x0F) + carry_in;
+        uint8_t ah = (a_old >> 4) + (operand >> 4);
+        
+        if (al > 9) {
+            al = (al + 6) & 0x0F;
+            ah++;
+        }
+        
+        /* Set flags before final BCD correction */
+        uint16_t binary_result = a_old + operand + carry_in;
+        CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+                     (binary_result & 0x80 ? FLAG_N : 0) |                    /* N based on binary result */
+                     (binary_result == 0 ? FLAG_Z : 0) |                      /* Z based on binary result */
+                     (((a_old ^ binary_result) & (operand ^ binary_result) & 0x80) ? FLAG_V : 0); /* V based on binary */
+        
+        if (ah > 9) {
+            ah = (ah + 6) & 0x0F;
+            CPU_P(cpu) |= FLAG_C;
+        }
+        
+        CPU_A(cpu) = (ah << 4) | al;
+    } else {
+        /* Binary mode */
+        uint16_t result = a_old + operand + carry_in;
+        CPU_A(cpu) = result & 0xFF;
+        
+        /* ADC modifies only N, V, Z, C flags - preserve all others exactly */
+        CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+                     (CPU_A(cpu) & FLAG_N) |                                    /* N = bit 7 of result */
+                     (CPU_A(cpu) == 0 ? FLAG_Z : 0) |                          /* Z = result is zero */
+                     (result > 0xFF ? FLAG_C : 0) |                            /* C = carry out */
+                     (((a_old ^ result) & (operand ^ result) & 0x80) ? FLAG_V : 0); /* V = overflow */
+    }
     
     fam65xx_transition_to_fetch(cpu);
     return pins;
