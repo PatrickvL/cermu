@@ -163,9 +163,26 @@ static bus_state_t op_bit(fam65xx_t* cpu, bus_state_t pins) {
 
 /* JAM - Jam/Halt CPU */
 static bus_state_t op_jam(fam65xx_t* cpu, bus_state_t pins) {
-    /* JAM instruction - CPU halts indefinitely */
-    pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-    /* Don't transition to fetch - stay in JAM state */
+    switch (cpu->cycle_index++) {
+        case 0:
+            /* PHI2: Read from PC+1 (next byte after opcode) */
+            pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            /* Don't increment PC - we'll read from same location again */
+            break;
+            
+        case 1:
+            /* PHI2: Read from same PC+1 location again (JAM behavior) */
+            pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            
+            /* Restore PC to original opcode location (undo the increment from opcode fetch) */
+            CPU_PC(cpu)--;
+            
+            /* For testing: transition to fetch (in real hardware this would loop forever) */
+            fam65xx_transition_to_fetch(cpu);
+            break;
+    }
     return pins;
 }
 
