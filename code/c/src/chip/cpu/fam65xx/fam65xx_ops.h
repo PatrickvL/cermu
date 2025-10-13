@@ -65,16 +65,7 @@ static bus_state_t op_adc(fam65xx_t* cpu, bus_state_t pins) {
     
     if (CPU_P(cpu) & FLAG_D) {
         /* BCD (Decimal) mode - 6502 hardware-accurate behavior */
-        /* This implements the actual 6502 hardware BCD algorithm behavior */
-        uint16_t binary_result = a_old + operand + carry_in;
-        
-        /* Set N, V, Z flags based on binary result (6502 hardware behavior) */
-        CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                     (binary_result & 0x80 ? FLAG_N : 0) |                    /* N = bit 7 of binary result */
-                     ((binary_result & 0xFF) == 0 ? FLAG_Z : 0) |             /* Z = binary result is zero */
-                     (((a_old ^ binary_result) & (operand ^ binary_result) & 0x80) ? FLAG_V : 0); /* V = signed overflow */
-        
-        /* 6502 BCD addition - based on ProcessorTests ground truth */
+        /* 6502 BCD addition algorithm */
         uint8_t al = (a_old & 0x0F) + (operand & 0x0F) + carry_in;
         uint8_t ah = (a_old >> 4) + (operand >> 4);
         
@@ -88,10 +79,19 @@ static bus_state_t op_adc(fam65xx_t* cpu, bus_state_t pins) {
         if (ah > 9) {
             ah += 6;
             CPU_P(cpu) |= FLAG_C;
+        } else {
+            /* Clear carry if no overflow */
+            CPU_P(cpu) &= ~FLAG_C;
         }
         
-        /* Assemble result - this matches the expected behavior */
+        /* Assemble BCD result */
         CPU_A(cpu) = ((ah & 0x0F) << 4) | (al & 0x0F);
+        
+        /* Set N, V, Z flags based on final BCD result for hardware accuracy with invalid digits */
+        CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_V | FLAG_Z)) |
+                     (CPU_A(cpu) & FLAG_N) |                                  /* N = bit 7 of BCD result */
+                     (CPU_A(cpu) == 0 ? FLAG_Z : 0) |                         /* Z = BCD result is zero */
+                     (((a_old ^ CPU_A(cpu)) & (operand ^ CPU_A(cpu)) & 0x80) ? FLAG_V : 0); /* V = signed overflow on BCD result */
     } else {
         /* Binary mode */
         uint16_t result = a_old + operand + carry_in;
