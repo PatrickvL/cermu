@@ -239,23 +239,79 @@ public:
     
     // Execute one instruction - SYNC-based completion detection (optimized for threading)
     bool step() {
+        return step_with_debug(nullptr);
+    }
+    
+    // Execute one instruction with detailed cycle logging for debugging
+    bool step_with_debug(std::ostringstream* debug_output) {
         try {
             uint32_t max_cycles = 10; // Safety limit
+            uint32_t cycle_in_instruction = 0;
             
             do {
+                // Capture state before tick
+                uint16_t pc_before = fam65xx_pc(&cpu);
+                uint8_t a_before = fam65xx_a(&cpu);
+                uint8_t x_before = fam65xx_x(&cpu);
+                uint8_t y_before = fam65xx_y(&cpu);
+                uint8_t s_before = fam65xx_s(&cpu);
+                uint8_t p_before = fam65xx_p(&cpu);
+                
                 pins = fam65xx_tick(&cpu, pins);
                 cycle_count++;
+                cycle_in_instruction++;
+                
+                // Capture state after tick
+                uint16_t pc_after = fam65xx_pc(&cpu);
+                uint8_t a_after = fam65xx_a(&cpu);
+                uint8_t x_after = fam65xx_x(&cpu);
+                uint8_t y_after = fam65xx_y(&cpu);
+                uint8_t s_after = fam65xx_s(&cpu);
+                uint8_t p_after = fam65xx_p(&cpu);
+                
+                // Log detailed cycle information if debug output provided
+                if (debug_output) {
+                    *debug_output << "    Cycle " << cycle_in_instruction << ": "
+                                  << "PC 0x" << std::hex << std::setfill('0') << std::setw(4) << pc_before
+                                  << "->0x" << pc_after << std::dec
+                                  << " A:0x" << std::hex << std::setfill('0') << std::setw(2) << (int)a_before
+                                  << "->0x" << (int)a_after << std::dec;
+                    
+                    // Show significant register changes
+                    if (x_before != x_after || y_before != y_after || s_before != s_after || p_before != p_after) {
+                        *debug_output << " X:0x" << std::hex << (int)x_before << "->0x" << (int)x_after
+                                      << " Y:0x" << (int)y_before << "->0x" << (int)y_after
+                                      << " S:0x" << (int)s_before << "->0x" << (int)s_after
+                                      << " P:0x" << (int)p_before << "->0x" << (int)p_after << std::dec;
+                    }
+                    
+                    // Show bus activity from last bus cycle
+                    if (!actual_bus_cycles.empty()) {
+                        const auto& last_cycle = actual_bus_cycles.back();
+                        *debug_output << " Bus[0x" << std::hex << std::setfill('0') << std::setw(4)
+                                      << last_cycle.address << "]=0x" << std::setw(2) << (int)last_cycle.data
+                                      << (last_cycle.is_write ? "W" : "R") << std::dec;
+                    }
+                    
+                    *debug_output << std::endl;
+                }
                 
                 // Instruction completes when opdone() returns true
                 bool instruction_done = fam65xx_opdone(&cpu);
                 
                 max_cycles--;
                 if (max_cycles == 0) {
+                    if (debug_output) {
+                        *debug_output << "    ERROR: Exceeded max cycle limit!" << std::endl;
+                    }
                     return false; // Exceeded cycle limit
                 }
                 
                 if (instruction_done) {
-                    // SYNC indicates ready for next instruction
+                    if (debug_output) {
+                        *debug_output << "    Instruction completed after " << cycle_in_instruction
+                                      << " cycles" << std::endl;
+                    }
                     break; // Instruction completed
                 }
             } while (true);
@@ -376,8 +432,8 @@ private:
         }
     }
     
-    bool compare_bus_cycles_threaded(const std::vector<bus_cycle_t>& actual, 
-                                   const cpu_state_t& expected, 
+    bool compare_bus_cycles_threaded(const std::vector<bus_cycle_t>& actual,
+                                   const cpu_state_t& expected,
                                    const std::string& test_name,
                                    std::ostringstream& output) {
         if (!expected.has_bus_cycles) {
@@ -394,7 +450,7 @@ private:
             match = false;
         }
         
-        // Simplified bus cycle comparison for performance
+        // Detailed bus cycle comparison with mismatch reporting
         size_t min_cycles = std::min(actual.size(), (size_t)expected.bus_cycle_count);
         for (size_t i = 0; i < min_cycles; i++) {
             const bus_cycle_t& actual_cycle = actual[i];
@@ -403,6 +459,16 @@ private:
             if (actual_cycle.address != expected_cycle.address ||
                 actual_cycle.data != expected_cycle.data ||
                 actual_cycle.is_write != expected_cycle.is_write) {
+                
+                if (!quiet_mode) {
+                    output << "FAIL " << test_name << ": Bus cycle " << (i+1) << " mismatch:" << std::endl;
+                    output << "  Expected: addr=0x" << std::hex << std::setfill('0') << std::setw(4)
+                           << expected_cycle.address << " data=0x" << std::setw(2) << (int)expected_cycle.data
+                           << (expected_cycle.is_write ? "W" : "R") << std::endl;
+                    output << "  Actual:   addr=0x" << std::setw(4) << actual_cycle.address
+                           << " data=0x" << std::setw(2) << (int)actual_cycle.data
+                           << (actual_cycle.is_write ? "W" : "R") << std::dec << std::endl;
+                }
                 match = false;
                 break; // Early exit for performance
             }
@@ -444,10 +510,24 @@ private:
         
         uint32_t initial_cycle_count = harness.get_cycle_count();
         
-        // Bootstrap and execute
+        // Bootstrap and execute with detailed logging in verbose mode
         harness.bootstrap_processor_for_tests();
-        bool step_result = harness.step();
+        
+        bool step_result;
+        if (verbose_mode) {
+            output << "  [Worker " << worker_id << "] Executing instruction with cycle-by-cycle details:" << std::endl;
+            step_result = harness.step_with_debug(&output);
+        } else {
+            step_result = harness.step();
+        }
+        
         uint32_t cycles_executed = harness.get_cycle_count() - initial_cycle_count;
+        
+        if (verbose_mode) {
+            output << "  [Worker " << worker_id << "] Final state: PC=0x" << std::hex
+                   << harness.get_pc() << " A=0x" << (int)harness.get_a()
+                   << " Cycles=" << std::dec << cycles_executed << std::endl;
+        }
         
         if (!step_result) {
             if (!quiet_mode) {
