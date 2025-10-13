@@ -273,8 +273,8 @@ bus_state_t fam65xx_init(fam65xx_t* cpu, const fam65xx_desc_t* desc) {
     cpu->reg8[REG_ZPH] = 0x00;  /* Zero page high byte */
     cpu->reg8[REG_SPH] = 0x01;  /* Stack pointer high byte */
     
-    /* Initialize interrupt state - shift register starts inactive (lines high) */
-    cpu->interrupt_shift_register = 0xFFFFFFFF;  /* All bits high = inactive state */
+    /* Initialize interrupt state - shift register starts with no activity */
+    cpu->interrupt_shift_register = 0x00000000;  /* No interrupt activity detected yet */
     cpu->nmi_prev = 1;  /* NMI line starts high (inactive) for edge detection */
     
     /* Initialize default CPU state */
@@ -298,8 +298,8 @@ bus_state_t fam65xx_init(fam65xx_t* cpu, const fam65xx_desc_t* desc) {
 
 /* Start hardware RESET sequence for normal emulation */
 bus_state_t fam65xx_reset(fam65xx_t* cpu, bus_state_t pins) {
-    /* Initialize interrupt state - shift register starts inactive (lines high) */
-    cpu->interrupt_shift_register = 0xFFFFFFFF;  /* All bits high = inactive state */
+    /* Initialize interrupt state - shift register starts with no activity */
+    cpu->interrupt_shift_register = 0x00000000;  /* No interrupt activity detected yet */
     cpu->nmi_prev = 1;  /* NMI line starts high (inactive) for edge detection */
     
     /* Set BRK flag to indicate RESET and start interrupt sequence */
@@ -350,6 +350,10 @@ bus_state_t fam65xx_bootstrap(fam65xx_t* cpu, bus_state_t pins) {
     
     /* Clear any interrupt flags that might have been set */
     cpu->brk_flags = 0;
+    
+    /* CRITICAL: Reset interrupt shift register to prevent false triggers */
+    cpu->interrupt_shift_register = 0x00000000;  /* No interrupt activity detected yet */
+    cpu->nmi_prev = 1;  /* NMI line starts high (inactive) for edge detection */
     
     /* Set up for instruction fetch - CPU ready to execute next instruction */
     cpu->cycle_index = 0;
