@@ -100,11 +100,8 @@ static bus_state_t am_abx(fam65xx_t* cpu, bus_state_t pins) {
             /* Add X to low byte only - this creates the "wrong" address for page cross */
             CPU_ABL(cpu) += CPU_X(cpu);
             
-            /* Check if we need page cross cycle - inline page cross detection */
-            int page_crossed = ((base ^ effective) & 0x0100) != 0;
-            
             /* Check if we need page cross cycle */
-            if (cpu->opcode_entry.page_cross && !page_crossed) {
+            if (cpu->opcode_entry.page_cross && !fam65xx_page_crossed(base, effective)) {
                 /* No page cross - fix address and skip cycle 2 */
                 CPU_AB(cpu) = effective;
                 fam65xx_transition_to_operation(cpu);
