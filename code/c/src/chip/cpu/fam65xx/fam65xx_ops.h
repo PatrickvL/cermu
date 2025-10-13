@@ -185,7 +185,7 @@ static bus_state_t op_nop(fam65xx_t* cpu, bus_state_t pins) {
  * ============================================================================
  */
 
-/* Helper function for branch operations */
+/* Helper function for branch operations - hardware-accurate 6502 timing */
 static bus_state_t fam65xx_branch_helper(fam65xx_t* cpu, bus_state_t pins, uint8_t flag_mask, bool flag_value) {
     switch (cpu->cycle_index++) {
         case 0: {
@@ -198,34 +198,54 @@ static bus_state_t fam65xx_branch_helper(fam65xx_t* cpu, bus_state_t pins, uint8
             bool branch_taken = ((CPU_P(cpu) & flag_mask) != 0) == flag_value;
             
             if (!branch_taken) {
+                /* Branch not taken: instruction completes after 2 cycles */
                 fam65xx_transition_to_fetch(cpu);
                 return pins;
             }
             
-            /* Calculate target address */
-            int8_t offset = (int8_t)BUS_GET_DATA(pins);
-            uint16_t target = CPU_PC(cpu) + offset;
-            CPU_AB(cpu) = target;
-            
-            /* Branch instructions ALWAYS take page cross penalty cycle when crossing pages */
-            /* Unlike load operations, branches never skip the penalty cycle */
-            if (!fam65xx_page_crossed(CPU_PC(cpu), target)) {
-                /* No page cross - can complete immediately */
-                CPU_PC(cpu) = target;
-                fam65xx_transition_to_fetch(cpu);
-                return pins;
-            }
-            /* Page cross detected - continue to penalty cycle */
+            /* Branch taken: store offset for next cycle */
+            CPU_DL(cpu) = BUS_GET_DATA(pins);
             break;
         }
         
-        case 1:
-            /* PHI2: Page cross penalty cycle - dummy read from PC before branch */
+        case 1: {
+            /* PHI2: MANDATORY dummy cycle for ALL taken branches */
+            int8_t offset = (int8_t)CPU_DL(cpu);
+            CPU_AB(cpu) = CPU_PC(cpu) + offset;
+            
+            /* Check for page cross */
+            bool page_cross = fam65xx_page_crossed(CPU_PC(cpu), CPU_AB(cpu));
+            
+            /* Set up dummy read address */
+            if (page_cross) {
+                /* Page cross: dummy read from "wrong" address */
+                CPU_ABH(cpu) = CPU_PCH(cpu);
+            } else {
+                /* Same page: dummy read from AB */
+            }
+            
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            
+            /* PHI1: Set PC to target */
+            CPU_PC(cpu) += offset;
+            
+            if (!page_cross) {
+                /* Same page: instruction completes after 3 cycles */
+                fam65xx_transition_to_fetch(cpu);
+                return pins;
+            }
+            
+            /* Page cross: continue to penalty cycle */
+            break;
+        }
+        
+        case 2:
+            /* PHI2: Page cross penalty cycle */
             pins = fam65xx_phi2_read(cpu, pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Set final PC to target address */
-            CPU_PC(cpu) = CPU_AB(cpu);
+            /* PHI1: Page cross penalty complete - instruction completes after 4 cycles */
             fam65xx_transition_to_fetch(cpu);
             break;
     }
