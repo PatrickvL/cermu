@@ -202,9 +202,12 @@ static bus_state_t op_las(fam65xx_t* cpu, bus_state_t pins) {
 
 /* SHA - Store A & X & (H+1) */
 static bus_state_t op_sha(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Write A&X&(H+1) to target address */
-    uint8_t high = (CPU_AB(cpu) >> 8) + 1;
-    CPU_DL(cpu) = CPU_A(cpu) & CPU_X(cpu) & high;
+    /* Hardware quirk: SHA performs the store using the current address in AB
+     * For page-crossing indexed modes, this is the "wrong" intermediate address
+     * The value written is A & X & (high_byte + 1) */
+    CPU_DL(cpu) = CPU_A(cpu) & CPU_X(cpu) & (CPU_ABH(cpu) + 1);
+    
+    /* PHI2: Write A&X&(H+1) to current AB address (may be wrong for page cross) */
     pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
@@ -215,10 +218,11 @@ static bus_state_t op_sha(fam65xx_t* cpu, bus_state_t pins) {
 
 /* SHS - Store A & X & (H+1), set SP to A & X */
 static bus_state_t op_shs(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Write A&X&(H+1) to target address */
-    uint8_t high = (CPU_AB(cpu) >> 8) + 1;
-    uint8_t val = CPU_A(cpu) & CPU_X(cpu) & high;
+    /* Hardware quirk: SHS uses current AB address and its high byte for AND */
+    uint8_t val = CPU_A(cpu) & CPU_X(cpu) & (CPU_ABH(cpu) + 1);
     CPU_DL(cpu) = val;
+    
+    /* PHI2: Write A&X&(H+1) to current AB address */
     pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
@@ -230,9 +234,10 @@ static bus_state_t op_shs(fam65xx_t* cpu, bus_state_t pins) {
 
 /* SHX - Store X & (H+1) */
 static bus_state_t op_shx(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Write X&(H+1) to target address */
-    uint8_t high = (CPU_AB(cpu) >> 8) + 1;
-    CPU_DL(cpu) = CPU_X(cpu) & high;
+    /* Hardware quirk: SHX uses current AB address and its high byte for AND */
+    CPU_DL(cpu) = CPU_X(cpu) & (CPU_ABH(cpu) + 1);
+    
+    /* PHI2: Write X&(H+1) to current AB address */
     pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
@@ -243,9 +248,10 @@ static bus_state_t op_shx(fam65xx_t* cpu, bus_state_t pins) {
 
 /* SHY - Store Y & (H+1) */
 static bus_state_t op_shy(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Write Y&(H+1) to target address */
-    uint8_t high = (CPU_AB(cpu) >> 8) + 1;
-    CPU_DL(cpu) = CPU_Y(cpu) & high;
+    /* Hardware quirk: SHY uses current AB address and its high byte for AND */
+    CPU_DL(cpu) = CPU_Y(cpu) & (CPU_ABH(cpu) + 1);
+    
+    /* PHI2: Write Y&(H+1) to current AB address */
     pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     

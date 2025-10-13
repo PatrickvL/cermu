@@ -189,7 +189,8 @@ static const cycle_fn_t fam65xx_op_handlers[OP_COUNT] = {
 };
 
 // Compact macro for opcode_info_t opcode definition - creates properly formatted bitfield entries
-#define OP(am_index, page_cross, op_index, rmw_flag) {(am_index), 0, (page_cross), (rmw_flag), (op_index)}
+#define OP(am_index, page_cross, op_index, rmw_flag) {(am_index), 0, 0, (page_cross), (rmw_flag), (op_index)}
+#define OP_ILLEGAL_STORE(am_index, page_cross, op_index, rmw_flag) {(am_index), 1, 0, (page_cross), (rmw_flag), (op_index)}
 
 // Complete opcode lookup table - 8 entries per line for readability
 static const opcode_info_t fam65xx_opcode_table[256] = {
@@ -211,8 +212,8 @@ static const opcode_info_t fam65xx_opcode_table[256] = {
     OP(AM_NON,0,OP_SEI,0), OP(AM_ABY,1,OP_ADC,0), OP(AM_NON,0,OP_NOP,0), OP(AM_ABY,0,OP_RRA,1), OP(AM_ABX,0,OP_NOP,0), OP(AM_ABX,1,OP_ADC,0), OP(AM_ABX,0,OP_ROR,1), OP(AM_ABX,0,OP_RRA,1),
     OP(AM_IMM,0,OP_NOP,0), OP(AM_INX,0,OP_STA,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_INX,0,OP_SAX,0), OP(AM_ZER,0,OP_STY,0), OP(AM_ZER,0,OP_STA,0), OP(AM_ZER,0,OP_STX,0), OP(AM_ZER,0,OP_SAX,0),
     OP(AM_NON,0,OP_DEY,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_NON,0,OP_TXA,0), OP(AM_IMM,0,OP_XAA,0), OP(AM_ABS,0,OP_STY,0), OP(AM_ABS,0,OP_STA,0), OP(AM_ABS,0,OP_STX,0), OP(AM_ABS,0,OP_SAX,0),
-    OP(AM_REL,0,OP_BCC,0), OP(AM_INY,0,OP_STA,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_SHA,0), OP(AM_ZPX,0,OP_STY,0), OP(AM_ZPX,0,OP_STA,0), OP(AM_ZPY,0,OP_STX,0), OP(AM_ZPY,0,OP_SAX,0),
-    OP(AM_NON,0,OP_TYA,0), OP(AM_ABY,0,OP_STA,0), OP(AM_NON,0,OP_TXS,0), OP(AM_ABY,0,OP_SHS,0), OP(AM_ABX,0,OP_SHY,0), OP(AM_ABX,0,OP_STA,0), OP(AM_ABY,0,OP_SHX,0), OP(AM_ABY,0,OP_SHA,0),
+    OP(AM_REL,0,OP_BCC,0), OP(AM_INY,0,OP_STA,0), OP(AM_NON,0,OP_JAM,0), OP_ILLEGAL_STORE(AM_INY,0,OP_SHA,0), OP(AM_ZPX,0,OP_STY,0), OP(AM_ZPX,0,OP_STA,0), OP(AM_ZPY,0,OP_STX,0), OP(AM_ZPY,0,OP_SAX,0),
+    OP(AM_NON,0,OP_TYA,0), OP(AM_ABY,0,OP_STA,0), OP(AM_NON,0,OP_TXS,0), OP_ILLEGAL_STORE(AM_ABY,0,OP_SHS,0), OP_ILLEGAL_STORE(AM_ABX,0,OP_SHY,0), OP(AM_ABX,0,OP_STA,0), OP_ILLEGAL_STORE(AM_ABY,0,OP_SHX,0), OP_ILLEGAL_STORE(AM_ABY,0,OP_SHA,0),
     OP(AM_IMM,0,OP_LDY,0), OP(AM_INX,0,OP_LDA,0), OP(AM_IMM,0,OP_LDX,0), OP(AM_INX,0,OP_LAX,0), OP(AM_ZER,0,OP_LDY,0), OP(AM_ZER,0,OP_LDA,0), OP(AM_ZER,0,OP_LDX,0), OP(AM_ZER,0,OP_LAX,0),
     OP(AM_NON,0,OP_TAY,0), OP(AM_IMM,0,OP_LDA,0), OP(AM_NON,0,OP_TAX,0), OP(AM_IMM,0,OP_LAX,0), OP(AM_ABS,0,OP_LDY,0), OP(AM_ABS,0,OP_LDA,0), OP(AM_ABS,0,OP_LDX,0), OP(AM_ABS,0,OP_LAX,0),
     OP(AM_REL,0,OP_BCS,0), OP(AM_INY,1,OP_LDA,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_LAX,0), OP(AM_ZPX,0,OP_LDY,0), OP(AM_ZPX,0,OP_LDA,0), OP(AM_ZPY,0,OP_LDX,0), OP(AM_ZPY,0,OP_LAX,0),
@@ -227,8 +228,9 @@ static const opcode_info_t fam65xx_opcode_table[256] = {
     OP(AM_NON,0,OP_SED,0), OP(AM_ABY,1,OP_SBC,0), OP(AM_NON,0,OP_NOP,0), OP(AM_ABY,0,OP_ISC,1), OP(AM_ABX,0,OP_NOP,0), OP(AM_ABX,1,OP_SBC,0), OP(AM_ABX,0,OP_INC,1), OP(AM_ABX,0,OP_ISC,1)
 };
 
-// Clean up the compact opcode macro
+// Clean up the compact opcode macros
 #undef OP
+#undef OP_ILLEGAL_STORE
 
 #endif /* CHIPS_IMPL */
 
