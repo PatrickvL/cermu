@@ -50,7 +50,7 @@ extern "C" {
  * ============================================================================
  */
 
-/* LAX - Load A and X */
+/* LAX - Load A and X with unstable immediate mode behavior */
 static bus_state_t op_lax(fam65xx_t* cpu, bus_state_t pins) {
     /* PHI2: Read operand from target address or PC for immediate */
     if (cpu->opcode_entry.am_index == AM_IMM) {
@@ -66,6 +66,14 @@ static bus_state_t op_lax(fam65xx_t* cpu, bus_state_t pins) {
     
     /* PHI1: Load both A and X */
     uint8_t data = BUS_GET_DATA(pins);
+    
+    if (cpu->opcode_entry.am_index == AM_IMM) {
+        /* LAX immediate mode has unstable behavior - testing 0xEE constant like XAA
+         * XAA pattern: (A | 0xEE) & X & operand works perfectly
+         * Testing similar pattern for LAX: (A | 0xEE) & operand */
+        data = (CPU_A(cpu) | 0xEE) & data;
+    }
+    
     CPU_A(cpu) = data;
     CPU_X(cpu) = data;
     fam65xx_update_nz_flags(cpu, data);
@@ -112,7 +120,7 @@ static bus_state_t op_anc(fam65xx_t* cpu, bus_state_t pins) {
     return pins;
 }
 
-/* ARR - AND + ROR */
+/* ARR - AND + ROR with hardware-accurate flag behavior */
 static bus_state_t op_arr(fam65xx_t* cpu, bus_state_t pins) {
     /* PHI2: Read operand from target address or PC for immediate */
     if (cpu->opcode_entry.am_index == AM_IMM) {
@@ -126,14 +134,27 @@ static bus_state_t op_arr(fam65xx_t* cpu, bus_state_t pins) {
         if (!FAM65XX_GET_RDY(pins)) return pins;
     }
     
-    /* PHI1: Perform AND then ROR with complex flag behavior */
-    uint8_t carry = (CPU_P(cpu) & FLAG_C) ? 0x80 : 0;
-    CPU_A(cpu) &= BUS_GET_DATA(pins);
-    CPU_A(cpu) = (CPU_A(cpu) >> 1) | carry;
+    /* PHI1: Perform AND then ROR with hardware-accurate behavior
+     * ARR is complex because it combines AND + ROR but with special flag handling */
+    uint8_t operand = BUS_GET_DATA(pins);
+    uint8_t carry_in = (CPU_P(cpu) & FLAG_C) ? 0x80 : 0;
+    
+    /* Step 1: AND A with operand */
+    CPU_A(cpu) &= operand;
+    
+    /* Step 2: ROR the result */
+    CPU_A(cpu) = (CPU_A(cpu) >> 1) | carry_in;
+    
+    /* Update N and Z flags normally */
     fam65xx_update_nz_flags(cpu, CPU_A(cpu));
+    
+    /* ARR has special C and V flag behavior:
+     * C = bit 6 of result (not the shifted-out bit!)
+     * V = bit 6 XOR bit 5 of result */
     CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_C | FLAG_V)) |
                  ((CPU_A(cpu) & 0x40) ? FLAG_C : 0) |
                  (((CPU_A(cpu) & 0x40) ^ ((CPU_A(cpu) & 0x20) << 1)) ? FLAG_V : 0);
+    
     fam65xx_transition_to_fetch(cpu);
     return pins;
 }
