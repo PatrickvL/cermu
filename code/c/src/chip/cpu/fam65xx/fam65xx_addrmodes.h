@@ -99,7 +99,7 @@ static bus_state_t am_abx(fam65xx_t* cpu, bus_state_t pins) {
             CPU_ABL(cpu) += CPU_X(cpu);
             
             /* Skip penalty cycle if allowed and no page cross occurred */
-            if (cpu->opcode_entry.page_cross && !fam65xx_page_crossed(base, effective)) {
+            if (cpu->opcode_entry.can_skip_page_cross && !fam65xx_page_crossed(base, effective)) {
                 CPU_AB(cpu) = effective;  /* Fix address */
                 fam65xx_transition_to_operation(cpu);
             }
@@ -154,7 +154,7 @@ static bus_state_t am_aby(fam65xx_t* cpu, bus_state_t pins) {
             CPU_ABL(cpu) += CPU_Y(cpu);
             
             /* Skip penalty cycle if allowed and no page cross occurred */
-            if (cpu->opcode_entry.page_cross && !fam65xx_page_crossed(base, effective)) {
+            if (cpu->opcode_entry.can_skip_page_cross && !fam65xx_page_crossed(base, effective)) {
                 CPU_AB(cpu) = effective;  /* Fix address */
                 fam65xx_transition_to_operation(cpu);
             }
@@ -263,7 +263,7 @@ static bus_state_t am_idy(fam65xx_t* cpu, bus_state_t pins) {
             CPU_ABL(cpu) += CPU_Y(cpu);
             
             /* Skip penalty cycle if allowed and no page cross */
-            if (cpu->opcode_entry.page_cross && !fam65xx_page_crossed(base, effective)) {
+            if (cpu->opcode_entry.can_skip_page_cross && !fam65xx_page_crossed(base, effective)) {
                 CPU_AB(cpu) = effective;  /* Set correct final address */
                 fam65xx_transition_to_operation(cpu);
             }

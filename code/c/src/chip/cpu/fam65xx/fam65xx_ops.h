@@ -226,18 +226,24 @@ static bus_state_t op_jam(fam65xx_t* cpu, bus_state_t pins) {
 
 /* NOP - No Operation */
 static bus_state_t op_nop(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read based on addressing mode (same pattern as other operations) */
-    /* Immediate mode - read operand from PC */
-    /* Implicit mode - dummy read from PC */
-    /* Memory addressing modes (AM_ZER, AM_ABS, AM_ZPX, etc.) - read from target address set by addressing mode handler */
-    reg16_t addr_reg = cpu->opcode_entry.am_index > AM_IMM ? REG_AB : REG_PC;
-    pins = fam65xx_phi2_read(cpu, pins, addr_reg);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    if (cpu->opcode_entry.am_index == AM_IMM) {
-        CPU_PC(cpu)++;
-    }
+    /* NOP behavior depends on addressing mode:
+     * - AM_NON (implicit): Dummy read from PC (already done by opcode fetch)
+     * - AM_IMM: Read immediate operand from PC and discard
+     * - Memory modes: Read from target address and discard (hardware accurate) */
     
-    /* PHI1: No operation performed - just discard the data and complete instruction */
+    if (cpu->opcode_entry.am_index == AM_IMM) {
+        /* Immediate mode - read operand from PC and discard */
+        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+        CPU_PC(cpu)++;
+    } else if (cpu->opcode_entry.am_index > AM_IMM) {
+        /* Memory addressing modes - read from target address and discard */
+        pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+    }
+    /* Implicit mode (AM_NON) - no additional read needed */
+    
+    /* PHI1: No operation performed - instruction completes */
     fam65xx_transition_to_fetch(cpu);
     return pins;
 }
