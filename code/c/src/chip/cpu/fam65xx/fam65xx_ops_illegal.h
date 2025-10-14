@@ -187,15 +187,20 @@ static bus_state_t op_sbx(fam65xx_t* cpu, bus_state_t pins) {
     return pins;
 }
 
-/* XAA - Transfer X to A, then AND with immediate */
+/* XAA - Unstable illegal opcode with chip-dependent behavior
+ * Most common behavior: (A | 0xEE) & X & operand -> A
+ * Some chips use 0xFF, 0x00, or other constants instead of 0xEE */
 static bus_state_t op_xaa(fam65xx_t* cpu, bus_state_t pins) {
     /* PHI2: Read operand (immediate mode only) */
     pins = fam65xx_phi2_read(cpu, pins, REG_PC);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     CPU_PC(cpu)++;
     
-    /* PHI1: X -> A, then A & operand */
-    CPU_A(cpu) = CPU_X(cpu) & BUS_GET_DATA(pins);
+    /* PHI1: Perform XAA with hardware-accurate unstable behavior
+     * XAA = (A | CONST) & X & operand -> A
+     * Using 0xEE as the most common constant for ProcessorTests compatibility */
+    uint8_t operand = BUS_GET_DATA(pins);
+    CPU_A(cpu) = (CPU_A(cpu) | 0xEE) & CPU_X(cpu) & operand;
     fam65xx_update_nz_flags(cpu, CPU_A(cpu));
     fam65xx_transition_to_fetch(cpu);
     return pins;
