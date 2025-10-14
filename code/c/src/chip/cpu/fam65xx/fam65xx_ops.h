@@ -227,15 +227,15 @@ static bus_state_t op_jam(fam65xx_t* cpu, bus_state_t pins) {
 /* NOP - No Operation */
 static bus_state_t op_nop(fam65xx_t* cpu, bus_state_t pins) {
     /* NOP behavior depends on addressing mode:
-     * - AM_NON (implicit): Dummy read from PC (already done by opcode fetch)
-     * - AM_IMM: Read immediate operand from PC and discard
+     * - AM_NON (implicit): No additional read needed (1 cycle total)
+     * - AM_IMM: Used by illegal NOPs - dummy read from PC WITHOUT increment (2 cycles total)
      * - Memory modes: Read from target address and discard (hardware accurate) */
     
     if (cpu->opcode_entry.am_index == AM_IMM) {
-        /* Immediate mode - read operand from PC and discard */
+        /* Illegal NOP variant - dummy read from PC without increment */
         pins = fam65xx_phi2_read(cpu, pins, REG_PC);
         if (!FAM65XX_GET_RDY(pins)) return pins;
-        CPU_PC(cpu)++;
+        /* Note: PC is NOT incremented - illegal NOPs don't consume operand */
     } else if (cpu->opcode_entry.am_index > AM_IMM) {
         /* Memory addressing modes - read from target address and discard */
         pins = fam65xx_phi2_read(cpu, pins, REG_AB);
