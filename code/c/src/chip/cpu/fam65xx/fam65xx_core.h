@@ -194,12 +194,12 @@ typedef enum {
 // ============================================================================
 
 typedef struct {
-    uint16_t am_index      : 4;   // Addressing mode index (0-15, bits 0-3, nibble-aligned)
-    uint16_t illegal_store : 1;   // Illegal store quirk - uses wrong address on page cross (bit 4)
-    uint16_t _reserved     : 2;   // Reserved bits (bits 5-6)
-    uint16_t page_cross    : 1;   // Can skip cycle if no page cross (bit 7)
-    uint16_t rmw           : 1;   // Read-Modify-Write op_index (bit 8)
-    uint16_t op_index      : 7;   // Operation index (0-127, bits 9-15, byte-extractable with >> 9)
+    uint16_t am_index           : 4;   // Addressing mode index (0-15, bits 0-3, nibble-aligned)
+    uint16_t illegal_store      : 1;   // Illegal store quirk - uses wrong address on page cross (bit 4)
+    uint16_t _reserved          : 2;   // Reserved bits (bits 5-6)
+    uint16_t can_skip_page_cross : 1;   // Can skip page cross penalty cycle (bit 7) - only for read operations
+    uint16_t rmw                : 1;   // Read-Modify-Write op_index (bit 8)
+    uint16_t op_index           : 7;   // Operation index (0-127, bits 9-15, byte-extractable with >> 9)
 } opcode_info_t;
 
 // ============================================================================
