@@ -222,27 +222,22 @@ static bus_state_t op_las(fam65xx_t* cpu, bus_state_t pins) {
     return pins;
 }
 
-/* SHA - Store A & X & (H+1) */
+/* SHA - Store A & X & H */
 static bus_state_t op_sha(fam65xx_t* cpu, bus_state_t pins) {
-    /* NON-STANDARD DL REGISTER REUSE: Check page cross penalty flag first
-     *
-     * EXPLANATION: DL register was set by addressing modes (ABX/ABY/IDY) to communicate
-     * the page cross penalty flag. We must check it BEFORE overwriting DL with data.
-     * This is safe because SHA operation sets DL itself and doesn't depend on any
-     * previous DL value from the addressing mode.
-     *
-     * RISK MITIGATION: This operation completely overwrites DL, so no data corruption.
-     */
+    /* NON-STANDARD DL REGISTER REUSE: Check page cross penalty flag first */
     uint8_t page_cross_penalty = CPU_DL(cpu);
     
-    /* Calculate the data value using the current high byte of the address */
-    CPU_DL(cpu) = CPU_A(cpu) & CPU_X(cpu) & (CPU_ABH(cpu) + 1);
+    /* CRITICAL: Calculate data using ORIGINAL high byte before any address corruption */
+    uint8_t original_high = CPU_ABH(cpu);
+    CPU_DL(cpu) = CPU_A(cpu) & CPU_X(cpu) & original_high;
     
-    /* SHA hardware quirk: Only occurs during page crossings in indexed addressing modes.
-     * During page crossings, the high byte gets corrupted by ANDing with (A & X). */
+    /* SHA hardware quirk: Only occurs during page crossings
+     * Corruption formula varies by addressing mode */
     if (page_cross_penalty) {
-        /* Hardware quirk: AND the current address high byte with (A & X) */
-        CPU_ABH(cpu) &= (CPU_A(cpu) & CPU_X(cpu));
+        if (cpu->opcode_entry.am_index == AM_ABY || cpu->opcode_entry.am_index == AM_INY) {
+            /* SHA with ABY/IDY: High byte ANDed with A & X & Y */
+            CPU_ABH(cpu) &= (CPU_A(cpu) & CPU_X(cpu) & CPU_Y(cpu));
+        }
     }
     
     /* PHI2: Write to (possibly corrupted) address */
@@ -254,28 +249,22 @@ static bus_state_t op_sha(fam65xx_t* cpu, bus_state_t pins) {
     return pins;
 }
 
-/* SHS - Store A & X & (H+1), set SP to A & X */
+/* SHS - Store A & X & H, set SP to A & X */
 static bus_state_t op_shs(fam65xx_t* cpu, bus_state_t pins) {
-    /* NON-STANDARD DL REGISTER REUSE: Check page cross penalty flag first
-     *
-     * EXPLANATION: DL register was set by addressing modes (ABX/ABY/IDY) to communicate
-     * the page cross penalty flag. We must check it BEFORE overwriting DL with data.
-     * This is safe because SHS operation sets DL itself and doesn't depend on any
-     * previous DL value from the addressing mode.
-     *
-     * RISK MITIGATION: This operation completely overwrites DL, so no data corruption.
-     */
+    /* NON-STANDARD DL REGISTER REUSE: Check page cross penalty flag first */
     uint8_t page_cross_penalty = CPU_DL(cpu);
     
-    /* Calculate the data value using the current high byte of the address */
-    CPU_DL(cpu) = CPU_A(cpu) & CPU_X(cpu) & (CPU_ABH(cpu) + 1);
+    /* CRITICAL: Calculate data using ORIGINAL high byte before any address corruption */
+    uint8_t original_high = CPU_ABH(cpu);
+    CPU_DL(cpu) = CPU_A(cpu) & CPU_X(cpu) & original_high;
     
-    /* SHS hardware quirk: Only occurs during page crossings */
-    if (page_cross_penalty) {
+    /* SHS hardware quirk: Only occurs during page crossings
+     * With ABY addressing: High byte ANDed with A & X */
+    if (page_cross_penalty && cpu->opcode_entry.am_index == AM_ABY) {
         CPU_ABH(cpu) &= (CPU_A(cpu) & CPU_X(cpu));
     }
     
-    /* PHI2: Write A&X&(H+1) to (possibly corrupted) address */
+    /* PHI2: Write A&X&H to (possibly corrupted) address */
     pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
@@ -285,33 +274,22 @@ static bus_state_t op_shs(fam65xx_t* cpu, bus_state_t pins) {
     return pins;
 }
 
-/* SHX - Store X & (H+1) */
+/* SHX - Store X & H */
 static bus_state_t op_shx(fam65xx_t* cpu, bus_state_t pins) {
-    /* NON-STANDARD DL REGISTER REUSE: Check page cross penalty flag first
-     *
-     * EXPLANATION: DL register was set by addressing modes (ABX/ABY/IDY) to communicate
-     * the page cross penalty flag. We must check it BEFORE overwriting DL with data.
-     * This is safe because SHX operation sets DL itself and doesn't depend on any
-     * previous DL value from the addressing mode.
-     *
-     * RISK MITIGATION: This operation completely overwrites DL, so no data corruption.
-     */
+    /* NON-STANDARD DL REGISTER REUSE: Check page cross penalty flag first */
     uint8_t page_cross_penalty = CPU_DL(cpu);
     
-    /* Calculate the data value using the current high byte of the address */
-    CPU_DL(cpu) = CPU_X(cpu) & (CPU_ABH(cpu) + 1);
+    /* CRITICAL: Calculate data using ORIGINAL high byte before any address corruption */
+    uint8_t original_high = CPU_ABH(cpu);
+    CPU_DL(cpu) = CPU_X(cpu) & original_high;
     
     /* SHX hardware quirk: Only occurs during page crossings
-     * For SHX with ABY addressing, corruption uses Y register */
-    if (page_cross_penalty) {
-        if (cpu->opcode_entry.am_index == AM_ABY) {
-            CPU_ABH(cpu) &= CPU_Y(cpu);
-        } else {
-            CPU_ABH(cpu) &= CPU_X(cpu);
-        }
+     * With ABY addressing: High byte ANDed with X & Y */
+    if (page_cross_penalty && cpu->opcode_entry.am_index == AM_ABY) {
+        CPU_ABH(cpu) &= (CPU_X(cpu) & CPU_Y(cpu));
     }
     
-    /* PHI2: Write X&(H+1) to (possibly corrupted) address */
+    /* PHI2: Write X&H to (possibly corrupted) address */
     pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
@@ -322,29 +300,13 @@ static bus_state_t op_shx(fam65xx_t* cpu, bus_state_t pins) {
 
 /* SHY - Store Y & (H+1) */
 static bus_state_t op_shy(fam65xx_t* cpu, bus_state_t pins) {
-    /* NON-STANDARD DL REGISTER REUSE: Check page cross penalty flag first
-     *
-     * EXPLANATION: DL register was set by addressing modes (ABX/ABY/IDY) to communicate
-     * the page cross penalty flag. We must check it BEFORE overwriting DL with data.
-     * This is safe because SHY operation sets DL itself and doesn't depend on any
-     * previous DL value from the addressing mode.
-     *
-     * RISK MITIGATION: This operation completely overwrites DL, so no data corruption.
-     */
-    uint8_t page_cross_penalty = CPU_DL(cpu);
+    /* CRITICAL: Calculate data using ORIGINAL high byte before any address corruption
+     * Testing: Use H instead of H+1 based on ProcessorTests evidence */
+    uint8_t original_high = CPU_ABH(cpu);
+    CPU_DL(cpu) = CPU_Y(cpu) & original_high;
     
-    /* Calculate the data value using the current high byte of the address */
-    CPU_DL(cpu) = CPU_Y(cpu) & (CPU_ABH(cpu) + 1);
-    
-    /* SHY hardware quirk: Only occurs during page crossings
-     * For SHY with ABX addressing, corruption uses X register */
-    if (page_cross_penalty) {
-        if (cpu->opcode_entry.am_index == AM_ABX) {
-            CPU_ABH(cpu) &= CPU_X(cpu);
-        } else {
-            CPU_ABH(cpu) &= CPU_Y(cpu);
-        }
-    }
+    /* SHY hardware quirk: Always occurs for illegal store opcodes */
+    CPU_ABH(cpu) &= (original_high + 1);
     
     /* PHI2: Write Y&(H+1) to (possibly corrupted) address */
     pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
