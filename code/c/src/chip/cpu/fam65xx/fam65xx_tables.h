@@ -189,6 +189,7 @@ static const cycle_fn_t fam65xx_op_handlers[OP_COUNT] = {
 };
 
 // Compact macro for opcode_info_t opcode definition - creates properly formatted bitfield entries
+// Field order: am_index, illegal_store, _reserved, can_skip_page_cross, rmw, op_index
 #define OP(am_index, can_skip_page_cross, op_index, rmw_flag) {(am_index), 0, 0, (can_skip_page_cross), (rmw_flag), (op_index)}
 #define OP_ILLEGAL_STORE(am_index, can_skip_page_cross, op_index, rmw_flag) {(am_index), 1, 0, (can_skip_page_cross), (rmw_flag), (op_index)}
 
