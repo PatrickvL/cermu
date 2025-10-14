@@ -227,21 +227,36 @@ static bus_state_t op_jam(fam65xx_t* cpu, bus_state_t pins) {
 /* NOP - No Operation */
 static bus_state_t op_nop(fam65xx_t* cpu, bus_state_t pins) {
     /* NOP behavior depends on addressing mode:
-     * - AM_NON (implicit): No additional read needed (1 cycle total)
-     * - AM_IMM: Used by illegal NOPs - dummy read from PC WITHOUT increment (2 cycles total)
+     * - AM_NON (implicit): Legal NOP 0xea - needs dummy internal cycle (2 cycles total)
+     * - AM_IMM: Illegal NOPs use this for 2-cycle dummy read without PC increment
      * - Memory modes: Read from target address and discard (hardware accurate) */
     
     if (cpu->opcode_entry.am_index == AM_IMM) {
-        /* Illegal NOP variant - dummy read from PC without increment */
-        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        /* Note: PC is NOT incremented - illegal NOPs don't consume operand */
+        /* Check opcode to distinguish between legal immediate NOPs vs illegal variants */
+        uint8_t opcode = CPU_IR(cpu);
+        
+        /* Illegal NOP opcodes that need dummy read without PC increment */
+        if (opcode == 0x1a || opcode == 0x3a || opcode == 0x5a ||
+            opcode == 0x7a || opcode == 0xda || opcode == 0xfa) {
+            /* Illegal NOP: dummy read from PC WITHOUT increment */
+            pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+        } else {
+            /* Legal immediate NOP: read operand and increment PC */
+            pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_PC(cpu)++;
+        }
     } else if (cpu->opcode_entry.am_index > AM_IMM) {
         /* Memory addressing modes - read from target address and discard */
         pins = fam65xx_phi2_read(cpu, pins, REG_AB);
         if (!FAM65XX_GET_RDY(pins)) return pins;
+    } else {
+        /* Legal NOP (0xea) - AM_NON: Dummy read from PC for internal operation cycle */
+        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+        /* Note: PC is NOT incremented for legal NOP - it's an internal operation */
     }
-    /* Implicit mode (AM_NON) - no additional read needed */
     
     /* PHI1: No operation performed - instruction completes */
     fam65xx_transition_to_fetch(cpu);
