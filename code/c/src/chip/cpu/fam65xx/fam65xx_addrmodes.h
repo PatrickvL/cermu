@@ -103,11 +103,14 @@ static bus_state_t am_abx(fam65xx_t* cpu, bus_state_t pins) {
             /* Add X to low byte only - this creates the "wrong" address for page cross */
             CPU_ABL(cpu) += CPU_X(cpu);
             
-            /* Check if we need page cross cycle */
-            if (cpu->opcode_entry.page_cross && !page_crossed) {
-                /* No page cross - fix address and skip cycle 2 */
+            /* Check if we can skip page cross cycle */
+            if (!cpu->opcode_entry.page_cross && !page_crossed) {
+                /* No page cross needed and none occurred - fix address and skip cycle 2 */
                 CPU_AB(cpu) = effective;
                 fam65xx_transition_to_operation(cpu);
+            } else if (cpu->opcode_entry.page_cross) {
+                /* Force penalty cycle for opcodes that always need it (like illegal stores) */
+                /* Continue to cycle 2 with wrong address in AB */
             }
             /* Otherwise continue to cycle 2 with wrong address in AB */
             break;
@@ -133,11 +136,17 @@ static bus_state_t am_abx(fam65xx_t* cpu, bus_state_t pins) {
              *
              * This optimization eliminates the need for a separate CPU state field.
              */
-            CPU_DL(cpu) = cpu->opcode_entry.illegal_store;
-
+            /* Store illegal store flag in a temporary location
+             * since DL contains the original low byte needed for address calculation */
+            uint8_t original_low = CPU_DL(cpu);
+            uint8_t illegal_store_flag = cpu->opcode_entry.illegal_store;
+            
             /* Fix address to correct value after page cross penalty cycle */
-            CPU_ABL(cpu) = CPU_DL(cpu);
+            CPU_ABL(cpu) = original_low;
             CPU_AB(cpu) += CPU_X(cpu);
+            
+            /* Set DL to illegal store flag after address calculation is complete */
+            CPU_DL(cpu) = illegal_store_flag;
             fam65xx_transition_to_operation(cpu);
             break;
     }
@@ -176,9 +185,9 @@ static bus_state_t am_aby(fam65xx_t* cpu, bus_state_t pins) {
             /* Add Y to low byte only - this creates the "wrong" address for page cross */
             CPU_ABL(cpu) += CPU_Y(cpu);
             
-            /* Check if we need page cross cycle */
-            if (cpu->opcode_entry.page_cross && !fam65xx_page_crossed(base, effective)) {
-                /* No page cross - fix address and skip cycle 2 */
+            /* Check if we can skip page cross cycle */
+            if (!cpu->opcode_entry.page_cross && !fam65xx_page_crossed(base, effective)) {
+                /* No page cross needed and none occurred - fix address and skip cycle 2 */
                 CPU_AB(cpu) = effective;
                 fam65xx_transition_to_operation(cpu);
             }
@@ -206,11 +215,17 @@ static bus_state_t am_aby(fam65xx_t* cpu, bus_state_t pins) {
              *
              * This optimization eliminates the need for a separate CPU state field.
              */
-            CPU_DL(cpu) = cpu->opcode_entry.illegal_store;
+            /* Store illegal store flag in a temporary location
+             * since DL contains the original low byte needed for address calculation */
+            uint8_t original_low = CPU_DL(cpu);
+            uint8_t illegal_store_flag = cpu->opcode_entry.illegal_store;
             
             /* Fix address to correct value after page cross penalty cycle */
-            CPU_ABL(cpu) = CPU_DL(cpu);
+            CPU_ABL(cpu) = original_low;
             CPU_AB(cpu) += CPU_Y(cpu);
+            
+            /* Set DL to illegal store flag after address calculation is complete */
+            CPU_DL(cpu) = illegal_store_flag;
             fam65xx_transition_to_operation(cpu);
             break;
     }
@@ -301,10 +316,13 @@ static bus_state_t am_idy(fam65xx_t* cpu, bus_state_t pins) {
             CPU_DL(cpu) = CPU_ABL(cpu);
             CPU_ABL(cpu) += CPU_Y(cpu);
             
-            if (cpu->opcode_entry.page_cross && !fam65xx_page_crossed(base, effective)) {
-                /* No page cross - set correct address and skip cycle 3 */
+            if (!cpu->opcode_entry.page_cross && !fam65xx_page_crossed(base, effective)) {
+                /* No page cross needed and none occurred - set correct address and skip cycle 3 */
                 CPU_AB(cpu) = effective;
                 fam65xx_transition_to_operation(cpu);
+            } else if (cpu->opcode_entry.page_cross) {
+                /* Force penalty cycle for opcodes that always need it (like illegal stores) */
+                /* Continue to cycle 3 with wrong address for penalty cycle */
             }
             /* Otherwise continue to cycle 3 with wrong address for penalty cycle */
             break;
@@ -330,11 +348,17 @@ static bus_state_t am_idy(fam65xx_t* cpu, bus_state_t pins) {
              *
              * This optimization eliminates the need for a separate CPU state field.
              */
-            CPU_DL(cpu) = cpu->opcode_entry.illegal_store;
+            /* Store illegal store flag in a temporary location (use high bit of DL)
+             * since DL contains the original low byte needed for address calculation */
+            uint8_t original_low = CPU_DL(cpu);
+            uint8_t illegal_store_flag = cpu->opcode_entry.illegal_store;
             
             /* Fix address to correct value after page cross penalty cycle */
-            CPU_ABL(cpu) = CPU_DL(cpu);
+            CPU_ABL(cpu) = original_low;
             CPU_AB(cpu) += CPU_Y(cpu);
+            
+            /* Set DL to illegal store flag after address calculation is complete */
+            CPU_DL(cpu) = illegal_store_flag;
             fam65xx_transition_to_operation(cpu);
             break;
     }
