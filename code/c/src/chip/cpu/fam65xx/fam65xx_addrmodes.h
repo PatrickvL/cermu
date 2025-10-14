@@ -121,10 +121,10 @@ static bus_state_t am_abx(fam65xx_t* cpu, bus_state_t pins) {
             pins = fam65xx_phi2_read(cpu, pins, REG_AB);
             if (!FAM65XX_GET_RDY(pins)) return pins;
 
-            /* PHI1: NON-STANDARD DL REGISTER REUSE FOR ILLEGAL STORE QUIRK FLAG
+            /* PHI1: NON-STANDARD DL REGISTER REUSE FOR ILLEGAL STORE INTERMEDIATE HIGH BYTE
              *
              * RISK ANALYSIS: This is a non-standard use of the DL register to communicate
-             * page cross penalty state from addressing modes to illegal store operations.
+             * the intermediate high byte from addressing modes to illegal store operations.
              *
              * SAFETY VERIFICATION (exhaustively checked):
              * All operations that can follow ABX addressing mode either:
@@ -136,17 +136,24 @@ static bus_state_t am_abx(fam65xx_t* cpu, bus_state_t pins) {
              *
              * This optimization eliminates the need for a separate CPU state field.
              */
-            /* Store illegal store flag in a temporary location
-             * since DL contains the original low byte needed for address calculation */
+            /* Store original low byte and calculate intermediate high byte */
             uint8_t original_low = CPU_DL(cpu);
-            uint8_t illegal_store_flag = cpu->opcode_entry.illegal_store;
+            
+            /* Recalculate base and effective to determine if page was actually crossed */
+            uint16_t base = (CPU_ABH(cpu) << 8) | original_low;
+            uint16_t effective = base + CPU_X(cpu);
+            bool actual_page_crossed = fam65xx_page_crossed(base, effective);
+            
+            /* Calculate intermediate high byte (before page cross correction) */
+            uint8_t intermediate_high = CPU_ABH(cpu) + (((uint16_t)original_low + CPU_X(cpu)) > 0xFF ? 1 : 0);
             
             /* Fix address to correct value after page cross penalty cycle */
             CPU_ABL(cpu) = original_low;
             CPU_AB(cpu) += CPU_X(cpu);
             
-            /* Set DL to illegal store flag after address calculation is complete */
-            CPU_DL(cpu) = illegal_store_flag;
+            /* Always store intermediate high byte in DL for illegal store operations */
+            /* This simplifies page crossing detection in illegal operations */
+            CPU_DL(cpu) = intermediate_high;
             fam65xx_transition_to_operation(cpu);
             break;
     }
@@ -200,10 +207,10 @@ static bus_state_t am_aby(fam65xx_t* cpu, bus_state_t pins) {
             pins = fam65xx_phi2_read(cpu, pins, REG_AB);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: NON-STANDARD DL REGISTER REUSE FOR ILLEGAL STORE QUIRK FLAG
+            /* PHI1: NON-STANDARD DL REGISTER REUSE FOR ILLEGAL STORE INTERMEDIATE HIGH BYTE
              *
              * RISK ANALYSIS: This is a non-standard use of the DL register to communicate
-             * page cross penalty state from addressing modes to illegal store operations.
+             * the intermediate high byte from addressing modes to illegal store operations.
              *
              * SAFETY VERIFICATION (exhaustively checked):
              * All operations that can follow ABY addressing mode either:
@@ -215,17 +222,24 @@ static bus_state_t am_aby(fam65xx_t* cpu, bus_state_t pins) {
              *
              * This optimization eliminates the need for a separate CPU state field.
              */
-            /* Store illegal store flag in a temporary location
-             * since DL contains the original low byte needed for address calculation */
+            /* Store original low byte and calculate intermediate high byte */
             uint8_t original_low = CPU_DL(cpu);
-            uint8_t illegal_store_flag = cpu->opcode_entry.illegal_store;
+            
+            /* Recalculate base and effective to determine if page was actually crossed */
+            uint16_t base = (CPU_ABH(cpu) << 8) | original_low;
+            uint16_t effective = base + CPU_Y(cpu);
+            bool actual_page_crossed = fam65xx_page_crossed(base, effective);
+            
+            /* Calculate intermediate high byte (before page cross correction) */
+            uint8_t intermediate_high = CPU_ABH(cpu) + (((uint16_t)original_low + CPU_Y(cpu)) > 0xFF ? 1 : 0);
             
             /* Fix address to correct value after page cross penalty cycle */
             CPU_ABL(cpu) = original_low;
             CPU_AB(cpu) += CPU_Y(cpu);
             
-            /* Set DL to illegal store flag after address calculation is complete */
-            CPU_DL(cpu) = illegal_store_flag;
+            /* Always store intermediate high byte in DL for illegal store operations */
+            /* This simplifies page crossing detection in illegal operations */
+            CPU_DL(cpu) = intermediate_high;
             fam65xx_transition_to_operation(cpu);
             break;
     }
@@ -333,10 +347,10 @@ static bus_state_t am_idy(fam65xx_t* cpu, bus_state_t pins) {
             pins = fam65xx_phi2_read(cpu, pins, REG_AB);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: NON-STANDARD DL REGISTER REUSE FOR ILLEGAL STORE QUIRK FLAG
+            /* PHI1: NON-STANDARD DL REGISTER REUSE FOR ILLEGAL STORE INTERMEDIATE HIGH BYTE
              *
              * RISK ANALYSIS: This is a non-standard use of the DL register to communicate
-             * page cross penalty state from addressing modes to illegal store operations.
+             * the intermediate high byte from addressing modes to illegal store operations.
              *
              * SAFETY VERIFICATION (exhaustively checked):
              * All operations that can follow IDY addressing mode either:
@@ -348,17 +362,24 @@ static bus_state_t am_idy(fam65xx_t* cpu, bus_state_t pins) {
              *
              * This optimization eliminates the need for a separate CPU state field.
              */
-            /* Store illegal store flag in a temporary location (use high bit of DL)
-             * since DL contains the original low byte needed for address calculation */
+            /* Store original low byte and calculate intermediate high byte */
             uint8_t original_low = CPU_DL(cpu);
-            uint8_t illegal_store_flag = cpu->opcode_entry.illegal_store;
+            
+            /* Recalculate base and effective to determine if page was actually crossed */
+            uint16_t base = (CPU_ABH(cpu) << 8) | original_low;
+            uint16_t effective = base + CPU_Y(cpu);
+            bool actual_page_crossed = fam65xx_page_crossed(base, effective);
+            
+            /* Calculate intermediate high byte (before page cross correction) */
+            uint8_t intermediate_high = CPU_ABH(cpu) + (((uint16_t)original_low + CPU_Y(cpu)) > 0xFF ? 1 : 0);
             
             /* Fix address to correct value after page cross penalty cycle */
             CPU_ABL(cpu) = original_low;
             CPU_AB(cpu) += CPU_Y(cpu);
             
-            /* Set DL to illegal store flag after address calculation is complete */
-            CPU_DL(cpu) = illegal_store_flag;
+            /* Always store intermediate high byte in DL for illegal store operations */
+            /* This simplifies page crossing detection in illegal operations */
+            CPU_DL(cpu) = intermediate_high;
             fam65xx_transition_to_operation(cpu);
             break;
     }

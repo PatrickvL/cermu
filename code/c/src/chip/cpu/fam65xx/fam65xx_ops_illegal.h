@@ -224,24 +224,21 @@ static bus_state_t op_las(fam65xx_t* cpu, bus_state_t pins) {
 
 /* SHA - Store A & X & H */
 static bus_state_t op_sha(fam65xx_t* cpu, bus_state_t pins) {
-    /* NON-STANDARD DL REGISTER REUSE: Check page cross penalty flag first */
-    uint8_t page_cross_penalty = CPU_DL(cpu);
+    /* DL contains intermediate high byte from addressing mode */
+    uint8_t intermediate_high = CPU_DL(cpu);
+    bool page_crossed = (intermediate_high != CPU_ABH(cpu));
     
-    /* CRITICAL: Calculate data using ORIGINAL high byte before any address corruption */
-    uint8_t original_high = CPU_ABH(cpu);
-    CPU_DL(cpu) = CPU_A(cpu) & CPU_X(cpu) & original_high;
+    /* Data calculation always uses intermediate high byte */
+    CPU_DL(cpu) = CPU_A(cpu) & CPU_X(cpu) & (intermediate_high + 1);
     
-    /* SHA hardware quirk: Only occurs during page crossings
-     * Corruption formula varies by addressing mode */
-    if (page_cross_penalty) {
-        if (cpu->opcode_entry.am_index == AM_ABY || cpu->opcode_entry.am_index == AM_INY) {
-            /* SHA with ABY/IDY: High byte ANDed with A & X & Y */
-            CPU_ABH(cpu) &= (CPU_A(cpu) & CPU_X(cpu) & CPU_Y(cpu));
-        }
+    /* Apply address corruption only during page crossings */
+    if (page_crossed) {
+        CPU_ABH(cpu) &= (CPU_A(cpu) & CPU_X(cpu));
     }
     
     /* PHI2: Write to (possibly corrupted) address */
     pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
+    
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     /* PHI1: Complete instruction */
@@ -251,45 +248,22 @@ static bus_state_t op_sha(fam65xx_t* cpu, bus_state_t pins) {
 
 /* SHS - Store A & X & H, set SP to A & X */
 static bus_state_t op_shs(fam65xx_t* cpu, bus_state_t pins) {
-    /* NON-STANDARD DL REGISTER REUSE: Check page cross penalty flag first */
-    uint8_t page_cross_penalty = CPU_DL(cpu);
+    /* DL contains intermediate high byte from addressing mode */
+    uint8_t intermediate_high = CPU_DL(cpu);
+    bool page_crossed = (intermediate_high != CPU_ABH(cpu));
     
-    /* CRITICAL: Calculate data using ORIGINAL high byte before any address corruption */
-    uint8_t original_high = CPU_ABH(cpu);
-    CPU_DL(cpu) = CPU_A(cpu) & CPU_X(cpu) & original_high;
+    /* Data calculation always uses intermediate high byte */
+    CPU_DL(cpu) = CPU_A(cpu) & CPU_X(cpu) & (intermediate_high + 1);
     
-    /* SHS hardware quirk: Only occurs during page crossings
-     * With ABY addressing: High byte ANDed with A & X */
-    if (page_cross_penalty && cpu->opcode_entry.am_index == AM_ABY) {
+    /* Apply address corruption only during page crossings */
+    if (page_crossed) {
         CPU_ABH(cpu) &= (CPU_A(cpu) & CPU_X(cpu));
     }
     
-    /* PHI2: Write A&X&H to (possibly corrupted) address */
-    pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    /* PHI1: Set SP to A & X */
+    /* Set SP to A & X (SHS side effect) */
     CPU_S(cpu) = CPU_A(cpu) & CPU_X(cpu);
-    fam65xx_transition_to_fetch(cpu);
-    return pins;
-}
-
-/* SHX - Store X & H */
-static bus_state_t op_shx(fam65xx_t* cpu, bus_state_t pins) {
-    /* NON-STANDARD DL REGISTER REUSE: Check page cross penalty flag first */
-    uint8_t page_cross_penalty = CPU_DL(cpu);
     
-    /* CRITICAL: Calculate data using ORIGINAL high byte before any address corruption */
-    uint8_t original_high = CPU_ABH(cpu);
-    CPU_DL(cpu) = CPU_X(cpu) & original_high;
-    
-    /* SHX hardware quirk: Only occurs during page crossings
-     * With ABY addressing: High byte ANDed with X & Y */
-    if (page_cross_penalty && cpu->opcode_entry.am_index == AM_ABY) {
-        CPU_ABH(cpu) &= (CPU_X(cpu) & CPU_Y(cpu));
-    }
-    
-    /* PHI2: Write X&H to (possibly corrupted) address */
+    /* PHI2: Write to address */
     pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
@@ -298,17 +272,44 @@ static bus_state_t op_shx(fam65xx_t* cpu, bus_state_t pins) {
     return pins;
 }
 
-/* SHY - Store Y & (H+1) */
+/* SHX - Store X & H */
+static bus_state_t op_shx(fam65xx_t* cpu, bus_state_t pins) {
+    /* DL contains intermediate high byte from addressing mode */
+    uint8_t intermediate_high = CPU_DL(cpu);
+    bool page_crossed = (intermediate_high != CPU_ABH(cpu));
+    
+    /* Data calculation always uses intermediate high byte */
+    CPU_DL(cpu) = CPU_X(cpu) & (intermediate_high + 1);
+    
+    /* Apply address corruption only during page crossings */
+    if (page_crossed) {
+        CPU_ABH(cpu) &= CPU_X(cpu);
+    }
+    
+    /* PHI2: Write to address */
+    pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
+    if (!FAM65XX_GET_RDY(pins)) return pins;
+    
+    /* PHI1: Complete instruction */
+    fam65xx_transition_to_fetch(cpu);
+    return pins;
+}
+
+/* SHY - Store Y & H */
 static bus_state_t op_shy(fam65xx_t* cpu, bus_state_t pins) {
-    /* CRITICAL: Calculate data using ORIGINAL high byte before any address corruption
-     * Testing: Use H instead of H+1 based on ProcessorTests evidence */
-    uint8_t original_high = CPU_ABH(cpu);
-    CPU_DL(cpu) = CPU_Y(cpu) & original_high;
+    /* DL contains intermediate high byte from addressing mode */
+    uint8_t intermediate_high = CPU_DL(cpu);
+    bool page_crossed = (intermediate_high != CPU_ABH(cpu));
     
-    /* SHY hardware quirk: Always occurs for illegal store opcodes */
-    CPU_ABH(cpu) &= (original_high + 1);
+    /* Data calculation always uses intermediate high byte */
+    CPU_DL(cpu) = CPU_Y(cpu) & (intermediate_high + 1);
     
-    /* PHI2: Write Y&(H+1) to (possibly corrupted) address */
+    /* Apply address corruption only during page crossings */
+    if (page_crossed) {
+        CPU_ABH(cpu) &= CPU_Y(cpu);
+    }
+    
+    /* PHI2: Write to address */
     pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
