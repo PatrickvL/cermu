@@ -9,22 +9,35 @@ RUNNER_SRC = fam65xx_processor_tests_runner.cpp json_parser.c
 RUNNER_OBJ = $(RUNNER_SRC:.cpp=.o)
 RUNNER_OBJ := $(RUNNER_OBJ:.c=.o)
 
+# Header dependencies - any change to these headers triggers rebuild
+HEADER_DEPS = ../src/chip/cpu/fam65xx/fam65xx.h \
+              ../src/chip/cpu/fam65xx/fam65xx_core.h \
+              ../src/chip/cpu/fam65xx/fam65xx_impl.h \
+              ../src/chip/cpu/fam65xx/fam65xx_tables.h \
+              ../src/chip/cpu/fam65xx/fam65xx_addrmodes.h \
+              ../src/chip/cpu/fam65xx/fam65xx_ops.h \
+              ../src/chip/cpu/fam65xx/fam65xx_ops_part2.h \
+              ../src/chip/cpu/fam65xx/fam65xx_ops_part3.h \
+              ../src/chip/cpu/fam65xx/fam65xx_ops_rmw.h \
+              ../src/chip/cpu/fam65xx/fam65xx_ops_illegal.h \
+              json_parser.h
+
 # Target executable
 TARGET = fam65xx_processor_tests_runner
 
 # Default target
 all: $(TARGET)
 
-# Build test runner
-$(TARGET): $(RUNNER_OBJ)
-	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
+# Build test runner - depends on headers too
+$(TARGET): $(RUNNER_OBJ) $(HEADER_DEPS)
+	$(CC) $(CFLAGS) -o $@ $(RUNNER_OBJ) $(LIBS)
 
-# Compile C++ files
-%.o: %.cpp
+# Compile C++ files - depend on headers
+%.o: %.cpp $(HEADER_DEPS)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
-# Compile C files  
-%.o: %.c
+# Compile C files - depend on headers
+%.o: %.c $(HEADER_DEPS)
 	gcc $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 # Clean build artifacts

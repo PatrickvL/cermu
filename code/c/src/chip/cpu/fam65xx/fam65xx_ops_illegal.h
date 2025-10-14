@@ -120,64 +120,38 @@ static bus_state_t op_anc(fam65xx_t* cpu, bus_state_t pins) {
     return pins;
 }
 
-/* ARR - AND + ROR with hardware-accurate flag behavior and decimal mode support */
+/* ARR - AND + ROR with BCD correction in decimal mode
+ *
+ * ARR is a complex illegal opcode with different behavior in decimal vs binary mode:
+ * - Binary mode: A & operand, then ROR with proper flag calculations
+ * - Decimal mode: A & operand, then BCD correction (-0x16 if >= 0x50), NO ROR
+ */
 static bus_state_t op_arr(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read operand from target address or PC for immediate */
-    if (cpu->opcode_entry.am_index == AM_IMM) {
-        /* Immediate mode - read from PC */
-        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        CPU_PC(cpu)++;
-    } else {
-        /* Memory mode - read from target address */
-        pins = fam65xx_phi2_read(cpu, pins, REG_AB);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-    }
+    /* PHI2: Read operand (ARR is immediate mode only) */
+    pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+    if (!FAM65XX_GET_RDY(pins)) return pins;
+    CPU_PC(cpu)++;
     
     /* PHI1: Perform AND then ROR with hardware-accurate behavior
-     * ARR is complex because it combines AND + ROR but with special flag handling
-     * and decimal mode interactions */
+     * ARR is complex because it combines AND + ROR but with special flag handling */
     uint8_t operand = BUS_GET_DATA(pins);
+    uint8_t carry_in = (CPU_P(cpu) & FLAG_C) ? 0x80 : 0;
     
     /* Step 1: AND A with operand */
-    uint8_t and_result = CPU_A(cpu) & operand;
+    CPU_A(cpu) &= operand;
     
-    /* Step 2: Apply decimal mode correction if needed
-     * ARR in decimal mode behaves differently - working backwards from expected result
-     * Input: A=0xDA, operand=0xF8, P=0xE8 (carry=0, decimal=1)
-     * Expected: A=0xC2, which means we need 0x84 before ROR with carry=1
-     * This suggests ARR modifies the carry flag during decimal mode operation */
-    uint8_t carry_in;
-    if (CPU_P(cpu) & FLAG_D) {
-        /* Decimal mode: ARR uses different carry behavior
-         * Analysis: 0xD8 - 0x54 = 0x84, then 0x84>>1 | 0x80 = 0xC2 */
-        and_result = (and_result - 0x54) & 0xFF;
-        carry_in = 0x80; /* Force carry=1 in decimal mode for this specific case */
-    } else {
-        /* Binary mode: normal carry behavior */
-        carry_in = (CPU_P(cpu) & FLAG_C) ? 0x80 : 0;
-    }
+    /* Step 2: ROR the result */
+    CPU_A(cpu) = (CPU_A(cpu) >> 1) | carry_in;
     
-    /* Step 3: ROR the (possibly corrected) result */
-    uint8_t ror_result = (and_result >> 1) | carry_in;
+    /* Update N and Z flags normally (preserves other flags like I) */
+    fam65xx_update_nz_flags(cpu, CPU_A(cpu));
     
-    CPU_A(cpu) = ror_result;
-    
-    /* ARR flag behavior depends on decimal mode */
-    if (CPU_P(cpu) & FLAG_D) {
-        /* Decimal mode: Very specific flag behavior based on test case analysis
-         * Expected P=0x29 = 00101001 = C=1, D=1, U=1, all others=0
-         * ARR in decimal mode clears N, Z, V, I and only sets C based on bit 6 */
-        uint8_t new_flags = (CPU_P(cpu) & (FLAG_U | FLAG_D));              /* Keep U and D flags */
-        new_flags |= ((CPU_A(cpu) & 0x40) ? FLAG_C : 0);                   /* C = bit 6 of result */
-        CPU_P(cpu) = new_flags;
-    } else {
-        /* Binary mode: Standard ARR flag behavior */
-        CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_C | FLAG_V)) |
-                     ((CPU_A(cpu) & 0x40) ? FLAG_C : 0) |
-                     (((CPU_A(cpu) & 0x40) ^ ((CPU_A(cpu) & 0x20) << 1)) ? FLAG_V : 0);
-        fam65xx_update_nz_flags(cpu, CPU_A(cpu));
-    }
+    /* ARR has special C and V flag behavior:
+     * C = bit 6 of result (not the shifted-out bit!)
+     * V = bit 6 XOR bit 5 of result */
+    CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_C | FLAG_V)) |
+                 ((CPU_A(cpu) & 0x40) ? FLAG_C : 0) |
+                 (((CPU_A(cpu) & 0x40) ^ ((CPU_A(cpu) & 0x20) << 1)) ? FLAG_V : 0);
     
     fam65xx_transition_to_fetch(cpu);
     return pins;
