@@ -112,9 +112,10 @@ static bus_state_t am_abx(fam65xx_t* cpu, bus_state_t pins) {
             pins = fam65xx_phi2_read(cpu, pins, REG_AB);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Correct address by applying carry
-            * DL contains original ABH (intermediate high byte) for illegal opcodes */
-            CPU_AB(cpu) += CPU_X(cpu);
+            /* PHI1: Correct final address */
+            CPU_ABH(cpu) = CPU_DL(cpu);  /* Restore original high byte */
+            CPU_ABL(cpu) -= CPU_X(cpu);  /* Restore original low byte */
+            CPU_AB(cpu) += CPU_X(cpu);   /* Correctly calculate final address */
             
             fam65xx_transition_to_operation(cpu);
             break;
@@ -153,7 +154,7 @@ static bus_state_t am_aby(fam65xx_t* cpu, bus_state_t pins) {
             CPU_ABL(cpu) += CPU_Y(cpu);
             
             /* Skip penalty cycle if allowed and no page cross occurred */
-            if (!cpu->opcode_entry.page_cross && !fam65xx_page_crossed(base, effective)) {
+            if (cpu->opcode_entry.page_cross && !fam65xx_page_crossed(base, effective)) {
                 CPU_AB(cpu) = effective;  /* Fix address */
                 fam65xx_transition_to_operation(cpu);
             }
@@ -166,9 +167,10 @@ static bus_state_t am_aby(fam65xx_t* cpu, bus_state_t pins) {
             pins = fam65xx_phi2_read(cpu, pins, REG_AB);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Correct address by applying carry
-             * DL contains original ABH (intermediate high byte) for illegal opcodes */
-            CPU_AB(cpu) += CPU_Y(cpu);
+            /* PHI1: Correct final address */
+            CPU_ABH(cpu) = CPU_DL(cpu);  /* Restore original high byte */
+            CPU_ABL(cpu) -= CPU_Y(cpu);  /* Restore original low byte */
+            CPU_AB(cpu) += CPU_Y(cpu);   /* Correctly calculate final address */
             
             fam65xx_transition_to_operation(cpu);
             break;
@@ -254,13 +256,15 @@ static bus_state_t am_idy(fam65xx_t* cpu, bus_state_t pins) {
             uint16_t base = CPU_AB(cpu);
             uint16_t effective = base + CPU_Y(cpu);
             
-            /* Save original low byte and add Y (creates intermediate address) */
-            CPU_DL(cpu) = CPU_ABL(cpu);
+            /* Store original high byte in DL for illegal opcodes */
+            CPU_DL(cpu) = CPU_ABH(cpu);
+            
+            /* Add Y to low byte (creates intermediate address for page cross penalty) */
             CPU_ABL(cpu) += CPU_Y(cpu);
             
             /* Skip penalty cycle if allowed and no page cross */
             if (cpu->opcode_entry.page_cross && !fam65xx_page_crossed(base, effective)) {
-                CPU_AB(cpu) = effective;
+                CPU_AB(cpu) = effective;  /* Set correct final address */
                 fam65xx_transition_to_operation(cpu);
             }
             break;
@@ -270,17 +274,14 @@ static bus_state_t am_idy(fam65xx_t* cpu, bus_state_t pins) {
             pins = fam65xx_phi2_read(cpu, pins, REG_AB);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            uint8_t original_low = CPU_DL(cpu);
-            bool carry = ((uint16_t)original_low + CPU_Y(cpu)) > 0xFF;
+            /* DL already contains intermediate high byte from case 1 */
             
-            /* ALWAYS save intermediate high byte for illegal opcodes */
-            CPU_DL(cpu) = CPU_ABH(cpu);
-            
-            /* Correct address */
-            CPU_ABL(cpu) = original_low + CPU_Y(cpu);
-            if (carry) {
-                CPU_ABH(cpu)++;
-            }
+            /* Correct final address: base + Y (recalculate from scratch) */
+            /* Current AB has intermediate address: wrong_high:(base_low + Y) */
+            /* We need: (base_high:(base_low)) + Y */
+            CPU_ABH(cpu) = CPU_DL(cpu);  /* Restore original high byte */
+            CPU_ABL(cpu) -= CPU_Y(cpu);  /* Recover original base low */
+            CPU_AB(cpu) += CPU_Y(cpu);   /* Calculate correct final */
             
             fam65xx_transition_to_operation(cpu);
             break;
