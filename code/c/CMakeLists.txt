@@ -252,8 +252,7 @@ if(BUILD_GUI)
             src/gui/cimgui_backends.cpp
             src/chip/video/vic_ii/vicii_gui.c
             src/chip/logic/pla_gui.c
-            src/chip/cpu/fam65xx/fam65xx_gui.hpp
-            src/chip/cpu/fam65xx/fam65xx_gui.cpp
+            src/chip/cpu/fam65xx/fam65xx_gui.c
         )
 
     add_executable(c64emu_gui
