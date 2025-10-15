@@ -46,6 +46,43 @@ extern "C" {
 #ifdef CHIPS_IMPL
 
 /* ============================================================================
+ * HELPER FUNCTIONS FOR CODE DEDUPLICATION
+ * ============================================================================
+ */
+
+/* Common pattern: Read operand from immediate or memory mode */
+static inline bus_state_t illegal_read_operand_immediate_or_memory(fam65xx_t* cpu, bus_state_t pins) {
+    if (cpu->opcode_entry.am_index == AM_IMM) {
+        /* Immediate mode - read from PC */
+        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+        CPU_PC(cpu)++;
+    } else {
+        /* Memory mode - read from target address */
+        pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+    }
+    return pins;
+}
+
+/* Helper for illegal store operations with address corruption */
+static inline bus_state_t illegal_store_with_corruption_helper(fam65xx_t* cpu, bus_state_t pins, uint8_t data_value) {
+    /* Apply address corruption on page cross (DL != ABH means page crossed) */
+    if (CPU_DL(cpu) != CPU_ABH(cpu)) {
+        CPU_ABH(cpu) = data_value;
+    }
+    
+    CPU_DL(cpu) = data_value;
+    
+    /* PHI2: Write to (possibly corrupted) address */
+    pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
+    if (!FAM65XX_GET_RDY(pins)) return pins;
+    
+    fam65xx_transition_to_fetch(cpu);
+    return pins;
+}
+
+/* ============================================================================
  * LOAD/STORE COMBINATION OPERATIONS
  * ============================================================================
  */
@@ -100,17 +137,9 @@ static bus_state_t op_sax(fam65xx_t* cpu, bus_state_t pins) {
 
 /* ANC - AND with Carry */
 static bus_state_t op_anc(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read operand from target address or PC for immediate */
-    if (cpu->opcode_entry.am_index == AM_IMM) {
-        /* Immediate mode - read from PC */
-        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        CPU_PC(cpu)++;
-    } else {
-        /* Memory mode - read from target address */
-        pins = fam65xx_phi2_read(cpu, pins, REG_AB);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-    }
+    /* PHI2: Read operand using common pattern */
+    pins = illegal_read_operand_immediate_or_memory(cpu, pins);
+    if (!FAM65XX_GET_RDY(pins)) return pins;
     
     /* PHI1: Perform AND and set carry to bit 7 */
     CPU_A(cpu) &= BUS_GET_DATA(pins);
@@ -159,17 +188,9 @@ static bus_state_t op_arr(fam65xx_t* cpu, bus_state_t pins) {
 
 /* ASR - AND + LSR */
 static bus_state_t op_asr(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read operand from target address or PC for immediate */
-    if (cpu->opcode_entry.am_index == AM_IMM) {
-        /* Immediate mode - read from PC */
-        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        CPU_PC(cpu)++;
-    } else {
-        /* Memory mode - read from target address */
-        pins = fam65xx_phi2_read(cpu, pins, REG_AB);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-    }
+    /* PHI2: Read operand using common pattern */
+    pins = illegal_read_operand_immediate_or_memory(cpu, pins);
+    if (!FAM65XX_GET_RDY(pins)) return pins;
     
     /* PHI1: Perform AND then LSR */
     CPU_A(cpu) &= BUS_GET_DATA(pins);
@@ -182,17 +203,9 @@ static bus_state_t op_asr(fam65xx_t* cpu, bus_state_t pins) {
 
 /* SBX - (A & X) - operand -> X */
 static bus_state_t op_sbx(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read operand from target address or PC for immediate */
-    if (cpu->opcode_entry.am_index == AM_IMM) {
-        /* Immediate mode - read from PC */
-        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        CPU_PC(cpu)++;
-    } else {
-        /* Memory mode - read from target address */
-        pins = fam65xx_phi2_read(cpu, pins, REG_AB);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-    }
+    /* PHI2: Read operand using common pattern */
+    pins = illegal_read_operand_immediate_or_memory(cpu, pins);
+    if (!FAM65XX_GET_RDY(pins)) return pins;
     
     /* PHI1: Perform (A & X) - operand -> X */
     uint8_t data = BUS_GET_DATA(pins);
@@ -306,20 +319,7 @@ static bus_state_t op_las(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t op_sha(fam65xx_t* cpu, bus_state_t pins) {
     /* Calculate value: A & X & (intermediate_high + 1) */
     uint8_t data_value = CPU_A(cpu) & CPU_X(cpu) & (CPU_DL(cpu) + 1);
-    
-    /* Apply address corruption on page cross (DL != ABH means page crossed) */
-    if (CPU_DL(cpu) != CPU_ABH(cpu)) {
-        CPU_ABH(cpu) = data_value;
-    }
-    
-    CPU_DL(cpu) = data_value;
-    
-    /* PHI2: Write to (possibly corrupted) address */
-    pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    fam65xx_transition_to_fetch(cpu);
-    return pins;
+    return illegal_store_with_corruption_helper(cpu, pins, data_value);
 }
 
 /* SHS (TAS) - Store A & X & (H+1), Set S to A & X */
@@ -352,40 +352,14 @@ static bus_state_t op_shs(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t op_shx(fam65xx_t* cpu, bus_state_t pins) {
     /* Calculate value: X & (intermediate_high + 1) */
     uint8_t data_value = CPU_X(cpu) & (CPU_DL(cpu) + 1);
-    
-    /* Apply address corruption on page cross */
-    if (CPU_DL(cpu) != CPU_ABH(cpu)) {
-        CPU_ABH(cpu) = data_value;
-    }
-    
-    CPU_DL(cpu) = data_value;
-    
-    /* PHI2: Write to (possibly corrupted) address */
-    pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    fam65xx_transition_to_fetch(cpu);
-    return pins;
+    return illegal_store_with_corruption_helper(cpu, pins, data_value);
 }
 
 /* SHY (SYA, SAY) - Store Y & (H+1) */
 static bus_state_t op_shy(fam65xx_t* cpu, bus_state_t pins) {
     /* Calculate value: Y & (intermediate_high + 1) */
     uint8_t data_value = CPU_Y(cpu) & (CPU_DL(cpu) + 1);
-    
-    /* Apply address corruption on page cross */
-    if (CPU_DL(cpu) != CPU_ABH(cpu)) {
-        CPU_ABH(cpu) = data_value;
-    }
-    
-    CPU_DL(cpu) = data_value;
-    
-    /* PHI2: Write to (possibly corrupted) address */
-    pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    fam65xx_transition_to_fetch(cpu);
-    return pins;
+    return illegal_store_with_corruption_helper(cpu, pins, data_value);
 }
 
 #endif /* CHIPS_IMPL */

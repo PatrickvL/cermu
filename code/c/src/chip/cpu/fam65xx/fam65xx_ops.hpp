@@ -40,6 +40,44 @@ static void fam65xx_transition_to_fetch(fam65xx_t* cpu);
 static bus_state_t fam65xx_branch_helper(fam65xx_t* cpu, bus_state_t pins, uint8_t flag_mask, bool flag_value);
 
 /* ============================================================================
+ * HELPER FUNCTIONS FOR CODE DEDUPLICATION
+ * ============================================================================
+ */
+
+/* Common pattern: Read operand from immediate or memory mode */
+static inline bus_state_t ops_read_operand_immediate_or_memory(fam65xx_t* cpu, bus_state_t pins) {
+    if (cpu->opcode_entry.am_index == AM_IMM) {
+        /* Immediate mode - read from PC */
+        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+        CPU_PC(cpu)++;
+    } else {
+        /* Memory mode - read from target address */
+        pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+    }
+    return pins;
+}
+
+/* Helper for compare operations */
+static inline bus_state_t ops_compare_helper(fam65xx_t* cpu, bus_state_t pins, uint8_t reg_value) {
+    /* PHI2: Read operand using common pattern */
+    pins = ops_read_operand_immediate_or_memory(cpu, pins);
+    if (!FAM65XX_GET_RDY(pins)) return pins;
+    
+    /* PHI1: Perform compare operation */
+    uint8_t data = BUS_GET_DATA(pins);
+    uint16_t result = reg_value - data;
+    
+    CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
+                 (result & FLAG_N) |
+                 ((result & 0xFF) == 0 ? FLAG_Z : 0) |
+                 (reg_value >= data ? FLAG_C : 0);
+    fam65xx_transition_to_fetch(cpu);
+    return pins;
+}
+
+/* ============================================================================
  * ARITHMETIC OPERATIONS
  * ============================================================================
  */
@@ -371,82 +409,17 @@ static bus_state_t op_bvs(fam65xx_t* cpu, bus_state_t pins) {
 
 /* CMP - Compare Accumulator */
 static bus_state_t op_cmp(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read operand from target address or PC for immediate */
-    if (cpu->opcode_entry.am_index == AM_IMM) {
-        /* Immediate mode - read from PC */
-        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        CPU_PC(cpu)++;
-    } else {
-        /* Memory mode - read from target address */
-        pins = fam65xx_phi2_read(cpu, pins, REG_AB);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-    }
-    
-    /* PHI1: Perform CMP operation */
-    uint8_t data = BUS_GET_DATA(pins);
-    uint16_t result = CPU_A(cpu) - data;
-    
-    CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-                 (result & FLAG_N) |
-                 ((result & 0xFF) == 0 ? FLAG_Z : 0) |
-                 (CPU_A(cpu) >= data ? FLAG_C : 0);
-    fam65xx_transition_to_fetch(cpu);
-    return pins;
+    return ops_compare_helper(cpu, pins, CPU_A(cpu));
 }
-
 
 /* CPX - Compare X Register */
 static bus_state_t op_cpx(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read operand from target address or PC for immediate */
-    if (cpu->opcode_entry.am_index == AM_IMM) {
-        /* Immediate mode - read from PC */
-        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        CPU_PC(cpu)++;
-    } else {
-        /* Memory mode - read from target address */
-        pins = fam65xx_phi2_read(cpu, pins, REG_AB);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-    }
-    
-    /* PHI1: Perform CPX operation */
-    uint8_t data = BUS_GET_DATA(pins);
-    uint16_t result = CPU_X(cpu) - data;
-    
-    CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-                 (result & FLAG_N) |
-                 ((result & 0xFF) == 0 ? FLAG_Z : 0) |
-                 (CPU_X(cpu) >= data ? FLAG_C : 0);
-    fam65xx_transition_to_fetch(cpu);
-    return pins;
+    return ops_compare_helper(cpu, pins, CPU_X(cpu));
 }
-
 
 /* CPY - Compare Y Register */
 static bus_state_t op_cpy(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read operand from target address or PC for immediate */
-    if (cpu->opcode_entry.am_index == AM_IMM) {
-        /* Immediate mode - read from PC */
-        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        CPU_PC(cpu)++;
-    } else {
-        /* Memory mode - read from target address */
-        pins = fam65xx_phi2_read(cpu, pins, REG_AB);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-    }
-    
-    /* PHI1: Perform CPY operation */
-    uint8_t data = BUS_GET_DATA(pins);
-    uint16_t result = CPU_Y(cpu) - data;
-    
-    CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-                 (result & FLAG_N) |
-                 ((result & 0xFF) == 0 ? FLAG_Z : 0) |
-                 (CPU_Y(cpu) >= data ? FLAG_C : 0);
-    fam65xx_transition_to_fetch(cpu);
-    return pins;
+    return ops_compare_helper(cpu, pins, CPU_Y(cpu));
 }
 
 
