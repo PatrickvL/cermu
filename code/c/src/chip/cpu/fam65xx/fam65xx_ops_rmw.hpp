@@ -1,6 +1,6 @@
 #pragma once
 /*
- * fam65xx_rmw_operations.h - MOS 65xx Family Read-Modify-Write Operations
+ * fam65xx_rmw_operations.hpp - MOS 65xx Family Read-Modify-Write Operations (C++ Version)
  * 
  * This file contains all Read-Modify-Write (RMW) operations that can work
  * in both accumulator mode (1 cycle) and memory mode (3 cycles).
@@ -22,7 +22,7 @@
  * - SRE (LSR + EOR)
  */
 
-#include "fam65xx_core.h"
+#include "fam65xx_core.hpp"
 
 #ifdef __cplusplus
 extern "C" {

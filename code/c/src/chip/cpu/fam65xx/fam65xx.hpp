@@ -1,6 +1,6 @@
 #pragma once
 /*
- * fam65xx_modular.h - MOS 65xx Family CPU Emulator (Modular Version)
+ * fam65xx_modular.hpp - MOS 65xx Family CPU Emulator (Modular Version) (C++ Version)
  * 
  * This is the main include file for the modular version of the PHI2 split
  * architecture CPU emulator. It includes all component files in the correct
@@ -63,22 +63,22 @@
  * This modular version splits the original monolithic file into logical
  * components for better maintainability while minimizing forward declarations:
  *
- * 1. fam65xx_core.h - Core definitions, CPU state, register mappings, API declarations
- * 2. fam65xx_tables.h - Includes ALL operation files and defines lookup tables
- *    ├─ fam65xx_addrmodes.h - Addressing mode handlers (am_* functions)
- *    ├─ fam65xx_ops.h - Arithmetic, bit test, branch, compare operations
- *    ├─ fam65xx_ops_part2.h - Control flow and flag operations
- *    ├─ fam65xx_ops_part3.h - Load, logic, register, stack, store, transfer operations
- *    ├─ fam65xx_ops_rmw.h - Read-modify-write operations (ASL, LSR, ROL, ROR, INC, DEC, illegal RMW)
- *    └─ fam65xx_ops_illegal.h - Illegal/undocumented opcodes (LAX, SAX, etc.)
- * 3. fam65xx_impl.h - Core implementation (PHI2 handlers, interrupts, tick, init)
+ * 1. fam65xx_core.hpp - Core definitions, CPU state, register mappings, API declarations
+ * 2. fam65xx_tables.hpp - Includes ALL operation files and defines lookup tables
+ *    ├─ fam65xx_addrmodes.hpp - Addressing mode handlers (am_* functions)
+ *    ├─ fam65xx_ops.hpp - Arithmetic, bit test, branch, compare operations
+ *    ├─ fam65xx_ops_part2.hpp - Control flow and flag operations
+ *    ├─ fam65xx_ops_part3.hpp - Load, logic, register, stack, store, transfer operations
+ *    ├─ fam65xx_ops_rmw.hpp - Read-modify-write operations (ASL, LSR, ROL, ROR, INC, DEC, illegal RMW)
+ *    └─ fam65xx_ops_illegal.hpp - Illegal/undocumented opcodes (LAX, SAX, etc.)
+ * 3. fam65xx_impl.hpp - Core implementation (PHI2 handlers, interrupts, tick, init)
  *
- * This structure eliminates forward declarations by having fam65xx_tables.h include
+ * This structure eliminates forward declarations by having fam65xx_tables.hpp include
  * all operation implementations before defining the lookup tables that reference them.
  */
 
-#include <stdint.h>
-#include <stdbool.h>
+#include <cstdint>
+#include <cstdbool>
 
 #ifdef __cplusplus
 extern "C" {
@@ -87,15 +87,15 @@ extern "C" {
 /* Include all modular components in dependency order to minimize forward declarations */
 
 /* 1. Core definitions - must be first (defines types and constants) */
-#include "fam65xx_core.h"
+#include "fam65xx_core.hpp"
 
 /* 2. Tables and enums - includes ALL operation and addressing mode handlers internally
  *    This eliminates the need for forward declarations by including implementations
  *    before defining the lookup tables that reference them. */
-#include "fam65xx_tables.h"
+#include "fam65xx_tables.hpp"
 
 /* 3. Implementation functions - use tables and operation handlers */
-#include "fam65xx_impl.h"
+#include "fam65xx_impl.hpp"
 
 /* Compatibility aliases for test runner integration */
 #define cpu_init fam65xx_init

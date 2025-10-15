@@ -1,6 +1,6 @@
 #pragma once
 /*
- * fam65xx_core.h - MOS 65xx Family CPU Core Definitions and API
+ * fam65xx_core.hpp - MOS 65xx Family CPU Core Definitions and API (C++ Version)
  * 
  * ARCHITECTURE OVERVIEW:
  * ======================
@@ -54,8 +54,8 @@
  *    - Each system tick = handler execution (PHI2 + memory + PHI1)
  */
 
-#include <stdint.h>
-#include <stdbool.h>
+#include <cstdint>
+#include <cstdbool>
 
 // Include system-wide bus definitions
 #include "../../../core/aiemuc.h"

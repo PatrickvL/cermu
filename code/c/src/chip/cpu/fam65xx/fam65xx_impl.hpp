@@ -1,6 +1,6 @@
 #pragma once
 /*
- * fam65xx_implementation.h - MOS 65xx Family CPU Core Implementation
+ * fam65xx_implementation.hpp - MOS 65xx Family CPU Core Implementation (C++ Version)
  * 
  * This file contains the core implementation functions:
  * - PHI2 handlers for read/write operations
@@ -11,8 +11,8 @@
  * - API implementations
  */
 
-#include "fam65xx_core.h"
-#include <string.h>
+#include "fam65xx_core.hpp"
+#include <cstring>
 
 #ifdef __cplusplus
 extern "C" {
@@ -257,7 +257,7 @@ bus_state_t fam65xx_tick(fam65xx_t* cpu, bus_state_t pins) {
  */
 
 bus_state_t fam65xx_init(fam65xx_t* cpu, const fam65xx_desc_t* desc) {
-    memset(cpu, 0, sizeof(fam65xx_t));
+    std::memset(cpu, 0, sizeof(fam65xx_t));
     
     /* Set up memory callbacks */
     if (desc) {

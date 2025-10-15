@@ -1,6 +1,6 @@
 #pragma once
 /*
- * fam65xx_addressing.h - MOS 65xx Family CPU Addressing Mode Handlers
+ * fam65xx_addressing.hpp - MOS 65xx Family CPU Addressing Mode Handlers (C++ Version)
  *
  * This file contains all addressing mode handlers that prepare addresses
  * for CPU operations. These handlers are called before operation handlers
@@ -21,7 +21,7 @@
  * addressing mode handlers - they're handled directly in operations.
  */
 
-#include "fam65xx_core.h"
+#include "fam65xx_core.hpp"
 
 #ifdef __cplusplus
 extern "C" {
