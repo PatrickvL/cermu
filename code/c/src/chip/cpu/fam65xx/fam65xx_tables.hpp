@@ -183,6 +183,24 @@ static const cycle_fn_t fam65xx_op_handlers[OP_COUNT] = {
     op_jam, // OP_JAM
     // 65C02 enhancements
     op_bra, // OP_BRA
+    op_nop, // OP_STZ - placeholder
+    op_nop, // OP_TRB - placeholder
+    op_nop, // OP_TSB - placeholder
+    op_nop, // OP_PHX - placeholder
+    op_nop, // OP_PHY - placeholder
+    op_nop, // OP_PLX - placeholder
+    op_nop, // OP_PLY - placeholder
+    op_nop, // OP_WAI - placeholder
+    op_nop, // OP_STP - placeholder
+    // Rockwell 65C02 bit manipulation
+    op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, // OP_RMB0-7
+    op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, // OP_SMB0-7
+    op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, // OP_BBR0-7
+    op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, // OP_BBS0-7
+    // 65C816 16-bit operations
+    op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, // OP_REP-OP_WDM
+    op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, // OP_PEA-OP_PLD
+    op_nop, op_nop, op_nop, op_nop, op_nop, // OP_RTL-OP_MVP
     // Illegal opcodes - combination instructions
     op_lax, // OP_LAX
     op_sax, // OP_SAX
@@ -212,17 +230,24 @@ static const cycle_fn_t fam65xx_op_handlers[OP_COUNT] = {
 #define OP(am_index, can_skip_page_cross, op_index, rmw_flag) {(am_index), 0, 0, (can_skip_page_cross), (rmw_flag), (op_index)}
 #define OP_ILLEGAL_STORE(am_index, can_skip_page_cross, op_index, rmw_flag) {(am_index), 1, 0, (can_skip_page_cross), (rmw_flag), (op_index)}
 
-// THE ONE OPCODE TABLE - populated by constexpr template helper per processor
-opcode_info_t fam65xx_opcode_table[256];
+// NOTE: Opcode table is now internal to each processor implementation
+// Each concrete processor gets its own compile-time generated table
 
-// Clean up the compact opcode macros
-#undef OP
-#undef OP_ILLEGAL_STORE
+/* Transition from addressing mode to operation */
+static void fam65xx_transition_to_operation(fam65xx_t* cpu) {
+    /* Use the processor-specific internal table */
+    cpu->cycle_index = 0;
+    cpu->current_handler = fam65xx_op_handlers[cpu->opcode_entry.op_index];
+}
 
 #endif /* CHIPS_IMPL */
 
 #ifdef __cplusplus
 } // extern "C"
+
+// C++ includes outside namespace to avoid namespace pollution
+#include <array>
+#include <cstddef>
 
 // ============================================================================
 // TEMPLATE-BASED PROCESSOR-SPECIFIC OPCODE TABLES
@@ -243,105 +268,421 @@ using fam65xx_variants::WDC65C02Tag;
 using fam65xx_variants::Rockwell65C02Tag;
 using fam65xx_variants::WDC65C816Tag;
 
-#ifdef CHIPS_IMPL
+// ============================================================================
+// TEMPLATE-BASED PROCESSOR-SPECIFIC FUNCTIONALITY
+// ============================================================================
+// This section provides compile-time processor specialization capabilities
+// The base table above is used for runtime, templates for compile-time features
 
 // ============================================================================
-// CONSTEXPR TEMPLATE HELPER TO POPULATE THE ONE OPCODE TABLE
+// CONSTEXPR OPCODE TABLE GENERATOR FOR EACH PROCESSOR VARIANT
 // ============================================================================
+// Each concrete processor core gets its own internal compile-time generated table
+// No external access needed - tables are purely internal to each processor implementation
 
-// Note: Processor feature detection helpers are now defined in fam65xx_templates.hpp
-// to avoid duplicate definitions
-
-// Redefine OP macros for template context
-#define OP_TEMPLATE(am_index, can_skip_page_cross, op_index, rmw_flag) {(am_index), 0, 0, (can_skip_page_cross), (rmw_flag), (op_index)}
-#define OP_ILLEGAL_STORE_TEMPLATE(am_index, can_skip_page_cross, op_index, rmw_flag) {(am_index), 1, 0, (can_skip_page_cross), (rmw_flag), (op_index)}
-
-// THE ONE CONSTEXPR TEMPLATE HELPER that fills the ONE table
+// Constexpr function to generate processor-specific opcode entry
 template<typename ProcessorTag>
-constexpr opcode_info_t get_opcode_entry(uint8_t opcode) {
-    // Base 6502 opcodes - common to all processors
+constexpr opcode_info_t generate_opcode_entry(uint8_t opcode) {
+    // Processor feature detection at compile time
+    constexpr bool has_illegal = ProcessorTraits<ProcessorTag>::has_illegal_opcodes;
+    constexpr bool has_cmos = ProcessorTraits<ProcessorTag>::has_cmos_enhancements;
+    constexpr bool has_bit_manip = ProcessorTraits<ProcessorTag>::has_bit_manipulation;
+    
+    // Helper lambda for creating opcode entries
+    auto make_op = [](AddrMode am, int skip_page, Operation op, int rmw) constexpr -> opcode_info_t {
+        return opcode_info_t{static_cast<uint8_t>(am), 0, 0, static_cast<uint8_t>(skip_page), static_cast<uint8_t>(rmw), static_cast<uint8_t>(op)};
+    };
+    auto make_illegal_store_op = [](AddrMode am, int skip_page, Operation op, int rmw) constexpr -> opcode_info_t {
+        return opcode_info_t{static_cast<uint8_t>(am), 1, 0, static_cast<uint8_t>(skip_page), static_cast<uint8_t>(rmw), static_cast<uint8_t>(op)};
+    };
+    
+    // Generate hardware-accurate opcode entries with processor-specific behavior
+    // Complete 256-entry table generated at compile time per processor variant
     switch (opcode) {
-        case 0x00: return OP_TEMPLATE(AM_NON,0,OP_BRK,0);
-        case 0x01: return OP_TEMPLATE(AM_INX,1,OP_ORA,0);
-        case 0x05: return OP_TEMPLATE(AM_ZER,1,OP_ORA,0);
-        case 0x06: return OP_TEMPLATE(AM_ZER,0,OP_ASL,1);
-        case 0x08: return OP_TEMPLATE(AM_NON,0,OP_PHP,0);
-        case 0x09: return OP_TEMPLATE(AM_IMM,1,OP_ORA,0);
-        case 0x0A: return OP_TEMPLATE(AM_ACC,0,OP_ASL,0);
-        case 0x0D: return OP_TEMPLATE(AM_ABS,1,OP_ORA,0);
-        case 0x0E: return OP_TEMPLATE(AM_ABS,0,OP_ASL,1);
-        case 0x10: return OP_TEMPLATE(AM_REL,0,OP_BPL,0);
-        case 0x11: return OP_TEMPLATE(AM_INY,1,OP_ORA,0);
-        case 0x15: return OP_TEMPLATE(AM_ZPX,1,OP_ORA,0);
-        case 0x16: return OP_TEMPLATE(AM_ZPX,0,OP_ASL,1);
-        case 0x18: return OP_TEMPLATE(AM_NON,0,OP_CLC,0);
-        case 0x19: return OP_TEMPLATE(AM_ABY,1,OP_ORA,0);
-        case 0x1D: return OP_TEMPLATE(AM_ABX,1,OP_ORA,0);
-        case 0x1E: return OP_TEMPLATE(AM_ABX,0,OP_ASL,1);
-        case 0x20: return OP_TEMPLATE(AM_NON,0,OP_JSR,0);
-        case 0x21: return OP_TEMPLATE(AM_INX,1,OP_AND,0);
-        case 0x24: return OP_TEMPLATE(AM_ZER,1,OP_BIT,0);
-        case 0x25: return OP_TEMPLATE(AM_ZER,1,OP_AND,0);
-        case 0x26: return OP_TEMPLATE(AM_ZER,0,OP_ROL,1);
-        case 0x28: return OP_TEMPLATE(AM_NON,0,OP_PLP,0);
-        case 0x29: return OP_TEMPLATE(AM_IMM,1,OP_AND,0);
-        case 0x2A: return OP_TEMPLATE(AM_ACC,0,OP_ROL,0);
-        case 0x2C: return OP_TEMPLATE(AM_ABS,1,OP_BIT,0);
-        case 0x2D: return OP_TEMPLATE(AM_ABS,1,OP_AND,0);
-        case 0x2E: return OP_TEMPLATE(AM_ABS,0,OP_ROL,1);
-        case 0x30: return OP_TEMPLATE(AM_REL,0,OP_BMI,0);
-        case 0x31: return OP_TEMPLATE(AM_INY,1,OP_AND,0);
-        case 0x35: return OP_TEMPLATE(AM_ZPX,1,OP_AND,0);
-        case 0x36: return OP_TEMPLATE(AM_ZPX,0,OP_ROL,1);
-        case 0x38: return OP_TEMPLATE(AM_NON,0,OP_SEC,0);
-        case 0x39: return OP_TEMPLATE(AM_ABY,1,OP_AND,0);
-        case 0x3D: return OP_TEMPLATE(AM_ABX,1,OP_AND,0);
-        case 0x3E: return OP_TEMPLATE(AM_ABX,0,OP_ROL,1);
-        // ... continue for all 256 opcodes, but with processor-specific behavior
+        // Row 0x0x - BRK, ORA, ASL
+        case 0x00: return make_op(AM_NON,0,OP_BRK,0);
+        case 0x01: return make_op(AM_INX,1,OP_ORA,0);
+        case 0x02: return has_illegal ? make_op(AM_NON,0,OP_JAM,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x03: return has_illegal ? make_op(AM_INX,0,OP_SLO,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x04: return has_illegal ? make_op(AM_ZER,1,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x05: return make_op(AM_ZER,1,OP_ORA,0);
+        case 0x06: return make_op(AM_ZER,0,OP_ASL,1);
+        case 0x07: return has_illegal ? make_op(AM_ZER,0,OP_SLO,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x08: return make_op(AM_NON,0,OP_PHP,0);
+        case 0x09: return make_op(AM_IMM,1,OP_ORA,0);
+        case 0x0A: return make_op(AM_ACC,0,OP_ASL,0);
+        case 0x0B: return has_illegal ? make_op(AM_IMM,1,OP_ANC,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x0C: return has_illegal ? make_op(AM_ABS,1,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x0D: return make_op(AM_ABS,1,OP_ORA,0);
+        case 0x0E: return make_op(AM_ABS,0,OP_ASL,1);
+        case 0x0F: return has_illegal ? make_op(AM_ABS,0,OP_SLO,1) : make_op(AM_NON,0,OP_NOP,0);
         
-        // Processor-specific handling
-        case 0x80: {
-            if constexpr (processor_has_cmos_enhancements<ProcessorTag>()) {
-                return OP_TEMPLATE(AM_REL,0,OP_BRA,0);  // BRA on 65C02+
-            } else {
-                if constexpr (processor_has_illegal_opcodes<ProcessorTag>()) {
-                    return OP_TEMPLATE(AM_IMM,1,OP_NOP,0);  // Illegal NOP on 6502
-                } else {
-                    return OP_TEMPLATE(AM_NON,0,OP_NOP,0);  // Regular NOP
-                }
-            }
-        }
+        // Row 0x1x - BPL, ORA, ASL
+        case 0x10: return make_op(AM_REL,0,OP_BPL,0);
+        case 0x11: return make_op(AM_INY,1,OP_ORA,0);
+        case 0x12: return has_illegal ? make_op(AM_NON,0,OP_JAM,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x13: return has_illegal ? make_op(AM_INY,0,OP_SLO,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x14: return has_illegal ? make_op(AM_ZPX,1,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x15: return make_op(AM_ZPX,1,OP_ORA,0);
+        case 0x16: return make_op(AM_ZPX,0,OP_ASL,1);
+        case 0x17: return has_illegal ? make_op(AM_ZPX,0,OP_SLO,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x18: return make_op(AM_NON,0,OP_CLC,0);
+        case 0x19: return make_op(AM_ABY,1,OP_ORA,0);
+        case 0x1A: return has_illegal ? make_op(AM_NON,0,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x1B: return has_illegal ? make_op(AM_ABY,0,OP_SLO,1) : make_op(AM_NON,0,OP_NOP,0);  // SLO nnnn,Y - the critical opcode!
+        case 0x1C: return has_illegal ? make_op(AM_ABX,1,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x1D: return make_op(AM_ABX,1,OP_ORA,0);
+        case 0x1E: return make_op(AM_ABX,0,OP_ASL,1);
+        case 0x1F: return has_illegal ? make_op(AM_ABX,0,OP_SLO,1) : make_op(AM_NON,0,OP_NOP,0);
+
+        // Row 0x2x - JSR, AND, ROL, BIT
+        case 0x20: return make_op(AM_NON,0,OP_JSR,0);
+        case 0x21: return make_op(AM_INX,1,OP_AND,0);
+        case 0x22: return has_illegal ? make_op(AM_NON,0,OP_JAM,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x23: return has_illegal ? make_op(AM_INX,0,OP_RLA,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x24: return make_op(AM_ZER,1,OP_BIT,0);
+        case 0x25: return make_op(AM_ZER,1,OP_AND,0);
+        case 0x26: return make_op(AM_ZER,0,OP_ROL,1);
+        case 0x27: return has_illegal ? make_op(AM_ZER,0,OP_RLA,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x28: return make_op(AM_NON,0,OP_PLP,0);
+        case 0x29: return make_op(AM_IMM,1,OP_AND,0);
+        case 0x2A: return make_op(AM_ACC,0,OP_ROL,0);
+        case 0x2B: return has_illegal ? make_op(AM_IMM,1,OP_ANC,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x2C: return make_op(AM_ABS,1,OP_BIT,0);
+        case 0x2D: return make_op(AM_ABS,1,OP_AND,0);
+        case 0x2E: return make_op(AM_ABS,0,OP_ROL,1);
+        case 0x2F: return has_illegal ? make_op(AM_ABS,0,OP_RLA,1) : make_op(AM_NON,0,OP_NOP,0);
+
+        // Row 0x3x - BMI, AND, ROL
+        case 0x30: return make_op(AM_REL,0,OP_BMI,0);
+        case 0x31: return make_op(AM_INY,1,OP_AND,0);
+        case 0x32: return has_illegal ? make_op(AM_NON,0,OP_JAM,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x33: return has_illegal ? make_op(AM_INY,0,OP_RLA,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x34: return has_illegal ? make_op(AM_ZPX,1,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x35: return make_op(AM_ZPX,1,OP_AND,0);
+        case 0x36: return make_op(AM_ZPX,0,OP_ROL,1);
+        case 0x37: return has_illegal ? make_op(AM_ZPX,0,OP_RLA,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x38: return make_op(AM_NON,0,OP_SEC,0);
+        case 0x39: return make_op(AM_ABY,1,OP_AND,0);
+        case 0x3A: return has_illegal ? make_op(AM_NON,0,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x3B: return has_illegal ? make_op(AM_ABY,0,OP_RLA,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x3C: return has_illegal ? make_op(AM_ABX,1,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x3D: return make_op(AM_ABX,1,OP_AND,0);
+        case 0x3E: return make_op(AM_ABX,0,OP_ROL,1);
+        case 0x3F: return has_illegal ? make_op(AM_ABX,0,OP_RLA,1) : make_op(AM_NON,0,OP_NOP,0);
+
+        // Row 0x4x - RTI, EOR, LSR
+        case 0x40: return make_op(AM_NON,0,OP_RTI,0);
+        case 0x41: return make_op(AM_INX,1,OP_EOR,0);
+        case 0x42: return has_illegal ? make_op(AM_NON,0,OP_JAM,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x43: return has_illegal ? make_op(AM_INX,0,OP_SRE,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x44: return has_illegal ? make_op(AM_ZER,1,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x45: return make_op(AM_ZER,1,OP_EOR,0);
+        case 0x46: return make_op(AM_ZER,0,OP_LSR,1);
+        case 0x47: return has_illegal ? make_op(AM_ZER,0,OP_SRE,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x48: return make_op(AM_NON,0,OP_PHA,0);
+        case 0x49: return make_op(AM_IMM,1,OP_EOR,0);
+        case 0x4A: return make_op(AM_ACC,0,OP_LSR,0);
+        case 0x4B: return has_illegal ? make_op(AM_IMM,1,OP_ASR,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x4C: return make_op(AM_ABS,0,OP_JMP,0);
+        case 0x4D: return make_op(AM_ABS,1,OP_EOR,0);
+        case 0x4E: return make_op(AM_ABS,0,OP_LSR,1);
+        case 0x4F: return has_illegal ? make_op(AM_ABS,0,OP_SRE,1) : make_op(AM_NON,0,OP_NOP,0);
+
+        // Row 0x5x - BVC, EOR, LSR
+        case 0x50: return make_op(AM_REL,0,OP_BVC,0);
+        case 0x51: return make_op(AM_INY,1,OP_EOR,0);
+        case 0x52: return has_illegal ? make_op(AM_NON,0,OP_JAM,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x53: return has_illegal ? make_op(AM_INY,0,OP_SRE,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x54: return has_illegal ? make_op(AM_ZPX,1,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x55: return make_op(AM_ZPX,1,OP_EOR,0);
+        case 0x56: return make_op(AM_ZPX,0,OP_LSR,1);
+        case 0x57: return has_illegal ? make_op(AM_ZPX,0,OP_SRE,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x58: return make_op(AM_NON,0,OP_CLI,0);
+        case 0x59: return make_op(AM_ABY,1,OP_EOR,0);
+        case 0x5A: return has_illegal ? make_op(AM_NON,0,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x5B: return has_illegal ? make_op(AM_ABY,0,OP_SRE,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x5C: return has_illegal ? make_op(AM_ABX,1,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x5D: return make_op(AM_ABX,1,OP_EOR,0);
+        case 0x5E: return make_op(AM_ABX,0,OP_LSR,1);
+        case 0x5F: return has_illegal ? make_op(AM_ABX,0,OP_SRE,1) : make_op(AM_NON,0,OP_NOP,0);
+
+        // Row 0x6x - RTS, ADC, ROR
+        case 0x60: return make_op(AM_NON,0,OP_RTS,0);
+        case 0x61: return make_op(AM_INX,1,OP_ADC,0);
+        case 0x62: return has_illegal ? make_op(AM_NON,0,OP_JAM,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x63: return has_illegal ? make_op(AM_INX,0,OP_RRA,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x64: return has_illegal ? make_op(AM_ZER,1,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x65: return make_op(AM_ZER,1,OP_ADC,0);
+        case 0x66: return make_op(AM_ZER,0,OP_ROR,1);
+        case 0x67: return has_illegal ? make_op(AM_ZER,0,OP_RRA,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x68: return make_op(AM_NON,0,OP_PLA,0);
+        case 0x69: return make_op(AM_IMM,1,OP_ADC,0);
+        case 0x6A: return make_op(AM_ACC,0,OP_ROR,0);
+        case 0x6B: return has_illegal ? make_op(AM_IMM,1,OP_ARR,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x6C: return make_op(AM_IND,0,OP_JMP,0);
+        case 0x6D: return make_op(AM_ABS,1,OP_ADC,0);
+        case 0x6E: return make_op(AM_ABS,0,OP_ROR,1);
+        case 0x6F: return has_illegal ? make_op(AM_ABS,0,OP_RRA,1) : make_op(AM_NON,0,OP_NOP,0);
+
+        // Row 0x7x - BVS, ADC, ROR
+        case 0x70: return make_op(AM_REL,0,OP_BVS,0);
+        case 0x71: return make_op(AM_INY,1,OP_ADC,0);
+        case 0x72: return has_illegal ? make_op(AM_NON,0,OP_JAM,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x73: return has_illegal ? make_op(AM_INY,0,OP_RRA,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x74: return has_illegal ? make_op(AM_ZPX,1,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x75: return make_op(AM_ZPX,1,OP_ADC,0);
+        case 0x76: return make_op(AM_ZPX,0,OP_ROR,1);
+        case 0x77: return has_illegal ? make_op(AM_ZPX,0,OP_RRA,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x78: return make_op(AM_NON,0,OP_SEI,0);
+        case 0x79: return make_op(AM_ABY,1,OP_ADC,0);
+        case 0x7A: return has_illegal ? make_op(AM_NON,0,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x7B: return has_illegal ? make_op(AM_ABY,0,OP_RRA,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x7C: return has_illegal ? make_op(AM_ABX,1,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x7D: return make_op(AM_ABX,1,OP_ADC,0);
+        case 0x7E: return make_op(AM_ABX,0,OP_ROR,1);
+        case 0x7F: return has_illegal ? make_op(AM_ABX,0,OP_RRA,1) : make_op(AM_NON,0,OP_NOP,0);
+
+        // Row 0x8x - STA, STX, STY and illegal opcodes
+        case 0x80: return has_cmos ? make_op(AM_REL,0,OP_BRA,0) : (has_illegal ? make_op(AM_IMM,1,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0));
+        case 0x81: return make_op(AM_INX,0,OP_STA,0);
+        case 0x82: return has_illegal ? make_op(AM_IMM,1,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x83: return has_illegal ? make_op(AM_INX,0,OP_SAX,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x84: return make_op(AM_ZER,0,OP_STY,0);
+        case 0x85: return make_op(AM_ZER,0,OP_STA,0);
+        case 0x86: return make_op(AM_ZER,0,OP_STX,0);
+        case 0x87: return has_illegal ? make_op(AM_ZER,0,OP_SAX,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x88: return make_op(AM_NON,0,OP_DEY,0);
+        case 0x89: return has_illegal ? make_op(AM_IMM,1,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x8A: return make_op(AM_NON,0,OP_TXA,0);
+        case 0x8B: return has_illegal ? make_op(AM_IMM,1,OP_XAA,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x8C: return make_op(AM_ABS,0,OP_STY,0);
+        case 0x8D: return make_op(AM_ABS,0,OP_STA,0);
+        case 0x8E: return make_op(AM_ABS,0,OP_STX,0);
+        case 0x8F: return has_illegal ? make_op(AM_ABS,0,OP_SAX,0) : make_op(AM_NON,0,OP_NOP,0);
+
+        // Row 0x9x - BCC, STA, STX, STY
+        case 0x90: return make_op(AM_REL,0,OP_BCC,0);
+        case 0x91: return make_op(AM_INY,0,OP_STA,0);
+        case 0x92: return has_illegal ? make_op(AM_NON,0,OP_JAM,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x93: return has_illegal ? make_illegal_store_op(AM_INY,0,OP_SHA,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x94: return make_op(AM_ZPX,0,OP_STY,0);
+        case 0x95: return make_op(AM_ZPX,0,OP_STA,0);
+        case 0x96: return make_op(AM_ZPY,0,OP_STX,0);
+        case 0x97: return has_illegal ? make_op(AM_ZPY,0,OP_SAX,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x98: return make_op(AM_NON,0,OP_TYA,0);
+        case 0x99: return make_op(AM_ABY,0,OP_STA,0);
+        case 0x9A: return make_op(AM_NON,0,OP_TXS,0);
+        case 0x9B: return has_illegal ? make_illegal_store_op(AM_ABY,0,OP_SHS,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x9C: return has_illegal ? make_illegal_store_op(AM_ABX,0,OP_SHY,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x9D: return make_op(AM_ABX,0,OP_STA,0);
+        case 0x9E: return has_illegal ? make_illegal_store_op(AM_ABY,0,OP_SHX,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0x9F: return has_illegal ? make_illegal_store_op(AM_ABY,0,OP_SHA,0) : make_op(AM_NON,0,OP_NOP,0);
+
+        // Row 0xAx - LDY, LDA, LDX
+        case 0xA0: return make_op(AM_IMM,1,OP_LDY,0);
+        case 0xA1: return make_op(AM_INX,1,OP_LDA,0);
+        case 0xA2: return make_op(AM_IMM,1,OP_LDX,0);
+        case 0xA3: return has_illegal ? make_op(AM_INX,1,OP_LAX,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xA4: return make_op(AM_ZER,1,OP_LDY,0);
+        case 0xA5: return make_op(AM_ZER,1,OP_LDA,0);
+        case 0xA6: return make_op(AM_ZER,1,OP_LDX,0);
+        case 0xA7: return has_illegal ? make_op(AM_ZER,1,OP_LAX,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xA8: return make_op(AM_NON,0,OP_TAY,0);
+        case 0xA9: return make_op(AM_IMM,1,OP_LDA,0);
+        case 0xAA: return make_op(AM_NON,0,OP_TAX,0);
+        case 0xAB: return has_illegal ? make_op(AM_IMM,1,OP_LAX,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xAC: return make_op(AM_ABS,1,OP_LDY,0);
+        case 0xAD: return make_op(AM_ABS,1,OP_LDA,0);
+        case 0xAE: return make_op(AM_ABS,1,OP_LDX,0);
+        case 0xAF: return has_illegal ? make_op(AM_ABS,1,OP_LAX,0) : make_op(AM_NON,0,OP_NOP,0);
+
+        // Row 0xBx - BCS, LDA, LDX
+        case 0xB0: return make_op(AM_REL,0,OP_BCS,0);
+        case 0xB1: return make_op(AM_INY,1,OP_LDA,0);
+        case 0xB2: return has_illegal ? make_op(AM_NON,0,OP_JAM,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xB3: return has_illegal ? make_op(AM_INY,1,OP_LAX,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xB4: return make_op(AM_ZPX,1,OP_LDY,0);
+        case 0xB5: return make_op(AM_ZPX,1,OP_LDA,0);
+        case 0xB6: return make_op(AM_ZPY,1,OP_LDX,0);
+        case 0xB7: return has_illegal ? make_op(AM_ZPY,1,OP_LAX,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xB8: return make_op(AM_NON,0,OP_CLV,0);
+        case 0xB9: return make_op(AM_ABY,1,OP_LDA,0);
+        case 0xBA: return make_op(AM_NON,0,OP_TSX,0);
+        case 0xBB: return has_illegal ? make_op(AM_ABY,1,OP_LAS,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xBC: return make_op(AM_ABX,1,OP_LDY,0);
+        case 0xBD: return make_op(AM_ABX,1,OP_LDA,0);
+        case 0xBE: return make_op(AM_ABY,1,OP_LDX,0);
+        case 0xBF: return has_illegal ? make_op(AM_ABY,1,OP_LAX,0) : make_op(AM_NON,0,OP_NOP,0);
+
+        // Row 0xCx - CPY, CMP, DEC
+        case 0xC0: return make_op(AM_IMM,1,OP_CPY,0);
+        case 0xC1: return make_op(AM_INX,1,OP_CMP,0);
+        case 0xC2: return has_illegal ? make_op(AM_IMM,1,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xC3: return has_illegal ? make_op(AM_INX,0,OP_DCP,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xC4: return make_op(AM_ZER,1,OP_CPY,0);
+        case 0xC5: return make_op(AM_ZER,1,OP_CMP,0);
+        case 0xC6: return make_op(AM_ZER,0,OP_DEC,1);
+        case 0xC7: return has_illegal ? make_op(AM_ZER,0,OP_DCP,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xC8: return make_op(AM_NON,0,OP_INY,0);
+        case 0xC9: return make_op(AM_IMM,1,OP_CMP,0);
+        case 0xCA: return make_op(AM_NON,0,OP_DEX,0);
+        case 0xCB: return has_illegal ? make_op(AM_IMM,1,OP_SBX,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xCC: return make_op(AM_ABS,1,OP_CPY,0);
+        case 0xCD: return make_op(AM_ABS,1,OP_CMP,0);
+        case 0xCE: return make_op(AM_ABS,0,OP_DEC,1);
+        case 0xCF: return has_illegal ? make_op(AM_ABS,0,OP_DCP,1) : make_op(AM_NON,0,OP_NOP,0);
+
+        // Row 0xDx - BNE, CMP, DEC
+        case 0xD0: return make_op(AM_REL,0,OP_BNE,0);
+        case 0xD1: return make_op(AM_INY,1,OP_CMP,0);
+        case 0xD2: return has_illegal ? make_op(AM_NON,0,OP_JAM,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xD3: return has_illegal ? make_op(AM_INY,0,OP_DCP,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xD4: return has_illegal ? make_op(AM_ZPX,1,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xD5: return make_op(AM_ZPX,1,OP_CMP,0);
+        case 0xD6: return make_op(AM_ZPX,0,OP_DEC,1);
+        case 0xD7: return has_illegal ? make_op(AM_ZPX,0,OP_DCP,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xD8: return make_op(AM_NON,0,OP_CLD,0);
+        case 0xD9: return make_op(AM_ABY,1,OP_CMP,0);
+        case 0xDA: return has_illegal ? make_op(AM_NON,0,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xDB: return has_illegal ? make_op(AM_ABY,0,OP_DCP,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xDC: return has_illegal ? make_op(AM_ABX,1,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xDD: return make_op(AM_ABX,1,OP_CMP,0);
+        case 0xDE: return make_op(AM_ABX,0,OP_DEC,1);
+        case 0xDF: return has_illegal ? make_op(AM_ABX,0,OP_DCP,1) : make_op(AM_NON,0,OP_NOP,0);
+
+        // Row 0xEx - CPX, SBC, INC
+        case 0xE0: return make_op(AM_IMM,1,OP_CPX,0);
+        case 0xE1: return make_op(AM_INX,1,OP_SBC,0);
+        case 0xE2: return has_illegal ? make_op(AM_IMM,1,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xE3: return has_illegal ? make_op(AM_INX,0,OP_ISC,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xE4: return make_op(AM_ZER,1,OP_CPX,0);
+        case 0xE5: return make_op(AM_ZER,1,OP_SBC,0);
+        case 0xE6: return make_op(AM_ZER,0,OP_INC,1);
+        case 0xE7: return has_illegal ? make_op(AM_ZER,0,OP_ISC,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xE8: return make_op(AM_NON,0,OP_INX,0);
+        case 0xE9: return make_op(AM_IMM,1,OP_SBC,0);
+        case 0xEA: return make_op(AM_NON,0,OP_NOP,0);
+        case 0xEB: return has_illegal ? make_op(AM_IMM,1,OP_SBC,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xEC: return make_op(AM_ABS,1,OP_CPX,0);
+        case 0xED: return make_op(AM_ABS,1,OP_SBC,0);
+        case 0xEE: return make_op(AM_ABS,0,OP_INC,1);
+        case 0xEF: return has_illegal ? make_op(AM_ABS,0,OP_ISC,1) : make_op(AM_NON,0,OP_NOP,0);
+
+        // Row 0xFx - BEQ, SBC, INC
+        case 0xF0: return make_op(AM_REL,0,OP_BEQ,0);
+        case 0xF1: return make_op(AM_INY,1,OP_SBC,0);
+        case 0xF2: return has_illegal ? make_op(AM_NON,0,OP_JAM,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xF3: return has_illegal ? make_op(AM_INY,0,OP_ISC,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xF4: return has_illegal ? make_op(AM_ZPX,1,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xF5: return make_op(AM_ZPX,1,OP_SBC,0);
+        case 0xF6: return make_op(AM_ZPX,0,OP_INC,1);
+        case 0xF7: return has_illegal ? make_op(AM_ZPX,0,OP_ISC,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xF8: return make_op(AM_NON,0,OP_SED,0);
+        case 0xF9: return make_op(AM_ABY,1,OP_SBC,0);
+        case 0xFA: return has_illegal ? make_op(AM_NON,0,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xFB: return has_illegal ? make_op(AM_ABY,0,OP_ISC,1) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xFC: return has_illegal ? make_op(AM_ABX,1,OP_NOP,0) : make_op(AM_NON,0,OP_NOP,0);
+        case 0xFD: return make_op(AM_ABX,1,OP_SBC,0);
+        case 0xFE: return make_op(AM_ABX,0,OP_INC,1);
+        case 0xFF: return has_illegal ? make_op(AM_ABX,0,OP_ISC,1) : make_op(AM_NON,0,OP_NOP,0);
         
-        default:
-            // For illegal opcodes
-            if constexpr (processor_has_illegal_opcodes<ProcessorTag>()) {
-                // Return appropriate illegal opcode based on opcode value
-                return OP_TEMPLATE(AM_NON,0,OP_JAM,0);  // Simplified - would need full mapping
-            } else {
-                // CMOS processors convert illegal opcodes to NOPs
-                return OP_TEMPLATE(AM_NON,0,OP_NOP,0);
-            }
+        default: return make_op(AM_NON,0,OP_NOP,0); // Should never reach here
     }
 }
 
-// Function to populate the ONE table based on processor type
+// Template to generate complete processor-specific opcode table
 template<typename ProcessorTag>
-void populate_opcode_table() {
-    for (int i = 0; i < 256; i++) {
-        fam65xx_opcode_table[i] = get_opcode_entry<ProcessorTag>(static_cast<uint8_t>(i));
+struct ProcessorOpcodeTableGenerator {
+    // Generate the complete opcode table at compile time
+    static constexpr std::array<opcode_info_t, 256> generate_table() {
+        std::array<opcode_info_t, 256> table{};
+        for (std::size_t i = 0; i < 256; ++i) {
+            table[i] = generate_opcode_entry<ProcessorTag>(static_cast<uint8_t>(i));
+        }
+        return table;
     }
-}
+    
+    // Each processor gets its own static constexpr table
+    static constexpr auto opcode_table = generate_table();
+};
 
-// Runtime table initialization (called once per processor type)
-void initialize_opcode_table_for_mos6502() { populate_opcode_table<MOS6502Tag>(); }
-void initialize_opcode_table_for_mos6510() { populate_opcode_table<MOS6510Tag>(); }
-void initialize_opcode_table_for_wdc65c02() { populate_opcode_table<WDC65C02Tag>(); }
-void initialize_opcode_table_for_rockwell65c02() { populate_opcode_table<Rockwell65C02Tag>(); }
-void initialize_opcode_table_for_wdc65c816() { populate_opcode_table<WDC65C816Tag>(); }
+// Macro to define processor-specific internal opcode tables in concrete implementations
+// Each processor gets its own unique table with no external access
+#define DEFINE_PROCESSOR_OPCODE_TABLE_INTERNAL(ProcessorTag) \
+    namespace { \
+        constexpr auto internal_processor_table = fam65xx_variants::ProcessorOpcodeTableGenerator<ProcessorTag>::opcode_table; \
+        static const opcode_info_t fam65xx_opcode_table[256] = { \
+            internal_processor_table[0], internal_processor_table[1], internal_processor_table[2], internal_processor_table[3], \
+            internal_processor_table[4], internal_processor_table[5], internal_processor_table[6], internal_processor_table[7], \
+            internal_processor_table[8], internal_processor_table[9], internal_processor_table[10], internal_processor_table[11], \
+            internal_processor_table[12], internal_processor_table[13], internal_processor_table[14], internal_processor_table[15], \
+            internal_processor_table[16], internal_processor_table[17], internal_processor_table[18], internal_processor_table[19], \
+            internal_processor_table[20], internal_processor_table[21], internal_processor_table[22], internal_processor_table[23], \
+            internal_processor_table[24], internal_processor_table[25], internal_processor_table[26], internal_processor_table[27], \
+            internal_processor_table[28], internal_processor_table[29], internal_processor_table[30], internal_processor_table[31], \
+            internal_processor_table[32], internal_processor_table[33], internal_processor_table[34], internal_processor_table[35], \
+            internal_processor_table[36], internal_processor_table[37], internal_processor_table[38], internal_processor_table[39], \
+            internal_processor_table[40], internal_processor_table[41], internal_processor_table[42], internal_processor_table[43], \
+            internal_processor_table[44], internal_processor_table[45], internal_processor_table[46], internal_processor_table[47], \
+            internal_processor_table[48], internal_processor_table[49], internal_processor_table[50], internal_processor_table[51], \
+            internal_processor_table[52], internal_processor_table[53], internal_processor_table[54], internal_processor_table[55], \
+            internal_processor_table[56], internal_processor_table[57], internal_processor_table[58], internal_processor_table[59], \
+            internal_processor_table[60], internal_processor_table[61], internal_processor_table[62], internal_processor_table[63], \
+            internal_processor_table[64], internal_processor_table[65], internal_processor_table[66], internal_processor_table[67], \
+            internal_processor_table[68], internal_processor_table[69], internal_processor_table[70], internal_processor_table[71], \
+            internal_processor_table[72], internal_processor_table[73], internal_processor_table[74], internal_processor_table[75], \
+            internal_processor_table[76], internal_processor_table[77], internal_processor_table[78], internal_processor_table[79], \
+            internal_processor_table[80], internal_processor_table[81], internal_processor_table[82], internal_processor_table[83], \
+            internal_processor_table[84], internal_processor_table[85], internal_processor_table[86], internal_processor_table[87], \
+            internal_processor_table[88], internal_processor_table[89], internal_processor_table[90], internal_processor_table[91], \
+            internal_processor_table[92], internal_processor_table[93], internal_processor_table[94], internal_processor_table[95], \
+            internal_processor_table[96], internal_processor_table[97], internal_processor_table[98], internal_processor_table[99], \
+            internal_processor_table[100], internal_processor_table[101], internal_processor_table[102], internal_processor_table[103], \
+            internal_processor_table[104], internal_processor_table[105], internal_processor_table[106], internal_processor_table[107], \
+            internal_processor_table[108], internal_processor_table[109], internal_processor_table[110], internal_processor_table[111], \
+            internal_processor_table[112], internal_processor_table[113], internal_processor_table[114], internal_processor_table[115], \
+            internal_processor_table[116], internal_processor_table[117], internal_processor_table[118], internal_processor_table[119], \
+            internal_processor_table[120], internal_processor_table[121], internal_processor_table[122], internal_processor_table[123], \
+            internal_processor_table[124], internal_processor_table[125], internal_processor_table[126], internal_processor_table[127], \
+            internal_processor_table[128], internal_processor_table[129], internal_processor_table[130], internal_processor_table[131], \
+            internal_processor_table[132], internal_processor_table[133], internal_processor_table[134], internal_processor_table[135], \
+            internal_processor_table[136], internal_processor_table[137], internal_processor_table[138], internal_processor_table[139], \
+            internal_processor_table[140], internal_processor_table[141], internal_processor_table[142], internal_processor_table[143], \
+            internal_processor_table[144], internal_processor_table[145], internal_processor_table[146], internal_processor_table[147], \
+            internal_processor_table[148], internal_processor_table[149], internal_processor_table[150], internal_processor_table[151], \
+            internal_processor_table[152], internal_processor_table[153], internal_processor_table[154], internal_processor_table[155], \
+            internal_processor_table[156], internal_processor_table[157], internal_processor_table[158], internal_processor_table[159], \
+            internal_processor_table[160], internal_processor_table[161], internal_processor_table[162], internal_processor_table[163], \
+            internal_processor_table[164], internal_processor_table[165], internal_processor_table[166], internal_processor_table[167], \
+            internal_processor_table[168], internal_processor_table[169], internal_processor_table[170], internal_processor_table[171], \
+            internal_processor_table[172], internal_processor_table[173], internal_processor_table[174], internal_processor_table[175], \
+            internal_processor_table[176], internal_processor_table[177], internal_processor_table[178], internal_processor_table[179], \
+            internal_processor_table[180], internal_processor_table[181], internal_processor_table[182], internal_processor_table[183], \
+            internal_processor_table[184], internal_processor_table[185], internal_processor_table[186], internal_processor_table[187], \
+            internal_processor_table[188], internal_processor_table[189], internal_processor_table[190], internal_processor_table[191], \
+            internal_processor_table[192], internal_processor_table[193], internal_processor_table[194], internal_processor_table[195], \
+            internal_processor_table[196], internal_processor_table[197], internal_processor_table[198], internal_processor_table[199], \
+            internal_processor_table[200], internal_processor_table[201], internal_processor_table[202], internal_processor_table[203], \
+            internal_processor_table[204], internal_processor_table[205], internal_processor_table[206], internal_processor_table[207], \
+            internal_processor_table[208], internal_processor_table[209], internal_processor_table[210], internal_processor_table[211], \
+            internal_processor_table[212], internal_processor_table[213], internal_processor_table[214], internal_processor_table[215], \
+            internal_processor_table[216], internal_processor_table[217], internal_processor_table[218], internal_processor_table[219], \
+            internal_processor_table[220], internal_processor_table[221], internal_processor_table[222], internal_processor_table[223], \
+            internal_processor_table[224], internal_processor_table[225], internal_processor_table[226], internal_processor_table[227], \
+            internal_processor_table[228], internal_processor_table[229], internal_processor_table[230], internal_processor_table[231], \
+            internal_processor_table[232], internal_processor_table[233], internal_processor_table[234], internal_processor_table[235], \
+            internal_processor_table[236], internal_processor_table[237], internal_processor_table[238], internal_processor_table[239], \
+            internal_processor_table[240], internal_processor_table[241], internal_processor_table[242], internal_processor_table[243], \
+            internal_processor_table[244], internal_processor_table[245], internal_processor_table[246], internal_processor_table[247], \
+            internal_processor_table[248], internal_processor_table[249], internal_processor_table[250], internal_processor_table[251], \
+            internal_processor_table[252], internal_processor_table[253], internal_processor_table[254], internal_processor_table[255] \
+        }; \
+    }
 
-// Clean up template macros
-#undef OP_TEMPLATE
-#undef OP_ILLEGAL_STORE_TEMPLATE
+// NOTE: Convenience template functions moved to fam65xx_variants.hpp to avoid redefinition
+
+#ifdef CHIPS_IMPL
 
 // ============================================================================
 // PROCESSOR-SPECIFIC INSTRUCTION SET QUERIES

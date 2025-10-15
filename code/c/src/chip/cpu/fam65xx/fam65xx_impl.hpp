@@ -30,64 +30,14 @@ static bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins);
  * Both return pins with RDY bit cleared if the cycle should be halted.
  */
 
-/* Centralized PHI2 read handler - handles memory reads during PHI2 phase
- * CPU read cycles can be halted by RDY signal, but VIC-II memory reads are always serviced
- *
- * Parameters:
- *   addr_reg: 16-bit register index containing the address to read from
- */
-static bus_state_t fam65xx_phi2_read(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg) {
-    uint16_t address;
-
-    if (FAM65XX_GET_RDY(pins)) {
-        address = cpu->reg16[addr_reg];
-        BUS_SET_ADDR(pins, address);
-    } else {
-        address = BUS_GET_ADDR(pins);
-    }
-
-    /* Always perform memory read to service VIC-II even when CPU halted */
-    uint8_t current_bus_data = BUS_GET_DATA(pins);
-    uint8_t data = cpu->mem_read(cpu->mem_user_data, address, current_bus_data);
-    BUS_SET_DATA(pins, data);
-    
-    return pins;
-}
-
-/* Centralized PHI2 write handler - handles memory writes during PHI2 phase
- * Write always proceeds (cannot be halted), but PHI1 can still halt
- *
- * Parameters:
- *   addr_reg: 16-bit register index containing the address to write to
- *   reg_write: 8-bit register index to write from
- */
-static bus_state_t fam65xx_phi2_write(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg, reg8_t reg_write) {
-    uint16_t address = cpu->reg16[addr_reg];
-    
-    /* Write cycle - always proceeds regardless of RDY */
-    BUS_SET_ADDR(pins, address);
-    uint8_t data_byte = cpu->reg8[reg_write];
-    BUS_SET_DATA(pins, data_byte);
-    cpu->mem_write(cpu->mem_user_data, address, data_byte);
-    
-    return pins;
-}
+/* PHI2 handlers are now defined as static inline in fam65xx_core.hpp */
 
 /* ============================================================================
  * INTERRUPT HANDLING FUNCTIONS
  * ============================================================================
  */
 
-/* Helper function to get interrupt vector address based on BRK flags */
-static inline uint16_t fam65xx_get_vector_addr(fam65xx_t* cpu) {
-    if (cpu->brk_flags & FAM65XX_BRK_RESET) {
-        return 0xFFFC;
-    } else if (cpu->brk_flags & FAM65XX_BRK_NMI) {
-        return 0xFFFA;
-    } else {
-        return 0xFFFE;  // BRK/IRQ vector
-    }
-}
+/* Helper function to get interrupt vector address based on BRK flags - now defined in fam65xx_ops_part2.hpp */
 
 /* Merged interrupt processing function - updates shift register and detects completion
  * Hardware accurate implementation with proper edge detection and I flag checking
@@ -152,8 +102,8 @@ static inline bool fam65xx_process_interrupt_detection(fam65xx_t* cpu, bus_state
  * ============================================================================
  */
 
-/* Opcode fetch handler - reads opcode and transitions to appropriate handler */
-static bus_state_t fam65xx_opcode_fetch(fam65xx_t* cpu, bus_state_t pins) {
+/* Opcode fetch handler - uses processor-specific internal opcode table */
+bus_state_t fam65xx_opcode_fetch(fam65xx_t* cpu, bus_state_t pins) {
     /* PHI2: Read opcode from PC */
     pins = fam65xx_phi2_read(cpu, pins, REG_PC);
     if (!FAM65XX_GET_RDY(pins)) return pins;
@@ -163,12 +113,14 @@ static bus_state_t fam65xx_opcode_fetch(fam65xx_t* cpu, bus_state_t pins) {
     CPU_IR(cpu) = BUS_GET_DATA(pins);
     
     /* Cache the opcode entry (copy once, accessed many times) */
+    /* Use the processor-specific internal table generated at compile time */
     opcode_info_t opcode_entry = fam65xx_opcode_table[CPU_IR(cpu)];
     cpu->opcode_entry = opcode_entry;
     cpu->cycle_index = 0;
     
     /* Transition based on cached entry */
     int am_index = opcode_entry.am_index;
+    
     if (am_index > AM_IMM) {
         /* Has addressing mode cycles */
         cpu->current_handler = fam65xx_addr_mode_table[am_index];
@@ -179,18 +131,8 @@ static bus_state_t fam65xx_opcode_fetch(fam65xx_t* cpu, bus_state_t pins) {
     
     return pins;
 }
+/* Transition from addressing mode to operation - now in fam65xx_addrmodes.hpp */
 
-/* Transition from addressing mode to operation */
-static void fam65xx_transition_to_operation(fam65xx_t* cpu) {
-    cpu->cycle_index = 0;
-    cpu->current_handler = fam65xx_op_handlers[cpu->opcode_entry.op_index];
-}
-
-/* Transition from operation back to opcode fetch */
-static void fam65xx_transition_to_fetch(fam65xx_t* cpu) {
-    cpu->cycle_index = 0;
-    cpu->current_handler = fam65xx_opcode_fetch;
-}
 
 
 /* ============================================================================
