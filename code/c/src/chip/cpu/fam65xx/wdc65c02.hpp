@@ -15,15 +15,29 @@
  * - Improved timing on some instructions
  */
 
-#include "fam65xx.hpp"
 #include "fam65xx_variants.hpp"
+
+// Include tables for template-based opcode generation
+#ifndef CHIPS_IMPL
+#define CHIPS_IMPL
+#endif
+
+// Include core definitions first
+#include "fam65xx_core.hpp"
+#include "fam65xx_tables.hpp"
+
+// Define internal processor-specific opcode table for WDC 65C02
+DEFINE_PROCESSOR_OPCODE_TABLE_INTERNAL(fam65xx_variants::WDC65C02Tag)
+
+// Include the implementation after the table definitions
+#include "fam65xx_impl.hpp"
 
 #ifdef __cplusplus
 
 namespace fam65xx_cpu {
 
 // WDC 65C02 CPU class - CMOS with enhancements
-using WDC65C02 = fam65xx_variants::fam65xx_variants::CPU<fam65xx_variants::WDC65C02Tag>;
+using WDC65C02 = fam65xx_variants::CPU<fam65xx_variants::WDC65C02Tag>;
 
 // Feature queries for compile-time optimization
 constexpr bool has_illegal_opcodes() { return false; }  // Converted to NOPs
@@ -196,6 +210,12 @@ inline uint64_t wdc65c02_init(wdc65c02_c_t* cpu, const fam65xx_desc_t* desc) {
 inline uint64_t wdc65c02_reset(wdc65c02_c_t* cpu, uint64_t pins) {
     cpu->enhanced_count = 0;
     return fam65xx_reset(&cpu->impl, pins);
+}
+
+// Bootstrap WDC 65C02 CPU for immediate execution (test runner compatibility)
+inline uint64_t wdc65c02_bootstrap(wdc65c02_c_t* cpu, uint64_t pins) {
+    cpu->enhanced_count = 0;
+    return fam65xx_bootstrap(&cpu->impl, pins);
 }
 
 // Execute one tick

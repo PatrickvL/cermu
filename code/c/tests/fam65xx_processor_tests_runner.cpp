@@ -152,7 +152,7 @@ private:
 public:
     // Bootstrap processor for ProcessorTests compatibility
     void bootstrap_processor_for_tests() {
-        pins = mos6502_reset(&cpu, pins);  // Use reset instead of bootstrap
+        pins = mos6502_bootstrap(&cpu, pins);  // Use bootstrap to skip reset sequence
     }
 
     ProcessorTestHarness() : cycle_count(0) {
