@@ -34,6 +34,93 @@ static bus_state_t fam65xx_phi2_read(fam65xx_t* cpu, bus_state_t pins, reg16_t a
 static void fam65xx_transition_to_operation(fam65xx_t* cpu);
 
 /* ============================================================================
+ * HELPER FUNCTIONS FOR CODE DEDUPLICATION
+ * ============================================================================
+ */
+
+/* Helper for zero page indexed addressing (ZPX, ZPY) */
+static inline bus_state_t addrmodes_zpx_helper(fam65xx_t* cpu, bus_state_t pins, uint8_t index_reg) {
+    switch (cpu->cycle_index++) {
+        case 0:
+            /* PHI2: Read base address from PC */
+            pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_PC(cpu)++;
+            
+            /* PHI1: Store base address in ZP and increment PC */
+            CPU_ZPL(cpu) = BUS_GET_DATA(pins);
+            break;
+            
+        case 1:
+            /* PHI2: Dummy read from ZP while adding index */
+            pins = fam65xx_phi2_read(cpu, pins, REG_ZP);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            
+            /* PHI1: Add index to ZP address, then copy to AB */
+            CPU_ZPL(cpu) += index_reg;
+            CPU_AB(cpu) = CPU_ZP(cpu); /* Copy final ZP address to AB */
+            fam65xx_transition_to_operation(cpu);
+            break;
+    }
+    return pins;
+}
+
+/* Helper for absolute indexed addressing with page cross optimization (ABX, ABY) */
+static inline bus_state_t addrmodes_abx_helper(fam65xx_t* cpu, bus_state_t pins, uint8_t index_reg) {
+    switch (cpu->cycle_index++) {
+        case 0:
+            /* PHI2: Read low byte from PC */
+            pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_PC(cpu)++;
+            
+            /* PHI1: Store low byte and increment PC */
+            CPU_ABL(cpu) = BUS_GET_DATA(pins);
+            break;
+            
+        case 1: {
+            /* PHI2: Read high byte from PC */
+            pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_PC(cpu)++;
+            
+            /* PHI1: Calculate addresses */
+            CPU_ABH(cpu) = BUS_GET_DATA(pins);
+            uint16_t base = CPU_AB(cpu);
+            uint16_t effective = base + index_reg;
+            
+            /* Store original high byte in DL for illegal opcodes */
+            CPU_DL(cpu) = CPU_ABH(cpu);
+            
+            /* Add index to low byte (creates intermediate "wrong" address for page cross) */
+            CPU_ABL(cpu) += index_reg;
+            
+            /* Skip penalty cycle if allowed and no page cross occurred */
+            if (cpu->opcode_entry.can_skip_page_cross && !fam65xx_page_crossed(base, effective)) {
+                CPU_AB(cpu) = effective;  /* Fix address */
+                fam65xx_transition_to_operation(cpu);
+            }
+            /* Otherwise continue to cycle 2 with intermediate address */
+            break;
+        }
+            
+        case 2:
+            /* PHI2: Page cross penalty - read from intermediate address */
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            
+            /* PHI1: Correct final address */
+            CPU_ABH(cpu) = CPU_DL(cpu);  /* Restore original high byte */
+            CPU_ABL(cpu) -= index_reg;   /* Restore original low byte */
+            CPU_AB(cpu) += index_reg;    /* Correctly calculate final address */
+            
+            fam65xx_transition_to_operation(cpu);
+            break;
+    }
+    return pins;
+}
+
+/* ============================================================================
  * ADDRESSING MODE HANDLERS
  * ============================================================================
  * These handlers prepare the address/data for operations.
@@ -70,112 +157,12 @@ static bus_state_t am_abs(fam65xx_t* cpu, bus_state_t pins) {
 
 /* Absolute,X - operand at $nnnn + X (may skip cycle if no page cross) */
 static bus_state_t am_abx(fam65xx_t* cpu, bus_state_t pins) {
-    switch (cpu->cycle_index++) {
-        case 0:
-            /* PHI2: Read low byte from PC */
-            pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            CPU_PC(cpu)++;
-            
-            /* PHI1: Store low byte and increment PC */
-            CPU_ABL(cpu) = BUS_GET_DATA(pins);
-            break;
-            
-        case 1: {
-            /* PHI2: Read high byte from PC */
-            pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            CPU_PC(cpu)++;
-            
-            /* PHI1: Calculate addresses */
-            CPU_ABH(cpu) = BUS_GET_DATA(pins);
-            uint16_t base = CPU_AB(cpu);
-            uint16_t effective = base + CPU_X(cpu);
-            
-            /* Store original high byte in DL for illegal opcodes */
-            CPU_DL(cpu) = CPU_ABH(cpu);
-            
-            /* Add X to low byte (creates intermediate "wrong" address for page cross) */
-            CPU_ABL(cpu) += CPU_X(cpu);
-            
-            /* Skip penalty cycle if allowed and no page cross occurred */
-            if (cpu->opcode_entry.can_skip_page_cross && !fam65xx_page_crossed(base, effective)) {
-                CPU_AB(cpu) = effective;  /* Fix address */
-                fam65xx_transition_to_operation(cpu);
-            }
-            /* Otherwise continue to cycle 2 with intermediate address */
-            break;
-        }
-            
-        case 2:
-            /* PHI2: Page cross penalty - read from intermediate address */
-            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            
-            /* PHI1: Correct final address */
-            CPU_ABH(cpu) = CPU_DL(cpu);  /* Restore original high byte */
-            CPU_ABL(cpu) -= CPU_X(cpu);  /* Restore original low byte */
-            CPU_AB(cpu) += CPU_X(cpu);   /* Correctly calculate final address */
-            
-            fam65xx_transition_to_operation(cpu);
-            break;
-    }
-    return pins;
+    return addrmodes_abx_helper(cpu, pins, CPU_X(cpu));
 }
 
 /* Absolute,Y - operand at $nnnn + Y (may skip cycle if no page cross) */
 static bus_state_t am_aby(fam65xx_t* cpu, bus_state_t pins) {
-    switch (cpu->cycle_index++) {
-        case 0:
-            /* PHI2: Read low byte from PC */
-            pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            CPU_PC(cpu)++;
-            
-            /* PHI1: Store low byte and increment PC */
-            CPU_ABL(cpu) = BUS_GET_DATA(pins);
-            break;
-            
-        case 1: {
-            /* PHI2: Read high byte from PC */
-            pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            CPU_PC(cpu)++;
-            
-            /* PHI1: Calculate addresses */
-            CPU_ABH(cpu) = BUS_GET_DATA(pins);
-            uint16_t base = CPU_AB(cpu);
-            uint16_t effective = base + CPU_Y(cpu);
-            
-            /* Store original high byte in DL for illegal opcodes */
-            CPU_DL(cpu) = CPU_ABH(cpu);
-            
-            /* Add Y to low byte (creates intermediate "wrong" address for page cross) */
-            CPU_ABL(cpu) += CPU_Y(cpu);
-            
-            /* Skip penalty cycle if allowed and no page cross occurred */
-            if (cpu->opcode_entry.can_skip_page_cross && !fam65xx_page_crossed(base, effective)) {
-                CPU_AB(cpu) = effective;  /* Fix address */
-                fam65xx_transition_to_operation(cpu);
-            }
-            /* Otherwise continue to cycle 2 with intermediate address */
-            break;
-        }
-            
-        case 2:
-            /* PHI2: Page cross penalty - read from intermediate address */
-            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            
-            /* PHI1: Correct final address */
-            CPU_ABH(cpu) = CPU_DL(cpu);  /* Restore original high byte */
-            CPU_ABL(cpu) -= CPU_Y(cpu);  /* Restore original low byte */
-            CPU_AB(cpu) += CPU_Y(cpu);   /* Correctly calculate final address */
-            
-            fam65xx_transition_to_operation(cpu);
-            break;
-    }
-    return pins;
+    return addrmodes_abx_helper(cpu, pins, CPU_Y(cpu));
 }
 
 /* Indexed Indirect - operand at (($nn + X) & 0xFF) */
@@ -358,56 +345,12 @@ static bus_state_t am_zp(fam65xx_t* cpu, bus_state_t pins) {
 
 /* Zero Page,X - operand at ($00nn + X) & 0xFF */
 static bus_state_t am_zpx(fam65xx_t* cpu, bus_state_t pins) {
-    switch (cpu->cycle_index++) {
-        case 0:
-            /* PHI2: Read base address from PC */
-            pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            CPU_PC(cpu)++;
-            
-            /* PHI1: Store base address in ZP and increment PC */
-            CPU_ZPL(cpu) = BUS_GET_DATA(pins);
-            break;
-            
-        case 1:
-            /* PHI2: Dummy read from ZP while adding X */
-            pins = fam65xx_phi2_read(cpu, pins, REG_ZP);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            
-            /* PHI1: Add X to ZP address, then copy to AB */
-            CPU_ZPL(cpu) += CPU_X(cpu);
-            CPU_AB(cpu) = CPU_ZP(cpu); /* Copy final ZP address to AB */
-            fam65xx_transition_to_operation(cpu);
-            break;
-    }
-    return pins;
+    return addrmodes_zpx_helper(cpu, pins, CPU_X(cpu));
 }
 
 /* Zero Page,Y - operand at ($00nn + Y) & 0xFF */
 static bus_state_t am_zpy(fam65xx_t* cpu, bus_state_t pins) {
-    switch (cpu->cycle_index++) {
-        case 0:
-            /* PHI2: Read base address from PC */
-            pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            CPU_PC(cpu)++;
-            
-            /* PHI1: Store base address in ZP and increment PC */
-            CPU_ZPL(cpu) = BUS_GET_DATA(pins);
-            break;
-            
-        case 1:
-            /* PHI2: Dummy read from ZP while adding Y */
-            pins = fam65xx_phi2_read(cpu, pins, REG_ZP);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            
-            /* PHI1: Add Y to ZP address, then copy to AB */
-            CPU_ZPL(cpu) += CPU_Y(cpu);
-            CPU_AB(cpu) = CPU_ZP(cpu); /* Copy final ZP address to AB */
-            fam65xx_transition_to_operation(cpu);
-            break;
-    }
-    return pins;
+    return addrmodes_zpx_helper(cpu, pins, CPU_Y(cpu));
 }
 
 #endif /* CHIPS_IMPL */

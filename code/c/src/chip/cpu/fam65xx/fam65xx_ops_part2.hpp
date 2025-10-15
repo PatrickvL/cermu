@@ -22,6 +22,27 @@ extern "C" {
 #ifdef CHIPS_IMPL
 
 /* ============================================================================
+ * HELPER FUNCTIONS FOR CODE DEDUPLICATION
+ * ============================================================================
+ */
+
+/* Common pattern: Dummy cycle for internal flag operations */
+static inline bus_state_t part2_flag_operation_with_dummy_cycle(fam65xx_t* cpu, bus_state_t pins, uint8_t flag, bool set_flag) {
+    /* Dummy cycle for internal operation */
+    pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+    if (!FAM65XX_GET_RDY(pins)) return pins;
+    
+    /* PHI1: Set or clear the flag */
+    if (set_flag) {
+        CPU_P(cpu) |= flag;
+    } else {
+        CPU_P(cpu) &= ~flag;
+    }
+    fam65xx_transition_to_fetch(cpu);
+    return pins;
+}
+
+/* ============================================================================
  * CONTROL FLOW OPERATIONS
  * ============================================================================
  */
@@ -283,86 +304,37 @@ static bus_state_t op_rts(fam65xx_t* cpu, bus_state_t pins) {
 
 /* CLC - Clear Carry Flag */
 static bus_state_t op_clc(fam65xx_t* cpu, bus_state_t pins) {
-    /* Dummy cycle for internal operation */
-    pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    /* PHI1: Clear carry flag */
-    CPU_P(cpu) &= ~FLAG_C;
-    fam65xx_transition_to_fetch(cpu);
-    return pins;
+    return part2_flag_operation_with_dummy_cycle(cpu, pins, FLAG_C, false);
 }
 
 /* CLD - Clear Decimal Mode Flag */
 static bus_state_t op_cld(fam65xx_t* cpu, bus_state_t pins) {
-    /* Dummy cycle for internal operation */
-    pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    /* PHI1: Clear decimal mode flag */
-    CPU_P(cpu) &= ~FLAG_D;
-    fam65xx_transition_to_fetch(cpu);
-    return pins;
+    return part2_flag_operation_with_dummy_cycle(cpu, pins, FLAG_D, false);
 }
 
 /* CLI - Clear Interrupt Disable Flag */
 static bus_state_t op_cli(fam65xx_t* cpu, bus_state_t pins) {
-    /* Dummy cycle for internal operation */
-    pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    /* PHI1: Clear interrupt disable flag */
-    CPU_P(cpu) &= ~FLAG_I;
-    fam65xx_transition_to_fetch(cpu);
-    return pins;
+    return part2_flag_operation_with_dummy_cycle(cpu, pins, FLAG_I, false);
 }
 
 /* CLV - Clear Overflow Flag */
 static bus_state_t op_clv(fam65xx_t* cpu, bus_state_t pins) {
-    /* Dummy cycle for internal operation */
-    pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    /* PHI1: Clear overflow flag */
-    CPU_P(cpu) &= ~FLAG_V;
-    fam65xx_transition_to_fetch(cpu);
-    return pins;
+    return part2_flag_operation_with_dummy_cycle(cpu, pins, FLAG_V, false);
 }
 
 /* SEC - Set Carry Flag */
 static bus_state_t op_sec(fam65xx_t* cpu, bus_state_t pins) {
-    /* Dummy cycle for internal operation */
-    pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    /* PHI1: Set carry flag */
-    CPU_P(cpu) |= FLAG_C;
-    fam65xx_transition_to_fetch(cpu);
-    return pins;
+    return part2_flag_operation_with_dummy_cycle(cpu, pins, FLAG_C, true);
 }
 
 /* SED - Set Decimal Mode Flag */
 static bus_state_t op_sed(fam65xx_t* cpu, bus_state_t pins) {
-    /* Dummy cycle for internal operation */
-    pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    /* PHI1: Set decimal mode flag */
-    CPU_P(cpu) |= FLAG_D;
-    fam65xx_transition_to_fetch(cpu);
-    return pins;
+    return part2_flag_operation_with_dummy_cycle(cpu, pins, FLAG_D, true);
 }
 
 /* SEI - Set Interrupt Disable Flag */
 static bus_state_t op_sei(fam65xx_t* cpu, bus_state_t pins) {
-    /* Dummy cycle for internal operation */
-    pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    /* PHI1: Set interrupt disable flag */
-    CPU_P(cpu) |= FLAG_I;
-    fam65xx_transition_to_fetch(cpu);
-    return pins;
+    return part2_flag_operation_with_dummy_cycle(cpu, pins, FLAG_I, true);
 }
 
 #endif /* CHIPS_IMPL */
