@@ -23,7 +23,7 @@
 namespace fam65xx_cpu {
 
 // Rockwell 65C02 CPU class - WDC 65C02 with bit manipulation
-using Rockwell65C02 = fam65xx_template::CPU<fam65xx_template::Rockwell65C02Tag>;
+using Rockwell65C02 = fam65xx_variants::fam65xx_variants::CPU<fam65xx_variants::Rockwell65C02Tag>;
 
 // Feature queries for compile-time optimization
 constexpr bool has_illegal_opcodes() { return false; }  // Converted to NOPs

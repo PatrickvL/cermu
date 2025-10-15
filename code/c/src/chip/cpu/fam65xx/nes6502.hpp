@@ -20,7 +20,7 @@
 namespace fam65xx_cpu {
 
 // NES 6502 CPU class - 6502 without decimal mode
-using NES6502 = fam65xx_template::CPU<fam65xx_template::MOS6502Tag>;
+using NES6502 = fam65xx_variants::fam65xx_variants::CPU<fam65xx_variants::MOS6502Tag>;
 
 // Feature queries for compile-time optimization  
 constexpr bool has_illegal_opcodes() { return true; }

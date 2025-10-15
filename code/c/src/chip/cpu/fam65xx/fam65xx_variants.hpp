@@ -28,7 +28,7 @@ extern "C" {
 #include "fam65xx_core.hpp"
 }
 
-namespace fam65xx_template {
+namespace fam65xx_variants {
 
 // ============================================================================
 // PROCESSOR FEATURE TRAITS
@@ -278,6 +278,6 @@ constexpr bool processor_has_16bit_mode() {
     return ProcessorTraits<ProcessorTag>::has_16bit_mode;
 }
 
-} // namespace fam65xx_template
+} // namespace fam65xx_variants
 
 #endif // __cplusplus

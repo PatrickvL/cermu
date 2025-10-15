@@ -22,7 +22,7 @@ extern "C" {
 #ifdef CHIPS_IMPL
 
 // Centralized PHI2 read handler - handles memory reads during PHI2 phase
-static inline bus_state_t fam65xx_template_phi2_read(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg) {
+static inline bus_state_t fam65xx_phi2_read(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg) {
     uint16_t address;
 
     if (FAM65XX_GET_RDY(pins)) {
@@ -41,7 +41,7 @@ static inline bus_state_t fam65xx_template_phi2_read(fam65xx_t* cpu, bus_state_t
 }
 
 // Centralized PHI2 write handler - handles memory writes during PHI2 phase
-static inline bus_state_t fam65xx_template_phi2_write(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) {
+static inline bus_state_t fam65xx_phi2_write(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) {
     uint16_t address = cpu->reg16[addr_reg];
     
     /* Write cycle - always proceeds regardless of RDY */
@@ -54,7 +54,7 @@ static inline bus_state_t fam65xx_template_phi2_write(fam65xx_t* cpu, bus_state_
 }
 
 // Transition from operation back to opcode fetch
-static inline void fam65xx_template_transition_to_fetch(fam65xx_t* cpu) {
+static inline void fam65xx_transition_to_fetch(fam65xx_t* cpu) {
     cpu->cycle_index = 0;
     // Forward declaration - will be resolved at link time
     extern bus_state_t fam65xx_opcode_fetch(fam65xx_t* cpu, bus_state_t pins);
@@ -62,7 +62,7 @@ static inline void fam65xx_template_transition_to_fetch(fam65xx_t* cpu) {
 }
 
 // Update N and Z flags based on value
-static inline void fam65xx_template_update_nz_flags(fam65xx_t* cpu, uint8_t value) {
+static inline void fam65xx_update_nz_flags(fam65xx_t* cpu, uint8_t value) {
     uint8_t flags = CPU_P(cpu) & ~(FLAG_N | FLAG_Z);
     if (value & 0x80) flags |= FLAG_N;
     if (value == 0) flags |= FLAG_Z;
