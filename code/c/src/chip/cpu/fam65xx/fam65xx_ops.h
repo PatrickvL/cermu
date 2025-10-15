@@ -309,8 +309,7 @@ static bus_state_t fam65xx_branch_helper(fam65xx_t* cpu, bus_state_t pins, uint8
             
             /* Page cross detected: Set up wrong intermediate address for penalty cycle */
             /* Hardware adds offset to low byte only, keeping original high byte */
-            int8_t signed_offset = (int8_t)CPU_DL(cpu);
-            CPU_PCL(cpu) += signed_offset;
+            CPU_PCL(cpu) += (int8_t)CPU_DL(cpu);
             break;
         }
         

@@ -29,17 +29,16 @@ extern "C" {
 /* BRK - Break / Software Interrupt */
 static bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins) {
     switch (cpu->cycle_index++) {
-        case 0: {
+        case 0:
             /* BRK does a dummy read from PC+1 */
             pins = fam65xx_phi2_read(cpu, pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) return pins;
 
-            if (0 == (cpu->brk_flags & (FAM65XX_BRK_IRQ | FAM65XX_BRK_NMI))) {
-                /* PHI1: Increment PC once - PC now points to PC+1 for return address */
+            if (!(cpu->brk_flags & FAM65XX_BRK_RESET)) {
+                /* Increment PC for BRK/IRQ/NMI (but not RESET) */
                 CPU_PC(cpu)++;
             }
             break;
-        }
             
         case 1:
             /* PHI2: Push PCH to stack */
@@ -78,8 +77,15 @@ static bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins) {
             CPU_S(cpu)--;
             CPU_P(cpu) |= FLAG_I;
             
-            /* Set up vector address using helper function */
-            CPU_AB(cpu) = fam65xx_get_vector_addr(cpu);
+            /* Check for interrupt hijacking - NMI can hijack BRK after P is pushed */
+            if ((cpu->brk_flags & FAM65XX_BRK_NMI) && 
+                !(cpu->brk_flags & FAM65XX_BRK_RESET)) {
+                /* NMI hijacks BRK - use NMI vector instead */
+                CPU_AB(cpu) = 0xFFFA;
+            } else {
+                /* Set up vector address using helper function */
+                CPU_AB(cpu) = fam65xx_get_vector_addr(cpu);
+            }
             break;
         }
             
