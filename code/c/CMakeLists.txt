@@ -86,9 +86,9 @@ else()
     endif()
 endif()
 
-# GUI detection logic - re-enabled with new fam65xx_cpp support
+# GUI detection logic - re-enabled with new fam65xx support
 if(SDL2_FOUND AND OpenGL_FOUND)
-    message(STATUS "SDL2 and OpenGL found - GUI will be built with fam65xx_cpp support")
+    message(STATUS "SDL2 and OpenGL found - GUI will be built with fam65xx support")
     set(BUILD_GUI TRUE)
 else()
     message(STATUS "SDL2 or OpenGL not found - GUI will be skipped")
@@ -99,7 +99,7 @@ endif()
 include_directories(
     ${CMAKE_SOURCE_DIR}/src/core
     ${CMAKE_SOURCE_DIR}/src/chip/cpu/mos6510
-    ${CMAKE_SOURCE_DIR}/src/chip/cpu/fam65xx_cpp
+    ${CMAKE_SOURCE_DIR}/src/chip/cpu/fam65xx
     ${CMAKE_SOURCE_DIR}/src/chip/io
     ${CMAKE_SOURCE_DIR}/src/chip/logic
     ${CMAKE_SOURCE_DIR}/src/chip/memory
@@ -252,8 +252,8 @@ if(BUILD_GUI)
             src/gui/cimgui_backends.cpp
             src/chip/video/vic_ii/vicii_gui.c
             src/chip/logic/pla_gui.c
-            src/chip/cpu/fam65xx_cpp/fam65xx_gui.hpp
-            src/chip/cpu/fam65xx_cpp/fam65xx_gui.cpp
+            src/chip/cpu/fam65xx/fam65xx_gui.hpp
+            src/chip/cpu/fam65xx/fam65xx_gui.cpp
         )
 
     add_executable(c64emu_gui
@@ -375,7 +375,7 @@ endif()
 enable_testing()
 
 # Add tests subdirectory for comprehensive MOS6510 testing
-add_subdirectory(tests)  # Re-enabled for fam65xx_cpp testing
+add_subdirectory(tests)  # Re-enabled for fam65xx testing
 
 # Add tests (currently disabled due to API compatibility issues)
 # add_test(NAME minimal_test COMMAND minimal_test)
