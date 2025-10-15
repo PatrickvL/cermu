@@ -1,10 +1,29 @@
 #pragma once
 /*
- * fam65xx_modular.hpp - MOS 65xx Family CPU Emulator (Modular Version) (C++ Version)
- * 
+ * fam65xx_modular.hpp - MOS 65xx Family CPU Emulator (Template-Enhanced Version) (C++ Version)
+ *
  * This is the main include file for the modular version of the PHI2 split
- * architecture CPU emulator. It includes all component files in the correct
- * order to minimize forward declarations.
+ * architecture CPU emulator with template-based processor variant support.
+ * It includes all component files in the correct order to minimize forward declarations.
+ *
+ * TEMPLATE ENHANCEMENT OVERVIEW:
+ * ==============================
+ *
+ * This version adds compile-time processor variant support through C++ templates
+ * while maintaining full backward compatibility with the existing proven implementation.
+ *
+ * SUPPORTED PROCESSOR VARIANTS:
+ * - MOS 6502 (Original NMOS with illegal opcodes)
+ * - MOS 6510 (C64 variant with I/O port)
+ * - WDC 65C02 (CMOS version with enhanced instructions)
+ * - Rockwell R65C02 (CMOS with bit manipulation)
+ * - WDC 65C816 (16-bit extension)
+ *
+ * TEMPLATE FEATURES:
+ * - Compile-time processor feature selection
+ * - Zero runtime overhead for processor differences
+ * - Processor-specific opcode tables and behaviors
+ * - Single source compatibility across all variants
  * 
  * ARCHITECTURE OVERVIEW:
  * ======================
@@ -80,21 +99,30 @@
 #include <cstdint>
 #include <cstdbool>
 
+/* Include all modular components in dependency order to minimize forward declarations */
+
+/* 1. Core definitions - must be first (defines types and constants) */
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Include all modular components in dependency order to minimize forward declarations */
-
-/* 1. Core definitions - must be first (defines types and constants) */
 #include "fam65xx_core.hpp"
+
+#ifdef __cplusplus
+}
+#endif
 
 /* 2. Tables and enums - includes ALL operation and addressing mode handlers internally
  *    This eliminates the need for forward declarations by including implementations
- *    before defining the lookup tables that reference them. */
+ *    before defining the lookup tables that reference them.
+ *    NOTE: This contains C++ templates, so it's outside extern "C" */
 #include "fam65xx_tables.hpp"
 
 /* 3. Implementation functions - use tables and operation handlers */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "fam65xx_impl.hpp"
 
 /* Compatibility aliases for test runner integration */

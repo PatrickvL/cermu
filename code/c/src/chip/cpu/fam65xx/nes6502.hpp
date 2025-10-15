@@ -1,0 +1,193 @@
+#pragma once
+/*
+ * nes6502.hpp - Nintendo Entertainment System 6502 Microprocessor Emulator
+ *
+ * Modified 6502 used in the Nintendo Entertainment System (NES/Famicom).
+ * Based on Ricoh 2A03/2A07 which removes decimal mode but keeps illegal opcodes.
+ *
+ * Features:
+ * - All illegal opcodes from original 6502
+ * - Decimal mode disabled (SED/CLD still exist but D flag is ignored)
+ * - NMOS bugs preserved (JMP indirect page boundary bug)
+ * - Additional sound generator on chip (not emulated here)
+ * - Used in: Nintendo Famicom, Nintendo Entertainment System
+ */
+
+#include "fam65xx.hpp"
+
+#ifdef __cplusplus
+
+namespace fam65xx_cpu {
+
+// NES 6502 CPU class - 6502 without decimal mode
+using NES6502 = fam65xx_template::CPU<fam65xx_template::MOS6502Tag>;
+
+// Feature queries for compile-time optimization  
+constexpr bool has_illegal_opcodes() { return true; }
+constexpr bool has_decimal_mode() { return false; }  // Key difference: no decimal mode
+constexpr bool has_cmos_enhancements() { return false; }
+constexpr bool has_bit_manipulation() { return false; }
+constexpr bool has_16bit_mode() { return false; }
+constexpr bool has_io_port() { return false; }
+constexpr bool has_nmos_bugs() { return true; }
+constexpr bool decimal_affects_nz() { return true; }  // Would affect if decimal existed
+
+// NES-specific CPU wrapper that disables decimal mode
+class NES6502CPU {
+private:
+    NES6502 cpu;
+    
+public:
+    // CPU interface delegation
+    bus_state_t init(const fam65xx_desc_t* desc = nullptr) { return cpu.init(desc); }
+    bus_state_t reset(bus_state_t pins) { return cpu.reset(pins); }
+    bus_state_t bootstrap(bus_state_t pins) { return cpu.bootstrap(pins); }
+    bool opdone() const { return cpu.opdone(); }
+    
+    // Modified tick that ignores decimal flag
+    bus_state_t tick(bus_state_t pins) {
+        // Clear decimal flag before each instruction to disable decimal mode
+        cpu.set_p(cpu.p() & ~0x08);  // Clear D flag
+        return cpu.tick(pins);
+    }
+    
+    // Register access
+    void set_a(uint8_t v) { cpu.set_a(v); }
+    void set_x(uint8_t v) { cpu.set_x(v); }
+    void set_y(uint8_t v) { cpu.set_y(v); }
+    void set_s(uint8_t v) { cpu.set_s(v); }
+    void set_pc(uint16_t v) { cpu.set_pc(v); }
+    
+    // Modified set_p that ignores decimal flag
+    void set_p(uint8_t v) { 
+        cpu.set_p(v & ~0x08);  // Always clear D flag
+    }
+    
+    uint8_t a() const { return cpu.a(); }
+    uint8_t x() const { return cpu.x(); }
+    uint8_t y() const { return cpu.y(); }
+    uint8_t s() const { return cpu.s(); }
+    uint16_t pc() const { return cpu.pc(); }
+    
+    // Modified get_p that always shows decimal flag as clear
+    uint8_t p() const { 
+        return cpu.p() & ~0x08;  // Always clear D flag in return value
+    }
+    
+    // Direct CPU access (for advanced users who know what they're doing)
+    NES6502* get_cpu() { return &cpu; }
+    const NES6502* get_cpu() const { return &cpu; }
+};
+
+// Convenient creation functions
+inline NES6502 create_basic() {
+    return NES6502{};
+}
+
+inline NES6502CPU create() {
+    return NES6502CPU{};
+}
+
+// Initialization with memory callbacks
+inline NES6502CPU create_with_memory(
+    uint8_t (*read_fn)(void*, uint16_t, uint8_t),
+    void (*write_fn)(void*, uint16_t, uint8_t),
+    void* user_data = nullptr
+) {
+    fam65xx_desc_t desc = {};
+    desc.mem_read = read_fn;
+    desc.mem_write = write_fn;
+    desc.mem_user_data = user_data;
+    
+    NES6502CPU cpu;
+    cpu.init(&desc);
+    return cpu;
+}
+
+} // namespace fam65xx_cpu
+
+// Global type aliases for convenience
+using nes6502_t = fam65xx_cpu::NES6502CPU;
+using ricoh2a03_t = fam65xx_cpu::NES6502CPU;  // Alternative name
+
+#endif // __cplusplus
+
+// C compatibility wrapper functions
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// C API for NES 6502 - wraps the template implementation
+typedef struct {
+    fam65xx_t impl;
+} nes6502_c_t;
+
+// Initialize NES 6502 CPU
+inline uint64_t nes6502_init(nes6502_c_t* cpu, const fam65xx_desc_t* desc) {
+    return fam65xx_init(&cpu->impl, desc);
+}
+
+// Reset NES 6502 CPU
+inline uint64_t nes6502_reset(nes6502_c_t* cpu, uint64_t pins) {
+    uint64_t result = fam65xx_reset(&cpu->impl, pins);
+    // Clear decimal flag after reset
+    fam65xx_set_p(&cpu->impl, fam65xx_p(&cpu->impl) & ~0x08);
+    return result;
+}
+
+// Execute one tick with decimal mode disabled
+inline uint64_t nes6502_tick(nes6502_c_t* cpu, uint64_t pins) {
+    // Clear decimal flag before tick
+    fam65xx_set_p(&cpu->impl, fam65xx_p(&cpu->impl) & ~0x08);
+    return fam65xx_tick(&cpu->impl, pins);
+}
+
+// Check if operation is done
+inline bool nes6502_opdone(nes6502_c_t* cpu) {
+    return fam65xx_opdone(&cpu->impl);
+}
+
+// Register access functions
+inline uint8_t nes6502_a(nes6502_c_t* cpu) { return fam65xx_a(&cpu->impl); }
+inline uint8_t nes6502_x(nes6502_c_t* cpu) { return fam65xx_x(&cpu->impl); }
+inline uint8_t nes6502_y(nes6502_c_t* cpu) { return fam65xx_y(&cpu->impl); }
+inline uint8_t nes6502_s(nes6502_c_t* cpu) { return fam65xx_s(&cpu->impl); }
+inline uint16_t nes6502_pc(nes6502_c_t* cpu) { return fam65xx_pc(&cpu->impl); }
+
+// Modified P register access that masks decimal flag
+inline uint8_t nes6502_p(nes6502_c_t* cpu) { 
+    return fam65xx_p(&cpu->impl) & ~0x08;  // Always clear D flag
+}
+
+inline void nes6502_set_a(nes6502_c_t* cpu, uint8_t v) { fam65xx_set_a(&cpu->impl, v); }
+inline void nes6502_set_x(nes6502_c_t* cpu, uint8_t v) { fam65xx_set_x(&cpu->impl, v); }
+inline void nes6502_set_y(nes6502_c_t* cpu, uint8_t v) { fam65xx_set_y(&cpu->impl, v); }
+inline void nes6502_set_s(nes6502_c_t* cpu, uint8_t v) { fam65xx_set_s(&cpu->impl, v); }
+inline void nes6502_set_pc(nes6502_c_t* cpu, uint16_t v) { fam65xx_set_pc(&cpu->impl, v); }
+
+// Modified P register set that ignores decimal flag
+inline void nes6502_set_p(nes6502_c_t* cpu, uint8_t v) { 
+    fam65xx_set_p(&cpu->impl, v & ~0x08);  // Always clear D flag
+}
+
+// Ricoh 2A03 aliases
+#define ricoh2a03_init nes6502_init
+#define ricoh2a03_reset nes6502_reset
+#define ricoh2a03_tick nes6502_tick
+#define ricoh2a03_opdone nes6502_opdone
+#define ricoh2a03_a nes6502_a
+#define ricoh2a03_x nes6502_x
+#define ricoh2a03_y nes6502_y
+#define ricoh2a03_s nes6502_s
+#define ricoh2a03_p nes6502_p
+#define ricoh2a03_pc nes6502_pc
+#define ricoh2a03_set_a nes6502_set_a
+#define ricoh2a03_set_x nes6502_set_x
+#define ricoh2a03_set_y nes6502_set_y
+#define ricoh2a03_set_s nes6502_set_s
+#define ricoh2a03_set_p nes6502_set_p
+#define ricoh2a03_set_pc nes6502_set_pc
+
+#ifdef __cplusplus
+}
+#endif
