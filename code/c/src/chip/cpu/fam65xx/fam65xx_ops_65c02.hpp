@@ -41,32 +41,64 @@ static inline bus_state_t op_stz(fam65xx_t* cpu, bus_state_t pins) {
 
 // TRB - Test and Reset Bits
 static inline bus_state_t op_trb(fam65xx_t* cpu, bus_state_t pins) {
-    pins = fam65xx_phi2_read(cpu, pins, REG_AB);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    const uint8_t data = BUS_GET_DATA(pins);
-    const uint8_t result = data & ~CPU_A(cpu);
-    
-    // Set Z flag based on A & data
-    CPU_P(cpu) = (CPU_P(cpu) & ~FLAG_Z) | ((CPU_A(cpu) & data) ? 0 : FLAG_Z);
-    
-    CPU_DL(cpu) = result;
-    return fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
+    switch (cpu->cycle_index++) {
+        case 0: {
+            /* PHI2: Read data from target address */
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            
+            /* PHI1: Process data and set flags */
+            const uint8_t data = BUS_GET_DATA(pins);
+            const uint8_t result = data & ~CPU_A(cpu);
+            
+            // Set Z flag based on A & data
+            CPU_P(cpu) = (CPU_P(cpu) & ~FLAG_Z) | ((CPU_A(cpu) & data) ? 0 : FLAG_Z);
+            
+            CPU_DL(cpu) = result;
+            break;
+        }
+            
+        case 1:
+            /* PHI2: Write modified data back */
+            pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            
+            /* PHI1: Complete operation */
+            fam65xx_transition_to_fetch(cpu);
+            break;
+    }
+    return pins;
 }
 
 // TSB - Test and Set Bits
 static inline bus_state_t op_tsb(fam65xx_t* cpu, bus_state_t pins) {
-    pins = fam65xx_phi2_read(cpu, pins, REG_AB);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    const uint8_t data = BUS_GET_DATA(pins);
-    const uint8_t result = data | CPU_A(cpu);
-    
-    // Set Z flag based on A & data
-    CPU_P(cpu) = (CPU_P(cpu) & ~FLAG_Z) | ((CPU_A(cpu) & data) ? 0 : FLAG_Z);
-    
-    CPU_DL(cpu) = result;
-    return fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
+    switch (cpu->cycle_index++) {
+        case 0: {
+            /* PHI2: Read data from target address */
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            
+            /* PHI1: Process data and set flags */
+            const uint8_t data = BUS_GET_DATA(pins);
+            const uint8_t result = data | CPU_A(cpu);
+            
+            // Set Z flag based on A & data
+            CPU_P(cpu) = (CPU_P(cpu) & ~FLAG_Z) | ((CPU_A(cpu) & data) ? 0 : FLAG_Z);
+            
+            CPU_DL(cpu) = result;
+            break;
+        }
+            
+        case 1:
+            /* PHI2: Write modified data back */
+            pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            
+            /* PHI1: Complete operation */
+            fam65xx_transition_to_fetch(cpu);
+            break;
+    }
+    return pins;
 }
 
 // PHX - Push X Register
@@ -130,15 +162,32 @@ static inline bus_state_t op_stp(fam65xx_t* cpu, bus_state_t pins) {
 // RMB0-RMB7 - Reset Memory Bit
 #define DEFINE_RMB_OP(bit) \
 static inline bus_state_t op_rmb##bit(fam65xx_t* cpu, bus_state_t pins) { \
-    pins = fam65xx_phi2_read(cpu, pins, REG_AB); \
-    if (!FAM65XX_GET_RDY(pins)) return pins; \
-    const uint8_t data = BUS_GET_DATA(pins); \
-    CPU_DL(cpu) = data & ~(1 << (bit)); \
-    return fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL); \
+    switch (cpu->cycle_index++) { \
+        case 0: { \
+            /* PHI2: Read data from target address */ \
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB); \
+            if (!FAM65XX_GET_RDY(pins)) return pins; \
+            \
+            /* PHI1: Reset bit and prepare write data */ \
+            const uint8_t data = BUS_GET_DATA(pins); \
+            CPU_DL(cpu) = data & ~(1 << (bit)); \
+            break; \
+        } \
+            \
+        case 1: \
+            /* PHI2: Write modified data back */ \
+            pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL); \
+            if (!FAM65XX_GET_RDY(pins)) return pins; \
+            \
+            /* PHI1: Complete operation */ \
+            fam65xx_transition_to_fetch(cpu); \
+            break; \
+    } \
+    return pins; \
 }
 
 DEFINE_RMB_OP(0)
-DEFINE_RMB_OP(1) 
+DEFINE_RMB_OP(1)
 DEFINE_RMB_OP(2)
 DEFINE_RMB_OP(3)
 DEFINE_RMB_OP(4)
@@ -149,16 +198,33 @@ DEFINE_RMB_OP(7)
 // SMB0-SMB7 - Set Memory Bit
 #define DEFINE_SMB_OP(bit) \
 static inline bus_state_t op_smb##bit(fam65xx_t* cpu, bus_state_t pins) { \
-    pins = fam65xx_phi2_read(cpu, pins, REG_AB); \
-    if (!FAM65XX_GET_RDY(pins)) return pins; \
-    const uint8_t data = BUS_GET_DATA(pins); \
-    CPU_DL(cpu) = data | (1 << (bit)); \
-    return fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL); \
+    switch (cpu->cycle_index++) { \
+        case 0: { \
+            /* PHI2: Read data from target address */ \
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB); \
+            if (!FAM65XX_GET_RDY(pins)) return pins; \
+            \
+            /* PHI1: Set bit and prepare write data */ \
+            const uint8_t data = BUS_GET_DATA(pins); \
+            CPU_DL(cpu) = data | (1 << (bit)); \
+            break; \
+        } \
+            \
+        case 1: \
+            /* PHI2: Write modified data back */ \
+            pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL); \
+            if (!FAM65XX_GET_RDY(pins)) return pins; \
+            \
+            /* PHI1: Complete operation */ \
+            fam65xx_transition_to_fetch(cpu); \
+            break; \
+    } \
+    return pins; \
 }
 
 DEFINE_SMB_OP(0)
 DEFINE_SMB_OP(1)
-DEFINE_SMB_OP(2) 
+DEFINE_SMB_OP(2)
 DEFINE_SMB_OP(3)
 DEFINE_SMB_OP(4)
 DEFINE_SMB_OP(5)

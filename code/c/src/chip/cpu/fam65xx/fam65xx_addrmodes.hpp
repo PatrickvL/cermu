@@ -504,6 +504,7 @@ static bus_state_t am_sr(fam65xx_t* cpu, bus_state_t pins) {
             /* PHI2: Dummy cycle for timing accuracy */
             pins = fam65xx_phi2_read(cpu, pins, REG_AB);
             if (!FAM65XX_GET_RDY(pins)) return pins;
+
             fam65xx_transition_to_operation(cpu);
             break;
     }
