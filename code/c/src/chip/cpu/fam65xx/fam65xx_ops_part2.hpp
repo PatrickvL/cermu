@@ -21,6 +21,17 @@ extern "C" {
 
 #ifdef CHIPS_IMPL
 
+/* Helper function to get interrupt vector address based on BRK flags */
+static inline uint16_t fam65xx_get_vector_addr(fam65xx_t* cpu) {
+    if (cpu->brk_flags & FAM65XX_BRK_RESET) {
+        return 0xFFFC;
+    } else if (cpu->brk_flags & FAM65XX_BRK_NMI) {
+        return 0xFFFA;
+    } else {
+        return 0xFFFE;  // BRK/IRQ vector
+    }
+}
+
 /* ============================================================================
  * HELPER FUNCTIONS FOR CODE DEDUPLICATION
  * ============================================================================

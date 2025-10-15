@@ -329,9 +329,7 @@ static inline void fam65xx_transition_to_fetch(fam65xx_t* cpu) {
 
 /* Forward declarations only for functions referenced in core.h itself */
 #ifdef CHIPS_IMPL
-/* These functions are needed by the API functions below - others are now included via tables */
-static inline uint16_t fam65xx_get_vector_addr(fam65xx_t* cpu);
-static void fam65xx_transition_to_operation(fam65xx_t* cpu);
+/* These functions are now implemented locally where needed */
 #endif
 
 /* Main API functions (callback-based for test runner compatibility) */

@@ -16,6 +16,21 @@
 
 #include "fam65xx_variants.hpp"
 
+// Include tables for template-based opcode generation
+#ifndef CHIPS_IMPL
+#define CHIPS_IMPL
+#endif
+
+// Include core definitions first
+#include "fam65xx_core.hpp"
+#include "fam65xx_tables.hpp"
+
+// Define internal processor-specific opcode table for MOS 6502
+DEFINE_PROCESSOR_OPCODE_TABLE_INTERNAL(fam65xx_variants::MOS6502Tag)
+
+// Include the implementation after the table definitions
+#include "fam65xx_impl.hpp"
+
 #ifdef __cplusplus
 
 namespace fam65xx_cpu {
@@ -63,6 +78,7 @@ typedef struct {
 
 // Initialize MOS 6502 CPU
 inline uint64_t mos6502_init(mos6502_c_t* cpu, const fam65xx_desc_t* desc) {
+    // Use static opcode table - no initialization needed
     return fam65xx_init(&cpu->impl, desc);
 }
 
@@ -79,6 +95,11 @@ inline uint64_t mos6502_tick(mos6502_c_t* cpu, uint64_t pins) {
 // Check if operation is done
 inline bool mos6502_opdone(mos6502_c_t* cpu) {
     return fam65xx_opdone(&cpu->impl);
+}
+
+// Bootstrap CPU for immediate execution (test runner compatibility)
+inline uint64_t mos6502_bootstrap(mos6502_c_t* cpu, uint64_t pins) {
+    return fam65xx_bootstrap(&cpu->impl, pins);
 }
 
 // Register access functions

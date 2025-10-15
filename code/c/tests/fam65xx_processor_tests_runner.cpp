@@ -23,7 +23,9 @@ extern "C" {
 #ifndef CHIPS_IMPL
     #define CHIPS_IMPL
 #endif
-#include "../src/chip/cpu/fam65xx/fam65xx.hpp"
+
+// Include processor-specific headers
+#include "../src/chip/cpu/fam65xx/mos6502.hpp"
 
 namespace fs = std::filesystem;
 
@@ -105,10 +107,10 @@ public:
     }
 };
 
-//  test harness combining C++ reliability with C optimizations
+// Updated test harness using the new MOS 6502 template-based API
 class ProcessorTestHarness {
 private:
-    fam65xx_t cpu;
+    mos6502_c_t cpu;  // Use the new C wrapper type
     uint8_t memory[65536];
     uint32_t cycle_count;
     uint64_t pins;  // Maintain pins state across steps
@@ -150,20 +152,20 @@ private:
 public:
     // Bootstrap processor for ProcessorTests compatibility
     void bootstrap_processor_for_tests() {
-        pins = fam65xx_bootstrap(&cpu, pins);
+        pins = mos6502_reset(&cpu, pins);  // Use reset instead of bootstrap
     }
 
     ProcessorTestHarness() : cycle_count(0) {
         // Clear memory (optimized approach from C version)
         std::fill(memory, memory + 65536, 0);
         
-        // Initialize CPU with memory callbacks (reliable C++ approach)
+        // Initialize CPU with memory callbacks using new API
         fam65xx_desc_t desc = {};
         desc.mem_read = mem_read;
         desc.mem_write = mem_write;
         desc.mem_user_data = this;
         
-        pins = fam65xx_init(&cpu, &desc);
+        pins = mos6502_init(&cpu, &desc);  // Use mos6502_init instead of fam65xx_init
         
         // ProcessorTests expects CPU to be ready for immediate execution
         cycle_count = 0;
@@ -223,20 +225,20 @@ public:
         return actual_bus_cycles;
     }
     
-    // CPU state accessors (C++ version approach)
-    void set_pc(uint16_t pc) { fam65xx_set_pc(&cpu, pc); }
-    void set_a(uint8_t a) { fam65xx_set_a(&cpu, a); }
-    void set_x(uint8_t x) { fam65xx_set_x(&cpu, x); }
-    void set_y(uint8_t y) { fam65xx_set_y(&cpu, y); }
-    void set_sp(uint8_t sp) { fam65xx_set_s(&cpu, sp); }
-    void set_status(uint8_t p) { fam65xx_set_p(&cpu, p); }
+    // CPU state accessors - use new MOS 6502 API
+    void set_pc(uint16_t pc) { mos6502_set_pc(&cpu, pc); }
+    void set_a(uint8_t a) { mos6502_set_a(&cpu, a); }
+    void set_x(uint8_t x) { mos6502_set_x(&cpu, x); }
+    void set_y(uint8_t y) { mos6502_set_y(&cpu, y); }
+    void set_sp(uint8_t sp) { mos6502_set_s(&cpu, sp); }
+    void set_status(uint8_t p) { mos6502_set_p(&cpu, p); }
     
-    uint16_t get_pc() const { return fam65xx_pc(const_cast<fam65xx_t*>(&cpu)); }
-    uint8_t get_a() const { return fam65xx_a(const_cast<fam65xx_t*>(&cpu)); }
-    uint8_t get_x() const { return fam65xx_x(const_cast<fam65xx_t*>(&cpu)); }
-    uint8_t get_y() const { return fam65xx_y(const_cast<fam65xx_t*>(&cpu)); }
-    uint8_t get_sp() const { return fam65xx_s(const_cast<fam65xx_t*>(&cpu)); }
-    uint8_t get_status() const { return fam65xx_p(const_cast<fam65xx_t*>(&cpu)); }
+    uint16_t get_pc() const { return mos6502_pc(const_cast<mos6502_c_t*>(&cpu)); }
+    uint8_t get_a() const { return mos6502_a(const_cast<mos6502_c_t*>(&cpu)); }
+    uint8_t get_x() const { return mos6502_x(const_cast<mos6502_c_t*>(&cpu)); }
+    uint8_t get_y() const { return mos6502_y(const_cast<mos6502_c_t*>(&cpu)); }
+    uint8_t get_sp() const { return mos6502_s(const_cast<mos6502_c_t*>(&cpu)); }
+    uint8_t get_status() const { return mos6502_p(const_cast<mos6502_c_t*>(&cpu)); }
     
     // Memory access (for direct memory setup, not during CPU execution)
     void set_memory(uint16_t addr, uint8_t data) {
@@ -261,24 +263,24 @@ public:
             
             do {
                 // Capture state before tick
-                uint16_t pc_before = fam65xx_pc(&cpu);
-                uint8_t a_before = fam65xx_a(&cpu);
-                uint8_t x_before = fam65xx_x(&cpu);
-                uint8_t y_before = fam65xx_y(&cpu);
-                uint8_t s_before = fam65xx_s(&cpu);
-                uint8_t p_before = fam65xx_p(&cpu);
+                uint16_t pc_before = mos6502_pc(&cpu);
+                uint8_t a_before = mos6502_a(&cpu);
+                uint8_t x_before = mos6502_x(&cpu);
+                uint8_t y_before = mos6502_y(&cpu);
+                uint8_t s_before = mos6502_s(&cpu);
+                uint8_t p_before = mos6502_p(&cpu);
                 
-                pins = fam65xx_tick(&cpu, pins);
+                pins = mos6502_tick(&cpu, pins);  // Use mos6502_tick instead of fam65xx_tick
                 cycle_count++;
                 cycle_in_instruction++;
                 
                 // Capture state after tick
-                uint16_t pc_after = fam65xx_pc(&cpu);
-                uint8_t a_after = fam65xx_a(&cpu);
-                uint8_t x_after = fam65xx_x(&cpu);
-                uint8_t y_after = fam65xx_y(&cpu);
-                uint8_t s_after = fam65xx_s(&cpu);
-                uint8_t p_after = fam65xx_p(&cpu);
+                uint16_t pc_after = mos6502_pc(&cpu);
+                uint8_t a_after = mos6502_a(&cpu);
+                uint8_t x_after = mos6502_x(&cpu);
+                uint8_t y_after = mos6502_y(&cpu);
+                uint8_t s_after = mos6502_s(&cpu);
+                uint8_t p_after = mos6502_p(&cpu);
                 
                 // Log detailed cycle information if debug output provided
                 if (debug_output) {
@@ -308,7 +310,7 @@ public:
                 }
                 
                 // Instruction completes when opdone() returns true
-                bool instruction_done = fam65xx_opdone(&cpu);
+                bool instruction_done = mos6502_opdone(&cpu);  // Use mos6502_opdone instead of fam65xx_opdone
                 
                 max_cycles--;
                 if (max_cycles == 0) {
@@ -746,7 +748,7 @@ std::vector<TestItem> collect_all_tests(const std::vector<std::string>& test_pat
 
 // Enhanced usage information
 void print_usage(const char* program_name) {
-    std::cout << "fam65xx ProcessorTests Runner - Parallel Edition\n";
+    std::cout << "fam65xx ProcessorTests Runner - Template Edition\n";
     std::cout << "Usage: " << program_name << " [options] <test_file_or_directory>\n";
     std::cout << "\nTest Execution Options:\n";
     std::cout << "  -v, --verbose      Enable verbose output with detailed execution logs\n";
@@ -756,20 +758,21 @@ void print_usage(const char* program_name) {
     std::cout << "  -j, --jobs N       Number of parallel jobs (default: CPU cores - 1)\n";
     std::cout << "  -h, --help         Show this help message\n";
     std::cout << "\nExamples:\n";
-    std::cout << "  " << program_name << " processor_tests/6502/v1/                    # Run with default parallelism\n";
-    std::cout << "  " << program_name << " -j 4 -v processor_tests/6502/v1/69.json   # 4 workers, verbose output\n";
-    std::cout << "  " << program_name << " -q -c -j 8 processor_tests/6502/v1/       # 8 workers, quiet, continue on failures\n";
+    std::cout << "  " << program_name << " processor_tests/nes6502/v1/                    # Run with default parallelism\n";
+    std::cout << "  " << program_name << " -j 4 -v processor_tests/nes6502/v1/69.json   # 4 workers, verbose output\n";
+    std::cout << "  " << program_name << " -q -c -j 8 processor_tests/nes6502/v1/       # 8 workers, quiet, continue on failures\n";
     std::cout << "\nFeatures:\n";
+    std::cout << "  ✓ New template-based MOS 6502 CPU implementation\n";
     std::cout << "  ✓ Parallel test execution for maximum performance\n";
     std::cout << "  ✓ Thread-safe output (no mixed stdout)\n";
     std::cout << "  ✓ Intelligent core usage (hardware cores - 1)\n";
-    std::cout << "  ✓ Compacted debug output for speed\n";
     std::cout << "  ✓ Hardware-accurate timing validation\n";
 }
 
 // Enhanced results printing
 void print_results(std::chrono::milliseconds duration, size_t num_workers) {
-    std::cout << "\n=== FAM65XX PROCESSOR TESTS RESULTS (Parallel Edition) ===\n";
+    std::cout << "\n=== FAM65XX PROCESSOR TESTS RESULTS (Template Edition) ===\n";
+    std::cout << "CPU Implementation: Template-based MOS 6502\n";
     std::cout << "Execution time: " << duration.count() << " ms\n";
     std::cout << "Worker threads: " << num_workers << "\n";
     std::cout << "Total tests run: " << results.total_tests << "\n";
@@ -805,7 +808,7 @@ void print_results(std::chrono::milliseconds duration, size_t num_workers) {
     }
     
     if (results.passed_tests == results.total_tests) {
-        std::cout << "\n🎉 ALL TESTS PASSED - fam65xx is hardware-accurate! 🎉\n";
+        std::cout << "\n🎉 ALL TESTS PASSED - Template-based fam65xx is hardware-accurate! 🎉\n";
     } else {
         std::cout << "\n❌ SOME TESTS FAILED - implementation differs from hardware\n";
     }
@@ -850,7 +853,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    std::cout << "=== fam65xx ProcessorTests Runner - Parallel Edition ===\n";
+    std::cout << "=== fam65xx ProcessorTests Runner - Template Edition ===\n";
+    std::cout << "CPU Implementation: Template-based MOS 6502\n";
     std::cout << "Test paths: " << test_paths.size() << " specified\n";
     std::cout << "Worker threads: " << num_workers << "\n";
     std::cout << "Verbose: " << (verbose_output ? "enabled" : "disabled") << "\n";
@@ -916,7 +920,7 @@ int main(int argc, char* argv[]) {
         std::cout << "\nNo tests were executed!\n";
         return 1;
     } else if (results.passed_tests == results.total_tests) {
-        std::cout << "\nALL TESTS PASSED - fam65xx matches ProcessorTests ground truth!\n";
+        std::cout << "\nALL TESTS PASSED - Template-based fam65xx matches ProcessorTests ground truth!\n";
         return 0;
     } else {
         double pass_rate = (double)results.passed_tests / results.total_tests * 100.0;
