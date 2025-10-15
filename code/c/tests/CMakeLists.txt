@@ -151,7 +151,7 @@ add_executable(fam65xx_processor_tests_runner
     json_parser.c
 )
 target_include_directories(fam65xx_processor_tests_runner PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
 )
 target_compile_definitions(fam65xx_processor_tests_runner PRIVATE CHIPS_IMPL)
@@ -279,7 +279,7 @@ add_custom_target(run_processor_tests
 
 add_custom_target(run_all_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} --verbose
-    DEPENDS fam65xx_cpp_klaus_test_runner processor_tests_runner
+    DEPENDS fam65xx_klaus_test_runner fam65xx_processor_tests_runner
     COMMENT "Running all MOS6510 tests"
 )
 
@@ -312,4 +312,5 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/processor_tests)
 else()
     message(STATUS "  ProcessorTests Available: No")
 endif()
-message(STATUS "  fam65xx_cpp Klaus Test Runner: Built")
+message(STATUS "  fam65xx Klaus Test Runner: Built")
+message(STATUS "  fam65xx Lorenz Test Harness: Built")

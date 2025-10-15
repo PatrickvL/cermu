@@ -250,56 +250,30 @@ processor_tests_runner/fast:
 .PHONY : processor_tests_runner/fast
 
 #=============================================================================
-# Target rules for targets named fam65xx_cpp_klaus_test_runner
+# Target rules for targets named fam65xx_klaus_test_runner
 
 # Build rule for target.
-fam65xx_cpp_klaus_test_runner: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 fam65xx_cpp_klaus_test_runner
-.PHONY : fam65xx_cpp_klaus_test_runner
+fam65xx_klaus_test_runner: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 fam65xx_klaus_test_runner
+.PHONY : fam65xx_klaus_test_runner
 
 # fast build rule for target.
-fam65xx_cpp_klaus_test_runner/fast:
-	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_klaus_test_runner.dir/build
-.PHONY : fam65xx_cpp_klaus_test_runner/fast
+fam65xx_klaus_test_runner/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_klaus_test_runner.dir/build.make tests/CMakeFiles/fam65xx_klaus_test_runner.dir/build
+.PHONY : fam65xx_klaus_test_runner/fast
 
 #=============================================================================
-# Target rules for targets named fam65xx_cpp_lorenz_test_runner
+# Target rules for targets named fam65xx_lorenz_test_harness
 
 # Build rule for target.
-fam65xx_cpp_lorenz_test_runner: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 fam65xx_cpp_lorenz_test_runner
-.PHONY : fam65xx_cpp_lorenz_test_runner
+fam65xx_lorenz_test_harness: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 fam65xx_lorenz_test_harness
+.PHONY : fam65xx_lorenz_test_harness
 
 # fast build rule for target.
-fam65xx_cpp_lorenz_test_runner/fast:
-	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_lorenz_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_lorenz_test_runner.dir/build
-.PHONY : fam65xx_cpp_lorenz_test_runner/fast
-
-#=============================================================================
-# Target rules for targets named fam65xx_cpp_65c02_test_runner
-
-# Build rule for target.
-fam65xx_cpp_65c02_test_runner: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 fam65xx_cpp_65c02_test_runner
-.PHONY : fam65xx_cpp_65c02_test_runner
-
-# fast build rule for target.
-fam65xx_cpp_65c02_test_runner/fast:
-	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_65c02_test_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_65c02_test_runner.dir/build
-.PHONY : fam65xx_cpp_65c02_test_runner/fast
-
-#=============================================================================
-# Target rules for targets named fam65xx_cpp_processor_tests_runner
-
-# Build rule for target.
-fam65xx_cpp_processor_tests_runner: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 fam65xx_cpp_processor_tests_runner
-.PHONY : fam65xx_cpp_processor_tests_runner
-
-# fast build rule for target.
-fam65xx_cpp_processor_tests_runner/fast:
-	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_cpp_processor_tests_runner.dir/build.make tests/CMakeFiles/fam65xx_cpp_processor_tests_runner.dir/build
-.PHONY : fam65xx_cpp_processor_tests_runner/fast
+fam65xx_lorenz_test_harness/fast:
+	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/fam65xx_lorenz_test_harness.dir/build.make tests/CMakeFiles/fam65xx_lorenz_test_harness.dir/build
+.PHONY : fam65xx_lorenz_test_harness/fast
 
 #=============================================================================
 # Target rules for targets named fam65xx_processor_tests_runner
@@ -418,29 +392,29 @@ run_all_tests/fast:
 	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/run_all_tests.dir/build.make tests/CMakeFiles/run_all_tests.dir/build
 .PHONY : run_all_tests/fast
 
-src/chip/cpu/fam65xx_cpp/fam65xx_gui.o: src/chip/cpu/fam65xx_cpp/fam65xx_gui.cpp.o
-.PHONY : src/chip/cpu/fam65xx_cpp/fam65xx_gui.o
+src/chip/cpu/fam65xx/fam65xx_gui.o: src/chip/cpu/fam65xx/fam65xx_gui.cpp.o
+.PHONY : src/chip/cpu/fam65xx/fam65xx_gui.o
 
 # target to build an object file
-src/chip/cpu/fam65xx_cpp/fam65xx_gui.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/fam65xx_cpp/fam65xx_gui.cpp.o
-.PHONY : src/chip/cpu/fam65xx_cpp/fam65xx_gui.cpp.o
+src/chip/cpu/fam65xx/fam65xx_gui.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/fam65xx/fam65xx_gui.cpp.o
+.PHONY : src/chip/cpu/fam65xx/fam65xx_gui.cpp.o
 
-src/chip/cpu/fam65xx_cpp/fam65xx_gui.i: src/chip/cpu/fam65xx_cpp/fam65xx_gui.cpp.i
-.PHONY : src/chip/cpu/fam65xx_cpp/fam65xx_gui.i
+src/chip/cpu/fam65xx/fam65xx_gui.i: src/chip/cpu/fam65xx/fam65xx_gui.cpp.i
+.PHONY : src/chip/cpu/fam65xx/fam65xx_gui.i
 
 # target to preprocess a source file
-src/chip/cpu/fam65xx_cpp/fam65xx_gui.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/fam65xx_cpp/fam65xx_gui.cpp.i
-.PHONY : src/chip/cpu/fam65xx_cpp/fam65xx_gui.cpp.i
+src/chip/cpu/fam65xx/fam65xx_gui.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/fam65xx/fam65xx_gui.cpp.i
+.PHONY : src/chip/cpu/fam65xx/fam65xx_gui.cpp.i
 
-src/chip/cpu/fam65xx_cpp/fam65xx_gui.s: src/chip/cpu/fam65xx_cpp/fam65xx_gui.cpp.s
-.PHONY : src/chip/cpu/fam65xx_cpp/fam65xx_gui.s
+src/chip/cpu/fam65xx/fam65xx_gui.s: src/chip/cpu/fam65xx/fam65xx_gui.cpp.s
+.PHONY : src/chip/cpu/fam65xx/fam65xx_gui.s
 
 # target to generate assembly for a file
-src/chip/cpu/fam65xx_cpp/fam65xx_gui.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/fam65xx_cpp/fam65xx_gui.cpp.s
-.PHONY : src/chip/cpu/fam65xx_cpp/fam65xx_gui.cpp.s
+src/chip/cpu/fam65xx/fam65xx_gui.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/fam65xx/fam65xx_gui.cpp.s
+.PHONY : src/chip/cpu/fam65xx/fam65xx_gui.cpp.s
 
 src/chip/cpu/mos6510/mos6510.o: src/chip/cpu/mos6510/mos6510.cpp.o
 .PHONY : src/chip/cpu/mos6510/mos6510.o
@@ -1092,10 +1066,8 @@ help:
 	@echo "... c64emu"
 	@echo "... c64emu_gui"
 	@echo "... cimgui"
-	@echo "... fam65xx_cpp_65c02_test_runner"
-	@echo "... fam65xx_cpp_klaus_test_runner"
-	@echo "... fam65xx_cpp_lorenz_test_runner"
-	@echo "... fam65xx_cpp_processor_tests_runner"
+	@echo "... fam65xx_klaus_test_runner"
+	@echo "... fam65xx_lorenz_test_harness"
 	@echo "... fam65xx_processor_tests_runner"
 	@echo "... irq_level_handling_test"
 	@echo "... json_parser"
@@ -1104,9 +1076,9 @@ help:
 	@echo "... processor_tests_runner"
 	@echo "... unified_processor_test"
 	@echo "... unified_processor_test_simple"
-	@echo "... src/chip/cpu/fam65xx_cpp/fam65xx_gui.o"
-	@echo "... src/chip/cpu/fam65xx_cpp/fam65xx_gui.i"
-	@echo "... src/chip/cpu/fam65xx_cpp/fam65xx_gui.s"
+	@echo "... src/chip/cpu/fam65xx/fam65xx_gui.o"
+	@echo "... src/chip/cpu/fam65xx/fam65xx_gui.i"
+	@echo "... src/chip/cpu/fam65xx/fam65xx_gui.s"
 	@echo "... src/chip/cpu/mos6510/mos6510.o"
 	@echo "... src/chip/cpu/mos6510/mos6510.i"
 	@echo "... src/chip/cpu/mos6510/mos6510.s"

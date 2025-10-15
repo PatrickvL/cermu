@@ -22,16 +22,6 @@ namespace fam65xx_cpu {
 // NES 6502 CPU class - 6502 without decimal mode
 using NES6502 = fam65xx_variants::fam65xx_variants::CPU<fam65xx_variants::MOS6502Tag>;
 
-// Feature queries for compile-time optimization  
-constexpr bool has_illegal_opcodes() { return true; }
-constexpr bool has_decimal_mode() { return false; }  // Key difference: no decimal mode
-constexpr bool has_cmos_enhancements() { return false; }
-constexpr bool has_bit_manipulation() { return false; }
-constexpr bool has_16bit_mode() { return false; }
-constexpr bool has_io_port() { return false; }
-constexpr bool has_nmos_bugs() { return true; }
-constexpr bool decimal_affects_nz() { return true; }  // Would affect if decimal existed
-
 // NES-specific CPU wrapper that disables decimal mode
 class NES6502CPU {
 private:

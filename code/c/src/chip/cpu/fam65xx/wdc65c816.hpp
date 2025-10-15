@@ -26,16 +26,6 @@ namespace fam65xx_cpu {
 // WDC 65C816 CPU class - 16-bit enhanced processor
 using WDC65C816 = fam65xx_variants::fam65xx_variants::CPU<fam65xx_variants::WDC65C816Tag>;
 
-// Feature queries for compile-time optimization
-constexpr bool has_illegal_opcodes() { return false; }  // Converted to NOPs
-constexpr bool has_decimal_mode() { return true; }
-constexpr bool has_cmos_enhancements() { return true; }
-constexpr bool has_bit_manipulation() { return false; }
-constexpr bool has_16bit_mode() { return true; }       // Key feature
-constexpr bool has_io_port() { return false; }
-constexpr bool has_nmos_bugs() { return false; }       // Bugs fixed
-constexpr bool decimal_affects_nz() { return false; }  // Fixed in CMOS
-
 // 65C816-specific registers and flags
 enum WDC65C816Registers {
     // Status register flags (in addition to standard 6502 flags)
