@@ -107,7 +107,7 @@ static bus_state_t op_adc(fam65xx_t* cpu, bus_state_t pins) {
         /* Calculate binary result first for flag computation */
         uint16_t binary_result = a_old + operand + carry_in;
         
-        /* 6502 BCD addition algorithm for result computation */
+        /* 6502 BCD addition algorithm */
         uint8_t al = (a_old & 0x0F) + (operand & 0x0F) + carry_in;
         uint8_t ah = (a_old >> 4) + (operand >> 4);
         
@@ -117,23 +117,20 @@ static bus_state_t op_adc(fam65xx_t* cpu, bus_state_t pins) {
             ah++;
         }
         
-        /* Handle high nibble and set carry flag */
+        /* Set flags based on binary result BEFORE BCD adjustment */
+        CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+                     (binary_result & 0x80 ? FLAG_N : 0) |                       /* N = bit 7 of binary result */
+                     ((binary_result & 0xFF) == 0 ? FLAG_Z : 0) |                /* Z = binary result is zero */
+                     (binary_result > 0xFF ? FLAG_C : 0) |                       /* C = carry out from binary result */
+                     (((a_old ^ binary_result) & (operand ^ binary_result) & 0x80) ? FLAG_V : 0); /* V = signed overflow on binary result */
+        
+        /* Adjust high nibble for BCD */
         if (ah > 9) {
             ah += 6;
-            CPU_P(cpu) |= FLAG_C;
-        } else {
-            /* Clear carry if no overflow */
-            CPU_P(cpu) &= ~FLAG_C;
         }
         
         /* Assemble BCD result */
         CPU_A(cpu) = ((ah & 0x0F) << 4) | (al & 0x0F);
-        
-        /* 6502 BCD flag behavior: N and Z based on binary result, V based on binary result */
-        CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_V | FLAG_Z)) |
-                     (binary_result & FLAG_N) |                                   /* N = bit 7 of binary result */
-                     ((binary_result & 0xFF) == 0 ? FLAG_Z : 0) |                /* Z = binary result is zero */
-                     (((a_old ^ binary_result) & (operand ^ binary_result) & 0x80) ? FLAG_V : 0); /* V = signed overflow on binary result */
     } else {
         /* Binary mode */
         uint16_t result = a_old + operand + carry_in;
