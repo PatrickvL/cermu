@@ -23,7 +23,7 @@ extern "C" {
 #ifndef CHIPS_IMPL
     #define CHIPS_IMPL
 #endif
-#include "../src/chip/cpu/fam65xx/fam65xx.h"
+#include "../src/chip/cpu/fam65xx/fam65xx.hpp"
 
 namespace fs = std::filesystem;
 

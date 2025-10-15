@@ -10,16 +10,16 @@ RUNNER_OBJ = $(RUNNER_SRC:.cpp=.o)
 RUNNER_OBJ := $(RUNNER_OBJ:.c=.o)
 
 # Header dependencies - any change to these headers triggers rebuild
-HEADER_DEPS = ../src/chip/cpu/fam65xx/fam65xx.h \
-              ../src/chip/cpu/fam65xx/fam65xx_core.h \
-              ../src/chip/cpu/fam65xx/fam65xx_impl.h \
-              ../src/chip/cpu/fam65xx/fam65xx_tables.h \
-              ../src/chip/cpu/fam65xx/fam65xx_addrmodes.h \
-              ../src/chip/cpu/fam65xx/fam65xx_ops.h \
-              ../src/chip/cpu/fam65xx/fam65xx_ops_part2.h \
-              ../src/chip/cpu/fam65xx/fam65xx_ops_part3.h \
-              ../src/chip/cpu/fam65xx/fam65xx_ops_rmw.h \
-              ../src/chip/cpu/fam65xx/fam65xx_ops_illegal.h \
+HEADER_DEPS = ../src/chip/cpu/fam65xx/fam65xx.hpp \
+              ../src/chip/cpu/fam65xx/fam65xx_core.hpp \
+              ../src/chip/cpu/fam65xx/fam65xx_impl.hpp \
+              ../src/chip/cpu/fam65xx/fam65xx_tables.hpp \
+              ../src/chip/cpu/fam65xx/fam65xx_addrmodes.hpp \
+              ../src/chip/cpu/fam65xx/fam65xx_ops.hpp \
+              ../src/chip/cpu/fam65xx/fam65xx_ops_part2.hpp \
+              ../src/chip/cpu/fam65xx/fam65xx_ops_part3.hpp \
+              ../src/chip/cpu/fam65xx/fam65xx_ops_rmw.hpp \
+              ../src/chip/cpu/fam65xx/fam65xx_ops_illegal.hpp \
               json_parser.h
 
 # Target executable
@@ -38,7 +38,7 @@ $(TARGET): $(RUNNER_OBJ) $(HEADER_DEPS)
 
 # Compile C files - depend on headers
 %.o: %.c $(HEADER_DEPS)
-	gcc $(CFLAGS) $(INCLUDES) -c $< -o $@
+	gcc -std=c99 -O2 -Wall -Wextra $(INCLUDES) -c $< -o $@
 
 # Clean build artifacts
 clean:

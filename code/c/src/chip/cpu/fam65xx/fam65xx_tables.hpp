@@ -1,6 +1,6 @@
 #pragma once
 /*
- * fam65xx_tables.h - MOS 65xx Family CPU Lookup Tables and Enums
+ * fam65xx_tables.hpp - MOS 65xx Family CPU Lookup Tables and Enums (C++ Version)
  *
  * This file contains:
  * - Addressing mode and operation enums
@@ -12,7 +12,7 @@
  * The lookup tables reference the actual function implementations directly.
  */
 
-#include "fam65xx_core.h"
+#include "fam65xx_core.hpp"
 
 #ifdef __cplusplus
 extern "C" {
@@ -81,12 +81,12 @@ typedef enum {
 #ifdef CHIPS_IMPL
 
 // Include all function implementations to eliminate forward declarations
-#include "fam65xx_addrmodes.h"
-#include "fam65xx_ops.h"
-#include "fam65xx_ops_part2.h"
-#include "fam65xx_ops_part3.h"
-#include "fam65xx_ops_rmw.h"
-#include "fam65xx_ops_illegal.h"
+#include "fam65xx_addrmodes.hpp"
+#include "fam65xx_ops.hpp"
+#include "fam65xx_ops_part2.hpp"
+#include "fam65xx_ops_part3.hpp"
+#include "fam65xx_ops_rmw.hpp"
+#include "fam65xx_ops_illegal.hpp"
 
 /* Addressing mode table - function pointers ordered by enum */
 static const cycle_fn_t fam65xx_addr_mode_table[AM_COUNT] = {

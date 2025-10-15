@@ -1,6 +1,6 @@
 #pragma once
 /*
- * fam65xx_illegal_operations.h - MOS 65xx Family Illegal/Undocumented Operations
+ * fam65xx_illegal_operations.hpp - MOS 65xx Family Illegal/Undocumented Operations (C++ Version)
  * 
  * This file contains all illegal/undocumented opcodes that exist on the 6502.
  * These are not officially supported instructions but have predictable behavior
@@ -37,7 +37,7 @@
  * The illegal_store flag in opcode_info_t indicates when this quirk should activate.
  */
 
-#include "fam65xx_core.h"
+#include "fam65xx_core.hpp"
 
 #ifdef __cplusplus
 extern "C" {

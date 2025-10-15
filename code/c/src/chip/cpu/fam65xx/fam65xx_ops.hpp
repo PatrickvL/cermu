@@ -1,6 +1,6 @@
 #pragma once
 /*
- * fam65xx_operations.h - MOS 65xx Family CPU Official Operation Handlers
+ * fam65xx_operations.hpp - MOS 65xx Family CPU Official Operation Handlers (C++ Version)
  * 
  * This file contains all official (documented) CPU operation handlers.
  * These functions perform the actual CPU operations after addressing
@@ -25,7 +25,7 @@
  * Illegal operations are in a separate file (fam65xx_illegal.h).
  */
 
-#include "fam65xx_core.h"
+#include "fam65xx_core.hpp"
 
 #ifdef __cplusplus
 extern "C" {

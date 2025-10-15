@@ -1,6 +1,6 @@
 #pragma once
 /*
- * fam65xx_operations_part2.h - MOS 65xx Family CPU Operations (Part 2)
+ * fam65xx_operations_part2.hpp - MOS 65xx Family CPU Operations (Part 2) (C++ Version)
  * 
  * This file contains the remaining official CPU operations:
  * - Control Flow Operations (BRK, JMP, JSR, RTI, RTS)
@@ -13,7 +13,7 @@
  * - Transfer Operations (TAX, TAY, TSX, TXA, TXS, TYA)
  */
 
-#include "fam65xx_core.h"
+#include "fam65xx_core.hpp"
 
 #ifdef __cplusplus
 extern "C" {
