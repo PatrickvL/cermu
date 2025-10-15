@@ -577,14 +577,45 @@ private:
             state_match = false;
         }
         
-        // Additional register checks (abbreviated for space, but include all original checks)
-        if (harness->get_sp() != test->final.s ||
-            harness->get_a() != test->final.a ||
-            harness->get_x() != test->final.x ||
-            harness->get_y() != test->final.y ||
-            harness->get_status() != test->final.p) {
+        // Additional register checks with detailed failure reporting
+        if (harness->get_sp() != test->final.s) {
+            if (!quiet_mode) {
+                output << "FAIL " << test->name << ": SP - expected 0x" << std::hex
+                       << (int)test->final.s << ", got 0x" << (int)harness->get_sp() << std::dec << std::endl;
+            }
             state_match = false;
-            // Detailed failure reporting would go here
+        }
+        
+        if (harness->get_a() != test->final.a) {
+            if (!quiet_mode) {
+                output << "FAIL " << test->name << ": A - expected 0x" << std::hex
+                       << (int)test->final.a << ", got 0x" << (int)harness->get_a() << std::dec << std::endl;
+            }
+            state_match = false;
+        }
+        
+        if (harness->get_x() != test->final.x) {
+            if (!quiet_mode) {
+                output << "FAIL " << test->name << ": X - expected 0x" << std::hex
+                       << (int)test->final.x << ", got 0x" << (int)harness->get_x() << std::dec << std::endl;
+            }
+            state_match = false;
+        }
+        
+        if (harness->get_y() != test->final.y) {
+            if (!quiet_mode) {
+                output << "FAIL " << test->name << ": Y - expected 0x" << std::hex
+                       << (int)test->final.y << ", got 0x" << (int)harness->get_y() << std::dec << std::endl;
+            }
+            state_match = false;
+        }
+        
+        if (harness->get_status() != test->final.p) {
+            if (!quiet_mode) {
+                output << "FAIL " << test->name << ": P - expected 0x" << std::hex
+                       << (int)test->final.p << ", got 0x" << (int)harness->get_status() << std::dec << std::endl;
+            }
+            state_match = false;
         }
         
         // Memory state comparison
