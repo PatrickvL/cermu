@@ -18,7 +18,7 @@
 extern "C" {
 #endif
 
-#ifdef CHIPS_IMPL
+#ifdef AIEMUC_IMPL
 
 // Forward declaration for BRK handler
 static bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins);
@@ -305,7 +305,7 @@ bus_state_t fam65xx_bootstrap(fam65xx_t* cpu, bus_state_t pins) {
 }
 
 
-#endif /* CHIPS_IMPL */
+#endif /* AIEMUC_IMPL */
 
 #ifdef __cplusplus
 }

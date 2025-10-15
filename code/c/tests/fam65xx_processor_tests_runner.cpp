@@ -20,8 +20,8 @@ extern "C" {
 #include "json_parser.h"
 }
 
-#ifndef CHIPS_IMPL
-    #define CHIPS_IMPL
+#ifndef AIEMUC_IMPL
+    #define AIEMUC_IMPL
 #endif
 
 // Include processor-specific headers

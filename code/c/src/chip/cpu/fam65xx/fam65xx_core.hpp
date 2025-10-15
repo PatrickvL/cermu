@@ -279,7 +279,7 @@ static inline void fam65xx_update_nz_flags(fam65xx_t* cpu, uint8_t value) {
 // HELPER FUNCTIONS (formerly in fam65xx_helpers.hpp)
 // ============================================================================
 
-#ifdef CHIPS_IMPL
+#ifdef AIEMUC_IMPL
 
 // Centralized PHI2 read handler - handles memory reads during PHI2 phase
 static inline bus_state_t fam65xx_phi2_read(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg) {
@@ -328,14 +328,14 @@ static inline void fam65xx_transition_to_fetch(fam65xx_t* cpu) {
     cpu->current_handler = fam65xx_opcode_fetch;
 }
 
-#endif // CHIPS_IMPL
+#endif // AIEMUC_IMPL
 
 // ============================================================================
 // API Function Declarations
 // ============================================================================
 
 /* Forward declarations only for functions referenced in core.h itself */
-#ifdef CHIPS_IMPL
+#ifdef AIEMUC_IMPL
 /* These functions are now implemented locally where needed */
 #endif
 

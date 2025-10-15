@@ -96,7 +96,7 @@ typedef enum {
     OP_COUNT
 } Operation;
 
-#ifdef CHIPS_IMPL
+#ifdef AIEMUC_IMPL
 
 // Include all function implementations to eliminate forward declarations
 #include "fam65xx_addrmodes.hpp"
@@ -227,7 +227,7 @@ static void fam65xx_transition_to_operation(fam65xx_t* cpu) {
     cpu->current_handler = fam65xx_op_handlers[cpu->opcode_entry.op_index];
 }
 
-#endif /* CHIPS_IMPL */
+#endif /* AIEMUC_IMPL */
 
 #ifdef __cplusplus
 } // extern "C"
@@ -688,7 +688,7 @@ struct ProcessorOpcodeTableGenerator {
 
 // NOTE: Convenience template functions moved to fam65xx_variants.hpp to avoid redefinition
 
-#ifdef CHIPS_IMPL
+#ifdef AIEMUC_IMPL
 
 // ============================================================================
 // PROCESSOR-SPECIFIC INSTRUCTION SET QUERIES
@@ -777,7 +777,7 @@ struct ProcessorBehavior<WDC65C02Tag> {
     static inline bool has_jmp_indirect_bug() { return false; }
 };
 
-#endif /* CHIPS_IMPL */
+#endif /* AIEMUC_IMPL */
 
 } // namespace fam65xx_variants
 

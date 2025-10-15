@@ -19,7 +19,7 @@
 extern "C" {
 #endif
 
-#ifdef CHIPS_IMPL
+#ifdef AIEMUC_IMPL
 
 // ============================================================================
 // 65C02 ENHANCED OPERATIONS
@@ -273,7 +273,7 @@ DEFINE_BBS_OP(5)
 DEFINE_BBS_OP(6)
 DEFINE_BBS_OP(7)
 
-#endif /* CHIPS_IMPL */
+#endif /* AIEMUC_IMPL */
 
 #ifdef __cplusplus
 }

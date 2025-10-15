@@ -19,7 +19,7 @@
 extern "C" {
 #endif
 
-#ifdef CHIPS_IMPL
+#ifdef AIEMUC_IMPL
 
 /* Helper function to get interrupt vector address based on BRK flags */
 static inline uint16_t fam65xx_get_vector_addr(fam65xx_t* cpu) {
@@ -348,7 +348,7 @@ static bus_state_t op_sei(fam65xx_t* cpu, bus_state_t pins) {
     return part2_flag_operation_with_dummy_cycle(cpu, pins, FLAG_I, true);
 }
 
-#endif /* CHIPS_IMPL */
+#endif /* AIEMUC_IMPL */
 
 #ifdef __cplusplus
 }

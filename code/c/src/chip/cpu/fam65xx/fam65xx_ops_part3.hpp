@@ -17,7 +17,7 @@
 extern "C" {
 #endif
 
-#ifdef CHIPS_IMPL
+#ifdef AIEMUC_IMPL
 
 /* ============================================================================
  * HELPER FUNCTIONS FOR CODE DEDUPLICATION
@@ -391,7 +391,7 @@ static bus_state_t op_tya(fam65xx_t* cpu, bus_state_t pins) {
     return transfer_with_flags_helper(cpu, pins, CPU_Y(cpu), &CPU_A(cpu));
 }
 
-#endif /* CHIPS_IMPL */
+#endif /* AIEMUC_IMPL */
 
 #ifdef __cplusplus
 }

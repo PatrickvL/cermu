@@ -43,7 +43,7 @@
 extern "C" {
 #endif
 
-#ifdef CHIPS_IMPL
+#ifdef AIEMUC_IMPL
 
 /* ============================================================================
  * HELPER FUNCTIONS FOR CODE DEDUPLICATION
@@ -65,22 +65,6 @@ static inline bus_state_t illegal_read_operand_immediate_or_memory(fam65xx_t* cp
     return pins;
 }
 
-/* Helper for illegal store operations with address corruption */
-static inline bus_state_t illegal_store_with_corruption_helper(fam65xx_t* cpu, bus_state_t pins, uint8_t data_value) {
-    /* Apply address corruption on page cross (DL != ABH means page crossed) */
-    if (CPU_DL(cpu) != CPU_ABH(cpu)) {
-        CPU_ABH(cpu) = data_value;
-    }
-    
-    CPU_DL(cpu) = data_value;
-    
-    /* PHI2: Write to (possibly corrupted) address */
-    pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    fam65xx_transition_to_fetch(cpu);
-    return pins;
-}
 
 /* ============================================================================
  * LOAD/STORE COMBINATION OPERATIONS
@@ -345,9 +329,33 @@ static bus_state_t op_las(fam65xx_t* cpu, bus_state_t pins) {
  */
 /* SHA (AHX, AXA) - Store A & X & (H+1) with address corruption on page cross */
 static bus_state_t op_sha(fam65xx_t* cpu, bus_state_t pins) {
-    /* Calculate value: A & X & (intermediate_high + 1) */
-    uint8_t data_value = CPU_A(cpu) & CPU_X(cpu) & (CPU_DL(cpu) + 1);
-    return illegal_store_with_corruption_helper(cpu, pins, data_value);
+    /* For SHA, the intermediate high byte was the high byte before adding the index.
+     * Since illegal stores skip the penalty cycle, we need to reconstruct this.
+     * The current AB contains the final effective address.
+     * The original high byte can be calculated by subtracting the index from the effective address */
+    
+    uint16_t effective = CPU_AB(cpu);
+    uint16_t base = effective - CPU_Y(cpu);  /* Reconstruct base address by subtracting Y */
+    uint8_t original_high = (base >> 8) & 0xFF;  /* Get original high byte */
+    
+    /* Calculate value: A & X & (original_high + 1) */
+    uint8_t data_value = CPU_A(cpu) & CPU_X(cpu) & (original_high + 1);
+    
+    /* Apply address corruption on page cross */
+    if (fam65xx_page_crossed(base, effective)) {
+        CPU_ABH(cpu) = data_value;  /* Corrupt high byte with the calculated value */
+    }
+    
+    /* Set data to write */
+    CPU_DL(cpu) = data_value;
+    
+    /* PHI2: Write to (possibly corrupted) address */
+    pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
+    if (!FAM65XX_GET_RDY(pins)) return pins;
+    
+    /* PHI1: Complete instruction */
+    fam65xx_transition_to_fetch(cpu);
+    return pins;
 }
 
 /* SHS (TAS) - Store A & X & (H+1), Set S to A & X */
@@ -358,20 +366,20 @@ static bus_state_t op_shs(fam65xx_t* cpu, bus_state_t pins) {
     /* Calculate value: (A & X) & (intermediate_high + 1) */
     uint8_t data_value = ax & (CPU_DL(cpu) + 1);
     
-    /* Apply address corruption on page cross */
+    /* Apply address corruption on page cross (DL != ABH means page crossed) */
     if (CPU_DL(cpu) != CPU_ABH(cpu)) {
         CPU_ABH(cpu) = data_value;
     }
     
+    /* Set data to write */
     CPU_DL(cpu) = data_value;
     
     /* PHI2: Write to (possibly corrupted) address */
     pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
-    /* PHI1: Set stack pointer to A & X (unique to SHS) */
+    /* PHI1: Set stack pointer to A & X (unique to SHS) and complete instruction */
     CPU_S(cpu) = ax;
-    
     fam65xx_transition_to_fetch(cpu);
     return pins;
 }
@@ -380,17 +388,47 @@ static bus_state_t op_shs(fam65xx_t* cpu, bus_state_t pins) {
 static bus_state_t op_shx(fam65xx_t* cpu, bus_state_t pins) {
     /* Calculate value: X & (intermediate_high + 1) */
     uint8_t data_value = CPU_X(cpu) & (CPU_DL(cpu) + 1);
-    return illegal_store_with_corruption_helper(cpu, pins, data_value);
+    
+    /* Apply address corruption on page cross (DL != ABH means page crossed) */
+    if (CPU_DL(cpu) != CPU_ABH(cpu)) {
+        CPU_ABH(cpu) = data_value;
+    }
+    
+    /* Set data to write */
+    CPU_DL(cpu) = data_value;
+    
+    /* PHI2: Write to (possibly corrupted) address */
+    pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
+    if (!FAM65XX_GET_RDY(pins)) return pins;
+    
+    /* PHI1: Complete instruction */
+    fam65xx_transition_to_fetch(cpu);
+    return pins;
 }
 
 /* SHY (SYA, SAY) - Store Y & (H+1) */
 static bus_state_t op_shy(fam65xx_t* cpu, bus_state_t pins) {
     /* Calculate value: Y & (intermediate_high + 1) */
     uint8_t data_value = CPU_Y(cpu) & (CPU_DL(cpu) + 1);
-    return illegal_store_with_corruption_helper(cpu, pins, data_value);
+    
+    /* Apply address corruption on page cross (DL != ABH means page crossed) */
+    if (CPU_DL(cpu) != CPU_ABH(cpu)) {
+        CPU_ABH(cpu) = data_value;
+    }
+    
+    /* Set data to write */
+    CPU_DL(cpu) = data_value;
+    
+    /* PHI2: Write to (possibly corrupted) address */
+    pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
+    if (!FAM65XX_GET_RDY(pins)) return pins;
+    
+    /* PHI1: Complete instruction */
+    fam65xx_transition_to_fetch(cpu);
+    return pins;
 }
 
-#endif /* CHIPS_IMPL */
+#endif /* AIEMUC_IMPL */
 
 #ifdef __cplusplus
 }
