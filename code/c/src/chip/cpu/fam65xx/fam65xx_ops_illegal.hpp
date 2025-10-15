@@ -153,7 +153,7 @@ static bus_state_t op_anc(fam65xx_t* cpu, bus_state_t pins) {
  *
  * ARR is a complex illegal opcode with different behavior in decimal vs binary mode:
  * - Binary mode: A & operand, then ROR with proper flag calculations
- * - Decimal mode: A & operand, then BCD correction (-0x16 if >= 0x50), NO ROR
+ * - Decimal mode: A & operand, then BCD correction, with special behavior
  */
 static bus_state_t op_arr(fam65xx_t* cpu, bus_state_t pins) {
     /* PHI2: Read operand (ARR is immediate mode only) */
@@ -161,26 +161,54 @@ static bus_state_t op_arr(fam65xx_t* cpu, bus_state_t pins) {
     if (!FAM65XX_GET_RDY(pins)) return pins;
     CPU_PC(cpu)++;
     
-    /* PHI1: Perform AND then ROR with hardware-accurate behavior
-     * ARR is complex because it combines AND + ROR but with special flag handling */
+    /* PHI1: Perform AND then mode-dependent processing */
     uint8_t operand = BUS_GET_DATA(pins);
     uint8_t carry_in = (CPU_P(cpu) & FLAG_C) ? 0x80 : 0;
     
     /* Step 1: AND A with operand */
     CPU_A(cpu) &= operand;
     
-    /* Step 2: ROR the result */
-    CPU_A(cpu) = (CPU_A(cpu) >> 1) | carry_in;
-    
-    /* Update N and Z flags normally (preserves other flags like I) */
-    fam65xx_update_nz_flags(cpu, CPU_A(cpu));
-    
-    /* ARR has special C and V flag behavior:
-     * C = bit 6 of result (not the shifted-out bit!)
-     * V = bit 6 XOR bit 5 of result */
-    CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_C | FLAG_V)) |
-                 ((CPU_A(cpu) & 0x40) ? FLAG_C : 0) |
-                 (((CPU_A(cpu) & 0x40) ^ ((CPU_A(cpu) & 0x20) << 1)) ? FLAG_V : 0);
+    if (CPU_P(cpu) & FLAG_D) {
+        /* Decimal mode - special BCD behavior without ROR */
+        uint8_t result = CPU_A(cpu);
+        
+        /* BCD correction logic for ARR in decimal mode */
+        if (result >= 0x50) {
+            result -= 0x50;
+            CPU_P(cpu) |= FLAG_C;
+        } else {
+            CPU_P(cpu) &= ~FLAG_C;
+        }
+        
+        /* Apply BCD nibble adjustments */
+        if ((result & 0x0F) >= 0x0A) {
+            result -= 0x0A;
+        }
+        if (result >= 0x50) {
+            result -= 0x50;
+        }
+        
+        CPU_A(cpu) = result;
+        
+        /* Update flags for decimal mode */
+        fam65xx_update_nz_flags(cpu, CPU_A(cpu));
+        CPU_P(cpu) = (CPU_P(cpu) & ~FLAG_V) |
+                     (((CPU_A(cpu) & 0x40) ^ ((CPU_A(cpu) & 0x20) << 1)) ? FLAG_V : 0);
+    } else {
+        /* Binary mode - standard ROR with special flag behavior */
+        /* Step 2: ROR the result */
+        CPU_A(cpu) = (CPU_A(cpu) >> 1) | carry_in;
+        
+        /* Update N and Z flags normally (preserves other flags like I) */
+        fam65xx_update_nz_flags(cpu, CPU_A(cpu));
+        
+        /* ARR has special C and V flag behavior:
+         * C = bit 6 of result (not the shifted-out bit!)
+         * V = bit 6 XOR bit 5 of result */
+        CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_C | FLAG_V)) |
+                     ((CPU_A(cpu) & 0x40) ? FLAG_C : 0) |
+                     (((CPU_A(cpu) & 0x40) ^ ((CPU_A(cpu) & 0x20) << 1)) ? FLAG_V : 0);
+    }
     
     fam65xx_transition_to_fetch(cpu);
     return pins;
