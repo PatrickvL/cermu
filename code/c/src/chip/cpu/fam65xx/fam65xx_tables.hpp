@@ -249,26 +249,8 @@ using fam65xx_template::WDC65C816Tag;
 // CONSTEXPR TEMPLATE HELPER TO POPULATE THE ONE OPCODE TABLE
 // ============================================================================
 
-// Processor feature detection helpers
-template<typename ProcessorTag>
-constexpr bool processor_has_illegal_opcodes() {
-    return ProcessorTraits<ProcessorTag>::has_illegal_opcodes;
-}
-
-template<typename ProcessorTag>
-constexpr bool processor_has_cmos_enhancements() {
-    return ProcessorTraits<ProcessorTag>::has_cmos_enhancements;
-}
-
-template<typename ProcessorTag>
-constexpr bool processor_has_bit_manipulation() {
-    return ProcessorTraits<ProcessorTag>::has_bit_manipulation;
-}
-
-template<typename ProcessorTag>
-constexpr bool processor_has_16bit_mode() {
-    return ProcessorTraits<ProcessorTag>::has_16bit_mode;
-}
+// Note: Processor feature detection helpers are now defined in fam65xx_templates.hpp
+// to avoid duplicate definitions
 
 // Redefine OP macros for template context
 #define OP_TEMPLATE(am_index, can_skip_page_cross, op_index, rmw_flag) {(am_index), 0, 0, (can_skip_page_cross), (rmw_flag), (op_index)}
