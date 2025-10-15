@@ -4,8 +4,5 @@
 # 
 # This file includes the relevant testing commands required for 
 # testing this directory and lists subdirectories to be tested as well.
-add_test(processor_tests "/home/patrick/Git/aiemu/code/c/tests/processor_tests_runner" "processor_tests/6502/v1/")
-set_tests_properties(processor_tests PROPERTIES  PASS_REGULAR_EXPRESSION "ALL TESTS PASSED" TIMEOUT "300" WORKING_DIRECTORY "/home/patrick/Git/aiemu/code/c/tests" _BACKTRACE_TRIPLES "/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;248;add_test;/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;0;")
-add_test(fam65xx_cpp_klaus_test "/home/patrick/Git/aiemu/code/c/tests/fam65xx_cpp_klaus_test_runner" "--functional")
-set_tests_properties(fam65xx_cpp_klaus_test PROPERTIES  PASS_REGULAR_EXPRESSION "ALL TESTS PASSED" TIMEOUT "300" WORKING_DIRECTORY "/home/patrick/Git/aiemu/code/c/tests/.." _BACKTRACE_TRIPLES "/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;262;add_test;/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;0;")
-subdirs("cpu_build")
+add_test(fam65xx_klaus_test "/home/patrick/Git/aiemu/code/c/tests/fam65xx_klaus_test_runner" "--functional")
+set_tests_properties(fam65xx_klaus_test PROPERTIES  PASS_REGULAR_EXPRESSION "ALL TESTS PASSED" TIMEOUT "300" WORKING_DIRECTORY "/home/patrick/Git/aiemu/code/c/tests/.." _BACKTRACE_TRIPLES "/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;225;add_test;/home/patrick/Git/aiemu/code/c/tests/CMakeLists.txt;0;")

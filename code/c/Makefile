@@ -237,19 +237,6 @@ json_parser/fast:
 .PHONY : json_parser/fast
 
 #=============================================================================
-# Target rules for targets named processor_tests_runner
-
-# Build rule for target.
-processor_tests_runner: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 processor_tests_runner
-.PHONY : processor_tests_runner
-
-# fast build rule for target.
-processor_tests_runner/fast:
-	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/processor_tests_runner.dir/build.make tests/CMakeFiles/processor_tests_runner.dir/build
-.PHONY : processor_tests_runner/fast
-
-#=============================================================================
 # Target rules for targets named fam65xx_klaus_test_runner
 
 # Build rule for target.
@@ -289,32 +276,6 @@ fam65xx_processor_tests_runner/fast:
 .PHONY : fam65xx_processor_tests_runner/fast
 
 #=============================================================================
-# Target rules for targets named regenerate_decoder
-
-# Build rule for target.
-regenerate_decoder: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 regenerate_decoder
-.PHONY : regenerate_decoder
-
-# fast build rule for target.
-regenerate_decoder/fast:
-	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/regenerate_decoder.dir/build.make tests/CMakeFiles/regenerate_decoder.dir/build
-.PHONY : regenerate_decoder/fast
-
-#=============================================================================
-# Target rules for targets named unified_processor_test
-
-# Build rule for target.
-unified_processor_test: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 unified_processor_test
-.PHONY : unified_processor_test
-
-# fast build rule for target.
-unified_processor_test/fast:
-	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/unified_processor_test.dir/build.make tests/CMakeFiles/unified_processor_test.dir/build
-.PHONY : unified_processor_test/fast
-
-#=============================================================================
 # Target rules for targets named unified_processor_test_simple
 
 # Build rule for target.
@@ -326,45 +287,6 @@ unified_processor_test_simple: cmake_check_build_system
 unified_processor_test_simple/fast:
 	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/unified_processor_test_simple.dir/build.make tests/CMakeFiles/unified_processor_test_simple.dir/build
 .PHONY : unified_processor_test_simple/fast
-
-#=============================================================================
-# Target rules for targets named nmi_edge_detection_test
-
-# Build rule for target.
-nmi_edge_detection_test: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 nmi_edge_detection_test
-.PHONY : nmi_edge_detection_test
-
-# fast build rule for target.
-nmi_edge_detection_test/fast:
-	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/nmi_edge_detection_test.dir/build.make tests/CMakeFiles/nmi_edge_detection_test.dir/build
-.PHONY : nmi_edge_detection_test/fast
-
-#=============================================================================
-# Target rules for targets named irq_level_handling_test
-
-# Build rule for target.
-irq_level_handling_test: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 irq_level_handling_test
-.PHONY : irq_level_handling_test
-
-# fast build rule for target.
-irq_level_handling_test/fast:
-	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/irq_level_handling_test.dir/build.make tests/CMakeFiles/irq_level_handling_test.dir/build
-.PHONY : irq_level_handling_test/fast
-
-#=============================================================================
-# Target rules for targets named brk_flag_setting_test
-
-# Build rule for target.
-brk_flag_setting_test: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 brk_flag_setting_test
-.PHONY : brk_flag_setting_test
-
-# fast build rule for target.
-brk_flag_setting_test/fast:
-	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/brk_flag_setting_test.dir/build.make tests/CMakeFiles/brk_flag_setting_test.dir/build
-.PHONY : brk_flag_setting_test/fast
 
 #=============================================================================
 # Target rules for targets named run_processor_tests
@@ -392,29 +314,29 @@ run_all_tests/fast:
 	$(MAKE) $(MAKESILENT) -f tests/CMakeFiles/run_all_tests.dir/build.make tests/CMakeFiles/run_all_tests.dir/build
 .PHONY : run_all_tests/fast
 
-src/chip/cpu/fam65xx/fam65xx_gui.o: src/chip/cpu/fam65xx/fam65xx_gui.cpp.o
+src/chip/cpu/fam65xx/fam65xx_gui.o: src/chip/cpu/fam65xx/fam65xx_gui.c.o
 .PHONY : src/chip/cpu/fam65xx/fam65xx_gui.o
 
 # target to build an object file
-src/chip/cpu/fam65xx/fam65xx_gui.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/fam65xx/fam65xx_gui.cpp.o
-.PHONY : src/chip/cpu/fam65xx/fam65xx_gui.cpp.o
+src/chip/cpu/fam65xx/fam65xx_gui.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/fam65xx/fam65xx_gui.c.o
+.PHONY : src/chip/cpu/fam65xx/fam65xx_gui.c.o
 
-src/chip/cpu/fam65xx/fam65xx_gui.i: src/chip/cpu/fam65xx/fam65xx_gui.cpp.i
+src/chip/cpu/fam65xx/fam65xx_gui.i: src/chip/cpu/fam65xx/fam65xx_gui.c.i
 .PHONY : src/chip/cpu/fam65xx/fam65xx_gui.i
 
 # target to preprocess a source file
-src/chip/cpu/fam65xx/fam65xx_gui.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/fam65xx/fam65xx_gui.cpp.i
-.PHONY : src/chip/cpu/fam65xx/fam65xx_gui.cpp.i
+src/chip/cpu/fam65xx/fam65xx_gui.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/fam65xx/fam65xx_gui.c.i
+.PHONY : src/chip/cpu/fam65xx/fam65xx_gui.c.i
 
-src/chip/cpu/fam65xx/fam65xx_gui.s: src/chip/cpu/fam65xx/fam65xx_gui.cpp.s
+src/chip/cpu/fam65xx/fam65xx_gui.s: src/chip/cpu/fam65xx/fam65xx_gui.c.s
 .PHONY : src/chip/cpu/fam65xx/fam65xx_gui.s
 
 # target to generate assembly for a file
-src/chip/cpu/fam65xx/fam65xx_gui.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/fam65xx/fam65xx_gui.cpp.s
-.PHONY : src/chip/cpu/fam65xx/fam65xx_gui.cpp.s
+src/chip/cpu/fam65xx/fam65xx_gui.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/c64emu_gui.dir/build.make CMakeFiles/c64emu_gui.dir/src/chip/cpu/fam65xx/fam65xx_gui.c.s
+.PHONY : src/chip/cpu/fam65xx/fam65xx_gui.c.s
 
 src/chip/cpu/mos6510/mos6510.o: src/chip/cpu/mos6510/mos6510.cpp.o
 .PHONY : src/chip/cpu/mos6510/mos6510.o
@@ -1059,22 +981,16 @@ help:
 	@echo "... list_install_components"
 	@echo "... rebuild_cache"
 	@echo "... test"
-	@echo "... regenerate_decoder"
 	@echo "... run_all_tests"
 	@echo "... run_processor_tests"
-	@echo "... brk_flag_setting_test"
 	@echo "... c64emu"
 	@echo "... c64emu_gui"
 	@echo "... cimgui"
 	@echo "... fam65xx_klaus_test_runner"
 	@echo "... fam65xx_lorenz_test_harness"
 	@echo "... fam65xx_processor_tests_runner"
-	@echo "... irq_level_handling_test"
 	@echo "... json_parser"
 	@echo "... mos6510_lib"
-	@echo "... nmi_edge_detection_test"
-	@echo "... processor_tests_runner"
-	@echo "... unified_processor_test"
 	@echo "... unified_processor_test_simple"
 	@echo "... src/chip/cpu/fam65xx/fam65xx_gui.o"
 	@echo "... src/chip/cpu/fam65xx/fam65xx_gui.i"

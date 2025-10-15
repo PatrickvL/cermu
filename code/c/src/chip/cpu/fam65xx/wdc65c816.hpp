@@ -17,14 +17,29 @@
  * - Block move instructions (MVN, MVP)
  */
 
-#include "fam65xx.hpp"
+#include "fam65xx_variants.hpp"
+
+// Include tables for template-based opcode generation
+#ifndef AIEMUC_IMPL
+    #define AIEMUC_IMPL
+#endif
+
+// Include core definitions first
+#include "fam65xx_core.hpp"
+#include "fam65xx_tables.hpp"
+
+// Define internal processor-specific opcode table for WDC 65C816
+DEFINE_PROCESSOR_OPCODE_TABLE_INTERNAL(fam65xx_variants::WDC65C816Tag)
+
+// Include the implementation after the table definitions
+#include "fam65xx_impl.hpp"
 
 #ifdef __cplusplus
 
 namespace fam65xx_cpu {
 
 // WDC 65C816 CPU class - 16-bit enhanced processor
-using WDC65C816 = fam65xx_variants::fam65xx_variants::CPU<fam65xx_variants::WDC65C816Tag>;
+using WDC65C816 = fam65xx_variants::CPU<fam65xx_variants::WDC65C816Tag>;
 
 // 65C816-specific registers and flags
 enum WDC65C816Registers {
