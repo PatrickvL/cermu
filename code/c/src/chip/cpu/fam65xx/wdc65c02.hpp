@@ -18,8 +18,8 @@
 #include "fam65xx_variants.hpp"
 
 // Include tables for template-based opcode generation
-#ifndef CHIPS_IMPL
-#define CHIPS_IMPL
+#ifndef AIEMUC_IMPL
+    #define AIEMUC_IMPL
 #endif
 
 // Include core definitions first

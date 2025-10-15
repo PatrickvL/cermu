@@ -27,7 +27,7 @@
 extern "C" {
 #endif
 
-#ifdef CHIPS_IMPL
+#ifdef AIEMUC_IMPL
 
 // Forward declarations for internal functions
 static bus_state_t fam65xx_phi2_read(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg);
@@ -578,7 +578,7 @@ static bus_state_t am_sri(fam65xx_t* cpu, bus_state_t pins) {
     return pins;
 }
 
-#endif /* CHIPS_IMPL */
+#endif /* AIEMUC_IMPL */
 
 #ifdef __cplusplus
 }

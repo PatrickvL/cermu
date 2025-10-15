@@ -31,7 +31,7 @@
 extern "C" {
 #endif
 
-#ifdef CHIPS_IMPL
+#ifdef AIEMUC_IMPL
 
 // Forward declarations for internal functions
 static bus_state_t fam65xx_phi2_read(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg);
@@ -104,10 +104,10 @@ static bus_state_t op_adc(fam65xx_t* cpu, bus_state_t pins) {
     if (CPU_P(cpu) & FLAG_D) {
         /* BCD (Decimal) mode - 6502 hardware behavior */
         
-        /* Calculate binary result first for flag computation */
+        /* Calculate binary result first for N, V, Z flag computation */
         uint16_t binary_result = a_old + operand + carry_in;
         
-        /* 6502 BCD addition algorithm */
+        /* 6502 BCD addition algorithm with proper carry detection */
         uint8_t al = (a_old & 0x0F) + (operand & 0x0F) + carry_in;
         uint8_t ah = (a_old >> 4) + (operand >> 4);
         
@@ -117,17 +117,20 @@ static bus_state_t op_adc(fam65xx_t* cpu, bus_state_t pins) {
             ah++;
         }
         
-        /* Set flags based on binary result BEFORE BCD adjustment */
-        CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                     (binary_result & 0x80 ? FLAG_N : 0) |                       /* N = bit 7 of binary result */
-                     ((binary_result & 0xFF) == 0 ? FLAG_Z : 0) |                /* Z = binary result is zero */
-                     (binary_result > 0xFF ? FLAG_C : 0) |                       /* C = carry out from binary result */
-                     (((a_old ^ binary_result) & (operand ^ binary_result) & 0x80) ? FLAG_V : 0); /* V = signed overflow on binary result */
+        /* Determine BCD carry - occurs when high nibble > 9 after adjustment */
+        bool bcd_carry = (ah > 9);
         
         /* Adjust high nibble for BCD */
         if (ah > 9) {
             ah += 6;
         }
+        
+        /* Set flags: N, V, Z based on binary result, C based on BCD carry */
+        CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+                     (binary_result & 0x80 ? FLAG_N : 0) |                       /* N = bit 7 of binary result */
+                     ((binary_result & 0xFF) == 0 ? FLAG_Z : 0) |                /* Z = binary result is zero */
+                     (bcd_carry ? FLAG_C : 0) |                                  /* C = carry out from BCD calculation */
+                     (((a_old ^ binary_result) & (operand ^ binary_result) & 0x80) ? FLAG_V : 0); /* V = signed overflow on binary result */
         
         /* Assemble BCD result */
         CPU_A(cpu) = ((ah & 0x0F) << 4) | (al & 0x0F);
@@ -420,7 +423,7 @@ static bus_state_t op_cpy(fam65xx_t* cpu, bus_state_t pins) {
 }
 
 
-#endif /* CHIPS_IMPL */
+#endif /* AIEMUC_IMPL */
 
 #ifdef __cplusplus
 }
