@@ -292,6 +292,9 @@ static inline bus_state_t fam65xx_phi2_read(fam65xx_t* cpu, bus_state_t pins, re
         address = BUS_GET_ADDR(pins);
     }
 
+    /* Set R/W̅ bit to indicate READ (1 = Read, 0 = Write) */
+    pins |= FAM65XX_RW;
+
     /* Always perform memory read to service VIC-II even when CPU halted */
     uint8_t current_bus_data = BUS_GET_DATA(pins);
     uint8_t data = cpu->mem_read(cpu->mem_user_data, address, current_bus_data);
@@ -308,6 +311,10 @@ static inline bus_state_t fam65xx_phi2_write(fam65xx_t* cpu, bus_state_t pins, r
     pins = BUS_SET_ADDR(pins, address);
     uint8_t data_byte = cpu->reg8[data_reg];
     pins = BUS_SET_DATA(pins, data_byte);
+    
+    /* CRITICAL FIX: Clear R/W̅ bit to indicate WRITE (0 = Write, 1 = Read) */
+    pins &= ~FAM65XX_RW;
+    
     cpu->mem_write(cpu->mem_user_data, address, data_byte);
     
     return pins;
