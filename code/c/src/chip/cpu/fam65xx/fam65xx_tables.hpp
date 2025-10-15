@@ -183,21 +183,21 @@ static const cycle_fn_t fam65xx_op_handlers[OP_COUNT] = {
     op_jam, // OP_JAM
     // 65C02 enhancements
     op_bra, // OP_BRA
-    op_nop, // OP_STZ - placeholder
-    op_nop, // OP_TRB - placeholder
-    op_nop, // OP_TSB - placeholder
-    op_nop, // OP_PHX - placeholder
-    op_nop, // OP_PHY - placeholder
-    op_nop, // OP_PLX - placeholder
-    op_nop, // OP_PLY - placeholder
-    op_nop, // OP_WAI - placeholder
-    op_nop, // OP_STP - placeholder
-    // Rockwell 65C02 bit manipulation
+    op_nop, // OP_STZ - TODO: implement
+    op_nop, // OP_TRB - TODO: implement
+    op_nop, // OP_TSB - TODO: implement
+    op_nop, // OP_PHX - TODO: implement
+    op_nop, // OP_PHY - TODO: implement
+    op_nop, // OP_PLX - TODO: implement
+    op_nop, // OP_PLY - TODO: implement
+    op_nop, // OP_WAI - TODO: implement
+    op_nop, // OP_STP - TODO: implement
+    // Rockwell 65C02 bit manipulation - TODO: implement all
     op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, // OP_RMB0-7
     op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, // OP_SMB0-7
     op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, // OP_BBR0-7
     op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, // OP_BBS0-7
-    // 65C816 16-bit operations
+    // 65C816 16-bit operations - TODO: implement all
     op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, // OP_REP-OP_WDM
     op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, // OP_PEA-OP_PLD
     op_nop, op_nop, op_nop, op_nop, op_nop, // OP_RTL-OP_MVP
