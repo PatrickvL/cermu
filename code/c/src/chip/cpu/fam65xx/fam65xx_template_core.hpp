@@ -18,6 +18,7 @@
 #include "fam65xx_templates.hpp"
 #include "fam65xx_tables.hpp"
 #include <array>
+#include <cstring>
 
 namespace fam65xx_template {
 
@@ -87,121 +88,119 @@ template<typename ProcessorTag>
 constexpr std::array<cycle_fn_t, OP_COUNT> generate_op_table() {
     std::array<cycle_fn_t, OP_COUNT> table{};
     
-    // Standard operations (all processors) - forward declared from fam65xx_ops.hpp
-    extern "C" {
-        // Load/Store operations
-        bus_state_t op_lda(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_ldx(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_ldy(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_sta(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_stx(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_sty(fam65xx_t* cpu, bus_state_t pins);
-        
-        // Arithmetic
-        bus_state_t op_adc(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_sbc(fam65xx_t* cpu, bus_state_t pins);
-        
-        // Logic
-        bus_state_t op_and(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_ora(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_eor(fam65xx_t* cpu, bus_state_t pins);
-        
-        // Compare
-        bus_state_t op_cmp(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_cpx(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_cpy(fam65xx_t* cpu, bus_state_t pins);
-        
-        // Shift/rotate
-        bus_state_t op_asl(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_lsr(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_rol(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_ror(fam65xx_t* cpu, bus_state_t pins);
-        
-        // Increment/decrement
-        bus_state_t op_inc(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_dec(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_inx(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_iny(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_dex(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_dey(fam65xx_t* cpu, bus_state_t pins);
-        
-        // Transfer
-        bus_state_t op_tax(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_tay(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_txa(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_tya(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_tsx(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_txs(fam65xx_t* cpu, bus_state_t pins);
-        
-        // Stack
-        bus_state_t op_pha(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_php(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_pla(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_plp(fam65xx_t* cpu, bus_state_t pins);
-        
-        // Branch
-        bus_state_t op_bcc(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_bcs(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_beq(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_bne(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_bmi(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_bpl(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_bvc(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_bvs(fam65xx_t* cpu, bus_state_t pins);
-        
-        // Flag
-        bus_state_t op_clc(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_sec(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_cli(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_sei(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_cld(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_sed(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_clv(fam65xx_t* cpu, bus_state_t pins);
-        
-        // Control
-        bus_state_t op_jmp(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_jsr(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_rts(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_rti(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins);
-        
-        // Other
-        bus_state_t op_bit(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_nop(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_jam(fam65xx_t* cpu, bus_state_t pins);
-        
-        // 65C02 enhanced operations
-        bus_state_t op_bra(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_stz(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_trb(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_tsb(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_phx(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_phy(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_plx(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_ply(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_wai(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_stp(fam65xx_t* cpu, bus_state_t pins);
-        
-        // Illegal operations
-        bus_state_t op_lax(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_sax(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_dcp(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_isc(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_slo(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_rla(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_sre(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_rra(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_anc(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_asr(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_arr(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_sbx(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_sha(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_shs(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_shx(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_shy(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_las(fam65xx_t* cpu, bus_state_t pins);
-        bus_state_t op_xaa(fam65xx_t* cpu, bus_state_t pins);
-    }
+    // Forward declarations for operations - will be linked from other files
+    // Load/Store operations
+    extern bus_state_t op_lda(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_ldx(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_ldy(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_sta(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_stx(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_sty(fam65xx_t* cpu, bus_state_t pins);
+    
+    // Arithmetic
+    extern bus_state_t op_adc(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_sbc(fam65xx_t* cpu, bus_state_t pins);
+    
+    // Logic
+    extern bus_state_t op_and(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_ora(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_eor(fam65xx_t* cpu, bus_state_t pins);
+    
+    // Compare
+    extern bus_state_t op_cmp(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_cpx(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_cpy(fam65xx_t* cpu, bus_state_t pins);
+    
+    // Shift/rotate
+    extern bus_state_t op_asl(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_lsr(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_rol(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_ror(fam65xx_t* cpu, bus_state_t pins);
+    
+    // Increment/decrement
+    extern bus_state_t op_inc(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_dec(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_inx(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_iny(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_dex(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_dey(fam65xx_t* cpu, bus_state_t pins);
+    
+    // Transfer
+    extern bus_state_t op_tax(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_tay(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_txa(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_tya(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_tsx(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_txs(fam65xx_t* cpu, bus_state_t pins);
+    
+    // Stack
+    extern bus_state_t op_pha(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_php(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_pla(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_plp(fam65xx_t* cpu, bus_state_t pins);
+    
+    // Branch
+    extern bus_state_t op_bcc(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_bcs(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_beq(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_bne(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_bmi(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_bpl(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_bvc(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_bvs(fam65xx_t* cpu, bus_state_t pins);
+    
+    // Flag
+    extern bus_state_t op_clc(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_sec(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_cli(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_sei(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_cld(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_sed(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_clv(fam65xx_t* cpu, bus_state_t pins);
+    
+    // Control
+    extern bus_state_t op_jmp(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_jsr(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_rts(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_rti(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins);
+    
+    // Other
+    extern bus_state_t op_bit(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_nop(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_jam(fam65xx_t* cpu, bus_state_t pins);
+    
+    // 65C02 enhanced operations
+    extern bus_state_t op_bra(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_stz(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_trb(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_tsb(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_phx(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_phy(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_plx(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_ply(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_wai(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_stp(fam65xx_t* cpu, bus_state_t pins);
+    
+    // Illegal operations
+    extern bus_state_t op_lax(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_sax(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_dcp(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_isc(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_slo(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_rla(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_sre(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_rra(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_anc(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_asr(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_arr(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_sbx(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_sha(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_shs(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_shx(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_shy(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_las(fam65xx_t* cpu, bus_state_t pins);
+    extern bus_state_t op_xaa(fam65xx_t* cpu, bus_state_t pins);
     
     // Populate standard operations
     table[OP_LDA] = op_lda; table[OP_LDX] = op_ldx; table[OP_LDY] = op_ldy;
@@ -457,7 +456,7 @@ public:
     // Constructor
     CPU_Core() {
         // Initialize CPU state
-        memset(&cpu_state, 0, sizeof(cpu_state));
+        std::memset(&cpu_state, 0, sizeof(cpu_state));
         
         // Set processor-specific defaults
         if constexpr (has_io_port) {

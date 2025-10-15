@@ -14,6 +14,7 @@
  */
 
 #include "fam65xx_core.hpp"
+#include "fam65xx_template_helpers.hpp"
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,89 +26,102 @@ extern "C" {
 // 65C02 ENHANCED OPERATIONS
 // ============================================================================
 
+// Forward declarations for missing functions
+static void fam65xx_transition_to_fetch(fam65xx_t* cpu);
+static bus_state_t fam65xx_phi2_read(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg);
+static bus_state_t fam65xx_phi2_write(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg, reg8_t data_reg);
+
+// Helper macros for RDY checking and fetch transition
+#define FAM65XX_RDY_CHECK(pins) FAM65XX_GET_RDY(pins)
+#define FETCH_NEXT_OP(cpu, pins) do { fam65xx_template_transition_to_fetch(cpu); return pins; } while(0)
+
 // STZ - Store Zero
 static inline bus_state_t op_stz(fam65xx_t* cpu, bus_state_t pins) {
-    BUS_SET_DATA(pins, 0);
-    return fam65xx_phi2_write(cpu, pins);
+    CPU_DL(cpu) = 0;  // Store zero in data latch
+    return fam65xx_template_phi2_write(cpu, pins, REG_AB, REG_DL);
 }
 
 // TRB - Test and Reset Bits
 static inline bus_state_t op_trb(fam65xx_t* cpu, bus_state_t pins) {
+    pins = fam65xx_template_phi2_read(cpu, pins, REG_AB);
+    if (!FAM65XX_RDY_CHECK(pins)) return pins;
+    
     const uint8_t data = BUS_GET_DATA(pins);
-    const uint8_t result = data & ~cpu->A;
+    const uint8_t result = data & ~CPU_A(cpu);
     
     // Set Z flag based on A & data
-    cpu->P = (cpu->P & ~FLAG_Z) | ((cpu->A & data) ? 0 : FLAG_Z);
+    CPU_P(cpu) = (CPU_P(cpu) & ~FLAG_Z) | ((CPU_A(cpu) & data) ? 0 : FLAG_Z);
     
-    BUS_SET_DATA(pins, result);
-    return fam65xx_phi2_write(cpu, pins);
+    CPU_DL(cpu) = result;
+    return fam65xx_template_phi2_write(cpu, pins, REG_AB, REG_DL);
 }
 
 // TSB - Test and Set Bits
 static inline bus_state_t op_tsb(fam65xx_t* cpu, bus_state_t pins) {
+    pins = fam65xx_template_phi2_read(cpu, pins, REG_AB);
+    if (!FAM65XX_RDY_CHECK(pins)) return pins;
+    
     const uint8_t data = BUS_GET_DATA(pins);
-    const uint8_t result = data | cpu->A;
+    const uint8_t result = data | CPU_A(cpu);
     
     // Set Z flag based on A & data
-    cpu->P = (cpu->P & ~FLAG_Z) | ((cpu->A & data) ? 0 : FLAG_Z);
+    CPU_P(cpu) = (CPU_P(cpu) & ~FLAG_Z) | ((CPU_A(cpu) & data) ? 0 : FLAG_Z);
     
-    BUS_SET_DATA(pins, result);
-    return fam65xx_phi2_write(cpu, pins);
+    CPU_DL(cpu) = result;
+    return fam65xx_template_phi2_write(cpu, pins, REG_AB, REG_DL);
 }
 
 // PHX - Push X Register
 static inline bus_state_t op_phx(fam65xx_t* cpu, bus_state_t pins) {
-    BUS_SET_ADDR(pins, 0x0100 | cpu->S);
-    BUS_SET_DATA(pins, cpu->X);
-    cpu->S--;
-    return fam65xx_phi2_write(cpu, pins);
+    CPU_AB(cpu) = CPU_SP(cpu);
+    CPU_S(cpu)--;
+    return fam65xx_template_phi2_write(cpu, pins, REG_AB, REG_X);
 }
 
 // PHY - Push Y Register
 static inline bus_state_t op_phy(fam65xx_t* cpu, bus_state_t pins) {
-    BUS_SET_ADDR(pins, 0x0100 | cpu->S);
-    BUS_SET_DATA(pins, cpu->Y);
-    cpu->S--;
-    return fam65xx_phi2_write(cpu, pins);
+    CPU_AB(cpu) = CPU_SP(cpu);
+    CPU_S(cpu)--;
+    return fam65xx_template_phi2_write(cpu, pins, REG_AB, REG_Y);
 }
 
 // PLX - Pull X Register
 static inline bus_state_t op_plx(fam65xx_t* cpu, bus_state_t pins) {
-    cpu->S++;
-    BUS_SET_ADDR(pins, 0x0100 | cpu->S);
-    pins = fam65xx_phi2_read(cpu, pins);
-    if (!BUS_RDY(pins)) return pins;
+    CPU_S(cpu)++;
+    CPU_AB(cpu) = CPU_SP(cpu);
+    pins = fam65xx_template_phi2_read(cpu, pins, REG_AB);
+    if (!FAM65XX_RDY_CHECK(pins)) return pins;
     
-    cpu->X = BUS_GET_DATA(pins);
-    cpu->P = (cpu->P & ~(FLAG_N | FLAG_Z)) | (cpu->X & FLAG_N) | ((cpu->X == 0) ? FLAG_Z : 0);
+    CPU_X(cpu) = BUS_GET_DATA(pins);
+    fam65xx_template_update_nz_flags(cpu, CPU_X(cpu));
     
-    return fam65xx_fetch_next_op(cpu, pins);
+    FETCH_NEXT_OP(cpu, pins);
 }
 
 // PLY - Pull Y Register
 static inline bus_state_t op_ply(fam65xx_t* cpu, bus_state_t pins) {
-    cpu->S++;
-    BUS_SET_ADDR(pins, 0x0100 | cpu->S);
-    pins = fam65xx_phi2_read(cpu, pins);
-    if (!BUS_RDY(pins)) return pins;
+    CPU_S(cpu)++;
+    CPU_AB(cpu) = CPU_SP(cpu);
+    pins = fam65xx_template_phi2_read(cpu, pins, REG_AB);
+    if (!FAM65XX_RDY_CHECK(pins)) return pins;
     
-    cpu->Y = BUS_GET_DATA(pins);
-    cpu->P = (cpu->P & ~(FLAG_N | FLAG_Z)) | (cpu->Y & FLAG_N) | ((cpu->Y == 0) ? FLAG_Z : 0);
+    CPU_Y(cpu) = BUS_GET_DATA(pins);
+    fam65xx_template_update_nz_flags(cpu, CPU_Y(cpu));
     
-    return fam65xx_fetch_next_op(cpu, pins);
+    FETCH_NEXT_OP(cpu, pins);
 }
 
 // WAI - Wait for Interrupt
 static inline bus_state_t op_wai(fam65xx_t* cpu, bus_state_t pins) {
     // Set WAI state - CPU stops until interrupt occurs
-    cpu->bcd_enabled = true;  // Reuse a flag to indicate WAI state
-    return fam65xx_fetch_next_op(cpu, pins);
+    cpu->brk_flags |= FAM65XX_BRK_IRQ;  // Mark as waiting for interrupt
+    FETCH_NEXT_OP(cpu, pins);
 }
 
 // STP - Stop
 static inline bus_state_t op_stp(fam65xx_t* cpu, bus_state_t pins) {
     // Set STP state - CPU stops until reset
-    cpu->jam_enabled = true;  // Reuse a flag to indicate STP state
+    cpu->brk_flags |= FAM65XX_BRK_RESET;  // Mark as stopped
     return pins;  // Stop execution
 }
 
@@ -118,9 +132,11 @@ static inline bus_state_t op_stp(fam65xx_t* cpu, bus_state_t pins) {
 // RMB0-RMB7 - Reset Memory Bit
 #define DEFINE_RMB_OP(bit) \
 static inline bus_state_t op_rmb##bit(fam65xx_t* cpu, bus_state_t pins) { \
+    pins = fam65xx_template_phi2_read(cpu, pins, REG_AB); \
+    if (!FAM65XX_RDY_CHECK(pins)) return pins; \
     const uint8_t data = BUS_GET_DATA(pins); \
-    BUS_SET_DATA(pins, data & ~(1 << (bit))); \
-    return fam65xx_phi2_write(cpu, pins); \
+    CPU_DL(cpu) = data & ~(1 << (bit)); \
+    return fam65xx_template_phi2_write(cpu, pins, REG_AB, REG_DL); \
 }
 
 DEFINE_RMB_OP(0)
@@ -135,9 +151,11 @@ DEFINE_RMB_OP(7)
 // SMB0-SMB7 - Set Memory Bit
 #define DEFINE_SMB_OP(bit) \
 static inline bus_state_t op_smb##bit(fam65xx_t* cpu, bus_state_t pins) { \
+    pins = fam65xx_template_phi2_read(cpu, pins, REG_AB); \
+    if (!FAM65XX_RDY_CHECK(pins)) return pins; \
     const uint8_t data = BUS_GET_DATA(pins); \
-    BUS_SET_DATA(pins, data | (1 << (bit))); \
-    return fam65xx_phi2_write(cpu, pins); \
+    CPU_DL(cpu) = data | (1 << (bit)); \
+    return fam65xx_template_phi2_write(cpu, pins, REG_AB, REG_DL); \
 }
 
 DEFINE_SMB_OP(0)
@@ -152,14 +170,13 @@ DEFINE_SMB_OP(7)
 // BBR0-BBR7 - Branch on Bit Reset
 #define DEFINE_BBR_OP(bit) \
 static inline bus_state_t op_bbr##bit(fam65xx_t* cpu, bus_state_t pins) { \
-    const uint8_t data = BUS_GET_DATA(pins); \
+    const uint8_t data = CPU_DL(cpu); \
     if (!(data & (1 << (bit)))) { \
         /* Bit is reset, take branch */ \
-        return fam65xx_branch_taken(cpu, pins); \
-    } else { \
-        /* Bit is set, branch not taken */ \
-        return fam65xx_fetch_next_op(cpu, pins); \
+        int8_t offset = (int8_t)CPU_IR(cpu); \
+        CPU_PC(cpu) += offset; \
     } \
+    FETCH_NEXT_OP(cpu, pins); \
 }
 
 DEFINE_BBR_OP(0)
@@ -174,14 +191,13 @@ DEFINE_BBR_OP(7)
 // BBS0-BBS7 - Branch on Bit Set
 #define DEFINE_BBS_OP(bit) \
 static inline bus_state_t op_bbs##bit(fam65xx_t* cpu, bus_state_t pins) { \
-    const uint8_t data = BUS_GET_DATA(pins); \
+    const uint8_t data = CPU_DL(cpu); \
     if (data & (1 << (bit))) { \
         /* Bit is set, take branch */ \
-        return fam65xx_branch_taken(cpu, pins); \
-    } else { \
-        /* Bit is reset, branch not taken */ \
-        return fam65xx_fetch_next_op(cpu, pins); \
+        int8_t offset = (int8_t)CPU_IR(cpu); \
+        CPU_PC(cpu) += offset; \
     } \
+    FETCH_NEXT_OP(cpu, pins); \
 }
 
 DEFINE_BBS_OP(0)
@@ -200,55 +216,56 @@ DEFINE_BBS_OP(7)
 // Zero Page Indirect - ($nn)
 static inline bus_state_t am_zpi(fam65xx_t* cpu, bus_state_t pins) {
     // Fetch zero page address
-    pins = fam65xx_phi2_read(cpu, pins);
-    if (!BUS_RDY(pins)) return pins;
+    CPU_AB(cpu) = CPU_PC(cpu)++;
+    pins = fam65xx_template_phi2_read(cpu, pins, REG_AB);
+    if (!FAM65XX_RDY_CHECK(pins)) return pins;
     
     const uint8_t zp_addr = BUS_GET_DATA(pins);
     
     // Read low byte of indirect address
-    BUS_SET_ADDR(pins, zp_addr);
-    pins = fam65xx_phi2_read(cpu, pins);
-    if (!BUS_RDY(pins)) return pins;
+    CPU_AB(cpu) = zp_addr;
+    pins = fam65xx_template_phi2_read(cpu, pins, REG_AB);
+    if (!FAM65XX_RDY_CHECK(pins)) return pins;
     
     const uint8_t addr_lo = BUS_GET_DATA(pins);
     
-    // Read high byte of indirect address  
-    BUS_SET_ADDR(pins, (zp_addr + 1) & 0xFF);
-    pins = fam65xx_phi2_read(cpu, pins);
-    if (!BUS_RDY(pins)) return pins;
+    // Read high byte of indirect address
+    CPU_AB(cpu) = (zp_addr + 1) & 0xFF;
+    pins = fam65xx_template_phi2_read(cpu, pins, REG_AB);
+    if (!FAM65XX_RDY_CHECK(pins)) return pins;
     
     const uint8_t addr_hi = BUS_GET_DATA(pins);
     
     // Set final address
-    const uint16_t final_addr = addr_lo | (addr_hi << 8);
-    BUS_SET_ADDR(pins, final_addr);
+    CPU_AB(cpu) = addr_lo | (addr_hi << 8);
     
     return pins;
 }
 
-// Zero Page Relative for BBR/BBS - nn,label  
+// Zero Page Relative for BBR/BBS - nn,label
 static inline bus_state_t am_zpr(fam65xx_t* cpu, bus_state_t pins) {
     // First fetch zero page address
-    pins = fam65xx_phi2_read(cpu, pins);
-    if (!BUS_RDY(pins)) return pins;
+    CPU_AB(cpu) = CPU_PC(cpu)++;
+    pins = fam65xx_template_phi2_read(cpu, pins, REG_AB);
+    if (!FAM65XX_RDY_CHECK(pins)) return pins;
     
     const uint8_t zp_addr = BUS_GET_DATA(pins);
     
     // Read data at zero page address for bit test
-    BUS_SET_ADDR(pins, zp_addr);
-    pins = fam65xx_phi2_read(cpu, pins);
-    if (!BUS_RDY(pins)) return pins;
+    CPU_AB(cpu) = zp_addr;
+    pins = fam65xx_template_phi2_read(cpu, pins, REG_AB);
+    if (!FAM65XX_RDY_CHECK(pins)) return pins;
     
     // Store the data for the bit test operation
-    cpu->AD = BUS_GET_DATA(pins);
+    CPU_DL(cpu) = BUS_GET_DATA(pins);
     
     // Now fetch the branch offset
-    BUS_SET_ADDR(pins, cpu->PC++);
-    pins = fam65xx_phi2_read(cpu, pins);
-    if (!BUS_RDY(pins)) return pins;
+    CPU_AB(cpu) = CPU_PC(cpu)++;
+    pins = fam65xx_template_phi2_read(cpu, pins, REG_AB);
+    if (!FAM65XX_RDY_CHECK(pins)) return pins;
     
     // Store branch offset for potential branch
-    cpu->IR = BUS_GET_DATA(pins);
+    CPU_IR(cpu) = BUS_GET_DATA(pins);
     
     return pins;
 }
