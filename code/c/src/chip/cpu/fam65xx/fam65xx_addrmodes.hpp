@@ -406,6 +406,7 @@ static bus_state_t am_zpr(fam65xx_t* cpu, bus_state_t pins) {
             CPU_AB(cpu) = CPU_PC(cpu)++;
             pins = fam65xx_phi2_read(cpu, pins, REG_AB);
             if (!FAM65XX_GET_RDY(pins)) return pins;
+
             CPU_ZPL(cpu) = BUS_GET_DATA(pins);  // Store ZP address
             return pins;
             
@@ -413,6 +414,7 @@ static bus_state_t am_zpr(fam65xx_t* cpu, bus_state_t pins) {
             CPU_AB(cpu) = CPU_ZPL(cpu);
             pins = fam65xx_phi2_read(cpu, pins, REG_AB);
             if (!FAM65XX_GET_RDY(pins)) return pins;
+
             CPU_DL(cpu) = BUS_GET_DATA(pins);  // Store ZP data for bit testing
             return pins;
             
@@ -420,8 +422,157 @@ static bus_state_t am_zpr(fam65xx_t* cpu, bus_state_t pins) {
             CPU_AB(cpu) = CPU_PC(cpu)++;
             pins = fam65xx_phi2_read(cpu, pins, REG_AB);
             if (!FAM65XX_GET_RDY(pins)) return pins;
+
             CPU_IR(cpu) = BUS_GET_DATA(pins);  // Store branch offset for potential branch
             return pins;
+    }
+    return pins;
+}
+
+// ============================================================================
+// 65C816 ADDRESSING MODES
+// ============================================================================
+
+// Absolute Indexed Indirect - ($nnnn,X) - 65C816 only
+static bus_state_t am_abi(fam65xx_t* cpu, bus_state_t pins) {
+    switch (cpu->cycle_index++) {
+        case 0:
+            /* PHI2: Read low byte of pointer from PC */
+            pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_PC(cpu)++;
+            
+            /* PHI1: Store pointer low byte */
+            CPU_ABL(cpu) = BUS_GET_DATA(pins);
+            break;
+            
+        case 1:
+            /* PHI2: Read high byte of pointer from PC */
+            pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_PC(cpu)++;
+            
+            /* PHI1: Store pointer high byte and add X */
+            CPU_ABH(cpu) = BUS_GET_DATA(pins);
+            CPU_AB(cpu) += CPU_X(cpu);  // Add X to pointer address
+            break;
+            
+        case 2:
+            /* PHI2: Read low byte of target from (pointer + X) */
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            
+            /* PHI1: Store target low byte and increment pointer */
+            CPU_DL(cpu) = BUS_GET_DATA(pins);
+            CPU_AB(cpu)++;
+            break;
+            
+        case 3:
+            /* PHI2: Read high byte of target from (pointer + X + 1) */
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            
+            /* PHI1: Assemble final target address */
+            CPU_ABL(cpu) = CPU_DL(cpu);
+            CPU_ABH(cpu) = BUS_GET_DATA(pins);
+            fam65xx_transition_to_operation(cpu);
+            break;
+    }
+    return pins;
+}
+
+// Stack Relative - n,S - 65C816 only
+static bus_state_t am_sr(fam65xx_t* cpu, bus_state_t pins) {
+    switch (cpu->cycle_index++) {
+        case 0: {
+            /* PHI2: Read offset from PC */
+            pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_PC(cpu)++;
+            
+            /* PHI1: Store offset and calculate target address */
+            uint8_t offset = BUS_GET_DATA(pins);
+            
+            /* Stack relative addressing: S + offset (wraps within stack page) */
+            CPU_AB(cpu) = CPU_S(cpu); // Stack is always in page 1 ($01xx)
+            CPU_ABL(cpu) += offset;   // Low byte calculation
+            fam65xx_transition_to_operation(cpu);
+            break;
+        }
+            
+        case 1:
+            /* PHI2: Dummy cycle for timing accuracy */
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            fam65xx_transition_to_operation(cpu);
+            break;
+    }
+    return pins;
+}
+
+// Stack Relative Indirect Indexed - (n,S),Y - 65C816 only
+static bus_state_t am_sri(fam65xx_t* cpu, bus_state_t pins) {
+    switch (cpu->cycle_index++) {
+        case 0: {
+            /* PHI2: Read offset from PC */
+            pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_PC(cpu)++;
+            
+            /* PHI1: Calculate stack pointer address */
+            uint8_t offset = BUS_GET_DATA(pins);
+            CPU_AB(cpu) = CPU_S(cpu); // Stack page
+            CPU_ABL(cpu) += offset;
+            break;
+        }
+            
+        case 1:
+            /* PHI2: Read low byte of indirect address from stack */
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            
+            /* PHI1: Store low byte and increment stack pointer */
+            CPU_DL(cpu) = BUS_GET_DATA(pins);
+            CPU_ABL(cpu)++;  // Stay in stack page
+            break;
+            
+        case 2: {
+            /* PHI2: Read high byte of indirect address from stack */
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            
+            /* PHI1: Calculate base address and add Y */
+            CPU_ABL(cpu) = CPU_DL(cpu);
+            CPU_ABH(cpu) = BUS_GET_DATA(pins);
+            uint16_t base = CPU_AB(cpu);
+            uint16_t effective = base + CPU_Y(cpu);
+            
+            /* Store original high byte for page cross handling */
+            CPU_DL(cpu) = CPU_ABH(cpu);
+            
+            /* Add Y to low byte (creates intermediate address) */
+            CPU_ABL(cpu) += CPU_Y(cpu);
+            
+            /* Skip penalty cycle if no page cross */
+            if (!fam65xx_page_crossed(base, effective)) {
+                CPU_AB(cpu) = effective;
+                fam65xx_transition_to_operation(cpu);
+            }
+            break;
+        }
+            
+        case 3:
+            /* PHI2: Page cross penalty cycle */
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            
+            /* PHI1: Correct final address */
+            CPU_ABH(cpu) = CPU_DL(cpu);    // Restore original high byte
+            CPU_ABL(cpu) -= CPU_Y(cpu);    // Restore original low byte
+            CPU_AB(cpu) += CPU_Y(cpu);     // Calculate correct final address
+            
+            fam65xx_transition_to_operation(cpu);
+            break;
     }
     return pins;
 }

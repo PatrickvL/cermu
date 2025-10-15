@@ -612,11 +612,11 @@ struct ProcessorOpcodeTableGenerator {
             am_ind,  /* AM_IND */ \
             am_idx,  /* AM_INX */ \
             am_idy,  /* AM_INY */ \
-            am_zpi,  /* AM_ZPI - filled by processors that support it */ \
-            nullptr, /* AM_ABI - filled by processors that support it */ \
-            nullptr, /* AM_SR  - filled by processors that support it */ \
-            nullptr, /* AM_SRI - filled by processors that support it */ \
-            am_zpr   /* AM_ZPR - filled by processors that support it */ \
+            am_zpi,  /* AM_ZPI - Zero Page Indirect (65C02+) */ \
+            am_abi,  /* AM_ABI - Absolute Indexed Indirect (65C816) */ \
+            am_sr,   /* AM_SR  - Stack Relative (65C816) */ \
+            am_sri,  /* AM_SRI - Stack Relative Indirect Indexed (65C816) */ \
+            am_zpr   /* AM_ZPR - Zero Page Relative for BBR/BBS (Rockwell) */ \
         }; \
         static const opcode_info_t fam65xx_opcode_table[256] = { \
             internal_processor_table[0], internal_processor_table[1], internal_processor_table[2], internal_processor_table[3], \
