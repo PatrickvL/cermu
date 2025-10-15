@@ -230,18 +230,18 @@ opcode_info_t fam65xx_opcode_table[256];
 // This section provides hardware-accurate opcode tables for each processor variant
 // with their specific instruction sets, illegal opcode handling, and new instructions.
 
-namespace fam65xx_template {
+namespace fam65xx_variants {
 
-// Include template definitions
-#include "fam65xx_templates.hpp"
+// Include variant definitions
+#include "fam65xx_variants.hpp"
 
-// Import template definitions from fam65xx_template namespace
-using fam65xx_template::ProcessorTraits;
-using fam65xx_template::MOS6502Tag;
-using fam65xx_template::MOS6510Tag;
-using fam65xx_template::WDC65C02Tag;
-using fam65xx_template::Rockwell65C02Tag;
-using fam65xx_template::WDC65C816Tag;
+// Import definitions from fam65xx_variants namespace
+using fam65xx_variants::ProcessorTraits;
+using fam65xx_variants::MOS6502Tag;
+using fam65xx_variants::MOS6510Tag;
+using fam65xx_variants::WDC65C02Tag;
+using fam65xx_variants::Rockwell65C02Tag;
+using fam65xx_variants::WDC65C816Tag;
 
 #ifdef CHIPS_IMPL
 
@@ -432,7 +432,7 @@ struct ProcessorBehavior<WDC65C02Tag> {
 
 #endif /* CHIPS_IMPL */
 
-} // namespace fam65xx_template
+} // namespace fam65xx_variants
 
 #endif /* __cplusplus */
 

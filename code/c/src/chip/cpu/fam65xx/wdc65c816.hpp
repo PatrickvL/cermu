@@ -24,7 +24,7 @@
 namespace fam65xx_cpu {
 
 // WDC 65C816 CPU class - 16-bit enhanced processor
-using WDC65C816 = fam65xx_template::CPU<fam65xx_template::WDC65C816Tag>;
+using WDC65C816 = fam65xx_variants::fam65xx_variants::CPU<fam65xx_variants::WDC65C816Tag>;
 
 // Feature queries for compile-time optimization
 constexpr bool has_illegal_opcodes() { return false; }  // Converted to NOPs

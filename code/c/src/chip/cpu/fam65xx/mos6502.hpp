@@ -14,14 +14,14 @@
  * - 64KB address space
  */
 
-#include "fam65xx_templates.hpp"
+#include "fam65xx_variants.hpp"
 
 #ifdef __cplusplus
 
 namespace fam65xx_cpu {
 
 // MOS 6502 CPU class - Original NMOS with illegal opcodes
-using MOS6502 = fam65xx_template::CPU<fam65xx_template::MOS6502Tag>;
+using MOS6502 = fam65xx_variants::CPU<fam65xx_variants::MOS6502Tag>;
 
 // Convenient creation function
 inline MOS6502 create() {

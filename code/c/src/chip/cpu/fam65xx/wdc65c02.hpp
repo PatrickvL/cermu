@@ -16,13 +16,14 @@
  */
 
 #include "fam65xx.hpp"
+#include "fam65xx_variants.hpp"
 
 #ifdef __cplusplus
 
 namespace fam65xx_cpu {
 
 // WDC 65C02 CPU class - CMOS with enhancements
-using WDC65C02 = fam65xx_template::CPU<fam65xx_template::WDC65C02Tag>;
+using WDC65C02 = fam65xx_variants::fam65xx_variants::CPU<fam65xx_variants::WDC65C02Tag>;
 
 // Feature queries for compile-time optimization
 constexpr bool has_illegal_opcodes() { return false; }  // Converted to NOPs

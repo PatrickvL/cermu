@@ -1,26 +1,26 @@
 #pragma once
-#ifndef FAM65XX_TEMPLATE_CORE_HPP_INCLUDED
-#define FAM65XX_TEMPLATE_CORE_HPP_INCLUDED
+#ifndef FAM65XX_CORE_VARIANTS_HPP_INCLUDED
+#define FAM65XX_CORE_VARIANTS_HPP_INCLUDED
 
 /*
- * fam65xx_template_core.hpp - Compile-Time Template System for MOS 65xx Family
+ * fam65xx_core_variants.hpp - Compile-Time CPU Variant System for MOS 65xx Family
  *
- * This implements a single unified CPU template system with:
+ * This implements a single unified CPU variant system with:
  * - Compile-time constexpr opcode table generation
  * - Per-CPU-core addressing mode and operation lookup tables
- * - Template-based processor-specific handler variants
+ * - Processor-specific handler variants
  * - Zero runtime overhead through complete constexpr evaluation
  */
 
 #ifdef __cplusplus
 
 #include "fam65xx_core.hpp"
-#include "fam65xx_templates.hpp"
+#include "fam65xx_variants.hpp"
 #include "fam65xx_tables.hpp"
 #include <array>
 #include <cstring>
 
-namespace fam65xx_template {
+namespace fam65xx_variants {
 
 // ============================================================================
 // COMPILE-TIME CONSTEXPR ADDRESSING MODE AND OPERATION TABLE GENERATION
@@ -530,8 +530,15 @@ using WDC65C02_Core = CPU_Core<WDC65C02Tag>;
 using Rockwell65C02_Core = CPU_Core<Rockwell65C02Tag>;
 using WDC65C816_Core = CPU_Core<WDC65C816Tag>;
 
-} // namespace fam65xx_template
+// Import the processor tags into current namespace
+using MOS6502Tag = fam65xx_variants::MOS6502Tag;
+using MOS6510Tag = fam65xx_variants::MOS6510Tag;
+using WDC65C02Tag = fam65xx_variants::WDC65C02Tag;
+using Rockwell65C02Tag = fam65xx_variants::Rockwell65C02Tag;
+using WDC65C816Tag = fam65xx_variants::WDC65C816Tag;
+
+} // namespace fam65xx_variants
 
 #endif // __cplusplus
 
-#endif // FAM65XX_TEMPLATE_CORE_HPP_INCLUDED
+#endif // FAM65XX_CORE_VARIANTS_HPP_INCLUDED
