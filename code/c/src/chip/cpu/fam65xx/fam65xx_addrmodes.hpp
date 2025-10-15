@@ -365,6 +365,67 @@ static bus_state_t am_zpy(fam65xx_t* cpu, bus_state_t pins) {
     return addrmodes_zpx_helper(cpu, pins, CPU_Y(cpu));
 }
 
+// ============================================================================
+// ENHANCED ADDRESSING MODES FOR 65C02
+// ============================================================================
+
+// Zero Page Indirect - ($nn) - Multi-cycle addressing mode
+static bus_state_t am_zpi(fam65xx_t* cpu, bus_state_t pins) {
+    switch (cpu->cycle_index++) {
+        case 0: // Fetch zero page address
+            CPU_AB(cpu) = CPU_PC(cpu)++;
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_ZPL(cpu) = BUS_GET_DATA(pins);  // Store ZP address
+            return pins;
+            
+        case 1: // Read low byte of indirect address
+            CPU_AB(cpu) = CPU_ZPL(cpu);
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_ABL(cpu) = BUS_GET_DATA(pins);  // Store low byte
+            return pins;
+            
+        case 2: // Read high byte of indirect address
+            CPU_AB(cpu) = (CPU_ZPL(cpu) + 1) & 0xFF;
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_ABH(cpu) = BUS_GET_DATA(pins);  // Store high byte
+            
+            // Set final address
+            CPU_AB(cpu) = CPU_AB(cpu);
+            return pins;
+    }
+    return pins;
+}
+
+// Zero Page Relative for BBR/BBS - nn,label - Multi-cycle addressing mode
+static bus_state_t am_zpr(fam65xx_t* cpu, bus_state_t pins) {
+    switch (cpu->cycle_index++) {
+        case 0: // First fetch zero page address
+            CPU_AB(cpu) = CPU_PC(cpu)++;
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_ZPL(cpu) = BUS_GET_DATA(pins);  // Store ZP address
+            return pins;
+            
+        case 1: // Read data at zero page address for bit test
+            CPU_AB(cpu) = CPU_ZPL(cpu);
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_DL(cpu) = BUS_GET_DATA(pins);  // Store ZP data for bit testing
+            return pins;
+            
+        case 2: // Now fetch the branch offset
+            CPU_AB(cpu) = CPU_PC(cpu)++;
+            pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_IR(cpu) = BUS_GET_DATA(pins);  // Store branch offset for potential branch
+            return pins;
+    }
+    return pins;
+}
+
 #endif /* CHIPS_IMPL */
 
 #ifdef __cplusplus
