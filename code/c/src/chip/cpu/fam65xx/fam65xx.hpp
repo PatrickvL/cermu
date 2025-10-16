@@ -101,12 +101,46 @@
 
 /* Include all modular components in dependency order to minimize forward declarations */
 
-/* 1. Core definitions - must be first (defines types and constants) */
+/* 1. Core definitions - includes types, utilities, and API declarations */
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include "fam65xx_core.hpp"
+// Include core type definitions
+#include "fam65xx_types.hpp"
+
+// Include utility functions
+#include "fam65xx_utils.hpp"
+
+// ============================================================================
+// API Function Declarations
+// ============================================================================
+
+/* Main API functions (callback-based for test runner compatibility) */
+bus_state_t fam65xx_init(fam65xx_t* cpu, const fam65xx_desc_t* desc);
+bus_state_t fam65xx_reset(fam65xx_t* cpu, bus_state_t pins);
+bus_state_t fam65xx_tick(fam65xx_t* cpu, bus_state_t pins);
+bool fam65xx_opdone(fam65xx_t* cpu);
+bus_state_t fam65xx_bootstrap(fam65xx_t* cpu, bus_state_t pins);
+
+/* CPU state accessor functions (for test runner compatibility) */
+void fam65xx_set_a(fam65xx_t* cpu, uint8_t v);
+void fam65xx_set_x(fam65xx_t* cpu, uint8_t v);
+void fam65xx_set_y(fam65xx_t* cpu, uint8_t v);
+void fam65xx_set_s(fam65xx_t* cpu, uint8_t v);
+void fam65xx_set_p(fam65xx_t* cpu, uint8_t v);
+void fam65xx_set_pc(fam65xx_t* cpu, uint16_t v);
+
+uint8_t fam65xx_a(fam65xx_t* cpu);
+uint8_t fam65xx_x(fam65xx_t* cpu);
+uint8_t fam65xx_y(fam65xx_t* cpu);
+uint8_t fam65xx_s(fam65xx_t* cpu);
+uint8_t fam65xx_p(fam65xx_t* cpu);
+uint16_t fam65xx_pc(fam65xx_t* cpu);
+
+/* Processor-specific table access functions */
+opcode_info_t fam65xx_get_opcode_entry(uint8_t opcode);
+cycle_fn_t fam65xx_get_addr_mode_handler(int am_index);
 
 #ifdef __cplusplus
 }
@@ -118,7 +152,10 @@ extern "C" {
  *    NOTE: This contains C++ templates, so it's outside extern "C" */
 #include "fam65xx_tables.hpp"
 
-/* 3. Implementation functions - use tables and operation handlers */
+/* 3. Template variants - provides processor-specific CPU template classes */
+#include "fam65xx_variants.hpp"
+
+/* 4. Implementation functions - use tables and operation handlers */
 #ifdef __cplusplus
 extern "C" {
 #endif

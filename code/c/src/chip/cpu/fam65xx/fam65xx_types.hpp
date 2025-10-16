@@ -1,0 +1,220 @@
+#pragma once
+/*
+ * fam65xx_types.hpp - MOS 65xx Family CPU Core Type Definitions (C++ Version)
+ * 
+ * This file contains all core type definitions, macros, and structures used
+ * across the 65xx family CPU implementations:
+ * - Bus state and pin definitions
+ * - CPU flags and interrupt definitions
+ * - Register indices and memory callback types
+ * - Opcode encoding structures
+ * - CPU state structure
+ */
+
+#include <cstdint>
+#include <cstdbool>
+
+// Include system-wide bus definitions
+#include "../../../core/aiemuc.h"
+#include "../../../core/system_lines.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// ============================================================================
+// Bus State and Pin Definitions
+// ============================================================================
+
+// Legacy pin compatibility - map to system_lines.h definitions
+#define FAM65XX_RW      BUS_BIT(BUS_RW_BIT)
+#define FAM65XX_SYNC    BUS_BIT(BUS_SYNC_BIT)
+#define FAM65XX_IRQ     BUS_BIT(BUS_IRQ_BIT)
+#define FAM65XX_NMI     BUS_BIT(BUS_NMI_BIT)
+#define FAM65XX_RDY     BUS_BIT(BUS_RDY_BIT)
+#define FAM65XX_RES     BUS_BIT(BUS_RES_BIT)
+
+// Legacy compatibility macros for FAM65XX bus access
+#define FAM65XX_GET_ADDR(p) BUS_GET_ADDR(p)
+#define FAM65XX_SET_ADDR(p, d) BUS_SET_ADDR(p, d)
+#define FAM65XX_GET_DATA(p) BUS_GET_DATA(p)
+#define FAM65XX_SET_DATA(p, d) BUS_SET_DATA(p, d)
+
+// CPU pin access using project definitions
+#define FAM65XX_GET_RDY(pins)      ((pins) & FAM65XX_RDY)
+#define FAM65XX_SET_SYNC(pins, v)  ((pins) = ((v) ? ((pins) | FAM65XX_SYNC) : ((pins) & ~FAM65XX_SYNC)))
+#define FAM65XX_GET_SYNC(pins)     ((pins) & FAM65XX_SYNC)
+#define FAM65XX_GET_IRQ(pins)      ((pins) & FAM65XX_IRQ)
+#define FAM65XX_GET_NMI(pins)      ((pins) & FAM65XX_NMI)
+
+// ============================================================================
+// Memory Callback Types (for test runner compatibility)
+// ============================================================================
+
+typedef uint8_t (*fam65xx_mem_read_t)(void* user_data, uint16_t addr, uint8_t bus_state);
+typedef void (*fam65xx_mem_write_t)(void* user_data, uint16_t addr, uint8_t data);
+
+// Initialization descriptor for callback-based memory interface
+typedef struct {
+    fam65xx_mem_read_t mem_read;
+    fam65xx_mem_write_t mem_write;
+    void* mem_user_data;
+    
+    // 6510-specific callbacks (unused in basic implementation)
+    uint8_t (*m6510_in_cb)(void* user_data);
+    void (*m6510_out_cb)(uint8_t data, void* user_data);
+    uint8_t m6510_io_pullup;
+    uint8_t m6510_io_floating;
+    void* m6510_user_data;
+} fam65xx_desc_t;
+
+// ============================================================================
+// CPU Flags
+// ============================================================================
+
+#define FLAG_C  0x01  // Carry
+#define FLAG_Z  0x02  // Zero
+#define FLAG_I  0x04  // Interrupt Disable
+#define FLAG_D  0x08  // Decimal Mode
+#define FLAG_B  0x10  // Break
+#define FLAG_U  0x20  // Unused (always 1)
+#define FLAG_V  0x40  // Overflow
+#define FLAG_N  0x80  // Negative
+
+// BRK flags for interrupt handling
+#define FAM65XX_BRK_IRQ     (1<<0)
+#define FAM65XX_BRK_NMI     (1<<1)
+#define FAM65XX_BRK_RESET   (1<<2)
+
+// Interrupt shift register bit layout - merged system (3 bits per interrupt + separators)
+#define INT_IRQ_START_BIT   0   // IRQ uses bits 0-2 (3 bits)
+#define INT_IRQ_SEP_BIT     3   // Separator bit after IRQ (bit 3)
+#define INT_NMI_START_BIT   4   // NMI uses bits 4-6 (3 bits)
+#define INT_NMI_SEP_BIT     7   // Separator bit after NMI (bit 7)
+#define INT_RESET_START_BIT 8   // RESET uses bits 8-10 (3 bits)
+#define INT_RESET_SEP_BIT   11  // Separator bit after RESET (bit 11)
+#define INT_IRQ_MASK        (0x7 << INT_IRQ_START_BIT)     // 3 bits: 0b111
+#define INT_NMI_MASK        (0x7 << INT_NMI_START_BIT)     // 3 bits: 0b111
+#define INT_RESET_MASK      (0x7 << INT_RESET_START_BIT)   // 3 bits: 0b111
+#define INT_SEPARATOR_MASK  ((1 << INT_IRQ_SEP_BIT) | (1 << INT_NMI_SEP_BIT) | (1 << INT_RESET_SEP_BIT))
+
+// ============================================================================
+// 8-bit Register indices with endian-aware 16-bit pairs
+// ============================================================================
+
+typedef enum {
+    // 16-bit aligned register pairs (endian-aware) for memory addresses
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    REG_ZPL,       // Zero page (low byte) - full 16-bit zero page register
+    REG_ZPH,       // Zero page (high byte) - always 0x00 for 6502/6510
+    REG_SPL,       // Stack pointer (low byte) - full 16-bit stack register
+    REG_SPH,       // Stack pointer (high byte) - always 0x01 for 6502/6510
+    REG_ABL,       // Address Bus (low byte, even index for little endian)
+    REG_ABH,       // Address Bus (high byte)
+    REG_PCL,       // Program Counter (low byte, even index for little endian)
+    REG_PCH,       // Program Counter (high byte)
+#else
+    REG_ZPH,       // Zero page (high byte) - always 0x00 for 6502/6510
+    REG_ZPL,       // Zero page (low byte) - full 16-bit zero page register
+    REG_SPH,       // Stack pointer (high byte) - always 0x01 for 6502/6510
+    REG_SPL,       // Stack pointer (low byte) - full 16-bit stack register
+    REG_ABH,       // Address Bus (high byte, even index for big endian)
+    REG_ABL,       // Address Bus (low byte)
+    REG_PCH,       // Program Counter (high byte, even index for big endian)
+    REG_PCL,       // Program Counter (low byte)
+#endif
+    // Public registers
+    REG_A,         // Accumulator
+    REG_X,         // X index
+    REG_Y,         // Y index
+    REG_P,         // Processor status
+    // Internal registers
+    REG_IR,        // Instruction Register (current opcode)
+    REG_DL,        // Data latch
+    
+    REG_COUNT,
+
+    // Compatibility mapping for 8-bit stack pointer
+    REG_S = REG_SPL  // Map legacy S register to SPL for compatibility
+} reg8_t;
+
+// 16-bit register indices (native endian compatible)
+typedef enum {
+    REG_ZP = REG_ZPL / 2,  // Zero page (16 bits) - full zero page register
+    REG_SP = REG_SPL / 2,  // Stack pointer as 16-bit (SPL in low, 0x01 in high)
+    REG_AB = REG_ABL / 2,  // Address Bus Latch as 16-bit (ADL/ADH pair)
+    REG_PC = REG_PCL / 2,  // Program counter / PC as 16-bit (PCL/PCH pair)
+} reg16_t;
+
+// ============================================================================
+// Opcode Encoding
+// ============================================================================
+
+typedef struct {
+    uint16_t am_index            : 4;   // Addressing mode index (0-15, bits 0-3, nibble-aligned) [See addr_mode_t]
+    uint16_t illegal_store       : 1;   // Illegal store quirk - uses wrong address on page cross (bit 4)
+    uint16_t _reserved           : 2;   // Reserved bits (bits 5-6)
+    uint16_t can_skip_page_cross : 1;   // Can skip page cross penalty cycle (bit 7) - only for read operations
+    uint16_t rmw                 : 1;   // Read-Modify-Write op_index (bit 8)
+    uint16_t op_index            : 7;   // Operation index (0-127, bits 9-15, byte-extractable with >> 9) [See operation_t]
+} opcode_info_t;
+
+// ============================================================================
+// CPU State
+// ============================================================================
+
+typedef struct fam65xx_t fam65xx_t;
+typedef bus_state_t (*cycle_fn_t)(fam65xx_t* cpu, bus_state_t pins);
+
+struct fam65xx_t {
+    /* Register array - union allows both 8-bit and 16-bit access */
+    union {
+        uint8_t reg8[REG_COUNT];        /* 8-bit register access */
+        uint16_t reg16[REG_COUNT / 2];  /* 16-bit pair access (little-endian) */
+    };
+    
+    /* Current execution state */
+    opcode_info_t opcode_entry;         /* Cached opcode entry (copied once) */
+    cycle_fn_t current_handler;         /* Current PHI1 handler */
+    uint8_t cycle_index;                /* Current cycle within instruction */
+    
+    /* Interrupt state - merged shift register system */
+    uint8_t brk_flags;                  /* BRK/IRQ/NMI/RESET flags */
+    uint8_t nmi_prev;                   /* Previous NMI line state for edge detection
+                                         * NOTE: Consider storing complete previous pins state
+                                         * for edge detection of all signals if needed in future */
+    uint32_t interrupt_shift_register;  /* Combined shift register for all interrupt types */
+    
+    /* Memory callbacks (for test runner compatibility) */
+    fam65xx_mem_read_t mem_read;        /* Memory read callback */
+    fam65xx_mem_write_t mem_write;      /* Memory write callback */
+    void* mem_user_data;                /* User data for memory callbacks */
+};
+
+/* Accessor macros for cleaner code */
+#define CPU_ZP(cpu)    ((cpu)->reg16[REG_ZP])   /* Zero page address (0x0000 | ZPL) */
+#define CPU_SP(cpu)    ((cpu)->reg16[REG_SP])   /* Stack pointer (0x0100 | SPL) */
+#define CPU_AB(cpu)    ((cpu)->reg16[REG_AB])   /* Address Bus Latch (ABH/ABL) */
+#define CPU_PC(cpu)    ((cpu)->reg16[REG_PC])   /* Program Counter (PCH/PCL) */
+
+/* Individual byte access - using the new register layout */
+#define CPU_ZPL(cpu)   ((cpu)->reg8[REG_ZPL])   /* Zero Page Low (High is always 0x00)*/
+#define CPU_S(cpu)     ((cpu)->reg8[REG_SPL])   /* Stack Pointer Low (High is always 0x01)*/
+#define CPU_ABH(cpu)   ((cpu)->reg8[REG_ABH])   /* Address Bus Latch High */
+#define CPU_ABL(cpu)   ((cpu)->reg8[REG_ABL])   /* Address Bus Latch Low */
+#define CPU_PCH(cpu)   ((cpu)->reg8[REG_PCH])   /* Program Counter High */
+#define CPU_PCL(cpu)   ((cpu)->reg8[REG_PCL])   /* Program Counter Low */
+
+#define CPU_A(cpu)     ((cpu)->reg8[REG_A])
+#define CPU_X(cpu)     ((cpu)->reg8[REG_X])
+#define CPU_Y(cpu)     ((cpu)->reg8[REG_Y])
+#define CPU_P(cpu)     ((cpu)->reg8[REG_P])
+#define CPU_IR(cpu)    ((cpu)->reg8[REG_IR])
+#define CPU_DL(cpu)    ((cpu)->reg8[REG_DL])
+
+/* Legacy aliases for compatibility */
+#define CPU_AD(cpu)    CPU_AB(cpu)  /* Address latch as 16-bit - now maps to AB */
+
+#ifdef __cplusplus
+}
+#endif

@@ -21,15 +21,12 @@
     #define AIEMUC_IMPL
 #endif
 
-// Include core definitions first
-#include "fam65xx_core.hpp"
-#include "fam65xx_tables.hpp"
+// Include the main modular header (which now includes everything)
+#include "fam65xx.hpp"
 
-// Define internal processor-specific opcode table for MOS 6502
-DEFINE_PROCESSOR_OPCODE_TABLE_INTERNAL(fam65xx_variants::MOS6502Tag)
-
-// Include the implementation after the table definitions
-#include "fam65xx_impl.hpp"
+// MOS 6502 uses the processor-agnostic access functions
+// The mos6502_opcode_table from fam65xx_tables.hpp is used by default
+// No macro needed - clean static const table implementation!
 
 #ifdef __cplusplus
 

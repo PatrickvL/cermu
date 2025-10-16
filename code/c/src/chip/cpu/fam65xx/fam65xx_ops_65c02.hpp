@@ -13,7 +13,8 @@
  * - BBR/BBS (Branch on Bit Reset/Set) - Rockwell variant
  */
 
-#include "fam65xx_core.hpp"
+#include "fam65xx_types.hpp"
+#include "fam65xx_utils.hpp"
 
 #ifdef __cplusplus
 extern "C" {

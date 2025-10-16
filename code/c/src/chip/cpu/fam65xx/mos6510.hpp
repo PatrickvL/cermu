@@ -13,7 +13,16 @@
  * - Compatible with 6502 software
  */
 
-#include "fam65xx_variants.hpp"
+// Include tables for template-based opcode generation
+#ifndef AIEMUC_IMPL
+    #define AIEMUC_IMPL
+#endif
+
+// Include the main modular header (which now includes everything)
+#include "fam65xx.hpp"
+
+// Define internal processor-specific opcode table for MOS 6510
+DEFINE_PROCESSOR_OPCODE_TABLE_INTERNAL(fam65xx_variants::MOS6510Tag)
 
 #ifdef __cplusplus
 
