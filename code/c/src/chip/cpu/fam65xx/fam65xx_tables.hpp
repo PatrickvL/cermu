@@ -220,13 +220,6 @@ static const cycle_fn_t fam65xx_op_handlers[OP_COUNT] = {
 // NOTE: Opcode table is now internal to each processor implementation
 // Each concrete processor gets its own compile-time generated table
 
-/* Transition from addressing mode to operation */
-static void fam65xx_transition_to_operation(fam65xx_t* cpu) {
-    /* Use the processor-specific internal table */
-    cpu->cycle_index = 0;
-    cpu->current_handler = fam65xx_op_handlers[cpu->opcode_entry.op_index];
-}
-
 #endif /* AIEMUC_IMPL */
 
 #ifdef __cplusplus
@@ -273,7 +266,7 @@ constexpr opcode_info_t generate_opcode_entry(uint8_t opcode) {
     // Processor feature detection at compile time
     constexpr bool has_illegal = ProcessorTraits<ProcessorTag>::has_illegal_opcodes;
     constexpr bool has_cmos = ProcessorTraits<ProcessorTag>::has_cmos_enhancements;
-    constexpr bool has_bit_manip = ProcessorTraits<ProcessorTag>::has_bit_manipulation;
+    (void)ProcessorTraits<ProcessorTag>::has_bit_manipulation; // Suppress unused variable warning
     
     // Helper lambda for creating opcode entries
     auto make_op = [](AddrMode am, int skip_page, Operation op, int rmw) constexpr -> opcode_info_t {

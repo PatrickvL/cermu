@@ -25,14 +25,6 @@ extern "C" {
 // 65C02 ENHANCED OPERATIONS
 // ============================================================================
 
-// Forward declarations for missing functions
-static void fam65xx_transition_to_fetch(fam65xx_t* cpu);
-static bus_state_t fam65xx_phi2_read(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg);
-static bus_state_t fam65xx_phi2_write(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg, reg8_t data_reg);
-
-// Helper macros for RDY checking and fetch transition
-#define FETCH_NEXT_OP(cpu, pins) do { fam65xx_transition_to_fetch(cpu); return pins; } while(0)
-
 // STZ - Store Zero
 static inline bus_state_t op_stz(fam65xx_t* cpu, bus_state_t pins) {
     CPU_DL(cpu) = 0;  // Store zero in data latch
@@ -124,8 +116,8 @@ static inline bus_state_t op_plx(fam65xx_t* cpu, bus_state_t pins) {
     
     CPU_X(cpu) = BUS_GET_DATA(pins);
     fam65xx_update_nz_flags(cpu, CPU_X(cpu));
-    
-    FETCH_NEXT_OP(cpu, pins);
+    fam65xx_transition_to_fetch(cpu);
+    return pins;
 }
 
 // PLY - Pull Y Register
@@ -137,15 +129,16 @@ static inline bus_state_t op_ply(fam65xx_t* cpu, bus_state_t pins) {
     
     CPU_Y(cpu) = BUS_GET_DATA(pins);
     fam65xx_update_nz_flags(cpu, CPU_Y(cpu));
-    
-    FETCH_NEXT_OP(cpu, pins);
+    fam65xx_transition_to_fetch(cpu);
+    return pins;;
 }
 
 // WAI - Wait for Interrupt
 static inline bus_state_t op_wai(fam65xx_t* cpu, bus_state_t pins) {
     // Set WAI state - CPU stops until interrupt occurs
     cpu->brk_flags |= FAM65XX_BRK_IRQ;  // Mark as waiting for interrupt
-    FETCH_NEXT_OP(cpu, pins);
+    fam65xx_transition_to_fetch(cpu);
+    return pins;;
 }
 
 // STP - Stop
@@ -240,7 +233,8 @@ static inline bus_state_t op_bbr##bit(fam65xx_t* cpu, bus_state_t pins) { \
         int8_t offset = (int8_t)CPU_IR(cpu); \
         CPU_PC(cpu) += offset; \
     } \
-    FETCH_NEXT_OP(cpu, pins); \
+    fam65xx_transition_to_fetch(cpu); \
+    return pins; \
 }
 
 DEFINE_BBR_OP(0)
@@ -261,7 +255,8 @@ static inline bus_state_t op_bbs##bit(fam65xx_t* cpu, bus_state_t pins) { \
         int8_t offset = (int8_t)CPU_IR(cpu); \
         CPU_PC(cpu) += offset; \
     } \
-    FETCH_NEXT_OP(cpu, pins); \
+    fam65xx_transition_to_fetch(cpu); \
+    return pins; \
 }
 
 DEFINE_BBS_OP(0)

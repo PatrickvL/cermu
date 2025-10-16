@@ -16,7 +16,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)  # Disable compiler-specific extensions
 
 # C++ standard for the new 65xx C++ core
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -40,7 +40,14 @@ if(MSVC)
         /wd4201                 # Disable nameless struct/union warning (ImGui compatibility)
         /wd4100                 # Disable unreferenced parameter warning
         /wd5287                 # Disable different enum types warning (ImGui compatibility)
+        /wd4996                 # Disable deprecated function warnings (C++17 headers)
+        /wd4463                 # Disable bit-field overflow warnings
+        /wd4505                 # Disable unreferenced function with internal linkage warnings
+        /wd4189                 # Disable local variable initialized but not referenced warnings
+        /wd4244                 # Disable data conversion warnings
     )
+    # Define to silence C++17 deprecation warnings
+    add_compile_definitions(_SILENCE_CXX17_C_HEADER_DEPRECATION_WARNING)
 else()
     # GCC/Clang specific settings
     add_compile_options(

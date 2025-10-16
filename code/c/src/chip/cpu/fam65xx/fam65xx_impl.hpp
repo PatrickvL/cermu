@@ -298,8 +298,7 @@ bus_state_t fam65xx_bootstrap(fam65xx_t* cpu, bus_state_t pins) {
     cpu->nmi_prev = 1;  /* NMI line starts high (inactive) for edge detection */
     
     /* Set up for instruction fetch - CPU ready to execute next instruction */
-    cpu->cycle_index = 0;
-    cpu->current_handler = fam65xx_opcode_fetch;
+    fam65xx_transition_to_fetch(cpu);
     
     return pins;
 }

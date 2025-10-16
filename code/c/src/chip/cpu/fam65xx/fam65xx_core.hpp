@@ -282,7 +282,7 @@ static inline void fam65xx_update_nz_flags(fam65xx_t* cpu, uint8_t value) {
 #ifdef AIEMUC_IMPL
 
 // Centralized PHI2 read handler - handles memory reads during PHI2 phase
-static inline bus_state_t fam65xx_phi2_read(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg) {
+static bus_state_t fam65xx_phi2_read(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg) {
     uint16_t address;
 
     if (FAM65XX_GET_RDY(pins)) {
@@ -304,7 +304,7 @@ static inline bus_state_t fam65xx_phi2_read(fam65xx_t* cpu, bus_state_t pins, re
 }
 
 // Centralized PHI2 write handler - handles memory writes during PHI2 phase
-static inline bus_state_t fam65xx_phi2_write(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) {
+static bus_state_t fam65xx_phi2_write(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) {
     uint16_t address = cpu->reg16[addr_reg];
     
     /* Write cycle - always proceeds regardless of RDY */
@@ -318,6 +318,14 @@ static inline bus_state_t fam65xx_phi2_write(fam65xx_t* cpu, bus_state_t pins, r
     cpu->mem_write(cpu->mem_user_data, address, data_byte);
     
     return pins;
+}
+
+/* Transition from addressing mode to operation */
+static inline void fam65xx_transition_to_operation(fam65xx_t* cpu) {
+    /* Use the processor-specific internal table - forward declaration */
+    extern const cycle_fn_t fam65xx_op_handlers[];
+    cpu->cycle_index = 0;
+    cpu->current_handler = fam65xx_op_handlers[cpu->opcode_entry.op_index];
 }
 
 // Transition from operation back to opcode fetch
