@@ -6,6 +6,10 @@
 // Simple getopt implementation for Windows compatibility
 // This is a minimal implementation for basic argument parsing
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern char *optarg;
 extern int optind, opterr, optopt;
 
@@ -25,6 +29,10 @@ struct option {
 int getopt(int argc, char * const argv[], const char *optstring);
 int getopt_long(int argc, char * const argv[], const char *optstring,
                 const struct option *longopts, int *longindex);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // GETOPT_H_INCLUDED
 #endif // _WIN32

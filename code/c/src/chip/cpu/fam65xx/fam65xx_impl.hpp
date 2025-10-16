@@ -98,7 +98,7 @@ static inline bool fam65xx_process_interrupt_detection(fam65xx_t* cpu, bus_state
 }
 
 /* ============================================================================
- * OPCODE FETCH AND TRANSITION FUNCTIONS
+ * OPCODE FETCH 
  * ============================================================================
  */
 
@@ -131,9 +131,6 @@ bus_state_t fam65xx_opcode_fetch(fam65xx_t* cpu, bus_state_t pins) {
     
     return pins;
 }
-/* Transition from addressing mode to operation - now in fam65xx_addrmodes.hpp */
-
-
 
 /* ============================================================================
  * CPU TICK FUNCTION
