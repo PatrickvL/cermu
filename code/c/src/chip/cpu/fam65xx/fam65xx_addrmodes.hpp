@@ -29,12 +29,6 @@ extern "C" {
 
 #ifdef AIEMUC_IMPL
 
-// Forward declarations for internal functions
-static bus_state_t fam65xx_phi2_read(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg);
-
-/* Transition from addressing mode to operation - defined in fam65xx_tables.hpp */
-static void fam65xx_transition_to_operation(fam65xx_t* cpu);
-
 /* ============================================================================
  * HELPER FUNCTIONS FOR CODE DEDUPLICATION
  * ============================================================================

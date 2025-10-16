@@ -33,12 +33,6 @@ extern "C" {
 
 #ifdef AIEMUC_IMPL
 
-// Forward declarations for internal functions
-static bus_state_t fam65xx_phi2_read(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg);
-static bus_state_t fam65xx_phi2_write(fam65xx_t* cpu, bus_state_t pins, reg16_t addr_reg, reg8_t reg_write);
-static void fam65xx_transition_to_fetch(fam65xx_t* cpu);
-static bus_state_t fam65xx_branch_helper(fam65xx_t* cpu, bus_state_t pins, uint8_t flag_mask, bool flag_value);
-
 /* ============================================================================
  * HELPER FUNCTIONS FOR CODE DEDUPLICATION
  * ============================================================================

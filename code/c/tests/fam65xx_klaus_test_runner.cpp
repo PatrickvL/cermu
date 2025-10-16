@@ -3,7 +3,11 @@
 #include <string>
 #include <vector>
 #include <cstring>
+#ifdef _WIN32
+#include "getopt_windows.h"
+#else
 #include <getopt.h>
+#endif
 #include <chrono>
 #include <iomanip>
 

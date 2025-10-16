@@ -6,7 +6,7 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 # Set C++ standard for fam65xx tests
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Compiler-specific flags
@@ -17,6 +17,9 @@ if(MSVC)
     set(CMAKE_C_FLAGS_RELEASE "/O2 /DNDEBUG")
     # Disable specific MSVC warnings if needed
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /wd4996")  # Disable deprecated function warnings
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4996 /wd4463")  # Disable deprecated and bit-field warnings
+    # Define to silence C++17 deprecation warnings
+    add_compile_definitions(_SILENCE_CXX17_C_HEADER_DEPRECATION_WARNING)
 else()
     # GCC/Clang flags
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra")
@@ -89,9 +92,12 @@ target_include_directories(json_parser PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 # Basic test removed - was using legacy API incompatible with modern C++ core
 
 # fam65xx Klaus Test Suite - New C++ CPU Core Testing
-add_executable(fam65xx_klaus_test_runner
-    fam65xx_klaus_test_runner.cpp
-)
+set(KLAUS_TEST_SOURCES fam65xx_klaus_test_runner.cpp)
+if(WIN32)
+    list(APPEND KLAUS_TEST_SOURCES getopt_windows.c)
+endif()
+
+add_executable(fam65xx_klaus_test_runner ${KLAUS_TEST_SOURCES})
 target_include_directories(fam65xx_klaus_test_runner PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/core

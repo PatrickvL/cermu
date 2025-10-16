@@ -125,10 +125,6 @@ extern "C" {
 
 #include "fam65xx_impl.hpp"
 
-/* Compatibility aliases for test runner integration */
-#define cpu_init fam65xx_init
-#define cpu_tick fam65xx_tick
-
 #ifdef __cplusplus
 }
 #endif
