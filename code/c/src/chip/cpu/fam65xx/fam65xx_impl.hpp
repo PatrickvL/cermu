@@ -11,7 +11,8 @@
  * - API implementations
  */
 
-#include "fam65xx_core.hpp"
+#include "fam65xx_types.hpp"
+#include "fam65xx_utils.hpp"
 #include <cstring>
 
 #ifdef __cplusplus
@@ -102,7 +103,7 @@ static inline bool fam65xx_process_interrupt_detection(fam65xx_t* cpu, bus_state
  * ============================================================================
  */
 
-/* Opcode fetch handler - uses processor-specific internal opcode table */
+/* Opcode fetch handler - uses processor-specific tables through function pointers */
 bus_state_t fam65xx_opcode_fetch(fam65xx_t* cpu, bus_state_t pins) {
     /* PHI2: Read opcode from PC */
     pins = fam65xx_phi2_read(cpu, pins, REG_PC);
@@ -113,8 +114,12 @@ bus_state_t fam65xx_opcode_fetch(fam65xx_t* cpu, bus_state_t pins) {
     CPU_IR(cpu) = BUS_GET_DATA(pins);
     
     /* Cache the opcode entry (copy once, accessed many times) */
-    /* Use the processor-specific internal table generated at compile time */
-    opcode_info_t opcode_entry = fam65xx_opcode_table[CPU_IR(cpu)];
+    /* Access processor-specific table through CPU instance */
+    /* NOTE: This requires processor-specific implementations to provide table access */
+    extern opcode_info_t fam65xx_get_opcode_entry(uint8_t opcode);
+    extern cycle_fn_t fam65xx_get_addr_mode_handler(int am_index);
+    
+    opcode_info_t opcode_entry = fam65xx_get_opcode_entry(CPU_IR(cpu));
     cpu->opcode_entry = opcode_entry;
     cpu->cycle_index = 0;
     
@@ -123,7 +128,7 @@ bus_state_t fam65xx_opcode_fetch(fam65xx_t* cpu, bus_state_t pins) {
     
     if (am_index > AM_IMM) {
         /* Has addressing mode cycles */
-        cpu->current_handler = fam65xx_addr_mode_table[am_index];
+        cpu->current_handler = fam65xx_get_addr_mode_handler(am_index);
     } else {
         /* No addressing mode (AM_NON) or immediate mode (AM_IMM), go straight to operation */
         cpu->current_handler = fam65xx_op_handlers[opcode_entry.op_index];

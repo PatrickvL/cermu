@@ -1,6 +1,6 @@
 #pragma once
 /*
- * fam65xx_templates.hpp - Template System for MOS 65xx Family CPU Variants
+ * fam65xx_variants.hpp - Template System for MOS 65xx Family CPU Variants
  *
  * This header provides C++ template support for different MOS 65xx processor
  * variants while maintaining full backward compatibility with the existing C API.
@@ -22,11 +22,10 @@
 #ifdef __cplusplus
 
 #include <cstdint>
+#include <cstring>
 
-// Include the C API for actual implementation
-extern "C" {
-#include "fam65xx_core.hpp"
-}
+// Include just the types - no circular dependency
+#include "fam65xx_types.hpp"
 
 namespace fam65xx_variants {
 
@@ -123,10 +122,33 @@ struct ProcessorTraits<WDC65C816Tag> {
 // TEMPLATE CPU CLASS
 // ============================================================================
 
+// Forward declarations for API functions
+extern "C" {
+    bus_state_t fam65xx_init(fam65xx_t* cpu, const fam65xx_desc_t* desc);
+    bus_state_t fam65xx_reset(fam65xx_t* cpu, bus_state_t pins);
+    bus_state_t fam65xx_tick(fam65xx_t* cpu, bus_state_t pins);
+    bool fam65xx_opdone(fam65xx_t* cpu);
+    bus_state_t fam65xx_bootstrap(fam65xx_t* cpu, bus_state_t pins);
+    
+    void fam65xx_set_a(fam65xx_t* cpu, uint8_t v);
+    void fam65xx_set_x(fam65xx_t* cpu, uint8_t v);
+    void fam65xx_set_y(fam65xx_t* cpu, uint8_t v);
+    void fam65xx_set_s(fam65xx_t* cpu, uint8_t v);
+    void fam65xx_set_p(fam65xx_t* cpu, uint8_t v);
+    void fam65xx_set_pc(fam65xx_t* cpu, uint16_t v);
+    
+    uint8_t fam65xx_a(fam65xx_t* cpu);
+    uint8_t fam65xx_x(fam65xx_t* cpu);
+    uint8_t fam65xx_y(fam65xx_t* cpu);
+    uint8_t fam65xx_s(fam65xx_t* cpu);
+    uint8_t fam65xx_p(fam65xx_t* cpu);
+    uint16_t fam65xx_pc(fam65xx_t* cpu);
+}
+
 template<typename ProcessorTag>
 class CPU {
 private:
-    fam65xx_t* cpu_impl;  // Pointer to avoid including full definition
+    fam65xx_t cpu_impl;  // Direct instance, not pointer
     using traits = ProcessorTraits<ProcessorTag>;
     
 public:
@@ -134,16 +156,13 @@ public:
     // INITIALIZATION AND LIFECYCLE
     // ========================================================================
     
-    CPU() : cpu_impl(nullptr) {
-        // Implementation will be allocated externally or provided
+    CPU() {
+        // Zero-initialize the implementation
+        std::memset(&cpu_impl, 0, sizeof(fam65xx_t));
     }
     
-    explicit CPU(fam65xx_t* impl) : cpu_impl(impl) {}
-    
     bus_state_t init(const fam65xx_desc_t* desc = nullptr) {
-        if (!cpu_impl) return 0;
-        
-        bus_state_t pins = fam65xx_init(cpu_impl, desc);
+        bus_state_t pins = fam65xx_init(&cpu_impl, desc);
         
         // Apply processor-specific initialization
         if constexpr (traits::has_io_port) {
@@ -154,13 +173,11 @@ public:
     }
     
     bus_state_t reset(bus_state_t pins) {
-        if (!cpu_impl) return 0;
-        return fam65xx_reset(cpu_impl, pins);
+        return fam65xx_reset(&cpu_impl, pins);
     }
     
     bus_state_t bootstrap(bus_state_t pins) {
-        if (!cpu_impl) return 0;
-        return fam65xx_bootstrap(cpu_impl, pins);
+        return fam65xx_bootstrap(&cpu_impl, pins);
     }
     
     // ========================================================================
@@ -168,44 +185,39 @@ public:
     // ========================================================================
     
     bus_state_t tick(bus_state_t pins) {
-        if (!cpu_impl) return 0;
-        
         // Handle processor-specific behavior
         if constexpr (traits::has_io_port) {
             pins = handle_io_port_tick(pins);
         }
         
-        return fam65xx_tick(cpu_impl, pins);
+        return fam65xx_tick(&cpu_impl, pins);
     }
     
     bool opdone() const {
-        if (!cpu_impl) return true;
-        return fam65xx_opdone(cpu_impl);
+        return fam65xx_opdone(const_cast<fam65xx_t*>(&cpu_impl));
     }
     
     // ========================================================================
     // REGISTER ACCESS
     // ========================================================================
     
-    void set_a(uint8_t v) { if (cpu_impl) fam65xx_set_a(cpu_impl, v); }
-    void set_x(uint8_t v) { if (cpu_impl) fam65xx_set_x(cpu_impl, v); }
-    void set_y(uint8_t v) { if (cpu_impl) fam65xx_set_y(cpu_impl, v); }
-    void set_s(uint8_t v) { if (cpu_impl) fam65xx_set_s(cpu_impl, v); }
-    void set_p(uint8_t v) { if (cpu_impl) fam65xx_set_p(cpu_impl, v); }
-    void set_pc(uint16_t v) { if (cpu_impl) fam65xx_set_pc(cpu_impl, v); }
+    void set_a(uint8_t v) { fam65xx_set_a(&cpu_impl, v); }
+    void set_x(uint8_t v) { fam65xx_set_x(&cpu_impl, v); }
+    void set_y(uint8_t v) { fam65xx_set_y(&cpu_impl, v); }
+    void set_s(uint8_t v) { fam65xx_set_s(&cpu_impl, v); }
+    void set_p(uint8_t v) { fam65xx_set_p(&cpu_impl, v); }
+    void set_pc(uint16_t v) { fam65xx_set_pc(&cpu_impl, v); }
     
-    uint8_t a() const { return cpu_impl ? fam65xx_a(cpu_impl) : 0; }
-    uint8_t x() const { return cpu_impl ? fam65xx_x(cpu_impl) : 0; }
-    uint8_t y() const { return cpu_impl ? fam65xx_y(cpu_impl) : 0; }
-    uint8_t s() const { return cpu_impl ? fam65xx_s(cpu_impl) : 0; }
-    uint8_t p() const { return cpu_impl ? fam65xx_p(cpu_impl) : 0; }
-    uint16_t pc() const { return cpu_impl ? fam65xx_pc(cpu_impl) : 0; }
+    uint8_t a() const { return fam65xx_a(const_cast<fam65xx_t*>(&cpu_impl)); }
+    uint8_t x() const { return fam65xx_x(const_cast<fam65xx_t*>(&cpu_impl)); }
+    uint8_t y() const { return fam65xx_y(const_cast<fam65xx_t*>(&cpu_impl)); }
+    uint8_t s() const { return fam65xx_s(const_cast<fam65xx_t*>(&cpu_impl)); }
+    uint8_t p() const { return fam65xx_p(const_cast<fam65xx_t*>(&cpu_impl)); }
+    uint16_t pc() const { return fam65xx_pc(const_cast<fam65xx_t*>(&cpu_impl)); }
     
     // Direct access for compatibility
-    fam65xx_t* get_impl() { return cpu_impl; }
-    const fam65xx_t* get_impl() const { return cpu_impl; }
-    
-    void set_impl(fam65xx_t* impl) { cpu_impl = impl; }
+    fam65xx_t* get_impl() { return &cpu_impl; }
+    const fam65xx_t* get_impl() const { return &cpu_impl; }
     
     // ========================================================================
     // FEATURE QUERIES
