@@ -320,6 +320,11 @@ static bus_state_t fam65xx_phi2_write(fam65xx_t* cpu, bus_state_t pins, reg16_t 
     return pins;
 }
 
+/* ============================================================================
+ * TRANSITION FUNCTIONS
+ * ============================================================================
+ */
+
 /* Transition from addressing mode to operation */
 static inline void fam65xx_transition_to_operation(fam65xx_t* cpu) {
     /* Use the processor-specific internal table - forward declaration */
