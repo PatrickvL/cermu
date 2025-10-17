@@ -27,6 +27,7 @@
 
 #include "fam65xx_types.hpp"
 #include "fam65xx_utils.hpp"
+#include "fam65xx_helpers.hpp"
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,43 +35,7 @@ extern "C" {
 
 #ifdef AIEMUC_IMPL
 
-/* ============================================================================
- * HELPER FUNCTIONS FOR CODE DEDUPLICATION
- * ============================================================================
- */
 
-/* Common pattern: Read operand from immediate or memory mode */
-static inline bus_state_t ops_read_operand_immediate_or_memory(fam65xx_t* cpu, bus_state_t pins) {
-    if (cpu->opcode_entry.am_index == AM_IMM) {
-        /* Immediate mode - read from PC */
-        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        CPU_PC(cpu)++;
-    } else {
-        /* Memory mode - read from target address */
-        pins = fam65xx_phi2_read(cpu, pins, REG_AB);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-    }
-    return pins;
-}
-
-/* Helper for compare operations */
-static inline bus_state_t ops_compare_helper(fam65xx_t* cpu, bus_state_t pins, uint8_t reg_value) {
-    /* PHI2: Read operand using common pattern */
-    pins = ops_read_operand_immediate_or_memory(cpu, pins);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    /* PHI1: Perform compare operation */
-    uint8_t data = BUS_GET_DATA(pins);
-    uint16_t result = reg_value - data;
-    
-    CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-                 (result & FLAG_N) |
-                 ((result & 0xFF) == 0 ? FLAG_Z : 0) |
-                 (reg_value >= data ? FLAG_C : 0);
-    fam65xx_transition_to_fetch(cpu);
-    return pins;
-}
 
 /* ============================================================================
  * ARITHMETIC OPERATIONS
@@ -79,17 +44,9 @@ static inline bus_state_t ops_compare_helper(fam65xx_t* cpu, bus_state_t pins, u
 
 /* ADC - Add with Carry */
 static bus_state_t op_adc(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read operand from target address or PC for immediate */
-    if (cpu->opcode_entry.am_index == AM_IMM) {
-        /* Immediate mode - read from PC */
-        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        CPU_PC(cpu)++;
-    } else {
-        /* Memory mode - read from target address */
-        pins = fam65xx_phi2_read(cpu, pins, REG_AB);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-    }
+    /* PHI2: Read operand using unified helper */
+    pins = read_operand_immediate_or_memory(cpu, pins);
+    if (!FAM65XX_GET_RDY(pins)) return pins;
     
     /* PHI1: Perform ADC operation with BCD support */
     uint8_t operand = BUS_GET_DATA(pins);
@@ -157,17 +114,9 @@ static bus_state_t op_adc(fam65xx_t* cpu, bus_state_t pins) {
 
 /* SBC - Subtract with Carry */
 static bus_state_t op_sbc(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read operand from target address or PC for immediate */
-    if (cpu->opcode_entry.am_index == AM_IMM) {
-        /* Immediate mode - read from PC */
-        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        CPU_PC(cpu)++;
-    } else {
-        /* Memory mode - read from target address */
-        pins = fam65xx_phi2_read(cpu, pins, REG_AB);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-    }
+    /* PHI2: Read operand using unified helper */
+    pins = read_operand_immediate_or_memory(cpu, pins);
+    if (!FAM65XX_GET_RDY(pins)) return pins;
     
     /* PHI1: Perform SBC operation with BCD support */
     uint8_t operand = BUS_GET_DATA(pins);
@@ -369,38 +318,45 @@ static bus_state_t fam65xx_branch_helper(fam65xx_t* cpu, bus_state_t pins, uint8
 
 /* BRA - Branch Always (65C02) */
 static bus_state_t op_bra(fam65xx_t* cpu, bus_state_t pins) {
-    return fam65xx_branch_helper(cpu, pins, 0xFF, true); /* Always branch */
+    return fam65xx_branch_helper(cpu, pins, 0, true);  /* Always branch */
 }
 
-/* Branch operations - alphabetically ordered */
+/* BCC - Branch if Carry Clear */
 static bus_state_t op_bcc(fam65xx_t* cpu, bus_state_t pins) {
     return fam65xx_branch_helper(cpu, pins, FLAG_C, false);
 }
 
+/* BCS - Branch if Carry Set */
 static bus_state_t op_bcs(fam65xx_t* cpu, bus_state_t pins) {
     return fam65xx_branch_helper(cpu, pins, FLAG_C, true);
 }
 
+/* BEQ - Branch if Equal (Zero Set) */
 static bus_state_t op_beq(fam65xx_t* cpu, bus_state_t pins) {
     return fam65xx_branch_helper(cpu, pins, FLAG_Z, true);
 }
 
-static bus_state_t op_bmi(fam65xx_t* cpu, bus_state_t pins) {
-    return fam65xx_branch_helper(cpu, pins, FLAG_N, true);
-}
-
+/* BNE - Branch if Not Equal (Zero Clear) */
 static bus_state_t op_bne(fam65xx_t* cpu, bus_state_t pins) {
     return fam65xx_branch_helper(cpu, pins, FLAG_Z, false);
 }
 
+/* BMI - Branch if Minus (Negative Set) */
+static bus_state_t op_bmi(fam65xx_t* cpu, bus_state_t pins) {
+    return fam65xx_branch_helper(cpu, pins, FLAG_N, true);
+}
+
+/* BPL - Branch if Plus (Negative Clear) */
 static bus_state_t op_bpl(fam65xx_t* cpu, bus_state_t pins) {
     return fam65xx_branch_helper(cpu, pins, FLAG_N, false);
 }
 
+/* BVC - Branch if Overflow Clear */
 static bus_state_t op_bvc(fam65xx_t* cpu, bus_state_t pins) {
     return fam65xx_branch_helper(cpu, pins, FLAG_V, false);
 }
 
+/* BVS - Branch if Overflow Set */
 static bus_state_t op_bvs(fam65xx_t* cpu, bus_state_t pins) {
     return fam65xx_branch_helper(cpu, pins, FLAG_V, true);
 }
@@ -412,17 +368,17 @@ static bus_state_t op_bvs(fam65xx_t* cpu, bus_state_t pins) {
 
 /* CMP - Compare Accumulator */
 static bus_state_t op_cmp(fam65xx_t* cpu, bus_state_t pins) {
-    return ops_compare_helper(cpu, pins, CPU_A(cpu));
+    return compare_helper(cpu, pins, CPU_A(cpu));
 }
 
 /* CPX - Compare X Register */
 static bus_state_t op_cpx(fam65xx_t* cpu, bus_state_t pins) {
-    return ops_compare_helper(cpu, pins, CPU_X(cpu));
+    return compare_helper(cpu, pins, CPU_X(cpu));
 }
 
 /* CPY - Compare Y Register */
 static bus_state_t op_cpy(fam65xx_t* cpu, bus_state_t pins) {
-    return ops_compare_helper(cpu, pins, CPU_Y(cpu));
+    return compare_helper(cpu, pins, CPU_Y(cpu));
 }
 
 

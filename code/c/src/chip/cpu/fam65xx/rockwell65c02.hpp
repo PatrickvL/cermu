@@ -16,14 +16,26 @@
  * - Zero page relative addressing for bit branch instructions
  */
 
+#include "fam65xx_processor_traits.hpp"
+
+// Include tables for template-based opcode generation
+#ifndef AIEMUC_IMPL
+    #define AIEMUC_IMPL
+#endif
+
+// Include the main modular header (which now includes everything)
 #include "fam65xx.hpp"
+
+// Rockwell 65C02 uses the unified opcode table system with Rockwell65C02Tag
+// The processor-specific table is generated using template-based selection
+// ensuring hardware-accurate WDC 65C02 features plus bit manipulation
 
 #ifdef __cplusplus
 
 namespace fam65xx_cpu {
 
 // Rockwell 65C02 CPU class - WDC 65C02 with bit manipulation
-using Rockwell65C02 = fam65xx_variants::fam65xx_variants::CPU<fam65xx_variants::Rockwell65C02Tag>;
+using Rockwell65C02 = fam65xx_variants::CPU<fam65xx_variants::Rockwell65C02Tag>;
 
 // Bit manipulation instruction opcodes
 enum RockwellBitInstructions {

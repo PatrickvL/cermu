@@ -69,17 +69,17 @@ typedef enum {
     OP_ASL, OP_LSR, OP_ROL, OP_ROR,                            // 14-17: Shift/rotate
     OP_INC, OP_DEC,                                            // 18-19: Increment/decrement
     OP_INX, OP_INY, OP_DEX, OP_DEY,                            // 20-23: Register inc/dec
-    OP_TAX, OP_TAY, OP_TXA, OP_TYA, OP_TSX, OP_TXS,           // 24-29: Transfer operations
+    OP_TAX, OP_TAY, OP_TXA, OP_TYA, OP_TSX, OP_TXS,            // 24-29: Transfer operations
     OP_PHA, OP_PHP, OP_PLA, OP_PLP,                            // 30-33: Stack operations
     OP_BCC, OP_BCS, OP_BEQ, OP_BNE, OP_BMI, OP_BPL, OP_BVC, OP_BVS, // 34-41: Branches
-    OP_CLC, OP_SEC, OP_CLI, OP_SEI, OP_CLD, OP_SED, OP_CLV,   // 42-48: Flag operations
-    OP_JMP, OP_JSR, OP_RTS, OP_RTI, OP_BRK,                   // 49-53: Control flow
+    OP_CLC, OP_SEC, OP_CLI, OP_SEI, OP_CLD, OP_SED, OP_CLV,    // 42-48: Flag operations
+    OP_JMP, OP_JSR, OP_RTS, OP_RTI, OP_BRK,                    // 49-53: Control flow
     OP_BIT, OP_NOP, OP_JAM,                                    // 54-56: Test/misc
     
     // Illegal opcodes - most commonly used in 6502/6510 (57-74)
     OP_LAX, OP_SAX, OP_DCP, OP_ISC, OP_SLO, OP_RLA, OP_SRE, OP_RRA, // 57-64: Combo ops
     OP_ANC, OP_ASR, OP_ARR, OP_SBX,                            // 65-68: Special accumulator
-    OP_SHA, OP_SHS, OP_SHX, OP_SHY, OP_LAS,                   // 69-73: Store with AND
+    OP_SHA, OP_SHS, OP_SHX, OP_SHY, OP_LAS,                    // 69-73: Store with AND
     OP_XAA,                                                    // 74: Special operation
     
     // 65C02 enhancements (75-84)
@@ -99,12 +99,9 @@ typedef enum {
     OP_COUNT
 } operation_t;
 
-// Helper to safely convert operation to 7-bit index
-#define OP_TO_7BIT(op) ((op) < OP_COUNT_7BIT ? (op) : OP_NOP)
-
 #ifdef AIEMUC_IMPL
 
-// Include all function implementations to eliminate forward declarations
+// Include split operations and addressing modes
 #include "fam65xx_addrmodes.hpp"
 #include "fam65xx_ops.hpp"
 #include "fam65xx_ops_part2.hpp"
@@ -113,7 +110,10 @@ typedef enum {
 #include "fam65xx_ops_illegal.hpp"
 #include "fam65xx_ops_65c02.hpp"
 
-/* Operation table - function pointers ordered by enum */
+/* External declaration for linker visibility */
+extern const cycle_fn_t fam65xx_op_handlers[OP_COUNT];
+
+/* Operation table - function pointers ordered by enum (uses unified operations) */
 const cycle_fn_t fam65xx_op_handlers[OP_COUNT] = {
     op_lda, // OP_LDA
     op_ldx, // OP_LDX
@@ -172,27 +172,7 @@ const cycle_fn_t fam65xx_op_handlers[OP_COUNT] = {
     op_bit, // OP_BIT
     op_nop, // OP_NOP
     op_jam, // OP_JAM
-    // 65C02 enhancements
-    op_bra, // OP_BRA
-    op_stz, // OP_STZ
-    op_trb, // OP_TRB
-    op_tsb, // OP_TSB
-    op_phx, // OP_PHX
-    op_phy, // OP_PHY
-    op_plx, // OP_PLX
-    op_ply, // OP_PLY
-    op_wai, // OP_WAI
-    op_stp, // OP_STP
-    // Rockwell 65C02 bit manipulation - TODO: implement all
-    op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, // OP_RMB0-7
-    op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, // OP_SMB0-7
-    op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, // OP_BBR0-7
-    op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, // OP_BBS0-7
-    // 65C816 16-bit operations - TODO: implement all
-    op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, // OP_REP-OP_WDM
-    op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, // OP_PEA-OP_PLD
-    op_nop, op_nop, op_nop, op_nop, op_nop, // OP_RTL-OP_MVP
-    // Illegal opcodes - combination instructions
+    // Illegal opcodes - combination instructions (from unified operations)
     op_lax, // OP_LAX
     op_sax, // OP_SAX
     op_dcp, // OP_DCP
@@ -213,13 +193,33 @@ const cycle_fn_t fam65xx_op_handlers[OP_COUNT] = {
     op_shy, // OP_SHY
     op_las, // OP_LAS
     // Illegal opcodes - special operations
-    op_xaa  // OP_XAA
+    op_xaa, // OP_XAA
+    // 65C02 enhancements (from unified operations)
+    op_bra, // OP_BRA
+    op_stz, // OP_STZ
+    op_trb, // OP_TRB
+    op_tsb, // OP_TSB
+    op_phx, // OP_PHX
+    op_phy, // OP_PHY
+    op_plx, // OP_PLX
+    op_ply, // OP_PLY
+    op_wai, // OP_WAI
+    op_stp, // OP_STP
+    // Rockwell 65C02 bit manipulation (from unified operations)
+    op_rmb0, op_rmb1, op_rmb2, op_rmb3, op_rmb4, op_rmb5, op_rmb6, op_rmb7, // OP_RMB0-7
+    op_smb0, op_smb1, op_smb2, op_smb3, op_smb4, op_smb5, op_smb6, op_smb7, // OP_SMB0-7
+    op_bbr0, op_bbr1, op_bbr2, op_bbr3, op_bbr4, op_bbr5, op_bbr6, op_bbr7, // OP_BBR0-7
+    op_bbs0, op_bbs1, op_bbs2, op_bbs3, op_bbs4, op_bbs5, op_bbs6, op_bbs7, // OP_BBS0-7
+    // 65C816 16-bit operations (placeholder - from unified operations when implemented)
+    op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, // OP_REP-OP_WDM
+    op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, op_nop, // OP_PEA-OP_PLD
+    op_nop, op_nop, op_nop, op_nop, op_nop  // OP_RTL-OP_MVP
 };
 
 // Single shared addressing mode table (same across all processors)
 const cycle_fn_t fam65xx_addr_mode_table[AM_COUNT] = {
-    nullptr,  // AM_NON - No handler needed
-    nullptr,  // AM_IMM - No handler (handled in operation)
+    NULL,  // AM_NON - No handler needed
+    NULL,  // AM_IMM - No handler (handled in operation)
     am_zp,    // AM_ZER
     am_zpx,   // AM_ZPX
     am_zpy,   // AM_ZPY
@@ -237,162 +237,67 @@ const cycle_fn_t fam65xx_addr_mode_table[AM_COUNT] = {
 };
 
 // Compact macro for opcode_info_t opcode definition - creates properly formatted bitfield entries
-// Field order: am_index, illegal_store, _reserved, can_skip_page_cross, rmw, op_index
-#define OP(am_index, can_skip_page_cross, op_index, rmw_flag) {(am_index), 0, 0, (can_skip_page_cross), (rmw_flag), OP_TO_7BIT(op_index)}
-#define OP_ILLEGAL_STORE(am_index, can_skip_page_cross, op_index, rmw_flag) {(am_index), 1, 0, (can_skip_page_cross), (rmw_flag), OP_TO_7BIT(op_index)}
-
-#endif /* AIEMUC_IMPL */
-
-#ifdef __cplusplus
-} // extern "C"
-
-// C++ includes outside namespace to avoid namespace pollution
-#include <array>
+// Field order: op_index, am_index, illegal_store, can_skip_page_cross, rmw, _reserved
+#define OP(am_index, can_skip_page_cross, op_index, rmw_flag) {(op_index), (am_index), 0, (can_skip_page_cross), (rmw_flag), 0}
+#define OP_ILLEGAL_STORE(am_index, can_skip_page_cross, op_index, rmw_flag) {(op_index), (am_index), 1, (can_skip_page_cross), (rmw_flag), 0}
 
 // ============================================================================
-// COMPLETE PROCESSOR-SPECIFIC OPCODE TABLES
+// PLACEHOLDER MOS6502 OPCODE TABLE (Standard 6502 implementation)
 // ============================================================================
-// This section provides hardware-accurate opcode tables for each processor variant
-// with complete 256-opcode mapping integrated from fam65xx_unified_opcodes.hpp
+// This provides the basic 6502 opcode table for the current implementation.
+// This will be replaced with the unified template system in a future task.
 
-namespace fam65xx_variants {
-
-// Forward declarations for processor tags (from fam65xx_variants.hpp)
-struct MOS6502Tag;
-struct MOS6510Tag;
-struct WDC65C02Tag;
-struct Rockwell65C02Tag;
-struct WDC65C816Tag;
-
-#ifdef AIEMUC_IMPL
-
-// ============================================================================
-// COMPLETE MOS 6502 OPCODE TABLE (256 entries, hardware-accurate)
-// ============================================================================
-const opcode_info_t mos6502_opcode_table[256] = {
-    // 0x00-0x0F
-    OP(AM_NON, 0, OP_BRK, 0), OP(AM_INX, 1, OP_ORA, 0), OP(AM_NON, 0, OP_JAM, 0), OP(AM_INX, 0, OP_SLO, 0),
-    OP(AM_ZER, 0, OP_NOP, 0), OP(AM_ZER, 1, OP_ORA, 0), OP(AM_ZER, 0, OP_ASL, 1), OP(AM_ZER, 0, OP_SLO, 0),
-    OP(AM_NON, 0, OP_PHP, 0), OP(AM_IMM, 1, OP_ORA, 0), OP(AM_NON, 0, OP_ASL, 1), OP(AM_IMM, 0, OP_ANC, 0),
-    OP(AM_ABS, 0, OP_NOP, 0), OP(AM_ABS, 1, OP_ORA, 0), OP(AM_ABS, 0, OP_ASL, 1), OP(AM_ABS, 0, OP_SLO, 0),
-    
-    // 0x10-0x1F
-    OP(AM_NON, 0, OP_BPL, 0), OP(AM_INY, 1, OP_ORA, 0), OP(AM_NON, 0, OP_JAM, 0), OP_ILLEGAL_STORE(AM_INY, 0, OP_SLO, 0),
-    OP(AM_ZPX, 0, OP_NOP, 0), OP(AM_ZPX, 1, OP_ORA, 0), OP(AM_ZPX, 0, OP_ASL, 1), OP(AM_ZPX, 0, OP_SLO, 0),
-    OP(AM_NON, 0, OP_CLC, 0), OP(AM_ABY, 1, OP_ORA, 0), OP(AM_NON, 0, OP_NOP, 0), OP_ILLEGAL_STORE(AM_ABY, 0, OP_SLO, 0),
-    OP(AM_ABX, 0, OP_NOP, 0), OP(AM_ABX, 1, OP_ORA, 0), OP_ILLEGAL_STORE(AM_ABX, 0, OP_ASL, 1), OP_ILLEGAL_STORE(AM_ABX, 0, OP_SLO, 0),
-    
-    // 0x20-0x2F
-    OP(AM_ABS, 0, OP_JSR, 0), OP(AM_INX, 1, OP_AND, 0), OP(AM_NON, 0, OP_JAM, 0), OP(AM_INX, 0, OP_RLA, 0),
-    OP(AM_ZER, 1, OP_BIT, 0), OP(AM_ZER, 1, OP_AND, 0), OP(AM_ZER, 0, OP_ROL, 1), OP(AM_ZER, 0, OP_RLA, 0),
-    OP(AM_NON, 0, OP_PLP, 0), OP(AM_IMM, 1, OP_AND, 0), OP(AM_NON, 0, OP_ROL, 1), OP(AM_IMM, 0, OP_ANC, 0),
-    OP(AM_ABS, 1, OP_BIT, 0), OP(AM_ABS, 1, OP_AND, 0), OP(AM_ABS, 0, OP_ROL, 1), OP(AM_ABS, 0, OP_RLA, 0),
-    
-    // 0x30-0x3F
-    OP(AM_NON, 0, OP_BMI, 0), OP(AM_INY, 1, OP_AND, 0), OP(AM_NON, 0, OP_JAM, 0), OP_ILLEGAL_STORE(AM_INY, 0, OP_RLA, 0),
-    OP(AM_ZPX, 0, OP_NOP, 0), OP(AM_ZPX, 1, OP_AND, 0), OP(AM_ZPX, 0, OP_ROL, 1), OP(AM_ZPX, 0, OP_RLA, 0),
-    OP(AM_NON, 0, OP_SEC, 0), OP(AM_ABY, 1, OP_AND, 0), OP(AM_NON, 0, OP_NOP, 0), OP_ILLEGAL_STORE(AM_ABY, 0, OP_RLA, 0),
-    OP(AM_ABX, 0, OP_NOP, 0), OP(AM_ABX, 1, OP_AND, 0), OP_ILLEGAL_STORE(AM_ABX, 0, OP_ROL, 1), OP_ILLEGAL_STORE(AM_ABX, 0, OP_RLA, 0),
-    
-    // 0x40-0x4F
-    OP(AM_NON, 0, OP_RTI, 0), OP(AM_INX, 1, OP_EOR, 0), OP(AM_NON, 0, OP_JAM, 0), OP(AM_INX, 0, OP_SRE, 0),
-    OP(AM_ZER, 0, OP_NOP, 0), OP(AM_ZER, 1, OP_EOR, 0), OP(AM_ZER, 0, OP_LSR, 1), OP(AM_ZER, 0, OP_SRE, 0),
-    OP(AM_NON, 0, OP_PHA, 0), OP(AM_IMM, 1, OP_EOR, 0), OP(AM_NON, 0, OP_LSR, 1), OP(AM_IMM, 0, OP_ASR, 0),
-    OP(AM_ABS, 0, OP_JMP, 0), OP(AM_ABS, 1, OP_EOR, 0), OP(AM_ABS, 0, OP_LSR, 1), OP(AM_ABS, 0, OP_SRE, 0),
-    
-    // 0x50-0x5F
-    OP(AM_NON, 0, OP_BVC, 0), OP(AM_INY, 1, OP_EOR, 0), OP(AM_NON, 0, OP_JAM, 0), OP_ILLEGAL_STORE(AM_INY, 0, OP_SRE, 0),
-    OP(AM_ZPX, 0, OP_NOP, 0), OP(AM_ZPX, 1, OP_EOR, 0), OP(AM_ZPX, 0, OP_LSR, 1), OP(AM_ZPX, 0, OP_SRE, 0),
-    OP(AM_NON, 0, OP_CLI, 0), OP(AM_ABY, 1, OP_EOR, 0), OP(AM_NON, 0, OP_NOP, 0), OP_ILLEGAL_STORE(AM_ABY, 0, OP_SRE, 0),
-    OP(AM_ABX, 0, OP_NOP, 0), OP(AM_ABX, 1, OP_EOR, 0), OP_ILLEGAL_STORE(AM_ABX, 0, OP_LSR, 1), OP_ILLEGAL_STORE(AM_ABX, 0, OP_SRE, 0),
-    
-    // 0x60-0x6F
-    OP(AM_NON, 0, OP_RTS, 0), OP(AM_INX, 1, OP_ADC, 0), OP(AM_NON, 0, OP_JAM, 0), OP(AM_INX, 0, OP_RRA, 0),
-    OP(AM_ZER, 0, OP_NOP, 0), OP(AM_ZER, 1, OP_ADC, 0), OP(AM_ZER, 0, OP_ROR, 1), OP(AM_ZER, 0, OP_RRA, 0),
-    OP(AM_NON, 0, OP_PLA, 0), OP(AM_IMM, 1, OP_ADC, 0), OP(AM_NON, 0, OP_ROR, 1), OP(AM_IMM, 0, OP_ARR, 0),
-    OP(AM_IND, 0, OP_JMP, 0), OP(AM_ABS, 1, OP_ADC, 0), OP(AM_ABS, 0, OP_ROR, 1), OP(AM_ABS, 0, OP_RRA, 0),
-    
-    // 0x70-0x7F
-    OP(AM_NON, 0, OP_BVS, 0), OP(AM_INY, 1, OP_ADC, 0), OP(AM_NON, 0, OP_JAM, 0), OP_ILLEGAL_STORE(AM_INY, 0, OP_RRA, 0),
-    OP(AM_ZPX, 0, OP_NOP, 0), OP(AM_ZPX, 1, OP_ADC, 0), OP(AM_ZPX, 0, OP_ROR, 1), OP(AM_ZPX, 0, OP_RRA, 0),
-    OP(AM_NON, 0, OP_SEI, 0), OP(AM_ABY, 1, OP_ADC, 0), OP(AM_NON, 0, OP_NOP, 0), OP_ILLEGAL_STORE(AM_ABY, 0, OP_RRA, 0),
-    OP(AM_ABX, 0, OP_NOP, 0), OP(AM_ABX, 1, OP_ADC, 0), OP_ILLEGAL_STORE(AM_ABX, 0, OP_ROR, 1), OP_ILLEGAL_STORE(AM_ABX, 0, OP_RRA, 0),
-    
-    // 0x80-0x8F
-    OP(AM_IMM, 0, OP_NOP, 0), OP(AM_INX, 0, OP_STA, 0), OP(AM_IMM, 0, OP_NOP, 0), OP(AM_INX, 0, OP_SAX, 0),
-    OP(AM_ZER, 0, OP_STY, 0), OP(AM_ZER, 0, OP_STA, 0), OP(AM_ZER, 0, OP_STX, 0), OP(AM_ZER, 0, OP_SAX, 0),
-    OP(AM_NON, 0, OP_DEY, 0), OP(AM_IMM, 0, OP_NOP, 0), OP(AM_NON, 0, OP_TXA, 0), OP(AM_IMM, 0, OP_XAA, 0),
-    OP(AM_ABS, 0, OP_STY, 0), OP(AM_ABS, 0, OP_STA, 0), OP(AM_ABS, 0, OP_STX, 0), OP(AM_ABS, 0, OP_SAX, 0),
-    
-    // 0x90-0x9F
-    OP(AM_NON, 0, OP_BCC, 0), OP_ILLEGAL_STORE(AM_INY, 0, OP_STA, 0), OP(AM_NON, 0, OP_JAM, 0), OP_ILLEGAL_STORE(AM_INY, 0, OP_SHA, 0),
-    OP(AM_ZPX, 0, OP_STY, 0), OP(AM_ZPX, 0, OP_STA, 0), OP(AM_ZPY, 0, OP_STX, 0), OP(AM_ZPY, 0, OP_SAX, 0),
-    OP(AM_NON, 0, OP_TYA, 0), OP_ILLEGAL_STORE(AM_ABY, 0, OP_STA, 0), OP(AM_NON, 0, OP_TXS, 0), OP_ILLEGAL_STORE(AM_ABY, 0, OP_SHS, 0),
-    OP_ILLEGAL_STORE(AM_ABX, 0, OP_SHY, 0), OP(AM_ABX, 0, OP_STA, 0), OP_ILLEGAL_STORE(AM_ABY, 0, OP_SHX, 0), OP_ILLEGAL_STORE(AM_ABY, 0, OP_SHA, 0),
-    
-    // 0xA0-0xAF
-    OP(AM_IMM, 1, OP_LDY, 0), OP(AM_INX, 1, OP_LDA, 0), OP(AM_IMM, 1, OP_LDX, 0), OP(AM_INX, 1, OP_LAX, 0),
-    OP(AM_ZER, 1, OP_LDY, 0), OP(AM_ZER, 1, OP_LDA, 0), OP(AM_ZER, 1, OP_LDX, 0), OP(AM_ZER, 1, OP_LAX, 0),
-    OP(AM_NON, 0, OP_TAY, 0), OP(AM_IMM, 1, OP_LDA, 0), OP(AM_NON, 0, OP_TAX, 0), OP(AM_IMM, 1, OP_LAX, 0),
-    OP(AM_ABS, 1, OP_LDY, 0), OP(AM_ABS, 1, OP_LDA, 0), OP(AM_ABS, 1, OP_LDX, 0), OP(AM_ABS, 1, OP_LAX, 0),
-    
-    // 0xB0-0xBF
-    OP(AM_NON, 0, OP_BCS, 0), OP(AM_INY, 1, OP_LDA, 0), OP(AM_NON, 0, OP_JAM, 0), OP(AM_INY, 1, OP_LAX, 0),
-    OP(AM_ZPX, 1, OP_LDY, 0), OP(AM_ZPX, 1, OP_LDA, 0), OP(AM_ZPY, 1, OP_LDX, 0), OP(AM_ZPY, 1, OP_LAX, 0),
-    OP(AM_NON, 0, OP_CLV, 0), OP(AM_ABY, 1, OP_LDA, 0), OP(AM_NON, 0, OP_TSX, 0), OP(AM_ABY, 1, OP_LAS, 0),
-    OP(AM_ABX, 1, OP_LDY, 0), OP(AM_ABX, 1, OP_LDA, 0), OP(AM_ABY, 1, OP_LDX, 0), OP(AM_ABY, 1, OP_LAX, 0),
-    
-    // 0xC0-0xCF
-    OP(AM_IMM, 1, OP_CPY, 0), OP(AM_INX, 1, OP_CMP, 0), OP(AM_IMM, 0, OP_NOP, 0), OP(AM_INX, 0, OP_DCP, 0),
-    OP(AM_ZER, 1, OP_CPY, 0), OP(AM_ZER, 1, OP_CMP, 0), OP(AM_ZER, 0, OP_DEC, 1), OP(AM_ZER, 0, OP_DCP, 0),
-    OP(AM_NON, 0, OP_INY, 0), OP(AM_IMM, 1, OP_CMP, 0), OP(AM_NON, 0, OP_DEX, 0), OP(AM_IMM, 0, OP_SBX, 0),
-    OP(AM_ABS, 1, OP_CPY, 0), OP(AM_ABS, 1, OP_CMP, 0), OP(AM_ABS, 0, OP_DEC, 1), OP(AM_ABS, 0, OP_DCP, 0),
-    
-    // 0xD0-0xDF
-    OP(AM_NON, 0, OP_BNE, 0), OP(AM_INY, 1, OP_CMP, 0), OP(AM_NON, 0, OP_JAM, 0), OP_ILLEGAL_STORE(AM_INY, 0, OP_DCP, 0),
-    OP(AM_ZPX, 0, OP_NOP, 0), OP(AM_ZPX, 1, OP_CMP, 0), OP(AM_ZPX, 0, OP_DEC, 1), OP(AM_ZPX, 0, OP_DCP, 0),
-    OP(AM_NON, 0, OP_CLD, 0), OP(AM_ABY, 1, OP_CMP, 0), OP(AM_NON, 0, OP_NOP, 0), OP_ILLEGAL_STORE(AM_ABY, 0, OP_DCP, 0),
-    OP(AM_ABX, 0, OP_NOP, 0), OP(AM_ABX, 1, OP_CMP, 0), OP_ILLEGAL_STORE(AM_ABX, 0, OP_DEC, 1), OP_ILLEGAL_STORE(AM_ABX, 0, OP_DCP, 0),
-    
-    // 0xE0-0xEF
-    OP(AM_IMM, 1, OP_CPX, 0), OP(AM_INX, 1, OP_SBC, 0), OP(AM_IMM, 0, OP_NOP, 0), OP(AM_INX, 0, OP_ISC, 0),
-    OP(AM_ZER, 1, OP_CPX, 0), OP(AM_ZER, 1, OP_SBC, 0), OP(AM_ZER, 0, OP_INC, 1), OP(AM_ZER, 0, OP_ISC, 0),
-    OP(AM_NON, 0, OP_INX, 0), OP(AM_IMM, 1, OP_SBC, 0), OP(AM_NON, 0, OP_NOP, 0), OP(AM_IMM, 1, OP_SBC, 0),
-    OP(AM_ABS, 1, OP_CPX, 0), OP(AM_ABS, 1, OP_SBC, 0), OP(AM_ABS, 0, OP_INC, 1), OP(AM_ABS, 0, OP_ISC, 0),
-    
-    // 0xF0-0xFF
-    OP(AM_NON, 0, OP_BEQ, 0), OP(AM_INY, 1, OP_SBC, 0), OP(AM_NON, 0, OP_JAM, 0), OP_ILLEGAL_STORE(AM_INY, 0, OP_ISC, 0),
-    OP(AM_ZPX, 0, OP_NOP, 0), OP(AM_ZPX, 1, OP_SBC, 0), OP(AM_ZPX, 0, OP_INC, 1), OP(AM_ZPX, 0, OP_ISC, 0),
-    OP(AM_NON, 0, OP_SED, 0), OP(AM_ABY, 1, OP_SBC, 0), OP(AM_NON, 0, OP_NOP, 0), OP_ILLEGAL_STORE(AM_ABY, 0, OP_ISC, 0),
-    OP(AM_ABX, 0, OP_NOP, 0), OP(AM_ABX, 1, OP_SBC, 0), OP_ILLEGAL_STORE(AM_ABX, 0, OP_INC, 1), OP_ILLEGAL_STORE(AM_ABX, 0, OP_ISC, 0)
+static const opcode_info_t fam65xx_mos6502_opcode_table[256] = {
+    OP(AM_NON,0,OP_BRK,0), OP(AM_INX,1,OP_ORA,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INX,0,OP_SLO,1), OP(AM_ZER,1,OP_NOP,0), OP(AM_ZER,1,OP_ORA,0), OP(AM_ZER,0,OP_ASL,1), OP(AM_ZER,0,OP_SLO,1),
+    OP(AM_NON,0,OP_PHP,0), OP(AM_IMM,1,OP_ORA,0), OP(AM_ACC,0,OP_ASL,0), OP(AM_IMM,1,OP_ANC,0), OP(AM_ABS,1,OP_NOP,0), OP(AM_ABS,1,OP_ORA,0), OP(AM_ABS,0,OP_ASL,1), OP(AM_ABS,0,OP_SLO,1),
+    OP(AM_REL,0,OP_BPL,0), OP(AM_INY,1,OP_ORA,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_SLO,1), OP(AM_ZPX,1,OP_NOP,0), OP(AM_ZPX,1,OP_ORA,0), OP(AM_ZPX,0,OP_ASL,1), OP(AM_ZPX,0,OP_SLO,1),
+    OP(AM_NON,0,OP_CLC,0), OP(AM_ABY,1,OP_ORA,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABY,0,OP_SLO,1), OP(AM_ABX,1,OP_NOP,0), OP(AM_ABX,1,OP_ORA,0), OP(AM_ABX,0,OP_ASL,1), OP(AM_ABX,0,OP_SLO,1),
+    OP(AM_NON,0,OP_JSR,0), OP(AM_INX,1,OP_AND,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INX,0,OP_RLA,1), OP(AM_ZER,1,OP_BIT,0), OP(AM_ZER,1,OP_AND,0), OP(AM_ZER,0,OP_ROL,1), OP(AM_ZER,0,OP_RLA,1),
+    OP(AM_NON,0,OP_PLP,0), OP(AM_IMM,1,OP_AND,0), OP(AM_ACC,0,OP_ROL,0), OP(AM_IMM,1,OP_ANC,0), OP(AM_ABS,1,OP_BIT,0), OP(AM_ABS,1,OP_AND,0), OP(AM_ABS,0,OP_ROL,1), OP(AM_ABS,0,OP_RLA,1),
+    OP(AM_REL,0,OP_BMI,0), OP(AM_INY,1,OP_AND,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_RLA,1), OP(AM_ZPX,1,OP_NOP,0), OP(AM_ZPX,1,OP_AND,0), OP(AM_ZPX,0,OP_ROL,1), OP(AM_ZPX,0,OP_RLA,1),
+    OP(AM_NON,0,OP_SEC,0), OP(AM_ABY,1,OP_AND,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABY,0,OP_RLA,1), OP(AM_ABX,1,OP_NOP,0), OP(AM_ABX,1,OP_AND,0), OP(AM_ABX,0,OP_ROL,1), OP(AM_ABX,0,OP_RLA,1),
+    OP(AM_NON,0,OP_RTI,0), OP(AM_INX,1,OP_EOR,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INX,0,OP_SRE,1), OP(AM_ZER,1,OP_NOP,0), OP(AM_ZER,1,OP_EOR,0), OP(AM_ZER,0,OP_LSR,1), OP(AM_ZER,0,OP_SRE,1),
+    OP(AM_NON,0,OP_PHA,0), OP(AM_IMM,1,OP_EOR,0), OP(AM_ACC,0,OP_LSR,0), OP(AM_IMM,1,OP_ASR,0), OP(AM_ABS,1,OP_JMP,0), OP(AM_ABS,1,OP_EOR,0), OP(AM_ABS,0,OP_LSR,1), OP(AM_ABS,0,OP_SRE,1),
+    OP(AM_REL,0,OP_BVC,0), OP(AM_INY,1,OP_EOR,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_SRE,1), OP(AM_ZPX,1,OP_NOP,0), OP(AM_ZPX,1,OP_EOR,0), OP(AM_ZPX,0,OP_LSR,1), OP(AM_ZPX,0,OP_SRE,1),
+    OP(AM_NON,0,OP_CLI,0), OP(AM_ABY,1,OP_EOR,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABY,0,OP_SRE,1), OP(AM_ABX,1,OP_NOP,0), OP(AM_ABX,1,OP_EOR,0), OP(AM_ABX,0,OP_LSR,1), OP(AM_ABX,0,OP_SRE,1),
+    OP(AM_NON,0,OP_RTS,0), OP(AM_INX,1,OP_ADC,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INX,0,OP_RRA,1), OP(AM_ZER,1,OP_NOP,0), OP(AM_ZER,1,OP_ADC,0), OP(AM_ZER,0,OP_ROR,1), OP(AM_ZER,0,OP_RRA,1),
+    OP(AM_NON,0,OP_PLA,0), OP(AM_IMM,1,OP_ADC,0), OP(AM_ACC,0,OP_ROR,0), OP(AM_IMM,1,OP_ARR,0), OP(AM_IND,1,OP_JMP,0), OP(AM_ABS,1,OP_ADC,0), OP(AM_ABS,0,OP_ROR,1), OP(AM_ABS,0,OP_RRA,1),
+    OP(AM_REL,0,OP_BVS,0), OP(AM_INY,1,OP_ADC,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_RRA,1), OP(AM_ZPX,1,OP_NOP,0), OP(AM_ZPX,1,OP_ADC,0), OP(AM_ZPX,0,OP_ROR,1), OP(AM_ZPX,0,OP_RRA,1),
+    OP(AM_NON,0,OP_SEI,0), OP(AM_ABY,1,OP_ADC,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABY,0,OP_RRA,1), OP(AM_ABX,1,OP_NOP,0), OP(AM_ABX,1,OP_ADC,0), OP(AM_ABX,0,OP_ROR,1), OP(AM_ABX,0,OP_RRA,1),
+    OP(AM_IMM,1,OP_NOP,0), OP(AM_INX,0,OP_STA,0), OP(AM_IMM,1,OP_NOP,0), OP(AM_INX,0,OP_SAX,0), OP(AM_ZER,0,OP_STY,0), OP(AM_ZER,0,OP_STA,0), OP(AM_ZER,0,OP_STX,0), OP(AM_ZER,0,OP_SAX,0),
+    OP(AM_NON,0,OP_DEY,0), OP(AM_IMM,1,OP_NOP,0), OP(AM_NON,0,OP_TXA,0), OP(AM_IMM,1,OP_XAA,0), OP(AM_ABS,0,OP_STY,0), OP(AM_ABS,0,OP_STA,0), OP(AM_ABS,0,OP_STX,0), OP(AM_ABS,0,OP_SAX,0),
+    OP(AM_REL,0,OP_BCC,0), OP(AM_INY,0,OP_STA,0), OP(AM_NON,0,OP_JAM,0), OP_ILLEGAL_STORE(AM_INY,0,OP_SHA,0), OP(AM_ZPX,0,OP_STY,0), OP(AM_ZPX,0,OP_STA,0), OP(AM_ZPY,0,OP_STX,0), OP(AM_ZPY,0,OP_SAX,0),
+    OP(AM_NON,0,OP_TYA,0), OP(AM_ABY,0,OP_STA,0), OP(AM_NON,0,OP_TXS,0), OP_ILLEGAL_STORE(AM_ABY,0,OP_SHS,0), OP_ILLEGAL_STORE(AM_ABX,0,OP_SHY,0), OP(AM_ABX,0,OP_STA,0), OP_ILLEGAL_STORE(AM_ABY,0,OP_SHX,0), OP_ILLEGAL_STORE(AM_ABY,0,OP_SHA,0),
+    OP(AM_IMM,1,OP_LDY,0), OP(AM_INX,1,OP_LDA,0), OP(AM_IMM,1,OP_LDX,0), OP(AM_INX,1,OP_LAX,0), OP(AM_ZER,1,OP_LDY,0), OP(AM_ZER,1,OP_LDA,0), OP(AM_ZER,1,OP_LDX,0), OP(AM_ZER,1,OP_LAX,0),
+    OP(AM_NON,0,OP_TAY,0), OP(AM_IMM,1,OP_LDA,0), OP(AM_NON,0,OP_TAX,0), OP(AM_IMM,0,OP_LAX,0), OP(AM_ABS,1,OP_LDY,0), OP(AM_ABS,1,OP_LDA,0), OP(AM_ABS,1,OP_LDX,0), OP(AM_ABS,1,OP_LAX,0),
+    OP(AM_REL,0,OP_BCS,0), OP(AM_INY,1,OP_LDA,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,1,OP_LAX,0), OP(AM_ZPX,1,OP_LDY,0), OP(AM_ZPX,1,OP_LDA,0), OP(AM_ZPY,1,OP_LDX,0), OP(AM_ZPY,1,OP_LAX,0),
+    OP(AM_NON,0,OP_CLV,0), OP(AM_ABY,1,OP_LDA,0), OP(AM_NON,0,OP_TSX,0), OP(AM_ABY,1,OP_LAS,0), OP(AM_ABX,1,OP_LDY,0), OP(AM_ABX,1,OP_LDA,0), OP(AM_ABY,1,OP_LDX,0), OP(AM_ABY,1,OP_LAX,0),
+    OP(AM_IMM,1,OP_CPY,0), OP(AM_INX,1,OP_CMP,0), OP(AM_IMM,1,OP_NOP,0), OP(AM_INX,0,OP_DCP,1), OP(AM_ZER,1,OP_CPY,0), OP(AM_ZER,1,OP_CMP,0), OP(AM_ZER,0,OP_DEC,1), OP(AM_ZER,0,OP_DCP,1),
+    OP(AM_NON,0,OP_INY,0), OP(AM_IMM,1,OP_CMP,0), OP(AM_NON,0,OP_DEX,0), OP(AM_IMM,1,OP_SBX,0), OP(AM_ABS,1,OP_CPY,0), OP(AM_ABS,1,OP_CMP,0), OP(AM_ABS,0,OP_DEC,1), OP(AM_ABS,0,OP_DCP,1),
+    OP(AM_REL,0,OP_BNE,0), OP(AM_INY,1,OP_CMP,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_DCP,1), OP(AM_ZPX,1,OP_NOP,0), OP(AM_ZPX,1,OP_CMP,0), OP(AM_ZPX,0,OP_DEC,1), OP(AM_ZPX,0,OP_DCP,1),
+    OP(AM_NON,0,OP_CLD,0), OP(AM_ABY,1,OP_CMP,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABY,0,OP_DCP,1), OP(AM_ABX,1,OP_NOP,0), OP(AM_ABX,1,OP_CMP,0), OP(AM_ABX,0,OP_DEC,1), OP(AM_ABX,0,OP_DCP,1),
+    OP(AM_IMM,1,OP_CPX,0), OP(AM_INX,1,OP_SBC,0), OP(AM_IMM,1,OP_NOP,0), OP(AM_INX,0,OP_ISC,1), OP(AM_ZER,1,OP_CPX,0), OP(AM_ZER,1,OP_SBC,0), OP(AM_ZER,0,OP_INC,1), OP(AM_ZER,0,OP_ISC,1),
+    OP(AM_NON,0,OP_INX,0), OP(AM_IMM,1,OP_SBC,0), OP(AM_NON,0,OP_NOP,0), OP(AM_IMM,1,OP_SBC,0), OP(AM_ABS,1,OP_CPX,0), OP(AM_ABS,1,OP_SBC,0), OP(AM_ABS,0,OP_INC,1), OP(AM_ABS,0,OP_ISC,1),
+    OP(AM_REL,0,OP_BEQ,0), OP(AM_INY,1,OP_SBC,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_ISC,1), OP(AM_ZPX,1,OP_NOP,0), OP(AM_ZPX,1,OP_SBC,0), OP(AM_ZPX,0,OP_INC,1), OP(AM_ZPX,0,OP_ISC,1),
+    OP(AM_NON,0,OP_SED,0), OP(AM_ABY,1,OP_SBC,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABY,0,OP_ISC,1), OP(AM_ABX,1,OP_NOP,0), OP(AM_ABX,1,OP_SBC,0), OP(AM_ABX,0,OP_INC,1), OP(AM_ABX,0,OP_ISC,1)
 };
 
-#endif // AIEMUC_IMPL
-
-} // namespace fam65xx_variants
-
-// ============================================================================
-// PROCESSOR-AGNOSTIC ACCESS FUNCTIONS (Global scope)
-// ============================================================================
-
-#ifdef AIEMUC_IMPL
-
-// Default processor-agnostic accessor functions - clean static const implementation
+// Default processor-agnostic accessor functions - works with current split file system
 opcode_info_t fam65xx_get_opcode_entry(uint8_t opcode) {
-    // Use MOS 6502 table directly - no macro needed!
-    return fam65xx_variants::mos6502_opcode_table[opcode];
+    return fam65xx_mos6502_opcode_table[opcode];
 }
 
 cycle_fn_t fam65xx_get_addr_mode_handler(int am_index) {
-    // Use the single shared addressing mode table
     if (am_index >= 0 && am_index < AM_COUNT) {
         return fam65xx_addr_mode_table[am_index];
     }
     return nullptr;
 }
 
-#endif
+#endif /* AIEMUC_IMPL */
 
-#endif /* __cplusplus */
+#ifdef __cplusplus
+} // extern "C"
+#endif
 
 #endif /* FAM65XX_TABLES_HPP_INCLUDED */

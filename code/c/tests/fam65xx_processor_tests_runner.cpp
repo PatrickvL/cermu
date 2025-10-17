@@ -789,9 +789,9 @@ void print_usage(const char* program_name) {
     std::cout << "  -j, --jobs N       Number of parallel jobs (default: CPU cores - 1)\n";
     std::cout << "  -h, --help         Show this help message\n";
     std::cout << "\nExamples:\n";
-    std::cout << "  " << program_name << " processor_tests/nes6502/v1/                    # Run with default parallelism\n";
-    std::cout << "  " << program_name << " -j 4 -v processor_tests/nes6502/v1/69.json   # 4 workers, verbose output\n";
-    std::cout << "  " << program_name << " -q -c -j 8 processor_tests/nes6502/v1/       # 8 workers, quiet, continue on failures\n";
+    std::cout << "  " << program_name << " processor_tests/6502/v1/                  # Run with default parallelism\n";
+    std::cout << "  " << program_name << " -j 4 -v processor_tests/6502/v1/69.json   # 4 workers, verbose output\n";
+    std::cout << "  " << program_name << " -q -c -j 8 processor_tests/6502/v1/       # 8 workers, quiet, continue on failures\n";
     std::cout << "\nFeatures:\n";
     std::cout << "  ✓ New template-based MOS 6502 CPU implementation\n";
     std::cout << "  ✓ Parallel test execution for maximum performance\n";

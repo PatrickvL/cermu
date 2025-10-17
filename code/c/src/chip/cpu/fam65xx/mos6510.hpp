@@ -20,16 +20,13 @@
 
 // Include the main modular header (which now includes everything)
 #include "fam65xx.hpp"
-
-// Define internal processor-specific opcode table for MOS 6510
-DEFINE_PROCESSOR_OPCODE_TABLE_INTERNAL(fam65xx_variants::MOS6510Tag)
+#include "../../../core/chip.h"
+#include <cstdlib>
+#include <cstring>
 
 #ifdef __cplusplus
 
 namespace fam65xx_cpu {
-
-// MOS 6510 CPU class - 6502 with I/O port
-using MOS6510 = fam65xx_variants::CPU<fam65xx_variants::MOS6510Tag>;
 
 // I/O Port Callback System for External Decoupling
 struct mos6510_io_callbacks_t {
@@ -68,6 +65,10 @@ struct IOPortState {
     IOPortState() : ddr(0x00), data(0x37), external(0xFF) {}
 };
 
+// Forward declare the type alias
+using MOS6510 = fam65xx_t;
+typedef fam65xx_t MOS6510; // C compatibility
+
 // MOS 6510 with Enhanced I/O Port Management and Callback System
 class MOS6510WithIOPort {
 private:
@@ -79,30 +80,30 @@ private:
     uint32_t io_access_count = 0;
     
 public:
-    // CPU interface delegation
-    bus_state_t init(const fam65xx_desc_t* desc = nullptr) { return cpu.init(desc); }
-    bus_state_t reset(bus_state_t pins) { 
+    // CPU interface delegation using C functions
+    bus_state_t init(const fam65xx_desc_t* desc = nullptr) { return fam65xx_init(&cpu, desc); }
+    bus_state_t reset(bus_state_t pins) {
         io_port = IOPortState(); // Reset I/O port
-        return cpu.reset(pins); 
+        return fam65xx_reset(&cpu, pins);
     }
-    bus_state_t bootstrap(bus_state_t pins) { return cpu.bootstrap(pins); }
-    bus_state_t tick(bus_state_t pins) { return cpu.tick(pins); }
-    bool opdone() const { return cpu.opdone(); }
+    bus_state_t bootstrap(bus_state_t pins) { return fam65xx_bootstrap(&cpu, pins); }
+    bus_state_t tick(bus_state_t pins) { return fam65xx_tick(&cpu, pins); }
+    bool opdone() const { return fam65xx_opdone(const_cast<fam65xx_t*>(&cpu)); }
     
-    // Register access
-    void set_a(uint8_t v) { cpu.set_a(v); }
-    void set_x(uint8_t v) { cpu.set_x(v); }
-    void set_y(uint8_t v) { cpu.set_y(v); }
-    void set_s(uint8_t v) { cpu.set_s(v); }
-    void set_p(uint8_t v) { cpu.set_p(v); }
-    void set_pc(uint16_t v) { cpu.set_pc(v); }
+    // Register access using C functions
+    void set_a(uint8_t v) { fam65xx_set_a(&cpu, v); }
+    void set_x(uint8_t v) { fam65xx_set_x(&cpu, v); }
+    void set_y(uint8_t v) { fam65xx_set_y(&cpu, v); }
+    void set_s(uint8_t v) { fam65xx_set_s(&cpu, v); }
+    void set_p(uint8_t v) { fam65xx_set_p(&cpu, v); }
+    void set_pc(uint16_t v) { fam65xx_set_pc(&cpu, v); }
     
-    uint8_t a() const { return cpu.a(); }
-    uint8_t x() const { return cpu.x(); }
-    uint8_t y() const { return cpu.y(); }
-    uint8_t s() const { return cpu.s(); }
-    uint8_t p() const { return cpu.p(); }
-    uint16_t pc() const { return cpu.pc(); }
+    uint8_t a() const { return fam65xx_a(const_cast<fam65xx_t*>(&cpu)); }
+    uint8_t x() const { return fam65xx_x(const_cast<fam65xx_t*>(&cpu)); }
+    uint8_t y() const { return fam65xx_y(const_cast<fam65xx_t*>(&cpu)); }
+    uint8_t s() const { return fam65xx_s(const_cast<fam65xx_t*>(&cpu)); }
+    uint8_t p() const { return fam65xx_p(const_cast<fam65xx_t*>(&cpu)); }
+    uint16_t pc() const { return fam65xx_pc(const_cast<fam65xx_t*>(&cpu)); }
     
     // I/O Port Callback System
     void set_io_callbacks(const mos6510_io_callbacks_t& cb) {
@@ -193,8 +194,11 @@ public:
 };
 
 // Convenient creation functions
-inline MOS6510 create() {
-    return MOS6510{};
+// Convenient creation function for basic MOS6510
+inline fam65xx_t create() {
+    fam65xx_t cpu;
+    fam65xx_init(&cpu, nullptr);
+    return cpu;
 }
 
 inline MOS6510WithIOPort create_with_io_port() {
@@ -212,15 +216,15 @@ inline MOS6510 create_with_memory(
     desc.mem_write = write_fn;
     desc.mem_user_data = user_data;
     
-    MOS6510 cpu;
-    cpu.init(&desc);
+    fam65xx_t cpu;
+    fam65xx_init(&cpu, &desc);
     return cpu;
 }
 
 } // namespace fam65xx_cpu
 
 // Global type aliases for convenience
-using mos6510_t = fam65xx_cpu::MOS6510;
+using mos6510_t = fam65xx_t;
 using mos6510_with_io_t = fam65xx_cpu::MOS6510WithIOPort;
 
 #endif // __cplusplus
@@ -289,6 +293,101 @@ inline uint8_t mos6510_get_io_data(mos6510_c_t* cpu) {
     return (cpu->io_data & cpu->io_ddr) | (cpu->io_external & ~cpu->io_ddr);
 }
 inline uint8_t mos6510_get_io_external(mos6510_c_t* cpu) { return cpu->io_external; }
+
+// ============================================================================
+// MOS6510 Chip API - System Integration (MIGRATED FROM mos6510/ folder)
+// ============================================================================
+
+// MOS6510 CPU chip structure - zero-overhead wrapper
+typedef struct {
+    fam65xx_t cpu_impl;
+    void (*io_callback)(uint16_t addr, uint8_t data, bool write);
+} mos6510_chip_t;
+
+// Create/destroy CPU instance
+inline mos6510_chip_t* mos6510_chip_create_impl(void) {
+    mos6510_chip_t* chip = (mos6510_chip_t*)malloc(sizeof(mos6510_chip_t));
+    if (chip) {
+        memset(chip, 0, sizeof(mos6510_chip_t));
+    }
+    return chip;
+}
+
+inline void mos6510_destroy(mos6510_chip_t* cpu) {
+    if (cpu) {
+        free(cpu);
+    }
+}
+
+// Initialize CPU with optional IO callback
+inline void mos6510_chip_init(mos6510_chip_t* cpu,
+                       void (*io_callback)(uint16_t addr, uint8_t data, bool write)) {
+    if (cpu) {
+        cpu->io_callback = io_callback;
+        fam65xx_init(&cpu->cpu_impl, nullptr);
+    }
+}
+
+// Main CPU tick - direct bus interface
+inline bus_state_t mos6510_chip_tick(mos6510_chip_t* cpu, bus_state_t bus_state) {
+    if (!cpu) return 0;
+    return fam65xx_tick(&cpu->cpu_impl, bus_state);
+}
+
+// Debug interface
+inline uint16_t mos6510_get_pc(mos6510_chip_t* cpu) {
+    return cpu ? fam65xx_pc(&cpu->cpu_impl) : 0;
+}
+
+inline uint8_t mos6510_get_a(mos6510_chip_t* cpu) {
+    return cpu ? fam65xx_a(&cpu->cpu_impl) : 0;
+}
+
+inline uint8_t mos6510_get_x(mos6510_chip_t* cpu) {
+    return cpu ? fam65xx_x(&cpu->cpu_impl) : 0;
+}
+
+inline uint8_t mos6510_get_y(mos6510_chip_t* cpu) {
+    return cpu ? fam65xx_y(&cpu->cpu_impl) : 0;
+}
+
+inline uint8_t mos6510_get_s(mos6510_chip_t* cpu) {
+    return cpu ? fam65xx_s(&cpu->cpu_impl) : 0;
+}
+
+inline uint8_t mos6510_get_p(mos6510_chip_t* cpu) {
+    return cpu ? fam65xx_p(&cpu->cpu_impl) : 0;
+}
+
+// System integration functions
+inline bus_state_t mos6510_tick_chip(void* chip, bus_state_t bus_state) {
+    return mos6510_chip_tick((mos6510_chip_t*)chip, bus_state);
+}
+
+// Chip descriptor for system registration
+static void* mos6510_chip_create(void* desc) {
+    (void)desc; // Unused parameter
+    return mos6510_chip_create_impl();
+}
+
+static void mos6510_chip_destroy(void* chip) {
+    mos6510_destroy((mos6510_chip_t*)chip);
+}
+
+// Chip descriptor - commented out until chip_descriptor_t is available
+/*
+static chip_descriptor_t mos6510_descriptor = {
+    .description = "MOS6510 CPU (Unified Implementation)",
+    .create = mos6510_chip_create,
+    .destroy = mos6510_chip_destroy,
+    .bus_attach = NULL, // No special bus attachment needed
+    .bank_change = NULL, // No banking change needed
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    .render_debug_window = NULL, // No GUI debug window implemented yet
+    .render_settings_window = NULL // No GUI settings window implemented yet
+#endif
+};
+*/
 
 #ifdef __cplusplus
 }

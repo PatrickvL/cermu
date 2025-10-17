@@ -153,7 +153,7 @@ cycle_fn_t fam65xx_get_addr_mode_handler(int am_index);
 #include "fam65xx_tables.hpp"
 
 /* 3. Template variants - provides processor-specific CPU template classes */
-#include "fam65xx_variants.hpp"
+#include "fam65xx_processor_traits.hpp"
 
 /* 4. Implementation functions - use tables and operation handlers */
 #ifdef __cplusplus

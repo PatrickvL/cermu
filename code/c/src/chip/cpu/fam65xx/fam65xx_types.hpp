@@ -133,6 +133,9 @@ typedef enum {
     REG_DL,        // Data latch
     
     REG_COUNT,
+    
+    // Map ZERO to ZPL to avoid duplication
+    REG_ZERO = REG_ZPL, // Constant zero register (always reads 0x00) 
 
     // Compatibility mapping for 8-bit stack pointer
     REG_S = REG_SPL  // Map legacy S register to SPL for compatibility
@@ -151,12 +154,12 @@ typedef enum {
 // ============================================================================
 
 typedef struct {
-    uint16_t am_index            : 4;   // Addressing mode index (0-15, bits 0-3, nibble-aligned) [See addr_mode_t]
-    uint16_t illegal_store       : 1;   // Illegal store quirk - uses wrong address on page cross (bit 4)
-    uint16_t _reserved           : 2;   // Reserved bits (bits 5-6)
-    uint16_t can_skip_page_cross : 1;   // Can skip page cross penalty cycle (bit 7) - only for read operations
-    uint16_t rmw                 : 1;   // Read-Modify-Write op_index (bit 8)
-    uint16_t op_index            : 7;   // Operation index (0-127, bits 9-15, byte-extractable with >> 9) [See operation_t]
+    uint16_t op_index            : 8;   // Operation index (0-255, bits 0-7, full byte) [See operation_t]
+    uint16_t am_index            : 4;   // Addressing mode index (0-15, bits 8-11, nibble-aligned) [See addressing_mode_t]
+    uint16_t illegal_store       : 1;   // Illegal store quirk - uses wrong address on page cross (bit 12)
+    uint16_t can_skip_page_cross : 1;   // Can skip page cross penalty cycle (bit 13) - only for read operations
+    uint16_t rmw                 : 1;   // Read-Modify-Write operation (bit 14)
+    uint16_t _reserved           : 1;   // Reserved bit (bit 15)
 } opcode_info_t;
 
 // ============================================================================
@@ -189,6 +192,10 @@ struct fam65xx_t {
     fam65xx_mem_read_t mem_read;        /* Memory read callback */
     fam65xx_mem_write_t mem_write;      /* Memory write callback */
     void* mem_user_data;                /* User data for memory callbacks */
+    
+    /* 65C02 extended state */
+    bool wait_for_interrupt;            /* WAI instruction state */
+    bool stopped;                       /* STP instruction state */
 };
 
 /* Accessor macros for cleaner code */

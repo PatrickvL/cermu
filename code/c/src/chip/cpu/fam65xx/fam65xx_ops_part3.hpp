@@ -13,6 +13,7 @@
 
 #include "fam65xx_types.hpp"
 #include "fam65xx_utils.hpp"
+#include "fam65xx_helpers.hpp"
 
 #ifdef __cplusplus
 extern "C" {
@@ -20,32 +21,6 @@ extern "C" {
 
 #ifdef AIEMUC_IMPL
 
-/* ============================================================================
- * HELPER FUNCTIONS FOR CODE DEDUPLICATION
- * ============================================================================
- */
-
-/* Common pattern: Read operand from immediate or memory mode */
-static inline bus_state_t read_operand_immediate_or_memory(fam65xx_t* cpu, bus_state_t pins) {
-    if (cpu->opcode_entry.am_index == AM_IMM) {
-        /* Immediate mode - read from PC */
-        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        CPU_PC(cpu)++;
-    } else {
-        /* Memory mode - read from target address */
-        pins = fam65xx_phi2_read(cpu, pins, REG_AB);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-    }
-    return pins;
-}
-
-/* Common pattern: Simple register operation with dummy cycle */
-static inline bus_state_t simple_register_op_with_dummy_cycle(fam65xx_t* cpu, bus_state_t pins) {
-    pins = fam65xx_phi2_read(cpu, pins, REG_PC);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    return pins;
-}
 
 /* ============================================================================
  * LOAD OPERATIONS

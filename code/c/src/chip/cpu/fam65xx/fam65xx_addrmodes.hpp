@@ -123,7 +123,7 @@ static inline bus_state_t addrmodes_abx_helper(fam65xx_t* cpu, bus_state_t pins,
 }
 
 /* ============================================================================
- * ADDRESSING MODE HANDLERS
+ * 6502 ADDRESSING MODE HANDLERS
  * ============================================================================
  * These handlers prepare the address/data for operations.
  * They transition to the operation handler when complete.
@@ -361,7 +361,7 @@ static bus_state_t am_zpy(fam65xx_t* cpu, bus_state_t pins) {
 }
 
 // ============================================================================
-// ENHANCED ADDRESSING MODES FOR 65C02
+// 65C02 ADDRESSING MODES
 // ============================================================================
 
 // Zero Page Indirect - ($nn) - Multi-cycle addressing mode
