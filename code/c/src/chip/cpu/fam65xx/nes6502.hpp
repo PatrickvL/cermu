@@ -13,14 +13,26 @@
  * - Used in: Nintendo Famicom, Nintendo Entertainment System
  */
 
+#include "fam65xx_processor_traits.hpp"
+
+// Include tables for template-based opcode generation
+#ifndef AIEMUC_IMPL
+    #define AIEMUC_IMPL
+#endif
+
+// Include the main modular header (which now includes everything)
 #include "fam65xx.hpp"
+
+// NES 6502 uses the unified opcode table system with MOS6502Tag
+// The processor-specific table is generated using template-based selection
+// ensuring hardware-accurate illegal opcodes with disabled decimal mode
 
 #ifdef __cplusplus
 
 namespace fam65xx_cpu {
 
 // NES 6502 CPU class - 6502 without decimal mode
-using NES6502 = fam65xx_variants::fam65xx_variants::CPU<fam65xx_variants::MOS6502Tag>;
+using NES6502 = fam65xx_variants::CPU<fam65xx_variants::MOS6502Tag>;
 
 // NES-specific CPU wrapper that disables decimal mode
 class NES6502CPU {

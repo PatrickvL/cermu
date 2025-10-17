@@ -15,14 +15,14 @@
 #include "fam65xx_utils.hpp"
 #include <cstring>
 
+// Forward declaration for BRK handler from unified operations
+extern bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins);
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #ifdef AIEMUC_IMPL
-
-// Forward declaration for BRK handler
-static bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins);
 
 /* ============================================================================
  * PHI2 HANDLERS
@@ -38,7 +38,7 @@ static bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins);
  * ============================================================================
  */
 
-/* Helper function to get interrupt vector address based on BRK flags - now defined in fam65xx_ops_part2.hpp */
+/* Helper function to get interrupt vector address based on BRK flags - now defined in fam65xx_unified_operations.hpp */
 
 /* Merged interrupt processing function - updates shift register and detects completion
  * Hardware accurate implementation with proper edge detection and I flag checking
@@ -304,7 +304,6 @@ bus_state_t fam65xx_bootstrap(fam65xx_t* cpu, bus_state_t pins) {
     
     return pins;
 }
-
 
 #endif /* AIEMUC_IMPL */
 

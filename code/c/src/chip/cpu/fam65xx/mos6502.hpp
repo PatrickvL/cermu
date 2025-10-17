@@ -14,7 +14,7 @@
  * - 64KB address space
  */
 
-#include "fam65xx_variants.hpp"
+#include "fam65xx_processor_traits.hpp"
 
 // Include tables for template-based opcode generation
 #ifndef AIEMUC_IMPL
@@ -24,24 +24,26 @@
 // Include the main modular header (which now includes everything)
 #include "fam65xx.hpp"
 
-// MOS 6502 uses the processor-agnostic access functions
-// The mos6502_opcode_table from fam65xx_tables.hpp is used by default
-// No macro needed - clean static const table implementation!
+// MOS 6502 uses the unified opcode table system
+// The processor-specific table is generated using template-based selection
+// ensuring hardware-accurate illegal opcodes and NMOS-specific behavior
 
 #ifdef __cplusplus
 
 namespace fam65xx_cpu {
 
-// MOS 6502 CPU class - Original NMOS with illegal opcodes
-using MOS6502 = fam65xx_variants::CPU<fam65xx_variants::MOS6502Tag>;
+// MOS 6502 CPU type alias - uses unified implementation
+using MOS6502 = fam65xx_t;
 
 // Convenient creation function
-inline MOS6502 create() {
-    return MOS6502{};
+inline fam65xx_t create() {
+    fam65xx_t cpu;
+    fam65xx_init(&cpu, nullptr);
+    return cpu;
 }
 
 // Initialization with memory callbacks
-inline MOS6502 create_with_memory(
+inline fam65xx_t create_with_memory(
     uint8_t (*read_fn)(void*, uint16_t, uint8_t),
     void (*write_fn)(void*, uint16_t, uint8_t),
     void* user_data = nullptr
@@ -51,15 +53,15 @@ inline MOS6502 create_with_memory(
     desc.mem_write = write_fn;
     desc.mem_user_data = user_data;
     
-    MOS6502 cpu;
-    cpu.init(&desc);
+    fam65xx_t cpu;
+    fam65xx_init(&cpu, &desc);
     return cpu;
 }
 
 } // namespace fam65xx_cpu
 
 // Global type alias for convenience
-using mos6502_t = fam65xx_cpu::MOS6502;
+using mos6502_t = fam65xx_t;
 
 #endif // __cplusplus
 
