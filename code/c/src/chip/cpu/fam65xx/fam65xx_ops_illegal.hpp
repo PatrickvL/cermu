@@ -102,9 +102,17 @@ static bus_state_t op_sax(fam65xx_t* cpu, bus_state_t pins) {
 
 /* ANC - AND with Carry */
 static bus_state_t op_anc(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read operand using unified helper */
-    pins = read_operand_immediate_or_memory(cpu, pins);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
+    /* PHI2: Read operand from target address or PC for immediate */
+    if (cpu->opcode_entry.am_index == AM_IMM) {
+        /* Immediate mode - read from PC */
+        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+        CPU_PC(cpu)++;
+    } else {
+        /* Memory mode - read from target address */
+        pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+    }
     
     /* PHI1: Perform AND and set carry to bit 7 */
     CPU_A(cpu) &= BUS_GET_DATA(pins);
@@ -181,9 +189,17 @@ static bus_state_t op_arr(fam65xx_t* cpu, bus_state_t pins) {
 
 /* ASR - AND + LSR */
 static bus_state_t op_asr(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read operand using unified helper */
-    pins = read_operand_immediate_or_memory(cpu, pins);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
+    /* PHI2: Read operand from target address or PC for immediate */
+    if (cpu->opcode_entry.am_index == AM_IMM) {
+        /* Immediate mode - read from PC */
+        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+        CPU_PC(cpu)++;
+    } else {
+        /* Memory mode - read from target address */
+        pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+    }
     
     /* PHI1: Perform AND then LSR */
     CPU_A(cpu) &= BUS_GET_DATA(pins);
@@ -196,9 +212,17 @@ static bus_state_t op_asr(fam65xx_t* cpu, bus_state_t pins) {
 
 /* SBX - (A & X) - operand -> X */
 static bus_state_t op_sbx(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read operand using unified helper */
-    pins = read_operand_immediate_or_memory(cpu, pins);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
+    /* PHI2: Read operand from target address or PC for immediate */
+    if (cpu->opcode_entry.am_index == AM_IMM) {
+        /* Immediate mode - read from PC */
+        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+        CPU_PC(cpu)++;
+    } else {
+        /* Memory mode - read from target address */
+        pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+    }
     
     /* PHI1: Perform (A & X) - operand -> X */
     uint8_t data = BUS_GET_DATA(pins);
@@ -310,21 +334,12 @@ static bus_state_t op_las(fam65xx_t* cpu, bus_state_t pins) {
  */
 /* SHA (AHX, AXA) - Store A & X & (H+1) with address corruption on page cross */
 static bus_state_t op_sha(fam65xx_t* cpu, bus_state_t pins) {
-    /* For SHA, the intermediate high byte was the high byte before adding the index.
-     * Since illegal stores skip the penalty cycle, we need to reconstruct this.
-     * The current AB contains the final effective address.
-     * The original high byte can be calculated by subtracting the index from the effective address */
+    /* Calculate value: A & X & (intermediate_high + 1) */
+    uint8_t data_value = CPU_A(cpu) & CPU_X(cpu) & (CPU_DL(cpu) + 1);
     
-    uint16_t effective = CPU_AB(cpu);
-    uint16_t base = effective - CPU_Y(cpu);  /* Reconstruct base address by subtracting Y */
-    uint8_t original_high = (base >> 8) & 0xFF;  /* Get original high byte */
-    
-    /* Calculate value: A & X & (original_high + 1) */
-    uint8_t data_value = CPU_A(cpu) & CPU_X(cpu) & (original_high + 1);
-    
-    /* Apply address corruption on page cross */
-    if (fam65xx_page_crossed(base, effective)) {
-        CPU_ABH(cpu) = data_value;  /* Corrupt high byte with the calculated value */
+    /* Apply address corruption on page cross (DL != ABH means page crossed) */
+    if (CPU_DL(cpu) != CPU_ABH(cpu)) {
+        CPU_ABH(cpu) = data_value;
     }
     
     /* Set data to write */
@@ -347,7 +362,7 @@ static bus_state_t op_shs(fam65xx_t* cpu, bus_state_t pins) {
     /* Calculate value: (A & X) & (intermediate_high + 1) */
     uint8_t data_value = ax & (CPU_DL(cpu) + 1);
     
-    /* Apply address corruption on page cross (DL != ABH means page crossed) */
+    /* Apply address corruption on page cross */
     if (CPU_DL(cpu) != CPU_ABH(cpu)) {
         CPU_ABH(cpu) = data_value;
     }
@@ -359,8 +374,9 @@ static bus_state_t op_shs(fam65xx_t* cpu, bus_state_t pins) {
     pins = fam65xx_phi2_write(cpu, pins, REG_AB, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
-    /* PHI1: Set stack pointer to A & X (unique to SHS) and complete instruction */
+    /* PHI1: Set stack pointer to A & X (unique to SHS) */
     CPU_S(cpu) = ax;
+    
     fam65xx_transition_to_fetch(cpu);
     return pins;
 }
