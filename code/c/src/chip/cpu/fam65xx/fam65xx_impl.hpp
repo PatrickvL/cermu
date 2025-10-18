@@ -207,7 +207,23 @@ bus_state_t fam65xx_tick(fam65xx_t* cpu, bus_state_t pins) {
  */
 
 bus_state_t fam65xx_init(fam65xx_t* cpu, const fam65xx_desc_t* desc) {
+    /* CRITICAL: Preserve the opcode table that was initialized by template constructor */
+    opcode_info_t saved_opcode_table[256];
+    #ifdef __cplusplus
+    std::memcpy(saved_opcode_table, cpu->opcode_table, sizeof(cpu->opcode_table));
+    #else
+    memcpy(saved_opcode_table, cpu->opcode_table, sizeof(cpu->opcode_table));
+    #endif
+    
+    /* Clear the CPU state but preserve opcode table */
     memset(cpu, 0, sizeof(fam65xx_t));
+    
+    /* Restore the processor-specific opcode table */
+    #ifdef __cplusplus
+    std::memcpy(cpu->opcode_table, saved_opcode_table, sizeof(cpu->opcode_table));
+    #else
+    memcpy(cpu->opcode_table, saved_opcode_table, sizeof(cpu->opcode_table));
+    #endif
     
     /* Set up memory callbacks */
     if (desc) {
