@@ -21,12 +21,9 @@
 #include "../../../core/chip.h"
 #ifdef __cplusplus
 #include <cstdlib>
-#else
-#include <stdlib.h>
-#endif
-#ifdef __cplusplus
 #include <cstring>
 #else
+#include <stdlib.h>
 #include <string.h>
 #endif
 
