@@ -21,8 +21,16 @@
 // Include the main modular header (which now includes everything)
 #include "fam65xx.hpp"
 #include "../../../core/chip.h"
+#ifdef __cplusplus
 #include <cstdlib>
+#else
+#include <stdlib.h>
+#endif
+#ifdef __cplusplus
 #include <cstring>
+#else
+#include <string.h>
+#endif
 
 #ifdef __cplusplus
 
@@ -81,7 +89,11 @@ private:
     
 public:
     // CPU interface delegation using C functions
-    bus_state_t init(const fam65xx_desc_t* desc = nullptr) { return fam65xx_init(&cpu, desc); }
+    bus_state_t init(const fam65xx_desc_t* desc = nullptr) {
+        bus_state_t result = fam65xx_init(&cpu, desc);
+        fam65xx_init_processor_opcode_table(&cpu, "MOS6510");
+        return result;
+    }
     bus_state_t reset(bus_state_t pins) {
         io_port = IOPortState(); // Reset I/O port
         return fam65xx_reset(&cpu, pins);
@@ -198,6 +210,7 @@ public:
 inline fam65xx_t create() {
     fam65xx_t cpu;
     fam65xx_init(&cpu, nullptr);
+    fam65xx_init_processor_opcode_table(&cpu, "MOS6510");
     return cpu;
 }
 
@@ -218,6 +231,7 @@ inline MOS6510 create_with_memory(
     
     fam65xx_t cpu;
     fam65xx_init(&cpu, &desc);
+    fam65xx_init_processor_opcode_table(&cpu, "MOS6510");
     return cpu;
 }
 
@@ -247,7 +261,9 @@ inline uint64_t mos6510_init(mos6510_c_t* cpu, const fam65xx_desc_t* desc) {
     cpu->io_ddr = 0x00;
     cpu->io_data = 0x37;    // Default C64 startup state
     cpu->io_external = 0xFF;
-    return fam65xx_init(&cpu->impl, desc);
+    uint64_t result = fam65xx_init(&cpu->impl, desc);
+    fam65xx_init_processor_opcode_table(&cpu->impl, "MOS6510");
+    return result;
 }
 
 // Reset MOS 6510 CPU
@@ -324,7 +340,8 @@ inline void mos6510_chip_init(mos6510_chip_t* cpu,
                        void (*io_callback)(uint16_t addr, uint8_t data, bool write)) {
     if (cpu) {
         cpu->io_callback = io_callback;
-        fam65xx_init(&cpu->cpu_impl, nullptr);
+        fam65xx_init(&cpu->cpu_impl, NULL);
+        fam65xx_init_processor_opcode_table(&cpu->cpu_impl, "MOS6510");
     }
 }
 

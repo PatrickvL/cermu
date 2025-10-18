@@ -109,7 +109,10 @@ public:
     // CPU interface delegation
     bus_state_t init(const fam65xx_desc_t* desc = nullptr) {
         extended_state = WDC65C816State();
-        return fam65xx_init(&cpu, desc);
+        bus_state_t result = fam65xx_init(&cpu, desc);
+        extern void fam65xx_init_processor_opcode_table(fam65xx_t* cpu, const char* processor_type);
+        fam65xx_init_processor_opcode_table(&cpu, "WDC65C816");
+        return result;
     }
     
     bus_state_t reset(bus_state_t pins) {
@@ -215,7 +218,11 @@ public:
 
 // Convenient creation functions
 inline WDC65C816 create_basic() {
-    return WDC65C816{};
+    fam65xx_t cpu;
+    fam65xx_init(&cpu, nullptr);
+    extern void fam65xx_init_processor_opcode_table(fam65xx_t* cpu, const char* processor_type);
+    fam65xx_init_processor_opcode_table(&cpu, "WDC65C816");
+    return cpu;
 }
 
 inline WDC65C816CPU create() {
@@ -274,7 +281,9 @@ inline uint64_t wdc65c816_init(wdc65c816_c_t* cpu, const fam65xx_desc_t* desc) {
     cpu->x_16 = 0;
     cpu->y_16 = 0;
     cpu->long_count = 0;
-    return fam65xx_init(&cpu->impl, desc);
+    uint64_t result = fam65xx_init(&cpu->impl, desc);
+    fam65xx_init_processor_opcode_table(&cpu->impl, "WDC65C816");
+    return result;
 }
 
 // Reset WDC 65C816 CPU

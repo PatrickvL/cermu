@@ -35,7 +35,7 @@
 namespace fam65xx_cpu {
 
 // Rockwell 65C02 CPU class - WDC 65C02 with bit manipulation
-using Rockwell65C02 = fam65xx_variants::CPU<fam65xx_variants::Rockwell65C02Tag>;
+using Rockwell65C02 = fam65xx_t;
 
 // Bit manipulation instruction opcodes
 enum RockwellBitInstructions {
@@ -97,13 +97,18 @@ private:
     
 public:
     // CPU interface delegation
-    bus_state_t init(const fam65xx_desc_t* desc = nullptr) { return cpu.init(desc); }
-    bus_state_t reset(bus_state_t pins) { 
-        bit_instruction_count = 0;
-        return cpu.reset(pins); 
+    bus_state_t init(const fam65xx_desc_t* desc = nullptr) {
+        bus_state_t result = fam65xx_init(&cpu, desc);
+        extern void fam65xx_init_processor_opcode_table(fam65xx_t* cpu, const char* processor_type);
+        fam65xx_init_processor_opcode_table(&cpu, "Rockwell65C02");
+        return result;
     }
-    bus_state_t bootstrap(bus_state_t pins) { return cpu.bootstrap(pins); }
-    bool opdone() const { return cpu.opdone(); }
+    bus_state_t reset(bus_state_t pins) {
+        bit_instruction_count = 0;
+        return fam65xx_reset(&cpu, pins);
+    }
+    bus_state_t bootstrap(bus_state_t pins) { return fam65xx_bootstrap(&cpu, pins); }
+    bool opdone() const { return fam65xx_opdone(const_cast<fam65xx_t*>(&cpu)); }
     
     // Enhanced tick with bit instruction tracking
     bus_state_t tick(bus_state_t pins) {
@@ -114,23 +119,23 @@ public:
                 bit_instruction_count++;
             }
         }
-        return cpu.tick(pins);
+        return fam65xx_tick(&cpu, pins);
     }
     
     // Register access
-    void set_a(uint8_t v) { cpu.set_a(v); }
-    void set_x(uint8_t v) { cpu.set_x(v); }
-    void set_y(uint8_t v) { cpu.set_y(v); }
-    void set_s(uint8_t v) { cpu.set_s(v); }
-    void set_p(uint8_t v) { cpu.set_p(v); }
-    void set_pc(uint16_t v) { cpu.set_pc(v); }
+    void set_a(uint8_t v) { fam65xx_set_a(&cpu, v); }
+    void set_x(uint8_t v) { fam65xx_set_x(&cpu, v); }
+    void set_y(uint8_t v) { fam65xx_set_y(&cpu, v); }
+    void set_s(uint8_t v) { fam65xx_set_s(&cpu, v); }
+    void set_p(uint8_t v) { fam65xx_set_p(&cpu, v); }
+    void set_pc(uint16_t v) { fam65xx_set_pc(&cpu, v); }
     
-    uint8_t a() const { return cpu.a(); }
-    uint8_t x() const { return cpu.x(); }
-    uint8_t y() const { return cpu.y(); }
-    uint8_t s() const { return cpu.s(); }
-    uint8_t p() const { return cpu.p(); }
-    uint16_t pc() const { return cpu.pc(); }
+    uint8_t a() const { return fam65xx_a(const_cast<fam65xx_t*>(&cpu)); }
+    uint8_t x() const { return fam65xx_x(const_cast<fam65xx_t*>(&cpu)); }
+    uint8_t y() const { return fam65xx_y(const_cast<fam65xx_t*>(&cpu)); }
+    uint8_t s() const { return fam65xx_s(const_cast<fam65xx_t*>(&cpu)); }
+    uint8_t p() const { return fam65xx_p(const_cast<fam65xx_t*>(&cpu)); }
+    uint16_t pc() const { return fam65xx_pc(const_cast<fam65xx_t*>(&cpu)); }
     
     // Bit instruction queries
     uint32_t get_bit_instruction_count() const { return bit_instruction_count; }
@@ -156,7 +161,11 @@ public:
 
 // Convenient creation functions
 inline Rockwell65C02 create_basic() {
-    return Rockwell65C02{};
+    fam65xx_t cpu;
+    fam65xx_init(&cpu, nullptr);
+    extern void fam65xx_init_processor_opcode_table(fam65xx_t* cpu, const char* processor_type);
+    fam65xx_init_processor_opcode_table(&cpu, "Rockwell65C02");
+    return cpu;
 }
 
 inline Rockwell65C02CPU create() {
@@ -201,7 +210,9 @@ typedef struct {
 // Initialize Rockwell 65C02 CPU
 inline uint64_t rockwell65c02_init(rockwell65c02_c_t* cpu, const fam65xx_desc_t* desc) {
     cpu->bit_count = 0;
-    return fam65xx_init(&cpu->impl, desc);
+    uint64_t result = fam65xx_init(&cpu->impl, desc);
+    fam65xx_init_processor_opcode_table(&cpu->impl, "Rockwell65C02");
+    return result;
 }
 
 // Reset Rockwell 65C02 CPU

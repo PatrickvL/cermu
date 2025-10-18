@@ -13,10 +13,10 @@
  * - Easy extension through feature composition
  */
 
+#ifdef __cplusplus
+
 #include <cstdint>
 #include <type_traits>
-
-#ifdef __cplusplus
 
 namespace fam65xx_core {
 

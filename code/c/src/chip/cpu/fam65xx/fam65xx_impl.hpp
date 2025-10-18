@@ -13,7 +13,11 @@
 
 #include "fam65xx_types.hpp"
 #include "fam65xx_utils.hpp"
+#ifdef __cplusplus
 #include <cstring>
+#else
+#include <string.h>
+#endif
 
 // Forward declaration for BRK handler from unified operations
 extern bus_state_t op_brk(fam65xx_t* cpu, bus_state_t pins);
@@ -114,12 +118,10 @@ bus_state_t fam65xx_opcode_fetch(fam65xx_t* cpu, bus_state_t pins) {
     CPU_IR(cpu) = BUS_GET_DATA(pins);
     
     /* Cache the opcode entry (copy once, accessed many times) */
-    /* Access processor-specific table through CPU instance */
-    /* NOTE: This requires processor-specific implementations to provide table access */
-    extern opcode_info_t fam65xx_get_opcode_entry(uint8_t opcode);
-    extern cycle_fn_t fam65xx_get_addr_mode_handler(int am_index);
+    /* Direct access to CPU's internal processor-specific opcode table */
+    extern const cycle_fn_t fam65xx_addr_mode_table[AM_COUNT];
     
-    opcode_info_t opcode_entry = fam65xx_get_opcode_entry(CPU_IR(cpu));
+    opcode_info_t opcode_entry = cpu->opcode_table[CPU_IR(cpu)];
     cpu->opcode_entry = opcode_entry;
     cpu->cycle_index = 0;
     
@@ -128,7 +130,11 @@ bus_state_t fam65xx_opcode_fetch(fam65xx_t* cpu, bus_state_t pins) {
     
     if (am_index > AM_IMM) {
         /* Has addressing mode cycles */
-        cpu->current_handler = fam65xx_get_addr_mode_handler(am_index);
+        if (am_index >= 0 && am_index < AM_COUNT) {
+            cpu->current_handler = fam65xx_addr_mode_table[am_index];
+        } else {
+            cpu->current_handler = NULL;
+        }
     } else {
         /* No addressing mode (AM_NON) or immediate mode (AM_IMM), go straight to operation */
         cpu->current_handler = fam65xx_op_handlers[opcode_entry.op_index];
@@ -201,7 +207,7 @@ bus_state_t fam65xx_tick(fam65xx_t* cpu, bus_state_t pins) {
  */
 
 bus_state_t fam65xx_init(fam65xx_t* cpu, const fam65xx_desc_t* desc) {
-    std::memset(cpu, 0, sizeof(fam65xx_t));
+    memset(cpu, 0, sizeof(fam65xx_t));
     
     /* Set up memory callbacks */
     if (desc) {
@@ -209,6 +215,9 @@ bus_state_t fam65xx_init(fam65xx_t* cpu, const fam65xx_desc_t* desc) {
         cpu->mem_write = desc->mem_write;
         cpu->mem_user_data = desc->mem_user_data;
     }
+    
+    /* Note: Opcode table initialization is now handled by individual CPU implementations */
+    /* Each CPU wrapper calls fam65xx_init_processor_opcode_table with the correct processor type */
     
     /* Initialize register layout:
      * ZP high byte (REG_ZPH) = 0x00 (always zero for zero page)

@@ -32,7 +32,7 @@
 namespace fam65xx_cpu {
 
 // NES 6502 CPU class - 6502 without decimal mode
-using NES6502 = fam65xx_variants::CPU<fam65xx_variants::MOS6502Tag>;
+using NES6502 = fam65xx_t;
 
 // NES-specific CPU wrapper that disables decimal mode
 class NES6502CPU {
@@ -41,39 +41,44 @@ private:
     
 public:
     // CPU interface delegation
-    bus_state_t init(const fam65xx_desc_t* desc = nullptr) { return cpu.init(desc); }
-    bus_state_t reset(bus_state_t pins) { return cpu.reset(pins); }
-    bus_state_t bootstrap(bus_state_t pins) { return cpu.bootstrap(pins); }
-    bool opdone() const { return cpu.opdone(); }
+    bus_state_t init(const fam65xx_desc_t* desc = nullptr) {
+        bus_state_t result = fam65xx_init(&cpu, desc);
+        extern void fam65xx_init_processor_opcode_table(fam65xx_t* cpu, const char* processor_type);
+        fam65xx_init_processor_opcode_table(&cpu, "NES6502");
+        return result;
+    }
+    bus_state_t reset(bus_state_t pins) { return fam65xx_reset(&cpu, pins); }
+    bus_state_t bootstrap(bus_state_t pins) { return fam65xx_bootstrap(&cpu, pins); }
+    bool opdone() const { return fam65xx_opdone(const_cast<fam65xx_t*>(&cpu)); }
     
     // Modified tick that ignores decimal flag
     bus_state_t tick(bus_state_t pins) {
         // Clear decimal flag before each instruction to disable decimal mode
-        cpu.set_p(cpu.p() & ~0x08);  // Clear D flag
-        return cpu.tick(pins);
+        fam65xx_set_p(&cpu, fam65xx_p(&cpu) & ~0x08);  // Clear D flag
+        return fam65xx_tick(&cpu, pins);
     }
     
     // Register access
-    void set_a(uint8_t v) { cpu.set_a(v); }
-    void set_x(uint8_t v) { cpu.set_x(v); }
-    void set_y(uint8_t v) { cpu.set_y(v); }
-    void set_s(uint8_t v) { cpu.set_s(v); }
-    void set_pc(uint16_t v) { cpu.set_pc(v); }
+    void set_a(uint8_t v) { fam65xx_set_a(&cpu, v); }
+    void set_x(uint8_t v) { fam65xx_set_x(&cpu, v); }
+    void set_y(uint8_t v) { fam65xx_set_y(&cpu, v); }
+    void set_s(uint8_t v) { fam65xx_set_s(&cpu, v); }
+    void set_pc(uint16_t v) { fam65xx_set_pc(&cpu, v); }
     
     // Modified set_p that ignores decimal flag
-    void set_p(uint8_t v) { 
-        cpu.set_p(v & ~0x08);  // Always clear D flag
+    void set_p(uint8_t v) {
+        fam65xx_set_p(&cpu, v & ~0x08);  // Always clear D flag
     }
     
-    uint8_t a() const { return cpu.a(); }
-    uint8_t x() const { return cpu.x(); }
-    uint8_t y() const { return cpu.y(); }
-    uint8_t s() const { return cpu.s(); }
-    uint16_t pc() const { return cpu.pc(); }
+    uint8_t a() const { return fam65xx_a(const_cast<fam65xx_t*>(&cpu)); }
+    uint8_t x() const { return fam65xx_x(const_cast<fam65xx_t*>(&cpu)); }
+    uint8_t y() const { return fam65xx_y(const_cast<fam65xx_t*>(&cpu)); }
+    uint8_t s() const { return fam65xx_s(const_cast<fam65xx_t*>(&cpu)); }
+    uint16_t pc() const { return fam65xx_pc(const_cast<fam65xx_t*>(&cpu)); }
     
     // Modified get_p that always shows decimal flag as clear
-    uint8_t p() const { 
-        return cpu.p() & ~0x08;  // Always clear D flag in return value
+    uint8_t p() const {
+        return fam65xx_p(const_cast<fam65xx_t*>(&cpu)) & ~0x08;  // Always clear D flag in return value
     }
     
     // Direct CPU access (for advanced users who know what they're doing)
@@ -83,7 +88,11 @@ public:
 
 // Convenient creation functions
 inline NES6502 create_basic() {
-    return NES6502{};
+    fam65xx_t cpu;
+    fam65xx_init(&cpu, nullptr);
+    extern void fam65xx_init_processor_opcode_table(fam65xx_t* cpu, const char* processor_type);
+    fam65xx_init_processor_opcode_table(&cpu, "NES6502");
+    return cpu;
 }
 
 inline NES6502CPU create() {
@@ -126,7 +135,9 @@ typedef struct {
 
 // Initialize NES 6502 CPU
 inline uint64_t nes6502_init(nes6502_c_t* cpu, const fam65xx_desc_t* desc) {
-    return fam65xx_init(&cpu->impl, desc);
+    uint64_t result = fam65xx_init(&cpu->impl, desc);
+    fam65xx_init_processor_opcode_table(&cpu->impl, "NES6502");
+    return result;
 }
 
 // Reset NES 6502 CPU
