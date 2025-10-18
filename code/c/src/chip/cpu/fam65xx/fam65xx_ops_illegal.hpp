@@ -40,6 +40,7 @@
 #include "fam65xx_types.hpp"
 #include "fam65xx_utils.hpp"
 #include "fam65xx_helpers.hpp"
+#include "fam65xx_helpers.hpp"
 
 #ifdef __cplusplus
 extern "C" {
@@ -120,54 +121,59 @@ static bus_state_t op_arr(fam65xx_t* cpu, bus_state_t pins) {
     
     /* PHI1: Perform AND then ROR, then mode-dependent processing */
     uint8_t operand = BUS_GET_DATA(pins);
-    uint8_t carry_in = (CPU_P(cpu) & FLAG_C) ? 0x80 : 0;
+    bool carry_in = (CPU_P(cpu) & FLAG_C) != 0;
     
-    /* Step 1: AND A with operand */
-    CPU_A(cpu) &= operand;
+    /* Step 1: AND A with operand - save original for BCD checks */
+    uint8_t original_a = CPU_A(cpu) & operand;
+    CPU_A(cpu) = original_a;
     
     /* Step 2: ROR the result (both modes do this) */
-    CPU_A(cpu) = (CPU_A(cpu) >> 1) | carry_in;
+    uint8_t shifted_a = (CPU_A(cpu) >> 1) | (carry_in ? 0x80 : 0);
     
-    /* Update N and Z flags normally */
-    fam65xx_update_nz_flags(cpu, CPU_A(cpu));
+    /* Clear all flags initially */
+    CPU_P(cpu) &= ~(FLAG_N | FLAG_Z | FLAG_V | FLAG_C);
+    
+    /* Set N and Z flags based on shifted result (floooh does this first) */
+    fam65xx_update_nz_flags(cpu, shifted_a);
     
     if (CPU_P(cpu) & FLAG_D) {
-        /* Decimal mode - ARR has very specific behavior different from normal BCD */
-        uint8_t result = CPU_A(cpu);
+        /* Decimal mode - ARR uses floooh/chips algorithm */
         
-        /* ARR decimal mode algorithm based on hardware analysis:
-         * The key insight is that ARR doesn't follow standard BCD rules
-         * Instead, it appears to add 0x60 when certain conditions are met */
-        
-        /* If low nibble >= 0x0A, add 6 to correct it */
-        if ((result & 0x0F) >= 0x0A) {
-            result += 0x06;
+        /* Set V flag based on bit 6 change between original and shifted */
+        if ((shifted_a ^ CPU_A(cpu)) & 0x40) {
+            CPU_P(cpu) |= FLAG_V;
         }
         
-        /* ARR specific rule: if result >= 0x50, add 0x60 and set carry */
-        if (result >= 0x50) {
+        /* BCD correction using ORIGINAL A value for digit checks (floooh approach) */
+        uint8_t result = shifted_a;
+        
+        /* Low nibble BCD correction - use ORIGINAL A value for threshold check */
+        if ((CPU_A(cpu) & 0x0F) >= 5) {
+            result = ((result + 6) & 0x0F) | (result & 0xF0);
+        }
+        
+        /* High nibble BCD correction and carry - use ORIGINAL A value for threshold check */
+        if ((CPU_A(cpu) & 0xF0) >= 0x50) {
             result += 0x60;
             CPU_P(cpu) |= FLAG_C;
-        } else {
-            CPU_P(cpu) &= ~FLAG_C;
         }
         
         CPU_A(cpu) = result;
         
-        /* Update flags after BCD correction */
-        fam65xx_update_nz_flags(cpu, CPU_A(cpu));
-        
-        /* V flag: bit 6 XOR bit 5 of final result */
-        CPU_P(cpu) = (CPU_P(cpu) & ~FLAG_V) |
-                     (((CPU_A(cpu) & 0x40) ^ ((CPU_A(cpu) & 0x20) << 1)) ? FLAG_V : 0);
+        /* DO NOT update N and Z flags after BCD correction - floooh keeps original flags */
     } else {
         /* Binary mode - special C and V flag behavior */
+        CPU_A(cpu) = shifted_a;
+        
         /* ARR has special C and V flag behavior:
          * C = bit 6 of result (not the shifted-out bit!)
          * V = bit 6 XOR bit 5 of result */
-        CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_C | FLAG_V)) |
-                     ((CPU_A(cpu) & 0x40) ? FLAG_C : 0) |
-                     (((CPU_A(cpu) & 0x40) ^ ((CPU_A(cpu) & 0x20) << 1)) ? FLAG_V : 0);
+        if (CPU_A(cpu) & 0x40) {
+            CPU_P(cpu) |= FLAG_C | FLAG_V;
+        }
+        if (CPU_A(cpu) & 0x20) {
+            CPU_P(cpu) ^= FLAG_V;
+        }
     }
     
     fam65xx_transition_to_fetch(cpu);
