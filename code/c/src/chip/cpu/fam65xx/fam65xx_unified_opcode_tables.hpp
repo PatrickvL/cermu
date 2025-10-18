@@ -54,6 +54,81 @@ template<typename ProcessorTag>
 constexpr opcode_info_t get_opcode_info_for_opcode(uint8_t opcode) {
     using traits = fam65xx_core::ProcessorTraits<ProcessorTag>;
     
+    // Handle processor-specific extensions - override base 6502 table where needed
+    if constexpr (!fam65xx_core::has_illegal_opcodes<ProcessorTag>()) {
+        // CMOS processors: convert illegal opcodes to NOPs with proper addressing modes
+        switch (opcode) {
+            // Convert illegal opcodes to NOPs for non-NMOS processors
+            case 0x02: case 0x12: case 0x22: case 0x32: case 0x42: case 0x52:
+            case 0x62: case 0x72: case 0x92: case 0xB2: case 0xD2: case 0xF2:
+                return {OP_NOP, AM_NON, 0, 0, 0, 0}; // JAM -> NOP
+            
+            case 0x03: case 0x13: case 0x23: case 0x33: case 0x43: case 0x53:
+            case 0x63: case 0x73: case 0xC3: case 0xD3: case 0xE3: case 0xF3:
+                return {OP_NOP, AM_NON, 0, 0, 0, 0}; // Illegal RMW -> NOP
+            
+            case 0x0B: case 0x2B: case 0x4B: case 0x6B: case 0x8B: case 0xAB: case 0xCB:
+                return {OP_NOP, AM_NON, 0, 0, 0, 0}; // Illegal immediate -> NOP
+        }
+        
+        // CMOS enhancements (65C02 and later)
+        if constexpr (fam65xx_core::has_cmos_enhancements<ProcessorTag>()) {
+            switch (opcode) {
+                // Override some illegal opcodes with CMOS enhancements
+                case 0x80: return {OP_BRA, AM_NON, 0, 0, 0, 0}; // REL mode
+                case 0x64: return {OP_STZ, AM_ZER, 0, 0, 0, 0};
+                case 0x74: return {OP_STZ, AM_ZPX, 0, 0, 0, 0};
+                case 0x9C: return {OP_STZ, AM_ABS, 0, 0, 0, 0};
+                case 0x9E: return {OP_STZ, AM_ABX, 0, 0, 0, 0};
+                case 0x14: return {OP_TRB, AM_ZER, 0, 0, 1, 0};
+                case 0x1C: return {OP_TRB, AM_ABS, 0, 0, 1, 0};
+                case 0x04: return {OP_TSB, AM_ZER, 0, 0, 1, 0};
+                case 0x0C: return {OP_TSB, AM_ABS, 0, 0, 1, 0};
+                case 0xDA: return {OP_PHX, AM_NON, 0, 0, 0, 0};
+                case 0xFA: return {OP_PLX, AM_NON, 0, 0, 0, 0};
+                case 0x5A: return {OP_PHY, AM_NON, 0, 0, 0, 0};
+                case 0x7A: return {OP_PLY, AM_NON, 0, 0, 0, 0};
+                case 0xCB: return {OP_WAI, AM_NON, 0, 0, 0, 0};
+                case 0xDB: return {OP_STP, AM_NON, 0, 0, 0, 0};
+                case 0x89: return {OP_BIT, AM_IMM, 0, 1, 0, 0};
+                case 0x3C: return {OP_BIT, AM_ABX, 0, 1, 0, 0};
+                case 0x7C: return {OP_JMP, AM_ABX, 0, 1, 0, 0}; // JMP (abs,X)
+                
+                // Zero page indirect addressing modes
+                case 0x72: return {OP_ADC, AM_ZPI, 0, 1, 0, 0};
+                case 0x32: return {OP_AND, AM_ZPI, 0, 1, 0, 0};
+                case 0xD2: return {OP_CMP, AM_ZPI, 0, 1, 0, 0};
+                case 0x52: return {OP_EOR, AM_ZPI, 0, 1, 0, 0};
+                case 0xB2: return {OP_LDA, AM_ZPI, 0, 1, 0, 0};
+                case 0x12: return {OP_ORA, AM_ZPI, 0, 1, 0, 0};
+                case 0xF2: return {OP_SBC, AM_ZPI, 0, 1, 0, 0};
+                case 0x92: return {OP_STA, AM_ZPI, 0, 0, 0, 0};
+            }
+        }
+        
+        // Rockwell 65C02 bit manipulation instructions
+        if constexpr (fam65xx_core::has_bit_manipulation<ProcessorTag>()) {
+            switch (opcode) {
+                // Override illegal opcodes with bit manipulation (conflicts handled by processor type)
+                case 0x07: case 0x17: case 0x27: case 0x37:
+                case 0x47: case 0x57: case 0x67: case 0x77:
+                    return {OP_RMB0, AM_ZER, 0, 0, 1, 0}; // RMB instructions
+                    
+                case 0x87: case 0x97: case 0xA7: case 0xB7:
+                case 0xC7: case 0xD7: case 0xE7: case 0xF7:
+                    return {OP_SMB0, AM_ZER, 0, 0, 1, 0}; // SMB instructions
+                    
+                case 0x0F: case 0x1F: case 0x2F: case 0x3F:
+                case 0x4F: case 0x5F: case 0x6F: case 0x7F:
+                    return {OP_BBR0, AM_ZPR, 0, 0, 0, 0}; // BBR instructions
+                    
+                case 0x8F: case 0x9F: case 0xAF: case 0xBF:
+                case 0xCF: case 0xDF: case 0xEF: case 0xFF:
+                    return {OP_BBS0, AM_ZPR, 0, 0, 0, 0}; // BBS instructions
+            }
+        }
+    }
+    
     // Define opcode entries exactly matching fam65xx_mos6502_opcode_table format
     // Format: {op_index, am_index, illegal_store, can_skip_page_cross, rmw, _reserved}
     switch (opcode) {
@@ -344,81 +419,6 @@ constexpr opcode_info_t get_opcode_info_for_opcode(uint8_t opcode) {
         case 0xFD: return {OP_SBC, AM_ABX, 0, 1, 0, 0};
         case 0xFE: return {OP_INC, AM_ABX, 0, 0, 1, 0};
         case 0xFF: return {OP_ISC, AM_ABX, 0, 0, 1, 0};
-    }
-    
-    // Handle processor-specific extensions - override base 6502 table where needed
-    if constexpr (!fam65xx_core::has_illegal_opcodes<ProcessorTag>()) {
-        // CMOS processors: convert illegal opcodes to NOPs with proper addressing modes
-        switch (opcode) {
-            // Convert illegal opcodes to NOPs for non-NMOS processors
-            case 0x02: case 0x12: case 0x22: case 0x32: case 0x42: case 0x52:
-            case 0x62: case 0x72: case 0x92: case 0xB2: case 0xD2: case 0xF2:
-                return {OP_NOP, AM_NON, 0, 0, 0, 0}; // JAM -> NOP
-            
-            case 0x03: case 0x13: case 0x23: case 0x33: case 0x43: case 0x53:
-            case 0x63: case 0x73: case 0xC3: case 0xD3: case 0xE3: case 0xF3:
-                return {OP_NOP, AM_NON, 0, 0, 0, 0}; // Illegal RMW -> NOP
-            
-            case 0x0B: case 0x2B: case 0x4B: case 0x6B: case 0x8B: case 0xAB: case 0xCB:
-                return {OP_NOP, AM_NON, 0, 0, 0, 0}; // Illegal immediate -> NOP
-        }
-        
-        // CMOS enhancements (65C02 and later)
-        if constexpr (fam65xx_core::has_cmos_enhancements<ProcessorTag>()) {
-            switch (opcode) {
-                // Override some illegal opcodes with CMOS enhancements
-                case 0x80: return {OP_BRA, AM_NON, 0, 0, 0, 0}; // REL mode
-                case 0x64: return {OP_STZ, AM_ZER, 0, 0, 0, 0};
-                case 0x74: return {OP_STZ, AM_ZPX, 0, 0, 0, 0};
-                case 0x9C: return {OP_STZ, AM_ABS, 0, 0, 0, 0};
-                case 0x9E: return {OP_STZ, AM_ABX, 0, 0, 0, 0};
-                case 0x14: return {OP_TRB, AM_ZER, 0, 0, 1, 0};
-                case 0x1C: return {OP_TRB, AM_ABS, 0, 0, 1, 0};
-                case 0x04: return {OP_TSB, AM_ZER, 0, 0, 1, 0};
-                case 0x0C: return {OP_TSB, AM_ABS, 0, 0, 1, 0};
-                case 0xDA: return {OP_PHX, AM_NON, 0, 0, 0, 0};
-                case 0xFA: return {OP_PLX, AM_NON, 0, 0, 0, 0};
-                case 0x5A: return {OP_PHY, AM_NON, 0, 0, 0, 0};
-                case 0x7A: return {OP_PLY, AM_NON, 0, 0, 0, 0};
-                case 0xCB: return {OP_WAI, AM_NON, 0, 0, 0, 0};
-                case 0xDB: return {OP_STP, AM_NON, 0, 0, 0, 0};
-                case 0x89: return {OP_BIT, AM_IMM, 0, 1, 0, 0};
-                case 0x3C: return {OP_BIT, AM_ABX, 0, 1, 0, 0};
-                case 0x7C: return {OP_JMP, AM_ABX, 0, 1, 0, 0}; // JMP (abs,X)
-                
-                // Zero page indirect addressing modes
-                case 0x72: return {OP_ADC, AM_ZPI, 0, 1, 0, 0};
-                case 0x32: return {OP_AND, AM_ZPI, 0, 1, 0, 0};
-                case 0xD2: return {OP_CMP, AM_ZPI, 0, 1, 0, 0};
-                case 0x52: return {OP_EOR, AM_ZPI, 0, 1, 0, 0};
-                case 0xB2: return {OP_LDA, AM_ZPI, 0, 1, 0, 0};
-                case 0x12: return {OP_ORA, AM_ZPI, 0, 1, 0, 0};
-                case 0xF2: return {OP_SBC, AM_ZPI, 0, 1, 0, 0};
-                case 0x92: return {OP_STA, AM_ZPI, 0, 0, 0, 0};
-            }
-        }
-        
-        // Rockwell 65C02 bit manipulation instructions
-        if constexpr (fam65xx_core::has_bit_manipulation<ProcessorTag>()) {
-            switch (opcode) {
-                // Override illegal opcodes with bit manipulation (conflicts handled by processor type)
-                case 0x07: case 0x17: case 0x27: case 0x37:
-                case 0x47: case 0x57: case 0x67: case 0x77:
-                    return {OP_RMB0, AM_ZER, 0, 0, 1, 0}; // RMB instructions
-                    
-                case 0x87: case 0x97: case 0xA7: case 0xB7:
-                case 0xC7: case 0xD7: case 0xE7: case 0xF7:
-                    return {OP_SMB0, AM_ZER, 0, 0, 1, 0}; // SMB instructions
-                    
-                case 0x0F: case 0x1F: case 0x2F: case 0x3F:
-                case 0x4F: case 0x5F: case 0x6F: case 0x7F:
-                    return {OP_BBR0, AM_ZPR, 0, 0, 0, 0}; // BBR instructions
-                    
-                case 0x8F: case 0x9F: case 0xAF: case 0xBF:
-                case 0xCF: case 0xDF: case 0xEF: case 0xFF:
-                    return {OP_BBS0, AM_ZPR, 0, 0, 0, 0}; // BBS instructions
-            }
-        }
     }
     
     // Default fallback: return NOP for any unhandled opcodes
