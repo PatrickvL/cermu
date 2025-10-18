@@ -69,7 +69,7 @@ endif()
 find_package(OpenGL QUIET)
 
 # Check for local SDL2 installation
-set(SDL2_DIR "${CMAKE_SOURCE_DIR}/deps/sdl2/SDL2-2.30.10")
+set(SDL2_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/sdl2/SDL2-2.30.10")
 if(EXISTS "${SDL2_DIR}/include/SDL.h")
     set(SDL2_FOUND TRUE)
     set(SDL2_INCLUDE_DIRS "${SDL2_DIR}/include")
@@ -104,30 +104,30 @@ endif()
 
 # Include directories
 include_directories(
-    ${CMAKE_SOURCE_DIR}/src/core
-    ${CMAKE_SOURCE_DIR}/src/chip/cpu/mos6510
-    ${CMAKE_SOURCE_DIR}/src/chip/cpu/fam65xx
-    ${CMAKE_SOURCE_DIR}/src/chip/io
-    ${CMAKE_SOURCE_DIR}/src/chip/logic
-    ${CMAKE_SOURCE_DIR}/src/chip/memory
-    ${CMAKE_SOURCE_DIR}/src/chip/sound
-    ${CMAKE_SOURCE_DIR}/src/chip/video
-    ${CMAKE_SOURCE_DIR}/src/systems/c64
-    ${CMAKE_SOURCE_DIR}/src/main
-    ${CMAKE_SOURCE_DIR}/src/gui
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/cpu/mos6510
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/cpu/fam65xx
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/io
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/logic
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/memory
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/sound
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/video
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/systems/c64
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/main
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui
 )
 
 # Add cycle-accurate MOS6510 include path only when enabled
 if(C64_ENABLE_CYCLE_CPU)
-    include_directories(${CMAKE_SOURCE_DIR}/src/chip/cpu/mos6510_cycle)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/chip/cpu/mos6510_cycle)
 endif()
 
 # Add GUI-specific includes only if building GUI
 if(BUILD_GUI)
     include_directories(
-        ${CMAKE_SOURCE_DIR}/external/cimgui
-        ${CMAKE_SOURCE_DIR}/external/cimgui/imgui
-        ${CMAKE_SOURCE_DIR}/external/cimgui/imgui/backends
+        ${CMAKE_CURRENT_SOURCE_DIR}/external/cimgui
+        ${CMAKE_CURRENT_SOURCE_DIR}/external/cimgui/imgui
+        ${CMAKE_CURRENT_SOURCE_DIR}/external/cimgui/imgui/backends
         ${SDL2_INCLUDE_DIRS}
     )
 endif()
@@ -135,14 +135,14 @@ endif()
 # Add cimgui subdirectory if building GUI
 if(BUILD_GUI)
     # Check if cimgui directory exists
-    if(EXISTS "${CMAKE_SOURCE_DIR}/external/cimgui/CMakeLists.txt")
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/cimgui/CMakeLists.txt")
         # Configure cimgui to build as static library
         set(IMGUI_STATIC "yes" CACHE STRING "Build as a static library" FORCE)
         
         # Add cimgui from the external directory
-        add_subdirectory(${CMAKE_SOURCE_DIR}/external/cimgui ${CMAKE_BINARY_DIR}/external/cimgui)
+        add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/external/cimgui ${CMAKE_CURRENT_BINARY_DIR}/external/cimgui)
     else()
-        message(WARNING "cimgui not found at ${CMAKE_SOURCE_DIR}/external/cimgui - disabling GUI build")
+        message(WARNING "cimgui not found at ${CMAKE_CURRENT_SOURCE_DIR}/external/cimgui - disabling GUI build")
         set(BUILD_GUI FALSE)
     endif()
 endif()
@@ -321,7 +321,7 @@ if(BUILD_GUI)
     if(WIN32)
         add_custom_command(TARGET c64emu_gui POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_SOURCE_DIR}/deps/sdl2/SDL2-2.30.10/lib/x64/SDL2.dll"
+            "${CMAKE_CURRENT_SOURCE_DIR}/deps/sdl2/SDL2-2.30.10/lib/x64/SDL2.dll"
             "$<TARGET_FILE_DIR:c64emu_gui>/SDL2.dll"
             COMMENT "Copying SDL2.dll to output directory"
         )

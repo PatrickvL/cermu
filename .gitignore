@@ -9,10 +9,15 @@ code/c/tests/build/
 code/csharp/bin/
 code/csharp/obj/
 
-# CMake files
+# CMake generated files (should never be committed)
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
+Makefile
+*/Makefile
+**/**/Makefile
+CTestTestfile.cmake
+**/**/CTestTestfile.cmake
 
 # Visual Studio files
 .vs/
