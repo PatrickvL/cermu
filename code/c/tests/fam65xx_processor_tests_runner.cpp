@@ -15,6 +15,8 @@
 #include <atomic>
 #include <sstream>
 #include <future>
+#include <map>
+#include <stdexcept>
 
 extern "C" {
 #include "json_parser.h"
@@ -24,10 +26,186 @@ extern "C" {
     #define AIEMUC_IMPL
 #endif
 
-// Include processor-specific headers
+// Include processor-specific headers and types for unified interface
 #include "../src/chip/cpu/fam65xx/mos6502.hpp"
+#include "../src/chip/cpu/fam65xx/fam65xx_types.hpp"
 
 namespace fs = std::filesystem;
+
+// Processor type enumeration
+enum class ProcessorType {
+    MOS6502,
+    NES6502, 
+    MOS6510,
+    WDC65C02,
+    ROCKWELL65C02,
+    WDC65C816
+};
+
+// Processor type to string mapping
+const std::map<ProcessorType, std::string> processor_names = {
+    {ProcessorType::MOS6502, "MOS 6502"},
+    {ProcessorType::NES6502, "NES 6502 (Ricoh 2A03/2A07)"},
+    {ProcessorType::MOS6510, "MOS 6510 (C64)"},
+    {ProcessorType::WDC65C02, "WDC 65C02"},
+    {ProcessorType::ROCKWELL65C02, "Rockwell 65C02"},
+    {ProcessorType::WDC65C816, "WDC 65C816"}
+};
+
+// Helper function to get processor name
+std::string get_processor_name(ProcessorType type) {
+    auto it = processor_names.find(type);
+    if (it != processor_names.end()) {
+        return it->second;
+    }
+    return "Unknown Processor";
+}
+
+// Auto-detect processor type from test path
+ProcessorType detect_processor_from_path(const std::string& test_path) {
+    std::string path_lower = test_path;
+    std::transform(path_lower.begin(), path_lower.end(), path_lower.begin(), ::tolower);
+    
+    if (path_lower.find("processor_tests/6502/") != std::string::npos) return ProcessorType::MOS6502;
+    if (path_lower.find("processor_tests/nes6502/") != std::string::npos) return ProcessorType::NES6502;
+    if (path_lower.find("processor_tests/mos6510/") != std::string::npos) return ProcessorType::MOS6510;
+    if (path_lower.find("processor_tests/wdc65c02/") != std::string::npos) return ProcessorType::WDC65C02;
+    if (path_lower.find("processor_tests/rockwell65c02/") != std::string::npos) return ProcessorType::ROCKWELL65C02;
+    if (path_lower.find("processor_tests/wdc65c816/") != std::string::npos) return ProcessorType::WDC65C816;
+    
+    return ProcessorType::MOS6502;  // Default fallback
+}
+
+// Parse processor type from string (for command line option)
+ProcessorType parse_processor_type(const std::string& processor_str) {
+    std::string proc_lower = processor_str;
+    std::transform(proc_lower.begin(), proc_lower.end(), proc_lower.begin(), ::tolower);
+    
+    if (proc_lower == "mos6502" || proc_lower == "6502") return ProcessorType::MOS6502;
+    if (proc_lower == "nes6502" || proc_lower == "nes") return ProcessorType::NES6502;
+    if (proc_lower == "mos6510" || proc_lower == "6510") return ProcessorType::MOS6510;
+    if (proc_lower == "wdc65c02" || proc_lower == "65c02") return ProcessorType::WDC65C02;
+    if (proc_lower == "rockwell65c02" || proc_lower == "rockwell") return ProcessorType::ROCKWELL65C02;
+    if (proc_lower == "wdc65c816" || proc_lower == "65c816") return ProcessorType::WDC65C816;
+    
+    throw std::invalid_argument("Unknown processor type: " + processor_str);
+}
+
+// Unified processor interface that can work with any 65xx processor
+class UnifiedProcessorInterface {
+public:
+    virtual ~UnifiedProcessorInterface() = default;
+    virtual uint64_t init(const fam65xx_desc_t* desc) = 0;
+    virtual uint64_t bootstrap(uint64_t pins) = 0;
+    virtual uint64_t tick(uint64_t pins) = 0;
+    virtual bool opdone() = 0;
+    
+    // Register accessors
+    virtual uint16_t get_pc() = 0;
+    virtual uint8_t get_a() = 0;
+    virtual uint8_t get_x() = 0;
+    virtual uint8_t get_y() = 0;
+    virtual uint8_t get_sp() = 0;
+    virtual uint8_t get_status() = 0;
+    
+    virtual void set_pc(uint16_t pc) = 0;
+    virtual void set_a(uint8_t a) = 0;
+    virtual void set_x(uint8_t x) = 0;
+    virtual void set_y(uint8_t y) = 0;
+    virtual void set_sp(uint8_t sp) = 0;
+    virtual void set_status(uint8_t p) = 0;
+};
+
+// Template wrapper for MOS6502 processor
+class MOS6502Wrapper : public UnifiedProcessorInterface {
+private:
+    mos6502_c_t cpu;
+    
+public:
+    uint64_t init(const fam65xx_desc_t* desc) override {
+        return mos6502_init(&cpu, desc);
+    }
+    
+    uint64_t bootstrap(uint64_t pins) override {
+        return mos6502_bootstrap(&cpu, pins);
+    }
+    
+    uint64_t tick(uint64_t pins) override {
+        return mos6502_tick(&cpu, pins);
+    }
+    
+    bool opdone() override {
+        return mos6502_opdone(&cpu);
+    }
+    
+    uint16_t get_pc() override {
+        return mos6502_pc(&cpu);
+    }
+    
+    uint8_t get_a() override {
+        return mos6502_a(&cpu);
+    }
+    
+    uint8_t get_x() override {
+        return mos6502_x(&cpu);
+    }
+    
+    uint8_t get_y() override {
+        return mos6502_y(&cpu);
+    }
+    
+    uint8_t get_sp() override {
+        return mos6502_s(&cpu);
+    }
+    
+    uint8_t get_status() override {
+        return mos6502_p(&cpu);
+    }
+    
+    void set_pc(uint16_t pc) override {
+        mos6502_set_pc(&cpu, pc);
+    }
+    
+    void set_a(uint8_t a) override {
+        mos6502_set_a(&cpu, a);
+    }
+    
+    void set_x(uint8_t x) override {
+        mos6502_set_x(&cpu, x);
+    }
+    
+    void set_y(uint8_t y) override {
+        mos6502_set_y(&cpu, y);
+    }
+    
+    void set_sp(uint8_t sp) override {
+        mos6502_set_s(&cpu, sp);
+    }
+    
+    void set_status(uint8_t p) override {
+        mos6502_set_p(&cpu, p);
+    }
+};
+
+// Factory function to create processor instances
+std::unique_ptr<UnifiedProcessorInterface> create_processor(ProcessorType type) {
+    switch (type) {
+        case ProcessorType::MOS6502:
+            return std::make_unique<MOS6502Wrapper>();
+            
+        case ProcessorType::NES6502:
+        case ProcessorType::MOS6510:
+        case ProcessorType::WDC65C02:
+        case ProcessorType::ROCKWELL65C02:
+        case ProcessorType::WDC65C816:
+            // For now, fall back to MOS6502 until we add support for other processors
+            // TODO: Add NES6502Wrapper, MOS6510Wrapper, etc.
+            return std::make_unique<MOS6502Wrapper>();
+            
+        default:
+            throw std::invalid_argument("Unsupported processor type");
+    }
+}
 
 // Test results tracking with enhanced statistics
 struct TestResults {
@@ -107,10 +285,13 @@ public:
     }
 };
 
-// Updated test harness using the new MOS 6502 template-based API
+
+
+// Updated test harness using the unified processor wrapper
 class ProcessorTestHarness {
 private:
-    mos6502_c_t cpu;  // Use the new C wrapper type
+    std::unique_ptr<UnifiedProcessorInterface> cpu_wrapper;
+    ProcessorType processor_type;
     uint8_t memory[65536];
     uint32_t cycle_count;
     uint64_t pins;  // Maintain pins state across steps
@@ -152,12 +333,17 @@ private:
 public:
     // Bootstrap processor for ProcessorTests compatibility
     void bootstrap_processor_for_tests() {
-        pins = mos6502_bootstrap(&cpu, pins);  // Use bootstrap to skip reset sequence
+        pins = cpu_wrapper->bootstrap(pins);
     }
 
-    ProcessorTestHarness() : cycle_count(0) {
+    ProcessorTestHarness(ProcessorType proc_type = ProcessorType::MOS6502) 
+        : processor_type(proc_type), cycle_count(0) {
+        
         // Clear memory (optimized approach from C version)
         std::fill(memory, memory + 65536, 0);
+        
+        // Create processor wrapper for the specified type
+        cpu_wrapper = create_processor(processor_type);
         
         // Initialize CPU with memory callbacks using new API
         fam65xx_desc_t desc = {};
@@ -165,7 +351,7 @@ public:
         desc.mem_write = mem_write;
         desc.mem_user_data = this;
         
-        pins = mos6502_init(&cpu, &desc);  // Use mos6502_init instead of fam65xx_init
+        pins = cpu_wrapper->init(&desc);
         
         // ProcessorTests expects CPU to be ready for immediate execution
         cycle_count = 0;
@@ -225,20 +411,20 @@ public:
         return actual_bus_cycles;
     }
     
-    // CPU state accessors - use new MOS 6502 API
-    void set_pc(uint16_t pc) { mos6502_set_pc(&cpu, pc); }
-    void set_a(uint8_t a) { mos6502_set_a(&cpu, a); }
-    void set_x(uint8_t x) { mos6502_set_x(&cpu, x); }
-    void set_y(uint8_t y) { mos6502_set_y(&cpu, y); }
-    void set_sp(uint8_t sp) { mos6502_set_s(&cpu, sp); }
-    void set_status(uint8_t p) { mos6502_set_p(&cpu, p); }
+    // CPU state accessors - use unified processor wrapper
+    void set_pc(uint16_t pc) { cpu_wrapper->set_pc(pc); }
+    void set_a(uint8_t a) { cpu_wrapper->set_a(a); }
+    void set_x(uint8_t x) { cpu_wrapper->set_x(x); }
+    void set_y(uint8_t y) { cpu_wrapper->set_y(y); }
+    void set_sp(uint8_t sp) { cpu_wrapper->set_sp(sp); }
+    void set_status(uint8_t p) { cpu_wrapper->set_status(p); }
     
-    uint16_t get_pc() const { return mos6502_pc(const_cast<mos6502_c_t*>(&cpu)); }
-    uint8_t get_a() const { return mos6502_a(const_cast<mos6502_c_t*>(&cpu)); }
-    uint8_t get_x() const { return mos6502_x(const_cast<mos6502_c_t*>(&cpu)); }
-    uint8_t get_y() const { return mos6502_y(const_cast<mos6502_c_t*>(&cpu)); }
-    uint8_t get_sp() const { return mos6502_s(const_cast<mos6502_c_t*>(&cpu)); }
-    uint8_t get_status() const { return mos6502_p(const_cast<mos6502_c_t*>(&cpu)); }
+    uint16_t get_pc() const { return cpu_wrapper->get_pc(); }
+    uint8_t get_a() const { return cpu_wrapper->get_a(); }
+    uint8_t get_x() const { return cpu_wrapper->get_x(); }
+    uint8_t get_y() const { return cpu_wrapper->get_y(); }
+    uint8_t get_sp() const { return cpu_wrapper->get_sp(); }
+    uint8_t get_status() const { return cpu_wrapper->get_status(); }
     
     // Memory access (for direct memory setup, not during CPU execution)
     void set_memory(uint16_t addr, uint8_t data) {
@@ -263,24 +449,24 @@ public:
             
             do {
                 // Capture state before tick
-                uint16_t pc_before = mos6502_pc(&cpu);
-                uint8_t a_before = mos6502_a(&cpu);
-                uint8_t x_before = mos6502_x(&cpu);
-                uint8_t y_before = mos6502_y(&cpu);
-                uint8_t s_before = mos6502_s(&cpu);
-                uint8_t p_before = mos6502_p(&cpu);
+                uint16_t pc_before = cpu_wrapper->get_pc();
+                uint8_t a_before = cpu_wrapper->get_a();
+                uint8_t x_before = cpu_wrapper->get_x();
+                uint8_t y_before = cpu_wrapper->get_y();
+                uint8_t s_before = cpu_wrapper->get_sp();
+                uint8_t p_before = cpu_wrapper->get_status();
                 
-                pins = mos6502_tick(&cpu, pins);  // Use mos6502_tick instead of fam65xx_tick
+                pins = cpu_wrapper->tick(pins);
                 cycle_count++;
                 cycle_in_instruction++;
                 
                 // Capture state after tick
-                uint16_t pc_after = mos6502_pc(&cpu);
-                uint8_t a_after = mos6502_a(&cpu);
-                uint8_t x_after = mos6502_x(&cpu);
-                uint8_t y_after = mos6502_y(&cpu);
-                uint8_t s_after = mos6502_s(&cpu);
-                uint8_t p_after = mos6502_p(&cpu);
+                uint16_t pc_after = cpu_wrapper->get_pc();
+                uint8_t a_after = cpu_wrapper->get_a();
+                uint8_t x_after = cpu_wrapper->get_x();
+                uint8_t y_after = cpu_wrapper->get_y();
+                uint8_t s_after = cpu_wrapper->get_sp();
+                uint8_t p_after = cpu_wrapper->get_status();
                 
                 // Log detailed cycle information if debug output provided
                 if (debug_output) {
@@ -310,7 +496,7 @@ public:
                 }
                 
                 // Instruction completes when opdone() returns true
-                bool instruction_done = mos6502_opdone(&cpu);  // Use mos6502_opdone instead of fam65xx_opdone
+                bool instruction_done = cpu_wrapper->opdone();
                 
                 max_cycles--;
                 if (max_cycles == 0) {
@@ -361,13 +547,15 @@ private:
     bool quiet_mode;
     std::atomic<bool>& global_test_failed;
     bool stop_on_failure;
+    ProcessorType processor_type;
     
     
 public:
     TestWorkerPool(size_t num_workers, ThreadSafeOutput& output, ThreadSafeTestResults& res,
-                   bool verbose, bool quiet, std::atomic<bool>& test_failed, bool stop_fail)
+                   bool verbose, bool quiet, std::atomic<bool>& test_failed, bool stop_fail,
+                   ProcessorType proc_type)
         : output_handler(output), results(res), verbose_mode(verbose), quiet_mode(quiet),
-          global_test_failed(test_failed), stop_on_failure(stop_fail) {
+          global_test_failed(test_failed), stop_on_failure(stop_fail), processor_type(proc_type) {
         
         for (size_t i = 0; i < num_workers; ++i) {
             workers.emplace_back(&TestWorkerPool::worker_thread, this, i);
@@ -400,7 +588,7 @@ private:
     void worker_thread(size_t worker_id) {
         // PERFORMANCE OPTIMIZATION: Create one harness per worker thread
         // Reuse the same harness for all tests in this thread to avoid repeated initialization
-        ProcessorTestHarness harness;
+        ProcessorTestHarness harness(processor_type);  // Pass processor type to harness
         processor_test_t* previous_test = nullptr;
         
         while (!shutdown) {
@@ -779,8 +967,12 @@ std::vector<TestItem> collect_all_tests(const std::vector<std::string>& test_pat
 
 // Enhanced usage information
 void print_usage(const char* program_name) {
-    std::cout << "fam65xx ProcessorTests Runner - Template Edition\n";
+    std::cout << "fam65xx ProcessorTests Runner - Multi-Processor Edition\n";
     std::cout << "Usage: " << program_name << " [options] <test_file_or_directory>\n";
+    std::cout << "\nProcessor Selection:\n";
+    std::cout << "  -p, --processor P  Specify processor type (overrides auto-detection)\n";
+    std::cout << "                     Supported: mos6502, nes6502, mos6510, wdc65c02, rockwell65c02, wdc65c816\n";
+    std::cout << "                     Aliases: 6502, nes, 6510, 65c02, rockwell, 65c816\n";
     std::cout << "\nTest Execution Options:\n";
     std::cout << "  -v, --verbose      Enable verbose output with detailed execution logs\n";
     std::cout << "  -q, --quiet        Quiet mode - only show final summary\n";
@@ -788,12 +980,23 @@ void print_usage(const char* program_name) {
     std::cout << "  -s, --stop-first   Stop on first failure (default behavior)\n";
     std::cout << "  -j, --jobs N       Number of parallel jobs (default: CPU cores - 1)\n";
     std::cout << "  -h, --help         Show this help message\n";
+    std::cout << "\nProcessor Auto-Detection:\n";
+    std::cout << "  If no -p flag is specified, processor type is auto-detected from test path:\n";
+    std::cout << "  • processor_tests/6502/v1/      → MOS 6502\n";
+    std::cout << "  • processor_tests/nes6502/v1/   → NES 6502 (Ricoh 2A03/2A07)\n";
+    std::cout << "  • processor_tests/mos6510/v1/   → MOS 6510 (C64)\n";
+    std::cout << "  • processor_tests/wdc65c02/v1/  → WDC 65C02\n";
+    std::cout << "  • processor_tests/rockwell65c02/v1/ → Rockwell 65C02\n";
+    std::cout << "  • processor_tests/wdc65c816/v1/ → WDC 65C816\n";
     std::cout << "\nExamples:\n";
-    std::cout << "  " << program_name << " processor_tests/6502/v1/                  # Run with default parallelism\n";
-    std::cout << "  " << program_name << " -j 4 -v processor_tests/6502/v1/69.json   # 4 workers, verbose output\n";
-    std::cout << "  " << program_name << " -q -c -j 8 processor_tests/6502/v1/       # 8 workers, quiet, continue on failures\n";
+    std::cout << "  " << program_name << " processor_tests/6502/v1/                  # Auto-detect MOS 6502\n";
+    std::cout << "  " << program_name << " -p nes6502 processor_tests/6502/v1/       # Force NES 6502 on 6502 tests\n";
+    std::cout << "  " << program_name << " -j 4 -v processor_tests/nes6502/v1/       # Auto-detect NES, 4 workers, verbose\n";
+    std::cout << "  " << program_name << " -p wdc65c02 -q -c processor_tests/        # Force WDC 65C02, quiet mode\n";
     std::cout << "\nFeatures:\n";
-    std::cout << "  ✓ New template-based MOS 6502 CPU implementation\n";
+    std::cout << "  ✓ Multi-processor support (6502 family)\n";
+    std::cout << "  ✓ Automatic processor detection from test path\n";
+    std::cout << "  ✓ Manual processor override via command line\n";
     std::cout << "  ✓ Parallel test execution for maximum performance\n";
     std::cout << "  ✓ Thread-safe output (no mixed stdout)\n";
     std::cout << "  ✓ Intelligent core usage (hardware cores - 1)\n";
@@ -801,9 +1004,9 @@ void print_usage(const char* program_name) {
 }
 
 // Enhanced results printing
-void print_results(std::chrono::milliseconds duration, size_t num_workers) {
-    std::cout << "\n=== FAM65XX PROCESSOR TESTS RESULTS (Template Edition) ===\n";
-    std::cout << "CPU Implementation: Template-based MOS 6502\n";
+void print_results(std::chrono::milliseconds duration, size_t num_workers, ProcessorType processor_type) {
+    std::cout << "\n=== FAM65XX PROCESSOR TESTS RESULTS (Multi-Processor Edition) ===\n";
+    std::cout << "CPU Implementation: " << get_processor_name(processor_type) << "\n";
     std::cout << "Execution time: " << duration.count() << " ms\n";
     std::cout << "Worker threads: " << num_workers << "\n";
     std::cout << "Total tests run: " << results.total_tests << "\n";
@@ -854,6 +1057,8 @@ int main(int argc, char* argv[]) {
     
     std::vector<std::string> test_paths;
     size_t num_workers = std::max(1u, std::thread::hardware_concurrency() - 1); // CPU cores - 1
+    ProcessorType processor_type_override = ProcessorType::MOS6502;  // Default fallback
+    bool processor_specified = false;
     
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
@@ -870,6 +1075,17 @@ int main(int argc, char* argv[]) {
             if (i + 1 < argc) {
                 num_workers = std::max(1, std::atoi(argv[++i]));
             }
+        } else if (arg == "-p" || arg == "--processor") {
+            if (i + 1 < argc) {
+                try {
+                    processor_type_override = parse_processor_type(argv[++i]);
+                    processor_specified = true;
+                } catch (const std::invalid_argument& e) {
+                    std::cout << "ERROR: " << e.what() << "\n";
+                    print_usage(argv[0]);
+                    return 1;
+                }
+            }
         } else if (arg == "-h" || arg == "--help") {
             print_usage(argv[0]);
             return 0;
@@ -884,8 +1100,17 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    std::cout << "=== fam65xx ProcessorTests Runner - Template Edition ===\n";
-    std::cout << "CPU Implementation: Template-based MOS 6502\n";
+    // Auto-detect processor type from first test path if not specified
+    ProcessorType detected_processor_type = processor_specified ? 
+        processor_type_override : detect_processor_from_path(test_paths[0]);
+    
+    std::cout << "=== fam65xx ProcessorTests Runner - Multi-Processor Edition ===\n";
+    std::cout << "CPU Implementation: " << get_processor_name(detected_processor_type) << "\n";
+    if (processor_specified) {
+        std::cout << "Processor selection: Manual override (--processor)\n";
+    } else {
+        std::cout << "Processor selection: Auto-detected from test path\n";
+    }
     std::cout << "Test paths: " << test_paths.size() << " specified\n";
     std::cout << "Worker threads: " << num_workers << "\n";
     std::cout << "Verbose: " << (verbose_output ? "enabled" : "disabled") << "\n";
@@ -908,7 +1133,8 @@ int main(int argc, char* argv[]) {
     ThreadSafeOutput output_handler;
     ThreadSafeTestResults thread_results;
     TestWorkerPool worker_pool(num_workers, output_handler, thread_results, 
-                               verbose_output, g_quiet_mode, g_test_failed, g_stop_on_failure);
+                               verbose_output, g_quiet_mode, g_test_failed, g_stop_on_failure,
+                               detected_processor_type);
     
     // Submit all tests to worker pool
     std::cout << "Starting parallel execution...\n";
@@ -945,7 +1171,7 @@ int main(int argc, char* argv[]) {
     // Transfer results to global structure
     thread_results.merge_into_global(results);
     
-    print_results(duration, num_workers);
+    print_results(duration, num_workers, detected_processor_type);
     
     if (results.total_tests == 0) {
         std::cout << "\nNo tests were executed!\n";
