@@ -7,6 +7,7 @@
 
 #define AIEMUC_IMPL
 #include "fam65xx_unified_opcode_tables.hpp"
+#include <cstring>  // For memcpy
 
 namespace fam65xx_unified_tables {
 
@@ -27,19 +28,19 @@ namespace tables {
     // Initialize all tables
     void initialize_tables() {
         // Generate MOS 6502 table
-        mos6502_table = generate_opcode_table<fam65xx_variants::MOS6502Tag>();
+        mos6502_table = generate_opcode_table<fam65xx_core::MOS6502Tag>();
         
         // Generate MOS 6510 table
-        mos6510_table = generate_opcode_table<fam65xx_variants::MOS6510Tag>();
+        mos6510_table = generate_opcode_table<fam65xx_core::MOS6510Tag>();
         
         // Generate WDC 65C02 table
-        wdc65c02_table = generate_opcode_table<fam65xx_variants::WDC65C02Tag>();
+        wdc65c02_table = generate_opcode_table<fam65xx_core::WDC65C02Tag>();
         
         // Generate Rockwell 65C02 table
-        rockwell65c02_table = generate_opcode_table<fam65xx_variants::Rockwell65C02Tag>();
+        rockwell65c02_table = generate_opcode_table<fam65xx_core::Rockwell65C02Tag>();
         
         // Generate WDC 65C816 table
-        wdc65c816_table = generate_opcode_table<fam65xx_variants::WDC65C816Tag>();
+        wdc65c816_table = generate_opcode_table<fam65xx_core::WDC65C816Tag>();
     }
 }
 
@@ -78,19 +79,19 @@ void initialize_processor_tables() {
     // Generate each processor's table using the template function from unified tables
     for (int i = 0; i < 256; ++i) {
         uint8_t opcode = static_cast<uint8_t>(i);
-        mos6502_table_storage[i] = fam65xx_unified_tables::get_processor_opcode_entry<MOS6502Tag>(opcode);
-        mos6510_table_storage[i] = fam65xx_unified_tables::get_processor_opcode_entry<MOS6510Tag>(opcode);
-        wdc65c02_table_storage[i] = fam65xx_unified_tables::get_processor_opcode_entry<WDC65C02Tag>(opcode);
-        rockwell65c02_table_storage[i] = fam65xx_unified_tables::get_processor_opcode_entry<Rockwell65C02Tag>(opcode);
-        wdc65c816_table_storage[i] = fam65xx_unified_tables::get_processor_opcode_entry<WDC65C816Tag>(opcode);
+        mos6502_table_storage[i] = fam65xx_unified_tables::get_processor_opcode_entry<fam65xx_core::MOS6502Tag>(opcode);
+        mos6510_table_storage[i] = fam65xx_unified_tables::get_processor_opcode_entry<fam65xx_core::MOS6510Tag>(opcode);
+        wdc65c02_table_storage[i] = fam65xx_unified_tables::get_processor_opcode_entry<fam65xx_core::WDC65C02Tag>(opcode);
+        rockwell65c02_table_storage[i] = fam65xx_unified_tables::get_processor_opcode_entry<fam65xx_core::Rockwell65C02Tag>(opcode);
+        wdc65c816_table_storage[i] = fam65xx_unified_tables::get_processor_opcode_entry<fam65xx_core::WDC65C816Tag>(opcode);
     }
     
     // Copy to the exposed arrays (const_cast is safe here since we're initializing)
-    std::memcpy(const_cast<opcode_info_t*>(mos6502_opcode_table), mos6502_table_storage, sizeof(mos6502_opcode_table));
-    std::memcpy(const_cast<opcode_info_t*>(mos6510_opcode_table), mos6510_table_storage, sizeof(mos6510_opcode_table));
-    std::memcpy(const_cast<opcode_info_t*>(wdc65c02_opcode_table), wdc65c02_table_storage, sizeof(wdc65c02_opcode_table));
-    std::memcpy(const_cast<opcode_info_t*>(rockwell65c02_opcode_table), rockwell65c02_table_storage, sizeof(rockwell65c02_opcode_table));
-    std::memcpy(const_cast<opcode_info_t*>(wdc65c816_opcode_table), wdc65c816_table_storage, sizeof(wdc65c816_opcode_table));
+    memcpy(const_cast<opcode_info_t*>(mos6502_opcode_table), mos6502_table_storage, sizeof(mos6502_opcode_table));
+    memcpy(const_cast<opcode_info_t*>(mos6510_opcode_table), mos6510_table_storage, sizeof(mos6510_opcode_table));
+    memcpy(const_cast<opcode_info_t*>(wdc65c02_opcode_table), wdc65c02_table_storage, sizeof(wdc65c02_opcode_table));
+    memcpy(const_cast<opcode_info_t*>(rockwell65c02_opcode_table), rockwell65c02_table_storage, sizeof(rockwell65c02_opcode_table));
+    memcpy(const_cast<opcode_info_t*>(wdc65c816_opcode_table), wdc65c816_table_storage, sizeof(wdc65c816_opcode_table));
     
     tables_initialized = true;
 }

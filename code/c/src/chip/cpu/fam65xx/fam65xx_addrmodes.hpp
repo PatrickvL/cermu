@@ -6,7 +6,9 @@
  * for CPU operations. These handlers are called before operation handlers
  * and set up the target address in the Address Bus (AB) register.
  *
- * Addressing modes supported:
+ * ADDRESSING MODES SUPPORTED:
+ *
+ * Base 6502 (all processors):
  * - Zero Page (ZP): $00nn
  * - Zero Page,X (ZPX): ($00nn + X) & 0xFF
  * - Zero Page,Y (ZPY): ($00nn + Y) & 0xFF
@@ -16,6 +18,22 @@
  * - Indirect (IND): ($nnnn) - JMP only, includes 6502 page boundary bug
  * - Indexed Indirect (INX): (($nn + X) & 0xFF)
  * - Indirect Indexed (INY): ($nn) + Y (with page cross optimization)
+ *
+ * 65C02 enhancements (CMOS_ENHANCEMENTS trait):
+ * - Zero Page Indirect (ZPI): ($nn) - enhanced addressing
+ *
+ * Rockwell 65C02 (BIT_MANIPULATION trait):
+ * - Zero Page Relative (ZPR): nn,label - for BBR/BBS instructions
+ *
+ * 65C816 enhancements (WIDE_REGISTERS trait):
+ * - Absolute Indexed Indirect (ABI): ($nnnn,X)
+ * - Stack Relative (SR): n,S
+ * - Stack Relative Indirect Indexed (SRI): (n,S),Y
+ *
+ * TRAIT-BASED INTEGRATION:
+ * - Enhanced addressing modes are automatically available based on ProcessorTraits
+ * - The opcode table generation system selects appropriate modes per processor
+ * - No runtime overhead - processor differences resolved at compile time
  *
  * Note: Immediate, Implicit, Accumulator, and Relative modes don't use
  * addressing mode handlers - they're handled directly in operations.
