@@ -132,17 +132,20 @@ static bus_state_t op_arr(fam65xx_t* cpu, bus_state_t pins) {
     fam65xx_update_nz_flags(cpu, CPU_A(cpu));
     
     if (CPU_P(cpu) & FLAG_D) {
-        /* Decimal mode - BCD adjustments following hardware behavior */
+        /* Decimal mode - ARR has very specific behavior different from normal BCD */
         uint8_t result = CPU_A(cpu);
         
-        /* ARR decimal mode uses a different BCD correction algorithm */
-        /* Check if low nibble needs correction (>= 0x0A) */
+        /* ARR decimal mode algorithm based on hardware analysis:
+         * The key insight is that ARR doesn't follow standard BCD rules
+         * Instead, it appears to add 0x60 when certain conditions are met */
+        
+        /* If low nibble >= 0x0A, add 6 to correct it */
         if ((result & 0x0F) >= 0x0A) {
             result += 0x06;
         }
         
-        /* Check if high nibble needs correction (>= 0xA0) */
-        if ((result & 0xF0) >= 0xA0) {
+        /* ARR specific rule: if result >= 0x50, add 0x60 and set carry */
+        if (result >= 0x50) {
             result += 0x60;
             CPU_P(cpu) |= FLAG_C;
         } else {

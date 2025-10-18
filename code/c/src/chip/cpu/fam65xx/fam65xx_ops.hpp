@@ -67,11 +67,11 @@ static bus_state_t op_adc(fam65xx_t* cpu, bus_state_t pins) {
         /* Calculate binary result first for flag computation */
         uint16_t binary_result = a_old + operand + carry_in;
         
-        /* 6502 BCD addition algorithm */
+        /* 6502 BCD addition algorithm - hardware accurate */
         uint8_t al = (a_old & 0x0F) + (operand & 0x0F) + carry_in;
         uint8_t ah = (a_old >> 4) + (operand >> 4);
         
-        /* Adjust low nibble and propagate carry */
+        /* Adjust low nibble if > 9 */
         if (al > 9) {
             al += 6;
             ah++;
@@ -84,12 +84,16 @@ static bus_state_t op_adc(fam65xx_t* cpu, bus_state_t pins) {
                      (binary_result > 0xFF ? FLAG_C : 0) |                       /* C = carry out from binary result */
                      (((a_old ^ binary_result) & (operand ^ binary_result) & 0x80) ? FLAG_V : 0); /* V = signed overflow on binary result */
         
-        /* Adjust high nibble for BCD */
+        /* Adjust high nibble if > 9 and handle carry out */
         if (ah > 9) {
             ah += 6;
+            /* BCD carry is handled differently - set carry if ah >= 16 after adjustment */
+            if (ah >= 16) {
+                CPU_P(cpu) |= FLAG_C;
+            }
         }
         
-        /* Assemble BCD result */
+        /* Assemble BCD result - properly handle high nibble overflow */
         CPU_A(cpu) = ((ah & 0x0F) << 4) | (al & 0x0F);
     } else {
         /* Binary mode */
