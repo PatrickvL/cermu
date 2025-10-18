@@ -97,11 +97,6 @@ static inline bus_state_t addrmodes_abx_helper(fam65xx_t* cpu, bus_state_t pins,
                 CPU_AB(cpu) = effective;  /* Fix address */
                 fam65xx_transition_to_operation(cpu);
             }
-            /* Illegal store opcodes skip penalty cycle regardless of page cross */
-            else if (cpu->opcode_entry.illegal_store) {
-                CPU_AB(cpu) = effective;  /* Fix address for illegal store */
-                fam65xx_transition_to_operation(cpu);
-            }
             /* Otherwise continue to cycle 2 with intermediate address */
             break;
         }
@@ -254,11 +249,6 @@ static bus_state_t am_idy(fam65xx_t* cpu, bus_state_t pins) {
             /* Skip penalty cycle if allowed and no page cross */
             if (cpu->opcode_entry.can_skip_page_cross && !fam65xx_page_crossed(base, effective)) {
                 CPU_AB(cpu) = effective;  /* Set correct final address */
-                fam65xx_transition_to_operation(cpu);
-            }
-            /* Illegal store opcodes skip penalty cycle regardless of page cross */
-            else if (cpu->opcode_entry.illegal_store) {
-                CPU_AB(cpu) = effective;  /* Fix address for illegal store */
                 fam65xx_transition_to_operation(cpu);
             }
             break;
