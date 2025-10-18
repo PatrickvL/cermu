@@ -19,10 +19,7 @@
 
 #include "fam65xx_processor_traits.hpp"
 
-// Include tables for template-based opcode generation
-#ifndef AIEMUC_IMPL
-    #define AIEMUC_IMPL
-#endif
+// Note: AIEMUC_IMPL is defined in fam65xx_core.cpp, not in header files
 
 // Include core definitions first
 #include "fam65xx_types.hpp"
@@ -30,9 +27,12 @@
 
 // Include the implementation after the table definitions
 #include "fam65xx_impl.hpp"
-#include "fam65xx_processor_wrappers.hpp"
+#include "fam65xx_core.hpp"
 
 #ifdef __cplusplus
+
+// Bring in the unified CPU types
+using namespace fam65xx_core;
 
 namespace fam65xx_cpu {
 

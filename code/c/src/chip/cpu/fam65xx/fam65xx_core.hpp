@@ -28,32 +28,55 @@
  */
 
 #include "fam65xx_processor_traits.hpp"
-#include "fam65xx_feat_io_port.hpp"
-#include "fam65xx_feat_bit_ops.hpp"
-#include "fam65xx_feat_16bit_mode.hpp"
 #include "fam65xx_types.hpp"
 #include "fam65xx_utils.hpp"
+#include "fam65xx_tables.hpp"  // Include for fam65xx_init_opcode_table
+#ifdef __cplusplus
 #include <cstdint>
 #include <cstring>
+#else
+#include <stdint.h>
+#include <string.h>
+#endif
+
+// Forward declare API functions used in the template
+#ifdef __cplusplus
+extern "C" {
+#endif
+bus_state_t fam65xx_init(fam65xx_t* cpu, const fam65xx_desc_t* desc);
+bus_state_t fam65xx_reset(fam65xx_t* cpu, bus_state_t pins);
+bus_state_t fam65xx_tick(fam65xx_t* cpu, bus_state_t pins);
+bool fam65xx_opdone(fam65xx_t* cpu);
+bus_state_t fam65xx_bootstrap(fam65xx_t* cpu, bus_state_t pins);
+void fam65xx_set_a(fam65xx_t* cpu, uint8_t v);
+void fam65xx_set_x(fam65xx_t* cpu, uint8_t v);
+void fam65xx_set_y(fam65xx_t* cpu, uint8_t v);
+void fam65xx_set_s(fam65xx_t* cpu, uint8_t v);
+void fam65xx_set_p(fam65xx_t* cpu, uint8_t v);
+void fam65xx_set_pc(fam65xx_t* cpu, uint16_t v);
+uint8_t fam65xx_a(fam65xx_t* cpu);
+uint8_t fam65xx_x(fam65xx_t* cpu);
+uint8_t fam65xx_y(fam65xx_t* cpu);
+uint8_t fam65xx_s(fam65xx_t* cpu);
+uint8_t fam65xx_p(fam65xx_t* cpu);
+uint16_t fam65xx_pc(fam65xx_t* cpu);
+#ifdef __cplusplus
+}
+#endif
 
 #ifdef __cplusplus
 
 namespace fam65xx_core {
 
 // ============================================================================
-// UNIFIED CPU TEMPLATE
+// UNIFIED CPU TEMPLATE WITH AUTOMATIC OPCODE TABLE INITIALIZATION
 // ============================================================================
 
 template<typename ProcessorTag>
-class UnifiedCPU {
+class fam65xx_cpu_template_t {
 private:
     // Core CPU state (always present)
     fam65xx_t cpu_impl;
-    
-    // Feature components (conditionally instantiated)
-    fam65xx_features::IOPortFeature<ProcessorTag> io_port_feature;
-    fam65xx_features::BitManipulationFeature<ProcessorTag> bit_ops_feature;
-    fam65xx_features::SixteenBitModeFeature<ProcessorTag> sixteenbit_feature;
     
     // Processor trait shortcuts
     using traits = ProcessorTraits<ProcessorTag>;
@@ -71,37 +94,27 @@ public:
     // CONSTRUCTOR AND LIFECYCLE
     // ========================================================================
     
-    UnifiedCPU() {
+    fam65xx_cpu_template_t() {
         // Zero-initialize the core implementation
+        #ifdef __cplusplus
         std::memset(&cpu_impl, 0, sizeof(fam65xx_t));
+        #else
+        memset(&cpu_impl, 0, sizeof(fam65xx_t));
+        #endif
+        
+        // Automatically populate opcode table using ProcessorTraits
+        fam65xx_init_opcode_table<ProcessorTag>(&cpu_impl);
     }
     
     // Copy constructor
-    UnifiedCPU(const UnifiedCPU& other) : cpu_impl(other.cpu_impl) {
-        if constexpr (has_io_port) {
-            io_port_feature = other.io_port_feature;
-        }
-        if constexpr (has_bit_ops) {
-            bit_ops_feature = other.bit_ops_feature;
-        }
-        if constexpr (has_16bit) {
-            sixteenbit_feature = other.sixteenbit_feature;
-        }
+    fam65xx_cpu_template_t(const fam65xx_cpu_template_t& other) : cpu_impl(other.cpu_impl) {
+        // CPU implementation is copied, no additional feature components to copy
     }
     
     // Assignment operator
-    UnifiedCPU& operator=(const UnifiedCPU& other) {
+    fam65xx_cpu_template_t& operator=(const fam65xx_cpu_template_t& other) {
         if (this != &other) {
             cpu_impl = other.cpu_impl;
-            if constexpr (has_io_port) {
-                io_port_feature = other.io_port_feature;
-            }
-            if constexpr (has_bit_ops) {
-                bit_ops_feature = other.bit_ops_feature;
-            }
-            if constexpr (has_16bit) {
-                sixteenbit_feature = other.sixteenbit_feature;
-            }
         }
         return *this;
     }
@@ -111,37 +124,11 @@ public:
     // ========================================================================
     
     bus_state_t init(const fam65xx_desc_t* desc = nullptr) {
-        bus_state_t pins = fam65xx_init(&cpu_impl, desc);
-        
-        // Initialize feature components
-        if constexpr (has_io_port) {
-            io_port_feature.reset();
-        }
-        if constexpr (has_bit_ops) {
-            bit_ops_feature.reset();
-        }
-        if constexpr (has_16bit) {
-            sixteenbit_feature.reset();
-        }
-        
-        return pins;
+        return fam65xx_init(&cpu_impl, desc);
     }
     
     bus_state_t reset(bus_state_t pins) {
-        pins = fam65xx_reset(&cpu_impl, pins);
-        
-        // Reset feature components
-        if constexpr (has_io_port) {
-            io_port_feature.reset();
-        }
-        if constexpr (has_bit_ops) {
-            bit_ops_feature.reset();
-        }
-        if constexpr (has_16bit) {
-            sixteenbit_feature.reset();
-        }
-        
-        return pins;
+        return fam65xx_reset(&cpu_impl, pins);
     }
     
     bus_state_t bootstrap(bus_state_t pins) {
@@ -153,32 +140,7 @@ public:
     // ========================================================================
     
     bus_state_t tick(bus_state_t pins) {
-        // Pre-tick feature processing
-        if constexpr (has_io_port) {
-            pins = io_port_feature.handle_tick(pins);
-        }
-        if constexpr (has_16bit) {
-            pins = sixteenbit_feature.handle_tick(pins);
-        }
-        
-        // Core CPU tick
-        pins = fam65xx_tick(&cpu_impl, pins);
-        
-        // Post-tick feature processing
-        if (opdone()) {
-            // Track instruction usage in features
-            uint8_t opcode = cpu_impl.reg8[REG_IR]; // Get last executed opcode
-            
-            if constexpr (has_bit_ops) {
-                bit_ops_feature.track_instruction(opcode);
-            }
-            if constexpr (has_16bit) {
-                sixteenbit_feature.track_instruction(opcode);
-                sixteenbit_feature.update_register_widths(&cpu_impl);
-            }
-        }
-        
-        return pins;
+        return fam65xx_tick(&cpu_impl, pins);
     }
     
     bool opdone() const {
@@ -189,36 +151,11 @@ public:
     // REGISTER ACCESS (8-bit standard interface)
     // ========================================================================
     
-    void set_a(uint8_t v) { 
-        fam65xx_set_a(&cpu_impl, v);
-        // Sync with 16-bit register if available
-        if constexpr (has_16bit) {
-            sixteenbit_feature.set_a_16((sixteenbit_feature.get_a_16() & 0xFF00) | v);
-        }
-    }
-    
-    void set_x(uint8_t v) { 
-        fam65xx_set_x(&cpu_impl, v);
-        if constexpr (has_16bit) {
-            sixteenbit_feature.set_x_16((sixteenbit_feature.get_x_16() & 0xFF00) | v);
-        }
-    }
-    
-    void set_y(uint8_t v) { 
-        fam65xx_set_y(&cpu_impl, v);
-        if constexpr (has_16bit) {
-            sixteenbit_feature.set_y_16((sixteenbit_feature.get_y_16() & 0xFF00) | v);
-        }
-    }
-    
-    void set_s(uint8_t v) { 
-        fam65xx_set_s(&cpu_impl, v);
-        if constexpr (has_16bit) {
-            sixteenbit_feature.set_s_16((sixteenbit_feature.get_s_16() & 0xFF00) | v);
-        }
-    }
-    
-    void set_p(uint8_t v) { 
+    void set_a(uint8_t v) { fam65xx_set_a(&cpu_impl, v); }
+    void set_x(uint8_t v) { fam65xx_set_x(&cpu_impl, v); }
+    void set_y(uint8_t v) { fam65xx_set_y(&cpu_impl, v); }
+    void set_s(uint8_t v) { fam65xx_set_s(&cpu_impl, v); }
+    void set_p(uint8_t v) {
         // Special handling for processors without decimal mode
         if constexpr (!has_feature<ProcessorTag>(ProcessorFeatures::DECIMAL_MODE)) {
             v &= ~FLAG_D; // Clear decimal flag for NES 6502
@@ -236,246 +173,13 @@ public:
     uint8_t s() const { return fam65xx_s(const_cast<fam65xx_t*>(&cpu_impl)); }
     uint16_t pc() const { return fam65xx_pc(const_cast<fam65xx_t*>(&cpu_impl)); }
     
-    uint8_t p() const { 
+    uint8_t p() const {
         uint8_t flags = fam65xx_p(const_cast<fam65xx_t*>(&cpu_impl));
         // Special handling for processors without decimal mode
         if constexpr (!has_feature<ProcessorTag>(ProcessorFeatures::DECIMAL_MODE)) {
             flags &= ~FLAG_D; // Always clear decimal flag for NES 6502
         }
         return flags;
-    }
-    
-    // ========================================================================
-    // I/O PORT FEATURE INTERFACE (only available if processor has I/O port)
-    // ========================================================================
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::IO_PORT), void>
-    set_io_ddr(uint8_t value) {
-        io_port_feature.set_ddr(value);
-    }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::IO_PORT), void>
-    set_io_data(uint8_t value) {
-        io_port_feature.set_data(value);
-    }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::IO_PORT), void>
-    set_io_external(uint8_t value) {
-        io_port_feature.set_external(value);
-    }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::IO_PORT), uint8_t>
-    get_io_ddr() const {
-        return io_port_feature.get_ddr();
-    }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::IO_PORT), uint8_t>
-    get_io_data() const {
-        return io_port_feature.get_data();
-    }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::IO_PORT), uint8_t>
-    get_io_external() const {
-        return io_port_feature.get_external();
-    }
-    
-    // I/O port callbacks
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::IO_PORT), void>
-    set_io_callbacks(const fam65xx_features::IOPortCallbacks& callbacks) {
-        io_port_feature.set_callbacks(callbacks);
-    }
-    
-    // Memory banking helpers (C64-specific)
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::IO_PORT), bool>
-    is_basic_rom_enabled() const {
-        return io_port_feature.is_basic_rom_enabled();
-    }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::IO_PORT), bool>
-    is_kernal_rom_enabled() const {
-        return io_port_feature.is_kernal_rom_enabled();
-    }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::IO_PORT), bool>
-    is_char_rom_enabled() const {
-        return io_port_feature.is_char_rom_enabled();
-    }
-    
-    // ========================================================================
-    // BIT MANIPULATION FEATURE INTERFACE (only available if processor has bit ops)
-    // ========================================================================
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::BIT_MANIPULATION), uint32_t>
-    get_bit_instruction_count() const {
-        return bit_ops_feature.get_bit_instruction_count();
-    }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::BIT_MANIPULATION), void>
-    reset_bit_instruction_count() {
-        bit_ops_feature.reset_bit_instruction_count();
-    }
-    
-    // Static bit manipulation utilities
-    template<typename T = ProcessorTag>
-    static std::enable_if_t<has_feature<T>(ProcessorFeatures::BIT_MANIPULATION), uint8_t>
-    set_bit(uint8_t value, uint8_t bit) {
-        return fam65xx_features::BitManipulationFeature<T>::set_bit(value, bit);
-    }
-    
-    template<typename T = ProcessorTag>
-    static std::enable_if_t<has_feature<T>(ProcessorFeatures::BIT_MANIPULATION), uint8_t>
-    clear_bit(uint8_t value, uint8_t bit) {
-        return fam65xx_features::BitManipulationFeature<T>::clear_bit(value, bit);
-    }
-    
-    template<typename T = ProcessorTag>
-    static std::enable_if_t<has_feature<T>(ProcessorFeatures::BIT_MANIPULATION), bool>
-    test_bit(uint8_t value, uint8_t bit) {
-        return fam65xx_features::BitManipulationFeature<T>::test_bit(value, bit);
-    }
-    
-    // ========================================================================
-    // 16-BIT MODE FEATURE INTERFACE (only available if processor has 16-bit mode)
-    // ========================================================================
-    
-    // 16-bit register access
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::WIDE_REGISTERS), void>
-    set_a_16(uint16_t value) {
-        sixteenbit_feature.set_a_16(value);
-        fam65xx_set_a(&cpu_impl, value & 0xFF); // Sync 8-bit register
-    }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::WIDE_REGISTERS), void>
-    set_x_16(uint16_t value) {
-        sixteenbit_feature.set_x_16(value);
-        fam65xx_set_x(&cpu_impl, value & 0xFF);
-    }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::WIDE_REGISTERS), void>
-    set_y_16(uint16_t value) {
-        sixteenbit_feature.set_y_16(value);
-        fam65xx_set_y(&cpu_impl, value & 0xFF);
-    }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::WIDE_REGISTERS), uint16_t>
-    get_a_16() const {
-        return sixteenbit_feature.get_a_16();
-    }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::WIDE_REGISTERS), uint16_t>
-    get_x_16() const {
-        return sixteenbit_feature.get_x_16();
-    }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::WIDE_REGISTERS), uint16_t>
-    get_y_16() const {
-        return sixteenbit_feature.get_y_16();
-    }
-    
-    // Bank registers
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::WIDE_REGISTERS), void>
-    set_dp(uint16_t value) {
-        sixteenbit_feature.set_dp(value);
-    }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::WIDE_REGISTERS), void>
-    set_dbr(uint8_t value) {
-        sixteenbit_feature.set_dbr(value);
-    }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::WIDE_REGISTERS), void>
-    set_pbr(uint8_t value) {
-        sixteenbit_feature.set_pbr(value);
-    }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::WIDE_REGISTERS), uint16_t>
-    get_dp() const {
-        return sixteenbit_feature.get_dp();
-    }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::WIDE_REGISTERS), uint8_t>
-    get_dbr() const {
-        return sixteenbit_feature.get_dbr();
-    }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::WIDE_REGISTERS), uint8_t>
-    get_pbr() const {
-        return sixteenbit_feature.get_pbr();
-    }
-    
-    // Mode control
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::WIDE_REGISTERS), void>
-    set_emulation_mode(bool emulation) {
-        sixteenbit_feature.set_emulation_mode(emulation);
-    }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::WIDE_REGISTERS), bool>
-    get_emulation_mode() const {
-        return sixteenbit_feature.get_emulation_mode();
-    }
-    
-    // Mode queries
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::WIDE_REGISTERS), bool>
-    is_accumulator_16bit() const {
-        return sixteenbit_feature.is_accumulator_16bit(p());
-    }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::WIDE_REGISTERS), bool>
-    is_index_16bit() const {
-        return sixteenbit_feature.is_index_16bit(p());
-    }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::WIDE_REGISTERS), bool>
-    is_native_mode() const {
-        return sixteenbit_feature.is_native_mode();
-    }
-    
-    // 24-bit addressing
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::WIDE_REGISTERS), uint32_t>
-    make_long_address(uint8_t bank, uint16_t addr) const {
-        return sixteenbit_feature.make_long_address(bank, addr);
-    }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::WIDE_REGISTERS), uint32_t>
-    make_data_address(uint16_t addr) const {
-        return sixteenbit_feature.make_data_address(addr);
-    }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::WIDE_REGISTERS), uint32_t>
-    make_program_address(uint16_t addr) const {
-        return sixteenbit_feature.make_program_address(addr);
     }
     
     // ========================================================================
@@ -487,7 +191,7 @@ public:
     static constexpr bool has_cmos_enhancements() { return has_cmos; }
     static constexpr bool has_bit_manipulation() { return has_bit_ops; }
     static constexpr bool has_16bit_mode() { return has_16bit; }
-    static constexpr bool has_io_port() { return has_io_port; }
+    static constexpr bool has_io_port_feature() { return has_io_port; }  // Renamed to avoid conflict
     static constexpr bool has_nmos_bugs() { return has_feature<ProcessorTag>(ProcessorFeatures::NMOS_BUGS); }
     
     // Get processor name for debugging
@@ -507,79 +211,44 @@ public:
     fam65xx_t* get_impl() { return &cpu_impl; }
     const fam65xx_t* get_impl() const { return &cpu_impl; }
     
-    // Feature component access (only if enabled)
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::IO_PORT), fam65xx_features::IOPortFeature<T>&>
-    get_io_port_feature() { return io_port_feature; }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::BIT_MANIPULATION), fam65xx_features::BitManipulationFeature<T>&>
-    get_bit_ops_feature() { return bit_ops_feature; }
-    
-    template<typename T = ProcessorTag>
-    std::enable_if_t<has_feature<T>(ProcessorFeatures::WIDE_REGISTERS), fam65xx_features::SixteenBitModeFeature<T>&>
-    get_16bit_feature() { return sixteenbit_feature; }
-    
-    // ========================================================================
-    // MEMORY INTERFACE (delegate to implementations)
-    // ========================================================================
-    
-    // Handle memory-mapped I/O reads (called by memory system)
-    uint8_t handle_memory_read(uint16_t addr, uint8_t bus_data) {
-        if constexpr (has_io_port) {
-            if (addr <= 0x0001) {
-                return io_port_feature.read_register(addr);
-            }
-        }
-        
-        // Default: use provided bus data
-        return bus_data;
-    }
-    
-    // Handle memory-mapped I/O writes (called by memory system) 
-    void handle_memory_write(uint16_t addr, uint8_t data) {
-        if constexpr (has_io_port) {
-            if (addr <= 0x0001) {
-                io_port_feature.write_register(addr, data);
-                return;
-            }
-        }
-        
-        // Other address ranges handled by memory system
-    }
+    // Direct CPU access for C compatibility
+    fam65xx_t* get_cpu() { return &cpu_impl; }
+    const fam65xx_t* get_cpu() const { return &cpu_impl; }
 };
 
 // ============================================================================
-// TYPE ALIASES FOR ALL PROCESSOR VARIANTS
+// TYPE ALIASES FOR ALL PROCESSOR VARIANTS (replaces fam65xx_processor_wrapper_t)
 // ============================================================================
 
-using CPU_MOS6502 = UnifiedCPU<MOS6502Tag>;
-using CPU_MOS6510 = UnifiedCPU<MOS6510Tag>;
-using CPU_NES6502 = UnifiedCPU<NES6502Tag>;
-using CPU_WDC65C02 = UnifiedCPU<WDC65C02Tag>;
-using CPU_Rockwell65C02 = UnifiedCPU<Rockwell65C02Tag>;
-using CPU_WDC65C816 = UnifiedCPU<WDC65C816Tag>;
+// Primary processor type aliases (with automatic opcode table initialization)
+using mos6502_cpu_t = fam65xx_cpu_template_t<MOS6502Tag>;
+using mos6510_cpu_t = fam65xx_cpu_template_t<MOS6510Tag>;
+using nes6502_cpu_t = fam65xx_cpu_template_t<NES6502Tag>;
+using wdc65c02_cpu_t = fam65xx_cpu_template_t<WDC65C02Tag>;
+using rockwell65c02_cpu_t = fam65xx_cpu_template_t<Rockwell65C02Tag>;
+using wdc65c816_cpu_t = fam65xx_cpu_template_t<WDC65C816Tag>;
+
 
 // ============================================================================
 // FACTORY FUNCTIONS
 // ============================================================================
 
 template<typename ProcessorTag>
-constexpr UnifiedCPU<ProcessorTag> make_cpu() {
-    return UnifiedCPU<ProcessorTag>{};
+constexpr fam65xx_cpu_template_t<ProcessorTag> make_cpu() {
+    return fam65xx_cpu_template_t<ProcessorTag>{};
 }
 
 // Convenience factory functions
-inline CPU_MOS6502 make_mos6502() { return make_cpu<MOS6502Tag>(); }
-inline CPU_MOS6510 make_mos6510() { return make_cpu<MOS6510Tag>(); }
-inline CPU_NES6502 make_nes6502() { return make_cpu<NES6502Tag>(); }
-inline CPU_WDC65C02 make_wdc65c02() { return make_cpu<WDC65C02Tag>(); }
-inline CPU_Rockwell65C02 make_rockwell65c02() { return make_cpu<Rockwell65C02Tag>(); }
-inline CPU_WDC65C816 make_wdc65c816() { return make_cpu<WDC65C816Tag>(); }
+inline mos6502_cpu_t make_mos6502() { return make_cpu<MOS6502Tag>(); }
+inline mos6510_cpu_t make_mos6510() { return make_cpu<MOS6510Tag>(); }
+inline nes6502_cpu_t make_nes6502() { return make_cpu<NES6502Tag>(); }
+inline wdc65c02_cpu_t make_wdc65c02() { return make_cpu<WDC65C02Tag>(); }
+inline rockwell65c02_cpu_t make_rockwell65c02() { return make_cpu<Rockwell65C02Tag>(); }
+inline wdc65c816_cpu_t make_wdc65c816() { return make_cpu<WDC65C816Tag>(); }
 
 // Factory with memory callbacks
 template<typename ProcessorTag>
-UnifiedCPU<ProcessorTag> make_cpu_with_memory(
+fam65xx_cpu_template_t<ProcessorTag> make_cpu_with_memory(
     uint8_t (*read_fn)(void*, uint16_t, uint8_t),
     void (*write_fn)(void*, uint16_t, uint8_t),
     void* user_data = nullptr
@@ -589,7 +258,7 @@ UnifiedCPU<ProcessorTag> make_cpu_with_memory(
     desc.mem_write = write_fn;
     desc.mem_user_data = user_data;
     
-    UnifiedCPU<ProcessorTag> cpu;
+    fam65xx_cpu_template_t<ProcessorTag> cpu;
     cpu.init(&desc);
     return cpu;
 }

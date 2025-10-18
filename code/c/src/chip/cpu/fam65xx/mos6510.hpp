@@ -13,14 +13,11 @@
  * - Compatible with 6502 software
  */
 
-// Include tables for template-based opcode generation
-#ifndef AIEMUC_IMPL
-    #define AIEMUC_IMPL
-#endif
+// Note: AIEMUC_IMPL is defined in fam65xx_core.cpp, not in header files
 
-// Include the main modular header and processor wrappers
+// Include the main modular header and unified CPU template
 #include "fam65xx.hpp"
-#include "fam65xx_processor_wrappers.hpp"
+#include "fam65xx_core.hpp"
 #include "../../../core/chip.h"
 #ifdef __cplusplus
 #include <cstdlib>
@@ -34,6 +31,9 @@
 #endif
 
 #ifdef __cplusplus
+
+// Bring in the unified CPU types
+using namespace fam65xx_core;
 
 namespace fam65xx_cpu {
 
@@ -81,7 +81,7 @@ typedef fam65xx_t MOS6510; // C compatibility
 // MOS 6510 with Enhanced I/O Port Management and Callback System
 class MOS6510WithIOPort {
 private:
-    mos6510_cpu_t cpu_wrapper; // Use processor-specific wrapper with automatic opcode table init
+    mos6510_cpu_t cpu_wrapper; // Use unified CPU template with automatic opcode table init
     IOPortState io_port;
     
     // Callback system for external decoupling
@@ -261,7 +261,7 @@ static inline uint64_t mos6510_init(mos6510_c_t* cpu, const fam65xx_desc_t* desc
     cpu->io_external = 0xFF;
     
 #ifdef __cplusplus
-    // Use processor wrapper for automatic opcode table initialization
+    // Use unified CPU template for automatic opcode table initialization
     mos6510_cpu_t cpu_wrapper;
     uint64_t result = cpu_wrapper.init(desc);
     cpu->impl = *cpu_wrapper.get_cpu(); // Copy the initialized CPU
@@ -350,7 +350,7 @@ static inline void mos6510_chip_init(mos6510_chip_t* cpu,
         cpu->io_callback = io_callback;
         
 #ifdef __cplusplus
-        // Use processor wrapper for automatic opcode table initialization
+        // Use unified CPU template for automatic opcode table initialization
         mos6510_cpu_t cpu_wrapper;
         cpu_wrapper.init(NULL);
         cpu->cpu_impl = *cpu_wrapper.get_cpu(); // Copy the initialized CPU

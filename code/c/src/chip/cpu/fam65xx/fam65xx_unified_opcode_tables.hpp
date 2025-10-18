@@ -518,6 +518,7 @@ bool validate_enhanced_opcodes() {
     }
 }
 
+#ifdef AIEMUC_IMPL
 // Runtime validation function to check all processors
 bool validate_all_processors() {
     bool all_valid = true;
@@ -536,6 +537,7 @@ bool validate_all_processors() {
     
     return all_valid;
 }
+#endif // AIEMUC_IMPL
 
 } // namespace fam65xx_unified_tables
 
