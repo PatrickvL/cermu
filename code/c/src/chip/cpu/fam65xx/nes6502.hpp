@@ -15,20 +15,20 @@
 
 #include "fam65xx_processor_traits.hpp"
 
-// Include tables for template-based opcode generation
-#ifndef AIEMUC_IMPL
-    #define AIEMUC_IMPL
-#endif
+// Note: AIEMUC_IMPL is defined in fam65xx_core.cpp, not in header files
 
-// Include the main modular header (which now includes everything)
+// Include the main modular header and unified CPU template
 #include "fam65xx.hpp"
-#include "fam65xx_processor_wrappers.hpp"
+#include "fam65xx_core.hpp"
 
 // NES 6502 uses the unified opcode table system with MOS6502Tag
 // The processor-specific table is generated using template-based selection
 // ensuring hardware-accurate illegal opcodes with disabled decimal mode
 
 #ifdef __cplusplus
+
+// Bring in the unified CPU types
+using namespace fam65xx_core;
 
 namespace fam65xx_cpu {
 
