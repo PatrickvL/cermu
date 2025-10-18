@@ -22,6 +22,7 @@
 
 // Include the main modular header (which now includes everything)
 #include "fam65xx.hpp"
+#include "fam65xx_processor_wrappers.hpp"
 
 // NES 6502 uses the unified opcode table system with MOS6502Tag
 // The processor-specific table is generated using template-based selection
@@ -37,62 +38,58 @@ using NES6502 = fam65xx_t;
 // NES-specific CPU wrapper that disables decimal mode
 class NES6502CPU {
 private:
-    NES6502 cpu;
+    nes6502_cpu_t cpu_wrapper; // Use processor-specific wrapper with automatic opcode table init
     
 public:
     // CPU interface delegation
     bus_state_t init(const fam65xx_desc_t* desc = nullptr) {
-        bus_state_t result = fam65xx_init(&cpu, desc);
-        extern void fam65xx_init_processor_opcode_table(fam65xx_t* cpu, const char* processor_type);
-        fam65xx_init_processor_opcode_table(&cpu, "NES6502");
-        return result;
+        // Opcode table is automatically initialized by nes6502_cpu_t constructor
+        return cpu_wrapper.init(desc);
     }
-    bus_state_t reset(bus_state_t pins) { return fam65xx_reset(&cpu, pins); }
-    bus_state_t bootstrap(bus_state_t pins) { return fam65xx_bootstrap(&cpu, pins); }
-    bool opdone() const { return fam65xx_opdone(const_cast<fam65xx_t*>(&cpu)); }
+    bus_state_t reset(bus_state_t pins) { return cpu_wrapper.reset(pins); }
+    bus_state_t bootstrap(bus_state_t pins) { return cpu_wrapper.bootstrap(pins); }
+    bool opdone() const { return cpu_wrapper.opdone(); }
     
     // Modified tick that ignores decimal flag
     bus_state_t tick(bus_state_t pins) {
         // Clear decimal flag before each instruction to disable decimal mode
-        fam65xx_set_p(&cpu, fam65xx_p(&cpu) & ~0x08);  // Clear D flag
-        return fam65xx_tick(&cpu, pins);
+        fam65xx_set_p(cpu_wrapper.get_cpu(), fam65xx_p(cpu_wrapper.get_cpu()) & ~0x08);  // Clear D flag
+        return cpu_wrapper.tick(pins);
     }
     
     // Register access
-    void set_a(uint8_t v) { fam65xx_set_a(&cpu, v); }
-    void set_x(uint8_t v) { fam65xx_set_x(&cpu, v); }
-    void set_y(uint8_t v) { fam65xx_set_y(&cpu, v); }
-    void set_s(uint8_t v) { fam65xx_set_s(&cpu, v); }
-    void set_pc(uint16_t v) { fam65xx_set_pc(&cpu, v); }
+    void set_a(uint8_t v) { fam65xx_set_a(cpu_wrapper.get_cpu(), v); }
+    void set_x(uint8_t v) { fam65xx_set_x(cpu_wrapper.get_cpu(), v); }
+    void set_y(uint8_t v) { fam65xx_set_y(cpu_wrapper.get_cpu(), v); }
+    void set_s(uint8_t v) { fam65xx_set_s(cpu_wrapper.get_cpu(), v); }
+    void set_pc(uint16_t v) { fam65xx_set_pc(cpu_wrapper.get_cpu(), v); }
     
     // Modified set_p that ignores decimal flag
     void set_p(uint8_t v) {
-        fam65xx_set_p(&cpu, v & ~0x08);  // Always clear D flag
+        fam65xx_set_p(cpu_wrapper.get_cpu(), v & ~0x08);  // Always clear D flag
     }
     
-    uint8_t a() const { return fam65xx_a(const_cast<fam65xx_t*>(&cpu)); }
-    uint8_t x() const { return fam65xx_x(const_cast<fam65xx_t*>(&cpu)); }
-    uint8_t y() const { return fam65xx_y(const_cast<fam65xx_t*>(&cpu)); }
-    uint8_t s() const { return fam65xx_s(const_cast<fam65xx_t*>(&cpu)); }
-    uint16_t pc() const { return fam65xx_pc(const_cast<fam65xx_t*>(&cpu)); }
+    uint8_t a() const { return fam65xx_a(const_cast<fam65xx_t*>(cpu_wrapper.get_cpu())); }
+    uint8_t x() const { return fam65xx_x(const_cast<fam65xx_t*>(cpu_wrapper.get_cpu())); }
+    uint8_t y() const { return fam65xx_y(const_cast<fam65xx_t*>(cpu_wrapper.get_cpu())); }
+    uint8_t s() const { return fam65xx_s(const_cast<fam65xx_t*>(cpu_wrapper.get_cpu())); }
+    uint16_t pc() const { return fam65xx_pc(const_cast<fam65xx_t*>(cpu_wrapper.get_cpu())); }
     
     // Modified get_p that always shows decimal flag as clear
     uint8_t p() const {
-        return fam65xx_p(const_cast<fam65xx_t*>(&cpu)) & ~0x08;  // Always clear D flag in return value
+        return fam65xx_p(const_cast<fam65xx_t*>(cpu_wrapper.get_cpu())) & ~0x08;  // Always clear D flag in return value
     }
     
     // Direct CPU access (for advanced users who know what they're doing)
-    NES6502* get_cpu() { return &cpu; }
-    const NES6502* get_cpu() const { return &cpu; }
+    NES6502* get_cpu() { return cpu_wrapper.get_cpu(); }
+    const NES6502* get_cpu() const { return cpu_wrapper.get_cpu(); }
 };
 
 // Convenient creation functions
 inline NES6502 create_basic() {
-    fam65xx_t cpu;
-    fam65xx_init(&cpu, nullptr);
-    extern void fam65xx_init_processor_opcode_table(fam65xx_t* cpu, const char* processor_type);
-    fam65xx_init_processor_opcode_table(&cpu, "NES6502");
-    return cpu;
+    nes6502_cpu_t cpu_wrapper; // Automatically initializes opcode table
+    cpu_wrapper.init(nullptr);
+    return *cpu_wrapper.get_cpu(); // Return a copy of the initialized CPU
 }
 
 inline NES6502CPU create() {
@@ -135,8 +132,10 @@ typedef struct {
 
 // Initialize NES 6502 CPU
 inline uint64_t nes6502_init(nes6502_c_t* cpu, const fam65xx_desc_t* desc) {
-    uint64_t result = fam65xx_init(&cpu->impl, desc);
-    fam65xx_init_processor_opcode_table(&cpu->impl, "NES6502");
+    // Use processor wrapper for automatic opcode table initialization
+    nes6502_cpu_t cpu_wrapper;
+    uint64_t result = cpu_wrapper.init(desc);
+    cpu->impl = *cpu_wrapper.get_cpu(); // Copy the initialized CPU
     return result;
 }
 

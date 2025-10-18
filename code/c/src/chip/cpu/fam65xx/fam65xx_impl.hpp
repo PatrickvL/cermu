@@ -216,8 +216,8 @@ bus_state_t fam65xx_init(fam65xx_t* cpu, const fam65xx_desc_t* desc) {
         cpu->mem_user_data = desc->mem_user_data;
     }
     
-    /* Note: Opcode table initialization is now handled by individual CPU implementations */
-    /* Each CPU wrapper calls fam65xx_init_processor_opcode_table with the correct processor type */
+    /* Note: Opcode table initialization is now handled automatically by processor wrapper constructors */
+    /* Each processor wrapper (mos6502_cpu_t, mos6510_cpu_t, etc.) calls fam65xx_init_opcode_table<ProcessorTag> */
     
     /* Initialize register layout:
      * ZP high byte (REG_ZPH) = 0x00 (always zero for zero page)

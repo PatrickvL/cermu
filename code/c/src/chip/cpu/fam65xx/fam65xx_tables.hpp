@@ -271,31 +271,9 @@ inline void fam65xx_init_opcode_table(fam65xx_t* cpu) {
     }
 }
 
-// Single unified opcode table initialization function
-// This function is called from C++ code and uses template dispatch internally
-inline void fam65xx_init_processor_opcode_table(fam65xx_t* cpu, const char* processor_type) {
-    if (!cpu || !processor_type) return;
-    
-    // Use string comparison to determine processor type and initialize accordingly
-    if (strcmp(processor_type, "MOS6502") == 0) {
-        fam65xx_init_opcode_table<fam65xx_core::MOS6502Tag>(cpu);
-    } else if (strcmp(processor_type, "MOS6510") == 0) {
-        fam65xx_init_opcode_table<fam65xx_core::MOS6510Tag>(cpu);
-    } else if (strcmp(processor_type, "NES6502") == 0) {
-        fam65xx_init_opcode_table<fam65xx_core::NES6502Tag>(cpu);
-    } else if (strcmp(processor_type, "WDC65C02") == 0) {
-        fam65xx_init_opcode_table<fam65xx_core::WDC65C02Tag>(cpu);
-    } else if (strcmp(processor_type, "Rockwell65C02") == 0) {
-        fam65xx_init_opcode_table<fam65xx_core::Rockwell65C02Tag>(cpu);
-    } else if (strcmp(processor_type, "WDC65C816") == 0) {
-        fam65xx_init_opcode_table<fam65xx_core::WDC65C816Tag>(cpu);
-    } else {
-        // Default fallback to MOS6502
-        fam65xx_init_opcode_table<fam65xx_core::MOS6502Tag>(cpu);
-    }
-}
-
-// Note: Global CPU context (g_current_cpu) removed - direct opcode table access used instead
+// Note: Opcode table initialization is now handled automatically by processor wrapper constructors.
+// Each processor wrapper (mos6502_cpu_t, mos6510_cpu_t, etc.) calls fam65xx_init_opcode_table<ProcessorTag>
+// in its constructor, eliminating the need for manual initialization or string-based dispatch.
 
 #endif // __cplusplus
 

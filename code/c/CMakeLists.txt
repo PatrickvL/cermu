@@ -157,6 +157,7 @@ set(CORE_SOURCES
 # Chip library sources
 set(CHIP_SOURCES
     src/chip/cpu/mos6510/mos6510.cpp
+    src/chip/cpu/fam65xx/fam65xx_core.cpp
 )
 
 # Conditionally add cycle-accurate MOS6510 sources (DISABLED - sources not available)

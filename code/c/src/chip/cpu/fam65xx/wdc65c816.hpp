@@ -30,6 +30,7 @@
 
 // Include the implementation after the table definitions
 #include "fam65xx_impl.hpp"
+#include "fam65xx_processor_wrappers.hpp"
 
 #ifdef __cplusplus
 
@@ -101,7 +102,7 @@ struct WDC65C816State {
 // WDC 65C816 with enhanced state management
 class WDC65C816CPU {
 private:
-    WDC65C816 cpu;
+    wdc65c816_cpu_t cpu_wrapper; // Use processor-specific wrapper with automatic opcode table init
     WDC65C816State extended_state;
     uint32_t long_instruction_count = 0;
     
@@ -109,21 +110,19 @@ public:
     // CPU interface delegation
     bus_state_t init(const fam65xx_desc_t* desc = nullptr) {
         extended_state = WDC65C816State();
-        bus_state_t result = fam65xx_init(&cpu, desc);
-        extern void fam65xx_init_processor_opcode_table(fam65xx_t* cpu, const char* processor_type);
-        fam65xx_init_processor_opcode_table(&cpu, "WDC65C816");
-        return result;
+        // Opcode table is automatically initialized by wdc65c816_cpu_t constructor
+        return cpu_wrapper.init(desc);
     }
     
     bus_state_t reset(bus_state_t pins) {
         extended_state = WDC65C816State();
         extended_state.emulation = true;  // Start in emulation mode
         long_instruction_count = 0;
-        return fam65xx_reset(&cpu, pins);
+        return cpu_wrapper.reset(pins);
     }
     
-    bus_state_t bootstrap(bus_state_t pins) { return fam65xx_bootstrap(&cpu, pins); }
-    bool opdone() const { return fam65xx_opdone(const_cast<fam65xx_t*>(&cpu)); }
+    bus_state_t bootstrap(bus_state_t pins) { return cpu_wrapper.bootstrap(pins); }
+    bool opdone() const { return cpu_wrapper.opdone(); }
     
     // Enhanced tick with 16-bit support
     bus_state_t tick(bus_state_t pins) {
@@ -134,28 +133,28 @@ public:
                 long_instruction_count++;
             }
         }
-        return fam65xx_tick(&cpu, pins);
+        return cpu_wrapper.tick(pins);
     }
     
     // Standard register access (8-bit compatibility)
-    void set_a(uint8_t v) { fam65xx_set_a(&cpu, v); extended_state.a_16 = (extended_state.a_16 & 0xFF00) | v; }
-    void set_x(uint8_t v) { fam65xx_set_x(&cpu, v); extended_state.x_16 = (extended_state.x_16 & 0xFF00) | v; }
-    void set_y(uint8_t v) { fam65xx_set_y(&cpu, v); extended_state.y_16 = (extended_state.y_16 & 0xFF00) | v; }
-    void set_s(uint8_t v) { fam65xx_set_s(&cpu, v); }
-    void set_p(uint8_t v) { fam65xx_set_p(&cpu, v); }
-    void set_pc(uint16_t v) { fam65xx_set_pc(&cpu, v); }
+    void set_a(uint8_t v) { fam65xx_set_a(cpu_wrapper.get_cpu(), v); extended_state.a_16 = (extended_state.a_16 & 0xFF00) | v; }
+    void set_x(uint8_t v) { fam65xx_set_x(cpu_wrapper.get_cpu(), v); extended_state.x_16 = (extended_state.x_16 & 0xFF00) | v; }
+    void set_y(uint8_t v) { fam65xx_set_y(cpu_wrapper.get_cpu(), v); extended_state.y_16 = (extended_state.y_16 & 0xFF00) | v; }
+    void set_s(uint8_t v) { fam65xx_set_s(cpu_wrapper.get_cpu(), v); }
+    void set_p(uint8_t v) { fam65xx_set_p(cpu_wrapper.get_cpu(), v); }
+    void set_pc(uint16_t v) { fam65xx_set_pc(cpu_wrapper.get_cpu(), v); }
     
-    uint8_t a() const { return fam65xx_a(const_cast<fam65xx_t*>(&cpu)); }
-    uint8_t x() const { return fam65xx_x(const_cast<fam65xx_t*>(&cpu)); }
-    uint8_t y() const { return fam65xx_y(const_cast<fam65xx_t*>(&cpu)); }
-    uint8_t s() const { return fam65xx_s(const_cast<fam65xx_t*>(&cpu)); }
-    uint8_t p() const { return fam65xx_p(const_cast<fam65xx_t*>(&cpu)); }
-    uint16_t pc() const { return fam65xx_pc(const_cast<fam65xx_t*>(&cpu)); }
+    uint8_t a() const { return fam65xx_a(const_cast<fam65xx_t*>(cpu_wrapper.get_cpu())); }
+    uint8_t x() const { return fam65xx_x(const_cast<fam65xx_t*>(cpu_wrapper.get_cpu())); }
+    uint8_t y() const { return fam65xx_y(const_cast<fam65xx_t*>(cpu_wrapper.get_cpu())); }
+    uint8_t s() const { return fam65xx_s(const_cast<fam65xx_t*>(cpu_wrapper.get_cpu())); }
+    uint8_t p() const { return fam65xx_p(const_cast<fam65xx_t*>(cpu_wrapper.get_cpu())); }
+    uint16_t pc() const { return fam65xx_pc(const_cast<fam65xx_t*>(cpu_wrapper.get_cpu())); }
     
     // 16-bit register access
-    void set_a_16(uint16_t v) { extended_state.a_16 = v; fam65xx_set_a(&cpu, v & 0xFF); }
-    void set_x_16(uint16_t v) { extended_state.x_16 = v; fam65xx_set_x(&cpu, v & 0xFF); }
-    void set_y_16(uint16_t v) { extended_state.y_16 = v; fam65xx_set_y(&cpu, v & 0xFF); }
+    void set_a_16(uint16_t v) { extended_state.a_16 = v; fam65xx_set_a(cpu_wrapper.get_cpu(), v & 0xFF); }
+    void set_x_16(uint16_t v) { extended_state.x_16 = v; fam65xx_set_x(cpu_wrapper.get_cpu(), v & 0xFF); }
+    void set_y_16(uint16_t v) { extended_state.y_16 = v; fam65xx_set_y(cpu_wrapper.get_cpu(), v & 0xFF); }
     
     uint16_t a_16() const { return extended_state.a_16; }
     uint16_t x_16() const { return extended_state.x_16; }
@@ -208,8 +207,8 @@ public:
     }
     
     // Direct CPU access
-    WDC65C816* get_cpu() { return &cpu; }
-    const WDC65C816* get_cpu() const { return &cpu; }
+    WDC65C816* get_cpu() { return cpu_wrapper.get_cpu(); }
+    const WDC65C816* get_cpu() const { return cpu_wrapper.get_cpu(); }
     
     // Extended state access
     WDC65C816State* get_extended_state() { return &extended_state; }
@@ -218,11 +217,9 @@ public:
 
 // Convenient creation functions
 inline WDC65C816 create_basic() {
-    fam65xx_t cpu;
-    fam65xx_init(&cpu, nullptr);
-    extern void fam65xx_init_processor_opcode_table(fam65xx_t* cpu, const char* processor_type);
-    fam65xx_init_processor_opcode_table(&cpu, "WDC65C816");
-    return cpu;
+    wdc65c816_cpu_t cpu_wrapper; // Automatically initializes opcode table
+    cpu_wrapper.init(nullptr);
+    return *cpu_wrapper.get_cpu(); // Return a copy of the initialized CPU
 }
 
 inline WDC65C816CPU create() {
@@ -281,8 +278,11 @@ inline uint64_t wdc65c816_init(wdc65c816_c_t* cpu, const fam65xx_desc_t* desc) {
     cpu->x_16 = 0;
     cpu->y_16 = 0;
     cpu->long_count = 0;
-    uint64_t result = fam65xx_init(&cpu->impl, desc);
-    fam65xx_init_processor_opcode_table(&cpu->impl, "WDC65C816");
+    
+    // Use processor wrapper for automatic opcode table initialization
+    wdc65c816_cpu_t cpu_wrapper;
+    uint64_t result = cpu_wrapper.init(desc);
+    cpu->impl = *cpu_wrapper.get_cpu(); // Copy the initialized CPU
     return result;
 }
 
