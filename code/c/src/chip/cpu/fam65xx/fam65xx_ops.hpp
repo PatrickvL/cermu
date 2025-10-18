@@ -44,9 +44,17 @@ extern "C" {
 
 /* ADC - Add with Carry */
 static bus_state_t op_adc(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read operand using unified helper */
-    pins = read_operand_immediate_or_memory(cpu, pins);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
+    /* PHI2: Read operand from target address or PC for immediate */
+    if (cpu->opcode_entry.am_index == AM_IMM) {
+        /* Immediate mode - read from PC */
+        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+        CPU_PC(cpu)++;
+    } else {
+        /* Memory mode - read from target address */
+        pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+    }
     
     /* PHI1: Perform ADC operation with BCD support */
     uint8_t operand = BUS_GET_DATA(pins);
@@ -54,46 +62,35 @@ static bus_state_t op_adc(fam65xx_t* cpu, bus_state_t pins) {
     uint8_t a_old = CPU_A(cpu);
     
     if (CPU_P(cpu) & FLAG_D) {
-        /* BCD (Decimal) mode - 6502 hardware-accurate implementation
-         * Based on transistor-level analysis and comprehensive testing */
+        /* BCD (Decimal) mode - 6502 hardware behavior */
         
-        /* Perform binary addition first (used for N, V flags) */
+        /* Calculate binary result first for flag computation */
         uint16_t binary_result = a_old + operand + carry_in;
         
-        /* BCD addition algorithm matching 6502 hardware */
+        /* 6502 BCD addition algorithm */
         uint8_t al = (a_old & 0x0F) + (operand & 0x0F) + carry_in;
         uint8_t ah = (a_old >> 4) + (operand >> 4);
         
-        /* Adjust low nibble if >= 10 */
-        if (al >= 0x0A) {
-            al = ((al + 0x06) & 0x0F) + 0x10;
+        /* Adjust low nibble and propagate carry */
+        if (al > 9) {
+            al += 6;
+            ah++;
         }
         
-        /* Add low nibble carry to high nibble */
-        ah += (al >> 4);
-        
-        /* BCD carry occurs when high nibble sum > 9 */
-        bool bcd_carry = (ah > 9);
-        
-        /* Adjust high nibble if >= 10 */
-        if (ah >= 0x0A) {
-            ah = (ah + 0x06) & 0x0F;
-        }
-        
-        /* Assemble final BCD result */
-        uint8_t bcd_result = (ah << 4) | (al & 0x0F);
-        CPU_A(cpu) = bcd_result;
-        
-        /* 6502 BCD flag behavior (definitive hardware analysis):
-         * N = bit 7 of BCD result (after all adjustments)
-         * V = signed overflow from BINARY addition
-         * Z = BCD result is zero
-         * C = BCD carry out (high nibble > 9) */
+        /* Set flags based on binary result BEFORE BCD adjustment */
         CPU_P(cpu) = (CPU_P(cpu) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                     (bcd_result & 0x80 ? FLAG_N : 0) |                          /* N from BCD result */
-                     (bcd_result == 0 ? FLAG_Z : 0) |                            /* Z from BCD result */
-                     (bcd_carry ? FLAG_C : 0) |                                   /* C from BCD carry */
-                     (((a_old ^ binary_result) & (operand ^ binary_result) & 0x80) ? FLAG_V : 0); /* V from binary overflow */
+                     (binary_result & 0x80 ? FLAG_N : 0) |                       /* N = bit 7 of binary result */
+                     ((binary_result & 0xFF) == 0 ? FLAG_Z : 0) |                /* Z = binary result is zero */
+                     (binary_result > 0xFF ? FLAG_C : 0) |                       /* C = carry out from binary result */
+                     (((a_old ^ binary_result) & (operand ^ binary_result) & 0x80) ? FLAG_V : 0); /* V = signed overflow on binary result */
+        
+        /* Adjust high nibble for BCD */
+        if (ah > 9) {
+            ah += 6;
+        }
+        
+        /* Assemble BCD result */
+        CPU_A(cpu) = ((ah & 0x0F) << 4) | (al & 0x0F);
     } else {
         /* Binary mode */
         uint16_t result = a_old + operand + carry_in;
@@ -114,9 +111,17 @@ static bus_state_t op_adc(fam65xx_t* cpu, bus_state_t pins) {
 
 /* SBC - Subtract with Carry */
 static bus_state_t op_sbc(fam65xx_t* cpu, bus_state_t pins) {
-    /* PHI2: Read operand using unified helper */
-    pins = read_operand_immediate_or_memory(cpu, pins);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
+    /* PHI2: Read operand from target address or PC for immediate */
+    if (cpu->opcode_entry.am_index == AM_IMM) {
+        /* Immediate mode - read from PC */
+        pins = fam65xx_phi2_read(cpu, pins, REG_PC);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+        CPU_PC(cpu)++;
+    } else {
+        /* Memory mode - read from target address */
+        pins = fam65xx_phi2_read(cpu, pins, REG_AB);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+    }
     
     /* PHI1: Perform SBC operation with BCD support */
     uint8_t operand = BUS_GET_DATA(pins);
@@ -318,7 +323,7 @@ static bus_state_t fam65xx_branch_helper(fam65xx_t* cpu, bus_state_t pins, uint8
 
 /* BRA - Branch Always (65C02) */
 static bus_state_t op_bra(fam65xx_t* cpu, bus_state_t pins) {
-    return fam65xx_branch_helper(cpu, pins, 0, true);  /* Always branch */
+    return fam65xx_branch_helper(cpu, pins, 0xFF, true); /* Always branch */
 }
 
 /* BCC - Branch if Carry Clear */
