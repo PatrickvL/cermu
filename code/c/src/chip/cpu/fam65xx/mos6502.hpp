@@ -23,6 +23,7 @@
 
 // Include the main modular header (which now includes everything)
 #include "fam65xx.hpp"
+#include "fam65xx_processor_wrappers.hpp"
 
 // MOS 6502 uses the unified opcode table system
 // The processor-specific table is generated using template-based selection
@@ -37,11 +38,9 @@ using MOS6502 = fam65xx_t;
 
 // Convenient creation function
 inline fam65xx_t create() {
-    fam65xx_t cpu;
-    fam65xx_init(&cpu, nullptr);
-    extern void fam65xx_init_processor_opcode_table(fam65xx_t* cpu, const char* processor_type);
-    fam65xx_init_processor_opcode_table(&cpu, "MOS6502");
-    return cpu;
+    mos6502_cpu_t cpu_wrapper; // Automatically initializes opcode table
+    cpu_wrapper.init(nullptr);
+    return *cpu_wrapper.get_cpu(); // Return a copy of the initialized CPU
 }
 
 // Initialization with memory callbacks
@@ -55,10 +54,9 @@ inline fam65xx_t create_with_memory(
     desc.mem_write = write_fn;
     desc.mem_user_data = user_data;
     
-    fam65xx_t cpu;
-    fam65xx_init(&cpu, &desc);
-    fam65xx_init_processor_opcode_table(&cpu, "MOS6502");
-    return cpu;
+    mos6502_cpu_t cpu_wrapper; // Automatically initializes opcode table
+    cpu_wrapper.init(&desc);
+    return *cpu_wrapper.get_cpu(); // Return a copy of the initialized CPU
 }
 
 } // namespace fam65xx_cpu
@@ -80,8 +78,10 @@ typedef struct {
 
 // Initialize MOS 6502 CPU
 inline uint64_t mos6502_init(mos6502_c_t* cpu, const fam65xx_desc_t* desc) {
-    uint64_t result = fam65xx_init(&cpu->impl, desc);
-    fam65xx_init_processor_opcode_table(&cpu->impl, "MOS6502");
+    // Use processor wrapper for automatic opcode table initialization
+    mos6502_cpu_t cpu_wrapper;
+    uint64_t result = cpu_wrapper.init(desc);
+    cpu->impl = *cpu_wrapper.get_cpu(); // Copy the initialized CPU
     return result;
 }
 
