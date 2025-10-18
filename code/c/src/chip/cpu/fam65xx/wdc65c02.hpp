@@ -81,7 +81,12 @@ private:
     
 public:
     // CPU interface delegation
-    bus_state_t init(const fam65xx_desc_t* desc = nullptr) { return fam65xx_init(&cpu, desc); }
+    bus_state_t init(const fam65xx_desc_t* desc = nullptr) {
+        bus_state_t result = fam65xx_init(&cpu, desc);
+        extern void fam65xx_init_processor_opcode_table(fam65xx_t* cpu, const char* processor_type);
+        fam65xx_init_processor_opcode_table(&cpu, "WDC65C02");
+        return result;
+    }
     bus_state_t reset(bus_state_t pins) {
         enhanced_instruction_count = 0;
         return fam65xx_reset(&cpu, pins);
@@ -145,7 +150,11 @@ public:
 
 // Convenient creation functions
 inline WDC65C02 create_basic() {
-    return WDC65C02{};
+    fam65xx_t cpu;
+    fam65xx_init(&cpu, nullptr);
+    extern void fam65xx_init_processor_opcode_table(fam65xx_t* cpu, const char* processor_type);
+    fam65xx_init_processor_opcode_table(&cpu, "WDC65C02");
+    return cpu;
 }
 
 inline WDC65C02CPU create() {
@@ -190,7 +199,9 @@ typedef struct {
 // Initialize WDC 65C02 CPU
 inline uint64_t wdc65c02_init(wdc65c02_c_t* cpu, const fam65xx_desc_t* desc) {
     cpu->enhanced_count = 0;
-    return fam65xx_init(&cpu->impl, desc);
+    uint64_t result = fam65xx_init(&cpu->impl, desc);
+    fam65xx_init_processor_opcode_table(&cpu->impl, "WDC65C02");
+    return result;
 }
 
 // Reset WDC 65C02 CPU

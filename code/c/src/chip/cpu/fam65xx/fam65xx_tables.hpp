@@ -16,6 +16,11 @@
  */
 
 #include "fam65xx_types.hpp"
+#ifdef __cplusplus
+#include <cstring>
+#else
+#include <string.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -236,68 +241,62 @@ const cycle_fn_t fam65xx_addr_mode_table[AM_COUNT] = {
     am_zpr    // AM_ZPR - Zero Page Relative for BBR/BBS (Rockwell)
 };
 
-// Compact macro for opcode_info_t opcode definition - creates properly formatted bitfield entries
-// Field order: op_index, am_index, illegal_store, can_skip_page_cross, rmw, _reserved
-#define OP(am_index, can_skip_page_cross, op_index, rmw_flag) {(op_index), (am_index), 0, (can_skip_page_cross), (rmw_flag), 0}
-#define OP_ILLEGAL_STORE(am_index, can_skip_page_cross, op_index, rmw_flag) {(op_index), (am_index), 1, (can_skip_page_cross), (rmw_flag), 0}
-
-// ============================================================================
-// PLACEHOLDER MOS6502 OPCODE TABLE (Standard 6502 implementation)
-// ============================================================================
-// This provides the basic 6502 opcode table for the current implementation.
-// This will be replaced with the unified template system in a future task.
-
-static const opcode_info_t fam65xx_mos6502_opcode_table[256] = {
-    OP(AM_NON,0,OP_BRK,0), OP(AM_INX,1,OP_ORA,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INX,0,OP_SLO,1), OP(AM_ZER,1,OP_NOP,0), OP(AM_ZER,1,OP_ORA,0), OP(AM_ZER,0,OP_ASL,1), OP(AM_ZER,0,OP_SLO,1),
-    OP(AM_NON,0,OP_PHP,0), OP(AM_IMM,1,OP_ORA,0), OP(AM_ACC,0,OP_ASL,0), OP(AM_IMM,1,OP_ANC,0), OP(AM_ABS,1,OP_NOP,0), OP(AM_ABS,1,OP_ORA,0), OP(AM_ABS,0,OP_ASL,1), OP(AM_ABS,0,OP_SLO,1),
-    OP(AM_REL,0,OP_BPL,0), OP(AM_INY,1,OP_ORA,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_SLO,1), OP(AM_ZPX,1,OP_NOP,0), OP(AM_ZPX,1,OP_ORA,0), OP(AM_ZPX,0,OP_ASL,1), OP(AM_ZPX,0,OP_SLO,1),
-    OP(AM_NON,0,OP_CLC,0), OP(AM_ABY,1,OP_ORA,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABY,0,OP_SLO,1), OP(AM_ABX,1,OP_NOP,0), OP(AM_ABX,1,OP_ORA,0), OP(AM_ABX,0,OP_ASL,1), OP(AM_ABX,0,OP_SLO,1),
-    OP(AM_NON,0,OP_JSR,0), OP(AM_INX,1,OP_AND,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INX,0,OP_RLA,1), OP(AM_ZER,1,OP_BIT,0), OP(AM_ZER,1,OP_AND,0), OP(AM_ZER,0,OP_ROL,1), OP(AM_ZER,0,OP_RLA,1),
-    OP(AM_NON,0,OP_PLP,0), OP(AM_IMM,1,OP_AND,0), OP(AM_ACC,0,OP_ROL,0), OP(AM_IMM,1,OP_ANC,0), OP(AM_ABS,1,OP_BIT,0), OP(AM_ABS,1,OP_AND,0), OP(AM_ABS,0,OP_ROL,1), OP(AM_ABS,0,OP_RLA,1),
-    OP(AM_REL,0,OP_BMI,0), OP(AM_INY,1,OP_AND,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_RLA,1), OP(AM_ZPX,1,OP_NOP,0), OP(AM_ZPX,1,OP_AND,0), OP(AM_ZPX,0,OP_ROL,1), OP(AM_ZPX,0,OP_RLA,1),
-    OP(AM_NON,0,OP_SEC,0), OP(AM_ABY,1,OP_AND,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABY,0,OP_RLA,1), OP(AM_ABX,1,OP_NOP,0), OP(AM_ABX,1,OP_AND,0), OP(AM_ABX,0,OP_ROL,1), OP(AM_ABX,0,OP_RLA,1),
-    OP(AM_NON,0,OP_RTI,0), OP(AM_INX,1,OP_EOR,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INX,0,OP_SRE,1), OP(AM_ZER,1,OP_NOP,0), OP(AM_ZER,1,OP_EOR,0), OP(AM_ZER,0,OP_LSR,1), OP(AM_ZER,0,OP_SRE,1),
-    OP(AM_NON,0,OP_PHA,0), OP(AM_IMM,1,OP_EOR,0), OP(AM_ACC,0,OP_LSR,0), OP(AM_IMM,1,OP_ASR,0), OP(AM_ABS,1,OP_JMP,0), OP(AM_ABS,1,OP_EOR,0), OP(AM_ABS,0,OP_LSR,1), OP(AM_ABS,0,OP_SRE,1),
-    OP(AM_REL,0,OP_BVC,0), OP(AM_INY,1,OP_EOR,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_SRE,1), OP(AM_ZPX,1,OP_NOP,0), OP(AM_ZPX,1,OP_EOR,0), OP(AM_ZPX,0,OP_LSR,1), OP(AM_ZPX,0,OP_SRE,1),
-    OP(AM_NON,0,OP_CLI,0), OP(AM_ABY,1,OP_EOR,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABY,0,OP_SRE,1), OP(AM_ABX,1,OP_NOP,0), OP(AM_ABX,1,OP_EOR,0), OP(AM_ABX,0,OP_LSR,1), OP(AM_ABX,0,OP_SRE,1),
-    OP(AM_NON,0,OP_RTS,0), OP(AM_INX,1,OP_ADC,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INX,0,OP_RRA,1), OP(AM_ZER,1,OP_NOP,0), OP(AM_ZER,1,OP_ADC,0), OP(AM_ZER,0,OP_ROR,1), OP(AM_ZER,0,OP_RRA,1),
-    OP(AM_NON,0,OP_PLA,0), OP(AM_IMM,1,OP_ADC,0), OP(AM_ACC,0,OP_ROR,0), OP(AM_IMM,1,OP_ARR,0), OP(AM_IND,1,OP_JMP,0), OP(AM_ABS,1,OP_ADC,0), OP(AM_ABS,0,OP_ROR,1), OP(AM_ABS,0,OP_RRA,1),
-    OP(AM_REL,0,OP_BVS,0), OP(AM_INY,1,OP_ADC,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_RRA,1), OP(AM_ZPX,1,OP_NOP,0), OP(AM_ZPX,1,OP_ADC,0), OP(AM_ZPX,0,OP_ROR,1), OP(AM_ZPX,0,OP_RRA,1),
-    OP(AM_NON,0,OP_SEI,0), OP(AM_ABY,1,OP_ADC,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABY,0,OP_RRA,1), OP(AM_ABX,1,OP_NOP,0), OP(AM_ABX,1,OP_ADC,0), OP(AM_ABX,0,OP_ROR,1), OP(AM_ABX,0,OP_RRA,1),
-    OP(AM_IMM,1,OP_NOP,0), OP(AM_INX,0,OP_STA,0), OP(AM_IMM,1,OP_NOP,0), OP(AM_INX,0,OP_SAX,0), OP(AM_ZER,0,OP_STY,0), OP(AM_ZER,0,OP_STA,0), OP(AM_ZER,0,OP_STX,0), OP(AM_ZER,0,OP_SAX,0),
-    OP(AM_NON,0,OP_DEY,0), OP(AM_IMM,1,OP_NOP,0), OP(AM_NON,0,OP_TXA,0), OP(AM_IMM,1,OP_XAA,0), OP(AM_ABS,0,OP_STY,0), OP(AM_ABS,0,OP_STA,0), OP(AM_ABS,0,OP_STX,0), OP(AM_ABS,0,OP_SAX,0),
-    OP(AM_REL,0,OP_BCC,0), OP(AM_INY,0,OP_STA,0), OP(AM_NON,0,OP_JAM,0), OP_ILLEGAL_STORE(AM_INY,0,OP_SHA,0), OP(AM_ZPX,0,OP_STY,0), OP(AM_ZPX,0,OP_STA,0), OP(AM_ZPY,0,OP_STX,0), OP(AM_ZPY,0,OP_SAX,0),
-    OP(AM_NON,0,OP_TYA,0), OP(AM_ABY,0,OP_STA,0), OP(AM_NON,0,OP_TXS,0), OP_ILLEGAL_STORE(AM_ABY,0,OP_SHS,0), OP_ILLEGAL_STORE(AM_ABX,0,OP_SHY,0), OP(AM_ABX,0,OP_STA,0), OP_ILLEGAL_STORE(AM_ABY,0,OP_SHX,0), OP_ILLEGAL_STORE(AM_ABY,0,OP_SHA,0),
-    OP(AM_IMM,1,OP_LDY,0), OP(AM_INX,1,OP_LDA,0), OP(AM_IMM,1,OP_LDX,0), OP(AM_INX,1,OP_LAX,0), OP(AM_ZER,1,OP_LDY,0), OP(AM_ZER,1,OP_LDA,0), OP(AM_ZER,1,OP_LDX,0), OP(AM_ZER,1,OP_LAX,0),
-    OP(AM_NON,0,OP_TAY,0), OP(AM_IMM,1,OP_LDA,0), OP(AM_NON,0,OP_TAX,0), OP(AM_IMM,0,OP_LAX,0), OP(AM_ABS,1,OP_LDY,0), OP(AM_ABS,1,OP_LDA,0), OP(AM_ABS,1,OP_LDX,0), OP(AM_ABS,1,OP_LAX,0),
-    OP(AM_REL,0,OP_BCS,0), OP(AM_INY,1,OP_LDA,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,1,OP_LAX,0), OP(AM_ZPX,1,OP_LDY,0), OP(AM_ZPX,1,OP_LDA,0), OP(AM_ZPY,1,OP_LDX,0), OP(AM_ZPY,1,OP_LAX,0),
-    OP(AM_NON,0,OP_CLV,0), OP(AM_ABY,1,OP_LDA,0), OP(AM_NON,0,OP_TSX,0), OP(AM_ABY,1,OP_LAS,0), OP(AM_ABX,1,OP_LDY,0), OP(AM_ABX,1,OP_LDA,0), OP(AM_ABY,1,OP_LDX,0), OP(AM_ABY,1,OP_LAX,0),
-    OP(AM_IMM,1,OP_CPY,0), OP(AM_INX,1,OP_CMP,0), OP(AM_IMM,1,OP_NOP,0), OP(AM_INX,0,OP_DCP,1), OP(AM_ZER,1,OP_CPY,0), OP(AM_ZER,1,OP_CMP,0), OP(AM_ZER,0,OP_DEC,1), OP(AM_ZER,0,OP_DCP,1),
-    OP(AM_NON,0,OP_INY,0), OP(AM_IMM,1,OP_CMP,0), OP(AM_NON,0,OP_DEX,0), OP(AM_IMM,1,OP_SBX,0), OP(AM_ABS,1,OP_CPY,0), OP(AM_ABS,1,OP_CMP,0), OP(AM_ABS,0,OP_DEC,1), OP(AM_ABS,0,OP_DCP,1),
-    OP(AM_REL,0,OP_BNE,0), OP(AM_INY,1,OP_CMP,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_DCP,1), OP(AM_ZPX,1,OP_NOP,0), OP(AM_ZPX,1,OP_CMP,0), OP(AM_ZPX,0,OP_DEC,1), OP(AM_ZPX,0,OP_DCP,1),
-    OP(AM_NON,0,OP_CLD,0), OP(AM_ABY,1,OP_CMP,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABY,0,OP_DCP,1), OP(AM_ABX,1,OP_NOP,0), OP(AM_ABX,1,OP_CMP,0), OP(AM_ABX,0,OP_DEC,1), OP(AM_ABX,0,OP_DCP,1),
-    OP(AM_IMM,1,OP_CPX,0), OP(AM_INX,1,OP_SBC,0), OP(AM_IMM,1,OP_NOP,0), OP(AM_INX,0,OP_ISC,1), OP(AM_ZER,1,OP_CPX,0), OP(AM_ZER,1,OP_SBC,0), OP(AM_ZER,0,OP_INC,1), OP(AM_ZER,0,OP_ISC,1),
-    OP(AM_NON,0,OP_INX,0), OP(AM_IMM,1,OP_SBC,0), OP(AM_NON,0,OP_NOP,0), OP(AM_IMM,1,OP_SBC,0), OP(AM_ABS,1,OP_CPX,0), OP(AM_ABS,1,OP_SBC,0), OP(AM_ABS,0,OP_INC,1), OP(AM_ABS,0,OP_ISC,1),
-    OP(AM_REL,0,OP_BEQ,0), OP(AM_INY,1,OP_SBC,0), OP(AM_NON,0,OP_JAM,0), OP(AM_INY,0,OP_ISC,1), OP(AM_ZPX,1,OP_NOP,0), OP(AM_ZPX,1,OP_SBC,0), OP(AM_ZPX,0,OP_INC,1), OP(AM_ZPX,0,OP_ISC,1),
-    OP(AM_NON,0,OP_SED,0), OP(AM_ABY,1,OP_SBC,0), OP(AM_IMM,0,OP_NOP,0), OP(AM_ABY,0,OP_ISC,1), OP(AM_ABX,1,OP_NOP,0), OP(AM_ABX,1,OP_SBC,0), OP(AM_ABX,0,OP_INC,1), OP(AM_ABX,0,OP_ISC,1)
-};
-
-// Default processor-agnostic accessor functions - works with current split file system
-opcode_info_t fam65xx_get_opcode_entry(uint8_t opcode) {
-    return fam65xx_mos6502_opcode_table[opcode];
-}
-
-cycle_fn_t fam65xx_get_addr_mode_handler(int am_index) {
-    if (am_index >= 0 && am_index < AM_COUNT) {
-        return fam65xx_addr_mode_table[am_index];
-    }
-    return nullptr;
-}
-
 #endif /* AIEMUC_IMPL */
 
 #ifdef __cplusplus
 } // extern "C"
-#endif
+
+// Include C++ templates after enum definitions
+#include "fam65xx_unified_opcode_tables.hpp"
+#include "fam65xx_processor_traits.hpp"
+
+// ============================================================================
+// C++ TEMPLATE-BASED OPCODE TABLE FUNCTIONS
+// ============================================================================
+
+// Template-based opcode entry function using processor traits (requires includes above)
+template<typename ProcessorTag>
+opcode_info_t get_opcode_entry(uint8_t opcode) {
+    return fam65xx_unified_tables::get_processor_opcode_entry<ProcessorTag>(opcode);
+}
+
+// Template-based initialization functions to populate CPU's opcode table
+template<typename ProcessorTag>
+inline void fam65xx_init_opcode_table(fam65xx_t* cpu) {
+    if (!cpu) return;
+    
+    // Populate the CPU's internal opcode table using ProcessorTraits
+    for (int i = 0; i < 256; i++) {
+        cpu->opcode_table[i] = fam65xx_unified_tables::get_processor_opcode_entry<ProcessorTag>(i);
+    }
+}
+
+// Single unified opcode table initialization function
+// This function is called from C++ code and uses template dispatch internally
+inline void fam65xx_init_processor_opcode_table(fam65xx_t* cpu, const char* processor_type) {
+    if (!cpu || !processor_type) return;
+    
+    // Use string comparison to determine processor type and initialize accordingly
+    if (strcmp(processor_type, "MOS6502") == 0) {
+        fam65xx_init_opcode_table<fam65xx_core::MOS6502Tag>(cpu);
+    } else if (strcmp(processor_type, "MOS6510") == 0) {
+        fam65xx_init_opcode_table<fam65xx_core::MOS6510Tag>(cpu);
+    } else if (strcmp(processor_type, "NES6502") == 0) {
+        fam65xx_init_opcode_table<fam65xx_core::NES6502Tag>(cpu);
+    } else if (strcmp(processor_type, "WDC65C02") == 0) {
+        fam65xx_init_opcode_table<fam65xx_core::WDC65C02Tag>(cpu);
+    } else if (strcmp(processor_type, "Rockwell65C02") == 0) {
+        fam65xx_init_opcode_table<fam65xx_core::Rockwell65C02Tag>(cpu);
+    } else if (strcmp(processor_type, "WDC65C816") == 0) {
+        fam65xx_init_opcode_table<fam65xx_core::WDC65C816Tag>(cpu);
+    } else {
+        // Default fallback to MOS6502
+        fam65xx_init_opcode_table<fam65xx_core::MOS6502Tag>(cpu);
+    }
+}
+
+// Note: Global CPU context (g_current_cpu) removed - direct opcode table access used instead
+
+#endif // __cplusplus
 
 #endif /* FAM65XX_TABLES_HPP_INCLUDED */

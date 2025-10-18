@@ -39,6 +39,8 @@ using MOS6502 = fam65xx_t;
 inline fam65xx_t create() {
     fam65xx_t cpu;
     fam65xx_init(&cpu, nullptr);
+    extern void fam65xx_init_processor_opcode_table(fam65xx_t* cpu, const char* processor_type);
+    fam65xx_init_processor_opcode_table(&cpu, "MOS6502");
     return cpu;
 }
 
@@ -55,6 +57,7 @@ inline fam65xx_t create_with_memory(
     
     fam65xx_t cpu;
     fam65xx_init(&cpu, &desc);
+    fam65xx_init_processor_opcode_table(&cpu, "MOS6502");
     return cpu;
 }
 
@@ -77,8 +80,9 @@ typedef struct {
 
 // Initialize MOS 6502 CPU
 inline uint64_t mos6502_init(mos6502_c_t* cpu, const fam65xx_desc_t* desc) {
-    // Use static opcode table - no initialization needed
-    return fam65xx_init(&cpu->impl, desc);
+    uint64_t result = fam65xx_init(&cpu->impl, desc);
+    fam65xx_init_processor_opcode_table(&cpu->impl, "MOS6502");
+    return result;
 }
 
 // Reset MOS 6502 CPU

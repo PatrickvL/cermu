@@ -96,8 +96,16 @@
  * all operation implementations before defining the lookup tables that reference them.
  */
 
+#ifdef __cplusplus
 #include <cstdint>
+#else
+#include <stdint.h>
+#endif
+#ifdef __cplusplus
 #include <cstdbool>
+#else
+#include <stdbool.h>
+#endif
 
 /* Include all modular components in dependency order to minimize forward declarations */
 
@@ -138,9 +146,7 @@ uint8_t fam65xx_s(fam65xx_t* cpu);
 uint8_t fam65xx_p(fam65xx_t* cpu);
 uint16_t fam65xx_pc(fam65xx_t* cpu);
 
-/* Processor-specific table access functions */
-opcode_info_t fam65xx_get_opcode_entry(uint8_t opcode);
-cycle_fn_t fam65xx_get_addr_mode_handler(int am_index);
+/* Note: Direct access to fam65xx_addr_mode_table is used instead of function calls */
 
 #ifdef __cplusplus
 }

@@ -11,8 +11,16 @@
  * - CPU state structure
  */
 
+#ifdef __cplusplus
 #include <cstdint>
+#else
+#include <stdint.h>
+#endif
+#ifdef __cplusplus
 #include <cstdbool>
+#else
+#include <stdbool.h>
+#endif
 
 // Include system-wide bus definitions
 #include "../../../core/aiemuc.h"
@@ -175,6 +183,9 @@ struct fam65xx_t {
         uint8_t reg8[REG_COUNT];        /* 8-bit register access */
         uint16_t reg16[REG_COUNT / 2];  /* 16-bit pair access (little-endian) */
     };
+    
+    /* Processor-specific opcode table - populated during initialization based on ProcessorTraits */
+    opcode_info_t opcode_table[256];    /* Complete 256-entry opcode table for this CPU type */
     
     /* Current execution state */
     opcode_info_t opcode_entry;         /* Cached opcode entry (copied once) */
