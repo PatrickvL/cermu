@@ -230,33 +230,40 @@ public:
     // FEATURE-SPECIFIC MEMORY ACCESS OVERRIDES
     // ========================================================================
     
-    // Template-aware memory read with processor-specific handling
+    // VIC-II compatible memory read with proper RDY handling (matching old implementation)
     bus_state_t phi2_read(bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) {
-        // Get address for both checks and bus operations
-        uint16_t addr = this->reg16[addr_reg];
+        uint16_t address;
+
+        // Hardware-accurate RDY handling - address bus behavior matches old implementation
+        if (FAM65XX_GET_RDY(pins)) {
+            address = this->reg16[addr_reg];
+            pins = BUS_SET_ADDR(pins, address);
+        } else {
+            address = BUS_GET_ADDR(pins);  // Keep existing bus address when RDY low
+        }
         
         if constexpr (has_io_port<ProcessorTag>()) {
-            // Handle 6510 I/O port access
-            if (addr == 0x0000) {
+            // Handle 6510 I/O port access (only when RDY is high)
+            if (FAM65XX_GET_RDY(pins) && address == 0x0000) {
                 this->reg8[data_reg] = this->read_io_port();
                 return pins; // Don't perform bus read
-            } else if (addr == 0x0001) {
+            } else if (FAM65XX_GET_RDY(pins) && address == 0x0001) {
                 this->reg8[data_reg] = this->io_port.direction;
                 return pins; // Don't perform bus read
             }
         }
-        
-        // Standard bus read for all other addresses
-        pins = BUS_SET_ADDR(pins, addr);
-        pins |= FAM65XX_RW; // Set READ mode
-        
-        // Use memory callback if available
+
+        // Set R/W̅ bit to indicate READ (1 = Read, 0 = Write)
+        pins |= FAM65XX_RW;
+
+        // Always perform memory read to service VIC-II even when CPU halted
+        uint8_t current_bus_data = BUS_GET_DATA(pins);
+        uint8_t data = 0xFF; // Default floating bus
         if (this->mem_read != nullptr) {
-            this->reg8[data_reg] = this->mem_read(this->mem_user_data, addr, pins & 0xFF);
-        } else {
-            // No callback - return floating bus
-            this->reg8[data_reg] = 0xFF;
+            data = this->mem_read(this->mem_user_data, address, current_bus_data);
         }
+        pins = BUS_SET_DATA(pins, data);
+        this->reg8[data_reg] = data;
         
         return pins;
     }
