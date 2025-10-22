@@ -8,6 +8,7 @@
 
 #include "mos6502.h"
 #include "fam65xx.hpp"
+#include <cstdio>
 
 // Include concrete CPU type definitions
 using namespace fam65xx_cpp;
@@ -39,6 +40,20 @@ void mos6502_destroy(mos6502_t* cpu) {
 
 bus_state_t mos6502_init(mos6502_t* cpu, const chip_descriptor_t* desc) {
     return CPU_CAST(mos6502_cpu_t, cpu)->init(desc);
+}
+
+bus_state_t mos6502_init_enhanced(mos6502_t* cpu, const fam65xx_chip_descriptor_t* enhanced_desc) {
+    auto* cpu_impl = CPU_CAST(mos6502_cpu_t, cpu);
+    
+    // Initialize with base descriptor first (this clears memory callbacks)
+    bus_state_t result = cpu_impl->init(&enhanced_desc->base);
+    
+    // IMPORTANT: Set memory callbacks AFTER init() since init() clears them
+    cpu_impl->set_memory_callbacks(enhanced_desc->mem_read, enhanced_desc->mem_write, enhanced_desc->mem_user_data);
+    
+    printf("DEBUG: Enhanced init complete - mem_read=%p set after init\n", cpu_impl->mem_read);
+    
+    return result;
 }
 
 bus_state_t mos6502_bootstrap(mos6502_t* cpu, bus_state_t pins) {
@@ -105,6 +120,48 @@ void mos6502_set_p(mos6502_t* cpu, uint8_t value) {
 
 void mos6502_set_pc(mos6502_t* cpu, uint16_t value) {
     CPU_PC(CPU_CAST(mos6502_cpu_t, cpu)) = value;
+}
+
+// ============================================================================
+// Enhanced Descriptor API
+// ============================================================================
+
+static chip_descriptor_t mos6502_base_descriptor = {
+    .description = "MOS Technology 6502 (NMOS)",
+    .create = [](chip_descriptor_t* desc) -> void* {
+        return mos6502_create();
+    },
+    .destroy = [](void* chip) {
+        mos6502_destroy(reinterpret_cast<mos6502_t*>(chip));
+    },
+    .bus_attach = nullptr,  // Basic CPU doesn't need bus attach
+    .bank_change = nullptr, // Basic CPU doesn't have banking
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    .render_debug_window = nullptr,
+    .render_settings_window = nullptr
+#endif
+};
+
+fam65xx_chip_descriptor_t* mos6502_create_descriptor(
+    uint8_t (*read_callback)(void* user_data, uint16_t addr, uint8_t bus_state),
+    void (*write_callback)(void* user_data, uint16_t addr, uint8_t data),
+    void* user_data) {
+    
+    auto* desc = new fam65xx_chip_descriptor_t;
+    desc->base = mos6502_base_descriptor;
+    desc->mem_read = read_callback;
+    desc->mem_write = write_callback;
+    desc->mem_user_data = user_data;
+    
+    return desc;
+}
+
+void mos6502_destroy_descriptor(fam65xx_chip_descriptor_t* desc) {
+    delete desc;
+}
+
+const chip_descriptor_t* mos6502_get_chip_descriptor(void) {
+    return &mos6502_base_descriptor;
 }
 
 } // extern "C"

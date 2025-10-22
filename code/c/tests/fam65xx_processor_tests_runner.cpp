@@ -127,22 +127,37 @@ public:
     virtual void set_status(uint8_t p) = 0;
 };
 
-// Template wrapper for MOS6502 processor using new fam65xx_cpp API
+// Template wrapper for MOS6502 processor using enhanced descriptor API
 class MOS6502Wrapper : public UnifiedProcessorInterface {
 private:
     mos6502_t* cpu;
+    fam65xx_chip_descriptor_t* enhanced_desc;
     
 public:
     MOS6502Wrapper() {
+        // Create enhanced descriptor with memory callbacks
+        enhanced_desc = mos6502_create_descriptor(mem_read_callback, mem_write_callback, nullptr);
+        if (!enhanced_desc) {
+            throw std::runtime_error("Failed to create enhanced MOS6502 descriptor");
+        }
+        
+        // Create CPU using enhanced descriptor
         cpu = mos6502_create();
         if (!cpu) {
+            mos6502_destroy_descriptor(enhanced_desc);
             throw std::runtime_error("Failed to create MOS6502 CPU");
         }
+        
+        // Initialize with enhanced descriptor (automatically sets up memory callbacks)
+        mos6502_init_enhanced(cpu, enhanced_desc);
     }
     
     ~MOS6502Wrapper() {
         if (cpu) {
             mos6502_destroy(cpu);
+        }
+        if (enhanced_desc) {
+            mos6502_destroy_descriptor(enhanced_desc);
         }
     }
     
