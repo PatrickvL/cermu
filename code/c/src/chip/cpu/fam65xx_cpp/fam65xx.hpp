@@ -138,9 +138,11 @@ public:
     // ========================================================================
     
     bus_state_t init(const chip_descriptor_t* desc) {
-        // Initialize memory callbacks (will be set up by system)
-        // The chip_descriptor_t contains the creation/destroy functions
-        // Memory callbacks will be set up when the CPU is attached to the bus
+        // Note: Memory callbacks will be set through separate API calls
+        // This matches the old implementation's approach
+        this->mem_read = nullptr;
+        this->mem_write = nullptr;  
+        this->mem_user_data = nullptr;
         
         // Initialize processor-specific features
         init_conditional_features();
@@ -151,6 +153,13 @@ public:
         // Return initial pin state
         bus_state_t pins = 0;
         return pins;
+    }
+    
+    // Add memory callback setup function (matching old implementation)
+    void set_memory_callbacks(fam65xx_mem_read_t read_fn, fam65xx_mem_write_t write_fn, void* user_data) {
+        this->mem_read = read_fn;
+        this->mem_write = write_fn;
+        this->mem_user_data = user_data;
     }
     
     bus_state_t reset(bus_state_t pins) {
@@ -190,8 +199,8 @@ public:
     }
     
     bus_state_t tick(bus_state_t pins) {
-        // SYNC pin management - asserted during opcode fetch cycles
-        if (this->current_handler == nullptr && this->cycle_index == 0) {
+        // SYNC pin management - asserted during opcode fetch cycles (matching old implementation)
+        if (this->current_handler == &fam65xx_t::fetch_opcode && this->cycle_index == 0) {
             pins |= FAM65XX_SYNC;
         } else {
             pins &= ~FAM65XX_SYNC;
@@ -509,6 +518,45 @@ private:
         
         // Note: BCD and CMOS state mixins don't need initialization
         // as they are algorithmic and use existing CPU state
+    }
+    
+    void init_opcode_table() {
+        // Opcode table initialization - placeholder for template system
+        // In practice, opcode tables are generated at compile time
+    }
+    
+    // Read operand from immediate or memory mode (matching old implementation)
+    bus_state_t read_operand_immediate_or_memory(bus_state_t pins) {
+        if (this->opcode_entry.am_index == AM_IMM) {
+            // Immediate mode - read from PC
+            pins = phi2_read(pins, REG_PC, REG_DL);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_PC(this)++;
+        } else {
+            // Memory mode - read from target address
+            pins = phi2_read(pins, REG_AB, REG_DL);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+        }
+        return pins;
+    }
+    
+    // BCD subtraction helper matching old implementation signature
+    void bcd_subtraction_helper(uint8_t a_old, uint8_t operand, uint8_t borrow_in, 
+                               uint8_t* bcd_result, uint8_t* bcd_flags) {
+        if constexpr (has_bcd<ProcessorTag>()) {
+            bool carry_out, overflow;
+            *bcd_result = this->sbc_bcd(a_old, operand, borrow_in != 0, carry_out, overflow);
+            
+            // Generate flags matching old implementation
+            *bcd_flags = (*bcd_result & 0x80) |                    // N flag
+                        (*bcd_result == 0 ? FLAG_Z : 0) |         // Z flag  
+                        (carry_out ? FLAG_C : 0) |                // C flag
+                        (overflow ? FLAG_V : 0);                  // V flag
+        } else {
+            // No BCD support - should not be called
+            *bcd_result = a_old - operand - borrow_in;
+            *bcd_flags = 0;
+        }
     }
     
 
