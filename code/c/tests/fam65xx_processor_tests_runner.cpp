@@ -162,6 +162,11 @@ public:
     }
     
     uint64_t init(const chip_descriptor_t* desc) override {
+        // Don't reinitialize if we already have enhanced descriptor set up
+        // The enhanced initialization was already done in constructor
+        if (enhanced_desc) {
+            return 0; // Already initialized with enhanced descriptor
+        }
         return mos6502_init(cpu, desc);
     }
     
