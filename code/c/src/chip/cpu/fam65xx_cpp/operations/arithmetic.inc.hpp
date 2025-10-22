@@ -143,8 +143,24 @@ bus_state_t op_adc(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_nop(bus_state_t pins) {
-    // NOP does nothing except consume cycles
+    trace_enter("op_nop");
+    trace_instruction(0xEA, "NOP");
+    
+    // Legal NOP (0xEA) - AM_NON: Dummy read from PC for internal operation cycle  
+    // Based on old implementation: dummy read from PC WITHOUT incrementing PC
+    trace("NOP: dummy read from PC (no PC increment)");
+    pins = phi2_read(pins, REG_PC, REG_DL);
+    if (!FAM65XX_GET_RDY(pins)) {
+        trace("RDY low - returning early");
+        trace_exit("op_nop");
+        return pins;
+    }
+    
+    // PHI1: No operation performed - instruction completes
+    trace("NOP complete - transitioning to fetch");
     transition_to_fetch();
+    
+    trace_exit("op_nop");
     return pins;
 }
 

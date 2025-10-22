@@ -42,6 +42,8 @@
 #include <type_traits>
 #include <array>
 #include <cstring>
+#include <cstdio>
+#include <cstdarg>
 
 #include "fam65xx_types.h"
 #include "fam65xx_processor_traits.hpp"
@@ -111,6 +113,10 @@ public:
     bool wait_for_interrupt;            /* WAI instruction state */
     bool stopped;                       /* STP instruction state */
     
+    /* Debug tracing state */
+    static constexpr bool ENABLE_TRACING = true;  /* Compile-time tracing flag */
+    mutable int trace_indent;           /* Current tracing indentation level */
+    
     // ========================================================================
     // CONSTRUCTOR AND INITIALIZATION
     // ========================================================================
@@ -129,9 +135,65 @@ public:
         mem_user_data = nullptr;
         wait_for_interrupt = false;
         stopped = false;
+        trace_indent = 0;
         
         // Initialize conditional features
         this->init_conditional_features();
+    }
+    
+    // ========================================================================
+    // DEBUG TRACING HELPERS
+    // ========================================================================
+    
+    void trace(const char* format, ...) const {
+        if constexpr (ENABLE_TRACING) {
+            // Print indentation
+            for (int i = 0; i < trace_indent; i++) {
+                printf("  ");
+            }
+            
+            // Print formatted message
+            va_list args;
+            va_start(args, format);
+            vprintf(format, args);
+            va_end(args);
+            printf("\n");
+        }
+    }
+    
+    void trace_enter(const char* function_name) const {
+        if constexpr (ENABLE_TRACING) {
+            trace("→ %s", function_name);
+            trace_indent++;
+        }
+    }
+    
+    void trace_exit(const char* function_name) const {
+        if constexpr (ENABLE_TRACING) {
+            trace_indent--;
+            trace("← %s", function_name);
+        }
+    }
+    
+    void trace_registers(const char* context = "") const {
+        if constexpr (ENABLE_TRACING) {
+            trace("REGS %s: PC=%04X A=%02X X=%02X Y=%02X P=%02X S=%02X", 
+                  context,
+                  CPU_PC(this), CPU_A(this), CPU_X(this), CPU_Y(this), 
+                  CPU_P(this), CPU_S(this));
+        }
+    }
+    
+    void trace_memory_access(const char* op, uint16_t addr, uint8_t data) const {
+        if constexpr (ENABLE_TRACING) {
+            trace("MEM %s: [%04X] = %02X", op, addr, data);
+        }
+    }
+    
+    void trace_instruction(uint8_t opcode, const char* mnemonic) const {
+        if constexpr (ENABLE_TRACING) {
+            trace("EXEC: %02X %s (cycle %d)", opcode, mnemonic, cycle_index);
+        }
     }
     
     // ========================================================================
@@ -224,9 +286,13 @@ public:
     }
     
     bus_state_t tick(bus_state_t pins) {
+        trace_enter("tick");
+        trace_registers("before");
+        
         // SYNC pin management - asserted during opcode fetch cycles (matching old implementation)
         if (this->current_handler == &fam65xx_t::fetch_opcode && this->cycle_index == 0) {
             pins |= FAM65XX_SYNC;
+            trace("SYNC asserted (opcode fetch)");
         } else {
             pins &= ~FAM65XX_SYNC;
         }
@@ -250,12 +316,16 @@ public:
         
         // Execute current instruction cycle
         if (this->current_handler != nullptr) {
+            trace("Executing handler (cycle %d)", this->cycle_index);
             pins = (this->*this->current_handler)(pins);
         } else {
             // Start new instruction fetch - should not happen with proper initialization
+            trace("No handler - starting fetch_opcode");
             pins = this->fetch_opcode(pins);
         }
         
+        trace_registers("after");
+        trace_exit("tick");
         return pins;
     }
     
@@ -269,14 +339,19 @@ public:
     
     // VIC-II compatible memory read with proper RDY handling (matching old implementation)
     bus_state_t phi2_read(bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) {
+        trace_enter("phi2_read");
+        trace("Reading from addr_reg=%d to data_reg=%d", addr_reg, data_reg);
+        
         uint16_t address;
 
         // Hardware-accurate RDY handling - address bus behavior matches old implementation
         if (FAM65XX_GET_RDY(pins)) {
             address = this->reg16[addr_reg];
             pins = BUS_SET_ADDR(pins, address);
+            trace("RDY high: address = %04X", address);
         } else {
             address = BUS_GET_ADDR(pins);  // Keep existing bus address when RDY low
+            trace("RDY low: keeping address = %04X", address);
         }
         
         if constexpr (has_io_port<ProcessorTag>()) {
@@ -298,10 +373,15 @@ public:
         uint8_t data = 0xFF; // Default floating bus
         if (this->mem_read != nullptr) {
             data = this->mem_read(this->mem_user_data, address, current_bus_data);
+            trace("Memory callback returned: %02X", data);
+        } else {
+            trace("No memory callback - using floating bus default: %02X", data);
         }
         pins = BUS_SET_DATA(pins, data);
         this->reg8[data_reg] = data;
+        trace("Stored %02X in reg8[%d]", data, data_reg);
         
+        trace_exit("phi2_read");
         return pins;
     }
     
@@ -478,8 +558,11 @@ private:
     
     // Instruction fetch and decode
     bus_state_t fetch_opcode(bus_state_t pins) {
+        trace_enter("fetch_opcode");
+        
         // Read opcode from PC
         CPU_AB(this) = CPU_PC(this);
+        trace("Fetching opcode from PC=%04X", CPU_PC(this));
         pins = this->phi2_read(pins, REG_AB, REG_IR);
         CPU_PC(this)++;
         
@@ -488,12 +571,15 @@ private:
         
         // Decode opcode and set up instruction
         uint8_t opcode = CPU_IR(this);
+        trace("Fetched opcode: %02X", opcode);
         this->opcode_entry = get_opcode_info(opcode);
         this->cycle_index = 0;
         
         // Set up first instruction cycle handler
         this->current_handler = get_instruction_handler();
+        trace("Set up handler for opcode %02X", opcode);
         
+        trace_exit("fetch_opcode");
         return pins;
     }
     
