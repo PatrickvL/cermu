@@ -233,6 +233,7 @@ typedef struct {
 #define CPU_PC(cpu)    ((cpu)->reg16[REG_PC])   /* Program Counter (PCH/PCL) */
 
 /* Individual byte access - using the new register layout */
+#define CPU_ZPH(cpu)   ((cpu)->reg8[REG_ZPH])   /* Zero Page High (always 0x00 for 6502/6510)*/
 #define CPU_ZPL(cpu)   ((cpu)->reg8[REG_ZPL])   /* Zero Page Low (High is always 0x00)*/
 #define CPU_S(cpu)     ((cpu)->reg8[REG_SPL])   /* Stack Pointer Low (High is always 0x01)*/
 #define CPU_ABH(cpu)   ((cpu)->reg8[REG_ABH])   /* Address Bus Latch High */

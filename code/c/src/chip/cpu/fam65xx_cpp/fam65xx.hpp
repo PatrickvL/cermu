@@ -237,10 +237,13 @@ public:
             if (this->brk_flags & FAM65XX_BRK_RESET) {
                 // RESET has highest priority - immediately start RESET sequence
                 return reset(pins);
-            } else if (this->current_handler == nullptr && this->cycle_index == 0) {
-                // At instruction boundary - start interrupt sequence
-                this->current_handler = &fam65xx_t::interrupt_sequence;
+            } else if (this->current_handler == &fam65xx_t::fetch_opcode && this->cycle_index == 0) {
+                // At instruction boundary - start interrupt sequence (matching old implementation)
+                // Use op_brk as unified interrupt handler like old implementation
+                this->current_handler = &fam65xx_t::op_brk;
                 this->cycle_index = 0;
+                // Continue with op_brk handler execution this cycle
+                pins = (this->*this->current_handler)(pins);
                 return pins;
             }
         }
@@ -249,7 +252,7 @@ public:
         if (this->current_handler != nullptr) {
             pins = (this->*this->current_handler)(pins);
         } else {
-            // Start new instruction fetch
+            // Start new instruction fetch - should not happen with proper initialization
             pins = this->fetch_opcode(pins);
         }
         
@@ -257,7 +260,7 @@ public:
     }
     
     bool opdone() const {
-        return this->current_handler == nullptr;
+        return this->current_handler == &fam65xx_t::fetch_opcode;
     }
     
     // ========================================================================
@@ -407,16 +410,14 @@ private:
     std::array<InstructionHandler, AM_COUNT> addressing_mode_handlers;
     
     // Essential helper functions for template functionality
-    InstructionHandler get_instruction_handler(uint8_t opcode) {
-        opcode_info_t info = get_opcode_info(opcode);
-        
-        // For immediate mode and implied operations, go directly to operation
-        if (info.am_index <= AM_IMM) {
-            return operation_handlers[info.op_index];
+    inline InstructionHandler get_instruction_handler() {
+        // For addressing modes that need address calculation, start with addressing mode handler
+        if (this->opcode_entry.am_index > AM_IMM) {
+            return addressing_mode_handlers[this->opcode_entry.am_index];
         }
         
-        // For addressing modes that need address calculation, start with addressing mode handler
-        return addressing_mode_handlers[info.am_index];
+        // For immediate mode and implied operations, go directly to operation
+        return operation_handlers[this->opcode_entry.op_index];
     }
     
     // Hardware-accurate interrupt detection (matching old implementation)
@@ -491,27 +492,27 @@ private:
         this->cycle_index = 0;
         
         // Set up first instruction cycle handler
-        this->current_handler = get_instruction_handler(opcode);
+        this->current_handler = get_instruction_handler();
         
-        return pins;
-    }
-    
-    // Generic interrupt sequence handler
-    bus_state_t interrupt_sequence(bus_state_t pins) {
-        // Implementation of interrupt sequence
-        // This is a simplified placeholder - full implementation would match old BRK handler
-        transition_to_fetch();
         return pins;
     }
     
 public:
     // Transition to next instruction fetch (public for bootstrap function)
     void transition_to_fetch() {
-        this->current_handler = nullptr;
+        this->current_handler = &fam65xx_t::fetch_opcode;
         this->cycle_index = 0;
     }
 
 private:
+    // ========================================================================
+    // ESSENTIAL TEMPLATE FUNCTIONS (needed for real CPU implementation)
+    // ========================================================================
+    
+    void transition_to_operation() {
+        this->cycle_index = 0;
+        this->current_handler = operation_handlers[this->opcode_entry.op_index];
+    }
     
     void init_conditional_features() {
         // Initialize I/O port if present
@@ -524,30 +525,57 @@ private:
     }
     
     void init_opcode_table() {
-        // Initialize operation handler lookup table
-        operation_handlers.fill(&fam65xx_t::op_nop);  // Default to NOP
+        // Initialize operation handler lookup table with NOP as safe default
+        operation_handlers.fill(&fam65xx_t::op_nop);
         
-        // Basic operations (only include those that exist)
-        operation_handlers[OP_NOP] = &fam65xx_t::op_nop;
+        // Memory operations (implemented)
         operation_handlers[OP_LDA] = &fam65xx_t::op_lda;
         operation_handlers[OP_LDX] = &fam65xx_t::op_ldx;
         operation_handlers[OP_LDY] = &fam65xx_t::op_ldy;
         operation_handlers[OP_STA] = &fam65xx_t::op_sta;
         operation_handlers[OP_STX] = &fam65xx_t::op_stx;
         operation_handlers[OP_STY] = &fam65xx_t::op_sty;
+        operation_handlers[OP_AND] = &fam65xx_t::op_and;
+        operation_handlers[OP_ORA] = &fam65xx_t::op_ora;
+        operation_handlers[OP_EOR] = &fam65xx_t::op_eor;
+        operation_handlers[OP_BIT] = &fam65xx_t::op_bit;
+        
+        // Arithmetic operations (implemented)
         operation_handlers[OP_ADC] = &fam65xx_t::op_adc;
         operation_handlers[OP_SBC] = &fam65xx_t::op_sbc;
-        // TODO: Add more operations as they are implemented
+        operation_handlers[OP_CMP] = &fam65xx_t::op_cmp;
+        operation_handlers[OP_CPX] = &fam65xx_t::op_cpx;
+        operation_handlers[OP_CPY] = &fam65xx_t::op_cpy;
+        operation_handlers[OP_INC] = &fam65xx_t::op_inc;
+        operation_handlers[OP_DEC] = &fam65xx_t::op_dec;
+        operation_handlers[OP_NOP] = &fam65xx_t::op_nop;
+        
+        // Control operations (implemented)
+        operation_handlers[OP_JMP] = &fam65xx_t::op_jmp;
+        operation_handlers[OP_JSR] = &fam65xx_t::op_jsr;
+        operation_handlers[OP_RTS] = &fam65xx_t::op_rts;
+        operation_handlers[OP_BRK] = &fam65xx_t::op_brk;
+        operation_handlers[OP_RTI] = &fam65xx_t::op_rti;
         
         // Initialize addressing mode handler lookup table
-        addressing_mode_handlers.fill(nullptr);  // Default to no handler
+        addressing_mode_handlers.fill(nullptr);  // Default to nullptr (safe for AM_NON/AM_IMM)
         
-        // Basic addressing modes (only include those that exist)
-        addressing_mode_handlers[AM_NON] = nullptr;  // No handler needed
-        addressing_mode_handlers[AM_IMM] = nullptr;  // No handler (handled in operation)
+        // Addressing modes (implemented)
+        addressing_mode_handlers[AM_NON] = nullptr;   // No handler needed (implicit/accumulator/relative)
+        addressing_mode_handlers[AM_IMM] = nullptr;   // No handler (handled directly in operations)
         addressing_mode_handlers[AM_ZER] = &fam65xx_t::addr_zp;
+        addressing_mode_handlers[AM_ZPX] = &fam65xx_t::addr_zpx;
+        addressing_mode_handlers[AM_ZPY] = &fam65xx_t::addr_zpy;
         addressing_mode_handlers[AM_ABS] = &fam65xx_t::addr_abs;
-        // TODO: Add more addressing modes as they are implemented
+        addressing_mode_handlers[AM_ABX] = &fam65xx_t::addr_abx;
+        addressing_mode_handlers[AM_ABY] = &fam65xx_t::addr_aby;
+        addressing_mode_handlers[AM_IND] = &fam65xx_t::addr_ind;
+        addressing_mode_handlers[AM_INX] = &fam65xx_t::addr_inx;
+        addressing_mode_handlers[AM_INY] = &fam65xx_t::addr_iny;
+        
+        // 65C02 addressing modes (if implemented)
+        addressing_mode_handlers[AM_ZPI] = &fam65xx_t::addr_zp_ind;  // Zero Page Indirect
+        addressing_mode_handlers[AM_ABI] = &fam65xx_t::addr_ind_abs; // Absolute Indexed Indirect
     }
     
     // Read operand from immediate or memory mode (matching old implementation)
@@ -563,17 +591,6 @@ private:
             if (!FAM65XX_GET_RDY(pins)) return pins;
         }
         return pins;
-    }
-    
-
-    
-    // ========================================================================
-    // ESSENTIAL TEMPLATE FUNCTIONS (needed for real CPU implementation)
-    // ========================================================================
-    
-    void transition_to_operation() {
-        this->cycle_index = 0;
-        this->current_handler = operation_handlers[this->opcode_entry.op_index];
     }
 };
 
