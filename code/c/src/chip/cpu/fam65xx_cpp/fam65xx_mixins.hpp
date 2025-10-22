@@ -98,6 +98,18 @@ struct bcd_mixin_t {
         return ((ah & 0x0F) << 4) | (al & 0x0F);
     }
     
+    // BCD addition helper matching old implementation signature
+    void bcd_addition_helper(uint8_t a_old, uint8_t operand, uint8_t carry_in, uint8_t* bcd_result, uint8_t* bcd_flags) {
+        bool carry_out, overflow;
+        *bcd_result = adc_bcd(a_old, operand, carry_in != 0, carry_out, overflow);
+        
+        // Generate flags matching old implementation
+        *bcd_flags = (*bcd_result & 0x80) |                    // N flag
+                    (*bcd_result == 0 ? 0x02 : 0) |           // Z flag (FLAG_Z = 0x02)
+                    (carry_out ? 0x01 : 0) |                  // C flag (FLAG_C = 0x01)
+                    (overflow ? 0x40 : 0);                    // V flag (FLAG_V = 0x40)
+    }
+    
     // Subtract with Borrow in BCD mode  
     uint8_t sbc_bcd(uint8_t a, uint8_t b, bool borrow_in, bool& carry_out, bool& overflow) {
         uint16_t al = (a & 0x0F) - (b & 0x0F) - (borrow_in ? 0 : 1);
