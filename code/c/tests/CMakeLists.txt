@@ -139,7 +139,7 @@ target_compile_definitions(fam65xx_processor_tests_runner PRIVATE AIEMUC_IMPL)
 if(MSVC)
     target_compile_options(fam65xx_processor_tests_runner PRIVATE /WX- /wd4244 /wd4189 /wd4477)
 else()
-    target_compile_options(fam65xx_processor_tests_runner PRIVATE -Wno-error)
+    target_compile_options(fam65xx_processor_tests_runner PRIVATE -Wno-error -fpermissive)
 endif()
 # Link math library if needed
 if(NOT WIN32 AND NOT MSVC)

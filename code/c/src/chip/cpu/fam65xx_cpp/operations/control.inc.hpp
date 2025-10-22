@@ -58,35 +58,6 @@ bus_state_t op_rti(bus_state_t pins) {
 // ============================================================================
 // 65C02 ENHANCED CONTROL OPERATIONS
 // ============================================================================
-
-bus_state_t op_bra(bus_state_t pins) {
-    if constexpr (has_cmos_enhancements<ProcessorTag>()) {
-        // Branch always - 65C02 enhancement
-        // Implementation would go here
-        return pins;
-    } else {
-        return pins; // Invalid on NMOS
-    }
-}
-
+// NOTE: 65C816 long operations (op_jsl, op_rtl) are implemented in wide.inc.hpp
+// NOTE: 65C02 branch always (op_bra) is implemented in cmos.inc.hpp
 // ============================================================================
-// 65C816 LONG OPERATIONS
-// ============================================================================
-
-bus_state_t op_jsl(bus_state_t pins) {
-    if constexpr (has_wide_registers<ProcessorTag>()) {
-        // Jump to Subroutine Long - 65C816
-        return pins;
-    } else {
-        return pins;
-    }
-}
-
-bus_state_t op_rtl(bus_state_t pins) {
-    if constexpr (has_wide_registers<ProcessorTag>()) {
-        // Return from Subroutine Long - 65C816
-        return pins;
-    } else {
-        return pins;
-    }
-}

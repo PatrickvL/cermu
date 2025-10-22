@@ -66,7 +66,6 @@ bus_state_t op_nop(bus_state_t pins) {
     transition_to_fetch();
     return pins;
 }
-}
 
 // ============================================================================
 // SUBTRACT WITH CARRY (SBC)
