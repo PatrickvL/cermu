@@ -23,29 +23,34 @@ bus_state_t op_adc(bus_state_t pins) {
     uint16_t result;
     bool carry_out, overflow;
     
-    // Handle decimal mode if supported
-    if (decimal_mode && has_bcd<ProcessorTag>()) {
+    // Handle decimal mode if supported (matching old implementation)
+    if (decimal_mode) {
         if constexpr (has_bcd<ProcessorTag>()) {
-            CPU_A(this) = this->adc_bcd(a, operand, carry_in, carry_out, overflow);
+            // BCD (Decimal) mode - use unified BCD addition helper
+            uint8_t bcd_result;
+            uint8_t bcd_flags;
+            
+            this->bcd_addition_helper(a, operand, carry_in ? 1 : 0, &bcd_result, &bcd_flags);
+            
+            CPU_A(this) = bcd_result;
+            CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) | bcd_flags;
         } else {
-            // Fallback to binary if BCD not supported
+            // No BCD support - treat as binary
             goto binary_adc;
         }
     } else {
     binary_adc:
-        // Binary mode addition
+        // Binary mode addition (matching old implementation flag calculation)
         result = a + operand + (carry_in ? 1 : 0);
-        carry_out = (result > 0xFF);
-        overflow = ((a ^ result) & (operand ^ result) & 0x80) != 0;
         CPU_A(this) = result & 0xFF;
+        
+        // ADC modifies only N, V, Z, C flags - preserve all others exactly (matching old impl)
+        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+                      (CPU_A(this) & FLAG_N) |                                    // N = bit 7 of result
+                      (CPU_A(this) == 0 ? FLAG_Z : 0) |                          // Z = result is zero
+                      (result > 0xFF ? FLAG_C : 0) |                            // C = carry out
+                      (((a ^ result) & (operand ^ result) & 0x80) ? FLAG_V : 0); // V = overflow
     }
-    
-    // Update flags
-    CPU_P(this) = (CPU_P(this) & 0x3C) |  // Clear N,V,Z,C
-                  (CPU_A(this) & 0x80) |   // N flag
-                  (overflow ? FLAG_V : 0) | // V flag
-                  (CPU_A(this) == 0 ? FLAG_Z : 0) | // Z flag
-                  (carry_out ? FLAG_C : 0); // C flag
     
     // Complete instruction
     transition_to_fetch();
