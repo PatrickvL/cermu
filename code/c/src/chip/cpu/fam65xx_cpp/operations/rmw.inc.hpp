@@ -10,36 +10,36 @@
 template<typename OperationFunc>
 bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func) {
     if (this->opcode_entry.rmw) {
-        // Memory mode - 3-cycle RMW operation
+        // Memory mode - 3-cycle RMW operation (hardware-accurate)
         switch (this->cycle_index++) {
             case 0:
-                // Cycle 0: Read from memory
-                pins = phi2_read(pins, REG_AB, REG_DL);
+                // Cycle 0: Read original value from memory
+                pins = this->phi2_read(pins, REG_AB, REG_DL);
                 if (!FAM65XX_GET_RDY(pins)) return pins;
                 return pins;
                 
             case 1:
-                // Cycle 1: Dummy write (hardware behavior), then perform operation
-                pins = phi2_write_internal(pins, REG_AB, REG_DL);
+                // Cycle 1: Dummy write original value back (hardware behavior)
+                pins = this->phi2_write(pins, REG_AB, REG_DL);
                 if (!FAM65XX_GET_RDY(pins)) return pins;
-                // Perform operation on the data
+                // Perform operation on the read data (modify step)
                 operation_func(CPU_DL(this));
                 return pins;
                 
             case 2:
-                // Cycle 2: Write result back to memory
-                pins = phi2_write_internal(pins, REG_AB, REG_DL);
+                // Cycle 2: Write modified result back to memory
+                pins = this->phi2_write(pins, REG_AB, REG_DL);
                 if (!FAM65XX_GET_RDY(pins)) return pins;
-                transition_to_fetch();
+                this->transition_to_fetch();
                 return pins;
         }
     } else {
         // Accumulator mode - single cycle with dummy PHI2 read
-        pins = phi2_read(pins, REG_PC, REG_DL);
+        pins = this->phi2_read(pins, REG_PC, REG_DL);
         if (!FAM65XX_GET_RDY(pins)) return pins;
-        // Perform operation on accumulator
+        // Perform operation on accumulator (modify step)
         operation_func(CPU_A(this));
-        transition_to_fetch();
+        this->transition_to_fetch();
     }
     return pins;
 }
