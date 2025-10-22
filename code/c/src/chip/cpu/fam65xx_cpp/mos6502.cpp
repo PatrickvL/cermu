@@ -51,8 +51,6 @@ bus_state_t mos6502_init_enhanced(mos6502_t* cpu, const fam65xx_chip_descriptor_
     // IMPORTANT: Set memory callbacks AFTER init() since init() clears them
     cpu_impl->set_memory_callbacks(enhanced_desc->mem_read, enhanced_desc->mem_write, enhanced_desc->mem_user_data);
     
-    printf("DEBUG: Enhanced init complete - mem_read=%p set after init\n", cpu_impl->mem_read);
-    
     return result;
 }
 
