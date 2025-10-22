@@ -54,16 +54,9 @@
 namespace fam65xx_cpp {
 
 // ============================================================================
-// INTERRUPT SHIFT REGISTER CONSTANTS (matching old implementation)
+// INTERRUPT SHIFT REGISTER CONSTANTS (use definitions from fam65xx_types.h)
 // ============================================================================
-
-constexpr uint32_t INT_IRQ_START_BIT = 0;
-constexpr uint32_t INT_NMI_START_BIT = 8;
-constexpr uint32_t INT_RESET_START_BIT = 16;
-constexpr uint32_t INT_IRQ_MASK = 0x07;      // 3 bits for IRQ
-constexpr uint32_t INT_NMI_MASK = 0x0700;    // 3 bits for NMI
-constexpr uint32_t INT_RESET_MASK = 0x070000; // 3 bits for RESET
-constexpr uint32_t INT_SEPARATOR_MASK = INT_IRQ_MASK | INT_NMI_MASK | INT_RESET_MASK;
+// Note: INT_* constants are defined in fam65xx_types.h and used here via C header inclusion
 
 // ============================================================================
 // MAIN CPU TEMPLATE CLASS
@@ -130,7 +123,7 @@ public:
         stopped = false;
         
         // Initialize conditional features
-        init_conditional_features();
+        this->init_conditional_features();
     }
     
     // ========================================================================
@@ -145,10 +138,10 @@ public:
         this->mem_user_data = nullptr;
         
         // Initialize processor-specific features
-        init_conditional_features();
+        this->init_conditional_features();
         
         // Initialize opcode table for this processor type
-        init_opcode_table();
+        this->init_opcode_table();
         
         // Return initial pin state
         bus_state_t pins = 0;
@@ -184,7 +177,7 @@ public:
         this->stopped = false;
         
         // Reset processor-specific features
-        init_conditional_features();
+        this->init_conditional_features();
         
         // Load reset vector
         CPU_AB(this) = 0xFFFC;
@@ -193,7 +186,7 @@ public:
         pins = this->phi2_read(pins, REG_AB, REG_PCH);
         
         // Start fetch cycle
-        transition_to_fetch();
+        this->transition_to_fetch();
         
         return pins;
     }
@@ -207,7 +200,7 @@ public:
         }
         
         // Hardware-accurate interrupt detection every cycle (matching old implementation)
-        if (process_interrupt_detection(pins)) {
+        if (this->process_interrupt_detection(pins)) {
             // Interrupt detected - check if we should hijack current instruction
             if (this->brk_flags & FAM65XX_BRK_RESET) {
                 // RESET has highest priority - immediately start RESET sequence
@@ -225,7 +218,7 @@ public:
             pins = (this->*this->current_handler)(pins);
         } else {
             // Start new instruction fetch
-            pins = fetch_opcode(pins);
+            pins = this->fetch_opcode(pins);
         }
         
         return pins;
@@ -410,6 +403,18 @@ public:
     }
     
 private:
+    // ========================================================================
+    // FORWARD DECLARATIONS
+    // ========================================================================
+    void init_conditional_features();
+    void init_opcode_table();
+    void transition_to_fetch();
+    void transition_to_operation();
+    bool process_interrupt_detection(bus_state_t pins);
+    bus_state_t fetch_opcode(bus_state_t pins);
+    bus_state_t interrupt_sequence(bus_state_t pins);
+    bus_state_t read_operand_immediate_or_memory(bus_state_t pins);
+    
     // ========================================================================
     // INTERNAL HELPER FUNCTIONS
     // ========================================================================
@@ -760,5 +765,3 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table();
 #include "operations/opcode_tables.inc.hpp"
 
 } // namespace fam65xx_cpp
-
-#endif // __cplusplus
