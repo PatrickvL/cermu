@@ -151,7 +151,7 @@ public:
     }
     
     uint64_t bootstrap(uint64_t pins) override {
-        return mos6502_reset(cpu, pins);
+        return mos6502_bootstrap(cpu, pins);
     }
     
     uint64_t tick(uint64_t pins) override {

@@ -41,6 +41,10 @@ bus_state_t mos6502_init(mos6502_t* cpu, const chip_descriptor_t* desc) {
     return CPU_CAST(mos6502_cpu_t, cpu)->init(desc);
 }
 
+bus_state_t mos6502_bootstrap(mos6502_t* cpu, bus_state_t pins) {
+    return CPU_CAST(mos6502_cpu_t, cpu)->bootstrap(pins);
+}
+
 bus_state_t mos6502_reset(mos6502_t* cpu, bus_state_t pins) {
     return CPU_CAST(mos6502_cpu_t, cpu)->reset(pins);
 }

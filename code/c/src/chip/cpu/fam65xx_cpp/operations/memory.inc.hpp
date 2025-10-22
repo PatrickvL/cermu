@@ -15,18 +15,8 @@ bus_state_t op_lda(bus_state_t pins) {
     pins = read_operand_immediate_or_memory(pins);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
-    // Load accumulator
-    if constexpr (has_wide_registers<ProcessorTag>()) {
-        if (this->is_accumulator_16bit()) {
-            // 16-bit load for 65C816
-            // Read high byte on next cycle
-            this->set_accumulator((CPU_DL(this) << 8) | CPU_DL(this)); // Placeholder
-        } else {
-            CPU_A(this) = CPU_DL(this);
-        }
-    } else {
-        CPU_A(this) = CPU_DL(this);
-    }
+    // Load accumulator (8-bit only, wide registers disabled)
+    CPU_A(this) = CPU_DL(this);
     
     // Update N and Z flags
     update_nz_flags(CPU_A(this));
@@ -45,17 +35,8 @@ bus_state_t op_ldx(bus_state_t pins) {
     pins = read_operand_immediate_or_memory(pins);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
-    // Load X register
-    if constexpr (has_wide_registers<ProcessorTag>()) {
-        if (this->are_indexes_16bit()) {
-            // 16-bit load for 65C816
-            this->set_x_register((CPU_DL(this) << 8) | CPU_DL(this)); // Placeholder
-        } else {
-            CPU_X(this) = CPU_DL(this);
-        }
-    } else {
-        CPU_X(this) = CPU_DL(this);
-    }
+    // Load X register (8-bit only, wide registers disabled)
+    CPU_X(this) = CPU_DL(this);
     
     // Update N and Z flags
     update_nz_flags(CPU_X(this));
@@ -74,17 +55,8 @@ bus_state_t op_ldy(bus_state_t pins) {
     pins = read_operand_immediate_or_memory(pins);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
-    // Load Y register
-    if constexpr (has_wide_registers<ProcessorTag>()) {
-        if (this->are_indexes_16bit()) {
-            // 16-bit load for 65C816
-            this->set_y_register((CPU_DL(this) << 8) | CPU_DL(this)); // Placeholder
-        } else {
-            CPU_Y(this) = CPU_DL(this);
-        }
-    } else {
-        CPU_Y(this) = CPU_DL(this);
-    }
+    // Load Y register (8-bit only, wide registers disabled)
+    CPU_Y(this) = CPU_DL(this);
     
     // Update N and Z flags
     update_nz_flags(CPU_Y(this));
@@ -99,24 +71,9 @@ bus_state_t op_ldy(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_sta(bus_state_t pins) {
-    // Store accumulator using current addressing mode result
-    if constexpr (has_wide_registers<ProcessorTag>()) {
-        if (this->is_accumulator_16bit()) {
-            // 16-bit store for 65C816 - store low byte first
-            CPU_DL(this) = CPU_A(this);
-            pins = this->phi2_write(pins, REG_AB, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            
-            // Store high byte (would need another cycle)
-            // This is a simplified implementation
-        } else {
-            CPU_DL(this) = CPU_A(this);
-            pins = this->phi2_write(pins, REG_AB, REG_DL);
-        }
-    } else {
-        CPU_DL(this) = CPU_A(this);
-        pins = this->phi2_write(pins, REG_AB, REG_DL);
-    }
+    // Store accumulator using current addressing mode result (8-bit only)
+    CPU_DL(this) = CPU_A(this);
+    pins = this->phi2_write(pins, REG_AB, REG_DL);
     
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
@@ -130,17 +87,8 @@ bus_state_t op_sta(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_stx(bus_state_t pins) {
-    // Store X register using current addressing mode result
-    if constexpr (has_wide_registers<ProcessorTag>()) {
-        if (this->are_indexes_16bit()) {
-            // 16-bit store for 65C816
-            CPU_DL(this) = CPU_X(this);
-        } else {
-            CPU_DL(this) = CPU_X(this);
-        }
-    } else {
-        CPU_DL(this) = CPU_X(this);
-    }
+    // Store X register using current addressing mode result (8-bit only)
+    CPU_DL(this) = CPU_X(this);
     
     pins = this->phi2_write(pins, REG_AB, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
@@ -155,17 +103,8 @@ bus_state_t op_stx(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_sty(bus_state_t pins) {
-    // Store Y register using current addressing mode result
-    if constexpr (has_wide_registers<ProcessorTag>()) {
-        if (this->are_indexes_16bit()) {
-            // 16-bit store for 65C816
-            CPU_DL(this) = CPU_Y(this);
-        } else {
-            CPU_DL(this) = CPU_Y(this);
-        }
-    } else {
-        CPU_DL(this) = CPU_Y(this);
-    }
+    // Store Y register using current addressing mode result (8-bit only)
+    CPU_DL(this) = CPU_Y(this);
     
     pins = this->phi2_write(pins, REG_AB, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
