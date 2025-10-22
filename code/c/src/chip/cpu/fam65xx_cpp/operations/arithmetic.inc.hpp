@@ -219,7 +219,7 @@ bus_state_t op_cmp(bus_state_t pins) {
                   (a >= operand ? FLAG_C : 0); // C flag (set if no borrow)
     
     // Complete instruction
-    fam65xx_transition_to_fetch(this);
+    transition_to_fetch();
     return pins;
 }
 

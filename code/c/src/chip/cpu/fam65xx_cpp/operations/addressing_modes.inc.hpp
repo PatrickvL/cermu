@@ -305,8 +305,8 @@ bus_state_t addr_iny(bus_state_t pins) {
             CPU_ZPL(this)++;
             break;
             
-        case 2:
-            /* Read high byte of target from ZP+1 */
+        case 2: {
+            /* Third cycle: Read high byte of the base address */
             pins = phi2_read(pins, REG_ZP, REG_ABH);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
@@ -323,6 +323,7 @@ bus_state_t addr_iny(bus_state_t pins) {
                 /* No page cross - complete addressing mode */
                 return pins;
             }
+        }
             
         case 3:
             /* Page cross penalty - dummy read from wrong address, then fix */
