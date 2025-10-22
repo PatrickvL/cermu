@@ -54,6 +54,17 @@
 namespace fam65xx_cpp {
 
 // ============================================================================
+// FORWARD DECLARATIONS FOR OPCODE TABLE GENERATION
+// ============================================================================
+
+// Forward declaration - will be specialized for each processor
+template<typename ProcessorTag>
+constexpr std::array<opcode_info_t, 256> generate_opcode_table();
+
+// Include processor-specific opcode table specializations BEFORE class definition
+#include "operations/opcode_tables.inc.hpp"
+
+// ============================================================================
 // INTERRUPT SHIFT REGISTER CONSTANTS (use definitions from fam65xx_types.h)
 // ============================================================================
 // Note: INT_* constants are defined in fam65xx_types.h and used here via C header inclusion
@@ -64,10 +75,7 @@ namespace fam65xx_cpp {
 
 template<typename ProcessorTag>
 class fam65xx_t : 
-    public io_port_base_t<ProcessorTag>,       // Conditional I/O port
-    public bcd_base_t<ProcessorTag>,           // Conditional BCD arithmetic  
-    public cmos_state_base_t<ProcessorTag>,    // Conditional CMOS state
-    public wide_registers_base_t<ProcessorTag> // Conditional 16-bit registers
+    public io_port_base_t<ProcessorTag>        // Conditional I/O port only
 {
 public:
     // Type aliases for cleaner code
@@ -99,7 +107,7 @@ public:
     fam65xx_mem_write_t mem_write;      /* Memory write callback */
     void* mem_user_data;                /* User data for memory callbacks */
     
-    /* 65C02 extended state */
+    /* 65C02 extended state (merged from cmos_state_mixin_t) */
     bool wait_for_interrupt;            /* WAI instruction state */
     bool stopped;                       /* STP instruction state */
     
@@ -153,6 +161,30 @@ public:
         this->mem_read = read_fn;
         this->mem_write = write_fn;
         this->mem_user_data = user_data;
+    }
+    
+    bus_state_t bootstrap(bus_state_t pins) {
+        // Bootstrap CPU for immediate execution (test runner compatibility)
+        // Ported from original fam65xx implementation
+        
+        /* Set up for immediate instruction execution without RESET sequence */
+        pins |= FAM65XX_RDY;   /* Ensure RDY is high for execution */
+        pins |= FAM65XX_RW;    /* Ensure RW is set as default state */
+        pins |= FAM65XX_IRQ;   /* IRQ line high (inactive) */
+        pins |= FAM65XX_NMI;   /* NMI line high (inactive) */
+        pins |= FAM65XX_RES;   /* RESET line high (inactive) */
+        
+        /* Clear any interrupt flags that might have been set */
+        this->brk_flags = 0;
+        
+        /* CRITICAL: Reset interrupt shift register to prevent false triggers */
+        this->interrupt_shift_register = 0x00000000;  /* No interrupt activity detected yet */
+        this->nmi_prev = 1;  /* NMI line starts high (inactive) for edge detection */
+        
+        /* Set up for instruction fetch - CPU ready to execute next instruction */
+        this->transition_to_fetch();
+        
+        return pins;
     }
     
     bus_state_t reset(bus_state_t pins) {
@@ -328,96 +360,64 @@ public:
     
     // Generate processor-specific opcode table at compile time
     static constexpr opcode_info_t get_opcode_info(uint8_t opcode) {
-        // This will be specialized per processor type
+        // This will be specialized per processor type after table generation
         return generate_opcode_table<ProcessorTag>()[opcode];
     }
     
     // ========================================================================
-    // REGISTER ACCESS HELPERS (template-aware)
+    // HELPER FUNCTIONS (needed by operation files)
     // ========================================================================
     
-    // Accumulator access (8-bit or 16-bit depending on processor)
-    uint16_t get_accumulator() const {
-        if constexpr (has_wide_registers<ProcessorTag>()) {
-            return is_accumulator_16bit() ? this->wide_state.A_full : CPU_A(this);
-        } else {
-            return CPU_A(this);
-        }
+    // Update N and Z flags based on value
+    void update_nz_flags(uint8_t value) {
+        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_Z)) |
+                     (value & FLAG_N) |                      // N flag: bit 7 of result
+                     (value == 0 ? FLAG_Z : 0);              // Z flag: set if result is zero
     }
     
-    void set_accumulator(uint16_t value) {
-        if constexpr (has_wide_registers<ProcessorTag>()) {
-            if (is_accumulator_16bit()) {
-                this->wide_state.A_full = value;
-                CPU_A(this) = value & 0xFF; // Keep low byte in sync
-            } else {
-                CPU_A(this) = value & 0xFF;
-            }
-        } else {
-            CPU_A(this) = value & 0xFF;
-        }
+    // Check if page was crossed during addressing
+    bool page_crossed(uint16_t addr1, uint16_t addr2) const {
+        return (addr1 & 0xFF00) != (addr2 & 0xFF00);
     }
     
-    // X register access
-    uint16_t get_x_register() const {
-        if constexpr (has_wide_registers<ProcessorTag>()) {
-            return are_indexes_16bit() ? this->wide_state.X_full : CPU_X(this);
-        } else {
-            return CPU_X(this);
+    // Internal write operation without I/O port handling
+    bus_state_t phi2_write_internal(bus_state_t pins, uint16_t addr, uint8_t data) {
+        pins = BUS_SET_ADDR(pins, addr);
+        pins = BUS_SET_DATA(pins, data);
+        pins &= ~FAM65XX_RW; // Set WRITE mode
+        
+        // Use memory callback if available
+        if (this->mem_write != nullptr) {
+            this->mem_write(this->mem_user_data, addr, data);
         }
-    }
-    
-    void set_x_register(uint16_t value) {
-        if constexpr (has_wide_registers<ProcessorTag>()) {
-            if (are_indexes_16bit()) {
-                this->wide_state.X_full = value;
-                CPU_X(this) = value & 0xFF; // Keep low byte in sync
-            } else {
-                CPU_X(this) = value & 0xFF;
-            }
-        } else {
-            CPU_X(this) = value & 0xFF;
-        }
-    }
-    
-    // Y register access
-    uint16_t get_y_register() const {
-        if constexpr (has_wide_registers<ProcessorTag>()) {
-            return are_indexes_16bit() ? this->wide_state.Y_full : CPU_Y(this);
-        } else {
-            return CPU_Y(this);
-        }
-    }
-    
-    void set_y_register(uint16_t value) {
-        if constexpr (has_wide_registers<ProcessorTag>()) {
-            if (are_indexes_16bit()) {
-                this->wide_state.Y_full = value;
-                CPU_Y(this) = value & 0xFF; // Keep low byte in sync
-            } else {
-                CPU_Y(this) = value & 0xFF;
-            }
-        } else {
-            CPU_Y(this) = value & 0xFF;
-        }
+        
+        return pins;
     }
     
 private:
     // ========================================================================
-    // FORWARD DECLARATIONS
+    // INTERNAL HELPER FUNCTIONS AND DECLARATIONS
     // ========================================================================
-    void init_conditional_features();
-    void init_opcode_table();
-    void transition_to_fetch();
-    void transition_to_operation();
-    bool process_interrupt_detection(bus_state_t pins);
-    bus_state_t fetch_opcode(bus_state_t pins);
-    bus_state_t interrupt_sequence(bus_state_t pins);
-    bus_state_t read_operand_immediate_or_memory(bus_state_t pins);
     
-    // ========================================================================
-    // INTERNAL HELPER FUNCTIONS
-    // ========================================================================
+    // Template-dependent function pointer type
+    using InstructionHandler = bus_state_t (fam65xx_t<ProcessorTag>::*)(bus_state_t);
+    
+    // Lookup tables for handlers (initialized during init)
+    std::array<InstructionHandler, OP_COUNT> operation_handlers;
+    std::array<InstructionHandler, AM_COUNT> addressing_mode_handlers;
+    
+    // Essential helper functions for template functionality
+    InstructionHandler get_instruction_handler(uint8_t opcode) {
+        opcode_info_t info = get_opcode_info(opcode);
+        
+        // For immediate mode and implied operations, go directly to operation
+        if (info.am_index <= AM_IMM) {
+            return operation_handlers[info.op_index];
+        }
+        
+        // For addressing modes that need address calculation, start with addressing mode handler
+        return addressing_mode_handlers[info.am_index];
+    }
     
     // Hardware-accurate interrupt detection (matching old implementation)
     bool process_interrupt_detection(bus_state_t pins) {
@@ -504,11 +504,14 @@ private:
         return pins;
     }
     
-    // Transition to next instruction fetch
+public:
+    // Transition to next instruction fetch (public for bootstrap function)
     void transition_to_fetch() {
         this->current_handler = nullptr;
         this->cycle_index = 0;
     }
+
+private:
     
     void init_conditional_features() {
         // Initialize I/O port if present
@@ -516,18 +519,35 @@ private:
             this->init_io_port();
         }
         
-        // Initialize 16-bit registers if present
-        if constexpr (has_wide_registers<ProcessorTag>()) {
-            this->init_wide_registers();
-        }
-        
-        // Note: BCD and CMOS state mixins don't need initialization
-        // as they are algorithmic and use existing CPU state
+        // BCD and CMOS state are now integrated into main class
+        // 16-bit wide registers disabled for now
     }
     
     void init_opcode_table() {
-        // Opcode table initialization - placeholder for template system
-        // In practice, opcode tables are generated at compile time
+        // Initialize operation handler lookup table
+        operation_handlers.fill(&fam65xx_t::op_nop);  // Default to NOP
+        
+        // Basic operations (only include those that exist)
+        operation_handlers[OP_NOP] = &fam65xx_t::op_nop;
+        operation_handlers[OP_LDA] = &fam65xx_t::op_lda;
+        operation_handlers[OP_LDX] = &fam65xx_t::op_ldx;
+        operation_handlers[OP_LDY] = &fam65xx_t::op_ldy;
+        operation_handlers[OP_STA] = &fam65xx_t::op_sta;
+        operation_handlers[OP_STX] = &fam65xx_t::op_stx;
+        operation_handlers[OP_STY] = &fam65xx_t::op_sty;
+        operation_handlers[OP_ADC] = &fam65xx_t::op_adc;
+        operation_handlers[OP_SBC] = &fam65xx_t::op_sbc;
+        // TODO: Add more operations as they are implemented
+        
+        // Initialize addressing mode handler lookup table
+        addressing_mode_handlers.fill(nullptr);  // Default to no handler
+        
+        // Basic addressing modes (only include those that exist)
+        addressing_mode_handlers[AM_NON] = nullptr;  // No handler needed
+        addressing_mode_handlers[AM_IMM] = nullptr;  // No handler (handled in operation)
+        addressing_mode_handlers[AM_ZER] = &fam65xx_t::addr_zp;
+        addressing_mode_handlers[AM_ABS] = &fam65xx_t::addr_abs;
+        // TODO: Add more addressing modes as they are implemented
     }
     
     // Read operand from immediate or memory mode (matching old implementation)
@@ -545,223 +565,20 @@ private:
         return pins;
     }
     
-    // BCD subtraction helper matching old implementation signature
-    void bcd_subtraction_helper(uint8_t a_old, uint8_t operand, uint8_t borrow_in, 
-                               uint8_t* bcd_result, uint8_t* bcd_flags) {
-        if constexpr (has_bcd<ProcessorTag>()) {
-            bool carry_out, overflow;
-            *bcd_result = this->sbc_bcd(a_old, operand, borrow_in != 0, carry_out, overflow);
-            
-            // Generate flags matching old implementation
-            *bcd_flags = (*bcd_result & 0x80) |                    // N flag
-                        (*bcd_result == 0 ? FLAG_Z : 0) |         // Z flag  
-                        (carry_out ? FLAG_C : 0) |                // C flag
-                        (overflow ? FLAG_V : 0);                  // V flag
-        } else {
-            // No BCD support - should not be called
-            *bcd_result = a_old - operand - borrow_in;
-            *bcd_flags = 0;
-        }
-    }
-    
 
     
-    // Instruction fetch and decode
-    bus_state_t fetch_opcode(bus_state_t pins) {
-        // Read opcode from PC
-        CPU_AB(this) = CPU_PC(this);
-        pins = this->phi2_read(pins, REG_AB, REG_IR);
-        CPU_PC(this)++;
-        
-        // Set SYNC signal for opcode fetch
-        pins |= FAM65XX_SYNC;
-        
-        // Decode opcode and set up instruction
-        uint8_t opcode = CPU_IR(this);
-        this->opcode_entry = get_opcode_info(opcode);
-        this->cycle_index = 0;
-        
-        // Set up first instruction cycle handler
-        this->current_handler = get_instruction_handler(opcode);
-        
-        return pins;
-    }
+    // ========================================================================
+    // ESSENTIAL TEMPLATE FUNCTIONS (needed for real CPU implementation)
+    // ========================================================================
     
-    // Interrupt handling
-    bus_state_t handle_interrupts(bus_state_t pins) {
-        // Check for NMI edge (high to low transition)
-        bool nmi_current = !FAM65XX_GET_NMI(pins);
-        bool nmi_edge = !this->nmi_prev && nmi_current;
-        this->nmi_prev = nmi_current;
-        
-        // Check for IRQ level
-        bool irq_asserted = !FAM65XX_GET_IRQ(pins) && !(CPU_P(this) & FLAG_I);
-        
-        if (nmi_edge) {
-            this->brk_flags |= FAM65XX_BRK_NMI;
-            this->current_handler = &fam65xx_t::interrupt_sequence;
-        } else if (irq_asserted) {
-            this->brk_flags |= FAM65XX_BRK_IRQ;
-            this->current_handler = &fam65xx_t::interrupt_sequence;
-        }
-        
-        return pins;
-    }
-    
-    // Transition to next instruction fetch
-    void transition_to_fetch() {
-        this->current_handler = nullptr;
-        this->cycle_index = 0;
-    }
-    
-    // Transition from addressing mode to operation
     void transition_to_operation() {
         this->cycle_index = 0;
-        this->current_handler = get_operation_handler(this->opcode_entry.op_index);
-    }
-    
-    // Update N and Z flags based on value
-    void update_nz_flags(uint8_t value) {
-        CPU_P(this) = (CPU_P(this) & 0x7D) |  // Clear N,Z
-                      (value & 0x80) |         // N flag
-                      (value == 0 ? FLAG_Z : 0); // Z flag
-    }
-    
-    // Read operand with immediate mode handling (like original C helper)
-    bus_state_t read_operand_immediate_or_memory(bus_state_t pins) {
-        if (this->opcode_entry.am_index == AM_IMM) {
-            // Immediate mode - read from PC and increment
-            pins = this->phi2_read(pins, REG_PC, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            CPU_PC(this)++;
-        } else {
-            // Memory mode - read from target address in REG_AB
-            pins = this->phi2_read(pins, REG_AB, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-        }
-        return pins;
-    }
-    
-    // Fast page cross detection using XOR and bit 8 check
-    bool page_crossed(uint16_t addr1, uint16_t addr2) {
-        return (addr1 ^ addr2) & 0x0100;
-    }
-    
-    // Instruction handler function pointer type
-    using InstructionHandler = bus_state_t (fam65xx_t::*)(bus_state_t);
-    
-    // Static lookup tables - populated once per processor type
-    static constexpr std::array<InstructionHandler, OP_COUNT> operation_table = init_operation_table();
-    static constexpr std::array<InstructionHandler, AM_COUNT> addressing_mode_table = init_addressing_mode_table();
-    
-    // Get instruction handler for opcode
-    InstructionHandler get_instruction_handler(uint8_t opcode) {
-        // Get opcode information to determine addressing mode and operation
-        opcode_info_t info = get_opcode_info(opcode);
-        
-        // For immediate mode and implied operations, go directly to operation
-        if (info.am_index <= AM_IMM) {
-            return get_operation_handler(info.op_index);
-        }
-        
-        // For addressing modes that need address calculation, start with addressing mode handler
-        return get_addressing_mode_handler(info.am_index);
-    }
-    
-    // Get operation handler based on operation index (simple table lookup)
-    InstructionHandler get_operation_handler(uint8_t op_index) {
-        return operation_table[op_index];
-    }
-    
-    // Get addressing mode handler based on addressing mode index (simple table lookup) 
-    InstructionHandler get_addressing_mode_handler(uint8_t am_index) {
-        return addressing_mode_table[am_index];
-    }
-    
-    // Initialize operation handler lookup table (constexpr for compile-time generation)
-    static constexpr std::array<InstructionHandler, OP_COUNT> init_operation_table() {
-        std::array<InstructionHandler, OP_COUNT> table = {};
-        
-        // Initialize with NOP as default
-        for (size_t i = 0; i < OP_COUNT; ++i) {
-            table[i] = &fam65xx_t::op_nop;
-        }
-        
-        // Set up actual operation handlers
-        table[OP_LDA] = &fam65xx_t::op_lda;  table[OP_LDX] = &fam65xx_t::op_ldx;  table[OP_LDY] = &fam65xx_t::op_ldy;
-        table[OP_STA] = &fam65xx_t::op_sta;  table[OP_STX] = &fam65xx_t::op_stx;  table[OP_STY] = &fam65xx_t::op_sty;
-        table[OP_ADC] = &fam65xx_t::op_adc;  table[OP_SBC] = &fam65xx_t::op_sbc;  table[OP_CMP] = &fam65xx_t::op_cmp;
-        table[OP_CPX] = &fam65xx_t::op_cpx;  table[OP_CPY] = &fam65xx_t::op_cpy;
-        table[OP_AND] = &fam65xx_t::op_and;  table[OP_ORA] = &fam65xx_t::op_ora;  table[OP_EOR] = &fam65xx_t::op_eor;
-        table[OP_BIT] = &fam65xx_t::op_bit;
-        table[OP_ASL] = &fam65xx_t::op_asl;  table[OP_LSR] = &fam65xx_t::op_lsr;
-        table[OP_ROL] = &fam65xx_t::op_rol;  table[OP_ROR] = &fam65xx_t::op_ror;
-        table[OP_INC] = &fam65xx_t::op_inc;  table[OP_DEC] = &fam65xx_t::op_dec;
-        table[OP_INX] = &fam65xx_t::op_inx;  table[OP_INY] = &fam65xx_t::op_iny;
-        table[OP_DEX] = &fam65xx_t::op_dex;  table[OP_DEY] = &fam65xx_t::op_dey;
-        table[OP_TAX] = &fam65xx_t::op_tax;  table[OP_TAY] = &fam65xx_t::op_tay;
-        table[OP_TXA] = &fam65xx_t::op_txa;  table[OP_TYA] = &fam65xx_t::op_tya;
-        table[OP_TSX] = &fam65xx_t::op_tsx;  table[OP_TXS] = &fam65xx_t::op_txs;
-        table[OP_PHA] = &fam65xx_t::op_pha;  table[OP_PLA] = &fam65xx_t::op_pla;
-        table[OP_PHP] = &fam65xx_t::op_php;  table[OP_PLP] = &fam65xx_t::op_plp;
-        table[OP_BPL] = &fam65xx_t::op_bpl;  table[OP_BMI] = &fam65xx_t::op_bmi;
-        table[OP_BVC] = &fam65xx_t::op_bvc;  table[OP_BVS] = &fam65xx_t::op_bvs;
-        table[OP_BCC] = &fam65xx_t::op_bcc;  table[OP_BCS] = &fam65xx_t::op_bcs;
-        table[OP_BNE] = &fam65xx_t::op_bne;  table[OP_BEQ] = &fam65xx_t::op_beq;
-        table[OP_JMP] = &fam65xx_t::op_jmp;  table[OP_JSR] = &fam65xx_t::op_jsr;
-        table[OP_RTS] = &fam65xx_t::op_rts;  table[OP_BRK] = &fam65xx_t::op_brk;
-        table[OP_RTI] = &fam65xx_t::op_rti;
-        table[OP_CLC] = &fam65xx_t::op_clc;  table[OP_SEC] = &fam65xx_t::op_sec;
-        table[OP_CLI] = &fam65xx_t::op_cli;  table[OP_SEI] = &fam65xx_t::op_sei;
-        table[OP_CLV] = &fam65xx_t::op_clv;  table[OP_CLD] = &fam65xx_t::op_cld;
-        table[OP_SED] = &fam65xx_t::op_sed;  table[OP_NOP] = &fam65xx_t::op_nop;
-        
-        return table;
-    }
-    
-    // Initialize addressing mode handler lookup table (constexpr for compile-time generation)
-    static constexpr std::array<InstructionHandler, AM_COUNT> init_addressing_mode_table() {
-        std::array<InstructionHandler, AM_COUNT> table = {};
-        
-        // Initialize addressing mode handlers
-        table[AM_NON] = nullptr;                   table[AM_IMM] = nullptr; // These should not use addressing mode handlers
-        table[AM_ZER] = &fam65xx_t::addr_zp;       table[AM_ZPX] = &fam65xx_t::addr_zpx;
-        table[AM_ZPY] = &fam65xx_t::addr_zpy;      table[AM_ABS] = &fam65xx_t::addr_abs;
-        table[AM_ABX] = &fam65xx_t::addr_abx;      table[AM_ABY] = &fam65xx_t::addr_aby;
-        table[AM_INX] = &fam65xx_t::addr_inx;      table[AM_INY] = &fam65xx_t::addr_iny;
-        table[AM_IND] = &fam65xx_t::addr_ind;
-        
-        // Fill remaining slots with nullptr (unused addressing mode indices)
-        for (size_t i = 12; i < AM_COUNT; ++i) {
-            table[i] = nullptr;
-        }
-        
-        return table;
-    }
-    
-    // Initialize opcode table for this processor type
-    void init_opcode_table() {
-        // Static tables are initialized at compile time
-    }
-    
-    // Generic interrupt sequence handler
-    bus_state_t interrupt_sequence(bus_state_t pins) {
-        // Implementation of interrupt sequence
-        // This is a simplified placeholder
-        transition_to_fetch();
-        return pins;
+        this->current_handler = operation_handlers[this->opcode_entry.op_index];
     }
 };
 
 // ============================================================================
-// OPCODE TABLE GENERATION (processor-specific specializations)
+// OPCODE TABLE GENERATION (processor-specific specializations were included above)
 // ============================================================================
-
-// Forward declaration - will be specialized for each processor
-template<typename ProcessorTag>
-constexpr std::array<opcode_info_t, 256> generate_opcode_table();
-
-// Include processor-specific opcode table specializations
-#include "operations/opcode_tables.inc.hpp"
 
 } // namespace fam65xx_cpp

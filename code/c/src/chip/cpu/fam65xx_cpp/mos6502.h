@@ -40,6 +40,7 @@ void mos6502_destroy(mos6502_t* cpu);
 
 // Basic API functions
 bus_state_t mos6502_init(mos6502_t* cpu, const chip_descriptor_t* desc);
+bus_state_t mos6502_bootstrap(mos6502_t* cpu, bus_state_t pins);
 bus_state_t mos6502_reset(mos6502_t* cpu, bus_state_t pins);
 bus_state_t mos6502_tick(mos6502_t* cpu, bus_state_t pins);
 bool mos6502_opdone(mos6502_t* cpu);

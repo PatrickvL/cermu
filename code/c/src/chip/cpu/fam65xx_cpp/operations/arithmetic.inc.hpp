@@ -7,6 +7,87 @@
  */
 
 // ============================================================================
+// BCD ARITHMETIC HELPER FUNCTIONS (moved from main class)
+// ============================================================================
+
+// Add with Carry in BCD mode
+uint8_t adc_bcd(uint8_t a, uint8_t b, bool carry_in, bool& carry_out, bool& overflow) {
+    uint16_t al = (a & 0x0F) + (b & 0x0F) + (carry_in ? 1 : 0);
+    if (al > 0x09) al += 0x06;
+    
+    uint16_t ah = (a >> 4) + (b >> 4) + (al > 0x0F ? 1 : 0);
+    if (ah > 0x09) ah += 0x06;
+    
+    carry_out = (ah > 0x0F);
+    
+    // V flag behavior differs between NMOS and CMOS
+    if constexpr (has_nmos_bugs<ProcessorTag>()) {
+        // NMOS: V flag reflects binary operation result  
+        uint16_t binary_result = a + b + (carry_in ? 1 : 0);
+        overflow = ((a ^ binary_result) & (b ^ binary_result) & 0x80) != 0;
+    } else {
+        // CMOS: V flag undefined in BCD mode
+        overflow = false;
+    }
+    
+    return ((ah & 0x0F) << 4) | (al & 0x0F);
+}
+
+// BCD addition helper matching old implementation signature
+void bcd_addition_helper(uint8_t a_old, uint8_t operand, uint8_t carry_in, uint8_t* bcd_result, uint8_t* bcd_flags) {
+    bool carry_out, overflow;
+    *bcd_result = adc_bcd(a_old, operand, carry_in != 0, carry_out, overflow);
+    
+    // Generate flags matching old implementation
+    *bcd_flags = (*bcd_result & 0x80) |                    // N flag
+                (*bcd_result == 0 ? 0x02 : 0) |           // Z flag (FLAG_Z = 0x02)
+                (carry_out ? 0x01 : 0) |                  // C flag (FLAG_C = 0x01)
+                (overflow ? 0x40 : 0);                    // V flag (FLAG_V = 0x40)
+}
+
+// Subtract with Borrow in BCD mode  
+uint8_t sbc_bcd(uint8_t a, uint8_t b, bool borrow_in, bool& carry_out, bool& overflow) {
+    uint16_t al = (a & 0x0F) - (b & 0x0F) - (borrow_in ? 0 : 1);
+    if (al & 0x10) al -= 0x06;
+    
+    uint16_t ah = (a >> 4) - (b >> 4) - ((al & 0x10) ? 1 : 0);
+    if (ah & 0x10) ah -= 0x06;
+    
+    carry_out = !(ah & 0x10);
+    
+    // V flag behavior differs between NMOS and CMOS
+    if constexpr (has_nmos_bugs<ProcessorTag>()) {
+        // NMOS: V flag reflects binary operation result
+        uint16_t binary_result = a - b - (borrow_in ? 0 : 1);
+        overflow = ((a ^ b) & (a ^ binary_result) & 0x80) != 0;
+    } else {
+        // CMOS: V flag undefined in BCD mode  
+        overflow = false;
+    }
+    
+    return ((ah & 0x0F) << 4) | (al & 0x0F);
+}
+
+// BCD subtraction helper matching old implementation signature
+void bcd_subtraction_helper(uint8_t a_old, uint8_t operand, uint8_t borrow_in, 
+                           uint8_t* bcd_result, uint8_t* bcd_flags) {
+    if constexpr (has_bcd<ProcessorTag>()) {
+        bool carry_out, overflow;
+        *bcd_result = sbc_bcd(a_old, operand, borrow_in != 0, carry_out, overflow);
+        
+        // Generate flags matching old implementation
+        *bcd_flags = (*bcd_result & 0x80) |                    // N flag
+                    (*bcd_result == 0 ? 0x02 : 0) |           // Z flag (FLAG_Z = 0x02)
+                    (carry_out ? 0x01 : 0) |                  // C flag (FLAG_C = 0x01)
+                    (overflow ? 0x40 : 0);                    // V flag (FLAG_V = 0x40)
+    } else {
+        // No BCD support - should not be called
+        *bcd_result = a_old - operand - borrow_in;
+        *bcd_flags = 0;
+    }
+}
+
+// ============================================================================
 // ADD WITH CARRY (ADC)
 // ============================================================================
 
@@ -26,11 +107,11 @@ bus_state_t op_adc(bus_state_t pins) {
     // Handle decimal mode if supported (matching old implementation)
     if (decimal_mode) {
         if constexpr (has_bcd<ProcessorTag>()) {
-            // BCD (Decimal) mode - use unified BCD addition helper
+            // BCD (Decimal) mode - use BCD addition helper
             uint8_t bcd_result;
             uint8_t bcd_flags;
             
-            this->bcd_addition_helper(a, operand, carry_in ? 1 : 0, &bcd_result, &bcd_flags);
+            bcd_addition_helper(a, operand, carry_in ? 1 : 0, &bcd_result, &bcd_flags);
             
             CPU_A(this) = bcd_result;
             CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) | bcd_flags;
@@ -87,11 +168,11 @@ bus_state_t op_sbc(bus_state_t pins) {
     // Handle decimal mode if supported (matching old implementation)
     if (decimal_mode) {
         if constexpr (has_bcd<ProcessorTag>()) {
-            // BCD (Decimal) mode - use unified BCD subtraction helper
+            // BCD (Decimal) mode - use BCD subtraction helper
             uint8_t bcd_result;
             uint8_t bcd_flags;
             
-            this->bcd_subtraction_helper(a, operand, borrow_in ? 1 : 0, &bcd_result, &bcd_flags);
+            bcd_subtraction_helper(a, operand, borrow_in ? 1 : 0, &bcd_result, &bcd_flags);
             
             CPU_A(this) = bcd_result;
             CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) | bcd_flags;

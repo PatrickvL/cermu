@@ -178,14 +178,7 @@ struct wide_registers_mixin_t {
         wide_state.emulation_mode = true; // Start in emulation mode
     }
     
-    // Mode checking helpers
-    bool is_accumulator_16bit() const {
-        return !wide_state.emulation_mode && !(CPU_P(this) & 0x20); // M flag
-    }
-    
-    bool are_indexes_16bit() const {
-        return !wide_state.emulation_mode && !(CPU_P(this) & 0x10); // X flag
-    }
+    // Mode checking helpers - moved to main class due to register access needs
 };
 
 // ============================================================================
@@ -200,26 +193,17 @@ using io_port_base_t = std::conditional_t<
     empty_mixin_t
 >;
 
-template<typename ProcessorTag>
-using bcd_base_t = std::conditional_t<
-    has_bcd<ProcessorTag>(),
-    bcd_mixin_t<ProcessorTag>,
-    empty_mixin_t
->;
+// BCD and CMOS state functionality merged into main CPU class
+// Only I/O port mixin remains active
 
 template<typename ProcessorTag>
-using cmos_state_base_t = std::conditional_t<
-    has_cmos_enhancements<ProcessorTag>(),
-    cmos_state_mixin_t<ProcessorTag>,
-    empty_mixin_t
->;
+using bcd_base_t = empty_mixin_t;  // BCD merged into main class
 
 template<typename ProcessorTag>
-using wide_registers_base_t = std::conditional_t<
-    has_wide_registers<ProcessorTag>(),
-    wide_registers_mixin_t<ProcessorTag>,
-    empty_mixin_t
->;
+using cmos_state_base_t = empty_mixin_t;  // CMOS state merged into main class
+
+template<typename ProcessorTag>
+using wide_registers_base_t = empty_mixin_t;  // Wide registers disabled for now
 
 } // namespace fam65xx_cpp
 
