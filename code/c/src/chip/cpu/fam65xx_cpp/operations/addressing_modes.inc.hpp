@@ -14,100 +14,195 @@
 // ADDRESSING MODE HANDLERS
 // ============================================================================
 
-// Zero Page addressing: $nn
+// Zero Page addressing: $nn (cycle-accurate)
 bus_state_t addr_zp(bus_state_t pins) {
-    // Read zero page address from PC
-    CPU_AB(this) = CPU_PC(this);
-    pins = phi2_read(pins, REG_AB, REG_ABL);
+    // PHI2: Read zero page address from PC
+    pins = phi2_read(pins, REG_PC, REG_ABL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     CPU_PC(this)++;
     
     // Set up zero page address (high byte is always 0)
     CPU_ABH(this) = 0x00;
-    // ABL already contains the zero page address
     
     // Transition to operation
     transition_to_operation();
     return pins;
 }
 
-// Zero Page,X addressing: $nn,X  
+// Zero Page,X addressing: $nn,X (cycle-accurate)
 bus_state_t addr_zpx(bus_state_t pins) {
-    // Read zero page base address
-    CPU_AB(this) = CPU_PC(this);
-    pins = phi2_read(pins, REG_AB, REG_DL);
-    CPU_PC(this)++;
-    
-    // Add X register (wraps in zero page)
-    CPU_ABL(this) = (CPU_DL(this) + CPU_X(this)) & 0xFF;
-    CPU_ABH(this) = 0x00;
-    
+    switch (this->cycle_index++) {
+        case 0:
+            // PHI2: Read base address from PC
+            pins = phi2_read(pins, REG_PC, REG_DL);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_PC(this)++;
+            
+            // PHI1: Store base address in ZP
+            CPU_ZPL(this) = CPU_DL(this);
+            CPU_ZPH(this) = 0x00;
+            break;
+            
+        case 1:
+            // PHI2: Dummy read from ZP while adding index
+            pins = phi2_read(pins, REG_ZP, REG_DL);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            
+            // PHI1: Add index to ZP address (wraps in zero page), then copy to AB
+            CPU_ZPL(this) = (CPU_ZPL(this) + CPU_X(this)) & 0xFF;
+            CPU_AB(this) = CPU_ZP(this); // Copy final ZP address to AB
+            transition_to_operation();
+            break;
+    }
     return pins;
 }
 
-// Zero Page,Y addressing: $nn,Y
+// Zero Page,Y addressing: $nn,Y (cycle-accurate)
 bus_state_t addr_zpy(bus_state_t pins) {
-    // Read zero page base address
-    CPU_AB(this) = CPU_PC(this);
-    pins = phi2_read(pins, REG_AB, REG_DL);
-    CPU_PC(this)++;
-    
-    // Add Y register (wraps in zero page)
-    CPU_ABL(this) = (CPU_DL(this) + CPU_Y(this)) & 0xFF;
-    CPU_ABH(this) = 0x00;
-    
+    switch (this->cycle_index++) {
+        case 0:
+            // PHI2: Read base address from PC
+            pins = phi2_read(pins, REG_PC, REG_DL);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_PC(this)++;
+            
+            // PHI1: Store base address in ZP
+            CPU_ZPL(this) = CPU_DL(this);
+            CPU_ZPH(this) = 0x00;
+            break;
+            
+        case 1:
+            // PHI2: Dummy read from ZP while adding index
+            pins = phi2_read(pins, REG_ZP, REG_DL);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            
+            // PHI1: Add index to ZP address (wraps in zero page), then copy to AB
+            CPU_ZPL(this) = (CPU_ZPL(this) + CPU_Y(this)) & 0xFF;
+            CPU_AB(this) = CPU_ZP(this); // Copy final ZP address to AB
+            transition_to_operation();
+            break;
+    }
     return pins;
 }
 
-// Absolute addressing: $nnnn
+// Absolute addressing: $nnnn (cycle-accurate)
 bus_state_t addr_abs(bus_state_t pins) {
-    // Read low byte
-    CPU_AB(this) = CPU_PC(this);
-    pins = phi2_read(pins, REG_AB, REG_ABL);
-    CPU_PC(this)++;
-    
-    // Read high byte
-    CPU_AB(this) = CPU_PC(this);
-    pins = phi2_read(pins, REG_AB, REG_ABH);
-    CPU_PC(this)++;
-    
+    switch (this->cycle_index++) {
+        case 0:
+            // PHI2: Read low byte from PC
+            pins = phi2_read(pins, REG_PC, REG_ABL);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_PC(this)++;
+            break;
+            
+        case 1:
+            // PHI2: Read high byte from PC
+            pins = phi2_read(pins, REG_PC, REG_ABH);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_PC(this)++;
+            transition_to_operation();
+            break;
+    }
     return pins;
 }
 
-// Absolute,X addressing: $nnnn,X
+// Absolute,X addressing: $nnnn,X (cycle-accurate with page crossing)
 bus_state_t addr_abx(bus_state_t pins) {
-    // Read base address
-    pins = addr_abs(pins);
-    
-    // Add X register with page crossing check
-    uint16_t base_addr = CPU_AB(this);
-    uint16_t final_addr = base_addr + CPU_X(this);
-    CPU_AB(this) = final_addr;
-    
-    // Check for page crossing (affects timing on some instructions)
-    if ((base_addr & 0xFF00) != (final_addr & 0xFF00)) {
-        // Page crossing occurred - may need extra cycle
-        // This is handled by the operation based on can_skip_page_cross flag
+    switch (this->cycle_index++) {
+        case 0:
+            // PHI2: Read low byte from PC
+            pins = phi2_read(pins, REG_PC, REG_ABL);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_PC(this)++;
+            break;
+            
+        case 1: {
+            // PHI2: Read high byte from PC
+            pins = phi2_read(pins, REG_PC, REG_ABH);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_PC(this)++;
+            
+            // PHI1: Calculate addresses
+            uint16_t base = CPU_AB(this);
+            uint16_t effective = base + CPU_X(this);
+            
+            // Store original high byte in DL for page cross correction
+            CPU_DL(this) = CPU_ABH(this);
+            
+            // Add index to low byte (creates intermediate "wrong" address for page cross)
+            CPU_ABL(this) += CPU_X(this);
+            
+            // Skip penalty cycle if allowed and no page cross occurred
+            if (this->opcode_entry.can_skip_page_cross && ((base ^ effective) & 0xFF00) == 0) {
+                CPU_AB(this) = effective;  // Fix address
+                transition_to_operation();
+            }
+            // Otherwise continue to cycle 2 with intermediate address
+            break;
+        }
+            
+        case 2:
+            // PHI2: Page cross penalty - read from intermediate address
+            pins = phi2_read(pins, REG_AB, REG_DL);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            
+            // PHI1: Correct final address
+            CPU_ABH(this) = CPU_DL(this);  // Restore original high byte
+            CPU_ABL(this) -= CPU_X(this);  // Restore original low byte
+            CPU_AB(this) += CPU_X(this);   // Correctly calculate final address
+            transition_to_operation();
+            break;
     }
-    
     return pins;
 }
 
-// Absolute,Y addressing: $nnnn,Y  
+// Absolute,Y addressing: $nnnn,Y (cycle-accurate with page crossing)
 bus_state_t addr_aby(bus_state_t pins) {
-    // Read base address
-    pins = addr_abs(pins);
-    
-    // Add Y register with page crossing check
-    uint16_t base_addr = CPU_AB(this);
-    uint16_t final_addr = base_addr + CPU_Y(this);
-    CPU_AB(this) = final_addr;
-    
-    // Check for page crossing
-    if ((base_addr & 0xFF00) != (final_addr & 0xFF00)) {
-        // Page crossing occurred
+    switch (this->cycle_index++) {
+        case 0:
+            // PHI2: Read low byte from PC
+            pins = phi2_read(pins, REG_PC, REG_ABL);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_PC(this)++;
+            break;
+            
+        case 1: {
+            // PHI2: Read high byte from PC
+            pins = phi2_read(pins, REG_PC, REG_ABH);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_PC(this)++;
+            
+            // PHI1: Calculate addresses
+            uint16_t base = CPU_AB(this);
+            uint16_t effective = base + CPU_Y(this);
+            
+            // Store original high byte in DL for page cross correction
+            CPU_DL(this) = CPU_ABH(this);
+            
+            // Add index to low byte (creates intermediate "wrong" address for page cross)
+            CPU_ABL(this) += CPU_Y(this);
+            
+            // Skip penalty cycle if allowed and no page cross occurred
+            if (this->opcode_entry.can_skip_page_cross && ((base ^ effective) & 0xFF00) == 0) {
+                CPU_AB(this) = effective;  // Fix address
+                transition_to_operation();
+            }
+            // Otherwise continue to cycle 2 with intermediate address
+            break;
+        }
+            
+        case 2:
+            // PHI2: Page cross penalty - read from intermediate address
+            pins = phi2_read(pins, REG_AB, REG_DL);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            
+            // PHI1: Correct final address
+            CPU_ABH(this) = CPU_DL(this);  // Restore original high byte
+            CPU_ABL(this) -= CPU_Y(this);  // Restore original low byte
+            CPU_AB(this) += CPU_Y(this);   // Correctly calculate final address
+            transition_to_operation();
+            break;
     }
-    
     return pins;
 }
 
