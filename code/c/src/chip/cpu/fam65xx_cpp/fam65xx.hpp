@@ -54,6 +54,18 @@
 namespace fam65xx_cpp {
 
 // ============================================================================
+// INTERRUPT SHIFT REGISTER CONSTANTS (matching old implementation)
+// ============================================================================
+
+constexpr uint32_t INT_IRQ_START_BIT = 0;
+constexpr uint32_t INT_NMI_START_BIT = 8;
+constexpr uint32_t INT_RESET_START_BIT = 16;
+constexpr uint32_t INT_IRQ_MASK = 0x07;      // 3 bits for IRQ
+constexpr uint32_t INT_NMI_MASK = 0x0700;    // 3 bits for NMI
+constexpr uint32_t INT_RESET_MASK = 0x070000; // 3 bits for RESET
+constexpr uint32_t INT_SEPARATOR_MASK = INT_IRQ_MASK | INT_NMI_MASK | INT_RESET_MASK;
+
+// ============================================================================
 // MAIN CPU TEMPLATE CLASS
 // ============================================================================
 
@@ -84,7 +96,7 @@ public:
     bus_state_t (fam65xx_t::*current_handler)(bus_state_t);  /* Current instruction handler */
     uint8_t cycle_index;                /* Current cycle within instruction */
     
-    /* Interrupt state - merged shift register system */
+    /* Interrupt state - hardware-accurate shift register system */
     uint8_t brk_flags;                  /* BRK/IRQ/NMI/RESET flags */
     uint8_t nmi_prev;                   /* Previous NMI line state for edge detection */
     uint32_t interrupt_shift_register;  /* Combined shift register for all interrupt types */
@@ -178,14 +190,25 @@ public:
     }
     
     bus_state_t tick(bus_state_t pins) {
-        // Handle RDY line
-        if (!FAM65XX_GET_RDY(pins)) {
-            return pins; // CPU is halted
+        // SYNC pin management - asserted during opcode fetch cycles
+        if (this->current_handler == nullptr && this->cycle_index == 0) {
+            pins |= FAM65XX_SYNC;
+        } else {
+            pins &= ~FAM65XX_SYNC;
         }
         
-        // Handle interrupts if not in middle of instruction
-        if (this->current_handler == nullptr) {
-            pins = handle_interrupts(pins);
+        // Hardware-accurate interrupt detection every cycle (matching old implementation)
+        if (process_interrupt_detection(pins)) {
+            // Interrupt detected - check if we should hijack current instruction
+            if (this->brk_flags & FAM65XX_BRK_RESET) {
+                // RESET has highest priority - immediately start RESET sequence
+                return reset(pins);
+            } else if (this->current_handler == nullptr && this->cycle_index == 0) {
+                // At instruction boundary - start interrupt sequence
+                this->current_handler = &fam65xx_t::interrupt_sequence;
+                this->cycle_index = 0;
+                return pins;
+            }
         }
         
         // Execute current instruction cycle
@@ -374,6 +397,97 @@ private:
     // ========================================================================
     // INTERNAL HELPER FUNCTIONS
     // ========================================================================
+    
+    // Hardware-accurate interrupt detection (matching old implementation)
+    bool process_interrupt_detection(bus_state_t pins) {
+        // Use intermediate variable to reduce memory accesses
+        uint32_t shift_reg = this->interrupt_shift_register;
+        
+        // Shift the register left by one bit
+        shift_reg <<= 1;
+        
+        // Sample IRQ line and insert into IRQ bits (active low)
+        if (!(pins & FAM65XX_IRQ)) {
+            shift_reg |= (1 << INT_IRQ_START_BIT);
+        }
+        
+        // NMI Edge Detection - only trigger on falling edge
+        uint8_t nmi_current = (pins & FAM65XX_NMI) ? 1 : 0;
+        if (this->nmi_prev && !nmi_current) {
+            // Falling edge detected - insert into NMI bits
+            shift_reg |= (1 << INT_NMI_START_BIT);
+        }
+        this->nmi_prev = nmi_current;
+        
+        // Sample RESET line and insert into RESET bits (active low)
+        if (!(pins & FAM65XX_RES)) {
+            shift_reg |= (1 << INT_RESET_START_BIT);
+        }
+        
+        // Clear separator bits to prevent cross-over
+        shift_reg &= ~INT_SEPARATOR_MASK;
+        
+        // Store back the updated shift register
+        this->interrupt_shift_register = shift_reg;
+        
+        // Check for completed interrupt sequences in order of priority
+        
+        // Check if RESET has completed shift (3 consecutive cycles) - highest priority
+        if ((shift_reg & INT_RESET_MASK) == INT_RESET_MASK) {
+            this->brk_flags |= FAM65XX_BRK_RESET;
+            return true;
+        }
+        
+        // Check if NMI has completed shift (3 consecutive cycles) - middle priority
+        if ((shift_reg & INT_NMI_MASK) == INT_NMI_MASK) {
+            this->brk_flags |= FAM65XX_BRK_NMI;
+            return true;
+        }
+        
+        // Check if IRQ has completed shift (3 consecutive cycles) - lowest priority
+        // IRQ is masked by the I flag (interrupt disable)
+        if ((shift_reg & INT_IRQ_MASK) == INT_IRQ_MASK && !(CPU_P(this) & FLAG_I)) {
+            this->brk_flags |= FAM65XX_BRK_IRQ;
+            return true;
+        }
+        
+        return false;
+    }
+    
+    // Instruction fetch and decode
+    bus_state_t fetch_opcode(bus_state_t pins) {
+        // Read opcode from PC
+        CPU_AB(this) = CPU_PC(this);
+        pins = this->phi2_read(pins, REG_AB, REG_IR);
+        CPU_PC(this)++;
+        
+        // Set SYNC signal for opcode fetch
+        pins |= FAM65XX_SYNC;
+        
+        // Decode opcode and set up instruction
+        uint8_t opcode = CPU_IR(this);
+        this->opcode_entry = get_opcode_info(opcode);
+        this->cycle_index = 0;
+        
+        // Set up first instruction cycle handler
+        this->current_handler = get_instruction_handler(opcode);
+        
+        return pins;
+    }
+    
+    // Generic interrupt sequence handler
+    bus_state_t interrupt_sequence(bus_state_t pins) {
+        // Implementation of interrupt sequence
+        // This is a simplified placeholder - full implementation would match old BRK handler
+        transition_to_fetch();
+        return pins;
+    }
+    
+    // Transition to next instruction fetch
+    void transition_to_fetch() {
+        this->current_handler = nullptr;
+        this->cycle_index = 0;
+    }
     
     void init_conditional_features() {
         // Initialize I/O port if present
