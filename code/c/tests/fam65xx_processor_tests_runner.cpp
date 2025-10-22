@@ -26,11 +26,22 @@ extern "C" {
     #define AIEMUC_IMPL
 #endif
 
-// Include processor-specific headers and types for unified interface
-#include "../src/chip/cpu/fam65xx/mos6502.hpp"
-#include "../src/chip/cpu/fam65xx/fam65xx_types.hpp"
+// Include new fam65xx_cpp processor implementation  
+#include "../src/chip/cpu/fam65xx_cpp/mos6502.h"
 
 namespace fs = std::filesystem;
+
+// Memory for CPU testing
+static uint8_t test_memory[65536];
+
+// Memory callback functions for fam65xx API
+static uint8_t mem_read_callback(void* user_data, uint16_t addr, uint8_t bus_state) {
+    return test_memory[addr];
+}
+
+static void mem_write_callback(void* user_data, uint16_t addr, uint8_t data) {
+    test_memory[addr] = data;
+}
 
 // Processor type enumeration
 enum class ProcessorType {
@@ -95,7 +106,7 @@ ProcessorType parse_processor_type(const std::string& processor_str) {
 class UnifiedProcessorInterface {
 public:
     virtual ~UnifiedProcessorInterface() = default;
-    virtual uint64_t init(const fam65xx_desc_t* desc) = 0;
+    virtual uint64_t init(const chip_descriptor_t* desc) = 0;
     virtual uint64_t bootstrap(uint64_t pins) = 0;
     virtual uint64_t tick(uint64_t pins) = 0;
     virtual bool opdone() = 0;
@@ -116,74 +127,87 @@ public:
     virtual void set_status(uint8_t p) = 0;
 };
 
-// Template wrapper for MOS6502 processor
+// Template wrapper for MOS6502 processor using new fam65xx_cpp API
 class MOS6502Wrapper : public UnifiedProcessorInterface {
 private:
-    mos6502_c_t cpu;
+    mos6502_t* cpu;
     
 public:
-    uint64_t init(const fam65xx_desc_t* desc) override {
-        return mos6502_init(&cpu, desc);
+    MOS6502Wrapper() {
+        cpu = mos6502_create();
+        if (!cpu) {
+            throw std::runtime_error("Failed to create MOS6502 CPU");
+        }
+    }
+    
+    ~MOS6502Wrapper() {
+        if (cpu) {
+            mos6502_destroy(cpu);
+        }
+    }
+    
+    uint64_t init(const chip_descriptor_t* desc) override {
+        return mos6502_init(cpu, desc);
     }
     
     uint64_t bootstrap(uint64_t pins) override {
-        return mos6502_bootstrap(&cpu, pins);
+        return mos6502_reset(cpu, pins);
     }
     
     uint64_t tick(uint64_t pins) override {
-        return mos6502_tick(&cpu, pins);
+        return mos6502_tick(cpu, pins);
     }
     
     bool opdone() override {
-        return mos6502_opdone(&cpu);
+        return mos6502_opdone(cpu);
     }
     
     uint16_t get_pc() override {
-        return mos6502_pc(&cpu);
+        return mos6502_get_pc(cpu);
     }
     
     uint8_t get_a() override {
-        return mos6502_a(&cpu);
+        return mos6502_get_a(cpu);
     }
     
     uint8_t get_x() override {
-        return mos6502_x(&cpu);
+        return mos6502_get_x(cpu);
     }
     
     uint8_t get_y() override {
-        return mos6502_y(&cpu);
+        return mos6502_get_y(cpu);
     }
     
     uint8_t get_sp() override {
-        return mos6502_s(&cpu);
+        return mos6502_get_s(cpu);
     }
     
     uint8_t get_status() override {
-        return mos6502_p(&cpu);
+        return mos6502_get_p(cpu);
     }
     
     void set_pc(uint16_t pc) override {
-        mos6502_set_pc(&cpu, pc);
+        mos6502_set_pc(cpu, pc);
     }
     
     void set_a(uint8_t a) override {
-        mos6502_set_a(&cpu, a);
+        mos6502_set_a(cpu, a);
     }
     
     void set_x(uint8_t x) override {
-        mos6502_set_x(&cpu, x);
+        mos6502_set_x(cpu, x);
     }
     
     void set_y(uint8_t y) override {
-        mos6502_set_y(&cpu, y);
+        mos6502_set_y(cpu, y);
     }
     
     void set_sp(uint8_t sp) override {
-        mos6502_set_s(&cpu, sp);
+        mos6502_set_s(cpu, sp);
     }
     
     void set_status(uint8_t p) override {
-        mos6502_set_p(&cpu, p);
+        mos6502_set_p(cpu, p);
     }
 };
 
@@ -345,11 +369,9 @@ public:
         // Create processor wrapper for the specified type
         cpu_wrapper = create_processor(processor_type);
         
-        // Initialize CPU with memory callbacks using new API
-        fam65xx_desc_t desc = {};
-        desc.mem_read = mem_read;
-        desc.mem_write = mem_write;
-        desc.mem_user_data = this;
+        // Initialize CPU with new API (memory callbacks handled differently)
+        chip_descriptor_t desc = {};
+        desc.description = "MOS6502 Test CPU";
         
         pins = cpu_wrapper->init(&desc);
         
