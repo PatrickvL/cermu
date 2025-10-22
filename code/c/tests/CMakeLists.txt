@@ -124,13 +124,14 @@ if(NOT WIN32 AND NOT MSVC)
     target_link_libraries(fam65xx_lorenz_test_harness m)
 endif()
 
-# fam65xx Enhanced C ProcessorTests Runner - With debugging features
+# fam65xx Enhanced C ProcessorTests Runner - With debugging features (using new fam65xx_cpp)
 add_executable(fam65xx_processor_tests_runner
     fam65xx_processor_tests_runner.cpp
     json_parser.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp/mos6502.cpp
 )
 target_include_directories(fam65xx_processor_tests_runner PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
 )
 target_compile_definitions(fam65xx_processor_tests_runner PRIVATE AIEMUC_IMPL)
