@@ -650,6 +650,45 @@ private:
         operation_handlers[OP_BRK] = &fam65xx_t::op_brk;
         operation_handlers[OP_RTI] = &fam65xx_t::op_rti;
         
+        // Register operations (commented out - need to implement)
+        // operation_handlers[OP_INX] = &fam65xx_t::op_inx;
+        // operation_handlers[OP_INY] = &fam65xx_t::op_iny;
+        // operation_handlers[OP_DEX] = &fam65xx_t::op_dex;
+        // operation_handlers[OP_DEY] = &fam65xx_t::op_dey;
+        
+        // Transfer operations (implemented)
+        operation_handlers[OP_TAX] = &fam65xx_t::op_tax;
+        operation_handlers[OP_TAY] = &fam65xx_t::op_tay;
+        operation_handlers[OP_TXA] = &fam65xx_t::op_txa;
+        operation_handlers[OP_TYA] = &fam65xx_t::op_tya;
+        operation_handlers[OP_TSX] = &fam65xx_t::op_tsx;
+        operation_handlers[OP_TXS] = &fam65xx_t::op_txs;
+        
+        // Stack operations (implemented)
+        operation_handlers[OP_PHA] = &fam65xx_t::op_pha;
+        operation_handlers[OP_PHP] = &fam65xx_t::op_php;
+        operation_handlers[OP_PLA] = &fam65xx_t::op_pla;
+        operation_handlers[OP_PLP] = &fam65xx_t::op_plp;
+        
+        // Branch operations (implemented)
+        operation_handlers[OP_BCC] = &fam65xx_t::op_bcc;
+        operation_handlers[OP_BCS] = &fam65xx_t::op_bcs;
+        operation_handlers[OP_BEQ] = &fam65xx_t::op_beq;
+        operation_handlers[OP_BNE] = &fam65xx_t::op_bne;
+        operation_handlers[OP_BMI] = &fam65xx_t::op_bmi;
+        operation_handlers[OP_BPL] = &fam65xx_t::op_bpl;
+        operation_handlers[OP_BVC] = &fam65xx_t::op_bvc;
+        operation_handlers[OP_BVS] = &fam65xx_t::op_bvs;
+        
+        // Flag operations (implemented)
+        operation_handlers[OP_CLC] = &fam65xx_t::op_clc;
+        operation_handlers[OP_SEC] = &fam65xx_t::op_sec;
+        operation_handlers[OP_CLI] = &fam65xx_t::op_cli;
+        operation_handlers[OP_SEI] = &fam65xx_t::op_sei;
+        operation_handlers[OP_CLD] = &fam65xx_t::op_cld;
+        operation_handlers[OP_SED] = &fam65xx_t::op_sed;
+        operation_handlers[OP_CLV] = &fam65xx_t::op_clv;
+        
         // Initialize addressing mode handler lookup table
         addressing_mode_handlers.fill(nullptr);  // Default to nullptr (safe for AM_NON/AM_IMM)
         
