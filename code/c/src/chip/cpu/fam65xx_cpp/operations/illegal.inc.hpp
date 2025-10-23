@@ -107,6 +107,42 @@ bus_state_t op_rra(bus_state_t pins) {
 }
 
 // ============================================================================
+// PROCESSOR JAM/KILL OPERATION
+// ============================================================================
+
+bus_state_t op_jam(bus_state_t pins) {
+    // JAM/KIL instruction behavior on 6502:
+    // - PC does not advance (stays at opcode address)
+    // - Performs 3 bus cycles: opcode fetch + 2 dummy reads from PC+1
+    // - Processor effectively halts (infinite loop on this instruction)
+    
+    switch (this->current_cycle) {
+        case 0:
+            // Cycle 1: Opcode fetch (already done in fetch_opcode)
+            // Dummy read from PC+1
+            pins = this->phi2_read(pins, REG_PCL + 1, REG_DL);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            this->current_cycle++;
+            return pins;
+            
+        case 1:
+            // Cycle 2: Second dummy read from PC+1
+            pins = this->phi2_read(pins, REG_PCL + 1, REG_DL);  
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            
+            // JAM behavior: DO NOT transition to fetch, stay in this handler
+            // This creates an infinite loop as the real hardware does
+            this->current_cycle = 0;  // Reset to cycle 0 to loop forever
+            return pins;
+            
+        default:
+            // Should not reach here
+            this->current_cycle = 0;
+            return pins;
+    }
+}
+
+// ============================================================================
 // ILLEGAL ACCUMULATOR OPERATIONS
 // ============================================================================
 

@@ -635,6 +635,7 @@ private:
         operation_handlers[OP_INC] = &fam65xx_t::op_inc;
         operation_handlers[OP_DEC] = &fam65xx_t::op_dec;
         operation_handlers[OP_NOP] = &fam65xx_t::op_nop;
+        operation_handlers[OP_JAM] = &fam65xx_t::op_jam;
         
         // Control operations (implemented)
         operation_handlers[OP_JMP] = &fam65xx_t::op_jmp;
