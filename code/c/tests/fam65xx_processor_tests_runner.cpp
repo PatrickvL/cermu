@@ -336,7 +336,7 @@ class ProcessorTestHarness {
 private:
     std::unique_ptr<UnifiedProcessorInterface> cpu_wrapper;
     ProcessorType processor_type;
-    uint8_t memory[65536];
+    uint8_t* memory;  // Point to global test_memory array
     uint32_t cycle_count;
     uint64_t pins;  // Maintain pins state across steps
     
@@ -381,7 +381,7 @@ public:
     }
 
     ProcessorTestHarness(ProcessorType proc_type = ProcessorType::MOS6502) 
-        : processor_type(proc_type), cycle_count(0) {
+        : processor_type(proc_type), memory(test_memory), cycle_count(0) {
         
         // Clear memory (optimized approach from C version)
         std::fill(memory, memory + 65536, 0);
