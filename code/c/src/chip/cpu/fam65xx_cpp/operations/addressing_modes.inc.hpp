@@ -133,7 +133,7 @@ bus_state_t addr_abx(bus_state_t pins) {
             CPU_ABL(this) += CPU_X(this);
             
             // Skip penalty cycle if allowed and no page cross occurred
-            if (this->opcode_entry.can_skip_page_cross && ((base ^ effective) & 0xFF00) == 0) {
+            if ((this->opcode_entry.flags & OF_SKIP_PAGE) && ((base ^ effective) & 0xFF00) == 0) {
                 CPU_AB(this) = effective;  // Fix address
                 transition_to_operation();
             }
@@ -183,7 +183,7 @@ bus_state_t addr_aby(bus_state_t pins) {
             CPU_ABL(this) += CPU_Y(this);
             
             // Skip penalty cycle if allowed and no page cross occurred
-            if (this->opcode_entry.can_skip_page_cross && ((base ^ effective) & 0xFF00) == 0) {
+            if ((this->opcode_entry.flags & OF_SKIP_PAGE) && ((base ^ effective) & 0xFF00) == 0) {
                 CPU_AB(this) = effective;  // Fix address
                 transition_to_operation();
             }
