@@ -34,14 +34,13 @@ namespace fs = std::filesystem;
 // Memory for CPU testing
 static uint8_t test_memory[65536];
 
-// Memory callback functions for fam65xx API
-static uint8_t mem_read_callback(void* user_data, uint16_t addr, uint8_t bus_state) {
-    return test_memory[addr];
-}
+// Forward declarations
+class ProcessorTestHarness;
+static ProcessorTestHarness* current_test_harness = nullptr;
 
-static void mem_write_callback(void* user_data, uint16_t addr, uint8_t data) {
-    test_memory[addr] = data;
-}
+// Forward declarations for callback functions
+static uint8_t mem_read_callback(void* user_data, uint16_t addr, uint8_t bus_state);
+static void mem_write_callback(void* user_data, uint16_t addr, uint8_t data);
 
 // Processor type enumeration
 enum class ProcessorType {
@@ -364,17 +363,14 @@ private:
     }
     
     // Record bus cycle for comparison with JSON test data
+public:
     void record_bus_cycle(uint16_t addr, uint8_t data, bool is_write) {
         bus_cycle_t cycle;
         cycle.address = addr;
         cycle.data = data;
         cycle.is_write = is_write;
         actual_bus_cycles.push_back(cycle);
-        
-        // Removed verbose output for performance - handled in threaded version
     }
-
-public:
     // Bootstrap processor for ProcessorTests compatibility
     void bootstrap_processor_for_tests() {
         pins = cpu_wrapper->bootstrap(pins);
@@ -564,6 +560,24 @@ public:
     }
 };
 
+// Memory callback functions for fam65xx API (after class definition)
+static uint8_t mem_read_callback(void* user_data, uint16_t addr, uint8_t bus_state) {
+    uint8_t value = test_memory[addr];
+    // Record bus cycle if harness is available
+    if (current_test_harness) {
+        current_test_harness->record_bus_cycle(addr, value, false);
+    }
+    return value;
+}
+
+static void mem_write_callback(void* user_data, uint16_t addr, uint8_t data) {
+    test_memory[addr] = data;
+    // Record bus cycle if harness is available
+    if (current_test_harness) {
+        current_test_harness->record_bus_cycle(addr, data, true);
+    }
+}
+
 // Test item for worker queue
 struct TestItem {
     std::string filepath;
@@ -741,6 +755,9 @@ private:
             output << "[Worker " << worker_id << "] Running test: " << test->name << std::endl;
         }
         
+        // Set global harness for bus cycle recording
+        current_test_harness = harness;
+        
         // PERFORMANCE OPTIMIZATION: Use selective memory clearing based on previous test
         const cpu_state_t* previous_final = previous_test ? &previous_test->final : nullptr;
         harness->setup_memory_for_test(&test->initial, previous_final);
@@ -890,6 +907,9 @@ private:
                 output << "PASS " << test->name << " (opcode 0x" << std::hex
                        << (int)current_opcode << ")" << std::dec << std::endl;
             }
+            
+            // Clear global harness
+            current_test_harness = nullptr;
             return true;
         } else {
             results.failed_tests++;
@@ -904,6 +924,8 @@ private:
                 output << "mismatch (opcode 0x" << std::hex << (int)current_opcode << ")" << std::dec << std::endl;
             }
             
+            // Clear global harness
+            current_test_harness = nullptr;
             return false;
         }
     }
