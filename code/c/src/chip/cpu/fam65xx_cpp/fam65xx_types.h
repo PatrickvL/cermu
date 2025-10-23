@@ -232,13 +232,19 @@ typedef enum {
 // Opcode Encoding
 // ============================================================================
 
+// Opcode bit flags
+typedef enum {
+    OF_NONE          = 0x0,  // No special flags
+    OF_ILLEGAL_STORE = 0x1,  // Illegal store quirk - uses wrong address on page cross
+    OF_SKIP_PAGE     = 0x2,  // Can skip page cross penalty cycle (read operations only)
+    OF_RMW           = 0x4,  // Read-Modify-Write operation
+    OF_RESERVED      = 0x8   // Reserved for future use
+} opcode_flags_t;
+
 typedef struct {
-    uint16_t op_index            : 8;   // Operation index (0-255, bits 0-7, full byte)
-    uint16_t am_index            : 4;   // Addressing mode index (0-15, bits 8-11, nibble-aligned)
-    uint16_t illegal_store       : 1;   // Illegal store quirk - uses wrong address on page cross (bit 12)
-    uint16_t can_skip_page_cross : 1;   // Can skip page cross penalty cycle (bit 13) - only for read operations
-    uint16_t rmw                 : 1;   // Read-Modify-Write operation (bit 14)
-    uint16_t _reserved           : 1;   // Reserved bit (bit 15)
+    uint16_t op_index : 8;  // Operation index (0-255, bits 0-7) [type operation_t]
+    uint16_t am_index : 4;  // Addressing mode index (0-15, bits 8-11) [type addr_mode_t]
+    uint16_t flags    : 4;  // Opcode flags (bits 12-15) [type opcode_flags_t]
 } opcode_info_t;
 
 // ============================================================================
