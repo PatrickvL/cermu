@@ -637,6 +637,12 @@ private:
         operation_handlers[OP_NOP] = &fam65xx_t::op_nop;
         operation_handlers[OP_JAM] = &fam65xx_t::op_jam;
         
+        // RMW operations (implemented)
+        operation_handlers[OP_ASL] = &fam65xx_t::op_asl;
+        operation_handlers[OP_LSR] = &fam65xx_t::op_lsr;
+        operation_handlers[OP_ROL] = &fam65xx_t::op_rol;
+        operation_handlers[OP_ROR] = &fam65xx_t::op_ror;
+        
         // Control operations (implemented)
         operation_handlers[OP_JMP] = &fam65xx_t::op_jmp;
         operation_handlers[OP_JSR] = &fam65xx_t::op_jsr;
