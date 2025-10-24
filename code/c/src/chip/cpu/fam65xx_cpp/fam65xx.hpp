@@ -650,11 +650,11 @@ private:
         operation_handlers[OP_BRK] = &fam65xx_t::op_brk;
         operation_handlers[OP_RTI] = &fam65xx_t::op_rti;
         
-        // Register operations (commented out - need to implement)
-        // operation_handlers[OP_INX] = &fam65xx_t::op_inx;
-        // operation_handlers[OP_INY] = &fam65xx_t::op_iny;
-        // operation_handlers[OP_DEX] = &fam65xx_t::op_dex;
-        // operation_handlers[OP_DEY] = &fam65xx_t::op_dey;
+        // Register operations (implemented)
+        operation_handlers[OP_INX] = &fam65xx_t::op_inx;
+        operation_handlers[OP_INY] = &fam65xx_t::op_iny;
+        operation_handlers[OP_DEX] = &fam65xx_t::op_dex;
+        operation_handlers[OP_DEY] = &fam65xx_t::op_dey;
         
         // Transfer operations (implemented)
         operation_handlers[OP_TAX] = &fam65xx_t::op_tax;
