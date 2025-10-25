@@ -313,3 +313,121 @@ bus_state_t op_alr(bus_state_t pins) {
     }
     return pins;
 }
+
+// ASR is an alias for ALR (same operation, different names in documentation)
+bus_state_t op_asr(bus_state_t pins) {
+    return op_alr(pins);
+}
+
+// ============================================================================
+// ADDITIONAL ILLEGAL OPERATIONS
+// ============================================================================
+
+bus_state_t op_xaa(bus_state_t pins) {
+    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+        // XAA - Transfer X AND immediate to A (illegal)
+        pins = phi2_read(pins, REG_AB, REG_DL);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+        
+        CPU_A(this) = CPU_X(this) & CPU_DL(this);
+        update_nz_flags(CPU_A(this));
+        
+        transition_to_fetch();
+    }
+    return pins;
+}
+
+bus_state_t op_sbx(bus_state_t pins) {
+    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+        // SBX - Compare X with A AND immediate (illegal) (also called AXS)
+        pins = phi2_read(pins, REG_AB, REG_DL);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+        
+        uint8_t temp = CPU_A(this) & CPU_X(this);
+        uint8_t result = temp - CPU_DL(this);
+        
+        // Set carry flag (note: inverted logic for SBC-based operations)
+        if (temp >= CPU_DL(this)) {
+            CPU_P(this) |= FLAG_C;
+        } else {
+            CPU_P(this) &= ~FLAG_C;
+        }
+        
+        // Update X with result
+        CPU_X(this) = result;
+        update_nz_flags(CPU_X(this));
+        
+        transition_to_fetch();
+    }
+    return pins;
+}
+
+bus_state_t op_sha(bus_state_t pins) {
+    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+        // SHA - Store A AND X AND (high byte of effective address + 1) (illegal)
+        uint8_t result = CPU_A(this) & CPU_X(this) & ((REG_AB_HI(this) + 1) & 0xFF);
+        CPU_DL(this) = result;
+        pins = phi2_write(pins, REG_AB, REG_DL);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+        
+        transition_to_fetch();
+    }
+    return pins;
+}
+
+bus_state_t op_shs(bus_state_t pins) {
+    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+        // SHS - Store (A AND X) AND ((high byte of effective address) + 1) to stack pointer (illegal)
+        uint8_t result = CPU_A(this) & CPU_X(this) & ((REG_AB_HI(this) + 1) & 0xFF);
+        CPU_S(this) = result;
+        CPU_DL(this) = result;
+        pins = phi2_write(pins, REG_AB, REG_DL);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+        
+        transition_to_fetch();
+    }
+    return pins;
+}
+
+bus_state_t op_shx(bus_state_t pins) {
+    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+        // SHX - Store X AND ((high byte of effective address) + 1) (illegal)
+        uint8_t result = CPU_X(this) & ((REG_AB_HI(this) + 1) & 0xFF);
+        CPU_DL(this) = result;
+        pins = phi2_write(pins, REG_AB, REG_DL);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+        
+        transition_to_fetch();
+    }
+    return pins;
+}
+
+bus_state_t op_shy(bus_state_t pins) {
+    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+        // SHY - Store Y AND ((high byte of effective address) + 1) (illegal)
+        uint8_t result = CPU_Y(this) & ((REG_AB_HI(this) + 1) & 0xFF);
+        CPU_DL(this) = result;
+        pins = phi2_write(pins, REG_AB, REG_DL);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+        
+        transition_to_fetch();
+    }
+    return pins;
+}
+
+bus_state_t op_las(bus_state_t pins) {
+    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+        // LAS - Load A, X, and S with memory AND stack pointer (illegal)
+        pins = phi2_read(pins, REG_AB, REG_DL);
+        if (!FAM65XX_GET_RDY(pins)) return pins;
+        
+        uint8_t result = CPU_DL(this) & CPU_S(this);
+        CPU_A(this) = result;
+        CPU_X(this) = result;
+        CPU_S(this) = result;
+        
+        update_nz_flags(result);
+        transition_to_fetch();
+    }
+    return pins;
+}
