@@ -90,7 +90,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table<NES6502Tag>() {
     table[0x40] = {OP_RTI, AM_NON, OF_NONE};
     table[0x41] = {OP_EOR, AM_INX, OF_NONE};
     table[0x42] = {OP_JAM, AM_NON, OF_NONE};  // KIL/JAM - illegal opcode
-    table[0x43] = {OP_JAM, AM_NON, OF_NONE};  // KIL/JAM - illegal opcode
+    table[0x43] = {OP_SRE, AM_INX, OF_RMW};  // SRE - Shift Right then EOR (illegal but implemented)
     table[0x44] = {OP_JAM, AM_NON, OF_NONE};  // KIL/JAM - illegal opcode
     table[0x45] = {OP_EOR, AM_ZER, OF_NONE};
     table[0x46] = {OP_LSR, AM_ZER, OF_RMW};

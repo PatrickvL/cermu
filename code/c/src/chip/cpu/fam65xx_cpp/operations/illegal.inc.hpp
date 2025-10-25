@@ -47,61 +47,163 @@ bus_state_t op_sax(bus_state_t pins) {
 
 bus_state_t op_dcp(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
-        // TODO: Implement DCP - Decrement memory and compare with A
-        // For now, just dummy read and transition to fetch
-        pins = phi2_read(pins, REG_PC, REG_DL);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        transition_to_fetch();
+        // DCP - Decrement memory and compare with A (DEC memory, then CMP A with result)
+        // This is a Read-Modify-Write operation
+        return rmw_operation_helper(pins, [this](uint8_t& value) {
+            // Perform DEC on memory value
+            value--;
+            
+            // Perform CMP A with decremented value
+            uint16_t result = CPU_A(this) - value;
+            
+            // Set carry flag (inverted for CMP)
+            if (result < 0x100) {
+                CPU_P(this) |= FLAG_C;
+            } else {
+                CPU_P(this) &= ~FLAG_C;
+            }
+            
+            // Update N and Z flags based on comparison result
+            update_nz_flags((uint8_t)result);
+        });
     }
     return pins;
 }
 
 bus_state_t op_isc(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
-        // TODO: Implement ISC - Increment memory and subtract from A
-        pins = phi2_read(pins, REG_PC, REG_DL);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        transition_to_fetch();
+        // ISC - Increment memory and subtract from A (INC memory, then SBC A with result)
+        // This is a Read-Modify-Write operation
+        return rmw_operation_helper(pins, [this](uint8_t& value) {
+            // Perform INC on memory value
+            value++;
+            
+            // Perform SBC A with incremented value (A = A - value - (1 - C))
+            uint16_t result = CPU_A(this) - value - (1 - ((CPU_P(this) & FLAG_C) ? 1 : 0));
+            
+            // Set carry flag (inverted for SBC)
+            if (result < 0x100) {
+                CPU_P(this) |= FLAG_C;
+            } else {
+                CPU_P(this) &= ~FLAG_C;
+            }
+            
+            // Set overflow flag for SBC
+            bool overflow = ((CPU_A(this) ^ value) & 0x80) && ((CPU_A(this) ^ result) & 0x80);
+            if (overflow) {
+                CPU_P(this) |= FLAG_V;
+            } else {
+                CPU_P(this) &= ~FLAG_V;
+            }
+            
+            // Store result in A and update N,Z flags
+            CPU_A(this) = (uint8_t)result;
+            update_nz_flags(CPU_A(this));
+        });
     }
     return pins;
 }
 
 bus_state_t op_slo(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
-        // TODO: Implement SLO - Shift left and OR with A
-        pins = phi2_read(pins, REG_PC, REG_DL);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        transition_to_fetch();
+        // SLO - Shift Left and OR with A (ASL memory, then ORA A with result)
+        // This is a Read-Modify-Write operation
+        return rmw_operation_helper(pins, [this](uint8_t& value) {
+            // Perform ASL on memory value
+            if (value & 0x80) {
+                CPU_P(this) |= FLAG_C;
+            } else {
+                CPU_P(this) &= ~FLAG_C;
+            }
+            value <<= 1;
+            
+            // Perform ORA with accumulator
+            CPU_A(this) |= value;
+            update_nz_flags(CPU_A(this));
+        });
     }
     return pins;
 }
 
 bus_state_t op_rla(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
-        // TODO: Implement RLA - Rotate left and AND with A
-        pins = phi2_read(pins, REG_PC, REG_DL);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        transition_to_fetch();
+        // RLA - Rotate Left and AND with A (ROL memory, then AND A with result)
+        // This is a Read-Modify-Write operation
+        return rmw_operation_helper(pins, [this](uint8_t& value) {
+            // Perform ROL on memory value
+            uint8_t old_carry = (CPU_P(this) & FLAG_C) ? 1 : 0;
+            if (value & 0x80) {
+                CPU_P(this) |= FLAG_C;
+            } else {
+                CPU_P(this) &= ~FLAG_C;
+            }
+            value = (value << 1) | old_carry;
+            
+            // Perform AND with accumulator
+            CPU_A(this) &= value;
+            update_nz_flags(CPU_A(this));
+        });
     }
     return pins;
 }
 
 bus_state_t op_sre(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
-        // TODO: Implement SRE - Shift right and EOR with A
-        pins = phi2_read(pins, REG_PC, REG_DL);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        transition_to_fetch();
+        // SRE - Shift Right and EOR with A (LSR memory, then EOR result with A)
+        // This is a Read-Modify-Write operation
+        return rmw_operation_helper(pins, [this](uint8_t& value) {
+            // Perform LSR on memory value
+            if (value & 0x01) {
+                CPU_P(this) |= FLAG_C;
+            } else {
+                CPU_P(this) &= ~FLAG_C;
+            }
+            value >>= 1;
+            
+            // Perform EOR with accumulator
+            CPU_A(this) ^= value;
+            update_nz_flags(CPU_A(this));
+        });
     }
     return pins;
 }
 
 bus_state_t op_rra(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
-        // TODO: Implement RRA - Rotate right and ADC with A
-        pins = phi2_read(pins, REG_PC, REG_DL);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        transition_to_fetch();
+        // RRA - Rotate Right and ADC with A (ROR memory, then ADC A with result)
+        // This is a Read-Modify-Write operation
+        return rmw_operation_helper(pins, [this](uint8_t& value) {
+            // Perform ROR on memory value
+            uint8_t old_carry = (CPU_P(this) & FLAG_C) ? 0x80 : 0;
+            if (value & 0x01) {
+                CPU_P(this) |= FLAG_C;
+            } else {
+                CPU_P(this) &= ~FLAG_C;
+            }
+            value = (value >> 1) | old_carry;
+            
+            // Perform ADC with accumulator
+            uint16_t result = CPU_A(this) + value + ((CPU_P(this) & FLAG_C) ? 1 : 0);
+            
+            // Set carry flag
+            if (result > 0xFF) {
+                CPU_P(this) |= FLAG_C;
+            } else {
+                CPU_P(this) &= ~FLAG_C;
+            }
+            
+            // Set overflow flag for ADC
+            bool overflow = !((CPU_A(this) ^ value) & 0x80) && ((CPU_A(this) ^ result) & 0x80);
+            if (overflow) {
+                CPU_P(this) |= FLAG_V;
+            } else {
+                CPU_P(this) &= ~FLAG_V;
+            }
+            
+            // Store result in A and update N,Z flags
+            CPU_A(this) = (uint8_t)result;
+            update_nz_flags(CPU_A(this));
+        });
     }
     return pins;
 }
@@ -132,9 +234,23 @@ bus_state_t op_jam(bus_state_t pins) {
 
 bus_state_t op_anc(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
-        // TODO: Implement ANC - AND with carry
-        pins = phi2_read(pins, REG_PC, REG_DL);
+        // ANC - AND with carry (AND immediate, then copy N flag to C flag)
+        pins = phi2_read(pins, REG_AB, REG_DL);
         if (!FAM65XX_GET_RDY(pins)) return pins;
+        
+        // Perform AND with accumulator
+        CPU_A(this) &= CPU_DL(this);
+        
+        // Update N and Z flags
+        update_nz_flags(CPU_A(this));
+        
+        // Copy N flag to C flag (ANC behavior)
+        if (CPU_P(this) & FLAG_N) {
+            CPU_P(this) |= FLAG_C;
+        } else {
+            CPU_P(this) &= ~FLAG_C;
+        }
+        
         transition_to_fetch();
     }
     return pins;
@@ -142,9 +258,32 @@ bus_state_t op_anc(bus_state_t pins) {
 
 bus_state_t op_arr(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
-        // TODO: Implement ARR - AND + ROR with BCD correction
-        pins = phi2_read(pins, REG_PC, REG_DL);
+        // ARR - AND + ROR with BCD correction (AND immediate, then ROR A)
+        pins = phi2_read(pins, REG_AB, REG_DL);
         if (!FAM65XX_GET_RDY(pins)) return pins;
+        
+        // Perform AND with accumulator
+        CPU_A(this) &= CPU_DL(this);
+        
+        // Perform ROR on accumulator
+        uint8_t old_carry = (CPU_P(this) & FLAG_C) ? 0x80 : 0;
+        if (CPU_A(this) & 0x01) {
+            CPU_P(this) |= FLAG_C;
+        } else {
+            CPU_P(this) &= ~FLAG_C;
+        }
+        CPU_A(this) = (CPU_A(this) >> 1) | old_carry;
+        
+        // Update N and Z flags
+        update_nz_flags(CPU_A(this));
+        
+        // Set V flag based on bit 6 XOR bit 5 of result
+        if ((CPU_A(this) & 0x40) ^ ((CPU_A(this) & 0x20) << 1)) {
+            CPU_P(this) |= FLAG_V;
+        } else {
+            CPU_P(this) &= ~FLAG_V;
+        }
+        
         transition_to_fetch();
     }
     return pins;
@@ -152,9 +291,24 @@ bus_state_t op_arr(bus_state_t pins) {
 
 bus_state_t op_alr(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
-        // TODO: Implement ALR - AND + LSR
-        pins = phi2_read(pins, REG_PC, REG_DL);
+        // ALR - AND + LSR (AND immediate, then LSR A)
+        pins = phi2_read(pins, REG_AB, REG_DL);
         if (!FAM65XX_GET_RDY(pins)) return pins;
+        
+        // Perform AND with accumulator
+        CPU_A(this) &= CPU_DL(this);
+        
+        // Perform LSR on accumulator
+        if (CPU_A(this) & 0x01) {
+            CPU_P(this) |= FLAG_C;
+        } else {
+            CPU_P(this) &= ~FLAG_C;
+        }
+        CPU_A(this) >>= 1;
+        
+        // Update N and Z flags
+        update_nz_flags(CPU_A(this));
+        
         transition_to_fetch();
     }
     return pins;

@@ -278,6 +278,7 @@ bus_state_t addr_inx(bus_state_t pins) {
             /* Read high byte of target from ZP+X+1 */
             pins = phi2_read(pins, REG_ZP, REG_ABH);
             if (!FAM65XX_GET_RDY(pins)) return pins;
+            transition_to_operation();
             break;
     }
     return pins;
@@ -320,6 +321,7 @@ bus_state_t addr_iny(bus_state_t pins) {
                 break;
             } else {
                 /* No page cross - complete addressing mode */
+                transition_to_operation();
                 return pins;
             }
         }
@@ -329,6 +331,7 @@ bus_state_t addr_iny(bus_state_t pins) {
             pins = phi2_read(pins, REG_AB, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             /* Address is already correct from case 2 */
+            transition_to_operation();
             break;
     }
     return pins;
