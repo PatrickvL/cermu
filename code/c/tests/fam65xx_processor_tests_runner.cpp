@@ -1287,18 +1287,42 @@ void print_usage(const char* program_name) {
 }
 
 // Enhanced results printing
-void print_results(std::chrono::milliseconds duration, size_t num_workers, ProcessorType processor_type) {
+void print_results(std::chrono::milliseconds duration, size_t num_workers, ProcessorType processor_type, size_t tests_collected) {
     std::cout << "\n=== FAM65XX PROCESSOR TESTS RESULTS (Multi-Processor Edition) ===\n";
     std::cout << "CPU Implementation: " << get_processor_name(processor_type) << "\n";
     std::cout << "Execution time: " << duration.count() << " ms\n";
     std::cout << "Worker threads: " << num_workers << "\n";
-    std::cout << "Total tests run: " << results.total_tests << "\n";
+    
+    // Show detailed test statistics with context
+    std::cout << "Tests collected: " << tests_collected << " (from JSON files)\n";
+    std::cout << "Tests executed: " << results.total_tests << "\n";
+    
+    // Calculate expected total for full processor
+    uint32_t expected_total_tests = 256 * 10000;  // 256 opcodes × 10,000 tests each
+    
+    // Show early termination status
+    if (results.total_tests < tests_collected) {
+        std::cout << "⚠️  EARLY TERMINATION: Stopped after first failure (--stop-first mode)\n";
+        std::cout << "   Remaining tests: " << (tests_collected - results.total_tests) << " not executed\n";
+        if (tests_collected < expected_total_tests) {
+            std::cout << "   Note: Only " << (tests_collected / 10000) << " of 256 opcodes loaded (" 
+                      << std::fixed << std::setprecision(1) 
+                      << (double)tests_collected / expected_total_tests * 100.0 << "% of full test suite)\n";
+        }
+    } else if (tests_collected < expected_total_tests) {
+        std::cout << "ℹ️  PARTIAL TEST SUITE: " << (tests_collected / 10000) << " of 256 opcodes (" 
+                  << std::fixed << std::setprecision(1) 
+                  << (double)tests_collected / expected_total_tests * 100.0 << "% of full processor coverage)\n";
+    } else {
+        std::cout << "✅ COMPLETE TEST SUITE: All 256 opcodes (full processor coverage)\n";
+    }
+    
     std::cout << "Tests passed: " << results.passed_tests << "\n";
     std::cout << "Tests failed: " << results.failed_tests << "\n";
     
     if (results.total_tests > 0) {
         double pass_rate = (double)results.passed_tests / results.total_tests * 100.0;
-        std::cout << "Pass rate: " << std::fixed << std::setprecision(2) << pass_rate << "%\n";
+        std::cout << "Pass rate: " << std::fixed << std::setprecision(2) << pass_rate << "% (of executed tests)\n";
         
         // Calculate tests per second
         double tests_per_second = (double)results.total_tests / (duration.count() / 1000.0);
@@ -1457,7 +1481,7 @@ int main(int argc, char* argv[]) {
     // Transfer results to global structure
     thread_results.merge_into_global(results);
     
-    print_results(duration, num_workers, detected_processor_type);
+    print_results(duration, num_workers, detected_processor_type, all_tests.size());
     
     if (results.total_tests == 0) {
         std::cout << "\nNo tests were executed!\n";
