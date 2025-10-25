@@ -32,8 +32,8 @@ extern "C" {
 
 namespace fs = std::filesystem;
 
-// Memory for CPU testing
-static uint8_t test_memory[65536];
+// Thread-local memory for CPU testing - each worker gets its own memory space
+thread_local uint8_t test_memory[65536];
 
 // Forward declarations
 class ProcessorTestHarness;
