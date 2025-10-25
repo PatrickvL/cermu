@@ -689,6 +689,26 @@ private:
         operation_handlers[OP_SED] = &fam65xx_t::op_sed;
         operation_handlers[OP_CLV] = &fam65xx_t::op_clv;
         
+        // Illegal operations (implemented, conditionally compiled)
+        operation_handlers[OP_LAX] = &fam65xx_t::op_lax;
+        operation_handlers[OP_SAX] = &fam65xx_t::op_sax;
+        operation_handlers[OP_DCP] = &fam65xx_t::op_dcp;
+        operation_handlers[OP_ISC] = &fam65xx_t::op_isc;
+        operation_handlers[OP_SLO] = &fam65xx_t::op_slo;
+        operation_handlers[OP_RLA] = &fam65xx_t::op_rla;
+        operation_handlers[OP_SRE] = &fam65xx_t::op_sre;
+        operation_handlers[OP_RRA] = &fam65xx_t::op_rra;
+        operation_handlers[OP_ANC] = &fam65xx_t::op_anc;
+        operation_handlers[OP_ARR] = &fam65xx_t::op_arr;
+        operation_handlers[OP_ASR] = &fam65xx_t::op_asr;
+        operation_handlers[OP_XAA] = &fam65xx_t::op_xaa;
+        operation_handlers[OP_SBX] = &fam65xx_t::op_sbx;
+        operation_handlers[OP_SHA] = &fam65xx_t::op_sha;
+        operation_handlers[OP_SHS] = &fam65xx_t::op_shs;
+        operation_handlers[OP_SHX] = &fam65xx_t::op_shx;
+        operation_handlers[OP_SHY] = &fam65xx_t::op_shy;
+        operation_handlers[OP_LAS] = &fam65xx_t::op_las;
+        
         // Initialize addressing mode handler lookup table
         addressing_mode_handlers.fill(nullptr);  // Default to nullptr (safe for AM_NON/AM_IMM)
         
