@@ -126,10 +126,8 @@ bus_state_t addr_abx(bus_state_t pins) {
             uint16_t base = CPU_AB(this);
             uint16_t effective = base + CPU_X(this);
             
-            // Store original high byte in DL for page cross correction
-            CPU_DL(this) = CPU_ABH(this);
-            
             // Add index to low byte (creates intermediate "wrong" address for page cross)
+            // ABH stays unchanged, only ABL gets X added
             CPU_ABL(this) += CPU_X(this);
             
             // Skip penalty cycle if allowed and no page cross occurred
@@ -146,10 +144,11 @@ bus_state_t addr_abx(bus_state_t pins) {
             pins = phi2_read(pins, REG_AB, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            // PHI1: Correct final address
-            CPU_ABH(this) = CPU_DL(this);  // Restore original high byte
-            CPU_ABL(this) -= CPU_X(this);  // Restore original low byte
-            CPU_AB(this) += CPU_X(this);   // Correctly calculate final address
+            // PHI1: Correct final address using your approach
+            // ABL has X added, ABH is unchanged from original. Subtract X from ABL to restore original base
+            CPU_ABL(this) -= CPU_X(this);
+            // Now AB has original base address, add X to full 16-bit AB for correct effective address with carry
+            CPU_AB(this) += CPU_X(this);
             transition_to_operation();
             break;
     }
