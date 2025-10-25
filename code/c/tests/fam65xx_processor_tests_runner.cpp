@@ -1101,60 +1101,98 @@ static TestResults results;
 std::vector<TestItem> collect_tests_from_file(const std::string& filepath) {
     std::vector<TestItem> tests;
     
-    std::ifstream file(filepath);
+    // Optimize: Use memory-mapped file reading for better performance
+    std::ifstream file(filepath, std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
         std::cout << "ERROR: Could not open file: " << filepath << std::endl;
         return tests;
     }
     
-    // Read entire file
-    std::string json_content((std::istreambuf_iterator<char>(file)),
-                            std::istreambuf_iterator<char>());
+    // Get file size and read in one go
+    std::streamsize size = file.tellg();
+    if (size <= 0) {
+        return tests;
+    }
+    
+    file.seekg(0, std::ios::beg);
+    std::string json_content(size, '\0');
+    if (!file.read(json_content.data(), size)) {
+        std::cout << "ERROR: Could not read file: " << filepath << std::endl;
+        return tests;
+    }
     file.close();
     
-    // Parse JSON - handle both single tests and arrays
+    // Fast JSON parsing - simplified for array detection and count estimation
     const char* pos = json_content.c_str();
-    pos = json_skip_whitespace(pos);
+    const char* end = pos + json_content.size();
     
-    if (*pos == '[') {
-        // Array of tests
-        pos++; // Skip opening bracket
+    // Skip whitespace
+    while (pos < end && std::isspace(*pos)) pos++;
+    
+    if (pos < end && *pos == '[') {
+        // Array of tests - count objects first to reserve space
+        size_t object_count = 0;
+        const char* scan_pos = pos + 1;
+        int brace_level = 0;
         
-        while (*pos) {
-            pos = json_skip_whitespace(pos);
-            if (*pos == ']') break;
+        while (scan_pos < end) {
+            if (*scan_pos == '{') {
+                if (brace_level == 0) object_count++;
+                brace_level++;
+            } else if (*scan_pos == '}') {
+                brace_level--;
+            } else if (*scan_pos == ']' && brace_level == 0) {
+                break;
+            }
+            scan_pos++;
+        }
+        
+        // Reserve space for better performance
+        tests.reserve(object_count);
+        
+        // Parse objects
+        pos++; // Skip opening bracket
+        size_t test_index = 0;
+        
+        while (pos < end) {
+            while (pos < end && std::isspace(*pos)) pos++;
+            if (pos >= end || *pos == ']') break;
             
             if (*pos == '{') {
-                // Find the end of this test object
-                const char* test_end = json_find_object_end(pos);
-                if (!test_end) break;
+                // Find the end of this test object using brace counting
+                const char* obj_start = pos;
+                int braces = 1;
+                pos++; // Skip opening brace
                 
-                // Extract this test
-                size_t test_len = test_end - pos + 1;
-                std::string test_json(pos, test_len);
+                while (pos < end && braces > 0) {
+                    if (*pos == '{') braces++;
+                    else if (*pos == '}') braces--;
+                    pos++;
+                }
                 
-                TestItem item;
-                item.filepath = filepath;
-                item.test_json = test_json;
-                item.test_name = "test_" + std::to_string(tests.size());
-                tests.push_back(item);
-                
-                pos = test_end + 1;
+                if (braces == 0) {
+                    // Extract this test
+                    TestItem item;
+                    item.filepath = filepath;
+                    item.test_json.assign(obj_start, pos);
+                    item.test_name = "test_" + std::to_string(test_index++);
+                    tests.push_back(std::move(item));
+                }
             } else {
                 break;
             }
             
             // Skip comma if present
-            pos = json_skip_whitespace(pos);
-            if (*pos == ',') pos++;
+            while (pos < end && std::isspace(*pos)) pos++;
+            if (pos < end && *pos == ',') pos++;
         }
     } else {
         // Single test
         TestItem item;
         item.filepath = filepath;
-        item.test_json = json_content;
+        item.test_json = std::move(json_content);
         item.test_name = "single_test";
-        tests.push_back(item);
+        tests.push_back(std::move(item));
     }
     
     return tests;
@@ -1164,18 +1202,29 @@ std::vector<TestItem> collect_tests_from_file(const std::string& filepath) {
 std::vector<TestItem> collect_all_tests(const std::vector<std::string>& test_paths) {
     std::vector<TestItem> all_tests;
     
+    // First pass: count all JSON files to reserve space
+    size_t total_files = 0;
+    std::vector<std::string> json_files;
+    
     for (const auto& test_path : test_paths) {
         try {
             if (fs::is_directory(test_path)) {
-                for (const auto& entry : fs::recursive_directory_iterator(test_path)) {
-                    if (entry.is_regular_file() && entry.path().extension() == ".json") {
-                        auto file_tests = collect_tests_from_file(entry.path().string());
-                        all_tests.insert(all_tests.end(), file_tests.begin(), file_tests.end());
+                // Use iterative approach for better performance
+                std::error_code ec;
+                for (const auto& entry : fs::recursive_directory_iterator(test_path, ec)) {
+                    if (ec) {
+                        std::cout << "WARNING: Error accessing " << entry.path() << ": " << ec.message() << std::endl;
+                        continue;
+                    }
+                    
+                    if (entry.is_regular_file(ec) && !ec && entry.path().extension() == ".json") {
+                        json_files.push_back(entry.path().string());
+                        total_files++;
                     }
                 }
             } else if (fs::is_regular_file(test_path)) {
-                auto file_tests = collect_tests_from_file(test_path);
-                all_tests.insert(all_tests.end(), file_tests.begin(), file_tests.end());
+                json_files.push_back(test_path);
+                total_files++;
             } else {
                 std::cout << "ERROR: Invalid path: " << test_path << std::endl;
             }
@@ -1183,6 +1232,17 @@ std::vector<TestItem> collect_all_tests(const std::vector<std::string>& test_pat
             std::cout << "ERROR: Could not access path: " << test_path 
                       << " (" << ex.what() << ")" << std::endl;
         }
+    }
+    
+    // Reserve space for better performance (estimate ~10 tests per file)
+    all_tests.reserve(total_files * 10);
+    
+    // Second pass: actually collect tests
+    for (const auto& json_file : json_files) {
+        auto file_tests = collect_tests_from_file(json_file);
+        all_tests.insert(all_tests.end(), 
+                        std::make_move_iterator(file_tests.begin()),
+                        std::make_move_iterator(file_tests.end()));
     }
     
     return all_tests;
@@ -1342,10 +1402,13 @@ int main(int argc, char* argv[]) {
     
     auto start_time = std::chrono::high_resolution_clock::now();
     
-    // Collect all tests first
+    // Collect all tests first with timing
     std::cout << "Collecting tests..." << std::flush;
+    auto collect_start = std::chrono::high_resolution_clock::now();
     auto all_tests = collect_all_tests(test_paths);
-    std::cout << " Found " << all_tests.size() << " tests\n";
+    auto collect_end = std::chrono::high_resolution_clock::now();
+    auto collect_duration = std::chrono::duration_cast<std::chrono::milliseconds>(collect_end - collect_start);
+    std::cout << " Found " << all_tests.size() << " tests in " << collect_duration.count() << "ms\n";
     
     if (all_tests.empty()) {
         std::cout << "No tests found in specified paths!\n";
