@@ -19,22 +19,22 @@ namespace fam65xx_cpp {
 // ============================================================================
 
 enum class ProcessorFeatures : uint32_t {
-    MOS6502_BASE        =  0 << 1,  // Basic 6502 instruction set
-    ILLEGAL_OPCODES     =  1 << 1,  // NMOS illegal/undocumented opcodes
-    CMOS_ENHANCEMENTS   =  2 << 1,  // 65C02 enhanced instructions
-    BIT_MANIPULATION    =  3 << 1,  // Rockwell bit manipulation
-    WIDE_REGISTERS      =  4 << 1,  // 65C816 16-bit register modes
-    IO_PORT             =  5 << 1,  // 6510-style I/O port
-    BANK_SWITCHING      =  6 << 1,  // 65C816 bank switching
-    NMOS_BUGS           =  7 << 1,  // NMOS hardware bugs
-    DECIMAL_MODE        =  8 << 1,  // BCD arithmetic support
-    DECIMAL_AFFECTS_NZ  =  9 << 1,  // NMOS decimal N/Z behavior
-    ENHANCED_ADDRESSING = 10 << 1,  // 65C02+ addressing modes
-    LONG_ADDRESSING     = 11 << 1,  // 65C816 24-bit addressing
-    EMULATION_MODE      = 12 << 1,  // 65C816 emulation mode
-    NATIVE_MODE         = 13 << 1,  // 65C816 native mode
-    WAIT_STATES         = 14 << 1,  // WAI/STP instruction support
-    COPROCESSOR         = 15 << 1,  // COP instruction support
+    MOS6502_BASE        = 1 <<  0,  // Basic 6502 instruction set
+    ILLEGAL_OPCODES     = 1 <<  1,  // NMOS illegal/undocumented opcodes
+    CMOS_ENHANCEMENTS   = 1 <<  2,  // 65C02 enhanced instructions
+    BIT_MANIPULATION    = 1 <<  3,  // Rockwell bit manipulation
+    WIDE_REGISTERS      = 1 <<  4,  // 65C816 16-bit register modes
+    IO_PORT             = 1 <<  5,  // 6510-style I/O port
+    BANK_SWITCHING      = 1 <<  6,  // 65C816 bank switching
+    NMOS_BUGS           = 1 <<  7,  // NMOS hardware bugs
+    DECIMAL_MODE        = 1 <<  8,  // BCD arithmetic support
+    DECIMAL_AFFECTS_NZ  = 1 <<  9,  // NMOS decimal N/Z behavior
+    ENHANCED_ADDRESSING = 1 << 10,  // 65C02+ addressing modes
+    LONG_ADDRESSING     = 1 << 11,  // 65C816 24-bit addressing
+    EMULATION_MODE      = 1 << 12,  // 65C816 emulation mode
+    NATIVE_MODE         = 1 << 13,  // 65C816 native mode
+    WAIT_STATES         = 1 << 14,  // WAI/STP instruction support
+    COPROCESSOR         = 1 << 15,  // COP instruction support
 };
 
 // Bitwise operators
