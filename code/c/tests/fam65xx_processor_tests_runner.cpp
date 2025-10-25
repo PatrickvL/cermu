@@ -35,6 +35,11 @@ namespace fs = std::filesystem;
 // Thread-local memory for CPU testing - each worker gets its own memory space
 thread_local uint8_t test_memory[65536];
 
+// Global flags (declared early for use in functions)
+static bool g_quiet_mode = false;
+static bool g_stop_on_failure = true; 
+static std::atomic<bool> g_test_failed{false};
+
 // Forward declarations
 class ProcessorTestHarness;
 static ProcessorTestHarness* current_test_harness = nullptr;
@@ -77,15 +82,17 @@ ProcessorType detect_processor_from_path(const std::string& test_path) {
     std::string path_lower = test_path;
     std::transform(path_lower.begin(), path_lower.end(), path_lower.begin(), ::tolower);
     
-    fprintf(stderr, "DEBUG: Detecting processor from path: %s\n", test_path.c_str());
-    fprintf(stderr, "DEBUG: Path lowercase: %s\n", path_lower.c_str());
+    if (!g_quiet_mode) {
+        fprintf(stderr, "DEBUG: Detecting processor from path: %s\n", test_path.c_str());
+        fprintf(stderr, "DEBUG: Path lowercase: %s\n", path_lower.c_str());
+    }
     
     if (path_lower.find("processor_tests/6502/") != std::string::npos) {
-        printf("DEBUG: Detected MOS6502\n");
+        if (!g_quiet_mode) printf("DEBUG: Detected MOS6502\n");
         return ProcessorType::MOS6502;
     }
     if (path_lower.find("processor_tests/nes6502/") != std::string::npos) {
-        printf("DEBUG: Detected NES6502\n");
+        if (!g_quiet_mode) printf("DEBUG: Detected NES6502\n");
         return ProcessorType::NES6502;
     }
     if (path_lower.find("processor_tests/mos6510/") != std::string::npos) return ProcessorType::MOS6510;
@@ -93,7 +100,7 @@ ProcessorType detect_processor_from_path(const std::string& test_path) {
     if (path_lower.find("processor_tests/rockwell65c02/") != std::string::npos) return ProcessorType::ROCKWELL65C02;
     if (path_lower.find("processor_tests/wdc65c816/") != std::string::npos) return ProcessorType::WDC65C816;
     
-    printf("DEBUG: Using default MOS6502\n");
+    if (!g_quiet_mode) printf("DEBUG: Using default MOS6502\n");
     return ProcessorType::MOS6502;  // Default fallback
 }
 
@@ -254,7 +261,7 @@ private:
     
 public:
     NES6502Wrapper() : harness_ptr(nullptr) {
-        printf("DEBUG: NES6502Wrapper constructor called\n");
+        if (!g_quiet_mode) printf("DEBUG: NES6502Wrapper constructor called\n");
         // Create CPU using C++ template implementation
         cpu = new fam65xx_cpp::fam65xx_t<fam65xx_cpp::NES6502Tag>();
         if (!cpu) {
@@ -267,12 +274,12 @@ public:
         // Set up memory callbacks with this wrapper as user_data
         cpu->set_memory_callbacks(instance_mem_read, instance_mem_write, this);
         
-        printf("DEBUG: NES6502Wrapper created successfully\n");
+        if (!g_quiet_mode) printf("DEBUG: NES6502Wrapper created successfully\n");
     }
     
     void set_harness(void* harness) {
         harness_ptr = harness;
-        printf("DEBUG: NES6502Wrapper harness set to %p\n", harness);
+        if (!g_quiet_mode) printf("DEBUG: NES6502Wrapper harness set to %p\n", harness);
     }
     
     ~NES6502Wrapper() {
@@ -353,14 +360,14 @@ public:
 
 // Factory function to create processor instances
 std::unique_ptr<UnifiedProcessorInterface> create_processor(ProcessorType type) {
-    printf("DEBUG: Creating processor type: %d\n", (int)type);
+    if (!g_quiet_mode) printf("DEBUG: Creating processor type: %d\n", (int)type);
     switch (type) {
         case ProcessorType::MOS6502:
-            printf("DEBUG: Creating MOS6502Wrapper\n");
+            if (!g_quiet_mode) printf("DEBUG: Creating MOS6502Wrapper\n");
             return std::make_unique<MOS6502Wrapper>();
             
         case ProcessorType::NES6502:
-            printf("DEBUG: Creating NES6502Wrapper\n");
+            if (!g_quiet_mode) printf("DEBUG: Creating NES6502Wrapper\n");
             return std::make_unique<NES6502Wrapper>();
             
         case ProcessorType::MOS6510:
@@ -1088,9 +1095,6 @@ private:
 
 // Global variables
 bool verbose_output = false;
-static bool g_quiet_mode = false;
-static bool g_stop_on_failure = true;
-static std::atomic<bool> g_test_failed{false};
 static TestResults results;
 
 // Parallel file processing

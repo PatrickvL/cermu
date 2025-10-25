@@ -114,7 +114,7 @@ public:
     bool stopped;                       /* STP instruction state */
     
     /* Debug tracing state */
-    static constexpr bool ENABLE_TRACING = true;  /* Compile-time tracing flag */
+    static constexpr bool ENABLE_TRACING = false;  /* Compile-time tracing flag */
     mutable int trace_indent;           /* Current tracing indentation level */
     
     // ========================================================================
