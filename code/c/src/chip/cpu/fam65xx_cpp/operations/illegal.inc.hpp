@@ -18,8 +18,8 @@ bus_state_t op_lax(bus_state_t pins) {
         CPU_A(this) = CPU_DL(this);
         CPU_X(this) = CPU_DL(this);
         
-        fam65xx_update_nz_flags(this, CPU_A(this));
-        fam65xx_transition_to_fetch(this);
+        this->update_nz_flags(CPU_A(this));
+        this->transition_to_fetch();
         return pins;
     } else {
         // Invalid on processors without illegal opcodes
@@ -34,7 +34,7 @@ bus_state_t op_sax(bus_state_t pins) {
         pins = this->phi2_write(pins, REG_AB, REG_DL);
         if (!FAM65XX_GET_RDY(pins)) return pins;
         
-        fam65xx_transition_to_fetch(this);
+        this->transition_to_fetch();
         return pins;
     } else {
         return pins;
@@ -151,7 +151,7 @@ bus_state_t op_sre(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // SRE - Shift Right and EOR with A (LSR memory, then EOR result with A)
         // This is a Read-Modify-Write operation
-        return rmw_operation_helper(pins, [this](uint8_t& value) {
+        return this->rmw_operation_helper(pins, [this](uint8_t& value) {
             // Perform LSR on memory value
             if (value & 0x01) {
                 CPU_P(this) |= FLAG_C;
@@ -162,7 +162,7 @@ bus_state_t op_sre(bus_state_t pins) {
             
             // Perform EOR with accumulator
             CPU_A(this) ^= value;
-            update_nz_flags(CPU_A(this));
+            this->update_nz_flags(CPU_A(this));
         });
     }
     return pins;
@@ -365,7 +365,7 @@ bus_state_t op_sbx(bus_state_t pins) {
 bus_state_t op_sha(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // SHA - Store A AND X AND (high byte of effective address + 1) (illegal)
-        uint8_t result = CPU_A(this) & CPU_X(this) & ((REG_AB_HI(this) + 1) & 0xFF);
+        uint8_t result = CPU_A(this) & CPU_X(this) & ((CPU_ABH(this) + 1) & 0xFF);
         CPU_DL(this) = result;
         pins = phi2_write(pins, REG_AB, REG_DL);
         if (!FAM65XX_GET_RDY(pins)) return pins;
@@ -378,7 +378,7 @@ bus_state_t op_sha(bus_state_t pins) {
 bus_state_t op_shs(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // SHS - Store (A AND X) AND ((high byte of effective address) + 1) to stack pointer (illegal)
-        uint8_t result = CPU_A(this) & CPU_X(this) & ((REG_AB_HI(this) + 1) & 0xFF);
+        uint8_t result = CPU_A(this) & CPU_X(this) & ((CPU_ABH(this) + 1) & 0xFF);
         CPU_S(this) = result;
         CPU_DL(this) = result;
         pins = phi2_write(pins, REG_AB, REG_DL);
@@ -392,7 +392,7 @@ bus_state_t op_shs(bus_state_t pins) {
 bus_state_t op_shx(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // SHX - Store X AND ((high byte of effective address) + 1) (illegal)
-        uint8_t result = CPU_X(this) & ((REG_AB_HI(this) + 1) & 0xFF);
+        uint8_t result = CPU_X(this) & ((CPU_ABH(this) + 1) & 0xFF);
         CPU_DL(this) = result;
         pins = phi2_write(pins, REG_AB, REG_DL);
         if (!FAM65XX_GET_RDY(pins)) return pins;
@@ -405,7 +405,7 @@ bus_state_t op_shx(bus_state_t pins) {
 bus_state_t op_shy(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // SHY - Store Y AND ((high byte of effective address) + 1) (illegal)
-        uint8_t result = CPU_Y(this) & ((REG_AB_HI(this) + 1) & 0xFF);
+        uint8_t result = CPU_Y(this) & ((CPU_ABH(this) + 1) & 0xFF);
         CPU_DL(this) = result;
         pins = phi2_write(pins, REG_AB, REG_DL);
         if (!FAM65XX_GET_RDY(pins)) return pins;

@@ -57,7 +57,7 @@ bus_state_t op_asl(bus_state_t pins) {
         // Shift left
         value <<= 1;
         // Update N and Z flags
-        update_nz_flags(value);
+        this->update_nz_flags(value);
     });
 }
 
@@ -70,7 +70,7 @@ bus_state_t op_lsr(bus_state_t pins) {
         // Shift right
         value >>= 1;
         // Update N and Z flags
-        update_nz_flags(value);
+        this->update_nz_flags(value);
     });
 }
 
@@ -85,7 +85,7 @@ bus_state_t op_rol(bus_state_t pins) {
         // Rotate left with old carry
         value = (value << 1) | old_carry;
         // Update N and Z flags
-        update_nz_flags(value);
+        this->update_nz_flags(value);
     });
 }
 
@@ -100,6 +100,6 @@ bus_state_t op_ror(bus_state_t pins) {
         // Rotate right with old carry
         value = (value >> 1) | old_carry;
         // Update N and Z flags
-        update_nz_flags(value);
+        this->update_nz_flags(value);
     });
 }
