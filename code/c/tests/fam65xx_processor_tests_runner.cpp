@@ -28,6 +28,7 @@ extern "C" {
 
 // Include new fam65xx_cpp processor implementation  
 #include "../src/chip/cpu/fam65xx_cpp/mos6502.h"
+#include "../src/chip/cpu/fam65xx_cpp/fam65xx.hpp"
 
 namespace fs = std::filesystem;
 
@@ -76,13 +77,23 @@ ProcessorType detect_processor_from_path(const std::string& test_path) {
     std::string path_lower = test_path;
     std::transform(path_lower.begin(), path_lower.end(), path_lower.begin(), ::tolower);
     
-    if (path_lower.find("processor_tests/6502/") != std::string::npos) return ProcessorType::MOS6502;
-    if (path_lower.find("processor_tests/nes6502/") != std::string::npos) return ProcessorType::NES6502;
+    fprintf(stderr, "DEBUG: Detecting processor from path: %s\n", test_path.c_str());
+    fprintf(stderr, "DEBUG: Path lowercase: %s\n", path_lower.c_str());
+    
+    if (path_lower.find("processor_tests/6502/") != std::string::npos) {
+        printf("DEBUG: Detected MOS6502\n");
+        return ProcessorType::MOS6502;
+    }
+    if (path_lower.find("processor_tests/nes6502/") != std::string::npos) {
+        printf("DEBUG: Detected NES6502\n");
+        return ProcessorType::NES6502;
+    }
     if (path_lower.find("processor_tests/mos6510/") != std::string::npos) return ProcessorType::MOS6510;
     if (path_lower.find("processor_tests/wdc65c02/") != std::string::npos) return ProcessorType::WDC65C02;
     if (path_lower.find("processor_tests/rockwell65c02/") != std::string::npos) return ProcessorType::ROCKWELL65C02;
     if (path_lower.find("processor_tests/wdc65c816/") != std::string::npos) return ProcessorType::WDC65C816;
     
+    printf("DEBUG: Using default MOS6502\n");
     return ProcessorType::MOS6502;  // Default fallback
 }
 
@@ -230,19 +241,135 @@ public:
     }
 };
 
+// NES6502 wrapper using new C++ template implementation
+class NES6502Wrapper : public UnifiedProcessorInterface {
+private:
+    fam65xx_cpp::fam65xx_t<fam65xx_cpp::NES6502Tag>* cpu;
+    chip_descriptor_t desc;
+    void* harness_ptr; // Store harness for memory callbacks
+    
+    // Instance memory callbacks that know about this wrapper's harness
+    static uint8_t instance_mem_read(void* user_data, uint16_t addr, uint8_t bus_state);
+    static void instance_mem_write(void* user_data, uint16_t addr, uint8_t data);
+    
+public:
+    NES6502Wrapper() : harness_ptr(nullptr) {
+        printf("DEBUG: NES6502Wrapper constructor called\n");
+        // Create CPU using C++ template implementation
+        cpu = new fam65xx_cpp::fam65xx_t<fam65xx_cpp::NES6502Tag>();
+        if (!cpu) {
+            throw std::runtime_error("Failed to create NES6502 CPU");
+        }
+        
+        // Initialize CPU
+        cpu->init(&desc);
+        
+        // Set up memory callbacks with this wrapper as user_data
+        cpu->set_memory_callbacks(instance_mem_read, instance_mem_write, this);
+        
+        printf("DEBUG: NES6502Wrapper created successfully\n");
+    }
+    
+    void set_harness(void* harness) {
+        harness_ptr = harness;
+        printf("DEBUG: NES6502Wrapper harness set to %p\n", harness);
+    }
+    
+    ~NES6502Wrapper() {
+        if (cpu) {
+            delete cpu;
+        }
+    }
+    
+    // Implement interface methods
+    uint64_t init(const chip_descriptor_t* desc_ptr) override {
+        if (desc_ptr) {
+            desc = *desc_ptr;
+        }
+        // CPU already initialized in constructor
+        return 0;
+    }
+    
+    uint64_t bootstrap(uint64_t pins) override {
+        return cpu->bootstrap(pins);
+    }
+    
+    uint64_t tick(uint64_t pins) override {
+        return cpu->tick(pins);
+    }
+    
+    bool opdone() override {
+        return cpu->opdone();
+    }
+    
+    uint16_t get_pc() override {
+        return cpu->reg16[REG_PC];
+    }
+    
+    uint8_t get_a() override {
+        return cpu->reg8[REG_A];
+    }
+    
+    uint8_t get_x() override {
+        return cpu->reg8[REG_X];
+    }
+    
+    uint8_t get_y() override {
+        return cpu->reg8[REG_Y];
+    }
+    
+    uint8_t get_sp() override {
+        return cpu->reg8[REG_S];
+    }
+    
+    uint8_t get_status() override {
+        return cpu->reg8[REG_P];
+    }
+    
+    void set_pc(uint16_t pc) override {
+        cpu->reg16[REG_PC] = pc;
+    }
+    
+    void set_a(uint8_t a) override {
+        cpu->reg8[REG_A] = a;
+    }
+    
+    void set_x(uint8_t x) override {
+        cpu->reg8[REG_X] = x;
+    }
+    
+    void set_y(uint8_t y) override {
+        cpu->reg8[REG_Y] = y;
+    }
+    
+    void set_sp(uint8_t sp) override {
+        cpu->reg8[REG_S] = sp;
+    }
+    
+    void set_status(uint8_t p) override {
+        cpu->reg8[REG_P] = p;
+    }
+};
+
 // Factory function to create processor instances
 std::unique_ptr<UnifiedProcessorInterface> create_processor(ProcessorType type) {
+    printf("DEBUG: Creating processor type: %d\n", (int)type);
     switch (type) {
         case ProcessorType::MOS6502:
+            printf("DEBUG: Creating MOS6502Wrapper\n");
             return std::make_unique<MOS6502Wrapper>();
             
         case ProcessorType::NES6502:
+            printf("DEBUG: Creating NES6502Wrapper\n");
+            return std::make_unique<NES6502Wrapper>();
+            
         case ProcessorType::MOS6510:
         case ProcessorType::WDC65C02:
         case ProcessorType::ROCKWELL65C02:
         case ProcessorType::WDC65C816:
             // For now, fall back to MOS6502 until we add support for other processors
-            // TODO: Add NES6502Wrapper, MOS6510Wrapper, etc.
+            // TODO: Add MOS6510Wrapper, WDC65C02Wrapper, etc.
+            printf("DEBUG: Falling back to MOS6502Wrapper for type %d\n", (int)type);
             return std::make_unique<MOS6502Wrapper>();
             
         default:
@@ -384,6 +511,14 @@ public:
         
         // Create processor wrapper for the specified type
         cpu_wrapper = create_processor(processor_type);
+        
+        // For NES6502, set up harness for bus cycle recording
+        if (processor_type == ProcessorType::NES6502) {
+            NES6502Wrapper* nes_wrapper = dynamic_cast<NES6502Wrapper*>(cpu_wrapper.get());
+            if (nes_wrapper) {
+                nes_wrapper->set_harness(this);
+            }
+        }
         
         // Initialize CPU with new API (memory callbacks handled differently)
         chip_descriptor_t desc = {};
@@ -559,6 +694,26 @@ public:
         }
     }
 };
+
+// NES6502Wrapper memory callback implementations (need ProcessorTestHarness definition)
+uint8_t NES6502Wrapper::instance_mem_read(void* user_data, uint16_t addr, uint8_t bus_state) {
+    NES6502Wrapper* wrapper = static_cast<NES6502Wrapper*>(user_data);
+    uint8_t value = test_memory[addr];
+    if (wrapper->harness_ptr) {
+        ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(wrapper->harness_ptr);
+        harness->record_bus_cycle(addr, value, false);
+    }
+    return value;
+}
+
+void NES6502Wrapper::instance_mem_write(void* user_data, uint16_t addr, uint8_t data) {
+    NES6502Wrapper* wrapper = static_cast<NES6502Wrapper*>(user_data);
+    test_memory[addr] = data;
+    if (wrapper->harness_ptr) {
+        ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(wrapper->harness_ptr);
+        harness->record_bus_cycle(addr, data, true);
+    }
+}
 
 // Memory callback functions for fam65xx API (after class definition)
 static uint8_t mem_read_callback(void* user_data, uint16_t addr, uint8_t bus_state) {
