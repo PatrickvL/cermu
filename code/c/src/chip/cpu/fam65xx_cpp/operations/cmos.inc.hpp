@@ -136,7 +136,7 @@ bus_state_t op_stp(bus_state_t pins) {
 bus_state_t op_phx(bus_state_t pins) {
     if constexpr (has_cmos_enhancements<ProcessorTag>()) {
         // Push X to stack
-        CPU_AB(this) = 0x0100 + CPU_S(this);
+        CPU_AB(this) = CPU_SP(this);
         CPU_DL(this) = CPU_X(this);
         pins = phi2_write_internal(pins, REG_AB, REG_DL);
         CPU_S(this)--;
@@ -153,7 +153,7 @@ bus_state_t op_phx(bus_state_t pins) {
 bus_state_t op_phy(bus_state_t pins) {
     if constexpr (has_cmos_enhancements<ProcessorTag>()) {
         // Push Y to stack
-        CPU_AB(this) = 0x0100 + CPU_S(this);
+        CPU_AB(this) = CPU_SP(this);
         CPU_DL(this) = CPU_Y(this);
         pins = phi2_write_internal(pins, REG_AB, REG_DL);
         CPU_S(this)--;
@@ -171,7 +171,7 @@ bus_state_t op_plx(bus_state_t pins) {
     if constexpr (has_cmos_enhancements<ProcessorTag>()) {
         // Pull X from stack
         CPU_S(this)++;
-        CPU_AB(this) = 0x0100 + CPU_S(this);
+        CPU_AB(this) = CPU_SP(this);
         pins = phi2_read(pins, REG_AB, REG_X);
         
         // Update N and Z flags
@@ -190,7 +190,7 @@ bus_state_t op_ply(bus_state_t pins) {
     if constexpr (has_cmos_enhancements<ProcessorTag>()) {
         // Pull Y from stack
         CPU_S(this)++;
-        CPU_AB(this) = 0x0100 + CPU_S(this);
+        CPU_AB(this) = CPU_SP(this);
         pins = phi2_read(pins, REG_AB, REG_Y);
         
         // Update N and Z flags

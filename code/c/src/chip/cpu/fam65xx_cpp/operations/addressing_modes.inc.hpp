@@ -34,13 +34,11 @@ bus_state_t addr_zpx(bus_state_t pins) {
     switch (this->cycle_index++) {
         case 0:
             // PHI2: Read base address from PC
-            pins = phi2_read(pins, REG_PC, REG_DL);
+            pins = phi2_read(pins, REG_PC, REG_ZPL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_PC(this)++;
             
-            // PHI1: Store base address in ZP
-            CPU_ZPL(this) = CPU_DL(this);
-            CPU_ZPH(this) = 0x00;
+            // PHI1: Base address is alreayd stored in ZP
             break;
             
         case 1:
@@ -62,13 +60,11 @@ bus_state_t addr_zpy(bus_state_t pins) {
     switch (this->cycle_index++) {
         case 0:
             // PHI2: Read base address from PC
-            pins = phi2_read(pins, REG_PC, REG_DL);
+            pins = phi2_read(pins, REG_PC, REG_ZPL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_PC(this)++;
-            
-            // PHI1: Store base address in ZP
-            CPU_ZPL(this) = CPU_DL(this);
-            CPU_ZPH(this) = 0x00;
+
+            // PHI1: Base address is already stored in ZP
             break;
             
         case 1:
@@ -130,12 +126,15 @@ bus_state_t addr_abx(bus_state_t pins) {
             // ABH stays unchanged, only ABL gets X added
             CPU_ABL(this) += CPU_X(this);
             
-            // Skip penalty cycle if allowed and no page cross occurred
-            if ((this->opcode_entry.flags & OF_SKIP_PAGE) && !page_crossed((base, effective))) {
-                CPU_AB(this) = effective;  // Fix address
-                transition_to_operation();
+            // Check if we need penalty cycle (page crossing, RMW operations, or no skip flag)
+            if (!(this->opcode_entry.flags & OF_SKIP_PAGE) ||
+                page_crossed(base, effective) ||
+                (this->opcode_entry.flags & OF_RMW)) {
+                // Need penalty cycle - keep intermediate address for penalty read
             } else {
-                // Page crossing or always need penalty
+                // No penalty needed - complete with correct address
+                CPU_AB(this) = effective;
+                transition_to_operation();
             }
             return pins;
         }
@@ -180,7 +179,7 @@ bus_state_t addr_aby(bus_state_t pins) {
             CPU_ABL(this) += CPU_Y(this);
             
             // Skip penalty cycle if allowed and no page cross occurred
-            if ((this->opcode_entry.flags & OF_SKIP_PAGE) && !page_crossed((base, effective))) {
+            if ((this->opcode_entry.flags & OF_SKIP_PAGE) && !page_crossed(base, effective)) {
                 CPU_AB(this) = effective;  // Fix address
                 transition_to_operation();
             } else {
@@ -249,13 +248,11 @@ bus_state_t addr_inx(bus_state_t pins) {
     switch (this->cycle_index++) {
         case 0:
             /* Read pointer from PC */
-            pins = phi2_read(pins, REG_PC, REG_DL);
+            pins = phi2_read(pins, REG_PC, REG_ZPL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_PC(this)++;
             
-            /* Store pointer in zero page */
-            CPU_ZPL(this) = CPU_DL(this);
-            CPU_ZPH(this) = 0x00;
+            // PHI1: Base address is alreayd stored in ZP
             break;
             
         case 1:
