@@ -146,29 +146,43 @@ bus_state_t op_nop(bus_state_t pins) {
     trace_enter("op_nop");
     trace_instruction(0xEA, "NOP");
     
-    if (this->opcode_entry.am_index == AM_IMM) {
-        // Illegal NOP with immediate mode - read and discard the immediate byte
-        trace("NOP #imm: reading immediate operand");
-        pins = phi2_read(pins, REG_PC, REG_DL);
-        if (!FAM65XX_GET_RDY(pins)) {
-            trace("RDY low - returning early");
-            trace_exit("op_nop");
-            return pins;
-        }
-        CPU_PC(this)++;  // Advance PC past the immediate byte
-    } else {
-        // Legal NOP (0xEA) - AM_NON: Dummy read from PC for internal operation cycle  
-        // Based on old implementation: dummy read from PC WITHOUT incrementing PC
-        trace("NOP: dummy read from PC (no PC increment)");
-        pins = phi2_read(pins, REG_PC, REG_DL);
-        if (!FAM65XX_GET_RDY(pins)) {
-            trace("RDY low - returning early");
-            trace_exit("op_nop");
-            return pins;
-        }
+    switch (this->opcode_entry.am_index) {
+        case AM_IMM:
+            /* AM_IMM: All immediate NOPs read operand and increment PC */
+            trace("Immediate NOP: reading operand");
+            pins = phi2_read(pins, REG_PC, REG_DL);
+            if (!FAM65XX_GET_RDY(pins)) {
+                trace("RDY low - returning early");
+                trace_exit("op_nop");
+                return pins;
+            }
+            CPU_PC(this)++;
+            break;
+            
+        case AM_NON:
+            /* AM_NON: All implicit NOPs do dummy read from PC without increment */
+            trace("Implicit NOP: dummy read from PC");
+            pins = phi2_read(pins, REG_PC, REG_DL);
+            if (!FAM65XX_GET_RDY(pins)) {
+                trace("RDY low - returning early");
+                trace_exit("op_nop");
+                return pins;
+            }
+            break;
+            
+        default:
+            /* Memory modes: Read from target address and discard */
+            trace("Memory mode NOP: reading from target address");
+            pins = phi2_read(pins, REG_AB, REG_DL);
+            if (!FAM65XX_GET_RDY(pins)) {
+                trace("RDY low - returning early");
+                trace_exit("op_nop");
+                return pins;
+            }
+            break;
     }
     
-    // PHI1: No operation performed - instruction completes
+    /* Complete instruction */
     trace("NOP complete - transitioning to fetch");
     this->transition_to_fetch();
     
