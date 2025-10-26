@@ -146,19 +146,31 @@ bus_state_t op_nop(bus_state_t pins) {
     trace_enter("op_nop");
     trace_instruction(0xEA, "NOP");
     
-    // Legal NOP (0xEA) - AM_NON: Dummy read from PC for internal operation cycle  
-    // Based on old implementation: dummy read from PC WITHOUT incrementing PC
-    trace("NOP: dummy read from PC (no PC increment)");
-    pins = phi2_read(pins, REG_PC, REG_DL);
-    if (!FAM65XX_GET_RDY(pins)) {
-        trace("RDY low - returning early");
-        trace_exit("op_nop");
-        return pins;
+    if (this->opcode_entry.am_index == AM_IMM) {
+        // Illegal NOP with immediate mode - read and discard the immediate byte
+        trace("NOP #imm: reading immediate operand");
+        pins = phi2_read(pins, REG_PC, REG_DL);
+        if (!FAM65XX_GET_RDY(pins)) {
+            trace("RDY low - returning early");
+            trace_exit("op_nop");
+            return pins;
+        }
+        CPU_PC(this)++;  // Advance PC past the immediate byte
+    } else {
+        // Legal NOP (0xEA) - AM_NON: Dummy read from PC for internal operation cycle  
+        // Based on old implementation: dummy read from PC WITHOUT incrementing PC
+        trace("NOP: dummy read from PC (no PC increment)");
+        pins = phi2_read(pins, REG_PC, REG_DL);
+        if (!FAM65XX_GET_RDY(pins)) {
+            trace("RDY low - returning early");
+            trace_exit("op_nop");
+            return pins;
+        }
     }
     
     // PHI1: No operation performed - instruction completes
     trace("NOP complete - transitioning to fetch");
-    transition_to_fetch();
+    this->transition_to_fetch();
     
     trace_exit("op_nop");
     return pins;
@@ -292,27 +304,14 @@ bus_state_t op_cpy(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_inc(bus_state_t pins) {
-    // Read-Modify-Write operation
-    
-    // Read current value
-    pins = this->phi2_read(pins, REG_AB, REG_DL);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    // Modify (increment)
-    uint8_t value = CPU_DL(this) + 1;
-    
-    // Update flags
-    CPU_P(this) = (CPU_P(this) & 0x7D) |  // Clear N,Z (preserve others)
-                  (value & 0x80) |         // N flag
-                  (value == 0 ? FLAG_Z : 0); // Z flag
-    
-    // Write back modified value
-    pins = this->phi2_write(pins, REG_AB, REG_DL);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    // Complete instruction
-    transition_to_fetch();
-    return pins;
+    // INC - Increment memory by 1
+    // This is a Read-Modify-Write operation
+    return rmw_operation_helper(pins, [this](uint8_t& value) {
+        // Increment the value
+        value++;
+        // Update N and Z flags
+        this->update_nz_flags(value);
+    });
 }
 
 // ============================================================================
@@ -320,27 +319,14 @@ bus_state_t op_inc(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_dec(bus_state_t pins) {
-    // Read-Modify-Write operation
-    
-    // Read current value
-    pins = this->phi2_read(pins, REG_AB, REG_DL);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    // Modify (decrement)
-    uint8_t value = CPU_DL(this) - 1;
-    
-    // Update flags
-    CPU_P(this) = (CPU_P(this) & 0x7D) |  // Clear N,Z (preserve others)
-                  (value & 0x80) |         // N flag
-                  (value == 0 ? FLAG_Z : 0); // Z flag
-    
-    // Write back modified value
-    pins = this->phi2_write(pins, REG_AB, REG_DL);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    // Complete instruction
-    transition_to_fetch();
-    return pins;
+    // DEC - Decrement memory by 1
+    // This is a Read-Modify-Write operation
+    return rmw_operation_helper(pins, [this](uint8_t& value) {
+        // Decrement the value
+        value--;
+        // Update N and Z flags
+        this->update_nz_flags(value);
+    });
 }
 
 // ============================================================================

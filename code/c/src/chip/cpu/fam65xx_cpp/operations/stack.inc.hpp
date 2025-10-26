@@ -16,13 +16,13 @@ bus_state_t op_pha(bus_state_t pins) {
             break;
             
         case 1:
-            /* PHI2: Write A to stack (REG_SP already contains 0x0100 | S) */
-            pins = phi2_write_internal(pins, REG_SP, REG_A);
+            /* PHI2: Write A to stack (0x0100 | S) */
+            pins = phi2_write(pins, REG_SP, REG_A);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
             /* PHI1: Decrement stack pointer */
             CPU_S(this)--;
-            transition_to_fetch();
+            this->transition_to_fetch();
             break;
     }
     return pins;
