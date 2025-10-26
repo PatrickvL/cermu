@@ -204,40 +204,47 @@ bus_state_t addr_aby(bus_state_t pins) {
     return pins;
 }
 
-// Indirect addressing: ($nnnn) - JMP only
+// Indirect addressing: ($nnnn) - Used only by JMP instruction
 bus_state_t addr_ind(bus_state_t pins) {
     switch (this->cycle_index++) {
         case 0:
-            /* Read low byte of pointer address from PC */
+            // PHI2: Read low byte of pointer address from PC
             pins = phi2_read(pins, REG_PC, REG_ABL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_PC(this)++;
             break;
             
         case 1:
-            /* Read high byte of pointer address from PC */
+            // PHI2: Read high byte of pointer address from PC
             pins = phi2_read(pins, REG_PC, REG_ABH);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_PC(this)++;
             break;
             
         case 2:
-            /* Read low byte of target address from (pointer) */
+            // PHI2: Read low byte of target address from pointer
             pins = phi2_read(pins, REG_AB, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* Store target low byte and prepare for bug handling */
-            CPU_ABL(this)++; // Increment for high byte read
+            // PHI1: Set up for high byte read with processor-specific behavior
+            if constexpr (has_cmos_enhancements<ProcessorTag>()) {
+                // 65C02: Fixed page boundary behavior
+                CPU_AB(this)++;
+            } else {
+                // 6502: Page boundary bug - increment only low byte
+                CPU_ABL(this)++;
+            }
             break;
             
         case 3:
-            /* Read high byte of target address */
+            // PHI2: Read high byte of target address
             pins = phi2_read(pins, REG_AB, REG_ABH);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* Assemble final target address */
-            CPU_ABL(this) = CPU_DL(this);
-            // ABH already contains the high byte from the read
+            // PHI1: Assemble final target address
+            CPU_ABL(this) = CPU_DL(this);  // Low byte from cycle 2
+            // High byte already in ABH from this cycle
+            transition_to_operation();
             break;
     }
     return pins;
