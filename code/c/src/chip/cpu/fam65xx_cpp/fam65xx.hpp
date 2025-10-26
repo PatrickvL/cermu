@@ -213,6 +213,13 @@ public:
         // Initialize opcode table for this processor type
         this->init_opcode_table();
         
+        /* Initialize register layout:
+        * ZP high byte (REG_ZPH) = 0x00 (always zero for zero page)
+        * SP = 0x01FF (stack starts at top of page 1)
+        */
+        CPU_ZPH(this) = 0x00;  /* Zero page high byte */
+        CPU_SP(this) = 0x01FF; /* Stack pointer (page 1, starts at 0xFF) */
+
         // Return initial pin state
         bus_state_t pins = 0;
         return pins;
@@ -344,30 +351,29 @@ public:
         
         uint16_t address;
 
+        // Set R/W̅ bit to indicate READ (1 = Read, 0 = Write)
+        pins |= FAM65XX_RW;
+
         // Hardware-accurate RDY handling - address bus behavior matches old implementation
         if (FAM65XX_GET_RDY(pins)) {
             address = this->reg16[addr_reg];
             pins = BUS_SET_ADDR(pins, address);
             trace("RDY high: address = %04X", address);
+            if constexpr (has_io_port<ProcessorTag>()) {
+                // Handle 6510 I/O port access (only when RDY is high)
+                if (address == 0x0000) {
+                    this->reg8[data_reg] = this->read_io_port();
+                    return pins; // Don't perform bus read
+                } else if (address == 0x0001) {
+                    this->reg8[data_reg] = this->io_port.direction;
+                    return pins; // Don't perform bus read
+                }    
+            }
         } else {
             address = BUS_GET_ADDR(pins);  // Keep existing bus address when RDY low
             trace("RDY low: keeping address = %04X", address);
-        }
-        
-        if constexpr (has_io_port<ProcessorTag>()) {
-            // Handle 6510 I/O port access (only when RDY is high)
-            if (FAM65XX_GET_RDY(pins) && address == 0x0000) {
-                this->reg8[data_reg] = this->read_io_port();
-                return pins; // Don't perform bus read
-            } else if (FAM65XX_GET_RDY(pins) && address == 0x0001) {
-                this->reg8[data_reg] = this->io_port.direction;
-                return pins; // Don't perform bus read
-            }
-        }
-
-        // Set R/W̅ bit to indicate READ (1 = Read, 0 = Write)
-        pins |= FAM65XX_RW;
-
+        }    
+    
         // Always perform memory read to service VIC-II even when CPU halted
         uint8_t current_bus_data = BUS_GET_DATA(pins);
         uint8_t data = 0xFF; // Default floating bus
@@ -460,7 +466,7 @@ public:
     
     // Check if page was crossed during addressing
     bool page_crossed(uint16_t addr1, uint16_t addr2) const {
-        return (addr1 & 0xFF00) != (addr2 & 0xFF00);
+        return ((addr1 ^ addr2) & 0x0100) != 0;
     }
     
     // Internal write operation without I/O port handling

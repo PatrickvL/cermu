@@ -96,13 +96,13 @@ bus_state_t op_pea(bus_state_t pins) {
         uint8_t addr_high = CPU_DL(this);
         
         // Push high byte first
-        CPU_AB(this) = 0x0100 + CPU_S(this);
+        CPU_AB(this) = CPU_SP(this);
         CPU_DL(this) = addr_high;
         pins = phi2_write_internal(pins, REG_AB, REG_DL);
         CPU_S(this)--;
         
         // Push low byte
-        CPU_AB(this) = 0x0100 + CPU_S(this);
+        CPU_AB(this) = CPU_SP(this);
         CPU_DL(this) = addr_low;
         pins = phi2_write_internal(pins, REG_AB, REG_DL);
         CPU_S(this)--;
@@ -119,7 +119,7 @@ bus_state_t op_pea(bus_state_t pins) {
 bus_state_t op_phb(bus_state_t pins) {
     if constexpr (has_wide_registers<ProcessorTag>()) {
         // Push DBR to stack
-        CPU_AB(this) = 0x0100 + CPU_S(this);
+        CPU_AB(this) = CPU_SP(this);
         CPU_DL(this) = this->wide_state.DBR;
         pins = phi2_write_internal(pins, REG_AB, REG_DL);
         CPU_S(this)--;
@@ -139,13 +139,13 @@ bus_state_t op_phd(bus_state_t pins) {
         uint16_t d_reg = this->wide_state.D;
         
         // Push high byte first
-        CPU_AB(this) = 0x0100 + CPU_S(this);
+        CPU_AB(this) = CPU_SP(this);
         CPU_DL(this) = d_reg >> 8;
         pins = phi2_write_internal(pins, REG_AB, REG_DL);
         CPU_S(this)--;
         
         // Push low byte
-        CPU_AB(this) = 0x0100 + CPU_S(this);
+        CPU_AB(this) = CPU_SP(this);
         CPU_DL(this) = d_reg & 0xFF;
         pins = phi2_write_internal(pins, REG_AB, REG_DL);
         CPU_S(this)--;
@@ -162,7 +162,7 @@ bus_state_t op_phd(bus_state_t pins) {
 bus_state_t op_phk(bus_state_t pins) {
     if constexpr (has_wide_registers<ProcessorTag>()) {
         // Push PBR to stack
-        CPU_AB(this) = 0x0100 + CPU_S(this);
+        CPU_AB(this) = CPU_SP(this);
         CPU_DL(this) = this->wide_state.PBR;
         pins = phi2_write_internal(pins, REG_AB, REG_DL);
         CPU_S(this)--;
@@ -180,7 +180,7 @@ bus_state_t op_plb(bus_state_t pins) {
     if constexpr (has_wide_registers<ProcessorTag>()) {
         // Pull DBR from stack
         CPU_S(this)++;
-        CPU_AB(this) = 0x0100 + CPU_S(this);
+        CPU_AB(this) = CPU_SP(this);
         pins = phi2_read(pins, REG_AB, REG_DL);
         
         this->wide_state.DBR = CPU_DL(this);
@@ -203,13 +203,13 @@ bus_state_t op_pld(bus_state_t pins) {
         
         // Pull low byte first
         CPU_S(this)++;
-        CPU_AB(this) = 0x0100 + CPU_S(this);
+        CPU_AB(this) = CPU_SP(this);
         pins = phi2_read(pins, REG_AB, REG_DL);
         uint8_t low_byte = CPU_DL(this);
         
         // Pull high byte
         CPU_S(this)++;
-        CPU_AB(this) = 0x0100 + CPU_S(this);
+        CPU_AB(this) = CPU_SP(this);
         pins = phi2_read(pins, REG_AB, REG_DL);
         uint8_t high_byte = CPU_DL(this);
         
@@ -253,19 +253,19 @@ bus_state_t op_jsl(bus_state_t pins) {
         uint16_t return_pc = CPU_PC(this) - 1;
         
         // Push PBR
-        CPU_AB(this) = 0x0100 + CPU_S(this);
+        CPU_AB(this) = CPU_SP(this);
         CPU_DL(this) = this->wide_state.PBR;
         pins = phi2_write_internal(pins, REG_AB, REG_DL);
         CPU_S(this)--;
         
         // Push PC high
-        CPU_AB(this) = 0x0100 + CPU_S(this);
+        CPU_AB(this) = CPU_SP(this);
         CPU_DL(this) = return_pc >> 8;
         pins = phi2_write_internal(pins, REG_AB, REG_DL);
         CPU_S(this)--;
         
         // Push PC low
-        CPU_AB(this) = 0x0100 + CPU_S(this);
+        CPU_AB(this) = CPU_SP(this);
         CPU_DL(this) = return_pc & 0xFF;
         pins = phi2_write_internal(pins, REG_AB, REG_DL);
         CPU_S(this)--;
@@ -289,19 +289,19 @@ bus_state_t op_rtl(bus_state_t pins) {
         
         // Pull PC low
         CPU_S(this)++;
-        CPU_AB(this) = 0x0100 + CPU_S(this);
+        CPU_AB(this) = CPU_SP(this);
         pins = phi2_read(pins, REG_AB, REG_DL);
         uint8_t pc_low = CPU_DL(this);
         
         // Pull PC high
         CPU_S(this)++;
-        CPU_AB(this) = 0x0100 + CPU_S(this);
+        CPU_AB(this) = CPU_SP(this);
         pins = phi2_read(pins, REG_AB, REG_DL);
         uint8_t pc_high = CPU_DL(this);
         
         // Pull PBR
         CPU_S(this)++;
-        CPU_AB(this) = 0x0100 + CPU_S(this);
+        CPU_AB(this) = CPU_SP(this);
         pins = phi2_read(pins, REG_AB, REG_DL);
         this->wide_state.PBR = CPU_DL(this);
         
