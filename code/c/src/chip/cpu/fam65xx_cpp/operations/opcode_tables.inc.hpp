@@ -55,7 +55,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table<NES6502Tag>() {
     table[0x1D] = {OP_ORA, AM_ABX, OF_SKIP_PAGE};
     table[0x1E] = {OP_ASL, AM_ABX, OF_RMW};
     table[0x1F] = {OP_SLO, AM_ABX, OF_RMW};   // SLO - Shift Left then OR (illegal)
-    table[0x20] = {OP_JSR, AM_ABS, OF_NONE};
+    table[0x20] = {OP_JSR, AM_NON, OF_NONE};
     table[0x21] = {OP_AND, AM_INX, OF_NONE};
     table[0x22] = {OP_JAM, AM_NON, OF_NONE};  // KIL/JAM - illegal opcode
     table[0x23] = {OP_RLA, AM_INX, OF_RMW};   // RLA - Rotate Left then AND (illegal)
