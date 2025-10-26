@@ -92,8 +92,8 @@ void bcd_subtraction_helper(uint8_t a_old, uint8_t operand, uint8_t borrow_in,
 // ============================================================================
 
 bus_state_t op_adc(bus_state_t pins) {
-    // Read operand with immediate mode handling
-    pins = read_operand_immediate_or_memory(pins);
+    // Read operand directly into DL register (optimized version)
+    pins = read_operand_immediate_or_memory(pins, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     uint8_t operand = CPU_DL(this);
@@ -195,8 +195,8 @@ bus_state_t op_nop(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_sbc(bus_state_t pins) {
-    // Read operand with immediate mode handling
-    pins = read_operand_immediate_or_memory(pins);
+    // Read operand directly into DL register (optimized version)
+    pins = read_operand_immediate_or_memory(pins, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     uint8_t operand = CPU_DL(this);
@@ -246,8 +246,8 @@ bus_state_t op_sbc(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_cmp(bus_state_t pins) {
-    // Read operand with immediate mode handling
-    pins = read_operand_immediate_or_memory(pins);
+    // Read operand directly into DL register (optimized version)
+    pins = read_operand_immediate_or_memory(pins, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     uint8_t operand = CPU_DL(this);
@@ -270,8 +270,8 @@ bus_state_t op_cmp(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_cpx(bus_state_t pins) {
-    // Read operand with immediate mode handling
-    pins = read_operand_immediate_or_memory(pins);
+    // Read operand directly into DL register (optimized version)
+    pins = read_operand_immediate_or_memory(pins, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     uint8_t operand = CPU_DL(this);
@@ -294,8 +294,8 @@ bus_state_t op_cpx(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_cpy(bus_state_t pins) {
-    // Read operand with immediate mode handling
-    pins = read_operand_immediate_or_memory(pins);
+    // Read operand directly into DL register (optimized version)
+    pins = read_operand_immediate_or_memory(pins, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     uint8_t operand = CPU_DL(this);

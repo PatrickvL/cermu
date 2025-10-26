@@ -11,12 +11,9 @@
 // ============================================================================
 
 bus_state_t op_lda(bus_state_t pins) {
-    // Read operand with immediate mode handling
-    pins = read_operand_immediate_or_memory(pins);
+    // Read operand directly into accumulator (eliminates DL copy)
+    pins = read_operand_immediate_or_memory(pins, REG_A);
     if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    // Load accumulator (8-bit only, wide registers disabled)
-    CPU_A(this) = CPU_DL(this);
     
     // Update N and Z flags
     update_nz_flags(CPU_A(this));
@@ -31,12 +28,9 @@ bus_state_t op_lda(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_ldx(bus_state_t pins) {
-    // Read operand with immediate mode handling
-    pins = read_operand_immediate_or_memory(pins);
+    // Read operand directly into X register (eliminates DL copy)
+    pins = read_operand_immediate_or_memory(pins, REG_X);
     if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    // Load X register (8-bit only, wide registers disabled)
-    CPU_X(this) = CPU_DL(this);
     
     // Update N and Z flags
     update_nz_flags(CPU_X(this));
@@ -51,12 +45,9 @@ bus_state_t op_ldx(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_ldy(bus_state_t pins) {
-    // Read operand with immediate mode handling
-    pins = read_operand_immediate_or_memory(pins);
+    // Read operand directly into Y register (eliminates DL copy)
+    pins = read_operand_immediate_or_memory(pins, REG_Y);
     if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    // Load Y register (8-bit only, wide registers disabled)
-    CPU_Y(this) = CPU_DL(this);
     
     // Update N and Z flags
     update_nz_flags(CPU_Y(this));
@@ -71,9 +62,8 @@ bus_state_t op_ldy(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_sta(bus_state_t pins) {
-    // Store accumulator using current addressing mode result (8-bit only)
-    CPU_DL(this) = CPU_A(this);
-    pins = this->phi2_write(pins, REG_AB, REG_DL);
+    // Store accumulator directly from A register (eliminates DL copy)
+    pins = this->phi2_write(pins, REG_AB, REG_A);
     
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
@@ -87,10 +77,8 @@ bus_state_t op_sta(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_stx(bus_state_t pins) {
-    // Store X register using current addressing mode result (8-bit only)
-    CPU_DL(this) = CPU_X(this);
-    
-    pins = this->phi2_write(pins, REG_AB, REG_DL);
+    // Store X register directly from X register (eliminates DL copy)
+    pins = this->phi2_write(pins, REG_AB, REG_X);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     // Complete instruction (STX doesn't affect flags)
@@ -103,10 +91,8 @@ bus_state_t op_stx(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_sty(bus_state_t pins) {
-    // Store Y register using current addressing mode result (8-bit only)
-    CPU_DL(this) = CPU_Y(this);
-    
-    pins = this->phi2_write(pins, REG_AB, REG_DL);
+    // Store Y register directly from Y register (eliminates DL copy)
+    pins = this->phi2_write(pins, REG_AB, REG_Y);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     // Complete instruction (STY doesn't affect flags)
@@ -120,8 +106,8 @@ bus_state_t op_sty(bus_state_t pins) {
 
 // AND with Accumulator
 bus_state_t op_and(bus_state_t pins) {
-    // Read operand with immediate mode handling
-    pins = read_operand_immediate_or_memory(pins);
+    // Read operand directly into DL register (optimized version)
+    pins = read_operand_immediate_or_memory(pins, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     // Perform AND operation
@@ -137,8 +123,8 @@ bus_state_t op_and(bus_state_t pins) {
 
 // OR with Accumulator
 bus_state_t op_ora(bus_state_t pins) {
-    // Read operand with immediate mode handling
-    pins = read_operand_immediate_or_memory(pins);
+    // Read operand directly into DL register (optimized version)
+    pins = read_operand_immediate_or_memory(pins, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     // Perform OR operation
@@ -154,8 +140,8 @@ bus_state_t op_ora(bus_state_t pins) {
 
 // Exclusive OR with Accumulator
 bus_state_t op_eor(bus_state_t pins) {
-    // Read operand with immediate mode handling
-    pins = read_operand_immediate_or_memory(pins);
+    // Read operand directly into DL register (optimized version)
+    pins = read_operand_immediate_or_memory(pins, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     // Perform EOR operation
@@ -174,8 +160,8 @@ bus_state_t op_eor(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_bit(bus_state_t pins) {
-    // Read operand with immediate mode handling
-    pins = read_operand_immediate_or_memory(pins);
+    // Read operand directly into DL register (optimized version)
+    pins = read_operand_immediate_or_memory(pins, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     uint8_t operand = CPU_DL(this);
