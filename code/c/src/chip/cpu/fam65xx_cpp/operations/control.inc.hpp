@@ -21,25 +21,42 @@ bus_state_t op_jmp(bus_state_t pins) {
 bus_state_t op_jsr(bus_state_t pins) {
     switch (this->cycle_index++) {
         case 0:
-            /* PHI2: Dummy read from PC for internal operation */
-            pins = phi2_read(pins, REG_PC, REG_DL);
+            /* PHI2: Read low byte of target address from PC directly to ABL */
+            pins = phi2_read(pins, REG_PC, REG_ABL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
+            CPU_PC(this)++;
             break;
             
         case 1:
-            /* PHI2: Push PCH (high byte of return address - 1) to stack */
-            CPU_DL(this) = (CPU_PC(this) - 1) >> 8;
-            pins = phi2_write_internal(pins, REG_SP, REG_DL);
+            /* PHI2: Dummy read from stack pointer (internal operation) */
+            pins = phi2_read(pins, REG_SP, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
-            CPU_S(this)--;
             break;
             
         case 2:
-            /* PHI2: Push PCL (low byte of return address - 1) to stack */
-            CPU_DL(this) = (CPU_PC(this) - 1) & 0xFF;
-            pins = phi2_write_internal(pins, REG_SP, REG_DL);
+            /* PHI2: Push PCH (high byte of return address) to stack */
+            CPU_DL(this) = CPU_PCH(this);
+            pins = phi2_write(pins, REG_SP, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
+            
+            /* PHI1: Decrement stack pointer */
             CPU_S(this)--;
+            break;
+            
+        case 3:
+            /* PHI2: Push PCL (low byte of return address) to stack */
+            CPU_DL(this) = CPU_PCL(this);
+            pins = phi2_write(pins, REG_SP, REG_DL);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
+            
+            /* PHI1: Decrement stack pointer */
+            CPU_S(this)--;
+            break;
+            
+        case 4:
+            /* PHI2: Read high byte of target address from PC directly to ABH */
+            pins = phi2_read(pins, REG_PC, REG_ABH);
+            if (!FAM65XX_GET_RDY(pins)) return pins;
             
             /* PHI1: Set PC to target address */
             CPU_PC(this) = CPU_AB(this);
