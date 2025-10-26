@@ -49,7 +49,7 @@ bus_state_t addr_zpx(bus_state_t pins) {
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
             // PHI1: Add index to ZP address (wraps in zero page), then copy to AB
-            CPU_ZPL(this) = (CPU_ZPL(this) + CPU_X(this)) & 0xFF;
+            CPU_ZPL(this) += CPU_X(this);
             CPU_AB(this) = CPU_ZP(this); // Copy final ZP address to AB
             transition_to_operation();
             break;
@@ -77,7 +77,7 @@ bus_state_t addr_zpy(bus_state_t pins) {
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
             // PHI1: Add index to ZP address (wraps in zero page), then copy to AB
-            CPU_ZPL(this) = (CPU_ZPL(this) + CPU_Y(this)) & 0xFF;
+            CPU_ZPL(this) += CPU_Y(this);
             CPU_AB(this) = CPU_ZP(this); // Copy final ZP address to AB
             transition_to_operation();
             break;
@@ -131,16 +131,17 @@ bus_state_t addr_abx(bus_state_t pins) {
             CPU_ABL(this) += CPU_X(this);
             
             // Skip penalty cycle if allowed and no page cross occurred
-            if ((this->opcode_entry.flags & OF_SKIP_PAGE) && ((base ^ effective) & 0xFF00) == 0) {
+            if ((this->opcode_entry.flags & OF_SKIP_PAGE) && !page_crossed((base, effective))) {
                 CPU_AB(this) = effective;  // Fix address
                 transition_to_operation();
+            } else {
+                // Page crossing or always need penalty
             }
-            // Otherwise continue to cycle 2 with intermediate address
-            break;
+            return pins;
         }
             
         case 2:
-            // PHI2: Page cross penalty - read from intermediate address
+            // PHI2: Page cross penalty - read from wrong address
             pins = phi2_read(pins, REG_AB, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
@@ -175,30 +176,29 @@ bus_state_t addr_aby(bus_state_t pins) {
             uint16_t base = CPU_AB(this);
             uint16_t effective = base + CPU_Y(this);
             
-            // Store original high byte in DL for page cross correction
-            CPU_DL(this) = CPU_ABH(this);
-            
             // Add index to low byte (creates intermediate "wrong" address for page cross)
             CPU_ABL(this) += CPU_Y(this);
             
             // Skip penalty cycle if allowed and no page cross occurred
-            if ((this->opcode_entry.flags & OF_SKIP_PAGE) && ((base ^ effective) & 0xFF00) == 0) {
+            if ((this->opcode_entry.flags & OF_SKIP_PAGE) && !page_crossed((base, effective))) {
                 CPU_AB(this) = effective;  // Fix address
                 transition_to_operation();
+            } else {
+                // Page crossing or always need penalty
             }
-            // Otherwise continue to cycle 2 with intermediate address
-            break;
+            return pins;
         }
             
         case 2:
-            // PHI2: Page cross penalty - read from intermediate address
+            // PHI2: Page cross penalty - read from wrong address
             pins = phi2_read(pins, REG_AB, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
             // PHI1: Correct final address
-            CPU_ABH(this) = CPU_DL(this);  // Restore original high byte
-            CPU_ABL(this) -= CPU_Y(this);  // Restore original low byte
-            CPU_AB(this) += CPU_Y(this);   // Correctly calculate final address
+            // ABL has Y added, ABH is unchanged from original. Subtract Y from ABL to restore original base
+            CPU_ABL(this) -= CPU_Y(this);
+            // Now AB has original base address, add Y to full 16-bit AB for correct effective address with carry
+            CPU_AB(this) += CPU_Y(this);
             transition_to_operation();
             break;
     }
@@ -289,13 +289,9 @@ bus_state_t addr_iny(bus_state_t pins) {
     switch (this->cycle_index++) {
         case 0:
             /* Read pointer from PC */
-            pins = phi2_read(pins, REG_PC, REG_DL);
+            pins = phi2_read(pins, REG_PC, REG_ZPL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_PC(this)++;
-            
-            /* Store pointer in zero page */
-            CPU_ZPL(this) = CPU_DL(this);
-            CPU_ZPH(this) = 0x00;
             break;
             
         case 1:
@@ -320,17 +316,21 @@ bus_state_t addr_iny(bus_state_t pins) {
                 /* Page crossing - need penalty cycle */
                 break;
             } else {
-                /* No page cross - complete addressing mode */
+                /* No page cross and not RMW */
+                /* ABH is already correct (no carry) */
                 transition_to_operation();
                 return pins;
             }
         }
             
         case 3:
-            /* Page cross penalty - dummy read from wrong address, then fix */
+            /* Page cross penalty - dummy read from wrong address */
             pins = phi2_read(pins, REG_AB, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
-            /* Address is already correct from case 2 */
+            
+            CPU_ABL(this) -= CPU_Y(this);
+            /* Now fix the address by adding carry to high byte */
+            CPU_AB(this) += CPU_Y(this);
             transition_to_operation();
             break;
     }
