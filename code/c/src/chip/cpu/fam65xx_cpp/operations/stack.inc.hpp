@@ -70,12 +70,11 @@ bus_state_t op_pla(bus_state_t pins) {
             break;
             
         case 2:
-            /* PHI2: Read from incremented stack pointer */
-            pins = phi2_read(pins, REG_SP, REG_DL);
+            /* PHI2: Read from incremented stack pointer directly into A (eliminates copy) */
+            pins = phi2_read(pins, REG_SP, REG_A);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
-            /* PHI1: Store in A and set flags */
-            CPU_A(this) = BUS_GET_DATA(pins);
+            /* PHI1: Set flags based on accumulator value */
             update_nz_flags(CPU_A(this));
             transition_to_fetch();
             break;

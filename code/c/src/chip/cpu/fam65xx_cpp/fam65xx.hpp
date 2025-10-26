@@ -736,16 +736,16 @@ private:
         addressing_mode_handlers[AM_ABI] = &fam65xx_t::addr_ind_abs; // Absolute Indexed Indirect
     }
     
-    // Read operand from immediate or memory mode (matching old implementation)
-    bus_state_t read_operand_immediate_or_memory(bus_state_t pins) {
+    // Optimized version with direct register targeting to eliminate copies
+    inline bus_state_t read_operand_immediate_or_memory(bus_state_t pins, reg8_t target_reg) {
         if (this->opcode_entry.am_index == AM_IMM) {
-            // Immediate mode - read from PC
-            pins = phi2_read(pins, REG_PC, REG_DL);
+            // Immediate mode - read from PC directly into target register
+            pins = phi2_read(pins, REG_PC, target_reg);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_PC(this)++;
         } else {
-            // Memory mode - read from target address
-            pins = phi2_read(pins, REG_AB, REG_DL);
+            // Memory mode - read from target address directly into target register
+            pins = phi2_read(pins, REG_AB, target_reg);
             if (!FAM65XX_GET_RDY(pins)) return pins;
         }
         return pins;
