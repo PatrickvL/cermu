@@ -306,15 +306,18 @@ bus_state_t addr_iny(bus_state_t pins) {
             /* Add Y register with page crossing check */
             uint16_t base_addr = CPU_AB(this);
             uint16_t final_addr = base_addr + CPU_Y(this);
-            CPU_AB(this) = final_addr;
             
-            /* Check for page crossing penalty */
-            if (page_crossed(base_addr, final_addr)) {
-                /* Page crossing - need penalty cycle */
+            /* Add index to low byte only (creates intermediate "wrong" address for page cross) */
+            /* ABH stays unchanged, only ABL gets Y added */
+            CPU_ABL(this) += CPU_Y(this);
+            
+            /* Check if penalty cycle is needed (page crossing or RMW operation) */
+            if (page_crossed(base_addr, final_addr) || (this->opcode_entry.flags & OF_RMW)) {
+                /* Page crossing or RMW - need penalty cycle with intermediate address */
                 break;
             } else {
-                /* No page cross and not RMW */
-                /* ABH is already correct (no carry) */
+                /* No page cross and not RMW - can skip penalty, set correct address */
+                CPU_AB(this) = final_addr;
                 transition_to_operation();
                 return pins;
             }
@@ -325,8 +328,10 @@ bus_state_t addr_iny(bus_state_t pins) {
             pins = phi2_read(pins, REG_AB, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
+            /* Correct final address using same approach as Absolute,X */
+            /* ABL has Y added, ABH is unchanged. Subtract Y from ABL to restore original base */
             CPU_ABL(this) -= CPU_Y(this);
-            /* Now fix the address by adding carry to high byte */
+            /* Now AB has original base address, add Y to full 16-bit AB for correct effective address with carry */
             CPU_AB(this) += CPU_Y(this);
             transition_to_operation();
             break;
