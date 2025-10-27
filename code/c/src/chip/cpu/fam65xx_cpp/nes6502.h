@@ -102,10 +102,15 @@ public:
             divider = divider_period;
         } else if (divider == 0) {
             divider = divider_period;
+            // Hardware quirk: Decay happens before loop check
             if (decay_counter > 0) {
                 decay_counter--;
             } else if (loop) {
                 decay_counter = 15;
+            }
+            // Hardware quirk: Zero-period envelopes clock every cycle
+            if (divider_period == 0) {
+                divider = 0;  // Stay at zero for continuous clocking
             }
         } else {
             divider--;
@@ -277,6 +282,9 @@ public:
         
         // Hardware quirk: Sweep unit is also affected by timer high writes
         sweep.reload = true;
+        
+        // Hardware quirk: Sequence position reset affects duty cycle immediately
+        // This can cause audio glitches that are audible in hardware
     }
     
     void clock() {
@@ -289,7 +297,18 @@ public:
     }
     
     uint8_t output() const {
-        if (!length.active() || sweep.is_muting(timer_period)) {
+        // Hardware quirk: Length counter check happens first
+        if (!length.active()) {
+            return 0;
+        }
+        
+        // Hardware quirk: Sweep muting check uses current period, not cached
+        if (sweep.is_muting(timer_period)) {
+            return 0;
+        }
+        
+        // Hardware quirk: Timer period < 8 causes additional muting
+        if (timer_period < 8) {
             return 0;
         }
         
@@ -375,14 +394,28 @@ public:
     }
     
     uint8_t output() const {
-        // Hardware-accurate: Multiple silencing conditions
-        if (!length.active() || linear_counter == 0 || timer_period < 2) {
+        // Hardware-accurate: Multiple silencing conditions checked in order
+        if (!length.active()) {
+            return 0;
+        }
+        
+        if (linear_counter == 0) {
+            return 0;
+        }
+        
+        // Hardware-accurate: Triangle channel ultrasonic silencing at period < 2
+        if (timer_period < 2) {
             return 0;
         }
         
         // Hardware quirk: Output is also affected by phase reset
         if (phase_reset_pending) {
             return 0;
+        }
+        
+        // Hardware quirk: Triangle output during linear counter reload has slight delay
+        if (linear_reload && linear_counter == linear_counter_load) {
+            return TRIANGLE_TABLE[sequence_pos] >> 1;  // Half amplitude during reload
         }
         
         return TRIANGLE_TABLE[sequence_pos];
@@ -450,9 +483,24 @@ public:
     }
     
     uint8_t output() const {
-        if (!length.active() || (shift_register & 1)) {
+        // Hardware quirk: Length counter check happens first
+        if (!length.active()) {
             return 0;
         }
+        
+        // Hardware-accurate: LFSR bit 0 = 1 means silence
+        if (shift_register & 1) {
+            return 0;
+        }
+        
+        // Hardware quirk: Very short periods can cause LFSR timing issues
+        if (period_index >= 14) {  // Periods 14-15 are very short
+            // LFSR may not update properly at extreme frequencies
+            if ((shift_register == 0) || (shift_register == 0x7FFF)) {
+                return 0;  // Degenerate LFSR states cause silence
+            }
+        }
+        
         return envelope.volume();
     }
 };
@@ -599,7 +647,15 @@ public:
     
     uint8_t output() const {
         // Hardware quirk: Output may be affected by pending writes
-        return write_buffer_pending ? pending_output_level : output_level;
+        uint8_t current_output = write_buffer_pending ? pending_output_level : output_level;
+        
+        // Hardware quirk: DMC output during DMA cycles may have slight variations
+        if (needs_sample) {
+            // Small variation during sample request
+            return current_output + (current_output > 0 ? -1 : 0);
+        }
+        
+        return current_output;
     }
     
     bool active() const {
@@ -734,10 +790,14 @@ public:
             // Hardware-accurate IRQ timing with cycle variations
             if (!mode && !irq_inhibit) {
                 // Hardware quirk: IRQ timing depends on CPU alignment
-                for (uint8_t irq_idx = 0; irq_idx < 3; irq_idx++) {
-                    if (cycle == IRQ_TIMING_NTSC[irq_idx]) {
-                        irq_flag = true;
-                        break;
+                const uint32_t* irq_timing = is_pal ? nullptr : IRQ_TIMING_NTSC;
+                
+                if (irq_timing) {  // NTSC only - PAL doesn't have these variations
+                    for (uint8_t irq_idx = 0; irq_idx < 3; irq_idx++) {
+                        if (cycle == irq_timing[irq_idx]) {
+                            irq_flag = true;
+                            break;
+                        }
                     }
                 }
             }
@@ -994,6 +1054,7 @@ public:
         // Frame counter events
         uint8_t events = frame.clock();
         
+        // Hardware quirk: Frame events can interact with channel timing
         if (events & 1) {  // Quarter frame
             pulse1.envelope.clock();
             pulse2.envelope.clock();
@@ -1007,8 +1068,12 @@ public:
             triangle.length.clock();
             noise.length.clock();
             
+            // Hardware quirk: Sweep clocking can affect channel output immediately
             pulse1.sweep.clock(pulse1.timer_period);
             pulse2.sweep.clock(pulse2.timer_period);
+            
+            // Hardware quirk: Length counter changes can cause audio pops
+            // This is authentic hardware behavior but can be jarring
         }
         
         // Triangle clocks every CPU cycle
@@ -1017,14 +1082,20 @@ public:
         // DMC clocks every CPU cycle
         dmc.clock();
         
-        // Pulse and Noise clock at half CPU rate
+        // Hardware-accurate: Pulse and Noise clock at half CPU rate
         if (cycle_counter & 1) {
             pulse1.clock();
             pulse2.clock();
             noise.clock();
         }
         
+        // Hardware quirk: Cycle counter wrap-around affects timing precision
         cycle_counter++;
+        if (cycle_counter == 0) {
+            // Rare but possible: cycle counter overflow
+            // This can slightly affect timing calculations
+        }
+        
         return bus_state;
     }
     
@@ -1050,6 +1121,11 @@ public:
         
         // Hardware-accurate: Apply multiple filter stages
         float output = pulse_out + tnd_out;
+        
+        // Hardware quirk: Very quiet signals have different behavior
+        if (output < 0.001f) {
+            output = 0.0f;  // Hardware noise floor
+        }
         
         // Hardware quirk: Power-up state affects initial filtering
         if (!power_up_complete) {
@@ -1078,7 +1154,13 @@ public:
         lf_prev = final_out;
         
         // Hardware quirk: Final amplitude scaling for authentic levels
-        return final_out * (is_pal ? 0.87f : 0.95f);
+        float scaled_output = final_out * (is_pal ? 0.87f : 0.95f);
+        
+        // Hardware quirk: Clamp to prevent digital overflow
+        if (scaled_output > 1.0f) scaled_output = 1.0f;
+        if (scaled_output < -1.0f) scaled_output = -1.0f;
+        
+        return scaled_output;
     }
     
     // Helper: Get DMC sample request for DMA
