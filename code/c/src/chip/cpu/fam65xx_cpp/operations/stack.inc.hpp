@@ -12,7 +12,6 @@ bus_state_t op_pha(bus_state_t pins) {
         case 0:
             /* Dummy cycle for internal operation */
             pins = phi2_read(pins, REG_PC, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
             return pins;
             
         case 1:
@@ -34,7 +33,6 @@ bus_state_t op_php(bus_state_t pins) {
         case 0:
             /* Dummy cycle for internal operation */
             pins = phi2_read(pins, REG_PC, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
             return pins;
             
         case 1:
@@ -57,7 +55,6 @@ bus_state_t op_pla(bus_state_t pins) {
         case 0:
             /* PHI2: Dummy read from PC */
             pins = phi2_read(pins, REG_PC, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
             return pins;
             
         case 1:

@@ -186,7 +186,6 @@ bus_state_t op_jam(bus_state_t pins) {
         case 0:
             // PHI2: Read operand from PC+1 (this was PC++ after opcode fetch)
             pins = phi2_read(pins, REG_PC, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
             return pins;
             
         case 1:
