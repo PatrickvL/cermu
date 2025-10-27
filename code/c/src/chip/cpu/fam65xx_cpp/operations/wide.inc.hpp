@@ -48,11 +48,7 @@ bus_state_t op_xce(bus_state_t pins) {
         bool carry = (CPU_P(this) & FLAG_C) != 0;
         bool emulation = this->wide_state.emulation_mode;
         
-        if (emulation) {
-            CPU_P(this) |= FLAG_C;
-        } else {
-            CPU_P(this) &= ~FLAG_C;
-        }
+        this->update_flag(FLAG_C, emulation);
         
         this->wide_state.emulation_mode = carry;
         
