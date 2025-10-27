@@ -1234,8 +1234,8 @@ std::vector<TestItem> collect_all_tests(const std::vector<std::string>& test_pat
         }
     }
     
-    // Reserve space for better performance (estimate ~10 tests per file)
-    all_tests.reserve(total_files * 10);
+    // Reserve space for better performance (expect 10000 tests per file)
+    all_tests.reserve(total_files * 10000);
     
     // Second pass: actually collect tests
     for (const auto& json_file : json_files) {
