@@ -22,7 +22,8 @@ bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func)
                 
             case 1:
                 // Cycle 1: Dummy write original value back with processor-specific RDY handling
-                if (phi2_write_with_rdy_check(pins, REG_AB, REG_DL)) {
+                if (this->should_complete_write_cycle(pins)) {
+                    pins = this->phi2_write(pins, REG_AB, REG_DL);
                     operation_func(CPU_DL(this));
                     this->cycle_index++;
                 }
@@ -30,7 +31,8 @@ bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func)
                 
             case 2:
                 // Cycle 2: Write modified result back with processor-specific RDY handling
-                if (phi2_write_with_rdy_check(pins, REG_AB, REG_DL)) {
+                if (this->should_complete_write_cycle(pins)) {
+                    pins = this->phi2_write(pins, REG_AB, REG_DL);
                     transition_to_fetch();
                 }
                 return pins;

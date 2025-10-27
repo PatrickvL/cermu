@@ -139,8 +139,7 @@ bus_state_t op_phx(bus_state_t pins) {
     if constexpr (has_cmos_enhancements<ProcessorTag>()) {
         // Push X to stack
         CPU_AB(this) = CPU_SP(this);
-        CPU_DL(this) = CPU_X(this);
-        pins = phi2_write(pins, REG_AB, REG_DL);
+        pins = phi2_write(pins, REG_AB, REG_X);
         CPU_S(this)--;
         
         transition_to_fetch();
@@ -156,8 +155,7 @@ bus_state_t op_phy(bus_state_t pins) {
     if constexpr (has_cmos_enhancements<ProcessorTag>()) {
         // Push Y to stack
         CPU_AB(this) = CPU_SP(this);
-        CPU_DL(this) = CPU_Y(this);
-        pins = phi2_write(pins, REG_AB, REG_DL);
+        pins = phi2_write(pins, REG_AB, REG_Y);
         CPU_S(this)--;
         
         transition_to_fetch();
