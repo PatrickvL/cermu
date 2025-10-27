@@ -155,8 +155,8 @@ bus_state_t op_brk(bus_state_t pins) {
             
         case 3:
             /* PHI2: Push P|B|U to stack (B flag set for BRK) */
-            CPU_DL(this) = CPU_P(this) | FLAG_B | FLAG_U;
             if (this->should_complete_write_cycle(pins)) {
+                CPU_DL(this) = CPU_P(this) | FLAG_B | FLAG_U;
                 pins = this->phi2_write(pins, REG_SP, REG_DL);
                 CPU_S(this)--;
                 /* Set interrupt disable flag */
