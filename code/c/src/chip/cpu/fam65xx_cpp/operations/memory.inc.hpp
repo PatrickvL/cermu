@@ -64,10 +64,8 @@ bus_state_t op_ldy(bus_state_t pins) {
 bus_state_t op_sta(bus_state_t pins) {
     // Store accumulator directly from A register (eliminates DL copy)
     pins = this->phi2_write(pins, REG_AB, REG_A);
-    if (FAM65XX_GET_RDY(pins)) {
-        // Complete instruction (STA doesn't affect flags)
-        transition_to_fetch();
-    }
+    // Write cycles ignore RDY - complete instruction immediately
+    transition_to_fetch();
     return pins;
 }
 
@@ -78,10 +76,8 @@ bus_state_t op_sta(bus_state_t pins) {
 bus_state_t op_stx(bus_state_t pins) {
     // Store X register directly from X register (eliminates DL copy)
     pins = this->phi2_write(pins, REG_AB, REG_X);
-    if (FAM65XX_GET_RDY(pins)) {
-        // Complete instruction (STX doesn't affect flags)
-        transition_to_fetch();
-    }
+    // Write cycles ignore RDY - complete instruction immediately
+    transition_to_fetch();
     return pins;
 }
 
@@ -92,10 +88,8 @@ bus_state_t op_stx(bus_state_t pins) {
 bus_state_t op_sty(bus_state_t pins) {
     // Store Y register directly from Y register (eliminates DL copy)
     pins = this->phi2_write(pins, REG_AB, REG_Y);
-    if (FAM65XX_GET_RDY(pins)) {
-        // Complete instruction (STY doesn't affect flags)
-        transition_to_fetch();
-    }
+    // Write cycles ignore RDY - complete instruction immediately
+    transition_to_fetch();
     return pins;
 }
 
