@@ -26,7 +26,9 @@
 /* ========================================================================== */
 
 /* C11 standard alignment support with fallback to compiler-specific versions */
-#if __STDC_VERSION__ >= 201112L
+#ifdef __cplusplus
+    /* In C++, alignas is a keyword - don't redefine it */
+#elif __STDC_VERSION__ >= 201112L
     #include <stdalign.h>
     /* alignas is already defined in C11 */
 #elif defined(_MSC_VER)
