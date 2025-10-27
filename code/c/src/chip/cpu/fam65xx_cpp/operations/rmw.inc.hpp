@@ -11,10 +11,13 @@ template<typename OperationFunc>
 bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func) {
     if (this->opcode_entry.flags & OF_RMW) {
         // Memory mode - 3-cycle RMW operation (hardware-accurate)
-        switch (this->cycle_index++) {
+        switch (this->cycle_index) {
             case 0:
                 // Cycle 0: Read original value from memory
                 pins = this->phi2_read(pins, REG_AB, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->cycle_index++;
+                }
                 return pins;
                 
             case 1:
@@ -23,6 +26,7 @@ bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func)
                 if (FAM65XX_GET_RDY(pins)) {
                     // Perform operation on the read data (modify step)
                     operation_func(CPU_DL(this));
+                    this->cycle_index++;
                 }
                 return pins;
                 

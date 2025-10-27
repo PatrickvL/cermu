@@ -178,14 +178,17 @@ bus_state_t op_rra(bus_state_t pins) {
 
 bus_state_t op_jam(bus_state_t pins) {
     // JAM/KIL instruction behavior on 6502:
-    // - PC advances to read operand, then resets to opcode address  
+    // - PC advances to read operand, then resets to opcode address
     // - Performs 3-cycle pattern: opcode read, operand read, operand read
     // - For test compatibility: complete after 3 cycles with PC at opcode address
     
-    switch (this->cycle_index++) {
+    switch (this->cycle_index) {
         case 0:
             // PHI2: Read operand from PC+1 (this was PC++ after opcode fetch)
             pins = phi2_read(pins, REG_PC, REG_DL);
+            if (FAM65XX_GET_RDY(pins)) {
+                this->cycle_index++;
+            }
             return pins;
             
         case 1:
@@ -199,7 +202,7 @@ bus_state_t op_jam(bus_state_t pins) {
                 // In real hardware this would loop forever, but tests expect finite execution
                 transition_to_fetch();
             }
-            break;
+            return pins;
     }
     return pins;
 }
