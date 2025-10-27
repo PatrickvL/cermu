@@ -31,7 +31,8 @@ bus_state_t op_sax(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // Store A AND X to memory with processor-specific RDY handling
         CPU_DL(this) = CPU_A(this) & CPU_X(this);
-        if (phi2_write_with_rdy_check(pins, REG_AB, REG_DL)) {
+        if (this->should_complete_write_cycle(pins)) {
+            pins = this->phi2_write(pins, REG_AB, REG_DL);
             transition_to_fetch();
         }
     }
@@ -322,7 +323,8 @@ bus_state_t op_sha(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // SHA - Store A AND X AND (high byte of effective address + 1) (illegal)
         CPU_DL(this) = CPU_A(this) & CPU_X(this) & ((CPU_ABH(this) + 1) & 0xFF);
-        if (phi2_write_with_rdy_check(pins, REG_AB, REG_DL)) {
+        if (this->should_complete_write_cycle(pins)) {
+            pins = this->phi2_write(pins, REG_AB, REG_DL);
             transition_to_fetch();
         }
     }
@@ -333,7 +335,8 @@ bus_state_t op_shs(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // SHS - Store (A AND X) AND ((high byte of effective address) + 1) to stack pointer (illegal)
         CPU_S(this) = CPU_A(this) & CPU_X(this) & ((CPU_ABH(this) + 1) & 0xFF);
-        if (phi2_write_with_rdy_check(pins, REG_AB, REG_S)) {
+        if (this->should_complete_write_cycle(pins)) {
+            pins = this->phi2_write(pins, REG_AB, REG_S);
             transition_to_fetch();
         }
     }
@@ -344,7 +347,8 @@ bus_state_t op_shx(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // SHX - Store X AND ((high byte of effective address) + 1) (illegal)
         CPU_DL(this) = CPU_X(this) & ((CPU_ABH(this) + 1) & 0xFF);
-        if (phi2_write_with_rdy_check(pins, REG_AB, REG_DL)) {
+        if (this->should_complete_write_cycle(pins)) {
+            pins = this->phi2_write(pins, REG_AB, REG_DL);
             transition_to_fetch();
         }
     }
@@ -355,7 +359,8 @@ bus_state_t op_shy(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // SHY - Store Y AND ((high byte of effective address) + 1) (illegal)
         CPU_DL(this) = CPU_Y(this) & ((CPU_ABH(this) + 1) & 0xFF);
-        if (phi2_write_with_rdy_check(pins, REG_AB, REG_DL)) {
+        if (this->should_complete_write_cycle(pins)) {
+            pins = this->phi2_write(pins, REG_AB, REG_DL);
             transition_to_fetch();
         }
     }

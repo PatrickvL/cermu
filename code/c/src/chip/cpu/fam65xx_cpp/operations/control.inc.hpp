@@ -39,7 +39,8 @@ bus_state_t op_jsr(bus_state_t pins) {
             
         case 2:
             /* PHI2: Push PCH (high byte of return address) to stack */
-            if (phi2_write_with_rdy_check(pins, REG_SP, REG_PCH)) {
+            if (this->should_complete_write_cycle(pins)) {
+                pins = this->phi2_write(pins, REG_SP, REG_PCH);
                 CPU_S(this)--;
                 this->cycle_index++;
             }
@@ -47,7 +48,8 @@ bus_state_t op_jsr(bus_state_t pins) {
             
         case 3:
             /* PHI2: Push PCL (low byte of return address) to stack */
-            if (phi2_write_with_rdy_check(pins, REG_SP, REG_PCL)) {
+            if (this->should_complete_write_cycle(pins)) {
+                pins = this->phi2_write(pins, REG_SP, REG_PCL);
                 CPU_S(this)--;
                 this->cycle_index++;
             }
@@ -135,8 +137,8 @@ bus_state_t op_brk(bus_state_t pins) {
             
         case 1:
             /* PHI2: Push PCH to stack */
-            CPU_DL(this) = CPU_PCH(this);
-            if (phi2_write_with_rdy_check(pins, REG_SP, REG_DL)) {
+            if (this->should_complete_write_cycle(pins)) {
+                pins = this->phi2_write(pins, REG_SP, REG_PCH);
                 CPU_S(this)--;
                 this->cycle_index++;
             }
@@ -144,8 +146,8 @@ bus_state_t op_brk(bus_state_t pins) {
             
         case 2:
             /* PHI2: Push PCL to stack */
-            CPU_DL(this) = CPU_PCL(this);
-            if (phi2_write_with_rdy_check(pins, REG_SP, REG_DL)) {
+            if (this->should_complete_write_cycle(pins)) {
+                pins = this->phi2_write(pins, REG_SP, REG_PCL);
                 CPU_S(this)--;
                 this->cycle_index++;
             }
@@ -154,7 +156,8 @@ bus_state_t op_brk(bus_state_t pins) {
         case 3:
             /* PHI2: Push P|B|U to stack (B flag set for BRK) */
             CPU_DL(this) = CPU_P(this) | FLAG_B | FLAG_U;
-            if (phi2_write_with_rdy_check(pins, REG_SP, REG_DL)) {
+            if (this->should_complete_write_cycle(pins)) {
+                pins = this->phi2_write(pins, REG_SP, REG_DL);
                 CPU_S(this)--;
                 /* Set interrupt disable flag */
                 set_flag(FLAG_I);

@@ -341,8 +341,44 @@ public:
     }
     
     // ========================================================================
-    // FEATURE-SPECIFIC MEMORY ACCESS OVERRIDES
+    // PHI2 UNIFIED MEMORY ACCESS WITH PROCESSOR-VARIANT RDY HANDLING
     // ========================================================================
+    
+    /*
+     * PHI2 Write with Hardware-Accurate RDY Behavior
+     *
+     * The RDY (Ready) pin allows external hardware to stretch CPU cycles by pulling
+     * RDY low, causing the CPU to wait until RDY goes high before continuing.
+     * This is essential for interfacing with slower memory or I/O devices.
+     *
+     * PROCESSOR-VARIANT BEHAVIOR:
+     * ===========================
+     *
+     * NMOS processors (6502, 6510, NES 6502):
+     *   - HARDWARE BUG: Write cycles ignore RDY and always complete
+     *   - Read cycles respect RDY and will stretch when RDY is low
+     *   - This asymmetry is a well-documented NMOS design flaw
+     *
+     * CMOS processors (65C02, 65C816):
+     *   - BUG FIXED: Both read AND write cycles respect RDY consistently
+     *   - When RDY is low, the cycle stretches and NO bus operation occurs
+     *   - This allows proper interfacing with slow devices on both reads and writes
+     *
+     * Returns true if the operation completed and caller should advance to next cycle.
+     * Returns false if RDY is low and the cycle should be repeated next tick.
+     */
+    // Check if write cycle should complete based on RDY state and processor variant
+    inline bool should_complete_write_cycle(bus_state_t pins) {
+        // NMOS processors (6502/6510/NES6502): Ignore RDY during write cycles (hardware bug)
+        // CMOS processors (65C02/65C816): Respect RDY during write cycles (bug fixed)
+        if constexpr (has_nmos_bugs<ProcessorTag>()) {
+            // NMOS: Always complete write regardless of RDY state (matches hardware bug)
+            return true;
+        } else {
+            // CMOS: Only complete write when RDY is high (proper behavior)
+            return FAM65XX_GET_RDY(pins);
+        }
+    }
 
     // Unified memory write function with optional I/O port handling
     bus_state_t phi2_write(bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) {
@@ -374,6 +410,45 @@ public:
         return pins;
     }
     
+    /*
+     * PHI2 Read with Hardware-Accurate RDY Behavior
+     *
+     * Both NMOS and CMOS processors respect RDY during read cycles, but the
+     * implementation details vary slightly.
+     *
+     * PROCESSOR-VARIANT BEHAVIOR:
+     * ===========================
+     *
+     * NMOS processors (6502, 6510, NES 6502):
+     *   - Read cycles respect RDY and stretch when RDY is low
+     *   - Address bus retains previous value when RDY is low
+     *   - Data is still read from bus (for VIC-II compatibility)
+     *
+     * CMOS processors (65C02, 65C816):
+     *   - Read cycles respect RDY and stretch when RDY is low
+     *   - Address bus behavior is consistent with NMOS
+     *   - Data reading behavior is identical to NMOS
+     *
+     * VIC-II BUS ARBITRATION - WHY phi2_read() IS ALWAYS CALLED:
+     * ==========================================================
+     * Hardware Behavior When RDY Signal Changes:
+     * ┌─────────────────┬──────────────────┬─────────────────────────────┐
+     * │   Component     │    RDY High      │         RDY Low             │
+     * ├─────────────────┼──────────────────┼─────────────────────────────┤
+     * │ CPU             │ Normal execution │ STALLED (repeats cycle)     │
+     * │ VIC-II          │ Gets bus access  │ CONTINUES (needs bus)       │
+     * │ Address Bus     │ CPU's address    │ VIC-II's address (previous) │
+     * │ Memory Access   │ CPU operation    │ VIC-II operation            │
+     * │ Bus Pins Update │ Required         │ STILL REQUIRED              │
+     * └─────────────────┴──────────────────┴─────────────────────────────┘
+     *
+     * This is why phi2_read() must ALWAYS be called regardless of RDY state:
+     * - When RDY=1: CPU performs its memory access normally
+     * - When RDY=0: VIC-II continues its memory access, CPU waits but bus must be serviced
+     * - Memory callbacks and pin updates are essential for VIC-II operation
+     * - Address bus behavior changes based on RDY but memory access always occurs
+     */
+    
     // VIC-II compatible memory read with proper RDY handling (matching old implementation)
     bus_state_t phi2_read(bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) {
         trace_enter("phi2_read");
@@ -397,12 +472,12 @@ public:
                 } else if (address == 0x0001) {
                     this->reg8[data_reg] = this->io_port.direction;
                     return pins; // Don't perform bus read
-                }    
+                }
             }
         } else {
             address = BUS_GET_ADDR(pins);  // Keep existing bus address when RDY low
             trace("RDY low: keeping address = %04X", address);
-        }    
+        }
     
         // Always perform memory read to service VIC-II even when CPU halted
         uint8_t current_bus_data = BUS_GET_DATA(pins);
@@ -572,27 +647,6 @@ public:
     // Check if page was crossed during addressing
     bool page_crossed(uint16_t addr1, uint16_t addr2) const {
         return ((addr1 ^ addr2) & 0x0100) != 0;
-    }
-    
-    // ========================================================================
-    // PHI2 UNIFIED MEMORY ACCESS WITH PROCESSOR-VARIANT RDY HANDLING
-    // ========================================================================
-    
-    // Unified PHI2 write with processor-variant-specific RDY behavior
-    // Returns true if write completed and caller should perform completion logic
-    inline bool phi2_write_with_rdy_check(bus_state_t& pins, reg16_t addr_reg, reg8_t data_reg) {
-        // Always perform PHI2 write operation
-        pins = phi2_write(pins, addr_reg, data_reg);
-        
-        // Processor-variant-specific RDY behavior
-        if constexpr (has_nmos_bugs<ProcessorTag>()) {
-            // NMOS variants (6502, 6510): Write cycles ignore RDY, always complete
-            return true;
-        } else {
-            // CMOS variants (65C02, 65C816): Write cycles respect RDY with stretching
-            return FAM65XX_GET_RDY(pins);
-            // If RDY low: cycle stretches, write is postponed until RDY goes high
-        }
     }
     
 private:
