@@ -88,8 +88,7 @@ bus_state_t op_plp(bus_state_t pins) {
         case 0:
             /* PHI2: Dummy read from PC */
             pins = phi2_read(pins, REG_PC, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            break;
+            return pins;
             
         case 1:
             /* PHI2: Dummy read from current stack pointer, then increment SP */

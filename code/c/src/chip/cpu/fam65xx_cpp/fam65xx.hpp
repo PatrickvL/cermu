@@ -456,14 +456,91 @@ public:
     // ========================================================================
     // HELPER FUNCTIONS (needed by operation files)
     // ========================================================================
-    
-    // Update N and Z flags based on value
-    void update_nz_flags(uint8_t value) {
-        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_Z)) |
-                     (value & FLAG_N) |                      // N flag: bit 7 of result
-                     (value == 0 ? FLAG_Z : 0);              // Z flag: set if result is zero
+
+    // === Building blocks ===
+    inline void set_flag(uint8_t flag_mask) {
+        CPU_P(this) |= flag_mask;
     }
     
+    inline void clear_flag(uint8_t flag_mask) {
+        CPU_P(this) &= ~flag_mask;
+    }
+    
+    // === Foundation: Single memory write ===
+    inline void update_flags(uint8_t clear_mask, uint8_t set_mask) {
+        CPU_P(this) = (CPU_P(this) & ~clear_mask) | set_mask;
+    }
+    
+    inline void update_flag(uint8_t flag_mask, bool condition) {
+        update_flags(flag_mask, -condition & flag_mask);
+    }
+    
+    // === Helpers: Branchless flag calculations ===
+    inline uint8_t calc_n_flag(uint8_t value) {
+        return value & FLAG_N;  // Extract bit 7 (sign bit)
+    }    
+
+    inline uint8_t calc_z_flag(uint8_t value) {
+        return -(value == 0) & FLAG_Z;
+    }
+
+    inline uint8_t calc_c_flag(uint16_t result) {
+        return (result >> 8) & FLAG_C;  // Extract bit 8 (carry/borrow bit)
+    }
+
+    // Overflow for addition: sign bit of result differs from both inputs with same sign
+    inline uint8_t calc_v_flag_add(uint8_t old_a, uint8_t operand, uint16_t result) {
+        return (((old_a ^ result) & (operand ^ result)) >> 1) & FLAG_V;
+    }
+
+    // Overflow for subtraction: sign bit of result differs from minuend when inputs differ in sign
+    inline uint8_t calc_v_flag_sub(uint8_t old_a, uint8_t operand, uint16_t result) {
+        return (((old_a ^ operand) & (old_a ^ result)) >> 1) & FLAG_V;
+    }
+
+    // === Derived operations ===
+    inline void update_c_flag(uint8_t value, uint8_t bit_position) {
+        update_flag(FLAG_C,
+                   (value >> bit_position) & FLAG_C);
+    }
+
+    inline void update_nz_flags(uint8_t value) {
+        update_flags(FLAG_N | FLAG_Z, 
+                    calc_n_flag(value) |
+                    calc_z_flag(value));
+    }                
+
+    inline void update_nzc_flags(uint8_t minuend, uint8_t subtrahend) {
+        uint16_t result = minuend - subtrahend;
+        
+        update_flags(FLAG_N | FLAG_Z | FLAG_C,
+                    calc_n_flag(result) | 
+                    calc_z_flag(result) |
+                    calc_c_flag(~result));  // Inverted: carry set when no borrow
+    }
+
+    inline void update_nvz_flags(uint8_t operand, uint8_t and_result) {
+        update_flags(FLAG_N | FLAG_V | FLAG_Z,
+                    (operand & (FLAG_N | FLAG_V)) | 
+                    calc_z_flag(and_result));
+    }
+
+    inline void update_flags_adc(uint8_t old_a, uint8_t operand, uint16_t result) {
+        update_flags(FLAG_N | FLAG_V | FLAG_Z | FLAG_C,
+                    calc_n_flag(result) | 
+                    calc_z_flag(result) |
+                    calc_c_flag(result) |     // Direct: carry set when overflow
+                    calc_v_flag_add(old_a, operand, result));
+    }
+
+    inline void update_flags_sbc(uint8_t old_a, uint8_t operand, uint16_t result) {
+        update_flags(FLAG_N | FLAG_V | FLAG_Z | FLAG_C,
+                    calc_n_flag(result) | 
+                    calc_z_flag(result) |
+                    calc_c_flag(~result) |    // Inverted: carry set when no borrow
+                    calc_v_flag_sub(old_a, operand, result));
+    }
+
     // Check if page was crossed during addressing
     bool page_crossed(uint16_t addr1, uint16_t addr2) const {
         return ((addr1 ^ addr2) & 0x0100) != 0;
@@ -737,16 +814,15 @@ private:
     }
     
     // Optimized version with direct register targeting to eliminate copies
-    inline bus_state_t read_operand_immediate_or_memory(bus_state_t pins, reg8_t target_reg) {
+    inline bus_state_t phi2_read_operand(bus_state_t pins, reg8_t target_reg) {
         if (this->opcode_entry.am_index == AM_IMM) {
             // Immediate mode - read from PC directly into target register
             pins = phi2_read(pins, REG_PC, target_reg);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            CPU_PC(this)++;
+            if (FAM65XX_GET_RDY(pins))
+                CPU_PC(this)++;
         } else {
             // Memory mode - read from target address directly into target register
             pins = phi2_read(pins, REG_AB, target_reg);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
         }
         return pins;
     }
