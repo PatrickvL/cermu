@@ -76,8 +76,9 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table();
 // ============================================================================
 
 template<typename ProcessorTag>
-class fam65xx_t : 
-    public io_port_base_t<ProcessorTag>        // Conditional I/O port only
+class fam65xx_t :
+    public io_port_base_t<ProcessorTag>,       // Conditional I/O port only
+    public apu_base_t<ProcessorTag>            // Conditional APU only
 {
 public:
     // Type aliases for cleaner code
@@ -331,6 +332,11 @@ public:
             pins = this->fetch_opcode(pins);
         }
         
+        // Clock APU if present (every CPU cycle)
+        if constexpr (has_apu<ProcessorTag>()) {
+            this->clock_apu();
+        }
+        
         trace_registers("after");
         trace_exit("tick");
         return pins;
@@ -386,21 +392,37 @@ public:
         uint16_t addr = this->reg16[addr_reg];
         uint8_t data = this->reg8[data_reg];
         
-        // Standard bus write for all other addresses
-        pins = BUS_SET_ADDR(pins, addr);
-        pins = BUS_SET_DATA(pins, data);
-        pins &= ~FAM65XX_RW; // Set WRITE mode
+        // Handle APU register access (compile-time conditional)
+        if constexpr (has_apu<ProcessorTag>()) {
+            if (this->write_apu_register(addr, data)) {
+                pins = BUS_SET_ADDR(pins, addr);
+                pins = BUS_SET_DATA(pins, data);
+                pins &= ~FAM65XX_RW; // Set WRITE mode
+                return pins; // Handled by APU, don't perform bus write
+            }
+        }
         
         // Handle 6510 I/O port access (compile-time conditional)
         if constexpr (has_io_port<ProcessorTag>()) {
             if (addr == 0x0000) {
                 this->write_io_ddr(data);
+                pins = BUS_SET_ADDR(pins, addr);
+                pins = BUS_SET_DATA(pins, data);
+                pins &= ~FAM65XX_RW; // Set WRITE mode
                 return pins; // Don't perform bus write
             } else if (addr == 0x0001) {
                 this->write_io_data(data);
+                pins = BUS_SET_ADDR(pins, addr);
+                pins = BUS_SET_DATA(pins, data);
+                pins &= ~FAM65XX_RW; // Set WRITE mode
                 return pins; // Don't perform bus write
             }
         }
+        
+        // Standard bus write for all other addresses
+        pins = BUS_SET_ADDR(pins, addr);
+        pins = BUS_SET_DATA(pins, data);
+        pins &= ~FAM65XX_RW; // Set WRITE mode
         
         // Use memory callback if available
         if (this->mem_write != nullptr) {
@@ -460,6 +482,17 @@ public:
         if (FAM65XX_GET_RDY(pins)) {
             address = this->reg16[addr_reg];
             pins = BUS_SET_ADDR(pins, address);
+            
+            // Handle APU register access (only when RDY is high)
+            if constexpr (has_apu<ProcessorTag>()) {
+                uint8_t apu_data;
+                if (this->read_apu_register(address, apu_data)) {
+                    this->reg8[data_reg] = apu_data;
+                    pins = BUS_SET_DATA(pins, apu_data);
+                    return pins; // Don't perform bus read
+                }
+            }
+            
             if constexpr (has_io_port<ProcessorTag>()) {
                 // Handle 6510 I/O port access (only when RDY is high)
                 if (address == 0x0000) {
@@ -765,6 +798,11 @@ private:
         // Initialize I/O port if present
         if constexpr (has_io_port<ProcessorTag>()) {
             this->init_io_port();
+        }
+        
+        // Initialize APU if present
+        if constexpr (has_apu<ProcessorTag>()) {
+            this->init_apu();
         }
         
         // BCD and CMOS state are now integrated into main class

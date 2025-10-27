@@ -35,6 +35,7 @@ enum class ProcessorFeatures : uint32_t {
     NATIVE_MODE         = 1 << 13,  // 65C816 native mode
     WAIT_STATES         = 1 << 14,  // WAI/STP instruction support
     COPROCESSOR         = 1 << 15,  // COP instruction support
+    AUDIO_PROCESSING    = 1 << 16,  // Integrated APU (Audio Processing Unit)
 };
 
 // Bitwise operators
@@ -108,13 +109,14 @@ struct ProcessorTraits<MOS6510Tag> {
     static constexpr uint16_t year_introduced = 1982;
 };
 
-// NES 6502 - 6502 without decimal mode
+// NES 6502 - 6502 without decimal mode but with integrated APU
 template<>
 struct ProcessorTraits<NES6502Tag> {
-    static constexpr ProcessorFeatures features = 
+    static constexpr ProcessorFeatures features =
         ProcessorFeatures::MOS6502_BASE |
         ProcessorFeatures::ILLEGAL_OPCODES |
-        ProcessorFeatures::NMOS_BUGS;
+        ProcessorFeatures::NMOS_BUGS |
+        ProcessorFeatures::AUDIO_PROCESSING;
     
     static constexpr const char* name = "Ricoh 2A03";
     static constexpr const char* family = "NES 6502";
@@ -217,6 +219,11 @@ constexpr bool has_wide_registers() {
 template<typename ProcessorTag>
 constexpr bool has_nmos_bugs() {
     return has_feature<ProcessorTag>(ProcessorFeatures::NMOS_BUGS);
+}
+
+template<typename ProcessorTag>
+constexpr bool has_apu() {
+    return has_feature<ProcessorTag>(ProcessorFeatures::AUDIO_PROCESSING);
 }
 
 // Multiple feature queries

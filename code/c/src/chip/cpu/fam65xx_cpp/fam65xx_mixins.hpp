@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <type_traits>
 #include "fam65xx_processor_traits.hpp"
+#include "nes6502_unified.hpp"
 
 #ifdef __cplusplus
 
@@ -182,6 +183,101 @@ struct wide_registers_mixin_t {
 };
 
 // ============================================================================
+// APU MIXIN (NES 6502 Audio Processing Unit)
+// ============================================================================
+
+// APU functionality for NES 6502 processors with integrated audio
+template<typename ProcessorTag>
+struct apu_mixin_t {
+    // APU instance (aligned for performance)
+    struct alignas(8) {
+        nes6502_apu::APU* apu_instance;
+        bool is_pal;
+        uint8_t _padding[6]; // Align to 8 bytes
+    } apu_state;
+    
+    // Initialize APU
+    void init_apu() {
+        apu_state.is_pal = false; // Default to NTSC
+        apu_state.apu_instance = new nes6502_apu::APU(apu_state.is_pal);
+    }
+    
+    // Cleanup APU
+    void destroy_apu() {
+        delete apu_state.apu_instance;
+        apu_state.apu_instance = nullptr;
+    }
+    
+    // APU register write handler ($4000-$4017)
+    bool write_apu_register(uint16_t addr, uint8_t value) {
+        if (addr >= 0x4000 && addr <= 0x4017) {
+            if (apu_state.apu_instance) {
+                apu_state.apu_instance->write(addr, value);
+            }
+            return true; // Handled
+        }
+        return false; // Not APU register
+    }
+    
+    // APU register read handler ($4015)
+    bool read_apu_register(uint16_t addr, uint8_t& value) {
+        if (addr == 0x4015) {
+            if (apu_state.apu_instance) {
+                value = apu_state.apu_instance->read(addr);
+            } else {
+                value = 0;
+            }
+            return true; // Handled
+        }
+        return false; // Not APU register
+    }
+    
+    // Clock APU (called every CPU cycle)
+    void clock_apu() {
+        if (apu_state.apu_instance) {
+            apu_state.apu_instance->clock();
+        }
+    }
+    
+    // Generate audio sample
+    float generate_audio_sample() {
+        if (apu_state.apu_instance) {
+            return apu_state.apu_instance->sample();
+        }
+        return 0.0f;
+    }
+    
+    // DMC DMA handling
+    bool apu_needs_dma() const {
+        return apu_state.apu_instance && apu_state.apu_instance->dmc_needs_sample();
+    }
+    
+    uint16_t apu_dma_address() const {
+        return apu_state.apu_instance ? apu_state.apu_instance->dmc_sample_address() : 0;
+    }
+    
+    void apu_load_dma_sample(uint8_t data) {
+        if (apu_state.apu_instance) {
+            apu_state.apu_instance->dmc_load_sample(data);
+        }
+    }
+    
+    // APU IRQ status
+    bool apu_irq() const {
+        return apu_state.apu_instance && apu_state.apu_instance->irq();
+    }
+    
+    // Set PAL/NTSC mode
+    void set_apu_region(bool is_pal_region) {
+        apu_state.is_pal = is_pal_region;
+        if (apu_state.apu_instance) {
+            destroy_apu();
+            init_apu();
+        }
+    }
+};
+
+// ============================================================================
 // CONDITIONAL MIXIN TYPE SELECTION
 // ============================================================================
 
@@ -204,6 +300,13 @@ using cmos_state_base_t = empty_mixin_t;  // CMOS state merged into main class
 
 template<typename ProcessorTag>
 using wide_registers_base_t = empty_mixin_t;  // Wide registers disabled for now
+
+template<typename ProcessorTag>
+using apu_base_t = std::conditional_t<
+    has_apu<ProcessorTag>(),
+    apu_mixin_t<ProcessorTag>,
+    empty_mixin_t
+>;
 
 } // namespace fam65xx_cpp
 

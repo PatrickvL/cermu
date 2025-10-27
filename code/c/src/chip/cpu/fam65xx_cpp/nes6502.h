@@ -57,6 +57,14 @@ void nes6502_set_s(nes6502_t* cpu, uint8_t value);
 void nes6502_set_p(nes6502_t* cpu, uint8_t value);
 void nes6502_set_pc(nes6502_t* cpu, uint16_t value);
 
+// APU functions (only available when APU is enabled)
+float nes6502_generate_audio_sample(nes6502_t* cpu);
+bool nes6502_apu_needs_dma(nes6502_t* cpu);
+uint16_t nes6502_apu_dma_address(nes6502_t* cpu);
+void nes6502_apu_load_dma_sample(nes6502_t* cpu, uint8_t data);
+bool nes6502_apu_irq(nes6502_t* cpu);
+void nes6502_set_apu_region(nes6502_t* cpu, bool is_pal);
+
 #ifdef __cplusplus
 }
 #endif
