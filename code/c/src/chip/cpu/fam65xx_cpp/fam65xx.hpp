@@ -391,14 +391,14 @@ public:
         return pins;
     }
     
-    // Template-aware memory write with processor-specific handling
+    // Unified memory write function with optional I/O port handling
     bus_state_t phi2_write(bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) {
         // Get address and data for both checks and bus operations
         uint16_t addr = this->reg16[addr_reg];
         uint8_t data = this->reg8[data_reg];
         
         if constexpr (has_io_port<ProcessorTag>()) {
-            // Handle 6510 I/O port access
+            // Handle 6510 I/O port access (compile-time conditional)
             if (addr == 0x0000) {
                 this->write_io_ddr(data);
                 return pins; // Don't perform bus write
@@ -557,20 +557,6 @@ public:
     // Check if page was crossed during addressing
     bool page_crossed(uint16_t addr1, uint16_t addr2) const {
         return ((addr1 ^ addr2) & 0x0100) != 0;
-    }
-    
-    // Internal write operation without I/O port handling
-    bus_state_t phi2_write_internal(bus_state_t pins, uint16_t addr, uint8_t data) {
-        pins = BUS_SET_ADDR(pins, addr);
-        pins = BUS_SET_DATA(pins, data);
-        pins &= ~FAM65XX_RW; // Set WRITE mode
-        
-        // Use memory callback if available
-        if (this->mem_write != nullptr) {
-            this->mem_write(this->mem_user_data, addr, data);
-        }
-        
-        return pins;
     }
     
 private:

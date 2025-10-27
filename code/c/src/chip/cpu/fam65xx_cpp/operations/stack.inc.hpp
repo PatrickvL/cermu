@@ -40,7 +40,7 @@ bus_state_t op_php(bus_state_t pins) {
         case 1:
             /* PHI2: Write P|B|U to stack (REG_SP already contains 0x0100 | S) */
             CPU_DL(this) = CPU_P(this) | FLAG_B | FLAG_U;
-            pins = phi2_write_internal(pins, REG_SP, REG_DL);
+            pins = phi2_write(pins, REG_SP, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             
             /* PHI1: Decrement stack pointer */

@@ -125,7 +125,7 @@ bus_state_t op_brk(bus_state_t pins) {
         case 1:
             /* PHI2: Push PCH to stack */
             CPU_DL(this) = CPU_PCH(this);
-            pins = phi2_write_internal(pins, REG_SP, REG_DL);
+            pins = phi2_write(pins, REG_SP, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_S(this)--;
             break;
@@ -133,7 +133,7 @@ bus_state_t op_brk(bus_state_t pins) {
         case 2:
             /* PHI2: Push PCL to stack */
             CPU_DL(this) = CPU_PCL(this);
-            pins = phi2_write_internal(pins, REG_SP, REG_DL);
+            pins = phi2_write(pins, REG_SP, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_S(this)--;
             break;
@@ -141,7 +141,7 @@ bus_state_t op_brk(bus_state_t pins) {
         case 3:
             /* PHI2: Push P|B|U to stack (B flag set for BRK) */
             CPU_DL(this) = CPU_P(this) | FLAG_B | FLAG_U;
-            pins = phi2_write_internal(pins, REG_SP, REG_DL);
+            pins = phi2_write(pins, REG_SP, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_S(this)--;
             
