@@ -817,13 +817,14 @@ private:
         if (this->opcode_entry.am_index == AM_IMM) {
             // Immediate mode - read from PC directly into target register
             pins = phi2_read(pins, REG_PC, target_reg);
-            if (FAM65XX_GET_RDY(pins))
+            if (FAM65XX_GET_RDY(pins)) {
                 CPU_PC(this)++;
-        } else {
-            // Memory mode - read from target address directly into target register
-            pins = phi2_read(pins, REG_AB, target_reg);
+            }
+            return pins;
         }
-        return pins;
+
+        // Memory mode - read from target address directly into target register
+        return phi2_read(pins, REG_AB, target_reg);
     }
 };
 

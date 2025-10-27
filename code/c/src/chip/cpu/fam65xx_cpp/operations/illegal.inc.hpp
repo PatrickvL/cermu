@@ -13,13 +13,13 @@ bus_state_t op_lax(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // Load A and X from memory
         pins = this->phi2_read(pins, REG_AB, REG_DL);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        
-        CPU_A(this) = CPU_DL(this);
-        CPU_X(this) = CPU_DL(this);
-        
-        this->update_nz_flags(CPU_A(this));
-        this->transition_to_fetch();
+        if (FAM65XX_GET_RDY(pins)) {
+            CPU_A(this) = CPU_DL(this);
+            CPU_X(this) = CPU_DL(this);
+            
+            this->update_nz_flags(CPU_A(this));
+            this->transition_to_fetch();
+        }
         return pins;
     } else {
         // Invalid on processors without illegal opcodes
@@ -32,9 +32,9 @@ bus_state_t op_sax(bus_state_t pins) {
         // Store A AND X to memory
         CPU_DL(this) = CPU_A(this) & CPU_X(this);
         pins = this->phi2_write(pins, REG_AB, REG_DL);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        
-        this->transition_to_fetch();
+        if (FAM65XX_GET_RDY(pins)) {
+            this->transition_to_fetch();
+        }
         return pins;
     } else {
         return pins;
@@ -191,14 +191,14 @@ bus_state_t op_jam(bus_state_t pins) {
         case 1:
             // PHI2: Read operand again from same address (PC+1)
             pins = phi2_read(pins, REG_PC, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            
-            // JAM: Reset PC back to opcode address (the "jam" effect)
-            CPU_PC(this)--; // Go back to opcode address
-            
-            // For test suite compatibility: complete normally instead of infinite loop
-            // In real hardware this would loop forever, but tests expect finite execution
-            transition_to_fetch();
+            if (FAM65XX_GET_RDY(pins)) {
+                // JAM: Reset PC back to opcode address (the "jam" effect)
+                CPU_PC(this)--; // Go back to opcode address
+                
+                // For test suite compatibility: complete normally instead of infinite loop
+                // In real hardware this would loop forever, but tests expect finite execution
+                transition_to_fetch();
+            }
             break;
     }
     return pins;
@@ -212,18 +212,18 @@ bus_state_t op_anc(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // ANC - AND with carry (AND immediate, then copy N flag to C flag)
         pins = phi2_read(pins, REG_AB, REG_DL);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        
-        // Perform AND with accumulator
-        CPU_A(this) &= CPU_DL(this);
-        
-        // Update N and Z flags
-        update_nz_flags(CPU_A(this));
-        
-        // Copy N flag to C flag (ANC behavior)
-        this->update_flag(FLAG_C, CPU_P(this) & FLAG_N);
-        
-        transition_to_fetch();
+        if (FAM65XX_GET_RDY(pins)) {
+            // Perform AND with accumulator
+            CPU_A(this) &= CPU_DL(this);
+            
+            // Update N and Z flags
+            update_nz_flags(CPU_A(this));
+            
+            // Copy N flag to C flag (ANC behavior)
+            this->update_flag(FLAG_C, CPU_P(this) & FLAG_N);
+            
+            transition_to_fetch();
+        }
     }
     return pins;
 }
@@ -232,23 +232,23 @@ bus_state_t op_arr(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // ARR - AND + ROR with BCD correction (AND immediate, then ROR A)
         pins = phi2_read(pins, REG_AB, REG_DL);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        
-        // Perform AND with accumulator
-        CPU_A(this) &= CPU_DL(this);
-        
-        // Perform ROR on accumulator
-        uint8_t carry_in = this->get_carry_bit_7();
-        this->update_flag(FLAG_C, CPU_A(this) & 0x01);
-        CPU_A(this) = (CPU_A(this) >> 1) | carry_in;
-        
-        // Update N and Z flags
-        update_nz_flags(CPU_A(this));
-        
-        // Set V flag based on bit 6 XOR bit 5 of result
-        this->update_flag(FLAG_V, (CPU_A(this) & 0x40) ^ ((CPU_A(this) & 0x20) << 1));
-        
-        transition_to_fetch();
+        if (FAM65XX_GET_RDY(pins)) {
+            // Perform AND with accumulator
+            CPU_A(this) &= CPU_DL(this);
+            
+            // Perform ROR on accumulator
+            uint8_t carry_in = this->get_carry_bit_7();
+            this->update_flag(FLAG_C, CPU_A(this) & 0x01);
+            CPU_A(this) = (CPU_A(this) >> 1) | carry_in;
+            
+            // Update N and Z flags
+            update_nz_flags(CPU_A(this));
+            
+            // Set V flag based on bit 6 XOR bit 5 of result
+            this->update_flag(FLAG_V, (CPU_A(this) & 0x40) ^ ((CPU_A(this) & 0x20) << 1));
+            
+            transition_to_fetch();
+        }
     }
     return pins;
 }
@@ -257,19 +257,19 @@ bus_state_t op_alr(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // ALR - AND + LSR (AND immediate, then LSR A)
         pins = phi2_read(pins, REG_AB, REG_DL);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        
-        // Perform AND with accumulator
-        CPU_A(this) &= CPU_DL(this);
-        
-        // Perform LSR on accumulator
-        this->update_flag(FLAG_C, CPU_A(this) & 0x01);
-        CPU_A(this) >>= 1;
-        
-        // Update N and Z flags
-        update_nz_flags(CPU_A(this));
-        
-        transition_to_fetch();
+        if (FAM65XX_GET_RDY(pins)) {
+            // Perform AND with accumulator
+            CPU_A(this) &= CPU_DL(this);
+            
+            // Perform LSR on accumulator
+            this->update_flag(FLAG_C, CPU_A(this) & 0x01);
+            CPU_A(this) >>= 1;
+            
+            // Update N and Z flags
+            update_nz_flags(CPU_A(this));
+            
+            transition_to_fetch();
+        }
     }
     return pins;
 }
@@ -287,12 +287,12 @@ bus_state_t op_xaa(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // XAA - Transfer X AND immediate to A (illegal)
         pins = phi2_read(pins, REG_AB, REG_DL);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        
-        CPU_A(this) = CPU_X(this) & CPU_DL(this);
-        update_nz_flags(CPU_A(this));
-        
-        transition_to_fetch();
+        if (FAM65XX_GET_RDY(pins)) {
+            CPU_A(this) = CPU_X(this) & CPU_DL(this);
+            update_nz_flags(CPU_A(this));
+            
+            transition_to_fetch();
+        }
     }
     return pins;
 }
@@ -301,19 +301,19 @@ bus_state_t op_sbx(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // SBX - Compare X with A AND immediate (illegal) (also called AXS)
         pins = phi2_read(pins, REG_AB, REG_DL);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        
-        uint8_t temp = CPU_A(this) & CPU_X(this);
-        uint8_t result = temp - CPU_DL(this);
-        
-        // Set carry flag using standard subtraction semantics (carry = no borrow)
-        this->update_flag(FLAG_C, temp >= CPU_DL(this));
-        
-        // Update X with result
-        CPU_X(this) = result;
-        update_nz_flags(CPU_X(this));
-        
-        transition_to_fetch();
+        if (FAM65XX_GET_RDY(pins)) {
+            uint8_t temp = CPU_A(this) & CPU_X(this);
+            uint8_t result = temp - CPU_DL(this);
+            
+            // Set carry flag using standard subtraction semantics (carry = no borrow)
+            this->update_flag(FLAG_C, temp >= CPU_DL(this));
+            
+            // Update X with result
+            CPU_X(this) = result;
+            update_nz_flags(CPU_X(this));
+            
+            transition_to_fetch();
+        }
     }
     return pins;
 }
@@ -324,9 +324,9 @@ bus_state_t op_sha(bus_state_t pins) {
         uint8_t result = CPU_A(this) & CPU_X(this) & ((CPU_ABH(this) + 1) & 0xFF);
         CPU_DL(this) = result;
         pins = phi2_write(pins, REG_AB, REG_DL);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        
-        transition_to_fetch();
+        if (FAM65XX_GET_RDY(pins)) {
+            transition_to_fetch();
+        }
     }
     return pins;
 }
@@ -338,9 +338,9 @@ bus_state_t op_shs(bus_state_t pins) {
         CPU_S(this) = result;
         CPU_DL(this) = result;
         pins = phi2_write(pins, REG_AB, REG_DL);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        
-        transition_to_fetch();
+        if (FAM65XX_GET_RDY(pins)) {
+            transition_to_fetch();
+        }
     }
     return pins;
 }
@@ -351,9 +351,9 @@ bus_state_t op_shx(bus_state_t pins) {
         uint8_t result = CPU_X(this) & ((CPU_ABH(this) + 1) & 0xFF);
         CPU_DL(this) = result;
         pins = phi2_write(pins, REG_AB, REG_DL);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        
-        transition_to_fetch();
+        if (FAM65XX_GET_RDY(pins)) {
+            transition_to_fetch();
+        }
     }
     return pins;
 }
@@ -364,9 +364,9 @@ bus_state_t op_shy(bus_state_t pins) {
         uint8_t result = CPU_Y(this) & ((CPU_ABH(this) + 1) & 0xFF);
         CPU_DL(this) = result;
         pins = phi2_write(pins, REG_AB, REG_DL);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        
-        transition_to_fetch();
+        if (FAM65XX_GET_RDY(pins)) {
+            transition_to_fetch();
+        }
     }
     return pins;
 }
@@ -375,15 +375,15 @@ bus_state_t op_las(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // LAS - Load A, X, and S with memory AND stack pointer (illegal)
         pins = phi2_read(pins, REG_AB, REG_DL);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        
-        uint8_t result = CPU_DL(this) & CPU_S(this);
-        CPU_A(this) = result;
-        CPU_X(this) = result;
-        CPU_S(this) = result;
-        
-        update_nz_flags(result);
-        transition_to_fetch();
+        if (FAM65XX_GET_RDY(pins)) {
+            uint8_t result = CPU_DL(this) & CPU_S(this);
+            CPU_A(this) = result;
+            CPU_X(this) = result;
+            CPU_S(this) = result;
+            
+            update_nz_flags(result);
+            transition_to_fetch();
+        }
     }
     return pins;
 }
