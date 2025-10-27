@@ -32,9 +32,8 @@ bus_state_t op_sax(bus_state_t pins) {
         // Store A AND X to memory
         CPU_DL(this) = CPU_A(this) & CPU_X(this);
         pins = this->phi2_write(pins, REG_AB, REG_DL);
-        if (FAM65XX_GET_RDY(pins)) {
-            this->transition_to_fetch();
-        }
+        // Write cycles ignore RDY - complete instruction immediately
+        this->transition_to_fetch();
         return pins;
     } else {
         return pins;
@@ -327,9 +326,8 @@ bus_state_t op_sha(bus_state_t pins) {
         uint8_t result = CPU_A(this) & CPU_X(this) & ((CPU_ABH(this) + 1) & 0xFF);
         CPU_DL(this) = result;
         pins = phi2_write(pins, REG_AB, REG_DL);
-        if (FAM65XX_GET_RDY(pins)) {
-            transition_to_fetch();
-        }
+        // Write cycles ignore RDY - complete instruction immediately
+        transition_to_fetch();
     }
     return pins;
 }
@@ -341,9 +339,8 @@ bus_state_t op_shs(bus_state_t pins) {
         CPU_S(this) = result;
         CPU_DL(this) = result;
         pins = phi2_write(pins, REG_AB, REG_DL);
-        if (FAM65XX_GET_RDY(pins)) {
-            transition_to_fetch();
-        }
+        // Write cycles ignore RDY - complete instruction immediately
+        transition_to_fetch();
     }
     return pins;
 }
@@ -354,9 +351,8 @@ bus_state_t op_shx(bus_state_t pins) {
         uint8_t result = CPU_X(this) & ((CPU_ABH(this) + 1) & 0xFF);
         CPU_DL(this) = result;
         pins = phi2_write(pins, REG_AB, REG_DL);
-        if (FAM65XX_GET_RDY(pins)) {
-            transition_to_fetch();
-        }
+        // Write cycles ignore RDY - complete instruction immediately
+        transition_to_fetch();
     }
     return pins;
 }
@@ -367,9 +363,8 @@ bus_state_t op_shy(bus_state_t pins) {
         uint8_t result = CPU_Y(this) & ((CPU_ABH(this) + 1) & 0xFF);
         CPU_DL(this) = result;
         pins = phi2_write(pins, REG_AB, REG_DL);
-        if (FAM65XX_GET_RDY(pins)) {
-            transition_to_fetch();
-        }
+        // Write cycles ignore RDY - complete instruction immediately
+        transition_to_fetch();
     }
     return pins;
 }

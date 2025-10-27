@@ -23,19 +23,16 @@ bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func)
             case 1:
                 // Cycle 1: Dummy write original value back (hardware behavior)
                 pins = this->phi2_write(pins, REG_AB, REG_DL);
-                if (FAM65XX_GET_RDY(pins)) {
-                    // Perform operation on the read data (modify step)
-                    operation_func(CPU_DL(this));
-                    this->cycle_index++;
-                }
+                // Write cycles ignore RDY - perform operation and advance immediately
+                operation_func(CPU_DL(this));
+                this->cycle_index++;
                 return pins;
                 
             case 2:
                 // Cycle 2: Write modified result back to memory
                 pins = this->phi2_write(pins, REG_AB, REG_DL);
-                if (FAM65XX_GET_RDY(pins)) {
-                    this->transition_to_fetch();
-                }
+                // Write cycles ignore RDY - complete instruction immediately
+                this->transition_to_fetch();
                 return pins;
         }
     } else {

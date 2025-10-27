@@ -20,11 +20,9 @@ bus_state_t op_pha(bus_state_t pins) {
         case 1:
             /* PHI2: Write A to stack (0x0100 | S) */
             pins = phi2_write(pins, REG_SP, REG_A);
-            if (FAM65XX_GET_RDY(pins)) {
-                /* PHI1: Decrement stack pointer */
-                CPU_S(this)--;
-                this->transition_to_fetch();
-            }
+            /* PHI1: Decrement stack pointer - write cycles ignore RDY */
+            CPU_S(this)--;
+            this->transition_to_fetch();
             return pins;
     }
     return pins;
@@ -45,11 +43,9 @@ bus_state_t op_php(bus_state_t pins) {
             /* PHI2: Write P|B|U to stack (REG_SP already contains 0x0100 | S) */
             CPU_DL(this) = CPU_P(this) | FLAG_B | FLAG_U;
             pins = phi2_write(pins, REG_SP, REG_DL);
-            if (FAM65XX_GET_RDY(pins)) {
-                /* PHI1: Decrement stack pointer */
-                CPU_S(this)--;
-                transition_to_fetch();
-            }
+            /* PHI1: Decrement stack pointer - write cycles ignore RDY */
+            CPU_S(this)--;
+            transition_to_fetch();
             return pins;
     }
     return pins;
