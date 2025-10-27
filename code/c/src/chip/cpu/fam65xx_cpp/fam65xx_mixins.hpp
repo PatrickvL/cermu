@@ -10,7 +10,7 @@
 #include <cstdint>
 #include <type_traits>
 #include "fam65xx_processor_traits.hpp"
-#include "nes6502_unified.hpp"
+#include "nes6502.h"
 
 #ifdef __cplusplus
 
