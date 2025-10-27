@@ -85,13 +85,13 @@ bus_state_t op_pea(bus_state_t pins) {
         // Push high byte first
         CPU_AB(this) = CPU_SP(this);
         CPU_DL(this) = addr_high;
-        pins = phi2_write_internal(pins, REG_AB, REG_DL);
+        pins = phi2_write(pins, REG_AB, REG_DL);
         CPU_S(this)--;
         
         // Push low byte
         CPU_AB(this) = CPU_SP(this);
         CPU_DL(this) = addr_low;
-        pins = phi2_write_internal(pins, REG_AB, REG_DL);
+        pins = phi2_write(pins, REG_AB, REG_DL);
         CPU_S(this)--;
     }
 
@@ -105,7 +105,7 @@ bus_state_t op_phb(bus_state_t pins) {
         // Push DBR to stack
         CPU_AB(this) = CPU_SP(this);
         CPU_DL(this) = this->wide_state.DBR;
-        pins = phi2_write_internal(pins, REG_AB, REG_DL);
+        pins = phi2_write(pins, REG_AB, REG_DL);
         CPU_S(this)--;
     }
     
@@ -122,13 +122,13 @@ bus_state_t op_phd(bus_state_t pins) {
         // Push high byte first
         CPU_AB(this) = CPU_SP(this);
         CPU_DL(this) = d_reg >> 8;
-        pins = phi2_write_internal(pins, REG_AB, REG_DL);
+        pins = phi2_write(pins, REG_AB, REG_DL);
         CPU_S(this)--;
         
         // Push low byte
         CPU_AB(this) = CPU_SP(this);
         CPU_DL(this) = d_reg & 0xFF;
-        pins = phi2_write_internal(pins, REG_AB, REG_DL);
+        pins = phi2_write(pins, REG_AB, REG_DL);
         CPU_S(this)--;
     }
     transition_to_fetch();
@@ -141,7 +141,7 @@ bus_state_t op_phk(bus_state_t pins) {
         // Push PBR to stack
         CPU_AB(this) = CPU_SP(this);
         CPU_DL(this) = this->wide_state.PBR;
-        pins = phi2_write_internal(pins, REG_AB, REG_DL);
+        pins = phi2_write(pins, REG_AB, REG_DL);
         CPU_S(this)--;
     }
     transition_to_fetch();
@@ -221,19 +221,19 @@ bus_state_t op_jsl(bus_state_t pins) {
         // Push PBR
         CPU_AB(this) = CPU_SP(this);
         CPU_DL(this) = this->wide_state.PBR;
-        pins = phi2_write_internal(pins, REG_AB, REG_DL);
+        pins = phi2_write(pins, REG_AB, REG_DL);
         CPU_S(this)--;
         
         // Push PC high
         CPU_AB(this) = CPU_SP(this);
         CPU_DL(this) = return_pc >> 8;
-        pins = phi2_write_internal(pins, REG_AB, REG_DL);
+        pins = phi2_write(pins, REG_AB, REG_DL);
         CPU_S(this)--;
         
         // Push PC low
         CPU_AB(this) = CPU_SP(this);
         CPU_DL(this) = return_pc & 0xFF;
-        pins = phi2_write_internal(pins, REG_AB, REG_DL);
+        pins = phi2_write(pins, REG_AB, REG_DL);
         CPU_S(this)--;
         
         // Set new PC and PBR
