@@ -98,7 +98,7 @@ bus_state_t op_adc(bus_state_t pins) {
     
     uint8_t operand = CPU_DL(this);
     uint8_t a = CPU_A(this);
-    bool carry_in = (CPU_P(this) & FLAG_C) != 0;
+    uint8_t carry_in = CPU_P(this) & FLAG_C;
     
     uint16_t result;
     bool carry_out, overflow;
@@ -111,7 +111,7 @@ bus_state_t op_adc(bus_state_t pins) {
             uint8_t bcd_result;
             uint8_t bcd_flags;
             
-            bcd_addition_helper(a, operand, carry_in ? 1 : 0, &bcd_result, &bcd_flags);
+            bcd_addition_helper(a, operand, carry_in, &bcd_result, &bcd_flags);
             
             CPU_A(this) = bcd_result;
             update_flags(FLAG_N | FLAG_V | FLAG_Z | FLAG_C, bcd_flags);
@@ -123,7 +123,7 @@ bus_state_t op_adc(bus_state_t pins) {
     }
     
     // Binary mode addition (exact flag calculation matching old implementation)
-    result = a + operand + (carry_in ? 1 : 0);
+    result = a + operand + carry_in;
     CPU_A(this) = result & 0xFF;
     
     // ADC modifies only N, V, Z, C flags - preserve all others exactly

@@ -75,11 +75,11 @@ bus_state_t op_lsr(bus_state_t pins) {
 bus_state_t op_rol(bus_state_t pins) {
     return rmw_operation_helper(pins, [this](uint8_t& value) {
         // Get old carry flag
-        uint8_t old_carry = (CPU_P(this) & FLAG_C) ? 1 : 0;
+        uint8_t carry_in = CPU_P(this) & FLAG_C;
         // Set new carry flag from bit 7
         update_c_flag(value, 7);
         // Rotate left with old carry
-        value = (value << 1) | old_carry;
+        value = (value << 1) | carry_in;
         // Update N and Z flags
         this->update_nz_flags(value);
     });
@@ -89,11 +89,11 @@ bus_state_t op_rol(bus_state_t pins) {
 bus_state_t op_ror(bus_state_t pins) {
     return rmw_operation_helper(pins, [this](uint8_t& value) {
         // Get old carry flag
-        uint8_t old_carry = (CPU_P(this) & FLAG_C) ? 0x80 : 0;
+        uint8_t carry_in = (CPU_P(this) & FLAG_C) ? 0x80 : 0;
         // Set new carry flag from bit 0
         update_c_flag(value, 0);
         // Rotate right with old carry
-        value = (value >> 1) | old_carry;
+        value = (value >> 1) | carry_in;
         // Update N and Z flags
         this->update_nz_flags(value);
     });

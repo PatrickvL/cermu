@@ -79,7 +79,7 @@ bus_state_t op_isc(bus_state_t pins) {
             value++;
             
             // Perform SBC A with incremented value (A = A - value - (1 - C))
-            uint16_t result = CPU_A(this) - value - (1 - ((CPU_P(this) & FLAG_C) ? 1 : 0));
+            uint16_t result = CPU_A(this) - value - !(CPU_P(this) & FLAG_C);            
             
             // Set carry flag (inverted for SBC)
             if (result < 0x100) {
@@ -131,13 +131,13 @@ bus_state_t op_rla(bus_state_t pins) {
         // This is a Read-Modify-Write operation
         return rmw_operation_helper(pins, [this](uint8_t& value) {
             // Perform ROL on memory value
-            uint8_t old_carry = (CPU_P(this) & FLAG_C) ? 1 : 0;
+            uint8_t carry_in = CPU_P(this) & FLAG_C;
             if (value & 0x80) {
                 CPU_P(this) |= FLAG_C;
             } else {
                 CPU_P(this) &= ~FLAG_C;
             }
-            value = (value << 1) | old_carry;
+            value = (value << 1) | carry_in;
             
             // Perform AND with accumulator
             CPU_A(this) &= value;
@@ -174,13 +174,13 @@ bus_state_t op_rra(bus_state_t pins) {
         // This is a Read-Modify-Write operation
         return rmw_operation_helper(pins, [this](uint8_t& value) {
             // Perform ROR on memory value
-            uint8_t old_carry = (CPU_P(this) & FLAG_C) ? 0x80 : 0;
+            uint8_t carry_in = (CPU_P(this) & FLAG_C) ? 0x80 : 0;
             if (value & 0x01) {
                 CPU_P(this) |= FLAG_C;
             } else {
                 CPU_P(this) &= ~FLAG_C;
             }
-            value = (value >> 1) | old_carry;
+            value = (value >> 1) | carry_in;
             
             // Perform ADC with accumulator
             uint16_t result = CPU_A(this) + value + ((CPU_P(this) & FLAG_C) ? 1 : 0);
@@ -279,13 +279,13 @@ bus_state_t op_arr(bus_state_t pins) {
         CPU_A(this) &= CPU_DL(this);
         
         // Perform ROR on accumulator
-        uint8_t old_carry = (CPU_P(this) & FLAG_C) ? 0x80 : 0;
+        uint8_t carry_in = (CPU_P(this) & FLAG_C) ? 0x80 : 0;
         if (CPU_A(this) & 0x01) {
             CPU_P(this) |= FLAG_C;
         } else {
             CPU_P(this) &= ~FLAG_C;
         }
-        CPU_A(this) = (CPU_A(this) >> 1) | old_carry;
+        CPU_A(this) = (CPU_A(this) >> 1) | carry_in;
         
         // Update N and Z flags
         update_nz_flags(CPU_A(this));

@@ -146,7 +146,7 @@ bus_state_t op_brk(bus_state_t pins) {
             CPU_S(this)--;
             
             /* PHI1: Set interrupt disable flag */
-            CPU_P(this) |= FLAG_I;
+            set_flag(FLAG_I);
             break;
             
         case 4:
