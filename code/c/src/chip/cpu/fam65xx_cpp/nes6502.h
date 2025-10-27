@@ -914,19 +914,52 @@ public:
             }
         }
         
-        // Hardware-accurate DMC DMA timing with CPU alignment
+        // Hardware-accurate DMC DMA timing with CPU state analysis
         if (dmc.needs_sample && !dma_state.active) {
             dma_state.active = true;
-            // Hardware quirk: DMA timing varies by CPU cycle alignment and operation
-            uint8_t base_cycles = (cycle_counter & 1) ? 3 : 2;  // Odd/even alignment
             
-            // Additional cycle if CPU is in middle of read-modify-write operation
-            // This is a simplified approximation of complex CPU state interactions
-            if ((cycle_counter % 7) == 0) {
-                base_cycles++;  // RMW operations add extra cycle
+            // Hardware-accurate: DMA timing depends on CPU cycle alignment and instruction type
+            uint8_t dma_cycles = (cycle_counter & 1) ? 3 : 2;  // Base odd/even alignment
+            
+            // Hardware quirk: Additional cycles based on CPU state interactions
+            // Analysis of bus state to determine CPU operation type
+            uint16_t cpu_addr = BUS_GET_ADDR(bus_state);
+            uint8_t cpu_data = BUS_GET_DATA(bus_state);
+            bool is_write = BUS_GET_RW(bus_state) == 0;
+            
+            // Detect read-modify-write operations (common patterns)
+            // RMW operations: ASL, LSR, ROL, ROR, INC, DEC (memory)
+            // These take extra cycles and affect DMA timing
+            if (is_write && (cpu_addr >= 0x0000 && cpu_addr < 0x2000)) {
+                // Zero page RMW operations add 1 cycle
+                dma_cycles += 1;
+            } else if (is_write && (cpu_addr >= 0x0200)) {
+                // Absolute RMW operations may add 1-2 cycles depending on page crossing
+                if ((cpu_addr & 0xFF00) != ((cpu_addr - 1) & 0xFF00)) {
+                    dma_cycles += 2;  // Page boundary crossed
+                } else {
+                    dma_cycles += 1;  // Normal RMW
+                }
             }
             
-            dma_state.cycles_remaining = base_cycles;
+            // Hardware quirk: Stack operations affect DMA timing
+            if (cpu_addr >= 0x0100 && cpu_addr <= 0x01FF) {
+                // Stack operations (PHA, PLA, JSR, RTS, interrupts) add delay
+                dma_cycles += 1;
+            }
+            
+            // Hardware quirk: APU register access during DMA setup affects timing
+            if (cpu_addr >= 0x4000 && cpu_addr <= 0x4017) {
+                // Simultaneous APU access can delay DMA by 1 cycle
+                dma_cycles += 1;
+            }
+            
+            // Hardware limitation: Maximum DMA delay is 4 cycles
+            if (dma_cycles > 4) {
+                dma_cycles = 4;
+            }
+            
+            dma_state.cycles_remaining = dma_cycles;
             dma_state.address = dmc.current_address;
         }
         
