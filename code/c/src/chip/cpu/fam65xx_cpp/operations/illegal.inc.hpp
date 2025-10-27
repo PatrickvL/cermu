@@ -55,9 +55,9 @@ bus_state_t op_dcp(bus_state_t pins) {
             
             // Perform CMP A with decremented value
             uint16_t result = CPU_A(this) - value;
-            
-            // Set carry flag (inverted for CMP)
-            this->update_flag(FLAG_C, result < 0x100);
+            // Set carry flag (CMP uses subtraction semantics: carry = no borrow)
+            this->update_flag(FLAG_C, result >= 0);
+
             
             // Update N and Z flags based on comparison result
             this->update_nz_flags((uint8_t)result);
@@ -75,10 +75,10 @@ bus_state_t op_isc(bus_state_t pins) {
             value++;
             
             // Perform SBC A with incremented value (A = A - value - (1 - C))
-            uint16_t result = CPU_A(this) - value - !(CPU_P(this) & FLAG_C);            
-            
-            // Set carry flag (inverted for SBC)
-            this->update_flag(FLAG_C, result < 0x100);
+            uint16_t result = CPU_A(this) - value - this->get_borrow_input();
+
+            // Set carry flag (SBC uses subtraction semantics: carry = no borrow)
+            this->update_flag(FLAG_C, result >= 0);
             
             // Set overflow flag for SBC
             bool overflow = ((CPU_A(this) ^ value) & 0x80) && ((CPU_A(this) ^ result) & 0x80);
@@ -115,7 +115,7 @@ bus_state_t op_rla(bus_state_t pins) {
         // This is a Read-Modify-Write operation
         return rmw_operation_helper(pins, [this](uint8_t& value) {
             // Perform ROL on memory value
-            uint8_t carry_in = CPU_P(this) & FLAG_C;
+            uint8_t carry_in = this->get_carry_bit_0();
             this->update_flag(FLAG_C, value & 0x80);
             value = (value << 1) | carry_in;
             
@@ -150,12 +150,12 @@ bus_state_t op_rra(bus_state_t pins) {
         // This is a Read-Modify-Write operation
         return rmw_operation_helper(pins, [this](uint8_t& value) {
             // Perform ROR on memory value
-            uint8_t carry_in = (CPU_P(this) & FLAG_C) ? 0x80 : 0;
+            uint8_t carry_in = this->get_carry_bit_7();
             this->update_flag(FLAG_C, value & 0x01);
             value = (value >> 1) | carry_in;
             
             // Perform ADC with accumulator
-            uint16_t result = CPU_A(this) + value + ((CPU_P(this) & FLAG_C) ? 1 : 0);
+            uint16_t result = CPU_A(this) + value + this->get_carry_bit_0();
             
             // Set carry flag
             this->update_flag(FLAG_C, result > 0xFF);
@@ -239,7 +239,7 @@ bus_state_t op_arr(bus_state_t pins) {
         CPU_A(this) &= CPU_DL(this);
         
         // Perform ROR on accumulator
-        uint8_t carry_in = (CPU_P(this) & FLAG_C) ? 0x80 : 0;
+        uint8_t carry_in = this->get_carry_bit_7();
         this->update_flag(FLAG_C, CPU_A(this) & 0x01);
         CPU_A(this) = (CPU_A(this) >> 1) | carry_in;
         
@@ -307,7 +307,7 @@ bus_state_t op_sbx(bus_state_t pins) {
         uint8_t temp = CPU_A(this) & CPU_X(this);
         uint8_t result = temp - CPU_DL(this);
         
-        // Set carry flag (note: inverted logic for SBC-based operations)
+        // Set carry flag using standard subtraction semantics (carry = no borrow)
         this->update_flag(FLAG_C, temp >= CPU_DL(this));
         
         // Update X with result
