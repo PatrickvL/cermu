@@ -20,25 +20,28 @@ bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func)
             case 1:
                 // Cycle 1: Dummy write original value back (hardware behavior)
                 pins = this->phi2_write(pins, REG_AB, REG_DL);
-                if (FAM65XX_GET_RDY(pins))
+                if (FAM65XX_GET_RDY(pins)) {
                     // Perform operation on the read data (modify step)
                     operation_func(CPU_DL(this));
+                }
                 return pins;
                 
             case 2:
                 // Cycle 2: Write modified result back to memory
                 pins = this->phi2_write(pins, REG_AB, REG_DL);
-                if (FAM65XX_GET_RDY(pins))
+                if (FAM65XX_GET_RDY(pins)) {
                     this->transition_to_fetch();
+                }
                 return pins;
         }
     } else {
         // Accumulator mode - single cycle with dummy PHI2 read
         pins = this->phi2_read(pins, REG_PC, REG_DL);
-        if (!FAM65XX_GET_RDY(pins)) return pins;
-        // Perform operation on accumulator (modify step)
-        operation_func(CPU_A(this));
-        this->transition_to_fetch();
+        if (FAM65XX_GET_RDY(pins)) {
+            // Perform operation on accumulator (modify step)
+            operation_func(CPU_A(this));
+            this->transition_to_fetch();
+        }
     }
     return pins;
 }

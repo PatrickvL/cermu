@@ -13,13 +13,13 @@
 bus_state_t op_lda(bus_state_t pins) {
     // Read operand directly into accumulator (eliminates DL copy)
     pins = phi2_read_operand(pins, REG_A);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    // Update N and Z flags
-    update_nz_flags(CPU_A(this));
-    
-    // Complete instruction
-    transition_to_fetch();
+    if (FAM65XX_GET_RDY(pins)) {
+        // Update N and Z flags
+        update_nz_flags(CPU_A(this));
+        
+        // Complete instruction
+        transition_to_fetch();
+    }
     return pins;
 }
 
@@ -30,13 +30,13 @@ bus_state_t op_lda(bus_state_t pins) {
 bus_state_t op_ldx(bus_state_t pins) {
     // Read operand directly into X register (eliminates DL copy)
     pins = phi2_read_operand(pins, REG_X);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    // Update N and Z flags
-    update_nz_flags(CPU_X(this));
-    
-    // Complete instruction
-    transition_to_fetch();
+    if (FAM65XX_GET_RDY(pins)) {
+        // Update N and Z flags
+        update_nz_flags(CPU_X(this));
+        
+        // Complete instruction
+        transition_to_fetch();
+    }
     return pins;
 }
 
@@ -47,13 +47,13 @@ bus_state_t op_ldx(bus_state_t pins) {
 bus_state_t op_ldy(bus_state_t pins) {
     // Read operand directly into Y register (eliminates DL copy)
     pins = phi2_read_operand(pins, REG_Y);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    // Update N and Z flags
-    update_nz_flags(CPU_Y(this));
-    
-    // Complete instruction
-    transition_to_fetch();
+    if (FAM65XX_GET_RDY(pins)) {
+        // Update N and Z flags
+        update_nz_flags(CPU_Y(this));
+        
+        // Complete instruction
+        transition_to_fetch();
+    }
     return pins;
 }
 
@@ -64,11 +64,10 @@ bus_state_t op_ldy(bus_state_t pins) {
 bus_state_t op_sta(bus_state_t pins) {
     // Store accumulator directly from A register (eliminates DL copy)
     pins = this->phi2_write(pins, REG_AB, REG_A);
-    
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    // Complete instruction (STA doesn't affect flags)
-    transition_to_fetch();
+    if (FAM65XX_GET_RDY(pins)) {
+        // Complete instruction (STA doesn't affect flags)
+        transition_to_fetch();
+    }
     return pins;
 }
 
@@ -79,10 +78,10 @@ bus_state_t op_sta(bus_state_t pins) {
 bus_state_t op_stx(bus_state_t pins) {
     // Store X register directly from X register (eliminates DL copy)
     pins = this->phi2_write(pins, REG_AB, REG_X);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    // Complete instruction (STX doesn't affect flags)
-    transition_to_fetch();
+    if (FAM65XX_GET_RDY(pins)) {
+        // Complete instruction (STX doesn't affect flags)
+        transition_to_fetch();
+    }
     return pins;
 }
 
@@ -93,10 +92,10 @@ bus_state_t op_stx(bus_state_t pins) {
 bus_state_t op_sty(bus_state_t pins) {
     // Store Y register directly from Y register (eliminates DL copy)
     pins = this->phi2_write(pins, REG_AB, REG_Y);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    // Complete instruction (STY doesn't affect flags)
-    transition_to_fetch();
+    if (FAM65XX_GET_RDY(pins)) {
+        // Complete instruction (STY doesn't affect flags)
+        transition_to_fetch();
+    }
     return pins;
 }
 
@@ -108,16 +107,16 @@ bus_state_t op_sty(bus_state_t pins) {
 bus_state_t op_and(bus_state_t pins) {
     // Read operand directly into DL register (optimized version)
     pins = phi2_read_operand(pins, REG_DL);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    // Perform AND operation
-    CPU_A(this) &= CPU_DL(this);
-    
-    // Update N and Z flags
-    update_nz_flags(CPU_A(this));
-    
-    // Complete instruction
-    transition_to_fetch();
+    if (FAM65XX_GET_RDY(pins)) {
+        // Perform AND operation
+        CPU_A(this) &= CPU_DL(this);
+        
+        // Update N and Z flags
+        update_nz_flags(CPU_A(this));
+        
+        // Complete instruction
+        transition_to_fetch();
+    }
     return pins;
 }
 
@@ -125,16 +124,16 @@ bus_state_t op_and(bus_state_t pins) {
 bus_state_t op_ora(bus_state_t pins) {
     // Read operand directly into DL register (optimized version)
     pins = phi2_read_operand(pins, REG_DL);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    // Perform OR operation
-    CPU_A(this) |= CPU_DL(this);
-    
-    // Update N and Z flags
-    update_nz_flags(CPU_A(this));
-    
-    // Complete instruction
-    transition_to_fetch();
+    if (FAM65XX_GET_RDY(pins)) {
+        // Perform OR operation
+        CPU_A(this) |= CPU_DL(this);
+        
+        // Update N and Z flags
+        update_nz_flags(CPU_A(this));
+        
+        // Complete instruction
+        transition_to_fetch();
+    }
     return pins;
 }
 
@@ -142,16 +141,16 @@ bus_state_t op_ora(bus_state_t pins) {
 bus_state_t op_eor(bus_state_t pins) {
     // Read operand directly into DL register (optimized version)
     pins = phi2_read_operand(pins, REG_DL);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    // Perform EOR operation
-    CPU_A(this) ^= CPU_DL(this);
-    
-    // Update N and Z flags
-    update_nz_flags(CPU_A(this));
-    
-    // Complete instruction
-    transition_to_fetch();
+    if (FAM65XX_GET_RDY(pins)) {
+        // Perform EOR operation
+        CPU_A(this) ^= CPU_DL(this);
+        
+        // Update N and Z flags
+        update_nz_flags(CPU_A(this));
+        
+        // Complete instruction
+        transition_to_fetch();
+    }
     return pins;
 }
 
@@ -162,18 +161,18 @@ bus_state_t op_eor(bus_state_t pins) {
 bus_state_t op_bit(bus_state_t pins) {
     // Read operand directly into DL register (optimized version)
     pins = phi2_read_operand(pins, REG_DL);
-    if (!FAM65XX_GET_RDY(pins)) return pins;
-    
-    uint8_t operand = CPU_DL(this);
-    uint8_t result = CPU_A(this) & operand;
-    
-    // Update flags:
-    // N = bit 7 of operand
-    // V = bit 6 of operand
-    // Z = result of A & operand
-    update_nvz_flags(operand, result);
+    if (FAM65XX_GET_RDY(pins)) {
+        uint8_t operand = CPU_DL(this);
+        uint8_t result = CPU_A(this) & operand;
+        
+        // Update flags:
+        // N = bit 7 of operand
+        // V = bit 6 of operand
+        // Z = result of A & operand
+        update_nvz_flags(operand, result);
 
-    // Complete instruction
-    transition_to_fetch();
+        // Complete instruction
+        transition_to_fetch();
+    }
     return pins;
 }

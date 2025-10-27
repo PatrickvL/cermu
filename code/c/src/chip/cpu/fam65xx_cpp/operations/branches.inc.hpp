@@ -15,53 +15,54 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) 
         case 0: {
             /* PHI2: Read branch offset from PC */
             pins = phi2_read(pins, REG_PC, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            CPU_PC(this)++;
-            
-            /* PHI1: Check branch condition */
-            bool branch_taken = ((CPU_P(this) & flag_mask) != 0) == flag_value;
-            
-            if (!branch_taken) {
-                /* Branch not taken: instruction completes after 2 cycles */
-                transition_to_fetch();
-                return pins;
+            if (FAM65XX_GET_RDY(pins)) {
+                CPU_PC(this)++;
+                
+                /* PHI1: Check branch condition */
+                bool branch_taken = ((CPU_P(this) & flag_mask) != 0) == flag_value;
+                
+                if (!branch_taken) {
+                    /* Branch not taken: instruction completes after 2 cycles */
+                    transition_to_fetch();
+                    return pins;
+                }
+                
+                /* Branch taken: store offset and calculate target */
+                CPU_DL(this) = BUS_GET_DATA(pins);
+                CPU_AB(this) = CPU_PC(this) + (int8_t)CPU_DL(this);
             }
-            
-            /* Branch taken: store offset and calculate target */
-            CPU_DL(this) = BUS_GET_DATA(pins);
-            CPU_AB(this) = CPU_PC(this) + (int8_t)CPU_DL(this);
             return pins;
         }
         
         case 1: {
             /* PHI2: Dummy read from incremented PC (hardware behavior) */
             pins = phi2_read(pins, REG_PC, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            
-            /* PHI1: Check for page cross */
-            bool page_cross = page_crossed(CPU_PC(this), CPU_AB(this));
-            
-            if (!page_cross) {
-                /* No page cross: set final PC and complete after 3 cycles */
-                CPU_PC(this) = CPU_AB(this);
-                transition_to_fetch();
-                return pins;
+            if (FAM65XX_GET_RDY(pins)) {
+                /* PHI1: Check for page cross */
+                bool page_cross = page_crossed(CPU_PC(this), CPU_AB(this));
+                
+                if (!page_cross) {
+                    /* No page cross: set final PC and complete after 3 cycles */
+                    CPU_PC(this) = CPU_AB(this);
+                    transition_to_fetch();
+                    return pins;
+                }
+                
+                /* Page cross detected: Set up wrong intermediate address for penalty cycle */
+                /* Hardware adds offset to low byte only, keeping original high byte */
+                CPU_PCL(this) += (int8_t)CPU_DL(this);
             }
-            
-            /* Page cross detected: Set up wrong intermediate address for penalty cycle */
-            /* Hardware adds offset to low byte only, keeping original high byte */
-            CPU_PCL(this) += (int8_t)CPU_DL(this);
             return pins;
         }
         
         case 2:
             /* PHI2: Page cross penalty - dummy read from wrong intermediate address */
             pins = phi2_read(pins, REG_PC, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            
-            /* PHI1: Set final correct target PC and complete instruction */
-            CPU_PC(this) = CPU_AB(this);
-            transition_to_fetch();
+            if (FAM65XX_GET_RDY(pins)) {
+                /* PHI1: Set final correct target PC and complete instruction */
+                CPU_PC(this) = CPU_AB(this);
+                transition_to_fetch();
+            }
             break;
     }
     return pins;

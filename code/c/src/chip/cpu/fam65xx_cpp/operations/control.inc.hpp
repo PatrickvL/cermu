@@ -23,8 +23,9 @@ bus_state_t op_jsr(bus_state_t pins) {
         case 0:
             /* PHI2: Read low byte of target address from PC directly to ABL */
             pins = phi2_read(pins, REG_PC, REG_ABL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            CPU_PC(this)++;
+            if (FAM65XX_GET_RDY(pins)) {
+                CPU_PC(this)++;
+            }
             return pins;
             
         case 1:
@@ -36,30 +37,30 @@ bus_state_t op_jsr(bus_state_t pins) {
             /* PHI2: Push PCH (high byte of return address) to stack */
             CPU_DL(this) = CPU_PCH(this);
             pins = phi2_write(pins, REG_SP, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            
-            /* PHI1: Decrement stack pointer */
-            CPU_S(this)--;
+            if (FAM65XX_GET_RDY(pins)) {
+                /* PHI1: Decrement stack pointer */
+                CPU_S(this)--;
+            }
             return pins;
             
         case 3:
             /* PHI2: Push PCL (low byte of return address) to stack */
             CPU_DL(this) = CPU_PCL(this);
             pins = phi2_write(pins, REG_SP, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            
-            /* PHI1: Decrement stack pointer */
-            CPU_S(this)--;
+            if (FAM65XX_GET_RDY(pins)) {
+                /* PHI1: Decrement stack pointer */
+                CPU_S(this)--;
+            }
             return pins;
             
         case 4:
             /* PHI2: Read high byte of target address from PC directly to ABH */
             pins = phi2_read(pins, REG_PC, REG_ABH);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            
-            /* PHI1: Set PC to target address */
-            CPU_PC(this) = CPU_AB(this);
-            transition_to_fetch();
+            if (FAM65XX_GET_RDY(pins)) {
+                /* PHI1: Set PC to target address */
+                CPU_PC(this) = CPU_AB(this);
+                transition_to_fetch();
+            }
             break;
     }
     return pins;
@@ -76,31 +77,35 @@ bus_state_t op_rts(bus_state_t pins) {
         case 1:
             /* PHI2: Dummy read from current stack pointer, then increment SP */
             pins = phi2_read(pins, REG_SP, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            CPU_S(this)++;
+            if (FAM65XX_GET_RDY(pins)) {
+                CPU_S(this)++;
+            }
             return pins;
             
         case 2:
             /* PHI2: Pull PCL from stack */
             pins = phi2_read(pins, REG_SP, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            CPU_PCL(this) = CPU_DL(this);
-            CPU_S(this)++;
+            if (FAM65XX_GET_RDY(pins)) {
+                CPU_PCL(this) = CPU_DL(this);
+                CPU_S(this)++;
+            }
             return pins;
             
         case 3:
             /* PHI2: Pull PCH from stack */
             pins = phi2_read(pins, REG_SP, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            CPU_PCH(this) = CPU_DL(this);
+            if (FAM65XX_GET_RDY(pins)) {
+                CPU_PCH(this) = CPU_DL(this);
+            }
             return pins;
             
         case 4:
             /* PHI2: Dummy read from PC, then increment PC */
             pins = phi2_read(pins, REG_PC, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            CPU_PC(this)++;
-            transition_to_fetch();
+            if (FAM65XX_GET_RDY(pins)) {
+                CPU_PC(this)++;
+                transition_to_fetch();
+            }
             break;
     }
     return pins;
@@ -116,35 +121,39 @@ bus_state_t op_brk(bus_state_t pins) {
         case 0:
             /* PHI2: Dummy read from PC+1 (BRK has optional signature byte) */
             pins = phi2_read(pins, REG_PC, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            CPU_PC(this)++;
+            if (FAM65XX_GET_RDY(pins)) {
+                CPU_PC(this)++;
+            }
             return pins;
             
         case 1:
             /* PHI2: Push PCH to stack */
             CPU_DL(this) = CPU_PCH(this);
             pins = phi2_write(pins, REG_SP, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            CPU_S(this)--;
+            if (FAM65XX_GET_RDY(pins)) {
+                CPU_S(this)--;
+            }
             return pins;
             
         case 2:
             /* PHI2: Push PCL to stack */
             CPU_DL(this) = CPU_PCL(this);
             pins = phi2_write(pins, REG_SP, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            CPU_S(this)--;
+            if (FAM65XX_GET_RDY(pins)) {
+                CPU_S(this)--;
+            }
             return pins;
             
         case 3:
             /* PHI2: Push P|B|U to stack (B flag set for BRK) */
             CPU_DL(this) = CPU_P(this) | FLAG_B | FLAG_U;
             pins = phi2_write(pins, REG_SP, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            CPU_S(this)--;
-            
-            /* PHI1: Set interrupt disable flag */
-            set_flag(FLAG_I);
+            if (FAM65XX_GET_RDY(pins)) {
+                CPU_S(this)--;
+                
+                /* PHI1: Set interrupt disable flag */
+                set_flag(FLAG_I);
+            }
             return pins;
             
         case 4:
@@ -157,8 +166,9 @@ bus_state_t op_brk(bus_state_t pins) {
             /* PHI2: Read IRQ vector high byte from $FFFF */
             CPU_AB(this) = 0xFFFF;
             pins = phi2_read(pins, REG_AB, REG_PCH);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            transition_to_fetch();
+            if (FAM65XX_GET_RDY(pins)) {
+                transition_to_fetch();
+            }
             break;
     }
     return pins;
@@ -175,32 +185,36 @@ bus_state_t op_rti(bus_state_t pins) {
         case 1:
             /* PHI2: Dummy read from current stack pointer, then increment SP */
             pins = phi2_read(pins, REG_SP, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            CPU_S(this)++;
+            if (FAM65XX_GET_RDY(pins)) {
+                CPU_S(this)++;
+            }
             return pins;
             
         case 2:
             /* PHI2: Pull P from stack (clear B, set U) */
             pins = phi2_read(pins, REG_SP, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            CPU_P(this) = (CPU_DL(this) & ~FLAG_B) | FLAG_U;
-            CPU_S(this)++;
+            if (FAM65XX_GET_RDY(pins)) {
+                CPU_P(this) = (CPU_DL(this) & ~FLAG_B) | FLAG_U;
+                CPU_S(this)++;
+            }
             return pins;
             
         case 3:
             /* PHI2: Pull PCL from stack */
             pins = phi2_read(pins, REG_SP, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            CPU_PCL(this) = CPU_DL(this);
-            CPU_S(this)++;
+            if (FAM65XX_GET_RDY(pins)) {
+                CPU_PCL(this) = CPU_DL(this);
+                CPU_S(this)++;
+            }
             return pins;
             
         case 4:
             /* PHI2: Pull PCH from stack */
             pins = phi2_read(pins, REG_SP, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
-            CPU_PCH(this) = CPU_DL(this);
-            transition_to_fetch();
+            if (FAM65XX_GET_RDY(pins)) {
+                CPU_PCH(this) = CPU_DL(this);
+                transition_to_fetch();
+            }
             break;
     }
     return pins;
