@@ -98,7 +98,7 @@ bus_state_t op_adc(bus_state_t pins) {
     
     uint8_t operand = CPU_DL(this);
     uint8_t a = CPU_A(this);
-    uint8_t carry_in = CPU_P(this) & FLAG_C;
+    uint8_t carry_in = this->get_carry_bit_0();
     
     uint16_t result;
     bool carry_out, overflow;
@@ -197,7 +197,7 @@ bus_state_t op_sbc(bus_state_t pins) {
     
     uint8_t operand = CPU_DL(this);
     uint8_t a = CPU_A(this);
-    bool borrow_in = (CPU_P(this) & FLAG_C) == 0; // Inverted carry for SBC
+    bool borrow_in = this->get_borrow_input(); // Inverted carry for SBC
     
     uint16_t result;
     bool carry_out, overflow;

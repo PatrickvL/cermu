@@ -541,6 +541,19 @@ public:
                     calc_v_flag_sub(old_a, operand, result));
     }
 
+    // === Carry/Borrow Input Helpers ===
+    inline uint8_t get_borrow_input() const {
+        return (CPU_P(this) & FLAG_C) ^ FLAG_C;  // Branchless: XOR flips bit, result is 1 or 0
+    }
+
+    inline uint8_t get_carry_bit_7() const {
+        return (CPU_P(this) & FLAG_C) << 7;  // Shift bit 0 to bit 7
+    }
+
+    inline uint8_t get_carry_bit_0() const {
+        return CPU_P(this) & FLAG_C;  // Returns FLAG_C (0x01) or 0x00
+    }
+
     // Check if page was crossed during addressing
     bool page_crossed(uint16_t addr1, uint16_t addr2) const {
         return ((addr1 ^ addr2) & 0x0100) != 0;

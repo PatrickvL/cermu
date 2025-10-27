@@ -85,6 +85,7 @@ typedef struct {
 // 65C816-specific flags (redefine bit meanings in native mode)
 #define FLAG_X  0x10  // Index Register Select (0 = 16-bit, 1 = 8-bit) - 65C816
 #define FLAG_M  0x20  // Memory/Accumulator Select (0 = 16-bit, 1 = 8-bit) - 65C816
+#define FLAG_E 0x100  // Emulation mode (not in P register, separate)
 
 // BRK flags for interrupt handling
 #define FAM65XX_BRK_IRQ     (1<<0)
