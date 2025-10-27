@@ -78,9 +78,13 @@ typedef struct {
 #define FLAG_I  0x04  // Interrupt Disable
 #define FLAG_D  0x08  // Decimal Mode
 #define FLAG_B  0x10  // Break
-#define FLAG_U  0x20  // Unused (always 1)
+#define FLAG_U  0x20  // Unused (always 1) - 6502/6510/65C02
 #define FLAG_V  0x40  // Overflow
 #define FLAG_N  0x80  // Negative
+
+// 65C816-specific flags (redefine bit meanings in native mode)
+#define FLAG_X  0x10  // Index Register Select (0 = 16-bit, 1 = 8-bit) - 65C816
+#define FLAG_M  0x20  // Memory/Accumulator Select (0 = 16-bit, 1 = 8-bit) - 65C816
 
 // BRK flags for interrupt handling
 #define FAM65XX_BRK_IRQ     (1<<0)

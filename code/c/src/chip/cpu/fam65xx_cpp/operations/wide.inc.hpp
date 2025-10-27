@@ -54,7 +54,7 @@ bus_state_t op_xce(bus_state_t pins) {
         
         // If switching to emulation mode, force 8-bit modes
         if (this->wide_state.emulation_mode) {
-            CPU_P(this) |= 0x30; // Set M and X flags (8-bit modes)
+            CPU_P(this) |= (FLAG_M | FLAG_X); // Set M and X flags (8-bit modes)
         }
     }
 
