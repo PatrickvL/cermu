@@ -27,7 +27,7 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) 
                     return pins;
                 }
                 
-                /* Branch taken: calculate target */
+                /* Branch taken: calculate correct target address */
                 CPU_AB(this) = CPU_PC(this) + (int8_t)CPU_DL(this);
                 this->cycle_index++;
             }
@@ -48,16 +48,16 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) 
                     return pins;
                 }
                 
-                /* Page cross detected: Set up wrong intermediate address for penalty cycle */
-                /* Hardware adds offset to low byte only, keeping original high byte */
+                /* Page cross detected: set PC to wrong intermediate address for penalty cycle */
+                /* Hardware adds offset to PC low byte only, keeping original high byte */
                 CPU_PCL(this) += (int8_t)CPU_DL(this);
                 this->cycle_index++;
             }
             return pins;
         }
         
-        case 2:
-            /* PHI2: Page cross penalty - dummy read from wrong intermediate address */
+        case 2: {
+            /* PHI2: Page cross penalty - dummy read from wrong PC address */
             pins = phi2_read(pins, REG_PC, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Set final correct target PC and complete instruction */
@@ -65,6 +65,7 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) 
                 transition_to_fetch();
             }
             return pins;
+        }
     }
     return pins;
 }

@@ -212,8 +212,9 @@ bus_state_t op_jam(bus_state_t pins) {
 bus_state_t op_anc(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // ANC - AND with carry (AND immediate, then copy N flag to C flag)
-        pins = phi2_read(pins, REG_AB, REG_DL);
+        pins = phi2_read(pins, REG_PC, REG_DL);
         if (FAM65XX_GET_RDY(pins)) {
+            CPU_PC(this)++;
             // Perform AND with accumulator
             CPU_A(this) &= CPU_DL(this);
             
@@ -232,8 +233,9 @@ bus_state_t op_anc(bus_state_t pins) {
 bus_state_t op_arr(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // ARR - AND + ROR with BCD correction (AND immediate, then ROR A)
-        pins = phi2_read(pins, REG_AB, REG_DL);
+        pins = phi2_read(pins, REG_PC, REG_DL);
         if (FAM65XX_GET_RDY(pins)) {
+            CPU_PC(this)++;
             // Perform AND with accumulator
             CPU_A(this) &= CPU_DL(this);
             
@@ -257,8 +259,9 @@ bus_state_t op_arr(bus_state_t pins) {
 bus_state_t op_alr(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // ALR - AND + LSR (AND immediate, then LSR A)
-        pins = phi2_read(pins, REG_AB, REG_DL);
+        pins = phi2_read(pins, REG_PC, REG_DL);
         if (FAM65XX_GET_RDY(pins)) {
+            CPU_PC(this)++;
             // Perform AND with accumulator
             CPU_A(this) &= CPU_DL(this);
             
@@ -287,8 +290,9 @@ bus_state_t op_asr(bus_state_t pins) {
 bus_state_t op_xaa(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // XAA - Transfer X AND immediate to A (illegal)
-        pins = phi2_read(pins, REG_AB, REG_DL);
+        pins = phi2_read(pins, REG_PC, REG_DL);
         if (FAM65XX_GET_RDY(pins)) {
+            CPU_PC(this)++;
             CPU_A(this) = CPU_X(this) & CPU_DL(this);
             update_nz_flags(CPU_A(this));
             
@@ -301,8 +305,9 @@ bus_state_t op_xaa(bus_state_t pins) {
 bus_state_t op_sbx(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // SBX - Compare X with A AND immediate (illegal) (also called AXS)
-        pins = phi2_read(pins, REG_AB, REG_DL);
+        pins = phi2_read(pins, REG_PC, REG_DL);
         if (FAM65XX_GET_RDY(pins)) {
+            CPU_PC(this)++;
             uint8_t temp = CPU_A(this) & CPU_X(this);
             uint8_t result = temp - CPU_DL(this);
             // Update X with result
