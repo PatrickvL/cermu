@@ -153,7 +153,7 @@ bus_state_t op_nop(bus_state_t pins) {
                 return pins;
             }
             CPU_PC(this)++;
-            break;
+            return pins;
             
         case AM_NON:
             /* AM_NON: All implicit NOPs do dummy read from PC without increment */
@@ -164,7 +164,7 @@ bus_state_t op_nop(bus_state_t pins) {
                 trace_exit("op_nop");
                 return pins;
             }
-            break;
+            return pins;
             
         default:
             /* Memory modes: Read from target address and discard */
@@ -175,7 +175,7 @@ bus_state_t op_nop(bus_state_t pins) {
                 trace_exit("op_nop");
                 return pins;
             }
-            break;
+            return pins;
     }
     
     /* Complete instruction */

@@ -13,7 +13,7 @@ bus_state_t op_pha(bus_state_t pins) {
             /* Dummy cycle for internal operation */
             pins = phi2_read(pins, REG_PC, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
-            break;
+            return pins;
             
         case 1:
             /* PHI2: Write A to stack (0x0100 | S) */
@@ -35,7 +35,7 @@ bus_state_t op_php(bus_state_t pins) {
             /* Dummy cycle for internal operation */
             pins = phi2_read(pins, REG_PC, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
-            break;
+            return pins;
             
         case 1:
             /* PHI2: Write P|B|U to stack (REG_SP already contains 0x0100 | S) */
@@ -58,7 +58,7 @@ bus_state_t op_pla(bus_state_t pins) {
             /* PHI2: Dummy read from PC */
             pins = phi2_read(pins, REG_PC, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
-            break;
+            return pins;
             
         case 1:
             /* PHI2: Dummy read from current stack pointer, then increment SP */
@@ -67,7 +67,7 @@ bus_state_t op_pla(bus_state_t pins) {
             
             /* PHI1: Increment stack pointer */
             CPU_S(this)++;
-            break;
+            return pins;
             
         case 2:
             /* PHI2: Read from incremented stack pointer directly into A (eliminates copy) */
@@ -97,7 +97,7 @@ bus_state_t op_plp(bus_state_t pins) {
             
             /* PHI1: Increment stack pointer */
             CPU_S(this)++;
-            break;
+            return pins;
             
         case 2:
             /* PHI2: Read from incremented stack pointer */

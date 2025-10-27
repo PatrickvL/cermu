@@ -30,7 +30,7 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) 
             /* Branch taken: store offset and calculate target */
             CPU_DL(this) = BUS_GET_DATA(pins);
             CPU_AB(this) = CPU_PC(this) + (int8_t)CPU_DL(this);
-            break;
+            return pins;
         }
         
         case 1: {
@@ -51,7 +51,7 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) 
             /* Page cross detected: Set up wrong intermediate address for penalty cycle */
             /* Hardware adds offset to low byte only, keeping original high byte */
             CPU_PCL(this) += (int8_t)CPU_DL(this);
-            break;
+            return pins;
         }
         
         case 2:
