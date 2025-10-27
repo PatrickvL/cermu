@@ -451,9 +451,6 @@ public:
     
     // VIC-II compatible memory read with proper RDY handling (matching old implementation)
     bus_state_t phi2_read(bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) {
-        trace_enter("phi2_read");
-        trace("Reading from addr_reg=%d to data_reg=%d", addr_reg, data_reg);
-        
         uint16_t address;
 
         // Set R/W̅ bit to indicate READ (1 = Read, 0 = Write)
@@ -463,7 +460,6 @@ public:
         if (FAM65XX_GET_RDY(pins)) {
             address = this->reg16[addr_reg];
             pins = BUS_SET_ADDR(pins, address);
-            trace("RDY high: address = %04X", address);
             if constexpr (has_io_port<ProcessorTag>()) {
                 // Handle 6510 I/O port access (only when RDY is high)
                 if (address == 0x0000) {
@@ -476,7 +472,6 @@ public:
             }
         } else {
             address = BUS_GET_ADDR(pins);  // Keep existing bus address when RDY low
-            trace("RDY low: keeping address = %04X", address);
         }
     
         // Always perform memory read to service VIC-II even when CPU halted
@@ -484,15 +479,10 @@ public:
         uint8_t data = 0xFF; // Default floating bus
         if (this->mem_read != nullptr) {
             data = this->mem_read(this->mem_user_data, address, current_bus_data);
-            trace("Memory callback returned: %02X", data);
-        } else {
-            trace("No memory callback - using floating bus default: %02X", data);
         }
         pins = BUS_SET_DATA(pins, data);
         this->reg8[data_reg] = data;
-        trace("Stored %02X in reg8[%d]", data, data_reg);
         
-        trace_exit("phi2_read");
         return pins;
     }
     
@@ -674,35 +664,34 @@ private:
     
     // Hardware-accurate interrupt detection (matching old implementation)
     bool process_interrupt_detection(bus_state_t pins) {
-        // Use intermediate variable to reduce memory accesses
+        // Load state into registers to reduce memory accesses
         uint32_t shift_reg = this->interrupt_shift_register;
+        uint8_t nmi_prev = this->nmi_prev;
         
-        // Shift the register left by one bit
-        shift_reg <<= 1;
+        // Shift and clear separators (prevent cross-over) in one operation
+        shift_reg = (shift_reg << 1) & ~INT_SEPARATOR_MASK;
         
-        // Sample IRQ line and insert into IRQ bits (active low)
-        if (!(pins & FAM65XX_IRQ)) {
-            shift_reg |= (1 << INT_IRQ_START_BIT);
-        }
+        // Extract interrupt pins (bits 32-34) and invert (active low)
+        // After shift: bit 0=RES, bit 1=IRQ, bit 2=NMI
+        uint32_t int_pins = (~pins) >> BUS_RES_BIT;
         
-        // NMI Edge Detection - only trigger on falling edge
-        uint8_t nmi_current = (pins & FAM65XX_NMI) ? 1 : 0;
-        if (this->nmi_prev && !nmi_current) {
-            // Falling edge detected - insert into NMI bits
-            shift_reg |= (1 << INT_NMI_START_BIT);
-        }
-        this->nmi_prev = nmi_current;
+        // Pin bit offsets after extraction
+        constexpr uint8_t IRQ_OFFSET = BUS_IRQ_BIT - BUS_RES_BIT;  // 1
+        constexpr uint8_t NMI_OFFSET = BUS_NMI_BIT - BUS_RES_BIT;  // 2
         
-        // Sample RESET line and insert into RESET bits (active low)
-        if (!(pins & FAM65XX_RES)) {
-            shift_reg |= (1 << INT_RESET_START_BIT);
-        }
+        // Sample IRQ (extracted bit 1 -> shift_reg bit 0)
+        shift_reg |= (int_pins >> IRQ_OFFSET) & (1 << INT_IRQ_START_BIT);
         
-        // Clear separator bits to prevent cross-over
-        shift_reg &= ~INT_SEPARATOR_MASK;
+        // NMI edge detection (extracted bit 2)
+        uint8_t nmi_current = (int_pins >> NMI_OFFSET) & 0x1;
+        shift_reg |= (-(nmi_prev & !nmi_current)) & (1 << INT_NMI_START_BIT);
         
-        // Store back the updated shift register
+        // Sample RESET (extracted bit 0 -> shift_reg bit 8)
+        shift_reg |= (int_pins & 0x1) << INT_RESET_START_BIT;
+        
+        // Store updated state
         this->interrupt_shift_register = shift_reg;
+        this->nmi_prev = nmi_current;
         
         // Check for completed interrupt sequences in order of priority
         
