@@ -30,7 +30,6 @@ bus_state_t op_jsr(bus_state_t pins) {
         case 1:
             /* PHI2: Dummy read from stack pointer (internal operation) */
             pins = phi2_read(pins, REG_SP, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
             return pins;
             
         case 2:
@@ -72,7 +71,6 @@ bus_state_t op_rts(bus_state_t pins) {
         case 0:
             /* PHI2: Dummy read from PC */
             pins = phi2_read(pins, REG_PC, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
             return pins;
             
         case 1:
@@ -153,7 +151,6 @@ bus_state_t op_brk(bus_state_t pins) {
             /* PHI2: Read IRQ vector low byte from $FFFE */
             CPU_AB(this) = 0xFFFE;
             pins = phi2_read(pins, REG_AB, REG_PCL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
             return pins;
             
         case 5:
@@ -173,7 +170,6 @@ bus_state_t op_rti(bus_state_t pins) {
         case 0:
             /* PHI2: Dummy read from PC */
             pins = phi2_read(pins, REG_PC, REG_DL);
-            if (!FAM65XX_GET_RDY(pins)) return pins;
             return pins;
             
         case 1:
