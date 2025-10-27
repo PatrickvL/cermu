@@ -57,11 +57,7 @@ bus_state_t op_dcp(bus_state_t pins) {
             uint16_t result = CPU_A(this) - value;
             
             // Set carry flag (inverted for CMP)
-            if (result < 0x100) {
-                CPU_P(this) |= FLAG_C;
-            } else {
-                CPU_P(this) &= ~FLAG_C;
-            }
+            this->update_flag(FLAG_C, result < 0x100);
             
             // Update N and Z flags based on comparison result
             this->update_nz_flags((uint8_t)result);
@@ -82,19 +78,11 @@ bus_state_t op_isc(bus_state_t pins) {
             uint16_t result = CPU_A(this) - value - !(CPU_P(this) & FLAG_C);            
             
             // Set carry flag (inverted for SBC)
-            if (result < 0x100) {
-                CPU_P(this) |= FLAG_C;
-            } else {
-                CPU_P(this) &= ~FLAG_C;
-            }
+            this->update_flag(FLAG_C, result < 0x100);
             
             // Set overflow flag for SBC
             bool overflow = ((CPU_A(this) ^ value) & 0x80) && ((CPU_A(this) ^ result) & 0x80);
-            if (overflow) {
-                CPU_P(this) |= FLAG_V;
-            } else {
-                CPU_P(this) &= ~FLAG_V;
-            }
+            this->update_flag(FLAG_V, overflow);
             
             // Store result in A and update N,Z flags
             CPU_A(this) = (uint8_t)result;
@@ -110,11 +98,7 @@ bus_state_t op_slo(bus_state_t pins) {
         // This is a Read-Modify-Write operation
         return rmw_operation_helper(pins, [this](uint8_t& value) {
             // Perform ASL on memory value
-            if (value & 0x80) {
-                CPU_P(this) |= FLAG_C;
-            } else {
-                CPU_P(this) &= ~FLAG_C;
-            }
+            this->update_flag(FLAG_C, value & 0x80);
             value <<= 1;
             
             // Perform ORA with accumulator
@@ -132,11 +116,7 @@ bus_state_t op_rla(bus_state_t pins) {
         return rmw_operation_helper(pins, [this](uint8_t& value) {
             // Perform ROL on memory value
             uint8_t carry_in = CPU_P(this) & FLAG_C;
-            if (value & 0x80) {
-                CPU_P(this) |= FLAG_C;
-            } else {
-                CPU_P(this) &= ~FLAG_C;
-            }
+            this->update_flag(FLAG_C, value & 0x80);
             value = (value << 1) | carry_in;
             
             // Perform AND with accumulator
@@ -153,11 +133,7 @@ bus_state_t op_sre(bus_state_t pins) {
         // This is a Read-Modify-Write operation
         return this->rmw_operation_helper(pins, [this](uint8_t& value) {
             // Perform LSR on memory value
-            if (value & 0x01) {
-                CPU_P(this) |= FLAG_C;
-            } else {
-                CPU_P(this) &= ~FLAG_C;
-            }
+            this->update_flag(FLAG_C, value & 0x01);
             value >>= 1;
             
             // Perform EOR with accumulator
@@ -175,30 +151,18 @@ bus_state_t op_rra(bus_state_t pins) {
         return rmw_operation_helper(pins, [this](uint8_t& value) {
             // Perform ROR on memory value
             uint8_t carry_in = (CPU_P(this) & FLAG_C) ? 0x80 : 0;
-            if (value & 0x01) {
-                CPU_P(this) |= FLAG_C;
-            } else {
-                CPU_P(this) &= ~FLAG_C;
-            }
+            this->update_flag(FLAG_C, value & 0x01);
             value = (value >> 1) | carry_in;
             
             // Perform ADC with accumulator
             uint16_t result = CPU_A(this) + value + ((CPU_P(this) & FLAG_C) ? 1 : 0);
             
             // Set carry flag
-            if (result > 0xFF) {
-                CPU_P(this) |= FLAG_C;
-            } else {
-                CPU_P(this) &= ~FLAG_C;
-            }
+            this->update_flag(FLAG_C, result > 0xFF);
             
             // Set overflow flag for ADC
             bool overflow = !((CPU_A(this) ^ value) & 0x80) && ((CPU_A(this) ^ result) & 0x80);
-            if (overflow) {
-                CPU_P(this) |= FLAG_V;
-            } else {
-                CPU_P(this) &= ~FLAG_V;
-            }
+            this->update_flag(FLAG_V, overflow);
             
             // Store result in A and update N,Z flags
             CPU_A(this) = (uint8_t)result;
@@ -258,11 +222,7 @@ bus_state_t op_anc(bus_state_t pins) {
         update_nz_flags(CPU_A(this));
         
         // Copy N flag to C flag (ANC behavior)
-        if (CPU_P(this) & FLAG_N) {
-            CPU_P(this) |= FLAG_C;
-        } else {
-            CPU_P(this) &= ~FLAG_C;
-        }
+        this->update_flag(FLAG_C, CPU_P(this) & FLAG_N);
         
         transition_to_fetch();
     }
@@ -280,22 +240,14 @@ bus_state_t op_arr(bus_state_t pins) {
         
         // Perform ROR on accumulator
         uint8_t carry_in = (CPU_P(this) & FLAG_C) ? 0x80 : 0;
-        if (CPU_A(this) & 0x01) {
-            CPU_P(this) |= FLAG_C;
-        } else {
-            CPU_P(this) &= ~FLAG_C;
-        }
+        this->update_flag(FLAG_C, CPU_A(this) & 0x01);
         CPU_A(this) = (CPU_A(this) >> 1) | carry_in;
         
         // Update N and Z flags
         update_nz_flags(CPU_A(this));
         
         // Set V flag based on bit 6 XOR bit 5 of result
-        if ((CPU_A(this) & 0x40) ^ ((CPU_A(this) & 0x20) << 1)) {
-            CPU_P(this) |= FLAG_V;
-        } else {
-            CPU_P(this) &= ~FLAG_V;
-        }
+        this->update_flag(FLAG_V, (CPU_A(this) & 0x40) ^ ((CPU_A(this) & 0x20) << 1));
         
         transition_to_fetch();
     }
@@ -312,11 +264,7 @@ bus_state_t op_alr(bus_state_t pins) {
         CPU_A(this) &= CPU_DL(this);
         
         // Perform LSR on accumulator
-        if (CPU_A(this) & 0x01) {
-            CPU_P(this) |= FLAG_C;
-        } else {
-            CPU_P(this) &= ~FLAG_C;
-        }
+        this->update_flag(FLAG_C, CPU_A(this) & 0x01);
         CPU_A(this) >>= 1;
         
         // Update N and Z flags
@@ -360,11 +308,7 @@ bus_state_t op_sbx(bus_state_t pins) {
         uint8_t result = temp - CPU_DL(this);
         
         // Set carry flag (note: inverted logic for SBC-based operations)
-        if (temp >= CPU_DL(this)) {
-            CPU_P(this) |= FLAG_C;
-        } else {
-            CPU_P(this) &= ~FLAG_C;
-        }
+        this->update_flag(FLAG_C, temp >= CPU_DL(this));
         
         // Update X with result
         CPU_X(this) = result;
