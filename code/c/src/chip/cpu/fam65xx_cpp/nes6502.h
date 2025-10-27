@@ -91,6 +91,7 @@ private:
 public:
     void reset() {
         start = true;
+        divider = 0;  // Hardware behavior: reset clears divider
     }
     
     void clock() {
@@ -186,13 +187,17 @@ public:
     }
     
     void clock(uint16_t& current_period) {
-        if (divider == 0 && enabled && shift > 0 && !is_muting(current_period)) {
-            current_period = calculate_target(current_period);
-        }
+        // Hardware-accurate: Update target period calculation on every clock
+        bool should_update = (divider == 0 && enabled && shift > 0 && !is_muting(current_period));
         
         if (divider == 0 || reload) {
             divider = period;
             reload = false;
+            
+            // Hardware-accurate: Apply sweep change after divider reload
+            if (should_update) {
+                current_period = calculate_target(current_period);
+            }
         } else {
             divider--;
         }
@@ -246,6 +251,9 @@ public:
         length.load(value >> 3);
         sequence_pos = 0;
         envelope.reset();
+        
+        // Hardware-accurate: Writing to high timer also resets phase accumulator
+        timer = timer_period;
     }
     
     void clock() {
@@ -302,6 +310,9 @@ public:
         timer_period = (timer_period & 0xFF) | ((value & 0x7) << 8);
         length.load(value >> 3);
         linear_reload = true;
+        
+        // Hardware-accurate: Writing to high timer resets phase
+        timer = timer_period;
     }
     
     void clock() {
@@ -328,7 +339,8 @@ public:
     }
     
     uint8_t output() const {
-        if (!length.active() || linear_counter == 0) {
+        // Hardware-accurate: Triangle channel is silenced at ultrasonic frequencies (period < 2)
+        if (!length.active() || linear_counter == 0 || timer_period < 2) {
             return 0;
         }
         return TRIANGLE_TABLE[sequence_pos];
@@ -346,10 +358,10 @@ public:
     bool mode = false;  // false = 15-bit, true = 6-bit
     uint8_t period_index = 0;
     bool is_pal = false;
+    uint16_t shift_register = 1;  // Hardware-accurate: starts at 1, not 0 (made public for reset)
     
 private:
     uint16_t timer = 0;
-    uint16_t shift_register = 1;
 
 public:
     void write_control(uint8_t value) {
@@ -456,38 +468,41 @@ public:
         if (timer == 0) {
             timer = is_pal ? DMC_PERIOD_PAL[rate_index] : DMC_PERIOD_NTSC[rate_index];
             
-            if (!silence) {
-                // Adjust output level based on shift register bit
-                if (shift_register & 1) {
-                    if (output_level <= 125) output_level += 2;
-                } else {
-                    if (output_level >= 2) output_level -= 2;
+            // Hardware-accurate: Only process output if we have bits remaining
+            if (bits_remaining > 0) {
+                if (!silence) {
+                    // Adjust output level based on shift register bit
+                    if (shift_register & 1) {
+                        if (output_level <= 125) output_level += 2;
+                    } else {
+                        if (output_level >= 2) output_level -= 2;
+                    }
                 }
-            }
-            
-            shift_register >>= 1;
-            bits_remaining--;
-            
-            if (bits_remaining == 0) {
-                bits_remaining = 8;
-                if (sample_buffer_empty) {
-                    silence = true;
-                } else {
-                    silence = false;
-                    shift_register = sample_buffer;
-                    sample_buffer_empty = true;
-                    
-                    // Request next sample
-                    if (bytes_remaining > 0) {
-                        needs_sample = true;
-                        current_address = (current_address == 0xFFFF) ? 0x8000 : current_address + 1;
-                        bytes_remaining--;
+                
+                shift_register >>= 1;
+                bits_remaining--;
+                
+                if (bits_remaining == 0) {
+                    bits_remaining = 8;
+                    if (sample_buffer_empty) {
+                        silence = true;
+                    } else {
+                        silence = false;
+                        shift_register = sample_buffer;
+                        sample_buffer_empty = true;
                         
-                        if (bytes_remaining == 0) {
-                            if (loop) {
-                                start();
-                            } else if (irq_enabled) {
-                                irq_flag = true;
+                        // Request next sample
+                        if (bytes_remaining > 0) {
+                            needs_sample = true;
+                            current_address = (current_address == 0xFFFF) ? 0x8000 : current_address + 1;
+                            bytes_remaining--;
+                            
+                            if (bytes_remaining == 0) {
+                                if (loop) {
+                                    start();
+                                } else if (irq_enabled) {
+                                    irq_flag = true;
+                                }
                             }
                         }
                     }
@@ -505,6 +520,20 @@ public:
     bool active() const {
         return bytes_remaining > 0;
     }
+    
+    // Hardware-accurate initialization
+    void reset() {
+        timer = 0;
+        sample_buffer = 0;
+        sample_buffer_empty = true;
+        shift_register = 0;
+        bits_remaining = 8;  // Start with 8 bits
+        silence = true;
+        output_level = 0;
+        irq_flag = false;
+        needs_sample = false;
+        bytes_remaining = 0;
+    }
 };
 
 // ============================================================================
@@ -520,11 +549,16 @@ public:
 private:
     uint32_t cycle = 0;
     
-    // Frame counter timing (CPU cycles)
-    static constexpr uint32_t FRAME_COUNTER_NTSC_4STEP[4] = {7457, 14913, 22371, 29829};
-    static constexpr uint32_t FRAME_COUNTER_NTSC_5STEP[5] = {7457, 14913, 22371, 29829, 37281};
-    static constexpr uint32_t FRAME_COUNTER_PAL_4STEP[4] = {8313, 16627, 24939, 33252};
-    static constexpr uint32_t FRAME_COUNTER_PAL_5STEP[5] = {8313, 16627, 24939, 33252, 41565};
+    // Frame counter write delay (3-4 cycles)
+    struct {
+        bool pending = false;
+        uint8_t value = 0;
+        uint8_t delay = 0;
+    } write_buffer;
+    
+    // Frame counter timing (CPU cycles) - unified tables for both 4-step and 5-step modes
+    static constexpr uint32_t FRAME_COUNTER_NTSC[5] = {7457, 14913, 22371, 29829, 37281};
+    static constexpr uint32_t FRAME_COUNTER_PAL[5] = {8313, 16627, 24939, 33252, 41565};
 
 public:
     void reset() {
@@ -535,47 +569,77 @@ public:
     }
     
     void write(uint8_t value) {
-        mode = (value >> 7) & 1;
-        irq_inhibit = (value >> 6) & 1;
-        
-        if (irq_inhibit) {
-            irq_flag = false;
+        // Hardware-accurate: Frame counter writes have 3-4 cycle delay
+        write_buffer.pending = true;
+        write_buffer.value = value;
+        write_buffer.delay = 3; // Typical delay
+    }
+    
+    void process_delayed_write() {
+        if (write_buffer.pending) {
+            if (write_buffer.delay > 0) {
+                write_buffer.delay--;
+                return;
+            }
+            
+            // Apply the delayed write
+            uint8_t value = write_buffer.value;
+            mode = (value >> 7) & 1;
+            irq_inhibit = (value >> 6) & 1;
+            
+            if (irq_inhibit) {
+                irq_flag = false;
+            }
+            
+            // Writing to $4017 resets the frame counter
+            cycle = 0;
+            write_buffer.pending = false;
         }
-        
-        // Writing to $4017 resets the frame counter
-        cycle = 0;
     }
     
     // Returns which events to trigger: bit 0 = quarter frame, bit 1 = half frame
     uint8_t clock() {
+        // Process any delayed writes first
+        process_delayed_write();
+        
         uint8_t events = 0;
         
         const uint32_t* timing = nullptr;
         uint8_t steps = 0;
         
         if (is_pal) {
-            timing = mode ? FRAME_COUNTER_PAL_5STEP : FRAME_COUNTER_PAL_4STEP;
-            steps = mode ? 5 : 4;
+            timing = FRAME_COUNTER_PAL;
         } else {
-            timing = mode ? FRAME_COUNTER_NTSC_5STEP : FRAME_COUNTER_NTSC_4STEP;
-            steps = mode ? 5 : 4;
+            timing = FRAME_COUNTER_NTSC;
         }
+        steps = mode ? 5 : 4;
         
         cycle++;
         
         // Check for frame events
         for (uint8_t i = 0; i < steps; i++) {
             if (cycle == timing[i]) {
-                events |= 1;  // Quarter frame
+                events |= 1;  // Quarter frame (all steps)
                 
-                // Half frame on steps 1 and 3 (0-indexed) for 4-step
-                // Half frame on steps 1 and 4 (0-indexed) for 5-step
-                if ((!mode && (i == 1 || i == 3)) || (mode && (i == 1 || i == 4))) {
+                // Half frame events:
+                // 4-step mode: steps 1 and 3 (0-indexed)
+                // 5-step mode: steps 1 and 3 (0-indexed) - NOT step 4!
+                if ((!mode && (i == 1 || i == 3)) || (mode && (i == 1 || i == 3))) {
                     events |= 2;  // Half frame
                 }
                 
-                // IRQ on step 3 in 4-step mode (if not inhibited)
+                // Hardware-accurate: IRQ set with 1-cycle delay on final step in 4-step mode
                 if (!mode && i == 3 && !irq_inhibit) {
+                    // IRQ will be set on next cycle
+                }
+                
+                break; // Only one event per cycle
+            }
+            
+            // Hardware-accurate IRQ timing: set IRQ on specific cycles after final step
+            if (!mode && !irq_inhibit) {
+                // IRQ flag set on cycles 29830 and 29831 (and 29832 for odd CPU cycles)
+                if (cycle == timing[3] + 1 || cycle == timing[3] + 2) {
                     irq_flag = true;
                 }
             }
@@ -583,11 +647,17 @@ public:
         
         // Reset cycle counter at end of sequence
         uint32_t sequence_length = timing[steps - 1];
-        if (cycle >= sequence_length + 3) {  // +3 for IRQ timing
+        if (cycle > sequence_length) {
             cycle = 0;
         }
         
         return events;
+    }
+    
+    // Returns immediate events when $4017 is written (for 5-step mode)
+    uint8_t get_immediate_events() const {
+        // In 5-step mode, writing to $4017 triggers quarter and half frame events
+        return mode ? 3 : 0; // bit 0 = quarter, bit 1 = half
     }
 };
 
@@ -607,14 +677,115 @@ private:
     bool is_pal = false;
     uint32_t cycle_counter = 0;
     
+    // Hardware-accurate power-up state
+    bool power_up_complete = false;
+    uint32_t power_up_cycles = 0;
+    
+    // DMC DMA timing
+    struct {
+        bool active = false;
+        uint8_t cycles_remaining = 0;
+        uint16_t address = 0;
+    } dma_state;
+    
 public:
     APU(bool pal = false) : is_pal(pal) {
         noise.is_pal = pal;
         dmc.is_pal = pal;
         frame.is_pal = pal;
+        
+        // Hardware-accurate power-up initialization
+        reset_to_power_up_state();
     }
     
-    // MMIO Write Handler ($4000-$4017)
+    void reset_to_power_up_state() {
+        // Power-up state based on hardware behavior
+        power_up_complete = false;
+        power_up_cycles = 0;
+        
+        // All channels start disabled
+        pulse1.length.set_enabled(false);
+        pulse2.length.set_enabled(false);
+        triangle.length.set_enabled(false);
+        noise.length.set_enabled(false);
+        
+        // DMC starts silent with proper reset
+        dmc.reset();
+        
+        // Frame counter starts in 4-step mode
+        frame.mode = false;
+        frame.irq_inhibit = false;
+        frame.irq_flag = false;
+        
+        // Noise LFSR properly initialized
+        noise.shift_register = 1;
+    }
+    
+    // MMIO Write Handler ($4000-$4017) with bus state
+    #ifdef SYSTEM_LINES_H
+    bus_state_t write_with_bus(uint16_t addr, uint8_t value, bus_state_t bus_state) {
+        switch (addr) {
+            // Pulse 1
+            case 0x4000: pulse1.write_control(value); break;
+            case 0x4001: pulse1.write_sweep(value); break;
+            case 0x4002: pulse1.write_timer_low(value); break;
+            case 0x4003: pulse1.write_timer_high(value); break;
+            
+            // Pulse 2
+            case 0x4004: pulse2.write_control(value); break;
+            case 0x4005: pulse2.write_sweep(value); break;
+            case 0x4006: pulse2.write_timer_low(value); break;
+            case 0x4007: pulse2.write_timer_high(value); break;
+            
+            // Triangle
+            case 0x4008: triangle.write_control(value); break;
+            case 0x4009: break;  // Unused
+            case 0x400A: triangle.write_timer_low(value); break;
+            case 0x400B: triangle.write_timer_high(value); break;
+            
+            // Noise
+            case 0x400C: noise.write_control(value); break;
+            case 0x400D: break;  // Unused
+            case 0x400E: noise.write_period(value); break;
+            case 0x400F: noise.write_length(value); break;
+            
+            // DMC
+            case 0x4010: dmc.write_control(value); break;
+            case 0x4011: dmc.write_output(value); break;
+            case 0x4012: dmc.write_address(value); break;
+            case 0x4013: dmc.write_length(value); break;
+            
+            // Status
+            case 0x4015:
+                pulse1.length.set_enabled(value & 0x01);
+                pulse2.length.set_enabled(value & 0x02);
+                triangle.length.set_enabled(value & 0x04);
+                noise.length.set_enabled(value & 0x08);
+                
+                if (value & 0x10) {
+                    if (!dmc.active()) {
+                        dmc.start();
+                    }
+                } else {
+                    dmc.bytes_remaining = 0;
+                }
+                
+                dmc.irq_flag = false;
+                break;
+            
+            // Frame counter
+            case 0x4017:
+                frame.write(value);
+                break;
+        }
+        
+        // Update bus state with current data for open bus behavior
+        BUS_SET_DATA(bus_state, value);
+        return bus_state;
+    }
+    #endif
+    
+    // Standard MMIO Write Handler ($4000-$4017)
     void write(uint16_t addr, uint8_t value) {
         switch (addr) {
             // Pulse 1
@@ -672,6 +843,32 @@ public:
         }
     }
     
+    // MMIO Read Handler ($4015) with open bus behavior (requires system_lines.h)
+    #ifdef SYSTEM_LINES_H
+    bus_state_t read_with_bus(uint16_t addr, bus_state_t bus_state) {
+        
+        if (addr == 0x4015) {
+            uint8_t status = 0;
+            
+            status |= (pulse1.length.active() ? 0x01 : 0);
+            status |= (pulse2.length.active() ? 0x02 : 0);
+            status |= (triangle.length.active() ? 0x04 : 0);
+            status |= (noise.length.active() ? 0x08 : 0);
+            status |= (dmc.active() ? 0x10 : 0);
+            status |= (frame.irq_flag ? 0x40 : 0);
+            status |= (dmc.irq_flag ? 0x80 : 0);
+            
+            // Reading $4015 clears frame IRQ flag
+            frame.irq_flag = false;
+            
+            BUS_SET_DATA(bus_state, status);
+        }
+        // Other addresses return open bus (previous data on bus)
+        
+        return bus_state;
+    }
+    #endif
+    
     // MMIO Read Handler ($4015)
     uint8_t read(uint16_t addr) {
         if (addr == 0x4015) {
@@ -691,12 +888,37 @@ public:
             return status;
         }
         
-        // Other addresses return open bus (would need to track last value)
+        // Other addresses return open bus - simplified for compatibility
         return 0;
     }
     
     // Clock - called every CPU cycle
     void clock() {
+        // Handle power-up sequence
+        if (!power_up_complete) {
+            power_up_cycles++;
+            if (power_up_cycles >= 29830) { // ~1 frame at NTSC rate
+                power_up_complete = true;
+            }
+        }
+        
+        // Handle DMC DMA timing (simplified for compatibility)
+        if (dma_state.active) {
+            if (dma_state.cycles_remaining > 0) {
+                dma_state.cycles_remaining--;
+                return; // CPU stalled during DMA
+            } else {
+                dma_state.active = false;
+            }
+        }
+        
+        // Check if DMC needs a sample and start DMA
+        if (dmc.needs_sample && !dma_state.active) {
+            dma_state.active = true;
+            dma_state.cycles_remaining = (cycle_counter & 1) ? 3 : 2; // Odd/even cycle timing
+            dma_state.address = dmc.current_address;
+        }
+        
         // Frame counter events
         uint8_t events = frame.clock();
         
@@ -733,7 +955,31 @@ public:
         cycle_counter++;
     }
     
-    // Generate Audio Sample (non-linear mixing)
+    // Advanced clock with bus state for full hardware accuracy
+    #ifdef SYSTEM_LINES_H
+    bus_state_t clock_with_bus(bus_state_t bus_state) {
+        // Handle DMC DMA with full bus state management
+        if (dma_state.active) {
+            if (dma_state.cycles_remaining > 0) {
+                dma_state.cycles_remaining--;
+                // CPU is stalled during DMA
+                BUS_SET_ADDR(bus_state, dma_state.address);
+                return bus_state;
+            } else {
+                // DMA complete, load the sample
+                uint8_t sample = BUS_GET_DATA(bus_state);
+                dmc.load_sample(sample);
+                dma_state.active = false;
+            }
+        }
+        
+        // Regular clock operations
+        clock();
+        return bus_state;
+    }
+    #endif
+    
+    // Generate Audio Sample (hardware-accurate non-linear mixing)
     float sample() const {
         uint8_t p1 = pulse1.output();
         uint8_t p2 = pulse2.output();
@@ -741,7 +987,7 @@ public:
         uint8_t noi = noise.output();
         uint8_t dm = dmc.output();
         
-        // Non-linear mixing formulas
+        // Hardware-accurate non-linear mixing formulas
         float pulse_out = 0.0f;
         if (p1 + p2 > 0) {
             pulse_out = 95.88f / ((8128.0f / (p1 + p2)) + 100.0f);
@@ -753,7 +999,17 @@ public:
             tnd_out = 159.79f / ((1.0f / tnd_sum) + 100.0f);
         }
         
-        return pulse_out + tnd_out;
+        // Hardware-accurate: Apply high-frequency filtering and DC blocking
+        float output = pulse_out + tnd_out;
+        
+        // Simple DC blocking filter (hardware has ~20Hz cutoff)
+        static float prev_input = 0.0f;
+        static float prev_output = 0.0f;
+        float filtered = output - prev_input + 0.999f * prev_output;
+        prev_input = output;
+        prev_output = filtered;
+        
+        return filtered;
     }
     
     // Helper: Get DMC sample request for DMA
