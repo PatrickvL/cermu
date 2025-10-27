@@ -159,7 +159,7 @@ bus_state_t op_plb(bus_state_t pins) {
         this->wide_state.DBR = CPU_DL(this);
         
         // Update N and Z flags based on DBR
-        update_nz_flags(this->wide_state.DBR);
+        this->update_nz_flags(this->wide_state.DBR);
     }
 
     transition_to_fetch();
@@ -186,7 +186,7 @@ bus_state_t op_pld(bus_state_t pins) {
         this->wide_state.D = (high_byte << 8) | low_byte;
         
         // Update N and Z flags based on D register
-        update_nz_flags(this->wide_state.D & 0xFF); // Only check low byte for flags
+        this->update_nz_flags(this->wide_state.D & 0xFF); // Only check low byte for flags
     }
     transition_to_fetch();
     return pins;

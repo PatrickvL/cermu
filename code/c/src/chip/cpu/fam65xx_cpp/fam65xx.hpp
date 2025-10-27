@@ -204,7 +204,7 @@ public:
         // Note: Memory callbacks will be set through separate API calls
         // This matches the old implementation's approach
         this->mem_read = nullptr;
-        this->mem_write = nullptr;  
+        this->mem_write = nullptr;
         this->mem_user_data = nullptr;
         
         // Initialize processor-specific features
@@ -579,7 +579,7 @@ private:
         }
         
         // For immediate mode and implied operations, go directly to operation
-        return operation_handlers[this->opcode_entry.op_index];
+        return this->operation_handlers[this->opcode_entry.op_index];
     }
     
     // Hardware-accurate interrupt detection (matching old implementation)
@@ -658,7 +658,7 @@ private:
         this->cycle_index = 0;
         
         // Set up first instruction cycle handler
-        this->current_handler = get_instruction_handler();
+        this->current_handler = this->get_instruction_handler();
         trace("Set up handler for opcode %02X", opcode);
         
         trace_exit("fetch_opcode");
@@ -679,7 +679,7 @@ private:
     
     void transition_to_operation() {
         this->cycle_index = 0;
-        this->current_handler = operation_handlers[this->opcode_entry.op_index];
+        this->current_handler = this->operation_handlers[this->opcode_entry.op_index];
     }
     
     void init_conditional_features() {
