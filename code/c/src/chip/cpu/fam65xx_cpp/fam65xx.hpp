@@ -574,6 +574,27 @@ public:
         return ((addr1 ^ addr2) & 0x0100) != 0;
     }
     
+    // ========================================================================
+    // PHI2 UNIFIED MEMORY ACCESS WITH PROCESSOR-VARIANT RDY HANDLING
+    // ========================================================================
+    
+    // Unified PHI2 write with processor-variant-specific RDY behavior
+    // Returns true if write completed and caller should perform completion logic
+    inline bool phi2_write_with_rdy_check(bus_state_t& pins, reg16_t addr_reg, reg8_t data_reg) {
+        // Always perform PHI2 write operation
+        pins = phi2_write(pins, addr_reg, data_reg);
+        
+        // Processor-variant-specific RDY behavior
+        if constexpr (has_nmos_bugs<ProcessorTag>()) {
+            // NMOS variants (6502, 6510): Write cycles ignore RDY, always complete
+            return true;
+        } else {
+            // CMOS variants (65C02, 65C816): Write cycles respect RDY with stretching
+            return FAM65XX_GET_RDY(pins);
+            // If RDY low: cycle stretches, write is postponed until RDY goes high
+        }
+    }
+    
 private:
     // ========================================================================
     // INTERNAL HELPER FUNCTIONS AND DECLARATIONS

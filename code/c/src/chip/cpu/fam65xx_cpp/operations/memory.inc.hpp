@@ -62,10 +62,10 @@ bus_state_t op_ldy(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_sta(bus_state_t pins) {
-    // Store accumulator directly from A register (eliminates DL copy)
-    pins = this->phi2_write(pins, REG_AB, REG_A);
-    // Write cycles ignore RDY - complete instruction immediately
-    transition_to_fetch();
+    // Store accumulator with processor-specific RDY handling
+    if (phi2_write_with_rdy_check(pins, REG_AB, REG_A)) {
+        transition_to_fetch();
+    }
     return pins;
 }
 
@@ -74,10 +74,10 @@ bus_state_t op_sta(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_stx(bus_state_t pins) {
-    // Store X register directly from X register (eliminates DL copy)
-    pins = this->phi2_write(pins, REG_AB, REG_X);
-    // Write cycles ignore RDY - complete instruction immediately
-    transition_to_fetch();
+    // Store X register with processor-specific RDY handling
+    if (phi2_write_with_rdy_check(pins, REG_AB, REG_X)) {
+        transition_to_fetch();
+    }
     return pins;
 }
 
@@ -86,10 +86,10 @@ bus_state_t op_stx(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_sty(bus_state_t pins) {
-    // Store Y register directly from Y register (eliminates DL copy)
-    pins = this->phi2_write(pins, REG_AB, REG_Y);
-    // Write cycles ignore RDY - complete instruction immediately
-    transition_to_fetch();
+    // Store Y register with processor-specific RDY handling
+    if (phi2_write_with_rdy_check(pins, REG_AB, REG_Y)) {
+        transition_to_fetch();
+    }
     return pins;
 }
 
