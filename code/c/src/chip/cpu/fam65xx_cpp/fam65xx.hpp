@@ -386,8 +386,13 @@ public:
         uint16_t addr = this->reg16[addr_reg];
         uint8_t data = this->reg8[data_reg];
         
+        // Standard bus write for all other addresses
+        pins = BUS_SET_ADDR(pins, addr);
+        pins = BUS_SET_DATA(pins, data);
+        pins &= ~FAM65XX_RW; // Set WRITE mode
+        
+        // Handle 6510 I/O port access (compile-time conditional)
         if constexpr (has_io_port<ProcessorTag>()) {
-            // Handle 6510 I/O port access (compile-time conditional)
             if (addr == 0x0000) {
                 this->write_io_ddr(data);
                 return pins; // Don't perform bus write
@@ -396,11 +401,6 @@ public:
                 return pins; // Don't perform bus write
             }
         }
-        
-        // Standard bus write for all other addresses
-        pins = BUS_SET_ADDR(pins, addr);
-        pins = BUS_SET_DATA(pins, data);
-        pins &= ~FAM65XX_RW; // Set WRITE mode
         
         // Use memory callback if available
         if (this->mem_write != nullptr) {

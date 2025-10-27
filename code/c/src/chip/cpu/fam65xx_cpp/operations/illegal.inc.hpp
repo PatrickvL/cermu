@@ -305,13 +305,13 @@ bus_state_t op_sbx(bus_state_t pins) {
         if (FAM65XX_GET_RDY(pins)) {
             uint8_t temp = CPU_A(this) & CPU_X(this);
             uint8_t result = temp - CPU_DL(this);
+            // Update X with result
+            CPU_X(this) = result;
             
             // Set carry flag using standard subtraction semantics (carry = no borrow)
             this->update_flag(FLAG_C, temp >= CPU_DL(this));
             
-            // Update X with result
-            CPU_X(this) = result;
-            update_nz_flags(CPU_X(this));
+            update_nz_flags(result);
             
             transition_to_fetch();
         }
