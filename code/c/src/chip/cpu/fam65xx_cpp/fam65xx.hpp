@@ -343,6 +343,36 @@ public:
     // ========================================================================
     // FEATURE-SPECIFIC MEMORY ACCESS OVERRIDES
     // ========================================================================
+
+    // Unified memory write function with optional I/O port handling
+    bus_state_t phi2_write(bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) {
+        // Get address and data for both checks and bus operations
+        uint16_t addr = this->reg16[addr_reg];
+        uint8_t data = this->reg8[data_reg];
+        
+        if constexpr (has_io_port<ProcessorTag>()) {
+            // Handle 6510 I/O port access (compile-time conditional)
+            if (addr == 0x0000) {
+                this->write_io_ddr(data);
+                return pins; // Don't perform bus write
+            } else if (addr == 0x0001) {
+                this->write_io_data(data);
+                return pins; // Don't perform bus write
+            }
+        }
+        
+        // Standard bus write for all other addresses
+        pins = BUS_SET_ADDR(pins, addr);
+        pins = BUS_SET_DATA(pins, data);
+        pins &= ~FAM65XX_RW; // Set WRITE mode
+        
+        // Use memory callback if available
+        if (this->mem_write != nullptr) {
+            this->mem_write(this->mem_user_data, addr, data);
+        }
+        
+        return pins;
+    }
     
     // VIC-II compatible memory read with proper RDY handling (matching old implementation)
     bus_state_t phi2_read(bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) {
@@ -391,34 +421,19 @@ public:
         return pins;
     }
     
-    // Unified memory write function with optional I/O port handling
-    bus_state_t phi2_write(bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) {
-        // Get address and data for both checks and bus operations
-        uint16_t addr = this->reg16[addr_reg];
-        uint8_t data = this->reg8[data_reg];
-        
-        if constexpr (has_io_port<ProcessorTag>()) {
-            // Handle 6510 I/O port access (compile-time conditional)
-            if (addr == 0x0000) {
-                this->write_io_ddr(data);
-                return pins; // Don't perform bus write
-            } else if (addr == 0x0001) {
-                this->write_io_data(data);
-                return pins; // Don't perform bus write
+    // Optimized version with direct register targeting to eliminate copies
+    inline bus_state_t phi2_read_operand(bus_state_t pins, reg8_t target_reg) {
+        if (this->opcode_entry.am_index == AM_IMM) {
+            // Immediate mode - read from PC directly into target register
+            pins = phi2_read(pins, REG_PC, target_reg);
+            if (FAM65XX_GET_RDY(pins)) {
+                CPU_PC(this)++;
             }
+            return pins;
         }
-        
-        // Standard bus write for all other addresses
-        pins = BUS_SET_ADDR(pins, addr);
-        pins = BUS_SET_DATA(pins, data);
-        pins &= ~FAM65XX_RW; // Set WRITE mode
-        
-        // Use memory callback if available
-        if (this->mem_write != nullptr) {
-            this->mem_write(this->mem_user_data, addr, data);
-        }
-        
-        return pins;
+
+        // Memory mode - read from target address directly into target register
+        return phi2_read(pins, REG_AB, target_reg);
     }
     
     // ========================================================================
@@ -810,21 +825,6 @@ private:
         // 65C02 addressing modes (if implemented)
         addressing_mode_handlers[AM_ZPI] = &fam65xx_t::addr_zp_ind;  // Zero Page Indirect
         addressing_mode_handlers[AM_ABI] = &fam65xx_t::addr_ind_abs; // Absolute Indexed Indirect
-    }
-    
-    // Optimized version with direct register targeting to eliminate copies
-    inline bus_state_t phi2_read_operand(bus_state_t pins, reg8_t target_reg) {
-        if (this->opcode_entry.am_index == AM_IMM) {
-            // Immediate mode - read from PC directly into target register
-            pins = phi2_read(pins, REG_PC, target_reg);
-            if (FAM65XX_GET_RDY(pins)) {
-                CPU_PC(this)++;
-            }
-            return pins;
-        }
-
-        // Memory mode - read from target address directly into target register
-        return phi2_read(pins, REG_AB, target_reg);
     }
 };
 
