@@ -19,18 +19,22 @@ bus_state_t op_jmp(bus_state_t pins) {
 
 /* JSR - Jump to Subroutine */
 bus_state_t op_jsr(bus_state_t pins) {
-    switch (this->cycle_index++) {
+    switch (this->cycle_index) {
         case 0:
             /* PHI2: Read low byte of target address from PC directly to ABL */
             pins = phi2_read(pins, REG_PC, REG_ABL);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_PC(this)++;
+                this->cycle_index++;
             }
             return pins;
             
         case 1:
             /* PHI2: Dummy read from stack pointer (internal operation) */
             pins = phi2_read(pins, REG_SP, REG_DL);
+            if (FAM65XX_GET_RDY(pins)) {
+                this->cycle_index++;
+            }
             return pins;
             
         case 2:
@@ -40,6 +44,7 @@ bus_state_t op_jsr(bus_state_t pins) {
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Decrement stack pointer */
                 CPU_S(this)--;
+                this->cycle_index++;
             }
             return pins;
             
@@ -50,6 +55,7 @@ bus_state_t op_jsr(bus_state_t pins) {
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Decrement stack pointer */
                 CPU_S(this)--;
+                this->cycle_index++;
             }
             return pins;
             
@@ -61,17 +67,20 @@ bus_state_t op_jsr(bus_state_t pins) {
                 CPU_PC(this) = CPU_AB(this);
                 transition_to_fetch();
             }
-            break;
+            return pins;
     }
     return pins;
 }
 
 /* RTS - Return from Subroutine */
 bus_state_t op_rts(bus_state_t pins) {
-    switch (this->cycle_index++) {
+    switch (this->cycle_index) {
         case 0:
             /* PHI2: Dummy read from PC */
             pins = phi2_read(pins, REG_PC, REG_DL);
+            if (FAM65XX_GET_RDY(pins)) {
+                this->cycle_index++;
+            }
             return pins;
             
         case 1:
@@ -79,6 +88,7 @@ bus_state_t op_rts(bus_state_t pins) {
             pins = phi2_read(pins, REG_SP, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_S(this)++;
+                this->cycle_index++;
             }
             return pins;
             
@@ -88,6 +98,7 @@ bus_state_t op_rts(bus_state_t pins) {
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_PCL(this) = CPU_DL(this);
                 CPU_S(this)++;
+                this->cycle_index++;
             }
             return pins;
             
@@ -96,6 +107,7 @@ bus_state_t op_rts(bus_state_t pins) {
             pins = phi2_read(pins, REG_SP, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_PCH(this) = CPU_DL(this);
+                this->cycle_index++;
             }
             return pins;
             
@@ -106,7 +118,7 @@ bus_state_t op_rts(bus_state_t pins) {
                 CPU_PC(this)++;
                 transition_to_fetch();
             }
-            break;
+            return pins;
     }
     return pins;
 }
@@ -117,12 +129,13 @@ bus_state_t op_rts(bus_state_t pins) {
 
 /* BRK - Break (Software Interrupt) */
 bus_state_t op_brk(bus_state_t pins) {
-    switch (this->cycle_index++) {
+    switch (this->cycle_index) {
         case 0:
             /* PHI2: Dummy read from PC+1 (BRK has optional signature byte) */
             pins = phi2_read(pins, REG_PC, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_PC(this)++;
+                this->cycle_index++;
             }
             return pins;
             
@@ -132,6 +145,7 @@ bus_state_t op_brk(bus_state_t pins) {
             pins = phi2_write(pins, REG_SP, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_S(this)--;
+                this->cycle_index++;
             }
             return pins;
             
@@ -141,6 +155,7 @@ bus_state_t op_brk(bus_state_t pins) {
             pins = phi2_write(pins, REG_SP, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_S(this)--;
+                this->cycle_index++;
             }
             return pins;
             
@@ -150,9 +165,9 @@ bus_state_t op_brk(bus_state_t pins) {
             pins = phi2_write(pins, REG_SP, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_S(this)--;
-                
                 /* PHI1: Set interrupt disable flag */
                 set_flag(FLAG_I);
+                this->cycle_index++;
             }
             return pins;
             
@@ -160,6 +175,9 @@ bus_state_t op_brk(bus_state_t pins) {
             /* PHI2: Read IRQ vector low byte from $FFFE */
             CPU_AB(this) = 0xFFFE;
             pins = phi2_read(pins, REG_AB, REG_PCL);
+            if (FAM65XX_GET_RDY(pins)) {
+                this->cycle_index++;
+            }
             return pins;
             
         case 5:
@@ -169,17 +187,20 @@ bus_state_t op_brk(bus_state_t pins) {
             if (FAM65XX_GET_RDY(pins)) {
                 transition_to_fetch();
             }
-            break;
+            return pins;
     }
     return pins;
 }
 
 /* RTI - Return from Interrupt */
 bus_state_t op_rti(bus_state_t pins) {
-    switch (this->cycle_index++) {
+    switch (this->cycle_index) {
         case 0:
             /* PHI2: Dummy read from PC */
             pins = phi2_read(pins, REG_PC, REG_DL);
+            if (FAM65XX_GET_RDY(pins)) {
+                this->cycle_index++;
+            }
             return pins;
             
         case 1:
@@ -187,6 +208,7 @@ bus_state_t op_rti(bus_state_t pins) {
             pins = phi2_read(pins, REG_SP, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_S(this)++;
+                this->cycle_index++;
             }
             return pins;
             
@@ -196,6 +218,7 @@ bus_state_t op_rti(bus_state_t pins) {
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_P(this) = (CPU_DL(this) & ~FLAG_B) | FLAG_U;
                 CPU_S(this)++;
+                this->cycle_index++;
             }
             return pins;
             
@@ -205,6 +228,7 @@ bus_state_t op_rti(bus_state_t pins) {
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_PCL(this) = CPU_DL(this);
                 CPU_S(this)++;
+                this->cycle_index++;
             }
             return pins;
             
@@ -215,7 +239,7 @@ bus_state_t op_rti(bus_state_t pins) {
                 CPU_PCH(this) = CPU_DL(this);
                 transition_to_fetch();
             }
-            break;
+            return pins;
     }
     return pins;
 }

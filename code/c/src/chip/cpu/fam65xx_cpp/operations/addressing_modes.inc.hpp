@@ -32,12 +32,13 @@ bus_state_t addr_zp(bus_state_t pins) {
 
 // Zero Page,X addressing: $nn,X (cycle-accurate)
 bus_state_t addr_zpx(bus_state_t pins) {
-    switch (this->cycle_index++) {
+    switch (this->cycle_index) {
         case 0:
             // PHI2: Read base address from PC
             pins = phi2_read(pins, REG_PC, REG_ZPL);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_PC(this)++;
+                this->cycle_index++;
             }
             // PHI1: Base address is already stored in ZP
             return pins;
@@ -51,19 +52,20 @@ bus_state_t addr_zpx(bus_state_t pins) {
                 CPU_AB(this) = CPU_ZP(this); // Copy final ZP address to AB
                 transition_to_operation();
             }
-            break;
+            return pins;
     }
     return pins;
 }
 
 // Zero Page,Y addressing: $nn,Y (cycle-accurate)
 bus_state_t addr_zpy(bus_state_t pins) {
-    switch (this->cycle_index++) {
+    switch (this->cycle_index) {
         case 0:
             // PHI2: Read base address from PC
             pins = phi2_read(pins, REG_PC, REG_ZPL);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_PC(this)++;
+                this->cycle_index++;
             }
             // PHI1: Base address is already stored in ZP
             return pins;
@@ -77,19 +79,20 @@ bus_state_t addr_zpy(bus_state_t pins) {
                 CPU_AB(this) = CPU_ZP(this); // Copy final ZP address to AB
                 transition_to_operation();
             }
-            break;
+            return pins;
     }
     return pins;
 }
 
 // Absolute addressing: $nnnn (cycle-accurate)
 bus_state_t addr_abs(bus_state_t pins) {
-    switch (this->cycle_index++) {
+    switch (this->cycle_index) {
         case 0:
             // PHI2: Read low byte from PC
             pins = phi2_read(pins, REG_PC, REG_ABL);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_PC(this)++;
+                this->cycle_index++;
             }
             return pins;
             
@@ -100,19 +103,20 @@ bus_state_t addr_abs(bus_state_t pins) {
                 CPU_PC(this)++;
                 transition_to_operation();
             }
-            break;
+            return pins;
     }
     return pins;
 }
 
 // Absolute,X addressing: $nnnn,X (cycle-accurate with page crossing)
 bus_state_t addr_abx(bus_state_t pins) {
-    switch (this->cycle_index++) {
+    switch (this->cycle_index) {
         case 0:
             // PHI2: Read low byte from PC
             pins = phi2_read(pins, REG_PC, REG_ABL);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_PC(this)++;
+                this->cycle_index++;
             }
             return pins;
             
@@ -135,6 +139,7 @@ bus_state_t addr_abx(bus_state_t pins) {
                     page_crossed(base, effective) ||
                     (this->opcode_entry.flags & OF_RMW)) {
                     // Need penalty cycle - keep intermediate address for penalty read
+                    this->cycle_index++;
                 } else {
                     // No penalty needed - complete with correct address
                     CPU_AB(this) = effective;
@@ -155,19 +160,20 @@ bus_state_t addr_abx(bus_state_t pins) {
                 CPU_AB(this) += CPU_X(this);
                 transition_to_operation();
             }
-            break;
+            return pins;
     }
     return pins;
 }
 
 // Absolute,Y addressing: $nnnn,Y (cycle-accurate with page crossing)
 bus_state_t addr_aby(bus_state_t pins) {
-    switch (this->cycle_index++) {
+    switch (this->cycle_index) {
         case 0:
             // PHI2: Read low byte from PC
             pins = phi2_read(pins, REG_PC, REG_ABL);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_PC(this)++;
+                this->cycle_index++;
             }
             return pins;
             
@@ -190,6 +196,7 @@ bus_state_t addr_aby(bus_state_t pins) {
                     transition_to_operation();
                 } else {
                     // Page crossing or always need penalty
+                    this->cycle_index++;
                 }
             }
             return pins;
@@ -206,19 +213,20 @@ bus_state_t addr_aby(bus_state_t pins) {
                 CPU_AB(this) += CPU_Y(this);
                 transition_to_operation();
             }
-            break;
+            return pins;
     }
     return pins;
 }
 
 // Indirect addressing: ($nnnn) - Used only by JMP instruction
 bus_state_t addr_ind(bus_state_t pins) {
-    switch (this->cycle_index++) {
+    switch (this->cycle_index) {
         case 0:
             // PHI2: Read low byte of pointer address from PC
             pins = phi2_read(pins, REG_PC, REG_ABL);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_PC(this)++;
+                this->cycle_index++;
             }
             return pins;
             
@@ -227,6 +235,7 @@ bus_state_t addr_ind(bus_state_t pins) {
             pins = phi2_read(pins, REG_PC, REG_ABH);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_PC(this)++;
+                this->cycle_index++;
             }
             return pins;
             
@@ -242,6 +251,7 @@ bus_state_t addr_ind(bus_state_t pins) {
                     // 6502: Page boundary bug - increment only low byte
                     CPU_ABL(this)++;
                 }
+                this->cycle_index++;
             }
             return pins;
             
@@ -254,19 +264,20 @@ bus_state_t addr_ind(bus_state_t pins) {
                 // High byte already in ABH from this cycle
                 transition_to_operation();
             }
-            break;
+            return pins;
     }
     return pins;
 }
 
 // Indexed Indirect addressing: ($nn,X)
 bus_state_t addr_inx(bus_state_t pins) {
-    switch (this->cycle_index++) {
+    switch (this->cycle_index) {
         case 0:
             /* Read pointer from PC */
             pins = phi2_read(pins, REG_PC, REG_ZPL);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_PC(this)++;
+                this->cycle_index++;
             }
             // PHI1: Base address is already stored in ZP
             return pins;
@@ -277,6 +288,7 @@ bus_state_t addr_inx(bus_state_t pins) {
             if (FAM65XX_GET_RDY(pins)) {
                 /* Calculate ZP+X during dummy cycle */
                 CPU_ZPL(this) += CPU_X(this);
+                this->cycle_index++;
             }
             return pins;
             
@@ -285,6 +297,7 @@ bus_state_t addr_inx(bus_state_t pins) {
             pins = phi2_read(pins, REG_ZP, REG_ABL);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_ZPL(this)++;
+                this->cycle_index++;
             }
             return pins;
             
@@ -294,19 +307,20 @@ bus_state_t addr_inx(bus_state_t pins) {
             if (FAM65XX_GET_RDY(pins)) {
                 transition_to_operation();
             }
-            break;
+            return pins;
     }
     return pins;
 }
 
 // Indirect Indexed addressing: ($nn),Y
 bus_state_t addr_iny(bus_state_t pins) {
-    switch (this->cycle_index++) {
+    switch (this->cycle_index) {
         case 0:
             /* Read pointer from PC */
             pins = phi2_read(pins, REG_PC, REG_ZPL);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_PC(this)++;
+                this->cycle_index++;
             }
             return pins;
             
@@ -315,6 +329,7 @@ bus_state_t addr_iny(bus_state_t pins) {
             pins = phi2_read(pins, REG_ZP, REG_ABL);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_ZPL(this)++;
+                this->cycle_index++;
             }
             return pins;
             
@@ -333,6 +348,7 @@ bus_state_t addr_iny(bus_state_t pins) {
                 /* Check if penalty cycle is needed (page crossing or RMW operation) */
                 if (page_crossed(base_addr, final_addr) || (this->opcode_entry.flags & OF_RMW)) {
                     /* Page crossing or RMW - need penalty cycle with intermediate address */
+                    this->cycle_index++;
                 } else {
                     /* No page cross and not RMW - can skip penalty, set correct address */
                     CPU_AB(this) = final_addr;
@@ -353,7 +369,7 @@ bus_state_t addr_iny(bus_state_t pins) {
                 CPU_AB(this) += CPU_Y(this);
                 transition_to_operation();
             }
-            break;
+            return pins;
     }
     return pins;
 }

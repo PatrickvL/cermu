@@ -11,7 +11,7 @@
 
 /* Helper function for branch operations - hardware-accurate 6502 timing */
 bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) {
-    switch (this->cycle_index++) {
+    switch (this->cycle_index) {
         case 0: {
             /* PHI2: Read branch offset from PC */
             pins = phi2_read(pins, REG_PC, REG_DL);
@@ -30,6 +30,7 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) 
                 /* Branch taken: store offset and calculate target */
                 CPU_DL(this) = BUS_GET_DATA(pins);
                 CPU_AB(this) = CPU_PC(this) + (int8_t)CPU_DL(this);
+                this->cycle_index++;
             }
             return pins;
         }
@@ -51,6 +52,7 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) 
                 /* Page cross detected: Set up wrong intermediate address for penalty cycle */
                 /* Hardware adds offset to low byte only, keeping original high byte */
                 CPU_PCL(this) += (int8_t)CPU_DL(this);
+                this->cycle_index++;
             }
             return pins;
         }
@@ -63,7 +65,7 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) 
                 CPU_PC(this) = CPU_AB(this);
                 transition_to_fetch();
             }
-            break;
+            return pins;
     }
     return pins;
 }
