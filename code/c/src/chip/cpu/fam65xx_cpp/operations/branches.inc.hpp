@@ -48,19 +48,22 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) 
                     return pins;
                 }
                 
-                /* Page cross detected: set PC to wrong intermediate address for penalty cycle */
-                /* Hardware adds offset to PC low byte only, keeping original high byte */
+                /* Page cross detected: need penalty cycle with intermediate address */
+                /* Hardware behavior: Add offset to current PC's low byte, ignore carry */
+                /* This matches the exact same logic as the old working implementation */
                 CPU_PCL(this) += (int8_t)CPU_DL(this);
+                /* CPU_AB(this) already contains the correct final target from case 0 */
                 this->cycle_index++;
             }
             return pins;
         }
         
         case 2: {
-            /* PHI2: Page cross penalty - dummy read from wrong PC address */
+            /* PHI2: Page cross penalty - dummy read from intermediate address in PC */
             pins = phi2_read(pins, REG_PC, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Set final correct target PC and complete instruction */
+                /* CPU_AB(this) contains the correct target from case 1 */
                 CPU_PC(this) = CPU_AB(this);
                 transition_to_fetch();
             }
