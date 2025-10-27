@@ -156,23 +156,22 @@ void vicii_memory_access(vicii_t* vicii, uint8_t access_type, int access_param) 
             vicii_memory_read(vicii, address);
             vicii->sprites.sprites[access_param].data_pointer = BUS_GET_DATA(bus->state);
             break;            
-        case VIC_ACCESS_S:
-            {
-                vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[access_param];
-                if (sprite->mc_counter < 3) {
-                    address = sprite->data_pointer * 64 + sprite->mc_counter;
-                    vicii_memory_read(vicii, address);
-                    sprite->data_buffer[sprite->mc_counter] = BUS_GET_DATA(bus->state);
-                    sprite->mc_counter++;
-                } else {
-                    // "Whatever appears on the VIC-II internal bus during the fetch cycles
-                    // is displayed. That is both loads and stores to the VIC-II, or $ff if
-                    // no access occurs."
-                }
+
+        case VIC_ACCESS_S: {
+            vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[access_param];
+            if (sprite->mc_counter < 3) {
+                address = sprite->data_pointer * 64 + sprite->mc_counter;
+                vicii_memory_read(vicii, address);
+                sprite->data_buffer[sprite->mc_counter] = BUS_GET_DATA(bus->state);
+                sprite->mc_counter++;
+            } else {
+                // "Whatever appears on the VIC-II internal bus during the fetch cycles
+                // is displayed. That is both loads and stores to the VIC-II, or $ff if
+                // no access occurs."
             }
             break;
-            
-        case VIC_ACCESS_C:
+        }            
+        case VIC_ACCESS_C: {
             // Color RAM access (pins D8-D11)
             // Note, that mos2114_read masks the address to 0x03FF
             // so for that there's no need to use base 0xD800, but
@@ -196,37 +195,35 @@ void vicii_memory_access(vicii_t* vicii, uint8_t access_type, int access_param) 
                 vicii->video_logic.vmli++;
             }
             FALLTHROUGH; // to g-acess            
-
-            case VIC_ACCESS_G:
-            {
-                // Get character code from the video matrix line (real chip behavior)
-                uint8_t char_code = vicii->video_data.video_matrix_line[vicii->video_logic.vmli];
-                
-                if (vicii->video_logic.display_state) {
-                    if (vicii->registers.data[VICII_C1] & VICII_C1_BMM) {
-                        // Bitmap mode
-                        address = vicii->memory.cb_base | 
-                                ((vicii->video_logic.vc & 0x3FF) << 3) | 
-                                (vicii->video_logic.rc & 0x07);
-                    } else {
-                        // Text mode
-                        // "When changing from RAM to (char)ROM fetches, the LSB of the fetch address
-                        // is latched using the mode from the previous cycle, and the upper bits come
-                        // from the current mode. This glitch happens on 6569, but not on 8565."
-                        address = vicii->memory.cb_base | 
-                                (char_code << 3) | 
-                                (vicii->video_logic.rc & 0x07);
-                    }
-                } else {
-                    // Idle state
-                    address = (vicii->registers.data[VICII_C1] & VICII_C1_ECM) ? 0x39ff : 0x3fff;
-                }
-                
-                vicii_memory_read(vicii, address);
-                vicii_graphics_sequencer(vicii, BUS_GET_DATA(bus->state));
-            }
-            break;
+        }
+        case VIC_ACCESS_G: {
+            // Get character code from the video matrix line (real chip behavior)
+            uint8_t char_code = vicii->video_data.video_matrix_line[vicii->video_logic.vmli];
             
+            if (vicii->video_logic.display_state) {
+                if (vicii->registers.data[VICII_C1] & VICII_C1_BMM) {
+                    // Bitmap mode
+                    address = vicii->memory.cb_base | 
+                            ((vicii->video_logic.vc & 0x3FF) << 3) | 
+                            (vicii->video_logic.rc & 0x07);
+                } else {
+                    // Text mode
+                    // "When changing from RAM to (char)ROM fetches, the LSB of the fetch address
+                    // is latched using the mode from the previous cycle, and the upper bits come
+                    // from the current mode. This glitch happens on 6569, but not on 8565."
+                    address = vicii->memory.cb_base | 
+                            (char_code << 3) | 
+                            (vicii->video_logic.rc & 0x07);
+                }
+            } else {
+                // Idle state
+                address = (vicii->registers.data[VICII_C1] & VICII_C1_ECM) ? 0x39ff : 0x3fff;
+            }
+            
+            vicii_memory_read(vicii, address);
+            vicii_graphics_sequencer(vicii, BUS_GET_DATA(bus->state));
+            break;
+        }    
         case VIC_ACCESS_REFRESH:
             if (vicii->enable_hardware_accurate_reads) {
                 address = vicii->memory.vm_base | 0x3F00 | vicii->video_logic.refresh_counter;
