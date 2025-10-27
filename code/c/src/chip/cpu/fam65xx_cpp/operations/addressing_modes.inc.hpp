@@ -38,8 +38,8 @@ bus_state_t addr_zpx(bus_state_t pins) {
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_PC(this)++;
             
-            // PHI1: Base address is alreayd stored in ZP
-            break;
+            // PHI1: Base address is already stored in ZP
+            return pins;
             
         case 1:
             // PHI2: Dummy read from ZP while adding index
@@ -65,7 +65,7 @@ bus_state_t addr_zpy(bus_state_t pins) {
             CPU_PC(this)++;
 
             // PHI1: Base address is already stored in ZP
-            break;
+            return pins;
             
         case 1:
             // PHI2: Dummy read from ZP while adding index
@@ -89,7 +89,7 @@ bus_state_t addr_abs(bus_state_t pins) {
             pins = phi2_read(pins, REG_PC, REG_ABL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_PC(this)++;
-            break;
+            return pins;
             
         case 1:
             // PHI2: Read high byte from PC
@@ -110,7 +110,7 @@ bus_state_t addr_abx(bus_state_t pins) {
             pins = phi2_read(pins, REG_PC, REG_ABL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_PC(this)++;
-            break;
+            return pins;
             
         case 1: {
             // PHI2: Read high byte from PC
@@ -163,7 +163,7 @@ bus_state_t addr_aby(bus_state_t pins) {
             pins = phi2_read(pins, REG_PC, REG_ABL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_PC(this)++;
-            break;
+            return pins;
             
         case 1: {
             // PHI2: Read high byte from PC
@@ -212,14 +212,14 @@ bus_state_t addr_ind(bus_state_t pins) {
             pins = phi2_read(pins, REG_PC, REG_ABL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_PC(this)++;
-            break;
+            return pins;
             
         case 1:
             // PHI2: Read high byte of pointer address from PC
             pins = phi2_read(pins, REG_PC, REG_ABH);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_PC(this)++;
-            break;
+            return pins;
             
         case 2:
             // PHI2: Read low byte of target address from pointer
@@ -234,7 +234,7 @@ bus_state_t addr_ind(bus_state_t pins) {
                 // 6502: Page boundary bug - increment only low byte
                 CPU_ABL(this)++;
             }
-            break;
+            return pins;
             
         case 3:
             // PHI2: Read high byte of target address
@@ -259,8 +259,8 @@ bus_state_t addr_inx(bus_state_t pins) {
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_PC(this)++;
             
-            // PHI1: Base address is alreayd stored in ZP
-            break;
+            // PHI1: Base address is already stored in ZP
+            return pins;
             
         case 1:
             /* Dummy read from ZP (before adding X) */
@@ -269,14 +269,14 @@ bus_state_t addr_inx(bus_state_t pins) {
             
             /* Calculate ZP+X during dummy cycle */
             CPU_ZPL(this) += CPU_X(this);
-            break;
+            return pins;
             
         case 2:
             /* Read low byte of target from ZP+X */
             pins = phi2_read(pins, REG_ZP, REG_ABL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_ZPL(this)++;
-            break;
+            return pins;
             
         case 3:
             /* Read high byte of target from ZP+X+1 */
@@ -296,14 +296,14 @@ bus_state_t addr_iny(bus_state_t pins) {
             pins = phi2_read(pins, REG_PC, REG_ZPL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_PC(this)++;
-            break;
+            return pins;
             
         case 1:
             /* Read low byte of target from ZP */
             pins = phi2_read(pins, REG_ZP, REG_ABL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_ZPL(this)++;
-            break;
+            return pins;
             
         case 2: {
             /* Third cycle: Read high byte of the base address */
@@ -321,7 +321,7 @@ bus_state_t addr_iny(bus_state_t pins) {
             /* Check if penalty cycle is needed (page crossing or RMW operation) */
             if (page_crossed(base_addr, final_addr) || (this->opcode_entry.flags & OF_RMW)) {
                 /* Page crossing or RMW - need penalty cycle with intermediate address */
-                break;
+                return pins;
             } else {
                 /* No page cross and not RMW - can skip penalty, set correct address */
                 CPU_AB(this) = final_addr;

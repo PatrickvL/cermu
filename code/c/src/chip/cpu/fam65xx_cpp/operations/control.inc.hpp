@@ -25,13 +25,13 @@ bus_state_t op_jsr(bus_state_t pins) {
             pins = phi2_read(pins, REG_PC, REG_ABL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_PC(this)++;
-            break;
+            return pins;
             
         case 1:
             /* PHI2: Dummy read from stack pointer (internal operation) */
             pins = phi2_read(pins, REG_SP, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
-            break;
+            return pins;
             
         case 2:
             /* PHI2: Push PCH (high byte of return address) to stack */
@@ -41,7 +41,7 @@ bus_state_t op_jsr(bus_state_t pins) {
             
             /* PHI1: Decrement stack pointer */
             CPU_S(this)--;
-            break;
+            return pins;
             
         case 3:
             /* PHI2: Push PCL (low byte of return address) to stack */
@@ -51,7 +51,7 @@ bus_state_t op_jsr(bus_state_t pins) {
             
             /* PHI1: Decrement stack pointer */
             CPU_S(this)--;
-            break;
+            return pins;
             
         case 4:
             /* PHI2: Read high byte of target address from PC directly to ABH */
@@ -73,14 +73,14 @@ bus_state_t op_rts(bus_state_t pins) {
             /* PHI2: Dummy read from PC */
             pins = phi2_read(pins, REG_PC, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
-            break;
+            return pins;
             
         case 1:
             /* PHI2: Dummy read from current stack pointer, then increment SP */
             pins = phi2_read(pins, REG_SP, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_S(this)++;
-            break;
+            return pins;
             
         case 2:
             /* PHI2: Pull PCL from stack */
@@ -88,14 +88,14 @@ bus_state_t op_rts(bus_state_t pins) {
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_PCL(this) = CPU_DL(this);
             CPU_S(this)++;
-            break;
+            return pins;
             
         case 3:
             /* PHI2: Pull PCH from stack */
             pins = phi2_read(pins, REG_SP, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_PCH(this) = CPU_DL(this);
-            break;
+            return pins;
             
         case 4:
             /* PHI2: Dummy read from PC, then increment PC */
@@ -120,7 +120,7 @@ bus_state_t op_brk(bus_state_t pins) {
             pins = phi2_read(pins, REG_PC, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_PC(this)++;
-            break;
+            return pins;
             
         case 1:
             /* PHI2: Push PCH to stack */
@@ -128,7 +128,7 @@ bus_state_t op_brk(bus_state_t pins) {
             pins = phi2_write(pins, REG_SP, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_S(this)--;
-            break;
+            return pins;
             
         case 2:
             /* PHI2: Push PCL to stack */
@@ -136,7 +136,7 @@ bus_state_t op_brk(bus_state_t pins) {
             pins = phi2_write(pins, REG_SP, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_S(this)--;
-            break;
+            return pins;
             
         case 3:
             /* PHI2: Push P|B|U to stack (B flag set for BRK) */
@@ -147,14 +147,14 @@ bus_state_t op_brk(bus_state_t pins) {
             
             /* PHI1: Set interrupt disable flag */
             set_flag(FLAG_I);
-            break;
+            return pins;
             
         case 4:
             /* PHI2: Read IRQ vector low byte from $FFFE */
             CPU_AB(this) = 0xFFFE;
             pins = phi2_read(pins, REG_AB, REG_PCL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
-            break;
+            return pins;
             
         case 5:
             /* PHI2: Read IRQ vector high byte from $FFFF */
@@ -174,14 +174,14 @@ bus_state_t op_rti(bus_state_t pins) {
             /* PHI2: Dummy read from PC */
             pins = phi2_read(pins, REG_PC, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
-            break;
+            return pins;
             
         case 1:
             /* PHI2: Dummy read from current stack pointer, then increment SP */
             pins = phi2_read(pins, REG_SP, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_S(this)++;
-            break;
+            return pins;
             
         case 2:
             /* PHI2: Pull P from stack (clear B, set U) */
@@ -189,7 +189,7 @@ bus_state_t op_rti(bus_state_t pins) {
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_P(this) = (CPU_DL(this) & ~FLAG_B) | FLAG_U;
             CPU_S(this)++;
-            break;
+            return pins;
             
         case 3:
             /* PHI2: Pull PCL from stack */
@@ -197,7 +197,7 @@ bus_state_t op_rti(bus_state_t pins) {
             if (!FAM65XX_GET_RDY(pins)) return pins;
             CPU_PCL(this) = CPU_DL(this);
             CPU_S(this)++;
-            break;
+            return pins;
             
         case 4:
             /* PHI2: Pull PCH from stack */
