@@ -99,9 +99,6 @@ bus_state_t op_adc(bus_state_t pins) {
         uint8_t a = CPU_A(this);
         uint8_t carry_in = this->get_carry_bit_0();
         
-        uint16_t result;
-        bool carry_out, overflow;
-        
         // Handle decimal mode if supported (matching old implementation)
         if constexpr (has_bcd<ProcessorTag>()) {
             bool decimal_mode = (CPU_P(this) & FLAG_D) != 0;
@@ -122,8 +119,8 @@ bus_state_t op_adc(bus_state_t pins) {
         }
         
         // Binary mode addition (exact flag calculation matching old implementation)
-        result = a + operand + carry_in;
-        CPU_A(this) = result & 0xFF;
+        uint16_t result = a + operand + carry_in;
+        CPU_A(this) = (uint8_t)result;
         
         // ADC modifies only N, V, Z, C flags - preserve all others exactly
         update_flags_adc(a, operand, result);
@@ -197,10 +194,7 @@ bus_state_t op_sbc(bus_state_t pins) {
     if (FAM65XX_GET_RDY(pins)) {
         uint8_t operand = CPU_DL(this);
         uint8_t a = CPU_A(this);
-        bool borrow_in = this->get_borrow_input(); // Inverted carry for SBC
-        
-        uint16_t result;
-        bool carry_out, overflow;
+        uint8_t borrow_in = this->get_borrow_input(); // Inverted carry for SBC
         
         // Handle decimal mode if supported (matching old implementation)
         if constexpr (has_bcd<ProcessorTag>()) {
@@ -210,7 +204,7 @@ bus_state_t op_sbc(bus_state_t pins) {
                 uint8_t bcd_result;
                 uint8_t bcd_flags;
                 
-                bcd_subtraction_helper(a, operand, borrow_in ? 1 : 0, &bcd_result, &bcd_flags);
+                bcd_subtraction_helper(a, operand, borrow_in, &bcd_result, &bcd_flags);
                 
                 CPU_A(this) = bcd_result;
                 update_flags(FLAG_N | FLAG_V | FLAG_Z | FLAG_C, bcd_flags);
@@ -222,8 +216,8 @@ bus_state_t op_sbc(bus_state_t pins) {
         }
         
         // Binary mode subtraction (exact flag calculation matching old implementation)
-        result = a - operand - (borrow_in ? 1 : 0);
-        CPU_A(this) = result & 0xFF;
+        uint16_t result = a - operand - borrow_in;
+        CPU_A(this) = (uint8_t)result;
         
         // SBC modifies only N, V, Z, C flags - preserve all others exactly
         update_flags_sbc(a, operand, result);
