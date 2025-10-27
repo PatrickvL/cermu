@@ -142,6 +142,13 @@ public:
         this->init_conditional_features();
     }
     
+    ~fam65xx_t() {
+        // Cleanup conditional features
+        if constexpr (has_apu<ProcessorTag>()) {
+            this->destroy_apu();
+        }
+    }
+    
     // ========================================================================
     // DEBUG TRACING HELPERS
     // ========================================================================
