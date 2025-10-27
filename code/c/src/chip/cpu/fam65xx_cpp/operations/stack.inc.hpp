@@ -42,8 +42,8 @@ bus_state_t op_php(bus_state_t pins) {
             
         case 1:
             /* PHI2: Write P|B|U to stack with processor-specific RDY handling */
-            CPU_DL(this) = CPU_P(this) | FLAG_B | FLAG_U;
             if (this->should_complete_write_cycle(pins)) {
+                CPU_DL(this) = CPU_P(this) | FLAG_B | FLAG_U;
                 pins = this->phi2_write(pins, REG_SP, REG_DL);
                 CPU_S(this)--;
                 transition_to_fetch();
@@ -113,7 +113,7 @@ bus_state_t op_plp(bus_state_t pins) {
             pins = phi2_read(pins, REG_SP, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Store in P (clear B, set U) */
-                CPU_P(this) = (BUS_GET_DATA(pins) & ~FLAG_B) | FLAG_U;
+                CPU_P(this) = (CPU_DL(this) & ~FLAG_B) | FLAG_U;
                 transition_to_fetch();
             }
             return pins;

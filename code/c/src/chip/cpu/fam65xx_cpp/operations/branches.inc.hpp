@@ -13,7 +13,7 @@
 bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) {
     switch (this->cycle_index) {
         case 0: {
-            /* PHI2: Read branch offset from PC */
+            /* PHI2: Read branch offset from PC into DL */
             pins = phi2_read(pins, REG_PC, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_PC(this)++;
@@ -27,8 +27,7 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) 
                     return pins;
                 }
                 
-                /* Branch taken: store offset and calculate target */
-                CPU_DL(this) = BUS_GET_DATA(pins);
+                /* Branch taken: calculate target */
                 CPU_AB(this) = CPU_PC(this) + (int8_t)CPU_DL(this);
                 this->cycle_index++;
             }
