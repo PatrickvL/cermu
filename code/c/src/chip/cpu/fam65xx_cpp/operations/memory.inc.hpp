@@ -12,7 +12,7 @@
 
 bus_state_t op_lda(bus_state_t pins) {
     // Read operand directly into accumulator (eliminates DL copy)
-    pins = read_operand_immediate_or_memory(pins, REG_A);
+    pins = phi2_read_operand(pins, REG_A);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     // Update N and Z flags
@@ -29,7 +29,7 @@ bus_state_t op_lda(bus_state_t pins) {
 
 bus_state_t op_ldx(bus_state_t pins) {
     // Read operand directly into X register (eliminates DL copy)
-    pins = read_operand_immediate_or_memory(pins, REG_X);
+    pins = phi2_read_operand(pins, REG_X);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     // Update N and Z flags
@@ -46,7 +46,7 @@ bus_state_t op_ldx(bus_state_t pins) {
 
 bus_state_t op_ldy(bus_state_t pins) {
     // Read operand directly into Y register (eliminates DL copy)
-    pins = read_operand_immediate_or_memory(pins, REG_Y);
+    pins = phi2_read_operand(pins, REG_Y);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     // Update N and Z flags
@@ -107,7 +107,7 @@ bus_state_t op_sty(bus_state_t pins) {
 // AND with Accumulator
 bus_state_t op_and(bus_state_t pins) {
     // Read operand directly into DL register (optimized version)
-    pins = read_operand_immediate_or_memory(pins, REG_DL);
+    pins = phi2_read_operand(pins, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     // Perform AND operation
@@ -124,7 +124,7 @@ bus_state_t op_and(bus_state_t pins) {
 // OR with Accumulator
 bus_state_t op_ora(bus_state_t pins) {
     // Read operand directly into DL register (optimized version)
-    pins = read_operand_immediate_or_memory(pins, REG_DL);
+    pins = phi2_read_operand(pins, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     // Perform OR operation
@@ -141,7 +141,7 @@ bus_state_t op_ora(bus_state_t pins) {
 // Exclusive OR with Accumulator
 bus_state_t op_eor(bus_state_t pins) {
     // Read operand directly into DL register (optimized version)
-    pins = read_operand_immediate_or_memory(pins, REG_DL);
+    pins = phi2_read_operand(pins, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     // Perform EOR operation
@@ -161,7 +161,7 @@ bus_state_t op_eor(bus_state_t pins) {
 
 bus_state_t op_bit(bus_state_t pins) {
     // Read operand directly into DL register (optimized version)
-    pins = read_operand_immediate_or_memory(pins, REG_DL);
+    pins = phi2_read_operand(pins, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     uint8_t operand = CPU_DL(this);
@@ -169,13 +169,10 @@ bus_state_t op_bit(bus_state_t pins) {
     
     // Update flags:
     // N = bit 7 of operand
-    // V = bit 6 of operand  
+    // V = bit 6 of operand
     // Z = result of A & operand
-    CPU_P(this) = (CPU_P(this) & 0x3D) |  // Clear N,V,Z
-                  (operand & 0x80) |       // N = bit 7 of operand
-                  (operand & 0x40) |       // V = bit 6 of operand
-                  (result == 0 ? FLAG_Z : 0); // Z = A & operand == 0
-    
+    update_nvz_flags(operand, result);
+
     // Complete instruction
     transition_to_fetch();
     return pins;

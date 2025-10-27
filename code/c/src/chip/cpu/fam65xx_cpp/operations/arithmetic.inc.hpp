@@ -76,10 +76,10 @@ void bcd_subtraction_helper(uint8_t a_old, uint8_t operand, uint8_t borrow_in,
         *bcd_result = sbc_bcd(a_old, operand, borrow_in != 0, carry_out, overflow);
         
         // Generate flags matching old implementation
-        *bcd_flags = (*bcd_result & 0x80) |                    // N flag
-                    (*bcd_result == 0 ? 0x02 : 0) |           // Z flag (FLAG_Z = 0x02)
-                    (carry_out ? 0x01 : 0) |                  // C flag (FLAG_C = 0x01)
-                    (overflow ? 0x40 : 0);                    // V flag (FLAG_V = 0x40)
+        *bcd_flags = (*bcd_result & 0x80) |          // N flag
+                    (*bcd_result == 0 ? 0x02 : 0) |  // Z flag (FLAG_Z = 0x02)
+                    (carry_out ? 0x01 : 0) |         // C flag (FLAG_C = 0x01)
+                    (overflow ? 0x40 : 0);           // V flag (FLAG_V = 0x40)
     } else {
         // No BCD support - should not be called
         *bcd_result = a_old - operand - borrow_in;
@@ -93,20 +93,20 @@ void bcd_subtraction_helper(uint8_t a_old, uint8_t operand, uint8_t borrow_in,
 
 bus_state_t op_adc(bus_state_t pins) {
     // Read operand directly into DL register (optimized version)
-    pins = read_operand_immediate_or_memory(pins, REG_DL);
+    pins = phi2_read_operand(pins, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     uint8_t operand = CPU_DL(this);
     uint8_t a = CPU_A(this);
     bool carry_in = (CPU_P(this) & FLAG_C) != 0;
-    bool decimal_mode = (CPU_P(this) & FLAG_D) != 0;
     
     uint16_t result;
     bool carry_out, overflow;
     
     // Handle decimal mode if supported (matching old implementation)
-    if (decimal_mode) {
-        if constexpr (has_bcd<ProcessorTag>()) {
+    if constexpr (has_bcd<ProcessorTag>()) {
+        bool decimal_mode = (CPU_P(this) & FLAG_D) != 0;
+        if (decimal_mode) {
             // BCD (Decimal) mode - use BCD addition helper
             uint8_t bcd_result;
             uint8_t bcd_flags;
@@ -114,24 +114,20 @@ bus_state_t op_adc(bus_state_t pins) {
             bcd_addition_helper(a, operand, carry_in ? 1 : 0, &bcd_result, &bcd_flags);
             
             CPU_A(this) = bcd_result;
-            CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) | bcd_flags;
-        } else {
-            // No BCD support - treat as binary
-            goto binary_adc;
+            update_flags(FLAG_N | FLAG_V | FLAG_Z | FLAG_C, bcd_flags);
+            // Complete instruction
+            transition_to_fetch();
+            return pins;
         }
-    } else {
-    binary_adc:
-        // Binary mode addition (exact flag calculation matching old implementation)
-        result = a + operand + (carry_in ? 1 : 0);
-        CPU_A(this) = result & 0xFF;
-        
-        // ADC modifies only N, V, Z, C flags - preserve all others exactly
-        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                      (CPU_A(this) & FLAG_N) |                                    // N = bit 7 of result
-                      (CPU_A(this) == 0 ? FLAG_Z : 0) |                          // Z = result is zero
-                      (result > 0xFF ? FLAG_C : 0) |                            // C = carry out
-                      (((a ^ result) & (operand ^ result) & 0x80) ? FLAG_V : 0); // V = overflow
+        // No BCD support - treat as binary
     }
+    
+    // Binary mode addition (exact flag calculation matching old implementation)
+    result = a + operand + (carry_in ? 1 : 0);
+    CPU_A(this) = result & 0xFF;
+    
+    // ADC modifies only N, V, Z, C flags - preserve all others exactly
+    update_flags_adc(a, operand, result);
     
     // Complete instruction
     transition_to_fetch();
@@ -196,20 +192,20 @@ bus_state_t op_nop(bus_state_t pins) {
 
 bus_state_t op_sbc(bus_state_t pins) {
     // Read operand directly into DL register (optimized version)
-    pins = read_operand_immediate_or_memory(pins, REG_DL);
+    pins = phi2_read_operand(pins, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     uint8_t operand = CPU_DL(this);
     uint8_t a = CPU_A(this);
     bool borrow_in = (CPU_P(this) & FLAG_C) == 0; // Inverted carry for SBC
-    bool decimal_mode = (CPU_P(this) & FLAG_D) != 0;
     
     uint16_t result;
     bool carry_out, overflow;
     
     // Handle decimal mode if supported (matching old implementation)
-    if (decimal_mode) {
-        if constexpr (has_bcd<ProcessorTag>()) {
+    if constexpr (has_bcd<ProcessorTag>()) {
+        bool decimal_mode = (CPU_P(this) & FLAG_D) != 0;
+        if (decimal_mode) {
             // BCD (Decimal) mode - use BCD subtraction helper
             uint8_t bcd_result;
             uint8_t bcd_flags;
@@ -217,24 +213,20 @@ bus_state_t op_sbc(bus_state_t pins) {
             bcd_subtraction_helper(a, operand, borrow_in ? 1 : 0, &bcd_result, &bcd_flags);
             
             CPU_A(this) = bcd_result;
-            CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) | bcd_flags;
-        } else {
-            // No BCD support - treat as binary
-            goto binary_sbc;
+            update_flags(FLAG_N | FLAG_V | FLAG_Z | FLAG_C, bcd_flags);
+            // Complete instruction
+            transition_to_fetch();
+            return pins;
         }
-    } else {
-    binary_sbc:
-        // Binary mode subtraction (exact flag calculation matching old implementation)
-        result = a - operand - (borrow_in ? 1 : 0);
-        CPU_A(this) = result & 0xFF;
-        
-        // SBC modifies only N, V, Z, C flags - preserve all others exactly
-        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                      (CPU_A(this) & FLAG_N) |                                    // N = bit 7 of result
-                      (CPU_A(this) == 0 ? FLAG_Z : 0) |                          // Z = result is zero
-                      (result < 0x100 ? FLAG_C : 0) |                           // C = no borrow
-                      (((a ^ operand) & (a ^ result) & 0x80) ? FLAG_V : 0);     // V = overflow
+        // No BCD support - treat as binary
     }
+    
+    // Binary mode subtraction (exact flag calculation matching old implementation)
+    result = a - operand - (borrow_in ? 1 : 0);
+    CPU_A(this) = result & 0xFF;
+    
+    // SBC modifies only N, V, Z, C flags - preserve all others exactly
+    update_flags_sbc(a, operand, result);
     
     // Complete instruction
     transition_to_fetch();
@@ -247,7 +239,7 @@ bus_state_t op_sbc(bus_state_t pins) {
 
 bus_state_t op_cmp(bus_state_t pins) {
     // Read operand directly into DL register (optimized version)
-    pins = read_operand_immediate_or_memory(pins, REG_DL);
+    pins = phi2_read_operand(pins, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     uint8_t operand = CPU_DL(this);
@@ -255,10 +247,7 @@ bus_state_t op_cmp(bus_state_t pins) {
     uint16_t result = a - operand;
     
     // Update flags based on comparison
-    CPU_P(this) = (CPU_P(this) & 0x7C) |  // Clear N,Z,C (preserve V)
-                  (result & 0x80) |        // N flag
-                  ((result & 0xFF) == 0 ? FLAG_Z : 0) | // Z flag
-                  (a >= operand ? FLAG_C : 0); // C flag (set if no borrow)
+    update_nzc_flags(a, operand);
     
     // Complete instruction
     transition_to_fetch();
@@ -271,7 +260,7 @@ bus_state_t op_cmp(bus_state_t pins) {
 
 bus_state_t op_cpx(bus_state_t pins) {
     // Read operand directly into DL register (optimized version)
-    pins = read_operand_immediate_or_memory(pins, REG_DL);
+    pins = phi2_read_operand(pins, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     uint8_t operand = CPU_DL(this);
@@ -279,10 +268,7 @@ bus_state_t op_cpx(bus_state_t pins) {
     uint16_t result = x - operand;
     
     // Update flags based on comparison
-    CPU_P(this) = (CPU_P(this) & 0x7C) |  // Clear N,Z,C (preserve V)
-                  (result & 0x80) |        // N flag
-                  ((result & 0xFF) == 0 ? FLAG_Z : 0) | // Z flag
-                  (x >= operand ? FLAG_C : 0); // C flag
+    update_nzc_flags(x, operand);
     
     // Complete instruction
     transition_to_fetch();
@@ -295,7 +281,7 @@ bus_state_t op_cpx(bus_state_t pins) {
 
 bus_state_t op_cpy(bus_state_t pins) {
     // Read operand directly into DL register (optimized version)
-    pins = read_operand_immediate_or_memory(pins, REG_DL);
+    pins = phi2_read_operand(pins, REG_DL);
     if (!FAM65XX_GET_RDY(pins)) return pins;
     
     uint8_t operand = CPU_DL(this);
@@ -303,10 +289,7 @@ bus_state_t op_cpy(bus_state_t pins) {
     uint16_t result = y - operand;
     
     // Update flags based on comparison
-    CPU_P(this) = (CPU_P(this) & 0x7C) |  // Clear N,Z,C (preserve V)
-                  (result & 0x80) |        // N flag
-                  ((result & 0xFF) == 0 ? FLAG_Z : 0) | // Z flag
-                  (y >= operand ? FLAG_C : 0); // C flag
+    update_nzc_flags(y, operand);
     
     // Complete instruction
     transition_to_fetch();

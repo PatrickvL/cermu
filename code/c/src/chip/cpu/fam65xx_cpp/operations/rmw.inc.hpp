@@ -15,22 +15,21 @@ bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func)
             case 0:
                 // Cycle 0: Read original value from memory
                 pins = this->phi2_read(pins, REG_AB, REG_DL);
-                if (!FAM65XX_GET_RDY(pins)) return pins;
                 return pins;
                 
             case 1:
                 // Cycle 1: Dummy write original value back (hardware behavior)
                 pins = this->phi2_write(pins, REG_AB, REG_DL);
-                if (!FAM65XX_GET_RDY(pins)) return pins;
-                // Perform operation on the read data (modify step)
-                operation_func(CPU_DL(this));
+                if (FAM65XX_GET_RDY(pins))
+                    // Perform operation on the read data (modify step)
+                    operation_func(CPU_DL(this));
                 return pins;
                 
             case 2:
                 // Cycle 2: Write modified result back to memory
                 pins = this->phi2_write(pins, REG_AB, REG_DL);
-                if (!FAM65XX_GET_RDY(pins)) return pins;
-                this->transition_to_fetch();
+                if (FAM65XX_GET_RDY(pins))
+                    this->transition_to_fetch();
                 return pins;
         }
     } else {
@@ -52,8 +51,7 @@ bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func)
 bus_state_t op_asl(bus_state_t pins) {
     return rmw_operation_helper(pins, [this](uint8_t& value) {
         // Set carry flag from bit 7
-        if (value & 0x80) CPU_P(this) |= FLAG_C;
-        else CPU_P(this) &= ~FLAG_C;
+        update_c_flag(value, 7);
         // Shift left
         value <<= 1;
         // Update N and Z flags
@@ -65,8 +63,7 @@ bus_state_t op_asl(bus_state_t pins) {
 bus_state_t op_lsr(bus_state_t pins) {
     return rmw_operation_helper(pins, [this](uint8_t& value) {
         // Set carry flag from bit 0
-        if (value & 0x01) CPU_P(this) |= FLAG_C;
-        else CPU_P(this) &= ~FLAG_C;
+        update_c_flag(value, 0);
         // Shift right
         value >>= 1;
         // Update N and Z flags
@@ -80,8 +77,7 @@ bus_state_t op_rol(bus_state_t pins) {
         // Get old carry flag
         uint8_t old_carry = (CPU_P(this) & FLAG_C) ? 1 : 0;
         // Set new carry flag from bit 7
-        if (value & 0x80) CPU_P(this) |= FLAG_C;
-        else CPU_P(this) &= ~FLAG_C;
+        update_c_flag(value, 7);
         // Rotate left with old carry
         value = (value << 1) | old_carry;
         // Update N and Z flags
@@ -95,8 +91,7 @@ bus_state_t op_ror(bus_state_t pins) {
         // Get old carry flag
         uint8_t old_carry = (CPU_P(this) & FLAG_C) ? 0x80 : 0;
         // Set new carry flag from bit 0
-        if (value & 0x01) CPU_P(this) |= FLAG_C;
-        else CPU_P(this) &= ~FLAG_C;
+        update_c_flag(value, 0);
         // Rotate right with old carry
         value = (value >> 1) | old_carry;
         // Update N and Z flags

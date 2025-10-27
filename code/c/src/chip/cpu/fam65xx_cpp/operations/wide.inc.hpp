@@ -19,13 +19,10 @@ bus_state_t op_rep(bus_state_t pins) {
         
         // Reset specified status bits (clear bits that are 1 in operand)
         CPU_P(this) &= ~CPU_DL(this);
-        
-        transition_to_fetch();
-        return pins;
-    } else {
-        transition_to_fetch();
-        return pins;
     }
+    
+    transition_to_fetch();
+    return pins;
 }
 
 // SEP - Set Processor Status Bits (65C816)
@@ -38,13 +35,10 @@ bus_state_t op_sep(bus_state_t pins) {
         
         // Set specified status bits (set bits that are 1 in operand)
         CPU_P(this) |= CPU_DL(this);
-        
-        transition_to_fetch();
-        return pins;
-    } else {
-        transition_to_fetch();
-        return pins;
     }
+
+    transition_to_fetch();
+    return pins;
 }
 
 // XCE - Exchange Carry and Emulation Flags (65C816)
@@ -66,13 +60,10 @@ bus_state_t op_xce(bus_state_t pins) {
         if (this->wide_state.emulation_mode) {
             CPU_P(this) |= 0x30; // Set M and X flags (8-bit modes)
         }
-        
-        transition_to_fetch();
-        return pins;
-    } else {
-        transition_to_fetch();
-        return pins;
     }
+
+    transition_to_fetch();
+    return pins;
 }
 
 // ============================================================================
@@ -106,13 +97,10 @@ bus_state_t op_pea(bus_state_t pins) {
         CPU_DL(this) = addr_low;
         pins = phi2_write_internal(pins, REG_AB, REG_DL);
         CPU_S(this)--;
-        
-        transition_to_fetch();
-        return pins;
-    } else {
-        transition_to_fetch();
-        return pins;
     }
+
+    transition_to_fetch();
+    return pins;
 }
 
 // PHB - Push Data Bank Register (65C816)
@@ -123,13 +111,10 @@ bus_state_t op_phb(bus_state_t pins) {
         CPU_DL(this) = this->wide_state.DBR;
         pins = phi2_write_internal(pins, REG_AB, REG_DL);
         CPU_S(this)--;
-        
-        transition_to_fetch();
-        return pins;
-    } else {
-        transition_to_fetch();
-        return pins;
     }
+    
+    transition_to_fetch();
+    return pins;
 }
 
 // PHD - Push Direct Page Register (65C816)
@@ -149,13 +134,9 @@ bus_state_t op_phd(bus_state_t pins) {
         CPU_DL(this) = d_reg & 0xFF;
         pins = phi2_write_internal(pins, REG_AB, REG_DL);
         CPU_S(this)--;
-        
-        transition_to_fetch();
-        return pins;
-    } else {
-        transition_to_fetch();
-        return pins;
     }
+    transition_to_fetch();
+    return pins;
 }
 
 // PHK - Push Program Bank Register (65C816)
@@ -166,13 +147,9 @@ bus_state_t op_phk(bus_state_t pins) {
         CPU_DL(this) = this->wide_state.PBR;
         pins = phi2_write_internal(pins, REG_AB, REG_DL);
         CPU_S(this)--;
-        
-        transition_to_fetch();
-        return pins;
-    } else {
-        transition_to_fetch();
-        return pins;
     }
+    transition_to_fetch();
+    return pins;
 }
 
 // PLB - Pull Data Bank Register (65C816)
@@ -187,13 +164,10 @@ bus_state_t op_plb(bus_state_t pins) {
         
         // Update N and Z flags based on DBR
         update_nz_flags(this->wide_state.DBR);
-        
-        transition_to_fetch();
-        return pins;
-    } else {
-        transition_to_fetch();
-        return pins;
     }
+
+    transition_to_fetch();
+    return pins;
 }
 
 // PLD - Pull Direct Page Register (65C816)
@@ -217,13 +191,9 @@ bus_state_t op_pld(bus_state_t pins) {
         
         // Update N and Z flags based on D register
         update_nz_flags(this->wide_state.D & 0xFF); // Only check low byte for flags
-        
-        transition_to_fetch();
-        return pins;
-    } else {
-        transition_to_fetch();
-        return pins;
     }
+    transition_to_fetch();
+    return pins;
 }
 
 // ============================================================================
@@ -273,13 +243,10 @@ bus_state_t op_jsl(bus_state_t pins) {
         // Set new PC and PBR
         CPU_PC(this) = (addr_mid << 8) | addr_low;
         this->wide_state.PBR = addr_high;
-        
-        transition_to_fetch();
-        return pins;
-    } else {
-        transition_to_fetch();
-        return pins;
     }
+
+    transition_to_fetch();
+    return pins;
 }
 
 // RTL - Return from Subroutine Long (65C816)
@@ -307,11 +274,8 @@ bus_state_t op_rtl(bus_state_t pins) {
         
         // Set PC (increment by 1 for RTL)
         CPU_PC(this) = ((pc_high << 8) | pc_low) + 1;
-        
-        transition_to_fetch();
-        return pins;
-    } else {
-        transition_to_fetch();
-        return pins;
     }
+
+    transition_to_fetch();
+    return pins;
 }
