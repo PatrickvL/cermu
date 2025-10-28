@@ -277,23 +277,45 @@ bus_state_t op_anc(bus_state_t pins) {
 
 bus_state_t op_arr(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
-        // ARR - AND + ROR with BCD correction (AND immediate, then ROR A)
+        // ARR - AND + ROR with complex flag behavior (AND immediate, then ROR A)
         pins = phi2_read(pins, REG_PC, REG_DL);
         if (FAM65XX_GET_RDY(pins)) {
             CPU_PC(this)++;
-            // Perform AND with accumulator
+            
+            // Step 1: AND accumulator with immediate operand
             CPU_A(this) &= CPU_DL(this);
             
-            // Perform ROR on accumulator
-            uint8_t carry_in = get_carry_bit_7();
-            update_flag(FLAG_C, CPU_A(this) & 0x01);
-            CPU_A(this) = (CPU_A(this) >> 1) | carry_in;
+            // Step 2: ROR the AND result with current carry
+            uint8_t old_carry = (CPU_P(this) & FLAG_C) ? 0x80 : 0x00;
+            bool new_carry = (CPU_A(this) & 0x01) != 0;
+            CPU_A(this) = (CPU_A(this) >> 1) | old_carry;
             
-            // Update N and Z flags
+            // Step 3: Update flags - ARR has special flag behavior
+            // N and Z flags based on final result
             update_nz_flags(CPU_A(this));
             
-            // Set V flag based on bit 6 XOR bit 5 of result
-            update_flag(FLAG_V, (CPU_A(this) & 0x40) ^ ((CPU_A(this) & 0x20) << 1));
+            // C flag set from bit 0 of the AND result (before ROR)
+            update_flag(FLAG_C, new_carry);
+            
+            // V flag: hardware-accurate ARR overflow calculation
+            // V = bit 6 of result XOR bit 5 of result
+            bool v_flag = ((CPU_A(this) & 0x40) != 0) ^ ((CPU_A(this) & 0x20) != 0);
+            update_flag(FLAG_V, v_flag);
+            
+            // Special case: BCD mode behavior for ARR
+            if constexpr (has_bcd<ProcessorTag>()) {
+                if (CPU_P(this) & FLAG_D) {
+                    // In BCD mode, ARR has additional flag corrections
+                    // If low nibble of result >= 5, set carry
+                    if ((CPU_A(this) & 0x0F) >= 0x05) {
+                        CPU_P(this) |= FLAG_C;
+                    }
+                    // If high nibble of result >= 5, set carry
+                    if ((CPU_A(this) & 0xF0) >= 0x50) {
+                        CPU_P(this) |= FLAG_C;
+                    }
+                }
+            }
             
             transition_to_fetch();
         }
