@@ -77,8 +77,11 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table();
 
 template<typename ProcessorTag>
 class fam65xx_t :
-    public io_port_base_t<ProcessorTag>,       // Conditional I/O port only
-    public apu_base_t<ProcessorTag>            // Conditional APU only
+    public io_port_base_t<ProcessorTag>,
+    public apu_base_t<ProcessorTag>,
+    public bcd_base_t<ProcessorTag>,
+    public cmos_state_base_t<ProcessorTag>,
+    public wide_registers_base_t<ProcessorTag>
 {
 public:
     // Type aliases for cleaner code
@@ -402,8 +405,8 @@ public:
         // Handle APU register access (compile-time conditional)
         if constexpr (has_apu<ProcessorTag>()) {
             if (this->write_apu_register(addr, data)) {
-                pins = BUS_SET_ADDR(pins, addr);
-                pins = BUS_SET_DATA(pins, data);
+                pins = FAM65XX_SET_ADDR(pins, addr);
+                pins = FAM65XX_SET_DATA(pins, data);
                 pins &= ~FAM65XX_RW; // Set WRITE mode
                 return pins; // Handled by APU, don't perform bus write
             }
@@ -413,22 +416,22 @@ public:
         if constexpr (has_io_port<ProcessorTag>()) {
             if (addr == 0x0000) {
                 this->write_io_ddr(data);
-                pins = BUS_SET_ADDR(pins, addr);
-                pins = BUS_SET_DATA(pins, data);
+                pins = FAM65XX_SET_ADDR(pins, addr);
+                pins = FAM65XX_SET_DATA(pins, data);
                 pins &= ~FAM65XX_RW; // Set WRITE mode
                 return pins; // Don't perform bus write
             } else if (addr == 0x0001) {
                 this->write_io_data(data);
-                pins = BUS_SET_ADDR(pins, addr);
-                pins = BUS_SET_DATA(pins, data);
+                pins = FAM65XX_SET_ADDR(pins, addr);
+                pins = FAM65XX_SET_DATA(pins, data);
                 pins &= ~FAM65XX_RW; // Set WRITE mode
                 return pins; // Don't perform bus write
             }
         }
         
         // Standard bus write for all other addresses
-        pins = BUS_SET_ADDR(pins, addr);
-        pins = BUS_SET_DATA(pins, data);
+        pins = FAM65XX_SET_ADDR(pins, addr);
+        pins = FAM65XX_SET_DATA(pins, data);
         pins &= ~FAM65XX_RW; // Set WRITE mode
         
         // Use memory callback if available
@@ -488,14 +491,14 @@ public:
         // Hardware-accurate RDY handling - address bus behavior matches old implementation
         if (FAM65XX_GET_RDY(pins)) {
             address = this->reg16[addr_reg];
-            pins = BUS_SET_ADDR(pins, address);
+            pins = FAM65XX_SET_ADDR(pins, address);
             
             // Handle APU register access (only when RDY is high)
             if constexpr (has_apu<ProcessorTag>()) {
                 uint8_t apu_data;
                 if (this->read_apu_register(address, apu_data)) {
                     this->reg8[data_reg] = apu_data;
-                    pins = BUS_SET_DATA(pins, apu_data);
+                    pins = FAM65XX_SET_DATA(pins, apu_data);
                     return pins; // Don't perform bus read
                 }
             }
@@ -511,16 +514,16 @@ public:
                 }
             }
         } else {
-            address = BUS_GET_ADDR(pins);  // Keep existing bus address when RDY low
+            address = FAM65XX_GET_ADDR(pins);  // Keep existing bus address when RDY low
         }
     
         // Always perform memory read to service VIC-II even when CPU halted
-        uint8_t current_bus_data = BUS_GET_DATA(pins);
+        uint8_t current_bus_data = FAM65XX_GET_DATA(pins);
         uint8_t data = 0xFF; // Default floating bus
         if (this->mem_read != nullptr) {
             data = this->mem_read(this->mem_user_data, address, current_bus_data);
         }
-        pins = BUS_SET_DATA(pins, data);
+        pins = FAM65XX_SET_DATA(pins, data);
         this->reg8[data_reg] = data;
         
         return pins;

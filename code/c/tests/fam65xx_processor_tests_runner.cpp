@@ -1130,25 +1130,8 @@ std::vector<TestItem> collect_tests_from_file(const std::string& filepath) {
     while (pos < end && std::isspace(*pos)) pos++;
     
     if (pos < end && *pos == '[') {
-        // Array of tests - count objects first to reserve space
-        size_t object_count = 0;
-        const char* scan_pos = pos + 1;
-        int brace_level = 0;
-        
-        while (scan_pos < end) {
-            if (*scan_pos == '{') {
-                if (brace_level == 0) object_count++;
-                brace_level++;
-            } else if (*scan_pos == '}') {
-                brace_level--;
-            } else if (*scan_pos == ']' && brace_level == 0) {
-                break;
-            }
-            scan_pos++;
-        }
-        
         // Reserve space for better performance
-        tests.reserve(object_count);
+        tests.reserve(10000);
         
         // Parse objects
         pos++; // Skip opening bracket

@@ -17,11 +17,15 @@
 namespace fam65xx_cpp {
 
 // ============================================================================
-// EMPTY BASE FOR DISABLED FEATURES
+// EMPTY BASES FOR DISABLED FEATURES (processor-specific to avoid collisions)
 // ============================================================================
 
-// Empty mixin used when feature is not present (EBO eliminates overhead)
-struct empty_mixin_t {};
+// Separate empty types per feature to prevent duplicate base class errors
+struct empty_io_port_mixin_t {};
+struct empty_apu_mixin_t {};
+struct empty_wide_mixin_t {};
+struct empty_cmos_mixin_t {};
+struct empty_bcd_mixin_t {};
 
 // ============================================================================
 // I/O PORT MIXIN (6510-style processors)
@@ -286,26 +290,26 @@ template<typename ProcessorTag>
 using io_port_base_t = std::conditional_t<
     has_io_port<ProcessorTag>(),
     io_port_mixin_t<ProcessorTag>,
-    empty_mixin_t
+    empty_io_port_mixin_t
 >;
 
 // BCD and CMOS state functionality merged into main CPU class
 // Only I/O port mixin remains active
 
 template<typename ProcessorTag>
-using bcd_base_t = empty_mixin_t;  // BCD merged into main class
+using bcd_base_t = empty_bcd_mixin_t;  // BCD merged into main class
 
 template<typename ProcessorTag>
-using cmos_state_base_t = empty_mixin_t;  // CMOS state merged into main class
+using cmos_state_base_t = empty_cmos_mixin_t;  // CMOS state merged into main class
 
 template<typename ProcessorTag>
-using wide_registers_base_t = empty_mixin_t;  // Wide registers disabled for now
+using wide_registers_base_t = empty_wide_mixin_t;  // Wide registers disabled for now
 
 template<typename ProcessorTag>
 using apu_base_t = std::conditional_t<
     has_apu<ProcessorTag>(),
     apu_mixin_t<ProcessorTag>,
-    empty_mixin_t
+    empty_apu_mixin_t
 >;
 
 } // namespace fam65xx_cpp
