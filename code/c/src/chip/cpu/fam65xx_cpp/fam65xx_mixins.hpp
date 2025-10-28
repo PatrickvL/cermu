@@ -216,7 +216,11 @@ struct apu_mixin_t {
     bool write_apu_register(uint16_t addr, uint8_t value) {
         if (addr >= 0x4000 && addr <= 0x4017) {
             if (apu_state.apu_instance) {
-                apu_state.apu_instance->write(addr, value);
+                // Create a bus state with the address and data set
+                bus_state_t bus_state = 0;
+                FAM65XX_SET_ADDR(bus_state, addr);
+                FAM65XX_SET_DATA(bus_state, value);
+                apu_state.apu_instance->write(addr, value, bus_state);
             }
             return true; // Handled
         }
@@ -227,7 +231,11 @@ struct apu_mixin_t {
     bool read_apu_register(uint16_t addr, uint8_t& value) {
         if (addr == 0x4015) {
             if (apu_state.apu_instance) {
-                value = apu_state.apu_instance->read(addr);
+                // Create a bus state with the address set
+                bus_state_t bus_state = 0;
+                FAM65XX_SET_ADDR(bus_state, addr);
+                bus_state = apu_state.apu_instance->read(addr, bus_state);
+                value = FAM65XX_GET_DATA(bus_state);
             } else {
                 value = 0;
             }
@@ -236,11 +244,12 @@ struct apu_mixin_t {
         return false; // Not APU register
     }
     
-    // Clock APU (called every CPU cycle)
-    void clock_apu() {
+    // Clock APU (called every CPU cycle)  
+    bus_state_t clock_apu(bus_state_t bus_state) {
         if (apu_state.apu_instance) {
-            apu_state.apu_instance->clock();
+            return apu_state.apu_instance->tick(bus_state);
         }
+        return bus_state;
     }
     
     // Generate audio sample
