@@ -44,36 +44,42 @@ template<typename ProcessorTag>
 void bcd_addition_helper(uint8_t a_old, uint8_t operand, uint8_t carry_in, uint8_t* bcd_result, uint8_t* bcd_flags) {
     // Check BCD support per processor type using constexpr differentiation
     if constexpr (has_bcd<ProcessorTag>()) {
-        bool carry_out, overflow;
-        
-        // Use adc_bcd for the core computation with processor-specific behavior
-        *bcd_result = adc_bcd<ProcessorTag>(a_old, operand, carry_in != 0, carry_out, overflow);
+        // Hardware-accurate 6502 BCD addition (credit: MAME/floooh implementation)
+        uint8_t al = (a_old & 0x0F) + (operand & 0x0F) + carry_in;
+        if (al > 9) {
+            al += 6;
+        }
+        uint8_t ah = (a_old >> 4) + (operand >> 4) + (al > 0x0F);
         
         // Clear all flags we're about to set
         *bcd_flags = 0;
         
-        // N and Z flags: NMOS 6502 hardware quirk - based on binary arithmetic result
-        uint8_t binary_result = (uint8_t)(a_old + operand + carry_in);
-        
         // Z flag: binary sum is zero (NMOS 6502 hardware behavior)
+        uint8_t binary_result = (uint8_t)(a_old + operand + carry_in);
         if (binary_result == 0) {
             *bcd_flags |= FLAG_Z;
         }
         
-        // N flag: bit 7 of BCD result (expected by processor tests)
-        if (*bcd_result & 0x80) {
+        // N flag: bit 3 of high nibble intermediate result (NMOS 6502 BCD quirk)
+        if (ah & 0x08) {
             *bcd_flags |= FLAG_N;
         }
         
-        // V flag: use overflow from adc_bcd (processor-dependent)
-        if (overflow) {
+        // V flag: signed overflow using intermediate result (ah<<4)
+        if (~(a_old ^ operand) & (a_old ^ (ah << 4)) & 0x80) {
             *bcd_flags |= FLAG_V;
         }
         
-        // C flag: use carry from adc_bcd
-        if (carry_out) {
+        // High nibble adjustment and carry
+        if (ah > 9) {
+            ah += 6;
+        }
+        if (ah > 15) {
             *bcd_flags |= FLAG_C;
         }
+        
+        // Final BCD result
+        *bcd_result = (ah << 4) | (al & 0x0F);
     } else {
         // No BCD support - should not be called, but provide fallback
         *bcd_result = a_old + operand + carry_in;
@@ -110,14 +116,43 @@ template<typename ProcessorTag>
 void bcd_subtraction_helper(uint8_t a_old, uint8_t operand, uint8_t borrow_in, 
                            uint8_t* bcd_result, uint8_t* bcd_flags) {
     if constexpr (has_bcd<ProcessorTag>()) {
-        bool carry_out, overflow;
-        *bcd_result = sbc_bcd<ProcessorTag>(a_old, operand, borrow_in != 0, carry_out, overflow);
+        // Hardware-accurate 6502 BCD subtraction (credit: MAME/floooh implementation)
+        uint16_t diff = a_old - operand - borrow_in;
+        uint8_t al = (a_old & 0x0F) - (operand & 0x0F) - borrow_in;
+        if ((int8_t)al < 0) {
+            al -= 6;
+        }
+        uint8_t ah = (a_old >> 4) - (operand >> 4) - ((int8_t)al < 0);
         
-        // Generate flags matching old implementation with processor-specific behavior
-        *bcd_flags = (*bcd_result & 0x80) |          // N flag
-                    (*bcd_result == 0 ? 0x02 : 0) |  // Z flag (FLAG_Z = 0x02)
-                    (carry_out ? 0x01 : 0) |         // C flag (FLAG_C = 0x01)
-                    (overflow ? 0x40 : 0);           // V flag (FLAG_V = 0x40)
+        // Clear all flags we're about to set
+        *bcd_flags = 0;
+        
+        // Z flag: binary difference is zero
+        if (0 == (uint8_t)diff) {
+            *bcd_flags |= FLAG_Z;
+        }
+        // N flag: bit 7 of binary difference (different from addition!)
+        if (diff & 0x80) {
+            *bcd_flags |= FLAG_N;
+        }
+        
+        // V flag: signed overflow on binary operation
+        if ((a_old ^ operand) & (a_old ^ diff) & 0x80) {
+            *bcd_flags |= FLAG_V;
+        }
+        
+        // C flag: no borrow (result >= 0)
+        if (!(diff & 0xFF00)) {
+            *bcd_flags |= FLAG_C;
+        }
+        
+        // High nibble adjustment
+        if (ah & 0x80) {
+            ah -= 6;
+        }
+        
+        // Final BCD result
+        *bcd_result = (ah << 4) | (al & 0x0F);
     } else {
         // No BCD support - should not be called, but provide fallback
         *bcd_result = a_old - operand - borrow_in;
