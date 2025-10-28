@@ -190,13 +190,19 @@ bus_state_t addr_aby(bus_state_t pins) {
                 // Add index to low byte (creates intermediate "wrong" address for page cross)
                 CPU_ABL(this) += CPU_Y(this);
                 
-                // Skip penalty cycle if allowed and no page cross occurred
-                if ((this->opcode_entry.flags & OF_SKIP_PAGE) && !page_crossed(base, effective)) {
-                    CPU_AB(this) = effective;  // Fix address
-                    transition_to_operation();
-                } else {
-                    // Page crossing or always need penalty
+                // Check if penalty cycle is needed
+                bool needs_penalty = page_crossed(base, effective) ||          // Page crossing
+                                   (this->opcode_entry.flags & OF_RMW) ||      // RMW operations
+                                   (this->opcode_entry.flags & OF_ILLEGAL_STORE) || // SHA illegal store
+                                   !(this->opcode_entry.flags & OF_SKIP_PAGE); // No skip allowed
+                
+                if (needs_penalty) {
+                    // Page crossing, RMW, illegal store, or always need penalty
                     this->cycle_index++;
+                } else {
+                    // No penalty needed - complete with correct address
+                    CPU_AB(this) = effective;
+                    transition_to_operation();
                 }
             }
             return pins;
@@ -345,12 +351,16 @@ bus_state_t addr_iny(bus_state_t pins) {
                 /* ABH stays unchanged, only ABL gets Y added */
                 CPU_ABL(this) += CPU_Y(this);
                 
-                /* Check if penalty cycle is needed (page crossing or RMW operation) */
-                if (page_crossed(base_addr, final_addr) || (this->opcode_entry.flags & OF_RMW)) {
-                    /* Page crossing or RMW - need penalty cycle with intermediate address */
+                /* Check if penalty cycle is needed */
+                bool needs_penalty = page_crossed(base_addr, final_addr) ||      // Page crossing
+                                   (this->opcode_entry.flags & OF_RMW) ||        // RMW operations
+                                   (this->opcode_entry.flags & OF_ILLEGAL_STORE); // SHA illegal store
+                
+                if (needs_penalty) {
+                    /* Page crossing, RMW, or illegal store - need penalty cycle with intermediate address */
                     this->cycle_index++;
                 } else {
-                    /* No page cross and not RMW - can skip penalty, set correct address */
+                    /* No page cross, not RMW, and not illegal store - can skip penalty, set correct address */
                     CPU_AB(this) = final_addr;
                     transition_to_operation();
                 }

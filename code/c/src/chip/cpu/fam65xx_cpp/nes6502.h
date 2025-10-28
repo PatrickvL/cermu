@@ -608,7 +608,7 @@ public:
     void clock() {
         // Hardware quirk: LFSR temperature drift simulation
         lfsr_temperature_drift++;
-        if (lfsr_temperature_drift >= 65536) {
+        if (lfsr_temperature_drift >= 65535) {
             lfsr_temperature_drift = 0;
             // Extremely rare: simulate stuck bit due to silicon aging
             if ((shift_register & 0xFF) == 0xAA) {  // Specific pattern
