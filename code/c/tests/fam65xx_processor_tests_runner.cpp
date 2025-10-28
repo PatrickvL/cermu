@@ -1122,7 +1122,7 @@ void collect_tests_from_file(const std::string& filepath, std::vector<TestItem>&
     }
     file.close();
     
-    // Fast JSON parsing - simplified for array detection and count estimation
+    // Fast JSON parsing
     const char* pos = json_content.c_str();
     const char* end = pos + json_content.size();
     
@@ -1130,15 +1130,19 @@ void collect_tests_from_file(const std::string& filepath, std::vector<TestItem>&
     while (pos < end && std::isspace(*pos)) pos++;
     
     if (pos < end && *pos == '[') {
-        // Reserve space for 10000 tests (typical per file) for better performance
-        tests.reserve(10000);
-        
-        // Parse objects
+        // Parse objects - use single reusable TestItem to minimize allocations
         pos++; // Skip opening bracket
         size_t test_index = 0;
+        TestItem reusable_item; // Declare once, reuse for all tests
+        reusable_item.filepath = filepath; // Set filepath once since it's constant
         
+        // Pre-allocate test name string to avoid repeated allocations
+        reusable_item.test_name.reserve(20); // Reserve space for "test_" + numbers
+        
+        // Optimize: minimize function calls in tight loop
         while (pos < end) {
-            while (pos < end && std::isspace(*pos)) pos++;
+            // Skip whitespace - unrolled for performance
+            while (pos < end && (*pos == ' ' || *pos == '\t' || *pos == '\n' || *pos == '\r')) pos++;
             if (pos >= end || *pos == ']') break;
             
             if (*pos == '{') {
@@ -1147,30 +1151,33 @@ void collect_tests_from_file(const std::string& filepath, std::vector<TestItem>&
                 int braces = 1;
                 pos++; // Skip opening brace
                 
+                // Optimized brace counting - avoid repeated memory accesses
                 while (pos < end && braces > 0) {
-                    if (*pos == '{') braces++;
-                    else if (*pos == '}') braces--;
-                    pos++;
+                    char c = *pos++;
+                    if (c == '{') braces++;
+                    else if (c == '}') braces--;
                 }
                 
                 if (braces == 0) {
-                    // Extract this test
-                    TestItem item;
-                    item.filepath = filepath;
-                    item.test_json.assign(obj_start, pos);
-                    item.test_name = "test_" + std::to_string(test_index++);
-                    tests.push_back(std::move(item));
+                    // Reuse the same TestItem object - just update the changing fields
+                    reusable_item.test_json.assign(obj_start, pos);
+                    
+                    // Efficient test name generation - avoid string concatenation
+                    reusable_item.test_name = "test_";
+                    reusable_item.test_name += std::to_string(test_index++);
+                    
+                    tests.push_back(reusable_item); // Copy into vector
                 }
             } else {
                 break;
             }
             
-            // Skip comma if present
-            while (pos < end && std::isspace(*pos)) pos++;
+            // Skip comma if present - unrolled whitespace skip
+            while (pos < end && (*pos == ' ' || *pos == '\t' || *pos == '\n' || *pos == '\r')) pos++;
             if (pos < end && *pos == ',') pos++;
         }
     } else {
-        // Single test
+        // Single test - still create locally since it's only one
         TestItem item;
         item.filepath = filepath;
         item.test_json = std::move(json_content);
@@ -1220,7 +1227,8 @@ std::vector<TestItem> collect_all_tests(const std::vector<std::string>& test_pat
     
     // Pre-allocate reusable vector for file processing (avoid repeated allocations)
     std::vector<TestItem> file_tests;
-    file_tests.reserve(10000); // Pre-allocate for typical file size
+    // Reserve space for 10000 tests (typical per file) for better performance
+    file_tests.reserve(10000);
     
     // Second pass: actually collect tests using reusable vector
     for (const auto& json_file : json_files) {
