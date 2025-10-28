@@ -344,7 +344,7 @@ public:
         
         // Clock APU if present (every CPU cycle)
         if constexpr (has_apu<ProcessorTag>()) {
-            this->clock_apu();
+            pins = this->clock_apu(pins);
         }
         
         trace_registers("after");
