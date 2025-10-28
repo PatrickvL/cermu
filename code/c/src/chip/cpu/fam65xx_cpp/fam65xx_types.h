@@ -30,7 +30,7 @@ extern "C" {
 #define FAM65XX_RDY     BUS_BIT(BUS_RDY_BIT)
 #define FAM65XX_RES     BUS_BIT(BUS_RES_BIT)
 
-// Legacy compatibility macros for FAM65XX bus access
+// Macros for FAM65XX bus access
 #define FAM65XX_GET_ADDR(p) BUS_GET_ADDR(p)
 #define FAM65XX_SET_ADDR(p, d) BUS_SET_ADDR(p, d)
 #define FAM65XX_GET_DATA(p) BUS_GET_DATA(p)
@@ -42,6 +42,7 @@ extern "C" {
 #define FAM65XX_GET_SYNC(pins)     ((pins) & FAM65XX_SYNC)
 #define FAM65XX_GET_IRQ(pins)      ((pins) & FAM65XX_IRQ)
 #define FAM65XX_GET_NMI(pins)      ((pins) & FAM65XX_NMI)
+#define FAM65XX_GET_RW(pins)       ((pins) & FAM65XX_RW)
 
 // ============================================================================
 // Memory Callback Types (for compatibility)

@@ -939,7 +939,7 @@ void NESSystem::clock() {
             
             // Handle CPU memory requests
             uint16_t addr = BUS_GET_ADDR(pins);
-            bool is_write = BUS_GET_RW(pins) == 0;
+            bool is_write = pins & BUS_MASK_RW;
             
             if (is_write) {
                 uint8_t data = BUS_GET_DATA(pins);
@@ -952,7 +952,7 @@ void NESSystem::clock() {
             // Handle NMI from PPU
             if (ppu->get_nmi()) {
                 // Set NMI line low (NMI is active low)
-                pins = BUS_SET_NMI(pins, 0);
+                pins &= ~BUS_MASK_NMI;
             }
         }
         

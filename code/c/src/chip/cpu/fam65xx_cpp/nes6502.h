@@ -1158,7 +1158,7 @@ public:
         }
         
         // Update bus state with current data for open bus behavior
-        BUS_SET_DATA(bus_state, value);
+        FAM65XX_SET_DATA(bus_state, value);
         return bus_state;
     }
     
@@ -1179,7 +1179,7 @@ public:
             // Reading $4015 clears frame IRQ flag
             frame.irq_flag = false;
             
-            BUS_SET_DATA(bus_state, status);
+            FAM65XX_SET_DATA(bus_state, status);
         }
         // Other addresses return open bus (previous data on bus)
         
@@ -1202,11 +1202,11 @@ public:
             if (dma_state.cycles_remaining > 0) {
                 dma_state.cycles_remaining--;
                 // CPU is stalled during DMA
-                BUS_SET_ADDR(bus_state, dma_state.address);
+                FAM65XX_SET_ADDR(bus_state, dma_state.address);
                 return bus_state;
             } else {
                 // DMA complete, load the sample
-                uint8_t sample = BUS_GET_DATA(bus_state);
+                uint8_t sample = FAM65XX_GET_DATA(bus_state);
                 dmc.load_sample(sample);
                 dma_state.active = false;
             }
@@ -1221,9 +1221,9 @@ public:
             
             // Hardware quirk: Additional cycles based on CPU state interactions
             // Analysis of bus state to determine CPU operation type
-            uint16_t cpu_addr = BUS_GET_ADDR(bus_state);
-            uint8_t cpu_data = BUS_GET_DATA(bus_state);
-            bool is_write = BUS_GET_RW(bus_state) == 0;
+            uint16_t cpu_addr = FAM65XX_GET_ADDR(bus_state);
+            uint8_t cpu_data = FAM65XX_GET_DATA(bus_state);
+            bool is_write = FAM65XX_GET_RW(bus_state) == 0;
             
             // Detect read-modify-write operations (common patterns)
             // RMW operations: ASL, LSR, ROL, ROR, INC, DEC (memory)
