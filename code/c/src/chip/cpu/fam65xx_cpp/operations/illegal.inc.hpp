@@ -509,17 +509,26 @@ bus_state_t op_sha(bus_state_t pins) {
 
 bus_state_t op_shs(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
-        // SHS - Store A & X to memory, AND set S = A & X & (high byte + 1)
-        // Fixed to match reference implementation behavior
+        // SHS - Store A & X & (H+1), Set S to A & X - match reference implementation exactly
         if (should_complete_write_cycle(pins)) {
-            // Calculate A & X first
-            uint8_t ax_value = CPU_A(this) & CPU_X(this);
+            // Calculate A & X first (used for both value and S)
+            uint8_t ax = CPU_A(this) & CPU_X(this);
             
-            // Set stack pointer to A & X & (high byte + 1)
-            CPU_S(this) = ax_value & ((CPU_ABH(this) + 1) & 0xFF);
+            // Calculate value: (A & X) & (intermediate_high + 1)
+            // Use DL as intermediate high byte (before page cross correction)
+            uint8_t data_value = ax & ((CPU_DL(this) + 1) & 0xFF);
             
-            // Store A & X to memory (not the stack pointer value)
-            CPU_DL(this) = ax_value;
+            // Apply address corruption on page cross (DL != ABH means page crossed)
+            if (CPU_DL(this) != CPU_ABH(this)) {
+                CPU_ABH(this) = data_value;
+            }
+            
+            // Set data to write
+            CPU_DL(this) = data_value;
+            
+            // Set stack pointer to A & X (unique to SHS)
+            CPU_S(this) = ax;
+            
             pins = phi2_write(pins, REG_AB, REG_DL);
             transition_to_fetch();
         }
@@ -529,9 +538,20 @@ bus_state_t op_shs(bus_state_t pins) {
 
 bus_state_t op_shx(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
-        // SHX - Store X AND ((high byte of effective address) + 1) (illegal)
+        // SHX - Store X & (H+1) with address corruption - match reference implementation exactly
         if (should_complete_write_cycle(pins)) {
-            CPU_DL(this) = CPU_X(this) & ((CPU_ABH(this) + 1) & 0xFF);
+            // Calculate value: X & (intermediate_high + 1)
+            // Use DL as intermediate high byte (before page cross correction)
+            uint8_t data_value = CPU_X(this) & ((CPU_DL(this) + 1) & 0xFF);
+            
+            // Apply address corruption on page cross (DL != ABH means page crossed)
+            if (CPU_DL(this) != CPU_ABH(this)) {
+                CPU_ABH(this) = data_value;
+            }
+            
+            // Set data to write
+            CPU_DL(this) = data_value;
+            
             pins = phi2_write(pins, REG_AB, REG_DL);
             transition_to_fetch();
         }
@@ -541,9 +561,20 @@ bus_state_t op_shx(bus_state_t pins) {
 
 bus_state_t op_shy(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
-        // SHY - Store Y AND ((high byte of effective address) + 1) (illegal)
+        // SHY - Store Y & (H+1) with address corruption - match reference implementation exactly
         if (should_complete_write_cycle(pins)) {
-            CPU_DL(this) = CPU_Y(this) & ((CPU_ABH(this) + 1) & 0xFF);
+            // Calculate value: Y & (intermediate_high + 1)
+            // Use DL as intermediate high byte (before page cross correction)
+            uint8_t data_value = CPU_Y(this) & ((CPU_DL(this) + 1) & 0xFF);
+            
+            // Apply address corruption on page cross (DL != ABH means page crossed)
+            if (CPU_DL(this) != CPU_ABH(this)) {
+                CPU_ABH(this) = data_value;
+            }
+            
+            // Set data to write
+            CPU_DL(this) = data_value;
+            
             pins = phi2_write(pins, REG_AB, REG_DL);
             transition_to_fetch();
         }
