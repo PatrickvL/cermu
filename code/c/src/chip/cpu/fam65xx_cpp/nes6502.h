@@ -1229,7 +1229,7 @@ public:
             // Detect read-modify-write operations (common patterns)
             // RMW operations: ASL, LSR, ROL, ROR, INC, DEC (memory)
             // These take extra cycles and affect DMA timing
-            if (is_write && (cpu_addr >= 0x0000 && cpu_addr < 0x2000)) {
+            if (is_write && cpu_addr < 0x2000) {
                 // Zero page RMW operations add 1 cycle
                 dma_cycles += 1;
             } else if (is_write && (cpu_addr >= 0x0200)) {
