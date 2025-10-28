@@ -355,8 +355,21 @@ bus_state_t op_sbx(bus_state_t pins) {
 bus_state_t op_sha(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // SHA - Store A AND X AND (high byte of effective address + 1) (illegal)
+        // HARDWARE QUIRK: When page boundary is crossed during absolute,Y addressing,
+        // SHA stores to wrong address where high byte is corrupted
         if (this->should_complete_write_cycle(pins)) {
-            CPU_DL(this) = CPU_A(this) & CPU_X(this) & ((CPU_ABH(this) + 1) & 0xFF);
+            // Calculate the data to store: A AND X AND (high_byte + 1)
+            uint8_t high_byte_plus_one = (CPU_ABH(this) + 1) & 0xFF;
+            CPU_DL(this) = CPU_A(this) & CPU_X(this) & high_byte_plus_one;
+            
+            // CRITICAL HARDWARE QUIRK: If this is a page-crossed absolute,Y access,
+            // SHA writes to a corrupted address instead of the correct one.
+            // The corruption: high byte becomes (A AND X AND (H+1)) instead of correct H
+            if (this->opcode_entry.flags & OF_ILLEGAL_STORE) {
+                // Apply SHA hardware quirk: corrupt the high byte of write address
+                CPU_ABH(this) = CPU_A(this) & CPU_X(this) & high_byte_plus_one;
+            }
+            
             pins = this->phi2_write(pins, REG_AB, REG_DL);
             this->transition_to_fetch();
         }

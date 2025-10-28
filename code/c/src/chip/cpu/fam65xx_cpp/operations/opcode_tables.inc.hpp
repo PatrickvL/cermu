@@ -170,7 +170,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table<NES6502Tag>() {
     table[0x90] = {OP_BCC, AM_REL, OF_NONE};
     table[0x91] = {OP_STA, AM_INY, OF_NONE};
     table[0x92] = {OP_JAM, AM_NON, OF_NONE};  // KIL/JAM - illegal opcode
-    table[0x93] = {OP_SHA, AM_INY, OF_NONE};  // SHA - Store A AND X AND (addr_hi+1) (illegal)
+    table[0x93] = {OP_SHA, AM_INY, OF_ILLEGAL_STORE};  // SHA - Store A AND X AND (addr_hi+1) (illegal)
     table[0x94] = {OP_STY, AM_ZPX, OF_NONE};
     table[0x95] = {OP_STA, AM_ZPX, OF_NONE};
     table[0x96] = {OP_STX, AM_ZPY, OF_NONE};
@@ -182,7 +182,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table<NES6502Tag>() {
     table[0x9C] = {OP_SHY, AM_ABX, OF_NONE};  // SHY - Store Y AND ((addr_hi)+1) (illegal)
     table[0x9D] = {OP_STA, AM_ABX, OF_NONE};
     table[0x9E] = {OP_SHX, AM_ABY, OF_NONE};  // SHX - Store X AND ((addr_hi)+1) (illegal)
-    table[0x9F] = {OP_SHA, AM_ABY, OF_NONE};  // SHA - Store A AND X AND (addr_hi+1) (illegal)
+    table[0x9F] = {OP_SHA, AM_ABY, OF_ILLEGAL_STORE};  // SHA - Store A AND X AND (addr_hi+1) (illegal)
     table[0xA0] = {OP_LDY, AM_IMM, OF_NONE};
     table[0xA1] = {OP_LDA, AM_INX, OF_NONE};
     table[0xA2] = {OP_LDX, AM_IMM, OF_NONE};
