@@ -1122,59 +1122,41 @@ void collect_tests_from_file(const std::string& filepath, std::vector<TestItem>&
     }
     file.close();
     
-    // Fast JSON parsing
-    const char* pos = json_content.c_str();
-    const char* end = pos + json_content.size();
+    // Fastest possible approach for large JSON arrays
+    tests.reserve(10000); // Pre-allocate for typical test count
     
-    // Skip whitespace
-    while (pos < end && std::isspace(*pos)) pos++;
-    
-    if (pos < end && *pos == '[') {
-        // Parse objects - use single reusable TestItem to minimize allocations
-        pos++; // Skip opening bracket
+    if (json_content[0] == '[') {
+        // Use raw pointers for maximum performance on large data
+        const char* data = json_content.data();
+        const char* end = data + json_content.size();
+        const char* pos = data + 1; // Skip opening [
+        
         size_t test_index = 0;
-        TestItem reusable_item; // Declare once, reuse for all tests
-        reusable_item.filepath = filepath; // Set filepath once since it's constant
         
-        // Pre-allocate test name string to avoid repeated allocations
-        reusable_item.test_name.reserve(20); // Reserve space for "test_" + numbers
-        
-        // Optimize: minimize function calls in tight loop
         while (pos < end) {
-            // Skip whitespace - unrolled for performance
-            while (pos < end && (*pos == ' ' || *pos == '\t' || *pos == '\n' || *pos == '\r')) pos++;
-            if (pos >= end || *pos == ']') break;
+            // Fast search for opening brace using memchr
+            pos = static_cast<const char*>(memchr(pos, '{', end - pos));
+            if (!pos) break;
             
-            if (*pos == '{') {
-                // Find the end of this test object using brace counting
-                const char* obj_start = pos;
-                int braces = 1;
-                pos++; // Skip opening brace
-                
-                // Optimized brace counting - avoid repeated memory accesses
-                while (pos < end && braces > 0) {
-                    char c = *pos++;
-                    if (c == '{') braces++;
-                    else if (c == '}') braces--;
-                }
-                
-                if (braces == 0) {
-                    // Reuse the same TestItem object - just update the changing fields
-                    reusable_item.test_json.assign(obj_start, pos);
-                    
-                    // Efficient test name generation - avoid string concatenation
-                    reusable_item.test_name = "test_";
-                    reusable_item.test_name += std::to_string(test_index++);
-                    
-                    tests.push_back(reusable_item); // Copy into vector
-                }
-            } else {
-                break;
+            // Fast brace matching using pointer arithmetic
+            const char* obj_start = pos;
+            int depth = 1;
+            ++pos; // Skip opening brace
+            
+            while (pos < end && depth > 0) {
+                if (*pos == '{') ++depth;
+                else if (*pos == '}') --depth;
+                ++pos;
             }
             
-            // Skip comma if present - unrolled whitespace skip
-            while (pos < end && (*pos == ' ' || *pos == '\t' || *pos == '\n' || *pos == '\r')) pos++;
-            if (pos < end && *pos == ',') pos++;
+            if (depth == 0) {
+                // Use emplace_back to construct in-place
+                tests.emplace_back();
+                TestItem& item = tests.back();
+                item.filepath = filepath;
+                item.test_json.assign(obj_start, pos - obj_start);
+                item.test_name = "test_" + std::to_string(test_index++);
+            }
         }
     } else {
         // Single test - still create locally since it's only one
