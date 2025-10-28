@@ -22,10 +22,8 @@ namespace fam65xx_cpp {
 
 // Separate empty types per feature to prevent duplicate base class errors
 struct empty_io_port_mixin_t {};
-struct empty_apu_mixin_t {};
 struct empty_wide_mixin_t {};
-struct empty_cmos_mixin_t {};
-struct empty_bcd_mixin_t {};
+struct empty_apu_mixin_t {};
 
 // ============================================================================
 // I/O PORT MIXIN (6510-style processors)
@@ -69,88 +67,6 @@ struct io_port_mixin_t {
     void set_io_input(uint8_t value) {
         io_port.input = value;
     }
-};
-
-// ============================================================================
-// BCD ARITHMETIC MIXIN
-// ============================================================================
-
-// Binary Coded Decimal arithmetic support (disabled on NES 6502)
-template<typename ProcessorTag>
-struct bcd_mixin_t {
-    // Note: No additional state needed - BCD is algorithmic
-    
-    // Add with Carry in BCD mode
-    uint8_t adc_bcd(uint8_t a, uint8_t b, bool carry_in, bool& carry_out, bool& overflow) {
-        uint16_t al = (a & 0x0F) + (b & 0x0F) + (carry_in ? 1 : 0);
-        if (al > 0x09) al += 0x06;
-        
-        uint16_t ah = (a >> 4) + (b >> 4) + (al > 0x0F ? 1 : 0);
-        if (ah > 0x09) ah += 0x06;
-        
-        carry_out = (ah > 0x0F);
-        
-        // V flag behavior differs between NMOS and CMOS
-        if constexpr (has_nmos_bugs<ProcessorTag>()) {
-            // NMOS: V flag reflects binary operation result  
-            uint16_t binary_result = a + b + (carry_in ? 1 : 0);
-            overflow = ((a ^ binary_result) & (b ^ binary_result) & 0x80) != 0;
-        } else {
-            // CMOS: V flag undefined in BCD mode
-            overflow = false;
-        }
-        
-        return ((ah & 0x0F) << 4) | (al & 0x0F);
-    }
-    
-    // BCD addition helper matching old implementation signature
-    void bcd_addition_helper(uint8_t a_old, uint8_t operand, uint8_t carry_in, uint8_t* bcd_result, uint8_t* bcd_flags) {
-        bool carry_out, overflow;
-        *bcd_result = adc_bcd(a_old, operand, carry_in != 0, carry_out, overflow);
-        
-        // Generate flags matching old implementation
-        *bcd_flags = (*bcd_result & 0x80) |                    // N flag
-                    (*bcd_result == 0 ? 0x02 : 0) |           // Z flag (FLAG_Z = 0x02)
-                    (carry_out ? 0x01 : 0) |                  // C flag (FLAG_C = 0x01)
-                    (overflow ? 0x40 : 0);                    // V flag (FLAG_V = 0x40)
-    }
-    
-    // Subtract with Borrow in BCD mode  
-    uint8_t sbc_bcd(uint8_t a, uint8_t b, bool borrow_in, bool& carry_out, bool& overflow) {
-        uint16_t al = (a & 0x0F) - (b & 0x0F) - (borrow_in ? 0 : 1);
-        if (al & 0x10) al -= 0x06;
-        
-        uint16_t ah = (a >> 4) - (b >> 4) - ((al & 0x10) ? 1 : 0);
-        if (ah & 0x10) ah -= 0x06;
-        
-        carry_out = !(ah & 0x10);
-        
-        // V flag behavior differs between NMOS and CMOS
-        if constexpr (has_nmos_bugs<ProcessorTag>()) {
-            // NMOS: V flag reflects binary operation result
-            uint16_t binary_result = a - b - (borrow_in ? 0 : 1);
-            overflow = ((a ^ b) & (a ^ binary_result) & 0x80) != 0;
-        } else {
-            // CMOS: V flag undefined in BCD mode  
-            overflow = false;
-        }
-        
-        return ((ah & 0x0F) << 4) | (al & 0x0F);
-    }
-};
-
-// ============================================================================
-// 65C02 ENHANCED STATE MIXIN
-// ============================================================================
-
-// Additional state for 65C02 processors (WAI/STP instructions)
-template<typename ProcessorTag>
-struct cmos_state_mixin_t {
-    // Note: The base fam65xx_t already has wait_for_interrupt and stopped
-    // This mixin could add additional CMOS-specific state if needed
-    
-    // For now, this is empty but provides extension point
-    // Future: Could add timing state, enhanced addressing mode state, etc.
 };
 
 // ============================================================================
@@ -301,15 +217,6 @@ using io_port_base_t = std::conditional_t<
     io_port_mixin_t<ProcessorTag>,
     empty_io_port_mixin_t
 >;
-
-// BCD and CMOS state functionality merged into main CPU class
-// Only I/O port mixin remains active
-
-template<typename ProcessorTag>
-using bcd_base_t = empty_bcd_mixin_t;  // BCD merged into main class
-
-template<typename ProcessorTag>
-using cmos_state_base_t = empty_cmos_mixin_t;  // CMOS state merged into main class
 
 template<typename ProcessorTag>
 using wide_registers_base_t = empty_wide_mixin_t;  // Wide registers disabled for now
