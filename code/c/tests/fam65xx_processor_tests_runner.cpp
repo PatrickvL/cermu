@@ -42,7 +42,11 @@ static std::atomic<bool> g_test_failed{false};
 
 // Forward declarations
 class ProcessorTestHarness;
-static ProcessorTestHarness* current_test_harness = nullptr;
+
+// Thread-safe harness context for memory callbacks
+struct HarnessContext {
+    ProcessorTestHarness* current_harness = nullptr;
+};
 
 // Forward declarations for callback functions
 static uint8_t mem_read_callback(void* user_data, uint16_t addr, uint8_t bus_state);
@@ -142,6 +146,9 @@ public:
     virtual void set_y(uint8_t y) = 0;
     virtual void set_sp(uint8_t sp) = 0;
     virtual void set_status(uint8_t p) = 0;
+    
+    // Set harness for bus cycle recording (thread-safe)
+    virtual void set_harness(ProcessorTestHarness* harness) = 0;
 };
 
 // Template wrapper for MOS6502 processor using enhanced descriptor API
@@ -149,11 +156,12 @@ class MOS6502Wrapper : public UnifiedProcessorInterface {
 private:
     mos6502_t* cpu;
     fam65xx_chip_descriptor_t* enhanced_desc;
+    HarnessContext harness_context; // Thread-safe harness context
     
 public:
     MOS6502Wrapper() {
-        // Create enhanced descriptor with memory callbacks
-        enhanced_desc = mos6502_create_descriptor(mem_read_callback, mem_write_callback, nullptr);
+        // Create enhanced descriptor with memory callbacks and harness context
+        enhanced_desc = mos6502_create_descriptor(mem_read_callback, mem_write_callback, &harness_context);
         if (!enhanced_desc) {
             throw std::runtime_error("Failed to create enhanced MOS6502 descriptor");
         }
@@ -245,6 +253,11 @@ public:
     
     void set_status(uint8_t p) override {
         mos6502_set_p(cpu, p);
+    }
+    
+    // Set current harness for bus cycle recording (thread-safe)
+    void set_harness(ProcessorTestHarness* harness) {
+        harness_context.current_harness = harness;
     }
 };
 
@@ -355,6 +368,11 @@ public:
     
     void set_status(uint8_t p) override {
         cpu->reg8[REG_P] = p;
+    }
+    
+    // Set harness for bus cycle recording (thread-safe)
+    void set_harness(ProcessorTestHarness* harness) override {
+        harness_ptr = harness;
     }
 };
 
@@ -599,6 +617,9 @@ public:
     void set_sp(uint8_t sp) { cpu_wrapper->set_sp(sp); }
     void set_status(uint8_t p) { cpu_wrapper->set_status(p); }
     
+    // Thread-safe harness setting for bus cycle recording
+    void set_harness_for_bus_recording() { cpu_wrapper->set_harness(this); }
+    
     uint16_t get_pc() const { return cpu_wrapper->get_pc(); }
     uint8_t get_a() const { return cpu_wrapper->get_a(); }
     uint8_t get_x() const { return cpu_wrapper->get_x(); }
@@ -725,18 +746,20 @@ void NES6502Wrapper::instance_mem_write(void* user_data, uint16_t addr, uint8_t 
 // Memory callback functions for fam65xx API (after class definition)
 static uint8_t mem_read_callback(void* user_data, uint16_t addr, uint8_t bus_state) {
     uint8_t value = test_memory[addr];
-    // Record bus cycle if harness is available
-    if (current_test_harness) {
-        current_test_harness->record_bus_cycle(addr, value, false);
+    // Record bus cycle if harness is available - get harness from context
+    HarnessContext* context = static_cast<HarnessContext*>(user_data);
+    if (context && context->current_harness) {
+        context->current_harness->record_bus_cycle(addr, value, false);
     }
     return value;
 }
 
 static void mem_write_callback(void* user_data, uint16_t addr, uint8_t data) {
     test_memory[addr] = data;
-    // Record bus cycle if harness is available
-    if (current_test_harness) {
-        current_test_harness->record_bus_cycle(addr, data, true);
+    // Record bus cycle if harness is available - get harness from context
+    HarnessContext* context = static_cast<HarnessContext*>(user_data);
+    if (context && context->current_harness) {
+        context->current_harness->record_bus_cycle(addr, data, true);
     }
 }
 
@@ -917,8 +940,8 @@ private:
             output << "[Worker " << worker_id << "] Running test: " << test->name << std::endl;
         }
         
-        // Set global harness for bus cycle recording
-        current_test_harness = harness;
+        // REMOVED: Set global harness (thread safety issue)
+        // current_test_harness = harness;
         
         // PERFORMANCE OPTIMIZATION: Use selective memory clearing based on previous test
         const cpu_state_t* previous_final = previous_test ? &previous_test->final : nullptr;
@@ -926,6 +949,9 @@ private:
         
         // CRITICAL FIX: Bootstrap CPU to reset state before setting test state
         harness->bootstrap_processor_for_tests();
+        
+        // THREAD SAFETY FIX: Set harness in processor wrapper for bus cycle recording
+        harness->set_harness_for_bus_recording();
         
         harness->set_pc(test->initial.pc);
         harness->set_a(test->initial.a);
@@ -1070,8 +1096,8 @@ private:
                        << (int)current_opcode << ")" << std::dec << std::endl;
             }
             
-            // Clear global harness
-            current_test_harness = nullptr;
+            // REMOVED: Clear global harness (thread safety issue)
+            // current_test_harness = nullptr;
             return true;
         } else {
             results.failed_tests++;
@@ -1086,8 +1112,8 @@ private:
                 output << "mismatch (opcode 0x" << std::hex << (int)current_opcode << ")" << std::dec << std::endl;
             }
             
-            // Clear global harness
-            current_test_harness = nullptr;
+            // REMOVED: Clear global harness (thread safety issue)
+            // current_test_harness = nullptr;
             return false;
         }
     }
