@@ -813,9 +813,9 @@ public:
                         if (bytes_remaining > 0) {
                             needs_sample = true;
                             current_address++;
-                            if (current_address > 0xFFFF) {
-                                current_address = 0x8000;  // Wrap to $8000
-                            }
+                            // if (current_address > 0xFFFF) {
+                            //     current_address = 0x8000;  // Wrap to $8000
+                            // }
                             bytes_remaining--;
                             
                             if (bytes_remaining == 0) {

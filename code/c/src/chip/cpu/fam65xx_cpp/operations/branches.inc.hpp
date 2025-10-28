@@ -36,7 +36,8 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) 
         
         case 1: {
             /* PHI2: Dummy read from incremented PC (hardware behavior) */
-            pins = phi2_read(pins, REG_PC, REG_DL);
+            /* Use a different register to avoid overwriting the branch offset in DL */
+            pins = phi2_read(pins, REG_PC, REG_IR);  /* Use IR as dummy target */
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Check for page cross */
                 bool page_cross = page_crossed(CPU_PC(this), CPU_AB(this));
@@ -49,10 +50,17 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) 
                 }
                 
                 /* Page cross detected: need penalty cycle with intermediate address */
-                /* Hardware behavior: Add offset to current PC's low byte, ignore carry */
-                /* This matches the exact same logic as the old working implementation */
-                CPU_PCL(this) += (int8_t)CPU_DL(this);
-                /* CPU_AB(this) already contains the correct final target from case 0 */
+                /* Hardware behavior: Add signed offset to PC low byte only, ignore carry */
+                /* The intermediate address = (PC & 0xFF00) | ((PCL + signed_offset) & 0xFF) */
+                uint8_t pc_low = CPU_PCL(this);
+                int8_t signed_offset = (int8_t)CPU_DL(this);
+                uint8_t new_low = (uint8_t)(pc_low + signed_offset);  // Let it wrap naturally
+                uint16_t intermediate_addr = (CPU_PC(this) & 0xFF00) | new_low;
+                
+                
+                /* Store intermediate address in PC for penalty cycle read */
+                CPU_PC(this) = intermediate_addr;
+                /* CPU_AB(this) still contains the correct final target from case 0 */
                 this->cycle_index++;
             }
             return pins;
