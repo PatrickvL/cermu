@@ -1097,28 +1097,28 @@ private:
 bool verbose_output = false;
 static TestResults results;
 
-// Parallel file processing
-std::vector<TestItem> collect_tests_from_file(const std::string& filepath) {
-    std::vector<TestItem> tests;
+// Parallel file processing - reuses pre-allocated vector for performance
+void collect_tests_from_file(const std::string& filepath, std::vector<TestItem>& tests) {
+    tests.clear(); // Clear previous contents but keep allocated memory
     
     // Optimize: Use memory-mapped file reading for better performance
     std::ifstream file(filepath, std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
         std::cout << "ERROR: Could not open file: " << filepath << std::endl;
-        return tests;
+        return; // Early return, tests vector remains empty
     }
     
     // Get file size and read in one go
     std::streamsize size = file.tellg();
     if (size <= 0) {
-        return tests;
+        return; // Early return, tests vector remains empty
     }
     
     file.seekg(0, std::ios::beg);
     std::string json_content(size, '\0');
     if (!file.read(json_content.data(), size)) {
         std::cout << "ERROR: Could not read file: " << filepath << std::endl;
-        return tests;
+        return; // Early return, tests vector remains empty
     }
     file.close();
     
@@ -1130,7 +1130,7 @@ std::vector<TestItem> collect_tests_from_file(const std::string& filepath) {
     while (pos < end && std::isspace(*pos)) pos++;
     
     if (pos < end && *pos == '[') {
-        // Reserve space for better performance
+        // Reserve space for 10000 tests (typical per file) for better performance
         tests.reserve(10000);
         
         // Parse objects
@@ -1177,8 +1177,6 @@ std::vector<TestItem> collect_tests_from_file(const std::string& filepath) {
         item.test_name = "single_test";
         tests.push_back(std::move(item));
     }
-    
-    return tests;
 }
 
 // Optimized directory processing for parallel execution
@@ -1220,9 +1218,13 @@ std::vector<TestItem> collect_all_tests(const std::vector<std::string>& test_pat
     // Reserve space for better performance (expect 10000 tests per file)
     all_tests.reserve(total_files * 10000);
     
-    // Second pass: actually collect tests
+    // Pre-allocate reusable vector for file processing (avoid repeated allocations)
+    std::vector<TestItem> file_tests;
+    file_tests.reserve(10000); // Pre-allocate for typical file size
+    
+    // Second pass: actually collect tests using reusable vector
     for (const auto& json_file : json_files) {
-        auto file_tests = collect_tests_from_file(json_file);
+        collect_tests_from_file(json_file, file_tests);
         all_tests.insert(all_tests.end(), 
                         std::make_move_iterator(file_tests.begin()),
                         std::make_move_iterator(file_tests.end()));
