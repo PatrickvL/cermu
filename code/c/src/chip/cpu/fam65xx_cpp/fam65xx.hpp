@@ -79,8 +79,6 @@ template<typename ProcessorTag>
 class fam65xx_t :
     public io_port_base_t<ProcessorTag>,
     public apu_base_t<ProcessorTag>,
-    public bcd_base_t<ProcessorTag>,
-    public cmos_state_base_t<ProcessorTag>,
     public wide_registers_base_t<ProcessorTag>
 {
 public:
@@ -113,7 +111,7 @@ public:
     fam65xx_mem_write_t mem_write;      /* Memory write callback */
     void* mem_user_data;                /* User data for memory callbacks */
     
-    /* 65C02 extended state (merged from cmos_state_mixin_t) */
+    /* 65C02 extended state */
     bool wait_for_interrupt;            /* WAI instruction state */
     bool stopped;                       /* STP instruction state */
     
