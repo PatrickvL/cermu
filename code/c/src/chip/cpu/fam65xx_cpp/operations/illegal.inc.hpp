@@ -84,24 +84,51 @@ bus_state_t op_dcp(bus_state_t pins) {
 bus_state_t op_isc(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
         // ISC - Increment memory and subtract from A (INC memory, then SBC A with result)
-        // This is a Read-Modify-Write operation
+        // This is a Read-Modify-Write operation - match reference implementation exactly
         return rmw_operation_helper(pins, [this](uint8_t& value) {
             // Perform INC on memory value
             value++;
             
-            // Perform SBC A with incremented value (A = A - value - (1 - C))
-            uint16_t result = CPU_A(this) - value - get_borrow_input();
-
-            // Set carry flag (SBC uses subtraction semantics: carry = no borrow)
-            update_flag(FLAG_C, !(result & 0x100));
+            // Perform SBC A with incremented value - exact reference match
+            uint8_t operand = value;
+            uint8_t carry_in = (CPU_P(this) & FLAG_C) ? 1 : 0;
+            uint8_t a_old = CPU_A(this);
             
-            // Set overflow flag for SBC
-            bool overflow = ((CPU_A(this) ^ value) & 0x80) && ((CPU_A(this) ^ result) & 0x80);
-            update_flag(FLAG_V, overflow);
-            
-            // Store result in A and update N,Z flags
-            CPU_A(this) = (uint8_t)result;
-            update_nz_flags(CPU_A(this));
+            // Check for BCD support and decimal mode
+            if constexpr (has_bcd<ProcessorTag>()) {
+                if (CPU_P(this) & FLAG_D) {
+                    // BCD (Decimal) mode - use BCD subtraction helper matching reference implementation
+                    uint8_t bcd_result;
+                    uint8_t bcd_flags;
+                    
+                    bcd_subtraction_helper(a_old, operand, (1 - carry_in), &bcd_result, &bcd_flags);
+                    
+                    CPU_A(this) = bcd_result;
+                    CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) | bcd_flags;
+                } else {
+                    // Binary mode even when BCD supported
+                    uint16_t result = a_old - operand - (1 - carry_in);
+                    CPU_A(this) = result & 0xFF;
+                    
+                    // SBC modifies only N, V, Z, C flags - preserve all others exactly
+                    CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+                                 (CPU_A(this) & FLAG_N) |                                    /* N = bit 7 of result */
+                                 (CPU_A(this) == 0 ? FLAG_Z : 0) |                          /* Z = result is zero */
+                                 (result < 0x100 ? FLAG_C : 0) |                           /* C = no borrow */
+                                 (((a_old ^ operand) & (a_old ^ result) & 0x80) ? FLAG_V : 0); /* V = overflow */
+                }
+            } else {
+                // No BCD support - binary mode only
+                uint16_t result = a_old - operand - (1 - carry_in);
+                CPU_A(this) = result & 0xFF;
+                
+                // SBC modifies only N, V, Z, C flags - preserve all others exactly
+                CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+                             (CPU_A(this) & FLAG_N) |                                    /* N = bit 7 of result */
+                             (CPU_A(this) == 0 ? FLAG_Z : 0) |                          /* Z = result is zero */
+                             (result < 0x100 ? FLAG_C : 0) |                           /* C = no borrow */
+                             (((a_old ^ operand) & (a_old ^ result) & 0x80) ? FLAG_V : 0); /* V = overflow */
+            }
         });
     }
     return pins;
@@ -277,43 +304,79 @@ bus_state_t op_anc(bus_state_t pins) {
 
 bus_state_t op_arr(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
-        // ARR - AND + ROR with complex flag behavior (AND immediate, then ROR A)
+        // ARR - AND + ROR with BCD correction in decimal mode (reference implementation)
         pins = phi2_read(pins, REG_PC, REG_DL);
         if (FAM65XX_GET_RDY(pins)) {
             CPU_PC(this)++;
             
-            // Step 1: AND accumulator with immediate operand
-            CPU_A(this) &= CPU_DL(this);
+            uint8_t operand = CPU_DL(this);
+            bool carry_in = (CPU_P(this) & FLAG_C) != 0;
             
-            // Step 2: ROR the AND result with current carry
-            uint8_t old_carry = (CPU_P(this) & FLAG_C) ? 0x80 : 0x00;
-            bool new_carry = (CPU_A(this) & 0x01) != 0;
-            CPU_A(this) = (CPU_A(this) >> 1) | old_carry;
+            // Step 1: AND A with operand - save original for BCD checks
+            uint8_t original_a = CPU_A(this) & operand;
+            CPU_A(this) = original_a;
             
-            // Step 3: Update flags - ARR has special flag behavior
-            // N and Z flags based on final result
-            update_nz_flags(CPU_A(this));
+            // Step 2: ROR the result (both modes do this)
+            uint8_t shifted_a = (CPU_A(this) >> 1) | (carry_in ? 0x80 : 0);
             
-            // C flag set from bit 0 of the AND result (before ROR)
-            update_flag(FLAG_C, new_carry);
+            // Clear all flags initially
+            CPU_P(this) &= ~(FLAG_N | FLAG_Z | FLAG_V | FLAG_C);
             
-            // V flag: hardware-accurate ARR overflow calculation
-            // V = bit 6 of result XOR bit 5 of result
-            bool v_flag = ((CPU_A(this) & 0x40) != 0) ^ ((CPU_A(this) & 0x20) != 0);
-            update_flag(FLAG_V, v_flag);
+            // Set N and Z flags based on shifted result (reference does this first)
+            update_nz_flags(shifted_a);
             
-            // Special case: BCD mode behavior for ARR
             if constexpr (has_bcd<ProcessorTag>()) {
                 if (CPU_P(this) & FLAG_D) {
-                    // In BCD mode, ARR has additional flag corrections
-                    // If low nibble of result >= 5, set carry
-                    if ((CPU_A(this) & 0x0F) >= 0x05) {
-                        CPU_P(this) |= FLAG_C;
+                    // Decimal mode - ARR uses reference algorithm
+                    
+                    // Set V flag based on bit 6 change between original and shifted
+                    if ((shifted_a ^ CPU_A(this)) & 0x40) {
+                        CPU_P(this) |= FLAG_V;
                     }
-                    // If high nibble of result >= 5, set carry
+                    
+                    // BCD correction using ORIGINAL A value for digit checks (reference approach)
+                    uint8_t result = shifted_a;
+                    
+                    // Low nibble BCD correction - use ORIGINAL A value for threshold check
+                    if ((CPU_A(this) & 0x0F) >= 5) {
+                        result = ((result + 6) & 0x0F) | (result & 0xF0);
+                    }
+                    
+                    // High nibble BCD correction and carry - use ORIGINAL A value for threshold check
                     if ((CPU_A(this) & 0xF0) >= 0x50) {
+                        result += 0x60;
                         CPU_P(this) |= FLAG_C;
                     }
+                    
+                    CPU_A(this) = result;
+                    
+                    // DO NOT update N and Z flags after BCD correction - reference keeps original flags
+                } else {
+                    // Binary mode - special C and V flag behavior
+                    CPU_A(this) = shifted_a;
+                    
+                    // ARR has special C and V flag behavior:
+                    // C = bit 6 of result (not the shifted-out bit!)
+                    // V = bit 6 XOR bit 5 of result
+                    if (CPU_A(this) & 0x40) {
+                        CPU_P(this) |= FLAG_C | FLAG_V;
+                    }
+                    if (CPU_A(this) & 0x20) {
+                        CPU_P(this) ^= FLAG_V;
+                    }
+                }
+            } else {
+                // Binary mode - special C and V flag behavior (for processors without BCD)
+                CPU_A(this) = shifted_a;
+                
+                // ARR has special C and V flag behavior:
+                // C = bit 6 of result (not the shifted-out bit!)
+                // V = bit 6 XOR bit 5 of result
+                if (CPU_A(this) & 0x40) {
+                    CPU_P(this) |= FLAG_C | FLAG_V;
+                }
+                if (CPU_A(this) & 0x20) {
+                    CPU_P(this) ^= FLAG_V;
                 }
             }
             
