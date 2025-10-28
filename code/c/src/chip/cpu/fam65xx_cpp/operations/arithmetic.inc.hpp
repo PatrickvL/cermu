@@ -11,7 +11,6 @@
 // ============================================================================
 
 // Add with Carry in BCD mode - Hardware-accurate 6502 BCD algorithm with constexpr ProcessorTag differentiation
-template<typename ProcessorTag>
 uint8_t adc_bcd(uint8_t a, uint8_t b, bool carry_in, bool& carry_out, bool& overflow) {
     // Use hardware-accurate algorithm with processor-specific behavior
     uint8_t al = (a & 0x0F) + (b & 0x0F) + (carry_in ? 1 : 0);
@@ -40,7 +39,6 @@ uint8_t adc_bcd(uint8_t a, uint8_t b, bool carry_in, bool& carry_out, bool& over
 }
 
 // BCD addition helper matching old implementation signature - now uses adc_bcd with constexpr differentiation
-template<typename ProcessorTag>
 void bcd_addition_helper(uint8_t a_old, uint8_t operand, uint8_t carry_in, uint8_t* bcd_result, uint8_t* bcd_flags) {
     // Check BCD support per processor type using constexpr differentiation
     if constexpr (has_bcd<ProcessorTag>()) {
@@ -88,7 +86,6 @@ void bcd_addition_helper(uint8_t a_old, uint8_t operand, uint8_t carry_in, uint8
 }
 
 // Subtract with Borrow in BCD mode with constexpr ProcessorTag differentiation
-template<typename ProcessorTag>
 uint8_t sbc_bcd(uint8_t a, uint8_t b, bool borrow_in, bool& carry_out, bool& overflow) {
     uint16_t al = (a & 0x0F) - (b & 0x0F) - (borrow_in ? 0 : 1);
     if (al & 0x10) al -= 0x06;
@@ -104,7 +101,7 @@ uint8_t sbc_bcd(uint8_t a, uint8_t b, bool borrow_in, bool& carry_out, bool& ove
         uint16_t binary_result = a - b - (borrow_in ? 0 : 1);
         overflow = ((a ^ b) & (a ^ binary_result) & 0x80) != 0;
     } else {
-        // CMOS: V flag undefined in BCD mode  
+        // CMOS: V flag undefined in BCD mode
         overflow = false;
     }
     
@@ -112,8 +109,7 @@ uint8_t sbc_bcd(uint8_t a, uint8_t b, bool borrow_in, bool& carry_out, bool& ove
 }
 
 // BCD subtraction helper matching old implementation signature with constexpr differentiation
-template<typename ProcessorTag>
-void bcd_subtraction_helper(uint8_t a_old, uint8_t operand, uint8_t borrow_in, 
+void bcd_subtraction_helper(uint8_t a_old, uint8_t operand, uint8_t borrow_in,
                            uint8_t* bcd_result, uint8_t* bcd_flags) {
     if constexpr (has_bcd<ProcessorTag>()) {
         // Hardware-accurate 6502 BCD subtraction (credit: MAME/floooh implementation)
@@ -180,7 +176,7 @@ bus_state_t op_adc(bus_state_t pins) {
                 uint8_t bcd_result;
                 uint8_t bcd_flags;
                 
-                bcd_addition_helper<ProcessorTag>(a, operand, carry_in, &bcd_result, &bcd_flags);
+                bcd_addition_helper(a, operand, carry_in, &bcd_result, &bcd_flags);
                 
                 CPU_A(this) = bcd_result;
                 update_flags(FLAG_N | FLAG_V | FLAG_Z | FLAG_C, bcd_flags);
@@ -277,7 +273,7 @@ bus_state_t op_sbc(bus_state_t pins) {
                 uint8_t bcd_result;
                 uint8_t bcd_flags;
                 
-                bcd_subtraction_helper<ProcessorTag>(a, operand, borrow_in, &bcd_result, &bcd_flags);
+                bcd_subtraction_helper(a, operand, borrow_in, &bcd_result, &bcd_flags);
                 
                 CPU_A(this) = bcd_result;
                 update_flags(FLAG_N | FLAG_V | FLAG_Z | FLAG_C, bcd_flags);
