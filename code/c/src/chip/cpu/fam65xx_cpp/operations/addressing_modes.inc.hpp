@@ -354,7 +354,8 @@ bus_state_t addr_iny(bus_state_t pins) {
                 /* Check if penalty cycle is needed */
                 bool needs_penalty = page_crossed(base_addr, final_addr) ||      // Page crossing
                                    (this->opcode_entry.flags & OF_RMW) ||        // RMW operations
-                                   (this->opcode_entry.flags & OF_ILLEGAL_STORE); // SHA illegal store
+                                   (this->opcode_entry.flags & OF_ILLEGAL_STORE) || // SHA illegal store
+                                   !(this->opcode_entry.flags & OF_SKIP_PAGE);   // Store operations and others that can't skip
                 
                 if (needs_penalty) {
                     /* Page crossing, RMW, or illegal store - need penalty cycle with intermediate address */
