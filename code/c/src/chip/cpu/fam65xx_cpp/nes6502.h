@@ -21,8 +21,9 @@
 #include <cstring>
 #include <cmath>
 
-#include "../../core/chip.h"
-#include "../../core/system_lines.h"
+#include "../../../core/chip.h"
+#include "../../../core/system_lines.h"
+#include "fam65xx_types.h"
 
 #ifdef __cplusplus
 
