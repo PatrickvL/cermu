@@ -26,8 +26,7 @@ extern "C" {
     #define AIEMUC_IMPL
 #endif
 
-// Include new fam65xx_cpp processor implementation  
-#include "../src/chip/cpu/fam65xx_cpp/mos6502.h"
+// Include new fam65xx_cpp processor implementation
 #include "../src/chip/cpu/fam65xx_cpp/fam65xx.hpp"
 
 namespace fs = std::filesystem;
@@ -43,14 +42,7 @@ static std::atomic<bool> g_test_failed{false};
 // Forward declarations
 class ProcessorTestHarness;
 
-// Thread-safe harness context for memory callbacks
-struct HarnessContext {
-    ProcessorTestHarness* current_harness = nullptr;
-};
 
-// Forward declarations for callback functions
-static uint8_t mem_read_callback(void* user_data, uint16_t addr, uint8_t bus_state);
-static void mem_write_callback(void* user_data, uint16_t addr, uint8_t data);
 
 // Processor type enumeration
 enum class ProcessorType {
@@ -151,113 +143,118 @@ public:
     virtual void set_harness(ProcessorTestHarness* harness) = 0;
 };
 
-// Template wrapper for MOS6502 processor using enhanced descriptor API
+// MOS6502 wrapper using new C++ template implementation
 class MOS6502Wrapper : public UnifiedProcessorInterface {
 private:
-    mos6502_t* cpu;
-    fam65xx_chip_descriptor_t* enhanced_desc;
-    HarnessContext harness_context; // Thread-safe harness context
+    fam65xx_cpp::fam65xx_t<fam65xx_cpp::MOS6502Tag>* cpu;
+    chip_descriptor_t desc;
+    void* harness_ptr; // Store harness for memory callbacks
+    
+    // Instance memory callbacks that know about this wrapper's harness
+    static uint8_t instance_mem_read(void* user_data, uint16_t addr, uint8_t bus_state);
+    static void instance_mem_write(void* user_data, uint16_t addr, uint8_t data);
     
 public:
-    MOS6502Wrapper() {
-        // Create enhanced descriptor with memory callbacks and harness context
-        enhanced_desc = mos6502_create_descriptor(mem_read_callback, mem_write_callback, &harness_context);
-        if (!enhanced_desc) {
-            throw std::runtime_error("Failed to create enhanced MOS6502 descriptor");
-        }
-        
-        // Create CPU using enhanced descriptor
-        cpu = mos6502_create();
+    MOS6502Wrapper() : harness_ptr(nullptr) {
+        if (!g_quiet_mode) printf("DEBUG: MOS6502Wrapper constructor called\n");
+        // Create CPU using C++ template implementation
+        cpu = new fam65xx_cpp::fam65xx_t<fam65xx_cpp::MOS6502Tag>();
         if (!cpu) {
-            mos6502_destroy_descriptor(enhanced_desc);
             throw std::runtime_error("Failed to create MOS6502 CPU");
         }
         
-        // Initialize with enhanced descriptor (automatically sets up memory callbacks)
-        mos6502_init_enhanced(cpu, enhanced_desc);
+        // Initialize CPU
+        cpu->init(&desc);
+        
+        // Set up memory callbacks with this wrapper as user_data
+        cpu->set_memory_callbacks(instance_mem_read, instance_mem_write, this);
+        
+        if (!g_quiet_mode) printf("DEBUG: MOS6502Wrapper created successfully\n");
+    }
+    
+    void set_harness(void* harness) {
+        harness_ptr = harness;
+        if (!g_quiet_mode) printf("DEBUG: MOS6502Wrapper harness set to %p\n", harness);
     }
     
     ~MOS6502Wrapper() {
         if (cpu) {
-            mos6502_destroy(cpu);
-        }
-        if (enhanced_desc) {
-            mos6502_destroy_descriptor(enhanced_desc);
+            delete cpu;
         }
     }
     
-    uint64_t init(const chip_descriptor_t* desc) override {
-        // Don't reinitialize if we already have enhanced descriptor set up
-        // The enhanced initialization was already done in constructor
-        if (enhanced_desc) {
-            return 0; // Already initialized with enhanced descriptor
+    // Implement interface methods
+    uint64_t init(const chip_descriptor_t* desc_ptr) override {
+        if (desc_ptr) {
+            desc = *desc_ptr;
         }
-        return mos6502_init(cpu, desc);
+        // CPU already initialized in constructor
+        return 0;
     }
     
     uint64_t bootstrap(uint64_t pins) override {
-        return mos6502_bootstrap(cpu, pins);
+        return cpu->bootstrap(pins);
     }
     
     uint64_t tick(uint64_t pins) override {
-        return mos6502_tick(cpu, pins);
+        return cpu->tick(pins);
     }
     
     bool opdone() override {
-        return mos6502_opdone(cpu);
+        return cpu->opdone();
     }
     
     uint16_t get_pc() override {
-        return mos6502_get_pc(cpu);
+        return cpu->reg16[REG_PC];
     }
     
     uint8_t get_a() override {
-        return mos6502_get_a(cpu);
+        return cpu->reg8[REG_A];
     }
     
     uint8_t get_x() override {
-        return mos6502_get_x(cpu);
+        return cpu->reg8[REG_X];
     }
     
     uint8_t get_y() override {
-        return mos6502_get_y(cpu);
+        return cpu->reg8[REG_Y];
     }
     
     uint8_t get_sp() override {
-        return mos6502_get_s(cpu);
+        return cpu->reg8[REG_S];
     }
     
     uint8_t get_status() override {
-        return mos6502_get_p(cpu);
+        return cpu->reg8[REG_P];
     }
     
     void set_pc(uint16_t pc) override {
-        mos6502_set_pc(cpu, pc);
+        cpu->reg16[REG_PC] = pc;
     }
     
     void set_a(uint8_t a) override {
-        mos6502_set_a(cpu, a);
+        cpu->reg8[REG_A] = a;
     }
     
     void set_x(uint8_t x) override {
-        mos6502_set_x(cpu, x);
+        cpu->reg8[REG_X] = x;
     }
     
     void set_y(uint8_t y) override {
-        mos6502_set_y(cpu, y);
+        cpu->reg8[REG_Y] = y;
     }
     
     void set_sp(uint8_t sp) override {
-        mos6502_set_s(cpu, sp);
+        cpu->reg8[REG_S] = sp;
     }
     
     void set_status(uint8_t p) override {
-        mos6502_set_p(cpu, p);
+        cpu->reg8[REG_P] = p;
     }
     
-    // Set current harness for bus cycle recording (thread-safe)
-    void set_harness(ProcessorTestHarness* harness) {
-        harness_context.current_harness = harness;
+    // Set harness for bus cycle recording (thread-safe)
+    void set_harness(ProcessorTestHarness* harness) override {
+        harness_ptr = harness;
     }
 };
 
@@ -543,11 +540,16 @@ public:
         // Create processor wrapper for the specified type
         cpu_wrapper = create_processor(processor_type);
         
-        // For NES6502, set up harness for bus cycle recording
+        // Set up harness for bus cycle recording for C++ template implementations
         if (processor_type == ProcessorType::NES6502) {
             NES6502Wrapper* nes_wrapper = dynamic_cast<NES6502Wrapper*>(cpu_wrapper.get());
             if (nes_wrapper) {
                 nes_wrapper->set_harness(this);
+            }
+        } else if (processor_type == ProcessorType::MOS6502) {
+            MOS6502Wrapper* mos_wrapper = dynamic_cast<MOS6502Wrapper*>(cpu_wrapper.get());
+            if (mos_wrapper) {
+                mos_wrapper->set_harness(this);
             }
         }
         
@@ -729,6 +731,26 @@ public:
     }
 };
 
+// MOS6502Wrapper memory callback implementations (need ProcessorTestHarness definition)
+uint8_t MOS6502Wrapper::instance_mem_read(void* user_data, uint16_t addr, uint8_t bus_state) {
+    MOS6502Wrapper* wrapper = static_cast<MOS6502Wrapper*>(user_data);
+    uint8_t value = test_memory[addr];
+    if (wrapper->harness_ptr) {
+        ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(wrapper->harness_ptr);
+        harness->record_bus_cycle(addr, value, false);
+    }
+    return value;
+}
+
+void MOS6502Wrapper::instance_mem_write(void* user_data, uint16_t addr, uint8_t data) {
+    MOS6502Wrapper* wrapper = static_cast<MOS6502Wrapper*>(user_data);
+    test_memory[addr] = data;
+    if (wrapper->harness_ptr) {
+        ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(wrapper->harness_ptr);
+        harness->record_bus_cycle(addr, data, true);
+    }
+}
+
 // NES6502Wrapper memory callback implementations (need ProcessorTestHarness definition)
 uint8_t NES6502Wrapper::instance_mem_read(void* user_data, uint16_t addr, uint8_t bus_state) {
     NES6502Wrapper* wrapper = static_cast<NES6502Wrapper*>(user_data);
@@ -749,25 +771,6 @@ void NES6502Wrapper::instance_mem_write(void* user_data, uint16_t addr, uint8_t 
     }
 }
 
-// Memory callback functions for fam65xx API (after class definition)
-static uint8_t mem_read_callback(void* user_data, uint16_t addr, uint8_t bus_state) {
-    uint8_t value = test_memory[addr];
-    // Record bus cycle if harness is available - get harness from context
-    HarnessContext* context = static_cast<HarnessContext*>(user_data);
-    if (context && context->current_harness) {
-        context->current_harness->record_bus_cycle(addr, value, false);
-    }
-    return value;
-}
-
-static void mem_write_callback(void* user_data, uint16_t addr, uint8_t data) {
-    test_memory[addr] = data;
-    // Record bus cycle if harness is available - get harness from context
-    HarnessContext* context = static_cast<HarnessContext*>(user_data);
-    if (context && context->current_harness) {
-        context->current_harness->record_bus_cycle(addr, data, true);
-    }
-}
 
 // Test item for worker queue
 struct TestItem {
