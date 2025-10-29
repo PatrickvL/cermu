@@ -684,34 +684,33 @@ public:
      */
     inline uint8_t bcd_add_6502(uint8_t a, uint8_t b, bool carry_in, bool& carry_out, bool& overflow) {
         // Hardware-accurate NMOS 6502 BCD addition
-        // Based on comprehensive analysis: V flag calculated after low nibble adjustment
+        // The V flag in BCD mode is calculated BEFORE any BCD adjustments
         
-        // Step 1: Binary addition for low nibble
+        // Step 1: Pure binary addition (this is what V flag sees)
+        uint16_t binary_result = a + b + (carry_in ? 1 : 0);
+        uint8_t binary_sum = binary_result & 0xFF;
+        
+        // Step 2: Calculate V flag from pure binary operation (before BCD adjustment)
+        // This matches the NMOS 6502 silicon behavior
+        overflow = ((a ^ binary_sum) & (b ^ binary_sum) & 0x80) != 0;
+        
+        // Step 3: BCD nibble processing for the actual result
         uint16_t al = (a & 0x0F) + (b & 0x0F) + (carry_in ? 1 : 0);
         uint16_t ah = (a >> 4) + (b >> 4);
         
-        // Step 2: Low nibble adjustment and propagation
+        // Step 4: Low nibble BCD adjustment
         if (al > 9) {
             al += 6;
             ah++;
         }
         
-        // Step 3: CRITICAL - V flag calculation from state after low nibble adjustment
-        // This is the intermediate result that the NMOS 6502 V flag circuit sees
-        uint8_t intermediate_low = al & 0x0F;
-        uint8_t intermediate_high = ah & 0x0F;
-        uint8_t intermediate = intermediate_low | (intermediate_high << 4);
-        
-        // V flag calculated from this intermediate state using standard formula
-        overflow = ((a ^ intermediate) & (b ^ intermediate) & 0x80) != 0;
-        
-        // Step 4: High nibble BCD adjustment for final result
+        // Step 5: High nibble BCD adjustment
         if (ah > 9) {
             ah += 6;
         }
         carry_out = (ah > 15);
         
-        // Step 5: Final BCD result
+        // Step 6: Final BCD result
         uint8_t bcd_result = (al & 0x0F) | ((ah & 0x0F) << 4);
         
         return bcd_result;
@@ -722,31 +721,36 @@ public:
      * Matches hardware behavior for SBC instruction in decimal mode
      */
     inline uint8_t bcd_sub_6502(uint8_t a, uint8_t b, bool borrow_in, bool& carry_out, bool& overflow) {
-        // BCD subtraction (SBC with borrow)
+        // Hardware-accurate NMOS 6502 BCD subtraction
+        
+        // Step 1: Pure binary subtraction first (for V flag calculation)
+        int16_t binary_result = a - b - (borrow_in ? 1 : 0);
+        uint8_t binary_low = binary_result & 0xFF;
+        carry_out = (binary_result >= 0);  // Carry clear indicates borrow occurred
+        
+        // Step 2: BCD nibble processing
         int16_t al = (a & 0x0F) - (b & 0x0F) - (borrow_in ? 1 : 0);
         int16_t ah = (a >> 4) - (b >> 4);
         
-        // Low nibble adjustment
+        // Step 3: Low nibble adjustment
         if (al < 0) {
             al -= 6;
             ah--;
         }
         
-        // High nibble adjustment
+        // Step 4: High nibble adjustment
         if (ah < 0) {
             ah -= 6;
         }
         
-        uint8_t result = (al & 0x0F) | ((ah & 0x0F) << 4);
+        // Step 5: Final BCD result
+        uint8_t bcd_result = (al & 0x0F) | ((ah & 0x0F) << 4);
         
-        // Hardware-accurate flag calculation
-        carry_out = (ah >= 0);  // Carry clear indicates borrow occurred
+        // Step 6: CRITICAL - V flag calculated from BINARY result, not BCD result
+        // Same principle as BCD addition - V flag circuit operates on binary arithmetic
+        overflow = ((a ^ b) & (a ^ binary_low) & 0x80) != 0;
         
-        // Overflow calculation for BCD subtraction
-        int16_t binary_result = a - b - (borrow_in ? 1 : 0);
-        overflow = ((a ^ b) & (a ^ result) & 0x80) != 0;
-        
-        return result;
+        return bcd_result;
     }
 
     // ========================================================================
