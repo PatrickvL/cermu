@@ -178,10 +178,10 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table<NES6502Tag>() {
     table[0x98] = {OP_TYA, AM_NON, OF_NONE};
     table[0x99] = {OP_STA, AM_ABY, OF_NONE};
     table[0x9A] = {OP_TXS, AM_NON, OF_NONE};
-    table[0x9B] = {OP_SHS, AM_ABY, OF_NONE};  // SHS - Store (A AND X) AND ((addr_hi)+1) to S (illegal)
-    table[0x9C] = {OP_SHY, AM_ABX, OF_NONE};  // SHY - Store Y AND ((addr_hi)+1) (illegal)
+    table[0x9B] = {OP_SHS, AM_ABY, OF_ILLEGAL_STORE};  // SHS - Store (A AND X) AND ((addr_hi)+1) to S (illegal)
+    table[0x9C] = {OP_SHY, AM_ABX, OF_ILLEGAL_STORE};  // SHY - Store Y AND ((addr_hi)+1) (illegal)
     table[0x9D] = {OP_STA, AM_ABX, OF_NONE};
-    table[0x9E] = {OP_SHX, AM_ABY, OF_NONE};  // SHX - Store X AND ((addr_hi)+1) (illegal)
+    table[0x9E] = {OP_SHX, AM_ABY, OF_ILLEGAL_STORE};  // SHX - Store X AND ((addr_hi)+1) (illegal)
     table[0x9F] = {OP_SHA, AM_ABY, OF_ILLEGAL_STORE};  // SHA - Store A AND X AND (addr_hi+1) (illegal)
     table[0xA0] = {OP_LDY, AM_IMM, OF_NONE};
     table[0xA1] = {OP_LDA, AM_INX, OF_NONE};

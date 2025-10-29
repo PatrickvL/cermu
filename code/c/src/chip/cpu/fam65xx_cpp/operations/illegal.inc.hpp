@@ -458,47 +458,18 @@ bus_state_t op_sbx(bus_state_t pins) {
 
 bus_state_t op_sha(bus_state_t pins) {
     if constexpr (has_illegal_opcodes<ProcessorTag>()) {
-        // SHA - Store A AND X AND (high byte of effective address + 1) (illegal)
-        // HARDWARE BEHAVIOR: SHA has conditional address corruption based on page crossing
+        // SHA - Store A & X & (H+1) with address corruption on page cross
         if (should_complete_write_cycle(pins)) {
-            // Get the current effective address after addressing mode completed
-            uint16_t effective_addr = CPU_AB(this);
-            uint8_t current_high = CPU_ABH(this);
-            uint8_t current_low = CPU_ABL(this);
+            // Calculate value: A & X & (intermediate_high + 1)
+            uint8_t data_value = CPU_A(this) & CPU_X(this) & (CPU_DL(this) + 1);
             
-            // Determine if page crossing occurred during addressing calculation
-            bool page_crossed = false;
-            uint8_t original_high = current_high;
-            
-            if (opcode_entry.am_index == AM_ABY) {
-                // Absolute,Y: base_addr + Y
-                // Reconstruct base address by subtracting Y
-                uint16_t base_low = (current_low - CPU_Y(this)) & 0xFF;
-                if (base_low + CPU_Y(this) > 0xFF) {
-                    page_crossed = true;
-                    original_high = current_high - 1; // The high byte before page crossing fix
-                }
-            } else if (opcode_entry.am_index == AM_INY) {
-                // Indirect,Y: (zp) + Y
-                // Reconstruct base address by subtracting Y
-                uint16_t base_low = (current_low - CPU_Y(this)) & 0xFF;
-                if (base_low + CPU_Y(this) > 0xFF) {
-                    page_crossed = true;
-                    original_high = current_high - 1; // The high byte before page crossing fix
-                }
+            // Apply address corruption on page cross (DL != ABH means page crossed)
+            if (CPU_DL(this) != CPU_ABH(this)) {
+                CPU_ABH(this) = data_value;
             }
             
-            // Calculate data to store: A & X & (high_byte + 1)
-            // Hardware quirk: Data calculation uses the SAME high byte as address corruption
-            uint8_t data_high_byte = page_crossed ? original_high : current_high;
-            uint8_t data = CPU_A(this) & CPU_X(this) & ((data_high_byte + 1) & 0xFF);
-            CPU_DL(this) = data;
-            
-            // Apply address corruption if page was crossed
-            if (page_crossed) {
-                // Corrupt address high byte: A & X & (original_high + 1)
-                CPU_ABH(this) = CPU_A(this) & CPU_X(this) & ((original_high + 1) & 0xFF);
-            }
+            // Set data to write
+            CPU_DL(this) = data_value;
             
             pins = phi2_write(pins, REG_AB, REG_DL);
             transition_to_fetch();
