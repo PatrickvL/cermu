@@ -126,6 +126,9 @@ bus_state_t addr_abx(bus_state_t pins) {
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_PC(this)++;
                 
+                // CRITICAL: Store intermediate high byte in DL for illegal opcodes BEFORE any modifications
+                CPU_DL(this) = CPU_ABH(this);
+                
                 // PHI1: Calculate addresses
                 uint16_t base = CPU_AB(this);
                 uint16_t effective = base + CPU_X(this);
@@ -134,11 +137,14 @@ bus_state_t addr_abx(bus_state_t pins) {
                 // ABH stays unchanged, only ABL gets X added
                 CPU_ABL(this) += CPU_X(this);
                 
-                // Check if we need penalty cycle (page crossing, RMW operations, or no skip flag)
-                if (!(this->opcode_entry.flags & OF_SKIP_PAGE) ||
-                    page_crossed(base, effective) ||
-                    (this->opcode_entry.flags & OF_RMW)) {
-                    // Need penalty cycle - keep intermediate address for penalty read
+                // Check if penalty cycle is needed
+                bool needs_penalty = page_crossed(base, effective) ||          // Page crossing
+                                   (this->opcode_entry.flags & OF_RMW) ||      // RMW operations
+                                   (this->opcode_entry.flags & OF_ILLEGAL_STORE) || // SHY illegal store
+                                   !(this->opcode_entry.flags & OF_SKIP_PAGE); // No skip allowed
+                
+                if (needs_penalty) {
+                    // Page crossing, RMW, illegal store, or always need penalty
                     this->cycle_index++;
                 } else {
                     // No penalty needed - complete with correct address
@@ -150,10 +156,10 @@ bus_state_t addr_abx(bus_state_t pins) {
         }
             
         case 2:
-            // PHI2: Page cross penalty - read from wrong address
-            pins = phi2_read(pins, REG_AB, REG_DL);
+            // PHI2: Page cross penalty - read from wrong address (use temporary register to avoid overwriting DL)
+            pins = phi2_read(pins, REG_AB, REG_IR); // Use IR as temporary since DL has intermediate high byte
             if (FAM65XX_GET_RDY(pins)) {
-                // PHI1: Correct final address using your approach
+                // PHI1: Correct final address
                 // ABL has X added, ABH is unchanged from original. Subtract X from ABL to restore original base
                 CPU_ABL(this) -= CPU_X(this);
                 // Now AB has original base address, add X to full 16-bit AB for correct effective address with carry
@@ -183,6 +189,9 @@ bus_state_t addr_aby(bus_state_t pins) {
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_PC(this)++;
                 
+                // CRITICAL: Store intermediate high byte in DL for illegal opcodes BEFORE any modifications
+                CPU_DL(this) = CPU_ABH(this);
+                
                 // PHI1: Calculate addresses
                 uint16_t base = CPU_AB(this);
                 uint16_t effective = base + CPU_Y(this);
@@ -208,9 +217,9 @@ bus_state_t addr_aby(bus_state_t pins) {
             return pins;
         }
             
-        case 2:
-            // PHI2: Page cross penalty - read from wrong address
-            pins = phi2_read(pins, REG_AB, REG_DL);
+        case 2: {
+            // PHI2: Page cross penalty - read from wrong address (use temporary register to avoid overwriting DL)
+            pins = phi2_read(pins, REG_AB, REG_IR); // Use IR as temporary since DL has intermediate high byte
             if (FAM65XX_GET_RDY(pins)) {
                 // PHI1: Correct final address
                 // ABL has Y added, ABH is unchanged from original. Subtract Y from ABL to restore original base
@@ -220,6 +229,7 @@ bus_state_t addr_aby(bus_state_t pins) {
                 transition_to_operation();
             }
             return pins;
+        }
     }
     return pins;
 }
@@ -343,6 +353,9 @@ bus_state_t addr_iny(bus_state_t pins) {
             /* Third cycle: Read high byte of the base address */
             pins = phi2_read(pins, REG_ZP, REG_ABH);
             if (FAM65XX_GET_RDY(pins)) {
+                /* Store the intermediate high byte in DL for illegal opcodes */
+                CPU_DL(this) = CPU_ABH(this);
+                
                 /* Add Y register with page crossing check */
                 uint16_t base_addr = CPU_AB(this);
                 uint16_t final_addr = base_addr + CPU_Y(this);
@@ -370,14 +383,18 @@ bus_state_t addr_iny(bus_state_t pins) {
         }
             
         case 3:
-            /* Page cross penalty - dummy read from wrong address */
-            pins = phi2_read(pins, REG_AB, REG_DL);
+            /* Page cross penalty - dummy read from wrong address (don't overwrite DL!) */
+            pins = phi2_read(pins, REG_AB, REG_IR); // Use IR as temporary, preserve DL
             if (FAM65XX_GET_RDY(pins)) {
-                /* Correct final address using same approach as Absolute,X */
-                /* ABL has Y added, ABH is unchanged. Subtract Y from ABL to restore original base */
-                CPU_ABL(this) -= CPU_Y(this);
-                /* Now AB has original base address, add Y to full 16-bit AB for correct effective address with carry */
-                CPU_AB(this) += CPU_Y(this);
+                /* DL already contains intermediate high byte from case 2 */
+                
+                /* Correct final address using reference implementation approach */
+                /* Current AB has intermediate address: wrong_high:(base_low + Y) */
+                /* We need: (base_high:(base_low)) + Y */
+                CPU_ABH(this) = CPU_DL(this);  /* Restore original high byte */
+                CPU_ABL(this) -= CPU_Y(this);  /* Recover original base low */
+                CPU_AB(this) += CPU_Y(this);   /* Calculate correct final */
+                
                 transition_to_operation();
             }
             return pins;
