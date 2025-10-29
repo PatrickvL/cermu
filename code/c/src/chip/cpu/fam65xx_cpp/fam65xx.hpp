@@ -683,31 +683,38 @@ public:
      * - Exact overflow flag calculation
      */
     inline uint8_t bcd_add_6502(uint8_t a, uint8_t b, bool carry_in, bool& carry_out, bool& overflow) {
-        // BCD addition with hardware-accurate flag behavior
+        // Hardware-accurate NMOS 6502 BCD addition
+        // Based on comprehensive analysis: V flag calculated after low nibble adjustment
+        
+        // Step 1: Binary addition for low nibble
         uint16_t al = (a & 0x0F) + (b & 0x0F) + (carry_in ? 1 : 0);
         uint16_t ah = (a >> 4) + (b >> 4);
         
-        // Low nibble adjustment
+        // Step 2: Low nibble adjustment and propagation
         if (al > 9) {
             al += 6;
             ah++;
         }
         
-        // High nibble adjustment
+        // Step 3: CRITICAL - V flag calculation from state after low nibble adjustment
+        // This is the intermediate result that the NMOS 6502 V flag circuit sees
+        uint8_t intermediate_low = al & 0x0F;
+        uint8_t intermediate_high = ah & 0x0F;
+        uint8_t intermediate = intermediate_low | (intermediate_high << 4);
+        
+        // V flag calculated from this intermediate state using standard formula
+        overflow = ((a ^ intermediate) & (b ^ intermediate) & 0x80) != 0;
+        
+        // Step 4: High nibble BCD adjustment for final result
         if (ah > 9) {
             ah += 6;
         }
-        
-        uint8_t result = (al & 0x0F) | ((ah & 0x0F) << 4);
-        
-        // Hardware-accurate flag calculation
         carry_out = (ah > 15);
         
-        // Overflow calculation for BCD (based on decimal result vs binary result)
-        uint16_t binary_result = a + b + (carry_in ? 1 : 0);
-        overflow = ((a ^ result) & (b ^ result) & 0x80) != 0;
+        // Step 5: Final BCD result
+        uint8_t bcd_result = (al & 0x0F) | ((ah & 0x0F) << 4);
         
-        return result;
+        return bcd_result;
     }
     
     /**
@@ -766,16 +773,9 @@ public:
         if constexpr (has_bcd<ProcessorTag>()) {
             // Processor supports BCD mode
             if (CPU_P(this) & FLAG_D) {
-                // BCD mode - calculate binary result first for N and V flags
-                uint16_t full_binary_result = old_a + operand + (carry_in ? 1 : 0);
-                binary_result = full_binary_result & 0xFF;
-                
-                // Calculate BCD result
+                // BCD mode - use hardware-accurate BCD implementation
                 result = bcd_add_6502(old_a, operand, carry_in, carry_out, overflow);
-                
-                // CRITICAL FIX: For NMOS 6502 hardware accuracy, N and V flags are
-                // calculated from the binary result, not the BCD-adjusted result
-                overflow = ((old_a ^ binary_result) & (operand ^ binary_result) & 0x80) != 0;
+                binary_result = result;  // Use BCD result for N/Z flags
             } else {
                 // Binary mode
                 uint16_t full_result = old_a + operand + (carry_in ? 1 : 0);
@@ -797,31 +797,12 @@ public:
         CPU_A(this) = result;
         
         // Update flags using branchless calculations
-        // CRITICAL FIX: In BCD mode, N and V flags use binary_result for hardware accuracy
-        if constexpr (has_bcd<ProcessorTag>()) {
-            if (CPU_P(this) & FLAG_D) {
-                // BCD mode: Use binary result for N flag, BCD result for Z flag
-                CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                              calc_n_flag(binary_result) |    // N flag from binary result
-                              calc_z_flag(result) |           // Z flag from BCD result
-                              (carry_out ? FLAG_C : 0) |
-                              (overflow ? FLAG_V : 0);        // V flag calculated from binary result above
-            } else {
-                // Binary mode: Use result for all flags
-                CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                              calc_n_flag(result) |
-                              calc_z_flag(result) |
-                              (carry_out ? FLAG_C : 0) |
-                              (overflow ? FLAG_V : 0);
-            }
-        } else {
-            // Non-BCD processors: Use result for all flags
-            CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                          calc_n_flag(result) |
-                          calc_z_flag(result) |
-                          (carry_out ? FLAG_C : 0) |
-                          (overflow ? FLAG_V : 0);
-        }
+        // Update flags using branchless calculations
+        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+                      calc_n_flag(result) |
+                      calc_z_flag(result) |
+                      (carry_out ? FLAG_C : 0) |
+                      (overflow ? FLAG_V : 0);
     }
     
     /**
