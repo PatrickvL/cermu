@@ -16,8 +16,8 @@ bus_state_t op_adc(bus_state_t pins) {
     if (FAM65XX_GET_RDY(pins)) {
         uint8_t operand = CPU_DL(this);
         
-        // Use unified ADC operation with processor-specific optimizations
-        perform_adc_unified(operand);
+        // Use ADC operation with processor-specific optimizations
+        perform_adc(operand);
         
         // Complete instruction
         transition_to_fetch();
@@ -114,8 +114,8 @@ bus_state_t op_sbc(bus_state_t pins) {
     if (FAM65XX_GET_RDY(pins)) {
         uint8_t operand = CPU_DL(this);
         
-        // Use unified SBC operation with processor-specific optimizations
-        perform_sbc_unified(operand);
+        // Use SBC operation with processor-specific optimizations
+        perform_sbc(operand);
         
         // Complete instruction
         transition_to_fetch();
@@ -134,8 +134,8 @@ bus_state_t op_cmp(bus_state_t pins) {
         uint8_t operand = CPU_DL(this);
         uint8_t a = CPU_A(this);
         
-        // Use optimized unified comparison
-        perform_compare_unified(a, operand);
+        // Use optimized comparison
+        perform_compare(a, operand);
         
         // Complete instruction
         transition_to_fetch();
@@ -154,8 +154,8 @@ bus_state_t op_cpx(bus_state_t pins) {
         uint8_t operand = CPU_DL(this);
         uint8_t x = CPU_X(this);
         
-        // Use optimized unified comparison
-        perform_compare_unified(x, operand);
+        // Use optimized comparison
+        perform_compare(x, operand);
         
         // Complete instruction
         transition_to_fetch();
@@ -174,8 +174,8 @@ bus_state_t op_cpy(bus_state_t pins) {
         uint8_t operand = CPU_DL(this);
         uint8_t y = CPU_Y(this);
         
-        // Use optimized unified comparison
-        perform_compare_unified(y, operand);
+        // Use optimized comparison
+        perform_compare(y, operand);
         
         // Complete instruction
         transition_to_fetch();
