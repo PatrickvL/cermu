@@ -284,6 +284,12 @@ public:
         // Initialize CPU
         cpu->init(&desc);
         
+        // CRITICAL: Enable ProcessorTests compatibility mode to disable APU memory-mapped I/O
+        if constexpr (fam65xx_cpp::has_apu<fam65xx_cpp::NES6502Tag>()) {
+            cpu->set_processor_tests_mode(true);
+            if (!g_quiet_mode) printf("DEBUG: Enabled ProcessorTests compatibility mode for NES6502\n");
+        }
+        
         // Set up memory callbacks with this wrapper as user_data
         cpu->set_memory_callbacks(instance_mem_read, instance_mem_write, this);
         
