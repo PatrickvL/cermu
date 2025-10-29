@@ -1,9 +1,13 @@
 /*
- * wide.inc - 65C816 16-bit Operations for MOS 65xx Family
+ * wide.inc.hpp - 65C816 16-bit Operations for MOS 65xx Family
  *
- * This file contains 65C816-specific 16-bit operation implementations that are
- * conditionally compiled based on processor support for wide registers.
+ * This file contains template member function implementations that are
+ * included within the fam65xx_t template class.
  */
+
+#include "inc_lint_prevention.hpp"
+
+#ifndef FAM65XX_SKIP_IMPLEMENTATION
 
 // ============================================================================
 // 65C816 MODE CONTROL OPERATIONS
@@ -406,3 +410,7 @@ bus_state_t op_rtl(bus_state_t pins) {
     }
     return pins;
 }
+
+#endif // FAM65XX_SKIP_IMPLEMENTATION
+
+#include "inc_lint_prevention_footer.hpp"

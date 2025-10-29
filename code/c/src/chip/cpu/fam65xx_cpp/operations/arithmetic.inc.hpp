@@ -6,6 +6,10 @@
  * use the new unified helper functions for optimized performance.
  */
 
+#include "inc_lint_prevention.hpp"
+
+#ifndef FAM65XX_SKIP_IMPLEMENTATION
+
 // ============================================================================
 // ADD WITH CARRY (ADC)
 // ============================================================================
@@ -237,3 +241,7 @@ bus_state_t op_sbc_16bit(bus_state_t pins) {
         return pins;
     }
 }
+
+#endif // FAM65XX_SKIP_IMPLEMENTATION
+
+#include "inc_lint_prevention_footer.hpp"

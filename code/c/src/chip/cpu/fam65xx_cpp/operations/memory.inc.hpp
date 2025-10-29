@@ -1,10 +1,14 @@
 /*
- * memory.inc - Memory Load/Store Operations for MOS 65xx Family
+ * memory.inc.hpp - Memory Load/Store Operations for MOS 65xx Family
  *
  * This file contains load and store operation implementations that are
  * included within the fam65xx_t template class. These operations handle
  * data movement between registers and memory.
  */
+
+#include "inc_lint_prevention.hpp"
+
+#ifndef FAM65XX_SKIP_IMPLEMENTATION
 
 // ============================================================================
 // LOAD ACCUMULATOR (LDA)
@@ -173,3 +177,7 @@ bus_state_t op_bit(bus_state_t pins) {
     }
     return pins;
 }
+
+#endif // FAM65XX_SKIP_IMPLEMENTATION
+
+#include "inc_lint_prevention_footer.hpp"

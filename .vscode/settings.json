@@ -1,14 +1,7 @@
 {
     "cmake.sourceDirectory": "/home/patrick/Git/aiemu/code/c",
     "files.associations": {
-        "c64.h": "c",
-        "cpu6510.h": "c",
-        "bus.h": "c",
-        "stdbool.h": "c",
-        "device.h": "c",
-        "stdint.h": "c",
-        "mos6569.h": "c",
-        "vicii_common.h": "c",
-        "mos6567.h": "c"
+        "*.h": "c",
+        "*.hpp": "cpp"
     }
 }

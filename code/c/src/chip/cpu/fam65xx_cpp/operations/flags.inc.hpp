@@ -1,9 +1,13 @@
 /*
- * flags.inc - Flag Manipulation Operations for MOS 65xx Family
+ * flags.inc.hpp - Flag Manipulation Operations for MOS 65xx Family
+ *
+ * This file contains flag manipulation operation implementations that are
+ * included within the fam65xx_t template class.
  */
 
-// Note: These functions are included within the fam65xx_t template class
-// so they have access to member functions and the 'this' pointer
+#include "inc_lint_prevention.hpp"
+
+#ifndef FAM65XX_SKIP_IMPLEMENTATION
 
 // ============================================================================
 // FLAG MANIPULATION OPERATIONS
@@ -85,3 +89,7 @@ bus_state_t op_clv(bus_state_t pins) {
     }
     return pins;
 }
+
+#endif // FAM65XX_SKIP_IMPLEMENTATION
+
+#include "inc_lint_prevention_footer.hpp"

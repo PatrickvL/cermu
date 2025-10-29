@@ -1,14 +1,13 @@
 /*
- * addressing_modes.inc - Addressing Mode Handlers for MOS 65xx Family
+ * addressing_modes.inc.hpp - Addressing Mode Handlers for MOS 65xx Family
  *
- * This file contains all addressing mode handler implementations that are
- * included within the fam65xx_t template class. These handlers prepare
- * addresses for CPU operations and are called before operation handlers.
- *
- * DESIGN: Each handler follows the pin-accurate bus interface pattern,
- * taking and returning bus_state_t pins parameter. Conditional compilation
- * based on ProcessorTag enables processor-specific optimizations.
+ * This file contains template member function implementations that are
+ * included within the fam65xx_t template class.
  */
+
+#include "inc_lint_prevention.hpp"
+
+#ifndef FAM65XX_SKIP_IMPLEMENTATION
 
 // ============================================================================
 // ADDRESSING MODE HANDLERS
@@ -513,4 +512,6 @@ bus_state_t addr_rel(bus_state_t pins) {
     return pins;
 }
 
+#endif // FAM65XX_SKIP_IMPLEMENTATION
 
+#include "inc_lint_prevention_footer.hpp"
