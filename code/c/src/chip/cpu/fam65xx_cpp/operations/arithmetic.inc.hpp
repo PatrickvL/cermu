@@ -205,51 +205,76 @@ bus_state_t op_adc(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_nop(bus_state_t pins) {
-    trace_enter("op_nop");
-    trace_instruction(0xEA, "NOP");
-    
     switch (this->opcode_entry.am_index) {
         case AM_IMM:
-            /* AM_IMM: All immediate NOPs read operand and increment PC */
-            trace("Immediate NOP: reading operand");
+            // AM_IMM: All immediate NOPs read operand and increment PC
             pins = phi2_read(pins, REG_PC, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_PC(this)++;
             } else {
-                trace("RDY low - returning early");
-                trace_exit("op_nop");
                 return pins;
             }
             break;
             
         case AM_NON:
-            /* AM_NON: All implicit NOPs do dummy read from PC without increment */
-            trace("Implicit NOP: dummy read from PC");
+            // AM_NON: All implicit NOPs do dummy read from PC without increment
             pins = phi2_read(pins, REG_PC, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) {
-                trace("RDY low - returning early");
-                trace_exit("op_nop");
                 return pins;
             }
             break;
             
+        case AM_ABX:
+            /**
+             * Handle NES6502 test syscalls as documented at
+             * https://github.com/search?q=repo%3Arofl0r%2Fblargg-6502-cpu-test+syscall&type=code
+             * Pattern: $fc, $13, $37 indicates character output syscall
+             * Character byte awaits at address 0x2000
+             */
+            bool is_potential_syscall = false;
+            // Handle NES6502 syscall support for "long nop" patterns
+            if constexpr (std::is_same_v<ProcessorTag, NES6502Tag>) {
+                // Check for syscall pattern: [FC 13] 37
+                // Note, that by convention, DL holds the intermediate high byte from the addressing mode
+                // so instead of checking DL, we check the most recently read byte on the data bus
+                uint8_t opcode = CPU_IR(this);
+                uint8_t bus_data = FAM65XX_GET_DATA(pins);
+                is_potential_syscall = opcode == 0xFC && bus_data == 0x13;
+            }
+            // AM_IMM: All immediate NOPs read operand and increment PC
+            pins = phi2_read(pins, REG_PC, REG_DL);
+            if (FAM65XX_GET_RDY(pins)) {
+                CPU_PC(this)++;                
+                // Handle NES6502 syscall support for "long nop" patterns
+                if constexpr (std::is_same_v<ProcessorTag, NES6502Tag>) {
+                    // Check for syscall pattern: FC 13 [37]
+                    uint8_t final_byte = CPU_DL(this);
+                    if (is_potential_syscall && final_byte == 0x37) {
+                        // Syscall detected - output character from 0x2000
+                        if (this->mem_read) {
+                            uint8_t character = this->mem_read(this->mem_user_data, 0x2000, 0);
+                            if (character != 0) {
+                                printf("%c", character);
+                                fflush(stdout);
+                            }
+                        }    
+                    }
+                }
+            } else {
+                return pins;
+            }
+            break;
         default:
-            /* Memory modes: Read from target address and discard */
-            trace("Memory mode NOP: reading from target address");
+            // Memory modes: Read from target address and discard
             pins = phi2_read(pins, REG_AB, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) {
-                trace("RDY low - returning early");
-                trace_exit("op_nop");
                 return pins;
             }
             break;
     }
     
-    /* Complete instruction */
-    trace("NOP complete - transitioning to fetch");
+    // Complete instruction
     this->transition_to_fetch();
-    
-    trace_exit("op_nop");
     return pins;
 }
 
