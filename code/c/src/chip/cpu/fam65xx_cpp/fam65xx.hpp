@@ -701,7 +701,8 @@ public:
         nz_source = (al & 0x0F) | ((ah & 0x0F) << 4);
         
         // Step 5: V flag from binary overflow logic
-        const uint16_t overflow_bits = (a ^ binary_sum) & (b ^ binary_sum);
+        const uint8_t binary_result_8 = static_cast<uint8_t>(binary_sum);
+        const uint8_t overflow_bits = (a ^ binary_result_8) & (b ^ binary_result_8);
         overflow = (overflow_bits >> 7) != 0;
         
         // Step 6: NMOS 6502 carry - BCD primary with binary backup
@@ -730,9 +731,9 @@ public:
         int16_t ah = (a >> 4) - (b >> 4);
         
         // Step 3: NMOS 6502 QUIRK - N/Z flags from intermediate result BEFORE adjustments
-        // CORRECTED: Capture intermediate result BEFORE any BCD adjustments
-        // This matches the actual NMOS 6502 silicon behavior where flags are computed early
-        nz_source = (al & 0x0F) | ((ah & 0x0F) << 4);
+        // CORRECTED: Capture intermediate result properly handling negative values
+        // The actual NMOS 6502 silicon behavior computes flags from the binary subtraction result
+        nz_source = static_cast<uint8_t>(binary_result);
         
         // Step 4: Low nibble adjustment with borrow propagation (after capturing flags)
         const int16_t low_borrow = (al < 0);
@@ -781,11 +782,21 @@ public:
                 bool carry_out, overflow;
                 result = bcd_add_6502(old_a, operand, carry_in, carry_out, overflow, flags_source);
                 
-                // Build flags directly
-                new_flags = calc_n_flag(flags_source) |
-                        calc_z_flag(flags_source) |
-                        (-carry_out & FLAG_C) |
-                        (-overflow & FLAG_V);
+                // CRITICAL FIX: Apply reference implementation approach for BCD flags
+                // Z flag: MUST use binary sum, not BCD result (hardware behavior)
+                const uint8_t binary_sum = old_a + operand + carry_in;
+                const uint8_t z_flag = (binary_sum == 0) ? FLAG_Z : 0;
+                
+                // N flag: Use bit 3 of high nibble, only when Z=0 (reference implementation)
+                uint8_t n_flag = 0;
+                if (!z_flag && (flags_source & 0x80)) {  // Check if Z=0 and bit 7 set
+                    n_flag = FLAG_N;
+                }
+                
+                // V flag: Use intermediate result (ah<<4) approach from reference
+                const uint8_t v_flag_from_bcd = (~(old_a ^ operand) & (old_a ^ flags_source) & 0x80) ? FLAG_V : 0;
+                
+                new_flags = n_flag | z_flag | (-carry_out & FLAG_C) | v_flag_from_bcd;
                 
                 CPU_A(this) = result;
                 CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) | new_flags;
@@ -829,10 +840,13 @@ public:
                 bool carry_out, overflow;
                 result = bcd_sub_6502(old_a, operand, borrow_in, carry_out, overflow, flags_source);
                 
-                new_flags = calc_n_flag(flags_source) |
-                        calc_z_flag(flags_source) |
+                // NMOS 6502 BCD QUIRK: All flags (including V) computed from intermediate BCD result
+                // This matches the actual silicon behavior for BCD edge cases and ADC implementation
+                const uint8_t v_flag_from_bcd = calc_v_flag_sub(old_a, operand, flags_source);
+                new_flags = calc_n_flag(flags_source) |  // N flag from intermediate result
+                        calc_z_flag(flags_source) |      // Z flag from intermediate result
                         (-carry_out & FLAG_C) |
-                        (-overflow & FLAG_V);
+                        v_flag_from_bcd;  // V flag from BCD intermediate result, not binary
                 
                 CPU_A(this) = result;
                 CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) | new_flags;
