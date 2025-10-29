@@ -62,8 +62,8 @@ bus_state_t op_asl(bus_state_t pins) {
     return rmw_operation_helper(pins, [this](uint8_t& value) {
         uint8_t carry_out;
         value = this->shift_left(value, carry_out);
-        // Update flags
-        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+        // Update flags - ASL only affects N, Z, C (V flag unchanged)
+        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
                       this->calc_nz_flags(value) | carry_out;
     });
 }
@@ -73,8 +73,8 @@ bus_state_t op_lsr(bus_state_t pins) {
     return rmw_operation_helper(pins, [this](uint8_t& value) {
         uint8_t carry_out;
         value = this->shift_right(value, carry_out);
-        // Update flags
-        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+        // Update flags - LSR only affects N, Z, C (V flag unchanged)
+        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
                       this->calc_nz_flags(value) | carry_out;
     });
 }
@@ -85,8 +85,8 @@ bus_state_t op_rol(bus_state_t pins) {
         uint8_t carry_in = this->get_carry_bit_0();
         uint8_t carry_out;
         value = this->rotate_left(value, carry_in, carry_out);
-        // Update flags
-        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+        // Update flags - ROL only affects N, Z, C (V flag unchanged)
+        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
                       this->calc_nz_flags(value) | carry_out;
     });
 }
@@ -97,8 +97,8 @@ bus_state_t op_ror(bus_state_t pins) {
         uint8_t carry_in = this->get_carry_bit_7();
         uint8_t carry_out;
         value = this->rotate_right(value, carry_in, carry_out);
-        // Update flags
-        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+        // Update flags - ROR only affects N, Z, C (V flag unchanged)
+        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
                       this->calc_nz_flags(value) | carry_out;
     });
 }
