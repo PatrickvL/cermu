@@ -1,9 +1,13 @@
 /*
- * control.inc - Control Flow Operations for MOS 65xx Family
+ * control.inc.hpp - Control Flow Operations for MOS 65xx Family
  *
- * This file contains control flow operation implementations (JMP, JSR, RTS, etc.)
- * that are included within the fam65xx_t template class.
+ * This file contains template member function implementations that are
+ * included within the fam65xx_t template class.
  */
+
+#include "inc_lint_prevention.hpp"
+
+#ifndef FAM65XX_SKIP_IMPLEMENTATION
 
 // ============================================================================
 // JUMP OPERATIONS
@@ -244,3 +248,7 @@ bus_state_t op_rti(bus_state_t pins) {
 // NOTE: 65C816 long operations (op_jsl, op_rtl) are implemented in wide.inc.hpp
 // NOTE: 65C02 branch always (op_bra) is implemented in cmos.inc.hpp
 // ============================================================================
+
+#endif // FAM65XX_SKIP_IMPLEMENTATION
+
+#include "inc_lint_prevention_footer.hpp"

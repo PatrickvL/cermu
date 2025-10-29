@@ -1,9 +1,13 @@
 /*
- * cmos.inc - 65C02 Enhanced Operations for MOS 65xx Family
+ * cmos.inc.hpp - 65C02 Enhanced Operations for MOS 65xx Family
  *
- * This file contains 65C02-specific operation implementations that are
- * conditionally compiled based on processor support.
+ * This file contains template member function implementations that are
+ * included within the fam65xx_t template class.
  */
+
+#include "inc_lint_prevention.hpp"
+
+#ifndef FAM65XX_SKIP_IMPLEMENTATION
 
 // ============================================================================
 // 65C02 ENHANCED INSTRUCTIONS
@@ -203,3 +207,7 @@ bus_state_t op_ply(bus_state_t pins) {
         return pins;
     }
 }
+
+#endif // FAM65XX_SKIP_IMPLEMENTATION
+
+#include "inc_lint_prevention_footer.hpp"

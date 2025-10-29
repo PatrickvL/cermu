@@ -555,8 +555,11 @@ public:
     // as part of this template class, allowing conditional compilation
     // based on ProcessorTag features
     
+    // Define template context guard for .inc.hpp files BEFORE including them
+    #define FAM65XX_TEMPLATE_CONTEXT
+    
 #include "operations/addressing_modes.inc.hpp"  // Addressing mode handlers
-#include "operations/arithmetic.inc.hpp"        // ADC, SBC, CMP operations  
+#include "operations/arithmetic.inc.hpp"        // ADC, SBC, CMP operations
 #include "operations/memory.inc.hpp"           // Load/store operations
 #include "operations/control.inc.hpp"          // Control flow operations
 #include "operations/branches.inc.hpp"         // Branch operations
@@ -567,6 +570,9 @@ public:
 #include "operations/illegal.inc.hpp"          // Illegal/undocumented opcodes
 #include "operations/cmos.inc.hpp"             // 65C02 enhancements
 #include "operations/wide.inc.hpp"             // 65C816 16-bit operations
+    
+    // Undefine the guard after inclusion
+    #undef FAM65XX_TEMPLATE_CONTEXT
     
     // ========================================================================
     // OPCODE TABLE GENERATION

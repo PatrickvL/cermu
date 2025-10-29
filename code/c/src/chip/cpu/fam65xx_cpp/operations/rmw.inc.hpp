@@ -2,6 +2,10 @@
  * rmw.inc - Read-Modify-Write Operations for MOS 65xx Family
  */
 
+#include "inc_lint_prevention.hpp"
+
+#ifndef FAM65XX_SKIP_IMPLEMENTATION
+
 // ============================================================================
 // RMW HELPER FUNCTIONS
 // ============================================================================
@@ -98,3 +102,7 @@ bus_state_t op_ror(bus_state_t pins) {
                       this->calc_nz_flags(value) | carry_out;
     });
 }
+
+#endif // FAM65XX_SKIP_IMPLEMENTATION
+
+#include "inc_lint_prevention_footer.hpp"

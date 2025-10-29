@@ -1,9 +1,13 @@
 /*
- * branches.inc - Branch Operations for MOS 65xx Family
+ * branches.inc.hpp - Branch Operations for MOS 65xx Family
  *
- * This file contains branch operation implementations that are included
- * within the fam65xx_t template class.
+ * This file contains template member function implementations that are
+ * included within the fam65xx_t template class.
  */
+
+#include "inc_lint_prevention.hpp"
+
+#ifndef FAM65XX_SKIP_IMPLEMENTATION
 
 // ============================================================================
 // BRANCH HELPER FUNCTION
@@ -124,3 +128,7 @@ bus_state_t op_bvc(bus_state_t pins) {
 bus_state_t op_bvs(bus_state_t pins) {
     return branch_helper(pins, FLAG_V, true);
 }
+
+#endif // FAM65XX_SKIP_IMPLEMENTATION
+
+#include "inc_lint_prevention_footer.hpp"

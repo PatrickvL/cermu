@@ -1,17 +1,29 @@
 /*
- * opcode_tables.inc - Processor-Specific Opcode Table Specializations
+ * opcode_tables.inc.hpp - Processor-Specific Opcode Table Specializations
  *
- * This file contains template specializations of the opcode table generation
- * function for each supported processor type. Each processor gets its own
- * compile-time generated opcode table based on its feature set.
+ * SPECIAL CASE: This file contains template specializations that MUST be at namespace level.
+ * Unlike other .inc.hpp files that contain member functions, this file contains free
+ * functions that are template specializations, so they cannot be inside a class.
+ *
+ * LINT PREVENTION APPROACH:
+ * This file does NOT use the standard lint prevention system because template
+ * specializations must be at namespace level. Instead, it includes all required
+ * headers unconditionally and relies on proper namespace management in the
+ * including file (fam65xx.hpp).
  */
 
+// Always include required headers for both standalone analysis and production
 #include <array>
 #include "../fam65xx_types.h"
 #include "../fam65xx_processor_traits.hpp"
 
-// This file is included inside the fam65xx_cpp namespace in fam65xx.hpp
-// so all template specializations are automatically in the correct namespace
+// Forward declare the template function (needed for both contexts)
+template<typename ProcessorTag>
+constexpr std::array<opcode_info_t, 256> generate_opcode_table();
+
+#ifndef FAM65XX_SKIP_IMPLEMENTATION
+
+// Headers are already included above based on template context
 
 // ============================================================================
 // OPCODE TABLE GENERATION SPECIALIZATIONS
@@ -19,7 +31,7 @@
 
 // NES 6502 (no BCD, no illegal opcodes) - Base implementation with explicit JAM for undefined opcodes
 template<>
-constexpr std::array<opcode_info_t, 256> generate_opcode_table<NES6502Tag>() {
+constexpr std::array<opcode_info_t, 256> generate_opcode_table<fam65xx_cpp::NES6502Tag>() {
     std::array<opcode_info_t, 256> table{};
     
     // All 256 opcodes explicitly defined - valid opcodes and proper illegal opcodes for hardware accuracy
@@ -285,8 +297,8 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table<NES6502Tag>() {
 
 // MOS 6502 (original NMOS with illegal opcodes)
 template<>
-constexpr std::array<opcode_info_t, 256> generate_opcode_table<MOS6502Tag>() {
-    auto table = generate_opcode_table<NES6502Tag>();
+constexpr std::array<opcode_info_t, 256> generate_opcode_table<fam65xx_cpp::MOS6502Tag>() {
+    auto table = generate_opcode_table<fam65xx_cpp::NES6502Tag>();
     
     // Replace specific JAM opcodes with actual illegal opcodes for NMOS 6502
     table[0x83] = {OP_SAX, AM_INX, OF_NONE};
@@ -305,14 +317,14 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table<MOS6502Tag>() {
 
 // MOS 6510 (C64/C128 variant) - Same as 6502 with I/O port
 template<>
-constexpr std::array<opcode_info_t, 256> generate_opcode_table<MOS6510Tag>() {
-    return generate_opcode_table<MOS6502Tag>();
+constexpr std::array<opcode_info_t, 256> generate_opcode_table<fam65xx_cpp::MOS6510Tag>() {
+    return generate_opcode_table<fam65xx_cpp::MOS6502Tag>();
 }
 
 // WDC 65C02 (CMOS variant) - Enhanced 6502 without illegal opcodes
 template<>
-constexpr std::array<opcode_info_t, 256> generate_opcode_table<WDC65C02Tag>() {
-    auto table = generate_opcode_table<NES6502Tag>();
+constexpr std::array<opcode_info_t, 256> generate_opcode_table<fam65xx_cpp::WDC65C02Tag>() {
+    auto table = generate_opcode_table<fam65xx_cpp::NES6502Tag>();
     
     // Add 65C02 enhancements incrementally
     table[0x04] = {OP_TSB, AM_ZER, OF_RMW};
@@ -332,8 +344,8 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table<WDC65C02Tag>() {
 
 // WDC 65C816 (16-bit enhanced) - 65C02 base + 16-bit extensions
 template<>
-constexpr std::array<opcode_info_t, 256> generate_opcode_table<WDC65C816Tag>() {
-    auto table = generate_opcode_table<WDC65C02Tag>();
+constexpr std::array<opcode_info_t, 256> generate_opcode_table<fam65xx_cpp::WDC65C816Tag>() {
+    auto table = generate_opcode_table<fam65xx_cpp::WDC65C02Tag>();
     
     // Add 65C816 specific opcodes incrementally (placeholders for now)
     table[0x0B] = {OP_PHD, AM_NON, OF_NONE};
@@ -353,8 +365,8 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table<WDC65C816Tag>() {
 
 // Rockwell 65C02 (CMOS with RMB/SMB/BBR/BBS) - 65C02 + bit manipulation
 template<>
-constexpr std::array<opcode_info_t, 256> generate_opcode_table<Rockwell65C02Tag>() {
-    auto table = generate_opcode_table<WDC65C02Tag>();
+constexpr std::array<opcode_info_t, 256> generate_opcode_table<fam65xx_cpp::Rockwell65C02Tag>() {
+    auto table = generate_opcode_table<fam65xx_cpp::WDC65C02Tag>();
     
     // Add Rockwell bit manipulation instructions incrementally (RMB/SMB)
     table[0x07] = {OP_RMB0, AM_ZER, OF_RMW}; // RMB0 (placeholder)
@@ -376,3 +388,8 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table<Rockwell65C02Tag>
 
     return table;
 }
+
+#endif // FAM65XX_SKIP_IMPLEMENTATION
+
+// No additional namespace management needed.
+// This file is included at namespace level in fam65xx.hpp.

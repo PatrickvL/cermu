@@ -1,9 +1,13 @@
 /*
- * illegal.inc - Illegal/Undocumented Operations for MOS 65xx Family
+ * illegal.inc.hpp - Illegal/Undocumented Operations for MOS 65xx Family
  *
- * This file contains illegal opcode implementations that are conditionally
- * compiled based on processor support for undocumented opcodes.
+ * This file contains template member function implementations that are
+ * included within the fam65xx_t template class.
  */
+
+#include "inc_lint_prevention.hpp"
+
+#ifndef FAM65XX_SKIP_IMPLEMENTATION
 
 // ============================================================================
 // ILLEGAL LOAD/STORE COMBINATIONS
@@ -511,3 +515,7 @@ bus_state_t op_las(bus_state_t pins) {
     }
     return pins;
 }
+
+#endif // FAM65XX_SKIP_IMPLEMENTATION
+
+#include "inc_lint_prevention_footer.hpp"
