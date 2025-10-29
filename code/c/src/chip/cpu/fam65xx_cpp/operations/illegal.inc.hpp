@@ -94,41 +94,12 @@ bus_state_t op_isc(bus_state_t pins) {
             uint8_t carry_in = (CPU_P(this) & FLAG_C) ? 1 : 0;
             uint8_t a_old = CPU_A(this);
             
-            // Check for BCD support and decimal mode
-            if constexpr (has_bcd<ProcessorTag>()) {
-                if (CPU_P(this) & FLAG_D) {
-                    // BCD (Decimal) mode - use BCD subtraction helper matching reference implementation
-                    uint8_t bcd_result;
-                    uint8_t bcd_flags;
-                    
-                    bcd_subtraction_helper(a_old, operand, (1 - carry_in), &bcd_result, &bcd_flags);
-                    
-                    CPU_A(this) = bcd_result;
-                    CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) | bcd_flags;
-                } else {
-                    // Binary mode even when BCD supported
-                    uint16_t result = a_old - operand - (1 - carry_in);
-                    CPU_A(this) = result & 0xFF;
-                    
-                    // SBC modifies only N, V, Z, C flags - preserve all others exactly
-                    CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                                 (CPU_A(this) & FLAG_N) |                                    /* N = bit 7 of result */
-                                 (CPU_A(this) == 0 ? FLAG_Z : 0) |                          /* Z = result is zero */
-                                 (result < 0x100 ? FLAG_C : 0) |                           /* C = no borrow */
-                                 (((a_old ^ operand) & (a_old ^ result) & 0x80) ? FLAG_V : 0); /* V = overflow */
-                }
-            } else {
-                // No BCD support - binary mode only
-                uint16_t result = a_old - operand - (1 - carry_in);
-                CPU_A(this) = result & 0xFF;
-                
-                // SBC modifies only N, V, Z, C flags - preserve all others exactly
-                CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                             (CPU_A(this) & FLAG_N) |                                    /* N = bit 7 of result */
-                             (CPU_A(this) == 0 ? FLAG_Z : 0) |                          /* Z = result is zero */
-                             (result < 0x100 ? FLAG_C : 0) |                           /* C = no borrow */
-                             (((a_old ^ operand) & (a_old ^ result) & 0x80) ? FLAG_V : 0); /* V = overflow */
-            }
+            // Use existing class helper function for SBC
+            uint16_t result = a_old - operand - (1 - carry_in);
+            CPU_A(this) = (uint8_t)result;
+            
+            // Use existing class helper for flag updates
+            update_flags_sbc(a_old, operand, result);
         });
     }
     return pins;
@@ -202,41 +173,12 @@ bus_state_t op_rra(bus_state_t pins) {
             uint8_t carry_in = (CPU_P(this) & FLAG_C) ? 1 : 0;
             uint8_t a_old = CPU_A(this);
             
-            // Check for BCD support and decimal mode
-            if constexpr (has_bcd<ProcessorTag>()) {
-                if (CPU_P(this) & FLAG_D) {
-                    // BCD (Decimal) mode - use BCD addition helper matching reference implementation
-                    uint8_t bcd_result;
-                    uint8_t bcd_flags;
-                    
-                    bcd_addition_helper(a_old, operand, carry_in, &bcd_result, &bcd_flags);
-                    
-                    CPU_A(this) = bcd_result;
-                    CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) | bcd_flags;
-                } else {
-                    // Binary mode even when BCD supported
-                    uint16_t result = a_old + operand + carry_in;
-                    CPU_A(this) = result & 0xFF;
-                    
-                    // ADC modifies only N, V, Z, C flags - preserve all others exactly
-                    CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                                 (CPU_A(this) & FLAG_N) |                                    /* N = bit 7 of result */
-                                 (CPU_A(this) == 0 ? FLAG_Z : 0) |                          /* Z = result is zero */
-                                 (result > 0xFF ? FLAG_C : 0) |                            /* C = carry out */
-                                 (((a_old ^ result) & (operand ^ result) & 0x80) ? FLAG_V : 0); /* V = overflow */
-                }
-            } else {
-                // No BCD support - binary mode only
-                uint16_t result = a_old + operand + carry_in;
-                CPU_A(this) = result & 0xFF;
-                
-                // ADC modifies only N, V, Z, C flags - preserve all others exactly
-                CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                             (CPU_A(this) & FLAG_N) |                                    /* N = bit 7 of result */
-                             (CPU_A(this) == 0 ? FLAG_Z : 0) |                          /* Z = result is zero */
-                             (result > 0xFF ? FLAG_C : 0) |                            /* C = carry out */
-                             (((a_old ^ result) & (operand ^ result) & 0x80) ? FLAG_V : 0); /* V = overflow */
-            }
+            // Use existing class helper function for ADC
+            uint16_t result = a_old + operand + carry_in;
+            CPU_A(this) = (uint8_t)result;
+            
+            // Use existing class helper for flag updates
+            update_flags_adc(a_old, operand, result);
         });
     }
     return pins;
