@@ -703,8 +703,10 @@ public:
         // This is the key insight: flags come from post-low-nibble, pre-high-nibble result
         nz_source = (al & 0x0F) | ((ah & 0x0F) << 4);
         
-        // Step 5: V flag - calculated using intermediate result
-        overflow = ((a ^ nz_source) & (b ^ nz_source) & 0x80) != 0;
+        // Step 5: CORRECTED V flag - NMOS 6502 uses BINARY overflow logic even in BCD mode
+        // The hardware calculates V flag using the original binary addition, not BCD intermediate
+        // This matches the actual NMOS 6502 silicon behavior
+        overflow = ((a ^ binary_sum) & (b ^ binary_sum) & 0x80) != 0;
         
         // Step 6: DEFINITIVE NMOS 6502 CARRY BEHAVIOR
         // After analyzing ALL failing cases, NMOS 6502 BCD carry follows this exact rule:
@@ -753,8 +755,10 @@ public:
         // This is the key insight: flags come from post-low-nibble, pre-high-nibble result
         nz_source = (al & 0x0F) | ((ah & 0x0F) << 4);
         
-        // Step 5: V flag - calculated using intermediate result
-        overflow = ((a ^ b) & (a ^ nz_source) & 0x80) != 0;
+        // Step 5: CORRECTED V flag - NMOS 6502 uses BINARY overflow logic even in BCD mode
+        // The hardware calculates V flag using the original binary subtraction, not BCD intermediate
+        // This matches the actual NMOS 6502 silicon behavior
+        overflow = ((a ^ b) & (a ^ (binary_result & 0xFF)) & 0x80) != 0;
         
         // Step 6: DEFINITIVE NMOS 6502 CARRY BEHAVIOR FOR SUBTRACTION
         // After analyzing ALL failing cases, NMOS 6502 BCD carry for SBC follows this exact rule:
