@@ -46,6 +46,7 @@ bus_state_t op_nop(bus_state_t pins) {
             break;
             
         case AM_NON:
+        case AM_ABY:
             // AM_NON: All implicit NOPs do dummy read from PC without increment
             pins = phi2_read(pins, REG_PC, REG_DL);
             if (!FAM65XX_GET_RDY(pins)) {
@@ -70,10 +71,10 @@ bus_state_t op_nop(bus_state_t pins) {
                 uint8_t bus_data = FAM65XX_GET_DATA(pins);
                 is_potential_syscall = opcode == 0xFC && bus_data == 0x13;
             }
-            // AM_IMM: All immediate NOPs read operand and increment PC
-            pins = phi2_read(pins, REG_PC, REG_DL);
+            
+            // FIXED: AM_ABX should read from calculated indexed address (AB), not PC
+            pins = phi2_read(pins, REG_AB, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
-                CPU_PC(this)++;
                 // Handle NES6502 syscall support for "long nop" patterns
                 if constexpr (std::is_same_v<ProcessorTag, NES6502Tag>) {
                     // Check for syscall pattern: FC 13 [37]
