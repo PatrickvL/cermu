@@ -56,51 +56,45 @@ bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func)
 /* ASL - Arithmetic Shift Left */
 bus_state_t op_asl(bus_state_t pins) {
     return rmw_operation_helper(pins, [this](uint8_t& value) {
-        // Set carry flag from bit 7
-        update_c_flag(value, 7);
-        // Shift left
-        value <<= 1;
-        // Update N and Z flags
-        this->update_nz_flags(value);
+        uint8_t carry_out;
+        value = this->shift_left(value, carry_out);
+        // Update flags
+        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+                      this->calc_nz_flags(value) | carry_out;
     });
 }
 
 /* LSR - Logical Shift Right */
 bus_state_t op_lsr(bus_state_t pins) {
     return rmw_operation_helper(pins, [this](uint8_t& value) {
-        // Set carry flag from bit 0
-        update_c_flag(value, 0);
-        // Shift right
-        value >>= 1;
-        // Update N and Z flags
-        this->update_nz_flags(value);
+        uint8_t carry_out;
+        value = this->shift_right(value, carry_out);
+        // Update flags
+        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+                      this->calc_nz_flags(value) | carry_out;
     });
 }
 
 /* ROL - Rotate Left */
 bus_state_t op_rol(bus_state_t pins) {
     return rmw_operation_helper(pins, [this](uint8_t& value) {
-        // Get old carry flag
         uint8_t carry_in = this->get_carry_bit_0();
-        // Set new carry flag from bit 7
-        update_c_flag(value, 7);
-        // Rotate left with old carry
-        value = (value << 1) | carry_in;
-        // Update N and Z flags
-        this->update_nz_flags(value);
+        uint8_t carry_out;
+        value = this->rotate_left(value, carry_in, carry_out);
+        // Update flags
+        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+                      this->calc_nz_flags(value) | carry_out;
     });
 }
 
 /* ROR - Rotate Right */
 bus_state_t op_ror(bus_state_t pins) {
     return rmw_operation_helper(pins, [this](uint8_t& value) {
-        // Get old carry flag
         uint8_t carry_in = this->get_carry_bit_7();
-        // Set new carry flag from bit 0
-        update_c_flag(value, 0);
-        // Rotate right with old carry
-        value = (value >> 1) | carry_in;
-        // Update N and Z flags
-        this->update_nz_flags(value);
+        uint8_t carry_out;
+        value = this->rotate_right(value, carry_in, carry_out);
+        // Update flags
+        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+                      this->calc_nz_flags(value) | carry_out;
     });
 }

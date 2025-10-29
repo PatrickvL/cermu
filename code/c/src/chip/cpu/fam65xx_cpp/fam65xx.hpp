@@ -741,7 +741,7 @@ public:
     // ========================================================================
     
     /**
-     * Unified ADC operation with BCD support
+     * ADC operation with BCD support
      * Handles both binary and BCD modes with proper flag calculation
      *
      * Template parameter allows compile-time processor-specific optimizations:
@@ -749,7 +749,7 @@ public:
      * - MOS 6502/6510: Full BCD support with hardware-accurate behavior
      * - 65C02: Enhanced BCD with corrected flag behavior
      */
-    inline void perform_adc_unified(uint8_t operand) {
+    inline void perform_adc(uint8_t operand) {
         uint8_t old_a = CPU_A(this);
         bool carry_in = (CPU_P(this) & FLAG_C) != 0;
         bool carry_out = false;
@@ -819,10 +819,10 @@ public:
     }
     
     /**
-     * Unified SBC operation with BCD support
+     * SBC operation with BCD support
      * Handles both binary and BCD modes with proper flag calculation
      */
-    inline void perform_sbc_unified(uint8_t operand) {
+    inline void perform_sbc(uint8_t operand) {
         uint8_t old_a = CPU_A(this);
         bool borrow_in = (CPU_P(this) & FLAG_C) == 0;  // Carry clear means borrow
         bool carry_out = false;
@@ -861,10 +861,10 @@ public:
     }
     
     /**
-     * Unified compare operation (CMP/CPX/CPY)
+     * Compare operation (CMP/CPX/CPY)
      * Optimized implementation with branchless flag calculation
      */
-    inline void perform_compare_unified(uint8_t reg_value, uint8_t operand) {
+    inline void perform_compare(uint8_t reg_value, uint8_t operand) {
         // Update flags using branchless calculations
         CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
                       calc_nzc_flags(reg_value, operand);
@@ -929,7 +929,7 @@ public:
      * Arithmetic Shift Left (ASL) with carry output
      * Hardware-accurate implementation with proper flag handling
      */
-    inline uint8_t shift_left_carry(uint8_t value, uint8_t& carry_out) {
+    inline uint8_t shift_left(uint8_t value, uint8_t& carry_out) {
         carry_out = (value & 0x80) ? FLAG_C : 0;
         return value << 1;
     }
@@ -938,7 +938,7 @@ public:
      * Logical Shift Right (LSR) with carry output
      * Hardware-accurate implementation
      */
-    inline uint8_t shift_right_carry(uint8_t value, uint8_t& carry_out) {
+    inline uint8_t shift_right(uint8_t value, uint8_t& carry_out) {
         carry_out = (value & 0x01) ? FLAG_C : 0;
         return value >> 1;
     }
@@ -947,7 +947,7 @@ public:
      * Rotate Left (ROL) with carry input/output
      * Hardware-accurate 9-bit rotation through carry flag
      */
-    inline uint8_t rotate_left_carry(uint8_t value, uint8_t carry_in, uint8_t& carry_out) {
+    inline uint8_t rotate_left(uint8_t value, uint8_t carry_in, uint8_t& carry_out) {
         carry_out = (value & 0x80) ? FLAG_C : 0;
         return (value << 1) | (carry_in ? 1 : 0);
     }
@@ -956,7 +956,7 @@ public:
      * Rotate Right (ROR) with carry input/output
      * Hardware-accurate 9-bit rotation through carry flag
      */
-    inline uint8_t rotate_right_carry(uint8_t value, uint8_t carry_in, uint8_t& carry_out) {
+    inline uint8_t rotate_right(uint8_t value, uint8_t carry_in, uint8_t& carry_out) {
         carry_out = (value & 0x01) ? FLAG_C : 0;
         return (value >> 1) | (carry_in ? 0x80 : 0);
     }
@@ -965,16 +965,11 @@ public:
     // ADDRESSING AND PAGE CROSSING HELPERS
     // ========================================================================
     
-    // Check if page was crossed during addressing
-    bool page_crossed(uint16_t addr1, uint16_t addr2) const {
-        return ((addr1 ^ addr2) & 0x0100) != 0;
-    }
-    
     /**
      * Check if page boundary was crossed during addressing
      * Used for determining extra cycle penalties
      */
-    inline bool page_crossed_fast(uint16_t addr1, uint16_t addr2) const {
+    inline bool page_crossed(uint16_t addr1, uint16_t addr2) const {
         return ((addr1 ^ addr2) & 0x0100) != 0;
     }
     
@@ -992,7 +987,7 @@ public:
      */
     inline uint16_t calc_abs_addr_indexed(uint16_t base, uint8_t index, bool& page_crossed_out) const {
         uint16_t result = base + index;
-        page_crossed_out = page_crossed_fast(base, result);
+        page_crossed_out = page_crossed(base, result);
         return result;
     }
 
