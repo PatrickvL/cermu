@@ -113,12 +113,14 @@ struct apu_mixin_t {
     struct alignas(8) {
         nes6502_apu::APU* apu_instance;
         bool is_pal;
-        uint8_t _padding[6]; // Align to 8 bytes
+        bool processor_tests_mode;  // Disable memory-mapped I/O for ProcessorTests compatibility
+        uint8_t _padding[5]; // Align to 8 bytes
     } apu_state;
     
     // Initialize APU
     void init_apu() {
         apu_state.is_pal = false; // Default to NTSC
+        apu_state.processor_tests_mode = false; // Default to normal APU mode
         apu_state.apu_instance = new nes6502_apu::APU(apu_state.is_pal);
     }
     
@@ -128,8 +130,13 @@ struct apu_mixin_t {
         apu_state.apu_instance = nullptr;
     }
     
-    // APU register write handler ($4000-$4017)
+    // APU register write handler ($4000-$4017) - ProcessorTests compatible
     bool write_apu_register(uint16_t addr, uint8_t value) {
+        // In ProcessorTests mode, don't intercept memory-mapped I/O
+        if (apu_state.processor_tests_mode) {
+            return false; // Not handled - allow normal memory access
+        }
+        
         if (addr >= 0x4000 && addr <= 0x4017) {
             if (apu_state.apu_instance) {
                 // Create a bus state with the address and data set
@@ -143,8 +150,13 @@ struct apu_mixin_t {
         return false; // Not APU register
     }
     
-    // APU register read handler ($4015)
+    // APU register read handler ($4015) - ProcessorTests compatible
     bool read_apu_register(uint16_t addr, uint8_t& value) {
+        // In ProcessorTests mode, don't intercept memory-mapped I/O
+        if (apu_state.processor_tests_mode) {
+            return false; // Not handled - allow normal memory access
+        }
+        
         if (addr == 0x4015) {
             if (apu_state.apu_instance) {
                 // Create a bus state with the address set
@@ -203,6 +215,11 @@ struct apu_mixin_t {
             destroy_apu();
             init_apu();
         }
+    }
+    
+    // Enable/disable ProcessorTests compatibility mode
+    void set_processor_tests_mode(bool enable) {
+        apu_state.processor_tests_mode = enable;
     }
 };
 
