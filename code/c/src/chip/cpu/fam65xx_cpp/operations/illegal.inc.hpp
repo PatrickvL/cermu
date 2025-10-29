@@ -93,17 +93,9 @@ bus_state_t op_isc(bus_state_t pins) {
             // Perform INC on memory value
             value++;
             
-            // Perform SBC A with incremented value - exact reference match
-            uint8_t operand = value;
-            uint8_t carry_in = (CPU_P(this) & FLAG_C) ? 1 : 0;
-            uint8_t a_old = CPU_A(this);
-            
-            // Use existing class helper function for SBC
-            uint16_t result = a_old - operand - (1 - carry_in);
-            CPU_A(this) = (uint8_t)result;
-            
-            // Use existing class helper for flag updates
-            update_flags_sbc(a_old, operand, result);
+            // Perform SBC A with incremented value using BCD-aware function
+            // This ensures proper NMOS 6502 BCD behavior including V flag calculation
+            perform_sbc(value);
         });
     }
     return pins;
@@ -172,17 +164,9 @@ bus_state_t op_rra(bus_state_t pins) {
             else CPU_P(this) &= ~FLAG_C;
             value = (value >> 1) | old_carry;
             
-            // Perform ADC with A - exact reference match
-            uint8_t operand = value;
-            uint8_t carry_in = (CPU_P(this) & FLAG_C) ? 1 : 0;
-            uint8_t a_old = CPU_A(this);
-            
-            // Use existing class helper function for ADC
-            uint16_t result = a_old + operand + carry_in;
-            CPU_A(this) = (uint8_t)result;
-            
-            // Use existing class helper for flag updates
-            update_flags_adc(a_old, operand, result);
+            // Perform ADC with A using BCD-aware function
+            // This ensures proper NMOS 6502 BCD behavior including V flag calculation
+            perform_adc(value);
         });
     }
     return pins;
