@@ -603,7 +603,7 @@ public:
     }
     
     inline void update_flag(uint8_t flag_mask, bool condition) {
-        update_flags(flag_mask, -condition & flag_mask);
+        update_flags(flag_mask, (uint8_t)condition * flag_mask);
     }
     
     // ========================================================================

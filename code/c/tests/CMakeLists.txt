@@ -128,18 +128,21 @@ endif()
 add_executable(fam65xx_processor_tests_runner
     fam65xx_processor_tests_runner.cpp
     json_parser.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp/mos6502.cpp
 )
 target_include_directories(fam65xx_processor_tests_runner PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
+    ${CMAKE_CURRENT_SOURCE_DIR}
 )
 target_compile_definitions(fam65xx_processor_tests_runner PRIVATE AIEMUC_IMPL)
+# Set C++20 standard for fam65xx_cpp template support
+set_property(TARGET fam65xx_processor_tests_runner PROPERTY CXX_STANDARD 20)
+set_property(TARGET fam65xx_processor_tests_runner PROPERTY CXX_STANDARD_REQUIRED ON)
 # Disable warnings as errors for this target due to generated code warnings
 if(MSVC)
-    target_compile_options(fam65xx_processor_tests_runner PRIVATE /WX- /wd4244 /wd4189 /wd4477)
+    target_compile_options(fam65xx_processor_tests_runner PRIVATE /WX- /wd4244 /wd4189 /wd4477 /wd4996 /wd4100 /wd4996 /wd4505)
 else()
-    target_compile_options(fam65xx_processor_tests_runner PRIVATE -Wno-error -fpermissive)
+    target_compile_options(fam65xx_processor_tests_runner PRIVATE -Wno-error -fpermissive -Wno-unused-parameter -Wno-unused-variable)
 endif()
 # Link math library if needed
 if(NOT WIN32 AND NOT MSVC)
