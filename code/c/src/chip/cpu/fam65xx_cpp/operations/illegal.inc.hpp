@@ -42,11 +42,9 @@ bus_state_t op_lax(bus_state_t pins) {
                 transition_to_fetch();
             }
         }
-        return pins;
-    } else {
-        // Invalid on processors without illegal opcodes
-        return pins;
     }
+
+    return pins;
 }
 
 bus_state_t op_sax(bus_state_t pins) {
@@ -81,8 +79,9 @@ bus_state_t op_dcp(bus_state_t pins) {
             // Update N and Z flags based on comparison result
             update_nz_flags((uint8_t)result);
         });
+    } else {
+        return pins;
     }
-    return pins;
 }
 
 bus_state_t op_isc(bus_state_t pins) {
@@ -97,8 +96,9 @@ bus_state_t op_isc(bus_state_t pins) {
             // This ensures proper NMOS 6502 BCD behavior including V flag calculation
             perform_sbc(value);
         });
+    } else {
+        return pins;
     }
-    return pins;
 }
 
 bus_state_t op_slo(bus_state_t pins) {
@@ -114,8 +114,9 @@ bus_state_t op_slo(bus_state_t pins) {
             CPU_A(this) |= value;
             update_nz_flags(CPU_A(this));
         });
+    } else {
+        return pins;
     }
-    return pins;
 }
 
 bus_state_t op_rla(bus_state_t pins) {
@@ -132,8 +133,9 @@ bus_state_t op_rla(bus_state_t pins) {
             CPU_A(this) &= value;
             update_nz_flags(CPU_A(this));
         });
+    } else {
+        return pins;
     }
-    return pins;
 }
 
 bus_state_t op_sre(bus_state_t pins) {
@@ -149,8 +151,9 @@ bus_state_t op_sre(bus_state_t pins) {
             CPU_A(this) ^= value;
             update_nz_flags(CPU_A(this));
         });
+    } else {
+        return pins;
     }
-    return pins;
 }
 
 bus_state_t op_rra(bus_state_t pins) {
@@ -168,8 +171,9 @@ bus_state_t op_rra(bus_state_t pins) {
             // This ensures proper NMOS 6502 BCD behavior including V flag calculation
             perform_adc(value);
         });
+    } else {
+        return pins;
     }
-    return pins;
 }
 
 // ============================================================================
@@ -229,6 +233,7 @@ bus_state_t op_anc(bus_state_t pins) {
             transition_to_fetch();
         }
     }
+
     return pins;
 }
 
@@ -313,6 +318,7 @@ bus_state_t op_arr(bus_state_t pins) {
             transition_to_fetch();
         }
     }
+
     return pins;
 }
 
@@ -335,6 +341,7 @@ bus_state_t op_alr(bus_state_t pins) {
             transition_to_fetch();
         }
     }
+
     return pins;
 }
 
@@ -361,6 +368,7 @@ bus_state_t op_xaa(bus_state_t pins) {
             transition_to_fetch();
         }
     }
+
     return pins;
 }
 
@@ -383,6 +391,7 @@ bus_state_t op_sbx(bus_state_t pins) {
             transition_to_fetch();
         }
     }
+
     return pins;
 }
 
@@ -405,6 +414,7 @@ bus_state_t op_sha(bus_state_t pins) {
             transition_to_fetch();
         }
     }
+
     return pins;
 }
 
@@ -434,6 +444,7 @@ bus_state_t op_shs(bus_state_t pins) {
             transition_to_fetch();
         }
     }
+
     return pins;
 }
 
@@ -452,11 +463,11 @@ bus_state_t op_shx(bus_state_t pins) {
             
             // Set data to write
             CPU_DL(this) = data_value;
-            
             pins = phi2_write(pins, REG_AB, REG_DL);
             transition_to_fetch();
         }
     }
+
     return pins;
 }
 
@@ -475,11 +486,11 @@ bus_state_t op_shy(bus_state_t pins) {
             
             // Set data to write
             CPU_DL(this) = data_value;
-            
             pins = phi2_write(pins, REG_AB, REG_DL);
             transition_to_fetch();
         }
     }
+
     return pins;
 }
 
@@ -497,6 +508,7 @@ bus_state_t op_las(bus_state_t pins) {
             transition_to_fetch();
         }
     }
+
     return pins;
 }
 

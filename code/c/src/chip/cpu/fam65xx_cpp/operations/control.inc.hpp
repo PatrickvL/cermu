@@ -94,9 +94,8 @@ bus_state_t op_rts(bus_state_t pins) {
             
         case 2:
             /* PHI2: Pull PCL from stack */
-            pins = phi2_read(pins, REG_SP, REG_DL);
+            pins = phi2_read(pins, REG_SP, REG_PCL);
             if (FAM65XX_GET_RDY(pins)) {
-                CPU_PCL(this) = CPU_DL(this);
                 CPU_S(this)++;
                 this->cycle_index++;
             }
@@ -104,9 +103,8 @@ bus_state_t op_rts(bus_state_t pins) {
             
         case 3:
             /* PHI2: Pull PCH from stack */
-            pins = phi2_read(pins, REG_SP, REG_DL);
+            pins = phi2_read(pins, REG_SP, REG_PCH);
             if (FAM65XX_GET_RDY(pins)) {
-                CPU_PCH(this) = CPU_DL(this);
                 this->cycle_index++;
             }
             return pins;
@@ -222,9 +220,8 @@ bus_state_t op_rti(bus_state_t pins) {
             
         case 3:
             /* PHI2: Pull PCL from stack */
-            pins = phi2_read(pins, REG_SP, REG_DL);
+            pins = phi2_read(pins, REG_SP, REG_PCL);
             if (FAM65XX_GET_RDY(pins)) {
-                CPU_PCL(this) = CPU_DL(this);
                 CPU_S(this)++;
                 this->cycle_index++;
             }
@@ -232,9 +229,8 @@ bus_state_t op_rti(bus_state_t pins) {
             
         case 4:
             /* PHI2: Pull PCH from stack */
-            pins = phi2_read(pins, REG_SP, REG_DL);
+            pins = phi2_read(pins, REG_SP, REG_PCH);
             if (FAM65XX_GET_RDY(pins)) {
-                CPU_PCH(this) = CPU_DL(this);
                 transition_to_fetch();
             }
             return pins;
