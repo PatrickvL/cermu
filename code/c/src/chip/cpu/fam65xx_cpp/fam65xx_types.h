@@ -10,9 +10,9 @@
 #include <cstdint>
 
 // Include system-wide bus definitions
-#include "../../../core/aiemuc.h"
-#include "../../../core/system_lines.h"
-#include "../../../core/chip.h"
+#include "../../core/aiemuc.h"
+#include "../../core/system_lines.h"
+#include "../../core/chip.h"
 
 #ifdef __cplusplus
 extern "C" {
