@@ -166,8 +166,9 @@ bus_state_t op_brk(bus_state_t pins) {
                     /* NMOS 6502 always sets I flag on BRK */
                     set_flag(FLAG_I);
                 } else {
-                    /* CMOS 65C02 preserves current I flag state on BRK */
-                    /* No change to I flag */
+                    /* CMOS 65C02 sets I flag and clears D flag on BRK/IRQ/NMI */
+                    set_flag(FLAG_I);
+                    clear_flag(FLAG_D);
                 }
                 this->cycle_index++;
             }

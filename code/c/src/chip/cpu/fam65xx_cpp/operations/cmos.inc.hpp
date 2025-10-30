@@ -172,14 +172,26 @@ bus_state_t op_stp(bus_state_t pins) {
     }
 }
 
-// PHX - Push X Register (65C02)
+// PHX - Push X Register (65C02) - Hardware-accurate 3-cycle operation like PHA
 bus_state_t op_phx(bus_state_t pins) {
     if constexpr (has_cmos_enhancements<ProcessorTag>()) {
-        // Push X to stack with processor-specific RDY handling
-        if (this->should_complete_write_cycle(pins)) {
-            pins = phi2_write(pins, REG_SP, REG_X);
-            CPU_S(this)--;
-            transition_to_fetch();
+        switch (this->cycle_index) {
+            case 0:
+                /* Dummy cycle for internal operation */
+                pins = phi2_read(pins, REG_PC, REG_TMP);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                /* PHI2: Write X to stack with processor-specific RDY handling */
+                if (this->should_complete_write_cycle(pins)) {
+                    pins = phi2_write(pins, REG_SP, REG_X);
+                    CPU_S(this)--;
+                    transition_to_fetch();
+                }
+                return pins;
         }
         return pins;
     } else {
@@ -188,14 +200,26 @@ bus_state_t op_phx(bus_state_t pins) {
     }
 }
 
-// PHY - Push Y Register (65C02)
+// PHY - Push Y Register (65C02) - Hardware-accurate 3-cycle operation like PHA
 bus_state_t op_phy(bus_state_t pins) {
     if constexpr (has_cmos_enhancements<ProcessorTag>()) {
-        // Push Y to stack with processor-specific RDY handling
-        if (this->should_complete_write_cycle(pins)) {
-            pins = phi2_write(pins, REG_SP, REG_Y);
-            CPU_S(this)--;
-            transition_to_fetch();
+        switch (this->cycle_index) {
+            case 0:
+                /* Dummy cycle for internal operation */
+                pins = phi2_read(pins, REG_PC, REG_TMP);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                /* PHI2: Write Y to stack with processor-specific RDY handling */
+                if (this->should_complete_write_cycle(pins)) {
+                    pins = phi2_write(pins, REG_SP, REG_Y);
+                    CPU_S(this)--;
+                    transition_to_fetch();
+                }
+                return pins;
         }
         return pins;
     } else {
@@ -204,16 +228,37 @@ bus_state_t op_phy(bus_state_t pins) {
     }
 }
 
-// PLX - Pull X Register (65C02)
+// PLX - Pull X Register (65C02) - Hardware-accurate 4-cycle operation like PLA
 bus_state_t op_plx(bus_state_t pins) {
     if constexpr (has_cmos_enhancements<ProcessorTag>()) {
-        // Pull X from stack
-        CPU_S(this)++;
-        pins = phi2_read(pins, REG_SP, REG_X);
-        if (FAM65XX_GET_RDY(pins)) {
-            // Update N and Z flags
-            update_nz_flags(CPU_X(this));
-            transition_to_fetch();
+        switch (this->cycle_index) {
+            case 0:
+                /* PHI2: Dummy read from PC */
+                pins = phi2_read(pins, REG_PC, REG_TMP);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                /* PHI2: Dummy read from current stack pointer, then increment SP */
+                pins = phi2_read(pins, REG_SP, REG_TMP);
+                if (FAM65XX_GET_RDY(pins)) {
+                    /* PHI1: Increment stack pointer */
+                    CPU_S(this)++;
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 2:
+                /* PHI2: Read from incremented stack pointer directly into X (eliminates copy) */
+                pins = phi2_read(pins, REG_SP, REG_X);
+                if (FAM65XX_GET_RDY(pins)) {
+                    /* PHI1: Set flags based on X register value */
+                    update_nz_flags(CPU_X(this));
+                    transition_to_fetch();
+                }
+                return pins;
         }
         return pins;
     } else {
@@ -222,16 +267,37 @@ bus_state_t op_plx(bus_state_t pins) {
     }
 }
 
-// PLY - Pull Y Register (65C02)
+// PLY - Pull Y Register (65C02) - Hardware-accurate 4-cycle operation like PLA
 bus_state_t op_ply(bus_state_t pins) {
     if constexpr (has_cmos_enhancements<ProcessorTag>()) {
-        // Pull Y from stack
-        CPU_S(this)++;
-        pins = phi2_read(pins, REG_SP, REG_Y);
-        if (FAM65XX_GET_RDY(pins)) {
-            // Update N and Z flags
-            update_nz_flags(CPU_Y(this));
-            transition_to_fetch();
+        switch (this->cycle_index) {
+            case 0:
+                /* PHI2: Dummy read from PC */
+                pins = phi2_read(pins, REG_PC, REG_TMP);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                /* PHI2: Dummy read from current stack pointer, then increment SP */
+                pins = phi2_read(pins, REG_SP, REG_TMP);
+                if (FAM65XX_GET_RDY(pins)) {
+                    /* PHI1: Increment stack pointer */
+                    CPU_S(this)++;
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 2:
+                /* PHI2: Read from incremented stack pointer directly into Y (eliminates copy) */
+                pins = phi2_read(pins, REG_SP, REG_Y);
+                if (FAM65XX_GET_RDY(pins)) {
+                    /* PHI1: Set flags based on Y register value */
+                    update_nz_flags(CPU_Y(this));
+                    transition_to_fetch();
+                }
+                return pins;
         }
         return pins;
     } else {
