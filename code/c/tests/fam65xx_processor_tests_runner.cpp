@@ -39,8 +39,7 @@ static bool g_quiet_mode = false;
 static bool g_stop_on_failure = true; 
 static std::atomic<bool> g_test_failed{false};
 
-// Forward declarations
-class ProcessorTestHarness;
+// Forward declarations (moved later after full class definition)
 
 
 
@@ -126,6 +125,9 @@ ProcessorType parse_processor_type(const std::string& processor_str) {
     throw std::invalid_argument("Unknown processor type: " + processor_str);
 }
 
+// Forward declarations
+class ProcessorTestHarness;
+
 // Unified processor interface that can work with any 65xx processor
 class UnifiedProcessorInterface {
 public:
@@ -154,200 +156,10 @@ public:
     virtual void set_harness(ProcessorTestHarness* harness) = 0;
 };
 
-// Generic processor wrapper template - eliminates code duplication
-template<typename ProcessorTag>
-class ProcessorWrapper : public UnifiedProcessorInterface {
-private:
-    fam65xx_cpp::fam65xx_t<ProcessorTag>* cpu;
-    chip_descriptor_t desc;
-    void* harness_ptr; // Store harness for memory callbacks
-    
-    // Instance memory callbacks that know about this wrapper's harness
-    static uint8_t instance_mem_read(void* user_data, uint16_t addr, uint8_t bus_state) {
-        (void)bus_state; // Suppress unused parameter warning
-        ProcessorWrapper<ProcessorTag>* wrapper = static_cast<ProcessorWrapper<ProcessorTag>*>(user_data);
-        uint8_t value = test_memory[addr];
-        if (wrapper->harness_ptr) {
-            ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(wrapper->harness_ptr);
-            harness->record_bus_cycle(addr, value, false);
-        }
-        return value;
-    }
-    
-    static void instance_mem_write(void* user_data, uint16_t addr, uint8_t data) {
-        ProcessorWrapper<ProcessorTag>* wrapper = static_cast<ProcessorWrapper<ProcessorTag>*>(user_data);
-        test_memory[addr] = data;
-        if (wrapper->harness_ptr) {
-            ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(wrapper->harness_ptr);
-            harness->record_bus_cycle(addr, data, true);
-        }
-    }
-    
-public:
-private:
-    // Helper function to get processor name for debug output - compile-time processor name determination
-    constexpr const char* get_processor_debug_name() const {
-        if constexpr (std::is_same_v<ProcessorTag, fam65xx_cpp::MOS6502Tag>) return "MOS6502";
-        else if constexpr (std::is_same_v<ProcessorTag, fam65xx_cpp::NES6502Tag>) return "NES6502";
-        else if constexpr (std::is_same_v<ProcessorTag, fam65xx_cpp::WDC65C02Tag>) return "WDC65C02";
-        else if constexpr (std::is_same_v<ProcessorTag, fam65xx_cpp::MOS6510Tag>) return "MOS6510";
-        else if constexpr (std::is_same_v<ProcessorTag, fam65xx_cpp::Rockwell65C02Tag>) return "Rockwell65C02";
-        else if constexpr (std::is_same_v<ProcessorTag, fam65xx_cpp::WDC65C816Tag>) return "WDC65C816";
-        else return "Unknown";
-    }
+// Forward declaration for factory function
+std::unique_ptr<UnifiedProcessorInterface> create_processor(ProcessorType type);
 
-public:
-    ProcessorWrapper() : harness_ptr(nullptr) {
-        if (!g_quiet_mode) {
-            printf("DEBUG: %sWrapper constructor called\n", get_processor_debug_name());
-        }
-        
-        // Create CPU using C++ template implementation
-        cpu = new fam65xx_cpp::fam65xx_t<ProcessorTag>();
-        if (!cpu) {
-            throw std::runtime_error("Failed to create CPU");
-        }
-        
-        // Initialize CPU
-        cpu->init(&desc);
-        
-        // Special handling for NES6502 - enable ProcessorTests compatibility mode
-        if constexpr (std::is_same_v<ProcessorTag, fam65xx_cpp::NES6502Tag>) {
-            if constexpr (fam65xx_cpp::has_apu<ProcessorTag>()) {
-                cpu->set_processor_tests_mode(true);
-                if (!g_quiet_mode) printf("DEBUG: Enabled ProcessorTests compatibility mode for NES6502\n");
-            }
-        }
-        
-        // Set up memory callbacks with this wrapper as user_data
-        cpu->set_memory_callbacks(instance_mem_read, instance_mem_write, this);
-        
-        if (!g_quiet_mode) {
-            printf("DEBUG: %sWrapper created successfully\n", get_processor_debug_name());
-        }
-    }
-    
-    ~ProcessorWrapper() {
-        if (cpu) {
-            delete cpu;
-        }
-    }
-    
-    // Implement interface methods
-    uint64_t init(const chip_descriptor_t* desc_ptr) override {
-        if (desc_ptr) {
-            desc = *desc_ptr;
-        }
-        // CPU already initialized in constructor
-        return 0;
-    }
-    
-    uint64_t bootstrap(uint64_t pins) override {
-        return cpu->bootstrap(pins);
-    }
-    
-    uint64_t tick(uint64_t pins) override {
-        return cpu->tick(pins);
-    }
-    
-    bool opdone() override {
-        return cpu->opdone();
-    }
-    
-    uint16_t get_pc() override {
-        return cpu->reg16[REG_PC];
-    }
-    
-    uint8_t get_a() override {
-        return cpu->reg8[REG_A];
-    }
-    
-    uint8_t get_x() override {
-        return cpu->reg8[REG_X];
-    }
-    
-    uint8_t get_y() override {
-        return cpu->reg8[REG_Y];
-    }
-    
-    uint8_t get_sp() override {
-        return cpu->reg8[REG_S];
-    }
-    
-    uint8_t get_status() override {
-        return cpu->reg8[REG_P];
-    }
-    
-    void set_pc(uint16_t pc) override {
-        cpu->reg16[REG_PC] = pc;
-    }
-    
-    void set_a(uint8_t a) override {
-        cpu->reg8[REG_A] = a;
-    }
-    
-    void set_x(uint8_t x) override {
-        cpu->reg8[REG_X] = x;
-    }
-    
-    void set_y(uint8_t y) override {
-        cpu->reg8[REG_Y] = y;
-    }
-    
-    void set_sp(uint8_t sp) override {
-        cpu->reg8[REG_S] = sp;
-    }
-    
-    void set_status(uint8_t p) override {
-        cpu->reg8[REG_P] = p;
-    }
-    
-    // Set harness for bus cycle recording (thread-safe)
-    void set_harness(ProcessorTestHarness* harness) override {
-        harness_ptr = harness;
-    }
-};
-
-// Type aliases for convenience and backward compatibility
-using MOS6502Wrapper = ProcessorWrapper<fam65xx_cpp::MOS6502Tag>;
-using NES6502Wrapper = ProcessorWrapper<fam65xx_cpp::NES6502Tag>;
-using WDC65C02Wrapper = ProcessorWrapper<fam65xx_cpp::WDC65C02Tag>;
-using MOS6510Wrapper = ProcessorWrapper<fam65xx_cpp::MOS6510Tag>;
-using Rockwell65C02Wrapper = ProcessorWrapper<fam65xx_cpp::Rockwell65C02Tag>;
-using WDC65C816Wrapper = ProcessorWrapper<fam65xx_cpp::WDC65C816Tag>;
-
-// Factory function to create processor instances
-std::unique_ptr<UnifiedProcessorInterface> create_processor(ProcessorType type) {
-    if (!g_quiet_mode) printf("DEBUG: Creating processor type: %d\n", (int)type);
-    switch (type) {
-        case ProcessorType::MOS6502:
-            if (!g_quiet_mode) printf("DEBUG: Creating MOS6502Wrapper\n");
-            return std::make_unique<MOS6502Wrapper>();
-            
-        case ProcessorType::NES6502:
-            if (!g_quiet_mode) printf("DEBUG: Creating NES6502Wrapper\n");
-            return std::make_unique<NES6502Wrapper>();
-            
-        case ProcessorType::WDC65C02:
-            if (!g_quiet_mode) printf("DEBUG: Creating WDC65C02Wrapper\n");
-            return std::make_unique<WDC65C02Wrapper>();
-            
-        case ProcessorType::MOS6510:
-            if (!g_quiet_mode) printf("DEBUG: Creating MOS6510Wrapper\n");
-            return std::make_unique<MOS6510Wrapper>();
-            
-        case ProcessorType::ROCKWELL65C02:
-            if (!g_quiet_mode) printf("DEBUG: Creating Rockwell65C02Wrapper\n");
-            return std::make_unique<Rockwell65C02Wrapper>();
-            
-        case ProcessorType::WDC65C816:
-            if (!g_quiet_mode) printf("DEBUG: Creating WDC65C816Wrapper\n");
-            return std::make_unique<WDC65C816Wrapper>();
-            
-        default:
-            throw std::invalid_argument("Unsupported processor type");
-    }
-}
+// ProcessorWrapper template will be defined after ProcessorTestHarness
 
 // Test results tracking with enhanced statistics
 struct TestResults {
@@ -664,6 +476,199 @@ public:
         }
     }
 };
+
+// Generic processor wrapper template - eliminates code duplication
+template<typename ProcessorTag>
+class ProcessorWrapper : public UnifiedProcessorInterface {
+private:
+    fam65xx_cpp::fam65xx_t<ProcessorTag>* cpu;
+    chip_descriptor_t desc;
+    void* harness_ptr; // Store harness for memory callbacks
+    
+    // Instance memory callbacks that know about this wrapper's harness
+    static uint8_t instance_mem_read(void* user_data, uint16_t addr, uint8_t bus_state) {
+        (void)bus_state; // Suppress unused parameter warning
+        ProcessorWrapper<ProcessorTag>* wrapper = static_cast<ProcessorWrapper<ProcessorTag>*>(user_data);
+        uint8_t value = test_memory[addr];
+        if (wrapper->harness_ptr) {
+            ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(wrapper->harness_ptr);
+            harness->record_bus_cycle(addr, value, false);
+        }
+        return value;
+    }
+    
+    static void instance_mem_write(void* user_data, uint16_t addr, uint8_t data) {
+        ProcessorWrapper<ProcessorTag>* wrapper = static_cast<ProcessorWrapper<ProcessorTag>*>(user_data);
+        test_memory[addr] = data;
+        if (wrapper->harness_ptr) {
+            ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(wrapper->harness_ptr);
+            harness->record_bus_cycle(addr, data, true);
+        }
+    }
+    
+    // Helper function to get processor name for debug output - compile-time processor name determination
+    constexpr const char* get_processor_debug_name() const {
+        if constexpr (std::is_same_v<ProcessorTag, fam65xx_cpp::MOS6502Tag>) return "MOS6502";
+        else if constexpr (std::is_same_v<ProcessorTag, fam65xx_cpp::NES6502Tag>) return "NES6502";
+        else if constexpr (std::is_same_v<ProcessorTag, fam65xx_cpp::WDC65C02Tag>) return "WDC65C02";
+        else if constexpr (std::is_same_v<ProcessorTag, fam65xx_cpp::MOS6510Tag>) return "MOS6510";
+        else if constexpr (std::is_same_v<ProcessorTag, fam65xx_cpp::Rockwell65C02Tag>) return "Rockwell65C02";
+        else if constexpr (std::is_same_v<ProcessorTag, fam65xx_cpp::WDC65C816Tag>) return "WDC65C816";
+        else return "Unknown";
+    }
+
+public:
+    ProcessorWrapper() : harness_ptr(nullptr) {
+        if (!g_quiet_mode) {
+            printf("DEBUG: %sWrapper constructor called\n", get_processor_debug_name());
+        }
+        
+        // Create CPU using C++ template implementation
+        cpu = new fam65xx_cpp::fam65xx_t<ProcessorTag>();
+        if (!cpu) {
+            throw std::runtime_error("Failed to create CPU");
+        }
+        
+        // Initialize CPU
+        cpu->init(&desc);
+        
+        // Special handling for NES6502 - enable ProcessorTests compatibility mode
+        if constexpr (std::is_same_v<ProcessorTag, fam65xx_cpp::NES6502Tag>) {
+            if constexpr (fam65xx_cpp::has_apu<ProcessorTag>()) {
+                cpu->set_processor_tests_mode(true);
+                if (!g_quiet_mode) printf("DEBUG: Enabled ProcessorTests compatibility mode for NES6502\n");
+            }
+        }
+        
+        // Set up memory callbacks with this wrapper as user_data
+        cpu->set_memory_callbacks(instance_mem_read, instance_mem_write, this);
+        
+        if (!g_quiet_mode) {
+            printf("DEBUG: %sWrapper created successfully\n", get_processor_debug_name());
+        }
+    }
+    
+    ~ProcessorWrapper() {
+        if (cpu) {
+            delete cpu;
+        }
+    }
+    
+    // Implement interface methods
+    uint64_t init(const chip_descriptor_t* desc_ptr) override {
+        if (desc_ptr) {
+            desc = *desc_ptr;
+        }
+        // CPU already initialized in constructor
+        return 0;
+    }
+    
+    uint64_t bootstrap(uint64_t pins) override {
+        return cpu->bootstrap(pins);
+    }
+    
+    uint64_t tick(uint64_t pins) override {
+        return cpu->tick(pins);
+    }
+    
+    bool opdone() override {
+        return cpu->opdone();
+    }
+    
+    uint16_t get_pc() override {
+        return cpu->reg16[REG_PC];
+    }
+    
+    uint8_t get_a() override {
+        return cpu->reg8[REG_A];
+    }
+    
+    uint8_t get_x() override {
+        return cpu->reg8[REG_X];
+    }
+    
+    uint8_t get_y() override {
+        return cpu->reg8[REG_Y];
+    }
+    
+    uint8_t get_sp() override {
+        return cpu->reg8[REG_S];
+    }
+    
+    uint8_t get_status() override {
+        return cpu->reg8[REG_P];
+    }
+    
+    void set_pc(uint16_t pc) override {
+        cpu->reg16[REG_PC] = pc;
+    }
+    
+    void set_a(uint8_t a) override {
+        cpu->reg8[REG_A] = a;
+    }
+    
+    void set_x(uint8_t x) override {
+        cpu->reg8[REG_X] = x;
+    }
+    
+    void set_y(uint8_t y) override {
+        cpu->reg8[REG_Y] = y;
+    }
+    
+    void set_sp(uint8_t sp) override {
+        cpu->reg8[REG_S] = sp;
+    }
+    
+    void set_status(uint8_t p) override {
+        cpu->reg8[REG_P] = p;
+    }
+    
+    // Set harness for bus cycle recording (thread-safe)
+    void set_harness(ProcessorTestHarness* harness) override {
+        harness_ptr = harness;
+    }
+};
+
+// Type aliases for convenience and backward compatibility
+using MOS6502Wrapper = ProcessorWrapper<fam65xx_cpp::MOS6502Tag>;
+using NES6502Wrapper = ProcessorWrapper<fam65xx_cpp::NES6502Tag>;
+using WDC65C02Wrapper = ProcessorWrapper<fam65xx_cpp::WDC65C02Tag>;
+using MOS6510Wrapper = ProcessorWrapper<fam65xx_cpp::MOS6510Tag>;
+using Rockwell65C02Wrapper = ProcessorWrapper<fam65xx_cpp::Rockwell65C02Tag>;
+using WDC65C816Wrapper = ProcessorWrapper<fam65xx_cpp::WDC65C816Tag>;
+
+// Factory function to create processor instances
+std::unique_ptr<UnifiedProcessorInterface> create_processor(ProcessorType type) {
+    if (!g_quiet_mode) printf("DEBUG: Creating processor type: %d\n", (int)type);
+    switch (type) {
+        case ProcessorType::MOS6502:
+            if (!g_quiet_mode) printf("DEBUG: Creating MOS6502Wrapper\n");
+            return std::make_unique<MOS6502Wrapper>();
+            
+        case ProcessorType::NES6502:
+            if (!g_quiet_mode) printf("DEBUG: Creating NES6502Wrapper\n");
+            return std::make_unique<NES6502Wrapper>();
+            
+        case ProcessorType::WDC65C02:
+            if (!g_quiet_mode) printf("DEBUG: Creating WDC65C02Wrapper\n");
+            return std::make_unique<WDC65C02Wrapper>();
+            
+        case ProcessorType::MOS6510:
+            if (!g_quiet_mode) printf("DEBUG: Creating MOS6510Wrapper\n");
+            return std::make_unique<MOS6510Wrapper>();
+            
+        case ProcessorType::ROCKWELL65C02:
+            if (!g_quiet_mode) printf("DEBUG: Creating Rockwell65C02Wrapper\n");
+            return std::make_unique<Rockwell65C02Wrapper>();
+            
+        case ProcessorType::WDC65C816:
+            if (!g_quiet_mode) printf("DEBUG: Creating WDC65C816Wrapper\n");
+            return std::make_unique<WDC65C816Wrapper>();
+            
+        default:
+            throw std::invalid_argument("Unsupported processor type");
+    }
+}
 
 // Test item for worker queue
 struct TestItem {
