@@ -38,8 +38,7 @@ bus_state_t op_bra(bus_state_t pins) {
 bus_state_t op_stz(bus_state_t pins) {
     if constexpr (has_cmos_enhancements<ProcessorTag>()) {
         // Store zero to target address
-        CPU_DL(this) = 0x00;
-        pins = phi2_write(pins, REG_AB, REG_DL);
+        pins = phi2_write(pins, REG_AB, REG_ZERO);
         
         transition_to_fetch();
         return pins;
