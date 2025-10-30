@@ -144,7 +144,7 @@ bus_state_t op_sre(bus_state_t pins) {
         // This is a Read-Modify-Write operation
         return rmw_operation_helper(pins, [this](uint8_t& value) {
             // Perform LSR on memory value
-            update_flag(FLAG_C, value & 0x01);
+            update_flags(FLAG_C, value & FLAG_C);
             value >>= 1;
             
             // Perform EOR with accumulator
@@ -162,10 +162,11 @@ bus_state_t op_rra(bus_state_t pins) {
         // This is a Read-Modify-Write operation - match reference implementation exactly
         return rmw_operation_helper(pins, [this](uint8_t& value) {
             // Perform ROR on memory value - exact reference match
-            uint8_t old_carry = (CPU_P(this) & FLAG_C) ? 0x80 : 0;
-            if (value & 0x01) CPU_P(this) |= FLAG_C;
-            else CPU_P(this) &= ~FLAG_C;
-            value = (value >> 1) | old_carry;
+            const uint8_t carry_in = CPU_P(this) & FLAG_C;
+            const uint8_t carry_out = value & FLAG_C;
+            value = (value >> 1) | (carry_in << 7);
+
+            update_flags(FLAG_C, carry_out);
             
             // Perform ADC with A using BCD-aware function
             // This ensures proper NMOS 6502 BCD behavior including V flag calculation
