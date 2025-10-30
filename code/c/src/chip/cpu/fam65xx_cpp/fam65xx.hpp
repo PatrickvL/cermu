@@ -705,6 +705,7 @@ public:
         const uint8_t old_a = CPU_A(this);
         const uint8_t carry_in = CPU_P(this) & FLAG_C;
         const uint16_t full_result = old_a + operand + carry_in;
+        const uint8_t result = static_cast<uint8_t>(full_result);
 
         if constexpr (has_bcd<ProcessorTag>()) {
             if (CPU_P(this) & FLAG_D) {
@@ -715,22 +716,21 @@ public:
                 uint8_t ah = (old_a >> 4) + (operand >> 4) + (al > 0x0F);
                 
                 // Construct nz_source for hardware-accurate N/Z flags
-                const uint8_t nz_source = (full_result & 0xFF) ? ((ah & 0x08) ? FLAG_N : FLAG_C) : 0;
+                const uint8_t n_flag = (result != 0) * ((ah << 4) & FLAG_N);
                 const uint8_t v_flag = ((~(old_a ^ operand) & (old_a ^ (ah << 4))) >> 1) & FLAG_V;
                 
                 if (ah > 9) ah += 6;
                 
+                const uint8_t z_flag = (result == 0) * FLAG_Z;
+                const uint8_t c_flag = ah > 15; // FLAG_C
                 CPU_A(this) = (ah << 4) | (al & 0x0F);
                 CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                    calc_nz_flags(nz_source) |
-                    v_flag |
-                    (ah > 15); // FLAG_C
+                    n_flag | v_flag | z_flag | c_flag;
                 return;
             }
         }
         
         // Binary mode
-        const uint8_t result = static_cast<uint8_t>(full_result);
         CPU_A(this) = result;
         CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
             calc_nz_flags(result) |
@@ -745,38 +745,33 @@ public:
         const uint8_t old_a = CPU_A(this);
         const uint8_t borrow_in = (CPU_P(this) & FLAG_C) ^ 1;
         const uint16_t full_result = old_a - operand - borrow_in;
+        const uint8_t result = static_cast<uint8_t>(full_result);
         
+        // Calculate flags once - same for both BCD and binary modes
+        const uint8_t n_flag = result & FLAG_N;
+        const uint8_t v_flag = (((old_a ^ operand) & (old_a ^ result)) >> 1) & FLAG_V;
+        const uint8_t z_flag = (result == 0) * FLAG_Z;
+        const uint8_t c_flag = !(full_result & 0x0100); // FLAG_C
+        
+        // Shared flag setting for both modes
+        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+            n_flag | v_flag | z_flag | c_flag;
+        // Binary mode - set result first
+        CPU_A(this) = result;
         if constexpr (has_bcd<ProcessorTag>()) {
             if (CPU_P(this) & FLAG_D) {
-                // BCD mode - inlined hardware-accurate implementation
+                // BCD mode - overwrite with BCD-adjusted result
                 uint8_t al = (old_a & 0x0F) - (operand & 0x0F) - borrow_in;
                 const bool al_borrow = (int8_t)al < 0;
                 if (al_borrow) al -= 6;
                 
                 uint8_t ah = (old_a >> 4) - (operand >> 4) - al_borrow;
-                
-                // N/Z flags from binary result
-                const uint8_t nz_source = static_cast<uint8_t>(full_result);
-                const uint8_t v_flag = calc_v_flag_sub(old_a, operand, nz_source);
-                
                 if (ah & 0x80) ah -= 6;
                 
                 CPU_A(this) = (ah << 4) | (al & 0x0F);
-                CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                    calc_nz_flags(nz_source) |
-                    v_flag |
-                    !(full_result & 0x0100); // FLAG_C
-                return;
+                // Fall through to shared flag setting
             }
         }
-        
-        // Binary mode
-        const uint8_t result = static_cast<uint8_t>(full_result);
-        CPU_A(this) = result;
-        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-            calc_nz_flags(result) |
-            calc_v_flag_sub(old_a, operand, result) |
-            !(full_result & 0x0100); // FLAG_C
     }
 
     /**
