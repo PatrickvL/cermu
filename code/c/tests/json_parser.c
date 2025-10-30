@@ -4,96 +4,167 @@
 #include <string.h>
 #include <ctype.h>
 
-// Skip whitespace and return pointer to next non-whitespace character
+// ============================================================================
+// JSON PARSER IMPLEMENTATION
+// ============================================================================
+
+// Skip whitespace characters
 const char* json_skip_whitespace(const char* str) {
-    while (str && (*str == ' ' || *str == '\t' || *str == '\n' || *str == '\r')) {
+    while (*str && (*str == ' ' || *str == '\t' || *str == '\n' || *str == '\r')) {
         str++;
     }
     return str;
 }
 
-// Find a key in JSON object and return pointer to its value
+// Find the value associated with a key in a JSON object
 const char* json_find_key(const char* json, const char* key) {
-    if (!json || !key) return NULL;
+    const char* pos = json;
+    size_t key_len = strlen(key);
     
-    char search_key[256];
-    snprintf(search_key, sizeof(search_key), "\"%s\"", key);
-    
-    const char* pos = strstr(json, search_key);
-    if (!pos) return NULL;
-    
-    // Move past the key
-    pos += strlen(search_key);
     pos = json_skip_whitespace(pos);
+    if (*pos != '{') {
+        return NULL; // Not a JSON object
+    }
+    pos++; // Skip opening brace
     
-    // Expect colon
-    if (*pos != ':') return NULL;
+    while (*pos) {
+        pos = json_skip_whitespace(pos);
+        if (*pos == '}') break; // End of object
+        
+        // Expect a string key
+        if (*pos != '"') return NULL;
+        pos++; // Skip opening quote
+        
+        // Check if this is our key
+        if (strncmp(pos, key, key_len) == 0 && pos[key_len] == '"') {
+            pos += key_len + 1; // Skip key and closing quote
+            pos = json_skip_whitespace(pos);
+            if (*pos != ':') return NULL;
+            pos++; // Skip colon
+            return json_skip_whitespace(pos);
+        }
+        
+        // Skip to end of this key
+        while (*pos && *pos != '"') {
+            if (*pos == '\\') pos++; // Skip escaped characters
+            pos++;
+        }
+        if (*pos != '"') return NULL;
+        pos++; // Skip closing quote
+        
+        pos = json_skip_whitespace(pos);
+        if (*pos != ':') return NULL;
+        pos++; // Skip colon
+        
+        // Skip the value
+        pos = json_skip_whitespace(pos);
+        if (*pos == '"') {
+            // String value
+            pos++;
+            while (*pos && *pos != '"') {
+                if (*pos == '\\') pos++; // Skip escaped characters
+                pos++;
+            }
+            if (*pos == '"') pos++;
+        } else if (*pos == '{') {
+            // Object value - find matching closing brace
+            int depth = 1;
+            pos++;
+            while (*pos && depth > 0) {
+                if (*pos == '{') depth++;
+                else if (*pos == '}') depth--;
+                pos++;
+            }
+        } else if (*pos == '[') {
+            // Array value - find matching closing bracket
+            int depth = 1;
+            pos++;
+            while (*pos && depth > 0) {
+                if (*pos == '[') depth++;
+                else if (*pos == ']') depth--;
+                pos++;
+            }
+        } else {
+            // Number, boolean, or null
+            while (*pos && *pos != ',' && *pos != '}' && !isspace(*pos)) {
+                pos++;
+            }
+        }
+        
+        pos = json_skip_whitespace(pos);
+        if (*pos == ',') pos++; // Skip comma if present
+    }
+    
+    return NULL; // Key not found
+}
+
+// Find the end of a JSON object
+const char* json_find_object_end(const char* json) {
+    const char* pos = json;
+    if (*pos != '{') return NULL;
+    
+    int depth = 1;
     pos++;
     
-    return json_skip_whitespace(pos);
-}
-
-// Find the end of an object (matching closing brace)
-const char* json_find_object_end(const char* json) {
-    if (!json || *json != '{') return NULL;
-    
-    int brace_count = 1;
-    json++; // Skip opening brace
-    
-    while (*json && brace_count > 0) {
-        if (*json == '{') {
-            brace_count++;
-        } else if (*json == '}') {
-            brace_count--;
-        } else if (*json == '"') {
-            // Skip string content
-            json++;
-            while (*json && *json != '"') {
-                if (*json == '\\') json++; // Skip escaped character
-                json++;
+    while (*pos && depth > 0) {
+        if (*pos == '{') {
+            depth++;
+        } else if (*pos == '}') {
+            depth--;
+        } else if (*pos == '"') {
+            // Skip string
+            pos++;
+            while (*pos && *pos != '"') {
+                if (*pos == '\\') pos++; // Skip escaped characters
+                pos++;
             }
+            if (*pos == '"') pos++;
+            continue;
         }
-        json++;
+        pos++;
     }
     
-    return brace_count == 0 ? json - 1 : NULL;
+    return (depth == 0) ? pos - 1 : NULL;
 }
 
-// Find the end of an array (matching closing bracket)
+// Find the end of a JSON array
 const char* json_find_array_end(const char* json) {
-    if (!json || *json != '[') return NULL;
+    const char* pos = json;
+    if (*pos != '[') return NULL;
     
-    int bracket_count = 1;
-    json++; // Skip opening bracket
+    int depth = 1;
+    pos++;
     
-    while (*json && bracket_count > 0) {
-        if (*json == '[') {
-            bracket_count++;
-        } else if (*json == ']') {
-            bracket_count--;
-        } else if (*json == '"') {
-            // Skip string content
-            json++;
-            while (*json && *json != '"') {
-                if (*json == '\\') json++; // Skip escaped character
-                json++;
+    while (*pos && depth > 0) {
+        if (*pos == '[') {
+            depth++;
+        } else if (*pos == ']') {
+            depth--;
+        } else if (*pos == '"') {
+            // Skip string
+            pos++;
+            while (*pos && *pos != '"') {
+                if (*pos == '\\') pos++; // Skip escaped characters
+                pos++;
             }
+            if (*pos == '"') pos++;
+            continue;
         }
-        json++;
+        pos++;
     }
     
-    return bracket_count == 0 ? json - 1 : NULL;
+    return (depth == 0) ? pos - 1 : NULL;
 }
 
-// Parse a number value for a given key
+// Parse a number from JSON
 int json_parse_number(const char* json, const char* key) {
     const char* value = json_find_key(json, key);
-    if (!value) return -1;
+    if (!value) return 0;
     
-    return (int)strtol(value, NULL, 10);
+    return (int)strtol(value, NULL, 0); // Support hex with 0x prefix
 }
 
-// Parse a string value for a given key
+// Parse a string from JSON
 bool json_parse_string(const char* json, const char* key, char* output, size_t max_len) {
     const char* value = json_find_key(json, key);
     if (!value || *value != '"') return false;
@@ -103,7 +174,7 @@ bool json_parse_string(const char* json, const char* key, char* output, size_t m
     
     while (*value && *value != '"' && i < max_len - 1) {
         if (*value == '\\') {
-            value++; // Skip escape character
+            value++; // Skip backslash
             if (*value) {
                 output[i++] = *value++;
             }
@@ -113,249 +184,156 @@ bool json_parse_string(const char* json, const char* key, char* output, size_t m
     }
     
     output[i] = '\0';
-    return *value == '"';
+    return *value == '"'; // Should end with closing quote
 }
 
-// Parse RAM array: supports both [[address, value], ...] and [{"address": N, "bytes": [...]}, ...]
+// Parse RAM array from JSON - ProcessorTests format: [[address, byte], [address, byte], ...]
 bool json_parse_ram_array(const char* json, cpu_state_t* state) {
-    const char* ram_start = json_find_key(json, "ram");
-    if (!ram_start || *ram_start != '[') return true; // RAM is optional
+    const char* ram_array = json_find_key(json, "ram");
+    if (!ram_array || *ram_array != '[') {
+        state->ram_count = 0;
+        return true; // Empty RAM is valid
+    }
     
+    const char* pos = ram_array + 1; // Skip opening bracket
     state->ram_count = 0;
-    const char* pos = ram_start + 1; // Skip opening bracket
     
-    while (*pos && *pos != ']' && state->ram_count < MAX_RAM_ENTRIES) {
+    while (*pos && state->ram_count < MAX_RAM_ENTRIES) {
         pos = json_skip_whitespace(pos);
-        if (*pos == ']') break;
+        if (*pos == ']') break; // End of array
         
-        if (*pos == '[') {
-            // ProcessorTests format: [address, value]
-            pos++;
-            
-            // Parse address
-            pos = json_skip_whitespace(pos);
-            state->ram[state->ram_count].address = (uint16_t)strtol(pos, (char**)&pos, 10);
-            
-            // Expect comma
-            pos = json_skip_whitespace(pos);
-            if (*pos != ',') break;
-            pos++;
-            
-            // Parse value or array of values
-            pos = json_skip_whitespace(pos);
-            if (*pos == '[') {
-                // Array of bytes: [byte1, byte2, ...]
-                pos++; // Skip opening bracket
-                state->ram[state->ram_count].byte_count = 0;
-                
-                while (*pos && *pos != ']' && state->ram[state->ram_count].byte_count < MAX_RAM_BYTES) {
-                    pos = json_skip_whitespace(pos);
-                    if (*pos == ']') break;
-                    
-                    state->ram[state->ram_count].bytes[state->ram[state->ram_count].byte_count++] =
-                        (uint8_t)strtol(pos, (char**)&pos, 10);
-                    
-                    pos = json_skip_whitespace(pos);
-                    if (*pos == ',') pos++;
-                }
-                
-                // Skip closing bracket
-                pos = json_skip_whitespace(pos);
-                if (*pos == ']') pos++;
-            } else {
-                // Single value
-                state->ram[state->ram_count].bytes[0] = (uint8_t)strtol(pos, (char**)&pos, 10);
-                state->ram[state->ram_count].byte_count = 1;
-            }
-            
-            // Skip closing bracket for this pair
-            pos = json_skip_whitespace(pos);
-            if (*pos == ']') pos++;
-            
-        } else if (*pos == '{') {
-            // Extended format: {"address": N, "bytes": [...]}
-            const char* obj_end = json_find_object_end(pos);
-            if (!obj_end) break;
-            
-            // Create temporary buffer for this object
-            size_t obj_len = obj_end - pos + 1;
-            char* obj_json = (char*)malloc(obj_len + 1);
-            if (!obj_json) break;
-            
-            strncpy(obj_json, pos, obj_len);
-            obj_json[obj_len] = '\0';
-            
-            // Parse address
-            int addr = json_parse_number(obj_json, "address");
-            if (addr < 0) {
-                free(obj_json);
-                break;
-            }
-            state->ram[state->ram_count].address = (uint16_t)addr;
-            
-            // Parse bytes array
-            const char* bytes_start = json_find_key(obj_json, "bytes");
-            if (bytes_start && *bytes_start == '[') {
-                const char* bytes_pos = bytes_start + 1;
-                state->ram[state->ram_count].byte_count = 0;
-                
-                while (*bytes_pos && *bytes_pos != ']' &&
-                       state->ram[state->ram_count].byte_count < MAX_RAM_BYTES) {
-                    bytes_pos = json_skip_whitespace(bytes_pos);
-                    if (*bytes_pos == ']') break;
-                    
-                    int byte_val = (int)strtol(bytes_pos, (char**)&bytes_pos, 10);
-                    state->ram[state->ram_count].bytes[state->ram[state->ram_count].byte_count++] =
-                        (uint8_t)byte_val;
-                    
-                    bytes_pos = json_skip_whitespace(bytes_pos);
-                    if (*bytes_pos == ',') bytes_pos++;
-                }
-            } else {
-                // Fallback: single value
-                state->ram[state->ram_count].bytes[0] = 0;
-                state->ram[state->ram_count].byte_count = 1;
-            }
-            
-            free(obj_json);
-            pos = obj_end + 1;
-        } else {
-            break; // Unknown format
-        }
+        if (*pos != '[') return false; // Each RAM entry should be an array
+        pos++; // Skip opening bracket of RAM entry
+        
+        // Parse address (first element)
+        pos = json_skip_whitespace(pos);
+        state->ram[state->ram_count].address = (uint16_t)strtol(pos, (char**)&pos, 0);
+        
+        pos = json_skip_whitespace(pos);
+        if (*pos != ',') return false;
+        pos++; // Skip comma
+        
+        // Parse single byte (second element) - ProcessorTests format
+        pos = json_skip_whitespace(pos);
+        state->ram[state->ram_count].bytes[0] = (uint8_t)strtol(pos, (char**)&pos, 0);
+        state->ram[state->ram_count].byte_count = 1; // Always 1 byte per entry in ProcessorTests
+        
+        pos = json_skip_whitespace(pos);
+        if (*pos != ']') return false; // Should end RAM entry array
+        pos++; // Skip closing bracket of RAM entry
         
         state->ram_count++;
         
-        // Skip comma between entries
         pos = json_skip_whitespace(pos);
-        if (*pos == ',') pos++;
+        if (*pos == ',') pos++; // Skip comma if present
     }
     
     return true;
 }
 
-// Parse cycles array: [[address, data, "read/write"], ...]
+// Parse cycles array from JSON (bus cycles)
 bool json_parse_cycles_array(const char* json, cpu_state_t* state) {
-    const char* cycles_start = json_find_key(json, "cycles");
-    if (!cycles_start || *cycles_start != '[') {
-        state->bus_cycle_count = 0;
+    const char* cycles_array = json_find_key(json, "cycles");
+    if (!cycles_array || *cycles_array != '[') {
         state->has_bus_cycles = false;
-        return true; // Cycles array is optional
+        state->bus_cycle_count = 0;
+        return true; // No cycles is valid
     }
     
+    const char* pos = cycles_array + 1; // Skip opening bracket
     state->bus_cycle_count = 0;
     state->has_bus_cycles = true;
-    const char* pos = cycles_start + 1; // Skip opening bracket
     
-    while (*pos && *pos != ']' && state->bus_cycle_count < MAX_BUS_CYCLES) {
+    while (*pos && state->bus_cycle_count < MAX_BUS_CYCLES) {
         pos = json_skip_whitespace(pos);
-        if (*pos == ']') break;
+        if (*pos == ']') break; // End of array
         
-        if (*pos == '[') {
-            // Parse cycle entry: [address, data, "read"/"write"]
-            pos++;
-            
-            // Parse address
-            pos = json_skip_whitespace(pos);
-            state->bus_cycles[state->bus_cycle_count].address = (uint16_t)strtol(pos, (char**)&pos, 10);
-            
-            // Expect comma
-            pos = json_skip_whitespace(pos);
-            if (*pos != ',') break;
-            pos++;
-            
-            // Parse data
-            pos = json_skip_whitespace(pos);
-            state->bus_cycles[state->bus_cycle_count].data = (uint8_t)strtol(pos, (char**)&pos, 10);
-            
-            // Expect comma
-            pos = json_skip_whitespace(pos);
-            if (*pos != ',') break;
-            pos++;
-            
-            // Parse "read" or "write"
-            pos = json_skip_whitespace(pos);
-            if (*pos == '"') {
-                pos++; // Skip opening quote
-                if (strncmp(pos, "write", 5) == 0) {
-                    state->bus_cycles[state->bus_cycle_count].is_write = true;
-                    pos += 5;
-                } else if (strncmp(pos, "read", 4) == 0) {
-                    state->bus_cycles[state->bus_cycle_count].is_write = false;
-                    pos += 4;
-                } else {
-                    break; // Invalid read/write type
-                }
-                
-                // Skip closing quote
-                if (*pos == '"') pos++;
-            } else {
-                break; // Expected quoted string
-            }
-            
-            // Skip closing bracket for this cycle
-            pos = json_skip_whitespace(pos);
-            if (*pos == ']') pos++;
-            
-            state->bus_cycle_count++;
+        if (*pos != '[') return false; // Each cycle should be an array
+        pos++; // Skip opening bracket
+        
+        // Parse address
+        pos = json_skip_whitespace(pos);
+        state->bus_cycles[state->bus_cycle_count].address = (uint16_t)strtol(pos, (char**)&pos, 0);
+        
+        pos = json_skip_whitespace(pos);
+        if (*pos != ',') return false;
+        pos++; // Skip comma
+        
+        // Parse data
+        pos = json_skip_whitespace(pos);
+        state->bus_cycles[state->bus_cycle_count].data = (uint8_t)strtol(pos, (char**)&pos, 0);
+        
+        pos = json_skip_whitespace(pos);
+        if (*pos != ',') return false;
+        pos++; // Skip comma
+        
+        // Parse read/write flag
+        pos = json_skip_whitespace(pos);
+        if (*pos == '"') {
+            pos++; // Skip opening quote
+            state->bus_cycles[state->bus_cycle_count].is_write = (*pos == 'w' || *pos == 'W');
+            while (*pos && *pos != '"') pos++; // Skip to closing quote
+            if (*pos == '"') pos++;
         } else {
-            break; // Unknown format
+            // Numeric format: assume 0 = read, 1 = write
+            int rw = (int)strtol(pos, (char**)&pos, 0);
+            state->bus_cycles[state->bus_cycle_count].is_write = (rw != 0);
         }
         
-        // Skip comma between entries
         pos = json_skip_whitespace(pos);
-        if (*pos == ',') pos++;
+        if (*pos != ']') return false; // Should end cycle array
+        pos++; // Skip closing bracket
+        
+        state->bus_cycle_count++;
+        
+        pos = json_skip_whitespace(pos);
+        if (*pos == ',') pos++; // Skip comma if present
     }
     
     return true;
 }
 
-// Parse CPU state (initial or final)
+// Parse CPU state from JSON
 bool json_parse_cpu_state(const char* json, const char* state_name, cpu_state_t* state) {
-    const char* state_start = json_find_key(json, state_name);
-    if (!state_start || *state_start != '{') return false;
-    
-    const char* state_end = json_find_object_end(state_start);
-    if (!state_end) return false;
-    
-    // Create a temporary buffer for the state object
-    size_t state_len = state_end - state_start + 1;
-    char* state_json = (char*)malloc(state_len + 1);
-    if (!state_json) return false;
-    
-    strncpy(state_json, state_start, state_len);
-    state_json[state_len] = '\0';
-    
-    // Parse individual fields
-    state->pc = (uint16_t)json_parse_number(state_json, "pc");
-    state->s = (uint8_t)json_parse_number(state_json, "s");
-    state->a = (uint8_t)json_parse_number(state_json, "a");
-    state->x = (uint8_t)json_parse_number(state_json, "x");
-    state->y = (uint8_t)json_parse_number(state_json, "y");
-    state->p = (uint8_t)json_parse_number(state_json, "p");
-    
-    // Parse cycles (only present in final state)
-    int cycles = json_parse_number(state_json, "cycles");
-    if (cycles >= 0) {
-        state->cycles = (uint32_t)cycles;
-        state->has_cycles = true;
-    } else {
-        state->cycles = 0;
-        state->has_cycles = false;
+    const char* state_obj = json_find_key(json, state_name);
+    if (!state_obj || *state_obj != '{') {
+        return false;
     }
     
-    // Parse RAM array
-    bool ram_ok = json_parse_ram_array(state_json, state);
+    // Parse registers
+    state->pc = (uint16_t)json_parse_number(state_obj, "pc");
+    state->s = (uint8_t)json_parse_number(state_obj, "s");
+    state->a = (uint8_t)json_parse_number(state_obj, "a");
+    state->x = (uint8_t)json_parse_number(state_obj, "x");
+    state->y = (uint8_t)json_parse_number(state_obj, "y");
+    state->p = (uint8_t)json_parse_number(state_obj, "p");
     
-    free(state_json);
-    return ram_ok;
+    // Parse RAM
+    if (!json_parse_ram_array(state_obj, state)) {
+        return false;
+    }
+    
+    // Parse cycles (optional)
+    const char* cycles_value = json_find_key(state_obj, "cycles");
+    if (cycles_value && *cycles_value >= '0' && *cycles_value <= '9') {
+        state->cycles = (uint32_t)strtoul(cycles_value, NULL, 10);
+        state->has_cycles = true;
+    } else {
+        state->has_cycles = false;
+        state->cycles = 0;
+    }
+    
+    // Parse bus cycles (optional)
+    json_parse_cycles_array(state_obj, state);
+    
+    return true;
 }
 
 // Parse a complete processor test from JSON
 bool json_parse_processor_test(const char* json_content, processor_test_t* test) {
-    if (!json_content || !test) return false;
-    
-    // Initialize test structure
-    memset(test, 0, sizeof(processor_test_t));
+    if (!json_content || !test) {
+        return false;
+    }
     
     // Parse test name
     if (!json_parse_string(json_content, "name", test->name, sizeof(test->name))) {
@@ -369,11 +347,6 @@ bool json_parse_processor_test(const char* json_content, processor_test_t* test)
     
     // Parse final state
     if (!json_parse_cpu_state(json_content, "final", &test->final)) {
-        return false;
-    }
-    
-    // Parse cycles array (ProcessorTests format)
-    if (!json_parse_cycles_array(json_content, &test->final)) {
         return false;
     }
     
