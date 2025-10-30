@@ -125,7 +125,7 @@ bus_state_t op_rla(bus_state_t pins) {
         // This is a Read-Modify-Write operation
         return rmw_operation_helper(pins, [this](uint8_t& value) {
             // Perform ROL on memory value
-            uint8_t carry_in = get_carry_bit_0();
+            uint8_t carry_in = CPU_P(this) & FLAG_C;
             update_flag(FLAG_C, value & 0x80);
             value = (value << 1) | carry_in;
             

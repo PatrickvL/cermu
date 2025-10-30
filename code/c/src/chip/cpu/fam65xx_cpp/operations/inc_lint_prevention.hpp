@@ -138,17 +138,6 @@ namespace fam65xx_cpp {
       inline void update_flags_sbc(uint8_t a_old, uint8_t operand, uint8_t result) {}
       inline void update_flags_adc(uint8_t a_old, uint8_t operand, uint8_t result) {}
       
-      // Shift/rotate helpers
-      inline uint8_t shift_left(uint8_t value, uint8_t& carry_out) { carry_out = 0; return value; }
-      inline uint8_t shift_right(uint8_t value, uint8_t& carry_out) { carry_out = 0; return value; }
-      inline uint8_t rotate_left(uint8_t value, uint8_t carry_in, uint8_t& carry_out) { carry_out = 0; return value; }
-      inline uint8_t rotate_right(uint8_t value, uint8_t carry_in, uint8_t& carry_out) { carry_out = 0; return value; }
-      
-      // Helper functions
-      inline uint8_t get_carry_bit_0() const { return 0; }
-      inline uint8_t get_carry_bit_7() const { return 0; }
-      inline uint8_t get_borrow_input() const { return 0; }
-      
       // Address calculation helpers
       inline bool page_crossed(uint16_t addr1, uint16_t addr2) const { return false; }
       inline bool should_complete_write_cycle(bus_state_t pins) { return true; }

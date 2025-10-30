@@ -919,59 +919,6 @@ public:
                     calc_v_flag_sub(old_a, operand, result));
     }
 
-    // === Carry/Borrow Input Helpers ===
-    inline uint8_t get_borrow_input() const {
-        return (CPU_P(this) & FLAG_C) ^ FLAG_C;  // Branchless: XOR flips bit, result is 1 or 0
-    }
-
-    inline uint8_t get_carry_bit_7() const {
-        return (CPU_P(this) & FLAG_C) << 7;  // Shift bit 0 to bit 7
-    }
-
-    inline uint8_t get_carry_bit_0() const {
-        return CPU_P(this) & FLAG_C;  // Returns FLAG_C (0x01) or 0x00
-    }
-
-    // ========================================================================
-    // SHIFT AND ROTATE HELPERS
-    // ========================================================================
-    
-    /**
-     * Arithmetic Shift Left (ASL) with carry output
-     * Hardware-accurate implementation with proper flag handling
-     */
-    inline uint8_t shift_left(uint8_t value, uint8_t& carry_out) {
-        carry_out = (value & 0x80) ? FLAG_C : 0;
-        return value << 1;
-    }
-    
-    /**
-     * Logical Shift Right (LSR) with carry output
-     * Hardware-accurate implementation
-     */
-    inline uint8_t shift_right(uint8_t value, uint8_t& carry_out) {
-        carry_out = (value & 0x01) ? FLAG_C : 0;
-        return value >> 1;
-    }
-    
-    /**
-     * Rotate Left (ROL) with carry input/output
-     * Hardware-accurate 9-bit rotation through carry flag
-     */
-    inline uint8_t rotate_left(uint8_t value, uint8_t carry_in, uint8_t& carry_out) {
-        carry_out = (value & 0x80) ? FLAG_C : 0;
-        return (value << 1) | (carry_in ? 1 : 0);
-    }
-    
-    /**
-     * Rotate Right (ROR) with carry input/output
-     * Hardware-accurate 9-bit rotation through carry flag
-     */
-    inline uint8_t rotate_right(uint8_t value, uint8_t carry_in, uint8_t& carry_out) {
-        carry_out = (value & 0x01) ? FLAG_C : 0;
-        return (value >> 1) | (carry_in ? 0x80 : 0);
-    }
-
     // ========================================================================
     // ADDRESSING AND PAGE CROSSING HELPERS
     // ========================================================================
@@ -1029,7 +976,6 @@ private:
     bool process_interrupt_detection(bus_state_t pins) {
         // Load state into registers to reduce memory accesses
         uint32_t shift_reg = this->interrupt_shift_register;
-        uint8_t nmi_prev = this->nmi_prev;
         
         // Shift and clear separators (prevent cross-over) in one operation
         shift_reg = (shift_reg << 1) & ~INT_SEPARATOR_MASK;
@@ -1047,7 +993,7 @@ private:
         
         // NMI edge detection (extracted bit 2)
         uint8_t nmi_current = (int_pins >> NMI_OFFSET) & 0x1;
-        shift_reg |= (-(nmi_prev & !nmi_current)) & (1 << INT_NMI_START_BIT);
+        shift_reg |= (-(this->nmi_prev & !nmi_current)) & (1 << INT_NMI_START_BIT);
         
         // Sample RESET (extracted bit 0 -> shift_reg bit 8)
         shift_reg |= (int_pins & 0x1) << INT_RESET_START_BIT;
