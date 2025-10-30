@@ -709,20 +709,32 @@ public:
 
         if constexpr (has_bcd<ProcessorTag>()) {
             if (CPU_P(this) & FLAG_D) {
-                // BCD mode - inlined hardware-accurate implementation
+                // BCD mode - shared calculation with processor-specific flag behavior
                 uint8_t al = (old_a & 0x0F) + (operand & 0x0F) + carry_in;
                 if (al > 9) al += 6;
                 
                 uint8_t ah = (old_a >> 4) + (operand >> 4) + (al > 0x0F);
                 
-                // Construct nz_source for hardware-accurate N/Z flags
-                const uint8_t n_flag = (result != 0) * ((ah << 4) & FLAG_N);
-                const uint8_t v_flag = ((~(old_a ^ operand) & (old_a ^ (ah << 4))) >> 1) & FLAG_V;
+                // Processor-specific flag calculation
+                uint8_t n_flag, v_flag, z_flag, c_flag;
+                if constexpr (std::is_same_v<ProcessorTag, WDC65C02Tag>) {
+                    // WDC65C02: Calculate flags before final adjustment, N flag from final result
+                    c_flag = (ah > 15) ? FLAG_C : 0;
+                    v_flag = ((~(old_a ^ operand) & (old_a ^ result)) >> 1) & FLAG_V;
+                    z_flag = (result == 0) * FLAG_Z;
+                    if (ah > 9) ah += 6;
+                    const uint8_t bcd_result = (ah << 4) | (al & 0x0F);
+                    n_flag = bcd_result & FLAG_N;
+                } else {
+                    // NMOS: Original flag behavior with quirky N flag calculation
+                    n_flag = (result != 0) * ((ah << 4) & FLAG_N);
+                    v_flag = ((~(old_a ^ operand) & (old_a ^ (ah << 4))) >> 1) & FLAG_V;
+                    if (ah > 9) ah += 6;
+                    z_flag = (result == 0) * FLAG_Z;
+                    c_flag = (ah > 15) ? FLAG_C : 0;
+                }
                 
-                if (ah > 9) ah += 6;
-                
-                const uint8_t z_flag = (result == 0) * FLAG_Z;
-                const uint8_t c_flag = (ah > 15) ? FLAG_C : 0;
+                // Shared footer: apply result and flags
                 CPU_A(this) = (ah << 4) | (al & 0x0F);
                 CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
                     n_flag | v_flag | z_flag | c_flag;
@@ -735,7 +747,7 @@ public:
         CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
             calc_nz_flags(result) |
             calc_v_flag_add(old_a, operand, result) |
-            (full_result >> 8); // FLAG_C
+            calc_c_flag(full_result);
     }
 
     /**
@@ -1009,6 +1021,12 @@ private:
         operation_handlers[OP_PHP] = &fam65xx_t::op_php;
         operation_handlers[OP_PLA] = &fam65xx_t::op_pla;
         operation_handlers[OP_PLP] = &fam65xx_t::op_plp;
+        
+        // WDC65C02 enhanced stack operations
+        operation_handlers[OP_PHX] = &fam65xx_t::op_phx;
+        operation_handlers[OP_PHY] = &fam65xx_t::op_phy;
+        operation_handlers[OP_PLX] = &fam65xx_t::op_plx;
+        operation_handlers[OP_PLY] = &fam65xx_t::op_ply;
         
         // Branch operations (implemented)
         operation_handlers[OP_BCC] = &fam65xx_t::op_bcc;

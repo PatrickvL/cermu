@@ -34,6 +34,21 @@ bus_state_t op_adc(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_nop(bus_state_t pins) {
+    // WDC65C02 neutralized illegal opcodes preserve original addressing timing
+    if constexpr (has_cmos_enhancements<ProcessorTag>()) {
+        if (this->opcode_entry.flags & OF_RMW) {
+            // RMW mode NOP: Perform full read-modify-write cycle but don't modify the value
+            // This preserves the bus cycle timing for WDC65C02 neutralized illegal opcodes
+            return rmw_operation_helper(pins, [this](uint8_t& value) {
+                // NOP operation: read the value but don't modify it
+                // This creates the correct bus cycle pattern for WDC65C02 illegal opcodes
+                (void)value; // Suppress unused parameter warning
+                // No operation performed - value remains unchanged
+            });
+        }
+    }
+    
+    // Regular NOP handling for non-RMW modes
     switch (this->opcode_entry.am_index) {
         case AM_IMM:
             // AM_IMM: All immediate NOPs read operand and increment PC
@@ -54,11 +69,15 @@ bus_state_t op_nop(bus_state_t pins) {
             break;
 
         default:
-            // Memory modes: Dummy read from target address
-            pins = phi2_read(pins, REG_AB, REG_TMP);
-            if (!FAM65XX_GET_RDY(pins)) {
-                return pins;
+            // WDC65C02 neutralized illegal opcodes: operands already consumed by addressing mode handler
+            if constexpr (!has_cmos_enhancements<ProcessorTag>()) {                
+                // NMOS behavior: Memory modes do dummy read from target address
+                pins = phi2_read(pins, REG_AB, REG_TMP);
+                if (!FAM65XX_GET_RDY(pins)) {
+                    return pins;
+                }
             }
+            // Most WDC65C02 illegal opcodes just consume operands and do nothing
 
             /**
              * Handle NES6502 test syscalls as documented at

@@ -108,5 +108,6 @@ code/c/tests/build/external/
 code/c/tests/fam65xx_cpp_65c02_test_runner
 code/c/tests/fam65xx_cpp_klaus_test_runner
 code/c/tests/fam65xx_cpp_lorenz_test_runner
+code/c/tests/fam65xx_processor_tests_runner
 code/csharp/aiemu/obj/*
 code/c/tests/CTestTestfile.cmake
