@@ -73,6 +73,9 @@ ProcessorType detect_processor_from_path(const std::string& test_path) {
     std::transform(path_lower.begin(), path_lower.end(), path_lower.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     
+    // Normalize path separators for Windows/Unix compatibility
+    std::replace(path_lower.begin(), path_lower.end(), '\\', '/');
+    
     if (!g_quiet_mode) {
         fprintf(stderr, "DEBUG: Detecting processor from path: %s\n", test_path.c_str());
         fprintf(stderr, "DEBUG: Path lowercase: %s\n", path_lower.c_str());
@@ -86,10 +89,22 @@ ProcessorType detect_processor_from_path(const std::string& test_path) {
         if (!g_quiet_mode) printf("DEBUG: Detected NES6502\n");
         return ProcessorType::NES6502;
     }
-    if (path_lower.find("processor_tests/mos6510/") != std::string::npos) return ProcessorType::MOS6510;
-    if (path_lower.find("processor_tests/wdc65c02/") != std::string::npos) return ProcessorType::WDC65C02;
-    if (path_lower.find("processor_tests/rockwell65c02/") != std::string::npos) return ProcessorType::ROCKWELL65C02;
-    if (path_lower.find("processor_tests/wdc65c816/") != std::string::npos) return ProcessorType::WDC65C816;
+    if (path_lower.find("processor_tests/mos6510/") != std::string::npos) {
+        if (!g_quiet_mode) printf("DEBUG: Detected MOS6510\n");
+        return ProcessorType::MOS6510;
+    }
+    if (path_lower.find("processor_tests/wdc65c02/") != std::string::npos) {
+        if (!g_quiet_mode) printf("DEBUG: Detected WDC65C02\n");
+        return ProcessorType::WDC65C02;
+    }
+    if (path_lower.find("processor_tests/rockwell65c02/") != std::string::npos) {
+        if (!g_quiet_mode) printf("DEBUG: Detected ROCKWELL65C02\n");
+        return ProcessorType::ROCKWELL65C02;
+    }
+    if (path_lower.find("processor_tests/wdc65c816/") != std::string::npos) {
+        if (!g_quiet_mode) printf("DEBUG: Detected WDC65C816\n");
+        return ProcessorType::WDC65C816;
+    }
     
     if (!g_quiet_mode) printf("DEBUG: Using default MOS6502\n");
     return ProcessorType::MOS6502;  // Default fallback
