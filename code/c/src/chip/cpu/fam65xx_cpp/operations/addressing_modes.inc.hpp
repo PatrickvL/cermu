@@ -155,11 +155,8 @@ bus_state_t addr_abx(bus_state_t pins) {
         }
             
         case 2:
-            // PHI2: Page cross penalty - read from wrong address (use temporary register to avoid overwriting DL)
-            uint8_t tmp = CPU_DL(this); // Save DL temporarily
-            // Note : Using IR as temporary is not safe, given op_nop may use it for syscall detection
-            pins = phi2_read(pins, REG_AB, REG_DL);
-            CPU_DL(this) = tmp; // Restore DL from temporary
+            // PHI2: Page cross penalty - read from wrong address (use TMP to avoid overwriting DL)
+            pins = phi2_read(pins, REG_AB, REG_TMP);
             if (FAM65XX_GET_RDY(pins)) {
                 // PHI1: Correct final address
                 // ABL has X added, ABH is unchanged from original. Subtract X from ABL to restore original base
@@ -221,7 +218,7 @@ bus_state_t addr_aby(bus_state_t pins) {
             
         case 2: {
             // PHI2: Page cross penalty - read from wrong address (use temporary register to avoid overwriting DL)
-            pins = phi2_read(pins, REG_AB, REG_IR); // Use IR as temporary since DL has intermediate high byte
+            pins = phi2_read(pins, REG_AB, REG_TMP); // Use TMP as temporary since DL has intermediate high byte
             if (FAM65XX_GET_RDY(pins)) {
                 // PHI1: Correct final address
                 // ABL has Y added, ABH is unchanged from original. Subtract Y from ABL to restore original base
@@ -386,7 +383,7 @@ bus_state_t addr_iny(bus_state_t pins) {
             
         case 3:
             /* Page cross penalty - dummy read from wrong address (don't overwrite DL!) */
-            pins = phi2_read(pins, REG_AB, REG_IR); // Use IR as temporary, preserve DL
+            pins = phi2_read(pins, REG_AB, REG_TMP); // Use TMP as temporary, preserve DL
             if (FAM65XX_GET_RDY(pins)) {
                 /* DL already contains intermediate high byte from case 2 */
                 

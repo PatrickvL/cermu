@@ -18,7 +18,7 @@ bus_state_t op_pha(bus_state_t pins) {
     switch (this->cycle_index) {
         case 0:
             /* Dummy cycle for internal operation */
-            pins = phi2_read(pins, REG_PC, REG_DL);
+            pins = phi2_read(pins, REG_PC, REG_TMP);
             if (FAM65XX_GET_RDY(pins)) {
                 this->cycle_index++;
             }
@@ -41,7 +41,7 @@ bus_state_t op_php(bus_state_t pins) {
     switch (this->cycle_index) {
         case 0:
             /* Dummy cycle for internal operation */
-            pins = phi2_read(pins, REG_PC, REG_DL);
+            pins = phi2_read(pins, REG_PC, REG_TMP);
             if (FAM65XX_GET_RDY(pins)) {
                 this->cycle_index++;
             }
@@ -65,7 +65,7 @@ bus_state_t op_pla(bus_state_t pins) {
     switch (this->cycle_index) {
         case 0:
             /* PHI2: Dummy read from PC */
-            pins = phi2_read(pins, REG_PC, REG_DL);
+            pins = phi2_read(pins, REG_PC, REG_TMP);
             if (FAM65XX_GET_RDY(pins)) {
                 this->cycle_index++;
             }
@@ -73,7 +73,7 @@ bus_state_t op_pla(bus_state_t pins) {
             
         case 1:
             /* PHI2: Dummy read from current stack pointer, then increment SP */
-            pins = phi2_read(pins, REG_SP, REG_DL);
+            pins = phi2_read(pins, REG_SP, REG_TMP);
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Increment stack pointer */
                 CPU_S(this)++;
@@ -99,7 +99,7 @@ bus_state_t op_plp(bus_state_t pins) {
     switch (this->cycle_index) {
         case 0:
             /* PHI2: Dummy read from PC */
-            pins = phi2_read(pins, REG_PC, REG_DL);
+            pins = phi2_read(pins, REG_PC, REG_TMP);
             if (FAM65XX_GET_RDY(pins)) {
                 this->cycle_index++;
             }
@@ -107,7 +107,7 @@ bus_state_t op_plp(bus_state_t pins) {
             
         case 1:
             /* PHI2: Dummy read from current stack pointer, then increment SP */
-            pins = phi2_read(pins, REG_SP, REG_DL);
+            pins = phi2_read(pins, REG_SP, REG_TMP);
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Increment stack pointer */
                 CPU_S(this)++;

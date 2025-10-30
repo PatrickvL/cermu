@@ -35,7 +35,7 @@ bus_state_t op_jsr(bus_state_t pins) {
             
         case 1:
             /* PHI2: Dummy read from stack pointer (internal operation) */
-            pins = phi2_read(pins, REG_SP, REG_DL);
+            pins = phi2_read(pins, REG_SP, REG_TMP);
             if (FAM65XX_GET_RDY(pins)) {
                 this->cycle_index++;
             }
@@ -77,7 +77,7 @@ bus_state_t op_rts(bus_state_t pins) {
     switch (this->cycle_index) {
         case 0:
             /* PHI2: Dummy read from PC */
-            pins = phi2_read(pins, REG_PC, REG_DL);
+            pins = phi2_read(pins, REG_PC, REG_TMP);
             if (FAM65XX_GET_RDY(pins)) {
                 this->cycle_index++;
             }
@@ -85,7 +85,7 @@ bus_state_t op_rts(bus_state_t pins) {
             
         case 1:
             /* PHI2: Dummy read from current stack pointer, then increment SP */
-            pins = phi2_read(pins, REG_SP, REG_DL);
+            pins = phi2_read(pins, REG_SP, REG_TMP);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_S(this)++;
                 this->cycle_index++;
@@ -113,7 +113,7 @@ bus_state_t op_rts(bus_state_t pins) {
             
         case 4:
             /* PHI2: Dummy read from PC, then increment PC */
-            pins = phi2_read(pins, REG_PC, REG_DL);
+            pins = phi2_read(pins, REG_PC, REG_TMP);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_PC(this)++;
                 transition_to_fetch();
@@ -132,7 +132,7 @@ bus_state_t op_brk(bus_state_t pins) {
     switch (this->cycle_index) {
         case 0:
             /* PHI2: Dummy read from PC+1 (BRK has optional signature byte) */
-            pins = phi2_read(pins, REG_PC, REG_DL);
+            pins = phi2_read(pins, REG_PC, REG_TMP);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_PC(this)++;
                 this->cycle_index++;
@@ -195,7 +195,7 @@ bus_state_t op_rti(bus_state_t pins) {
     switch (this->cycle_index) {
         case 0:
             /* PHI2: Dummy read from PC */
-            pins = phi2_read(pins, REG_PC, REG_DL);
+            pins = phi2_read(pins, REG_PC, REG_TMP);
             if (FAM65XX_GET_RDY(pins)) {
                 this->cycle_index++;
             }
@@ -203,7 +203,7 @@ bus_state_t op_rti(bus_state_t pins) {
             
         case 1:
             /* PHI2: Dummy read from current stack pointer, then increment SP */
-            pins = phi2_read(pins, REG_SP, REG_DL);
+            pins = phi2_read(pins, REG_SP, REG_TMP);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_S(this)++;
                 this->cycle_index++;
