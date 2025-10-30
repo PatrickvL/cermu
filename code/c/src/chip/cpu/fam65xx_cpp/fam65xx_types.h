@@ -216,6 +216,7 @@ typedef enum {
     // Internal registers
     REG_IR,        // Instruction Register (current opcode)
     REG_DL,        // Data latch
+    REG_TMP,       // Temporay/scratch register
     
     REG_COUNT,
     
