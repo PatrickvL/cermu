@@ -1223,7 +1223,7 @@ public:
             // Hardware quirk: Additional cycles based on CPU state interactions
             // Analysis of bus state to determine CPU operation type
             uint16_t cpu_addr = FAM65XX_GET_ADDR(bus_state);
-            uint8_t cpu_data = FAM65XX_GET_DATA(bus_state);
+            (void)FAM65XX_GET_DATA(bus_state); // Suppress unused variable warning
             bool is_write = FAM65XX_GET_RW(bus_state) == 0;
             
             // Detect read-modify-write operations (common patterns)

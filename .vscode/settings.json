@@ -1,7 +1,8 @@
 {
-    "cmake.sourceDirectory": "/home/patrick/Git/aiemu/code/c",
+    "cmake.sourceDirectory": "code/c/tests",
     "files.associations": {
         "*.h": "c",
-        "*.hpp": "cpp"
+        "*.hpp": "cpp",
+        "xtr1common": "cpp"
     }
 }
