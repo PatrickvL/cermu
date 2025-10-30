@@ -19,13 +19,15 @@ bus_state_t op_bra(bus_state_t pins) {
         // Read relative offset
         CPU_AB(this) = CPU_PC(this);
         pins = phi2_read(pins, REG_AB, REG_DL);
-        CPU_PC(this)++;
-        
-        // Apply branch offset
-        int8_t offset = static_cast<int8_t>(CPU_DL(this));
-        CPU_PC(this) += offset;
-        
-        transition_to_fetch();
+        if (FAM65XX_GET_RDY(pins)) {
+            CPU_PC(this)++;
+            
+            // Apply branch offset
+            int8_t offset = static_cast<int8_t>(CPU_DL(this));
+            CPU_PC(this) += offset;
+            
+            transition_to_fetch();
+        }
         return pins;
     } else {
         // Invalid on NMOS processors - treat as NOP
@@ -55,21 +57,22 @@ bus_state_t op_trb(bus_state_t pins) {
         
         // Read current value
         pins = phi2_read(pins, REG_AB, REG_DL);
-        
-        uint8_t memory = CPU_DL(this);
-        uint8_t accumulator = CPU_A(this);
-        
-        // Test bits (set Z flag if A & memory == 0)
-        uint8_t test_result = memory & accumulator;
-        update_flags(FLAG_Z, test_result == 0);
-        
-        // Reset bits (memory = memory & ~A)
-        CPU_DL(this) = memory & ~accumulator;
-        
-        // Write back
-        pins = phi2_write(pins, REG_AB, REG_DL);
-        
-        transition_to_fetch();
+        if (FAM65XX_GET_RDY(pins)) {
+            uint8_t memory = CPU_DL(this);
+            uint8_t accumulator = CPU_A(this);
+            
+            // Test bits (set Z flag if A & memory == 0)
+            uint8_t test_result = memory & accumulator;
+            update_flags(FLAG_Z, test_result == 0);
+            
+            // Reset bits (memory = memory & ~A)
+            CPU_DL(this) = memory & ~accumulator;
+            
+            // Write back
+            pins = phi2_write(pins, REG_AB, REG_DL);
+            
+            transition_to_fetch();
+        }
         return pins;
     } else {
         transition_to_fetch();
@@ -84,21 +87,22 @@ bus_state_t op_tsb(bus_state_t pins) {
         
         // Read current value
         pins = phi2_read(pins, REG_AB, REG_DL);
-        
-        uint8_t memory = CPU_DL(this);
-        uint8_t accumulator = CPU_A(this);
-        
-        // Test bits (set Z flag if A & memory == 0)
-        uint8_t test_result = memory & accumulator;
-        update_flags(FLAG_Z, test_result == 0);
-        
-        // Set bits (memory = memory | A)
-        CPU_DL(this) = memory | accumulator;
-        
-        // Write back
-        pins = phi2_write(pins, REG_AB, REG_DL);
-        
-        transition_to_fetch();
+        if (FAM65XX_GET_RDY(pins)) {
+            uint8_t memory = CPU_DL(this);
+            uint8_t accumulator = CPU_A(this);
+            
+            // Test bits (set Z flag if A & memory == 0)
+            uint8_t test_result = memory & accumulator;
+            update_flags(FLAG_Z, test_result == 0);
+            
+            // Set bits (memory = memory | A)
+            CPU_DL(this) = memory | accumulator;
+            
+            // Write back
+            pins = phi2_write(pins, REG_AB, REG_DL);
+            
+            transition_to_fetch();
+        }
         return pins;
     } else {
         transition_to_fetch();
@@ -140,11 +144,12 @@ bus_state_t op_stp(bus_state_t pins) {
 // PHX - Push X Register (65C02)
 bus_state_t op_phx(bus_state_t pins) {
     if constexpr (has_cmos_enhancements<ProcessorTag>()) {
-        // Push X to stack
-        pins = phi2_write(pins, REG_SP, REG_X);
-        CPU_S(this)--;
-        
-        transition_to_fetch();
+        // Push X to stack with processor-specific RDY handling
+        if (this->should_complete_write_cycle(pins)) {
+            pins = phi2_write(pins, REG_SP, REG_X);
+            CPU_S(this)--;
+            transition_to_fetch();
+        }
         return pins;
     } else {
         transition_to_fetch();
@@ -155,11 +160,12 @@ bus_state_t op_phx(bus_state_t pins) {
 // PHY - Push Y Register (65C02)
 bus_state_t op_phy(bus_state_t pins) {
     if constexpr (has_cmos_enhancements<ProcessorTag>()) {
-        // Push Y to stack
-        pins = phi2_write(pins, REG_SP, REG_Y);
-        CPU_S(this)--;
-        
-        transition_to_fetch();
+        // Push Y to stack with processor-specific RDY handling
+        if (this->should_complete_write_cycle(pins)) {
+            pins = phi2_write(pins, REG_SP, REG_Y);
+            CPU_S(this)--;
+            transition_to_fetch();
+        }
         return pins;
     } else {
         transition_to_fetch();
@@ -173,11 +179,11 @@ bus_state_t op_plx(bus_state_t pins) {
         // Pull X from stack
         CPU_S(this)++;
         pins = phi2_read(pins, REG_SP, REG_X);
-        
-        // Update N and Z flags
-        update_nz_flags(CPU_X(this));
-        
-        transition_to_fetch();
+        if (FAM65XX_GET_RDY(pins)) {
+            // Update N and Z flags
+            update_nz_flags(CPU_X(this));
+            transition_to_fetch();
+        }
         return pins;
     } else {
         transition_to_fetch();
@@ -191,11 +197,11 @@ bus_state_t op_ply(bus_state_t pins) {
         // Pull Y from stack
         CPU_S(this)++;
         pins = phi2_read(pins, REG_SP, REG_Y);
-        
-        // Update N and Z flags
-        update_nz_flags(CPU_Y(this));
-        
-        transition_to_fetch();
+        if (FAM65XX_GET_RDY(pins)) {
+            // Update N and Z flags
+            update_nz_flags(CPU_Y(this));
+            transition_to_fetch();
+        }
         return pins;
     } else {
         transition_to_fetch();
