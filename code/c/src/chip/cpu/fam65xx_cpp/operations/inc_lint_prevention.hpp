@@ -128,15 +128,11 @@ namespace fam65xx_cpp {
       inline void update_flags(uint8_t clear_mask, uint8_t set_mask) {}
       inline void update_flag(uint8_t flag_mask, bool condition) {}
       inline void update_nz_flags(uint8_t value) {}
-      inline void update_nzc_flags(uint8_t minuend, uint8_t subtrahend) {}
-      inline void update_nvz_flags(uint8_t operand, uint8_t and_result) {}
       
       // Arithmetic operation helpers
       inline void perform_adc(uint8_t operand) {}
       inline void perform_sbc(uint8_t operand) {}
       inline void perform_compare(uint8_t reg_value, uint8_t operand) {}
-      inline void update_flags_sbc(uint8_t a_old, uint8_t operand, uint8_t result) {}
-      inline void update_flags_adc(uint8_t a_old, uint8_t operand, uint8_t result) {}
       
       // Address calculation helpers
       inline bool page_crossed(uint16_t addr1, uint16_t addr2) const { return false; }

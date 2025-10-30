@@ -620,10 +620,9 @@ public:
     
     /**
      * Branchless Z flag calculation
-     * Uses arithmetic negation trick: -(value == 0) produces 0xFF or 0x00
      */
     inline uint8_t calc_z_flag(uint8_t value) {
-        return -(value == 0) & FLAG_Z;
+        return (value == 0) * FLAG_Z;
     }
     
     /**
@@ -670,218 +669,6 @@ public:
     }
 
     // ========================================================================
-    // HARDWARE-ACCURATE BCD ARITHMETIC HELPERS
-    // ========================================================================
-    
-    /**
-     * Hardware-accurate 6502 BCD addition
-     * Based on MAME and floooh implementations with exact hardware timing
-     *
-     * This implementation matches the actual 6502 silicon behavior including:
-     * - Correct N and Z flag behavior in BCD mode
-     * - Proper carry handling
-     * - Exact overflow flag calculation
-     */
-    inline uint8_t bcd_add_6502(uint8_t a, uint8_t b, bool carry_in, bool& carry_out, bool& overflow, uint8_t& nz_source) {
-        // DEFINITIVE NMOS 6502 BCD addition - 100% ProcessorTests compatible
-        
-        // Step 1: Binary addition for overflow and carry backup
-        const uint16_t binary_sum = a + b + carry_in;
-        
-        // Step 2: BCD nibble processing
-        uint16_t al = (a & 0x0F) + (b & 0x0F) + carry_in;
-        uint16_t ah = (a >> 4) + (b >> 4);
-        
-        // Step 3: Low nibble adjustment with carry propagation
-        const uint16_t low_carry = (al > 9);
-        al += low_carry * 6;  // Branchless: add 6 if al > 9
-        ah += low_carry;
-        
-        // Step 4: NMOS 6502 QUIRK - N/Z flags from intermediate result
-        nz_source = (al & 0x0F) | ((ah & 0x0F) << 4);
-        
-        // Step 5: V flag from binary overflow logic
-        const uint8_t binary_result_8 = static_cast<uint8_t>(binary_sum);
-        const uint8_t overflow_bits = (a ^ binary_result_8) & (b ^ binary_result_8);
-        overflow = (overflow_bits >> 7) != 0;
-        
-        // Step 6: NMOS 6502 carry - BCD primary with binary backup
-        // Simplified: primary_carry || (!primary_carry && secondary_carry) === primary_carry || secondary_carry
-        carry_out = (ah > 9) || (binary_sum > 0xFF);
-        
-        // Step 7: High nibble adjustment
-        ah += (ah > 9) * 6;  // Branchless: add 6 if ah > 9
-        
-        // Step 8: Final BCD result
-        return (al & 0x0F) | ((ah & 0x0F) << 4);
-    }
-
-    /**
-     * Hardware-accurate 6502 BCD subtraction
-     * Matches hardware behavior for SBC instruction in decimal mode
-     */
-    inline uint8_t bcd_sub_6502(uint8_t a, uint8_t b, bool borrow_in, bool& carry_out, bool& overflow, uint8_t& nz_source) {
-        // DEFINITIVE NMOS 6502 BCD subtraction - 100% ProcessorTests compatible
-        
-        // Step 1: Binary subtraction for overflow and carry backup
-        const int16_t binary_result = a - b - borrow_in;
-        
-        // Step 2: BCD nibble processing
-        int16_t al = (a & 0x0F) - (b & 0x0F) - borrow_in;
-        int16_t ah = (a >> 4) - (b >> 4);
-        
-        // Step 3: NMOS 6502 QUIRK - N/Z flags from intermediate result BEFORE adjustments
-        // CORRECTED: Capture intermediate result properly handling negative values
-        // The actual NMOS 6502 silicon behavior computes flags from the binary subtraction result
-        nz_source = static_cast<uint8_t>(binary_result);
-        
-        // Step 4: Low nibble adjustment with borrow propagation (after capturing flags)
-        const int16_t low_borrow = (al < 0);
-        al -= low_borrow * 6;  // Branchless: subtract 6 if al < 0
-        ah -= low_borrow;
-        
-        // Step 5: V flag from binary overflow logic
-        const uint8_t binary_result_8 = static_cast<uint8_t>(binary_result);
-        const uint8_t overflow_bits = (a ^ b) & (a ^ binary_result_8);
-        overflow = (overflow_bits >> 7) != 0;
-        
-        // Step 6: NMOS 6502 carry - both BCD and binary must succeed
-        carry_out = (ah >= 0) && (binary_result >= 0);
-        
-        // Step 7: High nibble adjustment
-        ah -= (ah < 0) * 6;  // Branchless: subtract 6 if ah < 0
-        
-        // Step 8: Final BCD result
-        return (al & 0x0F) | ((ah & 0x0F) << 4);
-    }
-
-    // ========================================================================
-    // UNIFIED OPERATION PATTERNS WITH PROCESSOR-SPECIFIC OPTIMIZATIONS
-    // ========================================================================
-    
-    /**
-     * ADC operation with BCD support
-     * Handles both binary and BCD modes with proper flag calculation
-     *
-     * Template parameter allows compile-time processor-specific optimizations:
-     * - NES 6502: BCD disabled, simplified binary-only path
-     * - MOS 6502/6510: Full BCD support with hardware-accurate behavior
-     * - 65C02: Enhanced BCD with corrected flag behavior
-     */
-    inline void perform_adc(uint8_t operand) {
-        const uint8_t old_a = CPU_A(this);
-        const uint8_t carry_in = (CPU_P(this) & FLAG_C) != 0;
-        
-        uint8_t result;
-        uint8_t flags_source;
-        uint8_t new_flags;
-        
-        if constexpr (has_bcd<ProcessorTag>()) {
-            if (CPU_P(this) & FLAG_D) {
-                // BCD mode - use hardware-accurate BCD implementation
-                bool carry_out, overflow;
-                result = bcd_add_6502(old_a, operand, carry_in, carry_out, overflow, flags_source);
-                
-                // CRITICAL FIX: Apply reference implementation approach for BCD flags
-                // Z flag: MUST use binary sum, not BCD result (hardware behavior)
-                const uint8_t binary_sum = old_a + operand + carry_in;
-                const uint8_t z_flag = (binary_sum == 0) ? FLAG_Z : 0;
-                
-                // N flag: Use bit 3 of high nibble, only when Z=0 (reference implementation)
-                uint8_t n_flag = 0;
-                if (!z_flag && (flags_source & 0x80)) {  // Check if Z=0 and bit 7 set
-                    n_flag = FLAG_N;
-                }
-                
-                // V flag: Use intermediate result (ah<<4) approach from reference
-                const uint8_t v_flag_from_bcd = (~(old_a ^ operand) & (old_a ^ flags_source) & 0x80) ? FLAG_V : 0;
-                
-                new_flags = n_flag | z_flag | (-carry_out & FLAG_C) | v_flag_from_bcd;
-                
-                CPU_A(this) = result;
-                CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) | new_flags;
-                return;
-            }
-        }
-        
-        // Binary mode (for all non-BCD processors or binary mode)
-        const uint16_t full_result = old_a + operand + carry_in;
-        result = static_cast<uint8_t>(full_result);
-        
-        // Calculate flags directly from computation
-        const uint8_t carry_out = full_result >> 8;  // Extract carry bit
-        const uint8_t overflow_bits = (old_a ^ result) & (operand ^ result);
-        
-        // Build all flags in one operation
-        new_flags = calc_n_flag(result) |
-                calc_z_flag(result) |
-                (-carry_out & FLAG_C) |
-                (-(overflow_bits >> 7) & FLAG_V);
-        
-        CPU_A(this) = result;
-        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) | new_flags;
-    }
-
-    /**
-     * SBC operation with BCD support
-     * Handles both binary and BCD modes with proper flag calculation
-     */
-    inline void perform_sbc(uint8_t operand) {
-        const uint8_t old_a = CPU_A(this);
-        const uint8_t borrow_in = (CPU_P(this) & FLAG_C) == 0;  // Carry clear means borrow
-        
-        uint8_t result;
-        uint8_t flags_source;
-        uint8_t new_flags;
-        
-        if constexpr (has_bcd<ProcessorTag>()) {
-            if (CPU_P(this) & FLAG_D) {
-                // BCD mode
-                bool carry_out, overflow;
-                result = bcd_sub_6502(old_a, operand, borrow_in, carry_out, overflow, flags_source);
-                
-                // NMOS 6502 BCD QUIRK: All flags (including V) computed from intermediate BCD result
-                // This matches the actual silicon behavior for BCD edge cases and ADC implementation
-                const uint8_t v_flag_from_bcd = calc_v_flag_sub(old_a, operand, flags_source);
-                new_flags = calc_n_flag(flags_source) |  // N flag from intermediate result
-                        calc_z_flag(flags_source) |      // Z flag from intermediate result
-                        (-carry_out & FLAG_C) |
-                        v_flag_from_bcd;  // V flag from BCD intermediate result, not binary
-                
-                CPU_A(this) = result;
-                CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) | new_flags;
-                return;
-            }
-        }
-        
-        // Binary mode (for all non-BCD processors or binary mode)
-        const int16_t full_result = old_a - operand - borrow_in;
-        result = static_cast<uint8_t>(full_result);
-        
-        // Carry is set when no borrow occurred (result >= 0)
-        const uint8_t carry_out = (full_result >= 0);
-        const uint8_t overflow_bits = (old_a ^ operand) & (old_a ^ result);
-        
-        new_flags = calc_n_flag(result) |
-                calc_z_flag(result) |
-                (-carry_out & FLAG_C) |
-                (-(overflow_bits >> 7) & FLAG_V);
-        
-        CPU_A(this) = result;
-        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) | new_flags;
-    }
-
-    /**
-     * Compare operation (CMP/CPX/CPY)
-     * Optimized implementation with branchless flag calculation
-     */
-    inline void perform_compare(uint8_t reg_value, uint8_t operand) {
-        // Update flags using branchless calculations
-        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-                      calc_nzc_flags(reg_value, operand);
-    }
-
-    // ========================================================================
     // DERIVED OPERATIONS (updated to use optimized functions)
     // ========================================================================
     
@@ -893,30 +680,113 @@ public:
         update_flags(FLAG_N | FLAG_Z, calc_nz_flags(value));
     }
 
-    inline void update_nzc_flags(uint8_t minuend, uint8_t subtrahend) {
-        update_flags(FLAG_N | FLAG_Z | FLAG_C, calc_nzc_flags(minuend, subtrahend));
+    // ========================================================================
+    // HARDWARE-ACCURATE BCD ARITHMETIC HELPERS
+    // ========================================================================
+    
+    /**
+     * Hardware-accurate 6502 BCD addition
+     * Based on MAME and floooh implementations with exact hardware timing
+     *
+     * This implementation matches the actual 6502 silicon behavior including:
+     * - Correct N and Z flag behavior in BCD mode
+     * - Proper carry handling
+     * - Exact overflow flag calculation
+     *    
+     * ADC operation with BCD support
+     * Handles both binary and BCD modes with proper flag calculation
+     *
+     * Template parameter allows compile-time processor-specific optimizations:
+     * - NES 6502: BCD disabled, simplified binary-only path
+     * - MOS 6502/6510: Full BCD support with hardware-accurate behavior
+     * - 65C02: Enhanced BCD with corrected flag behavior
+     */
+    inline void perform_adc(uint8_t operand) {
+        const uint8_t old_a = CPU_A(this);
+        const uint8_t carry_in = CPU_P(this) & FLAG_C;
+        const uint16_t full_result = old_a + operand + carry_in;
+
+        if constexpr (has_bcd<ProcessorTag>()) {
+            if (CPU_P(this) & FLAG_D) {
+                // BCD mode - inlined hardware-accurate implementation
+                uint8_t al = (old_a & 0x0F) + (operand & 0x0F) + carry_in;
+                if (al > 9) al += 6;
+                
+                uint8_t ah = (old_a >> 4) + (operand >> 4) + (al > 0x0F);
+                
+                // Construct nz_source for hardware-accurate N/Z flags
+                const uint8_t nz_source = (full_result & 0xFF) ? ((ah & 0x08) ? FLAG_N : FLAG_C) : 0;
+                const uint8_t v_flag = ((~(old_a ^ operand) & (old_a ^ (ah << 4))) >> 1) & FLAG_V;
+                
+                if (ah > 9) ah += 6;
+                
+                CPU_A(this) = (ah << 4) | (al & 0x0F);
+                CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+                    calc_nz_flags(nz_source) |
+                    v_flag |
+                    (ah > 15); // FLAG_C
+                return;
+            }
+        }
+        
+        // Binary mode
+        const uint8_t result = static_cast<uint8_t>(full_result);
+        CPU_A(this) = result;
+        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+            calc_nz_flags(result) |
+            calc_v_flag_add(old_a, operand, result) |
+            (full_result >> 8); // FLAG_C
     }
 
-    inline void update_nvz_flags(uint8_t operand, uint8_t and_result) {
-        update_flags(FLAG_N | FLAG_V | FLAG_Z,
-                    (operand & (FLAG_N | FLAG_V)) |
-                    calc_z_flag(and_result));
+    /**
+     * SBC operation with BCD support - MAXIMALLY OPTIMIZED
+     */
+    inline void perform_sbc(uint8_t operand) {
+        const uint8_t old_a = CPU_A(this);
+        const uint8_t borrow_in = (CPU_P(this) & FLAG_C) ^ 1;
+        const uint16_t full_result = old_a - operand - borrow_in;
+        
+        if constexpr (has_bcd<ProcessorTag>()) {
+            if (CPU_P(this) & FLAG_D) {
+                // BCD mode - inlined hardware-accurate implementation
+                uint8_t al = (old_a & 0x0F) - (operand & 0x0F) - borrow_in;
+                const bool al_borrow = (int8_t)al < 0;
+                if (al_borrow) al -= 6;
+                
+                uint8_t ah = (old_a >> 4) - (operand >> 4) - al_borrow;
+                
+                // N/Z flags from binary result
+                const uint8_t nz_source = static_cast<uint8_t>(full_result);
+                const uint8_t v_flag = calc_v_flag_sub(old_a, operand, nz_source);
+                
+                if (ah & 0x80) ah -= 6;
+                
+                CPU_A(this) = (ah << 4) | (al & 0x0F);
+                CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+                    calc_nz_flags(nz_source) |
+                    v_flag |
+                    !(full_result & 0x0100); // FLAG_C
+                return;
+            }
+        }
+        
+        // Binary mode
+        const uint8_t result = static_cast<uint8_t>(full_result);
+        CPU_A(this) = result;
+        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+            calc_nz_flags(result) |
+            calc_v_flag_sub(old_a, operand, result) |
+            !(full_result & 0x0100); // FLAG_C
     }
 
-    inline void update_flags_adc(uint8_t old_a, uint8_t operand, uint16_t result) {
-        update_flags(FLAG_N | FLAG_V | FLAG_Z | FLAG_C,
-                    calc_n_flag(result) |
-                    calc_z_flag(result) |
-                    calc_c_flag(result) |     // Direct: carry set when overflow
-                    calc_v_flag_add(old_a, operand, result));
-    }
-
-    inline void update_flags_sbc(uint8_t old_a, uint8_t operand, uint16_t result) {
-        update_flags(FLAG_N | FLAG_V | FLAG_Z | FLAG_C,
-                    calc_n_flag(result) |
-                    calc_z_flag(result) |
-                    calc_c_flag(~result) |    // Inverted: carry set when no borrow
-                    calc_v_flag_sub(old_a, operand, result));
+    /**
+     * Compare operation (CMP/CPX/CPY)
+     * Optimized implementation with branchless flag calculation
+     */
+    inline void perform_compare(uint8_t reg_value, uint8_t operand) {
+        // Update flags using branchless calculations
+        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
+                      calc_nzc_flags(reg_value, operand);
     }
 
     // ========================================================================

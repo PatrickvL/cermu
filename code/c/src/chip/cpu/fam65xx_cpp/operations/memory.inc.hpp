@@ -170,7 +170,9 @@ bus_state_t op_bit(bus_state_t pins) {
         // N = bit 7 of operand
         // V = bit 6 of operand
         // Z = result of A & operand
-        update_nvz_flags(operand, result);
+        update_flags(FLAG_N | FLAG_V | FLAG_Z,
+                    (operand & (FLAG_N | FLAG_V)) |
+                    calc_z_flag(result));        
 
         // Complete instruction
         transition_to_fetch();
