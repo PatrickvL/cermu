@@ -161,8 +161,14 @@ bus_state_t op_brk(bus_state_t pins) {
                 CPU_DL(this) = CPU_P(this) | FLAG_B | FLAG_U;
                 pins = this->phi2_write(pins, REG_SP, REG_DL);
                 CPU_S(this)--;
-                /* Set interrupt disable flag */
-                set_flag(FLAG_I);
+                /* Set interrupt disable flag - processor specific behavior */
+                if constexpr (has_nmos_bugs<ProcessorTag>()) {
+                    /* NMOS 6502 always sets I flag on BRK */
+                    set_flag(FLAG_I);
+                } else {
+                    /* CMOS 65C02 preserves current I flag state on BRK */
+                    /* No change to I flag */
+                }
                 this->cycle_index++;
             }
             return pins;
