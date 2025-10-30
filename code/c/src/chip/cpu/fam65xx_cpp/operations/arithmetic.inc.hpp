@@ -46,20 +46,20 @@ bus_state_t op_nop(bus_state_t pins) {
             break;
             
         case AM_NON:
-        case AM_ABY:
-            // Implicit and absolute indexed NOPs do dummy read from PC without increment
+            // Implicit NOPs do dummy read from PC without increment
             pins = phi2_read(pins, REG_PC, REG_TMP);
             if (!FAM65XX_GET_RDY(pins)) {
                 return pins;
             }
             break;
 
-        case AM_ABX:
-            // Implicit and absolute indexed NOPs do dummy read from PC without increment
-            pins = phi2_read(pins, REG_PC, REG_TMP);
+        default:
+            // Memory modes: Dummy read from target address
+            pins = phi2_read(pins, REG_AB, REG_TMP);
             if (!FAM65XX_GET_RDY(pins)) {
                 return pins;
             }
+
             /**
              * Handle NES6502 test syscalls as documented at
              * https://github.com/search?q=repo%3Arofl0r%2Fblargg-6502-cpu-test+syscall&type=code
@@ -69,6 +69,8 @@ bus_state_t op_nop(bus_state_t pins) {
             // Handle NES6502 syscall support for "long nop" patterns
             if constexpr (std::is_same_v<ProcessorTag, NES6502Tag>) {
                 // Check for syscall pattern: FC 13 37
+                // Note : Having this in default instead of a separate case AM_ABX is less host code
+                // (at a cost of 1 otherwise needless compare for the other NES6502 memory NOPs)
                 if (CPU_IR(this) == 0xFC && CPU_ABL(this) == 0x13 && CPU_ABH(this) == 0x37) {
                     // Syscall detected - output character from 0x2000
                     if (this->mem_read) {
@@ -79,14 +81,6 @@ bus_state_t op_nop(bus_state_t pins) {
                         }
                     }
                 }
-            }
-            break;
-            
-        default:
-            // Memory modes: Dummy read from target address
-            pins = phi2_read(pins, REG_AB, REG_TMP);
-            if (!FAM65XX_GET_RDY(pins)) {
-                return pins;
             }
             break;
     }
