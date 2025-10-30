@@ -138,11 +138,11 @@ target_compile_definitions(fam65xx_processor_tests_runner PRIVATE AIEMUC_IMPL)
 # Set C++20 standard for fam65xx_cpp template support
 set_property(TARGET fam65xx_processor_tests_runner PROPERTY CXX_STANDARD 20)
 set_property(TARGET fam65xx_processor_tests_runner PROPERTY CXX_STANDARD_REQUIRED ON)
-# Disable warnings as errors for this target due to generated code warnings
+# Enable full warning reporting to identify all compiler messages
 if(MSVC)
-    target_compile_options(fam65xx_processor_tests_runner PRIVATE /WX- /wd4244 /wd4189 /wd4477 /wd4996 /wd4100 /wd4996 /wd4505)
+    target_compile_options(fam65xx_processor_tests_runner PRIVATE /W4)
 else()
-    target_compile_options(fam65xx_processor_tests_runner PRIVATE -Wno-error -fpermissive -Wno-unused-parameter -Wno-unused-variable)
+    target_compile_options(fam65xx_processor_tests_runner PRIVATE -Wall -Wextra)
 endif()
 # Link math library if needed
 if(NOT WIN32 AND NOT MSVC)
