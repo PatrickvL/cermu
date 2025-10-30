@@ -17,8 +17,7 @@
 bus_state_t op_bra(bus_state_t pins) {
     if constexpr (has_cmos_enhancements<ProcessorTag>()) {
         // Read relative offset
-        CPU_AB(this) = CPU_PC(this);
-        pins = phi2_read(pins, REG_AB, REG_DL);
+        pins = phi2_read(pins, REG_PC, REG_DL);
         if (FAM65XX_GET_RDY(pins)) {
             CPU_PC(this)++;
             
@@ -50,28 +49,44 @@ bus_state_t op_stz(bus_state_t pins) {
     }
 }
 
-// TRB - Test and Reset Bits (65C02)
+// TRB - Test and Reset Bits (65C02) - Hardware-accurate 3-cycle RMW
 bus_state_t op_trb(bus_state_t pins) {
     if constexpr (has_cmos_enhancements<ProcessorTag>()) {
-        // Read-Modify-Write operation
-        
-        // Read current value
-        pins = phi2_read(pins, REG_AB, REG_DL);
-        if (FAM65XX_GET_RDY(pins)) {
-            uint8_t memory = CPU_DL(this);
-            uint8_t accumulator = CPU_A(this);
-            
-            // Test bits (set Z flag if A & memory == 0)
-            uint8_t test_result = memory & accumulator;
-            update_flags(FLAG_Z, test_result == 0);
-            
-            // Reset bits (memory = memory & ~A)
-            CPU_DL(this) = memory & ~accumulator;
-            
-            // Write back
-            pins = phi2_write(pins, REG_AB, REG_DL);
-            
-            transition_to_fetch();
+        // Hardware-accurate 3-cycle Read-Modify-Write operation
+        switch (this->cycle_index) {
+            case 0:
+                // Cycle 0: Read original value from memory
+                pins = phi2_read(pins, REG_AB, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                // Cycle 1: Dummy write original value back + modify
+                if (this->should_complete_write_cycle(pins)) {
+                    pins = phi2_write(pins, REG_AB, REG_DL);
+                    
+                    uint8_t accumulator = CPU_A(this);
+                    
+                    // Test bits (set Z flag if A & memory == 0)
+                    uint8_t test_result = CPU_DL(this) & accumulator;
+                    update_flags(FLAG_Z, test_result == 0);
+                    
+                    // Reset bits (memory = memory & ~A)
+                    CPU_DL(this) &= ~accumulator;
+                    
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 2:
+                // Cycle 2: Write modified result back
+                if (this->should_complete_write_cycle(pins)) {
+                    pins = phi2_write(pins, REG_AB, REG_DL);
+                    transition_to_fetch();
+                }
+                return pins;
         }
         return pins;
     } else {
@@ -80,28 +95,44 @@ bus_state_t op_trb(bus_state_t pins) {
     }
 }
 
-// TSB - Test and Set Bits (65C02)
+// TSB - Test and Set Bits (65C02) - Hardware-accurate 3-cycle RMW
 bus_state_t op_tsb(bus_state_t pins) {
     if constexpr (has_cmos_enhancements<ProcessorTag>()) {
-        // Read-Modify-Write operation
-        
-        // Read current value
-        pins = phi2_read(pins, REG_AB, REG_DL);
-        if (FAM65XX_GET_RDY(pins)) {
-            uint8_t memory = CPU_DL(this);
-            uint8_t accumulator = CPU_A(this);
-            
-            // Test bits (set Z flag if A & memory == 0)
-            uint8_t test_result = memory & accumulator;
-            update_flags(FLAG_Z, test_result == 0);
-            
-            // Set bits (memory = memory | A)
-            CPU_DL(this) = memory | accumulator;
-            
-            // Write back
-            pins = phi2_write(pins, REG_AB, REG_DL);
-            
-            transition_to_fetch();
+        // Hardware-accurate 3-cycle Read-Modify-Write operation
+        switch (this->cycle_index) {
+            case 0:
+                // Cycle 0: Read original value from memory
+                pins = phi2_read(pins, REG_AB, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                // Cycle 1: Dummy write original value back + modify
+                if (this->should_complete_write_cycle(pins)) {
+                    pins = phi2_write(pins, REG_AB, REG_DL);
+                    
+                    uint8_t accumulator = CPU_A(this);
+                    
+                    // Test bits (set Z flag if A & memory == 0)
+                    uint8_t test_result = CPU_DL(this) & accumulator;
+                    update_flags(FLAG_Z, test_result == 0);
+                    
+                    // Set bits (memory = memory | A)
+                    CPU_DL(this) |= accumulator;
+                    
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 2:
+                // Cycle 2: Write modified result back
+                if (this->should_complete_write_cycle(pins)) {
+                    pins = phi2_write(pins, REG_AB, REG_DL);
+                    transition_to_fetch();
+                }
+                return pins;
         }
         return pins;
     } else {

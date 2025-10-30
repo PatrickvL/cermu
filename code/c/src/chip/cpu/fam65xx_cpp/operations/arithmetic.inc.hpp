@@ -47,56 +47,43 @@ bus_state_t op_nop(bus_state_t pins) {
             
         case AM_NON:
         case AM_ABY:
-            // AM_NON: All implicit NOPs do dummy read from PC without increment
+            // Implicit and absolute indexed NOPs do dummy read from PC without increment
             pins = phi2_read(pins, REG_PC, REG_TMP);
             if (!FAM65XX_GET_RDY(pins)) {
                 return pins;
             }
             break;
-            
-        case AM_ABX: {
+
+        case AM_ABX:
+            // Implicit and absolute indexed NOPs do dummy read from PC without increment
+            pins = phi2_read(pins, REG_PC, REG_TMP);
+            if (!FAM65XX_GET_RDY(pins)) {
+                return pins;
+            }
             /**
              * Handle NES6502 test syscalls as documented at
              * https://github.com/search?q=repo%3Arofl0r%2Fblargg-6502-cpu-test+syscall&type=code
              * Pattern: $fc, $13, $37 indicates character output syscall
              * Character byte awaits at address 0x2000
              */
-            bool is_potential_syscall = false;
             // Handle NES6502 syscall support for "long nop" patterns
             if constexpr (std::is_same_v<ProcessorTag, NES6502Tag>) {
-                // Check for syscall pattern: [FC 13] 37
-                // Note, that by convention, DL holds the intermediate high byte from the addressing mode
-                // so instead of checking DL, we check the most recently read byte on the data bus
-                uint8_t opcode = CPU_IR(this);
-                uint8_t bus_data = FAM65XX_GET_DATA(pins);
-                is_potential_syscall = opcode == 0xFC && bus_data == 0x13;
-            }
-            
-            // FIXED: AM_ABX should read from calculated indexed address (AB), not PC
-            pins = phi2_read(pins, REG_AB, REG_TMP);
-            if (FAM65XX_GET_RDY(pins)) {
-                // Handle NES6502 syscall support for "long nop" patterns
-                if constexpr (std::is_same_v<ProcessorTag, NES6502Tag>) {
-                    // Check for syscall pattern: FC 13 [37]
-                    uint8_t final_byte = CPU_DL(this);
-                    if (is_potential_syscall && final_byte == 0x37) {
-                        // Syscall detected - output character from 0x2000
-                        if (this->mem_read) {
-                            uint8_t character = this->mem_read(this->mem_user_data, 0x2000, 0);
-                            if (character != 0) {
-                                printf("%c", character);
-                                fflush(stdout);
-                            }
+                // Check for syscall pattern: FC 13 37
+                if (CPU_IR(this) == 0xFC && CPU_ABL(this) == 0x13 && CPU_ABH(this) == 0x37) {
+                    // Syscall detected - output character from 0x2000
+                    if (this->mem_read) {
+                        uint8_t character = this->mem_read(this->mem_user_data, 0x2000, 0);
+                        if (character != 0) {
+                            printf("%c", character);
+                            fflush(stdout);
                         }
                     }
                 }
-            } else {
-                return pins;
             }
             break;
-        }
+            
         default:
-            // Memory modes: Read from target address and discard
+            // Memory modes: Dummy read from target address
             pins = phi2_read(pins, REG_AB, REG_TMP);
             if (!FAM65XX_GET_RDY(pins)) {
                 return pins;
