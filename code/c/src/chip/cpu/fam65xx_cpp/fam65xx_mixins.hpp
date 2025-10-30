@@ -10,9 +10,13 @@
 #include <cstdint>
 #include <type_traits>
 #include "fam65xx_processor_traits.hpp"
-#include "nes6502.h"
 
 #ifdef __cplusplus
+
+// Forward declarations to avoid circular dependencies
+namespace nes6502_apu {
+    class APU;
+}
 
 namespace fam65xx_cpp {
 
@@ -91,7 +95,7 @@ struct wide_registers_mixin_t {
     // Initialize 16-bit state
     void init_wide_registers() {
         wide_state.A_full = 0x0000;
-        wide_state.X_full = 0x0000; 
+        wide_state.X_full = 0x0000;
         wide_state.Y_full = 0x0000;
         wide_state.D = 0x0000;
         wide_state.DBR = 0x00;
@@ -99,7 +103,22 @@ struct wide_registers_mixin_t {
         wide_state.emulation_mode = true; // Start in emulation mode
     }
     
-    // Mode checking helpers - moved to main class due to register access needs
+    // Accessor methods for 16-bit registers
+    uint16_t get_accumulator() const { return wide_state.A_full; }
+    uint16_t get_x_full() const { return wide_state.X_full; }
+    uint16_t get_y_full() const { return wide_state.Y_full; }
+    uint16_t get_d() const { return wide_state.D; }
+    uint8_t get_dbr() const { return wide_state.DBR; }
+    uint8_t get_pbr() const { return wide_state.PBR; }
+    bool get_emulation_mode() const { return wide_state.emulation_mode; }
+    
+    void set_accumulator(uint16_t value) { wide_state.A_full = value; }
+    void set_x_full(uint16_t value) { wide_state.X_full = value; }
+    void set_y_full(uint16_t value) { wide_state.Y_full = value; }
+    void set_d(uint16_t value) { wide_state.D = value; }
+    void set_dbr(uint8_t value) { wide_state.DBR = value; }
+    void set_pbr(uint8_t value) { wide_state.PBR = value; }
+    void set_emulation_mode(bool mode) { wide_state.emulation_mode = mode; }
 };
 
 // ============================================================================
