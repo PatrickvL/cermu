@@ -60,7 +60,7 @@ bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func)
 /* ASL - Arithmetic Shift Left */
 bus_state_t op_asl(bus_state_t pins) {
     return rmw_operation_helper(pins, [this](uint8_t& value) {
-        uint8_t carry_out = value >> 7;  // Extract bit 7 into bit 0 position (FLAG_C)
+        const uint8_t carry_out = value >> 7;  // Extract bit 7 into bit 0 position (FLAG_C)
         value <<= 1;
         // Update flags - ASL only affects N, Z, C (V flag unchanged)
         CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
@@ -71,7 +71,7 @@ bus_state_t op_asl(bus_state_t pins) {
 /* LSR - Logical Shift Right */
 bus_state_t op_lsr(bus_state_t pins) {
     return rmw_operation_helper(pins, [this](uint8_t& value) {
-        uint8_t carry_out = value & FLAG_C;
+        const uint8_t carry_out = value & FLAG_C;
         value >>= 1;
         // Update flags - LSR only affects N, Z, C (V flag unchanged)
         CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
@@ -82,8 +82,8 @@ bus_state_t op_lsr(bus_state_t pins) {
 /* ROL - Rotate Left */
 bus_state_t op_rol(bus_state_t pins) {
     return rmw_operation_helper(pins, [this](uint8_t& value) {
-        uint8_t carry_in = CPU_P(this) & FLAG_C;
-        uint8_t carry_out = value >> 7;  // Extract bit 7 into bit 0 position (FLAG_C)
+        const uint8_t carry_in = CPU_P(this) & FLAG_C;
+        const uint8_t carry_out = value >> 7;  // Extract bit 7 into bit 0 position (FLAG_C)
         value = (value << 1) | carry_in;
         // Update flags - ROL only affects N, Z, C (V flag unchanged)
         CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
@@ -94,8 +94,8 @@ bus_state_t op_rol(bus_state_t pins) {
 /* ROR - Rotate Right */
 bus_state_t op_ror(bus_state_t pins) {
     return rmw_operation_helper(pins, [this](uint8_t& value) {
-        uint8_t carry_in = CPU_P(this) & FLAG_C;
-        uint8_t carry_out = value & FLAG_C;
+        const uint8_t carry_in = CPU_P(this) & FLAG_C;
+        const uint8_t carry_out = value & FLAG_C;
         value = (value >> 1) | (carry_in << 7);
         // Update flags - ROR only affects N, Z, C (V flag unchanged)
         CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
