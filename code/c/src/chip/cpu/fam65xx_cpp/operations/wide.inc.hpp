@@ -104,8 +104,7 @@ bus_state_t op_pea(bus_state_t pins) {
         switch (this->cycle_index) {
             case 0:
                 // Read address low byte
-                CPU_AB(this) = CPU_PC(this);
-                pins = this->phi2_read(pins, REG_AB, REG_DL);
+                pins = this->phi2_read(pins, REG_PC, REG_TMP); // Store addr_low in TMP temporarily
                 if (FAM65XX_GET_RDY(pins)) {
                     CPU_PC(this)++;
                     this->cycle_index++;
@@ -113,10 +112,8 @@ bus_state_t op_pea(bus_state_t pins) {
                 return pins;
                 
             case 1:
-                // Store low byte in IR, read address high byte
-                CPU_IR(this) = CPU_DL(this); // Store addr_low in IR temporarily
-                CPU_AB(this) = CPU_PC(this);
-                pins = this->phi2_read(pins, REG_AB, REG_DL);
+                // Read address high byte
+                pins = this->phi2_read(pins, REG_PC, REG_DL);
                 if (FAM65XX_GET_RDY(pins)) {
                     CPU_PC(this)++;
                     this->cycle_index++;
@@ -124,11 +121,10 @@ bus_state_t op_pea(bus_state_t pins) {
                 return pins;
                 
             case 2:
-                // Push high byte first
-                CPU_AB(this) = CPU_SP(this);
                 // Don't modify DL here - it contains addr_high from previous read
                 if (this->should_complete_write_cycle(pins)) {
-                    pins = this->phi2_write(pins, REG_AB, REG_DL);
+                    // Push high byte first
+                    pins = this->phi2_write(pins, REG_SP, REG_DL);
                     CPU_S(this)--;
                     this->cycle_index++;
                 }
@@ -136,10 +132,8 @@ bus_state_t op_pea(bus_state_t pins) {
                 
             case 3:
                 // Push low byte
-                CPU_AB(this) = CPU_SP(this);
-                CPU_DL(this) = CPU_IR(this); // addr_low from case 1
                 if (this->should_complete_write_cycle(pins)) {
-                    pins = this->phi2_write(pins, REG_AB, REG_DL);
+                    pins = this->phi2_write(pins, REG_SP, REG_TMP); // addr_low from case 0
                     CPU_S(this)--;
                     this->transition_to_fetch();
                 }
@@ -158,10 +152,10 @@ bus_state_t op_phb(bus_state_t pins) {
         switch (this->cycle_index) {
             case 0:
                 // Push DBR to stack
-                CPU_AB(this) = CPU_SP(this);
-                CPU_DL(this) = this->wide_state.DBR;
                 if (this->should_complete_write_cycle(pins)) {
-                    pins = this->phi2_write(pins, REG_AB, REG_DL);
+                    CPU_AB(this) = CPU_SP(this);
+                    CPU_TMP(this) = this->wide_state.DBR;
+                    pins = this->phi2_write(pins, REG_AB, REG_TMP);
                     CPU_S(this)--;
                     this->transition_to_fetch();
                 }
@@ -296,30 +290,25 @@ bus_state_t op_jsl(bus_state_t pins) {
         switch (this->cycle_index) {
             case 0:
                 // Read address low byte
-                CPU_AB(this) = CPU_PC(this);
-                pins = this->phi2_read(pins, REG_AB, REG_DL);
+                pins = this->phi2_read(pins, REG_PC, REG_ABL);
                 if (FAM65XX_GET_RDY(pins)) {
                     CPU_PC(this)++;
-                    CPU_IR(this) = CPU_DL(this); // Store addr_low in IR
                     this->cycle_index++;
                 }
                 return pins;
                 
             case 1:
                 // Read address high byte
-                CPU_AB(this) = CPU_PC(this);
-                pins = this->phi2_read(pins, REG_AB, REG_ABH);
+                pins = this->phi2_read(pins, REG_PC, REG_ABH);
                 if (FAM65XX_GET_RDY(pins)) {
                     CPU_PC(this)++;
-                    CPU_ABL(this) = CPU_IR(this); // Restore addr_low to ABL
                     this->cycle_index++;
                 }
                 return pins;
                 
             case 2:
                 // Read bank byte
-                CPU_AB(this) = CPU_PC(this);
-                pins = this->phi2_read(pins, REG_AB, REG_DL);
+                pins = this->phi2_read(pins, REG_PC, REG_DL);
                 if (FAM65XX_GET_RDY(pins)) {
                     CPU_PC(this)++;
                     this->cycle_index++;
@@ -328,10 +317,9 @@ bus_state_t op_jsl(bus_state_t pins) {
                 
             case 3:
                 // Push program bank register
-                CPU_AB(this) = CPU_SP(this);
-                CPU_IR(this) = this->wide_state.PBR; // Store PBR in IR
                 if (this->should_complete_write_cycle(pins)) {
-                    pins = this->phi2_write(pins, REG_SP, REG_IR);
+                    CPU_TMP(this) = this->wide_state.PBR; // Store PBR in TMP
+                    pins = this->phi2_write(pins, REG_SP, REG_TMP);
                     CPU_S(this)--;
                     this->cycle_index++;
                 }
@@ -339,10 +327,8 @@ bus_state_t op_jsl(bus_state_t pins) {
                 
             case 4:
                 // Push PC high byte (return address - 1)
-                CPU_AB(this) = CPU_SP(this);
-                CPU_IR(this) = CPU_PCH(this);
                 if (this->should_complete_write_cycle(pins)) {
-                    pins = this->phi2_write(pins, REG_SP, REG_IR);
+                    pins = this->phi2_write(pins, REG_SP, REG_PCH);
                     CPU_S(this)--;
                     this->cycle_index++;
                 }
@@ -350,10 +336,8 @@ bus_state_t op_jsl(bus_state_t pins) {
                 
             case 5:
                 // Push PC low byte
-                CPU_AB(this) = CPU_SP(this);
-                CPU_IR(this) = CPU_PCL(this);
                 if (this->should_complete_write_cycle(pins)) {
-                    pins = this->phi2_write(pins, REG_SP, REG_IR);
+                    pins = this->phi2_write(pins, REG_SP, REG_PCL);
                     CPU_S(this)--;
                     // Set new program counter and bank
                     CPU_PC(this) = CPU_AB(this); // addr_high:addr_low from cases 0-1
@@ -375,8 +359,7 @@ bus_state_t op_rtl(bus_state_t pins) {
             case 0:
                 // Pull PC low byte
                 CPU_S(this)++;
-                CPU_AB(this) = CPU_SP(this);
-                pins = this->phi2_read(pins, REG_AB, REG_PCL);
+                pins = this->phi2_read(pins, REG_SP, REG_PCL);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->cycle_index++;
                 }
@@ -385,8 +368,7 @@ bus_state_t op_rtl(bus_state_t pins) {
             case 1:
                 // Pull PC high byte
                 CPU_S(this)++;
-                CPU_AB(this) = CPU_SP(this);
-                pins = this->phi2_read(pins, REG_AB, REG_PCH);
+                pins = this->phi2_read(pins, REG_SP, REG_PCH);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->cycle_index++;
                 }
@@ -395,10 +377,9 @@ bus_state_t op_rtl(bus_state_t pins) {
             case 2:
                 // Pull program bank
                 CPU_S(this)++;
-                CPU_AB(this) = CPU_SP(this);
-                pins = this->phi2_read(pins, REG_AB, REG_DL);
+                pins = this->phi2_read(pins, REG_SP, REG_TMP);
                 if (FAM65XX_GET_RDY(pins)) {
-                    this->wide_state.PBR = CPU_DL(this);
+                    this->wide_state.PBR = CPU_TMP(this);
                     // Increment PC (RTL increments, RTS doesn't)
                     CPU_PC(this)++;
                     this->transition_to_fetch();

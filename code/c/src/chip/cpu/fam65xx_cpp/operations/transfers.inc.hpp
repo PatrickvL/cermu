@@ -16,7 +16,7 @@
 /* Helper for transfer operations with flags */
 bus_state_t transfer_with_flags_helper(bus_state_t pins, uint8_t value, uint8_t& target_reg) {
     /* Dummy cycle for internal operation */
-    pins = phi2_read(pins, REG_PC, REG_DL);
+    pins = phi2_read(pins, REG_PC, REG_TMP);
     if (FAM65XX_GET_RDY(pins)) {
         /* PHI1: Transfer and update flags */
         target_reg = value;
@@ -29,7 +29,7 @@ bus_state_t transfer_with_flags_helper(bus_state_t pins, uint8_t value, uint8_t&
 /* Helper for transfer operations without flags */
 bus_state_t transfer_no_flags_helper(bus_state_t pins, uint8_t value, uint8_t& target_reg) {
     /* Dummy cycle for internal operation */
-    pins = phi2_read(pins, REG_PC, REG_DL);
+    pins = phi2_read(pins, REG_PC, REG_TMP);
     if (FAM65XX_GET_RDY(pins)) {
         /* PHI1: Transfer without updating flags */
         target_reg = value;
@@ -79,7 +79,7 @@ bus_state_t op_tya(bus_state_t pins) {
 /* INX - Increment X */
 bus_state_t op_inx(bus_state_t pins) {
     /* Dummy cycle for internal operation */
-    pins = phi2_read(pins, REG_PC, REG_DL);
+    pins = phi2_read(pins, REG_PC, REG_TMP);
     if (FAM65XX_GET_RDY(pins)) {
         /* PHI1: Increment X and update flags */
         CPU_X(this)++;
@@ -92,7 +92,7 @@ bus_state_t op_inx(bus_state_t pins) {
 /* INY - Increment Y */
 bus_state_t op_iny(bus_state_t pins) {
     /* Dummy cycle for internal operation */
-    pins = phi2_read(pins, REG_PC, REG_DL);
+    pins = phi2_read(pins, REG_PC, REG_TMP);
     if (FAM65XX_GET_RDY(pins)) {
         /* PHI1: Increment Y and update flags */
         CPU_Y(this)++;
@@ -105,7 +105,7 @@ bus_state_t op_iny(bus_state_t pins) {
 /* DEX - Decrement X */
 bus_state_t op_dex(bus_state_t pins) {
     /* Dummy cycle for internal operation */
-    pins = phi2_read(pins, REG_PC, REG_DL);
+    pins = phi2_read(pins, REG_PC, REG_TMP);
     if (FAM65XX_GET_RDY(pins)) {
         /* PHI1: Decrement X and update flags */
         CPU_X(this)--;

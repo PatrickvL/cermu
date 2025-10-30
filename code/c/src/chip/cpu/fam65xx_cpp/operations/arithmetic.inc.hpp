@@ -37,7 +37,7 @@ bus_state_t op_nop(bus_state_t pins) {
     switch (this->opcode_entry.am_index) {
         case AM_IMM:
             // AM_IMM: All immediate NOPs read operand and increment PC
-            pins = phi2_read(pins, REG_PC, REG_DL);
+            pins = phi2_read(pins, REG_PC, REG_TMP);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_PC(this)++;
             } else {
@@ -48,7 +48,7 @@ bus_state_t op_nop(bus_state_t pins) {
         case AM_NON:
         case AM_ABY:
             // AM_NON: All implicit NOPs do dummy read from PC without increment
-            pins = phi2_read(pins, REG_PC, REG_DL);
+            pins = phi2_read(pins, REG_PC, REG_TMP);
             if (!FAM65XX_GET_RDY(pins)) {
                 return pins;
             }
@@ -73,7 +73,7 @@ bus_state_t op_nop(bus_state_t pins) {
             }
             
             // FIXED: AM_ABX should read from calculated indexed address (AB), not PC
-            pins = phi2_read(pins, REG_AB, REG_DL);
+            pins = phi2_read(pins, REG_AB, REG_TMP);
             if (FAM65XX_GET_RDY(pins)) {
                 // Handle NES6502 syscall support for "long nop" patterns
                 if constexpr (std::is_same_v<ProcessorTag, NES6502Tag>) {
@@ -97,7 +97,7 @@ bus_state_t op_nop(bus_state_t pins) {
         }
         default:
             // Memory modes: Read from target address and discard
-            pins = phi2_read(pins, REG_AB, REG_DL);
+            pins = phi2_read(pins, REG_AB, REG_TMP);
             if (!FAM65XX_GET_RDY(pins)) {
                 return pins;
             }
