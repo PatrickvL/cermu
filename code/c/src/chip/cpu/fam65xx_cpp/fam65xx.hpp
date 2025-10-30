@@ -209,7 +209,7 @@ public:
     // PROCESSOR-SPECIFIC INITIALIZATION  
     // ========================================================================
     
-    bus_state_t init(const chip_descriptor_t* desc) {
+    bus_state_t init(const chip_descriptor_t* /*desc*/) {
         // Note: Memory callbacks will be set through separate API calls
         // This matches the old implementation's approach
         this->mem_read = nullptr;
@@ -663,8 +663,8 @@ public:
      */
     inline uint8_t calc_nzc_flags(uint8_t minuend, uint8_t subtrahend) {
         uint16_t result = minuend - subtrahend;
-        return calc_n_flag(result) |
-               calc_z_flag(result) |
+        return calc_n_flag(static_cast<uint8_t>(result)) |
+               calc_z_flag(static_cast<uint8_t>(result)) |
                calc_c_flag(~result);  // Inverted for subtraction
     }
 
@@ -722,7 +722,7 @@ public:
                 if (ah > 9) ah += 6;
                 
                 const uint8_t z_flag = (result == 0) * FLAG_Z;
-                const uint8_t c_flag = ah > 15; // FLAG_C
+                const uint8_t c_flag = (ah > 15) ? FLAG_C : 0;
                 CPU_A(this) = (ah << 4) | (al & 0x0F);
                 CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
                     n_flag | v_flag | z_flag | c_flag;
