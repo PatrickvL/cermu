@@ -101,8 +101,8 @@ static inline void bcd_addition_helper(uint8_t a_old, uint8_t operand, uint8_t c
     if (0 == (uint8_t)(a_old + operand + carry_in)) {
         *flags_out |= FLAG_Z;
     }
-    /* N flag: bit 3 of high nibble (ah & 0x08) */
-    else if (ah & 0x08) {
+    /* N flag: bit 3 of high nibble (ah & 0x08) - FIXED: separate from Z flag check */
+    if (ah & 0x08) {
         *flags_out |= FLAG_N;
     }
     
