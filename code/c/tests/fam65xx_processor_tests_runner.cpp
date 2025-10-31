@@ -75,37 +75,24 @@ ProcessorType detect_processor_from_path(const std::string& test_path) {
     // Normalize path separators for Windows/Unix compatibility
     std::replace(path_lower.begin(), path_lower.end(), '\\', '/');
     
-    if (!g_quiet_mode) {
-        fprintf(stderr, "DEBUG: Detecting processor from path: %s\n", test_path.c_str());
-        fprintf(stderr, "DEBUG: Path lowercase: %s\n", path_lower.c_str());
-    }
-    
     if (path_lower.find("processor_tests/6502/") != std::string::npos) {
-        if (!g_quiet_mode) printf("DEBUG: Detected MOS6502\n");
         return ProcessorType::MOS6502;
     }
     if (path_lower.find("processor_tests/nes6502/") != std::string::npos) {
-        if (!g_quiet_mode) printf("DEBUG: Detected NES6502\n");
         return ProcessorType::NES6502;
     }
     if (path_lower.find("processor_tests/mos6510/") != std::string::npos) {
-        if (!g_quiet_mode) printf("DEBUG: Detected MOS6510\n");
         return ProcessorType::MOS6510;
     }
     if (path_lower.find("processor_tests/wdc65c02/") != std::string::npos) {
-        if (!g_quiet_mode) printf("DEBUG: Detected WDC65C02\n");
         return ProcessorType::WDC65C02;
     }
     if (path_lower.find("processor_tests/rockwell65c02/") != std::string::npos) {
-        if (!g_quiet_mode) printf("DEBUG: Detected ROCKWELL65C02\n");
         return ProcessorType::ROCKWELL65C02;
     }
     if (path_lower.find("processor_tests/wdc65c816/") != std::string::npos) {
-        if (!g_quiet_mode) printf("DEBUG: Detected WDC65C816\n");
         return ProcessorType::WDC65C816;
     }
-    
-    if (!g_quiet_mode) printf("DEBUG: Using default MOS6502\n");
     return ProcessorType::MOS6502;  // Default fallback
 }
 
@@ -290,30 +277,20 @@ public:
     ProcessorTestHarness(ProcessorType proc_type = ProcessorType::MOS6502)
         : processor_type(proc_type), memory(test_memory), cycle_count(0) {
         
-        if (!g_quiet_mode) printf("DEBUG: ProcessorTestHarness constructor called for processor type %d\n", (int)proc_type);
-        
         // Clear memory (optimized approach from C version)
         std::fill(memory, memory + 65536, static_cast<uint8_t>(0));
-        
-        if (!g_quiet_mode) printf("DEBUG: About to call create_processor...\n");
         
         // Create processor wrapper for the specified type
         cpu_wrapper = create_processor(processor_type);
         
-        if (!g_quiet_mode) printf("DEBUG: create_processor returned successfully\n");
-        
         // Set up harness for bus cycle recording - now works with all processors via unified interface
         cpu_wrapper->set_harness(this);
-        
-        if (!g_quiet_mode) printf("DEBUG: About to call cpu_wrapper->init...\n");
         
         // Initialize CPU with new API (memory callbacks handled differently)
         chip_descriptor_t desc = {};
         desc.description = "MOS6502 Test CPU";
         
         pins = cpu_wrapper->init(&desc);
-        
-        if (!g_quiet_mode) printf("DEBUG: ProcessorTestHarness constructor completed successfully\n");
         
         // ProcessorTests expects CPU to be ready for immediate execution
         cycle_count = 0;
@@ -529,10 +506,6 @@ private:
 
 public:
     ProcessorWrapper() : harness_ptr(nullptr) {
-        if (!g_quiet_mode) {
-            printf("DEBUG: %sWrapper constructor called\n", get_processor_debug_name());
-        }
-        
         // Create CPU using C++ template implementation
         cpu = new fam65xx::fam65xx_t<Traits>();
         if (!cpu) {
@@ -545,15 +518,10 @@ public:
         // Special handling for NES6502 - check if has APU via CPUTraits
         if constexpr (Traits.has_apu()) {
             cpu->set_processor_tests_mode(true);
-            if (!g_quiet_mode) printf("DEBUG: Enabled ProcessorTests compatibility mode for NES6502\n");
         }
         
         // Set up memory callbacks with this wrapper as user_data
         cpu->set_memory_callbacks(instance_mem_read, instance_mem_write, this);
-        
-        if (!g_quiet_mode) {
-            printf("DEBUG: %sWrapper created successfully\n", get_processor_debug_name());
-        }
     }
     
     ~ProcessorWrapper() {
@@ -637,41 +605,26 @@ public:
     }
 };
 
-// Type aliases for convenience and backward compatibility
-using MOS6502Wrapper = ProcessorWrapper<fam65xx::MOS6502>;
-using NES6502Wrapper = ProcessorWrapper<fam65xx::RICOH_2A03>;
-using WDC65C02Wrapper = ProcessorWrapper<fam65xx::WDC_W65C02S>;
-using MOS6510Wrapper = ProcessorWrapper<fam65xx::MOS6510>;
-using Rockwell65C02Wrapper = ProcessorWrapper<fam65xx::ROCKWELL_R65C02>;
-using WDC65C816Wrapper = ProcessorWrapper<fam65xx::WDC_65C816>;
-
-// Factory function to create processor instances
+// Factory function to create processor instances - direct template instantiation
 std::unique_ptr<UnifiedProcessorInterface> create_processor(ProcessorType type) {
-    if (!g_quiet_mode) printf("DEBUG: Creating processor type: %d\n", (int)type);
     switch (type) {
         case ProcessorType::MOS6502:
-            if (!g_quiet_mode) printf("DEBUG: Creating MOS6502Wrapper\n");
-            return std::make_unique<MOS6502Wrapper>();
+            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::MOS6502>());
             
         case ProcessorType::NES6502:
-            if (!g_quiet_mode) printf("DEBUG: Creating NES6502Wrapper\n");
-            return std::make_unique<NES6502Wrapper>();
+            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::RICOH_2A03>());
             
         case ProcessorType::WDC65C02:
-            if (!g_quiet_mode) printf("DEBUG: Creating WDC65C02Wrapper\n");
-            return std::make_unique<WDC65C02Wrapper>();
+            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::WDC_W65C02S>());
             
         case ProcessorType::MOS6510:
-            if (!g_quiet_mode) printf("DEBUG: Creating MOS6510Wrapper\n");
-            return std::make_unique<MOS6510Wrapper>();
+            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::MOS6510>());
             
         case ProcessorType::ROCKWELL65C02:
-            if (!g_quiet_mode) printf("DEBUG: Creating Rockwell65C02Wrapper\n");
-            return std::make_unique<Rockwell65C02Wrapper>();
+            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::ROCKWELL_R65C02>());
             
         case ProcessorType::WDC65C816:
-            if (!g_quiet_mode) printf("DEBUG: Creating WDC65C816Wrapper\n");
-            return std::make_unique<WDC65C816Wrapper>();
+            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::WDC_65C816>());
             
         default:
             throw std::invalid_argument("Unsupported processor type");
@@ -715,12 +668,9 @@ public:
         : output_handler(output), results(res), verbose_mode(verbose), quiet_mode(quiet),
           global_test_failed(test_failed), stop_on_failure(stop_fail), processor_type(proc_type) {
         
-        if (!quiet_mode) printf("DEBUG: Creating %zu worker threads...\n", num_workers);
         for (size_t i = 0; i < num_workers; ++i) {
-            if (!quiet_mode) printf("DEBUG: Starting worker thread %zu\n", i);
             workers.emplace_back(&TestWorkerPool::worker_thread, this, i);
         }
-        if (!quiet_mode) printf("DEBUG: All worker threads started\n");
     }
     
     ~TestWorkerPool() {
@@ -773,14 +723,10 @@ public:
     
 private:
     void worker_thread(size_t worker_id) {
-        if (!quiet_mode) printf("DEBUG: Worker thread %zu starting, creating ProcessorTestHarness...\n", worker_id);
-        
         // PERFORMANCE OPTIMIZATION: Create one harness per worker thread
         // Reuse the same harness for all tests in this thread to avoid repeated initialization
         ProcessorTestHarness harness(processor_type);  // Pass processor type to harness
         processor_test_t* previous_test = nullptr;
-        
-        if (!quiet_mode) printf("DEBUG: Worker thread %zu ProcessorTestHarness created successfully\n", worker_id);
         
         while (!shutdown) {
             TestItem item;
@@ -1406,21 +1352,12 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    // Add debug output to identify exact hang location
-    std::cout << "DEBUG: About to create ThreadSafeOutput...\n" << std::flush;
-    
     // Set up parallel execution
     ThreadSafeOutput output_handler;
-    std::cout << "DEBUG: ThreadSafeOutput created\n" << std::flush;
-    
     ThreadSafeTestResults thread_results;
-    std::cout << "DEBUG: ThreadSafeTestResults created\n" << std::flush;
-    
-    std::cout << "DEBUG: About to create TestWorkerPool with " << num_workers << " workers...\n" << std::flush;
     TestWorkerPool worker_pool(num_workers, output_handler, thread_results,
                                verbose_output, g_quiet_mode, g_test_failed, g_stop_on_failure,
                                detected_processor_type);
-    std::cout << "DEBUG: TestWorkerPool created successfully\n" << std::flush;
     
     // Submit all tests to worker pool
     std::cout << "Starting parallel execution...\n";
