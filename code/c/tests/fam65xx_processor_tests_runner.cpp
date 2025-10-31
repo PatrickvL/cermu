@@ -843,8 +843,11 @@ private:
                                     ProcessorTestHarness* harness, const processor_test_t* previous_test) {
         results.total_tests++;
         
+        // Capture all debug output in a separate buffer - only emit if test fails or verbose mode
+        std::ostringstream debug_output;
+        
         if (verbose_mode) {
-            output << "[Worker " << worker_id << "] Running test: " << test->name << std::endl;
+            debug_output << "[Worker " << worker_id << "] Running test: " << test->name << std::endl;
         }
         
         // REMOVED: Set global harness (thread safety issue)
@@ -871,8 +874,8 @@ private:
         uint8_t current_opcode = harness->get_memory(pc_addr);
         
         if (verbose_mode) {
-            output << "  [Worker " << worker_id << "] Opcode at PC 0x" << std::hex << test->initial.pc
-                   << ": 0x" << std::hex << (int)current_opcode << std::dec << std::endl;
+            debug_output << "  [Worker " << worker_id << "] Opcode at PC 0x" << std::hex << test->initial.pc
+                        << ": 0x" << std::hex << (int)current_opcode << std::dec << std::endl;
         }
         
         uint32_t initial_cycle_count = harness->get_cycle_count();
@@ -880,8 +883,8 @@ private:
         // Execute instruction (CPU already bootstrapped and configured)
         bool step_result;
         if (verbose_mode) {
-            output << "  [Worker " << worker_id << "] Executing instruction with cycle-by-cycle details:" << std::endl;
-            step_result = harness->step_with_debug(&output);
+            debug_output << "  [Worker " << worker_id << "] Executing instruction with cycle-by-cycle details:" << std::endl;
+            step_result = harness->step_with_debug(&debug_output);
         } else {
             step_result = harness->step();
         }
@@ -889,13 +892,14 @@ private:
         uint32_t cycles_executed = harness->get_cycle_count() - initial_cycle_count;
         
         if (verbose_mode) {
-            output << "  [Worker " << worker_id << "] Final state: PC=0x" << std::hex
-                   << harness->get_pc() << " A=0x" << (int)harness->get_a()
-                   << " Cycles=" << std::dec << cycles_executed << std::endl;
+            debug_output << "  [Worker " << worker_id << "] Final state: PC=0x" << std::hex
+                        << harness->get_pc() << " A=0x" << (int)harness->get_a()
+                        << " Cycles=" << std::dec << cycles_executed << std::endl;
         }
         
         if (!step_result) {
             if (!quiet_mode) {
+                output << debug_output.str(); // Emit debug output on failure
                 output << "FAIL " << test->name << ": Instruction execution failed (opcode 0x"
                        << std::hex << (int)current_opcode << ")" << std::dec << std::endl;
             }
@@ -913,8 +917,8 @@ private:
         uint16_t actual_pc = harness->get_pc();
         if (actual_pc != test->final.pc) {
             if (!quiet_mode) {
-                output << "FAIL " << test->name << ": PC - expected 0x" << std::hex
-                       << test->final.pc << ", got 0x" << actual_pc << std::dec << std::endl;
+                debug_output << "FAIL " << test->name << ": PC - expected 0x" << std::hex
+                            << test->final.pc << ", got 0x" << actual_pc << std::dec << std::endl;
             }
             state_match = false;
         }
@@ -922,40 +926,40 @@ private:
         // Additional register checks with detailed failure reporting
         if (harness->get_sp() != test->final.s) {
             if (!quiet_mode) {
-                output << "FAIL " << test->name << ": SP - expected 0x" << std::hex
-                       << (int)test->final.s << ", got 0x" << (int)harness->get_sp() << std::dec << std::endl;
+                debug_output << "FAIL " << test->name << ": SP - expected 0x" << std::hex
+                            << (int)test->final.s << ", got 0x" << (int)harness->get_sp() << std::dec << std::endl;
             }
             state_match = false;
         }
         
         if (harness->get_a() != test->final.a) {
             if (!quiet_mode) {
-                output << "FAIL " << test->name << ": A - expected 0x" << std::hex
-                       << (int)test->final.a << ", got 0x" << (int)harness->get_a() << std::dec << std::endl;
+                debug_output << "FAIL " << test->name << ": A - expected 0x" << std::hex
+                            << (int)test->final.a << ", got 0x" << (int)harness->get_a() << std::dec << std::endl;
             }
             state_match = false;
         }
         
         if (harness->get_x() != test->final.x) {
             if (!quiet_mode) {
-                output << "FAIL " << test->name << ": X - expected 0x" << std::hex
-                       << (int)test->final.x << ", got 0x" << (int)harness->get_x() << std::dec << std::endl;
+                debug_output << "FAIL " << test->name << ": X - expected 0x" << std::hex
+                            << (int)test->final.x << ", got 0x" << (int)harness->get_x() << std::dec << std::endl;
             }
             state_match = false;
         }
         
         if (harness->get_y() != test->final.y) {
             if (!quiet_mode) {
-                output << "FAIL " << test->name << ": Y - expected 0x" << std::hex
-                       << (int)test->final.y << ", got 0x" << (int)harness->get_y() << std::dec << std::endl;
+                debug_output << "FAIL " << test->name << ": Y - expected 0x" << std::hex
+                            << (int)test->final.y << ", got 0x" << (int)harness->get_y() << std::dec << std::endl;
             }
             state_match = false;
         }
         
         if (harness->get_status() != test->final.p) {
             if (!quiet_mode) {
-                output << "FAIL " << test->name << ": P - expected 0x" << std::hex
-                       << (int)test->final.p << ", got 0x" << (int)harness->get_status() << std::dec << std::endl;
+                debug_output << "FAIL " << test->name << ": P - expected 0x" << std::hex
+                            << (int)test->final.p << ", got 0x" << (int)harness->get_status() << std::dec << std::endl;
             }
             state_match = false;
         }
@@ -969,9 +973,9 @@ private:
                 
                 if (actual_value != expected_value) {
                     if (!quiet_mode) {
-                        output << "FAIL " << test->name << ": Memory[0x" << std::hex << (addr + j)
-                               << "] - expected 0x" << (int)expected_value
-                               << ", got 0x" << (int)actual_value << std::dec << std::endl;
+                        debug_output << "FAIL " << test->name << ": Memory[0x" << std::hex << (addr + j)
+                                    << "] - expected 0x" << (int)expected_value
+                                    << ", got 0x" << (int)actual_value << std::dec << std::endl;
                     }
                     state_match = false;
                 }
@@ -981,8 +985,8 @@ private:
         // Check cycle count
         if (test->final.has_cycles && cycles_executed != test->final.cycles) {
             if (!quiet_mode) {
-                output << "FAIL " << test->name << ": Cycles - expected " << test->final.cycles
-                       << ", got " << cycles_executed << std::endl;
+                debug_output << "FAIL " << test->name << ": Cycles - expected " << test->final.cycles
+                            << ", got " << cycles_executed << std::endl;
             }
             cycle_match = false;
             results.cycle_mismatches++;
@@ -999,6 +1003,7 @@ private:
             results.passed_tests++;
             results.record_opcode_result(current_opcode, true); // Mark as successful
             if (verbose_mode) {
+                output << debug_output.str(); // Emit debug output only if verbose
                 output << "PASS " << test->name << " (opcode 0x" << std::hex
                        << (int)current_opcode << ")" << std::dec << std::endl;
             }
@@ -1011,7 +1016,9 @@ private:
             if (!state_match) results.state_mismatches++;
             results.record_opcode_result(current_opcode, false); // Record failure
             
-            if (verbose_mode) {
+            // Always emit debug output on failure (unless quiet mode)
+            if (!quiet_mode) {
+                output << debug_output.str();
                 output << "FAIL " << test->name << ": ";
                 if (!state_match) output << "State ";
                 if (!cycle_match) output << "Cycle ";
