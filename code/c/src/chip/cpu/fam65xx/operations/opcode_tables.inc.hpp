@@ -450,37 +450,13 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
 // TEMPLATE SPECIALIZATIONS FOR EACH PROCESSOR TYPE
 // ============================================================================
 
-// Template specializations for generate_opcode_table function
-// These match the CPUTraits instances defined in fam65xx_processor_traits.hpp
-
-template<>
-constexpr std::array<opcode_info_t, 256> generate_opcode_table<MOS6502>() {
-    return generate_opcode_table_for_traits(MOS6502);
-}
-
-template<>
-constexpr std::array<opcode_info_t, 256> generate_opcode_table<RICOH_2A03>() {
-    return generate_opcode_table_for_traits(RICOH_2A03);
-}
-
-template<>
-constexpr std::array<opcode_info_t, 256> generate_opcode_table<MOS6510>() {
-    return generate_opcode_table_for_traits(MOS6510);
-}
-
-template<>
-constexpr std::array<opcode_info_t, 256> generate_opcode_table<WDC_W65C02S>() {
-    return generate_opcode_table_for_traits(WDC_W65C02S);
-}
-
-template<>
-constexpr std::array<opcode_info_t, 256> generate_opcode_table<ROCKWELL_R65C02>() {
-    return generate_opcode_table_for_traits(ROCKWELL_R65C02);
-}
-
-template<>
-constexpr std::array<opcode_info_t, 256> generate_opcode_table<WDC_65C816>() {
-    return generate_opcode_table_for_traits(WDC_65C816);
-}
+// Template specializations are not needed for CPUTraits reference parameters!
+// The template function generate_opcode_table<Traits>() where Traits is a reference
+// to a CPUTraits instance will automatically use the generic implementation
+// that calls generate_opcode_table_for_traits(Traits) at compile time.
+//
+// This is because template<const CPUTraits& Traits> means the function is
+// instantiated with the actual CPUTraits instance, not a type.
+// The compiler will generate the correct implementation automatically.
 
 #endif // FAM65XX_SKIP_IMPLEMENTATION

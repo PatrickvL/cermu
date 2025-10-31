@@ -59,11 +59,14 @@ namespace fam65xx {
 // FORWARD DECLARATIONS FOR OPCODE TABLE GENERATION
 // ============================================================================
 
-// Forward declaration - will be specialized for each processor
+// Forward declaration for opcode table generation function
 template<const CPUTraits& Traits>
-constexpr std::array<opcode_info_t, 256> generate_opcode_table();
+constexpr std::array<opcode_info_t, 256> generate_opcode_table() {
+    // This will use the generate_opcode_table_for_traits function from opcode_tables.inc.hpp
+    return generate_opcode_table_for_traits(Traits);
+}
 
-// Include processor-specific opcode table specializations BEFORE class definition
+// Include opcode table generation implementation
 #include "operations/opcode_tables.inc.hpp"
 
 // ============================================================================
