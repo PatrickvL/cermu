@@ -301,7 +301,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0x0F] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
         table[0x12] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
         table[0x13] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
-        table[0x17] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
+        table[0x17] = {OP_NOP, AM_IMM, OF_NONE};  // SLO -> 2-byte NOP
         table[0x1B] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
         table[0x1F] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
         table[0x23] = {OP_NOP, AM_NON, OF_NONE};  // RLA -> NOP
