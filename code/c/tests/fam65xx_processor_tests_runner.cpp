@@ -26,8 +26,8 @@ extern "C" {
     #define AIEMUC_IMPL
 #endif
 
-// Include new fam65xx_cpp processor implementation
-#include "../src/chip/cpu/fam65xx_cpp/fam65xx.hpp"
+// Include new fam65xx processor implementation
+#include "../src/chip/cpu/fam65xx/fam65xx.hpp"
 
 namespace fs = std::filesystem;
 
@@ -478,10 +478,10 @@ public:
 };
 
 // Generic processor wrapper template - eliminates code duplication
-template<const fam65xx_cpp::CPUTraits& Traits>
+template<const fam65xx::CPUTraits& Traits>
 class ProcessorWrapper : public UnifiedProcessorInterface {
 private:
-    fam65xx_cpp::fam65xx_t<Traits>* cpu;
+    fam65xx::fam65xx_t<Traits>* cpu;
     chip_descriptor_t desc;
     void* harness_ptr; // Store harness for memory callbacks
     
@@ -508,12 +508,12 @@ private:
     
     // Helper function to get processor name for debug output - compile-time processor name determination
     constexpr const char* get_processor_debug_name() const {
-        if constexpr (&Traits == &fam65xx_cpp::MOS6502) return "MOS6502";
-        else if constexpr (&Traits == &fam65xx_cpp::RICOH_2A03) return "NES6502";
-        else if constexpr (&Traits == &fam65xx_cpp::WDC_W65C02S) return "WDC65C02";
-        else if constexpr (&Traits == &fam65xx_cpp::MOS6510) return "MOS6510";
-        else if constexpr (&Traits == &fam65xx_cpp::ROCKWELL_R65C02) return "Rockwell65C02";
-        else if constexpr (&Traits == &fam65xx_cpp::WDC_65C816) return "WDC65C816";
+        if constexpr (&Traits == &fam65xx::MOS6502) return "MOS6502";
+        else if constexpr (&Traits == &fam65xx::RICOH_2A03) return "NES6502";
+        else if constexpr (&Traits == &fam65xx::WDC_W65C02S) return "WDC65C02";
+        else if constexpr (&Traits == &fam65xx::MOS6510) return "MOS6510";
+        else if constexpr (&Traits == &fam65xx::ROCKWELL_R65C02) return "Rockwell65C02";
+        else if constexpr (&Traits == &fam65xx::WDC_65C816) return "WDC65C816";
         else return "Unknown";
     }
 
@@ -524,7 +524,7 @@ public:
         }
         
         // Create CPU using C++ template implementation
-        cpu = new fam65xx_cpp::fam65xx_t<Traits>();
+        cpu = new fam65xx::fam65xx_t<Traits>();
         if (!cpu) {
             throw std::runtime_error("Failed to create CPU");
         }
@@ -533,7 +533,7 @@ public:
         cpu->init(&desc);
         
         // Special handling for NES6502 - enable ProcessorTests compatibility mode
-        if constexpr (&Traits == &fam65xx_cpp::RICOH_2A03) {
+        if constexpr (&Traits == &fam65xx::RICOH_2A03) {
             if constexpr (Traits.has_apu()) {
                 // Note: ProcessorTests mode is now handled automatically by CPUTraits
                 if (!g_quiet_mode) printf("DEBUG: NES6502 compatibility mode active\n");
@@ -630,12 +630,12 @@ public:
 };
 
 // Type aliases for convenience and backward compatibility
-using MOS6502Wrapper = ProcessorWrapper<fam65xx_cpp::MOS6502>;
-using NES6502Wrapper = ProcessorWrapper<fam65xx_cpp::RICOH_2A03>;
-using WDC65C02Wrapper = ProcessorWrapper<fam65xx_cpp::WDC_W65C02S>;
-using MOS6510Wrapper = ProcessorWrapper<fam65xx_cpp::MOS6510>;
-using Rockwell65C02Wrapper = ProcessorWrapper<fam65xx_cpp::ROCKWELL_R65C02>;
-using WDC65C816Wrapper = ProcessorWrapper<fam65xx_cpp::WDC_65C816>;
+using MOS6502Wrapper = ProcessorWrapper<fam65xx::MOS6502>;
+using NES6502Wrapper = ProcessorWrapper<fam65xx::RICOH_2A03>;
+using WDC65C02Wrapper = ProcessorWrapper<fam65xx::WDC_W65C02S>;
+using MOS6510Wrapper = ProcessorWrapper<fam65xx::MOS6510>;
+using Rockwell65C02Wrapper = ProcessorWrapper<fam65xx::ROCKWELL_R65C02>;
+using WDC65C816Wrapper = ProcessorWrapper<fam65xx::WDC_65C816>;
 
 // Factory function to create processor instances
 std::unique_ptr<UnifiedProcessorInterface> create_processor(ProcessorType type) {

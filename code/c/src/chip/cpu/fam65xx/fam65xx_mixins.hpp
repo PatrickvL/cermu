@@ -15,7 +15,7 @@
 
 #ifdef __cplusplus
 
-namespace fam65xx_cpp {
+namespace fam65xx {
 
 // ============================================================================
 // EMPTY BASES FOR DISABLED FEATURES (processor-specific to avoid collisions)
@@ -265,6 +265,6 @@ using apu_base_t = std::conditional_t<
     empty_apu_mixin_t
 >;
 
-} // namespace fam65xx_cpp
+} // namespace fam65xx
 
 #endif // __cplusplus

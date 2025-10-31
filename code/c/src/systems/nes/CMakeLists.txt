@@ -12,7 +12,7 @@ target_include_directories(nes_system PUBLIC
 )
 
 target_link_libraries(nes_system
-    fam65xx_cpp
+    fam65xx
 )
 
 # Compiler-specific settings

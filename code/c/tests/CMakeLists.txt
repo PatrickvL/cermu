@@ -35,14 +35,14 @@ set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 set(CPU_DIR ${SRC_DIR}/chip/cpu)
 set(CORE_DIR ${SRC_DIR}/core)
 
-# Collect CPU source files (using fam65xx_cpp template-based implementation)
+# Collect CPU source files (using fam65xx template-based implementation)
 set(CPU_SOURCES
-    ${CPU_DIR}/fam65xx_cpp/mos6502.cpp
-    ${CPU_DIR}/fam65xx_cpp/mos6510.cpp
-    ${CPU_DIR}/fam65xx_cpp/nes6502.cpp
-    ${CPU_DIR}/fam65xx_cpp/wdc65c02.cpp
-    ${CPU_DIR}/fam65xx_cpp/rockwell65c02.cpp
-    ${CPU_DIR}/fam65xx_cpp/wdc65c816.cpp
+    ${CPU_DIR}/fam65xx/mos6502.cpp
+    ${CPU_DIR}/fam65xx/mos6510.cpp
+    ${CPU_DIR}/fam65xx/nes6502.cpp
+    ${CPU_DIR}/fam65xx/wdc65c02.cpp
+    ${CPU_DIR}/fam65xx/rockwell65c02.cpp
+    ${CPU_DIR}/fam65xx/wdc65c816.cpp
 )
 
 # Collect core source files
@@ -70,7 +70,7 @@ endforeach()
 add_library(mos6510_lib STATIC ${CPU_SOURCES} ${CORE_SOURCES})
 target_include_directories(mos6510_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/../
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx
 )
 # Enable REDESIGN CPU dispatch mechanism for MOS6510 library
 target_compile_definitions(mos6510_lib PRIVATE REDESIGN=1)
@@ -82,7 +82,7 @@ target_include_directories(json_parser PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 # fam65xx Klaus Test Suite - New C++ CPU Core Testing
 add_executable(fam65xx_klaus_test_runner fam65xx_klaus_test_runner.cpp)
 target_include_directories(fam65xx_klaus_test_runner PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
 )
 target_compile_definitions(fam65xx_klaus_test_runner PRIVATE AIEMUC_IMPL)
@@ -98,7 +98,7 @@ add_executable(fam65xx_lorenz_test_harness
     fam65xx_lorenz_test_harness.cpp
 )
 target_include_directories(fam65xx_lorenz_test_harness PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
 )
 target_compile_definitions(fam65xx_lorenz_test_harness PRIVATE AIEMUC_IMPL)
@@ -107,18 +107,18 @@ if(NOT WIN32 AND NOT MSVC)
     target_link_libraries(fam65xx_lorenz_test_harness m)
 endif()
 
-# fam65xx Enhanced C ProcessorTests Runner - With debugging features (using new fam65xx_cpp)
+# fam65xx Enhanced C ProcessorTests Runner - With debugging features (using new fam65xx)
 add_executable(fam65xx_processor_tests_runner
     fam65xx_processor_tests_runner.cpp
     json_parser.c
 )
 target_include_directories(fam65xx_processor_tests_runner PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 target_compile_definitions(fam65xx_processor_tests_runner PRIVATE AIEMUC_IMPL)
-# Set C++20 standard for fam65xx_cpp template support
+# Set C++20 standard for fam65xx template support
 set_property(TARGET fam65xx_processor_tests_runner PROPERTY CXX_STANDARD 20)
 set_property(TARGET fam65xx_processor_tests_runner PROPERTY CXX_STANDARD_REQUIRED ON)
 # Enable full warning reporting to identify all compiler messages

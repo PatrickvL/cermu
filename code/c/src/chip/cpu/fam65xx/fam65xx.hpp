@@ -29,7 +29,7 @@
  * #include "fam65xx.hpp"
  * 
  * // Create a C64 CPU instance
- * fam65xx_cpp::fam65xx_t<MOS6510Tag> c64_cpu;
+ * fam65xx::fam65xx_t<MOS6510Tag> c64_cpu;
  * 
  * // Initialize and use with pin-based interface
  * bus_state_t pins = c64_cpu.init(&desc);
@@ -53,7 +53,7 @@
 // C++ NAMESPACE - MAIN CPU TEMPLATE IMPLEMENTATION
 // ============================================================================
 
-namespace fam65xx_cpp {
+namespace fam65xx {
 
 // ============================================================================
 // FORWARD DECLARATIONS FOR OPCODE TABLE GENERATION
@@ -1098,4 +1098,4 @@ private:
 // OPCODE TABLE GENERATION (processor-specific specializations were included above)
 // ============================================================================
 
-} // namespace fam65xx_cpp
+} // namespace fam65xx

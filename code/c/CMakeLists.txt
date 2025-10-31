@@ -7,9 +7,6 @@ project(aiemuc
     LANGUAGES C CXX
 )
 
-# Optionally enable the cycle-accurate MOS6510 core (experimental)
-option(C64_ENABLE_CYCLE_CPU "Enable cycle-accurate MOS6510 core" OFF)
-
 # Set C standard
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -105,7 +102,7 @@ endif()
 # Include directories
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/cpu/fam65xx_cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/cpu/fam65xx
     ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/io
     ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/logic
     ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/memory
@@ -115,11 +112,6 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/main
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui
 )
-
-# Add cycle-accurate MOS6510 include path only when enabled
-if(C64_ENABLE_CYCLE_CPU)
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/chip/cpu/mos6510_cycle)
-endif()
 
 # Add GUI-specific includes only if building GUI
 if(BUILD_GUI)
@@ -153,44 +145,16 @@ set(CORE_SOURCES
     src/core/ioport.c
 )
 
-# Chip library sources - Updated for fam65xx_cpp
+# Chip library sources - Updated for fam65xx
 set(CHIP_SOURCES
-    # CPU sources - using fam65xx_cpp template-based implementation
-    src/chip/cpu/fam65xx_cpp/mos6502.cpp
-    src/chip/cpu/fam65xx_cpp/mos6510.cpp
-    src/chip/cpu/fam65xx_cpp/nes6502.cpp
-    src/chip/cpu/fam65xx_cpp/wdc65c02.cpp
-    src/chip/cpu/fam65xx_cpp/rockwell65c02.cpp
-    src/chip/cpu/fam65xx_cpp/wdc65c816.cpp
+    # CPU sources - using fam65xx template-based implementation
+    src/chip/cpu/fam65xx/mos6502.cpp
+    src/chip/cpu/fam65xx/mos6510.cpp
+    src/chip/cpu/fam65xx/nes6502.cpp
+    src/chip/cpu/fam65xx/wdc65c02.cpp
+    src/chip/cpu/fam65xx/rockwell65c02.cpp
+    src/chip/cpu/fam65xx/wdc65c816.cpp
 )
-
-# Conditionally add cycle-accurate MOS6510 sources (DISABLED - sources not available)
-# if(C64_ENABLE_CYCLE_CPU)
-#     set(CYCLE_CPU_SOURCES
-#         src/chip/cpu/mos6510_cycle/cpu_config.c
-#         src/chip/cpu/mos6510_cycle/deferred_ops.c
-#         src/chip/cpu/mos6510_cycle/instruction_table.c
-#         src/chip/cpu/mos6510_cycle/internal_bus.c
-#         src/chip/cpu/mos6510_cycle/interrupt_recognition.c
-#         src/chip/cpu/mos6510_cycle/mos6510_registers.c
-#         src/chip/cpu/mos6510_cycle/mos6510_state.c
-#         src/chip/cpu/mos6510_cycle/mos6510_tick.c
-#         src/chip/cpu/mos6510_cycle/nmi_skipping.c
-#         src/chip/cpu/mos6510_cycle/pipeline.c
-#         src/chip/cpu/mos6510_cycle/pla_lookup.c
-#         src/chip/cpu/mos6510_cycle/timing_states.c
-#     )
-#     list(APPEND CHIP_SOURCES ${CYCLE_CPU_SOURCES})
-#
-#     # Relax warnings for cycle core sources only to allow build on MSVC
-#     if(MSVC)
-#         set_source_files_properties(${CYCLE_CPU_SOURCES} PROPERTIES
-#             COMPILE_FLAGS "/WX- /wd4244 /wd4996 /wd4133 /wd4013"
-#             COMPILE_DEFINITIONS "_CRT_SECURE_NO_WARNINGS"
-#         )
-#     endif()
-# endif()
-
 # Always include other chip sources
 list(APPEND CHIP_SOURCES
     # I/O
@@ -235,14 +199,6 @@ add_executable(c64emu
     ${SYSTEM_SOURCES}
     ${CORE_UTIL_SOURCES}
 )
-# Enable REDESIGN CPU dispatch mechanism with Nostradamus Distributor
-target_compile_definitions(c64emu PRIVATE REDESIGN=1)
-if(C64_ENABLE_CYCLE_CPU)
-    target_compile_definitions(c64emu PRIVATE C64_ENABLE_CYCLE_CPU=1)
-else()
-    target_compile_definitions(c64emu PRIVATE C64_ENABLE_CYCLE_CPU=0)
-endif()
-
 
 # Link required libraries
 # Note: mos6502_family functions are inline in headers, no separate library needed
@@ -277,14 +233,6 @@ if(BUILD_GUI)
 
     # Define CIMGUI_DEFINE_ENUMS_AND_STRUCTS only for our GUI code
     target_compile_definitions(c64emu_gui PRIVATE CIMGUI_DEFINE_ENUMS_AND_STRUCTS=1)
-    # Enable REDESIGN CPU dispatch mechanism with Nostradamus Distributor
-    target_compile_definitions(c64emu_gui PRIVATE REDESIGN=1)
-    if(C64_ENABLE_CYCLE_CPU)
-        target_compile_definitions(c64emu_gui PRIVATE C64_ENABLE_CYCLE_CPU=1)
-    else()
-        target_compile_definitions(c64emu_gui PRIVATE C64_ENABLE_CYCLE_CPU=0)
-    endif()
-
     
     # Add SDL2 include directories to the GUI target
     target_include_directories(c64emu_gui PRIVATE ${SDL2_INCLUDE_DIRS})

@@ -23,7 +23,7 @@
 #include <vector>
 #include <string>
 
-#include "../../chip/cpu/fam65xx_cpp/nes6502.h"
+#include "../../chip/cpu/fam65xx/nes6502.h"
 #include "../../core/chip.h"
 #include "../../core/system_lines.h"
 
