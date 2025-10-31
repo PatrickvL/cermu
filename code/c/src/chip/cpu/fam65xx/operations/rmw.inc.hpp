@@ -25,9 +25,22 @@ bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func)
                 return pins;
                 
             case 1:
-                // Cycle 1: Dummy write original value back with processor-specific RDY handling
+                // Cycle 1: Hardware-accurate dummy write behavior
                 if (this->should_complete_write_cycle(pins)) {
-                    pins = this->phi2_write(pins, REG_AB, REG_DL);
+                    if constexpr (has_rmw_dummy_write()) {
+                        if (!this->should_complete_write_cycle(pins)) {
+                            return pins;
+                        }
+
+                        // NMOS processors: Write original value back (dummy write)
+                        pins = this->phi2_write(pins, REG_AB, REG_DL);
+                    } else {
+                        // CMOS processors: Dummy read cycle instead of write
+                        pins = this->phi2_read(pins, REG_AB, REG_TMP);
+                        if (!FAM65XX_GET_RDY(pins)) {
+                            return pins;
+                        }
+                    }
                     operation_func(CPU_DL(this));
                     this->cycle_index++;
                 }

@@ -99,6 +99,9 @@ public:
     static constexpr bool has_nmos_bugs() { return Traits.is_nmos(); }
     static constexpr bool has_io_port() { return Traits.has_io_port(); }
     static constexpr bool has_apu() { return Traits.has_apu(); }
+    static constexpr bool has_rmw_dummy_write() { return Traits.has(CPUCoreFlags::RMW_DUMMY_WRITE); }
+    static constexpr bool has_nmi_line() { return !Traits.has(CPUCoreFlags::NO_NMI_LINE); }
+    static constexpr bool has_irq_line() { return !Traits.has(CPUCoreFlags::NO_IRQ_LINE); }
     
     // ========================================================================
     // CPU STATE (merged from fam65xx_cpu_state_t)
@@ -898,19 +901,23 @@ private:
         constexpr uint8_t IRQ_OFFSET = BUS_IRQ_BIT - BUS_RES_BIT;  // 1
         constexpr uint8_t NMI_OFFSET = BUS_NMI_BIT - BUS_RES_BIT;  // 2
         
-        // Sample IRQ (extracted bit 1 -> shift_reg bit 0)
-        shift_reg |= (int_pins >> IRQ_OFFSET) & (1 << INT_IRQ_START_BIT);
+        // Sample IRQ (extracted bit 1 -> shift_reg bit 0) - only if IRQ line exists
+        if constexpr (has_irq_line()) {
+            shift_reg |= (int_pins >> IRQ_OFFSET) & (1 << INT_IRQ_START_BIT);
+        }
         
-        // NMI edge detection (extracted bit 2)
-        uint8_t nmi_current = (int_pins >> NMI_OFFSET) & 0x1;
-        shift_reg |= (-(this->nmi_prev & !nmi_current)) & (1 << INT_NMI_START_BIT);
+        // NMI edge detection (extracted bit 2) - only if NMI line exists
+        if constexpr (has_nmi_line()) {
+            uint8_t nmi_current = (int_pins >> NMI_OFFSET) & 0x1;
+            shift_reg |= (-(this->nmi_prev & !nmi_current)) & (1 << INT_NMI_START_BIT);
+            this->nmi_prev = nmi_current;
+        }
         
         // Sample RESET (extracted bit 0 -> shift_reg bit 8)
         shift_reg |= (int_pins & 0x1) << INT_RESET_START_BIT;
         
         // Store updated state
         this->interrupt_shift_register = shift_reg;
-        this->nmi_prev = nmi_current;
         
         // Check for completed interrupt sequences in order of priority
         
@@ -921,16 +928,20 @@ private:
         }
         
         // Check if NMI has completed shift (3 consecutive cycles) - middle priority
-        if ((shift_reg & INT_NMI_MASK) == INT_NMI_MASK) {
-            this->brk_flags |= FAM65XX_BRK_NMI;
-            return true;
+        if constexpr (has_nmi_line()) {
+            if ((shift_reg & INT_NMI_MASK) == INT_NMI_MASK) {
+                this->brk_flags |= FAM65XX_BRK_NMI;
+                return true;
+            }
         }
         
         // Check if IRQ has completed shift (3 consecutive cycles) - lowest priority
         // IRQ is masked by the I flag (interrupt disable)
-        if ((shift_reg & INT_IRQ_MASK) == INT_IRQ_MASK && !(CPU_P(this) & FLAG_I)) {
-            this->brk_flags |= FAM65XX_BRK_IRQ;
-            return true;
+        if constexpr (has_irq_line()) {
+            if ((shift_reg & INT_IRQ_MASK) == INT_IRQ_MASK && !(CPU_P(this) & FLAG_I)) {
+                this->brk_flags |= FAM65XX_BRK_IRQ;
+                return true;
+            }
         }
         
         return false;

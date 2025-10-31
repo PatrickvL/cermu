@@ -32,7 +32,7 @@ namespace CPUCoreFlags {
     
     // === Hardware Bugs (bits 8-11) ===
     constexpr uint32_t JMP_INDIRECT_BUG     = 1 << 8;   // JMP ($xxFF) wraps within page ✓ IMPLEMENTED
-    constexpr uint32_t RMW_DUMMY_WRITE      = 1 << 9;   // TODO: RMW writes original (vs dummy read)
+    constexpr uint32_t RMW_DUMMY_WRITE      = 1 << 9;   // ✓ IMPLEMENTED: RMW writes original (vs dummy read)
     // Bits 10-11 reserved for other quirks
     
     // === Decimal Mode (bits 12-15) ===
@@ -47,8 +47,8 @@ namespace CPUCoreFlags {
     // Bits 18-19 reserved
     
     // === Interrupts (bits 20-23) ===
-    constexpr uint32_t NO_NMI_LINE          = 1 << 20;  // TODO: NMI disabled (7501)
-    constexpr uint32_t NO_IRQ_LINE          = 1 << 21;  // TODO: IRQ disabled (6507)
+    constexpr uint32_t NO_NMI_LINE          = 1 << 20;  // ✓ IMPLEMENTED: NMI disabled (7501)
+    constexpr uint32_t NO_IRQ_LINE          = 1 << 21;  // ✓ IMPLEMENTED: IRQ disabled (6507)
     // Bits 22-23 reserved
     
     // === Timing (bits 24-27) ===
