@@ -57,27 +57,6 @@ namespace CPUCoreFlags {
     // Bits 26-27 reserved
 }
 
-// Legacy enum for backward compatibility during transition
-enum CPUCoreFlags_Enum : uint32_t {
-    ILLEGAL_OPCODES      = CPUCoreFlags::ILLEGAL_OPCODES,
-    CMOS_BASE            = CPUCoreFlags::CMOS_BASE,
-    ROCKWELL_BITS        = CPUCoreFlags::ROCKWELL_BITS,
-    WAI_STP              = CPUCoreFlags::WAI_STP,
-    CE02_EXTENDED        = CPUCoreFlags::CE02_EXTENDED,
-    C816_16BIT           = CPUCoreFlags::C816_16BIT,
-    HUC6280_EXTENDED     = CPUCoreFlags::HUC6280_EXTENDED,
-    JMP_INDIRECT_BUG     = CPUCoreFlags::JMP_INDIRECT_BUG,
-    RMW_DUMMY_WRITE      = CPUCoreFlags::RMW_DUMMY_WRITE,
-    HAS_DECIMAL_MODE     = CPUCoreFlags::HAS_DECIMAL_MODE,
-    BCD_NMOS_FLAGS       = CPUCoreFlags::BCD_NMOS_FLAGS,
-    BCD_EXTRA_CYCLE      = CPUCoreFlags::BCD_EXTRA_CYCLE,
-    HAS_IO_PORT          = CPUCoreFlags::HAS_IO_PORT,
-    HAS_BANKING          = CPUCoreFlags::HAS_BANKING,
-    NO_NMI_LINE          = CPUCoreFlags::NO_NMI_LINE,
-    NO_IRQ_LINE          = CPUCoreFlags::NO_IRQ_LINE,
-    OPTIMIZED_CYCLES     = CPUCoreFlags::OPTIMIZED_CYCLES,
-    VARIABLE_CLOCK       = CPUCoreFlags::VARIABLE_CLOCK,
-};
 
 // ============================================================================
 // Banking/MMU Type (mutually exclusive)
