@@ -688,6 +688,8 @@ private:
     std::mutex queue_mutex;
     std::condition_variable queue_cv;
     std::atomic<bool> shutdown{false};
+    std::atomic<size_t> active_workers{0};  // Track active workers
+    std::atomic<size_t> total_tests_added{0};  // Track total tests added
     
     ThreadSafeOutput& output_handler;
     ThreadSafeTestResults& results;
@@ -721,15 +723,41 @@ public:
     }
     
     void add_test(const TestItem& item) {
-        std::lock_guard<std::mutex> lock(queue_mutex);
-        test_queue.push(item);
+        {
+            std::lock_guard<std::mutex> lock(queue_mutex);
+            test_queue.push(item);
+            total_tests_added++;
+        }
         queue_cv.notify_one();
     }
     
     void wait_completion() {
-        // Wait for queue to empty
-        std::unique_lock<std::mutex> lock(queue_mutex);
-        queue_cv.wait(lock, [this] { return test_queue.empty(); });
+        // Wait for all tests to be processed by checking that:
+        // 1. Queue is empty AND
+        // 2. All workers are idle (no active workers) AND
+        // 3. All tests have been completed
+        while (true) {
+            bool queue_empty;
+            {
+                std::lock_guard<std::mutex> lock(queue_mutex);
+                queue_empty = test_queue.empty();
+            }
+            
+            // Check completion conditions
+            bool all_tests_processed = results.total_tests.load() >= total_tests_added.load();
+            bool no_active_workers = active_workers.load() == 0;
+            
+            if (queue_empty && no_active_workers && all_tests_processed) {
+                break;
+            }
+            
+            // Early exit on failure if requested
+            if (stop_on_failure && global_test_failed.load()) {
+                break;
+            }
+            
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
     }
     
 private:
@@ -741,25 +769,33 @@ private:
         
         while (!shutdown) {
             TestItem item;
+            bool got_item = false;
             
             {
                 std::unique_lock<std::mutex> lock(queue_mutex);
                 queue_cv.wait(lock, [this] { return !test_queue.empty() || shutdown; });
                 
                 if (shutdown) break;
-                if (test_queue.empty()) continue;
-                
-                item = test_queue.front();
-                test_queue.pop();
+                if (!test_queue.empty()) {
+                    item = test_queue.front();
+                    test_queue.pop();
+                    got_item = true;
+                    active_workers++;  // Mark this worker as active
+                }
             }
+            
+            if (!got_item) continue;
             
             // Check if we should stop due to failure
             if (stop_on_failure && global_test_failed.load()) {
+                active_workers--;  // Mark worker as inactive before breaking
                 break;
             }
             
             // Process the test with reused harness
             process_single_test(item, worker_id, &harness, previous_test);
+            
+            active_workers--;  // Mark worker as inactive after processing
         }
     }
     
@@ -1354,10 +1390,13 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
+    // CRITICAL FIX: Limit worker threads to number of tests to prevent deadlock
+    size_t effective_workers = std::min(num_workers, all_tests.size());
+    
     // Set up parallel execution
     ThreadSafeOutput output_handler;
     ThreadSafeTestResults thread_results;
-    TestWorkerPool worker_pool(num_workers, output_handler, thread_results, 
+    TestWorkerPool worker_pool(effective_workers, output_handler, thread_results,
                                verbose_output, g_quiet_mode, g_test_failed, g_stop_on_failure,
                                detected_processor_type);
     
@@ -1367,24 +1406,23 @@ int main(int argc, char* argv[]) {
         worker_pool.add_test(test);
     }
     
-    // Wait for completion and periodically flush output
-    while (!all_tests.empty()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        
-        // Flush any pending output
-        if (output_handler.has_pending()) {
-            output_handler.flush_all();
+    // Use proper wait completion method with periodic output flushing
+    std::atomic<bool> flush_thread_should_exit{false};
+    std::thread flush_thread([&output_handler, &flush_thread_should_exit]() {
+        while (!flush_thread_should_exit.load()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            if (output_handler.has_pending()) {
+                output_handler.flush_all();
+            }
         }
-        
-        // Check if we're done (simplified check)
-        if (thread_results.total_tests.load() >= all_tests.size()) {
-            break;
-        }
-        
-        // Early exit on failure if requested
-        if (g_stop_on_failure && g_test_failed.load()) {
-            break;
-        }
+    });
+    
+    // Wait for all tests to complete
+    worker_pool.wait_completion();
+    
+    // Stop the flush thread
+    if (flush_thread.joinable()) {
+        flush_thread.join();
     }
     
     // Final output flush
@@ -1396,7 +1434,7 @@ int main(int argc, char* argv[]) {
     // Transfer results to global structure
     thread_results.merge_into_global(results);
     
-    print_results(duration, num_workers, detected_processor_type, all_tests.size());
+    print_results(duration, effective_workers, detected_processor_type, all_tests.size());
     
     if (results.total_tests == 0) {
         std::cout << "\nNo tests were executed!\n";
