@@ -12,7 +12,7 @@
 #endif
 
 // Include processor-specific headers
-#include "../src/chip/cpu/fam65xx/mos6502.hpp"
+#include "../src/chip/cpu/fam65xx/mos6502.h"
 
 namespace fam65xx_lorenz {
 
@@ -53,7 +53,7 @@ struct LorenzTestResult {
 
 class LorenzTestHarness {
 private:
-    mos6502_c_t cpu_;
+    mos6502_t* cpu_;
     std::vector<uint8_t> memory_;
     uint64_t cycle_count_;
     uint16_t load_address_;
@@ -88,16 +88,22 @@ public:
         pins_(0),
         expected_cycles_(0) {
         
-        // Initialize CPU with memory callbacks
-        fam65xx_desc_t desc = {};
-        desc.mem_read = mem_read;
-        desc.mem_write = mem_write;
-        desc.mem_user_data = this;
+        // Create CPU instance
+        cpu_ = mos6502_create();
         
-        pins_ = mos6502_init(&cpu_, &desc);
+        // Initialize CPU with enhanced descriptor and memory callbacks
+        fam65xx_chip_descriptor_t* desc = mos6502_create_descriptor(mem_read, mem_write, this);
+        pins_ = mos6502_init_enhanced(cpu_, desc);
+        mos6502_destroy_descriptor(desc);
         
         // Set up memory map
         setup_memory_map();
+    }
+    
+    ~LorenzTestHarness() {
+        if (cpu_) {
+            mos6502_destroy(cpu_);
+        }
     }
 
     bool load_test(const std::string& test_name) {
@@ -156,7 +162,7 @@ public:
         
         // Reset CPU and set initial state
         reset_cpu();
-        mos6502_set_pc(&cpu_, load_address_);
+        mos6502_set_pc(cpu_, load_address_);
         
         // Capture initial state
         initial_state_ = get_current_state();
@@ -176,10 +182,10 @@ public:
                 cycle_count_++;
                 
                 // Check for infinite loops or crashes
-                uint16_t pc = mos6502_pc(&cpu_);
+                uint16_t pc = mos6502_get_pc(cpu_);
                 if (pc == 0x0000 || pc >= 0xFF00) {
                     result.status = LorenzTestResult::Status::CRASH;
-                    result.message = "CPU crashed or jumped to invalid address: $" + 
+                    result.message = "CPU crashed or jumped to invalid address: $" +
                                    std::to_string(pc);
                     break;
                 }
@@ -230,24 +236,24 @@ public:
     }
 
     void set_initial_state(const LorenzTestState& state) {
-        mos6502_set_pc(&cpu_, state.pc);
-        mos6502_set_a(&cpu_, state.a);
-        mos6502_set_x(&cpu_, state.x);
-        mos6502_set_y(&cpu_, state.y);
-        mos6502_set_s(&cpu_, state.sp);
-        mos6502_set_p(&cpu_, state.p);
+        mos6502_set_pc(cpu_, state.pc);
+        mos6502_set_a(cpu_, state.a);
+        mos6502_set_x(cpu_, state.x);
+        mos6502_set_y(cpu_, state.y);
+        mos6502_set_s(cpu_, state.sp);
+        mos6502_set_p(cpu_, state.p);
         
         initial_state_ = state;
     }
 
     LorenzTestState get_current_state() const {
         LorenzTestState state;
-        state.pc = mos6502_pc(const_cast<mos6502_c_t*>(&cpu_));
-        state.a = mos6502_a(const_cast<mos6502_c_t*>(&cpu_));
-        state.x = mos6502_x(const_cast<mos6502_c_t*>(&cpu_));
-        state.y = mos6502_y(const_cast<mos6502_c_t*>(&cpu_));
-        state.sp = mos6502_s(const_cast<mos6502_c_t*>(&cpu_));
-        state.p = mos6502_p(const_cast<mos6502_c_t*>(&cpu_));
+        state.pc = mos6502_get_pc(cpu_);
+        state.a = mos6502_get_a(cpu_);
+        state.x = mos6502_get_x(cpu_);
+        state.y = mos6502_get_y(cpu_);
+        state.sp = mos6502_get_s(cpu_);
+        state.p = mos6502_get_p(cpu_);
         state.cycles = cycle_count_;
         
         return state;
@@ -265,7 +271,7 @@ public:
 private:
     void reset_cpu() {
         // Bootstrap processor for immediate execution
-        pins_ = mos6502_bootstrap(&cpu_, pins_);
+        pins_ = mos6502_bootstrap(cpu_, pins_);
         
         // Set reset vector to load address
         memory_[0xFFFC] = load_address_ & 0xFF;
@@ -283,7 +289,7 @@ private:
     }
 
     bool is_test_complete() const {
-        uint16_t pc = mos6502_pc(const_cast<mos6502_c_t*>(&cpu_));
+        uint16_t pc = mos6502_get_pc(cpu_);
         
         // Test completion detection methods:
         
@@ -321,17 +327,17 @@ private:
 
     void execute_cycle() {
         // Execute CPU cycle
-        pins_ = mos6502_tick(&cpu_, pins_);
+        pins_ = mos6502_tick(cpu_, pins_);
         
         if (trace_enabled_) {
-            uint16_t pc = mos6502_pc(&cpu_);
-            std::cout << "Cycle " << cycle_count_ << ": PC=$" 
+            uint16_t pc = mos6502_get_pc(cpu_);
+            std::cout << "Cycle " << cycle_count_ << ": PC=$"
                      << std::hex << std::setw(4) << std::setfill('0') << pc
-                     << " A=$" << std::setw(2) << static_cast<int>(mos6502_a(&cpu_))
-                     << " X=$" << std::setw(2) << static_cast<int>(mos6502_x(&cpu_))
-                     << " Y=$" << std::setw(2) << static_cast<int>(mos6502_y(&cpu_))
-                     << " SP=$" << std::setw(2) << static_cast<int>(mos6502_s(&cpu_))
-                     << " P=$" << std::setw(2) << static_cast<int>(mos6502_p(&cpu_))
+                     << " A=$" << std::setw(2) << static_cast<int>(mos6502_get_a(cpu_))
+                     << " X=$" << std::setw(2) << static_cast<int>(mos6502_get_x(cpu_))
+                     << " Y=$" << std::setw(2) << static_cast<int>(mos6502_get_y(cpu_))
+                     << " SP=$" << std::setw(2) << static_cast<int>(mos6502_get_s(cpu_))
+                     << " P=$" << std::setw(2) << static_cast<int>(mos6502_get_p(cpu_))
                      << std::endl;
         }
     }
