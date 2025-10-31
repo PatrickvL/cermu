@@ -15,16 +15,36 @@
 // ============================================================================
 
 bus_state_t op_adc(bus_state_t pins) {
-    // Read operand directly into DL register
-    pins = this->phi2_read_operand(pins, REG_DL);
-    if (FAM65XX_GET_RDY(pins)) {
-        uint8_t operand = CPU_DL(this);
-        
-        // Use ADC operation with processor-specific optimizations
-        this->perform_adc(operand);
-        
-        // Complete instruction
-        this->transition_to_fetch();
+    switch (this->cycle_index) {
+        case 0:
+            // Read operand directly into DL register
+            pins = this->phi2_read_operand(pins, REG_DL);
+            if (FAM65XX_GET_RDY(pins)) {
+                uint8_t operand = CPU_DL(this);
+                
+                // Use ADC operation with processor-specific optimizations
+                this->perform_adc(operand);
+                
+                // CMOS processors need extra cycle in decimal mode
+                if constexpr (this->has_bcd_extra_cycle()) {
+                    if (CPU_P(this) & FLAG_D) {
+                        this->cycle_index++;
+                        return pins;
+                    }
+                }
+                
+                // Complete instruction if no extra cycle needed
+                this->transition_to_fetch();
+            }
+            return pins;
+            
+        case 1:
+            // Extra cycle for CMOS decimal mode - do dummy read from PC
+            pins = this->phi2_read(pins, REG_PC, REG_TMP);
+            if (FAM65XX_GET_RDY(pins)) {
+                this->transition_to_fetch();
+            }
+            return pins;
     }
     return pins;
 }
@@ -114,16 +134,36 @@ bus_state_t op_nop(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_sbc(bus_state_t pins) {
-    // Read operand directly into DL register
-    pins = this->phi2_read_operand(pins, REG_DL);
-    if (FAM65XX_GET_RDY(pins)) {
-        uint8_t operand = CPU_DL(this);
-        
-        // Use SBC operation with processor-specific optimizations
-        this->perform_sbc(operand);
-        
-        // Complete instruction
-        this->transition_to_fetch();
+    switch (this->cycle_index) {
+        case 0:
+            // Read operand directly into DL register
+            pins = this->phi2_read_operand(pins, REG_DL);
+            if (FAM65XX_GET_RDY(pins)) {
+                uint8_t operand = CPU_DL(this);
+                
+                // Use SBC operation with processor-specific optimizations
+                this->perform_sbc(operand);
+                
+                // CMOS processors need extra cycle in decimal mode
+                if constexpr (this->has_bcd_extra_cycle()) {
+                    if (CPU_P(this) & FLAG_D) {
+                        this->cycle_index++;
+                        return pins;
+                    }
+                }
+                
+                // Complete instruction if no extra cycle needed
+                this->transition_to_fetch();
+            }
+            return pins;
+            
+        case 1:
+            // Extra cycle for CMOS decimal mode - do dummy read from PC
+            pins = this->phi2_read(pins, REG_PC, REG_TMP);
+            if (FAM65XX_GET_RDY(pins)) {
+                this->transition_to_fetch();
+            }
+            return pins;
     }
     return pins;
 }

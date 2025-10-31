@@ -91,6 +91,7 @@ public:
     // CPUTraits-based feature detection helpers for operations files
     static constexpr bool has_illegal_opcodes() { return Traits.has(CPUCoreFlags::ILLEGAL_OPCODES); }
     static constexpr bool has_bcd() { return Traits.has(CPUCoreFlags::HAS_DECIMAL_MODE); }
+    static constexpr bool has_bcd_extra_cycle() { return Traits.has(CPUCoreFlags::BCD_EXTRA_CYCLE); }
     static constexpr bool has_cmos() { return Traits.has(CPUCoreFlags::CMOS_BASE); }
     static constexpr bool has_wide_registers() { return Traits.has(CPUCoreFlags::C816_16BIT); }
     static constexpr bool has_nmos_bugs() { return Traits.is_nmos(); }
