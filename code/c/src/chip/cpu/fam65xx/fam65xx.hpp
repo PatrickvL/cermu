@@ -92,6 +92,8 @@ public:
     static constexpr bool has_illegal_opcodes() { return Traits.has(CPUCoreFlags::ILLEGAL_OPCODES); }
     static constexpr bool has_bcd() { return Traits.has(CPUCoreFlags::HAS_DECIMAL_MODE); }
     static constexpr bool has_bcd_extra_cycle() { return Traits.has(CPUCoreFlags::BCD_EXTRA_CYCLE); }
+    static constexpr bool has_bcd_nmos_flags() { return Traits.has(CPUCoreFlags::BCD_NMOS_FLAGS); }
+    static constexpr bool has_optimized_cycles() { return Traits.has(CPUCoreFlags::OPTIMIZED_CYCLES); }
     static constexpr bool has_cmos() { return Traits.has(CPUCoreFlags::CMOS_BASE); }
     static constexpr bool has_wide_registers() { return Traits.has(CPUCoreFlags::C816_16BIT); }
     static constexpr bool has_nmos_bugs() { return Traits.is_nmos(); }
@@ -730,21 +732,21 @@ public:
                 
                 // Processor-specific flag calculation
                 uint8_t n_flag, v_flag, z_flag, c_flag;
-                if constexpr (Traits.has(CPUCoreFlags::CMOS_BASE) && !Traits.has(CPUCoreFlags::ROCKWELL_BITS)) {
-                    // WDC65C02: Calculate flags before final adjustment, N flag from final result
+                if constexpr (has_bcd_nmos_flags()) {
+                    // NMOS: N,V,Z flags calculated from binary result (before BCD adjustment)
+                    n_flag = result & FLAG_N;  // N flag from binary result
+                    v_flag = ((~(old_a ^ operand) & (old_a ^ result)) >> 1) & FLAG_V;  // V flag from binary result
+                    z_flag = (result == 0) * FLAG_Z;  // Z flag from binary result
+                    if (ah > 9) ah += 6;
+                    c_flag = (ah > 15) ? FLAG_C : 0;
+                } else {
+                    // CMOS: N,V,Z flags calculated from BCD result (after BCD adjustment)
                     c_flag = (ah > 15) ? FLAG_C : 0;
                     v_flag = ((~(old_a ^ operand) & (old_a ^ result)) >> 1) & FLAG_V;
                     z_flag = (result == 0) * FLAG_Z;
                     if (ah > 9) ah += 6;
                     const uint8_t bcd_result = (ah << 4) | (al & 0x0F);
-                    n_flag = bcd_result & FLAG_N;
-                } else {
-                    // NMOS: Original flag behavior with quirky N flag calculation
-                    n_flag = (result != 0) * ((ah << 4) & FLAG_N);
-                    v_flag = ((~(old_a ^ operand) & (old_a ^ (ah << 4))) >> 1) & FLAG_V;
-                    if (ah > 9) ah += 6;
-                    z_flag = (result == 0) * FLAG_Z;
-                    c_flag = (ah > 15) ? FLAG_C : 0;
+                    n_flag = bcd_result & FLAG_N;  // N flag from BCD result
                 }
                 
                 // Shared footer: apply result and flags
@@ -772,20 +774,9 @@ public:
         const uint16_t full_result = old_a - operand - borrow_in;
         const uint8_t result = static_cast<uint8_t>(full_result);
         
-        // Calculate flags once - same for both BCD and binary modes
-        const uint8_t n_flag = result & FLAG_N;
-        const uint8_t v_flag = (((old_a ^ operand) & (old_a ^ result)) >> 1) & FLAG_V;
-        const uint8_t z_flag = (result == 0) * FLAG_Z;
-        const uint8_t c_flag = !(full_result & 0x0100); // FLAG_C
-        
-        // Shared flag setting for both modes
-        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-            n_flag | v_flag | z_flag | c_flag;
-        // Binary mode - set result first
-        CPU_A(this) = result;
         if constexpr (has_bcd()) {
             if (CPU_P(this) & FLAG_D) {
-                // BCD mode - overwrite with BCD-adjusted result
+                // BCD mode - calculate BCD result
                 uint8_t al = (old_a & 0x0F) - (operand & 0x0F) - borrow_in;
                 const bool al_borrow = (int8_t)al < 0;
                 if (al_borrow) al -= 6;
@@ -793,10 +784,39 @@ public:
                 uint8_t ah = (old_a >> 4) - (operand >> 4) - al_borrow;
                 if (ah & 0x80) ah -= 6;
                 
-                CPU_A(this) = (ah << 4) | (al & 0x0F);
-                // Fall through to shared flag setting
+                const uint8_t bcd_result = (ah << 4) | (al & 0x0F);
+                CPU_A(this) = bcd_result;
+                
+                // Processor-specific flag calculation for BCD mode
+                uint8_t n_flag, v_flag, z_flag, c_flag;
+                if constexpr (has_bcd_nmos_flags()) {
+                    // NMOS: N,V,Z flags calculated from binary result (before BCD adjustment)
+                    n_flag = result & FLAG_N;
+                    v_flag = (((old_a ^ operand) & (old_a ^ result)) >> 1) & FLAG_V;
+                    z_flag = (result == 0) * FLAG_Z;
+                } else {
+                    // CMOS: N,V,Z flags calculated from BCD result (after BCD adjustment)
+                    n_flag = bcd_result & FLAG_N;
+                    v_flag = (((old_a ^ operand) & (old_a ^ bcd_result)) >> 1) & FLAG_V;
+                    z_flag = (bcd_result == 0) * FLAG_Z;
+                }
+                c_flag = !(full_result & 0x0100); // Carry flag same for both
+                
+                CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+                    n_flag | v_flag | z_flag | c_flag;
+                return;
             }
         }
+        
+        // Binary mode - calculate flags from binary result
+        const uint8_t n_flag = result & FLAG_N;
+        const uint8_t v_flag = (((old_a ^ operand) & (old_a ^ result)) >> 1) & FLAG_V;
+        const uint8_t z_flag = (result == 0) * FLAG_Z;
+        const uint8_t c_flag = !(full_result & 0x0100); // FLAG_C
+        
+        CPU_A(this) = result;
+        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+            n_flag | v_flag | z_flag | c_flag;
     }
 
     /**

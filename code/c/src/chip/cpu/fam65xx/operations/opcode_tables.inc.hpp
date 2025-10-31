@@ -283,7 +283,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
     // Now apply processor-specific modifications based on CPUTraits
     
     // Synertek 65C02 specific overrides - very limited CMOS processor (MUST come before general CMOS)
-    if (traits.has(fam65xx::CMOS_BASE) && !traits.has(fam65xx::WAI_STP) && !traits.has(fam65xx::ROCKWELL_BITS)) {
+    if (traits.has(fam65xx::CPUCoreFlags::CMOS_BASE) && !traits.has(fam65xx::CPUCoreFlags::WAI_STP) && !traits.has(fam65xx::CPUCoreFlags::ROCKWELL_BITS)) {
         // Synertek 65C02 is a limited CMOS processor - these instructions are NOPs with specific addressing modes
         table[0x1A] = {OP_NOP, AM_NON, OF_NONE};  // INC A -> 1-byte NOP (implied)
         table[0x3A] = {OP_NOP, AM_NON, OF_NONE};  // DEC A -> 1-byte NOP (implied)
@@ -295,7 +295,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
     }
     
     // CMOS processors: Replace illegal opcodes with NOPs
-    if (traits.has(fam65xx::CMOS_BASE)) {
+    if (traits.has(fam65xx::CPUCoreFlags::CMOS_BASE)) {
         // WDC65C02: Specific illegal opcodes become 2-byte NOPs (AM_IMM)
         // These opcodes: 0x02, 0x22, 0x42, 0x62, 0x82, 0xC2, 0xE2
         table[0x02] = {OP_NOP, AM_IMM, OF_NONE};  // JAM -> 2-byte NOP
@@ -403,7 +403,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
     
     
     // Rockwell 65C02 modifications (add RMB/SMB/BBR/BBS instructions)
-    if (traits.has(fam65xx::ROCKWELL_BITS)) {
+    if (traits.has(fam65xx::CPUCoreFlags::ROCKWELL_BITS)) {
         // Add Rockwell bit manipulation instructions (RMB/SMB)
         table[0x07] = {OP_RMB0, AM_ZER, OF_RMW}; // RMB0
         table[0x17] = {OP_RMB1, AM_ZER, OF_RMW}; // RMB1
@@ -442,7 +442,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
     }
     
     // WDC 65C816 modifications (16-bit enhanced instructions)
-    if (traits.has(fam65xx::C816_16BIT)) {
+    if (traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
         // Add 65C816 specific opcodes
         table[0x0B] = {OP_PHD, AM_NON, OF_NONE};  // PHD
         table[0x22] = {OP_JSL, AM_ABS, OF_NONE};  // JSL
