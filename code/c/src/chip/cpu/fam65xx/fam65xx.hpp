@@ -580,6 +580,7 @@ public:
 #include "operations/rmw.inc.hpp"              // Read-modify-write operations
 #include "operations/illegal.inc.hpp"          // Illegal/undocumented opcodes
 #include "operations/cmos.inc.hpp"             // 65C02 enhancements
+#include "operations/rockwell.inc.hpp"         // Rockwell 65C02 bit manipulation
 #include "operations/wide.inc.hpp"             // 65C816 16-bit operations
     
     // Undefine the guard after inclusion
@@ -984,6 +985,22 @@ private:
         operation_handlers[OP_ARR] = &fam65xx_t::op_arr;
         operation_handlers[OP_ASL] = &fam65xx_t::op_asl;
         operation_handlers[OP_ASR] = &fam65xx_t::op_asr;
+        operation_handlers[OP_BBR0] = &fam65xx_t::op_bbr0;
+        operation_handlers[OP_BBR1] = &fam65xx_t::op_bbr1;
+        operation_handlers[OP_BBR2] = &fam65xx_t::op_bbr2;
+        operation_handlers[OP_BBR3] = &fam65xx_t::op_bbr3;
+        operation_handlers[OP_BBR4] = &fam65xx_t::op_bbr4;
+        operation_handlers[OP_BBR5] = &fam65xx_t::op_bbr5;
+        operation_handlers[OP_BBR6] = &fam65xx_t::op_bbr6;
+        operation_handlers[OP_BBR7] = &fam65xx_t::op_bbr7;
+        operation_handlers[OP_BBS0] = &fam65xx_t::op_bbs0;
+        operation_handlers[OP_BBS1] = &fam65xx_t::op_bbs1;
+        operation_handlers[OP_BBS2] = &fam65xx_t::op_bbs2;
+        operation_handlers[OP_BBS3] = &fam65xx_t::op_bbs3;
+        operation_handlers[OP_BBS4] = &fam65xx_t::op_bbs4;
+        operation_handlers[OP_BBS5] = &fam65xx_t::op_bbs5;
+        operation_handlers[OP_BBS6] = &fam65xx_t::op_bbs6;
+        operation_handlers[OP_BBS7] = &fam65xx_t::op_bbs7;
         operation_handlers[OP_BCC] = &fam65xx_t::op_bcc;
         operation_handlers[OP_BCS] = &fam65xx_t::op_bcs;
         operation_handlers[OP_BEQ] = &fam65xx_t::op_beq;
@@ -1032,6 +1049,14 @@ private:
         operation_handlers[OP_PLY] = &fam65xx_t::op_ply;
         operation_handlers[OP_RLA] = &fam65xx_t::op_rla;
         operation_handlers[OP_REP] = &fam65xx_t::op_rep;
+        operation_handlers[OP_RMB0] = &fam65xx_t::op_rmb0;
+        operation_handlers[OP_RMB1] = &fam65xx_t::op_rmb1;
+        operation_handlers[OP_RMB2] = &fam65xx_t::op_rmb2;
+        operation_handlers[OP_RMB3] = &fam65xx_t::op_rmb3;
+        operation_handlers[OP_RMB4] = &fam65xx_t::op_rmb4;
+        operation_handlers[OP_RMB5] = &fam65xx_t::op_rmb5;
+        operation_handlers[OP_RMB6] = &fam65xx_t::op_rmb6;
+        operation_handlers[OP_RMB7] = &fam65xx_t::op_rmb7;
         operation_handlers[OP_ROL] = &fam65xx_t::op_rol;
         operation_handlers[OP_ROR] = &fam65xx_t::op_ror;        
         operation_handlers[OP_RRA] = &fam65xx_t::op_rra;
@@ -1049,6 +1074,14 @@ private:
         operation_handlers[OP_SHX] = &fam65xx_t::op_shx;
         operation_handlers[OP_SHY] = &fam65xx_t::op_shy;
         operation_handlers[OP_SLO] = &fam65xx_t::op_slo;
+        operation_handlers[OP_SMB0] = &fam65xx_t::op_smb0;
+        operation_handlers[OP_SMB1] = &fam65xx_t::op_smb1;
+        operation_handlers[OP_SMB2] = &fam65xx_t::op_smb2;
+        operation_handlers[OP_SMB3] = &fam65xx_t::op_smb3;
+        operation_handlers[OP_SMB4] = &fam65xx_t::op_smb4;
+        operation_handlers[OP_SMB5] = &fam65xx_t::op_smb5;
+        operation_handlers[OP_SMB6] = &fam65xx_t::op_smb6;
+        operation_handlers[OP_SMB7] = &fam65xx_t::op_smb7;
         operation_handlers[OP_SRE] = &fam65xx_t::op_sre;
         operation_handlers[OP_STA] = &fam65xx_t::op_sta;
         operation_handlers[OP_STP] = &fam65xx_t::op_stp;

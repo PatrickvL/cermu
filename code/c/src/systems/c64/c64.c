@@ -11,7 +11,7 @@
 /* dual CPU include removed */
 #include "../../core/storage/rom_loader.h"
 #include "../../core/config/path_discovery.h"
-#include "../../chip/cpu/mos6510/mos6510.h" // Direct C++ core
+#include "../../chip/cpu/fam65xx/mos6510.h" // Direct C++ core
 #include "../../chip/io/mos6526.h" // cia
 #include "../../chip/sound/mos6581.h" // sid
 #include "../../chip/video/vic_ii/mos6569.h" // vicii PAL
