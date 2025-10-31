@@ -1,5 +1,5 @@
 /**
- * Comprehensive CPU Diagnostic Tool for fam65xx_cpp
+ * Comprehensive CPU Diagnostic Tool for fam65xx
  * Analyzes and debugs CPU core implementation issues
  */
 #include <iostream>
@@ -9,9 +9,9 @@
 #include <fstream>
 #include <functional>
 
-// Include fam65xx_cpp CPU implementation
-#include "../src/chip/cpu/fam65xx_cpp/fam65xx.hpp"
-#include "../src/chip/cpu/fam65xx_cpp/cpu_config.hpp"
+// Include fam65xx CPU implementation
+#include "../src/chip/cpu/fam65xx/fam65xx.hpp"
+#include "../src/chip/cpu/fam65xx/cpu_config.hpp"
 #include "../src/core/system_lines.h"
 
 // Simple memory interface for testing
@@ -54,7 +54,7 @@ public:
 
 class CPUDiagnostic {
 private:
-    using CPU = fam65xx_cpp::fam65xx<config_6502>;
+    using CPU = fam65xx::fam65xx<config_6502>;
     CPU* cpu;
     TestMemory* memory;
     
@@ -308,7 +308,7 @@ public:
     
     void runComprehensiveDiagnostic() {
         std::cout << "========================================" << std::endl;
-        std::cout << "   fam65xx_cpp CPU DIAGNOSTIC TOOL" << std::endl;
+        std::cout << "   fam65xx CPU DIAGNOSTIC TOOL" << std::endl;
         std::cout << "   Comprehensive Implementation Analysis" << std::endl;
         std::cout << "========================================" << std::endl;
         

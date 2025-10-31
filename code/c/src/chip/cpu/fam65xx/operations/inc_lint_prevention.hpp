@@ -76,7 +76,7 @@
 // SURROGATE NAMESPACE AND CLASS CONTEXT
 // =========================================================================
 
-namespace fam65xx_cpp {
+namespace fam65xx {
     
     // Forward declare any missing processor tags (avoid redefinition)
     #ifndef FAM65XX_MOCK_PROCESSOR_TAG

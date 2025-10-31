@@ -5,7 +5,7 @@
 #include "nes6502.h"
 #include "fam65xx.hpp"
 
-using namespace fam65xx_cpp;
+using namespace fam65xx;
 
 // ============================================================================
 // CONCRETE CPU TYPE DEFINITION

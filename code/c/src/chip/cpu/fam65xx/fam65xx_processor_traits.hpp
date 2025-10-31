@@ -12,7 +12,7 @@
 
 #ifdef __cplusplus
 
-namespace fam65xx_cpp {
+namespace fam65xx {
 
 // ============================================================================
 // CPU Core Feature Flags (only CPU execution behavior)
@@ -412,6 +412,6 @@ constexpr bool has_apu() {
     return Traits.has_apu();
 }
 
-} // namespace fam65xx_cpp
+} // namespace fam65xx
 
 #endif // __cplusplus

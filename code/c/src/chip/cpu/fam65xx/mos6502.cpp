@@ -11,7 +11,7 @@
 #include <cstdio>
 
 // Include concrete CPU type definitions
-using namespace fam65xx_cpp;
+using namespace fam65xx;
 
 // ============================================================================
 // CONCRETE CPU TYPE DEFINITIONS

@@ -4,13 +4,12 @@ This directory contains a comprehensive test suite that uses **TomHarte's Proces
 
 ## 🎯 Overview
 
-The ProcessorTests runner provides **definitive, hardware-verified validation** of your MOS6510 CPU using authoritative test data from the ProcessorTests repository, eliminating any guesswork about correct CPU behavior.
+The fam65xx ProcessorTests runner provides **definitive, hardware-verified validation** of your MOS6510 CPU using authoritative test data from the ProcessorTests repository, eliminating any guesswork about correct CPU behavior.
 
 ## 📦 Files
 
-- **`processor_tests_runner.c`** - Main test runner using ProcessorTests JSON data
+- **`fam65xx_processor_tests_runner.cpp`** - Main test runner using ProcessorTests JSON data
 - **`json_parser.c/.h`** - Custom JSON parser (no external dependencies)
-- **`test_mos6510_comprehensive.c`** - Fallback/custom test suite
 - **`CMakeLists.txt`** - Build configuration with ProcessorTests integration
 
 ## 🚀 Quick Setup
@@ -33,10 +32,10 @@ cmake ..
 cmake --build . --config Debug
 
 # Run ProcessorTests validation (thousands of tests)
-./processor_tests_runner ../processor_tests/6502/v1/
+./fam65xx_processor_tests_runner ../processor_tests/6502/v1/
 
 # Or run specific test file
-./processor_tests_runner -v ../processor_tests/6502/v1/00.json
+./fam65xx_processor_tests_runner -v ../processor_tests/6502/v1/00.json
 ```
 
 ### 3. Using Build Scripts
@@ -67,12 +66,12 @@ REM Linux/macOS
 
 ### Run All ProcessorTests
 ```bash
-./processor_tests_runner processor_tests/6502/v1/
+./fam65xx_processor_tests_runner processor_tests/6502/v1/
 ```
 
 ### Run Single Test File (Verbose)
 ```bash
-./processor_tests_runner -v processor_tests/6502/v1/00.json
+./fam65xx_processor_tests_runner -v processor_tests/6502/v1/00.json
 ```
 
 ### Run Only Comprehensive Tests
@@ -159,7 +158,7 @@ git submodule update --init --recursive
 
 ### Cycle Count Mismatches
 If all cycle counts are consistently off by 1:
-- Check intercept mechanism overhead adjustment in `processor_tests_runner.c`
+- Check intercept mechanism overhead adjustment in `fam65xx_processor_tests_runner.cpp`
 - Modify the cycle adjustment logic if needed
 
 ### Memory Access Errors

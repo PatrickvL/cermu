@@ -22,7 +22,7 @@
   
     }; // End of template<typename ProcessorTag> class fam65xx_t
     
-  } // End of namespace fam65xx_cpp
+  } // End of namespace fam65xx
 
   // =========================================================================
   // RESTORE COMPILER DIAGNOSTICS
