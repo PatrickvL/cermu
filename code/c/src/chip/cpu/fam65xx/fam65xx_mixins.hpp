@@ -149,11 +149,11 @@ struct apu_mixin_t {
     // APU register write handler ($4000-$4017) - ProcessorTests compatible
     bool write_apu_register(uint16_t addr, uint8_t value) {
         // In ProcessorTests mode, don't intercept memory-mapped I/O
-        if (apu_state.processor_tests_mode) {
-            return false; // Not handled - allow normal memory access
-        }
-        
         if (addr >= 0x4000 && addr <= 0x4017) {
+            if (apu_state.processor_tests_mode) {
+                return false; // Not handled - allow normal memory access
+            }
+            
             if (apu_state.apu_instance) {
                 // Create a bus state with the address and data set
                 bus_state_t bus_state = 0;
@@ -169,11 +169,11 @@ struct apu_mixin_t {
     // APU register read handler ($4015) - ProcessorTests compatible
     bool read_apu_register(uint16_t addr, uint8_t& value) {
         // In ProcessorTests mode, don't intercept memory-mapped I/O
-        if (apu_state.processor_tests_mode) {
-            return false; // Not handled - allow normal memory access
-        }
-        
         if (addr == 0x4015) {
+            if (apu_state.processor_tests_mode) {
+                return false; // Not handled - allow normal memory access
+            }
+            
             if (apu_state.apu_instance) {
                 // Create a bus state with the address set
                 bus_state_t bus_state = 0;
