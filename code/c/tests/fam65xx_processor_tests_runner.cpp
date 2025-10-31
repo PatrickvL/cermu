@@ -615,7 +615,7 @@ std::unique_ptr<UnifiedProcessorInterface> create_processor(ProcessorType type) 
             return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::RICOH_2A03>());
             
         case ProcessorType::WDC65C02:
-            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::WDC_W65C02S>());
+            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::WDC_65SC02>());
             
         case ProcessorType::MOS6510:
             return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::MOS6510>());
