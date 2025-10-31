@@ -287,23 +287,33 @@ public:
         pins = cpu_wrapper->bootstrap(pins);
     }
 
-    ProcessorTestHarness(ProcessorType proc_type = ProcessorType::MOS6502) 
+    ProcessorTestHarness(ProcessorType proc_type = ProcessorType::MOS6502)
         : processor_type(proc_type), memory(test_memory), cycle_count(0) {
+        
+        if (!g_quiet_mode) printf("DEBUG: ProcessorTestHarness constructor called for processor type %d\n", (int)proc_type);
         
         // Clear memory (optimized approach from C version)
         std::fill(memory, memory + 65536, static_cast<uint8_t>(0));
         
+        if (!g_quiet_mode) printf("DEBUG: About to call create_processor...\n");
+        
         // Create processor wrapper for the specified type
         cpu_wrapper = create_processor(processor_type);
         
+        if (!g_quiet_mode) printf("DEBUG: create_processor returned successfully\n");
+        
         // Set up harness for bus cycle recording - now works with all processors via unified interface
         cpu_wrapper->set_harness(this);
+        
+        if (!g_quiet_mode) printf("DEBUG: About to call cpu_wrapper->init...\n");
         
         // Initialize CPU with new API (memory callbacks handled differently)
         chip_descriptor_t desc = {};
         desc.description = "MOS6502 Test CPU";
         
         pins = cpu_wrapper->init(&desc);
+        
+        if (!g_quiet_mode) printf("DEBUG: ProcessorTestHarness constructor completed successfully\n");
         
         // ProcessorTests expects CPU to be ready for immediate execution
         cycle_count = 0;
@@ -506,15 +516,15 @@ private:
         }
     }
     
-    // Helper function to get processor name for debug output - compile-time processor name determination
-    constexpr const char* get_processor_debug_name() const {
-        if constexpr (&Traits == &fam65xx::MOS6502) return "MOS6502";
-        else if constexpr (&Traits == &fam65xx::RICOH_2A03) return "NES6502";
-        else if constexpr (&Traits == &fam65xx::WDC_W65C02S) return "WDC65C02";
-        else if constexpr (&Traits == &fam65xx::MOS6510) return "MOS6510";
-        else if constexpr (&Traits == &fam65xx::ROCKWELL_R65C02) return "Rockwell65C02";
-        else if constexpr (&Traits == &fam65xx::WDC_65C816) return "WDC65C816";
-        else return "Unknown";
+    // Helper function to get processor name for debug output
+    const char* get_processor_debug_name() const {
+        // Runtime identification based on CPUTraits features
+        if (Traits.has_apu()) return "NES6502";
+        else if (Traits.has_io_port()) return "MOS6510";
+        else if (Traits.has(fam65xx::CPUCoreFlags::ROCKWELL_BITS)) return "Rockwell65C02";
+        else if (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) return "WDC65C816";
+        else if (Traits.has(fam65xx::CPUCoreFlags::CMOS_BASE)) return "WDC65C02";
+        else return "MOS6502";
     }
 
 public:
@@ -532,12 +542,10 @@ public:
         // Initialize CPU
         cpu->init(&desc);
         
-        // Special handling for NES6502 - enable ProcessorTests compatibility mode
-        if constexpr (&Traits == &fam65xx::RICOH_2A03) {
-            if constexpr (Traits.has_apu()) {
-                // Note: ProcessorTests mode is now handled automatically by CPUTraits
-                if (!g_quiet_mode) printf("DEBUG: NES6502 compatibility mode active\n");
-            }
+        // Special handling for NES6502 - check if has APU via CPUTraits
+        if constexpr (Traits.has_apu()) {
+            cpu->set_processor_tests_mode(true);
+            if (!g_quiet_mode) printf("DEBUG: Enabled ProcessorTests compatibility mode for NES6502\n");
         }
         
         // Set up memory callbacks with this wrapper as user_data
@@ -707,9 +715,12 @@ public:
         : output_handler(output), results(res), verbose_mode(verbose), quiet_mode(quiet),
           global_test_failed(test_failed), stop_on_failure(stop_fail), processor_type(proc_type) {
         
+        if (!quiet_mode) printf("DEBUG: Creating %zu worker threads...\n", num_workers);
         for (size_t i = 0; i < num_workers; ++i) {
+            if (!quiet_mode) printf("DEBUG: Starting worker thread %zu\n", i);
             workers.emplace_back(&TestWorkerPool::worker_thread, this, i);
         }
+        if (!quiet_mode) printf("DEBUG: All worker threads started\n");
     }
     
     ~TestWorkerPool() {
@@ -762,10 +773,14 @@ public:
     
 private:
     void worker_thread(size_t worker_id) {
+        if (!quiet_mode) printf("DEBUG: Worker thread %zu starting, creating ProcessorTestHarness...\n", worker_id);
+        
         // PERFORMANCE OPTIMIZATION: Create one harness per worker thread
         // Reuse the same harness for all tests in this thread to avoid repeated initialization
         ProcessorTestHarness harness(processor_type);  // Pass processor type to harness
         processor_test_t* previous_test = nullptr;
+        
+        if (!quiet_mode) printf("DEBUG: Worker thread %zu ProcessorTestHarness created successfully\n", worker_id);
         
         while (!shutdown) {
             TestItem item;
@@ -1108,8 +1123,9 @@ void collect_tests_from_file(const std::string& filepath, std::vector<TestItem>&
         const char* pos = data + 1; // Skip opening [
         
         size_t test_index = 0;
+        size_t safety_limit = 1000000; // Prevent infinite loops
         
-        while (pos < end) {
+        while (pos < end && safety_limit-- > 0) {
             // Fast search for opening brace using memchr
             pos = static_cast<const char*>(memchr(pos, '{', end - pos));
             if (!pos) break;
@@ -1390,15 +1406,21 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    // CRITICAL FIX: Limit worker threads to number of tests to prevent deadlock
-    size_t effective_workers = std::min(num_workers, all_tests.size());
+    // Add debug output to identify exact hang location
+    std::cout << "DEBUG: About to create ThreadSafeOutput...\n" << std::flush;
     
     // Set up parallel execution
     ThreadSafeOutput output_handler;
+    std::cout << "DEBUG: ThreadSafeOutput created\n" << std::flush;
+    
     ThreadSafeTestResults thread_results;
-    TestWorkerPool worker_pool(effective_workers, output_handler, thread_results,
+    std::cout << "DEBUG: ThreadSafeTestResults created\n" << std::flush;
+    
+    std::cout << "DEBUG: About to create TestWorkerPool with " << num_workers << " workers...\n" << std::flush;
+    TestWorkerPool worker_pool(num_workers, output_handler, thread_results,
                                verbose_output, g_quiet_mode, g_test_failed, g_stop_on_failure,
                                detected_processor_type);
+    std::cout << "DEBUG: TestWorkerPool created successfully\n" << std::flush;
     
     // Submit all tests to worker pool
     std::cout << "Starting parallel execution...\n";
@@ -1421,6 +1443,7 @@ int main(int argc, char* argv[]) {
     worker_pool.wait_completion();
     
     // Stop the flush thread
+    flush_thread_should_exit = true;
     if (flush_thread.joinable()) {
         flush_thread.join();
     }
@@ -1434,7 +1457,7 @@ int main(int argc, char* argv[]) {
     // Transfer results to global structure
     thread_results.merge_into_global(results);
     
-    print_results(duration, effective_workers, detected_processor_type, all_tests.size());
+    print_results(duration, num_workers, detected_processor_type, all_tests.size());
     
     if (results.total_tests == 0) {
         std::cout << "\nNo tests were executed!\n";

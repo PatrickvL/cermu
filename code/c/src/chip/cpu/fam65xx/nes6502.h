@@ -93,6 +93,10 @@ private:
     // Hardware quirk: Envelope has silicon-level timing variations
     uint8_t silicon_delay = 0;  // Microscopic timing variations in real hardware
     bool temperature_drift = false;  // Temperature affects envelope timing
+    
+    // THREAD SAFETY FIX: Convert static variables to instance variables
+    uint16_t temp_counter = 0;      // Was static - now per-instance
+    uint8_t start_jitter = 0;       // Was static - now per-instance
 
 public:
     void reset() {
@@ -109,7 +113,6 @@ public:
         }
         
         // Hardware quirk: Temperature drift affects envelope timing every ~1000 clocks
-        static uint16_t temp_counter = 0;
         temp_counter++;
         if (temp_counter >= 1000) {
             temp_counter = 0;
@@ -126,7 +129,6 @@ public:
             divider = divider_period;
             
             // Hardware quirk: Envelope start has microscopic jitter
-            static uint8_t start_jitter = 0;
             start_jitter = (start_jitter + 1) & 0x3;
             if (start_jitter == 0 && divider_period > 8) {
                 silicon_delay = 1;  // Rare start timing variation
@@ -310,6 +312,9 @@ private:
     // Hardware quirk: Pulse channels have sub-harmonic resonance effects
     uint16_t resonance_counter = 0;
     bool resonance_active = false;
+    
+    // THREAD SAFETY FIX: Convert static variables to instance variables
+    uint8_t period1_jitter = 0;    // Was static - now per-instance
 
 public:
     PulseChannel(bool is_pulse1) {
@@ -374,7 +379,6 @@ public:
             // Hardware quirk: Timer reload has microscopic variations
             if (timer_period == 1) {
                 // Period 1 has special timing behavior
-                static uint8_t period1_jitter = 0;
                 period1_jitter = (period1_jitter + 1) & 0x1;
                 if (period1_jitter) {
                     timer += 1;  // Occasional extra cycle
@@ -440,6 +444,9 @@ private:
     // Hardware quirk: Triangle has unique harmonic distortion patterns
     uint8_t harmonic_phase = 0;
     bool harmonic_distortion = false;
+    
+    // THREAD SAFETY FIX: Convert static variables to instance variables
+    uint8_t stutter_counter = 0;   // Was static - now per-instance
 
 public:
     void write_control(uint8_t value) {
@@ -489,7 +496,6 @@ public:
                 // Hardware quirk: Triangle sequence has micro-stutters at period boundaries
                 if (timer_period == 1) {
                     // Ultra-high frequency triangle has timing anomalies
-                    static uint8_t stutter_counter = 0;
                     stutter_counter++;
                     if (stutter_counter >= 8) {
                         stutter_counter = 0;
@@ -582,6 +588,9 @@ private:
     // Hardware quirk: LFSR has temperature-dependent behavior
     uint16_t lfsr_temperature_drift = 0;
     bool lfsr_stuck_bit = false;  // Rare silicon defect simulation
+    
+    // THREAD SAFETY FIX: Convert static variables to instance variables
+    uint8_t fast_jitter = 0;      // Was static - now per-instance
 
 public:
     void write_control(uint8_t value) {
@@ -632,7 +641,6 @@ public:
             
             // Hardware quirk: LFSR at extreme periods has timing variations
             if (period_index == 0) {  // Fastest period
-                static uint8_t fast_jitter = 0;
                 fast_jitter = (fast_jitter + 1) & 0x7;
                 if (fast_jitter == 0) {
                     timer += 1;  // Occasional timing slip at maximum speed
@@ -702,6 +710,9 @@ private:
     uint16_t dac_settling_time = 0;  // DAC has settling time after level changes
     uint8_t previous_output = 0;     // Track output changes for DAC simulation
     bool dac_nonlinear = false;      // DAC non-linearity at extreme levels
+    
+    // THREAD SAFETY FIX: Convert static variables to instance variables
+    mutable uint8_t settling_noise = 0;      // Was static - now per-instance (mutable for const methods)
 
 public:
     void write_control(uint8_t value) {
@@ -858,7 +869,6 @@ public:
         // Hardware quirk: DAC settling affects output stability
         if (dac_settling_time > 0 && std::abs((int)current_output - (int)previous_output) > 8) {
             // Output instability during settling
-            static uint8_t settling_noise = 0;
             settling_noise = (settling_noise + 1) & 0x3;
             return current_output + (settling_noise & 0x1 ? 1 : -1);
         }
@@ -1056,6 +1066,19 @@ private:
         uint8_t cycles_remaining = 0;
         uint16_t address = 0;
     } dma_state;
+    
+    // THREAD SAFETY FIX: Convert static variables to instance variables (mutable for const methods)
+    mutable float component_drift = 1.0f;
+    mutable uint32_t drift_counter = 0;
+    mutable float drift_accumulator = 0.0f;
+    mutable float thermal_coeff = 1.0f;
+    mutable uint32_t thermal_counter = 0;
+    mutable float hf_prev = 0.0f;
+    mutable float prev_input = 0.0f;
+    mutable float prev_output = 0.0f;
+    mutable float lf_prev = 0.0f;
+    mutable float manufacturing_variation = 1.0f;
+    mutable bool variation_initialized = false;
     
 public:
     APU(bool pal = false) : is_pal(pal) {
@@ -1334,15 +1357,12 @@ public:
         float output = pulse_out + tnd_out;
         
         // Hardware quirk: Component tolerance simulation
-        static float component_drift = 1.0f;
-        static uint32_t drift_counter = 0;
         drift_counter++;
         
         // Simulate component aging over time (very slow drift)
         if (drift_counter >= 1000000) {  // Every ~1M samples
             drift_counter = 0;
             // Components drift ±0.1% over time
-            static float drift_accumulator = 0.0f;
             drift_accumulator += (((drift_counter * 37) % 1000) - 500) * 0.000002f;
             if (drift_accumulator > 0.001f) drift_accumulator = 0.001f;
             if (drift_accumulator < -0.001f) drift_accumulator = -0.001f;
@@ -1352,8 +1372,6 @@ public:
         output *= component_drift;
         
         // Hardware quirk: Temperature-dependent filtering
-        static float thermal_coeff = 1.0f;
-        static uint32_t thermal_counter = 0;
         thermal_counter++;
         if (thermal_counter >= 48000) {  // ~1Hz thermal variation at 48kHz
             thermal_counter = 0;
@@ -1376,28 +1394,22 @@ public:
         float filter_coeff = base_filter_coeff * thermal_coeff;
         
         // High-frequency roll-off with component variations
-        static float hf_prev = 0.0f;
         float hf_filtered = output * filter_coeff + hf_prev * (1.0f - filter_coeff);
         hf_prev = hf_filtered;
         
         // DC blocking filter (hardware has ~20Hz cutoff) with aging effects
-        static float prev_input = 0.0f;
-        static float prev_output = 0.0f;
         float dc_coeff = 0.999f * component_drift;
         float dc_blocked = hf_filtered - prev_input + dc_coeff * prev_output;
         prev_input = hf_filtered;
         prev_output = dc_blocked;
         
         // Hardware quirk: Additional low-pass filtering varies by region and temperature
-        static float lf_prev = 0.0f;
         float base_lf_coeff = is_pal ? 0.088f : 0.0956f;
         float lf_coeff = base_lf_coeff * thermal_coeff;
         float final_out = dc_blocked * lf_coeff + lf_prev * (1.0f - lf_coeff);
         lf_prev = final_out;
         
         // Hardware quirk: Manufacturing variation simulation
-        static float manufacturing_variation = 1.0f;
-        static bool variation_initialized = false;
         if (!variation_initialized) {
             // Each "chip" has slight manufacturing differences
             uint32_t chip_id = (uint32_t)(uintptr_t)this;  // Use object address as unique ID
