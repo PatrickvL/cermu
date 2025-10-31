@@ -183,7 +183,7 @@ namespace CoreFlags {
         CPUCoreFlags::HAS_DECIMAL_MODE | CPUCoreFlags::BCD_NMOS_FLAGS;
     
     // CMOS common flags
-    constexpr uint32_t CMOS_BASE_FLAGS = 
+    constexpr uint32_t CMOS_BASE_FLAGS =
         CPUCoreFlags::CMOS_BASE | CPUCoreFlags::HAS_DECIMAL_MODE | CPUCoreFlags::BCD_EXTRA_CYCLE;
     
     // CMOS with Rockwell extensions

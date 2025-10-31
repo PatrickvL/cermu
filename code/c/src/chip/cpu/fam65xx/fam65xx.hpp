@@ -777,9 +777,20 @@ public:
         const uint16_t full_result = old_a - operand - borrow_in;
         const uint8_t result = static_cast<uint8_t>(full_result);
         
+        // Calculate flags once - same for both BCD and binary modes
+        const uint8_t n_flag = result & FLAG_N;
+        const uint8_t v_flag = (((old_a ^ operand) & (old_a ^ result)) >> 1) & FLAG_V;
+        const uint8_t z_flag = (result == 0) * FLAG_Z;
+        const uint8_t c_flag = !(full_result & 0x0100); // FLAG_C
+        
+        // Shared flag setting for both modes
+        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+            n_flag | v_flag | z_flag | c_flag;
+        // Binary mode - set result first
+        CPU_A(this) = result;
         if constexpr (has_bcd()) {
             if (CPU_P(this) & FLAG_D) {
-                // BCD mode - calculate BCD result
+                // BCD mode - overwrite with BCD-adjusted result
                 uint8_t al = (old_a & 0x0F) - (operand & 0x0F) - borrow_in;
                 const bool al_borrow = (int8_t)al < 0;
                 if (al_borrow) al -= 6;
@@ -787,39 +798,10 @@ public:
                 uint8_t ah = (old_a >> 4) - (operand >> 4) - al_borrow;
                 if (ah & 0x80) ah -= 6;
                 
-                const uint8_t bcd_result = (ah << 4) | (al & 0x0F);
-                CPU_A(this) = bcd_result;
-                
-                // Processor-specific flag calculation for BCD mode
-                uint8_t n_flag, v_flag, z_flag, c_flag;
-                if constexpr (has_bcd_nmos_flags()) {
-                    // NMOS: N,V,Z flags calculated from binary result (before BCD adjustment)
-                    n_flag = result & FLAG_N;
-                    v_flag = (((old_a ^ operand) & (old_a ^ result)) >> 1) & FLAG_V;
-                    z_flag = (result == 0) * FLAG_Z;
-                } else {
-                    // CMOS: N,V,Z flags calculated from BCD result (after BCD adjustment)
-                    n_flag = bcd_result & FLAG_N;
-                    v_flag = (((old_a ^ operand) & (old_a ^ bcd_result)) >> 1) & FLAG_V;
-                    z_flag = (bcd_result == 0) * FLAG_Z;
-                }
-                c_flag = !(full_result & 0x0100); // Carry flag same for both
-                
-                CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                    n_flag | v_flag | z_flag | c_flag;
-                return;
+                CPU_A(this) = (ah << 4) | (al & 0x0F);
+                // Fall through to shared flag setting
             }
         }
-        
-        // Binary mode - calculate flags from binary result
-        const uint8_t n_flag = result & FLAG_N;
-        const uint8_t v_flag = (((old_a ^ operand) & (old_a ^ result)) >> 1) & FLAG_V;
-        const uint8_t z_flag = (result == 0) * FLAG_Z;
-        const uint8_t c_flag = !(full_result & 0x0100); // FLAG_C
-        
-        CPU_A(this) = result;
-        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-            n_flag | v_flag | z_flag | c_flag;
     }
 
     /**
