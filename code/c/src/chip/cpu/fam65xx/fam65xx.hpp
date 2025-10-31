@@ -735,21 +735,21 @@ public:
                 
                 // Processor-specific flag calculation
                 uint8_t n_flag, v_flag, z_flag, c_flag;
-                if constexpr (has_bcd_nmos_flags()) {
-                    // NMOS: N,V,Z flags calculated from binary result (before BCD adjustment)
-                    n_flag = result & FLAG_N;  // N flag from binary result
-                    v_flag = ((~(old_a ^ operand) & (old_a ^ result)) >> 1) & FLAG_V;  // V flag from binary result
-                    z_flag = (result == 0) * FLAG_Z;  // Z flag from binary result
-                    if (ah > 9) ah += 6;
-                    c_flag = (ah > 15) ? FLAG_C : 0;
-                } else {
-                    // CMOS: N,V,Z flags calculated from BCD result (after BCD adjustment)
+                if constexpr (Traits.has(CPUCoreFlags::CMOS_BASE) && !Traits.has(CPUCoreFlags::ROCKWELL_BITS)) {
+                    // WDC65C02: Calculate flags before final adjustment, N flag from final result
                     c_flag = (ah > 15) ? FLAG_C : 0;
                     v_flag = ((~(old_a ^ operand) & (old_a ^ result)) >> 1) & FLAG_V;
                     z_flag = (result == 0) * FLAG_Z;
                     if (ah > 9) ah += 6;
                     const uint8_t bcd_result = (ah << 4) | (al & 0x0F);
-                    n_flag = bcd_result & FLAG_N;  // N flag from BCD result
+                    n_flag = bcd_result & FLAG_N;
+                } else {
+                    // NMOS: Original flag behavior with quirky N flag calculation
+                    n_flag = (result != 0) * ((ah << 4) & FLAG_N);
+                    v_flag = ((~(old_a ^ operand) & (old_a ^ (ah << 4))) >> 1) & FLAG_V;
+                    if (ah > 9) ah += 6;
+                    z_flag = (result == 0) * FLAG_Z;
+                    c_flag = (ah > 15) ? FLAG_C : 0;
                 }
                 
                 // Shared footer: apply result and flags
