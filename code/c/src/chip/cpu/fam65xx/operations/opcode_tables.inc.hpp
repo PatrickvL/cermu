@@ -284,8 +284,17 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
     
     // CMOS processors: Replace illegal opcodes with NOPs
     if (traits.has(CMOS_BASE)) {
-        // Replace ALL illegal opcodes with simple single-cycle NOPs (WDC65C02 behavior)
-        table[0x02] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
+        // WDC65C02: Specific illegal opcodes become 2-byte NOPs (AM_IMM)
+        // These opcodes: 0x02, 0x22, 0x42, 0x62, 0x82, 0xC2, 0xE2
+        table[0x02] = {OP_NOP, AM_IMM, OF_NONE};  // JAM -> 2-byte NOP
+        table[0x22] = {OP_NOP, AM_IMM, OF_NONE};  // JAM -> 2-byte NOP
+        table[0x42] = {OP_NOP, AM_IMM, OF_NONE};  // JAM -> 2-byte NOP
+        table[0x62] = {OP_NOP, AM_IMM, OF_NONE};  // JAM -> 2-byte NOP
+        table[0x82] = {OP_NOP, AM_IMM, OF_NONE};  // NOP #imm -> 2-byte NOP
+        table[0xC2] = {OP_NOP, AM_IMM, OF_NONE};  // NOP #imm -> 2-byte NOP
+        table[0xE2] = {OP_NOP, AM_IMM, OF_NONE};  // NOP #imm -> 2-byte NOP
+        
+        // Replace ALL other illegal opcodes with simple single-cycle NOPs (WDC65C02 behavior)
         table[0x03] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
         table[0x07] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
         table[0x0B] = {OP_NOP, AM_NON, OF_NONE};  // ANC -> NOP
@@ -295,7 +304,6 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0x17] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
         table[0x1B] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
         table[0x1F] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
-        table[0x22] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
         table[0x23] = {OP_NOP, AM_NON, OF_NONE};  // RLA -> NOP
         table[0x27] = {OP_NOP, AM_NON, OF_NONE};  // RLA -> NOP
         table[0x2B] = {OP_NOP, AM_NON, OF_NONE};  // ANC -> NOP
@@ -305,7 +313,6 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0x37] = {OP_NOP, AM_NON, OF_NONE};  // RLA -> NOP
         table[0x3B] = {OP_NOP, AM_NON, OF_NONE};  // RLA -> NOP
         table[0x3F] = {OP_NOP, AM_NON, OF_NONE};  // RLA -> NOP
-        table[0x42] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
         table[0x43] = {OP_NOP, AM_NON, OF_NONE};  // SRE -> NOP
         table[0x47] = {OP_NOP, AM_NON, OF_NONE};  // SRE -> NOP
         table[0x4B] = {OP_NOP, AM_NON, OF_NONE};  // ASR -> NOP
@@ -315,7 +322,6 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0x57] = {OP_NOP, AM_NON, OF_NONE};  // SRE -> NOP
         table[0x5B] = {OP_NOP, AM_NON, OF_NONE};  // SRE -> NOP
         table[0x5F] = {OP_NOP, AM_NON, OF_NONE};  // SRE -> NOP
-        table[0x62] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
         table[0x63] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
         table[0x67] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
         table[0x6B] = {OP_NOP, AM_NON, OF_NONE};  // ARR -> NOP
@@ -368,7 +374,9 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         
         // Add 65C02 enhancements
         table[0x04] = {OP_TSB, AM_ZER, OF_RMW};   // TSB zero page
+        table[0x0C] = {OP_TSB, AM_ABS, OF_RMW};   // TSB absolute
         table[0x14] = {OP_TRB, AM_ZER, OF_RMW};   // TRB zero page
+        table[0x1C] = {OP_TRB, AM_ABS, OF_RMW};   // TRB absolute
         table[0x5A] = {OP_PHY, AM_NON, OF_NONE};  // PHY
         table[0x64] = {OP_STZ, AM_ZER, OF_NONE};  // STZ zero page
         table[0x7A] = {OP_PLY, AM_NON, OF_NONE};  // PLY

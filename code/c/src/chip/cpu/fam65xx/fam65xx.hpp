@@ -974,106 +974,94 @@ private:
         // Initialize operation handler lookup table with NOP as safe default
         operation_handlers.fill(&fam65xx_t::op_nop);
         
-        // Memory operations (implemented)
-        operation_handlers[OP_LDA] = &fam65xx_t::op_lda;
-        operation_handlers[OP_LDX] = &fam65xx_t::op_ldx;
-        operation_handlers[OP_LDY] = &fam65xx_t::op_ldy;
-        operation_handlers[OP_STA] = &fam65xx_t::op_sta;
-        operation_handlers[OP_STX] = &fam65xx_t::op_stx;
-        operation_handlers[OP_STY] = &fam65xx_t::op_sty;
-        operation_handlers[OP_AND] = &fam65xx_t::op_and;
-        operation_handlers[OP_ORA] = &fam65xx_t::op_ora;
-        operation_handlers[OP_EOR] = &fam65xx_t::op_eor;
-        operation_handlers[OP_BIT] = &fam65xx_t::op_bit;
-        
-        // Arithmetic operations (implemented)
+        // Sorted alphabetically for easier maintenance
         operation_handlers[OP_ADC] = &fam65xx_t::op_adc;
-        operation_handlers[OP_SBC] = &fam65xx_t::op_sbc;
-        operation_handlers[OP_CMP] = &fam65xx_t::op_cmp;
-        operation_handlers[OP_CPX] = &fam65xx_t::op_cpx;
-        operation_handlers[OP_CPY] = &fam65xx_t::op_cpy;
-        operation_handlers[OP_INC] = &fam65xx_t::op_inc;
-        operation_handlers[OP_DEC] = &fam65xx_t::op_dec;
-        operation_handlers[OP_NOP] = &fam65xx_t::op_nop;
-        operation_handlers[OP_JAM] = &fam65xx_t::op_jam;
-        
-        // RMW operations (implemented)
+        operation_handlers[OP_ANC] = &fam65xx_t::op_anc;
+        operation_handlers[OP_AND] = &fam65xx_t::op_and;
+        operation_handlers[OP_ARR] = &fam65xx_t::op_arr;
         operation_handlers[OP_ASL] = &fam65xx_t::op_asl;
-        operation_handlers[OP_LSR] = &fam65xx_t::op_lsr;
-        operation_handlers[OP_ROL] = &fam65xx_t::op_rol;
-        operation_handlers[OP_ROR] = &fam65xx_t::op_ror;
-        
-        // Control operations (implemented)
-        operation_handlers[OP_JMP] = &fam65xx_t::op_jmp;
-        operation_handlers[OP_JSR] = &fam65xx_t::op_jsr;
-        operation_handlers[OP_RTS] = &fam65xx_t::op_rts;
-        operation_handlers[OP_BRK] = &fam65xx_t::op_brk;
-        operation_handlers[OP_RTI] = &fam65xx_t::op_rti;
-        
-        // Register operations (implemented)
-        operation_handlers[OP_INX] = &fam65xx_t::op_inx;
-        operation_handlers[OP_INY] = &fam65xx_t::op_iny;
-        operation_handlers[OP_DEX] = &fam65xx_t::op_dex;
-        operation_handlers[OP_DEY] = &fam65xx_t::op_dey;
-        
-        // Transfer operations (implemented)
-        operation_handlers[OP_TAX] = &fam65xx_t::op_tax;
-        operation_handlers[OP_TAY] = &fam65xx_t::op_tay;
-        operation_handlers[OP_TXA] = &fam65xx_t::op_txa;
-        operation_handlers[OP_TYA] = &fam65xx_t::op_tya;
-        operation_handlers[OP_TSX] = &fam65xx_t::op_tsx;
-        operation_handlers[OP_TXS] = &fam65xx_t::op_txs;
-        
-        // Stack operations (implemented)
-        operation_handlers[OP_PHA] = &fam65xx_t::op_pha;
-        operation_handlers[OP_PHP] = &fam65xx_t::op_php;
-        operation_handlers[OP_PLA] = &fam65xx_t::op_pla;
-        operation_handlers[OP_PLP] = &fam65xx_t::op_plp;
-        
-        // WDC65C02 enhanced stack operations
-        operation_handlers[OP_PHX] = &fam65xx_t::op_phx;
-        operation_handlers[OP_PHY] = &fam65xx_t::op_phy;
-        operation_handlers[OP_PLX] = &fam65xx_t::op_plx;
-        operation_handlers[OP_PLY] = &fam65xx_t::op_ply;
-        
-        // Branch operations (implemented)
+        operation_handlers[OP_ASR] = &fam65xx_t::op_asr;
         operation_handlers[OP_BCC] = &fam65xx_t::op_bcc;
         operation_handlers[OP_BCS] = &fam65xx_t::op_bcs;
         operation_handlers[OP_BEQ] = &fam65xx_t::op_beq;
-        operation_handlers[OP_BNE] = &fam65xx_t::op_bne;
+        operation_handlers[OP_BIT] = &fam65xx_t::op_bit;
         operation_handlers[OP_BMI] = &fam65xx_t::op_bmi;
+        operation_handlers[OP_BNE] = &fam65xx_t::op_bne;
         operation_handlers[OP_BPL] = &fam65xx_t::op_bpl;
+        operation_handlers[OP_BRA] = &fam65xx_t::op_bra;
+        operation_handlers[OP_BRK] = &fam65xx_t::op_brk;
         operation_handlers[OP_BVC] = &fam65xx_t::op_bvc;
         operation_handlers[OP_BVS] = &fam65xx_t::op_bvs;
-        
-        // Flag operations (implemented)
         operation_handlers[OP_CLC] = &fam65xx_t::op_clc;
-        operation_handlers[OP_SEC] = &fam65xx_t::op_sec;
-        operation_handlers[OP_CLI] = &fam65xx_t::op_cli;
-        operation_handlers[OP_SEI] = &fam65xx_t::op_sei;
         operation_handlers[OP_CLD] = &fam65xx_t::op_cld;
-        operation_handlers[OP_SED] = &fam65xx_t::op_sed;
+        operation_handlers[OP_CLI] = &fam65xx_t::op_cli;
         operation_handlers[OP_CLV] = &fam65xx_t::op_clv;
-        
-        // Illegal operations (implemented, conditionally compiled)
-        operation_handlers[OP_LAX] = &fam65xx_t::op_lax;
-        operation_handlers[OP_SAX] = &fam65xx_t::op_sax;
+        operation_handlers[OP_CMP] = &fam65xx_t::op_cmp;
+        operation_handlers[OP_CPX] = &fam65xx_t::op_cpx;
+        operation_handlers[OP_CPY] = &fam65xx_t::op_cpy;
         operation_handlers[OP_DCP] = &fam65xx_t::op_dcp;
+        operation_handlers[OP_DEC] = &fam65xx_t::op_dec;
+        operation_handlers[OP_DEX] = &fam65xx_t::op_dex;
+        operation_handlers[OP_DEY] = &fam65xx_t::op_dey;
+        operation_handlers[OP_EOR] = &fam65xx_t::op_eor;
+        operation_handlers[OP_INC] = &fam65xx_t::op_inc;
+        operation_handlers[OP_INX] = &fam65xx_t::op_inx;
+        operation_handlers[OP_INY] = &fam65xx_t::op_iny;
         operation_handlers[OP_ISC] = &fam65xx_t::op_isc;
-        operation_handlers[OP_SLO] = &fam65xx_t::op_slo;
+        operation_handlers[OP_JAM] = &fam65xx_t::op_jam;
+        operation_handlers[OP_JMP] = &fam65xx_t::op_jmp;
+        operation_handlers[OP_JSR] = &fam65xx_t::op_jsr;
+        operation_handlers[OP_LAS] = &fam65xx_t::op_las;
+        operation_handlers[OP_LAX] = &fam65xx_t::op_lax;
+        operation_handlers[OP_LDA] = &fam65xx_t::op_lda;
+        operation_handlers[OP_LDX] = &fam65xx_t::op_ldx;
+        operation_handlers[OP_LDY] = &fam65xx_t::op_ldy;
+        operation_handlers[OP_LSR] = &fam65xx_t::op_lsr;
+        operation_handlers[OP_NOP] = &fam65xx_t::op_nop;
+        operation_handlers[OP_ORA] = &fam65xx_t::op_ora;
+        operation_handlers[OP_PHA] = &fam65xx_t::op_pha;
+        operation_handlers[OP_PHP] = &fam65xx_t::op_php;
+        operation_handlers[OP_PHX] = &fam65xx_t::op_phx;
+        operation_handlers[OP_PHY] = &fam65xx_t::op_phy;
+        operation_handlers[OP_PLA] = &fam65xx_t::op_pla;
+        operation_handlers[OP_PLP] = &fam65xx_t::op_plp;
+        operation_handlers[OP_PLX] = &fam65xx_t::op_plx;
+        operation_handlers[OP_PLY] = &fam65xx_t::op_ply;
         operation_handlers[OP_RLA] = &fam65xx_t::op_rla;
-        operation_handlers[OP_SRE] = &fam65xx_t::op_sre;
+        operation_handlers[OP_REP] = &fam65xx_t::op_rep;
+        operation_handlers[OP_ROL] = &fam65xx_t::op_rol;
+        operation_handlers[OP_ROR] = &fam65xx_t::op_ror;        
         operation_handlers[OP_RRA] = &fam65xx_t::op_rra;
-        operation_handlers[OP_ANC] = &fam65xx_t::op_anc;
-        operation_handlers[OP_ARR] = &fam65xx_t::op_arr;
-        operation_handlers[OP_ASR] = &fam65xx_t::op_asr;
-        operation_handlers[OP_XAA] = &fam65xx_t::op_xaa;
+        operation_handlers[OP_RTI] = &fam65xx_t::op_rti;
+        operation_handlers[OP_RTS] = &fam65xx_t::op_rts;
+        operation_handlers[OP_SAX] = &fam65xx_t::op_sax;
+        operation_handlers[OP_SBC] = &fam65xx_t::op_sbc;
         operation_handlers[OP_SBX] = &fam65xx_t::op_sbx;
+        operation_handlers[OP_SEC] = &fam65xx_t::op_sec;
+        operation_handlers[OP_SED] = &fam65xx_t::op_sed;
+        operation_handlers[OP_SEP] = &fam65xx_t::op_sep;        
+        operation_handlers[OP_SEI] = &fam65xx_t::op_sei;
         operation_handlers[OP_SHA] = &fam65xx_t::op_sha;
         operation_handlers[OP_SHS] = &fam65xx_t::op_shs;
         operation_handlers[OP_SHX] = &fam65xx_t::op_shx;
         operation_handlers[OP_SHY] = &fam65xx_t::op_shy;
-        operation_handlers[OP_LAS] = &fam65xx_t::op_las;
+        operation_handlers[OP_SLO] = &fam65xx_t::op_slo;
+        operation_handlers[OP_SRE] = &fam65xx_t::op_sre;
+        operation_handlers[OP_STA] = &fam65xx_t::op_sta;
+        operation_handlers[OP_STP] = &fam65xx_t::op_stp;
+        operation_handlers[OP_STX] = &fam65xx_t::op_stx;
+        operation_handlers[OP_STY] = &fam65xx_t::op_sty;
+        operation_handlers[OP_STZ] = &fam65xx_t::op_stz;
+        operation_handlers[OP_TAX] = &fam65xx_t::op_tax;
+        operation_handlers[OP_TAY] = &fam65xx_t::op_tay;
+        operation_handlers[OP_TRB] = &fam65xx_t::op_trb;
+        operation_handlers[OP_TSB] = &fam65xx_t::op_tsb;
+        operation_handlers[OP_TSX] = &fam65xx_t::op_tsx;
+        operation_handlers[OP_TXA] = &fam65xx_t::op_txa;
+        operation_handlers[OP_TXS] = &fam65xx_t::op_txs;
+        operation_handlers[OP_TYA] = &fam65xx_t::op_tya;
+        operation_handlers[OP_WAI] = &fam65xx_t::op_wai;
+        operation_handlers[OP_XAA] = &fam65xx_t::op_xaa;
         
         // Initialize addressing mode handler lookup table
         addressing_mode_handlers.fill(nullptr);  // Default to nullptr (safe for AM_NON/AM_IMM)
