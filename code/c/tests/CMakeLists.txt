@@ -102,6 +102,8 @@ target_include_directories(fam65xx_lorenz_test_harness PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
 )
 target_compile_definitions(fam65xx_lorenz_test_harness PRIVATE AIEMUC_IMPL)
+# Link against MOS6510 library for implementation symbols
+target_link_libraries(fam65xx_lorenz_test_harness mos6510_lib)
 # Link math library if needed
 if(NOT WIN32 AND NOT MSVC)
     target_link_libraries(fam65xx_lorenz_test_harness m)

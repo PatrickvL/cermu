@@ -3,9 +3,7 @@
 #include <string>
 #include <vector>
 #include <cstring>
-#ifdef _WIN32
-#include "getopt_windows.h"
-#else
+#ifndef _WIN32
 #include <getopt.h>
 #endif
 #include <chrono>
@@ -13,7 +11,7 @@
 
 
 // Include processor-specific headers
-#include "../src/chip/cpu/fam65xx/mos6502.hpp"
+#include "../src/chip/cpu/fam65xx/mos6502.h"
 
 // ============================================================================
 // Klaus2m5 Test Runner for fam65xx Implementation
@@ -54,7 +52,7 @@ enum class TestMode {
 
 class KlausTestHarness {
 private:
-    mos6502_c_t cpu_;                      // Use the C wrapper type
+    mos6502_t* cpu_;                       // Use the C wrapper type
     std::vector<uint8_t> memory_;
     std::vector<uint8_t> test_binary_;
     uint64_t max_cycles_;
@@ -76,13 +74,19 @@ private:
 
 public:
     KlausTestHarness() : memory_(65536, 0x00), max_cycles_(KLAUS_MAX_CYCLES), trace_enabled_(false), pins_(0) {
-        // Initialize CPU with memory callbacks using new API
-        fam65xx_desc_t desc = {};
-        desc.mem_read = mem_read;
-        desc.mem_write = mem_write;
-        desc.mem_user_data = this;
+        // Create CPU instance
+        cpu_ = mos6502_create();
         
-        pins_ = mos6502_init(&cpu_, &desc);
+        // Initialize CPU with enhanced descriptor and memory callbacks
+        fam65xx_chip_descriptor_t* desc = mos6502_create_descriptor(mem_read, mem_write, this);
+        pins_ = mos6502_init_enhanced(cpu_, desc);
+        mos6502_destroy_descriptor(desc);
+    }
+    
+    ~KlausTestHarness() {
+        if (cpu_) {
+            mos6502_destroy(cpu_);
+        }
     }
 
     bool load_binary(const std::string& filename) {
@@ -136,10 +140,10 @@ public:
         memory_[0xFFFD] = (KLAUS_TEST_START_ADDRESS >> 8) & 0xFF;
 
         // Bootstrap processor for immediate execution (skip reset sequence)
-        pins_ = mos6502_bootstrap(&cpu_, pins_);
+        pins_ = mos6502_bootstrap(cpu_, pins_);
         
         // Set PC directly to test start address
-        mos6502_set_pc(&cpu_, KLAUS_TEST_START_ADDRESS);
+        mos6502_set_pc(cpu_, KLAUS_TEST_START_ADDRESS);
 
         std::cout << "Starting Klaus functional test..." << std::endl;
         
@@ -150,7 +154,7 @@ public:
         constexpr uint32_t STUCK_THRESHOLD = 1000;
 
         while (cycles < max_cycles_) {
-            uint16_t current_pc = mos6502_pc(&cpu_);
+            uint16_t current_pc = mos6502_get_pc(cpu_);
             
             // Check for success condition - Klaus test success is indicated by infinite loops
             uint8_t instruction = memory_[current_pc];
@@ -178,8 +182,8 @@ public:
                 stuck_counter++;
                 if (stuck_counter > STUCK_THRESHOLD) {
                     status.result = TestResult::STUCK;
-                    status.error_message = "CPU stuck at PC=$" + 
-                                         std::to_string(current_pc) + 
+                    status.error_message = "CPU stuck at PC=$" +
+                                         std::to_string(current_pc) +
                                          " for " + std::to_string(stuck_counter) + " cycles";
                     break;
                 }
@@ -189,31 +193,31 @@ public:
             }
             
             // Execute one CPU cycle
-            pins_ = mos6502_tick(&cpu_, pins_);
+            pins_ = mos6502_tick(cpu_, pins_);
             cycles++;
             
             // Optional trace output
             if (trace_enabled_ && trace_file_.is_open() && cycles % 10 == 0) {
-                trace_file_ << "Cycle " << cycles 
-                           << ": PC=$" << std::hex << std::setw(4) << std::setfill('0') << mos6502_pc(&cpu_)
-                           << " A=$" << std::setw(2) << static_cast<int>(mos6502_a(&cpu_))
-                           << " X=$" << std::setw(2) << static_cast<int>(mos6502_x(&cpu_))
-                           << " Y=$" << std::setw(2) << static_cast<int>(mos6502_y(&cpu_))
-                           << " P=$" << std::setw(2) << static_cast<int>(mos6502_p(&cpu_))
-                           << " S=$" << std::setw(2) << static_cast<int>(mos6502_s(&cpu_))
+                trace_file_ << "Cycle " << cycles
+                           << ": PC=$" << std::hex << std::setw(4) << std::setfill('0') << mos6502_get_pc(cpu_)
+                           << " A=$" << std::setw(2) << static_cast<int>(mos6502_get_a(cpu_))
+                           << " X=$" << std::setw(2) << static_cast<int>(mos6502_get_x(cpu_))
+                           << " Y=$" << std::setw(2) << static_cast<int>(mos6502_get_y(cpu_))
+                           << " P=$" << std::setw(2) << static_cast<int>(mos6502_get_p(cpu_))
+                           << " S=$" << std::setw(2) << static_cast<int>(mos6502_get_s(cpu_))
                            << std::endl;
             }
             
             if (cycles % 100000 == 0) {
-                std::cout << "Executed " << cycles << " cycles, PC=$" 
-                         << std::hex << std::setw(4) << std::setfill('0') 
-                         << mos6502_pc(&cpu_) << std::endl;
+                std::cout << "Executed " << cycles << " cycles, PC=$"
+                         << std::hex << std::setw(4) << std::setfill('0')
+                         << mos6502_get_pc(cpu_) << std::endl;
             }
         }
         
         status.end_time = std::chrono::steady_clock::now();
         status.cycles_executed = cycles;
-        status.final_pc = mos6502_pc(&cpu_);
+        status.final_pc = mos6502_get_pc(cpu_);
         
         if (status.result == TestResult::NOT_SET) {
             if (cycles >= max_cycles_) {
@@ -221,7 +225,7 @@ public:
                 status.error_message = "Test timed out after " + std::to_string(cycles) + " cycles";
             } else {
                 status.result = TestResult::FAILED;
-                status.error_message = "Test failed at PC=$" + std::to_string(mos6502_pc(&cpu_));
+                status.error_message = "Test failed at PC=$" + std::to_string(mos6502_get_pc(cpu_));
             }
         }
         
@@ -429,6 +433,7 @@ int main(int argc, char* argv[]) {
     bool verbose = false;
 
     // Parse command line arguments
+#ifndef _WIN32
     static const struct option long_options[] = {
         {"help",       no_argument,       0, 'h'},
         {"trace",      required_argument, 0, 't'},
@@ -440,7 +445,22 @@ int main(int argc, char* argv[]) {
         {"verbose",    no_argument,       0, 'v'},
         {0, 0, 0, 0}
     };
+#endif
 
+#ifdef _WIN32
+    // Simplified Windows parsing - just check for help flag
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg == "-h" || arg == "--help") {
+            print_usage(argv[0]);
+            return 0;
+        } else if (arg == "--functional") {
+            test_mode = TestMode::FUNCTIONAL;
+        } else if (arg == "--verbose") {
+            verbose = true;
+        }
+    }
+#else
     int c;
     while ((c = getopt_long(argc, argv, "ht:c:fdiav", long_options, nullptr)) != -1) {
         switch (c) {
@@ -475,6 +495,7 @@ int main(int argc, char* argv[]) {
                 break;
         }
     }
+#endif
 
     // Banner
     std::cout << "========================================\n";

@@ -7,6 +7,8 @@
 
 using namespace fam65xx;
 
+extern "C" {
+
 // ============================================================================
 // CONCRETE CPU TYPE DEFINITION
 // ============================================================================
@@ -32,20 +34,14 @@ bus_state_t mos6510_init(mos6510_t* cpu, const mos6510_desc_t* desc) {
     // Initialize base CPU with the chip descriptor
     bus_state_t pins = CPU_CAST(cpu)->init(&desc->base);
     
-    // Set up 6510-specific I/O port callbacks
-    // Store the callbacks in the CPU instance for use in I/O port operations
+    // Initialize 6510-specific I/O port state
     auto* cpu_impl = CPU_CAST(cpu);
     if constexpr (MOS6510.has_io_port()) {
-        // Store I/O port callbacks in the mixin
-        cpu_impl->io_port.in_cb = desc->m6510_in_cb;
-        cpu_impl->io_port.out_cb = desc->m6510_out_cb;
-        cpu_impl->io_port.pullup = desc->m6510_io_pullup;
-        cpu_impl->io_port.floating = desc->m6510_io_floating;
-        cpu_impl->io_port.user_data = desc->m6510_user_data;
+        // Initialize I/O port with default C64 state
+        cpu_impl->init_io_port();
         
-        // Initialize I/O port with default state
-        cpu_impl->io_port.direction = 0xFF; // All pins input by default
-        cpu_impl->io_port.data = 0xFF;      // All pins high by default
+        // Note: I/O port callbacks are handled at a higher level (system integration)
+        // The mixin provides the basic I/O port register functionality
     }
     
     return pins;
