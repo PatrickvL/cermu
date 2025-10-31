@@ -1,15 +1,9 @@
 /*
- * opcode_tables.inc.hpp - Processor-Specific Opcode Table Specializations
+ * opcode_tables.inc.hpp - CPUTraits-Based Opcode Table Generation
  *
- * SPECIAL CASE: This file contains template specializations that MUST be at namespace level.
- * Unlike other .inc.hpp files that contain member functions, this file contains free
- * functions that are template specializations, so they cannot be inside a class.
- *
- * LINT PREVENTION APPROACH:
- * This file does NOT use the standard lint prevention system because template
- * specializations must be at namespace level. Instead, it includes all required
- * headers unconditionally and relies on proper namespace management in the
- * including file (fam65xx.hpp).
+ * This file contains the CPUTraits-based opcode table generation function.
+ * Unlike other .inc.hpp files that contain member functions, this file contains
+ * a free function that generates opcode tables based on CPUTraits configuration.
  */
 
 // Always include required headers for both standalone analysis and production
@@ -17,35 +11,15 @@
 #include "../fam65xx_types.h"
 #include "../fam65xx_processor_traits.hpp"
 
-// Forward declare the template function (needed for both contexts)
-template<typename ProcessorTag>
-constexpr std::array<opcode_info_t, 256> generate_opcode_table();
-
 #ifndef FAM65XX_SKIP_IMPLEMENTATION
 
-// Headers are already included above based on template context
-
 // ============================================================================
-// OPCODE TABLE GENERATION SPECIALIZATIONS
+// CPUTRAITS-BASED OPCODE TABLE GENERATION
 // ============================================================================
 
-// OPTIMIZED ORDER: Minimize total overwrites across all processor generations
-//
-// GENERATION ORDER ANALYSIS (6! = 720 possible orders, but only few make sense):
-// Current order: NES6502 → MOS6502 → MOS6510 → WDC65C02 → WDC65C816 → Rockwell65C02
-// Total overwrites: ~10 + 0 + ~50 + ~10 + ~10 = 80 overwrites
-//
-// OPTIMAL ORDER (derived):
-// WDC65C02 (base) → Rockwell65C02 → WDC65C816 → NES6502 → MOS6502 → MOS6510
-// Total overwrites: 0 + ~10 + ~10 + ~50 + ~10 + 0 = 80 overwrites (same)
-//
-// ACTUALLY OPTIMAL ORDER (smarter analysis):
-// NES6502 (base with illegal opcodes) → MOS6502 → MOS6510 → [CMOS Base] → WDC65C02 → Rockwell65C02 → WDC65C816
-// But we can create a better intermediate base...
-
-// NES 6502 - Base implementation with explicit illegal opcodes (used by NMOS family)
-template<>
-constexpr std::array<opcode_info_t, 256> generate_opcode_table<fam65xx_cpp::NES6502Tag>() {
+// CPUTraits-based opcode table generation function
+constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const CPUTraits& traits) {
+    // Start with base NES 6502/RICOH 2A03 implementation with explicit illegal opcodes
     std::array<opcode_info_t, 256> table{};
     
     // All 256 opcodes explicitly defined - valid opcodes and proper illegal opcodes for hardware accuracy
@@ -306,182 +280,207 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table<fam65xx_cpp::NES6
     table[0xFE] = {OP_INC, AM_ABX, OF_RMW};
     table[0xFF] = {OP_ISC, AM_ABX, OF_RMW};   // ISC - Increment then SBC (illegal)
 
+    // Now apply processor-specific modifications based on CPUTraits
+    
+    // CMOS processors: Replace illegal opcodes with NOPs
+    if (traits.has(CMOS_BASE)) {
+        // Replace ALL illegal opcodes with simple single-cycle NOPs (WDC65C02 behavior)
+        table[0x02] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
+        table[0x03] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
+        table[0x07] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
+        table[0x0B] = {OP_NOP, AM_NON, OF_NONE};  // ANC -> NOP
+        table[0x0F] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
+        table[0x12] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
+        table[0x13] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
+        table[0x17] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
+        table[0x1B] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
+        table[0x1F] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
+        table[0x22] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
+        table[0x23] = {OP_NOP, AM_NON, OF_NONE};  // RLA -> NOP
+        table[0x27] = {OP_NOP, AM_NON, OF_NONE};  // RLA -> NOP
+        table[0x2B] = {OP_NOP, AM_NON, OF_NONE};  // ANC -> NOP
+        table[0x2F] = {OP_NOP, AM_ABS, OF_NONE};  // RLA -> NOP (special case: must match ProcessorTests expectations)
+        table[0x32] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
+        table[0x33] = {OP_NOP, AM_NON, OF_NONE};  // RLA -> NOP
+        table[0x37] = {OP_NOP, AM_NON, OF_NONE};  // RLA -> NOP
+        table[0x3B] = {OP_NOP, AM_NON, OF_NONE};  // RLA -> NOP
+        table[0x3F] = {OP_NOP, AM_NON, OF_NONE};  // RLA -> NOP
+        table[0x42] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
+        table[0x43] = {OP_NOP, AM_NON, OF_NONE};  // SRE -> NOP
+        table[0x47] = {OP_NOP, AM_NON, OF_NONE};  // SRE -> NOP
+        table[0x4B] = {OP_NOP, AM_NON, OF_NONE};  // ASR -> NOP
+        table[0x4F] = {OP_NOP, AM_NON, OF_NONE};  // SRE -> NOP
+        table[0x52] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
+        table[0x53] = {OP_NOP, AM_NON, OF_NONE};  // SRE -> NOP
+        table[0x57] = {OP_NOP, AM_NON, OF_NONE};  // SRE -> NOP
+        table[0x5B] = {OP_NOP, AM_NON, OF_NONE};  // SRE -> NOP
+        table[0x5F] = {OP_NOP, AM_NON, OF_NONE};  // SRE -> NOP
+        table[0x62] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
+        table[0x63] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
+        table[0x67] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
+        table[0x6B] = {OP_NOP, AM_NON, OF_NONE};  // ARR -> NOP
+        table[0x6F] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
+        table[0x72] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
+        table[0x73] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
+        table[0x77] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
+        table[0x7B] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
+        table[0x7F] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
+        table[0x83] = {OP_NOP, AM_NON, OF_NONE};  // SAX -> NOP
+        table[0x87] = {OP_NOP, AM_NON, OF_NONE};  // SAX -> NOP
+        table[0x8B] = {OP_NOP, AM_NON, OF_NONE};  // XAA -> NOP
+        table[0x8F] = {OP_NOP, AM_NON, OF_NONE};  // SAX -> NOP
+        table[0x92] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
+        table[0x93] = {OP_NOP, AM_NON, OF_NONE};  // SHA -> NOP
+        table[0x97] = {OP_NOP, AM_NON, OF_NONE};  // SAX -> NOP
+        table[0x9B] = {OP_NOP, AM_NON, OF_NONE};  // SHS -> NOP
+        table[0x9C] = {OP_NOP, AM_NON, OF_NONE};  // SHY -> NOP (will be overridden for 65C02)
+        table[0x9E] = {OP_NOP, AM_NON, OF_NONE};  // SHX -> NOP
+        table[0x9F] = {OP_NOP, AM_NON, OF_NONE};  // SHA -> NOP
+        table[0xA3] = {OP_NOP, AM_NON, OF_NONE};  // LAX -> NOP
+        table[0xA7] = {OP_NOP, AM_NON, OF_NONE};  // LAX -> NOP
+        table[0xAB] = {OP_NOP, AM_NON, OF_NONE};  // LAX -> NOP
+        table[0xAF] = {OP_NOP, AM_NON, OF_NONE};  // LAX -> NOP
+        table[0xB2] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
+        table[0xB3] = {OP_NOP, AM_NON, OF_NONE};  // LAX -> NOP
+        table[0xB7] = {OP_NOP, AM_NON, OF_NONE};  // LAX -> NOP
+        table[0xBB] = {OP_NOP, AM_NON, OF_NONE};  // LAS -> NOP
+        table[0xBF] = {OP_NOP, AM_NON, OF_NONE};  // LAX -> NOP
+        table[0xC3] = {OP_NOP, AM_NON, OF_NONE};  // DCP -> NOP
+        table[0xC7] = {OP_NOP, AM_NON, OF_NONE};  // DCP -> NOP
+        table[0xCB] = {OP_NOP, AM_NON, OF_NONE};  // SBX -> NOP (will be overridden for 65C02)
+        table[0xCF] = {OP_NOP, AM_NON, OF_NONE};  // DCP -> NOP
+        table[0xD2] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
+        table[0xD3] = {OP_NOP, AM_NON, OF_NONE};  // DCP -> NOP
+        table[0xD7] = {OP_NOP, AM_NON, OF_NONE};  // DCP -> NOP
+        table[0xDA] = {OP_NOP, AM_NON, OF_NONE};  // NOP -> NOP (will be overridden for 65C02)
+        table[0xDB] = {OP_NOP, AM_NON, OF_NONE};  // DCP -> NOP (will be overridden for 65C02)
+        table[0xDF] = {OP_NOP, AM_NON, OF_NONE};  // DCP -> NOP
+        table[0xE3] = {OP_NOP, AM_NON, OF_NONE};  // ISC -> NOP
+        table[0xE7] = {OP_NOP, AM_NON, OF_NONE};  // ISC -> NOP
+        table[0xEB] = {OP_NOP, AM_NON, OF_NONE};  // SBC -> NOP
+        table[0xEF] = {OP_NOP, AM_NON, OF_NONE};  // ISC -> NOP
+        table[0xF2] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
+        table[0xF3] = {OP_NOP, AM_NON, OF_NONE};  // ISC -> NOP
+        table[0xF7] = {OP_NOP, AM_NON, OF_NONE};  // ISC -> NOP
+        table[0xFA] = {OP_NOP, AM_NON, OF_NONE};  // NOP -> NOP (will be overridden for 65C02)
+        table[0xFB] = {OP_NOP, AM_NON, OF_NONE};  // ISC -> NOP
+        table[0xFF] = {OP_NOP, AM_NON, OF_NONE};  // ISC -> NOP
+        
+        // Add 65C02 enhancements
+        table[0x04] = {OP_TSB, AM_ZER, OF_RMW};   // TSB zero page
+        table[0x14] = {OP_TRB, AM_ZER, OF_RMW};   // TRB zero page
+        table[0x5A] = {OP_PHY, AM_NON, OF_NONE};  // PHY
+        table[0x64] = {OP_STZ, AM_ZER, OF_NONE};  // STZ zero page
+        table[0x7A] = {OP_PLY, AM_NON, OF_NONE};  // PLY
+        table[0x80] = {OP_BRA, AM_REL, OF_NONE};  // BRA
+        table[0x9C] = {OP_STZ, AM_ABS, OF_NONE};  // STZ absolute
+        table[0xCB] = {OP_WAI, AM_NON, OF_NONE};  // WAI
+        table[0xDA] = {OP_PHX, AM_NON, OF_NONE};  // PHX
+        table[0xDB] = {OP_STP, AM_NON, OF_NONE};  // STP
+        table[0xFA] = {OP_PLX, AM_NON, OF_NONE};  // PLX
+    }
+    
+    // Rockwell 65C02 modifications (add RMB/SMB/BBR/BBS instructions)
+    if (traits.has(ROCKWELL_BITS)) {
+        // Add Rockwell bit manipulation instructions (RMB/SMB)
+        table[0x07] = {OP_RMB0, AM_ZER, OF_RMW}; // RMB0
+        table[0x17] = {OP_RMB1, AM_ZER, OF_RMW}; // RMB1
+        table[0x27] = {OP_RMB2, AM_ZER, OF_RMW}; // RMB2
+        table[0x37] = {OP_RMB3, AM_ZER, OF_RMW}; // RMB3
+        table[0x47] = {OP_RMB4, AM_ZER, OF_RMW}; // RMB4
+        table[0x57] = {OP_RMB5, AM_ZER, OF_RMW}; // RMB5
+        table[0x67] = {OP_RMB6, AM_ZER, OF_RMW}; // RMB6
+        table[0x77] = {OP_RMB7, AM_ZER, OF_RMW}; // RMB7
+        table[0x87] = {OP_SMB0, AM_ZER, OF_RMW}; // SMB0
+        table[0x97] = {OP_SMB1, AM_ZER, OF_RMW}; // SMB1
+        table[0xA7] = {OP_SMB2, AM_ZER, OF_RMW}; // SMB2
+        table[0xB7] = {OP_SMB3, AM_ZER, OF_RMW}; // SMB3
+        table[0xC7] = {OP_SMB4, AM_ZER, OF_RMW}; // SMB4
+        table[0xD7] = {OP_SMB5, AM_ZER, OF_RMW}; // SMB5
+        table[0xE7] = {OP_SMB6, AM_ZER, OF_RMW}; // SMB6
+        table[0xF7] = {OP_SMB7, AM_ZER, OF_RMW}; // SMB7
+        
+        // BBR/BBS instructions (branch on bit reset/set) - use special ZPR addressing mode
+        table[0x0F] = {OP_BBR0, AM_ZPR, OF_NONE}; // BBR0
+        table[0x1F] = {OP_BBR1, AM_ZPR, OF_NONE}; // BBR1
+        table[0x2F] = {OP_BBR2, AM_ZPR, OF_NONE}; // BBR2
+        table[0x3F] = {OP_BBR3, AM_ZPR, OF_NONE}; // BBR3
+        table[0x4F] = {OP_BBR4, AM_ZPR, OF_NONE}; // BBR4
+        table[0x5F] = {OP_BBR5, AM_ZPR, OF_NONE}; // BBR5
+        table[0x6F] = {OP_BBR6, AM_ZPR, OF_NONE}; // BBR6
+        table[0x7F] = {OP_BBR7, AM_ZPR, OF_NONE}; // BBR7
+        table[0x8F] = {OP_BBS0, AM_ZPR, OF_NONE}; // BBS0
+        table[0x9F] = {OP_BBS1, AM_ZPR, OF_NONE}; // BBS1
+        table[0xAF] = {OP_BBS2, AM_ZPR, OF_NONE}; // BBS2
+        table[0xBF] = {OP_BBS3, AM_ZPR, OF_NONE}; // BBS3
+        table[0xCF] = {OP_BBS4, AM_ZPR, OF_NONE}; // BBS4
+        table[0xDF] = {OP_BBS5, AM_ZPR, OF_NONE}; // BBS5
+        table[0xEF] = {OP_BBS6, AM_ZPR, OF_NONE}; // BBS6
+        table[0xFF] = {OP_BBS7, AM_ZPR, OF_NONE}; // BBS7
+    }
+    
+    // WDC 65C816 modifications (16-bit enhanced instructions)
+    if (traits.has(C816_16BIT)) {
+        // Add 65C816 specific opcodes
+        table[0x0B] = {OP_PHD, AM_NON, OF_NONE};  // PHD
+        table[0x22] = {OP_JSL, AM_ABS, OF_NONE};  // JSL
+        table[0x2B] = {OP_PLD, AM_NON, OF_NONE};  // PLD
+        table[0x4B] = {OP_PHK, AM_NON, OF_NONE};  // PHK
+        table[0x6B] = {OP_RTL, AM_NON, OF_NONE};  // RTL
+        table[0x8B] = {OP_PHB, AM_NON, OF_NONE};  // PHB
+        table[0xAB] = {OP_PLB, AM_NON, OF_NONE};  // PLB
+        table[0xC2] = {OP_REP, AM_IMM, OF_NONE};  // REP
+        table[0xE2] = {OP_SEP, AM_IMM, OF_NONE};  // SEP
+        table[0xF4] = {OP_PEA, AM_ABS, OF_NONE};  // PEA
+        table[0xFB] = {OP_XCE, AM_NON, OF_NONE};  // XCE
+        
+        // Additional 65C816 instructions
+        table[0x42] = {OP_WDM, AM_IMM, OF_NONE};  // WDM
+        table[0x44] = {OP_MVP, AM_NON, OF_NONE};  // MVP
+        table[0x54] = {OP_MVN, AM_NON, OF_NONE};  // MVN
+        table[0x62] = {OP_PER, AM_REL, OF_NONE}; // PER
+        table[0xD4] = {OP_PEI, AM_ZPI, OF_NONE}; // PEI
+        table[0xF4] = {OP_PEA, AM_ABS, OF_NONE}; // PEA
+    }
+    
     return table;
 }
 
-// MOS 6502 (original NMOS with illegal opcodes) - Only 10 overwrites from NES6502
+// ============================================================================
+// TEMPLATE SPECIALIZATIONS FOR EACH PROCESSOR TYPE
+// ============================================================================
+
+// Template specializations for generate_opcode_table function
+// These match the CPUTraits instances defined in fam65xx_processor_traits.hpp
+
 template<>
-constexpr std::array<opcode_info_t, 256> generate_opcode_table<fam65xx_cpp::MOS6502Tag>() {
-    auto table = generate_opcode_table<fam65xx_cpp::NES6502Tag>();
-    
-    // Replace specific JAM opcodes with actual illegal opcodes for NMOS 6502
-    table[0x83] = {OP_SAX, AM_INX, OF_NONE};
-    table[0x87] = {OP_SAX, AM_ZER, OF_NONE};
-    table[0x8F] = {OP_SAX, AM_ABS, OF_NONE};
-    table[0x97] = {OP_SAX, AM_ZPY, OF_NONE};
-    table[0xA3] = {OP_LAX, AM_INX, OF_NONE};
-    table[0xA7] = {OP_LAX, AM_ZER, OF_NONE};
-    table[0xAF] = {OP_LAX, AM_ABS, OF_NONE};
-    table[0xB3] = {OP_LAX, AM_INY, OF_SKIP_PAGE};
-    table[0xB7] = {OP_LAX, AM_ZPY, OF_NONE};
-    table[0xBF] = {OP_LAX, AM_ABY, OF_SKIP_PAGE};
-    
-    return table;
+constexpr std::array<opcode_info_t, 256> generate_opcode_table<MOS6502>() {
+    return generate_opcode_table_for_traits(MOS6502);
 }
 
-// MOS 6510 (C64/C128 variant) - 0 overwrites from MOS6502
 template<>
-constexpr std::array<opcode_info_t, 256> generate_opcode_table<fam65xx_cpp::MOS6510Tag>() {
-    return generate_opcode_table<fam65xx_cpp::MOS6502Tag>();
+constexpr std::array<opcode_info_t, 256> generate_opcode_table<RICOH_2A03>() {
+    return generate_opcode_table_for_traits(RICOH_2A03);
 }
 
-// WDC 65C02 (CMOS variant) - ~50 overwrites from NES6502 (replace illegals with NOPs + add CMOS instructions)
 template<>
-constexpr std::array<opcode_info_t, 256> generate_opcode_table<fam65xx_cpp::WDC65C02Tag>() {
-    auto table = generate_opcode_table<fam65xx_cpp::NES6502Tag>();
-    
-    // Replace ALL illegal opcodes with simple single-cycle NOPs (WDC65C02 behavior)
-    // All illegal opcodes become single-byte, single-cycle NOPs that only increment PC by 1
-    table[0x02] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
-    table[0x03] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
-    table[0x07] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
-    table[0x0B] = {OP_NOP, AM_NON, OF_NONE};  // ANC -> NOP
-    table[0x0F] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
-    table[0x12] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
-    table[0x13] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
-    table[0x17] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
-    table[0x1B] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
-    table[0x1F] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
-    table[0x22] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
-    table[0x23] = {OP_NOP, AM_NON, OF_NONE};  // RLA -> NOP
-    table[0x27] = {OP_NOP, AM_NON, OF_NONE};  // RLA -> NOP
-    table[0x2B] = {OP_NOP, AM_NON, OF_NONE};  // ANC -> NOP
-    table[0x2F] = {OP_NOP, AM_ABS, OF_NONE};  // RLA -> NOP (special case: must match ProcessorTests expectations)
-    table[0x32] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
-    table[0x33] = {OP_NOP, AM_NON, OF_NONE};  // RLA -> NOP
-    table[0x37] = {OP_NOP, AM_NON, OF_NONE};  // RLA -> NOP
-    table[0x3B] = {OP_NOP, AM_NON, OF_NONE};  // RLA -> NOP
-    table[0x3F] = {OP_NOP, AM_NON, OF_NONE};  // RLA -> NOP
-    table[0x42] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
-    table[0x43] = {OP_NOP, AM_NON, OF_NONE};  // SRE -> NOP
-    table[0x47] = {OP_NOP, AM_NON, OF_NONE};  // SRE -> NOP
-    table[0x4B] = {OP_NOP, AM_NON, OF_NONE};  // ASR -> NOP
-    table[0x4F] = {OP_NOP, AM_NON, OF_NONE};  // SRE -> NOP
-    table[0x52] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
-    table[0x53] = {OP_NOP, AM_NON, OF_NONE};  // SRE -> NOP
-    table[0x57] = {OP_NOP, AM_NON, OF_NONE};  // SRE -> NOP
-    table[0x5B] = {OP_NOP, AM_NON, OF_NONE};  // SRE -> NOP
-    table[0x5F] = {OP_NOP, AM_NON, OF_NONE};  // SRE -> NOP
-    table[0x62] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
-    table[0x63] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
-    table[0x67] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
-    table[0x6B] = {OP_NOP, AM_NON, OF_NONE};  // ARR -> NOP
-    table[0x6F] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
-    table[0x72] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
-    table[0x73] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
-    table[0x77] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
-    table[0x7B] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
-    table[0x7F] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
-    table[0x83] = {OP_NOP, AM_NON, OF_NONE};  // SAX -> NOP
-    table[0x87] = {OP_NOP, AM_NON, OF_NONE};  // SAX -> NOP
-    table[0x8B] = {OP_NOP, AM_NON, OF_NONE};  // XAA -> NOP
-    table[0x8F] = {OP_NOP, AM_NON, OF_NONE};  // SAX -> NOP
-    table[0x92] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
-    table[0x93] = {OP_NOP, AM_NON, OF_NONE};  // SHA -> NOP
-    table[0x97] = {OP_NOP, AM_NON, OF_NONE};  // SAX -> NOP
-    table[0x9B] = {OP_NOP, AM_NON, OF_NONE};  // SHS -> NOP
-    table[0x9E] = {OP_NOP, AM_NON, OF_NONE};  // SHX -> NOP
-    table[0x9F] = {OP_NOP, AM_NON, OF_NONE};  // SHA -> NOP
-    table[0xA3] = {OP_NOP, AM_NON, OF_NONE};  // LAX -> NOP
-    table[0xA7] = {OP_NOP, AM_NON, OF_NONE};  // LAX -> NOP
-    table[0xAB] = {OP_NOP, AM_NON, OF_NONE};  // LAX -> NOP
-    table[0xAF] = {OP_NOP, AM_NON, OF_NONE};  // LAX -> NOP
-    table[0xB2] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
-    table[0xB3] = {OP_NOP, AM_NON, OF_NONE};  // LAX -> NOP
-    table[0xB7] = {OP_NOP, AM_NON, OF_NONE};  // LAX -> NOP
-    table[0xBB] = {OP_NOP, AM_NON, OF_NONE};  // LAS -> NOP
-    table[0xBF] = {OP_NOP, AM_NON, OF_NONE};  // LAX -> NOP
-    table[0xC3] = {OP_NOP, AM_NON, OF_NONE};  // DCP -> NOP
-    table[0xC7] = {OP_NOP, AM_NON, OF_NONE};  // DCP -> NOP
-    table[0xCF] = {OP_NOP, AM_NON, OF_NONE};  // DCP -> NOP
-    table[0xD2] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
-    table[0xD3] = {OP_NOP, AM_NON, OF_NONE};  // DCP -> NOP
-    table[0xD7] = {OP_NOP, AM_NON, OF_NONE};  // DCP -> NOP
-    table[0xDF] = {OP_NOP, AM_NON, OF_NONE};  // DCP -> NOP
-    table[0xE3] = {OP_NOP, AM_NON, OF_NONE};  // ISC -> NOP
-    table[0xE7] = {OP_NOP, AM_NON, OF_NONE};  // ISC -> NOP
-    table[0xEB] = {OP_NOP, AM_NON, OF_NONE};  // SBC -> NOP
-    table[0xEF] = {OP_NOP, AM_NON, OF_NONE};  // ISC -> NOP
-    table[0xF2] = {OP_NOP, AM_NON, OF_NONE};  // JAM -> NOP
-    table[0xF3] = {OP_NOP, AM_NON, OF_NONE};  // ISC -> NOP
-    table[0xF7] = {OP_NOP, AM_NON, OF_NONE};  // ISC -> NOP
-    table[0xFB] = {OP_NOP, AM_NON, OF_NONE};  // ISC -> NOP
-    table[0xFF] = {OP_NOP, AM_NON, OF_NONE};  // ISC -> NOP
-    
-    // Add 65C02 enhancements incrementally - 11 additions
-    table[0x04] = {OP_TSB, AM_ZER, OF_RMW};
-    table[0x14] = {OP_TRB, AM_ZER, OF_RMW};
-    table[0x5A] = {OP_PHY, AM_NON, OF_NONE};
-    table[0x64] = {OP_STZ, AM_ZER, OF_NONE};
-    table[0x7A] = {OP_PLY, AM_NON, OF_NONE};
-    table[0x80] = {OP_BRA, AM_REL, OF_NONE};
-    table[0x9C] = {OP_STZ, AM_ABS, OF_NONE};
-    table[0xCB] = {OP_WAI, AM_NON, OF_NONE};
-    table[0xDA] = {OP_PHX, AM_NON, OF_NONE};
-    table[0xDB] = {OP_STP, AM_NON, OF_NONE};
-    table[0xFA] = {OP_PLX, AM_NON, OF_NONE};
-    
-    return table;
+constexpr std::array<opcode_info_t, 256> generate_opcode_table<MOS6510>() {
+    return generate_opcode_table_for_traits(MOS6510);
 }
 
-// Rockwell 65C02 (CMOS with RMB/SMB/BBR/BBS) - 16 overwrites from WDC65C02
 template<>
-constexpr std::array<opcode_info_t, 256> generate_opcode_table<fam65xx_cpp::Rockwell65C02Tag>() {
-    auto table = generate_opcode_table<fam65xx_cpp::WDC65C02Tag>();
-    
-    // Add Rockwell bit manipulation instructions incrementally (RMB/SMB)
-    table[0x07] = {OP_RMB0, AM_ZER, OF_RMW}; // RMB0 (placeholder)
-    table[0x17] = {OP_RMB1, AM_ZER, OF_RMW}; // RMB1 (placeholder)
-    table[0x27] = {OP_RMB2, AM_ZER, OF_RMW}; // RMB2 (placeholder)
-    table[0x37] = {OP_RMB3, AM_ZER, OF_RMW}; // RMB3 (placeholder)
-    table[0x47] = {OP_RMB4, AM_ZER, OF_RMW}; // RMB4 (placeholder)
-    table[0x57] = {OP_RMB5, AM_ZER, OF_RMW}; // RMB5 (placeholder)
-    table[0x67] = {OP_RMB6, AM_ZER, OF_RMW}; // RMB6 (placeholder)
-    table[0x77] = {OP_RMB7, AM_ZER, OF_RMW}; // RMB7 (placeholder)
-    table[0x87] = {OP_SMB0, AM_ZER, OF_RMW}; // SMB0 (placeholder)
-    table[0x97] = {OP_SMB1, AM_ZER, OF_RMW}; // SMB1 (placeholder)
-    table[0xA7] = {OP_SMB2, AM_ZER, OF_RMW}; // SMB2 (placeholder)
-    table[0xB7] = {OP_SMB3, AM_ZER, OF_RMW}; // SMB3 (placeholder)
-    table[0xC7] = {OP_SMB4, AM_ZER, OF_RMW}; // SMB4 (placeholder)
-    table[0xD7] = {OP_SMB5, AM_ZER, OF_RMW}; // SMB5 (placeholder)
-    table[0xE7] = {OP_SMB6, AM_ZER, OF_RMW}; // SMB6 (placeholder)
-    table[0xF7] = {OP_SMB7, AM_ZER, OF_RMW}; // SMB7 (placeholder)
-
-    return table;
+constexpr std::array<opcode_info_t, 256> generate_opcode_table<WDC_W65C02S>() {
+    return generate_opcode_table_for_traits(WDC_W65C02S);
 }
 
-// WDC 65C816 (16-bit enhanced) - 11 overwrites from WDC65C02
 template<>
-constexpr std::array<opcode_info_t, 256> generate_opcode_table<fam65xx_cpp::WDC65C816Tag>() {
-    auto table = generate_opcode_table<fam65xx_cpp::WDC65C02Tag>();
-    
-    // Add 65C816 specific opcodes incrementally (placeholders for now)
-    table[0x0B] = {OP_PHD, AM_NON, OF_NONE};
-    table[0x22] = {OP_JSL, AM_ABS, OF_NONE};
-    table[0x2B] = {OP_PLD, AM_NON, OF_NONE};
-    table[0x4B] = {OP_PHK, AM_NON, OF_NONE};
-    table[0x6B] = {OP_RTL, AM_NON, OF_NONE};
-    table[0x8B] = {OP_PHB, AM_NON, OF_NONE};
-    table[0xAB] = {OP_PLB, AM_NON, OF_NONE};
-    table[0xC2] = {OP_REP, AM_IMM, OF_NONE};
-    table[0xE2] = {OP_SEP, AM_IMM, OF_NONE};
-    table[0xF4] = {OP_PEA, AM_ABS, OF_NONE};
-    table[0xFB] = {OP_XCE, AM_NON, OF_NONE};
+constexpr std::array<opcode_info_t, 256> generate_opcode_table<ROCKWELL_R65C02>() {
+    return generate_opcode_table_for_traits(ROCKWELL_R65C02);
+}
 
-    return table;
+template<>
+constexpr std::array<opcode_info_t, 256> generate_opcode_table<WDC_65C816>() {
+    return generate_opcode_table_for_traits(WDC_65C816);
 }
 
 #endif // FAM65XX_SKIP_IMPLEMENTATION
-
-// No additional namespace management needed.
-// This file is included at namespace level in fam65xx.hpp.

@@ -15,14 +15,14 @@
 
 // REP - Reset Processor Status Bits (65C816)
 bus_state_t op_rep(bus_state_t pins) {
-    if constexpr (has_wide_registers<ProcessorTag>()) {
+    if constexpr (has_wide_registers()) {
         switch (this->cycle_index) {
             case 0:
                 // Fetch immediate operand
                 pins = this->phi2_read(pins, REG_PC, REG_DL);
                 if (FAM65XX_GET_RDY(pins)) {
                     CPU_PC(this)++;
-                    this->cycle_index++;
+                    cycle_index++;
                 }
                 return pins;
                 
@@ -41,14 +41,14 @@ bus_state_t op_rep(bus_state_t pins) {
 
 // SEP - Set Processor Status Bits (65C816)
 bus_state_t op_sep(bus_state_t pins) {
-    if constexpr (has_wide_registers<ProcessorTag>()) {
+    if constexpr (has_wide_registers()) {
         switch (this->cycle_index) {
             case 0:
                 // Fetch immediate operand
                 pins = this->phi2_read(pins, REG_PC, REG_DL);
                 if (FAM65XX_GET_RDY(pins)) {
                     CPU_PC(this)++;
-                    this->cycle_index++;
+                    cycle_index++;
                 }
                 return pins;
                 
@@ -67,12 +67,12 @@ bus_state_t op_sep(bus_state_t pins) {
 
 // XCE - Exchange Carry and Emulation Flags (65C816)
 bus_state_t op_xce(bus_state_t pins) {
-    if constexpr (has_wide_registers<ProcessorTag>()) {
+    if constexpr (has_wide_registers()) {
         switch (this->cycle_index) {
             case 0:
                 // Exchange C flag and E flag (implied operation - 1 cycle)
                 bool carry = (CPU_P(this) & FLAG_C) != 0;
-                bool emulation = this->wide_state.emulation_mode;
+                bool emulation = this->get_emulation_mode();
                 
                 this->update_flag(FLAG_C, emulation);
                 this->wide_state.emulation_mode = carry;
@@ -98,23 +98,23 @@ bus_state_t op_xce(bus_state_t pins) {
 
 // PEA - Push Effective Absolute Address (65C816)
 bus_state_t op_pea(bus_state_t pins) {
-    if constexpr (has_wide_registers<ProcessorTag>()) {
+    if constexpr (has_wide_registers()) {
         switch (this->cycle_index) {
             case 0:
                 // Read address low byte
                 pins = this->phi2_read(pins, REG_PC, REG_ABL);
                 if (FAM65XX_GET_RDY(pins)) {
                     CPU_PC(this)++;
-                    this->cycle_index++;
+                    cycle_index++;
                 }
                 return pins;
                 
             case 1:
                 // Read address high byte
-                pins = this->phi2_read(pins, REG_PC, REG_ABH);
+                pins = phi2_read(pins, REG_PC, REG_ABH);
                 if (FAM65XX_GET_RDY(pins)) {
                     CPU_PC(this)++;
-                    this->cycle_index++;
+                    cycle_index++;
                 }
                 return pins;
                 
@@ -123,16 +123,16 @@ bus_state_t op_pea(bus_state_t pins) {
                 if (this->should_complete_write_cycle(pins)) {
                     pins = this->phi2_write(pins, REG_SP, REG_ABH);
                     CPU_S(this)--;
-                    this->cycle_index++;
+                    cycle_index++;
                 }
                 return pins;
                 
             case 3:
                 // Push low byte
-                if (this->should_complete_write_cycle(pins)) {
-                    pins = this->phi2_write(pins, REG_SP, REG_ABL); // addr_low from case 0
+                if (should_complete_write_cycle(pins)) {
+                    pins = phi2_write(pins, REG_SP, REG_ABL); // addr_low from case 0
                     CPU_S(this)--;
-                    this->transition_to_fetch();
+                    transition_to_fetch();
                 }
                 return pins;
         }
@@ -145,15 +145,15 @@ bus_state_t op_pea(bus_state_t pins) {
 
 // PHB - Push Data Bank Register (65C816)
 bus_state_t op_phb(bus_state_t pins) {
-    if constexpr (has_wide_registers<ProcessorTag>()) {
+    if constexpr (has_wide_registers()) {
         switch (this->cycle_index) {
             case 0:
                 // Push DBR to stack
-                if (this->should_complete_write_cycle(pins)) {
-                    CPU_TMP(this) = this->wide_state.DBR;
-                    pins = this->phi2_write(pins, REG_SP, REG_TMP);
+                if (should_complete_write_cycle(pins)) {
+                    CPU_DL(this) = this->wide_state.DBR;
+                    pins = phi2_write(pins, REG_SP, REG_DL);
                     CPU_S(this)--;
-                    this->transition_to_fetch();
+                    transition_to_fetch();
                 }
                 return pins;
         }
@@ -166,7 +166,7 @@ bus_state_t op_phb(bus_state_t pins) {
 
 // PHD - Push Direct Page Register (65C816)
 bus_state_t op_phd(bus_state_t pins) {
-    if constexpr (has_wide_registers<ProcessorTag>()) {
+    if constexpr (has_wide_registers()) {
         switch (this->cycle_index) {
             case 0:
                 // Push D high byte first
@@ -197,15 +197,15 @@ bus_state_t op_phd(bus_state_t pins) {
 
 // PHK - Push Program Bank Register (65C816)
 bus_state_t op_phk(bus_state_t pins) {
-    if constexpr (has_wide_registers<ProcessorTag>()) {
+    if constexpr (has_wide_registers()) {
         switch (this->cycle_index) {
             case 0:
                 // Push PBR to stack
-                if (this->should_complete_write_cycle(pins)) {
-                    CPU_TMP(this) = this->wide_state.PBR;
-                    pins = this->phi2_write(pins, REG_SP, REG_TMP);
+                if (should_complete_write_cycle(pins)) {
+                    CPU_DL(this) = this->wide_state.PBR;
+                    pins = phi2_write(pins, REG_SP, REG_DL);
                     CPU_S(this)--;
-                    this->transition_to_fetch();
+                    transition_to_fetch();
                 }
                 return pins;
         }
@@ -218,17 +218,17 @@ bus_state_t op_phk(bus_state_t pins) {
 
 // PLB - Pull Data Bank Register (65C816)
 bus_state_t op_plb(bus_state_t pins) {
-    if constexpr (has_wide_registers<ProcessorTag>()) {
+    if constexpr (has_wide_registers()) {
         switch (this->cycle_index) {
             case 0:
                 // Pull DBR from stack
                 CPU_S(this)++;
-                pins = this->phi2_read(pins, REG_SP, REG_DL);
+                pins = phi2_read(pins, REG_SP, REG_DL);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->wide_state.DBR = CPU_DL(this);
                     // Update N and Z flags based on DBR
                     this->update_nz_flags(this->wide_state.DBR);
-                    this->transition_to_fetch();
+                    transition_to_fetch();
                 }
                 return pins;
         }
@@ -240,32 +240,32 @@ bus_state_t op_plb(bus_state_t pins) {
 
 // PLD - Pull Direct Page Register (65C816)
 bus_state_t op_pld(bus_state_t pins) {
-    if constexpr (has_wide_registers<ProcessorTag>()) {
+    if constexpr (has_wide_registers()) {
         switch (this->cycle_index) {
             case 0:
                 // Pull D register low byte first
                 CPU_S(this)++;
-                pins = this->phi2_read(pins, REG_SP, REG_DL);
+                pins = phi2_read(pins, REG_SP, REG_DL);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->wide_state.D = (this->wide_state.D & 0xFF00) | CPU_DL(this); // Set low byte
-                    this->cycle_index++;
+                    cycle_index++;
                 }
                 return pins;
                 
             case 1:
                 // Pull D register high byte
                 CPU_S(this)++;
-                pins = this->phi2_read(pins, REG_SP, REG_DL);
+                pins = phi2_read(pins, REG_SP, REG_DL);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->wide_state.D = (this->wide_state.D & 0x00FF) | (CPU_DL(this) << 8); // Set high byte
                     // Update N and Z flags based on D register
                     this->update_nz_flags(this->wide_state.D & 0xFF); // Only check low byte for flags
-                    this->transition_to_fetch();
+                    transition_to_fetch();
                 }
                 return pins;
         }
     } else {
-        this->transition_to_fetch();
+        transition_to_fetch();
     }
     return pins;
 }
@@ -276,108 +276,111 @@ bus_state_t op_pld(bus_state_t pins) {
 
 // JSL - Jump to Subroutine Long (65C816)
 bus_state_t op_jsl(bus_state_t pins) {
-    if constexpr (has_wide_registers<ProcessorTag>()) {
-        switch (this->cycle_index) {
+    if constexpr (has_wide_registers()) {
+        switch (cycle_index) {
             case 0:
                 // Read address low byte
-                pins = this->phi2_read(pins, REG_PC, REG_ABL);
+                pins = phi2_read(pins, REG_PC, REG_ABL);
                 if (FAM65XX_GET_RDY(pins)) {
                     CPU_PC(this)++;
-                    this->cycle_index++;
+                    cycle_index++;
                 }
                 return pins;
                 
             case 1:
                 // Read address high byte
-                pins = this->phi2_read(pins, REG_PC, REG_ABH);
+                pins = phi2_read(pins, REG_PC, REG_ABH);
                 if (FAM65XX_GET_RDY(pins)) {
                     CPU_PC(this)++;
-                    this->cycle_index++;
+                    cycle_index++;
                 }
                 return pins;
                 
             case 2:
                 // Read bank byte
-                pins = this->phi2_read(pins, REG_PC, REG_DL);
+                pins = phi2_read(pins, REG_PC, REG_DL);
                 if (FAM65XX_GET_RDY(pins)) {
                     CPU_PC(this)++;
-                    this->cycle_index++;
+                    cycle_index++;
                 }
                 return pins;
                 
             case 3:
                 // Push program bank register
-                if (this->should_complete_write_cycle(pins)) {
-                    CPU_TMP(this) = this->wide_state.PBR; // Store PBR in TMP
-                    pins = this->phi2_write(pins, REG_SP, REG_TMP);
+                if (should_complete_write_cycle(pins)) {
+                    // Store PBR in DL temporarily
+                    uint8_t saved_dl = CPU_DL(this);
+                    CPU_DL(this) = this->wide_state.PBR;
+                    pins = phi2_write(pins, REG_SP, REG_DL);
+                    CPU_DL(this) = saved_dl; // Restore DL
                     CPU_S(this)--;
-                    this->cycle_index++;
+                    cycle_index++;
                 }
                 return pins;
                 
             case 4:
                 // Push PC high byte (return address - 1)
-                if (this->should_complete_write_cycle(pins)) {
-                    pins = this->phi2_write(pins, REG_SP, REG_PCH);
+                if (should_complete_write_cycle(pins)) {
+                    pins = phi2_write(pins, REG_SP, REG_PCH);
                     CPU_S(this)--;
-                    this->cycle_index++;
+                    cycle_index++;
                 }
                 return pins;
                 
             case 5:
                 // Push PC low byte
-                if (this->should_complete_write_cycle(pins)) {
-                    pins = this->phi2_write(pins, REG_SP, REG_PCL);
+                if (should_complete_write_cycle(pins)) {
+                    pins = phi2_write(pins, REG_SP, REG_PCL);
                     CPU_S(this)--;
                     // Set new program counter and bank
                     CPU_PC(this) = CPU_AB(this); // addr_high:addr_low from cases 0-1
                     this->wide_state.PBR = CPU_DL(this); // bank from case 2
-                    this->transition_to_fetch();
+                    transition_to_fetch();
                 }
                 return pins;
         }
     } else {
-        this->transition_to_fetch();
+        transition_to_fetch();
     }
     return pins;
 }
 
 // RTL - Return from Subroutine Long (65C816)
 bus_state_t op_rtl(bus_state_t pins) {
-    if constexpr (has_wide_registers<ProcessorTag>()) {
-        switch (this->cycle_index) {
+    if constexpr (has_wide_registers()) {
+        switch (cycle_index) {
             case 0:
                 // Pull PC low byte
                 CPU_S(this)++;
-                pins = this->phi2_read(pins, REG_SP, REG_PCL);
+                pins = phi2_read(pins, REG_SP, REG_PCL);
                 if (FAM65XX_GET_RDY(pins)) {
-                    this->cycle_index++;
+                    cycle_index++;
                 }
                 return pins;
                 
             case 1:
                 // Pull PC high byte
                 CPU_S(this)++;
-                pins = this->phi2_read(pins, REG_SP, REG_PCH);
+                pins = phi2_read(pins, REG_SP, REG_PCH);
                 if (FAM65XX_GET_RDY(pins)) {
-                    this->cycle_index++;
+                    cycle_index++;
                 }
                 return pins;
                 
             case 2:
                 // Pull program bank
                 CPU_S(this)++;
-                pins = this->phi2_read(pins, REG_SP, REG_TMP);
+                pins = phi2_read(pins, REG_SP, REG_DL);
                 if (FAM65XX_GET_RDY(pins)) {
-                    this->wide_state.PBR = CPU_TMP(this);
+                    this->wide_state.PBR = CPU_DL(this);
                     // Increment PC (RTL increments, RTS doesn't)
                     CPU_PC(this)++;
-                    this->transition_to_fetch();
+                    transition_to_fetch();
                 }
                 return pins;
         }
     } else {
-        this->transition_to_fetch();
+        transition_to_fetch();
     }
     return pins;
 }

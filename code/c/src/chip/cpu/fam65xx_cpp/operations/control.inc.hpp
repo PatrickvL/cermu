@@ -162,7 +162,7 @@ bus_state_t op_brk(bus_state_t pins) {
                 pins = this->phi2_write(pins, REG_SP, REG_DL);
                 CPU_S(this)--;
                 /* Set interrupt disable flag - processor specific behavior */
-                if constexpr (has_nmos_bugs<ProcessorTag>()) {
+                if constexpr (has_nmos_bugs()) {
                     /* NMOS 6502 always sets I flag on BRK */
                     set_flag(FLAG_I);
                 } else {

@@ -105,8 +105,7 @@ endif()
 # Include directories
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/cpu/mos6510
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/cpu/fam65xx
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/cpu/fam65xx_cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/io
     ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/logic
     ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/memory
@@ -154,10 +153,15 @@ set(CORE_SOURCES
     src/core/ioport.c
 )
 
-# Chip library sources
+# Chip library sources - Updated for fam65xx_cpp
 set(CHIP_SOURCES
-    src/chip/cpu/mos6510/mos6510.cpp
-    src/chip/cpu/fam65xx/fam65xx_core.cpp
+    # CPU sources - using fam65xx_cpp template-based implementation
+    src/chip/cpu/fam65xx_cpp/mos6502.cpp
+    src/chip/cpu/fam65xx_cpp/mos6510.cpp
+    src/chip/cpu/fam65xx_cpp/nes6502.cpp
+    src/chip/cpu/fam65xx_cpp/wdc65c02.cpp
+    src/chip/cpu/fam65xx_cpp/rockwell65c02.cpp
+    src/chip/cpu/fam65xx_cpp/wdc65c816.cpp
 )
 
 # Conditionally add cycle-accurate MOS6510 sources (DISABLED - sources not available)
@@ -260,7 +264,6 @@ if(BUILD_GUI)
             src/gui/cimgui_backends.cpp
             src/chip/video/vic_ii/vicii_gui.c
             src/chip/logic/pla_gui.c
-            src/chip/cpu/fam65xx/fam65xx_gui.c
         )
 
     add_executable(c64emu_gui

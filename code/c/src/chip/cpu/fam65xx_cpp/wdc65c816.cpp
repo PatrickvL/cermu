@@ -11,7 +11,7 @@ using namespace fam65xx_cpp;
 // CONCRETE CPU TYPE DEFINITION
 // ============================================================================
 
-using wdc65c816_cpu_t = fam65xx_t<WDC65C816Tag>;
+using wdc65c816_cpu_t = fam65xx_t<WDC_65C816>;
 
 // Cast helper for opaque handle
 #define CPU_CAST(ptr) reinterpret_cast<wdc65c816_cpu_t*>(ptr)

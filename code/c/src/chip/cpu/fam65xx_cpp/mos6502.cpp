@@ -18,7 +18,7 @@ using namespace fam65xx_cpp;
 // ============================================================================
 
 // Define concrete CPU types for easier use
-using mos6502_cpu_t = fam65xx_t<MOS6502Tag>;
+using mos6502_cpu_t = fam65xx_t<MOS6502>;
 
 // Cast helpers for opaque handles
 #define CPU_CAST(type, ptr) reinterpret_cast<type*>(ptr)

@@ -60,7 +60,7 @@ namespace fam65xx_cpp {
 // ============================================================================
 
 // Forward declaration - will be specialized for each processor
-template<typename ProcessorTag>
+template<const CPUTraits& Traits>
 constexpr std::array<opcode_info_t, 256> generate_opcode_table();
 
 // Include processor-specific opcode table specializations BEFORE class definition
@@ -75,16 +75,21 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table();
 // MAIN CPU TEMPLATE CLASS
 // ============================================================================
 
-template<typename ProcessorTag>
+template<const CPUTraits& Traits>
 class fam65xx_t :
-    public io_port_base_t<ProcessorTag>,
-    public apu_base_t<ProcessorTag>,
-    public wide_registers_base_t<ProcessorTag>
+    public io_port_base_t<Traits>,
+    public apu_base_t<Traits>,
+    public wide_registers_base_t<Traits>
 {
 public:
-    // Type aliases for cleaner code
-    using ProcessorTraits = fam65xx_cpp::ProcessorTraits<ProcessorTag>;
-    using Features = fam65xx_cpp::ProcessorFeatures;
+    // CPUTraits-based feature detection helpers for operations files
+    static constexpr bool has_illegal_opcodes() { return Traits.has(CPUCoreFlags::ILLEGAL_OPCODES); }
+    static constexpr bool has_bcd() { return Traits.has(CPUCoreFlags::HAS_DECIMAL_MODE); }
+    static constexpr bool has_cmos() { return Traits.has(CPUCoreFlags::CMOS_BASE); }
+    static constexpr bool has_wide_registers() { return Traits.has(CPUCoreFlags::C816_16BIT); }
+    static constexpr bool has_nmos_bugs() { return Traits.is_nmos(); }
+    static constexpr bool has_io_port() { return Traits.has_io_port(); }
+    static constexpr bool has_apu() { return Traits.has_apu(); }
     
     // ========================================================================
     // CPU STATE (merged from fam65xx_cpu_state_t)
@@ -145,7 +150,7 @@ public:
     
     ~fam65xx_t() {
         // Cleanup conditional features
-        if constexpr (has_apu<ProcessorTag>()) {
+        if constexpr (has_apu()) {
             this->destroy_apu();
         }
     }
@@ -341,7 +346,7 @@ public:
         }
         
         // Clock APU if present (every CPU cycle)
-        if constexpr (has_apu<ProcessorTag>()) {
+        if constexpr (has_apu()) {
             pins = this->clock_apu(pins);
         }
         
@@ -385,7 +390,7 @@ public:
     inline bool should_complete_write_cycle(bus_state_t pins) {
         // NMOS processors (6502/6510/NES6502): Ignore RDY during write cycles (hardware bug)
         // CMOS processors (65C02/65C816): Respect RDY during write cycles (bug fixed)
-        if constexpr (has_nmos_bugs<ProcessorTag>()) {
+        if constexpr (has_nmos_bugs()) {
             // NMOS: Always complete write regardless of RDY state (matches hardware bug)
             return true;
         } else {
@@ -406,7 +411,7 @@ public:
         pins &= ~FAM65XX_RW; // Set WRITE mode
         
         // Handle APU register access (compile-time conditional)
-        if constexpr (has_apu<ProcessorTag>()) {
+        if constexpr (has_apu()) {
             if (this->write_apu_register(addr, data)) {
                 // APU register handled, but still call memory callback for test compatibility
                 if (this->mem_write != nullptr) {
@@ -417,7 +422,7 @@ public:
         }
         
         // Handle 6510 I/O port access (compile-time conditional)
-        if constexpr (has_io_port<ProcessorTag>()) {
+        if constexpr (Traits.has_io_port()) {
             if (addr == 0x0000) {
                 this->write_io_ddr(data);
                 // Still call memory callback for test compatibility
@@ -496,7 +501,7 @@ public:
             pins = FAM65XX_SET_ADDR(pins, address);
             
             // Handle APU register access (only when RDY is high)
-            if constexpr (has_apu<ProcessorTag>()) {
+            if constexpr (has_apu()) {
                 uint8_t apu_data;
                 if (this->read_apu_register(address, apu_data)) {
                     this->reg8[data_reg] = apu_data;
@@ -505,7 +510,7 @@ public:
                 }
             }
             
-            if constexpr (has_io_port<ProcessorTag>()) {
+            if constexpr (has_io_port()) {
                 // Handle 6510 I/O port access (only when RDY is high)
                 if (address == 0x0000) {
                     this->reg8[data_reg] = this->read_io_port();
@@ -553,7 +558,7 @@ public:
     // Include all operation implementations
     // These .inc.hpp files contain function definitions that will be compiled
     // as part of this template class, allowing conditional compilation
-    // based on ProcessorTag features
+    // based on CPUTraits features
     
     // Define template context guard for .inc.hpp files BEFORE including them
     #define FAM65XX_TEMPLATE_CONTEXT
@@ -581,7 +586,7 @@ public:
     // Generate processor-specific opcode table at compile time
     static constexpr opcode_info_t get_opcode_info(uint8_t opcode) {
         // This will be specialized per processor type after table generation
-        return generate_opcode_table<ProcessorTag>()[opcode];
+        return generate_opcode_table<Traits>()[opcode];
     }
     
     // ========================================================================
@@ -707,7 +712,7 @@ public:
         const uint16_t full_result = old_a + operand + carry_in;
         const uint8_t result = static_cast<uint8_t>(full_result);
 
-        if constexpr (has_bcd<ProcessorTag>()) {
+        if constexpr (has_bcd()) {
             if (CPU_P(this) & FLAG_D) {
                 // BCD mode - shared calculation with processor-specific flag behavior
                 uint8_t al = (old_a & 0x0F) + (operand & 0x0F) + carry_in;
@@ -717,7 +722,7 @@ public:
                 
                 // Processor-specific flag calculation
                 uint8_t n_flag, v_flag, z_flag, c_flag;
-                if constexpr (std::is_same_v<ProcessorTag, WDC65C02Tag>) {
+                if constexpr (Traits.has(CPUCoreFlags::CMOS_BASE) && !Traits.has(CPUCoreFlags::ROCKWELL_BITS)) {
                     // WDC65C02: Calculate flags before final adjustment, N flag from final result
                     c_flag = (ah > 15) ? FLAG_C : 0;
                     v_flag = ((~(old_a ^ operand) & (old_a ^ result)) >> 1) & FLAG_V;
@@ -770,7 +775,7 @@ public:
             n_flag | v_flag | z_flag | c_flag;
         // Binary mode - set result first
         CPU_A(this) = result;
-        if constexpr (has_bcd<ProcessorTag>()) {
+        if constexpr (has_bcd()) {
             if (CPU_P(this) & FLAG_D) {
                 // BCD mode - overwrite with BCD-adjusted result
                 uint8_t al = (old_a & 0x0F) - (operand & 0x0F) - borrow_in;
@@ -832,7 +837,7 @@ private:
     // ========================================================================
     
     // Template-dependent function pointer type
-    using InstructionHandler = bus_state_t (fam65xx_t<ProcessorTag>::*)(bus_state_t);
+    using InstructionHandler = bus_state_t (fam65xx_t<Traits>::*)(bus_state_t);
     
     // Lookup tables for handlers (initialized during init)
     std::array<InstructionHandler, OP_COUNT> operation_handlers;
@@ -949,12 +954,12 @@ private:
     
     void init_conditional_features() {
         // Initialize I/O port if present
-        if constexpr (has_io_port<ProcessorTag>()) {
+        if constexpr (has_io_port()) {
             this->init_io_port();
         }
         
         // Initialize APU if present
-        if constexpr (has_apu<ProcessorTag>()) {
+        if constexpr (has_apu()) {
             this->init_apu();
         }
         

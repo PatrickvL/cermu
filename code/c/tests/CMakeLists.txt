@@ -35,9 +35,14 @@ set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 set(CPU_DIR ${SRC_DIR}/chip/cpu)
 set(CORE_DIR ${SRC_DIR}/core)
 
-# Collect CPU source files (legacy fam65xx removed - using modern C++ core)
+# Collect CPU source files (using fam65xx_cpp template-based implementation)
 set(CPU_SOURCES
-    ${CPU_DIR}/mos6510/mos6510.cpp
+    ${CPU_DIR}/fam65xx_cpp/mos6502.cpp
+    ${CPU_DIR}/fam65xx_cpp/mos6510.cpp
+    ${CPU_DIR}/fam65xx_cpp/nes6502.cpp
+    ${CPU_DIR}/fam65xx_cpp/wdc65c02.cpp
+    ${CPU_DIR}/fam65xx_cpp/rockwell65c02.cpp
+    ${CPU_DIR}/fam65xx_cpp/wdc65c816.cpp
 )
 
 # Collect core source files
@@ -65,41 +70,19 @@ endforeach()
 add_library(mos6510_lib STATIC ${CPU_SOURCES} ${CORE_SOURCES})
 target_include_directories(mos6510_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/../
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp
 )
 # Enable REDESIGN CPU dispatch mechanism for MOS6510 library
 target_compile_definitions(mos6510_lib PRIVATE REDESIGN=1)
-# No longer linking legacy mos6502_family - using modern C++ fam65xx
 
 # JSON Parser library for ProcessorTests
 add_library(json_parser STATIC json_parser.c)
 target_include_directories(json_parser PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
-# ProcessorTests Runner - Ground Truth Validation (DISABLED - obsolete, uses old API)
-# This runner is obsolete and references non-existent mos6502.h and nes6502.h files
-# Use the modern fam65xx_processor_tests_runner instead
-# add_executable(processor_tests_runner
-#     processor_tests_runner.c
-# )
-# target_link_libraries(processor_tests_runner mos6510_lib json_parser)
-# target_sources(processor_tests_runner PRIVATE ${CORE_SOURCES})
-# # Enable REDESIGN CPU dispatch mechanism for processor tests
-# target_compile_definitions(processor_tests_runner PRIVATE REDESIGN=1)
-
-# Comprehensive Test Suite removed - was referencing deleted legacy headers
-# Modern fam65xx tests are used instead
-
-# Basic test removed - was using legacy API incompatible with modern C++ core
-
 # fam65xx Klaus Test Suite - New C++ CPU Core Testing
-set(KLAUS_TEST_SOURCES fam65xx_klaus_test_runner.cpp)
-if(WIN32)
-    list(APPEND KLAUS_TEST_SOURCES getopt_windows.c)
-endif()
-
-add_executable(fam65xx_klaus_test_runner ${KLAUS_TEST_SOURCES})
+add_executable(fam65xx_klaus_test_runner fam65xx_klaus_test_runner.cpp)
 target_include_directories(fam65xx_klaus_test_runner PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
 )
 target_compile_definitions(fam65xx_klaus_test_runner PRIVATE AIEMUC_IMPL)
@@ -115,7 +98,7 @@ add_executable(fam65xx_lorenz_test_harness
     fam65xx_lorenz_test_harness.cpp
 )
 target_include_directories(fam65xx_lorenz_test_harness PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx_cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
 )
 target_compile_definitions(fam65xx_lorenz_test_harness PRIVATE AIEMUC_IMPL)
@@ -149,71 +132,6 @@ if(NOT WIN32 AND NOT MSVC)
     target_link_libraries(fam65xx_processor_tests_runner m)
 endif()
 
-# Unified Processor Test Framework - DISABLED (obsolete, references fam65xx_cpp)
-# This test references the obsolete fam65xx_cpp directory that no longer exists
-# Use the modern fam65xx test runners instead
-# add_executable(unified_processor_test
-#     ../unified_processor_test.cpp
-# )
-# target_include_directories(unified_processor_test PRIVATE
-#     ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
-# )
-# # Link math library if needed
-# if(NOT WIN32 AND NOT MSVC)
-#     target_link_libraries(unified_processor_test m)
-# endif()
-
-# Simple Unified Processor Test - Working version without template issues
-add_executable(unified_processor_test_simple
-    ../unified_processor_test_simple.cpp
-)
-# Link math library if needed
-if(NOT WIN32 AND NOT MSVC)
-    target_link_libraries(unified_processor_test_simple m)
-endif()
-
-# fam65xx Interrupt Handling Tests - DISABLED (obsolete, reference fam65xx_cpp)
-# These tests reference the obsolete fam65xx_cpp directory that no longer exists
-# Interrupt behavior is now tested in the modern fam65xx test runners
-# add_executable(nmi_edge_detection_test
-#     nmi_edge_detection_test.cpp
-# )
-# target_include_directories(nmi_edge_detection_test PRIVATE
-#     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx
-#     ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
-# )
-# target_compile_definitions(nmi_edge_detection_test PRIVATE AIEMUC_IMPL)
-# # Link math library if needed
-# if(NOT WIN32 AND NOT MSVC)
-#     target_link_libraries(nmi_edge_detection_test m)
-# endif()
-
-# add_executable(irq_level_handling_test
-#     irq_level_handling_test.cpp
-# )
-# target_include_directories(irq_level_handling_test PRIVATE
-#     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx
-#     ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
-# )
-# target_compile_definitions(irq_level_handling_test PRIVATE AIEMUC_IMPL)
-# # Link math library if needed
-# if(NOT WIN32 AND NOT MSVC)
-#     target_link_libraries(irq_level_handling_test m)
-# endif()
-
-# add_executable(brk_flag_setting_test
-#     brk_flag_setting_test.cpp
-# )
-# target_include_directories(brk_flag_setting_test PRIVATE
-#     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx
-#     ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
-# )
-# target_compile_definitions(brk_flag_setting_test PRIVATE AIEMUC_IMPL)
-# # Link math library if needed
-# if(NOT WIN32 AND NOT MSVC)
-#     target_link_libraries(brk_flag_setting_test m)
-# endif()
-
 # Enable testing
 enable_testing()
 
@@ -228,10 +146,6 @@ enable_testing()
 #         PASS_REGULAR_EXPRESSION "ALL TESTS PASSED"
 #     )
 # endif()
-
-# Comprehensive test removed - using modern fam65xx tests instead
-
-# Basic test removed - using modern fam65xx tests instead
 
 # fam65xx Klaus test
 add_test(NAME fam65xx_klaus_test COMMAND fam65xx_klaus_test_runner --functional)
@@ -248,10 +162,6 @@ add_custom_target(run_processor_tests
     COMMENT "Running ProcessorTests ground truth validation with modern fam65xx runner"
 )
 
-# Comprehensive test target removed - using modern fam65xx tests instead
-
-# Basic test target removed - using modern fam65xx tests instead
-
 add_custom_target(run_all_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} --verbose
     DEPENDS fam65xx_klaus_test_runner fam65xx_processor_tests_runner
@@ -259,21 +169,11 @@ add_custom_target(run_all_tests
 )
 
 # Install targets (optional)
-# TEMPORARILY DISABLED due to header compatibility issues with MSVC
-# Legacy test_mos6510_comprehensive removed - using modern fam65xx tests
-
-if(TARGET test_mos6510_basic_tests)
-    install(TARGETS test_mos6510_basic_tests
-        RUNTIME DESTINATION bin
-    )
-endif()
 
 # Install fam65xx test runner
 install(TARGETS fam65xx_klaus_test_runner
     RUNTIME DESTINATION bin
 )
-
-# Legacy basic test removed from install targets
 
 # Print summary
 message(STATUS "MOS6510 Tests Configuration:")

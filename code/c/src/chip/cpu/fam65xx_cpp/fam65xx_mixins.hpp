@@ -3,7 +3,7 @@
  * fam65xx_mixins.hpp - Conditional Feature Mixins for MOS 65xx Family
  *
  * This file contains mixin classes that add processor-specific data and functionality
- * only when the corresponding feature is enabled via ProcessorTraits. Empty base
+ * only when the corresponding feature is enabled via CPUTraits. Empty base
  * optimization ensures zero overhead when features are disabled.
  */
 
@@ -31,7 +31,7 @@ struct empty_apu_mixin_t {};
 // ============================================================================
 
 // I/O Port functionality for processors like MOS 6510 (C64/C128)
-template<typename ProcessorTag>
+template<const CPUTraits& Traits>
 struct io_port_mixin_t {
     // I/O Port registers (aligned to 4-byte boundary)
     struct alignas(4) {
@@ -75,7 +75,7 @@ struct io_port_mixin_t {
 // ============================================================================
 
 // Extended state for 65C816 16-bit processor
-template<typename ProcessorTag>
+template<const CPUTraits& Traits>
 struct wide_registers_mixin_t {
     // Extended registers (aligned to 8-byte boundary for performance)
     struct alignas(8) {
@@ -123,7 +123,7 @@ struct wide_registers_mixin_t {
 // ============================================================================
 
 // APU functionality for NES 6502 processors with integrated audio
-template<typename ProcessorTag>
+template<const CPUTraits& Traits>
 struct apu_mixin_t {
     // APU instance (aligned for performance)
     struct alignas(8) {
@@ -244,20 +244,24 @@ struct apu_mixin_t {
 // ============================================================================
 
 // Use std::conditional to include mixins only when features are present
-template<typename ProcessorTag>
+template<const CPUTraits& Traits>
 using io_port_base_t = std::conditional_t<
-    has_io_port<ProcessorTag>(),
-    io_port_mixin_t<ProcessorTag>,
+    Traits.has_io_port(),
+    io_port_mixin_t<Traits>,
     empty_io_port_mixin_t
 >;
 
-template<typename ProcessorTag>
-using wide_registers_base_t = empty_wide_mixin_t;  // Wide registers disabled for now
+template<const CPUTraits& Traits>
+using wide_registers_base_t = std::conditional_t<
+    Traits.has(CPUCoreFlags::C816_16BIT),
+    wide_registers_mixin_t<Traits>,
+    empty_wide_mixin_t
+>;
 
-template<typename ProcessorTag>
+template<const CPUTraits& Traits>
 using apu_base_t = std::conditional_t<
-    has_apu<ProcessorTag>(),
-    apu_mixin_t<ProcessorTag>,
+    Traits.peripheral.has_sound(),
+    apu_mixin_t<Traits>,
     empty_apu_mixin_t
 >;
 
