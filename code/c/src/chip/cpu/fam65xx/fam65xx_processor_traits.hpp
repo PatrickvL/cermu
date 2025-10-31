@@ -303,7 +303,13 @@ constexpr CPUTraits WDC_65C02_EARLY = {
 
 constexpr CPUTraits WDC_65SC02 = WDC_65C02_EARLY;
 constexpr CPUTraits GTE_G65SC02 = WDC_65C02_EARLY;
-constexpr CPUTraits SYNERTEK_65C02 = WDC_65C02_EARLY;
+constexpr CPUTraits SYNERTEK_65C02 = {
+    .core_flags = CPUCoreFlags::CMOS_BASE | CPUCoreFlags::HAS_DECIMAL_MODE,
+    .address_bits = 16,
+    .io_port_mask = 0x00,
+    .banking = BankingType::NONE,
+    .peripheral = {SoundChip::NONE, DMAController::NONE, false}
+};
 
 constexpr CPUTraits ROCKWELL_R65C02 = {
     .core_flags = CoreFlags::ROCKWELL_BASE,
