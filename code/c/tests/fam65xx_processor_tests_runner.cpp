@@ -46,23 +46,25 @@ static std::atomic<bool> g_test_failed{false};
 // Processor type enumeration
 enum class ProcessorType {
     MOS6502,
-    NES6502, 
+    NES6502,
     MOS6510,
-    WDC65C02,
+    SYNERTEK65C02,
     ROCKWELL65C02,
+    WDC65C02,
     WDC65C816
 };
 
 // Centralized processor name determination - single source of truth
 std::string get_processor_name(ProcessorType type) {
     switch (type) {
-        case ProcessorType::MOS6502:     return "MOS 6502";
-        case ProcessorType::NES6502:     return "NES 6502 (Ricoh 2A03/2A07)";
-        case ProcessorType::MOS6510:     return "MOS 6510 (C64)";
-        case ProcessorType::WDC65C02:    return "WDC 65C02";
+        case ProcessorType::MOS6502:       return "MOS 6502";
+        case ProcessorType::NES6502:       return "NES 6502 (Ricoh 2A03/2A07)";
+        case ProcessorType::MOS6510:       return "MOS 6510 (C64)";
+        case ProcessorType::SYNERTEK65C02: return "Synertek 65C02";
         case ProcessorType::ROCKWELL65C02: return "Rockwell 65C02";
-        case ProcessorType::WDC65C816:   return "WDC 65C816";
-        default:                         return "Unknown Processor";
+        case ProcessorType::WDC65C02:      return "WDC 65C02 (W65C02S)";
+        case ProcessorType::WDC65C816:     return "WDC 65C816";
+        default:                           return "Unknown Processor";
     }
 }
 
@@ -84,11 +86,14 @@ ProcessorType detect_processor_from_path(const std::string& test_path) {
     if (path_lower.find("processor_tests/mos6510/") != std::string::npos) {
         return ProcessorType::MOS6510;
     }
-    if (path_lower.find("processor_tests/wdc65c02/") != std::string::npos) {
-        return ProcessorType::WDC65C02;
+    if (path_lower.find("processor_tests/synertek65c02/") != std::string::npos) {
+        return ProcessorType::SYNERTEK65C02;
     }
     if (path_lower.find("processor_tests/rockwell65c02/") != std::string::npos) {
         return ProcessorType::ROCKWELL65C02;
+    }
+    if (path_lower.find("processor_tests/wdc65c02/") != std::string::npos) {
+        return ProcessorType::WDC65C02;
     }
     if (path_lower.find("processor_tests/wdc65c816/") != std::string::npos) {
         return ProcessorType::WDC65C816;
@@ -105,8 +110,9 @@ ProcessorType parse_processor_type(const std::string& processor_str) {
     if (proc_lower == "mos6502" || proc_lower == "6502") return ProcessorType::MOS6502;
     if (proc_lower == "nes6502" || proc_lower == "nes") return ProcessorType::NES6502;
     if (proc_lower == "mos6510" || proc_lower == "6510") return ProcessorType::MOS6510;
-    if (proc_lower == "wdc65c02" || proc_lower == "65c02") return ProcessorType::WDC65C02;
+    if (proc_lower == "synertek65c02" || proc_lower == "synertek") return ProcessorType::SYNERTEK65C02;
     if (proc_lower == "rockwell65c02" || proc_lower == "rockwell") return ProcessorType::ROCKWELL65C02;
+    if (proc_lower == "wdc65c02" || proc_lower == "65c02") return ProcessorType::WDC65C02;
     if (proc_lower == "wdc65c816" || proc_lower == "65c816") return ProcessorType::WDC65C816;
     
     throw std::invalid_argument("Unknown processor type: " + processor_str);
@@ -614,14 +620,17 @@ std::unique_ptr<UnifiedProcessorInterface> create_processor(ProcessorType type) 
         case ProcessorType::NES6502:
             return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::RICOH_2A03>());
             
-        case ProcessorType::WDC65C02:
-            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::WDC_65SC02>());
-            
         case ProcessorType::MOS6510:
             return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::MOS6510>());
             
+        case ProcessorType::SYNERTEK65C02:
+            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::SYNERTEK_65C02>());
+            
         case ProcessorType::ROCKWELL65C02:
             return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::ROCKWELL_R65C02>());
+            
+        case ProcessorType::WDC65C02:
+            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::WDC_W65C02S>());
             
         case ProcessorType::WDC65C816:
             return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::WDC_65C816>());
@@ -1167,8 +1176,8 @@ void print_usage(const char* program_name) {
     std::cout << "Usage: " << program_name << " [options] <test_file_or_directory>\n";
     std::cout << "\nProcessor Selection:\n";
     std::cout << "  -p, --processor P  Specify processor type (overrides auto-detection)\n";
-    std::cout << "                     Supported: mos6502, nes6502, mos6510, wdc65c02, rockwell65c02, wdc65c816\n";
-    std::cout << "                     Aliases: 6502, nes, 6510, 65c02, rockwell, 65c816\n";
+    std::cout << "                     Supported: mos6502, nes6502, mos6510, synertek65c02, rockwell65c02, wdc65c02, wdc65c816\n";
+    std::cout << "                     Aliases: 6502, nes, 6510, synertek, rockwell, 65c02, 65c816\n";
     std::cout << "\nTest Execution Options:\n";
     std::cout << "  -v, --verbose      Enable verbose output with detailed execution logs\n";
     std::cout << "  -q, --quiet        Quiet mode - only show final summary\n";
@@ -1185,10 +1194,10 @@ void print_usage(const char* program_name) {
     std::cout << "  • processor_tests/rockwell65c02/v1/ → Rockwell 65C02\n";
     std::cout << "  • processor_tests/wdc65c816/v1/ → WDC 65C816\n";
     std::cout << "\nExamples:\n";
-    std::cout << "  " << program_name << " processor_tests/6502/v1/                  # Auto-detect MOS 6502\n";
-    std::cout << "  " << program_name << " -p nes6502 processor_tests/6502/v1/       # Force NES 6502 on 6502 tests\n";
-    std::cout << "  " << program_name << " -j 4 -v processor_tests/nes6502/v1/       # Auto-detect NES, 4 workers, verbose\n";
-    std::cout << "  " << program_name << " -p wdc65c02 -q -c processor_tests/        # Force WDC 65C02, quiet mode\n";
+    std::cout << "  " << program_name << " processor_tests/6502/v1/                     # Auto-detect MOS 6502\n";
+    std::cout << "  " << program_name << " -p nes6502 processor_tests/6502/v1/          # Force NES 6502 on 6502 tests\n";
+    std::cout << "  " << program_name << " -j 4 -v processor_tests/synertek65c02/v1/    # Auto-detect Synertek, 4 workers, verbose\n";
+    std::cout << "  " << program_name << " -p wdc65c02 -q -c processor_tests/wdc65c02/ # Force WDC 65C02, quiet mode\n";
     std::cout << "\nFeatures:\n";
     std::cout << "  ✓ Multi-processor support (6502 family)\n";
     std::cout << "  ✓ Automatic processor detection from test path\n";
