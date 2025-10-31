@@ -31,13 +31,13 @@ namespace CPUCoreFlags {
     // Bit 7 reserved
     
     // === Hardware Bugs (bits 8-11) ===
-    constexpr uint32_t JMP_INDIRECT_BUG     = 1 << 8;   // TODO: JMP ($xxFF) wraps within page
+    constexpr uint32_t JMP_INDIRECT_BUG     = 1 << 8;   // JMP ($xxFF) wraps within page ✓ IMPLEMENTED
     constexpr uint32_t RMW_DUMMY_WRITE      = 1 << 9;   // TODO: RMW writes original (vs dummy read)
     // Bits 10-11 reserved for other quirks
     
     // === Decimal Mode (bits 12-15) ===
     constexpr uint32_t HAS_DECIMAL_MODE     = 1 << 12;  // BCD mode exists (2A03 lacks this) ✓ IMPLEMENTED
-    constexpr uint32_t BCD_NMOS_FLAGS       = 1 << 13;  // TODO: N,V,Z from binary (NMOS) vs BCD (CMOS)
+    constexpr uint32_t BCD_NMOS_FLAGS       = 1 << 13;  // N,V,Z from binary (NMOS) vs BCD (CMOS) ✓ IMPLEMENTED
     constexpr uint32_t BCD_EXTRA_CYCLE      = 1 << 14;  // CMOS takes extra cycle in decimal ✓ IMPLEMENTED
     // Bit 15 reserved
     
