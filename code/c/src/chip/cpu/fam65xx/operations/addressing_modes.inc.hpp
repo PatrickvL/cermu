@@ -537,6 +537,36 @@ bus_state_t addr_rel(bus_state_t pins) {
     return pins;
 }
 
+// Zero Page Relative Addressing: For BBR/BBS instructions ($nn,$offset)
+bus_state_t addr_zp_rel(bus_state_t pins) {
+    if constexpr (has_bit_manipulation<Traits>()) {
+        // BBR/BBS instructions: $nn,$offset
+        switch (cycle_index) {
+            case 0:
+                // PHI2: Read zero page address from PC
+                pins = phi2_read(pins, REG_PC, REG_ZPL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    CPU_PC(this)++;
+                    cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                // PHI2: Read branch offset from PC (stored in DL for operation to use)
+                pins = phi2_read(pins, REG_PC, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    CPU_PC(this)++;
+                    // ZP address is in ZP register, branch offset is in DL
+                    transition_to_operation();
+                }
+                return pins;
+        }
+        return pins;
+    } else {
+        return pins; // Should not be called on non-Rockwell processors
+    }
+}
+
 #endif // FAM65XX_SKIP_IMPLEMENTATION
 
 #include "inc_lint_prevention_footer.hpp"
