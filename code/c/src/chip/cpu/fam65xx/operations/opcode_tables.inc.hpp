@@ -18,7 +18,7 @@
 // ============================================================================
 
 // CPUTraits-based opcode table generation function
-constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const CPUTraits& traits) {
+constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const fam65xx::CPUTraits& traits) {
     // Start with base NES 6502/RICOH 2A03 implementation with explicit illegal opcodes
     std::array<opcode_info_t, 256> table{};
     
@@ -49,7 +49,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
     table[0x17] = {OP_SLO, AM_ZPX, OF_RMW};   // SLO - Shift Left then OR (illegal)
     table[0x18] = {OP_CLC, AM_NON, OF_NONE};
     table[0x19] = {OP_ORA, AM_ABY, OF_SKIP_PAGE};
-    table[0x1A] = {OP_NOP, AM_NON, OF_NONE};  // NOP - illegal NOP
+    table[0x1A] = {OP_NOP, AM_NON, OF_NONE};  // INC A - illegal NOP (1-byte)
     table[0x1B] = {OP_SLO, AM_ABY, OF_RMW};   // SLO - Shift Left then OR (illegal)
     table[0x1C] = {OP_NOP, AM_ABX, OF_SKIP_PAGE}; // NOP abs,X - illegal NOP
     table[0x1D] = {OP_ORA, AM_ABX, OF_SKIP_PAGE};
@@ -81,7 +81,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
     table[0x37] = {OP_RLA, AM_ZPX, OF_RMW};   // RLA - Rotate Left then AND (illegal)
     table[0x38] = {OP_SEC, AM_NON, OF_NONE};
     table[0x39] = {OP_AND, AM_ABY, OF_SKIP_PAGE};
-    table[0x3A] = {OP_NOP, AM_NON, OF_NONE};  // NOP - illegal NOP
+    table[0x3A] = {OP_NOP, AM_NON, OF_NONE};  // DEC A - illegal NOP (1-byte)
     table[0x3B] = {OP_RLA, AM_ABY, OF_RMW};   // RLA - Rotate Left then AND (illegal)
     table[0x3C] = {OP_NOP, AM_ABX, OF_SKIP_PAGE}; // NOP abs,X - illegal NOP
     table[0x3D] = {OP_AND, AM_ABX, OF_SKIP_PAGE};
@@ -123,7 +123,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
     table[0x61] = {OP_ADC, AM_INX, OF_NONE};
     table[0x62] = {OP_JAM, AM_NON, OF_NONE};  // KIL/JAM - illegal opcode
     table[0x63] = {OP_RRA, AM_INX, OF_RMW};   // RRA - Rotate Right then ADC (illegal)
-    table[0x64] = {OP_NOP, AM_ZER, OF_NONE};  // NOP zp - illegal NOP
+    table[0x64] = {OP_NOP, AM_ZER, OF_NONE};  // NOP zp - illegal NOP (2-byte) - will be overridden for 65C02
     table[0x65] = {OP_ADC, AM_ZER, OF_NONE};
     table[0x66] = {OP_ROR, AM_ZER, OF_RMW};
     table[0x67] = {OP_RRA, AM_ZER, OF_RMW};   // RRA - Rotate Right then ADC (illegal)
@@ -147,7 +147,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
     table[0x79] = {OP_ADC, AM_ABY, OF_SKIP_PAGE};
     table[0x7A] = {OP_NOP, AM_NON, OF_NONE};  // NOP - illegal NOP
     table[0x7B] = {OP_RRA, AM_ABY, OF_RMW};   // RRA - Rotate Right then ADC (illegal)
-    table[0x7C] = {OP_NOP, AM_ABX, OF_SKIP_PAGE}; // NOP abs,X - illegal NOP
+    table[0x7C] = {OP_NOP, AM_ABX, OF_SKIP_PAGE}; // JMP (abs,X) - illegal NOP (3-byte) - will be overridden for 65C02
     table[0x7D] = {OP_ADC, AM_ABX, OF_SKIP_PAGE};
     table[0x7E] = {OP_ROR, AM_ABX, OF_RMW};
     table[0x7F] = {OP_RRA, AM_ABX, OF_RMW};   // RRA - Rotate Right then ADC (illegal)
@@ -166,7 +166,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
     table[0x8C] = {OP_STY, AM_ABS, OF_NONE};
     table[0x8D] = {OP_STA, AM_ABS, OF_NONE};
     table[0x8E] = {OP_STX, AM_ABS, OF_NONE};
-    table[0x8F] = {OP_SAX, AM_ABS, OF_NONE};  // SAX - Store A AND X (illegal)
+    table[0x8F] = {OP_SAX, AM_ABS, OF_NONE};  // SAX - Store A AND X (illegal) - will be overridden for CMOS
     table[0x90] = {OP_BCC, AM_REL, OF_NONE};
     table[0x91] = {OP_STA, AM_INY, OF_NONE};
     table[0x92] = {OP_JAM, AM_NON, OF_NONE};  // KIL/JAM - illegal opcode
@@ -179,10 +179,10 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
     table[0x99] = {OP_STA, AM_ABY, OF_NONE};
     table[0x9A] = {OP_TXS, AM_NON, OF_NONE};
     table[0x9B] = {OP_SHS, AM_ABY, OF_ILLEGAL_STORE};  // SHS - Store (A AND X) AND ((addr_hi)+1) to S (illegal)
-    table[0x9C] = {OP_SHY, AM_ABX, OF_ILLEGAL_STORE};  // SHY - Store Y AND ((addr_hi)+1) (illegal)
+    table[0x9C] = {OP_SHY, AM_ABX, OF_ILLEGAL_STORE};  // SHY - Store Y AND ((addr_hi)+1) (illegal) - will be overridden for 65C02
     table[0x9D] = {OP_STA, AM_ABX, OF_NONE};
-    table[0x9E] = {OP_SHX, AM_ABY, OF_ILLEGAL_STORE};  // SHX - Store X AND ((addr_hi)+1) (illegal)
-    table[0x9F] = {OP_SHA, AM_ABY, OF_ILLEGAL_STORE};  // SHA - Store A AND X AND (addr_hi+1) (illegal)
+    table[0x9E] = {OP_SHX, AM_ABY, OF_ILLEGAL_STORE};  // SHX - Store X AND ((addr_hi)+1) (illegal) - will be overridden for CMOS
+    table[0x9F] = {OP_SHA, AM_ABY, OF_ILLEGAL_STORE};  // SHA - Store A AND X AND (addr_hi+1) (illegal) - will be overridden for CMOS
     table[0xA0] = {OP_LDY, AM_IMM, OF_NONE};
     table[0xA1] = {OP_LDA, AM_INX, OF_NONE};
     table[0xA2] = {OP_LDX, AM_IMM, OF_NONE};
@@ -282,8 +282,20 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
 
     // Now apply processor-specific modifications based on CPUTraits
     
+    // Synertek 65C02 specific overrides - very limited CMOS processor (MUST come before general CMOS)
+    if (traits.has(fam65xx::CMOS_BASE) && !traits.has(fam65xx::WAI_STP) && !traits.has(fam65xx::ROCKWELL_BITS)) {
+        // Synertek 65C02 is a limited CMOS processor - these instructions are NOPs with specific addressing modes
+        table[0x1A] = {OP_NOP, AM_NON, OF_NONE};  // INC A -> 1-byte NOP (implied)
+        table[0x3A] = {OP_NOP, AM_NON, OF_NONE};  // DEC A -> 1-byte NOP (implied)
+        table[0x64] = {OP_NOP, AM_ZER, OF_NONE};  // STZ zp -> 2-byte NOP (zero page)
+        table[0x7C] = {OP_NOP, AM_ABS, OF_NONE};  // JMP (abs,X) -> 3-byte NOP (absolute)
+        table[0x9C] = {OP_NOP, AM_ABS, OF_NONE};  // STZ abs -> 3-byte NOP (absolute)
+        table[0xCB] = {OP_NOP, AM_NON, OF_NONE};  // WAI -> 1-byte NOP (implied)
+        table[0xDB] = {OP_NOP, AM_NON, OF_NONE};  // STP -> 1-byte NOP (implied)
+    }
+    
     // CMOS processors: Replace illegal opcodes with NOPs
-    if (traits.has(CMOS_BASE)) {
+    if (traits.has(fam65xx::CMOS_BASE)) {
         // WDC65C02: Specific illegal opcodes become 2-byte NOPs (AM_IMM)
         // These opcodes: 0x02, 0x22, 0x42, 0x62, 0x82, 0xC2, 0xE2
         table[0x02] = {OP_NOP, AM_IMM, OF_NONE};  // JAM -> 2-byte NOP
@@ -335,43 +347,43 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0x83] = {OP_NOP, AM_NON, OF_NONE};  // SAX -> NOP
         table[0x87] = {OP_NOP, AM_IMM, OF_NONE};  // SAX -> 2-byte NOP
         table[0x8B] = {OP_NOP, AM_NON, OF_NONE};  // XAA -> NOP
-        table[0x8F] = {OP_NOP, AM_IMM, OF_NONE};  // SAX -> 2-byte NOP
+        table[0x8F] = {OP_NOP, AM_ABS, OF_NONE};  // SAX -> 3-byte NOP (absolute addressing)
         table[0x92] = {OP_NOP, AM_IMM, OF_NONE};  // JAM -> 2-byte NOP
         table[0x93] = {OP_NOP, AM_NON, OF_NONE};  // SHA -> NOP
         table[0x97] = {OP_NOP, AM_IMM, OF_NONE};  // SAX -> 2-byte NOP
         table[0x9B] = {OP_NOP, AM_NON, OF_NONE};  // SHS -> NOP
-        table[0x9C] = {OP_NOP, AM_NON, OF_NONE};  // SHY -> NOP (will be overridden for 65C02)
-        table[0x9E] = {OP_NOP, AM_NON, OF_NONE};  // SHX -> NOP
-        table[0x9F] = {OP_NOP, AM_IMM, OF_NONE};  // SHA -> 2-byte NOP
+        table[0x9C] = {OP_NOP, AM_ABS, OF_NONE};  // SHY -> 3-byte NOP (will be overridden for 65C02)
+        table[0x9E] = {OP_NOP, AM_ABY, OF_NONE};  // SHX -> 3-byte NOP (absolute,Y addressing)
+        table[0x9F] = {OP_NOP, AM_ABY, OF_NONE};  // SHA -> 3-byte NOP (absolute,Y addressing)
         table[0xA3] = {OP_NOP, AM_NON, OF_NONE};  // LAX -> NOP
         table[0xA7] = {OP_NOP, AM_IMM, OF_NONE};  // LAX -> 2-byte NOP
         table[0xAB] = {OP_NOP, AM_NON, OF_NONE};  // LAX -> NOP
-        table[0xAF] = {OP_NOP, AM_IMM, OF_NONE};  // LAX -> 2-byte NOP
+        table[0xAF] = {OP_NOP, AM_ABS, OF_NONE};  // LAX -> 3-byte NOP (absolute addressing)
         table[0xB2] = {OP_NOP, AM_IMM, OF_NONE};  // JAM -> 2-byte NOP
         table[0xB3] = {OP_NOP, AM_NON, OF_NONE};  // LAX -> NOP
         table[0xB7] = {OP_NOP, AM_IMM, OF_NONE};  // LAX -> 2-byte NOP
         table[0xBB] = {OP_NOP, AM_NON, OF_NONE};  // LAS -> NOP
-        table[0xBF] = {OP_NOP, AM_IMM, OF_NONE};  // LAX -> 2-byte NOP
+        table[0xBF] = {OP_NOP, AM_ABY, OF_NONE};  // LAX -> 3-byte NOP (absolute,Y addressing)
         table[0xC3] = {OP_NOP, AM_NON, OF_NONE};  // DCP -> NOP
         table[0xC7] = {OP_NOP, AM_IMM, OF_NONE};  // DCP -> 2-byte NOP
         table[0xCB] = {OP_NOP, AM_NON, OF_NONE};  // SBX -> NOP (will be overridden for 65C02)
-        table[0xCF] = {OP_NOP, AM_IMM, OF_NONE};  // DCP -> 2-byte NOP
+        table[0xCF] = {OP_NOP, AM_ABS, OF_NONE};  // DCP -> 3-byte NOP (absolute addressing)
         table[0xD2] = {OP_NOP, AM_IMM, OF_NONE};  // JAM -> 2-byte NOP
         table[0xD3] = {OP_NOP, AM_NON, OF_NONE};  // DCP -> NOP
         table[0xD7] = {OP_NOP, AM_IMM, OF_NONE};  // DCP -> 2-byte NOP
         table[0xDA] = {OP_NOP, AM_NON, OF_NONE};  // NOP -> NOP (will be overridden for 65C02)
-        table[0xDB] = {OP_NOP, AM_NON, OF_NONE};  // DCP -> NOP (will be overridden for 65C02)
-        table[0xDF] = {OP_NOP, AM_IMM, OF_NONE};  // DCP -> 2-byte NOP
+        table[0xDB] = {OP_NOP, AM_ABY, OF_NONE};  // DCP -> 3-byte NOP (absolute,Y addressing) (will be overridden for 65C02)
+        table[0xDF] = {OP_NOP, AM_ABX, OF_NONE};  // DCP -> 3-byte NOP (absolute,X addressing)
         table[0xE3] = {OP_NOP, AM_NON, OF_NONE};  // ISC -> NOP
         table[0xE7] = {OP_NOP, AM_IMM, OF_NONE};  // ISC -> 2-byte NOP
         table[0xEB] = {OP_NOP, AM_NON, OF_NONE};  // SBC -> NOP
-        table[0xEF] = {OP_NOP, AM_IMM, OF_NONE};  // ISC -> 2-byte NOP
+        table[0xEF] = {OP_NOP, AM_ABS, OF_NONE};  // ISC -> 3-byte NOP (absolute addressing)
         table[0xF2] = {OP_NOP, AM_IMM, OF_NONE};  // JAM -> 2-byte NOP
         table[0xF3] = {OP_NOP, AM_NON, OF_NONE};  // ISC -> NOP
         table[0xF7] = {OP_NOP, AM_IMM, OF_NONE};  // ISC -> 2-byte NOP
         table[0xFA] = {OP_NOP, AM_NON, OF_NONE};  // NOP -> NOP (will be overridden for 65C02)
         table[0xFB] = {OP_NOP, AM_NON, OF_NONE};  // ISC -> NOP
-        table[0xFF] = {OP_NOP, AM_IMM, OF_NONE};  // ISC -> 2-byte NOP
+        table[0xFF] = {OP_NOP, AM_ABX, OF_NONE};  // ISC -> 3-byte NOP (absolute,X addressing)
         
         // Add 65C02 enhancements
         table[0x04] = {OP_TSB, AM_ZER, OF_RMW};   // TSB zero page
@@ -389,8 +401,9 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0xFA] = {OP_PLX, AM_NON, OF_NONE};  // PLX
     }
     
+    
     // Rockwell 65C02 modifications (add RMB/SMB/BBR/BBS instructions)
-    if (traits.has(ROCKWELL_BITS)) {
+    if (traits.has(fam65xx::ROCKWELL_BITS)) {
         // Add Rockwell bit manipulation instructions (RMB/SMB)
         table[0x07] = {OP_RMB0, AM_ZER, OF_RMW}; // RMB0
         table[0x17] = {OP_RMB1, AM_ZER, OF_RMW}; // RMB1
@@ -429,7 +442,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
     }
     
     // WDC 65C816 modifications (16-bit enhanced instructions)
-    if (traits.has(C816_16BIT)) {
+    if (traits.has(fam65xx::C816_16BIT)) {
         // Add 65C816 specific opcodes
         table[0x0B] = {OP_PHD, AM_NON, OF_NONE};  // PHD
         table[0x22] = {OP_JSL, AM_ABS, OF_NONE};  // JSL
