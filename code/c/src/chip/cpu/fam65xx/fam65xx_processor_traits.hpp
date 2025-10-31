@@ -21,39 +21,39 @@ namespace fam65xx {
 // CPUCoreFlags namespace - provides global access to constants for operations files
 namespace CPUCoreFlags {
     // === Instruction Set (bits 0-7) ===
-    constexpr uint32_t ILLEGAL_OPCODES      = 1 << 0;   // NMOS undocumented opcodes work
-    constexpr uint32_t CMOS_BASE            = 1 << 1;   // CMOS instruction set (BRA, STZ, etc.)
-    constexpr uint32_t ROCKWELL_BITS        = 1 << 2;   // RMB/SMB/BBR/BBS instructions
-    constexpr uint32_t WAI_STP              = 1 << 3;   // WAI and STP instructions
-    constexpr uint32_t CE02_EXTENDED        = 1 << 4;   // 65CE02 extensions (Z register, etc.)
-    constexpr uint32_t C816_16BIT           = 1 << 5;   // 65C816 16-bit mode
-    constexpr uint32_t HUC6280_EXTENDED     = 1 << 6;   // HuC6280 unique instructions
+    constexpr uint32_t ILLEGAL_OPCODES      = 1 << 0;   // NMOS undocumented opcodes work ✓ IMPLEMENTED
+    constexpr uint32_t CMOS_BASE            = 1 << 1;   // CMOS instruction set (BRA, STZ, etc.) ✓ IMPLEMENTED
+    constexpr uint32_t ROCKWELL_BITS        = 1 << 2;   // RMB/SMB/BBR/BBS instructions ✓ IMPLEMENTED
+    constexpr uint32_t WAI_STP              = 1 << 3;   // WAI and STP instructions ✓ IMPLEMENTED
+    constexpr uint32_t CE02_EXTENDED        = 1 << 4;   // TODO: 65CE02 extensions (Z register, etc.)
+    constexpr uint32_t C816_16BIT           = 1 << 5;   // 65C816 16-bit mode ✓ IMPLEMENTED
+    constexpr uint32_t HUC6280_EXTENDED     = 1 << 6;   // TODO: HuC6280 unique instructions
     // Bit 7 reserved
     
     // === Hardware Bugs (bits 8-11) ===
-    constexpr uint32_t JMP_INDIRECT_BUG     = 1 << 8;   // JMP ($xxFF) wraps within page
-    constexpr uint32_t RMW_DUMMY_WRITE      = 1 << 9;   // RMW writes original (vs dummy read)
+    constexpr uint32_t JMP_INDIRECT_BUG     = 1 << 8;   // TODO: JMP ($xxFF) wraps within page
+    constexpr uint32_t RMW_DUMMY_WRITE      = 1 << 9;   // TODO: RMW writes original (vs dummy read)
     // Bits 10-11 reserved for other quirks
     
     // === Decimal Mode (bits 12-15) ===
-    constexpr uint32_t HAS_DECIMAL_MODE     = 1 << 12;  // BCD mode exists (2A03 lacks this)
-    constexpr uint32_t BCD_NMOS_FLAGS       = 1 << 13;  // N,V,Z from binary (NMOS) vs BCD (CMOS)
-    constexpr uint32_t BCD_EXTRA_CYCLE      = 1 << 14;  // CMOS takes extra cycle in decimal
+    constexpr uint32_t HAS_DECIMAL_MODE     = 1 << 12;  // BCD mode exists (2A03 lacks this) ✓ IMPLEMENTED
+    constexpr uint32_t BCD_NMOS_FLAGS       = 1 << 13;  // TODO: N,V,Z from binary (NMOS) vs BCD (CMOS)
+    constexpr uint32_t BCD_EXTRA_CYCLE      = 1 << 14;  // CMOS takes extra cycle in decimal ✓ IMPLEMENTED
     // Bit 15 reserved
     
     // === Memory & Banking (bits 16-19) ===
-    constexpr uint32_t HAS_IO_PORT          = 1 << 16;  // Memory-mapped I/O port
-    constexpr uint32_t HAS_BANKING          = 1 << 17;  // Banking/MMU present
+    constexpr uint32_t HAS_IO_PORT          = 1 << 16;  // Memory-mapped I/O port ✓ IMPLEMENTED
+    constexpr uint32_t HAS_BANKING          = 1 << 17;  // TODO: Banking/MMU present
     // Bits 18-19 reserved
     
     // === Interrupts (bits 20-23) ===
-    constexpr uint32_t NO_NMI_LINE          = 1 << 20;  // NMI disabled (7501)
-    constexpr uint32_t NO_IRQ_LINE          = 1 << 21;  // IRQ disabled (6507)
+    constexpr uint32_t NO_NMI_LINE          = 1 << 20;  // TODO: NMI disabled (7501)
+    constexpr uint32_t NO_IRQ_LINE          = 1 << 21;  // TODO: IRQ disabled (6507)
     // Bits 22-23 reserved
     
     // === Timing (bits 24-27) ===
-    constexpr uint32_t OPTIMIZED_CYCLES     = 1 << 24;  // 65CE02 removed dummy cycles
-    constexpr uint32_t VARIABLE_CLOCK       = 1 << 25;  // Can switch speeds (8502, HuC6280)
+    constexpr uint32_t OPTIMIZED_CYCLES     = 1 << 24;  // TODO: 65CE02 removed dummy cycles
+    constexpr uint32_t VARIABLE_CLOCK       = 1 << 25;  // TODO: Can switch speeds (8502, HuC6280)
     // Bits 26-27 reserved
 }
 
