@@ -52,7 +52,7 @@ namespace CPUCoreFlags {
     // Bits 22-23 reserved
     
     // === Timing (bits 24-27) ===
-    constexpr uint32_t OPTIMIZED_CYCLES     = 1 << 24;  // TODO: 65CE02 removed dummy cycles
+    constexpr uint32_t OPTIMIZED_CYCLES     = 1 << 24;  // ✓ IMPLEMENTED: 65CE02 removed dummy cycles - implemented in flags.inc.hpp
     constexpr uint32_t VARIABLE_CLOCK       = 1 << 25;  // TODO: Can switch speeds (8502, HuC6280)
     // Bits 26-27 reserved
 }
