@@ -418,9 +418,37 @@ bus_state_t addr_ind_abs(bus_state_t pins) {
 // Zero Page Indirect addressing: ($nn) - 65C02 only
 bus_state_t addr_zp_ind(bus_state_t pins) {
     if constexpr (has_cmos()) {
-        // 65C02 zero page indirect addressing
-        // Implementation would go here
-        return pins; // Placeholder
+        // 65C02 zero page indirect addressing: ($nn)
+        switch (cycle_index) {
+            case 0:
+                // PHI2: Read zero page address from PC
+                pins = phi2_read(pins, REG_PC, REG_ZPL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    CPU_PC(this)++;
+                    CPU_ZPH(this) = 0x00; // Zero page high byte is always 0
+                    cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                // PHI2: Read low byte of target address from zero page
+                pins = phi2_read(pins, REG_ZP, REG_ABL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    CPU_ZPL(this)++; // Move to next zero page location
+                    cycle_index++;
+                }
+                return pins;
+                
+            case 2:
+                // PHI2: Read high byte of target address from zero page + 1
+                pins = phi2_read(pins, REG_ZP, REG_ABH);
+                if (FAM65XX_GET_RDY(pins)) {
+                    // PHI1: Address bus now contains final target address
+                    transition_to_operation();
+                }
+                return pins;
+        }
+        return pins;
     } else {
         return pins; // Should not be called
     }

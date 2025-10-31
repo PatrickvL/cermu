@@ -348,7 +348,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0x87] = {OP_NOP, AM_IMM, OF_NONE};  // SAX -> 2-byte NOP
         table[0x8B] = {OP_NOP, AM_NON, OF_NONE};  // XAA -> NOP
         table[0x8F] = {OP_NOP, AM_ABS, OF_NONE};  // SAX -> 3-byte NOP (absolute addressing)
-        table[0x92] = {OP_NOP, AM_IMM, OF_NONE};  // JAM -> 2-byte NOP
+        table[0x92] = {OP_STA, AM_ZPI, OF_NONE};  // STA ($nn) - Store A zero page indirect (65C02)
         table[0x93] = {OP_NOP, AM_NON, OF_NONE};  // SHA -> NOP
         table[0x97] = {OP_NOP, AM_IMM, OF_NONE};  // SAX -> 2-byte NOP
         table[0x9B] = {OP_NOP, AM_NON, OF_NONE};  // SHS -> NOP
@@ -359,7 +359,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0xA7] = {OP_NOP, AM_IMM, OF_NONE};  // LAX -> 2-byte NOP
         table[0xAB] = {OP_NOP, AM_NON, OF_NONE};  // LAX -> NOP
         table[0xAF] = {OP_NOP, AM_ABS, OF_NONE};  // LAX -> 3-byte NOP (absolute addressing)
-        table[0xB2] = {OP_NOP, AM_IMM, OF_NONE};  // JAM -> 2-byte NOP
+        table[0xB2] = {OP_LDA, AM_ZPI, OF_NONE};  // LDA ($nn) - Load A zero page indirect (65C02)
         table[0xB3] = {OP_NOP, AM_NON, OF_NONE};  // LAX -> NOP
         table[0xB7] = {OP_NOP, AM_IMM, OF_NONE};  // LAX -> 2-byte NOP
         table[0xBB] = {OP_NOP, AM_NON, OF_NONE};  // LAS -> NOP
@@ -368,7 +368,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0xC7] = {OP_NOP, AM_IMM, OF_NONE};  // DCP -> 2-byte NOP
         table[0xCB] = {OP_NOP, AM_NON, OF_NONE};  // SBX -> NOP (will be overridden for 65C02)
         table[0xCF] = {OP_NOP, AM_ABS, OF_NONE};  // DCP -> 3-byte NOP (absolute addressing)
-        table[0xD2] = {OP_NOP, AM_IMM, OF_NONE};  // JAM -> 2-byte NOP
+        table[0xD2] = {OP_CMP, AM_ZPI, OF_NONE};  // CMP ($nn) - Compare A zero page indirect (65C02)
         table[0xD3] = {OP_NOP, AM_NON, OF_NONE};  // DCP -> NOP
         table[0xD7] = {OP_NOP, AM_IMM, OF_NONE};  // DCP -> 2-byte NOP
         table[0xDA] = {OP_NOP, AM_NON, OF_NONE};  // NOP -> NOP (will be overridden for 65C02)
@@ -378,7 +378,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0xE7] = {OP_NOP, AM_IMM, OF_NONE};  // ISC -> 2-byte NOP
         table[0xEB] = {OP_NOP, AM_NON, OF_NONE};  // SBC -> NOP
         table[0xEF] = {OP_NOP, AM_ABS, OF_NONE};  // ISC -> 3-byte NOP (absolute addressing)
-        table[0xF2] = {OP_NOP, AM_IMM, OF_NONE};  // JAM -> 2-byte NOP
+        table[0xF2] = {OP_SBC, AM_ZPI, OF_NONE};  // SBC ($nn) - Subtract with Carry zero page indirect (65C02)
         table[0xF3] = {OP_NOP, AM_NON, OF_NONE};  // ISC -> NOP
         table[0xF7] = {OP_NOP, AM_IMM, OF_NONE};  // ISC -> 2-byte NOP
         table[0xFA] = {OP_NOP, AM_NON, OF_NONE};  // NOP -> NOP (will be overridden for 65C02)
