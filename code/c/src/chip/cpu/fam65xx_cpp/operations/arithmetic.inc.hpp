@@ -16,15 +16,15 @@
 
 bus_state_t op_adc(bus_state_t pins) {
     // Read operand directly into DL register
-    pins = phi2_read_operand(pins, REG_DL);
+    pins = this->phi2_read_operand(pins, REG_DL);
     if (FAM65XX_GET_RDY(pins)) {
         uint8_t operand = CPU_DL(this);
         
         // Use ADC operation with processor-specific optimizations
-        perform_adc(operand);
+        this->perform_adc(operand);
         
         // Complete instruction
-        transition_to_fetch();
+        this->transition_to_fetch();
     }
     return pins;
 }
@@ -35,11 +35,11 @@ bus_state_t op_adc(bus_state_t pins) {
 
 bus_state_t op_nop(bus_state_t pins) {
     // WDC65C02 neutralized illegal opcodes preserve original addressing timing
-    if constexpr (has_cmos_enhancements<ProcessorTag>()) {
+    if constexpr (this->has_cmos()) {
         if (this->opcode_entry.flags & OF_RMW) {
             // RMW mode NOP: Perform full read-modify-write cycle but don't modify the value
             // This preserves the bus cycle timing for WDC65C02 neutralized illegal opcodes
-            return rmw_operation_helper(pins, [this](uint8_t& value) {
+            return this->rmw_operation_helper(pins, [this](uint8_t& value) {
                 // NOP operation: read the value but don't modify it
                 // This creates the correct bus cycle pattern for WDC65C02 illegal opcodes
                 (void)value; // Suppress unused parameter warning
@@ -52,7 +52,7 @@ bus_state_t op_nop(bus_state_t pins) {
     switch (this->opcode_entry.am_index) {
         case AM_IMM:
             // AM_IMM: All immediate NOPs read operand and increment PC
-            pins = phi2_read(pins, REG_PC, REG_TMP);
+            pins = this->phi2_read(pins, REG_PC, REG_TMP);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_PC(this)++;
             } else {
@@ -62,7 +62,7 @@ bus_state_t op_nop(bus_state_t pins) {
             
         case AM_NON:
             // Implicit NOPs do dummy read from PC without increment
-            pins = phi2_read(pins, REG_PC, REG_TMP);
+            pins = this->phi2_read(pins, REG_PC, REG_TMP);
             if (!FAM65XX_GET_RDY(pins)) {
                 return pins;
             }
@@ -70,9 +70,9 @@ bus_state_t op_nop(bus_state_t pins) {
 
         default:
             // WDC65C02 neutralized illegal opcodes: operands already consumed by addressing mode handler
-            if constexpr (!has_cmos_enhancements<ProcessorTag>()) {                
+            if constexpr (!this->has_cmos()) {
                 // NMOS behavior: Memory modes do dummy read from target address
-                pins = phi2_read(pins, REG_AB, REG_TMP);
+                pins = this->phi2_read(pins, REG_AB, REG_TMP);
                 if (!FAM65XX_GET_RDY(pins)) {
                     return pins;
                 }
@@ -86,7 +86,7 @@ bus_state_t op_nop(bus_state_t pins) {
              * Character byte awaits at address 0x2000
              */
             // Handle NES6502 syscall support for "long nop" patterns
-            if constexpr (std::is_same_v<ProcessorTag, NES6502Tag>) {
+            if constexpr (this->has_apu()) {
                 // Check for syscall pattern: FC 13 37
                 // Note : Having this in default instead of a separate case AM_ABX is less host code
                 // (at a cost of 1 otherwise needless compare for the other NES6502 memory NOPs)
@@ -115,15 +115,15 @@ bus_state_t op_nop(bus_state_t pins) {
 
 bus_state_t op_sbc(bus_state_t pins) {
     // Read operand directly into DL register
-    pins = phi2_read_operand(pins, REG_DL);
+    pins = this->phi2_read_operand(pins, REG_DL);
     if (FAM65XX_GET_RDY(pins)) {
         uint8_t operand = CPU_DL(this);
         
         // Use SBC operation with processor-specific optimizations
-        perform_sbc(operand);
+        this->perform_sbc(operand);
         
         // Complete instruction
-        transition_to_fetch();
+        this->transition_to_fetch();
     }
     return pins;
 }
@@ -134,16 +134,16 @@ bus_state_t op_sbc(bus_state_t pins) {
 
 bus_state_t op_cmp(bus_state_t pins) {
     // Read operand directly into DL register
-    pins = phi2_read_operand(pins, REG_DL);
+    pins = this->phi2_read_operand(pins, REG_DL);
     if (FAM65XX_GET_RDY(pins)) {
         uint8_t operand = CPU_DL(this);
         uint8_t a = CPU_A(this);
         
         // Use optimized comparison
-        perform_compare(a, operand);
+        this->perform_compare(a, operand);
         
         // Complete instruction
-        transition_to_fetch();
+        this->transition_to_fetch();
     }
     return pins;
 }
@@ -154,16 +154,16 @@ bus_state_t op_cmp(bus_state_t pins) {
 
 bus_state_t op_cpx(bus_state_t pins) {
     // Read operand directly into DL register
-    pins = phi2_read_operand(pins, REG_DL);
+    pins = this->phi2_read_operand(pins, REG_DL);
     if (FAM65XX_GET_RDY(pins)) {
         uint8_t operand = CPU_DL(this);
         uint8_t x = CPU_X(this);
         
         // Use optimized comparison
-        perform_compare(x, operand);
+        this->perform_compare(x, operand);
         
         // Complete instruction
-        transition_to_fetch();
+        this->transition_to_fetch();
     }
     return pins;
 }
@@ -174,16 +174,16 @@ bus_state_t op_cpx(bus_state_t pins) {
 
 bus_state_t op_cpy(bus_state_t pins) {
     // Read operand directly into DL register
-    pins = phi2_read_operand(pins, REG_DL);
+    pins = this->phi2_read_operand(pins, REG_DL);
     if (FAM65XX_GET_RDY(pins)) {
         uint8_t operand = CPU_DL(this);
         uint8_t y = CPU_Y(this);
         
         // Use optimized comparison
-        perform_compare(y, operand);
+        this->perform_compare(y, operand);
         
         // Complete instruction
-        transition_to_fetch();
+        this->transition_to_fetch();
     }
     return pins;
 }
@@ -195,7 +195,7 @@ bus_state_t op_cpy(bus_state_t pins) {
 bus_state_t op_inc(bus_state_t pins) {
     // INC - Increment memory by 1
     // This is a Read-Modify-Write operation
-    return rmw_operation_helper(pins, [this](uint8_t& value) {
+    return this->rmw_operation_helper(pins, [this](uint8_t& value) {
         // Increment the value
         value++;
         // Update N and Z flags using optimized helper
@@ -210,7 +210,7 @@ bus_state_t op_inc(bus_state_t pins) {
 bus_state_t op_dec(bus_state_t pins) {
     // DEC - Decrement memory by 1
     // This is a Read-Modify-Write operation
-    return rmw_operation_helper(pins, [this](uint8_t& value) {
+    return this->rmw_operation_helper(pins, [this](uint8_t& value) {
         // Decrement the value
         value--;
         // Update N and Z flags using optimized helper
@@ -223,7 +223,7 @@ bus_state_t op_dec(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_adc_16bit(bus_state_t pins) {
-    if constexpr (has_wide_registers<ProcessorTag>()) {
+    if constexpr (this->has_wide_registers()) {
         // 16-bit ADC implementation for 65C816
         // This would be a more complex implementation
         // For now, delegate to 8-bit version
@@ -235,7 +235,7 @@ bus_state_t op_adc_16bit(bus_state_t pins) {
 }
 
 bus_state_t op_sbc_16bit(bus_state_t pins) {
-    if constexpr (has_wide_registers<ProcessorTag>()) {
+    if constexpr (this->has_wide_registers()) {
         // 16-bit SBC implementation for 65C816
         return op_sbc(pins);
     } else {

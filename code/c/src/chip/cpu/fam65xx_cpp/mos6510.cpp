@@ -11,7 +11,7 @@ using namespace fam65xx_cpp;
 // CONCRETE CPU TYPE DEFINITION
 // ============================================================================
 
-using mos6510_cpu_t = fam65xx_t<MOS6510Tag>;
+using mos6510_cpu_t = fam65xx_t<MOS6510>;
 
 // Cast helper for opaque handle
 #define CPU_CAST(ptr) reinterpret_cast<mos6510_cpu_t*>(ptr)
@@ -35,7 +35,7 @@ bus_state_t mos6510_init(mos6510_t* cpu, const mos6510_desc_t* desc) {
     // Set up 6510-specific I/O port callbacks
     // Store the callbacks in the CPU instance for use in I/O port operations
     auto* cpu_impl = CPU_CAST(cpu);
-    if constexpr (has_io_port<MOS6510Tag>()) {
+    if constexpr (MOS6510.has_io_port()) {
         // Store I/O port callbacks in the mixin
         cpu_impl->io_port.in_cb = desc->m6510_in_cb;
         cpu_impl->io_port.out_cb = desc->m6510_out_cb;

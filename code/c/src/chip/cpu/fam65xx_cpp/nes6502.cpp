@@ -11,7 +11,7 @@ using namespace fam65xx_cpp;
 // CONCRETE CPU TYPE DEFINITION
 // ============================================================================
 
-using nes6502_cpu_t = fam65xx_t<NES6502Tag>;
+using nes6502_cpu_t = fam65xx_t<RICOH_2A03>;
 
 // Cast helper for opaque handle
 #define CPU_CAST(ptr) reinterpret_cast<nes6502_cpu_t*>(ptr)
@@ -99,7 +99,7 @@ void nes6502_set_pc(nes6502_t* cpu, uint16_t value) {
 // APU functions (conditionally compiled based on NES6502Tag features)
 float nes6502_generate_audio_sample(nes6502_t* cpu) {
     auto* cpu_ptr = CPU_CAST(cpu);
-    if constexpr (has_apu<NES6502Tag>()) {
+    if constexpr (RICOH_2A03.has_apu()) {
         return cpu_ptr->generate_audio_sample();
     } else {
         return 0.0f; // No APU
@@ -108,7 +108,7 @@ float nes6502_generate_audio_sample(nes6502_t* cpu) {
 
 bool nes6502_apu_needs_dma(nes6502_t* cpu) {
     auto* cpu_ptr = CPU_CAST(cpu);
-    if constexpr (has_apu<NES6502Tag>()) {
+    if constexpr (RICOH_2A03.has_apu()) {
         return cpu_ptr->apu_needs_dma();
     } else {
         return false; // No APU
@@ -117,7 +117,7 @@ bool nes6502_apu_needs_dma(nes6502_t* cpu) {
 
 uint16_t nes6502_apu_dma_address(nes6502_t* cpu) {
     auto* cpu_ptr = CPU_CAST(cpu);
-    if constexpr (has_apu<NES6502Tag>()) {
+    if constexpr (RICOH_2A03.has_apu()) {
         return cpu_ptr->apu_dma_address();
     } else {
         return 0; // No APU
@@ -126,7 +126,7 @@ uint16_t nes6502_apu_dma_address(nes6502_t* cpu) {
 
 void nes6502_apu_load_dma_sample(nes6502_t* cpu, uint8_t data) {
     auto* cpu_ptr = CPU_CAST(cpu);
-    if constexpr (has_apu<NES6502Tag>()) {
+    if constexpr (RICOH_2A03.has_apu()) {
         cpu_ptr->apu_load_dma_sample(data);
     }
     // No-op if no APU
@@ -134,7 +134,7 @@ void nes6502_apu_load_dma_sample(nes6502_t* cpu, uint8_t data) {
 
 bool nes6502_apu_irq(nes6502_t* cpu) {
     auto* cpu_ptr = CPU_CAST(cpu);
-    if constexpr (has_apu<NES6502Tag>()) {
+    if constexpr (RICOH_2A03.has_apu()) {
         return cpu_ptr->apu_irq();
     } else {
         return false; // No APU
@@ -143,7 +143,7 @@ bool nes6502_apu_irq(nes6502_t* cpu) {
 
 void nes6502_set_apu_region(nes6502_t* cpu, bool is_pal) {
     auto* cpu_ptr = CPU_CAST(cpu);
-    if constexpr (has_apu<NES6502Tag>()) {
+    if constexpr (RICOH_2A03.has_apu()) {
         cpu_ptr->set_apu_region(is_pal);
     }
     // No-op if no APU

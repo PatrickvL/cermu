@@ -259,7 +259,7 @@ bus_state_t addr_ind(bus_state_t pins) {
             pins = phi2_read(pins, REG_AB, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
                 // PHI1: Set up for high byte read with processor-specific behavior
-                if constexpr (has_cmos_enhancements<ProcessorTag>()) {
+                if constexpr (has_cmos()) {
                     // 65C02: Fixed page boundary behavior
                     CPU_AB(this)++;
                 } else {
@@ -405,7 +405,7 @@ bus_state_t addr_iny(bus_state_t pins) {
 
 // Absolute Indirect addressing: ($nnnn) - JMP/JSR for 65C02
 bus_state_t addr_ind_abs(bus_state_t pins) {
-    if constexpr (has_cmos_enhancements<ProcessorTag>()) {
+    if constexpr (has_cmos()) {
         // This addressing mode only exists on 65C02+
         // Use the same implementation as regular indirect addressing
         return addr_ind(pins);
@@ -417,7 +417,7 @@ bus_state_t addr_ind_abs(bus_state_t pins) {
 
 // Zero Page Indirect addressing: ($nn) - 65C02 only
 bus_state_t addr_zp_ind(bus_state_t pins) {
-    if constexpr (has_cmos_enhancements<ProcessorTag>()) {
+    if constexpr (has_cmos()) {
         // 65C02 zero page indirect addressing
         // Implementation would go here
         return pins; // Placeholder
@@ -428,7 +428,7 @@ bus_state_t addr_zp_ind(bus_state_t pins) {
 
 // Absolute Indexed Indirect addressing: ($nnnn,X) - 65C02 JMP only
 bus_state_t addr_abs_inx(bus_state_t pins) {
-    if constexpr (has_cmos_enhancements<ProcessorTag>()) {
+    if constexpr (has_cmos()) {
         // 65C02 absolute indexed indirect
         return pins; // Placeholder
     } else {
@@ -440,7 +440,7 @@ bus_state_t addr_abs_inx(bus_state_t pins) {
 
 // Direct Page addressing: dp (65C816)
 bus_state_t addr_dp(bus_state_t pins) {
-    if constexpr (has_wide_registers<ProcessorTag>()) {
+    if constexpr (has_wide_registers()) {
         // Use Direct Page register instead of zero page
         // Implementation would use this->wide_state.D
         return pins; // Placeholder
@@ -452,7 +452,7 @@ bus_state_t addr_dp(bus_state_t pins) {
 
 // Direct Page,X addressing: dp,X (65C816)
 bus_state_t addr_dpx(bus_state_t pins) {
-    if constexpr (has_wide_registers<ProcessorTag>()) {
+    if constexpr (has_wide_registers()) {
         // Use Direct Page register with X indexing
         return pins; // Placeholder
     } else {
@@ -462,7 +462,7 @@ bus_state_t addr_dpx(bus_state_t pins) {
 
 // Long addressing: $nnnnnn (65C816)
 bus_state_t addr_long(bus_state_t pins) {
-    if constexpr (has_wide_registers<ProcessorTag>()) {
+    if constexpr (has_wide_registers()) {
         // 24-bit addressing using bank registers
         return pins; // Placeholder
     } else {
@@ -472,7 +472,7 @@ bus_state_t addr_long(bus_state_t pins) {
 
 // Long,X addressing: $nnnnnn,X (65C816)
 bus_state_t addr_long_x(bus_state_t pins) {
-    if constexpr (has_wide_registers<ProcessorTag>()) {
+    if constexpr (has_wide_registers()) {
         // 24-bit addressing with X indexing
         return pins; // Placeholder
     } else {
@@ -482,7 +482,7 @@ bus_state_t addr_long_x(bus_state_t pins) {
 
 // Stack Relative addressing: sr,S (65C816)
 bus_state_t addr_stack_rel(bus_state_t pins) {
-    if constexpr (has_wide_registers<ProcessorTag>()) {
+    if constexpr (has_wide_registers()) {
         // Stack relative addressing
         return pins; // Placeholder
     } else {
@@ -492,7 +492,7 @@ bus_state_t addr_stack_rel(bus_state_t pins) {
 
 // Stack Relative Indirect Indexed: (sr,S),Y (65C816)
 bus_state_t addr_stack_rel_iny(bus_state_t pins) {
-    if constexpr (has_wide_registers<ProcessorTag>()) {
+    if constexpr (has_wide_registers()) {
         // Complex 65C816 addressing mode
         return pins; // Placeholder
     } else {

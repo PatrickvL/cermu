@@ -15,7 +15,7 @@
 
 // BRA - Branch Always (65C02)
 bus_state_t op_bra(bus_state_t pins) {
-    if constexpr (has_cmos_enhancements<ProcessorTag>()) {
+    if constexpr (has_cmos()) {
         // Read relative offset
         pins = phi2_read(pins, REG_PC, REG_DL);
         if (FAM65XX_GET_RDY(pins)) {
@@ -37,7 +37,7 @@ bus_state_t op_bra(bus_state_t pins) {
 
 // STZ - Store Zero (65C02)
 bus_state_t op_stz(bus_state_t pins) {
-    if constexpr (has_cmos_enhancements<ProcessorTag>()) {
+    if constexpr (has_cmos()) {
         // Store zero to target address
         pins = phi2_write(pins, REG_AB, REG_ZERO);
         
@@ -51,7 +51,7 @@ bus_state_t op_stz(bus_state_t pins) {
 
 // TRB - Test and Reset Bits (65C02) - Hardware-accurate 3-cycle RMW
 bus_state_t op_trb(bus_state_t pins) {
-    if constexpr (has_cmos_enhancements<ProcessorTag>()) {
+    if constexpr (has_cmos()) {
         // Hardware-accurate 3-cycle Read-Modify-Write operation
         switch (this->cycle_index) {
             case 0:
@@ -97,7 +97,7 @@ bus_state_t op_trb(bus_state_t pins) {
 
 // TSB - Test and Set Bits (65C02) - Hardware-accurate 3-cycle RMW
 bus_state_t op_tsb(bus_state_t pins) {
-    if constexpr (has_cmos_enhancements<ProcessorTag>()) {
+    if constexpr (has_cmos()) {
         // Hardware-accurate 3-cycle Read-Modify-Write operation
         switch (this->cycle_index) {
             case 0:
@@ -143,7 +143,7 @@ bus_state_t op_tsb(bus_state_t pins) {
 
 // WAI - Wait for Interrupt (65C02)
 bus_state_t op_wai(bus_state_t pins) {
-    if constexpr (has_cmos_enhancements<ProcessorTag>()) {
+    if constexpr (has_cmos()) {
         // Set wait state
         this->wait_for_interrupt = true;
         
@@ -159,7 +159,7 @@ bus_state_t op_wai(bus_state_t pins) {
 
 // STP - Stop (65C02)
 bus_state_t op_stp(bus_state_t pins) {
-    if constexpr (has_cmos_enhancements<ProcessorTag>()) {
+    if constexpr (has_cmos()) {
         // Set stopped state
         this->stopped = true;
         
@@ -174,7 +174,7 @@ bus_state_t op_stp(bus_state_t pins) {
 
 // PHX - Push X Register (65C02) - Hardware-accurate 3-cycle operation like PHA
 bus_state_t op_phx(bus_state_t pins) {
-    if constexpr (has_cmos_enhancements<ProcessorTag>()) {
+    if constexpr (has_cmos()) {
         switch (this->cycle_index) {
             case 0:
                 /* Dummy cycle for internal operation */
@@ -202,7 +202,7 @@ bus_state_t op_phx(bus_state_t pins) {
 
 // PHY - Push Y Register (65C02) - Hardware-accurate 3-cycle operation like PHA
 bus_state_t op_phy(bus_state_t pins) {
-    if constexpr (has_cmos_enhancements<ProcessorTag>()) {
+    if constexpr (has_cmos()) {
         switch (this->cycle_index) {
             case 0:
                 /* Dummy cycle for internal operation */
@@ -230,7 +230,7 @@ bus_state_t op_phy(bus_state_t pins) {
 
 // PLX - Pull X Register (65C02) - Hardware-accurate 4-cycle operation like PLA
 bus_state_t op_plx(bus_state_t pins) {
-    if constexpr (has_cmos_enhancements<ProcessorTag>()) {
+    if constexpr (has_cmos()) {
         switch (this->cycle_index) {
             case 0:
                 /* PHI2: Dummy read from PC */
@@ -269,7 +269,7 @@ bus_state_t op_plx(bus_state_t pins) {
 
 // PLY - Pull Y Register (65C02) - Hardware-accurate 4-cycle operation like PLA
 bus_state_t op_ply(bus_state_t pins) {
-    if constexpr (has_cmos_enhancements<ProcessorTag>()) {
+    if constexpr (has_cmos()) {
         switch (this->cycle_index) {
             case 0:
                 /* PHI2: Dummy read from PC */

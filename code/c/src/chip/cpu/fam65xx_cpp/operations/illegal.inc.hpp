@@ -14,7 +14,7 @@
 // ============================================================================
 
 bus_state_t op_lax(bus_state_t pins) {
-    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+    if constexpr (has_illegal_opcodes()) {
         // LAX - Load A and X from memory
         // Special case: LAX immediate has unstable behavior - uses (A | 0xEE) & operand
         if (opcode_entry.am_index == AM_IMM) {
@@ -48,7 +48,7 @@ bus_state_t op_lax(bus_state_t pins) {
 }
 
 bus_state_t op_sax(bus_state_t pins) {
-    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+    if constexpr (has_illegal_opcodes()) {
         // Store A AND X to memory with processor-specific RDY handling
         if (should_complete_write_cycle(pins)) {
             CPU_DL(this) = CPU_A(this) & CPU_X(this);
@@ -64,7 +64,7 @@ bus_state_t op_sax(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_dcp(bus_state_t pins) {
-    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+    if constexpr (has_illegal_opcodes()) {
         // DCP - Decrement memory and compare with A (DEC memory, then CMP A with result)
         // This is a Read-Modify-Write operation
         return rmw_operation_helper(pins, [this](uint8_t& value) {
@@ -85,7 +85,7 @@ bus_state_t op_dcp(bus_state_t pins) {
 }
 
 bus_state_t op_isc(bus_state_t pins) {
-    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+    if constexpr (has_illegal_opcodes()) {
         // ISC - Increment memory and subtract from A (INC memory, then SBC A with result)
         // This is a Read-Modify-Write operation - match reference implementation exactly
         return rmw_operation_helper(pins, [this](uint8_t& value) {
@@ -102,7 +102,7 @@ bus_state_t op_isc(bus_state_t pins) {
 }
 
 bus_state_t op_slo(bus_state_t pins) {
-    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+    if constexpr (has_illegal_opcodes()) {
         // SLO - Shift Left and OR with A (ASL memory, then ORA A with result)
         // This is a Read-Modify-Write operation
         return rmw_operation_helper(pins, [this](uint8_t& value) {
@@ -120,7 +120,7 @@ bus_state_t op_slo(bus_state_t pins) {
 }
 
 bus_state_t op_rla(bus_state_t pins) {
-    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+    if constexpr (has_illegal_opcodes()) {
         // RLA - Rotate Left and AND with A (ROL memory, then AND A with result)
         // This is a Read-Modify-Write operation
         return rmw_operation_helper(pins, [this](uint8_t& value) {
@@ -139,7 +139,7 @@ bus_state_t op_rla(bus_state_t pins) {
 }
 
 bus_state_t op_sre(bus_state_t pins) {
-    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+    if constexpr (has_illegal_opcodes()) {
         // SRE - Shift Right and EOR with A (LSR memory, then EOR result with A)
         // This is a Read-Modify-Write operation
         return rmw_operation_helper(pins, [this](uint8_t& value) {
@@ -157,7 +157,7 @@ bus_state_t op_sre(bus_state_t pins) {
 }
 
 bus_state_t op_rra(bus_state_t pins) {
-    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+    if constexpr (has_illegal_opcodes()) {
         // RRA - Rotate Right and ADC with A (ROR memory, then ADC A with result)
         // This is a Read-Modify-Write operation - match reference implementation exactly
         return rmw_operation_helper(pins, [this](uint8_t& value) {
@@ -217,7 +217,7 @@ bus_state_t op_jam(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_anc(bus_state_t pins) {
-    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+    if constexpr (has_illegal_opcodes()) {
         // ANC - AND with carry (AND immediate, then copy N flag to C flag)
         pins = phi2_read(pins, REG_PC, REG_DL);
         if (FAM65XX_GET_RDY(pins)) {
@@ -239,7 +239,7 @@ bus_state_t op_anc(bus_state_t pins) {
 }
 
 bus_state_t op_arr(bus_state_t pins) {
-    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+    if constexpr (has_illegal_opcodes()) {
         // ARR - AND + ROR with BCD correction in decimal mode (reference implementation)
         pins = phi2_read(pins, REG_PC, REG_DL);
         if (FAM65XX_GET_RDY(pins)) {
@@ -261,7 +261,7 @@ bus_state_t op_arr(bus_state_t pins) {
             // Set N and Z flags based on shifted result (reference does this first)
             update_nz_flags(shifted_a);
             
-            if constexpr (has_bcd<ProcessorTag>()) {
+            if constexpr (has_bcd()) {
                 if (CPU_P(this) & FLAG_D) {
                     // Decimal mode - ARR uses reference algorithm
                     
@@ -324,7 +324,7 @@ bus_state_t op_arr(bus_state_t pins) {
 }
 
 bus_state_t op_alr(bus_state_t pins) {
-    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+    if constexpr (has_illegal_opcodes()) {
         // ALR - AND + LSR (AND immediate, then LSR A)
         pins = phi2_read(pins, REG_PC, REG_DL);
         if (FAM65XX_GET_RDY(pins)) {
@@ -356,7 +356,7 @@ bus_state_t op_asr(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_xaa(bus_state_t pins) {
-    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+    if constexpr (has_illegal_opcodes()) {
         // XAA - Transfer X AND immediate to A (illegal)
         // Hardware quirk: Uses unstable constant 0xEE like LAX immediate
         pins = phi2_read(pins, REG_PC, REG_DL);
@@ -374,7 +374,7 @@ bus_state_t op_xaa(bus_state_t pins) {
 }
 
 bus_state_t op_sbx(bus_state_t pins) {
-    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+    if constexpr (has_illegal_opcodes()) {
         // SBX - Compare X with A AND immediate (illegal) (also called AXS)
         pins = phi2_read(pins, REG_PC, REG_DL);
         if (FAM65XX_GET_RDY(pins)) {
@@ -397,7 +397,7 @@ bus_state_t op_sbx(bus_state_t pins) {
 }
 
 bus_state_t op_sha(bus_state_t pins) {
-    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+    if constexpr (has_illegal_opcodes()) {
         // SHA - Store A & X & (H+1) with address corruption on page cross
         if (should_complete_write_cycle(pins)) {
             // Calculate value: A & X & (intermediate_high + 1)
@@ -420,7 +420,7 @@ bus_state_t op_sha(bus_state_t pins) {
 }
 
 bus_state_t op_shs(bus_state_t pins) {
-    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+    if constexpr (has_illegal_opcodes()) {
         // SHS - Store A & X & (H+1), Set S to A & X - match reference implementation exactly
         if (should_complete_write_cycle(pins)) {
             // Calculate A & X first (used for both value and S)
@@ -450,7 +450,7 @@ bus_state_t op_shs(bus_state_t pins) {
 }
 
 bus_state_t op_shx(bus_state_t pins) {
-    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+    if constexpr (has_illegal_opcodes()) {
         // SHX - Store X & (H+1) with address corruption - match reference implementation exactly
         if (should_complete_write_cycle(pins)) {
             // Calculate value: X & (intermediate_high + 1)
@@ -473,7 +473,7 @@ bus_state_t op_shx(bus_state_t pins) {
 }
 
 bus_state_t op_shy(bus_state_t pins) {
-    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+    if constexpr (has_illegal_opcodes()) {
         // SHY - Store Y & (H+1) with address corruption - match reference implementation exactly
         if (should_complete_write_cycle(pins)) {
             // Calculate value: Y & (intermediate_high + 1)
@@ -496,7 +496,7 @@ bus_state_t op_shy(bus_state_t pins) {
 }
 
 bus_state_t op_las(bus_state_t pins) {
-    if constexpr (has_illegal_opcodes<ProcessorTag>()) {
+    if constexpr (has_illegal_opcodes()) {
         // LAS - Load A, X, and S with memory AND stack pointer (illegal)
         pins = phi2_read(pins, REG_AB, REG_DL);
         if (FAM65XX_GET_RDY(pins)) {

@@ -11,7 +11,7 @@ using namespace fam65xx_cpp;
 // CONCRETE CPU TYPE DEFINITION
 // ============================================================================
 
-using rockwell65c02_cpu_t = fam65xx_t<ROCKWELL65C02Tag>;
+using rockwell65c02_cpu_t = fam65xx_t<ROCKWELL_R65C02>;
 
 // Cast helper for opaque handle
 #define CPU_CAST(ptr) reinterpret_cast<rockwell65c02_cpu_t*>(ptr)
