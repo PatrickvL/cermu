@@ -825,28 +825,26 @@ public:
                 // Calculate flags based on processor type
                 uint8_t n_flag, v_flag, z_flag, c_flag;
                 
-                if constexpr (Traits.has(CPUCoreFlags::CMOS_BASE) && !Traits.has(CPUCoreFlags::BCD_NMOS_FLAGS)) {
-                    // Standard CMOS (WDC65C02 and Synertek65C02): Enhanced flag behavior
-                    // Calculate intermediate BCD result before borrow adjustment for flag calculations
-                    uint8_t intermediate_bcd = (ah << 4) | (al & 0x0F);
+                if constexpr (Traits.has(CPUCoreFlags::CMOS_BASE)) {
+                    // All CMOS processors: Use consistent behavior based on hardware testing
+                    // The key insight: C and V flags are always from binary result
+                    // N and Z flags depend on processor variant
                     
-                    // BCD adjustment for borrow calculation
-                    c_flag = !(full_result & 0x0100);  // C flag based on binary borrow
-                    if (ah & 0x80) ah -= 6;
-                    uint8_t bcd_result = (ah << 4) | (al & 0x0F);
+                    c_flag = !(full_result & 0x0100);  // C flag always from binary borrow
+                    v_flag = calc_v_flag_sub(old_a, operand, full_result);  // V flag always from binary result
                     
-                    // The Synertek 65C02 has unique BCD flag behavior for SBC:
-                    // - V flag: calculated from binary result (hardware-verified)
-                    // - Z flag: calculated from BCD result (after adjustments)
-                    // - N flag: from BCD result
-                    // - C flag: from binary borrow
-                    
-                    // V flag from binary result (hardware-accurate for Synertek)
-                    v_flag = calc_v_flag_sub(old_a, operand, full_result);
-                    // Z flag from BCD result (hardware-accurate for Synertek)
-                    z_flag = calc_z_flag(bcd_result);
-                    // N flag: sign from BCD result
-                    n_flag = bcd_result & FLAG_N;
+                    if constexpr (Traits.has(CPUCoreFlags::BCD_NMOS_FLAGS)) {
+                        // CMOS with NMOS-style flags (WDC65C02, Rockwell65C02): N,Z from binary
+                        z_flag = calc_z_flag(result);  // Z flag from binary result
+                        n_flag = result & FLAG_N;  // N flag from binary result
+                        if (ah & 0x80) ah -= 6;  // Apply BCD adjustment after flag calculation
+                    } else {
+                        // Pure CMOS (Synertek65C02): N,Z from BCD result
+                        if (ah & 0x80) ah -= 6;  // Apply BCD adjustment first
+                        uint8_t bcd_result = (ah << 4) | (al & 0x0F);
+                        z_flag = calc_z_flag(bcd_result);  // Z flag from BCD result
+                        n_flag = bcd_result & FLAG_N;  // N flag from BCD result
+                    }
                 } else {
                     // NMOS processors and CMOS with NMOS-style flags: Original flag calculation
                     n_flag = result & FLAG_N;
