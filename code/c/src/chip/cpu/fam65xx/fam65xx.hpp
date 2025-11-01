@@ -1140,12 +1140,16 @@ private:
         addressing_mode_handlers[AM_INX] = &fam65xx_t::am_inx;
         addressing_mode_handlers[AM_INY] = &fam65xx_t::am_iny;
         
-        // 65C02 addressing modes (if implemented)
-        addressing_mode_handlers[AM_ZPI] = &fam65xx_t::am_zpi;  // Zero Page Indirect
-        addressing_mode_handlers[AM_ABI] = &fam65xx_t::am_abi; // Absolute Indexed Indirect
-        
         // Rockwell 65C02 addressing modes
         addressing_mode_handlers[AM_ZPR] = &fam65xx_t::am_zpr;  // Zero Page Relative (for BBR/BBS)
+        
+        // 65C02 addressing modes (if implemented)
+        addressing_mode_handlers[AM_ZPI] = &fam65xx_t::am_zpi;  // Zero Page Indirect
+
+        // 65C816 addressing modes (if implemented)
+        addressing_mode_handlers[AM_ABI] = &fam65xx_t::am_abi;  // Absolute Indexed Indirect
+        addressing_mode_handlers[AM_SR] = &fam65xx_t::am_sr;    // Stack Relative
+        addressing_mode_handlers[AM_SRI] = &fam65xx_t::am_sri;  // Stack Relative Indirect Indexed
     }
 };
 

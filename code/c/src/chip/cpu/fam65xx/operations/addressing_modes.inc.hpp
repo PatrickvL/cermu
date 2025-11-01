@@ -447,10 +447,8 @@ bus_state_t am_zpi(bus_state_t pins) {
                 }
                 return pins;
         }
-        return pins;
-    } else {
-        return pins; // Should not be called
     }
+    return pins;
 }
 
 // Absolute Indexed Indirect addressing: ($nnnn,X) - 65C02 JMP only
@@ -500,10 +498,8 @@ bus_state_t am_abi(bus_state_t pins) {
                 }
                 return pins;
         }
-        return pins;
-    } else {
-        return pins; // Should not be called on NMOS processors
     }
+    return pins;
 }
 
 // 65C816 Enhanced Addressing Modes (conditional compilation)
@@ -551,7 +547,7 @@ bus_state_t addr_long_x(bus_state_t pins) {
 }
 
 // Stack Relative addressing: sr,S (65C816)
-bus_state_t addr_stack_rel(bus_state_t pins) {
+bus_state_t amr_sr(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
         // Stack relative addressing
         return pins; // Placeholder
@@ -561,7 +557,7 @@ bus_state_t addr_stack_rel(bus_state_t pins) {
 }
 
 // Stack Relative Indirect Indexed: (sr,S),Y (65C816)
-bus_state_t addr_stack_rel_iny(bus_state_t pins) {
+bus_state_t am_sri(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
         // Complex 65C816 addressing mode
         return pins; // Placeholder
