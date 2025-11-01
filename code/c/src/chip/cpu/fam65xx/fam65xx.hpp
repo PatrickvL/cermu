@@ -507,37 +507,45 @@ public:
         
         // Hardware-accurate RDY handling - safe address resolution without undefined behavior
         uint16_t address;
-        if (FAM65XX_GET_RDY(pins)) {
-            address = this->reg16[addr_reg];
-            pins = FAM65XX_SET_ADDR(pins, address);
-        } else {
+        if (!FAM65XX_GET_RDY(pins)) {
             address = FAM65XX_GET_ADDR(pins);
-        }
+        } else {
+            address = this->reg16[addr_reg];
+            pins = FAM65XX_SET_ADDR(pins, address);            
+            
+            if constexpr (has_io_port()) {
+                if (address <= 0x0001) {
+                    const uint8_t io_data = (address == 0x0000)
+                        ? this->read_io_port()
+                        : this->io_port.direction;
+                    if constexpr (store_in_register)
+                        this->reg8[data_reg] = io_data;
 
-        // Fast-path register access checks (compile-time conditional, optimized order)
-        if constexpr (has_apu()) {
-            uint8_t apu_data;
-            if (FAM65XX_GET_RDY(pins) && this->read_apu_register(address, apu_data)) {
-                if constexpr (store_in_register) this->reg8[data_reg] = apu_data;
-                return FAM65XX_SET_DATA(pins, apu_data);
+                    return pins; // Address and R/W already set, no need to update DATA pins for I/O
+                }
+            }
+
+            // Fast-path register access checks (compile-time conditional, optimized order)
+            if constexpr (has_apu()) {
+                uint8_t apu_data;
+                if (this->read_apu_register(address, apu_data)) {
+                    if constexpr (store_in_register)
+                        this->reg8[data_reg] = apu_data;
+
+                    return FAM65XX_SET_DATA(pins, apu_data);
+                }
             }
         }
-        
-        if constexpr (has_io_port()) {
-            if (FAM65XX_GET_RDY(pins) && (address <= 0x0001)) {
-                const uint8_t io_data = (address == 0x0000) ? this->read_io_port() : this->io_port.direction;
-                if constexpr (store_in_register) this->reg8[data_reg] = io_data;
-                return pins; // Address and R/W already set, no need to update DATA pins for I/O
-            }
-        }
-
+            
         // Standard memory access - always perform for VIC-II compatibility
-        const uint8_t data = (this->mem_read != nullptr) ?
-            this->mem_read(this->mem_user_data, address, FAM65XX_GET_DATA(pins)) :
-            FAM65XX_GET_DATA(pins);
+        const uint8_t data = (this->mem_read != nullptr)
+            ? this->mem_read(this->mem_user_data, address, FAM65XX_GET_DATA(pins))
+            : FAM65XX_GET_DATA(pins);
             
         // Single conditional register write and pin update
-        if constexpr (store_in_register) this->reg8[data_reg] = data;
+        if constexpr (store_in_register)
+            this->reg8[data_reg] = data;
+
         return FAM65XX_SET_DATA(pins, data);
     }
     
