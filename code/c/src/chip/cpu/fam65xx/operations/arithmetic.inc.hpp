@@ -92,7 +92,7 @@ bus_state_t op_nop(bus_state_t pins) {
             // Memory addressing modes (AM_ABS, AM_ABX, AM_ABY, AM_ZER, AM_ZPX, AM_ZPY) need dummy read
             // The addressing mode handler has already consumed operands and set up AB register
             // Now we need to complete the read cycle for proper timing
-            pins = this->phi2_read(pins, REG_AB, REG_TMP);
+            pins = this->phi2_dummy_read(pins, REG_AB);
             if (!FAM65XX_GET_RDY(pins)) {
                 return pins;
             }

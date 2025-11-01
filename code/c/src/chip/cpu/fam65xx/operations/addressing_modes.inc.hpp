@@ -156,7 +156,7 @@ bus_state_t am_abx(bus_state_t pins) {
             
         case 2:
             // PHI2: Page cross penalty - read from wrong address (use TMP to avoid overwriting DL)
-            pins = phi2_read(pins, REG_AB, REG_TMP);
+            pins = phi2_dummy_read(pins, REG_AB);
             if (FAM65XX_GET_RDY(pins)) {
                 // PHI1: Correct final address
                 // ABL has X added, ABH is unchanged from original. Subtract X from ABL to restore original base
@@ -218,7 +218,7 @@ bus_state_t am_aby(bus_state_t pins) {
             
         case 2: {
             // PHI2: Page cross penalty - read from wrong address (use temporary register to avoid overwriting DL)
-            pins = phi2_read(pins, REG_AB, REG_TMP); // Use TMP as temporary since DL has intermediate high byte
+            pins = phi2_dummy_read(pins, REG_AB);
             if (FAM65XX_GET_RDY(pins)) {
                 // PHI1: Correct final address
                 // ABL has Y added, ABH is unchanged from original. Subtract Y from ABL to restore original base
@@ -383,7 +383,7 @@ bus_state_t am_iny(bus_state_t pins) {
             
         case 3:
             /* Page cross penalty - dummy read from wrong address (don't overwrite DL!) */
-            pins = phi2_read(pins, REG_AB, REG_TMP); // Use TMP as temporary, preserve DL
+            pins = phi2_dummy_read(pins, REG_AB);
             if (FAM65XX_GET_RDY(pins)) {
                 /* DL already contains intermediate high byte from case 2 */
                 

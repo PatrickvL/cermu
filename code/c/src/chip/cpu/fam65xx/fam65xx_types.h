@@ -216,7 +216,6 @@ typedef enum {
     // Internal registers
     REG_IR,        // Instruction Register (current opcode)
     REG_DL,        // Data latch
-    REG_TMP,       // Temporay/scratch register
     
     REG_COUNT,
     
@@ -276,7 +275,6 @@ typedef struct {
 #define CPU_P(cpu)     ((cpu)->reg8[REG_P])
 #define CPU_IR(cpu)    ((cpu)->reg8[REG_IR])
 #define CPU_DL(cpu)    ((cpu)->reg8[REG_DL])
-#define CPU_TMP(cpu)   ((cpu)->reg8[REG_TMP])
 
 /* Legacy aliases for compatibility */
 #define CPU_AD(cpu)    CPU_AB(cpu)  /* Address latch as 16-bit - now maps to AB */
