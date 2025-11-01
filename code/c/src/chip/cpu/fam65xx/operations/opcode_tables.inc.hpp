@@ -83,7 +83,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
     table[0x39] = {OP_AND, AM_ABY, OF_SKIP_PAGE};
     table[0x3A] = {OP_NOP, AM_NON, OF_NONE};  // DEC A - illegal NOP (1-byte)
     table[0x3B] = {OP_RLA, AM_ABY, OF_RMW};   // RLA - Rotate Left then AND (illegal)
-    table[0x3C] = {OP_BIT, AM_ABX, OF_SKIP_PAGE}; // BIT abs,X - BIT absolute,X (65C02)
+    table[0x3C] = {OP_NOP, AM_ABX, OF_SKIP_PAGE}; // NOP abs,X - illegal NOP (will be overridden for 65C02)
     table[0x3D] = {OP_AND, AM_ABX, OF_SKIP_PAGE};
     table[0x3E] = {OP_ROL, AM_ABX, OF_RMW};
     table[0x3F] = {OP_RLA, AM_ABX, OF_RMW};   // RLA - Rotate Left then AND (illegal)
@@ -323,6 +323,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0x32] = {OP_AND, AM_ZPI, OF_NONE};  // AND ($nn) - AND zero page indirect (65C02)
         table[0x33] = {OP_NOP, AM_NON, OF_NONE};  // RLA -> NOP
         table[0x34] = {OP_BIT, AM_ZPX, OF_NONE};  // BIT zp,X - BIT zero page,X (65C02)
+        table[0x3C] = {OP_BIT, AM_ABX, OF_SKIP_PAGE}; // BIT abs,X - BIT absolute,X (65C02)
         table[0x37] = {OP_NOP, AM_IMM, OF_NONE};  // RLA -> 2-byte NOP
         table[0x3B] = {OP_NOP, AM_NON, OF_NONE};  // RLA -> NOP
         table[0x3F] = {OP_NOP, AM_ABS, OF_NONE};  // RLA -> 3-byte NOP (absolute,X)
