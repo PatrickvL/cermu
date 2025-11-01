@@ -817,29 +817,56 @@ public:
         if constexpr (has_bcd()) {
             if (CPU_P(this) & FLAG_D) {
                 // Hardware-accurate 6502 BCD subtraction
-                // Based on analysis of ProcessorTests ground truth
+                // Different algorithms for NMOS vs CMOS processors
                 
-                // Calculate flags from binary result (always)
+                // Calculate flags from binary result (always for V and C)
                 uint8_t c_flag = !(full_result & 0x0100) ? FLAG_C : 0;
                 uint8_t v_flag = calc_v_flag_sub(old_a, operand, full_result);
                 
-                // BCD subtraction algorithm - nibble by nibble
-                uint8_t al = (old_a & 0x0F) - (operand & 0x0F) - borrow_in;
-                if (al & 0x10) {
-                    al -= 6;
-                }
+                uint8_t bcd_result;
                 
-                uint8_t ah = (old_a >> 4) - (operand >> 4) - ((al & 0x10) >> 4);
-                if (ah & 0x10) {
-                    ah -= 6;
+                if constexpr (Traits.is_nmos()) {
+                    // NMOS BCD algorithm (MOS 6502)
+                    uint8_t al = (old_a & 0x0F) - (operand & 0x0F) - borrow_in;
+                    bool low_borrow = false;
+                    if (al & 0x10) {
+                        al -= 6;
+                        low_borrow = true;
+                    }
+                    
+                    uint8_t ah = (old_a >> 4) - (operand >> 4) - (low_borrow ? 1 : 0);
+                    if (ah & 0x10) {
+                        ah -= 6;
+                    }
+                    
+                    bcd_result = ((ah & 0x0F) << 4) | (al & 0x0F);
+                } else {
+                    // CMOS BCD algorithm - exact match for ProcessorTests ground truth
+                    // Based on the WDC 65C02 datasheet and verified implementations
+                    uint16_t result = old_a - operand - borrow_in + 0x100;
+                    
+                    // Low nibble correction
+                    if ((old_a & 0x0F) < ((operand & 0x0F) + borrow_in)) {
+                        result -= 6;
+                    }
+                    
+                    // High nibble correction - check for borrow from low nibble
+                    uint8_t effective_high_operand = (operand >> 4);
+                    if ((old_a & 0x0F) < ((operand & 0x0F) + borrow_in)) {
+                        effective_high_operand++;
+                    }
+                    
+                    if ((old_a >> 4) < effective_high_operand) {
+                        result -= 0x60;
+                    }
+                    
+                    bcd_result = result & 0xFF;
                 }
-                
-                uint8_t bcd_result = ((ah & 0x0F) << 4) | (al & 0x0F);
                 
                 // Flag calculation based on processor type
                 uint8_t n_flag, z_flag;
                 if constexpr (Traits.has(CPUCoreFlags::BCD_NMOS_FLAGS)) {
-                    // CMOS with NMOS-style flags: N,Z from binary result
+                    // NMOS-style or CMOS with NMOS flags: N,Z from binary result
                     n_flag = result & FLAG_N;
                     z_flag = calc_z_flag(result);
                 } else {
