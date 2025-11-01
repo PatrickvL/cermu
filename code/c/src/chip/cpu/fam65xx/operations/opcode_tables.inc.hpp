@@ -83,7 +83,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
     table[0x39] = {OP_AND, AM_ABY, OF_SKIP_PAGE};
     table[0x3A] = {OP_NOP, AM_NON, OF_NONE};  // DEC A - illegal NOP (1-byte)
     table[0x3B] = {OP_RLA, AM_ABY, OF_RMW};   // RLA - Rotate Left then AND (illegal)
-    table[0x3C] = {OP_NOP, AM_ABX, OF_SKIP_PAGE}; // NOP abs,X - illegal NOP
+    table[0x3C] = {OP_BIT, AM_ABX, OF_SKIP_PAGE}; // BIT abs,X - BIT absolute,X (65C02)
     table[0x3D] = {OP_AND, AM_ABX, OF_SKIP_PAGE};
     table[0x3E] = {OP_ROL, AM_ABX, OF_RMW};
     table[0x3F] = {OP_RLA, AM_ABX, OF_RMW};   // RLA - Rotate Left then AND (illegal)
@@ -282,16 +282,16 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
 
     // Now apply processor-specific modifications based on CPUTraits
     
-    // Synertek 65C02 specific overrides - very limited CMOS processor (MUST come before general CMOS)
+    // Synertek 65C02 specific overrides - limited CMOS processor (MUST come before general CMOS)
     if (traits.has(fam65xx::CPUCoreFlags::CMOS_BASE) && !traits.has(fam65xx::CPUCoreFlags::WAI_STP) && !traits.has(fam65xx::CPUCoreFlags::ROCKWELL_BITS)) {
-        // Synertek 65C02 is a limited CMOS processor - these instructions are NOPs with specific addressing modes
-        table[0x1A] = {OP_NOP, AM_NON, OF_NONE};  // INC A -> 1-byte NOP (implied)
-        table[0x3A] = {OP_NOP, AM_NON, OF_NONE};  // DEC A -> 1-byte NOP (implied)
-        table[0x64] = {OP_NOP, AM_ZER, OF_NONE};  // STZ zp -> 2-byte NOP (zero page)
-        table[0x7C] = {OP_NOP, AM_ABS, OF_NONE};  // JMP (abs,X) -> 3-byte NOP (absolute)
-        table[0x9C] = {OP_NOP, AM_ABS, OF_NONE};  // STZ abs -> 3-byte NOP (absolute)
-        table[0xCB] = {OP_NOP, AM_NON, OF_NONE};  // WAI -> 1-byte NOP (implied)
-        table[0xDB] = {OP_NOP, AM_NON, OF_NONE};  // STP -> 1-byte NOP (implied)
+        // Synertek 65C02 supports basic accumulator increment/decrement but not advanced CMOS instructions
+        table[0x1A] = {OP_INC, AM_ACC, OF_NONE};  // INC A - Increment Accumulator (supported on Synertek 65C02)
+        table[0x3A] = {OP_DEC, AM_ACC, OF_NONE};  // DEC A - Decrement Accumulator (supported on Synertek 65C02)
+        table[0x64] = {OP_NOP, AM_ZER, OF_NONE};  // STZ zp -> 2-byte NOP (zero page) - not supported
+        table[0x7C] = {OP_NOP, AM_ABS, OF_NONE};  // JMP (abs,X) -> 3-byte NOP (absolute) - not supported
+        table[0x9C] = {OP_NOP, AM_ABS, OF_NONE};  // STZ abs -> 3-byte NOP (absolute) - not supported
+        table[0xCB] = {OP_NOP, AM_NON, OF_NONE};  // WAI -> 1-byte NOP (implied) - not supported
+        table[0xDB] = {OP_NOP, AM_NON, OF_NONE};  // STP -> 1-byte NOP (implied) - not supported
     }
     
     // CMOS processors: Replace illegal opcodes with NOPs
@@ -312,7 +312,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0x07] = {OP_NOP, AM_IMM, OF_NONE};  // SLO -> 2-byte NOP
         table[0x0B] = {OP_NOP, AM_NON, OF_NONE};  // ANC -> NOP
         table[0x0F] = {OP_NOP, AM_ABS, OF_NONE};  // SLO -> 3-byte NOP (absolute)
-        table[0x12] = {OP_NOP, AM_IMM, OF_NONE};  // JAM -> 2-byte NOP
+        table[0x12] = {OP_ORA, AM_ZPI, OF_NONE};  // ORA ($nn) - ORA zero page indirect (65C02)
         table[0x13] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
         table[0x17] = {OP_NOP, AM_IMM, OF_NONE};  // SLO -> 2-byte NOP
         table[0x1B] = {OP_NOP, AM_NON, OF_NONE};  // SLO -> NOP
@@ -321,8 +321,9 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0x27] = {OP_NOP, AM_IMM, OF_NONE};  // RLA -> 2-byte NOP
         table[0x2B] = {OP_NOP, AM_NON, OF_NONE};  // ANC -> NOP
         table[0x2F] = {OP_NOP, AM_ABS, OF_NONE};  // RLA -> NOP (special case: must match ProcessorTests expectations)
-        table[0x32] = {OP_NOP, AM_IMM, OF_NONE};  // JAM -> 2-byte NOP
+        table[0x32] = {OP_AND, AM_ZPI, OF_NONE};  // AND ($nn) - AND zero page indirect (65C02)
         table[0x33] = {OP_NOP, AM_NON, OF_NONE};  // RLA -> NOP
+        table[0x34] = {OP_BIT, AM_ZPX, OF_NONE};  // BIT zp,X - BIT zero page,X (65C02)
         table[0x37] = {OP_NOP, AM_IMM, OF_NONE};  // RLA -> 2-byte NOP
         table[0x3B] = {OP_NOP, AM_NON, OF_NONE};  // RLA -> NOP
         table[0x3F] = {OP_NOP, AM_ABS, OF_NONE};  // RLA -> 3-byte NOP (absolute,X)
@@ -330,7 +331,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0x47] = {OP_NOP, AM_IMM, OF_NONE};  // SRE -> 2-byte NOP
         table[0x4B] = {OP_NOP, AM_NON, OF_NONE};  // ASR -> NOP
         table[0x4F] = {OP_NOP, AM_ABS, OF_NONE};  // SRE -> 3-byte NOP (absolute)
-        table[0x52] = {OP_NOP, AM_IMM, OF_NONE};  // JAM -> 2-byte NOP
+        table[0x52] = {OP_EOR, AM_ZPI, OF_NONE};  // EOR ($nn) - EOR zero page indirect (65C02)
         table[0x53] = {OP_NOP, AM_NON, OF_NONE};  // SRE -> NOP
         table[0x57] = {OP_NOP, AM_IMM, OF_NONE};  // SRE -> 2-byte NOP
         table[0x5B] = {OP_NOP, AM_NON, OF_NONE};  // SRE -> NOP
@@ -341,11 +342,14 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0x6F] = {OP_NOP, AM_ABS, OF_NONE};  // RRA -> 3-byte NOP (absolute)
         table[0x72] = {OP_ADC, AM_ZPI, OF_NONE};  // ADC ($nn) - Add with Carry zero page indirect (65C02)
         table[0x73] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
+        table[0x74] = {OP_BIT, AM_ZPX, OF_NONE};  // BIT zp,X - BIT zero page,X (65C02)
         table[0x77] = {OP_NOP, AM_IMM, OF_NONE};  // RRA -> 2-byte NOP
         table[0x7B] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
+        table[0x7C] = {OP_JMP, AM_ABI, OF_NONE};  // JMP (abs,X) - JMP absolute indexed indirect (ALL 65C02)
         table[0x7F] = {OP_NOP, AM_ABS, OF_NONE};  // RRA -> 3-byte NOP (absolute,X)
         table[0x83] = {OP_NOP, AM_NON, OF_NONE};  // SAX -> NOP
         table[0x87] = {OP_NOP, AM_IMM, OF_NONE};  // SAX -> 2-byte NOP
+        table[0x89] = {OP_BIT, AM_IMM, OF_NONE};  // BIT #imm - BIT immediate (ALL 65C02)
         table[0x8B] = {OP_NOP, AM_NON, OF_NONE};  // XAA -> NOP
         table[0x8F] = {OP_NOP, AM_ABS, OF_NONE};  // SAX -> 3-byte NOP (absolute addressing)
         table[0x92] = {OP_STA, AM_ZPI, OF_NONE};  // STA ($nn) - Store A zero page indirect (65C02)
@@ -385,7 +389,9 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0xFB] = {OP_NOP, AM_NON, OF_NONE};  // ISC -> NOP
         table[0xFF] = {OP_NOP, AM_ABX, OF_NONE};  // ISC -> 3-byte NOP (absolute,X addressing)
         
-        // Add 65C02 enhancements
+        // Add 65C02 enhancements - ALL CMOS processors support these accumulator instructions
+        table[0x1A] = {OP_INC, AM_ACC, OF_NONE};  // INC A - Increment Accumulator (all 65C02 variants)
+        table[0x3A] = {OP_DEC, AM_ACC, OF_NONE};  // DEC A - Decrement Accumulator (all 65C02 variants)
         table[0x04] = {OP_TSB, AM_ZER, OF_RMW};   // TSB zero page
         table[0x0C] = {OP_TSB, AM_ABS, OF_RMW};   // TSB absolute
         table[0x14] = {OP_TRB, AM_ZER, OF_RMW};   // TRB zero page
@@ -399,13 +405,6 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0xDA] = {OP_PHX, AM_NON, OF_NONE};  // PHX
         table[0xDB] = {OP_STP, AM_NON, OF_NONE};  // STP
         table[0xFA] = {OP_PLX, AM_NON, OF_NONE};  // PLX
-    }
-    
-    // WDC 65C02 specific overrides (must come after general CMOS but before Rockwell)
-    if (traits.has(fam65xx::CPUCoreFlags::CMOS_BASE) && traits.has(fam65xx::CPUCoreFlags::WAI_STP) && !traits.has(fam65xx::CPUCoreFlags::ROCKWELL_BITS)) {
-        // WDC 65C02 specific instructions that differ from base CMOS
-        table[0x7C] = {OP_JMP, AM_ABI, OF_NONE};  // JMP (abs,X) - absolute indexed indirect
-        table[0x89] = {OP_BIT, AM_IMM, OF_NONE};  // BIT immediate - unique to WDC 65C02
     }
     
     // Rockwell 65C02 modifications (add RMB/SMB/BBR/BBS instructions)
