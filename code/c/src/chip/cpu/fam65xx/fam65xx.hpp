@@ -1162,8 +1162,10 @@ private:
 
         // 65C816 addressing modes (if implemented)
         addressing_mode_handlers[AM_ABI] = &fam65xx_t::am_abi;  // Absolute Indexed Indirect
-        addressing_mode_handlers[AM_SR] = &fam65xx_t::am_sr;    // Stack Relative
-        addressing_mode_handlers[AM_SRI] = &fam65xx_t::am_sri;  // Stack Relative Indirect Indexed
+        if constexpr (has_wide_registers()) {
+            addressing_mode_handlers[AM_SR] = &fam65xx_t::amr_sr;    // Stack Relative (65C816 only)
+            addressing_mode_handlers[AM_SRI] = &fam65xx_t::am_sri;  // Stack Relative Indirect Indexed (65C816 only)
+        }
     }
 };
 

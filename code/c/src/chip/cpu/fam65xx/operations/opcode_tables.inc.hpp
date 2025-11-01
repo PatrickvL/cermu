@@ -339,7 +339,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0x67] = {OP_NOP, AM_IMM, OF_NONE};  // RRA -> 2-byte NOP
         table[0x6B] = {OP_NOP, AM_NON, OF_NONE};  // ARR -> NOP
         table[0x6F] = {OP_NOP, AM_ABS, OF_NONE};  // RRA -> 3-byte NOP (absolute)
-        table[0x72] = {OP_NOP, AM_IMM, OF_NONE};  // JAM -> 2-byte NOP
+        table[0x72] = {OP_ADC, AM_ZPI, OF_NONE};  // ADC ($nn) - Add with Carry zero page indirect (65C02)
         table[0x73] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
         table[0x77] = {OP_NOP, AM_IMM, OF_NONE};  // RRA -> 2-byte NOP
         table[0x7B] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
