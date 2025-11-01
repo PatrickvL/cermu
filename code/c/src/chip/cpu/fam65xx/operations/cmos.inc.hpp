@@ -66,7 +66,7 @@ bus_state_t op_trb(bus_state_t pins) {
                     
                     // Test bits (set Z flag if A & memory == 0)
                     uint8_t test_result = CPU_DL(this) & accumulator;
-                    update_flags(FLAG_Z, test_result == 0);
+                    update_flag(FLAG_Z, test_result == 0);
                     
                     // Reset bits (memory = memory & ~A)
                     CPU_DL(this) &= ~accumulator;
@@ -109,7 +109,7 @@ bus_state_t op_tsb(bus_state_t pins) {
                     
                     // Test bits (set Z flag if A & memory == 0)
                     uint8_t test_result = CPU_DL(this) & accumulator;
-                    update_flags(FLAG_Z, test_result == 0);
+                    update_flag(FLAG_Z, test_result == 0);
                     
                     // Set bits (memory = memory | A)
                     CPU_DL(this) |= accumulator;

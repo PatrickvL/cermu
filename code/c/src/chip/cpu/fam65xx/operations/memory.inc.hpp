@@ -166,13 +166,20 @@ bus_state_t op_bit(bus_state_t pins) {
         uint8_t operand = CPU_DL(this);
         uint8_t result = CPU_A(this) & operand;
         
-        // Update flags:
-        // N = bit 7 of operand
-        // V = bit 6 of operand
-        // Z = result of A & operand
-        update_flags(FLAG_N | FLAG_V | FLAG_Z,
-                    (operand & (FLAG_N | FLAG_V)) |
-                    calc_z_flag(result));        
+        // BIT immediate (65C02) only affects Z flag - N and V are NOT affected
+        // BIT memory affects N, V, and Z flags normally
+        if (this->opcode_entry.am_index == AM_IMM) {
+            // BIT immediate: only update Z flag
+            update_flag(FLAG_Z, result == 0);
+        } else {
+            // BIT memory: update N, V, and Z flags
+            // N = bit 7 of operand
+            // V = bit 6 of operand
+            // Z = result of A & operand
+            update_flags(FLAG_N | FLAG_V | FLAG_Z,
+                        (operand & (FLAG_N | FLAG_V)) |
+                        calc_z_flag(result));
+        }
 
         // Complete instruction
         transition_to_fetch();
