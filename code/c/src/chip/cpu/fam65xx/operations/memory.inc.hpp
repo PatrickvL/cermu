@@ -160,10 +160,11 @@ bus_state_t op_eor(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_bit(bus_state_t pins) {
-    // Read operand directly into DL register (optimized version)
-    pins = phi2_read_operand(pins, REG_DL);
+    // CRITICAL FIX: Use REG_TMP instead of REG_DL to avoid conflict with addressing modes
+    // that store intermediate values in REG_DL (like am_abx storing high byte)
+    pins = phi2_read_operand(pins, REG_TMP);
     if (FAM65XX_GET_RDY(pins)) {
-        uint8_t operand = CPU_DL(this);
+        uint8_t operand = CPU_TMP(this);
         uint8_t result = CPU_A(this) & operand;
         
         // BIT immediate (65C02) only affects Z flag - N and V are NOT affected
