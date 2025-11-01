@@ -220,9 +220,6 @@ typedef enum {
     
     REG_COUNT,
     
-    // Map ZERO to ZPH to avoid duplication - ZPH is always 0x00
-    REG_ZERO = REG_ZPH, // Constant zero register (always reads 0x00)
-
     // Compatibility mapping for 8-bit stack pointer
     REG_S = REG_SPL  // Map legacy S register to SPL for compatibility
 } reg8_t;
