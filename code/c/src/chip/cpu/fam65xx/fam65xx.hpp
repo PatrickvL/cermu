@@ -814,40 +814,30 @@ public:
                 // Calculate flags based on processor type
                 uint8_t n_flag, v_flag, z_flag, c_flag;
                 
-                if constexpr (Traits.has(CPUCoreFlags::CMOS_BASE)) {
-                    // CMOS processors: Different flag behavior than NMOS
-                    if constexpr (Traits.has(CPUCoreFlags::BCD_NMOS_FLAGS)) {
-                        // Some CMOS processors still use NMOS-style flag calculation
-                        n_flag = result & FLAG_N;
-                        v_flag = (((old_a ^ operand) & (old_a ^ result)) >> 1) & FLAG_V;
-                        z_flag = (result == 0) * FLAG_Z;
-                        c_flag = !(full_result & 0x0100);
-                        if (ah & 0x80) ah -= 6;
-                    } else {
-                        // Standard CMOS (WDC65C02 and Synertek65C02): Different flag behavior
-                        // Calculate intermediate BCD result before borrow adjustment for flag calculations
-                        uint8_t intermediate_bcd = (ah << 4) | (al & 0x0F);
-                        
-                        // BCD adjustment for borrow calculation
-                        c_flag = !(full_result & 0x0100);  // C flag based on binary borrow
-                        if (ah & 0x80) ah -= 6;
-                        uint8_t bcd_result = (ah << 4) | (al & 0x0F);
-                        
-                        // The Synertek 65C02 has unique BCD flag behavior for SBC:
-                        // - V flag: calculated from intermediate BCD (before high nibble adjustment)
-                        // - Z flag: calculated from BCD result (after adjustments)
-                        // - N flag: from BCD result
-                        // - C flag: from binary borrow
-                        
-                        // V flag from intermediate BCD result (hardware-accurate for Synertek)
-                        v_flag = calc_v_flag_sub(old_a, operand, (uint16_t)intermediate_bcd);
-                        // Z flag from BCD result (hardware-accurate for Synertek)
-                        z_flag = calc_z_flag(bcd_result);
-                        // N flag: sign from BCD result
-                        n_flag = bcd_result & FLAG_N;
-                    }
+                if constexpr (Traits.has(CPUCoreFlags::CMOS_BASE) && !Traits.has(CPUCoreFlags::BCD_NMOS_FLAGS)) {
+                    // Standard CMOS (WDC65C02 and Synertek65C02): Enhanced flag behavior
+                    // Calculate intermediate BCD result before borrow adjustment for flag calculations
+                    uint8_t intermediate_bcd = (ah << 4) | (al & 0x0F);
+                    
+                    // BCD adjustment for borrow calculation
+                    c_flag = !(full_result & 0x0100);  // C flag based on binary borrow
+                    if (ah & 0x80) ah -= 6;
+                    uint8_t bcd_result = (ah << 4) | (al & 0x0F);
+                    
+                    // The Synertek 65C02 has unique BCD flag behavior for SBC:
+                    // - V flag: calculated from intermediate BCD (before high nibble adjustment)
+                    // - Z flag: calculated from BCD result (after adjustments)
+                    // - N flag: from BCD result
+                    // - C flag: from binary borrow
+                    
+                    // V flag from intermediate BCD result (hardware-accurate for Synertek)
+                    v_flag = calc_v_flag_sub(old_a, operand, (uint16_t)intermediate_bcd);
+                    // Z flag from BCD result (hardware-accurate for Synertek)
+                    z_flag = calc_z_flag(bcd_result);
+                    // N flag: sign from BCD result
+                    n_flag = bcd_result & FLAG_N;
                 } else {
-                    // NMOS processors: Complex flag calculation with hardware quirks
+                    // NMOS processors and CMOS with NMOS-style flags: Original flag calculation
                     n_flag = result & FLAG_N;
                     v_flag = (((old_a ^ operand) & (old_a ^ result)) >> 1) & FLAG_V;
                     z_flag = (result == 0) * FLAG_Z;
