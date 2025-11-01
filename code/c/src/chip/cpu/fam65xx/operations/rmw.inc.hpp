@@ -56,7 +56,7 @@ bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func)
         }
     } else {
         // Accumulator mode - single cycle with dummy PHI2 read
-        pins = this->phi2_read(pins, REG_PC, REG_TMP);
+        pins = this->phi2_dummy_read(pins, REG_PC);
         if (FAM65XX_GET_RDY(pins)) {
             // Perform operation on accumulator (modify step)
             operation_func(CPU_A(this));

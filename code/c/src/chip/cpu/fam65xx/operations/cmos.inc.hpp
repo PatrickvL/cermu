@@ -160,7 +160,7 @@ bus_state_t op_phx(bus_state_t pins) {
         switch (this->cycle_index) {
             case 0:
                 /* Dummy cycle for internal operation */
-                pins = phi2_read(pins, REG_PC, REG_TMP);
+                pins = phi2_dummy_read(pins, REG_PC);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->cycle_index++;
                 }
@@ -185,7 +185,7 @@ bus_state_t op_phy(bus_state_t pins) {
         switch (this->cycle_index) {
             case 0:
                 /* Dummy cycle for internal operation */
-                pins = phi2_read(pins, REG_PC, REG_TMP);
+                pins = phi2_dummy_read(pins, REG_PC);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->cycle_index++;
                 }
@@ -210,7 +210,7 @@ bus_state_t op_plx(bus_state_t pins) {
         switch (this->cycle_index) {
             case 0:
                 /* PHI2: Dummy read from PC */
-                pins = phi2_read(pins, REG_PC, REG_TMP);
+                pins = phi2_dummy_read(pins, REG_PC);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->cycle_index++;
                 }
@@ -246,7 +246,7 @@ bus_state_t op_ply(bus_state_t pins) {
         switch (this->cycle_index) {
             case 0:
                 /* PHI2: Dummy read from PC */
-                pins = phi2_read(pins, REG_PC, REG_TMP);
+                pins = phi2_dummy_read(pins, REG_PC);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->cycle_index++;
                 }
