@@ -401,6 +401,12 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0xFA] = {OP_PLX, AM_NON, OF_NONE};  // PLX
     }
     
+    // WDC 65C02 specific overrides (must come after general CMOS but before Rockwell)
+    if (traits.has(fam65xx::CPUCoreFlags::CMOS_BASE) && traits.has(fam65xx::CPUCoreFlags::WAI_STP) && !traits.has(fam65xx::CPUCoreFlags::ROCKWELL_BITS)) {
+        // WDC 65C02 specific instructions that differ from base CMOS
+        table[0x7C] = {OP_JMP, AM_ABI, OF_NONE};  // JMP (abs,X) - absolute indexed indirect
+        table[0x89] = {OP_BIT, AM_IMM, OF_NONE};  // BIT immediate - unique to WDC 65C02
+    }
     
     // Rockwell 65C02 modifications (add RMB/SMB/BBR/BBS instructions)
     if (traits.has(fam65xx::CPUCoreFlags::ROCKWELL_BITS)) {
