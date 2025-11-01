@@ -539,7 +539,7 @@ bus_state_t addr_rel(bus_state_t pins) {
 
 // Zero Page Relative Addressing: For BBR/BBS instructions ($nn,$offset)
 bus_state_t addr_zp_rel(bus_state_t pins) {
-    if constexpr (has_bit_manipulation<Traits>()) {
+    if constexpr (Traits.has_bit_manipulation()) {
         // BBR/BBS instructions: $nn,$offset
         switch (cycle_index) {
             case 0:

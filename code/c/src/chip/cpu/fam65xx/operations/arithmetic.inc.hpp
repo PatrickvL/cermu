@@ -89,15 +89,13 @@ bus_state_t op_nop(bus_state_t pins) {
             break;
 
         default:
-            // WDC65C02 neutralized illegal opcodes: operands already consumed by addressing mode handler
-            if constexpr (!this->has_cmos()) {
-                // NMOS behavior: Memory modes do dummy read from target address
-                pins = this->phi2_read(pins, REG_AB, REG_TMP);
-                if (!FAM65XX_GET_RDY(pins)) {
-                    return pins;
-                }
+            // Memory addressing modes (AM_ABS, AM_ABX, AM_ABY, AM_ZER, AM_ZPX, AM_ZPY) need dummy read
+            // The addressing mode handler has already consumed operands and set up AB register
+            // Now we need to complete the read cycle for proper timing
+            pins = this->phi2_read(pins, REG_AB, REG_TMP);
+            if (!FAM65XX_GET_RDY(pins)) {
+                return pins;
             }
-            // Most WDC65C02 illegal opcodes just consume operands and do nothing
 
             /**
              * Handle NES6502 test syscalls as documented at
