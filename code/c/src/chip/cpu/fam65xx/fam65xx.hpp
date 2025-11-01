@@ -805,38 +805,36 @@ public:
     }
 
     /**
-     * SBC operation with BCD support - MAXIMALLY OPTIMIZED
+     * SBC operation with BCD support - Hardware-accurate implementation
+     * Based on ProcessorTests validation and actual 65xx silicon behavior
      */
     inline void perform_sbc(uint8_t operand) {
         const uint8_t old_a = CPU_A(this);
-        const uint8_t borrow_in = (CPU_P(this) & FLAG_C) ^ 1;
+        const uint8_t borrow_in = (CPU_P(this) & FLAG_C) ^ 1;  // Invert carry for borrow
         const uint16_t full_result = old_a - operand - borrow_in;
         const uint8_t result = static_cast<uint8_t>(full_result);
 
         if constexpr (has_bcd()) {
             if (CPU_P(this) & FLAG_D) {
-                // BCD subtraction - based on hardware analysis and ProcessorTests data
+                // Hardware-accurate 6502 BCD subtraction
+                // Based on analysis of ProcessorTests ground truth
                 
-                // Binary flags are calculated from the binary operation
-                uint8_t c_flag = !(full_result & 0x0100);
+                // Calculate flags from binary result (always)
+                uint8_t c_flag = !(full_result & 0x0100) ? FLAG_C : 0;
                 uint8_t v_flag = calc_v_flag_sub(old_a, operand, full_result);
                 
-                // BCD decimal adjustment
-                int16_t al = (old_a & 0x0F) - (operand & 0x0F) - borrow_in;
-                int16_t ah = (old_a >> 4) - (operand >> 4);
-                
-                // Adjust low nibble if needed
-                if (al < 0) {
+                // BCD subtraction algorithm - nibble by nibble
+                uint8_t al = (old_a & 0x0F) - (operand & 0x0F) - borrow_in;
+                if (al & 0x10) {
                     al -= 6;
-                    ah--;  // Borrow from high nibble
                 }
                 
-                // Adjust high nibble if needed
-                if (ah < 0) {
+                uint8_t ah = (old_a >> 4) - (operand >> 4) - ((al & 0x10) >> 4);
+                if (ah & 0x10) {
                     ah -= 6;
                 }
                 
-                uint8_t final_result = ((ah & 0x0F) << 4) | (al & 0x0F);
+                uint8_t bcd_result = ((ah & 0x0F) << 4) | (al & 0x0F);
                 
                 // Flag calculation based on processor type
                 uint8_t n_flag, z_flag;
@@ -846,12 +844,12 @@ public:
                     z_flag = calc_z_flag(result);
                 } else {
                     // Pure CMOS: N,Z from BCD result
-                    n_flag = final_result & FLAG_N;
-                    z_flag = calc_z_flag(final_result);
+                    n_flag = bcd_result & FLAG_N;
+                    z_flag = calc_z_flag(bcd_result);
                 }
                 
                 // Apply result and flags
-                CPU_A(this) = final_result;
+                CPU_A(this) = bcd_result;
                 CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
                     n_flag | v_flag | z_flag | c_flag;
                 return;
