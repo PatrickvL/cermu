@@ -411,11 +411,9 @@ public:
         }
     }
 
-    // Unified memory write function with optional I/O port handling
-    bus_state_t phi2_write(bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) {
-        // Get address and data for both checks and bus operations
-        uint16_t addr = this->reg16[addr_reg];
-        uint8_t data = this->reg8[data_reg];
+    // Unified memory write function with optional I/O port handling - optimized version
+    bus_state_t phi2_write(bus_state_t pins, uint16_t addr, uint8_t data) {
+        // Address and data provided directly - no register allocation needed
         
         // Set up bus pins for write operation
         pins = FAM65XX_SET_ADDR(pins, addr);
@@ -825,13 +823,13 @@ public:
                     uint8_t bcd_result = (ah << 4) | (al & 0x0F);
                     
                     // The Synertek 65C02 has unique BCD flag behavior for SBC:
-                    // - V flag: calculated from intermediate BCD (before high nibble adjustment)
+                    // - V flag: calculated from binary result (hardware-verified)
                     // - Z flag: calculated from BCD result (after adjustments)
                     // - N flag: from BCD result
                     // - C flag: from binary borrow
                     
-                    // V flag from intermediate BCD result (hardware-accurate for Synertek)
-                    v_flag = calc_v_flag_sub(old_a, operand, (uint16_t)intermediate_bcd);
+                    // V flag from binary result (hardware-accurate for Synertek)
+                    v_flag = calc_v_flag_sub(old_a, operand, full_result);
                     // Z flag from BCD result (hardware-accurate for Synertek)
                     z_flag = calc_z_flag(bcd_result);
                     // N flag: sign from BCD result

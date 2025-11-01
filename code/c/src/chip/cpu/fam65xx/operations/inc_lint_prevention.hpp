@@ -119,7 +119,7 @@ namespace fam65xx {
       
       // Memory access functions
       inline bus_state_t phi2_read(bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) { return pins; }
-      inline bus_state_t phi2_write(bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) { return pins; }
+      inline bus_state_t phi2_write(bus_state_t pins, uint16_t addr, uint8_t data) { return pins; }
       inline bus_state_t phi2_read_operand(bus_state_t pins, reg8_t target_reg) { return pins; }
       
       // Flag manipulation functions
