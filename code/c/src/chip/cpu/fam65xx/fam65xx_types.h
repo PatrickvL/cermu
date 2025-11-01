@@ -190,8 +190,6 @@ typedef enum {
 typedef enum {
     // 16-bit aligned register pairs (endian-aware) for memory addresses
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-    REG_ZPL,       // Zero page (low byte) - full 16-bit zero page register
-    REG_ZPH,       // Zero page (high byte) - always 0x00 for 6502/6510
     REG_SPL,       // Stack pointer (low byte) - full 16-bit stack register
     REG_SPH,       // Stack pointer (high byte) - always 0x01 for 6502/6510
     REG_ABL,       // Address Bus (low byte, even index for little endian)
@@ -199,8 +197,6 @@ typedef enum {
     REG_PCL,       // Program Counter (low byte, even index for little endian)
     REG_PCH,       // Program Counter (high byte)
 #else
-    REG_ZPH,       // Zero page (high byte) - always 0x00 for 6502/6510
-    REG_ZPL,       // Zero page (low byte) - full 16-bit zero page register
     REG_SPH,       // Stack pointer (high byte) - always 0x01 for 6502/6510
     REG_SPL,       // Stack pointer (low byte) - full 16-bit stack register
     REG_ABH,       // Address Bus (high byte, even index for big endian)
@@ -225,7 +221,6 @@ typedef enum {
 
 // 16-bit register indices (native endian compatible)
 typedef enum {
-    REG_ZP = REG_ZPL / 2,  // Zero page (16 bits) - full zero page register
     REG_SP = REG_SPL / 2,  // Stack pointer as 16-bit (SPL in low, 0x01 in high)
     REG_AB = REG_ABL / 2,  // Address Bus Latch as 16-bit (ADL/ADH pair)
     REG_PC = REG_PCL / 2,  // Program counter / PC as 16-bit (PCL/PCH pair)
@@ -255,14 +250,11 @@ typedef struct {
 // ============================================================================
 
 /* Accessor macros for cleaner code */
-#define CPU_ZP(cpu)    ((cpu)->reg16[REG_ZP])   /* Zero page address (0x0000 | ZPL) */
 #define CPU_SP(cpu)    ((cpu)->reg16[REG_SP])   /* Stack pointer (0x0100 | SPL) */
 #define CPU_AB(cpu)    ((cpu)->reg16[REG_AB])   /* Address Bus Latch (ABH/ABL) */
 #define CPU_PC(cpu)    ((cpu)->reg16[REG_PC])   /* Program Counter (PCH/PCL) */
 
 /* Individual byte access - using the new register layout */
-#define CPU_ZPH(cpu)   ((cpu)->reg8[REG_ZPH])   /* Zero Page High (always 0x00 for 6502/6510)*/
-#define CPU_ZPL(cpu)   ((cpu)->reg8[REG_ZPL])   /* Zero Page Low (High is always 0x00)*/
 #define CPU_S(cpu)     ((cpu)->reg8[REG_SPL])   /* Stack Pointer Low (High is always 0x01)*/
 #define CPU_ABH(cpu)   ((cpu)->reg8[REG_ABH])   /* Address Bus Latch High */
 #define CPU_ABL(cpu)   ((cpu)->reg8[REG_ABL])   /* Address Bus Latch Low */

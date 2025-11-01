@@ -240,10 +240,8 @@ public:
         this->init_opcode_table();
         
         /* Initialize register layout:
-        * ZP high byte (REG_ZPH) = 0x00 (always zero for zero page)
         * SP = 0x01FF (stack starts at top of page 1)
         */
-        CPU_ZPH(this) = 0x00;  /* Zero page high byte */
         CPU_SP(this) = 0x01FF; /* Stack pointer (page 1, starts at 0xFF) */
 
         // Return initial pin state
