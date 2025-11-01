@@ -108,7 +108,7 @@ bus_state_t op_pea(bus_state_t pins) {
             case 2:
                 // Push high byte first
                 if (this->should_complete_write_cycle(pins)) {
-                    pins = this->phi2_write(pins, REG_SP, REG_ABH);
+                    pins = this->phi2_write(pins, CPU_SP(this), CPU_ABH(this));
                     CPU_S(this)--;
                     cycle_index++;
                 }
@@ -117,7 +117,7 @@ bus_state_t op_pea(bus_state_t pins) {
             case 3:
                 // Push low byte
                 if (should_complete_write_cycle(pins)) {
-                    pins = phi2_write(pins, REG_SP, REG_ABL); // addr_low from case 0
+                    pins = phi2_write(pins, CPU_SP(this), CPU_ABL(this)); // addr_low from case 0
                     CPU_S(this)--;
                     transition_to_fetch();
                 }
@@ -132,8 +132,7 @@ bus_state_t op_phb(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
         // Push DBR to stack
         if (should_complete_write_cycle(pins)) {
-            CPU_DL(this) = this->wide_state.DBR;
-            pins = phi2_write(pins, REG_SP, REG_DL);
+            pins = phi2_write(pins, CPU_SP(this), this->wide_state.DBR);
             CPU_S(this)--;
             transition_to_fetch();
         }
@@ -148,8 +147,8 @@ bus_state_t op_phd(bus_state_t pins) {
             case 0:
                 // Push D high byte first
                 if (this->should_complete_write_cycle(pins)) {
-                    CPU_DL(this) = this->wide_state.D >> 8;
-                    pins = this->phi2_write(pins, REG_SP, REG_DL);
+                    uint8_t d_high = this->wide_state.D >> 8;
+                    pins = this->phi2_write(pins, CPU_SP(this), d_high);
                     CPU_S(this)--;
                     this->cycle_index++;
                 }
@@ -158,8 +157,8 @@ bus_state_t op_phd(bus_state_t pins) {
             case 1:
                 // Push D low byte
                 if (this->should_complete_write_cycle(pins)) {
-                    CPU_DL(this) = this->wide_state.D & 0xFF;
-                    pins = this->phi2_write(pins, REG_SP, REG_DL);
+                    uint8_t d_low = this->wide_state.D & 0xFF;
+                    pins = this->phi2_write(pins, CPU_SP(this), d_low);
                     CPU_S(this)--;
                     this->transition_to_fetch();
                 }
@@ -174,8 +173,7 @@ bus_state_t op_phk(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
         // Push PBR to stack
         if (should_complete_write_cycle(pins)) {
-            CPU_DL(this) = this->wide_state.PBR;
-            pins = phi2_write(pins, REG_SP, REG_DL);
+            pins = phi2_write(pins, CPU_SP(this), this->wide_state.PBR);
             CPU_S(this)--;
             transition_to_fetch();
         }
@@ -268,8 +266,7 @@ bus_state_t op_jsl(bus_state_t pins) {
                 // Push program bank register
                 if (should_complete_write_cycle(pins)) {
                     // Store PBR in TMP for pushing
-                    CPU_TMP(this) = this->wide_state.PBR;
-                    pins = phi2_write(pins, REG_SP, REG_TMP);
+                    pins = phi2_write(pins, CPU_SP(this), this->wide_state.PBR);
                     CPU_S(this)--;
                     cycle_index++;
                 }
@@ -278,7 +275,7 @@ bus_state_t op_jsl(bus_state_t pins) {
             case 4:
                 // Push PC high byte (return address - 1)
                 if (should_complete_write_cycle(pins)) {
-                    pins = phi2_write(pins, REG_SP, REG_PCH);
+                    pins = phi2_write(pins, CPU_SP(this), CPU_PCH(this));
                     CPU_S(this)--;
                     cycle_index++;
                 }
@@ -287,7 +284,7 @@ bus_state_t op_jsl(bus_state_t pins) {
             case 5:
                 // Push PC low byte
                 if (should_complete_write_cycle(pins)) {
-                    pins = phi2_write(pins, REG_SP, REG_PCL);
+                    pins = phi2_write(pins, CPU_SP(this), CPU_PCL(this));
                     CPU_S(this)--;
                     // Set new program counter and bank
                     CPU_PC(this) = CPU_AB(this); // addr_high:addr_low from cases 0-1
