@@ -184,14 +184,26 @@ bus_state_t op_phk(bus_state_t pins) {
 // PLB - Pull Data Bank Register (65C816)
 bus_state_t op_plb(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
-        // Pull DBR from stack
-        CPU_S(this)++;
-        pins = phi2_read(pins, REG_SP, REG_DL);
-        if (FAM65XX_GET_RDY(pins)) {
-            this->wide_state.DBR = CPU_DL(this);
-            // Update N and Z flags based on DBR
-            this->update_nz_flags(this->wide_state.DBR);
-            transition_to_fetch();
+        switch (this->cycle_index) {
+            case 0:
+                // Dummy read from current SP, then increment SP
+                pins = phi2_dummy_read(pins, REG_SP);
+                if (FAM65XX_GET_RDY(pins)) {
+                    CPU_S(this)++;
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                // Pull DBR from stack
+                pins = phi2_read(pins, REG_SP, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->wide_state.DBR = CPU_DL(this);
+                    // Update N and Z flags based on DBR
+                    this->update_nz_flags(this->wide_state.DBR);
+                    transition_to_fetch();
+                }
+                return pins;
         }
     }
     return pins;
@@ -202,18 +214,26 @@ bus_state_t op_pld(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
         switch (this->cycle_index) {
             case 0:
-                // Pull D register low byte first
-                CPU_S(this)++;
-                pins = phi2_read(pins, REG_SP, REG_DL);
+                // Dummy read from current SP, then increment SP for low byte
+                pins = phi2_dummy_read(pins, REG_SP);
                 if (FAM65XX_GET_RDY(pins)) {
-                    this->wide_state.D = (this->wide_state.D & 0xFF00) | CPU_DL(this); // Set low byte
+                    CPU_S(this)++;
                     cycle_index++;
                 }
                 return pins;
                 
             case 1:
+                // Pull D register low byte first
+                pins = phi2_read(pins, REG_SP, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->wide_state.D = (this->wide_state.D & 0xFF00) | CPU_DL(this); // Set low byte
+                    CPU_S(this)++; // Increment for high byte
+                    cycle_index++;
+                }
+                return pins;
+                
+            case 2:
                 // Pull D register high byte
-                CPU_S(this)++;
                 pins = phi2_read(pins, REG_SP, REG_DL);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->wide_state.D = (this->wide_state.D & 0x00FF) | (CPU_DL(this) << 8); // Set high byte
@@ -302,26 +322,34 @@ bus_state_t op_rtl(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
         switch (cycle_index) {
             case 0:
-                // Pull PC low byte
-                CPU_S(this)++;
-                pins = phi2_read(pins, REG_SP, REG_PCL);
+                // Dummy read from current SP, then increment SP for PCL
+                pins = phi2_dummy_read(pins, REG_SP);
                 if (FAM65XX_GET_RDY(pins)) {
+                    CPU_S(this)++;
                     cycle_index++;
                 }
                 return pins;
                 
             case 1:
-                // Pull PC high byte
-                CPU_S(this)++;
-                pins = phi2_read(pins, REG_SP, REG_PCH);
+                // Pull PC low byte
+                pins = phi2_read(pins, REG_SP, REG_PCL);
                 if (FAM65XX_GET_RDY(pins)) {
+                    CPU_S(this)++; // Increment for PCH
                     cycle_index++;
                 }
                 return pins;
                 
             case 2:
+                // Pull PC high byte
+                pins = phi2_read(pins, REG_SP, REG_PCH);
+                if (FAM65XX_GET_RDY(pins)) {
+                    CPU_S(this)++; // Increment for PBR
+                    cycle_index++;
+                }
+                return pins;
+                
+            case 3:
                 // Pull program bank
-                CPU_S(this)++;
                 pins = phi2_read(pins, REG_SP, REG_DL);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->wide_state.PBR = CPU_DL(this);
