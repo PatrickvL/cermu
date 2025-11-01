@@ -142,14 +142,20 @@ bus_state_t op_wai(bus_state_t pins) {
     return pins;
 }
 
-// STP - Stop (65C02)
+// STP - Stop (65C02) - 2-byte instruction that reads immediate byte before stopping
 bus_state_t op_stp(bus_state_t pins) {
     if constexpr (has_cmos()) {
-        // Set stopped state
-        this->stopped = true;
-        
-        // CPU halts until reset
-        transition_to_fetch();
+        // Read immediate byte (required for 2-byte instruction)
+        pins = phi2_read(pins, REG_PC, REG_DL);
+        if (FAM65XX_GET_RDY(pins)) {
+            CPU_PC(this)++;
+            
+            // Set stopped state after reading immediate byte
+            this->stopped = true;
+            
+            // CPU halts until reset
+            transition_to_fetch();
+        }
     }
     return pins;
 }

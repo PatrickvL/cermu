@@ -342,7 +342,6 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0x6F] = {OP_NOP, AM_ABS, OF_NONE};  // RRA -> 3-byte NOP (absolute)
         table[0x72] = {OP_ADC, AM_ZPI, OF_NONE};  // ADC ($nn) - Add with Carry zero page indirect (65C02)
         table[0x73] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
-        // 0x74 remains NOP zp,X (illegal NOP) even on 65C02
         table[0x77] = {OP_NOP, AM_IMM, OF_NONE};  // RRA -> 2-byte NOP
         table[0x7B] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
         table[0x7C] = {OP_JMP, AM_ABI, OF_NONE};  // JMP (abs,X) - JMP absolute indexed indirect (ALL 65C02)
@@ -357,7 +356,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0x97] = {OP_NOP, AM_IMM, OF_NONE};  // SAX -> 2-byte NOP
         table[0x9B] = {OP_NOP, AM_NON, OF_NONE};  // SHS -> NOP
         table[0x9C] = {OP_NOP, AM_ABS, OF_NONE};  // SHY -> 3-byte NOP (will be overridden for 65C02)
-        table[0x9E] = {OP_NOP, AM_ABY, OF_NONE};  // SHX -> 3-byte NOP (absolute,Y addressing)
+        table[0x9E] = {OP_NOP, AM_ABX, OF_NONE};  // SHX -> 3-byte NOP (absolute,X addressing)
         table[0x9F] = {OP_NOP, AM_ABY, OF_NONE};  // SHA -> 3-byte NOP (absolute,Y addressing)
         table[0xA3] = {OP_NOP, AM_NON, OF_NONE};  // LAX -> NOP
         table[0xA7] = {OP_NOP, AM_IMM, OF_NONE};  // LAX -> 2-byte NOP
@@ -398,12 +397,14 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0x1C] = {OP_TRB, AM_ABS, OF_RMW};   // TRB absolute
         table[0x5A] = {OP_PHY, AM_NON, OF_NONE};  // PHY
         table[0x64] = {OP_STZ, AM_ZER, OF_NONE};  // STZ zero page
+        table[0x74] = {OP_STZ, AM_ZPX, OF_NONE};  // STZ zero page,X
         table[0x7A] = {OP_PLY, AM_NON, OF_NONE};  // PLY
         table[0x80] = {OP_BRA, AM_REL, OF_NONE};  // BRA
         table[0x9C] = {OP_STZ, AM_ABS, OF_NONE};  // STZ absolute
+        table[0x9E] = {OP_STZ, AM_ABX, OF_NONE};  // STZ absolute,X
         table[0xCB] = {OP_WAI, AM_NON, OF_NONE};  // WAI
         table[0xDA] = {OP_PHX, AM_NON, OF_NONE};  // PHX
-        table[0xDB] = {OP_STP, AM_NON, OF_NONE};  // STP
+        table[0xDB] = {OP_STP, AM_IMM, OF_NONE};  // STP (2-byte instruction)
         table[0xFA] = {OP_PLX, AM_NON, OF_NONE};  // PLX
         
         // Synertek 65C02 post-CMOS overrides - must come after general CMOS settings

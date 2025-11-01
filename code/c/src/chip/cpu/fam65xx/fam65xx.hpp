@@ -815,47 +815,43 @@ public:
 
         if constexpr (has_bcd()) {
             if (CPU_P(this) & FLAG_D) {
-                // BCD mode calculation
-                uint8_t al = (old_a & 0x0F) - (operand & 0x0F) - borrow_in;
-                const bool al_borrow = (int8_t)al < 0;
-                if (al_borrow) al -= 6;
+                // BCD subtraction - based on hardware analysis and ProcessorTests data
                 
-                uint8_t ah = (old_a >> 4) - (operand >> 4) - al_borrow;
+                // Binary flags are calculated from the binary operation
+                uint8_t c_flag = !(full_result & 0x0100);
+                uint8_t v_flag = calc_v_flag_sub(old_a, operand, full_result);
                 
-                // Calculate flags based on processor type
-                uint8_t n_flag, v_flag, z_flag, c_flag;
+                // BCD decimal adjustment
+                int16_t al = (old_a & 0x0F) - (operand & 0x0F) - borrow_in;
+                int16_t ah = (old_a >> 4) - (operand >> 4);
                 
-                if constexpr (Traits.has(CPUCoreFlags::CMOS_BASE)) {
-                    // All CMOS processors: Use consistent behavior based on hardware testing
-                    // The key insight: C and V flags are always from binary result
-                    // N and Z flags depend on processor variant
-                    
-                    c_flag = !(full_result & 0x0100);  // C flag always from binary borrow
-                    v_flag = calc_v_flag_sub(old_a, operand, full_result);  // V flag always from binary result
-                    
-                    if constexpr (Traits.has(CPUCoreFlags::BCD_NMOS_FLAGS)) {
-                        // CMOS with NMOS-style flags (WDC65C02, Rockwell65C02): N,Z from binary
-                        z_flag = calc_z_flag(result);  // Z flag from binary result
-                        n_flag = result & FLAG_N;  // N flag from binary result
-                        if (ah & 0x80) ah -= 6;  // Apply BCD adjustment after flag calculation
-                    } else {
-                        // Pure CMOS (Synertek65C02): N,Z from BCD result
-                        if (ah & 0x80) ah -= 6;  // Apply BCD adjustment first
-                        uint8_t bcd_result = (ah << 4) | (al & 0x0F);
-                        z_flag = calc_z_flag(bcd_result);  // Z flag from BCD result
-                        n_flag = bcd_result & FLAG_N;  // N flag from BCD result
-                    }
-                } else {
-                    // NMOS processors and CMOS with NMOS-style flags: Original flag calculation
+                // Adjust low nibble if needed
+                if (al < 0) {
+                    al -= 6;
+                    ah--;  // Borrow from high nibble
+                }
+                
+                // Adjust high nibble if needed
+                if (ah < 0) {
+                    ah -= 6;
+                }
+                
+                uint8_t final_result = ((ah & 0x0F) << 4) | (al & 0x0F);
+                
+                // Flag calculation based on processor type
+                uint8_t n_flag, z_flag;
+                if constexpr (Traits.has(CPUCoreFlags::BCD_NMOS_FLAGS)) {
+                    // CMOS with NMOS-style flags: N,Z from binary result
                     n_flag = result & FLAG_N;
-                    v_flag = (((old_a ^ operand) & (old_a ^ result)) >> 1) & FLAG_V;
-                    z_flag = (result == 0) * FLAG_Z;
-                    c_flag = !(full_result & 0x0100);
-                    if (ah & 0x80) ah -= 6;
+                    z_flag = calc_z_flag(result);
+                } else {
+                    // Pure CMOS: N,Z from BCD result
+                    n_flag = final_result & FLAG_N;
+                    z_flag = calc_z_flag(final_result);
                 }
                 
                 // Apply result and flags
-                CPU_A(this) = (ah << 4) | (al & 0x0F);
+                CPU_A(this) = final_result;
                 CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
                     n_flag | v_flag | z_flag | c_flag;
                 return;
