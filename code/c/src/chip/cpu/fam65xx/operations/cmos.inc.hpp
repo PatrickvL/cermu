@@ -27,12 +27,8 @@ bus_state_t op_bra(bus_state_t pins) {
             
             transition_to_fetch();
         }
-        return pins;
-    } else {
-        // Invalid on NMOS processors - treat as NOP
-        transition_to_fetch();
-        return pins;
     }
+    return pins;
 }
 
 // STZ - Store Zero (65C02)
@@ -43,11 +39,8 @@ bus_state_t op_stz(bus_state_t pins) {
             pins = phi2_write(pins, REG_AB, REG_ZERO);
             transition_to_fetch();
         }
-        return pins;
-    } else {
-        transition_to_fetch();
-        return pins;
     }
+    return pins;
 }
 
 // TRB - Test and Reset Bits (65C02) - Hardware-accurate 3-cycle RMW
@@ -89,11 +82,8 @@ bus_state_t op_trb(bus_state_t pins) {
                 }
                 return pins;
         }
-        return pins;
-    } else {
-        transition_to_fetch();
-        return pins;
     }
+    return pins;
 }
 
 // TSB - Test and Set Bits (65C02) - Hardware-accurate 3-cycle RMW
@@ -135,11 +125,8 @@ bus_state_t op_tsb(bus_state_t pins) {
                 }
                 return pins;
         }
-        return pins;
-    } else {
-        transition_to_fetch();
-        return pins;
     }
+    return pins;
 }
 
 // WAI - Wait for Interrupt (65C02)
@@ -151,11 +138,8 @@ bus_state_t op_wai(bus_state_t pins) {
         // CPU halts until interrupt occurs
         // The tick() function will check this flag
         transition_to_fetch();
-        return pins;
-    } else {
-        transition_to_fetch();
-        return pins;
     }
+    return pins;
 }
 
 // STP - Stop (65C02)
@@ -166,11 +150,8 @@ bus_state_t op_stp(bus_state_t pins) {
         
         // CPU halts until reset
         transition_to_fetch();
-        return pins;
-    } else {
-        transition_to_fetch();
-        return pins;
     }
+    return pins;
 }
 
 // PHX - Push X Register (65C02) - Hardware-accurate 3-cycle operation like PHA
@@ -194,11 +175,8 @@ bus_state_t op_phx(bus_state_t pins) {
                 }
                 return pins;
         }
-        return pins;
-    } else {
-        transition_to_fetch();
-        return pins;
     }
+    return pins;
 }
 
 // PHY - Push Y Register (65C02) - Hardware-accurate 3-cycle operation like PHA
@@ -222,11 +200,8 @@ bus_state_t op_phy(bus_state_t pins) {
                 }
                 return pins;
         }
-        return pins;
-    } else {
-        transition_to_fetch();
-        return pins;
     }
+    return pins;
 }
 
 // PLX - Pull X Register (65C02) - Hardware-accurate 4-cycle operation like PLA
@@ -261,11 +236,8 @@ bus_state_t op_plx(bus_state_t pins) {
                 }
                 return pins;
         }
-        return pins;
-    } else {
-        transition_to_fetch();
-        return pins;
     }
+    return pins;
 }
 
 // PLY - Pull Y Register (65C02) - Hardware-accurate 4-cycle operation like PLA
@@ -300,11 +272,8 @@ bus_state_t op_ply(bus_state_t pins) {
                 }
                 return pins;
         }
-        return pins;
-    } else {
-        transition_to_fetch();
-        return pins;
     }
+    return pins;
 }
 
 #endif // FAM65XX_SKIP_IMPLEMENTATION

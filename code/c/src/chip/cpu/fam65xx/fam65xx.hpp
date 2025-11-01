@@ -434,7 +434,7 @@ public:
         }
         
         // Handle 6510 I/O port access (compile-time conditional)
-        if constexpr (Traits.has_io_port()) {
+        if constexpr (has_io_port()) {
             if (addr == 0x0000) {
                 this->write_io_ddr(data);
                 // Still call memory callback for test compatibility
@@ -1130,22 +1130,22 @@ private:
         // Addressing modes (implemented)
         addressing_mode_handlers[AM_NON] = nullptr;   // No handler needed (implicit/accumulator/relative)
         addressing_mode_handlers[AM_IMM] = nullptr;   // No handler (handled directly in operations)
-        addressing_mode_handlers[AM_ZER] = &fam65xx_t::addr_zp;
-        addressing_mode_handlers[AM_ZPX] = &fam65xx_t::addr_zpx;
-        addressing_mode_handlers[AM_ZPY] = &fam65xx_t::addr_zpy;
-        addressing_mode_handlers[AM_ABS] = &fam65xx_t::addr_abs;
-        addressing_mode_handlers[AM_ABX] = &fam65xx_t::addr_abx;
-        addressing_mode_handlers[AM_ABY] = &fam65xx_t::addr_aby;
-        addressing_mode_handlers[AM_IND] = &fam65xx_t::addr_ind;
-        addressing_mode_handlers[AM_INX] = &fam65xx_t::addr_inx;
-        addressing_mode_handlers[AM_INY] = &fam65xx_t::addr_iny;
+        addressing_mode_handlers[AM_ZER] = &fam65xx_t::am_zp;
+        addressing_mode_handlers[AM_ZPX] = &fam65xx_t::am_zpx;
+        addressing_mode_handlers[AM_ZPY] = &fam65xx_t::am_zpy;
+        addressing_mode_handlers[AM_ABS] = &fam65xx_t::am_abs;
+        addressing_mode_handlers[AM_ABX] = &fam65xx_t::am_abx;
+        addressing_mode_handlers[AM_ABY] = &fam65xx_t::am_aby;
+        addressing_mode_handlers[AM_IND] = &fam65xx_t::am_ind;
+        addressing_mode_handlers[AM_INX] = &fam65xx_t::am_inx;
+        addressing_mode_handlers[AM_INY] = &fam65xx_t::am_iny;
         
         // 65C02 addressing modes (if implemented)
-        addressing_mode_handlers[AM_ZPI] = &fam65xx_t::addr_zp_ind;  // Zero Page Indirect
-        addressing_mode_handlers[AM_ABI] = &fam65xx_t::addr_abs_inx; // Absolute Indexed Indirect
+        addressing_mode_handlers[AM_ZPI] = &fam65xx_t::am_zpi;  // Zero Page Indirect
+        addressing_mode_handlers[AM_ABI] = &fam65xx_t::am_abi; // Absolute Indexed Indirect
         
         // Rockwell 65C02 addressing modes
-        addressing_mode_handlers[AM_ZPR] = &fam65xx_t::addr_zp_rel;  // Zero Page Relative (for BBR/BBS)
+        addressing_mode_handlers[AM_ZPR] = &fam65xx_t::am_zpr;  // Zero Page Relative (for BBR/BBS)
     }
 };
 

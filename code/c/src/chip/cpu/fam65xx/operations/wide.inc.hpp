@@ -32,9 +32,6 @@ bus_state_t op_rep(bus_state_t pins) {
                 this->transition_to_fetch();
                 return pins;
         }
-    } else {
-        // Not supported on this processor - treat as NOP
-        this->transition_to_fetch();
     }
     return pins;
 }
@@ -58,9 +55,6 @@ bus_state_t op_sep(bus_state_t pins) {
                 this->transition_to_fetch();
                 return pins;
         }
-    } else {
-        // Not supported on this processor - treat as NOP
-        this->transition_to_fetch();
     }
     return pins;
 }
@@ -68,25 +62,18 @@ bus_state_t op_sep(bus_state_t pins) {
 // XCE - Exchange Carry and Emulation Flags (65C816)
 bus_state_t op_xce(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
-        switch (this->cycle_index) {
-            case 0:
-                // Exchange C flag and E flag (implied operation - 1 cycle)
-                bool carry = (CPU_P(this) & FLAG_C) != 0;
-                bool emulation = this->get_emulation_mode();
-                
-                this->update_flag(FLAG_C, emulation);
-                this->wide_state.emulation_mode = carry;
-                
-                // If switching to emulation mode, force 8-bit modes
-                if (this->wide_state.emulation_mode) {
-                    CPU_P(this) |= (FLAG_M | FLAG_X); // Set M and X flags (8-bit modes)
-                }
-                
-                this->transition_to_fetch();
-                return pins;
+        // Exchange C flag and E flag (implied operation - 1 cycle)
+        bool carry = (CPU_P(this) & FLAG_C) != 0;
+        bool emulation = this->get_emulation_mode();
+        
+        this->update_flag(FLAG_C, emulation);
+        this->wide_state.emulation_mode = carry;
+        
+        // If switching to emulation mode, force 8-bit modes
+        if (this->wide_state.emulation_mode) {
+            CPU_P(this) |= (FLAG_M | FLAG_X); // Set M and X flags (8-bit modes)
         }
-    } else {
-        // Not supported on this processor - treat as NOP
+        
         this->transition_to_fetch();
     }
     return pins;
@@ -136,9 +123,6 @@ bus_state_t op_pea(bus_state_t pins) {
                 }
                 return pins;
         }
-    } else {
-        // Not supported on this processor - treat as NOP
-        this->transition_to_fetch();
     }
     return pins;
 }
@@ -146,20 +130,13 @@ bus_state_t op_pea(bus_state_t pins) {
 // PHB - Push Data Bank Register (65C816)
 bus_state_t op_phb(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
-        switch (this->cycle_index) {
-            case 0:
-                // Push DBR to stack
-                if (should_complete_write_cycle(pins)) {
-                    CPU_DL(this) = this->wide_state.DBR;
-                    pins = phi2_write(pins, REG_SP, REG_DL);
-                    CPU_S(this)--;
-                    transition_to_fetch();
-                }
-                return pins;
+        // Push DBR to stack
+        if (should_complete_write_cycle(pins)) {
+            CPU_DL(this) = this->wide_state.DBR;
+            pins = phi2_write(pins, REG_SP, REG_DL);
+            CPU_S(this)--;
+            transition_to_fetch();
         }
-    } else {
-        // Not supported on this processor - treat as NOP
-        this->transition_to_fetch();
     }
     return pins;
 }
@@ -171,8 +148,8 @@ bus_state_t op_phd(bus_state_t pins) {
             case 0:
                 // Push D high byte first
                 if (this->should_complete_write_cycle(pins)) {
-                    CPU_TMP(this) = this->wide_state.D >> 8;
-                    pins = this->phi2_write(pins, REG_SP, REG_TMP);
+                    CPU_DL(this) = this->wide_state.D >> 8;
+                    pins = this->phi2_write(pins, REG_SP, REG_DL);
                     CPU_S(this)--;
                     this->cycle_index++;
                 }
@@ -181,16 +158,13 @@ bus_state_t op_phd(bus_state_t pins) {
             case 1:
                 // Push D low byte
                 if (this->should_complete_write_cycle(pins)) {
-                    CPU_TMP(this) = this->wide_state.D & 0xFF;
-                    pins = this->phi2_write(pins, REG_SP, REG_TMP);
+                    CPU_DL(this) = this->wide_state.D & 0xFF;
+                    pins = this->phi2_write(pins, REG_SP, REG_DL);
                     CPU_S(this)--;
                     this->transition_to_fetch();
                 }
                 return pins;
         }
-    } else {
-        // Not supported on this processor - treat as NOP
-        this->transition_to_fetch();
     }
     return pins;
 }
@@ -198,20 +172,13 @@ bus_state_t op_phd(bus_state_t pins) {
 // PHK - Push Program Bank Register (65C816)
 bus_state_t op_phk(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
-        switch (this->cycle_index) {
-            case 0:
-                // Push PBR to stack
-                if (should_complete_write_cycle(pins)) {
-                    CPU_DL(this) = this->wide_state.PBR;
-                    pins = phi2_write(pins, REG_SP, REG_DL);
-                    CPU_S(this)--;
-                    transition_to_fetch();
-                }
-                return pins;
+        // Push PBR to stack
+        if (should_complete_write_cycle(pins)) {
+            CPU_DL(this) = this->wide_state.PBR;
+            pins = phi2_write(pins, REG_SP, REG_DL);
+            CPU_S(this)--;
+            transition_to_fetch();
         }
-    } else {
-        // Not supported on this processor - treat as NOP
-        this->transition_to_fetch();
     }
     return pins;
 }
@@ -219,21 +186,15 @@ bus_state_t op_phk(bus_state_t pins) {
 // PLB - Pull Data Bank Register (65C816)
 bus_state_t op_plb(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
-        switch (this->cycle_index) {
-            case 0:
-                // Pull DBR from stack
-                CPU_S(this)++;
-                pins = phi2_read(pins, REG_SP, REG_DL);
-                if (FAM65XX_GET_RDY(pins)) {
-                    this->wide_state.DBR = CPU_DL(this);
-                    // Update N and Z flags based on DBR
-                    this->update_nz_flags(this->wide_state.DBR);
-                    transition_to_fetch();
-                }
-                return pins;
+        // Pull DBR from stack
+        CPU_S(this)++;
+        pins = phi2_read(pins, REG_SP, REG_DL);
+        if (FAM65XX_GET_RDY(pins)) {
+            this->wide_state.DBR = CPU_DL(this);
+            // Update N and Z flags based on DBR
+            this->update_nz_flags(this->wide_state.DBR);
+            transition_to_fetch();
         }
-    } else {
-        this->transition_to_fetch();
     }
     return pins;
 }
@@ -264,8 +225,6 @@ bus_state_t op_pld(bus_state_t pins) {
                 }
                 return pins;
         }
-    } else {
-        transition_to_fetch();
     }
     return pins;
 }
@@ -308,11 +267,9 @@ bus_state_t op_jsl(bus_state_t pins) {
             case 3:
                 // Push program bank register
                 if (should_complete_write_cycle(pins)) {
-                    // Store PBR in DL temporarily
-                    uint8_t saved_dl = CPU_DL(this);
-                    CPU_DL(this) = this->wide_state.PBR;
-                    pins = phi2_write(pins, REG_SP, REG_DL);
-                    CPU_DL(this) = saved_dl; // Restore DL
+                    // Store PBR in TMP for pushing
+                    CPU_TMP(this) = this->wide_state.PBR;
+                    pins = phi2_write(pins, REG_SP, REG_TMP);
                     CPU_S(this)--;
                     cycle_index++;
                 }
@@ -339,8 +296,6 @@ bus_state_t op_jsl(bus_state_t pins) {
                 }
                 return pins;
         }
-    } else {
-        transition_to_fetch();
     }
     return pins;
 }
@@ -379,8 +334,6 @@ bus_state_t op_rtl(bus_state_t pins) {
                 }
                 return pins;
         }
-    } else {
-        transition_to_fetch();
     }
     return pins;
 }

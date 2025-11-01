@@ -14,7 +14,7 @@
 // ============================================================================
 
 // Zero Page addressing: $nn (cycle-accurate)
-bus_state_t addr_zp(bus_state_t pins) {
+bus_state_t am_zp(bus_state_t pins) {
     // PHI2: Read zero page address from PC
     pins = phi2_read(pins, REG_PC, REG_ABL);
     if (FAM65XX_GET_RDY(pins)) {
@@ -30,7 +30,7 @@ bus_state_t addr_zp(bus_state_t pins) {
 }
 
 // Zero Page,X addressing: $nn,X (cycle-accurate)
-bus_state_t addr_zpx(bus_state_t pins) {
+bus_state_t am_zpx(bus_state_t pins) {
     switch (this->cycle_index) {
         case 0:
             // PHI2: Read base address from PC
@@ -57,7 +57,7 @@ bus_state_t addr_zpx(bus_state_t pins) {
 }
 
 // Zero Page,Y addressing: $nn,Y (cycle-accurate)
-bus_state_t addr_zpy(bus_state_t pins) {
+bus_state_t am_zpy(bus_state_t pins) {
     switch (this->cycle_index) {
         case 0:
             // PHI2: Read base address from PC
@@ -84,7 +84,7 @@ bus_state_t addr_zpy(bus_state_t pins) {
 }
 
 // Absolute addressing: $nnnn (cycle-accurate)
-bus_state_t addr_abs(bus_state_t pins) {
+bus_state_t am_abs(bus_state_t pins) {
     switch (this->cycle_index) {
         case 0:
             // PHI2: Read low byte from PC
@@ -108,7 +108,7 @@ bus_state_t addr_abs(bus_state_t pins) {
 }
 
 // Absolute,X addressing: $nnnn,X (cycle-accurate with page crossing)
-bus_state_t addr_abx(bus_state_t pins) {
+bus_state_t am_abx(bus_state_t pins) {
     switch (this->cycle_index) {
         case 0:
             // PHI2: Read low byte from PC
@@ -171,7 +171,7 @@ bus_state_t addr_abx(bus_state_t pins) {
 }
 
 // Absolute,Y addressing: $nnnn,Y (cycle-accurate with page crossing)
-bus_state_t addr_aby(bus_state_t pins) {
+bus_state_t am_aby(bus_state_t pins) {
     switch (this->cycle_index) {
         case 0:
             // PHI2: Read low byte from PC
@@ -234,7 +234,7 @@ bus_state_t addr_aby(bus_state_t pins) {
 }
 
 // Indirect addressing: ($nnnn) - Used only by JMP instruction
-bus_state_t addr_ind(bus_state_t pins) {
+bus_state_t am_ind(bus_state_t pins) {
     switch (this->cycle_index) {
         case 0:
             // PHI2: Read low byte of pointer address from PC
@@ -285,7 +285,7 @@ bus_state_t addr_ind(bus_state_t pins) {
 }
 
 // Indexed Indirect addressing: ($nn,X)
-bus_state_t addr_inx(bus_state_t pins) {
+bus_state_t am_inx(bus_state_t pins) {
     switch (this->cycle_index) {
         case 0:
             /* Read pointer from PC */
@@ -328,7 +328,7 @@ bus_state_t addr_inx(bus_state_t pins) {
 }
 
 // Indirect Indexed addressing: ($nn),Y
-bus_state_t addr_iny(bus_state_t pins) {
+bus_state_t am_iny(bus_state_t pins) {
     switch (this->cycle_index) {
         case 0:
             /* Read pointer from PC */
@@ -408,7 +408,7 @@ bus_state_t addr_ind_abs(bus_state_t pins) {
     if constexpr (has_cmos()) {
         // This addressing mode only exists on 65C02+
         // Use the same implementation as regular indirect addressing
-        return addr_ind(pins);
+        return am_ind(pins);
     } else {
         // Invalid on NMOS processors
         return pins; // Should not be called
@@ -416,7 +416,7 @@ bus_state_t addr_ind_abs(bus_state_t pins) {
 }
 
 // Zero Page Indirect addressing: ($nn) - 65C02 only
-bus_state_t addr_zp_ind(bus_state_t pins) {
+bus_state_t am_zpi(bus_state_t pins) {
     if constexpr (has_cmos()) {
         // 65C02 zero page indirect addressing: ($nn)
         switch (this->cycle_index) {
@@ -455,7 +455,7 @@ bus_state_t addr_zp_ind(bus_state_t pins) {
 }
 
 // Absolute Indexed Indirect addressing: ($nnnn,X) - 65C02 JMP only
-bus_state_t addr_abs_inx(bus_state_t pins) {
+bus_state_t am_abi(bus_state_t pins) {
     if constexpr (has_cmos()) {
         // WDC 65C02 absolute indexed indirect: JMP (abs,X)
         switch (this->cycle_index) {
@@ -510,24 +510,24 @@ bus_state_t addr_abs_inx(bus_state_t pins) {
 // 65C816 Enhanced Addressing Modes (conditional compilation)
 
 // Direct Page addressing: dp (65C816)
-bus_state_t addr_dp(bus_state_t pins) {
+bus_state_t am_dp(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
         // Use Direct Page register instead of zero page
         // Implementation would use this->wide_state.D
         return pins; // Placeholder
     } else {
         // Fall back to zero page on older processors
-        return addr_zp(pins);
+        return am_zp(pins);
     }
 }
 
 // Direct Page,X addressing: dp,X (65C816)
-bus_state_t addr_dpx(bus_state_t pins) {
+bus_state_t am_dpx(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
         // Use Direct Page register with X indexing
         return pins; // Placeholder
     } else {
-        return addr_zpx(pins);
+        return am_zpx(pins);
     }
 }
 
@@ -571,18 +571,9 @@ bus_state_t addr_stack_rel_iny(bus_state_t pins) {
     }
 }
 
-// Relative Addressing: For branch instructions
-bus_state_t addr_rel(bus_state_t pins) {
-    // Relative addressing doesn't pre-calculate address
-    // Branch operations handle their own relative address calculation
-    // Move directly to the operation
-    transition_to_operation();
-    return pins;
-}
-
 // Zero Page Relative Addressing: For BBR/BBS instructions ($nn,$offset)
-bus_state_t addr_zp_rel(bus_state_t pins) {
-    if constexpr (Traits.has_bit_manipulation()) {
+bus_state_t am_zpr(bus_state_t pins) {
+    if constexpr (Traits.has(CPUCoreFlags::ROCKWELL_BITS)) {
         // BBR/BBS instructions: $nn,$offset
         switch (this->cycle_index) {
             case 0:
@@ -604,10 +595,8 @@ bus_state_t addr_zp_rel(bus_state_t pins) {
                 }
                 return pins;
         }
-        return pins;
-    } else {
-        return pins; // Should not be called on non-Rockwell processors
     }
+    return pins;
 }
 
 #endif // FAM65XX_SKIP_IMPLEMENTATION

@@ -56,16 +56,12 @@ bus_state_t bit_branch_helper(bus_state_t pins, uint8_t bit_mask, bool bit_set) 
         bool bit_is_set = (this->reg8[REG_TMP] & bit_mask) != 0;
         bool branch_taken = (bit_is_set == bit_set);
         
-        if (!branch_taken) {
-            // Branch not taken: instruction completes
-            transition_to_fetch();
-            return pins;
+        if (branch_taken) {
+            // Branch taken: calculate target address and jump
+            int8_t signed_offset = (int8_t)CPU_DL(this);
+            uint16_t target_addr = CPU_PC(this) + signed_offset;
+            CPU_PC(this) = target_addr;
         }
-        
-        // Branch taken: calculate target address and jump
-        int8_t signed_offset = (int8_t)CPU_DL(this);
-        uint16_t target_addr = CPU_PC(this) + signed_offset;
-        CPU_PC(this) = target_addr;
         transition_to_fetch();
     }
     return pins;
