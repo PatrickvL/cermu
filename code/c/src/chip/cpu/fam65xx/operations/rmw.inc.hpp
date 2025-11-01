@@ -36,7 +36,7 @@ bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func)
                         pins = this->phi2_write(pins, CPU_AB(this), CPU_DL(this));
                     } else {
                         // CMOS processors: Dummy read cycle instead of write
-                        pins = this->phi2_read(pins, REG_AB, REG_TMP);
+                        pins = this->phi2_dummy_read(pins, REG_AB);
                         if (!FAM65XX_GET_RDY(pins)) {
                             return pins;
                         }

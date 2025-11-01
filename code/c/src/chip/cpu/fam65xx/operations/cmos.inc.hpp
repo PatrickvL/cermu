@@ -218,7 +218,7 @@ bus_state_t op_plx(bus_state_t pins) {
                 
             case 1:
                 /* PHI2: Dummy read from current stack pointer, then increment SP */
-                pins = phi2_read(pins, REG_SP, REG_TMP);
+                pins = phi2_dummy_read(pins, REG_SP);
                 if (FAM65XX_GET_RDY(pins)) {
                     /* PHI1: Increment stack pointer */
                     CPU_S(this)++;
@@ -254,7 +254,7 @@ bus_state_t op_ply(bus_state_t pins) {
                 
             case 1:
                 /* PHI2: Dummy read from current stack pointer, then increment SP */
-                pins = phi2_read(pins, REG_SP, REG_TMP);
+                pins = phi2_dummy_read(pins, REG_SP);
                 if (FAM65XX_GET_RDY(pins)) {
                     /* PHI1: Increment stack pointer */
                     CPU_S(this)++;

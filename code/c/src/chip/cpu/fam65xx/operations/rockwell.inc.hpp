@@ -50,17 +50,16 @@ bus_state_t bit_branch_helper(bus_state_t pins, uint8_t bit_mask, bool bit_set) 
     // ZP register contains the zero page address, DL contains the branch offset
     
     // PHI2: Read value from zero page address
-    pins = phi2_read(pins, REG_ZP, REG_TMP);
+    int8_t signed_offset = (int8_t)CPU_DL(this);
+    pins = phi2_read(pins, REG_ZP, REG_DL);
     if (FAM65XX_GET_RDY(pins)) {
         // PHI1: Test bit and decide whether to branch
-        bool bit_is_set = (this->reg8[REG_TMP] & bit_mask) != 0;
+        bool bit_is_set = (this->reg8[REG_DL] & bit_mask) != 0;
         bool branch_taken = (bit_is_set == bit_set);
         
         if (branch_taken) {
             // Branch taken: calculate target address and jump
-            int8_t signed_offset = (int8_t)CPU_DL(this);
-            uint16_t target_addr = CPU_PC(this) + signed_offset;
-            CPU_PC(this) = target_addr;
+            CPU_PC(this) += signed_offset;
         }
         transition_to_fetch();
     }
