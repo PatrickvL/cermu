@@ -130,11 +130,11 @@ typedef enum {
     AM_INX,     /* Indexed Indirect - operand at (($nn + X) & 0xFF) */
     AM_INY,     /* Indirect Indexed - operand at ($nn) + Y */
     // Enhanced addressing modes for all family members
+    AM_ZPR,     /* Zero Page Relative for BBR/BBS - nn,label - Rockwell */
     AM_ZPI,     /* Zero Page Indirect - ($nn) - 65C02 */
     AM_ABI,     /* Absolute Indexed Indirect - ($nnnn,X) - 65C816 */
     AM_SR,      /* Stack Relative - n,S - 65C816 */
     AM_SRI,     /* Stack Relative Indirect Indexed - (n,S),Y - 65C816 */
-    AM_ZPR,     /* Zero Page Relative for BBR/BBS - nn,label - Rockwell */
     AM_COUNT
 } addressing_mode_t;
 
