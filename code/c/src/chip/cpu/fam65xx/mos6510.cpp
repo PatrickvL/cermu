@@ -126,4 +126,27 @@ void mos6510_set_io_input(mos6510_t* cpu, uint8_t value) {
     CPU_CAST(cpu)->io_port.input = value;
 }
 
+// ============================================================================
+// CHIP DESCRIPTOR AND INTERFACE
+// ============================================================================
+
+// Chip-compatible tick function
+bus_state_t mos6510_tick_chip(void* cpu, bus_state_t pins) {
+    return mos6510_tick(reinterpret_cast<mos6510_t*>(cpu), pins);
+}
+
+// Chip descriptor for system registration
+chip_descriptor_t mos6510_descriptor = {
+    .create = []() -> void* { return mos6510_create(); },
+    .destroy = [](void* cpu) { mos6510_destroy(reinterpret_cast<mos6510_t*>(cpu)); },
+    .reset = [](void* cpu, bus_state_t pins) -> bus_state_t {
+        return mos6510_reset(reinterpret_cast<mos6510_t*>(cpu), pins);
+    },
+    .tick = mos6510_tick_chip,
+    .description = "MOS 6510 CPU (C64/C128)",
+    .bus_attach = nullptr,
+    .mem_read = nullptr,
+    .mem_write = nullptr
+};
+
 } // extern "C"

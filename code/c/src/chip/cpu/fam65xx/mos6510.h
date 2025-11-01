@@ -75,6 +75,12 @@ uint8_t mos6510_get_io_data(mos6510_t* cpu);
 uint8_t mos6510_get_io_input(mos6510_t* cpu);
 void mos6510_set_io_input(mos6510_t* cpu, uint8_t value);
 
+// Global descriptor for chip registration
+extern chip_descriptor_t mos6510_descriptor;
+
+// Chip-compatible tick function
+bus_state_t mos6510_tick_chip(void* cpu, bus_state_t pins);
+
 #ifdef __cplusplus
 }
 #endif
