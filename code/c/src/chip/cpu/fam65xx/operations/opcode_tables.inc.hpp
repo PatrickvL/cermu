@@ -290,8 +290,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0x64] = {OP_NOP, AM_ZER, OF_NONE};  // STZ zp -> 2-byte NOP (zero page) - not supported
         table[0x7C] = {OP_NOP, AM_ABS, OF_NONE};  // JMP (abs,X) -> 3-byte NOP (absolute) - not supported
         table[0x9C] = {OP_NOP, AM_ABS, OF_NONE};  // STZ abs -> 3-byte NOP (absolute) - not supported
-        table[0xCB] = {OP_NOP, AM_NON, OF_NONE};  // WAI -> 1-byte NOP (implied) - not supported
-        table[0xDB] = {OP_NOP, AM_NON, OF_NONE};  // STP -> 1-byte NOP (implied) - not supported
+        // WAI/STP will be handled by post-CMOS override section to avoid conflicts
     }
     
     // CMOS processors: Replace illegal opcodes with NOPs
@@ -342,7 +341,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0x6F] = {OP_NOP, AM_ABS, OF_NONE};  // RRA -> 3-byte NOP (absolute)
         table[0x72] = {OP_ADC, AM_ZPI, OF_NONE};  // ADC ($nn) - Add with Carry zero page indirect (65C02)
         table[0x73] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
-        table[0x74] = {OP_BIT, AM_ZPX, OF_NONE};  // BIT zp,X - BIT zero page,X (65C02)
+        // 0x74 remains NOP zp,X (illegal NOP) even on 65C02
         table[0x77] = {OP_NOP, AM_IMM, OF_NONE};  // RRA -> 2-byte NOP
         table[0x7B] = {OP_NOP, AM_NON, OF_NONE};  // RRA -> NOP
         table[0x7C] = {OP_JMP, AM_ABI, OF_NONE};  // JMP (abs,X) - JMP absolute indexed indirect (ALL 65C02)
@@ -405,6 +404,13 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0xDA] = {OP_PHX, AM_NON, OF_NONE};  // PHX
         table[0xDB] = {OP_STP, AM_NON, OF_NONE};  // STP
         table[0xFA] = {OP_PLX, AM_NON, OF_NONE};  // PLX
+        
+        // Synertek 65C02 post-CMOS overrides - must come after general CMOS settings
+        if (traits.has(fam65xx::CPUCoreFlags::CMOS_BASE) && !traits.has(fam65xx::CPUCoreFlags::WAI_STP) && !traits.has(fam65xx::CPUCoreFlags::ROCKWELL_BITS)) {
+            // Synertek 65C02 doesn't support WAI/STP - override with proper NOPs
+            table[0xCB] = {OP_NOP, AM_NON, OF_NONE};  // WAI -> 1-byte NOP (implied) - halt immediately on Synertek 65C02
+            table[0xDB] = {OP_NOP, AM_IMM, OF_NONE};  // STP -> 2-byte NOP (immediate) - not supported on Synertek 65C02
+        }
     }
     
     // Rockwell 65C02 modifications (add RMB/SMB/BBR/BBS instructions)
