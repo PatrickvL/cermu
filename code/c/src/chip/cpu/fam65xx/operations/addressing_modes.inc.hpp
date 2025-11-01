@@ -425,7 +425,6 @@ bus_state_t am_zpi(bus_state_t pins) {
                 pins = phi2_read(pins, REG_PC, REG_ZPL);
                 if (FAM65XX_GET_RDY(pins)) {
                     CPU_PC(this)++;
-                    CPU_ZPH(this) = 0x00; // Zero page high byte is always 0
                     this->cycle_index++;
                 }
                 return pins;
