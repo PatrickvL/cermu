@@ -498,8 +498,10 @@ public:
      * - Address bus behavior changes based on RDY but memory access always occurs
      */
     
-    // VIC-II compatible memory read with proper RDY handling (matching old implementation)
-    bus_state_t phi2_read(bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) {
+    // Template-based phi2_read with optional register write control
+    // store_in_register: true = normal operation, false = dummy read (no register write)
+    template<bool store_in_register = true>
+    inline bus_state_t phi2_read_template(bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) {
         uint16_t address;
 
         // Set R/W̅ bit to indicate READ (1 = Read, 0 = Write)
@@ -514,7 +516,9 @@ public:
             if constexpr (has_apu()) {
                 uint8_t apu_data;
                 if (this->read_apu_register(address, apu_data)) {
-                    this->reg8[data_reg] = apu_data;
+                    if constexpr (store_in_register) {
+                        this->reg8[data_reg] = apu_data;
+                    }
                     pins = FAM65XX_SET_DATA(pins, apu_data);
                     return pins; // Don't perform bus read
                 }
@@ -523,10 +527,14 @@ public:
             if constexpr (has_io_port()) {
                 // Handle 6510 I/O port access (only when RDY is high)
                 if (address == 0x0000) {
-                    this->reg8[data_reg] = this->read_io_port();
+                    if constexpr (store_in_register) {
+                        this->reg8[data_reg] = this->read_io_port();
+                    }
                     return pins; // Don't perform bus read
                 } else if (address == 0x0001) {
-                    this->reg8[data_reg] = this->io_port.direction;
+                    if constexpr (store_in_register) {
+                        this->reg8[data_reg] = this->io_port.direction;
+                    }
                     return pins; // Don't perform bus read
                 }
             }
@@ -541,9 +549,25 @@ public:
             data = this->mem_read(this->mem_user_data, address, current_bus_data);
         }
         pins = FAM65XX_SET_DATA(pins, data);
-        this->reg8[data_reg] = data;
+        
+        // Conditionally write to register based on template parameter
+        if constexpr (store_in_register) {
+            this->reg8[data_reg] = data;
+        }
         
         return pins;
+    }
+    
+    // Standard phi2_read function (backward compatibility)
+    inline bus_state_t phi2_read(bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) {
+        return phi2_read_template<true>(pins, addr_reg, data_reg);
+    }
+    
+    // Optimized dummy read that doesn't write to any register
+    // For cases where we only need the bus timing, not the actual data
+    inline bus_state_t phi2_dummy_read(bus_state_t pins, reg16_t addr_reg) {
+        // Template parameter false = no register write, much more efficient
+        return phi2_read_template<false>(pins, addr_reg, 0); // data_reg is unused
     }
     
     // Optimized version with direct register targeting to eliminate copies

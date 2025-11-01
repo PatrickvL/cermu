@@ -40,7 +40,7 @@ bus_state_t op_adc(bus_state_t pins) {
             
         case 1:
             // Extra cycle for CMOS decimal mode - do dummy read from PC
-            pins = this->phi2_read(pins, REG_PC, REG_TMP);
+            pins = this->phi2_dummy_read(pins, REG_PC);
             if (FAM65XX_GET_RDY(pins)) {
                 this->transition_to_fetch();
             }
@@ -72,7 +72,7 @@ bus_state_t op_nop(bus_state_t pins) {
     switch (this->opcode_entry.am_index) {
         case AM_IMM:
             // AM_IMM: All immediate NOPs read operand and increment PC
-            pins = this->phi2_read(pins, REG_PC, REG_TMP);
+            pins = this->phi2_dummy_read(pins, REG_PC);
             if (FAM65XX_GET_RDY(pins)) {
                 CPU_PC(this)++;
             } else {
@@ -82,7 +82,7 @@ bus_state_t op_nop(bus_state_t pins) {
             
         case AM_NON:
             // Implicit NOPs do dummy read from PC without increment
-            pins = this->phi2_read(pins, REG_PC, REG_TMP);
+            pins = this->phi2_dummy_read(pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) {
                 return pins;
             }
@@ -157,7 +157,7 @@ bus_state_t op_sbc(bus_state_t pins) {
             
         case 1:
             // Extra cycle for CMOS decimal mode - do dummy read from PC
-            pins = this->phi2_read(pins, REG_PC, REG_TMP);
+            pins = this->phi2_dummy_read(pins, REG_PC);
             if (FAM65XX_GET_RDY(pins)) {
                 this->transition_to_fetch();
             }
