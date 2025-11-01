@@ -419,14 +419,14 @@ bus_state_t addr_ind_abs(bus_state_t pins) {
 bus_state_t addr_zp_ind(bus_state_t pins) {
     if constexpr (has_cmos()) {
         // 65C02 zero page indirect addressing: ($nn)
-        switch (cycle_index) {
+        switch (this->cycle_index) {
             case 0:
                 // PHI2: Read zero page address from PC
                 pins = phi2_read(pins, REG_PC, REG_ZPL);
                 if (FAM65XX_GET_RDY(pins)) {
                     CPU_PC(this)++;
                     CPU_ZPH(this) = 0x00; // Zero page high byte is always 0
-                    cycle_index++;
+                    this->cycle_index++;
                 }
                 return pins;
                 
@@ -435,7 +435,7 @@ bus_state_t addr_zp_ind(bus_state_t pins) {
                 pins = phi2_read(pins, REG_ZP, REG_ABL);
                 if (FAM65XX_GET_RDY(pins)) {
                     CPU_ZPL(this)++; // Move to next zero page location
-                    cycle_index++;
+                    this->cycle_index++;
                 }
                 return pins;
                 
@@ -457,10 +457,53 @@ bus_state_t addr_zp_ind(bus_state_t pins) {
 // Absolute Indexed Indirect addressing: ($nnnn,X) - 65C02 JMP only
 bus_state_t addr_abs_inx(bus_state_t pins) {
     if constexpr (has_cmos()) {
-        // 65C02 absolute indexed indirect
-        return pins; // Placeholder
+        // WDC 65C02 absolute indexed indirect: JMP (abs,X)
+        switch (this->cycle_index) {
+            case 0:
+                // PHI2: Read low byte of base address from PC
+                pins = phi2_read(pins, REG_PC, REG_ABL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    CPU_PC(this)++;
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                // PHI2: Read high byte of base address from PC
+                pins = phi2_read(pins, REG_PC, REG_ABH);
+                if (FAM65XX_GET_RDY(pins)) {
+                    CPU_PC(this)++;
+                    // PHI1: Add X register to base address
+                    CPU_AB(this) += CPU_X(this);
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 2:
+                // PHI2: Read low byte of target address from (base+X)
+                pins = phi2_read(pins, REG_AB, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    // PHI1: Set up for high byte read
+                    CPU_AB(this)++;
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 3:
+                // PHI2: Read high byte of target address from (base+X+1)
+                pins = phi2_read(pins, REG_AB, REG_ABH);
+                if (FAM65XX_GET_RDY(pins)) {
+                    // PHI1: Assemble final target address
+                    CPU_ABL(this) = CPU_DL(this);  // Low byte from cycle 2
+                    // High byte already in ABH from this cycle
+                    // AB now contains the final jump target address
+                    transition_to_operation();
+                }
+                return pins;
+        }
+        return pins;
     } else {
-        return pins; // Should not be called
+        return pins; // Should not be called on NMOS processors
     }
 }
 
@@ -541,13 +584,13 @@ bus_state_t addr_rel(bus_state_t pins) {
 bus_state_t addr_zp_rel(bus_state_t pins) {
     if constexpr (Traits.has_bit_manipulation()) {
         // BBR/BBS instructions: $nn,$offset
-        switch (cycle_index) {
+        switch (this->cycle_index) {
             case 0:
                 // PHI2: Read zero page address from PC
                 pins = phi2_read(pins, REG_PC, REG_ZPL);
                 if (FAM65XX_GET_RDY(pins)) {
                     CPU_PC(this)++;
-                    cycle_index++;
+                    this->cycle_index++;
                 }
                 return pins;
                 
