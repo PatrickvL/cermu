@@ -746,13 +746,27 @@ public:
                         z_flag = (result == 0) * FLAG_Z;
                         c_flag = (ah > 15) ? FLAG_C : 0;
                     } else {
-                        // Standard CMOS (WDC65C02): N flag from BCD result, Z from binary, V from binary, C from BCD
+                        // Standard CMOS (WDC65C02 and Synertek65C02): Different flag behavior
+                        // Calculate intermediate BCD result before carry adjustment for flag calculations
+                        uint8_t intermediate_bcd = (ah << 4) | (al & 0x0F);
+                        
+                        // BCD adjustment for carry calculation
                         c_flag = (ah > 9) ? FLAG_C : 0;  // C flag based on decimal carry
                         if (ah > 9) ah += 6;
                         uint8_t bcd_result = (ah << 4) | (al & 0x0F);
-                        v_flag = ((~(old_a ^ operand) & (old_a ^ result)) >> 1) & FLAG_V;
-                        z_flag = (result == 0) * FLAG_Z;  // Z from binary result
-                        n_flag = bcd_result & FLAG_N;  // CRITICAL FIX: N flag from BCD result!
+                        
+                        // The Synertek 65C02 has unique BCD flag behavior:
+                        // - V flag: calculated from intermediate BCD (before high nibble adjustment)
+                        // - Z flag: calculated from BCD result (after adjustments)
+                        // - N flag: from BCD result
+                        // - C flag: from decimal carry
+                        
+                        // V flag from intermediate BCD result (hardware-accurate for Synertek)
+                        v_flag = calc_v_flag_add(old_a, operand, (uint16_t)intermediate_bcd);
+                        // Z flag from BCD result (hardware-accurate for Synertek)
+                        z_flag = calc_z_flag(bcd_result);
+                        // N flag: sign from BCD result
+                        n_flag = bcd_result & FLAG_N;
                     }
                 } else {
                     // NMOS processors: Complex flag calculation with hardware quirks
