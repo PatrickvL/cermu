@@ -727,23 +727,35 @@ public:
 
         if constexpr (has_bcd()) {
             if (CPU_P(this) & FLAG_D) {
-                // BCD mode - shared calculation with processor-specific flag behavior
+                // BCD mode calculation
                 uint8_t al = (old_a & 0x0F) + (operand & 0x0F) + carry_in;
                 if (al > 9) al += 6;
                 
                 uint8_t ah = (old_a >> 4) + (operand >> 4) + (al > 0x0F);
                 
-                // Processor-specific flag calculation
+                // Calculate flags based on processor type
                 uint8_t n_flag, v_flag, z_flag, c_flag;
-                if constexpr (Traits.has(CPUCoreFlags::CMOS_BASE) && !Traits.has(CPUCoreFlags::ROCKWELL_BITS)) {
-                    // WDC65C02: Calculate flags before final adjustment, N flag from binary result
-                    c_flag = (ah > 15) ? FLAG_C : 0;
-                    v_flag = ((~(old_a ^ operand) & (old_a ^ result)) >> 1) & FLAG_V;
-                    z_flag = (result == 0) * FLAG_Z;
-                    n_flag = result & FLAG_N;  // FIXED: Use binary result for N flag like NMOS
-                    if (ah > 9) ah += 6;
+                
+                if constexpr (Traits.has(CPUCoreFlags::CMOS_BASE)) {
+                    // CMOS processors: All flags from binary result, except when otherwise specified
+                    if constexpr (Traits.has(CPUCoreFlags::BCD_NMOS_FLAGS)) {
+                        // Some CMOS processors still use NMOS-style flag calculation
+                        n_flag = (result != 0) * ((ah << 4) & FLAG_N);
+                        v_flag = ((~(old_a ^ operand) & (old_a ^ (ah << 4))) >> 1) & FLAG_V;
+                        if (ah > 9) ah += 6;
+                        z_flag = (result == 0) * FLAG_Z;
+                        c_flag = (ah > 15) ? FLAG_C : 0;
+                    } else {
+                        // Standard CMOS (WDC65C02): N flag from BCD result, Z from binary, V from binary, C from BCD
+                        c_flag = (ah > 9) ? FLAG_C : 0;  // C flag based on decimal carry
+                        if (ah > 9) ah += 6;
+                        uint8_t bcd_result = (ah << 4) | (al & 0x0F);
+                        v_flag = ((~(old_a ^ operand) & (old_a ^ result)) >> 1) & FLAG_V;
+                        z_flag = (result == 0) * FLAG_Z;  // Z from binary result
+                        n_flag = bcd_result & FLAG_N;  // CRITICAL FIX: N flag from BCD result!
+                    }
                 } else {
-                    // NMOS: Original flag behavior with quirky N flag calculation
+                    // NMOS processors: Complex flag calculation with hardware quirks
                     n_flag = (result != 0) * ((ah << 4) & FLAG_N);
                     v_flag = ((~(old_a ^ operand) & (old_a ^ (ah << 4))) >> 1) & FLAG_V;
                     if (ah > 9) ah += 6;
@@ -751,7 +763,7 @@ public:
                     c_flag = (ah > 15) ? FLAG_C : 0;
                 }
                 
-                // Shared footer: apply result and flags
+                // Apply result and flags
                 CPU_A(this) = (ah << 4) | (al & 0x0F);
                 CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
                     n_flag | v_flag | z_flag | c_flag;
@@ -1130,7 +1142,7 @@ private:
         
         // 65C02 addressing modes (if implemented)
         addressing_mode_handlers[AM_ZPI] = &fam65xx_t::addr_zp_ind;  // Zero Page Indirect
-        addressing_mode_handlers[AM_ABI] = &fam65xx_t::addr_ind_abs; // Absolute Indexed Indirect
+        addressing_mode_handlers[AM_ABI] = &fam65xx_t::addr_abs_inx; // Absolute Indexed Indirect
         
         // Rockwell 65C02 addressing modes
         addressing_mode_handlers[AM_ZPR] = &fam65xx_t::addr_zp_rel;  // Zero Page Relative (for BBR/BBS)
