@@ -736,13 +736,12 @@ public:
                 // Processor-specific flag calculation
                 uint8_t n_flag, v_flag, z_flag, c_flag;
                 if constexpr (Traits.has(CPUCoreFlags::CMOS_BASE) && !Traits.has(CPUCoreFlags::ROCKWELL_BITS)) {
-                    // WDC65C02: Calculate flags before final adjustment, N flag from final result
+                    // WDC65C02: Calculate flags before final adjustment, N flag from binary result
                     c_flag = (ah > 15) ? FLAG_C : 0;
                     v_flag = ((~(old_a ^ operand) & (old_a ^ result)) >> 1) & FLAG_V;
                     z_flag = (result == 0) * FLAG_Z;
+                    n_flag = result & FLAG_N;  // FIXED: Use binary result for N flag like NMOS
                     if (ah > 9) ah += 6;
-                    const uint8_t bcd_result = (ah << 4) | (al & 0x0F);
-                    n_flag = bcd_result & FLAG_N;
                 } else {
                     // NMOS: Original flag behavior with quirky N flag calculation
                     n_flag = (result != 0) * ((ah << 4) & FLAG_N);
