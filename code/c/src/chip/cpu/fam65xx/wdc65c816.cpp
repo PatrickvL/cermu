@@ -4,6 +4,7 @@
 
 #include "wdc65c816.h"
 #include "fam65xx.hpp"
+#include "fam65xx_gui.h"
 
 using namespace fam65xx;
 
@@ -27,6 +28,9 @@ wdc65c816_t* wdc65c816_create(void) {
 }
 
 void wdc65c816_destroy(wdc65c816_t* cpu) {
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    unregister_cpu_from_gui(cpu);
+#endif
     delete CPU_CAST(cpu);
 }
 
@@ -167,6 +171,40 @@ void wdc65c816_set_pbr(wdc65c816_t* cpu, uint8_t value) {
 void wdc65c816_set_emulation_mode(wdc65c816_t* cpu, bool emulation) {
     // TODO: Set emulation mode in wide_registers mixin
     (void)emulation; // Placeholder
+}
+
+// WDC65C816 chip descriptor
+static chip_descriptor_t wdc65c816_base_descriptor;
+
+static void initialize_wdc65c816_descriptor() {
+    wdc65c816_base_descriptor.description = "WDC 65C816";
+    wdc65c816_base_descriptor.create = [](chip_descriptor_t* desc) -> void* {
+        return wdc65c816_create();
+    };
+    wdc65c816_base_descriptor.destroy = [](void* chip) {
+        wdc65c816_destroy(reinterpret_cast<wdc65c816_t*>(chip));
+    };
+    wdc65c816_base_descriptor.bus_attach = nullptr;  // Basic CPU doesn't need bus attach
+    wdc65c816_base_descriptor.bank_change = nullptr; // Basic CPU doesn't have banking
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    wdc65c816_base_descriptor.render_debug_window = [](void* cpu_handle, bool* show_window) {
+        wdc65c816_t* cpu = static_cast<wdc65c816_t*>(cpu_handle);
+        render_cpu_debug_window<WDC_65C816>(cpu, "WDC65C816");
+    };
+    wdc65c816_base_descriptor.render_settings_window = [](void* cpu_handle, bool* show_window) {
+        wdc65c816_t* cpu = static_cast<wdc65c816_t*>(cpu_handle);
+        render_cpu_settings_window<WDC_65C816>(cpu, "WDC65C816");
+    };
+#endif
+}
+
+const chip_descriptor_t* wdc65c816_get_chip_descriptor(void) {
+    static bool initialized = false;
+    if (!initialized) {
+        initialize_wdc65c816_descriptor();
+        initialized = true;
+    }
+    return &wdc65c816_base_descriptor;
 }
 
 } // extern "C"

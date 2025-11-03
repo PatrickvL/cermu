@@ -4,6 +4,7 @@
 
 #include "mos6510.h"
 #include "fam65xx.hpp"
+#include "fam65xx_gui.h"
 
 using namespace fam65xx;
 
@@ -27,6 +28,8 @@ mos6510_t* mos6510_create(void) {
 }
 
 void mos6510_destroy(mos6510_t* cpu) {
+    // Unregister from GUI system before destroying
+    fam65xx::unregister_cpu_from_gui(cpu);
     delete CPU_CAST(cpu);
 }
 
@@ -143,8 +146,8 @@ chip_descriptor_t mos6510_descriptor = {
     .bus_attach = nullptr,
     .bank_change = nullptr,  // MOS 6510 doesn't have banking
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-    .render_debug_window = nullptr,
-    .render_settings_window = nullptr
+    .render_debug_window = fam65xx_render_debug_window,
+    .render_settings_window = fam65xx_render_settings_window
 #endif
 };
 
