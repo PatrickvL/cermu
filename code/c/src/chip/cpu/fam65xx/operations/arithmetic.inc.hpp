@@ -20,14 +20,14 @@ bus_state_t op_adc(bus_state_t pins) {
             // Read operand directly into DL register
             pins = this->phi2_read_operand(pins, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
-                uint8_t operand = CPU_DL(this);
+                uint8_t operand = this->get(REG_DL);
                 
                 // Use ADC operation with processor-specific optimizations
                 this->perform_adc(operand);
                 
                 // CMOS processors need extra cycle in decimal mode
                 if constexpr (this->has_bcd_extra_cycle()) {
-                    if (CPU_P(this) & FLAG_D) {
+                    if (this->get(REG_P) & FLAG_D) {
                         this->cycle_index++;
                         return pins;
                     }
@@ -74,7 +74,7 @@ bus_state_t op_nop(bus_state_t pins) {
             // AM_IMM: All immediate NOPs read operand and increment PC
             pins = this->phi2_dummy_read(pins, REG_PC);
             if (FAM65XX_GET_RDY(pins)) {
-                CPU_PC(this)++;
+                this->inc(REG_PC);
             } else {
                 return pins;
             }
@@ -108,7 +108,7 @@ bus_state_t op_nop(bus_state_t pins) {
                 // Check for syscall pattern: FC 13 37
                 // Note : Having this in default instead of a separate case AM_ABX is less host code
                 // (at a cost of 1 otherwise needless compare for the other NES6502 memory NOPs)
-                if (CPU_IR(this) == 0xFC && CPU_ABL(this) == 0x13 && CPU_ABH(this) == 0x37) {
+                if (this->get(REG_IR) == 0xFC && this->get(REG_ABL) == 0x13 && this->get(REG_ABH) == 0x37) {
                     // Syscall detected - output character from 0x2000
                     if (this->mem_read) {
                         uint8_t character = this->mem_read(this->mem_user_data, 0x2000, 0);
@@ -137,14 +137,14 @@ bus_state_t op_sbc(bus_state_t pins) {
             // Read operand directly into DL register
             pins = this->phi2_read_operand(pins, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
-                uint8_t operand = CPU_DL(this);
+                uint8_t operand = this->get(REG_DL);
                 
                 // Use SBC operation with processor-specific optimizations
                 this->perform_sbc(operand);
                 
                 // CMOS processors need extra cycle in decimal mode
                 if constexpr (this->has_bcd_extra_cycle()) {
-                    if (CPU_P(this) & FLAG_D) {
+                    if (this->get(REG_P) & FLAG_D) {
                         this->cycle_index++;
                         return pins;
                     }
@@ -174,8 +174,8 @@ bus_state_t op_cmp(bus_state_t pins) {
     // Read operand directly into DL register
     pins = this->phi2_read_operand(pins, REG_DL);
     if (FAM65XX_GET_RDY(pins)) {
-        uint8_t operand = CPU_DL(this);
-        uint8_t a = CPU_A(this);
+        uint8_t operand = this->get(REG_DL);
+        uint8_t a = this->get(REG_A);
         
         // Use optimized comparison
         this->perform_compare(a, operand);
@@ -194,8 +194,8 @@ bus_state_t op_cpx(bus_state_t pins) {
     // Read operand directly into DL register
     pins = this->phi2_read_operand(pins, REG_DL);
     if (FAM65XX_GET_RDY(pins)) {
-        uint8_t operand = CPU_DL(this);
-        uint8_t x = CPU_X(this);
+        uint8_t operand = this->get(REG_DL);
+        uint8_t x = this->get(REG_X);
         
         // Use optimized comparison
         this->perform_compare(x, operand);
@@ -214,8 +214,8 @@ bus_state_t op_cpy(bus_state_t pins) {
     // Read operand directly into DL register
     pins = this->phi2_read_operand(pins, REG_DL);
     if (FAM65XX_GET_RDY(pins)) {
-        uint8_t operand = CPU_DL(this);
-        uint8_t y = CPU_Y(this);
+        uint8_t operand = this->get(REG_DL);
+        uint8_t y = this->get(REG_Y);
         
         // Use optimized comparison
         this->perform_compare(y, operand);

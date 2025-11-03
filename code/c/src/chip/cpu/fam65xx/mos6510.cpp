@@ -61,52 +61,52 @@ bool mos6510_opdone(mos6510_t* cpu) {
 
 // Register getters
 uint8_t mos6510_get_a(mos6510_t* cpu) {
-    return CPU_CAST(cpu)->reg8[REG_A];
+    return CPU_CAST(cpu)->get(REG_A);
 }
 
 uint8_t mos6510_get_x(mos6510_t* cpu) {
-    return CPU_CAST(cpu)->reg8[REG_X];
+    return CPU_CAST(cpu)->get(REG_X);
 }
 
 uint8_t mos6510_get_y(mos6510_t* cpu) {
-    return CPU_CAST(cpu)->reg8[REG_Y];
+    return CPU_CAST(cpu)->get(REG_Y);
 }
 
 uint8_t mos6510_get_s(mos6510_t* cpu) {
-    return CPU_CAST(cpu)->reg8[REG_SPL];
+    return CPU_CAST(cpu)->get(REG_SPL);
 }
 
 uint8_t mos6510_get_p(mos6510_t* cpu) {
-    return CPU_CAST(cpu)->reg8[REG_P];
+    return CPU_CAST(cpu)->get(REG_P);
 }
 
 uint16_t mos6510_get_pc(mos6510_t* cpu) {
-    return CPU_CAST(cpu)->reg16[REG_PC];
+    return CPU_CAST(cpu)->get(REG_PC);
 }
 
 // Register setters
 void mos6510_set_a(mos6510_t* cpu, uint8_t value) {
-    CPU_CAST(cpu)->reg8[REG_A] = value;
+    CPU_CAST(cpu)->set(REG_A, value);
 }
 
 void mos6510_set_x(mos6510_t* cpu, uint8_t value) {
-    CPU_CAST(cpu)->reg8[REG_X] = value;
+    CPU_CAST(cpu)->set(REG_X, value);
 }
 
 void mos6510_set_y(mos6510_t* cpu, uint8_t value) {
-    CPU_CAST(cpu)->reg8[REG_Y] = value;
+    CPU_CAST(cpu)->set(REG_Y, value);
 }
 
 void mos6510_set_s(mos6510_t* cpu, uint8_t value) {
-    CPU_CAST(cpu)->reg8[REG_SPL] = value;
+    CPU_CAST(cpu)->set(REG_SPL, value);
 }
 
 void mos6510_set_p(mos6510_t* cpu, uint8_t value) {
-    CPU_CAST(cpu)->reg8[REG_P] = value;
+    CPU_CAST(cpu)->set(REG_P, value);
 }
 
 void mos6510_set_pc(mos6510_t* cpu, uint16_t value) {
-    CPU_CAST(cpu)->reg16[REG_PC] = value;
+    CPU_CAST(cpu)->set(REG_PC, value);
 }
 
 // I/O Port access (6510-specific)

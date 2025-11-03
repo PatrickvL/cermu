@@ -203,10 +203,10 @@ public:
     
     void trace_registers(const char* context = "") const {
         if constexpr (ENABLE_TRACING) {
-            trace("REGS %s: PC=%04X A=%02X X=%02X Y=%02X P=%02X S=%02X", 
+            trace("REGS %s: PC=%04X A=%02X X=%02X Y=%02X P=%02X S=%02X",
                   context,
-                  CPU_PC(this), CPU_A(this), CPU_X(this), CPU_Y(this), 
-                  CPU_P(this), CPU_S(this));
+                  get(REG_PC), get(REG_A), get(REG_X), get(REG_Y),
+                  get(REG_P), get(REG_S));
         }
     }
     
@@ -242,7 +242,7 @@ public:
         /* Initialize register layout:
         * SP = 0x01FF (stack starts at top of page 1)
         */
-        CPU_SP(this) = 0x01FF; /* Stack pointer (page 1, starts at 0xFF) */
+        set(REG_SP, 0x01FF); /* Stack pointer (page 1, starts at 0xFF) */
 
         // Return initial pin state
         bus_state_t pins = 0;
@@ -282,11 +282,11 @@ public:
     
     bus_state_t reset(bus_state_t pins) {
         // Reset CPU state
-        CPU_A(this) = 0x00;
-        CPU_X(this) = 0x00;
-        CPU_Y(this) = 0x00;
-        CPU_S(this) = 0xFF;
-        CPU_P(this) = FLAG_U | FLAG_I; // Unused bit set, interrupts disabled
+        set(REG_A, 0x00);
+        set(REG_X, 0x00);
+        set(REG_Y, 0x00);
+        set(REG_S, 0xFF);
+        set(REG_P, FLAG_U | FLAG_I); // Unused bit set, interrupts disabled
         
         // Reset interrupt state
         this->brk_flags = 0;
@@ -305,9 +305,9 @@ public:
         this->init_conditional_features();
         
         // Load reset vector
-        CPU_AB(this) = 0xFFFC;
+        set(REG_AB, 0xFFFC);
         pins = this->phi2_read(pins, REG_AB, REG_PCL);
-        CPU_AB(this) = 0xFFFD;
+        set(REG_AB, 0xFFFD);
         pins = this->phi2_read(pins, REG_AB, REG_PCH);
         
         // Start fetch cycle
@@ -565,7 +565,7 @@ public:
             // Immediate mode - read from PC directly into target register
             pins = phi2_read(pins, REG_PC, target_reg);
             if (FAM65XX_GET_RDY(pins)) {
-                CPU_PC(this)++;
+                inc(REG_PC);
             }
             return pins;
         }
@@ -614,21 +614,70 @@ public:
     }
     
     // ========================================================================
+    // REGISTER ACCESSOR FUNCTIONS
+    // ========================================================================
+    
+    // 8-bit register get function
+    inline uint8_t get(reg8_t reg) const {
+        return this->reg8[reg];
+    }
+    
+    // 16-bit register get function
+    inline uint16_t get(reg16_t reg) const {
+        return this->reg16[reg];
+    }
+    
+    // 8-bit register set function
+    inline void set(reg8_t reg, uint8_t value) {
+        this->reg8[reg] = value;
+    }
+    
+    // 16-bit register set function
+    inline void set(reg16_t reg, uint16_t value) {
+        this->reg16[reg] = value;
+    }
+    
+    // 8-bit register inc function
+    inline void inc(reg8_t reg) {
+        this->reg8[reg]++;
+    }
+    
+    // 16-bit register inc function
+    inline void inc(reg16_t reg) {
+        this->reg16[reg]++;
+    }
+    
+    // 8-bit register dec function
+    inline void dec(reg8_t reg) {
+        this->reg8[reg]--;
+    }
+    
+    // 16-bit register dec function
+    inline void dec(reg16_t reg) {
+        this->reg16[reg]--;
+    }
+    
+    // Load function for reg8_t with bus_state_t pins
+    inline void load(reg8_t reg, bus_state_t pins) {
+        this->reg8[reg] = FAM65XX_GET_DATA(pins);
+    }
+
+    // ========================================================================
     // HELPER FUNCTIONS (needed by operation files)
     // ========================================================================
 
     // === Building blocks ===
     inline void set_flag(uint8_t flag_mask) {
-        CPU_P(this) |= flag_mask;
+        this->set(REG_P, this->get(REG_P) | flag_mask);
     }
     
     inline void clear_flag(uint8_t flag_mask) {
-        CPU_P(this) &= ~flag_mask;
+        this->set(REG_P, this->get(REG_P) & ~flag_mask);
     }
     
     // === Foundation: Single memory write ===
     inline void update_flags(uint8_t clear_mask, uint8_t set_mask) {
-        CPU_P(this) = (CPU_P(this) & ~clear_mask) | set_mask;
+        this->set(REG_P, (this->get(REG_P) & ~clear_mask) | set_mask);
     }
     
     inline void update_flag(uint8_t flag_mask, bool condition) {
@@ -731,13 +780,13 @@ public:
      * - 65C02: Enhanced BCD with corrected flag behavior
      */
     inline void perform_adc(uint8_t operand) {
-        const uint8_t old_a = CPU_A(this);
-        const uint8_t carry_in = CPU_P(this) & FLAG_C;
+        const uint8_t old_a = this->get(REG_A);
+        const uint8_t carry_in = this->get(REG_P) & FLAG_C;
         const uint16_t full_result = old_a + operand + carry_in;
         const uint8_t result = static_cast<uint8_t>(full_result);
 
         if constexpr (has_bcd()) {
-            if (CPU_P(this) & FLAG_D) {
+            if (this->get(REG_P) & FLAG_D) {
                 // BCD mode calculation
                 uint8_t al = (old_a & 0x0F) + (operand & 0x0F) + carry_in;
                 if (al > 9) al += 6;
@@ -789,19 +838,19 @@ public:
                 }
                 
                 // Apply result and flags
-                CPU_A(this) = (ah << 4) | (al & 0x0F);
-                CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                    n_flag | v_flag | z_flag | c_flag;
+                this->set(REG_A, (ah << 4) | (al & 0x0F));
+                this->set(REG_P, (this->get(REG_P) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+                    n_flag | v_flag | z_flag | c_flag);
                 return;
             }
         }
         
         // Binary mode
-        CPU_A(this) = result;
-        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+        this->set(REG_A, result);
+        this->set(REG_P, (this->get(REG_P) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
             calc_nz_flags(result) |
             calc_v_flag_add(old_a, operand, result) |
-            calc_c_flag(full_result);
+            calc_c_flag(full_result));
     }
 
     /**
@@ -809,13 +858,13 @@ public:
      * Based on ProcessorTests validation and actual 65xx silicon behavior
      */
     inline void perform_sbc(uint8_t operand) {
-        const uint8_t old_a = CPU_A(this);
-        const uint8_t borrow_in = (CPU_P(this) & FLAG_C) ^ 1;  // Invert carry for borrow
+        const uint8_t old_a = this->get(REG_A);
+        const uint8_t borrow_in = (this->get(REG_P) & FLAG_C) ^ 1;  // Invert carry for borrow
         const uint16_t full_result = old_a - operand - borrow_in;
         const uint8_t result = static_cast<uint8_t>(full_result);
 
         if constexpr (has_bcd()) {
-            if (CPU_P(this) & FLAG_D) {
+            if (this->get(REG_P) & FLAG_D) {
                 // Hardware-accurate 6502 BCD subtraction
                 // Different algorithms for NMOS vs CMOS processors
                 
@@ -876,19 +925,19 @@ public:
                 }
                 
                 // Apply result and flags
-                CPU_A(this) = bcd_result;
-                CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-                    n_flag | v_flag | z_flag | c_flag;
+                this->set(REG_A, bcd_result);
+                this->set(REG_P, (this->get(REG_P) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+                    n_flag | v_flag | z_flag | c_flag);
                 return;
             }
         }
         
         // Binary mode
-        CPU_A(this) = result;
-        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
+        this->set(REG_A, result);
+        this->set(REG_P, (this->get(REG_P) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
             calc_nz_flags(result) |
             calc_v_flag_sub(old_a, operand, full_result) |
-            (!(full_result & 0x0100) ? FLAG_C : 0);
+            (!(full_result & 0x0100) ? FLAG_C : 0));
     }
 
     /**
@@ -897,8 +946,8 @@ public:
      */
     inline void perform_compare(uint8_t reg_value, uint8_t operand) {
         // Update flags using branchless calculations
-        CPU_P(this) = (CPU_P(this) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-                      calc_nzc_flags(reg_value, operand);
+        this->set(REG_P, (this->get(REG_P) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
+                      calc_nzc_flags(reg_value, operand));
     }
 
     // ========================================================================
@@ -1007,7 +1056,7 @@ private:
         // Check if IRQ has completed shift (3 consecutive cycles) - lowest priority
         // IRQ is masked by the I flag (interrupt disable)
         if constexpr (has_irq_line()) {
-            if ((shift_reg & INT_IRQ_MASK) == INT_IRQ_MASK && !(CPU_P(this) & FLAG_I)) {
+            if ((shift_reg & INT_IRQ_MASK) == INT_IRQ_MASK && !(this->get(REG_P) & FLAG_I)) {
                 this->brk_flags |= FAM65XX_BRK_IRQ;
                 return true;
             }
@@ -1021,16 +1070,16 @@ private:
         trace_enter("fetch_opcode");
         
         // Read opcode from PC
-        CPU_AB(this) = CPU_PC(this);
-        trace("Fetching opcode from PC=%04X", CPU_PC(this));
+        set(REG_AB, get(REG_PC));
+        trace("Fetching opcode from PC=%04X", get(REG_PC));
         pins = this->phi2_read(pins, REG_AB, REG_IR);
-        CPU_PC(this)++;
+        inc(REG_PC);
         
         // Set SYNC signal for opcode fetch
         pins |= FAM65XX_SYNC;
         
         // Decode opcode and set up instruction
-        uint8_t opcode = CPU_IR(this);
+        uint8_t opcode = get(REG_IR);
         trace("Fetched opcode: %02X", opcode);
         this->opcode_entry = get_opcode_info(opcode);
         this->cycle_index = 0;

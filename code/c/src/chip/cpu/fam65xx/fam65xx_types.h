@@ -245,32 +245,6 @@ typedef struct {
     uint16_t flags    : 4;  // Opcode flags (bits 12-15) [type opcode_flags_t]
 } opcode_info_t;
 
-// ============================================================================
-// Accessor Macros
-// ============================================================================
-
-/* Accessor macros for cleaner code */
-#define CPU_SP(cpu)    ((cpu)->reg16[REG_SP])   /* Stack pointer (0x0100 | SPL) */
-#define CPU_AB(cpu)    ((cpu)->reg16[REG_AB])   /* Address Bus Latch (ABH/ABL) */
-#define CPU_PC(cpu)    ((cpu)->reg16[REG_PC])   /* Program Counter (PCH/PCL) */
-
-/* Individual byte access - using the new register layout */
-#define CPU_S(cpu)     ((cpu)->reg8[REG_SPL])   /* Stack Pointer Low (High is always 0x01)*/
-#define CPU_ABH(cpu)   ((cpu)->reg8[REG_ABH])   /* Address Bus Latch High */
-#define CPU_ABL(cpu)   ((cpu)->reg8[REG_ABL])   /* Address Bus Latch Low */
-#define CPU_PCH(cpu)   ((cpu)->reg8[REG_PCH])   /* Program Counter High */
-#define CPU_PCL(cpu)   ((cpu)->reg8[REG_PCL])   /* Program Counter Low */
-
-#define CPU_A(cpu)     ((cpu)->reg8[REG_A])
-#define CPU_X(cpu)     ((cpu)->reg8[REG_X])
-#define CPU_Y(cpu)     ((cpu)->reg8[REG_Y])
-#define CPU_P(cpu)     ((cpu)->reg8[REG_P])
-#define CPU_IR(cpu)    ((cpu)->reg8[REG_IR])
-#define CPU_DL(cpu)    ((cpu)->reg8[REG_DL])
-
-/* Legacy aliases for compatibility */
-#define CPU_AD(cpu)    CPU_AB(cpu)  /* Address latch as 16-bit - now maps to AB */
-
 #ifdef __cplusplus
 } // extern "C"
 #endif

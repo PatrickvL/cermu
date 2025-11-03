@@ -81,7 +81,11 @@ namespace fam65xx {
     // Forward declare any missing processor tags (avoid redefinition)
     #ifndef FAM65XX_MOCK_PROCESSOR_TAG
     #define FAM65XX_MOCK_PROCESSOR_TAG
-    struct MockProcessorTag {};
+    
+    struct MockProcessorTag {
+        constexpr bool has(uint32_t flag) const { return false; }
+        constexpr bool has_io_port() const { return false; }
+    };
     #endif
     
     // Create surrogate template class that matches real template structure
@@ -104,6 +108,9 @@ namespace fam65xx {
       bus_state_t (fam65xx_t::*current_handler)(bus_state_t);
       uint8_t cycle_index;
       
+      // Surrogate processor traits object
+      static constexpr MockProcessorTag Traits{};
+      
       // Memory callback interface (matching real template)
       fam65xx_mem_read_t mem_read;
       fam65xx_mem_write_t mem_write;
@@ -116,6 +123,16 @@ namespace fam65xx {
       // =====================================================================
       // SURROGATE MEMBER FUNCTION STUBS
       // =====================================================================
+      
+      // Register access functions
+      inline uint8_t get(reg8_t reg) const { return 0; }
+      inline uint16_t get(reg16_t reg) const { return 0; }
+      inline void set(reg8_t reg, uint8_t value) {}
+      inline void set(reg16_t reg, uint16_t value) {}
+      inline void inc(reg8_t reg) {}
+      inline void inc(reg16_t reg) {}
+      inline void dec(reg8_t reg) {}
+      inline void dec(reg16_t reg) {}
       
       // Memory access functions
       template<bool store_in_register = true>
@@ -150,19 +167,24 @@ namespace fam65xx {
       // Additional helper functions that might be missing
       inline uint8_t calc_nz_flags(uint8_t value) const { return 0; }
       
+      // Processor trait functions (static constexpr)
+      static constexpr bool has_cmos() { return false; }
+      static constexpr bool has_wide_registers() { return false; }
+      static constexpr bool has_illegal_opcodes() { return false; }
+      
       // =====================================================================
       // OPCODE TABLE TEMPLATE FUNCTION DECLARATION
       // =====================================================================
       
       // Special handling for opcode_tables.inc.hpp template specializations
-      template<typename ProcessorType>
-      static constexpr std::array<opcode_info_t, 256> generate_opcode_table() {
-        return std::array<opcode_info_t, 256>{};
-      }
+      // Note: Template function removed to avoid lint parsing errors
       
       // =====================================================================
       // THE ACTUAL .INC.HPP MEMBER FUNCTIONS WILL BE DECLARED HERE
       // This is where the linter will see the member functions in proper class scope
       // =====================================================================
-
+      
+      // Note: Class intentionally left open - will be closed by inc_lint_prevention_footer.hpp
+      // The VS Code language server may show "expected ';' after class" but this is by design
+      
 #endif // FAM65XX_TEMPLATE_CONTEXT

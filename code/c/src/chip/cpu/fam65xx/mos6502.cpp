@@ -72,52 +72,52 @@ bool mos6502_opdone(mos6502_t* cpu) {
 
 // Register getters
 uint8_t mos6502_get_a(mos6502_t* cpu) {
-    return CPU_A(CPU_CAST(mos6502_cpu_t, cpu));
+    return CPU_CAST(mos6502_cpu_t, cpu)->get(REG_A);
 }
 
 uint8_t mos6502_get_x(mos6502_t* cpu) {
-    return CPU_X(CPU_CAST(mos6502_cpu_t, cpu));
+    return CPU_CAST(mos6502_cpu_t, cpu)->get(REG_X);
 }
 
 uint8_t mos6502_get_y(mos6502_t* cpu) {
-    return CPU_Y(CPU_CAST(mos6502_cpu_t, cpu));
+    return CPU_CAST(mos6502_cpu_t, cpu)->get(REG_Y);
 }
 
 uint8_t mos6502_get_s(mos6502_t* cpu) {
-    return CPU_S(CPU_CAST(mos6502_cpu_t, cpu));
+    return CPU_CAST(mos6502_cpu_t, cpu)->get(REG_S);
 }
 
 uint8_t mos6502_get_p(mos6502_t* cpu) {
-    return CPU_P(CPU_CAST(mos6502_cpu_t, cpu));
+    return CPU_CAST(mos6502_cpu_t, cpu)->get(REG_P);
 }
 
 uint16_t mos6502_get_pc(mos6502_t* cpu) {
-    return CPU_PC(CPU_CAST(mos6502_cpu_t, cpu));
+    return CPU_CAST(mos6502_cpu_t, cpu)->get(REG_PC);
 }
 
 // Register setters
 void mos6502_set_a(mos6502_t* cpu, uint8_t value) {
-    CPU_A(CPU_CAST(mos6502_cpu_t, cpu)) = value;
+    CPU_CAST(mos6502_cpu_t, cpu)->set(REG_A, value);
 }
 
 void mos6502_set_x(mos6502_t* cpu, uint8_t value) {
-    CPU_X(CPU_CAST(mos6502_cpu_t, cpu)) = value;
+    CPU_CAST(mos6502_cpu_t, cpu)->set(REG_X, value);
 }
 
 void mos6502_set_y(mos6502_t* cpu, uint8_t value) {
-    CPU_Y(CPU_CAST(mos6502_cpu_t, cpu)) = value;
+    CPU_CAST(mos6502_cpu_t, cpu)->set(REG_Y, value);
 }
 
 void mos6502_set_s(mos6502_t* cpu, uint8_t value) {
-    CPU_S(CPU_CAST(mos6502_cpu_t, cpu)) = value;
+    CPU_CAST(mos6502_cpu_t, cpu)->set(REG_S, value);
 }
 
 void mos6502_set_p(mos6502_t* cpu, uint8_t value) {
-    CPU_P(CPU_CAST(mos6502_cpu_t, cpu)) = value;
+    CPU_CAST(mos6502_cpu_t, cpu)->set(REG_P, value);
 }
 
 void mos6502_set_pc(mos6502_t* cpu, uint16_t value) {
-    CPU_PC(CPU_CAST(mos6502_cpu_t, cpu)) = value;
+    CPU_CAST(mos6502_cpu_t, cpu)->set(REG_PC, value);
 }
 
 // ============================================================================

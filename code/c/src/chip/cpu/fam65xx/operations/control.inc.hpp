@@ -16,7 +16,7 @@
 /* JMP - Jump */
 bus_state_t op_jmp(bus_state_t pins) {
     /* Set PC to target address (addressing mode has already set up AB register) */
-    CPU_PC(this) = CPU_AB(this);
+    this->set(REG_PC, this->get(REG_AB));
     transition_to_fetch();
     return pins;
 }
@@ -28,7 +28,7 @@ bus_state_t op_jsr(bus_state_t pins) {
             /* PHI2: Read low byte of target address from PC directly to ABL */
             pins = phi2_read(pins, REG_PC, REG_ABL);
             if (FAM65XX_GET_RDY(pins)) {
-                CPU_PC(this)++;
+                this->inc(REG_PC);
                 this->cycle_index++;
             }
             return pins;
@@ -44,8 +44,8 @@ bus_state_t op_jsr(bus_state_t pins) {
         case 2:
             /* PHI2: Push PCH (high byte of return address) to stack */
             if (this->should_complete_write_cycle(pins)) {
-                pins = this->phi2_write(pins, CPU_SP(this), CPU_PCH(this));
-                CPU_S(this)--;
+                pins = this->phi2_write(pins, this->get(REG_SP), this->get(REG_PCH));
+                this->dec(REG_S);
                 this->cycle_index++;
             }
             return pins;
@@ -53,8 +53,8 @@ bus_state_t op_jsr(bus_state_t pins) {
         case 3:
             /* PHI2: Push PCL (low byte of return address) to stack */
             if (this->should_complete_write_cycle(pins)) {
-                pins = this->phi2_write(pins, CPU_SP(this), CPU_PCL(this));
-                CPU_S(this)--;
+                pins = this->phi2_write(pins, this->get(REG_SP), this->get(REG_PCL));
+                this->dec(REG_S);
                 this->cycle_index++;
             }
             return pins;
@@ -64,7 +64,7 @@ bus_state_t op_jsr(bus_state_t pins) {
             pins = phi2_read(pins, REG_PC, REG_ABH);
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Set PC to target address */
-                CPU_PC(this) = CPU_AB(this);
+                this->set(REG_PC, this->get(REG_AB));
                 transition_to_fetch();
             }
             return pins;
@@ -87,7 +87,7 @@ bus_state_t op_rts(bus_state_t pins) {
             /* PHI2: Dummy read from current stack pointer, then increment SP */
             pins = phi2_dummy_read(pins, REG_SP);
             if (FAM65XX_GET_RDY(pins)) {
-                CPU_S(this)++;
+                this->inc(REG_S);
                 this->cycle_index++;
             }
             return pins;
@@ -96,7 +96,7 @@ bus_state_t op_rts(bus_state_t pins) {
             /* PHI2: Pull PCL from stack */
             pins = phi2_read(pins, REG_SP, REG_PCL);
             if (FAM65XX_GET_RDY(pins)) {
-                CPU_S(this)++;
+                this->inc(REG_S);
                 this->cycle_index++;
             }
             return pins;
@@ -113,7 +113,7 @@ bus_state_t op_rts(bus_state_t pins) {
             /* PHI2: Dummy read from PC, then increment PC */
             pins = phi2_dummy_read(pins, REG_PC);
             if (FAM65XX_GET_RDY(pins)) {
-                CPU_PC(this)++;
+                this->inc(REG_PC);
                 transition_to_fetch();
             }
             return pins;
@@ -132,7 +132,7 @@ bus_state_t op_brk(bus_state_t pins) {
             /* PHI2: Dummy read from PC+1 (BRK has optional signature byte) */
             pins = phi2_dummy_read(pins, REG_PC);
             if (FAM65XX_GET_RDY(pins)) {
-                CPU_PC(this)++;
+                this->inc(REG_PC);
                 this->cycle_index++;
             }
             return pins;
@@ -140,8 +140,8 @@ bus_state_t op_brk(bus_state_t pins) {
         case 1:
             /* PHI2: Push PCH to stack */
             if (this->should_complete_write_cycle(pins)) {
-                pins = this->phi2_write(pins, CPU_SP(this), CPU_PCH(this));
-                CPU_S(this)--;
+                pins = this->phi2_write(pins, this->get(REG_SP), this->get(REG_PCH));
+                this->dec(REG_S);
                 this->cycle_index++;
             }
             return pins;
@@ -149,8 +149,8 @@ bus_state_t op_brk(bus_state_t pins) {
         case 2:
             /* PHI2: Push PCL to stack */
             if (this->should_complete_write_cycle(pins)) {
-                pins = this->phi2_write(pins, CPU_SP(this), CPU_PCL(this));
-                CPU_S(this)--;
+                pins = this->phi2_write(pins, this->get(REG_SP), this->get(REG_PCL));
+                this->dec(REG_S);
                 this->cycle_index++;
             }
             return pins;
@@ -158,9 +158,9 @@ bus_state_t op_brk(bus_state_t pins) {
         case 3:
             /* PHI2: Push P|B|U to stack (B flag set for BRK) */
             if (this->should_complete_write_cycle(pins)) {
-                uint8_t status_with_flags = CPU_P(this) | FLAG_B | FLAG_U;
-                pins = this->phi2_write(pins, CPU_SP(this), status_with_flags);
-                CPU_S(this)--;
+                uint8_t status_with_flags = this->get(REG_P) | FLAG_B | FLAG_U;
+                pins = this->phi2_write(pins, this->get(REG_SP), status_with_flags);
+                this->dec(REG_S);
                 /* Set interrupt disable flag - processor specific behavior */
                 if constexpr (has_nmos_bugs()) {
                     /* NMOS 6502 always sets I flag on BRK */
@@ -176,7 +176,7 @@ bus_state_t op_brk(bus_state_t pins) {
             
         case 4:
             /* PHI2: Read IRQ vector low byte from $FFFE */
-            CPU_AB(this) = 0xFFFE;
+            this->set(REG_AB, 0xFFFE);
             pins = phi2_read(pins, REG_AB, REG_PCL);
             if (FAM65XX_GET_RDY(pins)) {
                 this->cycle_index++;
@@ -185,7 +185,7 @@ bus_state_t op_brk(bus_state_t pins) {
             
         case 5:
             /* PHI2: Read IRQ vector high byte from $FFFF */
-            CPU_AB(this) = 0xFFFF;
+            this->set(REG_AB, 0xFFFF);
             pins = phi2_read(pins, REG_AB, REG_PCH);
             if (FAM65XX_GET_RDY(pins)) {
                 transition_to_fetch();
@@ -210,7 +210,7 @@ bus_state_t op_rti(bus_state_t pins) {
             /* PHI2: Dummy read from current stack pointer, then increment SP */
             pins = phi2_dummy_read(pins, REG_SP);
             if (FAM65XX_GET_RDY(pins)) {
-                CPU_S(this)++;
+                this->inc(REG_S);
                 this->cycle_index++;
             }
             return pins;
@@ -219,8 +219,8 @@ bus_state_t op_rti(bus_state_t pins) {
             /* PHI2: Pull P from stack (clear B, set U) */
             pins = phi2_read(pins, REG_SP, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
-                CPU_P(this) = (CPU_DL(this) & ~FLAG_B) | FLAG_U;
-                CPU_S(this)++;
+                this->set(REG_P, (this->get(REG_DL) & ~FLAG_B) | FLAG_U);
+                this->inc(REG_S);
                 this->cycle_index++;
             }
             return pins;
@@ -229,7 +229,7 @@ bus_state_t op_rti(bus_state_t pins) {
             /* PHI2: Pull PCL from stack */
             pins = phi2_read(pins, REG_SP, REG_PCL);
             if (FAM65XX_GET_RDY(pins)) {
-                CPU_S(this)++;
+                this->inc(REG_S);
                 this->cycle_index++;
             }
             return pins;
