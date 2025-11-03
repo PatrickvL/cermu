@@ -17,13 +17,11 @@ This header preserves legacy BUS_GET_LINES/BUS_SET_LINES semantics to avoid touc
 typedef uint64_t bus_state_t;
 
 /* Field shifts and masks */
-#define BUS_ADDR_SHIFT      0
-#define BUS_DATA_SHIFT      16
-#define BUS_BANK_SHIFT      24
+#define BUS_DATA_SHIFT      0
+#define BUS_ADDR_SHIFT      8
 
-#define BUS_ADDR_MASK       0x000000000000FFFFULL
-#define BUS_DATA_MASK       0x0000000000FF0000ULL
-#define BUS_BANK_MASK       0x00000000FF000000ULL
+#define BUS_DATA_MASK       0x00000000000000FFULL
+#define BUS_ADDR_MASK       0x0000000000FFFF00ULL
 
 /* Core pin bit indices */
 #define BUS_RES_BIT     32
@@ -50,13 +48,11 @@ typedef uint64_t bus_state_t;
 #define BUS_GET_BIT(state, bit) (((state) & BUS_BIT(bit)) != 0)
 
 /* High-performance field access macros */
-#define BUS_GET_ADDR(state)     ((uint16_t)((state) & BUS_ADDR_MASK))
 #define BUS_GET_DATA(state)     ((uint8_t) (((state) & BUS_DATA_MASK) >> BUS_DATA_SHIFT))
-#define BUS_GET_BANK(state)     ((uint8_t) (((state) & BUS_BANK_MASK) >> BUS_BANK_SHIFT))
+#define BUS_GET_ADDR(state)     ((uint16_t)(((state) & BUS_ADDR_MASK) >> BUS_ADDR_SHIFT))
 
-#define BUS_SET_ADDR(state, addr)   ((state) = ((state) & ~BUS_ADDR_MASK) | ((uint64_t)(addr) & 0xFFFFULL))
 #define BUS_SET_DATA(state, data)   ((state) = ((state) & ~BUS_DATA_MASK) | (((uint64_t)(data) & 0xFFULL) << BUS_DATA_SHIFT))
-#define BUS_SET_BANK(state, bank)   ((state) = ((state) & ~BUS_BANK_MASK) | (((uint64_t)(bank) & 0xFFULL) << BUS_BANK_SHIFT))
+#define BUS_SET_ADDR(state, addr)   ((state) = ((state) & ~BUS_ADDR_MASK) | (((uint64_t)(addr) & 0xFFFFULL) << BUS_ADDR_SHIFT))
 
 /* Legacy bus control line definitions (kept stable for callers) */
 #define BUS_LINE_IRQ    0 // Interrupt request line (legacy: 1 = asserted)
