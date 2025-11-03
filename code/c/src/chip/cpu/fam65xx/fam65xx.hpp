@@ -410,10 +410,11 @@ public:
     }
 
     // Unified memory write function with optional I/O port handling - optimized version
-    bus_state_t phi2_write(bus_state_t pins, uint16_t addr, uint8_t data) {
+    bus_state_t phi2_write(bus_state_t pins, reg16_t addr_reg, uint8_t data) {
         // Address and data provided directly - no register allocation needed
         
         // Set up bus pins for write operation
+        uint16_t addr = get(addr_reg);
         pins = FAM65XX_SET_ADDR(pins, addr);
         pins = FAM65XX_SET_DATA(pins, data);
         pins &= ~FAM65XX_RW; // Set WRITE mode
