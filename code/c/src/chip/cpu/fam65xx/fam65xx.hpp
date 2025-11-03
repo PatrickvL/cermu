@@ -409,55 +409,6 @@ public:
         }
     }
 
-    // Unified memory write function with optional I/O port handling - optimized version
-    bus_state_t phi2_write(bus_state_t pins, reg16_t addr_reg, uint8_t data) {
-        // Address and data provided directly - no register allocation needed
-        
-        // Set up bus pins for write operation
-        uint16_t addr = get(addr_reg);
-        pins = FAM65XX_SET_ADDR(pins, addr);
-        pins = FAM65XX_SET_DATA(pins, data);
-        pins &= ~FAM65XX_RW; // Set WRITE mode
-        
-        // Handle APU register access (compile-time conditional)
-        if constexpr (has_apu()) {
-            if (this->write_apu_register(addr, data)) {
-                // APU register handled, but still call memory callback for test compatibility
-                if (this->mem_write != nullptr) {
-                    this->mem_write(this->mem_user_data, addr, data);
-                }
-                return pins;
-            }
-        }
-        
-        // Handle 6510 I/O port access (compile-time conditional)
-        if constexpr (has_io_port()) {
-            if (addr == 0x0000) {
-                this->write_io_ddr(data);
-                // Still call memory callback for test compatibility
-                if (this->mem_write != nullptr) {
-                    this->mem_write(this->mem_user_data, addr, data);
-                }
-                return pins;
-            } else if (addr == 0x0001) {
-                this->write_io_data(data);
-                // Still call memory callback for test compatibility
-                if (this->mem_write != nullptr) {
-                    this->mem_write(this->mem_user_data, addr, data);
-                }
-                return pins;
-            }
-        }
-        
-        // Standard bus write for all other addresses
-        // Use memory callback if available
-        if (this->mem_write != nullptr) {
-            this->mem_write(this->mem_user_data, addr, data);
-        }
-        
-        return pins;
-    }
-    
     /*
      * PHI2 Read with Hardware-Accurate RDY Behavior
      *
@@ -495,69 +446,180 @@ public:
      * - When RDY=0: VIC-II continues its memory access, CPU waits but bus must be serviced
      * - Memory callbacks and pin updates are essential for VIC-II operation
      * - Address bus behavior changes based on RDY but memory access always occurs
+     * 
+     * This template method provides a unified interface for all bus operations
+     * with compile-time optimization based on processor traits. It serves as
+     * the foundation for implementing cycle-accurate, processor-variant-aware
+     * bus operations.
+     * 
+     * Template Parameters:
+     * - IsWrite: true for write operations, false for read operations
+     * - IsDummy: true for dummy/internal cycles, false for data cycles
+     * 
+     * Features:
+     * - Zero-overhead abstractions through template specialization
+     * - Hardware-accurate RDY handling per processor variant
+     * - Conditional DMA callback support for external devices
+     * - Optimized bus line updates for simulation environments
+     * - Memory callback integration with floating bus simulation
+     * 
+     * @param pins Current bus state (modified and returned)
+     * @param addr Physical address for bus operation
+     * @param data Data byte (for write operations, ignored for reads)
+     * @return Updated bus state with operation results
      */
-    
-    // Streamlined template-based phi2_read with optional register write control
-    // store_in_register: true = normal operation, false = dummy read (no register write)
-    template<bool store_in_register = true>
-    inline bus_state_t phi2_read_template(bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) {
-        // Set R/W̅ bit to indicate READ (1 = Read, 0 = Write) - early optimization
-        pins |= FAM65XX_RW;
-        
-        // Hardware-accurate RDY handling - safe address resolution without undefined behavior
-        uint16_t address;
+    template<bool IsWrite, bool IsDummy>
+    bus_state_t phi2_access(bus_state_t pins, reg16_t addr_reg, uint8_t data = 0) {
+        // Hardware-accurate RDY check - DMA device may have bus control
         if (!FAM65XX_GET_RDY(pins)) {
-            address = FAM65XX_GET_ADDR(pins);
-        } else {
-            address = this->reg16[addr_reg];
-            pins = FAM65XX_SET_ADDR(pins, address);            
+            // When RDY is low, external device (e.g., VIC-II) controls the bus
+            // CPU is stalled but bus operations continue for DMA compatibility
             
-            if constexpr (has_io_port()) {
-                if (address <= 0x0001) {
-                    const uint8_t io_data = (address == 0x0000)
-                        ? this->read_io_port()
-                        : this->io_port.direction;
-                    if constexpr (store_in_register)
-                        this->reg8[data_reg] = io_data;
-
-                    return pins; // Address and R/W already set, no need to update DATA pins for I/O
-                }
+            // For dummy cycles, still respect RDY but don't perform memory access
+            if constexpr (IsDummy && !Traits.accurate_internal_cycles()) {
+                // Skip dummy cycles if not simulating internal timing
+                return pins;
             }
+            
+            // DMA device has bus control - use existing address/data from pins
+            uint32_t dma_addr = FAM65XX_GET_ADDR(pins);
+            uint8_t bus_data = FAM65XX_GET_DATA(pins);
+            
+            // Perform DMA memory access (typically read for VIC-II)
+            uint8_t result_data = (this->mem_read != nullptr)
+                ? this->mem_read(this->mem_user_data, dma_addr, bus_data)
+                : bus_data;
+            
+            return FAM65XX_SET_DATA(pins, result_data);
+        }
+        
+        // CPU has bus control - proceed with normal operation
 
-            // Fast-path register access checks (compile-time conditional, optimized order)
-            if constexpr (has_apu()) {
-                uint8_t apu_data;
-                if (this->read_apu_register(address, apu_data)) {
-                    if constexpr (store_in_register)
-                        this->reg8[data_reg] = apu_data;
-
-                    return FAM65XX_SET_DATA(pins, apu_data);
-                }
+        // Skip dummy cycles if not simulating internal timing
+        if constexpr (IsDummy && !Traits.accurate_internal_cycles()) {
+            return pins;
+        }
+        
+        // Extract address from register
+        uint32_t addr = this->reg16[addr_reg];        
+        
+        // Update bus lines if enabled (for test/simulation environments)
+        if constexpr (Traits.update_bus_lines()) {
+            // Set address on bus (mask to processor's address width)
+            pins = FAM65XX_SET_ADDR(pins, addr & Traits.address_mask());
+            
+            // Set R/W̅ line (1 = Read, 0 = Write)
+            if constexpr (IsWrite) {
+                pins &= ~FAM65XX_RW;  // Clear RW for write
+            } else {
+                pins |= FAM65XX_RW;   // Set RW for read
             }
         }
+        
+        // Get current bus data for floating bus simulation
+        uint8_t bus_data = FAM65XX_GET_DATA(pins);
+        
+        // Perform memory operation based on template parameters
+        if constexpr (IsWrite) {
+            // WRITE OPERATION
             
-        // Standard memory access - always perform for VIC-II compatibility
-        const uint8_t data = (this->mem_read != nullptr)
-            ? this->mem_read(this->mem_user_data, address, FAM65XX_GET_DATA(pins))
-            : FAM65XX_GET_DATA(pins);
+            // Handle processor-specific I/O port access (compile-time conditional)
+            if constexpr (Traits.has_io_port()) {
+                if (addr <= 0x0001) {
+                    if (addr == 0x0000) {
+                        this->write_io_ddr(data);
+                    } else {
+                        this->write_io_data(data);
+                    }
+                    // Still call memory callback for test compatibility
+                    if (this->mem_write != nullptr) {
+                        this->mem_write(this->mem_user_data, addr, data);
+                    }
+                    return FAM65XX_SET_DATA(pins, data);
+                }
+            }
             
-        // Single conditional register write and pin update
-        if constexpr (store_in_register)
-            this->reg8[data_reg] = data;
-
-        return FAM65XX_SET_DATA(pins, data);
+            // Handle APU register access (compile-time conditional)
+            if constexpr (Traits.has_apu()) {
+                if (this->write_apu_register(addr, data)) {
+                    // APU register handled, but still call memory callback
+                    if (this->mem_write != nullptr) {
+                        this->mem_write(this->mem_user_data, addr, data);
+                    }
+                    return FAM65XX_SET_DATA(pins, data);
+                }
+            }
+            
+            // Standard memory write
+            if (this->mem_write != nullptr) {
+                this->mem_write(this->mem_user_data, addr, data);
+            }
+            
+            pins = FAM65XX_SET_DATA(pins, data);
+        } else {
+            // READ OPERATION
+            
+            // Handle processor-specific I/O port access first (compile-time conditional)
+            if constexpr (Traits.has_io_port()) {
+                if (addr <= 0x0001) {
+                    const uint8_t io_data = (addr == 0x0000)
+                        ? this->read_io_port()
+                        : this->io_port.direction;
+                    
+                    // For dummy reads, data is read but not used by CPU
+                    if constexpr (!IsDummy) {
+                        pins = FAM65XX_SET_DATA(pins, io_data);
+                    }
+                    return pins;
+                }
+            }
+            
+            // Handle APU register access (compile-time conditional)
+            if constexpr (Traits.has_apu()) {
+                uint8_t apu_data;
+                if (this->read_apu_register(addr, apu_data)) {
+                    // For dummy reads, data is read but not used by CPU
+                    if constexpr (!IsDummy) {
+                        pins = FAM65XX_SET_DATA(pins, apu_data);
+                    }
+                    return pins;
+                }
+            }
+            
+            // Standard memory access for all other addresses
+            uint8_t read_data = (this->mem_read != nullptr)
+                ? this->mem_read(this->mem_user_data, addr, bus_data)
+                : bus_data;  // Floating bus fallback
+            
+            // For dummy reads, data is read but not used by CPU
+            if constexpr (!IsDummy) {
+                pins = FAM65XX_SET_DATA(pins, read_data);
+            }
+        }
+        
+        return pins;
     }
     
-    // Standard phi2_read function (backward compatibility)
+    // ========================================================================
+    // CONCRETE BUS ACCESS WRAPPERS (Reference Implementation Style)
+    // ========================================================================
+    
+    /**
+     * Concrete wrapper functions for the phi2_access template
+     * These provide type-safe, easy-to-use interfaces while maintaining
+     * the zero-overhead benefits of the template implementation.
+     */
+    
     inline bus_state_t phi2_read(bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) {
-        return phi2_read_template<true>(pins, addr_reg, data_reg);
-    }
-    
-    // Optimized dummy read that doesn't write to any register
-    // For cases where we only need the bus timing, not the actual data
-    inline bus_state_t phi2_dummy_read(bus_state_t pins, reg16_t addr_reg) {
-        // Template parameter false = no register write, much more efficient
-        return phi2_read_template<false>(pins, addr_reg, static_cast<reg8_t>(0)); // data_reg is unused but type-safe
+        // Use the phi2_access template for read operation
+        pins = phi2_access<false, false>(pins, addr_reg);
+        
+        // Store the result in the specified data register if CPU has bus control
+        if (FAM65XX_GET_RDY(pins)) {
+            load(data_reg, pins); // TOOD : Move to cycle code?
+        }
+        
+        return pins;
     }
     
     // Optimized version with direct register targeting to eliminate copies
@@ -570,9 +632,20 @@ public:
             }
             return pins;
         }
-
         // Memory mode - read from target address directly into target register
         return phi2_read(pins, REG_AB, target_reg);
+    }
+
+    inline bus_state_t phi2_write(bus_state_t pins, reg16_t addr_reg, uint8_t data) {
+        return phi2_access<true, false>(pins, addr_reg, data);
+    }
+    
+    inline bus_state_t phi2_dummy_read(bus_state_t pins, reg16_t addr_reg) {
+        return phi2_access<false, true>(pins, addr_reg);
+    }
+    
+    inline bus_state_t phi2_dummy_write(bus_state_t pins, reg16_t addr_reg, uint8_t data) {
+        return phi2_access<true, true>(pins, addr_reg, data);
     }
     
     // ========================================================================
@@ -1101,6 +1174,24 @@ public:
     }
 
 private:
+    // ========================================================================
+    // BUS CONTROL HELPER FUNCTIONS
+    // ========================================================================
+    
+    /**
+     * Check if CPU has bus control (hardware-accurate RDY handling)
+     * 
+     * This function determines whether the CPU or an external DMA device
+     * (such as VIC-II) controls the bus based on the RDY pin state.
+     * 
+     * Returns true if CPU has bus control, false if DMA device has control.
+     */
+    static inline bool cpu_has_bus(bus_state_t pins) {
+        return FAM65XX_GET_RDY(pins);
+    }
+    
+
+    
     // ========================================================================
     // ESSENTIAL TEMPLATE FUNCTIONS (needed for real CPU implementation)
     // ========================================================================

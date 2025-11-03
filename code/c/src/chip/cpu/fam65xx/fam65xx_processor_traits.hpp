@@ -54,7 +54,8 @@ namespace CPUCoreFlags {
     // === Timing (bits 24-27) ===
     constexpr uint32_t OPTIMIZED_CYCLES     = 1 << 24;  // ✓ IMPLEMENTED: 65CE02 removed dummy cycles - implemented in flags.inc.hpp
     constexpr uint32_t VARIABLE_CLOCK       = 1 << 25;  // TODO: Can switch speeds (8502, HuC6280)
-    // Bits 26-27 reserved
+    constexpr uint32_t ACCURATE_INTERNAL_CYCLES = 1 << 26;  // Simulate internal dummy cycles for accuracy
+    constexpr uint32_t UPDATE_BUS_LINES     = 1 << 27;  // Update bus pins during simulation
 }
 
 
@@ -170,6 +171,15 @@ struct CPUTraits {
     constexpr bool has_bit_manipulation() const {
         return has(CPUCoreFlags::ROCKWELL_BITS);
     }
+    
+    // Additional traits for phi2_access template method
+    constexpr bool accurate_internal_cycles() const {
+        return has(CPUCoreFlags::ACCURATE_INTERNAL_CYCLES);
+    }
+    
+    constexpr bool update_bus_lines() const {
+        return has(CPUCoreFlags::UPDATE_BUS_LINES);
+    }
 };
 
 // ============================================================================
@@ -180,11 +190,13 @@ namespace CoreFlags {
     // NMOS common flags
     constexpr uint32_t NMOS_BASE = 
         CPUCoreFlags::ILLEGAL_OPCODES | CPUCoreFlags::JMP_INDIRECT_BUG | CPUCoreFlags::RMW_DUMMY_WRITE |
-        CPUCoreFlags::HAS_DECIMAL_MODE | CPUCoreFlags::BCD_NMOS_FLAGS;
+        CPUCoreFlags::HAS_DECIMAL_MODE | CPUCoreFlags::BCD_NMOS_FLAGS |
+        CPUCoreFlags::ACCURATE_INTERNAL_CYCLES | CPUCoreFlags::UPDATE_BUS_LINES;
     
     // CMOS common flags
     constexpr uint32_t CMOS_BASE_FLAGS =
-        CPUCoreFlags::CMOS_BASE | CPUCoreFlags::HAS_DECIMAL_MODE | CPUCoreFlags::BCD_EXTRA_CYCLE;
+        CPUCoreFlags::CMOS_BASE | CPUCoreFlags::HAS_DECIMAL_MODE | CPUCoreFlags::BCD_EXTRA_CYCLE |
+        CPUCoreFlags::ACCURATE_INTERNAL_CYCLES | CPUCoreFlags::UPDATE_BUS_LINES;
     
     // CMOS with Rockwell extensions
     constexpr uint32_t ROCKWELL_BASE = 
