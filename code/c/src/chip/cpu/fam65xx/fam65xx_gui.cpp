@@ -226,7 +226,7 @@ void render_chip_visualization(fam65xx_t<Traits>* cpu) {
         // Calculate available space
         ImVec2 available_size;
         igGetContentRegionAvail(&available_size);
-        float chip_width = 200.0f;
+        float chip_width = 300.0f;
         float chip_height = 400.0f;
         
         // Center the chip in available space
