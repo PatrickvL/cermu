@@ -150,14 +150,18 @@ private:
     PinLayout layout_;
     ChipVisualConfig config_;
     
+    // Scaled chip dimensions for rendering (calculated from package dimensions)
+    mutable float scaled_chip_width_ = 0.0f;
+    mutable float scaled_chip_height_ = 0.0f;
+    
     void render_pin_side(ImVec2 chip_center, const std::vector<ChipPin>& pins, 
                         const std::vector<PinState>& pin_states, PinSide side);
     void render_single_pin(ImVec2 pin_pos, const ChipPin& pin, const PinState& state, PinSide side);
-    void render_dip_style(ImVec2 chip_center, const char* chip_name);
-    void render_surface_mount_style(ImVec2 chip_center, const char* chip_name);
-    void render_qfp_style(ImVec2 chip_center, const char* chip_name);
-    void render_bga_style(ImVec2 chip_center, const char* chip_name);
-    void render_to_style(ImVec2 chip_center, const char* chip_name);
+    void render_dip_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name);
+    void render_surface_mount_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name);
+    void render_qfp_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name);
+    void render_bga_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name);
+    void render_to_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name);
     
     ImVec2 calculate_pin_position(ImVec2 chip_center, const ChipPin& pin, size_t index_in_side, PinSide side) const;
     ImVec2 calculate_bga_position(ImVec2 chip_center, uint8_t row, uint8_t col) const;

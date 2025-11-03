@@ -422,27 +422,44 @@ public:
         igText("MOS Technology 65xx Family Microprocessor");
         igSeparator();
         
-        render_cpu_registers<Traits>(cpu);
-        igSeparator();
+        // Create two-column layout: chip visualization on left, debugging info on right
+        ImVec2 window_size;
+        igGetWindowSize(&window_size);
         
-        render_internal_state<Traits>(cpu);
-        igSeparator();
+        // Left column: Chip Visualization (fixed width ~200px)
+        if (igBeginChild_Str("ChipVisualization", (ImVec2){200.0f, 0}, true, ImGuiWindowFlags_HorizontalScrollbar)) {
+            igText("Chip Visualization");
+            igSeparator();
+            
+            // Calculate chip center for visualization
+            ImVec2 chip_center, content_region;
+            igGetCursorScreenPos(&chip_center);
+            igGetContentRegionAvail(&content_region);
+            chip_center.x += content_region.x * 0.5f;
+            chip_center.y += 200.0f; // Space for the chip
+            
+            // Show chip visualization with real bus state from emulation
+            render_chip_visualization<Traits>(cpu, chip_center, last_bus_state);
+        }
+        igEndChild();
         
-        // Use the actual bus state from emulation loop
-        ImVec2 chip_center, content_region;
-        igGetCursorScreenPos(&chip_center);
-        igGetContentRegionAvail(&content_region);
-        chip_center.x += content_region.x * 0.5f;
-        chip_center.y += 200.0f; // Space for the chip
+        igSameLine(0, 5.0f); // Small gap between columns
         
-        // Show chip visualization with real bus state from emulation
-        render_chip_visualization<Traits>(cpu, chip_center, last_bus_state);
-        igSeparator();
-        
-        render_interrupt_state<Traits>(cpu);
-        igSeparator();
-        
-        render_processor_features<Traits>(cpu);
+        // Right column: All debugging information
+        ImVec2 right_column_size = {window_size.x - 220.0f, 0}; // Remaining width minus left column and gap
+        if (igBeginChild_Str("DebugInfo", right_column_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
+            render_cpu_registers<Traits>(cpu);
+            igSeparator();
+            
+            render_internal_state<Traits>(cpu);
+            igSeparator();
+            
+            render_interrupt_state<Traits>(cpu);
+            igSeparator();
+            
+            render_processor_features<Traits>(cpu);
+        }
+        igEndChild();
 
         igEnd();
     }
