@@ -285,17 +285,12 @@ public:
         set(REG_A, 0x00);
         set(REG_X, 0x00);
         set(REG_Y, 0x00);
-        set(REG_S, 0xFF);
+        set(REG_SP, 0x1FF);
         set(REG_P, FLAG_U | FLAG_I); // Unused bit set, interrupts disabled
         
         // Reset interrupt state
-        this->active_interrupt = FAM65XX_INT_NONE;
         this->nmi_prev = 0;
         this->interrupt_shift_register = 0;
-        
-        // Reset execution state
-        this->cycle_index = 0;
-        this->current_handler = nullptr;
         
         // Reset 65C02 extended state
         this->wait_for_interrupt = false;
@@ -304,14 +299,11 @@ public:
         // Reset processor-specific features
         this->init_conditional_features();
         
-        // Load reset vector
-        set(REG_AB, 0xFFFC);
-        pins = this->phi2_read(pins, REG_AB, REG_PCL);
-        set(REG_AB, 0xFFFD);
-        pins = this->phi2_read(pins, REG_AB, REG_PCH);
-        
-        // Start fetch cycle
-        this->transition_to_fetch();
+        // Use unified interrupt handler for vector loading
+        // Skip stack operations (cycles 0-3) and jump to vector loading (cycles 4-5)
+        this->active_interrupt = FAM65XX_INT_RESET;
+        this->current_handler = &fam65xx_t::op_brk;
+        this->cycle_index = 4;  // Jump to vector loading phase
         
         return pins;
     }
