@@ -8,6 +8,7 @@
 
 #include "mos6502.h"
 #include "fam65xx.hpp"
+#include "fam65xx_gui.h"
 #include <cstdio>
 
 // Include concrete CPU type definitions
@@ -31,10 +32,13 @@ using mos6502_cpu_t = fam65xx_t<MOS6502>;
 extern "C" {
 
 mos6502_t* mos6502_create(void) {
+    // Note: Temporarily using simplified creation until template issues are resolved
     return reinterpret_cast<mos6502_t*>(new mos6502_cpu_t());
 }
 
 void mos6502_destroy(mos6502_t* cpu) {
+    // Unregister from GUI system before destroying
+    fam65xx::unregister_cpu_from_gui(cpu);
     delete CPU_CAST(mos6502_cpu_t, cpu);
 }
 
@@ -124,21 +128,23 @@ void mos6502_set_pc(mos6502_t* cpu, uint16_t value) {
 // Enhanced Descriptor API
 // ============================================================================
 
-static chip_descriptor_t mos6502_base_descriptor = {
-    .description = "MOS Technology 6502 (NMOS)",
-    .create = [](chip_descriptor_t* desc) -> void* {
+static chip_descriptor_t mos6502_base_descriptor;
+
+static void initialize_mos6502_descriptor() {
+    mos6502_base_descriptor.description = "MOS Technology 6502 (NMOS)";
+    mos6502_base_descriptor.create = [](chip_descriptor_t* desc) -> void* {
         return mos6502_create();
-    },
-    .destroy = [](void* chip) {
+    };
+    mos6502_base_descriptor.destroy = [](void* chip) {
         mos6502_destroy(reinterpret_cast<mos6502_t*>(chip));
-    },
-    .bus_attach = nullptr,  // Basic CPU doesn't need bus attach
-    .bank_change = nullptr, // Basic CPU doesn't have banking
+    };
+    mos6502_base_descriptor.bus_attach = nullptr;  // Basic CPU doesn't need bus attach
+    mos6502_base_descriptor.bank_change = nullptr; // Basic CPU doesn't have banking
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-    .render_debug_window = nullptr,
-    .render_settings_window = nullptr
+    mos6502_base_descriptor.render_debug_window = fam65xx_render_debug_window;
+    mos6502_base_descriptor.render_settings_window = fam65xx_render_settings_window;
 #endif
-};
+}
 
 fam65xx_chip_descriptor_t* mos6502_create_descriptor(
     uint8_t (*read_callback)(void* user_data, uint16_t addr, uint8_t bus_state),
@@ -146,7 +152,7 @@ fam65xx_chip_descriptor_t* mos6502_create_descriptor(
     void* user_data) {
     
     auto* desc = new fam65xx_chip_descriptor_t;
-    desc->base = mos6502_base_descriptor;
+    desc->base = *mos6502_get_chip_descriptor();
     desc->mem_read = read_callback;
     desc->mem_write = write_callback;
     desc->mem_user_data = user_data;
@@ -159,6 +165,11 @@ void mos6502_destroy_descriptor(fam65xx_chip_descriptor_t* desc) {
 }
 
 const chip_descriptor_t* mos6502_get_chip_descriptor(void) {
+    static bool initialized = false;
+    if (!initialized) {
+        initialize_mos6502_descriptor();
+        initialized = true;
+    }
     return &mos6502_base_descriptor;
 }
 
