@@ -119,7 +119,7 @@ public:
     uint8_t cycle_index;                /* Current cycle within instruction */
     
     /* Interrupt state - hardware-accurate shift register system */
-    uint8_t brk_flags;                  /* BRK/IRQ/NMI/RESET flags */
+    interrupt_t active_interrupt;       /* Currently active interrupt (enum serves as vector index) */
     uint8_t nmi_prev;                   /* Previous NMI line state for edge detection */
     uint32_t interrupt_shift_register;  /* Combined shift register for all interrupt types */
     
@@ -146,7 +146,7 @@ public:
         opcode_entry = {};
         current_handler = nullptr;
         cycle_index = 0;
-        brk_flags = 0;
+        active_interrupt = FAM65XX_INT_NONE;
         nmi_prev = 0;
         interrupt_shift_register = 0;
         mem_read = nullptr;
@@ -268,7 +268,7 @@ public:
         pins |= FAM65XX_RES;   /* RESET line high (inactive) */
         
         /* Clear any interrupt flags that might have been set */
-        this->brk_flags = 0;
+        this->active_interrupt = FAM65XX_INT_NONE;
         
         /* CRITICAL: Reset interrupt shift register to prevent false triggers */
         this->interrupt_shift_register = 0x00000000;  /* No interrupt activity detected yet */
@@ -289,7 +289,7 @@ public:
         set(REG_P, FLAG_U | FLAG_I); // Unused bit set, interrupts disabled
         
         // Reset interrupt state
-        this->brk_flags = 0;
+        this->active_interrupt = FAM65XX_INT_NONE;
         this->nmi_prev = 0;
         this->interrupt_shift_register = 0;
         
@@ -331,7 +331,7 @@ public:
         // Hardware-accurate interrupt detection every cycle (matching old implementation)
         if (this->process_interrupt_detection(pins)) {
             // Interrupt detected - check if we should hijack current instruction
-            if (this->brk_flags & FAM65XX_BRK_RESET) {
+            if (this->active_interrupt == FAM65XX_INT_RESET) {
                 // RESET has highest priority - immediately start RESET sequence
                 return reset(pins);
             } else if (this->current_handler == &fam65xx_t::fetch_opcode && this->cycle_index == 0) {
@@ -1077,7 +1077,7 @@ private:
         return this->operation_handlers[this->opcode_entry.op_index];
     }
     
-    // Hardware-accurate interrupt detection (matching old implementation)
+    // Hardware-accurate interrupt detection with priority-order processing
     bool process_interrupt_detection(bus_state_t pins) {
         // Load state into registers to reduce memory accesses
         uint32_t shift_reg = this->interrupt_shift_register;
@@ -1111,31 +1111,44 @@ private:
         // Store updated state
         this->interrupt_shift_register = shift_reg;
         
-        // Check for completed interrupt sequences in order of priority
+        // Check for completed interrupt sequences in priority order (highest first)
+        // Set active_interrupt to highest priority interrupt detected
         
-        // Check if RESET has completed shift (3 consecutive cycles) - highest priority
+        // Check RESET first (highest priority)
         if ((shift_reg & INT_RESET_MASK) == INT_RESET_MASK) {
-            this->brk_flags |= FAM65XX_BRK_RESET;
+            this->active_interrupt = FAM65XX_INT_RESET;
             return true;
         }
         
-        // Check if NMI has completed shift (3 consecutive cycles) - middle priority
+        // Check ABORT (65C816 only, second highest)
+        if constexpr (has_wide_registers()) {
+            // ABORT detection logic would go here when implemented
+            // For now, ABORT is not connected to hardware pins
+        }
+        
+        // Check NMI (third highest priority)
         if constexpr (has_nmi_line()) {
             if ((shift_reg & INT_NMI_MASK) == INT_NMI_MASK) {
-                this->brk_flags |= FAM65XX_BRK_NMI;
+                this->active_interrupt = FAM65XX_INT_NMI;
                 return true;
             }
         }
         
-        // Check if IRQ has completed shift (3 consecutive cycles) - lowest priority
-        // IRQ is masked by the I flag (interrupt disable)
+        // Check COP (65C816 software interrupt, fourth priority)
+        // COP is triggered by software, not hardware pins - handled elsewhere
+        
+        // Check IRQ (fifth priority, maskable by I flag)
         if constexpr (has_irq_line()) {
             if ((shift_reg & INT_IRQ_MASK) == INT_IRQ_MASK && !(this->get(REG_P) & FLAG_I)) {
-                this->brk_flags |= FAM65XX_BRK_IRQ;
+                this->active_interrupt = FAM65XX_INT_IRQ;
                 return true;
             }
         }
         
+        // Check BRK (software interrupt, sixth priority)
+        // BRK is triggered by software, not hardware pins - handled in op_brk
+        
+        // No interrupt detected
         return false;
     }
     

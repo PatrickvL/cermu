@@ -88,22 +88,43 @@ typedef struct {
 #define FLAG_M  0x20  // Memory/Accumulator Select (0 = 16-bit, 1 = 8-bit) - 65C816
 #define FLAG_E 0x100  // Emulation mode (not in P register, separate)
 
-// BRK flags for interrupt handling
-#define FAM65XX_BRK_IRQ     (1<<0)
-#define FAM65XX_BRK_NMI     (1<<1)
-#define FAM65XX_BRK_RESET   (1<<2)
+// Interrupt types - ordered by priority (higher index = higher priority)
+typedef enum {
+    FAM65XX_INT_NONE = 0,    // No interrupt active
+    FAM65XX_INT_BRK,         // Software interrupt (BRK instruction) and default/fallback
+    FAM65XX_INT_IRQ,         // Maskable interrupt
+    FAM65XX_INT_COP,         // CoProcessor instruction (65C816)
+    FAM65XX_INT_NMI,         // Non-maskable interrupt
+    FAM65XX_INT_ABORT,       // Abort interrupt (65C816)
+    FAM65XX_INT_RESET        // Reset interrupt (highest priority)
+} interrupt_t;
 
 // Interrupt shift register bit layout - merged system (3 bits per interrupt + separators)
-#define INT_IRQ_START_BIT   0   // IRQ uses bits 0-2 (3 bits)
-#define INT_IRQ_SEP_BIT     3   // Separator bit after IRQ (bit 3)
-#define INT_NMI_START_BIT   4   // NMI uses bits 4-6 (3 bits)
-#define INT_NMI_SEP_BIT     7   // Separator bit after NMI (bit 7)
-#define INT_RESET_START_BIT 8   // RESET uses bits 8-10 (3 bits)
-#define INT_RESET_SEP_BIT   11  // Separator bit after RESET (bit 11)
+// Ordered by priority: RESET > ABORT > NMI > COP > IRQ > BRK
+#define INT_BRK_START_BIT   0   // BRK uses bits 0-2 (3 bits)
+#define INT_BRK_SEP_BIT     3   // Separator bit after BRK (bit 3)
+#define INT_IRQ_START_BIT   4   // IRQ uses bits 4-6 (3 bits)
+#define INT_IRQ_SEP_BIT     7   // Separator bit after IRQ (bit 7)
+#define INT_COP_START_BIT   8   // COP uses bits 8-10 (3 bits)
+#define INT_COP_SEP_BIT     11  // Separator bit after COP (bit 11)
+#define INT_NMI_START_BIT   12  // NMI uses bits 12-14 (3 bits)
+#define INT_NMI_SEP_BIT     15  // Separator bit after NMI (bit 15)
+#define INT_ABORT_START_BIT 16  // ABORT uses bits 16-18 (3 bits)
+#define INT_ABORT_SEP_BIT   19  // Separator bit after ABORT (bit 19)
+#define INT_RESET_START_BIT 20  // RESET uses bits 20-22 (3 bits)
+#define INT_RESET_SEP_BIT   23  // Separator bit after RESET (bit 23)
+
+// Interrupt masks (3 bits each)
+#define INT_BRK_MASK        (0x7 << INT_BRK_START_BIT)     // 3 bits: 0b111
 #define INT_IRQ_MASK        (0x7 << INT_IRQ_START_BIT)     // 3 bits: 0b111
+#define INT_COP_MASK        (0x7 << INT_COP_START_BIT)     // 3 bits: 0b111
 #define INT_NMI_MASK        (0x7 << INT_NMI_START_BIT)     // 3 bits: 0b111
+#define INT_ABORT_MASK      (0x7 << INT_ABORT_START_BIT)   // 3 bits: 0b111
 #define INT_RESET_MASK      (0x7 << INT_RESET_START_BIT)   // 3 bits: 0b111
-#define INT_SEPARATOR_MASK  ((1 << INT_IRQ_SEP_BIT) | (1 << INT_NMI_SEP_BIT) | (1 << INT_RESET_SEP_BIT))
+
+// Separator bits mask
+#define INT_SEPARATOR_MASK  ((1 << INT_BRK_SEP_BIT) | (1 << INT_IRQ_SEP_BIT) | (1 << INT_COP_SEP_BIT) | \
+                            (1 << INT_NMI_SEP_BIT) | (1 << INT_ABORT_SEP_BIT) | (1 << INT_RESET_SEP_BIT))
 
 // ============================================================================
 // ADDRESSING MODE AND OPERATION ENUMS
