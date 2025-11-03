@@ -46,6 +46,7 @@
 #include "../systems/c64/c64_config.h"
 #include "../utils/rom_loader.h"
 #include "../chip/cpu/fam65xx/mos6510.h"
+#include "../chip/cpu/fam65xx/fam65xx_gui.h"
 #include "../chip/video/vic_ii/vicii_common.h"
 #include "cimgui_backends.h"
 
@@ -383,6 +384,9 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, struct emulation_co
                 
                 // I/O & Peripherals category
                 if (igBeginMenu("I/O & Peripherals", true)) {
+                    if (c64->mos6510)
+                        fam65xx_update_bus_state((mos6510_t*)(c64->mos6510), c64->bus.state);
+
                     for (uint8_t chip_id = 0; chip_id < c64->system.chip_count && chip_id < 16; chip_id++) {
                         chip_entry_t* entry = &c64->system.chips[chip_id];
                         if (entry->desc && entry->desc->render_debug_window) {
