@@ -21,12 +21,12 @@ bus_state_t op_lax(bus_state_t pins) {
             // LAX immediate - unstable behavior with magic constant
             pins = phi2_read(pins, REG_PC, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
-                CPU_PC(this)++;
+                this->inc(REG_PC);
                 // Hardware quirk: LAX immediate uses unstable internal state
                 // Result is (A | 0xEE) & operand
-                uint8_t result = (CPU_A(this) | 0xEE) & CPU_DL(this);
-                CPU_A(this) = result;
-                CPU_X(this) = result;
+                uint8_t result = (this->get(REG_A) | 0xEE) & this->get(REG_DL);
+                this->set(REG_A, result);
+                this->set(REG_X, result);
                 
                 update_nz_flags(result);
                 transition_to_fetch();
@@ -35,10 +35,10 @@ bus_state_t op_lax(bus_state_t pins) {
             // LAX memory modes - normal behavior
             pins = phi2_read(pins, REG_AB, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
-                CPU_A(this) = CPU_DL(this);
-                CPU_X(this) = CPU_DL(this);
+                this->set(REG_A, this->get(REG_DL));
+                this->set(REG_X, this->get(REG_DL));
                 
-                update_nz_flags(CPU_A(this));
+                update_nz_flags(this->get(REG_A));
                 transition_to_fetch();
             }
         }
@@ -51,8 +51,8 @@ bus_state_t op_sax(bus_state_t pins) {
     if constexpr (has_illegal_opcodes()) {
         // Store A AND X to memory with processor-specific RDY handling
         if (should_complete_write_cycle(pins)) {
-            uint8_t result = CPU_A(this) & CPU_X(this);
-            pins = phi2_write(pins, CPU_AB(this), result);
+            uint8_t result = this->get(REG_A) & this->get(REG_X);
+            pins = phi2_write(pins, this->get(REG_AB), result);
             transition_to_fetch();
         }
     }
@@ -72,7 +72,7 @@ bus_state_t op_dcp(bus_state_t pins) {
             value--;
             
             // Perform CMP A with decremented value
-            uint16_t result = CPU_A(this) - value;
+            uint16_t result = this->get(REG_A) - value;
             // Set carry flag (CMP uses subtraction semantics: carry = no borrow)
             update_flag(FLAG_C, !(result & 0x100));
             
@@ -111,8 +111,8 @@ bus_state_t op_slo(bus_state_t pins) {
             value <<= 1;
             
             // Perform ORA with accumulator
-            CPU_A(this) |= value;
-            update_nz_flags(CPU_A(this));
+            this->set(REG_A, this->get(REG_A) | value);
+            update_nz_flags(this->get(REG_A));
         });
     } else {
         return pins;
@@ -125,13 +125,13 @@ bus_state_t op_rla(bus_state_t pins) {
         // This is a Read-Modify-Write operation
         return rmw_operation_helper(pins, [this](uint8_t& value) {
             // Perform ROL on memory value
-            uint8_t carry_in = CPU_P(this) & FLAG_C;
+            uint8_t carry_in = this->get(REG_P) & FLAG_C;
             update_flag(FLAG_C, value & 0x80);
             value = (value << 1) | carry_in;
             
             // Perform AND with accumulator
-            CPU_A(this) &= value;
-            update_nz_flags(CPU_A(this));
+            this->set(REG_A, this->get(REG_A) & value);
+            update_nz_flags(this->get(REG_A));
         });
     } else {
         return pins;
@@ -148,8 +148,8 @@ bus_state_t op_sre(bus_state_t pins) {
             value >>= 1;
             
             // Perform EOR with accumulator
-            CPU_A(this) ^= value;
-            update_nz_flags(CPU_A(this));
+            this->set(REG_A, this->get(REG_A) ^ value);
+            update_nz_flags(this->get(REG_A));
         });
     } else {
         return pins;
@@ -162,7 +162,7 @@ bus_state_t op_rra(bus_state_t pins) {
         // This is a Read-Modify-Write operation - match reference implementation exactly
         return rmw_operation_helper(pins, [this](uint8_t& value) {
             // Perform ROR on memory value - exact reference match
-            const uint8_t carry_in = CPU_P(this) & FLAG_C;
+            const uint8_t carry_in = this->get(REG_P) & FLAG_C;
             const uint8_t carry_out = value & FLAG_C;
             value = (value >> 1) | (carry_in << 7);
 
@@ -201,7 +201,7 @@ bus_state_t op_jam(bus_state_t pins) {
             pins = phi2_read(pins, REG_PC, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
                 // JAM: Reset PC back to opcode address (the "jam" effect)
-                CPU_PC(this)--; // Go back to opcode address
+                this->dec(REG_PC); // Go back to opcode address
                 
                 // For test suite compatibility: complete normally instead of infinite loop
                 // In real hardware this would loop forever, but tests expect finite execution
@@ -221,16 +221,16 @@ bus_state_t op_anc(bus_state_t pins) {
         // ANC - AND with carry (AND immediate, then copy N flag to C flag)
         pins = phi2_read(pins, REG_PC, REG_DL);
         if (FAM65XX_GET_RDY(pins)) {
-            CPU_PC(this)++;
+            this->inc(REG_PC);
             // Perform AND with accumulator
-            CPU_A(this) &= CPU_DL(this);
+            this->set(REG_A, this->get(REG_A) & this->get(REG_DL));
             
             // Update N and Z flags
-            update_nz_flags(CPU_A(this));
-            
+            update_nz_flags(this->get(REG_A));
+
             // Copy N flag to C flag (ANC behavior)
-            update_flag(FLAG_C, CPU_P(this) & FLAG_N);
-            
+            update_flag(FLAG_C, this->get(REG_P) & FLAG_N);
+
             transition_to_fetch();
         }
     }
@@ -243,76 +243,76 @@ bus_state_t op_arr(bus_state_t pins) {
         // ARR - AND + ROR with BCD correction in decimal mode (reference implementation)
         pins = phi2_read(pins, REG_PC, REG_DL);
         if (FAM65XX_GET_RDY(pins)) {
-            CPU_PC(this)++;
+            this->inc(REG_PC);
             
-            uint8_t operand = CPU_DL(this);
-            bool carry_in = (CPU_P(this) & FLAG_C) != 0;
-            
+            uint8_t operand = this->get(REG_DL);
+            bool carry_in = (this->get(REG_P) & FLAG_C) != 0;
+
             // Step 1: AND A with operand - save original for BCD checks
-            uint8_t original_a = CPU_A(this) & operand;
-            CPU_A(this) = original_a;
-            
+            uint8_t original_a = this->get(REG_A) & operand;
+            this->set(REG_A, original_a);
+
             // Step 2: ROR the result (both modes do this)
-            uint8_t shifted_a = (CPU_A(this) >> 1) | (carry_in ? 0x80 : 0);
-            
+            uint8_t shifted_a = (this->get(REG_A) >> 1) | (carry_in ? 0x80 : 0);
+
             // Clear all flags initially
-            CPU_P(this) &= ~(FLAG_N | FLAG_Z | FLAG_V | FLAG_C);
-            
+            this->set(REG_P, this->get(REG_P) & ~(FLAG_N | FLAG_Z | FLAG_V | FLAG_C));
+
             // Set N and Z flags based on shifted result (reference does this first)
             update_nz_flags(shifted_a);
             
             if constexpr (has_bcd()) {
-                if (CPU_P(this) & FLAG_D) {
+                if (this->get(REG_P) & FLAG_D) {
                     // Decimal mode - ARR uses reference algorithm
                     
                     // Set V flag based on bit 6 change between original and shifted
-                    if ((shifted_a ^ CPU_A(this)) & 0x40) {
-                        CPU_P(this) |= FLAG_V;
+                    if ((shifted_a ^ this->get(REG_A)) & 0x40) {
+                        this->set(REG_P, this->get(REG_P) | FLAG_V);
                     }
                     
                     // BCD correction using ORIGINAL A value for digit checks (reference approach)
                     uint8_t result = shifted_a;
                     
                     // Low nibble BCD correction - use ORIGINAL A value for threshold check
-                    if ((CPU_A(this) & 0x0F) >= 5) {
+                    if ((this->get(REG_A) & 0x0F) >= 5) {
                         result = ((result + 6) & 0x0F) | (result & 0xF0);
                     }
                     
                     // High nibble BCD correction and carry - use ORIGINAL A value for threshold check
-                    if ((CPU_A(this) & 0xF0) >= 0x50) {
+                    if ((this->get(REG_A) & 0xF0) >= 0x50) {
                         result += 0x60;
-                        CPU_P(this) |= FLAG_C;
+                        this->set(REG_P, this->get(REG_P) | FLAG_C);
                     }
-                    
-                    CPU_A(this) = result;
-                    
+
+                    this->set(REG_A, result);
+
                     // DO NOT update N and Z flags after BCD correction - reference keeps original flags
                 } else {
                     // Binary mode - special C and V flag behavior
-                    CPU_A(this) = shifted_a;
-                    
+                    this->set(REG_A, shifted_a);
+
                     // ARR has special C and V flag behavior:
                     // C = bit 6 of result (not the shifted-out bit!)
                     // V = bit 6 XOR bit 5 of result
-                    if (CPU_A(this) & 0x40) {
-                        CPU_P(this) |= FLAG_C | FLAG_V;
+                    if (this->get(REG_A) & 0x40) {
+                        this->set(REG_P, this->get(REG_P) | FLAG_C | FLAG_V);
                     }
-                    if (CPU_A(this) & 0x20) {
-                        CPU_P(this) ^= FLAG_V;
+                    if (this->get(REG_A) & 0x20) {
+                        this->set(REG_P, this->get(REG_P) ^ FLAG_V);
                     }
                 }
             } else {
                 // Binary mode - special C and V flag behavior (for processors without BCD)
-                CPU_A(this) = shifted_a;
-                
+                this->set(REG_A, shifted_a);
+
                 // ARR has special C and V flag behavior:
                 // C = bit 6 of result (not the shifted-out bit!)
                 // V = bit 6 XOR bit 5 of result
-                if (CPU_A(this) & 0x40) {
-                    CPU_P(this) |= FLAG_C | FLAG_V;
+                if (this->get(REG_A) & 0x40) {
+                    this->set(REG_P, this->get(REG_P) | FLAG_C | FLAG_V);
                 }
-                if (CPU_A(this) & 0x20) {
-                    CPU_P(this) ^= FLAG_V;
+                if (this->get(REG_A) & 0x20) {
+                    this->set(REG_P, this->get(REG_P) ^ FLAG_V);
                 }
             }
             
@@ -328,17 +328,17 @@ bus_state_t op_alr(bus_state_t pins) {
         // ALR - AND + LSR (AND immediate, then LSR A)
         pins = phi2_read(pins, REG_PC, REG_DL);
         if (FAM65XX_GET_RDY(pins)) {
-            CPU_PC(this)++;
+            this->inc(REG_PC);
             // Perform AND with accumulator
-            CPU_A(this) &= CPU_DL(this);
-            
+            this->set(REG_A, this->get(REG_A) & this->get(REG_DL));
+
             // Perform LSR on accumulator
-            update_flag(FLAG_C, CPU_A(this) & 0x01);
-            CPU_A(this) >>= 1;
-            
+            update_flag(FLAG_C, this->get(REG_A) & 0x01);
+            this->set(REG_A, this->get(REG_A) >> 1);
+
             // Update N and Z flags
-            update_nz_flags(CPU_A(this));
-            
+            update_nz_flags(this->get(REG_A));
+
             transition_to_fetch();
         }
     }
@@ -361,11 +361,11 @@ bus_state_t op_xaa(bus_state_t pins) {
         // Hardware quirk: Uses unstable constant 0xEE like LAX immediate
         pins = phi2_read(pins, REG_PC, REG_DL);
         if (FAM65XX_GET_RDY(pins)) {
-            CPU_PC(this)++;
+            this->inc(REG_PC);
             // Hardware behavior: (A | 0xEE) & X & operand
-            CPU_A(this) = (CPU_A(this) | 0xEE) & CPU_X(this) & CPU_DL(this);
-            update_nz_flags(CPU_A(this));
-            
+            this->set(REG_A, (this->get(REG_A) | 0xEE) & this->get(REG_X) & this->get(REG_DL));
+            update_nz_flags(this->get(REG_A));
+
             transition_to_fetch();
         }
     }
@@ -378,14 +378,14 @@ bus_state_t op_sbx(bus_state_t pins) {
         // SBX - Compare X with A AND immediate (illegal) (also called AXS)
         pins = phi2_read(pins, REG_PC, REG_DL);
         if (FAM65XX_GET_RDY(pins)) {
-            CPU_PC(this)++;
-            uint8_t temp = CPU_A(this) & CPU_X(this);
-            uint8_t result = temp - CPU_DL(this);
+            this->inc(REG_PC);
+            uint8_t temp = this->get(REG_A) & this->get(REG_X);
+            uint8_t result = temp - this->get(REG_DL);
             // Update X with result
-            CPU_X(this) = result;
-            
+            this->set(REG_X, result);
+
             // Set carry flag using standard subtraction semantics (carry = no borrow)
-            update_flag(FLAG_C, temp >= CPU_DL(this));
+            update_flag(FLAG_C, temp >= this->get(REG_DL));
             
             update_nz_flags(result);
             
@@ -401,17 +401,17 @@ bus_state_t op_sha(bus_state_t pins) {
         // SHA - Store A & X & (H+1) with address corruption on page cross
         if (should_complete_write_cycle(pins)) {
             // Calculate value: A & X & (intermediate_high + 1)
-            uint8_t data_value = CPU_A(this) & CPU_X(this) & (CPU_DL(this) + 1);
+            uint8_t data_value = this->get(REG_A) & this->get(REG_X) & (this->get(REG_DL) + 1);
             
             // Apply address corruption on page cross (DL != ABH means page crossed)
-            if (CPU_DL(this) != CPU_ABH(this)) {
-                CPU_ABH(this) = data_value;
+            if (this->get(REG_DL) != this->get(REG_ABH)) {
+                this->set(REG_ABH, data_value);
             }
             
             // Set data to write
-            CPU_DL(this) = data_value;
-            
-            pins = phi2_write(pins, CPU_AB(this), CPU_DL(this));
+            this->set(REG_DL, data_value);
+
+            pins = phi2_write(pins, this->get(REG_AB), this->get(REG_DL));
             transition_to_fetch();
         }
     }
@@ -424,24 +424,24 @@ bus_state_t op_shs(bus_state_t pins) {
         // SHS - Store A & X & (H+1), Set S to A & X - match reference implementation exactly
         if (should_complete_write_cycle(pins)) {
             // Calculate A & X first (used for both value and S)
-            uint8_t ax = CPU_A(this) & CPU_X(this);
+            uint8_t ax = this->get(REG_A) & this->get(REG_X);
             
             // Calculate value: (A & X) & (intermediate_high + 1)
             // Use DL as intermediate high byte (before page cross correction)
-            uint8_t data_value = ax & ((CPU_DL(this) + 1) & 0xFF);
-            
+            uint8_t data_value = ax & ((this->get(REG_DL) + 1) & 0xFF);
+
             // Apply address corruption on page cross (DL != ABH means page crossed)
-            if (CPU_DL(this) != CPU_ABH(this)) {
-                CPU_ABH(this) = data_value;
+            if (this->get(REG_DL) != this->get(REG_ABH)) {
+                this->set(REG_ABH, data_value);
             }
             
             // Set data to write
-            CPU_DL(this) = data_value;
-            
+            this->set(REG_DL, data_value);
+
             // Set stack pointer to A & X (unique to SHS)
-            CPU_S(this) = ax;
-            
-            pins = phi2_write(pins, CPU_AB(this), CPU_DL(this));
+            this->set(REG_S, ax);
+
+            pins = phi2_write(pins, this->get(REG_AB), this->get(REG_DL));
             transition_to_fetch();
         }
     }
@@ -455,15 +455,15 @@ bus_state_t op_shx(bus_state_t pins) {
         if (should_complete_write_cycle(pins)) {
             // Calculate value: X & (intermediate_high + 1)
             // Use DL as intermediate high byte (before page cross correction)
-            uint8_t data_value = CPU_X(this) & ((CPU_DL(this) + 1) & 0xFF);
-            
+            uint8_t data_value = this->get(REG_X) & ((this->get(REG_DL) + 1) & 0xFF);
+
             // Apply address corruption on page cross (DL != ABH means page crossed)
-            if (CPU_DL(this) != CPU_ABH(this)) {
-                CPU_ABH(this) = data_value;
+            if (this->get(REG_DL) != this->get(REG_ABH)) {
+                this->set(REG_ABH, data_value);
             }
             
             // Set data to write
-            pins = phi2_write(pins, CPU_AB(this), data_value);
+            pins = phi2_write(pins, this->get(REG_AB), data_value);
             transition_to_fetch();
         }
     }
@@ -477,15 +477,15 @@ bus_state_t op_shy(bus_state_t pins) {
         if (should_complete_write_cycle(pins)) {
             // Calculate value: Y & (intermediate_high + 1)
             // Use DL as intermediate high byte (before page cross correction)
-            uint8_t data_value = CPU_Y(this) & ((CPU_DL(this) + 1) & 0xFF);
-            
+            uint8_t data_value = this->get(REG_Y) & ((this->get(REG_DL) + 1) & 0xFF);
+
             // Apply address corruption on page cross (DL != ABH means page crossed)
-            if (CPU_DL(this) != CPU_ABH(this)) {
-                CPU_ABH(this) = data_value;
+            if (this->get(REG_DL) != this->get(REG_ABH)) {
+                this->set(REG_ABH, data_value);
             }
             
             // Set data to write
-            pins = phi2_write(pins, CPU_AB(this), data_value);
+            pins = phi2_write(pins, this->get(REG_AB), data_value);
             transition_to_fetch();
         }
     }
@@ -498,11 +498,11 @@ bus_state_t op_las(bus_state_t pins) {
         // LAS - Load A, X, and S with memory AND stack pointer (illegal)
         pins = phi2_read(pins, REG_AB, REG_DL);
         if (FAM65XX_GET_RDY(pins)) {
-            uint8_t result = CPU_DL(this) & CPU_S(this);
-            CPU_A(this) = result;
-            CPU_X(this) = result;
-            CPU_S(this) = result;
-            
+            uint8_t result = this->get(REG_DL) & this->get(REG_S);
+            this->set(REG_A, result);
+            this->set(REG_X, result);
+            this->set(REG_S, result);
+
             update_nz_flags(result);
             transition_to_fetch();
         }

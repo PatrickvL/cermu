@@ -14,7 +14,7 @@
 // ============================================================================
 
 /* Helper for transfer operations with flags */
-bus_state_t transfer_with_flags_helper(bus_state_t pins, uint8_t value, uint8_t& target_reg) {
+bus_state_t transfer_with_flags_helper(bus_state_t pins, uint8_t value, reg8_t target_reg) {
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
         pins = phi2_dummy_read(pins, REG_PC);
@@ -24,14 +24,14 @@ bus_state_t transfer_with_flags_helper(bus_state_t pins, uint8_t value, uint8_t&
     }
     
     // Common operation for all processors
-    target_reg = value;
-    update_nz_flags(target_reg);
+    this->set(target_reg, value);
+    update_nz_flags(value);
     transition_to_fetch();
     return pins;
 }
 
 /* Helper for transfer operations without flags */
-bus_state_t transfer_no_flags_helper(bus_state_t pins, uint8_t value, uint8_t& target_reg) {
+bus_state_t transfer_no_flags_helper(bus_state_t pins, uint8_t value, reg8_t target_reg) {
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
         pins = phi2_dummy_read(pins, REG_PC);
@@ -41,7 +41,7 @@ bus_state_t transfer_no_flags_helper(bus_state_t pins, uint8_t value, uint8_t& t
     }
     
     // Common operation for all processors
-    target_reg = value;
+    this->set(target_reg, value);
     transition_to_fetch();
     return pins;
 }
@@ -52,32 +52,32 @@ bus_state_t transfer_no_flags_helper(bus_state_t pins, uint8_t value, uint8_t& t
 
 /* TAX - Transfer A to X */
 bus_state_t op_tax(bus_state_t pins) {
-    return transfer_with_flags_helper(pins, CPU_A(this), CPU_X(this));
+    return transfer_with_flags_helper(pins, this->get(REG_A), REG_X);
 }
 
 /* TAY - Transfer A to Y */
 bus_state_t op_tay(bus_state_t pins) {
-    return transfer_with_flags_helper(pins, CPU_A(this), CPU_Y(this));
+    return transfer_with_flags_helper(pins, this->get(REG_A), REG_Y);
 }
 
 /* TSX - Transfer S to X */
 bus_state_t op_tsx(bus_state_t pins) {
-    return transfer_with_flags_helper(pins, CPU_S(this), CPU_X(this));
+    return transfer_with_flags_helper(pins, this->get(REG_S), REG_X);
 }
 
 /* TXA - Transfer X to A */
 bus_state_t op_txa(bus_state_t pins) {
-    return transfer_with_flags_helper(pins, CPU_X(this), CPU_A(this));
+    return transfer_with_flags_helper(pins, this->get(REG_X), REG_A);
 }
 
 /* TXS - Transfer X to S */
 bus_state_t op_txs(bus_state_t pins) {
-    return transfer_no_flags_helper(pins, CPU_X(this), CPU_S(this));
+    return transfer_no_flags_helper(pins, this->get(REG_X), REG_S);
 }
 
 /* TYA - Transfer Y to A */
 bus_state_t op_tya(bus_state_t pins) {
-    return transfer_with_flags_helper(pins, CPU_Y(this), CPU_A(this));
+    return transfer_with_flags_helper(pins, this->get(REG_Y), REG_A);
 }
 
 // ============================================================================
@@ -95,8 +95,8 @@ bus_state_t op_inx(bus_state_t pins) {
     }
     
     // Common operation for all processors
-    CPU_X(this)++;
-    update_nz_flags(CPU_X(this));
+    this->inc(REG_X);
+    update_nz_flags(this->get(REG_X));
     transition_to_fetch();
     return pins;
 }
@@ -112,8 +112,8 @@ bus_state_t op_iny(bus_state_t pins) {
     }
     
     // Common operation for all processors
-    CPU_Y(this)++;
-    update_nz_flags(CPU_Y(this));
+    this->inc(REG_Y);
+    update_nz_flags(get(REG_Y));
     transition_to_fetch();
     return pins;
 }
@@ -129,8 +129,8 @@ bus_state_t op_dex(bus_state_t pins) {
     }
     
     // Common operation for all processors
-    CPU_X(this)--;
-    update_nz_flags(CPU_X(this));
+    this->dec(REG_X);
+    update_nz_flags(this->get(REG_X));
     transition_to_fetch();
     return pins;
 }
@@ -146,8 +146,8 @@ bus_state_t op_dey(bus_state_t pins) {
     }
     
     // Common operation for all processors
-    CPU_Y(this)--;
-    update_nz_flags(CPU_Y(this));
+    this->dec(REG_Y);
+    update_nz_flags(get(REG_Y));
     transition_to_fetch();
     return pins;
 }

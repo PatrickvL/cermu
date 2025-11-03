@@ -48,52 +48,52 @@ bool wdc65c02_opdone(wdc65c02_t* cpu) {
 
 // Register getters
 uint8_t wdc65c02_get_a(wdc65c02_t* cpu) {
-    return CPU_CAST(cpu)->reg8[REG_A];
+    return CPU_CAST(cpu)->get(REG_A);
 }
 
 uint8_t wdc65c02_get_x(wdc65c02_t* cpu) {
-    return CPU_CAST(cpu)->reg8[REG_X];
+    return CPU_CAST(cpu)->get(REG_X);
 }
 
 uint8_t wdc65c02_get_y(wdc65c02_t* cpu) {
-    return CPU_CAST(cpu)->reg8[REG_Y];
+    return CPU_CAST(cpu)->get(REG_Y);
 }
 
 uint8_t wdc65c02_get_s(wdc65c02_t* cpu) {
-    return CPU_CAST(cpu)->reg8[REG_SPL];
+    return CPU_CAST(cpu)->get(REG_SPL);
 }
 
 uint8_t wdc65c02_get_p(wdc65c02_t* cpu) {
-    return CPU_CAST(cpu)->reg8[REG_P];
+    return CPU_CAST(cpu)->get(REG_P);
 }
 
 uint16_t wdc65c02_get_pc(wdc65c02_t* cpu) {
-    return CPU_CAST(cpu)->reg16[REG_PC];
+    return CPU_CAST(cpu)->get(REG_PC);
 }
 
 // Register setters
 void wdc65c02_set_a(wdc65c02_t* cpu, uint8_t value) {
-    CPU_CAST(cpu)->reg8[REG_A] = value;
+    CPU_CAST(cpu)->set(REG_A, value);
 }
 
 void wdc65c02_set_x(wdc65c02_t* cpu, uint8_t value) {
-    CPU_CAST(cpu)->reg8[REG_X] = value;
+    CPU_CAST(cpu)->set(REG_X, value);
 }
 
 void wdc65c02_set_y(wdc65c02_t* cpu, uint8_t value) {
-    CPU_CAST(cpu)->reg8[REG_Y] = value;
+    CPU_CAST(cpu)->set(REG_Y, value);
 }
 
 void wdc65c02_set_s(wdc65c02_t* cpu, uint8_t value) {
-    CPU_CAST(cpu)->reg8[REG_SPL] = value;
+    CPU_CAST(cpu)->set(REG_SPL, value);
 }
 
 void wdc65c02_set_p(wdc65c02_t* cpu, uint8_t value) {
-    CPU_CAST(cpu)->reg8[REG_P] = value;
+    CPU_CAST(cpu)->set(REG_P, value);
 }
 
 void wdc65c02_set_pc(wdc65c02_t* cpu, uint16_t value) {
-    CPU_CAST(cpu)->reg16[REG_PC] = value;
+    CPU_CAST(cpu)->set(REG_PC, value);
 }
 
 } // extern "C"

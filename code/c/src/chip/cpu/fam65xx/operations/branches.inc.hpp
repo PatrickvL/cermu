@@ -20,10 +20,10 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) 
             /* PHI2: Read branch offset from PC into DL */
             pins = phi2_read(pins, REG_PC, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
-                CPU_PC(this)++;
+                this->inc(REG_PC);
                 
                 /* PHI1: Check branch condition */
-                bool branch_taken = ((CPU_P(this) & flag_mask) != 0) == flag_value;
+                bool branch_taken = ((this->get(REG_P) & flag_mask) != 0) == flag_value;
                 
                 if (!branch_taken) {
                     /* Branch not taken: instruction completes after 2 cycles */
@@ -32,7 +32,7 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) 
                 }
                 
                 /* Branch taken: calculate correct target address */
-                CPU_AB(this) = CPU_PC(this) + (int8_t)CPU_DL(this);
+                this->set(REG_AB, this->get(REG_PC) + (int8_t)this->get(REG_DL));
                 this->cycle_index++;
             }
             return pins;
@@ -44,11 +44,11 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) 
             pins = phi2_dummy_read(pins, REG_PC);  /* Optimized dummy read */
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Check for page cross */
-                bool page_cross = page_crossed(CPU_PC(this), CPU_AB(this));
+                bool page_cross = page_crossed(this->get(REG_PC), this->get(REG_AB));
                 
                 if (!page_cross) {
                     /* No page cross: set final PC and complete after 3 cycles */
-                    CPU_PC(this) = CPU_AB(this);
+                    this->set(REG_PC, this->get(REG_AB));
                     transition_to_fetch();
                     return pins;
                 }
@@ -56,15 +56,15 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) 
                 /* Page cross detected: need penalty cycle with intermediate address */
                 /* Hardware behavior: Add signed offset to PC low byte only, ignore carry */
                 /* The intermediate address = (PC & 0xFF00) | ((PCL + signed_offset) & 0xFF) */
-                uint8_t pc_low = CPU_PCL(this);
-                int8_t signed_offset = (int8_t)CPU_DL(this);
+                uint8_t pc_low = this->get(REG_PC) & 0xFF;
+                int8_t signed_offset = (int8_t)this->get(REG_DL);
                 uint8_t new_low = (uint8_t)(pc_low + signed_offset);  // Let it wrap naturally
-                uint16_t intermediate_addr = (CPU_PC(this) & 0xFF00) | new_low;
+                uint16_t intermediate_addr = (this->get(REG_PC) & 0xFF00) | new_low;
                 
                 
                 /* Store intermediate address in PC for penalty cycle read */
-                CPU_PC(this) = intermediate_addr;
-                /* CPU_AB(this) still contains the correct final target from case 0 */
+                this->set(REG_PC, intermediate_addr);
+                /* REG_AB still contains the correct final target from case 0 */
                 this->cycle_index++;
             }
             return pins;
@@ -75,8 +75,8 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) 
             pins = phi2_dummy_read(pins, REG_PC);
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Set final correct target PC and complete instruction */
-                /* CPU_AB(this) contains the correct target from case 1 */
-                CPU_PC(this) = CPU_AB(this);
+                /* REG_AB contains the correct target from case 1 */
+                this->set(REG_PC, this->get(REG_AB));
                 transition_to_fetch();
             }
             return pins;

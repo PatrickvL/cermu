@@ -27,8 +27,8 @@ bus_state_t op_pha(bus_state_t pins) {
         case 1:
             /* PHI2: Write A to stack with processor-specific RDY handling */
             if (this->should_complete_write_cycle(pins)) {
-                pins = this->phi2_write(pins, CPU_SP(this), CPU_A(this));
-                CPU_S(this)--;
+                pins = this->phi2_write(pins, get(REG_SP), get(REG_A));
+                this->dec(REG_S);
                 transition_to_fetch();
             }
             return pins;
@@ -50,9 +50,9 @@ bus_state_t op_php(bus_state_t pins) {
         case 1:
             /* PHI2: Write P|B|U to stack with processor-specific RDY handling */
             if (this->should_complete_write_cycle(pins)) {
-                uint8_t status_with_flags = CPU_P(this) | FLAG_B | FLAG_U;
-                pins = this->phi2_write(pins, CPU_SP(this), status_with_flags);
-                CPU_S(this)--;
+                uint8_t status_with_flags = get(REG_P) | FLAG_B | FLAG_U;
+                pins = this->phi2_write(pins, get(REG_SP), status_with_flags);
+                this->dec(REG_S);
                 transition_to_fetch();
             }
             return pins;
@@ -76,7 +76,7 @@ bus_state_t op_pla(bus_state_t pins) {
             pins = phi2_dummy_read(pins, REG_SP);
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Increment stack pointer */
-                CPU_S(this)++;
+                this->inc(REG_S);
                 this->cycle_index++;
             }
             return pins;
@@ -86,7 +86,7 @@ bus_state_t op_pla(bus_state_t pins) {
             pins = phi2_read(pins, REG_SP, REG_A);
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Set flags based on accumulator value */
-                update_nz_flags(CPU_A(this));
+                update_nz_flags(get(REG_A));
                 transition_to_fetch();
             }
             return pins;
@@ -110,7 +110,7 @@ bus_state_t op_plp(bus_state_t pins) {
             pins = phi2_dummy_read(pins, REG_SP);
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Increment stack pointer */
-                CPU_S(this)++;
+                this->inc(REG_S);
                 this->cycle_index++;
             }
             return pins;
@@ -120,7 +120,7 @@ bus_state_t op_plp(bus_state_t pins) {
             pins = phi2_read(pins, REG_SP, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Store in P (clear B, set U) */
-                CPU_P(this) = (CPU_DL(this) & ~FLAG_B) | FLAG_U;
+                this->set(REG_P, (this->get(REG_DL) & ~FLAG_B) | FLAG_U);
                 transition_to_fetch();
             }
             return pins;

@@ -48,52 +48,52 @@ bool nes6502_opdone(nes6502_t* cpu) {
 
 // Register getters
 uint8_t nes6502_get_a(nes6502_t* cpu) {
-    return CPU_CAST(cpu)->reg8[REG_A];
+    return CPU_CAST(cpu)->get(REG_A);
 }
 
 uint8_t nes6502_get_x(nes6502_t* cpu) {
-    return CPU_CAST(cpu)->reg8[REG_X];
+    return CPU_CAST(cpu)->get(REG_X);
 }
 
 uint8_t nes6502_get_y(nes6502_t* cpu) {
-    return CPU_CAST(cpu)->reg8[REG_Y];
+    return CPU_CAST(cpu)->get(REG_Y);
 }
 
 uint8_t nes6502_get_s(nes6502_t* cpu) {
-    return CPU_CAST(cpu)->reg8[REG_SPL];
+    return CPU_CAST(cpu)->get(REG_SPL);
 }
 
 uint8_t nes6502_get_p(nes6502_t* cpu) {
-    return CPU_CAST(cpu)->reg8[REG_P];
+    return CPU_CAST(cpu)->get(REG_P);
 }
 
 uint16_t nes6502_get_pc(nes6502_t* cpu) {
-    return CPU_CAST(cpu)->reg16[REG_PC];
+    return CPU_CAST(cpu)->get(REG_PC);
 }
 
 // Register setters
 void nes6502_set_a(nes6502_t* cpu, uint8_t value) {
-    CPU_CAST(cpu)->reg8[REG_A] = value;
+    CPU_CAST(cpu)->set(REG_A, value);
 }
 
 void nes6502_set_x(nes6502_t* cpu, uint8_t value) {
-    CPU_CAST(cpu)->reg8[REG_X] = value;
+    CPU_CAST(cpu)->set(REG_X, value);
 }
 
 void nes6502_set_y(nes6502_t* cpu, uint8_t value) {
-    CPU_CAST(cpu)->reg8[REG_Y] = value;
+    CPU_CAST(cpu)->set(REG_Y, value);
 }
 
 void nes6502_set_s(nes6502_t* cpu, uint8_t value) {
-    CPU_CAST(cpu)->reg8[REG_SPL] = value;
+    CPU_CAST(cpu)->set(REG_SPL, value);
 }
 
 void nes6502_set_p(nes6502_t* cpu, uint8_t value) {
-    CPU_CAST(cpu)->reg8[REG_P] = value;
+    CPU_CAST(cpu)->set(REG_P, value);
 }
 
 void nes6502_set_pc(nes6502_t* cpu, uint16_t value) {
-    CPU_CAST(cpu)->reg16[REG_PC] = value;
+    CPU_CAST(cpu)->set(REG_PC, value);
 }
 
 // APU functions (conditionally compiled based on NES6502Tag features)
