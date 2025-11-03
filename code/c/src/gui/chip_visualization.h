@@ -65,9 +65,9 @@ struct PinState {
 struct PackageLayout {
     float width;             // Package width in pixels
     float height;            // Package height in pixels
-    uint8_t total_pins;      // Total number of pins
     bool has_notch;          // True if package has pin 1 notch indicator
-    const char* package_name; // Package type (e.g., "DIP-40", "PLCC-44")
+    const char* vendor;      // Manufacturer (e.g., "MOS Technology", "Ricoh", "WDC")
+    const char* chip_id;     // Chip identifier (e.g., "6502", "6510", "2A03")
 };
 
 // Pin layout arrays for each side
@@ -77,6 +77,11 @@ struct PinLayout {
     std::vector<ChipPin> top_pins;      // Pins on top side (left to right)
     std::vector<ChipPin> bottom_pins;   // Pins on bottom side (left to right)
     PackageLayout package;              // Package dimensions and info
+    
+    // Calculate total number of pins from all sides
+    size_t get_total_pins() const {
+        return left_pins.size() + right_pins.size() + top_pins.size() + bottom_pins.size();
+    }
 };
 
 // ============================================================================
@@ -97,7 +102,7 @@ struct ChipVisualConfig {
     
     float pin_width;                    // Pin rectangle width
     float pin_height;                   // Pin rectangle height
-    float led_radius;                   // LED indicator radius
+    float led_size;                     // LED indicator radius
     float label_offset;                 // Distance from pin to label
     float pin_spacing_factor;           // Spacing multiplier between pins
     float chip_border_width;            // Chip outline thickness
