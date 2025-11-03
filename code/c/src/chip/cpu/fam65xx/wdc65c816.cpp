@@ -24,7 +24,11 @@ using wdc65c816_cpu_t = fam65xx_t<WDC_65C816>;
 extern "C" {
 
 wdc65c816_t* wdc65c816_create(void) {
-    return reinterpret_cast<wdc65c816_t*>(new wdc65c816_cpu_t());
+    wdc65c816_t* cpu = reinterpret_cast<wdc65c816_t*>(new wdc65c816_cpu_t());
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    register_wdc65c816_for_gui(cpu);
+#endif
+    return cpu;
 }
 
 void wdc65c816_destroy(wdc65c816_t* cpu) {

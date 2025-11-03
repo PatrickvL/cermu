@@ -24,7 +24,11 @@ using rockwell65c02_cpu_t = fam65xx_t<ROCKWELL_R65C02>;
 extern "C" {
 
 rockwell65c02_t* rockwell65c02_create(void) {
-    return reinterpret_cast<rockwell65c02_t*>(new rockwell65c02_cpu_t());
+    rockwell65c02_t* cpu = reinterpret_cast<rockwell65c02_t*>(new rockwell65c02_cpu_t());
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    register_rockwell65c02_for_gui(cpu);
+#endif
+    return cpu;
 }
 
 void rockwell65c02_destroy(rockwell65c02_t* cpu) {
