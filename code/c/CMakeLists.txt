@@ -218,8 +218,11 @@ if(BUILD_GUI)
     set(GUI_SOURCES
             src/gui/cimgui_interface.c
             src/gui/cimgui_backends.cpp
+            src/gui/chip_visualization.cpp
             src/chip/video/vic_ii/vicii_gui.c
             src/chip/logic/pla_gui.c
+            src/chip/cpu/fam65xx/fam65xx_gui.cpp
+            src/chip/cpu/fam65xx/cpu_pin_layouts.cpp
         )
 
     add_executable(c64emu_gui

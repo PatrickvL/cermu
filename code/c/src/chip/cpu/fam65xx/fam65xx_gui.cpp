@@ -3,7 +3,7 @@
  * 
  * This file contains modern C++ GUI rendering that works directly with the 
  * template-based CPU implementation and adapts to processor traits for
- * variant-specific features.
+ * variant-specific features. Uses the generic chip visualization system.
  */
 
 #include <cstdint>
@@ -17,6 +17,10 @@
 #include "fam65xx.hpp"
 #include "fam65xx_types.h"
 #include "fam65xx_processor_traits.hpp"
+
+// Include generic chip visualization system
+#include "../../gui/chip_visualization.h"
+#include "cpu_pin_layouts.h"
 
 // Include GUI interface
 #include "../../../gui/cimgui_interface.h"
@@ -97,97 +101,40 @@ static const char* flag_names[] = {
 };
 
 // ============================================================================
-// CHIP VISUALIZATION SYSTEM
+// CPU-SPECIFIC CHIP VISUALIZATION HELPERS
 // ============================================================================
 
-// Pin types for visual categorization
-enum class PinType {
-    POWER,        // VCC, VSS
-    CLOCK,        // φ0, φ1, φ2
-    ADDRESS,      // A0-A15
-    DATA,         // D0-D7  
-    CONTROL,      // RW, SYNC, RDY, AEC
-    INTERRUPT,    // IRQ, NMI, RES
-    SPECIAL       // SO, BE, ML
-};
-
-// Pin definition structure
-struct ChipPin {
-    uint8_t pin_number;      // Physical pin number (1-40)
-    const char* label;       // Pin label (e.g., "A0", "D7", "RW")
-    PinType type;            // Pin type for color coding
-    uint8_t bit_index;       // Bit index within bus (for address/data pins)
-    bool invert_logic;       // True if pin is active-low
-};
-
-// DIP-40 pin layout for MOS 65xx family
-static const ChipPin chip_pins[] = {
-    // Left side (pins 1-20, top to bottom)
-    {1,  "VSS",   PinType::POWER,     0, false},  // Ground
-    {2,  "RDY",   PinType::CONTROL,   0, false},  // Ready
-    {3,  "φ1",    PinType::CLOCK,     0, false},  // Phase 1 Out
-    {4,  "IRQ",   PinType::INTERRUPT, 0, true},   // Interrupt Request (active low)
-    {5,  "NC",    PinType::SPECIAL,   0, false},  // No Connect  
-    {6,  "NMI",   PinType::INTERRUPT, 0, true},   // Non-Maskable Interrupt (active low)
-    {7,  "SYNC",  PinType::CONTROL,   0, false},  // Synchronize
-    {8,  "VCC",   PinType::POWER,     0, false},  // +5V Power
-    {9,  "A0",    PinType::ADDRESS,   0, false},  // Address Bus 0
-    {10, "A1",    PinType::ADDRESS,   1, false},  // Address Bus 1
-    {11, "A2",    PinType::ADDRESS,   2, false},  // Address Bus 2
-    {12, "A3",    PinType::ADDRESS,   3, false},  // Address Bus 3
-    {13, "A4",    PinType::ADDRESS,   4, false},  // Address Bus 4
-    {14, "A5",    PinType::ADDRESS,   5, false},  // Address Bus 5
-    {15, "A6",    PinType::ADDRESS,   6, false},  // Address Bus 6
-    {16, "A7",    PinType::ADDRESS,   7, false},  // Address Bus 7
-    {17, "A8",    PinType::ADDRESS,   8, false},  // Address Bus 8
-    {18, "A9",    PinType::ADDRESS,   9, false},  // Address Bus 9
-    {19, "A10",   PinType::ADDRESS,  10, false},  // Address Bus 10
-    {20, "A11",   PinType::ADDRESS,  11, false},  // Address Bus 11
+// Template function to create and render CPU chip visualization
+template<const CPUTraits& Traits>
+void render_chip_visualization(fam65xx_t<Traits>* cpu, ImVec2 chip_center, bus_state_t bus_state) {
+    static std::unique_ptr<ChipVisualization> chip_viz = nullptr;
     
-    // Right side (pins 21-40, top to bottom)
-    {21, "VSS",   PinType::POWER,     0, false},  // Ground
-    {22, "A12",   PinType::ADDRESS,  12, false},  // Address Bus 12
-    {23, "A13",   PinType::ADDRESS,  13, false},  // Address Bus 13
-    {24, "A14",   PinType::ADDRESS,  14, false},  // Address Bus 14
-    {25, "A15",   PinType::ADDRESS,  15, false},  // Address Bus 15
-    {26, "D7",    PinType::DATA,      7, false},  // Data Bus 7
-    {27, "D6",    PinType::DATA,      6, false},  // Data Bus 6
-    {28, "D5",    PinType::DATA,      5, false},  // Data Bus 5
-    {29, "D4",    PinType::DATA,      4, false},  // Data Bus 4
-    {30, "D3",    PinType::DATA,      3, false},  // Data Bus 3
-    {31, "D2",    PinType::DATA,      2, false},  // Data Bus 2
-    {32, "D1",    PinType::DATA,      1, false},  // Data Bus 1
-    {33, "D0",    PinType::DATA,      0, false},  // Data Bus 0
-    {34, "RW",    PinType::CONTROL,   0, false},  // Read/Write
-    {35, "NC",    PinType::SPECIAL,   0, false},  // No Connect (or ML on some variants)
-    {36, "BE",    PinType::CONTROL,   0, false},  // Bus Enable
-    {37, "φ0",    PinType::CLOCK,     0, false},  // Phase 0 In
-    {38, "SO",    PinType::SPECIAL,   0, true},   // Set Overflow (active low)
-    {39, "φ2",    PinType::CLOCK,     0, false},  // Phase 2 Out  
-    {40, "RES",   PinType::INTERRUPT, 0, true},   // Reset (active low)
-};
-
-constexpr size_t NUM_PINS = sizeof(chip_pins) / sizeof(ChipPin);
-
-// Pin state structure for rendering
-struct PinState {
-    bool is_active;
-    bool is_output;
-    uint8_t value;  // For multi-bit buses
-};
-
-// Colors for different pin types
-static uint32_t get_pin_type_color(PinType type) {
-    switch (type) {
-        case PinType::POWER:     return 0xFF6464FF; // Red (ABGR format)
-        case PinType::CLOCK:     return 0xFF64FFFF; // Yellow
-        case PinType::ADDRESS:   return 0xFFFF9664; // Light Blue
-        case PinType::DATA:      return 0xFF96FF64; // Light Green
-        case PinType::CONTROL:   return 0xFF6496FF; // Orange
-        case PinType::INTERRUPT: return 0xFFFF64FF; // Magenta
-        case PinType::SPECIAL:   return 0xFFC8C8C8; // Gray
-        default:                 return 0xFF808080; // Dark Gray
+    // Create chip visualization if not already created
+    if (!chip_viz) {
+        PinLayout layout = create_cpu_pin_layout<Traits>();
+        chip_viz = std::make_unique<ChipVisualization>(layout);
     }
+    
+    // Get current pin states from CPU and bus state
+    std::vector<PinState> pin_states = get_cpu_pin_states<Traits>(cpu, bus_state);
+    
+    // Render the chip
+    const char* chip_name = get_processor_name<Traits>();
+    chip_viz->render(chip_center, pin_states, chip_name);
+}
+
+// Fallback version without bus state
+template<const CPUTraits& Traits>
+void render_chip_visualization(fam65xx_t<Traits>* cpu, ImVec2 chip_center) {
+    // Create default bus state from CPU registers if possible
+    bus_state_t bus_state = 0;
+    if (cpu) {
+        BUS_SET_ADDR(bus_state, cpu->get(REG_AB));
+        BUS_SET_DATA(bus_state, cpu->get(REG_DL));
+        // Set safe defaults for control signals
+        bus_state |= BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_RDY_BIT) | BUS_BIT(BUS_RES_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_NMI_BIT);
+    }
+    render_chip_visualization<Traits>(cpu, chip_center, bus_state);
 }
 
 // ============================================================================
@@ -267,6 +214,50 @@ void render_internal_state(fam65xx_t<Traits>* cpu) {
         }
         igUnindent(16.0f);
         
+        igUnindent(16.0f);
+    }
+}
+
+template<const CPUTraits& Traits>
+void render_chip_visualization(fam65xx_t<Traits>* cpu) {
+    if (igCollapsingHeader_BoolPtr("Chip Visualization", NULL, ImGuiTreeNodeFlags_DefaultOpen)) {
+        igIndent(16.0f);
+        
+        // Calculate available space
+        ImVec2 available_size;
+        igGetContentRegionAvail(&available_size);
+        float chip_width = 200.0f;
+        float chip_height = 400.0f;
+        
+        // Center the chip in available space
+        ImVec2 cursor_pos;
+        igGetCursorScreenPos(&cursor_pos);
+        
+        // Get the pin layout for this CPU type to determine actual chip dimensions
+        static PinLayout layout = create_cpu_pin_layout<Traits>();
+        
+        ImVec2 chip_center = {
+            cursor_pos.x + available_size.x / 2,
+            cursor_pos.y + layout.package.height / 2 + 20
+        };
+        
+        // Reserve space for the chip drawing
+        ImVec2 dummy_size = {available_size.x, layout.package.height + 40};
+        igDummy(dummy_size);
+        
+        // Draw the CPU-specific chip visualization
+        render_chip_visualization<Traits>(cpu, chip_center);
+        
+        igSeparator();
+        
+        // Render pin legend using the generic visualization system
+        static std::unique_ptr<ChipVisualization> legend_viz = nullptr;
+        if (!legend_viz) {
+            legend_viz = std::make_unique<ChipVisualization>(layout);
+        }
+        legend_viz->render_legend();
+        
+        igUnindent(16.0f);
         igUnindent(16.0f);
     }
 }
@@ -398,6 +389,9 @@ public:
         igSeparator();
         
         render_internal_state<Traits>(cpu);
+        igSeparator();
+        
+        render_chip_visualization<Traits>(cpu);
         igSeparator();
         
         render_interrupt_state<Traits>(cpu);
