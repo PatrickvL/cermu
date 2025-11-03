@@ -158,6 +158,9 @@ public:
         
         // Initialize conditional features
         this->init_conditional_features();
+        
+        // Initialize operation and addressing mode handlers
+        this->init_opcode_table();
     }
     
     ~fam65xx_t() {
