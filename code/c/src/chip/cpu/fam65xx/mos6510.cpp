@@ -33,7 +33,9 @@ mos6510_t* mos6510_create(void) {
 
 void mos6510_destroy(mos6510_t* cpu) {
     // Unregister from GUI system before destroying
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
     fam65xx::unregister_cpu_from_gui(cpu);
+#endif
     delete CPU_CAST(cpu);
 }
 

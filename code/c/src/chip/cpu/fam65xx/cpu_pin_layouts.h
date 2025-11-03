@@ -36,7 +36,7 @@ PinLayout create_rockwell_r65c02_layout();
 
 // CPU pin state functions - get pin states from CPU and bus state  
 template<const fam65xx::CPUTraits& Traits>
-std::vector<PinState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, bus_state_t bus_state);
+std::vector<PinState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, PinLayout* layout, bus_state_t bus_state);
 
 // ============================================================================
 // TEMPLATE FUNCTION IMPLEMENTATIONS (must be in header for templates)
@@ -268,14 +268,18 @@ PinLayout create_cpu_pin_layout() {
         };
         
     } else {
-        // Fallback for unknown CPU type
-        layout.package = {
-            200.0f,                         // width
-            400.0f,                         // height
-            true,                           // has_notch
-            "Unknown",                      // vendor (fallback)
-            "65xx"                          // chip_id (fallback)
-        };
+        // Fallback for unknown CPU type - set fields individually
+        layout.package.width = 600.0f;                    // DIP-40 width
+        layout.package.height = 2000.0f;                  // DIP-40 height
+        layout.package.package_type = PackageType::DIP;
+        layout.package.marker = OrientationMarker::NOTCH;
+        layout.package.pin_pitch = 100.0f;
+        layout.package.has_thermal_pad = false;
+        layout.package.has_center_slug = false;
+        layout.package.thermal_pad_size = 0.0f;
+        
+        layout.markings.part_number = "Unknown";
+        layout.markings.manufacturer = "65xx Family";
     }
     
     return layout;
@@ -287,12 +291,10 @@ PinLayout create_cpu_pin_layout() {
 
 // CPU pin state function with compile-time CPU selection  
 template<const fam65xx::CPUTraits& Traits>
-std::vector<PinState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, bus_state_t bus_state) {
+std::vector<PinState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, const PinLayout* layout, bus_state_t bus_state) {
     // Map pins based on the pin layout for this CPU type
-    PinLayout layout = create_cpu_pin_layout<Traits>();
-    
     // Get the actual pin layout for this CPU
-    std::vector<PinState> states(layout.get_total_pins());
+    std::vector<PinState> states(layout->get_total_pins());
 
     // Initialize all pins as inactive and valid
     for (auto& state : states) {
@@ -422,16 +424,19 @@ std::vector<PinState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, bus_st
     
     // Process pins from all sides
     size_t pin_index = 0;
-    for (const auto& pin : layout.left_pins) {
+    for (const auto& pin : layout->left_pins) {
         process_pin(pin, pin.pin_number - 1); // Pin numbers are 1-based
     }
-    for (const auto& pin : layout.right_pins) {
+    for (const auto& pin : layout->right_pins) {
         process_pin(pin, pin.pin_number - 1);
     }
-    for (const auto& pin : layout.top_pins) {
+    for (const auto& pin : layout->top_pins) {
         process_pin(pin, pin.pin_number - 1);
     }
-    for (const auto& pin : layout.bottom_pins) {
+    for (const auto& pin : layout->bottom_pins) {
+        process_pin(pin, pin.pin_number - 1);
+    }    
+    for (const auto& pin : layout->grid_pins) {
         process_pin(pin, pin.pin_number - 1);
     }
     
@@ -450,8 +455,8 @@ PinLayout create_mos6502_layout() {
     // The create_dip40_layout() provides the physical package structure
     
     // Update package info for MOS 6502
-    layout.package.markings.part_number = "MOS6502";
-    layout.package.markings.manufacturer = "MOS Technology";
+    layout.markings.part_number = "MOS6502";
+    layout.markings.manufacturer = "MOS Technology";
     
     // Pin assignments for MOS 6502 (40-pin DIP)
     // Left side pins (1-20, top to bottom)
@@ -501,8 +506,19 @@ PinLayout create_mos6502_layout() {
         {40, "RES",   PinType::INTERRUPT, 0, true}
     };
     
-    // Replace the generic pins with MOS 6502 specific assignments
-    layout.pins = mos6502_pins;
+    // Distribute pins for DIP-40 package (left side: pins 1-20, right side: pins 21-40)
+    layout.left_pins.clear();
+    layout.right_pins.clear();
+    
+    // Left side pins (1-20, top to bottom)
+    for (int i = 0; i < 20; i++) {
+        layout.left_pins.push_back(mos6502_pins[i]);
+    }
+    
+    // Right side pins (21-40, bottom to top) 
+    for (int i = 20; i < 40; i++) {
+        layout.right_pins.push_back(mos6502_pins[i]);
+    }
     
     return layout;
 }
@@ -512,8 +528,8 @@ PinLayout create_mos6510_layout() {
     PinLayout layout = create_dip40_layout();
     
     // Update package info for MOS 6510
-    layout.package.markings.part_number = "MOS6510";
-    layout.package.markings.manufacturer = "MOS Technology";
+    layout.markings.part_number = "MOS6510";
+    layout.markings.manufacturer = "MOS Technology";
     
     // Pin assignments for MOS 6510 (40-pin DIP) - mostly same as 6502 but with AEC
     std::vector<ChipPin> mos6510_pins = {
@@ -562,7 +578,20 @@ PinLayout create_mos6510_layout() {
         {40, "RES",   PinType::INTERRUPT, 0, true}
     };
     
-    layout.pins = mos6510_pins;
+    // Distribute pins for DIP-40 package (left side: pins 1-20, right side: pins 21-40)
+    layout.left_pins.clear();
+    layout.right_pins.clear();
+    
+    // Left side pins (1-20, top to bottom)
+    for (int i = 0; i < 20; i++) {
+        layout.left_pins.push_back(mos6510_pins[i]);
+    }
+    
+    // Right side pins (21-40, bottom to top)
+    for (int i = 20; i < 40; i++) {
+        layout.right_pins.push_back(mos6510_pins[i]);
+    }
+    
     return layout;
 }
 
@@ -571,8 +600,8 @@ PinLayout create_wdc_w65c02s_layout() {
     PinLayout layout = create_dip40_layout();
     
     // Update package info for WDC W65C02S
-    layout.package.markings.part_number = "W65C02S";
-    layout.package.markings.manufacturer = "Western Design Center";
+    layout.markings.part_number = "W65C02S";
+    layout.markings.manufacturer = "Western Design Center";
     
     // Pin assignments for WDC W65C02S (40-pin DIP) - CMOS version with BE pin
     std::vector<ChipPin> wdc_w65c02s_pins = {
@@ -621,7 +650,20 @@ PinLayout create_wdc_w65c02s_layout() {
         {40, "RES",   PinType::INTERRUPT, 0, true}
     };
     
-    layout.pins = wdc_w65c02s_pins;
+    // Distribute pins for DIP-40 package (left side: pins 1-20, right side: pins 21-40)
+    layout.left_pins.clear();
+    layout.right_pins.clear();
+    
+    // Left side pins (1-20, top to bottom)
+    for (int i = 0; i < 20; i++) {
+        layout.left_pins.push_back(wdc_w65c02s_pins[i]);
+    }
+    
+    // Right side pins (21-40, bottom to top)
+    for (int i = 20; i < 40; i++) {
+        layout.right_pins.push_back(wdc_w65c02s_pins[i]);
+    }
+    
     return layout;
 }
 
@@ -630,8 +672,8 @@ PinLayout create_wdc_65c816_layout() {
     PinLayout layout = create_dip40_layout();
     
     // Update package info for WDC 65C816
-    layout.package.markings.part_number = "W65C816S";
-    layout.package.markings.manufacturer = "Western Design Center";
+    layout.markings.part_number = "W65C816S";
+    layout.markings.manufacturer = "Western Design Center";
     
     // Pin assignments for WDC 65C816 (40-pin DIP) - 16-bit processor
     std::vector<ChipPin> wdc_65c816_pins = {
@@ -680,7 +722,20 @@ PinLayout create_wdc_65c816_layout() {
         {40, "RES",   PinType::INTERRUPT, 0, true}
     };
     
-    layout.pins = wdc_65c816_pins;
+    // Distribute pins for DIP-40 package (left side: pins 1-20, right side: pins 21-40)
+    layout.left_pins.clear();
+    layout.right_pins.clear();
+    
+    // Left side pins (1-20, top to bottom)
+    for (int i = 0; i < 20; i++) {
+        layout.left_pins.push_back(wdc_65c816_pins[i]);
+    }
+    
+    // Right side pins (21-40, bottom to top)
+    for (int i = 20; i < 40; i++) {
+        layout.right_pins.push_back(wdc_65c816_pins[i]);
+    }
+    
     return layout;
 }
 
@@ -689,8 +744,8 @@ PinLayout create_ricoh_2a03_layout() {
     PinLayout layout = create_dip40_layout();
     
     // Update package info for RICOH 2A03 (NES processor)
-    layout.package.markings.part_number = "RP2A03";
-    layout.package.markings.manufacturer = "Ricoh";
+    layout.markings.part_number = "RP2A03";
+    layout.markings.manufacturer = "Ricoh";
     
     // Pin assignments for RICOH 2A03 (40-pin DIP) - NES processor (6502 derivative)
     std::vector<ChipPin> ricoh_2a03_pins = {
@@ -739,7 +794,20 @@ PinLayout create_ricoh_2a03_layout() {
         {40, "RES",   PinType::INTERRUPT, 0, true}
     };
     
-    layout.pins = ricoh_2a03_pins;
+    // Distribute pins for DIP-40 package (left side: pins 1-20, right side: pins 21-40)
+    layout.left_pins.clear();
+    layout.right_pins.clear();
+    
+    // Left side pins (1-20, top to bottom)
+    for (int i = 0; i < 20; i++) {
+        layout.left_pins.push_back(ricoh_2a03_pins[i]);
+    }
+    
+    // Right side pins (21-40, bottom to top)
+    for (int i = 20; i < 40; i++) {
+        layout.right_pins.push_back(ricoh_2a03_pins[i]);
+    }
+    
     return layout;
 }
 
@@ -748,8 +816,8 @@ PinLayout create_rockwell_r65c02_layout() {
     PinLayout layout = create_dip40_layout();
     
     // Update package info for Rockwell R65C02
-    layout.package.markings.part_number = "R65C02";
-    layout.package.markings.manufacturer = "Rockwell";
+    layout.markings.part_number = "R65C02";
+    layout.markings.manufacturer = "Rockwell";
     
     // Pin assignments for Rockwell R65C02 (40-pin DIP) - CMOS 6502 variant
     std::vector<ChipPin> rockwell_r65c02_pins = {
@@ -798,7 +866,20 @@ PinLayout create_rockwell_r65c02_layout() {
         {40, "RES",   PinType::INTERRUPT, 0, true}
     };
     
-    layout.pins = rockwell_r65c02_pins;
+    // Distribute pins for DIP-40 package (left side: pins 1-20, right side: pins 21-40)
+    layout.left_pins.clear();
+    layout.right_pins.clear();
+    
+    // Left side pins (1-20, top to bottom)
+    for (int i = 0; i < 20; i++) {
+        layout.left_pins.push_back(rockwell_r65c02_pins[i]);
+    }
+    
+    // Right side pins (21-40, bottom to top)
+    for (int i = 20; i < 40; i++) {
+        layout.right_pins.push_back(rockwell_r65c02_pins[i]);
+    }
+    
     return layout;
 }
 

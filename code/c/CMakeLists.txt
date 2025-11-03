@@ -143,6 +143,7 @@ set(CORE_SOURCES
     src/core/system.c
     src/core/chip.c
     src/core/ioport.c
+    src/core/chip_layout.cpp
 )
 
 # Chip library sources - Updated for fam65xx
@@ -222,7 +223,6 @@ if(BUILD_GUI)
             src/chip/video/vic_ii/vicii_gui.c
             src/chip/logic/pla_gui.c
             src/chip/cpu/fam65xx/fam65xx_gui.cpp
-            src/chip/cpu/fam65xx/cpu_pin_layouts.cpp
         )
 
     add_executable(c64emu_gui

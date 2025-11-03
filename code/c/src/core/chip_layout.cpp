@@ -62,29 +62,55 @@ ChipPin make_nc_pin(uint8_t num) {
 // PinLayout method implementations
 // ============================================================================
 
-std::string PinLayout::get_package_name() const {
-    size_t pin_count = get_total_pins();
-    switch (package.package_type) {
-        case PackageType::DIP:    return "DIP-" + std::to_string(pin_count);
-        case PackageType::SOIC:   return "SOIC-" + std::to_string(pin_count);
-        case PackageType::SOP:    return "SOP-" + std::to_string(pin_count);
-        case PackageType::SSOP:   return "SSOP-" + std::to_string(pin_count);
-        case PackageType::TSSOP:  return "TSSOP-" + std::to_string(pin_count);
-        case PackageType::PLCC:   return "PLCC-" + std::to_string(pin_count);
-        case PackageType::QFP:    return "QFP-" + std::to_string(pin_count);
-        case PackageType::LQFP:   return "LQFP-" + std::to_string(pin_count);
-        case PackageType::TQFP:   return "TQFP-" + std::to_string(pin_count);
-        case PackageType::QFN:    return "QFN-" + std::to_string(pin_count);
-        case PackageType::DFN:    return "DFN-" + std::to_string(pin_count);
-        case PackageType::BGA:    return "BGA-" + std::to_string(pin_count);
-        case PackageType::LGA:    return "LGA-" + std::to_string(pin_count);
-        case PackageType::SIP:    return "SIP-" + std::to_string(pin_count);
-        case PackageType::TO220:  return "TO-220";
-        case PackageType::TO92:   return "TO-92";
-        case PackageType::SOT23:  return "SOT-23";
+// Helper function to convert PackageType enum to string
+const std::string get_package_type_string(PackageType package_type) {
+    // get_package_name
+    switch(package_type) {
+        case PackageType::DIP: return "DIP";
+        case PackageType::SOIC: return "SOIC";
+        case PackageType::SOP: return "SOP";
+        case PackageType::SSOP: return "SSOP";
+        case PackageType::TSSOP: return "TSSOP";
+        case PackageType::PLCC: return "PLCC";
+        case PackageType::QFP: return "QFP";
+        case PackageType::LQFP: return "LQFP";
+        case PackageType::TQFP: return "TQFP";
+        case PackageType::QFN: return "QFN";
+        case PackageType::DFN: return "DFN";
+        case PackageType::BGA: return "BGA";
+        case PackageType::LGA: return "LGA";
+        case PackageType::SIP: return "SIP";
+        case PackageType::TO220: return "TO-220";
+        case PackageType::TO92: return "TO-92";
+        case PackageType::SOT23: return "SOT-23";
         case PackageType::SOT223: return "SOT-223";
-        case PackageType::CUSTOM: return "CUSTOM-" + std::to_string(pin_count);
-        default:                  return "UNKNOWN-" + std::to_string(pin_count);
+        case PackageType::CUSTOM: return "Custom";
+        default: return "IC";
+    }
+}
+
+static const char* get_package_type_charptr(PackageType package_type) {
+    return get_package_type_string(package_type).c_str();
+}
+
+const bool get_package_name_shows_pin_count(PackageType package_type) {
+    switch (package_type) {
+        case PackageType::TO220:
+        case PackageType::TO92:
+        case PackageType::SOT23:
+        case PackageType::SOT223:
+            return false;
+        default:
+            return true;
+    }
+}
+
+std::string PinLayout::get_package_name() const {
+    if (get_package_name_shows_pin_count(package.package_type)) {
+        size_t pin_count = get_total_pins();
+        return get_package_type_string(package.package_type) + "-" + std::to_string(pin_count);
+    } else {
+        return get_package_type_string(package.package_type);
     }
 }
 
