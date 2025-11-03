@@ -9,9 +9,13 @@
 using namespace fam65xx;
 
 // ============================================================================
-// GENERIC CPU PIN LAYOUT FUNCTION WITH COMPILE-TIME SELECTION
+// TEMPLATE IMPLEMENTATIONS MOVED TO HEADER
 // ============================================================================
+// NOTE: Template implementations are now in cpu_pin_layouts.h for proper visibility
+// This avoids template linking issues with C++
 
+/*
+// DEPRECATED: Template implementations moved to header file
 template<const CPUTraits& Traits>
 PinLayout create_cpu_pin_layout() {
     PinLayout layout;
@@ -560,9 +564,12 @@ std::vector<PinState> get_cpu_pin_states(fam65xx_t<Traits>* cpu) {
     
     return get_cpu_pin_states<Traits>(cpu, bus_state);
 }
+*/
 
-// Explicit template instantiations - trying to match the exact linker expectations
-// Based on linker errors, the calls expect &CPUTraits pattern
+// ============================================================================
+// EXPLICIT TEMPLATE INSTANTIATIONS 
+// ============================================================================
+// Keep explicit template instantiations to ensure template functions are compiled
 template PinLayout create_cpu_pin_layout<fam65xx::MOS6502>();
 template PinLayout create_cpu_pin_layout<fam65xx::MOS6510>();  
 template PinLayout create_cpu_pin_layout<fam65xx::WDC_W65C02S>();

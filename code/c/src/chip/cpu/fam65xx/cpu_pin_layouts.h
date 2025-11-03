@@ -140,12 +140,12 @@ std::vector<PinState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, bus_st
     
     // Set address pins (A0-A15)
     for (int i = 0; i < 16; i++) {
-        states[8 + i] = {(address & (1 << i)) != 0, false, i, false, true};  // A0-A15
+        states[8 + i] = {(address & (1 << i)) != 0, false, (uint8_t)i, false, true};  // A0-A15
     }
     
     // Set data pins (D0-D7)  
     for (int i = 0; i < 8; i++) {
-        states[33 - i] = {(data & (1 << i)) != 0, false, i, false, true};  // D0-D7
+        states[33 - i] = {(data & (1 << i)) != 0, false, (uint8_t)i, false, true};  // D0-D7
     }
     
     // Set control signals from bus state
