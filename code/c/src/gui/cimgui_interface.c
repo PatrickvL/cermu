@@ -333,6 +333,15 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, struct emulation_co
             igSeparator();
             if (igMenuItem_Bool("Exit", NULL, false, true)) {
                 g_should_quit = true;
+                // Stop emulation when File > Exit is selected
+                if (emu_context && emu_context->thread_running) {
+                    printf("GUI: File > Exit selected, stopping emulation\n");
+                    // Force thread to stop immediately like window close does
+                    emu_context->thread_running = false;
+                    emu_context->current_state = EMU_STATE_STOPPED;
+                    // Send quit signal to emulation thread
+                    gui_emulation_send_signal(emu_context, EMU_SIGNAL_QUIT);
+                }
             }
             igEndMenu();
         }
@@ -1520,12 +1529,18 @@ void gui_emulation_thread_stop(emulation_context_t* context) {
     sdl_thread_impl_t* impl = (sdl_thread_impl_t*)context->thread_impl;
     if (!impl->thread) return;
     
+    printf("GUI: Stopping emulation thread...\n");
+    
     // Signal thread to quit
+    context->thread_running = false;
+    context->current_state = EMU_STATE_STOPPED;
     gui_emulation_send_signal(context, EMU_SIGNAL_QUIT);
     
-    // Wait for thread to finish
+    // Wait for thread to finish with timeout
+    printf("GUI: Waiting for emulation thread to finish...\n");
     SDL_WaitThread(impl->thread, NULL);
     impl->thread = NULL;
+    printf("GUI: Emulation thread stopped\n");
 }
 
 void gui_emulation_send_signal(emulation_context_t* context, emulation_signal_t signal) {
@@ -1727,45 +1742,49 @@ static int gui_emulation_thread_main(void* data) {
                     uint32_t last_log_time = SDL_GetTicks();
                     const uint32_t log_interval_ms = 5000; // Log every 5 seconds
                     uint64_t last_total_cycles = context->total_cycles_executed;
+                    bool first_iteration = true;
                     
                     while (context->current_state == EMU_STATE_RUNNING && context->thread_running) {
-                        // Start continuous execution - this will run until intercept
-                        printf("Emulation thread: Starting continuous CPU execution\n");
-                        fflush(stdout); // Force output before potential crash
+                        uint32_t loop_start_time = SDL_GetTicks();
                         
-                        // Check CPU state before execution
-                        // CPU state access simplified
-                        printf("Emulation thread: Starting C++ CPU execution\n");
-                        fflush(stdout);
+                        // Only log periodically to reduce spam
+                        if (first_iteration || (loop_start_time - last_log_time) >= log_interval_ms) {
+                            printf("Emulation thread: Starting continuous CPU execution\n");
+                            fflush(stdout);
+                            last_log_time = loop_start_time;
+                            first_iteration = false;
+                        }
                         
                         // Record start time to detect crashes
                         uint32_t start_time = SDL_GetTicks();
                         
-                        // Use cycle-based execution instead of continuous execution
-                        for (int i = 0; i < 1000 && context->current_state == EMU_STATE_RUNNING; i++) {
+                        // Use cycle-based execution - execute one frame worth of cycles at a time
+                        // PAL C64: ~19,705 cycles per frame (985,248 Hz / 50 fps)
+                        for (int i = 0; i < 19705 && context->current_state == EMU_STATE_RUNNING && context->thread_running; i++) {
                             c64_cpu_cycle(context->c64);
                             context->total_cycles_executed++;
+                            
+                            // Check quit condition every 1000 cycles for responsiveness
+                            if ((i % 1000) == 0 && !context->thread_running) {
+                                printf("Emulation thread: Quick quit detected during CPU execution\n");
+                                break;
+                            }
                         }
                         
                         uint32_t end_time = SDL_GetTicks();
                         uint32_t execution_time = end_time - start_time;
                         
-                        printf("Emulation thread: CPU execution returned after %u ms (intercept hit)\n", execution_time);
-                        fflush(stdout);
-                        
-                        // If execution returned very quickly, it might be a crash or error
-                        if (execution_time < 100) {
-                            printf("Emulation thread: WARNING - Execution returned very quickly (%u ms)\n", execution_time);
-                            printf("Emulation thread: Execution cycle completed\n");
-                            fflush(stdout);
+                        // If execution returned very quickly, add delay to prevent spinning
+                        if (execution_time < 20) { // Less than one frame (50fps = 20ms for PAL)
+                            SDL_Delay(20 - execution_time); // Sleep to maintain ~50fps PAL timing
                         }
                         
-                        // Update cycle count (approximate - continuous execution doesn't track individual cycles)
-                        context->total_cycles_executed += 1000; // Rough estimate
+                        // Cycles are already tracked in the loop above, no need to add extra
                         
                         // Check thread state for pause/stop requests
                         if (context->current_state != EMU_STATE_RUNNING || !context->thread_running) {
-                            printf("Emulation thread: Pause/stop requested\n");
+                            printf("Emulation thread: Pause/stop requested (state=%d, thread_running=%d)\n", 
+                                   context->current_state, context->thread_running);
                             break;
                         }
                         
@@ -1780,8 +1799,9 @@ static int gui_emulation_thread_main(void* data) {
                             last_total_cycles = context->total_cycles_executed;
                         }
                         
-                        // Small delay to allow GUI responsiveness
-                        SDL_Delay(10);
+                        // Very small delay to allow GUI responsiveness without hurting performance
+                        // Main timing control is handled by the frame delay above
+                        SDL_Delay(0);
                     }
                 }
                 
@@ -1811,7 +1831,9 @@ static int gui_emulation_thread_main(void* data) {
                 break;
                 
             case EMU_SIGNAL_QUIT:
+                printf("Emulation thread: Quit signal received, setting thread_running = false\n");
                 context->thread_running = false;
+                context->current_state = EMU_STATE_STOPPED;
                 break;
                 
             default:
