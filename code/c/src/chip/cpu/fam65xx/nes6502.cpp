@@ -168,12 +168,10 @@ static void initialize_nes6502_descriptor() {
     nes6502_base_descriptor.bank_change = nullptr; // Basic CPU doesn't have banking
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
     nes6502_base_descriptor.render_debug_window = [](void* cpu_handle, bool* show_window) {
-        nes6502_t* cpu = static_cast<nes6502_t*>(cpu_handle);
-        render_cpu_debug_window<RICOH_2A03>(cpu, "NES 6502");
+        render_cpu_debug_window_impl(cpu_handle, "NES 6502");
     };
     nes6502_base_descriptor.render_settings_window = [](void* cpu_handle, bool* show_window) {
-        nes6502_t* cpu = static_cast<nes6502_t*>(cpu_handle);
-        render_cpu_settings_window<RICOH_2A03>(cpu, "NES 6502");
+        render_cpu_settings_window_impl(cpu_handle, "NES 6502");
     };
 #endif
 }

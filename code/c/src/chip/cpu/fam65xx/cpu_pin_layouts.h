@@ -12,6 +12,12 @@
 #include "fam65xx_processor_traits.hpp"
 #include "../../core/system_lines.h"
 
+// Forward declaration of the CPU template class
+namespace fam65xx {
+    template<const CPUTraits& Traits>
+    class fam65xx_t;
+}
+
 // ============================================================================
 // CPU TRAIT-BASED PIN LAYOUT FACTORY
 // ============================================================================
@@ -21,6 +27,7 @@ template<const fam65xx::CPUTraits& Traits>
 PinLayout create_cpu_pin_layout();
 
 // Specialized layouts for different CPU variants
+// CPU-specific pin layout functions using the CPU traits approach
 template<>
 PinLayout create_cpu_pin_layout<fam65xx::MOS6502>();
 
@@ -28,10 +35,10 @@ template<>
 PinLayout create_cpu_pin_layout<fam65xx::MOS6510>();
 
 template<>
-PinLayout create_cpu_pin_layout<fam65xx::WDC65C02>();
+PinLayout create_cpu_pin_layout<fam65xx::WDC_W65C02S>();
 
 template<>
-PinLayout create_cpu_pin_layout<fam65xx::WDC65C816>();
+PinLayout create_cpu_pin_layout<fam65xx::WDC_65C816>();
 
 template<>
 PinLayout create_cpu_pin_layout<fam65xx::RICOH_2A03>();

@@ -16,6 +16,16 @@ void fam65xx_render_settings_window(void* chip, bool* show_window);
 #ifdef __cplusplus
 }
 
+#include <unordered_map>
+#include <memory>
+
+// Forward declarations
+namespace fam65xx {
+    template<const CPUTraits& Traits> class fam65xx_t;
+    struct CPUTraits;
+    class CPUGUIRenderer;
+}
+
 // C++ template interface for registering CPU instances with the GUI system
 namespace fam65xx {
     // Register a CPU instance for GUI rendering
@@ -24,6 +34,12 @@ namespace fam65xx {
     
     // Unregister a CPU instance 
     void unregister_cpu_from_gui(void* cpu);
+    
+
+    
+    // Non-template function for rendering CPU windows
+    void render_cpu_debug_window_impl(void* cpu, const char* cpu_name);
+    void render_cpu_settings_window_impl(void* cpu, const char* cpu_name);
 }
 #endif
 

@@ -115,12 +115,10 @@ static void initialize_rockwell65c02_descriptor() {
     rockwell65c02_base_descriptor.bank_change = nullptr; // Basic CPU doesn't have banking
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
     rockwell65c02_base_descriptor.render_debug_window = [](void* cpu_handle, bool* show_window) {
-        rockwell65c02_t* cpu = static_cast<rockwell65c02_t*>(cpu_handle);
-        render_cpu_debug_window<ROCKWELL_R65C02>(cpu, "Rockwell 65C02");
+        render_cpu_debug_window_impl(cpu_handle, "Rockwell 65C02");
     };
     rockwell65c02_base_descriptor.render_settings_window = [](void* cpu_handle, bool* show_window) {
-        rockwell65c02_t* cpu = static_cast<rockwell65c02_t*>(cpu_handle);
-        render_cpu_settings_window<ROCKWELL_R65C02>(cpu, "Rockwell 65C02");
+        render_cpu_settings_window_impl(cpu_handle, "Rockwell 65C02");
     };
 #endif
 }
