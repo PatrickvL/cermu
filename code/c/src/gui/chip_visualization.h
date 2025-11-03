@@ -126,9 +126,13 @@ public:
     void render_legend();
     void render_bga_grid(ImVec2 chip_center, const std::vector<PinState>& pin_states);
     
+    // Settings GUI
+    void render_settings_gui();
+    
     // Configuration
     void set_visual_config(const ChipVisualConfig& config) { config_ = config; }
     const ChipVisualConfig& get_visual_config() const { return config_; }
+    ChipVisualConfig& get_mutable_visual_config() { return config_; }
     const PinLayout& get_pin_layout() const { return layout_; }
     void set_pin_layout(const PinLayout& layout) { layout_ = layout; }
     

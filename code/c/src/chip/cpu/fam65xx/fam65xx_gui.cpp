@@ -73,6 +73,51 @@ static const char* get_addressing_mode_name(uint8_t am_index) {
     return "Unknown";
 }
 
+// Helper function to get opcode name from operation enumeration
+static const char* get_opcode_name(uint8_t op_index) {
+    static const char* op_names[] = {
+        // Core 6502 operations (0-56)
+        "LDA", "LDX", "LDY",                                    // 0-2: Load operations
+        "STA", "STX", "STY",                                    // 3-5: Store operations
+        "ADC", "SBC",                                           // 6-7: Arithmetic
+        "AND", "ORA", "EOR",                                    // 8-10: Logic operations
+        "CMP", "CPX", "CPY",                                    // 11-13: Compare operations
+        "ASL", "LSR", "ROL", "ROR",                             // 14-17: Shift/rotate
+        "INC", "DEC",                                           // 18-19: Increment/decrement
+        "INX", "INY", "DEX", "DEY",                             // 20-23: Register inc/dec
+        "TAX", "TAY", "TXA", "TYA", "TSX", "TXS",               // 24-29: Transfer operations
+        "PHA", "PHP", "PLA", "PLP",                             // 30-33: Stack operations
+        "BCC", "BCS", "BEQ", "BNE", "BMI", "BPL", "BVC", "BVS", // 34-41: Branches
+        "CLC", "SEC", "CLI", "SEI", "CLD", "SED", "CLV",        // 42-48: Flag operations
+        "JMP", "JSR", "RTS", "RTI", "BRK",                      // 49-53: Control flow
+        "BIT", "NOP", "JAM",                                    // 54-56: Test/misc
+        
+        // Illegal opcodes (57-74)
+        "LAX", "SAX", "DCP", "ISC", "SLO", "RLA", "SRE", "RRA", // 57-64: Combo ops
+        "ANC", "ASR", "ARR", "SBX",                             // 65-68: Special accumulator
+        "SHA", "SHS", "SHX", "SHY", "LAS",                      // 69-73: Store with AND
+        "XAA",                                                  // 74: Special operation
+        
+        // 65C02 enhancements (75-84)
+        "BRA", "STZ", "TRB", "TSB", "PHX", "PHY", "PLX", "PLY", "WAI", "STP", // 75-84
+        
+        // Rockwell 65C02 bit manipulation (85-116)
+        "RMB0", "RMB1", "RMB2", "RMB3", "RMB4", "RMB5", "RMB6", "RMB7",
+        "SMB0", "SMB1", "SMB2", "SMB3", "SMB4", "SMB5", "SMB6", "SMB7",
+        "BBR0", "BBR1", "BBR2", "BBR3", "BBR4", "BBR5", "BBR6", "BBR7",
+        "BBS0", "BBS1", "BBS2", "BBS3", "BBS4", "BBS5", "BBS6", "BBS7",
+        
+        // 65C816 16-bit operations (117+)
+        "REP", "SEP", "XBA", "XCE", "COP", "WDM",
+        "PEA", "PER", "PEI", "PHB", "PHD", "PHK", "PLB", "PLD"
+    };
+    
+    if (op_index < sizeof(op_names) / sizeof(op_names[0])) {
+        return op_names[op_index];
+    }
+    return "???";
+}
+
 // Helper function to format processor flags (unchanged from original)
 static void format_processor_flags(uint8_t flags, char* buffer, size_t buffer_size) {
     snprintf(buffer, buffer_size, "%c%c%c%c%c%c%c%c",
@@ -96,8 +141,9 @@ static const char* flag_names[] = {
 // ============================================================================
 
 // Template function to create and render CPU chip visualization
+// Get shared chip visualization instance for a CPU type
 template<const CPUTraits& Traits>
-void render_chip_visualization(fam65xx_t<Traits>* cpu, ImVec2 chip_center, bus_state_t bus_state) {
+ChipVisualization* get_chip_visualization_instance() {
     static std::unique_ptr<ChipVisualization> chip_viz = nullptr;
     
     // Create chip visualization if not already created
@@ -105,6 +151,13 @@ void render_chip_visualization(fam65xx_t<Traits>* cpu, ImVec2 chip_center, bus_s
         PinLayout layout = create_cpu_pin_layout<Traits>();
         chip_viz = std::make_unique<ChipVisualization>(layout);
     }
+    
+    return chip_viz.get();
+}
+
+template<const CPUTraits& Traits>
+void render_chip_visualization(fam65xx_t<Traits>* cpu, ImVec2 chip_center, bus_state_t bus_state) {
+    ChipVisualization* chip_viz = get_chip_visualization_instance<Traits>();
     
     // Get current pin states from CPU and bus state
     std::vector<PinState> pin_states = get_cpu_pin_states<Traits>(cpu, &chip_viz->get_pin_layout(), bus_state);
@@ -200,10 +253,21 @@ void render_internal_state(fam65xx_t<Traits>* cpu) {
         // Current opcode information
         igText("Current Opcode Info:");
         igIndent(16.0f);
-        // Note: These would need public access or accessor methods
-        // For now, we'll show what we can access
-        igText("Addressing Mode:     %s", "Available via template analysis");
-        igText("Current Operation:   %s", "Available via opcode decode");
+        
+        // Show current addressing mode and opcode information if available
+        if (cpu) {
+            const char* am_name = get_addressing_mode_name(cpu->opcode_entry.am_index);
+            const char* op_name = get_opcode_name(cpu->opcode_entry.op_index);
+            igText("Current Opcode:      $%02X", cpu->get(REG_IR));
+            igText("Addressing Mode:     %s", am_name);
+            igText("Instruction:         %s", op_name);
+            igText("Instruction Cycle:   %d", cpu->cycle_index);
+            igText("Opcode Done:         %s", cpu->opdone() ? "Yes" : "No");
+        } else {
+            igText("Current Opcode:      N/A (CPU not available)");
+            igText("Addressing Mode:     N/A");
+            igText("Instruction:         N/A");
+        }
         
         // Show processor-specific execution features
         if constexpr (Traits.has(CPUCoreFlags::CMOS_BASE)) {
@@ -378,6 +442,8 @@ void render_interrupt_state(fam65xx_t<Traits>* cpu) {
     }
 }
 
+
+
 // ============================================================================
 // GENERIC CPU TYPE DETECTION AND DISPATCH
 // ============================================================================
@@ -418,16 +484,12 @@ public:
             return;
         }
 
-        igText("%s", get_processor_name());
-        igText("MOS Technology 65xx Family Microprocessor");
-        igSeparator();
-        
         // Create two-column layout: chip visualization on left, debugging info on right
         ImVec2 window_size;
         igGetWindowSize(&window_size);
         
-        // Left column: Chip Visualization (fixed width ~200px)
-        if (igBeginChild_Str("ChipVisualization", (ImVec2){200.0f, 0}, true, ImGuiWindowFlags_HorizontalScrollbar)) {
+        // Left column: Chip Visualization (fixed width ~250px, 25% wider)
+        if (igBeginChild_Str("ChipVisualization", (ImVec2){250.0f, 0}, true, ImGuiWindowFlags_HorizontalScrollbar)) {
             igText("Chip Visualization");
             igSeparator();
             
@@ -440,13 +502,19 @@ public:
             
             // Show chip visualization with real bus state from emulation
             render_chip_visualization<Traits>(cpu, chip_center, last_bus_state);
+            
+            igSeparator();
+            
+            // Visualization Settings Menu
+            ChipVisualization* chip_viz = get_chip_visualization_instance<Traits>();
+            chip_viz->render_settings_gui();
         }
         igEndChild();
         
         igSameLine(0, 5.0f); // Small gap between columns
         
         // Right column: All debugging information
-        ImVec2 right_column_size = {window_size.x - 220.0f, 0}; // Remaining width minus left column and gap
+        ImVec2 right_column_size = {window_size.x - 270.0f, 0}; // Remaining width minus left column and gap
         if (igBeginChild_Str("DebugInfo", right_column_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
             render_cpu_registers<Traits>(cpu);
             igSeparator();

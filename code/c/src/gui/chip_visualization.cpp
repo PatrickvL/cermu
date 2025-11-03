@@ -1055,3 +1055,65 @@ ImVec2 ChipVisualization::get_pin_position(ImVec2 chip_center, const ChipPin& pi
     
     return chip_center;
 }
+
+void ChipVisualization::render_settings_gui() {
+    if (igCollapsingHeader_TreeNodeFlags("Visualization Settings", ImGuiTreeNodeFlags_None)) {
+        bool config_changed = false;
+        
+        // Pin Display Options
+        if (igCollapsingHeader_TreeNodeFlags("Pin Display", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (igCheckbox("Show Pin Numbers", &config_.show_pin_numbers)) config_changed = true;
+            if (igCheckbox("Show Pin Labels", &config_.show_pin_labels)) config_changed = true;
+            if (igCheckbox("Show LED Indicators", &config_.show_led_indicators)) config_changed = true;
+            if (igCheckbox("Show Alternate Functions", &config_.show_alternate_functions)) config_changed = true;
+            if (igCheckbox("Show Pin Groups", &config_.show_pin_groups)) config_changed = true;
+            if (igCheckbox("Show Voltage Levels", &config_.show_voltage_levels)) config_changed = true;
+            if (igCheckbox("Show PWM Indicators", &config_.show_pwm_indicators)) config_changed = true;
+        }
+        
+        // Chip Display Options
+        if (igCollapsingHeader_TreeNodeFlags("Chip Display", ImGuiTreeNodeFlags_None)) {
+            if (igCheckbox("Show Package Name", &config_.show_package_name)) config_changed = true;
+            if (igCheckbox("Show Chip Markings", &config_.show_chip_markings)) config_changed = true;
+            if (igCheckbox("Show Thermal Pad", &config_.show_thermal_pad)) config_changed = true;
+            if (igCheckbox("Use Compact Layout", &config_.use_compact_layout)) config_changed = true;
+        }
+        
+        // Size Controls
+        if (igCollapsingHeader_TreeNodeFlags("Sizing", ImGuiTreeNodeFlags_None)) {
+            if (igSliderFloat("Pin Width", &config_.pin_width, 4.0f, 16.0f, "%.1f", ImGuiSliderFlags_None)) config_changed = true;
+            if (igSliderFloat("Pin Height", &config_.pin_height, 6.0f, 20.0f, "%.1f", ImGuiSliderFlags_None)) config_changed = true;
+            if (igSliderFloat("Pin Spacing", &config_.pin_spacing_factor, 0.5f, 2.0f, "%.1f", ImGuiSliderFlags_None)) config_changed = true;
+            if (igSliderFloat("Font Size", &config_.font_size, 8.0f, 16.0f, "%.1f", ImGuiSliderFlags_None)) config_changed = true;
+            if (igSliderFloat("Marker Size", &config_.marker_size, 2.0f, 12.0f, "%.1f", ImGuiSliderFlags_None)) config_changed = true;
+        }
+        
+        // Pin Notation Style
+        if (igCollapsingHeader_TreeNodeFlags("Pin Notation", ImGuiTreeNodeFlags_None)) {
+            const char* notation_items[] = {"OVERLINE", "HASH", "SLASH", "UNDERSCORE"};
+            int current_notation = (int)config_.notation_style;
+            if (igCombo_Str_arr("Active-Low Style", &current_notation, notation_items, 4, -1)) {
+                config_.notation_style = (PinNotationStyle)current_notation;
+                config_changed = true;
+            }
+        }
+        
+        // Visual Style Presets
+        if (igCollapsingHeader_TreeNodeFlags("Style Presets", ImGuiTreeNodeFlags_None)) {
+            const char* style_items[] = {"CLASSIC_DARK", "MODERN_LIGHT", "HIGH_CONTRAST", "COLORBLIND_FRIENDLY"};
+            int current_style = (int)config_.style;
+            if (igCombo_Str_arr("Visual Style", &current_style, style_items, 4, -1)) {
+                config_ = ChipVisualConfig::get_style((VisualStyle)current_style);
+                config_changed = true;
+            }
+            
+            igSameLine(0, -1.0f);
+            if (igButton("Reset to Default", (ImVec2){0, 0})) {
+                config_ = ChipVisualConfig::get_default();
+                config_changed = true;
+            }
+        }
+        
+        // Note: config_changed is handled automatically since we're modifying config_ directly
+    }
+}
