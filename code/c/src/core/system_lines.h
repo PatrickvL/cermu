@@ -32,13 +32,20 @@ typedef uint64_t bus_state_t;
 #define BUS_AEC_BIT     37
 #define BUS_BE_BIT      38
 #define BUS_ABORT_BIT   39
+#define BUS_VPB_BIT     40  // Vector Pull Bar (65C816)
+#define BUS_E_BIT       41  // Enable (65C816) 
+#define BUS_MX_BIT      42  // Memory/Index size (65C816)
+#define BUS_VDA_BIT     43  // Valid Data Address (65C816)
+#define BUS_PHI0_BIT    44  // φ0 clock input
+#define BUS_PHI1_BIT    45  // φ1 clock output
 /* Reserve bit for internal I/O pending flag (no external pin) */
 #define BUS_IO_PENDING_BIT 46
 
 /* Output pins */
 #define BUS_RW_BIT      48  /* 1 = Read, 0 = Write */
 #define BUS_SYNC_BIT    49
-/* 50-51 reserved */
+#define BUS_PHI2_BIT    50  // φ2 clock output
+/* 51 reserved */
 #define BUS_BA_BIT      52
 #define BUS_VP_BIT      53
 #define BUS_ML_BIT      54

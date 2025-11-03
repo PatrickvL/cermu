@@ -117,13 +117,11 @@ void ChipVisualization::render_pin_side(ImVec2 chip_center, const std::vector<Ch
         const ChipPin& pin = pins[i];
         
         // Find corresponding pin state (match by pin number)
-        PinState state = {false, false, 0, false};
-        for (const auto& ps : pin_states) {
-            // This is a simple approach - in practice you'd want a better mapping system
-            if (pin.pin_number <= pin_states.size()) {
-                state = pin_states[pin.pin_number - 1];
-                break;
-            }
+        PinState state = {false, false, 0, false, true}; // Default state
+        
+        // Look for matching pin state by pin number (1-indexed)
+        if (pin.pin_number > 0 && pin.pin_number <= pin_states.size()) {
+            state = pin_states[pin.pin_number - 1];
         }
         
         ImVec2 pin_pos = calculate_pin_position(chip_center, pin, i, side);
