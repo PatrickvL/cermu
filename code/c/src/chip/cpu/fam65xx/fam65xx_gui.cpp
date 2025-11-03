@@ -360,6 +360,7 @@ public:
     virtual void render_debug_window(bool* show_window) = 0;
     virtual void render_settings_window(bool* show_window) = 0;
     virtual const char* get_processor_name() const = 0;
+    virtual void update_bus_state(bus_state_t pins) = 0;
 };
 
 // Template implementation for specific CPU types
@@ -367,9 +368,15 @@ template<const CPUTraits& Traits>
 class CPUGUIRendererImpl : public CPUGUIRenderer {
 private:
     fam65xx_t<Traits>* cpu;
+    bus_state_t last_bus_state;
     
 public:
-    explicit CPUGUIRendererImpl(fam65xx_t<Traits>* cpu_ptr) : cpu(cpu_ptr) {}
+    explicit CPUGUIRendererImpl(fam65xx_t<Traits>* cpu_ptr) : cpu(cpu_ptr), last_bus_state(0) {}
+    
+    // Update the stored bus state (should be called from tick functions)
+    void update_bus_state(bus_state_t pins) override {
+        last_bus_state = pins;
+    }
     
     void render_debug_window(bool* show_window) override {
         if (!cpu || !show_window || !*show_window) return;
@@ -392,7 +399,15 @@ public:
         render_internal_state<Traits>(cpu);
         igSeparator();
         
-        render_chip_visualization<Traits>(cpu);
+        // Use the actual bus state from emulation loop
+        ImVec2 chip_center, content_region;
+        igGetCursorScreenPos(&chip_center);
+        igGetContentRegionAvail(&content_region);
+        chip_center.x += content_region.x * 0.5f;
+        chip_center.y += 200.0f; // Space for the chip
+        
+        // Show chip visualization with real bus state from emulation
+        render_chip_visualization<Traits>(cpu, chip_center, last_bus_state);
         igSeparator();
         
         render_interrupt_state<Traits>(cpu);
@@ -592,6 +607,14 @@ void fam65xx_render_settings_window(void* chip, bool* show_window) {
     igEnd();
 }
 
+void fam65xx_update_bus_state(void* chip, bus_state_t bus_state) {
+    // Update the bus state for the given CPU chip
+    auto it = cpu_renderers.find(chip);
+    if (it != cpu_renderers.end()) {
+        it->second->update_bus_state(bus_state);
+    }
+}
+
 } // extern "C"
 
 // ============================================================================
@@ -610,31 +633,31 @@ void register_cpu_for_gui(fam65xx_t<Traits>* cpu) {
 // Non-template registration functions for different CPU types
 void register_mos6502_for_gui(void* cpu) {
     if (cpu) {
-        cpu_renderers[cpu] = std::make_unique<CPUGUIRendererImpl<MOS6502>>(reinterpret_cast<fam65xx_t<MOS6502>*>(cpu));
+        cpu_renderers[cpu] = std::make_unique<CPUGUIRendererImpl<fam65xx::MOS6502>>(reinterpret_cast<fam65xx_t<fam65xx::MOS6502>*>(cpu));
     }
 }
 
 void register_nes6502_for_gui(void* cpu) {
     if (cpu) {
-        cpu_renderers[cpu] = std::make_unique<CPUGUIRendererImpl<RICOH_2A03>>(reinterpret_cast<fam65xx_t<RICOH_2A03>*>(cpu));
+        cpu_renderers[cpu] = std::make_unique<CPUGUIRendererImpl<fam65xx::RICOH_2A03>>(reinterpret_cast<fam65xx_t<fam65xx::RICOH_2A03>*>(cpu));
     }
 }
 
 void register_rockwell65c02_for_gui(void* cpu) {
     if (cpu) {
-        cpu_renderers[cpu] = std::make_unique<CPUGUIRendererImpl<ROCKWELL_R65C02>>(reinterpret_cast<fam65xx_t<ROCKWELL_R65C02>*>(cpu));
+        cpu_renderers[cpu] = std::make_unique<CPUGUIRendererImpl<fam65xx::ROCKWELL_R65C02>>(reinterpret_cast<fam65xx_t<fam65xx::ROCKWELL_R65C02>*>(cpu));
     }
 }
 
 void register_mos6510_for_gui(void* cpu) {
     if (cpu) {
-        cpu_renderers[cpu] = std::make_unique<CPUGUIRendererImpl<MOS6510>>(reinterpret_cast<fam65xx_t<MOS6510>*>(cpu));
+        cpu_renderers[cpu] = std::make_unique<CPUGUIRendererImpl<fam65xx::MOS6510>>(reinterpret_cast<fam65xx_t<fam65xx::MOS6510>*>(cpu));
     }
 }
 
 void register_wdc65c816_for_gui(void* cpu) {
     if (cpu) {
-        cpu_renderers[cpu] = std::make_unique<CPUGUIRendererImpl<WDC_65C816>>(reinterpret_cast<fam65xx_t<WDC_65C816>*>(cpu));
+        cpu_renderers[cpu] = std::make_unique<CPUGUIRendererImpl<fam65xx::WDC_65C816>>(reinterpret_cast<fam65xx_t<fam65xx::WDC_65C816>*>(cpu));
     }
 }
 
@@ -661,5 +684,12 @@ void render_cpu_settings_window_impl(void* cpu, const char* cpu_name) {
         it->second->render_settings_window(&show_window);
     }
 }
+
+// Explicit template instantiations for CPUGUIRendererImpl
+template class CPUGUIRendererImpl<fam65xx::MOS6502>;
+template class CPUGUIRendererImpl<fam65xx::MOS6510>;
+template class CPUGUIRendererImpl<fam65xx::RICOH_2A03>;
+template class CPUGUIRendererImpl<fam65xx::ROCKWELL_R65C02>;
+template class CPUGUIRendererImpl<fam65xx::WDC_65C816>;
 
 }

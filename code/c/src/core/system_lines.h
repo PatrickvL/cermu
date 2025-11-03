@@ -47,6 +47,7 @@ typedef uint64_t bus_state_t;
 
 /* Helpers */
 #define BUS_BIT(bit)            (1ULL << (bit))
+#define BUS_GET_BIT(state, bit) (((state) & BUS_BIT(bit)) != 0)
 
 /* High-performance field access macros */
 #define BUS_GET_ADDR(state)     ((uint16_t)((state) & BUS_ADDR_MASK))

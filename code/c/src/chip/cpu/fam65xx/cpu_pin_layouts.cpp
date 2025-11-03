@@ -9,20 +9,22 @@
 using namespace fam65xx;
 
 // ============================================================================
-// MOS 6502 (NMOS) PIN LAYOUT
+// GENERIC CPU PIN LAYOUT FUNCTION WITH COMPILE-TIME SELECTION
 // ============================================================================
 
-template<>
-PinLayout create_cpu_pin_layout<fam65xx::MOS6502>() {
+template<const CPUTraits& Traits>
+PinLayout create_cpu_pin_layout() {
     PinLayout layout;
     
-    layout.package = {
-        .width = 200.0f,
-        .height = 400.0f,
-        .total_pins = 40,
-        .has_notch = true,
-        .package_name = "DIP-40 (MOS 6502)"
-    };
+    // MOS 6502 (NMOS) PIN LAYOUT
+    if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::MOS6502)>) {
+        layout.package = {
+            .width = 200.0f,
+            .height = 400.0f,
+            .total_pins = 40,
+            .has_notch = true,
+            .package_name = "DIP-40 (MOS 6502)"
+        };
     
     // Left side pins (1-20, top to bottom)
     layout.left_pins = {
@@ -72,15 +74,8 @@ PinLayout create_cpu_pin_layout<fam65xx::MOS6502>() {
         {40, "RES",   PinType::INTERRUPT, 0, true}
     };
     
-    return layout;
-}
-
-// ============================================================================
-// MOS 6510 (C64/C128) PIN LAYOUT
-// ============================================================================
-
-template<>
-PinLayout create_cpu_pin_layout<fam65xx::MOS6510>() {
+    // MOS 6510 (C64/C128) PIN LAYOUT  
+    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::MOS6510)>) {
     PinLayout layout;
     
     layout.package = {
@@ -139,18 +134,9 @@ PinLayout create_cpu_pin_layout<fam65xx::MOS6510>() {
         {40, "RES",   PinType::INTERRUPT, 0, true}
     };
     
-    return layout;
-}
-
-// ============================================================================
-// WDC 65C02 (CMOS) PIN LAYOUT
-// ============================================================================
-
-template<>
-PinLayout create_cpu_pin_layout<fam65xx::WDC_W65C02S>() {
-    PinLayout layout;
-    
-    layout.package = {
+    // WDC 65C02 (CMOS) PIN LAYOUT
+    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::WDC_W65C02S)>) {
+        layout.package = {
         .width = 200.0f,
         .height = 400.0f,
         .total_pins = 40,
@@ -207,17 +193,10 @@ PinLayout create_cpu_pin_layout<fam65xx::WDC_W65C02S>() {
     };
     
     return layout;
-}
 
-// ============================================================================
-// WDC 65C816 (16-bit) PIN LAYOUT
-// ============================================================================
-
-template<>
-PinLayout create_cpu_pin_layout<fam65xx::WDC_65C816>() {
-    PinLayout layout;
-    
-    layout.package = {
+    // WDC 65C816 (16-BIT) PIN LAYOUT  
+    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::WDC_65C816)>) {
+        layout.package = {
         .width = 200.0f,
         .height = 400.0f,
         .total_pins = 40,
@@ -273,22 +252,13 @@ PinLayout create_cpu_pin_layout<fam65xx::WDC_65C816>() {
         {40, "RES",   PinType::INTERRUPT, 0, true}
     };
     
-    return layout;
-}
-
-// ============================================================================
-// NES 6502 (RICOH 2A03) PIN LAYOUT
-// ============================================================================
-
-template<>
-PinLayout create_cpu_pin_layout<fam65xx::RICOH_2A03>() {
-    PinLayout layout;
-    
-    layout.package = {
-        .width = 200.0f,
-        .height = 400.0f,
-        .total_pins = 40,
-        .has_notch = true,
+    // NES 6502 (RICOH 2A03) PIN LAYOUT
+    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::RICOH_2A03)>) {
+        layout.package = {
+            .width = 200.0f,
+            .height = 400.0f,
+            .total_pins = 40,
+            .has_notch = true,
         .package_name = "DIP-40 (RICOH 2A03)"
     };
     
@@ -340,18 +310,9 @@ PinLayout create_cpu_pin_layout<fam65xx::RICOH_2A03>() {
         {40, "RES",   PinType::INTERRUPT, 0, true}
     };
     
-    return layout;
-}
-
-// ============================================================================
-// ROCKWELL R65C02 PIN LAYOUT
-// ============================================================================
-
-template<>
-PinLayout create_cpu_pin_layout<fam65xx::ROCKWELL_R65C02>() {
-    PinLayout layout;
-    
-    layout.package = {
+    // ROCKWELL R65C02 PIN LAYOUT
+    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::ROCKWELL_R65C02)>) {
+        layout.package = {
         .width = 200.0f,
         .height = 400.0f,
         .total_pins = 40,
@@ -406,6 +367,17 @@ PinLayout create_cpu_pin_layout<fam65xx::ROCKWELL_R65C02>() {
         {39, "φ2",    PinType::CLOCK,     0, false},
         {40, "RES",   PinType::INTERRUPT, 0, true}
     };
+    
+    } else {
+        // Fallback for unknown CPU type
+        layout.package = {
+            .width = 200.0f,
+            .height = 400.0f,
+            .total_pins = 40,
+            .has_notch = true,
+            .package_name = "DIP-40 (Unknown CPU)"
+        };
+    }
     
     return layout;
 }
@@ -589,26 +561,18 @@ std::vector<PinState> get_cpu_pin_states(fam65xx_t<Traits>* cpu) {
     return get_cpu_pin_states<Traits>(cpu, bus_state);
 }
 
-// Template instantiations
+// Explicit template instantiations - trying to match the exact linker expectations
+// Based on linker errors, the calls expect &CPUTraits pattern
 template PinLayout create_cpu_pin_layout<fam65xx::MOS6502>();
-template PinLayout create_cpu_pin_layout<fam65xx::MOS6510>();
+template PinLayout create_cpu_pin_layout<fam65xx::MOS6510>();  
 template PinLayout create_cpu_pin_layout<fam65xx::WDC_W65C02S>();
 template PinLayout create_cpu_pin_layout<fam65xx::WDC_65C816>();
 template PinLayout create_cpu_pin_layout<fam65xx::RICOH_2A03>();
 template PinLayout create_cpu_pin_layout<fam65xx::ROCKWELL_R65C02>();
 
-// Template instantiations for bus state versions
 template std::vector<PinState> get_cpu_pin_states<fam65xx::MOS6502>(fam65xx::fam65xx_t<fam65xx::MOS6502>* cpu, bus_state_t bus_state);
 template std::vector<PinState> get_cpu_pin_states<fam65xx::MOS6510>(fam65xx::fam65xx_t<fam65xx::MOS6510>* cpu, bus_state_t bus_state);
 template std::vector<PinState> get_cpu_pin_states<fam65xx::WDC_W65C02S>(fam65xx::fam65xx_t<fam65xx::WDC_W65C02S>* cpu, bus_state_t bus_state);
 template std::vector<PinState> get_cpu_pin_states<fam65xx::WDC_65C816>(fam65xx::fam65xx_t<fam65xx::WDC_65C816>* cpu, bus_state_t bus_state);
 template std::vector<PinState> get_cpu_pin_states<fam65xx::RICOH_2A03>(fam65xx::fam65xx_t<fam65xx::RICOH_2A03>* cpu, bus_state_t bus_state);
 template std::vector<PinState> get_cpu_pin_states<fam65xx::ROCKWELL_R65C02>(fam65xx::fam65xx_t<fam65xx::ROCKWELL_R65C02>* cpu, bus_state_t bus_state);
-
-// Template instantiations for fallback versions
-template std::vector<PinState> get_cpu_pin_states<fam65xx::MOS6502>(fam65xx::fam65xx_t<fam65xx::MOS6502>* cpu);
-template std::vector<PinState> get_cpu_pin_states<fam65xx::MOS6510>(fam65xx::fam65xx_t<fam65xx::MOS6510>* cpu);
-template std::vector<PinState> get_cpu_pin_states<fam65xx::WDC_W65C02S>(fam65xx::fam65xx_t<fam65xx::WDC_W65C02S>* cpu);
-template std::vector<PinState> get_cpu_pin_states<fam65xx::WDC_65C816>(fam65xx::fam65xx_t<fam65xx::WDC_65C816>* cpu);
-template std::vector<PinState> get_cpu_pin_states<fam65xx::RICOH_2A03>(fam65xx::fam65xx_t<fam65xx::RICOH_2A03>* cpu);
-template std::vector<PinState> get_cpu_pin_states<fam65xx::ROCKWELL_R65C02>(fam65xx::fam65xx_t<fam65xx::ROCKWELL_R65C02>* cpu);

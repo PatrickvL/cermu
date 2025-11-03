@@ -18,6 +18,8 @@ void fam65xx_render_settings_window(void* chip, bool* show_window);
 
 #include <unordered_map>
 #include <memory>
+#include "../../gui/chip_visualization.h"
+#include "../../external/cimgui/cimgui.h"
 
 // Forward declarations
 namespace fam65xx {
@@ -47,6 +49,9 @@ namespace fam65xx {
     // Non-template function for rendering CPU windows
     void render_cpu_debug_window_impl(void* cpu, const char* cpu_name);
     void render_cpu_settings_window_impl(void* cpu, const char* cpu_name);
+    
+    // Update bus state for CPU visualization
+    void fam65xx_update_bus_state(void* chip, bus_state_t bus_state);
 }
 #endif
 
