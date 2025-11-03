@@ -227,40 +227,63 @@ void ChipVisualization::render(ImVec2 chip_center, const std::vector<PinState>& 
 void ChipVisualization::render_chip_body(ImVec2 chip_center, const char* chip_name) {
     ImDrawList* draw_list = igGetWindowDrawList();
     
-    float chip_width = layout_.package.width;
-    float chip_height = layout_.package.height;
+    // Scale chip dimensions from mils to reasonable pixel size
+    // Target: ~150 pixels for left side CPU debug GUI
+    const float MAX_CHIP_SIZE = 300.0f; // Maximum size in pixels
+    const float ASPECT_RATIO = layout_.package.width / layout_.package.height;
+    
+    float chip_width, chip_height;
+    if (ASPECT_RATIO > 1.0f) {
+        // Wider than tall
+        chip_width = MAX_CHIP_SIZE;
+        chip_height = MAX_CHIP_SIZE / ASPECT_RATIO;
+    } else {
+        // Taller than wide
+        chip_height = MAX_CHIP_SIZE;
+        chip_width = MAX_CHIP_SIZE * ASPECT_RATIO;
+    }
+    
+    // For DIP packages, ensure minimum width for pin visibility
+    if (layout_.package.package_type == PackageType::DIP) {
+        chip_width = std::max(chip_width, 80.0f);  // Minimum width for DIP
+        chip_height = std::max(chip_height, 120.0f); // Minimum height for DIP
+    }
+    
+    // Store scaled dimensions for use by other functions
+    scaled_chip_width_ = chip_width;
+    scaled_chip_height_ = chip_height;
     
     // Draw chip body based on package type
     switch (layout_.package.package_type) {
         case PackageType::DIP:
         case PackageType::SIP:
-            render_dip_style(chip_center, chip_name);
+            render_dip_style(chip_center, chip_width, chip_height, chip_name);
             break;
             
         case PackageType::SOIC:
         case PackageType::SOP:
         case PackageType::SSOP:
         case PackageType::TSSOP:
-            render_surface_mount_style(chip_center, chip_name);
+            render_surface_mount_style(chip_center, chip_width, chip_height, chip_name);
             break;
             
         case PackageType::QFP:
         case PackageType::LQFP:
         case PackageType::TQFP:
         case PackageType::PLCC:
-            render_qfp_style(chip_center, chip_name);
+            render_qfp_style(chip_center, chip_width, chip_height, chip_name);
             break;
             
         case PackageType::BGA:
         case PackageType::LGA:
-            render_bga_style(chip_center, chip_name);
+            render_bga_style(chip_center, chip_width, chip_height, chip_name);
             break;
             
         case PackageType::TO220:
         case PackageType::TO92:
         case PackageType::SOT23:
         case PackageType::SOT223:
-            render_to_style(chip_center, chip_name);
+            render_to_style(chip_center, chip_width, chip_height, chip_name);
             break;
             
         default:
@@ -292,10 +315,8 @@ void ChipVisualization::render_chip_body(ImVec2 chip_center, const char* chip_na
     }
 }
 
-void ChipVisualization::render_dip_style(ImVec2 chip_center, const char* chip_name) {
+void ChipVisualization::render_dip_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name) {
     ImDrawList* draw_list = igGetWindowDrawList();
-    float chip_width = layout_.package.width;
-    float chip_height = layout_.package.height;
     
     ImVec2 chip_min = {chip_center.x - chip_width/2, chip_center.y - chip_height/2};
     ImVec2 chip_max = {chip_center.x + chip_width/2, chip_center.y + chip_height/2};
@@ -305,10 +326,8 @@ void ChipVisualization::render_dip_style(ImVec2 chip_center, const char* chip_na
     ImDrawList_AddRect(draw_list, chip_min, chip_max, config_.chip_border_color, 2.0f, 0, config_.chip_border_width);
 }
 
-void ChipVisualization::render_surface_mount_style(ImVec2 chip_center, const char* chip_name) {
+void ChipVisualization::render_surface_mount_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name) {
     ImDrawList* draw_list = igGetWindowDrawList();
-    float chip_width = layout_.package.width;
-    float chip_height = layout_.package.height;
     
     ImVec2 chip_min = {chip_center.x - chip_width/2, chip_center.y - chip_height/2};
     ImVec2 chip_max = {chip_center.x + chip_width/2, chip_center.y + chip_height/2};
@@ -318,10 +337,8 @@ void ChipVisualization::render_surface_mount_style(ImVec2 chip_center, const cha
     ImDrawList_AddRect(draw_list, chip_min, chip_max, config_.chip_border_color, 1.0f, 0, config_.chip_border_width);
 }
 
-void ChipVisualization::render_qfp_style(ImVec2 chip_center, const char* chip_name) {
+void ChipVisualization::render_qfp_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name) {
     ImDrawList* draw_list = igGetWindowDrawList();
-    float chip_width = layout_.package.width;
-    float chip_height = layout_.package.height;
     
     ImVec2 chip_min = {chip_center.x - chip_width/2, chip_center.y - chip_height/2};
     ImVec2 chip_max = {chip_center.x + chip_width/2, chip_center.y + chip_height/2};
@@ -331,10 +348,8 @@ void ChipVisualization::render_qfp_style(ImVec2 chip_center, const char* chip_na
     ImDrawList_AddRect(draw_list, chip_min, chip_max, config_.chip_border_color, 0.0f, 0, config_.chip_border_width);
 }
 
-void ChipVisualization::render_bga_style(ImVec2 chip_center, const char* chip_name) {
+void ChipVisualization::render_bga_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name) {
     ImDrawList* draw_list = igGetWindowDrawList();
-    float chip_width = layout_.package.width;
-    float chip_height = layout_.package.height;
     
     ImVec2 chip_min = {chip_center.x - chip_width/2, chip_center.y - chip_height/2};
     ImVec2 chip_max = {chip_center.x + chip_width/2, chip_center.y + chip_height/2};
@@ -344,10 +359,8 @@ void ChipVisualization::render_bga_style(ImVec2 chip_center, const char* chip_na
     ImDrawList_AddRect(draw_list, chip_min, chip_max, config_.chip_border_color, 0.0f, 0, config_.chip_border_width * 1.5f);
 }
 
-void ChipVisualization::render_to_style(ImVec2 chip_center, const char* chip_name) {
+void ChipVisualization::render_to_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name) {
     ImDrawList* draw_list = igGetWindowDrawList();
-    float chip_width = layout_.package.width;
-    float chip_height = layout_.package.height;
     
     ImVec2 chip_min = {chip_center.x - chip_width/2, chip_center.y - chip_height/2};
     ImVec2 chip_max = {chip_center.x + chip_width/2, chip_center.y + chip_height/2};
@@ -403,7 +416,7 @@ void ChipVisualization::render_orientation_marker(ImVec2 chip_center) {
 
 void ChipVisualization::draw_notch(ImVec2 chip_center) {
     ImDrawList* draw_list = igGetWindowDrawList();
-    float chip_height = layout_.package.height;
+    float chip_height = scaled_chip_height_ > 0 ? scaled_chip_height_ : 80.0f;
     ImVec2 notch_center = {chip_center.x, chip_center.y - chip_height/2};
     ImDrawList_AddCircleFilled(draw_list, notch_center, config_.marker_size, config_.notch_color, 12);
     ImDrawList_AddCircle(draw_list, notch_center, config_.marker_size, config_.chip_border_color, 12, 1.0f);
@@ -411,16 +424,16 @@ void ChipVisualization::draw_notch(ImVec2 chip_center) {
 
 void ChipVisualization::draw_dot_marker(ImVec2 chip_center) {
     ImDrawList* draw_list = igGetWindowDrawList();
-    float chip_width = layout_.package.width;
-    float chip_height = layout_.package.height;
+    float chip_width = scaled_chip_width_ > 0 ? scaled_chip_width_ : 120.0f;
+    float chip_height = scaled_chip_height_ > 0 ? scaled_chip_height_ : 80.0f;
     ImVec2 marker_pos = {chip_center.x - chip_width/2 + 15, chip_center.y - chip_height/2 + 15};
     ImDrawList_AddCircleFilled(draw_list, marker_pos, config_.marker_size * 0.6f, config_.marker_color, 12);
 }
 
 void ChipVisualization::draw_chamfer(ImVec2 chip_center) {
     ImDrawList* draw_list = igGetWindowDrawList();
-    float chip_width = layout_.package.width;
-    float chip_height = layout_.package.height;
+    float chip_width = scaled_chip_width_ > 0 ? scaled_chip_width_ : 120.0f;
+    float chip_height = scaled_chip_height_ > 0 ? scaled_chip_height_ : 80.0f;
     float chamfer_size = config_.marker_size * 2;
     
     ImVec2 corner = {chip_center.x - chip_width/2, chip_center.y - chip_height/2};
@@ -434,8 +447,8 @@ void ChipVisualization::draw_chamfer(ImVec2 chip_center) {
 
 void ChipVisualization::draw_bar_marker(ImVec2 chip_center) {
     ImDrawList* draw_list = igGetWindowDrawList();
-    float chip_width = layout_.package.width;
-    float chip_height = layout_.package.height;
+    float chip_width = scaled_chip_width_ > 0 ? scaled_chip_width_ : 120.0f;
+    float chip_height = scaled_chip_height_ > 0 ? scaled_chip_height_ : 80.0f;
     
     ImVec2 bar_min = {chip_center.x - chip_width/3, chip_center.y - chip_height/2 + 5};
     ImVec2 bar_max = {chip_center.x + chip_width/3, chip_center.y - chip_height/2 + 8};
@@ -444,8 +457,8 @@ void ChipVisualization::draw_bar_marker(ImVec2 chip_center) {
 
 void ChipVisualization::draw_triangle_marker(ImVec2 chip_center) {
     ImDrawList* draw_list = igGetWindowDrawList();
-    float chip_width = layout_.package.width;
-    float chip_height = layout_.package.height;
+    float chip_width = scaled_chip_width_ > 0 ? scaled_chip_width_ : 120.0f;
+    float chip_height = scaled_chip_height_ > 0 ? scaled_chip_height_ : 80.0f;
     float size = config_.marker_size;
     
     ImVec2 tip = {chip_center.x - chip_width/2 + 10, chip_center.y - chip_height/2 + 10};
@@ -460,7 +473,9 @@ void ChipVisualization::render_thermal_pad(ImVec2 chip_center) {
     if (!layout_.package.has_thermal_pad) return;
     
     ImDrawList* draw_list = igGetWindowDrawList();
-    float pad_size = layout_.package.thermal_pad_size * std::min(layout_.package.width, layout_.package.height);
+    float chip_width = scaled_chip_width_ > 0 ? scaled_chip_width_ : 120.0f;
+    float chip_height = scaled_chip_height_ > 0 ? scaled_chip_height_ : 80.0f;
+    float pad_size = layout_.package.thermal_pad_size * std::min(chip_width, chip_height);
     
     ImVec2 pad_min = {chip_center.x - pad_size/2, chip_center.y - pad_size/2};
     ImVec2 pad_max = {chip_center.x + pad_size/2, chip_center.y + pad_size/2};
@@ -679,9 +694,10 @@ void ChipVisualization::render_single_pin(ImVec2 pin_pos, const ChipPin& pin, co
 
 ImVec2 ChipVisualization::calculate_pin_position(ImVec2 chip_center, const ChipPin& pin, 
                                                  size_t index_in_side, PinSide side) const {
-    float chip_width = layout_.package.width;
-    float chip_height = layout_.package.height;
-    float margin = 40.0f;
+    // Use scaled dimensions instead of raw package dimensions
+    float chip_width = scaled_chip_width_ > 0 ? scaled_chip_width_ : 120.0f;
+    float chip_height = scaled_chip_height_ > 0 ? scaled_chip_height_ : 80.0f;
+    float margin = 20.0f; // Reduced margin for smaller chip size
     
     ImVec2 pin_pos = chip_center;
     
@@ -724,9 +740,9 @@ ImVec2 ChipVisualization::calculate_pin_position(ImVec2 chip_center, const ChipP
 }
 
 ImVec2 ChipVisualization::calculate_bga_position(ImVec2 chip_center, uint8_t row, uint8_t col) const {
-    float chip_width = layout_.package.width;
-    float chip_height = layout_.package.height;
-    float margin = 30.0f;
+    float chip_width = scaled_chip_width_ > 0 ? scaled_chip_width_ : 120.0f;
+    float chip_height = scaled_chip_height_ > 0 ? scaled_chip_height_ : 80.0f;
+    float margin = 15.0f; // Reduced margin for smaller chip
     
     // Calculate grid dimensions
     uint8_t max_rows = 10; // Would be calculated from actual pins
@@ -834,8 +850,8 @@ std::string ChipVisualization::format_pin_label(const ChipPin& pin) const {
 }
 
 ImVec2 ChipVisualization::get_recommended_size() const {
-    float width = layout_.package.width + 200; // Extra space for labels
-    float height = layout_.package.height + 100;
+    float width = (scaled_chip_width_ > 0 ? scaled_chip_width_ : 120.0f) + 200; // Extra space for labels  
+    float height = (scaled_chip_height_ > 0 ? scaled_chip_height_ : 80.0f) + 100;
     
     // Add extra space for chip markings
     if (config_.show_chip_markings) {
