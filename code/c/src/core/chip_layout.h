@@ -95,17 +95,23 @@ struct ChipPin {
     bool is_differential_neg;// True if negative side of differential pair
 };
 
-// Pin state structure for visualization
+// Pin state for real-time visualization
 struct PinState {
     uint8_t pin_number;      // Pin number to match ChipPin
-    bool is_active;          // Pin is currently active
-    bool is_high;            // Pin logic level (true = high, false = low)
-    bool is_tristate;        // Pin is in high-impedance state
+    bool is_active;          // Current pin state
+    bool is_output;          // True if pin is output, false if input
+    uint8_t value;           // For multi-bit values or analog levels (0-255)
+//    bool is_high;            // Pin logic level (true = high, false = low)
+    bool is_tristate;        // True if pin is in high-impedance state
     bool has_pullup;         // Pin has pull-up resistor
     bool has_pulldown;       // Pin has pull-down resistor
+    bool is_valid;           // True if pin state is valid/available
+    float analog_voltage;    // For analog pins (0.0 - Vcc)
+    bool is_pwm;             // True if pin is PWM output
+    float pwm_duty_cycle;    // PWM duty cycle (0.0 - 1.0)
 };
 
-// Package layout structure
+// Package layout configuration
 struct PackageLayout {
     float width;                     // Package width (mil)
     float height;                    // Package height (mil)
@@ -117,7 +123,7 @@ struct PackageLayout {
     float thermal_pad_size;          // Size of thermal pad (relative to package)
 };
 
-// Chip markings structure
+// Chip markings/labels
 struct ChipMarkings {
     const char* part_number;         // Part number (e.g., "MOS6502", "74HC00")
     const char* manufacturer;        // Manufacturer name (e.g., "MOS Technology", "Texas Instruments")
@@ -132,7 +138,7 @@ struct ChipMarkings {
 };
 
 // Complete pin layout structure
-struct PinLayout {
+struct PinLayout { // TODO : Rename to ChipLayout
     PackageLayout package;           // Package dimensions and characteristics
     std::vector<ChipPin> left_pins;  // Left side pins (top to bottom)
     std::vector<ChipPin> right_pins; // Right side pins (top to bottom)
@@ -141,85 +147,92 @@ struct PinLayout {
     std::vector<ChipPin> grid_pins;  // Grid pins for BGA packages
     ChipMarkings markings;           // Chip text markings
     
-    // Helper methods
+    // Calculate total number of pins from all sides and grid
     size_t get_total_pins() const {
         return left_pins.size() + right_pins.size() + top_pins.size() + bottom_pins.size() + grid_pins.size();
     }
     
+    // Generate package name from type and pin count
     std::string get_package_name() const;
 };
 
-// ============================================================================
-// PIN MAKER HELPER FUNCTIONS
-// ============================================================================
-
-ChipPin make_power_pin(uint8_t num, const char* label);
-ChipPin make_ground_pin(uint8_t num, const char* label);
-ChipPin make_address_pin(uint8_t num, const char* label, uint8_t bit);
-ChipPin make_data_pin(uint8_t num, const char* label, uint8_t bit);
-ChipPin make_control_pin(uint8_t num, const char* label, bool active_low = false);
-ChipPin make_clock_pin(uint8_t num, const char* label);
-ChipPin make_interrupt_pin(uint8_t num, const char* label, bool active_low = false);
-ChipPin make_gpio_pin(uint8_t num, const char* label, const char* port = nullptr);
-ChipPin make_analog_pin(uint8_t num, const char* label);
-ChipPin make_differential_pin(uint8_t num, const char* label, bool positive);
-ChipPin make_nc_pin(uint8_t num);
+// BGA grid position (for BGA/LGA packages)
+struct BGAPosition {
+    uint8_t row;    // Row (A, B, C, ...)
+    uint8_t col;    // Column (1, 2, 3, ...)
+};
 
 // ============================================================================
-// STANDARD PACKAGE LAYOUT FUNCTIONS
+// HELPER FUNCTIONS FOR COMMON PACKAGE TYPES
 // ============================================================================
 
-// DIP layouts
-PinLayout create_dip8_layout();
-PinLayout create_dip14_layout();
-PinLayout create_dip16_layout();
-PinLayout create_dip20_layout();
-PinLayout create_dip24_layout();
-PinLayout create_dip28_layout();
+// Create standard DIP package layouts
 PinLayout create_dip40_layout();
+PinLayout create_dip28_layout(); 
+PinLayout create_dip24_layout();
+PinLayout create_dip20_layout();
+PinLayout create_dip16_layout();
+PinLayout create_dip14_layout();
+PinLayout create_dip8_layout();
 
-// SOIC layouts
+// Create SOIC/SOP package layouts
 PinLayout create_soic8_layout();
 PinLayout create_soic14_layout();
 PinLayout create_soic16_layout();
 PinLayout create_soic28_layout();
 
-// PLCC layouts
+// Create PLCC package layouts (pins on all 4 sides)
 PinLayout create_plcc28_layout();
 PinLayout create_plcc44_layout();
 PinLayout create_plcc68_layout();
 
-// QFP layouts
+// Create QFP package layouts (pins on all 4 sides)
 PinLayout create_qfp32_layout();
 PinLayout create_qfp44_layout();
 PinLayout create_qfp64_layout();
 PinLayout create_qfp100_layout();
 PinLayout create_qfp144_layout();
 
-// QFN layouts
+// Create QFN package layouts
 PinLayout create_qfn16_layout();
 PinLayout create_qfn24_layout();
 PinLayout create_qfn32_layout();
 PinLayout create_qfn48_layout();
 
-// BGA layouts
+// Create BGA package layouts
 PinLayout create_bga64_layout();
 PinLayout create_bga100_layout();
 PinLayout create_bga256_layout();
 
-// Power packages
-PinLayout create_to220_layout();
-PinLayout create_to92_layout();
-PinLayout create_sot23_layout();
-PinLayout create_sot223_layout();
+// Create power package layouts
+PinLayout create_to220_layout();   // 3-pin power regulator
+PinLayout create_to92_layout();    // 3-pin small transistor
+PinLayout create_sot23_layout();   // 3/5/6-pin small transistor
+PinLayout create_sot223_layout();  // Power package
 
-// SIP layouts
+// Create SIP layouts
 PinLayout create_sip8_layout();
 PinLayout create_sip9_layout();
 
-// Custom layout builders
+// Helper functions for building custom layouts
 PinLayout create_custom_dip(uint8_t total_pins, const char* part_name = nullptr);
 PinLayout create_custom_qfp(uint8_t total_pins, const char* part_name = nullptr);
 PinLayout create_custom_bga(uint8_t rows, uint8_t cols, const char* part_name = nullptr);
+
+// Pin definition helpers
+ChipPin make_power_pin(uint8_t num, const char* label);
+ChipPin make_ground_pin(uint8_t num, const char* label = "GND");
+ChipPin make_address_pin(uint8_t num, const char* label, uint8_t bit);
+ChipPin make_data_pin(uint8_t num, const char* label, uint8_t bit);
+ChipPin make_control_pin(uint8_t num, const char* label, bool active_low = false);
+ChipPin make_clock_pin(uint8_t num, const char* label);
+ChipPin make_interrupt_pin(uint8_t num, const char* label, bool active_low = true);
+ChipPin make_gpio_pin(uint8_t num, const char* label, const char* port = nullptr);
+ChipPin make_analog_pin(uint8_t num, const char* label);
+ChipPin make_differential_pin(uint8_t num, const char* label, bool positive);
+ChipPin make_nc_pin(uint8_t num);
+
+// Helper function to convert PackageType enum to string
+const std::string get_package_type_string(PackageType package_type);
 
 #endif // CHIP_LAYOUT_H

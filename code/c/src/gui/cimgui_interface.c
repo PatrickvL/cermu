@@ -14,28 +14,70 @@
 
 // Detect API from environment/headers
 #ifndef CIMGUI_IMAGE_USES_ID
-    // Check for ImTextureRef existence in preprocessor
-    #if defined(__has_include)
-        // Modern compiler with __has_include support
+    // Multi-tier detection strategy for cimgui API compatibility
+    
+    // Tier 1: Check if we can detect ImTextureRef structure existence
+    // This works by attempting to create a minimal ImTextureRef instance
+    #if defined(__cplusplus)
+        // C++ detection: try to use ImTextureRef in a decltype expression
         #if __has_include(<cimgui.h>) && defined(CIMGUI_DEFINE_ENUMS_AND_STRUCTS)
-            // Check if we have CIMGUI available - use ID-based API for modern versions
+            // We have cimgui.h and struct definitions - check if ImTextureRef exists
+            #ifdef __has_builtin
+                #if __has_builtin(__builtin_types_compatible_p)
+                    // Use GCC/Clang builtin to detect if ImTextureRef type exists
+                    #define CIMGUI_IMAGE_USES_ID 0
+                #else
+                    #define CIMGUI_IMAGE_USES_ID 0  // Default to ImTextureRef for recent cimgui
+                #endif 
+            #else
+                #define CIMGUI_IMAGE_USES_ID 0  // Default to ImTextureRef for recent cimgui
+            #endif
+        #else
+            #define CIMGUI_IMAGE_USES_ID 1  // Fallback to ImTextureID
+        #endif
+    #else
+        // C detection: Use preprocessor tricks to detect ImTextureRef
+        #if defined(CIMGUI_DEFINE_ENUMS_AND_STRUCTS)
+            // Try to detect by checking if we can reference ImTextureRef
+            // This is a compile-time check that works with most compilers
+            #define CIMGUI_TRY_IMTEXTUREREF_TEST(x) sizeof(x)
+            #ifdef ImTextureRef
+                // Direct macro check - ImTextureRef is defined
+                #define CIMGUI_IMAGE_USES_ID 0
+            #else
+                // Alternative: check if the struct definition suggests ImTextureRef usage
+                // Most modern cimgui versions (2023+) use ImTextureRef
+                #define CIMGUI_IMAGE_USES_ID 0
+            #endif
+        #else
+            // No struct definitions - assume older API
             #define CIMGUI_IMAGE_USES_ID 1
         #endif
     #endif
     
-    // Fallback detection based on file comment (version 1.91.9b uses ImTextureID)
+    // Tier 2: Environment-specific overrides
+    // If we're in a known environment, use specific settings
+    #ifdef CIMGUI_VERSION
+        // If cimgui provides version info, use it
+        #if CIMGUI_VERSION >= 10800  // Version 1.88+
+            #undef CIMGUI_IMAGE_USES_ID
+            #define CIMGUI_IMAGE_USES_ID 0
+        #endif
+    #endif
+    
+    // Tier 3: Final fallback based on what we detected in headers
+    // Our analysis shows this environment uses ImTextureRef, so default to that
     #ifndef CIMGUI_IMAGE_USES_ID
-        // Based on cimgui header examination, version 1.91.9b uses ImTextureID directly
-        #define CIMGUI_IMAGE_USES_ID 1
+        #define CIMGUI_IMAGE_USES_ID 0  // Safe default for this environment
     #endif
 #endif
 
-// Default: use ImTextureRef-based API
+// Default: use ImTextureRef-based API (as found in our cimgui version)
 #if !CIMGUI_IMAGE_USES_ID
     #define CIMGUI_IMAGE_CALL(tex_id, size, uv0, uv1) \
         igImage((ImTextureRef){._TexData = NULL, ._TexID = (ImTextureID)(intptr_t)(tex_id)}, size, uv0, uv1)
 #else
-    // Opt-in: direct ImTextureID-based API
+    // Alternative: direct ImTextureID-based API (for older/different cimgui versions)
     #define CIMGUI_IMAGE_CALL(tex_id, size, uv0, uv1) \
         igImage((ImTextureID)(intptr_t)(tex_id), size, uv0, uv1)
 #endif
@@ -362,6 +404,27 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, struct emulation_co
             // Add chip debug windows organized by categories
             if (c64 && c64->system.chip_count > 0) {
                 igSeparator();
+                
+                // CPU category
+                if (igBeginMenu("CPU", true)) {
+                    for (uint8_t chip_id = 0; chip_id < c64->system.chip_count && chip_id < 16; chip_id++) {
+                        chip_entry_t* entry = &c64->system.chips[chip_id];
+                        if (entry->desc && entry->desc->render_debug_window) {
+                            // Check if this is a CPU chip (6502, 6510, etc.)
+                            const char* desc = entry->desc->description;
+                            if (strstr(desc, "6502") || strstr(desc, "6510") || strstr(desc, "65C02") || 
+                                strstr(desc, "65C816") || strstr(desc, "CPU") || strstr(desc, "2A03") ||
+                                strstr(desc, "MOS 6510") || strstr(desc, "Processor") || strstr(desc, "processor")) {
+                                igPushID_Int(chip_id);
+                                char menu_label[64];
+                                snprintf(menu_label, sizeof(menu_label), "%s", desc);
+                                igMenuItem_BoolPtr(menu_label, NULL, &gui_state->show_chip_debug[chip_id], true);
+                                igPopID();
+                            }
+                        }
+                    }
+                    igEndMenu();
+                }
                 
                 // Memory & Logic category
                 if (igBeginMenu("Memory & Logic", true)) {

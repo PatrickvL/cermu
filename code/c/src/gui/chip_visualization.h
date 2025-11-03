@@ -1,5 +1,5 @@
 /*
- * chip_visualization.h - Enhanced chip visualization system for IC packages
+ * chip_visualization.h - Generic chip visualization system for IC packages
  * 
  * Enhanced version with support for:
  * - Multiple orientation markers (notch, dot, chamfer, bar, triangle)
@@ -98,125 +98,77 @@ struct ChipVisualConfig {
     // Style preset
     VisualStyle style;                  // Visual style preset
     
-    // Default constructor with reasonable defaults
-    ChipVisualConfig();
-    
-    // Apply a style preset
-    void apply_style(VisualStyle style);
+    static ChipVisualConfig get_default();
+    static ChipVisualConfig get_style(VisualStyle style);
 };
 
-// Pin grouping information
-struct PinGroup {
-    std::vector<int> pins;              // Pin numbers in this group
-    std::string label;                  // Group label (e.g., "PORTB", "DATA")
-    uint32_t color;                     // Group highlight color
-    bool is_bus;                        // Is this a bus group?
-    bool is_differential_pair;          // Is this a differential pair?
-};
+// Get color for pin type
+uint32_t get_pin_type_color(PinType type, VisualStyle style = VisualStyle::CLASSIC_DARK);
 
 // ============================================================================
 // CHIP VISUALIZATION CLASS
 // ============================================================================
 
 class ChipVisualization {
-private:
-    PinLayout layout;                   // Pin layout information
-    ChipVisualConfig config;            // Visual configuration
-    std::vector<PinGroup> pin_groups;   // Pin groupings
-    
-    // Current pin states
-    std::vector<PinState> pin_states;   // State for each pin
-    
-    // Cached drawing data
-    ImVec2 chip_size;                   // Calculated chip size
-    ImVec2 chip_position;               // Chip position in draw area
-    std::vector<ImVec2> pin_positions;  // Calculated pin positions
-    std::vector<ImRect> pin_rects;      // Pin interaction rectangles
-    bool layout_dirty;                  // Need to recalculate layout
-    
-    // Drawing helpers
-    void calculate_layout(ImVec2 available_size);
-    void draw_chip_body(ImDrawList* draw_list);
-    void draw_pins(ImDrawList* draw_list);
-    void draw_pin_labels(ImDrawList* draw_list);
-    void draw_pin_numbers(ImDrawList* draw_list);
-    void draw_led_indicators(ImDrawList* draw_list);
-    void draw_orientation_markers(ImDrawList* draw_list);
-    void draw_chip_markings(ImDrawList* draw_list);
-    void draw_thermal_pad(ImDrawList* draw_list);
-    void draw_pin_groups(ImDrawList* draw_list);
-    
-    // Package-specific drawing
-    void draw_dip_package(ImDrawList* draw_list);
-    void draw_soic_package(ImDrawList* draw_list);
-    void draw_plcc_package(ImDrawList* draw_list);
-    void draw_qfp_package(ImDrawList* draw_list);
-    void draw_qfn_package(ImDrawList* draw_list);
-    void draw_bga_package(ImDrawList* draw_list);
-    void draw_to_package(ImDrawList* draw_list);
-    void draw_sot_package(ImDrawList* draw_list);
-    void draw_custom_package(ImDrawList* draw_list);
-    
-    // Utility functions
-    ImVec2 get_pin_position(int pin_number) const;
-    ImRect get_pin_rect(int pin_number) const;
-    std::string format_pin_label(const std::string& base_label, bool is_active_low) const;
-    uint32_t get_pin_color(int pin_number) const;
-    bool is_pin_hovered(int pin_number, ImVec2 mouse_pos) const;
-    
 public:
-    // Constructor
-    explicit ChipVisualization(const PinLayout& layout);
+    ChipVisualization(const PinLayout& layout, const ChipVisualConfig& config = ChipVisualConfig::get_default());
+    
+    // Main rendering function
+    void render(ImVec2 chip_center, const std::vector<PinState>& pin_states, const char* chip_name = nullptr);
+    
+    // Render individual components
+    void render_chip_body(ImVec2 chip_center, const char* chip_name = nullptr);
+    void render_pins(ImVec2 chip_center, const std::vector<PinState>& pin_states);
+    void render_orientation_marker(ImVec2 chip_center);
+    void render_thermal_pad(ImVec2 chip_center);
+    void render_chip_markings(ImVec2 chip_center);
+    void render_pin_groups(ImVec2 chip_center);
+    void render_legend();
+    void render_bga_grid(ImVec2 chip_center, const std::vector<PinState>& pin_states);
     
     // Configuration
-    void set_config(const ChipVisualConfig& config);
-    const ChipVisualConfig& get_config() const { return config; }
-    void apply_style_preset(VisualStyle style);
+    void set_visual_config(const ChipVisualConfig& config) { config_ = config; }
+    const ChipVisualConfig& get_visual_config() const { return config_; }
+    const PinLayout& get_pin_layout() const { return layout_; }
+    void set_pin_layout(const PinLayout& layout) { layout_ = layout; }
     
-    // Pin state management
-    void set_pin_state(int pin_number, const PinState& state);
-    void set_pin_states(const std::vector<PinState>& states);
-    const PinState& get_pin_state(int pin_number) const;
-    void clear_pin_states();
+    // Pin lookup by number or label
+    const ChipPin* find_pin_by_number(uint8_t pin_number) const;
+    const ChipPin* find_pin_by_label(const char* label) const;
+    std::vector<const ChipPin*> find_pins_by_group(const char* group_name) const;
     
-    // Pin grouping
-    void add_pin_group(const PinGroup& group);
-    void clear_pin_groups();
+    // Get pin position for external drawing
+    ImVec2 get_pin_position(ImVec2 chip_center, const ChipPin& pin) const;
     
-    // Drawing
-    void draw(ImVec2 size = ImVec2(0, 0));
-    ImVec2 get_minimum_size() const;
+    // Format pin label according to notation style
+    std::string format_pin_label(const ChipPin& pin) const;
     
-    // Interaction
-    int get_hovered_pin() const;
-    bool is_pin_clicked(int pin_number) const;
+    // Get recommended window size for chip
+    ImVec2 get_recommended_size() const;
     
-    // Layout information
-    const PinLayout& get_layout() const { return layout; }
-    void set_layout(const PinLayout& new_layout);
-    void invalidate_layout() { layout_dirty = true; }
+private:
+    PinLayout layout_;
+    ChipVisualConfig config_;
+    
+    void render_pin_side(ImVec2 chip_center, const std::vector<ChipPin>& pins, 
+                        const std::vector<PinState>& pin_states, PinSide side);
+    void render_single_pin(ImVec2 pin_pos, const ChipPin& pin, const PinState& state, PinSide side);
+    void render_dip_style(ImVec2 chip_center, const char* chip_name);
+    void render_surface_mount_style(ImVec2 chip_center, const char* chip_name);
+    void render_qfp_style(ImVec2 chip_center, const char* chip_name);
+    void render_bga_style(ImVec2 chip_center, const char* chip_name);
+    void render_to_style(ImVec2 chip_center, const char* chip_name);
+    
+    ImVec2 calculate_pin_position(ImVec2 chip_center, const ChipPin& pin, size_t index_in_side, PinSide side) const;
+    ImVec2 calculate_bga_position(ImVec2 chip_center, uint8_t row, uint8_t col) const;
+    ImVec2 get_led_position(ImVec2 pin_pos, PinSide side) const;
+    ImVec2 get_label_position(ImVec2 pin_pos, const ChipPin& pin, PinSide side) const;
+    
+    void draw_notch(ImVec2 chip_center);
+    void draw_dot_marker(ImVec2 chip_center);
+    void draw_chamfer(ImVec2 chip_center);
+    void draw_bar_marker(ImVec2 chip_center);
+    void draw_triangle_marker(ImVec2 chip_center);
 };
-
-// ============================================================================
-// UTILITY FUNCTIONS
-// ============================================================================
-
-// Create default configuration for different styles
-ChipVisualConfig create_dark_theme_config();
-ChipVisualConfig create_light_theme_config();
-ChipVisualConfig create_high_contrast_config();
-ChipVisualConfig create_colorful_config();
-ChipVisualConfig create_monochrome_config();
-ChipVisualConfig create_datasheet_config();
-ChipVisualConfig create_schematic_config();
-
-// Pin group helpers
-PinGroup create_bus_group(const std::vector<int>& pins, const std::string& label, uint32_t color = 0xFF4080FF);
-PinGroup create_differential_pair(int pin1, int pin2, const std::string& label, uint32_t color = 0xFF40FF80);
-PinGroup create_power_group(const std::vector<int>& pins, const std::string& label, uint32_t color = 0xFFFF4040);
-
-// Color utilities
-uint32_t rgba_to_abgr(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255);
-void abgr_to_rgba(uint32_t abgr, uint8_t& r, uint8_t& g, uint8_t& b, uint8_t& a);
 
 #endif // CHIP_VISUALIZATION_H

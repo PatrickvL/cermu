@@ -16,6 +16,7 @@ void fam65xx_render_settings_window(void* chip, bool* show_window);
 #ifdef __cplusplus
 }
 
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #include <unordered_map>
 #include <memory>
 #include "../../gui/chip_visualization.h"
@@ -53,6 +54,7 @@ namespace fam65xx {
     // Update bus state for CPU visualization
     void fam65xx_update_bus_state(void* chip, bus_state_t bus_state);
 }
+#endif
 #endif
 
 #endif // FAM65XX_GUI_H

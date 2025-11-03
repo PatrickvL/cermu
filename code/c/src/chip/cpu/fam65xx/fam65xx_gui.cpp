@@ -107,7 +107,7 @@ void render_chip_visualization(fam65xx_t<Traits>* cpu, ImVec2 chip_center, bus_s
     }
     
     // Get current pin states from CPU and bus state
-    std::vector<PinState> pin_states = get_cpu_pin_states<Traits>(cpu, bus_state);
+    std::vector<PinState> pin_states = get_cpu_pin_states<Traits>(cpu, &chip_viz->get_pin_layout(), bus_state);
     
     // Render the chip
     const char* chip_name = get_processor_name<Traits>();
@@ -721,11 +721,11 @@ void render_cpu_settings_window_impl(void* cpu, const char* cpu_name) {
     }
 }
 
-// Explicit template instantiations for CPUGUIRendererImpl
-template class CPUGUIRendererImpl<fam65xx::MOS6502>;
-template class CPUGUIRendererImpl<fam65xx::MOS6510>;
-template class CPUGUIRendererImpl<fam65xx::RICOH_2A03>;
-template class CPUGUIRendererImpl<fam65xx::ROCKWELL_R65C02>;
-template class CPUGUIRendererImpl<fam65xx::WDC_65C816>;
+// Explicit template instantiations for CPUGUIRendererImpl - TEMPORARILY DISABLED
+// template class CPUGUIRendererImpl<fam65xx::MOS6502>;
+// template class CPUGUIRendererImpl<fam65xx::MOS6510>;
+// template class CPUGUIRendererImpl<fam65xx::RICOH_2A03>;
+// template class CPUGUIRendererImpl<fam65xx::ROCKWELL_R65C02>;
+// template class CPUGUIRendererImpl<fam65xx::WDC_65C816>;
 
 }
