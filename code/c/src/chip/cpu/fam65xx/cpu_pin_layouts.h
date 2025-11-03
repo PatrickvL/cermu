@@ -46,11 +46,11 @@ PinLayout create_cpu_pin_layout() {
     // MOS 6502 (NMOS) PIN LAYOUT
     if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::MOS6502)>) {
         layout.package = {
-            .width = 200.0f,
-            .height = 400.0f,
-            .total_pins = 40,
-            .has_notch = true,
-            .package_name = "DIP-40 (MOS 6502)"
+            200.0f,                         // width
+            400.0f,                         // height
+            true,                           // has_notch
+            Traits.get_vendor(),            // vendor
+            Traits.get_chip_id()            // chip_id
         };
         
         // Left side pins (1-20, top to bottom)
@@ -104,11 +104,11 @@ PinLayout create_cpu_pin_layout() {
     // MOS 6510 (C64/C128) PIN LAYOUT  
     } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::MOS6510)>) {
         layout.package = {
-            .width = 200.0f,
-            .height = 400.0f,
-            .total_pins = 40,
-            .has_notch = true,
-            .package_name = "DIP-40 (MOS 6510)"
+            200.0f,                         // width
+            400.0f,                         // height
+            true,                           // has_notch
+            Traits.get_vendor(),            // vendor
+            Traits.get_chip_id()            // chip_id
         };
         
         // Left side pins (1-20, top to bottom)
@@ -162,11 +162,11 @@ PinLayout create_cpu_pin_layout() {
     // WDC 65C02 (CMOS) PIN LAYOUT
     } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::WDC_W65C02S)>) {
         layout.package = {
-            .width = 200.0f,
-            .height = 400.0f,
-            .total_pins = 40,
-            .has_notch = true,
-            .package_name = "DIP-40 (WDC 65C02)"
+            200.0f,                         // width
+            400.0f,                         // height
+            true,                           // has_notch
+            Traits.get_vendor(),            // vendor
+            Traits.get_chip_id()            // chip_id
         };
         
         // Left side pins (1-20, top to bottom)
@@ -220,11 +220,11 @@ PinLayout create_cpu_pin_layout() {
     // WDC 65C816 (16-BIT) PIN LAYOUT  
     } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::WDC_65C816)>) {
         layout.package = {
-            .width = 200.0f,
-            .height = 400.0f,
-            .total_pins = 40,
-            .has_notch = true,
-            .package_name = "DIP-40 (WDC 65C816)"
+            200.0f,                         // width
+            400.0f,                         // height
+            true,                           // has_notch
+            Traits.get_vendor(),            // vendor
+            Traits.get_chip_id()            // chip_id
         };
         
         // Left side pins (1-20, top to bottom)
@@ -278,11 +278,11 @@ PinLayout create_cpu_pin_layout() {
     // NES 6502 (RICOH 2A03) PIN LAYOUT
     } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::RICOH_2A03)>) {
         layout.package = {
-            .width = 200.0f,
-            .height = 400.0f,
-            .total_pins = 40,
-            .has_notch = true,
-            .package_name = "DIP-40 (RICOH 2A03)"
+            200.0f,                         // width
+            400.0f,                         // height
+            true,                           // has_notch
+            Traits.get_vendor(),            // vendor
+            Traits.get_chip_id()            // chip_id
         };
         
         // Left side pins (1-20, top to bottom)
@@ -336,11 +336,11 @@ PinLayout create_cpu_pin_layout() {
     // ROCKWELL R65C02 PIN LAYOUT
     } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::ROCKWELL_R65C02)>) {
         layout.package = {
-            .width = 200.0f,
-            .height = 400.0f,
-            .total_pins = 40,
-            .has_notch = true,
-            .package_name = "DIP-40 (Rockwell R65C02)"
+            200.0f,                         // width
+            400.0f,                         // height
+            true,                           // has_notch
+            Traits.get_vendor(),            // vendor
+            Traits.get_chip_id()            // chip_id
         };
         
         // Left side pins (1-20, top to bottom)
@@ -394,11 +394,11 @@ PinLayout create_cpu_pin_layout() {
     } else {
         // Fallback for unknown CPU type
         layout.package = {
-            .width = 200.0f,
-            .height = 400.0f,
-            .total_pins = 40,
-            .has_notch = true,
-            .package_name = "DIP-40 (Unknown CPU)"
+            200.0f,                         // width
+            400.0f,                         // height
+            true,                           // has_notch
+            "Unknown",                      // vendor (fallback)
+            "65xx"                          // chip_id (fallback)
         };
     }
     
@@ -416,7 +416,7 @@ std::vector<PinState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, bus_st
     PinLayout layout = create_cpu_pin_layout<Traits>();
     
     // Get the actual pin layout for this CPU
-    std::vector<PinState> states(layout.package.total_pins);
+    std::vector<PinState> states(layout.get_total_pins());
 
     // Initialize all pins as inactive and valid
     for (auto& state : states) {

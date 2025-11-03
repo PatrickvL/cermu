@@ -103,6 +103,8 @@ struct PeripheralConfig {
 // ============================================================================
 
 struct CPUTraits {
+    const char* vendor;         // Manufacturer name (e.g., "MOS Technology", "Ricoh", "WDC")
+    const char* chip_id;        // Chip identifier (e.g., "6502", "6510", "2A03")
     uint32_t core_flags;        // CPUCoreFlags combination
     uint8_t address_bits;       // Address bus width (13, 16, 20, 21, 24)
     uint8_t io_port_mask;       // Bitmask of available I/O pins
@@ -146,6 +148,15 @@ struct CPUTraits {
     // Feature detection methods (for template compatibility)
     constexpr bool has_illegal_opcodes() const {
         return has(CPUCoreFlags::ILLEGAL_OPCODES);
+    }
+    
+    // String identification methods
+    constexpr const char* get_vendor() const {
+        return vendor;
+    }
+    
+    constexpr const char* get_chip_id() const {
+        return chip_id;
     }
     
     constexpr bool has_cmos_enhancements() const {
@@ -214,70 +225,85 @@ namespace CoreFlags {
 // --- NMOS Family ---
 
 constexpr CPUTraits MOS6502 = {
-    .core_flags = CoreFlags::NMOS_BASE,
-    .address_bits = 16,
-    .io_port_mask = 0x00,
-    .banking = BankingType::NONE,
-    .peripheral = {SoundChip::NONE, DMAController::NONE, false}
-};
-
-constexpr CPUTraits MOS6507 = {
-    .core_flags = CoreFlags::NMOS_BASE | CPUCoreFlags::NO_IRQ_LINE,
-    .address_bits = 13,
-    .io_port_mask = 0x00,
-    .banking = BankingType::NONE,
-    .peripheral = {SoundChip::NONE, DMAController::NONE, false}
+    "MOS Technology",                                                   // vendor
+    "6502",                                                             // chip_id
+    CoreFlags::NMOS_BASE,                                               // core_flags
+    16,                                                                 // address_bits
+    0x00,                                                               // io_port_mask
+    BankingType::NONE,                                                  // banking
+    {SoundChip::NONE, DMAController::NONE, false}                       // peripheral
 };
 
 constexpr CPUTraits MOS6504 = {
-    .core_flags = CoreFlags::NMOS_BASE,
-    .address_bits = 13,
-    .io_port_mask = 0x00,
-    .banking = BankingType::NONE,
-    .peripheral = {SoundChip::NONE, DMAController::NONE, false}
+    "MOS Technology",                                                   // vendor
+    "6504",                                                             // chip_id
+    CoreFlags::NMOS_BASE,                                               // core_flags
+    13,                                                                 // address_bits
+    0x00,                                                               // io_port_mask
+    BankingType::NONE,                                                  // banking
+    {SoundChip::NONE, DMAController::NONE, false}                       // peripheral
+};
+
+constexpr CPUTraits MOS6507 = {
+    "MOS Technology",                                                   // vendor
+    "6507",                                                             // chip_id
+    CoreFlags::NMOS_BASE | CPUCoreFlags::NO_IRQ_LINE,                   // core_flags
+    13,                                                                 // address_bits
+    0x00,                                                               // io_port_mask
+    BankingType::NONE,                                                  // banking
+    {SoundChip::NONE, DMAController::NONE, false}                       // peripheral
+};
+
+constexpr CPUTraits MOS6509 = {
+    "MOS Technology",                                                   // vendor
+    "6509",                                                             // chip_id
+    CoreFlags::NMOS_BASE | CPUCoreFlags::HAS_BANKING,                   // core_flags
+    20,                                                                 // address_bits
+    0x00,                                                               // io_port_mask
+    BankingType::MOS6509,                                               // banking
+    {SoundChip::NONE, DMAController::NONE, false}                       // peripheral
 };
 
 constexpr CPUTraits MOS6510 = {
-    .core_flags = CoreFlags::NMOS_BASE | CPUCoreFlags::HAS_IO_PORT,
-    .address_bits = 16,
-    .io_port_mask = 0x3F,  // Pins 0-5
-    .banking = BankingType::NONE,
-    .peripheral = {SoundChip::NONE, DMAController::NONE, false}
+    "MOS Technology",                                                   // vendor
+    "6510",                                                             // chip_id
+    CoreFlags::NMOS_BASE | CPUCoreFlags::HAS_IO_PORT,                   // core_flags
+    16,                                                                 // address_bits
+    0x3F,                                                               // io_port_mask (Pins 0-5)
+    BankingType::NONE,                                                  // banking
+    {SoundChip::NONE, DMAController::NONE, false}                       // peripheral
 };
 
 constexpr CPUTraits MOS6510T = MOS6510;  // Identical
 
 constexpr CPUTraits CSG7501 = {
-    .core_flags = CoreFlags::NMOS_BASE | CPUCoreFlags::HAS_IO_PORT | CPUCoreFlags::NO_NMI_LINE,
-    .address_bits = 16,
-    .io_port_mask = 0x5F,  // Pins 0-4, 6 (no pin 5)
-    .banking = BankingType::NONE,
-    .peripheral = {SoundChip::NONE, DMAController::NONE, false}
+    "Commodore",                                                        // vendor
+    "7501",                                                             // chip_id
+    CoreFlags::NMOS_BASE | CPUCoreFlags::HAS_IO_PORT | CPUCoreFlags::NO_NMI_LINE, // core_flags
+    16,                                                                 // address_bits
+    0x5F,                                                               // io_port_mask (Pins 0-4, 6 - no pin 5)
+    BankingType::NONE,                                                  // banking
+    {SoundChip::NONE, DMAController::NONE, false}                       // peripheral
 };
 
 constexpr CPUTraits CSG8502 = {
-    .core_flags = CoreFlags::NMOS_BASE | CPUCoreFlags::HAS_IO_PORT | CPUCoreFlags::VARIABLE_CLOCK,
-    .address_bits = 16,
-    .io_port_mask = 0x7F,  // Pins 0-6 (no pin 7)
-    .banking = BankingType::NONE,
-    .peripheral = {SoundChip::NONE, DMAController::NONE, false}
-};
-
-constexpr CPUTraits MOS6509 = {
-    .core_flags = CoreFlags::NMOS_BASE | CPUCoreFlags::HAS_BANKING,
-    .address_bits = 20,
-    .io_port_mask = 0x00,
-    .banking = BankingType::MOS6509,
-    .peripheral = {SoundChip::NONE, DMAController::NONE, false}
+    "Commodore",                                                        // vendor
+    "CSG8502",                                                          // chip_id
+    CoreFlags::NMOS_BASE | CPUCoreFlags::HAS_IO_PORT | CPUCoreFlags::VARIABLE_CLOCK, // core_flags
+    16,                                                                 // address_bits
+    0x7F,                                                               // io_port_mask (Pins 0-6, no pin 7)
+    BankingType::NONE,                                                  // banking
+    {SoundChip::NONE, DMAController::NONE, false}                       // peripheral
 };
 
 constexpr CPUTraits RICOH_2A03 = {
-    .core_flags = CPUCoreFlags::ILLEGAL_OPCODES | CPUCoreFlags::JMP_INDIRECT_BUG | CPUCoreFlags::RMW_DUMMY_WRITE,
-    // NO HAS_DECIMAL_MODE!
-    .address_bits = 16,
-    .io_port_mask = 0x00,
-    .banking = BankingType::NONE,
-    .peripheral = {SoundChip::RICOH_APU, DMAController::NONE, false}
+    "Ricoh",                                                            // vendor
+    "2A03",                                                             // chip_id
+    CPUCoreFlags::ILLEGAL_OPCODES | CPUCoreFlags::JMP_INDIRECT_BUG | CPUCoreFlags::RMW_DUMMY_WRITE, // core_flags (NO HAS_DECIMAL_MODE!)
+    16,                                                                 // address_bits
+    0x00,                                                               // io_port_mask
+    BankingType::NONE,                                                  // banking
+    {SoundChip::RICOH_APU, DMAController::NONE, false}                  // peripheral
 };
 
 constexpr CPUTraits RICOH_2A07 = RICOH_2A03;  // PAL version
@@ -285,83 +311,100 @@ constexpr CPUTraits RICOH_2A07 = RICOH_2A03;  // PAL version
 // --- CMOS Family ---
 
 constexpr CPUTraits WDC_65C02_EARLY = {
-    .core_flags = CoreFlags::CMOS_BASE_FLAGS,
-    .address_bits = 16,
-    .io_port_mask = 0x00,
-    .banking = BankingType::NONE,
-    .peripheral = {SoundChip::NONE, DMAController::NONE, false}
+    "WDC",                                                              // vendor
+    "65C02",                                                            // chip_id
+    CoreFlags::CMOS_BASE_FLAGS,                                         // core_flags
+    16,                                                                 // address_bits
+    0x00,                                                               // io_port_mask
+    BankingType::NONE,                                                  // banking
+    {SoundChip::NONE, DMAController::NONE, false}                       // peripheral
 };
 
 constexpr CPUTraits WDC_65SC02 = WDC_65C02_EARLY;
 constexpr CPUTraits GTE_G65SC02 = WDC_65C02_EARLY;
+
 constexpr CPUTraits SYNERTEK_65C02 = {
-    .core_flags = CPUCoreFlags::CMOS_BASE | CPUCoreFlags::HAS_DECIMAL_MODE | CPUCoreFlags::BCD_EXTRA_CYCLE,
-    .address_bits = 16,
-    .io_port_mask = 0x00,
-    .banking = BankingType::NONE,
-    .peripheral = {SoundChip::NONE, DMAController::NONE, false}
+    "Synertek",                                                         // vendor
+    "65C02",                                                            // chip_id
+    CPUCoreFlags::CMOS_BASE | CPUCoreFlags::HAS_DECIMAL_MODE | CPUCoreFlags::BCD_EXTRA_CYCLE, // core_flags
+    16,                                                                 // address_bits
+    0x00,                                                               // io_port_mask
+    BankingType::NONE,                                                  // banking
+    {SoundChip::NONE, DMAController::NONE, false}                       // peripheral
 };
 
 constexpr CPUTraits ROCKWELL_R65C02 = {
-    .core_flags = CoreFlags::ROCKWELL_BASE,
-    .address_bits = 16,
-    .io_port_mask = 0x00,
-    .banking = BankingType::NONE,
-    .peripheral = {SoundChip::NONE, DMAController::NONE, false}
+    "Rockwell",                                                         // vendor
+    "R65C02",                                                           // chip_id
+    CoreFlags::ROCKWELL_BASE,                                           // core_flags
+    16,                                                                 // address_bits
+    0x00,                                                               // io_port_mask
+    BankingType::NONE,                                                  // banking
+    {SoundChip::NONE, DMAController::NONE, false}                       // peripheral
 };
 
 constexpr CPUTraits WDC_W65C02S = {
-    .core_flags = CoreFlags::WDC_MODERN,
-    .address_bits = 16,
-    .io_port_mask = 0x00,
-    .banking = BankingType::NONE,
-    .peripheral = {SoundChip::NONE, DMAController::NONE, false}
+    "WDC",                                                              // vendor
+    "W65C02S",                                                          // chip_id
+    CoreFlags::WDC_MODERN,                                              // core_flags
+    16,                                                                 // address_bits
+    0x00,                                                               // io_port_mask
+    BankingType::NONE,                                                  // banking
+    {SoundChip::NONE, DMAController::NONE, false}                       // peripheral
 };
 
 // --- Advanced 8-bit Family ---
 
 constexpr CPUTraits CSG_65CE02 = {
-    .core_flags = CoreFlags::CMOS_BASE_FLAGS | CPUCoreFlags::CE02_EXTENDED | CPUCoreFlags::OPTIMIZED_CYCLES,
-    .address_bits = 16,
-    .io_port_mask = 0x00,
-    .banking = BankingType::NONE,
-    .peripheral = {SoundChip::NONE, DMAController::NONE, false}
+    "Commodore",                                                        // vendor
+    "65CE02",                                                           // chip_id
+    CoreFlags::CMOS_BASE_FLAGS | CPUCoreFlags::CE02_EXTENDED | CPUCoreFlags::OPTIMIZED_CYCLES, // core_flags
+    16,                                                                 // address_bits
+    0x00,                                                               // io_port_mask
+    BankingType::NONE,                                                  // banking
+    {SoundChip::NONE, DMAController::NONE, false}                       // peripheral
 };
 
 constexpr CPUTraits CSG_4510 = {
-    .core_flags = CoreFlags::CMOS_BASE_FLAGS | CPUCoreFlags::CE02_EXTENDED | 
-                  CPUCoreFlags::OPTIMIZED_CYCLES | CPUCoreFlags::HAS_BANKING,
-    .address_bits = 20,
-    .io_port_mask = 0x00,
-    .banking = BankingType::CSG4510,
-    .peripheral = {SoundChip::NONE, DMAController::CSG4510_DMA, false}
+    "Commodore",                                                        // vendor
+    "4510",                                                             // chip_id
+    CoreFlags::CMOS_BASE_FLAGS | CPUCoreFlags::CE02_EXTENDED | CPUCoreFlags::OPTIMIZED_CYCLES | CPUCoreFlags::HAS_BANKING, // core_flags
+    20,                                                                 // address_bits
+    0x00,                                                               // io_port_mask
+    BankingType::CSG4510,                                               // banking
+    {SoundChip::NONE, DMAController::CSG4510_DMA, false}                // peripheral
 };
 
 constexpr CPUTraits HUDSON_HUC6280 = {
-    .core_flags = CoreFlags::CMOS_BASE_FLAGS | CPUCoreFlags::HUC6280_EXTENDED | 
-                  CPUCoreFlags::VARIABLE_CLOCK | CPUCoreFlags::HAS_BANKING,
-    .address_bits = 21,
-    .io_port_mask = 0x00,
-    .banking = BankingType::HUC6280,
-    .peripheral = {SoundChip::HUC6280_PSG, DMAController::NONE, true}
+    "Hudson Soft",                                                      // vendor
+    "HuC6280",                                                          // chip_id
+    CoreFlags::CMOS_BASE_FLAGS | CPUCoreFlags::HUC6280_EXTENDED | CPUCoreFlags::VARIABLE_CLOCK | CPUCoreFlags::HAS_BANKING, // core_flags
+    21,                                                                 // address_bits
+    0x00,                                                               // io_port_mask
+    BankingType::HUC6280,                                               // banking
+    {SoundChip::HUC6280_PSG, DMAController::NONE, true}                 // peripheral
 };
 
 // --- 16-bit Family ---
 
 constexpr CPUTraits WDC_65C816 = {
-    .core_flags = CoreFlags::CMOS_BASE_FLAGS | CPUCoreFlags::C816_16BIT,
-    .address_bits = 24,
-    .io_port_mask = 0x00,
-    .banking = BankingType::NONE,
-    .peripheral = {SoundChip::NONE, DMAController::NONE, false}
+    "WDC",                                                              // vendor
+    "65C816",                                                           // chip_id
+    CoreFlags::CMOS_BASE_FLAGS | CPUCoreFlags::C816_16BIT,              // core_flags
+    24,                                                                 // address_bits
+    0x00,                                                               // io_port_mask
+    BankingType::NONE,                                                  // banking
+    {SoundChip::NONE, DMAController::NONE, false}                       // peripheral
 };
 
 constexpr CPUTraits RICOH_5A22 = {
-    .core_flags = CoreFlags::CMOS_BASE_FLAGS | CPUCoreFlags::C816_16BIT,
-    .address_bits = 24,
-    .io_port_mask = 0x00,
-    .banking = BankingType::NONE,
-    .peripheral = {SoundChip::NONE, DMAController::RICOH_5A22_DMA, false}
+    "Ricoh",                                                            // vendor
+    "5A22",                                                             // chip_id
+    CoreFlags::CMOS_BASE_FLAGS | CPUCoreFlags::C816_16BIT,              // core_flags
+    24,                                                                 // address_bits
+    0x00,                                                               // io_port_mask
+    BankingType::NONE,                                                  // banking
+    {SoundChip::NONE, DMAController::RICOH_5A22_DMA, false}             // peripheral
 };
 
 // ============================================================================

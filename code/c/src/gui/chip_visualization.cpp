@@ -27,23 +27,23 @@ uint32_t get_pin_type_color(PinType type) {
 
 ChipVisualConfig ChipVisualConfig::get_default() {
     return {
-        .chip_body_color = 0xFF2D2D30,      // Dark gray chip body
-        .chip_border_color = 0xFF808080,    // Light gray border
-        .pin_border_color = 0xFF000000,     // Black pin border
+        .chip_body_color = 0xFF1A1A1A,      // Darker chip body for better contrast
+        .chip_border_color = 0xFFCCCCCC,    // Light border
+        .pin_border_color = 0xFFCCCCCC,     // Light pin border
         .text_color = 0xFFFFFFFF,           // White text
         .active_text_color = 0xFF00FF00,    // Green text when active
-        .pin_number_color = 0xFFA0A0A0,     // Light gray pin numbers
+        .pin_number_color = 0xFFE0E0E0,     // Brighter pin numbers
         .led_active_color = 0xFF00FF00,     // Green LED when active
-        .led_inactive_color = 0xFF404040,   // Dark gray LED when inactive
-        .notch_color = 0xFF404040,          // Dark gray notch
+        .led_inactive_color = 0xFF004000,   // Darker green LED when inactive
+        .notch_color = 0xFF606060,          // Lighter notch
         
-        .pin_width = 8.0f,
-        .pin_height = 12.0f,
-        .led_radius = 3.0f,
-        .label_offset = 15.0f,
+        .pin_width = 10.0f,                 // Wider pins for better visibility
+        .pin_height = 16.0f,                // Taller pins
+        .led_size = 3.0f,                   // LED size diameter in pixels
+        .label_offset = 18.0f,              // More space for labels
         .pin_spacing_factor = 1.2f,
         .chip_border_width = 2.0f,
-        .pin_border_width = 1.0f,
+        .pin_border_width = 1.5f,           // Thicker pin borders
         
         .show_pin_numbers = true,
         .show_pin_labels = true,
@@ -94,21 +94,65 @@ void ChipVisualization::render_chip_body(ImVec2 chip_center, const char* chip_na
         ImDrawList_AddText_Vec2(draw_list, label_pos, config_.text_color, chip_name, NULL);
     }
     
-    // Draw package name if enabled
-    if (config_.show_package_name && layout_.package.package_name) {
-        ImVec2 package_label_size;
-        igCalcTextSize(&package_label_size, layout_.package.package_name, NULL, false, -1.0f);
-        ImVec2 package_label_pos = {chip_center.x - package_label_size.x/2, chip_center.y + 15};
-        ImDrawList_AddText_Vec2(draw_list, package_label_pos, config_.pin_number_color, layout_.package.package_name, NULL);
+    // Calculate total pins and individual side counts for debugging
+    size_t total_pins = layout_.left_pins.size() + layout_.right_pins.size() + 
+                       layout_.top_pins.size() + layout_.bottom_pins.size();
+    
+    // Draw vendor and chip information if enabled
+    if (config_.show_package_name) {
+        // Draw vendor name
+        if (layout_.package.vendor) {
+            ImVec2 vendor_label_size;
+            igCalcTextSize(&vendor_label_size, layout_.package.vendor, NULL, false, -1.0f);
+            ImVec2 vendor_label_pos = {chip_center.x - vendor_label_size.x/2, chip_center.y + 15};
+            ImDrawList_AddText_Vec2(draw_list, vendor_label_pos, config_.pin_number_color, layout_.package.vendor, NULL);
+        }
+        
+        // Draw chip ID below vendor
+        if (layout_.package.chip_id) {
+            ImVec2 chip_id_size;
+            igCalcTextSize(&chip_id_size, layout_.package.chip_id, NULL, false, -1.0f);
+            ImVec2 chip_id_pos = {chip_center.x - chip_id_size.x/2, chip_center.y + 30};
+            ImDrawList_AddText_Vec2(draw_list, chip_id_pos, config_.text_color, layout_.package.chip_id, NULL);
+        }
+        
+        // Package name has been removed - could derive "DIP-40" from pin count if needed
+    }
+    
+    // Draw debug pin count information
+    if (total_pins > 0) {
+        char pin_count_text[128];
+        snprintf(pin_count_text, sizeof(pin_count_text), 
+                 "Pins: %zu total (L:%zu R:%zu T:%zu B:%zu)", 
+                 total_pins, layout_.left_pins.size(), layout_.right_pins.size(),
+                 layout_.top_pins.size(), layout_.bottom_pins.size());
+        
+        ImVec2 pin_count_size;
+        igCalcTextSize(&pin_count_size, pin_count_text, NULL, false, -1.0f);
+        ImVec2 pin_count_pos = {chip_center.x - pin_count_size.x/2, chip_center.y + 65};
+        ImDrawList_AddText_Vec2(draw_list, pin_count_pos, 0xFF808080, pin_count_text, NULL); // Gray text
     }
 }
 
 void ChipVisualization::render_pins(ImVec2 chip_center, const std::vector<PinState>& pin_states) {
+    // Debug info - uncomment to debug pin rendering issues
+    // printf("Rendering pins: Left=%zu, Right=%zu, Top=%zu, Bottom=%zu, States=%zu\n", 
+    //        layout_.left_pins.size(), layout_.right_pins.size(), 
+    //        layout_.top_pins.size(), layout_.bottom_pins.size(), pin_states.size());
+    
     // Render each side
-    render_pin_side(chip_center, layout_.left_pins, pin_states, PinSide::LEFT);
-    render_pin_side(chip_center, layout_.right_pins, pin_states, PinSide::RIGHT);
-    render_pin_side(chip_center, layout_.top_pins, pin_states, PinSide::TOP);
-    render_pin_side(chip_center, layout_.bottom_pins, pin_states, PinSide::BOTTOM);
+    if (!layout_.left_pins.empty()) {
+        render_pin_side(chip_center, layout_.left_pins, pin_states, PinSide::LEFT);
+    }
+    if (!layout_.right_pins.empty()) {
+        render_pin_side(chip_center, layout_.right_pins, pin_states, PinSide::RIGHT);
+    }
+    if (!layout_.top_pins.empty()) {
+        render_pin_side(chip_center, layout_.top_pins, pin_states, PinSide::TOP);
+    }
+    if (!layout_.bottom_pins.empty()) {
+        render_pin_side(chip_center, layout_.bottom_pins, pin_states, PinSide::BOTTOM);
+    }
 }
 
 void ChipVisualization::render_pin_side(ImVec2 chip_center, const std::vector<ChipPin>& pins, 
@@ -131,28 +175,38 @@ void ChipVisualization::render_pin_side(ImVec2 chip_center, const std::vector<Ch
 
 void ChipVisualization::render_single_pin(ImVec2 pin_pos, const ChipPin& pin, const PinState& state, PinSide side) {
     ImDrawList* draw_list = igGetWindowDrawList();
+    if (!draw_list) return;
+    
+    // Debug: Force visible pins for testing
+    // printf("Drawing pin %d (%s) at (%.1f, %.1f)\n", pin.pin_number, pin.label, pin_pos.x, pin_pos.y);
     
     // Get pin type color
     uint32_t pin_color = get_pin_type_color(pin.type);
     
-    // Draw pin rectangle
+    // Simple pin rectangle - centered on pin position
     ImVec2 pin_min = {pin_pos.x - config_.pin_width/2, pin_pos.y - config_.pin_height/2};
     ImVec2 pin_max = {pin_pos.x + config_.pin_width/2, pin_pos.y + config_.pin_height/2};
     
+    // Draw pin rectangle with stronger colors for visibility
     ImDrawList_AddRectFilled(draw_list, pin_min, pin_max, pin_color, 0.0f, 0);
     ImDrawList_AddRect(draw_list, pin_min, pin_max, config_.pin_border_color, 0.0f, 0, config_.pin_border_width);
     
-    // Draw LED indicator if enabled
+    // Draw LED indicator if enabled - make it more prominent like in the reference
     if (config_.show_led_indicators) {
         ImVec2 led_pos = get_led_position(pin_pos, side);
         uint32_t led_color = state.is_active ? config_.led_active_color : config_.led_inactive_color;
         
-        ImDrawList_AddCircleFilled(draw_list, led_pos, config_.led_radius, led_color, 12);
-        ImDrawList_AddCircle(draw_list, led_pos, config_.led_radius, config_.pin_border_color, 12, 1.0f);
+        // Draw LED as a small square instead of circle
+        float led_size = config_.led_size;
+        ImVec2 led_min = {led_pos.x - led_size, led_pos.y - led_size};
+        ImVec2 led_max = {led_pos.x + led_size, led_pos.y + led_size};
+        
+        ImDrawList_AddRectFilled(draw_list, led_min, led_max, led_color, 0.0f, 0);
+        ImDrawList_AddRect(draw_list, led_min, led_max, config_.pin_border_color, 0.0f, 0, 1.5f);
     }
     
     // Draw pin label if enabled
-    if (config_.show_pin_labels) {
+    if (config_.show_pin_labels && pin.label && strlen(pin.label) > 0) {
         ImVec2 label_pos = get_label_position(pin_pos, pin, side);
         uint32_t text_color = state.is_active ? config_.active_text_color : config_.text_color;
         
@@ -169,23 +223,23 @@ void ChipVisualization::render_single_pin(ImVec2 pin_pos, const ChipPin& pin, co
     }
     
     // Draw pin number if enabled
-    if (config_.show_pin_numbers) {
+    if (config_.show_pin_numbers && pin.pin_number > 0) {
         char pin_num_str[4];
         snprintf(pin_num_str, sizeof(pin_num_str), "%d", pin.pin_number);
         
-        ImVec2 pin_num_pos;
+        ImVec2 pin_num_pos = {0.0f, 0.0f};  // Initialize to suppress warning
         switch (side) {
             case PinSide::LEFT:
                 pin_num_pos = {pin_pos.x + config_.pin_width/2 + 2, pin_pos.y - 6};
                 break;
             case PinSide::RIGHT:
-                pin_num_pos = {pin_pos.x - config_.pin_width/2 - 10, pin_pos.y - 6};
+                pin_num_pos = {pin_pos.x - config_.pin_width/2 - 12, pin_pos.y - 6};
                 break;
             case PinSide::TOP:
                 pin_num_pos = {pin_pos.x - 6, pin_pos.y + config_.pin_height/2 + 2};
                 break;
             case PinSide::BOTTOM:
-                pin_num_pos = {pin_pos.x - 6, pin_pos.y - config_.pin_height/2 - 10};
+                pin_num_pos = {pin_pos.x - 6, pin_pos.y - config_.pin_height/2 - 12};
                 break;
         }
         
@@ -201,31 +255,56 @@ ImVec2 ChipVisualization::calculate_pin_position(ImVec2 chip_center, const ChipP
     
     switch (side) {
         case PinSide::LEFT: {
-            pin_pos.x = chip_center.x - chip_width/2;
-            float total_height = chip_height - 40; // Leave margin for notch
-            float pin_spacing = total_height / std::max(1.0f, float(layout_.left_pins.size() - 1));
-            pin_pos.y = chip_center.y - total_height/2 + index_in_side * pin_spacing;
+            pin_pos.x = chip_center.x - chip_width/2; // Left edge of chip
+            size_t pin_count = layout_.left_pins.size();
+            if (pin_count > 1) {
+                // Distribute pins evenly along the left side with some margin
+                float start_y = chip_center.y - chip_height/2 + 20; // 20px margin from top
+                float end_y = chip_center.y + chip_height/2 - 20;   // 20px margin from bottom
+                float total_spacing = end_y - start_y;
+                pin_pos.y = start_y + (total_spacing / (pin_count - 1)) * index_in_side;
+            } else {
+                pin_pos.y = chip_center.y;
+            }
             break;
         }
         case PinSide::RIGHT: {
-            pin_pos.x = chip_center.x + chip_width/2;
-            float total_height = chip_height - 40;
-            float pin_spacing = total_height / std::max(1.0f, float(layout_.right_pins.size() - 1));
-            pin_pos.y = chip_center.y - total_height/2 + index_in_side * pin_spacing;
+            pin_pos.x = chip_center.x + chip_width/2; // Right edge of chip
+            size_t pin_count = layout_.right_pins.size();
+            if (pin_count > 1) {
+                float start_y = chip_center.y - chip_height/2 + 20;
+                float end_y = chip_center.y + chip_height/2 - 20;
+                float total_spacing = end_y - start_y;
+                pin_pos.y = start_y + (total_spacing / (pin_count - 1)) * index_in_side;
+            } else {
+                pin_pos.y = chip_center.y;
+            }
             break;
         }
         case PinSide::TOP: {
-            pin_pos.y = chip_center.y - chip_height/2;
-            float total_width = chip_width - 40; // Leave margin
-            float pin_spacing = total_width / std::max(1.0f, float(layout_.top_pins.size() - 1));
-            pin_pos.x = chip_center.x - total_width/2 + index_in_side * pin_spacing;
+            pin_pos.y = chip_center.y - chip_height/2; // Top edge of chip
+            size_t pin_count = layout_.top_pins.size();
+            if (pin_count > 1) {
+                float start_x = chip_center.x - chip_width/2 + 20; // 20px margin from left
+                float end_x = chip_center.x + chip_width/2 - 20;   // 20px margin from right
+                float total_spacing = end_x - start_x;
+                pin_pos.x = start_x + (total_spacing / (pin_count - 1)) * index_in_side;
+            } else {
+                pin_pos.x = chip_center.x;
+            }
             break;
         }
         case PinSide::BOTTOM: {
-            pin_pos.y = chip_center.y + chip_height/2;
-            float total_width = chip_width - 40;
-            float pin_spacing = total_width / std::max(1.0f, float(layout_.bottom_pins.size() - 1));
-            pin_pos.x = chip_center.x - total_width/2 + index_in_side * pin_spacing;
+            pin_pos.y = chip_center.y + chip_height/2; // Bottom edge of chip
+            size_t pin_count = layout_.bottom_pins.size();
+            if (pin_count > 1) {
+                float start_x = chip_center.x - chip_width/2 + 20;
+                float end_x = chip_center.x + chip_width/2 - 20;
+                float total_spacing = end_x - start_x;
+                pin_pos.x = start_x + (total_spacing / (pin_count - 1)) * index_in_side;
+            } else {
+                pin_pos.x = chip_center.x;
+            }
             break;
         }
     }
@@ -235,20 +314,20 @@ ImVec2 ChipVisualization::calculate_pin_position(ImVec2 chip_center, const ChipP
 
 ImVec2 ChipVisualization::get_led_position(ImVec2 pin_pos, PinSide side) const {
     ImVec2 led_pos = pin_pos;
-    float offset = config_.led_radius + 2;
+    float offset = 15.0f; // Simple offset from pin center
     
     switch (side) {
         case PinSide::LEFT:
-            led_pos.x -= config_.pin_width/2 + offset;
+            led_pos.x -= offset;
             break;
         case PinSide::RIGHT:
-            led_pos.x += config_.pin_width/2 + offset;
+            led_pos.x += offset;
             break;
         case PinSide::TOP:
-            led_pos.y -= config_.pin_height/2 + offset;
+            led_pos.y -= offset;
             break;
         case PinSide::BOTTOM:
-            led_pos.y += config_.pin_height/2 + offset;
+            led_pos.y += offset;
             break;
     }
     
@@ -257,22 +336,23 @@ ImVec2 ChipVisualization::get_led_position(ImVec2 pin_pos, PinSide side) const {
 
 ImVec2 ChipVisualization::get_label_position(ImVec2 pin_pos, const ChipPin& pin, PinSide side) const {
     ImVec2 label_pos = pin_pos;
+    float offset = 25.0f; // Simple offset for labels
     
     switch (side) {
         case PinSide::LEFT:
-            label_pos.x -= config_.pin_width/2 + config_.label_offset + 30;
+            label_pos.x -= offset;
             label_pos.y -= 6;
             break;
         case PinSide::RIGHT:
-            label_pos.x += config_.pin_width/2 + config_.label_offset;
+            label_pos.x += offset;
             label_pos.y -= 6;
             break;
         case PinSide::TOP:
-            label_pos.y -= config_.pin_height/2 + config_.label_offset + 8;
+            label_pos.y -= offset;
             label_pos.x -= 10; // Center approximately on pin
             break;
         case PinSide::BOTTOM:
-            label_pos.y += config_.pin_height/2 + config_.label_offset;
+            label_pos.y += offset;
             label_pos.x -= 10; // Center approximately on pin
             break;
     }

@@ -39,21 +39,11 @@ using namespace fam65xx;
 // Template function to get processor name based on traits
 template<const CPUTraits& Traits>
 const char* get_processor_name() {
-    if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::MOS6502)>) {
-        return "MOS 6502 (NMOS)";
-    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::MOS6510)>) {
-        return "MOS 6510 (C64/C128)";
-    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::WDC_W65C02S)>) {
-        return "WDC 65C02S (CMOS)";
-    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::ROCKWELL_R65C02)>) {
-        return "Rockwell R65C02";
-    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::WDC_65C816)>) {
-        return "WDC 65C816 (16-bit)";
-    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::RICOH_2A03)>) {
-        return "RICOH 2A03 (NES)";
-    } else {
-        return "65xx Family CPU";
-    }
+    // Use a static buffer to create the formatted name
+    static char processor_name_buffer[64];
+    snprintf(processor_name_buffer, sizeof(processor_name_buffer), "%s %s", 
+             Traits.get_vendor(), Traits.get_chip_id());
+    return processor_name_buffer;
 }
 
 // Helper function to get addressing mode name (unchanged from original)
@@ -193,7 +183,16 @@ void render_internal_state(fam65xx_t<Traits>* cpu) {
         // Internal registers - use native accessors
         igText("Instruction Register: $%02X", cpu->get(REG_IR));
         igText("Data Latch:          $%02X", cpu->get(REG_DL));
-        igText("Address Bus:         $%04X", cpu->get(REG_AB));
+        
+        // Format address bus display based on address width
+        if constexpr (Traits.address_bits <= 16) {
+            igText("Address Bus:         $%04X", cpu->get(REG_AB));
+        } else if constexpr (Traits.address_bits <= 20) {
+            igText("Address Bus:         $%05X", cpu->get(REG_AB));
+        } else {
+            igText("Address Bus:         $%06X", cpu->get(REG_AB));
+        }
+        
         igText("Cycle Index:         %d", cpu->cycle_index);
         
         igSeparator();
@@ -299,6 +298,36 @@ void render_processor_features(fam65xx_t<Traits>* cpu) {
             igText("✗ 8-bit Only");
         }
         
+        igUnindent(16.0f);
+        
+        igSeparator();
+        igText("Hardware Specifications:");
+        igIndent(16.0f);
+        igText("Vendor: %s", Traits.get_vendor());
+        igText("Chip ID: %s", Traits.get_chip_id());
+        igText("Address Bits: %u", Traits.address_bits);
+        
+        uint32_t address_space = 1u << Traits.address_bits;
+        if (address_space >= 1024 * 1024) {
+            igText("Address Space: %uMB", address_space / (1024 * 1024));
+        } else if (address_space >= 1024) {
+            igText("Address Space: %uKB", address_space / 1024);
+        } else {
+            igText("Address Space: %u bytes", address_space);
+        }
+        
+        if constexpr (Traits.has_io_port()) {
+            // Count bits set in io_port_mask (cross-platform)
+            uint8_t mask = Traits.io_port_mask;
+            int bit_count = 0;
+            while (mask) {
+                bit_count += mask & 1;
+                mask >>= 1;
+            }
+            igText("I/O Port Pins: %u available", bit_count);
+        } else {
+            igText("I/O Port: None");
+        }
         igUnindent(16.0f);
         
         // Processor-specific features
@@ -434,7 +463,15 @@ public:
         
         igText("Processor Family: MOS Technology 65xx");
         igText("Architecture: 8-bit microprocessor");
-        igText("Address Space: 64KB (16-bit addressing)");  
+        
+        // Calculate address space from CPUTraits
+        uint32_t address_space_kb = (1u << Traits.address_bits) / 1024;
+        if (address_space_kb >= 1024) {
+            igText("Address Space: %uMB (%u-bit addressing)", address_space_kb / 1024, Traits.address_bits);
+        } else {
+            igText("Address Space: %uKB (%u-bit addressing)", address_space_kb, Traits.address_bits);
+        }
+        
         igText("Data Width: 8 bits");
         
         igSeparator();
@@ -446,22 +483,21 @@ public:
     }
     
     const char* get_processor_name() const override {
-        if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::MOS6502)>) {
-            return "MOS 6502 (NMOS)";
-        } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::MOS6510)>) {
-            return "MOS 6510 (C64/C128)";
-        } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::WDC_W65C02S)>) {
-            return "WDC 65C02S (CMOS)";
-        } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::ROCKWELL_R65C02)>) {
-            return "Rockwell R65C02";
-        } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::WDC_65C816)>) {
-            return "WDC 65C816 (16-bit)";
-        } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::RICOH_2A03)>) {
-            return "RICOH 2A03 (NES)";
-        } else {
-            return "65xx Family CPU";
-        }
+        // Use the trait-based name generation
+        return fam65xx_gui_get_processor_name<Traits>();
     }
+private:
+    // Helper to generate processor name from traits
+    template<const CPUTraits& T>
+    const char* fam65xx_gui_get_processor_name() const {
+        // Use a static buffer to create the formatted name
+        static char processor_name_buffer[64];
+        snprintf(processor_name_buffer, sizeof(processor_name_buffer), "%s %s", 
+                 T.get_vendor(), T.get_chip_id());
+        return processor_name_buffer;
+    }
+
+public:
 };
 
 // Factory function to create appropriate renderer
