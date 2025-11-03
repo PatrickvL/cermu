@@ -12,6 +12,7 @@
 #include <type_traits>
 #include <unordered_map>
 #include <memory>
+#include <map>
 
 // Include the modern fam65xx implementation
 #include "fam65xx.hpp"
@@ -38,18 +39,18 @@ using namespace fam65xx;
 // Template function to get processor name based on traits
 template<const CPUTraits& Traits>
 const char* get_processor_name() {
-    if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(MOS6502)>) {
+    if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::MOS6502)>) {
         return "MOS 6502 (NMOS)";
-    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(MOS6510)>) {
+    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::MOS6510)>) {
         return "MOS 6510 (C64/C128)";
-    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(WDC65C02)>) {
-        return "WDC 65C02 (CMOS)";
-    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(Rockwell65C02)>) {
+    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::WDC_W65C02S)>) {
+        return "WDC 65C02S (CMOS)";
+    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::ROCKWELL_R65C02)>) {
         return "Rockwell R65C02";
-    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(WDC65C816)>) {
+    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::WDC_65C816)>) {
         return "WDC 65C816 (16-bit)";
-    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(NES6502)>) {
-        return "NES 6502 (Modified)";
+    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::RICOH_2A03)>) {
+        return "RICOH 2A03 (NES)";
     } else {
         return "65xx Family CPU";
     }
@@ -310,7 +311,7 @@ void render_processor_features(fam65xx_t<Traits>* cpu) {
             igUnindent(16.0f);
         }
         
-        if constexpr (Traits.has(CPUCoreFlags::ROCKWELL_EXTENSIONS)) {
+        if constexpr (Traits.has(CPUCoreFlags::ROCKWELL_BITS)) {
             igSeparator();
             igText("Rockwell Extensions:");
             igIndent(16.0f);
@@ -430,14 +431,28 @@ public:
     }
     
     const char* get_processor_name() const override {
-        return fam65xx::get_processor_name<Traits>();
+        if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::MOS6502)>) {
+            return "MOS 6502 (NMOS)";
+        } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::MOS6510)>) {
+            return "MOS 6510 (C64/C128)";
+        } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::WDC_W65C02S)>) {
+            return "WDC 65C02S (CMOS)";
+        } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::ROCKWELL_R65C02)>) {
+            return "Rockwell R65C02";
+        } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::WDC_65C816)>) {
+            return "WDC 65C816 (16-bit)";
+        } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::RICOH_2A03)>) {
+            return "RICOH 2A03 (NES)";
+        } else {
+            return "65xx Family CPU";
+        }
     }
 };
 
 // Factory function to create appropriate renderer
 // This would be called by the specific CPU implementations (mos6502.cpp, etc.)
-template<const CPUTraits& Traits>
-CPUGUIRenderer* create_cpu_gui_renderer(fam65xx_t<Traits>* cpu) {
+template<const fam65xx::CPUTraits& Traits>
+CPUGUIRenderer* create_cpu_gui_renderer(fam65xx::fam65xx_t<Traits>* cpu) {
     return new CPUGUIRendererImpl<Traits>(cpu);
 }
 
@@ -599,6 +614,21 @@ void unregister_cpu_from_gui(void* cpu) {
     }
 }
 
-// Template instantiations will be generated as needed by the compiler
+// Simple non-template functions for rendering CPU windows
+void render_cpu_debug_window_impl(void* cpu, const char* cpu_name) {
+    auto it = cpu_renderers.find(cpu);
+    if (it != cpu_renderers.end()) {
+        bool show_window = true;
+        it->second->render_debug_window(&show_window);
+    }
+}
+
+void render_cpu_settings_window_impl(void* cpu, const char* cpu_name) {
+    auto it = cpu_renderers.find(cpu);
+    if (it != cpu_renderers.end()) {
+        bool show_window = true;
+        it->second->render_settings_window(&show_window);
+    }
+}
 
 }

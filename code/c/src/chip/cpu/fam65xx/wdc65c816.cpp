@@ -188,12 +188,10 @@ static void initialize_wdc65c816_descriptor() {
     wdc65c816_base_descriptor.bank_change = nullptr; // Basic CPU doesn't have banking
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
     wdc65c816_base_descriptor.render_debug_window = [](void* cpu_handle, bool* show_window) {
-        wdc65c816_t* cpu = static_cast<wdc65c816_t*>(cpu_handle);
-        render_cpu_debug_window<WDC_65C816>(cpu, "WDC65C816");
+        render_cpu_debug_window_impl(cpu_handle, "WDC65C816");
     };
     wdc65c816_base_descriptor.render_settings_window = [](void* cpu_handle, bool* show_window) {
-        wdc65c816_t* cpu = static_cast<wdc65c816_t*>(cpu_handle);
-        render_cpu_settings_window<WDC_65C816>(cpu, "WDC65C816");
+        render_cpu_settings_window_impl(cpu_handle, "WDC65C816");
     };
 #endif
 }

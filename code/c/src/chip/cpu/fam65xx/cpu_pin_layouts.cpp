@@ -13,7 +13,7 @@ using namespace fam65xx;
 // ============================================================================
 
 template<>
-PinLayout create_cpu_pin_layout<MOS6502>() {
+PinLayout create_cpu_pin_layout<fam65xx::MOS6502>() {
     PinLayout layout;
     
     layout.package = {
@@ -80,7 +80,7 @@ PinLayout create_cpu_pin_layout<MOS6502>() {
 // ============================================================================
 
 template<>
-PinLayout create_cpu_pin_layout<MOS6510>() {
+PinLayout create_cpu_pin_layout<fam65xx::MOS6510>() {
     PinLayout layout;
     
     layout.package = {
@@ -147,7 +147,7 @@ PinLayout create_cpu_pin_layout<MOS6510>() {
 // ============================================================================
 
 template<>
-PinLayout create_cpu_pin_layout<WDC65C02>() {
+PinLayout create_cpu_pin_layout<fam65xx::WDC_W65C02S>() {
     PinLayout layout;
     
     layout.package = {
@@ -214,7 +214,7 @@ PinLayout create_cpu_pin_layout<WDC65C02>() {
 // ============================================================================
 
 template<>
-PinLayout create_cpu_pin_layout<WDC65C816>() {
+PinLayout create_cpu_pin_layout<fam65xx::WDC_65C816>() {
     PinLayout layout;
     
     layout.package = {
@@ -281,7 +281,7 @@ PinLayout create_cpu_pin_layout<WDC65C816>() {
 // ============================================================================
 
 template<>
-PinLayout create_cpu_pin_layout<RICOH_2A03>() {
+PinLayout create_cpu_pin_layout<fam65xx::RICOH_2A03>() {
     PinLayout layout;
     
     layout.package = {
@@ -348,7 +348,7 @@ PinLayout create_cpu_pin_layout<RICOH_2A03>() {
 // ============================================================================
 
 template<>
-PinLayout create_cpu_pin_layout<ROCKWELL_R65C02>() {
+PinLayout create_cpu_pin_layout<fam65xx::ROCKWELL_R65C02>() {
     PinLayout layout;
     
     layout.package = {
@@ -590,25 +590,25 @@ std::vector<PinState> get_cpu_pin_states(fam65xx_t<Traits>* cpu) {
 }
 
 // Template instantiations
-template PinLayout create_cpu_pin_layout<MOS6502>();
-template PinLayout create_cpu_pin_layout<MOS6510>();
-template PinLayout create_cpu_pin_layout<WDC65C02>();
-template PinLayout create_cpu_pin_layout<WDC65C816>();
-template PinLayout create_cpu_pin_layout<RICOH_2A03>();
-template PinLayout create_cpu_pin_layout<ROCKWELL_R65C02>();
+template PinLayout create_cpu_pin_layout<fam65xx::MOS6502>();
+template PinLayout create_cpu_pin_layout<fam65xx::MOS6510>();
+template PinLayout create_cpu_pin_layout<fam65xx::WDC_W65C02S>();
+template PinLayout create_cpu_pin_layout<fam65xx::WDC_65C816>();
+template PinLayout create_cpu_pin_layout<fam65xx::RICOH_2A03>();
+template PinLayout create_cpu_pin_layout<fam65xx::ROCKWELL_R65C02>();
 
 // Template instantiations for bus state versions
-template std::vector<PinState> get_cpu_pin_states<MOS6502>(fam65xx_t<MOS6502>* cpu, bus_state_t bus_state);
-template std::vector<PinState> get_cpu_pin_states<MOS6510>(fam65xx_t<MOS6510>* cpu, bus_state_t bus_state);
-template std::vector<PinState> get_cpu_pin_states<WDC65C02>(fam65xx_t<WDC65C02>* cpu, bus_state_t bus_state);
-template std::vector<PinState> get_cpu_pin_states<WDC65C816>(fam65xx_t<WDC65C816>* cpu, bus_state_t bus_state);
-template std::vector<PinState> get_cpu_pin_states<RICOH_2A03>(fam65xx_t<RICOH_2A03>* cpu, bus_state_t bus_state);
-template std::vector<PinState> get_cpu_pin_states<ROCKWELL_R65C02>(fam65xx_t<ROCKWELL_R65C02>* cpu, bus_state_t bus_state);
+template std::vector<PinState> get_cpu_pin_states<fam65xx::MOS6502>(fam65xx::fam65xx_t<fam65xx::MOS6502>* cpu, bus_state_t bus_state);
+template std::vector<PinState> get_cpu_pin_states<fam65xx::MOS6510>(fam65xx::fam65xx_t<fam65xx::MOS6510>* cpu, bus_state_t bus_state);
+template std::vector<PinState> get_cpu_pin_states<fam65xx::WDC_W65C02S>(fam65xx::fam65xx_t<fam65xx::WDC_W65C02S>* cpu, bus_state_t bus_state);
+template std::vector<PinState> get_cpu_pin_states<fam65xx::WDC_65C816>(fam65xx::fam65xx_t<fam65xx::WDC_65C816>* cpu, bus_state_t bus_state);
+template std::vector<PinState> get_cpu_pin_states<fam65xx::RICOH_2A03>(fam65xx::fam65xx_t<fam65xx::RICOH_2A03>* cpu, bus_state_t bus_state);
+template std::vector<PinState> get_cpu_pin_states<fam65xx::ROCKWELL_R65C02>(fam65xx::fam65xx_t<fam65xx::ROCKWELL_R65C02>* cpu, bus_state_t bus_state);
 
 // Template instantiations for fallback versions
-template std::vector<PinState> get_cpu_pin_states<MOS6502>(fam65xx_t<MOS6502>* cpu);
-template std::vector<PinState> get_cpu_pin_states<MOS6510>(fam65xx_t<MOS6510>* cpu);
-template std::vector<PinState> get_cpu_pin_states<WDC65C02>(fam65xx_t<WDC65C02>* cpu);
-template std::vector<PinState> get_cpu_pin_states<WDC65C816>(fam65xx_t<WDC65C816>* cpu);
-template std::vector<PinState> get_cpu_pin_states<RICOH_2A03>(fam65xx_t<RICOH_2A03>* cpu);
-template std::vector<PinState> get_cpu_pin_states<ROCKWELL_R65C02>(fam65xx_t<ROCKWELL_R65C02>* cpu);
+template std::vector<PinState> get_cpu_pin_states<fam65xx::MOS6502>(fam65xx::fam65xx_t<fam65xx::MOS6502>* cpu);
+template std::vector<PinState> get_cpu_pin_states<fam65xx::MOS6510>(fam65xx::fam65xx_t<fam65xx::MOS6510>* cpu);
+template std::vector<PinState> get_cpu_pin_states<fam65xx::WDC_W65C02S>(fam65xx::fam65xx_t<fam65xx::WDC_W65C02S>* cpu);
+template std::vector<PinState> get_cpu_pin_states<fam65xx::WDC_65C816>(fam65xx::fam65xx_t<fam65xx::WDC_65C816>* cpu);
+template std::vector<PinState> get_cpu_pin_states<fam65xx::RICOH_2A03>(fam65xx::fam65xx_t<fam65xx::RICOH_2A03>* cpu);
+template std::vector<PinState> get_cpu_pin_states<fam65xx::ROCKWELL_R65C02>(fam65xx::fam65xx_t<fam65xx::ROCKWELL_R65C02>* cpu);
