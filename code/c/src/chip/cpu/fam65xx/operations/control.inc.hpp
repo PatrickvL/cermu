@@ -125,6 +125,65 @@ bus_state_t op_rts(bus_state_t pins) {
 // INTERRUPT OPERATIONS
 // ============================================================================
 
+/* Helper function to get interrupt vector address based on active_interrupt and CPU type
+ *
+ * Uses direct enum indexing for clean, efficient vector determination.
+ * Higher priority interrupts use higher enum values in active_interrupt.
+ *
+ * INTERRUPT TYPES AND VECTOR TABLE LAYOUT:
+ * ========================================
+ * Enum | Interrupt Type      | Priority | 6502/65C02 | 65C816 Emul | 65C816 Native
+ * -----|---------------------|----------|------------|-------------|---------------
+ *  0   | FAM65XX_INT_NONE    |  N/A     |   0xFFFE   |   0xFFFE    |    0xFFE6
+ *  1   | FAM65XX_INT_BRK     |  Lowest  |   0xFFFE   |   0xFFFE    |    0xFFE6
+ *  2   | FAM65XX_INT_IRQ     |    ↑     |   0xFFFE   |   0xFFFE    |    0xFFEE
+ *  3   | FAM65XX_INT_COP#    |    |     |   N/A*     |   0xFFF4    |    0xFFE4
+ *  4   | FAM65XX_INT_NMI     |    |     |   0xFFFA   |   0xFFFA    |    0xFFEA
+ *  5   | FAM65XX_INT_ABORT#  |    ↓     |   N/A*     |   0xFFF8    |    0xFFE8
+ *  6   | FAM65XX_INT_RESET   | Highest  |   0xFFFC   |   0xFFFC    |    0xFFFC
+ *
+ * # = Only available on 65C816 CPU's
+ * * = Not supported on this CPU, conditional compilation prevents usage
+ *
+ * LOOKUP METHOD:
+ * ==============
+ * The active_interrupt enum serves directly as an index into vector tables.
+ * This eliminates the need for bit manipulation and provides clean lookup.
+ */
+uint16_t get_vector_addr() const {
+    // Vector lookup tables indexed by interrupt enum values
+    static constexpr uint16_t standard_vectors[7] = {
+        0xFFFE, // FAM65XX_INT_NONE: Default to BRK/IRQ vector
+        0xFFFE, // FAM65XX_INT_BRK: Software interrupt and default/fallback
+        0xFFFE, // FAM65XX_INT_IRQ: Hardware interrupt
+        0xFFF4, // FAM65XX_INT_COP: CoProcessor (65C816 emulation mode)
+        0xFFFA, // FAM65XX_INT_NMI: Non-maskable interrupt
+        0xFFF8, // FAM65XX_INT_ABORT: Memory abort (65C816 emulation mode)
+        0xFFFC  // FAM65XX_INT_RESET: Reset vector
+    };
+    
+    static constexpr uint16_t native_65C816_vectors[7] = {
+        0xFFE6, // FAM65XX_INT_NONE: Default to BRK vector (native mode)
+        0xFFE6, // FAM65XX_INT_BRK: Software interrupt and default (native mode)
+        0xFFEE, // FAM65XX_INT_IRQ: Hardware interrupt (native mode)
+        0xFFE4, // FAM65XX_INT_COP: CoProcessor (native mode)  
+        0xFFEA, // FAM65XX_INT_NMI: Non-maskable interrupt (native mode)
+        0xFFE8, // FAM65XX_INT_ABORT: Memory abort (native mode)
+        0xFFFC  // FAM65XX_INT_RESET: Reset vector (same in both modes)
+    };
+    
+    // Use active_interrupt directly as table index - much simpler!
+    const int interrupt_index = static_cast<int>(this->active_interrupt);
+    
+    // Select appropriate vector table and return vector address
+    if constexpr (has_wide_registers()) {
+        if (!this->get_emulation_mode()) {
+            return native_65C816_vectors[interrupt_index];
+        }
+    }
+    return standard_vectors[interrupt_index];
+}
+
 /* BRK - Break (Software Interrupt) */
 bus_state_t op_brk(bus_state_t pins) {
     switch (this->cycle_index) {
@@ -133,6 +192,10 @@ bus_state_t op_brk(bus_state_t pins) {
             pins = phi2_dummy_read(pins, REG_PC);
             if (FAM65XX_GET_RDY(pins)) {
                 this->inc(REG_PC);
+                /* Set interrupt type if not already set by hardware interrupt detection */
+                if (this->active_interrupt == FAM65XX_INT_NONE) {
+                    this->active_interrupt = FAM65XX_INT_BRK;
+                }
                 this->cycle_index++;
             }
             return pins;
@@ -175,8 +238,8 @@ bus_state_t op_brk(bus_state_t pins) {
             return pins;
             
         case 4:
-            /* PHI2: Read IRQ vector low byte from $FFFE */
-            this->set(REG_AB, 0xFFFE);
+            /* PHI2: Read interrupt vector low byte */
+            this->set(REG_AB, this->get_vector_addr());
             pins = phi2_read(pins, REG_AB, REG_PCL);
             if (FAM65XX_GET_RDY(pins)) {
                 this->cycle_index++;
@@ -184,10 +247,12 @@ bus_state_t op_brk(bus_state_t pins) {
             return pins;
             
         case 5:
-            /* PHI2: Read IRQ vector high byte from $FFFF */
-            this->set(REG_AB, 0xFFFF);
+            /* PHI2: Read interrupt vector high byte */
+            this->set(REG_AB, this->get_vector_addr() + 1);
             pins = phi2_read(pins, REG_AB, REG_PCH);
             if (FAM65XX_GET_RDY(pins)) {
+                /* Clear active interrupt - interrupt processing complete */
+                this->active_interrupt = FAM65XX_INT_NONE;
                 transition_to_fetch();
             }
             return pins;
