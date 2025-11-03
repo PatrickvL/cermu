@@ -137,16 +137,15 @@ bus_state_t mos6510_tick_chip(void* cpu, bus_state_t pins) {
 
 // Chip descriptor for system registration
 chip_descriptor_t mos6510_descriptor = {
-    .create = []() -> void* { return mos6510_create(); },
-    .destroy = [](void* cpu) { mos6510_destroy(reinterpret_cast<mos6510_t*>(cpu)); },
-    .reset = [](void* cpu, bus_state_t pins) -> bus_state_t {
-        return mos6510_reset(reinterpret_cast<mos6510_t*>(cpu), pins);
-    },
-    .tick = mos6510_tick_chip,
     .description = "MOS 6510 CPU (C64/C128)",
+    .create = [](chip_descriptor_t* desc) -> void* { return mos6510_create(); },
+    .destroy = [](void* cpu) { mos6510_destroy(reinterpret_cast<mos6510_t*>(cpu)); },
     .bus_attach = nullptr,
-    .mem_read = nullptr,
-    .mem_write = nullptr
+    .bank_change = nullptr,  // MOS 6510 doesn't have banking
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    .render_debug_window = nullptr,
+    .render_settings_window = nullptr
+#endif
 };
 
 } // extern "C"

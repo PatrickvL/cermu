@@ -68,7 +68,7 @@ bus_state_t op_ldy(bus_state_t pins) {
 bus_state_t op_sta(bus_state_t pins) {
     // Store accumulator with processor-specific RDY handling - optimized direct value write
     if (this->should_complete_write_cycle(pins)) {
-        pins = this->phi2_write(pins, get(REG_AB), get(REG_A));
+        pins = this->phi2_write(pins, (REG_AB), get(REG_A));
         transition_to_fetch();
     }
     return pins;
@@ -81,7 +81,7 @@ bus_state_t op_sta(bus_state_t pins) {
 bus_state_t op_stx(bus_state_t pins) {
     // Store X register with processor-specific RDY handling - optimized direct value write
     if (this->should_complete_write_cycle(pins)) {
-        pins = this->phi2_write(pins, get(REG_AB), get(REG_X));
+        pins = this->phi2_write(pins, (REG_AB), get(REG_X));
         transition_to_fetch();
     }
     return pins;
@@ -94,7 +94,7 @@ bus_state_t op_stx(bus_state_t pins) {
 bus_state_t op_sty(bus_state_t pins) {
     // Store Y register with processor-specific RDY handling - optimized direct value write
     if (this->should_complete_write_cycle(pins)) {
-        pins = this->phi2_write(pins, get(REG_AB), get(REG_Y));
+        pins = this->phi2_write(pins, (REG_AB), get(REG_Y));
         transition_to_fetch();
     }
     return pins;
