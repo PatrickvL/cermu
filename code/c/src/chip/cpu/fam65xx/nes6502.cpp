@@ -4,6 +4,7 @@
 
 #include "nes6502.h"
 #include "fam65xx.hpp"
+#include "fam65xx_gui.h"
 
 using namespace fam65xx;
 
@@ -27,6 +28,9 @@ nes6502_t* nes6502_create(void) {
 }
 
 void nes6502_destroy(nes6502_t* cpu) {
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    unregister_cpu_from_gui(cpu);
+#endif
     delete CPU_CAST(cpu);
 }
 
@@ -147,6 +151,40 @@ void nes6502_set_apu_region(nes6502_t* cpu, bool is_pal) {
         cpu_ptr->set_apu_region(is_pal);
     }
     // No-op if no APU
+}
+
+// NES 6502 (RICOH 2A03) chip descriptor
+static chip_descriptor_t nes6502_base_descriptor;
+
+static void initialize_nes6502_descriptor() {
+    nes6502_base_descriptor.description = "NES 6502 (RICOH 2A03)";
+    nes6502_base_descriptor.create = [](chip_descriptor_t* desc) -> void* {
+        return nes6502_create();
+    };
+    nes6502_base_descriptor.destroy = [](void* chip) {
+        nes6502_destroy(reinterpret_cast<nes6502_t*>(chip));
+    };
+    nes6502_base_descriptor.bus_attach = nullptr;  // Basic CPU doesn't need bus attach
+    nes6502_base_descriptor.bank_change = nullptr; // Basic CPU doesn't have banking
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    nes6502_base_descriptor.render_debug_window = [](void* cpu_handle, bool* show_window) {
+        nes6502_t* cpu = static_cast<nes6502_t*>(cpu_handle);
+        render_cpu_debug_window<RICOH_2A03>(cpu, "NES 6502");
+    };
+    nes6502_base_descriptor.render_settings_window = [](void* cpu_handle, bool* show_window) {
+        nes6502_t* cpu = static_cast<nes6502_t*>(cpu_handle);
+        render_cpu_settings_window<RICOH_2A03>(cpu, "NES 6502");
+    };
+#endif
+}
+
+const chip_descriptor_t* nes6502_get_chip_descriptor(void) {
+    static bool initialized = false;
+    if (!initialized) {
+        initialize_nes6502_descriptor();
+        initialized = true;
+    }
+    return &nes6502_base_descriptor;
 }
 
 } // extern "C"

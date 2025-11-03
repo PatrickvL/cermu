@@ -4,6 +4,7 @@
 
 #include "rockwell65c02.h"
 #include "fam65xx.hpp"
+#include "fam65xx_gui.h"
 
 using namespace fam65xx;
 
@@ -27,6 +28,9 @@ rockwell65c02_t* rockwell65c02_create(void) {
 }
 
 void rockwell65c02_destroy(rockwell65c02_t* cpu) {
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    unregister_cpu_from_gui(cpu);
+#endif
     delete CPU_CAST(cpu);
 }
 
@@ -94,6 +98,40 @@ void rockwell65c02_set_p(rockwell65c02_t* cpu, uint8_t value) {
 
 void rockwell65c02_set_pc(rockwell65c02_t* cpu, uint16_t value) {
     CPU_CAST(cpu)->set(REG_PC, value);
+}
+
+// Rockwell 65C02 chip descriptor
+static chip_descriptor_t rockwell65c02_base_descriptor;
+
+static void initialize_rockwell65c02_descriptor() {
+    rockwell65c02_base_descriptor.description = "Rockwell 65C02";
+    rockwell65c02_base_descriptor.create = [](chip_descriptor_t* desc) -> void* {
+        return rockwell65c02_create();
+    };
+    rockwell65c02_base_descriptor.destroy = [](void* chip) {
+        rockwell65c02_destroy(reinterpret_cast<rockwell65c02_t*>(chip));
+    };
+    rockwell65c02_base_descriptor.bus_attach = nullptr;  // Basic CPU doesn't need bus attach
+    rockwell65c02_base_descriptor.bank_change = nullptr; // Basic CPU doesn't have banking
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    rockwell65c02_base_descriptor.render_debug_window = [](void* cpu_handle, bool* show_window) {
+        rockwell65c02_t* cpu = static_cast<rockwell65c02_t*>(cpu_handle);
+        render_cpu_debug_window<ROCKWELL_R65C02>(cpu, "Rockwell 65C02");
+    };
+    rockwell65c02_base_descriptor.render_settings_window = [](void* cpu_handle, bool* show_window) {
+        rockwell65c02_t* cpu = static_cast<rockwell65c02_t*>(cpu_handle);
+        render_cpu_settings_window<ROCKWELL_R65C02>(cpu, "Rockwell 65C02");
+    };
+#endif
+}
+
+const chip_descriptor_t* rockwell65c02_get_chip_descriptor(void) {
+    static bool initialized = false;
+    if (!initialized) {
+        initialize_rockwell65c02_descriptor();
+        initialized = true;
+    }
+    return &rockwell65c02_base_descriptor;
 }
 
 } // extern "C"
