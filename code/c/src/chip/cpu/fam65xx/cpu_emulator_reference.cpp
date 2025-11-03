@@ -10,6 +10,7 @@
  * - Packed bus state representation (pins: data, address, RW, RDY, SYNC, cycle_idx)
  * - Endian-aware register layout with explicit 8/16-bit access
  * - Scheduled bus access pattern (centralized in tick function)
+ * - Three address sources: PC (program counter), AB (address bus), SP (stack pointer)
  * - Callback-based instruction dispatch (addressing → operation)
  * - Generic data width support (8-bit 6502, 16-bit 65816)
  * - Zero overhead for disabled features (if constexpr optimization)
@@ -21,6 +22,21 @@
  * - Handlers schedule the NEXT cycle's access
  * - Mode checks happen once per instruction (latched at opcode fetch)
  * - Template metaprogramming eliminates dead code at compile time
+ * 
+ * DMA/VIC-II Timing Notes:
+ * - VIC-II asserts AEC (Address Enable Control) 3 cycles before needing bus
+ * - BA (Bus Available) follows AEC with ~2-3 cycle delay (capacitive delay line)
+ * - BA connects to CPU RDY pin
+ * - The AEC→BA delay is handled by VIC-II/system emulation (not CPU emulation)
+ * - When RDY low: CPU writes proceed, CPU reads replaced by DMA reads
+ * - This allows CPU to complete write sequences without corruption
+ * - VIC-II can safely assert BA because:
+ *   1. It asserts AEC 3 cycles early (warning signal)
+ *   2. BA delays by 2-3 cycles (giving CPU time to finish writes)
+ *   3. CPU writes can continue even after BA goes low
+ *   4. By the time VIC needs the bus, CPU has completed its write sequence
+ * - Maximum consecutive CPU writes: typically 2-3 cycles (e.g., INC dummy+real)
+ * - The AEC timing ensures BA assertion doesn't corrupt multi-cycle writes
  */
 
 #include <cstdint>
@@ -52,10 +68,11 @@ using MemAccessCallback = uint8_t (*)(void* ctx, uint16_t addr,
 // ENUMERATIONS
 // ============================================================================
 
-// Address register selector (only PC or AB used for bus access)
+// Address register selector (PC, AB, or SP used for bus access)
 enum class AddrReg : uint8_t { 
     PC,  // Program Counter
-    AB   // Address Bus register
+    AB,  // Address Bus register
+    SP   // Stack Pointer (0x0100 | SPL)
 };
 
 // Access type for scheduled bus operations
@@ -84,6 +101,15 @@ enum operation_t : uint8_t {
     OP_CMP = 13,
     OP_TAX = 14,
     OP_NOP = 15,
+    OP_PHA = 16,
+    OP_PLA = 17,
+    OP_PHP = 18,
+    OP_PLP = 19,
+    OP_RTS = 20,
+    OP_RTI = 21,
+    OP_JSR = 22,
+    OP_WAI = 23,  // Wait for Interrupt (65C02/65816)
+    OP_STP = 24,  // Stop the Clock (65C02/65816)
     // ... up to 162 for full 6502 + illegals
 };
 
@@ -113,6 +139,7 @@ enum opcode_flags_t : uint8_t {
     OF_SKIP_PAGE     = 0x2,  // Can skip page cross penalty
     OF_RMW           = 0x4,  // Read-Modify-Write operation
     OF_PC_OR_AB      = 0x8   // First operation cycle: PC(1) or AB(0)
+                             // Note: Stack operations (PHA/PLA/RTS/RTI) schedule SP directly
 };
 
 // ============================================================================
@@ -125,6 +152,7 @@ struct MOS6502_Traits {
     static constexpr uint8_t data_width = 8;
     static constexpr uint8_t address_width = 16;
     static constexpr bool has_emulation_mode = false;
+    static constexpr bool has_wai_stp = false;  // No WAI/STP on NMOS
     
     // Pin bit positions (0 = disabled)
     static constexpr uint8_t rw_bit = 35;
@@ -141,10 +169,27 @@ struct WDC65816_Traits {
     static constexpr uint8_t data_width = 16;
     static constexpr uint8_t address_width = 24;
     static constexpr bool has_emulation_mode = true;
+    static constexpr bool has_wai_stp = true;  // WAI/STP available
     
     static constexpr uint8_t rw_bit = 35;
     static constexpr uint8_t rdy_bit = 36;
     static constexpr uint8_t sync_bit = 0;  // No SYNC on 65816
+    
+    static constexpr bool accurate_internal_cycles = true;
+    static constexpr bool update_bus_lines = true;
+};
+
+// WDC 65C02 traits (CMOS with additional opcodes)
+struct WDC65C02_Traits {
+    using data_t = uint8_t;
+    static constexpr uint8_t data_width = 8;
+    static constexpr uint8_t address_width = 16;
+    static constexpr bool has_emulation_mode = false;
+    static constexpr bool has_wai_stp = true;  // WAI/STP available on CMOS
+    
+    static constexpr uint8_t rw_bit = 35;
+    static constexpr uint8_t rdy_bit = 36;
+    static constexpr uint8_t sync_bit = 37;
     
     static constexpr bool accurate_internal_cycles = true;
     static constexpr bool update_bus_lines = true;
@@ -156,6 +201,7 @@ struct MOS6507_Traits {
     static constexpr uint8_t data_width = 8;
     static constexpr uint8_t address_width = 13;
     static constexpr bool has_emulation_mode = false;
+    static constexpr bool has_wai_stp = false;  // No WAI/STP
     
     static constexpr uint8_t rw_bit = 35;
     static constexpr uint8_t rdy_bit = 0;   // No RDY pin
@@ -584,17 +630,31 @@ private:
     
     template<bool IsWrite, bool IsDummy>
     bus_state_t phi2_access(bus_state_t pins, uint32_t addr, uint8_t data = 0) {
-        // RDY check - DMA device has bus
+        // RDY check - DMA device may need bus
         if constexpr (Config::has_rdy) {
             if (!Bus::is_rdy_high(pins)) {
-                uint32_t dma_addr = Bus::get_addr(pins);
-                uint8_t bus_data = Bus::get_data(pins);
-                uint8_t dma_data = mem.dma_cb(mem.dma_ctx, dma_addr, bus_data, false);
-                return Bus::set_data(pins, dma_data);
+                if constexpr (IsWrite) {
+                    // CPU WRITES proceed even when RDY low
+                    // This is CRITICAL for correct C64 emulation:
+                    // - VIC-II only needs to READ (character/sprite data)
+                    // - VIC-II doesn't interfere with CPU writes
+                    // - Allows CPU to complete multi-cycle write sequences
+                    // - Prevents write corruption during badlines
+                    // Fall through to normal CPU write handling below
+                } else {
+                    // CPU READS are replaced by DMA device read
+                    // VIC-II (or other DMA device) takes over the bus
+                    // Uses address from pins (DMA device set it via BA assertion)
+                    uint32_t dma_addr = Bus::get_addr(pins);
+                    uint8_t bus_data = Bus::get_data(pins);
+                    uint8_t dma_data = mem.dma_cb(mem.dma_ctx, dma_addr, bus_data, false);
+                    return Bus::set_data(pins, dma_data);
+                    // Note: CPU will retry its read when RDY goes high
+                }
             }
         }
         
-        // Skip dummy cycles if not simulating
+        // CPU has bus - check if we skip dummy cycles
         if constexpr (IsDummy && !CPUTraits::accurate_internal_cycles) {
             return pins;
         }
@@ -657,6 +717,8 @@ private:
         current_handler = operation_handlers[current_opcode_info.op_index];
         
         // Schedule first operation access based on flags
+        // Note: Stack operations (PHA/PLA/RTS/RTI/etc) will override this
+        // in their first cycle to schedule from SP instead
         AddrReg addr_reg = (current_opcode_info.flags & OF_PC_OR_AB) 
                            ? AddrReg::PC 
                            : AddrReg::AB;
@@ -1018,6 +1080,116 @@ private:
         return transition_to_fetch(pins);
     }
     
+    bus_state_t op_PLA(bus_state_t pins) {
+        uint8_t cycle = Bus::get_cycle_idx(pins);
+        
+        switch (cycle) {
+            case 0:  // Internal operation (dummy read from PC already done)
+                // Note: this handler starts after addressing mode
+                // For stack pull, there's no addressing mode, so we start here
+                inc16(Reg16::SP);
+                schedule_read(AddrReg::SP);  // Read from stack!
+                return Bus::inc_cycle_idx(pins);
+                
+            case 1:  // Pull byte from stack
+                set8(Reg8::A, Bus::get_data(pins));
+                set_nz_flags(get8(Reg8::A));
+                return transition_to_fetch(pins);
+        }
+        
+        return pins;
+    }
+    
+    bus_state_t op_PHA(bus_state_t pins) {
+        uint8_t cycle = Bus::get_cycle_idx(pins);
+        
+        switch (cycle) {
+            case 0:  // Internal operation (dummy read already done)
+                schedule_write(AddrReg::SP, get8(Reg8::A));  // Write to stack!
+                dec16(Reg16::SP);
+                return Bus::inc_cycle_idx(pins);
+                
+            case 1:  // Write completed
+                return transition_to_fetch(pins);
+        }
+        
+        return pins;
+    }
+    
+    bus_state_t op_RTS(bus_state_t pins) {
+        uint8_t cycle = Bus::get_cycle_idx(pins);
+        
+        switch (cycle) {
+            case 0:  // Internal operation (dummy read already done)
+                schedule_dummy_read(AddrReg::SP);
+                return Bus::inc_cycle_idx(pins);
+                
+            case 1:  // Dummy read from current SP
+                inc16(Reg16::SP);
+                schedule_read(AddrReg::SP);  // Read PCL from stack
+                return Bus::inc_cycle_idx(pins);
+                
+            case 2:  // Pull PCL
+                set8(Reg8::PCL, Bus::get_data(pins));
+                inc16(Reg16::SP);
+                schedule_read(AddrReg::SP);  // Read PCH from stack
+                return Bus::inc_cycle_idx(pins);
+                
+            case 3:  // Pull PCH
+                set8(Reg8::PCH, Bus::get_data(pins));
+                schedule_dummy_read(AddrReg::PC);  // Dummy read from new PC
+                return Bus::inc_cycle_idx(pins);
+                
+            case 4:  // Increment PC (dummy read completed)
+                inc16(Reg16::PC);
+                return transition_to_fetch(pins);
+        }
+        
+        return pins;
+    }
+    
+    bus_state_t op_WAI(bus_state_t pins) {
+        // WAI - Wait for Interrupt
+        // Stays in this handler until IRQ or NMI occurs
+        // Continues responding to RDY (DMA can still happen)
+        
+        if constexpr (CPUTraits::has_wai_stp) {
+            // Keep performing dummy reads from PC (low power, but responsive to DMA)
+            schedule_dummy_read(AddrReg::PC);
+            
+            // Check for interrupt (this would be set by external interrupt logic)
+            // bool irq_pending = check_irq();
+            // bool nmi_pending = check_nmi();
+            // if (irq_pending || nmi_pending) {
+            //     return transition_to_interrupt(pins);
+            // }
+            
+            // Stay in WAI - don't transition, don't change cycle
+            return pins;
+        }
+        
+        // If WAI not supported, treat as NOP
+        return transition_to_fetch(pins);
+    }
+    
+    bus_state_t op_STP(bus_state_t pins) {
+        // STP - Stop the Clock
+        // Completely halts CPU until RESET
+        // Does NOT schedule any access
+        // Does NOT respond to RDY
+        // Does NOT transition to any handler
+        
+        if constexpr (CPUTraits::has_wai_stp) {
+            // Don't schedule anything - no bus activity
+            // Don't transition - stay in this handler
+            // Only RESET can break out (checked in tick())
+            return pins;
+        }
+        
+        // If STP not supported, treat as NOP
+        return transition_to_fetch(pins);
+    }
+    
     // ========================================================================
     // HANDLER TABLES (static)
     // ========================================================================
@@ -1030,6 +1202,11 @@ private:
         &CPU::op_CMP,    // 13
         &CPU::op_TAX,    // 14
         &CPU::op_NOP,    // 15
+        &CPU::op_PHA,    // 16
+        &CPU::op_PLA,    // 17
+        &CPU::op_RTS,    // 18
+        &CPU::op_WAI,    // 23
+        &CPU::op_STP,    // 24
         // ... fill out all 163 operations
     };
     
@@ -1071,10 +1248,33 @@ public:
     }
     
     bus_state_t tick(bus_state_t pins) {
-        // Perform scheduled access
-        uint32_t addr = (next_access.addr_reg == AddrReg::PC) 
-                        ? get16(Reg16::PC) 
-                        : get16(Reg16::AB);
+        // Check if CPU is stopped (STP instruction)
+        if constexpr (CPUTraits::has_wai_stp) {
+            if (current_opcode_info.op_index == OP_STP) {
+                // CPU completely halted - only RESET can wake it
+                // Check reset line (would be passed in or stored externally)
+                // if (reset_asserted) {
+                //     return reset(pins);
+                // }
+                
+                // Still stopped - no bus activity
+                return pins;
+            }
+        }
+        
+        // Perform scheduled access - resolve address register
+        uint32_t addr;
+        switch (next_access.addr_reg) {
+            case AddrReg::PC:
+                addr = get16(Reg16::PC);
+                break;
+            case AddrReg::AB:
+                addr = get16(Reg16::AB);
+                break;
+            case AddrReg::SP:
+                addr = 0x0100 | get8(Reg8::SPL);
+                break;
+        }
         
         switch (next_access.type) {
             case AccessType::READ:
