@@ -35,6 +35,13 @@ namespace fam65xx {
     // Unregister a CPU instance 
     void unregister_cpu_from_gui(void* cpu);
     
+    // Non-template registration functions for specific CPU types
+    void register_mos6502_for_gui(void* cpu);
+    void register_mos6510_for_gui(void* cpu);
+    void register_nes6502_for_gui(void* cpu);
+    void register_rockwell65c02_for_gui(void* cpu);
+    void register_wdc65c816_for_gui(void* cpu);
+    
 
     
     // Non-template function for rendering CPU windows

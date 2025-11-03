@@ -607,6 +607,37 @@ void register_cpu_for_gui(fam65xx_t<Traits>* cpu) {
     }
 }
 
+// Non-template registration functions for different CPU types
+void register_mos6502_for_gui(void* cpu) {
+    if (cpu) {
+        cpu_renderers[cpu] = std::make_unique<CPUGUIRendererImpl<MOS6502>>(reinterpret_cast<fam65xx_t<MOS6502>*>(cpu));
+    }
+}
+
+void register_nes6502_for_gui(void* cpu) {
+    if (cpu) {
+        cpu_renderers[cpu] = std::make_unique<CPUGUIRendererImpl<RICOH_2A03>>(reinterpret_cast<fam65xx_t<RICOH_2A03>*>(cpu));
+    }
+}
+
+void register_rockwell65c02_for_gui(void* cpu) {
+    if (cpu) {
+        cpu_renderers[cpu] = std::make_unique<CPUGUIRendererImpl<ROCKWELL_R65C02>>(reinterpret_cast<fam65xx_t<ROCKWELL_R65C02>*>(cpu));
+    }
+}
+
+void register_mos6510_for_gui(void* cpu) {
+    if (cpu) {
+        cpu_renderers[cpu] = std::make_unique<CPUGUIRendererImpl<MOS6510>>(reinterpret_cast<fam65xx_t<MOS6510>*>(cpu));
+    }
+}
+
+void register_wdc65c816_for_gui(void* cpu) {
+    if (cpu) {
+        cpu_renderers[cpu] = std::make_unique<CPUGUIRendererImpl<WDC_65C816>>(reinterpret_cast<fam65xx_t<WDC_65C816>*>(cpu));
+    }
+}
+
 void unregister_cpu_from_gui(void* cpu) {
     auto it = cpu_renderers.find(cpu);
     if (it != cpu_renderers.end()) {

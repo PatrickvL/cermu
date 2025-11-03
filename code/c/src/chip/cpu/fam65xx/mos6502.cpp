@@ -32,8 +32,11 @@ using mos6502_cpu_t = fam65xx_t<MOS6502>;
 extern "C" {
 
 mos6502_t* mos6502_create(void) {
-    // Note: Temporarily using simplified creation until template issues are resolved
-    return reinterpret_cast<mos6502_t*>(new mos6502_cpu_t());
+    mos6502_t* cpu = reinterpret_cast<mos6502_t*>(new mos6502_cpu_t());
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    fam65xx::register_mos6502_for_gui(cpu);
+#endif
+    return cpu;
 }
 
 void mos6502_destroy(mos6502_t* cpu) {

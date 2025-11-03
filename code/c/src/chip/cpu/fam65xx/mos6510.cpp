@@ -24,7 +24,11 @@ using mos6510_cpu_t = fam65xx_t<MOS6510>;
 // ============================================================================
 
 mos6510_t* mos6510_create(void) {
-    return reinterpret_cast<mos6510_t*>(new mos6510_cpu_t());
+    mos6510_t* cpu = reinterpret_cast<mos6510_t*>(new mos6510_cpu_t());
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    fam65xx::register_mos6510_for_gui(cpu);
+#endif
+    return cpu;
 }
 
 void mos6510_destroy(mos6510_t* cpu) {

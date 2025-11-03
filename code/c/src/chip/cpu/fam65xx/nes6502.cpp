@@ -24,7 +24,11 @@ using nes6502_cpu_t = fam65xx_t<RICOH_2A03>;
 extern "C" {
 
 nes6502_t* nes6502_create(void) {
-    return reinterpret_cast<nes6502_t*>(new nes6502_cpu_t());
+    nes6502_t* cpu = reinterpret_cast<nes6502_t*>(new nes6502_cpu_t());
+#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+    register_nes6502_for_gui(cpu);
+#endif
+    return cpu;
 }
 
 void nes6502_destroy(nes6502_t* cpu) {
