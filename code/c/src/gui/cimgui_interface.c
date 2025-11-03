@@ -12,8 +12,26 @@
 // Our vendored cimgui currently uses ImTextureRef in igImage(). We default
 // to that calling convention, but allow opting into ImTextureID via a define.
 
-// Default: use ImTextureRef-based API
+// Detect API from environment/headers
 #ifndef CIMGUI_IMAGE_USES_ID
+    // Check for ImTextureRef existence in preprocessor
+    #if defined(__has_include)
+        // Modern compiler with __has_include support
+        #if __has_include(<cimgui.h>) && defined(CIMGUI_DEFINE_ENUMS_AND_STRUCTS)
+            // Check if we have CIMGUI available - use ID-based API for modern versions
+            #define CIMGUI_IMAGE_USES_ID 1
+        #endif
+    #endif
+    
+    // Fallback detection based on file comment (version 1.91.9b uses ImTextureID)
+    #ifndef CIMGUI_IMAGE_USES_ID
+        // Based on cimgui header examination, version 1.91.9b uses ImTextureID directly
+        #define CIMGUI_IMAGE_USES_ID 1
+    #endif
+#endif
+
+// Default: use ImTextureRef-based API
+#if !CIMGUI_IMAGE_USES_ID
     #define CIMGUI_IMAGE_CALL(tex_id, size, uv0, uv1) \
         igImage((ImTextureRef){._TexData = NULL, ._TexID = (ImTextureID)(intptr_t)(tex_id)}, size, uv0, uv1)
 #else
