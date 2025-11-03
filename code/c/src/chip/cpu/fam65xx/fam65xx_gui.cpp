@@ -191,19 +191,19 @@ void render_cpu_registers(fam65xx_t<Traits>* cpu) {
         igIndent(16.0f);
         
         // Main registers - use native accessors
-        igText("Accumulator (A):     $%02X (%d)", cpu->get(REG_A), cpu->get(REG_A));
-        igText("X Index (X):         $%02X (%d)", cpu->get(REG_X), cpu->get(REG_X));
-        igText("Y Index (Y):         $%02X (%d)", cpu->get(REG_Y), cpu->get(REG_Y));
-        igText("Stack Pointer (S):   $%02X (Stack: $01%02X)", cpu->get(REG_S), cpu->get(REG_S));
-        igText("Program Counter:     $%04X (%d)", cpu->get(REG_PC), cpu->get(REG_PC));
-        
+        igText("Accumulator (A):       $%02X (%d)", cpu->get(REG_A), cpu->get(REG_A));
+        igText("X Index (X):           $%02X (%d)", cpu->get(REG_X), cpu->get(REG_X));
+        igText("Y Index (Y):           $%02X (%d)", cpu->get(REG_Y), cpu->get(REG_Y));
+        igText("Stack Pointer (S):   $%04X", cpu->get(REG_SP));
+        igText("Program Counter:     $%04X", cpu->get(REG_PC));
+
         igSeparator();
         
         // Processor status with detailed breakdown
         uint8_t p_reg = cpu->get(REG_P);
         char flag_buffer[16];
         format_processor_flags(p_reg, flag_buffer, sizeof(flag_buffer));
-        igText("Processor Status (P): $%02X (%s)", p_reg, flag_buffer);
+        igText("Processor Status (P):  $%02X (%s)", p_reg, flag_buffer);
         
         igIndent(16.0f);
         for (int i = 0; i < 8; i++) {
@@ -218,9 +218,9 @@ void render_cpu_registers(fam65xx_t<Traits>* cpu) {
             igText("65C816 Extended Registers:");
             igIndent(16.0f);
             // Note: These would need additional accessors in the CPU template
-            igText("Direct Page (D):     $%04X", 0); // Placeholder
-            igText("Data Bank (DB):      $%02X", 0);  // Placeholder
-            igText("Program Bank (PB):   $%02X", 0);  // Placeholder
+            igText("Direct Page (D):      $%04X", 0); // Placeholder
+            igText("Data Bank (DB):         $%02X", 0);  // Placeholder
+            igText("Program Bank (PB):      $%02X", 0);  // Placeholder
             igUnindent(16.0f);
         }
         
@@ -234,19 +234,19 @@ void render_internal_state(fam65xx_t<Traits>* cpu) {
         igIndent(16.0f);
         
         // Internal registers - use native accessors
-        igText("Instruction Register: $%02X", cpu->get(REG_IR));
-        igText("Data Latch:          $%02X", cpu->get(REG_DL));
+        igText("Instruction Register:  $%02X", cpu->get(REG_IR));
+        igText("Data Latch:            $%02X", cpu->get(REG_DL));
         
         // Format address bus display based on address width
         if constexpr (Traits.address_bits <= 16) {
             igText("Address Bus:         $%04X", cpu->get(REG_AB));
         } else if constexpr (Traits.address_bits <= 20) {
-            igText("Address Bus:         $%05X", cpu->get(REG_AB));
+            igText("Address Bus:        $%05X", cpu->get(REG_AB));
         } else {
-            igText("Address Bus:         $%06X", cpu->get(REG_AB));
+            igText("Address Bus:       $%06X", cpu->get(REG_AB));
         }
         
-        igText("Cycle Index:         %d", cpu->cycle_index);
+        igText("Cycle Index:           %d", cpu->cycle_index);
         
         igSeparator();
         
