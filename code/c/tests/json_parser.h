@@ -40,6 +40,13 @@ typedef struct {
     uint8_t y;     // Y register
     uint8_t p;     // processor status
     
+    // 65816-specific registers (optional)
+    uint8_t e;     // emulation mode flag (65816)
+    uint8_t dbr;   // data bank register (65816)  
+    uint16_t d;    // direct page register (65816)
+    uint8_t pbr;   // program bank register (65816)
+    bool has_65816_state; // flag indicating if 65816 fields are valid
+    
     // RAM entries: [address, [bytes...]]
     struct {
         uint16_t address;

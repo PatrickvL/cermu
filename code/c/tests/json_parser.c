@@ -308,6 +308,26 @@ bool json_parse_cpu_state(const char* json, const char* state_name, cpu_state_t*
     state->y = (uint8_t)json_parse_number(state_obj, "y");
     state->p = (uint8_t)json_parse_number(state_obj, "p");
     
+    // Parse 65816-specific registers (optional)
+    const char* e_value = json_find_key(state_obj, "e");
+    const char* dbr_value = json_find_key(state_obj, "dbr");
+    const char* d_value = json_find_key(state_obj, "d");
+    const char* pbr_value = json_find_key(state_obj, "pbr");
+    
+    if (e_value || dbr_value || d_value || pbr_value) {
+        state->has_65816_state = true;
+        state->e = e_value ? (uint8_t)json_parse_number(state_obj, "e") : 0;
+        state->dbr = dbr_value ? (uint8_t)json_parse_number(state_obj, "dbr") : 0;
+        state->d = d_value ? (uint16_t)json_parse_number(state_obj, "d") : 0;
+        state->pbr = pbr_value ? (uint8_t)json_parse_number(state_obj, "pbr") : 0;
+    } else {
+        state->has_65816_state = false;
+        state->e = 0;
+        state->dbr = 0;
+        state->d = 0;
+        state->pbr = 0;
+    }
+    
     // Parse RAM
     if (!json_parse_ram_array(state_obj, state)) {
         return false;

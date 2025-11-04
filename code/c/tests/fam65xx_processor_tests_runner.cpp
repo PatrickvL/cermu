@@ -145,6 +145,12 @@ public:
     virtual void set_sp(uint8_t sp) = 0;
     virtual void set_status(uint8_t p) = 0;
     
+    // 65816-specific methods (no-op for other processors)
+    virtual void set_emulation_mode(bool mode) {}
+    virtual void set_d(uint16_t value) {}
+    virtual void set_dbr(uint8_t value) {}
+    virtual void set_pbr(uint8_t value) {}
+    
     // Set harness for bus cycle recording (thread-safe)
     virtual void set_harness(ProcessorTestHarness* harness) = 0;
 };
@@ -363,6 +369,12 @@ public:
     void set_y(uint8_t y) { cpu_wrapper->set_y(y); }
     void set_sp(uint8_t sp) { cpu_wrapper->set_sp(sp); }
     void set_status(uint8_t p) { cpu_wrapper->set_status(p); }
+    
+    // 65816-specific state setters
+    void set_emulation_mode(bool mode) { cpu_wrapper->set_emulation_mode(mode); }
+    void set_d(uint16_t value) { cpu_wrapper->set_d(value); }
+    void set_dbr(uint8_t value) { cpu_wrapper->set_dbr(value); }
+    void set_pbr(uint8_t value) { cpu_wrapper->set_pbr(value); }
     
     // Thread-safe harness setting for bus cycle recording
     void set_harness_for_bus_recording() { cpu_wrapper->set_harness(this); }
@@ -603,6 +615,31 @@ public:
     
     void set_status(uint8_t p) override {
         cpu->reg8[REG_P] = p;
+    }
+    
+    // 65816-specific methods - only compile for 65816
+    void set_emulation_mode(bool mode) override {
+        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+            cpu->set_emulation_mode(mode);
+        }
+    }
+    
+    void set_d(uint16_t value) override {
+        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+            cpu->set_d(value);
+        }
+    }
+    
+    void set_dbr(uint8_t value) override {
+        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+            cpu->set_dbr(value);
+        }
+    }
+    
+    void set_pbr(uint8_t value) override {
+        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+            cpu->set_pbr(value);
+        }
     }
     
     // Set harness for bus cycle recording (thread-safe)
@@ -875,6 +912,14 @@ private:
         harness->set_y(test->initial.y);
         harness->set_sp(test->initial.s);
         harness->set_status(test->initial.p);
+        
+        // Set 65816-specific state if available
+        if (test->initial.has_65816_state) {
+            harness->set_emulation_mode(test->initial.e != 0);
+            harness->set_d(test->initial.d);
+            harness->set_dbr(test->initial.dbr);
+            harness->set_pbr(test->initial.pbr);
+        }
 
         uint16_t pc_addr = test->initial.pc;
         uint8_t current_opcode = harness->get_memory(pc_addr);
