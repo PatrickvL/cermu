@@ -3,6 +3,15 @@
 # Disable legacy fam65xx C sources and dependent libs by default
 option(BUILD_LEGACY_65XX "Build legacy C 65xx cores (fam65xx, mos6502, mos6510, nes6502)" OFF)
 
+# FAM65XX Decoder - standalone library for instruction decoding
+add_library(fam65xx_decoder STATIC
+    fam65xx/fam65xx_decoder.c
+)
+target_include_directories(fam65xx_decoder PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/fam65xx
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../..
+)
+
 if(BUILD_LEGACY_65XX)
     # Shared MOS 6502 Family Core
     add_library(mos6502_family STATIC

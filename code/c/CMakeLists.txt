@@ -146,6 +146,14 @@ set(CORE_SOURCES
     src/core/chip_layout.cpp
 )
 
+# FAM65XX Decoder - standalone library for instruction decoding
+add_library(fam65xx_decoder STATIC
+    src/chip/cpu/fam65xx/fam65xx_decoder.c
+)
+target_include_directories(fam65xx_decoder PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/cpu/fam65xx
+)
+
 # Chip library sources - Updated for fam65xx
 set(CHIP_SOURCES
     # CPU sources - using fam65xx template-based implementation
@@ -250,6 +258,7 @@ if(BUILD_GUI)
     # Link libraries for GUI version
     target_link_libraries(c64emu_gui
         cimgui  # Properly linked cimgui static library
+        fam65xx_decoder  # FAM65XX instruction decoder
         ${SDL2_LIBRARIES}
         ${OPENGL_LIBRARIES}
         ${CMAKE_DL_LIBS}

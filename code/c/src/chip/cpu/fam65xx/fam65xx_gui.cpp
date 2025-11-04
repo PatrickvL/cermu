@@ -18,6 +18,7 @@
 #include "fam65xx.hpp"
 #include "fam65xx_types.h"
 #include "fam65xx_processor_traits.hpp"
+#include "fam65xx_decoder.h"
 
 // Include generic chip visualization system
 #include "../../gui/chip_visualization.h"
@@ -46,76 +47,14 @@ const char* get_processor_name() {
     return processor_name_buffer;
 }
 
-// Helper function to get addressing mode name (unchanged from original)
+// Helper function to get addressing mode name (uses decoder)
 static const char* get_addressing_mode_name(uint8_t am_index) {
-    static const char* am_names[] = {
-        "Implicit",     // 0
-        "Accumulator",  // 1
-        "Immediate",    // 2
-        "Zero Page",    // 3
-        "Zero Page,X",  // 4
-        "Zero Page,Y",  // 5
-        "Absolute",     // 6
-        "Absolute,X",   // 7
-        "Absolute,Y",   // 8
-        "Indirect",     // 9
-        "Indexed Indirect", // 10 (zp,X)
-        "Indirect Indexed", // 11 (zp),Y
-        "Relative",     // 12
-        "ZP Indirect",  // 13 (zp) - 65C02
-        "Absolute Indexed Indirect", // 14 (abs,X) - 65C02/65C816
-        "Stack Relative", // 15 - 65C816
-    };
-    
-    if (am_index < sizeof(am_names) / sizeof(am_names[0])) {
-        return am_names[am_index];
-    }
-    return "Unknown";
+    return fam65xx_get_addressing_mode_name(am_index);
 }
 
 // Helper function to get opcode name from operation enumeration
 static const char* get_opcode_name(uint8_t op_index) {
-    static const char* op_names[] = {
-        // Core 6502 operations (0-56)
-        "LDA", "LDX", "LDY",                                    // 0-2: Load operations
-        "STA", "STX", "STY",                                    // 3-5: Store operations
-        "ADC", "SBC",                                           // 6-7: Arithmetic
-        "AND", "ORA", "EOR",                                    // 8-10: Logic operations
-        "CMP", "CPX", "CPY",                                    // 11-13: Compare operations
-        "ASL", "LSR", "ROL", "ROR",                             // 14-17: Shift/rotate
-        "INC", "DEC",                                           // 18-19: Increment/decrement
-        "INX", "INY", "DEX", "DEY",                             // 20-23: Register inc/dec
-        "TAX", "TAY", "TXA", "TYA", "TSX", "TXS",               // 24-29: Transfer operations
-        "PHA", "PHP", "PLA", "PLP",                             // 30-33: Stack operations
-        "BCC", "BCS", "BEQ", "BNE", "BMI", "BPL", "BVC", "BVS", // 34-41: Branches
-        "CLC", "SEC", "CLI", "SEI", "CLD", "SED", "CLV",        // 42-48: Flag operations
-        "JMP", "JSR", "RTS", "RTI", "BRK",                      // 49-53: Control flow
-        "BIT", "NOP", "JAM",                                    // 54-56: Test/misc
-        
-        // Illegal opcodes (57-74)
-        "LAX", "SAX", "DCP", "ISC", "SLO", "RLA", "SRE", "RRA", // 57-64: Combo ops
-        "ANC", "ASR", "ARR", "SBX",                             // 65-68: Special accumulator
-        "SHA", "SHS", "SHX", "SHY", "LAS",                      // 69-73: Store with AND
-        "XAA",                                                  // 74: Special operation
-        
-        // 65C02 enhancements (75-84)
-        "BRA", "STZ", "TRB", "TSB", "PHX", "PHY", "PLX", "PLY", "WAI", "STP", // 75-84
-        
-        // Rockwell 65C02 bit manipulation (85-116)
-        "RMB0", "RMB1", "RMB2", "RMB3", "RMB4", "RMB5", "RMB6", "RMB7",
-        "SMB0", "SMB1", "SMB2", "SMB3", "SMB4", "SMB5", "SMB6", "SMB7",
-        "BBR0", "BBR1", "BBR2", "BBR3", "BBR4", "BBR5", "BBR6", "BBR7",
-        "BBS0", "BBS1", "BBS2", "BBS3", "BBS4", "BBS5", "BBS6", "BBS7",
-        
-        // 65C816 16-bit operations (117+)
-        "REP", "SEP", "XBA", "XCE", "COP", "WDM",
-        "PEA", "PER", "PEI", "PHB", "PHD", "PHK", "PLB", "PLD"
-    };
-    
-    if (op_index < sizeof(op_names) / sizeof(op_names[0])) {
-        return op_names[op_index];
-    }
-    return "???";
+    return fam65xx_get_opcode_name(op_index);
 }
 
 // Helper function to format processor flags (unchanged from original)
