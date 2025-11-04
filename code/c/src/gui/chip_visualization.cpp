@@ -502,7 +502,8 @@ void ChipVisualization::render_chip_markings(ImVec2 chip_center) {
     float line_height = 14;
     
     auto draw_marking = [&](const char* text) {
-        if (text && strlen(text) > 0) {
+        // Safety check: ensure text is not null and has content
+        if (text != nullptr && text[0] != '\0') {
             ImVec2 size;
             igCalcTextSize(&size, text, NULL, false, -1.0f);
             ImVec2 pos = {chip_center.x - size.x/2, chip_center.y + y_offset};
