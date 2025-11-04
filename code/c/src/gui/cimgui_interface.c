@@ -16,9 +16,12 @@
 #ifndef CIMGUI_IMAGE_USES_ID
     // Multi-tier detection strategy for cimgui API compatibility
     
-    // Tier 1: Check if we can detect ImTextureRef structure existence
-    // This works by attempting to create a minimal ImTextureRef instance
-    #if defined(__cplusplus)
+    // Tier 1: Compiler-specific detection
+    #if defined(_MSC_VER)
+        // MSVC environment: Our cimgui version appears to use ImTextureID directly
+        // Based on compilation errors, ImTextureRef is not available in this environment
+        #define CIMGUI_IMAGE_USES_ID 1
+    #elif defined(__cplusplus)
         // C++ detection: try to use ImTextureRef in a decltype expression
         #if __has_include(<cimgui.h>) && defined(CIMGUI_DEFINE_ENUMS_AND_STRUCTS)
             // We have cimgui.h and struct definitions - check if ImTextureRef exists
@@ -28,7 +31,7 @@
                     #define CIMGUI_IMAGE_USES_ID 0
                 #else
                     #define CIMGUI_IMAGE_USES_ID 0  // Default to ImTextureRef for recent cimgui
-                #endif 
+                #endif
             #else
                 #define CIMGUI_IMAGE_USES_ID 0  // Default to ImTextureRef for recent cimgui
             #endif
@@ -66,9 +69,8 @@
     #endif
     
     // Tier 3: Final fallback based on what we detected in headers
-    // Our analysis shows this environment uses ImTextureRef, so default to that
     #ifndef CIMGUI_IMAGE_USES_ID
-        #define CIMGUI_IMAGE_USES_ID 0  // Safe default for this environment
+        #define CIMGUI_IMAGE_USES_ID 0  // Safe default for non-MSVC environments
     #endif
 #endif
 
@@ -78,6 +80,7 @@
         igImage((ImTextureRef){._TexData = NULL, ._TexID = (ImTextureID)(intptr_t)(tex_id)}, size, uv0, uv1)
 #else
     // Alternative: direct ImTextureID-based API (for older/different cimgui versions)
+    // This version expects only 4 parameters: texture_id, size, uv0, uv1
     #define CIMGUI_IMAGE_CALL(tex_id, size, uv0, uv1) \
         igImage((ImTextureID)(intptr_t)(tex_id), size, uv0, uv1)
 #endif
