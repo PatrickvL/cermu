@@ -288,7 +288,7 @@ public:
     }
 
     ProcessorTestHarness(ProcessorType proc_type = ProcessorType::MOS6502)
-        : processor_type(proc_type), memory(test_memory), cycle_count(0) {
+        : processor_type(proc_type), memory(test_memory), cycle_count(0), pins(0) {
         
         // Clear memory (optimized approach from C version)
         std::fill(memory, memory + 65536, static_cast<uint8_t>(0));
@@ -304,6 +304,14 @@ public:
         desc.description = "MOS6502 Test CPU";
         
         pins = cpu_wrapper->init(&desc);
+        
+        // Initialize pins properly to prevent hardware interrupt detection
+        // Set all interrupt lines inactive (high) for proper test execution
+        pins |= FAM65XX_RDY;   /* Ensure RDY is high for execution */
+        pins |= FAM65XX_RW;    /* Ensure RW is set as default state */
+        pins |= FAM65XX_IRQ;   /* IRQ line high (inactive) */
+        pins |= FAM65XX_NMI;   /* NMI line high (inactive) */
+        pins |= FAM65XX_RES;   /* RESET line high (inactive) */
         
         // ProcessorTests expects CPU to be ready for immediate execution
         cycle_count = 0;
