@@ -214,6 +214,7 @@ bus_state_t op_brk(bus_state_t pins) {
             if (this->should_complete_write_cycle(pins)) {
                 pins = this->phi2_write(pins, (REG_SP), this->get(REG_PCL));
                 this->dec(REG_S);
+                this->set(REG_DL, this->get(REG_P) | FLAG_B | FLAG_U);
                 this->cycle_index++;
             }
             return pins;
@@ -221,8 +222,7 @@ bus_state_t op_brk(bus_state_t pins) {
         case 3:
             /* PHI2: Push P|B|U to stack (B flag set for BRK) */
             if (this->should_complete_write_cycle(pins)) {
-                uint8_t status_with_flags = this->get(REG_P) | FLAG_B | FLAG_U;
-                pins = this->phi2_write(pins, (REG_SP), status_with_flags);
+                pins = this->phi2_write(pins, (REG_SP), this->get(REG_DL));
                 this->dec(REG_S);
                 /* Set interrupt disable flag - processor specific behavior */
                 if constexpr (has_nmos_bugs()) {
@@ -233,22 +233,22 @@ bus_state_t op_brk(bus_state_t pins) {
                     set_flag(FLAG_I);
                     clear_flag(FLAG_D);
                 }
+                this->set(REG_AB, this->get_vector_addr());
                 this->cycle_index++;
             }
             return pins;
             
         case 4:
             /* PHI2: Read interrupt vector low byte */
-            this->set(REG_AB, this->get_vector_addr());
             pins = phi2_read(pins, REG_AB, REG_PCL);
             if (FAM65XX_GET_RDY(pins)) {
                 this->cycle_index++;
+                this->inc(REG_AB);
             }
             return pins;
             
         case 5:
             /* PHI2: Read interrupt vector high byte */
-            this->inc(REG_AB);
             pins = phi2_read(pins, REG_AB, REG_PCH);
             if (FAM65XX_GET_RDY(pins)) {
                 /* Clear active interrupt - interrupt processing complete */

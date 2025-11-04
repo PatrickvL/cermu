@@ -341,11 +341,12 @@ public:
         // Use unified interrupt handler for vector loading
         // Skip stack operations (cycles 0-3) and jump to vector loading (cycles 4-5)
         this->active_interrupt = FAM65XX_INT_RESET;
-        this->current_handler = &fam65xx_t::op_brk;
-        this->cycle_index = 4;  // Jump to vector loading phase
         
         // Set up opcode_entry for BRK (opcode $00) so tracing shows correct instruction
-        this->opcode_entry = {OP_BRK, AM_NON, OF_NONE};
+        this->opcode_entry = get_opcode_info(0x00);// = {OP_BRK, AM_NON, OF_NONE};
+        this->current_handler = &fam65xx_t::op_brk;
+        this->cycle_index = 4;  // Jump to vector loading phase
+        this->set(REG_AB, this->get_vector_addr()); // Do the same memory setup as preceding op_brk cycle 3
         
         return pins;
     }
@@ -1191,28 +1192,19 @@ private:
     
     // Instruction fetch and decode
     bus_state_t fetch_opcode(bus_state_t pins) {
-        trace_enter("fetch_opcode");
-        
         // Read opcode from PC
         set(REG_AB, get(REG_PC));
-        trace("Fetching opcode from PC=%04X", get(REG_PC));
         pins = this->phi2_read(pins, REG_AB, REG_IR);
         inc(REG_PC);
-        
         // Set SYNC signal for opcode fetch
         pins |= FAM65XX_SYNC;
-        
         // Decode opcode and set up instruction
         uint8_t opcode = get(REG_IR);
-        trace("Fetched opcode: %02X", opcode);
+
         this->opcode_entry = get_opcode_info(opcode);
         this->cycle_index = 0;
-        
         // Set up first instruction cycle handler
         this->current_handler = this->get_instruction_handler();
-        trace("Set up handler for opcode %02X", opcode);
-        
-        trace_exit("fetch_opcode");
         return pins;
     }
     
