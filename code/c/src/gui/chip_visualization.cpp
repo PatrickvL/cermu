@@ -1108,7 +1108,8 @@ void ChipVisualization::render_settings_gui() {
             }
             
             igSameLine(0, -1.0f);
-            if (igButton("Reset to Default", (ImVec2){0, 0})) {
+            ImVec2 reset_button_size = {0, 0};
+            if (igButton("Reset to Default", reset_button_size)) {
                 config_ = ChipVisualConfig::get_default();
                 config_changed = true;
             }

@@ -13,6 +13,9 @@ extern "C" {
 void fam65xx_render_debug_window(void* chip, bool* show_window);
 void fam65xx_render_settings_window(void* chip, bool* show_window);
 
+// Bus state update function (also needs C linkage)
+void fam65xx_update_bus_state(void* chip, uint64_t bus_state);
+
 #ifdef __cplusplus
 }
 
