@@ -506,19 +506,28 @@ public:
      * @param data Data byte (for write operations, ignored for reads)
      * @return Updated bus state with operation results
      */
+    #pragma warning(push)
+    #pragma warning(disable: 4702) // Disable unreachable code warning for template specializations
+    
     template<bool IsWrite, bool IsDummy>
     bus_state_t phi2_access(bus_state_t pins, reg16_t addr_reg, uint8_t data = 0) {
+        return phi2_access_impl<IsWrite, IsDummy>(pins, addr_reg, data);
+    }
+    
+private:
+    // Separate implementation to avoid unreachable code warnings
+    template<bool IsWrite, bool IsDummy>
+    bus_state_t phi2_access_impl(bus_state_t pins, reg16_t addr_reg, uint8_t data) {
+        // Skip dummy cycles if not simulating internal timing
+        if constexpr (IsDummy) {
+            if constexpr (!Traits.accurate_internal_cycles()) {
+                return pins;
+            }
+        }
+        
         // Hardware-accurate RDY check - DMA device may have bus control
         if (!FAM65XX_GET_RDY(pins)) {
             // When RDY is low, external device (e.g., VIC-II) controls the bus
-            // CPU is stalled but bus operations continue for DMA compatibility
-            
-            // For dummy cycles, still respect RDY but don't perform memory access
-            if constexpr (IsDummy && !Traits.accurate_internal_cycles()) {
-                // Skip dummy cycles if not simulating internal timing
-                return pins;
-            }
-            
             // DMA device has bus control - use existing address/data from pins
             uint32_t dma_addr = FAM65XX_GET_ADDR(pins);
             uint8_t bus_data = FAM65XX_GET_DATA(pins);
@@ -532,21 +541,12 @@ public:
         }
         
         // CPU has bus control - proceed with normal operation
-
-        // Skip dummy cycles if not simulating internal timing
-        if constexpr (IsDummy && !Traits.accurate_internal_cycles()) {
-            return pins;
-        }
-        
-        // Extract address from register
-        uint32_t addr = this->reg16[addr_reg];        
+        uint32_t addr = this->reg16[addr_reg];
         
         // Update bus lines if enabled (for test/simulation environments)
         if constexpr (Traits.update_bus_lines()) {
-            // Set address on bus (mask to processor's address width)
             pins = FAM65XX_SET_ADDR(pins, addr & Traits.address_mask());
             
-            // Set R/W̅ line (1 = Read, 0 = Write)
             if constexpr (IsWrite) {
                 pins &= ~FAM65XX_RW;  // Clear RW for write
             } else {
@@ -554,89 +554,97 @@ public:
             }
         }
         
-        // Get current bus data for floating bus simulation
         uint8_t bus_data = FAM65XX_GET_DATA(pins);
         
-        // Perform memory operation based on template parameters
         if constexpr (IsWrite) {
-            // WRITE OPERATION
-            
-            // Handle processor-specific I/O port access (compile-time conditional)
-            if constexpr (Traits.has_io_port()) {
-                if (addr <= 0x0001) {
-                    if (addr == 0x0000) {
-                        this->write_io_ddr(data);
-                    } else {
-                        this->write_io_data(data);
-                    }
-                    // Still call memory callback for test compatibility
-                    if (this->mem_write != nullptr) {
-                        this->mem_write(this->mem_user_data, addr, data);
-                    }
-                    return FAM65XX_SET_DATA(pins, data);
-                }
-            }
-            
-            // Handle APU register access (compile-time conditional)
-            if constexpr (Traits.has_apu()) {
-                if (this->write_apu_register(addr, data)) {
-                    // APU register handled, but still call memory callback
-                    if (this->mem_write != nullptr) {
-                        this->mem_write(this->mem_user_data, addr, data);
-                    }
-                    return FAM65XX_SET_DATA(pins, data);
-                }
-            }
-            
-            // Standard memory write
-            if (this->mem_write != nullptr) {
-                this->mem_write(this->mem_user_data, addr, data);
-            }
-            
-            pins = FAM65XX_SET_DATA(pins, data);
+            return phi2_write_impl<IsDummy>(pins, addr, data);
         } else {
-            // READ OPERATION
-            
-            // Handle processor-specific I/O port access first (compile-time conditional)
-            if constexpr (Traits.has_io_port()) {
-                if (addr <= 0x0001) {
-                    const uint8_t io_data = (addr == 0x0000)
-                        ? this->read_io_port()
-                        : this->io_port.direction;
-                    
-                    // For dummy reads, data is read but not used by CPU
-                    if constexpr (!IsDummy) {
-                        pins = FAM65XX_SET_DATA(pins, io_data);
-                    }
-                    return pins;
+            return phi2_read_impl<IsDummy>(pins, addr, bus_data);
+        }
+    }
+    
+    template<bool IsDummy>
+    bus_state_t phi2_write_impl(bus_state_t pins, uint32_t addr, uint8_t data) {
+        // Handle processor-specific I/O port access (compile-time conditional)
+        if constexpr (Traits.has_io_port()) {
+            if (addr <= 0x0001) {
+                if (addr == 0x0000) {
+                    this->write_io_ddr(data);
+                } else {
+                    this->write_io_data(data);
                 }
-            }
-            
-            // Handle APU register access (compile-time conditional)
-            if constexpr (Traits.has_apu()) {
-                uint8_t apu_data;
-                if (this->read_apu_register(addr, apu_data)) {
-                    // For dummy reads, data is read but not used by CPU
-                    if constexpr (!IsDummy) {
-                        pins = FAM65XX_SET_DATA(pins, apu_data);
-                    }
-                    return pins;
+                // Still call memory callback for test compatibility
+                if (this->mem_write != nullptr) {
+                    this->mem_write(this->mem_user_data, addr, data);
                 }
+                return FAM65XX_SET_DATA(pins, data);
             }
-            
-            // Standard memory access for all other addresses
-            uint8_t read_data = (this->mem_read != nullptr)
-                ? this->mem_read(this->mem_user_data, addr, bus_data)
-                : bus_data;  // Floating bus fallback
-            
-            // For dummy reads, data is read but not used by CPU
-            if constexpr (!IsDummy) {
-                pins = FAM65XX_SET_DATA(pins, read_data);
+        }
+        
+        // Handle APU register access (compile-time conditional)
+        if constexpr (Traits.has_apu()) {
+            if (this->write_apu_register(addr, data)) {
+                // APU register handled, but still call memory callback
+                if (this->mem_write != nullptr) {
+                    this->mem_write(this->mem_user_data, addr, data);
+                }
+                return FAM65XX_SET_DATA(pins, data);
             }
+        }
+        
+        // Standard memory write
+        if (this->mem_write != nullptr) {
+            this->mem_write(this->mem_user_data, addr, data);
+        }
+        
+        return FAM65XX_SET_DATA(pins, data);
+    }
+    
+    template<bool IsDummy>
+    bus_state_t phi2_read_impl(bus_state_t pins, uint32_t addr, uint8_t bus_data) {
+        // Handle processor-specific I/O port access first (compile-time conditional)
+        if constexpr (Traits.has_io_port()) {
+            if (addr <= 0x0001) {
+                const uint8_t io_data = (addr == 0x0000)
+                    ? this->read_io_port()
+                    : this->io_port.direction;
+                
+                // For dummy reads, data is read but not used by CPU
+                if constexpr (!IsDummy) {
+                    pins = FAM65XX_SET_DATA(pins, io_data);
+                }
+                return pins;
+            }
+        }
+        
+        // Handle APU register access (compile-time conditional)
+        if constexpr (Traits.has_apu()) {
+            uint8_t apu_data;
+            if (this->read_apu_register(addr, apu_data)) {
+                // For dummy reads, data is read but not used by CPU
+                if constexpr (!IsDummy) {
+                    pins = FAM65XX_SET_DATA(pins, apu_data);
+                }
+                return pins;
+            }
+        }
+        
+        // Standard memory access for all other addresses
+        uint8_t read_data = (this->mem_read != nullptr)
+            ? this->mem_read(this->mem_user_data, addr, bus_data)
+            : bus_data;  // Floating bus fallback
+        
+        // For dummy reads, data is read but not used by CPU
+        if constexpr (!IsDummy) {
+            pins = FAM65XX_SET_DATA(pins, read_data);
         }
         
         return pins;
     }
+    
+    #pragma warning(pop)
+
+public:
     
     // ========================================================================
     // CONCRETE BUS ACCESS WRAPPERS (Reference Implementation Style)
