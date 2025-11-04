@@ -43,6 +43,7 @@ set(CPU_SOURCES
     ${CPU_DIR}/fam65xx/wdc65c02.cpp
     ${CPU_DIR}/fam65xx/rockwell65c02.cpp
     ${CPU_DIR}/fam65xx/wdc65c816.cpp
+    ${CPU_DIR}/fam65xx/fam65xx_decoder.c
 )
 
 # Collect core source files
@@ -71,6 +72,7 @@ add_library(mos6510_lib STATIC ${CPU_SOURCES} ${CORE_SOURCES})
 target_include_directories(mos6510_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/../
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
 )
 # Enable REDESIGN CPU dispatch mechanism for MOS6510 library
 target_compile_definitions(mos6510_lib PRIVATE REDESIGN=1)
@@ -84,6 +86,7 @@ add_executable(fam65xx_klaus_test_runner fam65xx_klaus_test_runner.cpp)
 target_include_directories(fam65xx_klaus_test_runner PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
 )
 target_compile_definitions(fam65xx_klaus_test_runner PRIVATE AIEMUC_IMPL)
 # Link against MOS6510 library for implementation symbols
@@ -100,6 +103,7 @@ add_executable(fam65xx_lorenz_test_harness
 target_include_directories(fam65xx_lorenz_test_harness PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
 )
 target_compile_definitions(fam65xx_lorenz_test_harness PRIVATE AIEMUC_IMPL)
 # Link against MOS6510 library for implementation symbols
@@ -113,10 +117,12 @@ endif()
 add_executable(fam65xx_processor_tests_runner
     fam65xx_processor_tests_runner.cpp
     json_parser.c
+    ${CPU_DIR}/fam65xx/fam65xx_decoder.c
 )
 target_include_directories(fam65xx_processor_tests_runner PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 target_compile_definitions(fam65xx_processor_tests_runner PRIVATE AIEMUC_IMPL)
