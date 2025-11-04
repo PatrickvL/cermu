@@ -19,6 +19,7 @@
  * - MOS6502Tag:     Original NMOS 6502 with illegal opcodes
  * - MOS6510Tag:     C64/C128 variant with I/O port  
  * - NES6502Tag:     NES variant (no BCD, no illegal opcodes)
+
  * - WDC65C02Tag:    CMOS 65C02 with enhanced instructions
  * - Rockwell65C02Tag: CMOS with bit manipulation instructions
  * - WDC65C816Tag:   16-bit extended processor
@@ -44,6 +45,11 @@
 #include <cstring>
 #include <cstdio>
 #include <cstdarg>
+
+// Include instruction decoder for disassembly
+extern "C" {
+    #include "fam65xx_decoder.h"
+}
 
 #include "fam65xx_types.h"
 #include "fam65xx_processor_traits.hpp"
@@ -315,10 +321,38 @@ public:
         trace_enter("tick");
         trace_registers("before");
         
+        // Instruction disassembly for first 100 instructions
+        static int instruction_count = 0;
+        static bool trace_instructions = true;
+        
         // SYNC pin management - asserted during opcode fetch cycles (matching old implementation)
         if (this->current_handler == &fam65xx_t::fetch_opcode && this->cycle_index == 0) {
             pins |= FAM65XX_SYNC;
             trace("SYNC asserted (opcode fetch)");
+            
+            // Print disassembly for first 100 instructions
+            if (trace_instructions && instruction_count < 100) {
+                uint16_t pc = this->get(REG_PC);
+                uint16_t ab = this->get(REG_AB);  // Get address bus from register
+                uint8_t ir = this->get(REG_IR);  // Get instruction register
+                
+                // Get opcode name from decoder
+                const char* opcode_name = fam65xx_get_opcode_name(ir);
+                
+                printf("[%03d] PC=$%04X AB=$%04X IR=$%02X (%s) ", 
+                       instruction_count, pc, ab, ir, opcode_name);
+                
+                // Get instruction info if opcode is valid
+                printf("A=$%02X X=$%02X Y=$%02X S=$%02X P=$%02X\n", 
+                    this->get(REG_A), this->get(REG_X), this->get(REG_Y), 
+                    this->get(REG_SPL), this->get(REG_P));
+                    
+                instruction_count++;
+                if (instruction_count >= 100) {
+                    trace_instructions = false;
+                    printf("=== Instruction trace complete (100 instructions) ===\n");
+                }
+            }
         } else {
             pins &= ~FAM65XX_SYNC;
         }
