@@ -445,57 +445,6 @@ public:
     uint32_t get_cycle_count() const { return cycle_count; }
     void reset_cycle_count() { cycle_count = 0; }
     
-    // Validate that all addresses in test data fit within processor address space
-    bool validate_test_addresses(const processor_test_t* test, std::ostringstream& debug_output) const {
-        bool validation_passed = true;
-        
-        // Check initial state RAM addresses
-        for (int i = 0; i < test->initial.ram_count; i++) {
-            uint32_t addr = test->initial.ram[i].address;
-            if (addr > address_mask) {
-                debug_output << "WARNING " << test->name << ": Initial RAM address 0x" 
-                            << std::hex << addr << " exceeds " << get_processor_name(processor_type)
-                            << " address space (max 0x" << address_mask << ")" << std::dec << std::endl;
-                validation_passed = false;
-            }
-            
-            // Also check if it would wrap around and potentially overwrite other data
-            for (int j = 1; j < test->initial.ram[i].byte_count; j++) {
-                uint32_t wrapped_addr = (addr + j) & address_mask;
-                if (wrapped_addr < addr) {  // Address wrapped around
-                    debug_output << "INFO " << test->name << ": Address wrapping detected at 0x" 
-                                << std::hex << (addr + j) << " -> 0x" << wrapped_addr << std::dec << std::endl;
-                }
-            }
-        }
-        
-        // Check final state RAM addresses
-        for (int i = 0; i < test->final.ram_count; i++) {
-            uint32_t addr = test->final.ram[i].address;
-            if (addr > address_mask) {
-                debug_output << "WARNING " << test->name << ": Final RAM address 0x" 
-                            << std::hex << addr << " exceeds " << get_processor_name(processor_type)
-                            << " address space (max 0x" << address_mask << ")" << std::dec << std::endl;
-                validation_passed = false;
-            }
-        }
-        
-        // Check bus cycle addresses (if present)
-        if (test->final.has_bus_cycles) {
-            for (int i = 0; i < test->final.bus_cycle_count; i++) {
-                uint32_t addr = test->final.bus_cycles[i].address;
-                if (addr > address_mask) {
-                    debug_output << "WARNING " << test->name << ": Bus cycle address 0x" 
-                                << std::hex << addr << " exceeds " << get_processor_name(processor_type)
-                                << " address space (max 0x" << address_mask << ")" << std::dec << std::endl;
-                    validation_passed = false;
-                }
-            }
-        }
-        
-        return validation_passed;
-    }
-    
     // Execute one instruction - SYNC-based completion detection (optimized for threading)
     bool step() {
         return step_with_debug(nullptr);
@@ -996,13 +945,6 @@ private:
         
         if (verbose_mode) {
             debug_output << "[Worker " << worker_id << "] Running test: " << test->name << std::endl;
-        }
-        
-        // Validate test addresses for the current processor type
-        std::ostringstream validation_output;
-        bool addresses_valid = harness->validate_test_addresses(test, validation_output);
-        if (!addresses_valid || verbose_mode) {
-            debug_output << validation_output.str();
         }
         
         // REMOVED: Set global harness (thread safety issue)
