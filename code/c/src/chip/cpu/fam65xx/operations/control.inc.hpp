@@ -192,7 +192,8 @@ bus_state_t op_brk(bus_state_t pins) {
             pins = phi2_dummy_read(pins, REG_PC);
             if (FAM65XX_GET_RDY(pins)) {
                 this->inc(REG_PC);
-                /* Set interrupt type if not already set by hardware interrupt detection */
+                /* Set interrupt type to BRK if no hardware interrupt is active */
+                /* Hardware interrupts (IRQ, NMI) take priority over software BRK */
                 if (this->active_interrupt == FAM65XX_INT_NONE) {
                     this->active_interrupt = FAM65XX_INT_BRK;
                 }
