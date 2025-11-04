@@ -122,23 +122,19 @@ uint16_t wdc65c816_get_y_full(wdc65c816_t* cpu) {
 }
 
 uint16_t wdc65c816_get_d(wdc65c816_t* cpu) {
-    // TODO: Access D (direct page) register from wide_registers mixin
-    return 0x0000; // Placeholder
+    return CPU_CAST(cpu)->get_d();
 }
 
 uint8_t wdc65c816_get_dbr(wdc65c816_t* cpu) {
-    // TODO: Access DBR (data bank register) from wide_registers mixin
-    return 0x00; // Placeholder
+    return CPU_CAST(cpu)->get_dbr();
 }
 
 uint8_t wdc65c816_get_pbr(wdc65c816_t* cpu) {
-    // TODO: Access PBR (program bank register) from wide_registers mixin
-    return 0x00; // Placeholder
+    return CPU_CAST(cpu)->get_pbr();
 }
 
 bool wdc65c816_get_emulation_mode(wdc65c816_t* cpu) {
-    // TODO: Access emulation mode from wide_registers mixin
-    return true; // Placeholder - start in emulation mode
+    return CPU_CAST(cpu)->get_emulation_mode();
 }
 
 // 16-bit register setters (65C816-specific)
@@ -158,23 +154,19 @@ void wdc65c816_set_y_full(wdc65c816_t* cpu, uint16_t value) {
 }
 
 void wdc65c816_set_d(wdc65c816_t* cpu, uint16_t value) {
-    // TODO: Set D (direct page) register in wide_registers mixin
-    (void)value; // Placeholder
+    CPU_CAST(cpu)->set_d(value);
 }
 
 void wdc65c816_set_dbr(wdc65c816_t* cpu, uint8_t value) {
-    // TODO: Set DBR (data bank register) in wide_registers mixin
-    (void)value; // Placeholder
+    CPU_CAST(cpu)->set_dbr(value);
 }
 
 void wdc65c816_set_pbr(wdc65c816_t* cpu, uint8_t value) {
-    // TODO: Set PBR (program bank register) in wide_registers mixin
-    (void)value; // Placeholder
+    CPU_CAST(cpu)->set_pbr(value);
 }
 
 void wdc65c816_set_emulation_mode(wdc65c816_t* cpu, bool emulation) {
-    // TODO: Set emulation mode in wide_registers mixin
-    (void)emulation; // Placeholder
+    CPU_CAST(cpu)->set_emulation_mode(emulation);
 }
 
 // WDC65C816 chip descriptor
