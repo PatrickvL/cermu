@@ -107,7 +107,12 @@ struct wide_registers_mixin_t {
     uint16_t get_d() const { return wide_state.D; }
     uint8_t get_dbr() const { return wide_state.DBR; }
     uint8_t get_pbr() const { return wide_state.PBR; }
-    bool get_emulation_mode() const { return wide_state.emulation_mode; }
+    bool get_emulation_mode() const { 
+        // For 65C816, emulation mode is determined by the E flag
+        // In emulation mode (E=1), the CPU behaves like a 6502
+        // In native mode (E=0), the CPU uses 16-bit capabilities
+        return wide_state.emulation_mode; 
+    }
     
     void set_accumulator(uint16_t value) { wide_state.A_full = value; }
     void set_x_full(uint16_t value) { wide_state.X_full = value; }
