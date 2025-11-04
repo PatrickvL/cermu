@@ -248,7 +248,7 @@ bus_state_t op_brk(bus_state_t pins) {
             
         case 5:
             /* PHI2: Read interrupt vector high byte */
-            this->set(REG_AB, this->get_vector_addr() + 1);
+            this->inc(REG_AB);
             pins = phi2_read(pins, REG_AB, REG_PCH);
             if (FAM65XX_GET_RDY(pins)) {
                 /* Clear active interrupt - interrupt processing complete */
