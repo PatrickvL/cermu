@@ -16,6 +16,7 @@
 #include <sstream>
 #include <future>
 #include <map>
+#include <unordered_map>
 #include <stdexcept>
 
 extern "C" {
@@ -154,6 +155,9 @@ public:
     
     // Set harness for bus cycle recording (thread-safe)
     virtual void set_harness(ProcessorTestHarness* harness) = 0;
+    
+    // Get address mask for this processor type
+    virtual uint32_t get_address_mask() const = 0;
 };
 
 // Forward declaration for factory function
@@ -246,9 +250,11 @@ class ProcessorTestHarness {
 private:
     std::unique_ptr<UnifiedProcessorInterface> cpu_wrapper;
     ProcessorType processor_type;
-    uint8_t* memory;  // Point to global test_memory array
+    uint8_t* memory;  // Point to global test_memory array (64KB base memory)
+    std::unordered_map<uint32_t, uint8_t> extended_memory;  // For 24-bit addresses outside 64KB
     uint32_t cycle_count;
     uint64_t pins;  // Maintain pins state across steps
+    uint32_t address_mask;  // Cached address mask for this processor type (performance optimization)
     
     // Bus cycle tracking for comparing against JSON test data - reserve capacity to avoid reallocations
     std::vector<bus_cycle_t> actual_bus_cycles;
@@ -296,6 +302,9 @@ public:
         // Create processor wrapper for the specified type
         cpu_wrapper = create_processor(processor_type);
         
+        // Cache the address mask from CPUTraits for performance (avoid repeated calculations)
+        address_mask = cpu_wrapper->get_address_mask();
+        
         // Set up harness for bus cycle recording - now works with all processors via unified interface
         cpu_wrapper->set_harness(this);
         
@@ -317,21 +326,29 @@ public:
         cycle_count = 0;
     }
     
-    // Clear memory based on bus cycle writes and test data
+    // Clear memory based on bus cycle writes and test data (supports 24-bit addresses)
     void clear_written_memory(const cpu_state_t* test_data) {
         // Clear test data addresses if provided
         if (test_data && test_data->ram_count > 0) {
             for (int i = 0; i < test_data->ram_count; i++) {
                 for (int j = 0; j < test_data->ram[i].byte_count; j++) {
-                    memory[test_data->ram[i].address + j] = 0;
+                    clear_memory(test_data->ram[i].address + j);
                 }
             }
         }
 
         // Clear memory based on bus cycle writes
         for (const auto& cycle : actual_bus_cycles) {
-            if (cycle.is_write) {
-                memory[cycle.address] = 0;
+            if (!cycle.has_65816_flags) {
+                // Legacy format: use is_write flag
+                if (cycle.is_write) {
+                    clear_memory(cycle.address);
+                }
+            } else {
+                // 65816 format: check if it's a write operation (RWB == false)
+                if (!cycle.flags_65816.rwb) {
+                    clear_memory(cycle.address);
+                }
             }
         }
     }
@@ -350,11 +367,11 @@ public:
             std::fill(memory, memory + 65536, static_cast<uint8_t>(0));
         }
         
-        // Set up memory from RAM entries
+        // Set up memory from RAM entries (supports 24-bit addresses)
         for (int i = 0; i < initial->ram_count; i++) {
-            uint16_t addr = initial->ram[i].address;
+            uint32_t addr = initial->ram[i].address;
             for (int j = 0; j < initial->ram[i].byte_count; j++) {
-                memory[addr + j] = initial->ram[i].bytes[j];
+                set_memory(addr + j, initial->ram[i].bytes[j]);
             }
         }
     }
@@ -395,15 +412,89 @@ public:
     uint8_t get_sp() const { return cpu_wrapper->get_sp(); }
     uint8_t get_status() const { return cpu_wrapper->get_status(); }
     
-    // Memory access (for direct memory setup, not during CPU execution)
-    void set_memory(uint16_t addr, uint8_t data) {
-        memory[addr] = data;
+    // Memory access methods with address wrapping
+    void set_memory(uint32_t addr, uint8_t data) {
+        addr &= address_mask;  // Apply address wrapping inline
+        if (addr < 65536) {
+            memory[addr] = data;  // Fast access for base 64KB
+        } else {
+            extended_memory[addr] = data;  // Extended memory
+        }
     }
-    uint8_t get_memory(uint16_t addr) const { return memory[addr]; }
+    
+    uint8_t get_memory(uint32_t addr) const {
+        addr &= address_mask;  // Apply address wrapping inline
+        if (addr < 65536) {
+            return memory[addr];  // Fast access for base 64KB
+        } else {
+            auto it = extended_memory.find(addr);
+            return (it != extended_memory.end()) ? it->second : 0;  // Extended memory or default 0
+        }
+    }
+    
+    void clear_memory(uint32_t addr) {
+        addr &= address_mask;  // Apply address wrapping inline
+        if (addr < 65536) {
+            memory[addr] = 0;  // Fast access for base 64KB
+        } else {
+            extended_memory.erase(addr);  // Remove from extended memory
+        }
+    }
     
     // Cycle counting
     uint32_t get_cycle_count() const { return cycle_count; }
     void reset_cycle_count() { cycle_count = 0; }
+    
+    // Validate that all addresses in test data fit within processor address space
+    bool validate_test_addresses(const processor_test_t* test, std::ostringstream& debug_output) const {
+        bool validation_passed = true;
+        
+        // Check initial state RAM addresses
+        for (int i = 0; i < test->initial.ram_count; i++) {
+            uint32_t addr = test->initial.ram[i].address;
+            if (addr > address_mask) {
+                debug_output << "WARNING " << test->name << ": Initial RAM address 0x" 
+                            << std::hex << addr << " exceeds " << get_processor_name(processor_type)
+                            << " address space (max 0x" << address_mask << ")" << std::dec << std::endl;
+                validation_passed = false;
+            }
+            
+            // Also check if it would wrap around and potentially overwrite other data
+            for (int j = 1; j < test->initial.ram[i].byte_count; j++) {
+                uint32_t wrapped_addr = (addr + j) & address_mask;
+                if (wrapped_addr < addr) {  // Address wrapped around
+                    debug_output << "INFO " << test->name << ": Address wrapping detected at 0x" 
+                                << std::hex << (addr + j) << " -> 0x" << wrapped_addr << std::dec << std::endl;
+                }
+            }
+        }
+        
+        // Check final state RAM addresses
+        for (int i = 0; i < test->final.ram_count; i++) {
+            uint32_t addr = test->final.ram[i].address;
+            if (addr > address_mask) {
+                debug_output << "WARNING " << test->name << ": Final RAM address 0x" 
+                            << std::hex << addr << " exceeds " << get_processor_name(processor_type)
+                            << " address space (max 0x" << address_mask << ")" << std::dec << std::endl;
+                validation_passed = false;
+            }
+        }
+        
+        // Check bus cycle addresses (if present)
+        if (test->final.has_bus_cycles) {
+            for (int i = 0; i < test->final.bus_cycle_count; i++) {
+                uint32_t addr = test->final.bus_cycles[i].address;
+                if (addr > address_mask) {
+                    debug_output << "WARNING " << test->name << ": Bus cycle address 0x" 
+                                << std::hex << addr << " exceeds " << get_processor_name(processor_type)
+                                << " address space (max 0x" << address_mask << ")" << std::dec << std::endl;
+                    validation_passed = false;
+                }
+            }
+        }
+        
+        return validation_passed;
+    }
     
     // Execute one instruction - SYNC-based completion detection (optimized for threading)
     bool step() {
@@ -655,6 +746,11 @@ public:
     void set_harness(ProcessorTestHarness* harness) override {
         harness_ptr = harness;
     }
+    
+    // Get address mask from CPUTraits
+    uint32_t get_address_mask() const override {
+        return Traits.address_mask();
+    }
 };
 
 // Factory function to create processor instances - direct template instantiation
@@ -902,6 +998,13 @@ private:
             debug_output << "[Worker " << worker_id << "] Running test: " << test->name << std::endl;
         }
         
+        // Validate test addresses for the current processor type
+        std::ostringstream validation_output;
+        bool addresses_valid = harness->validate_test_addresses(test, validation_output);
+        if (!addresses_valid || verbose_mode) {
+            debug_output << validation_output.str();
+        }
+        
         // REMOVED: Set global harness (thread safety issue)
         // current_test_harness = harness;
         
@@ -1024,9 +1127,9 @@ private:
             state_match = false;
         }
         
-        // Memory state comparison
+        // Memory state comparison (supports 24-bit addresses)
         for (uint8_t i = 0; i < test->final.ram_count; i++) {
-            uint16_t addr = test->final.ram[i].address;
+            uint32_t addr = test->final.ram[i].address;
             for (uint8_t j = 0; j < test->final.ram[i].byte_count; j++) {
                 uint8_t expected_value = test->final.ram[i].bytes[j];
                 uint8_t actual_value = harness->get_memory(addr + j);
