@@ -24,11 +24,24 @@ typedef enum {
     JSON_OBJECT
 } json_type_t;
 
-// Bus cycle trace entry
+// Bus cycle trace entry (supports both legacy and 65816 formats)
 typedef struct {
-    uint16_t address;
+    uint32_t address;   // 24-bit address for 65816, 16-bit for legacy
     uint8_t data;
-    bool is_write;  // true = write, false = read
+    union {
+        bool is_write;  // legacy format: true = write, false = read
+        struct {        // 65816 format: 8-character output flags
+            bool vda;   // VDA (Valid Data Address)
+            bool vpa;   // VPA (Valid Program Address) 
+            bool vpb;   // VPB (Vector Pull)
+            bool rwb;   // RWB (Read/Write: true=read, false=write)
+            bool e;     // E (Emulation mode)
+            bool m;     // M (Memory/Accumulator 8-bit)
+            bool x;     // X (Index register 8-bit)
+            bool mlb;   // MLB (Memory Lock)
+        } flags_65816;
+    };
+    bool has_65816_flags; // true if flags_65816 is valid, false if is_write is valid
 } bus_cycle_t;
 
 // CPU state structure matching ProcessorTests format
@@ -47,9 +60,9 @@ typedef struct {
     uint8_t pbr;   // program bank register (65816)
     bool has_65816_state; // flag indicating if 65816 fields are valid
     
-    // RAM entries: [address, [bytes...]]
+    // RAM entries: [address, [bytes...]] (24-bit addresses for 65816)
     struct {
-        uint16_t address;
+        uint32_t address;   // 24-bit address for 65816, 16-bit for legacy
         uint8_t bytes[MAX_RAM_BYTES];
         uint8_t byte_count;
     } ram[MAX_RAM_ENTRIES];

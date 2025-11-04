@@ -205,9 +205,9 @@ bool json_parse_ram_array(const char* json, cpu_state_t* state) {
         if (*pos != '[') return false; // Each RAM entry should be an array
         pos++; // Skip opening bracket of RAM entry
         
-        // Parse address (first element)
+        // Parse address (first element) - 24-bit for 65816, 16-bit for legacy
         pos = json_skip_whitespace(pos);
-        state->ram[state->ram_count].address = (uint16_t)strtol(pos, (char**)&pos, 0);
+        state->ram[state->ram_count].address = (uint32_t)strtol(pos, (char**)&pos, 0);
         
         pos = json_skip_whitespace(pos);
         if (*pos != ',') return false;
@@ -231,7 +231,7 @@ bool json_parse_ram_array(const char* json, cpu_state_t* state) {
     return true;
 }
 
-// Parse cycles array from JSON (bus cycles)
+// Parse cycles array from JSON (supports both legacy and 65816 formats)
 bool json_parse_cycles_array(const char* json, cpu_state_t* state) {
     const char* cycles_array = json_find_key(json, "cycles");
     if (!cycles_array || *cycles_array != '[') {
@@ -251,31 +251,55 @@ bool json_parse_cycles_array(const char* json, cpu_state_t* state) {
         if (*pos != '[') return false; // Each cycle should be an array
         pos++; // Skip opening bracket
         
-        // Parse address
+        // Parse address (24-bit for 65816, 16-bit for legacy)
         pos = json_skip_whitespace(pos);
-        state->bus_cycles[state->bus_cycle_count].address = (uint16_t)strtol(pos, (char**)&pos, 0);
+        state->bus_cycles[state->bus_cycle_count].address = (uint32_t)strtol(pos, (char**)&pos, 0);
         
         pos = json_skip_whitespace(pos);
         if (*pos != ',') return false;
         pos++; // Skip comma
         
-        // Parse data
+        // Parse data (may be null for 65816 format)
         pos = json_skip_whitespace(pos);
-        state->bus_cycles[state->bus_cycle_count].data = (uint8_t)strtol(pos, (char**)&pos, 0);
+        if (strncmp(pos, "null", 4) == 0) {
+            state->bus_cycles[state->bus_cycle_count].data = 0; // null value
+            pos += 4;
+        } else {
+            state->bus_cycles[state->bus_cycle_count].data = (uint8_t)strtol(pos, (char**)&pos, 0);
+        }
         
         pos = json_skip_whitespace(pos);
         if (*pos != ',') return false;
         pos++; // Skip comma
         
-        // Parse read/write flag
+        // Parse third element (format detection)
         pos = json_skip_whitespace(pos);
         if (*pos == '"') {
+            // 65816 format: 8-character output string like "d--remx-"
             pos++; // Skip opening quote
-            state->bus_cycles[state->bus_cycle_count].is_write = (*pos == 'w' || *pos == 'W');
+            
+            const char* flags = pos;
+            if (strlen(flags) >= 8) {
+                state->bus_cycles[state->bus_cycle_count].has_65816_flags = true;
+                state->bus_cycles[state->bus_cycle_count].flags_65816.vda = (flags[0] == 'd');
+                state->bus_cycles[state->bus_cycle_count].flags_65816.vpa = (flags[1] == 'p');
+                state->bus_cycles[state->bus_cycle_count].flags_65816.vpb = (flags[2] == 'v');
+                state->bus_cycles[state->bus_cycle_count].flags_65816.rwb = (flags[3] == 'r');
+                state->bus_cycles[state->bus_cycle_count].flags_65816.e = (flags[4] == 'e');
+                state->bus_cycles[state->bus_cycle_count].flags_65816.m = (flags[5] == 'm');
+                state->bus_cycles[state->bus_cycle_count].flags_65816.x = (flags[6] == 'x');
+                state->bus_cycles[state->bus_cycle_count].flags_65816.mlb = (flags[7] == 'l');
+            } else {
+                // Legacy string format: simple "r"/"w" 
+                state->bus_cycles[state->bus_cycle_count].has_65816_flags = false;
+                state->bus_cycles[state->bus_cycle_count].is_write = (*flags == 'w' || *flags == 'W');
+            }
+            
             while (*pos && *pos != '"') pos++; // Skip to closing quote
             if (*pos == '"') pos++;
         } else {
-            // Numeric format: assume 0 = read, 1 = write
+            // Legacy numeric format: assume 0 = read, 1 = write
+            state->bus_cycles[state->bus_cycle_count].has_65816_flags = false;
             int rw = (int)strtol(pos, (char**)&pos, 0);
             state->bus_cycles[state->bus_cycle_count].is_write = (rw != 0);
         }
