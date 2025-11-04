@@ -180,32 +180,34 @@ public:
     // DEBUG TRACING HELPERS
     // ========================================================================
     
+    constexpr bool trace_instructions = false;
     void print_instruction_trace() const {
-        static int instruction_count = 0;
-        static bool trace_instructions = true;
         
-        if (trace_instructions && instruction_count < 100) {
-            uint16_t pc = this->get(REG_PC);
-            uint16_t ab = this->get(REG_AB);  // Get address bus from register
-            uint8_t ir = this->get(REG_IR);  // Get instruction register
-            
-            // Use the current opcode_entry which is properly set during reset to BRK
-            // This shows the logical instruction being executed (BRK during reset)
-            // rather than whatever random data is in the IR register
-            const char* opcode_name = fam65xx_get_opcode_name(this->opcode_entry.op_index);
-            
-            printf("[%03d] PC=$%04X AB=$%04X IR=$%02X (%s) ", 
-                   instruction_count, pc, ab, ir, opcode_name);
-            
-            // Get instruction info if opcode is valid
-            printf("A=$%02X X=$%02X Y=$%02X S=$%02X P=$%02X\n", 
-                this->get(REG_A), this->get(REG_X), this->get(REG_Y), 
-                this->get(REG_SPL), this->get(REG_P));
+        if constexpr (trace_instructions)
+        {
+            static int instruction_count = 0;
+            if (instruction_count < 100) {
+                uint16_t pc = this->get(REG_PC);
+                uint16_t ab = this->get(REG_AB);  // Get address bus from register
+                uint8_t ir = this->get(REG_IR);  // Get instruction register
                 
-            instruction_count++;
-            if (instruction_count >= 100) {
-                trace_instructions = false;
-                printf("=== Instruction trace complete (100 instructions) ===\n");
+                // Use the current opcode_entry which is properly set during reset to BRK
+                // This shows the logical instruction being executed (BRK during reset)
+                // rather than whatever random data is in the IR register
+                const char* opcode_name = fam65xx_get_opcode_name(this->opcode_entry.op_index);
+                
+                printf("[%03d] PC=$%04X AB=$%04X IR=$%02X (%s) ", 
+                    instruction_count, pc, ab, ir, opcode_name);
+                
+                // Get instruction info if opcode is valid
+                printf("A=$%02X X=$%02X Y=$%02X S=$%02X P=$%02X\n", 
+                    this->get(REG_A), this->get(REG_X), this->get(REG_Y), 
+                    this->get(REG_SPL), this->get(REG_P));
+                    
+                instruction_count++;
+                if (instruction_count == 100) {
+                    printf("=== Instruction trace complete (%d instructions) ===\n", instruction_count);
+                }
             }
         }
     }
