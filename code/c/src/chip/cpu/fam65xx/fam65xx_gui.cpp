@@ -22,7 +22,7 @@
 
 // Include generic chip visualization system
 #include "../../gui/chip_visualization.h"
-#include "cpu_pin_layouts.h"
+#include "fam65xx_layouts.h"
 
 // Include GUI interface
 #include "../../../gui/cimgui_interface.h"
@@ -428,7 +428,8 @@ public:
         igGetWindowSize(&window_size);
         
         // Left column: Chip Visualization (fixed width ~250px, 25% wider)
-        if (igBeginChild_Str("ChipVisualization", (ImVec2){250.0f, 0}, true, ImGuiWindowFlags_HorizontalScrollbar)) {
+        ImVec2 chip_viz_size = {250.0f, 0};
+        if (igBeginChild_Str("ChipVisualization", chip_viz_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
             igText("Chip Visualization");
             igSeparator();
             
