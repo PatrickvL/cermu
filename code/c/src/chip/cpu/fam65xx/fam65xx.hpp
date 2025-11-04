@@ -1324,8 +1324,8 @@ private:
         operation_handlers[OP_NOP] = &fam65xx_t::op_nop;
         operation_handlers[OP_ORA] = &fam65xx_t::op_ora;
         operation_handlers[OP_PEA] = &fam65xx_t::op_pea;
-//        operation_handlers[OP_PER] = &fam65xx_t::op_per;
-//        operation_handlers[OP_PEI] = &fam65xx_t::op_pei;
+        operation_handlers[OP_PER] = &fam65xx_t::op_per;
+        operation_handlers[OP_PEI] = &fam65xx_t::op_pei;
         operation_handlers[OP_PHB] = &fam65xx_t::op_phb;
         operation_handlers[OP_PHD] = &fam65xx_t::op_phd;
         operation_handlers[OP_PHK] = &fam65xx_t::op_phk;
@@ -1356,8 +1356,8 @@ private:
         operation_handlers[OP_RTL] = &fam65xx_t::op_rtl;
         operation_handlers[OP_JSL] = &fam65xx_t::op_jsl;
         operation_handlers[OP_JML] = &fam65xx_t::op_jmp;
-//        operation_handlers[OP_MVN] = &fam65xx_t::op_mvn;
-//        operation_handlers[OP_MVP] = &fam65xx_t::op_mvp;
+        operation_handlers[OP_MVN] = &fam65xx_t::op_mvn;
+        operation_handlers[OP_MVP] = &fam65xx_t::op_mvp;
         operation_handlers[OP_RTS] = &fam65xx_t::op_rts;
         operation_handlers[OP_SAX] = &fam65xx_t::op_sax;
         operation_handlers[OP_SBC] = &fam65xx_t::op_sbc;
@@ -1395,10 +1395,10 @@ private:
         operation_handlers[OP_TYA] = &fam65xx_t::op_tya;
         operation_handlers[OP_WAI] = &fam65xx_t::op_wai;
         operation_handlers[OP_XAA] = &fam65xx_t::op_xaa;
-//        operation_handlers[OP_XBA] = &fam65xx_t::op_xba;
+        operation_handlers[OP_XBA] = &fam65xx_t::op_xba;
         operation_handlers[OP_XCE] = &fam65xx_t::op_xce;
-//        operation_handlers[OP_COP] = &fam65xx_t::op_cop;
-//        operation_handlers[OP_WDM] = &fam65xx_t::op_wdm;
+        operation_handlers[OP_COP] = &fam65xx_t::op_cop;
+        operation_handlers[OP_WDM] = &fam65xx_t::op_wdm;
         
         // Initialize addressing mode handler lookup table
         addressing_mode_handlers.fill(nullptr);  // Default to nullptr (safe for AM_NON/AM_IMM)
