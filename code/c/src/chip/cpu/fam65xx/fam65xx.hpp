@@ -180,7 +180,7 @@ public:
     // DEBUG TRACING HELPERS
     // ========================================================================
     
-    constexpr bool trace_instructions = false;
+    template<const bool trace_instructions = false>
     void print_instruction_trace() const {
         
         if constexpr (trace_instructions)
