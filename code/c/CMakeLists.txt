@@ -210,7 +210,11 @@ add_executable(c64emu
 )
 
 # Link required libraries
-# Note: mos6502_family functions are inline in headers, no separate library needed
+# Link required libraries
+target_link_libraries(c64emu
+    fam65xx_decoder  # FAM65XX instruction decoder
+)
+
 if(NOT WIN32 AND NOT MSVC)
     target_link_libraries(c64emu m)  # Add math library for tanhf (Unix only)
 endif()

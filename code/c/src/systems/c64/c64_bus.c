@@ -184,8 +184,8 @@ void* c64_bus_system_create(chip_descriptor_t* desc) {
     c64_bus_t* c64_bus = (c64_bus_t*)calloc(1, sizeof(c64_bus_t));
     if (!c64_bus) return NULL;
     c64_bus->desc = desc;
-    // Initialize bus state
-    c64_bus->state = BUS_STATE(0, 0, BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY);
+    // Initialize bus state with reset line inactive (active-low, so set bit high)
+    c64_bus->state = BUS_STATE(0, 0, BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY) | BUS_BIT(BUS_RES_BIT);
       // Initialize system lines with default cartridge signals (no cartridge)
     c64_bus->system_lines = SYS_MASK_EXROM | SYS_MASK_GAME;  // Both high = no cartridge
     

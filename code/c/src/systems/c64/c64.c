@@ -256,10 +256,11 @@ c64_t* c64_system_create(const c64_config_t* config) {
     // Initialize bus as embedded struct - no need to create separately
     c64->bus.desc = &c64_bus_descriptor;
     c64->bus.c64 = c64;
-    // Initialize bus state
+    // Initialize bus state with reset line inactive (active-low, so set bit high)
     BUS_SET_ADDR(c64->bus.state, 0);
     BUS_SET_DATA(c64->bus.state, 0);
     BUS_SET_LINES(c64->bus.state, BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY);
+    c64->bus.state |= BUS_BIT(BUS_RES_BIT);  // Set reset line inactive
     // Initialize system lines with default cartridge signals (no cartridge)
     c64->bus.system_lines = SYS_MASK_EXROM | SYS_MASK_GAME;
     // Initialize the integrated adapter interfaces
@@ -314,7 +315,7 @@ c64_t* c64_system_create(const c64_config_t* config) {
     
     // Reset the CPU to initialize proper startup state
     printf("C64 System: Resetting CPU to initialize startup state\n");
-    bus_state_t reset_state = {0};
+    bus_state_t reset_state = BUS_BIT(BUS_RES_BIT);  // Set reset line inactive (high for active-low)
     mos6510_reset((mos6510_t*)c64->mos6510, reset_state);
     
     return c64;
