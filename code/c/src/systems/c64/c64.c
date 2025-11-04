@@ -312,6 +312,11 @@ c64_t* c64_system_create(const c64_config_t* config) {
     // Set CIA2 interrupt line to NMI (CIA1 defaults to IRQ in constructor)
     ((mos6526_t*)c64->cia2)->interrupt_line = BUS_MASK_NMI;
     
+    // Reset the CPU to initialize proper startup state
+    printf("C64 System: Resetting CPU to initialize startup state\n");
+    bus_state_t reset_state = {0};
+    mos6510_reset((mos6510_t*)c64->mos6510, reset_state);
+    
     return c64;
 }
 

@@ -180,6 +180,36 @@ public:
     // DEBUG TRACING HELPERS
     // ========================================================================
     
+    void print_instruction_trace() const {
+        static int instruction_count = 0;
+        static bool trace_instructions = true;
+        
+        if (trace_instructions && instruction_count < 100) {
+            uint16_t pc = this->get(REG_PC);
+            uint16_t ab = this->get(REG_AB);  // Get address bus from register
+            uint8_t ir = this->get(REG_IR);  // Get instruction register
+            
+            // Use the current opcode_entry which is properly set during reset to BRK
+            // This shows the logical instruction being executed (BRK during reset)
+            // rather than whatever random data is in the IR register
+            const char* opcode_name = fam65xx_get_opcode_name(this->opcode_entry.op_index);
+            
+            printf("[%03d] PC=$%04X AB=$%04X IR=$%02X (%s) ", 
+                   instruction_count, pc, ab, ir, opcode_name);
+            
+            // Get instruction info if opcode is valid
+            printf("A=$%02X X=$%02X Y=$%02X S=$%02X P=$%02X\n", 
+                this->get(REG_A), this->get(REG_X), this->get(REG_Y), 
+                this->get(REG_SPL), this->get(REG_P));
+                
+            instruction_count++;
+            if (instruction_count >= 100) {
+                trace_instructions = false;
+                printf("=== Instruction trace complete (100 instructions) ===\n");
+            }
+        }
+    }
+    
     void trace(const char* format, ...) const {
         if constexpr (ENABLE_TRACING) {
             // Print indentation
@@ -314,6 +344,9 @@ public:
         this->current_handler = &fam65xx_t::op_brk;
         this->cycle_index = 4;  // Jump to vector loading phase
         
+        // Set up opcode_entry for BRK (opcode $00) so tracing shows correct instruction
+        this->opcode_entry = {OP_BRK, AM_NON, OF_NONE};
+        
         return pins;
     }
     
@@ -321,38 +354,10 @@ public:
         trace_enter("tick");
         trace_registers("before");
         
-        // Instruction disassembly for first 100 instructions
-        static int instruction_count = 0;
-        static bool trace_instructions = true;
-        
         // SYNC pin management - asserted during opcode fetch cycles (matching old implementation)
         if (this->current_handler == &fam65xx_t::fetch_opcode && this->cycle_index == 0) {
             pins |= FAM65XX_SYNC;
             trace("SYNC asserted (opcode fetch)");
-            
-            // Print disassembly for first 100 instructions
-            if (trace_instructions && instruction_count < 100) {
-                uint16_t pc = this->get(REG_PC);
-                uint16_t ab = this->get(REG_AB);  // Get address bus from register
-                uint8_t ir = this->get(REG_IR);  // Get instruction register
-                
-                // Get opcode name from decoder
-                const char* opcode_name = fam65xx_get_opcode_name(ir);
-                
-                printf("[%03d] PC=$%04X AB=$%04X IR=$%02X (%s) ", 
-                       instruction_count, pc, ab, ir, opcode_name);
-                
-                // Get instruction info if opcode is valid
-                printf("A=$%02X X=$%02X Y=$%02X S=$%02X P=$%02X\n", 
-                    this->get(REG_A), this->get(REG_X), this->get(REG_Y), 
-                    this->get(REG_SPL), this->get(REG_P));
-                    
-                instruction_count++;
-                if (instruction_count >= 100) {
-                    trace_instructions = false;
-                    printf("=== Instruction trace complete (100 instructions) ===\n");
-                }
-            }
         } else {
             pins &= ~FAM65XX_SYNC;
         }
@@ -388,6 +393,9 @@ public:
         if constexpr (has_apu()) {
             pins = this->clock_apu(pins);
         }
+        
+        // Print instruction trace for debugging (covers all memory accesses including reset)
+        this->print_instruction_trace();
         
         trace_registers("after");
         trace_exit("tick");
