@@ -95,7 +95,8 @@ ProcessorType detect_processor_from_path(const std::string& test_path) {
     if (path_lower.find("processor_tests/wdc65c02/") != std::string::npos) {
         return ProcessorType::WDC65C02;
     }
-    if (path_lower.find("processor_tests/wdc65c816/") != std::string::npos) {
+    if (path_lower.find("processor_tests/wdc65c816/") != std::string::npos ||
+        path_lower.find("processor_tests/65816/") != std::string::npos) {
         return ProcessorType::WDC65C816;
     }
     return ProcessorType::MOS6502;  // Default fallback
