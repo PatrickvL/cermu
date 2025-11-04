@@ -363,6 +363,348 @@ bus_state_t op_rtl(bus_state_t pins) {
     return pins;
 }
 
+// PER - Push Effective Relative Address (65C816)
+bus_state_t op_per(bus_state_t pins) {
+    if constexpr (has_wide_registers()) {
+        switch (this->cycle_index) {
+            case 0:
+                // Read relative offset low byte
+                pins = this->phi2_read(pins, REG_PC, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                // Read relative offset high byte
+                pins = this->phi2_read(pins, REG_PC, REG_ABH);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    // Calculate effective address: PC + signed offset
+                    int16_t offset = (this->get(REG_ABH) << 8) | this->get(REG_DL);
+                    uint16_t effective_addr = this->get(REG_PC) + offset;
+                    this->set(REG_AB, effective_addr);
+                    cycle_index++;
+                }
+                return pins;
+                
+            case 2:
+                // Push high byte of effective address
+                if (this->should_complete_write_cycle(pins)) {
+                    pins = this->phi2_write(pins, REG_SP, this->get(REG_ABH));
+                    this->dec(REG_S);
+                    cycle_index++;
+                }
+                return pins;
+                
+            case 3:
+                // Push low byte of effective address
+                if (this->should_complete_write_cycle(pins)) {
+                    pins = this->phi2_write(pins, REG_SP, this->get(REG_ABL));
+                    this->dec(REG_S);
+                    this->transition_to_fetch();
+                }
+                return pins;
+        }
+    }
+    return pins;
+}
+
+// PEI - Push Effective Indirect Address (65C816)
+bus_state_t op_pei(bus_state_t pins) {
+    if constexpr (has_wide_registers()) {
+        switch (this->cycle_index) {
+            case 0:
+                // Read zero page address
+                pins = this->phi2_read(pins, REG_PC, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    // Calculate direct page relative address
+                    uint16_t dp_addr = this->wide_state.D + this->get(REG_DL);
+                    this->set(REG_AB, dp_addr);
+                    cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                // Read low byte of indirect address
+                pins = this->phi2_read(pins, REG_AB, REG_ABL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_AB);
+                    cycle_index++;
+                }
+                return pins;
+                
+            case 2:
+                // Read high byte of indirect address
+                pins = this->phi2_read(pins, REG_AB, REG_ABH);
+                if (FAM65XX_GET_RDY(pins)) {
+                    cycle_index++;
+                }
+                return pins;
+                
+            case 3:
+                // Push high byte of effective address
+                if (this->should_complete_write_cycle(pins)) {
+                    pins = this->phi2_write(pins, REG_SP, this->get(REG_ABH));
+                    this->dec(REG_S);
+                    cycle_index++;
+                }
+                return pins;
+                
+            case 4:
+                // Push low byte of effective address
+                if (this->should_complete_write_cycle(pins)) {
+                    pins = this->phi2_write(pins, REG_SP, this->get(REG_ABL));
+                    this->dec(REG_S);
+                    this->transition_to_fetch();
+                }
+                return pins;
+        }
+    }
+    return pins;
+}
+
+// XBA - Exchange B and A (65C816)
+bus_state_t op_xba(bus_state_t pins) {
+    if constexpr (has_wide_registers()) {
+        // Exchange the low and high bytes of the 16-bit accumulator
+        uint16_t full_a = this->wide_state.A_full;
+        uint8_t low_byte = full_a & 0xFF;
+        uint8_t high_byte = (full_a >> 8) & 0xFF;
+        
+        // Swap the bytes
+        this->wide_state.A_full = (low_byte << 8) | high_byte;
+        
+        // Update the 8-bit A register to reflect the new low byte
+        this->set(REG_A, high_byte);
+        
+        // Update N and Z flags based on new A register value
+        this->update_nz_flags(high_byte);
+        
+        this->transition_to_fetch();
+    }
+    return pins;
+}
+
+// MVN - Move Negative (65C816)
+bus_state_t op_mvn(bus_state_t pins) {
+    if constexpr (has_wide_registers()) {
+        switch (this->cycle_index) {
+            case 0:
+                // Read destination bank
+                pins = this->phi2_read(pins, REG_PC, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                // Read source bank
+                pins = this->phi2_read(pins, REG_PC, REG_ABH);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    cycle_index++;
+                }
+                return pins;
+                
+            case 2:
+                // Read from source address (bank:X)
+                {
+                    uint32_t src_addr = (this->get(REG_ABH) << 16) | this->get(REG_X);
+                    this->set(REG_AB, src_addr & 0xFFFF);
+                    pins = this->phi2_read(pins, REG_AB, REG_ABL);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        cycle_index++;
+                    }
+                }
+                return pins;
+                
+            case 3:
+                // Write to destination address (bank:Y)
+                if (this->should_complete_write_cycle(pins)) {
+                    uint32_t dst_addr = (this->get(REG_DL) << 16) | this->get(REG_Y);
+                    this->set(REG_AB, dst_addr & 0xFFFF);
+                    pins = this->phi2_write(pins, REG_AB, this->get(REG_ABL));
+                    
+                    // Increment X and Y
+                    this->inc(REG_X);
+                    this->inc(REG_Y);
+                    
+                    // Decrement A (transfer count)
+                    this->dec(REG_A);
+                    
+                    // Check if more bytes to transfer
+                    if (this->get(REG_A) != 0xFFFF) {
+                        // Continue transfer - go back to cycle 2
+                        cycle_index = 2;
+                    } else {
+                        // Transfer complete
+                        this->transition_to_fetch();
+                    }
+                }
+                return pins;
+        }
+    }
+    return pins;
+}
+
+// MVP - Move Positive (65C816)
+bus_state_t op_mvp(bus_state_t pins) {
+    if constexpr (has_wide_registers()) {
+        switch (this->cycle_index) {
+            case 0:
+                // Read destination bank
+                pins = this->phi2_read(pins, REG_PC, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                // Read source bank
+                pins = this->phi2_read(pins, REG_PC, REG_ABH);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    cycle_index++;
+                }
+                return pins;
+                
+            case 2:
+                // Read from source address (bank:X)
+                {
+                    uint32_t src_addr = (this->get(REG_ABH) << 16) | this->get(REG_X);
+                    this->set(REG_AB, src_addr & 0xFFFF);
+                    pins = this->phi2_read(pins, REG_AB, REG_ABL);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        cycle_index++;
+                    }
+                }
+                return pins;
+                
+            case 3:
+                // Write to destination address (bank:Y)
+                if (this->should_complete_write_cycle(pins)) {
+                    uint32_t dst_addr = (this->get(REG_DL) << 16) | this->get(REG_Y);
+                    this->set(REG_AB, dst_addr & 0xFFFF);
+                    pins = this->phi2_write(pins, REG_AB, this->get(REG_ABL));
+                    
+                    // Decrement X and Y (move in opposite direction from MVN)
+                    this->dec(REG_X);
+                    this->dec(REG_Y);
+                    
+                    // Decrement A (transfer count)
+                    this->dec(REG_A);
+                    
+                    // Check if more bytes to transfer
+                    if (this->get(REG_A) != 0xFFFF) {
+                        // Continue transfer - go back to cycle 2
+                        cycle_index = 2;
+                    } else {
+                        // Transfer complete
+                        this->transition_to_fetch();
+                    }
+                }
+                return pins;
+        }
+    }
+    return pins;
+}
+
+// COP - Co-processor Instruction (65C816)
+bus_state_t op_cop(bus_state_t pins) {
+    if constexpr (has_wide_registers()) {
+        switch (this->cycle_index) {
+            case 0:
+                // Read signature byte (ignored, but must be read for timing)
+                pins = this->phi2_read(pins, REG_PC, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                // Push program bank register
+                if (this->should_complete_write_cycle(pins)) {
+                    pins = this->phi2_write(pins, REG_SP, this->wide_state.PBR);
+                    this->dec(REG_S);
+                    cycle_index++;
+                }
+                return pins;
+                
+            case 2:
+                // Push PC high byte
+                if (this->should_complete_write_cycle(pins)) {
+                    pins = this->phi2_write(pins, REG_SP, this->get(REG_PCH));
+                    this->dec(REG_S);
+                    cycle_index++;
+                }
+                return pins;
+                
+            case 3:
+                // Push PC low byte
+                if (this->should_complete_write_cycle(pins)) {
+                    pins = this->phi2_write(pins, REG_SP, this->get(REG_PCL));
+                    this->dec(REG_S);
+                    cycle_index++;
+                }
+                return pins;
+                
+            case 4:
+                // Push processor status register
+                if (this->should_complete_write_cycle(pins)) {
+                    pins = this->phi2_write(pins, REG_SP, this->get(REG_P));
+                    this->dec(REG_S);
+                    // Set up interrupt type and vector address
+                    this->active_interrupt = FAM65XX_INT_COP;
+                    this->set(REG_AB, this->get_vector_addr());
+                    cycle_index++;
+                }
+                return pins;
+                
+            case 5:
+                // Read interrupt vector low byte
+                pins = this->phi2_read(pins, REG_AB, REG_PCL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_AB);
+                    cycle_index++;
+                }
+                return pins;
+                
+            case 6:
+                // Read interrupt vector high byte
+                pins = this->phi2_read(pins, REG_AB, REG_PCH);
+                if (FAM65XX_GET_RDY(pins)) {
+                    // Clear interrupt flag and disable interrupts
+                    this->clear_flag(FLAG_D);  // Clear decimal mode
+                    this->set_flag(FLAG_I);    // Disable interrupts
+                    this->active_interrupt = FAM65XX_INT_NONE;
+                    this->transition_to_fetch();
+                }
+                return pins;
+        }
+    }
+    return pins;
+}
+
+// WDM - WDM Reserved Instruction (65C816)
+bus_state_t op_wdm(bus_state_t pins) {
+    if constexpr (has_wide_registers()) {
+        // Read and ignore operand byte for timing compatibility
+        pins = this->phi2_read(pins, REG_PC, REG_DL);
+        if (FAM65XX_GET_RDY(pins)) {
+            this->inc(REG_PC);
+            // WDM is essentially a 2-byte NOP - do nothing else
+            this->transition_to_fetch();
+        }
+    }
+    return pins;
+}
+
 #endif // FAM65XX_SKIP_IMPLEMENTATION
 
 #include "inc_lint_prevention_footer.hpp"
