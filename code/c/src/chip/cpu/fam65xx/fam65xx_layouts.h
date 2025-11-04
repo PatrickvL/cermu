@@ -444,67 +444,56 @@ std::vector<PinState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, const 
 }
 
 // ============================================================================
+// COMPACT PIN DEFINITION MACROS FOR DIP-40 LAYOUTS
+// ============================================================================
+
+// Macro to create a ChipPin with all members properly initialized
+#define MAKE_PIN(num, lbl, typ, bit, inv) \
+    {num, lbl, typ, bit, inv, nullptr, nullptr, false, false}
+
+// Macro to define left and right pins in one line for DIP-40 packages
+#define PIN_PAIR(left_num, left_lbl, left_typ, left_bit, left_inv, \
+                 right_num, right_lbl, right_typ, right_bit, right_inv) \
+    layout.left_pins.push_back(MAKE_PIN(left_num, left_lbl, left_typ, left_bit, left_inv)); \
+    layout.right_pins.push_back(MAKE_PIN(right_num, right_lbl, right_typ, right_bit, right_inv));
+
+// ============================================================================
 // MOS 6502 SPECIFIC LAYOUT IMPLEMENTATION
 // ============================================================================
 
 PinLayout create_mos6502_layout() {
     // Start with DIP-40 base layout from core system
     PinLayout layout = create_dip40_layout();
-    
+   
     // Customize for MOS 6502 - assign pin labels and types
     // The create_dip40_layout() provides the physical package structure
-    
+   
     // Update package info for MOS 6502
     layout.markings.part_number = "MOS6502";
     layout.markings.manufacturer = "MOS Technology";
-    
-    // Pin assignments for MOS 6502 (40-pin DIP) left side: pins 1-20, right side: pins 21-40
-    layout.left_pins = {
-        {1,  "VSS",   PinType::POWER,     0, false},
-        {2,  "RDY",   PinType::CONTROL,   0, false},
-        {3,  "φ1",    PinType::CLOCK,     0, false},
-        {4,  "IRQ",   PinType::INTERRUPT, 0, true},
-        {5,  "NC",    PinType::SPECIAL,   0, false},
-        {6,  "NMI",   PinType::INTERRUPT, 0, true},
-        {7,  "SYNC",  PinType::CONTROL,   0, false},
-        {8,  "VCC",   PinType::POWER,     0, false},
-        {9,  "A0",    PinType::ADDRESS,   0, false},
-        {10, "A1",    PinType::ADDRESS,   1, false},
-        {11, "A2",    PinType::ADDRESS,   2, false},
-        {12, "A3",    PinType::ADDRESS,   3, false},
-        {13, "A4",    PinType::ADDRESS,   4, false},
-        {14, "A5",    PinType::ADDRESS,   5, false},
-        {15, "A6",    PinType::ADDRESS,   6, false},
-        {16, "A7",    PinType::ADDRESS,   7, false},
-        {17, "A8",    PinType::ADDRESS,   8, false},
-        {18, "A9",    PinType::ADDRESS,   9, false},
-        {19, "A10",   PinType::ADDRESS,   10, false},
-        {20, "A11",   PinType::ADDRESS,   11, false}
-    };
-
-    layout.right_pins = {        
-        {21, "VSS",   PinType::POWER,     0, false},
-        {22, "A12",   PinType::ADDRESS,   12, false},
-        {23, "A13",   PinType::ADDRESS,   13, false},
-        {24, "A14",   PinType::ADDRESS,   14, false},
-        {25, "A15",   PinType::ADDRESS,   15, false},
-        {26, "D7",    PinType::DATA,      7, false},
-        {27, "D6",    PinType::DATA,      6, false},
-        {28, "D5",    PinType::DATA,      5, false},
-        {29, "D4",    PinType::DATA,      4, false},
-        {30, "D3",    PinType::DATA,      3, false},
-        {31, "D2",    PinType::DATA,      2, false},
-        {32, "D1",    PinType::DATA,      1, false},
-        {33, "D0",    PinType::DATA,      0, false},
-        {34, "RW",    PinType::CONTROL,   0, false},
-        {35, "NC",    PinType::SPECIAL,   0, false},
-        {36, "NC",    PinType::SPECIAL,   0, false}, // No BE on original 6502
-        {37, "φ0",    PinType::CLOCK,     0, false},
-        {38, "SO",    PinType::SPECIAL,   0, true},
-        {39, "φ2",    PinType::CLOCK,     0, false},
-        {40, "RES",   PinType::INTERRUPT, 0, true}
-    };
-    
+   
+    // Pin assignments for MOS 6502 (40-pin DIP) - 20 lines of compact pin definitions
+    PIN_PAIR(1,  "VSS",   PinType::POWER,     0, false,   21, "VSS",   PinType::POWER,     0, false)
+    PIN_PAIR(2,  "RDY",   PinType::CONTROL,   0, false,   22, "A12",   PinType::ADDRESS,   12, false)
+    PIN_PAIR(3,  "φ1",    PinType::CLOCK,     0, false,   23, "A13",   PinType::ADDRESS,   13, false)
+    PIN_PAIR(4,  "IRQ",   PinType::INTERRUPT, 0, true,    24, "A14",   PinType::ADDRESS,   14, false)
+    PIN_PAIR(5,  "NC",    PinType::SPECIAL,   0, false,   25, "A15",   PinType::ADDRESS,   15, false)
+    PIN_PAIR(6,  "NMI",   PinType::INTERRUPT, 0, true,    26, "D7",    PinType::DATA,      7, false)
+    PIN_PAIR(7,  "SYNC",  PinType::CONTROL,   0, false,   27, "D6",    PinType::DATA,      6, false)
+    PIN_PAIR(8,  "VCC",   PinType::POWER,     0, false,   28, "D5",    PinType::DATA,      5, false)
+    PIN_PAIR(9,  "A0",    PinType::ADDRESS,   0, false,   29, "D4",    PinType::DATA,      4, false)
+    PIN_PAIR(10, "A1",    PinType::ADDRESS,   1, false,   30, "D3",    PinType::DATA,      3, false)
+    PIN_PAIR(11, "A2",    PinType::ADDRESS,   2, false,   31, "D2",    PinType::DATA,      2, false)
+    PIN_PAIR(12, "A3",    PinType::ADDRESS,   3, false,   32, "D1",    PinType::DATA,      1, false)
+    PIN_PAIR(13, "A4",    PinType::ADDRESS,   4, false,   33, "D0",    PinType::DATA,      0, false)
+    PIN_PAIR(14, "A5",    PinType::ADDRESS,   5, false,   34, "RW",    PinType::CONTROL,   0, false)
+    PIN_PAIR(15, "A6",    PinType::ADDRESS,   6, false,   35, "NC",    PinType::SPECIAL,   0, false)
+    PIN_PAIR(16, "A7",    PinType::ADDRESS,   7, false,   36, "NC",    PinType::SPECIAL,   0, false)
+    PIN_PAIR(17, "A8",    PinType::ADDRESS,   8, false,   37, "φ0",    PinType::CLOCK,     0, false)
+    PIN_PAIR(18, "A9",    PinType::ADDRESS,   9, false,   38, "SO",    PinType::SPECIAL,   0, true)
+    PIN_PAIR(19, "A10",   PinType::ADDRESS,   10, false,  39, "φ2",    PinType::CLOCK,     0, false)
+    PIN_PAIR(20, "A11",   PinType::ADDRESS,   11, false,  40, "RES",   PinType::INTERRUPT, 0, true)
+   
     return layout;
 }
 
@@ -516,53 +505,27 @@ PinLayout create_mos6510_layout() {
     layout.markings.part_number = "MOS6510";
     layout.markings.manufacturer = "MOS Technology";
     
-    // Pin assignments for MOS 6510 (40-pin DIP) - mostly same as 6502 but with AEC
-    layout.left_pins = {
-        // Left side (1-20)
-        {1,  "VSS",   PinType::POWER,     0, false},
-        {2,  "RDY",   PinType::CONTROL,   0, false},
-        {3,  "φ1",    PinType::CLOCK,     0, false},
-        {4,  "IRQ",   PinType::INTERRUPT, 0, true},
-        {5,  "NC",    PinType::SPECIAL,   0, false},
-        {6,  "NMI",   PinType::INTERRUPT, 0, true},
-        {7,  "SYNC",  PinType::CONTROL,   0, false},
-        {8,  "VCC",   PinType::POWER,     0, false},
-        {9,  "A0",    PinType::ADDRESS,   0, false},
-        {10, "A1",    PinType::ADDRESS,   1, false},
-        {11, "A2",    PinType::ADDRESS,   2, false},
-        {12, "A3",    PinType::ADDRESS,   3, false},
-        {13, "A4",    PinType::ADDRESS,   4, false},
-        {14, "A5",    PinType::ADDRESS,   5, false},
-        {15, "A6",    PinType::ADDRESS,   6, false},
-        {16, "A7",    PinType::ADDRESS,   7, false},
-        {17, "A8",    PinType::ADDRESS,   8, false},
-        {18, "A9",    PinType::ADDRESS,   9, false},
-        {19, "A10",   PinType::ADDRESS,   10, false},
-        {20, "A11",   PinType::ADDRESS,   11, false}
-    };
-    layout.right_pins = {    
-        // Right side (21-40)
-        {21, "VSS",   PinType::POWER,     0, false},
-        {22, "A12",   PinType::ADDRESS,   12, false},
-        {23, "A13",   PinType::ADDRESS,   13, false},
-        {24, "A14",   PinType::ADDRESS,   14, false},
-        {25, "A15",   PinType::ADDRESS,   15, false},
-        {26, "D7",    PinType::DATA,      7, false},
-        {27, "D6",    PinType::DATA,      6, false},
-        {28, "D5",    PinType::DATA,      5, false},
-        {29, "D4",    PinType::DATA,      4, false},
-        {30, "D3",    PinType::DATA,      3, false},
-        {31, "D2",    PinType::DATA,      2, false},
-        {32, "D1",    PinType::DATA,      1, false},
-        {33, "D0",    PinType::DATA,      0, false},
-        {34, "RW",    PinType::CONTROL,   0, false},
-        {35, "AEC",   PinType::CONTROL,   0, false}, // Address Enable Control - 6510 specific
-        {36, "NC",    PinType::SPECIAL,   0, false},
-        {37, "φ0",    PinType::CLOCK,     0, false},
-        {38, "SO",    PinType::SPECIAL,   0, true},
-        {39, "φ2",    PinType::CLOCK,     0, false},
-        {40, "RES",   PinType::INTERRUPT, 0, true}
-    };
+    // Pin assignments for MOS 6510 (40-pin DIP) - 20 lines of compact pin definitions
+    PIN_PAIR(1,  "VSS",   PinType::POWER,     0, false,   21, "VSS",   PinType::POWER,     0, false)
+    PIN_PAIR(2,  "RDY",   PinType::CONTROL,   0, false,   22, "A12",   PinType::ADDRESS,   12, false)
+    PIN_PAIR(3,  "φ1",    PinType::CLOCK,     0, false,   23, "A13",   PinType::ADDRESS,   13, false)
+    PIN_PAIR(4,  "IRQ",   PinType::INTERRUPT, 0, true,    24, "A14",   PinType::ADDRESS,   14, false)
+    PIN_PAIR(5,  "NC",    PinType::SPECIAL,   0, false,   25, "A15",   PinType::ADDRESS,   15, false)
+    PIN_PAIR(6,  "NMI",   PinType::INTERRUPT, 0, true,    26, "D7",    PinType::DATA,      7, false)
+    PIN_PAIR(7,  "SYNC",  PinType::CONTROL,   0, false,   27, "D6",    PinType::DATA,      6, false)
+    PIN_PAIR(8,  "VCC",   PinType::POWER,     0, false,   28, "D5",    PinType::DATA,      5, false)
+    PIN_PAIR(9,  "A0",    PinType::ADDRESS,   0, false,   29, "D4",    PinType::DATA,      4, false)
+    PIN_PAIR(10, "A1",    PinType::ADDRESS,   1, false,   30, "D3",    PinType::DATA,      3, false)
+    PIN_PAIR(11, "A2",    PinType::ADDRESS,   2, false,   31, "D2",    PinType::DATA,      2, false)
+    PIN_PAIR(12, "A3",    PinType::ADDRESS,   3, false,   32, "D1",    PinType::DATA,      1, false)
+    PIN_PAIR(13, "A4",    PinType::ADDRESS,   4, false,   33, "D0",    PinType::DATA,      0, false)
+    PIN_PAIR(14, "A5",    PinType::ADDRESS,   5, false,   34, "RW",    PinType::CONTROL,   0, false)
+    PIN_PAIR(15, "A6",    PinType::ADDRESS,   6, false,   35, "AEC",   PinType::CONTROL,   0, false) // Address Enable Control - 6510 specific
+    PIN_PAIR(16, "A7",    PinType::ADDRESS,   7, false,   36, "NC",    PinType::SPECIAL,   0, false)
+    PIN_PAIR(17, "A8",    PinType::ADDRESS,   8, false,   37, "φ0",    PinType::CLOCK,     0, false)
+    PIN_PAIR(18, "A9",    PinType::ADDRESS,   9, false,   38, "SO",    PinType::SPECIAL,   0, true)
+    PIN_PAIR(19, "A10",   PinType::ADDRESS,   10, false,  39, "φ2",    PinType::CLOCK,     0, false)
+    PIN_PAIR(20, "A11",   PinType::ADDRESS,   11, false,  40, "RES",   PinType::INTERRUPT, 0, true)
     
     return layout;
 }
@@ -575,53 +538,27 @@ PinLayout create_wdc_w65c02s_layout() {
     layout.markings.part_number = "W65C02S";
     layout.markings.manufacturer = "Western Design Center";
     
-    // Pin assignments for WDC W65C02S (40-pin DIP) - CMOS version with BE pin
-    layout.left_pins = {
-        // Left side (1-20)
-        {1,  "VSS",   PinType::POWER,     0, false},
-        {2,  "RDY",   PinType::CONTROL,   0, false}, // Bidirectional on 65C02
-        {3,  "φ1",    PinType::CLOCK,     0, false},
-        {4,  "IRQ",   PinType::INTERRUPT, 0, true},
-        {5,  "NC",    PinType::SPECIAL,   0, false},
-        {6,  "NMI",   PinType::INTERRUPT, 0, true},
-        {7,  "SYNC",  PinType::CONTROL,   0, false},
-        {8,  "VCC",   PinType::POWER,     0, false},
-        {9,  "A0",    PinType::ADDRESS,   0, false},
-        {10, "A1",    PinType::ADDRESS,   1, false},
-        {11, "A2",    PinType::ADDRESS,   2, false},
-        {12, "A3",    PinType::ADDRESS,   3, false},
-        {13, "A4",    PinType::ADDRESS,   4, false},
-        {14, "A5",    PinType::ADDRESS,   5, false},
-        {15, "A6",    PinType::ADDRESS,   6, false},
-        {16, "A7",    PinType::ADDRESS,   7, false},
-        {17, "A8",    PinType::ADDRESS,   8, false},
-        {18, "A9",    PinType::ADDRESS,   9, false},
-        {19, "A10",   PinType::ADDRESS,   10, false},
-        {20, "A11",   PinType::ADDRESS,   11, false}
-    };
-    layout.right_pins = {    
-        // Right side (21-40)
-        {21, "VSS",   PinType::POWER,     0, false},
-        {22, "A12",   PinType::ADDRESS,   12, false},
-        {23, "A13",   PinType::ADDRESS,   13, false},
-        {24, "A14",   PinType::ADDRESS,   14, false},
-        {25, "A15",   PinType::ADDRESS,   15, false},
-        {26, "D7",    PinType::DATA,      7, false},
-        {27, "D6",    PinType::DATA,      6, false},
-        {28, "D5",    PinType::DATA,      5, false},
-        {29, "D4",    PinType::DATA,      4, false},
-        {30, "D3",    PinType::DATA,      3, false},
-        {31, "D2",    PinType::DATA,      2, false},
-        {32, "D1",    PinType::DATA,      1, false},
-        {33, "D0",    PinType::DATA,      0, false},
-        {34, "RW",    PinType::CONTROL,   0, false},
-        {35, "NC",    PinType::SPECIAL,   0, false},
-        {36, "BE",    PinType::CONTROL,   0, false}, // Bus Enable on 65C02
-        {37, "φ0",    PinType::CLOCK,     0, false},
-        {38, "SO",    PinType::SPECIAL,   0, true},
-        {39, "φ2",    PinType::CLOCK,     0, false},
-        {40, "RES",   PinType::INTERRUPT, 0, true}
-    };
+    // Pin assignments for WDC W65C02S (40-pin DIP) - 20 lines of compact pin definitions
+    PIN_PAIR(1,  "VSS",   PinType::POWER,     0, false,   21, "VSS",   PinType::POWER,     0, false)
+    PIN_PAIR(2,  "RDY",   PinType::CONTROL,   0, false,   22, "A12",   PinType::ADDRESS,   12, false) // Bidirectional on 65C02
+    PIN_PAIR(3,  "φ1",    PinType::CLOCK,     0, false,   23, "A13",   PinType::ADDRESS,   13, false)
+    PIN_PAIR(4,  "IRQ",   PinType::INTERRUPT, 0, true,    24, "A14",   PinType::ADDRESS,   14, false)
+    PIN_PAIR(5,  "NC",    PinType::SPECIAL,   0, false,   25, "A15",   PinType::ADDRESS,   15, false)
+    PIN_PAIR(6,  "NMI",   PinType::INTERRUPT, 0, true,    26, "D7",    PinType::DATA,      7, false)
+    PIN_PAIR(7,  "SYNC",  PinType::CONTROL,   0, false,   27, "D6",    PinType::DATA,      6, false)
+    PIN_PAIR(8,  "VCC",   PinType::POWER,     0, false,   28, "D5",    PinType::DATA,      5, false)
+    PIN_PAIR(9,  "A0",    PinType::ADDRESS,   0, false,   29, "D4",    PinType::DATA,      4, false)
+    PIN_PAIR(10, "A1",    PinType::ADDRESS,   1, false,   30, "D3",    PinType::DATA,      3, false)
+    PIN_PAIR(11, "A2",    PinType::ADDRESS,   2, false,   31, "D2",    PinType::DATA,      2, false)
+    PIN_PAIR(12, "A3",    PinType::ADDRESS,   3, false,   32, "D1",    PinType::DATA,      1, false)
+    PIN_PAIR(13, "A4",    PinType::ADDRESS,   4, false,   33, "D0",    PinType::DATA,      0, false)
+    PIN_PAIR(14, "A5",    PinType::ADDRESS,   5, false,   34, "RW",    PinType::CONTROL,   0, false)
+    PIN_PAIR(15, "A6",    PinType::ADDRESS,   6, false,   35, "NC",    PinType::SPECIAL,   0, false)
+    PIN_PAIR(16, "A7",    PinType::ADDRESS,   7, false,   36, "BE",    PinType::CONTROL,   0, false) // Bus Enable on 65C02
+    PIN_PAIR(17, "A8",    PinType::ADDRESS,   8, false,   37, "φ0",    PinType::CLOCK,     0, false)
+    PIN_PAIR(18, "A9",    PinType::ADDRESS,   9, false,   38, "SO",    PinType::SPECIAL,   0, true)
+    PIN_PAIR(19, "A10",   PinType::ADDRESS,   10, false,  39, "φ2",    PinType::CLOCK,     0, false)
+    PIN_PAIR(20, "A11",   PinType::ADDRESS,   11, false,  40, "RES",   PinType::INTERRUPT, 0, true)
     
     return layout;
 }
@@ -634,53 +571,27 @@ PinLayout create_wdc_65c816_layout() {
     layout.markings.part_number = "W65C816S";
     layout.markings.manufacturer = "Western Design Center";
     
-    // Pin assignments for WDC 65C816 (40-pin DIP) - 16-bit processor
-    layout.left_pins = {
-        // Left side (1-20)
-        {1,  "VPB",   PinType::CONTROL,   0, false}, // Vector Pull Bar
-        {2,  "RDY",   PinType::CONTROL,   0, false},
-        {3,  "ABRT",  PinType::INTERRUPT, 0, true}, // Abort
-        {4,  "IRQ",   PinType::INTERRUPT, 0, true},
-        {5,  "ML",    PinType::CONTROL,   0, true}, // Memory Lock
-        {6,  "NMI",   PinType::INTERRUPT, 0, true},
-        {7,  "VP",    PinType::CONTROL,   0, false}, // Vector Pull
-        {8,  "VCC",   PinType::POWER,     0, false},
-        {9,  "A0",    PinType::ADDRESS,   0, false},
-        {10, "A1",    PinType::ADDRESS,   1, false},
-        {11, "A2",    PinType::ADDRESS,   2, false},
-        {12, "A3",    PinType::ADDRESS,   3, false},
-        {13, "A4",    PinType::ADDRESS,   4, false},
-        {14, "A5",    PinType::ADDRESS,   5, false},
-        {15, "A6",    PinType::ADDRESS,   6, false},
-        {16, "A7",    PinType::ADDRESS,   7, false},
-        {17, "A8",    PinType::ADDRESS,   8, false},
-        {18, "A9",    PinType::ADDRESS,   9, false},
-        {19, "A10",   PinType::ADDRESS,   10, false},
-        {20, "A11",   PinType::ADDRESS,   11, false}
-    };
-    layout.right_pins = {        
-        // Right side (21-40)
-        {21, "VSS",   PinType::POWER,     0, false},
-        {22, "A12",   PinType::ADDRESS,   12, false},
-        {23, "A13",   PinType::ADDRESS,   13, false},
-        {24, "A14",   PinType::ADDRESS,   14, false},
-        {25, "A15",   PinType::ADDRESS,   15, false},
-        {26, "D7",    PinType::DATA,      7, false},
-        {27, "D6",    PinType::DATA,      6, false},
-        {28, "D5",    PinType::DATA,      5, false},
-        {29, "D4",    PinType::DATA,      4, false},
-        {30, "D3",    PinType::DATA,      3, false},
-        {31, "D2",    PinType::DATA,      2, false},
-        {32, "D1",    PinType::DATA,      1, false},
-        {33, "D0",    PinType::DATA,      0, false},
-        {34, "RW",    PinType::CONTROL,   0, false},
-        {35, "E",     PinType::CLOCK,     0, false}, // Enable Clock
-        {36, "BE",    PinType::CONTROL,   0, false}, // Bus Enable
-        {37, "φ0",    PinType::CLOCK,     0, false},
-        {38, "MX",    PinType::CONTROL,   0, false}, // Mode Select
-        {39, "φ2",    PinType::CLOCK,     0, false},
-        {40, "RES",   PinType::INTERRUPT, 0, true}
-    };
+    // Pin assignments for WDC 65C816 (40-pin DIP) - 20 lines of compact pin definitions
+    PIN_PAIR(1,  "VPB",   PinType::CONTROL,   0, false,   21, "VSS",   PinType::POWER,     0, false) // Vector Pull Bar
+    PIN_PAIR(2,  "RDY",   PinType::CONTROL,   0, false,   22, "A12",   PinType::ADDRESS,   12, false)
+    PIN_PAIR(3,  "ABRT",  PinType::INTERRUPT, 0, true,    23, "A13",   PinType::ADDRESS,   13, false) // Abort
+    PIN_PAIR(4,  "IRQ",   PinType::INTERRUPT, 0, true,    24, "A14",   PinType::ADDRESS,   14, false)
+    PIN_PAIR(5,  "ML",    PinType::CONTROL,   0, true,    25, "A15",   PinType::ADDRESS,   15, false) // Memory Lock
+    PIN_PAIR(6,  "NMI",   PinType::INTERRUPT, 0, true,    26, "D7",    PinType::DATA,      7, false)
+    PIN_PAIR(7,  "VP",    PinType::CONTROL,   0, false,   27, "D6",    PinType::DATA,      6, false) // Vector Pull
+    PIN_PAIR(8,  "VCC",   PinType::POWER,     0, false,   28, "D5",    PinType::DATA,      5, false)
+    PIN_PAIR(9,  "A0",    PinType::ADDRESS,   0, false,   29, "D4",    PinType::DATA,      4, false)
+    PIN_PAIR(10, "A1",    PinType::ADDRESS,   1, false,   30, "D3",    PinType::DATA,      3, false)
+    PIN_PAIR(11, "A2",    PinType::ADDRESS,   2, false,   31, "D2",    PinType::DATA,      2, false)
+    PIN_PAIR(12, "A3",    PinType::ADDRESS,   3, false,   32, "D1",    PinType::DATA,      1, false)
+    PIN_PAIR(13, "A4",    PinType::ADDRESS,   4, false,   33, "D0",    PinType::DATA,      0, false)
+    PIN_PAIR(14, "A5",    PinType::ADDRESS,   5, false,   34, "RW",    PinType::CONTROL,   0, false)
+    PIN_PAIR(15, "A6",    PinType::ADDRESS,   6, false,   35, "E",     PinType::CLOCK,     0, false) // Enable Clock
+    PIN_PAIR(16, "A7",    PinType::ADDRESS,   7, false,   36, "BE",    PinType::CONTROL,   0, false) // Bus Enable
+    PIN_PAIR(17, "A8",    PinType::ADDRESS,   8, false,   37, "φ0",    PinType::CLOCK,     0, false)
+    PIN_PAIR(18, "A9",    PinType::ADDRESS,   9, false,   38, "MX",    PinType::CONTROL,   0, false) // Mode Select
+    PIN_PAIR(19, "A10",   PinType::ADDRESS,   10, false,  39, "φ2",    PinType::CLOCK,     0, false)
+    PIN_PAIR(20, "A11",   PinType::ADDRESS,   11, false,  40, "RES",   PinType::INTERRUPT, 0, true)
     
     return layout;
 }
@@ -693,53 +604,27 @@ PinLayout create_ricoh_2a03_layout() {
     layout.markings.part_number = "RP2A03";
     layout.markings.manufacturer = "Ricoh";
     
-    // Pin assignments for RICOH 2A03 (40-pin DIP) - NES processor (6502 derivative)
-    layout.left_pins = {
-        // Left side (1-20)
-        {1,  "VSS",   PinType::POWER,     0, false},
-        {2,  "RDY",   PinType::CONTROL,   0, false}, // Tied high internally in some revisions
-        {3,  "φ1",    PinType::CLOCK,     0, false},
-        {4,  "IRQ",   PinType::INTERRUPT, 0, true},
-        {5,  "NC",    PinType::SPECIAL,   0, false},
-        {6,  "NMI",   PinType::INTERRUPT, 0, true},
-        {7,  "SYNC",  PinType::CONTROL,   0, false},
-        {8,  "VCC",   PinType::POWER,     0, false},
-        {9,  "A0",    PinType::ADDRESS,   0, false},
-        {10, "A1",    PinType::ADDRESS,   1, false},
-        {11, "A2",    PinType::ADDRESS,   2, false},
-        {12, "A3",    PinType::ADDRESS,   3, false},
-        {13, "A4",    PinType::ADDRESS,   4, false},
-        {14, "A5",    PinType::ADDRESS,   5, false},
-        {15, "A6",    PinType::ADDRESS,   6, false},
-        {16, "A7",    PinType::ADDRESS,   7, false},
-        {17, "A8",    PinType::ADDRESS,   8, false},
-        {18, "A9",    PinType::ADDRESS,   9, false},
-        {19, "A10",   PinType::ADDRESS,   10, false},
-        {20, "A11",   PinType::ADDRESS,   11, false}
-    };
-    layout.right_pins = {
-        // Right side (21-40)
-        {21, "VSS",   PinType::POWER,     0, false},
-        {22, "A12",   PinType::ADDRESS,   12, false},
-        {23, "A13",   PinType::ADDRESS,   13, false},
-        {24, "A14",   PinType::ADDRESS,   14, false},
-        {25, "A15",   PinType::ADDRESS,   15, false},
-        {26, "D7",    PinType::DATA,      7, false},
-        {27, "D6",    PinType::DATA,      6, false},
-        {28, "D5",    PinType::DATA,      5, false},
-        {29, "D4",    PinType::DATA,      4, false},
-        {30, "D3",    PinType::DATA,      3, false},
-        {31, "D2",    PinType::DATA,      2, false},
-        {32, "D1",    PinType::DATA,      1, false},
-        {33, "D0",    PinType::DATA,      0, false},
-        {34, "RW",    PinType::CONTROL,   0, false},
-        {35, "NC",    PinType::SPECIAL,   0, false},
-        {36, "NC",    PinType::SPECIAL,   0, false}, // No BE on 2A03
-        {37, "φ0",    PinType::CLOCK,     0, false},
-        {38, "SO",    PinType::SPECIAL,   0, true},
-        {39, "φ2",    PinType::CLOCK,     0, false},
-        {40, "RES",   PinType::INTERRUPT, 0, true}
-    };
+    // Pin assignments for RICOH 2A03 (40-pin DIP) - 20 lines of compact pin definitions
+    PIN_PAIR(1,  "VSS",   PinType::POWER,     0, false,   21, "VSS",   PinType::POWER,     0, false)
+    PIN_PAIR(2,  "RDY",   PinType::CONTROL,   0, false,   22, "A12",   PinType::ADDRESS,   12, false) // Tied high internally in some revisions
+    PIN_PAIR(3,  "φ1",    PinType::CLOCK,     0, false,   23, "A13",   PinType::ADDRESS,   13, false)
+    PIN_PAIR(4,  "IRQ",   PinType::INTERRUPT, 0, true,    24, "A14",   PinType::ADDRESS,   14, false)
+    PIN_PAIR(5,  "NC",    PinType::SPECIAL,   0, false,   25, "A15",   PinType::ADDRESS,   15, false)
+    PIN_PAIR(6,  "NMI",   PinType::INTERRUPT, 0, true,    26, "D7",    PinType::DATA,      7, false)
+    PIN_PAIR(7,  "SYNC",  PinType::CONTROL,   0, false,   27, "D6",    PinType::DATA,      6, false)
+    PIN_PAIR(8,  "VCC",   PinType::POWER,     0, false,   28, "D5",    PinType::DATA,      5, false)
+    PIN_PAIR(9,  "A0",    PinType::ADDRESS,   0, false,   29, "D4",    PinType::DATA,      4, false)
+    PIN_PAIR(10, "A1",    PinType::ADDRESS,   1, false,   30, "D3",    PinType::DATA,      3, false)
+    PIN_PAIR(11, "A2",    PinType::ADDRESS,   2, false,   31, "D2",    PinType::DATA,      2, false)
+    PIN_PAIR(12, "A3",    PinType::ADDRESS,   3, false,   32, "D1",    PinType::DATA,      1, false)
+    PIN_PAIR(13, "A4",    PinType::ADDRESS,   4, false,   33, "D0",    PinType::DATA,      0, false)
+    PIN_PAIR(14, "A5",    PinType::ADDRESS,   5, false,   34, "RW",    PinType::CONTROL,   0, false)
+    PIN_PAIR(15, "A6",    PinType::ADDRESS,   6, false,   35, "NC",    PinType::SPECIAL,   0, false)
+    PIN_PAIR(16, "A7",    PinType::ADDRESS,   7, false,   36, "NC",    PinType::SPECIAL,   0, false) // No BE on 2A03
+    PIN_PAIR(17, "A8",    PinType::ADDRESS,   8, false,   37, "φ0",    PinType::CLOCK,     0, false)
+    PIN_PAIR(18, "A9",    PinType::ADDRESS,   9, false,   38, "SO",    PinType::SPECIAL,   0, true)
+    PIN_PAIR(19, "A10",   PinType::ADDRESS,   10, false,  39, "φ2",    PinType::CLOCK,     0, false)
+    PIN_PAIR(20, "A11",   PinType::ADDRESS,   11, false,  40, "RES",   PinType::INTERRUPT, 0, true)
     
     return layout;
 }
@@ -752,53 +637,27 @@ PinLayout create_rockwell_r65c02_layout() {
     layout.markings.part_number = "R65C02";
     layout.markings.manufacturer = "Rockwell";
     
-    // Pin assignments for Rockwell R65C02 (40-pin DIP) - CMOS 6502 variant
-    layout.left_pins = {
-        // Left side (1-20)
-        {1,  "VSS",   PinType::POWER,     0, false},
-        {2,  "RDY",   PinType::CONTROL,   0, false},
-        {3,  "φ1",    PinType::CLOCK,     0, false},
-        {4,  "IRQ",   PinType::INTERRUPT, 0, true},
-        {5,  "NC",    PinType::SPECIAL,   0, false},
-        {6,  "NMI",   PinType::INTERRUPT, 0, true},
-        {7,  "SYNC",  PinType::CONTROL,   0, false},
-        {8,  "VCC",   PinType::POWER,     0, false},
-        {9,  "A0",    PinType::ADDRESS,   0, false},
-        {10, "A1",    PinType::ADDRESS,   1, false},
-        {11, "A2",    PinType::ADDRESS,   2, false},
-        {12, "A3",    PinType::ADDRESS,   3, false},
-        {13, "A4",    PinType::ADDRESS,   4, false},
-        {14, "A5",    PinType::ADDRESS,   5, false},
-        {15, "A6",    PinType::ADDRESS,   6, false},
-        {16, "A7",    PinType::ADDRESS,   7, false},
-        {17, "A8",    PinType::ADDRESS,   8, false},
-        {18, "A9",    PinType::ADDRESS,   9, false},
-        {19, "A10",   PinType::ADDRESS,   10, false},
-        {20, "A11",   PinType::ADDRESS,   11, false}
-    };
-    layout.right_pins = {
-        // Right side (21-40)
-        {21, "VSS",   PinType::POWER,     0, false},
-        {22, "A12",   PinType::ADDRESS,   12, false},
-        {23, "A13",   PinType::ADDRESS,   13, false},
-        {24, "A14",   PinType::ADDRESS,   14, false},
-        {25, "A15",   PinType::ADDRESS,   15, false},
-        {26, "D7",    PinType::DATA,      7, false},
-        {27, "D6",    PinType::DATA,      6, false},
-        {28, "D5",    PinType::DATA,      5, false},
-        {29, "D4",    PinType::DATA,      4, false},
-        {30, "D3",    PinType::DATA,      3, false},
-        {31, "D2",    PinType::DATA,      2, false},
-        {32, "D1",    PinType::DATA,      1, false},
-        {33, "D0",    PinType::DATA,      0, false},
-        {34, "RW",    PinType::CONTROL,   0, false},
-        {35, "NC",    PinType::SPECIAL,   0, false},
-        {36, "BE",    PinType::CONTROL,   0, false}, // Bus Enable on R65C02
-        {37, "φ0",    PinType::CLOCK,     0, false},
-        {38, "SO",    PinType::SPECIAL,   0, true},
-        {39, "φ2",    PinType::CLOCK,     0, false},
-        {40, "RES",   PinType::INTERRUPT, 0, true}
-    };
+    // Pin assignments for Rockwell R65C02 (40-pin DIP) - 20 lines of compact pin definitions
+    PIN_PAIR(1,  "VSS",   PinType::POWER,     0, false,   21, "VSS",   PinType::POWER,     0, false)
+    PIN_PAIR(2,  "RDY",   PinType::CONTROL,   0, false,   22, "A12",   PinType::ADDRESS,   12, false)
+    PIN_PAIR(3,  "φ1",    PinType::CLOCK,     0, false,   23, "A13",   PinType::ADDRESS,   13, false)
+    PIN_PAIR(4,  "IRQ",   PinType::INTERRUPT, 0, true,    24, "A14",   PinType::ADDRESS,   14, false)
+    PIN_PAIR(5,  "NC",    PinType::SPECIAL,   0, false,   25, "A15",   PinType::ADDRESS,   15, false)
+    PIN_PAIR(6,  "NMI",   PinType::INTERRUPT, 0, true,    26, "D7",    PinType::DATA,      7, false)
+    PIN_PAIR(7,  "SYNC",  PinType::CONTROL,   0, false,   27, "D6",    PinType::DATA,      6, false)
+    PIN_PAIR(8,  "VCC",   PinType::POWER,     0, false,   28, "D5",    PinType::DATA,      5, false)
+    PIN_PAIR(9,  "A0",    PinType::ADDRESS,   0, false,   29, "D4",    PinType::DATA,      4, false)
+    PIN_PAIR(10, "A1",    PinType::ADDRESS,   1, false,   30, "D3",    PinType::DATA,      3, false)
+    PIN_PAIR(11, "A2",    PinType::ADDRESS,   2, false,   31, "D2",    PinType::DATA,      2, false)
+    PIN_PAIR(12, "A3",    PinType::ADDRESS,   3, false,   32, "D1",    PinType::DATA,      1, false)
+    PIN_PAIR(13, "A4",    PinType::ADDRESS,   4, false,   33, "D0",    PinType::DATA,      0, false)
+    PIN_PAIR(14, "A5",    PinType::ADDRESS,   5, false,   34, "RW",    PinType::CONTROL,   0, false)
+    PIN_PAIR(15, "A6",    PinType::ADDRESS,   6, false,   35, "NC",    PinType::SPECIAL,   0, false)
+    PIN_PAIR(16, "A7",    PinType::ADDRESS,   7, false,   36, "BE",    PinType::CONTROL,   0, false) // Bus Enable on R65C02
+    PIN_PAIR(17, "A8",    PinType::ADDRESS,   8, false,   37, "φ0",    PinType::CLOCK,     0, false)
+    PIN_PAIR(18, "A9",    PinType::ADDRESS,   9, false,   38, "SO",    PinType::SPECIAL,   0, true)
+    PIN_PAIR(19, "A10",   PinType::ADDRESS,   10, false,  39, "φ2",    PinType::CLOCK,     0, false)
+    PIN_PAIR(20, "A11",   PinType::ADDRESS,   11, false,  40, "RES",   PinType::INTERRUPT, 0, true)
     
     return layout;
 }
