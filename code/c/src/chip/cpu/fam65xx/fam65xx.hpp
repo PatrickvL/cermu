@@ -1004,11 +1004,11 @@ public:
                 } else {
                     // CMOS BCD algorithm - exact match for ProcessorTests ground truth
                     // Based on the WDC 65C02 datasheet and verified implementations
-                    uint16_t result = old_a - operand - borrow_in + 0x100;
+                    uint16_t bcd_calc_result = old_a - operand - borrow_in + 0x100;
                     
                     // Low nibble correction
                     if ((old_a & 0x0F) < ((operand & 0x0F) + borrow_in)) {
-                        result -= 6;
+                        bcd_calc_result -= 6;
                     }
                     
                     // High nibble correction - check for borrow from low nibble
@@ -1018,10 +1018,10 @@ public:
                     }
                     
                     if ((old_a >> 4) < effective_high_operand) {
-                        result -= 0x60;
+                        bcd_calc_result -= 0x60;
                     }
                     
-                    bcd_result = result & 0xFF;
+                    bcd_result = bcd_calc_result & 0xFF;
                 }
                 
                 // Flag calculation based on processor type
