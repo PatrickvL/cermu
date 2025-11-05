@@ -8,19 +8,18 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Compiler-specific flags
 if(MSVC)
     # Microsoft Visual C++ flags
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W4")
-    set(CMAKE_C_FLAGS_DEBUG "/Od /Zi /DDEBUG")
-    set(CMAKE_C_FLAGS_RELEASE "/O2 /DNDEBUG")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
+    set(CMAKE_CXX_FLAGS_DEBUG "/Od /Zi /DDEBUG")
+    set(CMAKE_CXX_FLAGS_RELEASE "/O2 /DNDEBUG")
     # Disable specific MSVC warnings if needed
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /wd4996")  # Disable deprecated function warnings
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4996 /wd4463")  # Disable deprecated and bit-field warnings
     # Define to silence C++17 deprecation warnings
     add_compile_definitions(_SILENCE_CXX17_C_HEADER_DEPRECATION_WARNING)
 else()
     # GCC/Clang flags
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra")
-    set(CMAKE_C_FLAGS_DEBUG "-g -O0 -DDEBUG")
-    set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
+    set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -DDEBUG")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
 endif()
 
 # Include directories
@@ -181,9 +180,9 @@ install(TARGETS fam65xx_klaus_test_runner
 
 # Print summary
 message(STATUS "MOS6510 Tests Configuration:")
-message(STATUS "  C Standard: ${CMAKE_C_STANDARD}")
+message(STATUS "  CXX Standard: ${CMAKE_CXX_STANDARD}")
 message(STATUS "  Build Type: ${CMAKE_BUILD_TYPE}")
-message(STATUS "  Compiler: ${CMAKE_C_COMPILER_ID}")
+message(STATUS "  Compiler: ${CMAKE_CXX_COMPILER_ID}")
 message(STATUS "  CPU Sources Found: ${CPU_SOURCES}")
 message(STATUS "  Core Sources Found: ${CORE_SOURCES}")
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/processor_tests)
