@@ -1,12 +1,64 @@
 #include "ram.h"
 #include "../../gui/cimgui_interface.h"
 #include "../../gui/generic_chip_gui.h"
-#include "../../core/non_cpu_chip_layouts.h"
+#include "../../core/chip_layout.h"
+#include "../../core/pin_macros.h"
 #ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #endif
 #include <cimgui.h>
 #include <stdio.h>
+
+// ============================================================================
+// GENERIC RAM LAYOUT (18-pin DIP for SRAM)
+// ============================================================================
+
+inline ChipLayout create_ram_layout() {
+    // Start with DIP-18 base layout
+    ChipLayout layout = create_dip18_layout();
+    
+    // Update package info for RAM
+    layout.markings = {
+        "SRAM",                      // part_number
+        "Generic",                   // manufacturer
+        nullptr,                     // package_variant
+        nullptr,                     // date_code
+        nullptr,                     // lot_number
+        nullptr,                     // custom_text
+        true,                        // show_part_number
+        true,                        // show_manufacturer
+        false,                       // show_package_variant
+        false                        // show_date_code
+    };
+    
+    // Clear default pins and create generic SRAM pinout (18-pin DIP)
+    layout.left_pins.clear();
+    layout.right_pins.clear();
+    
+    // Left side pins (1-9)
+    layout.left_pins.push_back(make_pin(1, PinLabel::A6, nullptr));       // Address 6
+    layout.left_pins.push_back(make_pin(2, PinLabel::A5, nullptr));       // Address 5
+    layout.left_pins.push_back(make_pin(3, PinLabel::A4, nullptr));       // Address 4
+    layout.left_pins.push_back(make_pin(4, PinLabel::A3, nullptr));       // Address 3
+    layout.left_pins.push_back(make_pin(5, PinLabel::A0, nullptr));       // Address 0
+    layout.left_pins.push_back(make_pin(6, PinLabel::A1, nullptr));       // Address 1
+    layout.left_pins.push_back(make_pin(7, PinLabel::A2, nullptr));       // Address 2
+    layout.left_pins.push_back(make_pin(8, PinLabel::D0, nullptr));       // Data 0
+    layout.left_pins.push_back(make_pin(9, PinLabel::VSS, nullptr));      // Ground
+    
+    // Right side pins (10-18)
+    layout.right_pins.push_back(make_pin(18, PinLabel::VCC, nullptr));    // +5V Power
+    layout.right_pins.push_back(make_pin(17, PinLabel::D1, nullptr));     // Data 1
+    layout.right_pins.push_back(make_pin(16, PinLabel::D2, nullptr));     // Data 2
+    layout.right_pins.push_back(make_pin(15, PinLabel::D3, nullptr));     // Data 3
+    layout.right_pins.push_back(make_pin(14, PinLabel::CS, nullptr));     // Chip Select
+    layout.right_pins.push_back(make_pin(13, PinLabel::WE, nullptr));     // Write Enable
+    layout.right_pins.push_back(make_pin(12, PinLabel::A9, nullptr));     // Address 9
+    layout.right_pins.push_back(make_pin(11, PinLabel::A8, nullptr));     // Address 8
+    layout.right_pins.push_back(make_pin(10, PinLabel::A7, nullptr));     // Address 7
+    
+    return layout;
+}
 
 // Callback functions for generic chip GUI
 static ChipLayout get_ram_layout(void* chip) {

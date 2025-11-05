@@ -1,7 +1,8 @@
 #include "mos6581.h"
 #include "../../gui/cimgui_interface.h"
 #include "../../gui/generic_chip_gui.h"
-#include "../../core/non_cpu_chip_layouts.h"
+#include "../../core/chip_layout.h"
+#include "../../core/pin_macros.h"
 #ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #endif
@@ -71,6 +72,67 @@ static void render_voice_debug(voice_t* voice, int voice_num) {
     }
     
     igPopID();
+}
+
+// ============================================================================
+// MOS6581 SID LAYOUT (28-pin DIP)
+// ============================================================================
+
+inline ChipLayout create_mos6581_layout() {
+    // Start with DIP-28 base layout
+    ChipLayout layout = create_dip28_layout();
+    
+    // Update package info for MOS6581 SID
+    layout.markings = {
+        "MOS6581",                   // part_number
+        "MOS Technology",            // manufacturer
+        nullptr,                     // package_variant
+        nullptr,                     // date_code
+        nullptr,                     // lot_number
+        nullptr,                     // custom_text
+        true,                        // show_part_number
+        true,                        // show_manufacturer
+        false,                       // show_package_variant
+        false                        // show_date_code
+    };
+    
+    // Clear default pins and create hardware-accurate MOS6581 SID pinout (28-pin DIP)
+    layout.left_pins.clear();
+    layout.right_pins.clear();
+    
+    // Left side pins (1-14)
+    layout.left_pins.push_back(make_pin(1,  PinLabel::CAP1A, nullptr));   // Filter Cap 1A
+    layout.left_pins.push_back(make_pin(2,  PinLabel::CAP1B, nullptr));   // Filter Cap 1B
+    layout.left_pins.push_back(make_pin(3,  PinLabel::CAP2A, nullptr));   // Filter Cap 2A
+    layout.left_pins.push_back(make_pin(4,  PinLabel::CAP2B, nullptr));   // Filter Cap 2B
+    layout.left_pins.push_back(make_pin(5,  PinLabel::RES, nullptr));     // Reset
+    layout.left_pins.push_back(make_pin(6,  PinLabel::PHI2, nullptr));    // Clock
+    layout.left_pins.push_back(make_pin(7,  PinLabel::RW, nullptr));      // Read/Write
+    layout.left_pins.push_back(make_pin(8,  PinLabel::CS, nullptr));      // Chip Select
+    layout.left_pins.push_back(make_pin(9,  PinLabel::A0, nullptr));      // Address 0
+    layout.left_pins.push_back(make_pin(10, PinLabel::A1, nullptr));      // Address 1
+    layout.left_pins.push_back(make_pin(11, PinLabel::A2, nullptr));      // Address 2
+    layout.left_pins.push_back(make_pin(12, PinLabel::A3, nullptr));      // Address 3
+    layout.left_pins.push_back(make_pin(13, PinLabel::A4, nullptr));      // Address 4
+    layout.left_pins.push_back(make_pin(14, PinLabel::VSS, nullptr));     // Ground
+    
+    // Right side pins (15-28)
+    layout.right_pins.push_back(make_pin(28, PinLabel::VDD, nullptr));    // +12V Power
+    layout.right_pins.push_back(make_pin(27, PinLabel::AUDIO_OUT, nullptr)); // Audio Output
+    layout.right_pins.push_back(make_pin(26, PinLabel::EXT_IN, nullptr)); // External Input
+    layout.right_pins.push_back(make_pin(25, PinLabel::VCC, nullptr));    // +5V Power
+    layout.right_pins.push_back(make_pin(24, PinLabel::POTX, nullptr));   // Paddle X
+    layout.right_pins.push_back(make_pin(23, PinLabel::POTY, nullptr));   // Paddle Y
+    layout.right_pins.push_back(make_pin(22, PinLabel::D7, nullptr));     // Data 7
+    layout.right_pins.push_back(make_pin(21, PinLabel::D6, nullptr));     // Data 6
+    layout.right_pins.push_back(make_pin(20, PinLabel::D5, nullptr));     // Data 5
+    layout.right_pins.push_back(make_pin(19, PinLabel::D4, nullptr));     // Data 4
+    layout.right_pins.push_back(make_pin(18, PinLabel::D3, nullptr));     // Data 3
+    layout.right_pins.push_back(make_pin(17, PinLabel::D2, nullptr));     // Data 2
+    layout.right_pins.push_back(make_pin(16, PinLabel::D1, nullptr));     // Data 1
+    layout.right_pins.push_back(make_pin(15, PinLabel::D0, nullptr));     // Data 0
+    
+    return layout;
 }
 
 // ============================================================================

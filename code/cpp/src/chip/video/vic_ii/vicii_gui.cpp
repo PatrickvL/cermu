@@ -1,7 +1,8 @@
 #include "vicii_common.h"
 #include "../../../gui/cimgui_interface.h"
 #include "../../../gui/generic_chip_gui.h"
-#include "../../../core/non_cpu_chip_layouts.h"
+#include "../../../core/chip_layout.h"
+#include "../../../core/pin_macros.h"
 #ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #endif
@@ -40,6 +41,53 @@ static const char* get_screen_mode(uint8_t cr1, uint8_t cr2) {
     if (!ecm && bmm && mcm)   return "Multicolor Bitmap";
     if (ecm && !bmm && !mcm)  return "Extended Color Text";
     return "Invalid Mode";
+}
+
+// ============================================================================
+// MOS6567/6569 VIC-II LAYOUT (40-pin DIP)
+// ============================================================================
+
+inline ChipLayout create_vicii_layout() {
+    // Start with DIP-40 base layout
+    ChipLayout layout = create_dip40_layout();
+    
+    // Update package info for VIC-II
+    layout.markings = {
+        "MOS6567/6569",              // part_number
+        "MOS Technology",            // manufacturer
+        nullptr,                     // package_variant
+        nullptr,                     // date_code
+        nullptr,                     // lot_number
+        nullptr,                     // custom_text
+        true,                        // show_part_number
+        true,                        // show_manufacturer
+        false,                       // show_package_variant
+        false                        // show_date_code
+    };
+    
+    // Hardware-accurate MOS6567/6569 VIC-II pinout (40-pin DIP)
+    PIN_LR(1,  VDD,     21, VSS)    // +5V Power / Ground
+    PIN_LR(2,  PHI0,    22, A5)     // Clock Input / Address 5
+    PIN_LR(3,  AEC,     23, A4)     // Address Enable / Address 4
+    PIN_LR(4,  BA,      24, A3)     // Bus Available / Address 3
+    PIN_LR(5,  RW,      25, A2)     // Read/Write / Address 2
+    PIN_LR(6,  IRQ,     26, A1)     // Interrupt / Address 1
+    PIN_LR(7,  A6,      27, A0)     // Address 6 / Address 0
+    PIN_LR(8,  A7,      28, D7)     // Address 7 / Data 7
+    PIN_LR(9,  A8,      29, D6)     // Address 8 / Data 6
+    PIN_LR(10, A9,      30, D5)     // Address 9 / Data 5
+    PIN_LR(11, A10,     31, D4)     // Address 10 / Data 4
+    PIN_LR(12, A11,     32, D3)     // Address 11 / Data 3
+    PIN_LR(13, A12,     33, D2)     // Address 12 / Data 2
+    PIN_LR(14, A13,     34, D1)     // Address 13 / Data 1
+    PIN_LR(15, CAS,     35, D0)     // Column Addr Strobe / Data 0
+    PIN_LR(16, RAS,     36, PHI2)   // Row Addr Strobe / Clock
+    PIN_LR(17, LUMA,    37, COLOR)  // Luminance / Color Signal
+    PIN_LR(18, CHROMA,  38, CS)     // Chrominance / Chip Select
+    PIN_LR(19, CSYNC,   39, SOUND)  // Composite Sync / Sound
+    PIN_LR(20, VSS,     40, VCC)    // Ground / +5V Power
+    
+    return layout;
 }
 
 // Callback functions for generic chip GUI
