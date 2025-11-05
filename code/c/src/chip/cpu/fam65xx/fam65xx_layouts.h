@@ -333,27 +333,27 @@ PinLayout create_mos6510_layout() {
         false                        // show_date_code
     };
     
-    // Pin assignments for MOS 6510 (40-pin DIP) - 20 lines of compact pin definitions
+    // Pin assignments for MOS 6510 (40-pin DIP) - Hardware accurate per documentation
     PIN_PAIR(1,  PHI0,  0, false,   21, VSS,   0, false)
     PIN_PAIR(2,  RDY,   0, false,   22, A12,   12, false)
     PIN_PAIR(3,  IRQ,   0, true,    23, A13,   13, false)
-    PIN_PAIR(4,  NMI,   0, true,    24, A14,   14, false)
-    PIN_PAIR(5,  AEC,   0, false,   25, A15,   15, false) // Address Enable Control - 6510 specific
-    PIN_PAIR(6,  VDD,   0, false,   26, D7,    7, false)
-    PIN_PAIR(7,  A0,    0, false,   27, D6,    6, false)
-    PIN_PAIR(8,  A1,    1, false,   28, D5,    5, false)
-    PIN_PAIR(9,  A2,    2, false,   29, D4,    4, false)
-    PIN_PAIR(10, A3,    3, false,   30, D3,    3, false)
-    PIN_PAIR(11, A4,    4, false,   31, D2,    2, false)
-    PIN_PAIR(12, A5,    5, false,   32, D1,    1, false)
-    PIN_PAIR(13, A6,    6, false,   33, D0,    0, false)
-    PIN_PAIR(14, A7,    7, false,   34, P0,    0, false) // I/O Port bit 0
-    PIN_PAIR(15, A8,    8, false,   35, P1,    1, false) // I/O Port bit 1
-    PIN_PAIR(16, A9,    9, false,   36, P2,    2, false) // I/O Port bit 2
-    PIN_PAIR(17, A10,   10, false,  37, P3,    3, false) // I/O Port bit 3
+    PIN_PAIR(4,  NMI,   0, true,    24, P0,    0, false) // I/O Port bit 0
+    PIN_PAIR(5,  AEC,   0, false,   25, P1,    1, false) // I/O Port bit 1
+    PIN_PAIR(6,  VDD,   0, false,   26, P2,    2, false) // I/O Port bit 2
+    PIN_PAIR(7,  A0,    0, false,   27, P3,    3, false) // I/O Port bit 3
+    PIN_PAIR(8,  A1,    1, false,   28, P4,    4, false) // I/O Port bit 4
+    PIN_PAIR(9,  A2,    2, false,   29, P5,    5, false) // I/O Port bit 5
+    PIN_PAIR(10, A3,    3, false,   30, D7,    7, false)
+    PIN_PAIR(11, A4,    4, false,   31, D6,    6, false)
+    PIN_PAIR(12, A5,    5, false,   32, D5,    5, false)
+    PIN_PAIR(13, A6,    6, false,   33, D4,    4, false)
+    PIN_PAIR(14, A7,    7, false,   34, D3,    3, false)
+    PIN_PAIR(15, A8,    8, false,   35, D2,    2, false)
+    PIN_PAIR(16, A9,    9, false,   36, D1,    1, false)
+    PIN_PAIR(17, A10,   10, false,  37, D0,    0, false)
     PIN_PAIR(18, A11,   11, false,  38, RW,    0, false)
-    PIN_PAIR(19, VSS,   0, false,   39, PHI2,  0, false)
-    PIN_PAIR(20, P4,    4, false,   40, RES,   0, true)  // I/O Port bit 4, P5 missing in this layout
+    PIN_PAIR(19, A14,   14, false,  39, PHI2,  0, false)
+    PIN_PAIR(20, A15,   15, false,  40, RES,   0, true)
     
     return layout;
 }
@@ -376,7 +376,7 @@ PinLayout create_wdc_w65c02s_layout() {
         false                        // show_date_code
     };
     
-    // Pin assignments for WDC W65C02S (40-pin DIP) - 20 lines of compact pin definitions
+    // Pin assignments for WDC W65C02S (40-pin DIP) - Hardware accurate per documentation
     PIN_PAIR(1,  VP,    0, false,   21, VSS,   0, false) // Vector Pull
     PIN_PAIR(2,  RDY,   0, false,   22, A12,   12, false) // Bidirectional on 65C02
     PIN_PAIR(3,  PHI1,  0, false,   23, A13,   13, false)
@@ -419,7 +419,7 @@ PinLayout create_wdc_65c816_layout() {
         false                        // show_date_code
     };
     
-    // Pin assignments for WDC 65C816 (40-pin DIP) - 20 lines of compact pin definitions
+    // Pin assignments for WDC 65C816 (40-pin DIP) - Hardware accurate per documentation
     PIN_PAIR(1,  VP,    0, false,   21, VSS,   0, false) // Vector Pull
     PIN_PAIR(2,  RDY,   0, false,   22, A12,   12, false)
     PIN_PAIR(3,  ABORT, 0, true,    23, A13,   13, false) // Abort
@@ -438,7 +438,7 @@ PinLayout create_wdc_65c816_layout() {
     PIN_PAIR(16, A7,    7, false,   36, BE,    0, false) // Bus Enable
     PIN_PAIR(17, A8,    8, false,   37, PHI0,  0, false)
     PIN_PAIR(18, A9,    9, false,   38, MX,    0, false) // M/X Status
-    PIN_PAIR(19, A10,   10, false,  39, VDA,   0, false) // Valid Data Address
+    PIN_PAIR(19, A10,   10, false,  39, PHI2,  0, false) // Corrected to PHI2 per docs
     PIN_PAIR(20, A11,   11, false,  40, RES,   0, true)
     
     return layout;

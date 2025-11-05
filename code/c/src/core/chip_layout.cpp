@@ -76,14 +76,24 @@ PinType ChipPin::get_pin_type() const {
             
         case PinLabel::P0: case PinLabel::P1: case PinLabel::P2: case PinLabel::P3:
         case PinLabel::P4: case PinLabel::P5: case PinLabel::P6: case PinLabel::P7:
+            return PinType::IO_PORT;
+            
         case PinLabel::PA0: case PinLabel::PA1: case PinLabel::PA2: case PinLabel::PA3:
         case PinLabel::PA4: case PinLabel::PA5: case PinLabel::PA6: case PinLabel::PA7:
+            return PinType::PORT_A;
+            
         case PinLabel::PB0: case PinLabel::PB1: case PinLabel::PB2: case PinLabel::PB3:
         case PinLabel::PB4: case PinLabel::PB5: case PinLabel::PB6: case PinLabel::PB7:
+            return PinType::PORT_B;
+            
         case PinLabel::PC0: case PinLabel::PC1: case PinLabel::PC2: case PinLabel::PC3:
         case PinLabel::PC4: case PinLabel::PC5: case PinLabel::PC6: case PinLabel::PC7:
+            return PinType::PORT_C;
+            
         case PinLabel::PD0: case PinLabel::PD1: case PinLabel::PD2: case PinLabel::PD3:
         case PinLabel::PD4: case PinLabel::PD5: case PinLabel::PD6: case PinLabel::PD7:
+            return PinType::PORT_D;
+            
         case PinLabel::UART_TX: case PinLabel::UART_RX:
         case PinLabel::SPI_CLK: case PinLabel::SPI_MOSI: case PinLabel::SPI_MISO: case PinLabel::SPI_CS:
             return PinType::SERIAL;
@@ -133,6 +143,157 @@ PinType ChipPin::get_pin_type() const {
         default:
             return PinType::SPECIAL;
     }
+}
+
+// ============================================================================
+// HELPER FUNCTIONS FOR PIN OPTIMIZATION
+// ============================================================================
+
+// Get bit index from pin label (for address/data/GPIO pins)
+uint8_t get_bit_index_from_label(PinLabel label) {
+    // Address pins A0-A23
+    if (label >= PinLabel::A0 && label <= PinLabel::A23) {
+        return (uint8_t)((int)label - (int)PinLabel::A0);
+    }
+    
+    // Data pins D0-D15
+    if (label >= PinLabel::D0 && label <= PinLabel::D15) {
+        return (uint8_t)((int)label - (int)PinLabel::D0);
+    }
+    
+    // GPIO pins PA0-PA7
+    if (label >= PinLabel::PA0 && label <= PinLabel::PA7) {
+        return (uint8_t)((int)label - (int)PinLabel::PA0);
+    }
+    
+    // GPIO pins PB0-PB7
+    if (label >= PinLabel::PB0 && label <= PinLabel::PB7) {
+        return (uint8_t)((int)label - (int)PinLabel::PB0);
+    }
+    
+    // GPIO pins PC0-PC7
+    if (label >= PinLabel::PC0 && label <= PinLabel::PC7) {
+        return (uint8_t)((int)label - (int)PinLabel::PC0);
+    }
+    
+    // GPIO pins PD0-PD7
+    if (label >= PinLabel::PD0 && label <= PinLabel::PD7) {
+        return (uint8_t)((int)label - (int)PinLabel::PD0);
+    }
+    
+    // I/O Port pins P0-P7 (6510 specific)
+    if (label >= PinLabel::P0 && label <= PinLabel::P7) {
+        return (uint8_t)((int)label - (int)PinLabel::P0);
+    }
+    
+    // Memory data pins DQ0-DQ7
+    if (label >= PinLabel::DQ0 && label <= PinLabel::DQ7) {
+        return (uint8_t)((int)label - (int)PinLabel::DQ0);
+    }
+    
+    // Memory address pins MA0-MA15
+    if (label >= PinLabel::MA0 && label <= PinLabel::MA15) {
+        return (uint8_t)((int)label - (int)PinLabel::MA0);
+    }
+    
+    // Logic pins Q0-Q7, I0-I7, Y0-Y7
+    if (label >= PinLabel::Q0 && label <= PinLabel::Q7) {
+        return (uint8_t)((int)label - (int)PinLabel::Q0);
+    }
+    if (label >= PinLabel::I0 && label <= PinLabel::I7) {
+        return (uint8_t)((int)label - (int)PinLabel::I0);
+    }
+    if (label >= PinLabel::Y0 && label <= PinLabel::Y7) {
+        return (uint8_t)((int)label - (int)PinLabel::Y0);
+    }
+    
+    // Select lines S0-S3
+    if (label >= PinLabel::S0 && label <= PinLabel::S3) {
+        return (uint8_t)((int)label - (int)PinLabel::S0);
+    }
+    
+    // Analog pins AIN0-AIN7, AOUT0-AOUT1
+    if (label >= PinLabel::AIN0 && label <= PinLabel::AIN7) {
+        return (uint8_t)((int)label - (int)PinLabel::AIN0);
+    }
+    if (label >= PinLabel::AOUT0 && label <= PinLabel::AOUT1) {
+        return (uint8_t)((int)label - (int)PinLabel::AOUT0);
+    }
+    
+    // PWM pins PWM0-PWM3
+    if (label >= PinLabel::PWM0 && label <= PinLabel::PWM3) {
+        return (uint8_t)((int)label - (int)PinLabel::PWM0);
+    }
+    
+    // Default case - cannot derive, return 0
+    return 0;
+}
+
+// Get invert logic from pin label (hardware-consistent across all chips)
+bool get_invert_logic_from_label(PinLabel label) {
+    switch(label) {
+        // Interrupt pins - always active low
+        case PinLabel::IRQ:
+        case PinLabel::NMI:
+        case PinLabel::RES:
+        case PinLabel::ABORT:
+        
+        // Special control pins - always active low
+        case PinLabel::SO:
+        case PinLabel::ML:
+        
+        // Chip select pins - typically active low
+        case PinLabel::CS:
+        case PinLabel::CS0:
+        case PinLabel::OE:
+        case PinLabel::WE:
+            return true;  // Active low
+            
+        default:
+            return false; // Active high
+    }
+}
+
+// Convert pin type to group name string
+const char* pin_type_to_group_name(PinType type) {
+    switch(type) {
+        case PinType::POWER:        return "POWER";
+        case PinType::CLOCK:        return "CLOCK";
+        case PinType::ADDRESS:      return "ADDR";
+        case PinType::DATA:         return "DATA";
+        case PinType::CONTROL:      return "CONTROL";
+        case PinType::INTERRUPT:    return "INTERRUPT";
+        case PinType::SPECIAL:      return "SPECIAL";
+        case PinType::IO_PORT:      return "GPIO";
+        case PinType::PORT_A:       return "PORTA";
+        case PinType::PORT_B:       return "PORTB";
+        case PinType::PORT_C:       return "PORTC";
+        case PinType::PORT_D:       return "PORTD";
+        case PinType::ANALOG:       return "ANALOG";
+        case PinType::DIFFERENTIAL: return "DIFF";
+        case PinType::VIDEO:        return "VIDEO";
+        case PinType::AUDIO:        return "AUDIO";
+        case PinType::MEMORY:       return "MEMORY";
+        case PinType::LOGIC:        return "LOGIC";
+        case PinType::SERIAL:       return "SERIAL";
+        case PinType::TIMER:        return "TIMER";
+        case PinType::NO_CONNECT:   return "NC";
+        default:                    return "UNKNOWN";
+    }
+}
+
+// Unified pin creation function
+ChipPin make_pin(uint8_t num, PinLabel label, const char* custom_group) {
+    return {
+        num,
+        label,
+        get_bit_index_from_label(label),
+        get_invert_logic_from_label(label),
+        custom_group ? custom_group : pin_type_to_group_name(pin_label_to_pin_type(label)),
+        nullptr,  // alt_function
+        false,    // is_differential_pos
+        false     // is_differential_neg
+    };
 }
 
 // ============================================================================
