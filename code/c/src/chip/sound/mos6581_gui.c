@@ -1,5 +1,7 @@
 #include "mos6581.h"
 #include "../../gui/cimgui_interface.h"
+#include "../../gui/generic_chip_gui.h"
+#include "../../core/non_cpu_chip_layouts.h"
 #ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #endif
@@ -74,78 +76,47 @@ static void render_voice_debug(voice_t* voice, int voice_num) {
 // ============================================================================
 // MOS6581 SID GUI DEBUG WINDOW
 // ============================================================================
-// Hardware-accurate SID chip layout (MOS 6581 - 28-pin DIP)
-static void render_sid_chip_layout(mos6581_t* sid) {
-    if (igCollapsingHeader_BoolPtr("Hardware Layout - MOS 6581 SID", NULL, ImGuiTreeNodeFlags_DefaultOpen)) {
-        igIndent(16.0f);
-        
-        igText("Package: 28-pin DIP");
-        igText("Sound Interface Device (SID)");
-        igSeparator();
-        
-        // Two-column layout for pins
-        igColumns(2, "sid_pinout", true);
-        igText("LEFT SIDE:");
-        igText("1  - CAP1A (Filter Cap)");
-        igText("2  - CAP1B (Filter Cap)");
-        igText("3  - CAP2A (Filter Cap)");
-        igText("4  - CAP2B (Filter Cap)");
-        igText("5  - RES (Reset)");
-        igText("6  - PHI2 (Clock)");
-        igText("7  - R/W (Read/Write)");
-        igText("8  - CS (Chip Select)");
-        igText("9  - A0 (Address)");
-        igText("10 - A1 (Address)");
-        igText("11 - A2 (Address)");
-        igText("12 - A3 (Address)");
-        igText("13 - A4 (Address)");
-        igText("14 - VSS (Ground)");
-        
-        igNextColumn();
-        igText("RIGHT SIDE:");
-        igText("15 - D0 (Data)");
-        igText("16 - D1 (Data)");
-        igText("17 - D2 (Data)");
-        igText("18 - D3 (Data)");
-        igText("19 - D4 (Data)");
-        igText("20 - D5 (Data)");
-        igText("21 - D6 (Data)");
-        igText("22 - D7 (Data)");
-        igText("23 - POTY (Paddle Y)");
-        igText("24 - POTX (Paddle X)");
-        igText("25 - VCC (+5V)");
-        igText("26 - EXT_IN (External Input)");
-        igText("27 - AUDIO_OUT (Audio Output)");
-        igText("28 - VDD (+12V)");
-        
-        igColumns(1, NULL, false);
-        igUnindent(16.0f);
-    }
+// Callback functions for generic chip GUI
+static ChipLayout get_sid_layout(void* chip) {
+    return create_mos6581_layout();
 }
 
-void mos6581_render_debug_window(void* chip, bool* show_window) {
+static void get_sid_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_state, struct PinState* pin_states) {
     mos6581_t* sid = (mos6581_t*)chip;
-    if (!sid || !sid->desc) return;
+    if (!sid || !layout || !pin_states) return;
     
-    if (!*show_window) return;
+    int total_pins = 28; // SID is 28-pin DIP
     
-    char window_title[128];
-    snprintf(window_title, sizeof(window_title), "%s Debug", sid->desc->description);
-    
-    if (!igBegin(window_title, show_window, 0)) {
-        igEnd();
-        return;
+    // Initialize all pins as inactive by default
+    for (int i = 0; i < total_pins; i++) {
+        pin_states[i].pin_number = i + 1;
+        pin_states[i].is_active = false;
+        pin_states[i].is_output = false;
+        pin_states[i].value = 0;
+        pin_states[i].is_tristate = false;
+        pin_states[i].has_pullup = false;
+        pin_states[i].has_pulldown = false;
+        pin_states[i].is_valid = true;
+        pin_states[i].analog_voltage = 0.0f;
+        pin_states[i].is_pwm = false;
+        pin_states[i].pwm_duty_cycle = 0.0f;
     }
+    
+    // Set power pins as active
+    pin_states[13].is_active = false; // VSS (Ground, pin 14)
+    pin_states[24].is_active = true;  // VCC (+5V, pin 25)
+    pin_states[27].is_active = true;  // VDD (+12V, pin 28)
+    
+    // Audio output pin should be active if SID is producing sound
+    pin_states[26].is_active = true;  // AUDIO_OUT (pin 27)
+    pin_states[26].is_output = true;
+}
 
-    // Create two-column layout: chip visualization on left, debugging info on right
-    igColumns(2, "sid_debug_columns", true);
+static void render_sid_specific_content(void* chip) {
+    mos6581_t* sid = (mos6581_t*)chip;
+    if (!sid) return;
     
-    // Left column: Hardware chip layout
-    render_sid_chip_layout(sid);
-    
-    igNextColumn();
-    
-    // Right column: Register and voice information
+    // This replaces the right column content from the original function
     igText("MOS 6581 SID (Sound Interface Device)");
     igText("SID MOS 6581 DIP has 28 pins");
     igSeparator();
@@ -183,71 +154,33 @@ void mos6581_render_debug_window(void* chip, bool* show_window) {
         
         igUnindent(16.0f);
     }
-    
-    igSeparator();
-    
-    // Register Map
-    if (igCollapsingHeader_BoolPtr("Register Map", NULL, 0)) {
-        igIndent(16.0f);
-        
-        igText("Voice 1 Registers:");
-        igIndent(16.0f);
-        igText("$D400: FRELO1 - Frequency Control (low byte)");
-        igText("$D401: FREHI1 - Frequency Control (high byte)"); 
-        igText("$D402: PWLO1 - Pulse Waveform Width (low byte)");
-        igText("$D403: PWHI1 - Pulse Waveform Width (high nybble)");
-        igText("$D404: VCREG1 - Voice Control Register");
-        igText("$D405: ATDCY1 - Attack/Decay Register");
-        igText("$D406: SUREL1 - Sustain/Release Control Register");
-        igUnindent(16.0f);
-        
-        igText("Voice 2 Registers:");
-        igIndent(16.0f);
-        igText("$D407: FRELO2 - Frequency Control (low byte)");
-        igText("$D408: FREHI2 - Frequency Control (high byte)");
-        igText("$D409: PWLO2 - Pulse Waveform Width (low byte)");
-        igText("$D40A: PWHI2 - Pulse Waveform Width (high nybble)");
-        igText("$D40B: VCREG2 - Voice Control Register");
-        igText("$D40C: ATDCY2 - Attack/Decay Register");
-        igText("$D40D: SUREL2 - Sustain/Release Control Register");
-        igUnindent(16.0f);
-        
-        igText("Voice 3 Registers:");
-        igIndent(16.0f);
-        igText("$D40E: FRELO3 - Frequency Control (low byte)");
-        igText("$D40F: FREHI3 - Frequency Control (high byte)");
-        igText("$D410: PWLO3 - Pulse Waveform Width (low byte)");
-        igText("$D411: PWHI3 - Pulse Waveform Width (high nybble)");
-        igText("$D412: VCREG3 - Voice Control Register");
-        igText("$D413: ATDCY3 - Attack/Decay Register");
-        igText("$D414: SUREL3 - Sustain/Release Control Register");
-        igUnindent(16.0f);
-        
-        igText("Filter & Global Registers:");
-        igIndent(16.0f);
-        igText("$D415: CUTLO - Filter Cutoff Frequency (low 3 bits)");
-        igText("$D416: CUTHI - Filter Cutoff Frequency (high byte)");
-        igText("$D417: RESON - Filter Resonance Control Register");
-        igText("$D418: SIGVOL - Volume and Filter Select Register");
-        igUnindent(16.0f);
-        
-        igText("Read-only Registers:");
-        igIndent(16.0f);
-        igText("$D419: POTX - Read Game Paddle 1 (or 3) Position");
-        igText("$D41A: POTY - Read Game Paddle 2 (or 4) Position");
-        igText("$D41B: OSC3 - Read Oscillator 3/Random Number Generator");
-        igText("$D41C: ENV3 - Envelope Generator 3 Output");
-        igUnindent(16.0f);
-        
-        igText("Unmapped Registers:");
-        igIndent(16.0f);
-        igText("$D41D-$D41F: Unmapped (always return $FF)");
-        igUnindent(16.0f);
-        
-        igUnindent(16.0f);
-    }
+}
 
-    igEnd();
+void mos6581_render_debug_window(void* chip, bool* show_window) {
+    mos6581_t* sid = (mos6581_t*)chip;
+    if (!sid || !sid->desc) return;
+    
+    if (!*show_window) return;
+    
+    char window_title[128];
+    snprintf(window_title, sizeof(window_title), "%s Debug", sid->desc->description);
+    
+    // Create generic chip GUI config
+    chip_gui_config_t config = generic_chip_gui_get_default_config("MOS6581", "SID");
+    config.get_layout = get_sid_layout;
+    config.get_pin_states = get_sid_pin_states;
+    
+    // Create generic chip GUI instance
+    generic_chip_gui_t* gui = generic_chip_gui_create(sid, &config);
+    if (!gui) {
+        return;
+    }
+    
+    // Use generic chip GUI render function
+    generic_chip_gui_render_debug_panel(gui, NULL, window_title, show_window, render_sid_specific_content);
+    
+    // Cleanup
+    generic_chip_gui_destroy(gui);
 }
 
 // ============================================================================

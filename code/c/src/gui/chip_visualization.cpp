@@ -817,7 +817,7 @@ ImVec2 ChipVisualization::get_label_position(ImVec2 pin_pos, const ChipPin& pin,
 std::string ChipVisualization::format_pin_label(const ChipPin& pin) const {
     const char* label_str = pin_label_to_string(pin.label);
     
-    if (!pin.invert_logic) {
+    if (!pin.get_invert_logic()) {
         return std::string(label_str);
     }
     
@@ -1013,7 +1013,7 @@ std::vector<const ChipPin*> ChipVisualization::find_pins_by_group(const char* gr
     
     auto search_side = [&](const std::vector<ChipPin>& pins) {
         for (const auto& pin : pins) {
-            if (pin.group_name && strcmp(pin.group_name, group_name) == 0) {
+            if (pin.get_group_name() && strcmp(pin.get_group_name(), group_name) == 0) {
                 result.push_back(&pin);
             }
         }

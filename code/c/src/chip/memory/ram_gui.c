@@ -1,83 +1,67 @@
 #include "ram.h"
 #include "../../gui/cimgui_interface.h"
+#include "../../gui/generic_chip_gui.h"
+#include "../../core/non_cpu_chip_layouts.h"
 #ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #endif
 #include <cimgui.h>
 #include <stdio.h>
 
-// Hardware-accurate RAM chip layout (Generic SRAM - 18-pin DIP)
-static void render_ram_chip_layout(ram_t* ram) {
-    if (igCollapsingHeader_BoolPtr("Hardware Layout - SRAM", NULL, ImGuiTreeNodeFlags_DefaultOpen)) {
-        igIndent(16.0f);
-        
-        igText("Package: 18-pin DIP");
-        igText("Static Random Access Memory (SRAM)");
-        igSeparator();
-        
-        // Two-column layout for pins
-        igColumns(2, "ram_pinout", true);
-        igText("LEFT SIDE:");
-        igText("1  - A6 (Address)");
-        igText("2  - A5 (Address)");
-        igText("3  - A4 (Address)");
-        igText("4  - A3 (Address)");
-        igText("5  - A0 (Address)");
-        igText("6  - A1 (Address)");
-        igText("7  - A2 (Address)");
-        igText("8  - D0 (Data)");
-        igText("9  - VSS (Ground)");
-        
-        igNextColumn();
-        igText("RIGHT SIDE:");
-        igText("10 - A7 (Address)");
-        igText("11 - A8 (Address)");
-        igText("12 - A9 (Address)");
-        igText("13 - WE (Write Enable)");
-        igText("14 - CS (Chip Select)");
-        igText("15 - D3 (Data)");
-        igText("16 - D2 (Data)");
-        igText("17 - D1 (Data)");
-        igText("18 - VCC (+5V)");
-        
-        igColumns(1, NULL, false);
-        igUnindent(16.0f);
-    }
+// Callback functions for generic chip GUI
+static ChipLayout get_ram_layout(void* chip) {
+    return create_ram_layout();
 }
 
-// ============================================================================
-// RAM GUI DEBUG WINDOW
-// ============================================================================
-void ram_render_debug_window(void* chip, bool* show_window) {
+static void get_ram_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_state, struct PinState* pin_states) {
     ram_t* ram = (ram_t*)chip;
-    if (!ram || !ram->desc) return;
+    if (!ram || !layout || !pin_states) return;
     
-    if (!*show_window) return;
+    int total_pins = 18; // Generic SRAM is 18-pin DIP
     
-    // Push unique ID to prevent conflicts between multiple RAM instances
-    igPushID_Int((int)(uintptr_t)ram);
-    char window_title[128];
-    snprintf(window_title, sizeof(window_title), "%s Debug", ram->desc->description);
-    
-    if (!igBegin(window_title, show_window, 0)) {
-        igEnd();
-        igPopID();
-        return;
+    // Initialize all pins as inactive by default
+    for (int i = 0; i < total_pins; i++) {
+        pin_states[i].pin_number = i + 1;
+        pin_states[i].is_active = false;
+        pin_states[i].is_output = false;
+        pin_states[i].value = 0;
+        pin_states[i].is_tristate = false;
+        pin_states[i].has_pullup = false;
+        pin_states[i].has_pulldown = false;
+        pin_states[i].is_valid = true;
+        pin_states[i].analog_voltage = 0.0f;
+        pin_states[i].is_pwm = false;
+        pin_states[i].pwm_duty_cycle = 0.0f;
     }
+    
+    // Set power pins as active
+    pin_states[8].is_active = false;  // VSS (Ground, pin 9)
+    pin_states[17].is_active = true;  // VCC (+5V, pin 18)
+    
+    // Set control pins based on bus state (simplified)
+    pin_states[13].is_active = true;  // CS (pin 14) - assume active when accessed
+    pin_states[12].is_active = false; // WE (pin 13) - simplified
+    
+    // Data pins (D0-D3) - show as active during access
+    pin_states[7].is_active = true;   // D0 (pin 8)
+    pin_states[16].is_active = true;  // D1 (pin 17)
+    pin_states[15].is_active = true;  // D2 (pin 16)
+    pin_states[14].is_active = true;  // D3 (pin 15)
+}
 
-    // Create two-column layout: chip visualization on left, debugging info on right
-    igColumns(2, "ram_debug_columns", true);
+static void render_ram_specific_content(void* chip) {
+    ram_t* ram = (ram_t*)chip;
+    if (!ram) return;
     
-    // Left column: Hardware chip layout
-    render_ram_chip_layout(ram);
-    
-    igNextColumn();
-    
-    // Right column: RAM information
+    // This replaces the right column content from the original function
     igText("RAM Memory");
     igSeparator();
     
-    igText("Size: 64KB");
+    if (ram->desc) {
+        igText("Size: %s", ram->desc->description);
+    } else {
+        igText("Size: 64KB");
+    }
     igText("Address Range: $0000-$FFFF");
     
     igSeparator();
@@ -92,12 +76,37 @@ void ram_render_debug_window(void* chip, bool* show_window) {
     for (int row = 0; row < 4; row++) {
         igText("%04X: 00 00 00 00", view_address + (row * 4));
     }
+}
 
-    // Reset to single column at the end
-    igColumns(1, NULL, false);
+// ============================================================================
+// RAM GUI DEBUG WINDOW
+// ============================================================================
+void ram_render_debug_window(void* chip, bool* show_window) {
+    ram_t* ram = (ram_t*)chip;
+    if (!ram || !ram->desc) return;
     
-    igEnd();
-    igPopID();
+    if (!*show_window) return;
+    
+    // Create generic chip GUI config
+    chip_gui_config_t config = generic_chip_gui_get_default_config("Generic", "SRAM");
+    config.get_layout = get_ram_layout;
+    config.get_pin_states = get_ram_pin_states;
+    
+    // Create generic chip GUI instance
+    generic_chip_gui_t* gui = generic_chip_gui_create(ram, &config);
+    if (!gui) {
+        return;
+    }
+    
+    // Create window title
+    char window_title[128];
+    snprintf(window_title, sizeof(window_title), "%s Debug", ram->desc->description);
+    
+    // Use generic chip GUI render function
+    generic_chip_gui_render_debug_panel(gui, NULL, window_title, show_window, render_ram_specific_content);
+    
+    // Cleanup
+    generic_chip_gui_destroy(gui);
 }
 void ram_render_settings_window(void* chip, bool* show_window) {
     ram_t* ram = (ram_t*)chip;

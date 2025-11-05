@@ -14,7 +14,7 @@
 // CHIPPIN METHOD IMPLEMENTATIONS
 // ============================================================================
 
-// Implementation of ChipPin::get_pin_type() method
+// Implementation of ChipPin derived methods
 PinType ChipPin::get_pin_type() const {
     switch (label) {
         case PinLabel::VDD:
@@ -104,10 +104,13 @@ PinType ChipPin::get_pin_type() const {
             
         case PinLabel::LUMA: case PinLabel::CHROMA: case PinLabel::HSYNC: case PinLabel::VSYNC:
         case PinLabel::CSYNC: case PinLabel::DOT_CLK: case PinLabel::COLOR_CLK: case PinLabel::LIGHT_PEN:
+        case PinLabel::COLOR:
             return PinType::VIDEO;
             
         case PinLabel::AUDIO_OUT: case PinLabel::AUDIO_IN: case PinLabel::FILTER_OUT: case PinLabel::FILTER_IN:
         case PinLabel::OSC1: case PinLabel::OSC2: case PinLabel::OSC3: case PinLabel::NOISE:
+        case PinLabel::CAP1A: case PinLabel::CAP1B: case PinLabel::CAP2A: case PinLabel::CAP2B:
+        case PinLabel::POTX: case PinLabel::POTY: case PinLabel::EXT_IN: case PinLabel::SOUND:
             return PinType::AUDIO;
             
         case PinLabel::CAS: case PinLabel::RAS: case PinLabel::MUX:
@@ -117,6 +120,7 @@ PinType ChipPin::get_pin_type() const {
         case PinLabel::MA4: case PinLabel::MA5: case PinLabel::MA6: case PinLabel::MA7:
         case PinLabel::MA8: case PinLabel::MA9: case PinLabel::MA10: case PinLabel::MA11:
         case PinLabel::MA12: case PinLabel::MA13: case PinLabel::MA14: case PinLabel::MA15:
+        case PinLabel::CASRAM: case PinLabel::CASRAM_PLA:
             return PinType::MEMORY;
             
         case PinLabel::Q0: case PinLabel::Q1: case PinLabel::Q2: case PinLabel::Q3:
@@ -127,9 +131,14 @@ PinType ChipPin::get_pin_type() const {
         case PinLabel::Y4: case PinLabel::Y5: case PinLabel::Y6: case PinLabel::Y7:
         case PinLabel::S0: case PinLabel::S1: case PinLabel::S2: case PinLabel::S3:
         case PinLabel::G:
+        case PinLabel::BASIC: case PinLabel::KERNAL: case PinLabel::CHAROM:
+        case PinLabel::GRW: case PinLabel::IO: case PinLabel::ROML: case PinLabel::ROMH:
+        case PinLabel::GAME: case PinLabel::EXROM: case PinLabel::CHAREN:
+        case PinLabel::LORAM: case PinLabel::HIRAM:
             return PinType::LOGIC;
             
         case PinLabel::CNT: case PinLabel::SP: case PinLabel::TOD: case PinLabel::FLAG:
+        case PinLabel::PC: case PinLabel::SDR:
             return PinType::TIMER;
             
         case PinLabel::VREF:
@@ -144,6 +153,18 @@ PinType ChipPin::get_pin_type() const {
         default:
             return PinType::SPECIAL;
     }
+}
+
+uint8_t ChipPin::get_bit_index() const {
+    return get_bit_index_from_label(label);
+}
+
+bool ChipPin::get_invert_logic() const {
+    return get_invert_logic_from_label(label);
+}
+
+const char* ChipPin::get_group_name() const {
+    return pin_type_to_group_name(get_pin_type());
 }
 
 // ============================================================================
@@ -283,15 +304,12 @@ const char* pin_type_to_group_name(PinType type) {
     }
 }
 
-// Unified pin creation function
-ChipPin make_pin(uint8_t num, PinLabel label, const char* custom_group) {
+// Unified pin creation function (replaces all legacy make_*_pin functions)
+ChipPin make_pin(uint8_t num, PinLabel label, const char* alt_function) {
     return {
         num,
         label,
-        get_bit_index_from_label(label),
-        get_invert_logic_from_label(label),
-        custom_group ? custom_group : pin_type_to_group_name(pin_label_to_pin_type(label)),
-        nullptr,  // alt_function
+        alt_function,
         false,    // is_differential_pos
         false     // is_differential_neg
     };
@@ -301,49 +319,52 @@ ChipPin make_pin(uint8_t num, PinLabel label, const char* custom_group) {
 // HELPER FUNCTIONS FOR STANDARD PACKAGE LAYOUTS
 // ============================================================================
 
-// Pin maker helper functions
+// Legacy functions replaced by make_pin - all now use generic make_pin
 ChipPin make_power_pin(uint8_t num, PinLabel label) {
-    return {num, label, 0, false, "POWER", nullptr, false, false};
+    return make_pin(num, label, nullptr);
 }
 
 ChipPin make_ground_pin(uint8_t num, PinLabel label) {
-    return {num, label, 0, false, "POWER", nullptr, false, false};
+    return make_pin(num, label, nullptr);
 }
 
 ChipPin make_address_pin(uint8_t num, PinLabel label, uint8_t bit) {
-    return {num, label, bit, false, "ADDR", nullptr, false, false};
+    return make_pin(num, label, nullptr);
 }
 
 ChipPin make_data_pin(uint8_t num, PinLabel label, uint8_t bit) {
-    return {num, label, bit, false, "DATA", nullptr, false, false};
+    return make_pin(num, label, nullptr);
 }
 
 ChipPin make_control_pin(uint8_t num, PinLabel label, bool active_low) {
-    return {num, label, 0, active_low, "CONTROL", nullptr, false, false};
+    return make_pin(num, label, nullptr);
 }
 
 ChipPin make_clock_pin(uint8_t num, PinLabel label) {
-    return {num, label, 0, false, "CLOCK", nullptr, false, false};
+    return make_pin(num, label, nullptr);
 }
 
 ChipPin make_interrupt_pin(uint8_t num, PinLabel label, bool active_low) {
-    return {num, label, 0, active_low, "INTERRUPT", nullptr, false, false};
+    return make_pin(num, label, nullptr);
 }
 
 ChipPin make_gpio_pin(uint8_t num, PinLabel label, const char* port) {
-    return {num, label, 0, false, port ? port : "GPIO", nullptr, false, false};
+    return make_pin(num, label, nullptr);
 }
 
 ChipPin make_analog_pin(uint8_t num, PinLabel label) {
-    return {num, label, 0, false, "ANALOG", nullptr, false, false};
+    return make_pin(num, label, nullptr);
 }
 
 ChipPin make_differential_pin(uint8_t num, PinLabel label, bool positive) {
-    return {num, label, 0, false, "DIFF", nullptr, positive, !positive};
+    ChipPin pin = make_pin(num, label, nullptr);
+    pin.is_differential_pos = positive;
+    pin.is_differential_neg = !positive;
+    return pin;
 }
 
 ChipPin make_nc_pin(uint8_t num) {
-    return {num, PinLabel::NC, 0, false, "NC", nullptr, false, false};
+    return make_pin(num, PinLabel::NC, nullptr);
 }
 
 // ============================================================================
@@ -1397,6 +1418,8 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::CAS: return "CAS";
         case PinLabel::RAS: return "RAS";
         case PinLabel::MUX: return "MUX";
+        case PinLabel::CASRAM: return "CASRAM";
+        case PinLabel::COLOR: return "COLOR";
         
         // Audio chip pins
         case PinLabel::AUDIO_OUT: return "AUDIO_OUT";
@@ -1407,12 +1430,22 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::OSC2: return "OSC2";
         case PinLabel::OSC3: return "OSC3";
         case PinLabel::NOISE: return "NOISE";
+        case PinLabel::CAP1A: return "CAP1A";
+        case PinLabel::CAP1B: return "CAP1B";
+        case PinLabel::CAP2A: return "CAP2A";
+        case PinLabel::CAP2B: return "CAP2B";
+        case PinLabel::POTX: return "POTX";
+        case PinLabel::POTY: return "POTY";
+        case PinLabel::EXT_IN: return "EXT_IN";
+        case PinLabel::SOUND: return "SOUND";
         
         // CIA/Timer chip pins
         case PinLabel::CNT: return "CNT";
         case PinLabel::SP: return "SP";
         case PinLabel::TOD: return "TOD";
         case PinLabel::FLAG: return "FLAG";
+        case PinLabel::PC: return "PC";
+        case PinLabel::SDR: return "SDR";
         
         // Memory chip pins
         case PinLabel::DQ0: return "DQ0";
@@ -1471,6 +1504,21 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::S3: return "S3";
         case PinLabel::G: return "G";
         
+        // PLA-specific pins
+        case PinLabel::BASIC: return "BASIC";
+        case PinLabel::KERNAL: return "KERNAL";
+        case PinLabel::CHAROM: return "CHAROM";
+        case PinLabel::CASRAM_PLA: return "CASRAM";
+        case PinLabel::GRW: return "GR/W";
+        case PinLabel::IO: return "I/O";
+        case PinLabel::ROML: return "ROML";
+        case PinLabel::ROMH: return "ROMH";
+        case PinLabel::GAME: return "GAME";
+        case PinLabel::EXROM: return "EXROM";
+        case PinLabel::CHAREN: return "CHAREN";
+        case PinLabel::LORAM: return "LORAM";
+        case PinLabel::HIRAM: return "HIRAM";
+        
         // Test and configuration pins
         case PinLabel::TEST: return "TEST";
         case PinLabel::NC: return "NC";
@@ -1513,28 +1561,9 @@ std::string pin_label_to_display_string(PinLabel label) {
     return base_str;
 }
 
-PinLabel string_to_pin_label(const char* label_str) {
-    if (!label_str) return PinLabel::UNKNOWN;
-    
-    // Power pins
-    if (strcmp(label_str, "VDD") == 0) return PinLabel::VDD;
-    if (strcmp(label_str, "VSS") == 0) return PinLabel::VSS;
-    if (strcmp(label_str, "VCC") == 0) return PinLabel::VCC;
-    if (strcmp(label_str, "GND") == 0) return PinLabel::GND;
-    
-    // Clock pins
-    if (strcmp(label_str, "φ0") == 0 || strcmp(label_str, "PHI0") == 0) return PinLabel::PHI0;
-    if (strcmp(label_str, "φ1") == 0 || strcmp(label_str, "PHI1") == 0) return PinLabel::PHI1;
-    if (strcmp(label_str, "φ2") == 0 || strcmp(label_str, "PHI2") == 0) return PinLabel::PHI2;
-    
-    // Add more conversions as needed...
-    
-    return PinLabel::UNKNOWN;
-}
-
 PinType pin_label_to_pin_type(PinLabel label) {
     // This function is redundant since ChipPin::get_pin_type() already does this
     // But we keep it for API compatibility
-    ChipPin temp_pin = {0, label, 0, false, nullptr, nullptr, false, false};
+    ChipPin temp_pin = {0, label, nullptr, false, false};
     return temp_pin.get_pin_type();
 }
