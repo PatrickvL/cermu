@@ -33,6 +33,10 @@ enum class PinType {
     INTERRUPT,    // Interrupt lines (IRQ, NMI, RES, INT, INTR, etc.)
     SPECIAL,      // Special purpose (SO, BE, ML, NC, TEST, etc.)
     IO_PORT,      // I/O port lines (P0-P7, PA0-PA7, GPIO, etc.)
+    PORT_A,       // Port A specific GPIO (PA0-PA7)
+    PORT_B,       // Port B specific GPIO (PB0-PB7)
+    PORT_C,       // Port C specific GPIO (PC0-PC7)
+    PORT_D,       // Port D specific GPIO (PD0-PD7)
     ANALOG,       // Analog signals (AIN, AOUT, VREF, etc.)
     DIFFERENTIAL, // Differential pairs (TX+/TX-, RX+/RX-, CLK+/CLK-)
     VIDEO,        // Video signals (LUMA, CHROMA, SYNC, etc.)
@@ -348,7 +352,10 @@ PinLayout create_custom_dip(uint8_t total_pins, const char* part_name = nullptr)
 PinLayout create_custom_qfp(uint8_t total_pins, const char* part_name = nullptr);
 PinLayout create_custom_bga(uint8_t rows, uint8_t cols, const char* part_name = nullptr);
 
-// Pin definition helpers
+// Unified pin creation function (replaces all make_*_pin functions)
+ChipPin make_pin(uint8_t num, PinLabel label, const char* custom_group = nullptr);
+
+// Legacy pin definition helpers (deprecated - use make_pin instead)
 ChipPin make_power_pin(uint8_t num, PinLabel label);
 ChipPin make_ground_pin(uint8_t num, PinLabel label = PinLabel::GND);
 ChipPin make_address_pin(uint8_t num, PinLabel label, uint8_t bit);
@@ -360,6 +367,11 @@ ChipPin make_gpio_pin(uint8_t num, PinLabel label, const char* port = nullptr);
 ChipPin make_analog_pin(uint8_t num, PinLabel label);
 ChipPin make_differential_pin(uint8_t num, PinLabel label, bool positive);
 ChipPin make_nc_pin(uint8_t num);
+
+// Helper functions for pin derivation
+uint8_t get_bit_index_from_label(PinLabel label);
+bool get_invert_logic_from_label(PinLabel label);
+const char* pin_type_to_group_name(PinType type);
 
 // Enum-to-string conversion functions
 const char* pin_label_to_string(PinLabel label);
