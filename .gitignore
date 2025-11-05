@@ -2,10 +2,10 @@
 .vscode/settings.json
 
 # Build directories
-code/c/build/
-code/c/build_gui/
-code/c/bin/
-code/c/tests/build/
+code/cpp/build/
+code/cpp/build_gui/
+code/cpp/bin/
+code/cpp/tests/build/
 code/csharp/bin/
 code/csharp/obj/
 
@@ -48,24 +48,24 @@ c64emu
 *.lastbuildstate
 *.tlog
 
-code/c/**/*_build/*
-code/c/**/*.dir/*
-code/c/x64/Debug/*
+code/cpp/**/*_build/*
+code/cpp/**/*.dir/*
+code/cpp/x64/Debug/*
 
-code/c/deps/*
-code/c/external/cimgui/
+code/cpp/deps/*
+code/cpp/external/cimgui/
 
-code/c/test_optimized_cpu
-code/c/test_pla_clean
-code/c/test_pla_mapping
-code/c/test_pla_standalone
-code/c/test_ram_consolidation
-code/c/tests/test_pla_clean
-code/c/tests/test_pla_standalone
-code/c/test_ram_consolidation
-code/c/imgui.ini
+code/cpp/test_optimized_cpu
+code/cpp/test_pla_clean
+code/cpp/test_pla_mapping
+code/cpp/test_pla_standalone
+code/cpp/test_ram_consolidation
+code/cpp/tests/test_pla_clean
+code/cpp/tests/test_pla_standalone
+code/cpp/test_ram_consolidation
+code/cpp/imgui.ini
 
-code/c/CTestTestfile.cmake
+code/cpp/CTestTestfile.cmake
 
 # Data files (ROMs, cartridges, disk images) - keep README files
 data/**/*.rom
@@ -104,10 +104,10 @@ external/**/*.zip
 !external/**/*_RESULTS*.md
 
 # Test runner executables and build artifacts
-code/c/tests/build/external/
-code/c/tests/fam65xx_cpp_65c02_test_runner
-code/c/tests/fam65xx_cpp_klaus_test_runner
-code/c/tests/fam65xx_cpp_lorenz_test_runner
-code/c/tests/fam65xx_processor_tests_runner
+code/cpp/tests/build/external/
+code/cpp/tests/fam65xx_cpp_65c02_test_runner
+code/cpp/tests/fam65xx_cpp_klaus_test_runner
+code/cpp/tests/fam65xx_cpp_lorenz_test_runner
+code/cpp/tests/fam65xx_processor_tests_runner
 code/csharp/aiemu/obj/*
-code/c/tests/CTestTestfile.cmake
+code/cpp/tests/CTestTestfile.cmake

@@ -1,11 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 project(MOS6510Tests)
 
-# Set C standard
-set(CMAKE_C_STANDARD 99)
-set(CMAKE_C_STANDARD_REQUIRED ON)
-
-# Set C++ standard for fam65xx tests
+# Set C++ standard for all tests (now fully C++)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -43,13 +39,13 @@ set(CPU_SOURCES
     ${CPU_DIR}/fam65xx/wdc65c02.cpp
     ${CPU_DIR}/fam65xx/rockwell65c02.cpp
     ${CPU_DIR}/fam65xx/wdc65c816.cpp
-    ${CPU_DIR}/fam65xx/fam65xx_decoder.c
+    ${CPU_DIR}/fam65xx/fam65xx_decoder.cpp
 )
 
 # Collect core source files
 set(CORE_SOURCES
-    ${CORE_DIR}/chip.c
-    ${CORE_DIR}/ioport.c
+    ${CORE_DIR}/chip.cpp
+    ${CORE_DIR}/ioport.cpp
 )
 
 # Filter out any missing files (in case some don't exist yet)
@@ -78,7 +74,7 @@ target_include_directories(mos6510_lib PUBLIC
 target_compile_definitions(mos6510_lib PRIVATE REDESIGN=1)
 
 # JSON Parser library for ProcessorTests
-add_library(json_parser STATIC json_parser.c)
+add_library(json_parser STATIC json_parser.cpp)
 target_include_directories(json_parser PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 # fam65xx Klaus Test Suite - New C++ CPU Core Testing
@@ -116,8 +112,8 @@ endif()
 # fam65xx Enhanced C ProcessorTests Runner - With debugging features (using new fam65xx)
 add_executable(fam65xx_processor_tests_runner
     fam65xx_processor_tests_runner.cpp
-    json_parser.c
-    ${CPU_DIR}/fam65xx/fam65xx_decoder.c
+    json_parser.cpp
+    ${CPU_DIR}/fam65xx/fam65xx_decoder.cpp
 )
 target_include_directories(fam65xx_processor_tests_runner PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx
