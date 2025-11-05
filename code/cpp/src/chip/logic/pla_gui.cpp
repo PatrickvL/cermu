@@ -4,7 +4,8 @@
 #include "pla.h"
 #include "../../gui/cimgui_interface.h"
 #include "../../gui/generic_chip_gui.h"
-#include "../../core/non_cpu_chip_layouts.h"
+#include "../../core/chip_layout.h"
+#include "../../core/pin_macros.h"
 #include "../../systems/c64/c64_bus.h"
 #include "../../systems/c64/c64.h"
 #include "../../chip/video/vic_ii/vicii_common.h"
@@ -45,6 +46,67 @@ static const char* get_pla_mode_vicii_description(uint8_t mode, uint16_t bank) {
              1 - game, 1 - exrom, 1 - va14);
     
     return mode_desc;
+}
+
+// ============================================================================
+// C64 PLA LAYOUT (28-pin DIP)
+// ============================================================================
+
+inline ChipLayout create_pla_layout() {
+    // Start with DIP-28 base layout
+    ChipLayout layout = create_dip28_layout();
+    
+    // Update package info for C64 PLA
+    layout.markings = {
+        "906114-01",                 // part_number
+        "Commodore",                 // manufacturer
+        nullptr,                     // package_variant
+        nullptr,                     // date_code
+        nullptr,                     // lot_number
+        nullptr,                     // custom_text
+        true,                        // show_part_number
+        true,                        // show_manufacturer
+        false,                       // show_package_variant
+        false                        // show_date_code
+    };
+    
+    // Clear default pins and create hardware-accurate C64 PLA pinout (28-pin DIP)
+    layout.left_pins.clear();
+    layout.right_pins.clear();
+    
+    // Left side pins (1-14)
+    layout.left_pins.push_back(make_pin(1,  PinLabel::A15, nullptr));     // Address 15
+    layout.left_pins.push_back(make_pin(2,  PinLabel::A14, nullptr));     // Address 14
+    layout.left_pins.push_back(make_pin(3,  PinLabel::A13, nullptr));     // Address 13
+    layout.left_pins.push_back(make_pin(4,  PinLabel::A12, nullptr));     // Address 12
+    layout.left_pins.push_back(make_pin(5,  PinLabel::BA, nullptr));      // Bus Available
+    layout.left_pins.push_back(make_pin(6,  PinLabel::AEC, nullptr));     // Address Enable
+    layout.left_pins.push_back(make_pin(7,  PinLabel::P0, nullptr));      // 6510 Port 0
+    layout.left_pins.push_back(make_pin(8,  PinLabel::P1, nullptr));      // 6510 Port 1
+    layout.left_pins.push_back(make_pin(9,  PinLabel::P2, nullptr));      // 6510 Port 2
+    layout.left_pins.push_back(make_pin(10, PinLabel::CHAREN, nullptr));  // Character Enable
+    layout.left_pins.push_back(make_pin(11, PinLabel::HIRAM, nullptr));   // High RAM
+    layout.left_pins.push_back(make_pin(12, PinLabel::LORAM, nullptr));   // Low RAM
+    layout.left_pins.push_back(make_pin(13, PinLabel::CAS, nullptr));     // Column Addr Strobe
+    layout.left_pins.push_back(make_pin(14, PinLabel::VSS, nullptr));     // Ground
+    
+    // Right side pins (15-28)
+    layout.right_pins.push_back(make_pin(28, PinLabel::VCC, nullptr));    // +5V Power
+    layout.right_pins.push_back(make_pin(27, PinLabel::A8, nullptr));     // Address 8
+    layout.right_pins.push_back(make_pin(26, PinLabel::PHI2, nullptr));   // Clock
+    layout.right_pins.push_back(make_pin(25, PinLabel::RW, nullptr));     // Read/Write
+    layout.right_pins.push_back(make_pin(24, PinLabel::EXROM, nullptr));  // External ROM
+    layout.right_pins.push_back(make_pin(23, PinLabel::GAME, nullptr));   // Game Line
+    layout.right_pins.push_back(make_pin(22, PinLabel::ROMH, nullptr));   // ROM High
+    layout.right_pins.push_back(make_pin(21, PinLabel::ROML, nullptr));   // ROM Low
+    layout.right_pins.push_back(make_pin(20, PinLabel::IO, nullptr));     // I/O Select
+    layout.right_pins.push_back(make_pin(19, PinLabel::GRW, nullptr));    // Graphics R/W
+    layout.right_pins.push_back(make_pin(18, PinLabel::CHAROM, nullptr)); // Character ROM
+    layout.right_pins.push_back(make_pin(17, PinLabel::KERNAL, nullptr)); // KERNAL ROM
+    layout.right_pins.push_back(make_pin(16, PinLabel::BASIC, nullptr));  // BASIC ROM
+    layout.right_pins.push_back(make_pin(15, PinLabel::CASRAM_PLA, nullptr)); // CAS RAM
+    
+    return layout;
 }
 
 // Callback functions for generic chip GUI
