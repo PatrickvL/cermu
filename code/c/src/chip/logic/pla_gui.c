@@ -52,7 +52,7 @@ static ChipLayout get_pla_layout(void* chip) {
     return create_pla_layout();
 }
 
-static void get_pla_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_state, struct PinState* pin_states) {
+static void get_pla_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_state, struct PinSignalState* pin_states) {
     c64_t* c64 = (c64_t*)chip;
     if (!c64 || !layout || !pin_states) return;
     

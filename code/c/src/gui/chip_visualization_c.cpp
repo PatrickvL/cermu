@@ -13,7 +13,7 @@
 extern "C" {
 
 void render_chip_visualization_c(const struct ChipLayout* layout, 
-                                const struct PinState* pin_states, 
+                                const struct PinSignalState* pin_states, 
                                 const char* header_title) {
     if (!layout || !pin_states || !header_title) return;
     
@@ -26,7 +26,7 @@ void render_chip_visualization_c(const struct ChipLayout* layout,
         
         // Convert C array to std::vector
         int total_pins = get_chip_layout_total_pins(layout);
-        std::vector<PinState> pin_states_vec(pin_states, pin_states + total_pins);
+        std::vector<PinSignalState> pin_states_vec(pin_states, pin_states + total_pins);
         
         // Calculate chip center position
         ImVec2 cursor_pos;

@@ -226,7 +226,7 @@ void render_chip_layout_gui(ChipGUIState* state, void* chip, bus_state_t bus_sta
     // For now, just a placeholder
 }
 
-void get_generic_chip_pin_states(void* chip, const ChipLayout* layout, bus_state_t bus_state, PinState* out_states) {
+void get_generic_chip_pin_states(void* chip, const ChipLayout* layout, bus_state_t bus_state, PinSignalState* out_states) {
     if (!layout || !out_states) return;
     
     // Basic implementation - just set all pins to inactive

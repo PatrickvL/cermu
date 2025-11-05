@@ -8,8 +8,13 @@
 #ifndef PIN_TYPES_H
 #define PIN_TYPES_H
 
+#ifdef __cplusplus
 #include <cstdint>
 #include <string>
+#else
+#include <stdint.h>
+#include <stdbool.h>
+#endif
 
 // ============================================================================
 // PIN TYPES AND ENUMERATIONS
@@ -200,13 +205,13 @@ enum class PinSide {
 // PIN STRUCTURES
 // ============================================================================
 
-// Pin definition structure with enum-based labels for performance
+// Die pin definition structure with enum-based labels for performance
 struct ChipPin {
-    uint8_t pin_number;      // Physical pin number (or grid position for BGA)
-    PinLabel label;          // Pin label enum for fast comparisons
-    const char* alt_function;// Alternate function name
-    bool is_differential_pos;// True if positive side of differential pair
-    bool is_differential_neg;// True if negative side of differential pair
+    uint8_t pin_number;           // Physical pin number (or grid position for BGA)
+    PinLabel label;               // Pin label enum for fast comparisons
+    const char* alt_function;     // Alternate function name
+    bool is_differential_pos;     // True if positive side of differential pair
+    bool is_differential_neg;     // True if negative side of differential pair
     
     // Derived properties - computed from label
     PinType get_pin_type() const;
@@ -215,19 +220,19 @@ struct ChipPin {
     const char* get_group_name() const;
 };
 
-// Pin state for real-time visualization
-struct PinState {
-    uint8_t pin_number;      // Pin number to match ChipPin
-    bool is_active;          // Current pin state
-    bool is_output;          // True if pin is output, false if input
-    uint8_t value;           // For multi-bit values or analog levels (0-255)
-    bool is_tristate;        // True if pin is in high-impedance state
-    bool has_pullup;         // Pin has pull-up resistor
-    bool has_pulldown;       // Pin has pull-down resistor
-    bool is_valid;           // True if pin state is valid/available
-    float analog_voltage;    // For analog pins (0.0 - Vcc)
-    bool is_pwm;             // True if pin is PWM output
-    float pwm_duty_cycle;    // PWM duty cycle (0.0 - 1.0)
+// Pin signal state for real-time visualization
+struct PinSignalState {
+    uint8_t pin_number;           // Pin number to match ChipPin
+    bool signal_level;            // Current signal level (high/low)
+    bool drive_direction;         // True if pin drives output, false if receives input
+    uint8_t signal_value;         // For multi-bit values or analog levels (0-255)
+    bool high_impedance;          // True if pin is in high-impedance (Hi-Z) state
+    bool has_pullup;              // Pin has pull-up resistor
+    bool has_pulldown;            // Pin has pull-down resistor
+    bool signal_valid;            // True if pin signal state is valid/available
+    float analog_voltage;         // For analog pins (0.0 - VCC)
+    bool is_pwm;                  // True if pin is PWM output
+    float pwm_duty_cycle;         // PWM duty cycle (0.0 - 1.0)
 };
 
 // BGA grid position (for BGA/LGA packages)
@@ -247,7 +252,9 @@ const char* pin_type_to_group_name(PinType type);
 
 // Enum-to-string conversion functions
 const char* pin_label_to_string(PinLabel label);
+#ifdef __cplusplus
 std::string pin_label_to_display_string(PinLabel label); // With Unicode symbols
+#endif
 
 // Derive pin type from pin label
 PinType pin_label_to_pin_type(PinLabel label);

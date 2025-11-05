@@ -199,7 +199,7 @@ ChipVisualization::ChipVisualization(const ChipLayout& layout, const ChipVisualC
     : layout_(layout), config_(config) {
 }
 
-void ChipVisualization::render(ImVec2 chip_center, const std::vector<PinState>& pin_states, const char* chip_name) {
+void ChipVisualization::render(ImVec2 chip_center, const std::vector<PinSignalState>& pin_states, const char* chip_name) {
     render_chip_body(chip_center, chip_name);
     render_orientation_marker(chip_center);
     
@@ -535,14 +535,14 @@ void ChipVisualization::render_pin_groups(ImVec2 chip_center) {
     // Implementation omitted for brevity
 }
 
-void ChipVisualization::render_pins(ImVec2 chip_center, const std::vector<PinState>& pin_states) {
+void ChipVisualization::render_pins(ImVec2 chip_center, const std::vector<PinSignalState>& pin_states) {
     render_pin_side(chip_center, layout_.left_pins, pin_states, PinSide::LEFT);
     render_pin_side(chip_center, layout_.right_pins, pin_states, PinSide::RIGHT);
     render_pin_side(chip_center, layout_.top_pins, pin_states, PinSide::TOP);
     render_pin_side(chip_center, layout_.bottom_pins, pin_states, PinSide::BOTTOM);
 }
 
-void ChipVisualization::render_bga_grid(ImVec2 chip_center, const std::vector<PinState>& pin_states) {
+void ChipVisualization::render_bga_grid(ImVec2 chip_center, const std::vector<PinSignalState>& pin_states) {
     // Render BGA ball grid
     // Calculate grid dimensions
     uint8_t max_row = 0, max_col = 0;
@@ -562,7 +562,7 @@ void ChipVisualization::render_bga_grid(ImVec2 chip_center, const std::vector<Pi
         
         ImVec2 ball_pos = calculate_bga_position(chip_center, row, col);
         
-        PinState state = {0, false, false, 0, false, false, false, true, 0.0f, false, 0.0f};
+        PinSignalState state = {0, false, false, 0, false, false, false, true, 0.0f, false, 0.0f};
         if (pin.pin_number <= pin_states.size()) {
             state = pin_states[pin.pin_number - 1];
         }
@@ -585,12 +585,12 @@ void ChipVisualization::render_bga_grid(ImVec2 chip_center, const std::vector<Pi
 }
 
 void ChipVisualization::render_pin_side(ImVec2 chip_center, const std::vector<ChipPin>& pins, 
-                                       const std::vector<PinState>& pin_states, PinSide side) {
+                                       const std::vector<PinSignalState>& pin_states, PinSide side) {
     for (size_t i = 0; i < pins.size(); i++) {
         const ChipPin& pin = pins[i];
         
         // Find corresponding pin state
-        PinState state = {0, false, false, 0, false, false, false, true, 0.0f, false, 0.0f};
+        PinSignalState state = {0, false, false, 0, false, false, false, true, 0.0f, false, 0.0f};
         if (pin.pin_number > 0 && pin.pin_number <= pin_states.size()) {
             state = pin_states[pin.pin_number - 1];
         }
@@ -600,7 +600,7 @@ void ChipVisualization::render_pin_side(ImVec2 chip_center, const std::vector<Ch
     }
 }
 
-void ChipVisualization::render_single_pin(ImVec2 pin_pos, const ChipPin& pin, const PinState& state, PinSide side) {
+void ChipVisualization::render_single_pin(ImVec2 pin_pos, const ChipPin& pin, const PinSignalState& state, PinSide side) {
     ImDrawList* draw_list = igGetWindowDrawList();
     
     // Get pin type color

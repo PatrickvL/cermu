@@ -13,7 +13,7 @@
 // Forward declarations
 static const char* mos6526_get_cia_name(mos6526_t* cia);
 static ChipLayout get_cia_layout(void* chip);
-static void get_cia_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_state, PinState* pin_states);
+static void get_cia_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_state, PinSignalState* pin_states);
 static void render_cia_specific_content(void* chip);
 
 // ============================================================================
@@ -25,7 +25,7 @@ static ChipLayout get_cia_layout(void* chip) {
     return create_mos6526_layout();
 }
 
-static void get_cia_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_state, PinState* pin_states) {
+static void get_cia_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_state, PinSignalState* pin_states) {
     mos6526_t* cia = (mos6526_t*)chip;
     if (!cia || !layout || !pin_states) return;
     
