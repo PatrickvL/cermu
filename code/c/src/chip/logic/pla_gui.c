@@ -45,6 +45,55 @@ static const char* get_pla_mode_vicii_description(uint8_t mode, uint16_t bank) {
     return mode_desc;
 }
 
+// Hardware-accurate PLA chip layout (C64 PLA - 28-pin DIP)
+static void render_pla_chip_layout(c64_t* c64) {
+    if (igCollapsingHeader_BoolPtr("Hardware Layout - C64 PLA (906114-01)", NULL, ImGuiTreeNodeFlags_DefaultOpen)) {
+        igIndent(16.0f);
+        
+        igText("Package: 28-pin DIP");
+        igText("Programmable Logic Array (PLA)");
+        igSeparator();
+        
+        // Two-column layout for pins
+        igColumns(2, "pla_pinout", true);
+        igText("LEFT SIDE:");
+        igText("1  - A15 (Address)");
+        igText("2  - A14 (Address)");
+        igText("3  - A13 (Address)");
+        igText("4  - A12 (Address)");
+        igText("5  - BA (Bus Available)");
+        igText("6  - AEC (Address Enable)");
+        igText("7  - P0 (6510 Port 0)");
+        igText("8  - P1 (6510 Port 1)");
+        igText("9  - P2 (6510 Port 2)");
+        igText("10 - CHAREN (Char Enable)");
+        igText("11 - HIRAM (High RAM)");
+        igText("12 - LORAM (Low RAM)");
+        igText("13 - CAS (Column Addr Strobe)");
+        igText("14 - VSS (Ground)");
+        
+        igNextColumn();
+        igText("RIGHT SIDE:");
+        igText("15 - CASRAM (CAS RAM)");
+        igText("16 - BASIC (BASIC ROM)");
+        igText("17 - KERNAL (KERNAL ROM)");
+        igText("18 - CHAROM (CHAR ROM)");
+        igText("19 - GR/W (Graphics R/W)");
+        igText("20 - I/O (I/O Select)");
+        igText("21 - ROML (ROM Low)");
+        igText("22 - ROMH (ROM High)");
+        igText("23 - GAME (Game Line)");
+        igText("24 - EXROM (External ROM)");
+        igText("25 - R/W (Read/Write)");
+        igText("26 - PHI2 (Clock)");
+        igText("27 - A8 (Address)");
+        igText("28 - VCC (+5V)");
+        
+        igColumns(1, NULL, false);
+        igUnindent(16.0f);
+    }
+}
+
 // ============================================================================
 // PLA GUI DEBUG WINDOW
 // ============================================================================
@@ -62,7 +111,16 @@ void pla_render_debug_window(void* chip, bool* show_window) {
         igEnd();
         return;
     }
+
+    // Create two-column layout: chip visualization on left, debugging info on right
+    igColumns(2, "pla_debug_columns", true);
     
+    // Left column: Hardware chip layout
+    render_pla_chip_layout(c64);
+    
+    igNextColumn();
+    
+    // Right column: PLA mode and banking information
     // Mode tracking and control
     bool has_c64 = c64;
     uint8_t current_mode = has_c64 ? c64->bus.pla_banking_mode : 0;
@@ -338,6 +396,9 @@ void pla_render_debug_window(void* chip, bool* show_window) {
         }
         igEndTable();
     }
+    
+    // Reset to single column at the end
+    igColumns(1, NULL, false);
     
     igEnd();
 }

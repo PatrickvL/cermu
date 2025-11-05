@@ -1,5 +1,7 @@
 #include "vicii_common.h"
 #include "../../../gui/cimgui_interface.h"
+#include "../../../gui/chip_visualization.h"
+#include "../../../core/emulation_context.h"
 #ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #endif
@@ -40,6 +42,67 @@ static const char* get_screen_mode(uint8_t cr1, uint8_t cr2) {
     return "Invalid Mode";
 }
 
+// Hardware-accurate VIC-II chip layout (MOS 6567/6569 - 40-pin DIP)
+static void render_vicii_chip_layout(vicii_t* vicii) {
+    if (igCollapsingHeader_TreeNodeFlags("Hardware Layout - MOS 6567/6569 VIC-II", ImGuiTreeNodeFlags_DefaultOpen)) {
+        igIndent(16.0f);
+        
+        igText("Package: 40-pin DIP");
+        igText("Video Interface Device (VIC-II)");
+        igSeparator();
+        
+        // Left side pins (1-20)
+        igColumns(2, "vic_pinout", true);
+        igText("LEFT SIDE:");
+        igText("1  - VDD (+5V)");
+        igText("2  - PHI0 (Clock)");
+        igText("3  - AEC (Address Enable)");
+        igText("4  - BA (Bus Available)");
+        igText("5  - R/W (Read/Write)");
+        igText("6  - IRQ (Interrupt)");
+        igText("7  - A6 (Address)");
+        igText("8  - A7 (Address)");
+        igText("9  - A8 (Address)");
+        igText("10 - A9 (Address)");
+        igText("11 - A10 (Address)");
+        igText("12 - A11 (Address)");
+        igText("13 - A12 (Address)");
+        igText("14 - A13 (Address)");
+        igText("15 - CAS (Column Addr Strobe)");
+        igText("16 - RAS (Row Addr Strobe)");
+        igText("17 - LUMA (Luminance)");
+        igText("18 - CHROMA (Chrominance)");
+        igText("19 - SYNC (Composite Sync)");
+        igText("20 - VSS (Ground)");
+        
+        igNextColumn();
+        igText("RIGHT SIDE:");
+        igText("21 - VSS (Ground)");
+        igText("22 - A5 (Address)");
+        igText("23 - A4 (Address)");
+        igText("24 - A3 (Address)");
+        igText("25 - A2 (Address)");
+        igText("26 - A1 (Address)");
+        igText("27 - A0 (Address)");
+        igText("28 - D7 (Data)");
+        igText("29 - D6 (Data)");
+        igText("30 - D5 (Data)");
+        igText("31 - D4 (Data)");
+        igText("32 - D3 (Data)");
+        igText("33 - D2 (Data)");
+        igText("34 - D1 (Data)");
+        igText("35 - D0 (Data)");
+        igText("36 - PHI2 (Clock)");
+        igText("37 - COLOR (Color Signal)");
+        igText("38 - CS (Chip Select)");
+        igText("39 - SOUND (Audio Out)");
+        igText("40 - VCC (+5V)");
+        
+        igColumns(1, NULL, false);
+        igUnindent(16.0f);
+    }
+}
+
 void vicii_gui_render_debug_window(void* chip, bool* show_window, const char* window_title) {
     if (!*show_window) return;
     
@@ -54,6 +117,15 @@ void vicii_gui_render_debug_window(void* chip, bool* show_window, const char* wi
         return;
     }
 
+    // Create two-column layout: chip visualization on left, debugging info on right
+    igColumns(2, "vicii_debug_columns", true);
+    
+    // Left column: Hardware chip layout
+    render_vicii_chip_layout(vicii);
+    
+    igNextColumn();
+    
+    // Right column: Register information
     igText("%s", get_vicii_type_name(vicii));
     igSeparator();
     
@@ -227,6 +299,9 @@ void vicii_gui_render_debug_window(void* chip, bool* show_window, const char* wi
             igText("%s", line);
         }
     }
+
+    // Reset to single column at the end
+    igColumns(1, NULL, false);
 
     igEnd();
 }

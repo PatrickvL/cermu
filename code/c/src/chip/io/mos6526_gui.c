@@ -15,6 +15,67 @@ static const char* mos6526_get_cia_name(mos6526_t* cia);
 // MOS6526 CIA GUI DEBUG WINDOW
 // ============================================================================
 
+// Hardware-accurate CIA chip layout (MOS 6526 - 40-pin DIP)
+static void render_cia_chip_layout(mos6526_t* cia) {
+    if (igCollapsingHeader_BoolPtr("Hardware Layout - MOS 6526 CIA", NULL, ImGuiTreeNodeFlags_DefaultOpen)) {
+        igIndent(16.0f);
+        
+        igText("Package: 40-pin DIP");
+        igText("Complex Interface Adapter (CIA)");
+        igSeparator();
+        
+        // Two-column layout for pins
+        igColumns(2, "cia_pinout", true);
+        igText("LEFT SIDE:");
+        igText("1  - VSS (Ground)");
+        igText("2  - PA0 (Port A Bit 0)");
+        igText("3  - PA1 (Port A Bit 1)");
+        igText("4  - PA2 (Port A Bit 2)");
+        igText("5  - PA3 (Port A Bit 3)");
+        igText("6  - PA4 (Port A Bit 4)");
+        igText("7  - PA5 (Port A Bit 5)");
+        igText("8  - PA6 (Port A Bit 6)");
+        igText("9  - PA7 (Port A Bit 7)");
+        igText("10 - PB0 (Port B Bit 0)");
+        igText("11 - PB1 (Port B Bit 1)");
+        igText("12 - PB2 (Port B Bit 2)");
+        igText("13 - PB3 (Port B Bit 3)");
+        igText("14 - PB4 (Port B Bit 4)");
+        igText("15 - PB5 (Port B Bit 5)");
+        igText("16 - PB6 (Port B Bit 6)");
+        igText("17 - PB7 (Port B Bit 7)");
+        igText("18 - PC (Serial Port)");
+        igText("19 - TOD (Time of Day)");
+        igText("20 - VCC (+5V)");
+        
+        igNextColumn();
+        igText("RIGHT SIDE:");
+        igText("21 - IRQ (Interrupt Request)");
+        igText("22 - R/W (Read/Write)");
+        igText("23 - CS (Chip Select)");
+        igText("24 - FLAG (Flag Input)");
+        igText("25 - PHI2 (Clock)");
+        igText("26 - SP (Serial Port)");
+        igText("27 - CNT (Serial Counter)");
+        igText("28 - A0 (Address)");
+        igText("29 - A1 (Address)");
+        igText("30 - A2 (Address)");
+        igText("31 - A3 (Address)");
+        igText("32 - D0 (Data)");
+        igText("33 - D1 (Data)");
+        igText("34 - D2 (Data)");
+        igText("35 - D3 (Data)");
+        igText("36 - D4 (Data)");
+        igText("37 - D5 (Data)");
+        igText("38 - D6 (Data)");
+        igText("39 - D7 (Data)");
+        igText("40 - RES (Reset)");
+        
+        igColumns(1, NULL, false);
+        igUnindent(16.0f);
+    }
+}
+
 void mos6526_render_debug_window(void* chip, bool* show_window) {
     mos6526_t* cia = (mos6526_t*)chip;
     if (!cia || !cia->desc) return;
@@ -32,6 +93,15 @@ void mos6526_render_debug_window(void* chip, bool* show_window) {
         return;
     }
 
+    // Create two-column layout: chip visualization on left, debugging info on right
+    igColumns(2, "cia_debug_columns", true);
+    
+    // Left column: Hardware chip layout
+    render_cia_chip_layout(cia);
+    
+    igNextColumn();
+    
+    // Right column: Register information
     // Show which CIA this is
     igText("Complex Interface Adapter - %s", cia_name);
     igSeparator();
@@ -89,6 +159,9 @@ void mos6526_render_debug_window(void* chip, bool* show_window) {
     // Serial Data Register
     igText("Serial Data Register: $%02X", cia->reg[SDR]);
 
+    // Reset to single column at the end
+    igColumns(1, NULL, false);
+    
     igEnd();
     igPopID();
 }
@@ -210,6 +283,9 @@ void mos6526_render_settings_window(void* chip, bool* show_window) {
     igText("SDR: $%02X", cia->reg[SDR]);
     igText("Shift Register: $%02X", cia->reg[SHIFT_OFFSET]);
     igText("Serial Shift: %d", cia->serial_shift);
+    
+    // Reset to single column at the end
+    igColumns(1, NULL, false);
     
     igEnd();
     igPopID();

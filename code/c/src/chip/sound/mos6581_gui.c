@@ -74,6 +74,55 @@ static void render_voice_debug(voice_t* voice, int voice_num) {
 // ============================================================================
 // MOS6581 SID GUI DEBUG WINDOW
 // ============================================================================
+// Hardware-accurate SID chip layout (MOS 6581 - 28-pin DIP)
+static void render_sid_chip_layout(mos6581_t* sid) {
+    if (igCollapsingHeader_BoolPtr("Hardware Layout - MOS 6581 SID", NULL, ImGuiTreeNodeFlags_DefaultOpen)) {
+        igIndent(16.0f);
+        
+        igText("Package: 28-pin DIP");
+        igText("Sound Interface Device (SID)");
+        igSeparator();
+        
+        // Two-column layout for pins
+        igColumns(2, "sid_pinout", true);
+        igText("LEFT SIDE:");
+        igText("1  - CAP1A (Filter Cap)");
+        igText("2  - CAP1B (Filter Cap)");
+        igText("3  - CAP2A (Filter Cap)");
+        igText("4  - CAP2B (Filter Cap)");
+        igText("5  - RES (Reset)");
+        igText("6  - PHI2 (Clock)");
+        igText("7  - R/W (Read/Write)");
+        igText("8  - CS (Chip Select)");
+        igText("9  - A0 (Address)");
+        igText("10 - A1 (Address)");
+        igText("11 - A2 (Address)");
+        igText("12 - A3 (Address)");
+        igText("13 - A4 (Address)");
+        igText("14 - VSS (Ground)");
+        
+        igNextColumn();
+        igText("RIGHT SIDE:");
+        igText("15 - D0 (Data)");
+        igText("16 - D1 (Data)");
+        igText("17 - D2 (Data)");
+        igText("18 - D3 (Data)");
+        igText("19 - D4 (Data)");
+        igText("20 - D5 (Data)");
+        igText("21 - D6 (Data)");
+        igText("22 - D7 (Data)");
+        igText("23 - POTY (Paddle Y)");
+        igText("24 - POTX (Paddle X)");
+        igText("25 - VCC (+5V)");
+        igText("26 - EXT_IN (External Input)");
+        igText("27 - AUDIO_OUT (Audio Output)");
+        igText("28 - VDD (+12V)");
+        
+        igColumns(1, NULL, false);
+        igUnindent(16.0f);
+    }
+}
+
 void mos6581_render_debug_window(void* chip, bool* show_window) {
     mos6581_t* sid = (mos6581_t*)chip;
     if (!sid || !sid->desc) return;
@@ -88,6 +137,15 @@ void mos6581_render_debug_window(void* chip, bool* show_window) {
         return;
     }
 
+    // Create two-column layout: chip visualization on left, debugging info on right
+    igColumns(2, "sid_debug_columns", true);
+    
+    // Left column: Hardware chip layout
+    render_sid_chip_layout(sid);
+    
+    igNextColumn();
+    
+    // Right column: Register and voice information
     igText("MOS 6581 SID (Sound Interface Device)");
     igText("SID MOS 6581 DIP has 28 pins");
     igSeparator();
@@ -304,6 +362,9 @@ void mos6581_render_settings_window(void* chip, bool* show_window) {
     if (igButton("Test Sound", (ImVec2){0, 0})) {
         // TODO: Generate test sound
     }
+
+    // Reset to single column at the end
+    igColumns(1, NULL, false);
 
     igEnd();
 }
