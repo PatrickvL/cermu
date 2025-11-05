@@ -286,8 +286,8 @@ ChipLayout create_c64_pla_layout() {
 // PIN STATE EXTRACTION FOR NON-CPU CHIPS
 // ============================================================================
 
-std::vector<PinState> get_video_chip_pin_states(void* chip, const ChipLayout* layout, bus_state_t bus_state) {
-    std::vector<PinState> states(layout->get_total_pins());
+std::vector<PinSignalState> get_video_chip_pin_states(void* chip, const ChipLayout* layout, bus_state_t bus_state) {
+    std::vector<PinSignalState> states(layout->get_total_pins());
     
     // Initialize all pins as inactive and valid
     for (auto& state : states) {
@@ -309,7 +309,7 @@ std::vector<PinState> get_video_chip_pin_states(void* chip, const ChipLayout* la
     auto process_pin = [&](const ChipPin& pin, size_t state_index) {
         if (state_index >= states.size()) return;
         
-        PinState& state = states[state_index];
+        PinSignalState& state = states[state_index];
         
         switch (pin.label) {
             case PinLabel::A0: case PinLabel::A1: case PinLabel::A2: case PinLabel::A3:
@@ -388,22 +388,22 @@ std::vector<PinState> get_video_chip_pin_states(void* chip, const ChipLayout* la
     return states;
 }
 
-std::vector<PinState> get_audio_chip_pin_states(void* chip, const ChipLayout* layout, bus_state_t bus_state) {
+std::vector<PinSignalState> get_audio_chip_pin_states(void* chip, const ChipLayout* layout, bus_state_t bus_state) {
     // Similar implementation to video chip but for audio-specific pins
     return get_video_chip_pin_states(chip, layout, bus_state); // Reuse for now
 }
 
-std::vector<PinState> get_io_chip_pin_states(void* chip, const ChipLayout* layout, bus_state_t bus_state) {
+std::vector<PinSignalState> get_io_chip_pin_states(void* chip, const ChipLayout* layout, bus_state_t bus_state) {
     // Similar implementation to video chip but for I/O-specific pins
     return get_video_chip_pin_states(chip, layout, bus_state); // Reuse for now
 }
 
-std::vector<PinState> get_memory_chip_pin_states(void* chip, const ChipLayout* layout, bus_state_t bus_state) {
+std::vector<PinSignalState> get_memory_chip_pin_states(void* chip, const ChipLayout* layout, bus_state_t bus_state) {
     // Similar implementation to video chip but for memory-specific pins
     return get_video_chip_pin_states(chip, layout, bus_state); // Reuse for now
 }
 
-std::vector<PinState> get_logic_chip_pin_states(void* chip, const ChipLayout* layout, bus_state_t bus_state) {
+std::vector<PinSignalState> get_logic_chip_pin_states(void* chip, const ChipLayout* layout, bus_state_t bus_state) {
     // Similar implementation to video chip but for logic-specific pins
     return get_video_chip_pin_states(chip, layout, bus_state); // Reuse for now
 }

@@ -47,7 +47,7 @@ static ChipLayout get_vicii_layout(void* chip) {
     return create_vicii_layout();
 }
 
-static void get_vicii_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_state, struct PinState* pin_states) {
+static void get_vicii_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_state, struct PinSignalState* pin_states) {
     vicii_t* vicii = (vicii_t*)chip;
     if (!vicii || !layout || !pin_states) return;
     

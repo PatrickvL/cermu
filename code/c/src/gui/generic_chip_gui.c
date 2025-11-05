@@ -107,7 +107,7 @@ void generic_chip_gui_refresh_layout(generic_chip_gui_t* gui) {
 // COLOR MANAGEMENT
 // ============================================================================
 
-uint32_t generic_chip_gui_get_pin_color(const chip_gui_config_t* config, const PinState* pin_state) {
+uint32_t generic_chip_gui_get_pin_color(const chip_gui_config_t* config, const PinSignalState* pin_state) {
     if (!config || !pin_state || !pin_state->is_valid) {
         return config->pin_color_inactive;
     }
@@ -149,7 +149,7 @@ void generic_chip_gui_render_layout(generic_chip_gui_t* gui,
             if (gui->cached_pin_states) {
                 free(gui->cached_pin_states);
             }
-            gui->cached_pin_states = (PinState*)calloc(total_pins, sizeof(PinState));
+            gui->cached_pin_states = (PinSignalState*)calloc(total_pins, sizeof(PinSignalState));
             
             if (gui->config.get_pin_states) {
                 gui->config.get_pin_states(gui->chip_instance, &gui->cached_layout, 
@@ -181,12 +181,12 @@ void generic_chip_gui_render_layout(generic_chip_gui_t* gui,
     
     // Render pins
     int pin_index = 0;
-    PinState* pin_states = gui->cached_pin_states;
+    PinSignalState* pin_states = gui->cached_pin_states;
     
     // Render left pins
     for (size_t i = 0; i < gui->cached_layout.left_pins.size(); i++) {
         const ChipPin* pin = &gui->cached_layout.left_pins.data()[i];
-        const PinState* state = pin_states ? &pin_states[pin_index] : NULL;
+        const PinSignalState* state = pin_states ? &pin_states[pin_index] : NULL;
         generic_chip_gui_render_pin(pin, state, &gui->config, chip_x - 50, chip_y - 100 + i * 20, scale);
         pin_index++;
     }
@@ -194,7 +194,7 @@ void generic_chip_gui_render_layout(generic_chip_gui_t* gui,
     // Render right pins
     for (size_t i = 0; i < gui->cached_layout.right_pins.size(); i++) {
         const ChipPin* pin = &gui->cached_layout.right_pins.data()[i];
-        const PinState* state = pin_states ? &pin_states[pin_index] : NULL;
+        const PinSignalState* state = pin_states ? &pin_states[pin_index] : NULL;
         generic_chip_gui_render_pin(pin, state, &gui->config, chip_x + 50, chip_y - 100 + i * 20, scale);
         pin_index++;
     }
@@ -308,7 +308,7 @@ void generic_chip_gui_render_dip_package(const ChipLayout* layout, const chip_gu
     }
 }
 
-void generic_chip_gui_render_pin(const ChipPin* pin, const PinState* pin_state, const chip_gui_config_t* config, float x, float y, float scale) {
+void generic_chip_gui_render_pin(const ChipPin* pin, const PinSignalState* pin_state, const chip_gui_config_t* config, float x, float y, float scale) {
     if (!pin || !config) return;
     
     ImDrawList* draw_list = igGetWindowDrawList();
@@ -380,12 +380,12 @@ ChipLayout generic_chip_gui_get_dip_layout(void* chip, int pin_count) {
     return layout;
 }
 
-void generic_chip_gui_get_basic_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_state, PinState* pin_states) {
+void generic_chip_gui_get_basic_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_state, PinSignalState* pin_states) {
     if (!layout || !pin_states) return;
     
     // Default implementation - all pins inactive
     int total_pins = layout->get_total_pins();
     for (int i = 0; i < total_pins; i++) {
-        pin_states[i] = (PinState){false, false, 0, false, true};
+        pin_states[i] = (PinSignalState){false, false, 0, false, true};
     }
 }

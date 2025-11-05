@@ -15,7 +15,7 @@ typedef struct generic_chip_gui_t generic_chip_gui_t;
 
 // Chip-specific callbacks for retrieving pin states and layouts
 typedef ChipLayout (*get_chip_layout_func_t)(void* chip);
-typedef void (*get_chip_pin_states_func_t)(void* chip, ChipLayout* layout, bus_state_t bus_state, PinState* pin_states);
+typedef void (*get_chip_pin_states_func_t)(void* chip, ChipLayout* layout, bus_state_t bus_state, PinSignalState* pin_states);
 
 // Generic chip visualization configuration
 typedef struct {
@@ -55,7 +55,7 @@ typedef struct generic_chip_gui_t {
     void* chip_instance;
     chip_gui_config_t config;
     ChipLayout cached_layout;
-    PinState* cached_pin_states;
+    PinSignalState* cached_pin_states;
     bool layout_cached;
     bus_state_t last_bus_state;
 } generic_chip_gui_t;
@@ -99,14 +99,14 @@ void generic_chip_gui_refresh_layout(generic_chip_gui_t* gui);
 
 // Default implementations for common chip types
 ChipLayout generic_chip_gui_get_dip_layout(void* chip, int pin_count);
-void generic_chip_gui_get_basic_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_state, PinState* pin_states);
+void generic_chip_gui_get_basic_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_state, PinSignalState* pin_states);
 
 // Pin state color mapping
-uint32_t generic_chip_gui_get_pin_color(const chip_gui_config_t* config, const PinState* pin_state);
+uint32_t generic_chip_gui_get_pin_color(const chip_gui_config_t* config, const PinSignalState* pin_state);
 
 // Layout rendering helpers
 void generic_chip_gui_render_dip_package(const ChipLayout* layout, const chip_gui_config_t* config, float x, float y, float scale);
-void generic_chip_gui_render_pin(const ChipPin* pin, const PinState* pin_state, const chip_gui_config_t* config, float x, float y, float scale);
+void generic_chip_gui_render_pin(const ChipPin* pin, const PinSignalState* pin_state, const chip_gui_config_t* config, float x, float y, float scale);
 void generic_chip_gui_render_chip_markings(const ChipLayout* layout, const chip_gui_config_t* config, float x, float y, float scale);
 
 #ifdef __cplusplus

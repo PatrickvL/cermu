@@ -99,7 +99,7 @@ void render_chip_visualization(fam65xx_t<Traits>* cpu, ImVec2 chip_center, bus_s
     ChipVisualization* chip_viz = get_chip_visualization_instance<Traits>();
     
     // Get current pin states from CPU and bus state
-    std::vector<PinState> pin_states = get_cpu_pin_states<Traits>(cpu, &chip_viz->get_pin_layout(), bus_state);
+    std::vector<PinSignalState> pin_states = get_cpu_pin_states<Traits>(cpu, &chip_viz->get_pin_layout(), bus_state);
     
     // Render the chip
     const char* chip_name = get_processor_name<Traits>();

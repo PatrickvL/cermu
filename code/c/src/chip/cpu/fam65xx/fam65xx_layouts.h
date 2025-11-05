@@ -36,7 +36,7 @@ ChipLayout create_rockwell_r65c02_layout();
 
 // CPU pin state functions - get pin states from CPU and bus state  
 template<const fam65xx::CPUTraits& Traits>
-std::vector<PinState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, ChipLayout* layout, bus_state_t bus_state);
+std::vector<PinSignalState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, ChipLayout* layout, bus_state_t bus_state);
 
 // ============================================================================
 // TEMPLATE FUNCTION IMPLEMENTATIONS (must be in header for templates)
@@ -99,10 +99,10 @@ ChipLayout create_cpu_pin_layout() {
 
 // CPU pin state function with compile-time CPU selection  
 template<const fam65xx::CPUTraits& Traits>
-std::vector<PinState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, const ChipLayout* layout, bus_state_t bus_state) {
+std::vector<PinSignalState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, const ChipLayout* layout, bus_state_t bus_state) {
     // Map pins based on the pin layout for this CPU type
     // Get the actual pin layout for this CPU
-    std::vector<PinState> states(layout->get_total_pins());
+    std::vector<PinSignalState> states(layout->get_total_pins());
 
     // Initialize all pins as inactive and valid
     for (auto& state : states) {
@@ -125,7 +125,7 @@ std::vector<PinState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, const 
     auto process_pin = [&](const ChipPin& pin, size_t state_index) {
         if (state_index >= states.size()) return;
         
-        PinState& state = states[state_index];
+        PinSignalState& state = states[state_index];
         
         switch (pin.get_pin_type()) {
             case PinType::ADDRESS: {

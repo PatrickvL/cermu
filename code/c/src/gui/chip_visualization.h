@@ -114,17 +114,17 @@ public:
     ChipVisualization(const ChipLayout& layout, const ChipVisualConfig& config = ChipVisualConfig::get_default());
     
     // Main rendering function
-    void render(ImVec2 chip_center, const std::vector<PinState>& pin_states, const char* chip_name = nullptr);
+    void render(ImVec2 chip_center, const std::vector<PinSignalState>& pin_states, const char* chip_name = nullptr);
     
     // Render individual components
     void render_chip_body(ImVec2 chip_center, const char* chip_name = nullptr);
-    void render_pins(ImVec2 chip_center, const std::vector<PinState>& pin_states);
+    void render_pins(ImVec2 chip_center, const std::vector<PinSignalState>& pin_states);
     void render_orientation_marker(ImVec2 chip_center);
     void render_thermal_pad(ImVec2 chip_center);
     void render_chip_markings(ImVec2 chip_center);
     void render_pin_groups(ImVec2 chip_center);
     void render_legend();
-    void render_bga_grid(ImVec2 chip_center, const std::vector<PinState>& pin_states);
+    void render_bga_grid(ImVec2 chip_center, const std::vector<PinSignalState>& pin_states);
     
     // Settings GUI
     void render_settings_gui();
@@ -159,8 +159,8 @@ private:
     mutable float scaled_chip_height_ = 0.0f;
     
     void render_pin_side(ImVec2 chip_center, const std::vector<ChipPin>& pins, 
-                        const std::vector<PinState>& pin_states, PinSide side);
-    void render_single_pin(ImVec2 pin_pos, const ChipPin& pin, const PinState& state, PinSide side);
+                        const std::vector<PinSignalState>& pin_states, PinSide side);
+    void render_single_pin(ImVec2 pin_pos, const ChipPin& pin, const PinSignalState& state, PinSide side);
     void render_dip_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name);
     void render_surface_mount_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name);
     void render_qfp_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name);

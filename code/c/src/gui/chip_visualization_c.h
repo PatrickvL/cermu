@@ -16,7 +16,7 @@ extern "C" {
 
 // C-compatible function to render chip visualization with collapsing header
 void render_chip_visualization_c(const struct ChipLayout* layout, 
-                                const struct PinState* pin_states, 
+                                const struct PinSignalState* pin_states, 
                                 const char* header_title);
 
 // Helper function to get total pins from ChipLayout
