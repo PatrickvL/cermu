@@ -87,7 +87,7 @@ ChipVisualization* get_chip_visualization_instance() {
     
     // Create chip visualization if not already created
     if (!chip_viz) {
-        PinLayout layout = create_cpu_pin_layout<Traits>();
+        ChipLayout layout = create_cpu_pin_layout<Traits>();
         chip_viz = std::make_unique<ChipVisualization>(layout);
     }
     
@@ -237,7 +237,7 @@ void render_chip_visualization(fam65xx_t<Traits>* cpu) {
         igGetCursorScreenPos(&cursor_pos);
         
         // Get the pin layout for this CPU type to determine actual chip dimensions
-        static PinLayout layout = create_cpu_pin_layout<Traits>();
+        static ChipLayout layout = create_cpu_pin_layout<Traits>();
         
         ImVec2 chip_center = {
             cursor_pos.x + available_size.x / 2,

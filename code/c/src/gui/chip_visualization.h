@@ -111,7 +111,7 @@ uint32_t get_pin_type_color(PinType type, VisualStyle style = VisualStyle::CLASS
 
 class ChipVisualization {
 public:
-    ChipVisualization(const PinLayout& layout, const ChipVisualConfig& config = ChipVisualConfig::get_default());
+    ChipVisualization(const ChipLayout& layout, const ChipVisualConfig& config = ChipVisualConfig::get_default());
     
     // Main rendering function
     void render(ImVec2 chip_center, const std::vector<PinState>& pin_states, const char* chip_name = nullptr);
@@ -133,8 +133,8 @@ public:
     void set_visual_config(const ChipVisualConfig& config) { config_ = config; }
     const ChipVisualConfig& get_visual_config() const { return config_; }
     ChipVisualConfig& get_mutable_visual_config() { return config_; }
-    const PinLayout& get_pin_layout() const { return layout_; }
-    void set_pin_layout(const PinLayout& layout) { layout_ = layout; }
+    const ChipLayout& get_pin_layout() const { return layout_; }
+    void set_pin_layout(const ChipLayout& layout) { layout_ = layout; }
     
     // Pin lookup by number or label
     const ChipPin* find_pin_by_number(uint8_t pin_number) const;
@@ -151,7 +151,7 @@ public:
     ImVec2 get_recommended_size() const;
     
 private:
-    PinLayout layout_;
+    ChipLayout layout_;
     ChipVisualConfig config_;
     
     // Scaled chip dimensions for rendering (calculated from package dimensions)

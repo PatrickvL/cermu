@@ -195,7 +195,7 @@ ChipVisualConfig ChipVisualConfig::get_style(VisualStyle style) {
 // CHIP VISUALIZATION CLASS IMPLEMENTATION
 // ============================================================================
 
-ChipVisualization::ChipVisualization(const PinLayout& layout, const ChipVisualConfig& config)
+ChipVisualization::ChipVisualization(const ChipLayout& layout, const ChipVisualConfig& config)
     : layout_(layout), config_(config) {
 }
 

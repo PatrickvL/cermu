@@ -284,7 +284,7 @@ void generic_chip_gui_render_settings_panel(generic_chip_gui_t* gui,
 // RENDERING HELPERS
 // ============================================================================
 
-void generic_chip_gui_render_dip_package(const PinLayout* layout, const chip_gui_config_t* config, float x, float y, float scale) {
+void generic_chip_gui_render_dip_package(const ChipLayout* layout, const chip_gui_config_t* config, float x, float y, float scale) {
     if (!layout || !config) return;
     
     ImDrawList* draw_list = igGetWindowDrawList();
@@ -339,7 +339,7 @@ void generic_chip_gui_render_pin(const ChipPin* pin, const PinState* pin_state, 
     }
 }
 
-void generic_chip_gui_render_chip_markings(const PinLayout* layout, const chip_gui_config_t* config, float x, float y, float scale) {
+void generic_chip_gui_render_chip_markings(const ChipLayout* layout, const chip_gui_config_t* config, float x, float y, float scale) {
     if (!layout || !config) return;
     
     ImDrawList* draw_list = igGetWindowDrawList();
@@ -361,9 +361,9 @@ void generic_chip_gui_render_chip_markings(const PinLayout* layout, const chip_g
 // DEFAULT IMPLEMENTATIONS
 // ============================================================================
 
-PinLayout generic_chip_gui_get_dip_layout(void* chip, int pin_count) {
+ChipLayout generic_chip_gui_get_dip_layout(void* chip, int pin_count) {
     // Return a basic DIP layout - this would be overridden by chip-specific implementations
-    PinLayout layout = {0};
+    ChipLayout layout = {0};
     
     switch (pin_count) {
         case 40:
@@ -380,7 +380,7 @@ PinLayout generic_chip_gui_get_dip_layout(void* chip, int pin_count) {
     return layout;
 }
 
-void generic_chip_gui_get_basic_pin_states(void* chip, PinLayout* layout, bus_state_t bus_state, PinState* pin_states) {
+void generic_chip_gui_get_basic_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_state, PinState* pin_states) {
     if (!layout || !pin_states) return;
     
     // Default implementation - all pins inactive
