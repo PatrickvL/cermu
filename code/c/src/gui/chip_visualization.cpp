@@ -567,7 +567,7 @@ void ChipVisualization::render_bga_grid(ImVec2 chip_center, const std::vector<Pi
             state = pin_states[pin.pin_number - 1];
         }
         
-        uint32_t ball_color = get_pin_type_color(pin.type, config_.style);
+        uint32_t ball_color = get_pin_type_color(pin.get_pin_type(), config_.style);
         if (state.is_active) {
             ball_color = config_.led_active_color;
         }
@@ -576,9 +576,10 @@ void ChipVisualization::render_bga_grid(ImVec2 chip_center, const std::vector<Pi
         ImDrawList_AddCircle(draw_list, ball_pos, 3.0f, config_.pin_border_color, 12, 1.0f);
         
         // Draw label if enabled
-        if (config_.show_pin_labels && pin.label) {
+        if (config_.show_pin_labels) {
+            const char* label_str = pin_label_to_string(pin.label);
             ImVec2 label_pos = {ball_pos.x - 8, ball_pos.y - 6};
-            ImDrawList_AddText_Vec2(draw_list, label_pos, config_.text_color, pin.label, NULL);
+            ImDrawList_AddText_Vec2(draw_list, label_pos, config_.text_color, label_str, NULL);
         }
     }
 }
@@ -603,7 +604,7 @@ void ChipVisualization::render_single_pin(ImVec2 pin_pos, const ChipPin& pin, co
     ImDrawList* draw_list = igGetWindowDrawList();
     
     // Get pin type color
-    uint32_t pin_color = get_pin_type_color(pin.type, config_.style);
+    uint32_t pin_color = get_pin_type_color(pin.get_pin_type(), config_.style);
     
     // Modify color based on state
     if (state.is_tristate) {
@@ -634,7 +635,7 @@ void ChipVisualization::render_single_pin(ImVec2 pin_pos, const ChipPin& pin, co
     }
     
     // Draw voltage level indicator for analog pins
-    if (config_.show_voltage_levels && pin.type == PinType::ANALOG && state.is_valid) {
+    if (config_.show_voltage_levels && pin.get_pin_type() == PinType::ANALOG && state.is_valid) {
         ImVec2 led_pos = get_led_position(pin_pos, side);
         char voltage_str[16];
         snprintf(voltage_str, sizeof(voltage_str), "%.2fV", state.analog_voltage);
@@ -814,36 +815,38 @@ ImVec2 ChipVisualization::get_label_position(ImVec2 pin_pos, const ChipPin& pin,
 }
 
 std::string ChipVisualization::format_pin_label(const ChipPin& pin) const {
+    const char* label_str = pin_label_to_string(pin.label);
+    
     if (!pin.invert_logic) {
-        return std::string(pin.label);
+        return std::string(label_str);
     }
     
     std::string formatted;
     switch (config_.notation_style) {
         case PinNotationStyle::SLASH_PREFIX:
-            formatted = "/" + std::string(pin.label);
+            formatted = "/" + std::string(label_str);
             break;
         case PinNotationStyle::OVERLINE:
             // Unicode overline combining character
-            formatted = std::string(pin.label) + "\u0305";
+            formatted = std::string(label_str) + "\u0305";
             break;
         case PinNotationStyle::TILDE_PREFIX:
-            formatted = "~" + std::string(pin.label);
+            formatted = "~" + std::string(label_str);
             break;
         case PinNotationStyle::HASH_SUFFIX:
-            formatted = std::string(pin.label) + "#";
+            formatted = std::string(label_str) + "#";
             break;
         case PinNotationStyle::ASTERISK_SUFFIX:
-            formatted = std::string(pin.label) + "*";
+            formatted = std::string(label_str) + "*";
             break;
         case PinNotationStyle::N_SUFFIX:
-            formatted = std::string(pin.label) + "_N";
+            formatted = std::string(label_str) + "_N";
             break;
         case PinNotationStyle::BAR_SUFFIX:
-            formatted = std::string(pin.label) + "_BAR";
+            formatted = std::string(label_str) + "_BAR";
             break;
         default:
-            formatted = "/" + std::string(pin.label);
+            formatted = "/" + std::string(label_str);
             break;
     }
     
@@ -988,7 +991,8 @@ const ChipPin* ChipVisualization::find_pin_by_number(uint8_t pin_number) const {
 const ChipPin* ChipVisualization::find_pin_by_label(const char* label) const {
     auto search_side = [label](const std::vector<ChipPin>& pins) -> const ChipPin* {
         for (const auto& pin : pins) {
-            if (strcmp(pin.label, label) == 0) {
+            const char* pin_label_str = pin_label_to_string(pin.label);
+            if (strcmp(pin_label_str, label) == 0) {
                 return &pin;
             }
         }
