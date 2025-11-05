@@ -202,62 +202,6 @@ std::string pin_label_to_display_string(PinLabel label) {
     }
 }
 
-// String-to-enum conversion for backwards compatibility
-PinLabel string_to_pin_label(const char* label_str) {
-    static const std::unordered_map<std::string, PinLabel> label_map = {
-        // Power pins
-        {"VDD", PinLabel::VDD}, {"VSS", PinLabel::VSS}, 
-        {"VCC", PinLabel::VCC}, {"GND", PinLabel::GND},
-        
-        // Clock pins (support both plain and Unicode)
-        {"PHI0", PinLabel::PHI0}, {"Φ0", PinLabel::PHI0}, {"φ0", PinLabel::PHI0},
-        {"PHI1", PinLabel::PHI1}, {"Φ1", PinLabel::PHI1}, {"φ1", PinLabel::PHI1},
-        {"PHI2", PinLabel::PHI2}, {"Φ2", PinLabel::PHI2}, {"φ2", PinLabel::PHI2},
-        
-        // Address bus pins
-        {"A0", PinLabel::A0}, {"A1", PinLabel::A1}, {"A2", PinLabel::A2}, {"A3", PinLabel::A3},
-        {"A4", PinLabel::A4}, {"A5", PinLabel::A5}, {"A6", PinLabel::A6}, {"A7", PinLabel::A7},
-        {"A8", PinLabel::A8}, {"A9", PinLabel::A9}, {"A10", PinLabel::A10}, {"A11", PinLabel::A11},
-        {"A12", PinLabel::A12}, {"A13", PinLabel::A13}, {"A14", PinLabel::A14}, {"A15", PinLabel::A15},
-        {"A16", PinLabel::A16}, {"A17", PinLabel::A17}, {"A18", PinLabel::A18}, {"A19", PinLabel::A19},
-        {"A20", PinLabel::A20}, {"A21", PinLabel::A21}, {"A22", PinLabel::A22}, {"A23", PinLabel::A23},
-        
-        // Data bus pins
-        {"D0", PinLabel::D0}, {"D1", PinLabel::D1}, {"D2", PinLabel::D2}, {"D3", PinLabel::D3},
-        {"D4", PinLabel::D4}, {"D5", PinLabel::D5}, {"D6", PinLabel::D6}, {"D7", PinLabel::D7},
-        {"D8", PinLabel::D8}, {"D9", PinLabel::D9}, {"D10", PinLabel::D10}, {"D11", PinLabel::D11},
-        {"D12", PinLabel::D12}, {"D13", PinLabel::D13}, {"D14", PinLabel::D14}, {"D15", PinLabel::D15},
-        
-        // Control signals (support both variants)
-        {"R/W", PinLabel::RW}, {"RW", PinLabel::RW},
-        {"SYNC", PinLabel::SYNC}, {"RDY", PinLabel::RDY}, 
-        {"AEC", PinLabel::AEC}, {"BE", PinLabel::BE}, {"BA", PinLabel::BA},
-        
-        // Interrupt pins
-        {"IRQ", PinLabel::IRQ}, {"NMI", PinLabel::NMI}, 
-        {"RES", PinLabel::RES}, {"ABORT", PinLabel::ABORT}, {"ABRT", PinLabel::ABORT},
-        
-        // Special pins
-        {"SO", PinLabel::SO}, {"VP", PinLabel::VP}, {"VPB", PinLabel::VPB},
-        {"VPA", PinLabel::VPA}, {"VDA", PinLabel::VDA}, {"ML", PinLabel::ML},
-        {"E", PinLabel::E}, {"MX", PinLabel::MX},
-        
-        // I/O Port pins
-        {"P0", PinLabel::P0}, {"P1", PinLabel::P1}, {"P2", PinLabel::P2}, {"P3", PinLabel::P3},
-        {"P4", PinLabel::P4}, {"P5", PinLabel::P5}, {"P6", PinLabel::P6}, {"P7", PinLabel::P7},
-        
-        // Test and configuration
-        {"NC", PinLabel::NC}, {"TEST", PinLabel::TEST},
-        
-        // Chip selects
-        {"CS", PinLabel::CS}, {"CS0", PinLabel::CS0}, {"CS1", PinLabel::CS1}, {"CS2", PinLabel::CS2},
-        {"OE", PinLabel::OE}, {"WE", PinLabel::WE}
-    };
-    
-    auto it = label_map.find(std::string(label_str));
-    return (it != label_map.end()) ? it->second : PinLabel::UNKNOWN;
-}
-
 // Derive pin type from pin label for GUI color coding and categorization
 PinType pin_label_to_pin_type(PinLabel label) {
     switch (label) {

@@ -3,6 +3,8 @@
 
 #include "pla.h"
 #include "../../gui/cimgui_interface.h"
+#include "../../gui/generic_chip_gui.h"
+#include "../../core/non_cpu_chip_layouts.h"
 #include "../../systems/c64/c64_bus.h"
 #include "../../systems/c64/c64.h"
 #include "../../chip/video/vic_ii/vicii_common.h"
@@ -45,82 +47,50 @@ static const char* get_pla_mode_vicii_description(uint8_t mode, uint16_t bank) {
     return mode_desc;
 }
 
-// Hardware-accurate PLA chip layout (C64 PLA - 28-pin DIP)
-static void render_pla_chip_layout(c64_t* c64) {
-    if (igCollapsingHeader_BoolPtr("Hardware Layout - C64 PLA (906114-01)", NULL, ImGuiTreeNodeFlags_DefaultOpen)) {
-        igIndent(16.0f);
-        
-        igText("Package: 28-pin DIP");
-        igText("Programmable Logic Array (PLA)");
-        igSeparator();
-        
-        // Two-column layout for pins
-        igColumns(2, "pla_pinout", true);
-        igText("LEFT SIDE:");
-        igText("1  - A15 (Address)");
-        igText("2  - A14 (Address)");
-        igText("3  - A13 (Address)");
-        igText("4  - A12 (Address)");
-        igText("5  - BA (Bus Available)");
-        igText("6  - AEC (Address Enable)");
-        igText("7  - P0 (6510 Port 0)");
-        igText("8  - P1 (6510 Port 1)");
-        igText("9  - P2 (6510 Port 2)");
-        igText("10 - CHAREN (Char Enable)");
-        igText("11 - HIRAM (High RAM)");
-        igText("12 - LORAM (Low RAM)");
-        igText("13 - CAS (Column Addr Strobe)");
-        igText("14 - VSS (Ground)");
-        
-        igNextColumn();
-        igText("RIGHT SIDE:");
-        igText("15 - CASRAM (CAS RAM)");
-        igText("16 - BASIC (BASIC ROM)");
-        igText("17 - KERNAL (KERNAL ROM)");
-        igText("18 - CHAROM (CHAR ROM)");
-        igText("19 - GR/W (Graphics R/W)");
-        igText("20 - I/O (I/O Select)");
-        igText("21 - ROML (ROM Low)");
-        igText("22 - ROMH (ROM High)");
-        igText("23 - GAME (Game Line)");
-        igText("24 - EXROM (External ROM)");
-        igText("25 - R/W (Read/Write)");
-        igText("26 - PHI2 (Clock)");
-        igText("27 - A8 (Address)");
-        igText("28 - VCC (+5V)");
-        
-        igColumns(1, NULL, false);
-        igUnindent(16.0f);
-    }
+// Callback functions for generic chip GUI
+static ChipLayout get_pla_layout(void* chip) {
+    return create_pla_layout();
 }
 
-// ============================================================================
-// PLA GUI DEBUG WINDOW
-// ============================================================================
-
-void pla_render_debug_window(void* chip, bool* show_window) {
-    // The chip parameter is expected to be a c64_t* since PLA is part of the C64 bus
+static void get_pla_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_state, struct PinState* pin_states) {
     c64_t* c64 = (c64_t*)chip;
+    if (!c64 || !layout || !pin_states) return;
     
-    if (!c64 || !*show_window) {
-        if (show_window) *show_window = false;
-        return;
+    int total_pins = 28; // PLA is 28-pin DIP
+    
+    // Initialize all pins as inactive by default
+    for (int i = 0; i < total_pins; i++) {
+        pin_states[i].pin_number = i + 1;
+        pin_states[i].is_active = false;
+        pin_states[i].is_output = false;
+        pin_states[i].value = 0;
+        pin_states[i].is_tristate = false;
+        pin_states[i].has_pullup = false;
+        pin_states[i].has_pulldown = false;
+        pin_states[i].is_valid = true;
+        pin_states[i].analog_voltage = 0.0f;
+        pin_states[i].is_pwm = false;
+        pin_states[i].pwm_duty_cycle = 0.0f;
     }
     
-    if (!igBegin("PLA Debug", show_window, 0)) {
-        igEnd();
-        return;
-    }
+    // Set power pins as active
+    pin_states[13].is_active = false; // VSS (Ground, pin 14)
+    pin_states[27].is_active = true;  // VCC (+5V, pin 28)
+    
+    // Set address pins based on current bus state (simplified)
+    uint8_t current_mode = c64->bus.pla_banking_mode;
+    pin_states[9].is_active = (current_mode & 0x04) != 0;   // CHAREN (pin 10)
+    pin_states[10].is_active = (current_mode & 0x02) != 0;  // HIRAM (pin 11)
+    pin_states[11].is_active = (current_mode & 0x01) != 0;  // LORAM (pin 12)
+    pin_states[22].is_active = (current_mode & 0x10) != 0;  // GAME (pin 23)
+    pin_states[23].is_active = (current_mode & 0x08) != 0;  // EXROM (pin 24)
+}
 
-    // Create two-column layout: chip visualization on left, debugging info on right
-    igColumns(2, "pla_debug_columns", true);
+static void render_pla_specific_content(void* chip) {
+    c64_t* c64 = (c64_t*)chip;
+    if (!c64) return;
     
-    // Left column: Hardware chip layout
-    render_pla_chip_layout(c64);
-    
-    igNextColumn();
-    
-    // Right column: PLA mode and banking information
+    // This replaces the right column content from the original function
     // Mode tracking and control
     bool has_c64 = c64;
     uint8_t current_mode = has_c64 ? c64->bus.pla_banking_mode : 0;
@@ -184,221 +154,40 @@ void pla_render_debug_window(void* chip, bool* show_window) {
             igText("Mode %d - %s", pla_debug_selected_mode,
                    (pla_debug_selected_mode == current_mode) ? "(ACTIVE)" : "(Preview)");
             igText("Configuration: %s", get_pla_mode_cpu_description(pla_debug_selected_mode));
-            
-            igSeparator();
-            
-            if (igBeginTable("CPUBanking", 9, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit, (ImVec2){0, 0}, 0)) {
-                // Table headers
-                igTableSetupColumn("Bank", ImGuiTableColumnFlags_None, 0.0f, 0);
-                igTableSetupColumn("Address Range", ImGuiTableColumnFlags_None, 0.0f, 0);
-                igTableSetupColumn("Encoded", ImGuiTableColumnFlags_None, 0.0f, 0);
-                igTableSetupColumn("Read CHIP", ImGuiTableColumnFlags_None, 0.0f, 0);
-                igTableSetupColumn("Read Desc.", ImGuiTableColumnFlags_None, 0.0f, 0);
-                igTableSetupColumn("Read Offset", ImGuiTableColumnFlags_None, 0.0f, 0);
-                igTableSetupColumn("Write CHIP", ImGuiTableColumnFlags_None, 0.0f, 0);
-                igTableSetupColumn("Write Desc,", ImGuiTableColumnFlags_None, 0.0f, 0);
-                igTableSetupColumn("Write Offset", ImGuiTableColumnFlags_None, 0.0f, 0);
-                igTableHeadersRow();
-                
-                chip_description_t read_desc = {0};
-                chip_description_t write_desc = {0};
-                // Table rows
-                for (int bank = 0; bank < 16; bank++) {
-                    igTableNextRow(ImGuiTableRowFlags_None, 0.0f);
-                    igTableSetColumnIndex(0);
-                    igText("$%X", bank);
-                    igTableSetColumnIndex(1);
-
-                    uint16_t bank_start = bank * 0x1000;
-
-                    igText("$%04X-$%04X", bank_start, bank_start + 0x0FFF);
-                    igTableSetColumnIndex(2);
-
-                    // Get encoded value for this bank and mode
-                    uint8_t encoded = encode_chip_rw(CHIP_UNMAPPED, CHIP_UNMAPPED);
-                    if (has_c64 && pla_debug_selected_mode < 32) {
-                        encoded = c64->bus.cpu_encoded_chip_per_bank_per_mode[pla_debug_selected_mode][bank];
-                    }
-                    
-                    igText("$%02X", encoded);
-                    igTableSetColumnIndex(3);
-
-                    // Decode CHIPs
-                    uint8_t read_chip = decode_read_chip(encoded);
-
-                    igText("%02d", read_chip);
-                    igTableSetColumnIndex(4);
-                    if (read_chip == CHIP_UNMAPPED) {
-                        igText("Unmapped");
-                        igTableSetColumnIndex(5);
-                        igText("-");
-                    } else {
-                        // Calculate separate read and write in-chip offsets
-                        c64_bus_get_chip_description(has_c64 ? &c64->bus : NULL, read_chip, &read_desc);
-
-                        // Compute effective base address for offset calculation (for ROMH remap, etc)
-                        uint16_t read_effective_base = read_desc.base;
-                        if (read_chip == CHIP_ROMH && (bank_start >= 0xE000)) { // TODO : Is there a better way to check this?
-                            // ROMH remapped to $E000/$F000: treat as if base is $E000
-                            read_effective_base = 0xE000;
-                        }
-                        
-                        // WAS uint16_t read_offset = (read_effective_base <= bank_start) ? (bank_start - read_effective_base) : 0;
-                        uint16_t read_offset = bank_start - read_effective_base;
-
-                        igText(c64_bus_chip_to_title(read_chip));
-                        igTableSetColumnIndex(5);
-                        igText("$%04X", read_offset);
-                    }
-
-                    uint8_t write_chip = decode_write_chip(encoded);
-                    
-                    igTableSetColumnIndex(6);
-                    igText("%02d", write_chip);
-                    igTableSetColumnIndex(7);
-                    if (write_chip == CHIP_UNMAPPED) {
-                        igText("Unmapped");
-                        igTableSetColumnIndex(8);
-                        igText("-");
-                    } else {
-                        c64_bus_get_chip_description(has_c64 ? &c64->bus : NULL, write_chip, &write_desc);
-
-                        uint16_t write_effective_base = write_desc.base;
-                        if (write_chip == CHIP_ROMH && (bank_start >= 0xE000)) { // NOTE : although ROMH is not writable, PLA modes 16-23 (LHGX xx01) still map it
-                            // ROMH remapped to $E000/$F000: treat as if base is $E000
-                            write_effective_base = 0xE000;
-                        }
-                        
-                        uint16_t write_offset = bank_start - write_effective_base;
-
-                        igText(c64_bus_chip_to_title(write_chip));
-                        igTableSetColumnIndex(8);
-                        igText("$%04X", write_offset);
-                    }
-                }
-                
-                igEndTable();
-            }
-            
-            igEndTabItem();
-        }
-        
-        // VIC-II Memory View Tab
-        if (igBeginTabItem("VIC-II Memory View", NULL, ImGuiTabItemFlags_None)) {
-            igText("VIC-II Memory Banking (16 x 4KB banks):");
-            igText("Mode %d - %s", pla_debug_selected_mode,
-                   (pla_debug_selected_mode == current_mode) ? "(ACTIVE)" : "(Preview)");
-                   
-            // VIC-II specific information
-            if (has_c64) {                
-                // Get current VIC-II bank from CIA2 Port A bits 0-1
-                uint8_t current_vicii_bank = 0;
-                if (c64->cia2) {
-                    uint8_t cia2_port_a = c64->cia2->reg[0]; // PRA register
-                    current_vicii_bank = 3 - (cia2_port_a & 0x03); // Inverted bits 0-1
-                }
-                uint16_t current_vicii_bank_address = current_vicii_bank * 0x4000;
-                igText("Configuration: %s", get_pla_mode_vicii_description(pla_debug_selected_mode, current_vicii_bank_address));
-                
-                igSeparator();
-                igText("VIC-II Bank Control:");
-                igText("CIA2 Port A bits 0-1: %d (Bank %d active)", c64->cia2 ? (c64->cia2->reg[0] & 0x03) : 0, current_vicii_bank);
-                
-                igSeparator();
-                
-                // VIC-II memory banking table (now 16 x 4KB banks, DRY with CPU table)
-                if (igBeginTable("VICIIBanking", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit, (ImVec2){0, 0}, 0)) {
-                    igTableSetupColumn("Bank", ImGuiTableColumnFlags_None, 0.0f, 0);
-                    igTableSetupColumn("Address Range", ImGuiTableColumnFlags_None, 0.0f, 0);
-                    igTableSetupColumn("CHIP", ImGuiTableColumnFlags_None, 0.0f, 0);
-                    igTableSetupColumn("Desc.", ImGuiTableColumnFlags_None, 0.0f, 0);
-                    igTableSetupColumn("Offset", ImGuiTableColumnFlags_None, 0.0f, 0);
-                    igTableSetupColumn("Status", ImGuiTableColumnFlags_None, 0.0f, 0);
-                    igTableHeadersRow();
-                    chip_description_t read_desc = {0};
-                    for (int bank = 0; bank < 16; bank++) {
-                        igTableNextRow(ImGuiTableRowFlags_None, 0.0f);
-                        igTableSetColumnIndex(0);
-                        igText("%d", bank);
-                        igTableSetColumnIndex(1);
-
-                        uint16_t bank_start = bank * 0x1000;
-
-                        igText("$%04X-$%04X", bank_start, bank_start + 0x0FFF);
-                        igTableSetColumnIndex(2);
-
-                        // Get CHIP for this VIC-II bank and mode
-                        uint8_t read_chip = CHIP_UNMAPPED;
-                        if (has_c64 && pla_debug_selected_mode < 32) {
-                            read_chip = c64->bus.vicii_chip_per_bank_per_mode[pla_debug_selected_mode][bank];
-                        }
-
-                        igText("%02d", read_chip);
-                        igTableSetColumnIndex(3);
-                        igText("%s", c64_bus_chip_to_title(read_chip));
-                        igTableSetColumnIndex(4);
-
-                        c64_bus_get_chip_description(has_c64 ? &c64->bus : NULL, read_chip, &read_desc);
-                        uint16_t read_offset = (read_desc.base <= bank_start) ? (bank_start - read_desc.base) : 0;
-
-                        igText("$%04X", read_offset);
-                        igTableSetColumnIndex(5);
-                        // Status: highlight if this 4KB bank is in the active VIC-II 16KB bank
-                        igText(((bank_start / 0x4000) == current_vicii_bank) ? "ACTIVE" : "Inactive");
-                    }
-                    igEndTable();
-                }
-            } else {
-                igText("Bus not initialized");
-            }
-            
             igEndTabItem();
         }
         
         igEndTabBar();
     }
-    
-    // Chip Information Legend (moved to bottom for better space utilization)
-    igSeparator();
-    igText("CHIP Legend:");
-    if (igBeginTable("CHIPLegend", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit, (ImVec2){0, 150}, 0)) {
-        igTableSetupColumn("CHIP id", ImGuiTableColumnFlags_None, 0.0f, 0);
-        igTableSetupColumn("Memory Range", ImGuiTableColumnFlags_None, 0.0f, 0);
-        igTableSetupColumn("Size", ImGuiTableColumnFlags_None, 0.0f, 0);
-        igTableSetupColumn("Chip", ImGuiTableColumnFlags_None, 0.0f, 0);
-        igTableSetupColumn("Title", ImGuiTableColumnFlags_None, 0.0f, 0);
-        igTableHeadersRow();
-        chip_description_t desc;
-        // Iterate through valid CHIP IDs only (handles irregular numbering)
-        for (size_t i = 0; i < VALID_CHIP_COUNT; i++) {
-            uint8_t chip_id = VALID_CHIP_IDS[i];
-            igTableNextRow(ImGuiTableRowFlags_None, 0.0f);
-            igTableSetColumnIndex(0);
-            igText("%02d", chip_id);
-            igTableSetColumnIndex(1);
+}
 
-            bool has_desc = c64_bus_get_chip_description(has_c64 ? &c64->bus : NULL, chip_id, &desc);
-            if (has_desc && desc.size > 0) {
-                igText("$%04X-$%04X", desc.base, (uint16_t)(desc.base + desc.size - 1));
-            } else {
-                igText("-");
-            }
-            igTableSetColumnIndex(2);
-            igText("%s", c64_bus_size_to_str(desc.size));
-            igTableSetColumnIndex(3);
-            igText("%s", (chip_id == CHIP_UNMAPPED) ? "Unmapped" : c64_bus_chip_to_title(chip_id));
-            igTableSetColumnIndex(4);
-            if (has_desc) {
-                igText("%s", desc.label);
-            } else {
-                igText("%s", c64_bus_chip_to_title(chip_id));
-            }
-        }
-        igEndTable();
+// ============================================================================
+// PLA GUI DEBUG WINDOW
+// ============================================================================
+
+void pla_render_debug_window(void* chip, bool* show_window) {
+    // The chip parameter is expected to be a c64_t* since PLA is part of the C64 bus
+    c64_t* c64 = (c64_t*)chip;
+    
+    if (!c64 || !*show_window) {
+        if (show_window) *show_window = false;
+        return;
     }
     
-    // Reset to single column at the end
-    igColumns(1, NULL, false);
+    // Create generic chip GUI config
+    chip_gui_config_t config = generic_chip_gui_get_default_config("906114-01", "PLA");
+    config.get_layout = get_pla_layout;
+    config.get_pin_states = get_pla_pin_states;
     
-    igEnd();
+    // Create generic chip GUI instance
+    generic_chip_gui_t* gui = generic_chip_gui_create(c64, &config);
+    if (!gui) {
+        return;
+    }
+    
+    // Use generic chip GUI render function
+    generic_chip_gui_render_debug_panel(gui, NULL, "PLA Debug", show_window, render_pla_specific_content);
+    
+    // Cleanup
+    generic_chip_gui_destroy(gui);
 }

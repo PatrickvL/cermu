@@ -130,11 +130,39 @@ enum class PinLabel {
     SP,           // Serial port
     TOD,          // Time of day clock
     FLAG,         // Flag input
+    PC,           // Serial port (alternate naming)
+    SDR,          // Serial Data Register
     
     // Memory chip pins
     DQ0, DQ1, DQ2, DQ3, DQ4, DQ5, DQ6, DQ7, // Data I/O
     MA0, MA1, MA2, MA3, MA4, MA5, MA6, MA7,  // Memory address
     MA8, MA9, MA10, MA11, MA12, MA13, MA14, MA15,
+    CASRAM,       // CAS for RAM
+    
+    // SID-specific pins
+    CAP1A, CAP1B, // Filter capacitor connections
+    CAP2A, CAP2B, // Filter capacitor connections
+    POTX, POTY,   // Paddle inputs
+    EXT_IN,       // External audio input
+    
+    // VIC-II specific pins
+    COLOR,        // Color signal output
+    SOUND,        // Sound output (VIC-II composite audio)
+    
+    // PLA specific pins (for C64 PLA chip)
+    BASIC,        // BASIC ROM select
+    KERNAL,       // KERNAL ROM select
+    CHAROM,       // Character ROM select
+    CASRAM_PLA,   // CAS RAM (PLA specific)
+    GRW,          // Graphics Read/Write
+    IO,           // I/O select
+    ROML,         // ROM Low
+    ROMH,         // ROM High
+    GAME,         // Game line
+    EXROM,        // External ROM
+    CHAREN,       // Character ROM enable
+    LORAM,        // Low RAM
+    HIRAM,        // High RAM
     
     // Logic chip pins
     Q0, Q1, Q2, Q3, Q4, Q5, Q6, Q7,         // Outputs
@@ -176,15 +204,15 @@ enum class PinSide {
 struct ChipPin {
     uint8_t pin_number;      // Physical pin number (or grid position for BGA)
     PinLabel label;          // Pin label enum for fast comparisons
-    uint8_t bit_index;       // Bit index within bus (for address/data pins)
-    bool invert_logic;       // True if pin is active-low
-    const char* group_name;  // Bus/group name (e.g., "ADDR", "DATA", "PORTA")
     const char* alt_function;// Alternate function name
     bool is_differential_pos;// True if positive side of differential pair
     bool is_differential_neg;// True if negative side of differential pair
     
-    // Derived property - get pin type from label
+    // Derived properties - computed from label
     PinType get_pin_type() const;
+    uint8_t get_bit_index() const;
+    bool get_invert_logic() const;
+    const char* get_group_name() const;
 };
 
 // Pin state for real-time visualization
@@ -220,9 +248,6 @@ const char* pin_type_to_group_name(PinType type);
 // Enum-to-string conversion functions
 const char* pin_label_to_string(PinLabel label);
 std::string pin_label_to_display_string(PinLabel label); // With Unicode symbols
-
-// String-to-enum conversion (for backwards compatibility)
-PinLabel string_to_pin_label(const char* label_str);
 
 // Derive pin type from pin label
 PinType pin_label_to_pin_type(PinLabel label);

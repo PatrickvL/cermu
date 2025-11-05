@@ -1,5 +1,7 @@
 #include "mos6526.h"
 #include "../../gui/cimgui_interface.h"
+#include "../../gui/generic_chip_gui.h"
+#include "../../core/non_cpu_chip_layouts.h"
 #include "../../systems/c64/c64.h"  // Need this to access C64 structure
 #ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
@@ -8,101 +10,88 @@
 #include <stdio.h>
 #include <stddef.h>  // For offsetof
 
-// Forward declaration
+// Forward declarations
 static const char* mos6526_get_cia_name(mos6526_t* cia);
+static ChipLayout get_cia_layout(void* chip);
+static void get_cia_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_state, PinState* pin_states);
+static void render_cia_specific_content(void* chip);
 
 // ============================================================================
 // MOS6526 CIA GUI DEBUG WINDOW
 // ============================================================================
 
-// Hardware-accurate CIA chip layout (MOS 6526 - 40-pin DIP)
-static void render_cia_chip_layout(mos6526_t* cia) {
-    if (igCollapsingHeader_BoolPtr("Hardware Layout - MOS 6526 CIA", NULL, ImGuiTreeNodeFlags_DefaultOpen)) {
-        igIndent(16.0f);
-        
-        igText("Package: 40-pin DIP");
-        igText("Complex Interface Adapter (CIA)");
-        igSeparator();
-        
-        // Two-column layout for pins
-        igColumns(2, "cia_pinout", true);
-        igText("LEFT SIDE:");
-        igText("1  - VSS (Ground)");
-        igText("2  - PA0 (Port A Bit 0)");
-        igText("3  - PA1 (Port A Bit 1)");
-        igText("4  - PA2 (Port A Bit 2)");
-        igText("5  - PA3 (Port A Bit 3)");
-        igText("6  - PA4 (Port A Bit 4)");
-        igText("7  - PA5 (Port A Bit 5)");
-        igText("8  - PA6 (Port A Bit 6)");
-        igText("9  - PA7 (Port A Bit 7)");
-        igText("10 - PB0 (Port B Bit 0)");
-        igText("11 - PB1 (Port B Bit 1)");
-        igText("12 - PB2 (Port B Bit 2)");
-        igText("13 - PB3 (Port B Bit 3)");
-        igText("14 - PB4 (Port B Bit 4)");
-        igText("15 - PB5 (Port B Bit 5)");
-        igText("16 - PB6 (Port B Bit 6)");
-        igText("17 - PB7 (Port B Bit 7)");
-        igText("18 - PC (Serial Port)");
-        igText("19 - TOD (Time of Day)");
-        igText("20 - VCC (+5V)");
-        
-        igNextColumn();
-        igText("RIGHT SIDE:");
-        igText("21 - IRQ (Interrupt Request)");
-        igText("22 - R/W (Read/Write)");
-        igText("23 - CS (Chip Select)");
-        igText("24 - FLAG (Flag Input)");
-        igText("25 - PHI2 (Clock)");
-        igText("26 - SP (Serial Port)");
-        igText("27 - CNT (Serial Counter)");
-        igText("28 - A0 (Address)");
-        igText("29 - A1 (Address)");
-        igText("30 - A2 (Address)");
-        igText("31 - A3 (Address)");
-        igText("32 - D0 (Data)");
-        igText("33 - D1 (Data)");
-        igText("34 - D2 (Data)");
-        igText("35 - D3 (Data)");
-        igText("36 - D4 (Data)");
-        igText("37 - D5 (Data)");
-        igText("38 - D6 (Data)");
-        igText("39 - D7 (Data)");
-        igText("40 - RES (Reset)");
-        
-        igColumns(1, NULL, false);
-        igUnindent(16.0f);
+// Callback functions for generic chip GUI
+static ChipLayout get_cia_layout(void* chip) {
+    return create_mos6526_layout();
+}
+
+static void get_cia_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_state, PinState* pin_states) {
+    mos6526_t* cia = (mos6526_t*)chip;
+    if (!cia || !layout || !pin_states) return;
+    
+    int total_pins = layout->get_total_pins();
+    
+    // Initialize all pins as inactive by default
+    for (int i = 0; i < total_pins; i++) {
+        pin_states[i].pin_number = 0;
+        pin_states[i].is_active = false;
+        pin_states[i].is_output = false;
+        pin_states[i].value = 0;
+        pin_states[i].is_tristate = false;
+        pin_states[i].has_pullup = false;
+        pin_states[i].has_pulldown = false;
+        pin_states[i].is_valid = true;
+        pin_states[i].analog_voltage = 0.0f;
+        pin_states[i].is_pwm = false;
+        pin_states[i].pwm_duty_cycle = 0.0f;
+    }
+    
+    // Set pin states based on CIA registers
+    // Port A pins (PA0-PA7, pins 2-9)
+    for (int i = 0; i < 8; i++) {
+        int pin_idx = i + 1; // PA0 is pin 2, so index 1
+        if (pin_idx < total_pins) {
+            bool pin_active = (cia->reg[PRA] & (1 << i)) != 0;
+            bool is_output = (cia->reg[DDRA] & (1 << i)) != 0;
+            pin_states[pin_idx].is_active = pin_active;
+            pin_states[pin_idx].is_valid = true;
+            pin_states[pin_idx].is_output = is_output;
+        }
+    }
+    
+    // Port B pins (PB0-PB7, pins 10-17)
+    for (int i = 0; i < 8; i++) {
+        int pin_idx = i + 9; // PB0 is pin 10, so index 9
+        if (pin_idx < total_pins) {
+            bool pin_active = (cia->reg[PRB] & (1 << i)) != 0;
+            bool is_output = (cia->reg[DDRB] & (1 << i)) != 0;
+            pin_states[pin_idx].is_active = pin_active;
+            pin_states[pin_idx].is_valid = true;
+            pin_states[pin_idx].is_output = is_output;
+        }
+    }
+    
+    // IRQ pin (pin 21, index 20)
+    if (20 < total_pins) {
+        bool irq_active = (cia->reg[ICR] & 0x80) != 0;
+        pin_states[20].is_active = irq_active;
+        pin_states[20].is_valid = true;
+    }
+    
+    // Power pins are always active
+    pin_states[0].is_active = false; // VSS (Ground, pin 1)
+    pin_states[19].is_active = true; // VDD (+5V, pin 20)
+    if (39 < total_pins) {
+        pin_states[39].is_active = false; // RES (Reset, pin 40)
     }
 }
 
-void mos6526_render_debug_window(void* chip, bool* show_window) {
+static void render_cia_specific_content(void* chip) {
     mos6526_t* cia = (mos6526_t*)chip;
-    if (!cia || !cia->desc) return;
+    if (!cia) return;
     
-    if (!*show_window) return;
-      // Push unique ID to prevent conflicts between CIA1 and CIA2
-    igPushID_Int((int)(uintptr_t)cia);
-      char window_title[128];
+    // This replaces the right column content from the original function
     const char* cia_name = mos6526_get_cia_name(cia);
-    snprintf(window_title, sizeof(window_title), "%s Debug", cia_name);
-    
-    if (!igBegin(window_title, show_window, 0)) {
-        igEnd();
-        igPopID();
-        return;
-    }
-
-    // Create two-column layout: chip visualization on left, debugging info on right
-    igColumns(2, "cia_debug_columns", true);
-    
-    // Left column: Hardware chip layout
-    render_cia_chip_layout(cia);
-    
-    igNextColumn();
-    
-    // Right column: Register information
-    // Show which CIA this is
     igText("Complex Interface Adapter - %s", cia_name);
     igSeparator();
 
@@ -158,11 +147,38 @@ void mos6526_render_debug_window(void* chip, bool* show_window) {
     
     // Serial Data Register
     igText("Serial Data Register: $%02X", cia->reg[SDR]);
+}
 
-    // Reset to single column at the end
-    igColumns(1, NULL, false);
+void mos6526_render_debug_window(void* chip, bool* show_window) {
+    mos6526_t* cia = (mos6526_t*)chip;
+    if (!cia || !cia->desc) return;
     
-    igEnd();
+    if (!*show_window) return;
+    
+    // Push unique ID to prevent conflicts between CIA1 and CIA2
+    igPushID_Int((int)(uintptr_t)cia);
+    
+    // Create generic chip GUI config
+    chip_gui_config_t config = generic_chip_gui_get_default_config("MOS6526", "CIA");
+    config.get_layout = get_cia_layout;
+    config.get_pin_states = get_cia_pin_states;
+    
+    // Create generic chip GUI instance
+    generic_chip_gui_t* gui = generic_chip_gui_create(cia, &config);
+    if (!gui) {
+        igPopID();
+        return;
+    }
+    
+    char window_title[128];
+    const char* cia_name = mos6526_get_cia_name(cia);
+    snprintf(window_title, sizeof(window_title), "%s Debug", cia_name);
+    
+    // Use generic chip GUI render function
+    generic_chip_gui_render_debug_panel(gui, NULL, window_title, show_window, render_cia_specific_content);
+    
+    // Cleanup
+    generic_chip_gui_destroy(gui);
     igPopID();
 }
 

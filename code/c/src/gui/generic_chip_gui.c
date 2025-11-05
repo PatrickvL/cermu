@@ -215,8 +215,8 @@ void generic_chip_gui_render_debug_panel(generic_chip_gui_t* gui,
     // Create two-column layout
     igColumns(2, "chip_debug_columns", true);
     
-    // Left column: Chip visualization
-    igText("Hardware Layout");
+    // Left column: Chip visualization using ChipLayout
+    igText("Chip Layout");
     igSeparator();
     
     ImVec2 avail_size;
