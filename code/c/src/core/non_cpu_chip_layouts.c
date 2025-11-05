@@ -29,9 +29,9 @@
 // VIDEO CHIP LAYOUTS
 // ============================================================================
 
-PinLayout create_mos6567_layout() {
+ChipLayout create_mos6567_layout() {
     // Start with DIP-40 base layout
-    PinLayout layout = create_dip40_layout();
+    ChipLayout layout = create_dip40_layout();
     
     // Update markings for MOS 6567 VIC-II (NTSC)
     layout.markings = {
@@ -73,9 +73,9 @@ PinLayout create_mos6567_layout() {
     return layout;
 }
 
-PinLayout create_mos6569_layout() {
+ChipLayout create_mos6569_layout() {
     // MOS 6569 is pin-compatible with 6567 but PAL timing
-    PinLayout layout = create_mos6567_layout();
+    ChipLayout layout = create_mos6567_layout();
     
     // Update part number for PAL version
     layout.markings.part_number = "MOS6569";
@@ -87,9 +87,9 @@ PinLayout create_mos6569_layout() {
 // AUDIO CHIP LAYOUTS
 // ============================================================================
 
-PinLayout create_mos6581_layout() {
+ChipLayout create_mos6581_layout() {
     // Start with DIP-28 base layout
-    PinLayout layout = create_dip28_layout();
+    ChipLayout layout = create_dip28_layout();
     
     // Update markings for MOS 6581 SID
     layout.markings = {
@@ -129,9 +129,9 @@ PinLayout create_mos6581_layout() {
 // I/O CHIP LAYOUTS
 // ============================================================================
 
-PinLayout create_mos6526_layout() {
+ChipLayout create_mos6526_layout() {
     // Start with DIP-40 base layout
-    PinLayout layout = create_dip40_layout();
+    ChipLayout layout = create_dip40_layout();
     
     // Update markings for MOS 6526 CIA
     layout.markings = {
@@ -177,9 +177,9 @@ PinLayout create_mos6526_layout() {
 // MEMORY CHIP LAYOUTS
 // ============================================================================
 
-PinLayout create_mos2114_layout() {
+ChipLayout create_mos2114_layout() {
     // Start with DIP-18 base layout
-    PinLayout layout = create_dip18_layout();
+    ChipLayout layout = create_dip18_layout();
     
     // Update markings for MOS 2114 SRAM
     layout.markings = {
@@ -213,9 +213,9 @@ PinLayout create_mos2114_layout() {
 // LOGIC CHIP LAYOUTS
 // ============================================================================
 
-PinLayout create_74ls139_layout() {
+ChipLayout create_74ls139_layout() {
     // Start with DIP-16 base layout
-    PinLayout layout = create_dip16_layout();
+    ChipLayout layout = create_dip16_layout();
     
     // Update markings for 74LS139
     layout.markings = {
@@ -244,9 +244,9 @@ PinLayout create_74ls139_layout() {
     return layout;
 }
 
-PinLayout create_c64_pla_layout() {
+ChipLayout create_c64_pla_layout() {
     // Start with DIP-28 base layout
-    PinLayout layout = create_dip28_layout();
+    ChipLayout layout = create_dip28_layout();
     
     // Update markings for C64 PLA
     layout.markings = {
@@ -286,7 +286,7 @@ PinLayout create_c64_pla_layout() {
 // PIN STATE EXTRACTION FOR NON-CPU CHIPS
 // ============================================================================
 
-std::vector<PinState> get_video_chip_pin_states(void* chip, const PinLayout* layout, bus_state_t bus_state) {
+std::vector<PinState> get_video_chip_pin_states(void* chip, const ChipLayout* layout, bus_state_t bus_state) {
     std::vector<PinState> states(layout->get_total_pins());
     
     // Initialize all pins as inactive and valid
@@ -388,22 +388,22 @@ std::vector<PinState> get_video_chip_pin_states(void* chip, const PinLayout* lay
     return states;
 }
 
-std::vector<PinState> get_audio_chip_pin_states(void* chip, const PinLayout* layout, bus_state_t bus_state) {
+std::vector<PinState> get_audio_chip_pin_states(void* chip, const ChipLayout* layout, bus_state_t bus_state) {
     // Similar implementation to video chip but for audio-specific pins
     return get_video_chip_pin_states(chip, layout, bus_state); // Reuse for now
 }
 
-std::vector<PinState> get_io_chip_pin_states(void* chip, const PinLayout* layout, bus_state_t bus_state) {
+std::vector<PinState> get_io_chip_pin_states(void* chip, const ChipLayout* layout, bus_state_t bus_state) {
     // Similar implementation to video chip but for I/O-specific pins
     return get_video_chip_pin_states(chip, layout, bus_state); // Reuse for now
 }
 
-std::vector<PinState> get_memory_chip_pin_states(void* chip, const PinLayout* layout, bus_state_t bus_state) {
+std::vector<PinState> get_memory_chip_pin_states(void* chip, const ChipLayout* layout, bus_state_t bus_state) {
     // Similar implementation to video chip but for memory-specific pins
     return get_video_chip_pin_states(chip, layout, bus_state); // Reuse for now
 }
 
-std::vector<PinState> get_logic_chip_pin_states(void* chip, const PinLayout* layout, bus_state_t bus_state) {
+std::vector<PinState> get_logic_chip_pin_states(void* chip, const ChipLayout* layout, bus_state_t bus_state) {
     // Similar implementation to video chip but for logic-specific pins
     return get_video_chip_pin_states(chip, layout, bus_state); // Reuse for now
 }

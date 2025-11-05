@@ -19,9 +19,9 @@
 // VIDEO CHIP LAYOUTS (VIC-II Family)
 // ============================================================================
 
-PinLayout create_mos6567_vic_layout(void) {
+ChipLayout create_mos6567_vic_layout(void) {
     // Create DIP-40 layout
-    PinLayout layout;
+    ChipLayout layout;
     memset(&layout, 0, sizeof(layout));
     
     // Set package info
@@ -46,8 +46,8 @@ PinLayout create_mos6567_vic_layout(void) {
     return layout;
 }
 
-PinLayout create_mos6569_vic_layout(void) {
-    PinLayout layout = create_mos6567_vic_layout();
+ChipLayout create_mos6569_vic_layout(void) {
+    ChipLayout layout = create_mos6567_vic_layout();
     layout.markings.part_number = "MOS6569";
     return layout;
 }
@@ -56,8 +56,8 @@ PinLayout create_mos6569_vic_layout(void) {
 // AUDIO CHIP LAYOUTS (SID Family)
 // ============================================================================
 
-PinLayout create_mos6581_sid_layout(void) {
-    PinLayout layout;
+ChipLayout create_mos6581_sid_layout(void) {
+    ChipLayout layout;
     memset(&layout, 0, sizeof(layout));
     
     // Set package info for DIP-28
@@ -83,8 +83,8 @@ PinLayout create_mos6581_sid_layout(void) {
 // I/O CHIP LAYOUTS (CIA Family)
 // ============================================================================
 
-PinLayout create_mos6526_cia_layout(void) {
-    PinLayout layout;
+ChipLayout create_mos6526_cia_layout(void) {
+    ChipLayout layout;
     memset(&layout, 0, sizeof(layout));
     
     // Set package info for DIP-40
@@ -110,8 +110,8 @@ PinLayout create_mos6526_cia_layout(void) {
 // MEMORY CHIP LAYOUTS
 // ============================================================================
 
-PinLayout create_generic_ram_layout(void) {
-    PinLayout layout;
+ChipLayout create_generic_ram_layout(void) {
+    ChipLayout layout;
     memset(&layout, 0, sizeof(layout));
     
     // Set package info for DIP-18
@@ -133,15 +133,15 @@ PinLayout create_generic_ram_layout(void) {
     return layout;
 }
 
-PinLayout create_mos2114_layout(void) {
-    PinLayout layout = create_generic_ram_layout();
+ChipLayout create_mos2114_layout(void) {
+    ChipLayout layout = create_generic_ram_layout();
     layout.markings.part_number = "MOS2114";
     layout.markings.manufacturer = "MOS Technology";
     return layout;
 }
 
-PinLayout create_generic_rom_layout(void) {
-    PinLayout layout;
+ChipLayout create_generic_rom_layout(void) {
+    ChipLayout layout;
     memset(&layout, 0, sizeof(layout));
     
     // Set package info for DIP-24
@@ -167,8 +167,8 @@ PinLayout create_generic_rom_layout(void) {
 // LOGIC CHIP LAYOUTS (PLA and others)
 // ============================================================================
 
-PinLayout create_generic_pla_layout(void) {
-    PinLayout layout;
+ChipLayout create_generic_pla_layout(void) {
+    ChipLayout layout;
     memset(&layout, 0, sizeof(layout));
     
     // Set package info for DIP-28
@@ -190,8 +190,8 @@ PinLayout create_generic_pla_layout(void) {
     return layout;
 }
 
-PinLayout create_c64_pla_layout(void) {
-    PinLayout layout = create_generic_pla_layout();
+ChipLayout create_c64_pla_layout(void) {
+    ChipLayout layout = create_generic_pla_layout();
     layout.markings.part_number = "906114-01";
     layout.markings.manufacturer = "Commodore";
     return layout;
@@ -201,7 +201,7 @@ PinLayout create_c64_pla_layout(void) {
 // CHIP VISUALIZATION HELPERS
 // ============================================================================
 
-void init_chip_gui_state(ChipGUIState* state, PinLayout layout) {
+void init_chip_gui_state(ChipGUIState* state, ChipLayout layout) {
     if (!state) return;
     
     state->layout = layout;
@@ -226,7 +226,7 @@ void render_chip_layout_gui(ChipGUIState* state, void* chip, bus_state_t bus_sta
     // For now, just a placeholder
 }
 
-void get_generic_chip_pin_states(void* chip, const PinLayout* layout, bus_state_t bus_state, PinState* out_states) {
+void get_generic_chip_pin_states(void* chip, const ChipLayout* layout, bus_state_t bus_state, PinState* out_states) {
     if (!layout || !out_states) return;
     
     // Basic implementation - just set all pins to inactive

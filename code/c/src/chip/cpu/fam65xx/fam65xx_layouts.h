@@ -8,7 +8,7 @@
 #ifndef CPU_PIN_LAYOUTS_H
 #define CPU_PIN_LAYOUTS_H
 
-#include "../../../gui/chip_visualization.h"
+#include "../../../core/chip_layout.h"
 #include "fam65xx_processor_traits.hpp"
 #include "../../core/system_lines.h"
 
@@ -24,19 +24,19 @@ namespace fam65xx {
 
 // CPU-specific pin layout functions - using reference template parameters like fam65xx_t
 template<const fam65xx::CPUTraits& Traits>
-PinLayout create_cpu_pin_layout();
+ChipLayout create_cpu_pin_layout();
 
 // Specific CPU layout functions  
-PinLayout create_mos6502_layout();
-PinLayout create_mos6510_layout();
-PinLayout create_wdc_w65c02s_layout();
-PinLayout create_wdc_65c816_layout();
-PinLayout create_ricoh_2a03_layout();
-PinLayout create_rockwell_r65c02_layout();
+ChipLayout create_mos6502_layout();
+ChipLayout create_mos6510_layout();
+ChipLayout create_wdc_w65c02s_layout();
+ChipLayout create_wdc_65c816_layout();
+ChipLayout create_ricoh_2a03_layout();
+ChipLayout create_rockwell_r65c02_layout();
 
 // CPU pin state functions - get pin states from CPU and bus state  
 template<const fam65xx::CPUTraits& Traits>
-std::vector<PinState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, PinLayout* layout, bus_state_t bus_state);
+std::vector<PinState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, ChipLayout* layout, bus_state_t bus_state);
 
 // ============================================================================
 // TEMPLATE FUNCTION IMPLEMENTATIONS (must be in header for templates)
@@ -48,8 +48,8 @@ std::vector<PinState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, PinLay
 
 // Generic CPU pin layout function with compile-time CPU selection
 template<const fam65xx::CPUTraits& Traits>
-PinLayout create_cpu_pin_layout() {
-    PinLayout layout = {};
+ChipLayout create_cpu_pin_layout() {
+    ChipLayout layout = {};
     
     // MOS 6502 (NMOS) PIN LAYOUT - use create_mos6502_layout()
     if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::MOS6502)>) {
@@ -99,7 +99,7 @@ PinLayout create_cpu_pin_layout() {
 
 // CPU pin state function with compile-time CPU selection  
 template<const fam65xx::CPUTraits& Traits>
-std::vector<PinState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, const PinLayout* layout, bus_state_t bus_state) {
+std::vector<PinState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, const ChipLayout* layout, bus_state_t bus_state) {
     // Map pins based on the pin layout for this CPU type
     // Get the actual pin layout for this CPU
     std::vector<PinState> states(layout->get_total_pins());
@@ -251,27 +251,15 @@ std::vector<PinState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, const 
     return states;
 }
 
-// ============================================================================
-// COMPACT PIN DEFINITION MACROS FOR DIP-40 LAYOUTS
-// ============================================================================
-
-// Macro to create a ChipPin with all members properly initialized
-#define MAKE_PIN(num, lbl_enum, bit, inv) \
-    {num, PinLabel::lbl_enum, bit, inv, nullptr, nullptr, false, false}
-
-// Macro to define left and right pins in one line for DIP-40 packages
-#define PIN_PAIR(left_num, left_lbl_enum, left_bit, left_inv, \
-                 right_num, right_lbl_enum, right_bit, right_inv) \
-    layout.left_pins.push_back(MAKE_PIN(left_num, left_lbl_enum, left_bit, left_inv)); \
-    layout.right_pins.push_back(MAKE_PIN(right_num, right_lbl_enum, right_bit, right_inv));
+// Note: PIN and PIN_LR macros are now defined in core/chip_layout.h
 
 // ============================================================================
 // MOS 6502 SPECIFIC LAYOUT IMPLEMENTATION
 // ============================================================================
 
-PinLayout create_mos6502_layout() {
+ChipLayout create_mos6502_layout() {
     // Start with DIP-40 base layout from core system
-    PinLayout layout = create_dip40_layout();
+    ChipLayout layout = create_dip40_layout();
    
     // Customize for MOS 6502 - assign pin labels and types
     // The create_dip40_layout() provides the physical package structure
@@ -290,34 +278,35 @@ PinLayout create_mos6502_layout() {
         false                        // show_date_code
     };
    
-    // Pin assignments for MOS 6502 (40-pin DIP) - 20 lines of compact pin definitions
-    PIN_PAIR(1,  VSS,   0, false,   21, VSS,   0, false)
-    PIN_PAIR(2,  RDY,   0, false,   22, A12,   12, false)
-    PIN_PAIR(3,  PHI1,  0, false,   23, A13,   13, false)
-    PIN_PAIR(4,  IRQ,   0, true,    24, A14,   14, false)
-    PIN_PAIR(5,  NC,    0, false,   25, A15,   15, false)
-    PIN_PAIR(6,  NMI,   0, true,    26, D7,    7, false)
-    PIN_PAIR(7,  SYNC,  0, false,   27, D6,    6, false)
-    PIN_PAIR(8,  VDD,   0, false,   28, D5,    5, false)
-    PIN_PAIR(9,  A0,    0, false,   29, D4,    4, false)
-    PIN_PAIR(10, A1,    1, false,   30, D3,    3, false)
-    PIN_PAIR(11, A2,    2, false,   31, D2,    2, false)
-    PIN_PAIR(12, A3,    3, false,   32, D1,    1, false)
-    PIN_PAIR(13, A4,    4, false,   33, D0,    0, false)
-    PIN_PAIR(14, A5,    5, false,   34, RW,    0, false)
-    PIN_PAIR(15, A6,    6, false,   35, NC,    0, false)
-    PIN_PAIR(16, A7,    7, false,   36, NC,    0, false)
-    PIN_PAIR(17, A8,    8, false,   37, PHI0,  0, false)
-    PIN_PAIR(18, A9,    9, false,   38, SO,    0, true)
-    PIN_PAIR(19, A10,   10, false,  39, PHI2,  0, false)
-    PIN_PAIR(20, A11,   11, false,  40, RES,   0, true)
+    // Pin assignments for MOS 6502 (40-pin DIP) - Using improved PIN_LR macro
+    // PIN_LR(left_num, left_lbl_enum, left_inv, right_num, right_lbl_enum, right_inv, right_bit, left_bit)
+    PIN_LR(1,  VSS,   false,   21, VSS,   false,   0, 0)
+    PIN_LR(2,  RDY,   false,   22, A12,   false,   12, 0)
+    PIN_LR(3,  PHI1,  false,   23, A13,   false,   13, 0)
+    PIN_LR(4,  IRQ,   true,    24, A14,   false,   14, 0)
+    PIN_LR(5,  NC,    false,   25, A15,   false,   15, 0)
+    PIN_LR(6,  NMI,   true,    26, D7,    false,   7, 0)
+    PIN_LR(7,  SYNC,  false,   27, D6,    false,   6, 0)
+    PIN_LR(8,  VDD,   false,   28, D5,    false,   5, 0)
+    PIN_LR(9,  A0,    false,   29, D4,    false,   4, 0)
+    PIN_LR(10, A1,    false,   30, D3,    false,   3, 1)
+    PIN_LR(11, A2,    false,   31, D2,    false,   2, 2)
+    PIN_LR(12, A3,    false,   32, D1,    false,   1, 3)
+    PIN_LR(13, A4,    false,   33, D0,    false,   0, 4)
+    PIN_LR(14, A5,    false,   34, RW,    false,   0, 5)
+    PIN_LR(15, A6,    false,   35, NC,    false,   0, 6)
+    PIN_LR(16, A7,    false,   36, NC,    false,   0, 7)
+    PIN_LR(17, A8,    false,   37, PHI0,  false,   0, 8)
+    PIN_LR(18, A9,    false,   38, SO,    true,    0, 9)
+    PIN_LR(19, A10,   false,   39, PHI2,  false,   0, 10)
+    PIN_LR(20, A11,   false,   40, RES,   true,    0, 11)
    
     return layout;
 }
 
-PinLayout create_mos6510_layout() {
+ChipLayout create_mos6510_layout() {
     // Start with DIP-40 base layout from core system
-    PinLayout layout = create_dip40_layout();
+    ChipLayout layout = create_dip40_layout();
     
     // Update package info for MOS 6510 - properly initialize all fields
     layout.markings = {
@@ -334,33 +323,34 @@ PinLayout create_mos6510_layout() {
     };
     
     // Pin assignments for MOS 6510 (40-pin DIP) - Hardware accurate per documentation
-    PIN_PAIR(1,  PHI0,  0, false,   21, VSS,   0, false)
-    PIN_PAIR(2,  RDY,   0, false,   22, A12,   12, false)
-    PIN_PAIR(3,  IRQ,   0, true,    23, A13,   13, false)
-    PIN_PAIR(4,  NMI,   0, true,    24, P0,    0, false) // I/O Port bit 0
-    PIN_PAIR(5,  AEC,   0, false,   25, P1,    1, false) // I/O Port bit 1
-    PIN_PAIR(6,  VDD,   0, false,   26, P2,    2, false) // I/O Port bit 2
-    PIN_PAIR(7,  A0,    0, false,   27, P3,    3, false) // I/O Port bit 3
-    PIN_PAIR(8,  A1,    1, false,   28, P4,    4, false) // I/O Port bit 4
-    PIN_PAIR(9,  A2,    2, false,   29, P5,    5, false) // I/O Port bit 5
-    PIN_PAIR(10, A3,    3, false,   30, D7,    7, false)
-    PIN_PAIR(11, A4,    4, false,   31, D6,    6, false)
-    PIN_PAIR(12, A5,    5, false,   32, D5,    5, false)
-    PIN_PAIR(13, A6,    6, false,   33, D4,    4, false)
-    PIN_PAIR(14, A7,    7, false,   34, D3,    3, false)
-    PIN_PAIR(15, A8,    8, false,   35, D2,    2, false)
-    PIN_PAIR(16, A9,    9, false,   36, D1,    1, false)
-    PIN_PAIR(17, A10,   10, false,  37, D0,    0, false)
-    PIN_PAIR(18, A11,   11, false,  38, RW,    0, false)
-    PIN_PAIR(19, A14,   14, false,  39, PHI2,  0, false)
-    PIN_PAIR(20, A15,   15, false,  40, RES,   0, true)
+    // PIN_LR(left_num, left_lbl_enum, left_inv, right_num, right_lbl_enum, right_inv, right_bit, left_bit)
+    PIN_LR(1,  PHI0,  false,   21, VSS,   false,   0, 0)
+    PIN_LR(2,  RDY,   false,   22, A12,   false,   12, 0)
+    PIN_LR(3,  IRQ,   true,    23, A13,   false,   13, 0)
+    PIN_LR(4,  NMI,   true,    24, P0,    false,   0, 0) // I/O Port bit 0
+    PIN_LR(5,  AEC,   false,   25, P1,    false,   1, 0) // I/O Port bit 1
+    PIN_LR(6,  VDD,   false,   26, P2,    false,   2, 0) // I/O Port bit 2
+    PIN_LR(7,  A0,    false,   27, P3,    false,   3, 0) // I/O Port bit 3
+    PIN_LR(8,  A1,    false,   28, P4,    false,   4, 1) // I/O Port bit 4
+    PIN_LR(9,  A2,    false,   29, P5,    false,   5, 2) // I/O Port bit 5
+    PIN_LR(10, A3,    false,   30, D7,    false,   7, 3)
+    PIN_LR(11, A4,    false,   31, D6,    false,   6, 4)
+    PIN_LR(12, A5,    false,   32, D5,    false,   5, 5)
+    PIN_LR(13, A6,    false,   33, D4,    false,   4, 6)
+    PIN_LR(14, A7,    false,   34, D3,    false,   3, 7)
+    PIN_LR(15, A8,    false,   35, D2,    false,   2, 8)
+    PIN_LR(16, A9,    false,   36, D1,    false,   1, 9)
+    PIN_LR(17, A10,   false,   37, D0,    false,   0, 10)
+    PIN_LR(18, A11,   false,   38, RW,    false,   0, 11)
+    PIN_LR(19, A14,   false,   39, PHI2,  false,   0, 14)
+    PIN_LR(20, A15,   false,   40, RES,   true,    0, 15)
     
     return layout;
 }
 
-PinLayout create_wdc_w65c02s_layout() {
+ChipLayout create_wdc_w65c02s_layout() {
     // Start with DIP-40 base layout from core system
-    PinLayout layout = create_dip40_layout();
+    ChipLayout layout = create_dip40_layout();
     
     // Update package info for WDC W65C02S - properly initialize all fields
     layout.markings = {
@@ -377,33 +367,34 @@ PinLayout create_wdc_w65c02s_layout() {
     };
     
     // Pin assignments for WDC W65C02S (40-pin DIP) - Hardware accurate per documentation
-    PIN_PAIR(1,  VP,    0, false,   21, VSS,   0, false) // Vector Pull
-    PIN_PAIR(2,  RDY,   0, false,   22, A12,   12, false) // Bidirectional on 65C02
-    PIN_PAIR(3,  PHI1,  0, false,   23, A13,   13, false)
-    PIN_PAIR(4,  IRQ,   0, true,    24, A14,   14, false)
-    PIN_PAIR(5,  ML,    0, true,    25, A15,   15, false) // Memory Lock
-    PIN_PAIR(6,  NMI,   0, true,    26, D7,    7, false)
-    PIN_PAIR(7,  SYNC,  0, false,   27, D6,    6, false)
-    PIN_PAIR(8,  VDD,   0, false,   28, D5,    5, false)
-    PIN_PAIR(9,  A0,    0, false,   29, D4,    4, false)
-    PIN_PAIR(10, A1,    1, false,   30, D3,    3, false)
-    PIN_PAIR(11, A2,    2, false,   31, D2,    2, false)
-    PIN_PAIR(12, A3,    3, false,   32, D1,    1, false)
-    PIN_PAIR(13, A4,    4, false,   33, D0,    0, false)
-    PIN_PAIR(14, A5,    5, false,   34, RW,    0, false)
-    PIN_PAIR(15, A6,    6, false,   35, NC,    0, false)
-    PIN_PAIR(16, A7,    7, false,   36, BE,    0, false) // Bus Enable on 65C02
-    PIN_PAIR(17, A8,    8, false,   37, PHI0,  0, false)
-    PIN_PAIR(18, A9,    9, false,   38, SO,    0, true)
-    PIN_PAIR(19, A10,   10, false,  39, PHI2,  0, false)
-    PIN_PAIR(20, A11,   11, false,  40, RES,   0, true)
+    // PIN_LR(left_num, left_lbl_enum, left_inv, right_num, right_lbl_enum, right_inv, right_bit, left_bit)
+    PIN_LR(1,  VP,    false,   21, VSS,   false,   0, 0) // Vector Pull
+    PIN_LR(2,  RDY,   false,   22, A12,   false,   12, 0) // Bidirectional on 65C02
+    PIN_LR(3,  PHI1,  false,   23, A13,   false,   13, 0)
+    PIN_LR(4,  IRQ,   true,    24, A14,   false,   14, 0)
+    PIN_LR(5,  ML,    true,    25, A15,   false,   15, 0) // Memory Lock
+    PIN_LR(6,  NMI,   true,    26, D7,    false,   7, 0)
+    PIN_LR(7,  SYNC,  false,   27, D6,    false,   6, 0)
+    PIN_LR(8,  VDD,   false,   28, D5,    false,   5, 0)
+    PIN_LR(9,  A0,    false,   29, D4,    false,   4, 0)
+    PIN_LR(10, A1,    false,   30, D3,    false,   3, 1)
+    PIN_LR(11, A2,    false,   31, D2,    false,   2, 2)
+    PIN_LR(12, A3,    false,   32, D1,    false,   1, 3)
+    PIN_LR(13, A4,    false,   33, D0,    false,   0, 4)
+    PIN_LR(14, A5,    false,   34, RW,    false,   0, 5)
+    PIN_LR(15, A6,    false,   35, NC,    false,   0, 6)
+    PIN_LR(16, A7,    false,   36, BE,    false,   0, 7) // Bus Enable on 65C02
+    PIN_LR(17, A8,    false,   37, PHI0,  false,   0, 8)
+    PIN_LR(18, A9,    false,   38, SO,    true,    0, 9)
+    PIN_LR(19, A10,   false,   39, PHI2,  false,   0, 10)
+    PIN_LR(20, A11,   false,   40, RES,   true,    0, 11)
     
     return layout;
 }
 
-PinLayout create_wdc_65c816_layout() {
+ChipLayout create_wdc_65c816_layout() {
     // Start with DIP-40 base layout from core system
-    PinLayout layout = create_dip40_layout();
+    ChipLayout layout = create_dip40_layout();
     
     // Update package info for WDC 65C816 - properly initialize all fields
     layout.markings = {
@@ -420,33 +411,34 @@ PinLayout create_wdc_65c816_layout() {
     };
     
     // Pin assignments for WDC 65C816 (40-pin DIP) - Hardware accurate per documentation
-    PIN_PAIR(1,  VP,    0, false,   21, VSS,   0, false) // Vector Pull
-    PIN_PAIR(2,  RDY,   0, false,   22, A12,   12, false)
-    PIN_PAIR(3,  ABORT, 0, true,    23, A13,   13, false) // Abort
-    PIN_PAIR(4,  IRQ,   0, true,    24, A14,   14, false)
-    PIN_PAIR(5,  ML,    0, true,    25, A15,   15, false) // Memory Lock
-    PIN_PAIR(6,  NMI,   0, true,    26, D7,    7, false)
-    PIN_PAIR(7,  VPA,   0, false,   27, D6,    6, false) // Valid Program Address
-    PIN_PAIR(8,  VDD,   0, false,   28, D5,    5, false)
-    PIN_PAIR(9,  A0,    0, false,   29, D4,    4, false)
-    PIN_PAIR(10, A1,    1, false,   30, D3,    3, false)
-    PIN_PAIR(11, A2,    2, false,   31, D2,    2, false)
-    PIN_PAIR(12, A3,    3, false,   32, D1,    1, false)
-    PIN_PAIR(13, A4,    4, false,   33, D0,    0, false)
-    PIN_PAIR(14, A5,    5, false,   34, RW,    0, false)
-    PIN_PAIR(15, A6,    6, false,   35, E,     0, false) // Emulation mode
-    PIN_PAIR(16, A7,    7, false,   36, BE,    0, false) // Bus Enable
-    PIN_PAIR(17, A8,    8, false,   37, PHI0,  0, false)
-    PIN_PAIR(18, A9,    9, false,   38, MX,    0, false) // M/X Status
-    PIN_PAIR(19, A10,   10, false,  39, PHI2,  0, false) // Corrected to PHI2 per docs
-    PIN_PAIR(20, A11,   11, false,  40, RES,   0, true)
+    // PIN_LR(left_num, left_lbl_enum, left_inv, right_num, right_lbl_enum, right_inv, right_bit, left_bit)
+    PIN_LR(1,  VP,    false,   21, VSS,   false,   0, 0) // Vector Pull
+    PIN_LR(2,  RDY,   false,   22, A12,   false,   12, 0)
+    PIN_LR(3,  ABORT, true,    23, A13,   false,   13, 0) // Abort
+    PIN_LR(4,  IRQ,   true,    24, A14,   false,   14, 0)
+    PIN_LR(5,  ML,    true,    25, A15,   false,   15, 0) // Memory Lock
+    PIN_LR(6,  NMI,   true,    26, D7,    false,   7, 0)
+    PIN_LR(7,  VPA,   false,   27, D6,    false,   6, 0) // Valid Program Address
+    PIN_LR(8,  VDD,   false,   28, D5,    false,   5, 0)
+    PIN_LR(9,  A0,    false,   29, D4,    false,   4, 0)
+    PIN_LR(10, A1,    false,   30, D3,    false,   3, 1)
+    PIN_LR(11, A2,    false,   31, D2,    false,   2, 2)
+    PIN_LR(12, A3,    false,   32, D1,    false,   1, 3)
+    PIN_LR(13, A4,    false,   33, D0,    false,   0, 4)
+    PIN_LR(14, A5,    false,   34, RW,    false,   0, 5)
+    PIN_LR(15, A6,    false,   35, E,     false,   0, 6) // Emulation mode
+    PIN_LR(16, A7,    false,   36, BE,    false,   0, 7) // Bus Enable
+    PIN_LR(17, A8,    false,   37, PHI0,  false,   0, 8)
+    PIN_LR(18, A9,    false,   38, MX,    false,   0, 9) // M/X Status
+    PIN_LR(19, A10,   false,   39, PHI2,  false,   0, 10) // Corrected to PHI2 per docs
+    PIN_LR(20, A11,   false,   40, RES,   true,    0, 11)
     
     return layout;
 }
 
-PinLayout create_ricoh_2a03_layout() {
+ChipLayout create_ricoh_2a03_layout() {
     // Start with DIP-40 base layout from core system
-    PinLayout layout = create_dip40_layout();
+    ChipLayout layout = create_dip40_layout();
     
     // Update package info for RICOH 2A03 (NES processor) - properly initialize all fields
     layout.markings = {
@@ -463,34 +455,34 @@ PinLayout create_ricoh_2a03_layout() {
     };
     
     // Pin assignments for RICOH 2A03 (40-pin DIP) - 20 lines of compact pin definitions
-    // This is similar to 6502 but with some differences
-    PIN_PAIR(1,  VSS,   0, false,   21, VSS,   0, false)
-    PIN_PAIR(2,  RDY,   0, false,   22, A12,   12, false) // Tied high internally in some revisions
-    PIN_PAIR(3,  PHI1,  0, false,   23, A13,   13, false)
-    PIN_PAIR(4,  IRQ,   0, true,    24, A14,   14, false)
-    PIN_PAIR(5,  NC,    0, false,   25, A15,   15, false)
-    PIN_PAIR(6,  NMI,   0, true,    26, D7,    7, false)
-    PIN_PAIR(7,  SYNC,  0, false,   27, D6,    6, false)
-    PIN_PAIR(8,  VDD,   0, false,   28, D5,    5, false)
-    PIN_PAIR(9,  A0,    0, false,   29, D4,    4, false)
-    PIN_PAIR(10, A1,    1, false,   30, D3,    3, false)
-    PIN_PAIR(11, A2,    2, false,   31, D2,    2, false)
-    PIN_PAIR(12, A3,    3, false,   32, D1,    1, false)
-    PIN_PAIR(13, A4,    4, false,   33, D0,    0, false)
-    PIN_PAIR(14, A5,    5, false,   34, RW,    0, false)
-    PIN_PAIR(15, A6,    6, false,   35, NC,    0, false)
-    PIN_PAIR(16, A7,    7, false,   36, NC,    0, false) // No BE on 2A03
-    PIN_PAIR(17, A8,    8, false,   37, PHI0,  0, false)
-    PIN_PAIR(18, A9,    9, false,   38, SO,    0, true)
-    PIN_PAIR(19, A10,   10, false,  39, PHI2,  0, false)
-    PIN_PAIR(20, A11,   11, false,  40, RES,   0, true)
+    // PIN_LR(left_num, left_lbl_enum, left_inv, right_num, right_lbl_enum, right_inv, right_bit, left_bit)
+    PIN_LR(1,  VSS,   false,   21, VSS,   false,   0, 0)
+    PIN_LR(2,  RDY,   false,   22, A12,   false,   12, 0) // Tied high internally in some revisions
+    PIN_LR(3,  PHI1,  false,   23, A13,   false,   13, 0)
+    PIN_LR(4,  IRQ,   true,    24, A14,   false,   14, 0)
+    PIN_LR(5,  NC,    false,   25, A15,   false,   15, 0)
+    PIN_LR(6,  NMI,   true,    26, D7,    false,   7, 0)
+    PIN_LR(7,  SYNC,  false,   27, D6,    false,   6, 0)
+    PIN_LR(8,  VDD,   false,   28, D5,    false,   5, 0)
+    PIN_LR(9,  A0,    false,   29, D4,    false,   4, 0)
+    PIN_LR(10, A1,    false,   30, D3,    false,   3, 1)
+    PIN_LR(11, A2,    false,   31, D2,    false,   2, 2)
+    PIN_LR(12, A3,    false,   32, D1,    false,   1, 3)
+    PIN_LR(13, A4,    false,   33, D0,    false,   0, 4)
+    PIN_LR(14, A5,    false,   34, RW,    false,   0, 5)
+    PIN_LR(15, A6,    false,   35, NC,    false,   0, 6)
+    PIN_LR(16, A7,    false,   36, NC,    false,   0, 7) // No BE on 2A03
+    PIN_LR(17, A8,    false,   37, PHI0,  false,   0, 8)
+    PIN_LR(18, A9,    false,   38, SO,    true,    0, 9)
+    PIN_LR(19, A10,   false,   39, PHI2,  false,   0, 10)
+    PIN_LR(20, A11,   false,   40, RES,   true,    0, 11)
     
     return layout;
 }
 
-PinLayout create_rockwell_r65c02_layout() {
+ChipLayout create_rockwell_r65c02_layout() {
     // Start with DIP-40 base layout from core system
-    PinLayout layout = create_dip40_layout();
+    ChipLayout layout = create_dip40_layout();
     
     // Update package info for Rockwell R65C02 - properly initialize all fields
     layout.markings = {
@@ -507,26 +499,27 @@ PinLayout create_rockwell_r65c02_layout() {
     };
     
     // Pin assignments for Rockwell R65C02 (40-pin DIP) - 20 lines of compact pin definitions
-    PIN_PAIR(1,  VSS,   0, false,   21, VSS,   0, false)
-    PIN_PAIR(2,  RDY,   0, false,   22, A12,   12, false)
-    PIN_PAIR(3,  PHI1,  0, false,   23, A13,   13, false)
-    PIN_PAIR(4,  IRQ,   0, true,    24, A14,   14, false)
-    PIN_PAIR(5,  NC,    0, false,   25, A15,   15, false)
-    PIN_PAIR(6,  NMI,   0, true,    26, D7,    7, false)
-    PIN_PAIR(7,  SYNC,  0, false,   27, D6,    6, false)
-    PIN_PAIR(8,  VDD,   0, false,   28, D5,    5, false)
-    PIN_PAIR(9,  A0,    0, false,   29, D4,    4, false)
-    PIN_PAIR(10, A1,    1, false,   30, D3,    3, false)
-    PIN_PAIR(11, A2,    2, false,   31, D2,    2, false)
-    PIN_PAIR(12, A3,    3, false,   32, D1,    1, false)
-    PIN_PAIR(13, A4,    4, false,   33, D0,    0, false)
-    PIN_PAIR(14, A5,    5, false,   34, RW,    0, false)
-    PIN_PAIR(15, A6,    6, false,   35, NC,    0, false)
-    PIN_PAIR(16, A7,    7, false,   36, BE,    0, false) // Bus Enable on R65C02
-    PIN_PAIR(17, A8,    8, false,   37, PHI0,  0, false)
-    PIN_PAIR(18, A9,    9, false,   38, SO,    0, true)
-    PIN_PAIR(19, A10,   10, false,  39, PHI2,  0, false)
-    PIN_PAIR(20, A11,   11, false,  40, RES,   0, true)
+    // PIN_LR(left_num, left_lbl_enum, left_inv, right_num, right_lbl_enum, right_inv, right_bit, left_bit)
+    PIN_LR(1,  VSS,   false,   21, VSS,   false,   0, 0)
+    PIN_LR(2,  RDY,   false,   22, A12,   false,   12, 0)
+    PIN_LR(3,  PHI1,  false,   23, A13,   false,   13, 0)
+    PIN_LR(4,  IRQ,   true,    24, A14,   false,   14, 0)
+    PIN_LR(5,  NC,    false,   25, A15,   false,   15, 0)
+    PIN_LR(6,  NMI,   true,    26, D7,    false,   7, 0)
+    PIN_LR(7,  SYNC,  false,   27, D6,    false,   6, 0)
+    PIN_LR(8,  VDD,   false,   28, D5,    false,   5, 0)
+    PIN_LR(9,  A0,    false,   29, D4,    false,   4, 0)
+    PIN_LR(10, A1,    false,   30, D3,    false,   3, 1)
+    PIN_LR(11, A2,    false,   31, D2,    false,   2, 2)
+    PIN_LR(12, A3,    false,   32, D1,    false,   1, 3)
+    PIN_LR(13, A4,    false,   33, D0,    false,   0, 4)
+    PIN_LR(14, A5,    false,   34, RW,    false,   0, 5)
+    PIN_LR(15, A6,    false,   35, NC,    false,   0, 6)
+    PIN_LR(16, A7,    false,   36, BE,    false,   0, 7) // Bus Enable on R65C02
+    PIN_LR(17, A8,    false,   37, PHI0,  false,   0, 8)
+    PIN_LR(18, A9,    false,   38, SO,    true,    0, 9)
+    PIN_LR(19, A10,   false,   39, PHI2,  false,   0, 10)
+    PIN_LR(20, A11,   false,   40, RES,   true,    0, 11)
     
     return layout;
 }

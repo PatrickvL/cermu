@@ -21,8 +21,8 @@
 // CPU CHIP LAYOUTS (65xx Family)
 // ============================================================================
 
-PinLayout create_mos6502_chip_layout() {
-    PinLayout layout = create_dip40_layout();
+ChipLayout create_mos6502_chip_layout() {
+    ChipLayout layout = create_dip40_layout();
     
     layout.markings = {
         "MOS6502",                   // part_number
@@ -62,8 +62,8 @@ PinLayout create_mos6502_chip_layout() {
     return layout;
 }
 
-PinLayout create_mos6510_chip_layout() {
-    PinLayout layout = create_dip40_layout();
+ChipLayout create_mos6510_chip_layout() {
+    ChipLayout layout = create_dip40_layout();
     
     layout.markings = {
         "MOS6510",                   // part_number
@@ -107,8 +107,8 @@ PinLayout create_mos6510_chip_layout() {
 // VIDEO CHIP LAYOUTS (VIC-II)
 // ============================================================================
 
-PinLayout create_mos6567_chip_layout() {
-    PinLayout layout = create_dip40_layout();
+ChipLayout create_mos6567_chip_layout() {
+    ChipLayout layout = create_dip40_layout();
     
     layout.markings = {
         "MOS6567",                   // part_number
@@ -148,8 +148,8 @@ PinLayout create_mos6567_chip_layout() {
     return layout;
 }
 
-PinLayout create_mos6569_chip_layout() {
-    PinLayout layout = create_mos6567_chip_layout(); // Same pinout as 6567
+ChipLayout create_mos6569_chip_layout() {
+    ChipLayout layout = create_mos6567_chip_layout(); // Same pinout as 6567
     
     layout.markings.part_number = "MOS6569";
     layout.markings.custom_text = "Video Interface Chip (PAL)";
@@ -161,8 +161,8 @@ PinLayout create_mos6569_chip_layout() {
 // AUDIO CHIP LAYOUTS (SID)
 // ============================================================================
 
-PinLayout create_mos6581_chip_layout() {
-    PinLayout layout = create_dip28_layout();
+ChipLayout create_mos6581_chip_layout() {
+    ChipLayout layout = create_dip28_layout();
     
     layout.markings = {
         "MOS6581",                   // part_number
@@ -219,8 +219,8 @@ PinLayout create_mos6581_chip_layout() {
 // I/O CHIP LAYOUTS (CIA)
 // ============================================================================
 
-PinLayout create_mos6526_chip_layout() {
-    PinLayout layout = create_dip40_layout();
+ChipLayout create_mos6526_chip_layout() {
+    ChipLayout layout = create_dip40_layout();
     
     layout.markings = {
         "MOS6526",                   // part_number
@@ -264,8 +264,8 @@ PinLayout create_mos6526_chip_layout() {
 // MEMORY CHIP LAYOUTS (RAM)
 // ============================================================================
 
-PinLayout create_static_ram_chip_layout() {
-    PinLayout layout = create_dip18_layout();
+ChipLayout create_static_ram_chip_layout() {
+    ChipLayout layout = create_dip18_layout();
     
     layout.markings = {
         "2114",                      // part_number
@@ -312,8 +312,8 @@ PinLayout create_static_ram_chip_layout() {
 // LOGIC CHIP LAYOUTS (PLA)
 // ============================================================================
 
-PinLayout create_pla_chip_layout() {
-    PinLayout layout = create_dip28_layout();
+ChipLayout create_pla_chip_layout() {
+    ChipLayout layout = create_dip28_layout();
     
     layout.markings = {
         "82S100",                    // part_number
@@ -370,7 +370,7 @@ PinLayout create_pla_chip_layout() {
 // LAYOUT FACTORY FUNCTIONS
 // ============================================================================
 
-PinLayout get_chip_layout(const char* chip_name) {
+ChipLayout get_chip_layout(const char* chip_name) {
     if (strcmp(chip_name, "MOS6502") == 0) {
         return create_mos6502_chip_layout();
     } else if (strcmp(chip_name, "MOS6510") == 0) {
