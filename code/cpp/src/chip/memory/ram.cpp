@@ -29,5 +29,5 @@ chip_descriptor_t ram_descriptor = {
 
 // Include GUI implementation
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#include "ram_gui.c"
+#include "ram_gui.h"
 #endif

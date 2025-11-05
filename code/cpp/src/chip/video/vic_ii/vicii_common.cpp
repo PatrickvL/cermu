@@ -182,7 +182,7 @@ void vicii_memory_access(vicii_t* vicii, uint8_t access_type, int access_param) 
             bus_state_t color_bus_state = BUS_STATE(address, 0 , 0);
             color_bus_state = mos2114_read(vicii->colorram, color_bus_state);
             uint8_t color_data = BUS_GET_DATA(color_bus_state);
-            vicii->video_data.video_color_line[vicii->video_logic.vmli] = color_data & 0x0F;
+            vicii->video_data.video_color_line[vicii->video_logic.vmli] = static_cast<vicii_color_t>(color_data & 0x0F);
             
             // Video matrix access  
             address = vicii->memory.vm_base + vicii->video_logic.vc;
@@ -448,7 +448,7 @@ static void vicii_unified_pixel_sequencer(vicii_t* vicii) {
             }
             
             // Set pixel data
-            pixel_data.color = color_index;
+            pixel_data.color = static_cast<vicii_color_t>(color_index);
             pixel_data.priority = is_background ? VICII_PRIORITY_BACKGROUND : VICII_PRIORITY_FOREGROUND;
             vicii_pixel_emit_at_x(vicii, &pixel_data, pixel_x);
             
@@ -518,14 +518,14 @@ static inline void vicii_sequencer_update_colors(vicii_t* vicii) {
     // Update color palette based on graphics mode and background colors
     switch (sequencer->graphics_mode) {
         case VICII_GM_STANDARD_TEXT:
-            sequencer->colors[0].color = regs->data[VICII_B0C];
+            sequencer->colors[0].color = static_cast<vicii_color_t>(regs->data[VICII_B0C]);
             sequencer->colors[0].priority = VICII_PRIORITY_BACKGROUND;
             sequencer->colors[4].priority = VICII_PRIORITY_FOREGROUND;
             break;
         case VICII_GM_MULTICOLOR_TEXT:
-            sequencer->colors[0].color = regs->data[VICII_B0C];
-            sequencer->colors[1].color = regs->data[VICII_B1C];
-            sequencer->colors[2].color = regs->data[VICII_B2C];
+            sequencer->colors[0].color = static_cast<vicii_color_t>(regs->data[VICII_B0C]);
+            sequencer->colors[1].color = static_cast<vicii_color_t>(regs->data[VICII_B1C]);
+            sequencer->colors[2].color = static_cast<vicii_color_t>(regs->data[VICII_B2C]);
             sequencer->colors[0].priority = VICII_PRIORITY_BACKGROUND;
             sequencer->colors[1].priority = VICII_PRIORITY_FOREGROUND;
             sequencer->colors[2].priority = VICII_PRIORITY_FOREGROUND;
@@ -536,17 +536,17 @@ static inline void vicii_sequencer_update_colors(vicii_t* vicii) {
             sequencer->colors[4].priority = VICII_PRIORITY_FOREGROUND;
             break;
         case VICII_GM_MULTICOLOR_BITMAP:
-            sequencer->colors[0].color = regs->data[VICII_B0C];
+            sequencer->colors[0].color = static_cast<vicii_color_t>(regs->data[VICII_B0C]);
             sequencer->colors[0].priority = VICII_PRIORITY_BACKGROUND;
             sequencer->colors[1].priority = VICII_PRIORITY_FOREGROUND;
             sequencer->colors[2].priority = VICII_PRIORITY_FOREGROUND;
             sequencer->colors[3].priority = VICII_PRIORITY_FOREGROUND;
             break;
         case VICII_GM_ECM_TEXT:
-            sequencer->colors[0].color = regs->data[VICII_B0C];
-            sequencer->colors[1].color = regs->data[VICII_B1C];
-            sequencer->colors[2].color = regs->data[VICII_B2C];
-            sequencer->colors[3].color = regs->data[VICII_B3C];
+            sequencer->colors[0].color = static_cast<vicii_color_t>(regs->data[VICII_B0C]);
+            sequencer->colors[1].color = static_cast<vicii_color_t>(regs->data[VICII_B1C]);
+            sequencer->colors[2].color = static_cast<vicii_color_t>(regs->data[VICII_B2C]);
+            sequencer->colors[3].color = static_cast<vicii_color_t>(regs->data[VICII_B3C]);
             for (int i = 0; i < 4; i++) {
                 sequencer->colors[i].priority = VICII_PRIORITY_BACKGROUND;
             }
@@ -682,7 +682,7 @@ bus_state_t vicii_registers_write(void* context, bus_state_t bus_state) {
             }
             break;
         case VICII_EC: // $d020 (4 bits) Exterior color (Border)
-            vicii->border.border_pixel.color = value; // value already masked to 0x0F above
+            vicii->border.border_pixel.color = static_cast<vicii_color_t>(value); // value already masked to 0x0F above
             FALLTHROUGH; // to B0C-B2C case
         case VICII_B0C: // $d021 (4 bits) Background color 0
         case VICII_B1C: // $d022 (4 bits) Background color 1
@@ -1321,7 +1321,7 @@ static inline void vicii_initialize(vicii_t* vicii) {
     
     // Initialize border priority once (color will be updated by register writes)
     vicii->border.border_pixel.priority = VICII_PRIORITY_BORDER;
-    vicii->border.border_pixel.color = vicii->registers.data[VICII_EC];
+    vicii->border.border_pixel.color = static_cast<vicii_color_t>(vicii->registers.data[VICII_EC]);
     // Initialize border flip-flops (Documentation section 3.9)
     vicii->border.main_border_flip_flop = true;      // Start with border on
     vicii->border.vertical_border_flip_flop = true;  // Start with vertical border on
@@ -1373,8 +1373,8 @@ static inline void vicii_initialize_timing(vicii_t* vicii, const vicii_chip_conf
         free(vicii->pixel.pixel_line_color);
         
         // Allocate new buffers with correct size
-        vicii->pixel.pixel_line_priority = malloc(vicii->pixel.visible_pixels_per_line * sizeof(vicii_priority_t));
-        vicii->pixel.pixel_line_color = malloc(vicii->pixel.visible_pixels_per_line * sizeof(uint32_t));
+        vicii->pixel.pixel_line_priority = static_cast<vicii_priority_t*>(malloc(vicii->pixel.visible_pixels_per_line * sizeof(vicii_priority_t)));
+        vicii->pixel.pixel_line_color = static_cast<uint32_t*>(malloc(vicii->pixel.visible_pixels_per_line * sizeof(uint32_t)));
         
         memset(vicii->pixel.pixel_line_priority, VICII_PRIORITY_BORDER, vicii->pixel.visible_pixels_per_line);
         for (int i = 0; i < vicii->pixel.visible_pixels_per_line; i++) {

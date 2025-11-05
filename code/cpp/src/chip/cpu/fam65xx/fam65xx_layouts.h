@@ -133,7 +133,7 @@ std::vector<PinSignalState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, 
                 if (bit_index < 16) {
                     state.signal_level = (addr_bus & (1 << bit_index)) != 0;
                     state.drive_direction = true;
-                    state.value = state.signal_level ? 1 : 0;
+                    state.signal_value = state.signal_level ? 1 : 0;
                 }
                 break;
             }
@@ -142,7 +142,7 @@ std::vector<PinSignalState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, 
                 if (bit_index < 8) {
                     state.signal_level = (data_bus & (1 << bit_index)) != 0;
                     state.drive_direction = (bus_state & BUS_BIT(BUS_RW_BIT)) == 0; // Output on write
-                    state.value = state.signal_level ? 1 : 0;
+                    state.signal_value = state.signal_level ? 1 : 0;
                     state.high_impedance = !state.drive_direction;
                 }
                 break;
@@ -229,7 +229,7 @@ std::vector<PinSignalState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, 
             state.signal_level = !state.signal_level;
         }
         
-        state.value = state.signal_level ? 1 : 0;
+        state.signal_value = state.signal_level ? 1 : 0;
     };
     
     // Process pins from all sides

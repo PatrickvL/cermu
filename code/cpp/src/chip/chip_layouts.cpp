@@ -27,8 +27,8 @@ ChipLayout create_mos6567_vic_layout(void) {
     // Set package info
     layout.package.width = 600.0f;
     layout.package.height = 2000.0f;
-    layout.package.package_type = PackageType_DIP;
-    layout.package.marker = OrientationMarker_NOTCH;
+    layout.package.package_type = PackageType::DIP;
+    layout.package.marker = OrientationMarker::NOTCH;
     layout.package.pin_pitch = 100.0f;
     layout.package.has_thermal_pad = false;
     layout.package.has_center_slug = false;
@@ -63,8 +63,8 @@ ChipLayout create_mos6581_sid_layout(void) {
     // Set package info for DIP-28
     layout.package.width = 600.0f;
     layout.package.height = 1400.0f;
-    layout.package.package_type = PackageType_DIP;
-    layout.package.marker = OrientationMarker_NOTCH;
+    layout.package.package_type = PackageType::DIP;
+    layout.package.marker = OrientationMarker::NOTCH;
     layout.package.pin_pitch = 100.0f;
     layout.package.has_thermal_pad = false;
     layout.package.has_center_slug = false;
@@ -90,8 +90,8 @@ ChipLayout create_mos6526_cia_layout(void) {
     // Set package info for DIP-40
     layout.package.width = 600.0f;
     layout.package.height = 2000.0f;
-    layout.package.package_type = PackageType_DIP;
-    layout.package.marker = OrientationMarker_NOTCH;
+    layout.package.package_type = PackageType::DIP;
+    layout.package.marker = OrientationMarker::NOTCH;
     layout.package.pin_pitch = 100.0f;
     layout.package.has_thermal_pad = false;
     layout.package.has_center_slug = false;
@@ -117,8 +117,8 @@ ChipLayout create_generic_ram_layout(void) {
     // Set package info for DIP-18
     layout.package.width = 600.0f;
     layout.package.height = 900.0f;
-    layout.package.package_type = PackageType_DIP;
-    layout.package.marker = OrientationMarker_NOTCH;
+    layout.package.package_type = PackageType::DIP;
+    layout.package.marker = OrientationMarker::NOTCH;
     layout.package.pin_pitch = 100.0f;
     layout.package.has_thermal_pad = false;
     layout.package.has_center_slug = false;
@@ -147,8 +147,8 @@ ChipLayout create_generic_rom_layout(void) {
     // Set package info for DIP-24
     layout.package.width = 600.0f;
     layout.package.height = 1200.0f;
-    layout.package.package_type = PackageType_DIP;
-    layout.package.marker = OrientationMarker_NOTCH;
+    layout.package.package_type = PackageType::DIP;
+    layout.package.marker = OrientationMarker::NOTCH;
     layout.package.pin_pitch = 100.0f;
     layout.package.has_thermal_pad = false;
     layout.package.has_center_slug = false;
@@ -174,8 +174,8 @@ ChipLayout create_generic_pla_layout(void) {
     // Set package info for DIP-28
     layout.package.width = 600.0f;
     layout.package.height = 1400.0f;
-    layout.package.package_type = PackageType_DIP;
-    layout.package.marker = OrientationMarker_NOTCH;
+    layout.package.package_type = PackageType::DIP;
+    layout.package.marker = OrientationMarker::NOTCH;
     layout.package.pin_pitch = 100.0f;
     layout.package.has_thermal_pad = false;
     layout.package.has_center_slug = false;
@@ -235,7 +235,7 @@ void get_generic_chip_pin_states(void* chip, const ChipLayout* layout, bus_state
     for (int i = 0; i < total_pins; i++) {
         out_states[i].signal_level = false;
         out_states[i].drive_direction = false;
-        out_states[i].value = 0;
+        out_states[i].signal_value = 0;
         out_states[i].high_impedance = false;
         out_states[i].signal_valid = true;
     }

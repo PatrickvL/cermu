@@ -7,7 +7,7 @@ if "%CONFIGURATION%"=="" set "CONFIGURATION=Release"
 
 REM Detect project path relative to script location
 set "SCRIPT_DIR=%~dp0"
-set "PROJECT_PATH=%SCRIPT_DIR%code\c"
+set "PROJECT_PATH=%SCRIPT_DIR%code\cpp"
 set "SOLUTION_FILE=aiemuc.sln"
 
 REM Try multiple MSBuild locations

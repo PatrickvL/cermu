@@ -71,51 +71,57 @@ typedef struct mos6526_s {
     bus_cycle_ops_t bus_interface;
 } mos6526_t;
 
-// Technical register indices (in decimal) and masks (in hexadecimal)
-#define PRA 0             // $dc00 Peripheral Data Reg A Monitoring/control of the 8 data lines of Port A.
-#define PRB 1             // $dc01 Peripheral Data Reg B Monitoring/control of the 8 data lines of Port B.
-#define DDRA 2            // $dc02 Data Direction Register A Bit X: 0=Input (read only), 1=Output (read and write)
-#define DDRB 3            // $dc03 Data Direction Register B Bit X: 0=Input (read only), 1=Output (read and write)
-#define TA_LO 4           // $dc04 Timer A Low Register Read: actual value Timer A (Low Byte) Writing: Set latch of Timer A (Low Byte)
-#define TA_HI 5           // $dc05 Timer A High Register Read: actual value Timer A (High Byte) Writing: Set latch of timer A (High Byte) - if the timer is stopped, the high-byte will automatically be re-set as well
-#define TB_LO 6           // $dc06 Timer B Low Register Read: actual value Timer B (Low Byte) Writing: Set latch of Timer B (Low Byte)
-#define TB_HI 7           // $dc07 Timer B High Register Read: actual value Timer B (High Byte) Writing: Set latch of timer B (High Byte) - if the timer is stopped, the high-byte will automatically be re-set as well
-#define TOD_10THS 8       // $dc08 Real Time Clock 10ths Of Seconds
-#define TOD_10THS_MASK 0x0F // $dc08 Real Time Clock 10ths Of Seconds Bit 0..3: Tenth seconds in BCD-format($0-$9) Bit 4..7: always 0
-#define TOD_SEC 9         // $dc09 Real Time Clock Seconds
-#define TOD_SEC_MASK 0x7F // $dc0a Real Time Clock Seconds Bit 0..3: Single seconds in BCD-format( $0-$9) Bit 4..6: Ten seconds in BCD-format ($0-$5) Bit 7: always 0
-#define TOD_MIN 10        // $dc0a Real Time Clock Minutes
-#define TOD_MIN_MASK 0x7F // $dc0a Real Time Clock Minutes Bit 0..3: Single minutes in BCD-format( $0-$9) Bit 4..6: Ten minutes in BCD-format ($0-$5) Bit 7: always 0
-#define TOD_HR 11         // $dc0b Real Time Clock Hours
-#define TOD_HR_PM 0x80    // $dc0b Real Time Clock Hours - Bit 7 Read: Differentiation AM/PM, 0=AM, 1=PM Writing into this register stops TOD, until register 8 (TOD 10THS) will be read.
-#define TOD_HR_MASK 0x1F  // $dc0b Real Time Clock Hours - Bit 0..3: Single hours in BCD-format($0-$9) Bit 4..6: Ten hours in BCD-format ($0-$5)
-#define SDR 12            // $dc0c Serial Data Register
-#define ICR 13            // $dc0d Interrupt Control Register
-#define ICR_IRQ 0x80      // $dc0d Interrupt Control Register Bit 7 Read: 1= IRQ An interrupt occurred, so at least one bit of INT MASK and INT DATA is set in both registers.
-#define ICR_S_C 0x80      // $dc0d Interrupt Control Register Bit 7 Write: Source bit. 0 = set bits 0..4 are clearing the according mask bit. 1 = set bits 0..4 are setting the according mask bit. If all bits 0..4 are cleared, there will be no change to the mask.
-#define ICR_UNUSED 0x60   // $dc0d Interrupt Control Register Bit 5..6: Always 0
-#define ICR_FLG 0x10      // $dc0d Interrupt Control Register Bit 4: 1 = IRQ Signal occurred at FLAG-pin (cassette port Data input, serial bus SRQ IN)
-#define ICR_SP 0x08       // $dc0d Interrupt Control Register Bit 3: 1 = SDR full or empty, so full byte was transferred, depending of operating mode serial bus
-#define ICR_ALRM 0x04     // $dc0d Interrupt Control Register Bit 2: 1 = Time of day and alarm time is equal
-#define ICR_TB 0x02       // $dc0d Interrupt Control Register Bit 1: 1 = Underflow Timer B
-#define ICR_TA 0x01       // $dc0d Interrupt Control Register Bit 0: 1 = Underflow Timer A
-#define CRA 14            // $dc0e Control Register A
-#define CRA_TODIN 0x80    // $dc0e Control Register A : Bit 7: Real Time Clock, 0 = 60 Hz, 1 = 50 Hz "Clock required 1:50Hz/0:60Hz on TOD pin for accurate time"
-#define CRA_SPMODE 0x40   // $dc0e Control Register A : Serial Port Bit 6: Direction of the serial shift register, 0 = SP-pin is input (read), 1 = SP-pin is output (write)
-#define CRA_INMODE 0x20   // $dc0e Control Register A : Timer A Bit 5: 0 = Timer counts system cycles, 1 = Timer counts positive slope at CNT-pin
-#define CRA_LOAD 0x10     // $dc0e Control Register A : Timer A Bit 4: 1 = Load latch into the timer once.
-#define CRA_RUNMODE 0x08  // $dc0e Control Register A : Timer A Bit 3: 0 = Timer-restart after underflow (latch will be reloaded), 1 = Timer stops after underflow.
-#define CRA_OUTMODE 0x04  // $dc0e Control Register A : Timer A Bit 2: 0 = Through a timer underflow, bit 6 of port B will get high for one cycle , 1 = Through a timer underflow, bit 6 of port B will be inverted
-#define CRA_PBON 0x02     // $dc0e Control Register A : Timer A Bit 1: 1 = Indicates a timer underflow at port B in bit 6.
-#define CRA_START 0x01    // $dc0e Control Register A : Timer A Bit 0: 0 = Stop timer; 1 = Start timer
-#define CRB 15            // $dc0f Control Register B
-#define CRB_ALARM 0x80    // $dc0f Control Register B : Bit 7: 0 = Writing into the TOD registers sets the clock time, 1 = Writing into the TOD registers sets the alarm time.
-#define CRB_INMODE 0x60   // $dc0f Control Register B : Timer B Bit 5..6: Counts 00:phi pulses/01:+CNT transitions/10:TimerA underflows/11:10 while CNT is high
-#define CRB_LOAD 0x10     // $dc0f Control Register B : Timer B Bit 4: 1 = Load latch into the timer once.
-#define CRB_RUNMODE 0x08  // $dc0f Control Register B : Timer B Bit 3: 0 = Timer-restart after underflow (latch will be reloaded), 1 = Timer stops after underflow.
-#define CRB_OUTMODE 0x04  // $dc0f Control Register B : Timer B Bit 2: 0 = Through a timer underflow, bit 7 of port B will get high for one cycle , 1 = Through a timer underflow, bit 7 of port B will be inverted
-#define CRB_PBON 0x02     // $dc0f Control Register B : Timer B Bit 1: 1 = Indicates a timer underflow at port B in bit 7.
-#define CRB_START 0x01    // $dc0f Control Register B : Timer B Bit 0: 0 = Stop timer; 1 = Start timer
+// MOS6526 CIA Register Definitions
+namespace MOS6526 {
+    // Technical register indices (in decimal) and masks (in hexadecimal)
+    constexpr uint8_t PRA = 0;             // $dc00 Peripheral Data Reg A Monitoring/control of the 8 data lines of Port A.
+    constexpr uint8_t PRB = 1;             // $dc01 Peripheral Data Reg B Monitoring/control of the 8 data lines of Port B.
+    constexpr uint8_t DDRA = 2;            // $dc02 Data Direction Register A Bit X: 0=Input (read only), 1=Output (read and write)
+    constexpr uint8_t DDRB = 3;            // $dc03 Data Direction Register B Bit X: 0=Input (read only), 1=Output (read and write)
+    constexpr uint8_t TA_LO = 4;           // $dc04 Timer A Low Register Read: actual value Timer A (Low Byte) Writing: Set latch of Timer A (Low Byte)
+    constexpr uint8_t TA_HI = 5;           // $dc05 Timer A High Register Read: actual value Timer A (High Byte) Writing: Set latch of timer A (High Byte) - if the timer is stopped, the high-byte will automatically be re-set as well
+    constexpr uint8_t TB_LO = 6;           // $dc06 Timer B Low Register Read: actual value Timer B (Low Byte) Writing: Set latch of Timer B (Low Byte)
+    constexpr uint8_t TB_HI = 7;           // $dc07 Timer B High Register Read: actual value Timer B (High Byte) Writing: Set latch of timer B (High Byte) - if the timer is stopped, the high-byte will automatically be re-set as well
+    constexpr uint8_t TOD_10THS = 8;       // $dc08 Real Time Clock 10ths Of Seconds
+    constexpr uint8_t TOD_10THS_MASK = 0x0F; // $dc08 Real Time Clock 10ths Of Seconds Bit 0..3: Tenth seconds in BCD-format($0-$9) Bit 4..7: always 0
+    constexpr uint8_t TOD_SEC = 9;         // $dc09 Real Time Clock Seconds
+    constexpr uint8_t TOD_SEC_MASK = 0x7F; // $dc0a Real Time Clock Seconds Bit 0..3: Single seconds in BCD-format( $0-$9) Bit 4..6: Ten seconds in BCD-format ($0-$5) Bit 7: always 0
+    constexpr uint8_t TOD_MIN = 10;        // $dc0a Real Time Clock Minutes
+    constexpr uint8_t TOD_MIN_MASK = 0x7F; // $dc0a Real Time Clock Minutes Bit 0..3: Single minutes in BCD-format( $0-$9) Bit 4..6: Ten minutes in BCD-format ($0-$5) Bit 7: always 0
+    constexpr uint8_t TOD_HR = 11;         // $dc0b Real Time Clock Hours
+    constexpr uint8_t TOD_HR_PM = 0x80;    // $dc0b Real Time Clock Hours - Bit 7 Read: Differentiation AM/PM, 0=AM, 1=PM Writing into this register stops TOD, until register 8 (TOD 10THS) will be read.
+    constexpr uint8_t TOD_HR_MASK = 0x1F;  // $dc0b Real Time Clock Hours - Bit 0..3: Single hours in BCD-format($0-$9) Bit 4..6: Ten hours in BCD-format ($0-$5)
+    constexpr uint8_t SDR = 12;            // $dc0c Serial Data Register
+    constexpr uint8_t ICR = 13;            // $dc0d Interrupt Control Register
+    constexpr uint8_t ICR_IRQ = 0x80;      // $dc0d Interrupt Control Register Bit 7 Read: 1= IRQ An interrupt occurred, so at least one bit of INT MASK and INT DATA is set in both registers.
+    constexpr uint8_t ICR_S_C = 0x80;      // $dc0d Interrupt Control Register Bit 7 Write: Source bit. 0 = set bits 0..4 are clearing the according mask bit. 1 = set bits 0..4 are setting the according mask bit. If all bits 0..4 are cleared, there will be no change to the mask.
+    constexpr uint8_t ICR_UNUSED = 0x60;   // $dc0d Interrupt Control Register Bit 5..6: Always 0
+    constexpr uint8_t ICR_FLG = 0x10;      // $dc0d Interrupt Control Register Bit 4: 1 = IRQ Signal occurred at FLAG-pin (cassette port Data input, serial bus SRQ IN)
+    constexpr uint8_t ICR_SP = 0x08;       // $dc0d Interrupt Control Register Bit 3: 1 = SDR full or empty, so full byte was transferred, depending of operating mode serial bus
+    constexpr uint8_t ICR_ALRM = 0x04;     // $dc0d Interrupt Control Register Bit 2: 1 = Time of day and alarm time is equal
+    constexpr uint8_t ICR_TB = 0x02;       // $dc0d Interrupt Control Register Bit 1: 1 = Underflow Timer B
+    constexpr uint8_t ICR_TA = 0x01;       // $dc0d Interrupt Control Register Bit 0: 1 = Underflow Timer A
+    constexpr uint8_t CRA = 14;            // $dc0e Control Register A
+    constexpr uint8_t CRA_TODIN = 0x80;    // $dc0e Control Register A : Bit 7: Real Time Clock, 0 = 60 Hz, 1 = 50 Hz "Clock required 1:50Hz/0:60Hz on TOD pin for accurate time"
+    constexpr uint8_t CRA_SPMODE = 0x40;   // $dc0e Control Register A : Serial Port Bit 6: Direction of the serial shift register, 0 = SP-pin is input (read), 1 = SP-pin is output (write)
+    constexpr uint8_t CRA_INMODE = 0x20;   // $dc0e Control Register A : Timer A Bit 5: 0 = Timer counts system cycles, 1 = Timer counts positive slope at CNT-pin
+    constexpr uint8_t CRA_LOAD = 0x10;     // $dc0e Control Register A : Timer A Bit 4: 1 = Load latch into the timer once.
+    constexpr uint8_t CRA_RUNMODE = 0x08;  // $dc0e Control Register A : Timer A Bit 3: 0 = Timer-restart after underflow (latch will be reloaded), 1 = Timer stops after underflow.
+    constexpr uint8_t CRA_OUTMODE = 0x04;  // $dc0e Control Register A : Timer A Bit 2: 0 = Through a timer underflow, bit 6 of port B will get high for one cycle , 1 = Through a timer underflow, bit 6 of port B will be inverted
+    constexpr uint8_t CRA_PBON = 0x02;     // $dc0e Control Register A : Timer A Bit 1: 1 = Indicates a timer underflow at port B in bit 6.
+    constexpr uint8_t CRA_START = 0x01;    // $dc0e Control Register A : Timer A Bit 0: 0 = Stop timer; 1 = Start timer
+    constexpr uint8_t CRB = 15;            // $dc0f Control Register B
+    constexpr uint8_t CRB_ALARM = 0x80;    // $dc0f Control Register B : Bit 7: 0 = Writing into the TOD registers sets the clock time, 1 = Writing into the TOD registers sets the alarm time.
+    constexpr uint8_t CRB_INMODE = 0x60;   // $dc0f Control Register B : Timer B Bit 5..6: Counts 00:phi pulses/01:+CNT transitions/10:TimerA underflows/11:10 while CNT is high
+    constexpr uint8_t CRB_LOAD = 0x10;     // $dc0f Control Register B : Timer B Bit 4: 1 = Load latch into the timer once.
+    constexpr uint8_t CRB_RUNMODE = 0x08;  // $dc0f Control Register B : Timer B Bit 3: 0 = Timer-restart after underflow (latch will be reloaded), 1 = Timer stops after underflow.
+    constexpr uint8_t CRB_OUTMODE = 0x04;  // $dc0f Control Register B : Timer B Bit 2: 0 = Through a timer underflow, bit 7 of port B will get high for one cycle , 1 = Through a timer underflow, bit 7 of port B will be inverted
+    constexpr uint8_t CRB_PBON = 0x02;     // $dc0f Control Register B : Timer B Bit 1: 1 = Indicates a timer underflow at port B in bit 7.
+    constexpr uint8_t CRB_START = 0x01;    // $dc0f Control Register B : Timer B Bit 0: 0 = Stop timer; 1 = Start timer
+}
+
+// Using declarations to maintain compatibility in MOS6526 implementation files
+using namespace MOS6526;
 
 // Function declarations
 void mos6526_reset(mos6526_t* cia);

@@ -140,7 +140,6 @@ set(CORE_SOURCES
     src/core/ioport.cpp
     src/core/chip_layout.cpp
     src/core/chip_layouts.cpp
-    src/core/non_cpu_chip_layouts.cpp
     src/core/pin_labels.cpp
     src/core/emulation_context.cpp
 )
@@ -200,7 +199,6 @@ set(SYSTEM_SOURCES
 set(CORE_UTIL_SOURCES
     src/core/storage/rom_loader.cpp
     src/core/config/path_discovery.cpp
-    src/utils/rom_loader.cpp
 )
 
 # Main executable (console version)

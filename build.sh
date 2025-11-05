@@ -10,7 +10,7 @@ set -e
 # Configuration
 PROJECT_NAME="c64emu"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CODE_DIR="${PROJECT_DIR}/code/c"
+CODE_DIR="${PROJECT_DIR}/code/cpp"
 BUILD_DIR="${CODE_DIR}/build"
 BIN_DIR="${CODE_DIR}/bin"
 

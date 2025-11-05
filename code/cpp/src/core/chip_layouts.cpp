@@ -4,13 +4,14 @@
  */
 
 #include "chip_layout.h"
+#include <cstring>  // For strcmp
 
 // ============================================================================
 // HELPER MACROS FOR CHIP PIN CREATION
 // ============================================================================
 
 #define MAKE_PIN_ENUM(num, label_enum, bit, inv) \
-    {num, label_enum, bit, inv, nullptr, nullptr, false, false}
+    ChipPin{num, label_enum, nullptr, false, false}
 
 #define PIN_PAIR_ENUM(left_num, left_label, left_bit, left_inv, \
                       right_num, right_label, right_bit, right_inv) \

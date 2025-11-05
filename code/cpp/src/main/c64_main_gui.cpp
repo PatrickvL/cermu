@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
     gui_init_state(&gui_state);
     
     // Initialize emulation thread through GUI
-    emulation_context_t emu_context;
+    gui_emulation_context_t emu_context;
     if (!gui_emulation_thread_init(&emu_context, c64)) {
         printf("Failed to initialize emulation thread\n");
         c64_system_destroy(c64);

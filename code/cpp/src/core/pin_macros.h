@@ -29,6 +29,8 @@
 // ============================================================================
 
 // Unified pin creation function (replaces all make_*_pin functions)
-ChipPin make_pin(uint8_t num, PinLabel label, const char* alt_function = nullptr);
+inline ChipPin make_pin(uint8_t num, PinLabel label, const char* alt_function = nullptr) {
+    return ChipPin{num, label, alt_function, false, false};
+}
 
 #endif // PIN_MACROS_H

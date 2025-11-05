@@ -33,6 +33,7 @@ chip_descriptor_t pla_descriptor = {
     .create = pla_create,
     .destroy = pla_destroy,
     .bus_attach = NULL,
+    .bank_change = NULL,
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
     .render_debug_window = pla_render_debug_window,
     .render_settings_window = NULL

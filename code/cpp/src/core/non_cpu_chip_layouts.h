@@ -19,7 +19,7 @@
 // MOS6526 CIA LAYOUT (40-pin DIP)
 // ============================================================================
 
-ChipLayout create_mos6526_layout() {
+inline ChipLayout create_mos6526_layout() {
     // Start with DIP-40 base layout
     ChipLayout layout = create_dip40_layout();
     
@@ -66,7 +66,7 @@ ChipLayout create_mos6526_layout() {
 // MOS6581 SID LAYOUT (28-pin DIP)
 // ============================================================================
 
-ChipLayout create_mos6581_layout() {
+inline ChipLayout create_mos6581_layout() {
     // Start with DIP-28 base layout
     ChipLayout layout = create_dip28_layout();
     
@@ -127,7 +127,7 @@ ChipLayout create_mos6581_layout() {
 // MOS6567/6569 VIC-II LAYOUT (40-pin DIP)
 // ============================================================================
 
-ChipLayout create_vicii_layout() {
+inline ChipLayout create_vicii_layout() {
     // Start with DIP-40 base layout
     ChipLayout layout = create_dip40_layout();
     
@@ -174,7 +174,7 @@ ChipLayout create_vicii_layout() {
 // GENERIC RAM LAYOUT (18-pin DIP for SRAM)
 // ============================================================================
 
-ChipLayout create_ram_layout() {
+inline ChipLayout create_ram_layout() {
     // Start with DIP-18 base layout
     ChipLayout layout = create_dip18_layout();
     
@@ -225,7 +225,7 @@ ChipLayout create_ram_layout() {
 // C64 PLA LAYOUT (28-pin DIP)
 // ============================================================================
 
-ChipLayout create_pla_layout() {
+inline ChipLayout create_pla_layout() {
     // Start with DIP-28 base layout
     ChipLayout layout = create_dip28_layout();
     

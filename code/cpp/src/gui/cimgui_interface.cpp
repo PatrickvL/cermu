@@ -190,7 +190,7 @@ bool gui_should_quit(void) {
     return g_should_quit;
 }
 
-void gui_handle_events(emulation_context_t* emu_context) {
+void gui_handle_events(gui_emulation_context_t* emu_context) {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         ImGui_ImplSDL2_ProcessEvent_C(&event);        if (event.type == SDL_QUIT) {
@@ -260,7 +260,7 @@ void gui_init_state(gui_state_t* gui_state) {
     strcpy(gui_state->rom_path_chargen, "data/c64/roms/characters.901225-01.bin");
 }
 
-void gui_render_frame(c64_t* c64, gui_state_t* gui_state, struct emulation_context_s* emu_context) {
+void gui_render_frame(c64_t* c64, gui_state_t* gui_state, gui_emulation_context_t* emu_context) {
     // Start the Dear ImGui frame
     ImGui_ImplOpenGL3_NewFrame_C();
     ImGui_ImplSDL2_NewFrame_C();
@@ -321,7 +321,7 @@ void gui_render_frame(c64_t* c64, gui_state_t* gui_state, struct emulation_conte
     ImGui_ImplOpenGL3_RenderDrawData_C(igGetDrawData());    SDL_GL_SwapWindow(g_window);
 }
 
-void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, struct emulation_context_s* emu_context) {
+void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_context_t* emu_context) {
     if (igBeginMainMenuBar()) {
         if (igBeginMenu("File", true)) {
             if (igMenuItem_Bool("Load ROM...", NULL, false, true)) {
@@ -708,7 +708,7 @@ void gui_render_memory_viewer(c64_t* c64, gui_state_t* gui_state) {
     igEnd();
 }
 
-void gui_render_debugger(c64_t* c64, gui_state_t* gui_state, emulation_context_t* emu_context) {
+void gui_render_debugger(c64_t* c64, gui_state_t* gui_state, gui_emulation_context_t* emu_context) {
     if (!igBegin("Debugger", &gui_state->show_debugger, 0)) {
         igEnd();
         return;
@@ -1314,7 +1314,7 @@ void gui_calculate_display_dimensions(gui_state_t* gui_state, float viewport_wid
 // ============================================================================
 
 // Helper function to reload ROMs when new paths are provided
-bool gui_apply_rom_changes(emulation_context_t* emu_context, gui_state_t* gui_state) {
+bool gui_apply_rom_changes(gui_emulation_context_t* emu_context, gui_state_t* gui_state) {
     if (!emu_context || !emu_context->c64 || !gui_state) {
         return false;
     }
@@ -1324,7 +1324,7 @@ bool gui_apply_rom_changes(emulation_context_t* emu_context, gui_state_t* gui_st
 }
 
 // Updated ROM loading function that updates GUI state
-void gui_load_rom_file(const char* filepath, const char* type, gui_state_t* gui_state, emulation_context_t* emu_context) {
+void gui_load_rom_file(const char* filepath, const char* type, gui_state_t* gui_state, gui_emulation_context_t* emu_context) {
     if (!filepath || !type || !gui_state) {
         printf("Invalid ROM loading parameters\n");
         return;
@@ -1449,7 +1449,7 @@ typedef struct {
 // Forward declarations
 static int gui_emulation_thread_main(void* data);
 
-bool gui_emulation_thread_init(emulation_context_t* context, struct c64_s* c64) {
+bool gui_emulation_thread_init(gui_emulation_context_t* context, c64_s* c64) {
     if (!context || !c64) return false;
     
     // Initialize context
@@ -1489,7 +1489,7 @@ bool gui_emulation_thread_init(emulation_context_t* context, struct c64_s* c64) 
     return true;
 }
 
-void gui_emulation_thread_cleanup(emulation_context_t* context) {
+void gui_emulation_thread_cleanup(gui_emulation_context_t* context) {
     if (!context || !context->thread_impl) return;
     
     sdl_thread_impl_t* impl = (sdl_thread_impl_t*)context->thread_impl;
@@ -1509,7 +1509,7 @@ void gui_emulation_thread_cleanup(emulation_context_t* context) {
     context->thread_impl = NULL;
 }
 
-bool gui_emulation_thread_start(emulation_context_t* context) {
+bool gui_emulation_thread_start(gui_emulation_context_t* context) {
     if (!context || !context->thread_impl) return false;
     
     sdl_thread_impl_t* impl = (sdl_thread_impl_t*)context->thread_impl;
@@ -1526,7 +1526,7 @@ bool gui_emulation_thread_start(emulation_context_t* context) {
     return true;
 }
 
-void gui_emulation_thread_stop(emulation_context_t* context) {
+void gui_emulation_thread_stop(gui_emulation_context_t* context) {
     if (!context || !context->thread_impl) return;
     
     sdl_thread_impl_t* impl = (sdl_thread_impl_t*)context->thread_impl;
@@ -1546,7 +1546,7 @@ void gui_emulation_thread_stop(emulation_context_t* context) {
     printf("GUI: Emulation thread stopped\n");
 }
 
-void gui_emulation_send_signal(emulation_context_t* context, emulation_signal_t signal) {
+void gui_emulation_send_signal(gui_emulation_context_t* context, emulation_signal_t signal) {
     if (!context || !context->thread_impl) return;
     
     sdl_thread_impl_t* impl = (sdl_thread_impl_t*)context->thread_impl;
@@ -1557,12 +1557,12 @@ void gui_emulation_send_signal(emulation_context_t* context, emulation_signal_t 
     SDL_UnlockMutex(impl->signal_mutex);
 }
 
-emulation_state_t gui_emulation_get_state(emulation_context_t* context) {
+emulation_state_t gui_emulation_get_state(gui_emulation_context_t* context) {
     if (!context) return EMU_STATE_STOPPED;
     return context->current_state;
 }
 
-void gui_emulation_set_speed(emulation_context_t* context, float speed_multiplier) {
+void gui_emulation_set_speed(gui_emulation_context_t* context, float speed_multiplier) {
     if (!context || !context->thread_impl) return;
     
     sdl_thread_impl_t* impl = (sdl_thread_impl_t*)context->thread_impl;
@@ -1573,24 +1573,24 @@ void gui_emulation_set_speed(emulation_context_t* context, float speed_multiplie
     SDL_UnlockMutex(impl->signal_mutex);
 }
 
-uint32_t gui_emulation_get_fps(emulation_context_t* context) {
+uint32_t gui_emulation_get_fps(gui_emulation_context_t* context) {
     if (!context) return 0;
     return context->actual_fps;
 }
 
-uint64_t gui_emulation_get_total_cycles(emulation_context_t* context) {
+uint64_t gui_emulation_get_total_cycles(gui_emulation_context_t* context) {
     if (!context) return 0;
     return context->total_cycles_executed;
 }
 
 // Convenience wrapper functions
-void gui_emulation_start(emulation_context_t* emu_context) {
+void gui_emulation_start(gui_emulation_context_t* emu_context) {
     if (emu_context) {
         gui_emulation_send_signal(emu_context, EMU_SIGNAL_START);
     }
 }
 
-void gui_emulation_pause(emulation_context_t* emu_context) {
+void gui_emulation_pause(gui_emulation_context_t* emu_context) {
     if (emu_context && emu_context->c64) {
         // First trigger the intercept to stop CPU execution
         // Use state management instead of intercept
@@ -1600,13 +1600,13 @@ void gui_emulation_pause(emulation_context_t* emu_context) {
     }
 }
 
-void gui_emulation_step(emulation_context_t* emu_context) {
+void gui_emulation_step(gui_emulation_context_t* emu_context) {
     if (emu_context) {
         gui_emulation_send_signal(emu_context, EMU_SIGNAL_STEP);
     }
 }
 
-void gui_emulation_reset(emulation_context_t* emu_context) {
+void gui_emulation_reset(gui_emulation_context_t* emu_context) {
     if (emu_context && emu_context->c64) {
         // Reset should happen from GUI thread for immediate response
         printf("GUI: Performing system reset\n");
@@ -1631,7 +1631,7 @@ void gui_emulation_reset(emulation_context_t* emu_context) {
 
 // Main emulation thread function - focused on CPU dispatch only
 static int gui_emulation_thread_main(void* data) {
-    emulation_context_t* context = (emulation_context_t*)data;
+    gui_emulation_context_t* context = (gui_emulation_context_t*)data;
     if (!context) return -1;
     
     sdl_thread_impl_t* impl = (sdl_thread_impl_t*)context->thread_impl;
@@ -1651,7 +1651,7 @@ static int gui_emulation_thread_main(void* data) {
         
         // Process signal and execute CPU operation
         switch (signal) {
-            case EMU_SIGNAL_START:
+            case EMU_SIGNAL_START: {
                 context->current_state = EMU_STATE_RUNNING;
                 printf("Emulation thread: Starting CPU execution\n");
                 
@@ -1812,6 +1812,7 @@ static int gui_emulation_thread_main(void* data) {
                 // After execution returns, go back to paused
                 context->current_state = EMU_STATE_PAUSED;
                 break;
+            }
                 
             case EMU_SIGNAL_STEP:
                 context->current_state = EMU_STATE_STEPPING;
@@ -1850,7 +1851,7 @@ static int gui_emulation_thread_main(void* data) {
 
 
 // Frame rendering and timing functions (called from main GUI thread)
-void gui_emulation_render_frame(emulation_context_t* context) {
+void gui_emulation_render_frame(gui_emulation_context_t* context) {
     if (!context) return;
     
     // Only render frame if emulation is running
@@ -1871,7 +1872,7 @@ void gui_emulation_render_frame(emulation_context_t* context) {
     }
 }
 
-void gui_emulation_update_fps(emulation_context_t* context) {
+void gui_emulation_update_fps(gui_emulation_context_t* context) {
     if (!context) return;
     
     static uint32_t last_fps_time = 0;

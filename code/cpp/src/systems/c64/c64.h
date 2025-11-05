@@ -42,8 +42,9 @@ struct C64System {
     std::uint64_t total_cycles; // Total cycles executed by the system
 };
 
-// Legacy typedef for compatibility during transition
+// Legacy typedefs for compatibility during transition
 using c64_t = C64System;
+using c64_s = C64System;  // For GUI interface compatibility
 
 // Container-of macro for embedded bus access
 #define container_of(ptr, type, member) \
