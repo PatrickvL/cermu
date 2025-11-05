@@ -38,6 +38,87 @@ enum class PinType {
     NO_CONNECT    // Explicitly no-connect pins
 };
 
+// Pin label enumeration for 65xx CPU family and common pins
+enum class PinLabel {
+    // Power pins
+    VDD,          // +5V power supply
+    VSS,          // Ground (0V)
+    VCC,          // Legacy +5V naming (prefer VDD)
+    GND,          // Legacy ground naming (prefer VSS)
+    
+    // Clock pins
+    PHI0,         // Φ0 - Clock input
+    PHI1,         // Φ1 - Inverted clock output
+    PHI2,         // Φ2 - Primary clock output
+    
+    // Address bus pins (A0-A23 for full 24-bit addressing)
+    A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15,
+    A16, A17, A18, A19, A20, A21, A22, A23,
+    
+    // Data bus pins (D0-D15 for 16-bit data)
+    D0, D1, D2, D3, D4, D5, D6, D7, D8, D9, D10, D11, D12, D13, D14, D15,
+    
+    // Control signals
+    RW,           // Read/Write control
+    SYNC,         // Synchronization output
+    RDY,          // Ready input/output
+    AEC,          // Address Enable Control (6510)
+    BE,           // Bus Enable (65C02/65C816)
+    BA,           // Bus Available
+    
+    // Interrupt pins
+    IRQ,          // Interrupt Request (active low)
+    NMI,          // Non-Maskable Interrupt (active low)
+    RES,          // Reset (active low)
+    ABORT,        // Abort (65C816, active low)
+    
+    // Special pins
+    SO,           // Set Overflow (active low)
+    VP,           // Vector Pull (65C02/65C816)
+    VPB,          // Vector Pull Bar (alternate naming)
+    VPA,          // Valid Program Address (65C816)
+    VDA,          // Valid Data Address (65C816)
+    ML,           // Memory Lock (65C02/65C816, active low)
+    E,            // Emulation mode (65C816)
+    MX,           // Memory/Index size status (65C816)
+    
+    // I/O Port pins (6510 specific)
+    P0, P1, P2, P3, P4, P5, P6, P7,
+    
+    // GPIO pins (general purpose)
+    PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7,
+    PB0, PB1, PB2, PB3, PB4, PB5, PB6, PB7,
+    PC0, PC1, PC2, PC3, PC4, PC5, PC6, PC7,
+    PD0, PD1, PD2, PD3, PD4, PD5, PD6, PD7,
+    
+    // Peripheral pins (for microcontroller variants)
+    UART_TX, UART_RX,
+    SPI_CLK, SPI_MOSI, SPI_MISO, SPI_CS,
+    PWM0, PWM1, PWM2, PWM3,
+    
+    // Common control pins
+    CS,           // Chip Select
+    CS0, CS1, CS2, // Multiple chip selects
+    OE,           // Output Enable
+    WE,           // Write Enable
+    
+    // Test and configuration pins
+    TEST,         // Test mode pin
+    NC,           // No Connect
+    
+    // Analog pins
+    VREF,         // Voltage Reference
+    AIN0, AIN1, AIN2, AIN3, AIN4, AIN5, AIN6, AIN7,
+    AOUT0, AOUT1,
+    
+    // Crystal/oscillator pins
+    XTAL1, XTAL2,
+    OSC_IN, OSC_OUT,
+    
+    // Unknown/custom pin
+    UNKNOWN
+};
+
 // Pin side enumeration for package layout
 enum class PinSide {
     LEFT,         // Left side pins (top to bottom)
@@ -82,17 +163,19 @@ enum class OrientationMarker {
     CUSTOM        // Custom marker
 };
 
-// Pin definition structure
+// Pin definition structure with enum-based labels for performance
 struct ChipPin {
     uint8_t pin_number;      // Physical pin number (or grid position for BGA)
-    const char* label;       // Pin label (e.g., "A0", "D7", "RW")
-    PinType type;            // Pin type for color coding
+    PinLabel label;          // Pin label enum for fast comparisons
     uint8_t bit_index;       // Bit index within bus (for address/data pins)
     bool invert_logic;       // True if pin is active-low
     const char* group_name;  // Bus/group name (e.g., "ADDR", "DATA", "PORTA")
     const char* alt_function;// Alternate function name
     bool is_differential_pos;// True if positive side of differential pair
     bool is_differential_neg;// True if negative side of differential pair
+    
+    // Derived property - get pin type from label
+    PinType get_pin_type() const;
 };
 
 // Pin state for real-time visualization
@@ -232,7 +315,15 @@ ChipPin make_analog_pin(uint8_t num, const char* label);
 ChipPin make_differential_pin(uint8_t num, const char* label, bool positive);
 ChipPin make_nc_pin(uint8_t num);
 
-// Helper function to convert PackageType enum to string
+// Enum-to-string conversion functions
+const char* pin_label_to_string(PinLabel label);
+std::string pin_label_to_display_string(PinLabel label); // With Unicode symbols
 const std::string get_package_type_string(PackageType package_type);
+
+// String-to-enum conversion (for backwards compatibility)
+PinLabel string_to_pin_label(const char* label_str);
+
+// Derive pin type from pin label
+PinType pin_label_to_pin_type(PinLabel label);
 
 #endif // CHIP_LAYOUT_H
