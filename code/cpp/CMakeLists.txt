@@ -1,18 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
 
 # Project definition
-project(aiemuc 
+project(aiemuc
     VERSION 0.1.0
-    DESCRIPTION "C64 Emulator - C implementation"
-    LANGUAGES C CXX
+    DESCRIPTION "C64 Emulator - C++ implementation"
+    LANGUAGES CXX
 )
 
-# Set C standard
-set(CMAKE_C_STANDARD 99)
-set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_C_EXTENSIONS OFF)  # Disable compiler-specific extensions
-
-# C++ standard for the new 65xx C++ core
+# Set C++ standard for the entire project
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -140,15 +135,15 @@ endif()
 
 # Core library sources
 set(CORE_SOURCES
-    src/core/system.c
-    src/core/chip.c
-    src/core/ioport.c
+    src/core/system.cpp
+    src/core/chip.cpp
+    src/core/ioport.cpp
     src/core/chip_layout.cpp
 )
 
 # FAM65XX Decoder - standalone library for instruction decoding
 add_library(fam65xx_decoder STATIC
-    src/chip/cpu/fam65xx/fam65xx_decoder.c
+    src/chip/cpu/fam65xx/fam65xx_decoder.cpp
 )
 target_include_directories(fam65xx_decoder PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/cpu/fam65xx
@@ -167,42 +162,42 @@ set(CHIP_SOURCES
 # Always include other chip sources
 list(APPEND CHIP_SOURCES
     # I/O
-    src/chip/io/mos6526.c
+    src/chip/io/mos6526.cpp
 
     # Logic
-    src/chip/logic/pla.c
+    src/chip/logic/pla.cpp
 
     # Memory
-    src/chip/memory/ram.c
-    src/chip/memory/rom.c
-    src/chip/memory/mos2114.c
+    src/chip/memory/ram.cpp
+    src/chip/memory/rom.cpp
+    src/chip/memory/mos2114.cpp
 
     # Sound
-    src/chip/sound/mos6581.c
+    src/chip/sound/mos6581.cpp
 
     # Video
-    src/chip/video/vic_ii/mos6569.c
-    src/chip/video/vic_ii/mos6567.c
-    src/chip/video/vic_ii/vicii_common.c
+    src/chip/video/vic_ii/mos6569.cpp
+    src/chip/video/vic_ii/mos6567.cpp
+    src/chip/video/vic_ii/vicii_common.cpp
 )
 
 # System sources
 set(SYSTEM_SOURCES
-    src/systems/c64/c64.c
-    src/systems/c64/c64_bus.c
-    src/systems/c64/c64_config.c
+    src/systems/c64/c64.cpp
+    src/systems/c64/c64_bus.cpp
+    src/systems/c64/c64_config.cpp
 )
 
 
 # Core utility sources (generic functionality)
 set(CORE_UTIL_SOURCES
-    src/core/storage/rom_loader.c
-    src/core/config/path_discovery.c
+    src/core/storage/rom_loader.cpp
+    src/core/config/path_discovery.cpp
 )
 
 # Main executable (console version)
 add_executable(c64emu
-    src/main/c64_main.c
+    src/main/c64_main.cpp
     ${CORE_SOURCES}
     ${CHIP_SOURCES}
     ${SYSTEM_SOURCES}
@@ -229,16 +224,16 @@ set_target_properties(c64emu
 if(BUILD_GUI)
     # GUI sources (just our interface file - cimgui handles the rest)
     set(GUI_SOURCES
-            src/gui/cimgui_interface.c
+            src/gui/cimgui_interface.cpp
             src/gui/cimgui_backends.cpp
             src/gui/chip_visualization.cpp
-            src/chip/video/vic_ii/vicii_gui.c
-            src/chip/logic/pla_gui.c
+            src/chip/video/vic_ii/vicii_gui.cpp
+            src/chip/logic/pla_gui.cpp
             src/chip/cpu/fam65xx/fam65xx_gui.cpp
         )
 
     add_executable(c64emu_gui
-        src/main/c64_main_gui.c
+        src/main/c64_main_gui.cpp
         ${CORE_SOURCES}
         ${CHIP_SOURCES}
         ${SYSTEM_SOURCES}
