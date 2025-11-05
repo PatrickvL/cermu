@@ -235,6 +235,9 @@ struct PinSignalState {
     float pwm_duty_cycle;         // PWM duty cycle (0.0 - 1.0)
 };
 
+// Legacy typedef for backward compatibility
+typedef struct PinSignalState PinState;
+
 // BGA grid position (for BGA/LGA packages)
 struct BGAPosition {
     uint8_t row;    // Row (A, B, C, ...)

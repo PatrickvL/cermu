@@ -112,7 +112,7 @@ std::vector<PinSignalState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, 
     if (!cpu) {
         // Mark all states as invalid if no CPU
         for (auto& state : states) {
-            state.is_valid = false;
+            state.signal_valid = false;
         }
         return states;
     }
@@ -131,105 +131,105 @@ std::vector<PinSignalState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, 
             case PinType::ADDRESS: {
                 uint8_t bit_index = pin.get_bit_index();
                 if (bit_index < 16) {
-                    state.is_active = (addr_bus & (1 << bit_index)) != 0;
-                    state.is_output = true;
-                    state.value = state.is_active ? 1 : 0;
+                    state.signal_level = (addr_bus & (1 << bit_index)) != 0;
+                    state.drive_direction = true;
+                    state.value = state.signal_level ? 1 : 0;
                 }
                 break;
             }
             case PinType::DATA: {
                 uint8_t bit_index = pin.get_bit_index();
                 if (bit_index < 8) {
-                    state.is_active = (data_bus & (1 << bit_index)) != 0;
-                    state.is_output = (bus_state & BUS_BIT(BUS_RW_BIT)) == 0; // Output on write
-                    state.value = state.is_active ? 1 : 0;
-                    state.is_tristate = !state.is_output;
+                    state.signal_level = (data_bus & (1 << bit_index)) != 0;
+                    state.drive_direction = (bus_state & BUS_BIT(BUS_RW_BIT)) == 0; // Output on write
+                    state.value = state.signal_level ? 1 : 0;
+                    state.high_impedance = !state.drive_direction;
                 }
                 break;
             }
             case PinType::CONTROL: {
                 if (pin.label == PinLabel::RW) {
-                    state.is_active = (bus_state & BUS_BIT(BUS_RW_BIT)) != 0;
-                    state.is_output = true;
+                    state.signal_level = (bus_state & BUS_BIT(BUS_RW_BIT)) != 0;
+                    state.drive_direction = true;
                 } else if (pin.label == PinLabel::SYNC) {
-                    state.is_active = (bus_state & BUS_BIT(BUS_SYNC_BIT)) != 0;
-                    state.is_output = true;
+                    state.signal_level = (bus_state & BUS_BIT(BUS_SYNC_BIT)) != 0;
+                    state.drive_direction = true;
                 } else if (pin.label == PinLabel::RDY) {
-                    state.is_active = (bus_state & BUS_BIT(BUS_RDY_BIT)) != 0;
-                    state.is_output = false; // Input to CPU
+                    state.signal_level = (bus_state & BUS_BIT(BUS_RDY_BIT)) != 0;
+                    state.drive_direction = false; // Input to CPU
                 } else if (pin.label == PinLabel::AEC) {
-                    state.is_active = (bus_state & BUS_BIT(BUS_AEC_BIT)) != 0;
-                    state.is_output = true;
+                    state.signal_level = (bus_state & BUS_BIT(BUS_AEC_BIT)) != 0;
+                    state.drive_direction = true;
                 } else if (pin.label == PinLabel::BE) {
-                    state.is_active = (bus_state & BUS_BIT(BUS_BE_BIT)) != 0;
-                    state.is_output = false; // Input to CPU
+                    state.signal_level = (bus_state & BUS_BIT(BUS_BE_BIT)) != 0;
+                    state.drive_direction = false; // Input to CPU
                 } else if (pin.label == PinLabel::BA) {
-                    state.is_active = (bus_state & BUS_BIT(BUS_BA_BIT)) != 0;
-                    state.is_output = true;
+                    state.signal_level = (bus_state & BUS_BIT(BUS_BA_BIT)) != 0;
+                    state.drive_direction = true;
                 }
                 break;
             }
             case PinType::INTERRUPT: {
                 if (pin.label == PinLabel::IRQ) {
-                    state.is_active = (bus_state & BUS_BIT(BUS_IRQ_BIT)) == 0; // Active low
-                    state.is_output = false;
+                    state.signal_level = (bus_state & BUS_BIT(BUS_IRQ_BIT)) == 0; // Active low
+                    state.drive_direction = false;
                 } else if (pin.label == PinLabel::NMI) {
-                    state.is_active = (bus_state & BUS_BIT(BUS_NMI_BIT)) == 0; // Active low
-                    state.is_output = false;
+                    state.signal_level = (bus_state & BUS_BIT(BUS_NMI_BIT)) == 0; // Active low
+                    state.drive_direction = false;
                 } else if (pin.label == PinLabel::RES) {
-                    state.is_active = (bus_state & BUS_BIT(BUS_RES_BIT)) == 0; // Active low
-                    state.is_output = false;
+                    state.signal_level = (bus_state & BUS_BIT(BUS_RES_BIT)) == 0; // Active low
+                    state.drive_direction = false;
                 } else if (pin.label == PinLabel::ABORT) {
-                    state.is_active = (bus_state & BUS_BIT(BUS_ABORT_BIT)) == 0; // Active low
-                    state.is_output = false;
+                    state.signal_level = (bus_state & BUS_BIT(BUS_ABORT_BIT)) == 0; // Active low
+                    state.drive_direction = false;
                 }
                 break;
             }
             case PinType::POWER: {
                 // Power pins always active
-                state.is_active = true;
-                state.is_output = false;
+                state.signal_level = true;
+                state.drive_direction = false;
                 break;
             }
             case PinType::CLOCK: {
                 // Clock pins - would need actual clock state from bus
                 // For now, assume active during valid cycles
-                state.is_active = true;
+                state.signal_level = true;
                 if (pin.label == PinLabel::PHI0) {
-                    state.is_output = false; // Input clock
+                    state.drive_direction = false; // Input clock
                 } else {
-                    state.is_output = true; // Generated clocks
+                    state.drive_direction = true; // Generated clocks
                 }
                 break;
             }
             case PinType::SPECIAL: {
                 if (pin.label == PinLabel::SO) {
-                    state.is_active = (bus_state & BUS_BIT(BUS_SO_BIT)) == 0; // Active low
-                    state.is_output = false;
+                    state.signal_level = (bus_state & BUS_BIT(BUS_SO_BIT)) == 0; // Active low
+                    state.drive_direction = false;
                 } else if (pin.label == PinLabel::VP) {
-                    state.is_active = (bus_state & BUS_BIT(BUS_VP_BIT)) != 0;
-                    state.is_output = true;
+                    state.signal_level = (bus_state & BUS_BIT(BUS_VP_BIT)) != 0;
+                    state.drive_direction = true;
                 } else if (pin.label == PinLabel::ML) {
-                    state.is_active = (bus_state & BUS_BIT(BUS_ML_BIT)) == 0; // Active low
-                    state.is_output = true;
+                    state.signal_level = (bus_state & BUS_BIT(BUS_ML_BIT)) == 0; // Active low
+                    state.drive_direction = true;
                 } else if (pin.label == PinLabel::NC) {
-                    state.is_active = false; // No connect
-                    state.is_output = false;
-                    state.is_tristate = true;
+                    state.signal_level = false; // No connect
+                    state.drive_direction = false;
+                    state.high_impedance = true;
                 }
                 break;
             }
             default:
-                state.is_active = false;
+                state.signal_level = false;
                 break;
         }
         
         // Handle active-low pins
         if (pin.get_invert_logic() && pin.get_pin_type() != PinType::INTERRUPT && pin.get_pin_type() != PinType::SPECIAL) {
-            state.is_active = !state.is_active;
+            state.signal_level = !state.signal_level;
         }
         
-        state.value = state.is_active ? 1 : 0;
+        state.value = state.signal_level ? 1 : 0;
     };
     
     // Process pins from all sides

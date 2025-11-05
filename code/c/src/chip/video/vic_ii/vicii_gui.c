@@ -58,25 +58,25 @@ static void get_vicii_pin_states(void* chip, ChipLayout* layout, bus_state_t bus
     // Initialize all pins as inactive by default
     for (int i = 0; i < total_pins; i++) {
         pin_states[i].pin_number = i + 1;
-        pin_states[i].is_active = false;
-        pin_states[i].is_output = false;
-        pin_states[i].value = 0;
-        pin_states[i].is_tristate = false;
+        pin_states[i].signal_level = false;
+        pin_states[i].drive_direction = false;
+        pin_states[i].signal_value = 0;
+        pin_states[i].high_impedance = false;
         pin_states[i].has_pullup = false;
         pin_states[i].has_pulldown = false;
-        pin_states[i].is_valid = true;
+        pin_states[i].signal_valid = true;
         pin_states[i].analog_voltage = 0.0f;
         pin_states[i].is_pwm = false;
         pin_states[i].pwm_duty_cycle = 0.0f;
     }
     
     // Set power pins as active
-    pin_states[0].is_active = true;  // VDD (pin 1)
-    pin_states[39].is_active = true; // VCC (pin 40)
+    pin_states[0].signal_level = true;  // VDD (pin 1)
+    pin_states[39].signal_level = true; // VCC (pin 40)
     
     // Set IRQ pin state based on VIC-II registers
     if (vicii->registers.data && (vicii->registers.data[0x19] & 0x80)) {
-        pin_states[5].is_active = true; // IRQ (pin 6)
+        pin_states[5].signal_level = true; // IRQ (pin 6)
     }
 }
 

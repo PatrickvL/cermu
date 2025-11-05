@@ -108,15 +108,15 @@ void generic_chip_gui_refresh_layout(generic_chip_gui_t* gui) {
 // ============================================================================
 
 uint32_t generic_chip_gui_get_pin_color(const chip_gui_config_t* config, const PinSignalState* pin_state) {
-    if (!config || !pin_state || !pin_state->is_valid) {
+    if (!config || !pin_state || !pin_state->signal_valid) {
         return config->pin_color_inactive;
     }
     
-    if (pin_state->is_tristate) {
+    if (pin_state->high_impedance) {
         return config->pin_color_tristate;
     }
     
-    if (pin_state->is_active) {
+    if (pin_state->signal_level) {
         return config->pin_color_active_high;
     } else {
         return config->pin_color_active_low;

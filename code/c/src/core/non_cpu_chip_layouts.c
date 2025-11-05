@@ -296,7 +296,7 @@ std::vector<PinSignalState> get_video_chip_pin_states(void* chip, const ChipLayo
     
     if (!chip) {
         for (auto& state : states) {
-            state.is_valid = false;
+            state.signal_valid = false;
         }
         return states;
     }
@@ -317,63 +317,63 @@ std::vector<PinSignalState> get_video_chip_pin_states(void* chip, const ChipLayo
             case PinLabel::A8: case PinLabel::A9: case PinLabel::A10: case PinLabel::A11:
             case PinLabel::A12: case PinLabel::A13: case PinLabel::A14: case PinLabel::A15:
                 if (pin.bit_index < 16) {
-                    state.is_active = (addr_bus & (1 << pin.bit_index)) != 0;
-                    state.is_output = false; // Address inputs to video chip
-                    state.value = state.is_active ? 1 : 0;
+                    state.signal_level = (addr_bus & (1 << pin.bit_index)) != 0;
+                    state.drive_direction = false; // Address inputs to video chip
+                    state.value = state.signal_level ? 1 : 0;
                 }
                 break;
                 
             case PinLabel::D0: case PinLabel::D1: case PinLabel::D2: case PinLabel::D3:
             case PinLabel::D4: case PinLabel::D5: case PinLabel::D6: case PinLabel::D7:
                 if (pin.bit_index < 8) {
-                    state.is_active = (data_bus & (1 << pin.bit_index)) != 0;
-                    state.is_output = (bus_state & BUS_BIT(BUS_RW_BIT)) != 0; // Input on read, output on write
-                    state.value = state.is_active ? 1 : 0;
-                    state.is_tristate = true;
+                    state.signal_level = (data_bus & (1 << pin.bit_index)) != 0;
+                    state.drive_direction = (bus_state & BUS_BIT(BUS_RW_BIT)) != 0; // Input on read, output on write
+                    state.value = state.signal_level ? 1 : 0;
+                    state.high_impedance = true;
                 }
                 break;
                 
             case PinLabel::RW:
-                state.is_active = (bus_state & BUS_BIT(BUS_RW_BIT)) != 0;
-                state.is_output = false; // Input to video chip
+                state.signal_level = (bus_state & BUS_BIT(BUS_RW_BIT)) != 0;
+                state.drive_direction = false; // Input to video chip
                 break;
                 
             case PinLabel::PHI2:
-                state.is_active = true; // Assume clock is running
-                state.is_output = false; // Input to video chip
+                state.signal_level = true; // Assume clock is running
+                state.drive_direction = false; // Input to video chip
                 break;
                 
             case PinLabel::CS:
-                state.is_active = true; // Assume chip is selected
-                state.is_output = false;
+                state.signal_level = true; // Assume chip is selected
+                state.drive_direction = false;
                 break;
                 
             case PinLabel::IRQ:
-                state.is_active = (bus_state & BUS_BIT(BUS_IRQ_BIT)) == 0; // Active low
-                state.is_output = true; // Output from video chip
+                state.signal_level = (bus_state & BUS_BIT(BUS_IRQ_BIT)) == 0; // Active low
+                state.drive_direction = true; // Output from video chip
                 break;
                 
             case PinLabel::VCC: case PinLabel::VDD:
-                state.is_active = true;
-                state.is_output = false;
+                state.signal_level = true;
+                state.drive_direction = false;
                 break;
                 
             case PinLabel::VSS:
-                state.is_active = false;
-                state.is_output = false;
+                state.signal_level = false;
+                state.drive_direction = false;
                 break;
                 
             default:
-                state.is_active = false;
+                state.signal_level = false;
                 break;
         }
         
         // Handle active-low pins
         if (pin.invert_logic) {
-            state.is_active = !state.is_active;
+            state.signal_level = !state.signal_level;
         }
         
-        state.value = state.is_active ? 1 : 0;
+        state.value = state.signal_level ? 1 : 0;
     };
     
     // Process pins from all sides

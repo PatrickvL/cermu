@@ -22,31 +22,31 @@ static void get_ram_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_s
     // Initialize all pins as inactive by default
     for (int i = 0; i < total_pins; i++) {
         pin_states[i].pin_number = i + 1;
-        pin_states[i].is_active = false;
-        pin_states[i].is_output = false;
-        pin_states[i].value = 0;
-        pin_states[i].is_tristate = false;
+        pin_states[i].signal_level = false;
+        pin_states[i].drive_direction = false;
+        pin_states[i].signal_value = 0;
+        pin_states[i].high_impedance = false;
         pin_states[i].has_pullup = false;
         pin_states[i].has_pulldown = false;
-        pin_states[i].is_valid = true;
+        pin_states[i].signal_valid = true;
         pin_states[i].analog_voltage = 0.0f;
         pin_states[i].is_pwm = false;
         pin_states[i].pwm_duty_cycle = 0.0f;
     }
     
     // Set power pins as active
-    pin_states[8].is_active = false;  // VSS (Ground, pin 9)
-    pin_states[17].is_active = true;  // VCC (+5V, pin 18)
+    pin_states[8].signal_level = false;  // VSS (Ground, pin 9)
+    pin_states[17].signal_level = true;  // VCC (+5V, pin 18)
     
     // Set control pins based on bus state (simplified)
-    pin_states[13].is_active = true;  // CS (pin 14) - assume active when accessed
-    pin_states[12].is_active = false; // WE (pin 13) - simplified
+    pin_states[13].signal_level = true;  // CS (pin 14) - assume active when accessed
+    pin_states[12].signal_level = false; // WE (pin 13) - simplified
     
     // Data pins (D0-D3) - show as active during access
-    pin_states[7].is_active = true;   // D0 (pin 8)
-    pin_states[16].is_active = true;  // D1 (pin 17)
-    pin_states[15].is_active = true;  // D2 (pin 16)
-    pin_states[14].is_active = true;  // D3 (pin 15)
+    pin_states[7].signal_level = true;   // D0 (pin 8)
+    pin_states[16].signal_level = true;  // D1 (pin 17)
+    pin_states[15].signal_level = true;  // D2 (pin 16)
+    pin_states[14].signal_level = true;  // D3 (pin 15)
 }
 
 static void render_ram_specific_content(void* chip) {
