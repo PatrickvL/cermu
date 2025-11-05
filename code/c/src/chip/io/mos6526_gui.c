@@ -34,13 +34,13 @@ static void get_cia_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_s
     // Initialize all pins as inactive by default
     for (int i = 0; i < total_pins; i++) {
         pin_states[i].pin_number = 0;
-        pin_states[i].is_active = false;
-        pin_states[i].is_output = false;
-        pin_states[i].value = 0;
-        pin_states[i].is_tristate = false;
+        pin_states[i].signal_level = false;
+        pin_states[i].drive_direction = false;
+        pin_states[i].signal_value = 0;
+        pin_states[i].high_impedance = false;
         pin_states[i].has_pullup = false;
         pin_states[i].has_pulldown = false;
-        pin_states[i].is_valid = true;
+        pin_states[i].signal_valid = true;
         pin_states[i].analog_voltage = 0.0f;
         pin_states[i].is_pwm = false;
         pin_states[i].pwm_duty_cycle = 0.0f;
@@ -52,10 +52,10 @@ static void get_cia_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_s
         int pin_idx = i + 1; // PA0 is pin 2, so index 1
         if (pin_idx < total_pins) {
             bool pin_active = (cia->reg[PRA] & (1 << i)) != 0;
-            bool is_output = (cia->reg[DDRA] & (1 << i)) != 0;
-            pin_states[pin_idx].is_active = pin_active;
-            pin_states[pin_idx].is_valid = true;
-            pin_states[pin_idx].is_output = is_output;
+            bool drive_direction = (cia->reg[DDRA] & (1 << i)) != 0;
+            pin_states[pin_idx].signal_level = pin_active;
+            pin_states[pin_idx].signal_valid = true;
+            pin_states[pin_idx].drive_direction = drive_direction;
         }
     }
     
@@ -64,25 +64,25 @@ static void get_cia_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_s
         int pin_idx = i + 9; // PB0 is pin 10, so index 9
         if (pin_idx < total_pins) {
             bool pin_active = (cia->reg[PRB] & (1 << i)) != 0;
-            bool is_output = (cia->reg[DDRB] & (1 << i)) != 0;
-            pin_states[pin_idx].is_active = pin_active;
-            pin_states[pin_idx].is_valid = true;
-            pin_states[pin_idx].is_output = is_output;
+            bool drive_direction = (cia->reg[DDRB] & (1 << i)) != 0;
+            pin_states[pin_idx].signal_level = pin_active;
+            pin_states[pin_idx].signal_valid = true;
+            pin_states[pin_idx].drive_direction = drive_direction;
         }
     }
     
     // IRQ pin (pin 21, index 20)
     if (20 < total_pins) {
         bool irq_active = (cia->reg[ICR] & 0x80) != 0;
-        pin_states[20].is_active = irq_active;
-        pin_states[20].is_valid = true;
+        pin_states[20].signal_level = irq_active;
+        pin_states[20].signal_valid = true;
     }
     
     // Power pins are always active
-    pin_states[0].is_active = false; // VSS (Ground, pin 1)
-    pin_states[19].is_active = true; // VDD (+5V, pin 20)
+    pin_states[0].signal_level = false; // VSS (Ground, pin 1)
+    pin_states[19].signal_level = true; // VDD (+5V, pin 20)
     if (39 < total_pins) {
-        pin_states[39].is_active = false; // RES (Reset, pin 40)
+        pin_states[39].signal_level = false; // RES (Reset, pin 40)
     }
 }
 

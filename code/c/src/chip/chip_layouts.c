@@ -233,10 +233,10 @@ void get_generic_chip_pin_states(void* chip, const ChipLayout* layout, bus_state
     // Real implementation would extract actual pin states from chip
     int total_pins = 40; // Assume DIP-40 for now
     for (int i = 0; i < total_pins; i++) {
-        out_states[i].is_active = false;
-        out_states[i].is_output = false;
+        out_states[i].signal_level = false;
+        out_states[i].drive_direction = false;
         out_states[i].value = 0;
-        out_states[i].is_tristate = false;
-        out_states[i].is_valid = true;
+        out_states[i].high_impedance = false;
+        out_states[i].signal_valid = true;
     }
 }

@@ -568,7 +568,7 @@ void ChipVisualization::render_bga_grid(ImVec2 chip_center, const std::vector<Pi
         }
         
         uint32_t ball_color = get_pin_type_color(pin.get_pin_type(), config_.style);
-        if (state.is_active) {
+        if (state.signal_level) {
             ball_color = config_.led_active_color;
         }
         
@@ -607,7 +607,7 @@ void ChipVisualization::render_single_pin(ImVec2 pin_pos, const ChipPin& pin, co
     uint32_t pin_color = get_pin_type_color(pin.get_pin_type(), config_.style);
     
     // Modify color based on state
-    if (state.is_tristate) {
+    if (state.high_impedance) {
         pin_color = (pin_color & 0x00FFFFFF) | 0x80000000; // Semi-transparent
     }
     
@@ -621,7 +621,7 @@ void ChipVisualization::render_single_pin(ImVec2 pin_pos, const ChipPin& pin, co
     // Draw LED indicator if enabled
     if (config_.show_led_indicators) {
         ImVec2 led_pos = get_led_position(pin_pos, side);
-        uint32_t led_color = state.is_active ? config_.led_active_color : config_.led_inactive_color;
+        uint32_t led_color = state.signal_level ? config_.led_active_color : config_.led_inactive_color;
         
         ImDrawList_AddCircleFilled(draw_list, led_pos, config_.led_radius, led_color, 12);
         ImDrawList_AddCircle(draw_list, led_pos, config_.led_radius, config_.pin_border_color, 12, 1.0f);
@@ -635,7 +635,7 @@ void ChipVisualization::render_single_pin(ImVec2 pin_pos, const ChipPin& pin, co
     }
     
     // Draw voltage level indicator for analog pins
-    if (config_.show_voltage_levels && pin.get_pin_type() == PinType::ANALOG && state.is_valid) {
+    if (config_.show_voltage_levels && pin.get_pin_type() == PinType::ANALOG && state.signal_valid) {
         ImVec2 led_pos = get_led_position(pin_pos, side);
         char voltage_str[16];
         snprintf(voltage_str, sizeof(voltage_str), "%.2fV", state.analog_voltage);
@@ -646,7 +646,7 @@ void ChipVisualization::render_single_pin(ImVec2 pin_pos, const ChipPin& pin, co
     // Draw pin label if enabled
     if (config_.show_pin_labels) {
         ImVec2 label_pos = get_label_position(pin_pos, pin, side);
-        uint32_t text_color = state.is_active ? config_.active_text_color : config_.text_color;
+        uint32_t text_color = state.signal_level ? config_.active_text_color : config_.text_color;
         
         std::string formatted_label = format_pin_label(pin);
         ImDrawList_AddText_Vec2(draw_list, label_pos, text_color, formatted_label.c_str(), NULL);

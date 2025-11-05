@@ -90,26 +90,26 @@ static void get_sid_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_s
     // Initialize all pins as inactive by default
     for (int i = 0; i < total_pins; i++) {
         pin_states[i].pin_number = i + 1;
-        pin_states[i].is_active = false;
-        pin_states[i].is_output = false;
-        pin_states[i].value = 0;
-        pin_states[i].is_tristate = false;
+        pin_states[i].signal_level = false;
+        pin_states[i].drive_direction = false;
+        pin_states[i].signal_value = 0;
+        pin_states[i].high_impedance = false;
         pin_states[i].has_pullup = false;
         pin_states[i].has_pulldown = false;
-        pin_states[i].is_valid = true;
+        pin_states[i].signal_valid = true;
         pin_states[i].analog_voltage = 0.0f;
         pin_states[i].is_pwm = false;
         pin_states[i].pwm_duty_cycle = 0.0f;
     }
     
     // Set power pins as active
-    pin_states[13].is_active = false; // VSS (Ground, pin 14)
-    pin_states[24].is_active = true;  // VCC (+5V, pin 25)
-    pin_states[27].is_active = true;  // VDD (+12V, pin 28)
+    pin_states[13].signal_level = false; // VSS (Ground, pin 14)
+    pin_states[24].signal_level = true;  // VCC (+5V, pin 25)
+    pin_states[27].signal_level = true;  // VDD (+12V, pin 28)
     
     // Audio output pin should be active if SID is producing sound
-    pin_states[26].is_active = true;  // AUDIO_OUT (pin 27)
-    pin_states[26].is_output = true;
+    pin_states[26].signal_level = true;  // AUDIO_OUT (pin 27)
+    pin_states[26].drive_direction = true;
 }
 
 static void render_sid_specific_content(void* chip) {

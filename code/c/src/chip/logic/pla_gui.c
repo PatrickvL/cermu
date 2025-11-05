@@ -61,29 +61,29 @@ static void get_pla_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_s
     // Initialize all pins as inactive by default
     for (int i = 0; i < total_pins; i++) {
         pin_states[i].pin_number = i + 1;
-        pin_states[i].is_active = false;
-        pin_states[i].is_output = false;
-        pin_states[i].value = 0;
-        pin_states[i].is_tristate = false;
+        pin_states[i].signal_level = false;
+        pin_states[i].drive_direction = false;
+        pin_states[i].signal_value = 0;
+        pin_states[i].high_impedance = false;
         pin_states[i].has_pullup = false;
         pin_states[i].has_pulldown = false;
-        pin_states[i].is_valid = true;
+        pin_states[i].signal_valid = true;
         pin_states[i].analog_voltage = 0.0f;
         pin_states[i].is_pwm = false;
         pin_states[i].pwm_duty_cycle = 0.0f;
     }
     
     // Set power pins as active
-    pin_states[13].is_active = false; // VSS (Ground, pin 14)
-    pin_states[27].is_active = true;  // VCC (+5V, pin 28)
+    pin_states[13].signal_level = false; // VSS (Ground, pin 14)
+    pin_states[27].signal_level = true;  // VCC (+5V, pin 28)
     
     // Set address pins based on current bus state (simplified)
     uint8_t current_mode = c64->bus.pla_banking_mode;
-    pin_states[9].is_active = (current_mode & 0x04) != 0;   // CHAREN (pin 10)
-    pin_states[10].is_active = (current_mode & 0x02) != 0;  // HIRAM (pin 11)
-    pin_states[11].is_active = (current_mode & 0x01) != 0;  // LORAM (pin 12)
-    pin_states[22].is_active = (current_mode & 0x10) != 0;  // GAME (pin 23)
-    pin_states[23].is_active = (current_mode & 0x08) != 0;  // EXROM (pin 24)
+    pin_states[9].signal_level = (current_mode & 0x04) != 0;   // CHAREN (pin 10)
+    pin_states[10].signal_level = (current_mode & 0x02) != 0;  // HIRAM (pin 11)
+    pin_states[11].signal_level = (current_mode & 0x01) != 0;  // LORAM (pin 12)
+    pin_states[22].signal_level = (current_mode & 0x10) != 0;  // GAME (pin 23)
+    pin_states[23].signal_level = (current_mode & 0x08) != 0;  // EXROM (pin 24)
 }
 
 static void render_pla_specific_content(void* chip) {
