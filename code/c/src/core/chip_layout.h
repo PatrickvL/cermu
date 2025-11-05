@@ -35,6 +35,12 @@ enum class PinType {
     IO_PORT,      // I/O port lines (P0-P7, PA0-PA7, GPIO, etc.)
     ANALOG,       // Analog signals (AIN, AOUT, VREF, etc.)
     DIFFERENTIAL, // Differential pairs (TX+/TX-, RX+/RX-, CLK+/CLK-)
+    VIDEO,        // Video signals (LUMA, CHROMA, SYNC, etc.)
+    AUDIO,        // Audio signals (AUDIO_OUT, OSC, FILTER, etc.)
+    MEMORY,       // Memory interface (DQ, MA, CAS, RAS, etc.)
+    LOGIC,        // Logic signals (Q, Y, S, G, etc.)
+    SERIAL,       // Serial communication (UART, SPI, etc.)
+    TIMER,        // Timer/counter signals (CNT, TOD, FLAG, etc.)
     NO_CONNECT    // Explicitly no-connect pins
 };
 
@@ -101,6 +107,45 @@ enum class PinLabel {
     CS0, CS1, CS2, // Multiple chip selects
     OE,           // Output Enable
     WE,           // Write Enable
+    
+    // Video chip pins (VIC-II, etc.)
+    LUMA,         // Luminance output
+    CHROMA,       // Chrominance output
+    HSYNC,        // Horizontal sync
+    VSYNC,        // Vertical sync
+    CSYNC,        // Composite sync
+    DOT_CLK,      // Dot clock
+    COLOR_CLK,    // Color clock
+    LIGHT_PEN,    // Light pen input
+    CAS,          // Column Address Strobe
+    RAS,          // Row Address Strobe
+    MUX,          // Address multiplexer
+    
+    // Audio chip pins (SID, etc.)
+    AUDIO_OUT,    // Audio output
+    AUDIO_IN,     // Audio input
+    FILTER_OUT,   // Filter output
+    FILTER_IN,    // Filter input
+    OSC1, OSC2, OSC3, // Oscillator outputs
+    NOISE,        // Noise output
+    
+    // CIA/Timer chip pins
+    CNT,          // Counter input
+    SP,           // Serial port
+    TOD,          // Time of day clock
+    FLAG,         // Flag input
+    
+    // Memory chip pins
+    DQ0, DQ1, DQ2, DQ3, DQ4, DQ5, DQ6, DQ7, // Data I/O
+    MA0, MA1, MA2, MA3, MA4, MA5, MA6, MA7,  // Memory address
+    MA8, MA9, MA10, MA11, MA12, MA13, MA14, MA15,
+    
+    // Logic chip pins
+    Q0, Q1, Q2, Q3, Q4, Q5, Q6, Q7,         // Outputs
+    I0, I1, I2, I3, I4, I5, I6, I7,         // Inputs
+    Y0, Y1, Y2, Y3, Y4, Y5, Y6, Y7,         // Logic outputs
+    S0, S1, S2, S3,                         // Select lines
+    G,            // Gate/Enable
     
     // Test and configuration pins
     TEST,         // Test mode pin
@@ -251,9 +296,10 @@ struct BGAPosition {
 
 // Create standard DIP package layouts
 PinLayout create_dip40_layout();
-PinLayout create_dip28_layout(); 
+PinLayout create_dip28_layout();
 PinLayout create_dip24_layout();
 PinLayout create_dip20_layout();
+PinLayout create_dip18_layout();
 PinLayout create_dip16_layout();
 PinLayout create_dip14_layout();
 PinLayout create_dip8_layout();
@@ -303,16 +349,16 @@ PinLayout create_custom_qfp(uint8_t total_pins, const char* part_name = nullptr)
 PinLayout create_custom_bga(uint8_t rows, uint8_t cols, const char* part_name = nullptr);
 
 // Pin definition helpers
-ChipPin make_power_pin(uint8_t num, const char* label);
-ChipPin make_ground_pin(uint8_t num, const char* label = "GND");
-ChipPin make_address_pin(uint8_t num, const char* label, uint8_t bit);
-ChipPin make_data_pin(uint8_t num, const char* label, uint8_t bit);
-ChipPin make_control_pin(uint8_t num, const char* label, bool active_low = false);
-ChipPin make_clock_pin(uint8_t num, const char* label);
-ChipPin make_interrupt_pin(uint8_t num, const char* label, bool active_low = true);
-ChipPin make_gpio_pin(uint8_t num, const char* label, const char* port = nullptr);
-ChipPin make_analog_pin(uint8_t num, const char* label);
-ChipPin make_differential_pin(uint8_t num, const char* label, bool positive);
+ChipPin make_power_pin(uint8_t num, PinLabel label);
+ChipPin make_ground_pin(uint8_t num, PinLabel label = PinLabel::GND);
+ChipPin make_address_pin(uint8_t num, PinLabel label, uint8_t bit);
+ChipPin make_data_pin(uint8_t num, PinLabel label, uint8_t bit);
+ChipPin make_control_pin(uint8_t num, PinLabel label, bool active_low = false);
+ChipPin make_clock_pin(uint8_t num, PinLabel label);
+ChipPin make_interrupt_pin(uint8_t num, PinLabel label, bool active_low = true);
+ChipPin make_gpio_pin(uint8_t num, PinLabel label, const char* port = nullptr);
+ChipPin make_analog_pin(uint8_t num, PinLabel label);
+ChipPin make_differential_pin(uint8_t num, PinLabel label, bool positive);
 ChipPin make_nc_pin(uint8_t num);
 
 // Enum-to-string conversion functions

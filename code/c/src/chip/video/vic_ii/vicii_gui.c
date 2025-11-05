@@ -1,7 +1,5 @@
 #include "vicii_common.h"
 #include "../../../gui/cimgui_interface.h"
-#include "../../../gui/chip_visualization.h"
-#include "../../../core/emulation_context.h"
 #ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #endif

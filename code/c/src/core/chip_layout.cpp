@@ -10,52 +10,178 @@
 #include <string>
 
 // ============================================================================
+// CHIPPIN METHOD IMPLEMENTATIONS
+// ============================================================================
+
+// Implementation of ChipPin::get_pin_type() method
+PinType ChipPin::get_pin_type() const {
+    switch (label) {
+        case PinLabel::VDD:
+        case PinLabel::VSS:
+        case PinLabel::VCC:
+        case PinLabel::GND:
+            return PinType::POWER;
+            
+        case PinLabel::PHI0:
+        case PinLabel::PHI1:
+        case PinLabel::PHI2:
+        case PinLabel::XTAL1:
+        case PinLabel::XTAL2:
+        case PinLabel::OSC_IN:
+        case PinLabel::OSC_OUT:
+            return PinType::CLOCK;
+            
+        case PinLabel::A0: case PinLabel::A1: case PinLabel::A2: case PinLabel::A3:
+        case PinLabel::A4: case PinLabel::A5: case PinLabel::A6: case PinLabel::A7:
+        case PinLabel::A8: case PinLabel::A9: case PinLabel::A10: case PinLabel::A11:
+        case PinLabel::A12: case PinLabel::A13: case PinLabel::A14: case PinLabel::A15:
+        case PinLabel::A16: case PinLabel::A17: case PinLabel::A18: case PinLabel::A19:
+        case PinLabel::A20: case PinLabel::A21: case PinLabel::A22: case PinLabel::A23:
+            return PinType::ADDRESS;
+            
+        case PinLabel::D0: case PinLabel::D1: case PinLabel::D2: case PinLabel::D3:
+        case PinLabel::D4: case PinLabel::D5: case PinLabel::D6: case PinLabel::D7:
+        case PinLabel::D8: case PinLabel::D9: case PinLabel::D10: case PinLabel::D11:
+        case PinLabel::D12: case PinLabel::D13: case PinLabel::D14: case PinLabel::D15:
+            return PinType::DATA;
+            
+        case PinLabel::RW:
+        case PinLabel::SYNC:
+        case PinLabel::RDY:
+        case PinLabel::AEC:
+        case PinLabel::BE:
+        case PinLabel::BA:
+        case PinLabel::CS:
+        case PinLabel::CS0: case PinLabel::CS1: case PinLabel::CS2:
+        case PinLabel::OE:
+        case PinLabel::WE:
+        case PinLabel::E:
+        case PinLabel::MX:
+            return PinType::CONTROL;
+            
+        case PinLabel::IRQ:
+        case PinLabel::NMI:
+        case PinLabel::RES:
+        case PinLabel::ABORT:
+            return PinType::INTERRUPT;
+            
+        case PinLabel::SO:
+        case PinLabel::VP:
+        case PinLabel::VPB:
+        case PinLabel::VPA:
+        case PinLabel::VDA:
+        case PinLabel::ML:
+        case PinLabel::TEST:
+            return PinType::SPECIAL;
+            
+        case PinLabel::P0: case PinLabel::P1: case PinLabel::P2: case PinLabel::P3:
+        case PinLabel::P4: case PinLabel::P5: case PinLabel::P6: case PinLabel::P7:
+        case PinLabel::PA0: case PinLabel::PA1: case PinLabel::PA2: case PinLabel::PA3:
+        case PinLabel::PA4: case PinLabel::PA5: case PinLabel::PA6: case PinLabel::PA7:
+        case PinLabel::PB0: case PinLabel::PB1: case PinLabel::PB2: case PinLabel::PB3:
+        case PinLabel::PB4: case PinLabel::PB5: case PinLabel::PB6: case PinLabel::PB7:
+        case PinLabel::PC0: case PinLabel::PC1: case PinLabel::PC2: case PinLabel::PC3:
+        case PinLabel::PC4: case PinLabel::PC5: case PinLabel::PC6: case PinLabel::PC7:
+        case PinLabel::PD0: case PinLabel::PD1: case PinLabel::PD2: case PinLabel::PD3:
+        case PinLabel::PD4: case PinLabel::PD5: case PinLabel::PD6: case PinLabel::PD7:
+        case PinLabel::UART_TX: case PinLabel::UART_RX:
+        case PinLabel::SPI_CLK: case PinLabel::SPI_MOSI: case PinLabel::SPI_MISO: case PinLabel::SPI_CS:
+            return PinType::SERIAL;
+            
+        case PinLabel::PWM0: case PinLabel::PWM1: case PinLabel::PWM2: case PinLabel::PWM3:
+            return PinType::IO_PORT;
+            
+        case PinLabel::LUMA: case PinLabel::CHROMA: case PinLabel::HSYNC: case PinLabel::VSYNC:
+        case PinLabel::CSYNC: case PinLabel::DOT_CLK: case PinLabel::COLOR_CLK: case PinLabel::LIGHT_PEN:
+            return PinType::VIDEO;
+            
+        case PinLabel::AUDIO_OUT: case PinLabel::AUDIO_IN: case PinLabel::FILTER_OUT: case PinLabel::FILTER_IN:
+        case PinLabel::OSC1: case PinLabel::OSC2: case PinLabel::OSC3: case PinLabel::NOISE:
+            return PinType::AUDIO;
+            
+        case PinLabel::CAS: case PinLabel::RAS: case PinLabel::MUX:
+        case PinLabel::DQ0: case PinLabel::DQ1: case PinLabel::DQ2: case PinLabel::DQ3:
+        case PinLabel::DQ4: case PinLabel::DQ5: case PinLabel::DQ6: case PinLabel::DQ7:
+        case PinLabel::MA0: case PinLabel::MA1: case PinLabel::MA2: case PinLabel::MA3:
+        case PinLabel::MA4: case PinLabel::MA5: case PinLabel::MA6: case PinLabel::MA7:
+        case PinLabel::MA8: case PinLabel::MA9: case PinLabel::MA10: case PinLabel::MA11:
+        case PinLabel::MA12: case PinLabel::MA13: case PinLabel::MA14: case PinLabel::MA15:
+            return PinType::MEMORY;
+            
+        case PinLabel::Q0: case PinLabel::Q1: case PinLabel::Q2: case PinLabel::Q3:
+        case PinLabel::Q4: case PinLabel::Q5: case PinLabel::Q6: case PinLabel::Q7:
+        case PinLabel::I0: case PinLabel::I1: case PinLabel::I2: case PinLabel::I3:
+        case PinLabel::I4: case PinLabel::I5: case PinLabel::I6: case PinLabel::I7:
+        case PinLabel::Y0: case PinLabel::Y1: case PinLabel::Y2: case PinLabel::Y3:
+        case PinLabel::Y4: case PinLabel::Y5: case PinLabel::Y6: case PinLabel::Y7:
+        case PinLabel::S0: case PinLabel::S1: case PinLabel::S2: case PinLabel::S3:
+        case PinLabel::G:
+            return PinType::LOGIC;
+            
+        case PinLabel::CNT: case PinLabel::SP: case PinLabel::TOD: case PinLabel::FLAG:
+            return PinType::TIMER;
+            
+        case PinLabel::VREF:
+        case PinLabel::AIN0: case PinLabel::AIN1: case PinLabel::AIN2: case PinLabel::AIN3:
+        case PinLabel::AIN4: case PinLabel::AIN5: case PinLabel::AIN6: case PinLabel::AIN7:
+        case PinLabel::AOUT0: case PinLabel::AOUT1:
+            return PinType::ANALOG;
+            
+        case PinLabel::NC:
+            return PinType::NO_CONNECT;
+            
+        default:
+            return PinType::SPECIAL;
+    }
+}
+
+// ============================================================================
 // HELPER FUNCTIONS FOR STANDARD PACKAGE LAYOUTS
 // ============================================================================
 
 // Pin maker helper functions
-ChipPin make_power_pin(uint8_t num, const char* label) {
-    return {num, label, PinType::POWER, 0, false, "POWER", nullptr, false, false};
+ChipPin make_power_pin(uint8_t num, PinLabel label) {
+    return {num, label, 0, false, "POWER", nullptr, false, false};
 }
 
-ChipPin make_ground_pin(uint8_t num, const char* label) {
-    return {num, label, PinType::POWER, 0, false, "POWER", nullptr, false, false};
+ChipPin make_ground_pin(uint8_t num, PinLabel label) {
+    return {num, label, 0, false, "POWER", nullptr, false, false};
 }
 
-ChipPin make_address_pin(uint8_t num, const char* label, uint8_t bit) {
-    return {num, label, PinType::ADDRESS, bit, false, "ADDR", nullptr, false, false};
+ChipPin make_address_pin(uint8_t num, PinLabel label, uint8_t bit) {
+    return {num, label, bit, false, "ADDR", nullptr, false, false};
 }
 
-ChipPin make_data_pin(uint8_t num, const char* label, uint8_t bit) {
-    return {num, label, PinType::DATA, bit, false, "DATA", nullptr, false, false};
+ChipPin make_data_pin(uint8_t num, PinLabel label, uint8_t bit) {
+    return {num, label, bit, false, "DATA", nullptr, false, false};
 }
 
-ChipPin make_control_pin(uint8_t num, const char* label, bool active_low) {
-    return {num, label, PinType::CONTROL, 0, active_low, "CONTROL", nullptr, false, false};
+ChipPin make_control_pin(uint8_t num, PinLabel label, bool active_low) {
+    return {num, label, 0, active_low, "CONTROL", nullptr, false, false};
 }
 
-ChipPin make_clock_pin(uint8_t num, const char* label) {
-    return {num, label, PinType::CLOCK, 0, false, "CLOCK", nullptr, false, false};
+ChipPin make_clock_pin(uint8_t num, PinLabel label) {
+    return {num, label, 0, false, "CLOCK", nullptr, false, false};
 }
 
-ChipPin make_interrupt_pin(uint8_t num, const char* label, bool active_low) {
-    return {num, label, PinType::INTERRUPT, 0, active_low, "INTERRUPT", nullptr, false, false};
+ChipPin make_interrupt_pin(uint8_t num, PinLabel label, bool active_low) {
+    return {num, label, 0, active_low, "INTERRUPT", nullptr, false, false};
 }
 
-ChipPin make_gpio_pin(uint8_t num, const char* label, const char* port) {
-    return {num, label, PinType::IO_PORT, 0, false, port ? port : "GPIO", nullptr, false, false};
+ChipPin make_gpio_pin(uint8_t num, PinLabel label, const char* port) {
+    return {num, label, 0, false, port ? port : "GPIO", nullptr, false, false};
 }
 
-ChipPin make_analog_pin(uint8_t num, const char* label) {
-    return {num, label, PinType::ANALOG, 0, false, "ANALOG", nullptr, false, false};
+ChipPin make_analog_pin(uint8_t num, PinLabel label) {
+    return {num, label, 0, false, "ANALOG", nullptr, false, false};
 }
 
-ChipPin make_differential_pin(uint8_t num, const char* label, bool positive) {
-    return {num, label, PinType::DIFFERENTIAL, 0, false, "DIFF", nullptr, positive, !positive};
+ChipPin make_differential_pin(uint8_t num, PinLabel label, bool positive) {
+    return {num, label, 0, false, "DIFF", nullptr, positive, !positive};
 }
 
 ChipPin make_nc_pin(uint8_t num) {
-    return {num, "NC", PinType::NO_CONNECT, 0, false, "NC", nullptr, false, false};
+    return {num, PinLabel::NC, 0, false, "NC", nullptr, false, false};
 }
 
 // ============================================================================
@@ -129,17 +255,17 @@ PinLayout create_dip8_layout() {
     };
     
     layout.left_pins = {
-        make_power_pin(1, "VCC"),
-        make_gpio_pin(2, "IN1"),
-        make_gpio_pin(3, "IN2"),
-        make_ground_pin(4, "GND")
+        make_power_pin(1, PinLabel::VCC),
+        make_gpio_pin(2, PinLabel::PA0, nullptr),
+        make_gpio_pin(3, PinLabel::PA1, nullptr),
+        make_ground_pin(4, PinLabel::GND)
     };
     
     layout.right_pins = {
-        make_power_pin(8, "VDD"),
-        make_gpio_pin(7, "OUT1"),
-        make_gpio_pin(6, "OUT2"),
-        make_ground_pin(5, "VSS")
+        make_power_pin(8, PinLabel::VDD),
+        make_gpio_pin(7, PinLabel::PB0, nullptr),
+        make_gpio_pin(6, PinLabel::PB1, nullptr),
+        make_ground_pin(5, PinLabel::VSS)
     };
     
     layout.markings = {
@@ -175,10 +301,9 @@ PinLayout create_dip14_layout() {
     for (uint8_t i = 1; i <= 7; i++) {
         char label[8];
         if (i == 7) {
-            layout.left_pins.push_back(make_ground_pin(7, "GND"));
+            layout.left_pins.push_back(make_ground_pin(7, PinLabel::GND));
         } else {
-            snprintf(label, sizeof(label), "P%d", i);
-            layout.left_pins.push_back(make_gpio_pin(i, label, "PORT"));
+            layout.left_pins.push_back(make_gpio_pin(i, PinLabel::PA0, "PORT"));
         }
     }
     
@@ -186,10 +311,9 @@ PinLayout create_dip14_layout() {
     for (uint8_t i = 14; i >= 8; i--) {
         char label[8];
         if (i == 14) {
-            layout.right_pins.push_back(make_power_pin(14, "VCC"));
+            layout.right_pins.push_back(make_power_pin(14, PinLabel::VCC));
         } else {
-            snprintf(label, sizeof(label), "P%d", i);
-            layout.right_pins.push_back(make_gpio_pin(i, label, "PORT"));
+            layout.right_pins.push_back(make_gpio_pin(i, PinLabel::PB0, "PORT"));
         }
     }
         return layout;
@@ -210,15 +334,11 @@ PinLayout create_dip16_layout() {
     
     // 8 pins per side
     for (uint8_t i = 1; i <= 8; i++) {
-        char label[8];
-        snprintf(label, sizeof(label), "P%d", i);
-        layout.left_pins.push_back(make_gpio_pin(i, label, "PORTA"));
+        layout.left_pins.push_back(make_gpio_pin(i, PinLabel::PA0, "PORTA"));
     }
     
     for (uint8_t i = 16; i >= 9; i--) {
-        char label[8];
-        snprintf(label, sizeof(label), "P%d", i);
-        layout.right_pins.push_back(make_gpio_pin(i, label, "PORTB"));
+        layout.right_pins.push_back(make_gpio_pin(i, PinLabel::PB0, "PORTB"));
     }
     
     return layout;
@@ -236,6 +356,31 @@ PinLayout create_dip20_layout() {
         false,                       // has_center_slug
         0.0f                         // thermal_pad_size
     };
+    
+    return layout;
+}
+
+PinLayout create_dip18_layout() {
+    PinLayout layout = {};
+    layout.package = {
+        300.0f,                      // width (mil) - DIP18 narrow body (7.62mm)
+        900.0f,                      // height (mil) - DIP18 body length (22.86mm)
+        PackageType::DIP,            // package_type
+        OrientationMarker::NOTCH,    // marker
+        100.0f,                      // pin_pitch (mil) - standard DIP pitch
+        false,                       // has_thermal_pad
+        false,                       // has_center_slug
+        0.0f                         // thermal_pad_size
+    };
+    
+    // 9 pins per side
+    for (uint8_t i = 1; i <= 9; i++) {
+        layout.left_pins.push_back(make_gpio_pin(i, PinLabel::MA0, "ADDR"));
+    }
+    
+    for (uint8_t i = 18; i >= 10; i--) {
+        layout.right_pins.push_back(make_gpio_pin(i, PinLabel::DQ0, "DATA"));
+    }
     
     return layout;
 }
@@ -303,17 +448,17 @@ PinLayout create_soic8_layout() {
     };
     
     layout.left_pins = {
-        make_gpio_pin(1, "IN1", nullptr),
-        make_gpio_pin(2, "IN2", nullptr),
-        make_gpio_pin(3, "IN3", nullptr),
-        make_ground_pin(4, "GND")
+        make_gpio_pin(1, PinLabel::PA0, nullptr),
+        make_gpio_pin(2, PinLabel::PA1, nullptr),
+        make_gpio_pin(3, PinLabel::PA2, nullptr),
+        make_ground_pin(4, PinLabel::GND)
     };
     
     layout.right_pins = {
-        make_power_pin(8, "VCC"),
-        make_gpio_pin(7, "OUT1", nullptr),
-        make_gpio_pin(6, "OUT2", nullptr),
-        make_gpio_pin(5, "OUT3", nullptr)
+        make_power_pin(8, PinLabel::VCC),
+        make_gpio_pin(7, PinLabel::PB0, nullptr),
+        make_gpio_pin(6, PinLabel::PB1, nullptr),
+        make_gpio_pin(5, PinLabel::PB2, nullptr)
     };
     
     return layout;
@@ -383,27 +528,19 @@ PinLayout create_plcc28_layout() {
     
     // PLCC has pins on all 4 sides: 7 per side
     for (int i = 1; i <= 7; i++) {
-        char label[8];
-        snprintf(label, sizeof(label), "L%d", i);
-        layout.left_pins.push_back(make_gpio_pin(i, label, "LEFT"));
+        layout.left_pins.push_back(make_gpio_pin(i, PinLabel::PA0, "LEFT"));
     }
     
     for (int i = 8; i <= 14; i++) {
-        char label[8];
-        snprintf(label, sizeof(label), "B%d", i);
-        layout.bottom_pins.push_back(make_gpio_pin(i, label, "BOTTOM"));
+        layout.bottom_pins.push_back(make_gpio_pin(i, PinLabel::PA1, "BOTTOM"));
     }
     
     for (int i = 15; i <= 21; i++) {
-        char label[8];
-        snprintf(label, sizeof(label), "R%d", i);
-        layout.right_pins.push_back(make_gpio_pin(i, label, "RIGHT"));
+        layout.right_pins.push_back(make_gpio_pin(i, PinLabel::PA2, "RIGHT"));
     }
     
     for (int i = 22; i <= 28; i++) {
-        char label[8];
-        snprintf(label, sizeof(label), "T%d", i);
-        layout.top_pins.push_back(make_gpio_pin(i, label, "TOP"));
+        layout.top_pins.push_back(make_gpio_pin(i, PinLabel::PA3, "TOP"));
     }
     
     return layout;
@@ -661,9 +798,9 @@ PinLayout create_to220_layout() {
     };
     
     layout.bottom_pins = {
-        make_gpio_pin(1, "IN", "INPUT"),
-        make_ground_pin(2, "GND"),
-        make_gpio_pin(3, "OUT", "OUTPUT")
+        make_gpio_pin(1, PinLabel::PA0, "INPUT"),
+        make_ground_pin(2, PinLabel::GND),
+        make_gpio_pin(3, PinLabel::PA1, "OUTPUT")
     };
     
     layout.markings = {
@@ -696,9 +833,9 @@ PinLayout create_to92_layout() {
     };
     
     layout.bottom_pins = {
-        make_gpio_pin(1, "E", "EMITTER"),
-        make_gpio_pin(2, "B", "BASE"),
-        make_gpio_pin(3, "C", "COLLECTOR")
+        make_gpio_pin(1, PinLabel::PA0, "EMITTER"),
+        make_gpio_pin(2, PinLabel::PA1, "BASE"),
+        make_gpio_pin(3, PinLabel::PA2, "COLLECTOR")
     };
     
     return layout;
@@ -718,12 +855,12 @@ PinLayout create_sot23_layout() {
     };
     
     layout.left_pins = {
-        make_gpio_pin(1, "B", "BASE"),
-        make_gpio_pin(2, "E", "EMITTER")
+        make_gpio_pin(1, PinLabel::PA0, "BASE"),
+        make_gpio_pin(2, PinLabel::PA1, "EMITTER")
     };
     
     layout.right_pins = {
-        make_gpio_pin(3, "C", "COLLECTOR")
+        make_gpio_pin(3, PinLabel::PA2, "COLLECTOR")
     };
     
     return layout;
@@ -743,14 +880,14 @@ PinLayout create_sot223_layout() {
     };
     
     layout.bottom_pins = {
-        make_gpio_pin(1, "IN", "INPUT"),
-        make_ground_pin(2, "GND"),
-        make_gpio_pin(3, "OUT", "OUTPUT")
+        make_gpio_pin(1, PinLabel::PA0, "INPUT"),
+        make_ground_pin(2, PinLabel::GND),
+        make_gpio_pin(3, PinLabel::PA1, "OUTPUT")
     };
     
     // Pin 4 is the large thermal tab (typically connected to OUT)
     layout.top_pins = {
-        make_gpio_pin(4, "TAB", "THERMAL")
+        make_gpio_pin(4, PinLabel::PA2, "THERMAL")
     };
     
     return layout;
@@ -772,9 +909,7 @@ PinLayout create_sip8_layout() {
     
     // All pins on one side (bottom)
     for (uint8_t i = 1; i <= 8; i++) {
-        char label[8];
-        snprintf(label, sizeof(label), "P%d", i);
-        layout.bottom_pins.push_back(make_gpio_pin(i, label, nullptr));
+        layout.bottom_pins.push_back(make_gpio_pin(i, PinLabel::PA0, nullptr));
     }
     
     return layout;
@@ -794,11 +929,9 @@ PinLayout create_sip9_layout() {
     };
     
     // Common pin 1, resistor array
-    layout.bottom_pins.push_back(make_gpio_pin(1, "COM", "COMMON"));
+    layout.bottom_pins.push_back(make_gpio_pin(1, PinLabel::PA0, "COMMON"));
     for (uint8_t i = 2; i <= 9; i++) {
-        char label[8];
-        snprintf(label, sizeof(label), "R%d", i);
-        layout.bottom_pins.push_back(make_gpio_pin(i, label, "RESISTOR"));
+        layout.bottom_pins.push_back(make_gpio_pin(i, PinLabel::PA1, "RESISTOR"));
     }
     
     layout.markings = {
@@ -840,15 +973,11 @@ PinLayout create_custom_dip(uint8_t total_pins, const char* part_name) {
     
     // Generate generic pins
     for (uint8_t i = 1; i <= pins_per_side; i++) {
-        char label[8];
-        snprintf(label, sizeof(label), "P%d", i);
-        layout.left_pins.push_back(make_gpio_pin(i, label, nullptr));
+        layout.left_pins.push_back(make_gpio_pin(i, PinLabel::PA0, nullptr));
     }
     
     for (uint8_t i = total_pins; i > pins_per_side; i--) {
-        char label[8];
-        snprintf(label, sizeof(label), "P%d", i);
-        layout.right_pins.push_back(make_gpio_pin(i, label, nullptr));
+        layout.right_pins.push_back(make_gpio_pin(i, PinLabel::PB0, nullptr));
     }
     
     return layout;
@@ -873,27 +1002,19 @@ PinLayout create_custom_qfp(uint8_t total_pins, const char* part_name) {
     
     // Generate pins for each side
     for (uint8_t i = 1; i <= pins_per_side; i++) {
-        char label[8];
-        snprintf(label, sizeof(label), "P%d", i);
-        layout.left_pins.push_back(make_gpio_pin(i, label));
+        layout.left_pins.push_back(make_gpio_pin(i, PinLabel::PA0, nullptr));
     }
     
     for (uint8_t i = pins_per_side + 1; i <= 2 * pins_per_side; i++) {
-        char label[8]; 
-        snprintf(label, sizeof(label), "P%d", i);
-        layout.top_pins.push_back(make_gpio_pin(i, label));
+        layout.top_pins.push_back(make_gpio_pin(i, PinLabel::PA1, nullptr));
     }
     
     for (uint8_t i = 2 * pins_per_side + 1; i <= 3 * pins_per_side; i++) {
-        char label[8];
-        snprintf(label, sizeof(label), "P%d", i);
-        layout.right_pins.push_back(make_gpio_pin(i, label));
+        layout.right_pins.push_back(make_gpio_pin(i, PinLabel::PA2, nullptr));
     }
     
     for (uint8_t i = 3 * pins_per_side + 1; i <= total_pins; i++) {
-        char label[8];
-        snprintf(label, sizeof(label), "P%d", i);
-        layout.bottom_pins.push_back(make_gpio_pin(i, label));
+        layout.bottom_pins.push_back(make_gpio_pin(i, PinLabel::PA3, nullptr));
     }
     
     layout.markings = {
@@ -932,13 +1053,8 @@ PinLayout create_custom_bga(uint8_t rows, uint8_t cols, const char* part_name) {
     // Generate grid pins (A1, A2, ..., B1, B2, ...)
     for (uint8_t row = 0; row < rows; row++) {
         for (uint8_t col = 0; col < cols; col++) {
-            char row_letter = 'A' + row;
-            uint8_t col_number = col + 1;
             uint8_t pin_number = row * cols + col + 1;
-            
-            char label[8];
-            snprintf(label, sizeof(label), "%c%d", row_letter, col_number);
-            layout.grid_pins.push_back(make_gpio_pin(pin_number, label));
+            layout.grid_pins.push_back(make_gpio_pin(pin_number, PinLabel::PA0, nullptr));
         }
     }
     
@@ -956,4 +1072,307 @@ PinLayout create_custom_bga(uint8_t rows, uint8_t cols, const char* part_name) {
     };
     
     return layout;
+}
+
+// ============================================================================
+// ENUM-TO-STRING CONVERSION FUNCTIONS
+// ============================================================================
+
+const char* pin_label_to_string(PinLabel label) {
+    switch (label) {
+        // Power pins
+        case PinLabel::VDD: return "VDD";
+        case PinLabel::VSS: return "VSS";
+        case PinLabel::VCC: return "VCC";
+        case PinLabel::GND: return "GND";
+        
+        // Clock pins
+        case PinLabel::PHI0: return "φ0";
+        case PinLabel::PHI1: return "φ1";
+        case PinLabel::PHI2: return "φ2";
+        
+        // Address bus pins
+        case PinLabel::A0: return "A0";
+        case PinLabel::A1: return "A1";
+        case PinLabel::A2: return "A2";
+        case PinLabel::A3: return "A3";
+        case PinLabel::A4: return "A4";
+        case PinLabel::A5: return "A5";
+        case PinLabel::A6: return "A6";
+        case PinLabel::A7: return "A7";
+        case PinLabel::A8: return "A8";
+        case PinLabel::A9: return "A9";
+        case PinLabel::A10: return "A10";
+        case PinLabel::A11: return "A11";
+        case PinLabel::A12: return "A12";
+        case PinLabel::A13: return "A13";
+        case PinLabel::A14: return "A14";
+        case PinLabel::A15: return "A15";
+        case PinLabel::A16: return "A16";
+        case PinLabel::A17: return "A17";
+        case PinLabel::A18: return "A18";
+        case PinLabel::A19: return "A19";
+        case PinLabel::A20: return "A20";
+        case PinLabel::A21: return "A21";
+        case PinLabel::A22: return "A22";
+        case PinLabel::A23: return "A23";
+        
+        // Data bus pins
+        case PinLabel::D0: return "D0";
+        case PinLabel::D1: return "D1";
+        case PinLabel::D2: return "D2";
+        case PinLabel::D3: return "D3";
+        case PinLabel::D4: return "D4";
+        case PinLabel::D5: return "D5";
+        case PinLabel::D6: return "D6";
+        case PinLabel::D7: return "D7";
+        case PinLabel::D8: return "D8";
+        case PinLabel::D9: return "D9";
+        case PinLabel::D10: return "D10";
+        case PinLabel::D11: return "D11";
+        case PinLabel::D12: return "D12";
+        case PinLabel::D13: return "D13";
+        case PinLabel::D14: return "D14";
+        case PinLabel::D15: return "D15";
+        
+        // Control signals
+        case PinLabel::RW: return "R/W";
+        case PinLabel::SYNC: return "SYNC";
+        case PinLabel::RDY: return "RDY";
+        case PinLabel::AEC: return "AEC";
+        case PinLabel::BE: return "BE";
+        case PinLabel::BA: return "BA";
+        
+        // Interrupt pins
+        case PinLabel::IRQ: return "IRQ";
+        case PinLabel::NMI: return "NMI";
+        case PinLabel::RES: return "RES";
+        case PinLabel::ABORT: return "ABORT";
+        
+        // Special pins
+        case PinLabel::SO: return "SO";
+        case PinLabel::VP: return "VP";
+        case PinLabel::VPB: return "VPB";
+        case PinLabel::VPA: return "VPA";
+        case PinLabel::VDA: return "VDA";
+        case PinLabel::ML: return "ML";
+        case PinLabel::E: return "E";
+        case PinLabel::MX: return "MX";
+        
+        // I/O Port pins
+        case PinLabel::P0: return "P0";
+        case PinLabel::P1: return "P1";
+        case PinLabel::P2: return "P2";
+        case PinLabel::P3: return "P3";
+        case PinLabel::P4: return "P4";
+        case PinLabel::P5: return "P5";
+        case PinLabel::P6: return "P6";
+        case PinLabel::P7: return "P7";
+        
+        // GPIO pins
+        case PinLabel::PA0: return "PA0";
+        case PinLabel::PA1: return "PA1";
+        case PinLabel::PA2: return "PA2";
+        case PinLabel::PA3: return "PA3";
+        case PinLabel::PA4: return "PA4";
+        case PinLabel::PA5: return "PA5";
+        case PinLabel::PA6: return "PA6";
+        case PinLabel::PA7: return "PA7";
+        case PinLabel::PB0: return "PB0";
+        case PinLabel::PB1: return "PB1";
+        case PinLabel::PB2: return "PB2";
+        case PinLabel::PB3: return "PB3";
+        case PinLabel::PB4: return "PB4";
+        case PinLabel::PB5: return "PB5";
+        case PinLabel::PB6: return "PB6";
+        case PinLabel::PB7: return "PB7";
+        case PinLabel::PC0: return "PC0";
+        case PinLabel::PC1: return "PC1";
+        case PinLabel::PC2: return "PC2";
+        case PinLabel::PC3: return "PC3";
+        case PinLabel::PC4: return "PC4";
+        case PinLabel::PC5: return "PC5";
+        case PinLabel::PC6: return "PC6";
+        case PinLabel::PC7: return "PC7";
+        case PinLabel::PD0: return "PD0";
+        case PinLabel::PD1: return "PD1";
+        case PinLabel::PD2: return "PD2";
+        case PinLabel::PD3: return "PD3";
+        case PinLabel::PD4: return "PD4";
+        case PinLabel::PD5: return "PD5";
+        case PinLabel::PD6: return "PD6";
+        case PinLabel::PD7: return "PD7";
+        
+        // Peripheral pins
+        case PinLabel::UART_TX: return "UART_TX";
+        case PinLabel::UART_RX: return "UART_RX";
+        case PinLabel::SPI_CLK: return "SPI_CLK";
+        case PinLabel::SPI_MOSI: return "SPI_MOSI";
+        case PinLabel::SPI_MISO: return "SPI_MISO";
+        case PinLabel::SPI_CS: return "SPI_CS";
+        case PinLabel::PWM0: return "PWM0";
+        case PinLabel::PWM1: return "PWM1";
+        case PinLabel::PWM2: return "PWM2";
+        case PinLabel::PWM3: return "PWM3";
+        
+        // Common control pins
+        case PinLabel::CS: return "CS";
+        case PinLabel::CS0: return "CS0";
+        case PinLabel::CS1: return "CS1";
+        case PinLabel::CS2: return "CS2";
+        case PinLabel::OE: return "OE";
+        case PinLabel::WE: return "WE";
+        
+        // Video chip pins
+        case PinLabel::LUMA: return "LUMA";
+        case PinLabel::CHROMA: return "CHROMA";
+        case PinLabel::HSYNC: return "HSYNC";
+        case PinLabel::VSYNC: return "VSYNC";
+        case PinLabel::CSYNC: return "CSYNC";
+        case PinLabel::DOT_CLK: return "DOT_CLK";
+        case PinLabel::COLOR_CLK: return "COLOR_CLK";
+        case PinLabel::LIGHT_PEN: return "LIGHT_PEN";
+        case PinLabel::CAS: return "CAS";
+        case PinLabel::RAS: return "RAS";
+        case PinLabel::MUX: return "MUX";
+        
+        // Audio chip pins
+        case PinLabel::AUDIO_OUT: return "AUDIO_OUT";
+        case PinLabel::AUDIO_IN: return "AUDIO_IN";
+        case PinLabel::FILTER_OUT: return "FILTER_OUT";
+        case PinLabel::FILTER_IN: return "FILTER_IN";
+        case PinLabel::OSC1: return "OSC1";
+        case PinLabel::OSC2: return "OSC2";
+        case PinLabel::OSC3: return "OSC3";
+        case PinLabel::NOISE: return "NOISE";
+        
+        // CIA/Timer chip pins
+        case PinLabel::CNT: return "CNT";
+        case PinLabel::SP: return "SP";
+        case PinLabel::TOD: return "TOD";
+        case PinLabel::FLAG: return "FLAG";
+        
+        // Memory chip pins
+        case PinLabel::DQ0: return "DQ0";
+        case PinLabel::DQ1: return "DQ1";
+        case PinLabel::DQ2: return "DQ2";
+        case PinLabel::DQ3: return "DQ3";
+        case PinLabel::DQ4: return "DQ4";
+        case PinLabel::DQ5: return "DQ5";
+        case PinLabel::DQ6: return "DQ6";
+        case PinLabel::DQ7: return "DQ7";
+        case PinLabel::MA0: return "MA0";
+        case PinLabel::MA1: return "MA1";
+        case PinLabel::MA2: return "MA2";
+        case PinLabel::MA3: return "MA3";
+        case PinLabel::MA4: return "MA4";
+        case PinLabel::MA5: return "MA5";
+        case PinLabel::MA6: return "MA6";
+        case PinLabel::MA7: return "MA7";
+        case PinLabel::MA8: return "MA8";
+        case PinLabel::MA9: return "MA9";
+        case PinLabel::MA10: return "MA10";
+        case PinLabel::MA11: return "MA11";
+        case PinLabel::MA12: return "MA12";
+        case PinLabel::MA13: return "MA13";
+        case PinLabel::MA14: return "MA14";
+        case PinLabel::MA15: return "MA15";
+        
+        // Logic chip pins
+        case PinLabel::Q0: return "Q0";
+        case PinLabel::Q1: return "Q1";
+        case PinLabel::Q2: return "Q2";
+        case PinLabel::Q3: return "Q3";
+        case PinLabel::Q4: return "Q4";
+        case PinLabel::Q5: return "Q5";
+        case PinLabel::Q6: return "Q6";
+        case PinLabel::Q7: return "Q7";
+        case PinLabel::I0: return "I0";
+        case PinLabel::I1: return "I1";
+        case PinLabel::I2: return "I2";
+        case PinLabel::I3: return "I3";
+        case PinLabel::I4: return "I4";
+        case PinLabel::I5: return "I5";
+        case PinLabel::I6: return "I6";
+        case PinLabel::I7: return "I7";
+        case PinLabel::Y0: return "Y0";
+        case PinLabel::Y1: return "Y1";
+        case PinLabel::Y2: return "Y2";
+        case PinLabel::Y3: return "Y3";
+        case PinLabel::Y4: return "Y4";
+        case PinLabel::Y5: return "Y5";
+        case PinLabel::Y6: return "Y6";
+        case PinLabel::Y7: return "Y7";
+        case PinLabel::S0: return "S0";
+        case PinLabel::S1: return "S1";
+        case PinLabel::S2: return "S2";
+        case PinLabel::S3: return "S3";
+        case PinLabel::G: return "G";
+        
+        // Test and configuration pins
+        case PinLabel::TEST: return "TEST";
+        case PinLabel::NC: return "NC";
+        
+        // Analog pins
+        case PinLabel::VREF: return "VREF";
+        case PinLabel::AIN0: return "AIN0";
+        case PinLabel::AIN1: return "AIN1";
+        case PinLabel::AIN2: return "AIN2";
+        case PinLabel::AIN3: return "AIN3";
+        case PinLabel::AIN4: return "AIN4";
+        case PinLabel::AIN5: return "AIN5";
+        case PinLabel::AIN6: return "AIN6";
+        case PinLabel::AIN7: return "AIN7";
+        case PinLabel::AOUT0: return "AOUT0";
+        case PinLabel::AOUT1: return "AOUT1";
+        
+        // Crystal/oscillator pins
+        case PinLabel::XTAL1: return "XTAL1";
+        case PinLabel::XTAL2: return "XTAL2";
+        case PinLabel::OSC_IN: return "OSC_IN";
+        case PinLabel::OSC_OUT: return "OSC_OUT";
+        
+        // Unknown/custom pin
+        case PinLabel::UNKNOWN:
+        default:
+            return "UNKNOWN";
+    }
+}
+
+std::string pin_label_to_display_string(PinLabel label) {
+    // Convert enum to basic string first
+    std::string base_str = pin_label_to_string(label);
+    
+    // Add Unicode symbols for special pins
+    if (label == PinLabel::PHI0) return "Φ0";
+    if (label == PinLabel::PHI1) return "Φ1";
+    if (label == PinLabel::PHI2) return "Φ2";
+    
+    return base_str;
+}
+
+PinLabel string_to_pin_label(const char* label_str) {
+    if (!label_str) return PinLabel::UNKNOWN;
+    
+    // Power pins
+    if (strcmp(label_str, "VDD") == 0) return PinLabel::VDD;
+    if (strcmp(label_str, "VSS") == 0) return PinLabel::VSS;
+    if (strcmp(label_str, "VCC") == 0) return PinLabel::VCC;
+    if (strcmp(label_str, "GND") == 0) return PinLabel::GND;
+    
+    // Clock pins
+    if (strcmp(label_str, "φ0") == 0 || strcmp(label_str, "PHI0") == 0) return PinLabel::PHI0;
+    if (strcmp(label_str, "φ1") == 0 || strcmp(label_str, "PHI1") == 0) return PinLabel::PHI1;
+    if (strcmp(label_str, "φ2") == 0 || strcmp(label_str, "PHI2") == 0) return PinLabel::PHI2;
+    
+    // Add more conversions as needed...
+    
+    return PinLabel::UNKNOWN;
+}
+
+PinType pin_label_to_pin_type(PinLabel label) {
+    // This function is redundant since ChipPin::get_pin_type() already does this
+    // But we keep it for API compatibility
+    ChipPin temp_pin = {0, label, 0, false, nullptr, nullptr, false, false};
+    return temp_pin.get_pin_type();
 }
