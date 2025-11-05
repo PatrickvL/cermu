@@ -192,20 +192,7 @@ PinLayout create_dip14_layout() {
             layout.right_pins.push_back(make_gpio_pin(i, label, "PORT"));
         }
     }
-    
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
-    return layout;
+        return layout;
 }
 
 PinLayout create_dip16_layout() {
@@ -234,18 +221,6 @@ PinLayout create_dip16_layout() {
         layout.right_pins.push_back(make_gpio_pin(i, label, "PORTB"));
     }
     
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -262,19 +237,6 @@ PinLayout create_dip20_layout() {
         0.0f                         // thermal_pad_size
     };
     
-    // Implementation similar to above
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -291,18 +253,6 @@ PinLayout create_dip24_layout() {
         0.0f                         // thermal_pad_size
     };
     
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -319,24 +269,11 @@ PinLayout create_dip28_layout() {
         0.0f                         // thermal_pad_size
     };
     
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
 PinLayout create_dip40_layout() {
     PinLayout layout = {};
-    
     layout.package = {
         600.0f,                      // width (mil) - DIP40 wide body width
         2000.0f,                     // height (mil) - DIP40 body length
@@ -348,18 +285,6 @@ PinLayout create_dip40_layout() {
         0.0f                         // thermal_pad_size
     };
     
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -391,18 +316,6 @@ PinLayout create_soic8_layout() {
         make_gpio_pin(5, "OUT3", nullptr)
     };
     
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -419,18 +332,6 @@ PinLayout create_soic14_layout() {
         0.0f                         // thermal_pad_size
     };
     
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -447,18 +348,6 @@ PinLayout create_soic16_layout() {
         0.0f                         // thermal_pad_size
     };
     
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -475,18 +364,6 @@ PinLayout create_soic28_layout() {
         0.0f                         // thermal_pad_size
     };
     
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -529,18 +406,6 @@ PinLayout create_plcc28_layout() {
         layout.top_pins.push_back(make_gpio_pin(i, label, "TOP"));
     }
     
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -558,18 +423,6 @@ PinLayout create_plcc44_layout() {
     };
     
     // 11 pins per side
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -587,18 +440,6 @@ PinLayout create_plcc68_layout() {
     };
     
     // 17 pins per side
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -617,18 +458,6 @@ PinLayout create_qfp32_layout() {
     };
     
     // 8 pins per side
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -645,18 +474,6 @@ PinLayout create_qfp44_layout() {
         0.0f                         // thermal_pad_size
     };
     
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -674,18 +491,6 @@ PinLayout create_qfp64_layout() {
     };
     
     // 16 pins per side
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -703,18 +508,6 @@ PinLayout create_qfp100_layout() {
     };
     
     // 25 pins per side
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -732,18 +525,6 @@ PinLayout create_qfp144_layout() {
     };
     
     // 36 pins per side
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -762,18 +543,6 @@ PinLayout create_qfn16_layout() {
     };
     
     // 4 pins per side
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -790,18 +559,6 @@ PinLayout create_qfn24_layout() {
         0.6f                         // thermal_pad_size
     };
     
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -818,18 +575,6 @@ PinLayout create_qfn32_layout() {
         0.65f                        // thermal_pad_size
     };
     
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -846,18 +591,6 @@ PinLayout create_qfn48_layout() {
         0.65f                        // thermal_pad_size
     };
     
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -876,18 +609,6 @@ PinLayout create_bga64_layout() {
     };
     
     // 8x8 grid
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -905,18 +626,6 @@ PinLayout create_bga100_layout() {
     };
     
     // 10x10 grid
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -934,18 +643,6 @@ PinLayout create_bga256_layout() {
     };
     
     // 16x16 grid
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -1004,18 +701,6 @@ PinLayout create_to92_layout() {
         make_gpio_pin(3, "C", "COLLECTOR")
     };
     
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -1041,18 +726,6 @@ PinLayout create_sot23_layout() {
         make_gpio_pin(3, "C", "COLLECTOR")
     };
     
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -1080,18 +753,6 @@ PinLayout create_sot223_layout() {
         make_gpio_pin(4, "TAB", "THERMAL")
     };
     
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -1116,18 +777,6 @@ PinLayout create_sip8_layout() {
         layout.bottom_pins.push_back(make_gpio_pin(i, label, nullptr));
     }
     
-    layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
-        false,                       // show_part_number
-        false,                       // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
     return layout;
 }
 
@@ -1202,7 +851,6 @@ PinLayout create_custom_dip(uint8_t total_pins, const char* part_name) {
         layout.right_pins.push_back(make_gpio_pin(i, label, nullptr));
     }
     
-    layout.markings = {};
     return layout;
 }
 
