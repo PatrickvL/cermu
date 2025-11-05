@@ -1247,7 +1247,7 @@ void* mos6581_system_create(chip_descriptor_t* desc) {
 
 // Include GUI implementation if available
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#include "mos6581_gui.c"
+#include "mos6581_gui.h"
 #endif
 
 /**

@@ -50,5 +50,5 @@ chip_descriptor_t mos6567_descriptor = {
 
 // Include GUI implementation
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#include "mos6567_gui.c"
+#include "mos6567_gui.h"
 #endif

@@ -244,9 +244,17 @@ void c64_system_destroy(c64_t* c64) {
 }
 
 c64_t* c64_system_create(const c64_config_t* config) {
-    c64_t* c64 = calloc(1, sizeof(c64_t));
+    c64_t* c64 = static_cast<c64_t*>(calloc(1, sizeof(c64_t)));
     if (!c64) {
         printf("ERROR: Failed to allocate C64 system\n");
+        return NULL;
+    }
+
+    // Initialize the legacy system wrapper first
+    system_8bit_init(&c64->system);
+    if (!c64->system.cpp_system) {
+        printf("ERROR: Failed to initialize system\n");
+        free(c64);
         return NULL;
     }
 
@@ -265,19 +273,19 @@ c64_t* c64_system_create(const c64_config_t* config) {
     c64->bus.system_lines = SYS_MASK_EXROM | SYS_MASK_GAME;
     // Initialize the integrated adapter interfaces
     c64_bus_init_adapters(&c64->bus);
-    if (!(c64->ram = create_and_register_chip(c64, &ram_descriptor, 0x0000, 65536))) { c64_system_destroy(c64); return NULL; }
+    if (!(c64->ram = static_cast<ram_t*>(create_and_register_chip(c64, &ram_descriptor, 0x0000, 65536)))) { c64_system_destroy(c64); return NULL; }
     if (!(c64->mos6510 = create_and_register_chip(c64, &mos6510_descriptor, 0x0000, 4096))) { c64_system_destroy(c64); return NULL; }
-    if (!(c64->cartridge_roml = create_and_register_chip(c64, &rom_descriptor, 0x8000, 8192))) { c64_system_destroy(c64); return NULL; }
-    if (!(c64->basic = create_and_register_chip(c64, &rom_descriptor, 0xA000, 8192))) { c64_system_destroy(c64); return NULL; }
-    if (!(c64->cartridge_romh = create_and_register_chip(c64, &rom_descriptor, 0xC000, 8192))) { c64_system_destroy(c64); return NULL; }
-    if (!(c64->charrom = create_and_register_chip(c64, &rom_descriptor, 0xD000, 4096))) { c64_system_destroy(c64); return NULL; }
-    if (!(c64->vicii = create_and_register_chip(c64, vicii_descriptor, 0xD000, 1024))) { c64_system_destroy(c64); return NULL; }
-    if (!(c64->sid = create_and_register_chip(c64, &mos6581_descriptor, 0xD400, 1024))) { c64_system_destroy(c64); return NULL; }
-    if (!(c64->colorram = create_and_register_chip(c64, &mos2114_descriptor, 0xD800, 1024))) { c64_system_destroy(c64); return NULL; }
+    if (!(c64->cartridge_roml = static_cast<rom_t*>(create_and_register_chip(c64, &rom_descriptor, 0x8000, 8192)))) { c64_system_destroy(c64); return NULL; }
+    if (!(c64->basic = static_cast<rom_t*>(create_and_register_chip(c64, &rom_descriptor, 0xA000, 8192)))) { c64_system_destroy(c64); return NULL; }
+    if (!(c64->cartridge_romh = static_cast<rom_t*>(create_and_register_chip(c64, &rom_descriptor, 0xC000, 8192)))) { c64_system_destroy(c64); return NULL; }
+    if (!(c64->charrom = static_cast<rom_t*>(create_and_register_chip(c64, &rom_descriptor, 0xD000, 4096)))) { c64_system_destroy(c64); return NULL; }
+    if (!(c64->vicii = static_cast<vicii_t*>(create_and_register_chip(c64, vicii_descriptor, 0xD000, 1024)))) { c64_system_destroy(c64); return NULL; }
+    if (!(c64->sid = static_cast<mos6581_t*>(create_and_register_chip(c64, &mos6581_descriptor, 0xD400, 1024)))) { c64_system_destroy(c64); return NULL; }
+    if (!(c64->colorram = static_cast<mos2114_t*>(create_and_register_chip(c64, &mos2114_descriptor, 0xD800, 1024)))) { c64_system_destroy(c64); return NULL; }
     c64->vicii->colorram = c64->colorram; // Also assign to VIC-II for compatibility
-    if (!(c64->cia1 = create_and_register_chip(c64, &mos6526_descriptor, 0xDC00, 256))) { c64_system_destroy(c64); return NULL; }
-    if (!(c64->cia2 = create_and_register_chip(c64, &mos6526_descriptor, 0xDD00, 256))) { c64_system_destroy(c64); return NULL; }
-    if (!(c64->kernal = create_and_register_chip(c64, &rom_descriptor, 0xE000, 8192))) { c64_system_destroy(c64); return NULL; }
+    if (!(c64->cia1 = static_cast<mos6526_t*>(create_and_register_chip(c64, &mos6526_descriptor, 0xDC00, 256)))) { c64_system_destroy(c64); return NULL; }
+    if (!(c64->cia2 = static_cast<mos6526_t*>(create_and_register_chip(c64, &mos6526_descriptor, 0xDD00, 256)))) { c64_system_destroy(c64); return NULL; }
+    if (!(c64->kernal = static_cast<rom_t*>(create_and_register_chip(c64, &rom_descriptor, 0xE000, 8192)))) { c64_system_destroy(c64); return NULL; }
     
     // Initialize placeholders for missing components
     c64->io1 = NULL; // No cartridge I/O by default

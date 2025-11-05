@@ -5,7 +5,8 @@
 #include <stdbool.h>
 
 // Forward declarations
-struct c64_s;
+struct C64System;
+typedef struct C64System c64_s;  // Use typedef instead of forward declaration to match our using alias
 
 // Aspect ratio configuration enums
 typedef enum {
@@ -95,9 +96,9 @@ typedef enum {
     EMU_STATE_RESETTING
 } emulation_state_t;
 
-// Emulation thread context
-typedef struct emulation_context_s {
-    struct c64_s* c64;              // C64 system pointer
+// GUI Emulation thread context
+typedef struct gui_emulation_context_s {
+    c64_s* c64;              // C64 system pointer
     void* thread_impl;              // Platform-specific thread implementation
     
     // Thread communication
@@ -114,7 +115,7 @@ typedef struct emulation_context_s {
     uint64_t total_cycles_executed;
     uint32_t frames_rendered;
     uint32_t actual_fps;
-} emulation_context_t;
+} gui_emulation_context_t;
 
 // GUI initialization and cleanup
 bool gui_init(const char* window_title, int width, int height);
@@ -123,23 +124,23 @@ void gui_cleanup_state(gui_state_t* gui_state);
 void gui_delay(uint32_t ms);
 
 // Main GUI functions
-void gui_render_frame(struct c64_s* c64, gui_state_t* gui_state, struct emulation_context_s* emu_context);
+void gui_render_frame(c64_s* c64, gui_state_t* gui_state, gui_emulation_context_t* emu_context);
 bool gui_should_quit(void);
-void gui_handle_events(struct emulation_context_s* emu_context);
+void gui_handle_events(gui_emulation_context_t* emu_context);
 
 // Window rendering functions
-void gui_render_menu_bar(struct c64_s* c64, gui_state_t* gui_state, struct emulation_context_s* emu_context);
-void gui_render_memory_viewer(struct c64_s* c64, gui_state_t* gui_state);
-void gui_render_debugger(struct c64_s* c64, gui_state_t* gui_state, struct emulation_context_s* emu_context);
-void gui_render_settings(struct c64_s* c64, gui_state_t* gui_state);
+void gui_render_menu_bar(c64_s* c64, gui_state_t* gui_state, gui_emulation_context_t* emu_context);
+void gui_render_memory_viewer(c64_s* c64, gui_state_t* gui_state);
+void gui_render_debugger(c64_s* c64, gui_state_t* gui_state, gui_emulation_context_t* emu_context);
+void gui_render_settings(c64_s* c64, gui_state_t* gui_state);
 void gui_render_about(gui_state_t* gui_state);
-void gui_render_screen(struct c64_s* c64, gui_state_t* gui_state);
+void gui_render_screen(c64_s* c64, gui_state_t* gui_state);
 // PLA debug is now handled through the chip system via pla_render_debug_window
 
 // Screen display functions
 bool gui_init_screen_display(gui_state_t* gui_state);
 void gui_cleanup_screen_display(gui_state_t* gui_state);
-void gui_update_screen_texture(struct c64_s* c64, gui_state_t* gui_state);
+void gui_update_screen_texture(c64_s* c64, gui_state_t* gui_state);
 
 // Framebuffer access functions
 uint32_t* gui_get_screen_buffer(void);
@@ -156,32 +157,32 @@ void gui_get_guest_dimensions(gui_state_t* gui_state, bool is_pal,
 
 // Utility functions
 void gui_init_state(gui_state_t* gui_state);
-void gui_load_rom_file(const char* filepath, const char* type, gui_state_t* gui_state, emulation_context_t* emu_context);
+void gui_load_rom_file(const char* filepath, const char* type, gui_state_t* gui_state, gui_emulation_context_t* emu_context);
 void gui_load_disk_image(const char* filepath);
-bool gui_reload_roms_from_state(struct c64_s* c64, const gui_state_t* gui_state);
-bool gui_apply_rom_changes(emulation_context_t* emu_context, gui_state_t* gui_state);
+bool gui_reload_roms_from_state(c64_s* c64, const gui_state_t* gui_state);
+bool gui_apply_rom_changes(gui_emulation_context_t* emu_context, gui_state_t* gui_state);
 
 // Emulation thread functions (SDL-based implementation)
-bool gui_emulation_thread_init(emulation_context_t* context, struct c64_s* c64);
-void gui_emulation_thread_cleanup(emulation_context_t* context);
-bool gui_emulation_thread_start(emulation_context_t* context);
-void gui_emulation_thread_stop(emulation_context_t* context);
+bool gui_emulation_thread_init(gui_emulation_context_t* context, c64_s* c64);
+void gui_emulation_thread_cleanup(gui_emulation_context_t* context);
+bool gui_emulation_thread_start(gui_emulation_context_t* context);
+void gui_emulation_thread_stop(gui_emulation_context_t* context);
 
 // Emulation control functions (called from GUI to send signals)
-void gui_emulation_send_signal(emulation_context_t* emu_context, emulation_signal_t signal);
-emulation_state_t gui_emulation_get_state(emulation_context_t* emu_context);
-void gui_emulation_set_speed(emulation_context_t* emu_context, float speed_multiplier);
-uint32_t gui_emulation_get_fps(emulation_context_t* emu_context);
-uint64_t gui_emulation_get_total_cycles(emulation_context_t* emu_context);
+void gui_emulation_send_signal(gui_emulation_context_t* emu_context, emulation_signal_t signal);
+emulation_state_t gui_emulation_get_state(gui_emulation_context_t* emu_context);
+void gui_emulation_set_speed(gui_emulation_context_t* emu_context, float speed_multiplier);
+uint32_t gui_emulation_get_fps(gui_emulation_context_t* emu_context);
+uint64_t gui_emulation_get_total_cycles(gui_emulation_context_t* emu_context);
 
 // Frame rendering and timing functions (called from main GUI thread)
-void gui_emulation_render_frame(emulation_context_t* emu_context);
-void gui_emulation_update_fps(emulation_context_t* emu_context);
+void gui_emulation_render_frame(gui_emulation_context_t* emu_context);
+void gui_emulation_update_fps(gui_emulation_context_t* emu_context);
 
 // Convenience wrapper functions
-void gui_emulation_start(emulation_context_t* emu_context);
-void gui_emulation_pause(emulation_context_t* emu_context);
-void gui_emulation_step(emulation_context_t* emu_context);
-void gui_emulation_reset(emulation_context_t* emu_context);
+void gui_emulation_start(gui_emulation_context_t* emu_context);
+void gui_emulation_pause(gui_emulation_context_t* emu_context);
+void gui_emulation_step(gui_emulation_context_t* emu_context);
+void gui_emulation_reset(gui_emulation_context_t* emu_context);
 
 #endif // CIMGUI_INTERFACE_H

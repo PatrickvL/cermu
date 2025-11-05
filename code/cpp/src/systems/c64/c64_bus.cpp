@@ -209,14 +209,14 @@ void c64_bus_system_attach(c64_bus_t* c64_bus, void* c64) {
 }
 
 chip_descriptor_t c64_bus_descriptor = {
-    .description = "C64 System Bus Controller",
-    .create = c64_bus_system_create,
-    .destroy = c64_bus_system_destroy,
-    .bus_attach = NULL,
-    .bank_change = NULL
+    /* description */ "C64 System Bus Controller",
+    /* create */ c64_bus_system_create,
+    /* destroy */ c64_bus_system_destroy,
+    /* bus_attach */ NULL,
+    /* bank_change */ NULL
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-    ,.render_debug_window = NULL, // No GUI debug window implemented yet
-    .render_settings_window = NULL // No GUI settings window implemented yet
+    , /* render_debug_window */ NULL, // No GUI debug window implemented yet
+    /* render_settings_window */ NULL // No GUI settings window implemented yet
 #endif
 };
 
@@ -240,7 +240,7 @@ static void c64_bus_update_pla_mode(c64_bus_t* c64_bus) {
 
 // Waits for the bus to be ready, ticking non-CPU chips.
 void c64_wait_for_bus_ready(c64_bus_t *c64_bus, bool is_read_cycle) {
-    c64_t* c64 = c64_bus->c64;
+    c64_t* c64 = static_cast<c64_t*>(c64_bus->c64);
 
     if (is_read_cycle) {
         // A CPU read must wait for VIC to release the bus (AEC high) AND
@@ -578,14 +578,18 @@ typedef struct {
 
 // Sparse lookup table indexed by CHIP_* values (supports irregular numbering)
 static const c64_chip_entry_t c64_bus_chip_to_entry[] = {
-    [CHIP_ROML]     = { 0x8000, 8*1024, "Cartridge ROM Low" },
-    [CHIP_ROMH]     = { 0xA000, 8*1024, "Cartridge ROM High" }, // Note: Can also map to 0xE000
-    [CHIP_KERNAL]   = { 0xE000, 8*1024, "KERNAL ROM" },
-    [CHIP_BASIC]    = { 0xA000, 8*1024, "BASIC ROM" },
-    [CHIP_CHARROM]  = { 0xD000, 4*1024, "Character ROM" },
-    [CHIP_RAM]      = { 0x0000, 64*1024, "RAM" },
-    [CHIP_UNMAPPED] = { 0x0000, 0, "Unmapped" },
-    [CHIP_IO]       = { 0xD000, 4*1024, "I/O" },
+    /* [CHIP_ROML] = */     { 0x8000, 8*1024, "Cartridge ROM Low" },
+    { 0, 0, nullptr }, // CHIP_1 unused
+    /* [CHIP_ROMH] = */     { 0xA000, 8*1024, "Cartridge ROM High" }, // Note: Can also map to 0xE000
+    { 0, 0, nullptr }, // CHIP_3 unused
+    /* [CHIP_KERNAL] = */   { 0xE000, 8*1024, "KERNAL ROM" },
+    { 0, 0, nullptr }, // CHIP_5 unused
+    /* [CHIP_BASIC] = */    { 0xA000, 8*1024, "BASIC ROM" },
+    { 0, 0, nullptr }, // CHIP_7 unused
+    /* [CHIP_CHARROM] = */  { 0xD000, 4*1024, "Character ROM" },
+    /* [CHIP_RAM] = */      { 0x0000, 64*1024, "RAM" },
+    /* [CHIP_UNMAPPED] = */ { 0x0000, 0, "Unmapped" },
+    /* [CHIP_IO] = */       { 0xD000, 4*1024, "I/O" },
 };
 static const size_t CHIP_ENTRY_COUNT = sizeof(c64_bus_chip_to_entry) / sizeof(c64_bus_chip_to_entry[0]);
 

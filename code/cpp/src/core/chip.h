@@ -12,22 +12,23 @@ class ChipBase;
 // Modern C++ callback type using std::function for type safety
 using chip_callback_t = std::function<bus_state_t(void* chip, bus_state_t bus_state)>;
 
-// Chip descriptor - modernized with C++ features
+// Chip descriptor - simplified for compatibility
 struct ChipDescriptor {
     const char* description;  // Human-readable description for debugging
-    std::unique_ptr<ChipBase> (*create)(ChipDescriptor* desc);
-    std::function<void(void* chip, void* bus)> bus_attach;
-    std::function<void(void* chip, std::uint8_t bank)> bank_change;
+    void* (*create)(ChipDescriptor* desc);  // Create chip instance
+    void (*destroy)(void* chip);            // Destroy chip instance
+    void (*bus_attach)(void* chip, void* bus);     // Bus attachment (nullable)
+    void (*bank_change)(void* chip, std::uint8_t bank);  // Bank change (nullable)
 #ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-    std::function<void(void* chip, bool* show_window)> render_debug_window; // Optional GUI debug window callback
-    std::function<void(void* chip, bool* show_window)> render_settings_window; // Optional GUI settings window callback
+    void (*render_debug_window)(void* chip, bool* show_window);   // GUI debug window (nullable)
+    void (*render_settings_window)(void* chip, bool* show_window); // GUI settings window (nullable)
 #endif
 };
 
-// Chip registry entry - modernized
+// Chip registry entry - simplified for compatibility
 struct ChipEntry {
-    std::unique_ptr<ChipBase> chip;
-    std::unique_ptr<ChipDescriptor> desc;
+    void* chip;                    // Raw pointer for compatibility
+    ChipDescriptor* desc;          // Raw pointer for compatibility
     std::size_t size;
     std::uint16_t base_address;
     std::uint8_t chip_id;

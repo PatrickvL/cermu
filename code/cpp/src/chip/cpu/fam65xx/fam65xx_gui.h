@@ -27,8 +27,8 @@ void fam65xx_update_bus_state(void* chip, uint64_t bus_state);
 
 // Forward declarations
 namespace fam65xx {
-    template<const CPUTraits& Traits> class fam65xx_t;
-    struct CPUTraits;
+    struct CPUTraits;  // Forward declare the struct first
+    template<const CPUTraits& Traits> class fam65xx_t;  // Then use it in template
     class CPUGUIRenderer;
 }
 
