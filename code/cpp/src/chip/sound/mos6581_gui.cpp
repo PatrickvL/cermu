@@ -96,20 +96,20 @@ inline ChipLayout create_mos6581_layout() {
         false                        // show_date_code
     };
     
-    PIN_LR(layout, 1,  CAP1A, 28, VDD);     // Filter Cap 1A / +12V Power
-    PIN_LR(layout, 2,  CAP1B, 27, AUDIO_OUT);  // Filter Cap 1B / Audio Output
-    PIN_LR(layout, 3,  CAP2A, 26, EXT_IN);  // Filter Cap 2A / External Input
-    PIN_LR(layout, 4,  CAP2B, 25, VCC);     // Filter Cap 2B / +5V Power
-    PIN_LR(layout, 5,  RES,   24, POTX);    // Reset         / Paddle X
-    PIN_LR(layout, 6,  PHI2,  23, POTY);    // Clock         / Paddle Y
-    PIN_LR(layout, 7,  RW,    22, D7);      // Read/Write    / Data 7
-    PIN_LR(layout, 8,  CS,    21, D6);      // Chip Select   / Data 6
-    PIN_LR(layout, 9,  A0,    20, D5);      // Address 0     / Data 5
-    PIN_LR(layout, 10, A1,    19, D4);      // Address 1     / Data 4
-    PIN_LR(layout, 11, A2,    18, D3);      // Address 2     / Data 3
-    PIN_LR(layout, 12, A3,    17, D2);      // Address 3     / Data 2
-    PIN_LR(layout, 13, A4,    16, D1);      // Address 4     / Data 1
-    PIN_LR(layout, 14, VSS,   15, D0);      // Ground        / Data 0
+    PIN_LR(layout, 1, CAP1A,  VDD, 28);     // Filter Cap 1A / +12V Power
+    PIN_LR(layout, 2, CAP1B,  AUDIO_OUT, 27);  // Filter Cap 1B / Audio Output
+    PIN_LR(layout, 3, CAP2A,  EXT_IN, 26);  // Filter Cap 2A / External Input
+    PIN_LR(layout, 4, CAP2B,  VCC, 25);     // Filter Cap 2B / +5V Power
+    PIN_LR(layout, 5, RES,    POTX, 24);    // Reset         / Paddle X
+    PIN_LR(layout, 6, PHI2,   POTY, 23);    // Clock         / Paddle Y
+    PIN_LR(layout, 7, RW,     D7, 22);      // Read/Write    / Data 7
+    PIN_LR(layout, 8, CS,     D6, 21);      // Chip Select   / Data 6
+    PIN_LR(layout, 9, A0,     D5, 20);      // Address 0     / Data 5
+    PIN_LR(layout, 10, A1,    D4, 19);      // Address 1     / Data 4
+    PIN_LR(layout, 11, A2,    D3, 18);      // Address 2     / Data 3
+    PIN_LR(layout, 12, A3,    D2, 17);      // Address 3     / Data 2
+    PIN_LR(layout, 13, A4,    D1, 16);      // Address 4     / Data 1
+    PIN_LR(layout, 14, VSS,   D0, 15);      // Ground        / Data 0
     
     return layout;
 }

@@ -246,10 +246,10 @@ ChipLayout create_dip8_layout() {
         0.0f                         // thermal_pad_size
     };
     
-    PIN_LR(layout, 1, VCC, 8, VDD);
-    PIN_LR(layout, 2, PA0, 7, PB0);
-    PIN_LR(layout, 3, PA1, 6, PB1);
-    PIN_LR(layout, 4, GND, 5, VSS);
+    PIN_LR(layout, 1, VCC,  VDD, 8);
+    PIN_LR(layout, 2, PA0,  PB0, 7);
+    PIN_LR(layout, 3, PA1,  PB1, 6);
+    PIN_LR(layout, 4, GND,  VSS, 5);
     
     layout.markings = {
         nullptr,                     // part_number

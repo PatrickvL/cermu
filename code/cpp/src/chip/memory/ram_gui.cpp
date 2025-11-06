@@ -36,15 +36,15 @@ inline ChipLayout create_ram_layout() {
     layout.right_pins.clear();
     
     // Left side pins (1-9)
-    PIN_LR(layout, 1, A6,  18, VCC);  // Address 6 / +5V Power
-    PIN_LR(layout, 2, A5,  17, D1);   // Address 5 / Data 1
-    PIN_LR(layout, 3, A4,  16, D2);   // Address 4 / Data 2
-    PIN_LR(layout, 4, A3,  15, D3);   // Address 3 / Data 3
-    PIN_LR(layout, 5, A0,  14, CS);   // Address 0 / Chip Select
-    PIN_LR(layout, 6, A1,  13, WE);   // Address 1 / Write Enable
-    PIN_LR(layout, 7, A2,  12, A9);   // Address 2 / Address 9
-    PIN_LR(layout, 8, D0,  11, A8);   // Data 0    / Address 8
-    PIN_LR(layout, 9, VSS, 10, A7);   // Ground    / Address 7
+    PIN_LR(layout, 1, A6,   VCC, 18);  // Address 6 / +5V Power
+    PIN_LR(layout, 2, A5,   D1,  17);   // Address 5 / Data 1
+    PIN_LR(layout, 3, A4,   D2,  16);   // Address 4 / Data 2
+    PIN_LR(layout, 4, A3,   D3,  15);   // Address 3 / Data 3
+    PIN_LR(layout, 5, A0,   CS,  14);   // Address 0 / Chip Select
+    PIN_LR(layout, 6, A1,   WE,  13);   // Address 1 / Write Enable
+    PIN_LR(layout, 7, A2,   A9,  12);   // Address 2 / Address 9
+    PIN_LR(layout, 8, D0,   A8,  11);   // Data 0    / Address 8
+    PIN_LR(layout, 9, VSS,  A7,  10);   // Ground    / Address 7
     
     return layout;
 }
