@@ -433,20 +433,6 @@ int main(int argc, char* argv[]) {
     bool verbose = false;
 
     // Parse command line arguments
-#ifndef _WIN32
-    static const struct option long_options[] = {
-        {"help",       no_argument,       0, 'h'},
-        {"trace",      required_argument, 0, 't'},
-        {"cycles",     required_argument, 0, 'c'},
-        {"functional", no_argument,       0, 'f'},
-        {"decimal",    no_argument,       0, 'd'},
-        {"interrupt",  no_argument,       0, 'i'},
-        {"all",        no_argument,       0, 'a'},
-        {"verbose",    no_argument,       0, 'v'},
-        {0, 0, 0, 0}
-    };
-#endif
-
 #ifdef _WIN32
     // Simplified Windows parsing - just check for help flag
     for (int i = 1; i < argc; i++) {
@@ -461,6 +447,18 @@ int main(int argc, char* argv[]) {
         }
     }
 #else
+    static const struct option long_options[] = {
+        {"help",       no_argument,       0, 'h'},
+        {"trace",      required_argument, 0, 't'},
+        {"cycles",     required_argument, 0, 'c'},
+        {"functional", no_argument,       0, 'f'},
+        {"decimal",    no_argument,       0, 'd'},
+        {"interrupt",  no_argument,       0, 'i'},
+        {"all",        no_argument,       0, 'a'},
+        {"verbose",    no_argument,       0, 'v'},
+        {0, 0, 0, 0}
+    };
+
     int c;
     while ((c = getopt_long(argc, argv, "ht:c:fdiav", long_options, nullptr)) != -1) {
         switch (c) {
