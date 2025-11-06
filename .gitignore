@@ -2,6 +2,7 @@
 .vscode/settings.json
 
 # Build directories
+build/bin/**
 code/cpp/build/
 code/cpp/build_gui/
 code/cpp/bin/

@@ -38,6 +38,12 @@ struct ChipLayout {
     std::string get_package_name() const;
 };
 
+// Macro to define left and right pins simultaneously for DIP packages
+// Simplified for new ChipPin structure
+#define PIN_LR(layout, left_num, left_lbl_enum, right_num, right_lbl_enum) \
+    layout.left_pins.push_back(PIN(left_num, left_lbl_enum)); \
+    layout.right_pins.push_back(PIN(right_num, right_lbl_enum));
+
 // ============================================================================
 // STANDARD PACKAGE LAYOUT FUNCTIONS
 // ============================================================================

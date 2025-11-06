@@ -169,52 +169,11 @@ const char* pin_type_to_group_name(PinType type) {
 // HELPER FUNCTIONS FOR STANDARD PACKAGE LAYOUTS
 // ============================================================================
 
-// Legacy functions replaced by make_pin - all now use generic make_pin
-ChipPin make_power_pin(uint8_t num, PinLabel label) {
-    return make_pin(num, label, nullptr);
-}
-
-ChipPin make_ground_pin(uint8_t num, PinLabel label) {
-    return make_pin(num, label, nullptr);
-}
-
-ChipPin make_address_pin(uint8_t num, PinLabel label, uint8_t bit) {
-    return make_pin(num, label, nullptr);
-}
-
-ChipPin make_data_pin(uint8_t num, PinLabel label, uint8_t bit) {
-    return make_pin(num, label, nullptr);
-}
-
-ChipPin make_control_pin(uint8_t num, PinLabel label, bool active_low) {
-    return make_pin(num, label, nullptr);
-}
-
-ChipPin make_clock_pin(uint8_t num, PinLabel label) {
-    return make_pin(num, label, nullptr);
-}
-
-ChipPin make_interrupt_pin(uint8_t num, PinLabel label, bool active_low) {
-    return make_pin(num, label, nullptr);
-}
-
-ChipPin make_gpio_pin(uint8_t num, PinLabel label, const char* port) {
-    return make_pin(num, label, nullptr);
-}
-
-ChipPin make_analog_pin(uint8_t num, PinLabel label) {
-    return make_pin(num, label, nullptr);
-}
-
-ChipPin make_differential_pin(uint8_t num, PinLabel label, bool positive) {
-    ChipPin pin = make_pin(num, label, nullptr);
+ChipPin make_pin(uint8_t num, PinLabel label, bool positive) {
+    ChipPin pin = make_pin(num, label);
     pin.is_differential_pos = positive;
     pin.is_differential_neg = !positive;
     return pin;
-}
-
-ChipPin make_nc_pin(uint8_t num) {
-    return make_pin(num, PinLabel::NC, nullptr);
 }
 
 // ============================================================================
@@ -287,19 +246,10 @@ ChipLayout create_dip8_layout() {
         0.0f                         // thermal_pad_size
     };
     
-    layout.left_pins = {
-        make_power_pin(1, PinLabel::VCC),
-        make_gpio_pin(2, PinLabel::PA0, nullptr),
-        make_gpio_pin(3, PinLabel::PA1, nullptr),
-        make_ground_pin(4, PinLabel::GND)
-    };
-    
-    layout.right_pins = {
-        make_power_pin(8, PinLabel::VDD),
-        make_gpio_pin(7, PinLabel::PB0, nullptr),
-        make_gpio_pin(6, PinLabel::PB1, nullptr),
-        make_ground_pin(5, PinLabel::VSS)
-    };
+    PIN_LR(layout, 1, VCC, 8, VDD);
+    PIN_LR(layout, 2, PA0, 7, PB0);
+    PIN_LR(layout, 3, PA1, 6, PB1);
+    PIN_LR(layout, 4, GND, 5, VSS);
     
     layout.markings = {
         nullptr,                     // part_number
@@ -332,21 +282,19 @@ ChipLayout create_dip14_layout() {
     
     // Left side (pins 1-7)
     for (uint8_t i = 1; i <= 7; i++) {
-        char label[8];
         if (i == 7) {
-            layout.left_pins.push_back(make_ground_pin(7, PinLabel::GND));
+            layout.left_pins.push_back(make_pin(7, PinLabel::GND));
         } else {
-            layout.left_pins.push_back(make_gpio_pin(i, PinLabel::PA0, "PORT"));
+            layout.left_pins.push_back(make_pin(i, PinLabel::PA0, "PORT"));
         }
     }
     
     // Right side (pins 8-14)
     for (uint8_t i = 14; i >= 8; i--) {
-        char label[8];
         if (i == 14) {
-            layout.right_pins.push_back(make_power_pin(14, PinLabel::VCC));
+            layout.right_pins.push_back(make_pin(14, PinLabel::VCC));
         } else {
-            layout.right_pins.push_back(make_gpio_pin(i, PinLabel::PB0, "PORT"));
+            layout.right_pins.push_back(make_pin(i, PinLabel::PB0, "PORT"));
         }
     }
         return layout;
@@ -367,11 +315,11 @@ ChipLayout create_dip16_layout() {
     
     // 8 pins per side
     for (uint8_t i = 1; i <= 8; i++) {
-        layout.left_pins.push_back(make_gpio_pin(i, PinLabel::PA0, "PORTA"));
+        layout.left_pins.push_back(make_pin(i, PinLabel::PA0, "PORTA"));
     }
     
     for (uint8_t i = 16; i >= 9; i--) {
-        layout.right_pins.push_back(make_gpio_pin(i, PinLabel::PB0, "PORTB"));
+        layout.right_pins.push_back(make_pin(i, PinLabel::PB0, "PORTB"));
     }
     
     return layout;
@@ -408,11 +356,11 @@ ChipLayout create_dip18_layout() {
     
     // 9 pins per side
     for (uint8_t i = 1; i <= 9; i++) {
-        layout.left_pins.push_back(make_gpio_pin(i, PinLabel::MA0, "ADDR"));
+        layout.left_pins.push_back(make_pin(i, PinLabel::MA0));
     }
     
     for (uint8_t i = 18; i >= 10; i--) {
-        layout.right_pins.push_back(make_gpio_pin(i, PinLabel::DQ0, "DATA"));
+        layout.right_pins.push_back(make_pin(i, PinLabel::DQ0));
     }
     
     return layout;
@@ -481,17 +429,17 @@ ChipLayout create_soic8_layout() {
     };
     
     layout.left_pins = {
-        make_gpio_pin(1, PinLabel::PA0, nullptr),
-        make_gpio_pin(2, PinLabel::PA1, nullptr),
-        make_gpio_pin(3, PinLabel::PA2, nullptr),
-        make_ground_pin(4, PinLabel::GND)
+        make_pin(1, PinLabel::PA0),
+        make_pin(2, PinLabel::PA1),
+        make_pin(3, PinLabel::PA2),
+        make_pin(4, PinLabel::GND)
     };
     
     layout.right_pins = {
-        make_power_pin(8, PinLabel::VCC),
-        make_gpio_pin(7, PinLabel::PB0, nullptr),
-        make_gpio_pin(6, PinLabel::PB1, nullptr),
-        make_gpio_pin(5, PinLabel::PB2, nullptr)
+        make_pin(8, PinLabel::VCC),
+        make_pin(7, PinLabel::PB0),
+        make_pin(6, PinLabel::PB1),
+        make_pin(5, PinLabel::PB2)
     };
     
     return layout;
@@ -561,19 +509,19 @@ ChipLayout create_plcc28_layout() {
     
     // PLCC has pins on all 4 sides: 7 per side
     for (int i = 1; i <= 7; i++) {
-        layout.left_pins.push_back(make_gpio_pin(i, PinLabel::PA0, "LEFT"));
+        layout.left_pins.push_back(make_pin(i, PinLabel::PA0, "LEFT"));
     }
     
     for (int i = 8; i <= 14; i++) {
-        layout.bottom_pins.push_back(make_gpio_pin(i, PinLabel::PA1, "BOTTOM"));
+        layout.bottom_pins.push_back(make_pin(i, PinLabel::PA1, "BOTTOM"));
     }
     
     for (int i = 15; i <= 21; i++) {
-        layout.right_pins.push_back(make_gpio_pin(i, PinLabel::PA2, "RIGHT"));
+        layout.right_pins.push_back(make_pin(i, PinLabel::PA2, "RIGHT"));
     }
     
     for (int i = 22; i <= 28; i++) {
-        layout.top_pins.push_back(make_gpio_pin(i, PinLabel::PA3, "TOP"));
+        layout.top_pins.push_back(make_pin(i, PinLabel::PA3, "TOP"));
     }
     
     return layout;
@@ -831,9 +779,9 @@ ChipLayout create_to220_layout() {
     };
     
     layout.bottom_pins = {
-        make_gpio_pin(1, PinLabel::PA0, "INPUT"),
-        make_ground_pin(2, PinLabel::GND),
-        make_gpio_pin(3, PinLabel::PA1, "OUTPUT")
+        make_pin(1, PinLabel::PA0, "INPUT"),
+        make_pin(2, PinLabel::GND),
+        make_pin(3, PinLabel::PA1, "OUTPUT")
     };
     
     layout.markings = {
@@ -866,9 +814,9 @@ ChipLayout create_to92_layout() {
     };
     
     layout.bottom_pins = {
-        make_gpio_pin(1, PinLabel::PA0, "EMITTER"),
-        make_gpio_pin(2, PinLabel::PA1, "BASE"),
-        make_gpio_pin(3, PinLabel::PA2, "COLLECTOR")
+        make_pin(1, PinLabel::PA0, "EMITTER"),
+        make_pin(2, PinLabel::PA1, "BASE"),
+        make_pin(3, PinLabel::PA2, "COLLECTOR")
     };
     
     return layout;
@@ -888,12 +836,12 @@ ChipLayout create_sot23_layout() {
     };
     
     layout.left_pins = {
-        make_gpio_pin(1, PinLabel::PA0, "BASE"),
-        make_gpio_pin(2, PinLabel::PA1, "EMITTER")
+        make_pin(1, PinLabel::PA0, "BASE"),
+        make_pin(2, PinLabel::PA1, "EMITTER")
     };
     
     layout.right_pins = {
-        make_gpio_pin(3, PinLabel::PA2, "COLLECTOR")
+        make_pin(3, PinLabel::PA2, "COLLECTOR")
     };
     
     return layout;
@@ -913,14 +861,14 @@ ChipLayout create_sot223_layout() {
     };
     
     layout.bottom_pins = {
-        make_gpio_pin(1, PinLabel::PA0, "INPUT"),
-        make_ground_pin(2, PinLabel::GND),
-        make_gpio_pin(3, PinLabel::PA1, "OUTPUT")
+        make_pin(1, PinLabel::PA0, "INPUT"),
+        make_pin(2, PinLabel::GND),
+        make_pin(3, PinLabel::PA1, "OUTPUT")
     };
     
     // Pin 4 is the large thermal tab (typically connected to OUT)
     layout.top_pins = {
-        make_gpio_pin(4, PinLabel::PA2, "THERMAL")
+        make_pin(4, PinLabel::PA2, "THERMAL")
     };
     
     return layout;
@@ -942,7 +890,7 @@ ChipLayout create_sip8_layout() {
     
     // All pins on one side (bottom)
     for (uint8_t i = 1; i <= 8; i++) {
-        layout.bottom_pins.push_back(make_gpio_pin(i, PinLabel::PA0, nullptr));
+        layout.bottom_pins.push_back(make_pin(i, PinLabel::PA0));
     }
     
     return layout;
@@ -962,9 +910,9 @@ ChipLayout create_sip9_layout() {
     };
     
     // Common pin 1, resistor array
-    layout.bottom_pins.push_back(make_gpio_pin(1, PinLabel::PA0, "COMMON"));
+    layout.bottom_pins.push_back(make_pin(1, PinLabel::PA0, "COMMON"));
     for (uint8_t i = 2; i <= 9; i++) {
-        layout.bottom_pins.push_back(make_gpio_pin(i, PinLabel::PA1, "RESISTOR"));
+        layout.bottom_pins.push_back(make_pin(i, PinLabel::PA1, "RESISTOR"));
     }
     
     layout.markings = {
@@ -1006,11 +954,11 @@ ChipLayout create_custom_dip(uint8_t total_pins, const char* part_name) {
     
     // Generate generic pins
     for (uint8_t i = 1; i <= pins_per_side; i++) {
-        layout.left_pins.push_back(make_gpio_pin(i, PinLabel::PA0, nullptr));
+        layout.left_pins.push_back(make_pin(i, PinLabel::PA0));
     }
     
     for (uint8_t i = total_pins; i > pins_per_side; i--) {
-        layout.right_pins.push_back(make_gpio_pin(i, PinLabel::PB0, nullptr));
+        layout.right_pins.push_back(make_pin(i, PinLabel::PB0));
     }
     
     return layout;
@@ -1035,19 +983,19 @@ ChipLayout create_custom_qfp(uint8_t total_pins, const char* part_name) {
     
     // Generate pins for each side
     for (uint8_t i = 1; i <= pins_per_side; i++) {
-        layout.left_pins.push_back(make_gpio_pin(i, PinLabel::PA0, nullptr));
+        layout.left_pins.push_back(make_pin(i, PinLabel::PA0));
     }
     
     for (uint8_t i = pins_per_side + 1; i <= 2 * pins_per_side; i++) {
-        layout.top_pins.push_back(make_gpio_pin(i, PinLabel::PA1, nullptr));
+        layout.top_pins.push_back(make_pin(i, PinLabel::PA1));
     }
     
     for (uint8_t i = 2 * pins_per_side + 1; i <= 3 * pins_per_side; i++) {
-        layout.right_pins.push_back(make_gpio_pin(i, PinLabel::PA2, nullptr));
+        layout.right_pins.push_back(make_pin(i, PinLabel::PA2));
     }
     
     for (uint8_t i = 3 * pins_per_side + 1; i <= total_pins; i++) {
-        layout.bottom_pins.push_back(make_gpio_pin(i, PinLabel::PA3, nullptr));
+        layout.bottom_pins.push_back(make_pin(i, PinLabel::PA3));
     }
     
     layout.markings = {
@@ -1087,7 +1035,7 @@ ChipLayout create_custom_bga(uint8_t rows, uint8_t cols, const char* part_name) 
     for (uint8_t row = 0; row < rows; row++) {
         for (uint8_t col = 0; col < cols; col++) {
             uint8_t pin_number = row * cols + col + 1;
-            layout.grid_pins.push_back(make_gpio_pin(pin_number, PinLabel::PA0, nullptr));
+            layout.grid_pins.push_back(make_pin(pin_number, PinLabel::PA0));
         }
     }
     
