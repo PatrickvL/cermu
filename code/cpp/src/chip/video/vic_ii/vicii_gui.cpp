@@ -66,26 +66,26 @@ inline ChipLayout create_vicii_layout() {
     };
     
     // Hardware-accurate MOS6567/6569 VIC-II pinout (40-pin DIP)
-    PIN_LR(layout, 1,  VDD,     21, VSS)    // +5V Power / Ground
-    PIN_LR(layout, 2,  PHI0,    22, A5)     // Clock Input / Address 5
-    PIN_LR(layout, 3,  AEC,     23, A4)     // Address Enable / Address 4
-    PIN_LR(layout, 4,  BA,      24, A3)     // Bus Available / Address 3
-    PIN_LR(layout, 5,  RW,      25, A2)     // Read/Write / Address 2
-    PIN_LR(layout, 6,  IRQ,     26, A1)     // Interrupt / Address 1
-    PIN_LR(layout, 7,  A6,      27, A0)     // Address 6 / Address 0
-    PIN_LR(layout, 8,  A7,      28, D7)     // Address 7 / Data 7
-    PIN_LR(layout, 9,  A8,      29, D6)     // Address 8 / Data 6
-    PIN_LR(layout, 10, A9,      30, D5)     // Address 9 / Data 5
-    PIN_LR(layout, 11, A10,     31, D4)     // Address 10 / Data 4
-    PIN_LR(layout, 12, A11,     32, D3)     // Address 11 / Data 3
-    PIN_LR(layout, 13, A12,     33, D2)     // Address 12 / Data 2
-    PIN_LR(layout, 14, A13,     34, D1)     // Address 13 / Data 1
-    PIN_LR(layout, 15, CAS,     35, D0)     // Column Addr Strobe / Data 0
-    PIN_LR(layout, 16, RAS,     36, PHI2)   // Row Addr Strobe / Clock
-    PIN_LR(layout, 17, LUMA,    37, COLOR)  // Luminance / Color Signal
-    PIN_LR(layout, 18, CHROMA,  38, CS)     // Chrominance / Chip Select
-    PIN_LR(layout, 19, CSYNC,   39, SOUND)  // Composite Sync / Sound
-    PIN_LR(layout, 20, VSS,     40, VCC)    // Ground / +5V Power
+    PIN_LR(layout, 1, VDD,      VSS, 21)    // +5V Power / Ground
+    PIN_LR(layout, 2, PHI0,     A5, 22)     // Clock Input / Address 5
+    PIN_LR(layout, 3, AEC,      A4, 23)     // Address Enable / Address 4
+    PIN_LR(layout, 4, BA,       A3, 24)     // Bus Available / Address 3
+    PIN_LR(layout, 5, RW,       A2, 25)     // Read/Write / Address 2
+    PIN_LR(layout, 6, IRQ,      A1, 26)     // Interrupt / Address 1
+    PIN_LR(layout, 7, A6,       A0, 27)     // Address 6 / Address 0
+    PIN_LR(layout, 8, A7,       D7, 28)     // Address 7 / Data 7
+    PIN_LR(layout, 9, A8,       D6, 29)     // Address 8 / Data 6
+    PIN_LR(layout, 10, A9,      D5, 30)     // Address 9 / Data 5
+    PIN_LR(layout, 11, A10,     D4, 31)     // Address 10 / Data 4
+    PIN_LR(layout, 12, A11,     D3, 32)     // Address 11 / Data 3
+    PIN_LR(layout, 13, A12,     D2, 33)     // Address 12 / Data 2
+    PIN_LR(layout, 14, A13,     D1, 34)     // Address 13 / Data 1
+    PIN_LR(layout, 15, CAS,     D0, 35)     // Column Addr Strobe / Data 0
+    PIN_LR(layout, 16, RAS,     PHI2, 36)   // Row Addr Strobe / Clock
+    PIN_LR(layout, 17, LUMA,    COLOR, 37)  // Luminance / Color Signal
+    PIN_LR(layout, 18, CHROMA,  CS, 38)     // Chrominance / Chip Select
+    PIN_LR(layout, 19, CSYNC,   SOUND, 39)  // Composite Sync / Sound
+    PIN_LR(layout, 20, VSS,     VCC, 40)    // Ground / +5V Power
     
     return layout;
 }

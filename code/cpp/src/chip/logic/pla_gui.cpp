@@ -71,20 +71,20 @@ inline ChipLayout create_pla_layout() {
     };
     
     // Left side pins (1-14)
-    PIN_LR(layout, 1, A15,     28, VCC);     // Address 15     / +5V Power
-    PIN_LR(layout, 2, A14,     27, A8);      // Address 14     / Address 8
-    PIN_LR(layout, 3, A13,     26, PHI2);    // Address 13     / Clock
-    PIN_LR(layout, 4, A12,     25, RW);      // Address 12     / Read/Write
-    PIN_LR(layout, 5, BA,      24, EXROM);   // Bus Available  / External ROM
-    PIN_LR(layout, 6, AEC,     23, GAME);    // Address Enable / Game Line
-    PIN_LR(layout, 7, P0,      22, ROMH);    // 6510 Port 0    / ROM High
-    PIN_LR(layout, 8, P1,      21, ROML);    // 6510 Port 1    / ROM Low
-    PIN_LR(layout, 9, P2,      20,  IO);     // 6510 Port 2    / I/O Select     
-    PIN_LR(layout, 10, CHAREN, 19, GRW);     // Character Enable / Graphics R/W
-    PIN_LR(layout, 11, HIRAM,  18, CHAROM);  // High RAM       / Character ROM
-    PIN_LR(layout, 12, LORAM,  17, KERNAL);  // Low RAM        / KERNAL ROM
-    PIN_LR(layout, 13, CAS,    16, BASIC);   // Column Addr Strobe / BASIC ROM
-    PIN_LR(layout, 14, VSS,    15, CASRAM_PLA);  // Ground     / CAS RAM      
+    PIN_LR(layout, 1, A15,      VCC, 28);     // Address 15     / +5V Power
+    PIN_LR(layout, 2, A14,      A8, 27);      // Address 14     / Address 8
+    PIN_LR(layout, 3, A13,      PHI2, 26);    // Address 13     / Clock
+    PIN_LR(layout, 4, A12,      RW, 25);      // Address 12     / Read/Write
+    PIN_LR(layout, 5, BA,       EXROM, 24);   // Bus Available  / External ROM
+    PIN_LR(layout, 6, AEC,      GAME, 23);    // Address Enable / Game Line
+    PIN_LR(layout, 7, P0,       ROMH, 22);    // 6510 Port 0    / ROM High
+    PIN_LR(layout, 8, P1,       ROML, 21);    // 6510 Port 1    / ROM Low
+    PIN_LR(layout, 9, P2,       IO, 20);     // 6510 Port 2    / I/O Select     
+    PIN_LR(layout, 10, CHAREN,  GRW, 19);     // Character Enable / Graphics R/W
+    PIN_LR(layout, 11, HIRAM,   CHAROM, 18);  // High RAM       / Character ROM
+    PIN_LR(layout, 12, LORAM,   KERNAL, 17);  // Low RAM        / KERNAL ROM
+    PIN_LR(layout, 13, CAS,     BASIC, 16);   // Column Addr Strobe / BASIC ROM
+    PIN_LR(layout, 14, VSS,     CASRAM_PLA, 15);  // Ground     / CAS RAM      
     
     return layout;
 }
