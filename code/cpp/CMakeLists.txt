@@ -139,7 +139,6 @@ set(CORE_SOURCES
     src/core/chip.cpp
     src/core/ioport.cpp
     src/core/chip_layout.cpp
-    src/core/chip_layouts.cpp
     src/core/pin_labels.cpp
     src/core/emulation_context.cpp
 )
@@ -164,9 +163,6 @@ set(CHIP_SOURCES
 )
 # Always include other chip sources
 list(APPEND CHIP_SOURCES
-    # Chip layouts
-    src/chip/chip_layouts.cpp
-
     # I/O
     src/chip/io/mos6526.cpp
 
@@ -353,10 +349,10 @@ else()
 endif()
 
 # Enable testing
-# enable_testing()
+enable_testing()
 
 # Add tests subdirectory for comprehensive MOS6510 testing
-# add_subdirectory(tests)  # Temporarily disabled for debugging
+add_subdirectory(tests)
 
 # Add tests (currently disabled due to API compatibility issues)
 # add_test(NAME minimal_test COMMAND minimal_test)
