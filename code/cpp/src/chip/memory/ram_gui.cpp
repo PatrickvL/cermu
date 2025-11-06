@@ -36,26 +36,15 @@ inline ChipLayout create_ram_layout() {
     layout.right_pins.clear();
     
     // Left side pins (1-9)
-    layout.left_pins.push_back(make_pin(1, PinLabel::A6, nullptr));       // Address 6
-    layout.left_pins.push_back(make_pin(2, PinLabel::A5, nullptr));       // Address 5
-    layout.left_pins.push_back(make_pin(3, PinLabel::A4, nullptr));       // Address 4
-    layout.left_pins.push_back(make_pin(4, PinLabel::A3, nullptr));       // Address 3
-    layout.left_pins.push_back(make_pin(5, PinLabel::A0, nullptr));       // Address 0
-    layout.left_pins.push_back(make_pin(6, PinLabel::A1, nullptr));       // Address 1
-    layout.left_pins.push_back(make_pin(7, PinLabel::A2, nullptr));       // Address 2
-    layout.left_pins.push_back(make_pin(8, PinLabel::D0, nullptr));       // Data 0
-    layout.left_pins.push_back(make_pin(9, PinLabel::VSS, nullptr));      // Ground
-    
-    // Right side pins (10-18)
-    layout.right_pins.push_back(make_pin(18, PinLabel::VCC, nullptr));    // +5V Power
-    layout.right_pins.push_back(make_pin(17, PinLabel::D1, nullptr));     // Data 1
-    layout.right_pins.push_back(make_pin(16, PinLabel::D2, nullptr));     // Data 2
-    layout.right_pins.push_back(make_pin(15, PinLabel::D3, nullptr));     // Data 3
-    layout.right_pins.push_back(make_pin(14, PinLabel::CS, nullptr));     // Chip Select
-    layout.right_pins.push_back(make_pin(13, PinLabel::WE, nullptr));     // Write Enable
-    layout.right_pins.push_back(make_pin(12, PinLabel::A9, nullptr));     // Address 9
-    layout.right_pins.push_back(make_pin(11, PinLabel::A8, nullptr));     // Address 8
-    layout.right_pins.push_back(make_pin(10, PinLabel::A7, nullptr));     // Address 7
+    PIN_LR(layout, 1, A6,  18, VCC);  // Address 6 / +5V Power
+    PIN_LR(layout, 2, A5,  17, D1);   // Address 5 / Data 1
+    PIN_LR(layout, 3, A4,  16, D2);   // Address 4 / Data 2
+    PIN_LR(layout, 4, A3,  15, D3);   // Address 3 / Data 3
+    PIN_LR(layout, 5, A0,  14, CS);   // Address 0 / Chip Select
+    PIN_LR(layout, 6, A1,  13, WE);   // Address 1 / Write Enable
+    PIN_LR(layout, 7, A2,  12, A9);   // Address 2 / Address 9
+    PIN_LR(layout, 8, D0,  11, A8);   // Data 0    / Address 8
+    PIN_LR(layout, 9, VSS, 10, A7);   // Ground    / Address 7
     
     return layout;
 }

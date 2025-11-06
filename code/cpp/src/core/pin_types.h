@@ -245,8 +245,21 @@ struct BGAPosition {
 };
 
 // ============================================================================
+// MODERN PIN DEFINITION MACROS (ENUM-BASED)
+// ============================================================================
+
+// Macro to create a ChipPin with simplified structure (no derivable fields)
+#define PIN(num, lbl_enum) \
+    {num, PinLabel::lbl_enum, nullptr, false, false}
+
+// ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
+
+// Unified pin creation function (replaces all make_*_pin functions)
+inline ChipPin make_pin(uint8_t num, PinLabel label = PinLabel::NC, const char* alt_function = nullptr) {
+    return ChipPin{num, label, alt_function, false, false};
+}
 
 // Helper functions for pin derivation
 uint8_t get_bit_index_from_label(PinLabel label);

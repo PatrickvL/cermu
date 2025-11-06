@@ -96,41 +96,20 @@ inline ChipLayout create_mos6581_layout() {
         false                        // show_date_code
     };
     
-    // Clear default pins and create hardware-accurate MOS6581 SID pinout (28-pin DIP)
-    layout.left_pins.clear();
-    layout.right_pins.clear();
-    
-    // Left side pins (1-14)
-    layout.left_pins.push_back(make_pin(1,  PinLabel::CAP1A, nullptr));   // Filter Cap 1A
-    layout.left_pins.push_back(make_pin(2,  PinLabel::CAP1B, nullptr));   // Filter Cap 1B
-    layout.left_pins.push_back(make_pin(3,  PinLabel::CAP2A, nullptr));   // Filter Cap 2A
-    layout.left_pins.push_back(make_pin(4,  PinLabel::CAP2B, nullptr));   // Filter Cap 2B
-    layout.left_pins.push_back(make_pin(5,  PinLabel::RES, nullptr));     // Reset
-    layout.left_pins.push_back(make_pin(6,  PinLabel::PHI2, nullptr));    // Clock
-    layout.left_pins.push_back(make_pin(7,  PinLabel::RW, nullptr));      // Read/Write
-    layout.left_pins.push_back(make_pin(8,  PinLabel::CS, nullptr));      // Chip Select
-    layout.left_pins.push_back(make_pin(9,  PinLabel::A0, nullptr));      // Address 0
-    layout.left_pins.push_back(make_pin(10, PinLabel::A1, nullptr));      // Address 1
-    layout.left_pins.push_back(make_pin(11, PinLabel::A2, nullptr));      // Address 2
-    layout.left_pins.push_back(make_pin(12, PinLabel::A3, nullptr));      // Address 3
-    layout.left_pins.push_back(make_pin(13, PinLabel::A4, nullptr));      // Address 4
-    layout.left_pins.push_back(make_pin(14, PinLabel::VSS, nullptr));     // Ground
-    
-    // Right side pins (15-28)
-    layout.right_pins.push_back(make_pin(28, PinLabel::VDD, nullptr));    // +12V Power
-    layout.right_pins.push_back(make_pin(27, PinLabel::AUDIO_OUT, nullptr)); // Audio Output
-    layout.right_pins.push_back(make_pin(26, PinLabel::EXT_IN, nullptr)); // External Input
-    layout.right_pins.push_back(make_pin(25, PinLabel::VCC, nullptr));    // +5V Power
-    layout.right_pins.push_back(make_pin(24, PinLabel::POTX, nullptr));   // Paddle X
-    layout.right_pins.push_back(make_pin(23, PinLabel::POTY, nullptr));   // Paddle Y
-    layout.right_pins.push_back(make_pin(22, PinLabel::D7, nullptr));     // Data 7
-    layout.right_pins.push_back(make_pin(21, PinLabel::D6, nullptr));     // Data 6
-    layout.right_pins.push_back(make_pin(20, PinLabel::D5, nullptr));     // Data 5
-    layout.right_pins.push_back(make_pin(19, PinLabel::D4, nullptr));     // Data 4
-    layout.right_pins.push_back(make_pin(18, PinLabel::D3, nullptr));     // Data 3
-    layout.right_pins.push_back(make_pin(17, PinLabel::D2, nullptr));     // Data 2
-    layout.right_pins.push_back(make_pin(16, PinLabel::D1, nullptr));     // Data 1
-    layout.right_pins.push_back(make_pin(15, PinLabel::D0, nullptr));     // Data 0
+    PIN_LR(layout, 1,  CAP1A, 28, VDD);     // Filter Cap 1A / +12V Power
+    PIN_LR(layout, 2,  CAP1B, 27, AUDIO_OUT);  // Filter Cap 1B / Audio Output
+    PIN_LR(layout, 3,  CAP2A, 26, EXT_IN);  // Filter Cap 2A / External Input
+    PIN_LR(layout, 4,  CAP2B, 25, VCC);     // Filter Cap 2B / +5V Power
+    PIN_LR(layout, 5,  RES,   24, POTX);    // Reset         / Paddle X
+    PIN_LR(layout, 6,  PHI2,  23, POTY);    // Clock         / Paddle Y
+    PIN_LR(layout, 7,  RW,    22, D7);      // Read/Write    / Data 7
+    PIN_LR(layout, 8,  CS,    21, D6);      // Chip Select   / Data 6
+    PIN_LR(layout, 9,  A0,    20, D5);      // Address 0     / Data 5
+    PIN_LR(layout, 10, A1,    19, D4);      // Address 1     / Data 4
+    PIN_LR(layout, 11, A2,    18, D3);      // Address 2     / Data 3
+    PIN_LR(layout, 12, A3,    17, D2);      // Address 3     / Data 2
+    PIN_LR(layout, 13, A4,    16, D1);      // Address 4     / Data 1
+    PIN_LR(layout, 14, VSS,   15, D0);      // Ground        / Data 0
     
     return layout;
 }

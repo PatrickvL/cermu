@@ -40,26 +40,26 @@ inline ChipLayout create_mos6526_layout() {
     };
     
     // Hardware-accurate MOS6526 CIA pinout (40-pin DIP)
-    PIN_LR(1,  VSS,     21, IRQ)    // Ground / Interrupt Request
-    PIN_LR(2,  PA0,     22, RW)     // Port A Bit 0 / Read/Write
-    PIN_LR(3,  PA1,     23, CS)     // Port A Bit 1 / Chip Select
-    PIN_LR(4,  PA2,     24, FLAG)   // Port A Bit 2 / Flag Input
-    PIN_LR(5,  PA3,     25, PHI2)   // Port A Bit 3 / Clock
-    PIN_LR(6,  PA4,     26, SP)     // Port A Bit 4 / Serial Port
-    PIN_LR(7,  PA5,     27, CNT)    // Port A Bit 5 / Counter
-    PIN_LR(8,  PA6,     28, A0)     // Port A Bit 6 / Address 0
-    PIN_LR(9,  PA7,     29, A1)     // Port A Bit 7 / Address 1
-    PIN_LR(10, PB0,     30, A2)     // Port B Bit 0 / Address 2
-    PIN_LR(11, PB1,     31, A3)     // Port B Bit 1 / Address 3
-    PIN_LR(12, PB2,     32, D0)     // Port B Bit 2 / Data 0
-    PIN_LR(13, PB3,     33, D1)     // Port B Bit 3 / Data 1
-    PIN_LR(14, PB4,     34, D2)     // Port B Bit 4 / Data 2
-    PIN_LR(15, PB5,     35, D3)     // Port B Bit 5 / Data 3
-    PIN_LR(16, PB6,     36, D4)     // Port B Bit 6 / Data 4
-    PIN_LR(17, PB7,     37, D5)     // Port B Bit 7 / Data 5
-    PIN_LR(18, PC,      38, D6)     // Serial Port / Data 6
-    PIN_LR(19, TOD,     39, D7)     // Time of Day / Data 7
-    PIN_LR(20, VDD,     40, RES)    // +5V Power / Reset
+    PIN_LR(layout, 1,  VSS,     21, IRQ)    // Ground / Interrupt Request
+    PIN_LR(layout, 2,  PA0,     22, RW)     // Port A Bit 0 / Read/Write
+    PIN_LR(layout, 3,  PA1,     23, CS)     // Port A Bit 1 / Chip Select
+    PIN_LR(layout, 4,  PA2,     24, FLAG)   // Port A Bit 2 / Flag Input
+    PIN_LR(layout, 5,  PA3,     25, PHI2)   // Port A Bit 3 / Clock
+    PIN_LR(layout, 6,  PA4,     26, SP)     // Port A Bit 4 / Serial Port
+    PIN_LR(layout, 7,  PA5,     27, CNT)    // Port A Bit 5 / Counter
+    PIN_LR(layout, 8,  PA6,     28, A0)     // Port A Bit 6 / Address 0
+    PIN_LR(layout, 9,  PA7,     29, A1)     // Port A Bit 7 / Address 1
+    PIN_LR(layout, 10, PB0,     30, A2)     // Port B Bit 0 / Address 2
+    PIN_LR(layout, 11, PB1,     31, A3)     // Port B Bit 1 / Address 3
+    PIN_LR(layout, 12, PB2,     32, D0)     // Port B Bit 2 / Data 0
+    PIN_LR(layout, 13, PB3,     33, D1)     // Port B Bit 3 / Data 1
+    PIN_LR(layout, 14, PB4,     34, D2)     // Port B Bit 4 / Data 2
+    PIN_LR(layout, 15, PB5,     35, D3)     // Port B Bit 5 / Data 3
+    PIN_LR(layout, 16, PB6,     36, D4)     // Port B Bit 6 / Data 4
+    PIN_LR(layout, 17, PB7,     37, D5)     // Port B Bit 7 / Data 5
+    PIN_LR(layout, 18, PC,      38, D6)     // Serial Port / Data 6
+    PIN_LR(layout, 19, TOD,     39, D7)     // Time of Day / Data 7
+    PIN_LR(layout, 20, VDD,     40, RES)    // +5V Power / Reset
     
     return layout;
 }

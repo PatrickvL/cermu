@@ -229,6 +229,10 @@ PinType pin_label_to_pin_type(PinLabel label) {
         case PinLabel::A12: case PinLabel::A13: case PinLabel::A14: case PinLabel::A15:
         case PinLabel::A16: case PinLabel::A17: case PinLabel::A18: case PinLabel::A19:
         case PinLabel::A20: case PinLabel::A21: case PinLabel::A22: case PinLabel::A23:
+        case PinLabel::MA0: case PinLabel::MA1: case PinLabel::MA2: case PinLabel::MA3:
+        case PinLabel::MA4: case PinLabel::MA5: case PinLabel::MA6: case PinLabel::MA7:
+        case PinLabel::MA8: case PinLabel::MA9: case PinLabel::MA10: case PinLabel::MA11:
+        case PinLabel::MA12: case PinLabel::MA13: case PinLabel::MA14: case PinLabel::MA15:
             return PinType::ADDRESS;
             
         // Data bus pins
@@ -236,6 +240,8 @@ PinType pin_label_to_pin_type(PinLabel label) {
         case PinLabel::D4: case PinLabel::D5: case PinLabel::D6: case PinLabel::D7:
         case PinLabel::D8: case PinLabel::D9: case PinLabel::D10: case PinLabel::D11:
         case PinLabel::D12: case PinLabel::D13: case PinLabel::D14: case PinLabel::D15:
+        case PinLabel::DQ0: case PinLabel::DQ1: case PinLabel::DQ2: case PinLabel::DQ3:
+        case PinLabel::DQ4: case PinLabel::DQ5: case PinLabel::DQ6: case PinLabel::DQ7:
             return PinType::DATA;
             
         // Control signals

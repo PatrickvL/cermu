@@ -70,41 +70,21 @@ inline ChipLayout create_pla_layout() {
         false                        // show_date_code
     };
     
-    // Clear default pins and create hardware-accurate C64 PLA pinout (28-pin DIP)
-    layout.left_pins.clear();
-    layout.right_pins.clear();
-    
     // Left side pins (1-14)
-    layout.left_pins.push_back(make_pin(1,  PinLabel::A15, nullptr));     // Address 15
-    layout.left_pins.push_back(make_pin(2,  PinLabel::A14, nullptr));     // Address 14
-    layout.left_pins.push_back(make_pin(3,  PinLabel::A13, nullptr));     // Address 13
-    layout.left_pins.push_back(make_pin(4,  PinLabel::A12, nullptr));     // Address 12
-    layout.left_pins.push_back(make_pin(5,  PinLabel::BA, nullptr));      // Bus Available
-    layout.left_pins.push_back(make_pin(6,  PinLabel::AEC, nullptr));     // Address Enable
-    layout.left_pins.push_back(make_pin(7,  PinLabel::P0, nullptr));      // 6510 Port 0
-    layout.left_pins.push_back(make_pin(8,  PinLabel::P1, nullptr));      // 6510 Port 1
-    layout.left_pins.push_back(make_pin(9,  PinLabel::P2, nullptr));      // 6510 Port 2
-    layout.left_pins.push_back(make_pin(10, PinLabel::CHAREN, nullptr));  // Character Enable
-    layout.left_pins.push_back(make_pin(11, PinLabel::HIRAM, nullptr));   // High RAM
-    layout.left_pins.push_back(make_pin(12, PinLabel::LORAM, nullptr));   // Low RAM
-    layout.left_pins.push_back(make_pin(13, PinLabel::CAS, nullptr));     // Column Addr Strobe
-    layout.left_pins.push_back(make_pin(14, PinLabel::VSS, nullptr));     // Ground
-    
-    // Right side pins (15-28)
-    layout.right_pins.push_back(make_pin(28, PinLabel::VCC, nullptr));    // +5V Power
-    layout.right_pins.push_back(make_pin(27, PinLabel::A8, nullptr));     // Address 8
-    layout.right_pins.push_back(make_pin(26, PinLabel::PHI2, nullptr));   // Clock
-    layout.right_pins.push_back(make_pin(25, PinLabel::RW, nullptr));     // Read/Write
-    layout.right_pins.push_back(make_pin(24, PinLabel::EXROM, nullptr));  // External ROM
-    layout.right_pins.push_back(make_pin(23, PinLabel::GAME, nullptr));   // Game Line
-    layout.right_pins.push_back(make_pin(22, PinLabel::ROMH, nullptr));   // ROM High
-    layout.right_pins.push_back(make_pin(21, PinLabel::ROML, nullptr));   // ROM Low
-    layout.right_pins.push_back(make_pin(20, PinLabel::IO, nullptr));     // I/O Select
-    layout.right_pins.push_back(make_pin(19, PinLabel::GRW, nullptr));    // Graphics R/W
-    layout.right_pins.push_back(make_pin(18, PinLabel::CHAROM, nullptr)); // Character ROM
-    layout.right_pins.push_back(make_pin(17, PinLabel::KERNAL, nullptr)); // KERNAL ROM
-    layout.right_pins.push_back(make_pin(16, PinLabel::BASIC, nullptr));  // BASIC ROM
-    layout.right_pins.push_back(make_pin(15, PinLabel::CASRAM_PLA, nullptr)); // CAS RAM
+    PIN_LR(layout, 1, A15,     28, VCC);     // Address 15     / +5V Power
+    PIN_LR(layout, 2, A14,     27, A8);      // Address 14     / Address 8
+    PIN_LR(layout, 3, A13,     26, PHI2);    // Address 13     / Clock
+    PIN_LR(layout, 4, A12,     25, RW);      // Address 12     / Read/Write
+    PIN_LR(layout, 5, BA,      24, EXROM);   // Bus Available  / External ROM
+    PIN_LR(layout, 6, AEC,     23, GAME);    // Address Enable / Game Line
+    PIN_LR(layout, 7, P0,      22, ROMH);    // 6510 Port 0    / ROM High
+    PIN_LR(layout, 8, P1,      21, ROML);    // 6510 Port 1    / ROM Low
+    PIN_LR(layout, 9, P2,      20,  IO);     // 6510 Port 2    / I/O Select     
+    PIN_LR(layout, 10, CHAREN, 19, GRW);     // Character Enable / Graphics R/W
+    PIN_LR(layout, 11, HIRAM,  18, CHAROM);  // High RAM       / Character ROM
+    PIN_LR(layout, 12, LORAM,  17, KERNAL);  // Low RAM        / KERNAL ROM
+    PIN_LR(layout, 13, CAS,    16, BASIC);   // Column Addr Strobe / BASIC ROM
+    PIN_LR(layout, 14, VSS,    15, CASRAM_PLA);  // Ground     / CAS RAM      
     
     return layout;
 }
