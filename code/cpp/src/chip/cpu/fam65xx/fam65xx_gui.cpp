@@ -25,11 +25,9 @@
 #include "fam65xx_layouts.h"
 
 // Include GUI interface
-#include "../../../gui/cimgui_interface.h"
-#ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#endif
-#include <cimgui.h>
+#include "../../../gui/imgui_interface.h"
+// Native Dear ImGui C++ - no conditional compilation needed
+#include <imgui.h>
 
 using namespace fam65xx;
 
@@ -126,132 +124,130 @@ void render_chip_visualization(fam65xx_t<Traits>* cpu, ImVec2 chip_center) {
 
 template<const CPUTraits& Traits>
 void render_cpu_registers(fam65xx_t<Traits>* cpu) {
-    if (igCollapsingHeader_BoolPtr("CPU Registers", NULL, ImGuiTreeNodeFlags_DefaultOpen)) {
-        igIndent(16.0f);
+    if (ImGui::CollapsingHeader("CPU Registers", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Indent(16.0f);
         
         // Main registers - use native accessors
-        igText("Accumulator (A):       $%02X (%d)", cpu->get(REG_A), cpu->get(REG_A));
-        igText("X Index (X):           $%02X (%d)", cpu->get(REG_X), cpu->get(REG_X));
-        igText("Y Index (Y):           $%02X (%d)", cpu->get(REG_Y), cpu->get(REG_Y));
-        igText("Stack Pointer (S):   $%04X", cpu->get(REG_SP));
-        igText("Program Counter:     $%04X", cpu->get(REG_PC));
+        ImGui::Text("Accumulator (A):       $%02X (%d)", cpu->get(REG_A), cpu->get(REG_A));
+        ImGui::Text("X Index (X):           $%02X (%d)", cpu->get(REG_X), cpu->get(REG_X));
+        ImGui::Text("Y Index (Y):           $%02X (%d)", cpu->get(REG_Y), cpu->get(REG_Y));
+        ImGui::Text("Stack Pointer (S):   $%04X", cpu->get(REG_SP));
+        ImGui::Text("Program Counter:     $%04X", cpu->get(REG_PC));
 
-        igSeparator();
+        ImGui::Separator();
         
         // Processor status with detailed breakdown
         uint8_t p_reg = cpu->get(REG_P);
         char flag_buffer[16];
         format_processor_flags(p_reg, flag_buffer, sizeof(flag_buffer));
-        igText("Processor Status (P):  $%02X (%s)", p_reg, flag_buffer);
+        ImGui::Text("Processor Status (P):  $%02X (%s)", p_reg, flag_buffer);
         
-        igIndent(16.0f);
+        ImGui::Indent(16.0f);
         for (int i = 0; i < 8; i++) {
             bool flag_set = (p_reg & (1 << i)) != 0;
-            igText("  %s: %s", flag_names[i], flag_set ? "Set" : "Clear");
+            ImGui::Text("  %s: %s", flag_names[i], flag_set ? "Set" : "Clear");
         }
-        igUnindent(16.0f);
+        ImGui::Unindent(16.0f);
         
         // Show 65C816-specific registers if available
         if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
-            igSeparator();
-            igText("65C816 Extended Registers:");
-            igIndent(16.0f);
+            ImGui::Separator();
+            ImGui::Text("65C816 Extended Registers:");
+            ImGui::Indent(16.0f);
             // Note: These would need additional accessors in the CPU template
-            igText("Direct Page (D):      $%04X", 0); // Placeholder
-            igText("Data Bank (DB):         $%02X", 0);  // Placeholder
-            igText("Program Bank (PB):      $%02X", 0);  // Placeholder
-            igUnindent(16.0f);
+            ImGui::Text("Direct Page (D):      $%04X", 0); // Placeholder
+            ImGui::Text("Data Bank (DB):         $%02X", 0);  // Placeholder
+            ImGui::Text("Program Bank (PB):      $%02X", 0);  // Placeholder
+            ImGui::Unindent(16.0f);
         }
         
-        igUnindent(16.0f);
+        ImGui::Unindent(16.0f);
     }
 }
 
 template<const CPUTraits& Traits>
 void render_internal_state(fam65xx_t<Traits>* cpu) {
-    if (igCollapsingHeader_BoolPtr("Internal State", NULL, ImGuiTreeNodeFlags_DefaultOpen)) {
-        igIndent(16.0f);
+    if (ImGui::CollapsingHeader("Internal State", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Indent(16.0f);
         
         // Internal registers - use native accessors
-        igText("Instruction Register:  $%02X", cpu->get(REG_IR));
-        igText("Data Latch:            $%02X", cpu->get(REG_DL));
+        ImGui::Text("Instruction Register:  $%02X", cpu->get(REG_IR));
+        ImGui::Text("Data Latch:            $%02X", cpu->get(REG_DL));
         
         // Format address bus display based on address width
         if constexpr (Traits.address_bits <= 16) {
-            igText("Address Bus:         $%04X", cpu->get(REG_AB));
+            ImGui::Text("Address Bus:         $%04X", cpu->get(REG_AB));
         } else if constexpr (Traits.address_bits <= 20) {
-            igText("Address Bus:        $%05X", cpu->get(REG_AB));
+            ImGui::Text("Address Bus:        $%05X", cpu->get(REG_AB));
         } else {
-            igText("Address Bus:       $%06X", cpu->get(REG_AB));
+            ImGui::Text("Address Bus:       $%06X", cpu->get(REG_AB));
         }
         
-        igText("Cycle Index:           %d", cpu->cycle_index);
+        ImGui::Text("Cycle Index:           %d", cpu->cycle_index);
         
-        igSeparator();
+        ImGui::Separator();
         
         // Current opcode information
-        igText("Current Opcode Info:");
-        igIndent(16.0f);
+        ImGui::Text("Current Opcode Info:");
+        ImGui::Indent(16.0f);
         
         // Show current addressing mode and opcode information if available
         if (cpu) {
             const char* am_name = get_addressing_mode_name(cpu->opcode_entry.am_index);
             const char* op_name = get_opcode_name(cpu->opcode_entry.op_index);
-            igText("Current Opcode:      $%02X", cpu->get(REG_IR));
-            igText("Addressing Mode:     %s", am_name);
-            igText("Instruction:         %s", op_name);
-            igText("Instruction Cycle:   %d", cpu->cycle_index);
-            igText("Opcode Done:         %s", cpu->opdone() ? "Yes" : "No");
+            ImGui::Text("Current Opcode:      $%02X", cpu->get(REG_IR));
+            ImGui::Text("Addressing Mode:     %s", am_name);
+            ImGui::Text("Instruction:         %s", op_name);
+            ImGui::Text("Instruction Cycle:   %d", cpu->cycle_index);
+            ImGui::Text("Opcode Done:         %s", cpu->opdone() ? "Yes" : "No");
         } else {
-            igText("Current Opcode:      N/A (CPU not available)");
-            igText("Addressing Mode:     N/A");
-            igText("Instruction:         N/A");
+            ImGui::Text("Current Opcode:      N/A (CPU not available)");
+            ImGui::Text("Addressing Mode:     N/A");
+            ImGui::Text("Instruction:         N/A");
         }
         
         // Show processor-specific execution features
         if constexpr (Traits.has(CPUCoreFlags::CMOS_BASE)) {
-            igText("CMOS Features:       Active");
+            ImGui::Text("CMOS Features:       Active");
         }
         if constexpr (Traits.has(CPUCoreFlags::ILLEGAL_OPCODES)) {
-            igText("Illegal Opcodes:     Supported");
+            ImGui::Text("Illegal Opcodes:     Supported");
         }
-        igUnindent(16.0f);
+        ImGui::Unindent(16.0f);
         
-        igUnindent(16.0f);
+        ImGui::Unindent(16.0f);
     }
 }
 
 template<const CPUTraits& Traits>
 void render_chip_visualization(fam65xx_t<Traits>* cpu) {
-    if (igCollapsingHeader_BoolPtr("Chip Visualization", NULL, ImGuiTreeNodeFlags_DefaultOpen)) {
-        igIndent(16.0f);
+    if (ImGui::CollapsingHeader("Chip Visualization", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Indent(16.0f);
         
         // Calculate available space
-        ImVec2 available_size;
-        igGetContentRegionAvail(&available_size);
+        ImVec2 available_size = ImGui::GetContentRegionAvail();
         float chip_width = 300.0f;
         float chip_height = 400.0f;
         
         // Center the chip in available space
-        ImVec2 cursor_pos;
-        igGetCursorScreenPos(&cursor_pos);
+        ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
         
         // Get the pin layout for this CPU type to determine actual chip dimensions
         static ChipLayout layout = create_cpu_pin_layout<Traits>();
         
-        ImVec2 chip_center = {
+        ImVec2 chip_center = ImVec2(
             cursor_pos.x + available_size.x / 2,
             cursor_pos.y + layout.package.height / 2 + 20
-        };
+        );
         
         // Reserve space for the chip drawing
-        ImVec2 dummy_size = {available_size.x, layout.package.height + 40};
-        igDummy(dummy_size);
+        ImVec2 dummy_size = ImVec2(available_size.x, layout.package.height + 40);
+        ImGui::Dummy(dummy_size);
         
         // Draw the CPU-specific chip visualization
         render_chip_visualization<Traits>(cpu, chip_center);
         
-        igSeparator();
+        ImGui::Separator();
         
         // Render pin legend using the generic visualization system
         static std::unique_ptr<ChipVisualization> legend_viz = nullptr;
@@ -260,63 +256,63 @@ void render_chip_visualization(fam65xx_t<Traits>* cpu) {
         }
         legend_viz->render_legend();
         
-        igUnindent(16.0f);
-        igUnindent(16.0f);
+        ImGui::Unindent(16.0f);
+        ImGui::Unindent(16.0f);
     }
 }
 
 template<const CPUTraits& Traits>
 void render_processor_features(fam65xx_t<Traits>* cpu) {
-    if (igCollapsingHeader_BoolPtr("Processor Features", NULL, 0)) {
-        igIndent(16.0f);
+    if (ImGui::CollapsingHeader("Processor Features")) {
+        ImGui::Indent(16.0f);
         
-        igText("Processor: %s", get_processor_name<Traits>());
-        igSeparator();
+        ImGui::Text("Processor: %s", get_processor_name<Traits>());
+        ImGui::Separator();
         
         // Show trait-based features
-        igText("Core Features:");
-        igIndent(16.0f);
+        ImGui::Text("Core Features:");
+        ImGui::Indent(16.0f);
         
         if constexpr (Traits.has(CPUCoreFlags::HAS_DECIMAL_MODE)) {
-            igText("✓ Decimal Mode (BCD)");
+            ImGui::Text("✓ Decimal Mode (BCD)");
         } else {
-            igText("✗ Decimal Mode (BCD)");
+            ImGui::Text("✗ Decimal Mode (BCD)");
         }
         
         if constexpr (Traits.has(CPUCoreFlags::ILLEGAL_OPCODES)) {
-            igText("✓ Illegal Opcodes");
+            ImGui::Text("✓ Illegal Opcodes");
         } else {
-            igText("✗ Illegal Opcodes");
+            ImGui::Text("✗ Illegal Opcodes");
         }
         
         if constexpr (Traits.has(CPUCoreFlags::CMOS_BASE)) {
-            igText("✓ CMOS Design");
+            ImGui::Text("✓ CMOS Design");
         } else {
-            igText("✗ NMOS Design");
+            ImGui::Text("✗ NMOS Design");
         }
         
         if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
-            igText("✓ 16-bit Extensions");
+            ImGui::Text("✓ 16-bit Extensions");
         } else {
-            igText("✗ 8-bit Only");
+            ImGui::Text("✗ 8-bit Only");
         }
         
-        igUnindent(16.0f);
+        ImGui::Unindent(16.0f);
         
-        igSeparator();
-        igText("Hardware Specifications:");
-        igIndent(16.0f);
-        igText("Vendor: %s", Traits.get_vendor());
-        igText("Chip ID: %s", Traits.get_chip_id());
-        igText("Address Bits: %u", Traits.address_bits);
+        ImGui::Separator();
+        ImGui::Text("Hardware Specifications:");
+        ImGui::Indent(16.0f);
+        ImGui::Text("Vendor: %s", Traits.get_vendor());
+        ImGui::Text("Chip ID: %s", Traits.get_chip_id());
+        ImGui::Text("Address Bits: %u", Traits.address_bits);
         
         uint32_t address_space = 1u << Traits.address_bits;
         if (address_space >= 1024 * 1024) {
-            igText("Address Space: %uMB", address_space / (1024 * 1024));
+            ImGui::Text("Address Space: %uMB", address_space / (1024 * 1024));
         } else if (address_space >= 1024) {
-            igText("Address Space: %uKB", address_space / 1024);
+            ImGui::Text("Address Space: %uKB", address_space / 1024);
         } else {
-            igText("Address Space: %u bytes", address_space);
+            ImGui::Text("Address Space: %u bytes", address_space);
         }
         
         if constexpr (Traits.has_io_port()) {
@@ -327,57 +323,57 @@ void render_processor_features(fam65xx_t<Traits>* cpu) {
                 bit_count += mask & 1;
                 mask >>= 1;
             }
-            igText("I/O Port Pins: %u available", bit_count);
+            ImGui::Text("I/O Port Pins: %u available", bit_count);
         } else {
-            igText("I/O Port: None");
+            ImGui::Text("I/O Port: None");
         }
-        igUnindent(16.0f);
+        ImGui::Unindent(16.0f);
         
         // Processor-specific features
         if constexpr (Traits.has_io_port()) {
-            igSeparator();
-            igText("I/O Port Features:");
-            igIndent(16.0f);
-            igText("✓ Memory-mapped I/O at $00/$01");
-            igText("✓ Bank switching support");
-            igUnindent(16.0f);
+            ImGui::Separator();
+            ImGui::Text("I/O Port Features:");
+            ImGui::Indent(16.0f);
+            ImGui::Text("✓ Memory-mapped I/O at $00/$01");
+            ImGui::Text("✓ Bank switching support");
+            ImGui::Unindent(16.0f);
         }
         
         if constexpr (Traits.has(CPUCoreFlags::ROCKWELL_BITS)) {
-            igSeparator();
-            igText("Rockwell Extensions:");
-            igIndent(16.0f);
-            igText("✓ Bit manipulation (RMB/SMB/BBR/BBS)");
-            igUnindent(16.0f);
+            ImGui::Separator();
+            ImGui::Text("Rockwell Extensions:");
+            ImGui::Indent(16.0f);
+            ImGui::Text("✓ Bit manipulation (RMB/SMB/BBR/BBS)");
+            ImGui::Unindent(16.0f);
         }
         
-        igUnindent(16.0f);
+        ImGui::Unindent(16.0f);
     }
 }
 
 template<const CPUTraits& Traits>
 void render_interrupt_state(fam65xx_t<Traits>* cpu) {
-    if (igCollapsingHeader_BoolPtr("Interrupt State", NULL, 0)) {
-        igIndent(16.0f);
+    if (ImGui::CollapsingHeader("Interrupt State")) {
+        ImGui::Indent(16.0f);
         
         // Note: These would need public accessors or friend functions
-        igText("Interrupt System:");
-        igIndent(16.0f);
-        igText("IRQ Disabled:   %s", (cpu->get(REG_P) & FLAG_I) ? "Yes" : "No");
+        ImGui::Text("Interrupt System:");
+        ImGui::Indent(16.0f);
+        ImGui::Text("IRQ Disabled:   %s", (cpu->get(REG_P) & FLAG_I) ? "Yes" : "No");
         
         // Show NMI edge detection for NMOS processors
         if constexpr (Traits.is_nmos()) {
-            igText("NMI Edge Detection: Active (NMOS)");
+            ImGui::Text("NMI Edge Detection: Active (NMOS)");
         }
         
         // Show 65C02-specific interrupt features
         if constexpr (Traits.has(CPUCoreFlags::CMOS_BASE)) {
-            igText("WAI/STP Support:    Available");
+            ImGui::Text("WAI/STP Support:    Available");
         }
         
-        igUnindent(16.0f);
+        ImGui::Unindent(16.0f);
         
-        igUnindent(16.0f);
+        ImGui::Unindent(16.0f);
     }
 }
 
@@ -418,58 +414,56 @@ public:
         char window_title[128];
         snprintf(window_title, sizeof(window_title), "%s Debug", get_processor_name());
         
-        if (!igBegin(window_title, show_window, 0)) {
-            igEnd();
+        if (!ImGui::Begin(window_title, show_window)) {
+            ImGui::End();
             return;
         }
 
         // Create two-column layout: chip visualization on left, debugging info on right
-        ImVec2 window_size;
-        igGetWindowSize(&window_size);
+        ImVec2 window_size = ImGui::GetWindowSize();
         
         // Left column: Chip Visualization (fixed width ~250px, 25% wider)
-        ImVec2 chip_viz_size = {250.0f, 0};
-        if (igBeginChild_Str("ChipVisualization", chip_viz_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
-            igText("Chip Visualization");
-            igSeparator();
+        ImVec2 chip_viz_size = ImVec2(250.0f, 0);
+        if (ImGui::BeginChild("ChipVisualization", chip_viz_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
+            ImGui::Text("Chip Visualization");
+            ImGui::Separator();
             
             // Calculate chip center for visualization
-            ImVec2 chip_center, content_region;
-            igGetCursorScreenPos(&chip_center);
-            igGetContentRegionAvail(&content_region);
+            ImVec2 chip_center = ImGui::GetCursorScreenPos();
+            ImVec2 content_region = ImGui::GetContentRegionAvail();
             chip_center.x += content_region.x * 0.5f;
             chip_center.y += 200.0f; // Space for the chip
             
             // Show chip visualization with real bus state from emulation
             render_chip_visualization<Traits>(cpu, chip_center, last_bus_state);
             
-            igSeparator();
+            ImGui::Separator();
             
             // Visualization Settings Menu
             ChipVisualization* chip_viz = get_chip_visualization_instance<Traits>();
             chip_viz->render_settings_gui();
         }
-        igEndChild();
+        ImGui::EndChild();
         
-        igSameLine(0, 5.0f); // Small gap between columns
+        ImGui::SameLine(0, 5.0f); // Small gap between columns
         
         // Right column: All debugging information
-        ImVec2 right_column_size = {window_size.x - 270.0f, 0}; // Remaining width minus left column and gap
-        if (igBeginChild_Str("DebugInfo", right_column_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
+        ImVec2 right_column_size = ImVec2(window_size.x - 270.0f, 0); // Remaining width minus left column and gap
+        if (ImGui::BeginChild("DebugInfo", right_column_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
             render_cpu_registers<Traits>(cpu);
-            igSeparator();
+            ImGui::Separator();
             
             render_internal_state<Traits>(cpu);
-            igSeparator();
+            ImGui::Separator();
             
             render_interrupt_state<Traits>(cpu);
-            igSeparator();
+            ImGui::Separator();
             
             render_processor_features<Traits>(cpu);
         }
-        igEndChild();
+        ImGui::EndChild();
 
-        igEnd();
+        ImGui::End();
     }
     
     void render_settings_window(bool* show_window) override {
@@ -478,33 +472,33 @@ public:
         char window_title[128];
         snprintf(window_title, sizeof(window_title), "%s Settings", get_processor_name());
         
-        if (!igBegin(window_title, show_window, 0)) {
-            igEnd();
+        if (!ImGui::Begin(window_title, show_window)) {
+            ImGui::End();
             return;
         }
 
-        igText("%s Configuration", get_processor_name());
-        igSeparator();
+        ImGui::Text("%s Configuration", get_processor_name());
+        ImGui::Separator();
         
-        igText("Processor Family: MOS Technology 65xx");
-        igText("Architecture: 8-bit microprocessor");
+        ImGui::Text("Processor Family: MOS Technology 65xx");
+        ImGui::Text("Architecture: 8-bit microprocessor");
         
         // Calculate address space from CPUTraits
         uint32_t address_space_kb = (1u << Traits.address_bits) / 1024;
         if (address_space_kb >= 1024) {
-            igText("Address Space: %uMB (%u-bit addressing)", address_space_kb / 1024, Traits.address_bits);
+            ImGui::Text("Address Space: %uMB (%u-bit addressing)", address_space_kb / 1024, Traits.address_bits);
         } else {
-            igText("Address Space: %uKB (%u-bit addressing)", address_space_kb, Traits.address_bits);
+            ImGui::Text("Address Space: %uKB (%u-bit addressing)", address_space_kb, Traits.address_bits);
         }
         
-        igText("Data Width: 8 bits");
+        ImGui::Text("Data Width: 8 bits");
         
-        igSeparator();
+        ImGui::Separator();
         
         // Show processor-specific configuration options
         render_processor_features<Traits>(cpu);
 
-        igEnd();
+        ImGui::End();
     }
     
     const char* get_processor_name() const override {
@@ -550,13 +544,13 @@ void fam65xx_render_debug_window(void* chip, bool* show_window) {
     } else {
         // Fallback for unknown CPU types
         if (show_window && *show_window) {
-            if (!igBegin("Unknown 65xx CPU Debug", show_window, 0)) {
-                igEnd();
+            if (!ImGui::Begin("Unknown 65xx CPU Debug", show_window)) {
+                ImGui::End();
                 return;
             }
-            igText("CPU type not registered for GUI rendering");
-            igText("Chip pointer: %p", chip);
-            igEnd();
+            ImGui::Text("CPU type not registered for GUI rendering");
+            ImGui::Text("Chip pointer: %p", chip);
+            ImGui::End();
         }
     }
 }
@@ -572,100 +566,100 @@ void fam65xx_render_settings_window(void* chip, bool* show_window) {
     // Fallback for unknown CPU types
     if (!chip || !show_window || !*show_window) return;
     
-    if (!igBegin("Unknown 65xx CPU Settings", show_window, 0)) {
-        igEnd();
+    if (!ImGui::Begin("Unknown 65xx CPU Settings", show_window)) {
+        ImGui::End();
         return;
     }
 
-    igText("65xx Family CPU Configuration");
-    igText("CPU type not registered for GUI rendering");
-    igSeparator();
+    ImGui::Text("65xx Family CPU Configuration");
+    ImGui::Text("CPU type not registered for GUI rendering");
+    ImGui::Separator();
     
     // Pin Configuration (static info, doesn't need CPU access)
-    if (igCollapsingHeader_BoolPtr("Pin Configuration", NULL, 0)) {
-        igIndent(16.0f);
-        igText("MOS 65xx DIP-40 Package (40 pins):");
-        igSeparator();
+    if (ImGui::CollapsingHeader("Pin Configuration")) {
+        ImGui::Indent(16.0f);
+        ImGui::Text("MOS 65xx DIP-40 Package (40 pins):");
+        ImGui::Separator();
         
-        igText("Power and Clock:");
-        igText("  VCC (8) - +5V Power Supply");
-        igText("  VSS (21) - Ground (0V)");
-        igText("  φ0 (3) - Phase 0 Clock Input");
-        igText("  φ1 (37) - Phase 1 Clock Output");
-        igText("  φ2 (39) - Phase 2 Clock Output");
+        ImGui::Text("Power and Clock:");
+        ImGui::Text("  VCC (8) - +5V Power Supply");
+        ImGui::Text("  VSS (21) - Ground (0V)");
+        ImGui::Text("  φ0 (3) - Phase 0 Clock Input");
+        ImGui::Text("  φ1 (37) - Phase 1 Clock Output");
+        ImGui::Text("  φ2 (39) - Phase 2 Clock Output");
         
-        igSeparator();
+        ImGui::Separator();
         
-        igText("Address Bus (16 lines):");
-        igText("  A0-A15 (9-20, 22-25) - Address Lines");
+        ImGui::Text("Address Bus (16 lines):");
+        ImGui::Text("  A0-A15 (9-20, 22-25) - Address Lines");
         
-        igSeparator();
+        ImGui::Separator();
         
-        igText("Data Bus (8 lines):");
-        igText("  D0-D7 (26, 28-33) - Data Lines");
+        ImGui::Text("Data Bus (8 lines):");
+        ImGui::Text("  D0-D7 (26, 28-33) - Data Lines");
         
-        igSeparator();
+        ImGui::Separator();
         
-        igText("Control Lines:");
-        igText("  R/W̅ (34) - Read/Write");
-        igText("  SYNC (7) - Synchronize");
-        igText("  RDY (2) - Ready");
+        ImGui::Text("Control Lines:");
+        ImGui::Text("  R/W̅ (34) - Read/Write");
+        ImGui::Text("  SYNC (7) - Synchronize");
+        ImGui::Text("  RDY (2) - Ready");
         
-        igSeparator();
+        ImGui::Separator();
         
-        igText("Interrupt Lines:");
-        igText("  IRQ̅ (4) - Interrupt Request");
-        igText("  NMI̅ (6) - Non-Maskable Interrupt");
-        igText("  RES̅ (40) - Reset");
+        ImGui::Text("Interrupt Lines:");
+        ImGui::Text("  IRQ̅ (4) - Interrupt Request");
+        ImGui::Text("  NMI̅ (6) - Non-Maskable Interrupt");
+        ImGui::Text("  RES̅ (40) - Reset");
         
-        igSeparator();
+        ImGui::Separator();
         
-        igText("Special:");
-        igText("  SO̅ (38) - Set Overflow");
-        igText("  BE (36) - Bus Enable");
-        igText("  ML̅ (35) - Memory Lock");
+        ImGui::Text("Special:");
+        ImGui::Text("  SO̅ (38) - Set Overflow");
+        ImGui::Text("  BE (36) - Bus Enable");
+        ImGui::Text("  ML̅ (35) - Memory Lock");
         
-        igUnindent(16.0f);
+        ImGui::Unindent(16.0f);
     }
     
-    igSeparator();
+    ImGui::Separator();
     
     // CPU Controls (placeholder - would need CPU access for real functionality)
-    if (igCollapsingHeader_BoolPtr("CPU Controls", NULL, ImGuiTreeNodeFlags_DefaultOpen)) {
-        igIndent(16.0f);
+    if (ImGui::CollapsingHeader("CPU Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Indent(16.0f);
         
-        ImVec2 button_size = {0, 0};
-        if (igButton("Reset CPU", button_size)) {
+        ImVec2 button_size = ImVec2(0, 0);
+        if (ImGui::Button("Reset CPU", button_size)) {
             // Reset would require bus state - this is just UI placeholder
         }
         
-        igSameLine(0, -1);
+        ImGui::SameLine();
         
-        if (igButton("Trigger NMI", button_size)) {
+        if (ImGui::Button("Trigger NMI", button_size)) {
             // NMI trigger would require pin manipulation
         }
         
-        igSameLine(0, -1);
+        ImGui::SameLine();
         
-        if (igButton("Trigger IRQ", button_size)) {
-            // IRQ trigger would require pin manipulation  
+        if (ImGui::Button("Trigger IRQ", button_size)) {
+            // IRQ trigger would require pin manipulation
         }
         
-        igSeparator();
+        ImGui::Separator();
         
         static bool step_mode = false;
-        igCheckbox("Single Step Mode", &step_mode);
+        ImGui::Checkbox("Single Step Mode", &step_mode);
         
         static bool trace_mode = false;
-        igCheckbox("Instruction Trace", &trace_mode);
+        ImGui::Checkbox("Instruction Trace", &trace_mode);
         
         static bool break_on_brk = true;
-        igCheckbox("Break on BRK instruction", &break_on_brk);
+        ImGui::Checkbox("Break on BRK instruction", &break_on_brk);
         
-        igUnindent(16.0f);
+        ImGui::Unindent(16.0f);
     }
 
-    igEnd();
+    ImGui::End();
 }
 
 void fam65xx_update_bus_state(void* chip, bus_state_t bus_state) {

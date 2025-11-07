@@ -19,7 +19,7 @@ struct ChipDescriptor {
     void (*destroy)(void* chip);            // Destroy chip instance
     void (*bus_attach)(void* chip, void* bus);     // Bus attachment (nullable)
     void (*bank_change)(void* chip, std::uint8_t bank);  // Bank change (nullable)
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
     void (*render_debug_window)(void* chip, bool* show_window);   // GUI debug window (nullable)
     void (*render_settings_window)(void* chip, bool* show_window); // GUI settings window (nullable)
 #endif
@@ -44,7 +44,7 @@ public:
     virtual void attach_bus(void* bus) {}
     virtual void bank_change(std::uint8_t bank) {}
     
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
     virtual void render_debug_window(bool* show_window) {}
     virtual void render_settings_window(bool* show_window) {}
 #endif

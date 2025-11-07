@@ -1,10 +1,8 @@
 #include "mos6567.h"
 #include "vicii_gui.h"
-#include "../../../gui/cimgui_interface.h"
-#ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#endif
-#include <cimgui.h>
+#include "../../../gui/imgui_interface.h"
+// Native Dear ImGui C++ - no conditional compilation needed
+#include <imgui.h>
 #include <stdio.h>
 
 // ============================================================================
