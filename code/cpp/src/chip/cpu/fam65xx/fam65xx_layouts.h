@@ -281,26 +281,26 @@ ChipLayout create_mos6502_layout() {
     };
    
     // Pin assignments for MOS 6502 (40-pin DIP) - Using simplified PIN_LR macro
-    PIN_LR(layout, 1, VSS,   VSS, 21)
-    PIN_LR(layout, 2, RDY,   A12, 22)
-    PIN_LR(layout, 3, PHI1,  A13, 23)
-    PIN_LR(layout, 4, IRQ,   A14, 24)
-    PIN_LR(layout, 5, NC,    A15, 25)
-    PIN_LR(layout, 6, NMI,   D7, 26)
-    PIN_LR(layout, 7, SYNC,  D6, 27)
-    PIN_LR(layout, 8, VDD,   D5, 28)
-    PIN_LR(layout, 9, A0,    D4, 29)
-    PIN_LR(layout, 10, A1,   D3, 30)
-    PIN_LR(layout, 11, A2,   D2, 31)
-    PIN_LR(layout, 12, A3,   D1, 32)
-    PIN_LR(layout, 13, A4,   D0, 33)
-    PIN_LR(layout, 14, A5,   RW, 34)
-    PIN_LR(layout, 15, A6,   NC, 35)
-    PIN_LR(layout, 16, A7,   NC, 36)
-    PIN_LR(layout, 17, A8,   PHI0, 37)
-    PIN_LR(layout, 18, A9,   SO, 38)
-    PIN_LR(layout, 19, A10,  PHI2, 39)
-    PIN_LR(layout, 20, A11,  RES, 40)
+    PIN_LR(layout,  1, VSS,   VSS, 21)
+    PIN_LR(layout,  2, RDY,   A12, 22)
+    PIN_LR(layout,  3, PHI1,  A13, 23)
+    PIN_LR(layout,  4, IRQ,   A14, 24)
+    PIN_LR(layout,  5, NC,    A15, 25)
+    PIN_LR(layout,  6, NMI,   D7, 26)
+    PIN_LR(layout,  7, SYNC,  D6, 27)
+    PIN_LR(layout,  8, VDD,   D5, 28)
+    PIN_LR(layout,  9, A0,    D4, 29)
+    PIN_LR(layout, 10, A1,    D3, 30)
+    PIN_LR(layout, 11, A2,    D2, 31)
+    PIN_LR(layout, 12, A3,    D1, 32)
+    PIN_LR(layout, 13, A4,    D0, 33)
+    PIN_LR(layout, 14, A5,    RW, 34)
+    PIN_LR(layout, 15, A6,    NC, 35)
+    PIN_LR(layout, 16, A7,    NC, 36)
+    PIN_LR(layout, 17, A8,    PHI0, 37)
+    PIN_LR(layout, 18, A9,    SO, 38)
+    PIN_LR(layout, 19, A10,   PHI2, 39)
+    PIN_LR(layout, 20, A11,   RES, 40)
    
     return layout;
 }
@@ -324,26 +324,26 @@ ChipLayout create_mos6510_layout() {
     };
     
     // Pin assignments for MOS 6510 (40-pin DIP) - Hardware accurate per documentation
-    PIN_LR(layout, 1, PHI0,  VSS, 21)
-    PIN_LR(layout, 2, RDY,   A12, 22)
-    PIN_LR(layout, 3, IRQ,   A13, 23)
-    PIN_LR(layout, 4, NMI,   P0, 24)    // I/O Port bit 0
-    PIN_LR(layout, 5, AEC,   P1, 25)    // I/O Port bit 1
-    PIN_LR(layout, 6, VDD,   P2, 26)    // I/O Port bit 2
-    PIN_LR(layout, 7, A0,    P3, 27)    // I/O Port bit 3
-    PIN_LR(layout, 8, A1,    P4, 28)    // I/O Port bit 4
-    PIN_LR(layout, 9, A2,    P5, 29)    // I/O Port bit 5
-    PIN_LR(layout, 10, A3,   D7, 30)
-    PIN_LR(layout, 11, A4,   D6, 31)
-    PIN_LR(layout, 12, A5,   D5, 32)
-    PIN_LR(layout, 13, A6,   D4, 33)
-    PIN_LR(layout, 14, A7,   D3, 34)
-    PIN_LR(layout, 15, A8,   D2, 35)
-    PIN_LR(layout, 16, A9,   D1, 36)
-    PIN_LR(layout, 17, A10,  D0, 37)
-    PIN_LR(layout, 18, A11,  RW, 38)
-    PIN_LR(layout, 19, A14,  PHI2, 39)
-    PIN_LR(layout, 20, A15,  RES, 40)
+    PIN_LR(layout,  1, PHI0,  VSS, 21)
+    PIN_LR(layout,  2, RDY,   A12, 22)
+    PIN_LR(layout,  3, IRQ,   A13, 23)
+    PIN_LR(layout,  4, NMI,   P0, 24)    // I/O Port bit 0
+    PIN_LR(layout,  5, AEC,   P1, 25)    // I/O Port bit 1
+    PIN_LR(layout,  6, VDD,   P2, 26)    // I/O Port bit 2
+    PIN_LR(layout,  7, A0,    P3, 27)    // I/O Port bit 3
+    PIN_LR(layout,  8, A1,    P4, 28)    // I/O Port bit 4
+    PIN_LR(layout,  9, A2,    P5, 29)    // I/O Port bit 5
+    PIN_LR(layout, 10, A3,    D7, 30)
+    PIN_LR(layout, 11, A4,    D6, 31)
+    PIN_LR(layout, 12, A5,    D5, 32)
+    PIN_LR(layout, 13, A6,    D4, 33)
+    PIN_LR(layout, 14, A7,    D3, 34)
+    PIN_LR(layout, 15, A8,    D2, 35)
+    PIN_LR(layout, 16, A9,    D1, 36)
+    PIN_LR(layout, 17, A10,   D0, 37)
+    PIN_LR(layout, 18, A11,   RW, 38)
+    PIN_LR(layout, 19, A14,   PHI2, 39)
+    PIN_LR(layout, 20, A15,   RES, 40)
     
     return layout;
 }
@@ -367,26 +367,26 @@ ChipLayout create_wdc_w65c02s_layout() {
     };
     
     // Pin assignments for WDC W65C02S (40-pin DIP) - Hardware accurate per documentation
-    PIN_LR(layout, 1, VP,    VSS, 21)   // Vector Pull
-    PIN_LR(layout, 2, RDY,   A12, 22)   // Bidirectional on 65C02
-    PIN_LR(layout, 3, PHI1,  A13, 23)
-    PIN_LR(layout, 4, IRQ,   A14, 24)
-    PIN_LR(layout, 5, ML,    A15, 25)   // Memory Lock
-    PIN_LR(layout, 6, NMI,   D7, 26)
-    PIN_LR(layout, 7, SYNC,  D6, 27)
-    PIN_LR(layout, 8, VDD,   D5, 28)
-    PIN_LR(layout, 9, A0,    D4, 29)
-    PIN_LR(layout, 10, A1,   D3, 30)
-    PIN_LR(layout, 11, A2,   D2, 31)
-    PIN_LR(layout, 12, A3,   D1, 32)
-    PIN_LR(layout, 13, A4,   D0, 33)
-    PIN_LR(layout, 14, A5,   RW, 34)
-    PIN_LR(layout, 15, A6,   NC, 35)
-    PIN_LR(layout, 16, A7,   BE, 36)    // Bus Enable on 65C02
-    PIN_LR(layout, 17, A8,   PHI0, 37)
-    PIN_LR(layout, 18, A9,   SO, 38)
-    PIN_LR(layout, 19, A10,  PHI2, 39)
-    PIN_LR(layout, 20, A11,  RES, 40)
+    PIN_LR(layout,  1, VP,    VSS, 21)   // Vector Pull
+    PIN_LR(layout,  2, RDY,   A12, 22)   // Bidirectional on 65C02
+    PIN_LR(layout,  3, PHI1,  A13, 23)
+    PIN_LR(layout,  4, IRQ,   A14, 24)
+    PIN_LR(layout,  5, ML,    A15, 25)   // Memory Lock
+    PIN_LR(layout,  6, NMI,   D7, 26)
+    PIN_LR(layout,  7, SYNC,  D6, 27)
+    PIN_LR(layout,  8, VDD,   D5, 28)
+    PIN_LR(layout,  9, A0,    D4, 29)
+    PIN_LR(layout, 10, A1,    D3, 30)
+    PIN_LR(layout, 11, A2,    D2, 31)
+    PIN_LR(layout, 12, A3,    D1, 32)
+    PIN_LR(layout, 13, A4,    D0, 33)
+    PIN_LR(layout, 14, A5,    RW, 34)
+    PIN_LR(layout, 15, A6,    NC, 35)
+    PIN_LR(layout, 16, A7,    BE, 36)    // Bus Enable on 65C02
+    PIN_LR(layout, 17, A8,    PHI0, 37)
+    PIN_LR(layout, 18, A9,    SO, 38)
+    PIN_LR(layout, 19, A10,   PHI2, 39)
+    PIN_LR(layout, 20, A11,   RES, 40)
     
     return layout;
 }
@@ -410,26 +410,26 @@ ChipLayout create_wdc_65c816_layout() {
     };
     
     // Pin assignments for WDC 65C816 (40-pin DIP) - Hardware accurate per documentation
-    PIN_LR(layout, 1, VPB,    VSS, 21)   // Vector Pull Bar
-    PIN_LR(layout, 2, RDY,    A12, 22)
-    PIN_LR(layout, 3, ABORT,  A13, 23)   // Abort
-    PIN_LR(layout, 4, IRQ,    A14, 24)
-    PIN_LR(layout, 5, ML,     A15, 25)   // Memory Lock
-    PIN_LR(layout, 6, NMI,    D7, 26)
-    PIN_LR(layout, 7, VPA,    D6, 27)    // Valid Program Address
-    PIN_LR(layout, 8, VDD,    D5, 28)
-    PIN_LR(layout, 9, A0,     D4, 29)
-    PIN_LR(layout, 10, A1,    D3, 30)
-    PIN_LR(layout, 11, A2,    D2, 31)
-    PIN_LR(layout, 12, A3,    D1, 32)
-    PIN_LR(layout, 13, A4,    D0, 33)
-    PIN_LR(layout, 14, A5,    RW, 34)
-    PIN_LR(layout, 15, A6,    E, 35)      // Emulation mode
-    PIN_LR(layout, 16, A7,    BE, 36)     // Bus Enable
-    PIN_LR(layout, 17, A8,    PHI0, 37)
-    PIN_LR(layout, 18, A9,    MX, 38)     // M/X Status
-    PIN_LR(layout, 19, A10,   VDA, 39)    // Valid Data Address
-    PIN_LR(layout, 20, A11,   RES, 40)
+    PIN_LR(layout,  1, VPB,    VSS, 21)   // Vector Pull Bar
+    PIN_LR(layout,  2, RDY,    A12, 22)
+    PIN_LR(layout,  3, ABORT,  A13, 23)   // Abort
+    PIN_LR(layout,  4, IRQ,    A14, 24)
+    PIN_LR(layout,  5, ML,     A15, 25)   // Memory Lock
+    PIN_LR(layout,  6, NMI,    D7, 26)
+    PIN_LR(layout,  7, VPA,    D6, 27)    // Valid Program Address
+    PIN_LR(layout,  8, VDD,    D5, 28)
+    PIN_LR(layout,  9, A0,     D4, 29)
+    PIN_LR(layout, 10, A1,     D3, 30)
+    PIN_LR(layout, 11, A2,     D2, 31)
+    PIN_LR(layout, 12, A3,     D1, 32)
+    PIN_LR(layout, 13, A4,     D0, 33)
+    PIN_LR(layout, 14, A5,     RW, 34)
+    PIN_LR(layout, 15, A6,     E, 35)      // Emulation mode
+    PIN_LR(layout, 16, A7,     BE, 36)     // Bus Enable
+    PIN_LR(layout, 17, A8,     PHI0, 37)
+    PIN_LR(layout, 18, A9,     MX, 38)     // M/X Status
+    PIN_LR(layout, 19, A10,    VDA, 39)    // Valid Data Address
+    PIN_LR(layout, 20, A11,    RES, 40)
     
     return layout;
 }
@@ -453,26 +453,26 @@ ChipLayout create_ricoh_2a03_layout() {
     };
     
     // Pin assignments for RICOH 2A03 (40-pin DIP)
-    PIN_LR(layout, 1, VSS,   VSS, 21)
-    PIN_LR(layout, 2, RDY,   A12, 22)   // Tied high internally in some revisions
-    PIN_LR(layout, 3, PHI1,  A13, 23)
-    PIN_LR(layout, 4, IRQ,   A14, 24)
-    PIN_LR(layout, 5, NC,    A15, 25)
-    PIN_LR(layout, 6, NMI,   D7, 26)
-    PIN_LR(layout, 7, SYNC,  D6, 27)
-    PIN_LR(layout, 8, VDD,   D5, 28)
-    PIN_LR(layout, 9, A0,    D4, 29)
-    PIN_LR(layout, 10, A1,   D3, 30)
-    PIN_LR(layout, 11, A2,   D2, 31)
-    PIN_LR(layout, 12, A3,   D1, 32)
-    PIN_LR(layout, 13, A4,   D0, 33)
-    PIN_LR(layout, 14, A5,   RW, 34)
-    PIN_LR(layout, 15, A6,   NC, 35)
-    PIN_LR(layout, 16, A7,   NC, 36)    // No BE on 2A03
-    PIN_LR(layout, 17, A8,   PHI0, 37)
-    PIN_LR(layout, 18, A9,   SO, 38)
-    PIN_LR(layout, 19, A10,  PHI2, 39)
-    PIN_LR(layout, 20, A11,  RES, 40)
+    PIN_LR(layout,  1, VSS,   VSS, 21)
+    PIN_LR(layout,  2, RDY,   A12, 22)   // Tied high internally in some revisions
+    PIN_LR(layout,  3, PHI1,  A13, 23)
+    PIN_LR(layout,  4, IRQ,   A14, 24)
+    PIN_LR(layout,  5, NC,    A15, 25)
+    PIN_LR(layout,  6, NMI,   D7, 26)
+    PIN_LR(layout,  7, SYNC,  D6, 27)
+    PIN_LR(layout,  8, VDD,   D5, 28)
+    PIN_LR(layout,  9, A0,    D4, 29)
+    PIN_LR(layout, 10, A1,    D3, 30)
+    PIN_LR(layout, 11, A2,    D2, 31)
+    PIN_LR(layout, 12, A3,    D1, 32)
+    PIN_LR(layout, 13, A4,    D0, 33)
+    PIN_LR(layout, 14, A5,    RW, 34)
+    PIN_LR(layout, 15, A6,    NC, 35)
+    PIN_LR(layout, 16, A7,    NC, 36)    // No BE on 2A03
+    PIN_LR(layout, 17, A8,    PHI0, 37)
+    PIN_LR(layout, 18, A9,    SO, 38)
+    PIN_LR(layout, 19, A10,   PHI2, 39)
+    PIN_LR(layout, 20, A11,   RES, 40)
     
     return layout;
 }
@@ -496,26 +496,26 @@ ChipLayout create_rockwell_r65c02_layout() {
     };
     
     // Pin assignments for Rockwell R65C02 (40-pin DIP)
-    PIN_LR(layout, 1, VSS,   VSS, 21)
-    PIN_LR(layout, 2, RDY,   A12, 22)
-    PIN_LR(layout, 3, PHI1,  A13, 23)
-    PIN_LR(layout, 4, IRQ,   A14, 24)
-    PIN_LR(layout, 5, NC,    A15, 25)
-    PIN_LR(layout, 6, NMI,   D7, 26)
-    PIN_LR(layout, 7, SYNC,  D6, 27)
-    PIN_LR(layout, 8, VDD,   D5, 28)
-    PIN_LR(layout, 9, A0,    D4, 29)
-    PIN_LR(layout, 10, A1,   D3, 30)
-    PIN_LR(layout, 11, A2,   D2, 31)
-    PIN_LR(layout, 12, A3,   D1, 32)
-    PIN_LR(layout, 13, A4,   D0, 33)
-    PIN_LR(layout, 14, A5,   RW, 34)
-    PIN_LR(layout, 15, A6,   NC, 35)
-    PIN_LR(layout, 16, A7,   BE, 36)    // Bus Enable on R65C02
-    PIN_LR(layout, 17, A8,   PHI0, 37)
-    PIN_LR(layout, 18, A9,   SO, 38)
-    PIN_LR(layout, 19, A10,  PHI2, 39)
-    PIN_LR(layout, 20, A11,  RES, 40)
+    PIN_LR(layout,  1, VSS,   VSS, 21)
+    PIN_LR(layout,  2, RDY,   A12, 22)
+    PIN_LR(layout,  3, PHI1,  A13, 23)
+    PIN_LR(layout,  4, IRQ,   A14, 24)
+    PIN_LR(layout,  5, NC,    A15, 25)
+    PIN_LR(layout,  6, NMI,   D7, 26)
+    PIN_LR(layout,  7, SYNC,  D6, 27)
+    PIN_LR(layout,  8, VDD,   D5, 28)
+    PIN_LR(layout,  9, A0,    D4, 29)
+    PIN_LR(layout, 10, A1,    D3, 30)
+    PIN_LR(layout, 11, A2,    D2, 31)
+    PIN_LR(layout, 12, A3,    D1, 32)
+    PIN_LR(layout, 13, A4,    D0, 33)
+    PIN_LR(layout, 14, A5,    RW, 34)
+    PIN_LR(layout, 15, A6,    NC, 35)
+    PIN_LR(layout, 16, A7,    BE, 36)    // Bus Enable on R65C02
+    PIN_LR(layout, 17, A8,    PHI0, 37)
+    PIN_LR(layout, 18, A9,    SO, 38)
+    PIN_LR(layout, 19, A10,   PHI2, 39)
+    PIN_LR(layout, 20, A11,   RES, 40)
     
     return layout;
 }

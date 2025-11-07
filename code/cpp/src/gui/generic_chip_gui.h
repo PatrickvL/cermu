@@ -6,6 +6,11 @@
 #include "../core/chip_layout.h"
 #include "../core/emulation_context.h"
 
+// Include chip visualization for ChipVisualConfig
+#ifdef __cplusplus
+#include "chip_visualization.h"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -17,7 +22,7 @@ typedef struct generic_chip_gui_t generic_chip_gui_t;
 typedef ChipLayout (*get_chip_layout_func_t)(void* chip);
 typedef void (*get_chip_pin_states_func_t)(void* chip, ChipLayout* layout, bus_state_t bus_state, PinSignalState* pin_states);
 
-// Generic chip visualization configuration
+// Generic chip visualization configuration - now uses ChipVisualConfig for rendering
 typedef struct {
     // Chip identification
     const char* chip_name;
@@ -27,19 +32,21 @@ typedef struct {
     get_chip_layout_func_t get_layout;
     get_chip_pin_states_func_t get_pin_states;
     
-    // Display options
+    // Chip-specific display options (non-visual)
+    float chip_scale;              // Scale factor for this specific chip
+    
+    // Legacy display options for compatibility - now mostly unused
     bool show_pin_numbers;
     bool show_pin_labels;
     bool show_pin_states;
     bool show_package_outline;
     bool show_chip_markings;
     
-    // Layout options
-    float chip_scale;
+    // Legacy layout options for compatibility
     float pin_label_size;
     float pin_state_size;
     
-    // Colors (RGBA)
+    // Legacy colors for compatibility - should migrate to ChipVisualConfig
     uint32_t background_color;
     uint32_t package_color;
     uint32_t pin_color_inactive;
@@ -47,6 +54,13 @@ typedef struct {
     uint32_t pin_color_active_low;
     uint32_t pin_color_tristate;
     uint32_t text_color;
+    
+    // Visual configuration reference (for future migration)
+    #ifdef __cplusplus
+    struct ChipVisualConfig* visual_config;  // Reference to shared visual config (optional)
+    #else
+    void* visual_config;                     // Reference to shared visual config (optional)
+    #endif
     
 } chip_gui_config_t;
 
