@@ -271,6 +271,9 @@ if(BUILD_GUI)
         ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/backends
     )
     
+    # Define IMGUI_VERSION macro for GUI build to enable chip GUI functions
+    target_compile_definitions(c64emu_gui PRIVATE IMGUI_VERSION="1.92.1")
+    
     # Disable some warnings for GUI build to work around ImGui header issues
     if(MSVC)
         target_compile_options(c64emu_gui PRIVATE /WX- /wd4201 /wd4996 /wd4244 /wd4189 /wd4100 /wd5287)

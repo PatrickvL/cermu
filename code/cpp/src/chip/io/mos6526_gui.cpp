@@ -4,9 +4,6 @@
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
 #include "../../systems/c64/c64.h"  // Need this to access C64 structure
-#ifndef IMGUI_VERSION
-#define IMGUI_VERSION
-#endif
 #include <imgui.h>
 #include <stdio.h>
 #include <stddef.h>  // For offsetof

@@ -1,5 +1,5 @@
 // This file now contains the gui_render_pla_debug function
-// moved from cimgui_interface.c for better organization
+// moved from imgui_interface.c for better organization
 
 #include "pla.h"
 #include "../../gui/imgui_interface.h"
