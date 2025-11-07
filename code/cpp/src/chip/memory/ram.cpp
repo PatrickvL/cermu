@@ -21,13 +21,13 @@ chip_descriptor_t ram_descriptor = {
     .destroy = ram_system_destroy,
     .bus_attach = NULL,
     .bank_change = NULL,
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
     .render_debug_window = ram_render_debug_window,
     .render_settings_window = ram_render_settings_window
 #endif
 };
 
 // Include GUI implementation
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
 #include "ram_gui.h"
 #endif

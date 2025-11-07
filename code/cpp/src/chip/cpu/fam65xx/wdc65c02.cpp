@@ -29,7 +29,7 @@ wdc65c02_t* wdc65c02_create(void) {
 
 void wdc65c02_destroy(wdc65c02_t* cpu) {
     // Unregister from GUI system before destroying
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
     fam65xx::unregister_cpu_from_gui(cpu);
 #endif
     delete CPU_CAST(cpu);
@@ -117,7 +117,7 @@ static void initialize_wdc65c02_descriptor() {
     };
     wdc65c02_base_descriptor.bus_attach = nullptr;
     wdc65c02_base_descriptor.bank_change = nullptr;
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
     wdc65c02_base_descriptor.render_debug_window = fam65xx_render_debug_window;
     wdc65c02_base_descriptor.render_settings_window = fam65xx_render_settings_window;
 #endif

@@ -27,7 +27,7 @@ void mos6569_bank_change(void* chip, uint8_t bank);
 // External descriptor instance
 extern chip_descriptor_t mos6569_descriptor;
 
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
 // GUI function declarations
 void mos6569_render_debug_window(void* chip, bool* show_window);
 void mos6569_render_settings_window(void* chip, bool* show_window);

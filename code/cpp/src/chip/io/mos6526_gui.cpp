@@ -4,8 +4,8 @@
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
 #include "../../systems/c64/c64.h"  // Need this to access C64 structure
-#ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifndef IMGUI_VERSION
+#define IMGUI_VERSION
 #endif
 #include <imgui.h>
 #include <stdio.h>

@@ -22,7 +22,7 @@ static void pla_destroy(void* chip) {
     // PLA is part of the C64 system, not destroyed separately
 }
 
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
 // Forward declaration for GUI function
 void pla_render_debug_window(void* chip, bool* show_window);
 #endif
@@ -34,7 +34,7 @@ chip_descriptor_t pla_descriptor = {
     .destroy = pla_destroy,
     .bus_attach = NULL,
     .bank_change = NULL,
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
     .render_debug_window = pla_render_debug_window,
     .render_settings_window = NULL
 #endif

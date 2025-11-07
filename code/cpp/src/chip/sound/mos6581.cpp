@@ -1246,7 +1246,7 @@ void* mos6581_system_create(chip_descriptor_t* desc) {
 }
 
 // Include GUI implementation if available
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
 #include "mos6581_gui.h"
 #endif
 
@@ -1432,7 +1432,7 @@ chip_descriptor_t mos6581_descriptor = {
     .destroy = mos6581_system_destroy,
     .bus_attach = (void (*)(void *, void *))mos6581_bus_attach,
     .bank_change = NULL,
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
     .render_debug_window = mos6581_render_debug_window,
     .render_settings_window = mos6581_render_settings_window
 #endif

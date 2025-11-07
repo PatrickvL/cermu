@@ -128,7 +128,7 @@ chip_descriptor_t mos2114_descriptor = {
     .destroy = mos2114_destroy,
     .bus_attach = NULL,
     .bank_change = NULL
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
     ,.render_debug_window = NULL, // No GUI debug window implemented yet
     .render_settings_window = NULL // No GUI settings window implemented yet
 #endif

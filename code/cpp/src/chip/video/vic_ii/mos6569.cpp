@@ -42,13 +42,13 @@ chip_descriptor_t mos6569_descriptor = {
     .destroy     = mos6569_system_destroy,
     .bus_attach  = mos6569_bus_attach,
     .bank_change = mos6569_bank_change,
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
     .render_debug_window = mos6569_render_debug_window,
     .render_settings_window = mos6569_render_settings_window
 #endif
 };
 
 // Include GUI implementation
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
 #include "mos6569_gui.h"
 #endif
