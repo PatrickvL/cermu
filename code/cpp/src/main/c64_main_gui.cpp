@@ -1,6 +1,6 @@
 #include "../systems/c64/c64.h"
 #include "../systems/c64/c64_config.h"
-#include "../gui/cimgui_interface.h"
+#include "../gui/imgui_interface.h"
 #include <stdio.h>
 
 // ============================================================================

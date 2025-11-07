@@ -1,9 +1,6 @@
 #include "generic_chip_gui.h"
 #include "imgui_interface.h"
-#ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#endif
-#include <cimgui.h>
+#include <imgui.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -162,7 +159,7 @@ void generic_chip_gui_render_layout(generic_chip_gui_t* gui,
     // Get drawing context
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     ImVec2 canvas_pos;
-    ImGui::GetCursorScreenPos(&canvas_pos);
+    canvas_pos = ImGui::GetCursorScreenPos();
     
     // Calculate chip position and scale
     float scale = gui->config.chip_scale;
@@ -220,12 +217,11 @@ void generic_chip_gui_render_debug_panel(generic_chip_gui_t* gui,
     ImGui::Separator();
     
     ImVec2 avail_size;
-    ImGui::GetContentRegionAvail(&avail_size);
+    avail_size = ImGui::GetContentRegionAvail();
     float layout_height = avail_size.y - 50; // Leave space for controls
     
-    if (igBeginChild_Str("chip_layout", (ImVec2){avail_size.x, layout_height}, true, 0)) {
-        ImVec2 child_size;
-        ImGui::GetContentRegionAvail(&child_size);
+    if (ImGui::BeginChild("chip_layout", ImVec2(avail_size.x, layout_height), true, 0)) {
+        ImVec2 child_size = ImGui::GetContentRegionAvail();
         generic_chip_gui_render_layout(gui, context, child_size.x, child_size.y);
     }
     ImGui::EndChild();
@@ -297,14 +293,14 @@ void generic_chip_gui_render_dip_package(const ChipLayout* layout, const chip_gu
     ImVec2 p1 = {x - width/2, y - height/2};
     ImVec2 p2 = {x + width/2, y + height/2};
     
-    ImDrawList_AddRectFilled(draw_list, p1, p2, package_color, 0.0f, 0);
-    ImDrawList_AddRect(draw_list, p1, p2, config->text_color, 0.0f, 0, 2.0f);
+    draw_list->AddRectFilled(p1, p2, package_color, 0.0f, 0);
+    draw_list->AddRect(p1, p2, config->text_color, 0.0f, 0, 2.0f);
     
     // Add notch for orientation
     if (layout->package.marker == OrientationMarker::NOTCH) {
         ImVec2 notch_p1 = {x - 10*scale, y - height/2 - 5*scale};
         ImVec2 notch_p2 = {x + 10*scale, y - height/2};
-        ImDrawList_AddRectFilled(draw_list, notch_p1, notch_p2, config->background_color, 0.0f, 0);
+        draw_list->AddRectFilled(notch_p1, notch_p2, config->background_color, 0.0f, 0);
     }
 }
 
@@ -321,21 +317,21 @@ void generic_chip_gui_render_pin(const ChipPin* pin, const PinSignalState* pin_s
     // Draw pin
     float pin_size = 8.0f * scale;
     ImVec2 pin_center = {x, y};
-    ImDrawList_AddCircleFilled(draw_list, pin_center, pin_size, pin_color, 8);
+    draw_list->AddCircleFilled(pin_center, pin_size, pin_color, 8);
     
     // Draw pin number
     if (config->show_pin_numbers) {
         char pin_num[8];
         snprintf(pin_num, sizeof(pin_num), "%d", pin->pin_number);
         ImVec2 text_pos = {x - 15*scale, y - 5*scale};
-        ImDrawList_AddText_Vec2(draw_list, text_pos, config->text_color, pin_num, NULL);
+        draw_list->AddText(text_pos, config->text_color, pin_num);
     }
     
     // Draw pin label
     if (config->show_pin_labels && pin->label != PinLabel::NC) {
         const char* label = pin_label_to_string(pin->label);
         ImVec2 text_pos = {x + 15*scale, y - 5*scale};
-        ImDrawList_AddText_Vec2(draw_list, text_pos, config->text_color, label, NULL);
+        draw_list->AddText(text_pos, config->text_color, label);
     }
 }
 
@@ -347,13 +343,13 @@ void generic_chip_gui_render_chip_markings(const ChipLayout* layout, const chip_
     // Render part number
     if (layout->markings.show_part_number && layout->markings.part_number) {
         ImVec2 text_pos = {x - 50*scale, y - 10*scale};
-        ImDrawList_AddText_Vec2(draw_list, text_pos, config->text_color, layout->markings.part_number, NULL);
+        draw_list->AddText(text_pos, config->text_color, layout->markings.part_number);
     }
     
     // Render manufacturer
     if (layout->markings.show_manufacturer && layout->markings.manufacturer) {
         ImVec2 text_pos = {x - 50*scale, y + 10*scale};
-        ImDrawList_AddText_Vec2(draw_list, text_pos, config->text_color, layout->markings.manufacturer, NULL);
+        draw_list->AddText(text_pos, config->text_color, layout->markings.manufacturer);
     }
 }
 
@@ -386,6 +382,6 @@ void generic_chip_gui_get_basic_pin_states(void* chip, ChipLayout* layout, bus_s
     // Default implementation - all pins inactive
     int total_pins = layout->get_total_pins();
     for (int i = 0; i < total_pins; i++) {
-        pin_states[i] = (PinSignalState){false, false, 0, false, true};
+        pin_states[i] = PinSignalState{false, false, 0, false, true};
     }
 }

@@ -2,17 +2,15 @@
 // moved from cimgui_interface.c for better organization
 
 #include "pla.h"
-#include "../../gui/cimgui_interface.h"
+#include "../../gui/imgui_interface.h"
 #include "../../gui/generic_chip_gui.h"
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
 #include "../../systems/c64/c64_bus.h"
 #include "../../systems/c64/c64.h"
 #include "../../chip/video/vic_ii/vicii_common.h"
-#ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#endif
-#include <cimgui.h>
+// Native Dear ImGui C++ - no conditional compilation needed
+#include <imgui.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -142,14 +140,14 @@ static void render_pla_specific_content(void* chip) {
     static int pla_debug_selected_mode = 0;
     
     // Auto-track mode checkbox
-    igCheckbox("Auto-track active mode", &auto_track_mode);
+    ImGui::Checkbox("Auto-track active mode", &auto_track_mode);
     
     if (auto_track_mode && has_c64) {
         pla_debug_selected_mode = current_mode;
     }
     
-    igSameLine(0, -1.0f);
-    igText("Current Mode: %d", current_mode);
+    ImGui::SameLine(0, -1.0f);
+    ImGui::Text("Current Mode: %d", current_mode);
     
     // Manual mode selector as active-low toggles in requested order: #LORAM, #HIRAM, #GAME, #EXROM, #CHAREN
     static bool loram_n = false, hiram_n = false, game_n = false, exrom_n = false, charen_n = false;
@@ -161,17 +159,17 @@ static void render_pla_specific_content(void* chip) {
     charen_n = ((pla_debug_selected_mode & 0x04) == 0);
 
     bool changed = false;
-    igText("Viewing Mode:");
-    igSameLine(0, -1.0f);
-    changed |= igCheckbox("#LORAM", &loram_n);
-    igSameLine(0, -1.0f);
-    changed |= igCheckbox("#HIRAM", &hiram_n);
-    igSameLine(0, -1.0f);
-    changed |= igCheckbox("#GAME", &game_n);
-    igSameLine(0, -1.0f);
-    changed |= igCheckbox("#EXROM", &exrom_n);
-    igSameLine(0, -1.0f);
-    changed |= igCheckbox("#CHAREN", &charen_n);
+    ImGui::Text("Viewing Mode:");
+    ImGui::SameLine(0, -1.0f);
+    changed |= ImGui::Checkbox("#LORAM", &loram_n);
+    ImGui::SameLine(0, -1.0f);
+    changed |= ImGui::Checkbox("#HIRAM", &hiram_n);
+    ImGui::SameLine(0, -1.0f);
+    changed |= ImGui::Checkbox("#GAME", &game_n);
+    ImGui::SameLine(0, -1.0f);
+    changed |= ImGui::Checkbox("#EXROM", &exrom_n);
+    ImGui::SameLine(0, -1.0f);
+    changed |= ImGui::Checkbox("#CHAREN", &charen_n);
 
     if (changed) {
         // Reconstruct mode from toggles (active-low: 0 = checked)
@@ -184,22 +182,22 @@ static void render_pla_specific_content(void* chip) {
         auto_track_mode = false;
     }
     
-    igSeparator();
+    ImGui::Separator();
     
     // Tab bar for CPU and VIC-II views
-    if (igBeginTabBar("PLA Views", ImGuiTabBarFlags_None)) {
+    if (ImGui::BeginTabBar("PLA Views", ImGuiTabBarFlags_None)) {
         
         // CPU Memory View Tab
-        if (igBeginTabItem("CPU Memory View", NULL, ImGuiTabItemFlags_None)) {
+        if (ImGui::BeginTabItem("CPU Memory View", NULL, ImGuiTabItemFlags_None)) {
             // CPU Memory Banking Table
-            igText("CPU Memory Banking (16 x 4KB banks):");
-            igText("Mode %d - %s", pla_debug_selected_mode,
+            ImGui::Text("CPU Memory Banking (16 x 4KB banks):");
+            ImGui::Text("Mode %d - %s", pla_debug_selected_mode,
                    (pla_debug_selected_mode == current_mode) ? "(ACTIVE)" : "(Preview)");
-            igText("Configuration: %s", get_pla_mode_cpu_description(pla_debug_selected_mode));
-            igEndTabItem();
+            ImGui::Text("Configuration: %s", get_pla_mode_cpu_description(pla_debug_selected_mode));
+            ImGui::EndTabItem();
         }
         
-        igEndTabBar();
+        ImGui::EndTabBar();
     }
 }
 

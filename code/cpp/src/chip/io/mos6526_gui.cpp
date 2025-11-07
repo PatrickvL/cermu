@@ -1,5 +1,5 @@
 #include "mos6526.h"
-#include "../../gui/cimgui_interface.h"
+#include "../../gui/imgui_interface.h"
 #include "../../gui/generic_chip_gui.h"
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
@@ -7,7 +7,7 @@
 #ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #endif
-#include <cimgui.h>
+#include <imgui.h>
 #include <stdio.h>
 #include <stddef.h>  // For offsetof
 
@@ -140,61 +140,61 @@ static void render_cia_specific_content(void* chip) {
     
     // This replaces the right column content from the original function
     const char* cia_name = mos6526_get_cia_name(cia);
-    igText("Complex Interface Adapter - %s", cia_name);
-    igSeparator();
+    ImGui::Text("Complex Interface Adapter - %s", cia_name);
+    ImGui::Separator();
 
     // CIA State Section
-    igText("CIA State");
-    igSeparator();
+    ImGui::Text("CIA State");
+    ImGui::Separator();
     
     // Port A and B
-    igText("Data Ports");
-    igSeparator();
+    ImGui::Text("Data Ports");
+    ImGui::Separator();
     
-    igText("Port A Data (PRA): $%02X", cia->reg[PRA]);
-    igText("Port A DDR (DDRA): $%02X", cia->reg[DDRA]);
-    igText("Port B Data (PRB): $%02X", cia->reg[PRB]);
-    igText("Port B DDR (DDRB): $%02X", cia->reg[DDRB]);
+    ImGui::Text("Port A Data (PRA): $%02X", cia->reg[PRA]);
+    ImGui::Text("Port A DDR (DDRA): $%02X", cia->reg[DDRA]);
+    ImGui::Text("Port B Data (PRB): $%02X", cia->reg[PRB]);
+    ImGui::Text("Port B DDR (DDRB): $%02X", cia->reg[DDRB]);
     
-    igSeparator();
+    ImGui::Separator();
     
     // Timers
-    igText("Timers");
-    igSeparator();
+    ImGui::Text("Timers");
+    ImGui::Separator();
     
     uint16_t timer_a = (cia->reg[TA_HI] << 8) | cia->reg[TA_LO];
-    igText("Timer A: %04X", timer_a);
-    igText("Timer A Control: $%02X", cia->reg[CRA]);
-    igText("Timer A Running: %s", (cia->reg[CRA] & 0x01) ? "YES" : "NO");
+    ImGui::Text("Timer A: %04X", timer_a);
+    ImGui::Text("Timer A Control: $%02X", cia->reg[CRA]);
+    ImGui::Text("Timer A Running: %s", (cia->reg[CRA] & 0x01) ? "YES" : "NO");
     
     uint16_t timer_b = (cia->reg[TB_HI] << 8) | cia->reg[TB_LO];
-    igText("Timer B: %04X", timer_b);
-    igText("Timer B Control: $%02X", cia->reg[CRB]);
-    igText("Timer B Running: %s", (cia->reg[CRB] & 0x01) ? "YES" : "NO");
+    ImGui::Text("Timer B: %04X", timer_b);
+    ImGui::Text("Timer B Control: $%02X", cia->reg[CRB]);
+    ImGui::Text("Timer B Running: %s", (cia->reg[CRB] & 0x01) ? "YES" : "NO");
     
-    igSeparator();
+    ImGui::Separator();
     
     // Time of Day Clock
-    igText("Time of Day Clock");
-    igSeparator();
+    ImGui::Text("Time of Day Clock");
+    ImGui::Separator();
     
-    igText("TOD 10ths: $%02X", cia->reg[TOD_10THS]);
-    igText("TOD Seconds: $%02X", cia->reg[TOD_SEC]);
-    igText("TOD Minutes: $%02X", cia->reg[TOD_MIN]);
-    igText("TOD Hours: $%02X", cia->reg[TOD_HR]);
+    ImGui::Text("TOD 10ths: $%02X", cia->reg[TOD_10THS]);
+    ImGui::Text("TOD Seconds: $%02X", cia->reg[TOD_SEC]);
+    ImGui::Text("TOD Minutes: $%02X", cia->reg[TOD_MIN]);
+    ImGui::Text("TOD Hours: $%02X", cia->reg[TOD_HR]);
     
-    igSeparator();
+    ImGui::Separator();
     
     // Interrupts
-    igText("Interrupt Control");
-    igSeparator();
-    igText("ICR: $%02X", cia->reg[ICR]);
-    igText("IRQ Active: %s", (cia->reg[ICR] & 0x80) ? "YES" : "NO");
+    ImGui::Text("Interrupt Control");
+    ImGui::Separator();
+    ImGui::Text("ICR: $%02X", cia->reg[ICR]);
+    ImGui::Text("IRQ Active: %s", (cia->reg[ICR] & 0x80) ? "YES" : "NO");
     
-    igSeparator();
+    ImGui::Separator();
     
     // Serial Data Register
-    igText("Serial Data Register: $%02X", cia->reg[SDR]);
+    ImGui::Text("Serial Data Register: $%02X", cia->reg[SDR]);
 }
 
 void mos6526_render_debug_window(void* chip, bool* show_window) {
@@ -204,7 +204,7 @@ void mos6526_render_debug_window(void* chip, bool* show_window) {
     if (!*show_window) return;
     
     // Push unique ID to prevent conflicts between CIA1 and CIA2
-    igPushID_Int((int)(uintptr_t)cia);
+    ImGui::PushID((int)(uintptr_t)cia);
     
     // Create generic chip GUI config
     chip_gui_config_t config = generic_chip_gui_get_default_config("MOS6526", "CIA");
@@ -214,7 +214,7 @@ void mos6526_render_debug_window(void* chip, bool* show_window) {
     // Create generic chip GUI instance
     generic_chip_gui_t* gui = generic_chip_gui_create(cia, &config);
     if (!gui) {
-        igPopID();
+        ImGui::PopID();
         return;
     }
     
@@ -227,7 +227,7 @@ void mos6526_render_debug_window(void* chip, bool* show_window) {
     
     // Cleanup
     generic_chip_gui_destroy(gui);
-    igPopID();
+    ImGui::PopID();
 }
 
 // ============================================================================
@@ -241,118 +241,118 @@ void mos6526_render_settings_window(void* chip, bool* show_window) {
     if (!*show_window) return;
     
     // Push unique ID to prevent conflicts between CIA1 and CIA2
-    igPushID_Int((int)(uintptr_t)cia);
+    ImGui::PushID((int)(uintptr_t)cia);
     
     char window_title[128];
     const char* cia_name = mos6526_get_cia_name(cia);
     snprintf(window_title, sizeof(window_title), "%s Settings", cia_name);
     
-    if (!igBegin(window_title, show_window, 0)) {
-        igEnd();
-        igPopID();
+    if (!ImGui::Begin(window_title, show_window, 0)) {
+        ImGui::End();
+        ImGui::PopID();
         return;
     }
 
     // Show which CIA this is
-    igText("Complex Interface Adapter - %s Configuration", cia_name);
-    igSeparator();
-    igText("Chip Type: MOS6526 CIA");
+    ImGui::Text("Complex Interface Adapter - %s Configuration", cia_name);
+    ImGui::Separator();
+    ImGui::Text("Chip Type: MOS6526 CIA");
 
     // CIA State Section
-    igText("Extended CIA Debug Information");
-    igSeparator();
+    ImGui::Text("Extended CIA Debug Information");
+    ImGui::Separator();
     
     // Port A and B with detailed information
-    igText("Data Ports (Detailed)");
-    igSeparator();
+    ImGui::Text("Data Ports (Detailed)");
+    ImGui::Separator();
     
-    igText("Port A Data (PRA): $%02X", cia->reg[PRA]);
-    igText("Port A DDR (DDRA): $%02X", cia->reg[DDRA]);
-    igText("Port A Value: $%02X", cia->port_a_value);
-    igSeparator();
+    ImGui::Text("Port A Data (PRA): $%02X", cia->reg[PRA]);
+    ImGui::Text("Port A DDR (DDRA): $%02X", cia->reg[DDRA]);
+    ImGui::Text("Port A Value: $%02X", cia->port_a_value);
+    ImGui::Separator();
     
-    igText("Port B Data (PRB): $%02X", cia->reg[PRB]);
-    igText("Port B DDR (DDRB): $%02X", cia->reg[DDRB]);
-    igText("Port B Internal DDR: $%02X", cia->reg[IDDRB_OFFSET]);
-    igText("Port B Value: $%02X", cia->port_b_value);
+    ImGui::Text("Port B Data (PRB): $%02X", cia->reg[PRB]);
+    ImGui::Text("Port B DDR (DDRB): $%02X", cia->reg[DDRB]);
+    ImGui::Text("Port B Internal DDR: $%02X", cia->reg[IDDRB_OFFSET]);
+    ImGui::Text("Port B Value: $%02X", cia->port_b_value);
     
-    igSeparator();
+    ImGui::Separator();
     
     // Timers with latches
-    igText("Timers (with Latches)");
-    igSeparator();
+    ImGui::Text("Timers (with Latches)");
+    ImGui::Separator();
     
     uint16_t timer_a = (cia->reg[TA_HI] << 8) | cia->reg[TA_LO];
     uint16_t timer_a_latch = (cia->reg[TIMER_OFFSET + TA_HI] << 8) | cia->reg[TIMER_OFFSET + TA_LO];
-    igText("Timer A: $%04X", timer_a);
-    igText("Timer A Latch: $%04X", timer_a_latch);
-    igText("Timer A Control: $%02X", cia->reg[CRA]);
-    igText("Timer A Running: %s", (cia->reg[CRA] & CRA_START) ? "YES" : "NO");
+    ImGui::Text("Timer A: $%04X", timer_a);
+    ImGui::Text("Timer A Latch: $%04X", timer_a_latch);
+    ImGui::Text("Timer A Control: $%02X", cia->reg[CRA]);
+    ImGui::Text("Timer A Running: %s", (cia->reg[CRA] & CRA_START) ? "YES" : "NO");
     
     uint16_t timer_b = (cia->reg[TB_HI] << 8) | cia->reg[TB_LO];
     uint16_t timer_b_latch = (cia->reg[TIMER_OFFSET + TB_HI] << 8) | cia->reg[TIMER_OFFSET + TB_LO];
-    igText("Timer B: $%04X", timer_b);
-    igText("Timer B Latch: $%04X", timer_b_latch);
-    igText("Timer B Control: $%02X", cia->reg[CRB]);
-    igText("Timer B Running: %s", (cia->reg[CRB] & CRB_START) ? "YES" : "NO");
+    ImGui::Text("Timer B: $%04X", timer_b);
+    ImGui::Text("Timer B Latch: $%04X", timer_b_latch);
+    ImGui::Text("Timer B Control: $%02X", cia->reg[CRB]);
+    ImGui::Text("Timer B Running: %s", (cia->reg[CRB] & CRB_START) ? "YES" : "NO");
     
-    igSeparator();
+    ImGui::Separator();
     
     // Time of Day Clock with detailed information
-    igText("Time of Day Clock (Detailed)");
-    igSeparator();
+    ImGui::Text("Time of Day Clock (Detailed)");
+    ImGui::Separator();
     
-    igText("TOD 10ths: $%02X", cia->reg[TOD_10THS]);
-    igText("TOD Seconds: $%02X", cia->reg[TOD_SEC]);
-    igText("TOD Minutes: $%02X", cia->reg[TOD_MIN]);
-    igText("TOD Hours: $%02X", cia->reg[TOD_HR]);
-    igText("TOD Running: %s", cia->is_running_tod ? "YES" : "NO");
-    igText("TOD Cycles: %d", cia->tod_cycles);
-    igText("TOD Read Delta: %u", cia->read_tod_delta);
-    igText("TOD Write Delta: %u", cia->write_tod_delta);
+    ImGui::Text("TOD 10ths: $%02X", cia->reg[TOD_10THS]);
+    ImGui::Text("TOD Seconds: $%02X", cia->reg[TOD_SEC]);
+    ImGui::Text("TOD Minutes: $%02X", cia->reg[TOD_MIN]);
+    ImGui::Text("TOD Hours: $%02X", cia->reg[TOD_HR]);
+    ImGui::Text("TOD Running: %s", cia->is_running_tod ? "YES" : "NO");
+    ImGui::Text("TOD Cycles: %d", cia->tod_cycles);
+    ImGui::Text("TOD Read Delta: %u", cia->read_tod_delta);
+    ImGui::Text("TOD Write Delta: %u", cia->write_tod_delta);
     
-    igSeparator();
+    ImGui::Separator();
     
     // Alarm registers
-    igText("Alarm Registers");
-    igSeparator();
+    ImGui::Text("Alarm Registers");
+    ImGui::Separator();
     
-    igText("Alarm 10ths: $%02X", cia->reg[ALARM_OFFSET + TOD_10THS]);
-    igText("Alarm Seconds: $%02X", cia->reg[ALARM_OFFSET + TOD_SEC]);
-    igText("Alarm Minutes: $%02X", cia->reg[ALARM_OFFSET + TOD_MIN]);
-    igText("Alarm Hours: $%02X", cia->reg[ALARM_OFFSET + TOD_HR]);
+    ImGui::Text("Alarm 10ths: $%02X", cia->reg[ALARM_OFFSET + TOD_10THS]);
+    ImGui::Text("Alarm Seconds: $%02X", cia->reg[ALARM_OFFSET + TOD_SEC]);
+    ImGui::Text("Alarm Minutes: $%02X", cia->reg[ALARM_OFFSET + TOD_MIN]);
+    ImGui::Text("Alarm Hours: $%02X", cia->reg[ALARM_OFFSET + TOD_HR]);
     
-    igSeparator();
+    ImGui::Separator();
     
     // Interrupts with detailed information
-    igText("Interrupt Control (Detailed)");
-    igSeparator();
+    ImGui::Text("Interrupt Control (Detailed)");
+    ImGui::Separator();
     
-    igText("ICR: $%02X", cia->reg[ICR]);
-    igText("Interrupt Mask: $%02X", cia->interrupt_mask);
-    igText("Delayed IRQ: %s", cia->delayed_irq ? "YES" : "NO");
-    igText("IRQ Active: %s", (cia->reg[ICR] & ICR_IRQ) ? "YES" : "NO");
-    igText("Timer A IRQ: %s", (cia->reg[ICR] & ICR_TA) ? "YES" : "NO");
-    igText("Timer B IRQ: %s", (cia->reg[ICR] & ICR_TB) ? "YES" : "NO");
-    igText("Alarm IRQ: %s", (cia->reg[ICR] & ICR_ALRM) ? "YES" : "NO");
-    igText("Serial IRQ: %s", (cia->reg[ICR] & ICR_SP) ? "YES" : "NO");
-    igText("Flag IRQ: %s", (cia->reg[ICR] & ICR_FLG) ? "YES" : "NO");
+    ImGui::Text("ICR: $%02X", cia->reg[ICR]);
+    ImGui::Text("Interrupt Mask: $%02X", cia->interrupt_mask);
+    ImGui::Text("Delayed IRQ: %s", cia->delayed_irq ? "YES" : "NO");
+    ImGui::Text("IRQ Active: %s", (cia->reg[ICR] & ICR_IRQ) ? "YES" : "NO");
+    ImGui::Text("Timer A IRQ: %s", (cia->reg[ICR] & ICR_TA) ? "YES" : "NO");
+    ImGui::Text("Timer B IRQ: %s", (cia->reg[ICR] & ICR_TB) ? "YES" : "NO");
+    ImGui::Text("Alarm IRQ: %s", (cia->reg[ICR] & ICR_ALRM) ? "YES" : "NO");
+    ImGui::Text("Serial IRQ: %s", (cia->reg[ICR] & ICR_SP) ? "YES" : "NO");
+    ImGui::Text("Flag IRQ: %s", (cia->reg[ICR] & ICR_FLG) ? "YES" : "NO");
     
-    igSeparator();
+    ImGui::Separator();
     
     // Serial Data Register with detailed information
-    igText("Serial Data (Detailed)");
-    igSeparator();
+    ImGui::Text("Serial Data (Detailed)");
+    ImGui::Separator();
     
-    igText("SDR: $%02X", cia->reg[SDR]);
-    igText("Shift Register: $%02X", cia->reg[SHIFT_OFFSET]);
-    igText("Serial Shift: %d", cia->serial_shift);
+    ImGui::Text("SDR: $%02X", cia->reg[SDR]);
+    ImGui::Text("Shift Register: $%02X", cia->reg[SHIFT_OFFSET]);
+    ImGui::Text("Serial Shift: %d", cia->serial_shift);
     
     // Reset to single column at the end
-    igColumns(1, NULL, false);
+    ImGui::Columns(1, NULL, false);
     
-    igEnd();
-    igPopID();
+    ImGui::End();
+    ImGui::PopID();
 }
 
 // Helper function to determine CIA type based on system context

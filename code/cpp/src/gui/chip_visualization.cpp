@@ -290,8 +290,8 @@ void ChipVisualization::render_chip_body(ImVec2 chip_center, const char* chip_na
             // Generic rectangular body
             ImVec2 chip_min = {chip_center.x - chip_width/2, chip_center.y - chip_height/2};
             ImVec2 chip_max = {chip_center.x + chip_width/2, chip_center.y + chip_height/2};
-            ImDrawList_AddRectFilled(draw_list, chip_min, chip_max, config_.chip_body_color, 0.0f, 0);
-            ImDrawList_AddRect(draw_list, chip_min, chip_max, config_.chip_border_color, 0.0f, 0, config_.chip_border_width);
+            draw_list->AddRectFilled(chip_min, chip_max, config_.chip_body_color, 0.0f, 0);
+            draw_list->AddRect(chip_min, chip_max, config_.chip_border_color, 0.0f, 0, config_.chip_border_width);
             break;
     }
     
@@ -300,7 +300,7 @@ void ChipVisualization::render_chip_body(ImVec2 chip_center, const char* chip_na
         ImVec2 label_size;
         label_size = ImGui::CalcTextSize(chip_name);
         ImVec2 label_pos = {chip_center.x - label_size.x/2, chip_center.y - 10};
-        ImDrawList_AddText_Vec2(draw_list, label_pos, config_.text_color, chip_name, NULL);
+        draw_list->AddText(label_pos, config_.text_color, chip_name);
     }
     
     // Draw package name if enabled
@@ -310,8 +310,8 @@ void ChipVisualization::render_chip_body(ImVec2 chip_center, const char* chip_na
         ImVec2 package_label_size;
         package_label_size = ImGui::CalcTextSize(package_name);
         ImVec2 package_label_pos = {chip_center.x - package_label_size.x/2, chip_center.y + 15};
-        ImDrawList_AddText_Vec2(draw_list, package_label_pos, config_.pin_number_color, 
-                               package_name, NULL);
+        draw_list->AddText(package_label_pos, config_.pin_number_color, 
+                               package_name);
     }
 }
 
@@ -322,8 +322,8 @@ void ChipVisualization::render_dip_style(ImVec2 chip_center, float chip_width, f
     ImVec2 chip_max = {chip_center.x + chip_width/2, chip_center.y + chip_height/2};
     
     // Draw rounded rectangle for DIP
-    ImDrawList_AddRectFilled(draw_list, chip_min, chip_max, config_.chip_body_color, 2.0f, 0);
-    ImDrawList_AddRect(draw_list, chip_min, chip_max, config_.chip_border_color, 2.0f, 0, config_.chip_border_width);
+    draw_list->AddRectFilled(chip_min, chip_max, config_.chip_body_color, 2.0f, 0);
+    draw_list->AddRect(chip_min, chip_max, config_.chip_border_color, 2.0f, 0, config_.chip_border_width);
 }
 
 void ChipVisualization::render_surface_mount_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name) {
@@ -333,8 +333,8 @@ void ChipVisualization::render_surface_mount_style(ImVec2 chip_center, float chi
     ImVec2 chip_max = {chip_center.x + chip_width/2, chip_center.y + chip_height/2};
     
     // Surface mount packages are flatter looking
-    ImDrawList_AddRectFilled(draw_list, chip_min, chip_max, config_.chip_body_color, 1.0f, 0);
-    ImDrawList_AddRect(draw_list, chip_min, chip_max, config_.chip_border_color, 1.0f, 0, config_.chip_border_width);
+    draw_list->AddRectFilled(chip_min, chip_max, config_.chip_body_color, 1.0f, 0);
+    draw_list->AddRect(chip_min, chip_max, config_.chip_border_color, 1.0f, 0, config_.chip_border_width);
 }
 
 void ChipVisualization::render_qfp_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name) {
@@ -344,8 +344,8 @@ void ChipVisualization::render_qfp_style(ImVec2 chip_center, float chip_width, f
     ImVec2 chip_max = {chip_center.x + chip_width/2, chip_center.y + chip_height/2};
     
     // QFP packages are typically square with chamfered corner
-    ImDrawList_AddRectFilled(draw_list, chip_min, chip_max, config_.chip_body_color, 0.0f, 0);
-    ImDrawList_AddRect(draw_list, chip_min, chip_max, config_.chip_border_color, 0.0f, 0, config_.chip_border_width);
+    draw_list->AddRectFilled(chip_min, chip_max, config_.chip_body_color, 0.0f, 0);
+    draw_list->AddRect(chip_min, chip_max, config_.chip_border_color, 0.0f, 0, config_.chip_border_width);
 }
 
 void ChipVisualization::render_bga_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name) {
@@ -355,8 +355,8 @@ void ChipVisualization::render_bga_style(ImVec2 chip_center, float chip_width, f
     ImVec2 chip_max = {chip_center.x + chip_width/2, chip_center.y + chip_height/2};
     
     // BGA packages show top view - square with marker
-    ImDrawList_AddRectFilled(draw_list, chip_min, chip_max, config_.chip_body_color, 0.0f, 0);
-    ImDrawList_AddRect(draw_list, chip_min, chip_max, config_.chip_border_color, 0.0f, 0, config_.chip_border_width * 1.5f);
+    draw_list->AddRectFilled(chip_min, chip_max, config_.chip_body_color, 0.0f, 0);
+    draw_list->AddRect(chip_min, chip_max, config_.chip_border_color, 0.0f, 0, config_.chip_border_width * 1.5f);
 }
 
 void ChipVisualization::render_to_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name) {
@@ -366,15 +366,15 @@ void ChipVisualization::render_to_style(ImVec2 chip_center, float chip_width, fl
     ImVec2 chip_max = {chip_center.x + chip_width/2, chip_center.y + chip_height/2};
     
     // TO packages have distinctive shape with heat sink tab
-    ImDrawList_AddRectFilled(draw_list, chip_min, chip_max, config_.chip_body_color, 3.0f, 0);
-    ImDrawList_AddRect(draw_list, chip_min, chip_max, config_.chip_border_color, 3.0f, 0, config_.chip_border_width);
+    draw_list->AddRectFilled(chip_min, chip_max, config_.chip_body_color, 3.0f, 0);
+    draw_list->AddRect(chip_min, chip_max, config_.chip_border_color, 3.0f, 0, config_.chip_border_width);
     
     // Draw heat sink tab at top
     if (layout_.package.package_type == PackageType::TO220) {
         ImVec2 tab_min = {chip_center.x - chip_width/3, chip_min.y - 15};
         ImVec2 tab_max = {chip_center.x + chip_width/3, chip_min.y};
-        ImDrawList_AddRectFilled(draw_list, tab_min, tab_max, config_.thermal_pad_color, 1.0f, 0);
-        ImDrawList_AddRect(draw_list, tab_min, tab_max, config_.chip_border_color, 1.0f, 0, 1.0f);
+        draw_list->AddRectFilled(tab_min, tab_max, config_.thermal_pad_color, 1.0f, 0);
+        draw_list->AddRect(tab_min, tab_max, config_.chip_border_color, 1.0f, 0, 1.0f);
     }
 }
 
@@ -406,7 +406,7 @@ void ChipVisualization::render_orientation_marker(ImVec2 chip_center) {
                 float chip_width = layout_.package.width;
                 float chip_height = layout_.package.height;
                 ImVec2 marker_pos = {chip_center.x - chip_width/2 + 15, chip_center.y - chip_height/2 + 15};
-                ImDrawList_AddCircle(draw_list, marker_pos, config_.marker_size, config_.marker_color, 12, 2.0f);
+                draw_list->AddCircle(marker_pos, config_.marker_size, config_.marker_color, 12, 2.0f);
             }
             break;
         default:
@@ -418,8 +418,8 @@ void ChipVisualization::draw_notch(ImVec2 chip_center) {
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     float chip_height = scaled_chip_height_ > 0 ? scaled_chip_height_ : 80.0f;
     ImVec2 notch_center = {chip_center.x, chip_center.y - chip_height/2};
-    ImDrawList_AddCircleFilled(draw_list, notch_center, config_.marker_size, config_.notch_color, 12);
-    ImDrawList_AddCircle(draw_list, notch_center, config_.marker_size, config_.chip_border_color, 12, 1.0f);
+    draw_list->AddCircleFilled(notch_center, config_.marker_size, config_.notch_color, 12);
+    draw_list->AddCircle(notch_center, config_.marker_size, config_.chip_border_color, 12, 1.0f);
 }
 
 void ChipVisualization::draw_dot_marker(ImVec2 chip_center) {
@@ -427,7 +427,7 @@ void ChipVisualization::draw_dot_marker(ImVec2 chip_center) {
     float chip_width = scaled_chip_width_ > 0 ? scaled_chip_width_ : 120.0f;
     float chip_height = scaled_chip_height_ > 0 ? scaled_chip_height_ : 80.0f;
     ImVec2 marker_pos = {chip_center.x - chip_width/2 + 15, chip_center.y - chip_height/2 + 15};
-    ImDrawList_AddCircleFilled(draw_list, marker_pos, config_.marker_size * 0.6f, config_.marker_color, 12);
+    draw_list->AddCircleFilled(marker_pos, config_.marker_size * 0.6f, config_.marker_color, 12);
 }
 
 void ChipVisualization::draw_chamfer(ImVec2 chip_center) {
@@ -441,8 +441,8 @@ void ChipVisualization::draw_chamfer(ImVec2 chip_center) {
     ImVec2 p2 = {corner.x + chamfer_size, corner.y};
     ImVec2 p3 = {corner.x, corner.y + chamfer_size};
     
-    ImDrawList_AddTriangleFilled(draw_list, p1, p2, p3, config_.notch_color);
-    ImDrawList_AddTriangle(draw_list, p1, p2, p3, config_.chip_border_color, 1.0f);
+    draw_list->AddTriangleFilled(p1, p2, p3, config_.notch_color);
+    draw_list->AddTriangle(p1, p2, p3, config_.chip_border_color, 1.0f);
 }
 
 void ChipVisualization::draw_bar_marker(ImVec2 chip_center) {
@@ -452,7 +452,7 @@ void ChipVisualization::draw_bar_marker(ImVec2 chip_center) {
     
     ImVec2 bar_min = {chip_center.x - chip_width/3, chip_center.y - chip_height/2 + 5};
     ImVec2 bar_max = {chip_center.x + chip_width/3, chip_center.y - chip_height/2 + 8};
-    ImDrawList_AddRectFilled(draw_list, bar_min, bar_max, config_.marker_color, 0.0f, 0);
+    draw_list->AddRectFilled(bar_min, bar_max, config_.marker_color, 0.0f, 0);
 }
 
 void ChipVisualization::draw_triangle_marker(ImVec2 chip_center) {
@@ -465,8 +465,8 @@ void ChipVisualization::draw_triangle_marker(ImVec2 chip_center) {
     ImVec2 p2 = {tip.x + size, tip.y - size/2};
     ImVec2 p3 = {tip.x + size, tip.y + size/2};
     
-    ImDrawList_AddTriangleFilled(draw_list, tip, p2, p3, config_.marker_color);
-    ImDrawList_AddTriangle(draw_list, tip, p2, p3, config_.chip_border_color, 1.0f);
+    draw_list->AddTriangleFilled(tip, p2, p3, config_.marker_color);
+    draw_list->AddTriangle(tip, p2, p3, config_.chip_border_color, 1.0f);
 }
 
 void ChipVisualization::render_thermal_pad(ImVec2 chip_center) {
@@ -480,19 +480,19 @@ void ChipVisualization::render_thermal_pad(ImVec2 chip_center) {
     ImVec2 pad_min = {chip_center.x - pad_size/2, chip_center.y - pad_size/2};
     ImVec2 pad_max = {chip_center.x + pad_size/2, chip_center.y + pad_size/2};
     
-    ImDrawList_AddRectFilled(draw_list, pad_min, pad_max, config_.thermal_pad_color, 0.0f, 0);
-    ImDrawList_AddRect(draw_list, pad_min, pad_max, config_.pin_border_color, 0.0f, 0, 1.0f);
+    draw_list->AddRectFilled(pad_min, pad_max, config_.thermal_pad_color, 0.0f, 0);
+    draw_list->AddRect(pad_min, pad_max, config_.pin_border_color, 0.0f, 0, 1.0f);
     
     // Add cross-hatch pattern
     for (int i = -3; i <= 3; i++) {
         float offset = i * pad_size / 8;
         ImVec2 line1_start = {chip_center.x + offset, pad_min.y};
         ImVec2 line1_end = {chip_center.x + offset, pad_max.y};
-        ImDrawList_AddLine(draw_list, line1_start, line1_end, config_.pin_border_color, 0.5f);
+        draw_list->AddLine(line1_start, line1_end, config_.pin_border_color, 0.5f);
         
         ImVec2 line2_start = {pad_min.x, chip_center.y + offset};
         ImVec2 line2_end = {pad_max.x, chip_center.y + offset};
-        ImDrawList_AddLine(draw_list, line2_start, line2_end, config_.pin_border_color, 0.5f);
+        draw_list->AddLine(line2_start, line2_end, config_.pin_border_color, 0.5f);
     }
 }
 
@@ -507,7 +507,7 @@ void ChipVisualization::render_chip_markings(ImVec2 chip_center) {
             ImVec2 size;
             size = ImGui::CalcTextSize(text);
             ImVec2 pos = {chip_center.x - size.x/2, chip_center.y + y_offset};
-            ImDrawList_AddText_Vec2(draw_list, pos, config_.pin_number_color, text, NULL);
+            draw_list->AddText(pos, config_.pin_number_color, text);
             y_offset += line_height;
         }
     };
@@ -572,14 +572,14 @@ void ChipVisualization::render_bga_grid(ImVec2 chip_center, const std::vector<Pi
             ball_color = config_.led_active_color;
         }
         
-        ImDrawList_AddCircleFilled(draw_list, ball_pos, 3.0f, ball_color, 12);
-        ImDrawList_AddCircle(draw_list, ball_pos, 3.0f, config_.pin_border_color, 12, 1.0f);
+        draw_list->AddCircleFilled(ball_pos, 3.0f, ball_color, 12);
+        draw_list->AddCircle(ball_pos, 3.0f, config_.pin_border_color, 12, 1.0f);
         
         // Draw label if enabled
         if (config_.show_pin_labels) {
             const char* label_str = pin_label_to_string(pin.label);
             ImVec2 label_pos = {ball_pos.x - 8, ball_pos.y - 6};
-            ImDrawList_AddText_Vec2(draw_list, label_pos, config_.text_color, label_str, NULL);
+            draw_list->AddText(label_pos, config_.text_color, label_str);
         }
     }
 }
@@ -615,23 +615,23 @@ void ChipVisualization::render_single_pin(ImVec2 pin_pos, const ChipPin& pin, co
     ImVec2 pin_min = {pin_pos.x - config_.pin_width/2, pin_pos.y - config_.pin_height/2};
     ImVec2 pin_max = {pin_pos.x + config_.pin_width/2, pin_pos.y + config_.pin_height/2};
     
-    ImDrawList_AddRectFilled(draw_list, pin_min, pin_max, pin_color, 0.0f, 0);
-    ImDrawList_AddRect(draw_list, pin_min, pin_max, config_.pin_border_color, 0.0f, 0, config_.pin_border_width);
+    draw_list->AddRectFilled(pin_min, pin_max, pin_color, 0.0f, 0);
+    draw_list->AddRect(pin_min, pin_max, config_.pin_border_color, 0.0f, 0, config_.pin_border_width);
     
     // Draw LED indicator if enabled
     if (config_.show_led_indicators) {
         ImVec2 led_pos = get_led_position(pin_pos, side);
         uint32_t led_color = state.signal_level ? config_.led_active_color : config_.led_inactive_color;
         
-        ImDrawList_AddCircleFilled(draw_list, led_pos, config_.led_radius, led_color, 12);
-        ImDrawList_AddCircle(draw_list, led_pos, config_.led_radius, config_.pin_border_color, 12, 1.0f);
+        draw_list->AddCircleFilled(led_pos, config_.led_radius, led_color, 12);
+        draw_list->AddCircle(led_pos, config_.led_radius, config_.pin_border_color, 12, 1.0f);
     }
     
     // Draw PWM indicator if enabled and applicable
     if (config_.show_pwm_indicators && state.is_pwm) {
          ImVec2 led_pos = get_led_position(pin_pos, side);
          float pwm_angle = state.pwm_duty_cycle * 2.0f * 3.14159f;
-        ImDrawList_AddCircle(draw_list, led_pos, config_.led_radius + 2, 0xFF00FFFF, 12, 2.0f);
+        draw_list->AddCircle(led_pos, config_.led_radius + 2, 0xFF00FFFF, 12, 2.0f);
     }
     
     // Draw voltage level indicator for analog pins
@@ -640,7 +640,7 @@ void ChipVisualization::render_single_pin(ImVec2 pin_pos, const ChipPin& pin, co
         char voltage_str[16];
         snprintf(voltage_str, sizeof(voltage_str), "%.2fV", state.analog_voltage);
         ImVec2 voltage_pos = {led_pos.x - 15, led_pos.y + 10};
-        ImDrawList_AddText_Vec2(draw_list, voltage_pos, config_.text_color, voltage_str, NULL);
+        draw_list->AddText(voltage_pos, config_.text_color, voltage_str);
     }
     
     // Draw pin label if enabled
@@ -649,7 +649,7 @@ void ChipVisualization::render_single_pin(ImVec2 pin_pos, const ChipPin& pin, co
         uint32_t text_color = state.signal_level ? config_.active_text_color : config_.text_color;
         
         std::string formatted_label = format_pin_label(pin);
-        ImDrawList_AddText_Vec2(draw_list, label_pos, text_color, formatted_label.c_str(), NULL);
+        draw_list->AddText(label_pos, text_color, formatted_label.c_str());
         
         // Show alternate function if enabled
         if (config_.show_alternate_functions && pin.alt_function) {
@@ -657,7 +657,7 @@ void ChipVisualization::render_single_pin(ImVec2 pin_pos, const ChipPin& pin, co
             alt_pos.y += 12;
             char alt_text[64];
             snprintf(alt_text, sizeof(alt_text), "(%s)", pin.alt_function);
-            ImDrawList_AddText_Vec2(draw_list, alt_pos, config_.pin_number_color, alt_text, NULL);
+            draw_list->AddText(alt_pos, config_.pin_number_color, alt_text);
         }
     }
     
@@ -682,7 +682,7 @@ void ChipVisualization::render_single_pin(ImVec2 pin_pos, const ChipPin& pin, co
                 break;
         }
         
-        ImDrawList_AddText_Vec2(draw_list, pin_num_pos, config_.pin_number_color, pin_num_str, NULL);
+        draw_list->AddText(pin_num_pos, config_.pin_number_color, pin_num_str);
     }
     
     // Draw differential pair indicator
@@ -690,7 +690,7 @@ void ChipVisualization::render_single_pin(ImVec2 pin_pos, const ChipPin& pin, co
         ImVec2 diff_pos = pin_pos;
         diff_pos.x += config_.pin_width/2 + 1;
         const char* diff_marker = pin.is_differential_pos ? "+" : "-";
-        ImDrawList_AddText_Vec2(draw_list, diff_pos, config_.text_color, diff_marker, NULL);
+        draw_list->AddText(diff_pos, config_.text_color, diff_marker);
     }
 }
 
@@ -894,11 +894,11 @@ void ChipVisualization::render_legend() {
             
             // Draw colored square
             ImVec2 cursor;
-            ImGui::GetCursorScreenPos(&cursor);
+            cursor = ImGui::GetCursorScreenPos();
             ImDrawList* draw_list = ImGui::GetWindowDrawList();
             ImVec2 square_max = {cursor.x + 12, cursor.y + 12};
-            ImDrawList_AddRectFilled(draw_list, cursor, square_max, color, 0.0f, 0);
-            ImDrawList_AddRect(draw_list, cursor, square_max, config_.pin_border_color, 0.0f, 0, 1.0f);
+            draw_list->AddRectFilled(cursor, square_max, color, 0.0f, 0);
+            draw_list->AddRect(cursor, square_max, config_.pin_border_color, 0.0f, 0, 1.0f);
             
             ImVec2 legend_dummy = {16, 12};
             ImGui::Dummy(legend_dummy);

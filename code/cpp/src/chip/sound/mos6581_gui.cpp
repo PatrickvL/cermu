@@ -1,12 +1,10 @@
 #include "mos6581.h"
-#include "../../gui/cimgui_interface.h"
+#include "../../gui/imgui_interface.h"
 #include "../../gui/generic_chip_gui.h"
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
-#ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#endif
-#include <cimgui.h>
+// Native Dear ImGui C++ - no conditional compilation needed
+#include <imgui.h>
 #include <stdio.h>
 
 static const char* waveform_names[] = {
@@ -30,48 +28,48 @@ static const char* envelope_cycle_names[] = {
 };
 
 static void render_voice_debug(voice_t* voice, int voice_num) {
-    igPushID_Int(voice_num);
+    ImGui::PushID(voice_num);
     
     char voice_header[32];
     snprintf(voice_header, sizeof(voice_header), "Voice %d", voice_num);
     
-    if (igCollapsingHeader_BoolPtr(voice_header, NULL, 0)) {
-        igIndent(16.0f);
+    if (ImGui::CollapsingHeader(voice_header)) {
+        ImGui::Indent(16.0f);
         
         // Write-only voice register values :
-        igText("Frequency: $%04X (%d)", voice->frequency, voice->frequency);
-        igText("Pulse Waveform Width: $%04X (%d)", voice->pulse_waveform_width, voice->pulse_waveform_width);
+        ImGui::Text("Frequency: $%04X (%d)", voice->frequency, voice->frequency);
+        ImGui::Text("Pulse Waveform Width: $%04X (%d)", voice->pulse_waveform_width, voice->pulse_waveform_width);
         
         // Values updated by WriteVoiceControlRegisterValue()
-        igText("Gated: %s", voice->gated ? "Yes" : "No");
-        igText("Synchronize: %s", voice->synchronize ? "Yes" : "No");
-        igText("Ring Modulation: %s", voice->ring_modulation ? "Yes" : "No");
-        igText("Test: %s", voice->test ? "Yes" : "No");
+        ImGui::Text("Gated: %s", voice->gated ? "Yes" : "No");
+        ImGui::Text("Synchronize: %s", voice->synchronize ? "Yes" : "No");
+        ImGui::Text("Ring Modulation: %s", voice->ring_modulation ? "Yes" : "No");
+        ImGui::Text("Test: %s", voice->test ? "Yes" : "No");
         const char* waveform_name = ((int)voice->waveform < 9) ? waveform_names[(int)voice->waveform] : "Unknown";
-        igText("Waveform: %s (%d)", waveform_name, (int)voice->waveform);
+        ImGui::Text("Waveform: %s (%d)", waveform_name, (int)voice->waveform);
         
-        igSeparator();
+        ImGui::Separator();
         
         // Outside readable variables (albeit after shifting)
-        igText("Envelope Amplitude: $%04X (%d)", voice->envelope_amplitude, voice->envelope_amplitude);
-        igText("Oscillator Waveform: $%04X (%d)", voice->oscillator_waveform, voice->oscillator_waveform);
-        igText("Result: %d", voice->result);
+        ImGui::Text("Envelope Amplitude: $%04X (%d)", voice->envelope_amplitude, voice->envelope_amplitude);
+        ImGui::Text("Oscillator Waveform: $%04X (%d)", voice->oscillator_waveform, voice->oscillator_waveform);
+        ImGui::Text("Result: %d", voice->result);
         
-        igSeparator();
+        ImGui::Separator();
         
         // Internal state
-        igText("Waveform Accumulator: $%06X (%d)", voice->waveform_accumulator, voice->waveform_accumulator);
+        ImGui::Text("Waveform Accumulator: $%06X (%d)", voice->waveform_accumulator, voice->waveform_accumulator);
         const char* cycle_name = ((int)voice->envelope_cycle < 5) ? envelope_cycle_names[(int)voice->envelope_cycle] : "Unknown";
-        igText("Envelope Cycle: %s (%d)", cycle_name, (int)voice->envelope_cycle);
-        igText("Envelope Next Level: %d", voice->envelope_next_level);
-        igText("Sustain Level: %d", voice->sustain_level);
+        ImGui::Text("Envelope Cycle: %s (%d)", cycle_name, (int)voice->envelope_cycle);
+        ImGui::Text("Envelope Next Level: %d", voice->envelope_next_level);
+        ImGui::Text("Sustain Level: %d", voice->sustain_level);
         
-        igText("CPU Clock: %.0f Hz", voice->cpu_clock);
+        ImGui::Text("CPU Clock: %.0f Hz", voice->cpu_clock);
 
-        igUnindent(16.0f);
+        ImGui::Unindent(16.0f);
     }
     
-    igPopID();
+    ImGui::PopID();
 }
 
 // ============================================================================
@@ -158,42 +156,42 @@ static void render_sid_specific_content(void* chip) {
     if (!sid) return;
     
     // This replaces the right column content from the original function
-    igText("MOS 6581 SID (Sound Interface Device)");
-    igText("SID MOS 6581 DIP has 28 pins");
-    igSeparator();
+    ImGui::Text("MOS 6581 SID (Sound Interface Device)");
+    ImGui::Text("SID MOS 6581 DIP has 28 pins");
+    ImGui::Separator();
     
     // Voices section
-    if (igCollapsingHeader_BoolPtr("Voices", NULL, ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::CollapsingHeader("Voices", ImGuiTreeNodeFlags_DefaultOpen)) {
         render_voice_debug(&sid->voice1, 1);
         render_voice_debug(&sid->voice2, 2);
         render_voice_debug(&sid->voice3, 3);
     }
     
-    igSeparator();
+    ImGui::Separator();
     
     // Filter and Global Settings
-    if (igCollapsingHeader_BoolPtr("Filter & Global Settings", NULL, ImGuiTreeNodeFlags_DefaultOpen)) {
-        igIndent(16.0f);
+    if (ImGui::CollapsingHeader("Filter & Global Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Indent(16.0f);
         
         // Write-only register values :
-        igText("Filter Cutoff Frequency: $%03X (%d)", sid->filter_cutoff_frequency, sid->filter_cutoff_frequency);
-        igText("Filter Voice 1: %s", sid->filter_voice1 ? "Yes" : "No");
-        igText("Filter Voice 2: %s", sid->filter_voice2 ? "Yes" : "No");
-        igText("Filter Voice 3: %s", sid->filter_voice3 ? "Yes" : "No");
-        igText("Filter Voice 4 (External): %s", sid->filter_voice4 ? "Yes" : "No");
-        igText("Filter Resonance: %d (0-15)", sid->filter_resonance);
-        igText("Volume: %d (0-15)", sid->volume);
-        igText("Low Pass Enabled: %s", sid->low_pass_enabled ? "Yes" : "No");
-        igText("Band Pass Enabled: %s", sid->band_pass_enabled ? "Yes" : "No");
-        igText("High Pass Enabled: %s", sid->high_pass_enabled ? "Yes" : "No");
-        igText("Voice 3 Disabled: %s", sid->voice3_disabled ? "Yes" : "No");
+        ImGui::Text("Filter Cutoff Frequency: $%03X (%d)", sid->filter_cutoff_frequency, sid->filter_cutoff_frequency);
+        ImGui::Text("Filter Voice 1: %s", sid->filter_voice1 ? "Yes" : "No");
+        ImGui::Text("Filter Voice 2: %s", sid->filter_voice2 ? "Yes" : "No");
+        ImGui::Text("Filter Voice 3: %s", sid->filter_voice3 ? "Yes" : "No");
+        ImGui::Text("Filter Voice 4 (External): %s", sid->filter_voice4 ? "Yes" : "No");
+        ImGui::Text("Filter Resonance: %d (0-15)", sid->filter_resonance);
+        ImGui::Text("Volume: %d (0-15)", sid->volume);
+        ImGui::Text("Low Pass Enabled: %s", sid->low_pass_enabled ? "Yes" : "No");
+        ImGui::Text("Band Pass Enabled: %s", sid->band_pass_enabled ? "Yes" : "No");
+        ImGui::Text("High Pass Enabled: %s", sid->high_pass_enabled ? "Yes" : "No");
+        ImGui::Text("Voice 3 Disabled: %s", sid->voice3_disabled ? "Yes" : "No");
         
-        igSeparator();
+        ImGui::Separator();
         
         // Internal state
-        igText("Sample Buffer Size: %d", SAMPLE_BUFFER_SIZE);
+        ImGui::Text("Sample Buffer Size: %d", SAMPLE_BUFFER_SIZE);
         
-        igUnindent(16.0f);
+        ImGui::Unindent(16.0f);
     }
 }
 
@@ -236,109 +234,109 @@ void mos6581_render_settings_window(void* chip, bool* show_window) {
     char window_title[128];
     snprintf(window_title, sizeof(window_title), "%s Settings", sid->desc->description);
     
-    if (!igBegin(window_title, show_window, 0)) {
-        igEnd();
+    if (!ImGui::Begin(window_title, show_window)) {
+        ImGui::End();
         return;
     }
 
-    igText("SID Configuration");
-    igSeparator();
+    ImGui::Text("SID Configuration");
+    ImGui::Separator();
     
-    igText("Chip Type: MOS6581 SID");
-    igText("Base Address: $D400-$D7FF");
-    igText("Register Size: 32 bytes (repeated each 32 bytes)");
-    igText("Address Mask: $1F (31)");
+    ImGui::Text("Chip Type: MOS6581 SID");
+    ImGui::Text("Base Address: $D400-$D7FF");
+    ImGui::Text("Register Size: 32 bytes (repeated each 32 bytes)");
+    ImGui::Text("Address Mask: $1F (31)");
     
-    igSeparator();
+    ImGui::Separator();
     
     // Pin Configuration
-    if (igCollapsingHeader_BoolPtr("Pin Configuration", NULL, 0)) {
-        igIndent(16.0f);
-        igText("SID MOS 6581 DIP has 28 pins:");
-        igText("CAP1A/CAP1B (1,2) - Capacitor connections");
-        igText("CAP2A/CAP2B (3,4) - Capacitor connections");
-        igText("/RES (5) - Reset Input");
-        igText("phi2 (6) - Clock Input");
-        igText("R/W (7) - Read/Write Input");
-        igText("/CS (8) - Chip Select");
-        igText("A0-A4 (9-13) - Address Inputs (5 bits)");
-        igText("GND (14) - Ground");
-        igText("D0-D7 (15-22) - Data Bus (8 bits)");
-        igText("POT_Y/POT_X (23,24) - Paddle inputs");
-        igText("Vcc/EXT_IN (25,26) - Power/External input");
-        igText("AUDIO_OUT/Vdd (27,28) - Audio output/Power");
-        igUnindent(16.0f);
+    if (ImGui::CollapsingHeader("Pin Configuration")) {
+        ImGui::Indent(16.0f);
+        ImGui::Text("SID MOS 6581 DIP has 28 pins:");
+        ImGui::Text("CAP1A/CAP1B (1,2) - Capacitor connections");
+        ImGui::Text("CAP2A/CAP2B (3,4) - Capacitor connections");
+        ImGui::Text("/RES (5) - Reset Input");
+        ImGui::Text("phi2 (6) - Clock Input");
+        ImGui::Text("R/W (7) - Read/Write Input");
+        ImGui::Text("/CS (8) - Chip Select");
+        ImGui::Text("A0-A4 (9-13) - Address Inputs (5 bits)");
+        ImGui::Text("GND (14) - Ground");
+        ImGui::Text("D0-D7 (15-22) - Data Bus (8 bits)");
+        ImGui::Text("POT_Y/POT_X (23,24) - Paddle inputs");
+        ImGui::Text("Vcc/EXT_IN (25,26) - Power/External input");
+        ImGui::Text("AUDIO_OUT/Vdd (27,28) - Audio output/Power");
+        ImGui::Unindent(16.0f);
     }
     
-    igSeparator();
+    ImGui::Separator();
     
     // Sound Settings
-    if (igCollapsingHeader_BoolPtr("Sound Settings", NULL, ImGuiTreeNodeFlags_DefaultOpen)) {
-        igIndent(16.0f);
+    if (ImGui::CollapsingHeader("Sound Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Indent(16.0f);
         
         static bool sound_enabled = true;
-        igCheckbox("Sound Enabled", &sound_enabled);
+        ImGui::Checkbox("Sound Enabled", &sound_enabled);
         
         static float master_volume = 1.0f;
-        igSliderFloat("Master Volume", &master_volume, 0.0f, 1.0f, "%.2f", 0);
+        ImGui::SliderFloat("Master Volume", &master_volume, 0.0f, 1.0f, "%.2f");
         
         static float cpu_clock = 1000000.0f;
-        igInputFloat("CPU Clock (Hz)", &cpu_clock, 1000.0f, 10000.0f, "%.0f", 0);
+        ImGui::InputFloat("CPU Clock (Hz)", &cpu_clock, 1000.0f, 10000.0f, "%.0f");
         
-        igSeparator();
+        ImGui::Separator();
         
-        igText("Filter Settings");
+        ImGui::Text("Filter Settings");
         static bool filter_enabled = true;
-        igCheckbox("Filter Enabled", &filter_enabled);
+        ImGui::Checkbox("Filter Enabled", &filter_enabled);
         
         static bool accurate_sid = false;
-        igCheckbox("Accurate SID Emulation", &accurate_sid);
+        ImGui::Checkbox("Accurate SID Emulation", &accurate_sid);
         
-        igUnindent(16.0f);
+        ImGui::Unindent(16.0f);
     }
     
-    igSeparator();
+    ImGui::Separator();
     
     // Voice Configuration
-    if (igCollapsingHeader_BoolPtr("Voice Configuration", NULL, 0)) {
-        igIndent(16.0f);
+    if (ImGui::CollapsingHeader("Voice Configuration")) {
+        ImGui::Indent(16.0f);
           for (int i = 1; i <= 3; i++) {
-            igPushID_Int(i);
+            ImGui::PushID(i);
             
             char voice_header[32];
             snprintf(voice_header, sizeof(voice_header), "Voice %d Settings", i); // Made unique
             
-            if (igCollapsingHeader_BoolPtr(voice_header, NULL, 0)) {
-                igIndent(16.0f);
+            if (ImGui::CollapsingHeader(voice_header)) {
+                ImGui::Indent(16.0f);
                 
                 static bool voice_enabled = true;
-                igCheckbox("Enabled", &voice_enabled);
+                ImGui::Checkbox("Enabled", &voice_enabled);
                 
                 static float voice_volume = 1.0f;
-                igSliderFloat("Volume", &voice_volume, 0.0f, 1.0f, "%.2f", 0);
-                  igUnindent(16.0f);
+                ImGui::SliderFloat("Volume", &voice_volume, 0.0f, 1.0f, "%.2f");
+                ImGui::Unindent(16.0f);
             }
             
-            igPopID();
+            ImGui::PopID();
         }
         
-        igUnindent(16.0f);
+        ImGui::Unindent(16.0f);
     }
     
-    igSeparator();
+    ImGui::Separator();
     
-    if (igButton("Reset SID", (ImVec2){0, 0})) {
+    if (ImGui::Button("Reset SID")) {
         mos6581_reset(sid);
     }
     
-    igSameLine(0, -1);
+    ImGui::SameLine();
     
-    if (igButton("Test Sound", (ImVec2){0, 0})) {
+    if (ImGui::Button("Test Sound")) {
         // TODO: Generate test sound
     }
 
     // Reset to single column at the end
-    igColumns(1, NULL, false);
+    ImGui::Columns(1, nullptr, false);
 
-    igEnd();
+    ImGui::End();
 }

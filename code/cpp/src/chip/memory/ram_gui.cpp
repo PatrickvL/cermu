@@ -1,12 +1,12 @@
 #include "ram.h"
-#include "../../gui/cimgui_interface.h"
+#include "../../gui/imgui_interface.h"
 #include "../../gui/generic_chip_gui.h"
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
 #ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #endif
-#include <cimgui.h>
+#include <imgui.h>
 #include <stdio.h>
 
 // ============================================================================
@@ -95,27 +95,27 @@ static void render_ram_specific_content(void* chip) {
     if (!ram) return;
     
     // This replaces the right column content from the original function
-    igText("RAM Memory");
-    igSeparator();
+    ImGui::Text("RAM Memory");
+    ImGui::Separator();
     
     if (ram->desc) {
-        igText("Size: %s", ram->desc->description);
+        ImGui::Text("Size: %s", ram->desc->description);
     } else {
-        igText("Size: 64KB");
+        ImGui::Text("Size: 64KB");
     }
-    igText("Address Range: $0000-$FFFF");
+    ImGui::Text("Address Range: $0000-$FFFF");
     
-    igSeparator();
+    ImGui::Separator();
     
     static int view_address = 0x0000;
-    igInputInt("View Address", &view_address, 1, 16, 0);
+    ImGui::InputInt("View Address", &view_address, 1, 16, 0);
     view_address &= 0xFFFF;
     
-    igText("Memory at $%04X:", view_address);
+    ImGui::Text("Memory at $%04X:", view_address);
 
     // Show 16 bytes in hex
     for (int row = 0; row < 4; row++) {
-        igText("%04X: 00 00 00 00", view_address + (row * 4));
+        ImGui::Text("%04X: 00 00 00 00", view_address + (row * 4));
     }
 }
 
@@ -156,31 +156,31 @@ void ram_render_settings_window(void* chip, bool* show_window) {
     if (!*show_window) return;
     
     // Push unique ID to prevent conflicts between multiple RAM instances
-    igPushID_Int((int)(uintptr_t)ram);
+    ImGui::PushID((int)(uintptr_t)ram);
     char window_title[128];
     snprintf(window_title, sizeof(window_title), "%s Settings", ram->desc->description);
     
-    if (!igBegin(window_title, show_window, 0)) {
-        igEnd();
-        igPopID();
+    if (!ImGui::Begin(window_title, show_window, 0)) {
+        ImGui::End();
+        ImGui::PopID();
         return;
     }
 
-    igText("RAM Configuration");
-    igSeparator();
+    ImGui::Text("RAM Configuration");
+    ImGui::Separator();
     
-    igText("Type: System RAM");
-    igText("Size: 64KB");
+    ImGui::Text("Type: System RAM");
+    ImGui::Text("Size: 64KB");
 
-    if (igButton("Clear All RAM", (ImVec2){0, 0})) {
+    if (ImGui::Button("Clear All RAM", ImVec2(0, 0))) {
         // Clear RAM
     }
     
-    igSameLine(0, -1.0f);
-    if (igButton("Fill with Pattern", (ImVec2){0, 0})) {
+    ImGui::SameLine(0, -1.0f);
+    if (ImGui::Button("Fill with Pattern", ImVec2(0, 0))) {
         // Fill with pattern
     }
 
-    igEnd();
-    igPopID();
+    ImGui::End();
+    ImGui::PopID();
 }
