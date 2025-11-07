@@ -10,7 +10,7 @@
 
 #include "../../../core/chip_layout.h"
 #include "fam65xx_processor_traits.hpp"
-#include "../../core/system_lines.h"
+#include "../../../core/system_lines.h"
 
 // Forward declaration of the CPU template class
 namespace fam65xx {
@@ -43,7 +43,6 @@ std::vector<PinSignalState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits>* cpu, 
 // ============================================================================
 
 #include "fam65xx.hpp"
-#include "../../core/system_lines.h"
 #include <type_traits>
 
 // Generic CPU pin layout function with compile-time CPU selection
@@ -51,28 +50,29 @@ template<const fam65xx::CPUTraits& Traits>
 ChipLayout create_cpu_pin_layout() {
     ChipLayout layout = {};
     
+    // Compare by vendor and model strings instead of types
     // MOS 6502 (NMOS) PIN LAYOUT - use create_mos6502_layout()
-    if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::MOS6502)>) {
+    if constexpr (Traits == fam65xx::MOS6502) {
         layout = create_mos6502_layout();
         
     // MOS 6510 (C64/C128) PIN LAYOUT - use create_mos6510_layout()
-    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::MOS6510)>) {
+    } else if constexpr (Traits == fam65xx::MOS6510) {
         layout = create_mos6510_layout();
         
     // WDC 65C02 (CMOS) PIN LAYOUT - use create_wdc_w65c02s_layout()
-    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::WDC_W65C02S)>) {
+    } else if constexpr (Traits == fam65xx::WDC_W65C02S) {
         layout = create_wdc_w65c02s_layout();
         
     // WDC 65C816 (16-BIT) PIN LAYOUT - use create_wdc_65c816_layout()
-    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::WDC_65C816)>) {
+    } else if constexpr (Traits == fam65xx::WDC_65C816) {
         layout = create_wdc_65c816_layout();
         
     // NES 6502 (RICOH 2A03) PIN LAYOUT - use create_ricoh_2a03_layout()
-    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::RICOH_2A03)>) {
+    } else if constexpr (Traits == fam65xx::RICOH_2A03) {
         layout = create_ricoh_2a03_layout();
         
     // ROCKWELL R65C02 PIN LAYOUT - use create_rockwell_r65c02_layout()
-    } else if constexpr (std::is_same_v<std::remove_cv_t<decltype(Traits)>, decltype(fam65xx::ROCKWELL_R65C02)>) {
+    } else if constexpr (Traits == fam65xx::ROCKWELL_R65C02) {
         layout = create_rockwell_r65c02_layout();
         
     } else {

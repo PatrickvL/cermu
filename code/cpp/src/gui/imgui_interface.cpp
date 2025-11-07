@@ -14,7 +14,6 @@
 #include "../chip/cpu/fam65xx/mos6510.h"
 #include "../chip/cpu/fam65xx/fam65xx_gui.h"
 #include "../chip/video/vic_ii/vicii_common.h"
-#include "imgui_backends.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -90,7 +89,7 @@ void gui_cleanup(void) {
     // Cleanup ImGui
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL2_Shutdown();
-    ImGui::DestroyContext(NULL);
+    ImGui::DestroyContext();
 
     if (g_gl_context) {
         SDL_GL_DeleteContext(g_gl_context);
