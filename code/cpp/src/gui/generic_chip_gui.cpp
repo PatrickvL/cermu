@@ -1,9 +1,13 @@
 #include "generic_chip_gui.h"
 #include "imgui_interface.h"
-#include <imgui.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+
+// Include ImGui only when available (conditional compilation)
+#ifdef IMGUI_VERSION
+#include <imgui.h>
+#endif
 
 // ============================================================================
 // DEFAULT CONFIGURATION
@@ -124,20 +128,29 @@ uint32_t generic_chip_gui_get_pin_color(const chip_gui_config_t* config, const P
 // RENDERING FUNCTIONS
 // ============================================================================
 
-void generic_chip_gui_render_layout(generic_chip_gui_t* gui, 
+void generic_chip_gui_render_layout(generic_chip_gui_t* gui,
                                    emulation_context_t* context,
-                                   float width, 
+                                   float width,
                                    float height) {
-    if (!gui || !context) return;
-    
-    // Get current bus state
-    bus_state_t current_bus_state = emulation_context_get_bus_state(context);
+    if (!gui) return;
     
     // Update cached layout if needed
     if (!gui->layout_cached && gui->config.get_layout) {
         gui->cached_layout = gui->config.get_layout(gui->chip_instance);
         gui->layout_cached = true;
     }
+    
+    // Check if we have a valid layout
+    if (!gui->layout_cached) {
+#ifdef IMGUI_VERSION
+        ImGui::Text("No chip layout available");
+        ImGui::Text("get_layout callback is NULL");
+#endif
+        return;
+    }
+    
+    // Get current bus state (use 0 if no context)
+    bus_state_t current_bus_state = context ? emulation_context_get_bus_state(context) : 0;
     
     // Update cached pin states if bus state changed or not cached
     if (!gui->cached_pin_states || gui->last_bus_state != current_bus_state) {
@@ -148,23 +161,24 @@ void generic_chip_gui_render_layout(generic_chip_gui_t* gui,
             }
             gui->cached_pin_states = (PinSignalState*)calloc(total_pins, sizeof(PinSignalState));
             
-            if (gui->config.get_pin_states) {
-                gui->config.get_pin_states(gui->chip_instance, &gui->cached_layout, 
+            if (gui->config.get_pin_states && gui->cached_pin_states) {
+                gui->config.get_pin_states(gui->chip_instance, &gui->cached_layout,
                                          current_bus_state, gui->cached_pin_states);
             }
         }
         gui->last_bus_state = current_bus_state;
     }
     
-    // Get drawing context
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    ImVec2 canvas_pos;
-    canvas_pos = ImGui::GetCursorScreenPos();
-    
     // Calculate chip position and scale
     float scale = gui->config.chip_scale;
+#ifdef IMGUI_VERSION
+    ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
     float chip_x = canvas_pos.x + width * 0.5f;
     float chip_y = canvas_pos.y + height * 0.5f;
+#else
+    float chip_x = width * 0.5f;
+    float chip_y = height * 0.5f;
+#endif
     
     // Render chip package
     if (gui->config.show_package_outline) {
@@ -176,24 +190,30 @@ void generic_chip_gui_render_layout(generic_chip_gui_t* gui,
         generic_chip_gui_render_chip_markings(&gui->cached_layout, &gui->config, chip_x, chip_y, scale);
     }
     
-    // Render pins
+    // Render pins safely
     int pin_index = 0;
     PinSignalState* pin_states = gui->cached_pin_states;
     
     // Render left pins
-    for (size_t i = 0; i < gui->cached_layout.left_pins.size(); i++) {
-        const ChipPin* pin = &gui->cached_layout.left_pins.data()[i];
-        const PinSignalState* state = pin_states ? &pin_states[pin_index] : NULL;
-        generic_chip_gui_render_pin(pin, state, &gui->config, chip_x - 50, chip_y - 100 + i * 20, scale);
-        pin_index++;
+    if (!gui->cached_layout.left_pins.empty()) {
+        for (size_t i = 0; i < gui->cached_layout.left_pins.size(); i++) {
+            const ChipPin* pin = &gui->cached_layout.left_pins[i];
+            const PinSignalState* state = (pin_states && pin_index < gui->cached_layout.get_total_pins()) ?
+                                        &pin_states[pin_index] : NULL;
+            generic_chip_gui_render_pin(pin, state, &gui->config, chip_x - 50, chip_y - 100 + i * 20, scale);
+            pin_index++;
+        }
     }
     
     // Render right pins
-    for (size_t i = 0; i < gui->cached_layout.right_pins.size(); i++) {
-        const ChipPin* pin = &gui->cached_layout.right_pins.data()[i];
-        const PinSignalState* state = pin_states ? &pin_states[pin_index] : NULL;
-        generic_chip_gui_render_pin(pin, state, &gui->config, chip_x + 50, chip_y - 100 + i * 20, scale);
-        pin_index++;
+    if (!gui->cached_layout.right_pins.empty()) {
+        for (size_t i = 0; i < gui->cached_layout.right_pins.size(); i++) {
+            const ChipPin* pin = &gui->cached_layout.right_pins[i];
+            const PinSignalState* state = (pin_states && pin_index < gui->cached_layout.get_total_pins()) ?
+                                        &pin_states[pin_index] : NULL;
+            generic_chip_gui_render_pin(pin, state, &gui->config, chip_x + 50, chip_y - 100 + i * 20, scale);
+            pin_index++;
+        }
     }
 }
 
@@ -204,6 +224,10 @@ void generic_chip_gui_render_debug_panel(generic_chip_gui_t* gui,
                                         void (*render_chip_specific_content)(void* chip)) {
     if (!gui || !show_window || !*show_window) return;
     
+#ifdef IMGUI_VERSION
+    // Set proper window size for first time opening
+    ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
+    
     if (!ImGui::Begin(window_title, show_window, 0)) {
         ImGui::End();
         return;
@@ -211,13 +235,13 @@ void generic_chip_gui_render_debug_panel(generic_chip_gui_t* gui,
     
     // Create two-column layout
     ImGui::Columns(2, "chip_debug_columns", true);
+    ImGui::SetColumnWidth(0, 350); // Fixed width for chip visualization column
     
     // Left column: Chip visualization using ChipLayout
     ImGui::Text("Chip Layout");
     ImGui::Separator();
     
-    ImVec2 avail_size;
-    avail_size = ImGui::GetContentRegionAvail();
+    ImVec2 avail_size = ImGui::GetContentRegionAvail();
     float layout_height = avail_size.y - 50; // Leave space for controls
     
     if (ImGui::BeginChild("chip_layout", ImVec2(avail_size.x, layout_height), true, 0)) {
@@ -244,6 +268,7 @@ void generic_chip_gui_render_debug_panel(generic_chip_gui_t* gui,
     
     ImGui::Columns(1, NULL, false);
     ImGui::End();
+#endif
 }
 
 void generic_chip_gui_render_settings_panel(generic_chip_gui_t* gui,
@@ -251,6 +276,10 @@ void generic_chip_gui_render_settings_panel(generic_chip_gui_t* gui,
                                            bool* show_window,
                                            void (*render_chip_specific_settings)(void* chip)) {
     if (!gui || !show_window || !*show_window) return;
+    
+#ifdef IMGUI_VERSION
+    // Set proper window size for first time opening
+    ImGui::SetNextWindowSize(ImVec2(500, 400), ImGuiCond_FirstUseEver);
     
     if (!ImGui::Begin(window_title, show_window, 0)) {
         ImGui::End();
@@ -274,6 +303,7 @@ void generic_chip_gui_render_settings_panel(generic_chip_gui_t* gui,
     }
     
     ImGui::End();
+#endif
 }
 
 // ============================================================================
@@ -283,6 +313,7 @@ void generic_chip_gui_render_settings_panel(generic_chip_gui_t* gui,
 void generic_chip_gui_render_dip_package(const ChipLayout* layout, const chip_gui_config_t* config, float x, float y, float scale) {
     if (!layout || !config) return;
     
+#ifdef IMGUI_VERSION
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     uint32_t package_color = config->package_color;
     
@@ -302,16 +333,18 @@ void generic_chip_gui_render_dip_package(const ChipLayout* layout, const chip_gu
         ImVec2 notch_p2 = {x + 10*scale, y - height/2};
         draw_list->AddRectFilled(notch_p1, notch_p2, config->background_color, 0.0f, 0);
     }
+#endif
 }
 
 void generic_chip_gui_render_pin(const ChipPin* pin, const PinSignalState* pin_state, const chip_gui_config_t* config, float x, float y, float scale) {
     if (!pin || !config) return;
     
+#ifdef IMGUI_VERSION
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     
     // Get pin color
-    uint32_t pin_color = pin_state ? 
-        generic_chip_gui_get_pin_color(config, pin_state) : 
+    uint32_t pin_color = pin_state ?
+        generic_chip_gui_get_pin_color(config, pin_state) :
         config->pin_color_inactive;
     
     // Draw pin
@@ -333,11 +366,13 @@ void generic_chip_gui_render_pin(const ChipPin* pin, const PinSignalState* pin_s
         ImVec2 text_pos = {x + 15*scale, y - 5*scale};
         draw_list->AddText(text_pos, config->text_color, label);
     }
+#endif
 }
 
 void generic_chip_gui_render_chip_markings(const ChipLayout* layout, const chip_gui_config_t* config, float x, float y, float scale) {
     if (!layout || !config) return;
     
+#ifdef IMGUI_VERSION
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     
     // Render part number
@@ -351,6 +386,7 @@ void generic_chip_gui_render_chip_markings(const ChipLayout* layout, const chip_
         ImVec2 text_pos = {x - 50*scale, y + 10*scale};
         draw_list->AddText(text_pos, config->text_color, layout->markings.manufacturer);
     }
+#endif
 }
 
 // ============================================================================
