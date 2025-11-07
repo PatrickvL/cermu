@@ -14,31 +14,15 @@
 // ============================================================================
 
 chip_gui_config_t generic_chip_gui_get_default_config(const char* chip_name, const char* chip_type) {
-    chip_gui_config_t config = {0};
+    chip_gui_config_t config = {};
     
     config.chip_name = chip_name;
     config.chip_type = chip_type;
     
-    // Default display options
-    config.show_pin_numbers = true;
-    config.show_pin_labels = true;
-    config.show_pin_states = true;
-    config.show_package_outline = true;
-    config.show_chip_markings = true;
-    
-    // Default layout options
-    config.chip_scale = 1.0f;
-    config.pin_label_size = 12.0f;
-    config.pin_state_size = 8.0f;
-    
-    // Default colors (RGBA in hex format)
-    config.background_color = 0xFF1E1E1E;     // Dark gray
-    config.package_color = 0xFF3A3A3A;        // Medium gray
-    config.pin_color_inactive = 0xFF606060;   // Gray
-    config.pin_color_active_high = 0xFF00FF00; // Green
-    config.pin_color_active_low = 0xFFFF0000;  // Red
-    config.pin_color_tristate = 0xFF0080FF;   // Blue
-    config.text_color = 0xFFFFFFFF;           // White
+    // Initialize with default ChipVisualConfig
+#ifdef __cplusplus
+    config.visual_config = ChipVisualConfig::get_default();
+#endif
     
     return config;
 }
@@ -109,19 +93,23 @@ void generic_chip_gui_refresh_layout(generic_chip_gui_t* gui) {
 // ============================================================================
 
 uint32_t generic_chip_gui_get_pin_color(const chip_gui_config_t* config, const PinSignalState* pin_state) {
+#ifdef __cplusplus
     if (!config || !pin_state || !pin_state->signal_valid) {
-        return config->pin_color_inactive;
+        return config->visual_config.led_inactive_color;
     }
     
     if (pin_state->high_impedance) {
-        return config->pin_color_tristate;
+        return 0xFF0080FF; // Blue for tristate
     }
     
     if (pin_state->signal_level) {
-        return config->pin_color_active_high;
+        return config->visual_config.led_active_color;
     } else {
-        return config->pin_color_active_low;
+        return config->visual_config.led_inactive_color;
     }
+#else
+    return 0xFF606060; // Default gray for C code
+#endif
 }
 
 // ============================================================================
@@ -170,7 +158,7 @@ void generic_chip_gui_render_layout(generic_chip_gui_t* gui,
     }
     
     // Calculate chip position and scale
-    float scale = gui->config.chip_scale;
+    float scale = 1.0f; // Default scale
 #ifdef IMGUI_VERSION
     ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
     float chip_x = canvas_pos.x + width * 0.5f;
@@ -181,14 +169,16 @@ void generic_chip_gui_render_layout(generic_chip_gui_t* gui,
 #endif
     
     // Render chip package
-    if (gui->config.show_package_outline) {
+#ifdef __cplusplus
+    if (gui->config.visual_config.show_package_name) {
         generic_chip_gui_render_dip_package(&gui->cached_layout, &gui->config, chip_x, chip_y, scale);
     }
     
     // Render chip markings
-    if (gui->config.show_chip_markings) {
+    if (gui->config.visual_config.show_chip_markings) {
         generic_chip_gui_render_chip_markings(&gui->cached_layout, &gui->config, chip_x, chip_y, scale);
     }
+#endif
     
     // Render pins safely
     int pin_index = 0;
@@ -198,7 +188,7 @@ void generic_chip_gui_render_layout(generic_chip_gui_t* gui,
     if (!gui->cached_layout.left_pins.empty()) {
         for (size_t i = 0; i < gui->cached_layout.left_pins.size(); i++) {
             const ChipPin* pin = &gui->cached_layout.left_pins[i];
-            const PinSignalState* state = (pin_states && pin_index < gui->cached_layout.get_total_pins()) ?
+            const PinSignalState* state = (pin_states && static_cast<size_t>(pin_index) < gui->cached_layout.get_total_pins()) ?
                                         &pin_states[pin_index] : NULL;
             generic_chip_gui_render_pin(pin, state, &gui->config, chip_x - 50, chip_y - 100 + i * 20, scale);
             pin_index++;
@@ -209,7 +199,7 @@ void generic_chip_gui_render_layout(generic_chip_gui_t* gui,
     if (!gui->cached_layout.right_pins.empty()) {
         for (size_t i = 0; i < gui->cached_layout.right_pins.size(); i++) {
             const ChipPin* pin = &gui->cached_layout.right_pins[i];
-            const PinSignalState* state = (pin_states && pin_index < gui->cached_layout.get_total_pins()) ?
+            const PinSignalState* state = (pin_states && static_cast<size_t>(pin_index) < gui->cached_layout.get_total_pins()) ?
                                         &pin_states[pin_index] : NULL;
             generic_chip_gui_render_pin(pin, state, &gui->config, chip_x + 50, chip_y - 100 + i * 20, scale);
             pin_index++;
@@ -251,9 +241,9 @@ void generic_chip_gui_render_debug_panel(generic_chip_gui_t* gui,
     ImGui::EndChild();
     
     // Layout controls
-    ImGui::Checkbox("Show Pin Numbers", &gui->config.show_pin_numbers);
-    ImGui::Checkbox("Show Pin Labels", &gui->config.show_pin_labels);
-    ImGui::Checkbox("Show Pin States", &gui->config.show_pin_states);
+    ImGui::Checkbox("Show Pin Numbers", &gui->config.visual_config.show_pin_numbers);
+    ImGui::Checkbox("Show Pin Labels", &gui->config.visual_config.show_pin_labels);
+    ImGui::Checkbox("Show LEDs", &gui->config.visual_config.show_led_indicators);
     
     // Move to right column
     ImGui::NextColumn();
@@ -290,10 +280,9 @@ void generic_chip_gui_render_settings_panel(generic_chip_gui_t* gui,
     ImGui::Separator();
     
     // Visualization options
-    ImGui::Checkbox("Show Package Outline", &gui->config.show_package_outline);
-    ImGui::Checkbox("Show Chip Markings", &gui->config.show_chip_markings);
-    ImGui::SliderFloat("Chip Scale", &gui->config.chip_scale, 0.5f, 2.0f, "%.1f", 0);
-    ImGui::SliderFloat("Pin Label Size", &gui->config.pin_label_size, 8.0f, 20.0f, "%.1f", 0);
+    ImGui::Checkbox("Show Package Name", &gui->config.visual_config.show_package_name);
+    ImGui::Checkbox("Show Chip Markings", &gui->config.visual_config.show_chip_markings);
+    ImGui::SliderFloat("Font Size", &gui->config.visual_config.font_size, 8.0f, 20.0f, "%.1f", 0);
     
     ImGui::Separator();
     
@@ -315,23 +304,24 @@ void generic_chip_gui_render_dip_package(const ChipLayout* layout, const chip_gu
     
 #ifdef IMGUI_VERSION
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
-    uint32_t package_color = config->package_color;
+    uint32_t package_color = config->visual_config.chip_body_color;
     
-    // Simple rectangle for DIP package
-    float width = layout->package.width * scale;
-    float height = layout->package.height * scale;
+    // Use proper hardware-accurate scaling (mils to pixels)
+    float mil_to_pixel = scale * 0.1f; // Convert mils to pixels with proper scaling
+    float width = layout->package.width * mil_to_pixel;
+    float height = layout->package.height * mil_to_pixel;
     
     ImVec2 p1 = {x - width/2, y - height/2};
     ImVec2 p2 = {x + width/2, y + height/2};
     
     draw_list->AddRectFilled(p1, p2, package_color, 0.0f, 0);
-    draw_list->AddRect(p1, p2, config->text_color, 0.0f, 0, 2.0f);
+    draw_list->AddRect(p1, p2, config->visual_config.chip_border_color, 0.0f, 0, config->visual_config.chip_border_width);
     
     // Add notch for orientation
     if (layout->package.marker == OrientationMarker::NOTCH) {
         ImVec2 notch_p1 = {x - 10*scale, y - height/2 - 5*scale};
         ImVec2 notch_p2 = {x + 10*scale, y - height/2};
-        draw_list->AddRectFilled(notch_p1, notch_p2, config->background_color, 0.0f, 0);
+        draw_list->AddRectFilled(notch_p1, notch_p2, 0xFF000000, 0.0f, 0); // Black notch
     }
 #endif
 }
@@ -345,7 +335,7 @@ void generic_chip_gui_render_pin(const ChipPin* pin, const PinSignalState* pin_s
     // Get pin color
     uint32_t pin_color = pin_state ?
         generic_chip_gui_get_pin_color(config, pin_state) :
-        config->pin_color_inactive;
+        config->visual_config.led_inactive_color;
     
     // Draw pin
     float pin_size = 8.0f * scale;
@@ -353,18 +343,18 @@ void generic_chip_gui_render_pin(const ChipPin* pin, const PinSignalState* pin_s
     draw_list->AddCircleFilled(pin_center, pin_size, pin_color, 8);
     
     // Draw pin number
-    if (config->show_pin_numbers) {
+    if (config->visual_config.show_pin_numbers) {
         char pin_num[8];
         snprintf(pin_num, sizeof(pin_num), "%d", pin->pin_number);
         ImVec2 text_pos = {x - 15*scale, y - 5*scale};
-        draw_list->AddText(text_pos, config->text_color, pin_num);
+        draw_list->AddText(text_pos, config->visual_config.pin_number_color, pin_num);
     }
     
     // Draw pin label
-    if (config->show_pin_labels && pin->label != PinLabel::NC) {
+    if (config->visual_config.show_pin_labels && pin->label != PinLabel::NC) {
         const char* label = pin_label_to_string(pin->label);
         ImVec2 text_pos = {x + 15*scale, y - 5*scale};
-        draw_list->AddText(text_pos, config->text_color, label);
+        draw_list->AddText(text_pos, config->visual_config.text_color, label);
     }
 #endif
 }
@@ -378,13 +368,13 @@ void generic_chip_gui_render_chip_markings(const ChipLayout* layout, const chip_
     // Render part number
     if (layout->markings.show_part_number && layout->markings.part_number) {
         ImVec2 text_pos = {x - 50*scale, y - 10*scale};
-        draw_list->AddText(text_pos, config->text_color, layout->markings.part_number);
+        draw_list->AddText(text_pos, config->visual_config.text_color, layout->markings.part_number);
     }
     
     // Render manufacturer
     if (layout->markings.show_manufacturer && layout->markings.manufacturer) {
         ImVec2 text_pos = {x - 50*scale, y + 10*scale};
-        draw_list->AddText(text_pos, config->text_color, layout->markings.manufacturer);
+        draw_list->AddText(text_pos, config->visual_config.text_color, layout->markings.manufacturer);
     }
 #endif
 }
@@ -395,7 +385,7 @@ void generic_chip_gui_render_chip_markings(const ChipLayout* layout, const chip_
 
 ChipLayout generic_chip_gui_get_dip_layout(void* chip, int pin_count) {
     // Return a basic DIP layout - this would be overridden by chip-specific implementations
-    ChipLayout layout = {0};
+    ChipLayout layout = {};
     
     switch (pin_count) {
         case 40:
@@ -418,6 +408,18 @@ void generic_chip_gui_get_basic_pin_states(void* chip, ChipLayout* layout, bus_s
     // Default implementation - all pins inactive
     int total_pins = layout->get_total_pins();
     for (int i = 0; i < total_pins; i++) {
-        pin_states[i] = PinSignalState{false, false, 0, false, true};
+        pin_states[i] = PinSignalState{
+            .pin_number = static_cast<uint8_t>(i + 1),
+            .signal_level = false,
+            .drive_direction = false,
+            .signal_value = 0,
+            .high_impedance = true,
+            .has_pullup = false,
+            .has_pulldown = false,
+            .signal_valid = true,
+            .analog_voltage = 0.0f,
+            .is_pwm = false,
+            .pwm_duty_cycle = 0.0f
+        };
     }
 }

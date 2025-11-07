@@ -1,11 +1,14 @@
 #include "mos6581.h"
 #include "../../gui/imgui_interface.h"
-#include "../../gui/generic_chip_gui.h"
+#include "../../gui/chip_visualization.h"
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
-// Native Dear ImGui C++ - no conditional compilation needed
+// Native Dear ImGui C++ - conditional compilation for GUI availability
+#ifdef IMGUI_VERSION
 #include <imgui.h>
+#endif
 #include <stdio.h>
+#include <memory>
 
 static const char* waveform_names[] = {
     "None",
@@ -27,6 +30,7 @@ static const char* envelope_cycle_names[] = {
     "Off"
 };
 
+#ifdef IMGUI_VERSION
 static void render_voice_debug(voice_t* voice, int voice_num) {
     ImGui::PushID(voice_num);
     
@@ -71,6 +75,7 @@ static void render_voice_debug(voice_t* voice, int voice_num) {
     
     ImGui::PopID();
 }
+#endif
 
 // ============================================================================
 // MOS6581 SID LAYOUT (28-pin DIP)
@@ -94,20 +99,22 @@ inline ChipLayout create_mos6581_layout() {
         false                        // show_date_code
     };
     
-    PIN_LR(layout,  1, CAP1A,  VDD, 28);     // Filter Cap 1A / +12V Power
-    PIN_LR(layout,  2, CAP1B,  AUDIO_OUT, 27);  // Filter Cap 1B / Audio Output
-    PIN_LR(layout,  3, CAP2A,  EXT_IN, 26);  // Filter Cap 2A / External Input
-    PIN_LR(layout,  4, CAP2B,  VCC, 25);     // Filter Cap 2B / +5V Power
-    PIN_LR(layout,  5, RES,    POTX, 24);    // Reset         / Paddle X
-    PIN_LR(layout,  6, PHI2,   POTY, 23);    // Clock         / Paddle Y
-    PIN_LR(layout,  7, RW,     D7, 22);      // Read/Write    / Data 7
-    PIN_LR(layout,  8, CS,     D6, 21);      // Chip Select   / Data 6
-    PIN_LR(layout,  9, A0,     D5, 20);      // Address 0     / Data 5
-    PIN_LR(layout, 10, A1,     D4, 19);      // Address 1     / Data 4
-    PIN_LR(layout, 11, A2,     D3, 18);      // Address 2     / Data 3
-    PIN_LR(layout, 12, A3,     D2, 17);      // Address 3     / Data 2
-    PIN_LR(layout, 13, A4,     D1, 16);      // Address 4     / Data 1
-    PIN_LR(layout, 14, VSS,    D0, 15);      // Ground        / Data 0
+    // Hardware-accurate MOS6581 SID pinout (28-pin DIP)
+    // Right-hand pins (15-28) are numbered bottom-up, not top-down
+    PIN_LR(layout,  1, CAP1A,  VDD, 28);      // Filter Cap 1A / +12V Power
+    PIN_LR(layout,  2, CAP1B,  AUDIO_OUT, 27); // Filter Cap 1B / Audio Output
+    PIN_LR(layout,  3, CAP2A,  EXT_IN, 26);   // Filter Cap 2A / External Input
+    PIN_LR(layout,  4, CAP2B,  VCC, 25);      // Filter Cap 2B / +5V Power
+    PIN_LR(layout,  5, RES,    POTX, 24);     // Reset         / Paddle X
+    PIN_LR(layout,  6, PHI2,   POTY, 23);     // Clock         / Paddle Y
+    PIN_LR(layout,  7, RW,     D7, 22);       // Read/Write    / Data 7
+    PIN_LR(layout,  8, CS,     D6, 21);       // Chip Select   / Data 6
+    PIN_LR(layout,  9, A0,     D5, 20);       // Address 0     / Data 5
+    PIN_LR(layout, 10, A1,     D4, 19);       // Address 1     / Data 4
+    PIN_LR(layout, 11, A2,     D3, 18);       // Address 2     / Data 3
+    PIN_LR(layout, 12, A3,     D2, 17);       // Address 3     / Data 2
+    PIN_LR(layout, 13, A4,     D1, 16);       // Address 4     / Data 1
+    PIN_LR(layout, 14, VSS,    D0, 15);       // Ground        / Data 0
     
     return layout;
 }
@@ -115,111 +122,154 @@ inline ChipLayout create_mos6581_layout() {
 // ============================================================================
 // MOS6581 SID GUI DEBUG WINDOW
 // ============================================================================
-// Callback functions for generic chip GUI
-static ChipLayout get_sid_layout(void* chip) {
-    return create_mos6581_layout();
-}
 
-static void get_sid_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_state, struct PinSignalState* pin_states) {
-    mos6581_t* sid = (mos6581_t*)chip;
-    if (!sid || !layout || !pin_states) return;
+// Helper function to get SID pin states for visualization
+static std::vector<PinSignalState> get_sid_pin_states(mos6581_t* sid, const ChipLayout* layout, bus_state_t bus_state) {
+    std::vector<PinSignalState> pin_states;
+    if (!sid || !layout) return pin_states;
     
-    int total_pins = 28; // SID is 28-pin DIP
+    int total_pins = layout->get_total_pins();
+    pin_states.resize(total_pins);
     
     // Initialize all pins as inactive by default
     for (int i = 0; i < total_pins; i++) {
-        pin_states[i].pin_number = i + 1;
-        pin_states[i].signal_level = false;
-        pin_states[i].drive_direction = false;
-        pin_states[i].signal_value = 0;
-        pin_states[i].high_impedance = false;
-        pin_states[i].has_pullup = false;
-        pin_states[i].has_pulldown = false;
-        pin_states[i].signal_valid = true;
-        pin_states[i].analog_voltage = 0.0f;
-        pin_states[i].is_pwm = false;
-        pin_states[i].pwm_duty_cycle = 0.0f;
+        pin_states[i] = PinSignalState{
+            .pin_number = static_cast<uint8_t>(i + 1),
+            .signal_level = false,
+            .drive_direction = false,
+            .signal_value = 0,
+            .high_impedance = true,
+            .has_pullup = false,
+            .has_pulldown = false,
+            .signal_valid = true,
+            .analog_voltage = 0.0f,
+            .is_pwm = false,
+            .pwm_duty_cycle = 0.0f
+        };
     }
     
     // Set power pins as active
     pin_states[13].signal_level = false; // VSS (Ground, pin 14)
+    pin_states[13].high_impedance = false;
     pin_states[24].signal_level = true;  // VCC (+5V, pin 25)
+    pin_states[24].high_impedance = false;
     pin_states[27].signal_level = true;  // VDD (+12V, pin 28)
+    pin_states[27].high_impedance = false;
     
     // Audio output pin should be active if SID is producing sound
     pin_states[26].signal_level = true;  // AUDIO_OUT (pin 27)
     pin_states[26].drive_direction = true;
+    pin_states[26].high_impedance = false;
+    
+    return pin_states;
 }
 
-static void render_sid_specific_content(void* chip) {
-    mos6581_t* sid = (mos6581_t*)chip;
-    if (!sid) return;
+// Get shared chip visualization instance for SID
+static ChipVisualization* get_sid_chip_visualization_instance() {
+    static std::unique_ptr<ChipVisualization> chip_viz = nullptr;
     
-    // This replaces the right column content from the original function
-    ImGui::Text("MOS 6581 SID (Sound Interface Device)");
-    ImGui::Text("SID MOS 6581 DIP has 28 pins");
-    ImGui::Separator();
-    
-    // Voices section
-    if (ImGui::CollapsingHeader("Voices", ImGuiTreeNodeFlags_DefaultOpen)) {
-        render_voice_debug(&sid->voice1, 1);
-        render_voice_debug(&sid->voice2, 2);
-        render_voice_debug(&sid->voice3, 3);
+    // Create chip visualization if not already created
+    if (!chip_viz) {
+        ChipLayout layout = create_mos6581_layout();
+        chip_viz = std::make_unique<ChipVisualization>(layout);
     }
     
-    ImGui::Separator();
-    
-    // Filter and Global Settings
-    if (ImGui::CollapsingHeader("Filter & Global Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::Indent(16.0f);
-        
-        // Write-only register values :
-        ImGui::Text("Filter Cutoff Frequency: $%03X (%d)", sid->filter_cutoff_frequency, sid->filter_cutoff_frequency);
-        ImGui::Text("Filter Voice 1: %s", sid->filter_voice1 ? "Yes" : "No");
-        ImGui::Text("Filter Voice 2: %s", sid->filter_voice2 ? "Yes" : "No");
-        ImGui::Text("Filter Voice 3: %s", sid->filter_voice3 ? "Yes" : "No");
-        ImGui::Text("Filter Voice 4 (External): %s", sid->filter_voice4 ? "Yes" : "No");
-        ImGui::Text("Filter Resonance: %d (0-15)", sid->filter_resonance);
-        ImGui::Text("Volume: %d (0-15)", sid->volume);
-        ImGui::Text("Low Pass Enabled: %s", sid->low_pass_enabled ? "Yes" : "No");
-        ImGui::Text("Band Pass Enabled: %s", sid->band_pass_enabled ? "Yes" : "No");
-        ImGui::Text("High Pass Enabled: %s", sid->high_pass_enabled ? "Yes" : "No");
-        ImGui::Text("Voice 3 Disabled: %s", sid->voice3_disabled ? "Yes" : "No");
-        
-        ImGui::Separator();
-        
-        // Internal state
-        ImGui::Text("Sample Buffer Size: %d", SAMPLE_BUFFER_SIZE);
-        
-        ImGui::Unindent(16.0f);
-    }
+    return chip_viz.get();
 }
 
 void mos6581_render_debug_window(void* chip, bool* show_window) {
     mos6581_t* sid = (mos6581_t*)chip;
-    if (!sid || !sid->desc) return;
+    if (!sid || !sid->desc || !show_window || !*show_window) return;
     
-    if (!*show_window) return;
-    
+#ifdef IMGUI_VERSION
     char window_title[128];
     snprintf(window_title, sizeof(window_title), "%s Debug", sid->desc->description);
     
-    // Create generic chip GUI config
-    chip_gui_config_t config = generic_chip_gui_get_default_config("MOS6581", "SID");
-    config.get_layout = get_sid_layout;
-    config.get_pin_states = get_sid_pin_states;
-    
-    // Create generic chip GUI instance
-    generic_chip_gui_t* gui = generic_chip_gui_create(sid, &config);
-    if (!gui) {
+    if (!ImGui::Begin(window_title, show_window)) {
+        ImGui::End();
         return;
     }
+
+    // Create two-column layout: chip visualization on left, debugging info on right
+    ImVec2 window_size = ImGui::GetWindowSize();
     
-    // Use generic chip GUI render function
-    generic_chip_gui_render_debug_panel(gui, NULL, window_title, show_window, render_sid_specific_content);
+    // Left column: Chip Visualization (fixed width ~250px)
+    ImVec2 chip_viz_size = ImVec2(250.0f, 0);
+    if (ImGui::BeginChild("ChipVisualization", chip_viz_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
+        ImGui::Text("Chip Visualization");
+        ImGui::Separator();
+        
+        // Calculate chip center for visualization
+        ImVec2 chip_center = ImGui::GetCursorScreenPos();
+        ImVec2 content_region = ImGui::GetContentRegionAvail();
+        chip_center.x += content_region.x * 0.5f;
+        chip_center.y += 150.0f; // Space for the chip (smaller for 28-pin)
+        
+        // Get chip visualization instance and render
+        ChipVisualization* chip_viz = get_sid_chip_visualization_instance();
+        const ChipLayout* layout = &chip_viz->get_pin_layout();
+        
+        // Get current pin states from SID
+        std::vector<PinSignalState> pin_states = get_sid_pin_states(sid, layout, 0 /* bus_state */);
+        
+        // Render the chip
+        chip_viz->render(chip_center, pin_states, "MOS6581 SID");
+        
+        ImGui::Separator();
+        
+        // Visualization Settings Menu
+        chip_viz->render_settings_gui();
+    }
+    ImGui::EndChild();
     
-    // Cleanup
-    generic_chip_gui_destroy(gui);
+    ImGui::SameLine(0, 5.0f); // Small gap between columns
+    
+    // Right column: All debugging information
+    ImVec2 right_column_size = ImVec2(window_size.x - 270.0f, 0); // Remaining width minus left column and gap
+    if (ImGui::BeginChild("DebugInfo", right_column_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
+        // SID Information
+        ImGui::Text("MOS 6581 SID (Sound Interface Device)");
+        ImGui::Text("SID MOS 6581 DIP has 28 pins");
+        ImGui::Separator();
+        
+        // Voices section
+        if (ImGui::CollapsingHeader("Voices", ImGuiTreeNodeFlags_DefaultOpen)) {
+            render_voice_debug(&sid->voice1, 1);
+            render_voice_debug(&sid->voice2, 2);
+            render_voice_debug(&sid->voice3, 3);
+        }
+        
+        ImGui::Separator();
+        
+        // Filter and Global Settings
+        if (ImGui::CollapsingHeader("Filter & Global Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Indent(16.0f);
+            
+            // Write-only register values :
+            ImGui::Text("Filter Cutoff Frequency: $%03X (%d)", sid->filter_cutoff_frequency, sid->filter_cutoff_frequency);
+            ImGui::Text("Filter Voice 1: %s", sid->filter_voice1 ? "Yes" : "No");
+            ImGui::Text("Filter Voice 2: %s", sid->filter_voice2 ? "Yes" : "No");
+            ImGui::Text("Filter Voice 3: %s", sid->filter_voice3 ? "Yes" : "No");
+            ImGui::Text("Filter Voice 4 (External): %s", sid->filter_voice4 ? "Yes" : "No");
+            ImGui::Text("Filter Resonance: %d (0-15)", sid->filter_resonance);
+            ImGui::Text("Volume: %d (0-15)", sid->volume);
+            ImGui::Text("Low Pass Enabled: %s", sid->low_pass_enabled ? "Yes" : "No");
+            ImGui::Text("Band Pass Enabled: %s", sid->band_pass_enabled ? "Yes" : "No");
+            ImGui::Text("High Pass Enabled: %s", sid->high_pass_enabled ? "Yes" : "No");
+            ImGui::Text("Voice 3 Disabled: %s", sid->voice3_disabled ? "Yes" : "No");
+            
+            ImGui::Separator();
+            
+            // Internal state
+            ImGui::Text("Sample Buffer Size: %d", SAMPLE_BUFFER_SIZE);
+            
+            ImGui::Unindent(16.0f);
+        }
+    }
+    ImGui::EndChild();
+
+    ImGui::End();
+#endif
 }
 
 // ============================================================================
@@ -227,10 +277,9 @@ void mos6581_render_debug_window(void* chip, bool* show_window) {
 // ============================================================================
 void mos6581_render_settings_window(void* chip, bool* show_window) {
     mos6581_t* sid = (mos6581_t*)chip;
-    if (!sid || !sid->desc) return;
+    if (!sid || !sid->desc || !show_window || !*show_window) return;
     
-    if (!*show_window) return;
-    
+#ifdef IMGUI_VERSION
     char window_title[128];
     snprintf(window_title, sizeof(window_title), "%s Settings", sid->desc->description);
     
@@ -339,4 +388,5 @@ void mos6581_render_settings_window(void* chip, bool* show_window) {
     ImGui::Columns(1, nullptr, false);
 
     ImGui::End();
+#endif
 }

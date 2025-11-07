@@ -1,6 +1,6 @@
 #include "mos6526.h"
 #include "../../gui/imgui_interface.h"
-#include "../../gui/generic_chip_gui.h"
+#include "../../gui/chip_visualization.h"
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
 #include "../../systems/c64/c64.h"  // Need this to access C64 structure
@@ -10,12 +10,10 @@
 #endif
 #include <stdio.h>
 #include <stddef.h>  // For offsetof
+#include <memory>
 
 // Forward declarations
 static const char* mos6526_get_cia_name(mos6526_t* cia);
-static ChipLayout get_cia_layout(void* chip);
-static void get_cia_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_state, PinSignalState* pin_states);
-static void render_cia_specific_content(void* chip);
 
 // ============================================================================
 // MOS6526 CIA LAYOUT (40-pin DIP)
@@ -40,26 +38,27 @@ inline ChipLayout create_mos6526_layout() {
     };
     
     // Hardware-accurate MOS6526 CIA pinout (40-pin DIP)
-    PIN_LR(layout,  1, VSS,  IRQ, 21)    // Ground / Interrupt Request
-    PIN_LR(layout,  2, PA0,  RW, 22)     // Port A Bit 0 / Read/Write
-    PIN_LR(layout,  3, PA1,  CS, 23)     // Port A Bit 1 / Chip Select
-    PIN_LR(layout,  4, PA2,  FLAG, 24)   // Port A Bit 2 / Flag Input
-    PIN_LR(layout,  5, PA3,  PHI2, 25)   // Port A Bit 3 / Clock
-    PIN_LR(layout,  6, PA4,  SP, 26)     // Port A Bit 4 / Serial Port
-    PIN_LR(layout,  7, PA5,  CNT, 27)    // Port A Bit 5 / Counter
-    PIN_LR(layout,  8, PA6,  A0, 28)     // Port A Bit 6 / Address 0
-    PIN_LR(layout,  9, PA7,  A1, 29)     // Port A Bit 7 / Address 1
-    PIN_LR(layout, 10, PB0,  A2, 30)     // Port B Bit 0 / Address 2
-    PIN_LR(layout, 11, PB1,  A3, 31)     // Port B Bit 1 / Address 3
-    PIN_LR(layout, 12, PB2,  D0, 32)     // Port B Bit 2 / Data 0
-    PIN_LR(layout, 13, PB3,  D1, 33)     // Port B Bit 3 / Data 1
-    PIN_LR(layout, 14, PB4,  D2, 34)     // Port B Bit 4 / Data 2
-    PIN_LR(layout, 15, PB5,  D3, 35)     // Port B Bit 5 / Data 3
-    PIN_LR(layout, 16, PB6,  D4, 36)     // Port B Bit 6 / Data 4
-    PIN_LR(layout, 17, PB7,  D5, 37)     // Port B Bit 7 / Data 5
-    PIN_LR(layout, 18, PC,   D6, 38)     // Serial Port / Data 6
-    PIN_LR(layout, 19, TOD,  D7, 39)     // Time of Day / Data 7
-    PIN_LR(layout, 20, VDD,  RES, 40)    // +5V Power / Reset
+    // Right-hand pins (21-40) are numbered bottom-up, not top-down
+    PIN_LR(layout,  1, VSS,  RES, 40)    // Ground / Reset
+    PIN_LR(layout,  2, PA0,  D7, 39)     // Port A Bit 0 / Data 7
+    PIN_LR(layout,  3, PA1,  D6, 38)     // Port A Bit 1 / Data 6
+    PIN_LR(layout,  4, PA2,  D5, 37)     // Port A Bit 2 / Data 5
+    PIN_LR(layout,  5, PA3,  D4, 36)     // Port A Bit 3 / Data 4
+    PIN_LR(layout,  6, PA4,  D3, 35)     // Port A Bit 4 / Data 3
+    PIN_LR(layout,  7, PA5,  D2, 34)     // Port A Bit 5 / Data 2
+    PIN_LR(layout,  8, PA6,  D1, 33)     // Port A Bit 6 / Data 1
+    PIN_LR(layout,  9, PA7,  D0, 32)     // Port A Bit 7 / Data 0
+    PIN_LR(layout, 10, PB0,  A3, 31)     // Port B Bit 0 / Address 3
+    PIN_LR(layout, 11, PB1,  A2, 30)     // Port B Bit 1 / Address 2
+    PIN_LR(layout, 12, PB2,  A1, 29)     // Port B Bit 2 / Address 1
+    PIN_LR(layout, 13, PB3,  A0, 28)     // Port B Bit 3 / Address 0
+    PIN_LR(layout, 14, PB4,  CNT, 27)    // Port B Bit 4 / Counter
+    PIN_LR(layout, 15, PB5,  SP, 26)     // Port B Bit 5 / Serial Port
+    PIN_LR(layout, 16, PB6,  PHI2, 25)   // Port B Bit 6 / Clock
+    PIN_LR(layout, 17, PB7,  FLAG, 24)   // Port B Bit 7 / Flag Input
+    PIN_LR(layout, 18, PC,   CS, 23)     // Serial Port / Chip Select
+    PIN_LR(layout, 19, TOD,  RW, 22)     // Time of Day / Read/Write
+    PIN_LR(layout, 20, VDD,  IRQ, 21)    // +5V Power / Interrupt Request
     
     return layout;
 }
@@ -68,30 +67,29 @@ inline ChipLayout create_mos6526_layout() {
 // MOS6526 CIA GUI DEBUG WINDOW
 // ============================================================================
 
-// Callback functions for generic chip GUI
-static ChipLayout get_cia_layout(void* chip) {
-    return create_mos6526_layout();
-}
-
-static void get_cia_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_state, PinSignalState* pin_states) {
-    mos6526_t* cia = (mos6526_t*)chip;
-    if (!cia || !layout || !pin_states) return;
+// Helper function to get CIA pin states for visualization
+static std::vector<PinSignalState> get_cia_pin_states(mos6526_t* cia, const ChipLayout* layout, bus_state_t bus_state) {
+    std::vector<PinSignalState> pin_states;
+    if (!cia || !layout) return pin_states;
     
     int total_pins = layout->get_total_pins();
+    pin_states.resize(total_pins);
     
     // Initialize all pins as inactive by default
     for (int i = 0; i < total_pins; i++) {
-        pin_states[i].pin_number = 0;
-        pin_states[i].signal_level = false;
-        pin_states[i].drive_direction = false;
-        pin_states[i].signal_value = 0;
-        pin_states[i].high_impedance = false;
-        pin_states[i].has_pullup = false;
-        pin_states[i].has_pulldown = false;
-        pin_states[i].signal_valid = true;
-        pin_states[i].analog_voltage = 0.0f;
-        pin_states[i].is_pwm = false;
-        pin_states[i].pwm_duty_cycle = 0.0f;
+        pin_states[i] = PinSignalState{
+            .pin_number = static_cast<uint8_t>(i + 1),
+            .signal_level = false,
+            .drive_direction = false,
+            .signal_value = 0,
+            .high_impedance = true,
+            .has_pullup = false,
+            .has_pulldown = false,
+            .signal_valid = true,
+            .analog_voltage = 0.0f,
+            .is_pwm = false,
+            .pwm_duty_cycle = 0.0f
+        };
     }
     
     // Set pin states based on CIA registers
@@ -104,6 +102,7 @@ static void get_cia_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_s
             pin_states[pin_idx].signal_level = pin_active;
             pin_states[pin_idx].signal_valid = true;
             pin_states[pin_idx].drive_direction = drive_direction;
+            pin_states[pin_idx].high_impedance = !drive_direction;
         }
     }
     
@@ -116,120 +115,160 @@ static void get_cia_pin_states(void* chip, ChipLayout* layout, bus_state_t bus_s
             pin_states[pin_idx].signal_level = pin_active;
             pin_states[pin_idx].signal_valid = true;
             pin_states[pin_idx].drive_direction = drive_direction;
+            pin_states[pin_idx].high_impedance = !drive_direction;
         }
     }
     
     // IRQ pin (pin 21, index 20)
     if (20 < total_pins) {
         bool irq_active = (cia->reg[ICR] & 0x80) != 0;
-        pin_states[20].signal_level = irq_active;
+        pin_states[20].signal_level = !irq_active; // IRQ is active low
         pin_states[20].signal_valid = true;
+        pin_states[20].drive_direction = true;
+        pin_states[20].high_impedance = false;
     }
     
     // Power pins are always active
-    pin_states[0].signal_level = false; // VSS (Ground, pin 1)
-    pin_states[19].signal_level = true; // VDD (+5V, pin 20)
+    pin_states[0].signal_level = false;  // VSS (Ground, pin 1)
+    pin_states[0].high_impedance = false;
+    pin_states[19].signal_level = true;  // VDD (+5V, pin 20)
+    pin_states[19].high_impedance = false;
     if (39 < total_pins) {
-        pin_states[39].signal_level = false; // RES (Reset, pin 40)
+        pin_states[39].signal_level = true; // RES (Reset, pin 40) - active high when not reset
+        pin_states[39].high_impedance = false;
     }
+    
+    return pin_states;
 }
 
-static void render_cia_specific_content(void* chip) {
-    mos6526_t* cia = (mos6526_t*)chip;
-    if (!cia) return;
+// Get shared chip visualization instance for CIA
+static ChipVisualization* get_cia_chip_visualization_instance() {
+    static std::unique_ptr<ChipVisualization> chip_viz = nullptr;
     
-#ifdef IMGUI_VERSION
-    // This replaces the right column content from the original function
-    const char* cia_name = mos6526_get_cia_name(cia);
-    ImGui::Text("Complex Interface Adapter - %s", cia_name);
-    ImGui::Separator();
-
-    // CIA State Section
-    ImGui::Text("CIA State");
-    ImGui::Separator();
+    // Create chip visualization if not already created
+    if (!chip_viz) {
+        ChipLayout layout = create_mos6526_layout();
+        chip_viz = std::make_unique<ChipVisualization>(layout);
+    }
     
-    // Port A and B
-    ImGui::Text("Data Ports");
-    ImGui::Separator();
-    
-    ImGui::Text("Port A Data (PRA): $%02X", cia->reg[PRA]);
-    ImGui::Text("Port A DDR (DDRA): $%02X", cia->reg[DDRA]);
-    ImGui::Text("Port B Data (PRB): $%02X", cia->reg[PRB]);
-    ImGui::Text("Port B DDR (DDRB): $%02X", cia->reg[DDRB]);
-    
-    ImGui::Separator();
-    
-    // Timers
-    ImGui::Text("Timers");
-    ImGui::Separator();
-    
-    uint16_t timer_a = (cia->reg[TA_HI] << 8) | cia->reg[TA_LO];
-    ImGui::Text("Timer A: %04X", timer_a);
-    ImGui::Text("Timer A Control: $%02X", cia->reg[CRA]);
-    ImGui::Text("Timer A Running: %s", (cia->reg[CRA] & 0x01) ? "YES" : "NO");
-    
-    uint16_t timer_b = (cia->reg[TB_HI] << 8) | cia->reg[TB_LO];
-    ImGui::Text("Timer B: %04X", timer_b);
-    ImGui::Text("Timer B Control: $%02X", cia->reg[CRB]);
-    ImGui::Text("Timer B Running: %s", (cia->reg[CRB] & 0x01) ? "YES" : "NO");
-    
-    ImGui::Separator();
-    
-    // Time of Day Clock
-    ImGui::Text("Time of Day Clock");
-    ImGui::Separator();
-    
-    ImGui::Text("TOD 10ths: $%02X", cia->reg[TOD_10THS]);
-    ImGui::Text("TOD Seconds: $%02X", cia->reg[TOD_SEC]);
-    ImGui::Text("TOD Minutes: $%02X", cia->reg[TOD_MIN]);
-    ImGui::Text("TOD Hours: $%02X", cia->reg[TOD_HR]);
-    
-    ImGui::Separator();
-    
-    // Interrupts
-    ImGui::Text("Interrupt Control");
-    ImGui::Separator();
-    ImGui::Text("ICR: $%02X", cia->reg[ICR]);
-    ImGui::Text("IRQ Active: %s", (cia->reg[ICR] & 0x80) ? "YES" : "NO");
-    
-    ImGui::Separator();
-    
-    // Serial Data Register
-    ImGui::Text("Serial Data Register: $%02X", cia->reg[SDR]);
-#endif
+    return chip_viz.get();
 }
 
 void mos6526_render_debug_window(void* chip, bool* show_window) {
     mos6526_t* cia = (mos6526_t*)chip;
-    if (!cia || !cia->desc) return;
-    
-    if (!*show_window) return;
+    if (!cia || !cia->desc || !show_window || !*show_window) return;
     
 #ifdef IMGUI_VERSION
     // Push unique ID to prevent conflicts between CIA1 and CIA2
     ImGui::PushID((int)(uintptr_t)cia);
     
-    // Create generic chip GUI config
-    chip_gui_config_t config = generic_chip_gui_get_default_config("MOS6526", "CIA");
-    config.get_layout = get_cia_layout;
-    config.get_pin_states = get_cia_pin_states;
-    
-    // Create generic chip GUI instance
-    generic_chip_gui_t* gui = generic_chip_gui_create(cia, &config);
-    if (!gui) {
-        ImGui::PopID();
-        return;
-    }
-    
     char window_title[128];
     const char* cia_name = mos6526_get_cia_name(cia);
     snprintf(window_title, sizeof(window_title), "%s Debug", cia_name);
     
-    // Use generic chip GUI render function
-    generic_chip_gui_render_debug_panel(gui, NULL, window_title, show_window, render_cia_specific_content);
+    if (!ImGui::Begin(window_title, show_window)) {
+        ImGui::End();
+        ImGui::PopID();
+        return;
+    }
+
+    // Create two-column layout: chip visualization on left, debugging info on right
+    ImVec2 window_size = ImGui::GetWindowSize();
     
-    // Cleanup
-    generic_chip_gui_destroy(gui);
+    // Left column: Chip Visualization (fixed width ~250px)
+    ImVec2 chip_viz_size = ImVec2(250.0f, 0);
+    if (ImGui::BeginChild("ChipVisualization", chip_viz_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
+        ImGui::Text("Chip Visualization");
+        ImGui::Separator();
+        
+        // Calculate chip center for visualization
+        ImVec2 chip_center = ImGui::GetCursorScreenPos();
+        ImVec2 content_region = ImGui::GetContentRegionAvail();
+        chip_center.x += content_region.x * 0.5f;
+        chip_center.y += 200.0f; // Space for the chip
+        
+        // Get chip visualization instance and render
+        ChipVisualization* chip_viz = get_cia_chip_visualization_instance();
+        const ChipLayout* layout = &chip_viz->get_pin_layout();
+        
+        // Get current pin states from CIA
+        std::vector<PinSignalState> pin_states = get_cia_pin_states(cia, layout, 0 /* bus_state */);
+        
+        // Render the chip
+        chip_viz->render(chip_center, pin_states, cia_name);
+        
+        ImGui::Separator();
+        
+        // Visualization Settings Menu
+        chip_viz->render_settings_gui();
+    }
+    ImGui::EndChild();
+    
+    ImGui::SameLine(0, 5.0f); // Small gap between columns
+    
+    // Right column: All debugging information
+    ImVec2 right_column_size = ImVec2(window_size.x - 270.0f, 0); // Remaining width minus left column and gap
+    if (ImGui::BeginChild("DebugInfo", right_column_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
+        // CIA State Section
+        ImGui::Text("Complex Interface Adapter - %s", cia_name);
+        ImGui::Separator();
+
+        // CIA State Section
+        ImGui::Text("CIA State");
+        ImGui::Separator();
+        
+        // Port A and B
+        ImGui::Text("Data Ports");
+        ImGui::Separator();
+        
+        ImGui::Text("Port A Data (PRA): $%02X", cia->reg[PRA]);
+        ImGui::Text("Port A DDR (DDRA): $%02X", cia->reg[DDRA]);
+        ImGui::Text("Port B Data (PRB): $%02X", cia->reg[PRB]);
+        ImGui::Text("Port B DDR (DDRB): $%02X", cia->reg[DDRB]);
+        
+        ImGui::Separator();
+        
+        // Timers
+        ImGui::Text("Timers");
+        ImGui::Separator();
+        
+        uint16_t timer_a = (cia->reg[TA_HI] << 8) | cia->reg[TA_LO];
+        ImGui::Text("Timer A: %04X", timer_a);
+        ImGui::Text("Timer A Control: $%02X", cia->reg[CRA]);
+        ImGui::Text("Timer A Running: %s", (cia->reg[CRA] & 0x01) ? "YES" : "NO");
+        
+        uint16_t timer_b = (cia->reg[TB_HI] << 8) | cia->reg[TB_LO];
+        ImGui::Text("Timer B: %04X", timer_b);
+        ImGui::Text("Timer B Control: $%02X", cia->reg[CRB]);
+        ImGui::Text("Timer B Running: %s", (cia->reg[CRB] & 0x01) ? "YES" : "NO");
+        
+        ImGui::Separator();
+        
+        // Time of Day Clock
+        ImGui::Text("Time of Day Clock");
+        ImGui::Separator();
+        
+        ImGui::Text("TOD 10ths: $%02X", cia->reg[TOD_10THS]);
+        ImGui::Text("TOD Seconds: $%02X", cia->reg[TOD_SEC]);
+        ImGui::Text("TOD Minutes: $%02X", cia->reg[TOD_MIN]);
+        ImGui::Text("TOD Hours: $%02X", cia->reg[TOD_HR]);
+        
+        ImGui::Separator();
+        
+        // Interrupts
+        ImGui::Text("Interrupt Control");
+        ImGui::Separator();
+        ImGui::Text("ICR: $%02X", cia->reg[ICR]);
+        ImGui::Text("IRQ Active: %s", (cia->reg[ICR] & 0x80) ? "YES" : "NO");
+        
+        ImGui::Separator();
+        
+        // Serial Data Register
+        ImGui::Text("Serial Data Register: $%02X", cia->reg[SDR]);
+    }
+    ImGui::EndChild();
+
+    ImGui::End();
     ImGui::PopID();
 #endif
 }
