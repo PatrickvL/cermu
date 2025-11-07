@@ -270,8 +270,8 @@ ChipLayout create_dip8_layout() {
 ChipLayout create_dip14_layout() {
     ChipLayout layout = {};
     layout.package = {
-        300.0f,                      // width (mil) - DIP14 narrow body width
-        748.0f,                      // height (mil) - DIP14 body length
+        300.0f,                      // width (mil) - DIP14 narrow body for logic chips (7.62mm)
+        748.0f,                      // height (mil) - DIP14 body length (19.00mm)
         PackageType::DIP,            // package_type
         OrientationMarker::NOTCH,    // marker
         100.0f,                      // pin_pitch (mil) - standard DIP pitch
@@ -303,7 +303,7 @@ ChipLayout create_dip14_layout() {
 ChipLayout create_dip16_layout() {
     ChipLayout layout = {};
     layout.package = {
-        250.0f,                      // width (mil) - DIP16 narrow body (6.35mm)
+        300.0f,                      // width (mil) - DIP16 narrow body for logic chips (7.62mm)
         800.0f,                      // height (mil) - DIP16 body length (20.32mm)
         PackageType::DIP,            // package_type
         OrientationMarker::NOTCH,    // marker
@@ -328,7 +328,7 @@ ChipLayout create_dip16_layout() {
 ChipLayout create_dip20_layout() {
     ChipLayout layout = {};
     layout.package = {
-        250.0f,                      // width (mil) - DIP20 narrow body (6.35mm)
+        300.0f,                      // width (mil) - DIP20 narrow body for logic chips (7.62mm)
         1000.0f,                     // height (mil) - DIP20 body length (25.4mm)
         PackageType::DIP,            // package_type
         OrientationMarker::NOTCH,    // marker
@@ -344,7 +344,7 @@ ChipLayout create_dip20_layout() {
 ChipLayout create_dip18_layout() {
     ChipLayout layout = {};
     layout.package = {
-        300.0f,                      // width (mil) - DIP18 narrow body (7.62mm)
+        300.0f,                      // width (mil) - DIP18 narrow body for 2114 SRAM (7.62mm)
         900.0f,                      // height (mil) - DIP18 body length (22.86mm)
         PackageType::DIP,            // package_type
         OrientationMarker::NOTCH,    // marker
@@ -369,7 +369,7 @@ ChipLayout create_dip18_layout() {
 ChipLayout create_dip24_layout() {
     ChipLayout layout = {};
     layout.package = {
-        250.0f,                      // width (mil) - DIP24 narrow body (6.35mm)
+        600.0f,                      // width (mil) - DIP24 wide body for ROM chips (15.24mm)
         1200.0f,                     // height (mil) - DIP24 body length (30.48mm)
         PackageType::DIP,            // package_type
         OrientationMarker::NOTCH,    // marker
@@ -385,7 +385,7 @@ ChipLayout create_dip24_layout() {
 ChipLayout create_dip28_layout() {
     ChipLayout layout = {};
     layout.package = {
-        250.0f,                      // width (mil) - DIP28 narrow body (6.35mm)
+        600.0f,                      // width (mil) - DIP28 wide body for C64 chips (15.24mm)
         1400.0f,                     // height (mil) - DIP28 body length (35.56mm)
         PackageType::DIP,            // package_type
         OrientationMarker::NOTCH,    // marker
