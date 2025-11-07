@@ -22,9 +22,9 @@ static void pla_destroy(void* chip) {
     // PLA is part of the C64 system, not destroyed separately
 }
 
+// Include GUI implementation
 #ifdef IMGUI_VERSION
-// Forward declaration for GUI function
-void pla_render_debug_window(void* chip, bool* show_window);
+#include "pla_gui.h"
 #endif
 
 // PLA chip descriptor
