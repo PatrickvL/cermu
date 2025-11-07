@@ -63,15 +63,15 @@ inline ChipLayout create_vicii_layout() {
     };
     
     // Hardware-accurate MOS6567/6569 VIC-II pinout (40-pin DIP)
-    PIN_LR(layout, 1, VDD,      VSS, 21)    // +5V Power / Ground
-    PIN_LR(layout, 2, PHI0,     A5, 22)     // Clock Input / Address 5
-    PIN_LR(layout, 3, AEC,      A4, 23)     // Address Enable / Address 4
-    PIN_LR(layout, 4, BA,       A3, 24)     // Bus Available / Address 3
-    PIN_LR(layout, 5, RW,       A2, 25)     // Read/Write / Address 2
-    PIN_LR(layout, 6, IRQ,      A1, 26)     // Interrupt / Address 1
-    PIN_LR(layout, 7, A6,       A0, 27)     // Address 6 / Address 0
-    PIN_LR(layout, 8, A7,       D7, 28)     // Address 7 / Data 7
-    PIN_LR(layout, 9, A8,       D6, 29)     // Address 8 / Data 6
+    PIN_LR(layout,  1, VDD,     VSS, 21)    // +5V Power / Ground
+    PIN_LR(layout,  2, PHI0,    A5, 22)     // Clock Input / Address 5
+    PIN_LR(layout,  3, AEC,     A4, 23)     // Address Enable / Address 4
+    PIN_LR(layout,  4, BA,      A3, 24)     // Bus Available / Address 3
+    PIN_LR(layout,  5, RW,      A2, 25)     // Read/Write / Address 2
+    PIN_LR(layout,  6, IRQ,     A1, 26)     // Interrupt / Address 1
+    PIN_LR(layout,  7, A6,      A0, 27)     // Address 6 / Address 0
+    PIN_LR(layout,  8, A7,      D7, 28)     // Address 7 / Data 7
+    PIN_LR(layout,  9, A8,      D6, 29)     // Address 8 / Data 6
     PIN_LR(layout, 10, A9,      D5, 30)     // Address 9 / Data 5
     PIN_LR(layout, 11, A10,     D4, 31)     // Address 10 / Data 4
     PIN_LR(layout, 12, A11,     D3, 32)     // Address 11 / Data 3

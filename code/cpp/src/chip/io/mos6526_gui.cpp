@@ -4,7 +4,10 @@
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
 #include "../../systems/c64/c64.h"  // Need this to access C64 structure
+// Native Dear ImGui C++ - conditional compilation for GUI availability
+#ifdef IMGUI_VERSION
 #include <imgui.h>
+#endif
 #include <stdio.h>
 #include <stddef.h>  // For offsetof
 
@@ -37,15 +40,15 @@ inline ChipLayout create_mos6526_layout() {
     };
     
     // Hardware-accurate MOS6526 CIA pinout (40-pin DIP)
-    PIN_LR(layout, 1, VSS,   IRQ, 21)    // Ground / Interrupt Request
-    PIN_LR(layout, 2, PA0,   RW, 22)     // Port A Bit 0 / Read/Write
-    PIN_LR(layout, 3, PA1,   CS, 23)     // Port A Bit 1 / Chip Select
-    PIN_LR(layout, 4, PA2,   FLAG, 24)   // Port A Bit 2 / Flag Input
-    PIN_LR(layout, 5, PA3,   PHI2, 25)   // Port A Bit 3 / Clock
-    PIN_LR(layout, 6, PA4,   SP, 26)     // Port A Bit 4 / Serial Port
-    PIN_LR(layout, 7, PA5,   CNT, 27)    // Port A Bit 5 / Counter
-    PIN_LR(layout, 8, PA6,   A0, 28)     // Port A Bit 6 / Address 0
-    PIN_LR(layout, 9, PA7,   A1, 29)     // Port A Bit 7 / Address 1
+    PIN_LR(layout,  1, VSS,  IRQ, 21)    // Ground / Interrupt Request
+    PIN_LR(layout,  2, PA0,  RW, 22)     // Port A Bit 0 / Read/Write
+    PIN_LR(layout,  3, PA1,  CS, 23)     // Port A Bit 1 / Chip Select
+    PIN_LR(layout,  4, PA2,  FLAG, 24)   // Port A Bit 2 / Flag Input
+    PIN_LR(layout,  5, PA3,  PHI2, 25)   // Port A Bit 3 / Clock
+    PIN_LR(layout,  6, PA4,  SP, 26)     // Port A Bit 4 / Serial Port
+    PIN_LR(layout,  7, PA5,  CNT, 27)    // Port A Bit 5 / Counter
+    PIN_LR(layout,  8, PA6,  A0, 28)     // Port A Bit 6 / Address 0
+    PIN_LR(layout,  9, PA7,  A1, 29)     // Port A Bit 7 / Address 1
     PIN_LR(layout, 10, PB0,  A2, 30)     // Port B Bit 0 / Address 2
     PIN_LR(layout, 11, PB1,  A3, 31)     // Port B Bit 1 / Address 3
     PIN_LR(layout, 12, PB2,  D0, 32)     // Port B Bit 2 / Data 0
@@ -135,6 +138,7 @@ static void render_cia_specific_content(void* chip) {
     mos6526_t* cia = (mos6526_t*)chip;
     if (!cia) return;
     
+#ifdef IMGUI_VERSION
     // This replaces the right column content from the original function
     const char* cia_name = mos6526_get_cia_name(cia);
     ImGui::Text("Complex Interface Adapter - %s", cia_name);
@@ -192,6 +196,7 @@ static void render_cia_specific_content(void* chip) {
     
     // Serial Data Register
     ImGui::Text("Serial Data Register: $%02X", cia->reg[SDR]);
+#endif
 }
 
 void mos6526_render_debug_window(void* chip, bool* show_window) {
@@ -200,6 +205,7 @@ void mos6526_render_debug_window(void* chip, bool* show_window) {
     
     if (!*show_window) return;
     
+#ifdef IMGUI_VERSION
     // Push unique ID to prevent conflicts between CIA1 and CIA2
     ImGui::PushID((int)(uintptr_t)cia);
     
@@ -225,6 +231,7 @@ void mos6526_render_debug_window(void* chip, bool* show_window) {
     // Cleanup
     generic_chip_gui_destroy(gui);
     ImGui::PopID();
+#endif
 }
 
 // ============================================================================
@@ -237,6 +244,7 @@ void mos6526_render_settings_window(void* chip, bool* show_window) {
     
     if (!*show_window) return;
     
+#ifdef IMGUI_VERSION
     // Push unique ID to prevent conflicts between CIA1 and CIA2
     ImGui::PushID((int)(uintptr_t)cia);
     
@@ -350,6 +358,7 @@ void mos6526_render_settings_window(void* chip, bool* show_window) {
     
     ImGui::End();
     ImGui::PopID();
+#endif
 }
 
 // Helper function to determine CIA type based on system context
