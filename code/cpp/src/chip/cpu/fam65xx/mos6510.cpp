@@ -25,7 +25,7 @@ using mos6510_cpu_t = fam65xx_t<MOS6510>;
 
 mos6510_t* mos6510_create(void) {
     mos6510_t* cpu = reinterpret_cast<mos6510_t*>(new mos6510_cpu_t());
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
     fam65xx::register_mos6510_for_gui(cpu);
 #endif
     return cpu;
@@ -33,7 +33,7 @@ mos6510_t* mos6510_create(void) {
 
 void mos6510_destroy(mos6510_t* cpu) {
     // Unregister from GUI system before destroying
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
     fam65xx::unregister_cpu_from_gui(cpu);
 #endif
     delete CPU_CAST(cpu);
@@ -155,7 +155,7 @@ chip_descriptor_t mos6510_descriptor = {
     },
     .bus_attach = nullptr,
     .bank_change = nullptr,  // MOS 6510 doesn't have banking
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
     .render_debug_window = fam65xx_render_debug_window,
     .render_settings_window = fam65xx_render_settings_window
 #endif

@@ -8,7 +8,7 @@ typedef struct ram_s {
     uint8_t* memory;  // Pointer to memory (will point into unified buffer)
 } ram_t;
 
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
 // GUI function declarations
 void ram_render_debug_window(void* chip, bool* show_window);
 void ram_render_settings_window(void* chip, bool* show_window);

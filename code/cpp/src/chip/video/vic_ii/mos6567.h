@@ -24,7 +24,7 @@ void mos6567_bank_change(void* chip, uint8_t bank);
 // Descriptor for NTSC VIC-II
 extern chip_descriptor_t mos6567_descriptor;
 
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
 // GUI function declarations
 void mos6567_render_debug_window(void* chip, bool* show_window);
 void mos6567_render_settings_window(void* chip, bool* show_window);

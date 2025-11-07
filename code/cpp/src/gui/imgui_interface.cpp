@@ -346,12 +346,12 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
                         if (entry->desc && entry->desc->render_debug_window) {
                             // Check if this is a CPU chip (6502, 6510, etc.)
                             const char* desc = entry->desc->description;
-                            if (strstr(desc, "6502") || strstr(desc, "6510") || strstr(desc, "65C02") || 
+                            if (desc && (strstr(desc, "6502") || strstr(desc, "6510") || strstr(desc, "65C02") ||
                                 strstr(desc, "65C816") || strstr(desc, "CPU") || strstr(desc, "2A03") ||
-                                strstr(desc, "MOS 6510") || strstr(desc, "Processor") || strstr(desc, "processor")) {
+                                strstr(desc, "MOS 6510") || strstr(desc, "Processor") || strstr(desc, "processor"))) {
                                 ImGui::PushID(chip_id);
                                 char menu_label[64];
-                                snprintf(menu_label, sizeof(menu_label), "%s", desc);
+                                snprintf(menu_label, sizeof(menu_label), "%s", desc ? desc : "Unknown CPU");
                                 ImGui::MenuItem(menu_label, NULL, &gui_state->show_chip_debug[chip_id]);
                                 ImGui::PopID();
                             }
@@ -367,10 +367,10 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
                         if (entry->desc && entry->desc->render_debug_window) {
                             // Check if this is a memory/logic chip (RAM, ROM, PLA)
                             const char* desc = entry->desc->description;
-                            if (strstr(desc, "RAM") || strstr(desc, "ROM") || strstr(desc, "PLA") || strstr(desc, "Memory")) {
+                            if (desc && (strstr(desc, "RAM") || strstr(desc, "ROM") || strstr(desc, "PLA") || strstr(desc, "Memory"))) {
                                 ImGui::PushID(chip_id);
                                 char menu_label[64];
-                                snprintf(menu_label, sizeof(menu_label), "%s", desc);
+                                snprintf(menu_label, sizeof(menu_label), "%s", desc ? desc : "Unknown Memory/Logic");
                                 ImGui::MenuItem(menu_label, NULL, &gui_state->show_chip_debug[chip_id]);
                                 ImGui::PopID();
                             }
@@ -389,11 +389,11 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
                         if (entry->desc && entry->desc->render_debug_window) {
                             // Check if this is an I/O or peripheral chip (VIC-II, SID, CIA)
                             const char* desc = entry->desc->description;
-                            if (strstr(desc, "VIC") || strstr(desc, "SID") || strstr(desc, "CIA") || 
-                                strstr(desc, "I/O") || strstr(desc, "Video") || strstr(desc, "Audio")) {
+                            if (desc && (strstr(desc, "VIC") || strstr(desc, "SID") || strstr(desc, "CIA") ||
+                                strstr(desc, "I/O") || strstr(desc, "Video") || strstr(desc, "Audio"))) {
                                 ImGui::PushID(chip_id);
                                 char menu_label[64];
-                                snprintf(menu_label, sizeof(menu_label), "%s", desc);
+                                snprintf(menu_label, sizeof(menu_label), "%s", desc ? desc : "Unknown I/O");
                                 ImGui::MenuItem(menu_label, NULL, &gui_state->show_chip_debug[chip_id]);
                                 ImGui::PopID();
                             }
@@ -511,7 +511,8 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
                         if (entry->desc && entry->desc->render_debug_window) {
                             ImGui::PushID(chip_id); // Push unique ID for each chip
                             char menu_label[64];
-                            snprintf(menu_label, sizeof(menu_label), "%s Debug", entry->desc->description);
+                            const char* desc = entry->desc->description;
+                            snprintf(menu_label, sizeof(menu_label), "%s Debug", desc ? desc : "Unknown Chip");
                             ImGui::MenuItem(menu_label, NULL, &gui_state->show_chip_debug[chip_id]);
                             ImGui::PopID(); // Pop chip ID
                         }
@@ -525,7 +526,8 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
                         if (entry->desc && entry->desc->render_settings_window) {
                             ImGui::PushID(chip_id); // Push unique ID for each chip
                             char menu_label[64];
-                            snprintf(menu_label, sizeof(menu_label), "%s Settings", entry->desc->description);
+                            const char* desc = entry->desc->description;
+                            snprintf(menu_label, sizeof(menu_label), "%s Settings", desc ? desc : "Unknown Chip");
                             ImGui::MenuItem(menu_label, NULL, &gui_state->show_chip_settings[chip_id]);
                             ImGui::PopID(); // Pop chip ID
                         }

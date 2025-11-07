@@ -216,7 +216,7 @@ chip_descriptor_t mos6526_descriptor = {
     .destroy = mos6526_system_destroy,
     .bus_attach = (void (*)(void *, void *))mos6526_bus_attach,
     .bank_change = NULL,
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
     .render_debug_window = mos6526_render_debug_window,
     .render_settings_window = mos6526_render_settings_window
 #endif

@@ -42,13 +42,13 @@ chip_descriptor_t mos6567_descriptor = {
     .destroy     = mos6567_system_destroy,
     .bus_attach  = mos6567_bus_attach,
     .bank_change = mos6567_bank_change,
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
     .render_debug_window = mos6567_render_debug_window,
     .render_settings_window = mos6567_render_settings_window
 #endif
 };
 
 // Include GUI implementation
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
 #include "mos6567_gui.h"
 #endif

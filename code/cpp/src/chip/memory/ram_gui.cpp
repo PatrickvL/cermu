@@ -3,8 +3,8 @@
 #include "../../gui/generic_chip_gui.h"
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
-#ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifndef IMGUI_VERSION
+#define IMGUI_VERSION
 #endif
 #include <imgui.h>
 #include <stdio.h>

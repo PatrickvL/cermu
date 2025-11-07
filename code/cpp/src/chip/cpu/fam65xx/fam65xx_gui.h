@@ -19,7 +19,7 @@ void fam65xx_update_bus_state(void* chip, uint64_t bus_state);
 #ifdef __cplusplus
 }
 
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
 #include <unordered_map>
 #include <memory>
 #include "../../gui/chip_visualization.h"

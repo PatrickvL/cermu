@@ -33,7 +33,7 @@ extern "C" {
 
 mos6502_t* mos6502_create(void) {
     mos6502_t* cpu = reinterpret_cast<mos6502_t*>(new mos6502_cpu_t());
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
     fam65xx::register_mos6502_for_gui(cpu);
 #endif
     return cpu;
@@ -41,7 +41,7 @@ mos6502_t* mos6502_create(void) {
 
 void mos6502_destroy(mos6502_t* cpu) {
     // Unregister from GUI system before destroying
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
     fam65xx::unregister_cpu_from_gui(cpu);
 #endif
     delete CPU_CAST(mos6502_cpu_t, cpu);
@@ -145,7 +145,7 @@ static void initialize_mos6502_descriptor() {
     };
     mos6502_base_descriptor.bus_attach = nullptr;  // Basic CPU doesn't need bus attach
     mos6502_base_descriptor.bank_change = nullptr; // Basic CPU doesn't have banking
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
     mos6502_base_descriptor.render_debug_window = fam65xx_render_debug_window;
     mos6502_base_descriptor.render_settings_window = fam65xx_render_settings_window;
 #endif

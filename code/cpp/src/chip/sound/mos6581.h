@@ -272,7 +272,7 @@ float mos6581_interpolate_sample(mos6581_t* sid, float position);
 // Chip descriptor
 extern chip_descriptor_t mos6581_descriptor;
 
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
 // GUI function declarations
 void mos6581_render_debug_window(void* chip, bool* show_window);
 void mos6581_render_settings_window(void* chip, bool* show_window);

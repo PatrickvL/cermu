@@ -168,7 +168,7 @@ void mos6526_check_interrupt_mask(mos6526_t* cia);
 // CONTROL REGISTER (CRA/CRB) handling
 void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v);
 
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
 // GUI function declarations
 void mos6526_render_debug_window(void* chip, bool* show_window);
 void mos6526_render_settings_window(void* chip, bool* show_window);

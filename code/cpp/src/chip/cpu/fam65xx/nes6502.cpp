@@ -25,14 +25,14 @@ extern "C" {
 
 nes6502_t* nes6502_create(void) {
     nes6502_t* cpu = reinterpret_cast<nes6502_t*>(new nes6502_cpu_t());
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
     register_nes6502_for_gui(cpu);
 #endif
     return cpu;
 }
 
 void nes6502_destroy(nes6502_t* cpu) {
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
     unregister_cpu_from_gui(cpu);
 #endif
     delete CPU_CAST(cpu);
@@ -170,7 +170,7 @@ static void initialize_nes6502_descriptor() {
     };
     nes6502_base_descriptor.bus_attach = nullptr;  // Basic CPU doesn't need bus attach
     nes6502_base_descriptor.bank_change = nullptr; // Basic CPU doesn't have banking
-#ifdef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#ifdef IMGUI_VERSION
     nes6502_base_descriptor.render_debug_window = [](void* cpu_handle, bool* show_window) {
         render_cpu_debug_window_impl(cpu_handle, "NES 6502");
     };
