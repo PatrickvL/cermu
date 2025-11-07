@@ -405,8 +405,6 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
                     // Also cycle border (exterior) color to be more visible
                     bus_state_t border_bus_state = BUS_STATE(VICII_EC, (current_bg_color + 8) % 16, 0);
                     vicii_registers_write(c64->vicii, border_bus_state);
-                    printf("DEBUG: Set VIC-II background color 0 (center) to %d, border to %d\n",
-                           current_bg_color, (current_bg_color + 8) % 16);
                     
                     current_bg_color = (current_bg_color + 1) % 16;
                     last_cycle_time = current_time;

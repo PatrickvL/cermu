@@ -767,5 +767,7 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
         mos6526_update_internal_data_direction_port_b(cia, cia->reg[DDRB]);
 }
 
-// GUI functions are declared in the header and implemented in separate GUI file
-// No direct inclusion needed here - linking handles the connection
+// Include GUI implementation
+#ifdef IMGUI_VERSION
+#include "mos6526_gui.h"
+#endif
