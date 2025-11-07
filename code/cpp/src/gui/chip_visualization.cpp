@@ -225,7 +225,7 @@ void ChipVisualization::render(ImVec2 chip_center, const std::vector<PinSignalSt
 }
 
 void ChipVisualization::render_chip_body(ImVec2 chip_center, const char* chip_name) {
-    ImDrawList* draw_list = igGetWindowDrawList();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
     
     // Scale chip dimensions from mils to reasonable pixel size
     // Target: ~150 pixels for left side CPU debug GUI
@@ -298,7 +298,7 @@ void ChipVisualization::render_chip_body(ImVec2 chip_center, const char* chip_na
     // Draw chip name if provided
     if (chip_name) {
         ImVec2 label_size;
-        igCalcTextSize(&label_size, chip_name, NULL, false, -1.0f);
+        label_size = ImGui::CalcTextSize(chip_name);
         ImVec2 label_pos = {chip_center.x - label_size.x/2, chip_center.y - 10};
         ImDrawList_AddText_Vec2(draw_list, label_pos, config_.text_color, chip_name, NULL);
     }
@@ -308,7 +308,7 @@ void ChipVisualization::render_chip_body(ImVec2 chip_center, const char* chip_na
         std::string package_name_str = get_package_type_string(layout_.package.package_type);
         const char* package_name = package_name_str.c_str();
         ImVec2 package_label_size;
-        igCalcTextSize(&package_label_size, package_name, NULL, false, -1.0f);
+        package_label_size = ImGui::CalcTextSize(package_name);
         ImVec2 package_label_pos = {chip_center.x - package_label_size.x/2, chip_center.y + 15};
         ImDrawList_AddText_Vec2(draw_list, package_label_pos, config_.pin_number_color, 
                                package_name, NULL);
@@ -316,7 +316,7 @@ void ChipVisualization::render_chip_body(ImVec2 chip_center, const char* chip_na
 }
 
 void ChipVisualization::render_dip_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name) {
-    ImDrawList* draw_list = igGetWindowDrawList();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
     
     ImVec2 chip_min = {chip_center.x - chip_width/2, chip_center.y - chip_height/2};
     ImVec2 chip_max = {chip_center.x + chip_width/2, chip_center.y + chip_height/2};
@@ -327,7 +327,7 @@ void ChipVisualization::render_dip_style(ImVec2 chip_center, float chip_width, f
 }
 
 void ChipVisualization::render_surface_mount_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name) {
-    ImDrawList* draw_list = igGetWindowDrawList();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
     
     ImVec2 chip_min = {chip_center.x - chip_width/2, chip_center.y - chip_height/2};
     ImVec2 chip_max = {chip_center.x + chip_width/2, chip_center.y + chip_height/2};
@@ -338,7 +338,7 @@ void ChipVisualization::render_surface_mount_style(ImVec2 chip_center, float chi
 }
 
 void ChipVisualization::render_qfp_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name) {
-    ImDrawList* draw_list = igGetWindowDrawList();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
     
     ImVec2 chip_min = {chip_center.x - chip_width/2, chip_center.y - chip_height/2};
     ImVec2 chip_max = {chip_center.x + chip_width/2, chip_center.y + chip_height/2};
@@ -349,7 +349,7 @@ void ChipVisualization::render_qfp_style(ImVec2 chip_center, float chip_width, f
 }
 
 void ChipVisualization::render_bga_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name) {
-    ImDrawList* draw_list = igGetWindowDrawList();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
     
     ImVec2 chip_min = {chip_center.x - chip_width/2, chip_center.y - chip_height/2};
     ImVec2 chip_max = {chip_center.x + chip_width/2, chip_center.y + chip_height/2};
@@ -360,7 +360,7 @@ void ChipVisualization::render_bga_style(ImVec2 chip_center, float chip_width, f
 }
 
 void ChipVisualization::render_to_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name) {
-    ImDrawList* draw_list = igGetWindowDrawList();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
     
     ImVec2 chip_min = {chip_center.x - chip_width/2, chip_center.y - chip_height/2};
     ImVec2 chip_max = {chip_center.x + chip_width/2, chip_center.y + chip_height/2};
@@ -402,7 +402,7 @@ void ChipVisualization::render_orientation_marker(ImVec2 chip_center) {
         case OrientationMarker::CIRCLE:
             // Similar to dot but unfilled
             {
-                ImDrawList* draw_list = igGetWindowDrawList();
+                ImDrawList* draw_list = ImGui::GetWindowDrawList();
                 float chip_width = layout_.package.width;
                 float chip_height = layout_.package.height;
                 ImVec2 marker_pos = {chip_center.x - chip_width/2 + 15, chip_center.y - chip_height/2 + 15};
@@ -415,7 +415,7 @@ void ChipVisualization::render_orientation_marker(ImVec2 chip_center) {
 }
 
 void ChipVisualization::draw_notch(ImVec2 chip_center) {
-    ImDrawList* draw_list = igGetWindowDrawList();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
     float chip_height = scaled_chip_height_ > 0 ? scaled_chip_height_ : 80.0f;
     ImVec2 notch_center = {chip_center.x, chip_center.y - chip_height/2};
     ImDrawList_AddCircleFilled(draw_list, notch_center, config_.marker_size, config_.notch_color, 12);
@@ -423,7 +423,7 @@ void ChipVisualization::draw_notch(ImVec2 chip_center) {
 }
 
 void ChipVisualization::draw_dot_marker(ImVec2 chip_center) {
-    ImDrawList* draw_list = igGetWindowDrawList();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
     float chip_width = scaled_chip_width_ > 0 ? scaled_chip_width_ : 120.0f;
     float chip_height = scaled_chip_height_ > 0 ? scaled_chip_height_ : 80.0f;
     ImVec2 marker_pos = {chip_center.x - chip_width/2 + 15, chip_center.y - chip_height/2 + 15};
@@ -431,7 +431,7 @@ void ChipVisualization::draw_dot_marker(ImVec2 chip_center) {
 }
 
 void ChipVisualization::draw_chamfer(ImVec2 chip_center) {
-    ImDrawList* draw_list = igGetWindowDrawList();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
     float chip_width = scaled_chip_width_ > 0 ? scaled_chip_width_ : 120.0f;
     float chip_height = scaled_chip_height_ > 0 ? scaled_chip_height_ : 80.0f;
     float chamfer_size = config_.marker_size * 2;
@@ -446,7 +446,7 @@ void ChipVisualization::draw_chamfer(ImVec2 chip_center) {
 }
 
 void ChipVisualization::draw_bar_marker(ImVec2 chip_center) {
-    ImDrawList* draw_list = igGetWindowDrawList();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
     float chip_width = scaled_chip_width_ > 0 ? scaled_chip_width_ : 120.0f;
     float chip_height = scaled_chip_height_ > 0 ? scaled_chip_height_ : 80.0f;
     
@@ -456,7 +456,7 @@ void ChipVisualization::draw_bar_marker(ImVec2 chip_center) {
 }
 
 void ChipVisualization::draw_triangle_marker(ImVec2 chip_center) {
-    ImDrawList* draw_list = igGetWindowDrawList();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
     float chip_width = scaled_chip_width_ > 0 ? scaled_chip_width_ : 120.0f;
     float chip_height = scaled_chip_height_ > 0 ? scaled_chip_height_ : 80.0f;
     float size = config_.marker_size;
@@ -472,7 +472,7 @@ void ChipVisualization::draw_triangle_marker(ImVec2 chip_center) {
 void ChipVisualization::render_thermal_pad(ImVec2 chip_center) {
     if (!layout_.package.has_thermal_pad) return;
     
-    ImDrawList* draw_list = igGetWindowDrawList();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
     float chip_width = scaled_chip_width_ > 0 ? scaled_chip_width_ : 120.0f;
     float chip_height = scaled_chip_height_ > 0 ? scaled_chip_height_ : 80.0f;
     float pad_size = layout_.package.thermal_pad_size * std::min(chip_width, chip_height);
@@ -497,7 +497,7 @@ void ChipVisualization::render_thermal_pad(ImVec2 chip_center) {
 }
 
 void ChipVisualization::render_chip_markings(ImVec2 chip_center) {
-    ImDrawList* draw_list = igGetWindowDrawList();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
     float y_offset = -40;
     float line_height = 14;
     
@@ -505,7 +505,7 @@ void ChipVisualization::render_chip_markings(ImVec2 chip_center) {
         // Safety check: ensure text is not null and has content
         if (text != nullptr && text[0] != '\0') {
             ImVec2 size;
-            igCalcTextSize(&size, text, NULL, false, -1.0f);
+            size = ImGui::CalcTextSize(text);
             ImVec2 pos = {chip_center.x - size.x/2, chip_center.y + y_offset};
             ImDrawList_AddText_Vec2(draw_list, pos, config_.pin_number_color, text, NULL);
             y_offset += line_height;
@@ -552,7 +552,7 @@ void ChipVisualization::render_bga_grid(ImVec2 chip_center, const std::vector<Pi
     }
     
     // Draw grid of balls
-    ImDrawList* draw_list = igGetWindowDrawList();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
     for (size_t i = 0; i < layout_.grid_pins.size(); i++) {
         const auto& pin = layout_.grid_pins[i];
         
@@ -601,7 +601,7 @@ void ChipVisualization::render_pin_side(ImVec2 chip_center, const std::vector<Ch
 }
 
 void ChipVisualization::render_single_pin(ImVec2 pin_pos, const ChipPin& pin, const PinSignalState& state, PinSide side) {
-    ImDrawList* draw_list = igGetWindowDrawList();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
     
     // Get pin type color
     uint32_t pin_color = get_pin_type_color(pin.get_pin_type(), config_.style);
@@ -866,8 +866,8 @@ ImVec2 ChipVisualization::get_recommended_size() const {
 }
 
 void ChipVisualization::render_legend() {
-    if (igCollapsingHeader_BoolPtr("Pin Type Legend", NULL, 0)) {
-        igIndent(16.0f);
+    if (ImGui::CollapsingHeader("Pin Type Legend", NULL, 0)) {
+        ImGui::Indent(16.0f);
         
         struct LegendEntry {
             PinType type;
@@ -894,20 +894,20 @@ void ChipVisualization::render_legend() {
             
             // Draw colored square
             ImVec2 cursor;
-            igGetCursorScreenPos(&cursor);
-            ImDrawList* draw_list = igGetWindowDrawList();
+            ImGui::GetCursorScreenPos(&cursor);
+            ImDrawList* draw_list = ImGui::GetWindowDrawList();
             ImVec2 square_max = {cursor.x + 12, cursor.y + 12};
             ImDrawList_AddRectFilled(draw_list, cursor, square_max, color, 0.0f, 0);
             ImDrawList_AddRect(draw_list, cursor, square_max, config_.pin_border_color, 0.0f, 0, 1.0f);
             
             ImVec2 legend_dummy = {16, 12};
-            igDummy(legend_dummy);
-            igSameLine(0, 4);
-            igText("%s: %s", entry.name, entry.description);
+            ImGui::Dummy(legend_dummy);
+            ImGui::SameLine(0, 4);
+            ImGui::Text("%s: %s", entry.name, entry.description);
         }
         
-        igSeparator();
-        igText("Pin Notation Styles:");
+        ImGui::Separator();
+        ImGui::Text("Pin Notation Styles:");
         
         const char* notation_examples[] = {
             "/ prefix: /IRQ, /CS, /WE",
@@ -919,33 +919,33 @@ void ChipVisualization::render_legend() {
         };
         
         for (const char* example : notation_examples) {
-            igBulletText("%s", example);
+            ImGui::BulletText("%s", example);
         }
         
-        igSeparator();
-        igText("Orientation Markers:");
-        igBulletText("Notch: U-shaped cutout at top center");
-        igBulletText("Dot: Physical dimple near pin 1");
-        igBulletText("Chamfer: Beveled corner near pin 1");
-        igBulletText("Bar: Stripe indicating pin 1 side");
-        igBulletText("Triangle: Pointer to pin 1");
+        ImGui::Separator();
+        ImGui::Text("Orientation Markers:");
+        ImGui::BulletText("Notch: U-shaped cutout at top center");
+        ImGui::BulletText("Dot: Physical dimple near pin 1");
+        ImGui::BulletText("Chamfer: Beveled corner near pin 1");
+        ImGui::BulletText("Bar: Stripe indicating pin 1 side");
+        ImGui::BulletText("Triangle: Pointer to pin 1");
         
-        igUnindent(16.0f);
+        ImGui::Unindent(16.0f);
     }
     
     // Package type information
-    if (igCollapsingHeader_BoolPtr("Package Information", NULL, 0)) {
-        igIndent(16.0f);
+    if (ImGui::CollapsingHeader("Package Information", NULL, 0)) {
+        ImGui::Indent(16.0f);
         
         std::string package_name_str = get_package_type_string(layout_.package.package_type);
-        igText("Package: %s", package_name_str.c_str());
+        ImGui::Text("Package: %s", package_name_str.c_str());
         
         // Calculate total pins
         int total_pins = layout_.left_pins.size() + layout_.right_pins.size() + 
                         layout_.top_pins.size() + layout_.bottom_pins.size() + 
                         layout_.grid_pins.size();
-        igText("Total Pins: %d", total_pins);
-        igText("Pin Pitch: %.2f mm", layout_.package.pin_pitch);
+        ImGui::Text("Total Pins: %d", total_pins);
+        ImGui::Text("Pin Pitch: %.2f mm", layout_.package.pin_pitch);
         
         const char* package_type_name = "Unknown";
         switch (layout_.package.package_type) {
@@ -959,13 +959,13 @@ void ChipVisualization::render_legend() {
             case PackageType::SOT23:  package_type_name = "SOT-23 (Small Transistor)"; break;
             default: break;
         }
-        igText("Type: %s", package_type_name);
+        ImGui::Text("Type: %s", package_type_name);
         
         if (layout_.package.has_thermal_pad) {
-            igText("Thermal Pad: Yes (%.0f%%)", layout_.package.thermal_pad_size * 100);
+            ImGui::Text("Thermal Pad: Yes (%.0f%%)", layout_.package.thermal_pad_size * 100);
         }
         
-        igUnindent(16.0f);
+        ImGui::Unindent(16.0f);
     }
 }
 
@@ -1062,59 +1062,59 @@ ImVec2 ChipVisualization::get_pin_position(ImVec2 chip_center, const ChipPin& pi
 }
 
 void ChipVisualization::render_settings_gui() {
-    if (igCollapsingHeader_TreeNodeFlags("Visualization Settings", ImGuiTreeNodeFlags_None)) {
+    if (ImGui::CollapsingHeader("Visualization Settings", ImGuiTreeNodeFlags_None)) {
         bool config_changed = false;
         
         // Pin Display Options
-        if (igCollapsingHeader_TreeNodeFlags("Pin Display", ImGuiTreeNodeFlags_DefaultOpen)) {
-            if (igCheckbox("Show Pin Numbers", &config_.show_pin_numbers)) config_changed = true;
-            if (igCheckbox("Show Pin Labels", &config_.show_pin_labels)) config_changed = true;
-            if (igCheckbox("Show LED Indicators", &config_.show_led_indicators)) config_changed = true;
-            if (igCheckbox("Show Alternate Functions", &config_.show_alternate_functions)) config_changed = true;
-            if (igCheckbox("Show Pin Groups", &config_.show_pin_groups)) config_changed = true;
-            if (igCheckbox("Show Voltage Levels", &config_.show_voltage_levels)) config_changed = true;
-            if (igCheckbox("Show PWM Indicators", &config_.show_pwm_indicators)) config_changed = true;
+        if (ImGui::CollapsingHeader("Pin Display", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::Checkbox("Show Pin Numbers", &config_.show_pin_numbers)) config_changed = true;
+            if (ImGui::Checkbox("Show Pin Labels", &config_.show_pin_labels)) config_changed = true;
+            if (ImGui::Checkbox("Show LED Indicators", &config_.show_led_indicators)) config_changed = true;
+            if (ImGui::Checkbox("Show Alternate Functions", &config_.show_alternate_functions)) config_changed = true;
+            if (ImGui::Checkbox("Show Pin Groups", &config_.show_pin_groups)) config_changed = true;
+            if (ImGui::Checkbox("Show Voltage Levels", &config_.show_voltage_levels)) config_changed = true;
+            if (ImGui::Checkbox("Show PWM Indicators", &config_.show_pwm_indicators)) config_changed = true;
         }
         
         // Chip Display Options
-        if (igCollapsingHeader_TreeNodeFlags("Chip Display", ImGuiTreeNodeFlags_None)) {
-            if (igCheckbox("Show Package Name", &config_.show_package_name)) config_changed = true;
-            if (igCheckbox("Show Chip Markings", &config_.show_chip_markings)) config_changed = true;
-            if (igCheckbox("Show Thermal Pad", &config_.show_thermal_pad)) config_changed = true;
-            if (igCheckbox("Use Compact Layout", &config_.use_compact_layout)) config_changed = true;
+        if (ImGui::CollapsingHeader("Chip Display", ImGuiTreeNodeFlags_None)) {
+            if (ImGui::Checkbox("Show Package Name", &config_.show_package_name)) config_changed = true;
+            if (ImGui::Checkbox("Show Chip Markings", &config_.show_chip_markings)) config_changed = true;
+            if (ImGui::Checkbox("Show Thermal Pad", &config_.show_thermal_pad)) config_changed = true;
+            if (ImGui::Checkbox("Use Compact Layout", &config_.use_compact_layout)) config_changed = true;
         }
         
         // Size Controls
-        if (igCollapsingHeader_TreeNodeFlags("Sizing", ImGuiTreeNodeFlags_None)) {
-            if (igSliderFloat("Pin Width", &config_.pin_width, 4.0f, 16.0f, "%.1f", ImGuiSliderFlags_None)) config_changed = true;
-            if (igSliderFloat("Pin Height", &config_.pin_height, 6.0f, 20.0f, "%.1f", ImGuiSliderFlags_None)) config_changed = true;
-            if (igSliderFloat("Pin Spacing", &config_.pin_spacing_factor, 0.5f, 2.0f, "%.1f", ImGuiSliderFlags_None)) config_changed = true;
-            if (igSliderFloat("Font Size", &config_.font_size, 8.0f, 16.0f, "%.1f", ImGuiSliderFlags_None)) config_changed = true;
-            if (igSliderFloat("Marker Size", &config_.marker_size, 2.0f, 12.0f, "%.1f", ImGuiSliderFlags_None)) config_changed = true;
+        if (ImGui::CollapsingHeader("Sizing", ImGuiTreeNodeFlags_None)) {
+            if (ImGui::SliderFloat("Pin Width", &config_.pin_width, 4.0f, 16.0f, "%.1f", ImGuiSliderFlags_None)) config_changed = true;
+            if (ImGui::SliderFloat("Pin Height", &config_.pin_height, 6.0f, 20.0f, "%.1f", ImGuiSliderFlags_None)) config_changed = true;
+            if (ImGui::SliderFloat("Pin Spacing", &config_.pin_spacing_factor, 0.5f, 2.0f, "%.1f", ImGuiSliderFlags_None)) config_changed = true;
+            if (ImGui::SliderFloat("Font Size", &config_.font_size, 8.0f, 16.0f, "%.1f", ImGuiSliderFlags_None)) config_changed = true;
+            if (ImGui::SliderFloat("Marker Size", &config_.marker_size, 2.0f, 12.0f, "%.1f", ImGuiSliderFlags_None)) config_changed = true;
         }
         
         // Pin Notation Style
-        if (igCollapsingHeader_TreeNodeFlags("Pin Notation", ImGuiTreeNodeFlags_None)) {
+        if (ImGui::CollapsingHeader("Pin Notation", ImGuiTreeNodeFlags_None)) {
             const char* notation_items[] = {"OVERLINE", "HASH", "SLASH", "UNDERSCORE"};
             int current_notation = (int)config_.notation_style;
-            if (igCombo_Str_arr("Active-Low Style", &current_notation, notation_items, 4, -1)) {
+            if (ImGui::Combo("Active-Low Style", &current_notation, notation_items, 4, -1)) {
                 config_.notation_style = (PinNotationStyle)current_notation;
                 config_changed = true;
             }
         }
         
         // Visual Style Presets
-        if (igCollapsingHeader_TreeNodeFlags("Style Presets", ImGuiTreeNodeFlags_None)) {
+        if (ImGui::CollapsingHeader("Style Presets", ImGuiTreeNodeFlags_None)) {
             const char* style_items[] = {"CLASSIC_DARK", "MODERN_LIGHT", "HIGH_CONTRAST", "COLORBLIND_FRIENDLY"};
             int current_style = (int)config_.style;
-            if (igCombo_Str_arr("Visual Style", &current_style, style_items, 4, -1)) {
+            if (ImGui::Combo("Visual Style", &current_style, style_items, 4, -1)) {
                 config_ = ChipVisualConfig::get_style((VisualStyle)current_style);
                 config_changed = true;
             }
             
-            igSameLine(0, -1.0f);
+            ImGui::SameLine(0, -1.0f);
             ImVec2 reset_button_size = {0, 0};
-            if (igButton("Reset to Default", reset_button_size)) {
+            if (ImGui::Button("Reset to Default", reset_button_size)) {
                 config_ = ChipVisualConfig::get_default();
                 config_changed = true;
             }

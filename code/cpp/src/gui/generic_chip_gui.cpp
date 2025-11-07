@@ -1,5 +1,5 @@
 #include "generic_chip_gui.h"
-#include "cimgui_interface.h"
+#include "imgui_interface.h"
 #ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #endif
@@ -160,9 +160,9 @@ void generic_chip_gui_render_layout(generic_chip_gui_t* gui,
     }
     
     // Get drawing context
-    ImDrawList* draw_list = igGetWindowDrawList();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
     ImVec2 canvas_pos;
-    igGetCursorScreenPos(&canvas_pos);
+    ImGui::GetCursorScreenPos(&canvas_pos);
     
     // Calculate chip position and scale
     float scale = gui->config.chip_scale;
@@ -207,47 +207,47 @@ void generic_chip_gui_render_debug_panel(generic_chip_gui_t* gui,
                                         void (*render_chip_specific_content)(void* chip)) {
     if (!gui || !show_window || !*show_window) return;
     
-    if (!igBegin(window_title, show_window, 0)) {
-        igEnd();
+    if (!ImGui::Begin(window_title, show_window, 0)) {
+        ImGui::End();
         return;
     }
     
     // Create two-column layout
-    igColumns(2, "chip_debug_columns", true);
+    ImGui::Columns(2, "chip_debug_columns", true);
     
     // Left column: Chip visualization using ChipLayout
-    igText("Chip Layout");
-    igSeparator();
+    ImGui::Text("Chip Layout");
+    ImGui::Separator();
     
     ImVec2 avail_size;
-    igGetContentRegionAvail(&avail_size);
+    ImGui::GetContentRegionAvail(&avail_size);
     float layout_height = avail_size.y - 50; // Leave space for controls
     
     if (igBeginChild_Str("chip_layout", (ImVec2){avail_size.x, layout_height}, true, 0)) {
         ImVec2 child_size;
-        igGetContentRegionAvail(&child_size);
+        ImGui::GetContentRegionAvail(&child_size);
         generic_chip_gui_render_layout(gui, context, child_size.x, child_size.y);
     }
-    igEndChild();
+    ImGui::EndChild();
     
     // Layout controls
-    igCheckbox("Show Pin Numbers", &gui->config.show_pin_numbers);
-    igCheckbox("Show Pin Labels", &gui->config.show_pin_labels);
-    igCheckbox("Show Pin States", &gui->config.show_pin_states);
+    ImGui::Checkbox("Show Pin Numbers", &gui->config.show_pin_numbers);
+    ImGui::Checkbox("Show Pin Labels", &gui->config.show_pin_labels);
+    ImGui::Checkbox("Show Pin States", &gui->config.show_pin_states);
     
     // Move to right column
-    igNextColumn();
+    ImGui::NextColumn();
     
     // Right column: Chip-specific debug content
-    igText("Debug Information");
-    igSeparator();
+    ImGui::Text("Debug Information");
+    ImGui::Separator();
     
     if (render_chip_specific_content) {
         render_chip_specific_content(gui->chip_instance);
     }
     
-    igColumns(1, NULL, false);
-    igEnd();
+    ImGui::Columns(1, NULL, false);
+    ImGui::End();
 }
 
 void generic_chip_gui_render_settings_panel(generic_chip_gui_t* gui,
@@ -256,28 +256,28 @@ void generic_chip_gui_render_settings_panel(generic_chip_gui_t* gui,
                                            void (*render_chip_specific_settings)(void* chip)) {
     if (!gui || !show_window || !*show_window) return;
     
-    if (!igBegin(window_title, show_window, 0)) {
-        igEnd();
+    if (!ImGui::Begin(window_title, show_window, 0)) {
+        ImGui::End();
         return;
     }
     
-    igText("Chip Visualization Settings");
-    igSeparator();
+    ImGui::Text("Chip Visualization Settings");
+    ImGui::Separator();
     
     // Visualization options
-    igCheckbox("Show Package Outline", &gui->config.show_package_outline);
-    igCheckbox("Show Chip Markings", &gui->config.show_chip_markings);
-    igSliderFloat("Chip Scale", &gui->config.chip_scale, 0.5f, 2.0f, "%.1f", 0);
-    igSliderFloat("Pin Label Size", &gui->config.pin_label_size, 8.0f, 20.0f, "%.1f", 0);
+    ImGui::Checkbox("Show Package Outline", &gui->config.show_package_outline);
+    ImGui::Checkbox("Show Chip Markings", &gui->config.show_chip_markings);
+    ImGui::SliderFloat("Chip Scale", &gui->config.chip_scale, 0.5f, 2.0f, "%.1f", 0);
+    ImGui::SliderFloat("Pin Label Size", &gui->config.pin_label_size, 8.0f, 20.0f, "%.1f", 0);
     
-    igSeparator();
+    ImGui::Separator();
     
     // Chip-specific settings
     if (render_chip_specific_settings) {
         render_chip_specific_settings(gui->chip_instance);
     }
     
-    igEnd();
+    ImGui::End();
 }
 
 // ============================================================================
@@ -287,7 +287,7 @@ void generic_chip_gui_render_settings_panel(generic_chip_gui_t* gui,
 void generic_chip_gui_render_dip_package(const ChipLayout* layout, const chip_gui_config_t* config, float x, float y, float scale) {
     if (!layout || !config) return;
     
-    ImDrawList* draw_list = igGetWindowDrawList();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
     uint32_t package_color = config->package_color;
     
     // Simple rectangle for DIP package
@@ -311,7 +311,7 @@ void generic_chip_gui_render_dip_package(const ChipLayout* layout, const chip_gu
 void generic_chip_gui_render_pin(const ChipPin* pin, const PinSignalState* pin_state, const chip_gui_config_t* config, float x, float y, float scale) {
     if (!pin || !config) return;
     
-    ImDrawList* draw_list = igGetWindowDrawList();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
     
     // Get pin color
     uint32_t pin_color = pin_state ? 
@@ -342,7 +342,7 @@ void generic_chip_gui_render_pin(const ChipPin* pin, const PinSignalState* pin_s
 void generic_chip_gui_render_chip_markings(const ChipLayout* layout, const chip_gui_config_t* config, float x, float y, float scale) {
     if (!layout || !config) return;
     
-    ImDrawList* draw_list = igGetWindowDrawList();
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
     
     // Render part number
     if (layout->markings.show_part_number && layout->markings.part_number) {

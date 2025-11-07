@@ -1,91 +1,12 @@
 #include <SDL.h>
 #include <SDL_opengl.h>
-#ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#endif
-#include <cimgui.h>
 
-// ============================================================================
-// CIMGUI VERSION COMPATIBILITY LAYER
-// ============================================================================
-// This handles API differences between different versions of cimgui/ImGui.
-// Our vendored cimgui currently uses ImTextureRef in igImage(). We default
-// to that calling convention, but allow opting into ImTextureID via a define.
+// Native Dear ImGui C++ headers
+#include "imgui.h"
+#include "imgui_impl_sdl2.h"
+#include "imgui_impl_opengl3.h"
 
-// Detect API from environment/headers
-#ifndef CIMGUI_IMAGE_USES_ID
-    // Multi-tier detection strategy for cimgui API compatibility
-    
-    // Tier 1: Compiler-specific detection
-    #if defined(_MSC_VER)
-        // MSVC environment: Our cimgui version appears to use ImTextureID directly
-        // Based on compilation errors, ImTextureRef is not available in this environment
-        #define CIMGUI_IMAGE_USES_ID 1
-    #elif defined(__cplusplus)
-        // C++ detection: try to use ImTextureRef in a decltype expression
-        #if __has_include(<cimgui.h>) && defined(CIMGUI_DEFINE_ENUMS_AND_STRUCTS)
-            // We have cimgui.h and struct definitions - check if ImTextureRef exists
-            #ifdef __has_builtin
-                #if __has_builtin(__builtin_types_compatible_p)
-                    // Use GCC/Clang builtin to detect if ImTextureRef type exists
-                    #define CIMGUI_IMAGE_USES_ID 0
-                #else
-                    #define CIMGUI_IMAGE_USES_ID 0  // Default to ImTextureRef for recent cimgui
-                #endif
-            #else
-                #define CIMGUI_IMAGE_USES_ID 0  // Default to ImTextureRef for recent cimgui
-            #endif
-        #else
-            #define CIMGUI_IMAGE_USES_ID 1  // Fallback to ImTextureID
-        #endif
-    #else
-        // C detection: Use preprocessor tricks to detect ImTextureRef
-        #if defined(CIMGUI_DEFINE_ENUMS_AND_STRUCTS)
-            // Try to detect by checking if we can reference ImTextureRef
-            // This is a compile-time check that works with most compilers
-            #define CIMGUI_TRY_IMTEXTUREREF_TEST(x) sizeof(x)
-            #ifdef ImTextureRef
-                // Direct macro check - ImTextureRef is defined
-                #define CIMGUI_IMAGE_USES_ID 0
-            #else
-                // Alternative: check if the struct definition suggests ImTextureRef usage
-                // Most modern cimgui versions (2023+) use ImTextureRef
-                #define CIMGUI_IMAGE_USES_ID 0
-            #endif
-        #else
-            // No struct definitions - assume older API
-            #define CIMGUI_IMAGE_USES_ID 1
-        #endif
-    #endif
-    
-    // Tier 2: Environment-specific overrides
-    // If we're in a known environment, use specific settings
-    #ifdef CIMGUI_VERSION
-        // If cimgui provides version info, use it
-        #if CIMGUI_VERSION >= 10800  // Version 1.88+
-            #undef CIMGUI_IMAGE_USES_ID
-            #define CIMGUI_IMAGE_USES_ID 0
-        #endif
-    #endif
-    
-    // Tier 3: Final fallback based on what we detected in headers
-    #ifndef CIMGUI_IMAGE_USES_ID
-        #define CIMGUI_IMAGE_USES_ID 0  // Safe default for non-MSVC environments
-    #endif
-#endif
-
-// Default: use ImTextureRef-based API (as found in our cimgui version)
-#if !CIMGUI_IMAGE_USES_ID
-    #define CIMGUI_IMAGE_CALL(tex_id, size, uv0, uv1) \
-        igImage((ImTextureRef){._TexData = NULL, ._TexID = (ImTextureID)(intptr_t)(tex_id)}, size, uv0, uv1)
-#else
-    // Alternative: direct ImTextureID-based API (for older/different cimgui versions)
-    // This version expects only 4 parameters: texture_id, size, uv0, uv1
-    #define CIMGUI_IMAGE_CALL(tex_id, size, uv0, uv1) \
-        igImage((ImTextureID)(intptr_t)(tex_id), size, uv0, uv1)
-#endif
-
-#include "cimgui_interface.h"
+#include "imgui_interface.h"
 #include "../systems/c64/c64.h"
 #include "../systems/c64/c64_bus.h"
 #include "../systems/c64/c64_config.h"
@@ -140,27 +61,27 @@ bool gui_init(const char* window_title, int width, int height) {
     SDL_ShowWindow(g_window);
 
     // Setup Dear ImGui context
-    igCreateContext(NULL);
-    ImGuiIO* io = igGetIO_Nil();
-    io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-    io->ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 
     // Setup Dear ImGui style
-    igStyleColorsDark(NULL);
+    ImGui::StyleColorsDark();
     
     // Custom color scheme for C64 aesthetic
-    ImGuiStyle* style = igGetStyle();
-    style->Colors[ImGuiCol_WindowBg] = (ImVec4){0.06f, 0.06f, 0.2f, 0.95f};
-    style->Colors[ImGuiCol_Header] = (ImVec4){0.2f, 0.2f, 0.8f, 0.8f};
-    style->Colors[ImGuiCol_HeaderHovered] = (ImVec4){0.3f, 0.3f, 0.9f, 0.8f};
-    style->Colors[ImGuiCol_HeaderActive] = (ImVec4){0.4f, 0.4f, 1.0f, 0.8f};
-    style->Colors[ImGuiCol_Button] = (ImVec4){0.2f, 0.2f, 0.7f, 0.6f};
-    style->Colors[ImGuiCol_ButtonHovered] = (ImVec4){0.3f, 0.3f, 0.8f, 0.8f};
-    style->Colors[ImGuiCol_ButtonActive] = (ImVec4){0.4f, 0.4f, 0.9f, 1.0f};
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.06f, 0.06f, 0.2f, 0.95f);
+    style.Colors[ImGuiCol_Header] = ImVec4(0.2f, 0.2f, 0.8f, 0.8f);
+    style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.3f, 0.3f, 0.9f, 0.8f);
+    style.Colors[ImGuiCol_HeaderActive] = ImVec4(0.4f, 0.4f, 1.0f, 0.8f);
+    style.Colors[ImGuiCol_Button] = ImVec4(0.2f, 0.2f, 0.7f, 0.6f);
+    style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.3f, 0.3f, 0.8f, 0.8f);
+    style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.4f, 0.4f, 0.9f, 1.0f);
 
     // Setup Platform/Renderer backends
-    ImGui_ImplSDL2_InitForOpenGL_C(g_window, g_gl_context);
-    ImGui_ImplOpenGL3_Init_C(glsl_version);
+    ImGui_ImplSDL2_InitForOpenGL(g_window, g_gl_context);
+    ImGui_ImplOpenGL3_Init(glsl_version);
 
     return true;
 }
@@ -169,7 +90,7 @@ void gui_cleanup(void) {
     // Cleanup ImGui
     ImGui_ImplOpenGL3_Shutdown_C();
     ImGui_ImplSDL2_Shutdown_C();
-    igDestroyContext(NULL);
+    ImGui::DestroyContext(NULL);
 
     if (g_gl_context) {
         SDL_GL_DeleteContext(g_gl_context);
@@ -193,7 +114,8 @@ bool gui_should_quit(void) {
 void gui_handle_events(gui_emulation_context_t* emu_context) {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
-        ImGui_ImplSDL2_ProcessEvent_C(&event);        if (event.type == SDL_QUIT) {
+        ImGui_ImplSDL2_ProcessEvent(&event);
+        if (event.type == SDL_QUIT) {
             g_should_quit = true;
             // Stop emulation when window is closed
             if (emu_context) {
@@ -264,7 +186,7 @@ void gui_render_frame(c64_t* c64, gui_state_t* gui_state, gui_emulation_context_
     // Start the Dear ImGui frame
     ImGui_ImplOpenGL3_NewFrame_C();
     ImGui_ImplSDL2_NewFrame_C();
-    igNewFrame();
+    ImGui::NewFrame();
 
     // Initialize screen display if needed
     if (gui_state->screen_texture_id == 0) {
@@ -313,28 +235,29 @@ void gui_render_frame(c64_t* c64, gui_state_t* gui_state, gui_emulation_context_
     }
 
     // Rendering
-    igRender();
-    ImGuiIO* io = igGetIO_Nil();
-    glViewport(0, 0, (int)io->DisplaySize.x, (int)io->DisplaySize.y);
+    ImGui::Render();
+    ImGuiIO& io = ImGui::GetIO();
+    glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
     glClearColor(0.0f, 0.0f, 0.2f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-    ImGui_ImplOpenGL3_RenderDrawData_C(igGetDrawData());    SDL_GL_SwapWindow(g_window);
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    SDL_GL_SwapWindow(g_window);
 }
 
 void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_context_t* emu_context) {
-    if (igBeginMainMenuBar()) {
-        if (igBeginMenu("File", true)) {
-            if (igMenuItem_Bool("Load ROM...", NULL, false, true)) {
+    if (ImGui::BeginMainMenuBar()) {
+        if (ImGui::BeginMenu("File")) {
+            if (ImGui::MenuItem("Load ROM...")) {
                 // TODO: Open file dialog
             }
-            if (igMenuItem_Bool("Load Disk Image...", NULL, false, true)) {
+            if (ImGui::MenuItem("Load Disk Image...")) {
                 // TODO: Open file dialog
             }
-            if (igMenuItem_Bool("Load Cartridge...", NULL, false, true)) {
+            if (ImGui::MenuItem("Load Cartridge...")) {
                 // TODO: Open file dialog
             }
-            igSeparator();
-            if (igMenuItem_Bool("Exit", NULL, false, true)) {
+            ImGui::Separator();
+            if (ImGui::MenuItem("Exit")) {
                 g_should_quit = true;
                 // Stop emulation when File > Exit is selected
                 if (emu_context && emu_context->thread_running) {
@@ -346,21 +269,21 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
                     gui_emulation_send_signal(emu_context, EMU_SIGNAL_QUIT);
                 }
             }
-            igEndMenu();
+            ImGui::EndMenu();
         }
         
-        if (igBeginMenu("Emulation", true)) {
-            if (igMenuItem_Bool("Reset", NULL, false, emu_context != NULL)) {
+        if (ImGui::BeginMenu("Emulation")) {
+            if (ImGui::MenuItem("Reset", nullptr, false, emu_context != nullptr)) {
                 if (emu_context) {
                     gui_emulation_reset(emu_context);
                     printf("GUI: Reset signal sent\n");
                 }
             }
-            igSeparator();
+            ImGui::Separator();
               // Start/Pause button
             bool is_running = emu_context ? (emu_context->current_state == EMU_STATE_RUNNING) : gui_state->emulation_running;
             const char* run_pause_text = is_running ? "Pause" : "Start";
-            if (igMenuItem_Bool(run_pause_text, NULL, false, emu_context != NULL)) {
+            if (ImGui::MenuItem(run_pause_text, nullptr, false, emu_context != nullptr)) {
                 if (emu_context) {
                     if (is_running) {
                         gui_emulation_pause(emu_context);
@@ -375,50 +298,50 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
             }
             
             // Single step button
-            if (igMenuItem_Bool("Single Step", NULL, false, emu_context != NULL && !gui_state->emulation_running)) {
+            if (ImGui::MenuItem("Single Step", nullptr, false, emu_context != nullptr && !gui_state->emulation_running)) {
                 if (emu_context) {
                     gui_emulation_step(emu_context);
                     printf("GUI: Step signal sent\n");
                 }
             }
             
-            igSeparator();
+            ImGui::Separator();
             
             // Speed control
             if (emu_context) {
                 static float speed_multiplier = 1.0f;
-                if (igSliderFloat("Speed", &speed_multiplier, 0.1f, 5.0f, "%.1fx", ImGuiSliderFlags_None)) {
+                if (ImGui::SliderFloat("Speed", &speed_multiplier, 0.1f, 5.0f, "%.1fx")) {
                     gui_emulation_set_speed(emu_context, speed_multiplier);
                 }
             }
 
             // CPU mode controls
-            igSeparator();
+            ImGui::Separator();
             if (c64) {
                 // Simplified CPU mode display (dual CPU functionality removed)
-                igText("CPU Mode: Modern C++ Core");
-                igText("Status: Active");
+                ImGui::Text("CPU Mode: Modern C++ Core");
+                ImGui::Text("Status: Active");
             }
             
-            igEndMenu();
+            ImGui::EndMenu();
         }
         
-        if (igBeginMenu("View", true)) {
-            igMenuItem_BoolPtr("Screen Display", NULL, &gui_state->show_screen, true);
-            igMenuItem_BoolPtr("Memory Viewer", NULL, &gui_state->show_memory_viewer, true);
-            igMenuItem_BoolPtr("Debugger", NULL, &gui_state->show_debugger, true);
+        if (ImGui::BeginMenu("View")) {
+            ImGui::MenuItem("Screen Display", nullptr, &gui_state->show_screen);
+            ImGui::MenuItem("Memory Viewer", nullptr, &gui_state->show_memory_viewer);
+            ImGui::MenuItem("Debugger", nullptr, &gui_state->show_debugger);
             
-            igEndMenu();
+            ImGui::EndMenu();
         }
 
-        if (igBeginMenu("Chips", true)) {
+        if (ImGui::BeginMenu("Chips")) {
             // Remove special handling for PLA debug since it's now handled by the chip system
             // Add chip debug windows organized by categories
             if (c64 && c64->system.chip_count > 0) {
-                igSeparator();
+                ImGui::Separator();
                 
                 // CPU category
-                if (igBeginMenu("CPU", true)) {
+                if (ImGui::BeginMenu("CPU")) {
                     for (uint8_t chip_id = 0; chip_id < c64->system.chip_count && chip_id < 16; chip_id++) {
                         chip_entry_t* entry = &c64->system.chips[chip_id];
                         if (entry->desc && entry->desc->render_debug_window) {
@@ -430,16 +353,16 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
                                 igPushID_Int(chip_id);
                                 char menu_label[64];
                                 snprintf(menu_label, sizeof(menu_label), "%s", desc);
-                                igMenuItem_BoolPtr(menu_label, NULL, &gui_state->show_chip_debug[chip_id], true);
-                                igPopID();
+                                ImGui::MenuItem(menu_label, NULL, &gui_state->show_chip_debug[chip_id]);
+                                ImGui::PopID();
                             }
                         }
                     }
-                    igEndMenu();
+                    ImGui::EndMenu();
                 }
                 
                 // Memory & Logic category
-                if (igBeginMenu("Memory & Logic", true)) {
+                if (ImGui::BeginMenu("Memory & Logic")) {
                     for (uint8_t chip_id = 0; chip_id < c64->system.chip_count && chip_id < 16; chip_id++) {
                         chip_entry_t* entry = &c64->system.chips[chip_id];
                         if (entry->desc && entry->desc->render_debug_window) {
@@ -449,16 +372,16 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
                                 igPushID_Int(chip_id);
                                 char menu_label[64];
                                 snprintf(menu_label, sizeof(menu_label), "%s", desc);
-                                igMenuItem_BoolPtr(menu_label, NULL, &gui_state->show_chip_debug[chip_id], true);
-                                igPopID();
+                                ImGui::MenuItem(menu_label, NULL, &gui_state->show_chip_debug[chip_id]);
+                                ImGui::PopID();
                             }
                         }
                     }
-                    igEndMenu();
+                    ImGui::EndMenu();
                 }
                 
                 // I/O & Peripherals category
-                if (igBeginMenu("I/O & Peripherals", true)) {
+                if (ImGui::BeginMenu("I/O & Peripherals")) {
                     if (c64->mos6510)
                         fam65xx_update_bus_state((mos6510_t*)(c64->mos6510), c64->bus.state);
 
@@ -472,25 +395,25 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
                                 igPushID_Int(chip_id);
                                 char menu_label[64];
                                 snprintf(menu_label, sizeof(menu_label), "%s", desc);
-                                igMenuItem_BoolPtr(menu_label, NULL, &gui_state->show_chip_debug[chip_id], true);
-                                igPopID();
+                                ImGui::MenuItem(menu_label, NULL, &gui_state->show_chip_debug[chip_id]);
+                                ImGui::PopID();
                             }
                         }
                     }
-                    igEndMenu();
+                    ImGui::EndMenu();
                 }
             }
             
-            igEndMenu();
+            ImGui::EndMenu();
         }
 
-        if (igBeginMenu("Screen", true)) {
-            igText("Display Controls");
-            igSeparator();
+        if (ImGui::BeginMenu("Screen")) {
+            ImGui::Text("Display Controls");
+            ImGui::Separator();
             
-            igSliderFloat("Scale", &gui_state->screen_scale, 0.5f, 4.0f, "%.1fx", ImGuiSliderFlags_None);
-            igCheckbox("Filter", &gui_state->screen_filter);
-            igCheckbox("Scanlines", &gui_state->screen_scanlines);
+            ImGui::SliderFloat("Scale", &gui_state->screen_scale, 0.5f, 4.0f, "%.1fx", ImGuiSliderFlags_None);
+            ImGui::Checkbox("Filter", &gui_state->screen_filter);
+            ImGui::Checkbox("Scanlines", &gui_state->screen_scanlines);
             
             // Update texture filtering based on user preference
             if (gui_state->screen_texture_id != 0) {
@@ -504,8 +427,8 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
                 }
             }
             
-            igSeparator();
-            igText("Aspect Ratio & Scaling");
+            ImGui::Separator();
+            ImGui::Text("Aspect Ratio & Scaling");
             
             // Aspect ratio mode selection
             const char* aspect_ratio_items[] = {
@@ -518,7 +441,7 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
             
             // Custom aspect ratio input (only shown when Custom is selected)
             if (gui_state->aspect_ratio_mode == ASPECT_RATIO_CUSTOM) {
-                igSliderFloat("Custom Ratio", &gui_state->custom_aspect_ratio, 0.5f, 3.0f, "%.2f", ImGuiSliderFlags_None);
+                ImGui::SliderFloat("Custom Ratio", &gui_state->custom_aspect_ratio, 0.5f, 3.0f, "%.2f", ImGuiSliderFlags_None);
             }
             
             // Scaling mode selection
@@ -531,16 +454,16 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
             }
             
             // Additional options
-            igCheckbox("Maintain Pixel Aspect", &gui_state->maintain_pixel_aspect);
-            igCheckbox("Show Overscan/Border", &gui_state->show_overscan);
-            igCheckbox("Center Display", &gui_state->center_display);
-            igCheckbox("Show Invisible Area", &gui_state->show_invisible_area);
+            ImGui::Checkbox("Maintain Pixel Aspect", &gui_state->maintain_pixel_aspect);
+            ImGui::Checkbox("Show Overscan/Border", &gui_state->show_overscan);
+            ImGui::Checkbox("Center Display", &gui_state->center_display);
+            ImGui::Checkbox("Show Invisible Area", &gui_state->show_invisible_area);
             
             // Debug: VIC-II color cycling
-            igSeparator();
-            igText("Debug Features:");
+            ImGui::Separator();
+            ImGui::Text("Debug Features:");
             static bool color_cycle_enabled = false;
-            igCheckbox("Cycle Background Color", &color_cycle_enabled);
+            ImGui::Checkbox("Cycle Background Color", &color_cycle_enabled);
             
             // Implement background color cycling
             if (color_cycle_enabled && c64 && c64->vicii) {
@@ -561,74 +484,74 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
                     current_bg_color = (current_bg_color + 1) % 16;
                     last_cycle_time = current_time;
                 }
-                igText("Current BG Color: %d", (current_bg_color + 15) % 16); // Show the current one
+                ImGui::Text("Current BG Color: %d", (current_bg_color + 15) % 16); // Show the current one
             }
             
             // Host DPI information
-            igSeparator();
-            igText("Host DPI Scale: %.2f", gui_state->host_dpi_scale);
+            ImGui::Separator();
+            ImGui::Text("Host DPI Scale: %.2f", gui_state->host_dpi_scale);
             
-            igSeparator();
+            ImGui::Separator();
             
             // Display information - use the constants that are defined later in the file
-            igText("Resolution: 320x200");
-            igText("With border: 403x284");
+            ImGui::Text("Resolution: 320x200");
+            ImGui::Text("With border: 403x284");
             
             if (c64) {
-                igText("Frame: %llu", c64->total_cycles / 20000);
+                ImGui::Text("Frame: %llu", c64->total_cycles / 20000);
             }
             
-            igEndMenu();
+            ImGui::EndMenu();
         }
 
-        if (igBeginMenu("Chips", true)) {
+        if (ImGui::BeginMenu("Chips")) {
             if (c64 && c64->system.chip_count > 0) {
-                if (igBeginMenu("Debug Windows", true)) {
+                if (ImGui::BeginMenu("Debug Windows")) {
                     for (uint8_t chip_id = 0; chip_id < c64->system.chip_count && chip_id < 16; chip_id++) {
                         chip_entry_t* entry = &c64->system.chips[chip_id];
                         if (entry->desc && entry->desc->render_debug_window) {
                             igPushID_Int(chip_id); // Push unique ID for each chip
                             char menu_label[64];
                             snprintf(menu_label, sizeof(menu_label), "%s Debug", entry->desc->description);
-                            igMenuItem_BoolPtr(menu_label, NULL, &gui_state->show_chip_debug[chip_id], true);
-                            igPopID(); // Pop chip ID
+                            ImGui::MenuItem(menu_label, NULL, &gui_state->show_chip_debug[chip_id]);
+                            ImGui::PopID(); // Pop chip ID
                         }
                     }
-                    igEndMenu();
+                    ImGui::EndMenu();
                 }
                 
-                if (igBeginMenu("Settings Windows", true)) {
+                if (ImGui::BeginMenu("Settings Windows")) {
                     for (uint8_t chip_id = 0; chip_id < c64->system.chip_count && chip_id < 16; chip_id++) {
                         chip_entry_t* entry = &c64->system.chips[chip_id];
                         if (entry->desc && entry->desc->render_settings_window) {
                             igPushID_Int(chip_id); // Push unique ID for each chip
                             char menu_label[64];
                             snprintf(menu_label, sizeof(menu_label), "%s Settings", entry->desc->description);
-                            igMenuItem_BoolPtr(menu_label, NULL, &gui_state->show_chip_settings[chip_id], true);
-                            igPopID(); // Pop chip ID
+                            ImGui::MenuItem(menu_label, NULL, &gui_state->show_chip_settings[chip_id]);
+                            ImGui::PopID(); // Pop chip ID
                         }
                     }
-                    igEndMenu();
+                    ImGui::EndMenu();
                 }
             } else {
-                igMenuItem_Bool("No chips available", NULL, false, false);
+                ImGui::MenuItem("No chips available", NULL, false, false);
             }
-            igEndMenu();
+            ImGui::EndMenu();
         }
         
-        if (igBeginMenu("Settings", true)) {
-            igMenuItem_BoolPtr("Preferences", NULL, &gui_state->show_settings, true);
-            igEndMenu();
+        if (ImGui::BeginMenu("Settings")) {
+            ImGui::MenuItem("Preferences", NULL, &gui_state->show_settings);
+            ImGui::EndMenu();
         }
         
-        if (igBeginMenu("Help", true)) {
-            igMenuItem_BoolPtr("About", NULL, &gui_state->show_about, true);
-            igEndMenu();
+        if (ImGui::BeginMenu("Help")) {
+            ImGui::MenuItem("About", NULL, &gui_state->show_about);
+            ImGui::EndMenu();
         }
           // Status bar on the right
-         igSameLine(igGetWindowWidth() - 450, -1.0f);
-         igText("Cycles: %llu", c64 ? c64->total_cycles : 0);
-         igSameLine(0, -1.0f);
+         ImGui::SameLine(ImGui::GetWindowWidth() - 450, -1.0f);
+         ImGui::Text("Cycles: %llu", c64 ? c64->total_cycles : 0);
+         ImGui::SameLine(0, -1.0f);
 
          // CPU mode + perf metrics (instantaneous)
          static uint32_t last_metrics_time = 0;
@@ -645,10 +568,10 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
                  last_fps_time = now;
              }
              
-             igText("Mode: C++");
-             igSameLine(0, -1.0f);
-             igText("Cycles: %llu", c64->total_cycles);
-             igSameLine(0, -1.0f);
+             ImGui::Text("Mode: C++");
+             ImGui::SameLine(0, -1.0f);
+             ImGui::Text("Cycles: %llu", c64->total_cycles);
+             ImGui::SameLine(0, -1.0f);
          }
 
          // Show actual emulation state from context if available
@@ -658,28 +581,28 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
                  emu_context->current_state == EMU_STATE_PAUSED ? "Paused" :
                  emu_context->current_state == EMU_STATE_STEPPING ? "Stepping" :
                  emu_context->current_state == EMU_STATE_STOPPED ? "Stopped" : "Unknown";
-             igText("%s", state_text);
+             ImGui::Text("%s", state_text);
          } else {
-             igText("%s", gui_state->emulation_running ? "Running" : "Paused");
+             ImGui::Text("%s", gui_state->emulation_running ? "Running" : "Paused");
          }
          
-         igEndMainMenuBar();
+         ImGui::EndMainMenuBar();
     }
 }
 
 void gui_render_memory_viewer(c64_t* c64, gui_state_t* gui_state) {
-    if (!igBegin("Memory Viewer", &gui_state->show_memory_viewer, 0)) {
-        igEnd();
+    if (!ImGui::Begin("Memory Viewer", &gui_state->show_memory_viewer, 0)) {
+        ImGui::End();
         return;
     }
 
     // Address input
-    igInputInt("Address", (int*)&gui_state->memory_address, 1, 16, ImGuiInputTextFlags_CharsHexadecimal);
+    ImGui::InputInt("Address", (int*)&gui_state->memory_address, 1, 16, ImGuiInputTextFlags_CharsHexadecimal);
     gui_state->memory_address &= 0xFFFF; // Keep within 16-bit range
     
-    igSliderInt("Columns", &gui_state->memory_columns, 8, 32, "%d", ImGuiSliderFlags_None);
+    ImGui::SliderInt("Columns", &gui_state->memory_columns, 8, 32, "%d", ImGuiSliderFlags_None);
     
-    igSeparator();
+    ImGui::Separator();
     
     // Memory display
     if (c64) {
@@ -688,72 +611,72 @@ void gui_render_memory_viewer(c64_t* c64, gui_state_t* gui_state) {
         
         for (int row = 0; row < 16; row++) {
             uint16_t addr = gui_state->memory_address + (row * gui_state->memory_columns);
-            igText("%04X: ", addr);
+            ImGui::Text("%04X: ", addr);
             
             for (int col = 0; col < gui_state->memory_columns; col++) {
                 uint16_t byte_addr = addr + col;
                 if (col >= gui_state->memory_columns || addr + col > 0xFFFF) break;
                 // Read memory through proper C64 bus mapping
                 uint8_t byte_value = c64_bus_read_cycle(&(c64->bus), byte_addr);
-                igSameLine(0, -1.0f);
-                igText("%02X", byte_value);
+                ImGui::SameLine(0, -1.0f);
+                ImGui::Text("%02X", byte_value);
             }
         }
         
-        igEndChild();
+        ImGui::EndChild();
     } else {
-        igText("C64 system not initialized");
+        ImGui::Text("C64 system not initialized");
     }
 
-    igEnd();
+    ImGui::End();
 }
 
 void gui_render_debugger(c64_t* c64, gui_state_t* gui_state, gui_emulation_context_t* emu_context) {
-    if (!igBegin("Debugger", &gui_state->show_debugger, 0)) {
-        igEnd();
+    if (!ImGui::Begin("Debugger", &gui_state->show_debugger, 0)) {
+        ImGui::End();
         return;
     }
     // Emulation state display
     if (emu_context) {
-        igText("Emulation State: %s",
+        ImGui::Text("Emulation State: %s",
                emu_context->current_state == EMU_STATE_RUNNING ? "Running" :
                emu_context->current_state == EMU_STATE_PAUSED ? "Paused" :
                emu_context->current_state == EMU_STATE_STEPPING ? "Stepping" :
                emu_context->current_state == EMU_STATE_STOPPED ? "Stopped" : "Unknown");
-        igText("FPS: %u", emu_context->actual_fps);
-        igText("Total Cycles: %llu", emu_context->total_cycles_executed);
-        igSeparator();
+        ImGui::Text("FPS: %u", emu_context->actual_fps);
+        ImGui::Text("Total Cycles: %llu", emu_context->total_cycles_executed);
+        ImGui::Separator();
         
         // System initialization status
-        igText("System Status:");
+        ImGui::Text("System Status:");
         if (c64) {
-            igText("CPU: %s", c64->mos6510 ? "Initialized" : "NOT INITIALIZED");
-            igText("Bus: %s", "Attached");
-            igText("RAM: %s", c64->ram ? "Available" : "NOT AVAILABLE");
+            ImGui::Text("CPU: %s", c64->mos6510 ? "Initialized" : "NOT INITIALIZED");
+            ImGui::Text("Bus: %s", "Attached");
+            ImGui::Text("RAM: %s", c64->ram ? "Available" : "NOT AVAILABLE");
               // Check reset vector
             if (c64) {
                 // Read reset vector through proper memory mapping (ROM or RAM depending on banking)
                 uint8_t reset_low = c64_bus_read_cycle(&(c64->bus), 0xFFFC);
                 uint8_t reset_high = c64_bus_read_cycle(&(c64->bus), 0xFFFD);
                 uint16_t reset_vector = (reset_high << 8) | reset_low;
-                igText("Reset Vector: $%04X %s", reset_vector, 
+                ImGui::Text("Reset Vector: $%04X %s", reset_vector, 
                        reset_vector == 0x0000 ? "(NO ROM)" : "(ROM LOADED)");
             } else {
-                igText("Reset Vector: N/A");
+                ImGui::Text("Reset Vector: N/A");
             }
         } else {
-            igText("C64 System: NOT INITIALIZED");
+            ImGui::Text("C64 System: NOT INITIALIZED");
         }
-        igSeparator();
+        ImGui::Separator();
     }
 
     // Execution controls
-    igText("Execution Control");
+    ImGui::Text("Execution Control");
       if (emu_context) {
         // Start/Pause button
         bool is_running = (emu_context->current_state == EMU_STATE_RUNNING);
         const char* run_pause_text = is_running ? "Pause" : "Run";
-        if (igButton(run_pause_text, (ImVec2){60, 0})) {
+        if (ImGui::Button(run_pause_text, (ImVec2){60, 0})) {
             if (is_running) {
                 gui_emulation_pause(emu_context);
                 printf("Debugger: Pause signal sent\n");
@@ -763,46 +686,46 @@ void gui_render_debugger(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
             }
         }
         
-        igSameLine(0, -1.0f);
-        if (igButton("Step", (ImVec2){60, 0})) {
+        ImGui::SameLine(0, -1.0f);
+        if (ImGui::Button("Step", (ImVec2){60, 0})) {
             gui_emulation_step(emu_context);
             printf("Debugger: Step signal sent\n");
         }
         
-        igSameLine(0, -1.0f);
-        if (igButton("Reset", (ImVec2){60, 0})) {
+        ImGui::SameLine(0, -1.0f);
+        if (ImGui::Button("Reset", (ImVec2){60, 0})) {
             gui_emulation_reset(emu_context);
             printf("Debugger: Reset signal sent\n");
         }
     } else {
-        igText("Emulation context not available");
+        ImGui::Text("Emulation context not available");
     }
     
-    igSeparator();
+    ImGui::Separator();
     
     // Breakpoint controls
-    igText("Breakpoints");
-    igInputInt("Address", (int*)&gui_state->breakpoint_address, 1, 16, ImGuiInputTextFlags_CharsHexadecimal);
+    ImGui::Text("Breakpoints");
+    ImGui::InputInt("Address", (int*)&gui_state->breakpoint_address, 1, 16, ImGuiInputTextFlags_CharsHexadecimal);
     gui_state->breakpoint_address &= 0xFFFF;
     
-    igSameLine(0, -1.0f);
-    if (igButton("Add", (ImVec2){0, 0})) {
+    ImGui::SameLine(0, -1.0f);
+    if (ImGui::Button("Add", (ImVec2){0, 0})) {
         gui_state->breakpoint_enabled = true;
         // TODO: Set breakpoint in emulator
         printf("Breakpoint set at $%04X\n", gui_state->breakpoint_address);
     }
     
-    igSameLine(0, -1.0f);
-    if (igButton("Clear All", (ImVec2){0, 0})) {
+    ImGui::SameLine(0, -1.0f);
+    if (ImGui::Button("Clear All", (ImVec2){0, 0})) {
         gui_state->breakpoint_enabled = false;
         // TODO: Clear all breakpoints
         printf("All breakpoints cleared\n");
     }
     
-    igSeparator();
+    ImGui::Separator();
     
     // Disassembly view
-    igText("Disassembly");
+    ImGui::Text("Disassembly");
     ImVec2 child_size = {0, 0};
     igBeginChild_Str("DisassemblyView", child_size, true, 0);
     
@@ -810,52 +733,52 @@ void gui_render_debugger(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
         // TODO: Show disassembled code around current PC
         for (int i = 0; i < 20; i++) {
             uint16_t addr = 0x8000 + i;
-            igText("%04X: LDA #$42", addr);
+            ImGui::Text("%04X: LDA #$42", addr);
         }
     } else {
-        igText("C64 system not initialized");
+        ImGui::Text("C64 system not initialized");
     }
     
-    igEndChild();
+    ImGui::EndChild();
 
-    igEnd();
+    ImGui::End();
 }
 
 void gui_render_settings(c64_t* c64, gui_state_t* gui_state) {
-    if (!igBegin("Settings", &gui_state->show_settings, 0)) {
-        igEnd();
+    if (!ImGui::Begin("Settings", &gui_state->show_settings, 0)) {
+        ImGui::End();
         return;
     }
 
-    igText("Emulation Settings");
-    igSeparator();
+    ImGui::Text("Emulation Settings");
+    ImGui::Separator();
     
-    igSliderInt("Target FPS", &gui_state->target_fps, 25, 120, "%d", ImGuiSliderFlags_None);
-    igSliderFloat("Emulation Speed", &gui_state->emulation_speed, 0.1f, 10.0f, "%.1fx", ImGuiSliderFlags_None);
+    ImGui::SliderInt("Target FPS", &gui_state->target_fps, 25, 120, "%d", ImGuiSliderFlags_None);
+    ImGui::SliderFloat("Emulation Speed", &gui_state->emulation_speed, 0.1f, 10.0f, "%.1fx", ImGuiSliderFlags_None);
     
-    igSeparator();
-    igText("ROM Files");
+    ImGui::Separator();
+    ImGui::Text("ROM Files");
     
-    igInputText("BASIC ROM", gui_state->rom_path_basic, sizeof(gui_state->rom_path_basic), 0, NULL, NULL);
-    igSameLine(0, -1.0f);
-    if (igButton("Browse##basic", (ImVec2){0, 0})) {
+    ImGui::InputText("BASIC ROM", gui_state->rom_path_basic, sizeof(gui_state->rom_path_basic), 0, NULL, NULL);
+    ImGui::SameLine(0, -1.0f);
+    if (ImGui::Button("Browse##basic", (ImVec2){0, 0})) {
         // TODO: File dialog
     }
     
-    igInputText("KERNAL ROM", gui_state->rom_path_kernal, sizeof(gui_state->rom_path_kernal), 0, NULL, NULL);
-    igSameLine(0, -1.0f);
-    if (igButton("Browse##kernal", (ImVec2){0, 0})) {
+    ImGui::InputText("KERNAL ROM", gui_state->rom_path_kernal, sizeof(gui_state->rom_path_kernal), 0, NULL, NULL);
+    ImGui::SameLine(0, -1.0f);
+    if (ImGui::Button("Browse##kernal", (ImVec2){0, 0})) {
         // TODO: File dialog
     }
     
-    igInputText("Character ROM", gui_state->rom_path_chargen, sizeof(gui_state->rom_path_chargen), 0, NULL, NULL);
-    igSameLine(0, -1.0f);
-    if (igButton("Browse##chargen", (ImVec2){0, 0})) {
+    ImGui::InputText("Character ROM", gui_state->rom_path_chargen, sizeof(gui_state->rom_path_chargen), 0, NULL, NULL);
+    ImGui::SameLine(0, -1.0f);
+    if (ImGui::Button("Browse##chargen", (ImVec2){0, 0})) {
         // TODO: File dialog
     }
-      igSeparator();
+      ImGui::Separator();
     
-    if (igButton("Reload ROMs", (ImVec2){0, 0})) {
+    if (ImGui::Button("Reload ROMs", (ImVec2){0, 0})) {
         if (c64) {
             if (gui_reload_roms_from_state(c64, gui_state)) {
                 printf("ROMs reloaded successfully from GUI settings\n");
@@ -866,47 +789,47 @@ void gui_render_settings(c64_t* c64, gui_state_t* gui_state) {
             printf("Cannot reload ROMs: C64 system not initialized\n");
         }
     }
-    igSameLine(0, -1.0f);
-    if (igButton("Apply Settings", (ImVec2){0, 0})) {
+    ImGui::SameLine(0, -1.0f);
+    if (ImGui::Button("Apply Settings", (ImVec2){0, 0})) {
         // TODO: Apply other settings to emulator
     }
-    igSameLine(0, -1.0f);
-    if (igButton("Reset to Defaults", (ImVec2){0, 0})) {
+    ImGui::SameLine(0, -1.0f);
+    if (ImGui::Button("Reset to Defaults", (ImVec2){0, 0})) {
         gui_init_state(gui_state);
     }
 
-    igEnd();
+    ImGui::End();
 }
 
 void gui_render_about(gui_state_t* gui_state) {
-    if (!igBegin("About", &gui_state->show_about, 0)) {
-        igEnd();
+    if (!ImGui::Begin("About", &gui_state->show_about, 0)) {
+        ImGui::End();
         return;
     }
 
-    igText("C64 Emulator");
-    igText("Version 0.1.0");
-    igSeparator();
+    ImGui::Text("C64 Emulator");
+    ImGui::Text("Version 0.1.0");
+    ImGui::Separator();
     
-    igText("A cycle-accurate Commodore 64 emulator");
-    igText("Built with Dear ImGui and SDL2");
+    ImGui::Text("A cycle-accurate Commodore 64 emulator");
+    ImGui::Text("Built with Dear ImGui and SDL2");
     
-    igSeparator();
+    ImGui::Separator();
     
-    igText("Features:");
-    igBulletText("MOS 6510 CPU emulation");
-    igBulletText("VIC-II graphics chip");
-    igBulletText("SID sound chip");
-    igBulletText("CIA I/O chips");
-    igBulletText("Complete memory mapping");
+    ImGui::Text("Features:");
+    ImGui::BulletText("MOS 6510 CPU emulation");
+    ImGui::BulletText("VIC-II graphics chip");
+    ImGui::BulletText("SID sound chip");
+    ImGui::BulletText("CIA I/O chips");
+    ImGui::BulletText("Complete memory mapping");
     
-    igSeparator();
+    ImGui::Separator();
     
-    if (igButton("Close", (ImVec2){0, 0})) {
+    if (ImGui::Button("Close", (ImVec2){0, 0})) {
         gui_state->show_about = false;
     }
 
-    igEnd();
+    ImGui::End();
 }
 
 // ============================================================================
@@ -1048,7 +971,7 @@ void gui_update_screen_texture(c64_t* c64, gui_state_t* gui_state) {
 
 void gui_render_screen(c64_t* c64, gui_state_t* gui_state) {
     // Get the main viewport to create a fullscreen background window
-    const ImGuiViewport* viewport = igGetMainViewport();
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
     
     // Detect and update host DPI scale if needed
     ImGuiIO* io = igGetIO_Nil();
@@ -1057,8 +980,8 @@ void gui_render_screen(c64_t* c64, gui_state_t* gui_state) {
     }
     
     // Set window position and size to cover the entire viewport
-    igSetNextWindowPos(viewport->Pos, ImGuiCond_Always, (ImVec2){0, 0});
-    igSetNextWindowSize(viewport->Size, ImGuiCond_Always);
+    ImGui::SetNextWindowPos(viewport->Pos, ImGuiCond_Always, (ImVec2){0, 0});
+    ImGui::SetNextWindowSize(viewport->Size, ImGuiCond_Always);
     
     // Window flags for a fullscreen background window
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration |
@@ -1074,7 +997,7 @@ void gui_render_screen(c64_t* c64, gui_state_t* gui_state) {
     igPushStyleVar_Float(ImGuiStyleVar_WindowRounding, 0.0f);
     igPushStyleVar_Float(ImGuiStyleVar_WindowBorderSize, 0.0f);
     
-    if (igBegin("##C64ScreenBackground", NULL, window_flags)) {
+    if (ImGui::Begin("##C64ScreenBackground", NULL, window_flags)) {
         // Determine if this is PAL or NTSC (check if c64 system is available)
         bool is_pal = true;  // Default to PAL
         if (c64 && c64->system.chip_count > 0) {
@@ -1102,7 +1025,7 @@ void gui_render_screen(c64_t* c64, gui_state_t* gui_state) {
                                        &display_width, &display_height, &pos_x, &pos_y);
         
         // Set cursor position
-        igSetCursorPos((ImVec2){pos_x, pos_y});
+        ImGui::SetCursorPos((ImVec2){pos_x, pos_y});
         
         // Render the C64 screen texture
         ImTextureID tex_id = (ImTextureID)(intptr_t)gui_state->screen_texture_id;
@@ -1134,11 +1057,11 @@ void gui_render_screen(c64_t* c64, gui_state_t* gui_state) {
             CIMGUI_IMAGE_CALL(tex_id, image_size, uv_min, uv_max);
         }
         // Handle mouse interaction with fullscreen screen
-        if (igIsItemHovered(ImGuiHoveredFlags_None)) {
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_None)) {
             ImVec2 mouse_pos;
-            igGetMousePos(&mouse_pos);
+            ImGui::GetMousePos(&mouse_pos);
             ImVec2 image_min;
-            igGetItemRectMin(&image_min);
+            ImGui::GetItemRectMin(&image_min);
             
             // Calculate relative position within the displayed image
             float rel_x = (mouse_pos.x - image_min.x) / display_width;
@@ -1153,16 +1076,16 @@ void gui_render_screen(c64_t* c64, gui_state_t* gui_state) {
                 guest_y >= 0 && guest_y < (int)guest_height) {
                 
                 if (gui_state->show_overscan) {
-                    igSetTooltip("C64 Screen coordinates: (%d, %d)", guest_x, guest_y);
+                    ImGui::SetTooltip("C64 Screen coordinates: (%d, %d)", guest_x, guest_y);
                 } else {
-                    igSetTooltip("C64 Active area: (%d, %d)", guest_x, guest_y);
+                    ImGui::SetTooltip("C64 Active area: (%d, %d)", guest_x, guest_y);
                 }
             }
         }
     }
-    igEnd();
+    ImGui::End();
     
-    igPopStyleVar(2); // Pop WindowRounding and WindowBorderSize
+    ImGui::PopStyleVar(2); // Pop WindowRounding and WindowBorderSize
 }
 
 // ============================================================================
