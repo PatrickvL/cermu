@@ -341,8 +341,15 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
                 
                 // CPU category
                 if (ImGui::BeginMenu("CPU")) {
+                    printf("DEBUG: Rendering CPU menu, chip_count=%d\n", c64->system.chip_count);
                     for (uint8_t chip_id = 0; chip_id < c64->system.chip_count && chip_id < 16; chip_id++) {
                         chip_entry_t* entry = &c64->system.chips[chip_id];
+                        printf("DEBUG: Chip %d: entry=%p, desc=%p\n", chip_id, entry, entry ? entry->desc : NULL);
+                        if (entry->desc) {
+                            printf("DEBUG: Chip %d desc->description='%s', render_debug_window=%p\n",
+                                   chip_id, entry->desc->description ? entry->desc->description : "NULL",
+                                   entry->desc->render_debug_window);
+                        }
                         if (entry->desc && entry->desc->render_debug_window) {
                             // Check if this is a CPU chip (6502, 6510, etc.)
                             const char* desc = entry->desc->description;
@@ -352,6 +359,7 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
                                 ImGui::PushID(chip_id);
                                 char menu_label[64];
                                 snprintf(menu_label, sizeof(menu_label), "%s", desc ? desc : "Unknown CPU");
+                                printf("DEBUG: Adding CPU menu item: '%s'\n", menu_label);
                                 ImGui::MenuItem(menu_label, NULL, &gui_state->show_chip_debug[chip_id]);
                                 ImGui::PopID();
                             }

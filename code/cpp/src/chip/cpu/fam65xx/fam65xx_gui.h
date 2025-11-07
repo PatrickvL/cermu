@@ -23,7 +23,6 @@ void fam65xx_update_bus_state(void* chip, uint64_t bus_state);
 #include <unordered_map>
 #include <memory>
 #include "../../gui/chip_visualization.h"
-#include "../../external/cimgui/cimgui.h"
 
 // Forward declarations
 namespace fam65xx {
