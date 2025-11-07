@@ -252,6 +252,7 @@ if(BUILD_GUI)
             src/chip/cpu/fam65xx/fam65xx_gui.cpp
             src/chip/io/mos6526_gui.cpp
             src/chip/memory/ram_gui.cpp
+            src/chip/memory/mos2114_gui.cpp
             src/chip/sound/mos6581_gui.cpp
         )
 

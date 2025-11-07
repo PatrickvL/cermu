@@ -22,7 +22,7 @@ typedef struct generic_chip_gui_t generic_chip_gui_t;
 typedef ChipLayout (*get_chip_layout_func_t)(void* chip);
 typedef void (*get_chip_pin_states_func_t)(void* chip, ChipLayout* layout, bus_state_t bus_state, PinSignalState* pin_states);
 
-// Generic chip visualization configuration - now uses ChipVisualConfig for rendering
+// Generic chip GUI configuration - uses ChipVisualConfig for all visual properties
 typedef struct {
     // Chip identification
     const char* chip_name;
@@ -32,34 +32,11 @@ typedef struct {
     get_chip_layout_func_t get_layout;
     get_chip_pin_states_func_t get_pin_states;
     
-    // Chip-specific display options (non-visual)
-    float chip_scale;              // Scale factor for this specific chip
-    
-    // Legacy display options for compatibility - now mostly unused
-    bool show_pin_numbers;
-    bool show_pin_labels;
-    bool show_pin_states;
-    bool show_package_outline;
-    bool show_chip_markings;
-    
-    // Legacy layout options for compatibility
-    float pin_label_size;
-    float pin_state_size;
-    
-    // Legacy colors for compatibility - should migrate to ChipVisualConfig
-    uint32_t background_color;
-    uint32_t package_color;
-    uint32_t pin_color_inactive;
-    uint32_t pin_color_active_high;
-    uint32_t pin_color_active_low;
-    uint32_t pin_color_tristate;
-    uint32_t text_color;
-    
-    // Visual configuration reference (for future migration)
+    // Visual configuration (primary owner of all rendering properties)
     #ifdef __cplusplus
-    struct ChipVisualConfig* visual_config;  // Reference to shared visual config (optional)
+    ChipVisualConfig visual_config;  // Embedded visual configuration
     #else
-    void* visual_config;                     // Reference to shared visual config (optional)
+    void* visual_config;             // Opaque pointer for C code
     #endif
     
 } chip_gui_config_t;
