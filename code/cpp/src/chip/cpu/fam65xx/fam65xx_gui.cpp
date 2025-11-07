@@ -503,21 +503,12 @@ public:
     }
     
     const char* get_processor_name() const override {
-        // Use the trait-based name generation
-        return fam65xx_gui_get_processor_name<Traits>();
-    }
-private:
-    // Helper to generate processor name from traits
-    template<const CPUTraits& T>
-    const char* fam65xx_gui_get_processor_name() const {
         // Use a thread-local static buffer to avoid conflicts between template instantiations
         static thread_local char processor_name_buffer[64];
         snprintf(processor_name_buffer, sizeof(processor_name_buffer), "%s %s",
-                 T.get_vendor(), T.get_chip_id());
+                 Traits.get_vendor(), Traits.get_chip_id());
         return processor_name_buffer;
     }
-
-public:
 };
 
 // Factory function to create appropriate renderer
