@@ -6,6 +6,9 @@
 #include <algorithm>
 #include <cstdio>
 
+// Only compile ImGui-dependent code when ImGui is available
+#ifdef IMGUI_VERSION
+
 // ============================================================================
 // COLOR DEFINITIONS AND VISUAL CONFIGURATION
 // ============================================================================
@@ -1123,3 +1126,5 @@ void ChipVisualization::render_settings_gui() {
         // Note: config_changed is handled automatically since we're modifying config_ directly
     }
 }
+
+#endif // IMGUI_VERSION
