@@ -191,6 +191,24 @@ struct CPUTraits {
     constexpr bool update_bus_lines() const {
         return has(CPUCoreFlags::UPDATE_BUS_LINES);
     }
+    
+    // Equality operator for constexpr comparisons
+    // Since CPUTraits instances use string literals, we can use pointer comparison
+    constexpr bool operator==(const CPUTraits& other) const {
+        return vendor == other.vendor &&
+               chip_id == other.chip_id &&
+               core_flags == other.core_flags &&
+               address_bits == other.address_bits &&
+               io_port_mask == other.io_port_mask &&
+               banking == other.banking &&
+               peripheral.sound == other.peripheral.sound &&
+               peripheral.dma == other.peripheral.dma &&
+               peripheral.has_timer == other.peripheral.has_timer;
+    }
+    
+    constexpr bool operator!=(const CPUTraits& other) const {
+        return !(*this == other);
+    }
 };
 
 // ============================================================================

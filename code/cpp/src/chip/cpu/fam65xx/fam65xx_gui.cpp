@@ -13,6 +13,7 @@
 #include <unordered_map>
 #include <memory>
 #include <map>
+#include <thread>
 
 // Include the modern fam65xx implementation
 #include "fam65xx.hpp"
@@ -38,9 +39,9 @@ using namespace fam65xx;
 // Template function to get processor name based on traits
 template<const CPUTraits& Traits>
 const char* get_processor_name() {
-    // Use a static buffer to create the formatted name
-    static char processor_name_buffer[64];
-    snprintf(processor_name_buffer, sizeof(processor_name_buffer), "%s %s", 
+    // Use a thread-local static buffer to avoid conflicts between template instantiations
+    static thread_local char processor_name_buffer[64];
+    snprintf(processor_name_buffer, sizeof(processor_name_buffer), "%s %s",
              Traits.get_vendor(), Traits.get_chip_id());
     return processor_name_buffer;
 }
@@ -97,7 +98,8 @@ void render_chip_visualization(fam65xx_t<Traits>* cpu, ImVec2 chip_center, bus_s
     ChipVisualization* chip_viz = get_chip_visualization_instance<Traits>();
     
     // Get current pin states from CPU and bus state
-    std::vector<PinSignalState> pin_states = get_cpu_pin_states<Traits>(cpu, &chip_viz->get_pin_layout(), bus_state);
+    const ChipLayout* layout = &chip_viz->get_pin_layout();
+    std::vector<PinSignalState> pin_states = get_cpu_pin_states<Traits>(cpu, layout, bus_state);
     
     // Render the chip
     const char* chip_name = get_processor_name<Traits>();
@@ -256,7 +258,6 @@ void render_chip_visualization(fam65xx_t<Traits>* cpu) {
         }
         legend_viz->render_legend();
         
-        ImGui::Unindent(16.0f);
         ImGui::Unindent(16.0f);
     }
 }
@@ -509,9 +510,9 @@ private:
     // Helper to generate processor name from traits
     template<const CPUTraits& T>
     const char* fam65xx_gui_get_processor_name() const {
-        // Use a static buffer to create the formatted name
-        static char processor_name_buffer[64];
-        snprintf(processor_name_buffer, sizeof(processor_name_buffer), "%s %s", 
+        // Use a thread-local static buffer to avoid conflicts between template instantiations
+        static thread_local char processor_name_buffer[64];
+        snprintf(processor_name_buffer, sizeof(processor_name_buffer), "%s %s",
                  T.get_vendor(), T.get_chip_id());
         return processor_name_buffer;
     }
