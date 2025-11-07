@@ -20,10 +20,7 @@
 #include <array>
 #include <string>
 
-#ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#endif
-#include <cimgui.h>
+#include <imgui.h>
 #include "../core/chip_layout.h"
 
 // ============================================================================

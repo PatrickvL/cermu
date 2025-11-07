@@ -111,24 +111,40 @@ include_directories(
 # Add GUI-specific includes only if building GUI
 if(BUILD_GUI)
     include_directories(
-        ${CMAKE_CURRENT_SOURCE_DIR}/external/cimgui
-        ${CMAKE_CURRENT_SOURCE_DIR}/external/cimgui/imgui
-        ${CMAKE_CURRENT_SOURCE_DIR}/external/cimgui/imgui/backends
+        ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui
+        ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/backends
         ${SDL2_INCLUDE_DIRS}
     )
 endif()
 
-# Add cimgui subdirectory if building GUI
+# Create ImGui library if building GUI
 if(BUILD_GUI)
-    # Check if cimgui directory exists
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/cimgui/CMakeLists.txt")
-        # Configure cimgui to build as static library
-        set(IMGUI_STATIC "yes" CACHE STRING "Build as a static library" FORCE)
+    # Check if imgui directory exists
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/imgui.h")
+        # Create ImGui static library
+        add_library(imgui STATIC
+            external/imgui/imgui.cpp
+            external/imgui/imgui_demo.cpp
+            external/imgui/imgui_draw.cpp
+            external/imgui/imgui_tables.cpp
+            external/imgui/imgui_widgets.cpp
+            external/imgui/backends/imgui_impl_sdl2.cpp
+            external/imgui/backends/imgui_impl_opengl3.cpp
+        )
         
-        # Add cimgui from the external directory
-        add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/external/cimgui ${CMAKE_CURRENT_BINARY_DIR}/external/cimgui)
+        # Set ImGui include directories
+        target_include_directories(imgui PUBLIC
+            ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui
+            ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/backends
+            ${SDL2_INCLUDE_DIRS}
+        )
+        
+        # Link ImGui with OpenGL and SDL2
+        target_link_libraries(imgui ${SDL2_LIBRARIES} ${OPENGL_LIBRARIES})
+        
+        message(STATUS "Using native Dear ImGui C++")
     else()
-        message(WARNING "cimgui not found at ${CMAKE_CURRENT_SOURCE_DIR}/external/cimgui - disabling GUI build")
+        message(WARNING "Dear ImGui not found at ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui - disabling GUI build")
         set(BUILD_GUI FALSE)
     endif()
 endif()
@@ -224,10 +240,9 @@ set_target_properties(c64emu
 
 # GUI executable (ImGui version) - only if SDL2 and OpenGL are available
 if(BUILD_GUI)
-    # GUI sources (just our interface file - cimgui handles the rest)
+    # GUI sources (native Dear ImGui C++)
     set(GUI_SOURCES
-            src/gui/cimgui_interface.cpp
-            src/gui/cimgui_backends.cpp
+            src/gui/imgui_interface.cpp
             src/gui/chip_visualization.cpp
             src/gui/generic_chip_gui.cpp
             src/chip/video/vic_ii/vicii_gui.cpp
@@ -248,14 +263,15 @@ if(BUILD_GUI)
         ${CORE_UTIL_SOURCES}
         ${GUI_SOURCES}
     )
-
-    # Define CIMGUI_DEFINE_ENUMS_AND_STRUCTS only for our GUI code
-    target_compile_definitions(c64emu_gui PRIVATE CIMGUI_DEFINE_ENUMS_AND_STRUCTS=1)
     
-    # Add SDL2 include directories to the GUI target
-    target_include_directories(c64emu_gui PRIVATE ${SDL2_INCLUDE_DIRS})
+    # Add SDL2 and ImGui include directories to the GUI target
+    target_include_directories(c64emu_gui PRIVATE
+        ${SDL2_INCLUDE_DIRS}
+        ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui
+        ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/backends
+    )
     
-    # Disable some warnings for GUI build to work around cimgui header issues
+    # Disable some warnings for GUI build to work around ImGui header issues
     if(MSVC)
         target_compile_options(c64emu_gui PRIVATE /WX- /wd4201 /wd4996 /wd4244 /wd4189 /wd4100 /wd5287)
     else()
@@ -264,7 +280,7 @@ if(BUILD_GUI)
 
     # Link libraries for GUI version
     target_link_libraries(c64emu_gui
-        cimgui  # Properly linked cimgui static library
+        imgui  # Native Dear ImGui C++ static library
         fam65xx_decoder  # FAM65XX instruction decoder
         ${SDL2_LIBRARIES}
         ${OPENGL_LIBRARIES}
