@@ -5,8 +5,8 @@
  * FAM65XX CPU family, supporting all variants from 6502 to 65C816.
  */
 
-#ifndef FAM65XX_DECODER_H
-#define FAM65XX_DECODER_H
+#pragma once
+
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -32,4 +32,3 @@ const char* fam65xx_get_opcode_name(uint8_t op_index);
 const char* fam65xx_get_addressing_mode_name(uint8_t am_index);
 
 
-#endif // FAM65XX_DECODER_H

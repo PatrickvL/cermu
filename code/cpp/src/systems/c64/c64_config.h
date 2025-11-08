@@ -1,5 +1,4 @@
-#ifndef C64_CONFIG_H
-#define C64_CONFIG_H
+#pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -54,4 +53,3 @@ void c64_config_init_defaults(c64_config_t* config);
 // Validate C64 configuration settings
 bool c64_config_validate(const c64_config_t* config);
 
-#endif // C64_CONFIG_H

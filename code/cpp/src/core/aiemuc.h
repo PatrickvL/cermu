@@ -1,5 +1,4 @@
-#ifndef AIEMUC_H
-#define AIEMUC_H
+#pragma once
 
 /* 
  * AIEMUC - Cross-platform compiler compatibility macros
@@ -157,5 +156,3 @@
         return aiemuc_popcount((unsigned int)x) + aiemuc_popcount((unsigned int)(x >> 32));
     }
 #endif
-
-#endif /* AIEMUC_H */

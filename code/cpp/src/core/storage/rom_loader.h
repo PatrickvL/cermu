@@ -1,5 +1,4 @@
-#ifndef CORE_ROM_LOADER_H
-#define CORE_ROM_LOADER_H
+#pragma once
 
 #include <stdint.h>
 #include <stddef.h>
@@ -52,4 +51,4 @@ bool rom_loader_load_to_buffer(const char* file_paths[], size_t expected_size,
  */
 bool rom_loader_verify_md5(const uint8_t* buffer, size_t size, const char* expected_md5);
 
-#endif // CORE_ROM_LOADER_H
+

@@ -1,5 +1,4 @@
-#ifndef MOS6567_PINS_H
-#define MOS6567_PINS_H
+#pragma once
 
 #include "../../../core/system_lines.h"
 
@@ -34,4 +33,4 @@
 #define VIC_PIN_SET_IRQ(sys_lines)      SYS_LINES_SET(sys_lines, VIC_MASK_IRQ)
 #define VIC_PIN_CLEAR_IRQ(sys_lines)    SYS_LINES_CLEAR(sys_lines, VIC_MASK_IRQ)
 
-#endif // MOS6567_PINS_H
+

@@ -5,8 +5,7 @@
  * Includes pin types, labels, sides, and state structures.
  */
 
-#ifndef PIN_TYPES_H
-#define PIN_TYPES_H
+#pragma once
 
 #include <cstdint>
 #include <string>
@@ -267,5 +266,3 @@ std::string pin_label_to_display_string(PinLabel label); // With Unicode symbols
 
 // Derive pin type from pin label
 PinType pin_label_to_pin_type(PinLabel label);
-
-#endif // PIN_TYPES_H

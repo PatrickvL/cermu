@@ -1,5 +1,4 @@
-#ifndef IMGUI_INTERFACE_H
-#define IMGUI_INTERFACE_H
+#pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -185,4 +184,4 @@ void gui_emulation_pause(gui_emulation_context_t* emu_context);
 void gui_emulation_step(gui_emulation_context_t* emu_context);
 void gui_emulation_reset(gui_emulation_context_t* emu_context);
 
-#endif // IMGUI_INTERFACE_H
+

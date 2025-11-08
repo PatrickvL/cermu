@@ -1,5 +1,4 @@
-#ifndef SYSTEM_LINES_H
-#define SYSTEM_LINES_H
+#pragma once
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -146,4 +145,4 @@ static inline bool bus_is_io_pending(const bus_state_t* state) {
     return ((*state & BUS_BIT(BUS_IO_PENDING_BIT)) != 0);
 }
 
-#endif // SYSTEM_LINES_H
+

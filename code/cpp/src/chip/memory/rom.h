@@ -1,5 +1,4 @@
-#ifndef ROM_H
-#define ROM_H
+#pragma once
 
 #include "../../core/chip.h"
 
@@ -16,4 +15,3 @@ void* rom_system_create_with_size(chip_descriptor_t* desc, unsigned int size);
 
 extern chip_descriptor_t rom_descriptor;
 
-#endif // ROM_H

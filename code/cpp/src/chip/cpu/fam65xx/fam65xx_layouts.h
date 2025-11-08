@@ -5,8 +5,8 @@
  * specific features and capabilities using CPU traits.
  */
 
-#ifndef CPU_PIN_LAYOUTS_H
-#define CPU_PIN_LAYOUTS_H
+#pragma once
+
 
 #include "../../../core/chip_layout.h"
 #include "fam65xx_processor_traits.hpp"
@@ -520,4 +520,3 @@ ChipLayout create_rockwell_r65c02_layout() {
     return layout;
 }
 
-#endif // CPU_PIN_LAYOUTS_H

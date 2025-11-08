@@ -1,5 +1,4 @@
-#ifndef MOS6567_H
-#define MOS6567_H
+#pragma once
 
 #include "vicii_common.h"
 
@@ -30,4 +29,3 @@ void mos6567_render_debug_window(void* chip, bool* show_window);
 void mos6567_render_settings_window(void* chip, bool* show_window);
 #endif
 
-#endif // MOS6567_H

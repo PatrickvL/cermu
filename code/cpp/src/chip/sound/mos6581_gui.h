@@ -1,5 +1,4 @@
-#ifndef MOS6581_GUI_H
-#define MOS6581_GUI_H
+#pragma once
 
 #include <stdbool.h>
 
@@ -10,4 +9,3 @@ typedef struct mos6581_s mos6581_t;
 void mos6581_render_debug_window(void* chip, bool* show_window);
 void mos6581_render_settings_window(void* chip, bool* show_window);
 
-#endif // MOS6581_GUI_H

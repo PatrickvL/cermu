@@ -6,13 +6,11 @@
 #include "fam65xx.hpp"
 #include "fam65xx_gui.h"
 
-using namespace fam65xx;
-
 // ============================================================================
 // CONCRETE CPU TYPE DEFINITION
 // ============================================================================
 
-using wdc65c816_cpu_t = fam65xx_t<WDC_65C816>;
+using wdc65c816_cpu_t = fam65xx::fam65xx_t<fam65xx::WDC_65C816>;
 
 // Cast helper for opaque handle
 #define CPU_CAST(ptr) reinterpret_cast<wdc65c816_cpu_t*>(ptr)
@@ -102,7 +100,7 @@ void wdc65c816_set_pc(wdc65c816_t* cpu, uint16_t value) {
     CPU_CAST(cpu)->set(REG_PC, value);
 }
 
-// 16-bit register getters (65C816-specific)
+// 16-bit register getters (65C816-specific) - PLACEHOLDER IMPLEMENTATIONS
 // Note: These will need to be implemented once the wide_registers mixin is properly defined
 uint16_t wdc65c816_get_a_full(wdc65c816_t* cpu) {
     // TODO: Access full 16-bit A register from wide_registers mixin
@@ -120,22 +118,30 @@ uint16_t wdc65c816_get_y_full(wdc65c816_t* cpu) {
 }
 
 uint16_t wdc65c816_get_d(wdc65c816_t* cpu) {
-    return CPU_CAST(cpu)->get_d();
+    // TODO: Implement direct page register access
+    (void)cpu; // Suppress unused parameter warning
+    return 0x0000; // Placeholder - return default direct page
 }
 
 uint8_t wdc65c816_get_dbr(wdc65c816_t* cpu) {
-    return CPU_CAST(cpu)->get_dbr();
+    // TODO: Implement data bank register access
+    (void)cpu; // Suppress unused parameter warning
+    return 0x00; // Placeholder - return default data bank
 }
 
 uint8_t wdc65c816_get_pbr(wdc65c816_t* cpu) {
-    return CPU_CAST(cpu)->get_pbr();
+    // TODO: Implement program bank register access
+    (void)cpu; // Suppress unused parameter warning
+    return 0x00; // Placeholder - return default program bank
 }
 
 bool wdc65c816_get_emulation_mode(wdc65c816_t* cpu) {
-    return CPU_CAST(cpu)->get_emulation_mode();
+    // TODO: Implement emulation mode status access
+    (void)cpu; // Suppress unused parameter warning
+    return true; // Placeholder - return emulation mode active
 }
 
-// 16-bit register setters (65C816-specific)
+// 16-bit register setters (65C816-specific) - PLACEHOLDER IMPLEMENTATIONS
 void wdc65c816_set_a_full(wdc65c816_t* cpu, uint16_t value) {
     // TODO: Set full 16-bit A register in wide_registers mixin
     CPU_CAST(cpu)->set(REG_A, value & 0xFF); // Placeholder - set 8-bit for now
@@ -152,19 +158,27 @@ void wdc65c816_set_y_full(wdc65c816_t* cpu, uint16_t value) {
 }
 
 void wdc65c816_set_d(wdc65c816_t* cpu, uint16_t value) {
-    CPU_CAST(cpu)->set_d(value);
+    // TODO: Implement direct page register setting
+    (void)cpu;   // Suppress unused parameter warning
+    (void)value; // Suppress unused parameter warning
 }
 
 void wdc65c816_set_dbr(wdc65c816_t* cpu, uint8_t value) {
-    CPU_CAST(cpu)->set_dbr(value);
+    // TODO: Implement data bank register setting
+    (void)cpu;   // Suppress unused parameter warning
+    (void)value; // Suppress unused parameter warning
 }
 
 void wdc65c816_set_pbr(wdc65c816_t* cpu, uint8_t value) {
-    CPU_CAST(cpu)->set_pbr(value);
+    // TODO: Implement program bank register setting
+    (void)cpu;   // Suppress unused parameter warning
+    (void)value; // Suppress unused parameter warning
 }
 
 void wdc65c816_set_emulation_mode(wdc65c816_t* cpu, bool emulation) {
-    CPU_CAST(cpu)->set_emulation_mode(emulation);
+    // TODO: Implement emulation mode setting
+    (void)cpu;       // Suppress unused parameter warning
+    (void)emulation; // Suppress unused parameter warning
 }
 
 // WDC65C816 chip descriptor
@@ -173,6 +187,7 @@ static chip_descriptor_t wdc65c816_base_descriptor;
 static void initialize_wdc65c816_descriptor() {
     wdc65c816_base_descriptor.description = "WDC 65C816";
     wdc65c816_base_descriptor.create = [](chip_descriptor_t* desc) -> void* {
+        (void)desc; // Suppress unused parameter warning
         return wdc65c816_create();
     };
     wdc65c816_base_descriptor.destroy = [](void* chip) {
@@ -181,12 +196,8 @@ static void initialize_wdc65c816_descriptor() {
     wdc65c816_base_descriptor.bus_attach = nullptr;  // Basic CPU doesn't need bus attach
     wdc65c816_base_descriptor.bank_change = nullptr; // Basic CPU doesn't have banking
 #ifdef IMGUI_VERSION
-    wdc65c816_base_descriptor.render_debug_window = [](void* cpu_handle, bool* show_window) {
-        render_cpu_debug_window_impl(cpu_handle, "WDC65C816");
-    };
-    wdc65c816_base_descriptor.render_settings_window = [](void* cpu_handle, bool* show_window) {
-        render_cpu_settings_window_impl(cpu_handle, "WDC65C816");
-    };
+    wdc65c816_base_descriptor.render_debug_window = fam65xx_render_debug_window;
+    wdc65c816_base_descriptor.render_settings_window = fam65xx_render_settings_window;
 #endif
 }
 

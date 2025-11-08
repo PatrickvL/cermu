@@ -1,5 +1,4 @@
-#ifndef PLA_GUI_H
-#define PLA_GUI_H
+#pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -8,4 +7,4 @@
 void pla_render_debug_window(void* chip, bool* show_window);
 void pla_render_settings_window(void* chip, bool* show_window);
 
-#endif // PLA_GUI_H
+

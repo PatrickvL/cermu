@@ -5,8 +5,8 @@
  * supporting both plain text and Unicode display formats.
  */
 
-#ifndef PIN_LABELS_H
-#define PIN_LABELS_H
+#pragma once
+
 
 #include "pin_types.h"
 #include <string>
@@ -20,4 +20,3 @@ std::string pin_label_to_display_string(PinLabel label);
 // Derive pin type from pin label for GUI color coding and categorization
 PinType pin_label_to_pin_type(PinLabel label);
 
-#endif // PIN_LABELS_H

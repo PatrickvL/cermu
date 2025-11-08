@@ -5,10 +5,9 @@
  * Includes both modern enum-based and legacy string-based pin creation.
  */
 
-#ifndef PIN_MACROS_H
-#define PIN_MACROS_H
+#pragma once
+
 
 #include "pin_types.h"
 
 
-#endif // PIN_MACROS_H
