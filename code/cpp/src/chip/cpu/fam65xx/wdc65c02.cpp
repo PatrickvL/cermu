@@ -21,8 +21,6 @@ using wdc65c02_cpu_t = fam65xx_t<WDC_65C02_EARLY>;
 // WDC 65C02 IMPLEMENTATION
 // ============================================================================
 
-extern "C" {
-
 wdc65c02_t* wdc65c02_create(void) {
     return reinterpret_cast<wdc65c02_t*>(new wdc65c02_cpu_t());
 }
@@ -131,5 +129,3 @@ const chip_descriptor_t* wdc65c02_get_chip_descriptor(void) {
     }
     return &wdc65c02_base_descriptor;
 }
-
-} // extern "C"

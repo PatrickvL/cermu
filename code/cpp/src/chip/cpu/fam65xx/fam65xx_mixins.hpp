@@ -13,8 +13,6 @@
 #include "fam65xx_types.h"  // For bus_state_t
 #include "nes6502.h"        // For nes6502_apu::APU class
 
-#ifdef __cplusplus
-
 namespace fam65xx {
 
 // ============================================================================
@@ -271,5 +269,3 @@ using apu_base_t = std::conditional_t<
 >;
 
 } // namespace fam65xx
-
-#endif // __cplusplus

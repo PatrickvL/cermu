@@ -19,10 +19,6 @@
 #include "../../core/chip.h"
 #include "../../core/system_lines.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 // ============================================================================
 // OPAQUE CPU HANDLE
 // ============================================================================
@@ -74,7 +70,3 @@ void wdc65c816_set_d(wdc65c816_t* cpu, uint16_t value);
 void wdc65c816_set_dbr(wdc65c816_t* cpu, uint8_t value);
 void wdc65c816_set_pbr(wdc65c816_t* cpu, uint8_t value);
 void wdc65c816_set_emulation_mode(wdc65c816_t* cpu, bool emulation);
-
-#ifdef __cplusplus
-}
-#endif

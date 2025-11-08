@@ -21,8 +21,6 @@ using wdc65c816_cpu_t = fam65xx_t<WDC_65C816>;
 // WDC 65C816 IMPLEMENTATION
 // ============================================================================
 
-extern "C" {
-
 wdc65c816_t* wdc65c816_create(void) {
     wdc65c816_t* cpu = reinterpret_cast<wdc65c816_t*>(new wdc65c816_cpu_t());
 #ifdef IMGUI_VERSION
@@ -200,5 +198,3 @@ const chip_descriptor_t* wdc65c816_get_chip_descriptor(void) {
     }
     return &wdc65c816_base_descriptor;
 }
-
-} // extern "C"

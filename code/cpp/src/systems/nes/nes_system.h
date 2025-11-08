@@ -27,8 +27,6 @@
 #include "../../core/chip.h"
 #include "../../core/system_lines.h"
 
-#ifdef __cplusplus
-
 // Forward declarations
 namespace nes_system {
     class PPU;
@@ -453,16 +451,6 @@ private:
 
 } // namespace nes_system
 
-#endif // __cplusplus
-
-// ============================================================================
-// C INTERFACE
-// ============================================================================
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 // Opaque handle
 typedef struct nes_system_t nes_system_t;
 
@@ -497,7 +485,3 @@ void nes_system_set_audio_sample_rate(nes_system_t* system, uint32_t rate);
 bool nes_system_is_cartridge_loaded(nes_system_t* system);
 uint64_t nes_system_get_total_cycles(nes_system_t* system);
 bool nes_system_is_ready(nes_system_t* system);
-
-#ifdef __cplusplus
-}
-#endif

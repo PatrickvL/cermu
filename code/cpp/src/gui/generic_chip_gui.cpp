@@ -20,9 +20,7 @@ chip_gui_config_t generic_chip_gui_get_default_config(const char* chip_name, con
     config.chip_type = chip_type;
     
     // Initialize with default ChipVisualConfig
-#ifdef __cplusplus
     config.visual_config = ChipVisualConfig::get_default();
-#endif
     
     return config;
 }
@@ -93,7 +91,6 @@ void generic_chip_gui_refresh_layout(generic_chip_gui_t* gui) {
 // ============================================================================
 
 uint32_t generic_chip_gui_get_pin_color(const chip_gui_config_t* config, const PinSignalState* pin_state) {
-#ifdef __cplusplus
     if (!config || !pin_state || !pin_state->signal_valid) {
         return config->visual_config.led_inactive_color;
     }
@@ -107,9 +104,6 @@ uint32_t generic_chip_gui_get_pin_color(const chip_gui_config_t* config, const P
     } else {
         return config->visual_config.led_inactive_color;
     }
-#else
-    return 0xFF606060; // Default gray for C code
-#endif
 }
 
 // ============================================================================
@@ -169,7 +163,6 @@ void generic_chip_gui_render_layout(generic_chip_gui_t* gui,
 #endif
     
     // Render chip package
-#ifdef __cplusplus
     if (gui->config.visual_config.show_package_name) {
         generic_chip_gui_render_dip_package(&gui->cached_layout, &gui->config, chip_x, chip_y, scale);
     }
@@ -178,7 +171,6 @@ void generic_chip_gui_render_layout(generic_chip_gui_t* gui,
     if (gui->config.visual_config.show_chip_markings) {
         generic_chip_gui_render_chip_markings(&gui->cached_layout, &gui->config, chip_x, chip_y, scale);
     }
-#endif
     
     // Render pins safely
     int pin_index = 0;

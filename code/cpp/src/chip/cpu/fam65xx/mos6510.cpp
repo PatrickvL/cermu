@@ -8,8 +8,6 @@
 
 using namespace fam65xx;
 
-extern "C" {
-
 // ============================================================================
 // CONCRETE CPU TYPE DEFINITION
 // ============================================================================
@@ -160,5 +158,3 @@ chip_descriptor_t mos6510_descriptor = {
     .render_settings_window = fam65xx_render_settings_window
 #endif
 };
-
-} // extern "C"

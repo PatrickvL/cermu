@@ -1,5 +1,4 @@
-#ifndef GENERIC_CHIP_GUI_H
-#define GENERIC_CHIP_GUI_H
+#pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -7,13 +6,7 @@
 #include "../core/emulation_context.h"
 
 // Include chip visualization for ChipVisualConfig
-#ifdef __cplusplus
 #include "chip_visualization.h"
-#endif
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 // Forward declarations
 typedef struct generic_chip_gui_t generic_chip_gui_t;
@@ -33,11 +26,7 @@ typedef struct {
     get_chip_pin_states_func_t get_pin_states;
     
     // Visual configuration (primary owner of all rendering properties)
-    #ifdef __cplusplus
     ChipVisualConfig visual_config;  // Embedded visual configuration
-    #else
-    void* visual_config;             // Opaque pointer for C code
-    #endif
     
 } chip_gui_config_t;
 
@@ -99,9 +88,3 @@ uint32_t generic_chip_gui_get_pin_color(const chip_gui_config_t* config, const P
 void generic_chip_gui_render_dip_package(const ChipLayout* layout, const chip_gui_config_t* config, float x, float y, float scale);
 void generic_chip_gui_render_pin(const ChipPin* pin, const PinSignalState* pin_state, const chip_gui_config_t* config, float x, float y, float scale);
 void generic_chip_gui_render_chip_markings(const ChipLayout* layout, const chip_gui_config_t* config, float x, float y, float scale);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif // GENERIC_CHIP_GUI_H

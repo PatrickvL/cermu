@@ -21,10 +21,6 @@
 #include "../../../core/system_lines.h"
 #include "fam65xx_types.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 // ============================================================================
 // OPAQUE CPU HANDLE
 // ============================================================================
@@ -71,7 +67,3 @@ void mos6502_destroy_descriptor(fam65xx_chip_descriptor_t* desc);
 
 // Basic descriptor for compatibility
 const chip_descriptor_t* mos6502_get_chip_descriptor(void);
-
-#ifdef __cplusplus
-}
-#endif
