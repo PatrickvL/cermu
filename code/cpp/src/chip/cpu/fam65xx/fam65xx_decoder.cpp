@@ -141,35 +141,3 @@ const char* fam65xx_get_addressing_mode_name(uint8_t am_index) {
     }
     return "Unknown";
 }
-
-int fam65xx_get_instruction_length(uint8_t opcode) {
-    return instruction_lengths[opcode];
-}
-
-bool fam65xx_is_legal_opcode(uint8_t opcode) {
-    uint8_t byte_index = opcode / 8;
-    uint8_t bit_index = opcode % 8;
-    return (legal_opcodes[byte_index] & (1 << bit_index)) != 0;
-}
-
-int fam65xx_disassemble_instruction(uint8_t opcode, uint8_t operand1, uint8_t operand2, 
-                                   uint16_t pc, char* buffer, size_t buffer_size) {
-    if (!buffer || buffer_size == 0) {
-        return -1;
-    }
-
-    // For now, this is a simplified disassembler
-    // A full implementation would need opcode->operation mapping
-    int length = fam65xx_get_instruction_length(opcode);
-    
-    switch (length) {
-        case 1:
-            return snprintf(buffer, buffer_size, "$%02X", opcode);
-        case 2:
-            return snprintf(buffer, buffer_size, "$%02X $%02X", opcode, operand1);
-        case 3:
-            return snprintf(buffer, buffer_size, "$%02X $%02X $%02X", opcode, operand1, operand2);
-        default:
-            return snprintf(buffer, buffer_size, "???");
-    }
-}
