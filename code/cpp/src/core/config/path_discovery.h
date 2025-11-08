@@ -1,5 +1,4 @@
-#ifndef CORE_SYSTEM_CONFIG_H
-#define CORE_SYSTEM_CONFIG_H
+#pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -27,4 +26,4 @@ bool system_config_discover_data_root(const char* system_name, char* out_path, s
  */
 bool system_config_discover_rom_root(const char* system_name, char* out_path, size_t path_size);
 
-#endif // CORE_SYSTEM_CONFIG_H
+

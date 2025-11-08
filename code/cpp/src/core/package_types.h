@@ -5,8 +5,8 @@
  * orientation markers, and standard package configurations.
  */
 
-#ifndef PACKAGE_TYPES_H
-#define PACKAGE_TYPES_H
+#pragma once
+
 
 #include <cstdint>
 #include <string>
@@ -89,4 +89,3 @@ struct ChipMarkings {
 const std::string get_package_type_string(PackageType package_type);
 bool get_package_name_shows_pin_count(PackageType package_type);
 
-#endif // PACKAGE_TYPES_H

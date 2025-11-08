@@ -1,5 +1,5 @@
-#ifndef CORE_IOPORT_H
-#define CORE_IOPORT_H
+#pragma once
+
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -139,4 +139,3 @@ static inline void ioport_update_bus_state(ioport_t* port, uint32_t bus_data) {
     port->last_bus = bus_data;
 }
 
-#endif // CORE_IOPORT_H

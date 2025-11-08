@@ -1,5 +1,4 @@
-#ifndef SIGNAL_NOTIFICATION_H
-#define SIGNAL_NOTIFICATION_H
+#pragma once
 
 #include <stdint.h>
 #include <stddef.h>
@@ -76,4 +75,4 @@ static inline void signal_update_lines(system_lines_t* sys_lines,
 #define SIGNAL_IS_CLEAR(sys_lines, mask)       (!SYS_LINES_TEST(sys_lines, mask))
 #define SIGNAL_GET_VALUE(sys_lines, shift, mask) ((SYS_LINES_RAW(sys_lines) >> (shift)) & (mask))
 
-#endif // SIGNAL_NOTIFICATION_H
+

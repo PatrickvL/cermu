@@ -1,5 +1,4 @@
-#ifndef VICII_GUI_H
-#define VICII_GUI_H
+#pragma once
 
 #include <stdbool.h>
 
@@ -7,4 +6,4 @@
 void vicii_gui_render_debug_window(void* chip, bool* show_window, const char* window_title);
 void vicii_gui_render_settings_window(void* chip, bool* show_window, const char* window_title);
 
-#endif // VICII_GUI_H
+

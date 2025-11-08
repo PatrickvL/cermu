@@ -5,7 +5,6 @@
  * Includes standard package templates and layout generation functions.
  */
 
-#ifndef PIN_LAYOUT_H
-#define PIN_LAYOUT_H
+#pragma once
 
-#endif // PIN_LAYOUT_H
+

@@ -1,5 +1,4 @@
-#ifndef BUS_CYCLE_OPS_H
-#define BUS_CYCLE_OPS_H
+#pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -39,4 +38,4 @@ typedef struct {
 
 } bus_cycle_ops_t;
 
-#endif // BUS_CYCLE_OPS_H
+

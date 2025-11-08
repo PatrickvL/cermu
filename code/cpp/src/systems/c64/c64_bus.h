@@ -1,5 +1,5 @@
-#ifndef C64_BUS_H
-#define C64_BUS_H
+#pragma once
+
 
 #include <stddef.h>
 #include <stdint.h>
@@ -228,4 +228,3 @@ static inline uint8_t decode_write_chip(uint8_t encoded) {
     return (encoded >> 4) & 0x0F; // Upper 4 bits are the write chip
 }
 
-#endif // C64_BUS_H

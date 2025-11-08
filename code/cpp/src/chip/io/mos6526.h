@@ -1,5 +1,5 @@
-#ifndef MOS6526_H
-#define MOS6526_H
+#pragma once
+
 
 #include "../../core/chip.h"
 #include "../../core/bus_cycle_interface.h"
@@ -176,4 +176,4 @@ void mos6526_render_settings_window(void* chip, bool* show_window);
 
 extern chip_descriptor_t mos6526_descriptor;
 
-#endif // MOS6526_H
+

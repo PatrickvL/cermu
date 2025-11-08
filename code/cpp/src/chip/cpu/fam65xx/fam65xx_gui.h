@@ -1,5 +1,5 @@
-#ifndef FAM65XX_GUI_H
-#define FAM65XX_GUI_H
+#pragma once
+
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -52,4 +52,3 @@ namespace fam65xx {
 }
 #endif
 
-#endif // FAM65XX_GUI_H

@@ -1,5 +1,4 @@
-#ifndef CONTROL_LINES_INTERFACE_H
-#define CONTROL_LINES_INTERFACE_H
+#pragma once
 
 #include <stdint.h>
 #include "system_lines.h"
@@ -34,4 +33,4 @@ typedef struct {
     void* context;
 } control_lines_interface_t;
 
-#endif // CONTROL_LINES_INTERFACE_H
+

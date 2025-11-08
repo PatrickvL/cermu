@@ -1,5 +1,4 @@
-#ifndef RAM_GUI_H
-#define RAM_GUI_H
+#pragma once
 
 #include <stdbool.h>
 
@@ -10,4 +9,3 @@ typedef struct ram_s ram_t;
 void ram_render_debug_window(void* chip, bool* show_window);
 void ram_render_settings_window(void* chip, bool* show_window);
 
-#endif // RAM_GUI_H

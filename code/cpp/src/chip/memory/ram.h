@@ -1,5 +1,4 @@
-#ifndef RAM_H
-#define RAM_H
+#pragma once
 
 #include "../../core/chip.h"
 
@@ -16,4 +15,3 @@ void ram_render_settings_window(void* chip, bool* show_window);
 
 extern chip_descriptor_t ram_descriptor;
 
-#endif // RAM_H

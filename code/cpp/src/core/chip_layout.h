@@ -5,8 +5,8 @@
  * Individual components are now separated into focused header files.
  */
 
-#ifndef CHIP_LAYOUT_H
-#define CHIP_LAYOUT_H
+#pragma once
+
 
 // Include all separated chip layout components
 #include "pin_types.h"
@@ -102,4 +102,3 @@ ChipLayout create_custom_dip(uint8_t total_pins, const char* part_name = nullptr
 ChipLayout create_custom_qfp(uint8_t total_pins, const char* part_name = nullptr);
 ChipLayout create_custom_bga(uint8_t rows, uint8_t cols, const char* part_name = nullptr);
 
-#endif // CHIP_LAYOUT_H

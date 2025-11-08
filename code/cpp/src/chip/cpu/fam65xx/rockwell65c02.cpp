@@ -108,6 +108,7 @@ static chip_descriptor_t rockwell65c02_base_descriptor;
 static void initialize_rockwell65c02_descriptor() {
     rockwell65c02_base_descriptor.description = "Rockwell 65C02";
     rockwell65c02_base_descriptor.create = [](chip_descriptor_t* desc) -> void* {
+        (void)desc; // Suppress unused parameter warning
         return rockwell65c02_create();
     };
     rockwell65c02_base_descriptor.destroy = [](void* chip) {
@@ -116,12 +117,8 @@ static void initialize_rockwell65c02_descriptor() {
     rockwell65c02_base_descriptor.bus_attach = nullptr;  // Basic CPU doesn't need bus attach
     rockwell65c02_base_descriptor.bank_change = nullptr; // Basic CPU doesn't have banking
 #ifdef IMGUI_VERSION
-    rockwell65c02_base_descriptor.render_debug_window = [](void* cpu_handle, bool* show_window) {
-        render_cpu_debug_window_impl(cpu_handle, "Rockwell 65C02");
-    };
-    rockwell65c02_base_descriptor.render_settings_window = [](void* cpu_handle, bool* show_window) {
-        render_cpu_settings_window_impl(cpu_handle, "Rockwell 65C02");
-    };
+    rockwell65c02_base_descriptor.render_debug_window = fam65xx_render_debug_window;
+    rockwell65c02_base_descriptor.render_settings_window = fam65xx_render_settings_window;
 #endif
 }
 

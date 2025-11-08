@@ -1,5 +1,4 @@
-#ifndef MOS6581_H
-#define MOS6581_H
+#pragma once
 
 #include "../../core/chip.h"
 #include "../../core/bus_cycle_interface.h"
@@ -277,5 +276,3 @@ extern chip_descriptor_t mos6581_descriptor;
 void mos6581_render_debug_window(void* chip, bool* show_window);
 void mos6581_render_settings_window(void* chip, bool* show_window);
 #endif
-
-#endif // MOS6581_H

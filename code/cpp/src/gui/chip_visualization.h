@@ -11,8 +11,7 @@
  * - Multiple visual styles
  */
 
-#ifndef CHIP_VISUALIZATION_H
-#define CHIP_VISUALIZATION_H
+#pragma once
 
 #include <cstdint>
 #include <cstring>
@@ -218,7 +217,7 @@ private:
     void draw_chamfer(void* chip_center) {}
     void draw_bar_marker(void* chip_center) {}
     void draw_triangle_marker(void* chip_center) {}
-#endif
 };
 
-#endif // CHIP_VISUALIZATION_H
+#endif
+
