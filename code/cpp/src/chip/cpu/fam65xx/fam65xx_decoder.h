@@ -12,9 +12,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 // ============================================================================
 // INSTRUCTION DECODING FUNCTIONS
@@ -34,8 +31,5 @@ const char* fam65xx_get_opcode_name(uint8_t op_index);
  */
 const char* fam65xx_get_addressing_mode_name(uint8_t am_index);
 
-#ifdef __cplusplus
-}
-#endif
 
 #endif // FAM65XX_DECODER_H

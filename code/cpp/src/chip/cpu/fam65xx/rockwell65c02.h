@@ -18,9 +18,6 @@
 #include "../../core/chip.h"
 #include "../../core/system_lines.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 // ============================================================================
 // OPAQUE CPU HANDLE
@@ -57,6 +54,3 @@ void rockwell65c02_set_s(rockwell65c02_t* cpu, uint8_t value);
 void rockwell65c02_set_p(rockwell65c02_t* cpu, uint8_t value);
 void rockwell65c02_set_pc(rockwell65c02_t* cpu, uint16_t value);
 
-#ifdef __cplusplus
-}
-#endif

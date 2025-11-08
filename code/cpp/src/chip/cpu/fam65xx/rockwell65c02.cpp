@@ -21,8 +21,6 @@ using rockwell65c02_cpu_t = fam65xx_t<ROCKWELL_R65C02>;
 // ROCKWELL 65C02 IMPLEMENTATION
 // ============================================================================
 
-extern "C" {
-
 rockwell65c02_t* rockwell65c02_create(void) {
     rockwell65c02_t* cpu = reinterpret_cast<rockwell65c02_t*>(new rockwell65c02_cpu_t());
 #ifdef IMGUI_VERSION
@@ -135,5 +133,3 @@ const chip_descriptor_t* rockwell65c02_get_chip_descriptor(void) {
     }
     return &rockwell65c02_base_descriptor;
 }
-
-} // extern "C"

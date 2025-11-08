@@ -10,8 +10,6 @@
 #include <cstdint>
 #include <type_traits>
 
-#ifdef __cplusplus
-
 namespace fam65xx {
 
 // ============================================================================
@@ -471,5 +469,3 @@ constexpr bool has_apu() {
 }
 
 } // namespace fam65xx
-
-#endif // __cplusplus

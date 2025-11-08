@@ -8,13 +8,8 @@
 #ifndef PIN_TYPES_H
 #define PIN_TYPES_H
 
-#ifdef __cplusplus
 #include <cstdint>
 #include <string>
-#else
-#include <stdint.h>
-#include <stdbool.h>
-#endif
 
 // ============================================================================
 // PIN TYPES AND ENUMERATIONS
@@ -268,9 +263,7 @@ const char* pin_type_to_group_name(PinType type);
 
 // Enum-to-string conversion functions
 const char* pin_label_to_string(PinLabel label);
-#ifdef __cplusplus
 std::string pin_label_to_display_string(PinLabel label); // With Unicode symbols
-#endif
 
 // Derive pin type from pin label
 PinType pin_label_to_pin_type(PinLabel label);

@@ -14,9 +14,6 @@
 #include "../../../core/system_lines.h"
 #include "../../../core/chip.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 // ============================================================================
 // Bus State and Pin Definitions
@@ -55,9 +52,6 @@ typedef void (*fam65xx_mem_write_t)(void* user_data, uint16_t addr, uint8_t data
 // Enhanced Chip Descriptor (extends chip_descriptor_t for fam65xx CPUs)
 // ============================================================================
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 typedef struct {
     chip_descriptor_t base;         // Base chip descriptor
@@ -66,9 +60,6 @@ typedef struct {
     void* mem_user_data;            // User data for memory callbacks
 } fam65xx_chip_descriptor_t;
 
-#ifdef __cplusplus
-}
-#endif
 
 // ============================================================================
 // CPU Flags
@@ -265,7 +256,3 @@ typedef struct {
     uint16_t am_index : 4;  // Addressing mode index (0-15, bits 8-11) [type addr_mode_t]
     uint16_t flags    : 4;  // Opcode flags (bits 12-15) [type opcode_flags_t]
 } opcode_info_t;
-
-#ifdef __cplusplus
-} // extern "C"
-#endif

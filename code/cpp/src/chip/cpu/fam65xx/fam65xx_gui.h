@@ -4,9 +4,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 // Function declarations for FAM65XX CPU family debug windows
 // These are C-compatible wrappers around the C++ template implementation
@@ -15,9 +12,6 @@ void fam65xx_render_settings_window(void* chip, bool* show_window);
 
 // Bus state update function (also needs C linkage)
 void fam65xx_update_bus_state(void* chip, uint64_t bus_state);
-
-#ifdef __cplusplus
-}
 
 #ifdef IMGUI_VERSION
 #include <unordered_map>
@@ -56,7 +50,6 @@ namespace fam65xx {
     // Update bus state for CPU visualization
     void fam65xx_update_bus_state(void* chip, bus_state_t bus_state);
 }
-#endif
 #endif
 
 #endif // FAM65XX_GUI_H

@@ -56,13 +56,11 @@
 /* ========================================================================== */
 
 /* Fall-through marker for switch statements to suppress compiler warnings */
-#if defined(__GNUC__) && __GNUC__ >= 7
-    #define FALLTHROUGH __attribute__((fallthrough))
-#elif defined(__clang__)
-    #define FALLTHROUGH __attribute__((fallthrough))
-#elif defined(__cplusplus) && __cplusplus >= 201703L
+#if defined(__cplusplus) && __cplusplus >= 201703L
     #define FALLTHROUGH [[fallthrough]]
 #elif defined(__GNUC__) && __GNUC__ >= 7
+    #define FALLTHROUGH __attribute__((fallthrough))
+#elif defined(__clang__)
     #define FALLTHROUGH __attribute__((fallthrough))
 #else
     #define FALLTHROUGH ((void)0)

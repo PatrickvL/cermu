@@ -21,8 +21,6 @@ using nes6502_cpu_t = fam65xx_t<RICOH_2A03>;
 // NES 6502 IMPLEMENTATION
 // ============================================================================
 
-extern "C" {
-
 nes6502_t* nes6502_create(void) {
     nes6502_t* cpu = reinterpret_cast<nes6502_t*>(new nes6502_cpu_t());
 #ifdef IMGUI_VERSION
@@ -188,5 +186,3 @@ const chip_descriptor_t* nes6502_get_chip_descriptor(void) {
     }
     return &nes6502_base_descriptor;
 }
-
-} // extern "C"

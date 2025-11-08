@@ -1,14 +1,9 @@
-#ifndef EMULATION_CONTEXT_H
-#define EMULATION_CONTEXT_H
+#pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
 #include "system_lines.h"
 #include "chip.h"  // Include chip.h to use ChipEntry
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 // Forward declarations
 struct emulation_context_t;
@@ -78,9 +73,3 @@ void emulation_context_update_performance(struct emulation_context_t* context,
 
 // Cycle tracking
 void emulation_context_advance_cycles(struct emulation_context_t* context, uint64_t cpu_cycles_delta);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif // EMULATION_CONTEXT_H

@@ -29,8 +29,6 @@ using mos6502_cpu_t = fam65xx_t<MOS6502>;
 // MOS 6502 (Original NMOS) IMPLEMENTATION
 // ============================================================================
 
-extern "C" {
-
 mos6502_t* mos6502_create(void) {
     mos6502_t* cpu = reinterpret_cast<mos6502_t*>(new mos6502_cpu_t());
 #ifdef IMGUI_VERSION
@@ -177,5 +175,3 @@ const chip_descriptor_t* mos6502_get_chip_descriptor(void) {
     }
     return &mos6502_base_descriptor;
 }
-
-} // extern "C"

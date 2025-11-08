@@ -20,10 +20,6 @@
 #include "../../core/chip.h"
 #include "../../core/system_lines.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 typedef struct mos6510_t mos6510_t;
 
 // ============================================================================
@@ -81,6 +77,3 @@ extern chip_descriptor_t mos6510_descriptor;
 // Chip-compatible tick function
 bus_state_t mos6510_tick_chip(void* cpu, bus_state_t pins);
 
-#ifdef __cplusplus
-}
-#endif
