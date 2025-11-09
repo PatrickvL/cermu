@@ -9,8 +9,8 @@ void ioport_init(ioport_t* port, uint8_t port_index, uint8_t width,
                  uint32_t initial_ddr, uint32_t initial_data, uint32_t initial_bus) {
     if (!port || width == 0 || width > 32) return;
     
-    // Clear the entire structure
-    memset(port, 0, sizeof(ioport_t));
+    // Initialize the structure using C++ initialization
+    *port = ioport_t{};
     
     // Set port configuration
     port->port_index = port_index;
