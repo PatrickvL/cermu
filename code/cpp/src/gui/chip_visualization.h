@@ -1,6 +1,6 @@
 /*
  * chip_visualization.h - Generic chip visualization system for IC packages
- * 
+ *
  * Enhanced version with support for:
  * - Multiple orientation markers (notch, dot, chamfer, bar, triangle)
  * - Various package types (DIP, SOIC, PLCC, QFP, QFN, BGA, TO, SOT)
@@ -13,16 +13,18 @@
 
 #pragma once
 
+#ifndef IMGUI_VERSION
+#error "chip_visualization.h requires IMGUI_VERSION to be defined. This header should only be included in GUI builds."
+#endif
+
 #include <cstdint>
 #include <cstring>
 #include <vector>
 #include <array>
 #include <string>
 
-// Include ImGui only when available (conditional compilation)
-#ifdef IMGUI_VERSION
+// Include ImGui (always available since header is GUI-only)
 #include <imgui.h>
-#endif
 #include "../core/chip_layout.h"
 
 // ============================================================================
@@ -113,7 +115,6 @@ public:
     ChipVisualization(const ChipLayout& layout, const ChipVisualConfig& config = ChipVisualConfig::get_default());
     
     // Main rendering function
-#ifdef IMGUI_VERSION
     void render(ImVec2 chip_center, const std::vector<PinSignalState>& pin_states, const char* chip_name = nullptr);
     
     // Render individual components
@@ -125,17 +126,6 @@ public:
     void render_pin_groups(ImVec2 chip_center);
     void render_legend();
     void render_bga_grid(ImVec2 chip_center, const std::vector<PinSignalState>& pin_states);
-#else
-    void render(void* chip_center, const std::vector<PinSignalState>& pin_states, const char* chip_name = nullptr) {}
-    void render_chip_body(void* chip_center, const char* chip_name = nullptr) {}
-    void render_pins(void* chip_center, const std::vector<PinSignalState>& pin_states) {}
-    void render_orientation_marker(void* chip_center) {}
-    void render_thermal_pad(void* chip_center) {}
-    void render_chip_markings(void* chip_center) {}
-    void render_pin_groups(void* chip_center) {}
-    void render_legend() {}
-    void render_bga_grid(void* chip_center, const std::vector<PinSignalState>& pin_states) {}
-#endif
     
     // Settings GUI
     void render_settings_gui();
@@ -153,21 +143,13 @@ public:
     std::vector<const ChipPin*> find_pins_by_group(const char* group_name) const;
     
     // Get pin position for external drawing
-#ifdef IMGUI_VERSION
     ImVec2 get_pin_position(ImVec2 chip_center, const ChipPin& pin) const;
-#else
-    void* get_pin_position(void* chip_center, const ChipPin& pin) const { return nullptr; }
-#endif
     
     // Format pin label according to notation style
     std::string format_pin_label(const ChipPin& pin) const;
     
     // Get recommended window size for chip
-#ifdef IMGUI_VERSION
     ImVec2 get_recommended_size() const;
-#else
-    void* get_recommended_size() const { return nullptr; }
-#endif
     
 private:
     ChipLayout layout_;
@@ -177,7 +159,6 @@ private:
     mutable float scaled_chip_width_ = 0.0f;
     mutable float scaled_chip_height_ = 0.0f;
     
-#ifdef IMGUI_VERSION
     void render_pin_side(ImVec2 chip_center, const std::vector<ChipPin>& pins,
                         const std::vector<PinSignalState>& pin_states, PinSide side);
     void render_single_pin(ImVec2 pin_pos, const ChipPin& pin, const PinSignalState& state, PinSide side);
@@ -197,26 +178,5 @@ private:
     void draw_chamfer(ImVec2 chip_center);
     void draw_bar_marker(ImVec2 chip_center);
     void draw_triangle_marker(ImVec2 chip_center);
-#else
-    void render_pin_side(void* chip_center, const std::vector<ChipPin>& pins,
-                        const std::vector<PinSignalState>& pin_states, PinSide side) {}
-    void render_single_pin(void* pin_pos, const ChipPin& pin, const PinSignalState& state, PinSide side) {}
-    void render_dip_style(void* chip_center, float chip_width, float chip_height, const char* chip_name) {}
-    void render_surface_mount_style(void* chip_center, float chip_width, float chip_height, const char* chip_name) {}
-    void render_qfp_style(void* chip_center, float chip_width, float chip_height, const char* chip_name) {}
-    void render_bga_style(void* chip_center, float chip_width, float chip_height, const char* chip_name) {}
-    void render_to_style(void* chip_center, float chip_width, float chip_height, const char* chip_name) {}
-    
-    void* calculate_pin_position(void* chip_center, const ChipPin& pin, size_t index_in_side, PinSide side) const { return nullptr; }
-    void* calculate_bga_position(void* chip_center, uint8_t row, uint8_t col) const { return nullptr; }
-    void* get_led_position(void* pin_pos, PinSide side) const { return nullptr; }
-    void* get_label_position(void* pin_pos, const ChipPin& pin, PinSide side) const { return nullptr; }
-    
-    void draw_notch(void* chip_center) {}
-    void draw_dot_marker(void* chip_center) {}
-    void draw_chamfer(void* chip_center) {}
-    void draw_bar_marker(void* chip_center) {}
-    void draw_triangle_marker(void* chip_center) {}
-#endif
 };
 
