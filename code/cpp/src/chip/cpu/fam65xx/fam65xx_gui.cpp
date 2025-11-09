@@ -21,14 +21,14 @@
 #include "fam65xx_processor_traits.hpp"
 #include "fam65xx_decoder.h"
 
-// Include generic chip visualization system
-#include "../../gui/chip_visualization.h"
-#include "fam65xx_layouts.h"
-
-// Include GUI interface
+// Include GUI interface first (defines IMGUI_VERSION)
 #include "../../../gui/imgui_interface.h"
 // Native Dear ImGui C++ - no conditional compilation needed
 #include <imgui.h>
+
+// Include generic chip visualization system (after ImGui)
+#include "../../../gui/chip_visualization.h"
+#include "fam65xx_layouts.h"
 
 using namespace fam65xx;
 
@@ -437,12 +437,6 @@ public:
             
             // Show chip visualization with real bus state from emulation
             render_chip_visualization<Traits>(cpu, chip_center, last_bus_state);
-            
-            ImGui::Separator();
-            
-            // Visualization Settings Menu
-            ChipVisualization* chip_viz = get_chip_visualization_instance<Traits>();
-            chip_viz->render_settings_gui();
         }
         ImGui::EndChild();
         

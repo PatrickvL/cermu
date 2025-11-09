@@ -42,6 +42,9 @@ typedef struct {
     bool show_chip_debug[16];    // Debug windows for each chip (indexed by chip ID)
     bool show_chip_settings[16]; // Settings windows for each chip (indexed by chip ID)
     
+    // Global Chip Visualization Configuration
+    bool show_chip_visualization_config; // Global chip visualization configuration dialog
+    
     // PLA Debug Window - now handled via chip debug system
     
     // Memory viewer state
