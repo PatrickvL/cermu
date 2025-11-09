@@ -56,7 +56,7 @@ bus_state_t op_adc(bus_state_t pins) {
 bus_state_t op_nop(bus_state_t pins) {
     // WDC65C02 neutralized illegal opcodes preserve original addressing timing
     if constexpr (this->has_cmos()) {
-        if (this->opcode_entry.flags & OF_RMW) {
+        if (this->opcode_entry.flags & to_index(OF::RMW)) {
             // RMW mode NOP: Perform full read-modify-write cycle but don't modify the value
             // This preserves the bus cycle timing for WDC65C02 neutralized illegal opcodes
             return this->rmw_operation_helper(pins, [this](uint8_t& value) {
@@ -70,7 +70,7 @@ bus_state_t op_nop(bus_state_t pins) {
     
     // Regular NOP handling for non-RMW modes
     switch (this->opcode_entry.am_index) {
-        case AM_IMM:
+        case to_index(AM::IMM):
             // AM_IMM: All immediate NOPs read operand and increment PC
             pins = this->phi2_dummy_read(pins, REG_PC);
             if (FAM65XX_GET_RDY(pins)) {
@@ -80,7 +80,7 @@ bus_state_t op_nop(bus_state_t pins) {
             }
             break;
             
-        case AM_NON:
+        case to_index(AM::NON):
             // Implicit NOPs do dummy read from PC without increment
             pins = this->phi2_dummy_read(pins, REG_PC);
             if (!FAM65XX_GET_RDY(pins)) {

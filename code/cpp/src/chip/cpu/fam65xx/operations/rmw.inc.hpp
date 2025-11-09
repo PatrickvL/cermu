@@ -13,7 +13,7 @@
 /* Helper for RMW operations that support both accumulator and memory modes */
 template<typename OperationFunc>
 bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func) {
-    if (this->opcode_entry.flags & OF_RMW) {
+    if (this->opcode_entry.flags & to_index(OF::RMW)) {
         // Memory mode - 3-cycle RMW operation (hardware-accurate)
         switch (this->cycle_index) {
             case 0:

@@ -167,7 +167,7 @@ bus_state_t op_bit(bus_state_t pins) {
         
         // BIT immediate (65C02) only affects Z flag - N and V are NOT affected
         // BIT memory affects N, V, and Z flags normally
-        if (this->opcode_entry.am_index == AM_IMM) {
+        if (this->opcode_entry.am_index == to_index(AM::IMM)) {
             // BIT immediate: only update Z flag
             update_flag(FLAG_Z, result == 0);
         } else {

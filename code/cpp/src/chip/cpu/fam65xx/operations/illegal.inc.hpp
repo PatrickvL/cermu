@@ -17,7 +17,7 @@ bus_state_t op_lax(bus_state_t pins) {
     if constexpr (has_illegal_opcodes()) {
         // LAX - Load A and X from memory
         // Special case: LAX immediate has unstable behavior - uses (A | 0xEE) & operand
-        if (opcode_entry.am_index == AM_IMM) {
+        if (opcode_entry.am_index == to_index(AM::IMM)) {
             // LAX immediate - unstable behavior with magic constant
             pins = phi2_read(pins, REG_PC, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {

@@ -20,16 +20,23 @@ void fam65xx_update_bus_state(void* chip, uint64_t bus_state);
 
 // Forward declarations
 namespace fam65xx {
-    struct CPUTraits;  // Forward declare the struct first
-    template<const CPUTraits& Traits> class fam65xx_t;  // Then use it in template
+    // Forward declare processor tag types instead of template parameters
+    struct MOS6502;
+    struct MOS6510;
+    struct NES6502;
+    struct Rockwell65C02;
+    struct WDC65C02;
+    struct WDC65C816;
+    
+    template<typename ProcessorTag> class fam65xx_t;
     class CPUGUIRenderer;
 }
 
 // C++ template interface for registering CPU instances with the GUI system
 namespace fam65xx {
     // Register a CPU instance for GUI rendering
-    template<const CPUTraits& Traits>
-    void register_cpu_for_gui(fam65xx_t<Traits>* cpu);
+    template<typename ProcessorTag>
+    void register_cpu_for_gui(fam65xx_t<ProcessorTag>* cpu);
     
     // Unregister a CPU instance 
     void unregister_cpu_from_gui(void* cpu);

@@ -11,15 +11,12 @@
 #include "fam65xx_gui.h"
 #include <cstdio>
 
-// Include concrete CPU type definitions
-using namespace fam65xx;
-
 // ============================================================================
 // CONCRETE CPU TYPE DEFINITIONS
 // ============================================================================
 
 // Define concrete CPU types for easier use
-using mos6502_cpu_t = fam65xx_t<MOS6502>;
+using mos6502_cpu_t = fam65xx::fam65xx_t<fam65xx::MOS6502>;
 
 // Cast helpers for opaque handles
 #define CPU_CAST(type, ptr) reinterpret_cast<type*>(ptr)
