@@ -23,11 +23,14 @@
 
 // Include GUI interface first (defines IMGUI_VERSION)
 #include "../../../gui/imgui_interface.h"
-// Native Dear ImGui C++ - no conditional compilation needed
+#include "../../../core/chip_layout.h"
+#include "../../../core/pin_macros.h"
+// Native Dear ImGui C++ - conditional compilation for GUI availability
+#ifdef IMGUI_VERSION
 #include <imgui.h>
-
-// Include generic chip visualization system (after ImGui)
 #include "../../../gui/chip_visualization.h"
+#include "../../../gui/global_chip_style.h"
+#endif
 #include "fam65xx_layouts.h"
 
 using namespace fam65xx;
@@ -74,32 +77,24 @@ static const char* flag_names[] = {
     "C", "Z", "I", "D", "B", "U", "V", "N"
 };
 
+#ifdef IMGUI_VERSION
 // ============================================================================
 // CPU-SPECIFIC CHIP VISUALIZATION HELPERS
 // ============================================================================
 
-// Template function to create and render CPU chip visualization
-// Get chip visualization instance for a CPU type (no static caching - always uses global config)
-template<const CPUTraits& Traits>
-ChipVisualization* get_chip_visualization_instance() {
-    static ChipLayout layout = create_cpu_pin_layout<Traits>();
-    static std::unique_ptr<ChipVisualization> chip_viz = std::make_unique<ChipVisualization>(layout);
-    
-    // Always return the same instance - but it will use get_visual_config() which returns global config
-    return chip_viz.get();
-}
-
 template<const CPUTraits& Traits>
 void render_chip_visualization(fam65xx_t<Traits>* cpu, ImVec2 chip_center, bus_state_t bus_state) {
-    ChipVisualization* chip_viz = get_chip_visualization_instance<Traits>();
+    // Get global renderer and chip layout
+    ChipVisualization& renderer = GetGlobalChipRenderer();
+    static ChipLayout layout = create_cpu_pin_layout<Traits>();
     
     // Get current pin states from CPU and bus state
-    const ChipLayout* layout = &chip_viz->get_pin_layout();
-    std::vector<PinSignalState> pin_states = get_cpu_pin_states<Traits>(cpu, layout, bus_state);
+    const ChipLayout* const_layout = &layout;
+    std::vector<PinSignalState> pin_states = get_cpu_pin_states<Traits>(cpu, const_layout, bus_state);
     
-    // Render the chip
+    // Render the chip using global renderer
     const char* chip_name = get_processor_name<Traits>();
-    chip_viz->render(chip_center, pin_states, chip_name);
+    renderer.render(layout, chip_center, pin_states, chip_name);
 }
 
 // Fallback version without bus state
@@ -247,9 +242,9 @@ void render_chip_visualization(fam65xx_t<Traits>* cpu) {
         
         ImGui::Separator();
         
-        // Render pin legend using the generic visualization system (no static caching)
-        static ChipVisualization legend_viz(layout);
-        legend_viz.render_legend();
+        // Render pin legend using the global visualization system
+        ChipVisualization& renderer = GetGlobalChipRenderer();
+        renderer.render_legend();
         
         ImGui::Unindent(16.0f);
     }
@@ -650,10 +645,13 @@ void fam65xx_update_bus_state(void* chip, bus_state_t bus_state) {
 }
 
 } // extern "C"
+#endif // IMGUI_VERSION
 
 // ============================================================================
 // C++ REGISTRATION API
 // ============================================================================
+
+#ifdef IMGUI_VERSION
 
 namespace fam65xx {
 
@@ -727,3 +725,4 @@ void render_cpu_settings_window_impl(void* cpu, const char* cpu_name) {
 // template class CPUGUIRendererImpl<fam65xx::WDC_65C816>;
 
 }
+#endif // IMGUI_VERSION

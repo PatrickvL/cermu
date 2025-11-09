@@ -1,11 +1,12 @@
 #include "vicii_common.h"
 #include "../../../gui/imgui_interface.h"
-#include "../../../gui/chip_visualization.h"
 #include "../../../core/chip_layout.h"
 #include "../../../core/pin_macros.h"
 // Native Dear ImGui C++ - conditional compilation for GUI availability
 #ifdef IMGUI_VERSION
 #include <imgui.h>
+#include "../../../gui/chip_visualization.h"
+#include "../../../gui/global_chip_style.h"
 #endif
 #include <stdio.h>
 #include <string.h>
@@ -148,13 +149,10 @@ static std::vector<PinSignalState> get_vicii_pin_states(vicii_t* vicii, const Ch
     return pin_states;
 }
 
-// Get chip visualization instance for VIC-II (no static caching - always uses global config)
-static ChipVisualization* get_vicii_chip_visualization_instance() {
+// Use global renderer for VIC-II chip visualization
+static ChipLayout& get_vicii_layout() {
     static ChipLayout layout = create_vicii_layout();
-    static std::unique_ptr<ChipVisualization> chip_viz = std::make_unique<ChipVisualization>(layout);
-    
-    // Always return the same instance - but it will use get_visual_config() which returns global config
-    return chip_viz.get();
+    return layout;
 }
 
 void vicii_gui_render_debug_window(void* chip, bool* show_window, const char* window_title) {
@@ -187,15 +185,15 @@ void vicii_gui_render_debug_window(void* chip, bool* show_window, const char* wi
         chip_center.x += content_region.x * 0.5f;
         chip_center.y += 200.0f; // Space for the chip
         
-        // Get chip visualization instance and render
-        ChipVisualization* chip_viz = get_vicii_chip_visualization_instance();
-        const ChipLayout* layout = &chip_viz->get_pin_layout();
+        // Get global renderer and chip layout
+        ChipVisualization& renderer = GetGlobalChipRenderer();
+        ChipLayout& layout = get_vicii_layout();
         
         // Get current pin states from VIC-II
-        std::vector<PinSignalState> pin_states = get_vicii_pin_states(vicii, layout, 0 /* bus_state */);
+        std::vector<PinSignalState> pin_states = get_vicii_pin_states(vicii, &layout, 0 /* bus_state */);
         
-        // Render the chip
-        chip_viz->render(chip_center, pin_states, get_vicii_type_name(vicii));
+        // Render the chip using global renderer
+        renderer.render(layout, chip_center, pin_states, get_vicii_type_name(vicii));
     }
     ImGui::EndChild();
     
