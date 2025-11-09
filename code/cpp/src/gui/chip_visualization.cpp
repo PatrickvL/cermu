@@ -434,7 +434,7 @@ void ChipVisualization::render_dip_style(ImVec2 chip_center, float chip_width, f
             }
             break;
             
-        case DatasheetMode::FUNCTIONAL_BLOCK:
+        case DatasheetMode::FUNCTIONAL_BLOCK: {
             // Internal architecture diagram with functional units
             draw_list->AddRectFilled(chip_min, chip_max, config_.chip_body_color, 0.0f, 0);
             draw_list->AddRect(chip_min, chip_max, config_.chip_border_color, 0.0f, 0, config_.chip_border_width * 1.5f);
@@ -461,8 +461,9 @@ void ChipVisualization::render_dip_style(ImVec2 chip_center, float chip_width, f
                 draw_list->AddText(text_pos, config_.text_color, chip_name);
             }
             break;
+        }
             
-        case DatasheetMode::CONNECTION_DIAGRAM:
+        case DatasheetMode::CONNECTION_DIAGRAM: {
             // Schematic symbol - triangle or box shape for logic symbols
             ImVec2 tri_p1 = {chip_min.x, chip_center.y};
             ImVec2 tri_p2 = {chip_max.x, chip_min.y + chip_height * 0.3f};
@@ -477,8 +478,9 @@ void ChipVisualization::render_dip_style(ImVec2 chip_center, float chip_width, f
                 draw_list->AddText(text_pos, config_.text_color, chip_name);
             }
             break;
+        }
             
-        case DatasheetMode::PACKAGE_OUTLINE:
+        case DatasheetMode::PACKAGE_OUTLINE: {
             // 3D-ish mechanical drawing for manufacturing
             draw_list->AddRectFilled(chip_min, chip_max, config_.chip_body_color, 2.0f, 0);
             draw_list->AddRect(chip_min, chip_max, config_.chip_border_color, 2.0f, 0, config_.chip_border_width);
@@ -505,6 +507,7 @@ void ChipVisualization::render_dip_style(ImVec2 chip_center, float chip_width, f
                 draw_list->AddText(text_pos, config_.text_color, package_text);
             }
             break;
+        }
             
         default:
             // Modern style - standard rounded rectangle
