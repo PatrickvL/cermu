@@ -426,7 +426,6 @@ void GlobalChipStyleManager::renderRealTimePreview() {
     if (preview_mode_ && config_changed_this_frame_) {
         // In preview mode, temporarily update the global config so all renderers see the changes
         // This is safe because we restore it when preview mode is disabled or dialog is closed
-        ChipVisualConfig old_config = global_config_;
         global_config_ = temp_config_;
         
         // Also notify registered visualizations for compatibility
