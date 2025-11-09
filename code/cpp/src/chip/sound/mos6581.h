@@ -27,9 +27,15 @@ typedef enum {
     SID_PIN_GND = 14, SID_PIN_D0 = 15,
 } mos6581_pin_t;
 
-// Register dimensions
-#define SID_REGS_BITS 5
-#define SID_REGS_SIZE (1 << SID_REGS_BITS) // 32
+// Register dimensions - Modern C++ constants
+namespace sid_constants {
+    constexpr uint8_t REGS_BITS = 5;
+    constexpr uint8_t REGS_SIZE = (1 << REGS_BITS); // 32
+}
+
+// Legacy macro compatibility
+#define SID_REGS_BITS sid_constants::REGS_BITS
+#define SID_REGS_SIZE sid_constants::REGS_SIZE
 #define SID_REGS_MASK (SID_REGS_SIZE - 1) // 31
 
 // SID chip revisions
@@ -81,11 +87,13 @@ typedef enum {
 // Combined waveform lookup table size
 #define COMBINED_WAVEFORM_TABLE_SIZE 4096
 
-// Forward declarations
-//typedef struct voice_s voice_t;
-typedef struct mos6581_s mos6581_t;
-typedef struct filter_state_s filter_state_t;
-typedef struct ring_buffer_s ring_buffer_t;
+// Forward declarations - Modern C++ style
+struct mos6581_s;
+struct filter_state_s;
+struct ring_buffer_s;
+using mos6581_t = mos6581_s;
+using filter_state_t = filter_state_s;
+using ring_buffer_t = ring_buffer_s;
 
 // Ring buffer for sample output
 typedef struct ring_buffer_s {

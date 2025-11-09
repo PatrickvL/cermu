@@ -6,62 +6,117 @@
 #include "../../../chip/memory/mos2114.h"  // For mos2114_t
 #include <stdbool.h>
 
-// VIC-II Register Constants
-#define VICII_REGS_SIZE 64
-#define VICII_REGS_MASK 63
+// VIC-II Register Constants - Modern C++ constexpr
+namespace vicii_regs {
+    constexpr uint8_t SIZE = 64;
+    constexpr uint8_t MASK = 63;
 
-// Register indices
-#define VICII_M0X     0   // $d000 X coordinate sprite 0
-#define VICII_M0Y     1   // $d001 Y coordinate sprite 0
-#define VICII_M1X     2   // $d002 X coordinate sprite 1
-#define VICII_M1Y     3   // $d003 Y coordinate sprite 1
-#define VICII_M2X     4   // $d004 X coordinate sprite 2
-#define VICII_M2Y     5   // $d005 Y coordinate sprite 2
-#define VICII_M3X     6   // $d006 X coordinate sprite 3
-#define VICII_M3Y     7   // $d007 Y coordinate sprite 3
-#define VICII_M4X     8   // $d008 X coordinate sprite 4
-#define VICII_M4Y     9   // $d009 Y coordinate sprite 4
-#define VICII_M5X     10  // $d00a X coordinate sprite 5
-#define VICII_M5Y     11  // $d00b Y coordinate sprite 5
-#define VICII_M6X     12  // $d00c X coordinate sprite 6
-#define VICII_M6Y     13  // $d00d Y coordinate sprite 6
-#define VICII_M7X     14  // $d00e X coordinate sprite 7
-#define VICII_M7Y     15  // $d00f Y coordinate sprite 7
-#define VICII_MX8     16  // $d010 MSB X coordinate sprite i
-#define VICII_C1      17  // $d011 Control register 1
-#define VICII_RASTER  18  // $d012 Raster counter
-#define VICII_LPX     19  // $d013 Light pen X
-#define VICII_LPY     20  // $d014 Light pen Y
-#define VICII_MXE     21  // $d015 Sprite enabled x
-#define VICII_C2      22  // $d016 Control register 2
-#define VICII_MXYE    23  // $d017 Sprite Y expansion x
-#define VICII_MP      24  // $d018 Memory pointers
-#define VICII_IR      25  // $d019 Interrupt Register
-#define VICII_IE      26  // $d01a Interrupt Enabled
-#define VICII_MXDP    27  // $d01b Sprite data priority x
-#define VICII_MXMC    28  // $d01c Sprite multicolor x select
-#define VICII_MXXE    29  // $d01d Sprite X expansion x
-#define VICII_MXM     30  // $d01e Sprite-sprite collision x
-#define VICII_MXD     31  // $d01f Sprite-data collision x
-#define VICII_EC      32  // $d020 Exterior color (Border)
-#define VICII_B0C     33  // $d021 Background color 0
-#define VICII_B1C     34  // $d022 Background color 1
-#define VICII_B2C     35  // $d023 Background color 2
-#define VICII_B3C     36  // $d024 Background color 3
-#define VICII_MM0     37  // $d025 Sprite multicolor 0
-#define VICII_MM1     38  // $d026 Sprite multicolor 1
-#define VICII_M0C     39  // $d027 Color sprite 0
-#define VICII_M1C     40  // $d028 Color sprite 1
-#define VICII_M2C     41  // $d029 Color sprite 2
-#define VICII_M3C     42  // $d02a Color sprite 3
-#define VICII_M4C     43  // $d02b Color sprite 4
-#define VICII_M5C     44  // $d02c Color sprite 5
-#define VICII_M6C     45  // $d02d Color sprite 6
-#define VICII_M7C     46  // $d02e Color sprite 7
+    // Register indices
+    constexpr uint8_t M0X = 0;   // $d000 X coordinate sprite 0
+    constexpr uint8_t M0Y = 1;   // $d001 Y coordinate sprite 0
+    constexpr uint8_t M1X = 2;   // $d002 X coordinate sprite 1
+    constexpr uint8_t M1Y = 3;   // $d003 Y coordinate sprite 1
+    constexpr uint8_t M2X = 4;   // $d004 X coordinate sprite 2
+    constexpr uint8_t M2Y = 5;   // $d005 Y coordinate sprite 2
+    constexpr uint8_t M3X = 6;   // $d006 X coordinate sprite 3
+    constexpr uint8_t M3Y = 7;   // $d007 Y coordinate sprite 3
+    constexpr uint8_t M4X = 8;   // $d008 X coordinate sprite 4
+    constexpr uint8_t M4Y = 9;   // $d009 Y coordinate sprite 4
+    constexpr uint8_t M5X = 10;  // $d00a X coordinate sprite 5
+    constexpr uint8_t M5Y = 11;  // $d00b Y coordinate sprite 5
+    constexpr uint8_t M6X = 12;  // $d00c X coordinate sprite 6
+    constexpr uint8_t M6Y = 13;  // $d00d Y coordinate sprite 6
+    constexpr uint8_t M7X = 14;  // $d00e X coordinate sprite 7
+    constexpr uint8_t M7Y = 15;  // $d00f Y coordinate sprite 7
+    constexpr uint8_t MX8 = 16;  // $d010 MSB X coordinate sprite i
+    constexpr uint8_t C1 = 17;   // $d011 Control register 1
+    constexpr uint8_t RASTER = 18; // $d012 Raster counter
+    constexpr uint8_t LPX = 19;  // $d013 Light pen X
+    constexpr uint8_t LPY = 20;  // $d014 Light pen Y
+    constexpr uint8_t MXE = 21;  // $d015 Sprite enabled x
+    constexpr uint8_t C2 = 22;   // $d016 Control register 2
+    constexpr uint8_t MXYE = 23; // $d017 Sprite Y expansion x
+    constexpr uint8_t MP = 24;   // $d018 Memory pointers
+    constexpr uint8_t IR = 25;   // $d019 Interrupt Register
+    constexpr uint8_t IE = 26;   // $d01a Interrupt Enabled
+    constexpr uint8_t MXDP = 27; // $d01b Sprite data priority x
+    constexpr uint8_t MXMC = 28; // $d01c Sprite multicolor x select
+    constexpr uint8_t MXXE = 29; // $d01d Sprite X expansion x
+    constexpr uint8_t MXM = 30;  // $d01e Sprite-sprite collision x
+    constexpr uint8_t MXD = 31;  // $d01f Sprite-data collision x
+    constexpr uint8_t EC = 32;   // $d020 Exterior color (Border)
+    constexpr uint8_t B0C = 33;  // $d021 Background color 0
+    constexpr uint8_t B1C = 34;  // $d022 Background color 1
+    constexpr uint8_t B2C = 35;  // $d023 Background color 2
+    constexpr uint8_t B3C = 36;  // $d024 Background color 3
+    constexpr uint8_t MM0 = 37;  // $d025 Sprite multicolor 0
+    constexpr uint8_t MM1 = 38;  // $d026 Sprite multicolor 1
+    constexpr uint8_t M0C = 39;  // $d027 Color sprite 0
+    constexpr uint8_t M1C = 40;  // $d028 Color sprite 1
+    constexpr uint8_t M2C = 41;  // $d029 Color sprite 2
+    constexpr uint8_t M3C = 42;  // $d02a Color sprite 3
+    constexpr uint8_t M4C = 43;  // $d02b Color sprite 4
+    constexpr uint8_t M5C = 44;  // $d02c Color sprite 5
+    constexpr uint8_t M6C = 45;  // $d02d Color sprite 6
+    constexpr uint8_t M7C = 46;  // $d02e Color sprite 7
 
-// MxM and MxD storage is moved outside the 0..63 range
-#define VICII_MXM_2   64  // Shadow register for MxM $d01e Sprite-sprite collision x
-#define VICII_MXD_2   65  // Shadow register for MxD $d01f Sprite-data collision x
+    // MxM and MxD storage is moved outside the 0..63 range
+    constexpr uint8_t MXM_2 = 64; // Shadow register for MxM $d01e Sprite-sprite collision x
+    constexpr uint8_t MXD_2 = 65; // Shadow register for MxD $d01f Sprite-data collision x
+}
+
+// Legacy macro compatibility - can be removed once all code is updated
+#define VICII_REGS_SIZE vicii_regs::SIZE
+#define VICII_REGS_MASK vicii_regs::MASK
+#define VICII_M0X     vicii_regs::M0X
+#define VICII_M0Y     vicii_regs::M0Y
+#define VICII_M1X     vicii_regs::M1X
+#define VICII_M1Y     vicii_regs::M1Y
+#define VICII_M2X     vicii_regs::M2X
+#define VICII_M2Y     vicii_regs::M2Y
+#define VICII_M3X     vicii_regs::M3X
+#define VICII_M3Y     vicii_regs::M3Y
+#define VICII_M4X     vicii_regs::M4X
+#define VICII_M4Y     vicii_regs::M4Y
+#define VICII_M5X     vicii_regs::M5X
+#define VICII_M5Y     vicii_regs::M5Y
+#define VICII_M6X     vicii_regs::M6X
+#define VICII_M6Y     vicii_regs::M6Y
+#define VICII_M7X     vicii_regs::M7X
+#define VICII_M7Y     vicii_regs::M7Y
+#define VICII_MX8     vicii_regs::MX8
+#define VICII_C1      vicii_regs::C1
+#define VICII_RASTER  vicii_regs::RASTER
+#define VICII_LPX     vicii_regs::LPX
+#define VICII_LPY     vicii_regs::LPY
+#define VICII_MXE     vicii_regs::MXE
+#define VICII_C2      vicii_regs::C2
+#define VICII_MXYE    vicii_regs::MXYE
+#define VICII_MP      vicii_regs::MP
+#define VICII_IR      vicii_regs::IR
+#define VICII_IE      vicii_regs::IE
+#define VICII_MXDP    vicii_regs::MXDP
+#define VICII_MXMC    vicii_regs::MXMC
+#define VICII_MXXE    vicii_regs::MXXE
+#define VICII_MXM     vicii_regs::MXM
+#define VICII_MXD     vicii_regs::MXD
+#define VICII_EC      vicii_regs::EC
+#define VICII_B0C     vicii_regs::B0C
+#define VICII_B1C     vicii_regs::B1C
+#define VICII_B2C     vicii_regs::B2C
+#define VICII_B3C     vicii_regs::B3C
+#define VICII_MM0     vicii_regs::MM0
+#define VICII_MM1     vicii_regs::MM1
+#define VICII_M0C     vicii_regs::M0C
+#define VICII_M1C     vicii_regs::M1C
+#define VICII_M2C     vicii_regs::M2C
+#define VICII_M3C     vicii_regs::M3C
+#define VICII_M4C     vicii_regs::M4C
+#define VICII_M5C     vicii_regs::M5C
+#define VICII_M6C     vicii_regs::M6C
+#define VICII_M7C     vicii_regs::M7C
+#define VICII_MXM_2   vicii_regs::MXM_2
+#define VICII_MXD_2   vicii_regs::MXD_2
 
 // Control register 1 ($d011) bit masks
 #define VICII_C1_YSCROLL  0x07  // Smooth Scroll to Y Pos
@@ -134,7 +189,7 @@ enum vicii_color_e {
     VICII_COLOR_LIGHT_BLUE = 14,
     VICII_COLOR_LIGHT_GREY = 15
 };
-typedef enum vicii_color_e vicii_color_t;
+using vicii_color_t = vicii_color_e;
 
 // Priority levels for sprite/background collision
 enum vicii_priority_e {
@@ -144,14 +199,14 @@ enum vicii_priority_e {
     VICII_PRIORITY_SPRITE_IN_FRONT = 3,
     VICII_PRIORITY_BORDER = 4
 };
-typedef enum vicii_priority_e vicii_priority_t;
+using vicii_priority_t = vicii_priority_e;
 
 // Pixel structure
 struct vicii_pixel_s {
     vicii_priority_t priority;
     vicii_color_t color;
 };
-typedef struct vicii_pixel_s vicii_pixel_t;
+using vicii_pixel_t = vicii_pixel_s;
 
 // MOS6569 PAL VIC-II timing constants 
 #define VICII_PAL_CYCLES_PER_LINE    63 // aka MOS6569_CYCLES_PER_LINE
@@ -194,7 +249,7 @@ typedef struct vicii_pixel_s vicii_pixel_t;
 // ========================================================================================
 
 // Configuration struct for different MOS 656x chip variants
-typedef struct {
+struct vicii_chip_config_t {
     // Timing parameters
     uint8_t cycles_per_line;
     uint16_t total_lines;
@@ -226,30 +281,31 @@ typedef struct {
     
     // Chip name for debugging
     const char* chip_name;
-} vicii_chip_config_t;
+};
 
 // ========================================================================================
 // CYCLE TABLE ENTRY TYPE (needed for timing unit)
 // ========================================================================================
-typedef struct vicii_s vicii_t;
-typedef uint8_t (*vicii_cycle_func_t)(vicii_t*, int);
+struct vicii_s; // Forward declaration
+using vicii_t = struct vicii_s;
+using vicii_cycle_func_t = uint8_t (*)(vicii_t*, int);
 
-typedef struct vicii_cycle_entry_t {
+struct vicii_cycle_entry_t {
     vicii_cycle_func_t func;
     int param;
-} vicii_cycle_entry_t;
+};
 
 // ========================================================================================
 // TOPIC-SPECIFIC UNIT STRUCTURES
 // ========================================================================================
 
 // Register Unit - All VIC-II register state
-typedef struct {
+struct vicii_registers_unit_t {
     uint8_t data[VICII_REGS_SIZE + 2];  // +2 for shadow collision registers
-} vicii_registers_unit_t;
+};
 
 // Timing Unit - All timing-related state
-typedef struct {
+struct vicii_timing_unit_t {
     // Primary counter is x_coordinate (pixel-level precision)
     uint16_t x_coordinate;               // Primary counter: 0-511 (9-bit, wraps)
     uint16_t display_x_coordinate;       // Display coordinate with 12-pixel pipeline delay
@@ -265,7 +321,7 @@ typedef struct {
     uint16_t pixels_per_line;            // Total pixels per line (504 PAL, 520 NTSC)
     uint8_t cycles_per_line;             // Cycles per line (63 PAL, 65 NTSC)
     uint16_t total_lines;                // Total lines per frame
-} vicii_timing_unit_t;
+};
 
 // Video Logic Unit - Display state and bad line logic (Documentation section 3.7)
 typedef struct {
