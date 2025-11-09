@@ -94,10 +94,15 @@ void GlobalChipStyleManager::renderConfigDialog(bool* show_dialog) {
     if (show_dialog && !*show_dialog) return;
     
     config_changed_this_frame_ = false;
-    using_temp_config_ = preview_mode_;
     
-    if (using_temp_config_) {
-        temp_config_ = global_config_;
+    // Initialize temp config on first use or when preview mode changes
+    static bool temp_config_initialized = false;
+    if (!temp_config_initialized || (using_temp_config_ != preview_mode_)) {
+        using_temp_config_ = preview_mode_;
+        if (using_temp_config_) {
+            temp_config_ = global_config_;
+        }
+        temp_config_initialized = true;
     }
     
     ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
@@ -406,15 +411,21 @@ void GlobalChipStyleManager::renderRealTimePreview() {
         }
     }
     
-    ImGui::Text("Preview controls and info would go here");
+    ImGui::Text("Live Preview Information");
+    ImGui::Separator();
     ImGui::Text("Active visualizations: %zu", registered_visualizations_.size());
     
     if (preview_mode_) {
-        ImGui::Text("Real-time preview: ENABLED");
+        ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Real-time preview: ENABLED");
         ImGui::Text("Changes apply immediately to all chip visualizations");
+        ImGui::Text("Use 'Apply Global' to make changes permanent");
     } else {
-        ImGui::Text("Real-time preview: DISABLED");
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Real-time preview: DISABLED");
         ImGui::Text("Click 'Apply Global' to update all visualizations");
+    }
+    
+    if (config_changed_this_frame_) {
+        ImGui::TextColored(ImVec4(0.0f, 0.8f, 1.0f, 1.0f), "Configuration updated this frame");
     }
 }
 
@@ -451,39 +462,17 @@ std::vector<std::string> GlobalChipStyleManager::getPresetNames() const {
 }
 
 // ============================================================================
-// AUTO-UPDATING VISUALIZATION WRAPPER
+// CHIP GUI INTEGRATION - SIMPLIFIED APPROACH
 // ============================================================================
 
-AutoUpdatingChipVisualization::AutoUpdatingChipVisualization(const std::string& id, const ChipLayout& layout)
-    : id_(id), layout_(layout) {
-    
-    viz_ = std::make_unique<ChipVisualization>(layout, GetGlobalChipConfig());
-    
-    // Register for automatic updates
-    GLOBAL_CHIP_STYLE.registerVisualization(id_, [this](const ChipVisualConfig& config) {
-        onConfigChanged(config);
-    });
-}
-
-AutoUpdatingChipVisualization::~AutoUpdatingChipVisualization() {
-    GLOBAL_CHIP_STYLE.unregisterVisualization(id_);
-}
-
-void AutoUpdatingChipVisualization::render(ImVec2 chip_center, const std::vector<PinSignalState>& pin_states, const char* chip_name) {
-    viz_->render(chip_center, pin_states, chip_name);
-}
-
-void AutoUpdatingChipVisualization::render_settings_gui() {
-    viz_->render_settings_gui();
-}
-
-ImVec2 AutoUpdatingChipVisualization::get_recommended_size() const {
-    return viz_->get_recommended_size();
-}
-
-void AutoUpdatingChipVisualization::onConfigChanged(const ChipVisualConfig& new_config) {
-    viz_->set_visual_config(new_config);
-}
+// No wrapper needed! Chip GUIs simply call GetGlobalChipConfig() directly:
+//
+// Example usage in any chip GUI rendering function:
+//   ChipVisualization* viz = get_chip_visualization_instance();
+//   viz->render(chip_center, pin_states, chip_name);
+//   // ChipVisualization automatically uses global config - no setup needed!
+//
+// This is much simpler and more efficient than complex wrapper classes.
 
 // ============================================================================
 // HISTORICAL PRESETS

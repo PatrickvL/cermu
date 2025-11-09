@@ -105,33 +105,14 @@ inline const ChipVisualConfig& GetGlobalChipConfig() {
     return GlobalChipStyleManager::getInstance().getGlobalConfig();
 }
 
-// Apply global style to a visualization
-inline void ApplyGlobalStyle(ChipVisualization& viz) {
-    viz.set_visual_config(GetGlobalChipConfig());
-}
 
-// Auto-updating chip visualization wrapper
-class AutoUpdatingChipVisualization {
-public:
-    AutoUpdatingChipVisualization(const std::string& id, const ChipLayout& layout);
-    ~AutoUpdatingChipVisualization();
-    
-    // Forward ChipVisualization interface
-    void render(ImVec2 chip_center, const std::vector<PinSignalState>& pin_states, const char* chip_name = nullptr);
-    void render_settings_gui();
-    ImVec2 get_recommended_size() const;
-    
-    // Access underlying visualization
-    ChipVisualization& getVisualization() { return *viz_; }
-    const ChipVisualization& getVisualization() const { return *viz_; }
-    
-private:
-    void onConfigChanged(const ChipVisualConfig& new_config);
-    
-    std::string id_;
-    std::unique_ptr<ChipVisualization> viz_;
-    ChipLayout layout_;
-};
+// Simple utility functions for chip GUIs - no wrapper needed!
+// ChipVisualization now automatically uses global config:
+//
+// Example usage in chip GUI:
+//   ChipVisualization* viz = get_chip_visualization_instance();
+//   viz->render(center, pin_states, chip_name);
+//   // That's it! Global config is used automatically
 
 // ============================================================================
 // HISTORICAL STYLE PRESETS
@@ -159,20 +140,22 @@ namespace HistoricalPresets {
 // INTEGRATION HELPERS
 // ============================================================================
 
-// Helper for existing chip GUIs to integrate with global style system
-template<typename ChipType>
-class GlobalStyleIntegratedGUI {
-public:
-    GlobalStyleIntegratedGUI(const std::string& chip_name, ChipType* chip_instance);
-    
-    void render_chip_visualization(ImVec2 center, const std::vector<PinSignalState>& states);
-    void render_style_controls();
-    
-private:
-    std::string chip_name_;
-    ChipType* chip_;
-    AutoUpdatingChipVisualization viz_;
-};
+// Example integration pattern for chip GUIs:
+//
+// static ChipVisualization* get_chip_viz_instance() {
+//     static std::unique_ptr<ChipVisualization> viz = nullptr;
+//     if (!viz) {
+//         ChipLayout layout = create_chip_layout();
+//         viz = std::make_unique<ChipVisualization>(layout);
+//     }
+//     return viz.get();
+// }
+//
+// void render_chip_debug_window() {
+//     ChipVisualization* viz = get_chip_viz_instance();
+//     viz->set_visual_config(GetGlobalChipConfig());  // Apply global config
+//     viz->render(center, pin_states, chip_name);     // Render with current style
+// }
 
 // Menu integration
 void RenderGlobalChipStyleMenu();
