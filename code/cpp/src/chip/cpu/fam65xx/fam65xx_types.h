@@ -184,7 +184,6 @@ enum class AddressingMode : uint8_t {
 };
 
 // Legacy C-style enum compatibility
-using addressing_mode_t = AddressingMode;
 constexpr auto AM_NON = AddressingMode::NONE;
 constexpr auto AM_IMM = AddressingMode::IMMEDIATE;
 constexpr auto AM_ZER = AddressingMode::ZERO_PAGE;
@@ -319,7 +318,6 @@ constexpr OpcodeFlags operator~(OpcodeFlags a) {
 }
 
 // Legacy C-style enum compatibility
-using opcode_flags_t = OpcodeFlags;
 constexpr auto OF_NONE = OpcodeFlags::NONE;
 constexpr auto OF_ILLEGAL_STORE = OpcodeFlags::ILLEGAL_STORE;
 constexpr auto OF_SKIP_PAGE = OpcodeFlags::SKIP_PAGE;
@@ -328,6 +326,6 @@ constexpr auto OF_RESERVED = OpcodeFlags::RESERVED;
 
 typedef struct {
     uint16_t op_index : 8;  // Operation index (0-255, bits 0-7) [type operation_t]
-    uint16_t am_index : 4;  // Addressing mode index (0-15, bits 8-11) [type addr_mode_t]
-    uint16_t flags    : 4;  // Opcode flags (bits 12-15) [type opcode_flags_t]
+    uint16_t am_index : 4;  // Addressing mode index (0-15, bits 8-11) [type AddressingMode]
+    uint16_t flags    : 4;  // Opcode flags (bits 12-15) [type OpcodeFlags]
 } opcode_info_t;
