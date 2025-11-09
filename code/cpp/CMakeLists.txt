@@ -244,7 +244,6 @@ if(BUILD_GUI)
     set(GUI_SOURCES
             src/gui/imgui_interface.cpp
             src/gui/chip_visualization.cpp
-            src/gui/generic_chip_gui.cpp
             src/chip/video/vic_ii/vicii_gui.cpp
             src/chip/video/vic_ii/mos6567_gui.cpp
             src/chip/video/vic_ii/mos6569_gui.cpp
