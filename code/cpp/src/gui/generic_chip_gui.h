@@ -1,5 +1,9 @@
 #pragma once
 
+#ifndef IMGUI_VERSION
+#error "generic_chip_gui.h requires IMGUI_VERSION to be defined. This header should only be included in GUI builds."
+#endif
+
 #include <stdint.h>
 #include <stdbool.h>
 #include "../core/chip_layout.h"
@@ -16,7 +20,6 @@ typedef struct generic_chip_gui_t generic_chip_gui_t;
 
 using get_chip_layout_func = std::function<ChipLayout(void* chip)>;
 using get_chip_pin_states_func = std::function<void(void* chip, ChipLayout* layout, bus_state_t bus_state, PinSignalState* pin_states)>;
-
 
 // Generic chip GUI configuration - uses ChipVisualConfig for all visual properties
 struct chip_gui_config_t {
@@ -51,9 +54,9 @@ generic_chip_gui_t* generic_chip_gui_create(void* chip_instance, const chip_gui_
 void generic_chip_gui_destroy(generic_chip_gui_t* gui);
 
 // Main rendering functions
-void generic_chip_gui_render_layout(generic_chip_gui_t* gui, 
+void generic_chip_gui_render_layout(generic_chip_gui_t* gui,
                                    emulation_context_t* context,
-                                   float width, 
+                                   float width,
                                    float height);
 
 void generic_chip_gui_render_debug_panel(generic_chip_gui_t* gui,
