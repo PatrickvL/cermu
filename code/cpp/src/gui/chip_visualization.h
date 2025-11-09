@@ -33,13 +33,24 @@
 
 // Pin notation style
 enum class PinNotationStyle {
-    SLASH_PREFIX,     // /CS, /IRQ, /WE
+    SLASH_PREFIX,     // /CS, /IRQ, /WE (70s Intel style)
     OVERLINE,         // C̄S̄, ĪR̄Q̄, W̄Ē (requires Unicode)
     TILDE_PREFIX,     // ~CS, ~IRQ, ~WE
-    HASH_SUFFIX,      // CS#, IRQ#, WE#
+    HASH_SUFFIX,      // CS#, IRQ#, WE# (80s style)
     ASTERISK_SUFFIX,  // CS*, IRQ*, WE*
     N_SUFFIX,         // CS_N, IRQ_N, WE_N
     BAR_SUFFIX        // CS_BAR, IRQ_BAR
+};
+
+// Datasheet rendering mode for historical accuracy
+enum class DatasheetMode {
+    MODERN,               // Modern clean rendering
+    EXTERNAL_LABELING,    // Early 70s dominant - labels outside package (view-agnostic)
+    TOP_VIEW_80S,         // 80s standard - labels inside, viewing from component side
+    BOTTOM_VIEW,          // Rare 80s experiment - mirrored view from solder/pin side
+    FUNCTIONAL_BLOCK,     // Internal architecture diagram with functional units
+    CONNECTION_DIAGRAM,   // Schematic symbol - pins by function not location
+    PACKAGE_OUTLINE       // Mechanical/dimensional drawing (3D-ish)
 };
 
 // Visual style presets
@@ -50,6 +61,8 @@ enum class VisualStyle {
     COLORFUL,          // Vibrant colors
     MONOCHROME,        // Black and white
     DATASHEET,         // Datasheet-style rendering
+    DATASHEET_70S,     // Early 70s hand-drafted style
+    DATASHEET_80S,     // Mid 80s CAD-generated style
     SCHEMATIC          // Schematic symbol style
 };
 
@@ -68,6 +81,8 @@ struct ChipVisualConfig {
     uint32_t marker_color;              // Orientation marker color
     uint32_t thermal_pad_color;         // Thermal pad color
     uint32_t group_border_color;        // Color for pin grouping boxes
+    uint32_t datasheet_grid_color;      // Grid lines for datasheet mode
+    uint32_t dimension_line_color;      // Dimension lines and arrows
     
     // Dimensions
     float pin_width;                    // Pin rectangle width
@@ -92,9 +107,17 @@ struct ChipVisualConfig {
     bool show_voltage_levels;           // Show voltage levels on analog pins
     bool show_pwm_indicators;           // Show PWM indicators
     bool use_compact_layout;            // Use more compact spacing
+    bool show_dimension_lines;          // Show package dimension lines
+    bool show_pin_pitch_indicators;     // Show pin pitch measurements
+    bool show_datasheet_grid;           // Show alignment grid
+    bool labels_inside_package;         // Pin labels inside vs outside package
+    bool numbers_inside_package;        // Pin numbers inside vs outside package
     
     // Pin notation
     PinNotationStyle notation_style;    // Style for active-low pins
+    
+    // Datasheet mode
+    DatasheetMode datasheet_mode;       // Historical datasheet rendering mode
     
     // Style preset
     VisualStyle style;                  // Visual style preset
@@ -126,6 +149,13 @@ public:
     void render_pin_groups(ImVec2 chip_center);
     void render_legend();
     void render_bga_grid(ImVec2 chip_center, const std::vector<PinSignalState>& pin_states);
+    
+    // Datasheet-specific rendering functions
+    void render_datasheet_grid(ImVec2 chip_center);
+    void render_dimension_lines(ImVec2 chip_center);
+    void render_pin_pitch_indicators(ImVec2 chip_center);
+    void render_connection_diagram_pins(ImVec2 chip_center, const std::vector<PinSignalState>& pin_states);
+    ImVec2 get_connection_diagram_pin_position(ImVec2 chip_center, const ChipPin& pin) const;
     
     // Settings GUI
     void render_settings_gui();
