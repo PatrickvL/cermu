@@ -8,8 +8,11 @@
 
 #include "mos6502.h"
 #include "fam65xx.hpp"
-#include "fam65xx_gui.h"
 #include <cstdio>
+
+#ifdef IMGUI_VERSION
+#include "fam65xx_gui.h"
+#endif
 
 // ============================================================================
 // CONCRETE CPU TYPE DEFINITIONS

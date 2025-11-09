@@ -5,6 +5,10 @@
 #include <stdbool.h>
 
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Function declarations for FAM65XX CPU family debug windows
 // These are C-compatible wrappers around the C++ template implementation
 void fam65xx_render_debug_window(void* chip, bool* show_window);
@@ -13,10 +17,15 @@ void fam65xx_render_settings_window(void* chip, bool* show_window);
 // Bus state update function (also needs C linkage)
 void fam65xx_update_bus_state(void* chip, uint64_t bus_state);
 
+#ifdef __cplusplus
+}
+#endif
+
 #ifdef IMGUI_VERSION
 #include <unordered_map>
 #include <memory>
 #include "../../gui/chip_visualization.h"
+#include "fam65xx_processor_traits.hpp"
 
 // Forward declarations
 namespace fam65xx {
@@ -28,13 +37,13 @@ namespace fam65xx {
     struct WDC65C02;
     struct WDC65C816;
     
-    template<typename ProcessorTag> class fam65xx_t;
+    template<const CPUTraits& Traits> class fam65xx_t;
     class CPUGUIRenderer;
 
     // C++ template interface for registering CPU instances with the GUI system
     // Register a CPU instance for GUI rendering
-    template<typename ProcessorTag>
-    void register_cpu_for_gui(fam65xx_t<ProcessorTag>* cpu);
+    template<const CPUTraits& Traits>
+    void register_cpu_for_gui(fam65xx_t<Traits>* cpu);
     
     // Unregister a CPU instance 
     void unregister_cpu_from_gui(void* cpu);
@@ -55,5 +64,6 @@ namespace fam65xx {
     // Update bus state for CPU visualization
     void fam65xx_update_bus_state(void* chip, bus_state_t bus_state);
 }
-#endif
+
+#endif // IMGUI_VERSION
 

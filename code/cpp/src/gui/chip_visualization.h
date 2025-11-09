@@ -217,7 +217,6 @@ private:
     void draw_chamfer(void* chip_center) {}
     void draw_bar_marker(void* chip_center) {}
     void draw_triangle_marker(void* chip_center) {}
-};
-
 #endif
+};
 
