@@ -30,10 +30,8 @@ namespace fam65xx {
     
     template<typename ProcessorTag> class fam65xx_t;
     class CPUGUIRenderer;
-}
 
-// C++ template interface for registering CPU instances with the GUI system
-namespace fam65xx {
+    // C++ template interface for registering CPU instances with the GUI system
     // Register a CPU instance for GUI rendering
     template<typename ProcessorTag>
     void register_cpu_for_gui(fam65xx_t<ProcessorTag>* cpu);

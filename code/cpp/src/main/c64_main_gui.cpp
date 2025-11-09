@@ -17,7 +17,13 @@ int main(int argc, char** argv) {
       // Initialize the C64 system
     c64_config_t config = {
         .vicii_standard = VIC_PAL,
-        .rom_config = NULL  // Use default ROM paths, can be overridden by GUI later
+        .rom_config = NULL,  // Use default ROM paths, can be overridden by GUI later
+        .roml_present = false,
+        .romh_present = false,
+        .roml_filename = nullptr,
+        .romh_filename = nullptr,
+        .initial_exrom_state = true,   // Default EXROM high (inactive)
+        .initial_game_state = true     // Default GAME high (inactive)
     };
     c64_t* c64 = c64_system_create(&config);
     if (!c64) {

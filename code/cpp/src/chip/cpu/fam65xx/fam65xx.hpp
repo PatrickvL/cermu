@@ -508,9 +508,6 @@ public:
      * @param data Data byte (for write operations, ignored for reads)
      * @return Updated bus state with operation results
      */
-    #pragma warning(push)
-    #pragma warning(disable: 4702) // Disable unreachable code warning for template specializations
-    
     template<bool IsWrite, bool IsDummy>
     bus_state_t phi2_access(bus_state_t pins, reg16_t addr_reg, uint8_t data = 0) {
         return phi2_access_impl<IsWrite, IsDummy>(pins, addr_reg, data);
@@ -643,8 +640,6 @@ private:
         
         return pins;
     }
-    
-    #pragma warning(pop)
 
 public:
     

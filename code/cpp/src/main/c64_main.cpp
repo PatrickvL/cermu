@@ -12,7 +12,13 @@ int main() {
         // Create system configuration (PAL by default) using C++ initialization
         c64_config_t config{
             .vicii_standard = VIC_PAL,
-            .rom_config = nullptr  // Use default ROM paths
+            .rom_config = nullptr,  // Use default ROM paths
+            .roml_present = false,
+            .romh_present = false,
+            .roml_filename = nullptr,
+            .romh_filename = nullptr,
+            .initial_exrom_state = true,   // Default EXROM high (inactive)
+            .initial_game_state = true     // Default GAME high (inactive)
         };
         
         // Initialize the C64 system and get the instance

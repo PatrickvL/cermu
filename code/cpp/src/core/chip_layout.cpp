@@ -207,9 +207,6 @@ const std::string get_package_type_string(PackageType package_type) {
     }
 }
 
-static const char* get_package_type_charptr(PackageType package_type) {
-    return get_package_type_string(package_type).c_str();
-}
 
 bool get_package_name_shows_pin_count(PackageType package_type) {
     switch (package_type) {
