@@ -1,12 +1,13 @@
 #include "mos6526.h"
 #include "../../gui/imgui_interface.h"
-#include "../../gui/chip_visualization.h"
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
 #include "../../systems/c64/c64.h"  // Need this to access C64 structure
 // Native Dear ImGui C++ - conditional compilation for GUI availability
 #ifdef IMGUI_VERSION
 #include <imgui.h>
+#include "../../gui/chip_visualization.h"
+#include "../../gui/global_chip_style.h"
 #endif
 #include <stdio.h>
 #include <stddef.h>  // For offsetof
@@ -190,6 +191,8 @@ void mos6526_render_debug_window(void* chip, bool* show_window) {
         // Get chip visualization instance and render
         ChipVisualization* chip_viz = get_cia_chip_visualization_instance();
         const ChipLayout* layout = &chip_viz->get_pin_layout();
+        
+        // ChipVisualization now automatically uses global config - no need to set it
         
         // Get current pin states from CIA
         std::vector<PinSignalState> pin_states = get_cia_pin_states(cia, layout, 0 /* bus_state */);

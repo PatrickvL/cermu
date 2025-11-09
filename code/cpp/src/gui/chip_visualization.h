@@ -135,7 +135,7 @@ uint32_t get_pin_type_color(PinType type, VisualStyle style = VisualStyle::CLASS
 
 class ChipVisualization {
 public:
-    ChipVisualization(const ChipLayout& layout, const ChipVisualConfig& config = ChipVisualConfig::get_default());
+    ChipVisualization(const ChipLayout& layout);
     
     // Main rendering function
     void render(ImVec2 chip_center, const std::vector<PinSignalState>& pin_states, const char* chip_name = nullptr);
@@ -160,10 +160,8 @@ public:
     // Settings GUI
     void render_settings_gui();
     
-    // Configuration
-    void set_visual_config(const ChipVisualConfig& config) { config_ = config; }
-    const ChipVisualConfig& get_visual_config() const { return config_; }
-    ChipVisualConfig& get_mutable_visual_config() { return config_; }
+    // Configuration - always use global config, no local storage!
+    const ChipVisualConfig& get_visual_config() const;
     const ChipLayout& get_pin_layout() const { return layout_; }
     void set_pin_layout(const ChipLayout& layout) { layout_ = layout; }
     
@@ -183,7 +181,7 @@ public:
     
 private:
     ChipLayout layout_;
-    ChipVisualConfig config_;
+    // No local config storage - always use global configuration!
     
     // Scaled chip dimensions for rendering (calculated from package dimensions)
     mutable float scaled_chip_width_ = 0.0f;
