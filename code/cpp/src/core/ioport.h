@@ -7,24 +7,22 @@
 // External pin read callback - called when reading input pins
 // Returns the actual state of external pins (hardware inputs)
 // Only the bits specified by pin_mask are valid in the returned value
-typedef uint32_t (*ioport_read_pins_t)(void* context, uint8_t port_index);
+#include <functional>
+using ioport_read_pins_func = std::function<uint32_t(void* context, uint8_t port_index)>;
+using ioport_pins_changed_func = std::function<void(void* context, uint8_t port_index, uint32_t new_value, uint32_t ddr)>;
 
-// Output pins change callback - called when output pins change
-// Notifies external hardware of output pin changes
-// Only the bits specified by DDR are outputs, others are floating/inputs
-typedef void (*ioport_pins_changed_t)(void* context, uint8_t port_index, uint32_t new_value, uint32_t ddr);
 
 // I/O Port Interface for system integration
-typedef struct {
+struct ioport_interface_t {
     void* context;                        // User context for callbacks
-    ioport_read_pins_t read_external_pins; // Read external pin states
-    ioport_pins_changed_t output_pins_changed; // Notify of output changes
-} ioport_interface_t;
+    ioport_read_pins_func read_external_pins; // Read external pin states (modern C++)
+    ioport_pins_changed_func output_pins_changed; // Notify of output changes (modern C++)
+};
 
 // I/O Port Device
 // This represents a generic microprocessor I/O port with data direction control
 // Supports 1-32 bits with floating bus behavior for unused pins
-typedef struct {
+struct ioport_t {
     // Port registers (32-bit for maximum flexibility)
     uint32_t ddr;        // Data Direction Register (1=output, 0=input)
     uint32_t data;       // Port Data Register (output values)
@@ -37,7 +35,7 @@ typedef struct {
     uint8_t port_index;  // Port number (0, 1, etc.) for multi-port devices
     uint8_t width;       // Number of implemented bits (1-32)
     uint32_t pin_mask;   // Mask of implemented pins (derived from width)
-} ioport_t;
+};
 
 // ============================================================================
 // I/O PORT FUNCTIONS

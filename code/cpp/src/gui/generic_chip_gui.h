@@ -12,23 +12,25 @@
 typedef struct generic_chip_gui_t generic_chip_gui_t;
 
 // Chip-specific callbacks for retrieving pin states and layouts
-typedef ChipLayout (*get_chip_layout_func_t)(void* chip);
-typedef void (*get_chip_pin_states_func_t)(void* chip, ChipLayout* layout, bus_state_t bus_state, PinSignalState* pin_states);
+#include <functional>
+
+using get_chip_layout_func = std::function<ChipLayout(void* chip)>;
+using get_chip_pin_states_func = std::function<void(void* chip, ChipLayout* layout, bus_state_t bus_state, PinSignalState* pin_states)>;
+
 
 // Generic chip GUI configuration - uses ChipVisualConfig for all visual properties
-typedef struct {
+struct chip_gui_config_t {
     // Chip identification
     const char* chip_name;
     const char* chip_type;
     
-    // Layout and visualization callbacks
-    get_chip_layout_func_t get_layout;
-    get_chip_pin_states_func_t get_pin_states;
+    // Layout and visualization callbacks - using modern C++ function types
+    get_chip_layout_func get_layout;
+    get_chip_pin_states_func get_pin_states;
     
     // Visual configuration (primary owner of all rendering properties)
     ChipVisualConfig visual_config;  // Embedded visual configuration
-    
-} chip_gui_config_t;
+};
 
 // Generic chip GUI instance
 typedef struct generic_chip_gui_t {
