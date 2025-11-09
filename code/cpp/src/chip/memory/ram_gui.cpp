@@ -159,11 +159,6 @@ void ram_render_debug_window(void* chip, bool* show_window) {
         
         // Render the chip
         chip_viz->render(chip_center, pin_states, "SRAM");
-        
-        ImGui::Separator();
-        
-        // Visualization Settings Menu
-        chip_viz->render_settings_gui();
     }
     ImGui::EndChild();
     

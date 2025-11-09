@@ -14,6 +14,7 @@
 #include "../chip/cpu/fam65xx/mos6510.h"
 #include "../chip/cpu/fam65xx/fam65xx_gui.h"
 #include "../chip/video/vic_ii/vicii_common.h"
+#include "global_chip_style.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -156,6 +157,7 @@ void gui_init_state(gui_state_t* gui_state) {
     gui_state->emulation_speed = 1.0f;
     gui_state->memory_columns = 16;
     gui_state->memory_address = 0x0000;
+    gui_state->show_chip_visualization_config = false;  // Global chip visualization config dialog
     
     // Screen display defaults
     gui_state->screen_texture_id = 0;
@@ -214,6 +216,12 @@ void gui_render_frame(c64_t* c64, gui_state_t* gui_state, gui_emulation_context_
     if (gui_state->show_about) {
         gui_render_about(gui_state);
     }
+    
+    // Render global chip visualization configuration dialog
+    if (gui_state->show_chip_visualization_config) {
+        GlobalChipStyleManager::getInstance().renderConfigDialog(&gui_state->show_chip_visualization_config);
+    }
+    
     // PLA debug is now handled through the chip system
     
     // Render chip debug and settings windows using chip callbacks
@@ -329,6 +337,8 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
             ImGui::MenuItem("Screen Display", nullptr, &gui_state->show_screen);
             ImGui::MenuItem("Memory Viewer", nullptr, &gui_state->show_memory_viewer);
             ImGui::MenuItem("Debugger", nullptr, &gui_state->show_debugger);
+            ImGui::Separator();
+            ImGui::MenuItem("Chip Visualization Config", nullptr, &gui_state->show_chip_visualization_config);
             
             ImGui::EndMenu();
         }
