@@ -67,7 +67,7 @@ void mos6526_reset(mos6526_t* cia) {
 // The CIA 2 registers are repeated each 16 bytes in the area $dd00-$ddff
 bus_state_t mos6526_registers_read(void* context, bus_state_t bus_state) {
     mos6526_t* cia = (mos6526_t*)context;
-    uint8_t reg = BUS_GET_ADDR(bus_state) & REGS_MASK;
+    uint8_t reg = BUS_GET_ADDR(bus_state) & CIA_REGS_MASK;
     
     switch (reg) {
         // Read ports
@@ -137,7 +137,7 @@ bus_state_t mos6526_registers_read(void* context, bus_state_t bus_state) {
 
 bus_state_t mos6526_registers_write(void* context, bus_state_t bus_state) {
     mos6526_t* cia = (mos6526_t*)context;
-    uint8_t reg = BUS_GET_ADDR(bus_state) & REGS_MASK;
+    uint8_t reg = BUS_GET_ADDR(bus_state) & CIA_REGS_MASK;
     uint8_t value = BUS_GET_DATA(bus_state);
     
     switch (reg) {

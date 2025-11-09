@@ -7,6 +7,9 @@
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -31,4 +34,7 @@ const char* fam65xx_get_opcode_name(uint8_t op_index);
  */
 const char* fam65xx_get_addressing_mode_name(uint8_t am_index);
 
+#ifdef __cplusplus
+}
+#endif
 

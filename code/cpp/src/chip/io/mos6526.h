@@ -34,9 +34,9 @@ typedef enum {
 } mos6526_pin_t;
 
 // Register dimensions
-#define REGS_BITS 4
-#define REGS_SIZE (1 << REGS_BITS) // 16
-#define REGS_MASK (REGS_SIZE - 1)  // 15
+#define CIA_REGS_BITS 4
+#define CIA_REGS_SIZE (1 << CIA_REGS_BITS) // 16
+#define CIA_REGS_MASK (CIA_REGS_SIZE - 1)  // 15
 
 // Constants
 #define A 0
@@ -59,7 +59,7 @@ typedef struct mos6526_s {
     uint8_t port_a_value;
     uint8_t port_b_value;
     int cycles_tod[2]; // Assigned once in constructor
-    uint8_t reg[REGS_SIZE + 4 + 4 + 4 + 1 + 1]; // Registers, plus TIMER, CLOCK, ALARM, SDR and DDRB latches
+    uint8_t reg[CIA_REGS_SIZE + 4 + 4 + 4 + 1 + 1]; // Registers, plus TIMER, CLOCK, ALARM, SDR and DDRB latches
     bool delayed_irq;
     uint32_t read_tod_delta;
     uint32_t write_tod_delta;
