@@ -142,13 +142,10 @@ static std::vector<PinSignalState> get_cia_pin_states(mos6526_t* cia, const Chip
     return pin_states;
 }
 
-// Get chip visualization instance for CIA (no static caching - always uses global config)
-static ChipVisualization* get_cia_chip_visualization_instance() {
+// Use global renderer for CIA chip visualization
+static ChipLayout& get_cia_layout() {
     static ChipLayout layout = create_mos6526_layout();
-    static std::unique_ptr<ChipVisualization> chip_viz = std::make_unique<ChipVisualization>(layout);
-    
-    // Always return the same instance - but it will use get_visual_config() which returns global config
-    return chip_viz.get();
+    return layout;
 }
 
 void mos6526_render_debug_window(void* chip, bool* show_window) {
@@ -184,17 +181,15 @@ void mos6526_render_debug_window(void* chip, bool* show_window) {
         chip_center.x += content_region.x * 0.5f;
         chip_center.y += 200.0f; // Space for the chip
         
-        // Get chip visualization instance and render
-        ChipVisualization* chip_viz = get_cia_chip_visualization_instance();
-        const ChipLayout* layout = &chip_viz->get_pin_layout();
-        
-        // ChipVisualization now automatically uses global config - no need to set it
+        // Get global renderer and chip layout
+        ChipVisualization& renderer = GetGlobalChipRenderer();
+        ChipLayout& layout = get_cia_layout();
         
         // Get current pin states from CIA
-        std::vector<PinSignalState> pin_states = get_cia_pin_states(cia, layout, 0 /* bus_state */);
+        std::vector<PinSignalState> pin_states = get_cia_pin_states(cia, &layout, 0 /* bus_state */);
         
-        // Render the chip
-        chip_viz->render(chip_center, pin_states, cia_name);
+        // Render the chip using global renderer
+        renderer.render(layout, chip_center, pin_states, cia_name);
     }
     ImGui::EndChild();
     

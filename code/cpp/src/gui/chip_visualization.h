@@ -130,81 +130,81 @@ struct ChipVisualConfig {
 uint32_t get_pin_type_color(PinType type, VisualStyle style = VisualStyle::CLASSIC_DARK);
 
 // ============================================================================
-// CHIP VISUALIZATION CLASS
+// CHIP VISUALIZATION CLASS - STATELESS GLOBAL RENDERER
 // ============================================================================
 
 class ChipVisualization {
 public:
-    ChipVisualization(const ChipLayout& layout);
+    ChipVisualization() = default;
     
-    // Main rendering function
-    void render(ImVec2 chip_center, const std::vector<PinSignalState>& pin_states, const char* chip_name = nullptr);
+    // Main rendering function - takes ChipLayout as parameter
+    void render(const ChipLayout& layout, ImVec2 chip_center, const std::vector<PinSignalState>& pin_states, const char* chip_name = nullptr);
     
-    // Render individual components
-    void render_chip_body(ImVec2 chip_center, const char* chip_name = nullptr);
-    void render_pins(ImVec2 chip_center, const std::vector<PinSignalState>& pin_states);
-    void render_orientation_marker(ImVec2 chip_center);
-    void render_thermal_pad(ImVec2 chip_center);
-    void render_chip_markings(ImVec2 chip_center);
-    void render_pin_groups(ImVec2 chip_center);
+    // Render individual components - all take ChipLayout as parameter
+    void render_chip_body(const ChipLayout& layout, ImVec2 chip_center, const char* chip_name = nullptr);
+    void render_pins(const ChipLayout& layout, ImVec2 chip_center, const std::vector<PinSignalState>& pin_states);
+    void render_orientation_marker(const ChipLayout& layout, ImVec2 chip_center);
+    void render_thermal_pad(const ChipLayout& layout, ImVec2 chip_center);
+    void render_chip_markings(const ChipLayout& layout, ImVec2 chip_center);
+    void render_pin_groups(const ChipLayout& layout, ImVec2 chip_center);
     void render_legend();
-    void render_bga_grid(ImVec2 chip_center, const std::vector<PinSignalState>& pin_states);
+    void render_bga_grid(const ChipLayout& layout, ImVec2 chip_center, const std::vector<PinSignalState>& pin_states);
     
     // Datasheet-specific rendering functions
-    void render_datasheet_grid(ImVec2 chip_center);
-    void render_dimension_lines(ImVec2 chip_center);
-    void render_pin_pitch_indicators(ImVec2 chip_center);
-    void render_connection_diagram_pins(ImVec2 chip_center, const std::vector<PinSignalState>& pin_states);
-    ImVec2 get_connection_diagram_pin_position(ImVec2 chip_center, const ChipPin& pin) const;
+    void render_datasheet_grid(const ChipLayout& layout, ImVec2 chip_center);
+    void render_dimension_lines(const ChipLayout& layout, ImVec2 chip_center);
+    void render_pin_pitch_indicators(const ChipLayout& layout, ImVec2 chip_center);
+    void render_connection_diagram_pins(const ChipLayout& layout, ImVec2 chip_center, const std::vector<PinSignalState>& pin_states);
+    ImVec2 get_connection_diagram_pin_position(const ChipLayout& layout, ImVec2 chip_center, const ChipPin& pin) const;
     
     // Settings GUI
     void render_settings_gui();
     
     // Configuration - always use global config, no local storage!
     const ChipVisualConfig& get_visual_config() const;
-    const ChipLayout& get_pin_layout() const { return layout_; }
-    void set_pin_layout(const ChipLayout& layout) { layout_ = layout; }
     
-    // Pin lookup by number or label
-    const ChipPin* find_pin_by_number(uint8_t pin_number) const;
-    const ChipPin* find_pin_by_label(const char* label) const;
-    std::vector<const ChipPin*> find_pins_by_group(const char* group_name) const;
+    // Pin lookup by number or label - takes ChipLayout as parameter
+    const ChipPin* find_pin_by_number(const ChipLayout& layout, uint8_t pin_number) const;
+    const ChipPin* find_pin_by_label(const ChipLayout& layout, const char* label) const;
+    std::vector<const ChipPin*> find_pins_by_group(const ChipLayout& layout, const char* group_name) const;
     
-    // Get pin position for external drawing
-    ImVec2 get_pin_position(ImVec2 chip_center, const ChipPin& pin) const;
+    // Get pin position for external drawing - takes ChipLayout as parameter
+    ImVec2 get_pin_position(const ChipLayout& layout, ImVec2 chip_center, const ChipPin& pin) const;
     
     // Format pin label according to notation style
     std::string format_pin_label(const ChipPin& pin) const;
     
-    // Get recommended window size for chip
-    ImVec2 get_recommended_size() const;
+    // Get recommended window size for chip - takes ChipLayout as parameter
+    ImVec2 get_recommended_size(const ChipLayout& layout) const;
     
 private:
-    ChipLayout layout_;
-    // No local config storage - always use global configuration!
+    // No local storage - completely stateless!
     
-    // Scaled chip dimensions for rendering (calculated from package dimensions)
+    // Scaled chip dimensions for rendering (calculated from package dimensions during render)
     mutable float scaled_chip_width_ = 0.0f;
     mutable float scaled_chip_height_ = 0.0f;
     
-    void render_pin_side(ImVec2 chip_center, const std::vector<ChipPin>& pins,
+    void render_pin_side(const ChipLayout& layout, ImVec2 chip_center, const std::vector<ChipPin>& pins,
                         const std::vector<PinSignalState>& pin_states, PinSide side);
     void render_single_pin(ImVec2 pin_pos, const ChipPin& pin, const PinSignalState& state, PinSide side);
-    void render_dip_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name);
-    void render_surface_mount_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name);
-    void render_qfp_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name);
-    void render_bga_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name);
-    void render_to_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name);
+    void render_dip_style(const ChipLayout& layout, ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name);
+    void render_surface_mount_style(const ChipLayout& layout, ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name);
+    void render_qfp_style(const ChipLayout& layout, ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name);
+    void render_bga_style(const ChipLayout& layout, ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name);
+    void render_to_style(const ChipLayout& layout, ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name);
     
-    ImVec2 calculate_pin_position(ImVec2 chip_center, const ChipPin& pin, size_t index_in_side, PinSide side) const;
-    ImVec2 calculate_bga_position(ImVec2 chip_center, uint8_t row, uint8_t col) const;
+    ImVec2 calculate_pin_position(const ChipLayout& layout, ImVec2 chip_center, const ChipPin& pin, size_t index_in_side, PinSide side) const;
+    ImVec2 calculate_bga_position(const ChipLayout& layout, ImVec2 chip_center, uint8_t row, uint8_t col) const;
     ImVec2 get_led_position(ImVec2 pin_pos, PinSide side) const;
     ImVec2 get_label_position(ImVec2 pin_pos, const ChipPin& pin, PinSide side) const;
     
-    void draw_notch(ImVec2 chip_center);
-    void draw_dot_marker(ImVec2 chip_center);
-    void draw_chamfer(ImVec2 chip_center);
-    void draw_bar_marker(ImVec2 chip_center);
-    void draw_triangle_marker(ImVec2 chip_center);
+    void draw_notch(const ChipLayout& layout, ImVec2 chip_center);
+    void draw_dot_marker(const ChipLayout& layout, ImVec2 chip_center);
+    void draw_chamfer(const ChipLayout& layout, ImVec2 chip_center);
+    void draw_bar_marker(const ChipLayout& layout, ImVec2 chip_center);
+    void draw_triangle_marker(const ChipLayout& layout, ImVec2 chip_center);
 };
+
+// Global renderer instance - single instance used by all chip rendering
+ChipVisualization& GetGlobalChipRenderer();
 
