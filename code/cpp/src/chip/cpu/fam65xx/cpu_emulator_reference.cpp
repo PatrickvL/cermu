@@ -83,64 +83,61 @@ enum class AccessType : uint8_t {
     DUMMY_WRITE   // Real bus cycle (RMW instructions)
 };
 
-// Operation type enumeration (example subset)
-enum operation_t : uint8_t {
-    OP_LDA = 0,
-    OP_LDX = 1,
-    OP_LDY = 2,
-    OP_STA = 3,
-    OP_STX = 4,
-    OP_STY = 5,
-    OP_ADC = 6,
-    OP_SBC = 7,
-    OP_AND = 8,
-    OP_ORA = 9,
-    OP_EOR = 10,
-    OP_INC = 11,
-    OP_DEC = 12,
-    OP_CMP = 13,
-    OP_TAX = 14,
-    OP_NOP = 15,
-    OP_PHA = 16,
-    OP_PLA = 17,
-    OP_PHP = 18,
-    OP_PLP = 19,
-    OP_RTS = 20,
-    OP_RTI = 21,
-    OP_JSR = 22,
-    OP_WAI = 23,  // Wait for Interrupt (65C02/65816)
-    OP_STP = 24,  // Stop the Clock (65C02/65816)
-    // ... up to 162 for full 6502 + illegals
-};
+// Note: This reference file uses simplified enum definitions for demonstration.
+// The actual implementation uses modern C++ scoped enums from fam65xx_types.h
 
-// Addressing mode enumeration
-enum addr_mode_t : uint8_t {
-    AM_IMPLIED = 0,
-    AM_IMMEDIATE = 1,
-    AM_ZEROPAGE = 2,
-    AM_ZEROPAGE_X = 3,
-    AM_ZEROPAGE_Y = 4,
-    AM_ABSOLUTE = 5,
-    AM_ABSOLUTE_X = 6,
-    AM_ABSOLUTE_Y = 7,
-    AM_INDEXED_INDIRECT = 8,   // (zp,X)
-    AM_INDIRECT_INDEXED = 9,   // (zp),Y
-    AM_RELATIVE = 10,
-    AM_INDIRECT = 11,
-    AM_ACCUMULATOR = 12,
-    AM_STACK_PUSH = 13,
-    AM_STACK_PULL = 14,
-};
+// Operation type constants (for reference - actual code uses Operation enum class)
+constexpr uint8_t OP_LDA = 0;
+constexpr uint8_t OP_LDX = 1;
+constexpr uint8_t OP_LDY = 2;
+constexpr uint8_t OP_STA = 3;
+constexpr uint8_t OP_STX = 4;
+constexpr uint8_t OP_STY = 5;
+constexpr uint8_t OP_ADC = 6;
+constexpr uint8_t OP_SBC = 7;
+constexpr uint8_t OP_AND = 8;
+constexpr uint8_t OP_ORA = 9;
+constexpr uint8_t OP_EOR = 10;
+constexpr uint8_t OP_INC = 11;
+constexpr uint8_t OP_DEC = 12;
+constexpr uint8_t OP_CMP = 13;
+constexpr uint8_t OP_TAX = 14;
+constexpr uint8_t OP_NOP = 15;
+constexpr uint8_t OP_PHA = 16;
+constexpr uint8_t OP_PLA = 17;
+constexpr uint8_t OP_PHP = 18;
+constexpr uint8_t OP_PLP = 19;
+constexpr uint8_t OP_RTS = 20;
+constexpr uint8_t OP_RTI = 21;
+constexpr uint8_t OP_JSR = 22;
+constexpr uint8_t OP_WAI = 23;  // Wait for Interrupt (65C02/65816)
+constexpr uint8_t OP_STP = 24;  // Stop the Clock (65C02/65816)
+// ... up to 162 for full 6502 + illegals
 
-// Opcode flags
-enum opcode_flags_t : uint8_t {
-    OF_NONE          = 0x0,
-    OF_ILLEGAL_STORE = 0x1,  // Illegal store quirk on page cross
-    OF_SKIP_PAGE     = 0x2,  // Can skip page cross penalty
-    OF_RMW           = 0x4,  // Read-Modify-Write operation
-    OF_PC_OR_AB      = 0x8   // First operation cycle: PC(1) or AB(0)
-                             // Note: Stack operations (PHA/PLA/RTS/RTI) schedule SP directly
-};
+// Addressing mode constants (for reference - actual code uses AddressingMode enum class)
+constexpr uint8_t AM_IMPLIED = 0;
+constexpr uint8_t AM_IMMEDIATE = 1;
+constexpr uint8_t AM_ZEROPAGE = 2;
+constexpr uint8_t AM_ZEROPAGE_X = 3;
+constexpr uint8_t AM_ZEROPAGE_Y = 4;
+constexpr uint8_t AM_ABSOLUTE = 5;
+constexpr uint8_t AM_ABSOLUTE_X = 6;
+constexpr uint8_t AM_ABSOLUTE_Y = 7;
+constexpr uint8_t AM_INDEXED_INDIRECT = 8;   // (zp,X)
+constexpr uint8_t AM_INDIRECT_INDEXED = 9;   // (zp),Y
+constexpr uint8_t AM_RELATIVE = 10;
+constexpr uint8_t AM_INDIRECT = 11;
+constexpr uint8_t AM_ACCUMULATOR = 12;
+constexpr uint8_t AM_STACK_PUSH = 13;
+constexpr uint8_t AM_STACK_PULL = 14;
+
+// Opcode flags constants (for reference - actual code uses OpcodeFlags enum class)
+constexpr uint8_t OF_NONE          = 0x0;
+constexpr uint8_t OF_ILLEGAL_STORE = 0x1;  // Illegal store quirk on page cross
+constexpr uint8_t OF_SKIP_PAGE     = 0x2;  // Can skip page cross penalty
+constexpr uint8_t OF_RMW           = 0x4;  // Read-Modify-Write operation
+constexpr uint8_t OF_PC_OR_AB      = 0x8;  // First operation cycle: PC(1) or AB(0)
+                                           // Note: Stack operations (PHA/PLA/RTS/RTI) schedule SP directly
 
 // ============================================================================
 // CPU TRAIT EXAMPLES
@@ -800,7 +797,7 @@ private:
                 schedule_read(AddrReg::PC);
                 return Bus::inc_cycle_idx(pins);
                 
-            case 1:  // Read base address high
+            case 1: {  // Read base address high
                 load(Reg8::ABH, pins);
                 inc16(Reg16::PC);
                 
@@ -824,12 +821,14 @@ private:
                     set16(Reg16::AB, addr);
                     return transition_to_operation(pins);
                 }
+            }
                 
-            case 2:  // Fix address after page cross
-                uint16_t base = get16(Reg16::AB);
-                uint16_t addr = (base & 0x00FF) + get8(Reg8::X) + ((base & 0xFF00) ? 0x0100 : 0);
-                set16(Reg16::AB, addr);
+            case 2: {  // Fix address after page cross
+                uint16_t base2 = get16(Reg16::AB);
+                uint16_t addr2 = (base2 & 0x00FF) + get8(Reg8::X) + ((base2 & 0xFF00) ? 0x0100 : 0);
+                set16(Reg16::AB, addr2);
                 return transition_to_operation(pins);
+            }
         }
         
         return pins;
@@ -845,12 +844,13 @@ private:
                 schedule_dummy_read(AddrReg::PC);
                 return Bus::inc_cycle_idx(pins);
                 
-            case 1:  // Dummy read, add X
+            case 1: {  // Dummy read, add X
                 uint8_t zp_addr = get8(Reg8::DL) + get8(Reg8::X);
                 set8(Reg8::ABL, zp_addr);
                 set8(Reg8::ABH, 0);
                 schedule_read(AddrReg::AB);
                 return Bus::inc_cycle_idx(pins);
+            }
                 
             case 2:  // Read pointer low
                 load(Reg8::DL, pins);
@@ -862,6 +862,7 @@ private:
                 load(Reg8::ABH, pins);
                 set8(Reg8::ABL, get8(Reg8::DL));
                 return transition_to_operation(pins);
+                break;
         }
         
         return pins;

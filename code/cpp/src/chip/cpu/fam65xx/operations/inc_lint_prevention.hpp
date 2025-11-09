@@ -117,8 +117,8 @@ namespace fam65xx {
       void* mem_user_data;
       
       // Handler lookup tables (matching real template)
-      std::array<bus_state_t (fam65xx_t::*)(bus_state_t), OP_COUNT> operation_handlers;
-      std::array<bus_state_t (fam65xx_t::*)(bus_state_t), AM_COUNT> addressing_mode_handlers;
+      std::array<bus_state_t (fam65xx_t::*)(bus_state_t), to_index(OP::COUNT)> operation_handlers;
+      std::array<bus_state_t (fam65xx_t::*)(bus_state_t), to_index(AM::COUNT)> addressing_mode_handlers;
       
       // =====================================================================
       // SURROGATE MEMBER FUNCTION STUBS
@@ -166,11 +166,20 @@ namespace fam65xx {
       
       // Additional helper functions that might be missing
       inline uint8_t calc_nz_flags(uint8_t value) const { return 0; }
+      inline uint8_t calc_z_flag(uint8_t value) const { return 0; }
       
       // Processor trait functions (static constexpr)
       static constexpr bool has_cmos() { return false; }
       static constexpr bool has_wide_registers() { return false; }
       static constexpr bool has_illegal_opcodes() { return false; }
+      static constexpr bool has_bcd() { return false; }
+      static constexpr bool has_bcd_extra_cycle() { return false; }
+      static constexpr bool has_apu() { return false; }
+      static constexpr bool has_rmw_dummy_write() { return false; }
+      
+      // RMW operation helper - forward declaration
+      template<typename OperationFunc>
+      bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func) { return pins; }
       
       // =====================================================================
       // OPCODE TABLE TEMPLATE FUNCTION DECLARATION

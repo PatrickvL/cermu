@@ -672,7 +672,7 @@ public:
     
     // Optimized version with direct register targeting to eliminate copies
     inline bus_state_t phi2_read_operand(bus_state_t pins, reg8_t target_reg) {
-        if (this->opcode_entry.am_index == AM_IMM) {
+        if (this->opcode_entry.am_index == to_index(AM::IMM)) {
             // Immediate mode - read from PC directly into target register
             pins = phi2_read(pins, REG_PC, target_reg);
             if (FAM65XX_GET_RDY(pins)) {
@@ -1111,13 +1111,13 @@ private:
     using InstructionHandler = bus_state_t (fam65xx_t<Traits>::*)(bus_state_t);
     
     // Lookup tables for handlers (initialized during init)
-    std::array<InstructionHandler, OP_COUNT> operation_handlers;
-    std::array<InstructionHandler, AM_COUNT> addressing_mode_handlers;
+    std::array<InstructionHandler, to_index(OP::COUNT)> operation_handlers;
+    std::array<InstructionHandler, to_index(AM::COUNT)> addressing_mode_handlers;
     
     // Essential helper functions for template functionality
     inline InstructionHandler get_instruction_handler() {
         // For addressing modes that need address calculation, start with addressing mode handler
-        if (this->opcode_entry.am_index > AM_IMM) {
+        if (this->opcode_entry.am_index > to_index(AM::IMM)) {
             return addressing_mode_handlers[this->opcode_entry.am_index];
         }
         
@@ -1273,170 +1273,170 @@ private:
         operation_handlers.fill(&fam65xx_t::op_nop);
         
         // Sorted alphabetically for easier maintenance
-        operation_handlers[OP_ADC] = &fam65xx_t::op_adc;
-        operation_handlers[OP_ANC] = &fam65xx_t::op_anc;
-        operation_handlers[OP_AND] = &fam65xx_t::op_and;
-        operation_handlers[OP_ARR] = &fam65xx_t::op_arr;
-        operation_handlers[OP_ASL] = &fam65xx_t::op_asl;
-        operation_handlers[OP_ASR] = &fam65xx_t::op_asr;
-        operation_handlers[OP_BBR0] = &fam65xx_t::op_bbr0;
-        operation_handlers[OP_BBR1] = &fam65xx_t::op_bbr1;
-        operation_handlers[OP_BBR2] = &fam65xx_t::op_bbr2;
-        operation_handlers[OP_BBR3] = &fam65xx_t::op_bbr3;
-        operation_handlers[OP_BBR4] = &fam65xx_t::op_bbr4;
-        operation_handlers[OP_BBR5] = &fam65xx_t::op_bbr5;
-        operation_handlers[OP_BBR6] = &fam65xx_t::op_bbr6;
-        operation_handlers[OP_BBR7] = &fam65xx_t::op_bbr7;
-        operation_handlers[OP_BBS0] = &fam65xx_t::op_bbs0;
-        operation_handlers[OP_BBS1] = &fam65xx_t::op_bbs1;
-        operation_handlers[OP_BBS2] = &fam65xx_t::op_bbs2;
-        operation_handlers[OP_BBS3] = &fam65xx_t::op_bbs3;
-        operation_handlers[OP_BBS4] = &fam65xx_t::op_bbs4;
-        operation_handlers[OP_BBS5] = &fam65xx_t::op_bbs5;
-        operation_handlers[OP_BBS6] = &fam65xx_t::op_bbs6;
-        operation_handlers[OP_BBS7] = &fam65xx_t::op_bbs7;
-        operation_handlers[OP_BCC] = &fam65xx_t::op_bcc;
-        operation_handlers[OP_BCS] = &fam65xx_t::op_bcs;
-        operation_handlers[OP_BEQ] = &fam65xx_t::op_beq;
-        operation_handlers[OP_BIT] = &fam65xx_t::op_bit;
-        operation_handlers[OP_BMI] = &fam65xx_t::op_bmi;
-        operation_handlers[OP_BNE] = &fam65xx_t::op_bne;
-        operation_handlers[OP_BPL] = &fam65xx_t::op_bpl;
-        operation_handlers[OP_BRA] = &fam65xx_t::op_bra;
-        operation_handlers[OP_BRK] = &fam65xx_t::op_brk;
-        operation_handlers[OP_BVC] = &fam65xx_t::op_bvc;
-        operation_handlers[OP_BVS] = &fam65xx_t::op_bvs;
-        operation_handlers[OP_CLC] = &fam65xx_t::op_clc;
-        operation_handlers[OP_CLD] = &fam65xx_t::op_cld;
-        operation_handlers[OP_CLI] = &fam65xx_t::op_cli;
-        operation_handlers[OP_CLV] = &fam65xx_t::op_clv;
-        operation_handlers[OP_CMP] = &fam65xx_t::op_cmp;
-        operation_handlers[OP_CPX] = &fam65xx_t::op_cpx;
-        operation_handlers[OP_CPY] = &fam65xx_t::op_cpy;
-        operation_handlers[OP_DCP] = &fam65xx_t::op_dcp;
-        operation_handlers[OP_DEC] = &fam65xx_t::op_dec;
-        operation_handlers[OP_DEX] = &fam65xx_t::op_dex;
-        operation_handlers[OP_DEY] = &fam65xx_t::op_dey;
-        operation_handlers[OP_EOR] = &fam65xx_t::op_eor;
-        operation_handlers[OP_INC] = &fam65xx_t::op_inc;
-        operation_handlers[OP_INX] = &fam65xx_t::op_inx;
-        operation_handlers[OP_INY] = &fam65xx_t::op_iny;
-        operation_handlers[OP_ISC] = &fam65xx_t::op_isc;
-        operation_handlers[OP_JAM] = &fam65xx_t::op_jam;
-        operation_handlers[OP_JMP] = &fam65xx_t::op_jmp;
-        operation_handlers[OP_JSR] = &fam65xx_t::op_jsr;
-        operation_handlers[OP_LAS] = &fam65xx_t::op_las;
-        operation_handlers[OP_LAX] = &fam65xx_t::op_lax;
-        operation_handlers[OP_LDA] = &fam65xx_t::op_lda;
-        operation_handlers[OP_LDX] = &fam65xx_t::op_ldx;
-        operation_handlers[OP_LDY] = &fam65xx_t::op_ldy;
-        operation_handlers[OP_LSR] = &fam65xx_t::op_lsr;
-        operation_handlers[OP_NOP] = &fam65xx_t::op_nop;
-        operation_handlers[OP_ORA] = &fam65xx_t::op_ora;
-        operation_handlers[OP_PEA] = &fam65xx_t::op_pea;
-        operation_handlers[OP_PER] = &fam65xx_t::op_per;
-        operation_handlers[OP_PEI] = &fam65xx_t::op_pei;
-        operation_handlers[OP_PHB] = &fam65xx_t::op_phb;
-        operation_handlers[OP_PHD] = &fam65xx_t::op_phd;
-        operation_handlers[OP_PHK] = &fam65xx_t::op_phk;
-        operation_handlers[OP_PLB] = &fam65xx_t::op_plb;
-        operation_handlers[OP_PLD] = &fam65xx_t::op_pld;
-        operation_handlers[OP_PHA] = &fam65xx_t::op_pha;
-        operation_handlers[OP_PHP] = &fam65xx_t::op_php;
-        operation_handlers[OP_PHX] = &fam65xx_t::op_phx;
-        operation_handlers[OP_PHY] = &fam65xx_t::op_phy;
-        operation_handlers[OP_PLA] = &fam65xx_t::op_pla;
-        operation_handlers[OP_PLP] = &fam65xx_t::op_plp;
-        operation_handlers[OP_PLX] = &fam65xx_t::op_plx;
-        operation_handlers[OP_PLY] = &fam65xx_t::op_ply;
-        operation_handlers[OP_REP] = &fam65xx_t::op_rep;
-        operation_handlers[OP_RLA] = &fam65xx_t::op_rla;
-        operation_handlers[OP_RMB0] = &fam65xx_t::op_rmb0;
-        operation_handlers[OP_RMB1] = &fam65xx_t::op_rmb1;
-        operation_handlers[OP_RMB2] = &fam65xx_t::op_rmb2;
-        operation_handlers[OP_RMB3] = &fam65xx_t::op_rmb3;
-        operation_handlers[OP_RMB4] = &fam65xx_t::op_rmb4;
-        operation_handlers[OP_RMB5] = &fam65xx_t::op_rmb5;
-        operation_handlers[OP_RMB6] = &fam65xx_t::op_rmb6;
-        operation_handlers[OP_RMB7] = &fam65xx_t::op_rmb7;
-        operation_handlers[OP_ROL] = &fam65xx_t::op_rol;
-        operation_handlers[OP_ROR] = &fam65xx_t::op_ror;        
-        operation_handlers[OP_RRA] = &fam65xx_t::op_rra;
-        operation_handlers[OP_RTI] = &fam65xx_t::op_rti;
-        operation_handlers[OP_RTL] = &fam65xx_t::op_rtl;
-        operation_handlers[OP_JSL] = &fam65xx_t::op_jsl;
-        operation_handlers[OP_JML] = &fam65xx_t::op_jmp;
-        operation_handlers[OP_MVN] = &fam65xx_t::op_mvn;
-        operation_handlers[OP_MVP] = &fam65xx_t::op_mvp;
-        operation_handlers[OP_RTS] = &fam65xx_t::op_rts;
-        operation_handlers[OP_SAX] = &fam65xx_t::op_sax;
-        operation_handlers[OP_SBC] = &fam65xx_t::op_sbc;
-        operation_handlers[OP_SBX] = &fam65xx_t::op_sbx;
-        operation_handlers[OP_SEC] = &fam65xx_t::op_sec;
-        operation_handlers[OP_SED] = &fam65xx_t::op_sed;
-        operation_handlers[OP_SEI] = &fam65xx_t::op_sei;
-        operation_handlers[OP_SEP] = &fam65xx_t::op_sep;        
-        operation_handlers[OP_SHA] = &fam65xx_t::op_sha;
-        operation_handlers[OP_SHS] = &fam65xx_t::op_shs;
-        operation_handlers[OP_SHX] = &fam65xx_t::op_shx;
-        operation_handlers[OP_SHY] = &fam65xx_t::op_shy;
-        operation_handlers[OP_SLO] = &fam65xx_t::op_slo;
-        operation_handlers[OP_SMB0] = &fam65xx_t::op_smb0;
-        operation_handlers[OP_SMB1] = &fam65xx_t::op_smb1;
-        operation_handlers[OP_SMB2] = &fam65xx_t::op_smb2;
-        operation_handlers[OP_SMB3] = &fam65xx_t::op_smb3;
-        operation_handlers[OP_SMB4] = &fam65xx_t::op_smb4;
-        operation_handlers[OP_SMB5] = &fam65xx_t::op_smb5;
-        operation_handlers[OP_SMB6] = &fam65xx_t::op_smb6;
-        operation_handlers[OP_SMB7] = &fam65xx_t::op_smb7;
-        operation_handlers[OP_SRE] = &fam65xx_t::op_sre;
-        operation_handlers[OP_STA] = &fam65xx_t::op_sta;
-        operation_handlers[OP_STP] = &fam65xx_t::op_stp;
-        operation_handlers[OP_STX] = &fam65xx_t::op_stx;
-        operation_handlers[OP_STY] = &fam65xx_t::op_sty;
-        operation_handlers[OP_STZ] = &fam65xx_t::op_stz;
-        operation_handlers[OP_TAX] = &fam65xx_t::op_tax;
-        operation_handlers[OP_TAY] = &fam65xx_t::op_tay;
-        operation_handlers[OP_TRB] = &fam65xx_t::op_trb;
-        operation_handlers[OP_TSB] = &fam65xx_t::op_tsb;
-        operation_handlers[OP_TSX] = &fam65xx_t::op_tsx;
-        operation_handlers[OP_TXA] = &fam65xx_t::op_txa;
-        operation_handlers[OP_TXS] = &fam65xx_t::op_txs;
-        operation_handlers[OP_TYA] = &fam65xx_t::op_tya;
-        operation_handlers[OP_WAI] = &fam65xx_t::op_wai;
-        operation_handlers[OP_XAA] = &fam65xx_t::op_xaa;
-        operation_handlers[OP_XBA] = &fam65xx_t::op_xba;
-        operation_handlers[OP_XCE] = &fam65xx_t::op_xce;
-        operation_handlers[OP_COP] = &fam65xx_t::op_cop;
-        operation_handlers[OP_WDM] = &fam65xx_t::op_wdm;
+        operation_handlers[to_index(OP::ADC)] = &fam65xx_t::op_adc;
+        operation_handlers[to_index(OP::ANC)] = &fam65xx_t::op_anc;
+        operation_handlers[to_index(OP::AND)] = &fam65xx_t::op_and;
+        operation_handlers[to_index(OP::ARR)] = &fam65xx_t::op_arr;
+        operation_handlers[to_index(OP::ASL)] = &fam65xx_t::op_asl;
+        operation_handlers[to_index(OP::ASR)] = &fam65xx_t::op_asr;
+        operation_handlers[to_index(OP::BBR0)] = &fam65xx_t::op_bbr0;
+        operation_handlers[to_index(OP::BBR1)] = &fam65xx_t::op_bbr1;
+        operation_handlers[to_index(OP::BBR2)] = &fam65xx_t::op_bbr2;
+        operation_handlers[to_index(OP::BBR3)] = &fam65xx_t::op_bbr3;
+        operation_handlers[to_index(OP::BBR4)] = &fam65xx_t::op_bbr4;
+        operation_handlers[to_index(OP::BBR5)] = &fam65xx_t::op_bbr5;
+        operation_handlers[to_index(OP::BBR6)] = &fam65xx_t::op_bbr6;
+        operation_handlers[to_index(OP::BBR7)] = &fam65xx_t::op_bbr7;
+        operation_handlers[to_index(OP::BBS0)] = &fam65xx_t::op_bbs0;
+        operation_handlers[to_index(OP::BBS1)] = &fam65xx_t::op_bbs1;
+        operation_handlers[to_index(OP::BBS2)] = &fam65xx_t::op_bbs2;
+        operation_handlers[to_index(OP::BBS3)] = &fam65xx_t::op_bbs3;
+        operation_handlers[to_index(OP::BBS4)] = &fam65xx_t::op_bbs4;
+        operation_handlers[to_index(OP::BBS5)] = &fam65xx_t::op_bbs5;
+        operation_handlers[to_index(OP::BBS6)] = &fam65xx_t::op_bbs6;
+        operation_handlers[to_index(OP::BBS7)] = &fam65xx_t::op_bbs7;
+        operation_handlers[to_index(OP::BCC)] = &fam65xx_t::op_bcc;
+        operation_handlers[to_index(OP::BCS)] = &fam65xx_t::op_bcs;
+        operation_handlers[to_index(OP::BEQ)] = &fam65xx_t::op_beq;
+        operation_handlers[to_index(OP::BIT)] = &fam65xx_t::op_bit;
+        operation_handlers[to_index(OP::BMI)] = &fam65xx_t::op_bmi;
+        operation_handlers[to_index(OP::BNE)] = &fam65xx_t::op_bne;
+        operation_handlers[to_index(OP::BPL)] = &fam65xx_t::op_bpl;
+        operation_handlers[to_index(OP::BRA)] = &fam65xx_t::op_bra;
+        operation_handlers[to_index(OP::BRK)] = &fam65xx_t::op_brk;
+        operation_handlers[to_index(OP::BVC)] = &fam65xx_t::op_bvc;
+        operation_handlers[to_index(OP::BVS)] = &fam65xx_t::op_bvs;
+        operation_handlers[to_index(OP::CLC)] = &fam65xx_t::op_clc;
+        operation_handlers[to_index(OP::CLD)] = &fam65xx_t::op_cld;
+        operation_handlers[to_index(OP::CLI)] = &fam65xx_t::op_cli;
+        operation_handlers[to_index(OP::CLV)] = &fam65xx_t::op_clv;
+        operation_handlers[to_index(OP::CMP)] = &fam65xx_t::op_cmp;
+        operation_handlers[to_index(OP::CPX)] = &fam65xx_t::op_cpx;
+        operation_handlers[to_index(OP::CPY)] = &fam65xx_t::op_cpy;
+        operation_handlers[to_index(OP::DCP)] = &fam65xx_t::op_dcp;
+        operation_handlers[to_index(OP::DEC)] = &fam65xx_t::op_dec;
+        operation_handlers[to_index(OP::DEX)] = &fam65xx_t::op_dex;
+        operation_handlers[to_index(OP::DEY)] = &fam65xx_t::op_dey;
+        operation_handlers[to_index(OP::EOR)] = &fam65xx_t::op_eor;
+        operation_handlers[to_index(OP::INC)] = &fam65xx_t::op_inc;
+        operation_handlers[to_index(OP::INX)] = &fam65xx_t::op_inx;
+        operation_handlers[to_index(OP::INY)] = &fam65xx_t::op_iny;
+        operation_handlers[to_index(OP::ISC)] = &fam65xx_t::op_isc;
+        operation_handlers[to_index(OP::JAM)] = &fam65xx_t::op_jam;
+        operation_handlers[to_index(OP::JMP)] = &fam65xx_t::op_jmp;
+        operation_handlers[to_index(OP::JSR)] = &fam65xx_t::op_jsr;
+        operation_handlers[to_index(OP::LAS)] = &fam65xx_t::op_las;
+        operation_handlers[to_index(OP::LAX)] = &fam65xx_t::op_lax;
+        operation_handlers[to_index(OP::LDA)] = &fam65xx_t::op_lda;
+        operation_handlers[to_index(OP::LDX)] = &fam65xx_t::op_ldx;
+        operation_handlers[to_index(OP::LDY)] = &fam65xx_t::op_ldy;
+        operation_handlers[to_index(OP::LSR)] = &fam65xx_t::op_lsr;
+        operation_handlers[to_index(OP::NOP)] = &fam65xx_t::op_nop;
+        operation_handlers[to_index(OP::ORA)] = &fam65xx_t::op_ora;
+        operation_handlers[to_index(OP::PEA)] = &fam65xx_t::op_pea;
+        operation_handlers[to_index(OP::PER)] = &fam65xx_t::op_per;
+        operation_handlers[to_index(OP::PEI)] = &fam65xx_t::op_pei;
+        operation_handlers[to_index(OP::PHB)] = &fam65xx_t::op_phb;
+        operation_handlers[to_index(OP::PHD)] = &fam65xx_t::op_phd;
+        operation_handlers[to_index(OP::PHK)] = &fam65xx_t::op_phk;
+        operation_handlers[to_index(OP::PLB)] = &fam65xx_t::op_plb;
+        operation_handlers[to_index(OP::PLD)] = &fam65xx_t::op_pld;
+        operation_handlers[to_index(OP::PHA)] = &fam65xx_t::op_pha;
+        operation_handlers[to_index(OP::PHP)] = &fam65xx_t::op_php;
+        operation_handlers[to_index(OP::PHX)] = &fam65xx_t::op_phx;
+        operation_handlers[to_index(OP::PHY)] = &fam65xx_t::op_phy;
+        operation_handlers[to_index(OP::PLA)] = &fam65xx_t::op_pla;
+        operation_handlers[to_index(OP::PLP)] = &fam65xx_t::op_plp;
+        operation_handlers[to_index(OP::PLX)] = &fam65xx_t::op_plx;
+        operation_handlers[to_index(OP::PLY)] = &fam65xx_t::op_ply;
+        operation_handlers[to_index(OP::REP)] = &fam65xx_t::op_rep;
+        operation_handlers[to_index(OP::RLA)] = &fam65xx_t::op_rla;
+        operation_handlers[to_index(OP::RMB0)] = &fam65xx_t::op_rmb0;
+        operation_handlers[to_index(OP::RMB1)] = &fam65xx_t::op_rmb1;
+        operation_handlers[to_index(OP::RMB2)] = &fam65xx_t::op_rmb2;
+        operation_handlers[to_index(OP::RMB3)] = &fam65xx_t::op_rmb3;
+        operation_handlers[to_index(OP::RMB4)] = &fam65xx_t::op_rmb4;
+        operation_handlers[to_index(OP::RMB5)] = &fam65xx_t::op_rmb5;
+        operation_handlers[to_index(OP::RMB6)] = &fam65xx_t::op_rmb6;
+        operation_handlers[to_index(OP::RMB7)] = &fam65xx_t::op_rmb7;
+        operation_handlers[to_index(OP::ROL)] = &fam65xx_t::op_rol;
+        operation_handlers[to_index(OP::ROR)] = &fam65xx_t::op_ror;
+        operation_handlers[to_index(OP::RRA)] = &fam65xx_t::op_rra;
+        operation_handlers[to_index(OP::RTI)] = &fam65xx_t::op_rti;
+        operation_handlers[to_index(OP::RTL)] = &fam65xx_t::op_rtl;
+        operation_handlers[to_index(OP::JSL)] = &fam65xx_t::op_jsl;
+        operation_handlers[to_index(OP::JML)] = &fam65xx_t::op_jmp;
+        operation_handlers[to_index(OP::MVN)] = &fam65xx_t::op_mvn;
+        operation_handlers[to_index(OP::MVP)] = &fam65xx_t::op_mvp;
+        operation_handlers[to_index(OP::RTS)] = &fam65xx_t::op_rts;
+        operation_handlers[to_index(OP::SAX)] = &fam65xx_t::op_sax;
+        operation_handlers[to_index(OP::SBC)] = &fam65xx_t::op_sbc;
+        operation_handlers[to_index(OP::SBX)] = &fam65xx_t::op_sbx;
+        operation_handlers[to_index(OP::SEC)] = &fam65xx_t::op_sec;
+        operation_handlers[to_index(OP::SED)] = &fam65xx_t::op_sed;
+        operation_handlers[to_index(OP::SEI)] = &fam65xx_t::op_sei;
+        operation_handlers[to_index(OP::SEP)] = &fam65xx_t::op_sep;
+        operation_handlers[to_index(OP::SHA)] = &fam65xx_t::op_sha;
+        operation_handlers[to_index(OP::SHS)] = &fam65xx_t::op_shs;
+        operation_handlers[to_index(OP::SHX)] = &fam65xx_t::op_shx;
+        operation_handlers[to_index(OP::SHY)] = &fam65xx_t::op_shy;
+        operation_handlers[to_index(OP::SLO)] = &fam65xx_t::op_slo;
+        operation_handlers[to_index(OP::SMB0)] = &fam65xx_t::op_smb0;
+        operation_handlers[to_index(OP::SMB1)] = &fam65xx_t::op_smb1;
+        operation_handlers[to_index(OP::SMB2)] = &fam65xx_t::op_smb2;
+        operation_handlers[to_index(OP::SMB3)] = &fam65xx_t::op_smb3;
+        operation_handlers[to_index(OP::SMB4)] = &fam65xx_t::op_smb4;
+        operation_handlers[to_index(OP::SMB5)] = &fam65xx_t::op_smb5;
+        operation_handlers[to_index(OP::SMB6)] = &fam65xx_t::op_smb6;
+        operation_handlers[to_index(OP::SMB7)] = &fam65xx_t::op_smb7;
+        operation_handlers[to_index(OP::SRE)] = &fam65xx_t::op_sre;
+        operation_handlers[to_index(OP::STA)] = &fam65xx_t::op_sta;
+        operation_handlers[to_index(OP::STP)] = &fam65xx_t::op_stp;
+        operation_handlers[to_index(OP::STX)] = &fam65xx_t::op_stx;
+        operation_handlers[to_index(OP::STY)] = &fam65xx_t::op_sty;
+        operation_handlers[to_index(OP::STZ)] = &fam65xx_t::op_stz;
+        operation_handlers[to_index(OP::TAX)] = &fam65xx_t::op_tax;
+        operation_handlers[to_index(OP::TAY)] = &fam65xx_t::op_tay;
+        operation_handlers[to_index(OP::TRB)] = &fam65xx_t::op_trb;
+        operation_handlers[to_index(OP::TSB)] = &fam65xx_t::op_tsb;
+        operation_handlers[to_index(OP::TSX)] = &fam65xx_t::op_tsx;
+        operation_handlers[to_index(OP::TXA)] = &fam65xx_t::op_txa;
+        operation_handlers[to_index(OP::TXS)] = &fam65xx_t::op_txs;
+        operation_handlers[to_index(OP::TYA)] = &fam65xx_t::op_tya;
+        operation_handlers[to_index(OP::WAI)] = &fam65xx_t::op_wai;
+        operation_handlers[to_index(OP::XAA)] = &fam65xx_t::op_xaa;
+        operation_handlers[to_index(OP::XBA)] = &fam65xx_t::op_xba;
+        operation_handlers[to_index(OP::XCE)] = &fam65xx_t::op_xce;
+        operation_handlers[to_index(OP::COP)] = &fam65xx_t::op_cop;
+        operation_handlers[to_index(OP::WDM)] = &fam65xx_t::op_wdm;
         
         // Initialize addressing mode handler lookup table
         addressing_mode_handlers.fill(nullptr);  // Default to nullptr (safe for AM_NON/AM_IMM)
         
         // Addressing modes (implemented)
-        addressing_mode_handlers[AM_NON] = nullptr;   // No handler needed (implicit/accumulator/relative)
-        addressing_mode_handlers[AM_IMM] = nullptr;   // No handler (handled directly in operations)
-        addressing_mode_handlers[AM_ZER] = &fam65xx_t::am_zp;
-        addressing_mode_handlers[AM_ZPX] = &fam65xx_t::am_zpx;
-        addressing_mode_handlers[AM_ZPY] = &fam65xx_t::am_zpy;
-        addressing_mode_handlers[AM_ABS] = &fam65xx_t::am_abs;
-        addressing_mode_handlers[AM_ABX] = &fam65xx_t::am_abx;
-        addressing_mode_handlers[AM_ABY] = &fam65xx_t::am_aby;
-        addressing_mode_handlers[AM_IND] = &fam65xx_t::am_ind;
-        addressing_mode_handlers[AM_INX] = &fam65xx_t::am_inx;
-        addressing_mode_handlers[AM_INY] = &fam65xx_t::am_iny;
+        addressing_mode_handlers[to_index(AM::NON)] = nullptr;   // No handler needed (implicit/accumulator/relative)
+        addressing_mode_handlers[to_index(AM::IMM)] = nullptr;   // No handler (handled directly in operations)
+        addressing_mode_handlers[to_index(AM::ZER)] = &fam65xx_t::am_zp;
+        addressing_mode_handlers[to_index(AM::ZPX)] = &fam65xx_t::am_zpx;
+        addressing_mode_handlers[to_index(AM::ZPY)] = &fam65xx_t::am_zpy;
+        addressing_mode_handlers[to_index(AM::ABS)] = &fam65xx_t::am_abs;
+        addressing_mode_handlers[to_index(AM::ABX)] = &fam65xx_t::am_abx;
+        addressing_mode_handlers[to_index(AM::ABY)] = &fam65xx_t::am_aby;
+        addressing_mode_handlers[to_index(AM::IND)] = &fam65xx_t::am_ind;
+        addressing_mode_handlers[to_index(AM::INX)] = &fam65xx_t::am_inx;
+        addressing_mode_handlers[to_index(AM::INY)] = &fam65xx_t::am_iny;
         
         // Rockwell 65C02 addressing modes
-        addressing_mode_handlers[AM_ZPR] = &fam65xx_t::am_zpr;  // Zero Page Relative (for BBR/BBS)
+        addressing_mode_handlers[to_index(AM::ZPR)] = &fam65xx_t::am_zpr;  // Zero Page Relative (for BBR/BBS)
         
         // 65C02 addressing modes (if implemented)
-        addressing_mode_handlers[AM_ZPI] = &fam65xx_t::am_zpi;  // Zero Page Indirect
+        addressing_mode_handlers[to_index(AM::ZPI)] = &fam65xx_t::am_zpi;  // Zero Page Indirect
 
         // 65C816 addressing modes (if implemented)
-        addressing_mode_handlers[AM_ABI] = &fam65xx_t::am_abi;  // Absolute Indexed Indirect
+        addressing_mode_handlers[to_index(AM::ABI)] = &fam65xx_t::am_abi;  // Absolute Indexed Indirect
         if constexpr (has_wide_registers()) {
-            addressing_mode_handlers[AM_SR] = &fam65xx_t::amr_sr;    // Stack Relative (65C816 only)
-            addressing_mode_handlers[AM_SRI] = &fam65xx_t::am_sri;  // Stack Relative Indirect Indexed (65C816 only)
+            addressing_mode_handlers[to_index(AM::SR)] = &fam65xx_t::amr_sr;    // Stack Relative (65C816 only)
+            addressing_mode_handlers[to_index(AM::SRI)] = &fam65xx_t::am_sri;  // Stack Relative Indirect Indexed (65C816 only)
         }
     }
 };

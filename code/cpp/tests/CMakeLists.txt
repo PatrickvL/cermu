@@ -111,7 +111,6 @@ endif()
 # fam65xx Enhanced C ProcessorTests Runner - With debugging features (using new fam65xx)
 add_executable(fam65xx_processor_tests_runner
     fam65xx_processor_tests_runner.cpp
-    json_parser.cpp
     ${CPU_DIR}/fam65xx/fam65xx_decoder.cpp
 )
 target_include_directories(fam65xx_processor_tests_runner PRIVATE
@@ -130,7 +129,8 @@ if(MSVC)
 else()
     target_compile_options(fam65xx_processor_tests_runner PRIVATE -Wall -Wextra)
 endif()
-# Link math library if needed
+# Link against json_parser library and math library if needed
+target_link_libraries(fam65xx_processor_tests_runner json_parser)
 if(NOT WIN32 AND NOT MSVC)
     target_link_libraries(fam65xx_processor_tests_runner m)
 endif()

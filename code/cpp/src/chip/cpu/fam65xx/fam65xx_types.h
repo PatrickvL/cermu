@@ -8,6 +8,7 @@
  */
 
 #include <cstdint>
+#include <type_traits>
 
 // Include system-wide bus definitions
 #include "../../../core/aiemuc.h"
@@ -161,91 +162,72 @@ constexpr auto FAM65XX_INT_RESET = InterruptType::RESET;
 //   - These modes either have no operand, operand in next byte, or
 //     operate directly on registers without memory access
 
-// Addressing Mode - Modern C++ scoped enum
 enum class AddressingMode : uint8_t {
-    NONE = 0,   // No addressing handler (Implicit/Accumulator/Relative)
-    IMMEDIATE,  // Immediate - operand is next byte
-    ZERO_PAGE,  // Zero Page - operand at $00nn
-    ZERO_PAGE_X,// Zero Page,X - operand at ($00nn + X) & 0xFF
-    ZERO_PAGE_Y,// Zero Page,Y - operand at ($00nn + Y) & 0xFF
-    ABSOLUTE,   // Absolute - operand at $nnnn
-    ABSOLUTE_X, // Absolute,X - operand at $nnnn + X
-    ABSOLUTE_Y, // Absolute,Y - operand at $nnnn + Y
-    INDIRECT,   // Indirect - jump target at ($nnnn)
-    INDEXED_INDIRECT,    // Indexed Indirect - operand at (($nn + X) & 0xFF)
-    INDIRECT_INDEXED,    // Indirect Indexed - operand at ($nn) + Y
+    NON = 0, /* No addressing handler (Implicit/Accumulator/Relative) */
+    IMM,     /* Immediate - operand is next byte */
+    ZER,     /* Zero Page - operand at $00nn */
+    ZPX,     /* Zero Page,X - operand at ($00nn + X) & 0xFF */
+    ZPY,     /* Zero Page,Y - operand at ($00nn + Y) & 0xFF */
+    ABS,     /* Absolute - operand at $nnnn */
+    ABX,     /* Absolute,X - operand at $nnnn + X */
+    ABY,     /* Absolute,Y - operand at $nnnn + Y */
+    IND,     /* Indirect - jump target at ($nnnn) */
+    INX,     /* Indexed Indirect - operand at (($nn + X) & 0xFF) */
+    INY,     /* Indirect Indexed - operand at ($nn) + Y */
     // Enhanced addressing modes for all family members
-    ZERO_PAGE_RELATIVE,  // Zero Page Relative for BBR/BBS - nn,label - Rockwell
-    ZERO_PAGE_INDIRECT,  // Zero Page Indirect - ($nn) - 65C02
-    ABSOLUTE_INDEXED_INDIRECT, // Absolute Indexed Indirect - ($nnnn,X) - 65C816
-    STACK_RELATIVE,      // Stack Relative - n,S - 65C816
-    STACK_RELATIVE_INDIRECT_INDEXED, // Stack Relative Indirect Indexed - (n,S),Y - 65C816
-    COUNT
+    ZPR,     /* Zero Page Relative for BBR/BBS - nn,label - Rockwell */
+    ZPI,     /* Zero Page Indirect - ($nn) - 65C02 */
+    ABI,     /* Absolute Indexed Indirect - ($nnnn,X) - 65C816 */
+    SR,      /* Stack Relative - n,S - 65C816 */
+    SRI,     /* Stack Relative Indirect Indexed - (n,S),Y - 65C816 */
+    COUNT,
+    
+    // Legacy aliases for documentation/clarity (all map to NON)
+    IMP = NON, /* Implied/Implicit - no operand */
+    ACC = NON, /* Accumulator - operate on A register */
+    REL = NON  /* Relative - branch offset */
 };
 
-// Legacy C-style enum compatibility
-constexpr auto AM_NON = AddressingMode::NONE;
-constexpr auto AM_IMM = AddressingMode::IMMEDIATE;
-constexpr auto AM_ZER = AddressingMode::ZERO_PAGE;
-constexpr auto AM_ZPX = AddressingMode::ZERO_PAGE_X;
-constexpr auto AM_ZPY = AddressingMode::ZERO_PAGE_Y;
-constexpr auto AM_ABS = AddressingMode::ABSOLUTE;
-constexpr auto AM_ABX = AddressingMode::ABSOLUTE_X;
-constexpr auto AM_ABY = AddressingMode::ABSOLUTE_Y;
-constexpr auto AM_IND = AddressingMode::INDIRECT;
-constexpr auto AM_INX = AddressingMode::INDEXED_INDIRECT;
-constexpr auto AM_INY = AddressingMode::INDIRECT_INDEXED;
-constexpr auto AM_ZPR = AddressingMode::ZERO_PAGE_RELATIVE;
-constexpr auto AM_ZPI = AddressingMode::ZERO_PAGE_INDIRECT;
-constexpr auto AM_ABI = AddressingMode::ABSOLUTE_INDEXED_INDIRECT;
-constexpr auto AM_SR = AddressingMode::STACK_RELATIVE;
-constexpr auto AM_SRI = AddressingMode::STACK_RELATIVE_INDIRECT_INDEXED;
-constexpr auto AM_COUNT = AddressingMode::COUNT;
 
-/* Aliases for documentation/clarity (all map to AM_NON) */
-#define AM_IMP  AM_NON  /* Implied/Implicit - no operand */
-#define AM_ACC  AM_NON  /* Accumulator - operate on A register */
-#define AM_REL  AM_NON  /* Relative - branch offset */
-
-typedef enum {
+enum class Operation : uint8_t {
     // Core 6502 operations (0-45) - these are used in all processors
-    OP_LDA, OP_LDX, OP_LDY,                                    // 0-2: Load operations
-    OP_STA, OP_STX, OP_STY,                                    // 3-5: Store operations
-    OP_ADC, OP_SBC,                                            // 6-7: Arithmetic
-    OP_AND, OP_ORA, OP_EOR,                                    // 8-10: Logic operations
-    OP_CMP, OP_CPX, OP_CPY,                                    // 11-13: Compare operations
-    OP_ASL, OP_LSR, OP_ROL, OP_ROR,                            // 14-17: Shift/rotate
-    OP_INC, OP_DEC,                                            // 18-19: Increment/decrement
-    OP_INX, OP_INY, OP_DEX, OP_DEY,                            // 20-23: Register inc/dec
-    OP_TAX, OP_TAY, OP_TXA, OP_TYA, OP_TSX, OP_TXS,            // 24-29: Transfer operations
-    OP_PHA, OP_PHP, OP_PLA, OP_PLP,                            // 30-33: Stack operations
-    OP_BCC, OP_BCS, OP_BEQ, OP_BNE, OP_BMI, OP_BPL, OP_BVC, OP_BVS, // 34-41: Branches
-    OP_CLC, OP_SEC, OP_CLI, OP_SEI, OP_CLD, OP_SED, OP_CLV,    // 42-48: Flag operations
-    OP_JMP, OP_JSR, OP_RTS, OP_RTI, OP_BRK,                    // 49-53: Control flow
-    OP_BIT, OP_NOP, OP_JAM,                                    // 54-56: Test/misc
+    LDA, LDX, LDY,                                    // 0-2: Load operations
+    STA, STX, STY,                                    // 3-5: Store operations
+    ADC, SBC,                                         // 6-7: Arithmetic
+    AND, ORA, EOR,                                    // 8-10: Logic operations
+    CMP, CPX, CPY,                                    // 11-13: Compare operations
+    ASL, LSR, ROL, ROR,                               // 14-17: Shift/rotate
+    INC, DEC,                                         // 18-19: Increment/decrement
+    INX, INY, DEX, DEY,                               // 20-23: Register inc/dec
+    TAX, TAY, TXA, TYA, TSX, TXS,                     // 24-29: Transfer operations
+    PHA, PHP, PLA, PLP,                               // 30-33: Stack operations
+    BCC, BCS, BEQ, BNE, BMI, BPL, BVC, BVS,           // 34-41: Branches
+    CLC, SEC, CLI, SEI, CLD, SED, CLV,                // 42-48: Flag operations
+    JMP, JSR, RTS, RTI, BRK,                          // 49-53: Control flow
+    BIT, NOP, JAM,                                    // 54-56: Test/misc
     
     // Illegal opcodes - most commonly used in 6502/6510 (57-74)
-    OP_LAX, OP_SAX, OP_DCP, OP_ISC, OP_SLO, OP_RLA, OP_SRE, OP_RRA, // 57-64: Combo ops
-    OP_ANC, OP_ASR, OP_ARR, OP_SBX,                            // 65-68: Special accumulator
-    OP_SHA, OP_SHS, OP_SHX, OP_SHY, OP_LAS,                    // 69-73: Store with AND
-    OP_XAA,                                                    // 74: Special operation
+    LAX, SAX, DCP, ISC, SLO, RLA, SRE, RRA,           // 57-64: Combo ops
+    ANC, ASR, ARR, SBX,                               // 65-68: Special accumulator
+    SHA, SHS, SHX, SHY, LAS,                          // 69-73: Store with AND
+    XAA,                                              // 74: Special operation
     
     // 65C02 enhancements (75-84)
-    OP_BRA, OP_STZ, OP_TRB, OP_TSB, OP_PHX, OP_PHY, OP_PLX, OP_PLY, OP_WAI, OP_STP, // 75-84
+    BRA, STZ, TRB, TSB, PHX, PHY, PLX, PLY, WAI, STP, // 75-84
 
-    // Extended operations (85-116) - these will map to OP_NOP in 7-bit tables
+    // Extended operations (85-116) - these will map to NOP in 7-bit tables
     // but can be handled via processor-specific logic
-    OP_RMB0, OP_RMB1, OP_RMB2, OP_RMB3, OP_RMB4, OP_RMB5, OP_RMB6, OP_RMB7,
-    OP_SMB0, OP_SMB1, OP_SMB2, OP_SMB3, OP_SMB4, OP_SMB5, OP_SMB6, OP_SMB7,
-    OP_BBR0, OP_BBR1, OP_BBR2, OP_BBR3, OP_BBR4, OP_BBR5, OP_BBR6, OP_BBR7,
-    OP_BBS0, OP_BBS1, OP_BBS2, OP_BBS3, OP_BBS4, OP_BBS5, OP_BBS6, OP_BBS7,
+    RMB0, RMB1, RMB2, RMB3, RMB4, RMB5, RMB6, RMB7,
+    SMB0, SMB1, SMB2, SMB3, SMB4, SMB5, SMB6, SMB7,
+    BBR0, BBR1, BBR2, BBR3, BBR4, BBR5, BBR6, BBR7,
+    BBS0, BBS1, BBS2, BBS3, BBS4, BBS5, BBS6, BBS7,
     // 65C816 16-bit operations (117-135)
-    OP_REP, OP_SEP, OP_XBA, OP_XCE, OP_COP, OP_WDM,
-    OP_PEA, OP_PER, OP_PEI, OP_PHB, OP_PHD, OP_PHK, OP_PLB, OP_PLD,
-    OP_RTL, OP_JSL, OP_JML, OP_MVN, OP_MVP,
+    REP, SEP, XBA, XCE, COP, WDM,
+    PEA, PER, PEI, PHB, PHD, PHK, PLB, PLD,
+    RTL, JSL, JML, MVN, MVP,
     
-    OP_COUNT
-} operation_t;
+    COUNT
+};
 
 // ============================================================================
 // 8-bit Register indices with endian-aware 16-bit pairs
@@ -294,7 +276,6 @@ typedef enum {
 // Opcode Encoding
 // ============================================================================
 
-// Opcode bit flags - Modern C++ scoped enum with bitwise operations
 enum class OpcodeFlags : uint8_t {
     NONE          = 0x0,  // No special flags
     ILLEGAL_STORE = 0x1,  // Illegal store quirk - uses wrong address on page cross
@@ -303,29 +284,38 @@ enum class OpcodeFlags : uint8_t {
     RESERVED      = 0x8   // Reserved for future use
 };
 
-// Enable bitwise operations for OpcodeFlags
-constexpr OpcodeFlags operator|(OpcodeFlags a, OpcodeFlags b) {
-    return static_cast<OpcodeFlags>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
-}
-constexpr OpcodeFlags operator&(OpcodeFlags a, OpcodeFlags b) {
-    return static_cast<OpcodeFlags>(static_cast<uint8_t>(a) & static_cast<uint8_t>(b));
-}
-constexpr OpcodeFlags operator^(OpcodeFlags a, OpcodeFlags b) {
-    return static_cast<OpcodeFlags>(static_cast<uint8_t>(a) ^ static_cast<uint8_t>(b));
-}
-constexpr OpcodeFlags operator~(OpcodeFlags a) {
-    return static_cast<OpcodeFlags>(~static_cast<uint8_t>(a));
+// ============================================================================
+// MODERN C++ HELPER FUNCTIONS
+// ============================================================================
+
+// Helper function to convert scoped enums to indices for array access
+// This eliminates the need for static_cast<size_t>() everywhere
+template<typename E>
+constexpr auto to_index(E e) noexcept {
+    return static_cast<std::underlying_type_t<E>>(e);
 }
 
-// Legacy C-style enum compatibility
-constexpr auto OF_NONE = OpcodeFlags::NONE;
-constexpr auto OF_ILLEGAL_STORE = OpcodeFlags::ILLEGAL_STORE;
-constexpr auto OF_SKIP_PAGE = OpcodeFlags::SKIP_PAGE;
-constexpr auto OF_RMW = OpcodeFlags::RMW;
-constexpr auto OF_RESERVED = OpcodeFlags::RESERVED;
-
-typedef struct {
-    uint16_t op_index : 8;  // Operation index (0-255, bits 0-7) [type operation_t]
+struct opcode_info_t {
+    uint16_t op_index : 8;  // Operation index (0-255, bits 0-7) [type Operation]
     uint16_t am_index : 4;  // Addressing mode index (0-15, bits 8-11) [type AddressingMode]
     uint16_t flags    : 4;  // Opcode flags (bits 12-15) [type OpcodeFlags]
-} opcode_info_t;
+    
+    // Constructor to handle scoped enum conversion
+    constexpr opcode_info_t(Operation op, AddressingMode am, OpcodeFlags fl)
+        : op_index(to_index(op))
+        , am_index(to_index(am))
+        , flags(to_index(fl))
+    {}
+    
+    // Default constructor for aggregate initialization
+    constexpr opcode_info_t() : op_index(0), am_index(0), flags(0) {}
+};
+
+// ============================================================================
+// CONVENIENT TYPE ALIASES FOR CLEAN SYNTAX
+// ============================================================================
+
+// Type aliases for cleaner opcode table syntax
+using OP = Operation;
+using AM = AddressingMode;
+using OF = OpcodeFlags;
