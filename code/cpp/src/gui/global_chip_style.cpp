@@ -91,17 +91,36 @@ void GlobalChipStyleManager::notifyAllVisualizations() {
 // ============================================================================
 
 void GlobalChipStyleManager::renderConfigDialog(bool* show_dialog) {
-    if (show_dialog && !*show_dialog) return;
+    if (show_dialog && !*show_dialog) {
+        // Dialog is being closed - restore original config if we were in preview mode
+        if (preview_mode_ && using_temp_config_) {
+            // Don't call setGlobalConfig here to avoid recursive notifications
+            // The original config is already preserved in global_config_
+        }
+        return;
+    }
     
     config_changed_this_frame_ = false;
     
     // Initialize temp config on first use or when preview mode changes
     static bool temp_config_initialized = false;
+    static bool was_in_preview_mode = false;
+    
     if (!temp_config_initialized || (using_temp_config_ != preview_mode_)) {
+        // Save original config when entering preview mode
+        if (preview_mode_ && !was_in_preview_mode) {
+            original_config_ = global_config_;
+        }
+        // Restore original config when leaving preview mode
+        else if (!preview_mode_ && was_in_preview_mode) {
+            global_config_ = original_config_;
+        }
+        
         using_temp_config_ = preview_mode_;
         if (using_temp_config_) {
             temp_config_ = global_config_;
         }
+        was_in_preview_mode = preview_mode_;
         temp_config_initialized = true;
     }
     
@@ -405,7 +424,12 @@ void GlobalChipStyleManager::renderPresetManagement() {
 
 void GlobalChipStyleManager::renderRealTimePreview() {
     if (preview_mode_ && config_changed_this_frame_) {
-        // Apply temporary config to all visualizations
+        // In preview mode, temporarily update the global config so all renderers see the changes
+        // This is safe because we restore it when preview mode is disabled or dialog is closed
+        ChipVisualConfig old_config = global_config_;
+        global_config_ = temp_config_;
+        
+        // Also notify registered visualizations for compatibility
         for (auto& pair : registered_visualizations_) {
             pair.second(temp_config_);
         }
