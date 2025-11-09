@@ -79,17 +79,13 @@ static const char* flag_names[] = {
 // ============================================================================
 
 // Template function to create and render CPU chip visualization
-// Get shared chip visualization instance for a CPU type
+// Get chip visualization instance for a CPU type (no static caching - always uses global config)
 template<const CPUTraits& Traits>
 ChipVisualization* get_chip_visualization_instance() {
-    static std::unique_ptr<ChipVisualization> chip_viz = nullptr;
+    static ChipLayout layout = create_cpu_pin_layout<Traits>();
+    static std::unique_ptr<ChipVisualization> chip_viz = std::make_unique<ChipVisualization>(layout);
     
-    // Create chip visualization if not already created
-    if (!chip_viz) {
-        ChipLayout layout = create_cpu_pin_layout<Traits>();
-        chip_viz = std::make_unique<ChipVisualization>(layout);
-    }
-    
+    // Always return the same instance - but it will use get_visual_config() which returns global config
     return chip_viz.get();
 }
 
@@ -251,12 +247,9 @@ void render_chip_visualization(fam65xx_t<Traits>* cpu) {
         
         ImGui::Separator();
         
-        // Render pin legend using the generic visualization system
-        static std::unique_ptr<ChipVisualization> legend_viz = nullptr;
-        if (!legend_viz) {
-            legend_viz = std::make_unique<ChipVisualization>(layout);
-        }
-        legend_viz->render_legend();
+        // Render pin legend using the generic visualization system (no static caching)
+        static ChipVisualization legend_viz(layout);
+        legend_viz.render_legend();
         
         ImGui::Unindent(16.0f);
     }
