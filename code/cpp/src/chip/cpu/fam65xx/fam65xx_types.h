@@ -45,8 +45,14 @@
 // Memory Callback Types (for compatibility)
 // ============================================================================
 
-typedef uint8_t (*fam65xx_mem_read_t)(void* user_data, uint16_t addr, uint8_t bus_state);
-typedef void (*fam65xx_mem_write_t)(void* user_data, uint16_t addr, uint8_t data);
+// Modern C++ function types - preferred for new code
+#include <functional>
+using fam65xx_mem_read_func = std::function<uint8_t(void* user_data, uint16_t addr, uint8_t bus_state)>;
+using fam65xx_mem_write_func = std::function<void(void* user_data, uint16_t addr, uint8_t data)>;
+
+// Legacy C function pointer types - kept for C compatibility
+using fam65xx_mem_read_t = uint8_t (*)(void* user_data, uint16_t addr, uint8_t bus_state);
+using fam65xx_mem_write_t = void (*)(void* user_data, uint16_t addr, uint8_t data);
 
 // ============================================================================
 // Enhanced Chip Descriptor (extends chip_descriptor_t for fam65xx CPUs)
@@ -65,30 +71,56 @@ typedef struct {
 // CPU Flags
 // ============================================================================
 
-#define FLAG_C  0x01  // Carry
-#define FLAG_Z  0x02  // Zero
-#define FLAG_I  0x04  // Interrupt Disable
-#define FLAG_D  0x08  // Decimal Mode
-#define FLAG_B  0x10  // Break
-#define FLAG_U  0x20  // Unused (always 1) - 6502/6510/65C02
-#define FLAG_V  0x40  // Overflow
-#define FLAG_N  0x80  // Negative
+// CPU Flags - Modern C++ constants
+namespace cpu_flags {
+    constexpr uint8_t CARRY = 0x01;              // Carry
+    constexpr uint8_t ZERO = 0x02;               // Zero
+    constexpr uint8_t INTERRUPT_DISABLE = 0x04;  // Interrupt Disable
+    constexpr uint8_t DECIMAL_MODE = 0x08;       // Decimal Mode
+    constexpr uint8_t BREAK = 0x10;              // Break
+    constexpr uint8_t UNUSED = 0x20;             // Unused (always 1) - 6502/6510/65C02
+    constexpr uint8_t OVERFLOW = 0x40;           // Overflow
+    constexpr uint8_t NEGATIVE = 0x80;           // Negative
+    
+    // 65C816-specific flags (redefine bit meanings in native mode)
+    constexpr uint8_t INDEX_SELECT = 0x10;       // Index Register Select (0 = 16-bit, 1 = 8-bit) - 65C816
+    constexpr uint8_t MEMORY_SELECT = 0x20;      // Memory/Accumulator Select (0 = 16-bit, 1 = 8-bit) - 65C816
+    constexpr uint16_t EMULATION_MODE = 0x100;   // Emulation mode (not in P register, separate)
+}
 
-// 65C816-specific flags (redefine bit meanings in native mode)
-#define FLAG_X  0x10  // Index Register Select (0 = 16-bit, 1 = 8-bit) - 65C816
-#define FLAG_M  0x20  // Memory/Accumulator Select (0 = 16-bit, 1 = 8-bit) - 65C816
-#define FLAG_E 0x100  // Emulation mode (not in P register, separate)
+// Legacy macro compatibility - can be removed once all code is updated
+#define FLAG_C  cpu_flags::CARRY
+#define FLAG_Z  cpu_flags::ZERO
+#define FLAG_I  cpu_flags::INTERRUPT_DISABLE
+#define FLAG_D  cpu_flags::DECIMAL_MODE
+#define FLAG_B  cpu_flags::BREAK
+#define FLAG_U  cpu_flags::UNUSED
+#define FLAG_V  cpu_flags::OVERFLOW
+#define FLAG_N  cpu_flags::NEGATIVE
+#define FLAG_X  cpu_flags::INDEX_SELECT
+#define FLAG_M  cpu_flags::MEMORY_SELECT
+#define FLAG_E  cpu_flags::EMULATION_MODE
 
-// Interrupt types - ordered by priority (higher index = higher priority)
-typedef enum {
-    FAM65XX_INT_NONE = 0,    // No interrupt active
-    FAM65XX_INT_BRK,         // Software interrupt (BRK instruction) and default/fallback
-    FAM65XX_INT_IRQ,         // Maskable interrupt
-    FAM65XX_INT_COP,         // CoProcessor instruction (65C816)
-    FAM65XX_INT_NMI,         // Non-maskable interrupt
-    FAM65XX_INT_ABORT,       // Abort interrupt (65C816)
-    FAM65XX_INT_RESET        // Reset interrupt (highest priority)
-} interrupt_t;
+// Interrupt types - Modern C++ scoped enum (ordered by priority: higher value = higher priority)
+enum class InterruptType : uint8_t {
+    NONE = 0,    // No interrupt active
+    BRK,         // Software interrupt (BRK instruction) and default/fallback
+    IRQ,         // Maskable interrupt
+    COP,         // CoProcessor instruction (65C816)
+    NMI,         // Non-maskable interrupt
+    ABORT,       // Abort interrupt (65C816)
+    RESET        // Reset interrupt (highest priority)
+};
+
+// Legacy C-style enum compatibility
+using interrupt_t = InterruptType;
+constexpr auto FAM65XX_INT_NONE = InterruptType::NONE;
+constexpr auto FAM65XX_INT_BRK = InterruptType::BRK;
+constexpr auto FAM65XX_INT_IRQ = InterruptType::IRQ;
+constexpr auto FAM65XX_INT_COP = InterruptType::COP;
+constexpr auto FAM65XX_INT_NMI = InterruptType::NMI;
+constexpr auto FAM65XX_INT_ABORT = InterruptType::ABORT;
+constexpr auto FAM65XX_INT_RESET = InterruptType::RESET;
 
 // Interrupt shift register bit layout - merged system (3 bits per interrupt + separators)
 // Ordered by priority: RESET > ABORT > NMI > COP > IRQ > BRK
@@ -129,26 +161,47 @@ typedef enum {
 //   - These modes either have no operand, operand in next byte, or
 //     operate directly on registers without memory access
 
-typedef enum {
-    AM_NON = 0, /* No addressing handler (Implicit/Accumulator/Relative) */
-    AM_IMM,     /* Immediate - operand is next byte */
-    AM_ZER,     /* Zero Page - operand at $00nn */
-    AM_ZPX,     /* Zero Page,X - operand at ($00nn + X) & 0xFF */
-    AM_ZPY,     /* Zero Page,Y - operand at ($00nn + Y) & 0xFF */
-    AM_ABS,     /* Absolute - operand at $nnnn */
-    AM_ABX,     /* Absolute,X - operand at $nnnn + X */
-    AM_ABY,     /* Absolute,Y - operand at $nnnn + Y */
-    AM_IND,     /* Indirect - jump target at ($nnnn) */
-    AM_INX,     /* Indexed Indirect - operand at (($nn + X) & 0xFF) */
-    AM_INY,     /* Indirect Indexed - operand at ($nn) + Y */
+// Addressing Mode - Modern C++ scoped enum
+enum class AddressingMode : uint8_t {
+    NONE = 0,   // No addressing handler (Implicit/Accumulator/Relative)
+    IMMEDIATE,  // Immediate - operand is next byte
+    ZERO_PAGE,  // Zero Page - operand at $00nn
+    ZERO_PAGE_X,// Zero Page,X - operand at ($00nn + X) & 0xFF
+    ZERO_PAGE_Y,// Zero Page,Y - operand at ($00nn + Y) & 0xFF
+    ABSOLUTE,   // Absolute - operand at $nnnn
+    ABSOLUTE_X, // Absolute,X - operand at $nnnn + X
+    ABSOLUTE_Y, // Absolute,Y - operand at $nnnn + Y
+    INDIRECT,   // Indirect - jump target at ($nnnn)
+    INDEXED_INDIRECT,    // Indexed Indirect - operand at (($nn + X) & 0xFF)
+    INDIRECT_INDEXED,    // Indirect Indexed - operand at ($nn) + Y
     // Enhanced addressing modes for all family members
-    AM_ZPR,     /* Zero Page Relative for BBR/BBS - nn,label - Rockwell */
-    AM_ZPI,     /* Zero Page Indirect - ($nn) - 65C02 */
-    AM_ABI,     /* Absolute Indexed Indirect - ($nnnn,X) - 65C816 */
-    AM_SR,      /* Stack Relative - n,S - 65C816 */
-    AM_SRI,     /* Stack Relative Indirect Indexed - (n,S),Y - 65C816 */
-    AM_COUNT
-} addressing_mode_t;
+    ZERO_PAGE_RELATIVE,  // Zero Page Relative for BBR/BBS - nn,label - Rockwell
+    ZERO_PAGE_INDIRECT,  // Zero Page Indirect - ($nn) - 65C02
+    ABSOLUTE_INDEXED_INDIRECT, // Absolute Indexed Indirect - ($nnnn,X) - 65C816
+    STACK_RELATIVE,      // Stack Relative - n,S - 65C816
+    STACK_RELATIVE_INDIRECT_INDEXED, // Stack Relative Indirect Indexed - (n,S),Y - 65C816
+    COUNT
+};
+
+// Legacy C-style enum compatibility
+using addressing_mode_t = AddressingMode;
+constexpr auto AM_NON = AddressingMode::NONE;
+constexpr auto AM_IMM = AddressingMode::IMMEDIATE;
+constexpr auto AM_ZER = AddressingMode::ZERO_PAGE;
+constexpr auto AM_ZPX = AddressingMode::ZERO_PAGE_X;
+constexpr auto AM_ZPY = AddressingMode::ZERO_PAGE_Y;
+constexpr auto AM_ABS = AddressingMode::ABSOLUTE;
+constexpr auto AM_ABX = AddressingMode::ABSOLUTE_X;
+constexpr auto AM_ABY = AddressingMode::ABSOLUTE_Y;
+constexpr auto AM_IND = AddressingMode::INDIRECT;
+constexpr auto AM_INX = AddressingMode::INDEXED_INDIRECT;
+constexpr auto AM_INY = AddressingMode::INDIRECT_INDEXED;
+constexpr auto AM_ZPR = AddressingMode::ZERO_PAGE_RELATIVE;
+constexpr auto AM_ZPI = AddressingMode::ZERO_PAGE_INDIRECT;
+constexpr auto AM_ABI = AddressingMode::ABSOLUTE_INDEXED_INDIRECT;
+constexpr auto AM_SR = AddressingMode::STACK_RELATIVE;
+constexpr auto AM_SRI = AddressingMode::STACK_RELATIVE_INDIRECT_INDEXED;
+constexpr auto AM_COUNT = AddressingMode::COUNT;
 
 /* Aliases for documentation/clarity (all map to AM_NON) */
 #define AM_IMP  AM_NON  /* Implied/Implicit - no operand */
@@ -242,14 +295,36 @@ typedef enum {
 // Opcode Encoding
 // ============================================================================
 
-// Opcode bit flags
-typedef enum {
-    OF_NONE          = 0x0,  // No special flags
-    OF_ILLEGAL_STORE = 0x1,  // Illegal store quirk - uses wrong address on page cross
-    OF_SKIP_PAGE     = 0x2,  // Can skip page cross penalty cycle (read operations only)
-    OF_RMW           = 0x4,  // Read-Modify-Write operation
-    OF_RESERVED      = 0x8   // Reserved for future use
-} opcode_flags_t;
+// Opcode bit flags - Modern C++ scoped enum with bitwise operations
+enum class OpcodeFlags : uint8_t {
+    NONE          = 0x0,  // No special flags
+    ILLEGAL_STORE = 0x1,  // Illegal store quirk - uses wrong address on page cross
+    SKIP_PAGE     = 0x2,  // Can skip page cross penalty cycle (read operations only)
+    RMW           = 0x4,  // Read-Modify-Write operation
+    RESERVED      = 0x8   // Reserved for future use
+};
+
+// Enable bitwise operations for OpcodeFlags
+constexpr OpcodeFlags operator|(OpcodeFlags a, OpcodeFlags b) {
+    return static_cast<OpcodeFlags>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
+}
+constexpr OpcodeFlags operator&(OpcodeFlags a, OpcodeFlags b) {
+    return static_cast<OpcodeFlags>(static_cast<uint8_t>(a) & static_cast<uint8_t>(b));
+}
+constexpr OpcodeFlags operator^(OpcodeFlags a, OpcodeFlags b) {
+    return static_cast<OpcodeFlags>(static_cast<uint8_t>(a) ^ static_cast<uint8_t>(b));
+}
+constexpr OpcodeFlags operator~(OpcodeFlags a) {
+    return static_cast<OpcodeFlags>(~static_cast<uint8_t>(a));
+}
+
+// Legacy C-style enum compatibility
+using opcode_flags_t = OpcodeFlags;
+constexpr auto OF_NONE = OpcodeFlags::NONE;
+constexpr auto OF_ILLEGAL_STORE = OpcodeFlags::ILLEGAL_STORE;
+constexpr auto OF_SKIP_PAGE = OpcodeFlags::SKIP_PAGE;
+constexpr auto OF_RMW = OpcodeFlags::RMW;
+constexpr auto OF_RESERVED = OpcodeFlags::RESERVED;
 
 typedef struct {
     uint16_t op_index : 8;  // Operation index (0-255, bits 0-7) [type operation_t]
