@@ -164,16 +164,12 @@ static std::vector<PinSignalState> get_sid_pin_states(mos6581_t* sid, const Chip
     return pin_states;
 }
 
-// Get shared chip visualization instance for SID
+// Get chip visualization instance for SID (no static caching - always uses global config)
 static ChipVisualization* get_sid_chip_visualization_instance() {
-    static std::unique_ptr<ChipVisualization> chip_viz = nullptr;
+    static ChipLayout layout = create_mos6581_layout();
+    static std::unique_ptr<ChipVisualization> chip_viz = std::make_unique<ChipVisualization>(layout);
     
-    // Create chip visualization if not already created
-    if (!chip_viz) {
-        ChipLayout layout = create_mos6581_layout();
-        chip_viz = std::make_unique<ChipVisualization>(layout);
-    }
-    
+    // Always return the same instance - but it will use get_visual_config() which returns global config
     return chip_viz.get();
 }
 

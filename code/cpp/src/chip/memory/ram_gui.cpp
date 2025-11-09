@@ -103,16 +103,12 @@ static std::vector<PinSignalState> get_ram_pin_states(ram_t* ram, const ChipLayo
     return pin_states;
 }
 
-// Get shared chip visualization instance for RAM
+// Get chip visualization instance for RAM (no static caching - always uses global config)
 static ChipVisualization* get_ram_chip_visualization_instance() {
-    static std::unique_ptr<ChipVisualization> chip_viz = nullptr;
+    static ChipLayout layout = create_ram_layout();
+    static std::unique_ptr<ChipVisualization> chip_viz = std::make_unique<ChipVisualization>(layout);
     
-    // Create chip visualization if not already created
-    if (!chip_viz) {
-        ChipLayout layout = create_ram_layout();
-        chip_viz = std::make_unique<ChipVisualization>(layout);
-    }
-    
+    // Always return the same instance - but it will use get_visual_config() which returns global config
     return chip_viz.get();
 }
 

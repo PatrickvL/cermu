@@ -148,16 +148,12 @@ static std::vector<PinSignalState> get_vicii_pin_states(vicii_t* vicii, const Ch
     return pin_states;
 }
 
-// Get shared chip visualization instance for VIC-II
+// Get chip visualization instance for VIC-II (no static caching - always uses global config)
 static ChipVisualization* get_vicii_chip_visualization_instance() {
-    static std::unique_ptr<ChipVisualization> chip_viz = nullptr;
+    static ChipLayout layout = create_vicii_layout();
+    static std::unique_ptr<ChipVisualization> chip_viz = std::make_unique<ChipVisualization>(layout);
     
-    // Create chip visualization if not already created
-    if (!chip_viz) {
-        ChipLayout layout = create_vicii_layout();
-        chip_viz = std::make_unique<ChipVisualization>(layout);
-    }
-    
+    // Always return the same instance - but it will use get_visual_config() which returns global config
     return chip_viz.get();
 }
 

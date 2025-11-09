@@ -130,16 +130,12 @@ static std::vector<PinSignalState> get_mos2114_pin_states(mos2114_t* mos2114, co
     return pin_states;
 }
 
-// Get shared chip visualization instance for MOS2114
+// Get chip visualization instance for MOS2114 (no static caching - always uses global config)
 static ChipVisualization* get_mos2114_chip_visualization_instance() {
-    static std::unique_ptr<ChipVisualization> chip_viz = nullptr;
+    static ChipLayout layout = create_mos2114_layout();
+    static std::unique_ptr<ChipVisualization> chip_viz = std::make_unique<ChipVisualization>(layout);
     
-    // Create chip visualization if not already created
-    if (!chip_viz) {
-        ChipLayout layout = create_mos2114_layout();
-        chip_viz = std::make_unique<ChipVisualization>(layout);
-    }
-    
+    // Always return the same instance - but it will use get_visual_config() which returns global config
     return chip_viz.get();
 }
 #endif
