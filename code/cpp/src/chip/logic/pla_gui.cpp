@@ -382,9 +382,9 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                                 ImGui::TableSetColumnIndex(2);
                                 ImGui::Text("%02X", encoded);
                                 ImGui::TableSetColumnIndex(3);
-                                ImGui::Text("%s", c64_bus_chip_to_title(page_read_chip));
+                                ImGui::Text("%s", get_io_chip_detail(page_read_chip));
                                 ImGui::TableSetColumnIndex(4);
-                                ImGui::Text("%s", c64_bus_chip_to_title(page_write_chip));
+                                ImGui::Text("%s", get_io_chip_detail(page_write_chip));
                                 ImGui::TableSetColumnIndex(5);
                                 ImGui::Text("$%04X", read_offset);
                                 ImGui::TableSetColumnIndex(6);
