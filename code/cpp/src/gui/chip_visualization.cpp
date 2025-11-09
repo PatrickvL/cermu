@@ -73,6 +73,8 @@ ChipVisualConfig ChipVisualConfig::get_style(VisualStyle style) {
             config.marker_color = 0xFF606060;
             config.thermal_pad_color = 0xFF404060;
             config.group_border_color = 0xFF606060;
+            config.datasheet_grid_color = 0xFF404040;
+            config.dimension_line_color = 0xFF808080;
             break;
             
         case VisualStyle::CLASSIC_LIGHT:
@@ -88,6 +90,8 @@ ChipVisualConfig ChipVisualConfig::get_style(VisualStyle style) {
             config.marker_color = 0xFF808080;
             config.thermal_pad_color = 0xFFD0D0E0;
             config.group_border_color = 0xFF808080;
+            config.datasheet_grid_color = 0xFFD0D0D0;
+            config.dimension_line_color = 0xFF808080;
             break;
             
         case VisualStyle::HIGH_CONTRAST:
@@ -103,6 +107,8 @@ ChipVisualConfig ChipVisualConfig::get_style(VisualStyle style) {
             config.marker_color = 0xFFFFFFFF;
             config.thermal_pad_color = 0xFF404040;
             config.group_border_color = 0xFFFFFFFF;
+            config.datasheet_grid_color = 0xFF808080;
+            config.dimension_line_color = 0xFFFFFFFF;
             break;
             
         case VisualStyle::COLORFUL:
@@ -118,6 +124,8 @@ ChipVisualConfig ChipVisualConfig::get_style(VisualStyle style) {
             config.marker_color = 0xFF8080FF;
             config.thermal_pad_color = 0xFF404080;
             config.group_border_color = 0xFF6060A0;
+            config.datasheet_grid_color = 0xFF404060;
+            config.dimension_line_color = 0xFF8080FF;
             break;
             
         case VisualStyle::MONOCHROME:
@@ -133,6 +141,8 @@ ChipVisualConfig ChipVisualConfig::get_style(VisualStyle style) {
             config.marker_color = 0xFFC0C0C0;
             config.thermal_pad_color = 0xFF404040;
             config.group_border_color = 0xFF808080;
+            config.datasheet_grid_color = 0xFF808080;
+            config.dimension_line_color = 0xFFFFFFFF;
             break;
             
         case VisualStyle::DATASHEET:
@@ -148,6 +158,44 @@ ChipVisualConfig ChipVisualConfig::get_style(VisualStyle style) {
             config.marker_color = 0xFF000000;
             config.thermal_pad_color = 0xFFF0F0F0;
             config.group_border_color = 0xFF000000;
+            config.datasheet_grid_color = 0xFFE0E0E0;
+            config.dimension_line_color = 0xFF000000;
+            break;
+            
+        case VisualStyle::DATASHEET_70S:
+            // Early 70s hand-drafted style - rougher lines, labels outside
+            config.chip_body_color = 0xFFFFFFFF;
+            config.chip_border_color = 0xFF000000;
+            config.pin_border_color = 0xFF000000;
+            config.text_color = 0xFF000000;
+            config.active_text_color = 0xFF000000;
+            config.pin_number_color = 0xFF000000;
+            config.led_active_color = 0xFF404040;
+            config.led_inactive_color = 0xFFE0E0E0;
+            config.notch_color = 0xFFD0D0D0;
+            config.marker_color = 0xFF000000;
+            config.thermal_pad_color = 0xFFF8F8F8;
+            config.group_border_color = 0xFF606060;  // Dashed grouping boxes
+            config.datasheet_grid_color = 0xFFF0F0F0;
+            config.dimension_line_color = 0xFF000000;
+            break;
+            
+        case VisualStyle::DATASHEET_80S:
+            // Mid 80s CAD-generated style - clean lines, labels inside
+            config.chip_body_color = 0xFFFFFFFF;
+            config.chip_border_color = 0xFF000000;
+            config.pin_border_color = 0xFF000000;
+            config.text_color = 0xFF000000;
+            config.active_text_color = 0xFF000000;
+            config.pin_number_color = 0xFF000000;
+            config.led_active_color = 0xFF606060;
+            config.led_inactive_color = 0xFFE0E0E0;
+            config.notch_color = 0xFFE0E0E0;
+            config.marker_color = 0xFF000000;
+            config.thermal_pad_color = 0xFFF0F0F0;
+            config.group_border_color = 0xFF000000;
+            config.datasheet_grid_color = 0xFFF0F0F0;
+            config.dimension_line_color = 0xFF000000;
             break;
             
         case VisualStyle::SCHEMATIC:
@@ -163,6 +211,8 @@ ChipVisualConfig ChipVisualConfig::get_style(VisualStyle style) {
             config.marker_color = 0xFF000000;
             config.thermal_pad_color = 0xFFF8F8F8;
             config.group_border_color = 0xFF000000;
+            config.datasheet_grid_color = 0xFFE0E0E0;
+            config.dimension_line_color = 0xFF000000;
             break;
     }
     
@@ -203,6 +253,11 @@ ChipVisualization::ChipVisualization(const ChipLayout& layout, const ChipVisualC
 }
 
 void ChipVisualization::render(ImVec2 chip_center, const std::vector<PinSignalState>& pin_states, const char* chip_name) {
+    // Draw datasheet grid if enabled (behind everything)
+    if (config_.show_datasheet_grid) {
+        render_datasheet_grid(chip_center);
+    }
+    
     render_chip_body(chip_center, chip_name);
     render_orientation_marker(chip_center);
     
@@ -219,11 +274,21 @@ void ChipVisualization::render(ImVec2 chip_center, const std::vector<PinSignalSt
     }
     
     // Render based on package type
-    if (layout_.package.package_type == PackageType::BGA || 
+    if (layout_.package.package_type == PackageType::BGA ||
         layout_.package.package_type == PackageType::LGA) {
         render_bga_grid(chip_center, pin_states);
     } else {
         render_pins(chip_center, pin_states);
+    }
+    
+    // Draw dimension lines if enabled (on top)
+    if (config_.show_dimension_lines) {
+        render_dimension_lines(chip_center);
+    }
+    
+    // Draw pin pitch indicators if enabled
+    if (config_.show_pin_pitch_indicators) {
+        render_pin_pitch_indicators(chip_center);
     }
 }
 
@@ -324,9 +389,129 @@ void ChipVisualization::render_dip_style(ImVec2 chip_center, float chip_width, f
     ImVec2 chip_min = {chip_center.x - chip_width/2, chip_center.y - chip_height/2};
     ImVec2 chip_max = {chip_center.x + chip_width/2, chip_center.y + chip_height/2};
     
-    // Draw rounded rectangle for DIP
-    draw_list->AddRectFilled(chip_min, chip_max, config_.chip_body_color, 2.0f, 0);
-    draw_list->AddRect(chip_min, chip_max, config_.chip_border_color, 2.0f, 0, config_.chip_border_width);
+    // Adjust rendering based on datasheet mode
+    switch (config_.datasheet_mode) {
+        case DatasheetMode::EXTERNAL_LABELING:
+            // Early 70s - external labeling, hand-drafted appearance, view-agnostic
+            draw_list->AddRectFilled(chip_min, chip_max, config_.chip_body_color, 1.5f, 0);
+            draw_list->AddRect(chip_min, chip_max, config_.chip_border_color, 1.5f, 0, config_.chip_border_width);
+            
+            // No view designation - this was view-agnostic, just a box with pins
+            if (chip_name) {
+                ImVec2 text_size = ImGui::CalcTextSize(chip_name);
+                ImVec2 text_pos = {chip_center.x - text_size.x/2, chip_min.y - 25};
+                draw_list->AddText(text_pos, config_.text_color, chip_name);
+            }
+            break;
+            
+        case DatasheetMode::TOP_VIEW_80S:
+            // 80s standard - clean CAD appearance with TOP VIEW designation
+            draw_list->AddRectFilled(chip_min, chip_max, config_.chip_body_color, 0.0f, 0);
+            draw_list->AddRect(chip_min, chip_max, config_.chip_border_color, 0.0f, 0, config_.chip_border_width);
+            
+            // Add "TOP VIEW" text in clean 80s style
+            if (chip_name) {
+                char top_view_text[64];
+                snprintf(top_view_text, sizeof(top_view_text), "%s (TOP VIEW)", chip_name);
+                ImVec2 text_size = ImGui::CalcTextSize(top_view_text);
+                ImVec2 text_pos = {chip_center.x - text_size.x/2, chip_min.y - 20};
+                draw_list->AddText(text_pos, config_.text_color, top_view_text);
+            }
+            break;
+            
+        case DatasheetMode::BOTTOM_VIEW:
+            // Rare 80s experiment - mirrored view from solder/pin side
+            draw_list->AddRectFilled(chip_min, chip_max, config_.chip_body_color, 0.0f, 0);
+            draw_list->AddRect(chip_min, chip_max, config_.chip_border_color, 0.0f, 0, config_.chip_border_width);
+            
+            // Add "BOTTOM VIEW" warning text
+            if (chip_name) {
+                char bottom_view_text[64];
+                snprintf(bottom_view_text, sizeof(bottom_view_text), "%s (BOTTOM VIEW - MIRRORED)", chip_name);
+                ImVec2 text_size = ImGui::CalcTextSize(bottom_view_text);
+                ImVec2 text_pos = {chip_center.x - text_size.x/2, chip_min.y - 20};
+                draw_list->AddText(text_pos, 0xFF0080FF, bottom_view_text); // Warning color
+            }
+            break;
+            
+        case DatasheetMode::FUNCTIONAL_BLOCK:
+            // Internal architecture diagram with functional units
+            draw_list->AddRectFilled(chip_min, chip_max, config_.chip_body_color, 0.0f, 0);
+            draw_list->AddRect(chip_min, chip_max, config_.chip_border_color, 0.0f, 0, config_.chip_border_width * 1.5f);
+            
+            // Add functional blocks inside (simplified)
+            float block_width = chip_width * 0.3f;
+            float block_height = chip_height * 0.2f;
+            
+            // ALU block
+            ImVec2 alu_min = {chip_center.x - block_width/2, chip_center.y - block_height};
+            ImVec2 alu_max = {chip_center.x + block_width/2, chip_center.y - block_height/2};
+            draw_list->AddRect(alu_min, alu_max, config_.pin_border_color, 0.0f, 0, 1.0f);
+            draw_list->AddText({alu_min.x + 5, alu_min.y + 5}, config_.text_color, "ALU");
+            
+            // Control block
+            ImVec2 ctrl_min = {chip_center.x - block_width/2, chip_center.y + block_height/2};
+            ImVec2 ctrl_max = {chip_center.x + block_width/2, chip_center.y + block_height};
+            draw_list->AddRect(ctrl_min, ctrl_max, config_.pin_border_color, 0.0f, 0, 1.0f);
+            draw_list->AddText({ctrl_min.x + 5, ctrl_min.y + 5}, config_.text_color, "CTRL");
+            
+            if (chip_name) {
+                ImVec2 text_size = ImGui::CalcTextSize(chip_name);
+                ImVec2 text_pos = {chip_center.x - text_size.x/2, chip_min.y - 25};
+                draw_list->AddText(text_pos, config_.text_color, chip_name);
+            }
+            break;
+            
+        case DatasheetMode::CONNECTION_DIAGRAM:
+            // Schematic symbol - triangle or box shape for logic symbols
+            ImVec2 tri_p1 = {chip_min.x, chip_center.y};
+            ImVec2 tri_p2 = {chip_max.x, chip_min.y + chip_height * 0.3f};
+            ImVec2 tri_p3 = {chip_max.x, chip_max.y - chip_height * 0.3f};
+            
+            draw_list->AddTriangleFilled(tri_p1, tri_p2, tri_p3, config_.chip_body_color);
+            draw_list->AddTriangle(tri_p1, tri_p2, tri_p3, config_.chip_border_color, config_.chip_border_width);
+            
+            if (chip_name) {
+                ImVec2 text_size = ImGui::CalcTextSize(chip_name);
+                ImVec2 text_pos = {chip_center.x - text_size.x/2, chip_center.y - text_size.y/2};
+                draw_list->AddText(text_pos, config_.text_color, chip_name);
+            }
+            break;
+            
+        case DatasheetMode::PACKAGE_OUTLINE:
+            // 3D-ish mechanical drawing for manufacturing
+            draw_list->AddRectFilled(chip_min, chip_max, config_.chip_body_color, 2.0f, 0);
+            draw_list->AddRect(chip_min, chip_max, config_.chip_border_color, 2.0f, 0, config_.chip_border_width);
+            
+            // Add 3D depth effect
+            ImVec2 depth_offset = {4.0f, -4.0f};
+            ImVec2 depth_min = {chip_min.x + depth_offset.x, chip_min.y + depth_offset.y};
+            ImVec2 depth_max = {chip_max.x + depth_offset.x, chip_max.y + depth_offset.y};
+            
+            // Draw depth lines
+            draw_list->AddLine({chip_min.x, chip_min.y}, depth_min, config_.pin_border_color, 1.0f);
+            draw_list->AddLine({chip_max.x, chip_min.y}, {depth_max.x, depth_min.y}, config_.pin_border_color, 1.0f);
+            draw_list->AddLine({chip_max.x, chip_max.y}, depth_max, config_.pin_border_color, 1.0f);
+            draw_list->AddLine({chip_min.x, chip_max.y}, {depth_min.x, depth_max.y}, config_.pin_border_color, 1.0f);
+            
+            // Draw back face
+            draw_list->AddRect(depth_min, depth_max, config_.pin_border_color, 2.0f, 0, 1.0f);
+            
+            if (chip_name) {
+                char package_text[64];
+                snprintf(package_text, sizeof(package_text), "%s PACKAGE OUTLINE", chip_name);
+                ImVec2 text_size = ImGui::CalcTextSize(package_text);
+                ImVec2 text_pos = {chip_center.x - text_size.x/2, chip_min.y - 25};
+                draw_list->AddText(text_pos, config_.text_color, package_text);
+            }
+            break;
+            
+        default:
+            // Modern style - standard rounded rectangle
+            draw_list->AddRectFilled(chip_min, chip_max, config_.chip_body_color, 2.0f, 0);
+            draw_list->AddRect(chip_min, chip_max, config_.chip_border_color, 2.0f, 0, config_.chip_border_width);
+            break;
+    }
 }
 
 void ChipVisualization::render_surface_mount_style(ImVec2 chip_center, float chip_width, float chip_height, const char* chip_name) {
@@ -669,19 +854,46 @@ void ChipVisualization::render_single_pin(ImVec2 pin_pos, const ChipPin& pin, co
         char pin_num_str[4];
         snprintf(pin_num_str, sizeof(pin_num_str), "%d", pin.pin_number);
         
+        // Historical datasheet pin number positioning
+        bool numbers_inside = config_.numbers_inside_package;
+        
         ImVec2 pin_num_pos;
         switch (side) {
             case PinSide::LEFT:
-                pin_num_pos = {pin_pos.x + config_.pin_width/2 + 2, pin_pos.y - 6};
+                if (numbers_inside) {
+                    // 80s style - numbers inside package
+                    pin_num_pos = {pin_pos.x + config_.pin_width/2 + 2, pin_pos.y - 6};
+                } else {
+                    // 70s style - numbers outside package, closer to pin
+                    pin_num_pos = {pin_pos.x - config_.pin_width/2 - 15, pin_pos.y - 6};
+                }
                 break;
             case PinSide::RIGHT:
-                pin_num_pos = {pin_pos.x - config_.pin_width/2 - 10, pin_pos.y - 6};
+                if (numbers_inside) {
+                    // 80s style - numbers inside package
+                    pin_num_pos = {pin_pos.x - config_.pin_width/2 - 10, pin_pos.y - 6};
+                } else {
+                    // 70s style - numbers outside package
+                    pin_num_pos = {pin_pos.x + config_.pin_width/2 + 2, pin_pos.y - 6};
+                }
                 break;
             case PinSide::TOP:
-                pin_num_pos = {pin_pos.x - 6, pin_pos.y + config_.pin_height/2 + 2};
+                if (numbers_inside) {
+                    // 80s style - numbers inside package
+                    pin_num_pos = {pin_pos.x - 6, pin_pos.y + config_.pin_height/2 + 2};
+                } else {
+                    // 70s style - numbers outside package
+                    pin_num_pos = {pin_pos.x - 6, pin_pos.y - config_.pin_height/2 - 15};
+                }
                 break;
             case PinSide::BOTTOM:
-                pin_num_pos = {pin_pos.x - 6, pin_pos.y - config_.pin_height/2 - 10};
+                if (numbers_inside) {
+                    // 80s style - numbers inside package
+                    pin_num_pos = {pin_pos.x - 6, pin_pos.y - config_.pin_height/2 - 10};
+                } else {
+                    // 70s style - numbers outside package
+                    pin_num_pos = {pin_pos.x - 6, pin_pos.y + config_.pin_height/2 + 2};
+                }
                 break;
         }
         
@@ -795,22 +1007,56 @@ ImVec2 ChipVisualization::get_label_position(ImVec2 pin_pos, const ChipPin& pin,
         offset *= 0.7f;
     }
     
+    // Historical datasheet positioning
+    bool labels_inside = config_.labels_inside_package;
+    float chip_width = scaled_chip_width_ > 0 ? scaled_chip_width_ : 120.0f;
+    float chip_height = scaled_chip_height_ > 0 ? scaled_chip_height_ : 80.0f;
+    
     switch (side) {
         case PinSide::LEFT:
-            label_pos.x -= config_.pin_width/2 + offset + 30;
-            label_pos.y -= 6;
+            if (labels_inside) {
+                // 80s style - labels inside package (TOP VIEW)
+                label_pos.x += config_.pin_width/2 + 8;
+                label_pos.y -= 6;
+            } else {
+                // 70s style - labels outside package
+                label_pos.x -= config_.pin_width/2 + offset + 30;
+                label_pos.y -= 6;
+            }
             break;
         case PinSide::RIGHT:
-            label_pos.x += config_.pin_width/2 + offset;
-            label_pos.y -= 6;
+            if (labels_inside) {
+                // 80s style - labels inside package
+                label_pos.x -= config_.pin_width/2 - 8;
+                label_pos.y -= 6;
+                // Right-align text for inside labels
+            } else {
+                // 70s style - labels outside package
+                label_pos.x += config_.pin_width/2 + offset;
+                label_pos.y -= 6;
+            }
             break;
         case PinSide::TOP:
-            label_pos.y -= config_.pin_height/2 + offset + 8;
-            label_pos.x -= 10;
+            if (labels_inside) {
+                // 80s style - labels inside package
+                label_pos.y += config_.pin_height/2 + 2;
+                label_pos.x -= 10;
+            } else {
+                // 70s style - labels outside package
+                label_pos.y -= config_.pin_height/2 + offset + 8;
+                label_pos.x -= 10;
+            }
             break;
         case PinSide::BOTTOM:
-            label_pos.y += config_.pin_height/2 + offset;
-            label_pos.x -= 10;
+            if (labels_inside) {
+                // 80s style - labels inside package
+                label_pos.y -= config_.pin_height/2 - 2;
+                label_pos.x -= 10;
+            } else {
+                // 70s style - labels outside package
+                label_pos.y += config_.pin_height/2 + offset;
+                label_pos.x -= 10;
+            }
             break;
     }
     
@@ -1125,6 +1371,116 @@ void ChipVisualization::render_settings_gui() {
         
         // Note: config_changed is handled automatically since we're modifying config_ directly
     }
+}
+
+// ============================================================================
+// DATASHEET-SPECIFIC RENDERING FUNCTIONS
+// ============================================================================
+
+void ChipVisualization::render_datasheet_grid(ImVec2 chip_center) {
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    float chip_width = scaled_chip_width_ > 0 ? scaled_chip_width_ : 120.0f;
+    float chip_height = scaled_chip_height_ > 0 ? scaled_chip_height_ : 80.0f;
+    
+    // Draw light grid lines for alignment (70s style)
+    float grid_spacing = 10.0f;
+    float grid_extend = 50.0f;
+    
+    ImVec2 grid_min = {chip_center.x - chip_width/2 - grid_extend, chip_center.y - chip_height/2 - grid_extend};
+    ImVec2 grid_max = {chip_center.x + chip_width/2 + grid_extend, chip_center.y + chip_height/2 + grid_extend};
+    
+    // Vertical lines
+    for (float x = grid_min.x; x <= grid_max.x; x += grid_spacing) {
+        draw_list->AddLine({x, grid_min.y}, {x, grid_max.y}, config_.datasheet_grid_color, 0.5f);
+    }
+    
+    // Horizontal lines
+    for (float y = grid_min.y; y <= grid_max.y; y += grid_spacing) {
+        draw_list->AddLine({grid_min.x, y}, {grid_max.x, y}, config_.datasheet_grid_color, 0.5f);
+    }
+}
+
+void ChipVisualization::render_dimension_lines(ImVec2 chip_center) {
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    float chip_width = scaled_chip_width_ > 0 ? scaled_chip_width_ : 120.0f;
+    float chip_height = scaled_chip_height_ > 0 ? scaled_chip_height_ : 80.0f;
+    
+    // Package width dimension line (below chip)
+    float dim_offset = 30.0f;
+    ImVec2 dim_start = {chip_center.x - chip_width/2, chip_center.y + chip_height/2 + dim_offset};
+    ImVec2 dim_end = {chip_center.x + chip_width/2, chip_center.y + chip_height/2 + dim_offset};
+    
+    // Draw dimension line
+    draw_list->AddLine(dim_start, dim_end, config_.dimension_line_color, 1.0f);
+    
+    // Draw end arrows
+    float arrow_size = 4.0f;
+    ImVec2 arrow1_p1 = {dim_start.x, dim_start.y - arrow_size};
+    ImVec2 arrow1_p2 = {dim_start.x, dim_start.y + arrow_size};
+    ImVec2 arrow2_p1 = {dim_end.x, dim_end.y - arrow_size};
+    ImVec2 arrow2_p2 = {dim_end.x, dim_end.y + arrow_size};
+    
+    draw_list->AddLine(arrow1_p1, arrow1_p2, config_.dimension_line_color, 1.0f);
+    draw_list->AddLine(arrow2_p1, arrow2_p2, config_.dimension_line_color, 1.0f);
+    
+    // Add dimension text
+    char dim_text[32];
+    snprintf(dim_text, sizeof(dim_text), "%.1f mm", layout_.package.width / 1000.0f);
+    ImVec2 text_size = ImGui::CalcTextSize(dim_text);
+    ImVec2 text_pos = {chip_center.x - text_size.x/2, dim_start.y + 5};
+    draw_list->AddText(text_pos, config_.dimension_line_color, dim_text);
+    
+    // Package height dimension line (to the right of chip)
+    ImVec2 dim_start_h = {chip_center.x + chip_width/2 + dim_offset, chip_center.y - chip_height/2};
+    ImVec2 dim_end_h = {chip_center.x + chip_width/2 + dim_offset, chip_center.y + chip_height/2};
+    
+    draw_list->AddLine(dim_start_h, dim_end_h, config_.dimension_line_color, 1.0f);
+    
+    // Height arrows
+    ImVec2 arrow3_p1 = {dim_start_h.x - arrow_size, dim_start_h.y};
+    ImVec2 arrow3_p2 = {dim_start_h.x + arrow_size, dim_start_h.y};
+    ImVec2 arrow4_p1 = {dim_end_h.x - arrow_size, dim_end_h.y};
+    ImVec2 arrow4_p2 = {dim_end_h.x + arrow_size, dim_end_h.y};
+    
+    draw_list->AddLine(arrow3_p1, arrow3_p2, config_.dimension_line_color, 1.0f);
+    draw_list->AddLine(arrow4_p1, arrow4_p2, config_.dimension_line_color, 1.0f);
+    
+    // Height dimension text (rotated would be ideal, but simplified for now)
+    snprintf(dim_text, sizeof(dim_text), "%.1f", layout_.package.height / 1000.0f);
+    ImVec2 height_text_pos = {dim_start_h.x + 8, chip_center.y - 6};
+    draw_list->AddText(height_text_pos, config_.dimension_line_color, dim_text);
+}
+
+void ChipVisualization::render_pin_pitch_indicators(ImVec2 chip_center) {
+    if (layout_.left_pins.size() < 2) return;  // Need at least 2 pins to show pitch
+    
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    float chip_width = scaled_chip_width_ > 0 ? scaled_chip_width_ : 120.0f;
+    float chip_height = scaled_chip_height_ > 0 ? scaled_chip_height_ : 80.0f;
+    
+    // Calculate pin positions for first two pins on left side
+    ImVec2 pin1_pos = calculate_pin_position(chip_center, layout_.left_pins[0], 0, PinSide::LEFT);
+    ImVec2 pin2_pos = calculate_pin_position(chip_center, layout_.left_pins[1], 1, PinSide::LEFT);
+    
+    // Draw pin pitch dimension line (to the left of chip)
+    float pitch_offset = 40.0f;
+    ImVec2 pitch_start = {chip_center.x - chip_width/2 - pitch_offset, pin1_pos.y};
+    ImVec2 pitch_end = {chip_center.x - chip_width/2 - pitch_offset, pin2_pos.y};
+    
+    draw_list->AddLine(pitch_start, pitch_end, config_.dimension_line_color, 1.0f);
+    
+    // Add small tick marks
+    float tick_size = 3.0f;
+    draw_list->AddLine({pitch_start.x - tick_size, pitch_start.y},
+                      {pitch_start.x + tick_size, pitch_start.y}, config_.dimension_line_color, 1.0f);
+    draw_list->AddLine({pitch_end.x - tick_size, pitch_end.y},
+                      {pitch_end.x + tick_size, pitch_end.y}, config_.dimension_line_color, 1.0f);
+    
+    // Add pitch measurement text
+    char pitch_text[16];
+    snprintf(pitch_text, sizeof(pitch_text), "%.1f", layout_.package.pin_pitch);
+    ImVec2 pitch_text_pos = {pitch_start.x - 25, (pitch_start.y + pitch_end.y) / 2 - 6};
+    draw_list->AddText(pitch_text_pos, config_.dimension_line_color, pitch_text);
 }
 
 #endif // IMGUI_VERSION
