@@ -46,6 +46,52 @@ static const char* get_pla_mode_vicii_description(uint8_t mode, uint16_t bank) {
     return mode_desc;
 }
 
+// Helper function to get detailed chip information for I/O areas
+static const char* get_io_chip_detail(uint8_t io_page) {
+    switch (io_page) {
+        case 0: return "VIC-II Video Interface Controller ($D000-$D0FF)";
+        case 1: return "VIC-II Extended Registers ($D100-$D1FF)";
+        case 2: return "VIC-II Mirror ($D200-$D2FF)";
+        case 3: return "VIC-II Mirror ($D300-$D3FF)";
+        case 4: return "SID Sound Interface Device ($D400-$D4FF)";
+        case 5: return "SID Mirror ($D500-$D5FF)";
+        case 6: return "SID Mirror ($D600-$D6FF)";
+        case 7: return "SID Mirror ($D700-$D7FF)";
+        case 8: return "Color RAM ($D800-$DBFF, 1KB 4-bit)";
+        case 9: return "Color RAM ($D800-$DBFF, 1KB 4-bit)";
+        case 10: return "Color RAM ($D800-$DBFF, 1KB 4-bit)";
+        case 11: return "Color RAM ($D800-$DBFF, 1KB 4-bit)";
+        case 12: return "CIA1 Complex Interface Adapter ($DC00-$DCFF)";
+        case 13: return "CIA2 Complex Interface Adapter ($DD00-$DDFF)";
+        case 14: return "I/O Expansion Area 1 ($DE00-$DEFF)";
+        case 15: return "I/O Expansion Area 2 ($DF00-$DFFF)";
+        default: return "Unknown I/O page";
+    }
+}
+
+// Helper function to get memory bank usage notes (the elaborate overview that was lost)
+static const char* get_memory_bank_notes(int bank) {
+    switch (bank) {
+        case 0: return "Zero page, stack, RAM";
+        case 1: return "Basic ML program start";
+        case 2: return "User programs/data";
+        case 3: return "User programs/data";
+        case 4: return "User programs/data";
+        case 5: return "User programs/data";
+        case 6: return "User programs/data";
+        case 7: return "User programs/data";
+        case 8: return "Cartridge ROM Low";
+        case 9: return "Cartridge ROM Low";
+        case 0xA: return "BASIC ROM / RAM";
+        case 0xB: return "BASIC ROM / RAM";
+        case 0xC: return "Upper RAM";
+        case 0xD: return "I/O / Character ROM";
+        case 0xE: return "KERNAL ROM / RAM";
+        case 0xF: return "KERNAL ROM / RAM";
+        default: return "";
+    }
+}
+
 // ============================================================================
 // C64 PLA LAYOUT (28-pin DIP)
 // ============================================================================
@@ -272,10 +318,275 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                 ImGui::Text("Mode %d - %s", pla_debug_selected_mode,
                        (pla_debug_selected_mode == current_mode) ? "(ACTIVE)" : "(Preview)");
                 ImGui::Text("Configuration: %s", get_pla_mode_cpu_description(pla_debug_selected_mode));
+                
+                ImGui::Separator();
+                
+                if (ImGui::BeginTable("CPUBanking", 8, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit, ImVec2(0, 0))) {
+                    // Table headers
+                    ImGui::TableSetupColumn("Bank", ImGuiTableColumnFlags_None, 0.0f, 0);
+                    ImGui::TableSetupColumn("Address Range", ImGuiTableColumnFlags_None, 0.0f, 0);
+                    ImGui::TableSetupColumn("Encoded", ImGuiTableColumnFlags_None, 0.0f, 0);
+                    ImGui::TableSetupColumn("Read Chip", ImGuiTableColumnFlags_None, 0.0f, 0);
+                    ImGui::TableSetupColumn("Write Chip", ImGuiTableColumnFlags_None, 0.0f, 0);
+                    ImGui::TableSetupColumn("Read Offset", ImGuiTableColumnFlags_None, 0.0f, 0);
+                    ImGui::TableSetupColumn("Write Offset", ImGuiTableColumnFlags_None, 0.0f, 0);
+                    ImGui::TableSetupColumn("Notes", ImGuiTableColumnFlags_None, 0.0f, 0);
+                    ImGui::TableHeadersRow();
+                    
+                    // Table rows - properly handle PLA-dependent chip mapping
+                    for (int bank = 0; bank < 16; bank++) {
+                        ImGui::TableNextRow(ImGuiTableRowFlags_None, 0.0f);
+                        
+                        uint16_t bank_start = bank * 0x1000;
+                        uint16_t bank_end = bank_start + 0x0FFF;
+                        
+                        // Get encoded value for this bank and mode - this is the key to PLA-aware mapping
+                        uint8_t encoded = 0;
+                        if (pla_debug_selected_mode < 32) {
+                            encoded = c64->bus.cpu_encoded_chip_per_bank_per_mode[pla_debug_selected_mode][bank];
+                        }
+                        
+                        // Decode chips from the PLA-generated encoding
+                        uint8_t read_chip = decode_read_chip(encoded);
+                        uint8_t write_chip = decode_write_chip(encoded);
+                        
+                        // Special handling for I/O area - this changes based on PLA mode
+                        if (read_chip == CHIP_IO || write_chip == CHIP_IO) {
+                            // Show I/O pages as individual rows (16 pages, $D000-$DFFF)
+                            for (int page = 0; page < 16; page++) {
+                                if (page > 0) {
+                                    ImGui::TableNextRow(ImGuiTableRowFlags_None, 0.0f);
+                                }
+                                uint16_t page_start = bank_start + (page * 0x100);
+                                uint16_t page_end = page_start + 0xFF;
+                                
+                                // For I/O pages, the actual chip depends on the page number
+                                uint8_t page_read_chip = (read_chip == CHIP_IO) ? page : read_chip;
+                                uint8_t page_write_chip = (write_chip == CHIP_IO) ? page : write_chip;
+                                
+                                chip_description_t read_desc = {0};
+                                chip_description_t write_desc = {0};
+                                c64_bus_get_chip_description(&c64->bus, page_read_chip, &read_desc);
+                                c64_bus_get_chip_description(&c64->bus, page_write_chip, &write_desc);
+                                uint16_t read_offset = (read_desc.base <= page_start) ? (page_start - read_desc.base) : 0;
+                                uint16_t write_offset = (write_desc.base <= page_start) ? (page_start - write_desc.base) : 0;
+    
+                                ImGui::TableSetColumnIndex(0);
+                                if (page == 0) {
+                                    ImGui::Text("$%X", bank);
+                                } else {
+                                    ImGui::Text("  .%X", page); // Sub-page indicator
+                                }
+                                ImGui::TableSetColumnIndex(1);
+                                ImGui::Text("$%04X-$%04X", page_start, page_end);
+                                ImGui::TableSetColumnIndex(2);
+                                ImGui::Text("%02X", encoded);
+                                ImGui::TableSetColumnIndex(3);
+                                ImGui::Text("%s", c64_bus_chip_to_title(page_read_chip));
+                                ImGui::TableSetColumnIndex(4);
+                                ImGui::Text("%s", c64_bus_chip_to_title(page_write_chip));
+                                ImGui::TableSetColumnIndex(5);
+                                ImGui::Text("$%04X", read_offset);
+                                ImGui::TableSetColumnIndex(6);
+                                ImGui::Text("$%04X", write_offset);
+                                ImGui::TableSetColumnIndex(7);
+                                // I/O area notes - these are always the same regardless of PLA mode
+                                if (read_chip == CHIP_IO) {
+                                    ImGui::Text("I/O Area");
+                                } else {
+                                    const char* chip_detail = get_io_chip_detail(page);
+                                    if (strstr(chip_detail, "VIC-II")) {
+                                        ImGui::Text("VIC-II registers");
+                                    } else if (strstr(chip_detail, "SID")) {
+                                        ImGui::Text("SID registers");
+                                    } else if (strstr(chip_detail, "Color RAM")) {
+                                        ImGui::Text("Color RAM");
+                                    } else if (strstr(chip_detail, "CIA1")) {
+                                        ImGui::Text("CIA1 registers");
+                                    } else if (strstr(chip_detail, "CIA2")) {
+                                        ImGui::Text("CIA2 registers");
+                                    } else if (strstr(chip_detail, "I/O Expansion")) {
+                                        ImGui::Text("Expansion I/O");
+                                    } else {
+                                        ImGui::Text("I/O page");
+                                    }
+                                }
+                            }
+                        } else {
+                            // Regular bank - chip mapping depends on PLA mode
+                            chip_description_t read_desc = {0};
+                            chip_description_t write_desc = {0};
+                            c64_bus_get_chip_description(&c64->bus, read_chip, &read_desc);
+                            c64_bus_get_chip_description(&c64->bus, write_chip, &write_desc);
+                            
+                            // Calculate offsets - these can vary based on chip remapping
+                            uint16_t read_offset = (read_desc.base <= bank_start) ? (bank_start - read_desc.base) : 0;
+                            uint16_t write_offset = (write_desc.base <= bank_start) ? (bank_start - write_desc.base) : 0;
+                            
+                            // Special case for ROMH remap (appears at $E000/$F000 instead of $A000/$B000)
+                            if (read_chip == CHIP_ROMH && (bank_start >= 0xE000)) {
+                                read_offset = bank_start - 0xE000;
+                            }
+                            if (write_chip == CHIP_ROMH && (bank_start >= 0xE000)) {
+                                write_offset = bank_start - 0xE000;
+                            }
+    
+                            ImGui::TableSetColumnIndex(0);
+                            ImGui::Text("$%X", bank);
+                            ImGui::TableSetColumnIndex(1);
+                            ImGui::Text("$%04X-$%04X", bank_start, bank_end);
+                            ImGui::TableSetColumnIndex(2);
+                            ImGui::Text("%02X", encoded);
+                            ImGui::TableSetColumnIndex(3);
+                            ImGui::Text("%s", c64_bus_chip_to_title(read_chip));
+                            ImGui::TableSetColumnIndex(4);
+                            ImGui::Text("%s", c64_bus_chip_to_title(write_chip));
+                            ImGui::TableSetColumnIndex(5);
+                            ImGui::Text("$%04X", read_offset);
+                            ImGui::TableSetColumnIndex(6);
+                            ImGui::Text("$%04X", write_offset);
+                            ImGui::TableSetColumnIndex(7);
+                            // Enhanced notes that reflect the actual PLA-dependent chip mapping
+                            const char* base_notes = get_memory_bank_notes(bank);
+                            // Add context about what's actually mapped based on PLA mode
+                            if (read_chip != write_chip) {
+                                ImGui::Text("%s (R:%s/W:%s)", base_notes,
+                                           c64_bus_chip_to_title(read_chip),
+                                           c64_bus_chip_to_title(write_chip));
+                            } else if (read_chip == CHIP_UNMAPPED) {
+                                ImGui::Text("%s (unmapped)", base_notes);
+                            } else {
+                                ImGui::Text("%s (%s)", base_notes, c64_bus_chip_to_title(read_chip));
+                            }
+                        }
+                    }
+                    
+                    ImGui::EndTable();
+                }
+                
+                ImGui::EndTabItem();
+            }
+            
+            // VIC-II Memory View Tab
+            if (ImGui::BeginTabItem("VIC-II Memory View", NULL, ImGuiTabItemFlags_None)) {
+                ImGui::Text("VIC-II Memory Banking (16 x 4KB banks):");
+                ImGui::Text("Mode %d - %s", pla_debug_selected_mode,
+                       (pla_debug_selected_mode == current_mode) ? "(ACTIVE)" : "(Preview)");
+                       
+                // VIC-II specific information
+                // Get current VIC-II bank from CIA2 Port A bits 0-1 (would need CIA2 access)
+                uint8_t current_vic_bank = 0; // Default bank 0 for now
+                uint16_t current_vic_bank_address = current_vic_bank * 0x4000;
+                ImGui::Text("Configuration: %s", get_pla_mode_vicii_description(pla_debug_selected_mode, current_vic_bank_address));
+                
+                ImGui::Separator();
+                ImGui::Text("VIC-II Bank Control:");
+                ImGui::Text("CIA2 Port A bits 0-1: %d (Bank %d active)", 0, current_vic_bank); // Simplified for now
+                
+                ImGui::Separator();
+                
+                // VIC-II memory banking table (16 x 4KB banks)
+                if (ImGui::BeginTable("VICIIBanking", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit, ImVec2(0, 0))) {
+                    ImGui::TableSetupColumn("Bank", ImGuiTableColumnFlags_None, 0.0f, 0);
+                    ImGui::TableSetupColumn("Address Range", ImGuiTableColumnFlags_None, 0.0f, 0);
+                    ImGui::TableSetupColumn("Chip", ImGuiTableColumnFlags_None, 0.0f, 0);
+                    ImGui::TableSetupColumn("Chip Title", ImGuiTableColumnFlags_None, 0.0f, 0);
+                    ImGui::TableSetupColumn("Offset", ImGuiTableColumnFlags_None, 0.0f, 0);
+                    ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_None, 0.0f, 0);
+                    ImGui::TableHeadersRow();
+                    
+                    for (int bank = 0; bank < 16; bank++) {
+                        ImGui::TableNextRow(ImGuiTableRowFlags_None, 0.0f);
+                        ImGui::TableSetColumnIndex(0);
+                        ImGui::Text("%d", bank);
+                        ImGui::TableSetColumnIndex(1);
+
+                        uint16_t bank_start = bank * 0x1000;
+                        ImGui::Text("$%04X-$%04X", bank_start, bank_start + 0x0FFF);
+                        ImGui::TableSetColumnIndex(2);
+
+                        // Get chip for this VIC-II bank and mode - PLA-dependent!
+                        uint8_t read_chip = CHIP_RAM; // Default to RAM
+                        if (pla_debug_selected_mode < 32) {
+                            read_chip = c64->bus.vicii_chip_per_bank_per_mode[pla_debug_selected_mode][bank];
+                        }
+
+                        ImGui::Text("%02d", read_chip);
+                        ImGui::TableSetColumnIndex(3);
+                        // Show what chip VIC-II actually sees at this address in this PLA mode
+                        const char* chip_title = c64_bus_chip_to_title(read_chip);
+                        if (read_chip == CHIP_CHARROM && pla_debug_selected_mode != current_mode) {
+                            ImGui::Text("%s (mode-dep)", chip_title); // Character ROM visibility depends on PLA mode
+                        } else if (read_chip == CHIP_RAM && bank >= 0xA && bank <= 0xF) {
+                            ImGui::Text("%s (under ROM)", chip_title); // RAM under ROM areas
+                        } else {
+                            ImGui::Text("%s", chip_title);
+                        }
+                        ImGui::TableSetColumnIndex(4);
+
+                        chip_description_t read_desc = {0};
+                        c64_bus_get_chip_description(&c64->bus, read_chip, &read_desc);
+                        uint16_t read_offset = (read_desc.base <= bank_start) ? (bank_start - read_desc.base) : 0;
+
+                        ImGui::Text("$%04X", read_offset);
+                        ImGui::TableSetColumnIndex(5);
+                        // Status: highlight if this 4KB bank is in the active VIC-II 16KB bank
+                        bool is_active_bank = ((bank_start / 0x4000) == current_vic_bank);
+                        if (is_active_bank && pla_debug_selected_mode == current_mode) {
+                            ImGui::Text("ACTIVE");
+                        } else if (is_active_bank) {
+                            ImGui::Text("ACTIVE (diff mode)");
+                        } else {
+                            ImGui::Text("Inactive");
+                        }
+                    }
+                    ImGui::EndTable();
+                }
+                
                 ImGui::EndTabItem();
             }
             
             ImGui::EndTabBar();
+        }
+        
+        // Chip Information Legend (moved to bottom for better space utilization)
+        ImGui::Separator();
+        ImGui::Text("CHIP Legend:");
+        if (ImGui::BeginTable("CHIPLegend", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit, ImVec2(0, 150))) {
+            ImGui::TableSetupColumn("CHIP ID", ImGuiTableColumnFlags_None, 0.0f, 0);
+            ImGui::TableSetupColumn("Memory Range", ImGuiTableColumnFlags_None, 0.0f, 0);
+            ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_None, 0.0f, 0);
+            ImGui::TableSetupColumn("Chip", ImGuiTableColumnFlags_None, 0.0f, 0);
+            ImGui::TableSetupColumn("Title", ImGuiTableColumnFlags_None, 0.0f, 0);
+            ImGui::TableHeadersRow();
+            
+            // Show all valid chip IDs
+            for (size_t i = 0; i < VALID_CHIP_COUNT; i++) {
+                uint8_t chip = VALID_CHIP_IDS[i];
+                ImGui::TableNextRow(ImGuiTableRowFlags_None, 0.0f);
+                ImGui::TableSetColumnIndex(0);
+                ImGui::Text("%02d", chip);
+                ImGui::TableSetColumnIndex(1);
+
+                chip_description_t desc = {0};
+                bool has_desc = c64_bus_get_chip_description(&c64->bus, chip, &desc);
+                if (has_desc && desc.size > 0) {
+                    ImGui::Text("$%04X-$%04X", desc.base, (uint16_t)(desc.base + desc.size - 1));
+                } else {
+                    ImGui::Text("-");
+                }
+                ImGui::TableSetColumnIndex(2);
+                ImGui::Text("%s", c64_bus_size_to_str(desc.size));
+                ImGui::TableSetColumnIndex(3);
+                ImGui::Text("%s", (chip == CHIP_UNMAPPED) ? "Unmapped" : c64_bus_chip_to_title(chip));
+                ImGui::TableSetColumnIndex(4);
+                if (has_desc) {
+                    ImGui::Text("%s", desc.label);
+                } else {
+                    ImGui::Text("%s", c64_bus_chip_to_title(chip));
+                }
+            }
+            ImGui::EndTable();
         }
     }
     ImGui::EndChild();
