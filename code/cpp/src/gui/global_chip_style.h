@@ -90,6 +90,7 @@ private:
     
     // Temporary config for real-time preview
     ChipVisualConfig temp_config_;
+    ChipVisualConfig original_config_;  // Backup of original config before preview mode
     bool using_temp_config_ = false;
 };
 
