@@ -17,7 +17,7 @@
 bus_state_t transfer_with_flags_helper(bus_state_t pins, uint8_t value, reg8_t target_reg) {
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read(pins, REG_PC);
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }
@@ -34,7 +34,7 @@ bus_state_t transfer_with_flags_helper(bus_state_t pins, uint8_t value, reg8_t t
 bus_state_t transfer_no_flags_helper(bus_state_t pins, uint8_t value, reg8_t target_reg) {
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read(pins, REG_PC);
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }
@@ -88,7 +88,7 @@ bus_state_t op_tya(bus_state_t pins) {
 bus_state_t op_inx(bus_state_t pins) {
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read(pins, REG_PC);
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }
@@ -105,7 +105,7 @@ bus_state_t op_inx(bus_state_t pins) {
 bus_state_t op_iny(bus_state_t pins) {
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read(pins, REG_PC);
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }
@@ -113,7 +113,7 @@ bus_state_t op_iny(bus_state_t pins) {
     
     // Common operation for all processors
     this->inc(REG_Y);
-    update_nz_flags(get(REG_Y));
+    update_nz_flags(this->get(REG_Y));
     transition_to_fetch();
     return pins;
 }
@@ -122,7 +122,7 @@ bus_state_t op_iny(bus_state_t pins) {
 bus_state_t op_dex(bus_state_t pins) {
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read(pins, REG_PC);
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }
@@ -139,7 +139,7 @@ bus_state_t op_dex(bus_state_t pins) {
 bus_state_t op_dey(bus_state_t pins) {
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read(pins, REG_PC);
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }
@@ -147,7 +147,7 @@ bus_state_t op_dey(bus_state_t pins) {
     
     // Common operation for all processors
     this->dec(REG_Y);
-    update_nz_flags(get(REG_Y));
+    update_nz_flags(this->get(REG_Y));
     transition_to_fetch();
     return pins;
 }

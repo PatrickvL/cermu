@@ -17,7 +17,7 @@
 bus_state_t op_bra(bus_state_t pins) {
     if constexpr (has_cmos()) {
         // Read relative offset
-        pins = phi2_read(pins, REG_PC, REG_DL);
+        pins = this->phi2_read(pins, REG_PC, REG_DL);
         if (FAM65XX_GET_RDY(pins)) {
             this->inc(REG_PC);
             
@@ -36,7 +36,7 @@ bus_state_t op_stz(bus_state_t pins) {
     if constexpr (has_cmos()) {
         // Store zero to target address with proper RDY handling
         if (this->should_complete_write_cycle(pins)) {
-            pins = phi2_write(pins, REG_AB, 0x00);
+            pins = this->phi2_write(pins, REG_AB, 0x00);
             transition_to_fetch();
         }
     }
@@ -50,7 +50,7 @@ bus_state_t op_trb(bus_state_t pins) {
         switch (this->cycle_index) {
             case 0:
                 // Cycle 0: Read original value from memory
-                pins = phi2_read(pins, REG_AB, REG_DL);
+                pins = this->phi2_read(pins, REG_AB, REG_DL);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->cycle_index++;
                 }
@@ -59,7 +59,7 @@ bus_state_t op_trb(bus_state_t pins) {
             case 1:
                 // Cycle 1: Dummy write original value back + modify
                 if (this->should_complete_write_cycle(pins)) {
-                    pins = phi2_write(pins, REG_AB, this->get(REG_DL));
+                    pins = this->phi2_write(pins, REG_AB, this->get(REG_DL));
                     
                     uint8_t accumulator = this->get(REG_A);
                     
@@ -77,7 +77,7 @@ bus_state_t op_trb(bus_state_t pins) {
             case 2:
                 // Cycle 2: Write modified result back
                 if (this->should_complete_write_cycle(pins)) {
-                    pins = phi2_write(pins, REG_AB, this->get(REG_DL));
+                    pins = this->phi2_write(pins, REG_AB, this->get(REG_DL));
                     transition_to_fetch();
                 }
                 return pins;
@@ -93,7 +93,7 @@ bus_state_t op_tsb(bus_state_t pins) {
         switch (this->cycle_index) {
             case 0:
                 // Cycle 0: Read original value from memory
-                pins = phi2_read(pins, REG_AB, REG_DL);
+                pins = this->phi2_read(pins, REG_AB, REG_DL);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->cycle_index++;
                 }
@@ -102,7 +102,7 @@ bus_state_t op_tsb(bus_state_t pins) {
             case 1:
                 // Cycle 1: Dummy write original value back + modify
                 if (this->should_complete_write_cycle(pins)) {
-                    pins = phi2_write(pins, REG_AB, this->get(REG_DL));
+                    pins = this->phi2_write(pins, REG_AB, this->get(REG_DL));
                     
                     uint8_t accumulator = this->get(REG_A);
                     
@@ -120,7 +120,7 @@ bus_state_t op_tsb(bus_state_t pins) {
             case 2:
                 // Cycle 2: Write modified result back
                 if (this->should_complete_write_cycle(pins)) {
-                    pins = phi2_write(pins, REG_AB, this->get(REG_DL));
+                    pins = this->phi2_write(pins, REG_AB, this->get(REG_DL));
                     transition_to_fetch();
                 }
                 return pins;
@@ -146,7 +146,7 @@ bus_state_t op_wai(bus_state_t pins) {
 bus_state_t op_stp(bus_state_t pins) {
     if constexpr (has_cmos()) {
         // Read immediate byte (required for 2-byte instruction)
-        pins = phi2_read(pins, REG_PC, REG_DL);
+        pins = this->phi2_read(pins, REG_PC, REG_DL);
         if (FAM65XX_GET_RDY(pins)) {
             this->inc(REG_PC);
             
@@ -166,7 +166,7 @@ bus_state_t op_phx(bus_state_t pins) {
         switch (this->cycle_index) {
             case 0:
                 /* Dummy cycle for internal operation */
-                pins = phi2_dummy_read(pins, REG_PC);
+                pins = this->phi2_dummy_read(pins, REG_PC);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->cycle_index++;
                 }
@@ -175,7 +175,7 @@ bus_state_t op_phx(bus_state_t pins) {
             case 1:
                 /* PHI2: Write X to stack with processor-specific RDY handling */
                 if (this->should_complete_write_cycle(pins)) {
-                    pins = phi2_write(pins, REG_SP, this->get(REG_X));
+                    pins = this->phi2_write(pins, REG_SP, this->get(REG_X));
                     this->dec(REG_S);
                     transition_to_fetch();
                 }
@@ -191,7 +191,7 @@ bus_state_t op_phy(bus_state_t pins) {
         switch (this->cycle_index) {
             case 0:
                 /* Dummy cycle for internal operation */
-                pins = phi2_dummy_read(pins, REG_PC);
+                pins = this->phi2_dummy_read(pins, REG_PC);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->cycle_index++;
                 }
@@ -200,7 +200,7 @@ bus_state_t op_phy(bus_state_t pins) {
             case 1:
                 /* PHI2: Write Y to stack with processor-specific RDY handling */
                 if (this->should_complete_write_cycle(pins)) {
-                    pins = phi2_write(pins, REG_SP, this->get(REG_Y));
+                    pins = this->phi2_write(pins, REG_SP, this->get(REG_Y));
                     this->dec(REG_S);
                     transition_to_fetch();
                 }
@@ -216,7 +216,7 @@ bus_state_t op_plx(bus_state_t pins) {
         switch (this->cycle_index) {
             case 0:
                 /* PHI2: Dummy read from PC */
-                pins = phi2_dummy_read(pins, REG_PC);
+                pins = this->phi2_dummy_read(pins, REG_PC);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->cycle_index++;
                 }
@@ -224,7 +224,7 @@ bus_state_t op_plx(bus_state_t pins) {
                 
             case 1:
                 /* PHI2: Dummy read from current stack pointer, then increment SP */
-                pins = phi2_dummy_read(pins, REG_SP);
+                pins = this->phi2_dummy_read(pins, REG_SP);
                 if (FAM65XX_GET_RDY(pins)) {
                     /* PHI1: Increment stack pointer */
                     this->inc(REG_S);
@@ -234,7 +234,7 @@ bus_state_t op_plx(bus_state_t pins) {
                 
             case 2:
                 /* PHI2: Read from incremented stack pointer directly into X (eliminates copy) */
-                pins = phi2_read(pins, REG_SP, REG_X);
+                pins = this->phi2_read(pins, REG_SP, REG_X);
                 if (FAM65XX_GET_RDY(pins)) {
                     /* PHI1: Set flags based on X register value */
                     update_nz_flags(this->get(REG_X));
@@ -252,7 +252,7 @@ bus_state_t op_ply(bus_state_t pins) {
         switch (this->cycle_index) {
             case 0:
                 /* PHI2: Dummy read from PC */
-                pins = phi2_dummy_read(pins, REG_PC);
+                pins = this->phi2_dummy_read(pins, REG_PC);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->cycle_index++;
                 }
@@ -260,7 +260,7 @@ bus_state_t op_ply(bus_state_t pins) {
                 
             case 1:
                 /* PHI2: Dummy read from current stack pointer, then increment SP */
-                pins = phi2_dummy_read(pins, REG_SP);
+                pins = this->phi2_dummy_read(pins, REG_SP);
                 if (FAM65XX_GET_RDY(pins)) {
                     /* PHI1: Increment stack pointer */
                     this->inc(REG_S);
@@ -270,7 +270,7 @@ bus_state_t op_ply(bus_state_t pins) {
                 
             case 2:
                 /* PHI2: Read from incremented stack pointer directly into Y (eliminates copy) */
-                pins = phi2_read(pins, REG_SP, REG_Y);
+                pins = this->phi2_read(pins, REG_SP, REG_Y);
                 if (FAM65XX_GET_RDY(pins)) {
                     /* PHI1: Set flags based on Y register value */
                     update_nz_flags(this->get(REG_Y));
