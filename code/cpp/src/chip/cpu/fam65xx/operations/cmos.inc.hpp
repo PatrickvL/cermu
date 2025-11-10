@@ -36,7 +36,7 @@ bus_state_t op_stz(bus_state_t pins) {
     if constexpr (has_cmos()) {
         // Store zero to target address with proper RDY handling
         if (this->should_complete_write_cycle(pins)) {
-            pins = phi2_write(pins, (REG_AB), 0x00);
+            pins = phi2_write(pins, REG_AB, 0x00);
             transition_to_fetch();
         }
     }
@@ -59,7 +59,7 @@ bus_state_t op_trb(bus_state_t pins) {
             case 1:
                 // Cycle 1: Dummy write original value back + modify
                 if (this->should_complete_write_cycle(pins)) {
-                    pins = phi2_write(pins, (REG_AB), this->get(REG_DL));
+                    pins = phi2_write(pins, REG_AB, this->get(REG_DL));
                     
                     uint8_t accumulator = this->get(REG_A);
                     
@@ -77,7 +77,7 @@ bus_state_t op_trb(bus_state_t pins) {
             case 2:
                 // Cycle 2: Write modified result back
                 if (this->should_complete_write_cycle(pins)) {
-                    pins = phi2_write(pins, (REG_AB), this->get(REG_DL));
+                    pins = phi2_write(pins, REG_AB, this->get(REG_DL));
                     transition_to_fetch();
                 }
                 return pins;
@@ -102,7 +102,7 @@ bus_state_t op_tsb(bus_state_t pins) {
             case 1:
                 // Cycle 1: Dummy write original value back + modify
                 if (this->should_complete_write_cycle(pins)) {
-                    pins = phi2_write(pins, (REG_AB), this->get(REG_DL));
+                    pins = phi2_write(pins, REG_AB, this->get(REG_DL));
                     
                     uint8_t accumulator = this->get(REG_A);
                     
@@ -120,7 +120,7 @@ bus_state_t op_tsb(bus_state_t pins) {
             case 2:
                 // Cycle 2: Write modified result back
                 if (this->should_complete_write_cycle(pins)) {
-                    pins = phi2_write(pins, (REG_AB), this->get(REG_DL));
+                    pins = phi2_write(pins, REG_AB, this->get(REG_DL));
                     transition_to_fetch();
                 }
                 return pins;
@@ -175,7 +175,7 @@ bus_state_t op_phx(bus_state_t pins) {
             case 1:
                 /* PHI2: Write X to stack with processor-specific RDY handling */
                 if (this->should_complete_write_cycle(pins)) {
-                    pins = phi2_write(pins, (REG_SP), this->get(REG_X));
+                    pins = phi2_write(pins, REG_SP, this->get(REG_X));
                     this->dec(REG_S);
                     transition_to_fetch();
                 }
@@ -200,7 +200,7 @@ bus_state_t op_phy(bus_state_t pins) {
             case 1:
                 /* PHI2: Write Y to stack with processor-specific RDY handling */
                 if (this->should_complete_write_cycle(pins)) {
-                    pins = phi2_write(pins, (REG_SP), this->get(REG_Y));
+                    pins = phi2_write(pins, REG_SP, this->get(REG_Y));
                     this->dec(REG_S);
                     transition_to_fetch();
                 }

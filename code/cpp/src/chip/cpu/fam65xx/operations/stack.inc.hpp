@@ -27,7 +27,7 @@ bus_state_t op_pha(bus_state_t pins) {
         case 1:
             /* PHI2: Write A to stack with processor-specific RDY handling */
             if (this->should_complete_write_cycle(pins)) {
-                pins = this->phi2_write(pins, (REG_SP), get(REG_A));
+                pins = this->phi2_write(pins, REG_SP, get(REG_A));
                 this->dec(REG_S);
                 transition_to_fetch();
             }

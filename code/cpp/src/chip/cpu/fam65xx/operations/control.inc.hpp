@@ -44,7 +44,7 @@ bus_state_t op_jsr(bus_state_t pins) {
         case 2:
             /* PHI2: Push PCH (high byte of return address) to stack */
             if (this->should_complete_write_cycle(pins)) {
-                pins = this->phi2_write(pins, (REG_SP), this->get(REG_PCH));
+                pins = this->phi2_write(pins, REG_SP, this->get(REG_PCH));
                 this->dec(REG_S);
                 this->cycle_index++;
             }
@@ -53,7 +53,7 @@ bus_state_t op_jsr(bus_state_t pins) {
         case 3:
             /* PHI2: Push PCL (low byte of return address) to stack */
             if (this->should_complete_write_cycle(pins)) {
-                pins = this->phi2_write(pins, (REG_SP), this->get(REG_PCL));
+                pins = this->phi2_write(pins, REG_SP, this->get(REG_PCL));
                 this->dec(REG_S);
                 this->cycle_index++;
             }
@@ -204,7 +204,7 @@ bus_state_t op_brk(bus_state_t pins) {
         case 1:
             /* PHI2: Push PCH to stack */
             if (this->should_complete_write_cycle(pins)) {
-                pins = this->phi2_write(pins, (REG_SP), this->get(REG_PCH));
+                pins = this->phi2_write(pins, REG_SP, this->get(REG_PCH));
                 this->dec(REG_S);
                 this->cycle_index++;
             }
@@ -213,7 +213,7 @@ bus_state_t op_brk(bus_state_t pins) {
         case 2:
             /* PHI2: Push PCL to stack */
             if (this->should_complete_write_cycle(pins)) {
-                pins = this->phi2_write(pins, (REG_SP), this->get(REG_PCL));
+                pins = this->phi2_write(pins, REG_SP, this->get(REG_PCL));
                 this->dec(REG_S);
                 this->set(REG_DL, this->get(REG_P) | FLAG_B | FLAG_U);
                 this->cycle_index++;
@@ -223,7 +223,7 @@ bus_state_t op_brk(bus_state_t pins) {
         case 3:
             /* PHI2: Push P|B|U to stack (B flag set for BRK) */
             if (this->should_complete_write_cycle(pins)) {
-                pins = this->phi2_write(pins, (REG_SP), this->get(REG_DL));
+                pins = this->phi2_write(pins, REG_SP, this->get(REG_DL));
                 this->dec(REG_S);
                 /* Set interrupt disable flag - processor specific behavior */
                 if constexpr (has_nmos_bugs()) {

@@ -52,7 +52,7 @@ bus_state_t op_sax(bus_state_t pins) {
         // Store A AND X to memory with processor-specific RDY handling
         if (should_complete_write_cycle(pins)) {
             uint8_t result = this->get(REG_A) & this->get(REG_X);
-            pins = phi2_write(pins, (REG_AB), result);
+            pins = phi2_write(pins, REG_AB, result);
             transition_to_fetch();
         }
     }
@@ -411,7 +411,7 @@ bus_state_t op_sha(bus_state_t pins) {
             // Set data to write
             this->set(REG_DL, data_value);
 
-            pins = phi2_write(pins, (REG_AB), this->get(REG_DL));
+            pins = phi2_write(pins, REG_AB, this->get(REG_DL));
             transition_to_fetch();
         }
     }
@@ -441,7 +441,7 @@ bus_state_t op_shs(bus_state_t pins) {
             // Set stack pointer to A & X (unique to SHS)
             this->set(REG_S, ax);
 
-            pins = phi2_write(pins, (REG_AB), this->get(REG_DL));
+            pins = phi2_write(pins, REG_AB, this->get(REG_DL));
             transition_to_fetch();
         }
     }
@@ -463,7 +463,7 @@ bus_state_t op_shx(bus_state_t pins) {
             }
             
             // Set data to write
-            pins = phi2_write(pins, (REG_AB), data_value);
+            pins = phi2_write(pins, REG_AB, data_value);
             transition_to_fetch();
         }
     }
@@ -485,7 +485,7 @@ bus_state_t op_shy(bus_state_t pins) {
             }
             
             // Set data to write
-            pins = phi2_write(pins, (REG_AB), data_value);
+            pins = phi2_write(pins, REG_AB, data_value);
             transition_to_fetch();
         }
     }

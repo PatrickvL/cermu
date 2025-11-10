@@ -33,7 +33,7 @@ bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func)
                         }
 
                         // NMOS processors: Write original value back (dummy write) - optimized
-                        pins = this->phi2_write(pins, (REG_AB), this->get(REG_DL));
+                        pins = this->phi2_write(pins, REG_AB, this->get(REG_DL));
                     } else {
                         // CMOS processors: Dummy read cycle instead of write
                         pins = this->phi2_dummy_read(pins, REG_AB);
@@ -51,7 +51,7 @@ bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func)
             case 2:
                 // Cycle 2: Write modified result back with processor-specific RDY handling
                 if (this->should_complete_write_cycle(pins)) {
-                    pins = this->phi2_write(pins, (REG_AB), this->get(REG_DL));
+                    pins = this->phi2_write(pins, REG_AB, this->get(REG_DL));
                     transition_to_fetch();
                 }
                 return pins;
