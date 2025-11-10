@@ -53,6 +53,7 @@ extern "C" {
 
 #include "fam65xx_types.h"
 #include "fam65xx_processor_traits.hpp"
+#include "fam65xx_register_mixins.hpp"
 #include "fam65xx_mixins.hpp"
 
 // ============================================================================
@@ -91,7 +92,7 @@ template<const CPUTraits& Traits>
 class fam65xx_t :
     public io_port_base_t<Traits>,
     public apu_base_t<Traits>,
-    public wide_registers_base_t<Traits>
+    public register_base_t<Traits>
 {
 public:
     // CPUTraits-based feature detection helpers for operations files
@@ -113,11 +114,9 @@ public:
     // CPU STATE (merged from fam65xx_cpu_state_t)
     // ========================================================================
     
-    /* Register array - union allows both 8-bit and 16-bit access */
-    union {
-        uint8_t reg8[REG_COUNT];        /* 8-bit register access */
-        uint16_t reg16[REG_COUNT / 2];  /* 16-bit pair access (little-endian) */
-    };
+    // Note: Register layout is now handled by register_base_t mixin
+    // This provides both narrow (8-bit) and wide (65C816) register support
+    // with automatic mode switching based on processor traits and M/X flags.
     
     /* Current execution state */
     opcode_info_t opcode_entry;         /* Cached opcode entry (copied once) */
@@ -148,7 +147,6 @@ public:
     
     fam65xx_t() {
         // Initialize CPU state to zero
-        memset(&reg8, 0, sizeof(reg8));
         opcode_entry = {};
         current_handler = nullptr;
         cycle_index = 0;
@@ -161,6 +159,9 @@ public:
         wait_for_interrupt = false;
         stopped = false;
         trace_indent = 0;
+        
+        // Initialize registers
+        this->init_registers();
         
         // Initialize conditional features
         this->init_conditional_features();
@@ -246,8 +247,8 @@ public:
         if constexpr (ENABLE_TRACING) {
             trace("REGS %s: PC=%04X A=%02X X=%02X Y=%02X P=%02X S=%02X",
                   context,
-                  get(REG_PC), get(REG_A), get(REG_X), get(REG_Y),
-                  get(REG_P), get(REG_S));
+                  this->get(REG_PC), this->get(REG_A), this->get(REG_X), this->get(REG_Y),
+                  this->get(REG_P), this->get(REG_S));
         }
     }
     
@@ -283,7 +284,7 @@ public:
         /* Initialize register layout:
         * SP = 0x01FF (stack starts at top of page 1)
         */
-        set(REG_SP, 0x01FF); /* Stack pointer (page 1, starts at 0xFF) */
+        this->set(REG_SP, 0x01FF); /* Stack pointer (page 1, starts at 0xFF) */
 
         // Return initial pin state
         bus_state_t pins = 0;
@@ -323,11 +324,11 @@ public:
     
     bus_state_t reset(bus_state_t pins) {
         // Reset CPU state
-        set(REG_A, 0x00);
-        set(REG_X, 0x00);
-        set(REG_Y, 0x00);
-        set(REG_SP, 0x1FF);
-        set(REG_P, FLAG_U | FLAG_I); // Unused bit set, interrupts disabled
+        this->set(REG_A, 0x00);
+        this->set(REG_X, 0x00);
+        this->set(REG_Y, 0x00);
+        this->set(REG_SP, 0x1FF);
+        this->set(REG_P, FLAG_U | FLAG_I); // Unused bit set, interrupts disabled
         
         // Reset interrupt state
         this->nmi_prev = 0;
@@ -538,7 +539,7 @@ private:
         }
         
         // CPU has bus control - proceed with normal operation
-        uint32_t addr = this->reg16[addr_reg];
+        uint32_t addr = this->get(addr_reg);
         
         // Update bus lines if enabled (for test/simulation environments)
         if constexpr (Traits.update_bus_lines()) {
@@ -657,7 +658,7 @@ public:
         
         // Store the result in the specified data register if CPU has bus control
         if (FAM65XX_GET_RDY(pins)) {
-            load(data_reg, pins); // TOOD : Move to cycle code?
+            this->load(data_reg, pins); // TOOD : Move to cycle code?
         }
         
         return pins;
@@ -669,7 +670,7 @@ public:
             // Immediate mode - read from PC directly into target register
             pins = phi2_read(pins, REG_PC, target_reg);
             if (FAM65XX_GET_RDY(pins)) {
-                inc(REG_PC);
+                this->inc(REG_PC);
             }
             return pins;
         }
@@ -728,54 +729,10 @@ public:
         return generate_opcode_table<Traits>()[opcode];
     }
     
-    // ========================================================================
-    // REGISTER ACCESSOR FUNCTIONS
-    // ========================================================================
-    
-    // 8-bit register get function
-    inline uint8_t get(reg8_t reg) const {
-        return this->reg8[reg];
-    }
-    
-    // 16-bit register get function
-    inline uint16_t get(reg16_t reg) const {
-        return this->reg16[reg];
-    }
-    
-    // 8-bit register set function
-    inline void set(reg8_t reg, uint8_t value) {
-        this->reg8[reg] = value;
-    }
-    
-    // 16-bit register set function
-    inline void set(reg16_t reg, uint16_t value) {
-        this->reg16[reg] = value;
-    }
-    
-    // 8-bit register inc function
-    inline void inc(reg8_t reg) {
-        this->reg8[reg]++;
-    }
-    
-    // 16-bit register inc function
-    inline void inc(reg16_t reg) {
-        this->reg16[reg]++;
-    }
-    
-    // 8-bit register dec function
-    inline void dec(reg8_t reg) {
-        this->reg8[reg]--;
-    }
-    
-    // 16-bit register dec function
-    inline void dec(reg16_t reg) {
-        this->reg16[reg]--;
-    }
-    
-    // Load function for reg8_t with bus_state_t pins
-    inline void load(reg8_t reg, bus_state_t pins) {
-        this->reg8[reg] = FAM65XX_GET_DATA(pins);
-    }
+    // Note: Register accessor functions are now provided by the register mixin
+    // The mixin provides get(), set(), inc(), dec(), and load() functions
+    // that automatically handle 8-bit vs 16-bit operation based on M/X flags
+    // for 65C816 or provide simple 8-bit access for other CPUs.
 
     // ========================================================================
     // HELPER FUNCTIONS (needed by operation files)
@@ -1197,12 +1154,12 @@ private:
     bus_state_t fetch_opcode(bus_state_t pins) {
         // Read opcode from PC
         pins = this->phi2_read(pins, REG_PC, REG_IR);
-        set(REG_AB, get(REG_PC));
-        inc(REG_PC);
+        this->set(REG_AB, this->get(REG_PC));
+        this->inc(REG_PC);
         // Set SYNC signal for opcode fetch
         pins |= FAM65XX_SYNC;
         // Decode opcode and set up instruction
-        uint8_t opcode = get(REG_IR);
+        uint8_t opcode = this->get(REG_IR);
 
         this->opcode_entry = get_opcode_info(opcode);
         this->cycle_index = 0;
@@ -1257,8 +1214,7 @@ private:
             this->init_apu();
         }
         
-        // BCD and CMOS state are now integrated into main class
-        // 16-bit wide registers disabled for now
+        // Register initialization is handled by register mixin
     }
     
     void init_opcode_table() {

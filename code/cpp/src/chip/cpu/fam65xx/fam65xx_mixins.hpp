@@ -11,6 +11,7 @@
 #include <type_traits>
 #include "fam65xx_processor_traits.hpp"
 #include "fam65xx_types.h"  // For bus_state_t
+#include "fam65xx_register_mixins.hpp"  // For register layout mixins
 #include "nes6502.h"        // For nes6502_apu::APU class
 
 namespace fam65xx {
@@ -21,7 +22,6 @@ namespace fam65xx {
 
 // Separate empty types per feature to prevent duplicate base class errors
 struct empty_io_port_mixin_t {};
-struct empty_wide_mixin_t {};
 struct empty_apu_mixin_t {};
 
 // ============================================================================
@@ -68,58 +68,9 @@ struct io_port_mixin_t {
     }
 };
 
-// ============================================================================
-// 16-BIT MODE MIXIN (65C816)
-// ============================================================================
-
-// Extended state for 65C816 16-bit processor
-template<const CPUTraits& Traits>
-struct wide_registers_mixin_t {
-    // Extended registers (aligned to 8-byte boundary for performance)
-    struct alignas(8) {
-        uint16_t A_full;    // Full 16-bit accumulator (C = A_full >> 8)
-        uint16_t X_full;    // Full 16-bit X index register
-        uint16_t Y_full;    // Full 16-bit Y index register
-        uint16_t D;         // Direct Page register
-        uint8_t DBR;        // Data Bank register
-        uint8_t PBR;        // Program Bank register
-        bool emulation_mode; // Emulation mode flag (separate from E flag)
-        uint8_t _padding;   // Align to 8 bytes
-    } wide_state;
-    
-    // Initialize 16-bit state
-    void init_wide_registers() {
-        wide_state.A_full = 0x0000;
-        wide_state.X_full = 0x0000;
-        wide_state.Y_full = 0x0000;
-        wide_state.D = 0x0000;
-        wide_state.DBR = 0x00;
-        wide_state.PBR = 0x00;
-        wide_state.emulation_mode = true; // Start in emulation mode
-    }
-    
-    // Accessor methods for 16-bit registers
-    uint16_t get_accumulator() const { return wide_state.A_full; }
-    uint16_t get_x_full() const { return wide_state.X_full; }
-    uint16_t get_y_full() const { return wide_state.Y_full; }
-    uint16_t get_d() const { return wide_state.D; }
-    uint8_t get_dbr() const { return wide_state.DBR; }
-    uint8_t get_pbr() const { return wide_state.PBR; }
-    bool get_emulation_mode() const { 
-        // For 65C816, emulation mode is determined by the E flag
-        // In emulation mode (E=1), the CPU behaves like a 6502
-        // In native mode (E=0), the CPU uses 16-bit capabilities
-        return wide_state.emulation_mode; 
-    }
-    
-    void set_accumulator(uint16_t value) { wide_state.A_full = value; }
-    void set_x_full(uint16_t value) { wide_state.X_full = value; }
-    void set_y_full(uint16_t value) { wide_state.Y_full = value; }
-    void set_d(uint16_t value) { wide_state.D = value; }
-    void set_dbr(uint8_t value) { wide_state.DBR = value; }
-    void set_pbr(uint8_t value) { wide_state.PBR = value; }
-    void set_emulation_mode(bool mode) { wide_state.emulation_mode = mode; }
-};
+// Note: 16-bit register support is now handled by fam65xx_register_mixins.hpp
+// The register layout mixins provide both narrow and wide register support
+// with automatic mode switching based on M and X flags.
 
 // ============================================================================
 // APU MIXIN (NES 6502 Audio Processing Unit)
@@ -254,12 +205,7 @@ using io_port_base_t = std::conditional_t<
     empty_io_port_mixin_t
 >;
 
-template<const CPUTraits& Traits>
-using wide_registers_base_t = std::conditional_t<
-    Traits.has(CPUCoreFlags::C816_16BIT),
-    wide_registers_mixin_t<Traits>,
-    empty_wide_mixin_t
->;
+// Note: Register layout selection is now handled by register_base_t in fam65xx_register_mixins.hpp
 
 template<const CPUTraits& Traits>
 using apu_base_t = std::conditional_t<

@@ -67,10 +67,10 @@ bus_state_t op_xce(bus_state_t pins) {
         bool emulation = this->get_emulation_mode();
         
         this->update_flag(FLAG_C, emulation);
-        this->wide_state.emulation_mode = carry;
+        this->set_emulation_mode(carry);
         
         // If switching to emulation mode, force 8-bit modes
-        if (this->wide_state.emulation_mode) {
+        if (carry) {
             this->set(REG_P, this->get(REG_P) | (FLAG_M | FLAG_X)); // Set M and X flags (8-bit modes)
         }
         
@@ -98,7 +98,7 @@ bus_state_t op_pea(bus_state_t pins) {
                 
             case 1:
                 // Read address high byte
-                pins = phi2_read(pins, REG_PC, REG_ABH);
+                pins = this->phi2_read(pins, REG_PC, REG_ABH);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->inc(REG_PC);
                     cycle_index++;
@@ -117,7 +117,7 @@ bus_state_t op_pea(bus_state_t pins) {
             case 3:
                 // Push low byte
                 if (should_complete_write_cycle(pins)) {
-                    pins = phi2_write(pins, REG_SP, this->get(REG_ABL)); // addr_low from case 0
+                    pins = this->phi2_write(pins, REG_SP, this->get(REG_ABL)); // addr_low from case 0
                     this->dec(REG_S);
                     transition_to_fetch();
                 }
@@ -132,7 +132,7 @@ bus_state_t op_phb(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
         // Push DBR to stack
         if (should_complete_write_cycle(pins)) {
-            pins = phi2_write(pins, REG_SP, this->wide_state.DBR);
+            pins = this->phi2_write(pins, REG_SP, this->get_dbr());
             this->dec(REG_S);
             transition_to_fetch();
         }
@@ -147,7 +147,7 @@ bus_state_t op_phd(bus_state_t pins) {
             case 0:
                 // Push D high byte first
                 if (this->should_complete_write_cycle(pins)) {
-                    uint8_t d_high = this->wide_state.D >> 8;
+                    uint8_t d_high = this->get_d() >> 8;
                     pins = this->phi2_write(pins, REG_SP, d_high);
                     this->dec(REG_S);
                     this->cycle_index++;
@@ -157,7 +157,7 @@ bus_state_t op_phd(bus_state_t pins) {
             case 1:
                 // Push D low byte
                 if (this->should_complete_write_cycle(pins)) {
-                    uint8_t d_low = this->wide_state.D & 0xFF;
+                    uint8_t d_low = this->get_d() & 0xFF;
                     pins = this->phi2_write(pins, REG_SP, d_low);
                     this->dec(REG_S);
                     this->transition_to_fetch();
@@ -173,7 +173,7 @@ bus_state_t op_phk(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
         // Push PBR to stack
         if (should_complete_write_cycle(pins)) {
-            pins = phi2_write(pins, REG_SP, this->wide_state.PBR);
+            pins = this->phi2_write(pins, REG_SP, this->get_pbr());
             this->dec(REG_S);
             transition_to_fetch();
         }
@@ -187,7 +187,7 @@ bus_state_t op_plb(bus_state_t pins) {
         switch (this->cycle_index) {
             case 0:
                 // Dummy read from current SP, then increment SP
-                pins = phi2_dummy_read(pins, REG_SP);
+                pins = this->phi2_dummy_read(pins, REG_SP);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->inc(REG_S);
                     this->cycle_index++;
@@ -196,11 +196,11 @@ bus_state_t op_plb(bus_state_t pins) {
                 
             case 1:
                 // Pull DBR from stack
-                pins = phi2_read(pins, REG_SP, REG_DL);
+                pins = this->phi2_read(pins, REG_SP, REG_DL);
                 if (FAM65XX_GET_RDY(pins)) {
-                    this->wide_state.DBR = this->get(REG_DL);
+                    this->set_dbr(this->get(REG_DL));
                     // Update N and Z flags based on DBR
-                    this->update_nz_flags(this->wide_state.DBR);
+                    this->update_nz_flags(this->get_dbr());
                     transition_to_fetch();
                 }
                 return pins;
@@ -215,7 +215,7 @@ bus_state_t op_pld(bus_state_t pins) {
         switch (this->cycle_index) {
             case 0:
                 // Dummy read from current SP, then increment SP for low byte
-                pins = phi2_dummy_read(pins, REG_SP);
+                pins = this->phi2_dummy_read(pins, REG_SP);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->inc(REG_S);
                     cycle_index++;
@@ -224,9 +224,9 @@ bus_state_t op_pld(bus_state_t pins) {
                 
             case 1:
                 // Pull D register low byte first
-                pins = phi2_read(pins, REG_SP, REG_DL);
+                pins = this->phi2_read(pins, REG_SP, REG_DL);
                 if (FAM65XX_GET_RDY(pins)) {
-                    this->wide_state.D = (this->wide_state.D & 0xFF00) | this->get(REG_DL); // Set low byte
+                    this->set_d((this->get_d() & 0xFF00) | this->get(REG_DL)); // Set low byte
                     this->inc(REG_S); // Increment for high byte
                     cycle_index++;
                 }
@@ -234,11 +234,11 @@ bus_state_t op_pld(bus_state_t pins) {
                 
             case 2:
                 // Pull D register high byte
-                pins = phi2_read(pins, REG_SP, REG_DL);
+                pins = this->phi2_read(pins, REG_SP, REG_DL);
                 if (FAM65XX_GET_RDY(pins)) {
-                    this->wide_state.D = (this->wide_state.D & 0x00FF) | (this->get(REG_DL) << 8); // Set high byte
+                    this->set_d((this->get_d() & 0x00FF) | (this->get(REG_DL) << 8)); // Set high byte
                     // Update N and Z flags based on D register
-                    this->update_nz_flags(this->wide_state.D & 0xFF); // Only check low byte for flags
+                    this->update_nz_flags(this->get_d() & 0xFF); // Only check low byte for flags
                     transition_to_fetch();
                 }
                 return pins;
@@ -257,7 +257,7 @@ bus_state_t op_jsl(bus_state_t pins) {
         switch (cycle_index) {
             case 0:
                 // Read address low byte
-                pins = phi2_read(pins, REG_PC, REG_ABL);
+                pins = this->phi2_read(pins, REG_PC, REG_ABL);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->inc(REG_PC);
                     cycle_index++;
@@ -266,7 +266,7 @@ bus_state_t op_jsl(bus_state_t pins) {
                 
             case 1:
                 // Read address high byte
-                pins = phi2_read(pins, REG_PC, REG_ABH);
+                pins = this->phi2_read(pins, REG_PC, REG_ABH);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->inc(REG_PC);
                     cycle_index++;
@@ -275,7 +275,7 @@ bus_state_t op_jsl(bus_state_t pins) {
                 
             case 2:
                 // Read bank byte
-                pins = phi2_read(pins, REG_PC, REG_DL);
+                pins = this->phi2_read(pins, REG_PC, REG_DL);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->inc(REG_PC);
                     cycle_index++;
@@ -286,7 +286,7 @@ bus_state_t op_jsl(bus_state_t pins) {
                 // Push program bank register
                 if (should_complete_write_cycle(pins)) {
                     // Store PBR in TMP for pushing
-                    pins = phi2_write(pins, REG_SP, this->wide_state.PBR);
+                    pins = this->phi2_write(pins, REG_SP, this->get_pbr());
                     this->dec(REG_S);
                     cycle_index++;
                 }
@@ -295,7 +295,7 @@ bus_state_t op_jsl(bus_state_t pins) {
             case 4:
                 // Push PC high byte (return address - 1)
                 if (should_complete_write_cycle(pins)) {
-                    pins = phi2_write(pins, REG_SP, this->get(REG_PCH));
+                    pins = this->phi2_write(pins, REG_SP, this->get(REG_PCH));
                     this->dec(REG_S);
                     cycle_index++;
                 }
@@ -304,11 +304,11 @@ bus_state_t op_jsl(bus_state_t pins) {
             case 5:
                 // Push PC low byte
                 if (should_complete_write_cycle(pins)) {
-                    pins = phi2_write(pins, REG_SP, this->get(REG_PCL));
+                    pins = this->phi2_write(pins, REG_SP, this->get(REG_PCL));
                     this->dec(REG_S);
                     // Set new program counter and bank
                     this->set(REG_PC, this->get(REG_AB)); // addr_high:addr_low from cases 0-1
-                    this->wide_state.PBR = this->get(REG_DL); // bank from case 2
+                    this->set_pbr(this->get(REG_DL)); // bank from case 2
                     transition_to_fetch();
                 }
                 return pins;
@@ -323,7 +323,7 @@ bus_state_t op_rtl(bus_state_t pins) {
         switch (cycle_index) {
             case 0:
                 // Dummy read from current SP, then increment SP for PCL
-                pins = phi2_dummy_read(pins, REG_SP);
+                pins = this->phi2_dummy_read(pins, REG_SP);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->inc(REG_S);
                     cycle_index++;
@@ -332,7 +332,7 @@ bus_state_t op_rtl(bus_state_t pins) {
                 
             case 1:
                 // Pull PC low byte
-                pins = phi2_read(pins, REG_SP, REG_PCL);
+                pins = this->phi2_read(pins, REG_SP, REG_PCL);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->inc(REG_S); // Increment for PCH
                     cycle_index++;
@@ -341,7 +341,7 @@ bus_state_t op_rtl(bus_state_t pins) {
                 
             case 2:
                 // Pull PC high byte
-                pins = phi2_read(pins, REG_SP, REG_PCH);
+                pins = this->phi2_read(pins, REG_SP, REG_PCH);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->inc(REG_S); // Increment for PBR
                     cycle_index++;
@@ -350,9 +350,9 @@ bus_state_t op_rtl(bus_state_t pins) {
                 
             case 3:
                 // Pull program bank
-                pins = phi2_read(pins, REG_SP, REG_DL);
+                pins = this->phi2_read(pins, REG_SP, REG_DL);
                 if (FAM65XX_GET_RDY(pins)) {
-                    this->wide_state.PBR = this->get(REG_DL);
+                    this->set_pbr(this->get(REG_DL));
                     // Increment PC (RTL increments, RTS doesn't)
                     this->inc(REG_PC);
                     transition_to_fetch();
@@ -421,7 +421,7 @@ bus_state_t op_pei(bus_state_t pins) {
                 if (FAM65XX_GET_RDY(pins)) {
                     this->inc(REG_PC);
                     // Calculate direct page relative address
-                    uint16_t dp_addr = this->wide_state.D + this->get(REG_DL);
+                    uint16_t dp_addr = this->get_d() + this->get(REG_DL);
                     this->set(REG_AB, dp_addr);
                     cycle_index++;
                 }
@@ -470,12 +470,12 @@ bus_state_t op_pei(bus_state_t pins) {
 bus_state_t op_xba(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
         // Exchange the low and high bytes of the 16-bit accumulator
-        uint16_t full_a = this->wide_state.A_full;
+        uint16_t full_a = this->get_accumulator_full();
         uint8_t low_byte = full_a & 0xFF;
         uint8_t high_byte = (full_a >> 8) & 0xFF;
         
         // Swap the bytes
-        this->wide_state.A_full = (low_byte << 8) | high_byte;
+        this->set_accumulator_full((low_byte << 8) | high_byte);
         
         // Update the 8-bit A register to reflect the new low byte
         this->set(REG_A, high_byte);
@@ -630,7 +630,7 @@ bus_state_t op_cop(bus_state_t pins) {
             case 1:
                 // Push program bank register
                 if (this->should_complete_write_cycle(pins)) {
-                    pins = this->phi2_write(pins, REG_SP, this->wide_state.PBR);
+                    pins = this->phi2_write(pins, REG_SP, this->get_pbr());
                     this->dec(REG_S);
                     cycle_index++;
                 }

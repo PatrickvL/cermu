@@ -619,51 +619,51 @@ public:
     }
     
     uint16_t get_pc() override {
-        return cpu->reg16[REG_PC];
+        return cpu->get(REG_PC);
     }
     
     uint8_t get_a() override {
-        return cpu->reg8[REG_A];
+        return cpu->get(REG_A);
     }
     
     uint8_t get_x() override {
-        return cpu->reg8[REG_X];
+        return cpu->get(REG_X);
     }
     
     uint8_t get_y() override {
-        return cpu->reg8[REG_Y];
+        return cpu->get(REG_Y);
     }
     
     uint8_t get_sp() override {
-        return cpu->reg8[REG_S];
+        return cpu->get(REG_S);
     }
     
     uint8_t get_status() override {
-        return cpu->reg8[REG_P];
+        return cpu->get(REG_P);
     }
     
     void set_pc(uint16_t pc) override {
-        cpu->reg16[REG_PC] = pc;
+        cpu->set(REG_PC, pc);
     }
     
     void set_a(uint8_t a) override {
-        cpu->reg8[REG_A] = a;
+        cpu->set(REG_A, a);
     }
     
     void set_x(uint8_t x) override {
-        cpu->reg8[REG_X] = x;
+        cpu->set(REG_X, x);
     }
     
     void set_y(uint8_t y) override {
-        cpu->reg8[REG_Y] = y;
+        cpu->set(REG_Y, y);
     }
     
     void set_sp(uint8_t sp) override {
-        cpu->reg8[REG_S] = sp;
+        cpu->set(REG_S, sp);
     }
     
     void set_status(uint8_t p) override {
-        cpu->reg8[REG_P] = p;
+        cpu->set(REG_P, p);
     }
     
     // 65816-specific methods - only compile for 65816
