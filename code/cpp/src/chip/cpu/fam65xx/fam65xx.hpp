@@ -1198,8 +1198,8 @@ private:
     // Instruction fetch and decode
     bus_state_t fetch_opcode(bus_state_t pins) {
         // Read opcode from PC
+        pins = this->phi2_read(pins, REG_PC, REG_IR);
         set(REG_AB, get(REG_PC));
-        pins = this->phi2_read(pins, REG_AB, REG_IR);
         inc(REG_PC);
         // Set SYNC signal for opcode fetch
         pins |= FAM65XX_SYNC;

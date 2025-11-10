@@ -45,13 +45,13 @@ bus_state_t op_php(bus_state_t pins) {
             if (FAM65XX_GET_RDY(pins)) {
                 this->cycle_index++;
             }
+            set(REG_DL, get(REG_P) | FLAG_B | FLAG_U);
             return pins;
             
         case 1:
             /* PHI2: Write P|B|U to stack with processor-specific RDY handling */
             if (this->should_complete_write_cycle(pins)) {
-                uint8_t status_with_flags = get(REG_P) | FLAG_B | FLAG_U;
-                pins = this->phi2_write(pins, (REG_SP), status_with_flags);
+                pins = this->phi2_write(pins, REG_SP, REG_DL);
                 this->dec(REG_S);
                 transition_to_fetch();
             }
