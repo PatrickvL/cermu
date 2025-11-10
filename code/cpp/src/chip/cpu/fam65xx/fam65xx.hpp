@@ -518,10 +518,8 @@ private:
     template<bool IsWrite, bool IsDummy>
     bus_state_t phi2_access_impl(bus_state_t pins, reg16_t addr_reg, uint8_t data) {
         // Skip dummy cycles if not simulating internal timing
-        if constexpr (IsDummy) {
-            if constexpr (!Traits.accurate_internal_cycles()) {
-                return pins;
-            }
+        if constexpr (IsDummy && !Traits.accurate_internal_cycles()) {
+            return pins;
         }
         
         // Hardware-accurate RDY check - DMA device may have bus control
@@ -1435,6 +1433,32 @@ private:
         }
     }
 };
+
+// ============================================================================
+// MSVC COMPATIBILITY TYPE ALIASES
+// ============================================================================
+
+// Create concrete type aliases for MSVC template compatibility
+// MSVC has stricter requirements for non-type template parameters
+using mos6502_cpu_impl_t = fam65xx_t<MOS6502>;
+using mos6510_cpu_impl_t = fam65xx_t<MOS6510>;
+using nes6502_cpu_impl_t = fam65xx_t<RICOH_2A03>;
+using wdc65c02_cpu_impl_t = fam65xx_t<WDC_65C02_EARLY>;
+using rockwell65c02_cpu_impl_t = fam65xx_t<ROCKWELL_R65C02>;
+using wdc65c816_cpu_impl_t = fam65xx_t<WDC_65C816>;
+
+// ============================================================================
+// EXPLICIT TEMPLATE INSTANTIATIONS (required for MSVC compatibility)
+// ============================================================================
+
+// Explicit template instantiations for all CPU variants
+// This ensures MSVC can properly resolve template parameters
+template class fam65xx_t<MOS6502>;
+template class fam65xx_t<MOS6510>;
+template class fam65xx_t<RICOH_2A03>;
+template class fam65xx_t<WDC_65C02_EARLY>;
+template class fam65xx_t<ROCKWELL_R65C02>;
+template class fam65xx_t<WDC_65C816>;
 
 // ============================================================================
 // OPCODE TABLE GENERATION (processor-specific specializations were included above)

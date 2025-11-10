@@ -4,6 +4,10 @@
 #include <string.h>
 #include <ctype.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // ============================================================================
 // JSON PARSER IMPLEMENTATION
 // ============================================================================
@@ -372,6 +376,10 @@ bool json_parse_cpu_state(const char* json, const char* state_name, cpu_state_t*
     
     return true;
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 // Parse a complete processor test from JSON
 bool json_parse_processor_test(const char* json_content, processor_test_t* test) {
