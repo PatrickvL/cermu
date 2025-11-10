@@ -10,7 +10,7 @@
 // CONCRETE CPU TYPE DEFINITION
 // ============================================================================
 
-using wdc65c816_cpu_t = fam65xx::fam65xx_t<fam65xx::WDC_65C816>;
+using wdc65c816_cpu_t = fam65xx::wdc65c816_cpu_impl_t;
 
 // Cast helper for opaque handle
 #define CPU_CAST(ptr) reinterpret_cast<wdc65c816_cpu_t*>(ptr)

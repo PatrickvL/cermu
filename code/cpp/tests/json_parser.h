@@ -80,6 +80,10 @@ typedef struct {
     cpu_state_t final;
 } processor_test_t;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // JSON parsing functions
 bool json_parse_processor_test(const char* json_content, processor_test_t* test);
 bool json_parse_cpu_state(const char* json, const char* state_name, cpu_state_t* state);
@@ -93,3 +97,7 @@ const char* json_find_key(const char* json, const char* key);
 const char* json_skip_whitespace(const char* str);
 const char* json_find_object_end(const char* json);
 const char* json_find_array_end(const char* json);
+
+#ifdef __cplusplus
+}
+#endif

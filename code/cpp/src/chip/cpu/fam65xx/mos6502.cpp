@@ -19,7 +19,7 @@
 // ============================================================================
 
 // Define concrete CPU types for easier use
-using mos6502_cpu_t = fam65xx::fam65xx_t<fam65xx::MOS6502>;
+using mos6502_cpu_t = fam65xx::mos6502_cpu_impl_t;
 
 // Cast helpers for opaque handles
 #define CPU_CAST(type, ptr) reinterpret_cast<type*>(ptr)

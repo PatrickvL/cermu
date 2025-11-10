@@ -12,7 +12,7 @@ using namespace fam65xx;
 // CONCRETE CPU TYPE DEFINITION
 // ============================================================================
 
-using mos6510_cpu_t = fam65xx_t<MOS6510>;
+using mos6510_cpu_t = fam65xx::mos6510_cpu_impl_t;
 
 // Cast helper for opaque handle
 #define CPU_CAST(ptr) reinterpret_cast<mos6510_cpu_t*>(ptr)

@@ -12,7 +12,7 @@ using namespace fam65xx;
 // CONCRETE CPU TYPE DEFINITION
 // ============================================================================
 
-using nes6502_cpu_t = fam65xx_t<RICOH_2A03>;
+using nes6502_cpu_t = fam65xx::nes6502_cpu_impl_t;
 
 // Cast helper for opaque handle
 #define CPU_CAST(ptr) reinterpret_cast<nes6502_cpu_t*>(ptr)

@@ -37,6 +37,8 @@ if(MSVC)
         /wd4505                 # Disable unreferenced function with internal linkage warnings
         /wd4189                 # Disable local variable initialized but not referenced warnings
         /wd4244                 # Disable data conversion warnings
+        /wd4702                 # Disable unreachable code warnings (template instantiation)
+        /wd4005                 # Disable macro redefinition warnings (ImGui)
     )
     # Define to silence C++17 deprecation warnings
     add_compile_definitions(_SILENCE_CXX17_C_HEADER_DEPRECATION_WARNING)
@@ -277,7 +279,7 @@ if(BUILD_GUI)
     
     # Disable some warnings for GUI build to work around ImGui header issues
     if(MSVC)
-        target_compile_options(c64emu_gui PRIVATE /WX- /wd4201 /wd4996 /wd4244 /wd4189 /wd4100 /wd5287)
+        target_compile_options(c64emu_gui PRIVATE /WX- /wd4201 /wd4996 /wd4244 /wd4189 /wd4100 /wd5287 /wd4702 /wd4005)
     else()
         target_compile_options(c64emu_gui PRIVATE -Wno-pedantic)
     endif()

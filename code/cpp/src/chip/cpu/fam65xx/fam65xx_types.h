@@ -72,35 +72,35 @@ typedef struct {
 // CPU Flags
 // ============================================================================
 
-// CPU Flags - Modern C++ constants
-namespace cpu_flags {
-    constexpr uint8_t CARRY = 0x01;              // Carry
-    constexpr uint8_t ZERO = 0x02;               // Zero
-    constexpr uint8_t INTERRUPT_DISABLE = 0x04;  // Interrupt Disable
-    constexpr uint8_t DECIMAL_MODE = 0x08;       // Decimal Mode
-    constexpr uint8_t BREAK = 0x10;              // Break
-    constexpr uint8_t UNUSED = 0x20;             // Unused (always 1) - 6502/6510/65C02
-    constexpr uint8_t OVERFLOW = 0x40;           // Overflow
-    constexpr uint8_t NEGATIVE = 0x80;           // Negative
+// CPU Flags - Modern C++ class enum
+enum class cpu_flags : uint16_t {
+    CARRY = 0x01,              // Carry
+    ZERO = 0x02,               // Zero
+    INTERRUPT_DISABLE = 0x04,  // Interrupt Disable
+    DECIMAL_MODE = 0x08,       // Decimal Mode
+    BREAK_FLAG = 0x10,         // Break (renamed to avoid conflicts)
+    UNUSED = 0x20,             // Unused (always 1) - 6502/6510/65C02
+    OVERFLOW_FLAG = 0x40,      // Overflow (renamed to avoid conflicts)
+    NEGATIVE = 0x80,           // Negative
     
     // 65C816-specific flags (redefine bit meanings in native mode)
-    constexpr uint8_t INDEX_SELECT = 0x10;       // Index Register Select (0 = 16-bit, 1 = 8-bit) - 65C816
-    constexpr uint8_t MEMORY_SELECT = 0x20;      // Memory/Accumulator Select (0 = 16-bit, 1 = 8-bit) - 65C816
-    constexpr uint16_t EMULATION_MODE = 0x100;   // Emulation mode (not in P register, separate)
-}
+    INDEX_SELECT = 0x10,       // Index Register Select (0 = 16-bit, 1 = 8-bit) - 65C816
+    MEMORY_SELECT = 0x20,      // Memory/Accumulator Select (0 = 16-bit, 1 = 8-bit) - 65C816
+    EMULATION_MODE = 0x100     // Emulation mode (not in P register, separate)
+};
 
-// Legacy macro compatibility - can be removed once all code is updated
-#define FLAG_C  cpu_flags::CARRY
-#define FLAG_Z  cpu_flags::ZERO
-#define FLAG_I  cpu_flags::INTERRUPT_DISABLE
-#define FLAG_D  cpu_flags::DECIMAL_MODE
-#define FLAG_B  cpu_flags::BREAK
-#define FLAG_U  cpu_flags::UNUSED
-#define FLAG_V  cpu_flags::OVERFLOW
-#define FLAG_N  cpu_flags::NEGATIVE
-#define FLAG_X  cpu_flags::INDEX_SELECT
-#define FLAG_M  cpu_flags::MEMORY_SELECT
-#define FLAG_E  cpu_flags::EMULATION_MODE
+// Legacy macro compatibility - use static_cast for type-safe access
+#define FLAG_C  static_cast<uint8_t>(cpu_flags::CARRY)
+#define FLAG_Z  static_cast<uint8_t>(cpu_flags::ZERO)
+#define FLAG_I  static_cast<uint8_t>(cpu_flags::INTERRUPT_DISABLE)
+#define FLAG_D  static_cast<uint8_t>(cpu_flags::DECIMAL_MODE)
+#define FLAG_B  static_cast<uint8_t>(cpu_flags::BREAK_FLAG)
+#define FLAG_U  static_cast<uint8_t>(cpu_flags::UNUSED)
+#define FLAG_V  static_cast<uint8_t>(cpu_flags::OVERFLOW_FLAG)
+#define FLAG_N  static_cast<uint8_t>(cpu_flags::NEGATIVE)
+#define FLAG_X  static_cast<uint8_t>(cpu_flags::INDEX_SELECT)   // INDEX_SELECT (65C816)
+#define FLAG_M  static_cast<uint8_t>(cpu_flags::MEMORY_SELECT)  // MEMORY_SELECT (65C816)
+#define FLAG_E  static_cast<uint16_t>(cpu_flags::EMULATION_MODE) // EMULATION_MODE (65C816)
 
 // Interrupt types - Modern C++ scoped enum (ordered by priority: higher value = higher priority)
 enum class InterruptType : uint8_t {
@@ -115,13 +115,13 @@ enum class InterruptType : uint8_t {
 
 // Legacy C-style enum compatibility
 using interrupt_t = InterruptType;
-constexpr auto FAM65XX_INT_NONE = InterruptType::NONE;
-constexpr auto FAM65XX_INT_BRK = InterruptType::BRK;
-constexpr auto FAM65XX_INT_IRQ = InterruptType::IRQ;
-constexpr auto FAM65XX_INT_COP = InterruptType::COP;
-constexpr auto FAM65XX_INT_NMI = InterruptType::NMI;
-constexpr auto FAM65XX_INT_ABORT = InterruptType::ABORT;
-constexpr auto FAM65XX_INT_RESET = InterruptType::RESET;
+inline constexpr auto FAM65XX_INT_NONE = InterruptType::NONE;
+inline constexpr auto FAM65XX_INT_BRK = InterruptType::BRK;
+inline constexpr auto FAM65XX_INT_IRQ = InterruptType::IRQ;
+inline constexpr auto FAM65XX_INT_COP = InterruptType::COP;
+inline constexpr auto FAM65XX_INT_NMI = InterruptType::NMI;
+inline constexpr auto FAM65XX_INT_ABORT = InterruptType::ABORT;
+inline constexpr auto FAM65XX_INT_RESET = InterruptType::RESET;
 
 // Interrupt shift register bit layout - merged system (3 bits per interrupt + separators)
 // Ordered by priority: RESET > ABORT > NMI > COP > IRQ > BRK
@@ -291,7 +291,7 @@ enum class OpcodeFlags : uint8_t {
 // Helper function to convert scoped enums to indices for array access
 // This eliminates the need for static_cast<size_t>() everywhere
 template<typename E>
-constexpr auto to_index(E e) noexcept {
+constexpr inline auto to_index(E e) noexcept {
     return static_cast<std::underlying_type_t<E>>(e);
 }
 

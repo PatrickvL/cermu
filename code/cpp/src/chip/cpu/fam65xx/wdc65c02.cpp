@@ -12,7 +12,7 @@ using namespace fam65xx;
 // CONCRETE CPU TYPE DEFINITION
 // ============================================================================
 
-using wdc65c02_cpu_t = fam65xx_t<WDC_65C02_EARLY>;
+using wdc65c02_cpu_t = fam65xx::wdc65c02_cpu_impl_t;
 
 // Cast helper for opaque handle
 #define CPU_CAST(ptr) reinterpret_cast<wdc65c02_cpu_t*>(ptr)
