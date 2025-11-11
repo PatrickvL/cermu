@@ -33,6 +33,12 @@ struct narrow_registers_mixin_t {
     // Data type alias - always 8-bit for narrow CPUs
     using data_t = uint8_t;
     
+    // Use register types for 8-bit CPUs
+    using reg8_t = uint8_t;
+    using reg16_t = uint8_t;
+    
+    static constexpr size_t REG_COUNT = 12;  // Number of 8-bit registers for narrow CPUs
+    
     // Register array - standard 8-bit layout
     union {
         uint8_t reg8[REG_COUNT];        // 8-bit register access
@@ -45,37 +51,37 @@ struct narrow_registers_mixin_t {
     }
     
     // === 8-bit register accessors ===
-    inline uint8_t get(reg8_t reg) const {
+    inline uint8_t get(uint8_t reg) const {
         return reg8[reg];
     }
     
-    inline void set(reg8_t reg, uint8_t value) {
+    inline void set(uint8_t reg, uint8_t value) {
         reg8[reg] = value;
     }
     
-    inline void inc(reg8_t reg) {
+    inline void inc(uint8_t reg) {
         reg8[reg]++;
     }
     
-    inline void dec(reg8_t reg) {
+    inline void dec(uint8_t reg) {
         reg8[reg]--;
     }
     
-    // === 16-bit register accessors ===
-    inline uint16_t get(reg16_t reg) const {
-        return reg16[reg];
+    // === Explicit 16-bit accessors ===
+    inline uint16_t get16(uint8_t reg_pair) const {
+        return reg16[reg_pair];
     }
     
-    inline void set(reg16_t reg, uint16_t value) {
-        reg16[reg] = value;
+    inline void set16(uint8_t reg_pair, uint16_t value) {
+        reg16[reg_pair] = value;
     }
     
-    inline void inc(reg16_t reg) {
-        reg16[reg]++;
+    inline void inc16(uint8_t reg_pair) {
+        reg16[reg_pair]++;
     }
     
-    inline void dec(reg16_t reg) {
-        reg16[reg]--;
+    inline void dec16(uint8_t reg_pair) {
+        reg16[reg_pair]--;
     }
     
     // === Memory operation helpers ===
@@ -84,7 +90,7 @@ struct narrow_registers_mixin_t {
     }
     
     inline void set_accumulator(data_t value) {
-        set(REG_A, static_cast<uint8_t>(value));
+        set(REG_A, value);
     }
     
     inline data_t get_x_register() const {
@@ -92,7 +98,7 @@ struct narrow_registers_mixin_t {
     }
     
     inline void set_x_register(data_t value) {
-        set(REG_X, static_cast<uint8_t>(value));
+        set(REG_X, value);
     }
     
     inline data_t get_y_register() const {
@@ -100,26 +106,19 @@ struct narrow_registers_mixin_t {
     }
     
     inline void set_y_register(data_t value) {
-        set(REG_Y, static_cast<uint8_t>(value));
+        set(REG_Y, value);
     }
     
     inline uint16_t get_stack_pointer() const {
-        return get(REG_SP);
+        return get16(REG_SP / 2);
     }
     
     inline void set_stack_pointer(uint16_t value) {
-        set(REG_SP, value);
+        set16(REG_SP / 2, value);
     }
     
-    // === 65C816 compatibility stubs (no-ops for 8-bit CPUs) ===
-    inline bool get_emulation_mode() const { return true; }
-    inline void set_emulation_mode(bool /*mode*/) { /* no-op */ }
-    inline uint8_t get_dbr() const { return 0x00; }
-    inline void set_dbr(uint8_t /*value*/) { /* no-op */ }
-    inline uint8_t get_pbr() const { return 0x00; }
-    inline void set_pbr(uint8_t /*value*/) { /* no-op */ }
-    inline uint16_t get_d() const { return 0x0000; }
-    inline void set_d(uint16_t /*value*/) { /* no-op */ }
+    // Note: 65C816 compatibility - 8-bit CPUs don't have these registers
+    // Use conditional compilation in operations that need 65C816 features
     
     // === Address calculation (16-bit only) ===
     inline uint32_t calc_effective_address(uint16_t addr) const {
@@ -127,7 +126,7 @@ struct narrow_registers_mixin_t {
     }
     
     // === Load function for bus operations ===
-    inline void load(reg8_t reg, bus_state_t pins) {
+    inline void load(uint8_t reg, bus_state_t pins) {
         reg8[reg] = FAM65XX_GET_DATA(pins);
     }
 };
@@ -141,226 +140,210 @@ struct wide_registers_mixin_t {
     // Data type alias - 16-bit for wide CPUs
     using data_t = uint16_t;
     
-    // Extended register layout for 65C816
-    struct alignas(8) {
-        // Base 8-bit registers (compatible layout)
-        union {
-            uint8_t reg8[REG_COUNT];        // 8-bit register access
-            uint16_t reg16[REG_COUNT / 2];  // 16-bit pair access
-        };
-        
-        // Extended 65C816 registers
-        uint16_t A_full;        // Full 16-bit accumulator
-        uint16_t X_full;        // Full 16-bit X register  
-        uint16_t Y_full;        // Full 16-bit Y register
-        uint16_t SP_full;       // Full 16-bit stack pointer
-        uint16_t D;             // Direct Page register
-        uint8_t DBR;            // Data Bank register
-        uint8_t PBR;            // Program Bank register
-        bool emulation_mode;    // Emulation mode flag
-        uint8_t _padding[5];    // Align to 8 bytes
-    } wide_state;
+    // Use register types for 16-bit CPUs
+    using reg8_t = uint8_t;
+    using reg16_t = uint8_t;
+    
+    static constexpr size_t REG_COUNT = 19;  // Number of 8-bit registers for 65C816
+    
+    // Register array with proper 8/16-bit alignment - matches narrow_registers_mixin_t structure
+    union {
+        uint8_t reg8[REG_COUNT];        // 8-bit register access
+        uint16_t reg16[REG_COUNT / 2];  // 16-bit pair access (little-endian)
+    };
+    
+    // 65C816 control state - separate from register array for cleaner design
+    bool emulation_mode;    // Emulation mode flag
     
     // Initialize registers
     void init_registers() {
-        memset(&wide_state, 0, sizeof(wide_state));
-        wide_state.emulation_mode = true; // Start in emulation mode
-        wide_state.SP_full = 0x01FF;      // Initialize stack pointer
-        
-        // Sync 8-bit views with extended registers
-        sync_registers_to_8bit();
+        memset(&reg8, 0, sizeof(reg8));
+        emulation_mode = true; // Start in emulation mode
+        set(REG_SPL, 0xFF);
+        set(REG_SPH, 0x01); // Initialize stack pointer
     }
     
     // === Helper: Check if register is in 16-bit mode ===
     inline bool is_accumulator_16bit() const {
-        return !wide_state.emulation_mode && !(get(REG_P) & FLAG_M);
+        return !emulation_mode && !(get(REG_P) & FLAG_M);
     }
     
     inline bool is_index_16bit() const {
-        return !wide_state.emulation_mode && !(get(REG_P) & FLAG_X);
-    }
-    
-    // === Synchronization between 8-bit and 16-bit views ===
-    inline void sync_registers_to_8bit() {
-        // Sync accumulator
-        wide_state.reg8[REG_A] = wide_state.A_full & 0xFF;
-        
-        // Sync index registers
-        wide_state.reg8[REG_X] = wide_state.X_full & 0xFF;
-        wide_state.reg8[REG_Y] = wide_state.Y_full & 0xFF;
-        
-        // Sync stack pointer
-        wide_state.reg16[REG_SP] = wide_state.SP_full;
-    }
-    
-    inline void sync_registers_from_8bit() {
-        // When in 8-bit mode, only update low bytes
-        if (!is_accumulator_16bit()) {
-            wide_state.A_full = (wide_state.A_full & 0xFF00) | wide_state.reg8[REG_A];
-        }
-        
-        if (!is_index_16bit()) {
-            wide_state.X_full = (wide_state.X_full & 0xFF00) | wide_state.reg8[REG_X];
-            wide_state.Y_full = (wide_state.Y_full & 0xFF00) | wide_state.reg8[REG_Y];
-            wide_state.SP_full = (wide_state.SP_full & 0xFF00) | (wide_state.reg16[REG_SP] & 0xFF);
-        }
+        return !emulation_mode && !(get(REG_P) & FLAG_X);
     }
     
     // === 8-bit register accessors ===
-    inline uint8_t get(reg8_t reg) const {
-        return wide_state.reg8[reg];
+    inline uint8_t get(uint8_t reg) const {
+        return reg8[reg];
     }
     
-    inline void set(reg8_t reg, uint8_t value) {
-        wide_state.reg8[reg] = value;
-        
-        // Sync extended registers when 8-bit registers change
-        if (reg == REG_A && !is_accumulator_16bit()) {
-            wide_state.A_full = (wide_state.A_full & 0xFF00) | value;
-        } else if (reg == REG_X && !is_index_16bit()) {
-            wide_state.X_full = (wide_state.X_full & 0xFF00) | value;
-        } else if (reg == REG_Y && !is_index_16bit()) {
-            wide_state.Y_full = (wide_state.Y_full & 0xFF00) | value;
-        }
+    inline void set(uint8_t reg, uint8_t value) {
+        reg8[reg] = value;
     }
     
-    inline void inc(reg8_t reg) {
-        set(reg, get(reg) + 1);
+    inline void inc(uint8_t reg) {
+        reg8[reg]++;
     }
     
-    inline void dec(reg8_t reg) {
-        set(reg, get(reg) - 1);
+    inline void dec(uint8_t reg) {
+        reg8[reg]--;
     }
     
-    // === 16-bit register accessors ===
-    inline uint16_t get(reg16_t reg) const {
-        if (reg == REG_SP) {
-            return wide_state.SP_full;
-        }
-        return wide_state.reg16[reg];
+    // === Explicit 16-bit accessors ===
+    inline uint16_t get16(uint8_t reg_pair) const {
+        return reg16[reg_pair];
     }
     
-    inline void set(reg16_t reg, uint16_t value) {
-        if (reg == REG_SP) {
-            wide_state.SP_full = value;
-            wide_state.reg16[REG_SP] = value;
-        } else {
-            wide_state.reg16[reg] = value;
-        }
+    inline void set16(uint8_t reg_pair, uint16_t value) {
+        reg16[reg_pair] = value;
     }
     
-    inline void inc(reg16_t reg) {
-        set(reg, get(reg) + 1);
+    inline void inc16(uint8_t reg_pair) {
+        reg16[reg_pair]++;
     }
     
-    inline void dec(reg16_t reg) {
-        set(reg, get(reg) - 1);
+    inline void dec16(uint8_t reg_pair) {
+        reg16[reg_pair]--;
     }
     
     // === Memory operation helpers (context-aware) ===
     inline data_t get_accumulator() const {
-        return is_accumulator_16bit() ? wide_state.A_full : (wide_state.A_full & 0xFF);
+        if (is_accumulator_16bit()) {
+            return static_cast<uint16_t>(get(REG_A)) | (static_cast<uint16_t>(get(REG_AH)) << 8);
+        } else {
+            return get(REG_A);
+        }
     }
     
     inline void set_accumulator(data_t value) {
         if (is_accumulator_16bit()) {
-            wide_state.A_full = value;
-            wide_state.reg8[REG_A] = value & 0xFF;
+            set(REG_A, static_cast<uint8_t>(value & 0xFF));
+            set(REG_AH, static_cast<uint8_t>((value >> 8) & 0xFF));
         } else {
-            wide_state.A_full = (wide_state.A_full & 0xFF00) | (value & 0xFF);
-            wide_state.reg8[REG_A] = value & 0xFF;
+            set(REG_A, static_cast<uint8_t>(value & 0xFF));
         }
     }
     
     inline data_t get_x_register() const {
-        return is_index_16bit() ? wide_state.X_full : (wide_state.X_full & 0xFF);
+        if (is_index_16bit()) {
+            return static_cast<uint16_t>(get(REG_X)) | (static_cast<uint16_t>(get(REG_XH)) << 8);
+        } else {
+            return get(REG_X);
+        }
     }
     
     inline void set_x_register(data_t value) {
         if (is_index_16bit()) {
-            wide_state.X_full = value;
-            wide_state.reg8[REG_X] = value & 0xFF;
+            set(REG_X, static_cast<uint8_t>(value & 0xFF));
+            set(REG_XH, static_cast<uint8_t>((value >> 8) & 0xFF));
         } else {
-            wide_state.X_full = (wide_state.X_full & 0xFF00) | (value & 0xFF);
-            wide_state.reg8[REG_X] = value & 0xFF;
+            set(REG_X, static_cast<uint8_t>(value & 0xFF));
         }
     }
     
     inline data_t get_y_register() const {
-        return is_index_16bit() ? wide_state.Y_full : (wide_state.Y_full & 0xFF);
+        if (is_index_16bit()) {
+            return static_cast<uint16_t>(get(REG_Y)) | (static_cast<uint16_t>(get(REG_YH)) << 8);
+        } else {
+            return get(REG_Y);
+        }
     }
     
     inline void set_y_register(data_t value) {
         if (is_index_16bit()) {
-            wide_state.Y_full = value;
-            wide_state.reg8[REG_Y] = value & 0xFF;
+            set(REG_Y, static_cast<uint8_t>(value & 0xFF));
+            set(REG_YH, static_cast<uint8_t>((value >> 8) & 0xFF));
         } else {
-            wide_state.Y_full = (wide_state.Y_full & 0xFF00) | (value & 0xFF);
-            wide_state.reg8[REG_Y] = value & 0xFF;
+            set(REG_Y, static_cast<uint8_t>(value & 0xFF));
         }
     }
     
     inline uint16_t get_stack_pointer() const {
-        return wide_state.SP_full;
+        return static_cast<uint16_t>(get(REG_SPL)) | (static_cast<uint16_t>(get(REG_SPH)) << 8);
     }
     
     inline void set_stack_pointer(uint16_t value) {
-        wide_state.SP_full = value;
-        wide_state.reg16[REG_SP] = value;
+        set(REG_SPL, static_cast<uint8_t>(value & 0xFF));
+        set(REG_SPH, static_cast<uint8_t>((value >> 8) & 0xFF));
     }
     
     // === 65C816 extended register access ===
     inline bool get_emulation_mode() const {
-        return wide_state.emulation_mode;
+        return emulation_mode;
     }
     
     inline void set_emulation_mode(bool mode) {
-        wide_state.emulation_mode = mode;
+        emulation_mode = mode;
         if (mode) {
             // Force 8-bit modes in emulation mode
             set(REG_P, get(REG_P) | (FLAG_M | FLAG_X));
+            // Clear high bytes of accumulator and index registers
+            set(REG_AH, 0);
+            set(REG_XH, 0);
+            set(REG_YH, 0);
+            // Force stack pointer to page 1
+            set(REG_SPH, 0x01);
         }
     }
     
-    inline uint8_t get_dbr() const { return wide_state.DBR; }
-    inline void set_dbr(uint8_t value) { wide_state.DBR = value; }
-    inline uint8_t get_pbr() const { return wide_state.PBR; }
-    inline void set_pbr(uint8_t value) { wide_state.PBR = value; }
-    inline uint16_t get_d() const { return wide_state.D; }
-    inline void set_d(uint16_t value) { wide_state.D = value; }
+    // Note: Use regular get(REG_*)/set(REG_*, value) functions instead of helper functions
+    // This provides direct access without additional function call overhead
     
-    // === 16-bit specific accessors ===
-    inline uint16_t get_accumulator_full() const { return wide_state.A_full; }
-    inline void set_accumulator_full(uint16_t value) { 
-        wide_state.A_full = value;
-        sync_registers_to_8bit();
+    // === 16-bit accumulator operations (respects M flag) ===
+    inline uint16_t get_accumulator_16() const {
+        return get_accumulator();
     }
     
-    inline uint16_t get_x_full() const { return wide_state.X_full; }
-    inline void set_x_full(uint16_t value) { 
-        wide_state.X_full = value;
-        sync_registers_to_8bit();
+    inline void set_accumulator_16(uint16_t value) {
+        set_accumulator(value);
     }
     
-    inline uint16_t get_y_full() const { return wide_state.Y_full; }
-    inline void set_y_full(uint16_t value) { 
-        wide_state.Y_full = value;
-        sync_registers_to_8bit();
+    // === 16-bit X register operations (respects X flag) ===
+    inline uint16_t get_x_16() const {
+        return get_x_register();
+    }
+    
+    inline void set_x_16(uint16_t value) {
+        set_x_register(value);
+    }
+    
+    // === 16-bit Y register operations (respects X flag) ===
+    inline uint16_t get_y_16() const {
+        return get_y_register();
+    }
+    
+    inline void set_y_16(uint16_t value) {
+        set_y_register(value);
     }
     
     // === Address calculation (24-bit with banking) ===
     inline uint32_t calc_effective_address(uint16_t addr) const {
-        return (static_cast<uint32_t>(wide_state.DBR) << 16) | addr;
+        return (static_cast<uint32_t>(get(REG_DBR)) << 16) | addr;
     }
     
     inline uint32_t calc_program_address(uint16_t addr) const {
-        return (static_cast<uint32_t>(wide_state.PBR) << 16) | addr;
+        return (static_cast<uint32_t>(get(REG_PBR)) << 16) | addr;
+    }
+    
+    // === 24-bit address formation (for 65C816 addressing) ===
+    inline uint32_t get_full_address(uint16_t offset = 0) const {
+        uint16_t pc = static_cast<uint16_t>(get(REG_PCL)) | (static_cast<uint16_t>(get(REG_PCH)) << 8);
+        return (static_cast<uint32_t>(get(REG_PBR)) << 16) | (pc + offset);
+    }
+    
+    inline uint32_t get_data_address(uint16_t offset) const {
+        return (static_cast<uint32_t>(get(REG_DBR)) << 16) | offset;
+    }
+    
+    inline uint32_t get_direct_address(uint8_t offset) const {
+        uint16_t d_reg = static_cast<uint16_t>(get(REG_DLow)) | (static_cast<uint16_t>(get(REG_DH)) << 8);
+        return (static_cast<uint32_t>(get(REG_DBR)) << 16) |
+               ((d_reg + offset) & 0xFFFF);
     }
     
     // === Load function for bus operations ===
-    inline void load(reg8_t reg, bus_state_t pins) {
-        wide_state.reg8[reg] = FAM65XX_GET_DATA(pins);
-        sync_registers_from_8bit();
+    inline void load(uint8_t reg, bus_state_t pins) {
+        reg8[reg] = FAM65XX_GET_DATA(pins);
     }
 };
 

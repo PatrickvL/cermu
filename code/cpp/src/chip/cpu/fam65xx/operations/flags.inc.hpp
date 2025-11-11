@@ -17,7 +17,7 @@
 bus_state_t op_clc(bus_state_t pins) {
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read(pins, static_cast<reg16_t>(REG_PC));
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }
@@ -33,7 +33,7 @@ bus_state_t op_clc(bus_state_t pins) {
 bus_state_t op_sec(bus_state_t pins) {
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read(pins, static_cast<reg16_t>(REG_PC));
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }
@@ -49,7 +49,7 @@ bus_state_t op_sec(bus_state_t pins) {
 bus_state_t op_cli(bus_state_t pins) {
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read(pins, static_cast<reg16_t>(REG_PC));
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }
@@ -65,7 +65,7 @@ bus_state_t op_cli(bus_state_t pins) {
 bus_state_t op_sei(bus_state_t pins) {
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read(pins, static_cast<reg16_t>(REG_PC));
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }
@@ -81,7 +81,7 @@ bus_state_t op_sei(bus_state_t pins) {
 bus_state_t op_cld(bus_state_t pins) {
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read(pins, static_cast<reg16_t>(REG_PC));
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }
@@ -97,7 +97,7 @@ bus_state_t op_cld(bus_state_t pins) {
 bus_state_t op_sed(bus_state_t pins) {
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read(pins, static_cast<reg16_t>(REG_PC));
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }
@@ -113,7 +113,7 @@ bus_state_t op_sed(bus_state_t pins) {
 bus_state_t op_clv(bus_state_t pins) {
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read(pins, static_cast<reg16_t>(REG_PC));
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }

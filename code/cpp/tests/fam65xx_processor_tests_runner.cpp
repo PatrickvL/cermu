@@ -675,19 +675,19 @@ public:
     
     void set_d(uint16_t value) override {
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            cpu->set_d(value);
+            cpu->set(REG_D, value);
         }
     }
     
     void set_dbr(uint8_t value) override {
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            cpu->set_dbr(value);
+            cpu->set(REG_DBR, value);
         }
     }
     
     void set_pbr(uint8_t value) override {
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            cpu->set_pbr(value);
+            cpu->set(REG_PBR, value);
         }
     }
     

@@ -19,7 +19,7 @@ bus_state_t op_lax(bus_state_t pins) {
         // Special case: LAX immediate has unstable behavior - uses (A | 0xEE) & operand
         if (opcode_entry.am_index == to_index(AM::IMM)) {
             // LAX immediate - unstable behavior with magic constant
-            pins = this->phi2_read(pins, REG_PC, REG_DL);
+            pins = this->phi2_read(pins, static_cast<reg16_t>(REG_PC), static_cast<reg8_t>(REG_DL));
             if (FAM65XX_GET_RDY(pins)) {
                 this->inc(REG_PC);
                 // Hardware quirk: LAX immediate uses unstable internal state
@@ -33,7 +33,7 @@ bus_state_t op_lax(bus_state_t pins) {
             }
         } else {
             // LAX memory modes - normal behavior
-            pins = this->phi2_read(pins, REG_AB, REG_DL);
+            pins = this->phi2_read(pins, static_cast<reg16_t>(REG_AB), static_cast<reg8_t>(REG_DL));
             if (FAM65XX_GET_RDY(pins)) {
                 this->set(REG_A, this->get(REG_DL));
                 this->set(REG_X, this->get(REG_DL));
@@ -52,7 +52,7 @@ bus_state_t op_sax(bus_state_t pins) {
         // Store A AND X to memory with processor-specific RDY handling
         if (should_complete_write_cycle(pins)) {
             uint8_t result = this->get(REG_A) & this->get(REG_X);
-            pins = this->phi2_write(pins, REG_AB, result);
+            pins = this->phi2_write(pins, static_cast<reg16_t>(REG_AB), result);
             transition_to_fetch();
         }
     }
@@ -190,7 +190,7 @@ bus_state_t op_jam(bus_state_t pins) {
     switch (cycle_index) {
         case 0:
             // PHI2: Read operand from PC+1 (this was PC++ after opcode fetch)
-            pins = this->phi2_read(pins, REG_PC, REG_DL);
+            pins = this->phi2_read(pins, static_cast<reg16_t>(REG_PC), static_cast<reg8_t>(REG_DL));
             if (FAM65XX_GET_RDY(pins)) {
                 cycle_index++;
             }
@@ -198,7 +198,7 @@ bus_state_t op_jam(bus_state_t pins) {
             
         case 1:
             // PHI2: Read operand again from same address (PC+1)
-            pins = this->phi2_read(pins, REG_PC, REG_DL);
+            pins = this->phi2_read(pins, static_cast<reg16_t>(REG_PC), static_cast<reg8_t>(REG_DL));
             if (FAM65XX_GET_RDY(pins)) {
                 // JAM: Reset PC back to opcode address (the "jam" effect)
                 this->dec(REG_PC); // Go back to opcode address
@@ -219,7 +219,7 @@ bus_state_t op_jam(bus_state_t pins) {
 bus_state_t op_anc(bus_state_t pins) {
     if constexpr (has_illegal_opcodes()) {
         // ANC - AND with carry (AND immediate, then copy N flag to C flag)
-        pins = this->phi2_read(pins, REG_PC, REG_DL);
+        pins = this->phi2_read(pins, static_cast<reg16_t>(REG_PC), static_cast<reg8_t>(REG_DL));
         if (FAM65XX_GET_RDY(pins)) {
             this->inc(REG_PC);
             // Perform AND with accumulator
@@ -241,7 +241,7 @@ bus_state_t op_anc(bus_state_t pins) {
 bus_state_t op_arr(bus_state_t pins) {
     if constexpr (has_illegal_opcodes()) {
         // ARR - AND + ROR with BCD correction in decimal mode (reference implementation)
-        pins = this->phi2_read(pins, REG_PC, REG_DL);
+        pins = this->phi2_read(pins, static_cast<reg16_t>(REG_PC), static_cast<reg8_t>(REG_DL));
         if (FAM65XX_GET_RDY(pins)) {
             this->inc(REG_PC);
             
@@ -326,7 +326,7 @@ bus_state_t op_arr(bus_state_t pins) {
 bus_state_t op_alr(bus_state_t pins) {
     if constexpr (has_illegal_opcodes()) {
         // ALR - AND + LSR (AND immediate, then LSR A)
-        pins = this->phi2_read(pins, REG_PC, REG_DL);
+        pins = this->phi2_read(pins, static_cast<reg16_t>(REG_PC), static_cast<reg8_t>(REG_DL));
         if (FAM65XX_GET_RDY(pins)) {
             this->inc(REG_PC);
             // Perform AND with accumulator
@@ -359,7 +359,7 @@ bus_state_t op_xaa(bus_state_t pins) {
     if constexpr (has_illegal_opcodes()) {
         // XAA - Transfer X AND immediate to A (illegal)
         // Hardware quirk: Uses unstable constant 0xEE like LAX immediate
-        pins = this->phi2_read(pins, REG_PC, REG_DL);
+        pins = this->phi2_read(pins, static_cast<reg16_t>(REG_PC), static_cast<reg8_t>(REG_DL));
         if (FAM65XX_GET_RDY(pins)) {
             this->inc(REG_PC);
             // Hardware behavior: (A | 0xEE) & X & operand
@@ -376,7 +376,7 @@ bus_state_t op_xaa(bus_state_t pins) {
 bus_state_t op_sbx(bus_state_t pins) {
     if constexpr (has_illegal_opcodes()) {
         // SBX - Compare X with A AND immediate (illegal) (also called AXS)
-        pins = this->phi2_read(pins, REG_PC, REG_DL);
+        pins = this->phi2_read(pins, static_cast<reg16_t>(REG_PC), static_cast<reg8_t>(REG_DL));
         if (FAM65XX_GET_RDY(pins)) {
             this->inc(REG_PC);
             uint8_t temp = this->get(REG_A) & this->get(REG_X);
@@ -411,7 +411,7 @@ bus_state_t op_sha(bus_state_t pins) {
             // Set data to write
             this->set(REG_DL, data_value);
 
-            pins = this->phi2_write(pins, REG_AB, this->get(REG_DL));
+            pins = this->phi2_write(pins, static_cast<reg16_t>(REG_AB), this->get(REG_DL));
             transition_to_fetch();
         }
     }
@@ -441,7 +441,7 @@ bus_state_t op_shs(bus_state_t pins) {
             // Set stack pointer to A & X (unique to SHS)
             this->set(REG_S, ax);
 
-            pins = this->phi2_write(pins, REG_AB, this->get(REG_DL));
+            pins = this->phi2_write(pins, static_cast<reg16_t>(REG_AB), this->get(REG_DL));
             transition_to_fetch();
         }
     }
@@ -463,7 +463,7 @@ bus_state_t op_shx(bus_state_t pins) {
             }
             
             // Set data to write
-            pins = this->phi2_write(pins, REG_AB, data_value);
+            pins = this->phi2_write(pins, static_cast<reg16_t>(REG_AB), data_value);
             transition_to_fetch();
         }
     }
@@ -485,7 +485,7 @@ bus_state_t op_shy(bus_state_t pins) {
             }
             
             // Set data to write
-            pins = this->phi2_write(pins, REG_AB, data_value);
+            pins = this->phi2_write(pins, static_cast<reg16_t>(REG_AB), data_value);
             transition_to_fetch();
         }
     }
@@ -496,7 +496,7 @@ bus_state_t op_shy(bus_state_t pins) {
 bus_state_t op_las(bus_state_t pins) {
     if constexpr (has_illegal_opcodes()) {
         // LAS - Load A, X, and S with memory AND stack pointer (illegal)
-        pins = this->phi2_read(pins, REG_AB, REG_DL);
+        pins = this->phi2_read(pins, static_cast<reg16_t>(REG_AB), static_cast<reg8_t>(REG_DL));
         if (FAM65XX_GET_RDY(pins)) {
             uint8_t result = this->get(REG_DL) & this->get(REG_S);
             this->set(REG_A, result);
