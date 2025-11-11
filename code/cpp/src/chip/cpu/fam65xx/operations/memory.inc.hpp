@@ -16,7 +16,7 @@
 
 bus_state_t op_lda(bus_state_t pins) {
     // Read operand directly into accumulator (eliminates DL copy)
-    pins = phi2_read_operand(pins, static_cast<reg8_t>(REG_A));
+    pins = phi2_read_operand(pins, REG_A);
     if (FAM65XX_GET_RDY(pins)) {
         // Update N and Z flags
         update_nz_flags(this->get(REG_A));
@@ -33,7 +33,7 @@ bus_state_t op_lda(bus_state_t pins) {
 
 bus_state_t op_ldx(bus_state_t pins) {
     // Read operand directly into X register (eliminates DL copy)
-    pins = phi2_read_operand(pins, static_cast<reg8_t>(REG_X));
+    pins = phi2_read_operand(pins, REG_X);
     if (FAM65XX_GET_RDY(pins)) {
         // Update N and Z flags
         update_nz_flags(this->get(REG_X));
@@ -50,7 +50,7 @@ bus_state_t op_ldx(bus_state_t pins) {
 
 bus_state_t op_ldy(bus_state_t pins) {
     // Read operand directly into Y register (eliminates DL copy)
-    pins = phi2_read_operand(pins, static_cast<reg8_t>(REG_Y));
+    pins = phi2_read_operand(pins, REG_Y);
     if (FAM65XX_GET_RDY(pins)) {
         // Update N and Z flags
         update_nz_flags(this->get(REG_Y));
@@ -68,7 +68,7 @@ bus_state_t op_ldy(bus_state_t pins) {
 bus_state_t op_sta(bus_state_t pins) {
     // Store accumulator with processor-specific RDY handling - optimized direct value write
     if (this->should_complete_write_cycle(pins)) {
-        pins = this->phi2_write(pins, static_cast<reg16_t>(REG_AB), this->get(REG_A));
+        pins = this->phi2_write(pins, REG_AB, this->get(REG_A));
         transition_to_fetch();
     }
     return pins;
@@ -81,7 +81,7 @@ bus_state_t op_sta(bus_state_t pins) {
 bus_state_t op_stx(bus_state_t pins) {
     // Store X register with processor-specific RDY handling - optimized direct value write
     if (this->should_complete_write_cycle(pins)) {
-        pins = this->phi2_write(pins, static_cast<reg16_t>(REG_AB), this->get(REG_X));
+        pins = this->phi2_write(pins, REG_AB, this->get(REG_X));
         transition_to_fetch();
     }
     return pins;
@@ -94,7 +94,7 @@ bus_state_t op_stx(bus_state_t pins) {
 bus_state_t op_sty(bus_state_t pins) {
     // Store Y register with processor-specific RDY handling - optimized direct value write
     if (this->should_complete_write_cycle(pins)) {
-        pins = this->phi2_write(pins, static_cast<reg16_t>(REG_AB), this->get(REG_Y));
+        pins = this->phi2_write(pins, REG_AB, this->get(REG_Y));
         transition_to_fetch();
     }
     return pins;
@@ -107,7 +107,7 @@ bus_state_t op_sty(bus_state_t pins) {
 // AND with Accumulator
 bus_state_t op_and(bus_state_t pins) {
     // Read operand directly into DL register (optimized version)
-    pins = phi2_read_operand(pins, static_cast<reg8_t>(REG_DL));
+    pins = phi2_read_operand(pins, REG_DL);
     if (FAM65XX_GET_RDY(pins)) {
         // Perform AND operation
         this->set(REG_A, this->get(REG_A) & this->get(REG_DL));
@@ -124,7 +124,7 @@ bus_state_t op_and(bus_state_t pins) {
 // OR with Accumulator
 bus_state_t op_ora(bus_state_t pins) {
     // Read operand directly into DL register (optimized version)
-    pins = phi2_read_operand(pins, static_cast<reg8_t>(REG_DL));
+    pins = phi2_read_operand(pins, REG_DL);
     if (FAM65XX_GET_RDY(pins)) {
         // Perform OR operation
         this->set(REG_A, this->get(REG_A) | this->get(REG_DL));
@@ -141,7 +141,7 @@ bus_state_t op_ora(bus_state_t pins) {
 // Exclusive OR with Accumulator
 bus_state_t op_eor(bus_state_t pins) {
     // Read operand directly into DL register (optimized version)
-    pins = phi2_read_operand(pins, static_cast<reg8_t>(REG_DL));
+    pins = phi2_read_operand(pins, REG_DL);
     if (FAM65XX_GET_RDY(pins)) {
         // Perform EOR operation
         this->set(REG_A, this->get(REG_A) ^ this->get(REG_DL));
@@ -160,7 +160,7 @@ bus_state_t op_eor(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_bit(bus_state_t pins) {
-    pins = phi2_read_operand(pins, static_cast<reg8_t>(REG_DL));
+    pins = phi2_read_operand(pins, REG_DL);
     if (FAM65XX_GET_RDY(pins)) {
         uint8_t operand = this->get(REG_DL);
         uint8_t result = this->get(REG_A) & operand;

@@ -18,7 +18,7 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) 
     switch (this->cycle_index) {
         case 0: {
             /* PHI2: Read branch offset from PC into DL */
-            pins = this->phi2_read(pins, static_cast<reg16_t>(REG_PC), static_cast<reg8_t>(REG_DL));
+            pins = this->phi2_read(pins, REG_PC, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
                 this->inc(REG_PC);
                 
@@ -41,7 +41,7 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) 
         case 1: {
             /* PHI2: Dummy read from incremented PC (hardware behavior) */
             /* Use a different register to avoid overwriting the branch offset in DL */
-            pins = this->phi2_dummy_read(pins, static_cast<reg16_t>(REG_PC));  /* Optimized dummy read */
+            pins = this->phi2_dummy_read(pins, REG_PC);  /* Optimized dummy read */
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Check for page cross */
                 bool page_cross = this->page_crossed(this->get(REG_PC), this->get(REG_AB));
@@ -72,7 +72,7 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) 
         
         case 2: {
             /* PHI2: Page cross penalty - dummy read from intermediate address in PC */
-            pins = this->phi2_dummy_read(pins, static_cast<reg16_t>(REG_PC));
+            pins = this->phi2_dummy_read(pins, REG_PC);
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Set final correct target PC and complete instruction */
                 /* REG_AB contains the correct target from case 1 */

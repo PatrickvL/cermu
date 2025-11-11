@@ -209,7 +209,7 @@ struct wide_registers_mixin_t {
     // === Memory operation helpers (context-aware) ===
     inline data_t get_accumulator() const {
         if (is_accumulator_16bit()) {
-            return static_cast<uint16_t>(get(REG_A)) | (static_cast<uint16_t>(get(REG_AH)) << 8);
+            return get(REG_A) | (get(REG_AH) << 8);
         } else {
             return get(REG_A);
         }
@@ -226,7 +226,7 @@ struct wide_registers_mixin_t {
     
     inline data_t get_x_register() const {
         if (is_index_16bit()) {
-            return static_cast<uint16_t>(get(REG_X)) | (static_cast<uint16_t>(get(REG_XH)) << 8);
+            return get(REG_X) | (get(REG_XH) << 8);
         } else {
             return get(REG_X);
         }
@@ -243,7 +243,7 @@ struct wide_registers_mixin_t {
     
     inline data_t get_y_register() const {
         if (is_index_16bit()) {
-            return static_cast<uint16_t>(get(REG_Y)) | (static_cast<uint16_t>(get(REG_YH)) << 8);
+            return get(REG_Y) | (get(REG_YH) << 8);
         } else {
             return get(REG_Y);
         }
@@ -259,7 +259,7 @@ struct wide_registers_mixin_t {
     }
     
     inline uint16_t get_stack_pointer() const {
-        return static_cast<uint16_t>(get(REG_SPL)) | (static_cast<uint16_t>(get(REG_SPH)) << 8);
+        return get(REG_SPL) | (get(REG_SPH) << 8);
     }
     
     inline void set_stack_pointer(uint16_t value) {
@@ -318,26 +318,26 @@ struct wide_registers_mixin_t {
     
     // === Address calculation (24-bit with banking) ===
     inline uint32_t calc_effective_address(uint16_t addr) const {
-        return (static_cast<uint32_t>(get(REG_DBR)) << 16) | addr;
+        return (get(REG_DBR) << 16) | addr;
     }
     
     inline uint32_t calc_program_address(uint16_t addr) const {
-        return (static_cast<uint32_t>(get(REG_PBR)) << 16) | addr;
+        return (get(REG_PBR) << 16) | addr;
     }
     
     // === 24-bit address formation (for 65C816 addressing) ===
     inline uint32_t get_full_address(uint16_t offset = 0) const {
-        uint16_t pc = static_cast<uint16_t>(get(REG_PCL)) | (static_cast<uint16_t>(get(REG_PCH)) << 8);
-        return (static_cast<uint32_t>(get(REG_PBR)) << 16) | (pc + offset);
+        uint16_t pc = get(REG_PCL) | (get(REG_PCH) << 8);
+        return (get(REG_PBR) << 16) | (pc + offset);
     }
     
     inline uint32_t get_data_address(uint16_t offset) const {
-        return (static_cast<uint32_t>(get(REG_DBR)) << 16) | offset;
+        return (get(REG_DBR) << 16) | offset;
     }
     
     inline uint32_t get_direct_address(uint8_t offset) const {
-        uint16_t d_reg = static_cast<uint16_t>(get(REG_DLow)) | (static_cast<uint16_t>(get(REG_DH)) << 8);
-        return (static_cast<uint32_t>(get(REG_DBR)) << 16) |
+        uint16_t d_reg = static_cast<uint16_t>(get(REG_DLow)) | (get(REG_DH) << 8);
+        return (get(REG_DBR) << 16) |
                ((d_reg + offset) & 0xFFFF);
     }
     
