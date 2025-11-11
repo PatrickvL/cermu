@@ -107,14 +107,6 @@ struct narrow_registers_mixin_t {
         set(REG_Y, value);
     }
     
-    inline uint16_t get_stack_pointer() const {
-        return get16(REG_SP);
-    }
-    
-    inline void set_stack_pointer(uint16_t value) {
-        set16(REG_SP, value);
-    }
-    
     // Note: 65C816 compatibility - 8-bit CPUs don't have these registers
     // Use conditional compilation in operations that need 65C816 features
     
@@ -205,7 +197,7 @@ struct wide_registers_mixin_t {
     // === Memory operation helpers (context-aware) ===
     inline data_t get_accumulator() const {
         if (is_accumulator_16bit()) {
-            return get(REG_A) | (get(REG_AH) << 8);
+            return get16(REG_A_FULL);
         } else {
             return get(REG_A);
         }
@@ -222,7 +214,7 @@ struct wide_registers_mixin_t {
     
     inline data_t get_x_register() const {
         if (is_index_16bit()) {
-            return get(REG_X) | (get(REG_XH) << 8);
+            return get16(REG_X_FULL);
         } else {
             return get(REG_X);
         }
@@ -239,7 +231,7 @@ struct wide_registers_mixin_t {
     
     inline data_t get_y_register() const {
         if (is_index_16bit()) {
-            return get(REG_Y) | (get(REG_YH) << 8);
+            return get16(REG_Y_FULL);
         } else {
             return get(REG_Y);
         }
@@ -252,15 +244,6 @@ struct wide_registers_mixin_t {
         } else {
             set(REG_Y, static_cast<uint8_t>(value & 0xFF));
         }
-    }
-    
-    inline uint16_t get_stack_pointer() const {
-        return get(REG_SPL) | (get(REG_SPH) << 8);
-    }
-    
-    inline void set_stack_pointer(uint16_t value) {
-        set(REG_SPL, static_cast<uint8_t>(value & 0xFF));
-        set(REG_SPH, static_cast<uint8_t>((value >> 8) & 0xFF));
     }
     
     // === 65C816 extended register access ===
@@ -294,24 +277,6 @@ struct wide_registers_mixin_t {
         set_accumulator(value);
     }
     
-    // === 16-bit X register operations (respects X flag) ===
-    inline uint16_t get_x_16() const {
-        return get_x_register();
-    }
-    
-    inline void set_x_16(uint16_t value) {
-        set_x_register(value);
-    }
-    
-    // === 16-bit Y register operations (respects X flag) ===
-    inline uint16_t get_y_16() const {
-        return get_y_register();
-    }
-    
-    inline void set_y_16(uint16_t value) {
-        set_y_register(value);
-    }
-    
     // === Address calculation (24-bit with banking) ===
     inline uint32_t calc_effective_address(uint16_t addr) const {
         return (get(REG_DBR) << 16) | addr;
@@ -323,7 +288,7 @@ struct wide_registers_mixin_t {
     
     // === 24-bit address formation (for 65C816 addressing) ===
     inline uint32_t get_full_address(uint16_t offset = 0) const {
-        uint16_t pc = get(REG_PCL) | (get(REG_PCH) << 8);
+        uint16_t pc = get16(REG_PC);
         return (get(REG_PBR) << 16) | (pc + offset);
     }
     
