@@ -95,6 +95,14 @@ class fam65xx_t :
     public register_base_t<Traits>
 {
 public:
+    // Expose register types from the register mixin for template-dependent name lookup
+    using reg8_t = typename register_base_t<Traits>::reg8_t;
+    using reg16_t = typename register_base_t<Traits>::reg16_t;
+    using data_t = typename register_base_t<Traits>::data_t;
+    
+    // Note: Register constants are now globally available via fam65xx_register_constants_global.hpp
+    // No using declarations needed - constants are accessible directly as fam65xx::REG_*
+    
     // CPUTraits-based feature detection helpers for operations files
     static constexpr bool has_illegal_opcodes() { return Traits.has(CPUCoreFlags::ILLEGAL_OPCODES); }
     static constexpr bool has_bcd() { return Traits.has(CPUCoreFlags::HAS_DECIMAL_MODE); }
@@ -284,7 +292,7 @@ public:
         /* Initialize register layout:
         * SP = 0x01FF (stack starts at top of page 1)
         */
-        this->set(REG_SP, 0x01FF); /* Stack pointer (page 1, starts at 0xFF) */
+        this->set16(REG_SP / 2, 0x01FF); /* Stack pointer (page 1, starts at 0xFF) */
 
         // Return initial pin state
         bus_state_t pins = 0;
@@ -327,7 +335,7 @@ public:
         this->set(REG_A, 0x00);
         this->set(REG_X, 0x00);
         this->set(REG_Y, 0x00);
-        this->set(REG_SP, 0x1FF);
+        this->set16(REG_SP / 2, 0x01FF);
         this->set(REG_P, FLAG_U | FLAG_I); // Unused bit set, interrupts disabled
         
         // Reset interrupt state
@@ -668,14 +676,14 @@ public:
     inline bus_state_t phi2_read_operand(bus_state_t pins, reg8_t target_reg) {
         if (this->opcode_entry.am_index == to_index(AM::IMM)) {
             // Immediate mode - read from PC directly into target register
-            pins = phi2_read(pins, REG_PC, target_reg);
+            pins = phi2_read(pins, static_cast<reg16_t>(REG_PC), target_reg);
             if (FAM65XX_GET_RDY(pins)) {
                 this->inc(REG_PC);
             }
             return pins;
         }
         // Memory mode - read from target address directly into target register
-        return phi2_read(pins, REG_AB, target_reg);
+        return phi2_read(pins, static_cast<reg16_t>(REG_AB), target_reg);
     }
 
     inline bus_state_t phi2_write(bus_state_t pins, reg16_t addr_reg, uint8_t data) {
@@ -1153,7 +1161,7 @@ private:
     // Instruction fetch and decode
     bus_state_t fetch_opcode(bus_state_t pins) {
         // Read opcode from PC
-        pins = this->phi2_read(pins, REG_PC, REG_IR);
+        pins = this->phi2_read(pins, static_cast<reg16_t>(REG_PC), static_cast<reg8_t>(REG_IR));
         this->set(REG_AB, this->get(REG_PC));
         this->inc(REG_PC);
         // Set SYNC signal for opcode fetch

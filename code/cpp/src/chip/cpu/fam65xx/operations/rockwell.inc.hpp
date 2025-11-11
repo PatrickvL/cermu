@@ -50,7 +50,7 @@ bus_state_t bit_branch_helper(bus_state_t pins, uint8_t bit_mask, bool bit_set) 
     // AB register contains the zero page address, DL contains the branch offset
     
     // PHI2: Read value from zero page address
-    pins = this->phi2_read(pins, REG_AB, REG_ABH);
+    pins = this->phi2_read(pins, static_cast<reg16_t>(REG_AB), static_cast<reg8_t>(REG_ABH));
     if (FAM65XX_GET_RDY(pins)) {
         // PHI1: Test bit and decide whether to branch
         bool bit_is_set = (this->get(REG_ABH) & bit_mask) != 0;

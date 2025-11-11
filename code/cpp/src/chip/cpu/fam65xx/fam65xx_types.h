@@ -230,47 +230,113 @@ enum class Operation : uint8_t {
 };
 
 // ============================================================================
-// 8-bit Register indices with endian-aware 16-bit pairs
+// GLOBAL REGISTER CONSTANTS (compatible with both narrow and wide layouts)
 // ============================================================================
 
-typedef enum {
+// 8-bit register constants - these work for both narrow and wide CPUs
+enum : uint8_t {
     // 16-bit aligned register pairs (endian-aware) for memory addresses
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-    REG_SPL,       // Stack pointer (low byte) - full 16-bit stack register
-    REG_SPH,       // Stack pointer (high byte) - always 0x01 for 6502/6510
-    REG_ABL,       // Address Bus (low byte, even index for little endian)
-    REG_ABH,       // Address Bus (high byte)
-    REG_PCL,       // Program Counter (low byte, even index for little endian)
-    REG_PCH,       // Program Counter (high byte)
+    REG_SPL = 0,       // Stack pointer (low byte)
+    REG_SPH = 1,       // Stack pointer (high byte)
+    REG_ABL = 2,       // Address Bus (low byte)
+    REG_ABH = 3,       // Address Bus (high byte)
+    REG_PCL = 4,       // Program Counter (low byte)
+    REG_PCH = 5,       // Program Counter (high byte)
 #else
-    REG_SPH,       // Stack pointer (high byte) - always 0x01 for 6502/6510
-    REG_SPL,       // Stack pointer (low byte) - full 16-bit stack register
-    REG_ABH,       // Address Bus (high byte, even index for big endian)
-    REG_ABL,       // Address Bus (low byte)
-    REG_PCH,       // Program Counter (high byte, even index for big endian)
-    REG_PCL,       // Program Counter (low byte)
+    REG_SPH = 0,       // Stack pointer (high byte)
+    REG_SPL = 1,       // Stack pointer (low byte)
+    REG_ABH = 2,       // Address Bus (high byte)
+    REG_ABL = 3,       // Address Bus (low byte)
+    REG_PCH = 4,       // Program Counter (high byte)
+    REG_PCL = 5,       // Program Counter (low byte)
 #endif
-    // Public registers
-    REG_A,         // Accumulator
-    REG_X,         // X index
-    REG_Y,         // Y index
-    REG_P,         // Processor status
-    // Internal registers
-    REG_IR,        // Instruction Register (current opcode)
-    REG_DL,        // Data latch
-    
-    REG_COUNT,
-    
-    // Compatibility mapping for 8-bit stack pointer
-    REG_S = REG_SPL  // Map legacy S register to SPL for compatibility
-} reg8_t;
 
-// 16-bit register indices (native endian compatible)
-typedef enum {
-    REG_SP = REG_SPL / 2,  // Stack pointer as 16-bit (SPL in low, 0x01 in high)
-    REG_AB = REG_ABL / 2,  // Address Bus Latch as 16-bit (ADL/ADH pair)
-    REG_PC = REG_PCL / 2,  // Program counter / PC as 16-bit (PCL/PCH pair)
-} reg16_t;
+    // Standard 65xx registers - same location in both layouts
+    REG_A = 6,         // Accumulator (low byte for 65C816)
+    REG_X = 7,         // X index (low byte for 65C816)
+    REG_Y = 8,         // Y index (low byte for 65C816)
+    REG_P = 9,         // Processor status
+    REG_IR = 10,       // Instruction Register (current opcode)
+    REG_DL = 11,       // Data latch (internal)
+    
+    // 65C816 extended registers (only used by wide register layout)
+    // These constants exist but are only meaningful for 65C816
+    REG_AH = 12,       // Accumulator high byte (65C816 only)
+    REG_XH = 13,       // X index high byte (65C816 only)
+    REG_YH = 14,       // Y index high byte (65C816 only)
+    REG_DBR = 15,      // Data Bank register (65C816 only)
+    REG_PBR = 16,      // Program Bank register (65C816 only)
+    REG_DLow = 17,     // Direct Page low byte (65C816 only)
+    REG_DH = 18,       // Direct Page high byte (65C816 only)
+    
+    // Compatibility mapping
+    REG_S = REG_SPL    // Map legacy S register to SPL for compatibility
+};
+
+// 16-bit register constants - these work for both narrow and wide CPUs
+enum : uint8_t {
+    REG_SP = REG_SPL / 2,   // Stack pointer (16-bit)
+    REG_AB = REG_ABL / 2,   // Address Bus (16-bit)
+    REG_PC = REG_PCL / 2,   // Program Counter (16-bit)
+    
+    // 65C816 extended 16-bit registers (only meaningful for wide CPUs)
+    REG_A_FULL = REG_A / 2, // Full accumulator (65C816 only)
+    REG_X_FULL = REG_X / 2, // Full X register (65C816 only)
+    REG_Y_FULL = REG_Y / 2, // Full Y register (65C816 only)
+    REG_D = REG_DLow / 2,   // Direct Page register (65C816 only)
+};
+
+// ============================================================================
+// REGISTER TYPE WRAPPERS FOR TEMPLATE-DEPENDENT TYPES
+// ============================================================================
+
+namespace fam65xx {
+
+// Simple wrapper types that provide implicit conversion from register constants
+// These allow template-dependent types while maintaining compatibility with REG_* constants
+
+struct narrow_reg8_t {
+    uint8_t value;
+    
+    // Allow implicit conversion from register constants
+    constexpr narrow_reg8_t(uint8_t reg) : value(reg) {}
+    
+    // Allow implicit conversion to uint8_t for array indexing
+    constexpr operator uint8_t() const { return value; }
+};
+
+struct narrow_reg16_t {
+    uint8_t value;
+    
+    // Allow implicit conversion from register constants
+    constexpr narrow_reg16_t(uint8_t reg) : value(reg) {}
+    
+    // Allow implicit conversion to uint8_t for array indexing
+    constexpr operator uint8_t() const { return value; }
+};
+
+struct wide_reg8_t {
+    uint8_t value;
+    
+    // Allow implicit conversion from register constants
+    constexpr wide_reg8_t(uint8_t reg) : value(reg) {}
+    
+    // Allow implicit conversion to uint8_t for array indexing
+    constexpr operator uint8_t() const { return value; }
+};
+
+struct wide_reg16_t {
+    uint8_t value;
+    
+    // Allow implicit conversion from register constants
+    constexpr wide_reg16_t(uint8_t reg) : value(reg) {}
+    
+    // Allow implicit conversion to uint8_t for array indexing
+    constexpr operator uint8_t() const { return value; }
+};
+
+} // namespace fam65xx
 
 // ============================================================================
 // Opcode Encoding

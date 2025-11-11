@@ -17,7 +17,7 @@
 bus_state_t transfer_with_flags_helper(bus_state_t pins, uint8_t value, reg8_t target_reg) {
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read(pins, static_cast<reg16_t>(REG_PC));
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }
@@ -34,7 +34,7 @@ bus_state_t transfer_with_flags_helper(bus_state_t pins, uint8_t value, reg8_t t
 bus_state_t transfer_no_flags_helper(bus_state_t pins, uint8_t value, reg8_t target_reg) {
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read(pins, static_cast<reg16_t>(REG_PC));
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }
@@ -52,32 +52,32 @@ bus_state_t transfer_no_flags_helper(bus_state_t pins, uint8_t value, reg8_t tar
 
 /* TAX - Transfer A to X */
 bus_state_t op_tax(bus_state_t pins) {
-    return transfer_with_flags_helper(pins, this->get(REG_A), REG_X);
+    return transfer_with_flags_helper(pins, this->get(REG_A), static_cast<reg8_t>(REG_X));
 }
 
 /* TAY - Transfer A to Y */
 bus_state_t op_tay(bus_state_t pins) {
-    return transfer_with_flags_helper(pins, this->get(REG_A), REG_Y);
+    return transfer_with_flags_helper(pins, this->get(REG_A), static_cast<reg8_t>(REG_Y));
 }
 
 /* TSX - Transfer S to X */
 bus_state_t op_tsx(bus_state_t pins) {
-    return transfer_with_flags_helper(pins, this->get(REG_S), REG_X);
+    return transfer_with_flags_helper(pins, this->get(REG_S), static_cast<reg8_t>(REG_X));
 }
 
 /* TXA - Transfer X to A */
 bus_state_t op_txa(bus_state_t pins) {
-    return transfer_with_flags_helper(pins, this->get(REG_X), REG_A);
+    return transfer_with_flags_helper(pins, this->get(REG_X), static_cast<reg8_t>(REG_A));
 }
 
 /* TXS - Transfer X to S */
 bus_state_t op_txs(bus_state_t pins) {
-    return transfer_no_flags_helper(pins, this->get(REG_X), REG_S);
+    return transfer_no_flags_helper(pins, this->get(REG_X), static_cast<reg8_t>(REG_S));
 }
 
 /* TYA - Transfer Y to A */
 bus_state_t op_tya(bus_state_t pins) {
-    return transfer_with_flags_helper(pins, this->get(REG_Y), REG_A);
+    return transfer_with_flags_helper(pins, this->get(REG_Y), static_cast<reg8_t>(REG_A));
 }
 
 // ============================================================================
@@ -88,7 +88,7 @@ bus_state_t op_tya(bus_state_t pins) {
 bus_state_t op_inx(bus_state_t pins) {
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read(pins, static_cast<reg16_t>(REG_PC));
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }
@@ -105,7 +105,7 @@ bus_state_t op_inx(bus_state_t pins) {
 bus_state_t op_iny(bus_state_t pins) {
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read(pins, static_cast<reg16_t>(REG_PC));
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }
@@ -122,7 +122,7 @@ bus_state_t op_iny(bus_state_t pins) {
 bus_state_t op_dex(bus_state_t pins) {
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read(pins, static_cast<reg16_t>(REG_PC));
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }
@@ -139,7 +139,7 @@ bus_state_t op_dex(bus_state_t pins) {
 bus_state_t op_dey(bus_state_t pins) {
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read(pins, static_cast<reg16_t>(REG_PC));
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }
