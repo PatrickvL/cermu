@@ -37,12 +37,10 @@ struct narrow_registers_mixin_t {
     using reg8_t = uint8_t;
     using reg16_t = uint8_t;
     
-    static constexpr size_t REG_COUNT = 12;  // Number of 8-bit registers for narrow CPUs
-    
     // Register array - standard 8-bit layout
     union {
-        uint8_t reg8[REG_COUNT];        // 8-bit register access
-        uint16_t reg16[REG_COUNT / 2];  // 16-bit pair access (little-endian)
+        uint8_t reg8[REG_COUNT_8BIT];        // 8-bit register access
+        uint16_t reg16[REG_COUNT_8BIT / 2];  // 16-bit pair access (little-endian)
     };
     
     // Initialize registers
@@ -110,11 +108,11 @@ struct narrow_registers_mixin_t {
     }
     
     inline uint16_t get_stack_pointer() const {
-        return get16(REG_SP / 2);
+        return get16(REG_SP);
     }
     
     inline void set_stack_pointer(uint16_t value) {
-        set16(REG_SP / 2, value);
+        set16(REG_SP, value);
     }
     
     // Note: 65C816 compatibility - 8-bit CPUs don't have these registers
@@ -144,12 +142,10 @@ struct wide_registers_mixin_t {
     using reg8_t = uint8_t;
     using reg16_t = uint8_t;
     
-    static constexpr size_t REG_COUNT = 19;  // Number of 8-bit registers for 65C816
-    
     // Register array with proper 8/16-bit alignment - matches narrow_registers_mixin_t structure
     union {
-        uint8_t reg8[REG_COUNT];        // 8-bit register access
-        uint16_t reg16[REG_COUNT / 2];  // 16-bit pair access (little-endian)
+        uint8_t reg8[REG_COUNT_16BIT];        // 8-bit register access
+        uint16_t reg16[REG_COUNT_16BIT / 2];  // 16-bit pair access (little-endian)
     };
     
     // 65C816 control state - separate from register array for cleaner design
@@ -336,7 +332,7 @@ struct wide_registers_mixin_t {
     }
     
     inline uint32_t get_direct_address(uint8_t offset) const {
-        uint16_t d_reg = static_cast<uint16_t>(get(REG_DLow)) | (get(REG_DH) << 8);
+        uint16_t d_reg = get16(REG_D);  // Use the proper 16-bit D register access
         return (get(REG_DBR) << 16) |
                ((d_reg + offset) & 0xFFFF);
     }

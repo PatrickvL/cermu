@@ -230,11 +230,12 @@ enum class Operation : uint8_t {
 };
 
 // ============================================================================
-// GLOBAL REGISTER CONSTANTS (compatible with both narrow and wide layouts)
+// GLOBAL REGISTER CONSTANTS (optimized layout for both narrow and wide CPUs)
 // ============================================================================
 
-// 8-bit register constants - these work for both narrow and wide CPUs
+// 8-bit register constants - optimized layout with no gaps for 8-bit CPUs
 enum : uint8_t {
+    // Core registers (0-11) - used by both 8-bit and 16-bit CPUs
     // 16-bit aligned register pairs (endian-aware) for memory addresses
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
     REG_SPL = 0,       // Stack pointer (low byte)
@@ -243,6 +244,12 @@ enum : uint8_t {
     REG_ABH = 3,       // Address Bus (high byte)
     REG_PCL = 4,       // Program Counter (low byte)
     REG_PCH = 5,       // Program Counter (high byte)
+    REG_A = 6,         // Accumulator (low byte for 65C816)
+    REG_AH = 7,        // Accumulator high byte (65C816) / unused (8-bit CPUs)
+    REG_X = 8,         // X index (low byte for 65C816)
+    REG_XH = 9,        // X index high byte (65C816) / unused (8-bit CPUs)
+    REG_Y = 10,        // Y index (low byte for 65C816)
+    REG_YH = 11,       // Y index high byte (65C816) / unused (8-bit CPUs)
 #else
     REG_SPH = 0,       // Stack pointer (high byte)
     REG_SPL = 1,       // Stack pointer (low byte)
@@ -250,26 +257,34 @@ enum : uint8_t {
     REG_ABL = 3,       // Address Bus (low byte)
     REG_PCH = 4,       // Program Counter (high byte)
     REG_PCL = 5,       // Program Counter (low byte)
+    REG_AH = 6,        // Accumulator high byte (65C816) / unused (8-bit CPUs)
+    REG_A = 7,         // Accumulator (low byte for 65C816)
+    REG_XH = 8,        // X index high byte (65C816) / unused (8-bit CPUs)
+    REG_X = 9,         // X index (low byte for 65C816)
+    REG_YH = 10,       // Y index high byte (65C816) / unused (8-bit CPUs)
+    REG_Y = 11,        // Y index (low byte for 65C816)
 #endif
 
-    // Standard 65xx registers - same location in both layouts
-    REG_A = 6,         // Accumulator (low byte for 65C816)
-    REG_X = 7,         // X index (low byte for 65C816)
-    REG_Y = 8,         // Y index (low byte for 65C816)
-    REG_P = 9,         // Processor status
-    REG_IR = 10,       // Instruction Register (current opcode)
-    REG_DL = 11,       // Data latch (internal)
+    // Common registers (continue from 12) - used by both CPU types
+    REG_P = 12,        // Processor status
+    REG_IR = 13,       // Instruction Register (current opcode)
+    REG_DL = 14,       // Data latch (internal)
     
-    // 65C816 extended registers (only used by wide register layout)
-    // These constants exist but are only meaningful for 65C816
-    REG_AH = 12,       // Accumulator high byte (65C816 only)
-    REG_XH = 13,       // X index high byte (65C816 only)
-    REG_YH = 14,       // Y index high byte (65C816 only)
+    // Extended registers (15-18) - only used by 65C816
     REG_DBR = 15,      // Data Bank register (65C816 only)
     REG_PBR = 16,      // Program Bank register (65C816 only)
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
     REG_DLow = 17,     // Direct Page low byte (65C816 only)
     REG_DH = 18,       // Direct Page high byte (65C816 only)
+#else
+    REG_DH = 17,       // Direct Page high byte (65C816 only)
+    REG_DLow = 18,     // Direct Page low byte (65C816 only)
+#endif
+
+    REG_COUNT_16BIT,  // Number of 8-bit registers for 65C816
+    REG_COUNT_8BIT = REG_DL + 1,  // Core registers 0-14 (high bytes unused for 8-bit CPUs)
     
+
     // Compatibility mapping
     REG_S = REG_SPL    // Map legacy S register to SPL for compatibility
 };
@@ -281,6 +296,7 @@ enum : uint8_t {
     REG_PC = REG_PCL / 2,   // Program Counter (16-bit)
     
     // 65C816 extended 16-bit registers (only meaningful for wide CPUs)
+    // Now properly aligned with endian-aware register pairs
     REG_A_FULL = REG_A / 2, // Full accumulator (65C816 only)
     REG_X_FULL = REG_X / 2, // Full X register (65C816 only)
     REG_Y_FULL = REG_Y / 2, // Full Y register (65C816 only)
