@@ -6,6 +6,7 @@
  */
 
 #include "inc_lint_prevention.hpp"
+#include <codecvt>
 
 #ifndef FAM65XX_SKIP_IMPLEMENTATION
 
@@ -224,9 +225,8 @@ bus_state_t op_pld(bus_state_t pins) {
                 
             case 1:
                 // Pull D register low byte first
-                pins = this->phi2_read(pins, REG_SP, REG_DL);
+                pins = this->phi2_read(pins, REG_SP, REG_DLow);
                 if (FAM65XX_GET_RDY(pins)) {
-                    this->set(REG_DLow, this->get(REG_DL)); // Set low byte directly
                     this->inc(REG_S); // Increment for high byte
                     this->cycle_index++;
                 }
@@ -234,9 +234,8 @@ bus_state_t op_pld(bus_state_t pins) {
                 
             case 2:
                 // Pull D register high byte
-                pins = this->phi2_read(pins, REG_SP, REG_DL);
+                pins = this->phi2_read(pins, REG_SP, REG_DH);
                 if (FAM65XX_GET_RDY(pins)) {
-                    this->set(REG_DH, this->get(REG_DL)); // Set high byte directly
                     // Update N and Z flags based on D register
                     this->update_nz_flags(this->get(REG_DLow)); // Only check low byte for flags
                     this->transition_to_fetch();
@@ -470,12 +469,9 @@ bus_state_t op_pei(bus_state_t pins) {
 bus_state_t op_xba(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
         // Exchange the low and high bytes of the 16-bit accumulator
-        uint8_t low_byte = this->get(REG_A);
-        uint8_t high_byte = this->get(REG_AH);
-        
+        uint16_t a = this->get16(REG_A_FULL);
         // Swap the bytes by setting them directly
-        this->set(REG_A, high_byte);
-        this->set(REG_AH, low_byte);
+        this->set16(REG_A_FULL, (a >> 8) | (a << 8));
         
         // Update N and Z flags based on new A register value (now contains old high byte)
         this->update_nz_flags(this->get(REG_A));

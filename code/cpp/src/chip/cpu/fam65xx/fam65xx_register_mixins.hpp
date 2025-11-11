@@ -205,8 +205,7 @@ struct wide_registers_mixin_t {
     
     inline void set_accumulator(data_t value) {
         if (is_accumulator_16bit()) {
-            set(REG_A, static_cast<uint8_t>(value & 0xFF));
-            set(REG_AH, static_cast<uint8_t>((value >> 8) & 0xFF));
+            set16(REG_A_FULL, value);
         } else {
             set(REG_A, static_cast<uint8_t>(value & 0xFF));
         }
@@ -222,8 +221,7 @@ struct wide_registers_mixin_t {
     
     inline void set_x_register(data_t value) {
         if (is_index_16bit()) {
-            set(REG_X, static_cast<uint8_t>(value & 0xFF));
-            set(REG_XH, static_cast<uint8_t>((value >> 8) & 0xFF));
+            set16(REG_X_FULL, value);
         } else {
             set(REG_X, static_cast<uint8_t>(value & 0xFF));
         }
@@ -239,8 +237,7 @@ struct wide_registers_mixin_t {
     
     inline void set_y_register(data_t value) {
         if (is_index_16bit()) {
-            set(REG_Y, static_cast<uint8_t>(value & 0xFF));
-            set(REG_YH, static_cast<uint8_t>((value >> 8) & 0xFF));
+            set16(REG_Y_FULL, value);
         } else {
             set(REG_Y, static_cast<uint8_t>(value & 0xFF));
         }
