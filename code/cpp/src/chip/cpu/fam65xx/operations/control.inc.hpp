@@ -26,7 +26,7 @@ bus_state_t op_jsr(bus_state_t pins) {
     switch (this->cycle_index) {
         case 0:
             /* PHI2: Read low byte of target address from PC directly to ABL */
-            pins = this->phi2_read(pins, static_cast<reg16_t>(REG_PC), static_cast<reg8_t>(REG_ABL));
+            pins = this->phi2_read(pins, REG_PC, REG_ABL);
             if (FAM65XX_GET_RDY(pins)) {
                 this->inc(REG_PC);
                 this->cycle_index++;
@@ -35,7 +35,7 @@ bus_state_t op_jsr(bus_state_t pins) {
             
         case 1:
             /* PHI2: Dummy read from stack pointer (internal operation) */
-            pins = this->phi2_dummy_read(pins, static_cast<reg16_t>(REG_SP));
+            pins = this->phi2_dummy_read(pins, REG_SP);
             if (FAM65XX_GET_RDY(pins)) {
                 this->cycle_index++;
             }
@@ -44,7 +44,7 @@ bus_state_t op_jsr(bus_state_t pins) {
         case 2:
             /* PHI2: Push PCH (high byte of return address) to stack */
             if (this->should_complete_write_cycle(pins)) {
-                pins = this->phi2_write(pins, static_cast<reg16_t>(REG_SP), this->get(REG_PCH));
+                pins = this->phi2_write(pins, REG_SP, this->get(REG_PCH));
                 this->dec(REG_S);
                 this->cycle_index++;
             }
@@ -53,7 +53,7 @@ bus_state_t op_jsr(bus_state_t pins) {
         case 3:
             /* PHI2: Push PCL (low byte of return address) to stack */
             if (this->should_complete_write_cycle(pins)) {
-                pins = this->phi2_write(pins, static_cast<reg16_t>(REG_SP), this->get(REG_PCL));
+                pins = this->phi2_write(pins, REG_SP, this->get(REG_PCL));
                 this->dec(REG_S);
                 this->cycle_index++;
             }
@@ -61,7 +61,7 @@ bus_state_t op_jsr(bus_state_t pins) {
             
         case 4:
             /* PHI2: Read high byte of target address from PC directly to ABH */
-            pins = this->phi2_read(pins, static_cast<reg16_t>(REG_PC), static_cast<reg8_t>(REG_ABH));
+            pins = this->phi2_read(pins, REG_PC, REG_ABH);
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Set PC to target address */
                 this->set(REG_PC, this->get(REG_AB));
@@ -77,7 +77,7 @@ bus_state_t op_rts(bus_state_t pins) {
     switch (this->cycle_index) {
         case 0:
             /* PHI2: Dummy read from PC */
-            pins = this->phi2_dummy_read(pins, static_cast<reg16_t>(REG_PC));
+            pins = this->phi2_dummy_read(pins, REG_PC);
             if (FAM65XX_GET_RDY(pins)) {
                 this->cycle_index++;
             }
@@ -85,7 +85,7 @@ bus_state_t op_rts(bus_state_t pins) {
             
         case 1:
             /* PHI2: Dummy read from current stack pointer, then increment SP */
-            pins = this->phi2_dummy_read(pins, static_cast<reg16_t>(REG_SP));
+            pins = this->phi2_dummy_read(pins, REG_SP);
             if (FAM65XX_GET_RDY(pins)) {
                 this->inc(REG_S);
                 this->cycle_index++;
@@ -94,7 +94,7 @@ bus_state_t op_rts(bus_state_t pins) {
             
         case 2:
             /* PHI2: Pull PCL from stack */
-            pins = this->phi2_read(pins, static_cast<reg16_t>(REG_SP), static_cast<reg8_t>(REG_PCL));
+            pins = this->phi2_read(pins, REG_SP, REG_PCL);
             if (FAM65XX_GET_RDY(pins)) {
                 this->inc(REG_S);
                 this->cycle_index++;
@@ -103,7 +103,7 @@ bus_state_t op_rts(bus_state_t pins) {
             
         case 3:
             /* PHI2: Pull PCH from stack */
-            pins = this->phi2_read(pins, static_cast<reg16_t>(REG_SP), static_cast<reg8_t>(REG_PCH));
+            pins = this->phi2_read(pins, REG_SP, REG_PCH);
             if (FAM65XX_GET_RDY(pins)) {
                 this->cycle_index++;
             }
@@ -111,7 +111,7 @@ bus_state_t op_rts(bus_state_t pins) {
             
         case 4:
             /* PHI2: Dummy read from PC, then increment PC */
-            pins = this->phi2_dummy_read(pins, static_cast<reg16_t>(REG_PC));
+            pins = this->phi2_dummy_read(pins, REG_PC);
             if (FAM65XX_GET_RDY(pins)) {
                 this->inc(REG_PC);
                 transition_to_fetch();
@@ -189,7 +189,7 @@ bus_state_t op_brk(bus_state_t pins) {
     switch (this->cycle_index) {
         case 0:
             /* PHI2: Dummy read from PC+1 (BRK has optional signature byte) */
-            pins = this->phi2_dummy_read(pins, static_cast<reg16_t>(REG_PC));
+            pins = this->phi2_dummy_read(pins, REG_PC);
             if (FAM65XX_GET_RDY(pins)) {
                 this->inc(REG_PC);
                 /* Set interrupt type to BRK if no hardware interrupt is active */
@@ -204,7 +204,7 @@ bus_state_t op_brk(bus_state_t pins) {
         case 1:
             /* PHI2: Push PCH to stack */
             if (this->should_complete_write_cycle(pins)) {
-                pins = this->phi2_write(pins, static_cast<reg16_t>(REG_SP), this->get(REG_PCH));
+                pins = this->phi2_write(pins, REG_SP, this->get(REG_PCH));
                 this->dec(REG_S);
                 this->cycle_index++;
             }
@@ -213,7 +213,7 @@ bus_state_t op_brk(bus_state_t pins) {
         case 2:
             /* PHI2: Push PCL to stack */
             if (this->should_complete_write_cycle(pins)) {
-                pins = this->phi2_write(pins, static_cast<reg16_t>(REG_SP), this->get(REG_PCL));
+                pins = this->phi2_write(pins, REG_SP, this->get(REG_PCL));
                 this->dec(REG_S);
                 this->set(REG_DL, this->get(REG_P) | FLAG_B | FLAG_U);
                 this->cycle_index++;
@@ -223,7 +223,7 @@ bus_state_t op_brk(bus_state_t pins) {
         case 3:
             /* PHI2: Push P|B|U to stack (B flag set for BRK) */
             if (this->should_complete_write_cycle(pins)) {
-                pins = this->phi2_write(pins, static_cast<reg16_t>(REG_SP), this->get(REG_DL));
+                pins = this->phi2_write(pins, REG_SP, this->get(REG_DL));
                 this->dec(REG_S);
                 /* Set interrupt disable flag - processor specific behavior */
                 if constexpr (has_nmos_bugs()) {
@@ -241,7 +241,7 @@ bus_state_t op_brk(bus_state_t pins) {
             
         case 4:
             /* PHI2: Read interrupt vector low byte */
-            pins = this->phi2_read(pins, static_cast<reg16_t>(REG_AB), static_cast<reg8_t>(REG_PCL));
+            pins = this->phi2_read(pins, REG_AB, REG_PCL);
             if (FAM65XX_GET_RDY(pins)) {
                 this->cycle_index++;
                 this->inc(REG_AB);
@@ -250,7 +250,7 @@ bus_state_t op_brk(bus_state_t pins) {
             
         case 5:
             /* PHI2: Read interrupt vector high byte */
-            pins = this->phi2_read(pins, static_cast<reg16_t>(REG_AB), static_cast<reg8_t>(REG_PCH));
+            pins = this->phi2_read(pins, REG_AB, REG_PCH);
             if (FAM65XX_GET_RDY(pins)) {
                 /* Clear active interrupt - interrupt processing complete */
                 this->active_interrupt = FAM65XX_INT_NONE;
@@ -266,7 +266,7 @@ bus_state_t op_rti(bus_state_t pins) {
     switch (this->cycle_index) {
         case 0:
             /* PHI2: Dummy read from PC */
-            pins = this->phi2_dummy_read(pins, static_cast<reg16_t>(REG_PC));
+            pins = this->phi2_dummy_read(pins, REG_PC);
             if (FAM65XX_GET_RDY(pins)) {
                 this->cycle_index++;
             }
@@ -274,7 +274,7 @@ bus_state_t op_rti(bus_state_t pins) {
             
         case 1:
             /* PHI2: Dummy read from current stack pointer, then increment SP */
-            pins = this->phi2_dummy_read(pins, static_cast<reg16_t>(REG_SP));
+            pins = this->phi2_dummy_read(pins, REG_SP);
             if (FAM65XX_GET_RDY(pins)) {
                 this->inc(REG_S);
                 this->cycle_index++;
@@ -283,7 +283,7 @@ bus_state_t op_rti(bus_state_t pins) {
             
         case 2:
             /* PHI2: Pull P from stack (clear B, set U) */
-            pins = this->phi2_read(pins, static_cast<reg16_t>(REG_SP), static_cast<reg8_t>(REG_DL));
+            pins = this->phi2_read(pins, REG_SP, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
                 this->set(REG_P, (this->get(REG_DL) & ~FLAG_B) | FLAG_U);
                 this->inc(REG_S);
@@ -293,7 +293,7 @@ bus_state_t op_rti(bus_state_t pins) {
             
         case 3:
             /* PHI2: Pull PCL from stack */
-            pins = this->phi2_read(pins, static_cast<reg16_t>(REG_SP), static_cast<reg8_t>(REG_PCL));
+            pins = this->phi2_read(pins, REG_SP, REG_PCL);
             if (FAM65XX_GET_RDY(pins)) {
                 this->inc(REG_S);
                 this->cycle_index++;
@@ -302,7 +302,7 @@ bus_state_t op_rti(bus_state_t pins) {
             
         case 4:
             /* PHI2: Pull PCH from stack */
-            pins = this->phi2_read(pins, static_cast<reg16_t>(REG_SP), static_cast<reg8_t>(REG_PCH));
+            pins = this->phi2_read(pins, REG_SP, REG_PCH);
             if (FAM65XX_GET_RDY(pins)) {
                 transition_to_fetch();
             }

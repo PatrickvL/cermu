@@ -676,14 +676,14 @@ public:
     inline bus_state_t phi2_read_operand(bus_state_t pins, reg8_t target_reg) {
         if (this->opcode_entry.am_index == to_index(AM::IMM)) {
             // Immediate mode - read from PC directly into target register
-            pins = phi2_read(pins, static_cast<reg16_t>(REG_PC), target_reg);
+            pins = phi2_read(pins, REG_PC, target_reg);
             if (FAM65XX_GET_RDY(pins)) {
                 this->inc(REG_PC);
             }
             return pins;
         }
         // Memory mode - read from target address directly into target register
-        return phi2_read(pins, static_cast<reg16_t>(REG_AB), target_reg);
+        return phi2_read(pins, REG_AB, target_reg);
     }
 
     inline bus_state_t phi2_write(bus_state_t pins, reg16_t addr_reg, uint8_t data) {
@@ -1161,7 +1161,7 @@ private:
     // Instruction fetch and decode
     bus_state_t fetch_opcode(bus_state_t pins) {
         // Read opcode from PC
-        pins = this->phi2_read(pins, static_cast<reg16_t>(REG_PC), static_cast<reg8_t>(REG_IR));
+        pins = this->phi2_read(pins, REG_PC, REG_IR);
         this->set(REG_AB, this->get(REG_PC));
         this->inc(REG_PC);
         // Set SYNC signal for opcode fetch
