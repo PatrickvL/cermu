@@ -773,12 +773,34 @@ public:
     opcode_info_t get_opcode_info(uint8_t opcode) const {
         if constexpr (has_wide_registers()) {
             // 65C816: Dynamic table switching based on emulation mode
-            if (this->get_emulation_mode()) {
+            bool emu_mode = this->get_emulation_mode();
+            
+            // DEBUG: Print emulation mode status for opcode 0xC2
+            if (opcode == 0xC2) {
+                printf("DEBUG: get_opcode_info(0xC2) - emulation_mode=%s\n",
+                       emu_mode ? "TRUE" : "FALSE");
+                fflush(stdout);
+            }
+            
+            if (emu_mode) {
                 // Emulation mode: Use 6502-compatible opcode table
-                return get_65c816_emulation_opcode_table()[opcode];
+                auto info = get_65c816_emulation_opcode_table()[opcode];
+                if (opcode == 0xC2) {
+                    printf("DEBUG: Emulation mode - returning op_index=%d (should be NOP=%d)\n",
+                           info.op_index, to_index(OP::NOP));
+                    printf("DEBUG: About to call operation_handlers[%d]\n", info.op_index);
+                    fflush(stdout);
+                }
+                return info;
             } else {
                 // Native mode: Use full 65C816 opcode table
-                return get_65c816_native_opcode_table()[opcode];
+                auto info = get_65c816_native_opcode_table()[opcode];
+                if (opcode == 0xC2) {
+                    printf("DEBUG: Native mode - returning op_index=%d (should be REP=%d)\n",
+                           info.op_index, to_index(OP::REP));
+                    fflush(stdout);
+                }
+                return info;
             }
         } else {
             // All other processors: Static table (compile-time)
@@ -1122,6 +1144,30 @@ private:
     std::array<InstructionHandler, to_index(AM::COUNT)> addressing_mode_handlers;
     
     // Essential helper functions for template functionality
+    // Dynamic operation handler selection for 65C816 emulation mode compatibility
+    inline InstructionHandler get_dynamic_operation_handler(uint8_t op_index) {
+        if constexpr (has_wide_registers()) {
+            // DEBUG: Check what operation handler we're about to call for 0xC2
+            if (this->get(REG_IR) == 0xC2) {
+                printf("DEBUG: get_dynamic_operation_handler(op_index=%d) - emulation_mode=%s\n",
+                       op_index, this->get_emulation_mode() ? "TRUE" : "FALSE");
+                printf("DEBUG: to_index(OP::NOP)=%d, to_index(OP::REP)=%d\n",
+                       to_index(OP::NOP), to_index(OP::REP));
+                printf("DEBUG: operation_handlers[%d] points to %s handler\n",
+                       op_index, (op_index == to_index(OP::NOP)) ? "NOP" :
+                                 (op_index == to_index(OP::REP)) ? "REP" : "UNKNOWN");
+                fflush(stdout);
+            }
+            
+            // For 65C816: Simply use the static handler table for now
+            // The emulation mode logic should be handled inside op_rep itself
+            return this->operation_handlers[op_index];
+        } else {
+            // Non-65C816 processors: Use standard handler table
+            return this->operation_handlers[op_index];
+        }
+    }
+    
     inline InstructionHandler get_instruction_handler() {
         // For addressing modes that need address calculation, start with addressing mode handler
         if (this->opcode_entry.am_index > to_index(AM::IMM)) {
@@ -1129,7 +1175,13 @@ private:
         }
         
         // For immediate mode and implied operations, go directly to operation
-        return this->operation_handlers[this->opcode_entry.op_index];
+        // 65C816: Dynamic handler selection based on emulation mode
+        if constexpr (has_wide_registers()) {
+            return get_dynamic_operation_handler(this->opcode_entry.op_index);
+        } else {
+            // All other processors: Use static handler table
+            return this->operation_handlers[this->opcode_entry.op_index];
+        }
     }
     
     // Hardware-accurate interrupt detection with priority-order processing

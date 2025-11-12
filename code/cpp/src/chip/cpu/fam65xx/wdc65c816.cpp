@@ -118,27 +118,19 @@ uint16_t wdc65c816_get_y_full(wdc65c816_t* cpu) {
 }
 
 uint16_t wdc65c816_get_d(wdc65c816_t* cpu) {
-    // TODO: Implement direct page register access
-    (void)cpu; // Suppress unused parameter warning
-    return 0x0000; // Placeholder - return default direct page
+    return CPU_CAST(cpu)->get(REG_D);
 }
 
 uint8_t wdc65c816_get_dbr(wdc65c816_t* cpu) {
-    // TODO: Implement data bank register access
-    (void)cpu; // Suppress unused parameter warning
-    return 0x00; // Placeholder - return default data bank
+    return CPU_CAST(cpu)->get(REG_DBR);
 }
 
 uint8_t wdc65c816_get_pbr(wdc65c816_t* cpu) {
-    // TODO: Implement program bank register access
-    (void)cpu; // Suppress unused parameter warning
-    return 0x00; // Placeholder - return default program bank
+    return CPU_CAST(cpu)->get(REG_PBR);
 }
 
 bool wdc65c816_get_emulation_mode(wdc65c816_t* cpu) {
-    // TODO: Implement emulation mode status access
-    (void)cpu; // Suppress unused parameter warning
-    return true; // Placeholder - return emulation mode active
+    return CPU_CAST(cpu)->get_emulation_mode();
 }
 
 // 16-bit register setters (65C816-specific) - PLACEHOLDER IMPLEMENTATIONS
@@ -158,27 +150,19 @@ void wdc65c816_set_y_full(wdc65c816_t* cpu, uint16_t value) {
 }
 
 void wdc65c816_set_d(wdc65c816_t* cpu, uint16_t value) {
-    // TODO: Implement direct page register setting
-    (void)cpu;   // Suppress unused parameter warning
-    (void)value; // Suppress unused parameter warning
+    CPU_CAST(cpu)->set(REG_D, value);
 }
 
 void wdc65c816_set_dbr(wdc65c816_t* cpu, uint8_t value) {
-    // TODO: Implement data bank register setting
-    (void)cpu;   // Suppress unused parameter warning
-    (void)value; // Suppress unused parameter warning
+    CPU_CAST(cpu)->set(REG_DBR, value);
 }
 
 void wdc65c816_set_pbr(wdc65c816_t* cpu, uint8_t value) {
-    // TODO: Implement program bank register setting
-    (void)cpu;   // Suppress unused parameter warning
-    (void)value; // Suppress unused parameter warning
+    CPU_CAST(cpu)->set(REG_PBR, value);
 }
 
 void wdc65c816_set_emulation_mode(wdc65c816_t* cpu, bool emulation) {
-    // TODO: Implement emulation mode setting
-    (void)cpu;       // Suppress unused parameter warning
-    (void)emulation; // Suppress unused parameter warning
+    CPU_CAST(cpu)->set_emulation_mode(emulation);
 }
 
 // WDC65C816 chip descriptor
