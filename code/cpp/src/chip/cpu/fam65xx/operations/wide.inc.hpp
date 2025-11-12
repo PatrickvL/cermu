@@ -6,7 +6,6 @@
  */
 
 #include "inc_lint_prevention.hpp"
-#include <codecvt>
 
 #ifndef FAM65XX_SKIP_IMPLEMENTATION
 

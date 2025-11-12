@@ -245,11 +245,11 @@ typedef enum : uint8_t {
     REG_ABH = 3,       // Address Bus (high byte)
     REG_PCL = 4,       // Program Counter (low byte)
     REG_PCH = 5,       // Program Counter (high byte)
-    REG_A = 6,         // Accumulator (low byte for 65C816)
+    REG_AL = 6,        // Accumulator (low byte for 65C816)
     REG_AH = 7,        // Accumulator high byte (65C816) / unused (8-bit CPUs)
-    REG_X = 8,         // X index (low byte for 65C816)
+    REG_XL = 8,        // X index (low byte for 65C816)
     REG_XH = 9,        // X index high byte (65C816) / unused (8-bit CPUs)
-    REG_Y = 10,        // Y index (low byte for 65C816)
+    REG_YL = 10,       // Y index (low byte for 65C816)
     REG_YH = 11,       // Y index high byte (65C816) / unused (8-bit CPUs)
 #else
     REG_SPH = 0,       // Stack pointer (high byte)
@@ -259,11 +259,11 @@ typedef enum : uint8_t {
     REG_PCH = 4,       // Program Counter (high byte)
     REG_PCL = 5,       // Program Counter (low byte)
     REG_AH = 6,        // Accumulator high byte (65C816) / unused (8-bit CPUs)
-    REG_A = 7,         // Accumulator (low byte for 65C816)
+    REG_AL = 7,        // Accumulator (low byte for 65C816)
     REG_XH = 8,        // X index high byte (65C816) / unused (8-bit CPUs)
-    REG_X = 9,         // X index (low byte for 65C816)
+    REG_XL = 9,        // X index (low byte for 65C816)
     REG_YH = 10,       // Y index high byte (65C816) / unused (8-bit CPUs)
-    REG_Y = 11,        // Y index (low byte for 65C816)
+    REG_YL = 11,       // Y index (low byte for 65C816)
 #endif
 
     // Common registers (continue from 12) - used by both CPU types
@@ -273,20 +273,22 @@ typedef enum : uint8_t {
     
     // Extended registers (15-18) - only used by 65C816
     REG_DBR = 15,      // Data Bank register (65C816 only)
-    REG_PBR = 16,      // Program Bank register (65C816 only)
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-    REG_DLow = 17,     // Direct Page low byte (65C816 only)
-    REG_DH = 18,       // Direct Page high byte (65C816 only)
-#else
+    REG_DLow = 16,     // Direct Page low byte (65C816 only)
     REG_DH = 17,       // Direct Page high byte (65C816 only)
-    REG_DLow = 18,     // Direct Page low byte (65C816 only)
+#else
+    REG_DH = 16,       // Direct Page high byte (65C816 only)
+    REG_DLow = 17,     // Direct Page low byte (65C816 only)
 #endif
+    REG_PBR = 18,      // Program Bank register (65C816 only)
 
     REG_COUNT_16BIT,  // Number of 8-bit registers for 65C816
     REG_COUNT_8BIT = REG_DL + 1,  // Core registers 0-14 (high bytes unused for 8-bit CPUs)
     
-
     // Compatibility mapping
+    REG_A = REG_AL,    // Map legacy A register to AL for compatibility
+    REG_X = REG_XL,    // Map legacy X register to XL for compatibility
+    REG_Y = REG_YL,    // Map legacy Y register to YL for compatibility
     REG_S = REG_SPL    // Map legacy S register to SPL for compatibility
 } reg8_t;
 
@@ -298,10 +300,10 @@ typedef enum : uint8_t {
     
     // 65C816 extended 16-bit registers (only meaningful for wide CPUs)
     // Now properly aligned with endian-aware register pairs
-    REG_A_FULL = REG_A / 2, // Full accumulator (65C816 only)
-    REG_X_FULL = REG_X / 2, // Full X register (65C816 only)
-    REG_Y_FULL = REG_Y / 2, // Full Y register (65C816 only)
-    REG_D = REG_DLow / 2,   // Direct Page register (65C816 only)
+    REG_A_FULL = REG_AL / 2, // Full accumulator (65C816 only)
+    REG_X_FULL = REG_XL / 2, // Full X register (65C816 only)
+    REG_Y_FULL = REG_YL / 2, // Full Y register (65C816 only)
+    REG_D = REG_DLow / 2,    // Direct Page register (65C816 only)
 } reg16_t;
 
 // ============================================================================
