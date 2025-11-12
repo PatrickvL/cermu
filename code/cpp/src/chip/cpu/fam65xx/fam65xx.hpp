@@ -759,10 +759,35 @@ public:
     // OPCODE TABLE GENERATION
     // ========================================================================
     
+    // 65C816 emulation mode opcode table (6502-compatible)
+    static const std::array<opcode_info_t, 256>& get_65c816_emulation_opcode_table() {
+        // Use MOS6502 traits for 6502-compatible behavior in emulation mode
+        static const auto table = generate_opcode_table_for_traits(MOS6502);
+        return table;
+    }
+    
+    // 65C816 native mode opcode table (full 65C816 instruction set)
+    static const std::array<opcode_info_t, 256>& get_65c816_native_opcode_table() {
+        static const auto table = generate_opcode_table<Traits>();
+        return table;
+    }
+    
     // Generate processor-specific opcode table at compile time
-    static constexpr opcode_info_t get_opcode_info(uint8_t opcode) {
-        // This will be specialized per processor type after table generation
-        return generate_opcode_table<Traits>()[opcode];
+    // 65C816 uses dynamic table switching, others use static tables
+    opcode_info_t get_opcode_info(uint8_t opcode) const {
+        if constexpr (has_wide_registers()) {
+            // 65C816: Dynamic table switching based on emulation mode
+            if (this->get_emulation_mode()) {
+                // Emulation mode: Use 6502-compatible opcode table
+                return get_65c816_emulation_opcode_table()[opcode];
+            } else {
+                // Native mode: Use full 65C816 opcode table
+                return get_65c816_native_opcode_table()[opcode];
+            }
+        } else {
+            // All other processors: Static table (compile-time)
+            return generate_opcode_table<Traits>()[opcode];
+        }
     }
     
     // Note: Register accessor functions are now provided by the register mixin

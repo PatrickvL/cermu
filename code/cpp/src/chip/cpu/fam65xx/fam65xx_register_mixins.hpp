@@ -139,8 +139,20 @@ struct wide_registers_mixin_t {
     void init_registers() {
         memset(&reg8, 0, sizeof(reg8));
         emulation_mode = true; // Start in emulation mode
+        
+        // Initialize 65C816-specific registers to 6502-compatible values
+        set(REG_D, 0x0000);    // Direct Page register = $0000 (behaves like Zero Page)
+        set(REG_DBR, 0x00);    // Data Bank Register = $00
+        set(REG_PBR, 0x00);    // Program Bank Register = $00
+        
+        // Initialize stack pointer to page 1 (6502 compatible)
         set(REG_SPL, 0xFF);
-        set(REG_SPH, 0x01); // Initialize stack pointer
+        set(REG_SPH, 0x01);
+        
+        // Initialize P register like a 6502 (only standard 6502 flags)
+        // In emulation mode, M and X flags are implicitly set by the emulation_mode flag
+        // but should not be visible in the P register like a real 6502
+        set(REG_P, FLAG_U | FLAG_I);  // Only unused bit and interrupt disable (6502-compatible)
     }
     
     // === Helper: Check if register is in 16-bit mode ===
@@ -248,8 +260,8 @@ struct wide_registers_mixin_t {
     inline void set_emulation_mode(bool mode) {
         emulation_mode = mode;
         if (mode) {
-            // Force 8-bit modes in emulation mode
-            set(REG_P, get(REG_P) | (FLAG_M | FLAG_X));
+            // In emulation mode, M and X are implicit (always set) but not visible in P register
+            // This matches real 65C816 hardware behavior
             // Clear high bytes of accumulator and index registers
             set(REG_AH, 0);
             set(REG_XH, 0);
