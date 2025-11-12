@@ -322,12 +322,8 @@ public:
     }
     
     bus_state_t reset(bus_state_t pins) {
-        // Reset CPU state
-        this->set(REG_A, 0x00);
-        this->set(REG_X, 0x00);
-        this->set(REG_Y, 0x00);
-        this->set(REG_SP, 0x01FF);
-        this->set(REG_P, FLAG_U | FLAG_I); // Unused bit set, interrupts disabled
+        // Reset registers properly (including emulation mode for 65C816)
+        this->init_registers();
         
         // Reset interrupt state
         this->nmi_prev = 0;
