@@ -51,7 +51,7 @@ bus_state_t op_php(bus_state_t pins) {
         case 1:
             /* PHI2: Write P|B|U to stack with processor-specific RDY handling */
             if (this->should_complete_write_cycle(pins)) {
-                pins = this->phi2_write(pins, REG_SP, REG_DL);
+                pins = this->phi2_write(pins, REG_SP, this->get(REG_DL));
                 this->dec(REG_S);
                 transition_to_fetch();
             }
