@@ -307,57 +307,6 @@ typedef enum : uint8_t {
 } reg16_t;
 
 // ============================================================================
-// REGISTER TYPE WRAPPERS FOR TEMPLATE-DEPENDENT TYPES
-// ============================================================================
-
-namespace fam65xx {
-
-// Simple wrapper types that provide implicit conversion from register constants
-// These allow template-dependent types while maintaining compatibility with REG_* constants
-
-struct narrow_reg8_t {
-    uint8_t value;
-    
-    // Allow implicit conversion from register constants
-    constexpr narrow_reg8_t(uint8_t reg) : value(reg) {}
-    
-    // Allow implicit conversion to uint8_t for array indexing
-    constexpr operator uint8_t() const { return value; }
-};
-
-struct narrow_reg16_t {
-    uint8_t value;
-    
-    // Allow implicit conversion from register constants
-    constexpr narrow_reg16_t(uint8_t reg) : value(reg) {}
-    
-    // Allow implicit conversion to uint8_t for array indexing
-    constexpr operator uint8_t() const { return value; }
-};
-
-struct wide_reg8_t {
-    uint8_t value;
-    
-    // Allow implicit conversion from register constants
-    constexpr wide_reg8_t(uint8_t reg) : value(reg) {}
-    
-    // Allow implicit conversion to uint8_t for array indexing
-    constexpr operator uint8_t() const { return value; }
-};
-
-struct wide_reg16_t {
-    uint8_t value;
-    
-    // Allow implicit conversion from register constants
-    constexpr wide_reg16_t(uint8_t reg) : value(reg) {}
-    
-    // Allow implicit conversion to uint8_t for array indexing
-    constexpr operator uint8_t() const { return value; }
-};
-
-} // namespace fam65xx
-
-// ============================================================================
 // Opcode Encoding
 // ============================================================================
 

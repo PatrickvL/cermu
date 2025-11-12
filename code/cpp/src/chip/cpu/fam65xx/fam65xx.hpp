@@ -114,12 +114,8 @@ public:
     static constexpr bool has_irq_line() { return !Traits.has(CPUCoreFlags::NO_IRQ_LINE); }
     
     // ========================================================================
-    // CPU STATE (merged from fam65xx_cpu_state_t)
+    // CPU STATE
     // ========================================================================
-    
-    // Note: Register layout is now handled by register_base_t mixin
-    // This provides both narrow (8-bit) and wide (65C816) register support
-    // with automatic mode switching based on processor traits and M/X flags.
     
     /* Current execution state */
     opcode_info_t opcode_entry;         /* Cached opcode entry (copied once) */
@@ -1194,9 +1190,7 @@ private:
     static inline bool cpu_has_bus(bus_state_t pins) {
         return FAM65XX_GET_RDY(pins);
     }
-    
-
-    
+        
     // ========================================================================
     // ESSENTIAL TEMPLATE FUNCTIONS (needed for real CPU implementation)
     // ========================================================================
