@@ -16,6 +16,18 @@
 // REP - Reset Processor Status Bits (65C816)
 bus_state_t op_rep(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
+        // Check emulation mode at runtime - REP is illegal in emulation mode
+        if (this->get_emulation_mode()) {
+            // In emulation mode, REP behaves like a 2-byte NOP (like 6502 illegal opcode)
+            // Fetch operand byte and discard it, then continue to next instruction
+            pins = this->phi2_read(pins, REG_PC, REG_DL);
+            if (FAM65XX_GET_RDY(pins)) {
+                this->inc(REG_PC);
+                this->transition_to_fetch();
+            }
+            return pins;
+        }
+        
         switch (this->cycle_index) {
             case 0:
                 // Fetch immediate operand
@@ -39,6 +51,18 @@ bus_state_t op_rep(bus_state_t pins) {
 // SEP - Set Processor Status Bits (65C816)
 bus_state_t op_sep(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
+        // Check emulation mode at runtime - SEP is illegal in emulation mode
+        if (this->get_emulation_mode()) {
+            // In emulation mode, SEP behaves like a 2-byte NOP (like 6502 illegal opcode)
+            // Fetch operand byte and discard it, then continue to next instruction
+            pins = this->phi2_read(pins, REG_PC, REG_DL);
+            if (FAM65XX_GET_RDY(pins)) {
+                this->inc(REG_PC);
+                this->transition_to_fetch();
+            }
+            return pins;
+        }
+        
         switch (this->cycle_index) {
             case 0:
                 // Fetch immediate operand
