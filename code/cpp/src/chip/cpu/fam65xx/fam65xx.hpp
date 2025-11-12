@@ -775,17 +775,18 @@ public:
             // 65C816: Dynamic table switching based on emulation mode
             bool emu_mode = this->get_emulation_mode();
             
-            // DEBUG: Print emulation mode status for opcode 0xC2
-            if (opcode == 0xC2) {
-                printf("DEBUG: get_opcode_info(0xC2) - emulation_mode=%s\n",
-                       emu_mode ? "TRUE" : "FALSE");
-                fflush(stdout);
-            }
-            
             if (emu_mode) {
                 // Emulation mode: Use 6502-compatible opcode table
                 auto info = get_65c816_emulation_opcode_table()[opcode];
-                // Clean: 0xC2 correctly mapped as NOP in emulation mode
+                
+                // CRITICAL FIX: Ensure flags are also 6502-compatible for proper NOP behavior
+                // The issue was that 65C816 REP flags (RMW) were being used in NOP handler
+                // causing RMW operation execution and P register corruption
+                if (opcode == 0xC2) {
+                    // Force 0xC2 to have simple NOP flags, not REP's RMW flags
+                    info.flags = to_index(OF::NONE);
+                }
+                
                 return info;
             } else {
                 // Native mode: Use full 65C816 opcode table
@@ -1259,14 +1260,6 @@ private:
         // Set up first instruction cycle handler
         this->current_handler = this->get_instruction_handler();
         
-        // DEBUG: Print handler selection for opcode 0xC2
-        if (opcode == 0xC2) {
-            printf("DEBUG: fetch_opcode(0xC2) - op_index=%d (NOP=%d, REP=%d)\n",
-                   this->opcode_entry.op_index,
-                   to_index(OP::NOP),
-                   to_index(OP::REP));
-            fflush(stdout);
-        }
         
         return pins;
     }
