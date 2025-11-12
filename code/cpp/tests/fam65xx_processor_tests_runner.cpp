@@ -1040,7 +1040,14 @@ private:
         }
 
         uint16_t pc_addr = test->initial.pc;
-        uint8_t current_opcode = harness->get_memory(pc_addr);
+        
+        // CRITICAL FIX: For 65816, we need to use the full 24-bit address (PBR + PC) to read the opcode
+        uint32_t full_pc_addr = pc_addr;
+        if (test->initial.has_65816_state) {
+            full_pc_addr = (static_cast<uint32_t>(test->initial.pbr) << 16) | pc_addr;
+        }
+        
+        uint8_t current_opcode = harness->get_memory(full_pc_addr);
         
         if (verbose_mode) {
             debug_output << "  [Worker " << worker_id << "] Opcode at PC 0x" << std::hex << test->initial.pc
