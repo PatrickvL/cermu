@@ -19,11 +19,20 @@ bus_state_t op_rep(bus_state_t pins) {
         // Check emulation mode at runtime - REP is illegal in emulation mode
         if (this->get_emulation_mode()) {
             // In emulation mode, REP behaves like a 2-byte NOP (like 6502 illegal opcode)
-            // Fetch operand byte and discard it, then continue to next instruction
-            pins = this->phi2_read(pins, REG_PC, REG_DL);
-            if (FAM65XX_GET_RDY(pins)) {
-                this->inc(REG_PC);
-                this->transition_to_fetch();
+            switch (this->cycle_index) {
+                case 0:
+                    // Fetch operand byte and discard it
+                    pins = this->phi2_read(pins, REG_PC, REG_DL);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        this->inc(REG_PC);
+                        this->cycle_index++;
+                    }
+                    return pins;
+                    
+                case 1:
+                    // Complete 2-byte NOP - do nothing and continue to next instruction
+                    transition_to_fetch();
+                    return pins;
             }
             return pins;
         }
@@ -41,7 +50,7 @@ bus_state_t op_rep(bus_state_t pins) {
             case 1:
                 // Reset specified status bits (clear bits that are 1 in operand)
                 this->set(REG_P, this->get(REG_P) & ~this->get(REG_DL));
-                this->transition_to_fetch();
+                transition_to_fetch();
                 return pins;
         }
     }
@@ -54,11 +63,20 @@ bus_state_t op_sep(bus_state_t pins) {
         // Check emulation mode at runtime - SEP is illegal in emulation mode
         if (this->get_emulation_mode()) {
             // In emulation mode, SEP behaves like a 2-byte NOP (like 6502 illegal opcode)
-            // Fetch operand byte and discard it, then continue to next instruction
-            pins = this->phi2_read(pins, REG_PC, REG_DL);
-            if (FAM65XX_GET_RDY(pins)) {
-                this->inc(REG_PC);
-                this->transition_to_fetch();
+            switch (this->cycle_index) {
+                case 0:
+                    // Fetch operand byte and discard it
+                    pins = this->phi2_read(pins, REG_PC, REG_DL);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        this->inc(REG_PC);
+                        this->cycle_index++;
+                    }
+                    return pins;
+                    
+                case 1:
+                    // Complete 2-byte NOP - do nothing and continue to next instruction
+                    transition_to_fetch();
+                    return pins;
             }
             return pins;
         }
@@ -76,7 +94,7 @@ bus_state_t op_sep(bus_state_t pins) {
             case 1:
                 // Set specified status bits (set bits that are 1 in operand)
                 this->set(REG_P, this->get(REG_P) | this->get(REG_DL));
-                this->transition_to_fetch();
+                transition_to_fetch();
                 return pins;
         }
     }
