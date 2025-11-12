@@ -138,9 +138,10 @@ namespace fam65xx {
       template<bool store_in_register = true>
       inline bus_state_t phi2_read_template(bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) { return pins; }
       inline bus_state_t phi2_read(bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) { return pins; }
-      inline bus_state_t phi2_write(bus_state_t pins, uint16_t addr, uint8_t data) { return pins; }
+      inline bus_state_t phi2_write(bus_state_t pins, reg16_t addr_reg, uint8_t data) { return pins; }
       inline bus_state_t phi2_read_operand(bus_state_t pins, reg8_t target_reg) { return pins; }
       inline bus_state_t phi2_dummy_read(bus_state_t pins, reg16_t addr_reg) { return pins; }
+      inline void load(reg8_t data_reg, bus_state_t pins) {}
       
       // Flag manipulation functions
       inline void set_flag(uint8_t flag_mask) {}
@@ -167,6 +168,11 @@ namespace fam65xx {
       // Additional helper functions that might be missing
       inline uint8_t calc_nz_flags(uint8_t value) const { return 0; }
       inline uint8_t calc_z_flag(uint8_t value) const { return 0; }
+      
+      // 65C816 compatibility functions
+      inline bool get_emulation_mode() const { return true; }
+      inline uint16_t get_x_register() const { return 0; }
+      inline uint16_t get_y_register() const { return 0; }
       
       // Processor trait functions (static constexpr)
       static constexpr bool has_cmos() { return false; }

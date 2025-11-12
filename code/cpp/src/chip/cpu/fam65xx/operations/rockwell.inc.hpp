@@ -44,12 +44,14 @@ bus_state_t op_smb5(bus_state_t pins) { return bit_modify_helper(pins, 0x20, tru
 bus_state_t op_smb6(bus_state_t pins) { return bit_modify_helper(pins, 0x40, true); }
 bus_state_t op_smb7(bus_state_t pins) { return bit_modify_helper(pins, 0x80, true); }
 
-/* Helper function for bit branch operations (BBR/BBS) - simplified for AM_ZPR addressing mode */
+/* Helper function for bit branch operations (BBR/BBS)
+ * ZPR addressing mode has already set up:
+ * - AB register contains zero page address
+ * - DL register contains branch offset
+ * This function reads the value, tests the bit, and branches if needed.
+ */
 bus_state_t bit_branch_helper(bus_state_t pins, uint8_t bit_mask, bool bit_set) {
-    // AM_ZPR addressing mode has already read the zero page address and branch offset
-    // AB register contains the zero page address, DL contains the branch offset
-    
-    // PHI2: Read value from zero page address
+    // PHI2: Read value from zero page address and test bit
     pins = this->phi2_read(pins, REG_AB, REG_ABH);
     if (FAM65XX_GET_RDY(pins)) {
         // PHI1: Test bit and decide whether to branch
@@ -61,7 +63,7 @@ bus_state_t bit_branch_helper(bus_state_t pins, uint8_t bit_mask, bool bit_set) 
             // Branch taken: calculate target address and jump
             this->set(REG_PC, this->get(REG_PC) + signed_offset);
         }
-        transition_to_fetch();
+        this->transition_to_fetch();
     }
     return pins;
 }

@@ -13,11 +13,14 @@
 // JUMP OPERATIONS
 // ============================================================================
 
-/* JMP - Jump */
+/* JMP - Jump
+ * All addressing modes (ABS, IND, ABI) are now handled by proper addressing mode handlers.
+ * This operation handler only performs the jump once addressing is complete.
+ */
 bus_state_t op_jmp(bus_state_t pins) {
-    /* Set PC to target address (addressing mode has already set up AB register) */
+    // Addressing mode has already set up AB register with target address
     this->set(REG_PC, this->get(REG_AB));
-    transition_to_fetch();
+    this->transition_to_fetch();
     return pins;
 }
 

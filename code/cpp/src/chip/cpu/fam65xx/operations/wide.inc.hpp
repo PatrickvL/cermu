@@ -147,7 +147,7 @@ bus_state_t op_phd(bus_state_t pins) {
             case 0:
                 // Push D high byte first
                 if (this->should_complete_write_cycle(pins)) {
-                    uint8_t d_high = this->get(REG_DH);
+                    uint8_t d_high = this->get(REG_DPH);
                     pins = this->phi2_write(pins, REG_SP, d_high);
                     this->dec(REG_S);
                     this->cycle_index++;
@@ -157,7 +157,7 @@ bus_state_t op_phd(bus_state_t pins) {
             case 1:
                 // Push D low byte
                 if (this->should_complete_write_cycle(pins)) {
-                    uint8_t d_low = this->get(REG_DLow);
+                    uint8_t d_low = this->get(REG_DPL);
                     pins = this->phi2_write(pins, REG_SP, d_low);
                     this->dec(REG_S);
                     this->transition_to_fetch();
@@ -224,7 +224,7 @@ bus_state_t op_pld(bus_state_t pins) {
                 
             case 1:
                 // Pull D register low byte first
-                pins = this->phi2_read(pins, REG_SP, REG_DLow);
+                pins = this->phi2_read(pins, REG_SP, REG_DPL);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->inc(REG_S); // Increment for high byte
                     this->cycle_index++;
@@ -233,10 +233,10 @@ bus_state_t op_pld(bus_state_t pins) {
                 
             case 2:
                 // Pull D register high byte
-                pins = this->phi2_read(pins, REG_SP, REG_DH);
+                pins = this->phi2_read(pins, REG_SP, REG_DPH);
                 if (FAM65XX_GET_RDY(pins)) {
                     // Update N and Z flags based on D register
-                    this->update_nz_flags(this->get(REG_DLow)); // Only check low byte for flags
+                    this->update_nz_flags(this->get(REG_DPL)); // Only check low byte for flags
                     this->transition_to_fetch();
                 }
                 return pins;

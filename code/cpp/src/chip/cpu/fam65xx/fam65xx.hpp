@@ -540,7 +540,7 @@ private:
         // CPU has bus control - proceed with normal operation
         uint16_t raw_addr = this->get(addr_reg);
         
-        // Calculate effective address with 65816 emulation mode support
+        // Calculate effective address with automatic PBR/DBR selection and 65816 emulation mode support
         uint32_t addr;
         if constexpr (has_wide_registers()) {
             // 65816: Check emulation mode first (runtime check)
@@ -548,32 +548,36 @@ private:
                 // Emulation mode: behave like 6502 with 16-bit addressing only
                 addr = raw_addr;
             } else {
-                // Native mode: Use 24-bit banking
+                // Native mode: Use 24-bit banking with automatic bank selection
                 // PBR is used for program counter (instruction fetches)
                 // DBR is used for data accesses (operands, stack, etc.)
+                // Direct Page accesses always use Bank $00
                 if (addr_reg == REG_PC) {
                     // Program addresses (instruction fetch): use PBR
                     addr = (static_cast<uint32_t>(this->get(REG_PBR)) << 16) | raw_addr;
+                } else if (addr_reg == REG_AB && raw_addr < 0x0200) {
+                    // Direct Page and Stack (Bank $00): addresses $0000-$01FF always in Bank $00
+                    addr = raw_addr;
                 } else {
-                    // Data addresses (operands, stack, etc.): use DBR
+                    // Data addresses (operands, etc.): use DBR
                     addr = (static_cast<uint32_t>(this->get(REG_DBR)) << 16) | raw_addr;
                 }
             }
         } else {
-            // For 8-bit CPUs: use 16-bit address directly
+            // For 8-bit CPUs: use 16-bit address directly (zero overhead)
             addr = raw_addr;
         }
         
         // Update bus lines if enabled (for test/simulation environments)
         if constexpr (Traits.update_bus_lines()) {
-            // For 65816: Split 24-bit address into 16-bit address + 8-bit bank
+            // For 65816: Split 24-bit address into 16-bit address + 8-bit bank using new macro
             if constexpr (has_wide_registers()) {
                 // Set lower 16 bits in address field
                 pins = FAM65XX_SET_ADDR(pins, addr & 0xFFFF);
-                // Set upper 8 bits in bank field (bits 24-31)
-                pins = (pins & ~0xFF000000ULL) | (((uint64_t)(addr >> 16) & 0xFF) << 24);
+                // Set upper 8 bits in bank field using new macro
+                pins = FAM65XX_SET_BANK(pins, (addr >> 16) & 0xFF);
             } else {
-                // For 8/16-bit CPUs: use address field only
+                // For 8/16-bit CPUs: use address field only (zero overhead)
                 pins = FAM65XX_SET_ADDR(pins, addr & Traits.address_mask());
             }
             
@@ -1395,9 +1399,9 @@ private:
         // Addressing modes (implemented)
         addressing_mode_handlers[to_index(AM::NON)] = nullptr;   // No handler needed (implicit/accumulator/relative)
         addressing_mode_handlers[to_index(AM::IMM)] = nullptr;   // No handler (handled directly in operations)
-        addressing_mode_handlers[to_index(AM::ZER)] = &fam65xx_t::am_zp;
-        addressing_mode_handlers[to_index(AM::ZPX)] = &fam65xx_t::am_zpx;
-        addressing_mode_handlers[to_index(AM::ZPY)] = &fam65xx_t::am_zpy;
+        addressing_mode_handlers[to_index(AM::DP)] = &fam65xx_t::am_zp;   // DP maps to ZP implementation for compatibility
+        addressing_mode_handlers[to_index(AM::DPX)] = &fam65xx_t::am_zpx; // DPX maps to ZPX implementation for compatibility
+        addressing_mode_handlers[to_index(AM::DPY)] = &fam65xx_t::am_zpy; // DPY maps to ZPY implementation for compatibility
         addressing_mode_handlers[to_index(AM::ABS)] = &fam65xx_t::am_abs;
         addressing_mode_handlers[to_index(AM::ABX)] = &fam65xx_t::am_abx;
         addressing_mode_handlers[to_index(AM::ABY)] = &fam65xx_t::am_aby;
@@ -1406,16 +1410,18 @@ private:
         addressing_mode_handlers[to_index(AM::INY)] = &fam65xx_t::am_iny;
         
         // Rockwell 65C02 addressing modes
-        addressing_mode_handlers[to_index(AM::ZPR)] = &fam65xx_t::am_zpr;  // Zero Page Relative (for BBR/BBS)
+        addressing_mode_handlers[to_index(AM::DPI)] = &fam65xx_t::am_zpi;  // Direct Page Indirect
         
-        // 65C02 addressing modes (if implemented)
-        addressing_mode_handlers[to_index(AM::ZPI)] = &fam65xx_t::am_zpi;  // Zero Page Indirect
-
-        // 65C816 addressing modes (if implemented)
-        addressing_mode_handlers[to_index(AM::ABI)] = &fam65xx_t::am_abi;  // Absolute Indexed Indirect
+        // 65C816 addressing modes - now have proper handlers
+        addressing_mode_handlers[to_index(AM::ABI)] = &fam65xx_t::am_abi;  // Absolute Indexed Indirect (abs,X) - JMP/JSR ($nnnn,X)
+        addressing_mode_handlers[to_index(AM::ZPR)] = &fam65xx_t::am_zpr;  // Zero Page Relative - BBR/BBS $nn,$offset
         if constexpr (has_wide_registers()) {
-            addressing_mode_handlers[to_index(AM::SR)] = &fam65xx_t::amr_sr;    // Stack Relative (65C816 only)
-            addressing_mode_handlers[to_index(AM::SRI)] = &fam65xx_t::am_sri;  // Stack Relative Indirect Indexed (65C816 only)
+            addressing_mode_handlers[to_index(AM::SR)] = &fam65xx_t::amr_sr;      // Stack Relative (65C816 only)
+            addressing_mode_handlers[to_index(AM::SRI)] = &fam65xx_t::am_sri;     // Stack Relative Indirect Indexed (65C816 only)
+            addressing_mode_handlers[to_index(AM::DPIL)] = &fam65xx_t::am_dpil;   // Direct Page Indirect Long (65C816 only)
+            addressing_mode_handlers[to_index(AM::DPILY)] = &fam65xx_t::am_dpily; // Direct Page Indirect Long,Y (65C816 only)
+            addressing_mode_handlers[to_index(AM::ABL)] = &fam65xx_t::am_abl;     // Absolute Long (65C816 only)
+            addressing_mode_handlers[to_index(AM::ABLX)] = &fam65xx_t::am_ablx;   // Absolute Long,X (65C816 only)
         }
     }
 };
