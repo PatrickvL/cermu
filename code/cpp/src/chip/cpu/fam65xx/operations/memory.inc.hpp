@@ -160,6 +160,44 @@ bus_state_t op_eor(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_bit(bus_state_t pins) {
+    // 65816 native mode with 16-bit accumulator (M=0) reads TWO bytes
+    if constexpr (has_wide_registers()) {
+        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_M)) {
+            // 65816 native mode, 16-bit accumulator - read 2 bytes
+            switch (this->cycle_index) {
+                case 0:
+                    // Read low byte of operand
+                    pins = phi2_read_operand(pins, REG_DL);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        this->cycle_index++;
+                        // For 65816 native mode, increment address bus with bank handling
+                        this->inc(REG_AB);
+                    }
+                    return pins;
+                    
+                case 1:
+                    // Read high byte of operand (this provides N and V flags)
+                    pins = phi2_read(pins, REG_AB, REG_DH);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        // Perform 16-bit BIT operation
+                        uint16_t operand = (this->get(REG_DH) << 8) | this->get(REG_DL);
+                        uint16_t acc = this->get(REG_A_FULL);
+                        uint16_t result = acc & operand;
+                        
+                        // BIT 16-bit: N and V flags come from HIGH BYTE of operand
+                        uint8_t high_byte = this->get(REG_DH);
+                        update_flag(FLAG_Z, result == 0);          // Z = 1 if (A & operand) == 0
+                        update_flag(FLAG_V, (high_byte & 0x40) != 0); // V = bit 6 of HIGH byte
+                        update_flag(FLAG_N, (high_byte & 0x80) != 0); // N = bit 7 of HIGH byte
+                        
+                        transition_to_fetch();
+                    }
+                    return pins;
+            }
+        }
+    }
+    
+    // Standard 8-bit BIT operation (all other cases)
     pins = phi2_read_operand(pins, REG_DL);
     if (FAM65XX_GET_RDY(pins)) {
         uint8_t operand = this->get(REG_DL);
@@ -172,12 +210,14 @@ bus_state_t op_bit(bus_state_t pins) {
             update_flag(FLAG_Z, result == 0);
         } else {
             // BIT memory: update N, V, and Z flags
-            // N = bit 7 of operand
-            // V = bit 6 of operand
-            // Z = result of A & operand
-            update_flags(FLAG_N | FLAG_V | FLAG_Z,
-                        (operand & (FLAG_N | FLAG_V)) |
-                        calc_z_flag(result));
+            // N = bit 7 of operand (copy bit 7 directly)
+            // V = bit 6 of operand (copy bit 6 directly)
+            // Z = result of A & operand (set if result is zero)
+            
+            // Extract N and V flags from operand in one operation (more efficient)
+            uint8_t flags_from_operand = operand & (FLAG_N | FLAG_V);
+            
+            update_flags(FLAG_N | FLAG_V | FLAG_Z, flags_from_operand | calc_z_flag(result));
         }
 
         // Complete instruction
