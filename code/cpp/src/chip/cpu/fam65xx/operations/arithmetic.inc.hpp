@@ -69,7 +69,16 @@ bus_state_t op_nop(bus_state_t pins) {
     }
     
     // WDC65C02 neutralized illegal opcodes preserve original addressing timing
+    // IMPORTANT: 65C816 in emulation mode should NEVER reach this code path
     if constexpr (this->has_cmos()) {
+        // Additional safety check: Verify we're not in 65C816 emulation mode
+        if constexpr (this->has_wide_registers()) {
+            if (this->get_emulation_mode()) {
+                // Safety: Force standard handling even if we somehow got here
+                goto standard_nop_handling;
+            }
+        }
+        
         if (this->opcode_entry.flags & to_index(OF::RMW)) {
             // RMW mode NOP: Perform full read-modify-write cycle but don't modify the value
             // This preserves the bus cycle timing for WDC65C02 neutralized illegal opcodes
