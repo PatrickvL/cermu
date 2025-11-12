@@ -54,15 +54,23 @@ bus_state_t op_adc(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_nop(bus_state_t pins) {
+    // CRITICAL FIX: 65C816 emulation mode compatibility
+    // In emulation mode, 65C816 should behave exactly like 6502, not CMOS
+    // This means NO RMW operations should be performed for NOP in emulation mode
+    
+    // For 65C816: Skip ALL CMOS behavior when in emulation mode
+    if constexpr (this->has_wide_registers()) {
+        if (this->get_emulation_mode()) {
+            // In emulation mode: behave like pure NMOS 6502
+            // Skip ALL CMOS RMW logic entirely - go directly to standard NOP handling
+            // This ensures 100% 6502 compatibility
+            goto standard_nop_handling;
+        }
+    }
+    
     // WDC65C02 neutralized illegal opcodes preserve original addressing timing
     if constexpr (this->has_cmos()) {
-        // Special case: 65C816 in emulation mode should behave like 6502, not CMOS
-        bool skip_rmw_check = false;
-        if constexpr (this->has_wide_registers()) {
-            skip_rmw_check = this->get_emulation_mode();
-        }
-        
-        if (!skip_rmw_check && (this->opcode_entry.flags & to_index(OF::RMW))) {
+        if (this->opcode_entry.flags & to_index(OF::RMW)) {
             // RMW mode NOP: Perform full read-modify-write cycle but don't modify the value
             // This preserves the bus cycle timing for WDC65C02 neutralized illegal opcodes
             return this->rmw_operation_helper(pins, [this](uint8_t& value) {
@@ -73,6 +81,8 @@ bus_state_t op_nop(bus_state_t pins) {
             });
         }
     }
+    
+standard_nop_handling:
     
     // Regular NOP handling for non-RMW modes
     switch (this->opcode_entry.am_index) {
