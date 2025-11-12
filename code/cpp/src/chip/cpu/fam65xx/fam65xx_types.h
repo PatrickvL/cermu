@@ -234,7 +234,8 @@ enum class Operation : uint8_t {
 // ============================================================================
 
 // 8-bit register constants - optimized layout with no gaps for 8-bit CPUs
-enum : uint8_t {
+// Type-safe enum typedefs for register access
+typedef enum : uint8_t {
     // Core registers (0-11) - used by both 8-bit and 16-bit CPUs
     // 16-bit aligned register pairs (endian-aware) for memory addresses
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
@@ -287,10 +288,10 @@ enum : uint8_t {
 
     // Compatibility mapping
     REG_S = REG_SPL    // Map legacy S register to SPL for compatibility
-};
+} reg8_t;
 
 // 16-bit register constants - these work for both narrow and wide CPUs
-enum : uint8_t {
+typedef enum : uint8_t {
     REG_SP = REG_SPL / 2,   // Stack pointer (16-bit)
     REG_AB = REG_ABL / 2,   // Address Bus (16-bit)
     REG_PC = REG_PCL / 2,   // Program Counter (16-bit)
@@ -301,7 +302,7 @@ enum : uint8_t {
     REG_X_FULL = REG_X / 2, // Full X register (65C816 only)
     REG_Y_FULL = REG_Y / 2, // Full Y register (65C816 only)
     REG_D = REG_DLow / 2,   // Direct Page register (65C816 only)
-};
+} reg16_t;
 
 // ============================================================================
 // REGISTER TYPE WRAPPERS FOR TEMPLATE-DEPENDENT TYPES

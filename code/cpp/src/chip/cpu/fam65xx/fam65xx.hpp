@@ -95,13 +95,8 @@ class fam65xx_t :
     public register_base_t<Traits>
 {
 public:
-    // Expose register types from the register mixin for template-dependent name lookup
-    using reg8_t = typename register_base_t<Traits>::reg8_t;
-    using reg16_t = typename register_base_t<Traits>::reg16_t;
+    // Data type alias from the register mixin
     using data_t = typename register_base_t<Traits>::data_t;
-    
-    // Note: Register constants are now globally available via fam65xx_register_constants_global.hpp
-    // No using declarations needed - constants are accessible directly as fam65xx::REG_*
     
     // CPUTraits-based feature detection helpers for operations files
     static constexpr bool has_illegal_opcodes() { return Traits.has(CPUCoreFlags::ILLEGAL_OPCODES); }
@@ -292,7 +287,7 @@ public:
         /* Initialize register layout:
         * SP = 0x01FF (stack starts at top of page 1)
         */
-        this->set16(REG_SP / 2, 0x01FF); /* Stack pointer (page 1, starts at 0xFF) */
+        this->set(REG_SP, 0x01FF); /* Stack pointer (page 1, starts at 0xFF) */
 
         // Return initial pin state
         bus_state_t pins = 0;
@@ -335,7 +330,7 @@ public:
         this->set(REG_A, 0x00);
         this->set(REG_X, 0x00);
         this->set(REG_Y, 0x00);
-        this->set16(REG_SP / 2, 0x01FF);
+        this->set(REG_SP, 0x01FF);
         this->set(REG_P, FLAG_U | FLAG_I); // Unused bit set, interrupts disabled
         
         // Reset interrupt state
