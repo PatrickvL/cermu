@@ -25,17 +25,18 @@ NC='\033[0m' # No Color
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TEST_RUNNER="./tests/fam65xx_processor_tests_runner"
+TEST_RUNNER="./fam65xx_processor_tests_runner"
 PROCESSOR_TESTS_DIR="tests/processor_tests"
 
 # Supported processors with their test directories
-declare -a PROCESSORS=("6502" "nes6502" "wdc65c02" "rockwell65c02" "synertek65c02")
+declare -a PROCESSORS=("6502" "nes6502" "wdc65c02" "rockwell65c02" "synertek65c02" "65816")
 declare -A PROCESSOR_NAMES=(
     ["6502"]="MOS 6502"
-    ["nes6502"]="NES 6502 (Ricoh 2A03/2A07)" 
+    ["nes6502"]="NES 6502 (Ricoh 2A03/2A07)"
     ["wdc65c02"]="WDC 65C02 (W65C02S)"
     ["rockwell65c02"]="Rockwell 65C02"
     ["synertek65c02"]="Synertek 65C02"
+    ["65816"]="WDC 65C816 (Emulation Mode)"
 )
 
 # Statistics tracking
@@ -92,7 +93,7 @@ build_test_runner() {
         -I src/core \
         -I tests \
         tests/fam65xx_processor_tests_runner.cpp \
-        tests/json_parser.c \
+        tests/json_parser.cpp \
         -o fam65xx_processor_tests_runner
     
     if [[ $? -eq 0 ]]; then
@@ -125,15 +126,26 @@ get_opcodes() {
     local processor=$1
     local test_dir="$PROCESSOR_TESTS_DIR/$processor/v1"
     
+    # Special case for 65C816: use emulation-only tests
+    if [[ "$processor" == "65816" ]]; then
+        test_dir="$PROCESSOR_TESTS_DIR/$processor/v1_emulation_only"
+    fi
+    
     if [[ ! -d "$test_dir" ]]; then
         log_error "Test directory not found: $test_dir"
         return 1
     fi
     
-    # List all JSON files and extract opcode numbers (remove .json extension)
-    find "$test_dir" -name "*.json" -type f | \
-        sed 's/.*\/\([^/]*\)\.json$/\1/' | \
-        sort -n
+    # List all JSON files and extract opcode numbers (remove .json extension and .e extension for 65816)
+    if [[ "$processor" == "65816" ]]; then
+        find "$test_dir" -name "*.e.json" -type f | \
+            sed 's/.*\/\([^/]*\)\.e\.json$/\1/' | \
+            sort -n
+    else
+        find "$test_dir" -name "*.json" -type f | \
+            sed 's/.*\/\([^/]*\)\.json$/\1/' | \
+            sort -n
+    fi
 }
 
 # Test single opcode across all processors
@@ -150,6 +162,11 @@ test_single_opcode() {
     
     for processor in "${PROCESSORS[@]}"; do
         local test_file="$PROCESSOR_TESTS_DIR/$processor/v1/$opcode_lower.json"
+        
+        # Special case for 65C816: use emulation-only tests
+        if [[ "$processor" == "65816" ]]; then
+            test_file="$PROCESSOR_TESTS_DIR/$processor/v1_emulation_only/$opcode_lower.e.json"
+        fi
         
         if [[ ! -f "$test_file" ]]; then
             log_warning "${PROCESSOR_NAMES[$processor]}: Opcode 0x$opcode_hex not available"
@@ -217,6 +234,11 @@ test_single_processor() {
         local opcode_lower=$(echo "$opcode" | tr '[:upper:]' '[:lower:]')
         local test_file="$test_dir/$opcode_lower.json"
         local opcode_hex=$(printf '%02X' $((16#$opcode)))
+        
+        # Special case for 65C816: use emulation-only tests
+        if [[ "$processor" == "65816" ]]; then
+            test_file="$test_dir/$opcode_lower.e.json"
+        fi
         
         if [[ "$quick_mode" != "true" ]]; then
             log_info "Testing opcode 0x$opcode_hex..."
