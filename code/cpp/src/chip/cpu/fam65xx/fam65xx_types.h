@@ -34,6 +34,10 @@
 #define FAM65XX_GET_DATA(p) BUS_GET_DATA(p)
 #define FAM65XX_SET_DATA(p, d) BUS_SET_DATA(p, d)
 
+// Bank byte handling for 65C816 (uses upper 8 bits of 32-bit bus state)
+#define FAM65XX_GET_BANK(p) (((p) >> 24) & 0xFF)
+#define FAM65XX_SET_BANK(p, bank) (((p) & ~0xFF000000ULL) | (((uint64_t)(bank) & 0xFF) << 24))
+
 // CPU pin access using project definitions
 #define FAM65XX_GET_RDY(pins)      ((pins) & FAM65XX_RDY)
 #define FAM65XX_SET_SYNC(pins, v)  ((pins) = ((v) ? ((pins) | FAM65XX_SYNC) : ((pins) & ~FAM65XX_SYNC)))
@@ -163,29 +167,53 @@ inline constexpr auto FAM65XX_INT_RESET = InterruptType::RESET;
 //     operate directly on registers without memory access
 
 enum class AddressingMode : uint8_t {
-    NON = 0, /* No addressing handler (Implicit/Accumulator/Relative) */
-    IMM,     /* Immediate - operand is next byte */
-    ZER,     /* Zero Page - operand at $00nn */
-    ZPX,     /* Zero Page,X - operand at ($00nn + X) & 0xFF */
-    ZPY,     /* Zero Page,Y - operand at ($00nn + Y) & 0xFF */
-    ABS,     /* Absolute - operand at $nnnn */
-    ABX,     /* Absolute,X - operand at $nnnn + X */
-    ABY,     /* Absolute,Y - operand at $nnnn + Y */
-    IND,     /* Indirect - jump target at ($nnnn) */
-    INX,     /* Indexed Indirect - operand at (($nn + X) & 0xFF) */
-    INY,     /* Indirect Indexed - operand at ($nn) + Y */
-    // Enhanced addressing modes for all family members
-    ZPR,     /* Zero Page Relative for BBR/BBS - nn,label - Rockwell */
-    ZPI,     /* Zero Page Indirect - ($nn) - 65C02 */
-    ABI,     /* Absolute Indexed Indirect - ($nnnn,X) - 65C816 */
-    SR,      /* Stack Relative - n,S - 65C816 */
-    SRI,     /* Stack Relative Indirect Indexed - (n,S),Y - 65C816 */
-    COUNT,
+    // ========================================================================
+    // Core addressing modes (0-19) - fits in 5-bit am_index
+    // ========================================================================
     
-    // Legacy aliases for documentation/clarity (all map to NON)
-    IMP = NON, /* Implied/Implicit - no operand */
-    ACC = NON, /* Accumulator - operate on A register */
-    REL = NON  /* Relative - branch offset */
+    // Universal modes - supported by all 65xx family processors
+    NON = 0, /* No addressing handler (Implicit/Accumulator/Relative/Special) - All CPUs */
+    IMM,     /* Immediate - operand is next byte - All CPUs */
+    DP,      /* Direct Page (65C816) / Zero Page (6502/6510/65C02) - All CPUs */
+    DPX,     /* Direct Page,X (65C816) / Zero Page,X (6502/6510/65C02) - All CPUs */
+    DPY,     /* Direct Page,Y (65C816) / Zero Page,Y (6502/6510/65C02) - All CPUs */
+    ABS,     /* Absolute - operand at $nnnn - All CPUs */
+    ABX,     /* Absolute,X - operand at $nnnn + X - All CPUs */
+    ABY,     /* Absolute,Y - operand at $nnnn + Y - All CPUs */
+    INX,     /* Indexed Indirect (zp,X) - 6502/6510 / (dp,X) - 65C02/65C816 */
+    INY,     /* Indirect Indexed (zp),Y - 6502/6510 / (dp),Y - 65C02/65C816 */
+    
+    // CMOS enhancements - 65C02 and 65C816 only
+    DPI,     /* Direct Page Indirect (dp) - 65C02/65C816 only */
+    
+    // Previously NON-aliased modes - now have dedicated handlers
+    IND,     /* Indirect (abs) - JMP only - 6502/6510/65C02/65C816 */
+    ABI,     /* Absolute Indexed Indirect (abs,X) - JMP/JSR - 65C816 only */
+    ZPR,     /* Zero Page Relative zp,rel - BBR/BBS - Rockwell 65C02 only */
+    
+    // 65C816 exclusive addressing modes
+    SR,      /* Stack Relative n,S - 65C816 only */
+    SRI,     /* Stack Relative Indirect Indexed (n,S),Y - 65C816 only */
+    DPIL,    /* Direct Page Indirect Long [dp] - 65C816 only */
+    DPILY,   /* Direct Page Indirect Long,Y [dp],Y - 65C816 only */
+    ABL,     /* Absolute Long $nnnnnn - 65C816 only */
+    ABLX,    /* Absolute Long,X $nnnnnn,X - 65C816 only */
+    COUNT,   /* Total count = 20, fits in 5-bit am_index */
+    
+    // ========================================================================
+    // Legacy aliases for documentation/clarity
+    // ========================================================================
+    IMP = NON,     /* Implied/Implicit - no operand - All CPUs */
+    ACC = NON,     /* Accumulator - operate on A register - All CPUs */
+    REL = NON,     /* Relative - branch offset - All CPUs */
+    
+    // ========================================================================
+    // Legacy aliases for backward compatibility
+    // ========================================================================
+    ZER = DP,      /* Zero Page -> Direct Page */
+    ZPX = DPX,     /* Zero Page,X -> Direct Page,X */
+    ZPY = DPY,     /* Zero Page,Y -> Direct Page,Y */
+    ZPI = DPI      /* Zero Page Indirect -> Direct Page Indirect */
 };
 
 
@@ -269,16 +297,16 @@ typedef enum : uint8_t {
     // Common registers (continue from 12) - used by both CPU types
     REG_P = 12,        // Processor status
     REG_IR = 13,       // Instruction Register (current opcode)
-    REG_DL = 14,       // Data latch (internal)
+    REG_DL = 14,       // Data Latch (internal)
     
     // Extended registers (15-18) - only used by 65C816
     REG_DBR = 15,      // Data Bank register (65C816 only)
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-    REG_DLow = 16,     // Direct Page low byte (65C816 only)
-    REG_DH = 17,       // Direct Page high byte (65C816 only)
+    REG_DPL = 16,      // Direct Page low byte (65C816 only)
+    REG_DPH = 17,      // Direct Page high byte (65C816 only)
 #else
-    REG_DH = 16,       // Direct Page high byte (65C816 only)
-    REG_DLow = 17,     // Direct Page low byte (65C816 only)
+    REG_DPH = 16,      // Direct Page high byte (65C816 only)
+    REG_DPL = 17,      // Direct Page low byte (65C816 only)
 #endif
     REG_PBR = 18,      // Program Bank register (65C816 only)
 
@@ -303,7 +331,7 @@ typedef enum : uint8_t {
     REG_A_FULL = REG_AL / 2, // Full accumulator (65C816 only)
     REG_X_FULL = REG_XL / 2, // Full X register (65C816 only)
     REG_Y_FULL = REG_YL / 2, // Full Y register (65C816 only)
-    REG_D = REG_DLow / 2,    // Direct Page register (65C816 only)
+    REG_D = REG_DPL / 2,     // Direct Page register (65C816 only)
 } reg16_t;
 
 // ============================================================================
@@ -314,8 +342,8 @@ enum class OpcodeFlags : uint8_t {
     NONE          = 0x0,  // No special flags
     ILLEGAL_STORE = 0x1,  // Illegal store quirk - uses wrong address on page cross
     SKIP_PAGE     = 0x2,  // Can skip page cross penalty cycle (read operations only)
-    RMW           = 0x4,  // Read-Modify-Write operation
-    RESERVED      = 0x8   // Reserved for future use
+    RMW           = 0x4   // Read-Modify-Write operation
+    // RESERVED flag removed to free up 1 bit for am_index expansion
 };
 
 // ============================================================================
@@ -331,8 +359,8 @@ constexpr inline auto to_index(E e) noexcept {
 
 struct opcode_info_t {
     uint16_t op_index : 8;  // Operation index (0-255, bits 0-7) [type Operation]
-    uint16_t am_index : 4;  // Addressing mode index (0-15, bits 8-11) [type AddressingMode]
-    uint16_t flags    : 4;  // Opcode flags (bits 12-15) [type OpcodeFlags]
+    uint16_t am_index : 5;  // Addressing mode index (0-31, bits 8-12) [type AddressingMode]
+    uint16_t flags    : 3;  // Opcode flags (bits 13-15) [type OpcodeFlags]
     
     // Constructor to handle scoped enum conversion
     constexpr opcode_info_t(Operation op, AddressingMode am, OpcodeFlags fl)

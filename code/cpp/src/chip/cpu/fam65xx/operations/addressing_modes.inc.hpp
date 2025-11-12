@@ -531,44 +531,328 @@ bus_state_t am_dpx(bus_state_t pins) {
     }
 }
 
-// Long addressing: $nnnnnn (65C816)
-bus_state_t addr_long(bus_state_t pins) {
+// Absolute Long addressing: $nnnnnn (65C816)
+bus_state_t am_abl(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
-        // 24-bit addressing using bank registers
-        return pins; // Placeholder
-    } else {
-        return pins; // Should not be called
+        switch (this->cycle_index) {
+            case 0:
+                // PHI2: Read low byte from PC
+                pins = this->phi2_read(pins, REG_PC, REG_ABL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                // PHI2: Read middle byte from PC
+                pins = this->phi2_read(pins, REG_PC, REG_ABH);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 2:
+                // PHI2: Read bank byte from PC
+                pins = this->phi2_read(pins, REG_PC, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    // Bank byte is handled by memory system
+                    this->transition_to_operation();
+                }
+                return pins;
+        }
     }
+    return pins; // Should not be called on 8-bit processors
 }
 
-// Long,X addressing: $nnnnnn,X (65C816)
-bus_state_t addr_long_x(bus_state_t pins) {
+// Absolute Long,X addressing: $nnnnnn,X (65C816)
+bus_state_t am_ablx(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
-        // 24-bit addressing with X indexing
-        return pins; // Placeholder
-    } else {
-        return pins; // Should not be called
+        switch (this->cycle_index) {
+            case 0:
+                // PHI2: Read low byte from PC
+                pins = this->phi2_read(pins, REG_PC, REG_ABL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                // PHI2: Read middle byte from PC
+                pins = this->phi2_read(pins, REG_PC, REG_ABH);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 2:
+                // PHI2: Read bank byte from PC
+                pins = this->phi2_read(pins, REG_PC, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    
+                    // Add X register to 16-bit address (wraps within bank)
+                    uint16_t base_addr = this->get(REG_AB);
+                    uint16_t x_val = this->get_x_register();
+                    uint16_t final_addr = base_addr + x_val;
+                    
+                    this->set(REG_AB, final_addr);
+                    this->transition_to_operation();
+                }
+                return pins;
+        }
     }
+    return pins; // Should not be called on 8-bit processors
+}
+
+// Direct Page Indirect Long addressing: [dp] (65C816)
+bus_state_t am_dpil(bus_state_t pins) {
+    if constexpr (has_wide_registers()) {
+        switch (this->cycle_index) {
+            case 0:
+                // PHI2: Read Direct Page offset from PC
+                pins = this->phi2_read(pins, REG_PC, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    
+                    // Calculate Direct Page pointer address (always in Bank $00)
+                    uint16_t dp_addr = this->get(REG_D) + this->get(REG_DL);
+                    this->set(REG_ABL, dp_addr & 0xFF);
+                    this->set(REG_ABH, (dp_addr >> 8) & 0xFF);
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                // PHI2: Read low byte of target address from Direct Page
+                pins = this->phi2_read(pins, REG_AB, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    uint16_t next_addr = (this->get(REG_AB) + 1) & 0xFFFF;
+                    this->set(REG_AB, next_addr);
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 2:
+                // PHI2: Read middle byte of target address
+                pins = this->phi2_read(pins, REG_AB, REG_ABL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    uint16_t next_addr = (this->get(REG_AB) + 1) & 0xFFFF;
+                    this->set(REG_AB, next_addr);
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 3:
+                // PHI2: Read bank byte of target address
+                pins = this->phi2_read(pins, REG_AB, REG_ABH);
+                if (FAM65XX_GET_RDY(pins)) {
+                    // Assemble final 24-bit address
+                    uint8_t low_byte = this->get(REG_DL);
+                    uint8_t mid_byte = this->get(REG_ABL);
+                    uint8_t bank_byte = this->get(REG_ABH);
+                    
+                    this->set(REG_ABL, low_byte);
+                    this->set(REG_ABH, mid_byte);
+                    this->set(REG_DL, bank_byte); // Bank byte for memory system
+                    
+                    // Check for Direct Page alignment penalty
+                    if ((this->get(REG_D) & 0xFF) != 0x00) {
+                        this->cycle_index++;
+                    } else {
+                        this->transition_to_operation();
+                    }
+                }
+                return pins;
+                
+            case 4:
+                // PHI2: Direct Page penalty cycle
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->transition_to_operation();
+                }
+                return pins;
+        }
+    }
+    return pins; // Should not be called on 8-bit processors
+}
+
+// Direct Page Indirect Long,Y addressing: [dp],Y (65C816)
+bus_state_t am_dpily(bus_state_t pins) {
+    if constexpr (has_wide_registers()) {
+        switch (this->cycle_index) {
+            case 0:
+                // PHI2: Read Direct Page offset from PC
+                pins = this->phi2_read(pins, REG_PC, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    
+                    // Calculate Direct Page pointer address (always in Bank $00)
+                    uint16_t dp_addr = this->get(REG_D) + this->get(REG_DL);
+                    this->set(REG_ABL, dp_addr & 0xFF);
+                    this->set(REG_ABH, (dp_addr >> 8) & 0xFF);
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                // PHI2: Read low byte of base address from Direct Page
+                pins = this->phi2_read(pins, REG_AB, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    uint16_t next_addr = (this->get(REG_AB) + 1) & 0xFFFF;
+                    this->set(REG_AB, next_addr);
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 2:
+                // PHI2: Read middle byte of base address
+                pins = this->phi2_read(pins, REG_AB, REG_ABL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    uint16_t next_addr = (this->get(REG_AB) + 1) & 0xFFFF;
+                    this->set(REG_AB, next_addr);
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 3:
+                // PHI2: Read bank byte of base address
+                pins = this->phi2_read(pins, REG_AB, REG_ABH);
+                if (FAM65XX_GET_RDY(pins)) {
+                    // Assemble base address and add Y
+                    uint8_t low_byte = this->get(REG_DL);
+                    uint8_t mid_byte = this->get(REG_ABL);
+                    uint8_t bank_byte = this->get(REG_ABH);
+                    
+                    uint16_t base_addr = (mid_byte << 8) | low_byte;
+                    uint16_t y_val = this->get_y_register();
+                    uint16_t final_addr = base_addr + y_val;
+                    
+                    // Set final address (bank from pointer, 16-bit offset + Y wraps within bank)
+                    this->set(REG_ABL, final_addr & 0xFF);
+                    this->set(REG_ABH, (final_addr >> 8) & 0xFF);
+                    this->set(REG_DL, bank_byte); // Bank byte for memory system
+                    
+                    // Check for Direct Page alignment penalty
+                    if ((this->get(REG_D) & 0xFF) != 0x00) {
+                        this->cycle_index++;
+                    } else {
+                        this->transition_to_operation();
+                    }
+                }
+                return pins;
+                
+            case 4:
+                // PHI2: Direct Page penalty cycle
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->transition_to_operation();
+                }
+                return pins;
+        }
+    }
+    return pins; // Should not be called on 8-bit processors
 }
 
 // Stack Relative addressing: sr,S (65C816)
-bus_state_t amr_sr(bus_state_t pins) {
+bus_state_t am_sr(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
-        // Stack relative addressing
-        return pins; // Placeholder
-    } else {
-        return pins; // Should not be called
+        switch (this->cycle_index) {
+            case 0:
+                // PHI2: Read stack offset from PC
+                pins = this->phi2_read(pins, REG_PC, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                // PHI2: Dummy internal operation cycle
+                if (FAM65XX_GET_RDY(pins)) {
+                    // Calculate stack address: $00:(S + offset)
+                    uint16_t stack_addr = this->get(REG_SP) + this->get(REG_DL);
+                    this->set(REG_ABL, stack_addr & 0xFF);
+                    this->set(REG_ABH, (stack_addr >> 8) & 0xFF);
+                    
+                    this->transition_to_operation();
+                }
+                return pins;
+        }
     }
+    return pins; // Should not be called on 8-bit processors
 }
 
 // Stack Relative Indirect Indexed: (sr,S),Y (65C816)
-bus_state_t am_sri(bus_state_t pins) {
+bus_state_t am_sriy(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
-        // Complex 65C816 addressing mode
-        return pins; // Placeholder
-    } else {
-        return pins; // Should not be called
+        switch (this->cycle_index) {
+            case 0:
+                // PHI2: Read stack offset from PC
+                pins = this->phi2_read(pins, REG_PC, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                // PHI2: Dummy internal operation cycle
+                if (FAM65XX_GET_RDY(pins)) {
+                    // Calculate stack pointer address: $00:(S + offset)
+                    uint16_t stack_addr = this->get(REG_SP) + this->get(REG_DL);
+                    this->set(REG_ABL, stack_addr & 0xFF);
+                    this->set(REG_ABH, (stack_addr >> 8) & 0xFF);
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 2:
+                // PHI2: Read low byte of pointer from stack
+                pins = this->phi2_read(pins, REG_AB, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    uint16_t next_addr = (this->get(REG_AB) + 1) & 0xFFFF;
+                    this->set(REG_AB, next_addr);
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 3:
+                // PHI2: Read high byte of pointer and add Y
+                pins = this->phi2_read(pins, REG_AB, REG_ABH);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->set(REG_ABL, this->get(REG_DL)); // Low byte from cycle 2
+                    
+                    uint16_t base_addr = this->get(REG_AB);
+                    uint16_t y_val = this->get_y_register();
+                    uint16_t final_addr = base_addr + y_val;
+                    
+                    this->set(REG_AB, final_addr);
+                    this->transition_to_operation();
+                }
+                return pins;
+        }
     }
+    return pins; // Should not be called on 8-bit processors
+}
+
+// Legacy alias functions for compatibility
+bus_state_t addr_long(bus_state_t pins) {
+    return am_abl(pins);
+}
+
+bus_state_t addr_long_x(bus_state_t pins) {
+    return am_ablx(pins);
+}
+
+bus_state_t amr_sr(bus_state_t pins) {
+    return am_sr(pins);
+}
+
+bus_state_t am_sri(bus_state_t pins) {
+    return am_sriy(pins);
 }
 
 // Zero Page Relative Addressing: For BBR/BBS instructions ($nn,$offset)
@@ -591,7 +875,7 @@ bus_state_t am_zpr(bus_state_t pins) {
                 pins = this->phi2_read(pins, REG_PC, REG_DL);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->inc(REG_PC);
-                    // ZP address is in ZP register, branch offset is in DL
+                    // ZP address is in AB register, branch offset is in DL
                     this->transition_to_operation();
                 }
                 return pins;

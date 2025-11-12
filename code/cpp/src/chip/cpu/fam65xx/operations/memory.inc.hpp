@@ -177,15 +177,15 @@ bus_state_t op_bit(bus_state_t pins) {
                     
                 case 1:
                     // Read high byte of operand (this provides N and V flags)
-                    pins = phi2_read(pins, REG_AB, REG_DH);
+                    pins = phi2_read(pins, REG_AB, REG_DL);
                     if (FAM65XX_GET_RDY(pins)) {
                         // Perform 16-bit BIT operation
-                        uint16_t operand = (this->get(REG_DH) << 8) | this->get(REG_DL);
+                        uint16_t operand = (this->get(REG_ABH) << 8) | this->get(REG_DL);
                         uint16_t acc = this->get(REG_A_FULL);
                         uint16_t result = acc & operand;
                         
                         // BIT 16-bit: N and V flags come from HIGH BYTE of operand
-                        uint8_t high_byte = this->get(REG_DH);
+                        uint8_t high_byte = this->get(REG_ABH);
                         update_flag(FLAG_Z, result == 0);          // Z = 1 if (A & operand) == 0
                         update_flag(FLAG_V, (high_byte & 0x40) != 0); // V = bit 6 of HIGH byte
                         update_flag(FLAG_N, (high_byte & 0x80) != 0); // N = bit 7 of HIGH byte
