@@ -268,6 +268,9 @@ struct wide_registers_mixin_t {
             set(REG_YH, 0);
             // Force stack pointer to page 1
             set(REG_SPH, 0x01);
+            // Ensure M and X flags are NOT visible in P register in emulation mode
+            // In emulation mode, these flags are implicit (always set) but should not appear in P
+            set(REG_P, get(REG_P) & ~(FLAG_M | FLAG_X));
         }
     }
     
