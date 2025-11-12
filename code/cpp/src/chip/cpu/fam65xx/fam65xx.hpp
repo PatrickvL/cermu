@@ -540,16 +540,22 @@ private:
         // CPU has bus control - proceed with normal operation
         uint16_t raw_addr = this->get(addr_reg);
         
-        // Calculate effective 24-bit address for 65816
+        // Calculate effective address with 65816 emulation mode support
         uint32_t addr;
         if constexpr (has_wide_registers()) {
-            // For 65816: Use appropriate banking based on address type
-            if (addr_reg == REG_PC || addr_reg == REG_AB) {
-                // Program addresses (instruction fetch): use PBR
-                addr = (static_cast<uint32_t>(this->get(REG_PBR)) << 16) | raw_addr;
+            // 65816: Check emulation mode first (runtime check)
+            if (this->get_emulation_mode()) {
+                // Emulation mode: behave like 6502 with 16-bit addressing only
+                addr = raw_addr;
             } else {
-                // Data addresses (operands, stack, etc.): use DBR
-                addr = (static_cast<uint32_t>(this->get(REG_DBR)) << 16) | raw_addr;
+                // Native mode: Use 24-bit banking
+                if (addr_reg == REG_PC || addr_reg == REG_AB) {
+                    // Program addresses (instruction fetch): use PBR
+                    addr = (static_cast<uint32_t>(this->get(REG_PBR)) << 16) | raw_addr;
+                } else {
+                    // Data addresses (operands, stack, etc.): use DBR
+                    addr = (static_cast<uint32_t>(this->get(REG_DBR)) << 16) | raw_addr;
+                }
             }
         } else {
             // For 8-bit CPUs: use 16-bit address directly
