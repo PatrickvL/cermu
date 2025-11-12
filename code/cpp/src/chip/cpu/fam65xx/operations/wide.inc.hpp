@@ -469,9 +469,9 @@ bus_state_t op_pei(bus_state_t pins) {
 bus_state_t op_xba(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
         // Exchange the low and high bytes of the 16-bit accumulator
-        uint16_t a = this->get16(REG_A_FULL);
+        uint16_t a = this->get(REG_A_FULL);
         // Swap the bytes by setting them directly
-        this->set16(REG_A_FULL, (a >> 8) | (a << 8));
+        this->set(REG_A_FULL, (a >> 8) | (a << 8));
         
         // Update N and Z flags based on new A register value (now contains old high byte)
         this->update_nz_flags(this->get(REG_A));

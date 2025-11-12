@@ -33,10 +33,6 @@ struct narrow_registers_mixin_t {
     // Data type alias - always 8-bit for narrow CPUs
     using data_t = uint8_t;
     
-    // Use register types for 8-bit CPUs
-    using reg8_t = uint8_t;
-    using reg16_t = uint8_t;
-    
     // Register array - standard 8-bit layout
     union {
         uint8_t reg8[REG_COUNT_8BIT];        // 8-bit register access
@@ -48,37 +44,38 @@ struct narrow_registers_mixin_t {
         memset(&reg8, 0, sizeof(reg8));
     }
     
-    // === 8-bit register accessors ===
-    inline uint8_t get(uint8_t reg) const {
+    
+    // === Type-safe 8-bit register accessors ===
+    inline uint8_t get(reg8_t reg) const {
         return reg8[reg];
     }
     
-    inline void set(uint8_t reg, uint8_t value) {
+    inline void set(reg8_t reg, uint8_t value) {
         reg8[reg] = value;
     }
     
-    inline void inc(uint8_t reg) {
+    inline void inc(reg8_t reg) {
         reg8[reg]++;
     }
     
-    inline void dec(uint8_t reg) {
+    inline void dec(reg8_t reg) {
         reg8[reg]--;
     }
     
-    // === Explicit 16-bit accessors ===
-    inline uint16_t get16(uint8_t reg_pair) const {
+    // === Type-safe 16-bit register accessors ===
+    inline uint16_t get(reg16_t reg_pair) const {
         return reg16[reg_pair];
     }
     
-    inline void set16(uint8_t reg_pair, uint16_t value) {
+    inline void set(reg16_t reg_pair, uint16_t value) {
         reg16[reg_pair] = value;
     }
     
-    inline void inc16(uint8_t reg_pair) {
+    inline void inc(reg16_t reg_pair) {
         reg16[reg_pair]++;
     }
     
-    inline void dec16(uint8_t reg_pair) {
+    inline void dec(reg16_t reg_pair) {
         reg16[reg_pair]--;
     }
     
@@ -130,10 +127,6 @@ struct wide_registers_mixin_t {
     // Data type alias - 16-bit for wide CPUs
     using data_t = uint16_t;
     
-    // Use register types for 16-bit CPUs
-    using reg8_t = uint8_t;
-    using reg16_t = uint8_t;
-    
     // Register array with proper 8/16-bit alignment - matches narrow_registers_mixin_t structure
     union {
         uint8_t reg8[REG_COUNT_16BIT];        // 8-bit register access
@@ -160,44 +153,44 @@ struct wide_registers_mixin_t {
         return !emulation_mode && !(get(REG_P) & FLAG_X);
     }
     
-    // === 8-bit register accessors ===
-    inline uint8_t get(uint8_t reg) const {
+    // === Type-safe 8-bit register accessors ===
+    inline uint8_t get(reg8_t reg) const {
         return reg8[reg];
     }
     
-    inline void set(uint8_t reg, uint8_t value) {
+    inline void set(reg8_t reg, uint8_t value) {
         reg8[reg] = value;
     }
     
-    inline void inc(uint8_t reg) {
+    inline void inc(reg8_t reg) {
         reg8[reg]++;
     }
     
-    inline void dec(uint8_t reg) {
+    inline void dec(reg8_t reg) {
         reg8[reg]--;
     }
     
-    // === Explicit 16-bit accessors ===
-    inline uint16_t get16(uint8_t reg_pair) const {
+    // === Type-safe 16-bit register accessors ===
+    inline uint16_t get(reg16_t reg_pair) const {
         return reg16[reg_pair];
     }
     
-    inline void set16(uint8_t reg_pair, uint16_t value) {
+    inline void set(reg16_t reg_pair, uint16_t value) {
         reg16[reg_pair] = value;
     }
     
-    inline void inc16(uint8_t reg_pair) {
+    inline void inc(reg16_t reg_pair) {
         reg16[reg_pair]++;
     }
     
-    inline void dec16(uint8_t reg_pair) {
+    inline void dec(reg16_t reg_pair) {
         reg16[reg_pair]--;
     }
     
     // === Memory operation helpers (context-aware) ===
     inline data_t get_accumulator() const {
         if (is_accumulator_16bit()) {
-            return get16(REG_A_FULL);
+            return get(REG_A_FULL);
         } else {
             return get(REG_A);
         }
@@ -205,7 +198,7 @@ struct wide_registers_mixin_t {
     
     inline void set_accumulator(data_t value) {
         if (is_accumulator_16bit()) {
-            set16(REG_A_FULL, value);
+            set(REG_A_FULL, value);
         } else {
             set(REG_A, static_cast<uint8_t>(value & 0xFF));
         }
@@ -213,7 +206,7 @@ struct wide_registers_mixin_t {
     
     inline data_t get_x_register() const {
         if (is_index_16bit()) {
-            return get16(REG_X_FULL);
+            return get(REG_X_FULL);
         } else {
             return get(REG_X);
         }
@@ -221,7 +214,7 @@ struct wide_registers_mixin_t {
     
     inline void set_x_register(data_t value) {
         if (is_index_16bit()) {
-            set16(REG_X_FULL, value);
+            set(REG_X_FULL, value);
         } else {
             set(REG_X, static_cast<uint8_t>(value & 0xFF));
         }
@@ -229,7 +222,7 @@ struct wide_registers_mixin_t {
     
     inline data_t get_y_register() const {
         if (is_index_16bit()) {
-            return get16(REG_Y_FULL);
+            return get(REG_Y_FULL);
         } else {
             return get(REG_Y);
         }
@@ -237,7 +230,7 @@ struct wide_registers_mixin_t {
     
     inline void set_y_register(data_t value) {
         if (is_index_16bit()) {
-            set16(REG_Y_FULL, value);
+            set(REG_Y_FULL, value);
         } else {
             set(REG_Y, static_cast<uint8_t>(value & 0xFF));
         }
@@ -285,7 +278,7 @@ struct wide_registers_mixin_t {
     
     // === 24-bit address formation (for 65C816 addressing) ===
     inline uint32_t get_full_address(uint16_t offset = 0) const {
-        uint16_t pc = get16(REG_PC);
+        uint16_t pc = get(REG_PC);
         return (get(REG_PBR) << 16) | (pc + offset);
     }
     
@@ -294,7 +287,7 @@ struct wide_registers_mixin_t {
     }
     
     inline uint32_t get_direct_address(uint8_t offset) const {
-        uint16_t d_reg = get16(REG_D);  // Use the proper 16-bit D register access
+        uint16_t d_reg = get(REG_D);  // Use the proper 16-bit D register access
         return (get(REG_DBR) << 16) |
                ((d_reg + offset) & 0xFFFF);
     }
