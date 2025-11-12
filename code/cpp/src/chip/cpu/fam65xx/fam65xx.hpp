@@ -564,7 +564,16 @@ private:
         
         // Update bus lines if enabled (for test/simulation environments)
         if constexpr (Traits.update_bus_lines()) {
-            pins = FAM65XX_SET_ADDR(pins, addr & Traits.address_mask());
+            // For 65816: Split 24-bit address into 16-bit address + 8-bit bank
+            if constexpr (has_wide_registers()) {
+                // Set lower 16 bits in address field
+                pins = FAM65XX_SET_ADDR(pins, addr & 0xFFFF);
+                // Set upper 8 bits in bank field (bits 24-31)
+                pins = (pins & ~0xFF000000ULL) | (((uint64_t)(addr >> 16) & 0xFF) << 24);
+            } else {
+                // For 8/16-bit CPUs: use address field only
+                pins = FAM65XX_SET_ADDR(pins, addr & Traits.address_mask());
+            }
             
             if constexpr (IsWrite) {
                 pins &= ~FAM65XX_RW;  // Clear RW for write
