@@ -538,7 +538,23 @@ private:
         }
         
         // CPU has bus control - proceed with normal operation
-        uint32_t addr = this->get(addr_reg);
+        uint16_t raw_addr = this->get(addr_reg);
+        
+        // Calculate effective 24-bit address for 65816
+        uint32_t addr;
+        if constexpr (has_wide_registers()) {
+            // For 65816: Use appropriate banking based on address type
+            if (addr_reg == REG_PC || addr_reg == REG_AB) {
+                // Program addresses (instruction fetch): use PBR
+                addr = (static_cast<uint32_t>(this->get(REG_PBR)) << 16) | raw_addr;
+            } else {
+                // Data addresses (operands, stack, etc.): use DBR
+                addr = (static_cast<uint32_t>(this->get(REG_DBR)) << 16) | raw_addr;
+            }
+        } else {
+            // For 8-bit CPUs: use 16-bit address directly
+            addr = raw_addr;
+        }
         
         // Update bus lines if enabled (for test/simulation environments)
         if constexpr (Traits.update_bus_lines()) {

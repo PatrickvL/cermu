@@ -543,20 +543,79 @@ private:
     static uint8_t instance_mem_read(void* user_data, uint16_t addr, uint8_t bus_state) {
         (void)bus_state; // Suppress unused parameter warning
         ProcessorWrapper<Traits>* wrapper = static_cast<ProcessorWrapper<Traits>*>(user_data);
-        uint8_t value = test_memory[addr];
+        uint8_t value;
+        
         if (wrapper->harness_ptr) {
             ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(wrapper->harness_ptr);
-            harness->record_bus_cycle(addr, value, false);
+            
+            // Calculate full 24-bit address for 65816 processors
+            uint32_t full_addr = addr;
+            
+            // Check if this is a 65816 processor at runtime
+            if (wrapper->is_65816()) {
+                // For 65816: We need to determine if this is program or data access
+                // Since the CPU already calculated the 24-bit address before calling this callback,
+                // we need to reconstruct it based on current CPU state
+                
+                // Get current CPU register values through the wrapper
+                uint8_t pbr = wrapper->cpu->get(REG_PBR);
+                uint8_t dbr = wrapper->cpu->get(REG_DBR);
+                uint16_t pc = wrapper->cpu->get(REG_PC);
+                
+                // Heuristic: If the 16-bit address matches PC, it's likely a program access (use PBR)
+                // Otherwise, it's likely a data access (use DBR)
+                if (addr == pc) {
+                    full_addr = (static_cast<uint32_t>(pbr) << 16) | addr;
+                } else {
+                    full_addr = (static_cast<uint32_t>(dbr) << 16) | addr;
+                }
+            }
+            
+            // Use harness memory access (supports 24-bit addresses for 65816)
+            value = harness->get_memory(full_addr);
+            harness->record_bus_cycle(addr, value, false);  // Still record 16-bit for compatibility
+        } else {
+            // Fallback to direct memory access
+            value = test_memory[addr];
         }
         return value;
     }
     
     static void instance_mem_write(void* user_data, uint16_t addr, uint8_t data) {
         ProcessorWrapper<Traits>* wrapper = static_cast<ProcessorWrapper<Traits>*>(user_data);
-        test_memory[addr] = data;
+        
         if (wrapper->harness_ptr) {
             ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(wrapper->harness_ptr);
-            harness->record_bus_cycle(addr, data, true);
+            
+            // Calculate full 24-bit address for 65816 processors
+            uint32_t full_addr = addr;
+            
+            // Check if this is a 65816 processor at runtime
+            if (wrapper->is_65816()) {
+                // For 65816: We need to determine if this program or data access
+                // Since the CPU already calculated the 24-bit address before calling this callback,
+                // we need to reconstruct it based on current CPU state
+                
+                // Get current CPU register values through the wrapper
+                uint8_t pbr = wrapper->cpu->get(REG_PBR);
+                uint8_t dbr = wrapper->cpu->get(REG_DBR);
+                uint16_t pc = wrapper->cpu->get(REG_PC);
+                
+                // Heuristic: If the 16-bit address matches PC, it's likely a program access (use PBR)
+                // Otherwise, it's likely a data access (use DBR)
+                if (addr == pc) {
+                    full_addr = (static_cast<uint32_t>(pbr) << 16) | addr;
+                } else {
+                    full_addr = (static_cast<uint32_t>(dbr) << 16) | addr;
+                }
+            }
+            
+            // Use harness memory access (supports 24-bit addresses for 65816)
+            harness->set_memory(full_addr, data);
+            harness->record_bus_cycle(addr, data, true);  // Still record 16-bit for compatibility
+        } else {
+            // Fallback to direct memory access
+            test_memory[addr] = data;
         }
     }
     
@@ -569,6 +628,11 @@ private:
         else if (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) return "WDC65C816";
         else if (Traits.has(fam65xx::CPUCoreFlags::CMOS_BASE)) return "WDC65C02";
         else return "MOS6502";
+    }
+    
+    // Helper function to check if this is a 65816 processor
+    bool is_65816() const {
+        return Traits.has(fam65xx::CPUCoreFlags::C816_16BIT);
     }
 
 public:
