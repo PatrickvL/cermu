@@ -549,7 +549,9 @@ private:
                 addr = raw_addr;
             } else {
                 // Native mode: Use 24-bit banking
-                if (addr_reg == REG_PC || addr_reg == REG_AB) {
+                // PBR is used for program counter (instruction fetches)
+                // DBR is used for data accesses (operands, stack, etc.)
+                if (addr_reg == REG_PC) {
                     // Program addresses (instruction fetch): use PBR
                     addr = (static_cast<uint32_t>(this->get(REG_PBR)) << 16) | raw_addr;
                 } else {
