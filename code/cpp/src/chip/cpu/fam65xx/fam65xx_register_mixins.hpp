@@ -44,7 +44,6 @@ struct narrow_registers_mixin_t {
         memset(&reg8, 0, sizeof(reg8));
     }
     
-    
     // === Type-safe 8-bit register accessors ===
     inline uint8_t get(reg8_t reg) const {
         return reg8[reg];
@@ -79,6 +78,11 @@ struct narrow_registers_mixin_t {
         reg16[reg_pair]--;
     }
     
+    // === Load function for bus operations ===
+    inline void load(reg8_t data_reg, bus_state_t pins) {
+        reg8[data_reg] = FAM65XX_GET_DATA(pins);
+    }
+    
     // === Memory operation helpers ===
     inline data_t get_accumulator() const {
         return get(REG_A);
@@ -110,11 +114,6 @@ struct narrow_registers_mixin_t {
     // === Address calculation (16-bit only) ===
     inline uint32_t calc_effective_address(uint16_t addr) const {
         return addr; // No banking in 8-bit CPUs
-    }
-    
-    // === Load function for bus operations ===
-    inline void load(uint8_t reg, bus_state_t pins) {
-        reg8[reg] = FAM65XX_GET_DATA(pins);
     }
 };
 
@@ -187,6 +186,11 @@ struct wide_registers_mixin_t {
         reg16[reg_pair]--;
     }
     
+    // === Load function for bus operations ===
+    inline void load(reg8_t data_reg, bus_state_t pins) {
+        reg8[data_reg] = FAM65XX_GET_DATA(pins);
+    }
+    
     // === Memory operation helpers (context-aware) ===
     inline data_t get_accumulator() const {
         if (is_accumulator_16bit()) {
@@ -255,9 +259,6 @@ struct wide_registers_mixin_t {
         }
     }
     
-    // Note: Use regular get(REG_*)/set(REG_*, value) functions instead of helper functions
-    // This provides direct access without additional function call overhead
-    
     // === 16-bit accumulator operations (respects M flag) ===
     inline uint16_t get_accumulator_16() const {
         return get_accumulator();
@@ -290,11 +291,6 @@ struct wide_registers_mixin_t {
         uint16_t d_reg = get(REG_D);  // Use the proper 16-bit D register access
         return (get(REG_DBR) << 16) |
                ((d_reg + offset) & 0xFFFF);
-    }
-    
-    // === Load function for bus operations ===
-    inline void load(uint8_t reg, bus_state_t pins) {
-        reg8[reg] = FAM65XX_GET_DATA(pins);
     }
 };
 
