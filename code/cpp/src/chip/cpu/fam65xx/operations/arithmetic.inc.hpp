@@ -58,27 +58,28 @@ bus_state_t op_nop(bus_state_t pins) {
     // In emulation mode, 65C816 should behave exactly like 6502, not CMOS
     // This means NO RMW operations should be performed for NOP in emulation mode
     
-    // For 65C816: Skip ALL CMOS behavior when in emulation mode
+    // HIGHEST PRIORITY: Check for 65C816 emulation mode first
     if constexpr (this->has_wide_registers()) {
         if (this->get_emulation_mode()) {
             // In emulation mode: behave like pure NMOS 6502
-            // Skip ALL CMOS RMW logic entirely - go directly to standard NOP handling
-            // This ensures 100% 6502 compatibility
+            // Skip ALL CMOS logic entirely - force immediate standard NOP handling
+            // This ensures 100% 6502 compatibility without any CMOS behavior
             goto standard_nop_handling;
         }
     }
     
-    // WDC65C02 neutralized illegal opcodes preserve original addressing timing
-    // IMPORTANT: 65C816 in emulation mode should NEVER reach this code path
+    // SECONDARY: WDC65C02 neutralized illegal opcodes preserve original addressing timing
+    // This code should ONLY execute for non-65C816 CMOS processors or 65C816 in native mode
     if constexpr (this->has_cmos()) {
-        // Additional safety check: Verify we're not in 65C816 emulation mode
+        // TRIPLE SAFETY CHECK: Absolutely ensure we're not in 65C816 emulation mode
         if constexpr (this->has_wide_registers()) {
+            // If we're 65C816 and in emulation mode, force standard handling
             if (this->get_emulation_mode()) {
-                // Safety: Force standard handling even if we somehow got here
                 goto standard_nop_handling;
             }
         }
         
+        // Only proceed with RMW if we have RMW flags AND we're not in 65C816 emulation mode
         if (this->opcode_entry.flags & to_index(OF::RMW)) {
             // RMW mode NOP: Perform full read-modify-write cycle but don't modify the value
             // This preserves the bus cycle timing for WDC65C02 neutralized illegal opcodes
