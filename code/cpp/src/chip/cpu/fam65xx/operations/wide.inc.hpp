@@ -5,7 +5,8 @@
  * included within the fam65xx_t template class.
  */
 
-#include "inc_lint_prevention.hpp"
+// Commented out lint prevention - causing too many issues
+// #include "inc_lint_prevention.hpp"
 
 #ifndef FAM65XX_SKIP_IMPLEMENTATION
 
@@ -243,7 +244,6 @@ bus_state_t op_phk(bus_state_t pins) {
                     this->transition_to_fetch();
                 }
                 return pins;
-            }
         }
         return pins;
     }

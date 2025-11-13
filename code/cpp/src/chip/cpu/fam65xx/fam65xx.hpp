@@ -1232,6 +1232,7 @@ public:
         this->current_handler = &fam65xx_t::fetch_opcode;
         this->cycle_index = 0;
     }
+    
 
 private:
     // ========================================================================
