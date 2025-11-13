@@ -169,23 +169,22 @@ uint16_t get_vector_addr() const {
         0xFFE6, // FAM65XX_INT_NONE: Default to BRK vector (native mode)
         0xFFE6, // FAM65XX_INT_BRK: Software interrupt and default (native mode)
         0xFFEE, // FAM65XX_INT_IRQ: Hardware interrupt (native mode)
-        0xFFE4, // FAM65XX_INT_COP: CoProcessor (native mode)  
+        0xFFE4, // FAM65XX_INT_COP: CoProcessor (native mode)
         0xFFEA, // FAM65XX_INT_NMI: Non-maskable interrupt (native mode)
         0xFFE8, // FAM65XX_INT_ABORT: Memory abort (native mode)
         0xFFFC  // FAM65XX_INT_RESET: Reset vector (same in both modes)
     };
     
-    // Use active_interrupt directly as table index - much simpler!
+    // Use active_interrupt directly as table index
     const int interrupt_index = static_cast<int>(this->active_interrupt);
     
-    // Select appropriate vector table and return vector address - native code nested
+    // 65C816 native mode uses different vectors
     if constexpr (has_wide_registers()) {
         if (!this->get_emulation_mode()) {
             return native_65C816_vectors[interrupt_index];
         }
     }
     
-    // Emulation mode and non-wide CPUs use standard vectors
     return standard_vectors[interrupt_index];
 }
 
