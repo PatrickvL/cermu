@@ -855,8 +855,14 @@ public:
     }
     
     ~TestWorkerPool() {
-        shutdown = true;
-        queue_cv.notify_all();
+        // Signal shutdown and wake up all waiting threads
+        {
+            std::lock_guard<std::mutex> lock(queue_mutex);
+            shutdown = true;
+        }
+        queue_cv.notify_all(); // Wake up ALL waiting threads
+        
+        // Wait for all threads to finish
         for (auto& worker : workers) {
             if (worker.joinable()) {
                 worker.join();
@@ -874,10 +880,10 @@ public:
     }
     
     void wait_completion() {
-        // Wait for all tests to be processed by checking that:
+        // CRITICAL FIX: Wait for all tests to be processed by checking that:
         // 1. Queue is empty AND
-        // 2. All workers are idle (no active workers) AND
-        // 3. All tests have been completed
+        // 2. All tests have been completed (the key condition - don't wait for idle workers)
+        // This fixes the hang when there are fewer tests than worker threads
         while (true) {
             bool queue_empty;
             {
@@ -885,16 +891,28 @@ public:
                 queue_empty = test_queue.empty();
             }
             
-            // Check completion conditions
+            // Check completion conditions - removed active_workers check that causes hangs
             bool all_tests_processed = results.total_tests.load() >= total_tests_added.load();
-            bool no_active_workers = active_workers.load() == 0;
             
-            if (queue_empty && no_active_workers && all_tests_processed) {
+            // Only require queue to be empty and all tests processed
+            if (queue_empty && all_tests_processed) {
+                // Signal shutdown to wake up any remaining idle threads
+                {
+                    std::lock_guard<std::mutex> lock(queue_mutex);
+                    shutdown = true;
+                }
+                queue_cv.notify_all();
                 break;
             }
             
             // Early exit on failure if requested
             if (stop_on_failure && global_test_failed.load()) {
+                // Signal shutdown to wake up any remaining idle threads
+                {
+                    std::lock_guard<std::mutex> lock(queue_mutex);
+                    shutdown = true;
+                }
+                queue_cv.notify_all();
                 break;
             }
             
@@ -1294,12 +1312,23 @@ void collect_tests_from_file(const std::string& filepath, std::vector<TestItem>&
             }
         }
     } else {
-        // Single test - still create locally since it's only one
-        TestItem item;
-        item.filepath = filepath;
-        item.test_json = std::move(json_content);
-        item.test_name = "single_test";
-        tests.push_back(std::move(item));
+        // Single test OR single object - handle both cases gracefully
+        // Check if it's a single object that should be wrapped in an array
+        if (json_content[0] == '{') {
+            // Single object - wrap it in an array format for consistency
+            TestItem item;
+            item.filepath = filepath;
+            item.test_json = std::move(json_content);
+            item.test_name = "single_test";
+            tests.push_back(std::move(item));
+        } else {
+            // Some other format - try to parse as-is (could be malformed)
+            TestItem item;
+            item.filepath = filepath;
+            item.test_json = std::move(json_content);
+            item.test_name = "unknown_format";
+            tests.push_back(std::move(item));
+        }
     }
 }
 
@@ -1431,8 +1460,13 @@ void print_results(std::chrono::milliseconds duration, size_t num_workers, Proce
     std::cout << "Tests failed: " << results.failed_tests << "\n";
     
     if (results.total_tests > 0) {
-        double pass_rate = (double)results.passed_tests / results.total_tests * 100.0;
-        std::cout << "Pass rate: " << std::fixed << std::setprecision(2) << pass_rate << "% (of executed tests)\n";
+        double execution_pass_rate = (double)results.passed_tests / results.total_tests * 100.0;
+        double overall_pass_rate = (double)results.passed_tests / tests_collected * 100.0;
+        
+        std::cout << "Pass rate (executed): " << std::fixed << std::setprecision(2) << execution_pass_rate << "%\n";
+        if (results.total_tests < tests_collected) {
+            std::cout << "Pass rate (overall): " << std::fixed << std::setprecision(2) << overall_pass_rate << "% (accounting for early termination)\n";
+        }
         
         // Calculate tests per second
         double tests_per_second = (double)results.total_tests / (duration.count() / 1000.0);
@@ -1549,10 +1583,20 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    // Set up parallel execution
+    // CRITICAL FIX: Adjust worker count to never exceed number of tests
+    // This prevents hanging when there are fewer tests than worker threads
+    size_t effective_workers = std::min(num_workers, std::max(static_cast<size_t>(1), all_tests.size()));
+    
+    if (effective_workers != num_workers) {
+        std::cout << "Effective worker threads: " << effective_workers << " (adjusted from " << num_workers << " to prevent thread hangs)\n";
+    } else {
+        std::cout << "Worker threads: " << effective_workers << "\n";
+    }
+    
+    // Set up parallel execution with adjusted worker count
     ThreadSafeOutput output_handler;
     ThreadSafeTestResults thread_results;
-    TestWorkerPool worker_pool(num_workers, output_handler, thread_results,
+    TestWorkerPool worker_pool(effective_workers, output_handler, thread_results,
                                verbose_output, g_quiet_mode, g_test_failed, g_stop_on_failure,
                                detected_processor_type);
     
