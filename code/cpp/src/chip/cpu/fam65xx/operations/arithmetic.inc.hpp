@@ -32,7 +32,7 @@ bus_state_t op_adc(bus_state_t pins) {
                     
                 case 1:
                     // Read high byte of operand
-                    pins = this->phi2_read(pins, REG_AB, REG_AH);
+                    pins = this->phi2_read<Addr::AB>(pins, REG_AH);
                     if (FAM65XX_GET_RDY(pins)) {
                         // Perform 16-bit ADC operation
                         uint16_t operand = (this->get(REG_AH) << 8) | this->get(REG_DL);
@@ -82,7 +82,7 @@ bus_state_t op_adc(bus_state_t pins) {
             
         case 1:
             // Extra cycle for CMOS decimal mode - do dummy read from PC
-            pins = this->phi2_dummy_read(pins, REG_PC);
+            pins = this->phi2_dummy_read<Addr::PC>(pins);
             if (FAM65XX_GET_RDY(pins)) {
                 this->transition_to_fetch();
             }
@@ -134,7 +134,7 @@ bus_state_t op_nop(bus_state_t pins) {
     switch (this->opcode_entry.am_index) {
         case to_index(AM::IMM):
             // AM_IMM: All immediate NOPs read operand and increment PC
-            pins = this->phi2_dummy_read(pins, REG_PC);
+            pins = this->phi2_dummy_read<Addr::PC>(pins);
             if (FAM65XX_GET_RDY(pins)) {
                 this->inc(REG_PC);
             } else {
@@ -144,7 +144,7 @@ bus_state_t op_nop(bus_state_t pins) {
             
         case to_index(AM::NON):
             // Implicit NOPs do dummy read from PC without increment
-            pins = this->phi2_dummy_read(pins, REG_PC);
+            pins = this->phi2_dummy_read<Addr::PC>(pins);
             if (!FAM65XX_GET_RDY(pins)) {
                 return pins;
             }
@@ -154,7 +154,7 @@ bus_state_t op_nop(bus_state_t pins) {
             // Memory addressing modes (AM_ABS, AM_ABX, AM_ABY, AM_ZER, AM_ZPX, AM_ZPY) need dummy read
             // The addressing mode handler has already consumed operands and set up AB register
             // Now we need to complete the read cycle for proper timing
-            pins = this->phi2_dummy_read(pins, REG_AB);
+            pins = this->phi2_dummy_read<Addr::AB>(pins);
             if (!FAM65XX_GET_RDY(pins)) {
                 return pins;
             }
@@ -211,7 +211,7 @@ bus_state_t op_sbc(bus_state_t pins) {
                     
                 case 1:
                     // Read high byte of operand
-                    pins = this->phi2_read(pins, REG_AB, REG_AH);
+                    pins = this->phi2_read<Addr::AB>(pins, REG_AH);
                     if (FAM65XX_GET_RDY(pins)) {
                         // Perform 16-bit SBC operation
                         uint16_t operand = (this->get(REG_AH) << 8) | this->get(REG_DL);
@@ -261,7 +261,7 @@ bus_state_t op_sbc(bus_state_t pins) {
             
         case 1:
             // Extra cycle for CMOS decimal mode - do dummy read from PC
-            pins = this->phi2_dummy_read(pins, REG_PC);
+            pins = this->phi2_dummy_read<Addr::PC>(pins);
             if (FAM65XX_GET_RDY(pins)) {
                 this->transition_to_fetch();
             }
@@ -292,7 +292,7 @@ bus_state_t op_cmp(bus_state_t pins) {
                     
                 case 1:
                     // Read high byte of operand
-                    pins = this->phi2_read(pins, REG_AB, REG_AH);
+                    pins = this->phi2_read<Addr::AB>(pins, REG_AH);
                     if (FAM65XX_GET_RDY(pins)) {
                         // Perform 16-bit comparison
                         uint16_t operand = (this->get(REG_AH) << 8) | this->get(REG_DL);
@@ -349,7 +349,7 @@ bus_state_t op_cpx(bus_state_t pins) {
                     
                 case 1:
                     // Read high byte of operand
-                    pins = this->phi2_read(pins, REG_AB, REG_AH);
+                    pins = this->phi2_read<Addr::AB>(pins, REG_AH);
                     if (FAM65XX_GET_RDY(pins)) {
                         // Perform 16-bit comparison
                         uint16_t operand = (this->get(REG_AH) << 8) | this->get(REG_DL);
@@ -406,7 +406,7 @@ bus_state_t op_cpy(bus_state_t pins) {
                     
                 case 1:
                     // Read high byte of operand
-                    pins = this->phi2_read(pins, REG_AB, REG_AH);
+                    pins = this->phi2_read<Addr::AB>(pins, REG_AH);
                     if (FAM65XX_GET_RDY(pins)) {
                         // Perform 16-bit comparison
                         uint16_t operand = (this->get(REG_AH) << 8) | this->get(REG_DL);

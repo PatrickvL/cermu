@@ -504,15 +504,21 @@ public:
      * @param data Data byte (for write operations, ignored for reads)
      * @return Updated bus state with operation results
      */
-    template<bool IsWrite, bool IsDummy>
-    bus_state_t phi2_access(bus_state_t pins, reg16_t addr_reg, uint8_t data = 0) {
-        return phi2_access_impl<IsWrite, IsDummy>(pins, addr_reg, data);
-    }
-    
 private:
-    // Separate implementation to avoid unreachable code warnings
-    template<bool IsWrite, bool IsDummy>
-    bus_state_t phi2_access_impl(bus_state_t pins, reg16_t addr_reg, uint8_t data) {
+    // Determine effective bank register based on address register
+    template<Addr addr_arg>
+    inline constexpr reg8_t effective_bank_reg(Bank bank_arg) const {
+        if constexpr (addr_arg == Addr::PC) {
+            return REG_PBR;  // PC always uses Program Bank Register
+        } else if constexpr (addr_arg == Addr::SP) {
+            return REG_ZBR;  // Stack always uses Zero Bank Register
+        } else {
+            return static_cast<reg8_t>(bank_arg);  // REG_AB uses the provided bank
+        }
+    }
+
+    template<bool IsWrite, bool IsDummy, Addr addr_arg, Bank bank_arg = Bank::DBR>
+    bus_state_t phi2_access(bus_state_t pins, uint8_t data = 0) {    
         // Skip dummy cycles if not simulating internal timing
         if constexpr (IsDummy && !Traits.accurate_internal_cycles()) {
             return pins;
@@ -533,36 +539,16 @@ private:
             return FAM65XX_SET_DATA(pins, result_data);
         }
         
-        // CPU has bus control - proceed with normal operation
-        uint16_t raw_addr = this->get(addr_reg);
+        // CPU has bus control - get address from the specified address register
+        constexpr reg16_t addr_reg = static_cast<reg16_t>(addr_arg);
+        uint32_t addr = this->get(addr_reg);
         
-        // Calculate effective address with automatic PBR/DBR selection and 65816 emulation mode support
-        uint32_t addr;
+        // 65C816 banking: OR bank register into high bits (optimizer eliminates for non-wide CPUs)
         if constexpr (has_wide_registers()) {
-            // 65816: Check emulation mode first (runtime check)
-            if (!this->get_emulation_mode()) {
-                // Native mode: Use 24-bit banking with automatic bank selection
-                // PBR is used for program counter (instruction fetches)
-                // DBR is used for data accesses (operands, stack, etc.)
-                // Direct Page accesses always use Bank $00
-                if (addr_reg == REG_PC) {
-                    // Program addresses (instruction fetch): use PBR
-                    addr = (static_cast<uint32_t>(this->get(REG_PBR)) << 16) | raw_addr;
-                } else if (addr_reg == REG_AB && raw_addr < 0x0200) {
-                    // Direct Page and Stack (Bank $00): addresses $0000-$01FF always in Bank $00
-                    addr = raw_addr;
-                } else {
-                    // Data addresses (operands, etc.): use DBR
-                    addr = (static_cast<uint32_t>(this->get(REG_DBR)) << 16) | raw_addr;
-                }
-            } else {
-                // Emulation mode: behave like 6502 with 16-bit addressing only
-                addr = raw_addr;
-            }
-        } else {
-            // For 8-bit CPUs: use 16-bit address directly (zero overhead)
-            addr = raw_addr;
+            // Always OR in the effective bank register value - REG_ZBR is always 0, others provide correct bank
+            addr |= static_cast<uint32_t>(this->get(effective_bank_reg<addr_arg>(bank_arg))) << 16;
         }
+        // For non-wide CPUs, the bank_arg parameter and this->get(effective_bank_reg<addr_arg>(bank_arg)) call are optimized away
         
         // Update bus lines if enabled (for test/simulation environments)
         if constexpr (Traits.update_bus_lines()) {
@@ -688,42 +674,46 @@ public:
      * the zero-overhead benefits of the template implementation.
      */
     
-    inline bus_state_t phi2_read(bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) {
-        // Use the phi2_access template for read operation
-        pins = phi2_access<false, false>(pins, addr_reg);
+    // Template-based wrapper functions using Addr and Bank enums
+    template<Addr addr_reg, Bank bank_arg = Bank::DBR>
+    inline bus_state_t phi2_read(bus_state_t pins, reg8_t data_reg) {
+        pins = phi2_access<false, false, addr_reg, bank_arg>(pins);
         
         // Store the result in the specified data register if CPU has bus control
         if (FAM65XX_GET_RDY(pins)) {
-            this->load(data_reg, pins); // TOOD : Move to cycle code?
+            this->load(data_reg, pins);
         }
         
         return pins;
     }
     
-    // Optimized version with direct register targeting to eliminate copies
+    // Optimized operand reading with banking-aware logic
     inline bus_state_t phi2_read_operand(bus_state_t pins, reg8_t target_reg) {
         if (this->opcode_entry.am_index == to_index(AM::IMM)) {
-            // Immediate mode - read from PC directly into target register
-            pins = phi2_read(pins, REG_PC, target_reg);
+            // Immediate mode - read from PC
+            pins = phi2_read<Addr::PC>(pins, target_reg);
             if (FAM65XX_GET_RDY(pins)) {
                 this->inc(REG_PC);
             }
             return pins;
         }
-        // Memory mode - read from target address directly into target register
-        return phi2_read(pins, REG_AB, target_reg);
+        // Memory mode - read from AB address (using program banking PBR for 65C816)
+        return phi2_read<Addr::AB, Bank::PBR>(pins, target_reg);
     }
 
-    inline bus_state_t phi2_write(bus_state_t pins, reg16_t addr_reg, uint8_t data) {
-        return phi2_access<true, false>(pins, addr_reg, data);
+    template<Addr addr_reg, Bank bank_arg = Bank::DBR>
+    inline bus_state_t phi2_write(bus_state_t pins, uint8_t data) {
+        return phi2_access<true, false, addr_reg, bank_arg>(pins, data);
     }
     
-    inline bus_state_t phi2_dummy_read(bus_state_t pins, reg16_t addr_reg) {
-        return phi2_access<false, true>(pins, addr_reg);
+    template<Addr addr_reg, Bank bank_arg = Bank::DBR>
+    inline bus_state_t phi2_dummy_read(bus_state_t pins) {
+        return phi2_access<false, true, addr_reg, bank_arg>(pins);
     }
     
-    inline bus_state_t phi2_dummy_write(bus_state_t pins, reg16_t addr_reg, uint8_t data) {
-        return phi2_access<true, true>(pins, addr_reg, data);
+    template<Addr addr_reg, Bank bank_arg = Bank::DBR>
+    inline bus_state_t phi2_dummy_write(bus_state_t pins, uint8_t data) {
+        return phi2_access<true, true, addr_reg, bank_arg>(pins, data);
     }
     
     // ========================================================================
@@ -1218,8 +1208,8 @@ private:
     
     // Instruction fetch and decode
     bus_state_t fetch_opcode(bus_state_t pins) {
-        // Read opcode from PC
-        pins = this->phi2_read(pins, REG_PC, REG_IR);
+        // Read opcode from PC (using program banking PBR for 65C816)
+        pins = this->phi2_read<Addr::PC>(pins, REG_IR);
         this->set(REG_AB, this->get(REG_PC));
         this->inc(REG_PC);
         // Set SYNC signal for opcode fetch

@@ -32,7 +32,7 @@ bus_state_t op_lda(bus_state_t pins) {
                     
                 case 1:
                     // Read high byte of operand
-                    pins = this->phi2_read(pins, REG_AB, REG_AH);
+                    pins = this->phi2_read<Addr::AB>(pins, REG_AH);
                     if (FAM65XX_GET_RDY(pins)) {
                         // Set 16-bit accumulator
                         uint16_t value = (this->get(REG_AH) << 8) | this->get(REG_DL);
@@ -84,7 +84,7 @@ bus_state_t op_ldx(bus_state_t pins) {
                     
                 case 1:
                     // Read high byte of operand
-                    pins = this->phi2_read(pins, REG_AB, REG_AH);
+                    pins = this->phi2_read<Addr::AB>(pins, REG_AH);
                     if (FAM65XX_GET_RDY(pins)) {
                         // Set 16-bit X register
                         uint16_t value = (this->get(REG_AH) << 8) | this->get(REG_DL);
@@ -136,7 +136,7 @@ bus_state_t op_ldy(bus_state_t pins) {
                     
                 case 1:
                     // Read high byte of operand
-                    pins = this->phi2_read(pins, REG_AB, REG_AH);
+                    pins = this->phi2_read<Addr::AB>(pins, REG_AH);
                     if (FAM65XX_GET_RDY(pins)) {
                         // Set 16-bit Y register
                         uint16_t value = (this->get(REG_AH) << 8) | this->get(REG_DL);
@@ -179,7 +179,7 @@ bus_state_t op_sta(bus_state_t pins) {
                 case 0:
                     // Store low byte of accumulator
                     if (this->should_complete_write_cycle(pins)) {
-                        pins = this->phi2_write(pins, REG_AB, this->get(REG_A));
+                        pins = this->phi2_write<Addr::AB>(pins, this->get(REG_A));
                         this->cycle_index++;
                         // For 65C816 native mode, increment address bus with bank handling
                         this->inc(REG_AB);
@@ -190,7 +190,7 @@ bus_state_t op_sta(bus_state_t pins) {
                     // Store high byte of accumulator
                     if (this->should_complete_write_cycle(pins)) {
                         uint16_t acc = this->get(REG_A_FULL);
-                        pins = this->phi2_write(pins, REG_AB, (acc >> 8) & 0xFF);
+                        pins = this->phi2_write<Addr::AB>(pins, (acc >> 8) & 0xFF);
                         this->transition_to_fetch();
                     }
                     return pins;
@@ -201,7 +201,7 @@ bus_state_t op_sta(bus_state_t pins) {
     
     // Standard 8-bit STA operation (emulation mode and non-wide CPUs)
     if (this->should_complete_write_cycle(pins)) {
-        pins = this->phi2_write(pins, REG_AB, this->get(REG_A));
+        pins = this->phi2_write<Addr::AB>(pins, this->get(REG_A));
         this->transition_to_fetch();
     }
     return pins;
@@ -220,7 +220,7 @@ bus_state_t op_stx(bus_state_t pins) {
                 case 0:
                     // Store low byte of X register
                     if (this->should_complete_write_cycle(pins)) {
-                        pins = this->phi2_write(pins, REG_AB, this->get(REG_X));
+                        pins = this->phi2_write<Addr::AB>(pins, this->get(REG_X));
                         this->cycle_index++;
                         // For 65C816 native mode, increment address bus with bank handling
                         this->inc(REG_AB);
@@ -231,7 +231,7 @@ bus_state_t op_stx(bus_state_t pins) {
                     // Store high byte of X register
                     if (this->should_complete_write_cycle(pins)) {
                         uint16_t x = this->get_x_register();
-                        pins = this->phi2_write(pins, REG_AB, (x >> 8) & 0xFF);
+                        pins = this->phi2_write<Addr::AB>(pins, (x >> 8) & 0xFF);
                         this->transition_to_fetch();
                     }
                     return pins;
@@ -242,7 +242,7 @@ bus_state_t op_stx(bus_state_t pins) {
     
     // Standard 8-bit STX operation (emulation mode and non-wide CPUs)
     if (this->should_complete_write_cycle(pins)) {
-        pins = this->phi2_write(pins, REG_AB, this->get(REG_X));
+        pins = this->phi2_write<Addr::AB>(pins, this->get(REG_X));
         this->transition_to_fetch();
     }
     return pins;
@@ -261,7 +261,7 @@ bus_state_t op_sty(bus_state_t pins) {
                 case 0:
                     // Store low byte of Y register
                     if (this->should_complete_write_cycle(pins)) {
-                        pins = this->phi2_write(pins, REG_AB, this->get(REG_Y));
+                        pins = this->phi2_write<Addr::AB>(pins, this->get(REG_Y));
                         this->cycle_index++;
                         // For 65C816 native mode, increment address bus with bank handling
                         this->inc(REG_AB);
@@ -272,7 +272,7 @@ bus_state_t op_sty(bus_state_t pins) {
                     // Store high byte of Y register
                     if (this->should_complete_write_cycle(pins)) {
                         uint16_t y = this->get_y_register();
-                        pins = this->phi2_write(pins, REG_AB, (y >> 8) & 0xFF);
+                        pins = this->phi2_write<Addr::AB>(pins, (y >> 8) & 0xFF);
                         this->transition_to_fetch();
                     }
                     return pins;
@@ -283,7 +283,7 @@ bus_state_t op_sty(bus_state_t pins) {
     
     // Standard 8-bit STY operation (emulation mode and non-wide CPUs)
     if (this->should_complete_write_cycle(pins)) {
-        pins = this->phi2_write(pins, REG_AB, this->get(REG_Y));
+        pins = this->phi2_write<Addr::AB>(pins, this->get(REG_Y));
         this->transition_to_fetch();
     }
     return pins;
@@ -312,7 +312,7 @@ bus_state_t op_and(bus_state_t pins) {
                     
                 case 1:
                     // Read high byte of operand
-                    pins = this->phi2_read(pins, REG_AB, REG_AH);
+                    pins = this->phi2_read<Addr::AB>(pins, REG_AH);
                     if (FAM65XX_GET_RDY(pins)) {
                         // Perform 16-bit AND operation
                         uint16_t operand = (this->get(REG_AH) << 8) | this->get(REG_DL);
@@ -366,7 +366,7 @@ bus_state_t op_ora(bus_state_t pins) {
                     
                 case 1:
                     // Read high byte of operand
-                    pins = this->phi2_read(pins, REG_AB, REG_AH);
+                    pins = this->phi2_read<Addr::AB>(pins, REG_AH);
                     if (FAM65XX_GET_RDY(pins)) {
                         // Perform 16-bit ORA operation
                         uint16_t operand = (this->get(REG_AH) << 8) | this->get(REG_DL);
@@ -420,7 +420,7 @@ bus_state_t op_eor(bus_state_t pins) {
                     
                 case 1:
                     // Read high byte of operand
-                    pins = this->phi2_read(pins, REG_AB, REG_AH);
+                    pins = this->phi2_read<Addr::AB>(pins, REG_AH);
                     if (FAM65XX_GET_RDY(pins)) {
                         // Perform 16-bit EOR operation
                         uint16_t operand = (this->get(REG_AH) << 8) | this->get(REG_DL);
@@ -477,7 +477,7 @@ bus_state_t op_bit(bus_state_t pins) {
                     
                 case 1:
                     // Read high byte of operand (this provides N and V flags)
-                    pins = this->phi2_read(pins, REG_AB, REG_DL);
+                    pins = this->phi2_read<Addr::AB>(pins, REG_DL);
                     if (FAM65XX_GET_RDY(pins)) {
                         // Perform 16-bit BIT operation
                         uint16_t operand = (this->get(REG_ABH) << 8) | this->get(REG_DL);

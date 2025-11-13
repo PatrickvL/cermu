@@ -22,7 +22,7 @@ bus_state_t op_pha(bus_state_t pins) {
             switch (this->cycle_index) {
                 case 0:
                     /* Dummy cycle for internal operation */
-                    pins = this->phi2_dummy_read(pins, REG_PC);
+                    pins = this->phi2_dummy_read<Addr::PC>(pins);
                     if (FAM65XX_GET_RDY(pins)) {
                         this->cycle_index++;
                     }
@@ -32,7 +32,7 @@ bus_state_t op_pha(bus_state_t pins) {
                     /* PHI2: Write high byte of A to stack */
                     if (this->should_complete_write_cycle(pins)) {
                         uint16_t acc = this->get(REG_A_FULL);
-                        pins = this->phi2_write(pins, REG_SP, (acc >> 8) & 0xFF);
+                        pins = this->phi2_write<Addr::SP>(pins, (acc >> 8) & 0xFF);
                         this->dec(REG_S);
                         this->cycle_index++;
                     }
@@ -41,7 +41,7 @@ bus_state_t op_pha(bus_state_t pins) {
                 case 2:
                     /* PHI2: Write low byte of A to stack */
                     if (this->should_complete_write_cycle(pins)) {
-                        pins = this->phi2_write(pins, REG_SP, this->get(REG_A));
+                        pins = this->phi2_write<Addr::SP>(pins, this->get(REG_A));
                         this->dec(REG_S);
                         this->transition_to_fetch();
                     }
@@ -55,7 +55,7 @@ bus_state_t op_pha(bus_state_t pins) {
     switch (this->cycle_index) {
         case 0:
             /* Dummy cycle for internal operation */
-            pins = this->phi2_dummy_read(pins, REG_PC);
+            pins = this->phi2_dummy_read<Addr::PC>(pins);
             if (FAM65XX_GET_RDY(pins)) {
                 this->cycle_index++;
             }
@@ -64,7 +64,7 @@ bus_state_t op_pha(bus_state_t pins) {
         case 1:
             /* PHI2: Write A to stack with processor-specific RDY handling */
             if (this->should_complete_write_cycle(pins)) {
-                pins = this->phi2_write(pins, REG_SP, this->get(REG_A));
+                pins = this->phi2_write<Addr::SP>(pins, this->get(REG_A));
                 this->dec(REG_S);
                 this->transition_to_fetch();
             }
@@ -78,7 +78,7 @@ bus_state_t op_php(bus_state_t pins) {
     switch (this->cycle_index) {
         case 0:
             /* Dummy cycle for internal operation */
-            pins = this->phi2_dummy_read(pins, REG_PC);
+            pins = this->phi2_dummy_read<Addr::PC>(pins);
             if (FAM65XX_GET_RDY(pins)) {
                 this->cycle_index++;
             }
@@ -88,7 +88,7 @@ bus_state_t op_php(bus_state_t pins) {
         case 1:
             /* PHI2: Write P|B|U to stack with processor-specific RDY handling */
             if (this->should_complete_write_cycle(pins)) {
-                pins = this->phi2_write(pins, REG_SP, this->get(REG_DL));
+                pins = this->phi2_write<Addr::SP>(pins, this->get(REG_DL));
                 this->dec(REG_S);
                 this->transition_to_fetch();
             }
@@ -106,7 +106,7 @@ bus_state_t op_pla(bus_state_t pins) {
             switch (this->cycle_index) {
                 case 0:
                     /* PHI2: Dummy read from PC */
-                    pins = this->phi2_dummy_read(pins, REG_PC);
+                    pins = this->phi2_dummy_read<Addr::PC>(pins);
                     if (FAM65XX_GET_RDY(pins)) {
                         this->cycle_index++;
                     }
@@ -114,7 +114,7 @@ bus_state_t op_pla(bus_state_t pins) {
                     
                 case 1:
                     /* PHI2: Dummy read from current stack pointer, then increment SP */
-                    pins = this->phi2_dummy_read(pins, REG_SP);
+                    pins = this->phi2_dummy_read<Addr::SP>(pins);
                     if (FAM65XX_GET_RDY(pins)) {
                         /* PHI1: Increment stack pointer */
                         this->inc(REG_S);
@@ -124,7 +124,7 @@ bus_state_t op_pla(bus_state_t pins) {
                     
                 case 2:
                     /* PHI2: Read low byte from incremented stack pointer */
-                    pins = this->phi2_read(pins, REG_SP, REG_DL);
+                    pins = this->phi2_read<Addr::SP>(pins, REG_DL);
                     if (FAM65XX_GET_RDY(pins)) {
                         /* PHI1: Increment stack pointer again */
                         this->inc(REG_S);
@@ -134,7 +134,7 @@ bus_state_t op_pla(bus_state_t pins) {
                     
                 case 3:
                     /* PHI2: Read high byte from incremented stack pointer */
-                    pins = this->phi2_read(pins, REG_SP, REG_AH);
+                    pins = this->phi2_read<Addr::SP>(pins, REG_AH);
                     if (FAM65XX_GET_RDY(pins)) {
                         /* PHI1: Set 16-bit accumulator and flags */
                         uint16_t value = (this->get(REG_AH) << 8) | this->get(REG_DL);
@@ -156,7 +156,7 @@ bus_state_t op_pla(bus_state_t pins) {
     switch (this->cycle_index) {
         case 0:
             /* PHI2: Dummy read from PC */
-            pins = this->phi2_dummy_read(pins, REG_PC);
+            pins = this->phi2_dummy_read<Addr::PC>(pins);
             if (FAM65XX_GET_RDY(pins)) {
                 this->cycle_index++;
             }
@@ -164,7 +164,7 @@ bus_state_t op_pla(bus_state_t pins) {
             
         case 1:
             /* PHI2: Dummy read from current stack pointer, then increment SP */
-            pins = this->phi2_dummy_read(pins, REG_SP);
+            pins = this->phi2_dummy_read<Addr::SP>(pins);
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Increment stack pointer */
                 this->inc(REG_S);
@@ -174,7 +174,7 @@ bus_state_t op_pla(bus_state_t pins) {
             
         case 2:
             /* PHI2: Read from incremented stack pointer directly into A (eliminates copy) */
-            pins = this->phi2_read(pins, REG_SP, REG_A);
+            pins = this->phi2_read<Addr::SP>(pins, REG_A);
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Set flags based on accumulator value */
                 this->update_nz_flags(this->get(REG_A));
@@ -190,7 +190,7 @@ bus_state_t op_plp(bus_state_t pins) {
     switch (this->cycle_index) {
         case 0:
             /* PHI2: Dummy read from PC */
-            pins = this->phi2_dummy_read(pins, REG_PC);
+            pins = this->phi2_dummy_read<Addr::PC>(pins);
             if (FAM65XX_GET_RDY(pins)) {
                 this->cycle_index++;
             }
@@ -198,7 +198,7 @@ bus_state_t op_plp(bus_state_t pins) {
             
         case 1:
             /* PHI2: Dummy read from current stack pointer, then increment SP */
-            pins = this->phi2_dummy_read(pins, REG_SP);
+            pins = this->phi2_dummy_read<Addr::SP>(pins);
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Increment stack pointer */
                 this->inc(REG_S);
@@ -208,7 +208,7 @@ bus_state_t op_plp(bus_state_t pins) {
             
         case 2:
             /* PHI2: Read from incremented stack pointer */
-            pins = this->phi2_read(pins, REG_SP, REG_DL);
+            pins = this->phi2_read<Addr::SP>(pins, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Store in P (clear B, set U) */
                 this->set(REG_P, (this->get(REG_DL) & ~FLAG_B) | FLAG_U);
