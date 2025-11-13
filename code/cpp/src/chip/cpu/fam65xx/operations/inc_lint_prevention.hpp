@@ -137,10 +137,13 @@ namespace fam65xx {
       // Memory access functions
       template<bool store_in_register = true>
       inline bus_state_t phi2_read_template(bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) { return pins; }
-      inline bus_state_t phi2_read(bus_state_t pins, reg16_t addr_reg, reg8_t data_reg) { return pins; }
-      inline bus_state_t phi2_write(bus_state_t pins, reg16_t addr_reg, uint8_t data) { return pins; }
+      template<addr_t addr_arg, Bank bank_arg = Bank::DBR>
+      inline bus_state_t phi2_read(bus_state_t pins, reg8_t data_reg) { return pins; }
+      template<addr_t addr_arg, Bank bank_arg = Bank::DBR>
+      inline bus_state_t phi2_write(bus_state_t pins, uint8_t data) { return pins; }
       inline bus_state_t phi2_read_operand(bus_state_t pins, reg8_t target_reg) { return pins; }
-      inline bus_state_t phi2_dummy_read(bus_state_t pins, reg16_t addr_reg) { return pins; }
+      template<addr_t addr_arg, Bank bank_arg = Bank::DBR>
+      inline bus_state_t phi2_dummy_read(bus_state_t pins) { return pins; }
       inline void load(reg8_t data_reg, bus_state_t pins) {}
       
       // Flag manipulation functions

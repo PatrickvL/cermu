@@ -309,6 +309,7 @@ typedef enum : uint8_t {
     REG_DPL = 17,      // Direct Page low byte (65C816 only)
 #endif
     REG_PBR = 18,      // Program Bank register (65C816 only)
+    REG_ZBR = 19,      // Zero Bank register (always 0x00, for 65C816 emulation mode and stack/DP access)
 
     REG_COUNT_16BIT,  // Number of 8-bit registers for 65C816
     REG_COUNT_8BIT = REG_DL + 1,  // Core registers 0-14 (high bytes unused for 8-bit CPUs)
@@ -334,6 +335,19 @@ typedef enum : uint8_t {
     REG_D = REG_DPL / 2,     // Direct Page register (65C816 only)
 } reg16_t;
 
+// Addr enum class for template parameters
+enum class Addr : uint8_t {
+    AB = REG_ABL / 2,   // Address Bus (16-bit)
+    PC = REG_PCL / 2,   // Program Counter (16-bit)
+    SP = REG_SPL / 2    // Stack pointer (16-bit)
+};
+
+enum class Bank : uint8_t {
+    DBR = REG_DBR,  // Data Bank register (8-bit, 65C816 only)
+    PBR = REG_PBR,  // Program Bank register (8-bit, 65C816 only)
+    ZBR = REG_ZBR   // Zero Bank register (always 0x00)
+};
+
 // ============================================================================
 // Opcode Encoding
 // ============================================================================
@@ -343,7 +357,6 @@ enum class OpcodeFlags : uint8_t {
     ILLEGAL_STORE = 0x1,  // Illegal store quirk - uses wrong address on page cross
     SKIP_PAGE     = 0x2,  // Can skip page cross penalty cycle (read operations only)
     RMW           = 0x4   // Read-Modify-Write operation
-    // RESERVED flag removed to free up 1 bit for am_index expansion
 };
 
 // ============================================================================

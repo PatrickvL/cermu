@@ -17,7 +17,7 @@
 bus_state_t transfer_with_flags_helper(bus_state_t pins, uint8_t value, reg8_t target_reg) {
     if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read<Addr::PC>(pins);
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }
@@ -34,7 +34,7 @@ bus_state_t transfer_with_flags_helper(bus_state_t pins, uint8_t value, reg8_t t
 bus_state_t transfer_no_flags_helper(bus_state_t pins, uint8_t value, reg8_t target_reg) {
     if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read<Addr::PC>(pins);
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }
@@ -61,7 +61,7 @@ bus_state_t op_tax(bus_state_t pins) {
             
             if constexpr (!this->has_optimized_cycles()) {
                 /* Dummy cycle for internal operation */
-                pins = this->phi2_dummy_read(pins, REG_PC);
+                pins = this->phi2_dummy_read<Addr::PC>(pins);
                 if (!FAM65XX_GET_RDY(pins)) {
                     return pins;
                 }
@@ -111,7 +111,7 @@ bus_state_t op_tay(bus_state_t pins) {
             
             if constexpr (!this->has_optimized_cycles()) {
                 /* Dummy cycle for internal operation */
-                pins = this->phi2_dummy_read(pins, REG_PC);
+                pins = this->phi2_dummy_read<Addr::PC>(pins);
                 if (!FAM65XX_GET_RDY(pins)) {
                     return pins;
                 }
@@ -158,7 +158,7 @@ bus_state_t op_tsx(bus_state_t pins) {
             // Native mode, 16-bit X register - transfer 16-bit stack pointer
             if constexpr (!this->has_optimized_cycles()) {
                 /* Dummy cycle for internal operation */
-                pins = this->phi2_dummy_read(pins, REG_PC);
+                pins = this->phi2_dummy_read<Addr::PC>(pins);
                 if (!FAM65XX_GET_RDY(pins)) {
                     return pins;
                 }
@@ -189,7 +189,7 @@ bus_state_t op_txa(bus_state_t pins) {
             
             if constexpr (!this->has_optimized_cycles()) {
                 /* Dummy cycle for internal operation */
-                pins = this->phi2_dummy_read(pins, REG_PC);
+                pins = this->phi2_dummy_read<Addr::PC>(pins);
                 if (!FAM65XX_GET_RDY(pins)) {
                     return pins;
                 }
@@ -236,7 +236,7 @@ bus_state_t op_txs(bus_state_t pins) {
             // Native mode - transfer can be 8-bit or 16-bit based on X flag
             if constexpr (!this->has_optimized_cycles()) {
                 /* Dummy cycle for internal operation */
-                pins = this->phi2_dummy_read(pins, REG_PC);
+                pins = this->phi2_dummy_read<Addr::PC>(pins);
                 if (!FAM65XX_GET_RDY(pins)) {
                     return pins;
                 }
@@ -272,7 +272,7 @@ bus_state_t op_tya(bus_state_t pins) {
             
             if constexpr (!this->has_optimized_cycles()) {
                 /* Dummy cycle for internal operation */
-                pins = this->phi2_dummy_read(pins, REG_PC);
+                pins = this->phi2_dummy_read<Addr::PC>(pins);
                 if (!FAM65XX_GET_RDY(pins)) {
                     return pins;
                 }
@@ -323,7 +323,7 @@ bus_state_t op_inx(bus_state_t pins) {
             // Native mode, 16-bit X register - perform 16-bit INX
             if constexpr (!this->has_optimized_cycles()) {
                 /* Dummy cycle for internal operation */
-                pins = this->phi2_dummy_read(pins, REG_PC);
+                pins = this->phi2_dummy_read<Addr::PC>(pins);
                 if (!FAM65XX_GET_RDY(pins)) {
                     return pins;
                 }
@@ -345,7 +345,7 @@ bus_state_t op_inx(bus_state_t pins) {
     // Standard 8-bit INX operation (emulation mode and non-wide CPUs)
     if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read<Addr::PC>(pins);
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }
@@ -366,7 +366,7 @@ bus_state_t op_iny(bus_state_t pins) {
             // Native mode, 16-bit Y register - perform 16-bit INY
             if constexpr (!this->has_optimized_cycles()) {
                 /* Dummy cycle for internal operation */
-                pins = this->phi2_dummy_read(pins, REG_PC);
+                pins = this->phi2_dummy_read<Addr::PC>(pins);
                 if (!FAM65XX_GET_RDY(pins)) {
                     return pins;
                 }
@@ -388,7 +388,7 @@ bus_state_t op_iny(bus_state_t pins) {
     // Standard 8-bit INY operation (emulation mode and non-wide CPUs)
     if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read<Addr::PC>(pins);
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }
@@ -409,7 +409,7 @@ bus_state_t op_dex(bus_state_t pins) {
             // Native mode, 16-bit X register - perform 16-bit DEX
             if constexpr (!this->has_optimized_cycles()) {
                 /* Dummy cycle for internal operation */
-                pins = this->phi2_dummy_read(pins, REG_PC);
+                pins = this->phi2_dummy_read<Addr::PC>(pins);
                 if (!FAM65XX_GET_RDY(pins)) {
                     return pins;
                 }
@@ -431,7 +431,7 @@ bus_state_t op_dex(bus_state_t pins) {
     // Standard 8-bit DEX operation (emulation mode and non-wide CPUs)
     if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read<Addr::PC>(pins);
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }
@@ -452,7 +452,7 @@ bus_state_t op_dey(bus_state_t pins) {
             // Native mode, 16-bit Y register - perform 16-bit DEY
             if constexpr (!this->has_optimized_cycles()) {
                 /* Dummy cycle for internal operation */
-                pins = this->phi2_dummy_read(pins, REG_PC);
+                pins = this->phi2_dummy_read<Addr::PC>(pins);
                 if (!FAM65XX_GET_RDY(pins)) {
                     return pins;
                 }
@@ -474,7 +474,7 @@ bus_state_t op_dey(bus_state_t pins) {
     // Standard 8-bit DEY operation (emulation mode and non-wide CPUs)
     if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read<Addr::PC>(pins);
         if (!FAM65XX_GET_RDY(pins)) {
             return pins;
         }

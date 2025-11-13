@@ -18,7 +18,7 @@ bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func)
         switch (this->cycle_index) {
             case 0:
                 // Cycle 0: Read original value from memory
-                pins = this->phi2_read(pins, REG_AB, REG_DL);
+                pins = this->phi2_read<Addr::AB>(pins, REG_DL);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->cycle_index++;
                 }
@@ -33,10 +33,10 @@ bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func)
                         }
 
                         // NMOS processors: Write original value back (dummy write) - optimized
-                        pins = this->phi2_write(pins, REG_AB, this->get(REG_DL));
+                        pins = this->phi2_write<Addr::AB>(pins, this->get(REG_DL));
                     } else {
                         // CMOS processors: Dummy read cycle instead of write
-                        pins = this->phi2_dummy_read(pins, REG_AB);
+                        pins = this->phi2_dummy_read<Addr::AB>(pins);
                         if (!FAM65XX_GET_RDY(pins)) {
                             return pins;
                         }
@@ -51,14 +51,14 @@ bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func)
             case 2:
                 // Cycle 2: Write modified result back with processor-specific RDY handling
                 if (this->should_complete_write_cycle(pins)) {
-                    pins = this->phi2_write(pins, REG_AB, this->get(REG_DL));
+                    pins = this->phi2_write<Addr::AB>(pins, this->get(REG_DL));
                     transition_to_fetch();
                 }
                 return pins;
         }
     } else {
         // Accumulator mode - single cycle with dummy PHI2 read
-        pins = this->phi2_dummy_read(pins, REG_PC);
+        pins = this->phi2_dummy_read<Addr::PC>(pins);
         if (FAM65XX_GET_RDY(pins)) {
             // Perform operation on accumulator (modify step)
             uint8_t value = this->get(REG_A);
