@@ -15,6 +15,43 @@
 
 /* PHA - Push Accumulator */
 bus_state_t op_pha(bus_state_t pins) {
+    // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
+    if constexpr (has_wide_registers()) {
+        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_M)) {
+            // Native mode, 16-bit accumulator - perform 16-bit PHA
+            switch (this->cycle_index) {
+                case 0:
+                    /* Dummy cycle for internal operation */
+                    pins = this->phi2_dummy_read(pins, REG_PC);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        this->cycle_index++;
+                    }
+                    return pins;
+                    
+                case 1:
+                    /* PHI2: Write high byte of A to stack */
+                    if (this->should_complete_write_cycle(pins)) {
+                        uint16_t acc = this->get(REG_A_FULL);
+                        pins = this->phi2_write(pins, REG_SP, (acc >> 8) & 0xFF);
+                        this->dec(REG_S);
+                        this->cycle_index++;
+                    }
+                    return pins;
+                    
+                case 2:
+                    /* PHI2: Write low byte of A to stack */
+                    if (this->should_complete_write_cycle(pins)) {
+                        pins = this->phi2_write(pins, REG_SP, this->get(REG_A));
+                        this->dec(REG_S);
+                        this->transition_to_fetch();
+                    }
+                    return pins;
+            }
+            return pins;
+        }
+    }
+    
+    // Standard 8-bit PHA operation (emulation mode and non-wide CPUs)
     switch (this->cycle_index) {
         case 0:
             /* Dummy cycle for internal operation */
@@ -29,7 +66,7 @@ bus_state_t op_pha(bus_state_t pins) {
             if (this->should_complete_write_cycle(pins)) {
                 pins = this->phi2_write(pins, REG_SP, this->get(REG_A));
                 this->dec(REG_S);
-                transition_to_fetch();
+                this->transition_to_fetch();
             }
             return pins;
     }
@@ -53,7 +90,7 @@ bus_state_t op_php(bus_state_t pins) {
             if (this->should_complete_write_cycle(pins)) {
                 pins = this->phi2_write(pins, REG_SP, this->get(REG_DL));
                 this->dec(REG_S);
-                transition_to_fetch();
+                this->transition_to_fetch();
             }
             return pins;
     }
@@ -62,6 +99,60 @@ bus_state_t op_php(bus_state_t pins) {
 
 /* PLA - Pull Accumulator */
 bus_state_t op_pla(bus_state_t pins) {
+    // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
+    if constexpr (has_wide_registers()) {
+        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_M)) {
+            // Native mode, 16-bit accumulator - perform 16-bit PLA
+            switch (this->cycle_index) {
+                case 0:
+                    /* PHI2: Dummy read from PC */
+                    pins = this->phi2_dummy_read(pins, REG_PC);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        this->cycle_index++;
+                    }
+                    return pins;
+                    
+                case 1:
+                    /* PHI2: Dummy read from current stack pointer, then increment SP */
+                    pins = this->phi2_dummy_read(pins, REG_SP);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        /* PHI1: Increment stack pointer */
+                        this->inc(REG_S);
+                        this->cycle_index++;
+                    }
+                    return pins;
+                    
+                case 2:
+                    /* PHI2: Read low byte from incremented stack pointer */
+                    pins = this->phi2_read(pins, REG_SP, REG_DL);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        /* PHI1: Increment stack pointer again */
+                        this->inc(REG_S);
+                        this->cycle_index++;
+                    }
+                    return pins;
+                    
+                case 3:
+                    /* PHI2: Read high byte from incremented stack pointer */
+                    pins = this->phi2_read(pins, REG_SP, REG_AH);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        /* PHI1: Set 16-bit accumulator and flags */
+                        uint16_t value = (this->get(REG_AH) << 8) | this->get(REG_DL);
+                        this->set(REG_A_FULL, value);
+                        
+                        // Update flags for 16-bit operation
+                        this->update_flag(FLAG_Z, value == 0);
+                        this->update_flag(FLAG_N, (value & 0x8000) != 0);
+                        
+                        this->transition_to_fetch();
+                    }
+                    return pins;
+            }
+            return pins;
+        }
+    }
+    
+    // Standard 8-bit PLA operation (emulation mode and non-wide CPUs)
     switch (this->cycle_index) {
         case 0:
             /* PHI2: Dummy read from PC */
@@ -86,8 +177,8 @@ bus_state_t op_pla(bus_state_t pins) {
             pins = this->phi2_read(pins, REG_SP, REG_A);
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Set flags based on accumulator value */
-                update_nz_flags(this->get(REG_A));
-                transition_to_fetch();
+                this->update_nz_flags(this->get(REG_A));
+                this->transition_to_fetch();
             }
             return pins;
     }
@@ -121,7 +212,7 @@ bus_state_t op_plp(bus_state_t pins) {
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Store in P (clear B, set U) */
                 this->set(REG_P, (this->get(REG_DL) & ~FLAG_B) | FLAG_U);
-                transition_to_fetch();
+                this->transition_to_fetch();
             }
             return pins;
     }

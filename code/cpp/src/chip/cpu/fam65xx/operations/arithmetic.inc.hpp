@@ -15,6 +15,48 @@
 // ============================================================================
 
 bus_state_t op_adc(bus_state_t pins) {
+    // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
+    if constexpr (this->has_wide_registers()) {
+        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_M)) {
+            // 65C816 native mode, 16-bit accumulator - perform 16-bit ADC
+            switch (this->cycle_index) {
+                case 0:
+                    // Read low byte of operand
+                    pins = this->phi2_read_operand(pins, REG_DL);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        this->cycle_index++;
+                        // For 65C816 native mode, increment address bus with bank handling
+                        this->inc(REG_AB);
+                    }
+                    return pins;
+                    
+                case 1:
+                    // Read high byte of operand
+                    pins = this->phi2_read(pins, REG_AB, REG_AH);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        // Perform 16-bit ADC operation
+                        uint16_t operand = (this->get(REG_AH) << 8) | this->get(REG_DL);
+                        uint16_t acc = this->get(REG_A_FULL);
+                        uint32_t result = acc + operand + ((this->get(REG_P) & FLAG_C) ? 1 : 0);
+                        
+                        // Set accumulator
+                        this->set(REG_A_FULL, result & 0xFFFF);
+                        
+                        // Update flags for 16-bit operation
+                        this->update_flag(FLAG_C, result > 0xFFFF);
+                        this->update_flag(FLAG_Z, (result & 0xFFFF) == 0);
+                        this->update_flag(FLAG_N, (result & 0x8000) != 0);
+                        this->update_flag(FLAG_V, ((acc ^ result) & (operand ^ result) & 0x8000) != 0);
+                        
+                        this->transition_to_fetch();
+                    }
+                    return pins;
+            }
+            return pins;
+        }
+    }
+    
+    // Standard 8-bit ADC operation (emulation mode and non-wide CPUs)
     switch (this->cycle_index) {
         case 0:
             // Read operand directly into DL register
@@ -58,41 +100,35 @@ bus_state_t op_nop(bus_state_t pins) {
     // In emulation mode, 65C816 should behave exactly like 6502, not CMOS
     // This means NO RMW operations should be performed for NOP in emulation mode
     
-    // HIGHEST PRIORITY: Check for 65C816 emulation mode first
-    if constexpr (this->has_wide_registers()) {
-        if (this->get_emulation_mode()) {
-            // In emulation mode: behave like pure NMOS 6502
-            // Skip ALL CMOS logic entirely - force immediate standard NOP handling
-            // This ensures 100% 6502 compatibility without any CMOS behavior
-            goto standard_nop_handling;
-        }
-    }
+    // Check if we should use CMOS RMW behavior
+    bool use_cmos_rmw = false;
     
     // SECONDARY: WDC65C02 neutralized illegal opcodes preserve original addressing timing
     // This code should ONLY execute for non-65C816 CMOS processors or 65C816 in native mode
     if constexpr (this->has_cmos()) {
-        // TRIPLE SAFETY CHECK: Absolutely ensure we're not in 65C816 emulation mode
+        // Check if we're NOT in 65C816 emulation mode
+        bool not_in_emulation = true;
         if constexpr (this->has_wide_registers()) {
-            // If we're 65C816 and in emulation mode, force standard handling
-            if (this->get_emulation_mode()) {
-                goto standard_nop_handling;
-            }
+            not_in_emulation = !this->get_emulation_mode();
         }
         
         // Only proceed with RMW if we have RMW flags AND we're not in 65C816 emulation mode
-        if (this->opcode_entry.flags & to_index(OF::RMW)) {
-            // RMW mode NOP: Perform full read-modify-write cycle but don't modify the value
-            // This preserves the bus cycle timing for WDC65C02 neutralized illegal opcodes
-            return this->rmw_operation_helper(pins, [this](uint8_t& value) {
-                // NOP operation: read the value but don't modify it
-                // This creates the correct bus cycle pattern for WDC65C02 illegal opcodes
-                (void)value; // Suppress unused parameter warning
-                // No operation performed - value remains unchanged
-            });
+        if (not_in_emulation && (this->opcode_entry.flags & to_index(OF::RMW))) {
+            use_cmos_rmw = true;
         }
     }
     
-standard_nop_handling:
+    // Handle CMOS RMW NOP if applicable
+    if (use_cmos_rmw) {
+        // RMW mode NOP: Perform full read-modify-write cycle but don't modify the value
+        // This preserves the bus cycle timing for WDC65C02 neutralized illegal opcodes
+        return this->rmw_operation_helper(pins, [this](uint8_t& value) {
+            // NOP operation: read the value but don't modify it
+            // This creates the correct bus cycle pattern for WDC65C02 illegal opcodes
+            (void)value; // Suppress unused parameter warning
+            // No operation performed - value remains unchanged
+        });
+    }
     
     // Regular NOP handling for non-RMW modes
     switch (this->opcode_entry.am_index) {
@@ -158,6 +194,48 @@ standard_nop_handling:
 // ============================================================================
 
 bus_state_t op_sbc(bus_state_t pins) {
+    // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
+    if constexpr (this->has_wide_registers()) {
+        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_M)) {
+            // 65C816 native mode, 16-bit accumulator - perform 16-bit SBC
+            switch (this->cycle_index) {
+                case 0:
+                    // Read low byte of operand
+                    pins = this->phi2_read_operand(pins, REG_DL);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        this->cycle_index++;
+                        // For 65C816 native mode, increment address bus with bank handling
+                        this->inc(REG_AB);
+                    }
+                    return pins;
+                    
+                case 1:
+                    // Read high byte of operand
+                    pins = this->phi2_read(pins, REG_AB, REG_AH);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        // Perform 16-bit SBC operation
+                        uint16_t operand = (this->get(REG_AH) << 8) | this->get(REG_DL);
+                        uint16_t acc = this->get(REG_A_FULL);
+                        uint32_t result = acc - operand - ((this->get(REG_P) & FLAG_C) ? 0 : 1);
+                        
+                        // Set accumulator
+                        this->set(REG_A_FULL, result & 0xFFFF);
+                        
+                        // Update flags for 16-bit operation
+                        this->update_flag(FLAG_C, result <= 0xFFFF);
+                        this->update_flag(FLAG_Z, (result & 0xFFFF) == 0);
+                        this->update_flag(FLAG_N, (result & 0x8000) != 0);
+                        this->update_flag(FLAG_V, ((acc ^ operand) & (acc ^ result) & 0x8000) != 0);
+                        
+                        this->transition_to_fetch();
+                    }
+                    return pins;
+            }
+            return pins;
+        }
+    }
+    
+    // Standard 8-bit SBC operation (emulation mode and non-wide CPUs)
     switch (this->cycle_index) {
         case 0:
             // Read operand directly into DL register
@@ -197,7 +275,44 @@ bus_state_t op_sbc(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_cmp(bus_state_t pins) {
-    // Read operand directly into DL register
+    // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
+    if constexpr (this->has_wide_registers()) {
+        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_M)) {
+            // 65C816 native mode, 16-bit accumulator - perform 16-bit CMP
+            switch (this->cycle_index) {
+                case 0:
+                    // Read low byte of operand
+                    pins = this->phi2_read_operand(pins, REG_DL);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        this->cycle_index++;
+                        // For 65C816 native mode, increment address bus with bank handling
+                        this->inc(REG_AB);
+                    }
+                    return pins;
+                    
+                case 1:
+                    // Read high byte of operand
+                    pins = this->phi2_read(pins, REG_AB, REG_AH);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        // Perform 16-bit comparison
+                        uint16_t operand = (this->get(REG_AH) << 8) | this->get(REG_DL);
+                        uint16_t acc = this->get(REG_A_FULL);
+                        uint32_t result = acc - operand;
+                        
+                        // Update flags for 16-bit operation
+                        this->update_flag(FLAG_C, acc >= operand);
+                        this->update_flag(FLAG_Z, acc == operand);
+                        this->update_flag(FLAG_N, (result & 0x8000) != 0);
+                        
+                        this->transition_to_fetch();
+                    }
+                    return pins;
+            }
+            return pins;
+        }
+    }
+    
+    // Standard 8-bit CMP operation (emulation mode and non-wide CPUs)
     pins = this->phi2_read_operand(pins, REG_DL);
     if (FAM65XX_GET_RDY(pins)) {
         uint8_t operand = this->get(REG_DL);
@@ -217,7 +332,44 @@ bus_state_t op_cmp(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_cpx(bus_state_t pins) {
-    // Read operand directly into DL register
+    // Check for 65C816 native mode with 16-bit index registers (X=0) - nested native code
+    if constexpr (this->has_wide_registers()) {
+        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_X)) {
+            // 65C816 native mode, 16-bit X register - perform 16-bit CPX
+            switch (this->cycle_index) {
+                case 0:
+                    // Read low byte of operand
+                    pins = this->phi2_read_operand(pins, REG_DL);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        this->cycle_index++;
+                        // For 65C816 native mode, increment address bus with bank handling
+                        this->inc(REG_AB);
+                    }
+                    return pins;
+                    
+                case 1:
+                    // Read high byte of operand
+                    pins = this->phi2_read(pins, REG_AB, REG_AH);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        // Perform 16-bit comparison
+                        uint16_t operand = (this->get(REG_AH) << 8) | this->get(REG_DL);
+                        uint16_t x = this->get_x_register();
+                        uint32_t result = x - operand;
+                        
+                        // Update flags for 16-bit operation
+                        this->update_flag(FLAG_C, x >= operand);
+                        this->update_flag(FLAG_Z, x == operand);
+                        this->update_flag(FLAG_N, (result & 0x8000) != 0);
+                        
+                        this->transition_to_fetch();
+                    }
+                    return pins;
+            }
+            return pins;
+        }
+    }
+    
+    // Standard 8-bit CPX operation (emulation mode and non-wide CPUs)
     pins = this->phi2_read_operand(pins, REG_DL);
     if (FAM65XX_GET_RDY(pins)) {
         uint8_t operand = this->get(REG_DL);
@@ -237,7 +389,44 @@ bus_state_t op_cpx(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_cpy(bus_state_t pins) {
-    // Read operand directly into DL register
+    // Check for 65C816 native mode with 16-bit index registers (X=0) - nested native code
+    if constexpr (this->has_wide_registers()) {
+        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_X)) {
+            // 65C816 native mode, 16-bit Y register - perform 16-bit CPY
+            switch (this->cycle_index) {
+                case 0:
+                    // Read low byte of operand
+                    pins = this->phi2_read_operand(pins, REG_DL);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        this->cycle_index++;
+                        // For 65C816 native mode, increment address bus with bank handling
+                        this->inc(REG_AB);
+                    }
+                    return pins;
+                    
+                case 1:
+                    // Read high byte of operand
+                    pins = this->phi2_read(pins, REG_AB, REG_AH);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        // Perform 16-bit comparison
+                        uint16_t operand = (this->get(REG_AH) << 8) | this->get(REG_DL);
+                        uint16_t y = this->get_y_register();
+                        uint32_t result = y - operand;
+                        
+                        // Update flags for 16-bit operation
+                        this->update_flag(FLAG_C, y >= operand);
+                        this->update_flag(FLAG_Z, y == operand);
+                        this->update_flag(FLAG_N, (result & 0x8000) != 0);
+                        
+                        this->transition_to_fetch();
+                    }
+                    return pins;
+            }
+            return pins;
+        }
+    }
+    
+    // Standard 8-bit CPY operation (emulation mode and non-wide CPUs)
     pins = this->phi2_read_operand(pins, REG_DL);
     if (FAM65XX_GET_RDY(pins)) {
         uint8_t operand = this->get(REG_DL);
@@ -280,32 +469,6 @@ bus_state_t op_dec(bus_state_t pins) {
         // Update N and Z flags using optimized helper
         this->update_nz_flags(value);
     });
-}
-
-// ============================================================================
-// 16-BIT ARITHMETIC (65C816 only)
-// ============================================================================
-
-bus_state_t op_adc_16bit(bus_state_t pins) {
-    if constexpr (this->has_wide_registers()) {
-        // 16-bit ADC implementation for 65C816
-        // This would be a more complex implementation
-        // For now, delegate to 8-bit version
-        return op_adc(pins);
-    }
-    
-    // Should not be called on processors without wide registers
-    return pins;
-}
-
-bus_state_t op_sbc_16bit(bus_state_t pins) {
-    if constexpr (this->has_wide_registers()) {
-        // 16-bit SBC implementation for 65C816
-        return op_sbc(pins);
-    }
-    
-    // Should not be called on processors without wide registers
-    return pins;
 }
 
 #endif // FAM65XX_SKIP_IMPLEMENTATION
