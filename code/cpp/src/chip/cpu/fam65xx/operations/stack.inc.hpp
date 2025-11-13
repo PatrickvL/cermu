@@ -31,8 +31,7 @@ bus_state_t op_pha(bus_state_t pins) {
                 case 1:
                     /* PHI2: Write high byte of A to stack */
                     if (this->should_complete_write_cycle(pins)) {
-                        uint16_t acc = this->get(REG_A_FULL);
-                        pins = this->phi2_write<Addr::SP>(pins, (acc >> 8) & 0xFF);
+                        pins = this->phi2_write<Addr::SP>(pins, this->get(REG_AH));
                         this->dec(REG_S);
                         this->cycle_index++;
                     }
@@ -41,7 +40,7 @@ bus_state_t op_pha(bus_state_t pins) {
                 case 2:
                     /* PHI2: Write low byte of A to stack */
                     if (this->should_complete_write_cycle(pins)) {
-                        pins = this->phi2_write<Addr::SP>(pins, this->get(REG_A));
+                        pins = this->phi2_write<Addr::SP>(pins, this->get(REG_AL));
                         this->dec(REG_S);
                         this->transition_to_fetch();
                     }
@@ -80,9 +79,9 @@ bus_state_t op_php(bus_state_t pins) {
             /* Dummy cycle for internal operation */
             pins = this->phi2_dummy_read<Addr::PC>(pins);
             if (FAM65XX_GET_RDY(pins)) {
+                this->set(REG_DL, this->get(REG_P) | FLAG_B | FLAG_U);
                 this->cycle_index++;
             }
-            this->set(REG_DL, this->get(REG_P) | FLAG_B | FLAG_U);
             return pins;
             
         case 1:
@@ -123,8 +122,8 @@ bus_state_t op_pla(bus_state_t pins) {
                     return pins;
                     
                 case 2:
-                    /* PHI2: Read low byte from incremented stack pointer */
-                    pins = this->phi2_read<Addr::SP>(pins, REG_DL);
+                    /* PHI2: Read accumulator low byte from incremented stack pointer */
+                    pins = this->phi2_read<Addr::SP>(pins, REG_AL);
                     if (FAM65XX_GET_RDY(pins)) {
                         /* PHI1: Increment stack pointer again */
                         this->inc(REG_S);
@@ -133,14 +132,11 @@ bus_state_t op_pla(bus_state_t pins) {
                     return pins;
                     
                 case 3:
-                    /* PHI2: Read high byte from incremented stack pointer */
+                    /* PHI2: Read accumulator high byte from incremented stack pointer */
                     pins = this->phi2_read<Addr::SP>(pins, REG_AH);
-                    if (FAM65XX_GET_RDY(pins)) {
-                        /* PHI1: Set 16-bit accumulator and flags */
-                        uint16_t value = (this->get(REG_AH) << 8) | this->get(REG_DL);
-                        this->set(REG_A_FULL, value);
-                        
+                    if (FAM65XX_GET_RDY(pins)) {                        
                         // Update flags for 16-bit operation
+                        uint16_t value = this->get(REG_A_16);
                         this->update_flag(FLAG_Z, value == 0);
                         this->update_flag(FLAG_N, (value & 0x8000) != 0);
                         
@@ -207,7 +203,7 @@ bus_state_t op_plp(bus_state_t pins) {
             return pins;
             
         case 2:
-            /* PHI2: Read from incremented stack pointer */
+            /* PHI2: Read status byte from incremented stack pointer */
             pins = this->phi2_read<Addr::SP>(pins, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
                 /* PHI1: Store in P (clear B, set U) */

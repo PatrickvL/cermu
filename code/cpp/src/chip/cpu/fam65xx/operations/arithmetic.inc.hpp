@@ -32,15 +32,16 @@ bus_state_t op_adc(bus_state_t pins) {
                     
                 case 1:
                     // Read high byte of operand
-                    pins = this->phi2_read<Addr::AB>(pins, REG_AH);
+                    pins = this->phi2_read<Addr::AB>(pins, REG_ABH);
                     if (FAM65XX_GET_RDY(pins)) {
                         // Perform 16-bit ADC operation
-                        uint16_t operand = (this->get(REG_AH) << 8) | this->get(REG_DL);
-                        uint16_t acc = this->get(REG_A_FULL);
+                        this->set(REG_ABL, this->get(REG_DL));
+                        uint16_t operand = this->get(REG_AB);
+                        uint16_t acc = this->get(REG_A_16);
                         uint32_t result = acc + operand + ((this->get(REG_P) & FLAG_C) ? 1 : 0);
                         
                         // Set accumulator
-                        this->set(REG_A_FULL, result & 0xFFFF);
+                        this->set(REG_A_16, result & 0xFFFF);
                         
                         // Update flags for 16-bit operation
                         this->update_flag(FLAG_C, result > 0xFFFF);
@@ -215,11 +216,11 @@ bus_state_t op_sbc(bus_state_t pins) {
                     if (FAM65XX_GET_RDY(pins)) {
                         // Perform 16-bit SBC operation
                         uint16_t operand = (this->get(REG_AH) << 8) | this->get(REG_DL);
-                        uint16_t acc = this->get(REG_A_FULL);
+                        uint16_t acc = this->get(REG_A_16);
                         uint32_t result = acc - operand - ((this->get(REG_P) & FLAG_C) ? 0 : 1);
                         
                         // Set accumulator
-                        this->set(REG_A_FULL, result & 0xFFFF);
+                        this->set(REG_A_16, result & 0xFFFF);
                         
                         // Update flags for 16-bit operation
                         this->update_flag(FLAG_C, result <= 0xFFFF);
@@ -296,7 +297,7 @@ bus_state_t op_cmp(bus_state_t pins) {
                     if (FAM65XX_GET_RDY(pins)) {
                         // Perform 16-bit comparison
                         uint16_t operand = (this->get(REG_AH) << 8) | this->get(REG_DL);
-                        uint16_t acc = this->get(REG_A_FULL);
+                        uint16_t acc = this->get(REG_A_16);
                         uint32_t result = acc - operand;
                         
                         // Update flags for 16-bit operation

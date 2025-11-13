@@ -667,7 +667,7 @@ public:
     uint16_t get_a() override {
         // For 65816 in native mode, return full 16-bit accumulator
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            return cpu->get(REG_A) | (cpu->get(REG_AH) << 8);
+            return cpu->get(REG_A_16);
         } else {
             // For 8-bit processors, extend to 16-bit
             return cpu->get(REG_A);
@@ -677,7 +677,7 @@ public:
     uint16_t get_x() override {
         // For 65816 in native mode, return full 16-bit X register
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            return cpu->get(REG_X) | (cpu->get(REG_XH) << 8);
+            return cpu->get(REG_X_16);
         } else {
             // For 8-bit processors, extend to 16-bit
             return cpu->get(REG_X);
@@ -687,7 +687,7 @@ public:
     uint16_t get_y() override {
         // For 65816 in native mode, return full 16-bit Y register
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            return cpu->get(REG_Y) | (cpu->get(REG_YH) << 8);
+            return cpu->get(REG_Y_16);
         } else {
             // For 8-bit processors, extend to 16-bit
             return cpu->get(REG_Y);
@@ -709,8 +709,7 @@ public:
     void set_a(uint16_t a) override {
         // For 65816, set both low and high bytes
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            cpu->set(REG_A, a & 0xFF);
-            cpu->set(REG_AH, (a >> 8) & 0xFF);
+            cpu->set(REG_A_16, a);
         } else {
             // For 8-bit processors, truncate to low byte
             cpu->set(REG_A, a & 0xFF);
@@ -720,8 +719,7 @@ public:
     void set_x(uint16_t x) override {
         // For 65816, set both low and high bytes
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            cpu->set(REG_X, x & 0xFF);
-            cpu->set(REG_XH, (x >> 8) & 0xFF);
+            cpu->set(REG_X_16, x);
         } else {
             // For 8-bit processors, truncate to low byte
             cpu->set(REG_X, x & 0xFF);
@@ -731,8 +729,7 @@ public:
     void set_y(uint16_t y) override {
         // For 65816, set both low and high bytes
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            cpu->set(REG_Y, y & 0xFF);
-            cpu->set(REG_YH, (y >> 8) & 0xFF);
+            cpu->set(REG_Y_16, y);
         } else {
             // For 8-bit processors, truncate to low byte
             cpu->set(REG_Y, y & 0xFF);

@@ -287,7 +287,7 @@ typedef enum : uint8_t {
     REG_PCH = 4,       // Program Counter (high byte)
     REG_PCL = 5,       // Program Counter (low byte)
     REG_AH = 6,        // Accumulator high byte (65C816) / unused (8-bit CPUs)
-    REG_AL = 7,        // Accumulator (low byte for 65C816)
+    REG_A = 7,        // Accumulator (low byte for 65C816)
     REG_XH = 8,        // X index high byte (65C816) / unused (8-bit CPUs)
     REG_XL = 9,        // X index (low byte for 65C816)
     REG_YH = 10,       // Y index high byte (65C816) / unused (8-bit CPUs)
@@ -309,13 +309,16 @@ typedef enum : uint8_t {
     REG_DPL = 17,      // Direct Page low byte (65C816 only)
 #endif
     REG_PBR = 18,      // Program Bank register (65C816 only)
-    REG_ZBR = 19,      // Zero Bank register (always 0x00, for 65C816 emulation mode and stack/DP access)
+    REG_SBR = 19,      // Source Bank register (65C816 only)
+//    REG_TBR = 20,      // Destination (To) Bank register (65C816 only)
+    REG_ZBR = 21,      // Zero Bank register (always 0x00, for 65C816 emulation mode and stack/DP access)
 
     REG_COUNT_16BIT,  // Number of 8-bit registers for 65C816
     REG_COUNT_8BIT = REG_DL + 1,  // Core registers 0-14 (high bytes unused for 8-bit CPUs)
     
     // Compatibility mapping
-    REG_A = REG_AL,    // Map legacy A register to AL for compatibility
+    REG_A = REG_AL,    // Map legacy A register to AL for compatibility (intentionally swapped from 65C816 : A high and B low byte)
+    REG_B = REG_AH,    // Map legacy B register to AH for compatibility
     REG_X = REG_XL,    // Map legacy X register to XL for compatibility
     REG_Y = REG_YL,    // Map legacy Y register to YL for compatibility
     REG_S = REG_SPL    // Map legacy S register to SPL for compatibility
@@ -329,10 +332,14 @@ typedef enum : uint8_t {
     
     // 65C816 extended 16-bit registers (only meaningful for wide CPUs)
     // Now properly aligned with endian-aware register pairs
-    REG_A_FULL = REG_AL / 2, // Full accumulator (65C816 only)
-    REG_X_FULL = REG_XL / 2, // Full X register (65C816 only)
-    REG_Y_FULL = REG_YL / 2, // Full Y register (65C816 only)
-    REG_D = REG_DPL / 2,     // Direct Page register (65C816 only)
+    REG_A_16 = REG_AL / 2,  // Full accumulator (16-bit, 65C816 only)
+    REG_X_16 = REG_XL / 2,  // Full X register (16-bit, 65C816 only)
+    REG_Y_16 = REG_YL / 2,  // Full Y register (16-bit, 65C816 only)
+    REG_D_16 = REG_DPL / 2, // Direct Page register (16-bit, 65C816 only)
+
+    // Compatibility mapping
+    REG_C = REG_A_16,       // Map legacy C register to REG_A_16 for compatibility
+    REG_D = REG_D_16        // Direct Page register (16-bit, 65C816 only)
 } reg16_t;
 
 // Addr enum class for template parameters
@@ -346,6 +353,8 @@ enum class Addr : uint8_t {
 enum class Bank : uint8_t {
     DBR = REG_DBR,  // Data Bank register (8-bit, 65C816 only)
     PBR = REG_PBR,  // Program Bank register (8-bit, 65C816 only)
+    SBR = REG_SBR,  // Source Bank register (8-bit, 65C816 only)
+//  TBR = REG_TBR,  // Destination (To) Bank register (8-bit, 65C816 only)
     ZBR = REG_ZBR   // Zero Bank register (8-bit, hardwired to 0x00)
 };
 

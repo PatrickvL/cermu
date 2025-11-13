@@ -69,18 +69,18 @@ bus_state_t op_tax(bus_state_t pins) {
             
             if (acc_16bit && index_16bit) {
                 // 16-bit A to 16-bit X
-                uint16_t value = this->get(REG_A_FULL);
+                uint16_t value = this->get(REG_A_16);
                 this->set_x_register(value);
                 this->update_flag(FLAG_Z, value == 0);
                 this->update_flag(FLAG_N, (value & 0x8000) != 0);
             } else if (acc_16bit && !index_16bit) {
                 // 16-bit A to 8-bit X (transfer low byte)
-                uint8_t value = this->get(REG_A);
+                uint8_t value = this->get(REG_AL);
                 this->set(REG_X, value);
                 this->update_nz_flags(value);
             } else if (!acc_16bit && index_16bit) {
                 // 8-bit A to 16-bit X (zero-extend)
-                uint16_t value = this->get(REG_A);
+                uint16_t value = this->get(REG_AL);
                 this->set_x_register(value);
                 this->update_flag(FLAG_Z, value == 0);
                 this->update_flag(FLAG_N, false); // High bit is always 0
@@ -119,7 +119,7 @@ bus_state_t op_tay(bus_state_t pins) {
             
             if (acc_16bit && index_16bit) {
                 // 16-bit A to 16-bit Y
-                uint16_t value = this->get(REG_A_FULL);
+                uint16_t value = this->get(REG_A_16);
                 this->set_y_register(value);
                 this->update_flag(FLAG_Z, value == 0);
                 this->update_flag(FLAG_N, (value & 0x8000) != 0);
@@ -198,13 +198,13 @@ bus_state_t op_txa(bus_state_t pins) {
             if (acc_16bit && index_16bit) {
                 // 16-bit X to 16-bit A
                 uint16_t value = this->get_x_register();
-                this->set(REG_A_FULL, value);
+                this->set(REG_A_16, value);
                 this->update_flag(FLAG_Z, value == 0);
                 this->update_flag(FLAG_N, (value & 0x8000) != 0);
             } else if (acc_16bit && !index_16bit) {
                 // 8-bit X to 16-bit A (zero-extend)
                 uint16_t value = this->get(REG_X);
-                this->set(REG_A_FULL, value);
+                this->set(REG_A_16, value);
                 this->update_flag(FLAG_Z, value == 0);
                 this->update_flag(FLAG_N, false); // High bit is always 0
             } else if (!acc_16bit && index_16bit) {
@@ -281,13 +281,13 @@ bus_state_t op_tya(bus_state_t pins) {
             if (acc_16bit && index_16bit) {
                 // 16-bit Y to 16-bit A
                 uint16_t value = this->get_y_register();
-                this->set(REG_A_FULL, value);
+                this->set(REG_A_16, value);
                 this->update_flag(FLAG_Z, value == 0);
                 this->update_flag(FLAG_N, (value & 0x8000) != 0);
             } else if (acc_16bit && !index_16bit) {
                 // 8-bit Y to 16-bit A (zero-extend)
                 uint16_t value = this->get(REG_Y);
-                this->set(REG_A_FULL, value);
+                this->set(REG_A_16, value);
                 this->update_flag(FLAG_Z, value == 0);
                 this->update_flag(FLAG_N, false); // High bit is always 0
             } else if (!acc_16bit && index_16bit) {

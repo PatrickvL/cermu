@@ -244,8 +244,8 @@ bus_state_t op_brk(bus_state_t pins) {
             return pins;
             
         case 4:
-            /* PHI2: Read interrupt vector low byte (using program banking PBR for 65C816) */
-            pins = this->phi2_read<Addr::AB, Bank::PBR>(pins, REG_PCL);
+            /* PHI2: Read interrupt vector low byte (always from bank 0 using ZBR for 65C816) */
+            pins = this->phi2_read<Addr::AB, Bank::ZBR>(pins, REG_PCL);
             if (FAM65XX_GET_RDY(pins)) {
                 this->cycle_index++;
                 this->inc(REG_AB);
@@ -253,8 +253,16 @@ bus_state_t op_brk(bus_state_t pins) {
             return pins;
             
         case 5:
-            /* PHI2: Read interrupt vector high byte (using program banking PBR for 65C816) */
-            pins = this->phi2_read<Addr::AB, Bank::PBR>(pins, REG_PCH);
+            /* PHI2: Read interrupt vector high byte (always from bank 0 using ZBR for 65C816) */
+            pins = this->phi2_read<Addr::AB, Bank::ZBR>(pins, REG_PCH);
+            if (FAM65XX_GET_RDY(pins)) {
+                this->cycle_index++;
+            }
+            return pins;
+            
+        case 6:
+            /* PHI2: Final cycle - dummy read from new PC to prepare for next instruction */
+            pins = this->phi2_dummy_read<Addr::PC>(pins);
             if (FAM65XX_GET_RDY(pins)) {
                 /* Clear active interrupt - interrupt processing complete */
                 this->active_interrupt = FAM65XX_INT_NONE;
