@@ -132,20 +132,20 @@ public:
     virtual uint64_t tick(uint64_t pins) = 0;
     virtual bool opdone() = 0;
     
-    // Register accessors
+    // Register accessors - support both 8-bit and 16-bit values for 65816 compatibility
     virtual uint16_t get_pc() = 0;
-    virtual uint8_t get_a() = 0;
-    virtual uint8_t get_x() = 0;
-    virtual uint8_t get_y() = 0;
-    virtual uint8_t get_sp() = 0;
-    virtual uint8_t get_status() = 0;
+    virtual uint16_t get_a() = 0;  // Return 16-bit for 65816, 8-bit extended to 16-bit for others
+    virtual uint16_t get_x() = 0;  // Return 16-bit for 65816, 8-bit extended to 16-bit for others
+    virtual uint16_t get_y() = 0;  // Return 16-bit for 65816, 8-bit extended to 16-bit for others
+    virtual uint8_t get_sp() = 0;  // Always 8-bit
+    virtual uint8_t get_status() = 0; // Always 8-bit
     
     virtual void set_pc(uint16_t pc) = 0;
-    virtual void set_a(uint8_t a) = 0;
-    virtual void set_x(uint8_t x) = 0;
-    virtual void set_y(uint8_t y) = 0;
-    virtual void set_sp(uint8_t sp) = 0;
-    virtual void set_status(uint8_t p) = 0;
+    virtual void set_a(uint16_t a) = 0;   // Accept 16-bit, truncate to 8-bit for non-65816
+    virtual void set_x(uint16_t x) = 0;   // Accept 16-bit, truncate to 8-bit for non-65816
+    virtual void set_y(uint16_t y) = 0;   // Accept 16-bit, truncate to 8-bit for non-65816
+    virtual void set_sp(uint8_t sp) = 0;  // Always 8-bit
+    virtual void set_status(uint8_t p) = 0; // Always 8-bit
     
     // 65816-specific methods (no-op for other processors)
     virtual void set_emulation_mode(bool mode) {}
@@ -388,13 +388,13 @@ public:
         return actual_bus_cycles;
     }
     
-    // CPU state accessors - use unified processor wrapper
+    // CPU state accessors - use unified processor wrapper with 16-bit register support
     void set_pc(uint16_t pc) { cpu_wrapper->set_pc(pc); }
-    void set_a(uint8_t a) { cpu_wrapper->set_a(a); }
-    void set_x(uint8_t x) { cpu_wrapper->set_x(x); }
-    void set_y(uint8_t y) { cpu_wrapper->set_y(y); }
-    void set_sp(uint8_t sp) { cpu_wrapper->set_sp(sp); }
-    void set_status(uint8_t p) { cpu_wrapper->set_status(p); }
+    void set_a(uint16_t a) { cpu_wrapper->set_a(a); }     // Accept 16-bit for 65816 compatibility
+    void set_x(uint16_t x) { cpu_wrapper->set_x(x); }     // Accept 16-bit for 65816 compatibility
+    void set_y(uint16_t y) { cpu_wrapper->set_y(y); }     // Accept 16-bit for 65816 compatibility
+    void set_sp(uint8_t sp) { cpu_wrapper->set_sp(sp); }  // Always 8-bit
+    void set_status(uint8_t p) { cpu_wrapper->set_status(p); } // Always 8-bit
     
     // 65816-specific state setters
     void set_emulation_mode(bool mode) { cpu_wrapper->set_emulation_mode(mode); }
@@ -406,11 +406,11 @@ public:
     void set_harness_for_bus_recording() { cpu_wrapper->set_harness(this); }
     
     uint16_t get_pc() const { return cpu_wrapper->get_pc(); }
-    uint8_t get_a() const { return cpu_wrapper->get_a(); }
-    uint8_t get_x() const { return cpu_wrapper->get_x(); }
-    uint8_t get_y() const { return cpu_wrapper->get_y(); }
-    uint8_t get_sp() const { return cpu_wrapper->get_sp(); }
-    uint8_t get_status() const { return cpu_wrapper->get_status(); }
+    uint16_t get_a() const { return cpu_wrapper->get_a(); }   // Return 16-bit for consistency
+    uint16_t get_x() const { return cpu_wrapper->get_x(); }   // Return 16-bit for consistency
+    uint16_t get_y() const { return cpu_wrapper->get_y(); }   // Return 16-bit for consistency
+    uint8_t get_sp() const { return cpu_wrapper->get_sp(); }  // Always 8-bit
+    uint8_t get_status() const { return cpu_wrapper->get_status(); } // Always 8-bit
     
     // Memory access methods with address wrapping
     void set_memory(uint32_t addr, uint8_t data) {
@@ -686,16 +686,34 @@ public:
         return cpu->get(REG_PC);
     }
     
-    uint8_t get_a() override {
-        return cpu->get(REG_A);
+    uint16_t get_a() override {
+        // For 65816 in native mode, return full 16-bit accumulator
+        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+            return cpu->get(REG_A) | (cpu->get(REG_AH) << 8);
+        } else {
+            // For 8-bit processors, extend to 16-bit
+            return cpu->get(REG_A);
+        }
     }
     
-    uint8_t get_x() override {
-        return cpu->get(REG_X);
+    uint16_t get_x() override {
+        // For 65816 in native mode, return full 16-bit X register
+        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+            return cpu->get(REG_X) | (cpu->get(REG_XH) << 8);
+        } else {
+            // For 8-bit processors, extend to 16-bit
+            return cpu->get(REG_X);
+        }
     }
     
-    uint8_t get_y() override {
-        return cpu->get(REG_Y);
+    uint16_t get_y() override {
+        // For 65816 in native mode, return full 16-bit Y register
+        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+            return cpu->get(REG_Y) | (cpu->get(REG_YH) << 8);
+        } else {
+            // For 8-bit processors, extend to 16-bit
+            return cpu->get(REG_Y);
+        }
     }
     
     uint8_t get_sp() override {
@@ -710,16 +728,37 @@ public:
         cpu->set(REG_PC, pc);
     }
     
-    void set_a(uint8_t a) override {
-        cpu->set(REG_A, a);
+    void set_a(uint16_t a) override {
+        // For 65816, set both low and high bytes
+        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+            cpu->set(REG_A, a & 0xFF);
+            cpu->set(REG_AH, (a >> 8) & 0xFF);
+        } else {
+            // For 8-bit processors, truncate to low byte
+            cpu->set(REG_A, a & 0xFF);
+        }
     }
     
-    void set_x(uint8_t x) override {
-        cpu->set(REG_X, x);
+    void set_x(uint16_t x) override {
+        // For 65816, set both low and high bytes
+        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+            cpu->set(REG_X, x & 0xFF);
+            cpu->set(REG_XH, (x >> 8) & 0xFF);
+        } else {
+            // For 8-bit processors, truncate to low byte
+            cpu->set(REG_X, x & 0xFF);
+        }
     }
     
-    void set_y(uint8_t y) override {
-        cpu->set(REG_Y, y);
+    void set_y(uint16_t y) override {
+        // For 65816, set both low and high bytes
+        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+            cpu->set(REG_Y, y & 0xFF);
+            cpu->set(REG_YH, (y >> 8) & 0xFF);
+        } else {
+            // For 8-bit processors, truncate to low byte
+            cpu->set(REG_Y, y & 0xFF);
+        }
     }
     
     void set_sp(uint8_t sp) override {
