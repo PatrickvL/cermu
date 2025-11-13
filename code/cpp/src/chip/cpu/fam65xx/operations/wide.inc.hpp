@@ -227,11 +227,23 @@ bus_state_t op_phd(bus_state_t pins) {
 // PHK - Push Program Bank Register (65C816)
 bus_state_t op_phk(bus_state_t pins) {
     if constexpr (this->has_wide_registers()) {
-        // Push PBR to stack
-        if (this->should_complete_write_cycle(pins)) {
-            pins = this->phi2_write<Addr::SP>(pins, this->get(REG_PBR));
-            this->dec(REG_S);
-            this->transition_to_fetch();
+        switch (this->cycle_index) {
+            case 0:
+                // Dummy read from PC (internal operation)
+                pins = this->phi2_dummy_read<Addr::PC>(pins);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->cycle_index++;
+                }
+                return pins;
+            case 1:
+                // Push PBR to stack
+                if (this->should_complete_write_cycle(pins)) {
+                    pins = this->phi2_write<Addr::SP>(pins, this->get(REG_PBR));
+                    this->dec(REG_S);
+                    this->transition_to_fetch();
+                }
+                return pins;
+            }
         }
         return pins;
     }
@@ -246,6 +258,14 @@ bus_state_t op_plb(bus_state_t pins) {
     if constexpr (this->has_wide_registers()) {
         switch (this->cycle_index) {
             case 0:
+                // Dummy read from current PC
+                pins = this->phi2_dummy_read<Addr::PC>(pins);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 1:
                 // Dummy read from current SP, then increment SP
                 pins = this->phi2_dummy_read<Addr::SP>(pins);
                 if (FAM65XX_GET_RDY(pins)) {
@@ -254,7 +274,7 @@ bus_state_t op_plb(bus_state_t pins) {
                 }
                 return pins;
                 
-            case 1:
+            case 2:
                 // Pull DBR from stack
                 pins = this->phi2_read<Addr::SP>(pins, REG_DBR);
                 if (FAM65XX_GET_RDY(pins)) {
@@ -630,7 +650,7 @@ bus_state_t op_mvp(bus_state_t pins) {
         switch (this->cycle_index) {
             case 0:
                 // Read destination bank
-                pins = this->phi2_read<Addr::PC>(pins, REG_DBR);
+                pins = this->phi2_read<Addr::PC>(pins, REG_DL);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->inc(REG_PC);
                     this->cycle_index++;
@@ -642,6 +662,7 @@ bus_state_t op_mvp(bus_state_t pins) {
                 pins = this->phi2_read<Addr::PC>(pins, REG_SBR);
                 if (FAM65XX_GET_RDY(pins)) {
                     this->inc(REG_PC);
+                    this->set(REG_DBR, this->get(REG_DL)); // destination bank from case 0
                     this->set(REG_AB, this->get(REG_X));
                     this->cycle_index++;
                 }
@@ -660,7 +681,6 @@ bus_state_t op_mvp(bus_state_t pins) {
                 // Write to destination address (bank:Y)
                 if (this->should_complete_write_cycle(pins)) {
                     pins = this->phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DL));
-                    
                     // Decrement X and Y (move in opposite direction from MVN)
                     this->dec(REG_X);
                     this->dec(REG_Y);
