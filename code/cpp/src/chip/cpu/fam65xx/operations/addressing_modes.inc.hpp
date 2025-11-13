@@ -512,9 +512,35 @@ bus_state_t am_abi(bus_state_t pins) {
 // Direct Page addressing: dp (65C816)
 bus_state_t am_dp(bus_state_t pins) {
     if constexpr (this->has_wide_registers()) {
-        // Use Direct Page register instead of zero page
-        // Implementation would use this->get(REG_D)
-        return pins; // Placeholder
+        switch (this->cycle_index) {
+            case 0:
+                // PHI2: Read Direct Page offset from PC
+                pins = this->phi2_read<Addr::PC>(pins, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    
+                    // Calculate Direct Page address (always in Bank $00)
+                    uint16_t dp_addr = this->get(REG_D) + this->get(REG_DL);
+                    this->set(REG_ABL, dp_addr & 0xFF);
+                    this->set(REG_ABH, (dp_addr >> 8) & 0xFF);
+                    
+                    // Check for Direct Page alignment penalty
+                    if ((this->get(REG_D) & 0xFF) != 0x00) {
+                        this->cycle_index++;
+                    } else {
+                        this->transition_to_operation();
+                    }
+                }
+                return pins;
+                
+            case 1:
+                // PHI2: Direct Page penalty cycle
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->transition_to_operation();
+                }
+                return pins;
+        }
+        return pins;
     }
     
     // Fall back to zero page on emulation mode and non-wide processors
@@ -524,8 +550,50 @@ bus_state_t am_dp(bus_state_t pins) {
 // Direct Page,X addressing: dp,X (65C816)
 bus_state_t am_dpx(bus_state_t pins) {
     if constexpr (this->has_wide_registers()) {
-        // Use Direct Page register with X indexing
-        return pins; // Placeholder
+        switch (this->cycle_index) {
+            case 0:
+                // PHI2: Read Direct Page offset from PC
+                pins = this->phi2_read<Addr::PC>(pins, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    
+                    // Calculate Direct Page base address (always in Bank $00)
+                    uint16_t dp_addr = this->get(REG_D) + this->get(REG_DL);
+                    this->set(REG_ABL, dp_addr & 0xFF);
+                    this->set(REG_ABH, (dp_addr >> 8) & 0xFF);
+                    
+                    // Check for Direct Page alignment penalty
+                    if ((this->get(REG_D) & 0xFF) != 0x00) {
+                        this->cycle_index++;
+                    } else {
+                        // No penalty - proceed directly to indexing
+                        this->cycle_index = 2;
+                    }
+                }
+                return pins;
+                
+            case 1:
+                // PHI2: Direct Page penalty cycle
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 2:
+                // PHI2: Dummy read from Direct Page address while adding X
+                pins = this->phi2_read<Addr::AB>(pins, REG_TMP);
+                if (FAM65XX_GET_RDY(pins)) {
+                    // PHI1: Add X register to Direct Page address (wraps within bank $00)
+                    uint16_t base_addr = this->get(REG_AB);
+                    uint16_t x_val = this->get_x_register();
+                    uint16_t final_addr = (base_addr + x_val) & 0xFFFF;
+                    
+                    this->set(REG_AB, final_addr);
+                    this->transition_to_operation();
+                }
+                return pins;
+        }
+        return pins;
     }
     
     // Fall back to zero page,X on emulation mode and non-wide processors

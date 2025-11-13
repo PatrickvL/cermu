@@ -456,28 +456,39 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
     
     // WDC 65C816 modifications (16-bit enhanced instructions)
     if (traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-        // Add 65C816 specific opcodes
-        table[0x0B] = {OP::PHD, AM::NON, OF::NONE};  // PHD
-        table[0x22] = {OP::JSL, AM::ABS, OF::NONE};  // JSL
-        table[0x2B] = {OP::PLD, AM::NON, OF::NONE};  // PLD
-        table[0x4B] = {OP::PHK, AM::NON, OF::NONE};  // PHK
-        table[0x6B] = {OP::RTL, AM::NON, OF::NONE};  // RTL
-        table[0x8B] = {OP::PHB, AM::NON, OF::NONE};  // PHB
-        table[0xAB] = {OP::PLB, AM::NON, OF::NONE};  // PLB
-        table[0xC2] = {OP::REP, AM::IMM, OF::NONE};  // REP
-        table[0xE2] = {OP::SEP, AM::IMM, OF::NONE};  // SEP
-        table[0xF4] = {OP::PEA, AM::ABS, OF::NONE};  // PEA
-        table[0xFB] = {OP::XCE, AM::NON, OF::NONE};  // XCE
+        // Mode Control Instructions
+        table[0xC2] = {OP::REP, AM::IMM, OF::NONE};  // REP - Reset Processor Status Bits
+        table[0xE2] = {OP::SEP, AM::IMM, OF::NONE};  // SEP - Set Processor Status Bits
+        table[0xFB] = {OP::XCE, AM::NON, OF::NONE};  // XCE - Exchange Carry and Emulation
         
-        // Additional 65C816 instructions
-        table[0x42] = {OP::WDM, AM::IMM, OF::NONE};  // WDM
-        table[0x44] = {OP::MVN, AM::NON, OF::NONE};  // MVN
-        table[0x54] = {OP::MVP, AM::NON, OF::NONE};  // MVP
-        table[0x5C] = {OP::JML, AM::ABS, OF::NONE};  // JML
-        table[0x62] = {OP::PER, AM::REL, OF::NONE};  // PER
-        table[0xD4] = {OP::PEI, AM::ZPI, OF::NONE};  // PEI
-        table[0xDC] = {OP::JML, AM::ABI, OF::NONE};  // JML
-        table[0xF4] = {OP::PEA, AM::ABS, OF::NONE};  // PEA
+        // Enhanced Stack Operations
+        table[0x0B] = {OP::PHD, AM::NON, OF::NONE};  // PHD - Push Direct Page Register
+        table[0x2B] = {OP::PLD, AM::NON, OF::NONE};  // PLD - Pull Direct Page Register
+        table[0x4B] = {OP::PHK, AM::NON, OF::NONE};  // PHK - Push Program Bank Register
+        table[0x8B] = {OP::PHB, AM::NON, OF::NONE};  // PHB - Push Data Bank Register
+        table[0xAB] = {OP::PLB, AM::NON, OF::NONE};  // PLB - Pull Data Bank Register
+        table[0xF4] = {OP::PEA, AM::ABS, OF::NONE};  // PEA - Push Effective Absolute Address
+        table[0x62] = {OP::PER, AM::REL, OF::NONE};  // PER - Push Effective Relative Address
+        table[0xD4] = {OP::PEI, AM::ZPI, OF::NONE};  // PEI - Push Effective Indirect Address
+        
+        // Long Addressing Operations
+        table[0x22] = {OP::JSL, AM::ABL, OF::NONE};  // JSL - Jump to Subroutine Long (24-bit)
+        table[0x6B] = {OP::RTL, AM::NON, OF::NONE};  // RTL - Return from Subroutine Long
+        table[0x5C] = {OP::JML, AM::ABL, OF::NONE};  // JML - Jump Long (24-bit absolute)
+        table[0xDC] = {OP::JML, AM::ABI, OF::NONE};  // JML - Jump Long (absolute indexed indirect)
+        
+        // Data Transfer Operations
+        table[0xEB] = {OP::XBA, AM::NON, OF::NONE};  // XBA - Exchange B and A
+        table[0x44] = {OP::MVN, AM::BLK, OF::NONE};  // MVN - Move Negative (block transfer)
+        table[0x54] = {OP::MVP, AM::BLK, OF::NONE};  // MVP - Move Positive (block transfer)
+        
+        // System Operations
+        table[0x02] = {OP::COP, AM::IMM, OF::NONE};  // COP - Co-processor Instruction
+        table[0x42] = {OP::WDM, AM::IMM, OF::NONE};  // WDM - WDM Reserved Instruction
+        
+        // Note: 65C816-specific addressing modes (ABL, ABLX, DPIL, DPILY, SR, SRIY)
+        // will be used by existing operations (LDA, STA, etc.) based on opcode mapping
+        // These are handled by the standard operation table entries with different addressing modes
     }
     
     return table;
