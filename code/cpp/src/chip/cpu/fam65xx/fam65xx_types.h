@@ -337,15 +337,16 @@ typedef enum : uint8_t {
 
 // Addr enum class for template parameters
 enum class Addr : uint8_t {
-    AB = REG_ABL / 2,   // Address Bus (16-bit)
-    PC = REG_PCL / 2,   // Program Counter (16-bit)
-    SP = REG_SPL / 2    // Stack pointer (16-bit)
+    AB = REG_AB,   // Address Bus (16-bit)
+    PC = REG_PC,   // Program Counter (16-bit)
+    SP = REG_SP    // Stack pointer (16-bit)
 };
 
+// Bank enum class for template parameters
 enum class Bank : uint8_t {
     DBR = REG_DBR,  // Data Bank register (8-bit, 65C816 only)
     PBR = REG_PBR,  // Program Bank register (8-bit, 65C816 only)
-    ZBR = REG_ZBR   // Zero Bank register (always 0x00)
+    ZBR = REG_ZBR   // Zero Bank register (8-bit, hardwired to 0x00)
 };
 
 // ============================================================================
