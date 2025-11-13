@@ -553,22 +553,11 @@ private:
             
             // Check if this is a 65816 processor at runtime
             if (wrapper->is_65816()) {
-                // For 65816: We need to determine if this is program or data access
-                // Since the CPU already calculated the 24-bit address before calling this callback,
-                // we need to reconstruct it based on current CPU state
-                
-                // Get current CPU register values through the wrapper
-                uint8_t pbr = wrapper->cpu->get(REG_PBR);
-                uint8_t dbr = wrapper->cpu->get(REG_DBR);
-                uint16_t pc = wrapper->cpu->get(REG_PC);
-                
-                // Heuristic: If the 16-bit address matches PC, it's likely a program access (use PBR)
-                // Otherwise, it's likely a data access (use DBR)
-                if (addr == pc) {
-                    full_addr = (static_cast<uint32_t>(pbr) << 16) | addr;
-                } else {
-                    full_addr = (static_cast<uint32_t>(dbr) << 16) | addr;
-                }
+                // CRITICAL FIX: For 65816, the CPU core already provides the full 24-bit address
+                // We should NOT try to reconstruct it here as that causes incorrect addressing
+                // The 65816 CPU core handles bank register logic internally
+                // Just use the address as-is since it's already been processed by the CPU
+                full_addr = addr; // Trust the CPU's address calculation
             }
             
             // Use harness memory access (supports 24-bit addresses for 65816)
@@ -592,22 +581,11 @@ private:
             
             // Check if this is a 65816 processor at runtime
             if (wrapper->is_65816()) {
-                // For 65816: We need to determine if this program or data access
-                // Since the CPU already calculated the 24-bit address before calling this callback,
-                // we need to reconstruct it based on current CPU state
-                
-                // Get current CPU register values through the wrapper
-                uint8_t pbr = wrapper->cpu->get(REG_PBR);
-                uint8_t dbr = wrapper->cpu->get(REG_DBR);
-                uint16_t pc = wrapper->cpu->get(REG_PC);
-                
-                // Heuristic: If the 16-bit address matches PC, it's likely a program access (use PBR)
-                // Otherwise, it's likely a data access (use DBR)
-                if (addr == pc) {
-                    full_addr = (static_cast<uint32_t>(pbr) << 16) | addr;
-                } else {
-                    full_addr = (static_cast<uint32_t>(dbr) << 16) | addr;
-                }
+                // CRITICAL FIX: For 65816, the CPU core already provides the full 24-bit address
+                // We should NOT try to reconstruct it here as that causes incorrect addressing
+                // The 65816 CPU core handles bank register logic internally
+                // Just use the address as-is since it's already been processed by the CPU
+                full_addr = addr; // Trust the CPU's address calculation
             }
             
             // Use harness memory access (supports 24-bit addresses for 65816)
@@ -1063,20 +1041,21 @@ private:
         // THREAD SAFETY FIX: Set harness in processor wrapper for bus cycle recording
         harness->set_harness_for_bus_recording();
         
-        harness->set_pc(test->initial.pc);
-        harness->set_a(test->initial.a);
-        harness->set_x(test->initial.x);
-        harness->set_y(test->initial.y);
-        harness->set_sp(test->initial.s);
-        harness->set_status(test->initial.p);
-        
-        // Set 65816-specific state if available
+        // CRITICAL FIX: Set 65816-specific state FIRST before other registers
         if (test->initial.has_65816_state) {
             harness->set_emulation_mode(test->initial.e != 0);
             harness->set_d(test->initial.d);
             harness->set_dbr(test->initial.dbr);
             harness->set_pbr(test->initial.pbr);
         }
+
+        // Then set the standard registers
+        harness->set_pc(test->initial.pc);
+        harness->set_a(test->initial.a);
+        harness->set_x(test->initial.x);
+        harness->set_y(test->initial.y);
+        harness->set_sp(test->initial.s);
+        harness->set_status(test->initial.p);
 
         uint16_t pc_addr = test->initial.pc;
         
