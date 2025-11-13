@@ -212,10 +212,11 @@ bus_state_t op_sbc(bus_state_t pins) {
                     
                 case 1:
                     // Read high byte of operand
-                    pins = this->phi2_read<Addr::AB>(pins, REG_AH);
+                    pins = this->phi2_read<Addr::AB>(pins, REG_ABH);
                     if (FAM65XX_GET_RDY(pins)) {
                         // Perform 16-bit SBC operation
-                        uint16_t operand = (this->get(REG_AH) << 8) | this->get(REG_DL);
+                        this->set(REG_ABL, this->get(REG_DL));
+                        uint16_t operand = this->get(REG_AB);
                         uint16_t acc = this->get(REG_A_16);
                         uint32_t result = acc - operand - ((this->get(REG_P) & FLAG_C) ? 0 : 1);
                         
@@ -293,10 +294,11 @@ bus_state_t op_cmp(bus_state_t pins) {
                     
                 case 1:
                     // Read high byte of operand
-                    pins = this->phi2_read<Addr::AB>(pins, REG_AH);
+                    pins = this->phi2_read<Addr::AB>(pins, REG_ABH);
                     if (FAM65XX_GET_RDY(pins)) {
                         // Perform 16-bit comparison
-                        uint16_t operand = (this->get(REG_AH) << 8) | this->get(REG_DL);
+                        this->set(REG_ABL, this->get(REG_DL));
+                        uint16_t operand = this->get(REG_AB);
                         uint16_t acc = this->get(REG_A_16);
                         uint32_t result = acc - operand;
                         
@@ -342,18 +344,19 @@ bus_state_t op_cpx(bus_state_t pins) {
                     // Read low byte of operand
                     pins = this->phi2_read_operand(pins, REG_DL);
                     if (FAM65XX_GET_RDY(pins)) {
-                        this->cycle_index++;
                         // For 65C816 native mode, increment address bus with bank handling
                         this->inc(REG_AB);
+                        this->cycle_index++;
                     }
                     return pins;
                     
                 case 1:
                     // Read high byte of operand
-                    pins = this->phi2_read<Addr::AB>(pins, REG_AH);
+                    pins = this->phi2_read<Addr::AB>(pins, REG_ABH);
                     if (FAM65XX_GET_RDY(pins)) {
                         // Perform 16-bit comparison
-                        uint16_t operand = (this->get(REG_AH) << 8) | this->get(REG_DL);
+                        this->set(REG_ABL, this->get(REG_DL));
+                        uint16_t operand = this->get(REG_AB);
                         uint16_t x = this->get_x_register();
                         uint32_t result = x - operand;
                         
@@ -399,18 +402,19 @@ bus_state_t op_cpy(bus_state_t pins) {
                     // Read low byte of operand
                     pins = this->phi2_read_operand(pins, REG_DL);
                     if (FAM65XX_GET_RDY(pins)) {
-                        this->cycle_index++;
                         // For 65C816 native mode, increment address bus with bank handling
                         this->inc(REG_AB);
+                        this->cycle_index++;
                     }
                     return pins;
                     
                 case 1:
                     // Read high byte of operand
-                    pins = this->phi2_read<Addr::AB>(pins, REG_AH);
+                    pins = this->phi2_read<Addr::AB>(pins, REG_ABH);
                     if (FAM65XX_GET_RDY(pins)) {
                         // Perform 16-bit comparison
-                        uint16_t operand = (this->get(REG_AH) << 8) | this->get(REG_DL);
+                        this->set(REG_ABL, this->get(REG_DL));
+                        uint16_t operand = this->get(REG_AB);
                         uint16_t y = this->get_y_register();
                         uint32_t result = y - operand;
                         

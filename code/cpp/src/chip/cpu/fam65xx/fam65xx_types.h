@@ -287,7 +287,7 @@ typedef enum : uint8_t {
     REG_PCH = 4,       // Program Counter (high byte)
     REG_PCL = 5,       // Program Counter (low byte)
     REG_AH = 6,        // Accumulator high byte (65C816) / unused (8-bit CPUs)
-    REG_A = 7,        // Accumulator (low byte for 65C816)
+    REG_AL = 7,        // Accumulator (low byte for 65C816)
     REG_XH = 8,        // X index high byte (65C816) / unused (8-bit CPUs)
     REG_XL = 9,        // X index (low byte for 65C816)
     REG_YH = 10,       // Y index high byte (65C816) / unused (8-bit CPUs)
@@ -299,7 +299,7 @@ typedef enum : uint8_t {
     REG_IR = 13,       // Instruction Register (current opcode)
     REG_DL = 14,       // Data Latch (internal)
     
-    // Extended registers (15-18) - only used by 65C816
+    // Extended registers (15-20) - only used by 65C816
     REG_DBR = 15,      // Data Bank register (65C816 only)
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
     REG_DPL = 16,      // Direct Page low byte (65C816 only)
@@ -310,18 +310,19 @@ typedef enum : uint8_t {
 #endif
     REG_PBR = 18,      // Program Bank register (65C816 only)
     REG_SBR = 19,      // Source Bank register (65C816 only)
-//    REG_TBR = 20,      // Destination (To) Bank register (65C816 only)
-    REG_ZBR = 21,      // Zero Bank register (always 0x00, for 65C816 emulation mode and stack/DP access)
+    REG_ZBR = 20,      // Zero Bank register (always 0x00, for 65C816 emulation mode and stack/DP access)
 
-    REG_COUNT_16BIT,  // Number of 8-bit registers for 65C816
+    REG_COUNT_16BIT,   // Number of 8-bit registers for 65C816
     REG_COUNT_8BIT = REG_DL + 1,  // Core registers 0-14 (high bytes unused for 8-bit CPUs)
-    
+
     // Compatibility mapping
-    REG_A = REG_AL,    // Map legacy A register to AL for compatibility (intentionally swapped from 65C816 : A high and B low byte)
-    REG_B = REG_AH,    // Map legacy B register to AH for compatibility
+    REG_S = REG_SPL,   // Map legacy S register to SPL for compatibility
     REG_X = REG_XL,    // Map legacy X register to XL for compatibility
     REG_Y = REG_YL,    // Map legacy Y register to YL for compatibility
-    REG_S = REG_SPL    // Map legacy S register to SPL for compatibility
+
+    // Compatibility mapping (65C816 : A = High byte of C (16 bit accumulator), B = Low byte of C)
+    REG_A = REG_AH,    // Map legacy A register to AH for compatibility
+    REG_B = REG_AL     // Map legacy B register to AL for compatibility
 } reg8_t;
 
 // 16-bit register constants - these work for both narrow and wide CPUs
@@ -354,7 +355,6 @@ enum class Bank : uint8_t {
     DBR = REG_DBR,  // Data Bank register (8-bit, 65C816 only)
     PBR = REG_PBR,  // Program Bank register (8-bit, 65C816 only)
     SBR = REG_SBR,  // Source Bank register (8-bit, 65C816 only)
-//  TBR = REG_TBR,  // Destination (To) Bank register (8-bit, 65C816 only)
     ZBR = REG_ZBR   // Zero Bank register (8-bit, hardwired to 0x00)
 };
 
