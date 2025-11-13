@@ -759,49 +759,11 @@ public:
     // OPCODE TABLE GENERATION
     // ========================================================================
     
-    // 65C816 emulation mode opcode table (6502-compatible)
-    static const std::array<opcode_info_t, 256>& get_65c816_emulation_opcode_table() {
-        // Use MOS6502 traits for 6502-compatible behavior in emulation mode
-        static const auto table = generate_opcode_table_for_traits(MOS6502);
-        return table;
-    }
-    
-    // 65C816 native mode opcode table (full 65C816 instruction set)
-    static const std::array<opcode_info_t, 256>& get_65c816_native_opcode_table() {
-        static const auto table = generate_opcode_table<Traits>();
-        return table;
-    }
-    
+
     // Generate processor-specific opcode table at compile time
-    // 65C816 uses dynamic table switching, others use static tables
+
     opcode_info_t get_opcode_info(uint8_t opcode) const {
-        if constexpr (has_wide_registers()) {
-            // 65C816: Dynamic table switching based on emulation mode
-            if (!this->get_emulation_mode()) {
-                // Native mode: Use full 65C816 opcode table
-                auto info = get_65c816_native_opcode_table()[opcode];
-                if (opcode == 0xC2) {
-                    printf("DEBUG: Native mode - returning op_index=%d (should be REP=%d)\n",
-                           info.op_index, to_index(OP::REP));
-                    fflush(stdout);
-                }
-                return info;
-            }
-            // Emulation mode: Use 6502-compatible opcode table (fallback for wide registers)
-            auto info = get_65c816_emulation_opcode_table()[opcode];
-            
-            // CRITICAL FIX: Ensure flags are also 6502-compatible for proper NOP behavior
-            // The issue was that 65C816 REP flags (RMW) were being used in NOP handler
-            // causing RMW operation execution and P register corruption
-            if (opcode == 0xC2) {
-                // Force 0xC2 to have simple NOP flags, not REP's RMW flags
-                info.flags = to_index(OF::NONE);
-            }
-            
-            return info;
-        }
-        // All other processors: Static table (compile-time)
-        return generate_opcode_table<Traits>()[opcode];
+            return generate_opcode_table<Traits>()[opcode];
     }
     
     // Note: Register accessor functions are now provided by the register mixin
