@@ -469,7 +469,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         table[0xAB] = {OP::PLB, AM::NON, OF::NONE};  // PLB - Pull Data Bank Register
         table[0xF4] = {OP::PEA, AM::ABS, OF::NONE};  // PEA - Push Effective Absolute Address
         table[0x62] = {OP::PER, AM::REL, OF::NONE};  // PER - Push Effective Relative Address
-        table[0xD4] = {OP::PEI, AM::ZPI, OF::NONE};  // PEI - Push Effective Indirect Address
+        table[0xD4] = {OP::PEI, AM::DPI, OF::NONE};  // PEI - Push Effective Indirect Address (Direct Page Indirect)
         
         // Long Addressing Operations
         table[0x22] = {OP::JSL, AM::ABL, OF::NONE};  // JSL - Jump to Subroutine Long (24-bit)
@@ -479,8 +479,8 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         
         // Data Transfer Operations
         table[0xEB] = {OP::XBA, AM::NON, OF::NONE};  // XBA - Exchange B and A
-        table[0x44] = {OP::MVN, AM::BLK, OF::NONE};  // MVN - Move Negative (block transfer)
-        table[0x54] = {OP::MVP, AM::BLK, OF::NONE};  // MVP - Move Positive (block transfer)
+        table[0x44] = {OP::MVN, AM::IMM, OF::NONE};  // MVN - Move Negative (uses 2 immediate bytes for src/dst banks)
+        table[0x54] = {OP::MVP, AM::IMM, OF::NONE};  // MVP - Move Positive (uses 2 immediate bytes for src/dst banks)
         
         // System Operations
         table[0x02] = {OP::COP, AM::IMM, OF::NONE};  // COP - Co-processor Instruction
