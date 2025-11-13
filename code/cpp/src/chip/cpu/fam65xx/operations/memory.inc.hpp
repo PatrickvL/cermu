@@ -160,7 +160,7 @@ bus_state_t op_eor(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_bit(bus_state_t pins) {
-    // 65816 native mode with 16-bit accumulator (M=0) reads TWO bytes
+    // Check for 65816 native mode with 16-bit accumulator (M=0) - nested native code
     if constexpr (has_wide_registers()) {
         if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_M)) {
             // 65816 native mode, 16-bit accumulator - read 2 bytes
@@ -194,10 +194,11 @@ bus_state_t op_bit(bus_state_t pins) {
                     }
                     return pins;
             }
+            return pins;
         }
     }
     
-    // Standard 8-bit BIT operation (all other cases)
+    // Standard 8-bit BIT operation (emulation mode and non-wide CPUs)
     pins = phi2_read_operand(pins, REG_DL);
     if (FAM65XX_GET_RDY(pins)) {
         uint8_t operand = this->get(REG_DL);

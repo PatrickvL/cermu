@@ -16,12 +16,11 @@
 // REP - Reset Processor Status Bits (65C816)
 bus_state_t op_rep(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
-        // Check emulation mode at runtime - REP is illegal in emulation mode
-        if (this->get_emulation_mode()) {
-            // In emulation mode, REP behaves like a 2-byte NOP (like 6502 illegal opcode)
+        // Check emulation mode at runtime - REP is only valid in native mode
+        if (!this->get_emulation_mode()) {
             switch (this->cycle_index) {
                 case 0:
-                    // Fetch operand byte and discard it
+                    // Fetch immediate operand
                     pins = this->phi2_read(pins, REG_PC, REG_DL);
                     if (FAM65XX_GET_RDY(pins)) {
                         this->inc(REG_PC);
@@ -30,29 +29,30 @@ bus_state_t op_rep(bus_state_t pins) {
                     return pins;
                     
                 case 1:
-                    // Complete 2-byte NOP - do nothing and continue to next instruction
+                    // Reset specified status bits (clear bits that are 1 in operand)
+                    this->set(REG_P, this->get(REG_P) & ~this->get(REG_DL));
                     transition_to_fetch();
                     return pins;
             }
             return pins;
         }
-        
-        switch (this->cycle_index) {
-            case 0:
-                // Fetch immediate operand
-                pins = this->phi2_read(pins, REG_PC, REG_DL);
-                if (FAM65XX_GET_RDY(pins)) {
-                    this->inc(REG_PC);
-                    this->cycle_index++;
-                }
-                return pins;
-                
-            case 1:
-                // Reset specified status bits (clear bits that are 1 in operand)
-                this->set(REG_P, this->get(REG_P) & ~this->get(REG_DL));
-                transition_to_fetch();
-                return pins;
-        }
+    }
+    
+    // In emulation mode or non-wide CPUs, REP behaves like a 2-byte NOP (like 6502 illegal opcode)
+    switch (this->cycle_index) {
+        case 0:
+            // Fetch operand byte and discard it
+            pins = this->phi2_read(pins, REG_PC, REG_DL);
+            if (FAM65XX_GET_RDY(pins)) {
+                this->inc(REG_PC);
+                this->cycle_index++;
+            }
+            return pins;
+            
+        case 1:
+            // Complete 2-byte NOP - do nothing and continue to next instruction
+            transition_to_fetch();
+            return pins;
     }
     return pins;
 }
@@ -60,12 +60,11 @@ bus_state_t op_rep(bus_state_t pins) {
 // SEP - Set Processor Status Bits (65C816)
 bus_state_t op_sep(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
-        // Check emulation mode at runtime - SEP is illegal in emulation mode
-        if (this->get_emulation_mode()) {
-            // In emulation mode, SEP behaves like a 2-byte NOP (like 6502 illegal opcode)
+        // Check emulation mode at runtime - SEP is only valid in native mode
+        if (!this->get_emulation_mode()) {
             switch (this->cycle_index) {
                 case 0:
-                    // Fetch operand byte and discard it
+                    // Fetch immediate operand
                     pins = this->phi2_read(pins, REG_PC, REG_DL);
                     if (FAM65XX_GET_RDY(pins)) {
                         this->inc(REG_PC);
@@ -74,29 +73,30 @@ bus_state_t op_sep(bus_state_t pins) {
                     return pins;
                     
                 case 1:
-                    // Complete 2-byte NOP - do nothing and continue to next instruction
+                    // Set specified status bits (set bits that are 1 in operand)
+                    this->set(REG_P, this->get(REG_P) | this->get(REG_DL));
                     transition_to_fetch();
                     return pins;
             }
             return pins;
         }
-        
-        switch (this->cycle_index) {
-            case 0:
-                // Fetch immediate operand
-                pins = this->phi2_read(pins, REG_PC, REG_DL);
-                if (FAM65XX_GET_RDY(pins)) {
-                    this->inc(REG_PC);
-                    this->cycle_index++;
-                }
-                return pins;
-                
-            case 1:
-                // Set specified status bits (set bits that are 1 in operand)
-                this->set(REG_P, this->get(REG_P) | this->get(REG_DL));
-                transition_to_fetch();
-                return pins;
-        }
+    }
+    
+    // In emulation mode or non-wide CPUs, SEP behaves like a 2-byte NOP (like 6502 illegal opcode)
+    switch (this->cycle_index) {
+        case 0:
+            // Fetch operand byte and discard it
+            pins = this->phi2_read(pins, REG_PC, REG_DL);
+            if (FAM65XX_GET_RDY(pins)) {
+                this->inc(REG_PC);
+                this->cycle_index++;
+            }
+            return pins;
+            
+        case 1:
+            // Complete 2-byte NOP - do nothing and continue to next instruction
+            transition_to_fetch();
+            return pins;
     }
     return pins;
 }
@@ -117,7 +117,11 @@ bus_state_t op_xce(bus_state_t pins) {
         }
         
         this->transition_to_fetch();
+        return pins;
     }
+    
+    // XCE is a NOP on non-wide CPUs (acts like illegal opcode)
+    this->transition_to_fetch();
     return pins;
 }
 
@@ -165,7 +169,11 @@ bus_state_t op_pea(bus_state_t pins) {
                 }
                 return pins;
         }
+        return pins;
     }
+    
+    // PEA is illegal on non-wide CPUs - acts as NOP
+    this->transition_to_fetch();
     return pins;
 }
 
@@ -178,7 +186,11 @@ bus_state_t op_phb(bus_state_t pins) {
             this->dec(REG_S);
             this->transition_to_fetch();
         }
+        return pins;
     }
+    
+    // PHB is illegal on non-wide CPUs - acts as NOP
+    this->transition_to_fetch();
     return pins;
 }
 
@@ -206,7 +218,11 @@ bus_state_t op_phd(bus_state_t pins) {
                 }
                 return pins;
         }
+        return pins;
     }
+    
+    // PHD is illegal on non-wide CPUs - acts as NOP
+    this->transition_to_fetch();
     return pins;
 }
 
@@ -219,7 +235,11 @@ bus_state_t op_phk(bus_state_t pins) {
             this->dec(REG_S);
             this->transition_to_fetch();
         }
+        return pins;
     }
+    
+    // PHK is illegal on non-wide CPUs - acts as NOP
+    this->transition_to_fetch();
     return pins;
 }
 
@@ -247,7 +267,11 @@ bus_state_t op_plb(bus_state_t pins) {
                 }
                 return pins;
         }
+        return pins;
     }
+    
+    // PLB is illegal on non-wide CPUs - acts as NOP
+    this->transition_to_fetch();
     return pins;
 }
 
@@ -283,7 +307,11 @@ bus_state_t op_pld(bus_state_t pins) {
                 }
                 return pins;
         }
+        return pins;
     }
+    
+    // PLD is illegal on non-wide CPUs - acts as NOP
+    this->transition_to_fetch();
     return pins;
 }
 
@@ -353,7 +381,11 @@ bus_state_t op_jsl(bus_state_t pins) {
                 }
                 return pins;
         }
+        return pins;
     }
+    
+    // JSL is illegal on non-wide CPUs - acts as NOP
+    this->transition_to_fetch();
     return pins;
 }
 
@@ -399,7 +431,11 @@ bus_state_t op_rtl(bus_state_t pins) {
                 }
                 return pins;
         }
+        return pins;
     }
+    
+    // RTL is illegal on non-wide CPUs - acts as NOP
+    this->transition_to_fetch();
     return pins;
 }
 
@@ -447,7 +483,11 @@ bus_state_t op_per(bus_state_t pins) {
                 }
                 return pins;
         }
+        return pins;
     }
+    
+    // PER is illegal on non-wide CPUs - acts as NOP
+    this->transition_to_fetch();
     return pins;
 }
 
@@ -502,7 +542,11 @@ bus_state_t op_pei(bus_state_t pins) {
                 }
                 return pins;
         }
+        return pins;
     }
+    
+    // PEI is illegal on non-wide CPUs - acts as NOP
+    this->transition_to_fetch();
     return pins;
 }
 
@@ -644,7 +688,11 @@ bus_state_t op_mvp(bus_state_t pins) {
                 }
                 return pins;
         }
+        return pins;
     }
+    
+    // MVP is illegal on non-wide CPUs - acts as NOP
+    this->transition_to_fetch();
     return pins;
 }
 
@@ -721,7 +769,11 @@ bus_state_t op_cop(bus_state_t pins) {
                 }
                 return pins;
         }
+        return pins;
     }
+    
+    // COP is illegal on non-wide CPUs - acts as NOP
+    this->transition_to_fetch();
     return pins;
 }
 
@@ -735,7 +787,11 @@ bus_state_t op_wdm(bus_state_t pins) {
             // WDM is essentially a 2-byte NOP - do nothing else
             this->transition_to_fetch();
         }
+        return pins;
     }
+    
+    // WDM is illegal on non-wide CPUs - acts as NOP
+    this->transition_to_fetch();
     return pins;
 }
 

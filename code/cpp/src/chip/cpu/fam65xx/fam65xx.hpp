@@ -540,10 +540,7 @@ private:
         uint32_t addr;
         if constexpr (has_wide_registers()) {
             // 65816: Check emulation mode first (runtime check)
-            if (this->get_emulation_mode()) {
-                // Emulation mode: behave like 6502 with 16-bit addressing only
-                addr = raw_addr;
-            } else {
+            if (!this->get_emulation_mode()) {
                 // Native mode: Use 24-bit banking with automatic bank selection
                 // PBR is used for program counter (instruction fetches)
                 // DBR is used for data accesses (operands, stack, etc.)
@@ -558,6 +555,9 @@ private:
                     // Data addresses (operands, etc.): use DBR
                     addr = (static_cast<uint32_t>(this->get(REG_DBR)) << 16) | raw_addr;
                 }
+            } else {
+                // Emulation mode: behave like 6502 with 16-bit addressing only
+                addr = raw_addr;
             }
         } else {
             // For 8-bit CPUs: use 16-bit address directly (zero overhead)
@@ -568,10 +568,14 @@ private:
         if constexpr (Traits.update_bus_lines()) {
             // For 65816: Split 24-bit address into 16-bit address + 8-bit bank using new macro
             if constexpr (has_wide_registers()) {
-                // Set lower 16 bits in address field
-                pins = FAM65XX_SET_ADDR(pins, addr & 0xFFFF);
-                // Set upper 8 bits in bank field using new macro
-                pins = FAM65XX_SET_BANK(pins, (addr >> 16) & 0xFF);
+                if (!this->get_emulation_mode()) {
+                    // Native mode: Set lower 16 bits in address field and upper 8 bits in bank field
+                    pins = FAM65XX_SET_ADDR(pins, addr & 0xFFFF);
+                    pins = FAM65XX_SET_BANK(pins, (addr >> 16) & 0xFF);
+                } else {
+                    // Emulation mode: use address field only like 8-bit CPUs
+                    pins = FAM65XX_SET_ADDR(pins, addr & Traits.address_mask());
+                }
             } else {
                 // For 8/16-bit CPUs: use address field only (zero overhead)
                 pins = FAM65XX_SET_ADDR(pins, addr & Traits.address_mask());
@@ -773,22 +777,7 @@ public:
     opcode_info_t get_opcode_info(uint8_t opcode) const {
         if constexpr (has_wide_registers()) {
             // 65C816: Dynamic table switching based on emulation mode
-            bool emu_mode = this->get_emulation_mode();
-            
-            if (emu_mode) {
-                // Emulation mode: Use 6502-compatible opcode table
-                auto info = get_65c816_emulation_opcode_table()[opcode];
-                
-                // CRITICAL FIX: Ensure flags are also 6502-compatible for proper NOP behavior
-                // The issue was that 65C816 REP flags (RMW) were being used in NOP handler
-                // causing RMW operation execution and P register corruption
-                if (opcode == 0xC2) {
-                    // Force 0xC2 to have simple NOP flags, not REP's RMW flags
-                    info.flags = to_index(OF::NONE);
-                }
-                
-                return info;
-            } else {
+            if (!this->get_emulation_mode()) {
                 // Native mode: Use full 65C816 opcode table
                 auto info = get_65c816_native_opcode_table()[opcode];
                 if (opcode == 0xC2) {
@@ -798,10 +787,21 @@ public:
                 }
                 return info;
             }
-        } else {
-            // All other processors: Static table (compile-time)
-            return generate_opcode_table<Traits>()[opcode];
+            // Emulation mode: Use 6502-compatible opcode table (fallback for wide registers)
+            auto info = get_65c816_emulation_opcode_table()[opcode];
+            
+            // CRITICAL FIX: Ensure flags are also 6502-compatible for proper NOP behavior
+            // The issue was that 65C816 REP flags (RMW) were being used in NOP handler
+            // causing RMW operation execution and P register corruption
+            if (opcode == 0xC2) {
+                // Force 0xC2 to have simple NOP flags, not REP's RMW flags
+                info.flags = to_index(OF::NONE);
+            }
+            
+            return info;
         }
+        // All other processors: Static table (compile-time)
+        return generate_opcode_table<Traits>()[opcode];
     }
     
     // Note: Register accessor functions are now provided by the register mixin
@@ -1143,14 +1143,17 @@ private:
     // Dynamic operation handler selection for 65C816 emulation mode compatibility
     inline InstructionHandler get_dynamic_operation_handler(uint8_t op_index) {
         if constexpr (has_wide_registers()) {
-            // For 65C816: Always use the handler that corresponds to the op_index
+            if (!this->get_emulation_mode()) {
+                // Native mode: Use the handler that corresponds to the op_index
+                return this->operation_handlers[op_index];
+            }
+            // Emulation mode: Use the handler that corresponds to the op_index
             // This is critical for emulation mode where opcodes may be remapped
             // (e.g., 0xC2 REP becomes NOP with op_index=55)
             return this->operation_handlers[op_index];
-        } else {
-            // Non-65C816 processors: Use standard handler table
-            return this->operation_handlers[op_index];
         }
+        // Non-65C816 processors: Use standard handler table
+        return this->operation_handlers[op_index];
     }
     
     inline InstructionHandler get_instruction_handler() {
@@ -1162,11 +1165,15 @@ private:
         // For immediate mode and implied operations, go directly to operation
         // Always use dynamic handler selection for 65C816 (emulation mode compatibility)
         if constexpr (has_wide_registers()) {
+            if (!this->get_emulation_mode()) {
+                // Native mode: Use dynamic handler selection
+                return get_dynamic_operation_handler(this->opcode_entry.op_index);
+            }
+            // Emulation mode: Use dynamic handler selection (fallback)
             return get_dynamic_operation_handler(this->opcode_entry.op_index);
-        } else {
-            // All other processors: Use static handler table
-            return this->operation_handlers[this->opcode_entry.op_index];
         }
+        // All other processors: Use static handler table
+        return this->operation_handlers[this->opcode_entry.op_index];
     }
     
     // Hardware-accurate interrupt detection with priority-order processing
@@ -1214,8 +1221,11 @@ private:
         
         // Check ABORT (65C816 only, second highest)
         if constexpr (has_wide_registers()) {
-            // ABORT detection logic would go here when implemented
-            // For now, ABORT is not connected to hardware pins
+            if (!this->get_emulation_mode()) {
+                // Native mode: ABORT detection logic would go here when implemented
+                // For now, ABORT is not connected to hardware pins
+            }
+            // Emulation mode: ABORT is not available (fallback for wide registers)
         }
         
         // Check NMI (third highest priority)
@@ -1296,7 +1306,13 @@ private:
         this->cycle_index = 0;
         // Use dynamic handler selection for 65C816 emulation mode compatibility
         if constexpr (has_wide_registers()) {
-            this->current_handler = get_dynamic_operation_handler(this->opcode_entry.op_index);
+            if (!this->get_emulation_mode()) {
+                // Native mode: Use dynamic handler selection
+                this->current_handler = get_dynamic_operation_handler(this->opcode_entry.op_index);
+            } else {
+                // Emulation mode: Use dynamic handler selection (fallback)
+                this->current_handler = get_dynamic_operation_handler(this->opcode_entry.op_index);
+            }
         } else {
             this->current_handler = this->operation_handlers[this->opcode_entry.op_index];
         }
@@ -1481,6 +1497,7 @@ private:
         addressing_mode_handlers[to_index(AM::ABI)] = &fam65xx_t::am_abi;  // Absolute Indexed Indirect (abs,X) - JMP/JSR ($nnnn,X)
         addressing_mode_handlers[to_index(AM::ZPR)] = &fam65xx_t::am_zpr;  // Zero Page Relative - BBR/BBS $nn,$offset
         if constexpr (has_wide_registers()) {
+            // Initialize 65C816-specific addressing modes for both native and emulation modes
             addressing_mode_handlers[to_index(AM::SR)] = &fam65xx_t::amr_sr;      // Stack Relative (65C816 only)
             addressing_mode_handlers[to_index(AM::SRI)] = &fam65xx_t::am_sri;     // Stack Relative Indirect Indexed (65C816 only)
             addressing_mode_handlers[to_index(AM::DPIL)] = &fam65xx_t::am_dpil;   // Direct Page Indirect Long (65C816 only)

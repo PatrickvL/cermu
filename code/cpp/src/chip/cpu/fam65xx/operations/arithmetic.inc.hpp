@@ -292,19 +292,20 @@ bus_state_t op_adc_16bit(bus_state_t pins) {
         // This would be a more complex implementation
         // For now, delegate to 8-bit version
         return op_adc(pins);
-    } else {
-        // Should not be called on processors without wide registers
-        return pins;
     }
+    
+    // Should not be called on processors without wide registers
+    return pins;
 }
 
 bus_state_t op_sbc_16bit(bus_state_t pins) {
     if constexpr (this->has_wide_registers()) {
         // 16-bit SBC implementation for 65C816
         return op_sbc(pins);
-    } else {
-        return pins;
     }
+    
+    // Should not be called on processors without wide registers
+    return pins;
 }
 
 #endif // FAM65XX_SKIP_IMPLEMENTATION
