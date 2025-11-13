@@ -107,6 +107,16 @@ struct narrow_registers_mixin_t {
     inline void set_y_register(data_t value) {
         set(REG_Y, value);
     }
+    
+    // === 65C816 compatibility methods ===
+    // For non-65C816 processors, emulation mode is always true
+    inline bool get_emulation_mode() const {
+        return true;  // 8-bit processors are always in "emulation mode"
+    }
+    
+    inline void set_emulation_mode(bool /*mode*/) {
+        // No-op for 8-bit processors
+    }
 };
 
 // ============================================================================
