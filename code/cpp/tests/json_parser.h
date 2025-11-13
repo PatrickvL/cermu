@@ -42,15 +42,15 @@ typedef struct {
 // CPU state structure matching ProcessorTests format
 typedef struct {
     uint16_t pc;
-    uint8_t s;     // stack pointer
-    uint8_t a;     // accumulator
-    uint8_t x;     // X register
-    uint8_t y;     // Y register
-    uint8_t p;     // processor status
+    uint8_t s;     // stack pointer (always 8-bit)
+    uint16_t a;    // accumulator (8-bit for 6502, 16-bit for 65816)
+    uint16_t x;    // X register (8-bit for 6502, 16-bit for 65816)
+    uint16_t y;    // Y register (8-bit for 6502, 16-bit for 65816)
+    uint8_t p;     // processor status (always 8-bit)
     
     // 65816-specific registers (optional)
     uint8_t e;     // emulation mode flag (65816)
-    uint8_t dbr;   // data bank register (65816)  
+    uint8_t dbr;   // data bank register (65816)
     uint16_t d;    // direct page register (65816)
     uint8_t pbr;   // program bank register (65816)
     bool has_65816_state; // flag indicating if 65816 fields are valid

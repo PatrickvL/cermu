@@ -328,13 +328,13 @@ bool json_parse_cpu_state(const char* json, const char* state_name, cpu_state_t*
         return false;
     }
     
-    // Parse registers
+    // Parse registers - preserve full 16-bit values for 65816 compatibility
     state->pc = (uint16_t)json_parse_number(state_obj, "pc");
-    state->s = (uint8_t)json_parse_number(state_obj, "s");
-    state->a = (uint8_t)json_parse_number(state_obj, "a");
-    state->x = (uint8_t)json_parse_number(state_obj, "x");
-    state->y = (uint8_t)json_parse_number(state_obj, "y");
-    state->p = (uint8_t)json_parse_number(state_obj, "p");
+    state->s = (uint8_t)json_parse_number(state_obj, "s");   // Stack pointer is always 8-bit
+    state->a = (uint16_t)json_parse_number(state_obj, "a");  // Accumulator: 8-bit for 6502, 16-bit for 65816
+    state->x = (uint16_t)json_parse_number(state_obj, "x");  // X register: 8-bit for 6502, 16-bit for 65816
+    state->y = (uint16_t)json_parse_number(state_obj, "y");  // Y register: 8-bit for 6502, 16-bit for 65816
+    state->p = (uint8_t)json_parse_number(state_obj, "p");   // Processor status is always 8-bit
     
     // Parse 65816-specific registers (optional)
     const char* e_value = json_find_key(state_obj, "e");
