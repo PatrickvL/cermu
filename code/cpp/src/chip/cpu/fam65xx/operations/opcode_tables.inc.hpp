@@ -471,11 +471,13 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
         
         // Additional 65C816 instructions
         table[0x42] = {OP::WDM, AM::IMM, OF::NONE};  // WDM
-        table[0x44] = {OP::MVP, AM::NON, OF::NONE};  // MVP
-        table[0x54] = {OP::MVN, AM::NON, OF::NONE};  // MVN
-        table[0x62] = {OP::PER, AM::REL, OF::NONE}; // PER
-        table[0xD4] = {OP::PEI, AM::ZPI, OF::NONE}; // PEI
-        table[0xF4] = {OP::PEA, AM::ABS, OF::NONE}; // PEA
+        table[0x44] = {OP::MVN, AM::NON, OF::NONE};  // MVN
+        table[0x54] = {OP::MVP, AM::NON, OF::NONE};  // MVP
+        table[0x5C] = {OP::JML, AM::ABS, OF::NONE};  // JML
+        table[0x62] = {OP::PER, AM::REL, OF::NONE};  // PER
+        table[0xD4] = {OP::PEI, AM::ZPI, OF::NONE};  // PEI
+        table[0xDC] = {OP::JML, AM::ABI, OF::NONE};  // JML
+        table[0xF4] = {OP::PEA, AM::ABS, OF::NONE};  // PEA
     }
     
     return table;

@@ -1381,7 +1381,8 @@ private:
         operation_handlers[to_index(OP::RTI)] = &fam65xx_t::op_rti;
         operation_handlers[to_index(OP::RTL)] = &fam65xx_t::op_rtl;
         operation_handlers[to_index(OP::JSL)] = &fam65xx_t::op_jsl;
-        operation_handlers[to_index(OP::JML)] = &fam65xx_t::op_jmp;
+        operation_handlers[to_index(OP::JML)] = &fam65xx_t::op_jml;
+        operation_handlers[to_index(OP::JMP)] = &fam65xx_t::op_jmp;
         operation_handlers[to_index(OP::MVN)] = &fam65xx_t::op_mvn;
         operation_handlers[to_index(OP::MVP)] = &fam65xx_t::op_mvp;
         operation_handlers[to_index(OP::RTS)] = &fam65xx_t::op_rts;

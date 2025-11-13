@@ -24,6 +24,17 @@ bus_state_t op_jmp(bus_state_t pins) {
     return pins;
 }
 
+/* JML - Jump long
+ * All addressing modes (ABS, IND, ABI) are now handled by proper addressing mode handlers.
+ * This operation handler only performs the jump once addressing is complete.
+ */
+bus_state_t op_jml(bus_state_t pins) {
+    // Addressing mode has already set up AB register with target address
+    this->set(REG_PC, this->get(REG_AB));
+    this->transition_to_fetch();
+    return pins;
+}
+
 /* JSR - Jump to Subroutine */
 bus_state_t op_jsr(bus_state_t pins) {
     switch (this->cycle_index) {
@@ -266,6 +277,11 @@ bus_state_t op_brk(bus_state_t pins) {
             if (FAM65XX_GET_RDY(pins)) {
                 /* Clear active interrupt - interrupt processing complete */
                 this->active_interrupt = FAM65XX_INT_NONE;
+                if constexpr (this->has_wide_registers()) {
+                    if (!this->get_emulation_mode()) {
+                        this->set(REG_PBR, 0); // Set program bank to 0 after interrupt
+                    }
+                }
                 transition_to_fetch();
             }
             return pins;
