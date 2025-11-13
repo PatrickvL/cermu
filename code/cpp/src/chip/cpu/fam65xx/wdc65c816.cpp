@@ -100,25 +100,21 @@ void wdc65c816_set_pc(wdc65c816_t* cpu, uint16_t value) {
     CPU_CAST(cpu)->set(REG_PC, value);
 }
 
-// 16-bit register getters (65C816-specific) - PLACEHOLDER IMPLEMENTATIONS
-// Note: These will need to be implemented once the wide_registers mixin is properly defined
+// 16-bit register getters (65C816-specific)
 uint16_t wdc65c816_get_a_full(wdc65c816_t* cpu) {
-    // TODO: Access full 16-bit A register from wide_registers mixin
-    return CPU_CAST(cpu)->get(REG_A); // Placeholder - return 8-bit for now
+    return CPU_CAST(cpu)->get(REG_A_16);
 }
 
 uint16_t wdc65c816_get_x_full(wdc65c816_t* cpu) {
-    // TODO: Access full 16-bit X register from wide_registers mixin
-    return CPU_CAST(cpu)->get(REG_X); // Placeholder - return 8-bit for now
+    return CPU_CAST(cpu)->get(REG_X_16);
 }
 
 uint16_t wdc65c816_get_y_full(wdc65c816_t* cpu) {
-    // TODO: Access full 16-bit Y register from wide_registers mixin
-    return CPU_CAST(cpu)->get(REG_Y); // Placeholder - return 8-bit for now
+    return CPU_CAST(cpu)->get(REG_Y_16);
 }
 
 uint16_t wdc65c816_get_d(wdc65c816_t* cpu) {
-    return CPU_CAST(cpu)->get(REG_D);
+    return CPU_CAST(cpu)->get(REG_D_16);
 }
 
 uint8_t wdc65c816_get_dbr(wdc65c816_t* cpu) {
@@ -133,24 +129,21 @@ bool wdc65c816_get_emulation_mode(wdc65c816_t* cpu) {
     return CPU_CAST(cpu)->get_emulation_mode();
 }
 
-// 16-bit register setters (65C816-specific) - PLACEHOLDER IMPLEMENTATIONS
+// 16-bit register setters (65C816-specific)
 void wdc65c816_set_a_full(wdc65c816_t* cpu, uint16_t value) {
-    // TODO: Set full 16-bit A register in wide_registers mixin
-    CPU_CAST(cpu)->set(REG_A, value & 0xFF); // Placeholder - set 8-bit for now
+    CPU_CAST(cpu)->set(REG_A_16, value);
 }
 
 void wdc65c816_set_x_full(wdc65c816_t* cpu, uint16_t value) {
-    // TODO: Set full 16-bit X register in wide_registers mixin
-    CPU_CAST(cpu)->set(REG_X, value & 0xFF); // Placeholder - set 8-bit for now
+    CPU_CAST(cpu)->set(REG_X_16, value);
 }
 
 void wdc65c816_set_y_full(wdc65c816_t* cpu, uint16_t value) {
-    // TODO: Set full 16-bit Y register in wide_registers mixin
-    CPU_CAST(cpu)->set(REG_Y, value & 0xFF); // Placeholder - set 8-bit for now
+    CPU_CAST(cpu)->set(REG_Y_16, value);
 }
 
 void wdc65c816_set_d(wdc65c816_t* cpu, uint16_t value) {
-    CPU_CAST(cpu)->set(REG_D, value);
+    CPU_CAST(cpu)->set(REG_D_16, value);
 }
 
 void wdc65c816_set_dbr(wdc65c816_t* cpu, uint8_t value) {
