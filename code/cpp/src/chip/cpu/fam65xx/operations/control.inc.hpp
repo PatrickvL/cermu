@@ -178,12 +178,14 @@ uint16_t get_vector_addr() const {
     // Use active_interrupt directly as table index - much simpler!
     const int interrupt_index = static_cast<int>(this->active_interrupt);
     
-    // Select appropriate vector table and return vector address
+    // Select appropriate vector table and return vector address - native code nested
     if constexpr (has_wide_registers()) {
         if (!this->get_emulation_mode()) {
             return native_65C816_vectors[interrupt_index];
         }
     }
+    
+    // Emulation mode and non-wide CPUs use standard vectors
     return standard_vectors[interrupt_index];
 }
 

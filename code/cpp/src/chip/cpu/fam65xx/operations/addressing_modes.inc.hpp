@@ -515,10 +515,10 @@ bus_state_t am_dp(bus_state_t pins) {
         // Use Direct Page register instead of zero page
         // Implementation would use this->get(REG_D)
         return pins; // Placeholder
-    } else {
-        // Fall back to zero page on older processors
-        return am_zp(pins);
     }
+    
+    // Fall back to zero page on emulation mode and non-wide processors
+    return am_zp(pins);
 }
 
 // Direct Page,X addressing: dp,X (65C816)
@@ -526,9 +526,10 @@ bus_state_t am_dpx(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
         // Use Direct Page register with X indexing
         return pins; // Placeholder
-    } else {
-        return am_zpx(pins);
     }
+    
+    // Fall back to zero page,X on emulation mode and non-wide processors
+    return am_zpx(pins);
 }
 
 // Absolute Long addressing: $nnnnnn (65C816)
@@ -563,8 +564,11 @@ bus_state_t am_abl(bus_state_t pins) {
                 }
                 return pins;
         }
+        return pins;
     }
-    return pins; // Should not be called on 8-bit processors
+    
+    // Should not be called on non-wide processors
+    return pins;
 }
 
 // Absolute Long,X addressing: $nnnnnn,X (65C816)
@@ -605,8 +609,11 @@ bus_state_t am_ablx(bus_state_t pins) {
                 }
                 return pins;
         }
+        return pins;
     }
-    return pins; // Should not be called on 8-bit processors
+    
+    // Should not be called on non-wide processors
+    return pins;
 }
 
 // Direct Page Indirect Long addressing: [dp] (65C816)
@@ -676,8 +683,11 @@ bus_state_t am_dpil(bus_state_t pins) {
                 }
                 return pins;
         }
+        return pins;
     }
-    return pins; // Should not be called on 8-bit processors
+    
+    // Should not be called on non-wide processors
+    return pins;
 }
 
 // Direct Page Indirect Long,Y addressing: [dp],Y (65C816)
@@ -752,8 +762,11 @@ bus_state_t am_dpily(bus_state_t pins) {
                 }
                 return pins;
         }
+        return pins;
     }
-    return pins; // Should not be called on 8-bit processors
+    
+    // Should not be called on non-wide processors
+    return pins;
 }
 
 // Stack Relative addressing: sr,S (65C816)
@@ -781,8 +794,11 @@ bus_state_t am_sr(bus_state_t pins) {
                 }
                 return pins;
         }
+        return pins;
     }
-    return pins; // Should not be called on 8-bit processors
+    
+    // Should not be called on non-wide processors
+    return pins;
 }
 
 // Stack Relative Indirect Indexed: (sr,S),Y (65C816)
@@ -834,8 +850,11 @@ bus_state_t am_sriy(bus_state_t pins) {
                 }
                 return pins;
         }
+        return pins;
     }
-    return pins; // Should not be called on 8-bit processors
+    
+    // Should not be called on non-wide processors
+    return pins;
 }
 
 // Legacy alias functions for compatibility
