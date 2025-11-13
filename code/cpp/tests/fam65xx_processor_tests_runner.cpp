@@ -1644,9 +1644,10 @@ int main(int argc, char* argv[]) {
         std::cout << "\nALL TESTS PASSED - Template-based fam65xx matches ProcessorTests ground truth!\n";
         return 0;
     } else {
-        double pass_rate = (double)results.passed_tests / results.total_tests * 100.0;
+        // Use overall pass rate accounting for early termination
+        double overall_pass_rate = (double)results.passed_tests / all_tests.size() * 100.0;
         std::cout << "\nSOME TESTS FAILED - fam65xx pass rate: "
-                  << std::fixed << std::setprecision(1) << pass_rate << "%\n";
+                  << std::fixed << std::setprecision(1) << overall_pass_rate << "%\n";
         std::cout << "Implementation differs from hardware-verified ground truth\n";
         return 1;
     }
