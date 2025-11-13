@@ -264,10 +264,6 @@ struct wide_registers_mixin_t {
         if (mode) {
             // In emulation mode, M and X are implicit (always set) but not visible in P register
             // This matches real 65C816 hardware behavior
-            // Clear high bytes of accumulator and index registers
-            set(REG_AH, 0);
-            set(REG_XH, 0);
-            set(REG_YH, 0);
             // Force stack pointer to page 1
             set(REG_SPH, 0x01);
             // Ensure M and X flags are NOT visible in P register in emulation mode
