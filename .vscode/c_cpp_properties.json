@@ -3,13 +3,24 @@
   "configurations": [
     {
       "name": "Linux",
-      "compilerPath": "/usr/bin/clang",
-      "intelliSenseMode": "linux-clang-x64",
+      "compilerPath": "/usr/bin/g++",
+      "intelliSenseMode": "linux-gcc-x64",
       "cStandard": "c17",
-      "cppStandard": "c++17",
+      "cppStandard": "c++20",
       "includePath": [
-        "${workspaceFolder}/**",
-        "${workspaceFolder}/code/c/src",
+        "${workspaceFolder}/code/cpp/src",
+        "${workspaceFolder}/code/cpp/src/core",
+        "${workspaceFolder}/code/cpp/src/chip/cpu/fam65xx",
+        "${workspaceFolder}/code/cpp/src/chip/io",
+        "${workspaceFolder}/code/cpp/src/chip/logic",
+        "${workspaceFolder}/code/cpp/src/chip/memory",
+        "${workspaceFolder}/code/cpp/src/chip/sound",
+        "${workspaceFolder}/code/cpp/src/chip/video",
+        "${workspaceFolder}/code/cpp/src/systems/c64",
+        "${workspaceFolder}/code/cpp/src/main",
+        "${workspaceFolder}/code/cpp/src/gui",
+        "${workspaceFolder}/code/cpp/external/imgui",
+        "${workspaceFolder}/code/cpp/external/imgui/backends",
         "/usr/include",
         "/usr/include/SDL2",
         "/usr/local/include",
@@ -29,7 +40,7 @@
         ],
         "limitSymbolsToIncludedHeaders": true
       },
-      "compileCommands": "${workspaceFolder}/build/compile_commands.json",
+      "compileCommands": "${workspaceFolder}/code/cpp/build/compile_commands.json",
       "configurationProvider": "ms-vscode.cmake-tools"
     }
   ]
