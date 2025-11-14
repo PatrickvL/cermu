@@ -85,6 +85,15 @@ bus_state_t am_zpy(bus_state_t pins) {
 
 // Absolute addressing: $nnnn (cycle-accurate)
 bus_state_t am_abs(bus_state_t pins) {
+    // Check for 65C816 PEA (0xF4) in emulation mode - redirect to ZPX addressing
+    if constexpr (this->has_wide_registers()) {
+        if (this->get_emulation_mode() && this->get(REG_IR) == 0xF4) {
+            // PEA in emulation mode should behave as NOP zp,X
+            this->transition_to_opcode(opcode_info_t{OP::NOP, AM::ZPX, OF::NONE});
+            return this->call_current_handler(pins);
+        }
+    }
+    
     switch (this->cycle_index) {
         case 0:
             // PHI2: Read low byte from PC
@@ -421,6 +430,15 @@ bus_state_t addr_ind_abs(bus_state_t pins) {
 
 // Zero Page Indirect addressing: ($nn) - 65C02 only
 bus_state_t am_zpi(bus_state_t pins) {
+    // Check for 65C816 PEI (0xD4) in emulation mode - redirect to ZPX addressing
+    if constexpr (this->has_wide_registers()) {
+        if (this->get_emulation_mode() && this->get(REG_IR) == 0xD4) {
+            // PEI in emulation mode should behave as NOP zp,X
+            this->transition_to_opcode(opcode_info_t{OP::NOP, AM::ZPX, OF::NONE});
+            return this->call_current_handler(pins);
+        }
+    }
+    
     // CRITICAL FIX: Remove constexpr conditional - all CMOS processors should support ZPI
     // The constexpr condition was preventing proper execution
     switch (this->cycle_index) {
@@ -581,7 +599,7 @@ bus_state_t am_dpx(bus_state_t pins) {
                 
             case 2:
                 // PHI2: Dummy read from Direct Page address while adding X
-                pins = this->phi2_read<Addr::AB>(pins, REG_TMP);
+                pins = this->phi2_dummy_read<Addr::AB>(pins);
                 if (FAM65XX_GET_RDY(pins)) {
                     // PHI1: Add X register to Direct Page address (wraps within bank $00)
                     uint16_t base_addr = this->get(REG_AB);
