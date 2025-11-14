@@ -183,7 +183,7 @@ struct apu_mixin_t {
     
     // Set PAL/NTSC mode
     void set_apu_region(bool is_pal_region) {
-        if (apu_state.is_pal = is_pal_region)
+        if (apu_state.is_pal == is_pal_region)
             return;
 
         apu_state.is_pal = is_pal_region;
