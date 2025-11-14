@@ -296,7 +296,6 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
     // CMOS processors: Replace illegal opcodes with NOPs
     if (traits.has(fam65xx::CPUCoreFlags::CMOS_BASE)) {
         // WDC65C02: Specific illegal opcodes become 2-byte NOPs (AM::IMM)
-        // These opcodes: 0x02, 0x22, 0x42, 0x62, 0x82, 0xC2, 0xE2
         table[0x02] = {OP::NOP, AM::IMM, OF::NONE};  // JAM -> 2-byte NOP
         table[0x22] = {OP::NOP, AM::IMM, OF::NONE};  // JAM -> 2-byte NOP
         table[0x42] = {OP::NOP, AM::IMM, OF::NONE};  // JAM -> 2-byte NOP
@@ -493,18 +492,5 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
     
     return table;
 }
-
-// ============================================================================
-// TEMPLATE SPECIALIZATIONS FOR EACH PROCESSOR TYPE
-// ============================================================================
-
-// Template specializations are not needed for CPUTraits reference parameters!
-// The template function generate_opcode_table<Traits>() where Traits is a reference
-// to a CPUTraits instance will automatically use the generic implementation
-// that calls generate_opcode_table_for_traits(Traits) at compile time.
-//
-// This is because template<const CPUTraits& Traits> means the function is
-// instantiated with the actual CPUTraits instance, not a type.
-// The compiler will generate the correct implementation automatically.
 
 #endif // FAM65XX_SKIP_IMPLEMENTATION

@@ -174,46 +174,46 @@ enum class AddressingMode : uint8_t {
     // Universal modes - supported by all 65xx family processors
     NON = 0, /* No addressing handler (Implicit/Accumulator/Relative/Special) - All CPUs */
     IMM,     /* Immediate - operand is next byte - All CPUs */
-    DP,      /* Direct Page (65C816) / Zero Page (6502/6510/65C02) - All CPUs */
-    DPX,     /* Direct Page,X (65C816) / Zero Page,X (6502/6510/65C02) - All CPUs */
-    DPY,     /* Direct Page,Y (65C816) / Zero Page,Y (6502/6510/65C02) - All CPUs */
+
     ABS,     /* Absolute - operand at $nnnn - All CPUs */
     ABX,     /* Absolute,X - operand at $nnnn + X - All CPUs */
     ABY,     /* Absolute,Y - operand at $nnnn + Y - All CPUs */
+    IND,     /* Indirect (abs) - JMP only - 6502/6510/65C02/65C816 */
     INX,     /* Indexed Indirect (zp,X) - 6502/6510 / (dp,X) - 65C02/65C816 */
     INY,     /* Indirect Indexed (zp),Y - 6502/6510 / (dp),Y - 65C02/65C816 */
+    ZER,     /* Zero Page (6502/6510/65C02) / Direct Page (65C816) - All CPUs */
+    ZPX,     /* Zero Page,X (6502/6510/65C02) / Direct Page,X (65C816) - All CPUs */
+    ZPY,     /* Zero Page,Y (6502/6510/65C02) / Direct Page,Y (65C816) - All CPUs */
     
     // CMOS enhancements - 65C02 and 65C816 only
-    DPI,     /* Direct Page Indirect (dp) - 65C02/65C816 only */
-    
-    // Previously NON-aliased modes - now have dedicated handlers
-    IND,     /* Indirect (abs) - JMP only - 6502/6510/65C02/65C816 */
-    ABI,     /* Absolute Indexed Indirect (abs,X) - JMP/JSR - 65C816 only */
     ZPR,     /* Zero Page Relative zp,rel - BBR/BBS - Rockwell 65C02 only */
+    ZPI,     /* Zero Page Indirect - 65C02/65C816 only */
     
     // 65C816 exclusive addressing modes
-    SR,      /* Stack Relative n,S - 65C816 only */
-    SRI,     /* Stack Relative Indirect Indexed (n,S),Y - 65C816 only */
-    DPIL,    /* Direct Page Indirect Long [dp] - 65C816 only */
-    DPILY,   /* Direct Page Indirect Long,Y [dp],Y - 65C816 only */
+    ABI,     /* Absolute Indexed Indirect (abs,X) - JMP/JSR - 65C816 only */
     ABL,     /* Absolute Long $nnnnnn - 65C816 only */
     ABLX,    /* Absolute Long,X $nnnnnn,X - 65C816 only */
+    DPIL,    /* Direct Page Indirect Long [dp] - 65C816 only */
+    DPILY,   /* Direct Page Indirect Long,Y [dp],Y - 65C816 only */
+    SR,      /* Stack Relative n,S - 65C816 only */
+    SRI,     /* Stack Relative Indirect Indexed (n,S),Y - 65C816 only */
+
     COUNT,   /* Total count = 20, fits in 5-bit am_index */
     
     // ========================================================================
-    // Legacy aliases for documentation/clarity
+    // Aliases for documentation/clarity
     // ========================================================================
-    IMP = NON,     /* Implied/Implicit - no operand - All CPUs */
     ACC = NON,     /* Accumulator - operate on A register - All CPUs */
+    IMP = NON,     /* Implied/Implicit - no operand - All CPUs */
     REL = NON,     /* Relative - branch offset - All CPUs */
     
     // ========================================================================
-    // Legacy aliases for backward compatibility
+    // Aliases for 65C816 compatibility
     // ========================================================================
-    ZER = DP,      /* Zero Page -> Direct Page */
-    ZPX = DPX,     /* Zero Page,X -> Direct Page,X */
-    ZPY = DPY,     /* Zero Page,Y -> Direct Page,Y */
-    ZPI = DPI      /* Zero Page Indirect -> Direct Page Indirect */
+    DP = ZER,      /* Direct Page -> Zero Page */
+    DPI = ZPI,     /* Direct Page Indirect (dp) -> Zero Page Indirect */
+    DPX = ZPX,     /* Direct Page,X -> Zero Page,X */
+    DPY = ZPY      /* Direct Page,Y -> Zero Page,Y */
 };
 
 
