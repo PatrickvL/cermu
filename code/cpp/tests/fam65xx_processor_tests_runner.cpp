@@ -304,6 +304,17 @@ public:
         cycle.address = addr;
         cycle.data = data;
         cycle.is_write = is_write;
+        cycle.has_65816_flags = false;
+        actual_bus_cycles.push_back(cycle);
+    }
+    
+    // Overloaded version for 32-bit addresses (65C816)
+    void record_bus_cycle(uint32_t addr, uint8_t data, bool is_write) {
+        bus_cycle_t cycle;
+        cycle.address = addr;
+        cycle.data = data;
+        cycle.is_write = is_write;
+        cycle.has_65816_flags = false;
         actual_bus_cycles.push_back(cycle);
     }
     // Bootstrap processor for ProcessorTests compatibility
@@ -566,11 +577,11 @@ private:
         if (wrapper->harness_ptr) {
             ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(wrapper->harness_ptr);
             
-            // For 65816, the CPU core already provides the full 24-bit address
-            // For other processors, addr will be 16-bit but passed as 32-bit
             // Use harness memory access (supports 24-bit addresses for 65816)
             value = harness->get_memory(addr);
-            harness->record_bus_cycle(static_cast<uint16_t>(addr & 0xFFFF), value, false);  // Record 16-bit for compatibility
+            
+            // Always use full 32-bit address for bus cycle tracking - the harness will handle masking
+            harness->record_bus_cycle(addr, value, false);
         } else {
             // Fallback to direct memory access (mask to 16-bit for safety)
             value = test_memory[addr & 0xFFFF];
@@ -584,11 +595,11 @@ private:
         if (wrapper->harness_ptr) {
             ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(wrapper->harness_ptr);
             
-            // For 65816, the CPU core already provides the full 24-bit address
-            // For other processors, addr will be 16-bit but passed as 32-bit
             // Use harness memory access (supports 24-bit addresses for 65816)
             harness->set_memory(addr, data);
-            harness->record_bus_cycle(static_cast<uint16_t>(addr & 0xFFFF), data, true);  // Record 16-bit for compatibility
+            
+            // Always use full 32-bit address for bus cycle tracking - the harness will handle masking
+            harness->record_bus_cycle(addr, data, true);
         } else {
             // Fallback to direct memory access (mask to 16-bit for safety)
             test_memory[addr & 0xFFFF] = data;
