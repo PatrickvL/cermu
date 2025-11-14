@@ -140,7 +140,7 @@ struct CPUTraits {
     }
     
     constexpr uint32_t address_mask() const {
-        return (1u << address_bits) - 1;
+        return ~(~0ull << address_bits);
     }
     
     // Feature detection methods (for template compatibility)
