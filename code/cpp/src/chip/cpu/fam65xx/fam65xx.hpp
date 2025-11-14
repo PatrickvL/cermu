@@ -496,8 +496,8 @@ class fam65xx_t :
             return pins;
         }
 
-        // Memory mode - read from AB address (using program banking PBR for 65C816)
-        return phi2_read<Addr::AB, Bank::PBR>(pins, target_reg);
+        // Memory mode - read from AB address (using data banking DBR for 65C816)
+        return phi2_read<Addr::AB, Bank::DBR>(pins, target_reg);
     }
     
     // ========================================================================
