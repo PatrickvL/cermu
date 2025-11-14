@@ -112,3 +112,4 @@ code/cpp/tests/fam65xx_cpp_lorenz_test_runner
 code/cpp/tests/fam65xx_processor_tests_runner
 code/csharp/aiemu/obj/*
 code/cpp/tests/CTestTestfile.cmake
+code/cpp/.cache/*
