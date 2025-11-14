@@ -52,7 +52,7 @@ bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func)
                 // Cycle 2: Write modified result back with processor-specific RDY handling
                 if (this->should_complete_write_cycle(pins)) {
                     pins = this->phi2_write<Addr::AB>(pins, this->get(REG_DL));
-                    transition_to_fetch();
+                    this->transition_to_fetch();
                 }
                 return pins;
         }
@@ -87,6 +87,81 @@ bus_state_t op_asl(bus_state_t pins) {
 
 /* LSR - Logical Shift Right */
 bus_state_t op_lsr(bus_state_t pins) {
+    // Check for 65C816 native mode with 16-bit memory operations (M=0)
+    if constexpr (this->has_wide_registers()) {
+        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_M) && 
+            (this->opcode_entry.flags & to_index(OF::RMW))) {
+            // 65C816 native mode, 16-bit memory operation - perform 16-bit LSR
+            switch (this->cycle_index) {
+                case 0:
+                    // Cycle 0: Read low byte from memory
+                    pins = this->phi2_read<Addr::AB>(pins, REG_DL);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        this->inc(REG_AB);
+                        this->cycle_index++;
+                    }
+                    return pins;
+                    
+                case 1:
+                    // Cycle 1: Read high byte from memory
+                    pins = this->phi2_read<Addr::AB>(pins, REG_ABH);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        this->cycle_index++;
+                    }
+                    return pins;
+                    
+                case 2:
+                {
+                    // Cycle 2: Hardware-accurate dummy cycle
+                    if constexpr (this->has_rmw_dummy_write()) {
+                        // NMOS processors: Write original high byte back (dummy write)
+                        pins = this->phi2_write<Addr::AB>(pins, this->get(REG_ABH));
+                    } else {
+                        // CMOS processors: Dummy read cycle instead of write
+                        pins = this->phi2_dummy_read<Addr::AB>(pins);
+                        if (!FAM65XX_GET_RDY(pins)) {
+                            return pins;
+                        }
+                    }
+                    
+                    // Perform 16-bit LSR operation
+                    this->set(REG_ABL, this->get(REG_DL));
+                    uint16_t value = this->get(REG_AB);
+                    const uint8_t carry_out = value & FLAG_C;
+                    value >>= 1;
+                    this->set(REG_AB, value);
+                    
+                    // Update flags - LSR only affects N, Z, C (V flag unchanged)
+                    this->update_flag(FLAG_C, carry_out != 0);
+                    this->update_flag(FLAG_Z, value == 0);
+                    this->update_flag(FLAG_N, (value & 0x8000) != 0);
+                    
+                    this->cycle_index++;
+                    return pins;
+                }
+                    
+                case 3:
+                    // Cycle 3: Write high byte back to memory
+                    if (this->should_complete_write_cycle(pins)) {
+                        pins = this->phi2_write<Addr::AB>(pins, this->get(REG_ABH));
+                        this->dec(REG_AB);
+                        this->cycle_index++;
+                    }
+                    return pins;
+                    
+                case 4:
+                    // Cycle 4: Write low byte back to memory
+                    if (this->should_complete_write_cycle(pins)) {
+                        pins = this->phi2_write<Addr::AB>(pins, this->get(REG_ABL));
+                        this->transition_to_fetch();
+                    }
+                    return pins;
+            }
+            return pins;
+        }
+    }
+    
+    // Standard 8-bit LSR operation (emulation mode, non-wide CPUs, and accumulator mode)
     return rmw_operation_helper(pins, [this](uint8_t& value) {
         const uint8_t carry_out = value & FLAG_C;
         value >>= 1;
