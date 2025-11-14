@@ -91,13 +91,16 @@ struct apu_mixin_t {
     void init_apu() {
         apu_state.is_pal = false; // Default to NTSC
         apu_state.processor_tests_mode = false; // Default to normal APU mode
+        destroy_apu(); // Ensure no existing instance as we're creating a new one, potentially with different region
         apu_state.apu_instance = new nes6502_apu::APU(apu_state.is_pal);
     }
     
     // Cleanup APU
     void destroy_apu() {
-        delete apu_state.apu_instance;
-        apu_state.apu_instance = nullptr;
+        if (apu_state.apu_instance != nullptr) {
+            delete apu_state.apu_instance;
+            apu_state.apu_instance = nullptr;
+        }
     }
     
     // APU register write handler ($4000-$4017) - ProcessorTests compatible
@@ -180,6 +183,9 @@ struct apu_mixin_t {
     
     // Set PAL/NTSC mode
     void set_apu_region(bool is_pal_region) {
+        if (apu_state.is_pal = is_pal_region)
+            return;
+
         apu_state.is_pal = is_pal_region;
         if (apu_state.apu_instance) {
             destroy_apu();

@@ -73,16 +73,12 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table_for_traits(const 
 #include "operations/opcode_tables.inc.hpp"
 
 // Now define the template function
+// Generate processor-specific opcode table at compile time
 template<const CPUTraits& Traits>
 constexpr std::array<opcode_info_t, 256> generate_opcode_table() {
     // This will use the generate_opcode_table_for_traits function from opcode_tables.inc.hpp
     return generate_opcode_table_for_traits(Traits);
 }
-
-// ============================================================================
-// INTERRUPT SHIFT REGISTER CONSTANTS (use definitions from fam65xx_types.h)
-// ============================================================================
-// Note: INT_* constants are defined in fam65xx_types.h and used here via C header inclusion
 
 // ============================================================================
 // MAIN CPU TEMPLATE CLASS
@@ -94,87 +90,24 @@ class fam65xx_t :
     public apu_base_t<Traits>,
     public register_base_t<Traits>
 {
-public:
     // Data type alias from the register mixin
     using data_t = typename register_base_t<Traits>::data_t;
     
     // CPUTraits-based feature detection helpers for operations files
-    static constexpr bool has_illegal_opcodes() { return Traits.has(CPUCoreFlags::ILLEGAL_OPCODES); }
+    static constexpr bool has_apu() { return Traits.has_apu(); }
+    static constexpr bool has_io_port() { return Traits.has_io_port(); }
+    static constexpr bool has_nmos_bugs() { return Traits.is_nmos(); }
+
     static constexpr bool has_bcd() { return Traits.has(CPUCoreFlags::HAS_DECIMAL_MODE); }
     static constexpr bool has_bcd_extra_cycle() { return Traits.has(CPUCoreFlags::BCD_EXTRA_CYCLE); }
     static constexpr bool has_bcd_nmos_flags() { return Traits.has(CPUCoreFlags::BCD_NMOS_FLAGS); }
-    static constexpr bool has_optimized_cycles() { return Traits.has(CPUCoreFlags::OPTIMIZED_CYCLES); }
     static constexpr bool has_cmos() { return Traits.has(CPUCoreFlags::CMOS_BASE); }
-    static constexpr bool has_wide_registers() { return Traits.has(CPUCoreFlags::C816_16BIT); }
-    static constexpr bool has_nmos_bugs() { return Traits.is_nmos(); }
-    static constexpr bool has_io_port() { return Traits.has_io_port(); }
-    static constexpr bool has_apu() { return Traits.has_apu(); }
-    static constexpr bool has_rmw_dummy_write() { return Traits.has(CPUCoreFlags::RMW_DUMMY_WRITE); }
-    static constexpr bool has_nmi_line() { return !Traits.has(CPUCoreFlags::NO_NMI_LINE); }
+    static constexpr bool has_illegal_opcodes() { return Traits.has(CPUCoreFlags::ILLEGAL_OPCODES); }
     static constexpr bool has_irq_line() { return !Traits.has(CPUCoreFlags::NO_IRQ_LINE); }
-    
-    // ========================================================================
-    // CPU STATE
-    // ========================================================================
-    
-    /* Current execution state */
-    opcode_info_t opcode_entry;         /* Cached opcode entry (copied once) */
-    bus_state_t (fam65xx_t::*current_handler)(bus_state_t);  /* Current instruction handler */
-    uint8_t cycle_index;                /* Current cycle within instruction */
-    
-    /* Interrupt state - hardware-accurate shift register system */
-    interrupt_t active_interrupt;       /* Currently active interrupt (enum serves as vector index) */
-    uint8_t nmi_prev;                   /* Previous NMI line state for edge detection */
-    uint32_t interrupt_shift_register;  /* Combined shift register for all interrupt types */
-    
-    /* Memory callbacks (for test runner compatibility) */
-    fam65xx_mem_read_t mem_read;        /* Memory read callback */
-    fam65xx_mem_write_t mem_write;      /* Memory write callback */
-    void* mem_user_data;                /* User data for memory callbacks */
-    
-    /* 65C02 extended state */
-    bool wait_for_interrupt;            /* WAI instruction state */
-    bool stopped;                       /* STP instruction state */
-    
-    /* Debug tracing state */
-    static constexpr bool ENABLE_TRACING = false;  /* Compile-time tracing flag */
-    mutable int trace_indent;           /* Current tracing indentation level */
-    
-    // ========================================================================
-    // CONSTRUCTOR AND INITIALIZATION
-    // ========================================================================
-    
-    fam65xx_t() {
-        // Initialize CPU state to zero
-        opcode_entry = {};
-        current_handler = nullptr;
-        cycle_index = 0;
-        active_interrupt = FAM65XX_INT_NONE;
-        nmi_prev = 0;
-        interrupt_shift_register = 0;
-        mem_read = nullptr;
-        mem_write = nullptr;
-        mem_user_data = nullptr;
-        wait_for_interrupt = false;
-        stopped = false;
-        trace_indent = 0;
-        
-        // Initialize registers
-        this->init_registers();
-        
-        // Initialize conditional features
-        this->init_conditional_features();
-        
-        // Initialize operation and addressing mode handlers
-        this->init_opcode_table();
-    }
-    
-    ~fam65xx_t() {
-        // Cleanup conditional features
-        if constexpr (has_apu()) {
-            this->destroy_apu();
-        }
-    }
+    static constexpr bool has_nmi_line() { return !Traits.has(CPUCoreFlags::NO_NMI_LINE); }
+    static constexpr bool has_optimized_cycles() { return Traits.has(CPUCoreFlags::OPTIMIZED_CYCLES); }
+    static constexpr bool has_rmw_dummy_write() { return Traits.has(CPUCoreFlags::RMW_DUMMY_WRITE); }
+    static constexpr bool has_wide_registers() { return Traits.has(CPUCoreFlags::C816_16BIT); }
     
     // ========================================================================
     // DEBUG TRACING HELPERS
@@ -261,145 +194,6 @@ public:
         if constexpr (ENABLE_TRACING) {
             trace("EXEC: %02X %s (cycle %d)", opcode, mnemonic, cycle_index);
         }
-    }
-    
-    // ========================================================================
-    // PROCESSOR-SPECIFIC INITIALIZATION  
-    // ========================================================================
-    
-    bus_state_t init(const chip_descriptor_t* /*desc*/) {
-        // Note: Memory callbacks will be set through separate API calls
-        // This matches the old implementation's approach
-        this->mem_read = nullptr;
-        this->mem_write = nullptr;
-        this->mem_user_data = nullptr;
-        
-        // Initialize processor-specific features
-        this->init_conditional_features();
-        
-        // Initialize opcode table for this processor type
-        this->init_opcode_table();
-        
-        /* Initialize register layout:
-        * SP = 0x01FF (stack starts at top of page 1)
-        */
-        this->set(REG_SP, 0x01FF); /* Stack pointer (page 1, starts at 0xFF) */
-
-        // Return initial pin state
-        bus_state_t pins = 0;
-        return pins;
-    }
-    
-    // Add memory callback setup function (matching old implementation)
-    void set_memory_callbacks(fam65xx_mem_read_t read_fn, fam65xx_mem_write_t write_fn, void* user_data) {
-        this->mem_read = read_fn;
-        this->mem_write = write_fn;
-        this->mem_user_data = user_data;
-    }
-    
-    bus_state_t bootstrap(bus_state_t pins) {
-        // Bootstrap CPU for immediate execution (test runner compatibility)
-        // Ported from original fam65xx implementation
-        
-        /* Set up for immediate instruction execution without RESET sequence */
-        pins |= FAM65XX_RDY;   /* Ensure RDY is high for execution */
-        pins |= FAM65XX_RW;    /* Ensure RW is set as default state */
-        pins |= FAM65XX_IRQ;   /* IRQ line high (inactive) */
-        pins |= FAM65XX_NMI;   /* NMI line high (inactive) */
-        pins |= FAM65XX_RES;   /* RESET line high (inactive) */
-        
-        /* Clear any interrupt flags that might have been set */
-        this->active_interrupt = FAM65XX_INT_NONE;
-        
-        /* CRITICAL: Reset interrupt shift register to prevent false triggers */
-        this->interrupt_shift_register = 0x00000000;  /* No interrupt activity detected yet */
-        this->nmi_prev = 1;  /* NMI line starts high (inactive) for edge detection */
-        
-        /* Set up for instruction fetch - CPU ready to execute next instruction */
-        this->transition_to_fetch();
-        
-        return pins;
-    }
-    
-    bus_state_t reset(bus_state_t pins) {
-        // Reset registers properly (including emulation mode for 65C816)
-        this->init_registers();
-        
-        // Reset interrupt state
-        this->nmi_prev = 0;
-        this->interrupt_shift_register = 0;
-        
-        // Reset 65C02 extended state
-        this->wait_for_interrupt = false;
-        this->stopped = false;
-        
-        // Reset processor-specific features
-        this->init_conditional_features();
-        
-        // Use unified interrupt handler for vector loading
-        // Skip stack operations (cycles 0-3) and jump to vector loading (cycles 4-5)
-        this->active_interrupt = FAM65XX_INT_RESET;
-        
-        // Set up opcode_entry for BRK (opcode $00) so tracing shows correct instruction
-        this->opcode_entry = get_opcode_info(0x00);// = {OP_BRK, AM_NON, OF_NONE};
-        this->current_handler = &fam65xx_t::op_brk;
-        this->cycle_index = 4;  // Jump to vector loading phase
-        this->set(REG_AB, this->get_vector_addr()); // Do the same memory setup as preceding op_brk cycle 3
-        
-        return pins;
-    }
-    
-    bus_state_t tick(bus_state_t pins) {
-        trace_enter("tick");
-        trace_registers("before");
-        
-        // SYNC pin management - asserted during opcode fetch cycles (matching old implementation)
-        if (this->current_handler == &fam65xx_t::fetch_opcode && this->cycle_index == 0) {
-            pins |= FAM65XX_SYNC;
-            trace("SYNC asserted (opcode fetch)");
-        } else {
-            pins &= ~FAM65XX_SYNC;
-        }
-        
-        // Hardware-accurate interrupt detection every cycle (matching old implementation)
-        if (this->process_interrupt_detection(pins)) {
-            // Interrupt detected - check if we should hijack current instruction
-            if (this->active_interrupt == FAM65XX_INT_RESET) {
-                // RESET has highest priority - immediately start RESET sequence
-                return reset(pins);
-            } else if (this->current_handler == &fam65xx_t::fetch_opcode && this->cycle_index == 0) {
-                // At instruction boundary - start interrupt sequence (matching old implementation)
-                // Use op_brk as unified interrupt handler like old implementation
-                this->current_handler = &fam65xx_t::op_brk;
-                this->cycle_index = 0;
-                // Continue with op_brk handler execution this cycle
-            }
-        }
-        
-        // Execute current instruction cycle
-        if (this->current_handler != nullptr) {
-            return this->call_current_handler(pins);
-        } else {
-            // Start new instruction fetch - should not happen with proper initialization
-            trace("No handler - starting fetch_opcode");
-            pins = this->fetch_opcode(pins);
-        }
-        
-        // Clock APU if present (every CPU cycle)
-        if constexpr (has_apu()) {
-            pins = this->clock_apu(pins);
-        }
-        
-        // Print instruction trace for debugging (covers all memory accesses including reset)
-        this->print_instruction_trace();
-        
-        trace_registers("after");
-        trace_exit("tick");
-        return pins;
-    }
-    
-    bool opdone() const {
-        return this->current_handler == &fam65xx_t::fetch_opcode;
     }
     
     // ========================================================================
@@ -501,7 +295,7 @@ public:
      * @param data Data byte (for write operations, ignored for reads)
      * @return Updated bus state with operation results
      */
-private:
+
     // Determine effective bank register based on address register
     template<Addr addr_arg>
     inline constexpr reg8_t effective_bank_reg(Bank bank_arg) const {
@@ -571,16 +365,15 @@ private:
             }
         }
         
-        uint8_t bus_data = FAM65XX_GET_DATA(pins);
-        
         if constexpr (IsWrite) {
-            return phi2_write_impl<IsDummy>(pins, addr, data);
+            return phi2_write_impl(pins, addr, data);
         } else {
+            uint8_t bus_data = FAM65XX_GET_DATA(pins);
+            
             return phi2_read_impl<IsDummy>(pins, addr, bus_data);
         }
     }
     
-    template<bool IsDummy>
     bus_state_t phi2_write_impl(bus_state_t pins, uint32_t addr, uint8_t data) {
         // Handle processor-specific I/O port access (compile-time conditional)
         if constexpr (Traits.has_io_port()) {
@@ -590,22 +383,14 @@ private:
                 } else {
                     this->write_io_data(data);
                 }
-                // Still call memory callback for test compatibility
-                if (this->mem_write != nullptr) {
-                    this->mem_write(this->mem_user_data, addr, data);
-                }
-                return FAM65XX_SET_DATA(pins, data);
+                // Fallthrough to call memory callback for test compatibility - TODO : return when !processor_tests_mode?
             }
         }
         
         // Handle APU register access (compile-time conditional)
         if constexpr (Traits.has_apu()) {
             if (this->write_apu_register(addr, data)) {
-                // APU register handled, but still call memory callback
-                if (this->mem_write != nullptr) {
-                    this->mem_write(this->mem_user_data, addr, data);
-                }
-                return FAM65XX_SET_DATA(pins, data);
+                // APU register handled, but still fallthrough to call memory callback
             }
         }
         
@@ -659,8 +444,6 @@ private:
         return pins;
     }
 
-public:
-    
     // ========================================================================
     // CONCRETE BUS ACCESS WRAPPERS (Reference Implementation Style)
     // ========================================================================
@@ -670,6 +453,11 @@ public:
      * These provide type-safe, easy-to-use interfaces while maintaining
      * the zero-overhead benefits of the template implementation.
      */
+    
+    template<Addr addr_reg, Bank bank_arg = Bank::DBR>
+    inline bus_state_t phi2_write(bus_state_t pins, uint8_t data) {
+        return phi2_access<true, false, addr_reg, bank_arg>(pins, data);
+    }
     
     // Template-based wrapper functions using Addr and Bank enums
     template<Addr addr_reg, Bank bank_arg = Bank::DBR>
@@ -683,6 +471,11 @@ public:
         
         return pins;
     }
+
+    template<Addr addr_reg, Bank bank_arg = Bank::DBR>
+    inline bus_state_t phi2_dummy_read(bus_state_t pins) {
+        return phi2_access<false, true, addr_reg, bank_arg>(pins);
+    }
     
     // Optimized operand reading with banking-aware logic
     inline bus_state_t phi2_read_operand(bus_state_t pins, reg8_t target_reg) {
@@ -694,70 +487,11 @@ public:
             }
             return pins;
         }
+
         // Memory mode - read from AB address (using program banking PBR for 65C816)
         return phi2_read<Addr::AB, Bank::PBR>(pins, target_reg);
     }
-
-    template<Addr addr_reg, Bank bank_arg = Bank::DBR>
-    inline bus_state_t phi2_write(bus_state_t pins, uint8_t data) {
-        return phi2_access<true, false, addr_reg, bank_arg>(pins, data);
-    }
     
-    template<Addr addr_reg, Bank bank_arg = Bank::DBR>
-    inline bus_state_t phi2_dummy_read(bus_state_t pins) {
-        return phi2_access<false, true, addr_reg, bank_arg>(pins);
-    }
-    
-    template<Addr addr_reg, Bank bank_arg = Bank::DBR>
-    inline bus_state_t phi2_dummy_write(bus_state_t pins, uint8_t data) {
-        return phi2_access<true, true, addr_reg, bank_arg>(pins, data);
-    }
-    
-    // ========================================================================
-    // OPERATION IMPLEMENTATIONS (included via .inc.hpp files)
-    // ========================================================================
-    
-    // Include all operation implementations
-    // These .inc.hpp files contain function definitions that will be compiled
-    // as part of this template class, allowing conditional compilation
-    // based on CPUTraits features
-    
-    // Define template context guard for .inc.hpp files BEFORE including them
-    #define FAM65XX_TEMPLATE_CONTEXT
-    
-#include "operations/addressing_modes.inc.hpp"  // Addressing mode handlers
-#include "operations/arithmetic.inc.hpp"        // ADC, SBC, CMP operations
-#include "operations/memory.inc.hpp"           // Load/store operations
-#include "operations/control.inc.hpp"          // Control flow operations
-#include "operations/branches.inc.hpp"         // Branch operations
-#include "operations/stack.inc.hpp"            // Stack operations
-#include "operations/transfers.inc.hpp"        // Register transfer operations
-#include "operations/flags.inc.hpp"            // Flag manipulation operations
-#include "operations/rmw.inc.hpp"              // Read-modify-write operations
-#include "operations/illegal.inc.hpp"          // Illegal/undocumented opcodes
-#include "operations/cmos.inc.hpp"             // 65C02 enhancements
-#include "operations/rockwell.inc.hpp"         // Rockwell 65C02 bit manipulation
-#include "operations/wide.inc.hpp"             // 65C816 16-bit operations
-    
-    // Undefine the guard after inclusion
-    #undef FAM65XX_TEMPLATE_CONTEXT
-    
-    // ========================================================================
-    // OPCODE TABLE GENERATION
-    // ========================================================================
-    
-
-    // Generate processor-specific opcode table at compile time
-
-    opcode_info_t get_opcode_info(uint8_t opcode) const {
-            return generate_opcode_table<Traits>()[opcode];
-    }
-    
-    // Note: Register accessor functions are now provided by the register mixin
-    // The mixin provides get(), set(), inc(), dec(), and load() functions
-    // that automatically handle 8-bit vs 16-bit operation based on M/X flags
-    // for 65C816 or provide simple 8-bit access for other CPUs.
-
     // ========================================================================
     // HELPER FUNCTIONS (needed by operation files)
     // ========================================================================
@@ -1076,26 +810,38 @@ public:
         return result;
     }
 
-private:
     // ========================================================================
-    // INTERNAL HELPER FUNCTIONS AND DECLARATIONS
+    // OPERATION IMPLEMENTATIONS (included via .inc.hpp files)
     // ========================================================================
     
-    // Template-dependent function pointer type
-    using InstructionHandler = bus_state_t (fam65xx_t<Traits>::*)(bus_state_t);
+    // Include all operation implementations
+    // These .inc.hpp files contain function definitions that will be compiled
+    // as part of this template class, allowing conditional compilation
+    // based on CPUTraits features
     
-    // Lookup tables for handlers (initialized during init)
-    std::array<InstructionHandler, to_index(OP::COUNT)> operation_handlers;
-    std::array<InstructionHandler, to_index(AM::COUNT)> addressing_mode_handlers;
+    // Define template context guard for .inc.hpp files BEFORE including them
+    #define FAM65XX_TEMPLATE_CONTEXT
     
-    inline InstructionHandler get_instruction_handler() {
-        // For addressing modes that need address calculation, start with addressing mode handler
-        if (this->opcode_entry.am_index > to_index(AM::IMM)) {
-            return addressing_mode_handlers[this->opcode_entry.am_index];
-        }
-        
-        return this->operation_handlers[this->opcode_entry.op_index];
-    }
+#include "operations/addressing_modes.inc.hpp"  // Addressing mode handlers
+#include "operations/arithmetic.inc.hpp"        // ADC, SBC, CMP operations
+#include "operations/memory.inc.hpp"           // Load/store operations
+#include "operations/control.inc.hpp"          // Control flow operations
+#include "operations/branches.inc.hpp"         // Branch operations
+#include "operations/stack.inc.hpp"            // Stack operations
+#include "operations/transfers.inc.hpp"        // Register transfer operations
+#include "operations/flags.inc.hpp"            // Flag manipulation operations
+#include "operations/rmw.inc.hpp"              // Read-modify-write operations
+#include "operations/illegal.inc.hpp"          // Illegal/undocumented opcodes
+#include "operations/cmos.inc.hpp"             // 65C02 enhancements
+#include "operations/rockwell.inc.hpp"         // Rockwell 65C02 bit manipulation
+#include "operations/wide.inc.hpp"             // 65C816 16-bit operations
+    
+    // Undefine the guard after inclusion
+    #undef FAM65XX_TEMPLATE_CONTEXT
+    
+    // ========================================================================
+    // EMULATION HELPER FUNCTIONS AND DECLARATIONS
+    // ========================================================================
     
     // Hardware-accurate interrupt detection with priority-order processing
     bool process_interrupt_detection(bus_state_t pins) {
@@ -1175,6 +921,29 @@ private:
         return false;
     }
     
+    // Template-dependent function pointer type
+    using InstructionHandler = bus_state_t (fam65xx_t<Traits>::*)(bus_state_t);
+    
+    // Lookup tables for handlers (initialized during init)
+    std::array<InstructionHandler, to_index(OP::COUNT)> operation_handlers;
+    std::array<InstructionHandler, to_index(AM::COUNT)> addressing_mode_handlers;
+    
+    inline InstructionHandler get_instruction_handler() {
+        // For addressing modes that need address calculation, start with addressing mode handler
+        if (this->opcode_entry.am_index > to_index(AM::IMM)) {
+            return addressing_mode_handlers[this->opcode_entry.am_index];
+        }
+        
+        return this->operation_handlers[this->opcode_entry.op_index];
+    }
+    
+    void transition_to_opcode(const opcode_info_t entry) {
+        this->opcode_entry = entry;
+        this->cycle_index = 0;
+        // Set up first instruction cycle handler
+        this->current_handler = this->get_instruction_handler();
+    }
+
     // Instruction fetch and decode
     bus_state_t fetch_opcode(bus_state_t pins) {
         // Read opcode from PC (using program banking PBR for 65C816)
@@ -1191,46 +960,20 @@ private:
         return pins;
     }
     
-public:
-    void transition_to_opcode(const opcode_info_t entry) {
-        this->opcode_entry = entry;
-        this->cycle_index = 0;
-        // Set up first instruction cycle handler
-        this->current_handler = this->get_instruction_handler();
-    }
-
     // Transition to next instruction fetch (public for bootstrap function)
     void transition_to_fetch() {
         this->current_handler = &fam65xx_t::fetch_opcode;
         this->cycle_index = 0;
-    }
-    
+    }    
 
-private:
-    // ========================================================================
-    // BUS CONTROL HELPER FUNCTIONS
-    // ========================================================================
-    
-    /**
-     * Check if CPU has bus control (hardware-accurate RDY handling)
-     * 
-     * This function determines whether the CPU or an external DMA device
-     * (such as VIC-II) controls the bus based on the RDY pin state.
-     * 
-     * Returns true if CPU has bus control, false if DMA device has control.
-     */
-    static inline bool cpu_has_bus(bus_state_t pins) {
-        return FAM65XX_GET_RDY(pins);
-    }
-        
-    // ========================================================================
-    // ESSENTIAL TEMPLATE FUNCTIONS (needed for real CPU implementation)
-    // ========================================================================
-    
     void transition_to_operation() {
         this->cycle_index = 0;
         this->current_handler = this->operation_handlers[this->opcode_entry.op_index];
     }
+    
+    // ========================================================================
+    // PROCESSOR-SPECIFIC INITIALIZATION  
+    // ========================================================================
     
     void init_conditional_features() {
         // Initialize I/O port if present
@@ -1391,35 +1134,232 @@ private:
         // Initialize addressing mode handler lookup table
         addressing_mode_handlers.fill(nullptr);  // Default to nullptr (safe for AM_NON/AM_IMM)
         
-        // Addressing modes (implemented)
+        // Addressing modes (no handler needed)
         addressing_mode_handlers[to_index(AM::NON)] = nullptr;   // No handler needed (implicit/accumulator/relative)
         addressing_mode_handlers[to_index(AM::IMM)] = nullptr;   // No handler (handled directly in operations)
-        addressing_mode_handlers[to_index(AM::DP)] = &fam65xx_t::am_zp;   // DP maps to ZP implementation for compatibility
-        addressing_mode_handlers[to_index(AM::DPX)] = &fam65xx_t::am_zpx; // DPX maps to ZPX implementation for compatibility
-        addressing_mode_handlers[to_index(AM::DPY)] = &fam65xx_t::am_zpy; // DPY maps to ZPY implementation for compatibility
+
+        // Addressing modes (implemented)
         addressing_mode_handlers[to_index(AM::ABS)] = &fam65xx_t::am_abs;
         addressing_mode_handlers[to_index(AM::ABX)] = &fam65xx_t::am_abx;
         addressing_mode_handlers[to_index(AM::ABY)] = &fam65xx_t::am_aby;
         addressing_mode_handlers[to_index(AM::IND)] = &fam65xx_t::am_ind;
         addressing_mode_handlers[to_index(AM::INX)] = &fam65xx_t::am_inx;
         addressing_mode_handlers[to_index(AM::INY)] = &fam65xx_t::am_iny;
+        addressing_mode_handlers[to_index(AM::ZER)] = &fam65xx_t::am_dp;  // DP maps to ZP implementation for pre-65C816 compatibility
+        addressing_mode_handlers[to_index(AM::ZPX)] = &fam65xx_t::am_dpx; // DPX maps to ZPX implementation for pre-65C816 compatibility
+        addressing_mode_handlers[to_index(AM::ZPY)] = &fam65xx_t::am_zpy; // TODO : DPY maps to ZPY implementation for pre-65C816 compatibility
         
         // Rockwell 65C02 addressing modes
-        addressing_mode_handlers[to_index(AM::DPI)] = &fam65xx_t::am_zpi;  // Direct Page Indirect
+        addressing_mode_handlers[to_index(AM::ZPR)] = &fam65xx_t::am_zpr; // Zero Page Relative - BBR/BBS $nn,$offset
+
+        // 65C02 and 65C816 addressing modes
+        addressing_mode_handlers[to_index(AM::ZPI)] = &fam65xx_t::am_zpi; // TODO : DPI mpas to ZPI implementation for pre-65C816 compatibility
         
-        // 65C816 addressing modes - now have proper handlers
-        addressing_mode_handlers[to_index(AM::ABI)] = &fam65xx_t::am_abi;  // Absolute Indexed Indirect (abs,X) - JMP/JSR ($nnnn,X)
-        addressing_mode_handlers[to_index(AM::ZPR)] = &fam65xx_t::am_zpr;  // Zero Page Relative - BBR/BBS $nn,$offset
-        if constexpr (has_wide_registers()) {
-            // Initialize 65C816-specific addressing modes for both native and emulation modes
-            addressing_mode_handlers[to_index(AM::SR)] = &fam65xx_t::amr_sr;      // Stack Relative (65C816 only)
-            addressing_mode_handlers[to_index(AM::SRI)] = &fam65xx_t::am_sri;     // Stack Relative Indirect Indexed (65C816 only)
-            addressing_mode_handlers[to_index(AM::DPIL)] = &fam65xx_t::am_dpil;   // Direct Page Indirect Long (65C816 only)
-            addressing_mode_handlers[to_index(AM::DPILY)] = &fam65xx_t::am_dpily; // Direct Page Indirect Long,Y (65C816 only)
-            addressing_mode_handlers[to_index(AM::ABL)] = &fam65xx_t::am_abl;     // Absolute Long (65C816 only)
-            addressing_mode_handlers[to_index(AM::ABLX)] = &fam65xx_t::am_ablx;   // Absolute Long,X (65C816 only)
+        // Initialize 65C816 exclusive addressing modes (some native map to emulation modes)
+        addressing_mode_handlers[to_index(AM::ABI)] = &fam65xx_t::am_abi;     // Absolute Indexed Indirect (abs,X) - JMP/JSR ($nnnn,X)
+        addressing_mode_handlers[to_index(AM::ABL)] = &fam65xx_t::am_abl;     // Absolute Long
+        addressing_mode_handlers[to_index(AM::ABLX)] = &fam65xx_t::am_ablx;   // Absolute Long,X
+        addressing_mode_handlers[to_index(AM::DPIL)] = &fam65xx_t::am_dpil;   // Direct Page Indirect Long
+        addressing_mode_handlers[to_index(AM::DPILY)] = &fam65xx_t::am_dpily; // Direct Page Indirect Long,Y
+        addressing_mode_handlers[to_index(AM::SR)] = &fam65xx_t::amr_sr;      // Stack Relative
+        addressing_mode_handlers[to_index(AM::SRI)] = &fam65xx_t::am_sri;     // Stack Relative Indirect Indexed
+    }
+
+    opcode_info_t get_opcode_info(uint8_t opcode) const {
+            return generate_opcode_table<Traits>()[opcode];
+    }
+    
+public:    
+
+    bus_state_t reset(bus_state_t pins) {
+        // Reset registers properly (including emulation mode for 65C816)
+        this->init_registers();
+        
+        // Reset interrupt state
+        this->nmi_prev = 0;
+        this->interrupt_shift_register = 0;
+        
+        // Reset 65C02 extended state
+        this->wait_for_interrupt = false;
+        this->stopped = false;
+        
+        // Reset processor-specific features
+        this->init_conditional_features();
+        
+        // Use unified interrupt handler for vector loading
+        // Skip stack operations (cycles 0-3) and jump to vector loading (cycles 4-5)
+        this->active_interrupt = FAM65XX_INT_RESET;
+        
+        // Set up opcode_entry for BRK (opcode $00) so tracing shows correct instruction
+        this->opcode_entry = get_opcode_info(0x00);// = {OP_BRK, AM_NON, OF_NONE};
+        this->current_handler = &fam65xx_t::op_brk;
+        this->cycle_index = 4;  // Jump to vector loading phase
+        this->set(REG_AB, this->get_vector_addr()); // Do the same memory setup as preceding op_brk cycle 3
+        
+        return pins;
+    }
+    
+    bus_state_t bootstrap(bus_state_t pins) {
+        // Bootstrap CPU for immediate execution (test runner compatibility)
+        // Ported from original fam65xx implementation
+        
+        /* Set up for immediate instruction execution without RESET sequence */
+        pins |= FAM65XX_RDY;   /* Ensure RDY is high for execution */
+        pins |= FAM65XX_RW;    /* Ensure RW is set as default state */
+        pins |= FAM65XX_IRQ;   /* IRQ line high (inactive) */
+        pins |= FAM65XX_NMI;   /* NMI line high (inactive) */
+        pins |= FAM65XX_RES;   /* RESET line high (inactive) */
+        
+        /* Clear any interrupt flags that might have been set */
+        this->active_interrupt = FAM65XX_INT_NONE;
+        
+        /* CRITICAL: Reset interrupt shift register to prevent false triggers */
+        this->interrupt_shift_register = 0x00000000;  /* No interrupt activity detected yet */
+        this->nmi_prev = 1;  /* NMI line starts high (inactive) for edge detection */
+        
+        /* Set up for instruction fetch - CPU ready to execute next instruction */
+        this->transition_to_fetch();
+        
+        return pins;
+    }
+    
+    bus_state_t tick(bus_state_t pins) {
+        trace_enter("tick");
+        trace_registers("before");
+        
+        // SYNC pin management - asserted during opcode fetch cycles (matching old implementation)
+        if (this->current_handler == &fam65xx_t::fetch_opcode && this->cycle_index == 0) {
+            pins |= FAM65XX_SYNC;
+            trace("SYNC asserted (opcode fetch)");
+        } else {
+            pins &= ~FAM65XX_SYNC;
+        }
+        
+        // Hardware-accurate interrupt detection every cycle (matching old implementation)
+        if (this->process_interrupt_detection(pins)) {
+            // Interrupt detected - check if we should hijack current instruction
+            if (this->active_interrupt == FAM65XX_INT_RESET) {
+                // RESET has highest priority - immediately start RESET sequence
+                return reset(pins);
+            } else if (this->current_handler == &fam65xx_t::fetch_opcode && this->cycle_index == 0) {
+                // At instruction boundary - start interrupt sequence (matching old implementation)
+                // Use op_brk as unified interrupt handler like old implementation
+                this->current_handler = &fam65xx_t::op_brk;
+                this->cycle_index = 0;
+                // Continue with op_brk handler execution this cycle
+            }
+        }
+        
+        // Execute current instruction cycle
+        if (this->current_handler != nullptr) {
+            return this->call_current_handler(pins);
+        } else {
+            // Start new instruction fetch - should not happen with proper initialization
+            trace("No handler - starting fetch_opcode");
+            pins = this->fetch_opcode(pins);
+        }
+        
+        // Clock APU if present (every CPU cycle)
+        if constexpr (has_apu()) {
+            pins = this->clock_apu(pins);
+        }
+        
+        // Print instruction trace for debugging (covers all memory accesses including reset)
+        this->print_instruction_trace();
+        
+        trace_registers("after");
+        trace_exit("tick");
+        return pins;
+    }
+    
+    bool opdone() const {
+        return this->current_handler == &fam65xx_t::fetch_opcode;
+    }
+    
+    // ========================================================================
+    // CONSTRUCTOR AND INITIALIZATION
+    // ========================================================================
+
+    // Add memory callback setup function (matching old implementation)
+    void set_memory_callbacks(fam65xx_mem_read_t read_fn, fam65xx_mem_write_t write_fn, void* user_data) {
+        this->mem_read = read_fn;
+        this->mem_write = write_fn;
+        this->mem_user_data = user_data;
+    }
+    
+    bus_state_t init(const chip_descriptor_t* /*desc*/) {
+        // Note: Memory callbacks will be set through separate API calls
+        // This matches the old implementation's approach
+        this->mem_read = nullptr;
+        this->mem_write = nullptr;
+        this->mem_user_data = nullptr;
+        
+        // Initialize processor-specific features
+        this->init_conditional_features();
+        
+        // Return initial pin state
+        bus_state_t pins = 0;
+        return pins;
+    }
+    
+    fam65xx_t() {
+        // Initialize CPU state to zero
+        opcode_entry = {};
+        current_handler = nullptr;
+        cycle_index = 0;
+        active_interrupt = FAM65XX_INT_NONE;
+        nmi_prev = 0;
+        interrupt_shift_register = 0;
+        mem_read = nullptr;
+        mem_write = nullptr;
+        mem_user_data = nullptr;
+        wait_for_interrupt = false;
+        stopped = false;
+        trace_indent = 0;
+        
+        // Initialize operation and addressing mode handlers
+        this->init_opcode_table();
+        
+        // Initialize conditional features
+        this->init_conditional_features();
+        
+        // Initialize registers
+        this->init_registers();
+    }
+    
+    ~fam65xx_t() {
+        // Cleanup conditional features
+        if constexpr (has_apu()) {
+            this->destroy_apu();
         }
     }
+
+    // ========================================================================
+    // CPU STATE
+    // ========================================================================
+    
+    /* Current execution state */
+    opcode_info_t opcode_entry;         /* Cached opcode entry (copied once) */
+    bus_state_t (fam65xx_t::*current_handler)(bus_state_t);  /* Current instruction handler */
+    uint8_t cycle_index;                /* Current cycle within instruction */
+    
+    /* Interrupt state - hardware-accurate shift register system */
+    interrupt_t active_interrupt;       /* Currently active interrupt (enum serves as vector index) */
+    uint8_t nmi_prev;                   /* Previous NMI line state for edge detection */
+    uint32_t interrupt_shift_register;  /* Combined shift register for all interrupt types */
+    
+    /* Memory callbacks (for test runner compatibility) */
+    fam65xx_mem_read_t mem_read;        /* Memory read callback */
+    fam65xx_mem_write_t mem_write;      /* Memory write callback */
+    void* mem_user_data;                /* User data for memory callbacks */
+    
+    /* 65C02 extended state */
+    bool wait_for_interrupt;            /* WAI instruction state */
+    bool stopped;                       /* STP instruction state */
+    
+    /* Debug tracing state */
+    static constexpr bool ENABLE_TRACING = false;  /* Compile-time tracing flag */
+    mutable int trace_indent;           /* Current tracing indentation level */
 };
 
 // ============================================================================

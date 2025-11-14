@@ -621,6 +621,13 @@ bus_state_t am_dpx(bus_state_t pins) {
 // Absolute Long addressing: $nnnnnn (65C816)
 bus_state_t am_abl(bus_state_t pins) {
     if constexpr (this->has_wide_registers()) {
+        // Check for 65C816 JSL (0x22) in emulation mode - redirect to NOP IMM addressing
+        if (this->get_emulation_mode() && this->get(REG_IR) == 0x22) {
+            // PEI in emulation mode should behave as NOP zp,X
+            this->transition_to_opcode(opcode_info_t{OP::NOP, AM::IMM, OF::NONE});
+            return this->call_current_handler(pins);
+        }
+    
         switch (this->cycle_index) {
             case 0:
                 // PHI2: Read low byte from PC

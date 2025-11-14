@@ -42,6 +42,14 @@ struct narrow_registers_mixin_t {
     // Initialize registers
     void init_registers() {
         memset(&reg8, 0, sizeof(reg8));
+
+        // Initialize P register like a 6502 (only standard 6502 flags)
+        set(REG_P, FLAG_U | FLAG_I);  // Only unused bit and interrupt disable (6502-compatible)
+        
+        /* Initialize register layout:
+        * SP = 0x01FF (stack starts at top of page 1)
+        */
+        this->set(REG_SP, 0x01FF); /* Stack pointer (page 1, starts at 0xFF) */
     }
     
     // === Type-safe 8-bit register accessors ===
