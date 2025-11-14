@@ -256,10 +256,10 @@ bus_state_t op_brk(bus_state_t pins) {
             
         case 4:
             /* PHI2: Read interrupt vector low byte (always from bank 0 using ZBR for 65C816) */
-            pins = this->phi2_read<Addr::AB, Bank::ZBR>(pins, REG_PCL);
+            pins = this->phi2_read<Addr::AB, Bank::ZBR>(pins, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
-                this->cycle_index++;
                 this->inc(REG_AB);
+                this->cycle_index++;
             }
             return pins;
             
@@ -267,6 +267,14 @@ bus_state_t op_brk(bus_state_t pins) {
             /* PHI2: Read interrupt vector high byte (always from bank 0 using ZBR for 65C816) */
             pins = this->phi2_read<Addr::AB, Bank::ZBR>(pins, REG_PCH);
             if (FAM65XX_GET_RDY(pins)) {
+                /* Construct PC from PCH and DL registers which contain the interrupt vector bytes */
+                this->set(REG_PCL, this->get(REG_DL));
+                /* 65C816: Set program bank to 0 immediately after vector read in emulation mode */
+                if constexpr (this->has_wide_registers()) {
+                    if (this->get_emulation_mode()) {
+                        this->set(REG_PBR, 0); // Set program bank to 0 after interrupt vector read
+                    }
+                }
                 this->cycle_index++;
             }
             return pins;
@@ -277,11 +285,6 @@ bus_state_t op_brk(bus_state_t pins) {
             if (FAM65XX_GET_RDY(pins)) {
                 /* Clear active interrupt - interrupt processing complete */
                 this->active_interrupt = FAM65XX_INT_NONE;
-                if constexpr (this->has_wide_registers()) {
-                    if (!this->get_emulation_mode()) {
-                        this->set(REG_PBR, 0); // Set program bank to 0 after interrupt
-                    }
-                }
                 transition_to_fetch();
             }
             return pins;
