@@ -52,12 +52,12 @@
 
 // Modern C++ function types - preferred for new code
 #include <functional>
-using fam65xx_mem_read_func = std::function<uint8_t(void* user_data, uint16_t addr, uint8_t bus_state)>;
-using fam65xx_mem_write_func = std::function<void(void* user_data, uint16_t addr, uint8_t data)>;
+using fam65xx_mem_read_func = std::function<uint8_t(void* user_data, uint32_t addr, uint8_t bus_state)>;
+using fam65xx_mem_write_func = std::function<void(void* user_data, uint32_t addr, uint8_t data)>;
 
 // Legacy C function pointer types - kept for C compatibility
-using fam65xx_mem_read_t = uint8_t (*)(void* user_data, uint16_t addr, uint8_t bus_state);
-using fam65xx_mem_write_t = void (*)(void* user_data, uint16_t addr, uint8_t data);
+using fam65xx_mem_read_t = uint8_t (*)(void* user_data, uint32_t addr, uint8_t bus_state);
+using fam65xx_mem_write_t = void (*)(void* user_data, uint32_t addr, uint8_t data);
 
 // ============================================================================
 // Enhanced Chip Descriptor (extends chip_descriptor_t for fam65xx CPUs)
