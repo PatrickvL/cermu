@@ -177,10 +177,18 @@ class fam65xx_t :
     
     void trace_registers(const char* context = "") const {
         if constexpr (ENABLE_TRACING) {
-            trace("REGS %s: PC=%04X A=%02X X=%02X Y=%02X P=%02X S=%02X",
+            if constexpr (this->has_wide_registers()) {
+                trace("REGS %s: PBR=%02X:PC=%04X A16=%05X X16=%04X Y16=%04X P=%02X ZBR=%02X:S=%02X DBR=%02X(:AB=%04X DL=%02X)",
+                    context,
+                    this->get(REG_PBR), this->get(REG_PC),
+                    this->get(REG_A_16), this->get(REG_X_16), this->get(REG_Y_16), this->get(REG_P),
+                    this->get(REG_ZBR), this->get(REG_S), this->get(REG_DBR),this->get(REG_AB), this->get(REG_DL));
+            } else {
+                trace("REGS %s: PC=%04X A=%02X X=%02X Y=%02X P=%02X S=%02X (AB=%04X DL=%02X)",
                   context,
                   this->get(REG_PC), this->get(REG_A), this->get(REG_X), this->get(REG_Y),
-                  this->get(REG_P), this->get(REG_S));
+                    this->get(REG_P), this->get(REG_S), this->get(REG_AB), this->get(REG_DL));
+            }
         }
     }
     
@@ -1250,7 +1258,6 @@ public:
                 // At instruction boundary - start interrupt sequence (matching old implementation)
                 // Use op_brk as unified interrupt handler like old implementation
                 this->current_handler = &fam65xx_t::op_brk;
-                this->cycle_index = 0;
                 // Continue with op_brk handler execution this cycle
             }
         }
