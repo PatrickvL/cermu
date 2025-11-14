@@ -32,29 +32,17 @@ bus_state_t op_rep(bus_state_t pins) {
                 case 1:
                     // Reset specified status bits (clear bits that are 1 in operand)
                     this->set(REG_P, this->get(REG_P) & ~this->get(REG_DL));
-                    transition_to_fetch();
+                    this->transition_to_fetch();
                     return pins;
             }
             return pins;
+        } else {
+            // In emulation mode, REP becomes a 2-byte NOP - redirect to NOP handler
+            this->transition_to_opcode(opcode_info_t{OP::NOP, AM::IMM, OF::NONE});
+            return this->call_current_handler(pins);
         }
     }
     
-    // In emulation mode or non-wide CPUs, REP behaves like a 2-byte NOP (like 6502 illegal opcode)
-    switch (this->cycle_index) {
-        case 0:
-            // Fetch operand byte and discard it
-            pins = this->phi2_dummy_read<Addr::PC>(pins);
-            if (FAM65XX_GET_RDY(pins)) {
-                this->inc(REG_PC);
-                this->cycle_index++;
-            }
-            return pins;
-            
-        case 1:
-            // Complete 2-byte NOP - do nothing and continue to next instruction
-            transition_to_fetch();
-            return pins;
-    }
     return pins;
 }
 
@@ -76,53 +64,60 @@ bus_state_t op_sep(bus_state_t pins) {
                 case 1:
                     // Set specified status bits (set bits that are 1 in operand)
                     this->set(REG_P, this->get(REG_P) | this->get(REG_DL));
-                    transition_to_fetch();
+                    this->transition_to_fetch();
                     return pins;
             }
             return pins;
+        } else {
+            // In emulation mode, SEP becomes a 2-byte NOP - redirect to NOP handler
+            this->transition_to_opcode(opcode_info_t{OP::NOP, AM::IMM, OF::NONE});
+            return this->call_current_handler(pins);
         }
     }
     
-    // In emulation mode or non-wide CPUs, SEP behaves like a 2-byte NOP (like 6502 illegal opcode)
-    switch (this->cycle_index) {
-        case 0:
-            // Fetch operand byte and discard it
-            pins = this->phi2_read<Addr::PC>(pins, REG_DL);
-            if (FAM65XX_GET_RDY(pins)) {
-                this->inc(REG_PC);
-                this->cycle_index++;
-            }
-            return pins;
-            
-        case 1:
-            // Complete 2-byte NOP - do nothing and continue to next instruction
-            transition_to_fetch();
-            return pins;
-    }
     return pins;
 }
 
-// XCE - Exchange Carry and Emulation Flags (65C816)
+// XCE - Exchange Carry and Emulation flags (65C816)
 bus_state_t op_xce(bus_state_t pins) {
     if constexpr (this->has_wide_registers()) {
-        // Exchange C flag and E flag (implied operation - 1 cycle)
-        bool carry = (this->get(REG_P) & FLAG_C) != 0;
-        bool emulation = this->get_emulation_mode();
-        
-        this->update_flag(FLAG_C, emulation);
-        this->set_emulation_mode(carry);
-        
-        // If switching to emulation mode, force 8-bit modes
-        if (carry) {
-            this->set(REG_P, this->get(REG_P) | (FLAG_M | FLAG_X)); // Set M and X flags (8-bit modes)
+        // XCE is valid in both native and emulation modes
+        switch (this->cycle_index) {
+            case 0:
+                // Internal cycle - exchange carry and emulation flags
+                {
+                    uint8_t p = this->get(REG_P);
+                    bool old_carry = (p & FLAG_C) != 0;
+                    bool old_emulation = this->get_emulation_mode();
+                    
+                    // Set carry flag to old emulation flag
+                    if (old_emulation) {
+                        p |= FLAG_C;
+                    } else {
+                        p &= ~FLAG_C;
+                    }
+                    
+                    // Set emulation mode to old carry flag
+                    this->set_emulation_mode(old_carry);
+                    
+                    // When switching to emulation mode, force M=1 and X=1
+                    if (old_carry) {  // Switching to emulation mode
+                        p |= (FLAG_M | FLAG_X);
+                    }
+                    
+                    this->set(REG_P, p);
+                }
+                this->cycle_index++;
+                return pins;
+                
+            case 1:
+                // Complete operation
+                this->transition_to_fetch();
+                return pins;
         }
-        
-        this->transition_to_fetch();
         return pins;
     }
     
-    // XCE is a NOP on non-wide CPUs (acts like illegal opcode)
-    this->transition_to_fetch();
     return pins;
 }
 
@@ -458,6 +453,13 @@ bus_state_t op_rtl(bus_state_t pins) {
 // PER - Push Effective Relative Address (65C816)
 bus_state_t op_per(bus_state_t pins) {
     if constexpr (this->has_wide_registers()) {
+        // Check for emulation mode - PER is not available in emulation mode
+        if (this->get_emulation_mode()) {
+            // In emulation mode, PER behaves as NOP (no operation)
+            this->transition_to_fetch();
+            return pins;
+        }
+        
         switch (this->cycle_index) {
             case 0:
                 // Read relative offset low byte
@@ -569,18 +571,28 @@ bus_state_t op_pei(bus_state_t pins) {
 // XBA - Exchange B and A (65C816)
 bus_state_t op_xba(bus_state_t pins) {
     if constexpr (this->has_wide_registers()) {
-        // Exchange the low and high bytes of the 16-bit accumulator
-        uint8_t a = this->get(REG_A);
-        uint8_t b = this->get(REG_B);
-        // Swap the bytes by setting them directly
-        this->set(REG_A, b);
-        this->set(REG_B, a);
-        
-        // Update N and Z flags based on new A register value (now contains old high byte)
-        this->update_nz_flags(b);
-        
-        this->transition_to_fetch();
+        // XBA is valid in both native and emulation modes
+        switch (this->cycle_index) {
+            case 0:
+                // Internal cycle - exchange high and low bytes of accumulator
+                {
+                    uint16_t acc = this->get(REG_C);  // Get 16-bit accumulator
+                    uint16_t swapped = ((acc & 0x00FF) << 8) | ((acc & 0xFF00) >> 8);
+                    this->set(REG_C, swapped);
+                    // Update N,Z flags based on new low byte
+                    this->update_nz_flags(swapped & 0xFF);
+                }
+                this->cycle_index++;
+                return pins;
+                
+            case 1:
+                // Complete operation
+                this->transition_to_fetch();
+                return pins;
+        }
+        return pins;
     }
+    
     return pins;
 }
 

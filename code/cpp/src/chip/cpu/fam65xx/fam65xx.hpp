@@ -373,15 +373,12 @@ public:
                 this->current_handler = &fam65xx_t::op_brk;
                 this->cycle_index = 0;
                 // Continue with op_brk handler execution this cycle
-                pins = (this->*this->current_handler)(pins);
-                return pins;
             }
         }
         
         // Execute current instruction cycle
         if (this->current_handler != nullptr) {
-            trace("Executing handler (cycle %d)", this->cycle_index);
-            pins = (this->*this->current_handler)(pins);
+            return this->call_current_handler(pins);
         } else {
             // Start new instruction fetch - should not happen with proper initialization
             trace("No handler - starting fetch_opcode");
@@ -1188,17 +1185,20 @@ private:
         pins |= FAM65XX_SYNC;
         // Decode opcode and set up instruction
         uint8_t opcode = this->get(REG_IR);
-
-        this->opcode_entry = get_opcode_info(opcode);
-        this->cycle_index = 0;
-        // Set up first instruction cycle handler
-        this->current_handler = this->get_instruction_handler();
-        
-        
+        opcode_info_t entry = get_opcode_info(opcode);
+        this->transition_to_opcode(entry);
+            
         return pins;
     }
     
 public:
+    void transition_to_opcode(const opcode_info_t entry) {
+        this->opcode_entry = entry;
+        this->cycle_index = 0;
+        // Set up first instruction cycle handler
+        this->current_handler = this->get_instruction_handler();
+    }
+
     // Transition to next instruction fetch (public for bootstrap function)
     void transition_to_fetch() {
         this->current_handler = &fam65xx_t::fetch_opcode;
