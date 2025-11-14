@@ -674,19 +674,10 @@ public:
     }
     
     uint16_t get_a() override {
-        // ProcessorTests expects register values to reflect current M flag status
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            // Check if we're in emulation mode or M flag is set (8-bit A register mode)
-            bool emulation_mode = cpu->get_emulation_mode();
-            bool m_flag = cpu->get(REG_P) & FLAG_M;
-            
-            if (emulation_mode || m_flag) {
-                // 8-bit A mode: return only low byte extended to 16-bit
-                return cpu->get(REG_A) & 0xFF;
-            } else {
-                // 16-bit A mode: return full 16-bit value
-                return cpu->get(REG_A_16);
-            }
+            // For 65C816, always return the full 16-bit A register value
+            // The M flag controls instruction behavior, not register reporting in ProcessorTests
+            return cpu->get(REG_A_16);
         } else {
             // For 8-bit processors, extend to 16-bit
             return cpu->get(REG_A);
@@ -694,17 +685,16 @@ public:
     }
     
     uint16_t get_x() override {
-        // ProcessorTests expects register values to reflect current X flag status
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            // Check if we're in emulation mode or X flag is set (8-bit X/Y register mode)
-            bool emulation_mode = cpu->get_emulation_mode();
-            bool x_flag = cpu->get(REG_P) & FLAG_X;
+            // For 65C816, check the X flag to determine register width
+            uint8_t status = cpu->get(REG_P);
+            bool x_flag = (status & FLAG_X) != 0;
             
-            if (emulation_mode || x_flag) {
-                // 8-bit X mode: return only low byte extended to 16-bit
+            if (x_flag) {
+                // 8-bit mode: return only low byte
                 return cpu->get(REG_X) & 0xFF;
             } else {
-                // 16-bit X mode: return full 16-bit value
+                // 16-bit mode: return full 16-bit value
                 return cpu->get(REG_X_16);
             }
         } else {
@@ -714,17 +704,16 @@ public:
     }
     
     uint16_t get_y() override {
-        // ProcessorTests expects register values to reflect current X flag status
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            // Check if we're in emulation mode or X flag is set (8-bit X/Y register mode)
-            bool emulation_mode = cpu->get_emulation_mode();
-            bool x_flag = cpu->get(REG_P) & FLAG_X;
+            // For 65C816, check the X flag to determine register width
+            uint8_t status = cpu->get(REG_P);
+            bool x_flag = (status & FLAG_X) != 0;
             
-            if (emulation_mode || x_flag) {
-                // 8-bit Y mode: return only low byte extended to 16-bit
+            if (x_flag) {
+                // 8-bit mode: return only low byte
                 return cpu->get(REG_Y) & 0xFF;
             } else {
-                // 16-bit Y mode: return full 16-bit value
+                // 16-bit mode: return full 16-bit value
                 return cpu->get(REG_Y_16);
             }
         } else {
@@ -1105,11 +1094,24 @@ private:
 
         // Then set the standard registers
         harness->set_pc(test->initial.pc);
+        
+        if (verbose_mode) {
+            debug_output << "  [Worker " << worker_id << "] Setting registers: A=0x" << std::hex
+                        << (int)test->initial.a << " X=0x" << (int)test->initial.x
+                        << " Y=0x" << (int)test->initial.y << " P=0x" << (int)test->initial.p << std::dec << std::endl;
+        }
+        
         harness->set_a(test->initial.a);
         harness->set_x(test->initial.x);
         harness->set_y(test->initial.y);
         harness->set_sp(test->initial.s);
         harness->set_status(test->initial.p);
+        
+        if (verbose_mode) {
+            debug_output << "  [Worker " << worker_id << "] After setting: A=0x" << std::hex
+                        << (int)harness->get_a() << " X=0x" << (int)harness->get_x()
+                        << " Y=0x" << (int)harness->get_y() << " P=0x" << (int)harness->get_status() << std::dec << std::endl;
+        }
 
         uint16_t pc_addr = test->initial.pc;
         
