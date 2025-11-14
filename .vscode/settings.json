@@ -72,6 +72,5 @@
         "typeinfo": "cpp",
         "queue": "cpp",
         "unordered_map": "cpp"
-    },
-    "dotnet.defaultSolution": "disable"
+    }
 }
