@@ -1,4 +1,5 @@
 {
+    "cmake.cmakePath": "/usr/bin/cmake",
     "cmake.sourceDirectory": "${workspaceFolder}/code/cpp",
     "cmake.buildDirectory": "${workspaceFolder}/code/cpp/build",
     "cmake.configureOnOpen": true,
@@ -71,5 +72,6 @@
         "typeinfo": "cpp",
         "queue": "cpp",
         "unordered_map": "cpp"
-    }
+    },
+    "dotnet.defaultSolution": "disable"
 }
