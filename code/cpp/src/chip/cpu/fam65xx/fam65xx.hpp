@@ -944,6 +944,11 @@ class fam65xx_t :
         this->current_handler = this->get_instruction_handler();
     }
 
+    // Helper method for calling current handler with proper member function pointer syntax
+    inline bus_state_t call_current_handler(bus_state_t pins) {
+        return (this->*current_handler)(pins);
+    }
+
     // Instruction fetch and decode
     bus_state_t fetch_opcode(bus_state_t pins) {
         // Read opcode from PC (using program banking PBR for 65C816)
@@ -1252,7 +1257,7 @@ public:
         
         // Execute current instruction cycle
         if (this->current_handler != nullptr) {
-            return this->call_current_handler(pins);
+            pins = this->call_current_handler(pins);
         } else {
             // Start new instruction fetch - should not happen with proper initialization
             trace("No handler - starting fetch_opcode");
