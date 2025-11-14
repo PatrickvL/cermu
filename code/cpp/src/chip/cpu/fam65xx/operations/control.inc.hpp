@@ -254,7 +254,7 @@ bus_state_t op_brk(bus_state_t pins) {
             }
             return pins;
             
-        case 4:
+        case 4: // Note : reset() starts at cycle_index 4!
             /* PHI2: Read interrupt vector low byte (always from bank 0 using ZBR for 65C816) */
             pins = this->phi2_read<Addr::AB, Bank::ZBR>(pins, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
