@@ -344,8 +344,11 @@ class fam65xx_t :
         
         // 65C816 banking: OR bank register into high bits (optimizer eliminates for non-wide CPUs)
         if constexpr (has_wide_registers()) {
-            // Always OR in the effective bank register value - REG_ZBR is always 0, others provide correct bank
-            addr |= static_cast<uint32_t>(this->get(effective_bank_reg<addr_arg>(bank_arg))) << 16;
+            // Only apply banking in native mode - emulation mode behaves exactly like 6502 (no banking)
+            if (!this->get_emulation_mode()) {
+                // Always OR in the effective bank register value - REG_ZBR is always 0, others provide correct bank
+                addr |= static_cast<uint32_t>(this->get(effective_bank_reg<addr_arg>(bank_arg))) << 16;
+            }
         }
         // For non-wide CPUs, the bank_arg parameter and this->get(effective_bank_reg<addr_arg>(bank_arg)) call are optimized away
         
