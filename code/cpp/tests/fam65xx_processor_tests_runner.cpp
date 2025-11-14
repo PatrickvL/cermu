@@ -674,9 +674,19 @@ public:
     }
     
     uint16_t get_a() override {
-        // For 65816 in native mode, return full 16-bit accumulator
+        // For 65816, check current processor mode
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            return cpu->get(REG_A_16);
+            // Check if accumulator is in 16-bit mode
+            bool emulation_mode = cpu->get_emulation_mode();
+            bool m_flag = cpu->get(REG_P) & FLAG_M;
+            
+            if (!emulation_mode && !m_flag) {
+                // Native mode with M=0: 16-bit accumulator
+                return cpu->get(REG_A_16);
+            } else {
+                // Emulation mode or M=1: 8-bit accumulator
+                return cpu->get(REG_A);
+            }
         } else {
             // For 8-bit processors, extend to 16-bit
             return cpu->get(REG_A);
@@ -684,9 +694,19 @@ public:
     }
     
     uint16_t get_x() override {
-        // For 65816 in native mode, return full 16-bit X register
+        // For 65816, check current processor mode
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            return cpu->get(REG_X_16);
+            // Check if index registers are in 16-bit mode
+            bool emulation_mode = cpu->get_emulation_mode();
+            bool x_flag = cpu->get(REG_P) & FLAG_X;
+            
+            if (!emulation_mode && !x_flag) {
+                // Native mode with X=0: 16-bit index registers
+                return cpu->get(REG_X_16);
+            } else {
+                // Emulation mode or X=1: 8-bit index registers
+                return cpu->get(REG_X);
+            }
         } else {
             // For 8-bit processors, extend to 16-bit
             return cpu->get(REG_X);
@@ -694,9 +714,19 @@ public:
     }
     
     uint16_t get_y() override {
-        // For 65816 in native mode, return full 16-bit Y register
+        // For 65816, check current processor mode
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            return cpu->get(REG_Y_16);
+            // Check if index registers are in 16-bit mode
+            bool emulation_mode = cpu->get_emulation_mode();
+            bool x_flag = cpu->get(REG_P) & FLAG_X;
+            
+            if (!emulation_mode && !x_flag) {
+                // Native mode with X=0: 16-bit index registers
+                return cpu->get(REG_Y_16);
+            } else {
+                // Emulation mode or X=1: 8-bit index registers
+                return cpu->get(REG_Y);
+            }
         } else {
             // For 8-bit processors, extend to 16-bit
             return cpu->get(REG_Y);
