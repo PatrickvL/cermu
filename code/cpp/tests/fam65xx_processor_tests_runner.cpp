@@ -260,23 +260,41 @@ private:
     std::vector<bus_cycle_t> actual_bus_cycles;
     
     // Memory callbacks - reliable approach from C++ version
-    static uint8_t mem_read(void* user_data, uint16_t addr, uint8_t bus_state) {
+    static uint8_t mem_read(void* user_data, uint32_t addr, uint8_t bus_state) {
         (void)bus_state; // Suppress unused parameter warning
         ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(user_data);
-        uint8_t value = harness->memory[addr];
         
-        // Record bus cycle for tracking
-        harness->record_bus_cycle(addr, value, false);
+        // Apply address mask for the processor type to support 24-bit addressing
+        addr &= harness->address_mask;
+        
+        uint8_t value;
+        if (addr < 65536) {
+            value = harness->memory[addr];  // Fast access for base 64KB
+        } else {
+            auto it = harness->extended_memory.find(addr);
+            value = (it != harness->extended_memory.end()) ? it->second : 0;  // Extended memory or default 0
+        }
+        
+        // Record bus cycle for tracking (use 16-bit for compatibility)
+        harness->record_bus_cycle(static_cast<uint16_t>(addr & 0xFFFF), value, false);
         
         return value;
     }
     
-    static void mem_write(void* user_data, uint16_t addr, uint8_t data) {
+    static void mem_write(void* user_data, uint32_t addr, uint8_t data) {
         ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(user_data);
-        harness->memory[addr] = data;
         
-        // Record bus cycle for tracking
-        harness->record_bus_cycle(addr, data, true);
+        // Apply address mask for the processor type to support 24-bit addressing
+        addr &= harness->address_mask;
+        
+        if (addr < 65536) {
+            harness->memory[addr] = data;  // Fast access for base 64KB
+        } else {
+            harness->extended_memory[addr] = data;  // Extended memory
+        }
+        
+        // Record bus cycle for tracking (use 16-bit for compatibility)
+        harness->record_bus_cycle(static_cast<uint16_t>(addr & 0xFFFF), data, true);
     }
     
     // Record bus cycle for comparison with JSON test data
@@ -540,7 +558,7 @@ private:
     void* harness_ptr; // Store harness for memory callbacks
     
     // Instance memory callbacks that know about this wrapper's harness
-    static uint8_t instance_mem_read(void* user_data, uint16_t addr, uint8_t bus_state) {
+    static uint8_t instance_mem_read(void* user_data, uint32_t addr, uint8_t bus_state) {
         (void)bus_state; // Suppress unused parameter warning
         ProcessorWrapper<Traits>* wrapper = static_cast<ProcessorWrapper<Traits>*>(user_data);
         uint8_t value;
@@ -548,52 +566,32 @@ private:
         if (wrapper->harness_ptr) {
             ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(wrapper->harness_ptr);
             
-            // Calculate full 24-bit address for 65816 processors
-            uint32_t full_addr = addr;
-            
-            // Check if this is a 65816 processor at runtime
-            if (wrapper->is_65816()) {
-                // CRITICAL FIX: For 65816, the CPU core already provides the full 24-bit address
-                // We should NOT try to reconstruct it here as that causes incorrect addressing
-                // The 65816 CPU core handles bank register logic internally
-                // Just use the address as-is since it's already been processed by the CPU
-                full_addr = addr; // Trust the CPU's address calculation
-            }
-            
+            // For 65816, the CPU core already provides the full 24-bit address
+            // For other processors, addr will be 16-bit but passed as 32-bit
             // Use harness memory access (supports 24-bit addresses for 65816)
-            value = harness->get_memory(full_addr);
-            harness->record_bus_cycle(addr, value, false);  // Still record 16-bit for compatibility
+            value = harness->get_memory(addr);
+            harness->record_bus_cycle(static_cast<uint16_t>(addr & 0xFFFF), value, false);  // Record 16-bit for compatibility
         } else {
-            // Fallback to direct memory access
-            value = test_memory[addr];
+            // Fallback to direct memory access (mask to 16-bit for safety)
+            value = test_memory[addr & 0xFFFF];
         }
         return value;
     }
     
-    static void instance_mem_write(void* user_data, uint16_t addr, uint8_t data) {
+    static void instance_mem_write(void* user_data, uint32_t addr, uint8_t data) {
         ProcessorWrapper<Traits>* wrapper = static_cast<ProcessorWrapper<Traits>*>(user_data);
         
         if (wrapper->harness_ptr) {
             ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(wrapper->harness_ptr);
             
-            // Calculate full 24-bit address for 65816 processors
-            uint32_t full_addr = addr;
-            
-            // Check if this is a 65816 processor at runtime
-            if (wrapper->is_65816()) {
-                // CRITICAL FIX: For 65816, the CPU core already provides the full 24-bit address
-                // We should NOT try to reconstruct it here as that causes incorrect addressing
-                // The 65816 CPU core handles bank register logic internally
-                // Just use the address as-is since it's already been processed by the CPU
-                full_addr = addr; // Trust the CPU's address calculation
-            }
-            
+            // For 65816, the CPU core already provides the full 24-bit address
+            // For other processors, addr will be 16-bit but passed as 32-bit
             // Use harness memory access (supports 24-bit addresses for 65816)
-            harness->set_memory(full_addr, data);
-            harness->record_bus_cycle(addr, data, true);  // Still record 16-bit for compatibility
+            harness->set_memory(addr, data);
+            harness->record_bus_cycle(static_cast<uint16_t>(addr & 0xFFFF), data, true);  // Record 16-bit for compatibility
         } else {
-            // Fallback to direct memory access
-            test_memory[addr] = data;
+            // Fallback to direct memory access (mask to 16-bit for safety)
+            test_memory[addr & 0xFFFF] = data;
         }
     }
     

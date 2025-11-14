@@ -150,8 +150,8 @@ static void initialize_mos6502_descriptor() {
 }
 
 fam65xx_chip_descriptor_t* mos6502_create_descriptor(
-    uint8_t (*read_callback)(void* user_data, uint16_t addr, uint8_t bus_state),
-    void (*write_callback)(void* user_data, uint16_t addr, uint8_t data),
+    uint8_t (*read_callback)(void* user_data, uint32_t addr, uint8_t bus_state),
+    void (*write_callback)(void* user_data, uint32_t addr, uint8_t data),
     void* user_data) {
     
     auto* desc = new fam65xx_chip_descriptor_t;

@@ -67,15 +67,15 @@ private:
     uint64_t expected_cycles_;
     
     // Memory callbacks
-    static uint8_t mem_read(void* user_data, uint16_t addr, uint8_t bus_state) {
+    static uint8_t mem_read(void* user_data, uint32_t addr, uint8_t bus_state) {
         (void)bus_state; // Suppress unused parameter warning
         LorenzTestHarness* harness = static_cast<LorenzTestHarness*>(user_data);
-        return harness->memory_[addr];
+        return harness->memory_[addr & 0xFFFF]; // Lorenz tests use 16-bit address space
     }
-    
-    static void mem_write(void* user_data, uint16_t addr, uint8_t data) {
+
+    static void mem_write(void* user_data, uint32_t addr, uint8_t data) {
         LorenzTestHarness* harness = static_cast<LorenzTestHarness*>(user_data);
-        harness->memory_[addr] = data;
+        harness->memory_[addr & 0xFFFF] = data; // Lorenz tests use 16-bit address space
     }
 
 public:

@@ -60,8 +60,8 @@ void mos6502_set_pc(mos6502_t* cpu, uint16_t value);
 
 // Enhanced descriptor creation (recommended approach)
 fam65xx_chip_descriptor_t* mos6502_create_descriptor(
-    uint8_t (*read_callback)(void* user_data, uint16_t addr, uint8_t bus_state),
-    void (*write_callback)(void* user_data, uint16_t addr, uint8_t data),
+    uint8_t (*read_callback)(void* user_data, uint32_t addr, uint8_t bus_state),
+    void (*write_callback)(void* user_data, uint32_t addr, uint8_t data),
     void* user_data);
 void mos6502_destroy_descriptor(fam65xx_chip_descriptor_t* desc);
 
