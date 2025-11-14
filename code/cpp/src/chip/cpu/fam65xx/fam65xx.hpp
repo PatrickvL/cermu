@@ -1091,40 +1091,12 @@ private:
     std::array<InstructionHandler, to_index(OP::COUNT)> operation_handlers;
     std::array<InstructionHandler, to_index(AM::COUNT)> addressing_mode_handlers;
     
-    // Essential helper functions for template functionality
-    // Dynamic operation handler selection for 65C816 emulation mode compatibility
-    inline InstructionHandler get_dynamic_operation_handler(uint8_t op_index) {
-        if constexpr (has_wide_registers()) {
-            if (!this->get_emulation_mode()) {
-                // Native mode: Use the handler that corresponds to the op_index
-                return this->operation_handlers[op_index];
-            }
-            // Emulation mode: Use the handler that corresponds to the op_index
-            // This is critical for emulation mode where opcodes may be remapped
-            // (e.g., 0xC2 REP becomes NOP with op_index=55)
-            return this->operation_handlers[op_index];
-        }
-        // Non-65C816 processors: Use standard handler table
-        return this->operation_handlers[op_index];
-    }
-    
     inline InstructionHandler get_instruction_handler() {
         // For addressing modes that need address calculation, start with addressing mode handler
         if (this->opcode_entry.am_index > to_index(AM::IMM)) {
             return addressing_mode_handlers[this->opcode_entry.am_index];
         }
         
-        // For immediate mode and implied operations, go directly to operation
-        // Always use dynamic handler selection for 65C816 (emulation mode compatibility)
-        if constexpr (has_wide_registers()) {
-            if (!this->get_emulation_mode()) {
-                // Native mode: Use dynamic handler selection
-                return get_dynamic_operation_handler(this->opcode_entry.op_index);
-            }
-            // Emulation mode: Use dynamic handler selection (fallback)
-            return get_dynamic_operation_handler(this->opcode_entry.op_index);
-        }
-        // All other processors: Use static handler table
         return this->operation_handlers[this->opcode_entry.op_index];
     }
     
@@ -1257,18 +1229,7 @@ private:
     
     void transition_to_operation() {
         this->cycle_index = 0;
-        // Use dynamic handler selection for 65C816 emulation mode compatibility
-        if constexpr (has_wide_registers()) {
-            if (!this->get_emulation_mode()) {
-                // Native mode: Use dynamic handler selection
-                this->current_handler = get_dynamic_operation_handler(this->opcode_entry.op_index);
-            } else {
-                // Emulation mode: Use dynamic handler selection (fallback)
-                this->current_handler = get_dynamic_operation_handler(this->opcode_entry.op_index);
-            }
-        } else {
-            this->current_handler = this->operation_handlers[this->opcode_entry.op_index];
-        }
+        this->current_handler = this->operation_handlers[this->opcode_entry.op_index];
     }
     
     void init_conditional_features() {
@@ -1328,6 +1289,7 @@ private:
         operation_handlers[to_index(OP::CLI)] = &fam65xx_t::op_cli;
         operation_handlers[to_index(OP::CLV)] = &fam65xx_t::op_clv;
         operation_handlers[to_index(OP::CMP)] = &fam65xx_t::op_cmp;
+        operation_handlers[to_index(OP::COP)] = &fam65xx_t::op_cop;
         operation_handlers[to_index(OP::CPX)] = &fam65xx_t::op_cpx;
         operation_handlers[to_index(OP::CPY)] = &fam65xx_t::op_cpy;
         operation_handlers[to_index(OP::DCP)] = &fam65xx_t::op_dcp;
@@ -1340,14 +1302,18 @@ private:
         operation_handlers[to_index(OP::INY)] = &fam65xx_t::op_iny;
         operation_handlers[to_index(OP::ISC)] = &fam65xx_t::op_isc;
         operation_handlers[to_index(OP::JAM)] = &fam65xx_t::op_jam;
+        operation_handlers[to_index(OP::JML)] = &fam65xx_t::op_jml;
         operation_handlers[to_index(OP::JMP)] = &fam65xx_t::op_jmp;
         operation_handlers[to_index(OP::JSR)] = &fam65xx_t::op_jsr;
+        operation_handlers[to_index(OP::JSL)] = &fam65xx_t::op_jsl;
         operation_handlers[to_index(OP::LAS)] = &fam65xx_t::op_las;
         operation_handlers[to_index(OP::LAX)] = &fam65xx_t::op_lax;
         operation_handlers[to_index(OP::LDA)] = &fam65xx_t::op_lda;
         operation_handlers[to_index(OP::LDX)] = &fam65xx_t::op_ldx;
         operation_handlers[to_index(OP::LDY)] = &fam65xx_t::op_ldy;
         operation_handlers[to_index(OP::LSR)] = &fam65xx_t::op_lsr;
+        operation_handlers[to_index(OP::MVN)] = &fam65xx_t::op_mvn;
+        operation_handlers[to_index(OP::MVP)] = &fam65xx_t::op_mvp;
         operation_handlers[to_index(OP::NOP)] = &fam65xx_t::op_nop;
         operation_handlers[to_index(OP::ORA)] = &fam65xx_t::op_ora;
         operation_handlers[to_index(OP::PEA)] = &fam65xx_t::op_pea;
@@ -1381,11 +1347,6 @@ private:
         operation_handlers[to_index(OP::RRA)] = &fam65xx_t::op_rra;
         operation_handlers[to_index(OP::RTI)] = &fam65xx_t::op_rti;
         operation_handlers[to_index(OP::RTL)] = &fam65xx_t::op_rtl;
-        operation_handlers[to_index(OP::JSL)] = &fam65xx_t::op_jsl;
-        operation_handlers[to_index(OP::JML)] = &fam65xx_t::op_jml;
-        operation_handlers[to_index(OP::JMP)] = &fam65xx_t::op_jmp;
-        operation_handlers[to_index(OP::MVN)] = &fam65xx_t::op_mvn;
-        operation_handlers[to_index(OP::MVP)] = &fam65xx_t::op_mvp;
         operation_handlers[to_index(OP::RTS)] = &fam65xx_t::op_rts;
         operation_handlers[to_index(OP::SAX)] = &fam65xx_t::op_sax;
         operation_handlers[to_index(OP::SBC)] = &fam65xx_t::op_sbc;
@@ -1422,11 +1383,10 @@ private:
         operation_handlers[to_index(OP::TXS)] = &fam65xx_t::op_txs;
         operation_handlers[to_index(OP::TYA)] = &fam65xx_t::op_tya;
         operation_handlers[to_index(OP::WAI)] = &fam65xx_t::op_wai;
+        operation_handlers[to_index(OP::WDM)] = &fam65xx_t::op_wdm;
         operation_handlers[to_index(OP::XAA)] = &fam65xx_t::op_xaa;
         operation_handlers[to_index(OP::XBA)] = &fam65xx_t::op_xba;
         operation_handlers[to_index(OP::XCE)] = &fam65xx_t::op_xce;
-        operation_handlers[to_index(OP::COP)] = &fam65xx_t::op_cop;
-        operation_handlers[to_index(OP::WDM)] = &fam65xx_t::op_wdm;
         
         // Initialize addressing mode handler lookup table
         addressing_mode_handlers.fill(nullptr);  // Default to nullptr (safe for AM_NON/AM_IMM)
