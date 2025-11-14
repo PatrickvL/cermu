@@ -17,30 +17,32 @@
 // REP - Reset Processor Status Bits (65C816)
 bus_state_t op_rep(bus_state_t pins) {
     if constexpr (this->has_wide_registers()) {
-        // Check emulation mode at runtime - REP is only valid in native mode
-        if (!this->get_emulation_mode()) {
-            switch (this->cycle_index) {
-                case 0:
-                    // Fetch immediate operand
-                    pins = this->phi2_read<Addr::PC>(pins, REG_DL);
-                    if (FAM65XX_GET_RDY(pins)) {
-                        this->inc(REG_PC);
-                        this->cycle_index++;
-                    }
-                    return pins;
+        switch (this->cycle_index) {
+            case 0:
+                // Fetch immediate operand
+                pins = this->phi2_read<Addr::PC>(pins, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                // Reset specified status bits (clear bits that are 1 in operand)
+                {
+                    uint8_t mask = this->get(REG_DL);
                     
-                case 1:
-                    // Reset specified status bits (clear bits that are 1 in operand)
-                    this->set(REG_P, this->get(REG_P) & ~this->get(REG_DL));
+                    if (this->get_emulation_mode()) {
+                        // In emulation mode, cannot clear M or X flags (bits 5 and 4)
+                        mask &= ~(FLAG_M | FLAG_X);
+                    }
+                    
+                    this->set(REG_P, this->get(REG_P) & ~mask);
                     this->transition_to_fetch();
-                    return pins;
-            }
-            return pins;
-        } else {
-            // In emulation mode, REP becomes a 2-byte NOP - redirect to NOP handler
-            this->transition_to_opcode(opcode_info_t{OP::NOP, AM::IMM, OF::NONE});
-            return this->call_current_handler(pins);
+                }
+                return pins;
         }
+        return pins;
     }
     
     return pins;
