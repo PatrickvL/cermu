@@ -192,11 +192,15 @@ bus_state_t op_asl(bus_state_t pins) {
 bus_state_t op_lsr(bus_state_t pins) {
     return rmw_operation_helper(pins,
         [this](uint8_t& value) {
-            const uint8_t carry_out = value & 1;  // Fix: get bit 0, not FLAG_C
+            const uint8_t carry_out = value & 1;  // Get bit 0 for carry flag
             value >>= 1;
             // Update flags - LSR only affects N, Z, C (V flag unchanged)
-            this->set(REG_P, (this->get(REG_P) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-                          this->calc_nz_flags(value) | carry_out);
+            // LSR always clears N flag since bit 7 becomes 0
+            uint8_t new_flags = (this->get(REG_P) & ~(FLAG_N | FLAG_Z | FLAG_C));
+            if (value == 0) new_flags |= FLAG_Z;  // Set Z if result is zero
+            if (carry_out) new_flags |= FLAG_C;   // Set C if bit 0 was set
+            // N flag stays clear (LSR always produces positive result)
+            this->set(REG_P, new_flags);
         },
         [this](uint16_t& value) {
             const uint8_t carry_out = value & 1;
