@@ -91,31 +91,6 @@ struct narrow_registers_mixin_t {
         reg8[data_reg] = FAM65XX_GET_DATA(pins);
     }
     
-    // === Memory operation helpers ===
-    inline data_t get_accumulator() const {
-        return get(REG_A);
-    }
-    
-    inline void set_accumulator(data_t value) {
-        set(REG_A, value);
-    }
-    
-    inline data_t get_x_register() const {
-        return get(REG_X);
-    }
-    
-    inline void set_x_register(data_t value) {
-        set(REG_X, value);
-    }
-    
-    inline data_t get_y_register() const {
-        return get(REG_Y);
-    }
-    
-    inline void set_y_register(data_t value) {
-        set(REG_Y, value);
-    }
-    
     // === 65C816 compatibility methods removed - now in main fam65xx_t class ===
     // Functions moved to fam65xx_t for constexpr wide register detection
     
@@ -237,33 +212,7 @@ struct wide_registers_mixin_t {
     // === Load function for bus operations ===
     inline void load(reg8_t data_reg, bus_state_t pins) {
         reg8[data_reg] = FAM65XX_GET_DATA(pins);
-    }
-    
-    // === Memory operation helpers (simplified - width logic moved to fam65xx_t) ===
-    // Note: These will be overridden in fam65xx_t with proper 16-bit width detection
-    inline data_t get_accumulator() const {
-        return get(REG_A);  // Always 8-bit in mixin, overridden in fam65xx_t
-    }
-    
-    inline void set_accumulator(data_t value) {
-        set(REG_A, static_cast<uint8_t>(value & 0xFF));  // Always 8-bit in mixin, overridden in fam65xx_t
-    }
-    
-    inline data_t get_x_register() const {
-        return get(REG_X);  // Always 8-bit in mixin, overridden in fam65xx_t
-    }
-    
-    inline void set_x_register(data_t value) {
-        set(REG_X, static_cast<uint8_t>(value & 0xFF));  // Always 8-bit in mixin, overridden in fam65xx_t
-    }
-    
-    inline data_t get_y_register() const {
-        return get(REG_Y);  // Always 8-bit in mixin, overridden in fam65xx_t
-    }
-    
-    inline void set_y_register(data_t value) {
-        set(REG_Y, static_cast<uint8_t>(value & 0xFF));  // Always 8-bit in mixin, overridden in fam65xx_t
-    }
+    }    
 };
 
 // ============================================================================

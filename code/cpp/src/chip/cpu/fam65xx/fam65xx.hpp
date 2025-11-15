@@ -219,43 +219,28 @@ class fam65xx_t :
         }
     }
     
-    // ========================================================================
-    // EMULATION MODE AND REGISTER WIDTH DETECTION (moved from mixins)
-    // ========================================================================
     
     /**
-     * Set emulation mode (65C816 specific)
-     * Uses constexpr wide check for compile-time optimization
+     * Template tooling function that returns true when 16-bit mode is required
+     * for the specified register. Handles all processor types and modes.
+     *
+     * @tparam reg_type The register type (REG_A, REG_X, REG_Y, or memory placeholder)
+     * @return true if 16-bit mode should be used for this register
      */
-    inline void set_emulation_mode(bool mode) {
+    template<reg8_t reg_type>
+    inline bool is_register_16bit() const {
         if constexpr (has_wide_registers()) {
-            if (mode) {
-                // Set emulation bit in the 16-bit P register
-                this->set(REG_P_16, this->get(REG_P_16) | FLAG_E);
-                // In emulation mode, M and X are implicit (always set) but not visible in P register
-                // Ensure M and X flags are NOT visible in P register in emulation mode
-                this->set(REG_P, this->get(REG_P) & ~(FLAG_M | FLAG_X));
-                // Force stack pointer to page 1
-                this->set(REG_SPH, 0x01);
-            } else {
-                // Clear emulation bit in the 16-bit P register
-                this->set(REG_P_16, this->get(REG_P_16) & ~FLAG_E);
+            // 65C816: Check register-specific width flags
+            if constexpr (reg_type == REG_A) {
+                // Accumulator: M=0 means 16-bit (only in native mode)
+                return this->is_accumulator_16bit();
+            } else if constexpr (reg_type == REG_X || reg_type == REG_Y) {
+                // Index registers: X=0 means 16-bit (only in native mode)
+                return this->is_index_16bit();
             }
         }
-        // Non-65C816 processors: no-op (always in emulation mode)
-    }
-    
-    /**
-     * Check if CPU is in emulation mode (65C816 specific)
-     * Uses constexpr wide check for compile-time optimization
-     */
-    inline bool in_emulation_mode() const {
-        if constexpr (has_wide_registers()) {
-            return (this->get(REG_P_16) & FLAG_E) != 0;
-        } else {
-            // Non-65C816 processors are always in "emulation mode" (6502 compatibility)
-            return true;
-        }
+        // Non-65C816 processors or memory operations: always 8-bit
+        return false;
     }
     
     // Get bank byte for address construction (0 if banking doesn't apply)
@@ -720,61 +705,6 @@ class fam65xx_t :
      */
     inline void update_nz_flags_8bit(uint8_t value) {
         update_flags(FLAG_N | FLAG_Z, calc_nz_flags_8bit(value));
-    }
-
-    // ========================================================================
-    // 16-BIT REGISTER MODE DETECTION TOOLING FUNCTION
-    // ========================================================================
-    
-    /**
-     * Check if accumulator is in 16-bit mode
-     * Uses constexpr wide check for compile-time optimization
-     */
-    inline bool is_accumulator_16bit() const {
-        if constexpr (has_wide_registers()) {
-            // 16-bit when BOTH emulation=0 AND M=0
-            return !(this->get(REG_P_16) & (FLAG_E | FLAG_M));
-        } else {
-            // Non-65C816 processors: always 8-bit
-            return false;
-        }
-    }
-    
-    /**
-     * Check if index registers are in 16-bit mode
-     * Uses constexpr wide check for compile-time optimization
-     */
-    inline bool is_index_16bit() const {
-        if constexpr (has_wide_registers()) {
-            // 16-bit when BOTH emulation=0 AND X=0
-            return !(this->get(REG_P_16) & (FLAG_E | FLAG_X));
-        } else {
-            // Non-65C816 processors: always 8-bit
-            return false;
-        }
-    }
-    
-    /**
-     * Template tooling function that returns true when 16-bit mode is required
-     * for the specified register. Handles all processor types and modes.
-     *
-     * @tparam reg_type The register type (REG_A, REG_X, REG_Y, or memory placeholder)
-     * @return true if 16-bit mode should be used for this register
-     */
-    template<reg8_t reg_type>
-    inline bool is_register_16bit() const {
-        if constexpr (has_wide_registers()) {
-            // 65C816: Check register-specific width flags
-            if constexpr (reg_type == REG_A) {
-                // Accumulator: M=0 means 16-bit (only in native mode)
-                return this->is_accumulator_16bit();
-            } else if constexpr (reg_type == REG_X || reg_type == REG_Y) {
-                // Index registers: X=0 means 16-bit (only in native mode)
-                return this->is_index_16bit();
-            }
-        }
-        // Non-65C816 processors or memory operations: always 8-bit
-        return false;
     }
     
     // ========================================================================
@@ -1555,8 +1485,75 @@ class fam65xx_t :
         return generate_opcode_table<Traits>()[opcode];
     }
     
-public:    
-
+public:
+    
+    // ========================================================================
+    // EMULATION MODE AND REGISTER WIDTH DETECTION (moved from mixins)
+    // ========================================================================
+    
+    /**
+     * Set emulation mode (65C816 specific)
+     * Uses constexpr wide check for compile-time optimization
+     */
+    inline void set_emulation_mode(bool mode) {
+        if constexpr (has_wide_registers()) {
+            if (mode) {
+                // Set emulation bit in the 16-bit P register
+                this->set(REG_P_16, this->get(REG_P_16) | FLAG_E);
+                // In emulation mode, M and X are implicit (always set) but not visible in P register
+                // Ensure M and X flags are NOT visible in P register in emulation mode
+                this->set(REG_P, this->get(REG_P) & ~(FLAG_M | FLAG_X));
+                // Force stack pointer to page 1
+                this->set(REG_SPH, 0x01);
+            } else {
+                // Clear emulation bit in the 16-bit P register
+                this->set(REG_P_16, this->get(REG_P_16) & ~FLAG_E);
+            }
+        }
+        // Non-65C816 processors: no-op (always in emulation mode)
+    }
+    
+    /**
+     * Check if CPU is in emulation mode (65C816 specific)
+     * Uses constexpr wide check for compile-time optimization
+     */
+    inline bool in_emulation_mode() const {
+        if constexpr (has_wide_registers()) {
+            return (this->get(REG_P_16) & FLAG_E) != 0;
+        } else {
+            // Non-65C816 processors are always in "emulation mode" (6502 compatibility)
+            return true;
+        }
+    }
+    
+    /**
+     * Check if accumulator is in 16-bit mode
+     * Uses constexpr wide check for compile-time optimization
+     */
+    inline bool is_accumulator_16bit() const {
+        if constexpr (has_wide_registers()) {
+            // 16-bit when BOTH emulation=0 AND M=0
+            return !(this->get(REG_P_16) & (FLAG_E | FLAG_M));
+        } else {
+            // Non-65C816 processors: always 8-bit
+            return false;
+        }
+    }
+    
+    /**
+     * Check if index registers are in 16-bit mode
+     * Uses constexpr wide check for compile-time optimization
+     */
+    inline bool is_index_16bit() const {
+        if constexpr (has_wide_registers()) {
+            // 16-bit when BOTH emulation=0 AND X=0
+            return !(this->get(REG_P_16) & (FLAG_E | FLAG_X));
+        } else {
+            // Non-65C816 processors: always 8-bit
+            return false;
+        }
+    }
+    
     bus_state_t reset(bus_state_t pins) {
         // Reset registers properly (including emulation mode for 65C816)
         this->init_registers();
