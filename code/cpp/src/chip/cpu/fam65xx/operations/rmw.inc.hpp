@@ -13,57 +13,58 @@
 /* ASL - Arithmetic Shift Left */
 bus_state_t op_asl(bus_state_t pins) {
     return this->rmw_operation_helper(pins, [this](data_t& value) {
-        // ASL: shift left, carry out from MSB using 16-bit detection
-        const uint8_t carry_out = this->is_register_16bit<REG_A>()
-            ? ((value >> 15) & FLAG_C)
-            : ((value >> 7) & FLAG_C);
-        value <<= 1;
+        // ASL: For memory operations, always work with 8-bit data regardless of data_t width
+        uint8_t val8 = static_cast<uint8_t>(value & 0xFF);
+        const uint8_t carry_out = (val8 >> 7) & FLAG_C;
+        val8 <<= 1;
+        value = val8;  // Store back the 8-bit result
         
-        // Update flags using consolidated helper with automatic register detection
-        this->update_nzc_flags<REG_A>(value, carry_out);
+        // Update flags using REG_MEM template parameter to force 8-bit behavior
+        this->update_nzc_flags<REG_MEM>(val8, carry_out);
     });
 }
 
 /* LSR - Logical Shift Right */
 bus_state_t op_lsr(bus_state_t pins) {
     return this->rmw_operation_helper(pins, [this](data_t& value) {
-        // LSR: shift right, carry out from LSB (always bit 0 regardless of width)
-        const uint8_t carry_out = value & FLAG_C;
-        value >>= 1;
+        // LSR: For memory operations, always work with 8-bit data regardless of data_t width
+        uint8_t val8 = static_cast<uint8_t>(value & 0xFF);
+        const uint8_t carry_out = val8 & FLAG_C;
+        val8 >>= 1;
+        value = val8;  // Store back the 8-bit result
         
-        // Update flags using consolidated helper with automatic register detection
-        this->update_nzc_flags<REG_A>(value, carry_out);
+        // Update flags using REG_MEM template parameter to force 8-bit behavior
+        this->update_nzc_flags<REG_MEM>(val8, carry_out);
     });
 }
 
 /* ROL - Rotate Left */
 bus_state_t op_rol(bus_state_t pins) {
     return this->rmw_operation_helper(pins, [this](data_t& value) {
-        // ROL: rotate left through carry
+        // ROL: For memory operations, always work with 8-bit data regardless of data_t width
+        uint8_t val8 = static_cast<uint8_t>(value & 0xFF);
         const uint8_t carry_in = this->get(REG_P) & FLAG_C;
-        const uint8_t carry_out = this->is_register_16bit<REG_A>()
-            ? ((value >> 15) & FLAG_C)
-            : ((value >> 7) & FLAG_C);
-        value = (value << 1) | carry_in;
+        const uint8_t carry_out = (val8 >> 7) & FLAG_C;
+        val8 = (val8 << 1) | carry_in;
+        value = val8;  // Store back the 8-bit result
         
-        // Update flags using consolidated helper with automatic register detection
-        this->update_nzc_flags<REG_A>(value, carry_out);
+        // Update flags using REG_MEM template parameter to force 8-bit behavior
+        this->update_nzc_flags<REG_MEM>(val8, carry_out);
     });
 }
 
 /* ROR - Rotate Right */
 bus_state_t op_ror(bus_state_t pins) {
     return this->rmw_operation_helper(pins, [this](data_t& value) {
-        // ROR: rotate right through carry
+        // ROR: For memory operations, always work with 8-bit data regardless of data_t width
+        uint8_t val8 = static_cast<uint8_t>(value & 0xFF);
         const uint8_t carry_in = this->get(REG_P) & FLAG_C;
-        const uint8_t carry_out = value & FLAG_C;
+        const uint8_t carry_out = val8 & FLAG_C;
+        val8 = (val8 >> 1) | (carry_in << 7);
+        value = val8;  // Store back the 8-bit result
         
-        // Calculate high bit position using 16-bit detection
-        const data_t high_bit_shift = this->is_register_16bit<REG_A>() ? 15 : 7;
-        value = (value >> 1) | (carry_in << high_bit_shift);
-        
-        // Update flags using consolidated helper with automatic register detection
-        this->update_nzc_flags<REG_A>(value, carry_out);
+        // Update flags using REG_MEM template parameter to force 8-bit behavior
+        this->update_nzc_flags<REG_MEM>(val8, carry_out);
     });
 }
 
