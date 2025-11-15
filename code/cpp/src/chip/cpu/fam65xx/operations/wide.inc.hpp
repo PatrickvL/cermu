@@ -105,11 +105,6 @@ bus_state_t op_xce(bus_state_t pins) {
                     // Set emulation mode to old carry flag
                     this->set_emulation_mode(old_carry);
                     
-                    // When switching to emulation mode, force M=1 and X=1
-                    if (old_carry) {  // Switching to emulation mode
-                        p |= (FLAG_M | FLAG_X);
-                    }
-                    
                     this->set(REG_P, p);
                 }
                 this->cycle_index++;

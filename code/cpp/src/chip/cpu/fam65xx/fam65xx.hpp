@@ -220,6 +220,65 @@ class fam65xx_t :
     }
     
     // ========================================================================
+    // EMULATION MODE AND REGISTER WIDTH DETECTION (moved from mixins)
+    // ========================================================================
+    
+    /**
+     * Set emulation mode (65C816 specific)
+     * Uses constexpr wide check for compile-time optimization
+     */
+    inline void set_emulation_mode(bool mode) {
+        if constexpr (has_wide_registers()) {
+            if (mode) {
+                // Set emulation bit in the 16-bit P register
+                this->set(REG_P_16, this->get(REG_P_16) | FLAG_E);
+                // In emulation mode, M and X are implicit (always set) but not visible in P register
+                // Ensure M and X flags are NOT visible in P register in emulation mode
+                this->set(REG_P, this->get(REG_P) & ~(FLAG_M | FLAG_X));
+                // Force stack pointer to page 1
+                this->set(REG_SPH, 0x01);
+            } else {
+                // Clear emulation bit in the 16-bit P register
+                this->set(REG_P_16, this->get(REG_P_16) & ~FLAG_E);
+            }
+        }
+        // Non-65C816 processors: no-op (always in emulation mode)
+    }
+    
+    /**
+     * Check if CPU is in emulation mode (65C816 specific)
+     * Uses constexpr wide check for compile-time optimization
+     */
+    inline bool in_emulation_mode() const {
+        if constexpr (has_wide_registers()) {
+            return (this->get(REG_P_16) & FLAG_E) != 0;
+        } else {
+            // Non-65C816 processors are always in "emulation mode" (6502 compatibility)
+            return true;
+        }
+    }
+    
+    // Get bank byte for address construction (0 if banking doesn't apply)
+    template<Addr addr_arg>
+    inline uint8_t get_address_bank(Bank bank_arg) const {
+        // Non-65C816 processors never use banking
+        if constexpr (!has_wide_registers()) return 0;
+        
+        // PC always uses PBR, even in emulation mode
+        if constexpr (addr_arg == Addr::PC) return this->get(REG_PBR);
+        
+        // Emulation mode: non-PC addresses don't use banking (6502 compatibility)
+        if (this->in_emulation_mode()) return 0;
+        
+        // Native mode: SP uses ZBR, data addresses use provided bank (typically DBR)
+        if constexpr (addr_arg == Addr::SP) {
+            return this->get(REG_ZBR);
+        } else {
+            return this->get(static_cast<reg8_t>(bank_arg));
+        }
+    }
+
+    // ========================================================================
     // PHI2 UNIFIED MEMORY ACCESS WITH PROCESSOR-VARIANT RDY HANDLING
     // ========================================================================
     
@@ -318,26 +377,6 @@ class fam65xx_t :
      * @param data Data byte (for write operations, ignored for reads)
      * @return Updated bus state with operation results
      */
-
-    // Get bank byte for address construction (0 if banking doesn't apply)
-    template<Addr addr_arg>
-    inline uint8_t get_address_bank(Bank bank_arg) const {
-        // Non-65C816 processors never use banking
-        if constexpr (!has_wide_registers()) return 0;
-        
-        // PC always uses PBR, even in emulation mode
-        if constexpr (addr_arg == Addr::PC) return this->get(REG_PBR);
-        
-        // Emulation mode: non-PC addresses don't use banking (6502 compatibility)
-        if (this->in_emulation_mode()) return 0;
-        
-        // Native mode: SP uses ZBR, data addresses use provided bank (typically DBR)
-        if constexpr (addr_arg == Addr::SP) {
-            return this->get(REG_ZBR);
-        } else {
-            return this->get(static_cast<reg8_t>(bank_arg));
-        }
-    }
 
     template<bool IsWrite, bool IsDummy, Addr addr_arg, Bank bank_arg = Bank::DBR>
     bus_state_t phi2_access(bus_state_t pins, uint8_t data = 0) {    
@@ -688,6 +727,34 @@ class fam65xx_t :
     // ========================================================================
     
     /**
+     * Check if accumulator is in 16-bit mode
+     * Uses constexpr wide check for compile-time optimization
+     */
+    inline bool is_accumulator_16bit() const {
+        if constexpr (has_wide_registers()) {
+            // 16-bit when BOTH emulation=0 AND M=0
+            return !(this->get(REG_P_16) & (FLAG_E | FLAG_M));
+        } else {
+            // Non-65C816 processors: always 8-bit
+            return false;
+        }
+    }
+    
+    /**
+     * Check if index registers are in 16-bit mode
+     * Uses constexpr wide check for compile-time optimization
+     */
+    inline bool is_index_16bit() const {
+        if constexpr (has_wide_registers()) {
+            // 16-bit when BOTH emulation=0 AND X=0
+            return !(this->get(REG_P_16) & (FLAG_E | FLAG_X));
+        } else {
+            // Non-65C816 processors: always 8-bit
+            return false;
+        }
+    }
+    
+    /**
      * Template tooling function that returns true when 16-bit mode is required
      * for the specified register. Handles all processor types and modes.
      *
@@ -700,17 +767,116 @@ class fam65xx_t :
             // 65C816: Check register-specific width flags
             if constexpr (reg_type == REG_A) {
                 // Accumulator: M=0 means 16-bit (only in native mode)
-                return !this->in_emulation_mode() && !(this->get(REG_P) & FLAG_M);
+                return this->is_accumulator_16bit();
             } else if constexpr (reg_type == REG_X || reg_type == REG_Y) {
                 // Index registers: X=0 means 16-bit (only in native mode)
-                return !this->in_emulation_mode() && !(this->get(REG_P) & FLAG_X);
+                return this->is_index_16bit();
             }
         }
         // Non-65C816 processors or memory operations: always 8-bit
         return false;
     }
     
-
+    // ========================================================================
+    // REGISTER ACCESS METHODS (override mixin methods with constexpr wide detection)
+    // ========================================================================
+    
+    /**
+     * Get accumulator value with automatic 8/16-bit handling
+     * Uses constexpr wide check for compile-time optimization
+     */
+    inline data_t get_accumulator() const {
+        if constexpr (has_wide_registers()) {
+            if (is_accumulator_16bit()) {
+                return this->get(REG_A_16);
+            } else {
+                return this->get(REG_A);
+            }
+        } else {
+            return this->get(REG_A);
+        }
+    }
+    
+    /**
+     * Set accumulator value with automatic 8/16-bit handling
+     * Uses constexpr wide check for compile-time optimization
+     */
+    inline void set_accumulator(data_t value) {
+        if constexpr (has_wide_registers()) {
+            if (is_accumulator_16bit()) {
+                this->set(REG_A_16, value);
+            } else {
+                this->set(REG_A, static_cast<uint8_t>(value & 0xFF));
+            }
+        } else {
+            this->set(REG_A, static_cast<uint8_t>(value & 0xFF));
+        }
+    }
+    
+    /**
+     * Get X register value with automatic 8/16-bit handling
+     * Uses constexpr wide check for compile-time optimization
+     */
+    inline data_t get_x_register() const {
+        if constexpr (has_wide_registers()) {
+            if (is_index_16bit()) {
+                return this->get(REG_X_16);
+            } else {
+                return this->get(REG_X);
+            }
+        } else {
+            return this->get(REG_X);
+        }
+    }
+    
+    /**
+     * Set X register value with automatic 8/16-bit handling
+     * Uses constexpr wide check for compile-time optimization
+     */
+    inline void set_x_register(data_t value) {
+        if constexpr (has_wide_registers()) {
+            if (is_index_16bit()) {
+                this->set(REG_X_16, value);
+            } else {
+                this->set(REG_X, static_cast<uint8_t>(value & 0xFF));
+            }
+        } else {
+            this->set(REG_X, static_cast<uint8_t>(value & 0xFF));
+        }
+    }
+    
+    /**
+     * Get Y register value with automatic 8/16-bit handling
+     * Uses constexpr wide check for compile-time optimization
+     */
+    inline data_t get_y_register() const {
+        if constexpr (has_wide_registers()) {
+            if (is_index_16bit()) {
+                return this->get(REG_Y_16);
+            } else {
+                return this->get(REG_Y);
+            }
+        } else {
+            return this->get(REG_Y);
+        }
+    }
+    
+    /**
+     * Set Y register value with automatic 8/16-bit handling
+     * Uses constexpr wide check for compile-time optimization
+     */
+    inline void set_y_register(data_t value) {
+        if constexpr (has_wide_registers()) {
+            if (is_index_16bit()) {
+                this->set(REG_Y_16, value);
+            } else {
+                this->set(REG_Y, static_cast<uint8_t>(value & 0xFF));
+            }
+        } else {
+            this->set(REG_Y, static_cast<uint8_t>(value & 0xFF));
+        }
+    }
+    
     // ========================================================================
     // HARDWARE-ACCURATE BCD ARITHMETIC HELPERS
     // ========================================================================
@@ -915,24 +1081,6 @@ class fam65xx_t :
         return ((addr1 ^ addr2) & 0x0100) != 0;
     }
     
-    /**
-     * Zero page address calculation with wrap-around
-     * Hardware-accurate 8-bit addition for zero page addressing
-     */
-    inline uint16_t calc_zp_addr(uint8_t base, uint8_t offset) const {
-        return (base + offset) & 0xFF;  // Wrap within zero page
-    }
-    
-    /**
-     * Absolute address calculation with page crossing detection
-     * Returns address and sets page_crossed flag for cycle timing
-     */
-    inline uint16_t calc_abs_addr_indexed(uint16_t base, uint8_t index, bool& page_crossed_out) const {
-        uint16_t result = base + index;
-        page_crossed_out = page_crossed(base, result);
-        return result;
-    }
-
     // ========================================================================
     // RMW OPERATION HELPER FUNCTIONS
     // ========================================================================
@@ -1120,10 +1268,6 @@ class fam65xx_t :
     std::array<InstructionHandler, to_index(AM::COUNT)> addressing_mode_handlers;
     
     inline InstructionHandler get_instruction_handler() {
-        // TEMPORARY DEBUG VALIDATION: Check table bounds and non-null pointers
-        printf("DEBUG VALIDATION: op_index=%d am_index=%d\n",
-               this->opcode_entry.op_index, this->opcode_entry.am_index);
-        
         // Validate op_index bounds
         if (this->opcode_entry.op_index >= to_index(OP::COUNT)) {
             printf("ERROR: op_index %d >= COUNT %d\n",
@@ -1149,8 +1293,6 @@ class fam65xx_t :
                 return &fam65xx_t::op_nop;  // Safe fallback
             }
             
-            printf("DEBUG: Using AM handler for am_index=%d (handler=%p)\n",
-                   this->opcode_entry.am_index, (void*)am_handler);
             return am_handler;
         }
         
@@ -1164,18 +1306,6 @@ class fam65xx_t :
             return &fam65xx_t::op_nop;  // Safe fallback
         }
         
-        // Debug LSR/ASL dispatch issue
-        if (this->get(REG_IR) == 0x46) {
-            printf("DEBUG 0x46 LSR: op_index=%d am_index=%d (LSR=%d, ASL=%d)\n",
-                   this->opcode_entry.op_index, this->opcode_entry.am_index,
-                   to_index(OP::LSR), to_index(OP::ASL));
-            printf("  Handler addresses: LSR=%p ASL=%p Selected=%p\n",
-                   (void*)&fam65xx_t::op_lsr, (void*)&fam65xx_t::op_asl,
-                   (void*)op_handler);
-        }
-        
-        printf("DEBUG: Using OP handler for op_index=%d (handler=%p)\n",
-               this->opcode_entry.op_index, (void*)op_handler);
         return op_handler;
     }
     
@@ -1422,25 +1552,7 @@ class fam65xx_t :
     }
 
     opcode_info_t get_opcode_info(uint8_t opcode) const {
-        printf("DEBUG: get_opcode_info called for opcode 0x%02x\n", opcode);
-        fflush(stdout);
-        
-        auto table = generate_opcode_table<Traits>();
-        auto entry = table[opcode];
-        
-        // Debug opcode 0x46 specifically
-        if (opcode == 0x46) {
-            printf("DEBUG get_opcode_info(0x46): op_index=%d am_index=%d flags=%d\n",
-                   entry.op_index, entry.am_index, entry.flags);
-            printf("  Expected: LSR=%d, ASL=%d, BRK=%d\n",
-                   to_index(OP::LSR), to_index(OP::ASL), to_index(OP::BRK));
-            printf("  Traits: has_C816=%s, has_CMOS=%s\n",
-                   Traits.has(CPUCoreFlags::C816_16BIT) ? "YES" : "NO",
-                   Traits.has(CPUCoreFlags::CMOS_BASE) ? "YES" : "NO");
-            fflush(stdout);
-        }
-        
-        return entry;
+        return generate_opcode_table<Traits>()[opcode];
     }
     
 public:    
@@ -1631,7 +1743,7 @@ public:
     bool stopped;                       /* STP instruction state */
     
     /* Debug tracing state */
-    static constexpr bool ENABLE_TRACING = true;  /* Compile-time tracing flag */
+    static constexpr bool ENABLE_TRACING = false;  /* Compile-time tracing flag */
     mutable int trace_indent;           /* Current tracing indentation level */
 };
 
