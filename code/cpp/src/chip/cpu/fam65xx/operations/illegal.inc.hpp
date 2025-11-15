@@ -28,7 +28,7 @@ bus_state_t op_lax(bus_state_t pins) {
                 this->set(REG_A, result);
                 this->set(REG_X, result);
                 
-                update_nz_flags(result);
+                this->update_nz_flags<REG_A>(result);
                 transition_to_fetch();
             }
         } else {
@@ -38,7 +38,7 @@ bus_state_t op_lax(bus_state_t pins) {
                 this->set(REG_A, this->get(REG_DL));
                 this->set(REG_X, this->get(REG_DL));
                 
-                update_nz_flags(this->get(REG_A));
+                this->update_nz_flags<REG_A>(this->get(REG_A));
                 transition_to_fetch();
             }
         }
@@ -74,10 +74,10 @@ bus_state_t op_dcp(bus_state_t pins) {
             // Perform CMP A with decremented value
             uint16_t result = this->get(REG_A) - static_cast<uint8_t>(value);
             // Set carry flag (CMP uses subtraction semantics: carry = no borrow)
-            update_flag(FLAG_C, !(result & 0x100));
+            this->update_flag(FLAG_C, !(result & 0x100));
             
             // Update N and Z flags based on comparison result
-            update_nz_flags(static_cast<uint8_t>(result));
+            this->update_nz_flags<REG_A>(static_cast<uint8_t>(result));
         });
     } else {
         return pins;
@@ -107,12 +107,12 @@ bus_state_t op_slo(bus_state_t pins) {
         // This is a Read-Modify-Write operation
         return rmw_operation_helper(pins, [this](data_t& value) {
             // Perform ASL on memory value
-            update_flag(FLAG_C, value & 0x80);
+            this->update_flag(FLAG_C, value & 0x80);
             value <<= 1;
             
             // Perform ORA with accumulator
             this->set(REG_A, this->get(REG_A) | static_cast<uint8_t>(value));
-            update_nz_flags(this->get(REG_A));
+            this->update_nz_flags<REG_A>(this->get(REG_A));
         });
     } else {
         return pins;
@@ -126,12 +126,12 @@ bus_state_t op_rla(bus_state_t pins) {
         return rmw_operation_helper(pins, [this](data_t& value) {
             // Perform ROL on memory value
             uint8_t carry_in = this->get(REG_P) & FLAG_C;
-            update_flag(FLAG_C, value & 0x80);
+            this->update_flag(FLAG_C, value & 0x80);
             value = (value << 1) | carry_in;
             
             // Perform AND with accumulator
             this->set(REG_A, this->get(REG_A) & static_cast<uint8_t>(value));
-            update_nz_flags(this->get(REG_A));
+            this->update_nz_flags<REG_A>(this->get(REG_A));
         });
     } else {
         return pins;
@@ -144,12 +144,12 @@ bus_state_t op_sre(bus_state_t pins) {
         // This is a Read-Modify-Write operation
         return rmw_operation_helper(pins, [this](data_t& value) {
             // Perform LSR on memory value
-            update_flags(FLAG_C, value & FLAG_C);
+            this->update_flag(FLAG_C, value & FLAG_C);
             value >>= 1;
             
             // Perform EOR with accumulator
             this->set(REG_A, this->get(REG_A) ^ static_cast<uint8_t>(value));
-            update_nz_flags(this->get(REG_A));
+            this->update_nz_flags<REG_A>(this->get(REG_A));
         });
     } else {
         return pins;
@@ -166,7 +166,7 @@ bus_state_t op_rra(bus_state_t pins) {
             const uint8_t carry_out = static_cast<uint8_t>(value) & FLAG_C;
             value = (value >> 1) | (carry_in << 7);
 
-            update_flags(FLAG_C, carry_out);
+            this->update_flag(FLAG_C, carry_out);
             
             // Perform ADC with A using BCD-aware function
             // This ensures proper NMOS 6502 BCD behavior including V flag calculation
@@ -226,10 +226,10 @@ bus_state_t op_anc(bus_state_t pins) {
             this->set(REG_A, this->get(REG_A) & this->get(REG_DL));
             
             // Update N and Z flags
-            update_nz_flags(this->get(REG_A));
+            this->update_nz_flags<REG_A>(this->get(REG_A));
 
             // Copy N flag to C flag (ANC behavior)
-            update_flag(FLAG_C, this->get(REG_P) & FLAG_N);
+            this->update_flag(FLAG_C, this->get(REG_P) & FLAG_N);
 
             transition_to_fetch();
         }
@@ -259,7 +259,7 @@ bus_state_t op_arr(bus_state_t pins) {
             this->set(REG_P, this->get(REG_P) & ~(FLAG_N | FLAG_Z | FLAG_V | FLAG_C));
 
             // Set N and Z flags based on shifted result (reference does this first)
-            update_nz_flags(shifted_a);
+            this->update_nz_flags<REG_A>(shifted_a);
             
             if constexpr (has_bcd()) {
                 if (this->get(REG_P) & FLAG_D) {
@@ -333,11 +333,11 @@ bus_state_t op_alr(bus_state_t pins) {
             this->set(REG_A, this->get(REG_A) & this->get(REG_DL));
 
             // Perform LSR on accumulator
-            update_flag(FLAG_C, this->get(REG_A) & 0x01);
+            this->update_flag(FLAG_C, this->get(REG_A) & 0x01);
             this->set(REG_A, this->get(REG_A) >> 1);
 
             // Update N and Z flags
-            update_nz_flags(this->get(REG_A));
+            this->update_nz_flags<REG_A>(this->get(REG_A));
 
             transition_to_fetch();
         }
@@ -364,7 +364,7 @@ bus_state_t op_xaa(bus_state_t pins) {
             this->inc(REG_PC);
             // Hardware behavior: (A | 0xEE) & X & operand
             this->set(REG_A, (this->get(REG_A) | 0xEE) & this->get(REG_X) & this->get(REG_DL));
-            update_nz_flags(this->get(REG_A));
+            this->update_nz_flags<REG_A>(this->get(REG_A));
 
             transition_to_fetch();
         }
@@ -385,9 +385,9 @@ bus_state_t op_sbx(bus_state_t pins) {
             this->set(REG_X, result);
 
             // Set carry flag using standard subtraction semantics (carry = no borrow)
-            update_flag(FLAG_C, temp >= this->get(REG_DL));
+            this->update_flag(FLAG_C, temp >= this->get(REG_DL));
             
-            update_nz_flags(result);
+            this->update_nz_flags<REG_X>(result);
             
             transition_to_fetch();
         }
@@ -503,7 +503,7 @@ bus_state_t op_las(bus_state_t pins) {
             this->set(REG_X, result);
             this->set(REG_S, result);
 
-            update_nz_flags(result);
+            this->update_nz_flags<REG_A>(result);
             transition_to_fetch();
         }
     }

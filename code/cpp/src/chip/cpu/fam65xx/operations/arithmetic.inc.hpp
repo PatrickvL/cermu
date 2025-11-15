@@ -456,8 +456,8 @@ bus_state_t op_inc(bus_state_t pins) {
     return this->rmw_operation_helper(pins, [this](data_t& value) {
         // Increment the value
         value++;
-        // Update N and Z flags using enhanced helper
-        this->update_nz_flags_enhanced(value);
+        // Update N and Z flags using consolidated helper
+        this->update_nz_flags<REG_A>(value);
     });
 }
 
@@ -471,8 +471,8 @@ bus_state_t op_dec(bus_state_t pins) {
     return this->rmw_operation_helper(pins, [this](data_t& value) {
         // Decrement the value
         value--;
-        // Update N and Z flags using enhanced helper
-        this->update_nz_flags_enhanced(value);
+        // Update N and Z flags using consolidated helper
+        this->update_nz_flags<REG_A>(value);
     });
 }
 
