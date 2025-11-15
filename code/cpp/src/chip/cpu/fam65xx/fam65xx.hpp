@@ -528,22 +528,32 @@ class fam65xx_t :
     }
     
     // ========================================================================
-    // OPTIMIZED BRANCHLESS FLAG CALCULATION HELPERS
+    // UNIFIED FLAG CALCULATION HELPERS WITH AUTOMATIC WIDTH DETECTION
     // ========================================================================
     
     /**
-     * Branchless N flag calculation
-     * Extract bit 7 directly - zero overhead on most architectures
+     * Unified N flag calculation with automatic width detection
+     * Uses template parameter for compile-time register type detection
      */
-    inline uint8_t calc_n_flag(uint8_t value) {
-        return value & FLAG_N;
+    template<reg8_t reg_type = REG_A>
+    inline uint8_t calc_n_flag(data_t value) const {
+        if (is_register_16bit<reg_type>()) {
+            return (value & 0x8000) ? FLAG_N : 0;
+        } else {
+            return (static_cast<uint8_t>(value) & 0x80) ? FLAG_N : 0;
+        }
     }
     
     /**
-     * Branchless Z flag calculation
+     * Unified Z flag calculation with automatic width detection
      */
-    inline uint8_t calc_z_flag(uint8_t value) {
-        return (value == 0) * FLAG_Z;
+    template<reg8_t reg_type = REG_A>
+    inline uint8_t calc_z_flag(data_t value) const {
+        if (is_register_16bit<reg_type>()) {
+            return (value == 0) ? FLAG_Z : 0;
+        } else {
+            return (static_cast<uint8_t>(value) == 0) ? FLAG_Z : 0;
+        }
     }
     
     /**
@@ -571,110 +581,129 @@ class fam65xx_t :
     }
     
     /**
-     * Combined NZ flag calculation
-     * Optimized for common case where both N and Z need updating
+     * Unified NZ flag calculation with automatic width detection
+     * Replaces all calc_nz_flags variants for maximum deduplication
      */
-    inline uint8_t calc_nz_flags(uint8_t value) {
-        return calc_n_flag(value) | calc_z_flag(value);
+    template<reg8_t reg_type = REG_A>
+    inline uint8_t calc_nz_flags(data_t value) const {
+        return calc_n_flag<reg_type>(value) | calc_z_flag<reg_type>(value);
     }
     
     /**
-     * Combined NZC flag calculation for compare operations
-     * Optimized for CMP, CPX, CPY instructions
+     * Unified NZC flag calculation for compare operations with width detection
+     * Replaces calc_nzc_flags variants
      */
-    inline uint8_t calc_nzc_flags(uint8_t minuend, uint8_t subtrahend) {
-        uint16_t result = minuend - subtrahend;
-        return calc_n_flag(static_cast<uint8_t>(result)) |
-               calc_z_flag(static_cast<uint8_t>(result)) |
-               calc_c_flag(~result);  // Inverted for subtraction
+    template<reg8_t reg_type = REG_A>
+    inline uint8_t calc_nzc_flags(data_t minuend, data_t subtrahend) {
+        if (is_register_16bit<reg_type>()) {
+            // 16-bit comparison
+            uint32_t result = minuend - subtrahend;
+            return ((result & 0x8000) ? FLAG_N : 0) |
+                   ((result & 0xFFFF) == 0 ? FLAG_Z : 0) |
+                   (minuend >= subtrahend ? FLAG_C : 0);
+        } else {
+            // 8-bit comparison
+            uint16_t result = static_cast<uint8_t>(minuend) - static_cast<uint8_t>(subtrahend);
+            return calc_n_flag<reg_type>(static_cast<uint8_t>(result)) |
+                   calc_z_flag<reg_type>(static_cast<uint8_t>(result)) |
+                   calc_c_flag(~result);  // Inverted for subtraction
+        }
     }
 
     // ========================================================================
-    // DERIVED OPERATIONS (updated to use optimized functions)
+    // UNIFIED UPDATE OPERATIONS WITH AUTOMATIC WIDTH DETECTION
     // ========================================================================
     
     inline void update_c_flag(uint8_t value, uint8_t bit_position) {
         update_flag(FLAG_C, (value >> bit_position) & FLAG_C);
     }
 
-    inline void update_nz_flags(uint8_t value) {
-        update_flags(FLAG_N | FLAG_Z, calc_nz_flags(value));
+    /**
+     * Unified NZ flags update with automatic width detection
+     * Replaces all update_nz_flags variants for maximum deduplication
+     */
+    template<reg8_t reg_type = REG_A>
+    inline void update_nz_flags(data_t value) {
+        update_flags(FLAG_N | FLAG_Z, calc_nz_flags<reg_type>(value));
+    }
+    
+    /**
+     * Unified NZC flags update with automatic width detection
+     * Replaces all update_nzc_flags variants for maximum deduplication
+     */
+    template<reg8_t reg_type = REG_A>
+    inline void update_nzc_flags(data_t value, uint8_t carry_flag) {
+        update_flags(FLAG_N | FLAG_Z | FLAG_C, calc_nz_flags<reg_type>(value) | carry_flag);
+    }
+    
+    // ========================================================================
+    // LEGACY COMPATIBILITY (8-bit only versions for explicit 8-bit operations)
+    // ========================================================================
+    
+    /**
+     * Legacy 8-bit only N flag calculation (for explicit 8-bit contexts)
+     */
+    inline uint8_t calc_n_flag_8bit(uint8_t value) const {
+        return value & FLAG_N;
+    }
+    
+    /**
+     * Legacy 8-bit only Z flag calculation (for explicit 8-bit contexts)
+     */
+    inline uint8_t calc_z_flag_8bit(uint8_t value) const {
+        return (value == 0) * FLAG_Z;
+    }
+    
+    /**
+     * Legacy 8-bit only NZ flag calculation (for explicit 8-bit contexts)
+     */
+    inline uint8_t calc_nz_flags_8bit(uint8_t value) const {
+        return calc_n_flag_8bit(value) | calc_z_flag_8bit(value);
+    }
+    
+    /**
+     * Legacy 8-bit only NZ flags update (for explicit 8-bit contexts)
+     */
+    inline void update_nz_flags_8bit(uint8_t value) {
+        update_flags(FLAG_N | FLAG_Z, calc_nz_flags_8bit(value));
     }
 
     // ========================================================================
-    // WIDTH-AWARE FLAG UPDATING HELPERS (for RMW and other operations)
+    // 16-BIT REGISTER MODE DETECTION TOOLING FUNCTION
     // ========================================================================
     
     /**
-     * Register-aware flag calculation with automatic 8/16-bit detection
-     * Uses constexpr wide check with fallback to 8-bit when emulation mode
-     * is active or when the specified register is set to 8-bit mode
+     * Template tooling function that returns true when 16-bit mode is required
+     * for the specified register. Handles all processor types and modes.
+     *
+     * @tparam reg_type The register type (REG_A, REG_X, REG_Y, or memory placeholder)
+     * @return true if 16-bit mode should be used for this register
      */
-    template<reg8_t flag_reg = REG_A>
-    inline uint8_t calc_nz_flags_register_aware(data_t value) {
+    template<reg8_t reg_type>
+    inline bool is_register_16bit() const {
         if constexpr (has_wide_registers()) {
-            // 65C816: Check emulation mode and register-specific width flags
-            bool use_16bit = false;
-            
-            if (!this->get_emulation_mode()) {
-                // Native mode: Check register-specific width flags (runtime check)
-                if constexpr (flag_reg == REG_A) {
-                    use_16bit = !(this->get(REG_P) & FLAG_M);  // M=0 means 16-bit accumulator
-                } else if constexpr (flag_reg == REG_X || flag_reg == REG_Y) {
-                    use_16bit = !(this->get(REG_P) & FLAG_X);  // X=0 means 16-bit index registers
-                } else {
-                    // For other registers (memory operations), always use 8-bit
-                    use_16bit = false;
-                }
-            }
-            // Emulation mode: always 8-bit
-            
-            if (use_16bit) {
-                // 16-bit flag calculation
-                return ((value & 0x8000) ? FLAG_N : 0) |
-                       ((value == 0) ? FLAG_Z : 0);
+            // 65C816: Check register-specific width flags
+            if constexpr (reg_type == REG_A) {
+                // Accumulator: M=0 means 16-bit (only in native mode)
+                return !this->get_emulation_mode() && !(this->get(REG_P) & FLAG_M);
+            } else if constexpr (reg_type == REG_X || reg_type == REG_Y) {
+                // Index registers: X=0 means 16-bit (only in native mode)
+                return !this->get_emulation_mode() && !(this->get(REG_P) & FLAG_X);
             }
         }
-        
-        // 8-bit flag calculation (fallback for all non-wide CPUs and 8-bit modes)
-        return calc_nz_flags(static_cast<uint8_t>(value));
+        // Non-65C816 processors or memory operations: always 8-bit
+        return false;
     }
+
+    // ========================================================================
+    // LEGACY COMPATIBILITY FUNCTIONS (redirect to unified functions)
+    // ========================================================================
     
     /**
-     * Enhanced update_nz_flags that checks register width for 65C816
-     * Falls back to 8-bit mode when emulation mode is active or register is 8-bit
+     * Legacy compatibility functions that redirect to the unified implementations
+     * These allow existing code to work without changes while using the new unified system
      */
-    inline void update_nz_flags_enhanced(data_t value) {
-        if constexpr (has_wide_registers()) {
-            // Check if we should use 16-bit accumulator flags
-            if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_M)) {
-                // Native mode with 16-bit accumulator (M=0)
-                update_flags(FLAG_N | FLAG_Z,
-                           ((value & 0x8000) ? FLAG_N : 0) |
-                           ((value == 0) ? FLAG_Z : 0));
-                return;
-            }
-        }
-        
-        // Use 8-bit flags (emulation mode, 8-bit accumulator, or non-wide CPU)
-        update_nz_flags(static_cast<uint8_t>(value));
-    }
     
-    // Legacy compatibility functions (use accumulator as default)
-    inline uint8_t calc_nz_flags_wide(data_t value) {
-        if constexpr (has_wide_registers()) {
-            if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_M)) {
-                // 16-bit accumulator mode
-                return ((value & 0x8000) ? FLAG_N : 0) |
-                       ((value == 0) ? FLAG_Z : 0);
-            }
-        }
-        return calc_nz_flags(static_cast<uint8_t>(value));
-    }
-    
-    inline void update_nzc_flags_wide(data_t value, uint8_t carry_flag) {
-        update_flags(FLAG_N | FLAG_Z | FLAG_C, calc_nz_flags_wide(value) | carry_flag);
-    }
 
     // ========================================================================
     // HARDWARE-ACCURATE BCD ARITHMETIC HELPERS
