@@ -17,7 +17,7 @@
 bus_state_t op_adc(bus_state_t pins) {
     trace_operation(__func__);
     // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
-    if constexpr (this->has_wide_registers()) {
+    if constexpr (has_wide_registers()) {
         if (this->is_accumulator_16bit()) {
             // 65C816 native mode, 16-bit accumulator - perform 16-bit ADC
             switch (this->cycle_index) {
