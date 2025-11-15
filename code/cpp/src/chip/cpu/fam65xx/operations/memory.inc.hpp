@@ -17,7 +17,7 @@
 bus_state_t op_lda(bus_state_t pins) {
     // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_M)) {
+        if (this->template is_register_16bit<REG_A>()) {
             // 65C816 native mode, 16-bit accumulator - perform 16-bit LDA
             switch (this->cycle_index) {
                 case 0:
@@ -66,7 +66,7 @@ bus_state_t op_lda(bus_state_t pins) {
 bus_state_t op_ldx(bus_state_t pins) {
     // Check for 65C816 native mode with 16-bit index registers (X=0) - nested native code
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_X)) {
+        if (this->template is_register_16bit<REG_X>()) {
             // 65C816 native mode, 16-bit X register - perform 16-bit LDX
             switch (this->cycle_index) {
                 case 0:
@@ -115,7 +115,7 @@ bus_state_t op_ldx(bus_state_t pins) {
 bus_state_t op_ldy(bus_state_t pins) {
     // Check for 65C816 native mode with 16-bit index registers (X=0) - nested native code
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_X)) {
+        if (this->template is_register_16bit<REG_Y>()) {
             // 65C816 native mode, 16-bit Y register - perform 16-bit LDY
             switch (this->cycle_index) {
                 case 0:
@@ -164,7 +164,7 @@ bus_state_t op_ldy(bus_state_t pins) {
 bus_state_t op_sta(bus_state_t pins) {
     // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_M)) {
+        if (this->template is_register_16bit<REG_A>()) {
             // 65C816 native mode, 16-bit accumulator - perform 16-bit STA
             switch (this->cycle_index) {
                 case 0:
@@ -204,7 +204,7 @@ bus_state_t op_sta(bus_state_t pins) {
 bus_state_t op_stx(bus_state_t pins) {
     // Check for 65C816 native mode with 16-bit index registers (X=0) - nested native code
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_X)) {
+        if (this->template is_register_16bit<REG_X>()) {
             // 65C816 native mode, 16-bit X register - perform 16-bit STX
             switch (this->cycle_index) {
                 case 0:
@@ -244,7 +244,7 @@ bus_state_t op_stx(bus_state_t pins) {
 bus_state_t op_sty(bus_state_t pins) {
     // Check for 65C816 native mode with 16-bit index registers (X=0) - nested native code
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_X)) {
+        if (this->template is_register_16bit<REG_Y>()) {
             // 65C816 native mode, 16-bit Y register - perform 16-bit STY
             switch (this->cycle_index) {
                 case 0:
@@ -285,7 +285,7 @@ bus_state_t op_sty(bus_state_t pins) {
 bus_state_t op_and(bus_state_t pins) {
     // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_M)) {
+        if (this->template is_register_16bit<REG_A>()) {
             // 65C816 native mode, 16-bit accumulator - perform 16-bit AND
             switch (this->cycle_index) {
                 case 0:
@@ -340,7 +340,7 @@ bus_state_t op_and(bus_state_t pins) {
 bus_state_t op_ora(bus_state_t pins) {
     // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_M)) {
+        if (this->template is_register_16bit<REG_A>()) {
             // 65C816 native mode, 16-bit accumulator - perform 16-bit ORA
             switch (this->cycle_index) {
                 case 0:
@@ -395,7 +395,7 @@ bus_state_t op_ora(bus_state_t pins) {
 bus_state_t op_eor(bus_state_t pins) {
     // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_M)) {
+        if (this->template is_register_16bit<REG_A>()) {
             // 65C816 native mode, 16-bit accumulator - perform 16-bit EOR
             switch (this->cycle_index) {
                 case 0:
@@ -453,7 +453,7 @@ bus_state_t op_eor(bus_state_t pins) {
 bus_state_t op_bit(bus_state_t pins) {
     // Check for 65816 native mode with 16-bit accumulator (M=0) - nested native code
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_M)) {
+        if (this->template is_register_16bit<REG_A>()) {
             // 65816 native mode, 16-bit accumulator - read 2 bytes
             switch (this->cycle_index) {
                 case 0:

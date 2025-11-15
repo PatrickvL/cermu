@@ -694,15 +694,24 @@ class fam65xx_t :
         // Non-65C816 processors or memory operations: always 8-bit
         return false;
     }
-
     // ========================================================================
-    // LEGACY COMPATIBILITY FUNCTIONS (redirect to unified functions)
+    // LEGACY COMPATIBILITY FUNCTIONS (minimal set for existing code)
     // ========================================================================
     
     /**
-     * Legacy compatibility functions that redirect to the unified implementations
-     * These allow existing code to work without changes while using the new unified system
+     * Minimal legacy compatibility functions for existing code compatibility
+     * These redirect to the consolidated template versions
      */
+    
+    // Legacy 8-bit wrapper - redirects to template version
+    inline void update_nz_flags(uint8_t value) {
+        this->update_nz_flags<REG_A>(static_cast<data_t>(value));
+    }
+    
+    // Legacy 8-bit calculation wrapper
+    inline uint8_t calc_nz_flags(uint8_t value) const {
+        return this->calc_nz_flags<REG_A>(static_cast<data_t>(value));
+    }
     
 
     // ========================================================================
