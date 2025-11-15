@@ -15,6 +15,7 @@
 
 // Zero Page addressing: $nn (cycle-accurate)
 bus_state_t am_zp(bus_state_t pins) {
+    trace_addressing_mode(__func__);
     // PHI2: Read zero page address from PC
     pins = this->phi2_read<Addr::PC>(pins, REG_ABL);
     if (FAM65XX_GET_RDY(pins)) {
@@ -31,6 +32,7 @@ bus_state_t am_zp(bus_state_t pins) {
 
 // Zero Page,X addressing: $nn,X (cycle-accurate)
 bus_state_t am_zpx(bus_state_t pins) {
+    trace_addressing_mode(__func__);
     switch (this->cycle_index) {
         case 0:
             // PHI2: Read base address from PC
@@ -59,6 +61,7 @@ bus_state_t am_zpx(bus_state_t pins) {
 
 // Zero Page,Y addressing: $nn,Y (cycle-accurate)
 bus_state_t am_zpy(bus_state_t pins) {
+    trace_addressing_mode(__func__);
     switch (this->cycle_index) {
         case 0:
             // PHI2: Read base address from PC
@@ -86,6 +89,7 @@ bus_state_t am_zpy(bus_state_t pins) {
 
 // Absolute addressing: $nnnn (cycle-accurate)
 bus_state_t am_abs(bus_state_t pins) {
+    trace_addressing_mode(__func__);
     // Check for 65C816 PEA (0xF4) in emulation mode - redirect to ZPX addressing
     if constexpr (this->has_wide_registers()) {
         if (this->in_emulation_mode() && this->get(REG_IR) == 0xF4) {
@@ -119,6 +123,7 @@ bus_state_t am_abs(bus_state_t pins) {
 
 // Absolute,X addressing: $nnnn,X (cycle-accurate with page crossing)
 bus_state_t am_abx(bus_state_t pins) {
+    trace_addressing_mode(__func__);
     switch (this->cycle_index) {
         case 0:
             // PHI2: Read low byte from PC
@@ -182,6 +187,7 @@ bus_state_t am_abx(bus_state_t pins) {
 
 // Absolute,Y addressing: $nnnn,Y (cycle-accurate with page crossing)
 bus_state_t am_aby(bus_state_t pins) {
+    trace_addressing_mode(__func__);
     switch (this->cycle_index) {
         case 0:
             // PHI2: Read low byte from PC
@@ -245,6 +251,7 @@ bus_state_t am_aby(bus_state_t pins) {
 
 // Indirect addressing: ($nnnn) - Used only by JMP instruction
 bus_state_t am_ind(bus_state_t pins) {
+    trace_addressing_mode(__func__);
     switch (this->cycle_index) {
         case 0:
             // PHI2: Read low byte of pointer address from PC
@@ -296,6 +303,7 @@ bus_state_t am_ind(bus_state_t pins) {
 
 // Indexed Indirect addressing: ($nn,X)
 bus_state_t am_inx(bus_state_t pins) {
+    trace_addressing_mode(__func__);
     switch (this->cycle_index) {
         case 0:
             /* Read pointer from PC */
@@ -341,6 +349,7 @@ bus_state_t am_inx(bus_state_t pins) {
 
 // Indirect Indexed addressing: ($nn),Y
 bus_state_t am_iny(bus_state_t pins) {
+    trace_addressing_mode(__func__);
     switch (this->cycle_index) {
         case 0:
             /* Read pointer from PC */
@@ -419,6 +428,7 @@ bus_state_t am_iny(bus_state_t pins) {
 
 // Zero Page Indirect addressing: ($nn) - 65C02 only
 bus_state_t am_zpi(bus_state_t pins) {
+    trace_addressing_mode(__func__);
     // Check for 65C816 PEI (0xD4) in emulation mode - redirect to ZPX addressing
     if constexpr (this->has_wide_registers()) {
         if (this->in_emulation_mode() && this->get(REG_IR) == 0xD4) {
@@ -465,6 +475,7 @@ bus_state_t am_zpi(bus_state_t pins) {
 
 // Absolute Indexed Indirect addressing: ($nnnn,X) - 65C02 JMP only
 bus_state_t am_abi(bus_state_t pins) {
+    trace_addressing_mode(__func__);
     if constexpr (has_cmos()) {
         // WDC 65C02 absolute indexed indirect: JMP (abs,X)
         switch (this->cycle_index) {
@@ -518,6 +529,7 @@ bus_state_t am_abi(bus_state_t pins) {
 
 // Direct Page addressing: dp (65C816)
 bus_state_t am_dp(bus_state_t pins) {
+    trace_addressing_mode(__func__);
     if constexpr (this->has_wide_registers()) {
         switch (this->cycle_index) {
             case 0:
@@ -556,6 +568,7 @@ bus_state_t am_dp(bus_state_t pins) {
 
 // Direct Page,X addressing: dp,X (65C816)
 bus_state_t am_dpx(bus_state_t pins) {
+    trace_addressing_mode(__func__);
     if constexpr (this->has_wide_registers()) {
         // Check for emulation mode - fall back to zero page,X behavior
         if (this->in_emulation_mode()) {
@@ -615,6 +628,7 @@ bus_state_t am_dpx(bus_state_t pins) {
 
 // Direct Page,Y addressing: dp,Y (65C816)
 bus_state_t am_dpy(bus_state_t pins) {
+    trace_addressing_mode(__func__);
     if constexpr (this->has_wide_registers()) { 
         // TODO : Implement similarly to am_dpx
     }
@@ -625,6 +639,7 @@ bus_state_t am_dpy(bus_state_t pins) {
 
 // Direct Page Indirect addressing: [dp] (65C816)
 bus_state_t am_dpi(bus_state_t pins) {
+    trace_addressing_mode(__func__);
     if constexpr (this->has_wide_registers()) { 
         // TODO : Implement similarly to am_dpil
     }
@@ -634,6 +649,7 @@ bus_state_t am_dpi(bus_state_t pins) {
 
 // Direct Page Indirect Long addressing: [dp.l] (65C816)
 bus_state_t am_dpil(bus_state_t pins) {
+    trace_addressing_mode(__func__);
     if constexpr (this->has_wide_registers()) {
         switch (this->cycle_index) {
             case 0:
@@ -708,6 +724,7 @@ bus_state_t am_dpil(bus_state_t pins) {
 
 // Direct Page Indirect Long,Y addressing: [dp],Y (65C816)
 bus_state_t am_dpily(bus_state_t pins) {
+    trace_addressing_mode(__func__);
     if constexpr (this->has_wide_registers()) {
         switch (this->cycle_index) {
             case 0:
@@ -787,6 +804,7 @@ bus_state_t am_dpily(bus_state_t pins) {
 
 // Absolute Long addressing: $nnnnnn (65C816)
 bus_state_t am_abl(bus_state_t pins) {
+    trace_addressing_mode(__func__);
     if constexpr (this->has_wide_registers()) {
         // Check for 65C816 JSL (0x22) in emulation mode - redirect to NOP IMM addressing
         if (this->in_emulation_mode() && this->get(REG_IR) == 0x22) {
@@ -833,6 +851,7 @@ bus_state_t am_abl(bus_state_t pins) {
 
 // Absolute Long,X addressing: $nnnnnn,X (65C816)
 bus_state_t am_ablx(bus_state_t pins) {
+    trace_addressing_mode(__func__);
     if constexpr (this->has_wide_registers()) {
         switch (this->cycle_index) {
             case 0:
@@ -878,6 +897,7 @@ bus_state_t am_ablx(bus_state_t pins) {
 
 // Stack Relative addressing: sr,S (65C816)
 bus_state_t am_sr(bus_state_t pins) {
+    trace_addressing_mode(__func__);
     if constexpr (this->has_wide_registers()) {
         switch (this->cycle_index) {
             case 0:
@@ -910,6 +930,7 @@ bus_state_t am_sr(bus_state_t pins) {
 
 // Stack Relative Indirect Indexed: (sr,S),Y (65C816)
 bus_state_t am_sri(bus_state_t pins) {
+    trace_addressing_mode(__func__);
     if constexpr (this->has_wide_registers()) {
         switch (this->cycle_index) {
             case 0:
@@ -966,6 +987,7 @@ bus_state_t am_sri(bus_state_t pins) {
 
 // Zero Page Relative Addressing: For BBR/BBS instructions ($nn,$offset)
 bus_state_t am_zpr(bus_state_t pins) {
+    trace_addressing_mode(__func__);
     if constexpr (this->has_bit_manipulation()) {
         // BBR/BBS instructions: $nn,$offset
         switch (this->cycle_index) {

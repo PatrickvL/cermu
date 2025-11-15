@@ -25,24 +25,24 @@ bus_state_t bit_modify_helper(bus_state_t pins, uint8_t bit_mask, bool set_bit) 
 }
 
 /* RMB0-RMB7 - Reset Memory Bit */
-bus_state_t op_rmb0(bus_state_t pins) { return bit_modify_helper(pins, 0x01, false); }
-bus_state_t op_rmb1(bus_state_t pins) { return bit_modify_helper(pins, 0x02, false); }
-bus_state_t op_rmb2(bus_state_t pins) { return bit_modify_helper(pins, 0x04, false); }
-bus_state_t op_rmb3(bus_state_t pins) { return bit_modify_helper(pins, 0x08, false); }
-bus_state_t op_rmb4(bus_state_t pins) { return bit_modify_helper(pins, 0x10, false); }
-bus_state_t op_rmb5(bus_state_t pins) { return bit_modify_helper(pins, 0x20, false); }
-bus_state_t op_rmb6(bus_state_t pins) { return bit_modify_helper(pins, 0x40, false); }
-bus_state_t op_rmb7(bus_state_t pins) { return bit_modify_helper(pins, 0x80, false); }
+bus_state_t op_rmb0(bus_state_t pins) { trace_operation(__func__); return bit_modify_helper(pins, 0x01, false); }
+bus_state_t op_rmb1(bus_state_t pins) { trace_operation(__func__); return bit_modify_helper(pins, 0x02, false); }
+bus_state_t op_rmb2(bus_state_t pins) { trace_operation(__func__); return bit_modify_helper(pins, 0x04, false); }
+bus_state_t op_rmb3(bus_state_t pins) { trace_operation(__func__); return bit_modify_helper(pins, 0x08, false); }
+bus_state_t op_rmb4(bus_state_t pins) { trace_operation(__func__); return bit_modify_helper(pins, 0x10, false); }
+bus_state_t op_rmb5(bus_state_t pins) { trace_operation(__func__); return bit_modify_helper(pins, 0x20, false); }
+bus_state_t op_rmb6(bus_state_t pins) { trace_operation(__func__); return bit_modify_helper(pins, 0x40, false); }
+bus_state_t op_rmb7(bus_state_t pins) { trace_operation(__func__); return bit_modify_helper(pins, 0x80, false); }
 
 /* SMB0-SMB7 - Set Memory Bit */
-bus_state_t op_smb0(bus_state_t pins) { return bit_modify_helper(pins, 0x01, true); }
-bus_state_t op_smb1(bus_state_t pins) { return bit_modify_helper(pins, 0x02, true); }
-bus_state_t op_smb2(bus_state_t pins) { return bit_modify_helper(pins, 0x04, true); }
-bus_state_t op_smb3(bus_state_t pins) { return bit_modify_helper(pins, 0x08, true); }
-bus_state_t op_smb4(bus_state_t pins) { return bit_modify_helper(pins, 0x10, true); }
-bus_state_t op_smb5(bus_state_t pins) { return bit_modify_helper(pins, 0x20, true); }
-bus_state_t op_smb6(bus_state_t pins) { return bit_modify_helper(pins, 0x40, true); }
-bus_state_t op_smb7(bus_state_t pins) { return bit_modify_helper(pins, 0x80, true); }
+bus_state_t op_smb0(bus_state_t pins) { trace_operation(__func__); return bit_modify_helper(pins, 0x01, true); }
+bus_state_t op_smb1(bus_state_t pins) { trace_operation(__func__); return bit_modify_helper(pins, 0x02, true); }
+bus_state_t op_smb2(bus_state_t pins) { trace_operation(__func__); return bit_modify_helper(pins, 0x04, true); }
+bus_state_t op_smb3(bus_state_t pins) { trace_operation(__func__); return bit_modify_helper(pins, 0x08, true); }
+bus_state_t op_smb4(bus_state_t pins) { trace_operation(__func__); return bit_modify_helper(pins, 0x10, true); }
+bus_state_t op_smb5(bus_state_t pins) { trace_operation(__func__); return bit_modify_helper(pins, 0x20, true); }
+bus_state_t op_smb6(bus_state_t pins) { trace_operation(__func__); return bit_modify_helper(pins, 0x40, true); }
+bus_state_t op_smb7(bus_state_t pins) { trace_operation(__func__); return bit_modify_helper(pins, 0x80, true); }
 
 /* Helper function for bit branch operations (BBR/BBS)
  * ZPR addressing mode has already set up:
@@ -69,24 +69,24 @@ bus_state_t bit_branch_helper(bus_state_t pins, uint8_t bit_mask, bool bit_set) 
 }
 
 /* BBR0-BBR7 - Branch on Bit Reset */
-bus_state_t op_bbr0(bus_state_t pins) { return bit_branch_helper(pins, 0x01, false); }
-bus_state_t op_bbr1(bus_state_t pins) { return bit_branch_helper(pins, 0x02, false); }
-bus_state_t op_bbr2(bus_state_t pins) { return bit_branch_helper(pins, 0x04, false); }
-bus_state_t op_bbr3(bus_state_t pins) { return bit_branch_helper(pins, 0x08, false); }
-bus_state_t op_bbr4(bus_state_t pins) { return bit_branch_helper(pins, 0x10, false); }
-bus_state_t op_bbr5(bus_state_t pins) { return bit_branch_helper(pins, 0x20, false); }
-bus_state_t op_bbr6(bus_state_t pins) { return bit_branch_helper(pins, 0x40, false); }
-bus_state_t op_bbr7(bus_state_t pins) { return bit_branch_helper(pins, 0x80, false); }
+bus_state_t op_bbr0(bus_state_t pins) { trace_operation(__func__); return bit_branch_helper(pins, 0x01, false); }
+bus_state_t op_bbr1(bus_state_t pins) { trace_operation(__func__); return bit_branch_helper(pins, 0x02, false); }
+bus_state_t op_bbr2(bus_state_t pins) { trace_operation(__func__); return bit_branch_helper(pins, 0x04, false); }
+bus_state_t op_bbr3(bus_state_t pins) { trace_operation(__func__); return bit_branch_helper(pins, 0x08, false); }
+bus_state_t op_bbr4(bus_state_t pins) { trace_operation(__func__); return bit_branch_helper(pins, 0x10, false); }
+bus_state_t op_bbr5(bus_state_t pins) { trace_operation(__func__); return bit_branch_helper(pins, 0x20, false); }
+bus_state_t op_bbr6(bus_state_t pins) { trace_operation(__func__); return bit_branch_helper(pins, 0x40, false); }
+bus_state_t op_bbr7(bus_state_t pins) { trace_operation(__func__); return bit_branch_helper(pins, 0x80, false); }
 
 /* BBS0-BBS7 - Branch on Bit Set */
-bus_state_t op_bbs0(bus_state_t pins) { return bit_branch_helper(pins, 0x01, true); }
-bus_state_t op_bbs1(bus_state_t pins) { return bit_branch_helper(pins, 0x02, true); }
-bus_state_t op_bbs2(bus_state_t pins) { return bit_branch_helper(pins, 0x04, true); }
-bus_state_t op_bbs3(bus_state_t pins) { return bit_branch_helper(pins, 0x08, true); }
-bus_state_t op_bbs4(bus_state_t pins) { return bit_branch_helper(pins, 0x10, true); }
-bus_state_t op_bbs5(bus_state_t pins) { return bit_branch_helper(pins, 0x20, true); }
-bus_state_t op_bbs6(bus_state_t pins) { return bit_branch_helper(pins, 0x40, true); }
-bus_state_t op_bbs7(bus_state_t pins) { return bit_branch_helper(pins, 0x80, true); }
+bus_state_t op_bbs0(bus_state_t pins) { trace_operation(__func__); return bit_branch_helper(pins, 0x01, true); }
+bus_state_t op_bbs1(bus_state_t pins) { trace_operation(__func__); return bit_branch_helper(pins, 0x02, true); }
+bus_state_t op_bbs2(bus_state_t pins) { trace_operation(__func__); return bit_branch_helper(pins, 0x04, true); }
+bus_state_t op_bbs3(bus_state_t pins) { trace_operation(__func__); return bit_branch_helper(pins, 0x08, true); }
+bus_state_t op_bbs4(bus_state_t pins) { trace_operation(__func__); return bit_branch_helper(pins, 0x10, true); }
+bus_state_t op_bbs5(bus_state_t pins) { trace_operation(__func__); return bit_branch_helper(pins, 0x20, true); }
+bus_state_t op_bbs6(bus_state_t pins) { trace_operation(__func__); return bit_branch_helper(pins, 0x40, true); }
+bus_state_t op_bbs7(bus_state_t pins) { trace_operation(__func__); return bit_branch_helper(pins, 0x80, true); }
 
 #endif // FAM65XX_SKIP_IMPLEMENTATION
 

@@ -178,7 +178,7 @@ class fam65xx_t :
     
     void trace_registers(const char* context = "") const {
         if constexpr (ENABLE_TRACING) {
-            if constexpr (this->has_wide_registers()) {
+            if constexpr (has_wide_registers()) {
                 trace("REGS %s: PBR=%02X:PC=%04X A16=%05X X16=%04X Y16=%04X P=%02X ZBR=%02X:S=%02X DBR=%02X(:AB=%04X DL=%02X)",
                     context,
                     this->get(REG_PBR), this->get(REG_PC),
@@ -196,6 +196,20 @@ class fam65xx_t :
     void trace_memory_access(const char* op, uint16_t addr, uint8_t data) const {
         if constexpr (ENABLE_TRACING) {
             trace("MEM %s: [%04X] = %02X", op, addr, data);
+        }
+    }
+    
+    void trace_addressing_mode(const char* am_name) const {
+        if constexpr (ENABLE_TRACING) {
+            trace("AM %s: IR=0x%02X cycle=%d AB=%04X PC=%04X",
+                  am_name, this->get(REG_IR), cycle_index,
+                  this->get(REG_AB), this->get(REG_PC));
+        }
+    }
+    
+    void trace_operation(const char* function_name) const {
+        if constexpr (ENABLE_TRACING) {
+            trace("OP: %s (IR=0x%02X cycle=%d)", function_name, this->get(REG_IR), cycle_index);
         }
     }
     
@@ -1105,20 +1119,63 @@ class fam65xx_t :
     std::array<InstructionHandler, to_index(AM::COUNT)> addressing_mode_handlers;
     
     inline InstructionHandler get_instruction_handler() {
+        // TEMPORARY DEBUG VALIDATION: Check table bounds and non-null pointers
+        printf("DEBUG VALIDATION: op_index=%d am_index=%d\n",
+               this->opcode_entry.op_index, this->opcode_entry.am_index);
+        
+        // Validate op_index bounds
+        if (this->opcode_entry.op_index >= to_index(OP::COUNT)) {
+            printf("ERROR: op_index %d >= COUNT %d\n",
+                   this->opcode_entry.op_index, to_index(OP::COUNT));
+            return &fam65xx_t::op_nop;  // Safe fallback
+        }
+        
+        // Validate am_index bounds
+        if (this->opcode_entry.am_index >= to_index(AM::COUNT)) {
+            printf("ERROR: am_index %d >= COUNT %d\n",
+                   this->opcode_entry.am_index, to_index(AM::COUNT));
+            return &fam65xx_t::op_nop;  // Safe fallback
+        }
+        
         // For addressing modes that need address calculation, start with addressing mode handler
         if (this->opcode_entry.am_index > to_index(AM::IMM)) {
-            return addressing_mode_handlers[this->opcode_entry.am_index];
+            InstructionHandler am_handler = addressing_mode_handlers[this->opcode_entry.am_index];
+            
+            // VALIDATION: Check for null addressing mode handler
+            if (am_handler == nullptr) {
+                printf("ERROR: NULL addressing mode handler for am_index=%d\n",
+                       this->opcode_entry.am_index);
+                return &fam65xx_t::op_nop;  // Safe fallback
+            }
+            
+            printf("DEBUG: Using AM handler for am_index=%d (handler=%p)\n",
+                   this->opcode_entry.am_index, (void*)am_handler);
+            return am_handler;
         }
         
-        // Debug code removed to eliminate pointer-to-member-function conversion warnings
-        #ifdef DEBUG_OPCODE_DISPATCH
-        if (this->get(REG_IR) == 0x36) {
-            printf("DEBUG 0x36: op_index=%d (expected ROL=16, LSR=15)\n",
+        // Get operation handler
+        InstructionHandler op_handler = this->operation_handlers[this->opcode_entry.op_index];
+        
+        // VALIDATION: Check for null operation handler
+        if (op_handler == nullptr) {
+            printf("ERROR: NULL operation handler for op_index=%d\n",
                    this->opcode_entry.op_index);
+            return &fam65xx_t::op_nop;  // Safe fallback
         }
-        #endif
         
-        return this->operation_handlers[this->opcode_entry.op_index];
+        // Debug LSR/ASL dispatch issue
+        if (this->get(REG_IR) == 0x46) {
+            printf("DEBUG 0x46 LSR: op_index=%d am_index=%d (LSR=%d, ASL=%d)\n",
+                   this->opcode_entry.op_index, this->opcode_entry.am_index,
+                   to_index(OP::LSR), to_index(OP::ASL));
+            printf("  Handler addresses: LSR=%p ASL=%p Selected=%p\n",
+                   (void*)&fam65xx_t::op_lsr, (void*)&fam65xx_t::op_asl,
+                   (void*)op_handler);
+        }
+        
+        printf("DEBUG: Using OP handler for op_index=%d (handler=%p)\n",
+               this->opcode_entry.op_index, (void*)op_handler);
+        return op_handler;
     }
     
     void transition_to_opcode(const opcode_info_t entry) {
@@ -1143,6 +1200,13 @@ class fam65xx_t :
         pins |= FAM65XX_SYNC;
         // Decode opcode and set up instruction
         uint8_t opcode = this->get(REG_IR);
+        
+        // TEMPORARY DEBUG: Force output for opcode 0x46
+        if (opcode == 0x46) {
+            fprintf(stderr, "FETCH_OPCODE: Processing opcode 0x46\n");
+            fflush(stderr);
+        }
+        
         opcode_info_t entry = get_opcode_info(opcode);
         this->transition_to_opcode(entry);
             
@@ -1357,7 +1421,25 @@ class fam65xx_t :
     }
 
     opcode_info_t get_opcode_info(uint8_t opcode) const {
-            return generate_opcode_table<Traits>()[opcode];
+        printf("DEBUG: get_opcode_info called for opcode 0x%02x\n", opcode);
+        fflush(stdout);
+        
+        auto table = generate_opcode_table<Traits>();
+        auto entry = table[opcode];
+        
+        // Debug opcode 0x46 specifically
+        if (opcode == 0x46) {
+            printf("DEBUG get_opcode_info(0x46): op_index=%d am_index=%d flags=%d\n",
+                   entry.op_index, entry.am_index, entry.flags);
+            printf("  Expected: LSR=%d, ASL=%d, BRK=%d\n",
+                   to_index(OP::LSR), to_index(OP::ASL), to_index(OP::BRK));
+            printf("  Traits: has_C816=%s, has_CMOS=%s\n",
+                   Traits.has(CPUCoreFlags::C816_16BIT) ? "YES" : "NO",
+                   Traits.has(CPUCoreFlags::CMOS_BASE) ? "YES" : "NO");
+            fflush(stdout);
+        }
+        
+        return entry;
     }
     
 public:    
