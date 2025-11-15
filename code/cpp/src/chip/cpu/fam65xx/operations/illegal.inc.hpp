@@ -67,17 +67,17 @@ bus_state_t op_dcp(bus_state_t pins) {
     if constexpr (has_illegal_opcodes()) {
         // DCP - Decrement memory and compare with A (DEC memory, then CMP A with result)
         // This is a Read-Modify-Write operation
-        return rmw_operation_helper(pins, [this](uint8_t& value) {
+        return rmw_operation_helper(pins, [this](data_t& value) {
             // Perform DEC on memory value
             value--;
             
             // Perform CMP A with decremented value
-            uint16_t result = this->get(REG_A) - value;
+            uint16_t result = this->get(REG_A) - static_cast<uint8_t>(value);
             // Set carry flag (CMP uses subtraction semantics: carry = no borrow)
             update_flag(FLAG_C, !(result & 0x100));
             
             // Update N and Z flags based on comparison result
-            update_nz_flags((uint8_t)result);
+            update_nz_flags(static_cast<uint8_t>(result));
         });
     } else {
         return pins;
@@ -88,13 +88,13 @@ bus_state_t op_isc(bus_state_t pins) {
     if constexpr (has_illegal_opcodes()) {
         // ISC - Increment memory and subtract from A (INC memory, then SBC A with result)
         // This is a Read-Modify-Write operation - match reference implementation exactly
-        return rmw_operation_helper(pins, [this](uint8_t& value) {
+        return rmw_operation_helper(pins, [this](data_t& value) {
             // Perform INC on memory value
             value++;
             
             // Perform SBC A with incremented value using BCD-aware function
             // This ensures proper NMOS 6502 BCD behavior including V flag calculation
-            perform_sbc(value);
+            perform_sbc(static_cast<uint8_t>(value));
         });
     } else {
         return pins;
@@ -105,13 +105,13 @@ bus_state_t op_slo(bus_state_t pins) {
     if constexpr (has_illegal_opcodes()) {
         // SLO - Shift Left and OR with A (ASL memory, then ORA A with result)
         // This is a Read-Modify-Write operation
-        return rmw_operation_helper(pins, [this](uint8_t& value) {
+        return rmw_operation_helper(pins, [this](data_t& value) {
             // Perform ASL on memory value
             update_flag(FLAG_C, value & 0x80);
             value <<= 1;
             
             // Perform ORA with accumulator
-            this->set(REG_A, this->get(REG_A) | value);
+            this->set(REG_A, this->get(REG_A) | static_cast<uint8_t>(value));
             update_nz_flags(this->get(REG_A));
         });
     } else {
@@ -123,14 +123,14 @@ bus_state_t op_rla(bus_state_t pins) {
     if constexpr (has_illegal_opcodes()) {
         // RLA - Rotate Left and AND with A (ROL memory, then AND A with result)
         // This is a Read-Modify-Write operation
-        return rmw_operation_helper(pins, [this](uint8_t& value) {
+        return rmw_operation_helper(pins, [this](data_t& value) {
             // Perform ROL on memory value
             uint8_t carry_in = this->get(REG_P) & FLAG_C;
             update_flag(FLAG_C, value & 0x80);
             value = (value << 1) | carry_in;
             
             // Perform AND with accumulator
-            this->set(REG_A, this->get(REG_A) & value);
+            this->set(REG_A, this->get(REG_A) & static_cast<uint8_t>(value));
             update_nz_flags(this->get(REG_A));
         });
     } else {
@@ -142,13 +142,13 @@ bus_state_t op_sre(bus_state_t pins) {
     if constexpr (has_illegal_opcodes()) {
         // SRE - Shift Right and EOR with A (LSR memory, then EOR result with A)
         // This is a Read-Modify-Write operation
-        return rmw_operation_helper(pins, [this](uint8_t& value) {
+        return rmw_operation_helper(pins, [this](data_t& value) {
             // Perform LSR on memory value
             update_flags(FLAG_C, value & FLAG_C);
             value >>= 1;
             
             // Perform EOR with accumulator
-            this->set(REG_A, this->get(REG_A) ^ value);
+            this->set(REG_A, this->get(REG_A) ^ static_cast<uint8_t>(value));
             update_nz_flags(this->get(REG_A));
         });
     } else {
@@ -160,17 +160,17 @@ bus_state_t op_rra(bus_state_t pins) {
     if constexpr (has_illegal_opcodes()) {
         // RRA - Rotate Right and ADC with A (ROR memory, then ADC A with result)
         // This is a Read-Modify-Write operation - match reference implementation exactly
-        return rmw_operation_helper(pins, [this](uint8_t& value) {
+        return rmw_operation_helper(pins, [this](data_t& value) {
             // Perform ROR on memory value - exact reference match
             const uint8_t carry_in = this->get(REG_P) & FLAG_C;
-            const uint8_t carry_out = value & FLAG_C;
+            const uint8_t carry_out = static_cast<uint8_t>(value) & FLAG_C;
             value = (value >> 1) | (carry_in << 7);
 
             update_flags(FLAG_C, carry_out);
             
             // Perform ADC with A using BCD-aware function
             // This ensures proper NMOS 6502 BCD behavior including V flag calculation
-            perform_adc(value);
+            perform_adc(static_cast<uint8_t>(value));
         });
     } else {
         return pins;

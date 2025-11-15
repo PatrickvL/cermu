@@ -12,246 +12,52 @@
 
 /* ASL - Arithmetic Shift Left */
 bus_state_t op_asl(bus_state_t pins) {
-    if (this->opcode_entry.flags & to_index(OF::RMW)) {
-        // Memory mode - multi-cycle RMW operation
-        switch (this->cycle_index) {
-            case 0:
-                // Cycle 0: Read original value from memory
-                pins = this->phi2_read<Addr::AB>(pins, REG_DL);
-                if (FAM65XX_GET_RDY(pins)) {
-                    this->cycle_index++;
-                }
-                return pins;
-                
-            case 1:
-                // Cycle 1: Dummy cycle and perform modification
-                if (this->has_rmw_dummy_write()) {
-                    // NMOS: Dummy write of original value
-                    pins = this->phi2_write<Addr::AB>(pins, this->get(REG_DL));
-                } else {
-                    // CMOS: Dummy read instead of write
-                    pins = this->phi2_dummy_read<Addr::AB>(pins);
-                }
-                
-                if (FAM65XX_GET_RDY(pins)) {
-                    uint8_t value = this->get(REG_DL);
-                    // ASL operation
-                    const uint8_t carry_out = (value >> 7) & FLAG_C;
-                    value <<= 1;
-                    this->set(REG_P, (this->get(REG_P) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-                                  this->calc_nz_flags(value) | carry_out);
-                    this->set(REG_DL, value);
-                    this->cycle_index++;
-                }
-                return pins;
-                
-            case 2:
-                // Cycle 2: Write modified value back to memory
-                if (this->should_complete_write_cycle(pins)) {
-                    pins = this->phi2_write<Addr::AB>(pins, this->get(REG_DL));
-                    this->transition_to_fetch();
-                }
-                return pins;
-        }
-    } else {
-        // Accumulator mode - single cycle operation
-        pins = this->phi2_dummy_read<Addr::PC>(pins);
-        if (FAM65XX_GET_RDY(pins)) {
-            uint8_t value = this->get(REG_A);
-            // ASL operation
-            const uint8_t carry_out = (value >> 7) & FLAG_C;
-            value <<= 1;
-            this->set(REG_P, (this->get(REG_P) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-                          this->calc_nz_flags(value) | carry_out);
-            this->set(REG_A, value);
-            this->transition_to_fetch();
-        }
-    }
-    return pins;
+    return this->rmw_operation_helper(pins, [this](data_t& value) {
+        // ASL: shift left, carry out from MSB
+        const uint8_t carry_out = (value >> (sizeof(data_t) * 8 - 1)) & FLAG_C;
+        value <<= 1;
+        
+        // Update flags using unified width-aware helper
+        this->update_nzc_flags_wide(value, carry_out);
+    });
 }
 
 /* LSR - Logical Shift Right */
 bus_state_t op_lsr(bus_state_t pins) {
-    if (this->opcode_entry.flags & to_index(OF::RMW)) {
-        // Memory mode - multi-cycle RMW operation
-        switch (this->cycle_index) {
-            case 0:
-                // Cycle 0: Read original value from memory
-                pins = this->phi2_read<Addr::AB>(pins, REG_DL);
-                if (FAM65XX_GET_RDY(pins)) {
-                    this->cycle_index++;
-                }
-                return pins;
-                
-            case 1:
-                // Cycle 1: Dummy cycle and perform modification
-                if (this->has_rmw_dummy_write()) {
-                    // NMOS: Dummy write of original value
-                    pins = this->phi2_write<Addr::AB>(pins, this->get(REG_DL));
-                } else {
-                    // CMOS: Dummy read instead of write
-                    pins = this->phi2_dummy_read<Addr::AB>(pins);
-                }
-                
-                if (FAM65XX_GET_RDY(pins)) {
-                    uint8_t value = this->get(REG_DL);
-                    // LSR operation - RIGHT shift (not left!)
-                    const uint8_t carry_out = value & FLAG_C;
-                    value >>= 1;
-                    this->set(REG_P, (this->get(REG_P) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-                                  this->calc_nz_flags(value) | carry_out);
-                    this->set(REG_DL, value);
-                    this->cycle_index++;
-                }
-                return pins;
-                
-            case 2:
-                // Cycle 2: Write modified value back to memory
-                if (this->should_complete_write_cycle(pins)) {
-                    pins = this->phi2_write<Addr::AB>(pins, this->get(REG_DL));
-                    this->transition_to_fetch();
-                }
-                return pins;
-        }
-    } else {
-        // Accumulator mode - single cycle operation
-        pins = this->phi2_dummy_read<Addr::PC>(pins);
-        if (FAM65XX_GET_RDY(pins)) {
-            uint8_t value = this->get(REG_A);
-            // LSR operation - RIGHT shift (not left!)
-            const uint8_t carry_out = value & FLAG_C;
-            value >>= 1;
-            this->set(REG_P, (this->get(REG_P) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-                          this->calc_nz_flags(value) | carry_out);
-            this->set(REG_A, value);
-            this->transition_to_fetch();
-        }
-    }
-    return pins;
+    return this->rmw_operation_helper(pins, [this](data_t& value) {
+        // LSR: shift right, carry out from LSB
+        const uint8_t carry_out = value & FLAG_C;
+        value >>= 1;
+        
+        // Update flags using unified width-aware helper
+        this->update_nzc_flags_wide(value, carry_out);
+    });
 }
 
 /* ROL - Rotate Left */
 bus_state_t op_rol(bus_state_t pins) {
-    if (this->opcode_entry.flags & to_index(OF::RMW)) {
-        // Memory mode - multi-cycle RMW operation
-        switch (this->cycle_index) {
-            case 0:
-                // Cycle 0: Read original value from memory
-                pins = this->phi2_read<Addr::AB>(pins, REG_DL);
-                if (FAM65XX_GET_RDY(pins)) {
-                    this->cycle_index++;
-                }
-                return pins;
-                
-            case 1:
-                // Cycle 1: Dummy cycle and perform modification
-                if (this->has_rmw_dummy_write()) {
-                    // NMOS: Dummy write of original value
-                    pins = this->phi2_write<Addr::AB>(pins, this->get(REG_DL));
-                } else {
-                    // CMOS: Dummy read instead of write
-                    pins = this->phi2_dummy_read<Addr::AB>(pins);
-                }
-                
-                if (FAM65XX_GET_RDY(pins)) {
-                    uint8_t value = this->get(REG_DL);
-                    // ROL operation
-                    const uint8_t carry_in = this->get(REG_P) & FLAG_C;
-                    const uint8_t carry_out = (value >> 7) & FLAG_C;
-                    value = (value << 1) | carry_in;
-                    this->set(REG_P, (this->get(REG_P) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-                                  this->calc_nz_flags(value) | carry_out);
-                    this->set(REG_DL, value);
-                    this->cycle_index++;
-                }
-                return pins;
-                
-            case 2:
-                // Cycle 2: Write modified value back to memory
-                if (this->should_complete_write_cycle(pins)) {
-                    pins = this->phi2_write<Addr::AB>(pins, this->get(REG_DL));
-                    this->transition_to_fetch();
-                }
-                return pins;
-        }
-    } else {
-        // Accumulator mode - single cycle operation
-        pins = this->phi2_dummy_read<Addr::PC>(pins);
-        if (FAM65XX_GET_RDY(pins)) {
-            uint8_t value = this->get(REG_A);
-            // ROL operation
-            const uint8_t carry_in = this->get(REG_P) & FLAG_C;
-            const uint8_t carry_out = (value >> 7) & FLAG_C;
-            value = (value << 1) | carry_in;
-            this->set(REG_P, (this->get(REG_P) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-                          this->calc_nz_flags(value) | carry_out);
-            this->set(REG_A, value);
-            this->transition_to_fetch();
-        }
-    }
-    return pins;
+    return this->rmw_operation_helper(pins, [this](data_t& value) {
+        // ROL: rotate left through carry
+        const uint8_t carry_in = this->get(REG_P) & FLAG_C;
+        const uint8_t carry_out = (value >> (sizeof(data_t) * 8 - 1)) & FLAG_C;
+        value = (value << 1) | carry_in;
+        
+        // Update flags using unified width-aware helper
+        this->update_nzc_flags_wide(value, carry_out);
+    });
 }
 
 /* ROR - Rotate Right */
 bus_state_t op_ror(bus_state_t pins) {
-    if (this->opcode_entry.flags & to_index(OF::RMW)) {
-        // Memory mode - multi-cycle RMW operation
-        switch (this->cycle_index) {
-            case 0:
-                // Cycle 0: Read original value from memory
-                pins = this->phi2_read<Addr::AB>(pins, REG_DL);
-                if (FAM65XX_GET_RDY(pins)) {
-                    this->cycle_index++;
-                }
-                return pins;
-                
-            case 1:
-                // Cycle 1: Dummy cycle and perform modification
-                if (this->has_rmw_dummy_write()) {
-                    // NMOS: Dummy write of original value
-                    pins = this->phi2_write<Addr::AB>(pins, this->get(REG_DL));
-                } else {
-                    // CMOS: Dummy read instead of write
-                    pins = this->phi2_dummy_read<Addr::AB>(pins);
-                }
-                
-                if (FAM65XX_GET_RDY(pins)) {
-                    uint8_t value = this->get(REG_DL);
-                    // ROR operation
-                    const uint8_t carry_in = this->get(REG_P) & FLAG_C;
-                    const uint8_t carry_out = value & FLAG_C;
-                    value = (value >> 1) | (carry_in << 7);
-                    this->set(REG_P, (this->get(REG_P) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-                                  this->calc_nz_flags(value) | carry_out);
-                    this->set(REG_DL, value);
-                    this->cycle_index++;
-                }
-                return pins;
-                
-            case 2:
-                // Cycle 2: Write modified value back to memory
-                if (this->should_complete_write_cycle(pins)) {
-                    pins = this->phi2_write<Addr::AB>(pins, this->get(REG_DL));
-                    this->transition_to_fetch();
-                }
-                return pins;
-        }
-    } else {
-        // Accumulator mode - single cycle operation
-        pins = this->phi2_dummy_read<Addr::PC>(pins);
-        if (FAM65XX_GET_RDY(pins)) {
-            uint8_t value = this->get(REG_A);
-            // ROR operation
-            const uint8_t carry_in = this->get(REG_P) & FLAG_C;
-            const uint8_t carry_out = value & FLAG_C;
-            value = (value >> 1) | (carry_in << 7);
-            this->set(REG_P, (this->get(REG_P) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-                          this->calc_nz_flags(value) | carry_out);
-            this->set(REG_A, value);
-            this->transition_to_fetch();
-        }
-    }
-    return pins;
+    return this->rmw_operation_helper(pins, [this](data_t& value) {
+        // ROR: rotate right through carry
+        const uint8_t carry_in = this->get(REG_P) & FLAG_C;
+        const uint8_t carry_out = value & FLAG_C;
+        value = (value >> 1) | (carry_in << (sizeof(data_t) * 8 - 1));
+        
+        // Update flags using unified width-aware helper
+        this->update_nzc_flags_wide(value, carry_out);
+    });
 }
 
 #endif // FAM65XX_SKIP_IMPLEMENTATION
