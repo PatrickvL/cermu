@@ -142,9 +142,6 @@ struct wide_registers_mixin_t {
         uint16_t reg16[REG_COUNT_16BIT / 2];  // 16-bit pair access (little-endian)
     };
     
-    // 65C816 control state - separate from register array for cleaner design
-    bool emulation_mode;    // Emulation mode flag
-    
     // Initialize registers
     void init_registers() {
         memset(&reg8, 0, sizeof(reg8));

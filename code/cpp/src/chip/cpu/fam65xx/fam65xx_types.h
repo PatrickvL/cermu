@@ -298,7 +298,6 @@ typedef enum : uint8_t {
     REG_PL = 13,       // Processor status low byte
 #endif
 
-    REG_P = REG_PL,    // Processor status
     // Common registers (continue from 12) - used by both CPU types
     REG_IR = 14,       // Instruction Register (current opcode)
     REG_DL = 15,       // Data Latch (internal)
@@ -320,13 +319,15 @@ typedef enum : uint8_t {
     REG_COUNT_8BIT = REG_DL + 1,  // Core registers 0-14 (high bytes unused for 8-bit CPUs)
 
     // Compatibility mapping
-    REG_S = REG_SPL,   // Map legacy S register to SPL for compatibility
-    REG_X = REG_XL,    // Map legacy X register to XL for compatibility
-    REG_Y = REG_YL,    // Map legacy Y register to YL for compatibility
+    REG_S = REG_SPL,   // Map S register to SPL
+    REG_X = REG_XL,    // Map X register to XL
+    REG_Y = REG_YL,    // Map Y register to YL
+    REG_P = REG_PL,    // Map P register to PL
+    // Note: REG_PH is already defined above for processor status high byte (emulation mode storage)
 
     // Compatibility mapping (65C816 : A = Low byte of C (16 bit accumulator), B = High byte of C)
-    REG_A = REG_AL,    // Map legacy A register to AL for compatibility
-    REG_B = REG_AH     // Map legacy B register to AH for compatibility
+    REG_A = REG_AL,    // Map  A register to AL
+    REG_B = REG_AH     // Map B register to AH
 } reg8_t;
 
 // 16-bit register constants - these work for both narrow and wide CPUs
@@ -340,7 +341,7 @@ typedef enum : uint8_t {
     REG_A_16 = REG_AL / 2,  // Full accumulator (16-bit, 65C816 only)
     REG_X_16 = REG_XL / 2,  // Full X register (16-bit, 65C816 only)
     REG_Y_16 = REG_YL / 2,  // Full Y register (16-bit, 65C816 only)
-    REG_P_16 = REG_PL / 2,  // Processor status (16-bit, 65C816 only)
+    REG_P_16 = REG_PL / 2,  // Processor status (16-bit, 65C816 only) - includes emulation mode in high byte
     REG_D_16 = REG_DPL / 2, // Direct Page register (16-bit, 65C816 only)
 
     // Compatibility mapping
