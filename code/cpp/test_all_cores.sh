@@ -25,7 +25,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TEST_RUNNER="./fam65xx_processor_tests_runner"
+TEST_RUNNER="./tests/fam65xx_processor_tests_runner"
 PROCESSOR_TESTS_DIR="tests/processor_tests"
 
 # Supported processors with their test directories
@@ -36,7 +36,7 @@ declare -A PROCESSOR_NAMES=(
     ["wdc65c02"]="WDC 65C02 (W65C02S)"
     ["rockwell65c02"]="Rockwell 65C02"
     ["synertek65c02"]="Synertek 65C02"
-    ["65816"]="WDC 65C816 (Emulation Mode)"
+    ["65816"]="WDC 65C816"
 )
 
 # Statistics tracking
@@ -124,22 +124,18 @@ check_prerequisites() {
 # Get available opcodes for a processor
 get_opcodes() {
     local processor=$1
+    local mode=${2:-"e"}  # Default to emulation mode for 65816
     local test_dir="$PROCESSOR_TESTS_DIR/$processor/v1"
-    
-    # Special case for 65C816: use emulation-only tests
-    if [[ "$processor" == "65816" ]]; then
-        test_dir="$PROCESSOR_TESTS_DIR/$processor/v1_emulation_only"
-    fi
     
     if [[ ! -d "$test_dir" ]]; then
         log_error "Test directory not found: $test_dir"
         return 1
     fi
     
-    # List all JSON files and extract opcode numbers (remove .json extension and .e extension for 65816)
+    # List all JSON files and extract opcode numbers (remove .json extension and mode extensions for 65816)
     if [[ "$processor" == "65816" ]]; then
-        find "$test_dir" -name "*.e.json" -type f | \
-            sed 's/.*\/\([^/]*\)\.e\.json$/\1/' | \
+        find "$test_dir" -name "*.${mode}.json" -type f | \
+            sed "s/.*\/\([^/]*\)\.${mode}\.json$/\1/" | \
             sort -n
     else
         find "$test_dir" -name "*.json" -type f | \
@@ -161,40 +157,76 @@ test_single_opcode() {
     local opcode_lower=$(echo "$opcode" | tr '[:upper:]' '[:lower:]')
     
     for processor in "${PROCESSORS[@]}"; do
-        local test_file="$PROCESSOR_TESTS_DIR/$processor/v1/$opcode_lower.json"
-        
-        # Special case for 65C816: use emulation-only tests
+        # Special case for 65C816: test both emulation and native modes
         if [[ "$processor" == "65816" ]]; then
-            test_file="$PROCESSOR_TESTS_DIR/$processor/v1_emulation_only/$opcode_lower.e.json"
-        fi
-        
-        if [[ ! -f "$test_file" ]]; then
-            log_warning "${PROCESSOR_NAMES[$processor]}: Opcode 0x$opcode_hex not available"
-            continue
-        fi
-        
-        log_info "Testing ${PROCESSOR_NAMES[$processor]} (opcode 0x$opcode_hex)..."
-        
-        local start_time=$(date +%s%N)
-        
-        if $TEST_RUNNER $quiet_mode "$test_file" > /tmp/test_output_${processor}_${opcode}.log 2>&1; then
-            local end_time=$(date +%s%N)
-            local duration=$(( (end_time - start_time) / 1000000 )) # Convert to milliseconds
-            
-            # Extract test statistics from output
-            local passed=$(grep "Tests passed:" /tmp/test_output_${processor}_${opcode}.log | awk '{print $3}')
-            local failed=$(grep "Tests failed:" /tmp/test_output_${processor}_${opcode}.log | awk '{print $3}')
-            local performance=$(grep "Performance:" /tmp/test_output_${processor}_${opcode}.log | awk '{print $2}')
-            
-            log_success "${PROCESSOR_NAMES[$processor]}: PASSED (${passed} tests, ${performance} tests/sec, ${duration}ms)"
+            for mode in "e" "n"; do
+                local mode_name="emulation"
+                if [[ "$mode" == "n" ]]; then
+                    mode_name="native"
+                fi
+                
+                local test_file="$PROCESSOR_TESTS_DIR/$processor/v1/$opcode_lower.$mode.json"
+                
+                if [[ ! -f "$test_file" ]]; then
+                    log_warning "${PROCESSOR_NAMES[$processor]} ($mode_name mode): Opcode 0x$opcode_hex not available"
+                    continue
+                fi
+                
+                log_info "Testing ${PROCESSOR_NAMES[$processor]} ($mode_name mode, opcode 0x$opcode_hex)..."
+                
+                local start_time=$(date +%s%N)
+                
+                if $TEST_RUNNER $quiet_mode "$test_file" > /tmp/test_output_${processor}_${mode}_${opcode}.log 2>&1; then
+                    local end_time=$(date +%s%N)
+                    local duration=$(( (end_time - start_time) / 1000000 )) # Convert to milliseconds
+                    
+                    # Extract test statistics from output
+                    local passed=$(grep "Tests passed:" /tmp/test_output_${processor}_${mode}_${opcode}.log | awk '{print $3}')
+                    local failed=$(grep "Tests failed:" /tmp/test_output_${processor}_${mode}_${opcode}.log | awk '{print $3}')
+                    local performance=$(grep "Performance:" /tmp/test_output_${processor}_${mode}_${opcode}.log | awk '{print $2}')
+                    
+                    log_success "${PROCESSOR_NAMES[$processor]} ($mode_name): PASSED (${passed} tests, ${performance} tests/sec, ${duration}ms)"
+                else
+                    log_error "${PROCESSOR_NAMES[$processor]} ($mode_name): FAILED"
+                    if [[ "$quiet_mode" != "-q" ]]; then
+                        echo "--- Failure Details ---"
+                        tail -20 /tmp/test_output_${processor}_${mode}_${opcode}.log
+                        echo "--- End Details ---"
+                    fi
+                    overall_success=false
+                fi
+            done
         else
-            log_error "${PROCESSOR_NAMES[$processor]}: FAILED"
-            if [[ "$quiet_mode" != "-q" ]]; then
-                echo "--- Failure Details ---"
-                tail -20 /tmp/test_output_${processor}_${opcode}.log
-                echo "--- End Details ---"
+            local test_file="$PROCESSOR_TESTS_DIR/$processor/v1/$opcode_lower.json"
+            
+            if [[ ! -f "$test_file" ]]; then
+                log_warning "${PROCESSOR_NAMES[$processor]}: Opcode 0x$opcode_hex not available"
+                continue
             fi
-            overall_success=false
+            
+            log_info "Testing ${PROCESSOR_NAMES[$processor]} (opcode 0x$opcode_hex)..."
+            
+            local start_time=$(date +%s%N)
+            
+            if $TEST_RUNNER $quiet_mode "$test_file" > /tmp/test_output_${processor}_${opcode}.log 2>&1; then
+                local end_time=$(date +%s%N)
+                local duration=$(( (end_time - start_time) / 1000000 )) # Convert to milliseconds
+                
+                # Extract test statistics from output
+                local passed=$(grep "Tests passed:" /tmp/test_output_${processor}_${opcode}.log | awk '{print $3}')
+                local failed=$(grep "Tests failed:" /tmp/test_output_${processor}_${opcode}.log | awk '{print $3}')
+                local performance=$(grep "Performance:" /tmp/test_output_${processor}_${opcode}.log | awk '{print $2}')
+                
+                log_success "${PROCESSOR_NAMES[$processor]}: PASSED (${passed} tests, ${performance} tests/sec, ${duration}ms)"
+            else
+                log_error "${PROCESSOR_NAMES[$processor]}: FAILED"
+                if [[ "$quiet_mode" != "-q" ]]; then
+                    echo "--- Failure Details ---"
+                    tail -20 /tmp/test_output_${processor}_${opcode}.log
+                    echo "--- End Details ---"
+                fi
+                overall_success=false
+            fi
         fi
     done
     
@@ -217,48 +249,121 @@ test_single_processor() {
         quiet_mode="-q"
     fi
     
-    log_header "🖥️  TESTING ALL OPCODES FOR ${PROCESSOR_NAMES[$processor]}"
-    log_separator
-    
-    local test_dir="$PROCESSOR_TESTS_DIR/$processor/v1"
-    local opcodes=($(get_opcodes "$processor"))
-    local total_opcodes=${#opcodes[@]}
-    local passed_opcodes=0
-    local failed_opcodes=0
-    
-    log_info "Found $total_opcodes opcodes for ${PROCESSOR_NAMES[$processor]}"
-    
-    local overall_start_time=$(date +%s%N)
-    
-    for opcode in "${opcodes[@]}"; do
-        local opcode_lower=$(echo "$opcode" | tr '[:upper:]' '[:lower:]')
-        local test_file="$test_dir/$opcode_lower.json"
-        local opcode_hex=$(printf '%02X' $((16#$opcode)))
+    # Special case for 65C816: test both emulation and native modes
+    if [[ "$processor" == "65816" ]]; then
+        for mode in "e" "n"; do
+            local mode_name="emulation"
+            if [[ "$mode" == "n" ]]; then
+                mode_name="native"
+            fi
+            
+            log_header "🖥️  TESTING ALL OPCODES FOR ${PROCESSOR_NAMES[$processor]} ($mode_name mode)"
+            log_separator
+            
+            local test_dir="$PROCESSOR_TESTS_DIR/$processor/v1"
+            local opcodes=($(get_opcodes "$processor" "$mode"))
+            local total_opcodes=${#opcodes[@]}
+            local mode_passed_opcodes=0
+            local mode_failed_opcodes=0
+            
+            log_info "Found $total_opcodes opcodes for ${PROCESSOR_NAMES[$processor]} ($mode_name mode)"
+            
+            local mode_start_time=$(date +%s%N)
+            
+            for opcode in "${opcodes[@]}"; do
+                local opcode_lower=$(echo "$opcode" | tr '[:upper:]' '[:lower:]')
+                local test_file="$test_dir/$opcode_lower.$mode.json"
+                local opcode_hex=$(printf '%02X' $((16#$opcode)))
+                
+                if [[ "$quick_mode" != "true" ]]; then
+                    log_info "Testing opcode 0x$opcode_hex ($mode_name mode)..."
+                fi
+                
+                if $TEST_RUNNER $quiet_mode "$test_file" > /tmp/test_output_${processor}_${mode}_${opcode}.log 2>&1; then
+                    ((mode_passed_opcodes++))
+                    if [[ "$quick_mode" != "true" ]]; then
+                        log_success "Opcode 0x$opcode_hex ($mode_name): PASSED"
+                    fi
+                else
+                    ((mode_failed_opcodes++))
+                    log_error "Opcode 0x$opcode_hex ($mode_name): FAILED"
+                    if [[ "$quiet_mode" != "-q" ]]; then
+                        echo "--- Failure Details ---"
+                        tail -10 /tmp/test_output_${processor}_${mode}_${opcode}.log
+                        echo "--- End Details ---"
+                    fi
+                fi
+            done
+            
+            local mode_end_time=$(date +%s%N)
+            local mode_duration=$(( (mode_end_time - mode_start_time) / 1000000 )) # Convert to milliseconds
+            
+            # Accumulate totals for both modes
+            passed_opcodes=$((passed_opcodes + mode_passed_opcodes))
+            failed_opcodes=$((failed_opcodes + mode_failed_opcodes))
+            
+            log_separator
+            log_header "📊 ${PROCESSOR_NAMES[$processor]} ($mode_name mode) RESULTS"
+            echo "Total opcodes: $total_opcodes"
+            echo "Passed: $mode_passed_opcodes"
+            echo "Failed: $mode_failed_opcodes"
+            
+            if [[ $total_opcodes -gt 0 ]]; then
+                local pass_rate=$(( mode_passed_opcodes * 100 / total_opcodes ))
+                echo "Pass rate: ${pass_rate}%"
+            fi
+            
+            echo "Execution time: ${mode_duration}ms"
+            
+            if [[ $mode_failed_opcodes -eq 0 ]]; then
+                log_success "🎉 ${PROCESSOR_NAMES[$processor]} ($mode_name): ALL OPCODES PASSED"
+            else
+                log_error "💥 ${PROCESSOR_NAMES[$processor]} ($mode_name): $mode_failed_opcodes OPCODES FAILED"
+            fi
+            echo
+        done
         
-        # Special case for 65C816: use emulation-only tests
-        if [[ "$processor" == "65816" ]]; then
-            test_file="$test_dir/$opcode_lower.e.json"
-        fi
+        # For 65C816, calculate combined totals
+        total_opcodes=$((passed_opcodes + failed_opcodes))
+    else
+        log_header "🖥️  TESTING ALL OPCODES FOR ${PROCESSOR_NAMES[$processor]}"
+        log_separator
         
-        if [[ "$quick_mode" != "true" ]]; then
-            log_info "Testing opcode 0x$opcode_hex..."
-        fi
+        local test_dir="$PROCESSOR_TESTS_DIR/$processor/v1"
+        local opcodes=($(get_opcodes "$processor"))
+        local total_opcodes=${#opcodes[@]}
+        local passed_opcodes=0
+        local failed_opcodes=0
         
-        if $TEST_RUNNER $quiet_mode "$test_file" > /tmp/test_output_${processor}_${opcode}.log 2>&1; then
-            ((passed_opcodes++))
+        log_info "Found $total_opcodes opcodes for ${PROCESSOR_NAMES[$processor]}"
+        
+        local overall_start_time=$(date +%s%N)
+        
+        for opcode in "${opcodes[@]}"; do
+            local opcode_lower=$(echo "$opcode" | tr '[:upper:]' '[:lower:]')
+            local test_file="$test_dir/$opcode_lower.json"
+            local opcode_hex=$(printf '%02X' $((16#$opcode)))
+            
             if [[ "$quick_mode" != "true" ]]; then
-                log_success "Opcode 0x$opcode_hex: PASSED"
+                log_info "Testing opcode 0x$opcode_hex..."
             fi
-        else
-            ((failed_opcodes++))
-            log_error "Opcode 0x$opcode_hex: FAILED"
-            if [[ "$quiet_mode" != "-q" ]]; then
-                echo "--- Failure Details ---"
-                tail -10 /tmp/test_output_${processor}_${opcode}.log
-                echo "--- End Details ---"
+            
+            if $TEST_RUNNER $quiet_mode "$test_file" > /tmp/test_output_${processor}_${opcode}.log 2>&1; then
+                ((passed_opcodes++))
+                if [[ "$quick_mode" != "true" ]]; then
+                    log_success "Opcode 0x$opcode_hex: PASSED"
+                fi
+            else
+                ((failed_opcodes++))
+                log_error "Opcode 0x$opcode_hex: FAILED"
+                if [[ "$quiet_mode" != "-q" ]]; then
+                    echo "--- Failure Details ---"
+                    tail -10 /tmp/test_output_${processor}_${opcode}.log
+                    echo "--- End Details ---"
+                fi
             fi
-        fi
-    done
+        done
+    fi
     
     local overall_end_time=$(date +%s%N)
     local total_duration=$(( (overall_end_time - overall_start_time) / 1000000 )) # Convert to milliseconds
@@ -396,32 +501,71 @@ list_opcodes() {
     
     for processor in "${PROCESSORS[@]}"; do
         echo
-        log_info "${PROCESSOR_NAMES[$processor]}:"
-        local opcodes=($(get_opcodes "$processor"))
-        local count=${#opcodes[@]}
         
-        if [[ $count -eq 0 ]]; then
-            log_warning "No opcodes found"
-            continue
-        fi
-        
-        echo "Count: $count opcodes"
-        echo -n "Opcodes: "
-        
-        local line_length=0
-        for opcode in "${opcodes[@]}"; do
-            local opcode_hex=$(printf '0x%02X' $((16#$opcode)))
-            echo -n "$opcode_hex "
-            line_length=$((line_length + 5))
-            
-            # Line wrap every 10 opcodes
-            if [[ $((line_length % 50)) -eq 0 ]]; then
+        # Special case for 65C816: show both emulation and native modes
+        if [[ "$processor" == "65816" ]]; then
+            for mode in "e" "n"; do
+                local mode_name="emulation"
+                if [[ "$mode" == "n" ]]; then
+                    mode_name="native"
+                fi
+                
+                log_info "${PROCESSOR_NAMES[$processor]} ($mode_name mode):"
+                local opcodes=($(get_opcodes "$processor" "$mode"))
+                local count=${#opcodes[@]}
+                
+                if [[ $count -eq 0 ]]; then
+                    log_warning "No opcodes found"
+                    continue
+                fi
+                
+                echo "Count: $count opcodes"
+                echo -n "Opcodes: "
+                
+                local line_length=0
+                for opcode in "${opcodes[@]}"; do
+                    local opcode_hex=$(printf '0x%02X' $((16#$opcode)))
+                    echo -n "$opcode_hex "
+                    line_length=$((line_length + 5))
+                    
+                    # Line wrap every 10 opcodes
+                    if [[ $((line_length % 50)) -eq 0 ]]; then
+                        echo
+                        echo -n "         "
+                        line_length=9  # Account for indentation
+                    fi
+                done
                 echo
-                echo -n "         "
-                line_length=9  # Account for indentation
+                echo
+            done
+        else
+            log_info "${PROCESSOR_NAMES[$processor]}:"
+            local opcodes=($(get_opcodes "$processor"))
+            local count=${#opcodes[@]}
+            
+            if [[ $count -eq 0 ]]; then
+                log_warning "No opcodes found"
+                continue
             fi
-        done
-        echo
+            
+            echo "Count: $count opcodes"
+            echo -n "Opcodes: "
+            
+            local line_length=0
+            for opcode in "${opcodes[@]}"; do
+                local opcode_hex=$(printf '0x%02X' $((16#$opcode)))
+                echo -n "$opcode_hex "
+                line_length=$((line_length + 5))
+                
+                # Line wrap every 10 opcodes
+                if [[ $((line_length % 50)) -eq 0 ]]; then
+                    echo
+                    echo -n "         "
+                    line_length=9  # Account for indentation
+                fi
+            done
+            echo
+        fi
     done
 }
 
