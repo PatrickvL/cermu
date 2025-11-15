@@ -173,7 +173,7 @@ namespace fam65xx {
       inline uint8_t calc_z_flag(uint8_t value) const { return 0; }
       
       // 65C816 compatibility functions
-      inline bool get_emulation_mode() const { return true; }
+      inline bool in_emulation_mode() const { return true; }
       inline uint16_t get_x_register() const { return 0; }
       inline uint16_t get_y_register() const { return 0; }
       

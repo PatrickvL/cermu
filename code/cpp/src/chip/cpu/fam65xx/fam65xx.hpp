@@ -345,7 +345,7 @@ class fam65xx_t :
         
         // 65C816 banking: OR bank register into high bits (optimizer eliminates for non-wide CPUs)
         if constexpr (has_wide_registers()) {
-            if (!this->get_emulation_mode()) {
+            if (!this->in_emulation_mode()) {
                 // Native mode: Apply banking using appropriate bank register
                 // effective_bank_reg handles SP->ZBR mapping (ZBR=0 for stack operations)
                 addr |= static_cast<uint32_t>(this->get(effective_bank_reg<addr_arg>(bank_arg))) << 16;
@@ -358,7 +358,7 @@ class fam65xx_t :
         if constexpr (Traits.update_bus_lines()) {
             // For 65816: Split 24-bit address into 16-bit address + 8-bit bank using new macro
             if constexpr (has_wide_registers()) {
-                if (!this->get_emulation_mode()) {
+                if (!this->in_emulation_mode()) {
                     // Native mode: Set lower 16 bits in address field and upper 8 bits in bank field
                     pins = FAM65XX_SET_ADDR(pins, addr & 0xFFFF);
                     pins = FAM65XX_SET_BANK(pins, (addr >> 16) & 0xFF);
@@ -685,10 +685,10 @@ class fam65xx_t :
             // 65C816: Check register-specific width flags
             if constexpr (reg_type == REG_A) {
                 // Accumulator: M=0 means 16-bit (only in native mode)
-                return !this->get_emulation_mode() && !(this->get(REG_P) & FLAG_M);
+                return !this->in_emulation_mode() && !(this->get(REG_P) & FLAG_M);
             } else if constexpr (reg_type == REG_X || reg_type == REG_Y) {
                 // Index registers: X=0 means 16-bit (only in native mode)
-                return !this->get_emulation_mode() && !(this->get(REG_P) & FLAG_X);
+                return !this->in_emulation_mode() && !(this->get(REG_P) & FLAG_X);
             }
         }
         // Non-65C816 processors or memory operations: always 8-bit
@@ -1064,7 +1064,7 @@ class fam65xx_t :
         
         // Check ABORT (65C816 only, second highest)
         if constexpr (has_wide_registers()) {
-            if (!this->get_emulation_mode()) {
+            if (!this->in_emulation_mode()) {
                 // Native mode: ABORT detection logic would go here when implemented
                 // For now, ABORT is not connected to hardware pins
             }

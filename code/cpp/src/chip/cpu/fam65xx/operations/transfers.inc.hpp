@@ -54,7 +54,7 @@ bus_state_t transfer_no_flags_helper(bus_state_t pins, uint8_t value, reg8_t tar
 bus_state_t op_tax(bus_state_t pins) {
     // Check for 65C816 native mode with different register sizes
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode()) {
+        if (!this->in_emulation_mode()) {
             // Native mode: handle M and X flags for register sizes
             bool acc_16bit = this->template is_register_16bit<REG_A>();
             bool index_16bit = this->template is_register_16bit<REG_X>();
@@ -104,7 +104,7 @@ bus_state_t op_tax(bus_state_t pins) {
 bus_state_t op_tay(bus_state_t pins) {
     // Check for 65C816 native mode with different register sizes
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode()) {
+        if (!this->in_emulation_mode()) {
             // Native mode: handle M and X flags for register sizes
             bool acc_16bit = this->template is_register_16bit<REG_A>();
             bool index_16bit = this->template is_register_16bit<REG_X>();
@@ -182,7 +182,7 @@ bus_state_t op_tsx(bus_state_t pins) {
 bus_state_t op_txa(bus_state_t pins) {
     // Check for 65C816 native mode with different register sizes
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode()) {
+        if (!this->in_emulation_mode()) {
             // Native mode: handle M and X flags for register sizes
             bool acc_16bit = this->template is_register_16bit<REG_A>();
             bool index_16bit = this->template is_register_16bit<REG_X>();
@@ -232,7 +232,7 @@ bus_state_t op_txa(bus_state_t pins) {
 bus_state_t op_txs(bus_state_t pins) {
     // Check for 65C816 native mode with 16-bit index registers
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode()) {
+        if (!this->in_emulation_mode()) {
             // Native mode - transfer can be 8-bit or 16-bit based on X flag
             if constexpr (!this->has_optimized_cycles()) {
                 /* Dummy cycle for internal operation */
@@ -265,7 +265,7 @@ bus_state_t op_txs(bus_state_t pins) {
 bus_state_t op_tya(bus_state_t pins) {
     // Check for 65C816 native mode with different register sizes
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode()) {
+        if (!this->in_emulation_mode()) {
             // Native mode: handle M and X flags for register sizes
             bool acc_16bit = this->template is_register_16bit<REG_A>();
             bool index_16bit = this->template is_register_16bit<REG_Y>();

@@ -191,7 +191,7 @@ uint16_t get_vector_addr() const {
     
     // 65C816 native mode uses different vectors
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode()) {
+        if (!this->in_emulation_mode()) {
             return native_65C816_vectors[interrupt_index];
         }
     }
@@ -271,7 +271,7 @@ bus_state_t op_brk(bus_state_t pins) {
                 this->set(REG_PCL, this->get(REG_DL));
                 /* 65C816: Set program bank to 0 immediately after vector read in emulation mode */
                 if constexpr (this->has_wide_registers()) {
-                    if (this->get_emulation_mode()) {
+                    if (this->in_emulation_mode()) {
                         this->set(REG_PBR, 0); // Set program bank to 0 after interrupt vector read
                     }
                 }
