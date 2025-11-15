@@ -56,8 +56,8 @@ bus_state_t op_tax(bus_state_t pins) {
     if constexpr (this->has_wide_registers()) {
         if (!this->get_emulation_mode()) {
             // Native mode: handle M and X flags for register sizes
-            bool acc_16bit = !(this->get(REG_P) & FLAG_M);
-            bool index_16bit = !(this->get(REG_P) & FLAG_X);
+            bool acc_16bit = this->template is_register_16bit<REG_A>();
+            bool index_16bit = this->template is_register_16bit<REG_X>();
             
             if constexpr (!this->has_optimized_cycles()) {
                 /* Dummy cycle for internal operation */
@@ -106,8 +106,8 @@ bus_state_t op_tay(bus_state_t pins) {
     if constexpr (this->has_wide_registers()) {
         if (!this->get_emulation_mode()) {
             // Native mode: handle M and X flags for register sizes
-            bool acc_16bit = !(this->get(REG_P) & FLAG_M);
-            bool index_16bit = !(this->get(REG_P) & FLAG_X);
+            bool acc_16bit = this->template is_register_16bit<REG_A>();
+            bool index_16bit = this->template is_register_16bit<REG_X>();
             
             if constexpr (!this->has_optimized_cycles()) {
                 /* Dummy cycle for internal operation */
@@ -154,7 +154,7 @@ bus_state_t op_tay(bus_state_t pins) {
 bus_state_t op_tsx(bus_state_t pins) {
     // Check for 65C816 native mode with 16-bit index registers
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_X)) {
+        if (this->template is_register_16bit<REG_X>()) {
             // Native mode, 16-bit X register - transfer 16-bit stack pointer
             if constexpr (!this->has_optimized_cycles()) {
                 /* Dummy cycle for internal operation */
@@ -184,8 +184,8 @@ bus_state_t op_txa(bus_state_t pins) {
     if constexpr (this->has_wide_registers()) {
         if (!this->get_emulation_mode()) {
             // Native mode: handle M and X flags for register sizes
-            bool acc_16bit = !(this->get(REG_P) & FLAG_M);
-            bool index_16bit = !(this->get(REG_P) & FLAG_X);
+            bool acc_16bit = this->template is_register_16bit<REG_A>();
+            bool index_16bit = this->template is_register_16bit<REG_X>();
             
             if constexpr (!this->has_optimized_cycles()) {
                 /* Dummy cycle for internal operation */
@@ -242,7 +242,7 @@ bus_state_t op_txs(bus_state_t pins) {
                 }
             }
             
-            if (!(this->get(REG_P) & FLAG_X)) {
+            if (this->template is_register_16bit<REG_X>()) {
                 // 16-bit X register - transfer full 16-bit value to stack pointer
                 uint16_t value = this->get_x_register();
                 this->set(REG_SP, value);
@@ -267,8 +267,8 @@ bus_state_t op_tya(bus_state_t pins) {
     if constexpr (this->has_wide_registers()) {
         if (!this->get_emulation_mode()) {
             // Native mode: handle M and X flags for register sizes
-            bool acc_16bit = !(this->get(REG_P) & FLAG_M);
-            bool index_16bit = !(this->get(REG_P) & FLAG_X);
+            bool acc_16bit = this->template is_register_16bit<REG_A>();
+            bool index_16bit = this->template is_register_16bit<REG_Y>();
             
             if constexpr (!this->has_optimized_cycles()) {
                 /* Dummy cycle for internal operation */
@@ -319,7 +319,7 @@ bus_state_t op_tya(bus_state_t pins) {
 bus_state_t op_inx(bus_state_t pins) {
     // Check for 65C816 native mode with 16-bit index registers (X=0) - nested native code
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_X)) {
+        if (this->template is_register_16bit<REG_X>()) {
             // Native mode, 16-bit X register - perform 16-bit INX
             if constexpr (!this->has_optimized_cycles()) {
                 /* Dummy cycle for internal operation */
@@ -362,7 +362,7 @@ bus_state_t op_inx(bus_state_t pins) {
 bus_state_t op_iny(bus_state_t pins) {
     // Check for 65C816 native mode with 16-bit index registers (X=0) - nested native code
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_X)) {
+        if (this->template is_register_16bit<REG_Y>()) {
             // Native mode, 16-bit Y register - perform 16-bit INY
             if constexpr (!this->has_optimized_cycles()) {
                 /* Dummy cycle for internal operation */
@@ -405,7 +405,7 @@ bus_state_t op_iny(bus_state_t pins) {
 bus_state_t op_dex(bus_state_t pins) {
     // Check for 65C816 native mode with 16-bit index registers (X=0) - nested native code
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_X)) {
+        if (this->template is_register_16bit<REG_X>()) {
             // Native mode, 16-bit X register - perform 16-bit DEX
             if constexpr (!this->has_optimized_cycles()) {
                 /* Dummy cycle for internal operation */
@@ -448,7 +448,7 @@ bus_state_t op_dex(bus_state_t pins) {
 bus_state_t op_dey(bus_state_t pins) {
     // Check for 65C816 native mode with 16-bit index registers (X=0) - nested native code
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_X)) {
+        if (this->template is_register_16bit<REG_Y>()) {
             // Native mode, 16-bit Y register - perform 16-bit DEY
             if constexpr (!this->has_optimized_cycles()) {
                 /* Dummy cycle for internal operation */
