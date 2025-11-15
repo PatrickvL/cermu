@@ -327,7 +327,10 @@ typedef enum : uint8_t {
 
     // Compatibility mapping (65C816 : A = Low byte of C (16 bit accumulator), B = High byte of C)
     REG_A = REG_AL,    // Map  A register to AL
-    REG_B = REG_AH     // Map B register to AH
+    REG_B = REG_AH,    // Map B register to AH
+    
+    // Memory operation pseudo-register - forces 8-bit behavior in template functions
+    REG_MEM = REG_DL   // Alias to DL - not A, X, or Y, so always 8-bit
 } reg8_t;
 
 // 16-bit register constants - these work for both narrow and wide CPUs
