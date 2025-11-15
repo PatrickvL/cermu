@@ -116,24 +116,8 @@ struct narrow_registers_mixin_t {
         set(REG_Y, value);
     }
     
-    // === 65C816 compatibility methods ===
-    // For non-65C816 processors, emulation mode is always true
-    inline bool in_emulation_mode() const {
-        return true;  // 8-bit processors are always in "emulation mode"
-    }
-    
-    inline void set_emulation_mode(bool /*mode*/) {
-        // No-op for 8-bit processors
-    }
-    
-    // === Optimized register width detection (always 8-bit for narrow CPUs) ===
-    inline bool is_accumulator_16bit() const {
-        return false;  // Always 8-bit for narrow CPUs
-    }
-    
-    inline bool is_index_16bit() const {
-        return false;  // Always 8-bit for narrow CPUs
-    }
+    // === 65C816 compatibility methods removed - now in main fam65xx_t class ===
+    // Functions moved to fam65xx_t for constexpr wide register detection
     
     template<reg8_t reg_type>
     inline bool is_register_16bit() const {
@@ -176,48 +160,15 @@ struct wide_registers_mixin_t {
         set(REG_ZBR, 0x00);    // Zero Bank Register = $00
     }   
     
-    // === 65C816 extended register access (using optimized helpers) ===
-
-    inline bool in_emulation_mode() const {
-        return (get(REG_P_16) & FLAG_E) != 0;
-    }
-    
-    inline void set_emulation_mode(bool mode) {
-        if (mode) {
-            // Set emulation bit in the 16-bit P register
-            set(REG_P_16, get(REG_P_16) | FLAG_E);
-            // In emulation mode, M and X are implicit (always set) but not visible in P register
-            // Ensure M and X flags are NOT visible in P register in emulation mode
-            set(REG_P, get(REG_P) & ~(FLAG_M | FLAG_X));
-            // Force stack pointer to page 1
-            set(REG_SPH, 0x01);
-        } else {
-            // Clear emulation bit in the 16-bit P register
-            set(REG_P_16, get(REG_P_16) & ~FLAG_E);
-        }
-    }
-    
-    // === Optimized Helper: Check if register is in 16-bit mode ===
-    // Single instruction checks combining emulation mode with M/X flags
-    inline bool is_accumulator_16bit() const {
-        // 16-bit when BOTH emulation=0 AND M=0
-        return !(get(REG_P_16) & (FLAG_E | FLAG_M));
-    }
-    
-    inline bool is_index_16bit() const {
-        // 16-bit when BOTH emulation=0 AND X=0
-        return !(get(REG_P_16) & (FLAG_E | FLAG_X));
-    }
+    // === 65C816 extended register access methods removed - now in main fam65xx_t class ===
+    // Functions moved to fam65xx_t for constexpr wide register detection
 
     // Template version for compile-time register type selection
     template<reg8_t reg_type>
     inline bool is_register_16bit() const {
-        if constexpr (reg_type == REG_A || reg_type == REG_AL) {
-            return !(get(REG_P_16) & (FLAG_E | FLAG_M));
-        } else if constexpr (reg_type == REG_X || reg_type == REG_XL || reg_type == REG_Y || reg_type == REG_YL) {
-            return !(get(REG_P_16) & (FLAG_E | FLAG_X));
-        }
-        return false;  // Other registers are always 8-bit
+        // Note: This will be overridden in the main fam65xx_t class
+        // For now, return false since the actual logic is in fam65xx_t
+        return false;  // Will be overridden by fam65xx_t implementation
     }
     
     // Fast XCE (Exchange Carry with Emulation) operation helper
@@ -288,53 +239,30 @@ struct wide_registers_mixin_t {
         reg8[data_reg] = FAM65XX_GET_DATA(pins);
     }
     
-    // === Memory operation helpers (context-aware using optimized checks) ===
+    // === Memory operation helpers (simplified - width logic moved to fam65xx_t) ===
+    // Note: These will be overridden in fam65xx_t with proper 16-bit width detection
     inline data_t get_accumulator() const {
-        if (is_register_16bit<REG_A>()) {
-            return get(REG_A_16);
-        } else {
-            return get(REG_A);
-        }
+        return get(REG_A);  // Always 8-bit in mixin, overridden in fam65xx_t
     }
     
     inline void set_accumulator(data_t value) {
-        if (is_register_16bit<REG_A>()) {
-            set(REG_A_16, value);
-        } else {
-            set(REG_A, static_cast<uint8_t>(value & 0xFF));
-        }
+        set(REG_A, static_cast<uint8_t>(value & 0xFF));  // Always 8-bit in mixin, overridden in fam65xx_t
     }
     
     inline data_t get_x_register() const {
-        if (is_register_16bit<REG_X>()) {
-            return get(REG_X_16);
-        } else {
-            return get(REG_X);
-        }
+        return get(REG_X);  // Always 8-bit in mixin, overridden in fam65xx_t
     }
     
     inline void set_x_register(data_t value) {
-        if (is_register_16bit<REG_X>()) {
-            set(REG_X_16, value);
-        } else {
-            set(REG_X, static_cast<uint8_t>(value & 0xFF));
-        }
+        set(REG_X, static_cast<uint8_t>(value & 0xFF));  // Always 8-bit in mixin, overridden in fam65xx_t
     }
     
     inline data_t get_y_register() const {
-        if (is_register_16bit<REG_Y>()) {
-            return get(REG_Y_16);
-        } else {
-            return get(REG_Y);
-        }
+        return get(REG_Y);  // Always 8-bit in mixin, overridden in fam65xx_t
     }
     
     inline void set_y_register(data_t value) {
-        if (is_register_16bit<REG_Y>()) {
-            set(REG_Y_16, value);
-        } else {
-            set(REG_Y, static_cast<uint8_t>(value & 0xFF));
-        }
+        set(REG_Y, static_cast<uint8_t>(value & 0xFF));  // Always 8-bit in mixin, overridden in fam65xx_t
     }
 };
 
