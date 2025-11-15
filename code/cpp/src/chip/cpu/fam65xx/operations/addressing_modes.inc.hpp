@@ -48,7 +48,19 @@ bus_state_t am_zpx(bus_state_t pins) {
             pins = this->phi2_read<Addr::AB>(pins, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
                 // PHI1: Add index to ABL address (wraps in zero page)
-                this->set(REG_ABL, this->get(REG_ABL) + this->get(REG_X));
+                // In emulation mode, X register is always 8-bit (use low byte only)
+                if constexpr (this->has_wide_registers()) {
+                    if (this->get_emulation_mode()) {
+                        // Emulation mode: X is always 8-bit, use low byte only
+                        this->set(REG_ABL, this->get(REG_ABL) + this->get(REG_X));
+                    } else {
+                        // Native mode: Use full X register width based on X flag
+                        this->set(REG_ABL, this->get(REG_ABL) + this->get_x_register());
+                    }
+                } else {
+                    // Non-wide processors: always 8-bit
+                    this->set(REG_ABL, this->get(REG_ABL) + this->get(REG_X));
+                }
                 this->transition_to_operation();
             }
             return pins;
