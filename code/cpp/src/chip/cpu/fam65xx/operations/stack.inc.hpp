@@ -18,7 +18,7 @@ bus_state_t op_pha(bus_state_t pins) {
     trace_operation(__func__);
     // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
     if constexpr (has_wide_registers()) {
-        if (this->template is_register_16bit<REG_A>()) {
+        if (this->is_accumulator_16bit()) {
             // Native mode, 16-bit accumulator - perform 16-bit PHA
             switch (this->cycle_index) {
                 case 0:
@@ -103,7 +103,7 @@ bus_state_t op_pla(bus_state_t pins) {
     trace_operation(__func__);
     // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
     if constexpr (has_wide_registers()) {
-        if (this->template is_register_16bit<REG_A>()) {
+        if (this->is_accumulator_16bit()) {
             // Native mode, 16-bit accumulator - perform 16-bit PLA
             switch (this->cycle_index) {
                 case 0:
