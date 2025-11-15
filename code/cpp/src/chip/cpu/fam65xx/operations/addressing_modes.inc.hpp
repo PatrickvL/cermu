@@ -417,18 +417,6 @@ bus_state_t am_iny(bus_state_t pins) {
 
 // 65C02 Enhanced Addressing Modes (conditional compilation)
 
-// Absolute Indirect addressing: ($nnnn) - JMP/JSR for 65C02
-bus_state_t addr_ind_abs(bus_state_t pins) {
-    if constexpr (has_cmos()) {
-        // This addressing mode only exists on 65C02+
-        // Use the same implementation as regular indirect addressing
-        return am_ind(pins);
-    } else {
-        // Invalid on NMOS processors
-        return pins; // Should not be called
-    }
-}
-
 // Zero Page Indirect addressing: ($nn) - 65C02 only
 bus_state_t am_zpi(bus_state_t pins) {
     // Check for 65C816 PEI (0xD4) in emulation mode - redirect to ZPX addressing
@@ -625,98 +613,26 @@ bus_state_t am_dpx(bus_state_t pins) {
     return am_zpx(pins);
 }
 
-// Absolute Long addressing: $nnnnnn (65C816)
-bus_state_t am_abl(bus_state_t pins) {
-    if constexpr (this->has_wide_registers()) {
-        // Check for 65C816 JSL (0x22) in emulation mode - redirect to NOP IMM addressing
-        if (this->in_emulation_mode() && this->get(REG_IR) == 0x22) {
-            // PEI in emulation mode should behave as NOP zp,X
-            this->transition_to_opcode(opcode_info_t{OP::NOP, AM::IMM, OF::NONE});
-            return this->call_current_handler(pins);
-        }
-    
-        switch (this->cycle_index) {
-            case 0:
-                // PHI2: Read low byte from PC
-                pins = this->phi2_read<Addr::PC>(pins, REG_ABL);
-                if (FAM65XX_GET_RDY(pins)) {
-                    this->inc(REG_PC);
-                    this->cycle_index++;
-                }
-                return pins;
-                
-            case 1:
-                // PHI2: Read middle byte from PC
-                pins = this->phi2_read<Addr::PC>(pins, REG_ABH);
-                if (FAM65XX_GET_RDY(pins)) {
-                    this->inc(REG_PC);
-                    this->cycle_index++;
-                }
-                return pins;
-                
-            case 2:
-                // PHI2: Read bank byte from PC
-                pins = this->phi2_read<Addr::PC>(pins, REG_DL);
-                if (FAM65XX_GET_RDY(pins)) {
-                    this->inc(REG_PC);
-                    // Bank byte is handled by memory system
-                    this->transition_to_operation();
-                }
-                return pins;
-        }
-        return pins;
+// Direct Page,Y addressing: dp,Y (65C816)
+bus_state_t am_dpy(bus_state_t pins) {
+    if constexpr (this->has_wide_registers()) { 
+        // TODO : Implement similarly to am_dpx
     }
-    
-    // Should not be called on non-wide processors
-    return pins;
+
+    // Fall back to zero page,Y on non-wide processors
+    return am_zpy(pins);
 }
 
-// Absolute Long,X addressing: $nnnnnn,X (65C816)
-bus_state_t am_ablx(bus_state_t pins) {
-    if constexpr (this->has_wide_registers()) {
-        switch (this->cycle_index) {
-            case 0:
-                // PHI2: Read low byte from PC
-                pins = this->phi2_read<Addr::PC>(pins, REG_ABL);
-                if (FAM65XX_GET_RDY(pins)) {
-                    this->inc(REG_PC);
-                    this->cycle_index++;
-                }
-                return pins;
-                
-            case 1:
-                // PHI2: Read middle byte from PC
-                pins = this->phi2_read<Addr::PC>(pins, REG_ABH);
-                if (FAM65XX_GET_RDY(pins)) {
-                    this->inc(REG_PC);
-                    this->cycle_index++;
-                }
-                return pins;
-                
-            case 2:
-                // PHI2: Read bank byte from PC
-                pins = this->phi2_read<Addr::PC>(pins, REG_DL);
-                if (FAM65XX_GET_RDY(pins)) {
-                    this->inc(REG_PC);
-                    
-                    // Add X register to 16-bit address (wraps within bank)
-                    uint16_t base_addr = this->get(REG_AB);
-                    uint16_t x_val = this->get_x_register();
-                    uint16_t final_addr = base_addr + x_val;
-                    
-                    this->set(REG_AB, final_addr);
-                    this->transition_to_operation();
-                }
-                return pins;
-        }
-        return pins;
+// Direct Page Indirect addressing: [dp] (65C816)
+bus_state_t am_dpi(bus_state_t pins) {
+    if constexpr (this->has_wide_registers()) { 
+        // TODO : Implement similarly to am_dpil
     }
-    
-    // Should not be called on non-wide processors
-    return pins;
+
+    return am_zpi(pins);
 }
 
-// Direct Page Indirect Long addressing: [dp] (65C816)
+// Direct Page Indirect Long addressing: [dp.l] (65C816)
 bus_state_t am_dpil(bus_state_t pins) {
     if constexpr (this->has_wide_registers()) {
         switch (this->cycle_index) {
@@ -869,6 +785,97 @@ bus_state_t am_dpily(bus_state_t pins) {
     return pins;
 }
 
+// Absolute Long addressing: $nnnnnn (65C816)
+bus_state_t am_abl(bus_state_t pins) {
+    if constexpr (this->has_wide_registers()) {
+        // Check for 65C816 JSL (0x22) in emulation mode - redirect to NOP IMM addressing
+        if (this->in_emulation_mode() && this->get(REG_IR) == 0x22) {
+            // PEI in emulation mode should behave as NOP zp,X
+            this->transition_to_opcode(opcode_info_t{OP::NOP, AM::IMM, OF::NONE});
+            return this->call_current_handler(pins);
+        }
+    
+        switch (this->cycle_index) {
+            case 0:
+                // PHI2: Read low byte from PC
+                pins = this->phi2_read<Addr::PC>(pins, REG_ABL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                // PHI2: Read middle byte from PC
+                pins = this->phi2_read<Addr::PC>(pins, REG_ABH);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 2:
+                // PHI2: Read bank byte from PC
+                pins = this->phi2_read<Addr::PC>(pins, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    // Bank byte is handled by memory system
+                    this->transition_to_operation();
+                }
+                return pins;
+        }
+        return pins;
+    }
+    
+    // Should not be called on non-wide processors
+    return pins;
+}
+
+// Absolute Long,X addressing: $nnnnnn,X (65C816)
+bus_state_t am_ablx(bus_state_t pins) {
+    if constexpr (this->has_wide_registers()) {
+        switch (this->cycle_index) {
+            case 0:
+                // PHI2: Read low byte from PC
+                pins = this->phi2_read<Addr::PC>(pins, REG_ABL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 1:
+                // PHI2: Read middle byte from PC
+                pins = this->phi2_read<Addr::PC>(pins, REG_ABH);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    this->cycle_index++;
+                }
+                return pins;
+                
+            case 2:
+                // PHI2: Read bank byte from PC
+                pins = this->phi2_read<Addr::PC>(pins, REG_DL);
+                if (FAM65XX_GET_RDY(pins)) {
+                    this->inc(REG_PC);
+                    
+                    // Add X register to 16-bit address (wraps within bank)
+                    uint16_t base_addr = this->get(REG_AB);
+                    uint16_t x_val = this->get_x_register();
+                    uint16_t final_addr = base_addr + x_val;
+                    
+                    this->set(REG_AB, final_addr);
+                    this->transition_to_operation();
+                }
+                return pins;
+        }
+        return pins;
+    }
+    
+    // Should not be called on non-wide processors
+    return pins;
+}
+
 // Stack Relative addressing: sr,S (65C816)
 bus_state_t am_sr(bus_state_t pins) {
     if constexpr (this->has_wide_registers()) {
@@ -902,7 +909,7 @@ bus_state_t am_sr(bus_state_t pins) {
 }
 
 // Stack Relative Indirect Indexed: (sr,S),Y (65C816)
-bus_state_t am_sriy(bus_state_t pins) {
+bus_state_t am_sri(bus_state_t pins) {
     if constexpr (this->has_wide_registers()) {
         switch (this->cycle_index) {
             case 0:
@@ -955,23 +962,6 @@ bus_state_t am_sriy(bus_state_t pins) {
     
     // Should not be called on non-wide processors
     return pins;
-}
-
-// Legacy alias functions for compatibility
-bus_state_t addr_long(bus_state_t pins) {
-    return am_abl(pins);
-}
-
-bus_state_t addr_long_x(bus_state_t pins) {
-    return am_ablx(pins);
-}
-
-bus_state_t amr_sr(bus_state_t pins) {
-    return am_sr(pins);
-}
-
-bus_state_t am_sri(bus_state_t pins) {
-    return am_sriy(pins);
 }
 
 // Zero Page Relative Addressing: For BBR/BBS instructions ($nn,$offset)

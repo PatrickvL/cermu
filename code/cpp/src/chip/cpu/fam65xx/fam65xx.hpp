@@ -1327,23 +1327,24 @@ class fam65xx_t :
         addressing_mode_handlers[to_index(AM::NON)] = nullptr;   // No handler needed (implicit/accumulator/relative)
         addressing_mode_handlers[to_index(AM::IMM)] = nullptr;   // No handler (handled directly in operations)
 
-        // Addressing modes (implemented)
+        // Addressing modes
         addressing_mode_handlers[to_index(AM::ABS)] = &fam65xx_t::am_abs;
         addressing_mode_handlers[to_index(AM::ABX)] = &fam65xx_t::am_abx;
         addressing_mode_handlers[to_index(AM::ABY)] = &fam65xx_t::am_aby;
         addressing_mode_handlers[to_index(AM::IND)] = &fam65xx_t::am_ind;
         addressing_mode_handlers[to_index(AM::INX)] = &fam65xx_t::am_inx;
         addressing_mode_handlers[to_index(AM::INY)] = &fam65xx_t::am_iny;
-        addressing_mode_handlers[to_index(AM::ZER)] = &fam65xx_t::am_dp;  // DP maps to ZP implementation for pre-65C816 compatibility
-        addressing_mode_handlers[to_index(AM::ZPX)] = &fam65xx_t::am_zpx; // Use actual zero page,X for compatibility
-        addressing_mode_handlers[to_index(AM::DPX)] = &fam65xx_t::am_dpx; // Direct Page,X - checks emulation mode internally
-        addressing_mode_handlers[to_index(AM::ZPY)] = &fam65xx_t::am_zpy; // TODO : DPY maps to ZPY implementation for pre-65C816 compatibility
-        
+
         // Rockwell 65C02 addressing modes
         addressing_mode_handlers[to_index(AM::ZPR)] = &fam65xx_t::am_zpr; // Zero Page Relative - BBR/BBS $nn,$offset
 
+        // 6502/6510 and 65C816 addressing modes
+        addressing_mode_handlers[to_index(AM::DP)] = &fam65xx_t::am_dp;   // Direct/Zero Page (maps to AM::ZER, am_zp) implementation for pre-65C816 compatibility
+        addressing_mode_handlers[to_index(AM::DPX)] = &fam65xx_t::am_dpx; // Direct/Zero Page,X (maps to AM::ZPX, am_zpx) implementation for pre-65C816 compatibility
+        addressing_mode_handlers[to_index(AM::DPY)] = &fam65xx_t::am_dpy; // Direct/Zero Page,Y (maps to AM::ZPY, am_zpy) implementation for pre-65C816 compatibility
+        
         // 65C02 and 65C816 addressing modes
-        addressing_mode_handlers[to_index(AM::ZPI)] = &fam65xx_t::am_zpi; // TODO : DPI mpas to ZPI implementation for pre-65C816 compatibility
+        addressing_mode_handlers[to_index(AM::DPI)] = &fam65xx_t::am_dpi; // Direct/Zero Page Indirect (maps to AM::ZPI, am_zpi) implementation for pre-65C816 compatibility
         
         // Initialize 65C816 exclusive addressing modes (some native map to emulation modes)
         addressing_mode_handlers[to_index(AM::ABI)] = &fam65xx_t::am_abi;     // Absolute Indexed Indirect (abs,X) - JMP/JSR ($nnnn,X)
@@ -1351,7 +1352,7 @@ class fam65xx_t :
         addressing_mode_handlers[to_index(AM::ABLX)] = &fam65xx_t::am_ablx;   // Absolute Long,X
         addressing_mode_handlers[to_index(AM::DPIL)] = &fam65xx_t::am_dpil;   // Direct Page Indirect Long
         addressing_mode_handlers[to_index(AM::DPILY)] = &fam65xx_t::am_dpily; // Direct Page Indirect Long,Y
-        addressing_mode_handlers[to_index(AM::SR)] = &fam65xx_t::amr_sr;      // Stack Relative
+        addressing_mode_handlers[to_index(AM::SR)] = &fam65xx_t::am_sr;       // Stack Relative
         addressing_mode_handlers[to_index(AM::SRI)] = &fam65xx_t::am_sri;     // Stack Relative Indirect Indexed
     }
 
