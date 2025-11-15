@@ -822,6 +822,67 @@ class fam65xx_t :
     }
 
     // ========================================================================
+    // RMW OPERATION HELPER FUNCTIONS
+    // ========================================================================
+    
+    /**
+     * Generic RMW (Read-Modify-Write) operation helper
+     * Handles the complex cycle-accurate timing for RMW operations
+     */
+    template<typename OperationFunc>
+    bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func) {
+        if (this->opcode_entry.flags & to_index(OF::RMW)) {
+            // Memory mode - multi-cycle RMW operation
+            switch (this->cycle_index) {
+                case 0:
+                    // Cycle 0: Read original value from memory
+                    pins = this->phi2_read<Addr::AB>(pins, REG_DL);
+                    if (FAM65XX_GET_RDY(pins)) {
+                        this->cycle_index++;
+                    }
+                    return pins;
+                    
+                case 1:
+                    // Cycle 1: Dummy cycle and perform modification
+                    if (Traits.has(CPUCoreFlags::RMW_DUMMY_WRITE)) {
+                        // NMOS: Dummy write of original value
+                        pins = this->phi2_write<Addr::AB>(pins, this->get(REG_DL));
+                    } else {
+                        // CMOS: Dummy read instead of write
+                        pins = this->phi2_dummy_read<Addr::AB>(pins);
+                    }
+                    
+                    if (FAM65XX_GET_RDY(pins)) {
+                        uint8_t value = this->get(REG_DL);
+                        operation_func(value);  // Call the lambda to modify the value
+                        this->set(REG_DL, value);
+                        this->cycle_index++;
+                    }
+                    return pins;
+                    
+                case 2:
+                    // Cycle 2: Write modified value back to memory
+                    if (this->should_complete_write_cycle(pins)) {
+                        pins = this->phi2_write<Addr::AB>(pins, this->get(REG_DL));
+                        this->transition_to_fetch();
+                    }
+                    return pins;
+            }
+        } else {
+            // Accumulator mode - single cycle operation
+            pins = this->phi2_dummy_read<Addr::PC>(pins);
+            if (FAM65XX_GET_RDY(pins)) {
+                uint8_t value = this->get(REG_A);
+                operation_func(value);  // Call the lambda to modify the value
+                this->set(REG_A, value);
+                this->transition_to_fetch();
+            }
+        }
+        return pins;
+    }
+
+
+    // ========================================================================
     // OPERATION IMPLEMENTATIONS (included via .inc.hpp files)
     // ========================================================================
     
