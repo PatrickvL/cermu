@@ -694,24 +694,6 @@ class fam65xx_t :
         // Non-65C816 processors or memory operations: always 8-bit
         return false;
     }
-    // ========================================================================
-    // LEGACY COMPATIBILITY FUNCTIONS (minimal set for existing code)
-    // ========================================================================
-    
-    /**
-     * Minimal legacy compatibility functions for existing code compatibility
-     * These redirect to the consolidated template versions
-     */
-    
-    // Legacy 8-bit wrapper - redirects to template version
-    inline void update_nz_flags(uint8_t value) {
-        this->update_nz_flags<REG_A>(static_cast<data_t>(value));
-    }
-    
-    // Legacy 8-bit calculation wrapper
-    inline uint8_t calc_nz_flags(uint8_t value) const {
-        return this->calc_nz_flags<REG_A>(static_cast<data_t>(value));
-    }
     
 
     // ========================================================================
@@ -804,7 +786,7 @@ class fam65xx_t :
         // Binary mode
         this->set(REG_A, result);
         this->set(REG_P, (this->get(REG_P) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-            calc_nz_flags(result) |
+            calc_nz_flags<REG_A>(result) |
             calc_v_flag_add(old_a, operand, result) |
             calc_c_flag(full_result));
     }
@@ -891,7 +873,7 @@ class fam65xx_t :
         // Binary mode
         this->set(REG_A, result);
         this->set(REG_P, (this->get(REG_P) & ~(FLAG_N | FLAG_V | FLAG_Z | FLAG_C)) |
-            calc_nz_flags(result) |
+            calc_nz_flags<REG_A>(result) |
             calc_v_flag_sub(old_a, operand, full_result) |
             (!(full_result & 0x0100) ? FLAG_C : 0));
     }
