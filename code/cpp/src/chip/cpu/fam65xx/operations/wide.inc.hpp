@@ -32,7 +32,7 @@ bus_state_t op_rep(bus_state_t pins) {
                 {
                     uint8_t mask = this->get(REG_DL);
                     
-                    if (this->get_emulation_mode()) {
+                    if (this->in_emulation_mode()) {
                         // In emulation mode, cannot clear M or X flags (bits 5 and 4)
                         mask &= ~(FLAG_M | FLAG_X);
                     }
@@ -52,7 +52,7 @@ bus_state_t op_rep(bus_state_t pins) {
 bus_state_t op_sep(bus_state_t pins) {
     if constexpr (this->has_wide_registers()) {
         // Check emulation mode at runtime - SEP is only valid in native mode
-        if (!this->get_emulation_mode()) {
+        if (!this->in_emulation_mode()) {
             switch (this->cycle_index) {
                 case 0:
                     // Fetch immediate operand
@@ -90,7 +90,7 @@ bus_state_t op_xce(bus_state_t pins) {
                 {
                     uint8_t p = this->get(REG_P);
                     bool old_carry = (p & FLAG_C) != 0;
-                    bool old_emulation = this->get_emulation_mode();
+                    bool old_emulation = this->in_emulation_mode();
                     
                     // Set carry flag to old emulation flag
                     if (old_emulation) {
@@ -456,7 +456,7 @@ bus_state_t op_rtl(bus_state_t pins) {
 bus_state_t op_per(bus_state_t pins) {
     if constexpr (this->has_wide_registers()) {
         // Check for emulation mode - PER is not available in emulation mode
-        if (this->get_emulation_mode()) {
+        if (this->in_emulation_mode()) {
             // In emulation mode, PER behaves as NOP (no operation)
             this->transition_to_fetch();
             return pins;

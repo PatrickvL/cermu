@@ -88,7 +88,7 @@ bus_state_t am_zpy(bus_state_t pins) {
 bus_state_t am_abs(bus_state_t pins) {
     // Check for 65C816 PEA (0xF4) in emulation mode - redirect to ZPX addressing
     if constexpr (this->has_wide_registers()) {
-        if (this->get_emulation_mode() && this->get(REG_IR) == 0xF4) {
+        if (this->in_emulation_mode() && this->get(REG_IR) == 0xF4) {
             // PEA in emulation mode should behave as NOP zp,X
             this->transition_to_opcode(opcode_info_t{OP::NOP, AM::ZPX, OF::NONE});
             return this->call_current_handler(pins);
@@ -433,7 +433,7 @@ bus_state_t addr_ind_abs(bus_state_t pins) {
 bus_state_t am_zpi(bus_state_t pins) {
     // Check for 65C816 PEI (0xD4) in emulation mode - redirect to ZPX addressing
     if constexpr (this->has_wide_registers()) {
-        if (this->get_emulation_mode() && this->get(REG_IR) == 0xD4) {
+        if (this->in_emulation_mode() && this->get(REG_IR) == 0xD4) {
             // PEI in emulation mode should behave as NOP zp,X
             this->transition_to_opcode(opcode_info_t{OP::NOP, AM::ZPX, OF::NONE});
             return this->call_current_handler(pins);
@@ -570,7 +570,7 @@ bus_state_t am_dp(bus_state_t pins) {
 bus_state_t am_dpx(bus_state_t pins) {
     if constexpr (this->has_wide_registers()) {
         // Check for emulation mode - fall back to zero page,X behavior
-        if (this->get_emulation_mode()) {
+        if (this->in_emulation_mode()) {
             return am_zpx(pins);
         }
         
@@ -629,7 +629,7 @@ bus_state_t am_dpx(bus_state_t pins) {
 bus_state_t am_abl(bus_state_t pins) {
     if constexpr (this->has_wide_registers()) {
         // Check for 65C816 JSL (0x22) in emulation mode - redirect to NOP IMM addressing
-        if (this->get_emulation_mode() && this->get(REG_IR) == 0x22) {
+        if (this->in_emulation_mode() && this->get(REG_IR) == 0x22) {
             // PEI in emulation mode should behave as NOP zp,X
             this->transition_to_opcode(opcode_info_t{OP::NOP, AM::IMM, OF::NONE});
             return this->call_current_handler(pins);

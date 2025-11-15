@@ -17,7 +17,7 @@
 bus_state_t op_adc(bus_state_t pins) {
     // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_M)) {
+        if (this->is_accumulator_16bit()) {
             // 65C816 native mode, 16-bit accumulator - perform 16-bit ADC
             switch (this->cycle_index) {
                 case 0:
@@ -110,7 +110,7 @@ bus_state_t op_nop(bus_state_t pins) {
         // Check if we're NOT in 65C816 emulation mode
         bool not_in_emulation = true;
         if constexpr (this->has_wide_registers()) {
-            not_in_emulation = !this->get_emulation_mode();
+            not_in_emulation = !this->in_emulation_mode();
         }
         
         // Only proceed with RMW if we have RMW flags AND we're not in 65C816 emulation mode
@@ -197,7 +197,7 @@ bus_state_t op_nop(bus_state_t pins) {
 bus_state_t op_sbc(bus_state_t pins) {
     // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_M)) {
+        if (this->is_accumulator_16bit()) {
             // 65C816 native mode, 16-bit accumulator - perform 16-bit SBC
             switch (this->cycle_index) {
                 case 0:
@@ -279,7 +279,7 @@ bus_state_t op_sbc(bus_state_t pins) {
 bus_state_t op_cmp(bus_state_t pins) {
     // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_M)) {
+        if (this->is_accumulator_16bit()) {
             // 65C816 native mode, 16-bit accumulator - perform 16-bit CMP
             switch (this->cycle_index) {
                 case 0:
@@ -337,7 +337,7 @@ bus_state_t op_cmp(bus_state_t pins) {
 bus_state_t op_cpx(bus_state_t pins) {
     // Check for 65C816 native mode with 16-bit index registers (X=0) - nested native code
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_X)) {
+        if (this->is_index_16bit()) {
             // 65C816 native mode, 16-bit X register - perform 16-bit CPX
             switch (this->cycle_index) {
                 case 0:
@@ -395,7 +395,7 @@ bus_state_t op_cpx(bus_state_t pins) {
 bus_state_t op_cpy(bus_state_t pins) {
     // Check for 65C816 native mode with 16-bit index registers (X=0) - nested native code
     if constexpr (this->has_wide_registers()) {
-        if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_X)) {
+        if (this->is_index_16bit()) {
             // 65C816 native mode, 16-bit Y register - perform 16-bit CPY
             switch (this->cycle_index) {
                 case 0:

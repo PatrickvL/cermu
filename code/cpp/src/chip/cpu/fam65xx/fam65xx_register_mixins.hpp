@@ -118,7 +118,7 @@ struct narrow_registers_mixin_t {
     
     // === 65C816 compatibility methods ===
     // For non-65C816 processors, emulation mode is always true
-    inline bool get_emulation_mode() const {
+    inline bool in_emulation_mode() const {
         return true;  // 8-bit processors are always in "emulation mode"
     }
     
@@ -178,7 +178,7 @@ struct wide_registers_mixin_t {
     
     // === 65C816 extended register access (using optimized helpers) ===
 
-    inline bool get_emulation_mode() const {
+    inline bool in_emulation_mode() const {
         return (get(REG_P_16) & FLAG_E) != 0;
     }
     
@@ -207,21 +207,6 @@ struct wide_registers_mixin_t {
     inline bool is_index_16bit() const {
         // 16-bit when BOTH emulation=0 AND X=0
         return !(get(REG_P_16) & (FLAG_E | FLAG_X));
-    }
-    
-    // Check if in native mode with 16-bit accumulator
-    inline bool is_native_mode_16bit_accumulator() const {
-        return !(get(REG_P_16) & (FLAG_E | FLAG_M));
-    }
-    
-    // Check if in native mode with 16-bit index registers
-    inline bool is_native_mode_16bit_index() const {
-        return !(get(REG_P_16) & (FLAG_E | FLAG_X));
-    }
-    
-    // Check if in native mode with both accumulator and index registers in 16-bit mode
-    inline bool is_native_mode_full_16bit() const {
-        return !(get(REG_P_16) & (FLAG_E | FLAG_M | FLAG_X));
     }
 
     // Template version for compile-time register type selection

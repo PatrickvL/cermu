@@ -126,7 +126,7 @@ uint8_t wdc65c816_get_pbr(wdc65c816_t* cpu) {
 }
 
 bool wdc65c816_get_emulation_mode(wdc65c816_t* cpu) {
-    return CPU_CAST(cpu)->get_emulation_mode();
+    return CPU_CAST(cpu)->in_emulation_mode();
 }
 
 // 16-bit register setters (65C816-specific)
