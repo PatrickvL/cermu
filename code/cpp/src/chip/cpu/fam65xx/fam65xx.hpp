@@ -602,6 +602,81 @@ class fam65xx_t :
     }
 
     // ========================================================================
+    // WIDTH-AWARE FLAG UPDATING HELPERS (for RMW and other operations)
+    // ========================================================================
+    
+    /**
+     * Register-aware flag calculation with automatic 8/16-bit detection
+     * Uses constexpr wide check with fallback to 8-bit when emulation mode
+     * is active or when the specified register is set to 8-bit mode
+     */
+    template<reg8_t flag_reg = REG_A>
+    inline uint8_t calc_nz_flags_register_aware(data_t value) {
+        if constexpr (has_wide_registers()) {
+            // 65C816: Check emulation mode and register-specific width flags
+            bool use_16bit = false;
+            
+            if (!this->get_emulation_mode()) {
+                // Native mode: Check register-specific width flags (runtime check)
+                if constexpr (flag_reg == REG_A) {
+                    use_16bit = !(this->get(REG_P) & FLAG_M);  // M=0 means 16-bit accumulator
+                } else if constexpr (flag_reg == REG_X || flag_reg == REG_Y) {
+                    use_16bit = !(this->get(REG_P) & FLAG_X);  // X=0 means 16-bit index registers
+                } else {
+                    // For other registers (memory operations), always use 8-bit
+                    use_16bit = false;
+                }
+            }
+            // Emulation mode: always 8-bit
+            
+            if (use_16bit) {
+                // 16-bit flag calculation
+                return ((value & 0x8000) ? FLAG_N : 0) |
+                       ((value == 0) ? FLAG_Z : 0);
+            }
+        }
+        
+        // 8-bit flag calculation (fallback for all non-wide CPUs and 8-bit modes)
+        return calc_nz_flags(static_cast<uint8_t>(value));
+    }
+    
+    /**
+     * Enhanced update_nz_flags that checks register width for 65C816
+     * Falls back to 8-bit mode when emulation mode is active or register is 8-bit
+     */
+    inline void update_nz_flags_enhanced(data_t value) {
+        if constexpr (has_wide_registers()) {
+            // Check if we should use 16-bit accumulator flags
+            if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_M)) {
+                // Native mode with 16-bit accumulator (M=0)
+                update_flags(FLAG_N | FLAG_Z,
+                           ((value & 0x8000) ? FLAG_N : 0) |
+                           ((value == 0) ? FLAG_Z : 0));
+                return;
+            }
+        }
+        
+        // Use 8-bit flags (emulation mode, 8-bit accumulator, or non-wide CPU)
+        update_nz_flags(static_cast<uint8_t>(value));
+    }
+    
+    // Legacy compatibility functions (use accumulator as default)
+    inline uint8_t calc_nz_flags_wide(data_t value) {
+        if constexpr (has_wide_registers()) {
+            if (!this->get_emulation_mode() && !(this->get(REG_P) & FLAG_M)) {
+                // 16-bit accumulator mode
+                return ((value & 0x8000) ? FLAG_N : 0) |
+                       ((value == 0) ? FLAG_Z : 0);
+            }
+        }
+        return calc_nz_flags(static_cast<uint8_t>(value));
+    }
+    
+    inline void update_nzc_flags_wide(data_t value, uint8_t carry_flag) {
+        update_flags(FLAG_N | FLAG_Z | FLAG_C, calc_nz_flags_wide(value) | carry_flag);
+    }
+
+    // ========================================================================
     // HARDWARE-ACCURATE BCD ARITHMETIC HELPERS
     // ========================================================================
     
@@ -828,17 +903,23 @@ class fam65xx_t :
     // ========================================================================
     
     /**
-     * Generic RMW (Read-Modify-Write) operation helper
-     * Handles the complex cycle-accurate timing for RMW operations
+     * Unified RMW (Read-Modify-Write) operation helper with constexpr wide support
+     * Handles the complex cycle-accurate timing for RMW operations with:
+     * - Constexpr wide register support (65C816) using data_t
+     * - Automatic 8/16-bit accumulator handling via get_accumulator()/set_accumulator()
+     * - Automatic banking fallback (Bank::DBR default handles emulation mode)
+     * - Hardware-accurate NMOS/CMOS dummy cycle behavior
+     * - Lambda-based operation functions for flexibility
      */
     template<typename OperationFunc>
     bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func) {
         if (this->opcode_entry.flags & to_index(OF::RMW)) {
-            // Memory mode - multi-cycle RMW operation
+            // Memory mode - multi-cycle RMW operation (always 8-bit for memory operations)
             switch (this->cycle_index) {
                 case 0:
-                    // Cycle 0: Read original value from memory
-                    pins = this->phi2_read<Addr::AB>(pins, REG_DL);
+                    // Cycle 0: Read original value from memory (DBR banking automatic)
+                    pins = this->phi2_read<Addr::AB, Bank::DBR>(pins, REG_DL);
+                    
                     if (FAM65XX_GET_RDY(pins)) {
                         this->cycle_index++;
                     }
@@ -846,37 +927,38 @@ class fam65xx_t :
                     
                 case 1:
                     // Cycle 1: Dummy cycle and perform modification
-                    if (Traits.has(CPUCoreFlags::RMW_DUMMY_WRITE)) {
-                        // NMOS: Dummy write of original value
-                        pins = this->phi2_write<Addr::AB>(pins, this->get(REG_DL));
+                    if (this->has_rmw_dummy_write()) {
+                        // NMOS: Dummy write of original value (DBR banking automatic)
+                        pins = this->phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DL));
                     } else {
-                        // CMOS: Dummy read instead of write
-                        pins = this->phi2_dummy_read<Addr::AB>(pins);
+                        // CMOS: Dummy read instead of write (DBR banking automatic)
+                        pins = this->phi2_dummy_read<Addr::AB, Bank::DBR>(pins);
                     }
                     
                     if (FAM65XX_GET_RDY(pins)) {
-                        uint8_t value = this->get(REG_DL);
-                        operation_func(value);  // Call the lambda to modify the value
-                        this->set(REG_DL, value);
+                        // For memory operations, convert 8-bit to data_t for consistent interface
+                        data_t value = static_cast<data_t>(this->get(REG_DL));
+                        operation_func(value);
+                        this->set(REG_DL, static_cast<uint8_t>(value & 0xFF));  // Memory operations are always 8-bit
                         this->cycle_index++;
                     }
                     return pins;
                     
                 case 2:
-                    // Cycle 2: Write modified value back to memory
+                    // Cycle 2: Write modified value back to memory (DBR banking automatic)
                     if (this->should_complete_write_cycle(pins)) {
-                        pins = this->phi2_write<Addr::AB>(pins, this->get(REG_DL));
+                        pins = this->phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DL));
                         this->transition_to_fetch();
                     }
                     return pins;
             }
         } else {
-            // Accumulator mode - single cycle operation
+            // Accumulator mode - single cycle operation with automatic 8/16-bit handling
             pins = this->phi2_dummy_read<Addr::PC>(pins);
             if (FAM65XX_GET_RDY(pins)) {
-                uint8_t value = this->get(REG_A);
-                operation_func(value);  // Call the lambda to modify the value
-                this->set(REG_A, value);
+                data_t value = this->get_accumulator();  // Automatically handles 8/16-bit based on M flag
+                operation_func(value);
+                this->set_accumulator(value);  // Automatically handles 8/16-bit based on M flag
                 this->transition_to_fetch();
             }
         }
@@ -1006,6 +1088,15 @@ class fam65xx_t :
         // For addressing modes that need address calculation, start with addressing mode handler
         if (this->opcode_entry.am_index > to_index(AM::IMM)) {
             return addressing_mode_handlers[this->opcode_entry.am_index];
+        }
+        
+        // Debug print for opcode 0x36 (ROL zp,X) dispatch issue
+        if (this->get(REG_IR) == 0x36) {
+            printf("DEBUG 0x36: op_index=%d (ROL=16, LSR=15), handler=%p, op_rol=%p, op_lsr=%p\n",
+                   this->opcode_entry.op_index,
+                   (void*)this->operation_handlers[this->opcode_entry.op_index],
+                   (void*)&fam65xx_t::op_rol,
+                   (void*)&fam65xx_t::op_lsr);
         }
         
         return this->operation_handlers[this->opcode_entry.op_index];

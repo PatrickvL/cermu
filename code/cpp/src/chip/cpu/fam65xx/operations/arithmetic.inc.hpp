@@ -123,7 +123,7 @@ bus_state_t op_nop(bus_state_t pins) {
     if (use_cmos_rmw) {
         // RMW mode NOP: Perform full read-modify-write cycle but don't modify the value
         // This preserves the bus cycle timing for WDC65C02 neutralized illegal opcodes
-        return this->rmw_operation_helper(pins, [this](uint8_t& value) {
+        return this->rmw_operation_helper(pins, [this](data_t& value) {
             // NOP operation: read the value but don't modify it
             // This creates the correct bus cycle pattern for WDC65C02 illegal opcodes
             (void)value; // Suppress unused parameter warning
@@ -453,11 +453,11 @@ bus_state_t op_cpy(bus_state_t pins) {
 bus_state_t op_inc(bus_state_t pins) {
     // INC - Increment memory by 1
     // This is a Read-Modify-Write operation
-    return this->rmw_operation_helper(pins, [this](uint8_t& value) {
+    return this->rmw_operation_helper(pins, [this](data_t& value) {
         // Increment the value
         value++;
-        // Update N and Z flags using optimized helper
-        this->update_nz_flags(value);
+        // Update N and Z flags using enhanced helper
+        this->update_nz_flags_enhanced(value);
     });
 }
 
@@ -468,11 +468,11 @@ bus_state_t op_inc(bus_state_t pins) {
 bus_state_t op_dec(bus_state_t pins) {
     // DEC - Decrement memory by 1
     // This is a Read-Modify-Write operation
-    return this->rmw_operation_helper(pins, [this](uint8_t& value) {
+    return this->rmw_operation_helper(pins, [this](data_t& value) {
         // Decrement the value
         value--;
-        // Update N and Z flags using optimized helper
-        this->update_nz_flags(value);
+        // Update N and Z flags using enhanced helper
+        this->update_nz_flags_enhanced(value);
     });
 }
 

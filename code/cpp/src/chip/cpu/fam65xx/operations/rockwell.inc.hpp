@@ -15,7 +15,7 @@
 
 /* Helper function for RMB/SMB operations */
 bus_state_t bit_modify_helper(bus_state_t pins, uint8_t bit_mask, bool set_bit) {
-    return this->rmw_operation_helper(pins, [this, bit_mask, set_bit](uint8_t& value) {
+    return this->rmw_operation_helper(pins, [this, bit_mask, set_bit](data_t& value) {
         if (set_bit) {
             value |= bit_mask;   // Set bit
         } else {

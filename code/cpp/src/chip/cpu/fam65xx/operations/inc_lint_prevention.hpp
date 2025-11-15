@@ -192,9 +192,12 @@ namespace fam65xx {
       inline bus_state_t call_current_handler(bus_state_t pins) { return pins; }
       inline uint32_t get_vector_addr() const { return 0; }
       
-      // RMW operation helper - forward declaration
-      template<typename OperationFunc>
-      bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func) { return pins; }
+      // Enhanced RMW operation helper - lambda-based approach for flexible operations
+      template<typename ModifyFunc>
+      bus_state_t rmw_operation_helper(bus_state_t pins, ModifyFunc modify_func) {
+          // Stub implementation for lint analysis - accepts lambda for operation logic
+          return pins;
+      }
       
       // =====================================================================
       // OPCODE TABLE TEMPLATE FUNCTION DECLARATION
