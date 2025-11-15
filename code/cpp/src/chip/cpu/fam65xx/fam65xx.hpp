@@ -321,21 +321,21 @@ class fam65xx_t :
 
     // Get bank byte for address construction (0 if banking doesn't apply)
     template<Addr addr_arg>
-    inline constexpr uint8_t get_address_bank(Bank bank_arg) const {
+    inline uint8_t get_address_bank(Bank bank_arg) const {
         // Non-65C816 processors never use banking
         if constexpr (!has_wide_registers()) return 0;
         
         // PC always uses PBR, even in emulation mode
-        if constexpr (addr_arg == Addr::PC) return this->regs[REG_PBR];
+        if constexpr (addr_arg == Addr::PC) return this->get(REG_PBR);
         
         // Emulation mode: non-PC addresses don't use banking (6502 compatibility)
         if (this->in_emulation_mode()) return 0;
         
         // Native mode: SP uses ZBR, data addresses use provided bank (typically DBR)
         if constexpr (addr_arg == Addr::SP) {
-            return this->regs[REG_ZBR];
+            return this->get(REG_ZBR);
         } else {
-            return this->regs[static_cast<reg8_t>(bank_arg)];
+            return this->get(static_cast<reg8_t>(bank_arg));
         }
     }
 
@@ -1631,7 +1631,7 @@ public:
     bool stopped;                       /* STP instruction state */
     
     /* Debug tracing state */
-    static constexpr bool ENABLE_TRACING = false;  /* Compile-time tracing flag */
+    static constexpr bool ENABLE_TRACING = true;  /* Compile-time tracing flag */
     mutable int trace_indent;           /* Current tracing indentation level */
 };
 
