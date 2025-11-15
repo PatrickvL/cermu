@@ -129,7 +129,7 @@ static std::vector<PinSignalState> get_vicii_pin_states(vicii_t* vicii, const Ch
     pin_states[20].high_impedance = false;
     
     // Set IRQ pin state based on VIC-II registers
-    if (vicii->registers.data && (vicii->registers.data[0x19] & 0x80)) {
+    if (vicii->registers.data[0x19] & 0x80) {
         pin_states[5].signal_level = false; // IRQ (pin 6) - active low
         pin_states[5].drive_direction = true;
         pin_states[5].high_impedance = false;

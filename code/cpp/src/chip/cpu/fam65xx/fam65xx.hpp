@@ -1110,14 +1110,13 @@ class fam65xx_t :
             return addressing_mode_handlers[this->opcode_entry.am_index];
         }
         
-        // Debug print for opcode 0x36 (ROL zp,X) dispatch issue
+        // Debug code removed to eliminate pointer-to-member-function conversion warnings
+        #ifdef DEBUG_OPCODE_DISPATCH
         if (this->get(REG_IR) == 0x36) {
-            printf("DEBUG 0x36: op_index=%d (ROL=16, LSR=15), handler=%p, op_rol=%p, op_lsr=%p\n",
-                   this->opcode_entry.op_index,
-                   (void*)this->operation_handlers[this->opcode_entry.op_index],
-                   (void*)&fam65xx_t::op_rol,
-                   (void*)&fam65xx_t::op_lsr);
+            printf("DEBUG 0x36: op_index=%d (expected ROL=16, LSR=15)\n",
+                   this->opcode_entry.op_index);
         }
+        #endif
         
         return this->operation_handlers[this->opcode_entry.op_index];
     }
