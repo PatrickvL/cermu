@@ -18,6 +18,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <inttypes.h>
 
 // Macro to create RGBA color values for OpenGL GL_RGBA format
 #define RGBA_COLOR(r, g, b, a) (((uint32_t)(a) << 24) | ((uint32_t)(b) << 16) | ((uint32_t)(g) << 8) | (uint32_t)(r))
@@ -433,7 +434,7 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
             ImGui::Text("With border: 403x284");
             
             if (c64) {
-                ImGui::Text("Frame: %llu", c64->total_cycles / 20000);
+                ImGui::Text("Frame: %" PRIu64, c64->total_cycles / 20000);
             }
             
             ImGui::EndMenu();
@@ -487,7 +488,7 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
         }
           // Status bar on the right
          ImGui::SameLine(ImGui::GetWindowWidth() - 450, -1.0f);
-         ImGui::Text("Cycles: %llu", c64 ? c64->total_cycles : 0);
+         ImGui::Text("Cycles: %" PRIu64, c64 ? c64->total_cycles : 0);
          ImGui::SameLine(0, -1.0f);
 
          // CPU mode + perf metrics (instantaneous)
@@ -507,7 +508,7 @@ void gui_render_menu_bar(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
              
              ImGui::Text("Mode: C++");
              ImGui::SameLine(0, -1.0f);
-             ImGui::Text("Cycles: %llu", c64->total_cycles);
+             ImGui::Text("Cycles: %" PRIu64, c64->total_cycles);
              ImGui::SameLine(0, -1.0f);
          }
 
@@ -581,7 +582,7 @@ void gui_render_debugger(c64_t* c64, gui_state_t* gui_state, gui_emulation_conte
                emu_context->current_state == EMU_STATE_STEPPING ? "Stepping" :
                emu_context->current_state == EMU_STATE_STOPPED ? "Stopped" : "Unknown");
         ImGui::Text("FPS: %u", emu_context->actual_fps);
-        ImGui::Text("Total Cycles: %llu", emu_context->total_cycles_executed);
+        ImGui::Text("Total Cycles: %" PRIu64, emu_context->total_cycles_executed);
         ImGui::Separator();
         
         // System initialization status

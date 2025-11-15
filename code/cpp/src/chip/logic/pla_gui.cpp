@@ -353,8 +353,8 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                                 uint8_t page_read_chip = (read_chip == CHIP_IO) ? page : read_chip;
                                 uint8_t page_write_chip = (write_chip == CHIP_IO) ? page : write_chip;
                                 
-                                chip_description_t read_desc = {0};
-                                chip_description_t write_desc = {0};
+                                chip_description_t read_desc = {.base = 0, .size = 0, .label = nullptr};
+                                chip_description_t write_desc = {.base = 0, .size = 0, .label = nullptr};
                                 c64_bus_get_chip_description(&c64->bus, page_read_chip, &read_desc);
                                 c64_bus_get_chip_description(&c64->bus, page_write_chip, &write_desc);
                                 uint16_t read_offset = (read_desc.base <= page_start) ? (page_start - read_desc.base) : 0;
@@ -403,8 +403,8 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                             }
                         } else {
                             // Regular bank - chip mapping depends on PLA mode
-                            chip_description_t read_desc = {0};
-                            chip_description_t write_desc = {0};
+                            chip_description_t read_desc = {.base = 0, .size = 0, .label = nullptr};
+                            chip_description_t write_desc = {.base = 0, .size = 0, .label = nullptr};
                             c64_bus_get_chip_description(&c64->bus, read_chip, &read_desc);
                             c64_bus_get_chip_description(&c64->bus, write_chip, &write_desc);
                             
@@ -513,7 +513,7 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                         }
                         ImGui::TableSetColumnIndex(4);
 
-                        chip_description_t read_desc = {0};
+                        chip_description_t read_desc = {.base = 0, .size = 0, .label = nullptr};
                         c64_bus_get_chip_description(&c64->bus, read_chip, &read_desc);
                         uint16_t read_offset = (read_desc.base <= bank_start) ? (bank_start - read_desc.base) : 0;
 
@@ -557,7 +557,7 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                 ImGui::Text("%02d", chip);
                 ImGui::TableSetColumnIndex(1);
 
-                chip_description_t desc = {0};
+                chip_description_t desc = {.base = 0, .size = 0, .label = nullptr};
                 bool has_desc = c64_bus_get_chip_description(&c64->bus, chip, &desc);
                 if (has_desc && desc.size > 0) {
                     ImGui::Text("$%04X-$%04X", desc.base, (uint16_t)(desc.base + desc.size - 1));
