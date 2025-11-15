@@ -188,7 +188,7 @@ namespace fam65xx {
       
       // RMW operation helper - forward declaration
       template<typename OperationFunc>
-      bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func) { return pins; };
+      bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func) { return pins; }
       
       // =====================================================================
       // OPCODE TABLE TEMPLATE FUNCTION DECLARATION
