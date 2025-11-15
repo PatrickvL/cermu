@@ -49,7 +49,7 @@ bus_state_t am_zpx(bus_state_t pins) {
             if (FAM65XX_GET_RDY(pins)) {
                 // PHI1: Add index to ABL address (wraps in zero page)
                 // Add index to ABL address (wraps in zero page)
-                        this->set(REG_ABL, this->get(REG_ABL) + this->get(REG_X));
+                this->set(REG_ABL, this->get(REG_ABL) + this->get(REG_X));
                 this->transition_to_operation();
             }
             return pins;

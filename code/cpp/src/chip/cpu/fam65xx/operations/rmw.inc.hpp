@@ -25,7 +25,7 @@ bus_state_t op_asl(bus_state_t pins) {
                 
             case 1:
                 // Cycle 1: Dummy cycle and perform modification
-                if (Traits.has(CPUCoreFlags::RMW_DUMMY_WRITE)) {
+                if (this->has_rmw_dummy_write()) {
                     // NMOS: Dummy write of original value
                     pins = this->phi2_write<Addr::AB>(pins, this->get(REG_DL));
                 } else {
@@ -85,7 +85,7 @@ bus_state_t op_lsr(bus_state_t pins) {
                 
             case 1:
                 // Cycle 1: Dummy cycle and perform modification
-                if (Traits.has(CPUCoreFlags::RMW_DUMMY_WRITE)) {
+                if (this->has_rmw_dummy_write()) {
                     // NMOS: Dummy write of original value
                     pins = this->phi2_write<Addr::AB>(pins, this->get(REG_DL));
                 } else {
@@ -145,7 +145,7 @@ bus_state_t op_rol(bus_state_t pins) {
                 
             case 1:
                 // Cycle 1: Dummy cycle and perform modification
-                if (Traits.has(CPUCoreFlags::RMW_DUMMY_WRITE)) {
+                if (this->has_rmw_dummy_write()) {
                     // NMOS: Dummy write of original value
                     pins = this->phi2_write<Addr::AB>(pins, this->get(REG_DL));
                 } else {
@@ -207,7 +207,7 @@ bus_state_t op_ror(bus_state_t pins) {
                 
             case 1:
                 // Cycle 1: Dummy cycle and perform modification
-                if (Traits.has(CPUCoreFlags::RMW_DUMMY_WRITE)) {
+                if (this->has_rmw_dummy_write()) {
                     // NMOS: Dummy write of original value
                     pins = this->phi2_write<Addr::AB>(pins, this->get(REG_DL));
                 } else {
