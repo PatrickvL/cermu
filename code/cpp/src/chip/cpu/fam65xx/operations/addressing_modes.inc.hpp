@@ -48,19 +48,8 @@ bus_state_t am_zpx(bus_state_t pins) {
             pins = this->phi2_read<Addr::AB>(pins, REG_DL);
             if (FAM65XX_GET_RDY(pins)) {
                 // PHI1: Add index to ABL address (wraps in zero page)
-                // In emulation mode, X register is always 8-bit (use low byte only)
-                if constexpr (this->has_wide_registers()) {
-                    if (this->get_emulation_mode()) {
-                        // Emulation mode: X is always 8-bit, use low byte only
+                // Add index to ABL address (wraps in zero page)
                         this->set(REG_ABL, this->get(REG_ABL) + this->get(REG_X));
-                    } else {
-                        // Native mode: Use full X register width based on X flag
-                        this->set(REG_ABL, this->get(REG_ABL) + this->get_x_register());
-                    }
-                } else {
-                    // Non-wide processors: always 8-bit
-                    this->set(REG_ABL, this->get(REG_ABL) + this->get(REG_X));
-                }
                 this->transition_to_operation();
             }
             return pins;
@@ -580,6 +569,12 @@ bus_state_t am_dp(bus_state_t pins) {
 // Direct Page,X addressing: dp,X (65C816)
 bus_state_t am_dpx(bus_state_t pins) {
     if constexpr (this->has_wide_registers()) {
+        // Check for emulation mode - fall back to zero page,X behavior
+        if (this->get_emulation_mode()) {
+            return am_zpx(pins);
+        }
+        
+        // Native mode: True Direct Page,X addressing
         switch (this->cycle_index) {
             case 0:
                 // PHI2: Read Direct Page offset from PC
@@ -626,7 +621,7 @@ bus_state_t am_dpx(bus_state_t pins) {
         return pins;
     }
     
-    // Fall back to zero page,X on emulation mode and non-wide processors
+    // Fall back to zero page,X on non-wide processors
     return am_zpx(pins);
 }
 
@@ -981,7 +976,7 @@ bus_state_t am_sri(bus_state_t pins) {
 
 // Zero Page Relative Addressing: For BBR/BBS instructions ($nn,$offset)
 bus_state_t am_zpr(bus_state_t pins) {
-    if constexpr (Traits.has(CPUCoreFlags::ROCKWELL_BITS)) {
+    if constexpr (this->has_bit_manipulation()) {
         // BBR/BBS instructions: $nn,$offset
         switch (this->cycle_index) {
             case 0:

@@ -108,7 +108,8 @@ class fam65xx_t :
     static constexpr bool has_optimized_cycles() { return Traits.has(CPUCoreFlags::OPTIMIZED_CYCLES); }
     static constexpr bool has_rmw_dummy_write() { return Traits.has(CPUCoreFlags::RMW_DUMMY_WRITE); }
     static constexpr bool has_wide_registers() { return Traits.has(CPUCoreFlags::C816_16BIT); }
-    
+    static constexpr bool has_bit_manipulation() { return Traits.has(CPUCoreFlags::ROCKWELL_BITS); }
+
     // ========================================================================
     // DEBUG TRACING HELPERS
     // ========================================================================
@@ -344,11 +345,12 @@ class fam65xx_t :
         
         // 65C816 banking: OR bank register into high bits (optimizer eliminates for non-wide CPUs)
         if constexpr (has_wide_registers()) {
-            // Only apply banking in native mode - emulation mode behaves exactly like 6502 (no banking)
             if (!this->get_emulation_mode()) {
-                // Always OR in the effective bank register value - REG_ZBR is always 0, others provide correct bank
+                // Native mode: Apply banking using appropriate bank register
+                // effective_bank_reg handles SP->ZBR mapping (ZBR=0 for stack operations)
                 addr |= static_cast<uint32_t>(this->get(effective_bank_reg<addr_arg>(bank_arg))) << 16;
             }
+            // Emulation mode: NO banking applied - behaves exactly like 6502 (bank $00 implicit)
         }
         // For non-wide CPUs, the bank_arg parameter and this->get(effective_bank_reg<addr_arg>(bank_arg)) call are optimized away
         
@@ -1223,7 +1225,8 @@ class fam65xx_t :
         addressing_mode_handlers[to_index(AM::INX)] = &fam65xx_t::am_inx;
         addressing_mode_handlers[to_index(AM::INY)] = &fam65xx_t::am_iny;
         addressing_mode_handlers[to_index(AM::ZER)] = &fam65xx_t::am_dp;  // DP maps to ZP implementation for pre-65C816 compatibility
-        addressing_mode_handlers[to_index(AM::ZPX)] = &fam65xx_t::am_dpx; // DPX maps to ZPX implementation for pre-65C816 compatibility
+        addressing_mode_handlers[to_index(AM::ZPX)] = &fam65xx_t::am_zpx; // Use actual zero page,X for compatibility
+        addressing_mode_handlers[to_index(AM::DPX)] = &fam65xx_t::am_dpx; // Direct Page,X - checks emulation mode internally
         addressing_mode_handlers[to_index(AM::ZPY)] = &fam65xx_t::am_zpy; // TODO : DPY maps to ZPY implementation for pre-65C816 compatibility
         
         // Rockwell 65C02 addressing modes

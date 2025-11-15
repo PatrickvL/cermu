@@ -108,7 +108,7 @@ namespace fam65xx {
       bus_state_t (fam65xx_t::*current_handler)(bus_state_t);
       uint8_t cycle_index;
       
-      // Surrogate processor traits object
+      // Surrogate processor traits object with proper methods
       static constexpr MockProcessorTag Traits{};
       
       // Memory callback interface (matching real template)
@@ -185,6 +185,12 @@ namespace fam65xx {
       static constexpr bool has_bcd_extra_cycle() { return false; }
       static constexpr bool has_apu() { return false; }
       static constexpr bool has_rmw_dummy_write() { return false; }
+      
+      // Additional functions that are used in addressing modes
+      inline opcode_info_t get_opcode_info(uint8_t opcode) const { return {}; }
+      inline void transition_to_opcode(const opcode_info_t entry) {}
+      inline bus_state_t call_current_handler(bus_state_t pins) { return pins; }
+      inline uint32_t get_vector_addr() const { return 0; }
       
       // RMW operation helper - forward declaration
       template<typename OperationFunc>
