@@ -1402,7 +1402,7 @@ class fam65xx_t :
         // Rockwell 65C02 addressing modes
         addressing_mode_handlers[to_index(AM::ZPR)] = &fam65xx_t::am_zpr; // Zero Page Relative - BBR/BBS $nn,$offset
 
-        // 6502/6510 and 65C816 addressing modes
+        // 6502/6510 and 65C816 addressing modes (with pre-65C816 compatibility)
         addressing_mode_handlers[to_index(AM::DP)] = &fam65xx_t::am_dp;   // Direct/Zero Page (maps to AM::ZER, am_zp) implementation for pre-65C816 compatibility
         addressing_mode_handlers[to_index(AM::DPX)] = &fam65xx_t::am_dpx; // Direct/Zero Page,X (maps to AM::ZPX, am_zpx) implementation for pre-65C816 compatibility
         addressing_mode_handlers[to_index(AM::DPY)] = &fam65xx_t::am_dpy; // Direct/Zero Page,Y (maps to AM::ZPY, am_zpy) implementation for pre-65C816 compatibility

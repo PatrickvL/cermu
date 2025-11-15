@@ -5,9 +5,9 @@
 /*
 Unified 64-bit bus state layout (compatible with new C++ core pins)
 Layout:
-- [ADDR:15-0]
-- [DATA:23-16]
-- [BANK:31-24]
+- [DATA:7-0]    (lowest 8 bits)
+- [ADDR:23-8]   (next 16 bits)
+- [BANK:31-24]  (next 8 bits)
 - [INPUT PINS:47-32]  (active-low for IRQ/NMI/RES, others active-high)
 - [OUTPUT PINS:63-48] (active-high)
 This header preserves legacy BUS_GET_LINES/BUS_SET_LINES semantics to avoid touching call sites.
@@ -18,9 +18,11 @@ typedef uint64_t bus_state_t;
 /* Field shifts and masks */
 #define BUS_DATA_SHIFT      0
 #define BUS_ADDR_SHIFT      8
+#define BUS_BANK_SHIFT      24
 
 #define BUS_DATA_MASK       0x00000000000000FFULL
 #define BUS_ADDR_MASK       0x0000000000FFFF00ULL
+#define BUS_BANK_MASK       0x00000000FF000000ULL
 
 /* Core pin bit indices */
 #define BUS_RES_BIT     32
@@ -56,9 +58,11 @@ typedef uint64_t bus_state_t;
 /* High-performance field access macros */
 #define BUS_GET_DATA(state)     ((uint8_t) (((state) & BUS_DATA_MASK) >> BUS_DATA_SHIFT))
 #define BUS_GET_ADDR(state)     ((uint16_t)(((state) & BUS_ADDR_MASK) >> BUS_ADDR_SHIFT))
+#define BUS_GET_BANK(state)     ((uint8_t) (((state) & BUS_BANK_MASK) >> BUS_BANK_SHIFT))
 
 #define BUS_SET_DATA(state, data)   ((state) = ((state) & ~BUS_DATA_MASK) | (((uint64_t)(data) & 0xFFULL) << BUS_DATA_SHIFT))
 #define BUS_SET_ADDR(state, addr)   ((state) = ((state) & ~BUS_ADDR_MASK) | (((uint64_t)(addr) & 0xFFFFULL) << BUS_ADDR_SHIFT))
+#define BUS_SET_BANK(state, bank)   ((state) = ((state) & ~BUS_BANK_MASK) | (((uint64_t)(bank) & 0xFFULL) << BUS_BANK_SHIFT))
 
 /* Legacy bus control line definitions (kept stable for callers) */
 #define BUS_LINE_IRQ    0 // Interrupt request line (legacy: 1 = asserted)
@@ -124,8 +128,8 @@ static inline bus_state_t bus_lines_apply(bus_state_t s, uint8_t lines) {
 /* Constructor helper preserving legacy semantics */
 static inline bus_state_t bus_state_make(uint16_t addr, uint8_t data, uint8_t lines) {
     bus_state_t s = 0;
-    s |= ((bus_state_t)addr & 0xFFFFULL);
     s |= (((bus_state_t)data & 0xFFULL) << BUS_DATA_SHIFT);
+    s |= (((bus_state_t)addr & 0xFFFFULL) << BUS_ADDR_SHIFT);
     /* BANK defaults to 0 for 6502/6510 family */
     s = bus_lines_apply(s, lines);
     return s;
