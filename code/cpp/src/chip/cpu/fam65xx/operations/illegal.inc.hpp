@@ -14,6 +14,7 @@
 // ============================================================================
 
 bus_state_t op_lax(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (has_illegal_opcodes()) {
         // LAX - Load A and X from memory
         // Special case: LAX immediate has unstable behavior - uses (A | 0xEE) & operand
@@ -48,6 +49,7 @@ bus_state_t op_lax(bus_state_t pins) {
 }
 
 bus_state_t op_sax(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (has_illegal_opcodes()) {
         // Store A AND X to memory with processor-specific RDY handling
         if (should_complete_write_cycle(pins)) {
@@ -64,6 +66,7 @@ bus_state_t op_sax(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_dcp(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (has_illegal_opcodes()) {
         // DCP - Decrement memory and compare with A (DEC memory, then CMP A with result)
         // This is a Read-Modify-Write operation
@@ -85,6 +88,7 @@ bus_state_t op_dcp(bus_state_t pins) {
 }
 
 bus_state_t op_isc(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (has_illegal_opcodes()) {
         // ISC - Increment memory and subtract from A (INC memory, then SBC A with result)
         // This is a Read-Modify-Write operation - match reference implementation exactly
@@ -102,6 +106,7 @@ bus_state_t op_isc(bus_state_t pins) {
 }
 
 bus_state_t op_slo(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (has_illegal_opcodes()) {
         // SLO - Shift Left and OR with A (ASL memory, then ORA A with result)
         // This is a Read-Modify-Write operation
@@ -120,6 +125,7 @@ bus_state_t op_slo(bus_state_t pins) {
 }
 
 bus_state_t op_rla(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (has_illegal_opcodes()) {
         // RLA - Rotate Left and AND with A (ROL memory, then AND A with result)
         // This is a Read-Modify-Write operation
@@ -139,6 +145,7 @@ bus_state_t op_rla(bus_state_t pins) {
 }
 
 bus_state_t op_sre(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (has_illegal_opcodes()) {
         // SRE - Shift Right and EOR with A (LSR memory, then EOR result with A)
         // This is a Read-Modify-Write operation
@@ -157,6 +164,7 @@ bus_state_t op_sre(bus_state_t pins) {
 }
 
 bus_state_t op_rra(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (has_illegal_opcodes()) {
         // RRA - Rotate Right and ADC with A (ROR memory, then ADC A with result)
         // This is a Read-Modify-Write operation - match reference implementation exactly
@@ -182,6 +190,7 @@ bus_state_t op_rra(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_jam(bus_state_t pins) {
+    trace_operation(__func__);
     // JAM/KIL instruction behavior on 6502:
     // - PC advances to read operand, then resets to opcode address
     // - Performs 3-cycle pattern: opcode read, operand read, operand read
@@ -217,6 +226,7 @@ bus_state_t op_jam(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_anc(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (has_illegal_opcodes()) {
         // ANC - AND with carry (AND immediate, then copy N flag to C flag)
         pins = this->phi2_read<Addr::PC>(pins, REG_DL);
@@ -239,6 +249,7 @@ bus_state_t op_anc(bus_state_t pins) {
 }
 
 bus_state_t op_arr(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (has_illegal_opcodes()) {
         // ARR - AND + ROR with BCD correction in decimal mode (reference implementation)
         pins = this->phi2_read<Addr::PC>(pins, REG_DL);
@@ -324,6 +335,7 @@ bus_state_t op_arr(bus_state_t pins) {
 }
 
 bus_state_t op_alr(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (has_illegal_opcodes()) {
         // ALR - AND + LSR (AND immediate, then LSR A)
         pins = this->phi2_read<Addr::PC>(pins, REG_DL);
@@ -356,6 +368,7 @@ bus_state_t op_asr(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_xaa(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (has_illegal_opcodes()) {
         // XAA - Transfer X AND immediate to A (illegal)
         // Hardware quirk: Uses unstable constant 0xEE like LAX immediate
@@ -374,6 +387,7 @@ bus_state_t op_xaa(bus_state_t pins) {
 }
 
 bus_state_t op_sbx(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (has_illegal_opcodes()) {
         // SBX - Compare X with A AND immediate (illegal) (also called AXS)
         pins = this->phi2_read<Addr::PC>(pins, REG_DL);
@@ -397,6 +411,7 @@ bus_state_t op_sbx(bus_state_t pins) {
 }
 
 bus_state_t op_sha(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (has_illegal_opcodes()) {
         // SHA - Store A & X & (H+1) with address corruption on page cross
         if (should_complete_write_cycle(pins)) {
@@ -420,6 +435,7 @@ bus_state_t op_sha(bus_state_t pins) {
 }
 
 bus_state_t op_shs(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (has_illegal_opcodes()) {
         // SHS - Store A & X & (H+1), Set S to A & X - match reference implementation exactly
         if (should_complete_write_cycle(pins)) {
@@ -450,6 +466,7 @@ bus_state_t op_shs(bus_state_t pins) {
 }
 
 bus_state_t op_shx(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (has_illegal_opcodes()) {
         // SHX - Store X & (H+1) with address corruption - match reference implementation exactly
         if (should_complete_write_cycle(pins)) {
@@ -472,6 +489,7 @@ bus_state_t op_shx(bus_state_t pins) {
 }
 
 bus_state_t op_shy(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (has_illegal_opcodes()) {
         // SHY - Store Y & (H+1) with address corruption - match reference implementation exactly
         if (should_complete_write_cycle(pins)) {
@@ -494,6 +512,7 @@ bus_state_t op_shy(bus_state_t pins) {
 }
 
 bus_state_t op_las(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (has_illegal_opcodes()) {
         // LAS - Load A, X, and S with memory AND stack pointer (illegal)
         pins = this->phi2_read<Addr::AB>(pins, REG_DL);

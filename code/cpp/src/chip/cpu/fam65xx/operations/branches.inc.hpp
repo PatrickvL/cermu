@@ -91,41 +91,49 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask, bool flag_value) 
 
 /* BCC - Branch if Carry Clear */
 bus_state_t op_bcc(bus_state_t pins) {
+    trace_operation(__func__);
     return branch_helper(pins, FLAG_C, false);
 }
 
 /* BCS - Branch if Carry Set */
 bus_state_t op_bcs(bus_state_t pins) {
+    trace_operation(__func__);
     return branch_helper(pins, FLAG_C, true);
 }
 
 /* BEQ - Branch if Equal (Zero Set) */
 bus_state_t op_beq(bus_state_t pins) {
+    trace_operation(__func__);
     return branch_helper(pins, FLAG_Z, true);
 }
 
 /* BNE - Branch if Not Equal (Zero Clear) */
 bus_state_t op_bne(bus_state_t pins) {
+    trace_operation(__func__);
     return branch_helper(pins, FLAG_Z, false);
 }
 
 /* BMI - Branch if Minus (Negative Set) */
 bus_state_t op_bmi(bus_state_t pins) {
+    trace_operation(__func__);
     return branch_helper(pins, FLAG_N, true);
 }
 
 /* BPL - Branch if Plus (Negative Clear) */
 bus_state_t op_bpl(bus_state_t pins) {
+    trace_operation(__func__);
     return branch_helper(pins, FLAG_N, false);
 }
 
 /* BVC - Branch if Overflow Clear */
 bus_state_t op_bvc(bus_state_t pins) {
+    trace_operation(__func__);
     return branch_helper(pins, FLAG_V, false);
 }
 
 /* BVS - Branch if Overflow Set */
 bus_state_t op_bvs(bus_state_t pins) {
+    trace_operation(__func__);
     return branch_helper(pins, FLAG_V, true);
 }
 

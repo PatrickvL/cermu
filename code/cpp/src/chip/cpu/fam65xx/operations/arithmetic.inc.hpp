@@ -15,6 +15,7 @@
 // ============================================================================
 
 bus_state_t op_adc(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
     if constexpr (this->has_wide_registers()) {
         if (this->is_accumulator_16bit()) {
@@ -97,6 +98,7 @@ bus_state_t op_adc(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_nop(bus_state_t pins) {
+    trace_operation(__func__);
     // CRITICAL FIX: 65C816 emulation mode compatibility
     // In emulation mode, 65C816 should behave exactly like 6502, not CMOS
     // This means NO RMW operations should be performed for NOP in emulation mode
@@ -195,6 +197,7 @@ bus_state_t op_nop(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_sbc(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
     if constexpr (this->has_wide_registers()) {
         if (this->is_accumulator_16bit()) {
@@ -277,6 +280,7 @@ bus_state_t op_sbc(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_cmp(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
     if constexpr (this->has_wide_registers()) {
         if (this->is_accumulator_16bit()) {
@@ -335,6 +339,7 @@ bus_state_t op_cmp(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_cpx(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with 16-bit index registers (X=0) - nested native code
     if constexpr (this->has_wide_registers()) {
         if (this->is_index_16bit()) {
@@ -393,6 +398,7 @@ bus_state_t op_cpx(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_cpy(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with 16-bit index registers (X=0) - nested native code
     if constexpr (this->has_wide_registers()) {
         if (this->is_index_16bit()) {
@@ -451,6 +457,7 @@ bus_state_t op_cpy(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_inc(bus_state_t pins) {
+    trace_operation(__func__);
     // INC - Increment memory by 1
     // This is a Read-Modify-Write operation
     return this->rmw_operation_helper(pins, [this](data_t& value) {
@@ -466,6 +473,7 @@ bus_state_t op_inc(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_dec(bus_state_t pins) {
+    trace_operation(__func__);
     // DEC - Decrement memory by 1
     // This is a Read-Modify-Write operation
     return this->rmw_operation_helper(pins, [this](data_t& value) {

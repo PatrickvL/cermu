@@ -52,6 +52,7 @@ bus_state_t transfer_no_flags_helper(bus_state_t pins, uint8_t value, reg8_t tar
 
 /* TAX - Transfer A to X */
 bus_state_t op_tax(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with different register sizes
     if constexpr (this->has_wide_registers()) {
         if (!this->in_emulation_mode()) {
@@ -102,6 +103,7 @@ bus_state_t op_tax(bus_state_t pins) {
 
 /* TAY - Transfer A to Y */
 bus_state_t op_tay(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with different register sizes
     if constexpr (this->has_wide_registers()) {
         if (!this->in_emulation_mode()) {
@@ -152,6 +154,7 @@ bus_state_t op_tay(bus_state_t pins) {
 
 /* TSX - Transfer S to X */
 bus_state_t op_tsx(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with 16-bit index registers
     if constexpr (this->has_wide_registers()) {
         if (this->template is_register_16bit<REG_X>()) {
@@ -180,6 +183,7 @@ bus_state_t op_tsx(bus_state_t pins) {
 
 /* TXA - Transfer X to A */
 bus_state_t op_txa(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with different register sizes
     if constexpr (this->has_wide_registers()) {
         if (!this->in_emulation_mode()) {
@@ -230,6 +234,7 @@ bus_state_t op_txa(bus_state_t pins) {
 
 /* TXS - Transfer X to S */
 bus_state_t op_txs(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with 16-bit index registers
     if constexpr (this->has_wide_registers()) {
         if (!this->in_emulation_mode()) {
@@ -263,6 +268,7 @@ bus_state_t op_txs(bus_state_t pins) {
 
 /* TYA - Transfer Y to A */
 bus_state_t op_tya(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with different register sizes
     if constexpr (this->has_wide_registers()) {
         if (!this->in_emulation_mode()) {
@@ -317,6 +323,7 @@ bus_state_t op_tya(bus_state_t pins) {
 
 /* INX - Increment X */
 bus_state_t op_inx(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with 16-bit index registers (X=0) - nested native code
     if constexpr (this->has_wide_registers()) {
         if (this->template is_register_16bit<REG_X>()) {
@@ -360,6 +367,7 @@ bus_state_t op_inx(bus_state_t pins) {
 
 /* INY - Increment Y */
 bus_state_t op_iny(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with 16-bit index registers (X=0) - nested native code
     if constexpr (this->has_wide_registers()) {
         if (this->template is_register_16bit<REG_Y>()) {
@@ -403,6 +411,7 @@ bus_state_t op_iny(bus_state_t pins) {
 
 /* DEX - Decrement X */
 bus_state_t op_dex(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with 16-bit index registers (X=0) - nested native code
     if constexpr (this->has_wide_registers()) {
         if (this->template is_register_16bit<REG_X>()) {
@@ -446,6 +455,7 @@ bus_state_t op_dex(bus_state_t pins) {
 
 /* DEY - Decrement Y */
 bus_state_t op_dey(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with 16-bit index registers (X=0) - nested native code
     if constexpr (this->has_wide_registers()) {
         if (this->template is_register_16bit<REG_Y>()) {

@@ -18,6 +18,7 @@
  * This operation handler only performs the jump once addressing is complete.
  */
 bus_state_t op_jmp(bus_state_t pins) {
+    trace_operation(__func__);
     // Addressing mode has already set up AB register with target address
     this->set(REG_PC, this->get(REG_AB));
     this->transition_to_fetch();
@@ -29,6 +30,7 @@ bus_state_t op_jmp(bus_state_t pins) {
  * This operation handler only performs the jump once addressing is complete.
  */
 bus_state_t op_jml(bus_state_t pins) {
+    trace_operation(__func__);
     // Addressing mode has already set up AB register with target address
     this->set(REG_PC, this->get(REG_AB));
     this->transition_to_fetch();
@@ -37,6 +39,7 @@ bus_state_t op_jml(bus_state_t pins) {
 
 /* JSR - Jump to Subroutine */
 bus_state_t op_jsr(bus_state_t pins) {
+    trace_operation(__func__);
     switch (this->cycle_index) {
         case 0:
             /* PHI2: Read low byte of target address from PC directly to ABL */
@@ -88,6 +91,7 @@ bus_state_t op_jsr(bus_state_t pins) {
 
 /* RTS - Return from Subroutine */
 bus_state_t op_rts(bus_state_t pins) {
+    trace_operation(__func__);
     switch (this->cycle_index) {
         case 0:
             /* PHI2: Dummy read from PC */
@@ -201,6 +205,7 @@ uint16_t get_vector_addr() const {
 
 /* BRK - Break (Software Interrupt) */
 bus_state_t op_brk(bus_state_t pins) {
+    trace_operation(__func__);
     switch (this->cycle_index) {
         case 0:
             /* PHI2: Dummy read from PC+1 (BRK has optional signature byte) */
@@ -294,6 +299,7 @@ bus_state_t op_brk(bus_state_t pins) {
 
 /* RTI - Return from Interrupt */
 bus_state_t op_rti(bus_state_t pins) {
+    trace_operation(__func__);
     switch (this->cycle_index) {
         case 0:
             /* PHI2: Dummy read from PC */

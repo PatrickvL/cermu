@@ -15,6 +15,7 @@
 // ============================================================================
 
 bus_state_t op_lda(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
     if constexpr (this->has_wide_registers()) {
         if (this->template is_register_16bit<REG_A>()) {
@@ -64,6 +65,7 @@ bus_state_t op_lda(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_ldx(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with 16-bit index registers (X=0) - nested native code
     if constexpr (this->has_wide_registers()) {
         if (this->template is_register_16bit<REG_X>()) {
@@ -113,6 +115,7 @@ bus_state_t op_ldx(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_ldy(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with 16-bit index registers (X=0) - nested native code
     if constexpr (this->has_wide_registers()) {
         if (this->template is_register_16bit<REG_Y>()) {
@@ -162,6 +165,7 @@ bus_state_t op_ldy(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_sta(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
     if constexpr (this->has_wide_registers()) {
         if (this->template is_register_16bit<REG_A>()) {
@@ -202,6 +206,7 @@ bus_state_t op_sta(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_stx(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with 16-bit index registers (X=0) - nested native code
     if constexpr (this->has_wide_registers()) {
         if (this->template is_register_16bit<REG_X>()) {
@@ -242,6 +247,7 @@ bus_state_t op_stx(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_sty(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with 16-bit index registers (X=0) - nested native code
     if constexpr (this->has_wide_registers()) {
         if (this->template is_register_16bit<REG_Y>()) {
@@ -283,6 +289,7 @@ bus_state_t op_sty(bus_state_t pins) {
 
 // AND with Accumulator
 bus_state_t op_and(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
     if constexpr (this->has_wide_registers()) {
         if (this->template is_register_16bit<REG_A>()) {
@@ -338,6 +345,7 @@ bus_state_t op_and(bus_state_t pins) {
 
 // OR with Accumulator
 bus_state_t op_ora(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
     if constexpr (this->has_wide_registers()) {
         if (this->template is_register_16bit<REG_A>()) {
@@ -393,6 +401,7 @@ bus_state_t op_ora(bus_state_t pins) {
 
 // Exclusive OR with Accumulator
 bus_state_t op_eor(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native code
     if constexpr (this->has_wide_registers()) {
         if (this->template is_register_16bit<REG_A>()) {
@@ -451,6 +460,7 @@ bus_state_t op_eor(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_bit(bus_state_t pins) {
+    trace_operation(__func__);
     // Check for 65816 native mode with 16-bit accumulator (M=0) - nested native code
     if constexpr (this->has_wide_registers()) {
         if (this->template is_register_16bit<REG_A>()) {

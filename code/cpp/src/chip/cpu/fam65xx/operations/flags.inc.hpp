@@ -15,6 +15,7 @@
 
 /* CLC - Clear Carry Flag */
 bus_state_t op_clc(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
         pins = this->phi2_dummy_read<Addr::PC>(pins);
@@ -31,6 +32,7 @@ bus_state_t op_clc(bus_state_t pins) {
 
 /* SEC - Set Carry Flag */
 bus_state_t op_sec(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
         pins = this->phi2_dummy_read<Addr::PC>(pins);
@@ -47,6 +49,7 @@ bus_state_t op_sec(bus_state_t pins) {
 
 /* CLI - Clear Interrupt Disable Flag */
 bus_state_t op_cli(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
         pins = this->phi2_dummy_read<Addr::PC>(pins);
@@ -63,6 +66,7 @@ bus_state_t op_cli(bus_state_t pins) {
 
 /* SEI - Set Interrupt Disable Flag */
 bus_state_t op_sei(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
         pins = this->phi2_dummy_read<Addr::PC>(pins);
@@ -79,6 +83,7 @@ bus_state_t op_sei(bus_state_t pins) {
 
 /* CLD - Clear Decimal Mode Flag */
 bus_state_t op_cld(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
         pins = this->phi2_dummy_read<Addr::PC>(pins);
@@ -95,6 +100,7 @@ bus_state_t op_cld(bus_state_t pins) {
 
 /* SED - Set Decimal Mode Flag */
 bus_state_t op_sed(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
         pins = this->phi2_dummy_read<Addr::PC>(pins);
@@ -111,6 +117,7 @@ bus_state_t op_sed(bus_state_t pins) {
 
 /* CLV - Clear Overflow Flag */
 bus_state_t op_clv(bus_state_t pins) {
+    trace_operation(__func__);
     if constexpr (!has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
         pins = this->phi2_dummy_read<Addr::PC>(pins);
