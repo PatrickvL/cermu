@@ -1,39 +1,20 @@
 /*
  * inc_lint_prevention_footer.hpp - Footer for Lint Prevention System
  * 
- * This footer closes the surrogate class context and restores compiler 
- * diagnostics. It must be included at the end of each .inc.hpp file
- * after all member function implementations.
+ * This footer restores compiler diagnostics for .inc.hpp files.
+ * It must be included at the end of each .inc.hpp file.
  *
- * DESIGN:
- * =======
- * - Closes the surrogate template class opened in inc_lint_prevention.hpp
- * - Closes the namespace context
- * - Restores compiler diagnostic settings
- * - Only active during standalone analysis (when FAM65XX_TEMPLATE_CONTEXT is not defined)
+ * USAGE:
+ * ======
+ * At the end of each .inc.hpp file:
+ *   #include "inc_lint_prevention_footer.hpp"
  */
 
 #ifndef FAM65XX_TEMPLATE_CONTEXT
-  // This section only applies during standalone lint analysis
+  // Restore compiler diagnostics when parsing standalone
   
-  // =========================================================================
-  // CLOSE SURROGATE CLASS AND NAMESPACE CONTEXT
-  // =========================================================================
-  
-    }; // End of template<typename ProcessorTag> class fam65xx_t
-    
-  } // End of namespace fam65xx
-
-  // =========================================================================
-  // RESTORE COMPILER DIAGNOSTICS
-  // =========================================================================
-  
-  #if defined(__clang__)
-    #pragma clang diagnostic pop
-  #elif defined(__GNUC__)
-    #pragma GCC diagnostic pop
-  #elif defined(_MSC_VER)
+  #if defined(_MSC_VER)
     #pragma warning(pop)
   #endif
-
+  
 #endif // FAM65XX_TEMPLATE_CONTEXT
