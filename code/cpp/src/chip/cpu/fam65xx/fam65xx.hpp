@@ -319,15 +319,23 @@ class fam65xx_t :
      * @return Updated bus state with operation results
      */
 
-    // Determine effective bank register based on address register
+    // Get bank byte for address construction (0 if banking doesn't apply)
     template<Addr addr_arg>
-    inline constexpr reg8_t effective_bank_reg(Bank bank_arg) const {
-        if constexpr (addr_arg == Addr::PC) {
-            return REG_PBR;  // PC always uses Program Bank Register
-        } else if constexpr (addr_arg == Addr::SP) {
-            return REG_ZBR;  // Stack always uses Zero Bank Register
+    inline constexpr uint8_t get_address_bank(Bank bank_arg) const {
+        // Non-65C816 processors never use banking
+        if constexpr (!has_wide_registers()) return 0;
+        
+        // PC always uses PBR, even in emulation mode
+        if constexpr (addr_arg == Addr::PC) return this->regs[REG_PBR];
+        
+        // Emulation mode: non-PC addresses don't use banking (6502 compatibility)
+        if (this->in_emulation_mode()) return 0;
+        
+        // Native mode: SP uses ZBR, data addresses use provided bank (typically DBR)
+        if constexpr (addr_arg == Addr::SP) {
+            return this->regs[REG_ZBR];
         } else {
-            return static_cast<reg8_t>(bank_arg);  // REG_AB uses the provided bank
+            return this->regs[static_cast<reg8_t>(bank_arg)];
         }
     }
 
@@ -357,17 +365,10 @@ class fam65xx_t :
         constexpr reg16_t addr_reg = static_cast<reg16_t>(addr_arg);
         uint32_t addr = this->get(addr_reg);
         
-        // 65C816 banking: OR bank register into high bits (optimizer eliminates for non-wide CPUs)
-        if constexpr (has_wide_registers()) {
-            if (!this->in_emulation_mode()) {
-                // Native mode: Apply banking using appropriate bank register
-                // effective_bank_reg handles SP->ZBR mapping (ZBR=0 for stack operations)
-                addr |= static_cast<uint32_t>(this->get(effective_bank_reg<addr_arg>(bank_arg))) << 16;
-            }
-            // Emulation mode: NO banking applied - behaves exactly like 6502 (bank $00 implicit)
-        }
-        // For non-wide CPUs, the bank_arg parameter and this->get(effective_bank_reg<addr_arg>(bank_arg)) call are optimized away
-        
+        // 65C816 banking: OR bank into high bits (optimizer eliminates for non-wide CPUs)
+        addr |= static_cast<uint32_t>(get_address_bank<addr_arg>(bank_arg)) << 16;
+        // For non-wide CPUs, the entire call optimizes to |= 0 (no-op)
+
         // Update bus lines if enabled (for test/simulation environments)
         if constexpr (Traits.update_bus_lines()) {
             // For 65816: Split 24-bit address into 16-bit address + 8-bit bank using new macro
