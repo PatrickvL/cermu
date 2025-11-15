@@ -125,6 +125,20 @@ struct narrow_registers_mixin_t {
     inline void set_emulation_mode(bool /*mode*/) {
         // No-op for 8-bit processors
     }
+    
+    // === Optimized register width detection (always 8-bit for narrow CPUs) ===
+    inline bool is_accumulator_16bit() const {
+        return false;  // Always 8-bit for narrow CPUs
+    }
+    
+    inline bool is_index_16bit() const {
+        return false;  // Always 8-bit for narrow CPUs
+    }
+    
+    template<reg8_t reg_type>
+    inline bool is_register_16bit() const {
+        return false;  // Always 8-bit for narrow CPUs
+    }
 };
 
 // ============================================================================
@@ -147,28 +161,107 @@ struct wide_registers_mixin_t {
         memset(&reg8, 0, sizeof(reg8));
         
         // Initialize P register like a 6502 (only standard 6502 flags)
-        // In emulation mode, M and X flags are implicitly set by the emulation_mode flag
-        // but should not be visible in the P register like a real 6502
         set(REG_P, FLAG_U | FLAG_I);  // Only unused bit and interrupt disable (6502-compatible)
+        
+        // Initialize emulation mode in high byte of P register using FLAG_E
+        set(REG_PH, static_cast<uint8_t>(FLAG_E >> 8));  // Set emulation mode bit in high byte
         
         // Initialize stack pointer to page 1 (6502 compatible)
         set(REG_SP, 0x01FF);
         
         // Initialize 65C816-specific registers to 6502-compatible values
-        emulation_mode = true; // Start in emulation mode
         set(REG_D, 0x0000);    // Direct Page register = $0000 (behaves like Zero Page)
         set(REG_DBR, 0x00);    // Data Bank Register = $00
         set(REG_PBR, 0x00);    // Program Bank Register = $00
         set(REG_ZBR, 0x00);    // Zero Bank Register = $00
+    }   
+    
+    // === 65C816 extended register access (using optimized helpers) ===
+
+    inline bool get_emulation_mode() const {
+        return (get(REG_P_16) & FLAG_E) != 0;
     }
     
-    // === Helper: Check if register is in 16-bit mode ===
+    inline void set_emulation_mode(bool mode) {
+        if (mode) {
+            // Set emulation bit in the 16-bit P register
+            set(REG_P_16, get(REG_P_16) | FLAG_E);
+            // In emulation mode, M and X are implicit (always set) but not visible in P register
+            // Ensure M and X flags are NOT visible in P register in emulation mode
+            set(REG_P, get(REG_P) & ~(FLAG_M | FLAG_X));
+            // Force stack pointer to page 1
+            set(REG_SPH, 0x01);
+        } else {
+            // Clear emulation bit in the 16-bit P register
+            set(REG_P_16, get(REG_P_16) & ~FLAG_E);
+        }
+    }
+    
+    // === Optimized Helper: Check if register is in 16-bit mode ===
+    // Single instruction checks combining emulation mode with M/X flags
     inline bool is_accumulator_16bit() const {
-        return !emulation_mode && !(get(REG_P) & FLAG_M);
+        // 16-bit when BOTH emulation=0 AND M=0
+        return !(get(REG_P_16) & (FLAG_E | FLAG_M));
     }
     
     inline bool is_index_16bit() const {
-        return !emulation_mode && !(get(REG_P) & FLAG_X);
+        // 16-bit when BOTH emulation=0 AND X=0
+        return !(get(REG_P_16) & (FLAG_E | FLAG_X));
+    }
+    
+    // Check if in native mode with 16-bit accumulator
+    inline bool is_native_mode_16bit_accumulator() const {
+        return !(get(REG_P_16) & (FLAG_E | FLAG_M));
+    }
+    
+    // Check if in native mode with 16-bit index registers
+    inline bool is_native_mode_16bit_index() const {
+        return !(get(REG_P_16) & (FLAG_E | FLAG_X));
+    }
+    
+    // Check if in native mode with both accumulator and index registers in 16-bit mode
+    inline bool is_native_mode_full_16bit() const {
+        return !(get(REG_P_16) & (FLAG_E | FLAG_M | FLAG_X));
+    }
+
+    // Template version for compile-time register type selection
+    template<reg8_t reg_type>
+    inline bool is_register_16bit() const {
+        if constexpr (reg_type == REG_A || reg_type == REG_AL) {
+            return !(get(REG_P_16) & (FLAG_E | FLAG_M));
+        } else if constexpr (reg_type == REG_X || reg_type == REG_XL || reg_type == REG_Y || reg_type == REG_YL) {
+            return !(get(REG_P_16) & (FLAG_E | FLAG_X));
+        }
+        return false;  // Other registers are always 8-bit
+    }
+    
+    // Fast XCE (Exchange Carry with Emulation) operation helper
+    inline void exchange_carry_emulation() {
+        uint16_t p_reg = get(REG_P_16);
+        bool old_carry = (p_reg & FLAG_C) != 0;
+        bool old_emulation = (p_reg & FLAG_E) != 0;
+        
+        // Set carry to old emulation state
+        if (old_emulation) {
+            p_reg |= FLAG_C;
+        } else {
+            p_reg &= ~FLAG_C;
+        }
+        
+        // Set emulation to old carry state
+        if (old_carry) {
+            p_reg |= FLAG_E;
+        } else {
+            p_reg &= ~FLAG_E;
+        }
+        
+        set(REG_P_16, p_reg);
+        
+        // Handle emulation mode side effects
+        if (old_carry) {  // Switching to emulation mode
+            set(REG_SPH, 0x01);  // Force stack to page 1
+            set(REG_P, get(REG_P) & ~(FLAG_M | FLAG_X));  // Hide M/X flags
+        }
     }
     
     // === Type-safe 8-bit register accessors ===
@@ -210,9 +303,9 @@ struct wide_registers_mixin_t {
         reg8[data_reg] = FAM65XX_GET_DATA(pins);
     }
     
-    // === Memory operation helpers (context-aware) ===
+    // === Memory operation helpers (context-aware using optimized checks) ===
     inline data_t get_accumulator() const {
-        if (is_accumulator_16bit()) {
+        if (is_register_16bit<REG_A>()) {
             return get(REG_A_16);
         } else {
             return get(REG_A);
@@ -220,7 +313,7 @@ struct wide_registers_mixin_t {
     }
     
     inline void set_accumulator(data_t value) {
-        if (is_accumulator_16bit()) {
+        if (is_register_16bit<REG_A>()) {
             set(REG_A_16, value);
         } else {
             set(REG_A, static_cast<uint8_t>(value & 0xFF));
@@ -228,7 +321,7 @@ struct wide_registers_mixin_t {
     }
     
     inline data_t get_x_register() const {
-        if (is_index_16bit()) {
+        if (is_register_16bit<REG_X>()) {
             return get(REG_X_16);
         } else {
             return get(REG_X);
@@ -236,7 +329,7 @@ struct wide_registers_mixin_t {
     }
     
     inline void set_x_register(data_t value) {
-        if (is_index_16bit()) {
+        if (is_register_16bit<REG_X>()) {
             set(REG_X_16, value);
         } else {
             set(REG_X, static_cast<uint8_t>(value & 0xFF));
@@ -244,7 +337,7 @@ struct wide_registers_mixin_t {
     }
     
     inline data_t get_y_register() const {
-        if (is_index_16bit()) {
+        if (is_register_16bit<REG_Y>()) {
             return get(REG_Y_16);
         } else {
             return get(REG_Y);
@@ -252,28 +345,10 @@ struct wide_registers_mixin_t {
     }
     
     inline void set_y_register(data_t value) {
-        if (is_index_16bit()) {
+        if (is_register_16bit<REG_Y>()) {
             set(REG_Y_16, value);
         } else {
             set(REG_Y, static_cast<uint8_t>(value & 0xFF));
-        }
-    }
-    
-    // === 65C816 extended register access ===
-    inline bool get_emulation_mode() const {
-        return emulation_mode;
-    }
-    
-    inline void set_emulation_mode(bool mode) {
-        emulation_mode = mode;
-        if (mode) {
-            // In emulation mode, M and X are implicit (always set) but not visible in P register
-            // This matches real 65C816 hardware behavior
-            // Force stack pointer to page 1
-            set(REG_SPH, 0x01);
-            // Ensure M and X flags are NOT visible in P register in emulation mode
-            // In emulation mode, these flags are implicit (always set) but should not appear in P
-            set(REG_P, get(REG_P) & ~(FLAG_M | FLAG_X));
         }
     }
 };
