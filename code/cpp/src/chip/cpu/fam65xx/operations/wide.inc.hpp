@@ -95,15 +95,17 @@ bus_state_t op_xce(bus_state_t pins) {
                     bool old_carry = (p & FLAG_C) != 0;
                     bool old_emulation = this->in_emulation_mode();
                     
-                    // Set carry flag to old emulation flag
+                    // Set emulation mode to old carry flag FIRST
+                    this->set_emulation_mode(old_carry);
+                    
+                    // Then update the carry flag in P register based on old emulation mode
+                    // Get the updated P register after set_emulation_mode()
+                    p = this->get(REG_P);
                     if (old_emulation) {
                         p |= FLAG_C;
                     } else {
                         p &= ~FLAG_C;
                     }
-                    
-                    // Set emulation mode to old carry flag
-                    this->set_emulation_mode(old_carry);
                     
                     this->set(REG_P, p);
                 }
