@@ -1494,15 +1494,11 @@ public:
             if (mode) {
                 // Set emulation bit in the 16-bit P register
                 this->set(REG_P_16, this->get(REG_P_16) | FLAG_E);
-                // In emulation mode, M and X are implicit (always set) but not visible in P register
-                // Ensure M and X flags are NOT visible in P register in emulation mode
-                this->set(REG_P, this->get(REG_P) & ~(FLAG_M | FLAG_X));
-                // Force stack pointer to page 1
-                this->set(REG_SPH, 0x01);
-                // If switching TO emulation mode, manually truncate index registers
+                // If switching TO emulation mode, truncate index registers to 8 bits
+                // Force stack pointer to page 1 and Direct Page to $0000
                 this->set(REG_XH, 0);
                 this->set(REG_YH, 0);
-                // Force Direct Page to $0000
+                this->set(REG_SPH, 0x01);
                 this->set(REG_D_16, 0);
             } else {
                 // Clear emulation bit in the 16-bit P register

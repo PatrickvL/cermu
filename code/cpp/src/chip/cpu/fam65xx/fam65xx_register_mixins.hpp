@@ -93,12 +93,7 @@ struct narrow_registers_mixin_t {
     
     // === 65C816 compatibility methods removed - now in main fam65xx_t class ===
     // Functions moved to fam65xx_t for constexpr wide register detection
-    
-    template<reg8_t reg_type>
-    inline bool is_register_16bit() const {
-        return false;  // Always 8-bit for narrow CPUs
-    }
-};
+    };
 
 // ============================================================================
 // WIDE REGISTERS MIXIN (65C816)
@@ -138,43 +133,6 @@ struct wide_registers_mixin_t {
     // === 65C816 extended register access methods removed - now in main fam65xx_t class ===
     // Functions moved to fam65xx_t for constexpr wide register detection
 
-    // Template version for compile-time register type selection
-    template<reg8_t reg_type>
-    inline bool is_register_16bit() const {
-        // Note: This will be overridden in the main fam65xx_t class
-        // For now, return false since the actual logic is in fam65xx_t
-        return false;  // Will be overridden by fam65xx_t implementation
-    }
-    
-    // Fast XCE (Exchange Carry with Emulation) operation helper
-    inline void exchange_carry_emulation() {
-        uint16_t p_reg = get(REG_P_16);
-        bool old_carry = (p_reg & FLAG_C) != 0;
-        bool old_emulation = (p_reg & FLAG_E) != 0;
-        
-        // Set carry to old emulation state
-        if (old_emulation) {
-            p_reg |= FLAG_C;
-        } else {
-            p_reg &= ~FLAG_C;
-        }
-        
-        // Set emulation to old carry state
-        if (old_carry) {
-            p_reg |= FLAG_E;
-        } else {
-            p_reg &= ~FLAG_E;
-        }
-        
-        set(REG_P_16, p_reg);
-        
-        // Handle emulation mode side effects
-        if (old_carry) {  // Switching to emulation mode
-            set(REG_SPH, 0x01);  // Force stack to page 1
-            set(REG_P, get(REG_P) & ~(FLAG_M | FLAG_X));  // Hide M/X flags
-        }
-    }
-    
     // === Type-safe 8-bit register accessors ===
     inline uint8_t get(reg8_t reg) const {
         return reg8[reg];
