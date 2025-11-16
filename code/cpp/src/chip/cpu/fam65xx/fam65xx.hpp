@@ -1262,12 +1262,6 @@ class fam65xx_t :
         // Decode opcode and set up instruction
         uint8_t opcode = this->get(REG_IR);
         
-        // TEMPORARY DEBUG: Force output for opcode 0x46
-        if (opcode == 0x46) {
-            fprintf(stderr, "FETCH_OPCODE: Processing opcode 0x46\n");
-            fflush(stderr);
-        }
-        
         opcode_info_t entry = get_opcode_info(opcode);
         this->transition_to_opcode(entry);
             
