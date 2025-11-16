@@ -807,6 +807,76 @@ class fam65xx_t :
         }
     }
     
+public:
+    // ========================================================================
+    // BASIC REGISTER ACCESSOR METHODS (moved from mixins to eliminate duplication)
+    // ========================================================================
+    
+    // === Type-safe 8-bit register accessors ===
+    inline uint8_t get(reg8_t reg) const {
+        return register_base_t<Traits>::reg8[reg];
+    }
+    
+    inline void set(reg8_t reg, uint8_t value) {
+        register_base_t<Traits>::reg8[reg] = value;
+    }
+    
+    inline void inc(reg8_t reg) {
+        register_base_t<Traits>::reg8[reg]++;
+    }
+    
+    inline void dec(reg8_t reg) {
+        register_base_t<Traits>::reg8[reg]--;
+    }
+    
+    // === Type-safe 16-bit register accessors ===
+    inline uint16_t get(reg16_t reg_pair) const {
+        return register_base_t<Traits>::reg16[reg_pair];
+    }
+    
+    inline void set(reg16_t reg_pair, uint16_t value) {
+        register_base_t<Traits>::reg16[reg_pair] = value;
+    }
+    
+    inline void inc(reg16_t reg_pair) {
+        register_base_t<Traits>::reg16[reg_pair]++;
+    }
+    
+    inline void dec(reg16_t reg_pair) {
+        register_base_t<Traits>::reg16[reg_pair]--;
+    }
+    
+    // === Load function for bus operations ===
+    inline void load(reg8_t data_reg, bus_state_t pins) {
+        register_base_t<Traits>::reg8[data_reg] = FAM65XX_GET_DATA(pins);
+    }
+
+private:
+    
+    // === Register initialization (moved from mixins to eliminate duplication) ===
+    void init_registers() {
+        // Clear all registers to zero - access through inheritance
+        std::memset(&this->reg8, 0, sizeof(this->reg8));
+        
+        // Initialize P register based on CPU type
+        if constexpr (has_wide_registers()) {
+            // 65C816: Initialize with emulation mode flag
+            set(REG_P_16, FLAG_E | FLAG_U | FLAG_I);
+        } else {
+            // 8-bit CPUs: Standard 6502-compatible initialization
+            set(REG_P, FLAG_U | FLAG_I);
+        }
+        
+        // Initialize stack pointer to page 1 (6502 compatible)
+        set(REG_SP, 0x01FF);
+        
+        // For 65C816, the memset above also initializes:
+        // REG_D (Direct Page Register) = 0
+        // REG_DBR (Data Bank Register) = 0  
+        // REG_PBR (Program Bank Register) = 0
+        // REG_ZBR (Zero Bank Register) = 0
+    }
+    
     // ========================================================================
     // HARDWARE-ACCURATE BCD ARITHMETIC HELPERS
     // ========================================================================
