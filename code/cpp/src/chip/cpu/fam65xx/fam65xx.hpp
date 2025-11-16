@@ -576,11 +576,27 @@ class fam65xx_t :
     template<typename OperationFunc>
     bus_state_t rmw_operation_helper(bus_state_t pins, OperationFunc operation_func) {
         if (this->opcode_entry.flags & to_index(OF::RMW)) {
-            // Memory mode - multi-cycle RMW operation (always 8-bit for memory operations)
+            // Memory mode - multi-cycle RMW operation (8-bit or 16-bit based on M flag)
+            // Determine correct banking based on addressing mode
+            // For 65C816, Direct Page operations use Bank 0 (ZBR) instead of DBR
+            constexpr bool can_use_direct_page = has_wide_registers();
+            const bool is_direct_page_addressing = (this->opcode_entry.am_index == to_index(AM::ZER) || 
+                                                   this->opcode_entry.am_index == to_index(AM::ZPX) ||
+                                                   this->opcode_entry.am_index == to_index(AM::ZPY));
+            
+            bool use_zero_bank = false;
+            if constexpr (can_use_direct_page) {
+                use_zero_bank = is_direct_page_addressing && !this->in_emulation_mode();
+            }
+            
             switch (this->cycle_index) {
                 case 0:
-                    // Cycle 0: Read original value from memory (DBR banking automatic)
-                    pins = this->phi2_read<Addr::AB, Bank::DBR>(pins, REG_DL);
+                    // Cycle 0: Read original value from memory
+                    if (use_zero_bank) {
+                        pins = this->phi2_read<Addr::AB, Bank::ZBR>(pins, REG_DL);  // Direct Page uses Bank 0
+                    } else {
+                        pins = this->phi2_read<Addr::AB, Bank::DBR>(pins, REG_DL);  // Other modes use DBR
+                    }
                     
                     if (FAM65XX_GET_RDY(pins)) {
                         this->cycle_index++;
@@ -590,11 +606,19 @@ class fam65xx_t :
                 case 1:
                     // Cycle 1: Dummy cycle and perform modification
                     if (this->has_rmw_dummy_write()) {
-                        // NMOS: Dummy write of original value (DBR banking automatic)
-                        pins = this->phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DL));
+                        // NMOS: Dummy write of original value
+                        if (use_zero_bank) {
+                            pins = this->phi2_write<Addr::AB, Bank::ZBR>(pins, this->get(REG_DL));  // Direct Page uses Bank 0
+                        } else {
+                            pins = this->phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DL));  // Other modes use DBR
+                        }
                     } else {
-                        // CMOS: Dummy read instead of write (DBR banking automatic)
-                        pins = this->phi2_dummy_read<Addr::AB, Bank::DBR>(pins);
+                        // CMOS: Dummy read instead of write
+                        if (use_zero_bank) {
+                            pins = this->phi2_dummy_read<Addr::AB, Bank::ZBR>(pins);  // Direct Page uses Bank 0
+                        } else {
+                            pins = this->phi2_dummy_read<Addr::AB, Bank::DBR>(pins);  // Other modes use DBR
+                        }
                     }
                     
                     if (FAM65XX_GET_RDY(pins)) {
@@ -607,9 +631,13 @@ class fam65xx_t :
                     return pins;
                     
                 case 2:
-                    // Cycle 2: Write modified value back to memory (DBR banking automatic)
+                    // Cycle 2: Write modified value back to memory
                     if (this->should_complete_write_cycle(pins)) {
-                        pins = this->phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DL));
+                        if (use_zero_bank) {
+                            pins = this->phi2_write<Addr::AB, Bank::ZBR>(pins, this->get(REG_DL));  // Direct Page uses Bank 0
+                        } else {
+                            pins = this->phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DL));  // Other modes use DBR
+                        }
                         this->transition_to_fetch();
                     }
                     return pins;
@@ -1007,9 +1035,9 @@ class fam65xx_t :
         addressing_mode_handlers[to_index(AM::ZPR)] = &fam65xx_t::am_zpr; // Zero Page Relative - BBR/BBS $nn,$offset
 
         // 6502/6510 and 65C816 addressing modes (with pre-65C816 compatibility)
-        addressing_mode_handlers[to_index(AM::DP)] = &fam65xx_t::am_dp;   // Direct/Zero Page (maps to AM::ZER, am_zp) implementation for pre-65C816 compatibility
-        addressing_mode_handlers[to_index(AM::DPX)] = &fam65xx_t::am_dpx; // Direct/Zero Page,X (maps to AM::ZPX, am_zpx) implementation for pre-65C816 compatibility
-        addressing_mode_handlers[to_index(AM::DPY)] = &fam65xx_t::am_dpy; // Direct/Zero Page,Y (maps to AM::ZPY, am_zpy) implementation for pre-65C816 compatibility
+        addressing_mode_handlers[to_index(AM::DP)] = &fam65xx_t::am_dp;   // Direct/Zero Page (aliassed to AM::ZER, am_zp) implementation for pre-65C816 compatibility
+        addressing_mode_handlers[to_index(AM::DPX)] = &fam65xx_t::am_dpx; // Direct/Zero Page,X (aliassed to AM::ZPX, am_zpx) implementation for pre-65C816 compatibility
+        addressing_mode_handlers[to_index(AM::DPY)] = &fam65xx_t::am_dpy; // Direct/Zero Page,Y (aliassed to AM::ZPY, am_zpy) implementation for pre-65C816 compatibility
         
         // 65C02 and 65C816 addressing modes
         addressing_mode_handlers[to_index(AM::DPI)] = &fam65xx_t::am_dpi; // Direct/Zero Page Indirect (maps to AM::ZPI, am_zpi) implementation for pre-65C816 compatibility

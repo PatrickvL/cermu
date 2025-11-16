@@ -338,6 +338,17 @@ private:
         update_flags(FLAG_N | FLAG_Z, calc_nz_flags_8bit(value));
     }
     
+    /**
+     * Explicit 16-bit NZ flags update (for 16-bit memory operations)
+     */
+    inline void update_nz_flags_16bit(uint16_t value) {
+        // N flag: bit 15 for 16-bit values
+        uint8_t n_flag = (value & 0x8000) ? FLAG_N : 0;
+        // Z flag: zero if entire 16-bit value is 0
+        uint8_t z_flag = (value == 0) ? FLAG_Z : 0;
+        update_flags(FLAG_N | FLAG_Z, n_flag | z_flag);
+    }
+    
     // === Register initialization ===
     void init_registers() {
         // Clear all registers to zero
