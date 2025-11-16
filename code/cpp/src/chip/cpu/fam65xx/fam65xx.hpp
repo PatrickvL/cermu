@@ -590,7 +590,7 @@ class fam65xx_t :
             }
             
             // Check if this is a 16-bit memory operation
-            const bool is_16bit_memory = true; // TEMPORARY: Force 16-bit for debugging
+            const bool is_16bit_memory = this->is_memory_16bit();
             
 
             
