@@ -39,57 +39,8 @@ struct narrow_registers_mixin_t {
         uint16_t reg16[REG_COUNT_8BIT / 2];  // 16-bit pair access (little-endian)
     };
     
-    // Initialize registers
-    void init_registers() {
-        memset(&reg8, 0, sizeof(reg8));
-
-        // Initialize P register like a 6502 (only standard 6502 flags)
-        set(REG_P, FLAG_U | FLAG_I);  // Only unused bit and interrupt disable (6502-compatible)
-        
-        /* Initialize register layout:
-        * SP = 0x01FF (stack starts at top of page 1)
-        */
-        this->set(REG_SP, 0x01FF); /* Stack pointer (page 1, starts at 0xFF) */
-    }
-    
-    // === Type-safe 8-bit register accessors ===
-    inline uint8_t get(reg8_t reg) const {
-        return reg8[reg];
-    }
-    
-    inline void set(reg8_t reg, uint8_t value) {
-        reg8[reg] = value;
-    }
-    
-    inline void inc(reg8_t reg) {
-        reg8[reg]++;
-    }
-    
-    inline void dec(reg8_t reg) {
-        reg8[reg]--;
-    }
-    
-    // === Type-safe 16-bit register accessors ===
-    inline uint16_t get(reg16_t reg_pair) const {
-        return reg16[reg_pair];
-    }
-    
-    inline void set(reg16_t reg_pair, uint16_t value) {
-        reg16[reg_pair] = value;
-    }
-    
-    inline void inc(reg16_t reg_pair) {
-        reg16[reg_pair]++;
-    }
-    
-    inline void dec(reg16_t reg_pair) {
-        reg16[reg_pair]--;
-    }
-    
-    // === Load function for bus operations ===
-    inline void load(reg8_t data_reg, bus_state_t pins) {
-        reg8[data_reg] = FAM65XX_GET_DATA(pins);
-    }
+    // === Methods moved to fam65xx_t base class to eliminate duplication ===
+    // init_registers(), get(), set(), inc(), dec(), load() methods are now in fam65xx_t
     
     // === 65C816 compatibility methods removed - now in main fam65xx_t class ===
     // Functions moved to fam65xx_t for constexpr wide register detection
@@ -110,65 +61,8 @@ struct wide_registers_mixin_t {
         uint16_t reg16[REG_COUNT_16BIT / 2];  // 16-bit pair access (little-endian)
     };
     
-    // Initialize registers
-    void init_registers() {
-        memset(&reg8, 0, sizeof(reg8));
-        
-        // Initialize high byte of P register to emulation mode (FLAG_E)
-        // Initialize low byte of P register like a 6502 (only standard 6502 flags)
-        set(REG_P_16, FLAG_E | FLAG_U | FLAG_I);  // Only unused bit and interrupt disable (6502-compatible)
-                
-        // Initialize stack pointer to page 1 (6502 compatible)
-        set(REG_SP, 0x01FF);
-        
-        // Above memset to zero also set 65C816-specific registers:
-        // REG_D (Direct Page Register),
-        // REG_DBR (Data Bank Register),
-        // REG_PBR (Program Bank Register) and
-        // REG_ZBR (Zero Bank Register) as required.
-    }   
-    
-    // === 65C816 extended register access methods removed - now in main fam65xx_t class ===
-    // Functions moved to fam65xx_t for constexpr wide register detection
-
-    // === Type-safe 8-bit register accessors ===
-    inline uint8_t get(reg8_t reg) const {
-        return reg8[reg];
-    }
-    
-    inline void set(reg8_t reg, uint8_t value) {
-        reg8[reg] = value;
-    }
-    
-    inline void inc(reg8_t reg) {
-        reg8[reg]++;
-    }
-    
-    inline void dec(reg8_t reg) {
-        reg8[reg]--;
-    }
-    
-    // === Type-safe 16-bit register accessors ===
-    inline uint16_t get(reg16_t reg_pair) const {
-        return reg16[reg_pair];
-    }
-    
-    inline void set(reg16_t reg_pair, uint16_t value) {
-        reg16[reg_pair] = value;
-    }
-    
-    inline void inc(reg16_t reg_pair) {
-        reg16[reg_pair]++;
-    }
-    
-    inline void dec(reg16_t reg_pair) {
-        reg16[reg_pair]--;
-    }
-    
-    // === Load function for bus operations ===
-    inline void load(reg8_t data_reg, bus_state_t pins) {
-        reg8[data_reg] = FAM65XX_GET_DATA(pins);
-    }    
+    // === Methods moved to fam65xx_t base class to eliminate duplication ===
+    // init_registers(), get(), set(), inc(), dec(), load() methods are now in fam65xx_t    
 };
 
 // ============================================================================
