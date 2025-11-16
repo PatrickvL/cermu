@@ -88,30 +88,18 @@ bus_state_t op_xce(bus_state_t pins) {
     if constexpr (this->has_wide_registers()) {
         // XCE is valid in both native and emulation modes
         switch (this->cycle_index) {
-            case 0:
+            case 0: {
                 // Internal cycle - exchange carry and emulation flags
-                {
-                    uint8_t p = this->get(REG_P);
-                    bool old_carry = (p & FLAG_C) != 0;
-                    bool old_emulation = this->in_emulation_mode();
-                    
-                    // Set emulation mode to old carry flag FIRST
-                    this->set_emulation_mode(old_carry);
-                    
-                    // Then update the carry flag in P register based on old emulation mode
-                    // Get the updated P register after set_emulation_mode()
-                    p = this->get(REG_P);
-                    if (old_emulation) {
-                        p |= FLAG_C;
-                    } else {
-                        p &= ~FLAG_C;
-                    }
-                    
-                    this->set(REG_P, p);
-                }
+                bool old_carry = (this->get(REG_P) & FLAG_C) != 0;
+                bool old_emulation = in_emulation_mode();
+                
+                // Update carry flag based on old emulation mode
+                update_flag(FLAG_C, old_emulation);
+                // Update emulation flag based on old carry
+                set_emulation_mode(old_carry);
                 this->cycle_index++;
                 return pins;
-                
+            }                
             case 1:
                 // Complete operation
                 this->transition_to_fetch();
