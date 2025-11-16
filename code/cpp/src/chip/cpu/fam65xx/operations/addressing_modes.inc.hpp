@@ -542,7 +542,7 @@ bus_state_t am_dp(bus_state_t pins) {
                     uint16_t dp_addr = this->get(REG_D) + this->get(REG_DL);
                     this->set(REG_ABL, dp_addr & 0xFF);
                     this->set(REG_ABH, (dp_addr >> 8) & 0xFF);
-                    
+
                     // Check for Direct Page alignment penalty
                     if ((this->get(REG_D) & 0xFF) != 0x00) {
                         this->cycle_index++;
