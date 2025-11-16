@@ -590,7 +590,9 @@ class fam65xx_t :
             }
             
             // Check if this is a 16-bit memory operation
-            const bool is_16bit_memory = this->is_memory_16bit();
+            const bool is_16bit_memory = true; // TEMPORARY: Force 16-bit for debugging
+            
+
             
             if (is_16bit_memory) {
                 // 16-bit memory RMW operation (6 cycles for 65C816)
