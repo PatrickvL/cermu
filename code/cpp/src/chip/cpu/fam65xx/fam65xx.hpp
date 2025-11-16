@@ -589,58 +589,147 @@ class fam65xx_t :
                 use_zero_bank = is_direct_page_addressing && !this->in_emulation_mode();
             }
             
-            switch (this->cycle_index) {
-                case 0:
-                    // Cycle 0: Read original value from memory
-                    if (use_zero_bank) {
-                        pins = this->phi2_read<Addr::AB, Bank::ZBR>(pins, REG_DL);  // Direct Page uses Bank 0
-                    } else {
-                        pins = this->phi2_read<Addr::AB, Bank::DBR>(pins, REG_DL);  // Other modes use DBR
-                    }
-                    
-                    if (FAM65XX_GET_RDY(pins)) {
-                        this->cycle_index++;
-                    }
-                    return pins;
-                    
-                case 1:
-                    // Cycle 1: Dummy cycle and perform modification
-                    if (this->has_rmw_dummy_write()) {
-                        // NMOS: Dummy write of original value
+            // Check if this is a 16-bit memory operation
+            const bool is_16bit_memory = this->is_memory_16bit();
+            
+            if (is_16bit_memory) {
+                // 16-bit memory RMW operation (6 cycles for 65C816)
+                switch (this->cycle_index) {
+                    case 0:
+                        // Cycle 0: Read low byte from memory
                         if (use_zero_bank) {
-                            pins = this->phi2_write<Addr::AB, Bank::ZBR>(pins, this->get(REG_DL));  // Direct Page uses Bank 0
+                            pins = this->phi2_read<Addr::AB, Bank::ZBR>(pins, REG_DL);  // Direct Page uses Bank 0
                         } else {
-                            pins = this->phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DL));  // Other modes use DBR
+                            pins = this->phi2_read<Addr::AB, Bank::DBR>(pins, REG_DL);  // Other modes use DBR
                         }
-                    } else {
-                        // CMOS: Dummy read instead of write
+                        
+                        if (FAM65XX_GET_RDY(pins)) {
+                            this->cycle_index++;
+                        }
+                        return pins;
+                        
+                    case 1:
+                        // Cycle 1: Read high byte from memory (address + 1)
+                        this->inc(REG_ABL);  // Increment address for high byte
                         if (use_zero_bank) {
-                            pins = this->phi2_dummy_read<Addr::AB, Bank::ZBR>(pins);  // Direct Page uses Bank 0
+                            pins = this->phi2_read<Addr::AB, Bank::ZBR>(pins, REG_DPL);  // Store high byte in DPL
                         } else {
-                            pins = this->phi2_dummy_read<Addr::AB, Bank::DBR>(pins);  // Other modes use DBR
+                            pins = this->phi2_read<Addr::AB, Bank::DBR>(pins, REG_DPL);  // Store high byte in DPL
                         }
-                    }
-                    
-                    if (FAM65XX_GET_RDY(pins)) {
-                        // For memory operations, convert 8-bit to data_t for consistent interface
-                        data_t value = static_cast<data_t>(this->get(REG_DL));
-                        operation_func(value);
-                        this->set(REG_DL, static_cast<uint8_t>(value & 0xFF));  // Memory operations are always 8-bit
-                        this->cycle_index++;
-                    }
-                    return pins;
-                    
-                case 2:
-                    // Cycle 2: Write modified value back to memory
-                    if (this->should_complete_write_cycle(pins)) {
+                        
+                        if (FAM65XX_GET_RDY(pins)) {
+                            this->cycle_index++;
+                        }
+                        return pins;
+                        
+                    case 2:
+                        // Cycle 2: Dummy cycle and perform 16-bit modification
+                        if (this->has_rmw_dummy_write()) {
+                            // NMOS: Dummy write of high byte
+                            if (use_zero_bank) {
+                                pins = this->phi2_write<Addr::AB, Bank::ZBR>(pins, this->get(REG_DPL));
+                            } else {
+                                pins = this->phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DPL));
+                            }
+                        } else {
+                            // CMOS: Dummy read instead of write
+                            if (use_zero_bank) {
+                                pins = this->phi2_dummy_read<Addr::AB, Bank::ZBR>(pins);
+                            } else {
+                                pins = this->phi2_dummy_read<Addr::AB, Bank::DBR>(pins);
+                            }
+                        }
+                        
+                        if (FAM65XX_GET_RDY(pins)) {
+                            // Perform 16-bit operation
+                            data_t value = static_cast<data_t>(this->get(REG_DL)) | (static_cast<data_t>(this->get(REG_DPL)) << 8);
+                            operation_func(value);
+                            this->set(REG_DL, static_cast<uint8_t>(value & 0xFF));       // Low byte
+                            this->set(REG_DPL, static_cast<uint8_t>((value >> 8) & 0xFF)); // High byte
+                            this->cycle_index++;
+                        }
+                        return pins;
+                        
+                    case 3:
+                        // Cycle 3: Write high byte back to memory (address + 1)
+                        if (this->should_complete_write_cycle(pins)) {
+                            if (use_zero_bank) {
+                                pins = this->phi2_write<Addr::AB, Bank::ZBR>(pins, this->get(REG_DPL));
+                            } else {
+                                pins = this->phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DPL));
+                            }
+                            this->cycle_index++;
+                        }
+                        return pins;
+                        
+                    case 4:
+                        // Cycle 4: Write low byte back to memory (address)
+                        this->dec(REG_ABL);  // Decrement address back to low byte
+                        if (this->should_complete_write_cycle(pins)) {
+                            if (use_zero_bank) {
+                                pins = this->phi2_write<Addr::AB, Bank::ZBR>(pins, this->get(REG_DL));
+                            } else {
+                                pins = this->phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DL));
+                            }
+                            this->transition_to_fetch();
+                        }
+                        return pins;
+                }
+            } else {
+                // 8-bit memory RMW operation (3 cycles)
+                switch (this->cycle_index) {
+                    case 0:
+                        // Cycle 0: Read original value from memory
                         if (use_zero_bank) {
-                            pins = this->phi2_write<Addr::AB, Bank::ZBR>(pins, this->get(REG_DL));  // Direct Page uses Bank 0
+                            pins = this->phi2_read<Addr::AB, Bank::ZBR>(pins, REG_DL);  // Direct Page uses Bank 0
                         } else {
-                            pins = this->phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DL));  // Other modes use DBR
+                            pins = this->phi2_read<Addr::AB, Bank::DBR>(pins, REG_DL);  // Other modes use DBR
                         }
-                        this->transition_to_fetch();
-                    }
-                    return pins;
+                        
+                        if (FAM65XX_GET_RDY(pins)) {
+                            this->cycle_index++;
+                        }
+                        return pins;
+                        
+                    case 1:
+                        // Cycle 1: Dummy cycle and perform modification
+                        if (this->has_rmw_dummy_write()) {
+                            // NMOS: Dummy write of original value
+                            if (use_zero_bank) {
+                                pins = this->phi2_write<Addr::AB, Bank::ZBR>(pins, this->get(REG_DL));  // Direct Page uses Bank 0
+                            } else {
+                                pins = this->phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DL));  // Other modes use DBR
+                            }
+                        } else {
+                            // CMOS: Dummy read instead of write
+                            if (use_zero_bank) {
+                                pins = this->phi2_dummy_read<Addr::AB, Bank::ZBR>(pins);  // Direct Page uses Bank 0
+                            } else {
+                                pins = this->phi2_dummy_read<Addr::AB, Bank::DBR>(pins);  // Other modes use DBR
+                            }
+                        }
+                        
+                        if (FAM65XX_GET_RDY(pins)) {
+                            // For 8-bit memory operations
+                            data_t value = static_cast<data_t>(this->get(REG_DL));
+                            operation_func(value);
+                            this->set(REG_DL, static_cast<uint8_t>(value & 0xFF));
+                            this->cycle_index++;
+                        }
+                        return pins;
+                        
+                    case 2:
+                        // Cycle 2: Write modified value back to memory
+                        if (this->should_complete_write_cycle(pins)) {
+                            if (use_zero_bank) {
+                                pins = this->phi2_write<Addr::AB, Bank::ZBR>(pins, this->get(REG_DL));  // Direct Page uses Bank 0
+                            } else {
+                                pins = this->phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DL));  // Other modes use DBR
+                            }
+                            this->transition_to_fetch();
+                        }
+                        return pins;
+                }
             }
         } else {
             // Accumulator mode - single cycle operation with automatic 8/16-bit handling
@@ -1093,6 +1182,20 @@ public:
     inline bool is_accumulator_16bit() const {
         if constexpr (has_wide_registers()) {
             // 16-bit when BOTH emulation=0 AND M=0
+            return !(this->get(REG_P_16) & (FLAG_E | FLAG_M));
+        } else {
+            // Non-65C816 processors: always 8-bit
+            return false;
+        }
+    }
+    
+    /**
+     * Check if memory operations are in 16-bit mode
+     * Uses constexpr wide check for compile-time optimization
+     */
+    inline bool is_memory_16bit() const {
+        if constexpr (has_wide_registers()) {
+            // Memory operations are 16-bit when BOTH emulation=0 AND M=0 (same as accumulator)
             return !(this->get(REG_P_16) & (FLAG_E | FLAG_M));
         } else {
             // Non-65C816 processors: always 8-bit
