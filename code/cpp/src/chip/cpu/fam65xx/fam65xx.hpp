@@ -1491,19 +1491,7 @@ public:
      */
     inline void set_emulation_mode(bool mode) {
         if constexpr (has_wide_registers()) {
-            if (mode) {
-                // Set emulation bit in the 16-bit P register
-                this->set(REG_P_16, this->get(REG_P_16) | FLAG_E);
-                // If switching TO emulation mode, truncate index registers to 8 bits
-                // Force stack pointer to page 1 and Direct Page to $0000
-                this->set(REG_XH, 0);
-                this->set(REG_YH, 0);
-                this->set(REG_SPH, 0x01);
-                this->set(REG_D_16, 0);
-            } else {
-                // Clear emulation bit in the 16-bit P register
-                this->set(REG_P_16, this->get(REG_P_16) & ~FLAG_E);
-            }
+            this->update_flag(FLAG_E, mode);
         }
         // Non-65C816 processors: no-op (always in emulation mode)
     }

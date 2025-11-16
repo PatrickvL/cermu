@@ -114,20 +114,18 @@ struct wide_registers_mixin_t {
     void init_registers() {
         memset(&reg8, 0, sizeof(reg8));
         
-        // Initialize P register like a 6502 (only standard 6502 flags)
-        set(REG_P, FLAG_U | FLAG_I);  // Only unused bit and interrupt disable (6502-compatible)
-        
-        // Initialize emulation mode in high byte of P register using FLAG_E
-        set(REG_PH, static_cast<uint8_t>(FLAG_E >> 8));  // Set emulation mode bit in high byte
-        
+        // Initialize high byte of P register to emulation mode (FLAG_E)
+        // Initialize low byte of P register like a 6502 (only standard 6502 flags)
+        set(REG_P_16, FLAG_E | FLAG_U | FLAG_I);  // Only unused bit and interrupt disable (6502-compatible)
+                
         // Initialize stack pointer to page 1 (6502 compatible)
         set(REG_SP, 0x01FF);
         
-        // Initialize 65C816-specific registers to 6502-compatible values
-        set(REG_D, 0x0000);    // Direct Page register = $0000 (behaves like Zero Page)
-        set(REG_DBR, 0x00);    // Data Bank Register = $00
-        set(REG_PBR, 0x00);    // Program Bank Register = $00
-        set(REG_ZBR, 0x00);    // Zero Bank Register = $00
+        // Above memset to zero also set 65C816-specific registers:
+        // REG_D (Direct Page Register),
+        // REG_DBR (Data Bank Register),
+        // REG_PBR (Program Bank Register) and
+        // REG_ZBR (Zero Bank Register) as required.
     }   
     
     // === 65C816 extended register access methods removed - now in main fam65xx_t class ===

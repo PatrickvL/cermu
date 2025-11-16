@@ -90,16 +90,38 @@ bus_state_t op_xce(bus_state_t pins) {
         switch (this->cycle_index) {
             case 0: {
                 // Internal cycle - exchange carry and emulation flags
-                bool old_carry = (this->get(REG_P) & FLAG_C) != 0;
-                bool old_emulation = in_emulation_mode();
+                // CRITICAL: Work with both 8-bit P and emulation flag separately
+                uint16_t p_reg_16 = this->get(REG_P_16);
+                bool old_carry = (p_reg_16 & FLAG_C) != 0;
+                bool old_emulation = (p_reg_16 & FLAG_E) != 0;
                 
-                // Update carry flag based on old emulation mode
-                update_flag(FLAG_C, old_emulation);
-                // Update emulation flag based on old carry
-                set_emulation_mode(old_carry);
+                // Exchange carry flag in 8-bit P register
+                if (old_emulation) {
+                    p_reg_16 |= FLAG_C;   // Set carry if was in emulation mode
+                } else {
+                    p_reg_16 &= ~FLAG_C;  // Clear carry if was in native mode
+                }
+                
+                // Exchange emulation flag manually (avoid set_emulation_mode() bugs)
+                if (old_carry) {
+                    p_reg_16 |= FLAG_E;   // Set emulation if old carry was set
+                } else {
+                    p_reg_16 &= ~FLAG_E;  // Clear emulation if old carry was clear
+                }
+
+                this->set(REG_P_16, p_reg_16);                
+                // Handle mode transition side effects only when switching TO emulation mode
+                if (old_carry && !old_emulation) {
+                    // Switching from native to emulation mode - truncate index registers
+                    this->set(REG_XH, 0);
+                    this->set(REG_YH, 0);
+                    this->set(REG_SPH, 0x01);
+                    this->set(REG_D_16, 0);
+                }
+                
                 this->cycle_index++;
                 return pins;
-            }                
+            }
             case 1:
                 // Complete operation
                 this->transition_to_fetch();
