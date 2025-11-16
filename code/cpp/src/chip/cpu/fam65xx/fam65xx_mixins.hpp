@@ -11,7 +11,6 @@
 #include <type_traits>
 #include "fam65xx_processor_traits.hpp"
 #include "fam65xx_types.h"  // For bus_state_t
-#include "fam65xx_register_mixins.hpp"  // For register layout mixins
 #include "nes6502.h"        // For nes6502_apu::APU class
 
 namespace fam65xx {
