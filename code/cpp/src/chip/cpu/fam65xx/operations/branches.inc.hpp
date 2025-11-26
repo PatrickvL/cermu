@@ -19,7 +19,7 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
   switch (this->cycle_index) {
   case 0: {
     /* PHI2: Read branch offset from PC into DL */
-    pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_DL);
+    pins = this->bus_setup_read<Addr::PC>(pins);
 
     this->inc(REG_PC);
 

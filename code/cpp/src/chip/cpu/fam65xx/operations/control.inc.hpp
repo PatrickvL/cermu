@@ -45,7 +45,7 @@ bus_state_t op_jsr(bus_state_t pins) {
   switch (this->cycle_index) {
   case 0:
     /* PHI2: Read low byte of target address from PC directly to ABL */
-    pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_ABL);
+    pins = this->bus_setup_read<Addr::PC>(pins);
 
     this->inc(REG_PC);
     this->cycle_index++;
@@ -76,7 +76,7 @@ bus_state_t op_jsr(bus_state_t pins) {
 
   case 4:
     /* PHI2: Read high byte of target address from PC directly to ABH */
-    pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_ABH);
+    pins = this->bus_setup_read<Addr::PC>(pins);
 
     /* PHI1: Set PC to target address */
     this->set(REG_PC, this->get(REG_AB));
@@ -107,7 +107,7 @@ bus_state_t op_rts(bus_state_t pins) {
 
   case 2:
     /* PHI2: Pull PCL from stack */
-    pins = this->/*TODO_READ*/ phi2_read<Addr::SP>(pins, REG_PCL);
+    pins = this->bus_setup_read<Addr::SP>(pins);
 
     this->inc(REG_S);
     this->cycle_index++;
@@ -115,7 +115,7 @@ bus_state_t op_rts(bus_state_t pins) {
 
   case 3:
     /* PHI2: Pull PCH from stack */
-    pins = this->/*TODO_READ*/ phi2_read<Addr::SP>(pins, REG_PCH);
+    pins = this->bus_setup_read<Addr::SP>(pins);
 
     this->cycle_index++;
     return pins;
@@ -253,7 +253,7 @@ bus_state_t op_brk(bus_state_t pins) {
   case 4: // Note : reset() starts at cycle_index 4!
     /* PHI2: Read interrupt vector low byte (always from bank 0 using ZBR for
      * 65C816) */
-    pins = this->/*TODO_READ*/ phi2_read<Addr::AB, Bank::ZBR>(pins, REG_DL);
+    pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
 
     this->inc(REG_AB);
     this->cycle_index++;
@@ -262,7 +262,7 @@ bus_state_t op_brk(bus_state_t pins) {
   case 5:
     /* PHI2: Read interrupt vector high byte (always from bank 0 using ZBR for
      * 65C816) */
-    pins = this->/*TODO_READ*/ phi2_read<Addr::AB, Bank::ZBR>(pins, REG_PCH);
+    pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
 
     /* Construct PC from PCH and DL registers which contain the interrupt
      * vector bytes */
@@ -312,7 +312,7 @@ bus_state_t op_rti(bus_state_t pins) {
 
   case 2:
     /* PHI2: Pull P from stack (clear B, set U) */
-    pins = this->/*TODO_READ*/ phi2_read<Addr::SP>(pins, REG_DL);
+    pins = this->bus_setup_read<Addr::SP>(pins);
 
     this->set(REG_P, (this->get(REG_DL) & ~FLAG_B) | FLAG_U);
     this->inc(REG_S);
@@ -321,7 +321,7 @@ bus_state_t op_rti(bus_state_t pins) {
 
   case 3:
     /* PHI2: Pull PCL from stack */
-    pins = this->/*TODO_READ*/ phi2_read<Addr::SP>(pins, REG_PCL);
+    pins = this->bus_setup_read<Addr::SP>(pins);
 
     this->inc(REG_S);
     this->cycle_index++;
@@ -329,7 +329,7 @@ bus_state_t op_rti(bus_state_t pins) {
 
   case 4:
     /* PHI2: Pull PCH from stack */
-    pins = this->/*TODO_READ*/ phi2_read<Addr::SP>(pins, REG_PCH);
+    pins = this->bus_setup_read<Addr::SP>(pins);
 
     transition_to_fetch();
     return pins;

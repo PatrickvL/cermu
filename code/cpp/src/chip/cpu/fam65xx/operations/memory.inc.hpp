@@ -33,7 +33,7 @@ bus_state_t op_lda(bus_state_t pins) {
 
       case 1:
         // Read high byte of operand
-        pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_AH);
+        pins = this->bus_setup_read<Addr::AB>(pins);
 
         // Update flags for 16-bit operation
         uint16_t value = this->get(REG_A_16);
@@ -81,7 +81,7 @@ bus_state_t op_ldx(bus_state_t pins) {
 
       case 1:
         // Read high byte of operand
-        pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_XH);
+        pins = this->bus_setup_read<Addr::AB>(pins);
 
         // Update flags for 16-bit operation
         uint16_t value = this->get(REG_X_16);
@@ -129,7 +129,7 @@ bus_state_t op_ldy(bus_state_t pins) {
 
       case 1:
         // Read high byte of operand
-        pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_YH);
+        pins = this->bus_setup_read<Addr::AB>(pins);
 
         // Update flags for 16-bit operation
         uint16_t value = this->get(REG_Y_16);
@@ -292,7 +292,7 @@ bus_state_t op_and(bus_state_t pins) {
 
       case 1:
         // Read high byte of operand
-        pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_ABH);
+        pins = this->bus_setup_read<Addr::AB>(pins);
 
         // Perform 16-bit AND operation
         this->set(REG_ABL, this->get(REG_DL));
@@ -346,8 +346,7 @@ bus_state_t op_ora(bus_state_t pins) {
 
       case 1:
         // Read high byte of operand
-        pins =
-            this->/*TODO_READ*/ phi2_read<Addr::AB, Bank::PBR>(pins, REG_ABH);
+        pins = this->bus_setup_read<Addr::AB, Bank::PBR>(pins);
 
         // Perform 16-bit ORA operation
         this->set(REG_ABL, this->get(REG_DL));
@@ -401,7 +400,7 @@ bus_state_t op_eor(bus_state_t pins) {
 
       case 1:
         // Read high byte of operand
-        pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_ABH);
+        pins = this->bus_setup_read<Addr::AB>(pins);
 
         // Perform 16-bit EOR operation
         this->set(REG_ABL, this->get(REG_DL));
@@ -458,7 +457,7 @@ bus_state_t op_bit(bus_state_t pins) {
 
       case 1:
         // Read high byte of operand (this provides N and V flags)
-        pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_ABH);
+        pins = this->bus_setup_read<Addr::AB>(pins);
 
         // Perform 16-bit BIT operation
         this->set(REG_ABL, this->get(REG_DL));

@@ -104,37 +104,51 @@ bus_state_t op_pla(bus_state_t pins) {
       case 0:
         /* PHI2: Dummy read from PC */
         pins = this->bus_setup_dummy<Addr::PC>(pins);
-
         this->cycle_index++;
         return pins;
 
       case 1:
-        /* PHI2: Dummy read from current stack pointer, then increment SP */
-        pins = this->bus_setup_dummy<Addr::SP>(pins);
+        /* PHI1: No operation - just increment cycle */
+        this->cycle_index++;
+        return pins;
 
+      case 2:
+        /* PHI2: Dummy read from current stack pointer */
+        pins = this->bus_setup_dummy<Addr::SP>(pins);
+        this->cycle_index++;
+        return pins;
+
+      case 3:
         /* PHI1: Increment stack pointer */
         this->inc(REG_S);
         this->cycle_index++;
         return pins;
 
-      case 2:
-        /* PHI2: Read accumulator low byte from incremented stack pointer */
-        pins = this->/*TODO_READ*/ phi2_read<Addr::SP>(pins, REG_AL);
+      case 4:
+        /* PHI2: Set up read for accumulator low byte from stack */
+        pins = this->bus_setup_read<Addr::SP>(pins);
+        this->cycle_index++;
+        return pins;
 
-        /* PHI1: Increment stack pointer again */
+      case 5:
+        /* PHI1: Load low byte from bus and increment SP */
+        this->bus_load_reg(REG_AL, pins);
         this->inc(REG_S);
         this->cycle_index++;
         return pins;
 
-      case 3:
-        /* PHI2: Read accumulator high byte from incremented stack pointer */
-        pins = this->/*TODO_READ*/ phi2_read<Addr::SP>(pins, REG_AH);
+      case 6:
+        /* PHI2: Set up read for accumulator high byte from stack */
+        pins = this->bus_setup_read<Addr::SP>(pins);
+        this->cycle_index++;
+        return pins;
 
-        // Update flags for 16-bit operation
+      case 7:
+        /* PHI1: Load high byte from bus and update flags */
+        this->bus_load_reg(REG_AH, pins);
         uint16_t value = this->get(REG_A_16);
         this->update_flag(FLAG_Z, value == 0);
         this->update_flag(FLAG_N, (value & 0x8000) != 0);
-
         this->transition_to_fetch();
         return pins;
       }
@@ -147,25 +161,35 @@ bus_state_t op_pla(bus_state_t pins) {
   case 0:
     /* PHI2: Dummy read from PC */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
-
     this->cycle_index++;
     return pins;
 
   case 1:
-    /* PHI2: Dummy read from current stack pointer, then increment SP */
-    pins = this->bus_setup_dummy<Addr::SP>(pins);
+    /* PHI1: No operation - just increment cycle */
+    this->cycle_index++;
+    return pins;
 
+  case 2:
+    /* PHI2: Dummy read from current stack pointer */
+    pins = this->bus_setup_dummy<Addr::SP>(pins);
+    this->cycle_index++;
+    return pins;
+
+  case 3:
     /* PHI1: Increment stack pointer */
     this->inc(REG_S);
     this->cycle_index++;
     return pins;
 
-  case 2:
-    /* PHI2: Read from incremented stack pointer directly into A (eliminates
-     * copy) */
-    pins = this->/*TODO_READ*/ phi2_read<Addr::SP>(pins, REG_A);
+  case 4:
+    /* PHI2: Set up bus read from incremented stack pointer */
+    pins = this->bus_setup_read<Addr::SP>(pins);
+    this->cycle_index++;
+    return pins;
 
-    /* PHI1: Set flags based on accumulator value */
+  case 5:
+    /* PHI1: Load accumulator from bus and set flags */
+    this->bus_load_reg(REG_A, pins);
     this->update_nz_flags(this->get(REG_A));
     this->transition_to_fetch();
     return pins;
@@ -180,24 +204,35 @@ bus_state_t op_plp(bus_state_t pins) {
   case 0:
     /* PHI2: Dummy read from PC */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
-
     this->cycle_index++;
     return pins;
 
   case 1:
-    /* PHI2: Dummy read from current stack pointer, then increment SP */
-    pins = this->bus_setup_dummy<Addr::SP>(pins);
+    /* PHI1: No operation - just increment cycle */
+    this->cycle_index++;
+    return pins;
 
+  case 2:
+    /* PHI2: Dummy read from current stack pointer */
+    pins = this->bus_setup_dummy<Addr::SP>(pins);
+    this->cycle_index++;
+    return pins;
+
+  case 3:
     /* PHI1: Increment stack pointer */
     this->inc(REG_S);
     this->cycle_index++;
     return pins;
 
-  case 2:
-    /* PHI2: Read status byte from incremented stack pointer */
-    pins = this->/*TODO_READ*/ phi2_read<Addr::SP>(pins, REG_DL);
+  case 4:
+    /* PHI2: Set up bus read for status byte from stack */
+    pins = this->bus_setup_read<Addr::SP>(pins);
+    this->cycle_index++;
+    return pins;
 
-    /* PHI1: Store in P (clear B, set U) */
+  case 5:
+    /* PHI1: Load status byte from bus into P (clear B, set U) */
+    this->bus_load_reg(REG_DL, pins);
     this->set(REG_P, (this->get(REG_DL) & ~FLAG_B) | FLAG_U);
     this->transition_to_fetch();
     return pins;

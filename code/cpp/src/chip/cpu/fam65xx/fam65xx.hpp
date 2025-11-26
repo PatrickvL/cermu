@@ -903,21 +903,30 @@ inline bus_state_t call_current_handler(bus_state_t pins) {
   return (this->*current_handler)(pins);
 }
 
-// Instruction fetch and decode
+// Instruction fetch and decode - PHI2/PHI1 split pattern
 bus_state_t fetch_opcode(bus_state_t pins) {
-  // Read opcode from PC (using program banking PBR for 65C816)
-  pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_IR);
-  this->set(REG_AB, this->get(REG_PC));
-  this->inc(REG_PC);
-  // Set SYNC signal for opcode fetch
-  pins |= FAM65XX_SYNC;
-  // Decode opcode and set up instruction
-  uint8_t opcode = this->get(REG_IR);
+  switch (this->cycle_index) {
+  case 0:
+    // PHI2: Set up bus for opcode read from PC
+    pins = this->bus_setup_read<Addr::PC>(pins);
+    this->set(REG_AB, this->get(REG_PC));
+    this->inc(REG_PC);
+    // Set SYNC signal for opcode fetch
+    pins |= FAM65XX_SYNC;
+    this->cycle_index++;
+    return pins;
 
-  opcode_info_t entry = get_opcode_info(opcode);
-  this->transition_to_opcode(entry);
+  case 1:
+    // PHI1: Sample opcode from bus and decode
+    uint8_t opcode = this->bus_get_data(pins);
+    this->set(REG_IR, opcode);
 
-  return pins;
+    opcode_info_t entry = get_opcode_info(opcode);
+    this->transition_to_opcode(entry);
+    return pins;
+  }
+
+  return pins; // Should never reach here
 }
 
 // Transition to next instruction fetch (public for bootstrap function)
