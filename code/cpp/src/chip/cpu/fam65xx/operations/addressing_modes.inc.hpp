@@ -194,8 +194,6 @@ case 2:
   this->transition_to_operation();
   return pins;
 }
-return pins;
-}
 
 // Absolute,Y addressing: $nnnn,Y (cycle-accurate with page crossing)
 bus_state_t am_aby(bus_state_t pins) {

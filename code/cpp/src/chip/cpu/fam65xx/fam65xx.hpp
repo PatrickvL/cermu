@@ -624,31 +624,27 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
 
         case 3:
           // Cycle 3: Write high byte back to memory (address + 1)
-
           if (use_zero_bank) {
             pins = this->bus_setup_write<Addr::AB, Bank::ZBR>(
                 pins, this->get(REG_DPL));
-            else {
-              pins = this->bus_setup_write<Addr::AB, Bank::DBR>(
-                  pins, this->get(REG_DPL));
-            }
-            this->cycle_index++;
+          } else {
+            pins = this->bus_setup_write<Addr::AB, Bank::DBR>(
+                pins, this->get(REG_DPL));
           }
+          this->cycle_index++;
           return pins;
 
         case 4:
           // Cycle 4: Write low byte back to memory (address)
           this->dec(REG_ABL); // Decrement address back to low byte
-
           if (use_zero_bank) {
             pins = this->bus_setup_write<Addr::AB, Bank::ZBR>(
                 pins, this->get(REG_DL));
-            else {
-              pins = this->bus_setup_write<Addr::AB, Bank::DBR>(
-                  pins, this->get(REG_DL));
-            }
-            this->transition_to_fetch();
+          } else {
+            pins = this->bus_setup_write<Addr::AB, Bank::DBR>(
+                pins, this->get(REG_DL));
           }
+          this->transition_to_fetch();
           return pins;
         }
       } else {
@@ -698,33 +694,32 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
 
         case 2:
           // Cycle 2: Write modified value back to memory
-
           if (use_zero_bank) {
             pins = this->bus_setup_write<Addr::AB, Bank::ZBR>(
-                pins, this->get(REG_DL)); // Direct Page uses Bank 0 else {
+                pins, this->get(REG_DL)); // Direct Page uses Bank 0
+          } else {
             pins = this->bus_setup_write<Addr::AB, Bank::DBR>(
                 pins, this->get(REG_DL)); // Other modes use DBR
           }
           this->transition_to_fetch();
+          return pins;
         }
         return pins;
       }
-    }
-  }
-  else {
-    // Accumulator mode - single cycle operation with automatic 8/16-bit
-    // handling
-    pins = this->bus_setup_dummy<Addr::PC>(pins);
+    } else {
+      // Accumulator mode - single cycle operation with automatic 8/16-bit
+      // handling
+      pins = this->bus_setup_dummy<Addr::PC>(pins);
 
-    data_t value = this->get_accumulator(); // Automatically handles
-                                            // 8/16-bit based on M flag
-    operation_func(value);
-    this->set_accumulator(
-        value); // Automatically handles 8/16-bit based on M flag
-    this->transition_to_fetch();
+      data_t value = this->get_accumulator(); // Automatically handles
+                                              // 8/16-bit based on M flag
+      operation_func(value);
+      this->set_accumulator(
+          value); // Automatically handles 8/16-bit based on M flag
+      this->transition_to_fetch();
+    }
+    return pins;
   }
-  return pins;
-}
 
 // ========================================================================
 // OPERATION IMPLEMENTATIONS (included via .inc.hpp files)
