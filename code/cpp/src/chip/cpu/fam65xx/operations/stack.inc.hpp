@@ -26,7 +26,6 @@ bus_state_t op_pha(bus_state_t pins) {
         /* Dummy cycle for internal operation */
         pins = this->bus_setup_dummy<Addr::PC>(pins);
 
-        this->cycle_index++;
         return pins;
 
       case 1:
@@ -55,7 +54,6 @@ bus_state_t op_pha(bus_state_t pins) {
     /* Dummy cycle for internal operation */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
 
-    this->cycle_index++;
     return pins;
 
   case 1:
@@ -78,7 +76,6 @@ bus_state_t op_php(bus_state_t pins) {
     pins = this->bus_setup_dummy<Addr::PC>(pins);
 
     this->set(REG_DL, this->get(REG_P) | FLAG_B | FLAG_U);
-    this->cycle_index++;
     return pins;
 
   case 1:
@@ -104,7 +101,6 @@ bus_state_t op_pla(bus_state_t pins) {
       case 0:
         /* PHI2: Dummy read from PC */
         pins = this->bus_setup_dummy<Addr::PC>(pins);
-        this->cycle_index++;
         return pins;
 
       case 1:
@@ -115,7 +111,6 @@ bus_state_t op_pla(bus_state_t pins) {
       case 2:
         /* PHI2: Dummy read from current stack pointer */
         pins = this->bus_setup_dummy<Addr::SP>(pins);
-        this->cycle_index++;
         return pins;
 
       case 3:
@@ -127,7 +122,6 @@ bus_state_t op_pla(bus_state_t pins) {
       case 4:
         /* PHI2: Set up read for accumulator low byte from stack */
         pins = this->bus_setup_read<Addr::SP>(pins);
-        this->cycle_index++;
         return pins;
 
       case 5:
@@ -140,7 +134,6 @@ bus_state_t op_pla(bus_state_t pins) {
       case 6:
         /* PHI2: Set up read for accumulator high byte from stack */
         pins = this->bus_setup_read<Addr::SP>(pins);
-        this->cycle_index++;
         return pins;
 
       case 7:
@@ -161,7 +154,6 @@ bus_state_t op_pla(bus_state_t pins) {
   case 0:
     /* PHI2: Dummy read from PC */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
-    this->cycle_index++;
     return pins;
 
   case 1:
@@ -172,7 +164,6 @@ bus_state_t op_pla(bus_state_t pins) {
   case 2:
     /* PHI2: Dummy read from current stack pointer */
     pins = this->bus_setup_dummy<Addr::SP>(pins);
-    this->cycle_index++;
     return pins;
 
   case 3:
@@ -184,7 +175,6 @@ bus_state_t op_pla(bus_state_t pins) {
   case 4:
     /* PHI2: Set up bus read from incremented stack pointer */
     pins = this->bus_setup_read<Addr::SP>(pins);
-    this->cycle_index++;
     return pins;
 
   case 5:
@@ -204,7 +194,6 @@ bus_state_t op_plp(bus_state_t pins) {
   case 0:
     /* PHI2: Dummy read from PC */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
-    this->cycle_index++;
     return pins;
 
   case 1:
@@ -215,7 +204,6 @@ bus_state_t op_plp(bus_state_t pins) {
   case 2:
     /* PHI2: Dummy read from current stack pointer */
     pins = this->bus_setup_dummy<Addr::SP>(pins);
-    this->cycle_index++;
     return pins;
 
   case 3:
@@ -227,7 +215,6 @@ bus_state_t op_plp(bus_state_t pins) {
   case 4:
     /* PHI2: Set up bus read for status byte from stack */
     pins = this->bus_setup_read<Addr::SP>(pins);
-    this->cycle_index++;
     return pins;
 
   case 5:

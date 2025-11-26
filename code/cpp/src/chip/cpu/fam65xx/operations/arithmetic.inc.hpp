@@ -26,7 +26,6 @@ bus_state_t op_adc(bus_state_t pins) {
         // Read low byte of operand
         pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
 
-        this->cycle_index++;
         // For 65C816 native mode, increment address bus with bank handling
         this->inc(REG_AB);
         return pins;
@@ -69,7 +68,6 @@ bus_state_t op_adc(bus_state_t pins) {
     // CMOS processors need extra cycle in decimal mode
     if constexpr (this->has_bcd_extra_cycle()) {
       if (this->get(REG_P) & FLAG_D) {
-        this->cycle_index++;
         return pins;
       }
 
@@ -202,7 +200,6 @@ bus_state_t op_sbc(bus_state_t pins) {
         // Read low byte of operand
         pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
 
-        this->cycle_index++;
         // For 65C816 native mode, increment address bus with bank handling
         this->inc(REG_AB);
         return pins;
@@ -245,7 +242,6 @@ bus_state_t op_sbc(bus_state_t pins) {
     // CMOS processors need extra cycle in decimal mode
     if constexpr (this->has_bcd_extra_cycle()) {
       if (this->get(REG_P) & FLAG_D) {
-        this->cycle_index++;
         return pins;
       }
 
@@ -280,7 +276,6 @@ bus_state_t op_cmp(bus_state_t pins) {
         // Read low byte of operand
         pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
 
-        this->cycle_index++;
         // For 65C816 native mode, increment address bus with bank handling
         this->inc(REG_AB);
         return pins;
@@ -338,7 +333,6 @@ bus_state_t op_cpx(bus_state_t pins) {
 
         // For 65C816 native mode, increment address bus with bank handling
         this->inc(REG_AB);
-        this->cycle_index++;
         return pins;
 
       case 1:
@@ -394,7 +388,6 @@ bus_state_t op_cpy(bus_state_t pins) {
 
         // For 65C816 native mode, increment address bus with bank handling
         this->inc(REG_AB);
-        this->cycle_index++;
         return pins;
 
       case 1:

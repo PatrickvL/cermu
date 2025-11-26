@@ -20,7 +20,6 @@ bus_state_t am_zp(bus_state_t pins) {
   case 0:
     /* PHI2: Set up bus read for zero page address from PC */
     pins = this->bus_setup_read<Addr::PC>(pins);
-    this->cycle_index++;
     return pins;
 
   case 1:
@@ -41,7 +40,6 @@ bus_state_t am_zpx(bus_state_t pins) {
   case 0:
     /* PHI2: Set up bus read for base address from PC */
     pins = this->bus_setup_read<Addr::PC>(pins);
-    this->cycle_index++;
     return pins;
 
   case 1:
@@ -55,7 +53,6 @@ bus_state_t am_zpx(bus_state_t pins) {
   case 2:
     /* PHI2: Dummy read from AB while adding index */
     pins = this->bus_setup_dummy<Addr::AB>(pins);
-    this->cycle_index++;
     return pins;
 
   case 3:
@@ -74,7 +71,6 @@ bus_state_t am_zpy(bus_state_t pins) {
   case 0:
     /* PHI2: Set up bus read for base address from PC */
     pins = this->bus_setup_read<Addr::PC>(pins);
-    this->cycle_index++;
     return pins;
 
   case 1:
@@ -88,7 +84,6 @@ bus_state_t am_zpy(bus_state_t pins) {
   case 2:
     /* PHI2: Dummy read from AB while adding index */
     pins = this->bus_setup_dummy<Addr::AB>(pins);
-    this->cycle_index++;
     return pins;
 
   case 3:
@@ -116,7 +111,6 @@ bus_state_t am_abs(bus_state_t pins) {
   case 0:
     /* PHI2: Set up bus read for low byte from PC */
     pins = this->bus_setup_read<Addr::PC>(pins);
-    this->cycle_index++;
     return pins;
 
   case 1:
@@ -129,7 +123,6 @@ bus_state_t am_abs(bus_state_t pins) {
   case 2:
     /* PHI2: Set up bus read for high byte from PC */
     pins = this->bus_setup_read<Addr::PC>(pins);
-    this->cycle_index++;
     return pins;
 
   case 3:
@@ -149,7 +142,6 @@ bus_state_t am_abx(bus_state_t pins) {
   case 0:
     // PHI2: Read low byte from PC
     pins = this->bus_setup_read<Addr::PC>(pins);
-    this->cycle_index++;
     return pins;
 
   case 1:
@@ -159,12 +151,11 @@ bus_state_t am_abx(bus_state_t pins) {
     this->cycle_index++;
     return pins;
 
-  case 1: {
+  case 2:
     pins = this->bus_setup_read<Addr::PC>(pins);
-    this->cycle_index++;
     return pins;
 
-  case 2:
+  case 3:
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_ABL, pins);
     this->inc(REG_PC);
@@ -188,22 +179,22 @@ bus_state_t am_abx(bus_state_t pins) {
     }
   }
 
-  case 2:
-    // PHI2: Page cross penalty - read from wrong address (use TMP to avoid
-    // overwriting DL)
-    pins = this->bus_setup_dummy<Addr::AB>(pins);
+case 2:
+  // PHI2: Page cross penalty - read from wrong address (use TMP to avoid
+  // overwriting DL)
+  pins = this->bus_setup_dummy<Addr::AB>(pins);
 
-    // PHI1: Correct final address
-    // ABL has X added, ABH is unchanged from original. Subtract X from ABL to
-    // restore original base
-    this->set(REG_ABL, this->get(REG_ABL) - this->get(REG_X));
-    // Now AB has original base address, add X to full 16-bit AB for correct
-    // effective address with carry
-    this->set(REG_AB, this->get(REG_AB) + this->get(REG_X));
-    this->transition_to_operation();
-    return pins;
-  }
+  // PHI1: Correct final address
+  // ABL has X added, ABH is unchanged from original. Subtract X from ABL to
+  // restore original base
+  this->set(REG_ABL, this->get(REG_ABL) - this->get(REG_X));
+  // Now AB has original base address, add X to full 16-bit AB for correct
+  // effective address with carry
+  this->set(REG_AB, this->get(REG_AB) + this->get(REG_X));
+  this->transition_to_operation();
   return pins;
+}
+return pins;
 }
 
 // Absolute,Y addressing: $nnnn,Y (cycle-accurate with page crossing)
@@ -213,7 +204,6 @@ bus_state_t am_aby(bus_state_t pins) {
   case 0:
     // PHI2: Read low byte from PC
     pins = this->bus_setup_read<Addr::PC>(pins);
-    this->cycle_index++;
     return pins;
 
   case 1:
@@ -223,12 +213,11 @@ bus_state_t am_aby(bus_state_t pins) {
     this->cycle_index++;
     return pins;
 
-  case 1: {
+  case 2:
     pins = this->bus_setup_read<Addr::PC>(pins);
-    this->cycle_index++;
     return pins;
 
-  case 2:
+  case 3:
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_ABL, pins);
     this->inc(REG_PC);
@@ -252,23 +241,23 @@ bus_state_t am_aby(bus_state_t pins) {
     }
   }
 
-  case 2: {
-    // PHI2: Page cross penalty - read from wrong address (use temporary
-    // register to avoid overwriting DL)
-    pins = this->bus_setup_dummy<Addr::AB>(pins);
+case 2: {
+  // PHI2: Page cross penalty - read from wrong address (use temporary
+  // register to avoid overwriting DL)
+  pins = this->bus_setup_dummy<Addr::AB>(pins);
 
-    // PHI1: Correct final address
-    // ABL has Y added, ABH is unchanged from original. Subtract Y from ABL to
-    // restore original base
-    this->set(REG_ABL, this->get(REG_ABL) - this->get(REG_Y));
-    // Now AB has original base address, add Y to full 16-bit AB for correct
-    // effective address with carry
-    this->set(REG_AB, this->get(REG_AB) + this->get(REG_Y));
-    this->transition_to_operation();
-    return pins;
-  }
-  }
+  // PHI1: Correct final address
+  // ABL has Y added, ABH is unchanged from original. Subtract Y from ABL to
+  // restore original base
+  this->set(REG_ABL, this->get(REG_ABL) - this->get(REG_Y));
+  // Now AB has original base address, add Y to full 16-bit AB for correct
+  // effective address with carry
+  this->set(REG_AB, this->get(REG_AB) + this->get(REG_Y));
+  this->transition_to_operation();
   return pins;
+}
+}
+return pins;
 }
 
 // Indirect addressing: ($nnnn) - Used only by JMP instruction
@@ -278,7 +267,6 @@ bus_state_t am_ind(bus_state_t pins) {
   case 0:
     // PHI2: Read low byte of pointer address from PC
     pins = this->bus_setup_read<Addr::PC>(pins);
-    this->cycle_index++;
     return pins;
 
   case 1:
@@ -288,26 +276,24 @@ bus_state_t am_ind(bus_state_t pins) {
     this->cycle_index++;
     return pins;
 
-  case 1:
+  case 2:
     // PHI2: Read high byte of pointer address from PC
     pins = this->bus_setup_read<Addr::PC>(pins);
-    this->cycle_index++;
     return pins;
 
-  case 2:
+  case 3:
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_DL, pins);
     this->inc(REG_PC);
     this->cycle_index++;
     return pins;
 
-  case 2:
+  case 4:
     // PHI2: Read low byte of target address from pointer
     pins = this->bus_setup_read<Addr::AB>(pins);
-    this->cycle_index++;
     return pins;
 
-  case 3:
+  case 5:
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_DL, pins);
     this->inc(REG_AB);
@@ -315,12 +301,11 @@ bus_state_t am_ind(bus_state_t pins) {
     this->cycle_index++;
     return pins;
 
-  case 3:
+  case 6:
     pins = this->bus_setup_read<Addr::AB>(pins);
-    this->cycle_index++;
     return pins;
 
-  case 4:
+  case 7:
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_DL, pins);
     this->set(REG_ABL, this->get(REG_DL)); // Low byte from cycle 2
@@ -336,7 +321,6 @@ bus_state_t am_inx(bus_state_t pins) {
   case 0:
     /* Read pointer from PC */
     pins = this->bus_setup_read<Addr::PC>(pins);
-    this->cycle_index++;
     return pins;
 
   case 1:
@@ -347,38 +331,35 @@ bus_state_t am_inx(bus_state_t pins) {
     this->cycle_index++;
     return pins;
 
-  case 1:
+  case 2:
     /* Dummy read from AB (before adding X) */
     pins = this->bus_setup_read<Addr::AB>(pins);
-    this->cycle_index++;
     return pins;
 
-  case 2:
+  case 3:
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_DL, pins);
     this->set(REG_ABL, this->get(REG_ABL) + this->get(REG_X));
     this->cycle_index++;
     return pins;
 
-  case 2:
+  case 4:
     /* Read low byte of target from AB+X */
     pins = this->bus_setup_read<Addr::AB>(pins);
-    this->cycle_index++;
     return pins;
 
-  case 3:
+  case 5:
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_DL, pins);
     this->set(REG_ABL, this->get(REG_ABL) + 1);
     this->cycle_index++;
     return pins;
 
-  case 3:
+  case 6:
     pins = this->bus_setup_read<Addr::AB>(pins);
-    this->cycle_index++;
     return pins;
 
-  case 4:
+  case 7:
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_DL, pins);
     this->set(REG_ABL, this->get(REG_DL)); // Low byte from cycle 2
@@ -394,7 +375,6 @@ bus_state_t am_iny(bus_state_t pins) {
   case 0:
     /* Read pointer from PC */
     pins = this->bus_setup_read<Addr::PC>(pins);
-    this->cycle_index++;
     return pins;
 
   case 1:
@@ -405,25 +385,23 @@ bus_state_t am_iny(bus_state_t pins) {
     this->cycle_index++;
     return pins;
 
-  case 1:
+  case 2:
     /* Read low byte of target from ZP */
     pins = this->bus_setup_read<Addr::AB>(pins);
-    this->cycle_index++;
     return pins;
 
-  case 2:
+  case 3:
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_DL, pins);
     this->set(REG_ABL, this->get(REG_ABL) + 1); // Increment zero page pointer
     this->cycle_index++;
     return pins;
 
-  case 2: {
+  case 4:
     pins = this->bus_setup_read<Addr::AB>(pins);
-    this->cycle_index++;
     return pins;
 
-  case 3:
+  case 5:
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_DL, pins);
     /* Set up AB with base address */
@@ -458,26 +436,26 @@ bus_state_t am_iny(bus_state_t pins) {
     }
   }
 
-  case 3:
-    /* Page cross penalty - dummy read from wrong address */
-    pins = this->bus_setup_dummy<Addr::AB>(pins);
+case 3:
+  /* Page cross penalty - dummy read from wrong address */
+  pins = this->bus_setup_dummy<Addr::AB>(pins);
 
-    /* DL contains intermediate high byte from case 2 */
+  /* DL contains intermediate high byte from case 2 */
 
-    /* Correct final address calculation */
-    /* Current AB has intermediate address: orig_high:(base_low + Y) */
-    /* We need: (orig_high:(base_low)) + Y */
-    this->set(REG_ABH, this->get(REG_DL)); /* Restore original high byte */
-    this->set(REG_ABL, this->get(REG_ABL) -
-                           this->get(REG_Y)); /* Recover original base low */
-    this->set(REG_AB,
-              this->get(REG_AB) +
-                  this->get(REG_Y)); /* Calculate correct final with carry */
+  /* Correct final address calculation */
+  /* Current AB has intermediate address: orig_high:(base_low + Y) */
+  /* We need: (orig_high:(base_low)) + Y */
+  this->set(REG_ABH, this->get(REG_DL)); /* Restore original high byte */
+  this->set(REG_ABL, this->get(REG_ABL) -
+                         this->get(REG_Y)); /* Recover original base low */
+  this->set(REG_AB,
+            this->get(REG_AB) +
+                this->get(REG_Y)); /* Calculate correct final with carry */
 
-    this->transition_to_operation();
-    return pins;
-  }
+  this->transition_to_operation();
   return pins;
+}
+return pins;
 }
 
 // 65C02 Enhanced Addressing Modes (conditional compilation)
@@ -500,7 +478,6 @@ bus_state_t am_zpi(bus_state_t pins) {
   case 0:
     // PHI2: Read zero page address from PC
     pins = this->bus_setup_read<Addr::PC>(pins);
-    this->cycle_index++;
     return pins;
 
   case 1:
@@ -511,25 +488,23 @@ bus_state_t am_zpi(bus_state_t pins) {
     this->cycle_index++;
     return pins;
 
-  case 1:
+  case 2:
     // PHI2: Read low byte of target address from zero page
     pins = this->bus_setup_read<Addr::AB>(pins);
-    this->cycle_index++;
     return pins;
 
-  case 2:
+  case 3:
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_DL, pins);
     this->set(REG_ABL,
     this->cycle_index++;
     return pins;
 
-  case 2:
+  case 4:
     pins = this->bus_setup_read<Addr::AB>(pins);
-  this->cycle_index++;
   return pins;
 
-case 3:
+case 5:
   /* PHI1: Load data and perform operations */
   this->bus_load_reg(REG_DL, pins);
     this->set(REG_ABL, this->get(REG_DL)); // Low byte from cycle 1
@@ -547,7 +522,6 @@ bus_state_t am_abi(bus_state_t pins) {
     case 0:
       // PHI2: Read low byte of base address from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
-      this->cycle_index++;
       return pins;
 
     case 1:
@@ -557,13 +531,12 @@ bus_state_t am_abi(bus_state_t pins) {
       this->cycle_index++;
       return pins;
 
-    case 1:
+    case 2:
       // PHI2: Read high byte of base address from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
-      this->cycle_index++;
       return pins;
 
-    case 2:
+    case 3:
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
       this->inc(REG_PC);
@@ -571,25 +544,23 @@ bus_state_t am_abi(bus_state_t pins) {
       this->cycle_index++;
       return pins;
 
-    case 2:
+    case 4:
       // PHI2: Read low byte of target address from (base+X)
       pins = this->bus_setup_read<Addr::AB>(pins);
-      this->cycle_index++;
       return pins;
 
-    case 3:
+    case 5:
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
       this->inc(REG_AB);
       this->cycle_index++;
       return pins;
 
-    case 3:
+    case 6:
       pins = this->bus_setup_read<Addr::AB>(pins);
-      this->cycle_index++;
       return pins;
 
-    case 4:
+    case 7:
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
       this->set(REG_ABL, this->get(REG_DL)); // Low byte from cycle 2
@@ -608,7 +579,6 @@ bus_state_t am_dp(bus_state_t pins) {
     switch (this->cycle_index) {
     case 0:
       pins = this->bus_setup_read<Addr::PC>(pins);
-      this->cycle_index++;
       return pins;
 
     case 1:
@@ -651,7 +621,6 @@ bus_state_t am_dpx(bus_state_t pins) {
     switch (this->cycle_index) {
     case 0:
       pins = this->bus_setup_read<Addr::PC>(pins);
-      this->cycle_index++;
       return pins;
 
     case 1:
@@ -723,7 +692,6 @@ bus_state_t am_dpil(bus_state_t pins) {
     case 0:
       // PHI2: Read Direct Page offset from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
-      this->cycle_index++;
       return pins;
 
     case 1:
@@ -735,38 +703,35 @@ bus_state_t am_dpil(bus_state_t pins) {
       this->cycle_index++;
       return pins;
 
-    case 1:
+    case 2:
       // PHI2: Read low byte of target address from Direct Page
       pins = this->bus_setup_read<Addr::AB>(pins);
-      this->cycle_index++;
-      return pins;
-
-    case 2:
-      /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      this->set(REG_AB, next_addr);
-      this->cycle_index++;
-      return pins;
-
-    case 2:
-      // PHI2: Read middle byte of target address
-      pins = this->bus_setup_read<Addr::AB>(pins);
-      this->cycle_index++;
       return pins;
 
     case 3:
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
       this->set(REG_AB, next_addr);
-      this->cycle_index++;
-      return pins;
-
-    case 3:
-      pins = this->bus_setup_read<Addr::AB>(pins);
       this->cycle_index++;
       return pins;
 
     case 4:
+      // PHI2: Read middle byte of target address
+      pins = this->bus_setup_read<Addr::AB>(pins);
+      return pins;
+
+    case 5:
+      /* PHI1: Load data and perform operations */
+      this->bus_load_reg(REG_DL, pins);
+      this->set(REG_AB, next_addr);
+      this->cycle_index++;
+      return pins;
+
+    case 6:
+      pins = this->bus_setup_read<Addr::AB>(pins);
+      return pins;
+
+    case 7:
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
       uint8_t low_byte = this->get(REG_DL);
@@ -803,7 +768,6 @@ bus_state_t am_dpily(bus_state_t pins) {
     case 0:
       // PHI2: Read Direct Page offset from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
-      this->cycle_index++;
       return pins;
 
     case 1:
@@ -815,38 +779,35 @@ bus_state_t am_dpily(bus_state_t pins) {
       this->cycle_index++;
       return pins;
 
-    case 1:
+    case 2:
       // PHI2: Read low byte of base address from Direct Page
       pins = this->bus_setup_read<Addr::AB>(pins);
-      this->cycle_index++;
-      return pins;
-
-    case 2:
-      /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      this->set(REG_AB, next_addr);
-      this->cycle_index++;
-      return pins;
-
-    case 2:
-      // PHI2: Read middle byte of base address
-      pins = this->bus_setup_read<Addr::AB>(pins);
-      this->cycle_index++;
       return pins;
 
     case 3:
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
       this->set(REG_AB, next_addr);
-      this->cycle_index++;
-      return pins;
-
-    case 3:
-      pins = this->bus_setup_read<Addr::AB>(pins);
       this->cycle_index++;
       return pins;
 
     case 4:
+      // PHI2: Read middle byte of base address
+      pins = this->bus_setup_read<Addr::AB>(pins);
+      return pins;
+
+    case 5:
+      /* PHI1: Load data and perform operations */
+      this->bus_load_reg(REG_DL, pins);
+      this->set(REG_AB, next_addr);
+      this->cycle_index++;
+      return pins;
+
+    case 6:
+      pins = this->bus_setup_read<Addr::AB>(pins);
+      return pins;
+
+    case 7:
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
       uint8_t low_byte = this->get(REG_DL);
@@ -894,7 +855,6 @@ bus_state_t am_abl(bus_state_t pins) {
     case 0:
       // PHI2: Read low byte from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
-      this->cycle_index++;
       return pins;
 
     case 1:
@@ -904,25 +864,23 @@ bus_state_t am_abl(bus_state_t pins) {
       this->cycle_index++;
       return pins;
 
-    case 1:
+    case 2:
       // PHI2: Read middle byte from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
-      this->cycle_index++;
-      return pins;
-
-    case 2:
-      /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      this->inc(REG_PC);
-      this->cycle_index++;
-      return pins;
-
-    case 2:
-      pins = this->bus_setup_read<Addr::PC>(pins);
-      this->cycle_index++;
       return pins;
 
     case 3:
+      /* PHI1: Load data and perform operations */
+      this->bus_load_reg(REG_DL, pins);
+      this->inc(REG_PC);
+      this->cycle_index++;
+      return pins;
+
+    case 4:
+      pins = this->bus_setup_read<Addr::PC>(pins);
+      return pins;
+
+    case 5:
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_ABL, pins);
       this->inc(REG_PC);
@@ -943,7 +901,6 @@ bus_state_t am_ablx(bus_state_t pins) {
     case 0:
       // PHI2: Read low byte from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
-      this->cycle_index++;
       return pins;
 
     case 1:
@@ -953,25 +910,23 @@ bus_state_t am_ablx(bus_state_t pins) {
       this->cycle_index++;
       return pins;
 
-    case 1:
+    case 2:
       // PHI2: Read middle byte from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
-      this->cycle_index++;
-      return pins;
-
-    case 2:
-      /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      this->inc(REG_PC);
-      this->cycle_index++;
-      return pins;
-
-    case 2:
-      pins = this->bus_setup_read<Addr::PC>(pins);
-      this->cycle_index++;
       return pins;
 
     case 3:
+      /* PHI1: Load data and perform operations */
+      this->bus_load_reg(REG_DL, pins);
+      this->inc(REG_PC);
+      this->cycle_index++;
+      return pins;
+
+    case 4:
+      pins = this->bus_setup_read<Addr::PC>(pins);
+      return pins;
+
+    case 5:
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_ABL, pins);
       this->inc(REG_PC);
@@ -996,7 +951,6 @@ bus_state_t am_sr(bus_state_t pins) {
     case 0:
       // PHI2: Read stack offset from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
-      this->cycle_index++;
       return pins;
 
     case 1:
@@ -1006,7 +960,7 @@ bus_state_t am_sr(bus_state_t pins) {
       this->cycle_index++;
       return pins;
 
-    case 1:
+    case 2:
       // PHI2: Dummy internal operation cycle
 
       // Calculate stack address: $00:(S + offset)
@@ -1032,7 +986,6 @@ bus_state_t am_sri(bus_state_t pins) {
     case 0:
       // PHI2: Read stack offset from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
-      this->cycle_index++;
       return pins;
 
     case 1:
@@ -1042,35 +995,33 @@ bus_state_t am_sri(bus_state_t pins) {
       this->cycle_index++;
       return pins;
 
-    case 1:
+    case 2:
       // PHI2: Dummy internal operation cycle
 
       // Calculate stack pointer address: $00:(S + offset)
       uint16_t stack_addr = this->get(REG_SP) + this->get(REG_DL);
       this->set(REG_ABL, stack_addr & 0xFF);
       this->set(REG_ABH, (stack_addr >> 8) & 0xFF);
-      this->cycle_index++;
       return pins;
 
-    case 2:
+    case 3:
       // PHI2: Read low byte of pointer from stack
       pins = this->bus_setup_read<Addr::AB>(pins);
       this->cycle_index++;
       return pins;
 
-    case 3:
+    case 4:
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
       this->set(REG_AB, next_addr);
-      this->cycle_index++;
       return pins;
 
-    case 3:
+    case 5:
       pins = this->bus_setup_read<Addr::AB>(pins);
       this->cycle_index++;
       return pins;
 
-    case 4:
+    case 6:
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
       this->set(REG_ABL, this->get(REG_DL)); // Low byte from cycle 2
@@ -1096,7 +1047,6 @@ bus_state_t am_zpr(bus_state_t pins) {
     case 0:
       // PHI2: Read zero page address from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
-      this->cycle_index++;
       return pins;
 
     case 1:
@@ -1107,12 +1057,11 @@ bus_state_t am_zpr(bus_state_t pins) {
       this->cycle_index++;
       return pins;
 
-    case 1:
+    case 2:
       pins = this->bus_setup_read<Addr::PC>(pins);
-      this->cycle_index++;
       return pins;
 
-    case 2:
+    case 3:
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_ABH, pins);
       this->inc(REG_PC);

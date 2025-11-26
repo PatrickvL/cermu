@@ -46,7 +46,6 @@ bus_state_t op_jsr(bus_state_t pins) {
   case 0:
     /* PHI2: Read low byte of target address from PC directly to ABL */
     pins = this->bus_setup_read<Addr::PC>(pins);
-    this->cycle_index++;
     return pins;
 
   case 1:
@@ -56,14 +55,13 @@ bus_state_t op_jsr(bus_state_t pins) {
     this->cycle_index++;
     return pins;
 
-  case 1:
+  case 2:
     /* PHI2: Dummy read from stack pointer (internal operation) */
     pins = this->bus_setup_dummy<Addr::SP>(pins);
 
-    this->cycle_index++;
     return pins;
 
-  case 2:
+  case 3:
     /* PHI2: Push PCH (high byte of return address) to stack */
 
     pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCH));
@@ -71,20 +69,19 @@ bus_state_t op_jsr(bus_state_t pins) {
     this->cycle_index++;
     return pins;
 
-  case 3:
+  case 4:
     /* PHI2: Push PCL (low byte of return address) to stack */
 
     pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCL));
     this->dec(REG_S);
-    this->cycle_index++;
     return pins;
 
-  case 4:
+  case 5:
     pins = this->bus_setup_read<Addr::PC>(pins);
     this->cycle_index++;
     return pins;
 
-  case 5:
+  case 6:
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_ABL, pins);
     /* PHI1: Set PC to target address */
@@ -102,7 +99,6 @@ bus_state_t op_rts(bus_state_t pins) {
     /* PHI2: Dummy read from PC */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
 
-    this->cycle_index++;
     return pins;
 
   case 1:
@@ -116,7 +112,6 @@ bus_state_t op_rts(bus_state_t pins) {
   case 2:
     /* PHI2: Pull PCL from stack */
     pins = this->bus_setup_read<Addr::SP>(pins);
-    this->cycle_index++;
     return pins;
 
   case 3:
@@ -126,14 +121,13 @@ bus_state_t op_rts(bus_state_t pins) {
     this->cycle_index++;
     return pins;
 
-  case 3:
+  case 4:
     /* PHI2: Pull PCH from stack */
     pins = this->bus_setup_read<Addr::SP>(pins);
 
-    this->cycle_index++;
     return pins;
 
-  case 4:
+  case 5:
     /* PHI2: Dummy read from PC, then increment PC */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
 
@@ -223,7 +217,6 @@ bus_state_t op_brk(bus_state_t pins) {
     /* Hardware interrupts (IRQ, NMI) take priority over software BRK */
     if (this->active_interrupt == FAM65XX_INT_NONE) {
       this->active_interrupt = FAM65XX_INT_BRK;
-      this->cycle_index++;
     }
     return pins;
 
@@ -313,7 +306,6 @@ bus_state_t op_rti(bus_state_t pins) {
     /* PHI2: Dummy read from PC */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
 
-    this->cycle_index++;
     return pins;
 
   case 1:
@@ -327,7 +319,6 @@ bus_state_t op_rti(bus_state_t pins) {
   case 2:
     /* PHI2: Pull P from stack (clear B, set U) */
     pins = this->bus_setup_read<Addr::SP>(pins);
-    this->cycle_index++;
     return pins;
 
   case 3:
@@ -338,20 +329,19 @@ bus_state_t op_rti(bus_state_t pins) {
     this->cycle_index++;
     return pins;
 
-  case 3:
+  case 4:
     /* PHI2: Pull PCL from stack */
     pins = this->bus_setup_read<Addr::SP>(pins);
-    this->cycle_index++;
     return pins;
 
-  case 4:
+  case 5:
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_DL, pins);
     this->inc(REG_S);
     this->cycle_index++;
     return pins;
 
-  case 4:
+  case 6:
     /* PHI2: Pull PCH from stack */
     pins = this->bus_setup_read<Addr::SP>(pins);
 

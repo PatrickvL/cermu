@@ -28,7 +28,6 @@ bus_state_t op_lda(bus_state_t pins) {
 
         // For 65C816 native mode, increment address bus with bank handling
         this->inc(REG_AB);
-        this->cycle_index++;
         return pins;
 
       case 1:
@@ -77,7 +76,6 @@ bus_state_t op_ldx(bus_state_t pins) {
 
         // For 65C816 native mode, increment address bus with bank handling
         this->inc(REG_AB);
-        this->cycle_index++;
         return pins;
 
       case 1:
@@ -126,7 +124,6 @@ bus_state_t op_ldy(bus_state_t pins) {
 
         // For 65C816 native mode, increment address bus with bank handling
         this->inc(REG_AB);
-        this->cycle_index++;
         return pins;
 
       case 1:
@@ -175,7 +172,6 @@ bus_state_t op_sta(bus_state_t pins) {
         pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_AL));
         // For 65C816 native mode, increment address bus with bank handling
         this->inc(REG_AB);
-        this->cycle_index++;
         return pins;
 
       case 1:
@@ -213,7 +209,6 @@ bus_state_t op_stx(bus_state_t pins) {
         pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_XL));
         // For 65C816 native mode, increment address bus with bank handling
         this->inc(REG_AB);
-        this->cycle_index++;
         return pins;
 
       case 1:
@@ -251,7 +246,6 @@ bus_state_t op_sty(bus_state_t pins) {
         pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_YL));
         // For 65C816 native mode, increment address bus with bank handling
         this->inc(REG_AB);
-        this->cycle_index++;
         return pins;
 
       case 1:
@@ -290,7 +284,6 @@ bus_state_t op_and(bus_state_t pins) {
 
         // For 65C816 native mode, increment address bus with bank handling
         this->inc(REG_AB);
-        this->cycle_index++;
         return pins;
 
       case 1:
@@ -343,7 +336,6 @@ bus_state_t op_ora(bus_state_t pins) {
 
         // For 65C816 native mode, increment address bus with bank handling
         this->inc(REG_AB);
-        this->cycle_index++;
         return pins;
 
       case 1:
@@ -394,7 +386,6 @@ bus_state_t op_eor(bus_state_t pins) {
         // Read low byte of operand
         pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
 
-        this->cycle_index++;
         // For 65C816 native mode, increment address bus with bank handling
         this->inc(REG_AB);
         return pins;
@@ -452,7 +443,6 @@ bus_state_t op_bit(bus_state_t pins) {
 
         // For 65816 native mode, increment address bus with bank handling
         this->inc(REG_AB);
-        this->cycle_index++;
         return pins;
 
       case 1:

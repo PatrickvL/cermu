@@ -25,7 +25,6 @@ bus_state_t op_lax(bus_state_t pins) {
       case 0:
         // PHI2: Setup read from PC
         pins = this->bus_setup_read<Addr::PC>(pins);
-        this->cycle_index++;
         return pins;
 
       case 1:
@@ -48,7 +47,6 @@ bus_state_t op_lax(bus_state_t pins) {
       case 0:
         // PHI2: Setup read from AB
         pins = this->bus_setup_read<Addr::AB>(pins);
-        this->cycle_index++;
         return pins;
 
       case 1:
@@ -250,7 +248,6 @@ bus_state_t op_anc(bus_state_t pins) {
     case 0:
       // PHI2: Setup read from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
-      this->cycle_index++;
       return pins;
 
     case 1:
@@ -282,7 +279,6 @@ bus_state_t op_arr(bus_state_t pins) {
     case 0:
       // PHI2: Setup read from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
-      this->cycle_index++;
       return pins;
 
     case 1:
@@ -382,7 +378,6 @@ bus_state_t op_alr(bus_state_t pins) {
     case 0:
       // PHI2: Setup read from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
-      this->cycle_index++;
       return pins;
 
     case 1:
@@ -422,7 +417,6 @@ bus_state_t op_xaa(bus_state_t pins) {
     case 0:
       // PHI2: Setup read from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
-      this->cycle_index++;
       return pins;
 
     case 1:
@@ -449,7 +443,6 @@ bus_state_t op_sbx(bus_state_t pins) {
     case 0:
       // PHI2: Setup read from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
-      this->cycle_index++;
       return pins;
 
     case 1:
@@ -590,7 +583,6 @@ bus_state_t op_las(bus_state_t pins) {
     case 0:
       // PHI2: Setup read from AB
       pins = this->bus_setup_read<Addr::AB>(pins);
-      this->cycle_index++;
       return pins;
 
     case 1:
