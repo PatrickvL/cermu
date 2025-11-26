@@ -205,17 +205,15 @@ bus_state_t op_jam(bus_state_t pins) {
     return pins;
 
   case 1:
-    // PHI2: Read operand again from same address (PC+1)
     pins = this->bus_setup_read<Addr::PC>(pins);
-
-    // JAM: Reset PC back to opcode address (the "jam" effect)
-    this->dec(REG_PC); // Go back to opcode address
-
-    // For test suite compatibility: complete normally instead of infinite
-    // loop In real hardware this would loop forever, but tests expect finite
-    // execution
-    transition_to_fetch();
+    this->cycle_index++;
     return pins;
+
+  case 2:
+    /* PHI1: Load data and perform operations */
+    this->bus_load_reg(REG_ABL, pins);
+    this->dec(REG_PC); // Go back to opcode address
+    transition_to_fetch();
   }
   return pins;
 }

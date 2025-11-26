@@ -80,13 +80,16 @@ bus_state_t op_jsr(bus_state_t pins) {
     return pins;
 
   case 4:
-    /* PHI2: Read high byte of target address from PC directly to ABH */
     pins = this->bus_setup_read<Addr::PC>(pins);
+    this->cycle_index++;
+    return pins;
 
+  case 5:
+    /* PHI1: Load data and perform operations */
+    this->bus_load_reg(REG_ABL, pins);
     /* PHI1: Set PC to target address */
     this->set(REG_PC, this->get(REG_AB));
     transition_to_fetch();
-    return pins;
   }
   return pins;
 }
