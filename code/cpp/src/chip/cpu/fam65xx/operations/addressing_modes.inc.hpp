@@ -172,14 +172,14 @@ bus_state_t am_abx(bus_state_t pins) {
           to_index(OF::SKIP_PAGE)); // No skip allowed
     if (needs_penalty) {
       this->cycle_index++;
-      else {
-        this->set(REG_AB, effective);
-        this->transition_to_operation();
-      }
+    } else {
+      this->set(REG_AB, effective);
+      this->transition_to_operation();
     }
+    return pins;
   }
 
-case 2:
+  case 4:
   // PHI2: Page cross penalty - read from wrong address (use TMP to avoid
   // overwriting DL)
   pins = this->bus_setup_dummy<Addr::AB>(pins);
@@ -232,14 +232,14 @@ bus_state_t am_aby(bus_state_t pins) {
           to_index(OF::SKIP_PAGE)); // No skip allowed
     if (needs_penalty) {
       this->cycle_index++;
-      else {
-        this->set(REG_AB, effective);
-        this->transition_to_operation();
-      }
+    } else {
+      this->set(REG_AB, effective);
+      this->transition_to_operation();
     }
+    return pins;
   }
 
-case 2: {
+  case 4: {
   // PHI2: Page cross penalty - read from wrong address (use temporary
   // register to avoid overwriting DL)
   pins = this->bus_setup_dummy<Addr::AB>(pins);
@@ -252,10 +252,9 @@ case 2: {
   // effective address with carry
   this->set(REG_AB, this->get(REG_AB) + this->get(REG_Y));
   this->transition_to_operation();
+    return pins;
+  }
   return pins;
-}
-}
-return pins;
 }
 
 // Indirect addressing: ($nnnn) - Used only by JMP instruction
@@ -425,16 +424,16 @@ bus_state_t am_iny(bus_state_t pins) {
       /* Page crossing, RMW, or illegal store - need penalty cycle with
        * intermediate address */
       this->cycle_index++;
-      else {
-        /* No page cross, not RMW, and not illegal store - can skip penalty, set
-         * correct address */
-        this->set(REG_AB, final_addr);
-        this->transition_to_operation();
-      }
+    } else {
+      /* No page cross, not RMW, and not illegal store - can skip penalty, set
+       * correct address */
+      this->set(REG_AB, final_addr);
+      this->transition_to_operation();
     }
+    return pins;
   }
 
-case 3:
+  case 6:
   /* Page cross penalty - dummy read from wrong address */
   pins = this->bus_setup_dummy<Addr::AB>(pins);
 
@@ -450,10 +449,10 @@ case 3:
             this->get(REG_AB) +
                 this->get(REG_Y)); /* Calculate correct final with carry */
 
-  this->transition_to_operation();
+    this->transition_to_operation();
+    return pins;
+  }
   return pins;
-}
-return pins;
 }
 
 // 65C02 Enhanced Addressing Modes (conditional compilation)
@@ -494,7 +493,7 @@ bus_state_t am_zpi(bus_state_t pins) {
   case 3:
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_DL, pins);
-    this->set(REG_ABL,
+    this->set(REG_ABL, this->get(REG_ABL) + 1);
     this->cycle_index++;
     return pins;
 
@@ -588,12 +587,12 @@ bus_state_t am_dp(bus_state_t pins) {
       this->set(REG_ABH, (dp_addr >> 8) & 0xFF);
       if ((this->get(REG_D) & 0xFF) != 0x00) {
         this->cycle_index++;
-        else {
-          this->transition_to_operation();
-        }
+      } else {
+        this->transition_to_operation();
       }
+      return pins;
 
-    case 1:
+    case 2:
       // PHI2: Direct Page penalty cycle
 
       this->transition_to_operation();
@@ -630,12 +629,12 @@ bus_state_t am_dpx(bus_state_t pins) {
       this->set(REG_ABH, (dp_addr >> 8) & 0xFF);
       if ((this->get(REG_D) & 0xFF) != 0x00) {
         this->cycle_index++;
-        else {
-          this->cycle_index = 2;
-        }
+      } else {
+        this->cycle_index = 2;
       }
+      return pins;
 
-    case 1:
+    case 2:
       // PHI2: Direct Page penalty cycle
 
       this->cycle_index++;
@@ -740,12 +739,12 @@ bus_state_t am_dpil(bus_state_t pins) {
       this->set(REG_DL, bank_byte); // Bank byte for memory system
       if ((this->get(REG_D) & 0xFF) != 0x00) {
         this->cycle_index++;
-        else {
-          this->transition_to_operation();
-        }
+      } else {
+        this->transition_to_operation();
       }
+      return pins;
 
-    case 4:
+    case 8:
       // PHI2: Direct Page penalty cycle
 
       this->transition_to_operation();
@@ -819,12 +818,12 @@ bus_state_t am_dpily(bus_state_t pins) {
       this->set(REG_DL, bank_byte); // Bank byte for memory system
       if ((this->get(REG_D) & 0xFF) != 0x00) {
         this->cycle_index++;
-        else {
-          this->transition_to_operation();
-        }
+      } else {
+        this->transition_to_operation();
       }
+      return pins;
 
-    case 4:
+    case 8:
       // PHI2: Direct Page penalty cycle
 
       this->transition_to_operation();
