@@ -15,118 +15,124 @@ using namespace fam65xx;
 using rockwell65c02_cpu_t = fam65xx::rockwell65c02_cpu_impl_t;
 
 // Cast helper for opaque handle
-#define CPU_CAST(ptr) reinterpret_cast<rockwell65c02_cpu_t*>(ptr)
+#define CPU_CAST(ptr) reinterpret_cast<rockwell65c02_cpu_t *>(ptr)
 
 // ============================================================================
 // ROCKWELL 65C02 IMPLEMENTATION
 // ============================================================================
 
-rockwell65c02_t* rockwell65c02_create(void) {
-    rockwell65c02_t* cpu = reinterpret_cast<rockwell65c02_t*>(new rockwell65c02_cpu_t());
+rockwell65c02_t *rockwell65c02_create(void) {
+  rockwell65c02_t *cpu =
+      reinterpret_cast<rockwell65c02_t *>(new rockwell65c02_cpu_t());
 #ifdef IMGUI_VERSION
-    register_rockwell65c02_for_gui(cpu);
+  register_rockwell65c02_for_gui(cpu);
 #endif
-    return cpu;
+  return cpu;
 }
 
-void rockwell65c02_destroy(rockwell65c02_t* cpu) {
+void rockwell65c02_destroy(rockwell65c02_t *cpu) {
 #ifdef IMGUI_VERSION
-    unregister_cpu_from_gui(cpu);
+  unregister_cpu_from_gui(cpu);
 #endif
-    delete CPU_CAST(cpu);
+  delete CPU_CAST(cpu);
 }
 
-bus_state_t rockwell65c02_init(rockwell65c02_t* cpu, const chip_descriptor_t* desc) {
-    return CPU_CAST(cpu)->init(desc);
+bus_state_t rockwell65c02_init(rockwell65c02_t *cpu,
+                               const chip_descriptor_t *desc) {
+  return CPU_CAST(cpu)->init(desc);
 }
 
-bus_state_t rockwell65c02_reset(rockwell65c02_t* cpu, bus_state_t pins) {
-    return CPU_CAST(cpu)->reset(pins);
+bus_state_t rockwell65c02_reset(rockwell65c02_t *cpu, bus_state_t pins) {
+  return CPU_CAST(cpu)->reset(pins);
 }
 
-bus_state_t rockwell65c02_tick(rockwell65c02_t* cpu, bus_state_t pins) {
-    return CPU_CAST(cpu)->tick(pins);
+bus_state_t rockwell65c02_tick(rockwell65c02_t *cpu, bus_state_t pins) {
+  return CPU_CAST(cpu)->tick(pins);
 }
 
-bool rockwell65c02_opdone(rockwell65c02_t* cpu) {
-    return CPU_CAST(cpu)->opdone();
+bool rockwell65c02_opdone(rockwell65c02_t *cpu) {
+  return CPU_CAST(cpu)->opdone();
 }
 
 // Register getters
-uint8_t rockwell65c02_get_a(rockwell65c02_t* cpu) {
-    return CPU_CAST(cpu)->get(REG_A);
+uint8_t rockwell65c02_get_a(rockwell65c02_t *cpu) {
+  return CPU_CAST(cpu)->get(REG_A);
 }
 
-uint8_t rockwell65c02_get_x(rockwell65c02_t* cpu) {
-    return CPU_CAST(cpu)->get(REG_X);
+uint8_t rockwell65c02_get_x(rockwell65c02_t *cpu) {
+  return CPU_CAST(cpu)->get(REG_X);
 }
 
-uint8_t rockwell65c02_get_y(rockwell65c02_t* cpu) {
-    return CPU_CAST(cpu)->get(REG_Y);
+uint8_t rockwell65c02_get_y(rockwell65c02_t *cpu) {
+  return CPU_CAST(cpu)->get(REG_Y);
 }
 
-uint8_t rockwell65c02_get_s(rockwell65c02_t* cpu) {
-    return CPU_CAST(cpu)->get(REG_SPL);
+uint8_t rockwell65c02_get_s(rockwell65c02_t *cpu) {
+  return CPU_CAST(cpu)->get(REG_SPL);
 }
 
-uint8_t rockwell65c02_get_p(rockwell65c02_t* cpu) {
-    return CPU_CAST(cpu)->get(REG_P);
+uint8_t rockwell65c02_get_p(rockwell65c02_t *cpu) {
+  return CPU_CAST(cpu)->get(REG_P);
 }
 
-uint16_t rockwell65c02_get_pc(rockwell65c02_t* cpu) {
-    return CPU_CAST(cpu)->get(REG_PC);
+uint16_t rockwell65c02_get_pc(rockwell65c02_t *cpu) {
+  return CPU_CAST(cpu)->get(REG_PC);
 }
 
 // Register setters
-void rockwell65c02_set_a(rockwell65c02_t* cpu, uint8_t value) {
-    CPU_CAST(cpu)->set(REG_A, value);
+void rockwell65c02_set_a(rockwell65c02_t *cpu, uint8_t value) {
+  CPU_CAST(cpu)->set(REG_A, value);
 }
 
-void rockwell65c02_set_x(rockwell65c02_t* cpu, uint8_t value) {
-    CPU_CAST(cpu)->set(REG_X, value);
+void rockwell65c02_set_x(rockwell65c02_t *cpu, uint8_t value) {
+  CPU_CAST(cpu)->set(REG_X, value);
 }
 
-void rockwell65c02_set_y(rockwell65c02_t* cpu, uint8_t value) {
-    CPU_CAST(cpu)->set(REG_Y, value);
+void rockwell65c02_set_y(rockwell65c02_t *cpu, uint8_t value) {
+  CPU_CAST(cpu)->set(REG_Y, value);
 }
 
-void rockwell65c02_set_s(rockwell65c02_t* cpu, uint8_t value) {
-    CPU_CAST(cpu)->set(REG_SPL, value);
+void rockwell65c02_set_s(rockwell65c02_t *cpu, uint8_t value) {
+  CPU_CAST(cpu)->set(REG_SPL, value);
 }
 
-void rockwell65c02_set_p(rockwell65c02_t* cpu, uint8_t value) {
-    CPU_CAST(cpu)->set(REG_P, value);
+void rockwell65c02_set_p(rockwell65c02_t *cpu, uint8_t value) {
+  CPU_CAST(cpu)->set(REG_P, value);
 }
 
-void rockwell65c02_set_pc(rockwell65c02_t* cpu, uint16_t value) {
-    CPU_CAST(cpu)->set(REG_PC, value);
+void rockwell65c02_set_pc(rockwell65c02_t *cpu, uint16_t value) {
+  CPU_CAST(cpu)->set(REG_PC, value);
 }
 
 // Rockwell 65C02 chip descriptor
 static chip_descriptor_t rockwell65c02_base_descriptor;
 
 static void initialize_rockwell65c02_descriptor() {
-    rockwell65c02_base_descriptor.description = "Rockwell 65C02";
-    rockwell65c02_base_descriptor.create = [](chip_descriptor_t* desc) -> void* {
-        (void)desc; // Suppress unused parameter warning
-        return rockwell65c02_create();
-    };
-    rockwell65c02_base_descriptor.destroy = [](void* chip) {
-        rockwell65c02_destroy(reinterpret_cast<rockwell65c02_t*>(chip));
-    };
-    rockwell65c02_base_descriptor.bus_attach = nullptr;  // Basic CPU doesn't need bus attach
-    rockwell65c02_base_descriptor.bank_change = nullptr; // Basic CPU doesn't have banking
+  rockwell65c02_base_descriptor.description = "Rockwell 65C02";
+  rockwell65c02_base_descriptor.create = [](chip_descriptor_t *desc) -> void * {
+    (void)desc; // Suppress unused parameter warning
+    return rockwell65c02_create();
+  };
+  rockwell65c02_base_descriptor.destroy = [](void *chip) {
+    rockwell65c02_destroy(reinterpret_cast<rockwell65c02_t *>(chip));
+  };
+  rockwell65c02_base_descriptor.bus_attach =
+      nullptr; // Basic CPU doesn't need bus attach
+  rockwell65c02_base_descriptor.bank_change =
+      nullptr; // Basic CPU doesn't have banking
 #ifdef IMGUI_VERSION
-    rockwell65c02_base_descriptor.render_debug_window = fam65xx_render_debug_window;
-    rockwell65c02_base_descriptor.render_settings_window = fam65xx_render_settings_window;
+  rockwell65c02_base_descriptor.render_debug_window =
+      fam65xx_render_debug_window;
+  rockwell65c02_base_descriptor.render_settings_window =
+      fam65xx_render_settings_window;
 #endif
 }
 
-const chip_descriptor_t* rockwell65c02_get_chip_descriptor(void) {
-    static bool initialized = false;
-    if (!initialized) {
-        initialize_rockwell65c02_descriptor();
-        initialized = true;
-    }
-    return &rockwell65c02_base_descriptor;
+const chip_descriptor_t *rockwell65c02_get_chip_descriptor(void) {
+  static bool initialized = false;
+  if (!initialized) {
+    initialize_rockwell65c02_descriptor();
+    initialized = true;
+  }
+  return &rockwell65c02_base_descriptor;
 }
