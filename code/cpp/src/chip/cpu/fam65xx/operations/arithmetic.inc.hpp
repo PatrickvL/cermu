@@ -161,24 +161,12 @@ bus_state_t op_nop(bus_state_t pins) {
                 * Pattern: $fc, $13, $37 indicates character output syscall
                 * Character byte awaits at address 0x2000
                 */
-    // Handle NES6502 syscall support for "long nop" patterns
-    if constexpr (this->has_apu()) {
-      // Check for syscall pattern: FC 13 37
-      // Note : Having this in default instead of a separate case AM_ABX is less
-      // host code (at a cost of 1 otherwise needless compare for the other
-      // NES6502 memory NOPs)
-      if (this->get(REG_IR) == 0xFC && this->get(REG_ABL) == 0x13 &&
-          this->get(REG_ABH) == 0x37) {
-        // Syscall detected - output character from 0x2000
-        if (this->mem_read) {
-          uint8_t character = this->mem_read(this->mem_user_data, 0x2000, 0);
-          if (character != 0) {
-            printf("%c", character);
-            fflush(stdout);
-          }
-        }
-      }
-    }
+    // TODO: NES6502 syscall support was removed during PHI2/PHI1 refactoring
+    // The mem_read/mem_write callback API is no longer available
+    // Syscall detection pattern: if (REG_IR==0xFC && ABL==0x13 && ABH==0x37)
+    // would output character from memory address 0x2000
+    // This functionality needs to be reimplemented at the bus/system level
+    // if NES6502 test ROM support is required
     break;
   }
 
