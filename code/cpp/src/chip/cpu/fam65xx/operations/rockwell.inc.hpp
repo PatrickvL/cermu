@@ -103,7 +103,7 @@ bus_state_t op_smb7(bus_state_t pins) {
 bus_state_t bit_branch_helper(bus_state_t pins, uint8_t bit_mask,
                               bool bit_set) {
   // PHI2: Read value from zero page address and test bit
-  pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_ABH);
+  pins = this->bus_setup_read<Addr::AB>(pins);
 
   // PHI1: Test bit and decide whether to branch
   bool bit_is_set = (this->get(REG_ABH) & bit_mask) != 0;

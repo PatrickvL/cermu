@@ -18,7 +18,7 @@ bus_state_t op_bra(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_cmos()) {
     // Read relative offset
-    pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_DL);
+    pins = this->bus_setup_read<Addr::PC>(pins);
 
     this->inc(REG_PC);
 
@@ -51,7 +51,7 @@ bus_state_t op_trb(bus_state_t pins) {
     switch (this->cycle_index) {
     case 0:
       // Cycle 0: Read original value from memory
-      pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_DL);
+      pins = this->bus_setup_read<Addr::AB>(pins);
 
       this->cycle_index++;
       return pins;
@@ -92,7 +92,7 @@ bus_state_t op_tsb(bus_state_t pins) {
     switch (this->cycle_index) {
     case 0:
       // Cycle 0: Read original value from memory
-      pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_DL);
+      pins = this->bus_setup_read<Addr::AB>(pins);
 
       this->cycle_index++;
       return pins;
@@ -145,7 +145,7 @@ bus_state_t op_stp(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_cmos()) {
     // Read immediate byte (required for 2-byte instruction)
-    pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_DL);
+    pins = this->bus_setup_read<Addr::PC>(pins);
 
     this->inc(REG_PC);
 
@@ -230,7 +230,7 @@ bus_state_t op_plx(bus_state_t pins) {
     case 2:
       /* PHI2: Read from incremented stack pointer directly into X (eliminates
        * copy) */
-      pins = this->/*TODO_READ*/ phi2_read<Addr::SP>(pins, REG_X);
+      pins = this->bus_setup_read<Addr::SP>(pins);
 
       /* PHI1: Set flags based on X register value */
       update_nz_flags(this->get(REG_X));
@@ -265,7 +265,7 @@ bus_state_t op_ply(bus_state_t pins) {
     case 2:
       /* PHI2: Read from incremented stack pointer directly into Y (eliminates
        * copy) */
-      pins = this->/*TODO_READ*/ phi2_read<Addr::SP>(pins, REG_Y);
+      pins = this->bus_setup_read<Addr::SP>(pins);
 
       /* PHI1: Set flags based on Y register value */
       update_nz_flags(this->get(REG_Y));
