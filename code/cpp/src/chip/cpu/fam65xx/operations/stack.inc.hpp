@@ -51,15 +51,22 @@ bus_state_t op_pha(bus_state_t pins) {
   // Standard 8-bit PHA operation (emulation mode and non-wide CPUs)
   switch (this->cycle_index) {
   case 0:
-    /* Dummy cycle for internal operation */
+    /* PHI2: Dummy cycle for internal operation */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
-
     return pins;
 
   case 1:
-    /* PHI2: Write A to stack with processor-specific RDY handling */
+    /* PHI1: Prepare for stack write */
+    this->cycle_index++;
+    return pins;
 
+  case 2:
+    /* PHI2: Write A to stack */
     pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_A));
+    return pins;
+
+  case 3:
+    /* PHI1: Decrement SP and transition */
     this->dec(REG_S);
     this->transition_to_fetch();
     return pins;
@@ -72,16 +79,23 @@ bus_state_t op_php(bus_state_t pins) {
   trace_operation(__func__);
   switch (this->cycle_index) {
   case 0:
-    /* Dummy cycle for internal operation */
+    /* PHI2: Dummy cycle for internal operation */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
-
-    this->set(REG_DL, this->get(REG_P) | FLAG_B | FLAG_U);
     return pins;
 
   case 1:
-    /* PHI2: Write P|B|U to stack with processor-specific RDY handling */
+    /* PHI1: Prepare status byte */
+    this->set(REG_DL, this->get(REG_P) | FLAG_B | FLAG_U);
+    this->cycle_index++;
+    return pins;
 
+  case 2:
+    /* PHI2: Write P|B|U to stack */
     pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_DL));
+    return pins;
+
+  case 3:
+    /* PHI1: Decrement SP and transition */
     this->dec(REG_S);
     this->transition_to_fetch();
     return pins;
