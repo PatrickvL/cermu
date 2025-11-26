@@ -51,12 +51,12 @@ bus_state_t op_pha(bus_state_t pins) {
   // Standard 8-bit PHA operation (emulation mode and non-wide CPUs)
   switch (this->cycle_index) {
   case 0:
-    /* PHI2: Dummy cycle for internal operation */
+    /* PHI2: Dummy read from PC+1 */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
     return pins;
 
   case 1:
-    /* PHI1: Prepare for stack write */
+    /* PHI1: Increment cycle */
     this->cycle_index++;
     return pins;
 
@@ -79,19 +79,18 @@ bus_state_t op_php(bus_state_t pins) {
   trace_operation(__func__);
   switch (this->cycle_index) {
   case 0:
-    /* PHI2: Dummy cycle for internal operation */
+    /* PHI2: Dummy read from PC+1 */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
     return pins;
 
   case 1:
-    /* PHI1: Prepare status byte */
-    this->set(REG_DL, this->get(REG_P) | FLAG_B | FLAG_U);
+    /* PHI1: Prepare status byte and increment cycle */
     this->cycle_index++;
     return pins;
 
   case 2:
     /* PHI2: Write P|B|U to stack */
-    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_DL));
+    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_P) | FLAG_B | FLAG_U);
     return pins;
 
   case 3:
