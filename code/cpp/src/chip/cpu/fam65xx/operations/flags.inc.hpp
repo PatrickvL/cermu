@@ -16,98 +16,126 @@
 /* CLC - Clear Carry Flag */
 bus_state_t op_clc(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (!has_optimized_cycles()) {
-    /* Dummy cycle for internal operation */
+  switch (this->cycle_index) {
+  case 0:
+    // PHI2: Dummy read from PC
     pins = this->bus_setup_dummy<Addr::PC>(pins);
+    return pins;
+  case 1:
+    // PHI1: Clear carry flag
+    clear_flag(FLAG_C);
+    this->cycle_index++;
+    this->transition_to_fetch();
+    return pins;
   }
-
-  // Common operation for all processors
-  clear_flag(FLAG_C);
-  this->transition_to_fetch();
   return pins;
 }
 
 /* SEC - Set Carry Flag */
 bus_state_t op_sec(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (!has_optimized_cycles()) {
-    /* Dummy cycle for internal operation */
+  switch (this->cycle_index) {
+  case 0:
+    // PHI2: Dummy read from PC
     pins = this->bus_setup_dummy<Addr::PC>(pins);
+    return pins;
+  case 1:
+    // PHI1: Set carry flag
+    set_flag(FLAG_C);
+    this->cycle_index++;
+    this->transition_to_fetch();
+    return pins;
   }
-
-  // Common operation for all processors
-  set_flag(FLAG_C);
-  this->transition_to_fetch();
   return pins;
 }
 
 /* CLI - Clear Interrupt Disable Flag */
 bus_state_t op_cli(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (!has_optimized_cycles()) {
-    /* Dummy cycle for internal operation */
+  switch (this->cycle_index) {
+  case 0:
+    // PHI2: Dummy read from PC
     pins = this->bus_setup_dummy<Addr::PC>(pins);
+    return pins;
+  case 1:
+    // PHI1: Clear interrupt disable
+    clear_flag(FLAG_I);
+    this->cycle_index++;
+    this->transition_to_fetch();
+    return pins;
   }
-
-  // Common operation for all processors
-  clear_flag(FLAG_I);
-  this->transition_to_fetch();
   return pins;
 }
 
 /* SEI - Set Interrupt Disable Flag */
 bus_state_t op_sei(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (!has_optimized_cycles()) {
-    /* Dummy cycle for internal operation */
+  switch (this->cycle_index) {
+  case 0:
+    // PHI2: Dummy read from PC
     pins = this->bus_setup_dummy<Addr::PC>(pins);
+    return pins;
+  case 1:
+    // PHI1: Set interrupt disable
+    set_flag(FLAG_I);
+    this->cycle_index++;
+    this->transition_to_fetch();
+    return pins;
   }
-
-  // Common operation for all processors
-  set_flag(FLAG_I);
-  this->transition_to_fetch();
   return pins;
 }
 
 /* CLD - Clear Decimal Mode Flag */
 bus_state_t op_cld(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (!has_optimized_cycles()) {
-    /* Dummy cycle for internal operation */
+  switch (this->cycle_index) {
+  case 0:
+    // PHI2: Dummy read from PC
     pins = this->bus_setup_dummy<Addr::PC>(pins);
+    return pins;
+  case 1:
+    // PHI1: Clear decimal mode
+    clear_flag(FLAG_D);
+    this->cycle_index++;
+    this->transition_to_fetch();
+    return pins;
   }
-
-  // Common operation for all processors
-  clear_flag(FLAG_D);
-  this->transition_to_fetch();
   return pins;
 }
 
 /* SED - Set Decimal Mode Flag */
 bus_state_t op_sed(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (!has_optimized_cycles()) {
-    /* Dummy cycle for internal operation */
+  switch (this->cycle_index) {
+  case 0:
+    // PHI2: Dummy read from PC
     pins = this->bus_setup_dummy<Addr::PC>(pins);
+    return pins;
+  case 1:
+    // PHI1: Set decimal mode
+    set_flag(FLAG_D);
+    this->cycle_index++;
+    this->transition_to_fetch();
+    return pins;
   }
-
-  // Common operation for all processors
-  set_flag(FLAG_D);
-  this->transition_to_fetch();
   return pins;
 }
 
 /* CLV - Clear Overflow Flag */
 bus_state_t op_clv(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (!has_optimized_cycles()) {
-    /* Dummy cycle for internal operation */
+  switch (this->cycle_index) {
+  case 0:
+    // PHI2: Dummy read from PC
     pins = this->bus_setup_dummy<Addr::PC>(pins);
+    return pins;
+  case 1:
+    // PHI1: Clear overflow
+    clear_flag(FLAG_V);
+    this->cycle_index++;
+    this->transition_to_fetch();
+    return pins;
   }
-
-  // Common operation for all processors
-  clear_flag(FLAG_V);
-  this->transition_to_fetch();
   return pins;
 }
 
