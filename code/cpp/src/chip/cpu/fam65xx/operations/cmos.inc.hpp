@@ -19,7 +19,7 @@ bus_state_t op_bra(bus_state_t pins) {
   if constexpr (has_cmos()) {
     // Read relative offset
     pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_DL);
-    
+
     this->inc(REG_PC);
 
     // Apply branch offset
@@ -36,8 +36,8 @@ bus_state_t op_stz(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_cmos()) {
     // Store zero to target address with proper RDY handling
-    
-    pins = this->/*TODO_WRITE*/ phi2_write<Addr::AB>(pins, 0x00);
+
+    pins = this->bus_setup_write<Addr::AB>(pins, 0x00);
     transition_to_fetch();
   }
   return pins;
@@ -52,15 +52,14 @@ bus_state_t op_trb(bus_state_t pins) {
     case 0:
       // Cycle 0: Read original value from memory
       pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_DL);
-      
+
       this->cycle_index++;
       return pins;
 
     case 1:
       // Cycle 1: Dummy write original value back + modify
-      
-      pins =
-          this->/*TODO_WRITE*/ phi2_write<Addr::AB>(pins, this->get(REG_DL));
+
+      pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_DL));
 
       uint8_t accumulator = this->get(REG_A);
 
@@ -76,9 +75,8 @@ bus_state_t op_trb(bus_state_t pins) {
 
     case 2:
       // Cycle 2: Write modified result back
-      
-      pins =
-          this->/*TODO_WRITE*/ phi2_write<Addr::AB>(pins, this->get(REG_DL));
+
+      pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_DL));
       transition_to_fetch();
       return pins;
     }
@@ -95,15 +93,14 @@ bus_state_t op_tsb(bus_state_t pins) {
     case 0:
       // Cycle 0: Read original value from memory
       pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_DL);
-      
+
       this->cycle_index++;
       return pins;
 
     case 1:
       // Cycle 1: Dummy write original value back + modify
-      
-      pins =
-          this->/*TODO_WRITE*/ phi2_write<Addr::AB>(pins, this->get(REG_DL));
+
+      pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_DL));
 
       uint8_t accumulator = this->get(REG_A);
 
@@ -119,9 +116,8 @@ bus_state_t op_tsb(bus_state_t pins) {
 
     case 2:
       // Cycle 2: Write modified result back
-      
-      pins =
-          this->/*TODO_WRITE*/ phi2_write<Addr::AB>(pins, this->get(REG_DL));
+
+      pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_DL));
       transition_to_fetch();
       return pins;
     }
@@ -150,7 +146,7 @@ bus_state_t op_stp(bus_state_t pins) {
   if constexpr (has_cmos()) {
     // Read immediate byte (required for 2-byte instruction)
     pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_DL);
-    
+
     this->inc(REG_PC);
 
     // Set stopped state after reading immediate byte
@@ -170,15 +166,14 @@ bus_state_t op_phx(bus_state_t pins) {
     case 0:
       /* Dummy cycle for internal operation */
       pins = this->bus_setup_dummy<Addr::PC>(pins);
-      
+
       this->cycle_index++;
       return pins;
 
     case 1:
       /* PHI2: Write X to stack with processor-specific RDY handling */
-      
-      pins =
-          this->/*TODO_WRITE*/ phi2_write<Addr::SP>(pins, this->get(REG_X));
+
+      pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_X));
       this->dec(REG_S);
       transition_to_fetch();
       return pins;
@@ -195,15 +190,14 @@ bus_state_t op_phy(bus_state_t pins) {
     case 0:
       /* Dummy cycle for internal operation */
       pins = this->bus_setup_dummy<Addr::PC>(pins);
-      
+
       this->cycle_index++;
       return pins;
 
     case 1:
       /* PHI2: Write Y to stack with processor-specific RDY handling */
-      
-      pins =
-          this->/*TODO_WRITE*/ phi2_write<Addr::SP>(pins, this->get(REG_Y));
+
+      pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_Y));
       this->dec(REG_S);
       transition_to_fetch();
       return pins;
@@ -220,14 +214,14 @@ bus_state_t op_plx(bus_state_t pins) {
     case 0:
       /* PHI2: Dummy read from PC */
       pins = this->bus_setup_dummy<Addr::PC>(pins);
-      
+
       this->cycle_index++;
       return pins;
 
     case 1:
       /* PHI2: Dummy read from current stack pointer, then increment SP */
       pins = this->bus_setup_dummy<Addr::SP>(pins);
-      
+
       /* PHI1: Increment stack pointer */
       this->inc(REG_S);
       this->cycle_index++;
@@ -237,7 +231,7 @@ bus_state_t op_plx(bus_state_t pins) {
       /* PHI2: Read from incremented stack pointer directly into X (eliminates
        * copy) */
       pins = this->/*TODO_READ*/ phi2_read<Addr::SP>(pins, REG_X);
-      
+
       /* PHI1: Set flags based on X register value */
       update_nz_flags(this->get(REG_X));
       transition_to_fetch();
@@ -255,14 +249,14 @@ bus_state_t op_ply(bus_state_t pins) {
     case 0:
       /* PHI2: Dummy read from PC */
       pins = this->bus_setup_dummy<Addr::PC>(pins);
-      
+
       this->cycle_index++;
       return pins;
 
     case 1:
       /* PHI2: Dummy read from current stack pointer, then increment SP */
       pins = this->bus_setup_dummy<Addr::SP>(pins);
-      
+
       /* PHI1: Increment stack pointer */
       this->inc(REG_S);
       this->cycle_index++;
@@ -272,7 +266,7 @@ bus_state_t op_ply(bus_state_t pins) {
       /* PHI2: Read from incremented stack pointer directly into Y (eliminates
        * copy) */
       pins = this->/*TODO_READ*/ phi2_read<Addr::SP>(pins, REG_Y);
-      
+
       /* PHI1: Set flags based on Y register value */
       update_nz_flags(this->get(REG_Y));
       transition_to_fetch();

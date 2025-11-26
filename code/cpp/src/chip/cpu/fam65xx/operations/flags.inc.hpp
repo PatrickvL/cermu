@@ -18,7 +18,8 @@ bus_state_t op_clc(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (!has_optimized_cycles()) {
     /* Dummy cycle for internal operation */
-    pins = this->bus_setup_dummy<Addr::PC>(pins);  }
+    pins = this->bus_setup_dummy<Addr::PC>(pins);
+  }
 
   // Common operation for all processors
   clear_flag(FLAG_C);
@@ -31,7 +32,8 @@ bus_state_t op_sec(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (!has_optimized_cycles()) {
     /* Dummy cycle for internal operation */
-    pins = this->bus_setup_dummy<Addr::PC>(pins);  }
+    pins = this->bus_setup_dummy<Addr::PC>(pins);
+  }
 
   // Common operation for all processors
   set_flag(FLAG_C);
@@ -44,7 +46,8 @@ bus_state_t op_cli(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (!has_optimized_cycles()) {
     /* Dummy cycle for internal operation */
-    pins = this->bus_setup_dummy<Addr::PC>(pins);  }
+    pins = this->bus_setup_dummy<Addr::PC>(pins);
+  }
 
   // Common operation for all processors
   clear_flag(FLAG_I);
@@ -57,7 +60,8 @@ bus_state_t op_sei(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (!has_optimized_cycles()) {
     /* Dummy cycle for internal operation */
-    pins = this->bus_setup_dummy<Addr::PC>(pins);  }
+    pins = this->bus_setup_dummy<Addr::PC>(pins);
+  }
 
   // Common operation for all processors
   set_flag(FLAG_I);
@@ -70,7 +74,8 @@ bus_state_t op_cld(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (!has_optimized_cycles()) {
     /* Dummy cycle for internal operation */
-    pins = this->bus_setup_dummy<Addr::PC>(pins);  }
+    pins = this->bus_setup_dummy<Addr::PC>(pins);
+  }
 
   // Common operation for all processors
   clear_flag(FLAG_D);
@@ -83,7 +88,8 @@ bus_state_t op_sed(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (!has_optimized_cycles()) {
     /* Dummy cycle for internal operation */
-    pins = this->bus_setup_dummy<Addr::PC>(pins);  }
+    pins = this->bus_setup_dummy<Addr::PC>(pins);
+  }
 
   // Common operation for all processors
   set_flag(FLAG_D);
@@ -96,7 +102,8 @@ bus_state_t op_clv(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (!has_optimized_cycles()) {
     /* Dummy cycle for internal operation */
-    pins = this->bus_setup_dummy<Addr::PC>(pins);  }
+    pins = this->bus_setup_dummy<Addr::PC>(pins);
+  }
 
   // Common operation for all processors
   clear_flag(FLAG_V);

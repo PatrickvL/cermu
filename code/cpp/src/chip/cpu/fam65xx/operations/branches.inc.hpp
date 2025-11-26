@@ -20,7 +20,7 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
   case 0: {
     /* PHI2: Read branch offset from PC into DL */
     pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_DL);
-    
+
     this->inc(REG_PC);
 
     /* PHI1: Check branch condition */
@@ -42,10 +42,9 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
     /* PHI2: Dummy read from incremented PC (hardware behavior) */
     /* Use a different register to avoid overwriting the branch offset in DL */
     pins = this->bus_setup_dummy<Addr::PC>(pins); /* Optimized dummy read */
-    
+
     /* PHI1: Check for page cross */
-    bool page_cross =
-        this->page_crossed(this->get(REG_PC), this->get(REG_AB));
+    bool page_cross = this->page_crossed(this->get(REG_PC), this->get(REG_AB));
 
     if (!page_cross) {
       /* No page cross: set final PC and complete after 3 cycles */
@@ -75,7 +74,7 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
   case 2: {
     /* PHI2: Page cross penalty - dummy read from intermediate address in PC */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
-    
+
     /* PHI1: Set final correct target PC and complete instruction */
     /* REG_AB contains the correct target from case 1 */
     this->set(REG_PC, this->get(REG_AB));
