@@ -104,16 +104,15 @@ bus_state_t bit_branch_helper(bus_state_t pins, uint8_t bit_mask,
                               bool bit_set) {
   // PHI2: Read value from zero page address and test bit
   pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_ABH);
-  if (FAM65XX_GET_RDY(pins)) {
-    // PHI1: Test bit and decide whether to branch
-    bool bit_is_set = (this->get(REG_ABH) & bit_mask) != 0;
-    bool branch_taken = (bit_is_set == bit_set);
+  
+  // PHI1: Test bit and decide whether to branch
+  bool bit_is_set = (this->get(REG_ABH) & bit_mask) != 0;
+  bool branch_taken = (bit_is_set == bit_set);
 
-    if (branch_taken) {
-      int8_t signed_offset = (int8_t)this->get(REG_DL);
-      // Branch taken: calculate target address and jump
-      this->set(REG_PC, this->get(REG_PC) + signed_offset);
-    }
+  if (branch_taken) {
+    int8_t signed_offset = (int8_t)this->get(REG_DL);
+    // Branch taken: calculate target address and jump
+    this->set(REG_PC, this->get(REG_PC) + signed_offset);
     this->transition_to_fetch();
   }
   return pins;

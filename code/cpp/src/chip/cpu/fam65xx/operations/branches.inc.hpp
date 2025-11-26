@@ -20,17 +20,16 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
   case 0: {
     /* PHI2: Read branch offset from PC into DL */
     pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_DL);
-    if (FAM65XX_GET_RDY(pins)) {
-      this->inc(REG_PC);
+    
+    this->inc(REG_PC);
 
-      /* PHI1: Check branch condition */
-      bool branch_taken = ((this->get(REG_P) & flag_mask) != 0) == flag_value;
+    /* PHI1: Check branch condition */
+    bool branch_taken = ((this->get(REG_P) & flag_mask) != 0) == flag_value;
 
-      if (!branch_taken) {
-        /* Branch not taken: instruction completes after 2 cycles */
-        transition_to_fetch();
-        return pins;
-      }
+    if (!branch_taken) {
+      /* Branch not taken: instruction completes after 2 cycles */
+      transition_to_fetch();
+      return pins;
 
       /* Branch taken: calculate correct target address */
       this->set(REG_AB, this->get(REG_PC) + (int8_t)this->get(REG_DL));
@@ -43,17 +42,16 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
     /* PHI2: Dummy read from incremented PC (hardware behavior) */
     /* Use a different register to avoid overwriting the branch offset in DL */
     pins = this->bus_setup_dummy<Addr::PC>(pins); /* Optimized dummy read */
-    if (FAM65XX_GET_RDY(pins)) {
-      /* PHI1: Check for page cross */
-      bool page_cross =
-          this->page_crossed(this->get(REG_PC), this->get(REG_AB));
+    
+    /* PHI1: Check for page cross */
+    bool page_cross =
+        this->page_crossed(this->get(REG_PC), this->get(REG_AB));
 
-      if (!page_cross) {
-        /* No page cross: set final PC and complete after 3 cycles */
-        this->set(REG_PC, this->get(REG_AB));
-        transition_to_fetch();
-        return pins;
-      }
+    if (!page_cross) {
+      /* No page cross: set final PC and complete after 3 cycles */
+      this->set(REG_PC, this->get(REG_AB));
+      transition_to_fetch();
+      return pins;
 
       /* Page cross detected: need penalty cycle with intermediate address */
       /* Hardware behavior: Add signed offset to PC low byte only, ignore carry
@@ -77,12 +75,11 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
   case 2: {
     /* PHI2: Page cross penalty - dummy read from intermediate address in PC */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
-    if (FAM65XX_GET_RDY(pins)) {
-      /* PHI1: Set final correct target PC and complete instruction */
-      /* REG_AB contains the correct target from case 1 */
-      this->set(REG_PC, this->get(REG_AB));
-      transition_to_fetch();
-    }
+    
+    /* PHI1: Set final correct target PC and complete instruction */
+    /* REG_AB contains the correct target from case 1 */
+    this->set(REG_PC, this->get(REG_AB));
+    transition_to_fetch();
     return pins;
   }
   }

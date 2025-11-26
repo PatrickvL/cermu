@@ -575,9 +575,8 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
                 pins, REG_DL); // Other modes use DBR
           }
 
-          if (FAM65XX_GET_RDY(pins)) {
-            this->cycle_index++;
-          }
+          
+          this->cycle_index++;
           return pins;
 
         case 1:
@@ -591,9 +590,8 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
                 pins, REG_DPL); // Store high byte in DPL
           }
 
-          if (FAM65XX_GET_RDY(pins)) {
-            this->cycle_index++;
-          }
+          
+          this->cycle_index++;
           return pins;
 
         case 2:
@@ -616,26 +614,23 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
             }
           }
 
-          if (FAM65XX_GET_RDY(pins)) {
-            // Perform 16-bit operation
-            data_t value = static_cast<data_t>(this->get(REG_DL)) |
-                           (static_cast<data_t>(this->get(REG_DPL)) << 8);
-            operation_func(value);
-            this->set(REG_DL, static_cast<uint8_t>(value & 0xFF)); // Low byte
-            this->set(REG_DPL,
-                      static_cast<uint8_t>((value >> 8) & 0xFF)); // High byte
-            this->cycle_index++;
-          }
+          
+          // Perform 16-bit operation
+          data_t value = static_cast<data_t>(this->get(REG_DL)) |
+                         (static_cast<data_t>(this->get(REG_DPL)) << 8);
+          operation_func(value);
+          this->set(REG_DL, static_cast<uint8_t>(value & 0xFF)); // Low byte
+          this->set(REG_DPL,
+                    static_cast<uint8_t>((value >> 8) & 0xFF)); // High byte
+          this->cycle_index++;
           return pins;
 
         case 3:
           // Cycle 3: Write high byte back to memory (address + 1)
-          /* TODO_WRITE: Remove check */ if (this->should_complete_write_cycle(
-                                                 pins)) {
-            if (use_zero_bank) {
-              pins = this->/*TODO_WRITE*/ phi2_write<Addr::AB, Bank::ZBR>(
-                  pins, this->get(REG_DPL));
-            } else {
+          
+          if (use_zero_bank) {
+            pins = this->/*TODO_WRITE*/ phi2_write<Addr::AB, Bank::ZBR>(
+                pins, this->get(REG_DPL)); else {
               pins = this->/*TODO_WRITE*/ phi2_write<Addr::AB, Bank::DBR>(
                   pins, this->get(REG_DPL));
             }
@@ -646,12 +641,10 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
         case 4:
           // Cycle 4: Write low byte back to memory (address)
           this->dec(REG_ABL); // Decrement address back to low byte
-          /* TODO_WRITE: Remove check */ if (this->should_complete_write_cycle(
-                                                 pins)) {
-            if (use_zero_bank) {
-              pins = this->/*TODO_WRITE*/ phi2_write<Addr::AB, Bank::ZBR>(
-                  pins, this->get(REG_DL));
-            } else {
+          
+          if (use_zero_bank) {
+            pins = this->/*TODO_WRITE*/ phi2_write<Addr::AB, Bank::ZBR>(
+                pins, this->get(REG_DL)); else {
               pins = this->/*TODO_WRITE*/ phi2_write<Addr::AB, Bank::DBR>(
                   pins, this->get(REG_DL));
             }
@@ -672,9 +665,8 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
                 pins, REG_DL); // Other modes use DBR
           }
 
-          if (FAM65XX_GET_RDY(pins)) {
-            this->cycle_index++;
-          }
+          
+          this->cycle_index++;
           return pins;
 
         case 1:
@@ -699,23 +691,20 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
             }
           }
 
-          if (FAM65XX_GET_RDY(pins)) {
-            // For 8-bit memory operations
-            data_t value = static_cast<data_t>(this->get(REG_DL));
-            operation_func(value);
-            this->set(REG_DL, static_cast<uint8_t>(value & 0xFF));
-            this->cycle_index++;
-          }
+          
+          // For 8-bit memory operations
+          data_t value = static_cast<data_t>(this->get(REG_DL));
+          operation_func(value);
+          this->set(REG_DL, static_cast<uint8_t>(value & 0xFF));
+          this->cycle_index++;
           return pins;
 
         case 2:
           // Cycle 2: Write modified value back to memory
-          /* TODO_WRITE: Remove check */ if (this->should_complete_write_cycle(
-                                                 pins)) {
-            if (use_zero_bank) {
-              pins = this->/*TODO_WRITE*/ phi2_write<Addr::AB, Bank::ZBR>(
-                  pins, this->get(REG_DL)); // Direct Page uses Bank 0
-            } else {
+          
+          if (use_zero_bank) {
+            pins = this->/*TODO_WRITE*/ phi2_write<Addr::AB, Bank::ZBR>(
+                pins, this->get(REG_DL)); // Direct Page uses Bank 0 else {
               pins = this->/*TODO_WRITE*/ phi2_write<Addr::AB, Bank::DBR>(
                   pins, this->get(REG_DL)); // Other modes use DBR
             }
@@ -728,14 +717,13 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       // Accumulator mode - single cycle operation with automatic 8/16-bit
       // handling
       pins = this->bus_setup_dummy<Addr::PC>(pins);
-      if (FAM65XX_GET_RDY(pins)) {
-        data_t value = this->get_accumulator(); // Automatically handles
-                                                // 8/16-bit based on M flag
-        operation_func(value);
-        this->set_accumulator(
-            value); // Automatically handles 8/16-bit based on M flag
-        this->transition_to_fetch();
-      }
+      
+      data_t value = this->get_accumulator(); // Automatically handles
+                                              // 8/16-bit based on M flag
+      operation_func(value);
+      this->set_accumulator(
+          value); // Automatically handles 8/16-bit based on M flag
+      this->transition_to_fetch();
     }
     return pins;
   }
@@ -1339,8 +1327,8 @@ public:
         }
       }
 
-      // Check RDY signal - CENTRALIZED CHECK
-      /* TODO_RDY: Remove check */ if (!FAM65XX_GET_RDY(pins)) {
+      // Check RDY signal - CENTRALIZED CHECK (KEEP THIS!)
+      if (!FAM65XX_GET_RDY(pins)) {
         // RDY low - external DMA active
         // DO NOT call handler, DO NOT increment
         trace("RDY low - DMA active, skipping handler");
@@ -1404,9 +1392,8 @@ public:
     pins = tick<Phase::PHI2>(pins);
 
     // PHI1 phase (only if not waiting for RDY)
-    if (FAM65XX_GET_RDY(pins)) {
-      pins = tick<Phase::PHI1>(pins);
-    }
+    
+    pins = tick<Phase::PHI1>(pins);
 
     trace_exit("tick (legacy)");
     return pins;
