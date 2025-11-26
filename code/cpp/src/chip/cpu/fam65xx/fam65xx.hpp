@@ -1436,7 +1436,8 @@ public:
         pins = this->fetch_opcode(pins);
       }
 
-      // tick<PHI2> increments from even to odd
+      // PHI2 increments cycle_index so PHI1 sees the odd cycle number
+      // This allows PHI2 (even) and PHI1 (odd) to execute different code
       cycle_index++;
 
       trace_registers("after PHI2");
