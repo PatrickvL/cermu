@@ -66,7 +66,6 @@ bus_state_t op_jsr(bus_state_t pins) {
 
     pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCH));
     this->dec(REG_S);
-    this->cycle_index++;
     return pins;
 
   case 4:
@@ -78,7 +77,6 @@ bus_state_t op_jsr(bus_state_t pins) {
 
   case 5:
     pins = this->bus_setup_read<Addr::PC>(pins);
-    this->cycle_index++;
     return pins;
 
   case 6:
@@ -102,7 +100,7 @@ bus_state_t op_rts(bus_state_t pins) {
     return pins;
 
   case 1:
-    /* PHI2: Dummy read from current stack pointer, then increment SP */
+    /* PHI1: Dummy read from current stack pointer, then increment SP */
     pins = this->bus_setup_dummy<Addr::SP>(pins);
 
     this->inc(REG_S);
@@ -225,7 +223,6 @@ bus_state_t op_brk(bus_state_t pins) {
 
     pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCH));
     this->dec(REG_S);
-    this->cycle_index++;
     return pins;
 
   case 2:
@@ -234,7 +231,6 @@ bus_state_t op_brk(bus_state_t pins) {
     pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCL));
     this->dec(REG_S);
     this->set(REG_DL, this->get(REG_P) | FLAG_B | FLAG_U);
-    this->cycle_index++;
     return pins;
 
   case 3:
@@ -252,14 +248,12 @@ bus_state_t op_brk(bus_state_t pins) {
       clear_flag(FLAG_D);
     }
     this->set(REG_AB, this->get_vector_addr());
-    this->cycle_index++;
     return pins;
 
   case 4: // Note : reset() starts at cycle_index 4!
     /* PHI2: Read interrupt vector low byte (always from bank 0 using ZBR for
      * 65C816) */
     pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
-    this->cycle_index++;
     return pins;
 
   case 5:
@@ -273,7 +267,6 @@ bus_state_t op_brk(bus_state_t pins) {
     /* PHI2: Read interrupt vector high byte (always from bank 0 using ZBR for
      * 65C816) */
     pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
-    this->cycle_index++;
     return pins;
 
   case 7:
@@ -313,7 +306,7 @@ bus_state_t op_rti(bus_state_t pins) {
     return pins;
 
   case 1:
-    /* PHI2: Dummy read from current stack pointer, then increment SP */
+    /* PHI1: Dummy read from current stack pointer, then increment SP */
     pins = this->bus_setup_dummy<Addr::SP>(pins);
 
     this->inc(REG_S);
