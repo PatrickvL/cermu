@@ -201,8 +201,15 @@ bus_state_t op_sta(bus_state_t pins) {
   }
 
   // Standard 8-bit STA operation (emulation mode and non-wide CPUs)
-  pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_A));
-  this->transition_to_fetch();
+  switch (this->cycle_index) {
+  case 0: // PHI2 - Write accumulator to address
+    pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_A));
+    return pins;
+
+  case 1: // PHI1 - Complete and transition
+    this->transition_to_fetch();
+    return pins;
+  }
   return pins;
 }
 
@@ -238,8 +245,15 @@ bus_state_t op_stx(bus_state_t pins) {
   }
 
   // Standard 8-bit STX operation (emulation mode and non-wide CPUs)
-  pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_X));
-  this->transition_to_fetch();
+  switch (this->cycle_index) {
+  case 0: // PHI2 - Write X register to address
+    pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_X));
+    return pins;
+
+  case 1: // PHI1 - Complete and transition
+    this->transition_to_fetch();
+    return pins;
+  }
   return pins;
 }
 
@@ -275,8 +289,15 @@ bus_state_t op_sty(bus_state_t pins) {
   }
 
   // Standard 8-bit STY operation (emulation mode and non-wide CPUs)
-  pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_Y));
-  this->transition_to_fetch();
+  switch (this->cycle_index) {
+  case 0: // PHI2 - Write Y register to address
+    pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_Y));
+    return pins;
+
+  case 1: // PHI1 - Complete and transition
+    this->transition_to_fetch();
+    return pins;
+  }
   return pins;
 }
 
