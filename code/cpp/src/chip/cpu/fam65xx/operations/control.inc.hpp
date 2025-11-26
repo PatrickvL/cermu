@@ -20,9 +20,18 @@
  */
 bus_state_t op_jmp(bus_state_t pins) {
   trace_operation(__func__);
-  // Addressing mode has already set up AB register with target address
-  this->set(REG_PC, this->get(REG_AB));
-  this->transition_to_fetch();
+  
+  switch (this->cycle_index) {
+    case 0: // PHI2: Dummy bus cycle
+      // Addressing mode has already set up AB register with target address
+      return pins;
+      
+    case 1: // PHI1: Set PC and transition
+      this->set(REG_PC, this->get(REG_AB));
+      this->cycle_index++;
+      this->transition_to_fetch();
+      return pins;
+  }
   return pins;
 }
 
@@ -33,9 +42,18 @@ bus_state_t op_jmp(bus_state_t pins) {
  */
 bus_state_t op_jml(bus_state_t pins) {
   trace_operation(__func__);
-  // Addressing mode has already set up AB register with target address
-  this->set(REG_PC, this->get(REG_AB));
-  this->transition_to_fetch();
+  
+  switch (this->cycle_index) {
+    case 0: // PHI2: Dummy bus cycle
+      // Addressing mode has already set up AB register with target address
+      return pins;
+      
+    case 1: // PHI1: Set PC and transition
+      this->set(REG_PC, this->get(REG_AB));
+      this->cycle_index++;
+      this->transition_to_fetch();
+      return pins;
+  }
   return pins;
 }
 
@@ -100,9 +118,7 @@ bus_state_t op_rts(bus_state_t pins) {
     return pins;
 
   case 1:
-    /* PHI1: Dummy read from current stack pointer, then increment SP */
-    pins = this->bus_setup_dummy<Addr::SP>(pins);
-
+    /* PHI1: Increment SP */
     this->inc(REG_S);
     this->cycle_index++;
     return pins;
@@ -126,9 +142,18 @@ bus_state_t op_rts(bus_state_t pins) {
     return pins;
 
   case 5:
-    /* PHI2: Dummy read from PC, then increment PC */
+    /* PHI1: Load PCH and increment */
+    this->bus_load_reg(REG_ABH, pins);
+    this->cycle_index++;
+    return pins;
+    
+  case 6:
+    /* PHI2: Dummy read from reconstructed PC */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
-
+    return pins;
+    
+  case 7:
+    /* PHI1: Increment PC and transition */
     this->inc(REG_PC);
     this->transition_to_fetch();
     return pins;
@@ -209,34 +234,49 @@ bus_state_t op_brk(bus_state_t pins) {
   case 0:
     /* PHI2: Dummy read from PC+1 (BRK has optional signature byte) */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
+    return pins;
 
+  case 1:
+    /* PHI1: Increment PC and set interrupt type */
     this->inc(REG_PC);
     /* Set interrupt type to BRK if no hardware interrupt is active */
     /* Hardware interrupts (IRQ, NMI) take priority over software BRK */
     if (this->active_interrupt == FAM65XX_INT_NONE) {
       this->active_interrupt = FAM65XX_INT_BRK;
     }
-    return pins;
-
-  case 1:
-    /* PHI2: Push PCH to stack */
-
-    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCH));
-    this->dec(REG_S);
+    this->cycle_index++;
     return pins;
 
   case 2:
-    /* PHI2: Push PCL to stack */
-
-    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCL));
+    /* PHI2: Push PCH to stack */
+    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCH));
+    return pins;
+    
+  case 3:
+    /* PHI1: Decrement SP */
     this->dec(REG_S);
-    this->set(REG_DL, this->get(REG_P) | FLAG_B | FLAG_U);
+    this->cycle_index++;
     return pins;
 
-  case 3:
-    /* PHI2: Push P|B|U to stack (B flag set for BRK) */
+  case 4:
+    /* PHI2: Push PCL to stack */
+    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCL));
+    return pins;
+    
+  case 5:
+    /* PHI1: Decrement SP and prepare status */
+    this->dec(REG_S);
+    this->set(REG_DL, this->get(REG_P) | FLAG_B | FLAG_U);
+    this->cycle_index++;
+    return pins;
 
+  case 6:
+    /* PHI2: Push P|B|U to stack (B flag set for BRK) */
     pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_DL));
+    return pins;
+    
+  case 7:
+    /* PHI1: Decrement SP, set interrupt flags, get vector address */
     this->dec(REG_S);
     /* Set interrupt disable flag - processor specific behavior */
     if constexpr (has_nmos_bugs()) {
@@ -248,29 +288,30 @@ bus_state_t op_brk(bus_state_t pins) {
       clear_flag(FLAG_D);
     }
     this->set(REG_AB, this->get_vector_addr());
+    this->cycle_index++;
     return pins;
 
-  case 4: // Note : reset() starts at cycle_index 4!
+  case 8: // Note : reset() starts at cycle_index 8 now!
     /* PHI2: Read interrupt vector low byte (always from bank 0 using ZBR for
      * 65C816) */
     pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
     return pins;
 
-  case 5:
-    /* PHI1: Load data and perform operations */
+  case 9:
+    /* PHI1: Load data and increment AB */
     this->bus_load_reg(REG_DL, pins);
     this->inc(REG_AB);
     this->cycle_index++;
     return pins;
 
-  case 6:
+  case 10:
     /* PHI2: Read interrupt vector high byte (always from bank 0 using ZBR for
      * 65C816) */
     pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
     return pins;
 
-  case 7:
-    /* PHI1: Load data and perform operations */
+  case 11:
+    /* PHI1: Load data and set PC */
     this->bus_load_reg(REG_ABH, pins);
     this->set(REG_PC, this->get(REG_AB));
     /* 65C816: Clear PBR on interrupts in emulation mode */
@@ -279,14 +320,6 @@ bus_state_t op_brk(bus_state_t pins) {
         this->set(REG_PBR, 0);
       }
     }
-    this->transition_to_fetch();
-    return pins;
-
-  case 8:
-    /* PHI2: Final cycle - dummy read from new PC to prepare for next
-     * instruction */
-    pins = this->bus_setup_dummy<Addr::PC>(pins);
-
     /* Clear active interrupt - interrupt processing complete */
     this->active_interrupt = FAM65XX_INT_NONE;
     this->transition_to_fetch();
@@ -306,9 +339,7 @@ bus_state_t op_rti(bus_state_t pins) {
     return pins;
 
   case 1:
-    /* PHI1: Dummy read from current stack pointer, then increment SP */
-    pins = this->bus_setup_dummy<Addr::SP>(pins);
-
+    /* PHI1: Increment SP */
     this->inc(REG_S);
     this->cycle_index++;
     return pins;
@@ -341,7 +372,12 @@ bus_state_t op_rti(bus_state_t pins) {
   case 6:
     /* PHI2: Pull PCH from stack */
     pins = this->bus_setup_read<Addr::SP>(pins);
-
+    return pins;
+    
+  case 7:
+    /* PHI1: Load PCH and transition */
+    this->bus_load_reg(REG_ABH, pins);
+    this->set(REG_PC, this->get(REG_AB));
     this->transition_to_fetch();
     return pins;
   }
