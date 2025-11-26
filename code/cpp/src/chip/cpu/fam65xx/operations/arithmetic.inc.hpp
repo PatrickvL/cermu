@@ -153,19 +153,14 @@ bus_state_t op_nop(bus_state_t pins) {
 
   case to_index(AM::NON):
     // Implicit NOPs do dummy read from PC without increment
-    pins = this->bus_setup_dummy<Addr::PC>(pins);
-    /* TODO_RDY: Remove check */ if (!FAM65XX_GET_RDY(pins)) { return pins; }
-    break;
+    pins = this->bus_setup_dummy<Addr::PC>(pins);    break;
 
   default:
     // Memory addressing modes (AM_ABS, AM_ABX, AM_ABY, AM_ZER, AM_ZPX, AM_ZPY)
     // need dummy read The addressing mode handler has already consumed operands
     // and set up AB register Now we need to complete the read cycle for proper
     // timing
-    pins = this->bus_setup_dummy<Addr::AB>(pins);
-    /* TODO_RDY: Remove check */ if (!FAM65XX_GET_RDY(pins)) { return pins; }
-
-    /**
+    pins = this->bus_setup_dummy<Addr::AB>(pins);    /**
      * Handle NES6502 test syscalls as documented at
      * https://github.com/search?q=repo%3Arofl0r%2Fblargg-6502-cpu-test+syscall&type=code
      * Pattern: $fc, $13, $37 indicates character output syscall
