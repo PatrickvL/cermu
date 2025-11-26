@@ -25,36 +25,34 @@ bus_state_t op_adc(bus_state_t pins) {
       case 0:
         // Read low byte of operand
         pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
-        if (FAM65XX_GET_RDY(pins)) {
-          this->cycle_index++;
-          // For 65C816 native mode, increment address bus with bank handling
-          this->inc(REG_AB);
-        }
+        
+        this->cycle_index++;
+        // For 65C816 native mode, increment address bus with bank handling
+        this->inc(REG_AB);
         return pins;
 
       case 1:
         // Read high byte of operand
         pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_ABH);
-        if (FAM65XX_GET_RDY(pins)) {
-          // Perform 16-bit ADC operation
-          this->set(REG_ABL, this->get(REG_DL));
-          uint16_t operand = this->get(REG_AB);
-          uint16_t acc = this->get(REG_A_16);
-          uint32_t result =
-              acc + operand + ((this->get(REG_P) & FLAG_C) ? 1 : 0);
+        
+        // Perform 16-bit ADC operation
+        this->set(REG_ABL, this->get(REG_DL));
+        uint16_t operand = this->get(REG_AB);
+        uint16_t acc = this->get(REG_A_16);
+        uint32_t result =
+            acc + operand + ((this->get(REG_P) & FLAG_C) ? 1 : 0);
 
-          // Set accumulator
-          this->set(REG_A_16, result & 0xFFFF);
+        // Set accumulator
+        this->set(REG_A_16, result & 0xFFFF);
 
-          // Update flags for 16-bit operation
-          this->update_flag(FLAG_C, result > 0xFFFF);
-          this->update_flag(FLAG_Z, (result & 0xFFFF) == 0);
-          this->update_flag(FLAG_N, (result & 0x8000) != 0);
-          this->update_flag(
-              FLAG_V, ((acc ^ result) & (operand ^ result) & 0x8000) != 0);
+        // Update flags for 16-bit operation
+        this->update_flag(FLAG_C, result > 0xFFFF);
+        this->update_flag(FLAG_Z, (result & 0xFFFF) == 0);
+        this->update_flag(FLAG_N, (result & 0x8000) != 0);
+        this->update_flag(
+            FLAG_V, ((acc ^ result) & (operand ^ result) & 0x8000) != 0);
 
-          this->transition_to_fetch();
-        }
+        this->transition_to_fetch();
         return pins;
       }
       return pins;
@@ -66,18 +64,17 @@ bus_state_t op_adc(bus_state_t pins) {
   case 0:
     // Read operand directly into DL register
     pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
-    if (FAM65XX_GET_RDY(pins)) {
-      uint8_t operand = this->get(REG_DL);
+    
+    uint8_t operand = this->get(REG_DL);
 
-      // Use ADC operation with processor-specific optimizations
-      this->perform_adc(operand);
+    // Use ADC operation with processor-specific optimizations
+    this->perform_adc(operand);
 
-      // CMOS processors need extra cycle in decimal mode
-      if constexpr (this->has_bcd_extra_cycle()) {
-        if (this->get(REG_P) & FLAG_D) {
-          this->cycle_index++;
-          return pins;
-        }
+    // CMOS processors need extra cycle in decimal mode
+    if constexpr (this->has_bcd_extra_cycle()) {
+      if (this->get(REG_P) & FLAG_D) {
+        this->cycle_index++;
+        return pins;
       }
 
       // Complete instruction if no extra cycle needed
@@ -88,9 +85,8 @@ bus_state_t op_adc(bus_state_t pins) {
   case 1:
     // Extra cycle for CMOS decimal mode - do dummy read from PC
     pins = this->bus_setup_dummy<Addr::PC>(pins);
-    if (FAM65XX_GET_RDY(pins)) {
-      this->transition_to_fetch();
-    }
+    
+    this->transition_to_fetch();
     return pins;
   }
   return pins;
@@ -144,9 +140,8 @@ bus_state_t op_nop(bus_state_t pins) {
   case to_index(AM::IMM):
     // AM_IMM: All immediate NOPs read operand and increment PC
     pins = this->bus_setup_dummy<Addr::PC>(pins);
-    if (FAM65XX_GET_RDY(pins)) {
-      this->inc(REG_PC);
-    } else {
+    
+    this->inc(REG_PC); else {
       return pins;
     }
     break;
@@ -207,36 +202,34 @@ bus_state_t op_sbc(bus_state_t pins) {
       case 0:
         // Read low byte of operand
         pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
-        if (FAM65XX_GET_RDY(pins)) {
-          this->cycle_index++;
-          // For 65C816 native mode, increment address bus with bank handling
-          this->inc(REG_AB);
-        }
+        
+        this->cycle_index++;
+        // For 65C816 native mode, increment address bus with bank handling
+        this->inc(REG_AB);
         return pins;
 
       case 1:
         // Read high byte of operand
         pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_ABH);
-        if (FAM65XX_GET_RDY(pins)) {
-          // Perform 16-bit SBC operation
-          this->set(REG_ABL, this->get(REG_DL));
-          uint16_t operand = this->get(REG_AB);
-          uint16_t acc = this->get(REG_A_16);
-          uint32_t result =
-              acc - operand - ((this->get(REG_P) & FLAG_C) ? 0 : 1);
+        
+        // Perform 16-bit SBC operation
+        this->set(REG_ABL, this->get(REG_DL));
+        uint16_t operand = this->get(REG_AB);
+        uint16_t acc = this->get(REG_A_16);
+        uint32_t result =
+            acc - operand - ((this->get(REG_P) & FLAG_C) ? 0 : 1);
 
-          // Set accumulator
-          this->set(REG_A_16, result & 0xFFFF);
+        // Set accumulator
+        this->set(REG_A_16, result & 0xFFFF);
 
-          // Update flags for 16-bit operation
-          this->update_flag(FLAG_C, result <= 0xFFFF);
-          this->update_flag(FLAG_Z, (result & 0xFFFF) == 0);
-          this->update_flag(FLAG_N, (result & 0x8000) != 0);
-          this->update_flag(FLAG_V,
-                            ((acc ^ operand) & (acc ^ result) & 0x8000) != 0);
+        // Update flags for 16-bit operation
+        this->update_flag(FLAG_C, result <= 0xFFFF);
+        this->update_flag(FLAG_Z, (result & 0xFFFF) == 0);
+        this->update_flag(FLAG_N, (result & 0x8000) != 0);
+        this->update_flag(FLAG_V,
+                          ((acc ^ operand) & (acc ^ result) & 0x8000) != 0);
 
-          this->transition_to_fetch();
-        }
+        this->transition_to_fetch();
         return pins;
       }
       return pins;
@@ -248,18 +241,17 @@ bus_state_t op_sbc(bus_state_t pins) {
   case 0:
     // Read operand directly into DL register
     pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
-    if (FAM65XX_GET_RDY(pins)) {
-      uint8_t operand = this->get(REG_DL);
+    
+    uint8_t operand = this->get(REG_DL);
 
-      // Use SBC operation with processor-specific optimizations
-      this->perform_sbc(operand);
+    // Use SBC operation with processor-specific optimizations
+    this->perform_sbc(operand);
 
-      // CMOS processors need extra cycle in decimal mode
-      if constexpr (this->has_bcd_extra_cycle()) {
-        if (this->get(REG_P) & FLAG_D) {
-          this->cycle_index++;
-          return pins;
-        }
+    // CMOS processors need extra cycle in decimal mode
+    if constexpr (this->has_bcd_extra_cycle()) {
+      if (this->get(REG_P) & FLAG_D) {
+        this->cycle_index++;
+        return pins;
       }
 
       // Complete instruction if no extra cycle needed
@@ -270,9 +262,8 @@ bus_state_t op_sbc(bus_state_t pins) {
   case 1:
     // Extra cycle for CMOS decimal mode - do dummy read from PC
     pins = this->bus_setup_dummy<Addr::PC>(pins);
-    if (FAM65XX_GET_RDY(pins)) {
-      this->transition_to_fetch();
-    }
+    
+    this->transition_to_fetch();
     return pins;
   }
   return pins;
@@ -293,30 +284,28 @@ bus_state_t op_cmp(bus_state_t pins) {
       case 0:
         // Read low byte of operand
         pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
-        if (FAM65XX_GET_RDY(pins)) {
-          this->cycle_index++;
-          // For 65C816 native mode, increment address bus with bank handling
-          this->inc(REG_AB);
-        }
+        
+        this->cycle_index++;
+        // For 65C816 native mode, increment address bus with bank handling
+        this->inc(REG_AB);
         return pins;
 
       case 1:
         // Read high byte of operand
         pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_ABH);
-        if (FAM65XX_GET_RDY(pins)) {
-          // Perform 16-bit comparison
-          this->set(REG_ABL, this->get(REG_DL));
-          uint16_t operand = this->get(REG_AB);
-          uint16_t acc = this->get(REG_A_16);
-          uint32_t result = acc - operand;
+        
+        // Perform 16-bit comparison
+        this->set(REG_ABL, this->get(REG_DL));
+        uint16_t operand = this->get(REG_AB);
+        uint16_t acc = this->get(REG_A_16);
+        uint32_t result = acc - operand;
 
-          // Update flags for 16-bit operation
-          this->update_flag(FLAG_C, acc >= operand);
-          this->update_flag(FLAG_Z, acc == operand);
-          this->update_flag(FLAG_N, (result & 0x8000) != 0);
+        // Update flags for 16-bit operation
+        this->update_flag(FLAG_C, acc >= operand);
+        this->update_flag(FLAG_Z, acc == operand);
+        this->update_flag(FLAG_N, (result & 0x8000) != 0);
 
-          this->transition_to_fetch();
-        }
+        this->transition_to_fetch();
         return pins;
       }
       return pins;
@@ -325,16 +314,15 @@ bus_state_t op_cmp(bus_state_t pins) {
 
   // Standard 8-bit CMP operation (emulation mode and non-wide CPUs)
   pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
-  if (FAM65XX_GET_RDY(pins)) {
-    uint8_t operand = this->get(REG_DL);
-    uint8_t a = this->get(REG_A);
+  
+  uint8_t operand = this->get(REG_DL);
+  uint8_t a = this->get(REG_A);
 
-    // Use optimized comparison
-    this->perform_compare(a, operand);
+  // Use optimized comparison
+  this->perform_compare(a, operand);
 
-    // Complete instruction
-    this->transition_to_fetch();
-  }
+  // Complete instruction
+  this->transition_to_fetch();
   return pins;
 }
 
@@ -353,30 +341,28 @@ bus_state_t op_cpx(bus_state_t pins) {
       case 0:
         // Read low byte of operand
         pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
-        if (FAM65XX_GET_RDY(pins)) {
-          // For 65C816 native mode, increment address bus with bank handling
-          this->inc(REG_AB);
-          this->cycle_index++;
-        }
+        
+        // For 65C816 native mode, increment address bus with bank handling
+        this->inc(REG_AB);
+        this->cycle_index++;
         return pins;
 
       case 1:
         // Read high byte of operand
         pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_ABH);
-        if (FAM65XX_GET_RDY(pins)) {
-          // Perform 16-bit comparison
-          this->set(REG_ABL, this->get(REG_DL));
-          uint16_t operand = this->get(REG_AB);
-          uint16_t x = this->get_x_register();
-          uint32_t result = x - operand;
+        
+        // Perform 16-bit comparison
+        this->set(REG_ABL, this->get(REG_DL));
+        uint16_t operand = this->get(REG_AB);
+        uint16_t x = this->get_x_register();
+        uint32_t result = x - operand;
 
-          // Update flags for 16-bit operation
-          this->update_flag(FLAG_C, x >= operand);
-          this->update_flag(FLAG_Z, x == operand);
-          this->update_flag(FLAG_N, (result & 0x8000) != 0);
+        // Update flags for 16-bit operation
+        this->update_flag(FLAG_C, x >= operand);
+        this->update_flag(FLAG_Z, x == operand);
+        this->update_flag(FLAG_N, (result & 0x8000) != 0);
 
-          this->transition_to_fetch();
-        }
+        this->transition_to_fetch();
         return pins;
       }
       return pins;
@@ -385,16 +371,15 @@ bus_state_t op_cpx(bus_state_t pins) {
 
   // Standard 8-bit CPX operation (emulation mode and non-wide CPUs)
   pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
-  if (FAM65XX_GET_RDY(pins)) {
-    uint8_t operand = this->get(REG_DL);
-    uint8_t x = this->get(REG_X);
+  
+  uint8_t operand = this->get(REG_DL);
+  uint8_t x = this->get(REG_X);
 
-    // Use optimized comparison
-    this->perform_compare(x, operand);
+  // Use optimized comparison
+  this->perform_compare(x, operand);
 
-    // Complete instruction
-    this->transition_to_fetch();
-  }
+  // Complete instruction
+  this->transition_to_fetch();
   return pins;
 }
 
@@ -413,30 +398,28 @@ bus_state_t op_cpy(bus_state_t pins) {
       case 0:
         // Read low byte of operand
         pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
-        if (FAM65XX_GET_RDY(pins)) {
-          // For 65C816 native mode, increment address bus with bank handling
-          this->inc(REG_AB);
-          this->cycle_index++;
-        }
+        
+        // For 65C816 native mode, increment address bus with bank handling
+        this->inc(REG_AB);
+        this->cycle_index++;
         return pins;
 
       case 1:
         // Read high byte of operand
         pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_ABH);
-        if (FAM65XX_GET_RDY(pins)) {
-          // Perform 16-bit comparison
-          this->set(REG_ABL, this->get(REG_DL));
-          uint16_t operand = this->get(REG_AB);
-          uint16_t y = this->get_y_register();
-          uint32_t result = y - operand;
+        
+        // Perform 16-bit comparison
+        this->set(REG_ABL, this->get(REG_DL));
+        uint16_t operand = this->get(REG_AB);
+        uint16_t y = this->get_y_register();
+        uint32_t result = y - operand;
 
-          // Update flags for 16-bit operation
-          this->update_flag(FLAG_C, y >= operand);
-          this->update_flag(FLAG_Z, y == operand);
-          this->update_flag(FLAG_N, (result & 0x8000) != 0);
+        // Update flags for 16-bit operation
+        this->update_flag(FLAG_C, y >= operand);
+        this->update_flag(FLAG_Z, y == operand);
+        this->update_flag(FLAG_N, (result & 0x8000) != 0);
 
-          this->transition_to_fetch();
-        }
+        this->transition_to_fetch();
         return pins;
       }
       return pins;
@@ -445,16 +428,15 @@ bus_state_t op_cpy(bus_state_t pins) {
 
   // Standard 8-bit CPY operation (emulation mode and non-wide CPUs)
   pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
-  if (FAM65XX_GET_RDY(pins)) {
-    uint8_t operand = this->get(REG_DL);
-    uint8_t y = this->get(REG_Y);
+  
+  uint8_t operand = this->get(REG_DL);
+  uint8_t y = this->get(REG_Y);
 
-    // Use optimized comparison
-    this->perform_compare(y, operand);
+  // Use optimized comparison
+  this->perform_compare(y, operand);
 
-    // Complete instruction
-    this->transition_to_fetch();
-  }
+  // Complete instruction
+  this->transition_to_fetch();
   return pins;
 }
 

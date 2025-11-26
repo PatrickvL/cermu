@@ -22,27 +22,25 @@ bus_state_t op_lax(bus_state_t pins) {
     if (opcode_entry.am_index == to_index(AM::IMM)) {
       // LAX immediate - unstable behavior with magic constant
       pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_DL);
-      if (FAM65XX_GET_RDY(pins)) {
-        this->inc(REG_PC);
-        // Hardware quirk: LAX immediate uses unstable internal state
-        // Result is (A | 0xEE) & operand
-        uint8_t result = (this->get(REG_A) | 0xEE) & this->get(REG_DL);
-        this->set(REG_A, result);
-        this->set(REG_X, result);
+      
+      this->inc(REG_PC);
+      // Hardware quirk: LAX immediate uses unstable internal state
+      // Result is (A | 0xEE) & operand
+      uint8_t result = (this->get(REG_A) | 0xEE) & this->get(REG_DL);
+      this->set(REG_A, result);
+      this->set(REG_X, result);
 
-        this->update_nz_flags<REG_A>(result);
-        transition_to_fetch();
-      }
+      this->update_nz_flags<REG_A>(result);
+      transition_to_fetch();
     } else {
       // LAX memory modes - normal behavior
       pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_DL);
-      if (FAM65XX_GET_RDY(pins)) {
-        this->set(REG_A, this->get(REG_DL));
-        this->set(REG_X, this->get(REG_DL));
+      
+      this->set(REG_A, this->get(REG_DL));
+      this->set(REG_X, this->get(REG_DL));
 
-        this->update_nz_flags<REG_A>(this->get(REG_A));
-        transition_to_fetch();
-      }
+      this->update_nz_flags<REG_A>(this->get(REG_A));
+      transition_to_fetch();
     }
   }
 
@@ -53,11 +51,10 @@ bus_state_t op_sax(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_illegal_opcodes()) {
     // Store A AND X to memory with processor-specific RDY handling
-    if (should_complete_write_cycle(pins)) {
-      uint8_t result = this->get(REG_A) & this->get(REG_X);
-      pins = this->/*TODO_WRITE*/ phi2_write<Addr::AB>(pins, result);
-      transition_to_fetch();
-    }
+    
+    uint8_t result = this->get(REG_A) & this->get(REG_X);
+    pins = this->/*TODO_WRITE*/ phi2_write<Addr::AB>(pins, result);
+    transition_to_fetch();
   }
   return pins;
 }
@@ -203,23 +200,21 @@ bus_state_t op_jam(bus_state_t pins) {
   case 0:
     // PHI2: Read operand from PC+1 (this was PC++ after opcode fetch)
     pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_DL);
-    if (FAM65XX_GET_RDY(pins)) {
-      cycle_index++;
-    }
+    
+    cycle_index++;
     return pins;
 
   case 1:
     // PHI2: Read operand again from same address (PC+1)
     pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_DL);
-    if (FAM65XX_GET_RDY(pins)) {
-      // JAM: Reset PC back to opcode address (the "jam" effect)
-      this->dec(REG_PC); // Go back to opcode address
+    
+    // JAM: Reset PC back to opcode address (the "jam" effect)
+    this->dec(REG_PC); // Go back to opcode address
 
-      // For test suite compatibility: complete normally instead of infinite
-      // loop In real hardware this would loop forever, but tests expect finite
-      // execution
-      transition_to_fetch();
-    }
+    // For test suite compatibility: complete normally instead of infinite
+    // loop In real hardware this would loop forever, but tests expect finite
+    // execution
+    transition_to_fetch();
     return pins;
   }
   return pins;
@@ -234,19 +229,18 @@ bus_state_t op_anc(bus_state_t pins) {
   if constexpr (has_illegal_opcodes()) {
     // ANC - AND with carry (AND immediate, then copy N flag to C flag)
     pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_DL);
-    if (FAM65XX_GET_RDY(pins)) {
-      this->inc(REG_PC);
-      // Perform AND with accumulator
-      this->set(REG_A, this->get(REG_A) & this->get(REG_DL));
+    
+    this->inc(REG_PC);
+    // Perform AND with accumulator
+    this->set(REG_A, this->get(REG_A) & this->get(REG_DL));
 
-      // Update N and Z flags
-      this->update_nz_flags<REG_A>(this->get(REG_A));
+    // Update N and Z flags
+    this->update_nz_flags<REG_A>(this->get(REG_A));
 
-      // Copy N flag to C flag (ANC behavior)
-      this->update_flag(FLAG_C, this->get(REG_P) & FLAG_N);
+    // Copy N flag to C flag (ANC behavior)
+    this->update_flag(FLAG_C, this->get(REG_P) & FLAG_N);
 
-      transition_to_fetch();
-    }
+    transition_to_fetch();
   }
 
   return pins;
@@ -258,33 +252,32 @@ bus_state_t op_arr(bus_state_t pins) {
     // ARR - AND + ROR with BCD correction in decimal mode (reference
     // implementation)
     pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_DL);
-    if (FAM65XX_GET_RDY(pins)) {
-      this->inc(REG_PC);
+    
+    this->inc(REG_PC);
 
-      uint8_t operand = this->get(REG_DL);
-      bool carry_in = (this->get(REG_P) & FLAG_C) != 0;
+    uint8_t operand = this->get(REG_DL);
+    bool carry_in = (this->get(REG_P) & FLAG_C) != 0;
 
-      // Step 1: AND A with operand - save original for BCD checks
-      uint8_t original_a = this->get(REG_A) & operand;
-      this->set(REG_A, original_a);
+    // Step 1: AND A with operand - save original for BCD checks
+    uint8_t original_a = this->get(REG_A) & operand;
+    this->set(REG_A, original_a);
 
-      // Step 2: ROR the result (both modes do this)
-      uint8_t shifted_a = (this->get(REG_A) >> 1) | (carry_in ? 0x80 : 0);
+    // Step 2: ROR the result (both modes do this)
+    uint8_t shifted_a = (this->get(REG_A) >> 1) | (carry_in ? 0x80 : 0);
 
-      // Clear all flags initially
-      this->set(REG_P, this->get(REG_P) & ~(FLAG_N | FLAG_Z | FLAG_V | FLAG_C));
+    // Clear all flags initially
+    this->set(REG_P, this->get(REG_P) & ~(FLAG_N | FLAG_Z | FLAG_V | FLAG_C));
 
-      // Set N and Z flags based on shifted result (reference does this first)
-      this->update_nz_flags<REG_A>(shifted_a);
+    // Set N and Z flags based on shifted result (reference does this first)
+    this->update_nz_flags<REG_A>(shifted_a);
 
-      if constexpr (has_bcd()) {
-        if (this->get(REG_P) & FLAG_D) {
-          // Decimal mode - ARR uses reference algorithm
+    if constexpr (has_bcd()) {
+      if (this->get(REG_P) & FLAG_D) {
+        // Decimal mode - ARR uses reference algorithm
 
-          // Set V flag based on bit 6 change between original and shifted
-          if ((shifted_a ^ this->get(REG_A)) & 0x40) {
-            this->set(REG_P, this->get(REG_P) | FLAG_V);
-          }
+        // Set V flag based on bit 6 change between original and shifted
+        if ((shifted_a ^ this->get(REG_A)) & 0x40) {
+          this->set(REG_P, this->get(REG_P) | FLAG_V);
 
           // BCD correction using ORIGINAL A value for digit checks (reference
           // approach)
@@ -349,20 +342,19 @@ bus_state_t op_alr(bus_state_t pins) {
   if constexpr (has_illegal_opcodes()) {
     // ALR - AND + LSR (AND immediate, then LSR A)
     pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_DL);
-    if (FAM65XX_GET_RDY(pins)) {
-      this->inc(REG_PC);
-      // Perform AND with accumulator
-      this->set(REG_A, this->get(REG_A) & this->get(REG_DL));
+    
+    this->inc(REG_PC);
+    // Perform AND with accumulator
+    this->set(REG_A, this->get(REG_A) & this->get(REG_DL));
 
-      // Perform LSR on accumulator
-      this->update_flag(FLAG_C, this->get(REG_A) & 0x01);
-      this->set(REG_A, this->get(REG_A) >> 1);
+    // Perform LSR on accumulator
+    this->update_flag(FLAG_C, this->get(REG_A) & 0x01);
+    this->set(REG_A, this->get(REG_A) >> 1);
 
-      // Update N and Z flags
-      this->update_nz_flags<REG_A>(this->get(REG_A));
+    // Update N and Z flags
+    this->update_nz_flags<REG_A>(this->get(REG_A));
 
-      transition_to_fetch();
-    }
+    transition_to_fetch();
   }
 
   return pins;
@@ -381,15 +373,14 @@ bus_state_t op_xaa(bus_state_t pins) {
     // XAA - Transfer X AND immediate to A (illegal)
     // Hardware quirk: Uses unstable constant 0xEE like LAX immediate
     pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_DL);
-    if (FAM65XX_GET_RDY(pins)) {
-      this->inc(REG_PC);
-      // Hardware behavior: (A | 0xEE) & X & operand
-      this->set(REG_A, (this->get(REG_A) | 0xEE) & this->get(REG_X) &
-                           this->get(REG_DL));
-      this->update_nz_flags<REG_A>(this->get(REG_A));
+    
+    this->inc(REG_PC);
+    // Hardware behavior: (A | 0xEE) & X & operand
+    this->set(REG_A, (this->get(REG_A) | 0xEE) & this->get(REG_X) &
+                         this->get(REG_DL));
+    this->update_nz_flags<REG_A>(this->get(REG_A));
 
-      transition_to_fetch();
-    }
+    transition_to_fetch();
   }
 
   return pins;
@@ -400,20 +391,19 @@ bus_state_t op_sbx(bus_state_t pins) {
   if constexpr (has_illegal_opcodes()) {
     // SBX - Compare X with A AND immediate (illegal) (also called AXS)
     pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_DL);
-    if (FAM65XX_GET_RDY(pins)) {
-      this->inc(REG_PC);
-      uint8_t temp = this->get(REG_A) & this->get(REG_X);
-      uint8_t result = temp - this->get(REG_DL);
-      // Update X with result
-      this->set(REG_X, result);
+    
+    this->inc(REG_PC);
+    uint8_t temp = this->get(REG_A) & this->get(REG_X);
+    uint8_t result = temp - this->get(REG_DL);
+    // Update X with result
+    this->set(REG_X, result);
 
-      // Set carry flag using standard subtraction semantics (carry = no borrow)
-      this->update_flag(FLAG_C, temp >= this->get(REG_DL));
+    // Set carry flag using standard subtraction semantics (carry = no borrow)
+    this->update_flag(FLAG_C, temp >= this->get(REG_DL));
 
-      this->update_nz_flags<REG_X>(result);
+    this->update_nz_flags<REG_X>(result);
 
-      transition_to_fetch();
-    }
+    transition_to_fetch();
   }
 
   return pins;
@@ -423,15 +413,14 @@ bus_state_t op_sha(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_illegal_opcodes()) {
     // SHA - Store A & X & (H+1) with address corruption on page cross
-    if (should_complete_write_cycle(pins)) {
-      // Calculate value: A & X & (intermediate_high + 1)
-      uint8_t data_value =
-          this->get(REG_A) & this->get(REG_X) & (this->get(REG_DL) + 1);
+    
+    // Calculate value: A & X & (intermediate_high + 1)
+    uint8_t data_value =
+        this->get(REG_A) & this->get(REG_X) & (this->get(REG_DL) + 1);
 
-      // Apply address corruption on page cross (DL != ABH means page crossed)
-      if (this->get(REG_DL) != this->get(REG_ABH)) {
-        this->set(REG_ABH, data_value);
-      }
+    // Apply address corruption on page cross (DL != ABH means page crossed)
+    if (this->get(REG_DL) != this->get(REG_ABH)) {
+      this->set(REG_ABH, data_value);
 
       // Set data to write
       this->set(REG_DL, data_value);
@@ -449,18 +438,17 @@ bus_state_t op_shs(bus_state_t pins) {
   if constexpr (has_illegal_opcodes()) {
     // SHS - Store A & X & (H+1), Set S to A & X - match reference
     // implementation exactly
-    if (should_complete_write_cycle(pins)) {
-      // Calculate A & X first (used for both value and S)
-      uint8_t ax = this->get(REG_A) & this->get(REG_X);
+    
+    // Calculate A & X first (used for both value and S)
+    uint8_t ax = this->get(REG_A) & this->get(REG_X);
 
-      // Calculate value: (A & X) & (intermediate_high + 1)
-      // Use DL as intermediate high byte (before page cross correction)
-      uint8_t data_value = ax & ((this->get(REG_DL) + 1) & 0xFF);
+    // Calculate value: (A & X) & (intermediate_high + 1)
+    // Use DL as intermediate high byte (before page cross correction)
+    uint8_t data_value = ax & ((this->get(REG_DL) + 1) & 0xFF);
 
-      // Apply address corruption on page cross (DL != ABH means page crossed)
-      if (this->get(REG_DL) != this->get(REG_ABH)) {
-        this->set(REG_ABH, data_value);
-      }
+    // Apply address corruption on page cross (DL != ABH means page crossed)
+    if (this->get(REG_DL) != this->get(REG_ABH)) {
+      this->set(REG_ABH, data_value);
 
       // Set data to write
       this->set(REG_DL, data_value);
@@ -481,15 +469,14 @@ bus_state_t op_shx(bus_state_t pins) {
   if constexpr (has_illegal_opcodes()) {
     // SHX - Store X & (H+1) with address corruption - match reference
     // implementation exactly
-    if (should_complete_write_cycle(pins)) {
-      // Calculate value: X & (intermediate_high + 1)
-      // Use DL as intermediate high byte (before page cross correction)
-      uint8_t data_value = this->get(REG_X) & ((this->get(REG_DL) + 1) & 0xFF);
+    
+    // Calculate value: X & (intermediate_high + 1)
+    // Use DL as intermediate high byte (before page cross correction)
+    uint8_t data_value = this->get(REG_X) & ((this->get(REG_DL) + 1) & 0xFF);
 
-      // Apply address corruption on page cross (DL != ABH means page crossed)
-      if (this->get(REG_DL) != this->get(REG_ABH)) {
-        this->set(REG_ABH, data_value);
-      }
+    // Apply address corruption on page cross (DL != ABH means page crossed)
+    if (this->get(REG_DL) != this->get(REG_ABH)) {
+      this->set(REG_ABH, data_value);
 
       // Set data to write
       pins = this->/*TODO_WRITE*/ phi2_write<Addr::AB>(pins, data_value);
@@ -505,15 +492,14 @@ bus_state_t op_shy(bus_state_t pins) {
   if constexpr (has_illegal_opcodes()) {
     // SHY - Store Y & (H+1) with address corruption - match reference
     // implementation exactly
-    if (should_complete_write_cycle(pins)) {
-      // Calculate value: Y & (intermediate_high + 1)
-      // Use DL as intermediate high byte (before page cross correction)
-      uint8_t data_value = this->get(REG_Y) & ((this->get(REG_DL) + 1) & 0xFF);
+    
+    // Calculate value: Y & (intermediate_high + 1)
+    // Use DL as intermediate high byte (before page cross correction)
+    uint8_t data_value = this->get(REG_Y) & ((this->get(REG_DL) + 1) & 0xFF);
 
-      // Apply address corruption on page cross (DL != ABH means page crossed)
-      if (this->get(REG_DL) != this->get(REG_ABH)) {
-        this->set(REG_ABH, data_value);
-      }
+    // Apply address corruption on page cross (DL != ABH means page crossed)
+    if (this->get(REG_DL) != this->get(REG_ABH)) {
+      this->set(REG_ABH, data_value);
 
       // Set data to write
       pins = this->/*TODO_WRITE*/ phi2_write<Addr::AB>(pins, data_value);
@@ -529,15 +515,14 @@ bus_state_t op_las(bus_state_t pins) {
   if constexpr (has_illegal_opcodes()) {
     // LAS - Load A, X, and S with memory AND stack pointer (illegal)
     pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_DL);
-    if (FAM65XX_GET_RDY(pins)) {
-      uint8_t result = this->get(REG_DL) & this->get(REG_S);
-      this->set(REG_A, result);
-      this->set(REG_X, result);
-      this->set(REG_S, result);
+    
+    uint8_t result = this->get(REG_DL) & this->get(REG_S);
+    this->set(REG_A, result);
+    this->set(REG_X, result);
+    this->set(REG_S, result);
 
-      this->update_nz_flags<REG_A>(result);
-      transition_to_fetch();
-    }
+    this->update_nz_flags<REG_A>(result);
+    transition_to_fetch();
   }
 
   return pins;
