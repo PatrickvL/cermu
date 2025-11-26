@@ -46,7 +46,12 @@ bus_state_t op_jsr(bus_state_t pins) {
   case 0:
     /* PHI2: Read low byte of target address from PC directly to ABL */
     pins = this->bus_setup_read<Addr::PC>(pins);
+    this->cycle_index++;
+    return pins;
 
+  case 1:
+    /* PHI1: Load data and perform operations */
+    this->bus_load_reg(REG_DL, pins);
     this->inc(REG_PC);
     this->cycle_index++;
     return pins;
@@ -108,7 +113,12 @@ bus_state_t op_rts(bus_state_t pins) {
   case 2:
     /* PHI2: Pull PCL from stack */
     pins = this->bus_setup_read<Addr::SP>(pins);
+    this->cycle_index++;
+    return pins;
 
+  case 3:
+    /* PHI1: Load data and perform operations */
+    this->bus_load_reg(REG_DL, pins);
     this->inc(REG_S);
     this->cycle_index++;
     return pins;
@@ -254,7 +264,12 @@ bus_state_t op_brk(bus_state_t pins) {
     /* PHI2: Read interrupt vector low byte (always from bank 0 using ZBR for
      * 65C816) */
     pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
+    this->cycle_index++;
+    return pins;
 
+  case 5:
+    /* PHI1: Load data and perform operations */
+    this->bus_load_reg(REG_DL, pins);
     this->inc(REG_AB);
     this->cycle_index++;
     return pins;
@@ -263,19 +278,15 @@ bus_state_t op_brk(bus_state_t pins) {
     /* PHI2: Read interrupt vector high byte (always from bank 0 using ZBR for
      * 65C816) */
     pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
+    this->cycle_index++;
+    return pins;
 
-    /* Construct PC from PCH and DL registers which contain the interrupt
-     * vector bytes */
+  case 6:
+    /* PHI1: Load data and perform operations */
+    this->bus_load_reg(REG_DL, pins);
     this->set(REG_PCL, this->get(REG_DL));
-    /* 65C816: Set program bank to 0 immediately after vector read in
-     * emulation mode */
-    if constexpr (this->has_wide_registers()) {
-      if (this->in_emulation_mode()) {
         this->set(REG_PBR,
-                  0); // Set program bank to 0 after interrupt vector read
-      }
       this->cycle_index++;
-    }
     return pins;
 
   case 6:
@@ -313,7 +324,12 @@ bus_state_t op_rti(bus_state_t pins) {
   case 2:
     /* PHI2: Pull P from stack (clear B, set U) */
     pins = this->bus_setup_read<Addr::SP>(pins);
+    this->cycle_index++;
+    return pins;
 
+  case 3:
+    /* PHI1: Load data and perform operations */
+    this->bus_load_reg(REG_DL, pins);
     this->set(REG_P, (this->get(REG_DL) & ~FLAG_B) | FLAG_U);
     this->inc(REG_S);
     this->cycle_index++;
@@ -322,7 +338,12 @@ bus_state_t op_rti(bus_state_t pins) {
   case 3:
     /* PHI2: Pull PCL from stack */
     pins = this->bus_setup_read<Addr::SP>(pins);
+    this->cycle_index++;
+    return pins;
 
+  case 4:
+    /* PHI1: Load data and perform operations */
+    this->bus_load_reg(REG_DL, pins);
     this->inc(REG_S);
     this->cycle_index++;
     return pins;
