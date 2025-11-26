@@ -94,7 +94,7 @@ bus_state_t op_xce(bus_state_t pins) {
   if constexpr (this->has_wide_registers()) {
     // XCE is valid in both native and emulation modes
     switch (this->cycle_index) {
-    case 0:
+    case 0: {
       // Internal cycle - exchange carry and emulation flags
       // CRITICAL: Work with both 8-bit P and emulation flag separately
       uint16_t p_reg_16 = this->get(REG_P_16);
@@ -129,10 +129,12 @@ bus_state_t op_xce(bus_state_t pins) {
       this->cycle_index++;
       return pins;
     }
+
     case 1:
-    // Complete operation
-    this->transition_to_fetch();
-    return pins;
+      // Complete operation
+      this->transition_to_fetch();
+      return pins;
+    }
   }
   return pins;
 }
@@ -511,7 +513,7 @@ bus_state_t op_per(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
 
-    case 3:
+    case 3: {
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
       this->inc(REG_PC);
@@ -519,6 +521,7 @@ bus_state_t op_per(bus_state_t pins) {
       this->set(REG_AB, effective_addr);
       this->cycle_index++;
       return pins;
+    }
 
     case 4:
       // Push high byte of effective address
@@ -553,7 +556,7 @@ bus_state_t op_pei(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
 
-    case 1:
+    case 1: {
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_ABL, pins);
       this->inc(REG_PC);
@@ -561,6 +564,7 @@ bus_state_t op_pei(bus_state_t pins) {
       this->set(REG_AB, dp_addr);
       this->cycle_index++;
       return pins;
+    }
 
     case 2:
       // Read low byte of indirect address

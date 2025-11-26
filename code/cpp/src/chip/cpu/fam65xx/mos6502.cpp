@@ -54,13 +54,12 @@ mos6502_init_enhanced(mos6502_t *cpu,
                       const fam65xx_chip_descriptor_t *enhanced_desc) {
   auto *cpu_impl = CPU_CAST(mos6502_cpu_t, cpu);
 
-  // Initialize with base descriptor first (this clears memory callbacks)
+  // Initialize with base descriptor first
   bus_state_t result = cpu_impl->init(&enhanced_desc->base);
 
-  // IMPORTANT: Set memory callbacks AFTER init() since init() clears them
-  cpu_impl->set_memory_callbacks(enhanced_desc->mem_read,
-                                 enhanced_desc->mem_write,
-                                 enhanced_desc->mem_user_data);
+  // TODO: Memory callbacks API has been removed in PHI2/PHI1 refactoring
+  // Memory access is now handled through bus_state_t pins interface
+  // If memory callbacks are needed, they should be implemented at bus level
 
   return result;
 }

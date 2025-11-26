@@ -741,7 +741,7 @@ bus_state_t am_dpil(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::AB>(pins);
       return pins;
 
-    case 7:
+    case 7: {
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
       uint8_t low_byte = this->get(REG_DL);
@@ -756,6 +756,7 @@ bus_state_t am_dpil(bus_state_t pins) {
         this->transition_to_operation();
       }
       return pins;
+    }
 
     case 8:
       // PHI2: Direct Page penalty cycle
@@ -823,7 +824,7 @@ bus_state_t am_dpily(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::AB>(pins);
       return pins;
 
-    case 7:
+    case 7: {
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
       uint8_t low_byte = this->get(REG_DL);
@@ -841,6 +842,7 @@ bus_state_t am_dpily(bus_state_t pins) {
         this->transition_to_operation();
       }
       return pins;
+    }
 
     case 8:
       // PHI2: Direct Page penalty cycle
@@ -942,7 +944,7 @@ bus_state_t am_ablx(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
 
-    case 5:
+    case 5: {
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_ABL, pins);
       this->inc(REG_PC);
@@ -951,6 +953,8 @@ bus_state_t am_ablx(bus_state_t pins) {
       uint16_t final_addr = base_addr + x_val;
       this->set(REG_AB, final_addr);
       this->transition_to_operation();
+      return pins;
+    }
     }
     return pins;
   }
@@ -976,7 +980,7 @@ bus_state_t am_sr(bus_state_t pins) {
       this->cycle_index++;
       return pins;
 
-    case 2:
+    case 2: {
       // PHI2: Dummy internal operation cycle
 
       // Calculate stack address: $00:(S + offset)
@@ -986,6 +990,7 @@ bus_state_t am_sr(bus_state_t pins) {
 
       this->transition_to_operation();
       return pins;
+    }
     }
     return pins;
   }
@@ -1011,7 +1016,7 @@ bus_state_t am_sri(bus_state_t pins) {
       this->cycle_index++;
       return pins;
 
-    case 2:
+    case 2: {
       // PHI2: Dummy internal operation cycle
 
       // Calculate stack pointer address: $00:(S + offset)
@@ -1019,6 +1024,7 @@ bus_state_t am_sri(bus_state_t pins) {
       this->set(REG_ABL, stack_addr & 0xFF);
       this->set(REG_ABH, (stack_addr >> 8) & 0xFF);
       return pins;
+    }
 
     case 3:
       // PHI2: Read low byte of pointer from stack
@@ -1031,6 +1037,7 @@ bus_state_t am_sri(bus_state_t pins) {
       this->bus_load_reg(REG_DL, pins);
       uint16_t next_addr = this->get(REG_AB) + 1;
       this->set(REG_AB, next_addr);
+      this->cycle_index++;
       return pins;
     }
 
@@ -1039,7 +1046,7 @@ bus_state_t am_sri(bus_state_t pins) {
       this->cycle_index++;
       return pins;
 
-    case 6:
+    case 6: {
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
       this->set(REG_ABL, this->get(REG_DL)); // Low byte from cycle 2
@@ -1048,6 +1055,8 @@ bus_state_t am_sri(bus_state_t pins) {
       uint16_t final_addr = base_addr + y_val;
       this->set(REG_AB, final_addr);
       this->transition_to_operation();
+      return pins;
+    }
     }
     return pins;
   }

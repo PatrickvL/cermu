@@ -21,7 +21,7 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
     pins = this->bus_setup_read<Addr::PC>(pins);
     return pins;
 
-  case 1:
+  case 1: {
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_ABL, pins);
     this->inc(REG_PC);
@@ -30,14 +30,16 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
     if (!branch_taken) {
       /* Branch not taken: instruction completes after 2 cycles */
       this->transition_to_fetch();
-
-      /* Branch taken: calculate correct target address */
-      this->set(REG_AB, this->get(REG_PC) + (int8_t)this->get(REG_DL));
-      this->cycle_index++;
+      return pins;
     }
-    return pins;
 
-  case 1: {
+    /* Branch taken: calculate correct target address */
+    this->set(REG_AB, this->get(REG_PC) + (int8_t)this->get(REG_DL));
+    this->cycle_index++;
+    return pins;
+  }
+
+  case 2: {
     /* PHI2: Dummy read from incremented PC (hardware behavior) */
     /* Use a different register to avoid overwriting the branch offset in DL */
     pins = this->bus_setup_dummy<Addr::PC>(pins); /* Optimized dummy read */
@@ -50,27 +52,29 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
       this->set(REG_PC, this->get(REG_AB));
       this->transition_to_fetch();
       return pins;
+    }
 
-      /* Page cross detected: need penalty cycle with intermediate address */
+    /* Page cross detected: need penalty cycle with intermediate address */
       /* Hardware behavior: Add signed offset to PC low byte only, ignore carry
        */
       /* The intermediate address = (PC & 0xFF00) | ((PCL + signed_offset) &
        * 0xFF) */
-      uint8_t pc_low = this->get(REG_PC) & 0xFF;
-      int8_t signed_offset = (int8_t)this->get(REG_DL);
-      uint8_t new_low =
-          (uint8_t)(pc_low + signed_offset); // Let it wrap naturally
-      uint16_t intermediate_addr = (this->get(REG_PC) & 0xFF00) | new_low;
+    /* Page cross detected: need penalty cycle with intermediate address */
+    /* Hardware behavior: Add signed offset to PC low byte only, ignore carry */
+    /* The intermediate address = (PC & 0xFF00) | ((PCL + signed_offset) & 0xFF) */
+    uint8_t pc_low = this->get(REG_PC) & 0xFF;
+    int8_t signed_offset = (int8_t)this->get(REG_DL);
+    uint8_t new_low = (uint8_t)(pc_low + signed_offset); // Let it wrap naturally
+    uint16_t intermediate_addr = (this->get(REG_PC) & 0xFF00) | new_low;
 
-      /* Store intermediate address in PC for penalty cycle read */
-      this->set(REG_PC, intermediate_addr);
-      /* REG_AB still contains the correct final target from case 0 */
-      this->cycle_index++;
-    }
+    /* Store intermediate address in PC for penalty cycle read */
+    this->set(REG_PC, intermediate_addr);
+    /* REG_AB still contains the correct final target from case 0 */
+    this->cycle_index++;
     return pins;
   }
 
-  case 2: {
+  case 3: {
     /* PHI2: Page cross penalty - dummy read from intermediate address in PC */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
 
