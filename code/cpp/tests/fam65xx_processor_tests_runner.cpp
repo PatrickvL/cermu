@@ -129,7 +129,8 @@ public:
     virtual ~UnifiedProcessorInterface() = default;
     virtual uint64_t init(const chip_descriptor_t* desc) = 0;
     virtual uint64_t bootstrap(uint64_t pins) = 0;
-    virtual uint64_t tick(uint64_t pins) = 0;
+    virtual uint64_t tick_phi2(uint64_t pins) = 0;  // PHI2 phase
+    virtual uint64_t tick_phi1(uint64_t pins) = 0;  // PHI1 phase
     virtual bool opdone() = 0;
     
     // Register accessors - support both 8-bit and 16-bit values for 65816 compatibility
@@ -479,6 +480,47 @@ public:
         return step_with_debug(nullptr);
     }
     
+    // Memory tick function - injects memory data into pins after CPU sets address
+    // This mimics the C64's c64_memory_tick() function for test harness use
+    void memory_tick() {
+        // Extract address from pins (always present)
+        uint16_t addr = FAM65XX_GET_ADDR(pins);
+        
+        // Apply address mask for processor type
+        uint32_t masked_addr = addr & address_mask;
+        
+        // Check if this is a read cycle (RW bit set)
+        if (pins & FAM65XX_RW) {
+            // READ CYCLE: Load data from memory into pins
+            uint8_t value;
+            if (masked_addr < 65536) {
+                value = memory[masked_addr];
+            } else {
+                auto it = extended_memory.find(masked_addr);
+                value = (it != extended_memory.end()) ? it->second : 0;
+            }
+            
+            // Inject data into pins (macro modifies pins in place)
+            FAM65XX_SET_DATA(pins, value);
+            
+            // Record bus cycle
+            record_bus_cycle(static_cast<uint16_t>(masked_addr & 0xFFFF), value, false);
+        } else {
+            // WRITE CYCLE: Store data from pins into memory
+            uint8_t data = FAM65XX_GET_DATA(pins);
+            
+            // Write to memory
+            if (masked_addr < 65536) {
+                memory[masked_addr] = data;
+            } else {
+                extended_memory[masked_addr] = data;
+            }
+            
+            // Record bus cycle
+            record_bus_cycle(static_cast<uint16_t>(masked_addr & 0xFFFF), data, true);
+        }
+    }
+    
     // Execute one instruction with detailed cycle logging for debugging
     bool step_with_debug(std::ostringstream* debug_output) {
         try {
@@ -494,7 +536,15 @@ public:
                 uint8_t s_before = cpu_wrapper->get_sp();
                 uint8_t p_before = cpu_wrapper->get_status();
                 
-                pins = cpu_wrapper->tick(pins);
+                // Execute PHI2 phase (bus setup)
+                pins = cpu_wrapper->tick_phi2(pins);
+                
+                // Memory access happens between PHI2 and PHI1
+                memory_tick();
+                
+                // Execute PHI1 phase (internal operations)
+                pins = cpu_wrapper->tick_phi1(pins);
+                
                 cycle_count++;
                 cycle_in_instruction++;
                 
@@ -664,8 +714,14 @@ public:
         return cpu->bootstrap(pins);
     }
     
-    uint64_t tick(uint64_t pins) override {
-        return cpu->tick(pins);
+    uint64_t tick_phi2(uint64_t pins) override {
+        using Phase = typename fam65xx::fam65xx_t<Traits>::Phase;
+        return cpu->template tick<Phase::PHI2>(pins);
+    }
+    
+    uint64_t tick_phi1(uint64_t pins) override {
+        using Phase = typename fam65xx::fam65xx_t<Traits>::Phase;
+        return cpu->template tick<Phase::PHI1>(pins);
     }
     
     bool opdone() override {
