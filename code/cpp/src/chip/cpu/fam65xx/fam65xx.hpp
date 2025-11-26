@@ -262,138 +262,58 @@ class fam65xx_t :
     }
 
     // ========================================================================
-    // PHI2 UNIFIED MEMORY ACCESS WITH PROCESSOR-VARIANT RDY HANDLING
+    // PHI2/PHI1 BUS SETUP FUNCTIONS (NO MEMORY ACCESS)
     // ========================================================================
     
     /*
-     * PHI2 Write with Hardware-Accurate RDY Behavior
+     * REVOLUTIONARY ARCHITECTURE: CPU ONLY DRIVES BUS SIGNALS
      *
-     * The RDY (Ready) pin allows external hardware to stretch CPU cycles by pulling
-     * RDY low, causing the CPU to wait until RDY goes high before continuing.
-     * This is essential for interfacing with slower memory or I/O devices.
+     * The CPU no longer performs memory access internally. Instead:
      *
-     * PROCESSOR-VARIANT BEHAVIOR:
-     * ===========================
+     * PHI2 (Even cycles): CPU sets up bus signals only
+     *   - Sets address on bus
+     *   - Sets R/W signal
+     *   - For writes: sets data on bus
+     *   - NO memory callback invocation
+     *   - External code performs actual memory operation
      *
-     * NMOS processors (6502, 6510, NES 6502):
-     *   - HARDWARE BUG: Write cycles ignore RDY and always complete
-     *   - Read cycles respect RDY and will stretch when RDY is low
-     *   - This asymmetry is a well-documented NMOS design flaw
+     * PHI1 (Odd cycles): CPU samples bus data and performs internal operations
+     *   - Reads data from bus pins (if read cycle)
+     *   - Performs ALU operations
+     *   - Updates internal registers
+     *   - Transitions between addressing/operation handlers
      *
-     * CMOS processors (65C02, 65C816):
-     *   - BUG FIXED: Both read AND write cycles respect RDY consistently
-     *   - When RDY is low, the cycle stretches and NO bus operation occurs
-     *   - This allows proper interfacing with slow devices on both reads and writes
-     *
-     * Returns true if the operation completed and caller should advance to next cycle.
-     * Returns false if RDY is low and the cycle should be repeated next tick.
-     */
-    // Check if write cycle should complete based on RDY state and processor variant
-    inline bool should_complete_write_cycle(bus_state_t pins) {
-        // NMOS processors (6502/6510/NES6502): Ignore RDY during write cycles (hardware bug)
-        // CMOS processors (65C02/65C816): Respect RDY during write cycles (bug fixed)
-        if constexpr (has_nmos_bugs()) {
-            // NMOS: Always complete write regardless of RDY state (matches hardware bug)
-            return true;
-        } else {
-            // CMOS: Only complete write when RDY is high (proper behavior)
-            return FAM65XX_GET_RDY(pins);
-        }
-    }
-
-    /*
-     * PHI2 Read with Hardware-Accurate RDY Behavior
-     *
-     * Both NMOS and CMOS processors respect RDY during read cycles, but the
-     * implementation details vary slightly.
-     *
-     * PROCESSOR-VARIANT BEHAVIOR:
-     * ===========================
-     *
-     * NMOS processors (6502, 6510, NES 6502):
-     *   - Read cycles respect RDY and stretch when RDY is low
-     *   - Address bus retains previous value when RDY is low
-     *   - Data is still read from bus (for VIC-II compatibility)
-     *
-     * CMOS processors (65C02, 65C816):
-     *   - Read cycles respect RDY and stretch when RDY is low
-     *   - Address bus behavior is consistent with NMOS
-     *   - Data reading behavior is identical to NMOS
-     *
-     * VIC-II BUS ARBITRATION - WHY phi2_read() IS ALWAYS CALLED:
-     * ==========================================================
-     * Hardware Behavior When RDY Signal Changes:
-     * ┌─────────────────┬──────────────────┬─────────────────────────────┐
-     * │   Component     │    RDY High      │         RDY Low             │
-     * ├─────────────────┼──────────────────┼─────────────────────────────┤
-     * │ CPU             │ Normal execution │ STALLED (repeats cycle)     │
-     * │ VIC-II          │ Gets bus access  │ CONTINUES (needs bus)       │
-     * │ Address Bus     │ CPU's address    │ VIC-II's address (previous) │
-     * │ Memory Access   │ CPU operation    │ VIC-II operation            │
-     * │ Bus Pins Update │ Required         │ STILL REQUIRED              │
-     * └─────────────────┴──────────────────┴─────────────────────────────┘
-     *
-     * This is why phi2_read() must ALWAYS be called regardless of RDY state:
-     * - When RDY=1: CPU performs its memory access normally
-     * - When RDY=0: VIC-II continues its memory access, CPU waits but bus must be serviced
-     * - Memory callbacks and pin updates are essential for VIC-II operation
-     * - Address bus behavior changes based on RDY but memory access always occurs
-     * 
-     * This template method provides a unified interface for all bus operations
-     * with compile-time optimization based on processor traits. It serves as
-     * the foundation for implementing cycle-accurate, processor-variant-aware
-     * bus operations.
-     * 
-     * Template Parameters:
-     * - IsWrite: true for write operations, false for read operations
-     * - IsDummy: true for dummy/internal cycles, false for data cycles
-     * 
-     * Features:
-     * - Zero-overhead abstractions through template specialization
-     * - Hardware-accurate RDY handling per processor variant
-     * - Conditional DMA callback support for external devices
-     * - Optimized bus line updates for simulation environments
-     * - Memory callback integration with floating bus simulation
-     * 
-     * @param pins Current bus state (modified and returned)
-     * @param addr Physical address for bus operation
-     * @param data Data byte (for write operations, ignored for reads)
-     * @return Updated bus state with operation results
+     * This matches real 6502 hardware where:
+     * - PHI2 = address/control lines stable, memory access window
+     * - PHI1 = internal CPU operations, data latching
      */
 
+    /**
+     * Core bus setup template - sets up address, R/W, and data (writes only)
+     * NO MEMORY ACCESS - external code reads bus state and performs operation
+     *
+     * @tparam IsWrite true for write operations, false for reads
+     * @tparam IsDummy true for dummy cycles (may be optimized out)
+     * @tparam addr_arg Which address register to use (PC, AB, SP)
+     * @tparam bank_arg Which bank register to use (65C816 only)
+     */
     template<bool IsWrite, bool IsDummy, Addr addr_arg, Bank bank_arg = Bank::DBR>
-    bus_state_t phi2_access(bus_state_t pins, uint8_t data = 0) {    
+    bus_state_t bus_setup(bus_state_t pins, uint8_t data = 0) {
         // Skip dummy cycles if not simulating internal timing
         if constexpr (IsDummy && !Traits.accurate_internal_cycles()) {
             return pins;
         }
         
-        // Hardware-accurate RDY check - DMA device may have bus control
-        if (!FAM65XX_GET_RDY(pins)) {
-            // When RDY is low, external device (e.g., VIC-II) controls the bus
-            // DMA device has bus control - use existing address/data from pins
-            uint32_t dma_addr = FAM65XX_GET_ADDR(pins);
-            uint8_t bus_data = FAM65XX_GET_DATA(pins);
-            
-            // Perform DMA memory access (typically read for VIC-II)
-            uint8_t result_data = (this->mem_read != nullptr)
-                ? this->mem_read(this->mem_user_data, dma_addr, bus_data)
-                : bus_data;
-            
-            return FAM65XX_SET_DATA(pins, result_data);
-        }
-        
-        // CPU has bus control - get address from the specified address register
+        // Get address from the specified address register
         constexpr reg16_t addr_reg = static_cast<reg16_t>(addr_arg);
         uint32_t addr = this->get(addr_reg);
         
         // 65C816 banking: OR bank into high bits (optimizer eliminates for non-wide CPUs)
         addr |= static_cast<uint32_t>(get_address_bank<addr_arg>(bank_arg)) << 16;
-        // For non-wide CPUs, the entire call optimizes to |= 0 (no-op)
-
-        // Update bus lines if enabled (for test/simulation environments)
+        
+        // Update bus lines (for simulation/test environments)
         if constexpr (Traits.update_bus_lines()) {
-            // For 65816: Split 24-bit address into 16-bit address + 8-bit bank using new macro
+            // For 65816: Split 24-bit address into 16-bit address + 8-bit bank
             if constexpr (has_wide_registers()) {
                 if (!this->in_emulation_mode()) {
                     // Native mode: Set lower 16 bits in address field and upper 8 bits in bank field
@@ -408,24 +328,96 @@ class fam65xx_t :
                 pins = FAM65XX_SET_ADDR(pins, addr & Traits.address_mask());
             }
             
+            // Set R/W signal
             if constexpr (IsWrite) {
                 pins &= ~FAM65XX_RW;  // Clear RW for write
+                pins = FAM65XX_SET_DATA(pins, data);  // Output data for write
             } else {
                 pins |= FAM65XX_RW;   // Set RW for read
+                // External code will put data on bus during memory access
             }
         }
         
-        if constexpr (IsWrite) {
-            return phi2_write_impl(pins, addr, data);
-        } else {
-            uint8_t bus_data = FAM65XX_GET_DATA(pins);
-            
-            return phi2_read_impl<IsDummy>(pins, addr, bus_data);
-        }
+        return pins;  // Bus setup complete - NO MEMORY ACCESS
     }
     
-    bus_state_t phi2_write_impl(bus_state_t pins, uint32_t addr, uint8_t data) {
-        // Handle processor-specific I/O port access (compile-time conditional)
+    // ========================================================================
+    // CONCRETE BUS SETUP WRAPPERS
+    // ========================================================================
+    
+    /**
+     * Set up bus for read cycle - NO MEMORY ACCESS
+     * External code reads address/RW from pins and performs memory operation
+     */
+    template<Addr addr_reg, Bank bank_arg = Bank::DBR>
+    inline bus_state_t bus_setup_read(bus_state_t pins) {
+        return bus_setup<false, false, addr_reg, bank_arg>(pins);
+    }
+    
+    /**
+     * Set up bus for write cycle - NO MEMORY ACCESS
+     * External code reads address/RW/data from pins and performs memory operation
+     */
+    template<Addr addr_reg, Bank bank_arg = Bank::DBR>
+    inline bus_state_t bus_setup_write(bus_state_t pins, uint8_t data) {
+        return bus_setup<true, false, addr_reg, bank_arg>(pins, data);
+    }
+    
+    /**
+     * Set up bus for dummy cycle - NO MEMORY ACCESS
+     * May be optimized out if accurate_internal_cycles() is false
+     */
+    template<Addr addr_reg, Bank bank_arg = Bank::DBR>
+    inline bus_state_t bus_setup_dummy(bus_state_t pins) {
+        return bus_setup<false, true, addr_reg, bank_arg>(pins);
+    }
+    
+    // ========================================================================
+    // PHI1 DATA LOADING HELPERS
+    // ========================================================================
+    
+    /**
+     * Load register from bus data (PHI1 phase)
+     * Single-line helper for clean read handling
+     */
+    inline void bus_load_reg(reg8_t data_reg, bus_state_t pins) {
+        this->set(data_reg, FAM65XX_GET_DATA(pins));
+    }
+    
+    /**
+     * Get data from bus without storing (PHI1 phase)
+     * Use when you need the value for calculations
+     */
+    inline uint8_t bus_get_data(bus_state_t pins) const {
+        return FAM65XX_GET_DATA(pins);
+    }
+    
+    // ========================================================================
+    // I/O PORT AND APU HANDLING (INTERNAL TO CPU)
+    // ========================================================================
+    
+    /**
+     * Handle I/O port read (6510 only) - called during PHI1 after external memory tick
+     * Returns true if address was I/O port (data placed in pins)
+     */
+    inline bool handle_io_port_read(bus_state_t& pins, uint32_t addr) {
+        if constexpr (Traits.has_io_port()) {
+            if (addr <= 0x0001) {
+                const uint8_t io_data = (addr == 0x0000)
+                    ? this->read_io_port()
+                    : this->io_port.direction;
+                pins = FAM65XX_SET_DATA(pins, io_data);
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * Handle I/O port write (6510 only) - called during PHI1 after external memory tick
+     * Returns true if address was I/O port
+     */
+    inline bool handle_io_port_write(uint32_t addr, uint8_t data) {
         if constexpr (Traits.has_io_port()) {
             if (addr <= 0x0001) {
                 if (addr == 0x0000) {
@@ -433,113 +425,36 @@ class fam65xx_t :
                 } else {
                     this->write_io_data(data);
                 }
-                // Fallthrough to call memory callback for test compatibility - TODO : return when !processor_tests_mode?
+                return true;
             }
         }
-        
-        // Handle APU register access (compile-time conditional)
-        if constexpr (Traits.has_apu()) {
-            if (this->write_apu_register(addr, data)) {
-                // APU register handled, but still fallthrough to call memory callback
-            }
-        }
-        
-        // Standard memory write
-        if (this->mem_write != nullptr) {
-            this->mem_write(this->mem_user_data, addr, data);
-        }
-        
-        return FAM65XX_SET_DATA(pins, data);
+        return false;
     }
     
-    template<bool IsDummy>
-    bus_state_t phi2_read_impl(bus_state_t pins, uint32_t addr, uint8_t bus_data) {
-        // Handle processor-specific I/O port access first (compile-time conditional)
-        if constexpr (Traits.has_io_port()) {
-            if (addr <= 0x0001) {
-                const uint8_t io_data = (addr == 0x0000)
-                    ? this->read_io_port()
-                    : this->io_port.direction;
-                
-                // For dummy reads, data is read but not used by CPU
-                if constexpr (!IsDummy) {
-                    pins = FAM65XX_SET_DATA(pins, io_data);
-                }
-                return pins;
-            }
-        }
-        
-        // Handle APU register access (compile-time conditional)
+    /**
+     * Handle APU register read (NES 6502 only) - called during PHI1 after external memory tick
+     * Returns true if address was APU register (data placed in pins)
+     */
+    inline bool handle_apu_read(bus_state_t& pins, uint32_t addr) {
         if constexpr (Traits.has_apu()) {
             uint8_t apu_data;
             if (this->read_apu_register(addr, apu_data)) {
-                // For dummy reads, data is read but not used by CPU
-                if constexpr (!IsDummy) {
-                    pins = FAM65XX_SET_DATA(pins, apu_data);
-                }
-                return pins;
+                pins = FAM65XX_SET_DATA(pins, apu_data);
+                return true;
             }
         }
-        
-        // Standard memory access for all other addresses
-        uint8_t read_data = (this->mem_read != nullptr)
-            ? this->mem_read(this->mem_user_data, addr, bus_data)
-            : bus_data;  // Floating bus fallback
-        
-        // For dummy reads, data is read but not used by CPU
-        if constexpr (!IsDummy) {
-            pins = FAM65XX_SET_DATA(pins, read_data);
-        }
-        
-        return pins;
+        return false;
     }
-
-    // ========================================================================
-    // CONCRETE BUS ACCESS WRAPPERS (Reference Implementation Style)
-    // ========================================================================
     
     /**
-     * Concrete wrapper functions for the phi2_access template
-     * These provide type-safe, easy-to-use interfaces while maintaining
-     * the zero-overhead benefits of the template implementation.
+     * Handle APU register write (NES 6502 only) - called during PHI1 after external memory tick
+     * Returns true if address was APU register
      */
-    
-    template<Addr addr_reg, Bank bank_arg = Bank::DBR>
-    inline bus_state_t phi2_write(bus_state_t pins, uint8_t data) {
-        return phi2_access<true, false, addr_reg, bank_arg>(pins, data);
-    }
-    
-    // Template-based wrapper functions using Addr and Bank enums
-    template<Addr addr_reg, Bank bank_arg = Bank::DBR>
-    inline bus_state_t phi2_read(bus_state_t pins, reg8_t data_reg) {
-        pins = phi2_access<false, false, addr_reg, bank_arg>(pins);
-        
-        // Store the result in the specified data register if CPU has bus control
-        if (FAM65XX_GET_RDY(pins)) {
-            this->load(data_reg, pins);
+    inline bool handle_apu_write(uint32_t addr, uint8_t data) {
+        if constexpr (Traits.has_apu()) {
+            return this->write_apu_register(addr, data);
         }
-        
-        return pins;
-    }
-
-    template<Addr addr_reg, Bank bank_arg = Bank::DBR>
-    inline bus_state_t phi2_dummy_read(bus_state_t pins) {
-        return phi2_access<false, true, addr_reg, bank_arg>(pins);
-    }
-    
-    // Optimized operand reading with banking-aware logic
-    inline bus_state_t phi2_read_operand(bus_state_t pins, reg8_t target_reg) {
-        if (this->opcode_entry.am_index == to_index(AM::IMM)) {
-            // Immediate mode - read from PC
-            pins = phi2_read<Addr::PC>(pins, target_reg);
-            if (FAM65XX_GET_RDY(pins)) {
-                this->inc(REG_PC);
-            }
-            return pins;
-        }
-
-        // Memory mode - read from AB address (using data banking DBR for 65C816)
-        return phi2_read<Addr::AB, Bank::DBR>(pins, target_reg);
+        return false;
     }
     
     // ========================================================================
@@ -547,6 +462,25 @@ class fam65xx_t :
     // ========================================================================
     
     #include "fam65xx_arithmetic.inc.hpp"
+    
+    // ========================================================================
+    // INTERNAL I/O PORT AND APU ACCESS (CALLED FROM PHI1 HANDLERS)
+    // ========================================================================
+    
+    /**
+     * Get address from pins for internal I/O handling
+     * Used by PHI1 handlers to check if I/O port/APU needs handling
+     */
+    inline uint32_t get_address_from_pins(bus_state_t pins) const {
+        uint32_t addr = FAM65XX_GET_ADDR(pins);
+        if constexpr (has_wide_registers()) {
+            if (!this->in_emulation_mode()) {
+                // Native mode: combine address and bank
+                addr |= static_cast<uint32_t>(FAM65XX_GET_BANK(pins)) << 16;
+            }
+        }
+        return addr;
+    }
 
     // ========================================================================
     // ADDRESSING AND PAGE CROSSING HELPERS
@@ -1271,51 +1205,116 @@ public:
         return pins;
     }
     
+    // ========================================================================
+    // TEMPLATE-BASED PHI2/PHI1 TICK FUNCTIONS
+    // ========================================================================
+    
+    /**
+     * Phase enum for template parameter - zero runtime overhead
+     */
+    enum class Phase { PHI2, PHI1 };
+    
+    /**
+     * Template tick function - compile-time phase selection
+     *
+     * @tparam phase PHI2 for bus setup, PHI1 for internal operations
+     * @param pins Current bus state
+     * @return Updated bus state
+     */
+    template<Phase phase>
     bus_state_t tick(bus_state_t pins) {
-        trace_enter("tick");
-        trace_registers("before");
-        
-        // SYNC pin management - asserted during opcode fetch cycles (matching old implementation)
-        if (this->current_handler == &fam65xx_t::fetch_opcode && this->cycle_index == 0) {
-            pins |= FAM65XX_SYNC;
-            trace("SYNC asserted (opcode fetch)");
-        } else {
-            pins &= ~FAM65XX_SYNC;
-        }
-        
-        // Hardware-accurate interrupt detection every cycle (matching old implementation)
-        if (this->process_interrupt_detection(pins)) {
-            // Interrupt detected - check if we should hijack current instruction
-            if (this->active_interrupt == FAM65XX_INT_RESET) {
-                // RESET has highest priority - immediately start RESET sequence
-                return reset(pins);
-            } else if (this->current_handler == &fam65xx_t::fetch_opcode && this->cycle_index == 0) {
-                // At instruction boundary - start interrupt sequence (matching old implementation)
-                // Use op_brk as unified interrupt handler like old implementation
-                this->current_handler = &fam65xx_t::op_brk;
-                // Continue with op_brk handler execution this cycle
+        if constexpr (phase == Phase::PHI2) {
+            // PHI2: Bus setup phase
+            trace_enter("tick<PHI2>");
+            trace_registers("before PHI2");
+            
+            // SYNC pin management - asserted during opcode fetch
+            if (this->current_handler == &fam65xx_t::fetch_opcode && this->cycle_index == 0) {
+                pins |= FAM65XX_SYNC;
+                trace("SYNC asserted (opcode fetch)");
+            } else {
+                pins &= ~FAM65XX_SYNC;
             }
+            
+            // Hardware-accurate interrupt detection
+            if (this->process_interrupt_detection(pins)) {
+                if (this->active_interrupt == FAM65XX_INT_RESET) {
+                    return reset(pins);
+                } else if (this->current_handler == &fam65xx_t::fetch_opcode && this->cycle_index == 0) {
+                    this->current_handler = &fam65xx_t::op_brk;
+                }
+            }
+            
+            // Check RDY signal - CENTRALIZED CHECK
+            if (!FAM65XX_GET_RDY(pins)) {
+                // RDY low - external DMA active
+                // DO NOT call handler, DO NOT increment
+                trace("RDY low - DMA active, skipping handler");
+                trace_exit("tick<PHI2>");
+                return pins;
+            }
+            
+            // Call handler to set up bus
+            if (this->current_handler != nullptr) {
+                pins = this->call_current_handler(pins);
+            } else {
+                trace("No handler - starting fetch_opcode");
+                pins = this->fetch_opcode(pins);
+            }
+            
+            // tick<PHI2> increments from even to odd
+            cycle_index++;
+            
+            trace_registers("after PHI2");
+            trace_exit("tick<PHI2>");
+            
+        } else {  // Phase::PHI1
+            // PHI1: Internal operation phase
+            trace_enter("tick<PHI1>");
+            trace_registers("before PHI1");
+            
+            // Call handler to perform internal operations
+            // Handler will increment cycle_index by 1 (odd → even)
+            if (this->current_handler != nullptr) {
+                pins = this->call_current_handler(pins);
+            }
+            
+            // Clock APU if present
+            if constexpr (has_apu()) {
+                pins = this->clock_apu(pins);
+            }
+            
+            // Print instruction trace for debugging
+            this->print_instruction_trace();
+            
+            trace_registers("after PHI1");
+            trace_exit("tick<PHI1>");
         }
         
-        // Execute current instruction cycle
-        if (this->current_handler != nullptr) {
-            pins = this->call_current_handler(pins);
-        } else {
-            // Start new instruction fetch - should not happen with proper initialization
-            trace("No handler - starting fetch_opcode");
-            pins = this->fetch_opcode(pins);
+        return pins;
+    }
+    
+    /**
+     * Legacy tick() function for backward compatibility
+     *
+     * DEPRECATED: Use tick<Phase::PHI2>() and tick<Phase::PHI1>() instead
+     * This function is maintained temporarily for test compatibility
+     */
+    bus_state_t tick(bus_state_t pins) {
+        // Simulate combined PHI2+PHI1 cycle
+        // This is NOT hardware-accurate but maintains test compatibility
+        
+        trace_enter("tick (legacy)");
+        
+        // PHI2 phase
+        pins = tick<Phase::PHI2>(pins);
+        
+        // PHI1 phase (only if not waiting for RDY)
+        if (FAM65XX_GET_RDY(pins)) {
+            pins = tick<Phase::PHI1>(pins);
         }
         
-        // Clock APU if present (every CPU cycle)
-        if constexpr (has_apu()) {
-            pins = this->clock_apu(pins);
-        }
-        
-        // Print instruction trace for debugging (covers all memory accesses including reset)
-        this->print_instruction_trace();
-        
-        trace_registers("after");
-        trace_exit("tick");
+        trace_exit("tick (legacy)");
         return pins;
     }
     
@@ -1327,20 +1326,7 @@ public:
     // CONSTRUCTOR AND INITIALIZATION
     // ========================================================================
 
-    // Add memory callback setup function (matching old implementation)
-    void set_memory_callbacks(fam65xx_mem_read_t read_fn, fam65xx_mem_write_t write_fn, void* user_data) {
-        this->mem_read = read_fn;
-        this->mem_write = write_fn;
-        this->mem_user_data = user_data;
-    }
-    
     bus_state_t init(const chip_descriptor_t* /*desc*/) {
-        // Note: Memory callbacks will be set through separate API calls
-        // This matches the old implementation's approach
-        this->mem_read = nullptr;
-        this->mem_write = nullptr;
-        this->mem_user_data = nullptr;
-        
         // Initialize processor-specific features
         this->init_conditional_features();
         
@@ -1357,9 +1343,6 @@ public:
         active_interrupt = FAM65XX_INT_NONE;
         nmi_prev = 0;
         interrupt_shift_register = 0;
-        mem_read = nullptr;
-        mem_write = nullptr;
-        mem_user_data = nullptr;
         wait_for_interrupt = false;
         stopped = false;
         trace_indent = 0;
@@ -1394,11 +1377,6 @@ public:
     interrupt_t active_interrupt;       /* Currently active interrupt (enum serves as vector index) */
     uint8_t nmi_prev;                   /* Previous NMI line state for edge detection */
     uint32_t interrupt_shift_register;  /* Combined shift register for all interrupt types */
-    
-    /* Memory callbacks (for test runner compatibility) */
-    fam65xx_mem_read_t mem_read;        /* Memory read callback */
-    fam65xx_mem_write_t mem_write;      /* Memory write callback */
-    void* mem_user_data;                /* User data for memory callbacks */
     
     /* 65C02 extended state */
     bool wait_for_interrupt;            /* WAI instruction state */
