@@ -22,7 +22,7 @@ bus_state_t op_lax(bus_state_t pins) {
     if (opcode_entry.am_index == to_index(AM::IMM)) {
       // LAX immediate - unstable behavior with magic constant
       pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_DL);
-      
+
       this->inc(REG_PC);
       // Hardware quirk: LAX immediate uses unstable internal state
       // Result is (A | 0xEE) & operand
@@ -35,7 +35,7 @@ bus_state_t op_lax(bus_state_t pins) {
     } else {
       // LAX memory modes - normal behavior
       pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_DL);
-      
+
       this->set(REG_A, this->get(REG_DL));
       this->set(REG_X, this->get(REG_DL));
 
@@ -51,9 +51,9 @@ bus_state_t op_sax(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_illegal_opcodes()) {
     // Store A AND X to memory with processor-specific RDY handling
-    
+
     uint8_t result = this->get(REG_A) & this->get(REG_X);
-    pins = this->/*TODO_WRITE*/ phi2_write<Addr::AB>(pins, result);
+    pins = this->bus_setup_write<Addr::AB>(pins, result);
     transition_to_fetch();
   }
   return pins;
@@ -200,14 +200,14 @@ bus_state_t op_jam(bus_state_t pins) {
   case 0:
     // PHI2: Read operand from PC+1 (this was PC++ after opcode fetch)
     pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_DL);
-    
+
     cycle_index++;
     return pins;
 
   case 1:
     // PHI2: Read operand again from same address (PC+1)
     pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_DL);
-    
+
     // JAM: Reset PC back to opcode address (the "jam" effect)
     this->dec(REG_PC); // Go back to opcode address
 
@@ -229,7 +229,7 @@ bus_state_t op_anc(bus_state_t pins) {
   if constexpr (has_illegal_opcodes()) {
     // ANC - AND with carry (AND immediate, then copy N flag to C flag)
     pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_DL);
-    
+
     this->inc(REG_PC);
     // Perform AND with accumulator
     this->set(REG_A, this->get(REG_A) & this->get(REG_DL));
@@ -252,7 +252,7 @@ bus_state_t op_arr(bus_state_t pins) {
     // ARR - AND + ROR with BCD correction in decimal mode (reference
     // implementation)
     pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_DL);
-    
+
     this->inc(REG_PC);
 
     uint8_t operand = this->get(REG_DL);
@@ -342,7 +342,7 @@ bus_state_t op_alr(bus_state_t pins) {
   if constexpr (has_illegal_opcodes()) {
     // ALR - AND + LSR (AND immediate, then LSR A)
     pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_DL);
-    
+
     this->inc(REG_PC);
     // Perform AND with accumulator
     this->set(REG_A, this->get(REG_A) & this->get(REG_DL));
@@ -373,11 +373,11 @@ bus_state_t op_xaa(bus_state_t pins) {
     // XAA - Transfer X AND immediate to A (illegal)
     // Hardware quirk: Uses unstable constant 0xEE like LAX immediate
     pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_DL);
-    
+
     this->inc(REG_PC);
     // Hardware behavior: (A | 0xEE) & X & operand
-    this->set(REG_A, (this->get(REG_A) | 0xEE) & this->get(REG_X) &
-                         this->get(REG_DL));
+    this->set(REG_A,
+              (this->get(REG_A) | 0xEE) & this->get(REG_X) & this->get(REG_DL));
     this->update_nz_flags<REG_A>(this->get(REG_A));
 
     transition_to_fetch();
@@ -391,7 +391,7 @@ bus_state_t op_sbx(bus_state_t pins) {
   if constexpr (has_illegal_opcodes()) {
     // SBX - Compare X with A AND immediate (illegal) (also called AXS)
     pins = this->/*TODO_READ*/ phi2_read<Addr::PC>(pins, REG_DL);
-    
+
     this->inc(REG_PC);
     uint8_t temp = this->get(REG_A) & this->get(REG_X);
     uint8_t result = temp - this->get(REG_DL);
@@ -413,7 +413,7 @@ bus_state_t op_sha(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_illegal_opcodes()) {
     // SHA - Store A & X & (H+1) with address corruption on page cross
-    
+
     // Calculate value: A & X & (intermediate_high + 1)
     uint8_t data_value =
         this->get(REG_A) & this->get(REG_X) & (this->get(REG_DL) + 1);
@@ -425,7 +425,7 @@ bus_state_t op_sha(bus_state_t pins) {
       // Set data to write
       this->set(REG_DL, data_value);
 
-      pins = this->/*TODO_WRITE*/ phi2_write<Addr::AB>(pins, this->get(REG_DL));
+      pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_DL));
       transition_to_fetch();
     }
   }
@@ -438,7 +438,7 @@ bus_state_t op_shs(bus_state_t pins) {
   if constexpr (has_illegal_opcodes()) {
     // SHS - Store A & X & (H+1), Set S to A & X - match reference
     // implementation exactly
-    
+
     // Calculate A & X first (used for both value and S)
     uint8_t ax = this->get(REG_A) & this->get(REG_X);
 
@@ -456,7 +456,7 @@ bus_state_t op_shs(bus_state_t pins) {
       // Set stack pointer to A & X (unique to SHS)
       this->set(REG_S, ax);
 
-      pins = this->/*TODO_WRITE*/ phi2_write<Addr::AB>(pins, this->get(REG_DL));
+      pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_DL));
       transition_to_fetch();
     }
   }
@@ -469,7 +469,7 @@ bus_state_t op_shx(bus_state_t pins) {
   if constexpr (has_illegal_opcodes()) {
     // SHX - Store X & (H+1) with address corruption - match reference
     // implementation exactly
-    
+
     // Calculate value: X & (intermediate_high + 1)
     // Use DL as intermediate high byte (before page cross correction)
     uint8_t data_value = this->get(REG_X) & ((this->get(REG_DL) + 1) & 0xFF);
@@ -479,7 +479,7 @@ bus_state_t op_shx(bus_state_t pins) {
       this->set(REG_ABH, data_value);
 
       // Set data to write
-      pins = this->/*TODO_WRITE*/ phi2_write<Addr::AB>(pins, data_value);
+      pins = this->bus_setup_write<Addr::AB>(pins, data_value);
       transition_to_fetch();
     }
   }
@@ -492,7 +492,7 @@ bus_state_t op_shy(bus_state_t pins) {
   if constexpr (has_illegal_opcodes()) {
     // SHY - Store Y & (H+1) with address corruption - match reference
     // implementation exactly
-    
+
     // Calculate value: Y & (intermediate_high + 1)
     // Use DL as intermediate high byte (before page cross correction)
     uint8_t data_value = this->get(REG_Y) & ((this->get(REG_DL) + 1) & 0xFF);
@@ -502,7 +502,7 @@ bus_state_t op_shy(bus_state_t pins) {
       this->set(REG_ABH, data_value);
 
       // Set data to write
-      pins = this->/*TODO_WRITE*/ phi2_write<Addr::AB>(pins, data_value);
+      pins = this->bus_setup_write<Addr::AB>(pins, data_value);
       transition_to_fetch();
     }
   }
@@ -515,7 +515,7 @@ bus_state_t op_las(bus_state_t pins) {
   if constexpr (has_illegal_opcodes()) {
     // LAS - Load A, X, and S with memory AND stack pointer (illegal)
     pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_DL);
-    
+
     uint8_t result = this->get(REG_DL) & this->get(REG_S);
     this->set(REG_A, result);
     this->set(REG_X, result);

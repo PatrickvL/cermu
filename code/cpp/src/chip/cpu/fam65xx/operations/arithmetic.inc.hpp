@@ -25,7 +25,7 @@ bus_state_t op_adc(bus_state_t pins) {
       case 0:
         // Read low byte of operand
         pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
-        
+
         this->cycle_index++;
         // For 65C816 native mode, increment address bus with bank handling
         this->inc(REG_AB);
@@ -34,13 +34,12 @@ bus_state_t op_adc(bus_state_t pins) {
       case 1:
         // Read high byte of operand
         pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_ABH);
-        
+
         // Perform 16-bit ADC operation
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
         uint16_t acc = this->get(REG_A_16);
-        uint32_t result =
-            acc + operand + ((this->get(REG_P) & FLAG_C) ? 1 : 0);
+        uint32_t result = acc + operand + ((this->get(REG_P) & FLAG_C) ? 1 : 0);
 
         // Set accumulator
         this->set(REG_A_16, result & 0xFFFF);
@@ -49,8 +48,8 @@ bus_state_t op_adc(bus_state_t pins) {
         this->update_flag(FLAG_C, result > 0xFFFF);
         this->update_flag(FLAG_Z, (result & 0xFFFF) == 0);
         this->update_flag(FLAG_N, (result & 0x8000) != 0);
-        this->update_flag(
-            FLAG_V, ((acc ^ result) & (operand ^ result) & 0x8000) != 0);
+        this->update_flag(FLAG_V,
+                          ((acc ^ result) & (operand ^ result) & 0x8000) != 0);
 
         this->transition_to_fetch();
         return pins;
@@ -64,7 +63,7 @@ bus_state_t op_adc(bus_state_t pins) {
   case 0:
     // Read operand directly into DL register
     pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
-    
+
     uint8_t operand = this->get(REG_DL);
 
     // Use ADC operation with processor-specific optimizations
@@ -85,7 +84,7 @@ bus_state_t op_adc(bus_state_t pins) {
   case 1:
     // Extra cycle for CMOS decimal mode - do dummy read from PC
     pins = this->bus_setup_dummy<Addr::PC>(pins);
-    
+
     this->transition_to_fetch();
     return pins;
   }
@@ -140,27 +139,30 @@ bus_state_t op_nop(bus_state_t pins) {
   case to_index(AM::IMM):
     // AM_IMM: All immediate NOPs read operand and increment PC
     pins = this->bus_setup_dummy<Addr::PC>(pins);
-    
-    this->inc(REG_PC); else {
+
+    this->inc(REG_PC);
+    else {
       return pins;
     }
     break;
 
   case to_index(AM::NON):
     // Implicit NOPs do dummy read from PC without increment
-    pins = this->bus_setup_dummy<Addr::PC>(pins);    break;
+    pins = this->bus_setup_dummy<Addr::PC>(pins);
+    break;
 
   default:
     // Memory addressing modes (AM_ABS, AM_ABX, AM_ABY, AM_ZER, AM_ZPX, AM_ZPY)
     // need dummy read The addressing mode handler has already consumed operands
     // and set up AB register Now we need to complete the read cycle for proper
     // timing
-    pins = this->bus_setup_dummy<Addr::AB>(pins);    /**
-     * Handle NES6502 test syscalls as documented at
-     * https://github.com/search?q=repo%3Arofl0r%2Fblargg-6502-cpu-test+syscall&type=code
-     * Pattern: $fc, $13, $37 indicates character output syscall
-     * Character byte awaits at address 0x2000
-     */
+    pins = this->bus_setup_dummy<Addr::AB>(
+        pins); /**
+                * Handle NES6502 test syscalls as documented at
+                * https://github.com/search?q=repo%3Arofl0r%2Fblargg-6502-cpu-test+syscall&type=code
+                * Pattern: $fc, $13, $37 indicates character output syscall
+                * Character byte awaits at address 0x2000
+                */
     // Handle NES6502 syscall support for "long nop" patterns
     if constexpr (this->has_apu()) {
       // Check for syscall pattern: FC 13 37
@@ -202,7 +204,7 @@ bus_state_t op_sbc(bus_state_t pins) {
       case 0:
         // Read low byte of operand
         pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
-        
+
         this->cycle_index++;
         // For 65C816 native mode, increment address bus with bank handling
         this->inc(REG_AB);
@@ -211,13 +213,12 @@ bus_state_t op_sbc(bus_state_t pins) {
       case 1:
         // Read high byte of operand
         pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_ABH);
-        
+
         // Perform 16-bit SBC operation
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
         uint16_t acc = this->get(REG_A_16);
-        uint32_t result =
-            acc - operand - ((this->get(REG_P) & FLAG_C) ? 0 : 1);
+        uint32_t result = acc - operand - ((this->get(REG_P) & FLAG_C) ? 0 : 1);
 
         // Set accumulator
         this->set(REG_A_16, result & 0xFFFF);
@@ -241,7 +242,7 @@ bus_state_t op_sbc(bus_state_t pins) {
   case 0:
     // Read operand directly into DL register
     pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
-    
+
     uint8_t operand = this->get(REG_DL);
 
     // Use SBC operation with processor-specific optimizations
@@ -262,7 +263,7 @@ bus_state_t op_sbc(bus_state_t pins) {
   case 1:
     // Extra cycle for CMOS decimal mode - do dummy read from PC
     pins = this->bus_setup_dummy<Addr::PC>(pins);
-    
+
     this->transition_to_fetch();
     return pins;
   }
@@ -284,7 +285,7 @@ bus_state_t op_cmp(bus_state_t pins) {
       case 0:
         // Read low byte of operand
         pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
-        
+
         this->cycle_index++;
         // For 65C816 native mode, increment address bus with bank handling
         this->inc(REG_AB);
@@ -293,7 +294,7 @@ bus_state_t op_cmp(bus_state_t pins) {
       case 1:
         // Read high byte of operand
         pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_ABH);
-        
+
         // Perform 16-bit comparison
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
@@ -314,7 +315,7 @@ bus_state_t op_cmp(bus_state_t pins) {
 
   // Standard 8-bit CMP operation (emulation mode and non-wide CPUs)
   pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
-  
+
   uint8_t operand = this->get(REG_DL);
   uint8_t a = this->get(REG_A);
 
@@ -341,7 +342,7 @@ bus_state_t op_cpx(bus_state_t pins) {
       case 0:
         // Read low byte of operand
         pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
-        
+
         // For 65C816 native mode, increment address bus with bank handling
         this->inc(REG_AB);
         this->cycle_index++;
@@ -350,7 +351,7 @@ bus_state_t op_cpx(bus_state_t pins) {
       case 1:
         // Read high byte of operand
         pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_ABH);
-        
+
         // Perform 16-bit comparison
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
@@ -371,7 +372,7 @@ bus_state_t op_cpx(bus_state_t pins) {
 
   // Standard 8-bit CPX operation (emulation mode and non-wide CPUs)
   pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
-  
+
   uint8_t operand = this->get(REG_DL);
   uint8_t x = this->get(REG_X);
 
@@ -398,7 +399,7 @@ bus_state_t op_cpy(bus_state_t pins) {
       case 0:
         // Read low byte of operand
         pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
-        
+
         // For 65C816 native mode, increment address bus with bank handling
         this->inc(REG_AB);
         this->cycle_index++;
@@ -407,7 +408,7 @@ bus_state_t op_cpy(bus_state_t pins) {
       case 1:
         // Read high byte of operand
         pins = this->/*TODO_READ*/ phi2_read<Addr::AB>(pins, REG_ABH);
-        
+
         // Perform 16-bit comparison
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
@@ -428,7 +429,7 @@ bus_state_t op_cpy(bus_state_t pins) {
 
   // Standard 8-bit CPY operation (emulation mode and non-wide CPUs)
   pins = this->DEPRECATED_phi2_read_operand(pins, REG_DL);
-  
+
   uint8_t operand = this->get(REG_DL);
   uint8_t y = this->get(REG_Y);
 

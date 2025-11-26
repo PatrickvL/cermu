@@ -18,7 +18,8 @@ bus_state_t transfer_with_flags_helper(bus_state_t pins, uint8_t value,
                                        reg8_t target_reg) {
   if constexpr (!this->has_optimized_cycles()) {
     /* Dummy cycle for internal operation */
-    pins = this->bus_setup_dummy<Addr::PC>(pins);  }
+    pins = this->bus_setup_dummy<Addr::PC>(pins);
+  }
 
   // Common operation for all processors
   this->set(target_reg, value);
@@ -32,7 +33,8 @@ bus_state_t transfer_no_flags_helper(bus_state_t pins, uint8_t value,
                                      reg8_t target_reg) {
   if constexpr (!this->has_optimized_cycles()) {
     /* Dummy cycle for internal operation */
-    pins = this->bus_setup_dummy<Addr::PC>(pins);  }
+    pins = this->bus_setup_dummy<Addr::PC>(pins);
+  }
 
   // Common operation for all processors
   this->set(target_reg, value);
@@ -56,7 +58,8 @@ bus_state_t op_tax(bus_state_t pins) {
 
       if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->bus_setup_dummy<Addr::PC>(pins);      }
+        pins = this->bus_setup_dummy<Addr::PC>(pins);
+      }
 
       if (acc_16bit && index_16bit) {
         // 16-bit A to 16-bit X
@@ -103,7 +106,8 @@ bus_state_t op_tay(bus_state_t pins) {
 
       if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->bus_setup_dummy<Addr::PC>(pins);      }
+        pins = this->bus_setup_dummy<Addr::PC>(pins);
+      }
 
       if (acc_16bit && index_16bit) {
         // 16-bit A to 16-bit Y
@@ -147,7 +151,8 @@ bus_state_t op_tsx(bus_state_t pins) {
       // Native mode, 16-bit X register - transfer 16-bit stack pointer
       if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->bus_setup_dummy<Addr::PC>(pins);      }
+        pins = this->bus_setup_dummy<Addr::PC>(pins);
+      }
 
       uint16_t value = this->get(REG_SP);
       this->set_x_register(value);
@@ -175,7 +180,8 @@ bus_state_t op_txa(bus_state_t pins) {
 
       if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->bus_setup_dummy<Addr::PC>(pins);      }
+        pins = this->bus_setup_dummy<Addr::PC>(pins);
+      }
 
       if (acc_16bit && index_16bit) {
         // 16-bit X to 16-bit A
@@ -219,7 +225,8 @@ bus_state_t op_txs(bus_state_t pins) {
       // Native mode - transfer can be 8-bit or 16-bit based on X flag
       if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->bus_setup_dummy<Addr::PC>(pins);      }
+        pins = this->bus_setup_dummy<Addr::PC>(pins);
+      }
 
       if (this->is_index_16bit()) {
         // 16-bit X register - transfer full 16-bit value to stack pointer
@@ -252,7 +259,8 @@ bus_state_t op_tya(bus_state_t pins) {
 
       if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->bus_setup_dummy<Addr::PC>(pins);      }
+        pins = this->bus_setup_dummy<Addr::PC>(pins);
+      }
 
       if (acc_16bit && index_16bit) {
         // 16-bit Y to 16-bit A
@@ -301,7 +309,8 @@ bus_state_t op_inx(bus_state_t pins) {
       // Native mode, 16-bit X register - perform 16-bit INX
       if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->bus_setup_dummy<Addr::PC>(pins);      }
+        pins = this->bus_setup_dummy<Addr::PC>(pins);
+      }
 
       uint16_t value = this->get_x_register();
       value++;
@@ -319,7 +328,8 @@ bus_state_t op_inx(bus_state_t pins) {
   // Standard 8-bit INX operation (emulation mode and non-wide CPUs)
   if constexpr (!this->has_optimized_cycles()) {
     /* Dummy cycle for internal operation */
-    pins = this->bus_setup_dummy<Addr::PC>(pins);  }
+    pins = this->bus_setup_dummy<Addr::PC>(pins);
+  }
 
   // Common operation for all processors
   this->inc(REG_X);
@@ -338,7 +348,8 @@ bus_state_t op_iny(bus_state_t pins) {
       // Native mode, 16-bit Y register - perform 16-bit INY
       if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->bus_setup_dummy<Addr::PC>(pins);      }
+        pins = this->bus_setup_dummy<Addr::PC>(pins);
+      }
 
       uint16_t value = this->get_y_register();
       value++;
@@ -356,7 +367,8 @@ bus_state_t op_iny(bus_state_t pins) {
   // Standard 8-bit INY operation (emulation mode and non-wide CPUs)
   if constexpr (!this->has_optimized_cycles()) {
     /* Dummy cycle for internal operation */
-    pins = this->bus_setup_dummy<Addr::PC>(pins);  }
+    pins = this->bus_setup_dummy<Addr::PC>(pins);
+  }
 
   // Common operation for all processors
   this->inc(REG_Y);
@@ -375,7 +387,8 @@ bus_state_t op_dex(bus_state_t pins) {
       // Native mode, 16-bit X register - perform 16-bit DEX
       if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->bus_setup_dummy<Addr::PC>(pins);      }
+        pins = this->bus_setup_dummy<Addr::PC>(pins);
+      }
 
       uint16_t value = this->get_x_register();
       value--;
@@ -393,7 +406,8 @@ bus_state_t op_dex(bus_state_t pins) {
   // Standard 8-bit DEX operation (emulation mode and non-wide CPUs)
   if constexpr (!this->has_optimized_cycles()) {
     /* Dummy cycle for internal operation */
-    pins = this->bus_setup_dummy<Addr::PC>(pins);  }
+    pins = this->bus_setup_dummy<Addr::PC>(pins);
+  }
 
   // Common operation for all processors
   this->dec(REG_X);
@@ -412,7 +426,8 @@ bus_state_t op_dey(bus_state_t pins) {
       // Native mode, 16-bit Y register - perform 16-bit DEY
       if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
-        pins = this->bus_setup_dummy<Addr::PC>(pins);      }
+        pins = this->bus_setup_dummy<Addr::PC>(pins);
+      }
 
       uint16_t value = this->get_y_register();
       value--;
@@ -430,7 +445,8 @@ bus_state_t op_dey(bus_state_t pins) {
   // Standard 8-bit DEY operation (emulation mode and non-wide CPUs)
   if constexpr (!this->has_optimized_cycles()) {
     /* Dummy cycle for internal operation */
-    pins = this->bus_setup_dummy<Addr::PC>(pins);  }
+    pins = this->bus_setup_dummy<Addr::PC>(pins);
+  }
 
   // Common operation for all processors
   this->dec(REG_Y);
