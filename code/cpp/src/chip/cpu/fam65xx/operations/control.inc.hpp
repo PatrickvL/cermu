@@ -193,7 +193,7 @@ uint16_t get_vector_addr() const {
   const int interrupt_index = static_cast<int>(this->active_interrupt);
 
   // 65C816 native mode uses different vectors
-  if constexpr (this->has_wide_registers()) {
+  if constexpr (has_wide_registers()) {
     if (!this->in_emulation_mode()) {
       return native_65C816_vectors[interrupt_index];
     }
