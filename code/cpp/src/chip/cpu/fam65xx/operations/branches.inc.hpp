@@ -17,9 +17,8 @@
 bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
                           bool flag_value) {
   switch (this->cycle_index) {
-  case 0: {
+  case 0:
     pins = this->bus_setup_read<Addr::PC>(pins);
-    this->cycle_index++;
     return pins;
 
   case 1:
@@ -37,7 +36,6 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
       this->cycle_index++;
     }
     return pins;
-  }
 
   case 1: {
     /* PHI2: Dummy read from incremented PC (hardware behavior) */
@@ -55,9 +53,9 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
 
       /* Page cross detected: need penalty cycle with intermediate address */
       /* Hardware behavior: Add signed offset to PC low byte only, ignore carry
-       */
+      */
       /* The intermediate address = (PC & 0xFF00) | ((PCL + signed_offset) &
-       * 0xFF) */
+      * 0xFF) */
       uint8_t pc_low = this->get(REG_PC) & 0xFF;
       int8_t signed_offset = (int8_t)this->get(REG_DL);
       uint8_t new_low =

@@ -106,7 +106,6 @@ bus_state_t bit_branch_helper(bus_state_t pins, uint8_t bit_mask,
   case 0:
     // PHI2: Setup read from zero page address
     pins = this->bus_setup_read<Addr::AB>(pins);
-    this->cycle_index++;
     return pins;
 
   case 1:

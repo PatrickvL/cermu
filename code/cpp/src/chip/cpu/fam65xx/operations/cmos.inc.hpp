@@ -22,7 +22,6 @@ bus_state_t op_bra(bus_state_t pins) {
     case 0:
       // PHI2: Setup read from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
-      this->cycle_index++;
       return pins;
 
     case 1:
@@ -61,7 +60,6 @@ bus_state_t op_bra(bus_state_t pins) {
         // Cycle 0: Read original value from memory
         pins = this->bus_setup_read<Addr::AB>(pins);
 
-        this->cycle_index++;
         return pins;
 
       case 1:
@@ -102,7 +100,6 @@ bus_state_t op_bra(bus_state_t pins) {
         // Cycle 0: Read original value from memory
         pins = this->bus_setup_read<Addr::AB>(pins);
 
-        this->cycle_index++;
         return pins;
 
       case 1:
@@ -157,7 +154,6 @@ bus_state_t op_bra(bus_state_t pins) {
       case 0:
         // PHI2: Setup read from PC
         pins = this->bus_setup_read<Addr::PC>(pins);
-        this->cycle_index++;
         return pins;
 
       case 1:
@@ -184,7 +180,6 @@ bus_state_t op_bra(bus_state_t pins) {
           /* Dummy cycle for internal operation */
           pins = this->bus_setup_dummy<Addr::PC>(pins);
 
-          this->cycle_index++;
           return pins;
 
         case 1:
@@ -209,7 +204,6 @@ bus_state_t op_bra(bus_state_t pins) {
           /* Dummy cycle for internal operation */
           pins = this->bus_setup_dummy<Addr::PC>(pins);
 
-          this->cycle_index++;
           return pins;
 
         case 1:
@@ -234,7 +228,6 @@ bus_state_t op_bra(bus_state_t pins) {
           /* PHI2: Dummy read from PC */
           pins = this->bus_setup_dummy<Addr::PC>(pins);
 
-          this->cycle_index++;
           return pins;
 
         case 1:
@@ -270,7 +263,6 @@ bus_state_t op_bra(bus_state_t pins) {
           /* PHI2: Dummy read from PC */
           pins = this->bus_setup_dummy<Addr::PC>(pins);
 
-          this->cycle_index++;
           return pins;
 
         case 1:
