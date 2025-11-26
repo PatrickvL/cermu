@@ -545,9 +545,7 @@ bus_state_t op_shx(bus_state_t pins) {
       return pins;
     }
   }
-}
-
-return pins;
+  return pins;
 }
 
 bus_state_t op_shy(bus_state_t pins) {
@@ -570,9 +568,7 @@ bus_state_t op_shy(bus_state_t pins) {
       return pins;
     }
   }
-}
-
-return pins;
+  return pins;
 }
 
 bus_state_t op_las(bus_state_t pins) {

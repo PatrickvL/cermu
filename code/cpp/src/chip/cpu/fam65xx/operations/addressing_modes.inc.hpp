@@ -179,7 +179,7 @@ bus_state_t am_abx(bus_state_t pins) {
     return pins;
   }
 
-  case 4:
+case 4:
   // PHI2: Page cross penalty - read from wrong address (use TMP to avoid
   // overwriting DL)
   pins = this->bus_setup_dummy<Addr::AB>(pins);
@@ -239,7 +239,7 @@ bus_state_t am_aby(bus_state_t pins) {
     return pins;
   }
 
-  case 4: {
+case 4: {
   // PHI2: Page cross penalty - read from wrong address (use temporary
   // register to avoid overwriting DL)
   pins = this->bus_setup_dummy<Addr::AB>(pins);
@@ -252,8 +252,8 @@ bus_state_t am_aby(bus_state_t pins) {
   // effective address with carry
   this->set(REG_AB, this->get(REG_AB) + this->get(REG_Y));
   this->transition_to_operation();
-    return pins;
-  }
+  return pins;
+}
   return pins;
 }
 
@@ -431,23 +431,22 @@ bus_state_t am_iny(bus_state_t pins) {
       this->transition_to_operation();
     }
     return pins;
-  }
 
   case 6:
-  /* Page cross penalty - dummy read from wrong address */
-  pins = this->bus_setup_dummy<Addr::AB>(pins);
+    /* Page cross penalty - dummy read from wrong address */
+    pins = this->bus_setup_dummy<Addr::AB>(pins);
 
-  /* DL contains intermediate high byte from case 2 */
+    /* DL contains intermediate high byte from case 2 */
 
-  /* Correct final address calculation */
-  /* Current AB has intermediate address: orig_high:(base_low + Y) */
-  /* We need: (orig_high:(base_low)) + Y */
-  this->set(REG_ABH, this->get(REG_DL)); /* Restore original high byte */
-  this->set(REG_ABL, this->get(REG_ABL) -
-                         this->get(REG_Y)); /* Recover original base low */
-  this->set(REG_AB,
-            this->get(REG_AB) +
-                this->get(REG_Y)); /* Calculate correct final with carry */
+    /* Correct final address calculation */
+    /* Current AB has intermediate address: orig_high:(base_low + Y) */
+    /* We need: (orig_high:(base_low)) + Y */
+    this->set(REG_ABH, this->get(REG_DL)); /* Restore original high byte */
+    this->set(REG_ABL, this->get(REG_ABL) -
+                           this->get(REG_Y)); /* Recover original base low */
+    this->set(REG_AB,
+              this->get(REG_AB) +
+                  this->get(REG_Y)); /* Calculate correct final with carry */
 
     this->transition_to_operation();
     return pins;
@@ -499,13 +498,14 @@ bus_state_t am_zpi(bus_state_t pins) {
 
   case 4:
     pins = this->bus_setup_read<Addr::AB>(pins);
-  return pins;
+    return pins;
 
-case 5:
-  /* PHI1: Load data and perform operations */
-  this->bus_load_reg(REG_DL, pins);
+  case 5:
+    /* PHI1: Load data and perform operations */
+    this->bus_load_reg(REG_DL, pins);
     this->set(REG_ABL, this->get(REG_DL)); // Low byte from cycle 1
     this->transition_to_operation();
+    return pins;
   }
   return pins;
 }
