@@ -136,7 +136,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
   // ========================================================================
 
   /* Debug tracing state */
-  static constexpr bool ENABLE_TRACING = false; /* Compile-time tracing flag */
+  static constexpr bool ENABLE_TRACING = false; /* Compile-time tracing flag - DISABLED FOR PRODUCTION */
   mutable int trace_indent = 0; /* Current tracing indentation level */
 
   // ========================================================================
@@ -217,10 +217,10 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
               this->get(REG_DBR), this->get(REG_AB), this->get(REG_DL));
       } else {
         trace("REGS %s: PC=%04X A=%02X X=%02X Y=%02X P=%02X S=%02X (AB=%04X "
-              "DL=%02X)",
+              "DL=%02X IR=%02X)",
               context, this->get(REG_PC), this->get(REG_A), this->get(REG_X),
               this->get(REG_Y), this->get(REG_P), this->get(REG_S),
-              this->get(REG_AB), this->get(REG_DL));
+              this->get(REG_AB), this->get(REG_DL), this->get(REG_IR));
       }
     }
   }
@@ -1017,6 +1017,9 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
 
   // Transition to next instruction fetch (public for bootstrap function)
   void transition_to_fetch() {
+    if constexpr (ENABLE_TRACING) {
+      trace("transition_to_fetch() called - resetting to fetch mode");
+    }
     this->current_handler = &fam65xx_t::fetch_opcode;
     this->cycle_index = 0;
   }
@@ -1428,7 +1431,7 @@ public:
         return pins;
       }
 
-      // Call handler to set up bus
+      // Call handler to set up bus (sees current even cycle_index)
       if (this->current_handler != nullptr) {
         pins = this->call_current_handler(pins);
       } else {
@@ -1436,7 +1439,8 @@ public:
         pins = this->fetch_opcode(pins);
       }
 
-      // PHI2 increments cycle_index so PHI1 sees the odd cycle number
+      // PHI2 increments cycle_index AFTER handler execution
+      // so PHI1 sees the next odd cycle number
       // This allows PHI2 (even) and PHI1 (odd) to execute different code
       cycle_index++;
 
@@ -1471,7 +1475,13 @@ public:
 
 
   bool opdone() const {
-    return this->current_handler == &fam65xx_t::fetch_opcode;
+    bool is_done = (this->current_handler == &fam65xx_t::fetch_opcode);
+    if constexpr (ENABLE_TRACING) {
+      trace("opdone() returning %s (handler=%s)",
+            is_done ? "true" : "false",
+            is_done ? "fetch_opcode" : "operation");
+    }
+    return is_done;
   }
 
   // ========================================================================

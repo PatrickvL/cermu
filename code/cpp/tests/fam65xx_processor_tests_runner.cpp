@@ -482,7 +482,8 @@ public:
     
     // Memory tick function - injects memory data into pins after CPU sets address
     // This mimics the C64's c64_memory_tick() function for test harness use
-    void memory_tick() {
+    // Returns updated pins value for caller to use
+    uint64_t memory_tick(uint64_t pins) {
         // Extract address from pins (always present)
         uint16_t addr = FAM65XX_GET_ADDR(pins);
         
@@ -500,8 +501,8 @@ public:
                 value = (it != extended_memory.end()) ? it->second : 0;
             }
             
-            // Inject data into pins (macro modifies pins in place)
-            FAM65XX_SET_DATA(pins, value);
+            // Inject data into pins (macro returns new pins value)
+            pins = FAM65XX_SET_DATA(pins, value);
             
             // Record bus cycle
             record_bus_cycle(static_cast<uint16_t>(masked_addr & 0xFFFF), value, false);
@@ -519,6 +520,8 @@ public:
             // Record bus cycle
             record_bus_cycle(static_cast<uint16_t>(masked_addr & 0xFFFF), data, true);
         }
+        
+        return pins;
     }
     
     // Execute one instruction with detailed cycle logging for debugging
@@ -540,7 +543,7 @@ public:
                 pins = cpu_wrapper->tick_phi2(pins);
                 
                 // Memory access happens between PHI2 and PHI1
-                memory_tick();
+                pins = memory_tick(pins);
                 
                 // Execute PHI1 phase (internal operations)
                 pins = cpu_wrapper->tick_phi1(pins);
