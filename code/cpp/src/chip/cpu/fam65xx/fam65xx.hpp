@@ -954,14 +954,19 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       pins |= FAM65XX_SYNC;
       return pins;
 
-    case 1:
+    case 1: {
       // PHI1: Sample opcode from bus and decode
       uint8_t opcode = this->bus_get_data(pins);
       this->set(REG_IR, opcode);
-
+  
+      // Increment cycle_index before transition (PHI1 always increments)
+      this->cycle_index++;
+      
+      // Transition resets cycle_index to 0 for new instruction
       opcode_info_t entry = get_opcode_info(opcode);
       this->transition_to_opcode(entry);
       return pins;
+    }
     }
 
     return pins; // Should never reach here
@@ -1420,28 +1425,6 @@ public:
     return pins;
   }
 
-  /**
-   * Legacy tick() function for backward compatibility
-   *
-   * DEPRECATED: Use tick<Phase::PHI2>() and tick<Phase::PHI1>() instead
-   * This function is maintained temporarily for test compatibility
-   */
-  bus_state_t tick(bus_state_t pins) {
-    // Simulate combined PHI2+PHI1 cycle
-    // This is NOT hardware-accurate but maintains test compatibility
-
-    trace_enter("tick (legacy)");
-
-    // PHI2 phase
-    pins = tick<Phase::PHI2>(pins);
-
-    // PHI1 phase (only if not waiting for RDY)
-
-    pins = tick<Phase::PHI1>(pins);
-
-    trace_exit("tick (legacy)");
-    return pins;
-  }
 
   bool opdone() const {
     return this->current_handler == &fam65xx_t::fetch_opcode;
