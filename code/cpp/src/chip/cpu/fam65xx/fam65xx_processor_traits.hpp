@@ -318,10 +318,11 @@ constexpr CPUTraits RICOH_2A03 = {
     "Ricoh", // vendor
     "2A03",  // chip_id
     CPUCoreFlags::ILLEGAL_OPCODES | CPUCoreFlags::JMP_INDIRECT_BUG |
-        CPUCoreFlags::RMW_DUMMY_WRITE, // core_flags (NO HAS_DECIMAL_MODE!)
-    16,                                // address_bits
-    0x00,                              // io_port_mask
-    BankingType::NONE,                 // banking
+        CPUCoreFlags::RMW_DUMMY_WRITE | CPUCoreFlags::ACCURATE_INTERNAL_CYCLES |
+        CPUCoreFlags::UPDATE_BUS_LINES, // core_flags (NO HAS_DECIMAL_MODE!)
+    16,                                 // address_bits
+    0x00,                               // io_port_mask
+    BankingType::NONE,                  // banking
     {SoundChip::RICOH_APU, DMAController::NONE, false} // peripheral
 };
 
