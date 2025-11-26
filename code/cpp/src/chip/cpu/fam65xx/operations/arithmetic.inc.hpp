@@ -32,27 +32,24 @@ bus_state_t op_adc(bus_state_t pins) {
         return pins;
 
       case 1:
-        // Read high byte of operand
         pins = this->bus_setup_read<Addr::AB>(pins);
+        this->cycle_index++;
+        return pins;
 
-        // Perform 16-bit ADC operation
+      case 2:
+        /* PHI1: Load data and perform operations */
+        this->bus_load_reg(REG_DL, pins);
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
         uint16_t acc = this->get(REG_A_16);
         uint32_t result = acc + operand + ((this->get(REG_P) & FLAG_C) ? 1 : 0);
-
-        // Set accumulator
         this->set(REG_A_16, result & 0xFFFF);
-
-        // Update flags for 16-bit operation
         this->update_flag(FLAG_C, result > 0xFFFF);
         this->update_flag(FLAG_Z, (result & 0xFFFF) == 0);
         this->update_flag(FLAG_N, (result & 0x8000) != 0);
         this->update_flag(FLAG_V,
                           ((acc ^ result) & (operand ^ result) & 0x8000) != 0);
-
         this->transition_to_fetch();
-        return pins;
       }
       return pins;
     }
@@ -211,27 +208,24 @@ bus_state_t op_sbc(bus_state_t pins) {
         return pins;
 
       case 1:
-        // Read high byte of operand
         pins = this->bus_setup_read<Addr::AB>(pins);
+        this->cycle_index++;
+        return pins;
 
-        // Perform 16-bit SBC operation
+      case 2:
+        /* PHI1: Load data and perform operations */
+        this->bus_load_reg(REG_DL, pins);
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
         uint16_t acc = this->get(REG_A_16);
         uint32_t result = acc - operand - ((this->get(REG_P) & FLAG_C) ? 0 : 1);
-
-        // Set accumulator
         this->set(REG_A_16, result & 0xFFFF);
-
-        // Update flags for 16-bit operation
         this->update_flag(FLAG_C, result <= 0xFFFF);
         this->update_flag(FLAG_Z, (result & 0xFFFF) == 0);
         this->update_flag(FLAG_N, (result & 0x8000) != 0);
         this->update_flag(FLAG_V,
                           ((acc ^ operand) & (acc ^ result) & 0x8000) != 0);
-
         this->transition_to_fetch();
-        return pins;
       }
       return pins;
     }
@@ -292,22 +286,21 @@ bus_state_t op_cmp(bus_state_t pins) {
         return pins;
 
       case 1:
-        // Read high byte of operand
         pins = this->bus_setup_read<Addr::AB>(pins);
+        this->cycle_index++;
+        return pins;
 
-        // Perform 16-bit comparison
+      case 2:
+        /* PHI1: Load data and perform operations */
+        this->bus_load_reg(REG_DL, pins);
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
         uint16_t acc = this->get(REG_A_16);
         uint32_t result = acc - operand;
-
-        // Update flags for 16-bit operation
         this->update_flag(FLAG_C, acc >= operand);
         this->update_flag(FLAG_Z, acc == operand);
         this->update_flag(FLAG_N, (result & 0x8000) != 0);
-
         this->transition_to_fetch();
-        return pins;
       }
       return pins;
     }
@@ -349,22 +342,21 @@ bus_state_t op_cpx(bus_state_t pins) {
         return pins;
 
       case 1:
-        // Read high byte of operand
         pins = this->bus_setup_read<Addr::AB>(pins);
+        this->cycle_index++;
+        return pins;
 
-        // Perform 16-bit comparison
+      case 2:
+        /* PHI1: Load data and perform operations */
+        this->bus_load_reg(REG_DL, pins);
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
         uint16_t x = this->get_x_register();
         uint32_t result = x - operand;
-
-        // Update flags for 16-bit operation
         this->update_flag(FLAG_C, x >= operand);
         this->update_flag(FLAG_Z, x == operand);
         this->update_flag(FLAG_N, (result & 0x8000) != 0);
-
         this->transition_to_fetch();
-        return pins;
       }
       return pins;
     }
@@ -406,22 +398,21 @@ bus_state_t op_cpy(bus_state_t pins) {
         return pins;
 
       case 1:
-        // Read high byte of operand
         pins = this->bus_setup_read<Addr::AB>(pins);
+        this->cycle_index++;
+        return pins;
 
-        // Perform 16-bit comparison
+      case 2:
+        /* PHI1: Load data and perform operations */
+        this->bus_load_reg(REG_DL, pins);
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
         uint16_t y = this->get_y_register();
         uint32_t result = y - operand;
-
-        // Update flags for 16-bit operation
         this->update_flag(FLAG_C, y >= operand);
         this->update_flag(FLAG_Z, y == operand);
         this->update_flag(FLAG_N, (result & 0x8000) != 0);
-
         this->transition_to_fetch();
-        return pins;
       }
       return pins;
     }

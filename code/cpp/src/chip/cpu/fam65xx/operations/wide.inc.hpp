@@ -296,13 +296,15 @@ bus_state_t op_plb(bus_state_t pins) {
       return pins;
 
     case 2:
-      // Pull DBR from stack
       pins = this->bus_setup_read<Addr::SP>(pins);
+      this->cycle_index++;
+      return pins;
 
-      // Update N and Z flags based on DBR
+    case 3:
+      /* PHI1: Load data and perform operations */
+      this->bus_load_reg(REG_DL, pins);
       this->update_nz_flags(this->get(REG_DBR));
       this->transition_to_fetch();
-      return pins;
     }
     return pins;
   }
@@ -339,14 +341,16 @@ bus_state_t op_pld(bus_state_t pins) {
       return pins;
 
     case 2:
-      // Pull D register high byte
       pins = this->bus_setup_read<Addr::SP>(pins);
+      this->cycle_index++;
+      return pins;
 
-      // Update N and Z flags based on D register
+    case 3:
+      /* PHI1: Load data and perform operations */
+      this->bus_load_reg(REG_DL, pins);
       this->update_nz_flags(
           this->get(REG_DPL)); // Only check low byte for flags
       this->transition_to_fetch();
-      return pins;
     }
     return pins;
   }
@@ -481,13 +485,15 @@ bus_state_t op_rtl(bus_state_t pins) {
       return pins;
 
     case 3:
-      // Pull program bank
       pins = this->bus_setup_read<Addr::SP>(pins);
+      this->cycle_index++;
+      return pins;
 
-      // Increment PC (RTL increments, RTS doesn't)
+    case 4:
+      /* PHI1: Load data and perform operations */
+      this->bus_load_reg(REG_DL, pins);
       this->inc(REG_PC);
       this->transition_to_fetch();
-      return pins;
     }
     return pins;
   }
@@ -866,15 +872,17 @@ bus_state_t op_cop(bus_state_t pins) {
       return pins;
 
     case 6:
-      // Read interrupt vector high byte
       pins = this->bus_setup_read<Addr::AB>(pins);
+      this->cycle_index++;
+      return pins;
 
-      // Clear interrupt flag and disable interrupts
+    case 7:
+      /* PHI1: Load data and perform operations */
+      this->bus_load_reg(REG_DL, pins);
       this->clear_flag(FLAG_D); // Clear decimal mode
       this->set_flag(FLAG_I);   // Disable interrupts
       this->active_interrupt = FAM65XX_INT_NONE;
       this->transition_to_fetch();
-      return pins;
     }
     return pins;
   }

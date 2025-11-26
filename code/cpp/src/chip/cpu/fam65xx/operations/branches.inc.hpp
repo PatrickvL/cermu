@@ -18,18 +18,19 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
                           bool flag_value) {
   switch (this->cycle_index) {
   case 0: {
-    /* PHI2: Read branch offset from PC into DL */
     pins = this->bus_setup_read<Addr::PC>(pins);
+    this->cycle_index++;
+    return pins;
 
+  case 1:
+    /* PHI1: Load data and perform operations */
+    this->bus_load_reg(REG_ABL, pins);
     this->inc(REG_PC);
-
     /* PHI1: Check branch condition */
     bool branch_taken = ((this->get(REG_P) & flag_mask) != 0) == flag_value;
-
     if (!branch_taken) {
       /* Branch not taken: instruction completes after 2 cycles */
       transition_to_fetch();
-      return pins;
 
       /* Branch taken: calculate correct target address */
       this->set(REG_AB, this->get(REG_PC) + (int8_t)this->get(REG_DL));
