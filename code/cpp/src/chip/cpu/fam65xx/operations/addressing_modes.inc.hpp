@@ -162,7 +162,7 @@ bus_state_t am_abx(bus_state_t pins) {
 
   case 3: {
     /* PHI1: Load data and perform operations */
-    this->bus_load_reg(REG_ABL, pins);
+    this->bus_load_reg(REG_ABH, pins);  // Load high byte into ABH
     this->inc(REG_PC);
     this->set(REG_DL, this->get(REG_ABH));
     uint16_t base = this->get(REG_AB);
@@ -225,7 +225,7 @@ bus_state_t am_aby(bus_state_t pins) {
 
   case 3: {
     /* PHI1: Load data and perform operations */
-    this->bus_load_reg(REG_ABL, pins);
+    this->bus_load_reg(REG_ABH, pins);  // Load high byte into ABH
     this->inc(REG_PC);
     this->set(REG_DL, this->get(REG_ABH));
     uint16_t base = this->get(REG_AB);
