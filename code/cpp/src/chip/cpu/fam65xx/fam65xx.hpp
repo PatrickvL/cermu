@@ -708,6 +708,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
 
         case 9: {
           // Cycle 9 PHI1: Complete operation
+          this->cycle_index++;
           this->transition_to_fetch();
           return pins;
         }
@@ -777,22 +778,31 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
 
         case 5: {
           // Cycle 5 PHI1: Complete operation
+          this->cycle_index++;
           this->transition_to_fetch();
           return pins;
         }
         }
       } // end 8-bit memory RMW
     } else {
-      // Accumulator mode - single cycle operation with automatic 8/16-bit
-      // handling
-      pins = this->bus_setup_dummy<Addr::PC>(pins);
+      // Accumulator mode - two-phase operation (PHI2 + PHI1)
+      switch (this->cycle_index) {
+      case 0: {
+        // Cycle 0 PHI2: Set up dummy read from PC
+        pins = this->bus_setup_dummy<Addr::PC>(pins);
+        return pins;
+      }
 
-      data_t value = this->get_accumulator(); // Automatically handles
-                                              // 8/16-bit based on M flag
-      operation_func(value);
-      this->set_accumulator(
-          value); // Automatically handles 8/16-bit based on M flag
-      this->transition_to_fetch();
+      case 1: {
+        // Cycle 1 PHI1: Perform operation on accumulator
+        data_t value = this->get_accumulator(); // Automatically handles 8/16-bit based on M flag
+        operation_func(value);
+        this->set_accumulator(value); // Automatically handles 8/16-bit based on M flag
+        this->cycle_index++;
+        this->transition_to_fetch();
+        return pins;
+      }
+      }
     }
     return pins;
   }
