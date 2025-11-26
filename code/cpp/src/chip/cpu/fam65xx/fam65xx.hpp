@@ -534,9 +534,9 @@ class fam65xx_t :
                     case 0:
                         // Cycle 0: Read low byte from memory
                         if (use_zero_bank) {
-                            pins = this->phi2_read<Addr::AB, Bank::ZBR>(pins, REG_DL);  // Direct Page uses Bank 0
+                            pins = this->/*TODO_READ*/phi2_read<Addr::AB, Bank::ZBR>(pins, REG_DL);  // Direct Page uses Bank 0
                         } else {
-                            pins = this->phi2_read<Addr::AB, Bank::DBR>(pins, REG_DL);  // Other modes use DBR
+                            pins = this->/*TODO_READ*/phi2_read<Addr::AB, Bank::DBR>(pins, REG_DL);  // Other modes use DBR
                         }
                         
                         if (FAM65XX_GET_RDY(pins)) {
@@ -548,9 +548,9 @@ class fam65xx_t :
                         // Cycle 1: Read high byte from memory (address + 1)
                         this->inc(REG_ABL);  // Increment address for high byte
                         if (use_zero_bank) {
-                            pins = this->phi2_read<Addr::AB, Bank::ZBR>(pins, REG_DPL);  // Store high byte in DPL
+                            pins = this->/*TODO_READ*/phi2_read<Addr::AB, Bank::ZBR>(pins, REG_DPL);  // Store high byte in DPL
                         } else {
-                            pins = this->phi2_read<Addr::AB, Bank::DBR>(pins, REG_DPL);  // Store high byte in DPL
+                            pins = this->/*TODO_READ*/phi2_read<Addr::AB, Bank::DBR>(pins, REG_DPL);  // Store high byte in DPL
                         }
                         
                         if (FAM65XX_GET_RDY(pins)) {
@@ -563,16 +563,16 @@ class fam65xx_t :
                         if (this->has_rmw_dummy_write()) {
                             // NMOS: Dummy write of high byte
                             if (use_zero_bank) {
-                                pins = this->phi2_write<Addr::AB, Bank::ZBR>(pins, this->get(REG_DPL));
+                                pins = this->/*TODO_WRITE*/phi2_write<Addr::AB, Bank::ZBR>(pins, this->get(REG_DPL));
                             } else {
-                                pins = this->phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DPL));
+                                pins = this->/*TODO_WRITE*/phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DPL));
                             }
                         } else {
                             // CMOS: Dummy read instead of write
                             if (use_zero_bank) {
-                                pins = this->phi2_dummy_read<Addr::AB, Bank::ZBR>(pins);
+                                pins = this->bus_setup_dummy<Addr::AB, Bank::ZBR>(pins);
                             } else {
-                                pins = this->phi2_dummy_read<Addr::AB, Bank::DBR>(pins);
+                                pins = this->bus_setup_dummy<Addr::AB, Bank::DBR>(pins);
                             }
                         }
                         
@@ -588,11 +588,11 @@ class fam65xx_t :
                         
                     case 3:
                         // Cycle 3: Write high byte back to memory (address + 1)
-                        if (this->should_complete_write_cycle(pins)) {
+                        /* TODO_WRITE: Remove check */ if (this->should_complete_write_cycle(pins)) {
                             if (use_zero_bank) {
-                                pins = this->phi2_write<Addr::AB, Bank::ZBR>(pins, this->get(REG_DPL));
+                                pins = this->/*TODO_WRITE*/phi2_write<Addr::AB, Bank::ZBR>(pins, this->get(REG_DPL));
                             } else {
-                                pins = this->phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DPL));
+                                pins = this->/*TODO_WRITE*/phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DPL));
                             }
                             this->cycle_index++;
                         }
@@ -601,11 +601,11 @@ class fam65xx_t :
                     case 4:
                         // Cycle 4: Write low byte back to memory (address)
                         this->dec(REG_ABL);  // Decrement address back to low byte
-                        if (this->should_complete_write_cycle(pins)) {
+                        /* TODO_WRITE: Remove check */ if (this->should_complete_write_cycle(pins)) {
                             if (use_zero_bank) {
-                                pins = this->phi2_write<Addr::AB, Bank::ZBR>(pins, this->get(REG_DL));
+                                pins = this->/*TODO_WRITE*/phi2_write<Addr::AB, Bank::ZBR>(pins, this->get(REG_DL));
                             } else {
-                                pins = this->phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DL));
+                                pins = this->/*TODO_WRITE*/phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DL));
                             }
                             this->transition_to_fetch();
                         }
@@ -617,9 +617,9 @@ class fam65xx_t :
                     case 0:
                         // Cycle 0: Read original value from memory
                         if (use_zero_bank) {
-                            pins = this->phi2_read<Addr::AB, Bank::ZBR>(pins, REG_DL);  // Direct Page uses Bank 0
+                            pins = this->/*TODO_READ*/phi2_read<Addr::AB, Bank::ZBR>(pins, REG_DL);  // Direct Page uses Bank 0
                         } else {
-                            pins = this->phi2_read<Addr::AB, Bank::DBR>(pins, REG_DL);  // Other modes use DBR
+                            pins = this->/*TODO_READ*/phi2_read<Addr::AB, Bank::DBR>(pins, REG_DL);  // Other modes use DBR
                         }
                         
                         if (FAM65XX_GET_RDY(pins)) {
@@ -632,16 +632,16 @@ class fam65xx_t :
                         if (this->has_rmw_dummy_write()) {
                             // NMOS: Dummy write of original value
                             if (use_zero_bank) {
-                                pins = this->phi2_write<Addr::AB, Bank::ZBR>(pins, this->get(REG_DL));  // Direct Page uses Bank 0
+                                pins = this->/*TODO_WRITE*/phi2_write<Addr::AB, Bank::ZBR>(pins, this->get(REG_DL));  // Direct Page uses Bank 0
                             } else {
-                                pins = this->phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DL));  // Other modes use DBR
+                                pins = this->/*TODO_WRITE*/phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DL));  // Other modes use DBR
                             }
                         } else {
                             // CMOS: Dummy read instead of write
                             if (use_zero_bank) {
-                                pins = this->phi2_dummy_read<Addr::AB, Bank::ZBR>(pins);  // Direct Page uses Bank 0
+                                pins = this->bus_setup_dummy<Addr::AB, Bank::ZBR>(pins);  // Direct Page uses Bank 0
                             } else {
-                                pins = this->phi2_dummy_read<Addr::AB, Bank::DBR>(pins);  // Other modes use DBR
+                                pins = this->bus_setup_dummy<Addr::AB, Bank::DBR>(pins);  // Other modes use DBR
                             }
                         }
                         
@@ -656,11 +656,11 @@ class fam65xx_t :
                         
                     case 2:
                         // Cycle 2: Write modified value back to memory
-                        if (this->should_complete_write_cycle(pins)) {
+                        /* TODO_WRITE: Remove check */ if (this->should_complete_write_cycle(pins)) {
                             if (use_zero_bank) {
-                                pins = this->phi2_write<Addr::AB, Bank::ZBR>(pins, this->get(REG_DL));  // Direct Page uses Bank 0
+                                pins = this->/*TODO_WRITE*/phi2_write<Addr::AB, Bank::ZBR>(pins, this->get(REG_DL));  // Direct Page uses Bank 0
                             } else {
-                                pins = this->phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DL));  // Other modes use DBR
+                                pins = this->/*TODO_WRITE*/phi2_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DL));  // Other modes use DBR
                             }
                             this->transition_to_fetch();
                         }
@@ -669,7 +669,7 @@ class fam65xx_t :
             }
         } else {
             // Accumulator mode - single cycle operation with automatic 8/16-bit handling
-            pins = this->phi2_dummy_read<Addr::PC>(pins);
+            pins = this->bus_setup_dummy<Addr::PC>(pins);
             if (FAM65XX_GET_RDY(pins)) {
                 data_t value = this->get_accumulator();  // Automatically handles 8/16-bit based on M flag
                 operation_func(value);
@@ -856,7 +856,7 @@ class fam65xx_t :
     // Instruction fetch and decode
     bus_state_t fetch_opcode(bus_state_t pins) {
         // Read opcode from PC (using program banking PBR for 65C816)
-        pins = this->phi2_read<Addr::PC>(pins, REG_IR);
+        pins = this->/*TODO_READ*/phi2_read<Addr::PC>(pins, REG_IR);
         this->set(REG_AB, this->get(REG_PC));
         this->inc(REG_PC);
         // Set SYNC signal for opcode fetch
@@ -1246,7 +1246,7 @@ public:
             }
             
             // Check RDY signal - CENTRALIZED CHECK
-            if (!FAM65XX_GET_RDY(pins)) {
+            /* TODO_RDY: Remove check */ if (!FAM65XX_GET_RDY(pins)) {
                 // RDY low - external DMA active
                 // DO NOT call handler, DO NOT increment
                 trace("RDY low - DMA active, skipping handler");
