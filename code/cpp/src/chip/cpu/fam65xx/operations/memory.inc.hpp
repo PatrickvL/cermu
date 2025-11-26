@@ -19,7 +19,7 @@ bus_state_t op_lda(bus_state_t pins) {
   // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native
   // code
   if constexpr (this->has_wide_registers()) {
-    if (this->this->is_accumulator_16bit()) {
+    if (this->is_accumulator_16bit()) {
       // 65C816 native mode, 16-bit accumulator - perform 16-bit LDA
       switch (this->cycle_index) {
       case 0: // PHI2 - Read low byte
@@ -41,7 +41,7 @@ bus_state_t op_lda(bus_state_t pins) {
         uint16_t value = this->get(REG_A_16);
         this->update_flag(FLAG_Z, value == 0);
         this->update_flag(FLAG_N, (value & 0x8000) != 0);
-        this->this->transition_to_fetch();
+        this->transition_to_fetch();
         return pins;
       }
       return pins;
@@ -57,7 +57,7 @@ bus_state_t op_lda(bus_state_t pins) {
   case 1: // PHI1
     this->bus_load_reg(REG_A, pins);
     this->update_nz_flags(this->get(REG_A));
-    this->this->transition_to_fetch();
+    this->transition_to_fetch();
     return pins;
   }
   return pins;
@@ -72,7 +72,7 @@ bus_state_t op_ldx(bus_state_t pins) {
   // Check for 65C816 native mode with 16-bit index registers (X=0) - nested
   // native code
   if constexpr (this->has_wide_registers()) {
-    if (this->this->is_index_16bit()) {
+    if (this->is_index_16bit()) {
       // 65C816 native mode, 16-bit X register - perform 16-bit LDX
       switch (this->cycle_index) {
       case 0: // PHI2 - Read low byte
@@ -94,7 +94,7 @@ bus_state_t op_ldx(bus_state_t pins) {
         uint16_t value = this->get(REG_X_16);
         this->update_flag(FLAG_Z, value == 0);
         this->update_flag(FLAG_N, (value & 0x8000) != 0);
-        this->this->transition_to_fetch();
+        this->transition_to_fetch();
         return pins;
       }
       return pins;
@@ -110,7 +110,7 @@ bus_state_t op_ldx(bus_state_t pins) {
   case 1: // PHI1
     this->bus_load_reg(REG_X, pins);
     this->update_nz_flags(this->get(REG_X));
-    this->this->transition_to_fetch();
+    this->transition_to_fetch();
     return pins;
   }
   return pins;
@@ -125,7 +125,7 @@ bus_state_t op_ldy(bus_state_t pins) {
   // Check for 65C816 native mode with 16-bit index registers (X=0) - nested
   // native code
   if constexpr (this->has_wide_registers()) {
-    if (this->this->is_index_16bit()) {
+    if (this->is_index_16bit()) {
       // 65C816 native mode, 16-bit Y register - perform 16-bit LDY
       switch (this->cycle_index) {
       case 0: // PHI2 - Read low byte
@@ -147,7 +147,7 @@ bus_state_t op_ldy(bus_state_t pins) {
         uint16_t value = this->get(REG_Y_16);
         this->update_flag(FLAG_Z, value == 0);
         this->update_flag(FLAG_N, (value & 0x8000) != 0);
-        this->this->transition_to_fetch();
+        this->transition_to_fetch();
         return pins;
       }
       return pins;
@@ -163,7 +163,7 @@ bus_state_t op_ldy(bus_state_t pins) {
   case 1: // PHI1
     this->bus_load_reg(REG_Y, pins);
     this->update_nz_flags(this->get(REG_Y));
-    this->this->transition_to_fetch();
+    this->transition_to_fetch();
     return pins;
   }
   return pins;
@@ -178,7 +178,7 @@ bus_state_t op_sta(bus_state_t pins) {
   // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native
   // code
   if constexpr (this->has_wide_registers()) {
-    if (this->this->is_accumulator_16bit()) {
+    if (this->is_accumulator_16bit()) {
       // 65C816 native mode, 16-bit accumulator - perform 16-bit STA
       switch (this->cycle_index) {
       case 0:
@@ -193,7 +193,7 @@ bus_state_t op_sta(bus_state_t pins) {
         // Store high byte of accumulator
 
         pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_AH));
-        this->this->transition_to_fetch();
+        this->transition_to_fetch();
         return pins;
       }
       return pins;
@@ -202,7 +202,7 @@ bus_state_t op_sta(bus_state_t pins) {
 
   // Standard 8-bit STA operation (emulation mode and non-wide CPUs)
   pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_A));
-  this->this->transition_to_fetch();
+  this->transition_to_fetch();
   return pins;
 }
 
@@ -215,7 +215,7 @@ bus_state_t op_stx(bus_state_t pins) {
   // Check for 65C816 native mode with 16-bit index registers (X=0) - nested
   // native code
   if constexpr (this->has_wide_registers()) {
-    if (this->this->is_index_16bit()) {
+    if (this->is_index_16bit()) {
       // 65C816 native mode, 16-bit X register - perform 16-bit STX
       switch (this->cycle_index) {
       case 0:
@@ -230,7 +230,7 @@ bus_state_t op_stx(bus_state_t pins) {
         // Store high byte of X register
 
         pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_XH));
-        this->this->transition_to_fetch();
+        this->transition_to_fetch();
         return pins;
       }
       return pins;
@@ -239,7 +239,7 @@ bus_state_t op_stx(bus_state_t pins) {
 
   // Standard 8-bit STX operation (emulation mode and non-wide CPUs)
   pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_X));
-  this->this->transition_to_fetch();
+  this->transition_to_fetch();
   return pins;
 }
 
@@ -252,7 +252,7 @@ bus_state_t op_sty(bus_state_t pins) {
   // Check for 65C816 native mode with 16-bit index registers (X=0) - nested
   // native code
   if constexpr (this->has_wide_registers()) {
-    if (this->this->is_index_16bit()) {
+    if (this->is_index_16bit()) {
       // 65C816 native mode, 16-bit Y register - perform 16-bit STY
       switch (this->cycle_index) {
       case 0:
@@ -267,7 +267,7 @@ bus_state_t op_sty(bus_state_t pins) {
         // Store high byte of Y register
 
         pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_YH));
-        this->this->transition_to_fetch();
+        this->transition_to_fetch();
         return pins;
       }
       return pins;
@@ -276,7 +276,7 @@ bus_state_t op_sty(bus_state_t pins) {
 
   // Standard 8-bit STY operation (emulation mode and non-wide CPUs)
   pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_Y));
-  this->this->transition_to_fetch();
+  this->transition_to_fetch();
   return pins;
 }
 
@@ -290,7 +290,7 @@ bus_state_t op_and(bus_state_t pins) {
   // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native
   // code
   if constexpr (this->has_wide_registers()) {
-    if (this->this->is_accumulator_16bit()) {
+    if (this->is_accumulator_16bit()) {
       // 65C816 native mode, 16-bit accumulator - perform 16-bit AND
       switch (this->cycle_index) {
       case 0: // PHI2 - Read low byte
@@ -316,7 +316,7 @@ bus_state_t op_and(bus_state_t pins) {
         this->set(REG_A_16, result);
         this->update_flag(FLAG_Z, result == 0);
         this->update_flag(FLAG_N, (result & 0x8000) != 0);
-        this->this->transition_to_fetch();
+        this->transition_to_fetch();
         return pins;
       }
       return pins;
@@ -333,7 +333,7 @@ bus_state_t op_and(bus_state_t pins) {
     this->bus_load_reg(REG_DL, pins);
     this->set(REG_A, this->get(REG_A) & this->get(REG_DL));
     this->update_nz_flags(this->get(REG_A));
-    this->this->transition_to_fetch();
+    this->transition_to_fetch();
     return pins;
   }
   return pins;
@@ -345,7 +345,7 @@ bus_state_t op_ora(bus_state_t pins) {
   // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native
   // code
   if constexpr (this->has_wide_registers()) {
-    if (this->this->is_accumulator_16bit()) {
+    if (this->is_accumulator_16bit()) {
       // 65C816 native mode, 16-bit accumulator - perform 16-bit ORA
       switch (this->cycle_index) {
       case 0: // PHI2 - Read low byte
@@ -371,7 +371,7 @@ bus_state_t op_ora(bus_state_t pins) {
         this->set(REG_A_16, result);
         this->update_flag(FLAG_Z, result == 0);
         this->update_flag(FLAG_N, (result & 0x8000) != 0);
-        this->this->transition_to_fetch();
+        this->transition_to_fetch();
         return pins;
       }
       return pins;
@@ -388,7 +388,7 @@ bus_state_t op_ora(bus_state_t pins) {
     this->bus_load_reg(REG_DL, pins);
     this->set(REG_A, this->get(REG_A) | this->get(REG_DL));
     this->update_nz_flags(this->get(REG_A));
-    this->this->transition_to_fetch();
+    this->transition_to_fetch();
     return pins;
   }
   return pins;
@@ -400,7 +400,7 @@ bus_state_t op_eor(bus_state_t pins) {
   // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native
   // code
   if constexpr (this->has_wide_registers()) {
-    if (this->this->is_accumulator_16bit()) {
+    if (this->is_accumulator_16bit()) {
       // 65C816 native mode, 16-bit accumulator - perform 16-bit EOR
       switch (this->cycle_index) {
       case 0: // PHI2 - Read low byte
@@ -426,7 +426,7 @@ bus_state_t op_eor(bus_state_t pins) {
         this->set(REG_A_16, result);
         this->update_flag(FLAG_Z, result == 0);
         this->update_flag(FLAG_N, (result & 0x8000) != 0);
-        this->this->transition_to_fetch();
+        this->transition_to_fetch();
         return pins;
       }
       return pins;
@@ -443,7 +443,7 @@ bus_state_t op_eor(bus_state_t pins) {
     this->bus_load_reg(REG_DL, pins);
     this->set(REG_A, this->get(REG_A) ^ this->get(REG_DL));
     this->update_nz_flags(this->get(REG_A));
-    this->this->transition_to_fetch();
+    this->transition_to_fetch();
     return pins;
   }
   return pins;
@@ -458,7 +458,7 @@ bus_state_t op_bit(bus_state_t pins) {
   // Check for 65816 native mode with 16-bit accumulator (M=0) - nested native
   // code
   if constexpr (this->has_wide_registers()) {
-    if (this->this->is_accumulator_16bit()) {
+    if (this->is_accumulator_16bit()) {
       // 65816 native mode, 16-bit accumulator - read 2 bytes
       switch (this->cycle_index) {
       case 0: // PHI2 - Read low byte
@@ -487,7 +487,7 @@ bus_state_t op_bit(bus_state_t pins) {
                           (high_byte & 0x40) != 0); // V = bit 6 of HIGH byte
         this->update_flag(FLAG_N,
                           (high_byte & 0x80) != 0); // N = bit 7 of HIGH byte
-        this->this->transition_to_fetch();
+        this->transition_to_fetch();
         return pins;
       }
       return pins;
@@ -524,7 +524,7 @@ bus_state_t op_bit(bus_state_t pins) {
     }
 
     // Complete instruction
-    this->this->transition_to_fetch();
+    this->transition_to_fetch();
     return pins;
   }
   return pins;

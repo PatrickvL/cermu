@@ -219,7 +219,7 @@ bus_state_t op_jam(bus_state_t pins) {
     // PHI2: Read operand from PC+1 (this was PC++ after opcode fetch)
     pins = this->bus_setup_read<Addr::PC>(pins);
 
-    cycle_index++;
+    this->cycle_index++;
     return pins;
 
   case 1:
@@ -487,9 +487,7 @@ bus_state_t op_sha(bus_state_t pins) {
       return pins;
     }
   }
-}
-
-return pins;
+  return pins;
 }
 
 bus_state_t op_shs(bus_state_t pins) {
@@ -520,9 +518,7 @@ bus_state_t op_shs(bus_state_t pins) {
       return pins;
     }
   }
-}
-
-return pins;
+  return pins;
 }
 
 bus_state_t op_shx(bus_state_t pins) {

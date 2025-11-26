@@ -33,7 +33,7 @@ bus_state_t op_bra(bus_state_t pins) {
       int8_t offset = static_cast<int8_t>(this->get(REG_DL));
       this->set(REG_PC, this->get(REG_PC) + offset);
 
-      this->this->transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -46,7 +46,7 @@ bus_state_t op_stz(bus_state_t pins) {
   if constexpr (has_cmos()) {
     // Store zero to target address with proper RDY handling
     pins = this->bus_setup_write<Addr::AB>(pins, 0x00);
-    this->this->transition_to_fetch();
+    this->transition_to_fetch();
   }
   return pins;
 }
@@ -82,7 +82,7 @@ bus_state_t op_trb(bus_state_t pins) {
     case 2:
       // Cycle 2: Write modified result back
       pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_DL));
-      this->this->transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -120,7 +120,7 @@ bus_state_t op_tsb(bus_state_t pins) {
     case 2:
       // Cycle 2: Write modified result back
       pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_DL));
-      this->this->transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -136,7 +136,7 @@ bus_state_t op_wai(bus_state_t pins) {
 
     // CPU halts until interrupt occurs
     // The tick() function will check this flag
-    this->this->transition_to_fetch();
+    this->transition_to_fetch();
   }
   return pins;
 }
@@ -161,7 +161,7 @@ bus_state_t op_stp(bus_state_t pins) {
       this->stopped = true;
 
       // CPU halts until reset
-      this->this->transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -182,7 +182,7 @@ bus_state_t op_phx(bus_state_t pins) {
       /* PHI2: Write X to stack with processor-specific RDY handling */
       pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_X));
       this->dec(REG_S);
-      this->this->transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -203,7 +203,7 @@ bus_state_t op_phy(bus_state_t pins) {
       /* PHI2: Write Y to stack with processor-specific RDY handling */
       pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_Y));
       this->dec(REG_S);
-      this->this->transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -235,7 +235,7 @@ bus_state_t op_plx(bus_state_t pins) {
 
       /* PHI1: Set flags based on X register value */
       this->update_nz_flags(this->get(REG_X));
-      this->this->transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -267,7 +267,7 @@ bus_state_t op_ply(bus_state_t pins) {
 
       /* PHI1: Set flags based on Y register value */
       this->update_nz_flags(this->get(REG_Y));
-      this->this->transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }

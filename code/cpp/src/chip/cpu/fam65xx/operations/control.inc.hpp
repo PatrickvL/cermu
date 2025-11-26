@@ -22,7 +22,7 @@ bus_state_t op_jmp(bus_state_t pins) {
   trace_operation(__func__);
   // Addressing mode has already set up AB register with target address
   this->set(REG_PC, this->get(REG_AB));
-  this->this->transition_to_fetch();
+  this->transition_to_fetch();
   return pins;
 }
 
@@ -35,7 +35,7 @@ bus_state_t op_jml(bus_state_t pins) {
   trace_operation(__func__);
   // Addressing mode has already set up AB register with target address
   this->set(REG_PC, this->get(REG_AB));
-  this->this->transition_to_fetch();
+  this->transition_to_fetch();
   return pins;
 }
 
@@ -246,14 +246,13 @@ bus_state_t op_brk(bus_state_t pins) {
     if constexpr (has_nmos_bugs()) {
       /* NMOS 6502 always sets I flag on BRK */
       set_flag(FLAG_I);
-      else {
-        /* CMOS 65C02 sets I flag and clears D flag on BRK/IRQ/NMI */
-        set_flag(FLAG_I);
-        clear_flag(FLAG_D);
-      }
-      this->set(REG_AB, this->get_vector_addr());
-      this->cycle_index++;
+    } else {
+      /* CMOS 65C02 sets I flag and clears D flag on BRK/IRQ/NMI */
+      set_flag(FLAG_I);
+      clear_flag(FLAG_D);
     }
+    this->set(REG_AB, this->get_vector_addr());
+    this->cycle_index++;
     return pins;
 
   case 4: // Note : reset() starts at cycle_index 4!
@@ -270,22 +269,27 @@ bus_state_t op_brk(bus_state_t pins) {
     this->cycle_index++;
     return pins;
 
-  case 5:
+  case 6:
     /* PHI2: Read interrupt vector high byte (always from bank 0 using ZBR for
      * 65C816) */
     pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
     this->cycle_index++;
     return pins;
 
-  case 6:
+  case 7:
     /* PHI1: Load data and perform operations */
-    this->bus_load_reg(REG_DL, pins);
-    this->set(REG_PCL, this->get(REG_DL));
-        this->set(REG_PBR,
-      this->cycle_index++;
+    this->bus_load_reg(REG_ABH, pins);
+    this->set(REG_PC, this->get(REG_AB));
+    /* 65C816: Clear PBR on interrupts in emulation mode */
+    if constexpr (has_wide_registers()) {
+      if (this->in_emulation_mode()) {
+        this->set(REG_PBR, 0);
+      }
+    }
+    this->transition_to_fetch();
     return pins;
 
-  case 6:
+  case 8:
     /* PHI2: Final cycle - dummy read from new PC to prepare for next
      * instruction */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
