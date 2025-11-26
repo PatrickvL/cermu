@@ -1,6 +1,6 @@
 /*
  * fam65xx_decoder.h - FAM65XX CPU instruction decoder and disassembler
- * 
+ *
  * This file contains instruction decoding and disassembly functions for the
  * FAM65XX CPU family, supporting all variants from 6502 to 65C816.
  */
@@ -11,10 +11,9 @@
 extern "C" {
 #endif
 
-#include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-
+#include <stdint.h>
 
 // ============================================================================
 // INSTRUCTION DECODING FUNCTIONS
@@ -25,16 +24,16 @@ extern "C" {
  * @param op_index Operation index from the opcode entry
  * @return String name of the operation (e.g., "LDA", "STA", etc.)
  */
-const char* fam65xx_get_opcode_name(uint8_t op_index);
+const char *fam65xx_get_opcode_name(uint8_t op_index);
 
 /**
  * Get the name of an addressing mode based on its addressing mode index
  * @param am_index Addressing mode index from the opcode entry
- * @return String name of the addressing mode (e.g., "Immediate", "Absolute", etc.)
+ * @return String name of the addressing mode (e.g., "Immediate", "Absolute",
+ * etc.)
  */
-const char* fam65xx_get_addressing_mode_name(uint8_t am_index);
+const char *fam65xx_get_addressing_mode_name(uint8_t am_index);
 
 #ifdef __cplusplus
 }
 #endif
-

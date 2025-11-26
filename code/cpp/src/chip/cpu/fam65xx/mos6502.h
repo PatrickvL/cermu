@@ -14,8 +14,8 @@
  * - Minimal API surface - only basic functions
  */
 
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "../../../core/chip.h"
 #include "../../../core/system_lines.h"
@@ -32,38 +32,40 @@ typedef struct mos6502_t mos6502_t;
 // ============================================================================
 
 // Create/destroy CPU instance
-mos6502_t* mos6502_create(void);
-void mos6502_destroy(mos6502_t* cpu);
+mos6502_t *mos6502_create(void);
+void mos6502_destroy(mos6502_t *cpu);
 
 // Basic API functions
-bus_state_t mos6502_init(mos6502_t* cpu, const chip_descriptor_t* desc);
-bus_state_t mos6502_init_enhanced(mos6502_t* cpu, const fam65xx_chip_descriptor_t* enhanced_desc);
-bus_state_t mos6502_bootstrap(mos6502_t* cpu, bus_state_t pins);
-bus_state_t mos6502_reset(mos6502_t* cpu, bus_state_t pins);
-bus_state_t mos6502_tick(mos6502_t* cpu, bus_state_t pins);
-bool mos6502_opdone(mos6502_t* cpu);
+bus_state_t mos6502_init(mos6502_t *cpu, const chip_descriptor_t *desc);
+bus_state_t
+mos6502_init_enhanced(mos6502_t *cpu,
+                      const fam65xx_chip_descriptor_t *enhanced_desc);
+bus_state_t mos6502_bootstrap(mos6502_t *cpu, bus_state_t pins);
+bus_state_t mos6502_reset(mos6502_t *cpu, bus_state_t pins);
+bus_state_t mos6502_tick(mos6502_t *cpu, bus_state_t pins);
+bool mos6502_opdone(mos6502_t *cpu);
 
 // Register access
-uint8_t mos6502_get_a(mos6502_t* cpu);
-uint8_t mos6502_get_x(mos6502_t* cpu);
-uint8_t mos6502_get_y(mos6502_t* cpu);
-uint8_t mos6502_get_s(mos6502_t* cpu);
-uint8_t mos6502_get_p(mos6502_t* cpu);
-uint16_t mos6502_get_pc(mos6502_t* cpu);
+uint8_t mos6502_get_a(mos6502_t *cpu);
+uint8_t mos6502_get_x(mos6502_t *cpu);
+uint8_t mos6502_get_y(mos6502_t *cpu);
+uint8_t mos6502_get_s(mos6502_t *cpu);
+uint8_t mos6502_get_p(mos6502_t *cpu);
+uint16_t mos6502_get_pc(mos6502_t *cpu);
 
-void mos6502_set_a(mos6502_t* cpu, uint8_t value);
-void mos6502_set_x(mos6502_t* cpu, uint8_t value);
-void mos6502_set_y(mos6502_t* cpu, uint8_t value);
-void mos6502_set_s(mos6502_t* cpu, uint8_t value);
-void mos6502_set_p(mos6502_t* cpu, uint8_t value);
-void mos6502_set_pc(mos6502_t* cpu, uint16_t value);
+void mos6502_set_a(mos6502_t *cpu, uint8_t value);
+void mos6502_set_x(mos6502_t *cpu, uint8_t value);
+void mos6502_set_y(mos6502_t *cpu, uint8_t value);
+void mos6502_set_s(mos6502_t *cpu, uint8_t value);
+void mos6502_set_p(mos6502_t *cpu, uint8_t value);
+void mos6502_set_pc(mos6502_t *cpu, uint16_t value);
 
 // Enhanced descriptor creation (recommended approach)
-fam65xx_chip_descriptor_t* mos6502_create_descriptor(
-    uint8_t (*read_callback)(void* user_data, uint32_t addr, uint8_t bus_state),
-    void (*write_callback)(void* user_data, uint32_t addr, uint8_t data),
-    void* user_data);
-void mos6502_destroy_descriptor(fam65xx_chip_descriptor_t* desc);
+fam65xx_chip_descriptor_t *mos6502_create_descriptor(
+    uint8_t (*read_callback)(void *user_data, uint32_t addr, uint8_t bus_state),
+    void (*write_callback)(void *user_data, uint32_t addr, uint8_t data),
+    void *user_data);
+void mos6502_destroy_descriptor(fam65xx_chip_descriptor_t *desc);
 
 // Basic descriptor for compatibility
-const chip_descriptor_t* mos6502_get_chip_descriptor(void);
+const chip_descriptor_t *mos6502_get_chip_descriptor(void);
