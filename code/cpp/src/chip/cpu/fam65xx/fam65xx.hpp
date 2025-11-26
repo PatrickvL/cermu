@@ -587,6 +587,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
           // Cycle 1 PHI1: Load low byte from bus
           this->bus_load_reg(REG_DL, pins);
           this->inc(REG_ABL); // Increment address for high byte
+          this->cycle_index++;
           return pins;
         }
 
@@ -603,6 +604,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
         case 3: {
           // Cycle 3 PHI1: Load high byte and perform dummy cycle setup
           this->bus_load_reg(REG_DPL, pins);
+          this->cycle_index++;
           return pins;
         }
 
@@ -636,6 +638,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
           this->set(REG_DL, static_cast<uint8_t>(value & 0xFF)); // Low byte
           this->set(REG_DPL,
                     static_cast<uint8_t>((value >> 8) & 0xFF)); // High byte
+          this->cycle_index++;
           return pins;
         }
 
@@ -654,6 +657,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
         case 7: {
           // Cycle 7 PHI1: Decrement address
           this->dec(REG_ABL); // Decrement address back to low byte
+          this->cycle_index++;
           return pins;
         }
 
@@ -691,6 +695,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
         case 1: {
           // Cycle 1 PHI1: Load original value from bus
           this->bus_load_reg(REG_DL, pins);
+          this->cycle_index++;
           return pins;
         }
 
@@ -721,6 +726,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
           data_t value = static_cast<data_t>(this->get(REG_DL));
           operation_func(value);
           this->set(REG_DL, static_cast<uint8_t>(value & 0xFF));
+          this->cycle_index++;
           return pins;
         }
 
