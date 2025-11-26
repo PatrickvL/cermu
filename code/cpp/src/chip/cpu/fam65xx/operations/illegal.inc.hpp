@@ -19,7 +19,7 @@ bus_state_t op_lax(bus_state_t pins) {
     // LAX - Load A and X from memory
     // Special case: LAX immediate has unstable behavior - uses (A | 0xEE) &
     // operand
-    if (opcode_entry.am_index == to_index(AM::IMM)) {
+    if (this->opcode_entry.am_index == to_index(AM::IMM)) {
       // LAX immediate - unstable behavior with magic constant
       switch (this->cycle_index) {
       case 0:
@@ -38,7 +38,7 @@ bus_state_t op_lax(bus_state_t pins) {
         this->set(REG_X, result);
 
         this->update_nz_flags<REG_A>(result);
-        transition_to_fetch();
+        this->transition_to_fetch();
         return pins;
       }
     } else {
@@ -56,7 +56,7 @@ bus_state_t op_lax(bus_state_t pins) {
         this->set(REG_X, this->get(REG_DL));
 
         this->update_nz_flags<REG_A>(this->get(REG_A));
-        transition_to_fetch();
+        this->transition_to_fetch();
         return pins;
       }
     }
@@ -72,7 +72,7 @@ bus_state_t op_sax(bus_state_t pins) {
 
     uint8_t result = this->get(REG_A) & this->get(REG_X);
     pins = this->bus_setup_write<Addr::AB>(pins, result);
-    transition_to_fetch();
+    this->transition_to_fetch();
   }
   return pins;
 }
@@ -214,7 +214,7 @@ bus_state_t op_jam(bus_state_t pins) {
   // - Performs 3-cycle pattern: opcode read, operand read, operand read
   // - For test compatibility: complete after 3 cycles with PC at opcode address
 
-  switch (cycle_index) {
+  switch (this->cycle_index) {
   case 0:
     // PHI2: Read operand from PC+1 (this was PC++ after opcode fetch)
     pins = this->bus_setup_read<Addr::PC>(pins);
@@ -231,7 +231,7 @@ bus_state_t op_jam(bus_state_t pins) {
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_ABL, pins);
     this->dec(REG_PC); // Go back to opcode address
-    transition_to_fetch();
+    this->transition_to_fetch();
   }
   return pins;
 }
@@ -262,7 +262,7 @@ bus_state_t op_anc(bus_state_t pins) {
 
       // Copy N flag to C flag (ANC behavior)
       this->update_flag(FLAG_C, this->get(REG_P) & FLAG_N);
-      transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -361,7 +361,7 @@ bus_state_t op_arr(bus_state_t pins) {
           }
         }
 
-        transition_to_fetch();
+        this->transition_to_fetch();
         return pins;
       }
     }
@@ -393,7 +393,7 @@ bus_state_t op_alr(bus_state_t pins) {
 
       // Update N and Z flags
       this->update_nz_flags<REG_A>(this->get(REG_A));
-      transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -427,7 +427,7 @@ bus_state_t op_xaa(bus_state_t pins) {
       this->set(REG_A, (this->get(REG_A) | 0xEE) & this->get(REG_X) &
                            this->get(REG_DL));
       this->update_nz_flags<REG_A>(this->get(REG_A));
-      transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -458,7 +458,7 @@ bus_state_t op_sbx(bus_state_t pins) {
       this->update_flag(FLAG_C, temp >= this->get(REG_DL));
 
       this->update_nz_flags<REG_X>(result);
-      transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -483,7 +483,7 @@ bus_state_t op_sha(bus_state_t pins) {
       this->set(REG_DL, data_value);
 
       pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_DL));
-      transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -516,7 +516,7 @@ bus_state_t op_shs(bus_state_t pins) {
       this->set(REG_S, ax);
 
       pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_DL));
-      transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -541,7 +541,7 @@ bus_state_t op_shx(bus_state_t pins) {
 
       // Set data to write
       pins = this->bus_setup_write<Addr::AB>(pins, data_value);
-      transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -564,7 +564,7 @@ bus_state_t op_shy(bus_state_t pins) {
 
       // Set data to write
       pins = this->bus_setup_write<Addr::AB>(pins, data_value);
-      transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -590,7 +590,7 @@ bus_state_t op_las(bus_state_t pins) {
       this->set(REG_S, result);
 
       this->update_nz_flags<REG_A>(result);
-      transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }

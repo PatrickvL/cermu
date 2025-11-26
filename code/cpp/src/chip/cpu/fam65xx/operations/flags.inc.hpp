@@ -23,7 +23,7 @@ bus_state_t op_clc(bus_state_t pins) {
 
   // Common operation for all processors
   clear_flag(FLAG_C);
-  transition_to_fetch();
+  this->transition_to_fetch();
   return pins;
 }
 
@@ -37,7 +37,7 @@ bus_state_t op_sec(bus_state_t pins) {
 
   // Common operation for all processors
   set_flag(FLAG_C);
-  transition_to_fetch();
+  this->transition_to_fetch();
   return pins;
 }
 
@@ -51,7 +51,7 @@ bus_state_t op_cli(bus_state_t pins) {
 
   // Common operation for all processors
   clear_flag(FLAG_I);
-  transition_to_fetch();
+  this->transition_to_fetch();
   return pins;
 }
 
@@ -65,7 +65,7 @@ bus_state_t op_sei(bus_state_t pins) {
 
   // Common operation for all processors
   set_flag(FLAG_I);
-  transition_to_fetch();
+  this->transition_to_fetch();
   return pins;
 }
 
@@ -79,7 +79,7 @@ bus_state_t op_cld(bus_state_t pins) {
 
   // Common operation for all processors
   clear_flag(FLAG_D);
-  transition_to_fetch();
+  this->transition_to_fetch();
   return pins;
 }
 
@@ -93,7 +93,7 @@ bus_state_t op_sed(bus_state_t pins) {
 
   // Common operation for all processors
   set_flag(FLAG_D);
-  transition_to_fetch();
+  this->transition_to_fetch();
   return pins;
 }
 
@@ -107,7 +107,7 @@ bus_state_t op_clv(bus_state_t pins) {
 
   // Common operation for all processors
   clear_flag(FLAG_V);
-  transition_to_fetch();
+  this->transition_to_fetch();
   return pins;
 }
 

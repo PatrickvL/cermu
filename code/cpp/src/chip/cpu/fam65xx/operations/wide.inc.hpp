@@ -42,7 +42,7 @@ bus_state_t op_rep(bus_state_t pins) {
         }
 
         this->set(REG_P, this->get(REG_P) & ~mask);
-        this->transition_to_fetch();
+        this->this->transition_to_fetch();
       }
       return pins;
     }
@@ -74,7 +74,7 @@ bus_state_t op_sep(bus_state_t pins) {
       case 2:
         // Set specified status bits (set bits that are 1 in operand)
         this->set(REG_P, this->get(REG_P) | this->get(REG_DL));
-        this->transition_to_fetch();
+        this->this->transition_to_fetch();
         return pins;
       }
       return pins;
@@ -131,13 +131,10 @@ bus_state_t op_xce(bus_state_t pins) {
     }
   case 1:
     // Complete operation
-    this->transition_to_fetch();
+    this->this->transition_to_fetch();
     return pins;
   }
   return pins;
-}
-
-return pins;
 }
 
 // ============================================================================
@@ -186,14 +183,14 @@ bus_state_t op_pea(bus_state_t pins) {
       pins = this->bus_setup_write<Addr::SP>(
           pins, this->get(REG_ABL)); // addr_low from case 0
       this->dec(REG_S);
-      this->transition_to_fetch();
+      this->this->transition_to_fetch();
       return pins;
     }
     return pins;
   }
 
   // PEA is illegal on non-wide CPUs - acts as NOP
-  this->transition_to_fetch();
+  this->this->transition_to_fetch();
   return pins;
 }
 
@@ -205,12 +202,12 @@ bus_state_t op_phb(bus_state_t pins) {
 
     pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_DBR));
     this->dec(REG_S);
-    this->transition_to_fetch();
+    this->this->transition_to_fetch();
     return pins;
   }
 
   // PHB is illegal on non-wide CPUs - acts as NOP
-  this->transition_to_fetch();
+  this->this->transition_to_fetch();
   return pins;
 }
 
@@ -231,14 +228,14 @@ bus_state_t op_phd(bus_state_t pins) {
 
       pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_DPL));
       this->dec(REG_S);
-      this->transition_to_fetch();
+      this->this->transition_to_fetch();
       return pins;
     }
     return pins;
   }
 
   // PHD is illegal on non-wide CPUs - acts as NOP
-  this->transition_to_fetch();
+  this->this->transition_to_fetch();
   return pins;
 }
 
@@ -257,14 +254,14 @@ bus_state_t op_phk(bus_state_t pins) {
 
       pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PBR));
       this->dec(REG_S);
-      this->transition_to_fetch();
+      this->this->transition_to_fetch();
       return pins;
     }
     return pins;
   }
 
   // PHK is illegal on non-wide CPUs - acts as NOP
-  this->transition_to_fetch();
+  this->this->transition_to_fetch();
   return pins;
 }
 
@@ -295,13 +292,13 @@ bus_state_t op_plb(bus_state_t pins) {
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
       this->update_nz_flags(this->get(REG_DBR));
-      this->transition_to_fetch();
+      this->this->transition_to_fetch();
     }
     return pins;
   }
 
   // PLB is illegal on non-wide CPUs - acts as NOP
-  this->transition_to_fetch();
+  this->this->transition_to_fetch();
   return pins;
 }
 
@@ -339,13 +336,13 @@ bus_state_t op_pld(bus_state_t pins) {
       this->bus_load_reg(REG_DL, pins);
       this->update_nz_flags(
           this->get(REG_DPL)); // Only check low byte for flags
-      this->transition_to_fetch();
+      this->this->transition_to_fetch();
     }
     return pins;
   }
 
   // PLD is illegal on non-wide CPUs - acts as NOP
-  this->transition_to_fetch();
+  this->this->transition_to_fetch();
   return pins;
 }
 
@@ -419,14 +416,14 @@ bus_state_t op_jsl(bus_state_t pins) {
       this->set(REG_PC,
                 this->get(REG_AB)); // addr_high:addr_low from cases 0-1
       this->set(REG_PBR, this->get(REG_DL)); // bank from case 2
-      this->transition_to_fetch();
+      this->this->transition_to_fetch();
       return pins;
     }
     return pins;
   }
 
   // JSL is illegal on non-wide CPUs - acts as NOP
-  this->transition_to_fetch();
+  this->this->transition_to_fetch();
   return pins;
 }
 
@@ -475,13 +472,13 @@ bus_state_t op_rtl(bus_state_t pins) {
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
       this->inc(REG_PC);
-      this->transition_to_fetch();
+      this->this->transition_to_fetch();
     }
     return pins;
   }
 
   // RTL is illegal on non-wide CPUs - acts as NOP
-  this->transition_to_fetch();
+  this->this->transition_to_fetch();
   return pins;
 }
 
@@ -492,7 +489,7 @@ bus_state_t op_per(bus_state_t pins) {
     // Check for emulation mode - PER is not available in emulation mode
     if (this->in_emulation_mode()) {
       // In emulation mode, PER behaves as NOP (no operation)
-      this->transition_to_fetch();
+      this->this->transition_to_fetch();
       return pins;
     }
 
@@ -534,14 +531,14 @@ bus_state_t op_per(bus_state_t pins) {
 
       pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_ABL));
       this->dec(REG_S);
-      this->transition_to_fetch();
+      this->this->transition_to_fetch();
       return pins;
     }
     return pins;
   }
 
   // PER is illegal on non-wide CPUs - acts as NOP
-  this->transition_to_fetch();
+  this->this->transition_to_fetch();
   return pins;
 }
 
@@ -594,14 +591,14 @@ bus_state_t op_pei(bus_state_t pins) {
 
       pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_ABL));
       this->dec(REG_S);
-      this->transition_to_fetch();
+      this->this->transition_to_fetch();
       return pins;
     }
     return pins;
   }
 
   // PEI is illegal on non-wide CPUs - acts as NOP
-  this->transition_to_fetch();
+  this->this->transition_to_fetch();
   return pins;
 }
 
@@ -625,7 +622,7 @@ bus_state_t op_xba(bus_state_t pins) {
 
     case 1:
       // Complete operation
-      this->transition_to_fetch();
+      this->this->transition_to_fetch();
       return pins;
     }
     return pins;
@@ -696,7 +693,7 @@ bus_state_t op_mvn(bus_state_t pins) {
         this->cycle_index = 2;
         else {
           // Transfer complete
-          this->transition_to_fetch();
+          this->this->transition_to_fetch();
         }
       }
       return pins;
@@ -767,7 +764,7 @@ bus_state_t op_mvp(bus_state_t pins) {
         this->cycle_index = 2;
         else {
           // Transfer complete
-          this->transition_to_fetch();
+          this->this->transition_to_fetch();
         }
       }
       return pins;
@@ -776,7 +773,7 @@ bus_state_t op_mvp(bus_state_t pins) {
   }
 
   // MVP is illegal on non-wide CPUs - acts as NOP
-  this->transition_to_fetch();
+  this->this->transition_to_fetch();
   return pins;
 }
 
@@ -848,13 +845,13 @@ bus_state_t op_cop(bus_state_t pins) {
       this->clear_flag(FLAG_D); // Clear decimal mode
       this->set_flag(FLAG_I);   // Disable interrupts
       this->active_interrupt = FAM65XX_INT_NONE;
-      this->transition_to_fetch();
+      this->this->transition_to_fetch();
     }
     return pins;
   }
 
   // COP is illegal on non-wide CPUs - acts as NOP
-  this->transition_to_fetch();
+  this->this->transition_to_fetch();
   return pins;
 }
 
@@ -867,12 +864,12 @@ bus_state_t op_wdm(bus_state_t pins) {
 
     this->inc(REG_PC);
     // WDM is essentially a 2-byte NOP - do nothing else
-    this->transition_to_fetch();
+    this->this->transition_to_fetch();
     return pins;
   }
 
   // WDM is illegal on non-wide CPUs - acts as NOP
-  this->transition_to_fetch();
+  this->this->transition_to_fetch();
   return pins;
 }
 

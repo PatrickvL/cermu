@@ -71,7 +71,7 @@ inline void load(reg8_t data_reg, bus_state_t pins) {
  */
 inline data_t get_accumulator() const {
   if constexpr (has_wide_registers()) {
-    if (is_accumulator_16bit()) {
+    if (this->is_accumulator_16bit()) {
       return this->get(REG_A_16);
     } else {
       return this->get(REG_A);
@@ -87,7 +87,7 @@ inline data_t get_accumulator() const {
  */
 inline void set_accumulator(data_t value) {
   if constexpr (has_wide_registers()) {
-    if (is_accumulator_16bit()) {
+    if (this->is_accumulator_16bit()) {
       this->set(REG_A_16, value);
     } else {
       this->set(REG_A, static_cast<uint8_t>(value & 0xFF));
@@ -103,7 +103,7 @@ inline void set_accumulator(data_t value) {
  */
 inline data_t get_x_register() const {
   if constexpr (has_wide_registers()) {
-    if (is_index_16bit()) {
+    if (this->is_index_16bit()) {
       return this->get(REG_X_16);
     } else {
       return this->get(REG_X);
@@ -119,7 +119,7 @@ inline data_t get_x_register() const {
  */
 inline void set_x_register(data_t value) {
   if constexpr (has_wide_registers()) {
-    if (is_index_16bit()) {
+    if (this->is_index_16bit()) {
       this->set(REG_X_16, value);
     } else {
       this->set(REG_X, static_cast<uint8_t>(value & 0xFF));
@@ -135,7 +135,7 @@ inline void set_x_register(data_t value) {
  */
 inline data_t get_y_register() const {
   if constexpr (has_wide_registers()) {
-    if (is_index_16bit()) {
+    if (this->is_index_16bit()) {
       return this->get(REG_Y_16);
     } else {
       return this->get(REG_Y);
@@ -151,7 +151,7 @@ inline data_t get_y_register() const {
  */
 inline void set_y_register(data_t value) {
   if constexpr (has_wide_registers()) {
-    if (is_index_16bit()) {
+    if (this->is_index_16bit()) {
       this->set(REG_Y_16, value);
     } else {
       this->set(REG_Y, static_cast<uint8_t>(value & 0xFF));
