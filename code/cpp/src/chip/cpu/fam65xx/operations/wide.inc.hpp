@@ -17,7 +17,7 @@
 // REP - Reset Processor Status Bits (65C816)
 bus_state_t op_rep(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (this->has_wide_registers()) {
+  if constexpr (has_wide_registers()) {
     switch (this->cycle_index) {
     case 0:
       // Fetch immediate operand
@@ -55,7 +55,7 @@ bus_state_t op_rep(bus_state_t pins) {
 // SEP - Set Processor Status Bits (65C816)
 bus_state_t op_sep(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (this->has_wide_registers()) {
+  if constexpr (has_wide_registers()) {
     // Check emulation mode at runtime - SEP is only valid in native mode
     if (!this->in_emulation_mode()) {
       switch (this->cycle_index) {
@@ -91,7 +91,7 @@ bus_state_t op_sep(bus_state_t pins) {
 // XCE - Exchange Carry and Emulation flags (65C816)
 bus_state_t op_xce(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (this->has_wide_registers()) {
+  if constexpr (has_wide_registers()) {
     // XCE is valid in both native and emulation modes
     switch (this->cycle_index) {
     case 0: {
@@ -146,7 +146,7 @@ bus_state_t op_xce(bus_state_t pins) {
 // PEA - Push Effective Absolute Address (65C816)
 bus_state_t op_pea(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (this->has_wide_registers()) {
+  if constexpr (has_wide_registers()) {
     switch (this->cycle_index) {
     case 0:
       // Read address low byte
@@ -199,7 +199,7 @@ bus_state_t op_pea(bus_state_t pins) {
 // PHB - Push Data Bank Register (65C816)
 bus_state_t op_phb(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (this->has_wide_registers()) {
+  if constexpr (has_wide_registers()) {
     // Push DBR to stack
 
     pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_DBR));
@@ -216,7 +216,7 @@ bus_state_t op_phb(bus_state_t pins) {
 // PHD - Push Direct Page Register (65C816)
 bus_state_t op_phd(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (this->has_wide_registers()) {
+  if constexpr (has_wide_registers()) {
     switch (this->cycle_index) {
     case 0:
       // Push D high byte first
@@ -244,7 +244,7 @@ bus_state_t op_phd(bus_state_t pins) {
 // PHK - Push Program Bank Register (65C816)
 bus_state_t op_phk(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (this->has_wide_registers()) {
+  if constexpr (has_wide_registers()) {
     switch (this->cycle_index) {
     case 0:
       // Dummy read from PC (internal operation)
@@ -270,7 +270,7 @@ bus_state_t op_phk(bus_state_t pins) {
 // PLB - Pull Data Bank Register (65C816)
 bus_state_t op_plb(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (this->has_wide_registers()) {
+  if constexpr (has_wide_registers()) {
     switch (this->cycle_index) {
     case 0:
       // Dummy read from current PC
@@ -307,7 +307,7 @@ bus_state_t op_plb(bus_state_t pins) {
 // PLD - Pull Direct Page Register (65C816)
 bus_state_t op_pld(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (this->has_wide_registers()) {
+  if constexpr (has_wide_registers()) {
     switch (this->cycle_index) {
     case 0:
       // Dummy read from current SP, then increment SP for low byte
@@ -355,7 +355,7 @@ bus_state_t op_pld(bus_state_t pins) {
 // JSL - Jump to Subroutine Long (65C816)
 bus_state_t op_jsl(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (this->has_wide_registers()) {
+  if constexpr (has_wide_registers()) {
     switch (this->cycle_index) {
     case 0:
       // Read address low byte
@@ -432,7 +432,7 @@ bus_state_t op_jsl(bus_state_t pins) {
 // RTL - Return from Subroutine Long (65C816)
 bus_state_t op_rtl(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (this->has_wide_registers()) {
+  if constexpr (has_wide_registers()) {
     switch (this->cycle_index) {
     case 0:
       // Dummy read from current SP, then increment SP for PCL
@@ -487,7 +487,7 @@ bus_state_t op_rtl(bus_state_t pins) {
 // PER - Push Effective Relative Address (65C816)
 bus_state_t op_per(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (this->has_wide_registers()) {
+  if constexpr (has_wide_registers()) {
     // Check for emulation mode - PER is not available in emulation mode
     if (this->in_emulation_mode()) {
       // In emulation mode, PER behaves as NOP (no operation)
@@ -549,7 +549,7 @@ bus_state_t op_per(bus_state_t pins) {
 // PEI - Push Effective Indirect Address (65C816)
 bus_state_t op_pei(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (this->has_wide_registers()) {
+  if constexpr (has_wide_registers()) {
     switch (this->cycle_index) {
     case 0:
       // Read zero page address
@@ -611,7 +611,7 @@ bus_state_t op_pei(bus_state_t pins) {
 // XBA - Exchange B and A (65C816)
 bus_state_t op_xba(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (this->has_wide_registers()) {
+  if constexpr (has_wide_registers()) {
     // XBA is valid in both native and emulation modes
     switch (this->cycle_index) {
     case 0:
@@ -640,7 +640,7 @@ bus_state_t op_xba(bus_state_t pins) {
 // MVN - Move Negative (65C816)
 bus_state_t op_mvn(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (this->has_wide_registers()) {
+  if constexpr (has_wide_registers()) {
     switch (this->cycle_index) {
     case 0:
       // Read destination bank
@@ -710,7 +710,7 @@ bus_state_t op_mvn(bus_state_t pins) {
 // MVP - Move Positive (65C816)
 bus_state_t op_mvp(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (this->has_wide_registers()) {
+  if constexpr (has_wide_registers()) {
     switch (this->cycle_index) {
     case 0:
       // Read destination bank
@@ -784,7 +784,7 @@ bus_state_t op_mvp(bus_state_t pins) {
 // COP - Co-processor Instruction (65C816)
 bus_state_t op_cop(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (this->has_wide_registers()) {
+  if constexpr (has_wide_registers()) {
     switch (this->cycle_index) {
     case 0:
       // Read signature byte (ignored, but must be read for timing)
@@ -862,7 +862,7 @@ bus_state_t op_cop(bus_state_t pins) {
 // WDM - WDM Reserved Instruction (65C816)
 bus_state_t op_wdm(bus_state_t pins) {
   trace_operation(__func__);
-  if constexpr (this->has_wide_registers()) {
+  if constexpr (has_wide_registers()) {
     // Read and ignore operand byte for timing compatibility
     pins = this->bus_setup_dummy<Addr::PC>(pins);
 

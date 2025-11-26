@@ -413,6 +413,27 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     return bus_setup<false, true, addr_reg, bank_arg>(pins);
   }
 
+  /**
+   * Unified operand read helper for PHI2 phase
+   * Handles immediate vs memory mode addressing automatically
+   * Based on the old phi2_read_operand() implementation
+   *
+   * For immediate mode: reads from PC (operand follows opcode)
+   * For memory modes: reads from AB (effective address calculated)
+   *
+   * This is a runtime check and cannot be avoided because immediate and
+   * memory addressing modes are fundamentally different operations at the
+   * hardware level (operand in instruction stream vs operand at address).
+   */
+  bus_state_t bus_setup_read_operand(bus_state_t pins) {
+    // Immediate mode: operand is at PC (instruction stream)
+    if (this->opcode_entry.am_index == to_index(AM::IMM)) {
+      return this->bus_setup_read<Addr::PC>(pins);
+    }
+    // Memory modes: operand is at effective address (AB)
+    return this->bus_setup_read<Addr::AB>(pins);
+  }
+
   // ========================================================================
   // PHI1 DATA LOADING HELPERS
   // ========================================================================
@@ -431,6 +452,18 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
    */
   inline uint8_t bus_get_data(bus_state_t pins) const {
     return FAM65XX_GET_DATA(pins);
+  }
+
+  /**
+   * Load register from bus and increment PC if immediate mode (PHI1 phase)
+   * Unified helper for immediate mode operand handling
+   */
+  inline void bus_load_operand(reg8_t data_reg, bus_state_t pins) {
+    this->bus_load_reg(data_reg, pins);
+    // Increment PC for immediate mode (operand was at PC)
+    if (this->opcode_entry.am_index == to_index(AM::IMM)) {
+      this->inc(REG_PC);
+    }
   }
 
   // ========================================================================
@@ -899,8 +932,8 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       return &fam65xx_t::op_nop; // Safe fallback
     }
 
-    // For addressing modes that need address calculation, start with addressing
-    // mode handler
+    // For addressing modes that need address calculation, start with addressing mode handler
+    // AM::NON and AM::IMM go directly to operation (no address calculation needed)
     if (this->opcode_entry.am_index > to_index(AM::IMM)) {
       InstructionHandler am_handler =
           addressing_mode_handlers[this->opcode_entry.am_index];
@@ -1146,13 +1179,13 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
 
     // Initialize addressing mode handler lookup table
     addressing_mode_handlers.fill(
-        nullptr); // Default to nullptr (safe for AM_NON/AM_IMM)
+        nullptr); // Default to nullptr (safe for AM_NON and AM_IMM)
 
-    // Addressing modes (no handler needed)
+    // Addressing modes
     addressing_mode_handlers[to_index(AM::NON)] =
         nullptr; // No handler needed (implicit/accumulator/relative)
     addressing_mode_handlers[to_index(AM::IMM)] =
-        nullptr; // No handler (handled directly in operations)
+        nullptr; // No handler needed - bus_setup_read_operand() handles this
 
     // Addressing modes
     addressing_mode_handlers[to_index(AM::ABS)] = &fam65xx_t::am_abs;

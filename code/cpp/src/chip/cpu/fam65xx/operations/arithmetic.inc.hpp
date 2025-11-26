@@ -27,7 +27,7 @@ bus_state_t op_adc(bus_state_t pins) {
         return pins;
 
       case 1: // PHI1 - Load and increment
-        this->bus_load_reg(REG_DL, pins);
+        this->bus_load_operand(REG_DL, pins);
         this->inc(REG_AB);
         this->cycle_index++;
         return pins;
@@ -37,7 +37,7 @@ bus_state_t op_adc(bus_state_t pins) {
         return pins;
 
       case 3: // PHI1 - Load and perform 16-bit ADC
-        this->bus_load_reg(REG_DL, pins);
+        this->bus_load_operand(REG_DL, pins);
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
         uint16_t acc = this->get(REG_A_16);
@@ -58,18 +58,18 @@ bus_state_t op_adc(bus_state_t pins) {
   // Standard 8-bit ADC operation (emulation mode and non-wide CPUs)
   switch (this->cycle_index) {
   case 0: // PHI2
-    // Setup read from AB
-    pins = this->bus_setup_read<Addr::AB>(pins);
+    // Setup read from AB (or PC for immediate mode)
+    pins = this->bus_setup_read_operand(pins);
     return pins;
 
   case 1: { // PHI1
     // Load operand and perform ADC
-    this->bus_load_reg(REG_DL, pins);
+    this->bus_load_operand(REG_DL, pins);
     uint8_t operand = this->get(REG_DL);
     this->perform_adc(operand);
 
     // CMOS processors need extra cycle in decimal mode
-    if constexpr (this->has_bcd_extra_cycle()) {
+    if constexpr (has_bcd_extra_cycle()) {
       if (this->get(REG_P) & FLAG_D) {
         this->cycle_index++;
         return pins;
@@ -109,10 +109,10 @@ bus_state_t op_nop(bus_state_t pins) {
   // SECONDARY: WDC65C02 neutralized illegal opcodes preserve original
   // addressing timing This code should ONLY execute for non-65C816 CMOS
   // processors or 65C816 in native mode
-  if constexpr (this->has_cmos()) {
+  if constexpr (has_cmos()) {
     // Check if we're NOT in 65C816 emulation mode
     bool not_in_emulation = true;
-    if constexpr (this->has_wide_registers()) {
+    if constexpr (has_wide_registers()) {
       not_in_emulation = !this->in_emulation_mode();
     }
 
@@ -183,7 +183,7 @@ bus_state_t op_sbc(bus_state_t pins) {
   trace_operation(__func__);
   // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native
   // code
-  if constexpr (this->has_wide_registers()) {
+  if constexpr (has_wide_registers()) {
     if (this->is_accumulator_16bit()) {
       // 65C816 native mode, 16-bit accumulator - perform 16-bit SBC
       switch (this->cycle_index) {
@@ -192,7 +192,7 @@ bus_state_t op_sbc(bus_state_t pins) {
         return pins;
 
       case 1: // PHI1 - Load and increment
-        this->bus_load_reg(REG_DL, pins);
+        this->bus_load_operand(REG_DL, pins);
         this->inc(REG_AB);
         this->cycle_index++;
         return pins;
@@ -202,7 +202,7 @@ bus_state_t op_sbc(bus_state_t pins) {
         return pins;
 
       case 3: // PHI1 - Load and perform 16-bit SBC
-        this->bus_load_reg(REG_DL, pins);
+        this->bus_load_operand(REG_DL, pins);
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
         uint16_t acc = this->get(REG_A_16);
@@ -223,16 +223,16 @@ bus_state_t op_sbc(bus_state_t pins) {
   // Standard 8-bit SBC operation (emulation mode and non-wide CPUs)
   switch (this->cycle_index) {
   case 0: // PHI2
-    pins = this->bus_setup_read<Addr::AB>(pins);
+    pins = this->bus_setup_read_operand(pins);
     return pins;
 
   case 1: { // PHI1
-    this->bus_load_reg(REG_DL, pins);
+    this->bus_load_operand(REG_DL, pins);
     uint8_t operand = this->get(REG_DL);
     this->perform_sbc(operand);
 
     // CMOS processors need extra cycle in decimal mode
-    if constexpr (this->has_bcd_extra_cycle()) {
+    if constexpr (has_bcd_extra_cycle()) {
       if (this->get(REG_P) & FLAG_D) {
         this->cycle_index++;
         return pins;
@@ -263,7 +263,7 @@ bus_state_t op_cmp(bus_state_t pins) {
   trace_operation(__func__);
   // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native
   // code
-  if constexpr (this->has_wide_registers()) {
+  if constexpr (has_wide_registers()) {
     if (this->is_accumulator_16bit()) {
       // 65C816 native mode, 16-bit accumulator - perform 16-bit CMP
       switch (this->cycle_index) {
@@ -272,7 +272,7 @@ bus_state_t op_cmp(bus_state_t pins) {
         return pins;
 
       case 1: // PHI1 - Load and increment
-        this->bus_load_reg(REG_DL, pins);
+        this->bus_load_operand(REG_DL, pins);
         this->inc(REG_AB);
         this->cycle_index++;
         return pins;
@@ -282,7 +282,7 @@ bus_state_t op_cmp(bus_state_t pins) {
         return pins;
 
       case 3: // PHI1 - Load and perform 16-bit CMP
-        this->bus_load_reg(REG_DL, pins);
+        this->bus_load_operand(REG_DL, pins);
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
         uint16_t acc = this->get(REG_A_16);
@@ -300,11 +300,11 @@ bus_state_t op_cmp(bus_state_t pins) {
   // Standard 8-bit CMP operation (emulation mode and non-wide CPUs)
   switch (this->cycle_index) {
   case 0: // PHI2
-    pins = this->bus_setup_read<Addr::AB>(pins);
+    pins = this->bus_setup_read_operand(pins);
     return pins;
 
   case 1: { // PHI1
-    this->bus_load_reg(REG_DL, pins);
+    this->bus_load_operand(REG_DL, pins);
     uint8_t operand = this->get(REG_DL);
     uint8_t a = this->get(REG_A);
     this->perform_compare(a, operand);
@@ -323,7 +323,7 @@ bus_state_t op_cpx(bus_state_t pins) {
   trace_operation(__func__);
   // Check for 65C816 native mode with 16-bit index registers (X=0) - nested
   // native code
-  if constexpr (this->has_wide_registers()) {
+  if constexpr (has_wide_registers()) {
     if (this->is_index_16bit()) {
       // 65C816 native mode, 16-bit X register - perform 16-bit CPX
       switch (this->cycle_index) {
@@ -332,7 +332,7 @@ bus_state_t op_cpx(bus_state_t pins) {
         return pins;
 
       case 1: // PHI1 - Load and increment
-        this->bus_load_reg(REG_DL, pins);
+        this->bus_load_operand(REG_DL, pins);
         this->inc(REG_AB);
         this->cycle_index++;
         return pins;
@@ -342,7 +342,7 @@ bus_state_t op_cpx(bus_state_t pins) {
         return pins;
 
       case 3: // PHI1 - Load and perform 16-bit CPX
-        this->bus_load_reg(REG_DL, pins);
+        this->bus_load_operand(REG_DL, pins);
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
         uint16_t x = this->get_x_register();
@@ -360,11 +360,11 @@ bus_state_t op_cpx(bus_state_t pins) {
   // Standard 8-bit CPX operation (emulation mode and non-wide CPUs)
   switch (this->cycle_index) {
   case 0: // PHI2
-    pins = this->bus_setup_read<Addr::AB>(pins);
+    pins = this->bus_setup_read_operand(pins);
     return pins;
 
   case 1: { // PHI1
-    this->bus_load_reg(REG_DL, pins);
+    this->bus_load_operand(REG_DL, pins);
     uint8_t operand = this->get(REG_DL);
     uint8_t x = this->get(REG_X);
     this->perform_compare(x, operand);
@@ -383,7 +383,7 @@ bus_state_t op_cpy(bus_state_t pins) {
   trace_operation(__func__);
   // Check for 65C816 native mode with 16-bit index registers (X=0) - nested
   // native code
-  if constexpr (this->has_wide_registers()) {
+  if constexpr (has_wide_registers()) {
     if (this->is_index_16bit()) {
       // 65C816 native mode, 16-bit Y register - perform 16-bit CPY
       switch (this->cycle_index) {
@@ -392,7 +392,7 @@ bus_state_t op_cpy(bus_state_t pins) {
         return pins;
 
       case 1: // PHI1 - Load and increment
-        this->bus_load_reg(REG_DL, pins);
+        this->bus_load_operand(REG_DL, pins);
         this->inc(REG_AB);
         this->cycle_index++;
         return pins;
@@ -402,7 +402,7 @@ bus_state_t op_cpy(bus_state_t pins) {
         return pins;
 
       case 3: // PHI1 - Load and perform 16-bit CPY
-        this->bus_load_reg(REG_DL, pins);
+        this->bus_load_operand(REG_DL, pins);
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
         uint16_t y = this->get_y_register();
@@ -420,11 +420,11 @@ bus_state_t op_cpy(bus_state_t pins) {
   // Standard 8-bit CPY operation (emulation mode and non-wide CPUs)
   switch (this->cycle_index) {
   case 0: // PHI2
-    pins = this->bus_setup_read<Addr::AB>(pins);
+    pins = this->bus_setup_read_operand(pins);
     return pins;
 
   case 1: { // PHI1
-    this->bus_load_reg(REG_DL, pins);
+    this->bus_load_operand(REG_DL, pins);
     uint8_t operand = this->get(REG_DL);
     uint8_t y = this->get(REG_Y);
     this->perform_compare(y, operand);
