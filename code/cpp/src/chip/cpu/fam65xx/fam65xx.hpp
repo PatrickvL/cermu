@@ -704,8 +704,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
           this->transition_to_fetch();
           return pins;
         }
-        return pins;
-      }
+      }  // end 8-bit memory RMW
     } else {
       // Accumulator mode - single cycle operation with automatic 8/16-bit
       // handling
