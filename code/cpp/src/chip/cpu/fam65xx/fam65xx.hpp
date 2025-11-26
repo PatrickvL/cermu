@@ -347,6 +347,12 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     constexpr reg16_t addr_reg = static_cast<reg16_t>(addr_arg);
     uint32_t addr = this->get(addr_reg);
 
+    // Stack address fixup: SP register holds only low byte (0x00-0xFF)
+    // Hardware automatically adds 0x0100 to form full stack address (0x0100-0x01FF)
+    if constexpr (addr_arg == Addr::SP) {
+      addr |= 0x0100;  // Stack is always in page 1 for 6502/6510
+    }
+
     // 65C816 banking: OR bank into high bits (optimizer eliminates for non-wide
     // CPUs)
     addr |= static_cast<uint32_t>(get_address_bank<addr_arg>(bank_arg)) << 16;

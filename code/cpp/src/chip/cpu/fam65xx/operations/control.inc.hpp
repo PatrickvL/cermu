@@ -68,7 +68,7 @@ bus_state_t op_jsr(bus_state_t pins) {
 
   case 1:
     /* PHI1: Load data and perform operations */
-    this->bus_load_reg(REG_DL, pins);
+    this->bus_load_reg(REG_ABL, pins);  // Load low byte into ABL (was REG_DL)
     this->inc(REG_PC);
     this->cycle_index++;
     return pins;
@@ -76,31 +76,43 @@ bus_state_t op_jsr(bus_state_t pins) {
   case 2:
     /* PHI2: Dummy read from stack pointer (internal operation) */
     pins = this->bus_setup_dummy<Addr::SP>(pins);
-
     return pins;
 
   case 3:
-    /* PHI2: Push PCH (high byte of return address) to stack */
-
-    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCH));
-    this->dec(REG_S);
+    /* PHI1: Increment cycle index */
+    this->cycle_index++;
     return pins;
 
   case 4:
-    /* PHI2: Push PCL (low byte of return address) to stack */
-
-    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCL));
-    this->dec(REG_S);
+    /* PHI2: Push PCH (high byte of return address) to stack */
+    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCH));
     return pins;
-
+    
   case 5:
-    pins = this->bus_setup_read<Addr::PC>(pins);
+    /* PHI1: Decrement SP */
+    this->dec(REG_S);
+    this->cycle_index++;
     return pins;
 
   case 6:
-    /* PHI1: Load data and perform operations */
-    this->bus_load_reg(REG_ABL, pins);
-    /* PHI1: Set PC to target address */
+    /* PHI2: Push PCL (low byte of return address) to stack */
+    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCL));
+    return pins;
+    
+  case 7:
+    /* PHI1: Decrement SP */
+    this->dec(REG_S);
+    this->cycle_index++;
+    return pins;
+
+  case 8:
+    /* PHI2: Read high byte of target address */
+    pins = this->bus_setup_read<Addr::PC>(pins);
+    return pins;
+
+  case 9:
+    /* PHI1: Load high byte, set PC to target address, and transition */
+    this->bus_load_reg(REG_ABH, pins);  // Load high byte into ABH
     this->set(REG_PC, this->get(REG_AB));
     this->transition_to_fetch();
   }
@@ -364,8 +376,8 @@ bus_state_t op_rti(bus_state_t pins) {
     return pins;
 
   case 5:
-    /* PHI1: Load data and perform operations */
-    this->bus_load_reg(REG_DL, pins);
+    /* PHI1: Load PCL into ABL and increment SP */
+    this->bus_load_reg(REG_ABL, pins);  // Load PCL into ABL (was REG_DL)
     this->inc(REG_S);
     this->cycle_index++;
     return pins;
