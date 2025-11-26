@@ -39,11 +39,12 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
     return pins;
   }
 
-  case 2: {
+  case 2:
     /* PHI2: Dummy read from incremented PC (hardware behavior) */
-    /* Use a different register to avoid overwriting the branch offset in DL */
-    pins = this->bus_setup_dummy<Addr::PC>(pins); /* Optimized dummy read */
+    pins = this->bus_setup_dummy<Addr::PC>(pins);
+    return pins;
 
+  case 3: {
     /* PHI1: Check for page cross */
     bool page_cross = this->page_crossed(this->get(REG_PC), this->get(REG_AB));
 
@@ -55,11 +56,6 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
     }
 
     /* Page cross detected: need penalty cycle with intermediate address */
-      /* Hardware behavior: Add signed offset to PC low byte only, ignore carry
-       */
-      /* The intermediate address = (PC & 0xFF00) | ((PCL + signed_offset) &
-       * 0xFF) */
-    /* Page cross detected: need penalty cycle with intermediate address */
     /* Hardware behavior: Add signed offset to PC low byte only, ignore carry */
     /* The intermediate address = (PC & 0xFF00) | ((PCL + signed_offset) & 0xFF) */
     uint8_t pc_low = this->get(REG_PC) & 0xFF;
@@ -69,21 +65,22 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
 
     /* Store intermediate address in PC for penalty cycle read */
     this->set(REG_PC, intermediate_addr);
-    /* REG_AB still contains the correct final target from case 0 */
+    /* REG_AB still contains the correct final target from case 1 */
     this->cycle_index++;
     return pins;
   }
 
-  case 3: {
+  case 4:
     /* PHI2: Page cross penalty - dummy read from intermediate address in PC */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
+    return pins;
 
+  case 5:
     /* PHI1: Set final correct target PC and complete instruction */
     /* REG_AB contains the correct target from case 1 */
     this->set(REG_PC, this->get(REG_AB));
     this->transition_to_fetch();
     return pins;
-  }
   }
   return pins;
 }
