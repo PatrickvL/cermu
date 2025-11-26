@@ -19,7 +19,7 @@ bus_state_t op_pha(bus_state_t pins) {
   // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native
   // code
   if constexpr (has_wide_registers()) {
-    if (this->this->is_accumulator_16bit()) {
+    if (this->is_accumulator_16bit()) {
       // Native mode, 16-bit accumulator - perform 16-bit PHA
       switch (this->cycle_index) {
       case 0:
@@ -41,7 +41,7 @@ bus_state_t op_pha(bus_state_t pins) {
 
         pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_AL));
         this->dec(REG_S);
-        this->this->transition_to_fetch();
+        this->transition_to_fetch();
         return pins;
       }
       return pins;
@@ -61,7 +61,7 @@ bus_state_t op_pha(bus_state_t pins) {
 
     pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_A));
     this->dec(REG_S);
-    this->this->transition_to_fetch();
+    this->transition_to_fetch();
     return pins;
   }
   return pins;
@@ -83,7 +83,7 @@ bus_state_t op_php(bus_state_t pins) {
 
     pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_DL));
     this->dec(REG_S);
-    this->this->transition_to_fetch();
+    this->transition_to_fetch();
     return pins;
   }
   return pins;
@@ -95,7 +95,7 @@ bus_state_t op_pla(bus_state_t pins) {
   // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native
   // code
   if constexpr (has_wide_registers()) {
-    if (this->this->is_accumulator_16bit()) {
+    if (this->is_accumulator_16bit()) {
       // Native mode, 16-bit accumulator - perform 16-bit PLA
       switch (this->cycle_index) {
       case 0:
@@ -142,7 +142,7 @@ bus_state_t op_pla(bus_state_t pins) {
         uint16_t value = this->get(REG_A_16);
         this->update_flag(FLAG_Z, value == 0);
         this->update_flag(FLAG_N, (value & 0x8000) != 0);
-        this->this->transition_to_fetch();
+        this->transition_to_fetch();
         return pins;
       }
       return pins;
@@ -181,7 +181,7 @@ bus_state_t op_pla(bus_state_t pins) {
     /* PHI1: Load accumulator from bus and set flags */
     this->bus_load_reg(REG_A, pins);
     this->update_nz_flags(this->get(REG_A));
-    this->this->transition_to_fetch();
+    this->transition_to_fetch();
     return pins;
   }
   return pins;
@@ -221,7 +221,7 @@ bus_state_t op_plp(bus_state_t pins) {
     /* PHI1: Load status byte from bus into P (clear B, set U) */
     this->bus_load_reg(REG_DL, pins);
     this->set(REG_P, (this->get(REG_DL) & ~FLAG_B) | FLAG_U);
-    this->this->transition_to_fetch();
+    this->transition_to_fetch();
     return pins;
   }
   return pins;

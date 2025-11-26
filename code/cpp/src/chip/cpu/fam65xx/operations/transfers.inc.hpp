@@ -24,7 +24,7 @@ bus_state_t transfer_with_flags_helper(bus_state_t pins, uint8_t value,
   // Common operation for all processors
   this->set(target_reg, value);
   this->update_nz_flags(value);
-  this->this->transition_to_fetch();
+  this->transition_to_fetch();
   return pins;
 }
 
@@ -38,7 +38,7 @@ bus_state_t transfer_no_flags_helper(bus_state_t pins, uint8_t value,
 
   // Common operation for all processors
   this->set(target_reg, value);
-  this->this->transition_to_fetch();
+  this->transition_to_fetch();
   return pins;
 }
 
@@ -53,8 +53,8 @@ bus_state_t op_tax(bus_state_t pins) {
   if constexpr (this->has_wide_registers()) {
     if (!this->in_emulation_mode()) {
       // Native mode: handle M and X flags for register sizes
-      bool acc_16bit = this->this->is_accumulator_16bit();
-      bool index_16bit = this->this->is_index_16bit();
+      bool acc_16bit = this->is_accumulator_16bit();
+      bool index_16bit = this->is_index_16bit();
 
       if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
@@ -85,7 +85,7 @@ bus_state_t op_tax(bus_state_t pins) {
         this->update_nz_flags(value);
       }
 
-      this->this->transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -101,8 +101,8 @@ bus_state_t op_tay(bus_state_t pins) {
   if constexpr (this->has_wide_registers()) {
     if (!this->in_emulation_mode()) {
       // Native mode: handle M and X flags for register sizes
-      bool acc_16bit = this->this->is_accumulator_16bit();
-      bool index_16bit = this->this->is_index_16bit();
+      bool acc_16bit = this->is_accumulator_16bit();
+      bool index_16bit = this->is_index_16bit();
 
       if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
@@ -133,7 +133,7 @@ bus_state_t op_tay(bus_state_t pins) {
         this->update_nz_flags(value);
       }
 
-      this->this->transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -147,7 +147,7 @@ bus_state_t op_tsx(bus_state_t pins) {
   trace_operation(__func__);
   // Check for 65C816 native mode with 16-bit index registers
   if constexpr (this->has_wide_registers()) {
-    if (this->this->is_index_16bit()) {
+    if (this->is_index_16bit()) {
       // Native mode, 16-bit X register - transfer 16-bit stack pointer
       if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
@@ -159,7 +159,7 @@ bus_state_t op_tsx(bus_state_t pins) {
       this->update_flag(FLAG_Z, value == 0);
       this->update_flag(FLAG_N, (value & 0x8000) != 0);
 
-      this->this->transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -175,8 +175,8 @@ bus_state_t op_txa(bus_state_t pins) {
   if constexpr (this->has_wide_registers()) {
     if (!this->in_emulation_mode()) {
       // Native mode: handle M and X flags for register sizes
-      bool acc_16bit = this->this->is_accumulator_16bit();
-      bool index_16bit = this->this->is_index_16bit();
+      bool acc_16bit = this->is_accumulator_16bit();
+      bool index_16bit = this->is_index_16bit();
 
       if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
@@ -207,7 +207,7 @@ bus_state_t op_txa(bus_state_t pins) {
         this->update_nz_flags(value);
       }
 
-      this->this->transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -228,7 +228,7 @@ bus_state_t op_txs(bus_state_t pins) {
         pins = this->bus_setup_dummy<Addr::PC>(pins);
       }
 
-      if (this->this->is_index_16bit()) {
+      if (this->is_index_16bit()) {
         // 16-bit X register - transfer full 16-bit value to stack pointer
         uint16_t value = this->get_x_register();
         this->set(REG_SP, value);
@@ -238,7 +238,7 @@ bus_state_t op_txs(bus_state_t pins) {
         this->set(REG_S, value);
       }
 
-      this->this->transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -254,8 +254,8 @@ bus_state_t op_tya(bus_state_t pins) {
   if constexpr (this->has_wide_registers()) {
     if (!this->in_emulation_mode()) {
       // Native mode: handle M and X flags for register sizes
-      bool acc_16bit = this->this->is_accumulator_16bit();
-      bool index_16bit = this->this->is_index_16bit();
+      bool acc_16bit = this->is_accumulator_16bit();
+      bool index_16bit = this->is_index_16bit();
 
       if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
@@ -286,7 +286,7 @@ bus_state_t op_tya(bus_state_t pins) {
         this->update_nz_flags(value);
       }
 
-      this->this->transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -305,7 +305,7 @@ bus_state_t op_inx(bus_state_t pins) {
   // Check for 65C816 native mode with 16-bit index registers (X=0) - nested
   // native code
   if constexpr (this->has_wide_registers()) {
-    if (this->this->is_index_16bit()) {
+    if (this->is_index_16bit()) {
       // Native mode, 16-bit X register - perform 16-bit INX
       if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
@@ -320,7 +320,7 @@ bus_state_t op_inx(bus_state_t pins) {
       this->update_flag(FLAG_Z, value == 0);
       this->update_flag(FLAG_N, (value & 0x8000) != 0);
 
-      this->this->transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -334,7 +334,7 @@ bus_state_t op_inx(bus_state_t pins) {
   // Common operation for all processors
   this->inc(REG_X);
   this->update_nz_flags(this->get(REG_X));
-  this->this->transition_to_fetch();
+  this->transition_to_fetch();
   return pins;
 }
 
@@ -344,7 +344,7 @@ bus_state_t op_iny(bus_state_t pins) {
   // Check for 65C816 native mode with 16-bit index registers (X=0) - nested
   // native code
   if constexpr (this->has_wide_registers()) {
-    if (this->this->is_index_16bit()) {
+    if (this->is_index_16bit()) {
       // Native mode, 16-bit Y register - perform 16-bit INY
       if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
@@ -359,7 +359,7 @@ bus_state_t op_iny(bus_state_t pins) {
       this->update_flag(FLAG_Z, value == 0);
       this->update_flag(FLAG_N, (value & 0x8000) != 0);
 
-      this->this->transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -373,7 +373,7 @@ bus_state_t op_iny(bus_state_t pins) {
   // Common operation for all processors
   this->inc(REG_Y);
   this->update_nz_flags(this->get(REG_Y));
-  this->this->transition_to_fetch();
+  this->transition_to_fetch();
   return pins;
 }
 
@@ -383,7 +383,7 @@ bus_state_t op_dex(bus_state_t pins) {
   // Check for 65C816 native mode with 16-bit index registers (X=0) - nested
   // native code
   if constexpr (this->has_wide_registers()) {
-    if (this->this->is_index_16bit()) {
+    if (this->is_index_16bit()) {
       // Native mode, 16-bit X register - perform 16-bit DEX
       if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
@@ -398,7 +398,7 @@ bus_state_t op_dex(bus_state_t pins) {
       this->update_flag(FLAG_Z, value == 0);
       this->update_flag(FLAG_N, (value & 0x8000) != 0);
 
-      this->this->transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -412,7 +412,7 @@ bus_state_t op_dex(bus_state_t pins) {
   // Common operation for all processors
   this->dec(REG_X);
   this->update_nz_flags(this->get(REG_X));
-  this->this->transition_to_fetch();
+  this->transition_to_fetch();
   return pins;
 }
 
@@ -422,7 +422,7 @@ bus_state_t op_dey(bus_state_t pins) {
   // Check for 65C816 native mode with 16-bit index registers (X=0) - nested
   // native code
   if constexpr (this->has_wide_registers()) {
-    if (this->this->is_index_16bit()) {
+    if (this->is_index_16bit()) {
       // Native mode, 16-bit Y register - perform 16-bit DEY
       if constexpr (!this->has_optimized_cycles()) {
         /* Dummy cycle for internal operation */
@@ -437,7 +437,7 @@ bus_state_t op_dey(bus_state_t pins) {
       this->update_flag(FLAG_Z, value == 0);
       this->update_flag(FLAG_N, (value & 0x8000) != 0);
 
-      this->this->transition_to_fetch();
+      this->transition_to_fetch();
       return pins;
     }
   }
@@ -451,7 +451,7 @@ bus_state_t op_dey(bus_state_t pins) {
   // Common operation for all processors
   this->dec(REG_Y);
   this->update_nz_flags(this->get(REG_Y));
-  this->this->transition_to_fetch();
+  this->transition_to_fetch();
   return pins;
 }
 

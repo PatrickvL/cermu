@@ -119,7 +119,7 @@ bus_state_t bit_branch_helper(bus_state_t pins, uint8_t bit_mask,
       // Branch taken: calculate target address and jump
       this->set(REG_PC, this->get(REG_PC) + signed_offset);
     }
-    this->this->transition_to_fetch();
+    this->transition_to_fetch();
     return pins;
   }
   return pins;
