@@ -306,8 +306,8 @@ bus_state_t op_arr(bus_state_t pins) {
         if (this->get(REG_P) & FLAG_D) {
           // Decimal mode - ARR uses reference algorithm
 
-          // Set V flag based on bit 6 change between original and shifted
-          if ((shifted_a ^ this->get(REG_A)) & 0x40) {
+          // Set V flag based on bit 6 change between shifted and original AND result
+          if ((shifted_a ^ original_a) & 0x40) {
             this->set(REG_P, this->get(REG_P) | FLAG_V);
 
             // BCD correction using ORIGINAL A value for digit checks (reference
@@ -316,13 +316,13 @@ bus_state_t op_arr(bus_state_t pins) {
 
             // Low nibble BCD correction - use ORIGINAL A value for threshold
             // check
-            if ((this->get(REG_A) & 0x0F) >= 5) {
+            if ((original_a & 0x0F) >= 5) {
               result = ((result + 6) & 0x0F) | (result & 0xF0);
             }
 
             // High nibble BCD correction and carry - use ORIGINAL A value for
             // threshold check
-            if ((this->get(REG_A) & 0xF0) >= 0x50) {
+            if ((original_a & 0xF0) >= 0x50) {
               result += 0x60;
               this->set(REG_P, this->get(REG_P) | FLAG_C);
             }
@@ -332,32 +332,35 @@ bus_state_t op_arr(bus_state_t pins) {
             // DO NOT update N and Z flags after BCD correction - reference
             // keeps original flags
           } else {
-            // Binary mode - special C and V flag behavior
+            // No BCD correction needed - just use shifted result
             this->set(REG_A, shifted_a);
 
-            // ARR has special C and V flag behavior:
+            // ARR has special C and V flag behavior even in decimal mode:
             // C = bit 6 of result (not the shifted-out bit!)
             // V = bit 6 XOR bit 5 of result
             if (this->get(REG_A) & 0x40) {
-              this->set(REG_P, this->get(REG_P) | FLAG_C | FLAG_V);
+              this->set(REG_P, this->get(REG_P) | FLAG_C);
             }
-            if (this->get(REG_A) & 0x20) {
-              this->set(REG_P, this->get(REG_P) ^ FLAG_V);
+            if ((this->get(REG_A) & 0x60) == 0x60 || (this->get(REG_A) & 0x60) == 0x00) {
+              // V is clear
+            } else {
+              this->set(REG_P, this->get(REG_P) | FLAG_V);
             }
           }
         } else {
-          // Binary mode - special C and V flag behavior (for processors without
-          // BCD)
+          // Binary mode - special C and V flag behavior
           this->set(REG_A, shifted_a);
 
           // ARR has special C and V flag behavior:
           // C = bit 6 of result (not the shifted-out bit!)
           // V = bit 6 XOR bit 5 of result
           if (this->get(REG_A) & 0x40) {
-            this->set(REG_P, this->get(REG_P) | FLAG_C | FLAG_V);
+            this->set(REG_P, this->get(REG_P) | FLAG_C);
           }
-          if (this->get(REG_A) & 0x20) {
-            this->set(REG_P, this->get(REG_P) ^ FLAG_V);
+          if ((this->get(REG_A) & 0x60) == 0x60 || (this->get(REG_A) & 0x60) == 0x00) {
+            // V is clear
+          } else {
+            this->set(REG_P, this->get(REG_P) | FLAG_V);
           }
         }
 
