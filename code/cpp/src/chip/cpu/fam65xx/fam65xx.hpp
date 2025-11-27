@@ -1004,7 +1004,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       pins = this->bus_setup_read<Addr::PC>(pins);
       this->set(REG_AB, this->get(REG_PC));
       this->inc(REG_PC);
-      // Set SYNC signal for opcode fetch
+      // Set SYNC signal for opcode fetch (hardware-accurate timing)
       pins |= FAM65XX_SYNC;
       return pins;
 
@@ -1012,6 +1012,9 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       // PHI1: Sample opcode from bus and decode
       uint8_t opcode = this->bus_get_data(pins);
       this->set(REG_IR, opcode);
+  
+      // Clear SYNC signal after opcode fetch completes (hardware-accurate timing)
+      pins &= ~FAM65XX_SYNC;
   
       // Increment cycle_index before transition (PHI1 always increments)
       this->cycle_index++;
@@ -1413,15 +1416,6 @@ public:
       // PHI2: Bus setup phase
       trace_enter("tick<PHI2>");
       trace_registers("before PHI2");
-
-      // SYNC pin management - asserted during opcode fetch
-      if (this->current_handler == &fam65xx_t::fetch_opcode &&
-          this->cycle_index == 0) {
-        pins |= FAM65XX_SYNC;
-        trace("SYNC asserted (opcode fetch)");
-      } else {
-        pins &= ~FAM65XX_SYNC;
-      }
 
       // Hardware-accurate interrupt detection
       if (this->process_interrupt_detection(pins)) {
