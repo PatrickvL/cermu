@@ -1056,8 +1056,8 @@ bus_state_t am_zpr(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
     case 1:
-      /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
+      /* PHI1: Load zero page address into ABL */
+      this->bus_load_reg(REG_ABL, pins);
       this->inc(REG_PC);
       this->set(REG_ABH, 0x00); // High byte is always 0 for zero page
       this->half_cycle++;
@@ -1067,8 +1067,8 @@ bus_state_t am_zpr(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
     case 3:
-      /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_ABH, pins);
+      /* PHI1: Load relative branch offset into DL */
+      this->bus_load_reg(REG_DL, pins);
       this->inc(REG_PC);
       this->transition_to_operation();
     }

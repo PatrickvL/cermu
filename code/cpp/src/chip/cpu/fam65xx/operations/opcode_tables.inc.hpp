@@ -367,9 +367,7 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
     table[0x64] = {
         OP::NOP, AM::ZER,
         OF::NONE}; // STZ zp -> 2-byte NOP (zero page) - not supported
-    table[0x7C] = {
-        OP::NOP, AM::ABS,
-        OF::NONE}; // JMP (abs,X) -> 3-byte NOP (absolute) - not supported
+    // Note: 0x7C (JMP abs,X) is supported on Synertek 65C02 - handled by CMOS section
     table[0x9C] = {
         OP::NOP, AM::ABS,
         OF::NONE}; // STZ abs -> 3-byte NOP (absolute) - not supported
@@ -393,7 +391,7 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
     table[0x03] = {OP::NOP, AM::NON, OF::NONE}; // SLO -> NOP
     table[0x07] = {OP::NOP, AM::IMM, OF::NONE}; // SLO -> 2-byte NOP
     table[0x0B] = {OP::NOP, AM::NON, OF::NONE}; // ANC -> NOP
-    table[0x0F] = {OP::NOP, AM::ABS, OF::NONE}; // SLO -> 3-byte NOP (absolute)
+    table[0x0F] = {OP::NOP, AM::ABS, OF::NONE}; // SLO -> 3-byte NOP (absolute) - will be overridden by Rockwell section
     table[0x12] = {OP::ORA, AM::ZPI,
                    OF::NONE}; // ORA ($nn) - ORA zero page indirect (65C02)
     table[0x13] = {OP::NOP, AM::NON, OF::NONE}; // SLO -> NOP
