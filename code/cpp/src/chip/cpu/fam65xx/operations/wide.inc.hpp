@@ -786,22 +786,11 @@ bus_state_t op_mvp(bus_state_t pins) {
 bus_state_t op_cop(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_wide_registers()) {
-    switch (this->half_cycle) {
-    case 0:
-      // PHI2: Read signature byte (ignored, but must be read for timing)
-      pins = this->bus_setup_dummy<Addr::PC>(pins);
-      return pins;
-    case 1:
-      this->inc(REG_PC);
-      // Set up interrupt type to COP (only difference from BRK)
-      this->active_interrupt = FAM65XX_INT_COP;
-      // Redirect handler to BRK for remaining cycles
-      this->current_handler = &fam65xx_t::op_brk;
-      // Forward to BRK handler starting at cycle 2 (after signature byte read)
-      this->half_cycle = 2;
-      return this->op_brk(pins);
-    }
-    return pins;
+    // Set up interrupt type to COP (only difference from BRK)
+    this->active_interrupt = FAM65XX_INT_COP;
+    // Redirect handler to BRK for all cycles
+    this->current_handler = &fam65xx_t::op_brk;
+    return this->op_brk(pins);
   }
 
   // COP is illegal on non-wide CPUs - acts as NOP
