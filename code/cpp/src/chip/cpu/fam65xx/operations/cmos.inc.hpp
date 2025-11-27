@@ -243,17 +243,27 @@ bus_state_t op_plx(bus_state_t pins) {
       pins = this->bus_setup_dummy<Addr::PC>(pins);
       return pins;
     case 1:
+      /* PHI1: No operation - just increment cycle */
+      this->half_cycle++;
+      return pins;
+
+    case 2:
+      /* PHI2: Dummy read from current stack pointer */
+      pins = this->bus_setup_dummy<Addr::SP>(pins);
+      return pins;
+    case 3:
       /* PHI1: Increment stack pointer */
       this->inc(REG_S);
       this->half_cycle++;
       return pins;
 
-    case 2:
-      /* PHI2: Read from incremented stack pointer directly into X (eliminates copy) */
+    case 4:
+      /* PHI2: Read from incremented stack pointer */
       pins = this->bus_setup_read<Addr::SP>(pins);
       return pins;
-    case 3:
-      /* PHI1: Set flags based on X register value */
+    case 5:
+      /* PHI1: Load X from bus and set flags */
+      this->bus_load_reg(REG_X, pins);
       this->update_nz_flags(this->get(REG_X));
       this->transition_to_fetch();
       return pins;
@@ -272,20 +282,27 @@ bus_state_t op_ply(bus_state_t pins) {
       pins = this->bus_setup_dummy<Addr::PC>(pins);
       return pins;
     case 1:
-      /* PHI2: Dummy read from current stack pointer, then increment SP */
-      pins = this->bus_setup_dummy<Addr::SP>(pins);
+      /* PHI1: No operation - just increment cycle */
+      this->half_cycle++;
+      return pins;
 
+    case 2:
+      /* PHI2: Dummy read from current stack pointer */
+      pins = this->bus_setup_dummy<Addr::SP>(pins);
+      return pins;
+    case 3:
       /* PHI1: Increment stack pointer */
       this->inc(REG_S);
       this->half_cycle++;
       return pins;
 
-    case 2:
-      /* PHI2: Read from incremented stack pointer directly into Y (eliminates copy) */
+    case 4:
+      /* PHI2: Read from incremented stack pointer */
       pins = this->bus_setup_read<Addr::SP>(pins);
       return pins;
-    case 3:
-      /* PHI1: Set flags based on Y register value */
+    case 5:
+      /* PHI1: Load Y from bus and set flags */
+      this->bus_load_reg(REG_Y, pins);
       this->update_nz_flags(this->get(REG_Y));
       this->transition_to_fetch();
       return pins;
