@@ -731,8 +731,7 @@ bus_state_t am_dpil(bus_state_t pins) {
     case 3: {
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
-      uint16_t next_addr = this->get(REG_AB) + 1;
-      this->set(REG_AB, next_addr);
+      this->inc(REG_AB);
       this->half_cycle++;
       return pins;
     }
@@ -745,8 +744,7 @@ bus_state_t am_dpil(bus_state_t pins) {
     case 5: {
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
-      uint16_t next_addr = this->get(REG_AB) + 1;
-      this->set(REG_AB, next_addr);
+      this->inc(REG_AB);
       this->half_cycle++;
       return pins;
     }
@@ -800,8 +798,7 @@ bus_state_t am_dpily(bus_state_t pins) {
       this->bus_load_reg(REG_DL, pins);
       this->inc(REG_PC);
       uint16_t dp_addr = this->get(REG_D) + this->get(REG_DL);
-      this->set(REG_ABL, dp_addr & 0xFF);
-      this->set(REG_ABH, (dp_addr >> 8) & 0xFF);
+      this->set(REG_AB, dp_addr);
       this->half_cycle++;
       return pins;
     }
@@ -814,8 +811,7 @@ bus_state_t am_dpily(bus_state_t pins) {
     case 3: {
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
-      uint16_t next_addr = this->get(REG_AB) + 1;
-      this->set(REG_AB, next_addr);
+      this->inc(REG_AB);
       this->half_cycle++;
       return pins;
     }
@@ -828,8 +824,7 @@ bus_state_t am_dpily(bus_state_t pins) {
     case 5: {
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
-      uint16_t next_addr = this->get(REG_AB) + 1;
-      this->set(REG_AB, next_addr);
+      this->inc(REG_AB);
       this->half_cycle++;
       return pins;
     }
@@ -847,8 +842,7 @@ bus_state_t am_dpily(bus_state_t pins) {
       uint16_t base_addr = (mid_byte << 8) | low_byte;
       uint16_t y_val = this->get_y_register();
       uint16_t final_addr = base_addr + y_val;
-      this->set(REG_ABL, final_addr & 0xFF);
-      this->set(REG_ABH, (final_addr >> 8) & 0xFF);
+      this->set(REG_AB, final_addr);
       this->set(REG_DL, bank_byte); // Bank byte for memory system
       if ((this->get(REG_D) & 0xFF) != 0x00) {
         this->half_cycle++;
@@ -1049,8 +1043,7 @@ bus_state_t am_sri(bus_state_t pins) {
     case 4: {
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
-      uint16_t next_addr = this->get(REG_AB) + 1;
-      this->set(REG_AB, next_addr);
+      this->inc(REG_AB);
       this->half_cycle++;
       return pins;
     }
