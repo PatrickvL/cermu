@@ -165,6 +165,9 @@ public:
     // Set harness for bus cycle recording (thread-safe)
     virtual void set_harness(ProcessorTestHarness* harness) = 0;
     
+    // Clear interrupt state (for test isolation)
+    virtual void clear_interrupt_state() = 0;
+    
     // Get address mask for this processor type
     virtual uint32_t get_address_mask() const = 0;
 };
@@ -318,6 +321,13 @@ public:
     }
     // Bootstrap processor for ProcessorTests compatibility
     void bootstrap_processor_for_tests() {
+        // Ensure interrupt lines are inactive (HIGH) before bootstrap
+        pins |= FAM65XX_RDY;   /* Ensure RDY is high for execution */
+        pins |= FAM65XX_RW;    /* Ensure RW is set as default state */
+        pins |= FAM65XX_IRQ;   /* IRQ line high (inactive) */
+        pins |= FAM65XX_NMI;   /* NMI line high (inactive) */
+        pins |= FAM65XX_RES;   /* RESET line high (inactive) */
+        
         pins = cpu_wrapper->bootstrap(pins);
     }
 
@@ -342,11 +352,11 @@ public:
         
         pins = cpu_wrapper->init(&desc);
         
-        // Initialize pins properly to prevent hardware interrupt detection
-        // Set all interrupt lines inactive (high) for proper test execution
+        // CRITICAL: Initialize pins with interrupt lines HIGH (inactive) BEFORE any operations
+        // This prevents false interrupt detection during bootstrap and test execution
         pins |= FAM65XX_RDY;   /* Ensure RDY is high for execution */
         pins |= FAM65XX_RW;    /* Ensure RW is set as default state */
-        pins |= FAM65XX_IRQ;   /* IRQ line high (inactive) */
+        pins |= FAM65XX_IRQ;   /* IRQ line high (inactive) - CRITICAL for BRK tests */
         pins |= FAM65XX_NMI;   /* NMI line high (inactive) */
         pins |= FAM65XX_RES;   /* RESET line high (inactive) */
         
@@ -432,6 +442,11 @@ public:
     
     // Thread-safe harness setting for bus cycle recording
     void set_harness_for_bus_recording() { cpu_wrapper->set_harness(this); }
+    
+    // Clear interrupt state to prevent false detection
+    void clear_interrupt_state() {
+        cpu_wrapper->clear_interrupt_state();
+    }
     
     uint16_t get_pc() const { return cpu_wrapper->get_pc(); }
     uint16_t get_a() const { return cpu_wrapper->get_a(); }   // Return 16-bit for consistency
@@ -533,10 +548,25 @@ public:
     // Execute one instruction with detailed cycle logging for debugging
     bool step_with_debug(std::ostringstream* debug_output) {
         try {
+            // CRITICAL: Ensure interrupt lines are HIGH before starting instruction execution
+            // This prevents spurious interrupt detection during the instruction
+            pins |= FAM65XX_IRQ;  // Keep IRQ line high (inactive)
+            pins |= FAM65XX_NMI;  // Keep NMI line high (inactive)
+            pins |= FAM65XX_RES;  // Keep RESET line high (inactive)
+            pins |= FAM65XX_RDY;  // Keep RDY high (no DMA)
+            
             uint32_t max_cycles = 10; // Safety limit
             uint32_t cycle_in_instruction = 0;
             
             do {
+                // CRITICAL: Ensure interrupt lines are HIGH before PHI2
+                // process_interrupt_detection() is called at the start of tick_phi2()
+                // so we must set these BEFORE calling it
+                pins |= FAM65XX_IRQ;  // Keep IRQ line high (inactive)
+                pins |= FAM65XX_NMI;  // Keep NMI line high (inactive)
+                pins |= FAM65XX_RES;  // Keep RESET line high (inactive)
+                pins |= FAM65XX_RDY;  // Keep RDY high (no DMA)
+                
                 // Capture state before tick
                 uint16_t pc_before = cpu_wrapper->get_pc();
                 uint8_t a_before = cpu_wrapper->get_a();
@@ -692,10 +722,9 @@ public:
         // Initialize CPU
         cpu->init(&desc);
         
-        // Special handling for NES6502 - check if has APU via CPUTraits
-        if constexpr (Traits.has_apu()) {
-            cpu->set_processor_tests_mode(true);
-        }
+        // Enable processor tests mode for ALL processors during testing
+        // This disables interrupt hijacking to allow clean instruction testing
+        cpu->set_processor_tests_mode(true);
     }
     
     ~ProcessorWrapper() {
@@ -785,7 +814,18 @@ public:
     }
     
     uint8_t get_sp() override {
+        // For 65C816 in native mode, this returns only the low byte
+        // The test harness only uses this for display/comparison, not for setting SP
         return cpu->get(REG_S);
+    }
+    
+    // Get full 16-bit SP for 65C816 native mode
+    uint16_t get_sp_16bit() const {
+        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+            return cpu->get(REG_SP);
+        } else {
+            return 0x0100 | cpu->get(REG_S);
+        }
     }
     
     uint8_t get_status() override {
@@ -828,11 +868,15 @@ public:
     
     void set_sp(uint16_t sp) override {
         // For 65C816 in native mode, set full 16-bit stack pointer
-        // For other processors, only use low byte (high byte forced to 0x01)
+        // For other processors, only use low byte (high byte forced to 0x01 by hardware)
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            cpu->set(REG_SP, sp);  // Set full 16-bit SP
+            // 65C816: Use REG_SP for full 16-bit stack pointer access
+            // In native mode, SP can be anywhere in bank 0 (full 16-bit value)
+            // In emulation mode, hardware forces high byte to 0x01, but we set the full value
+            cpu->set(REG_SP, sp);
         } else {
-            cpu->set(REG_S, static_cast<uint8_t>(sp & 0xFF));  // Set low byte only
+            // 8-bit processors: Only low byte matters (hardware forces page 1)
+            cpu->set(REG_S, static_cast<uint8_t>(sp & 0xFF));
         }
     }
     
@@ -875,6 +919,13 @@ public:
     // Set harness for bus cycle recording (thread-safe)
     void set_harness(ProcessorTestHarness* harness) override {
         harness_ptr = harness;
+    }
+    
+    // Clear interrupt state for test isolation
+    void clear_interrupt_state() override {
+        cpu->active_interrupt = FAM65XX_INT_NONE;
+        cpu->interrupt_shift_register = 0;
+        cpu->nmi_prev = 1;  // NMI starts high (inactive)
     }
     
     // Get address mask from CPUTraits
@@ -1174,20 +1225,20 @@ private:
         // THREAD SAFETY FIX: Set harness in processor wrapper for bus cycle recording
         harness->set_harness_for_bus_recording();
         
-        // CRITICAL: For 65816, set emulation mode FIRST before setting any registers
-        // This ensures SP and other registers are interpreted correctly for the mode
+        // CRITICAL FIX: Bootstrap CPU FIRST to clear internal state
+        // This prepares the CPU for immediate execution
+        harness->bootstrap_processor_for_tests();
+        
+        // Then set 65816-specific state (if present) AFTER bootstrap
+        // Bootstrap doesn't touch these registers, so they remain set
         if (test->initial.has_65816_state) {
             harness->set_emulation_mode(test->initial.e != 0);
             harness->set_d(test->initial.d);
             harness->set_dbr(test->initial.dbr);
             harness->set_pbr(test->initial.pbr);
         }
-        
-        // Bootstrap CPU to reset internal state machine AFTER setting emulation mode
-        // This ensures the CPU starts in the correct mode
-        harness->bootstrap_processor_for_tests();
 
-        // Set the standard registers
+        // Set the standard registers (after bootstrap and emulation mode)
         harness->set_pc(test->initial.pc);
         
         if (verbose_mode && !suppress_verbose) {
@@ -1222,6 +1273,10 @@ private:
             debug_output << "  [Worker " << worker_id << "] Opcode at PC 0x" << std::hex << test->initial.pc
                         << ": 0x" << std::hex << (int)current_opcode << std::dec << std::endl;
         }
+        
+        // CRITICAL: Clear interrupt state before test execution
+        // This ensures no residual interrupt detection from previous operations
+        harness->clear_interrupt_state();
         
         uint32_t initial_cycle_count = harness->get_cycle_count();
         
