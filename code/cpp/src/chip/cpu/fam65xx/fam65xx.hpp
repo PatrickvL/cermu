@@ -1247,6 +1247,14 @@ public:
   // ========================================================================
 
   /**
+   * Enable/disable processor tests mode
+   * When enabled, disables interrupt hijacking for clean instruction testing
+   */
+  inline void set_processor_tests_mode(bool mode) {
+    this->processor_tests_mode = mode;
+  }
+  
+  /**
    * Set emulation mode (65C816 specific)
    * Uses constexpr wide check for compile-time optimization
    */
@@ -1392,11 +1400,22 @@ public:
       trace_registers("before PHI2");
 
       // Hardware-accurate interrupt detection
-      if (this->process_interrupt_detection(pins)) {
+      // OPTIMIZATION: Use compile-time check when PROCESSOR_TESTS is defined globally
+      // This eliminates runtime overhead in production emulation builds
+      #ifdef PROCESSOR_TESTS
+        constexpr bool allow_interrupt_hijacking = false;
+      #else
+        const bool allow_interrupt_hijacking = !this->processor_tests_mode;
+      #endif
+      
+      if (allow_interrupt_hijacking && this->process_interrupt_detection(pins)) {
         if (this->active_interrupt == FAM65XX_INT_RESET) {
           return reset(pins);
         } else if (this->current_handler == &fam65xx_t::fetch_opcode &&
                    this->half_cycle == 0) {
+          // Hijack fetch and force BRK execution
+          // CRITICAL: When hijacking, BRK should still use the interrupt's vector
+          // So we keep active_interrupt as-is (IRQ/NMI/etc) and let BRK handle it
           this->current_handler = &fam65xx_t::op_brk;
         }
       }
@@ -1525,6 +1544,9 @@ public:
   /* 65C02 extended state */
   bool wait_for_interrupt; /* WAI instruction state */
   bool stopped;            /* STP instruction state */
+  
+  /* Test mode flag - disables interrupt hijacking for ProcessorTests compatibility */
+  bool processor_tests_mode = false;
 };
 
 // ============================================================================
