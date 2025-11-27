@@ -1456,7 +1456,16 @@ std::vector<TestItem> collect_all_tests(const std::vector<std::string>& test_pat
                             std::string filename = entry.path().stem().string();
                             std::transform(filename.begin(), filename.end(), filename.begin(),
                                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-                            if (filename != opcode_filter) {
+                            
+                            // Handle 65C816 test files with .e.json and .n.json extensions
+                            // Extract the opcode part before .e or .n suffix
+                            std::string opcode_part = filename;
+                            size_t dot_pos = filename.find('.');
+                            if (dot_pos != std::string::npos) {
+                                opcode_part = filename.substr(0, dot_pos);
+                            }
+                            
+                            if (opcode_part != opcode_filter) {
                                 continue; // Skip files that don't match opcode filter
                             }
                         }
@@ -1470,7 +1479,16 @@ std::vector<TestItem> collect_all_tests(const std::vector<std::string>& test_pat
                     std::string filename = file_path.stem().string();
                     std::transform(filename.begin(), filename.end(), filename.begin(),
                                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-                    if (filename != opcode_filter) {
+                    
+                    // Handle 65C816 test files with .e.json and .n.json extensions
+                    // Extract the opcode part before .e or .n suffix
+                    std::string opcode_part = filename;
+                    size_t dot_pos = filename.find('.');
+                    if (dot_pos != std::string::npos) {
+                        opcode_part = filename.substr(0, dot_pos);
+                    }
+                    
+                    if (opcode_part != opcode_filter) {
                         continue; // Skip files that don't match opcode filter
                     }
                 }

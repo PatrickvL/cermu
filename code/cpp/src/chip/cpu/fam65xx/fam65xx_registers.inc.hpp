@@ -355,8 +355,9 @@ void init_registers() {
 
   // Initialize P register based on CPU type
   if constexpr (has_wide_registers()) {
-    // 65C816 starts in emulation mode with M=1, X=1 flags
-    set(REG_P, FLAG_I | FLAG_M | FLAG_X);
+    // 65C816 starts in emulation mode with E=1, M=1, X=1 flags
+    // CRITICAL: Must set FLAG_E in the 16-bit P register for proper emulation mode
+    set(REG_P_16, FLAG_E | FLAG_I | FLAG_M | FLAG_X);
     set(REG_PBR, 0x00); // Program bank register
     set(REG_DBR, 0x00); // Data bank register
     set(REG_ZBR, 0x00); // Zero page bank register
