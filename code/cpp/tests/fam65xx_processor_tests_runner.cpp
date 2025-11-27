@@ -37,8 +37,10 @@ thread_local uint8_t test_memory[65536];
 
 // Global flags (declared early for use in functions)
 static bool g_quiet_mode = false;
-static bool g_stop_on_failure = true; 
+static bool g_stop_on_failure = true;
 static std::atomic<bool> g_test_failed{false};
+static std::atomic<size_t> g_verbose_output_count{0};  // Track verbose output to limit excessive logging
+static const size_t MAX_VERBOSE_OUTPUTS = 1000;  // Maximum number of verbose test outputs before suppressing
 
 // Forward declarations (moved later after full class definition)
 
@@ -1119,8 +1121,23 @@ private:
         // Capture all debug output in a separate buffer - only emit if test fails or verbose mode
         std::ostringstream debug_output;
         
+        // Check if we should suppress verbose output due to output limit
+        bool suppress_verbose = false;
         if (verbose_mode) {
-            debug_output << "[Worker " << worker_id << "] Running test: " << test->name << std::endl;
+            size_t current_count = g_verbose_output_count.fetch_add(1);
+            if (current_count >= MAX_VERBOSE_OUTPUTS) {
+                suppress_verbose = true;
+                if (current_count == MAX_VERBOSE_OUTPUTS) {
+                    // Show warning message once when limit is reached
+                    std::ostringstream warning;
+                    warning << "\n⚠️  WARNING: Verbose output limit reached (" << MAX_VERBOSE_OUTPUTS
+                            << " tests). Suppressing further verbose output to prevent excessive logging.\n"
+                            << "    Only test failures will be shown from this point.\n\n";
+                    output_handler.add_output(warning.str());
+                }
+            } else {
+                debug_output << "[Worker " << worker_id << "] Running test: " << test->name << std::endl;
+            }
         }
         
         // REMOVED: Set global harness (thread safety issue)
@@ -1147,7 +1164,7 @@ private:
         // Then set the standard registers
         harness->set_pc(test->initial.pc);
         
-        if (verbose_mode) {
+        if (verbose_mode && !suppress_verbose) {
             debug_output << "  [Worker " << worker_id << "] Setting registers: A=0x" << std::hex
                         << (int)test->initial.a << " X=0x" << (int)test->initial.x
                         << " Y=0x" << (int)test->initial.y << " P=0x" << (int)test->initial.p << std::dec << std::endl;
@@ -1159,7 +1176,7 @@ private:
         harness->set_sp(test->initial.s);
         harness->set_status(test->initial.p);
         
-        if (verbose_mode) {
+        if (verbose_mode && !suppress_verbose) {
             debug_output << "  [Worker " << worker_id << "] After setting: A=0x" << std::hex
                         << (int)harness->get_a() << " X=0x" << (int)harness->get_x()
                         << " Y=0x" << (int)harness->get_y() << " P=0x" << (int)harness->get_status() << std::dec << std::endl;
@@ -1175,7 +1192,7 @@ private:
         
         uint8_t current_opcode = harness->get_memory(full_pc_addr);
         
-        if (verbose_mode) {
+        if (verbose_mode && !suppress_verbose) {
             debug_output << "  [Worker " << worker_id << "] Opcode at PC 0x" << std::hex << test->initial.pc
                         << ": 0x" << std::hex << (int)current_opcode << std::dec << std::endl;
         }
@@ -1184,7 +1201,7 @@ private:
         
         // Execute instruction (CPU already bootstrapped and configured)
         bool step_result;
-        if (verbose_mode) {
+        if (verbose_mode && !suppress_verbose) {
             debug_output << "  [Worker " << worker_id << "] Executing instruction with cycle-by-cycle details:" << std::endl;
             step_result = harness->step_with_debug(&debug_output);
         } else {
@@ -1193,7 +1210,7 @@ private:
         
         uint32_t cycles_executed = harness->get_cycle_count() - initial_cycle_count;
         
-        if (verbose_mode) {
+        if (verbose_mode && !suppress_verbose) {
             debug_output << "  [Worker " << worker_id << "] Final state: PC=0x" << std::hex
                         << harness->get_pc() << " A=0x" << (int)harness->get_a()
                         << " Cycles=" << std::dec << cycles_executed << std::endl;
@@ -1304,8 +1321,8 @@ private:
         if (state_match && cycle_match && bus_cycle_match) {
             results.passed_tests++;
             results.record_opcode_result(current_opcode, true); // Mark as successful
-            if (verbose_mode) {
-                output << debug_output.str(); // Emit debug output only if verbose
+            if (verbose_mode && !suppress_verbose) {
+                output << debug_output.str(); // Emit debug output only if verbose and not suppressed
                 output << "PASS " << test->name << " (opcode 0x" << std::hex
                        << (int)current_opcode << ")" << std::dec << std::endl;
             }
