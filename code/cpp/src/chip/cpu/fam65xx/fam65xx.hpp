@@ -587,208 +587,184 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
    * - Hardware-accurate NMOS/CMOS dummy cycle behavior
    * - Lambda-based operation functions for flexibility
    */
+  /**
+   * Internal template helper for RMW operations with compile-time bank selection
+   * Eliminates runtime banking checks by using template parameter
+   */
+  template <Bank BankArg, typename OperationFunc>
+  bus_state_t rmw_operation_helper_impl(bus_state_t pins,
+                                        OperationFunc operation_func) {
+    // Check if this is a 16-bit memory operation
+    const bool is_16bit_memory = this->is_memory_16bit();
+
+    if (is_16bit_memory) {
+      // 16-bit memory RMW operation (6 cycles for 65C816)
+      switch (this->cycle_index) {
+      case 0: {
+        // Cycle 0 PHI2: Set up bus for reading low byte
+        pins = this->bus_setup_read<Addr::AB, BankArg>(pins);
+        return pins;
+      }
+
+      case 1: {
+        // Cycle 1 PHI1: Load low byte from bus
+        this->bus_load_reg(REG_DL, pins);
+        this->inc(REG_ABL); // Increment address for high byte
+        this->cycle_index++;
+        return pins;
+      }
+
+      case 2: {
+        // Cycle 2 PHI2: Set up bus for reading high byte
+        pins = this->bus_setup_read<Addr::AB, BankArg>(pins);
+        return pins;
+      }
+
+      case 3: {
+        // Cycle 3 PHI1: Load high byte and perform dummy cycle setup
+        this->bus_load_reg(REG_DPL, pins);
+        this->cycle_index++;
+        return pins;
+      }
+
+      case 4: {
+        // Cycle 4 PHI2: Dummy cycle
+        if (this->has_rmw_dummy_write()) {
+          // NMOS: Dummy write of high byte
+          pins = this->bus_setup_write<Addr::AB, BankArg>(
+              pins, this->get(REG_DPL));
+        } else {
+          // CMOS: Dummy read instead of write
+          pins = this->bus_setup_dummy<Addr::AB, BankArg>(pins);
+        }
+        return pins;
+      }
+
+      case 5: {
+        // Cycle 5 PHI1: Perform 16-bit operation
+        data_t value = static_cast<data_t>(this->get(REG_DL)) |
+                       (static_cast<data_t>(this->get(REG_DPL)) << 8);
+        operation_func(value);
+        this->set(REG_DL, static_cast<uint8_t>(value & 0xFF)); // Low byte
+        this->set(REG_DPL,
+                  static_cast<uint8_t>((value >> 8) & 0xFF)); // High byte
+        this->cycle_index++;
+        return pins;
+      }
+
+      case 6: {
+        // Cycle 6 PHI2: Write high byte back to memory (address + 1)
+        pins = this->bus_setup_write<Addr::AB, BankArg>(
+            pins, this->get(REG_DPL));
+        return pins;
+      }
+
+      case 7: {
+        // Cycle 7 PHI1: Decrement address
+        this->dec(REG_ABL); // Decrement address back to low byte
+        this->cycle_index++;
+        return pins;
+      }
+
+      case 8: {
+        // Cycle 8 PHI2: Write low byte back to memory (address)
+        pins = this->bus_setup_write<Addr::AB, BankArg>(
+            pins, this->get(REG_DL));
+        return pins;
+      }
+
+      case 9: {
+        // Cycle 9 PHI1: Complete operation
+        this->cycle_index++;
+        this->transition_to_fetch();
+        return pins;
+      }
+      }
+    } else {
+      // 8-bit memory RMW operation (PHI2/PHI1 split)
+      switch (this->cycle_index) {
+      case 0: {
+        // Cycle 0 PHI2: Set up bus for reading original value
+        pins = this->bus_setup_read<Addr::AB, BankArg>(pins);
+        return pins;
+      }
+
+      case 1: {
+        // Cycle 1 PHI1: Load original value from bus
+        this->bus_load_reg(REG_DL, pins);
+        this->cycle_index++;
+        return pins;
+      }
+
+      case 2: {
+        // Cycle 2 PHI2: Dummy cycle
+        if (this->has_rmw_dummy_write()) {
+          // NMOS: Dummy write of original value
+          pins = this->bus_setup_write<Addr::AB, BankArg>(
+              pins, this->get(REG_DL));
+        } else {
+          // CMOS: Dummy read instead of write
+          pins = this->bus_setup_dummy<Addr::AB, BankArg>(pins);
+        }
+        return pins;
+      }
+
+      case 3: {
+        // Cycle 3 PHI1: Perform modification
+        data_t value = static_cast<data_t>(this->get(REG_DL));
+        operation_func(value);
+        this->set(REG_DL, static_cast<uint8_t>(value & 0xFF));
+        this->cycle_index++;
+        return pins;
+      }
+
+      case 4: {
+        // Cycle 4 PHI2: Write modified value back to memory
+        pins = this->bus_setup_write<Addr::AB, BankArg>(
+            pins, this->get(REG_DL));
+        return pins;
+      }
+
+      case 5: {
+        // Cycle 5 PHI1: Complete operation
+        this->cycle_index++;
+        this->transition_to_fetch();
+        return pins;
+      }
+      }
+    } // end 8-bit memory RMW
+    return pins;
+  }
+
+  /**
+   * Public RMW operation helper - dispatches to optimized template variant
+   * Single runtime check at function entry, then zero-overhead execution
+   */
   template <typename OperationFunc>
   bus_state_t rmw_operation_helper(bus_state_t pins,
                                    OperationFunc operation_func) {
     if (this->opcode_entry.flags & to_index(OF::RMW)) {
-      // Memory mode - multi-cycle RMW operation (8-bit or 16-bit based on M
-      // flag) Determine correct banking based on addressing mode For 65C816,
-      // Direct Page operations use Bank 0 (ZBR) instead of DBR
+      // Memory mode - determine banking once at function entry
+      // For 65C816, Direct Page operations use Bank 0 (ZBR) instead of DBR
       constexpr bool can_use_direct_page = has_wide_registers();
-      const bool is_direct_page_addressing =
+      if constexpr (can_use_direct_page) {
+        const bool is_direct_page_addressing =
           (this->opcode_entry.am_index == to_index(AM::ZER) ||
            this->opcode_entry.am_index == to_index(AM::ZPX) ||
            this->opcode_entry.am_index == to_index(AM::ZPY));
 
-      bool use_zero_bank = false;
-      if constexpr (can_use_direct_page) {
-        use_zero_bank = is_direct_page_addressing && !this->in_emulation_mode();
-      }
-
-      // Check if this is a 16-bit memory operation
-      const bool is_16bit_memory = this->is_memory_16bit();
-
-      if (is_16bit_memory) {
-        // 16-bit memory RMW operation (6 cycles for 65C816)
-        switch (this->cycle_index) {
-        case 0: {
-          // Cycle 0 PHI2: Set up bus for reading low byte
-          if (use_zero_bank) {
-            pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
-          } else {
-            pins = this->bus_setup_read<Addr::AB, Bank::DBR>(pins);
-          }
-          return pins;
-        }
-
-        case 1: {
-          // Cycle 1 PHI1: Load low byte from bus
-          this->bus_load_reg(REG_DL, pins);
-          this->inc(REG_ABL); // Increment address for high byte
-          this->cycle_index++;
-          return pins;
-        }
-
-        case 2: {
-          // Cycle 2 PHI2: Set up bus for reading high byte
-          if (use_zero_bank) {
-            pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
-          } else {
-            pins = this->bus_setup_read<Addr::AB, Bank::DBR>(pins);
-          }
-          return pins;
-        }
-
-        case 3: {
-          // Cycle 3 PHI1: Load high byte and perform dummy cycle setup
-          this->bus_load_reg(REG_DPL, pins);
-          this->cycle_index++;
-          return pins;
-        }
-
-        case 4: {
-          // Cycle 4 PHI2: Dummy cycle
-          if (this->has_rmw_dummy_write()) {
-            // NMOS: Dummy write of high byte
-            if (use_zero_bank) {
-              pins = this->bus_setup_write<Addr::AB, Bank::ZBR>(
-                  pins, this->get(REG_DPL));
-            } else {
-              pins = this->bus_setup_write<Addr::AB, Bank::DBR>(
-                  pins, this->get(REG_DPL));
-            }
-          } else {
-            // CMOS: Dummy read instead of write
-            if (use_zero_bank) {
-              pins = this->bus_setup_dummy<Addr::AB, Bank::ZBR>(pins);
-            } else {
-              pins = this->bus_setup_dummy<Addr::AB, Bank::DBR>(pins);
-            }
-          }
-          return pins;
-        }
-
-        case 5: {
-          // Cycle 5 PHI1: Perform 16-bit operation
-          data_t value = static_cast<data_t>(this->get(REG_DL)) |
-                         (static_cast<data_t>(this->get(REG_DPL)) << 8);
-          operation_func(value);
-          this->set(REG_DL, static_cast<uint8_t>(value & 0xFF)); // Low byte
-          this->set(REG_DPL,
-                    static_cast<uint8_t>((value >> 8) & 0xFF)); // High byte
-          this->cycle_index++;
-          return pins;
-        }
-
-        case 6: {
-          // Cycle 6 PHI2: Write high byte back to memory (address + 1)
-          if (use_zero_bank) {
-            pins = this->bus_setup_write<Addr::AB, Bank::ZBR>(
-                pins, this->get(REG_DPL));
-          } else {
-            pins = this->bus_setup_write<Addr::AB, Bank::DBR>(
-                pins, this->get(REG_DPL));
-          }
-          return pins;
-        }
-
-        case 7: {
-          // Cycle 7 PHI1: Decrement address
-          this->dec(REG_ABL); // Decrement address back to low byte
-          this->cycle_index++;
-          return pins;
-        }
-
-        case 8: {
-          // Cycle 8 PHI2: Write low byte back to memory (address)
-          if (use_zero_bank) {
-            pins = this->bus_setup_write<Addr::AB, Bank::ZBR>(
-                pins, this->get(REG_DL));
-          } else {
-            pins = this->bus_setup_write<Addr::AB, Bank::DBR>(
-                pins, this->get(REG_DL));
-          }
-          return pins;
-        }
-
-        case 9: {
-          // Cycle 9 PHI1: Complete operation
-          this->cycle_index++;
-          this->transition_to_fetch();
-          return pins;
-        }
+        const bool use_zero_bank = is_direct_page_addressing && !this->in_emulation_mode();
+        
+        // Dispatch to template variant - compiler optimizes away all banking checks
+        if (use_zero_bank) {
+          return this->rmw_operation_helper_impl<Bank::ZBR>(pins, operation_func);
+        } else {
+          return this->rmw_operation_helper_impl<Bank::DBR>(pins, operation_func);
         }
       } else {
-        // 8-bit memory RMW operation (PHI2/PHI1 split)
-        switch (this->cycle_index) {
-        case 0: {
-          // Cycle 0 PHI2: Set up bus for reading original value
-          if (use_zero_bank) {
-            pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
-          } else {
-            pins = this->bus_setup_read<Addr::AB, Bank::DBR>(pins);
-          }
-          return pins;
-        }
-
-        case 1: {
-          // Cycle 1 PHI1: Load original value from bus
-          this->bus_load_reg(REG_DL, pins);
-          this->cycle_index++;
-          return pins;
-        }
-
-        case 2: {
-          // Cycle 2 PHI2: Dummy cycle
-          if (this->has_rmw_dummy_write()) {
-            // NMOS: Dummy write of original value
-            if (use_zero_bank) {
-              pins = this->bus_setup_write<Addr::AB, Bank::ZBR>(
-                  pins, this->get(REG_DL));
-            } else {
-              pins = this->bus_setup_write<Addr::AB, Bank::DBR>(
-                  pins, this->get(REG_DL));
-            }
-          } else {
-            // CMOS: Dummy read instead of write
-            if (use_zero_bank) {
-              pins = this->bus_setup_dummy<Addr::AB, Bank::ZBR>(pins);
-            } else {
-              pins = this->bus_setup_dummy<Addr::AB, Bank::DBR>(pins);
-            }
-          }
-          return pins;
-        }
-
-        case 3: {
-          // Cycle 3 PHI1: Perform modification
-          data_t value = static_cast<data_t>(this->get(REG_DL));
-          operation_func(value);
-          this->set(REG_DL, static_cast<uint8_t>(value & 0xFF));
-          this->cycle_index++;
-          return pins;
-        }
-
-        case 4: {
-          // Cycle 4 PHI2: Write modified value back to memory
-          if (use_zero_bank) {
-            pins = this->bus_setup_write<Addr::AB, Bank::ZBR>(
-                pins, this->get(REG_DL));
-          } else {
-            pins = this->bus_setup_write<Addr::AB, Bank::DBR>(
-                pins, this->get(REG_DL));
-          }
-          return pins;
-        }
-
-        case 5: {
-          // Cycle 5 PHI1: Complete operation
-          this->cycle_index++;
-          this->transition_to_fetch();
-          return pins;
-        }
-        }
-      } // end 8-bit memory RMW
+        // Non-65C816: always use DBR (which is ignored anyway)
+        return this->rmw_operation_helper_impl<Bank::DBR>(pins, operation_func);
+      }
     } else {
       // Accumulator mode - two-phase operation (PHI2 + PHI1)
       switch (this->cycle_index) {
