@@ -594,35 +594,29 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     if (is_16bit_memory) {
       // 16-bit memory RMW operation (6 cycles for 65C816)
       switch (this->half_cycle) {
-      case 0: {
-        // Cycle 0 PHI2: Set up bus for reading low byte
+      case 0:
+        // PHI2: Set up bus for reading low byte
         pins = this->bus_setup_read<Addr::AB, BankArg>(pins);
         return pins;
-      }
-
-      case 1: {
-        // Cycle 1 PHI1: Load low byte from bus
+      case 1:
+        // PHI1: Load low byte from bus
         this->bus_load_reg(REG_DL, pins);
         this->inc(REG_ABL); // Increment address for high byte
         this->half_cycle++;
         return pins;
-      }
 
-      case 2: {
-        // Cycle 2 PHI2: Set up bus for reading high byte
+      case 2:
+        // PHI2: Set up bus for reading high byte
         pins = this->bus_setup_read<Addr::AB, BankArg>(pins);
         return pins;
-      }
-
-      case 3: {
-        // Cycle 3 PHI1: Load high byte and perform dummy cycle setup
+      case 3:
+        // PHI1: Load high byte and perform dummy cycle setup
         this->bus_load_reg(REG_SBR, pins); // Note : Uses REG_SBR as temporary storage (allowed gievn its limited scope)
         this->half_cycle++;
         return pins;
-      }
 
-      case 4: {
-        // Cycle 4 PHI2: Dummy cycle
+      case 4:
+        // PHI2: Dummy cycle
         if (this->has_rmw_dummy_write()) {
           // NMOS: Dummy write of high byte
           pins = this->bus_setup_write<Addr::AB, BankArg>(
@@ -632,10 +626,8 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
           pins = this->bus_setup_dummy<Addr::AB, BankArg>(pins);
         }
         return pins;
-      }
-
       case 5: {
-        // Cycle 5 PHI1: Perform 16-bit operation
+        // PHI1: Perform 16-bit operation
         uint16_t value16 = static_cast<uint16_t>(this->get(REG_DL)) |
                            (static_cast<uint16_t>(this->get(REG_SBR)) << 8);
         data_t value = static_cast<data_t>(value16);
@@ -648,52 +640,42 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
         return pins;
       }
 
-      case 6: {
+      case 6:
         // Cycle 6 PHI2: Write high byte back to memory (address + 1)
         pins = this->bus_setup_write<Addr::AB, BankArg>(
             pins, this->get(REG_SBR));
         return pins;
-      }
-
-      case 7: {
+      case 7:
         // Cycle 7 PHI1: Decrement address
         this->dec(REG_ABL); // Decrement address back to low byte
         this->half_cycle++;
         return pins;
-      }
 
-      case 8: {
+      case 8:
         // Cycle 8 PHI2: Write low byte back to memory (address)
         pins = this->bus_setup_write<Addr::AB, BankArg>(
             pins, this->get(REG_DL));
         return pins;
-      }
-
-      case 9: {
+      case 9:
         // Cycle 9 PHI1: Complete operation
-        this->half_cycle++;
         this->transition_to_fetch();
         return pins;
-      }
       }
     } else {
       // 8-bit memory RMW operation (PHI2/PHI1 split)
       switch (this->half_cycle) {
-      case 0: {
-        // Cycle 0 PHI2: Set up bus for reading original value
+      case 0:
+        // PHI2: Set up bus for reading original value
         pins = this->bus_setup_read<Addr::AB, BankArg>(pins);
         return pins;
-      }
-
-      case 1: {
-        // Cycle 1 PHI1: Load original value from bus
+      case 1:
+        // PHI1: Load original value from bus
         this->bus_load_reg(REG_DL, pins);
         this->half_cycle++;
         return pins;
-      }
 
-      case 2: {
-        // Cycle 2 PHI2: Dummy cycle
+      case 2:
+        // PHI2: Dummy cycle
         if (this->has_rmw_dummy_write()) {
           // NMOS: Dummy write of original value
           pins = this->bus_setup_write<Addr::AB, BankArg>(
@@ -703,10 +685,8 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
           pins = this->bus_setup_dummy<Addr::AB, BankArg>(pins);
         }
         return pins;
-      }
-
       case 3: {
-        // Cycle 3 PHI1: Perform modification
+        // PHI1: Perform modification
         data_t value = static_cast<data_t>(this->get(REG_DL));
         operation_func(value);
         this->set(REG_DL, static_cast<uint8_t>(value & 0xFF));
@@ -714,21 +694,18 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
         return pins;
       }
 
-      case 4: {
-        // Cycle 4 PHI2: Write modified value back to memory
+      case 4:
+        // PHI2: Write modified value back to memory
         pins = this->bus_setup_write<Addr::AB, BankArg>(
             pins, this->get(REG_DL));
         return pins;
-      }
-
-      case 5: {
+      case 5:
         // Cycle 5 PHI1: Complete operation
-        this->half_cycle++;
         this->transition_to_fetch();
         return pins;
       }
-      }
     } // end 8-bit memory RMW
+
     return pins;
   }
 
@@ -769,13 +746,11 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
         pins = this->bus_setup_dummy<Addr::PC>(pins);
         return pins;
       }
-
       case 1: {
         // Cycle 1 PHI1: Perform operation on accumulator
         data_t value = this->get_accumulator(); // Automatically handles 8/16-bit based on M flag
         operation_func(value);
         this->set_accumulator(value); // Automatically handles 8/16-bit based on M flag
-        this->half_cycle++;
         this->transition_to_fetch();
         return pins;
       }
@@ -979,18 +954,12 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       // Set SYNC signal for opcode fetch (hardware-accurate timing)
       pins |= FAM65XX_SYNC;
       return pins;
-
     case 1: {
       // PHI1: Sample opcode from bus and decode
       uint8_t opcode = this->bus_get_data(pins);
-      this->set(REG_IR, opcode);
-  
+      this->set(REG_IR, opcode);  
       // Clear SYNC signal after opcode fetch completes (hardware-accurate timing)
-      pins &= ~FAM65XX_SYNC;
-  
-      // Increment half_cycle before transition (PHI1 always increments)
-      this->half_cycle++;
-      
+      pins &= ~FAM65XX_SYNC;  
       // Transition resets half_cycle to 0 for new instruction
       opcode_info_t entry = get_opcode_info(opcode);
       this->transition_to_opcode(entry);

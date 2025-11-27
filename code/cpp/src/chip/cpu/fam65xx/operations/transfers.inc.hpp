@@ -64,7 +64,6 @@ bus_state_t op_tax(bus_state_t pins) {
             this->set(REG_X, value);
             this->update_nz_flags(value);
           }
-          this->half_cycle++;
           this->transition_to_fetch();
           return pins;
         }
@@ -73,7 +72,6 @@ bus_state_t op_tax(bus_state_t pins) {
       uint8_t value = this->get(REG_A);
       this->set(REG_X, value);
       this->update_nz_flags(value);
-      this->half_cycle++;
       this->transition_to_fetch();
       return pins;
   }
@@ -132,7 +130,6 @@ bus_state_t op_tay(bus_state_t pins) {
             this->set(REG_Y, value);
             this->update_nz_flags(value);
           }
-          this->half_cycle++;
           this->transition_to_fetch();
           return pins;
         }
@@ -141,7 +138,6 @@ bus_state_t op_tay(bus_state_t pins) {
       uint8_t value = this->get(REG_A);
       this->set(REG_Y, value);
       this->update_nz_flags(value);
-      this->half_cycle++;
       this->transition_to_fetch();
       return pins;
   }
@@ -178,7 +174,6 @@ bus_state_t op_tsx(bus_state_t pins) {
           this->set_x_register(value);
           this->update_flag(FLAG_Z, value == 0);
           this->update_flag(FLAG_N, (value & 0x8000) != 0);
-          this->half_cycle++;
           this->transition_to_fetch();
           return pins;
         }
@@ -187,7 +182,6 @@ bus_state_t op_tsx(bus_state_t pins) {
       uint8_t value = this->get(REG_S);
       this->set(REG_X, value);
       this->update_nz_flags(value);
-      this->half_cycle++;
       this->transition_to_fetch();
       return pins;
   }
@@ -246,7 +240,6 @@ bus_state_t op_txa(bus_state_t pins) {
             this->set(REG_A, value);
             this->update_nz_flags(value);
           }
-          this->half_cycle++;
           this->transition_to_fetch();
           return pins;
         }
@@ -255,7 +248,6 @@ bus_state_t op_txa(bus_state_t pins) {
       uint8_t value = this->get(REG_X);
       this->set(REG_A, value);
       this->update_nz_flags(value);
-      this->half_cycle++;
       this->transition_to_fetch();
       return pins;
   }
@@ -297,7 +289,6 @@ bus_state_t op_txs(bus_state_t pins) {
             uint8_t value = this->get(REG_X);
             this->set(REG_S, value);
           }
-          this->half_cycle++;
           this->transition_to_fetch();
           return pins;
         }
@@ -305,7 +296,6 @@ bus_state_t op_txs(bus_state_t pins) {
       // Standard 8-bit operation
       uint8_t value = this->get(REG_X);
       this->set(REG_S, value);
-      this->half_cycle++;
       this->transition_to_fetch();
       return pins;
   }
@@ -364,7 +354,6 @@ bus_state_t op_tya(bus_state_t pins) {
             this->set(REG_A, value);
             this->update_nz_flags(value);
           }
-          this->half_cycle++;
           this->transition_to_fetch();
           return pins;
         }
@@ -373,7 +362,6 @@ bus_state_t op_tya(bus_state_t pins) {
       uint8_t value = this->get(REG_Y);
       this->set(REG_A, value);
       this->update_nz_flags(value);
-      this->half_cycle++;
       this->transition_to_fetch();
       return pins;
   }
@@ -395,7 +383,6 @@ bus_state_t op_inx(bus_state_t pins) {
         return this->bus_setup_dummy<Addr::PC>(pins);
       }
       return pins;
-      
     case 1: // PHI1: Operation
       if constexpr (has_wide_registers()) {
         if (this->is_index_16bit()) {
@@ -406,7 +393,6 @@ bus_state_t op_inx(bus_state_t pins) {
           // Update flags for 16-bit operation
           this->update_flag(FLAG_Z, value == 0);
           this->update_flag(FLAG_N, (value & 0x8000) != 0);
-          this->half_cycle++;
           this->transition_to_fetch();
           return pins;
         }
@@ -414,7 +400,6 @@ bus_state_t op_inx(bus_state_t pins) {
       // Standard 8-bit INX operation
       this->inc(REG_X);
       this->update_nz_flags(this->get(REG_X));
-      this->half_cycle++;
       this->transition_to_fetch();
       return pins;
   }
@@ -425,14 +410,12 @@ bus_state_t op_inx(bus_state_t pins) {
 /* INY - Increment Y */
 bus_state_t op_iny(bus_state_t pins) {
   trace_operation(__func__);
-  
   switch (this->half_cycle) {
     case 0: // PHI2: Bus setup
       if constexpr (!this->has_optimized_cycles()) {
         return this->bus_setup_dummy<Addr::PC>(pins);
       }
       return pins;
-      
     case 1: // PHI1: Operation
       if constexpr (has_wide_registers()) {
         if (this->is_index_16bit()) {
@@ -443,7 +426,6 @@ bus_state_t op_iny(bus_state_t pins) {
           // Update flags for 16-bit operation
           this->update_flag(FLAG_Z, value == 0);
           this->update_flag(FLAG_N, (value & 0x8000) != 0);
-          this->half_cycle++;
           this->transition_to_fetch();
           return pins;
         }
@@ -451,7 +433,6 @@ bus_state_t op_iny(bus_state_t pins) {
       // Standard 8-bit INY operation
       this->inc(REG_Y);
       this->update_nz_flags(this->get(REG_Y));
-      this->half_cycle++;
       this->transition_to_fetch();
       return pins;
   }
@@ -462,14 +443,12 @@ bus_state_t op_iny(bus_state_t pins) {
 /* DEX - Decrement X */
 bus_state_t op_dex(bus_state_t pins) {
   trace_operation(__func__);
-  
   switch (this->half_cycle) {
     case 0: // PHI2: Bus setup
       if constexpr (!this->has_optimized_cycles()) {
         return this->bus_setup_dummy<Addr::PC>(pins);
       }
       return pins;
-      
     case 1: // PHI1: Operation
       if constexpr (has_wide_registers()) {
         if (this->is_index_16bit()) {
@@ -480,7 +459,6 @@ bus_state_t op_dex(bus_state_t pins) {
           // Update flags for 16-bit operation
           this->update_flag(FLAG_Z, value == 0);
           this->update_flag(FLAG_N, (value & 0x8000) != 0);
-          this->half_cycle++;
           this->transition_to_fetch();
           return pins;
         }
@@ -488,7 +466,6 @@ bus_state_t op_dex(bus_state_t pins) {
       // Standard 8-bit DEX operation
       this->dec(REG_X);
       this->update_nz_flags(this->get(REG_X));
-      this->half_cycle++;
       this->transition_to_fetch();
       return pins;
   }
@@ -498,15 +475,13 @@ bus_state_t op_dex(bus_state_t pins) {
 
 /* DEY - Decrement Y */
 bus_state_t op_dey(bus_state_t pins) {
-  trace_operation(__func__);
-  
+  trace_operation(__func__);  
   switch (this->half_cycle) {
     case 0: // PHI2: Bus setup
       if constexpr (!this->has_optimized_cycles()) {
         return this->bus_setup_dummy<Addr::PC>(pins);
       }
-      return pins;
-      
+      return pins;      
     case 1: // PHI1: Operation
       if constexpr (has_wide_registers()) {
         if (this->is_index_16bit()) {
@@ -517,7 +492,6 @@ bus_state_t op_dey(bus_state_t pins) {
           // Update flags for 16-bit operation
           this->update_flag(FLAG_Z, value == 0);
           this->update_flag(FLAG_N, (value & 0x8000) != 0);
-          this->half_cycle++;
           this->transition_to_fetch();
           return pins;
         }
@@ -525,7 +499,6 @@ bus_state_t op_dey(bus_state_t pins) {
       // Standard 8-bit DEY operation
       this->dec(REG_Y);
       this->update_nz_flags(this->get(REG_Y));
-      this->half_cycle++;
       this->transition_to_fetch();
       return pins;
   }
